@@ -11,10 +11,12 @@ namespace DuelDx.Native;
 /// </summary>
 internal static class TextRaster
 {
-    private static readonly Font Font = new("Malgun Gothic", 13f, FontStyle.Bold, GraphicsUnit.Pixel);
+    private static readonly Dictionary<float, Font> Fonts = [];
 
-    public static (uint[] Px, int W, int H)? Render(string text, Color color)
+    public static (uint[] Px, int W, int H)? Render(string text, Color color, float fontSize = 13f)
     {
+        if (!Fonts.TryGetValue(fontSize, out var Font))
+            Fonts[fontSize] = Font = new Font("Malgun Gothic", fontSize, FontStyle.Bold, GraphicsUnit.Pixel);
         if (string.IsNullOrEmpty(text)) return null;
 
         using var measure = new Bitmap(1, 1);

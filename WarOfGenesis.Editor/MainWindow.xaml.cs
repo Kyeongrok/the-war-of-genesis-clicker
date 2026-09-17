@@ -23,7 +23,8 @@ public partial class MainWindow : Window
     private const string DefaultGameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
 
     private TxrTable? _txr;
-    private string _chrFolder = "", _obsFolder = "";
+    private string _chrFolder = "", _obsFolder = "", _gameRoot = "";
+    private GameDatabase? _database;
     private List<ChrRecord> _allChrRecords = [];
 
     private sealed class MotionItem(string label, ObsMotion motion)
@@ -102,6 +103,8 @@ public partial class MainWindow : Window
                 PakArchive.Extract(chrFolder, "Chr");
 
             _allChrRecords = ChrTable.Scan(chrFolder);
+            _gameRoot = root;
+            _database = null;
             SaveGameRoot(root);
             StatusText.Text = $"열었습니다 — 이름 글 {_txr.Rows.Count}줄, 인물 레코드 {_allChrRecords.Count}개. " +
                               "왼쪽에 번호대로 다 늘어놓았습니다 — 이름을 몰라도 그냥 골라 보세요.";
@@ -126,6 +129,42 @@ public partial class MainWindow : Window
 
         var window = new CharactersWindow(_allChrRecords, _txr, _obsFolder) { Owner = this };
         window.Show();
+    }
+
+    // ── 모션 매핑 창 ─────────────────────────────────────────────────────────
+
+    /// <summary>왼쪽에서 고른 캐릭터의 몸짓 파일(Obs) 모션표를 연다.</summary>
+    private void MotionMappingMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentRecord is not { } record) { StatusText.Text = "먼저 왼쪽에서 캐릭터를 고르세요."; return; }
+
+        string? path = EnsureObsPath(record.SpriteCode);
+        if (path == null) { StatusText.Text = $"몸짓 그림 {record.SpriteCode:D4}.obs 를 못 찾았습니다."; return; }
+
+        if (ObsMotionTable.Load(path) is not { } table)
+        {
+            StatusText.Text = $"{record.SpriteCode:D4}.obs 에서 모션표를 못 읽었습니다.";
+            return;
+        }
+        var subentries = _currentSpriteMotions.Count > 0 ? _currentSpriteMotions : ObsSprite.Decode(path);
+        new MotionMappingWindow($"{_currentName} (Chr {record.ChrCode:D4}, sprite {record.SpriteCode})", table, subentries) { Owner = this }.Show();
+    }
+
+    // ── 캐릭터 스탯 창 ───────────────────────────────────────────────────────
+
+    private void CharacterStatsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_gameRoot.Length == 0 || _allChrRecords.Count == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        try
+        {
+            _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+            // 게임 폴더에는 낱장 Chr 가 일부만 있다 — pak 안 레코드까지 보려고 번호대를 통째로 훑는다(없는 번호는 건너뜀).
+            new CharacterStatsWindow(_database, Enumerable.Range(0, 1000)) { Owner = this }.Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다: {ex.Message}";
+        }
     }
 
     // ── 전투맵 보기 창 ───────────────────────────────────────────────────────

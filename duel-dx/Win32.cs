@@ -14,8 +14,11 @@ internal static class Win32
     public const uint WM_CLOSE = 0x0010;
     public const uint WM_QUIT = 0x0012;
     public const uint WM_KEYDOWN = 0x0100;
+    public const uint WM_KEYUP = 0x0101;
+    public const uint WM_KILLFOCUS = 0x0008;
     public const uint WM_MOUSEMOVE = 0x0200;
     public const uint WM_LBUTTONDOWN = 0x0201;
+    public const uint WM_RBUTTONDOWN = 0x0204;
     public const uint WM_ERASEBKGND = 0x0014;
 
     public const uint PM_REMOVE = 0x0001;
@@ -24,8 +27,13 @@ internal static class Win32
     public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B;
     public const int VK_G = 0x47;
     public const int VK_TAB = 0x09;
+    public const int VK_W = 0x57, VK_A = 0x41, VK_S = 0x53, VK_D = 0x44;
 
     public const int IDC_ARROW = 32512;
+    public const uint SPI_GETWORKAREA = 0x0030;
+
+    [DllImport("user32.dll")]
+    public static extern bool SystemParametersInfoW(uint action, uint param, ref Rect rect, uint winIni);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct Point { public int X, Y; }
