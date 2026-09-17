@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using DuelDx.Native;
 using Vortice.D3DCompiler;
@@ -10,60 +12,59 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 「전투 중 캐릭터 차례가 오면 바닥에 이동범위가 깔리는」 화면의 첫 데모.
+/// 「게임을 켜면 첫 전투 맵이 펼쳐지고, 거기 투입되는 캐릭터들이 배치되어 있다」는 첫 장면.
 /// </summary>
 /// <remarks>
-/// 캐릭터 그림은 <b>진짜 게임 자료</b>다 — <c>WarOfGenesis.Assets</c>(TXR 이름표 · Chr
-/// 레코드 · Obs 도트그림)로 실제 <c>gen3pt2</c> 게임 폴더에서 읽는다. 반면 <b>이동범위
-/// 모양은 아직 임시</b>다 — <c>Project/the-war-of-genesis/분석/모션분석.md</c> 에 적어
-/// 둔 정적 분석(0x1006dee0 부근)으로는 "커서가 가리키는 한 칸이 다닐 수 있는가"를
-/// 확인하는 자리까지만 찾았고, 이동력만큼 갈 수 있는 칸 전체를 골라내는 flood-fill
-/// 본체(지형 비용·장애물)는 아직 못 찾았다. 그래서 지금은 <b>맨해튼 거리</b>(상하좌우
-/// 이동만 세는 다이아몬드 모양)로 대신한다 — 진짜 셈을 찾으면 <see cref="InRange"/>
-/// 하나만 바꾸면 된다.
+/// 아군·적군 구성은 <c>Project/the-war-of-genesis/분석/분석-전투구성.md</c> 에서 정적
+/// 분석으로 찾아낸 <b>실제 <c>Btl/0173.btl</c> 자료</b>다 — "영혼의 검" 챕터(<c>0019.chp</c>)
+/// 의 첫 전투이자, 게임 전체를 통틀어 그 챕터에서 가장 먼저 나오는 전투. 캐릭터 배치
+/// (Chr 코드·X/Y)는 이 파일에서 직접 읽어낸 값을 그대로 박아 뒀다 — 아직 <c>.btl</c> 을
+/// 일반적으로 읽어들이는 코드는 없다(이 전투 하나만 보여 주는 첫 데모).
 ///
-/// 창·그리기 얼개(Win32 창 + D3D11 텍스처 한 장 찍기)는 옛 일기토 데모와 같다.
+/// 배경 그림은 <b>확인 못 한 자리표시자</b>다 — 어느 <c>Map</c>/<c>Bgr</c> id가 이 전투에
+/// 진짜 쓰이는지는 <c>CBattle+0xa0</c> 을 채우는 함수가 실행 시점 상태(세이브 진행도)를
+/// 거쳐야 풀리는 값이라 정적 분석만으론 못 찾았다(분석 노트 참고). 그래서 <c>Bgr</c> 묶음
+/// 261장 중 위에서 내려다보는 전투 배경으로 보이는 <c>0200.bgr</c> 을 임시로 골라 썼다.
 /// </remarks>
-internal sealed unsafe class MoveRangeWindow : IDisposable
+internal sealed unsafe class BattleSceneWindow : IDisposable
 {
-    private const int TileSize = 32;
-    private const int Cols = 13, Rows = 8;
-    private const int GridTop = 30;
+    private readonly record struct Unit(int ChrCode, int Col, int Row, bool IsAlly);
+
+    /// <summary><c>Btl/0173.btl</c> 을 파싱해서 얻은 실제 배치. 아군 7 + 적군 15 = 22명.</summary>
+    private static readonly Unit[] Roster =
+    [
+        // 아군 — 천사(266)×2, 아델룬장교(302)×4, 세큘리티볼(19)×1
+        new(266, 17, 11, true), new(266, 13, 14, true),
+        new(302, 7, 30, true), new(302, 8, 18, true), new(302, 10, 24, true), new(302, 3, 27, true),
+        new(19, 5, 22, true),
+        // 적군 — 유블레인(33)×3, 엠블라(60)×6, 시녀(54)×6
+        new(33, 1, 20, false), new(33, 30, 30, false), new(33, 26, 8, false),
+        new(60, 15, 8, false), new(60, 19, 10, false), new(60, 13, 11, false),
+        new(60, 6, 16, false), new(60, 10, 19, false), new(60, 11, 20, false),
+        new(54, 9, 21, false), new(54, 5, 17, false), new(54, 11, 22, false),
+        new(54, 16, 14, false), new(54, 15, 10, false), new(54, 11, 13, false),
+    ];
+
+    private const int TileSize = 25;
+    private const int Cols = 32, Rows = 32;
+    private const int GridTop = 40;
     private const int BoardWidth = Cols * TileSize, BoardHeight = GridTop + Rows * TileSize;
-    private const int Zoom = 2;
+    private const int Zoom = 1;
 
-    /// <summary>창세기전3 파트2 게임 폴더. <c>assets/characters</c> 에 내보낸 인물이 없을 때만 여기서 읽는다.</summary>
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
+    private const string PlaceholderBgFile = "0200_placeholder.jpg";
 
-    /// <summary><c>assets/characters</c> 에도 게임 폴더에도 아무것도 없을 때 물러설 인물 번호.</summary>
-    private const int FallbackChrCode = 7;
-
-    /// <summary>이동력(칸 수). 실제 능력치 대신 임시로 박아 둔 값이다.</summary>
-    private const int MovePoints = 4;
-
-    private const uint BgColor = 0xFF1A1410;
-    private const uint TileA = 0xFF3A5A2E, TileB = 0xFF335227;
-    private const uint TileEdge = 0xFF1E2E16;
-    private const uint RangeTint = 0xA0348CE0;
-    private const uint CharTileTint = 0xC0E0C848;
+    private const uint BgColor = 0xFF14100C;
+    private const uint GridLine = 0x40FFFFFF;
+    private const uint AllyMark = 0xFF5AA0F0, EnemyMark = 0xFFE05050;
     private const uint White = 0xFFF2EAD6;
-    private const uint Yellow = 0xFFE8C864;
     private const uint DimGray = 0xFFA09888;
 
-    private uint[] _charFrame = [];
-    private int _charFrameW, _charFrameH;
-    private string _charName = "?";
-    private int _charSpriteCode;
+    private uint[] _bgPixels = [];
+    private readonly Dictionary<int, (uint[] Px, int W, int H)> _sprites = [];
+    private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
-
-    /// <summary>
-    /// 자료를 아직 읽는 중인가. <see cref="LoadCharacter"/> 가 배경 스레드에서 돌므로
-    /// 창은 <b>곧바로</b> 뜨고, 그림이 도착하면 다음 프레임에 반영된다.
-    /// </summary>
     private volatile bool _loading = true;
-
-    private int _charCol = Cols / 2, _charRow = Rows / 2;
-    private bool _showRange;
 
     private readonly uint[] _fb = new uint[BoardWidth * BoardHeight];
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
@@ -72,9 +73,9 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
 
     private IntPtr _hwnd;
     private static readonly Win32.WndProc StaticWndProcDelegate = StaticWndProcTrampoline;
-    private static MoveRangeWindow? _active;
+    private static BattleSceneWindow? _active;
     private static ushort _classAtom;
-    private const string ClassName = "MoveRangeDx";
+    private const string ClassName = "BattleSceneDx";
 
     private ID3D11Device _device = null!;
     private ID3D11DeviceContext _ctx = null!;
@@ -87,32 +88,31 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
 
     // ── 게임 자료 읽기 ───────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 배경 스레드에서 캐릭터 그림을 읽는다. Chr 578개 훑기·TXR 이름표 훑기·(처음
-    /// 한 번이면) Obs pak 풀기까지 겹치면 꽤 걸릴 수 있어서, 창을 막지 않으려고
-    /// <see cref="Run"/> 이 창을 띄운 <b>다음</b>에 이걸 따로 돌린다. 또
-    /// <see cref="ObsSprite.DecodeFirstFrame"/> 로 <b>필요한 한 장만</b> 풀어서
-    /// (원래 sprite 하나가 백 장 넘는 몸짓을 다 풀면 몇 초씩 걸렸다) 훨씬 빨라졌다.
-    /// </summary>
-    private void LoadCharacter()
+    /// <summary>배경 스레드에서 배경 그림·캐릭터 22명(고유 5종)을 읽는다. 창은 먼저 뜬다.</summary>
+    private void LoadScene()
     {
         try
         {
-            var (name, spriteCode, obsPath) = FindAnyExported() ?? LoadFromGameFolder(FallbackChrCode);
+            _bgPixels = LoadBackground();
 
-            var idle = ObsSprite.DecodeFirstFrame(obsPath)
-                       ?? throw new InvalidDataException($"{Path.GetFileName(obsPath)} 에서 그림을 못 풀었습니다.");
+            string assetsRoot = FindRepoAssetsRoot();
+            var manifests = CollectExportedManifests(assetsRoot);
 
-            var frame = new uint[idle.Width * idle.Height];
-            Buffer.BlockCopy(idle.Bgra, 0, frame, 0, idle.Bgra.Length);
+            foreach (int chrCode in Roster.Select(u => u.ChrCode).Distinct())
+            {
+                var (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
+                    ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
+                    : LoadFromGameFolder(chrCode);
 
-            // 다 갖춰진 뒤에 한꺼번에 반영한다 — 그리는 스레드(Render)가 절반만
-            // 채워진 상태를 보지 않게.
-            _charFrameW = idle.Width;
-            _charFrameH = idle.Height;
-            _charFrame = frame;
-            _charName = name;
-            _charSpriteCode = spriteCode;
+                _names[chrCode] = name;
+
+                var frame = ObsSprite.DecodeFirstFrame(obsPath);
+                if (frame == null) continue;
+
+                var px = new uint[frame.Width * frame.Height];
+                Buffer.BlockCopy(frame.Bgra, 0, px, 0, frame.Bgra.Length);
+                _sprites[chrCode] = (px, frame.Width, frame.Height);
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -125,40 +125,64 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
     }
 
     /// <summary>
-    /// <c>assets/characters/</c> 밑에 뽑아 둔 인물이 있으면 <b>아무거나 하나</b> 골라 쓴다 —
-    /// 원본 게임 없이도 도는 길이다. <c>WarOfGenesis.Editor</c> 의 「내보내기」가 그 폴더를
-    /// 만든다. 폴더 이름 순으로 골라 늘 같은 것이 뜨게 한다.
+    /// <c>assets/backgrounds/</c> 의 자리표시자 배경(JPEG)을 GDI+ 로 읽어 보드 크기(800×800)에
+    /// 그대로 맞춘다 — 크기가 이미 딱 맞아서 늘리지 않는다.
     /// </summary>
-    private static (string Name, int SpriteCode, string ObsPath)? FindAnyExported()
+    private static uint[] LoadBackground()
     {
-        string assetsRoot = FindRepoAssetsRoot();
-        if (assetsRoot.Length == 0 || !Directory.Exists(assetsRoot)) return null;
+        string repoRoot = FindRepoRoot();
+        string path = Path.Combine(repoRoot, "assets", "backgrounds", PlaceholderBgFile);
+        if (!File.Exists(path)) throw new FileNotFoundException($"배경 그림을 못 찾았습니다: {path}");
 
-        foreach (var folder in Directory.EnumerateDirectories(assetsRoot).OrderBy(d => d, StringComparer.Ordinal))
+        using var bitmap = new Bitmap(path);
+        using var resized = new Bitmap(bitmap, new Size(Cols * TileSize, Rows * TileSize));
+
+        var rect = new Rectangle(0, 0, resized.Width, resized.Height);
+        var data = resized.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
         {
-            var manifest = CharacterExport.LoadManifest(folder);
-            if (manifest == null) continue;
-
-            string obsPath = Path.Combine(folder, CharacterExport.ObsFileName(manifest.SpriteCode));
-            if (File.Exists(obsPath)) return (manifest.Name, manifest.SpriteCode, obsPath);
+            var px = new uint[resized.Width * resized.Height];
+            for (int y = 0; y < resized.Height; y++)
+            {
+                var row = new ReadOnlySpan<uint>((void*)(data.Scan0 + y * data.Stride), resized.Width);
+                row.CopyTo(px.AsSpan(y * resized.Width, resized.Width));
+            }
+            return px;
         }
-        return null;
+        finally { resized.UnlockBits(data); }
     }
 
-    /// <summary>저장소 뿌리를 거슬러 올라가 <c>assets/characters</c> 자리를 찍어 준다. 못 찾으면 빈 문자열.</summary>
-    private static string FindRepoAssetsRoot()
+    /// <summary><c>assets/characters/</c> 밑의 인물들을 전부 훑어 Chr 코드별로 모은다.</summary>
+    private static Dictionary<int, ExportedCharacter> CollectExportedManifests(string assetsRoot)
+    {
+        var result = new Dictionary<int, ExportedCharacter>();
+        if (assetsRoot.Length == 0 || !Directory.Exists(assetsRoot)) return result;
+
+        foreach (var folder in Directory.EnumerateDirectories(assetsRoot))
+        {
+            var manifest = CharacterExport.LoadManifest(folder);
+            if (manifest != null) result[manifest.ChrCode] = manifest;
+        }
+        return result;
+    }
+
+    private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
-        {
             if (Directory.Exists(Path.Combine(dir.FullName, "WarOfGenesis.Editor")))
-                return Path.Combine(dir.FullName, "assets", "characters");
-        }
-        return "";
+                return dir.FullName;
+        throw new DirectoryNotFoundException("저장소 뿌리(WarOfGenesis.Editor 옆)를 못 찾았습니다.");
+    }
+
+    private static string FindRepoAssetsRoot()
+    {
+        try { return Path.Combine(FindRepoRoot(), "assets", "characters"); }
+        catch (DirectoryNotFoundException) { return ""; }
     }
 
     /// <summary>내보낸 것이 없을 때의 마지막 수단 — 실제 게임 폴더에서 읽는다.</summary>
-    private static (string Name, int SpriteCode, string ObsPath) LoadFromGameFolder(int chrCode)
+    private static (string Name, string ObsPath) LoadFromGameFolder(int chrCode)
     {
         string chrFolder = Path.Combine(GameRoot, "Chr");
         string obsFolder = Path.Combine(GameRoot, "Obs");
@@ -170,13 +194,13 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
         var txr = TxrTable.Open(txrPath);
         var record = ChrTable.Scan(chrFolder).First(r => r.ChrCode == chrCode);
         string name = txr.TextOf(record.NameCode);
-        int spriteCode = record.SpriteCode;
+        if (name.Length == 0) name = txr.TextOf(record.AltNameCode);
 
-        string obsName = CharacterExport.ObsFileName(spriteCode);
+        string obsName = CharacterExport.ObsFileName(record.SpriteCode);
         if (!PakArchive.EnsureFile(obsFolder, "Obs", obsName))
             throw new FileNotFoundException($"{obsName} 을(를) Obs00~03.pak 에서 못 찾았습니다.");
 
-        return (name, spriteCode, Path.Combine(obsFolder, obsName));
+        return (name, Path.Combine(obsFolder, obsName));
     }
 
     // ── 창 열기 · 메시지 펌프 ─────────────────────────────────────────────────
@@ -191,13 +215,10 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
         Win32.ShowWindow(_hwnd, 5);
         Win32.UpdateWindow(_hwnd);
 
-        // 창을 먼저 보여 주고, 게임 자료 읽기는 뒤따로 돌린다 — Chr 578개·TXR
-        // 이름표를 훑는 동안 창이 안 뜬 채 멈춰 있지 않게.
-        System.Threading.Tasks.Task.Run(LoadCharacter);
+        System.Threading.Tasks.Task.Run(LoadScene);
 
         _running = true;
         var clock = Stopwatch.StartNew();
-        double last = 0;
 
         while (_running)
         {
@@ -209,11 +230,9 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
             }
             if (!_running) break;
 
-            _ = clock.Elapsed.TotalSeconds - last;
-            last = clock.Elapsed.TotalSeconds;
-
             Render();
         }
+        _ = clock.Elapsed;
     }
 
     private static void RegisterClassOnce()
@@ -243,7 +262,7 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, false);
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, "이동범위 (DirectX 데모)",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, "영혼의 검 — 첫 전투 (Btl 0173, 자리표시자 배경)",
             Win32.WS_OVERLAPPEDWINDOW, Win32.CW_USEDEFAULT, Win32.CW_USEDEFAULT,
             rect.Width, rect.Height,
             IntPtr.Zero, IntPtr.Zero, Win32.GetModuleHandleW(null), IntPtr.Zero);
@@ -259,61 +278,11 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
-            case Win32.WM_LBUTTONDOWN:
-                OnMouseDown(Win32.LowWord(lParam), Win32.HighWord(lParam));
-                return IntPtr.Zero;
             case Win32.WM_KEYDOWN:
-                OnKeyDown((int)wParam);
+                if ((int)wParam == Win32.VK_ESCAPE) _running = false;
                 return IntPtr.Zero;
         }
         return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
-    }
-
-    private void OnMouseDown(int px, int py)
-    {
-        int bx = px / Zoom, by = py / Zoom;
-        int col = bx / TileSize, row = (by - GridTop) / TileSize;
-
-        // 캐릭터가 선 칸을 누르면 이동범위를 켜고 끈다 — "캐릭터 차례가 오면(고르면)
-        // 이동범위가 깔린다"는 원래 게임 동작의 스위치 자리다.
-        if (col == _charCol && row == _charRow) { _showRange = !_showRange; return; }
-        if (_showRange && col >= 0 && col < Cols && row >= 0 && row < Rows && InRange(col, row))
-        {
-            _charCol = col;
-            _charRow = row;
-            _showRange = false;
-        }
-    }
-
-    private void OnKeyDown(int vk)
-    {
-        if (vk == Win32.VK_ESCAPE) { _running = false; return; }
-        if (vk is Win32.VK_RETURN or Win32.VK_SPACE) { _showRange = !_showRange; return; }
-
-        int dc = 0, dr = 0;
-        switch (vk)
-        {
-            case Win32.VK_LEFT: dc = -1; break;
-            case Win32.VK_RIGHT: dc = 1; break;
-            case Win32.VK_UP: dr = -1; break;
-            case Win32.VK_DOWN: dr = 1; break;
-            default: return;
-        }
-
-        // 방향키로 커서를 옮기다가, 이동범위가 켜져 있고 그 칸이 범위 안이면 그리로 선다.
-        int nc = Math.Clamp(_charCol + dc, 0, Cols - 1);
-        int nr = Math.Clamp(_charRow + dr, 0, Rows - 1);
-        if (_showRange && InRange(nc, nr)) { _charCol = nc; _charRow = nr; _showRange = false; }
-    }
-
-    /// <summary>
-    /// 이 칸이 이동 가능 범위 안인가 — <b>임시로 맨해튼 거리</b>만 본다.
-    /// 지형 비용·장애물은 아직 반영 안 됨(모션분석.md 참고).
-    /// </summary>
-    private bool InRange(int col, int row)
-    {
-        int dist = Math.Abs(col - _charCol) + Math.Abs(row - _charRow);
-        return dist > 0 && dist <= MovePoints;
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -328,54 +297,68 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
     private void Compose()
     {
         Array.Fill(_fb, BgColor);
+        DrawBackground();
+        DrawGridLines();
+        DrawUnits();
         DrawStatus();
-        DrawGrid();
-        DrawCharacter();
+    }
+
+    private void DrawBackground()
+    {
+        if (_bgPixels.Length == 0) return;
+        for (int y = 0; y < Rows * TileSize; y++)
+        {
+            var src = _bgPixels.AsSpan(y * Cols * TileSize, Cols * TileSize);
+            var dst = _fb.AsSpan((GridTop + y) * BoardWidth, Cols * TileSize);
+            src.CopyTo(dst);
+        }
+    }
+
+    private void DrawGridLines()
+    {
+        for (int c = 0; c <= Cols; c++)
+        {
+            int x = c * TileSize;
+            for (int y = GridTop; y < BoardHeight; y++) SetPixel(x, y, GridLine);
+        }
+        for (int r = 0; r <= Rows; r++)
+        {
+            int y = GridTop + r * TileSize;
+            for (int x = 0; x < BoardWidth; x++) SetPixel(x, y, GridLine);
+        }
+    }
+
+    private void DrawUnits()
+    {
+        foreach (var unit in Roster)
+        {
+            int tileX = unit.Col * TileSize, tileY = GridTop + unit.Row * TileSize;
+            uint mark = unit.IsAlly ? AllyMark : EnemyMark;
+            FillRect(tileX + 2, tileY + 2, TileSize - 4, TileSize - 4, mark & 0x60FFFFFF | 0x60000000);
+            StrokeRect(tileX, tileY, TileSize, TileSize, mark);
+
+            if (_sprites.TryGetValue(unit.ChrCode, out var sprite))
+            {
+                int x = tileX + TileSize / 2 - sprite.W / 2;
+                int y = tileY + TileSize - sprite.H;
+                BlitMasked(sprite.Px, sprite.W, sprite.H, x, y);
+            }
+        }
     }
 
     private void DrawStatus()
     {
         if (_loading)
         {
-            DrawText("게임 자료를 읽는 중...", 4, 4, Yellow);
+            DrawText("전투 자료를 읽는 중...", 4, 4, White);
             return;
         }
 
-        string rangeState = _showRange ? "표시 중" : "숨김";
-        DrawText($"{_charName} (sprite {_charSpriteCode})   이동력 {MovePoints}칸   이동범위: {rangeState}",
-                 4, 4, Yellow);
-        if (_loadError.Length > 0) DrawText($"그림을 못 읽었습니다: {_loadError}", 4, 18, 0xFFD05050);
-        else DrawText("스페이스/캐릭터 칸 클릭 = 이동범위 토글, 방향키/범위 안 클릭 = 이동", 4, 18, DimGray);
-    }
-
-    private void DrawGrid()
-    {
-        for (int r = 0; r < Rows; r++)
-        {
-            for (int c = 0; c < Cols; c++)
-            {
-                int x = c * TileSize, y = GridTop + r * TileSize;
-                uint tile = (c + r) % 2 == 0 ? TileA : TileB;
-                FillRect(x, y, TileSize, TileSize, tile);
-                StrokeRect(x, y, TileSize, TileSize, TileEdge);
-
-                if (_showRange && InRange(c, r))
-                    FillRect(x + 2, y + 2, TileSize - 4, TileSize - 4, RangeTint);
-            }
-        }
-
-        int cx = _charCol * TileSize, cy = GridTop + _charRow * TileSize;
-        FillRect(cx + 2, cy + 2, TileSize - 4, TileSize - 4, CharTileTint);
-    }
-
-    private void DrawCharacter()
-    {
-        if (_charFrame.Length == 0) return;
-
-        int bottomY = GridTop + (_charRow + 1) * TileSize;
-        int x = _charCol * TileSize + TileSize / 2 - _charFrameW / 2;
-        int y = bottomY - _charFrameH;
-        BlitMasked(_charFrame, _charFrameW, _charFrameH, x, y);
+        int allies = Roster.Count(u => u.IsAlly), enemies = Roster.Count(u => !u.IsAlly);
+        DrawText($"영혼의 검 — 첫 전투 (Btl 0173)   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
+                 4, 4, White);
+        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
+        else DrawText("파란 테두리 = 아군, 빨간 테두리 = 적군", 4, 20, DimGray);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -385,7 +368,7 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
         string key = text + ":" + argb;
         if (_textCache.TryGetValue(key, out var cached)) return cached;
 
-        var color = System.Drawing.Color.FromArgb((int)argb);
+        var color = Color.FromArgb((int)argb);
         var made = TextRaster.Render(text, color) ?? ([], 0, 0);
         if (_textCache.Count > 500) _textCache.Clear();
         _textCache[key] = made;
@@ -476,8 +459,8 @@ internal sealed unsafe class MoveRangeWindow : IDisposable
                 return Board.Load(int3(uv, 0));
             }
             """;
-        var vsBlob = Compiler.Compile(shader, "VS", "moverange.hlsl", "vs_4_0");
-        var psBlob = Compiler.Compile(shader, "PS", "moverange.hlsl", "ps_4_0");
+        var vsBlob = Compiler.Compile(shader, "VS", "battlescene.hlsl", "vs_4_0");
+        var psBlob = Compiler.Compile(shader, "PS", "battlescene.hlsl", "ps_4_0");
         _vs = _device.CreateVertexShader(vsBlob.Span);
         _ps = _device.CreatePixelShader(psBlob.Span);
 
