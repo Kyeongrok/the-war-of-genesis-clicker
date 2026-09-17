@@ -17,11 +17,18 @@ public sealed class TxrTable
 
     public IReadOnlyList<Row> Rows { get; }
 
-    private TxrTable(List<Row> rows) => Rows = rows;
+    private readonly Dictionary<ushort, string> _byId = [];
 
-    public static TxrTable Open(string path)
+    private TxrTable(List<Row> rows)
     {
-        byte[] data = File.ReadAllBytes(path);
+        Rows = rows;
+        foreach (var row in rows) _byId.TryAdd(row.TxrId, row.Text);
+    }
+
+    public static TxrTable Open(string path) => Parse(File.ReadAllBytes(path));
+
+    public static TxrTable Parse(byte[] data)
+    {
         Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         var cp949 = Encoding.GetEncoding(949);
 
@@ -38,7 +45,9 @@ public sealed class TxrTable
             uint relativeOffset = BitConverter.ToUInt32(data, recordOffset);
             ushort byteLength = BitConverter.ToUInt16(data, recordOffset + 4);
             ushort group = BitConverter.ToUInt16(data, recordOffset + 6);
-            ushort txrId = BitConverter.ToUInt16(data, recordOffset + 8);
+            // 번호는 이 10바이트 조각 바로 앞 2바이트다. 게임(G3PartII.dll LoadTextData 0x1004a190)은 머리 10바이트 뒤
+            // 0x0a 부터 (u16 번호, u32 위치, u32 길이) 로 읽는다. 예전에는 +8 을 번호로 읽어 모든 글이 한 칸씩 밀렸다.
+            ushort txrId = BitConverter.ToUInt16(data, recordOffset - 2);
             long textOffset = textBase + relativeOffset;
             recordOffset += 10;
 
@@ -81,10 +90,5 @@ public sealed class TxrTable
     }
 
     /// <summary>그 번호의 첫 글. 없으면 빈 문자열.</summary>
-    public string TextOf(ushort txrId)
-    {
-        foreach (var row in Rows)
-            if (row.TxrId == txrId) return row.Text;
-        return "";
-    }
+    public string TextOf(ushort txrId) => _byId.GetValueOrDefault(txrId, "");
 }
