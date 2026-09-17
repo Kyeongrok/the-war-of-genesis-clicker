@@ -10,17 +10,17 @@ using Rectangle = System.Windows.Shapes.Rectangle;
 namespace WarOfGenesis.Editor;
 
 /// <summary>
-/// <see cref="BattleDemoScene"/>(Btl 0045, 코어헌터 훈련장)를 32×32 칸 판 위에 그려 보는 창.
+/// <see cref="BattleDemoScene"/>(Btl 0045, 코어헌터 훈련장)를 원본 전투 맵(<c>Obt</c>) 위 32×34 칸 판에 그려 보는 창.
 /// </summary>
 /// <remarks>
 /// duel-dx 데모의 D3D 렌더링을 WPF <see cref="Canvas"/> 로 옮긴 것 — 게임 폴더 없이도, 저장소에
-/// 내보내 둔 <c>assets/characters</c>·<c>assets/backgrounds</c> 만으로 열어 볼 수 있다. 배치
+/// 내보내 둔 <c>assets/characters</c>·<c>assets/maps</c> 만으로 열어 볼 수 있다. 배치
 /// 자료는 duel-dx 와 이 창이 <see cref="BattleDemoScene"/> 하나를 함께 쓴다 — 둘 다 고칠 필요
 /// 없이 한 군데서만 고치면 된다.
 /// </remarks>
 public partial class BattleMapWindow : Window
 {
-    private const int TileSize = 25;
+    private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
 
     public BattleMapWindow()
     {
@@ -82,11 +82,11 @@ public partial class BattleMapWindow : Window
             var image = new Image
             {
                 Source = background,
-                Width = BattleDemoScene.Cols * TileSize,
-                Height = BattleDemoScene.Rows * TileSize,
+                Width = background.PixelWidth,
+                Height = background.PixelHeight,
             };
             Canvas.SetLeft(image, 0);
-            Canvas.SetTop(image, 0);
+            Canvas.SetTop(image, _mapOriginY);
             Board.Children.Add(image);
         }
 
@@ -97,25 +97,25 @@ public partial class BattleMapWindow : Window
         int enemies = BattleDemoScene.Roster.Count(u => !u.IsAlly);
         StatusText.Text =
             $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   " +
-            "배경: 자리표시자(Bgr 0200, 미확인)\n" +
+            $"배경: Obt {Path.GetFileNameWithoutExtension(BattleDemoScene.MapFile)}\n" +
             "파란 테두리 = 아군, 빨간 테두리 = 적군";
         if (loadError.Length > 0) StatusText.Text += $"\n못 읽은 자료가 있습니다: {loadError}";
     }
 
     private void DrawGridLines()
     {
-        double width = BattleDemoScene.Cols * TileSize, height = BattleDemoScene.Rows * TileSize;
+        double width = BattleDemoScene.Cols * TileW, height = BattleDemoScene.Rows * TileH;
         var brush = new SolidColorBrush(Color.FromArgb(64, 255, 255, 255));
         brush.Freeze();
 
         for (int c = 0; c <= BattleDemoScene.Cols; c++)
         {
-            double x = c * TileSize;
+            double x = c * TileW;
             Board.Children.Add(new Line { X1 = x, X2 = x, Y1 = 0, Y2 = height, Stroke = brush, StrokeThickness = 1 });
         }
         for (int r = 0; r <= BattleDemoScene.Rows; r++)
         {
-            double y = r * TileSize;
+            double y = r * TileH;
             Board.Children.Add(new Line { X1 = 0, X2 = width, Y1 = y, Y2 = y, Stroke = brush, StrokeThickness = 1 });
         }
     }
@@ -124,14 +124,14 @@ public partial class BattleMapWindow : Window
     {
         foreach (var unit in BattleDemoScene.Roster)
         {
-            double tileX = unit.Col * TileSize, tileY = unit.Row * TileSize;
+            double tileX = unit.Col * TileW, tileY = unit.Row * TileH;
             Color color = unit.IsAlly ? Colors.DeepSkyBlue : Colors.OrangeRed;
             var stroke = new SolidColorBrush(color);
             stroke.Freeze();
             var fill = new SolidColorBrush(Color.FromArgb(60, color.R, color.G, color.B));
             fill.Freeze();
 
-            var box = new Rectangle { Width = TileSize, Height = TileSize, Stroke = stroke, StrokeThickness = 2, Fill = fill };
+            var box = new Rectangle { Width = TileW, Height = TileH, Stroke = stroke, StrokeThickness = 2, Fill = fill };
             Canvas.SetLeft(box, tileX);
             Canvas.SetTop(box, tileY);
             Board.Children.Add(box);
@@ -145,26 +145,21 @@ public partial class BattleMapWindow : Window
                 Height = sprite.PixelHeight,
                 IsHitTestVisible = false,
             };
-            Canvas.SetLeft(image, tileX + TileSize / 2.0 - sprite.PixelWidth / 2.0);
-            Canvas.SetTop(image, tileY + TileSize - sprite.PixelHeight);
+            Canvas.SetLeft(image, tileX + TileW / 2.0 - sprite.PixelWidth / 2.0);
+            Canvas.SetTop(image, tileY + TileH - sprite.PixelHeight);
             Canvas.SetZIndex(image, 10);
             Board.Children.Add(image);
         }
     }
 
-    /// <summary>
-    /// <c>assets/backgrounds/</c> 의 자리표시자 배경(JPEG)을 읽는다 — 없으면 null(격자만 그린다).
-    /// </summary>
-    private static BitmapSource? LoadBackground()
-    {
-        string path = Path.Combine(FindAssetsRoot("backgrounds"), BattleDemoScene.PlaceholderBackgroundFile);
-        if (!File.Exists(path)) return null;
+    private double _mapOriginY;
 
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new Uri(path, UriKind.Absolute);
-        bitmap.EndInit();
+    /// <summary><c>assets/maps/</c> 의 전투 맵(<c>.obt</c>)을 풀어 그림으로 만든다.</summary>
+    private BitmapSource LoadBackground()
+    {
+        var map = ObtMap.Load(Path.Combine(FindAssetsRoot("maps"), BattleDemoScene.MapFile));
+        _mapOriginY = map.OriginY;
+        var bitmap = BitmapSource.Create(map.Width, map.Height, 96, 96, PixelFormats.Bgra32, null, map.Bgra, map.Width * 4);
         bitmap.Freeze();
         return bitmap;
     }
