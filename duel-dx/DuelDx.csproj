@@ -22,4 +22,10 @@
         <ProjectReference Include="..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
     </ItemGroup>
 
+    <!-- 배포용 exe 에 저장소의 assets 폴더(캐릭터·배경)를 함께 싣는다. 단일 exe 로 publish 할 때
+         IncludeAllContentForSelfExtract 로 exe 안에 묶여 실행 시 풀린다(AssetsFolder 가 찾는다). -->
+    <ItemGroup>
+        <Content Include="..\assets\**\*" LinkBase="assets" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>
