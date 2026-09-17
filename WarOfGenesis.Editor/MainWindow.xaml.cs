@@ -5,7 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using WarOfGenesis.Editor.Assets;
+using WarOfGenesis.Assets;
 
 namespace WarOfGenesis.Editor;
 
@@ -31,6 +31,11 @@ public partial class MainWindow : Window
         public ObsMotion Motion { get; } = motion;
         public override string ToString() => label;
     }
+
+    private ChrRecord? _currentRecord;
+    private string _currentName = "";
+    private List<ObsMotion> _currentSpriteMotions = [];
+    private List<ObsMotion> _currentFaceMotions = [];
 
     private List<ObsFrame> _currentFrames = [];
     private int _currentIndex;
@@ -175,9 +180,9 @@ public partial class MainWindow : Window
     private sealed class CharacterItem(ChrRecord record, string name)
     {
         public ChrRecord Record { get; } = record;
-        private readonly string _name = name;
+        public string Name { get; } = name;
         public override string ToString() =>
-            $"{(_name.Length > 0 ? _name : "(이름 없음)")}  [{Record.File}]  sprite={Record.SpriteCode} face={Record.FaceCode} job={Record.JobCode}";
+            $"{(Name.Length > 0 ? Name : "(이름 없음)")}  [{Record.File}]  sprite={Record.SpriteCode} face={Record.FaceCode} job={Record.JobCode}";
     }
 
     // ── 인물 → 몸짓 벌 ───────────────────────────────────────────────────────
@@ -186,41 +191,122 @@ public partial class MainWindow : Window
     {
         MotionList.Items.Clear();
         ClearViewer();
+        _currentRecord = null;
+        _currentSpriteMotions = [];
+        _currentFaceMotions = [];
+
         if (CharacterList.SelectedItem is not CharacterItem item) return;
 
         var record = item.Record;
-        LoadMotionsInto((record.SpriteCode, "몸짓"), (record.FaceCode, "초상"));
+        _currentRecord = record;
+        _currentName = item.Name;
+
+        _currentSpriteMotions = LoadMotions(record.SpriteCode, "몸짓");
+        _currentFaceMotions = record.FaceCode != 0 && record.FaceCode == record.SpriteCode
+            ? _currentSpriteMotions
+            : LoadMotions(record.FaceCode, "초상");
+
+        foreach (var motion in _currentSpriteMotions)
+            MotionList.Items.Add(new MotionItem($"몸짓 #{record.SpriteCode} — 몸짓 {motion.Id} ({motion.Frames.Count}컷)", motion));
+        foreach (var motion in _currentFaceMotions)
+            MotionList.Items.Add(new MotionItem($"초상 #{record.FaceCode} — 몸짓 {motion.Id} ({motion.Frames.Count}컷)", motion));
 
         StatusText.Text = MotionList.Items.Count == 0
             ? "이 인물의 그림 파일(Obs)을 못 찾았습니다."
-            : "가운데서 몸짓을 고르면 오른쪽에서 한 컷씩 볼 수 있습니다.";
+            : "가운데서 몸짓을 고르면 오른쪽에서 한 컷씩 볼 수 있습니다. 「내보내기」로 이 인물의 그림을 파일로 뽑을 수 있습니다.";
     }
 
-    private void LoadMotionsInto(params (ushort Code, string Kind)[] sources)
+    private List<ObsMotion> LoadMotions(ushort code, string kind)
     {
-        var seen = new HashSet<ushort>();
-        foreach (var (code, kind) in sources)
+        if (code == 0) return [];
+
+        string obsName = $"{code:D4}.obs";
+        if (!PakArchive.EnsureFile(_obsFolder, "Obs", obsName))
         {
-            if (code == 0 || !seen.Add(code)) continue;
-
-            string obsName = $"{code:D4}.obs";
-            if (!PakArchive.EnsureFile(_obsFolder, "Obs", obsName))
-            {
-                StatusText.Text = $"{kind} 그림({obsName})을 Obs00~03.pak 에서 못 찾았습니다.";
-                continue;
-            }
-
-            List<ObsMotion> motions;
-            try { motions = ObsSprite.Decode(Path.Combine(_obsFolder, obsName)); }
-            catch (Exception ex) when (ex is IOException or InvalidDataException)
-            {
-                StatusText.Text = $"{obsName} 을(를) 풀지 못했습니다: {ex.Message}";
-                continue;
-            }
-
-            foreach (var motion in motions)
-                MotionList.Items.Add(new MotionItem($"{kind} #{code} — 몸짓 {motion.Id} ({motion.Frames.Count}컷)", motion));
+            StatusText.Text = $"{kind} 그림({obsName})을 Obs00~03.pak 에서 못 찾았습니다.";
+            return [];
         }
+
+        try { return ObsSprite.Decode(Path.Combine(_obsFolder, obsName)); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"{obsName} 을(를) 풀지 못했습니다: {ex.Message}";
+            return [];
+        }
+    }
+
+    // ── 내보내기 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 고른 인물의 몸짓·초상 그림을 전부 PNG + <c>character.json</c> 자리표로 뽑는다.
+    /// </summary>
+    /// <remarks>
+    /// PNG 로 안 굽는다 — <c>&lt;ChrCode&gt;.chr</c> 와 <c>&lt;SpriteCode&gt;.obs</c>
+    /// (초상 번호가 다르면 그것도)를 게임 폴더에서 <b>그대로 복사</b>한다. 그러면
+    /// <see cref="ObsSprite"/>·<see cref="ChrTable"/> 를 한 글자도 안 고치고 이 폴더에도
+    /// 그대로 쓸 수 있다. 한 번 뽑아서 저장소에 커밋해 두면, 원본 게임
+    /// (<see cref="GameRootBox"/> 의 폴더)이 없는 컴퓨터에서도 그 인물을 다시 그릴 수
+    /// 있다 — duel-dx 같은 데모가 게임 없이 돌아가게 하려는 것이다.
+    /// </remarks>
+    private void ExportButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentRecord is not { } record) { StatusText.Text = "먼저 왼쪽에서 인물을 고르세요."; return; }
+
+        string chrPath = Path.Combine(_chrFolder, CharacterExport.ChrFileName(record.ChrCode));
+        if (!File.Exists(chrPath))
+        {
+            StatusText.Text = $"{Path.GetFileName(chrPath)} 을(를) 못 찾았습니다.";
+            return;
+        }
+
+        string? spritePath = EnsureObsPath(record.SpriteCode);
+        string? facePath = record.FaceCode == record.SpriteCode ? spritePath : EnsureObsPath(record.FaceCode);
+        if (spritePath == null && facePath == null)
+        {
+            StatusText.Text = "내보낼 그림(Obs)이 없습니다.";
+            return;
+        }
+
+        string assetsRoot = GuessAssetsRoot();
+        Directory.CreateDirectory(assetsRoot);
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "내보낼 곳을 고르세요 (보통 저장소의 assets/characters)",
+            InitialDirectory = assetsRoot,
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        string outDir = Path.Combine(dialog.FolderName, CharacterExport.FolderNameFor(record.ChrCode, _currentName));
+        Directory.CreateDirectory(outDir);
+
+        File.Copy(chrPath, Path.Combine(outDir, Path.GetFileName(chrPath)), overwrite: true);
+        if (spritePath != null) File.Copy(spritePath, Path.Combine(outDir, Path.GetFileName(spritePath)), overwrite: true);
+        if (facePath != null && facePath != spritePath)
+            File.Copy(facePath, Path.Combine(outDir, Path.GetFileName(facePath)), overwrite: true);
+
+        CharacterExport.SaveManifest(outDir, new ExportedCharacter(_currentName, record.ChrCode, record.SpriteCode, record.FaceCode));
+
+        StatusText.Text = $"내보냈습니다: {outDir}";
+    }
+
+    /// <summary>그 번호의 <c>.obs</c> 를 게임 폴더에 갖춰(없으면 pak 에서 풀어) 그 자리를 준다.</summary>
+    private string? EnsureObsPath(int code)
+    {
+        if (code == 0) return null;
+        string name = CharacterExport.ObsFileName(code);
+        return PakArchive.EnsureFile(_obsFolder, "Obs", name) ? Path.Combine(_obsFolder, name) : null;
+    }
+
+    /// <summary>저장소 뿌리를 거슬러 올라가 <c>assets/characters</c> 를 찍어 준다 — 못 찾으면 바탕화면.</summary>
+    private static string GuessAssetsRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "duel-dx")))
+                return Path.Combine(dir.FullName, "assets", "characters");
+        }
+        return Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
     }
 
     // ── 몸짓 → 한 컷씩 보기 ──────────────────────────────────────────────────

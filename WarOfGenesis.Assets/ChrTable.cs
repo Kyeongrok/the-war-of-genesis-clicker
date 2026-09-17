@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace WarOfGenesis.Editor.Assets;
+namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// <c>Chr/*.chr</c> 인물 레코드 — 이름 번호와 몸짓·초상 그림(Obs) 번호를 잇는다.

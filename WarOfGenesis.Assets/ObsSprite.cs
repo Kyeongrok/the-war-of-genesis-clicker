@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace WarOfGenesis.Editor.Assets;
+namespace WarOfGenesis.Assets;
 
 /// <summary>몸짓(Obs) 한 장 — 자리(X·Y)까지 포함해 BGRA 로 다 풀어 둔 것.</summary>
 public sealed record ObsFrame(int SlotId, int Width, int Height, int X, int Y, byte[] Bgra);
@@ -32,17 +32,48 @@ public static class ObsSprite
 
     private sealed record DecodedSlot(ushort SlotId, int Width, int Height, short X, short Y, byte[] Indexed);
 
+    /// <summary>
+    /// <b>첫 몸짓벌의 첫 장 하나만</b> 푼다 — 인물이 서 있는 자세 한 장만 필요할 때 쓴다.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Decode"/> 는 파일 안의 몸짓벌·장을 <b>죄다</b> 풀어서(살라딘 sprite
+    /// 하나가 백 장이 넘는다) 서 있는 그림 한 장만 필요할 때도 몇 초씩 걸린다. 이 쪽은
+    /// 첫 벌의 첫 장 딱 하나만 풀어서 순식간에 끝난다.
+    /// </remarks>
+    public static ObsFrame? DecodeFirstFrame(string path)
+    {
+        byte[] b = File.ReadAllBytes(path);
+        var subrefs = ParseStructure(b);
+        if (subrefs.Count == 0) return null;
+
+        var entry = TryParseSubEntry(b, subrefs[0].Offset, subrefs[0].Id);
+        if (entry == null || entry.Slots.Count == 0) return null;
+
+        var slot = DecodeSlot(b, entry.Slots[0].Offset, entry.TransparentIndex);
+        byte[] bgra = ToBgra(slot.Indexed, slot.Width, slot.Height, entry.Palette, entry.TransparentIndex);
+        return new ObsFrame(slot.SlotId, slot.Width, slot.Height, slot.X, slot.Y, bgra);
+    }
+
     public static List<ObsMotion> Decode(string path)
     {
         byte[] b = File.ReadAllBytes(path);
         var subrefs = ParseStructure(b);
 
         var motions = new List<ObsMotion>();
+
+        // 몸짓벌이 둘 이상일 때, 색인표에 적힌 둘째 벌부터의 자리값은 실제 머리 자리에서
+        // 최대 이백 바이트 가까이 어긋나 있을 수 있다(갈무리로 확인) — 97바이트 안쪽만
+        // 훑는 parse_subentry 로는 못 찾는다. 그런데 <b>바로 앞 벌의 마지막 장이 끝나는
+        // 자리에는 정확히</b> 다음 벌의 머리가 있다 — 벌들이 파일 안에 잇달아 있기
+        // 때문이다. 그래서 첫 벌만 색인표 자리를 믿고, 그다음부터는 앞 벌이 끝난 자리를
+        // 우선 짚어 보고, 그래도 안 되면 색인표 자리로 물러난다.
+        long nextSearchFrom = subrefs.Count > 0 ? subrefs[0].Offset : 0;
+
         foreach (var subref in subrefs)
         {
-            SubEntry entry;
-            try { entry = ParseSubEntry(b, subref.Offset, subref.Id); }
-            catch { continue; }
+            SubEntry? entry = TryParseSubEntry(b, nextSearchFrom, subref.Id)
+                            ?? TryParseSubEntry(b, subref.Offset, subref.Id);
+            if (entry == null) { nextSearchFrom = subref.Offset; continue; }
 
             var frames = new List<ObsFrame>();
             foreach (var slotRef in entry.Slots)
@@ -56,8 +87,26 @@ public static class ObsSprite
                 catch { /* 이 장만 건너뛴다 — 원본 도구도 그랬다. */ }
             }
             if (frames.Count > 0) motions.Add(new ObsMotion(entry.Id, frames));
+
+            nextSearchFrom = EndOfLastSlot(b, entry);
         }
         return motions;
+    }
+
+    private static SubEntry? TryParseSubEntry(byte[] b, long listedOffset, ushort expectedId)
+    {
+        if (listedOffset < 0) return null;
+        try { return ParseSubEntry(b, listedOffset, expectedId); }
+        catch (InvalidDataException) { return null; }
+    }
+
+    /// <summary>그 몸짓벌의 마지막 장 자료가 끝나는 자리 — 다음 벌의 머리가 있을 자리다.</summary>
+    private static long EndOfLastSlot(byte[] b, SubEntry entry)
+    {
+        if (entry.Slots.Count == 0) return 0;
+        var last = entry.Slots[^1];
+        uint payloadSize = U32(b, last.Offset + 2);
+        return last.Offset + 14 + payloadSize;
     }
 
     private static List<SubRef> ParseStructure(byte[] b)
@@ -82,7 +131,7 @@ public static class ObsSprite
     /// <summary>
     /// 몸짓 머리를 찾는다. 알려 준 자리에서 최대 96바이트 어긋나 있을 수 있어 하나씩 밀어 본다.
     /// </summary>
-    private static SubEntry ParseSubEntry(byte[] b, uint listedOffset, ushort expectedId)
+    private static SubEntry ParseSubEntry(byte[] b, long listedOffset, ushort expectedId)
     {
         for (int headerSkip = 0; headerSkip < 97; headerSkip++)
         {

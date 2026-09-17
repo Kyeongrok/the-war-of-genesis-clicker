@@ -11,3 +11,7 @@ obj/
 # VB6 (asset-extractor)
 *.exe
 *.log
+
+# Python (tools/)
+__pycache__/
+*.pyc

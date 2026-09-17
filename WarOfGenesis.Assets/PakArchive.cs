@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 
-namespace WarOfGenesis.Editor.Assets;
+namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// 창세기전3 파트2의 <c>.idx</c>/<c>.pak</c> 묶음 — 폴더 하나(Chr, Obs 따위)의 낱장 파일들을

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>WarOfGenesis.Assets</RootNamespace>
+        <!-- 창세기전3 파트2 게임 자료(TXR 이름표 · Chr 레코드 · Obs 도트그림)를 읽는
+             순수 로직뿐이다 — Windows API·UI 에 안 매여 있어 net10.0(플랫폼 무관)으로 둔다. -->
+    </PropertyGroup>
+
+</Project>

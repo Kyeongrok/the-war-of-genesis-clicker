@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 
-namespace WarOfGenesis.Editor.Assets;
+namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// <c>TXR/Txr.dat</c> 의 글 조각 표 — 인물 이름을 비롯한 온갖 문자열이 번호(<c>txr_id</c>)로
