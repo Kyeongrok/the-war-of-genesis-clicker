@@ -1,0 +1,12 @@
+# .NET 빌드 산출물
+bin/
+obj/
+
+# Visual Studio / Rider
+.vs/
+*.user
+*.suo
+
+# VB6 (asset-extractor)
+*.exe
+*.log
