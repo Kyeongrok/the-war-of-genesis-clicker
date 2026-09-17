@@ -1,0 +1,80 @@
+﻿<Window
+    x:Class="WarOfGenesis.Editor.CharactersWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="캐릭터 목록 — id · 이름 · 초상"
+    Width="620"
+    Height="760"
+    WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="8">
+        <StackPanel
+            Margin="0,0,0,8"
+            DockPanel.Dock="Top"
+            Orientation="Horizontal">
+            <TextBlock
+                Width="40"
+                VerticalAlignment="Center"
+                Text="찾기:" />
+            <TextBox
+                x:Name="FilterBox"
+                Width="220"
+                VerticalAlignment="Center"
+                TextChanged="FilterBox_TextChanged" />
+            <TextBlock
+                x:Name="StatusText"
+                Margin="12,0,0,0"
+                VerticalAlignment="Center"
+                Foreground="DimGray" />
+        </StackPanel>
+
+        <DataGrid
+            x:Name="Grid"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            CanUserResizeRows="False"
+            GridLinesVisibility="Horizontal"
+            HeadersVisibility="Column"
+            IsReadOnly="True"
+            RowHeight="52"
+            VerticalScrollBarVisibility="Auto">
+            <DataGrid.Columns>
+                <DataGridTextColumn
+                    Width="50"
+                    Binding="{Binding ChrCode}"
+                    Header="id" />
+                <DataGridTemplateColumn Width="50" Header="초상">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Image
+                                Width="44"
+                                Height="44"
+                                RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                Source="{Binding Portrait}"
+                                Stretch="Uniform" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn
+                    Width="160"
+                    Binding="{Binding Name}"
+                    Header="이름" />
+                <DataGridTextColumn
+                    Width="70"
+                    Binding="{Binding SpriteCode}"
+                    Header="sprite" />
+                <DataGridTextColumn
+                    Width="70"
+                    Binding="{Binding FaceCode}"
+                    Header="face" />
+                <DataGridTextColumn
+                    Width="60"
+                    Binding="{Binding JobCode}"
+                    Header="job" />
+                <DataGridTextColumn
+                    Width="*"
+                    Binding="{Binding File}"
+                    Header="Chr 파일" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>
