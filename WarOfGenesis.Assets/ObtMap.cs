@@ -6,7 +6,13 @@ namespace WarOfGenesis.Assets;
 /// 전투 맵 그림 한 장 — BGRA 픽셀과 전투 칸 수. 칸 하나는 <see cref="ObtMap.CellWidth"/>×<see cref="ObtMap.CellHeight"/> 픽셀이다.
 /// </summary>
 /// <param name="OriginY">그림의 맨 윗줄이 칸 판의 몇 픽셀 자리에 오는지(음수면 판 위로 삐져나간다).</param>
-public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, int Rows, byte[] Bgra);
+/// <param name="Heights">칸 높이(칸 수 = Cols×Rows, 행 우선) = (칸 레코드 첫 u16 + 19) / 20. 지형 비트 0x10 칸은 0.</param>
+/// <param name="Flags">칸 지형 플래그(칸 레코드 뒤 u16 격자). <c>&amp; 0x9</c> 면 못 들어가고, <c>&amp; 0x8</c> 이면 공격 범위에서도 빠진다.</param>
+public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, int Rows, byte[] Bgra, int[] Heights, ushort[] Flags)
+{
+    public int HeightAt(int col, int row) => Heights[row * Cols + col];
+    public ushort FlagsAt(int col, int row) => Flags[row * Cols + col];
+}
 
 /// <summary>
 /// <c>Obt/NNNN.obt</c> — 전투 맵. 칸별 지형 정보와, 맵 그림을 이루는 40×8 픽셀 띠 타일이 들어 있다.
@@ -40,7 +46,20 @@ public static class ObtMap
         int version = reader.ReadUInt16();
         int cols = reader.ReadInt16(), rows = reader.ReadInt16();
         int cellRecordSize = 10 + 1 + 16 + 2 + 2 + 2 + (version >= 4 ? 12 : 0);
-        reader.BaseStream.Seek(cols * rows * cellRecordSize + cols * rows * 2, SeekOrigin.Current);
+        // 칸 높이·지형 플래그 (0x10028680, 0x10030919 — 옵시디안 분석-전투 "이동 가능 영역")
+        var heights = new int[cols * rows];
+        var flags = new ushort[cols * rows];
+        for (int i = 0; i < heights.Length; i++)
+        {
+            heights[i] = (reader.ReadUInt16() + 19) / 20;
+            reader.BaseStream.Seek(cellRecordSize - 2, SeekOrigin.Current);
+        }
+        for (int i = 0; i < flags.Length; i++)
+        {
+            ushort f = reader.ReadUInt16();
+            if ((f & 0x10) != 0) { heights[i] = 0; f = 0; }
+            flags[i] = f;
+        }
 
         int layerW = reader.ReadInt16(), layerH = reader.ReadInt16();
         reader.ReadInt16();
@@ -89,6 +108,6 @@ public static class ObtMap
             }
         }
 
-        return new ObtMapImage(width, height, layerY * StripHeight, cols, rows, bgra);
+        return new ObtMapImage(width, height, layerY * StripHeight, cols, rows, bgra, heights, flags);
     }
 }
