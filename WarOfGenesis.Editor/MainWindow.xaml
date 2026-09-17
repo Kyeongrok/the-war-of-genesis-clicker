@@ -14,11 +14,6 @@
                     AutomationProperties.AutomationId="CharacterListMenuItem"
                     Click="CharacterListMenuItem_Click"
                     Header="캐릭터 목록(id·이름·초상)(_C)" />
-                <MenuItem
-                    x:Name="MotionMappingMenuItem"
-                    AutomationProperties.AutomationId="MotionMappingMenuItem"
-                    Click="MotionMappingMenuItem_Click"
-                    Header="고른 캐릭터의 모션 매핑(_T)" />
             </MenuItem>
             <MenuItem Header="요소(_E)">
                 <MenuItem
@@ -26,6 +21,28 @@
                     AutomationProperties.AutomationId="CharacterStatsMenuItem"
                     Click="CharacterStatsMenuItem_Click"
                     Header="캐릭터 스탯(_S)" />
+                <MenuItem
+                    x:Name="SkillsMenuItem"
+                    AutomationProperties.AutomationId="SkillsMenuItem"
+                    Click="SkillsMenuItem_Click"
+                    Header="스킬(어빌리티)(_K)" />
+            </MenuItem>
+            <MenuItem Header="에셋(_A)">
+                <MenuItem
+                    x:Name="MusicMenuItem"
+                    AutomationProperties.AutomationId="MusicMenuItem"
+                    Click="MusicMenuItem_Click"
+                    Header="배경음악(_B)" />
+                <MenuItem
+                    x:Name="EffectSoundMenuItem"
+                    AutomationProperties.AutomationId="EffectSoundMenuItem"
+                    Click="EffectSoundMenuItem_Click"
+                    Header="효과음(_S)" />
+                <MenuItem
+                    x:Name="VoiceMenuItem"
+                    AutomationProperties.AutomationId="VoiceMenuItem"
+                    Click="VoiceMenuItem_Click"
+                    Header="인물 대사(_V)" />
             </MenuItem>
             <MenuItem
                 x:Name="BattleMapMenuItem"
@@ -120,7 +137,18 @@
                     <ListBox
                         x:Name="CharacterList"
                         AutomationProperties.AutomationId="CharacterList"
-                        SelectionChanged="CharacterList_SelectionChanged" />
+                        PreviewMouseRightButtonDown="CharacterList_PreviewMouseRightButtonDown"
+                        SelectionChanged="CharacterList_SelectionChanged">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem
+                                    x:Name="MotionMappingMenuItem"
+                                    AutomationProperties.AutomationId="MotionMappingMenuItem"
+                                    Click="MotionMappingMenuItem_Click"
+                                    Header="모션 매핑 보기(_T)" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
                 </DockPanel>
 
                 <DockPanel Grid.Column="1" Margin="0,0,6,0">

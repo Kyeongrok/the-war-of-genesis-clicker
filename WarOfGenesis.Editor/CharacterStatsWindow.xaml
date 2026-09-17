@@ -38,7 +38,7 @@
             Margin="0,6,0,0"
             DockPanel.Dock="Bottom"
             Foreground="DimGray"
-            Text="값은 .chr 파일 기본값 + 장비 보너스(G3PartII.dll 식). HP 는 어빌리티 패시브 보너스를 아직 안 넣어 게임 화면보다 작을 수 있다. SOUL 은 전투 시작값/최대. ATK·ACR 은 시작 SOUL·가득 찬 TP 기준."
+            Text="값은 .chr 파일 기본값 + 장비 보너스(G3PartII.dll 식). HP 는 갑옷 배율을 곱한 화면 값이고, 어빌리티 패시브 보너스는 아직 안 넣었다. SOUL 은 전투 시작값/최대. ATK·ACR 은 시작 SOUL·가득 찬 TP 기준."
             TextWrapping="Wrap" />
 
         <DataGrid
