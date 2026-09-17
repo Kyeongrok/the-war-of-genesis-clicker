@@ -40,6 +40,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
     private const int BoardWidth = Cols * TileW, BoardHeight = GridTop + Rows * TileH;
+
+    /// <summary>창에 보이는 판 높이 — 판 전체의 80%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
+    private const int ViewHeight = BoardHeight * 4 / 5;
     private const double MaxZoom = 2;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
@@ -70,6 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private double _lastTime;
 
     private IntPtr _hwnd;
+    private static readonly bool Offscreen = Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1";
     private static readonly Win32.WndProc StaticWndProcDelegate = StaticWndProcTrampoline;
     private static BattleSceneWindow? _active;
     private static ushort _classAtom;
@@ -121,6 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
             }
             InitBattle();
+            LoadRingAssets();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -139,7 +144,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 1;
 
         // 제목 표시줄·테두리 몫을 조금 남긴다.
-        double fit = Math.Min((work.Width - 32) / (double)BoardWidth, (work.Height - 80) / (double)BoardHeight);
+        double fit = Math.Min((work.Width - 32) / (double)BoardWidth, (work.Height - 100) / (double)ViewHeight);
         return Math.Clamp(Math.Floor(fit * 20) / 20, 0.5, MaxZoom);
     }
 
@@ -194,7 +199,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         CreateNativeWindow();
         CreateSwapChain();
 
-        Win32.ShowWindow(_hwnd, 5);
+        // DUELDX_OFFSCREEN=1 이면 화면 밖에 포커스를 뺏지 않고 띄운다 — 자동 테스트가 사용자 화면을 건드리지 않게(WM_APP_SNAPSHOT 으로 확인).
+        Win32.ShowWindow(_hwnd, Offscreen ? 4 : 5);
         Win32.UpdateWindow(_hwnd);
 
         System.Threading.Tasks.Task.Run(LoadScene);
@@ -241,16 +247,17 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void CreateNativeWindow()
     {
-        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(BoardHeight * _zoom);
+        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
-        Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, false);
+        Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
+        IntPtr menu = CreateMenuBar();
 
         _active = this;
         _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}",
-            Win32.WS_OVERLAPPEDWINDOW, Win32.CW_USEDEFAULT, Win32.CW_USEDEFAULT,
+            Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : Win32.CW_USEDEFAULT, Offscreen ? 0 : Win32.CW_USEDEFAULT,
             rect.Width, rect.Height,
-            IntPtr.Zero, IntPtr.Zero, Win32.GetModuleHandleW(null), IntPtr.Zero);
+            IntPtr.Zero, menu, Win32.GetModuleHandleW(null), IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("창을 만들지 못했습니다.");
     }
 
@@ -270,6 +277,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_KEYUP:
                 _heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL:
+                ScrollCamera(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileH * 2);
+                return IntPtr.Zero;
+            case Win32.WM_APP_SNAPSHOT:
+                SaveSnapshot();
+                return IntPtr.Zero;
+            case Win32.WM_COMMAND:
+                OnMenuCommand((int)((long)wParam & 0xFFFF));
+                return IntPtr.Zero;
             case Win32.WM_KILLFOCUS:
                 _heldMoveKeys.Clear();
                 return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
@@ -279,9 +295,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
-                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom);
+                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
-                else _ringHover = RingItemAt(bx, by);
+                else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
             }
         }
@@ -292,31 +308,45 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
-        if (_statusUnit >= 0 && key != Win32.VK_ESCAPE) return;
-        switch (key)
+        if (_keysOpen) { OnKeysKey(key); return; }
+        if (key == Win32.VK_ESCAPE)
         {
-            case Win32.VK_ESCAPE:
-                if (_statusUnit >= 0) _statusUnit = -1;
-                else if (_ringUnit >= 0) _ringUnit = -1;
-                else CancelStep();
+            if (_statusUnit >= 0) _statusUnit = -1;
+            else if (_ringUnit >= 0) CancelRing();
+            else CancelStep(undoMove: true);
+            return;
+        }
+        if (key == Win32.VK_RETURN && _ringUnit >= 0 && _ringPhase == RingPhase.Idle && _ringHover >= 0) { PickRingItem(_ringHover); return; }
+        if (_statusUnit >= 0) return;
+
+        // 공격 대상 고르는 중: Enter·공격 키 = 커서의 적 공격, 다음 인물 키(Tab) = 다른 적
+        if (_targetWork >= 0 && _targetIsBasicAttack && _ringUnit < 0)
+        {
+            if (key == Win32.VK_RETURN || _keys.ActionFor(key) == KeyAction.Attack) { AttackCursorTarget(); return; }
+            if (_keys.ActionFor(key) == KeyAction.NextUnit) { CycleAttackCursor(); return; }
+        }
+
+        switch (MoveActionFor(key) ?? _keys.ActionFor(key))
+        {
+            case KeyAction.Grid: _showGrid = !_showGrid; break;
+            case KeyAction.Gauges: _showGauges = !_showGauges; break;
+            case KeyAction.Ring: ToggleRingForSelected(); break;
+            case KeyAction.Attack: RingShortcut(RingCommand.Attack); break;
+            case KeyAction.Ability: RingShortcut(RingCommand.Ability); break;
+            case KeyAction.Rest: RingShortcut(RingCommand.Rest); break;
+            case KeyAction.Status:
+                if (_ringUnit >= 0) RingShortcut(RingCommand.Status);
+                else if ((uint)_selected < _units.Length) _statusUnit = _selected;
                 break;
-            case Win32.VK_G: _showGrid = !_showGrid; break;
-            case Win32.VK_H: _showGauges = !_showGauges; break;
-            case Win32.VK_Q when IsPlayerTurn && !_units[_turn].IsBusy && !_abilityMenu && _targetWork < 0: Toast($"{UnitName(_turn)} 휴식"); Rest(_turn); break;
-            case Win32.VK_TAB:
+            case KeyAction.NextUnit:
                 for (int i = 1; i <= _units.Length; i++)
                 {
                     int next = (Math.Max(_selected, 0) + i) % _units.Length;
                     if (_units[next].Alive) { _selected = next; break; }
                 }
                 break;
-            case Win32.VK_SPACE: ToggleRingForSelected(); break;
-        }
-        if (_ringUnit >= 0 || _abilityMenu || _targetWork >= 0) return;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
-        switch (key)
-        {
-            case Win32.VK_UP or Win32.VK_W or Win32.VK_DOWN or Win32.VK_S
-                or Win32.VK_LEFT or Win32.VK_A or Win32.VK_RIGHT or Win32.VK_D:
+            case KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight:
+                if (_ringUnit >= 0 || _abilityMenu || _targetWork >= 0) break;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
                 _heldMoveKeys.Remove(key);
                 _heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
                 StepByKey(key);
@@ -324,14 +354,24 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
+    /// <summary>걷기 키 — 방향키는 늘, 그 밖은 단축키 표에서.</summary>
+    private KeyAction? MoveActionFor(int key) => key switch
+    {
+        Win32.VK_UP => KeyAction.MoveUp,
+        Win32.VK_DOWN => KeyAction.MoveDown,
+        Win32.VK_LEFT => KeyAction.MoveLeft,
+        Win32.VK_RIGHT => KeyAction.MoveRight,
+        _ => _keys.ActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight ? _keys.ActionFor(key) : null,
+    };
+
     /// <summary>
     /// 클릭: 공격 고르는 중이면 그 적을 친다. 인물이면 그 인물을 고르고(수치·영역 보기),
     /// 차례인 아군의 파란 칸이면 거기까지 걷는다. 빈 칸이면 차례인 인물로 선택을 되돌린다.
     /// </summary>
     private void OnClick(int clientX, int clientY)
     {
-        int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom);
-        if (OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
+        int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnKeysClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
         int boardY = by - GridTop;
         if (boardY < 0) return;
@@ -368,12 +408,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void StepByKey(int key)
     {
-        switch (key)
+        switch (MoveActionFor(key))
         {
-            case Win32.VK_UP or Win32.VK_W: TryStep(Facing.Up, 0, -1); break;
-            case Win32.VK_DOWN or Win32.VK_S: TryStep(Facing.Down, 0, 1); break;
-            case Win32.VK_LEFT or Win32.VK_A: TryStep(Facing.Left, -1, 0); break;
-            case Win32.VK_RIGHT or Win32.VK_D: TryStep(Facing.Right, 1, 0); break;
+            case KeyAction.MoveUp: TryStep(Facing.Up, 0, -1); break;
+            case KeyAction.MoveDown: TryStep(Facing.Down, 0, 1); break;
+            case KeyAction.MoveLeft: TryStep(Facing.Left, -1, 0); break;
+            case KeyAction.MoveRight: TryStep(Facing.Right, 1, 0); break;
         }
     }
 
@@ -382,7 +422,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
-        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && !_abilityMenu && _targetWork < 0 && IsPlayerTurn && !_units[_turn].IsBusy)
+        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !_abilityMenu && _targetWork < 0 && IsPlayerTurn && !_units[_turn].IsBusy)
             StepByKey(_heldMoveKeys[^1]);
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
@@ -394,6 +434,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
 
         foreach (var unit in _units) unit.SettleIfStopped();
+        UpdateCamera(dt);
+        UpdateRing();
         UpdateTurn();
         RefreshMoveRange();
     }
@@ -423,6 +465,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawStatusScreen();
         DrawToast();
         DrawOutcome();
+        DrawKeysPanel();
     }
 
     private void DrawBackground()
@@ -500,17 +543,18 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void DrawStatus()
     {
+        FillRect(0, _camY, BoardWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
         if (_loading)
         {
-            DrawText("전투 자료를 읽는 중...", 4, 4, White);
+            DrawText("전투 자료를 읽는 중...", 4, _camY + 4, White);
             return;
         }
 
         int allies = _units.Count(u => u.Alive && u.IsAlly), enemies = _units.Count(u => u.Alive && !u.IsAlly);
-        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   클릭·Tab: 인물 보기   G: 격자 {(_showGrid ? "끄기" : "켜기")}   H: 체력바 {(_showGauges ? "끄기" : "켜기")}",
-                 4, 4, White);
-        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
-        else DrawText(TurnLine(), 4, 20, 0xFFFFE8A0);
+        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   클릭·{KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물 보기   {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자   {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바   설정 메뉴: 단축키",
+                 4, _camY + 4, White);
+        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, _camY + 20, 0xFFD05050);
+        else DrawText(TurnLine(), 4, _camY + 20, 0xFFFFE8A0);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -619,7 +663,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _boardTex = _device.CreateTexture2D(new Texture2DDescription
         {
             Width = BoardWidth,
-            Height = BoardHeight,
+            Height = ViewHeight,
             MipLevels = 1,
             ArraySize = 1,
             Format = Format.B8G8R8A8_UNorm,
@@ -633,7 +677,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void CreateSwapChain()
     {
-        int w = (int)(BoardWidth * _zoom), h = (int)(BoardHeight * _zoom);
+        int w = (int)(BoardWidth * _zoom), h = (int)(ViewHeight * _zoom);
         using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
         using var adapter = dxgiDevice.GetAdapter();
         using var factory = adapter.GetParent<IDXGIFactory2>();
@@ -658,10 +702,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         var map = _ctx.Map(_boardTex, 0, MapMode.WriteDiscard);
         try
         {
-            for (int y = 0; y < BoardHeight; y++)
+            for (int y = 0; y < ViewHeight; y++)
             {
                 var dst = new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), BoardWidth);
-                _fb.AsSpan(y * BoardWidth, BoardWidth).CopyTo(dst);
+                _fb.AsSpan((_camY + y) * BoardWidth, BoardWidth).CopyTo(dst);
             }
         }
         finally { _ctx.Unmap(_boardTex, 0); }
@@ -669,7 +713,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void Draw()
     {
-        int w = (int)(BoardWidth * _zoom), h = (int)(BoardHeight * _zoom);
+        int w = (int)(BoardWidth * _zoom), h = (int)(ViewHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
         _ctx.RSSetViewport(0, 0, w, h);
         _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);

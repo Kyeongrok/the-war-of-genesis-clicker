@@ -22,6 +22,8 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private const uint MoveBlue = 0x786464FF, AttackRed = 0x78FF6428;
+    /// <summary>칸 사이 가는 줄 — 원본 화면(구현 노트 ui-3 캡처)처럼 어두운 남색.</summary>
+    private const uint RangeLine = 0xC0282C60;
     private const double RangeWaveCellsPerSecond = 30;
 
     /// <summary>한 인물의 이동 영역 — 칸마다 드는 TP(못 가면 <see cref="int.MaxValue"/>), 되짚을 앞 칸, 빨간 칸.</summary>
@@ -196,8 +198,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 uint color = range.Cost[i] != int.MaxValue ? MoveBlue : range.Red[i] ? AttackRed : 0;
                 if (color == 0) continue;
                 int x = col * TileW, y = GridTop + row * TileH;
-                FillRect(x + 1, y + 1, TileW - 2, TileH - 2, color);
-                StrokeRect(x + 1, y + 1, TileW - 2, TileH - 2, color | 0xFF000000);
+                FillRect(x, y, TileW, TileH, color);
+                StrokeRect(x, y, TileW + 1, TileH + 1, RangeLine);
             }
     }
 }
