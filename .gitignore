@@ -4,6 +4,7 @@ obj/
 
 # Visual Studio / Rider
 .vs/
+.idea/
 *.user
 *.suo
 
