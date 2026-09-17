@@ -26,7 +26,7 @@ internal static class Win32
     public const int VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
     public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B;
     public const int VK_G = 0x47;
-    public const int VK_R = 0x52;
+    public const int VK_Q = 0x51;
     public const int VK_H = 0x48;
     public const int VK_TAB = 0x09;
     public const int VK_W = 0x57, VK_A = 0x41, VK_S = 0x53, VK_D = 0x44;

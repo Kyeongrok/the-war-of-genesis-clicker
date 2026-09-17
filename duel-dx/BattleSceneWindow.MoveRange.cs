@@ -15,7 +15,8 @@ namespace DuelDx;
 /// <item>빨강: 파란 칸마다 기본공격(모양 2 십자, 사거리 5~8 = 정확히 2칸)이 닿는 칸 중 지형 &amp; 0x8 이 아닌 칸. 파랑이 먼저 칠해진다.</item>
 /// <item>색: 파랑 (100,100,255), 빨강 (255,100,40). 원점에서 맨해튼 거리로 물결처럼 퍼지며 깔린다(<c>+0x98</c> 반경).</item>
 /// </list>
-/// 인물의 지금 TP 로 셈하고, 자리나 TP 가 바뀌면 다시 셈한다.
+/// 차례인 인물은 <b>차례를 시작한 자리</b>에서 셈한다 — 걷는 동안에는 TP 를 안 쓰고 그 안에서 마음대로 오가며,
+/// 공격·어빌리티·휴식을 할 때 시작 자리에서 지금 자리까지의 걸음 비용을 한 번에 뺀다(<see cref="CommitMove"/>).
 /// Btl 오브젝트(Obj)·날기·큰 유닛·높이 보정이 붙는 공격 모양은 빠져 있다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -55,16 +56,21 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         var unit = _units[_selected];
-        if (_selected == _rangeUnit && unit.Col == _rangeCol && unit.Row == _rangeRow && unit.Tp == _rangeTp) return;
+        var (oc, or) = RangeOrigin(unit);
+        if (_selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp) return;
 
         _range = ComputeRange(unit);
         if (_range == null) { _rangeUnit = -1; return; }
-        if (_selected != _rangeUnit || unit.Col != _rangeCol || unit.Row != _rangeRow) _rangeStart = _lastTime;
+        if (_selected != _rangeUnit || oc != _rangeCol || or != _rangeRow) _rangeStart = _lastTime;
         _rangeUnit = _selected;
-        _rangeCol = unit.Col;
-        _rangeRow = unit.Row;
+        _rangeCol = oc;
+        _rangeRow = or;
         _rangeTp = unit.Tp;
     }
+
+    /// <summary>이동 영역을 셀 출발 칸 — 차례인 인물은 차례 시작 자리, 나머지는 지금 자리.</summary>
+    private (int Col, int Row) RangeOrigin(UnitState unit) =>
+        _turn >= 0 && _units[_turn] == unit ? (unit.OriginCol, unit.OriginRow) : (unit.Col, unit.Row);
 
     private UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row);
 
@@ -87,9 +93,11 @@ internal sealed unsafe partial class BattleSceneWindow
         int H(int col, int row) => map.HeightAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
 
+        var (originCol, originRow) = RangeOrigin(unit);
+
         bool Enterable(int col, int row)
         {
-            if (col == unit.Col && row == unit.Row) return true;
+            if (col == originCol && row == originRow) return true;
             if (!InBounds(col, row) || (map.FlagsAt(col, row) & 0x9) != 0) return false;
             if (LiveUnitAt(col, row) is { } other && other != unit) return false;
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
@@ -101,9 +109,9 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         var queue = new PriorityQueue<(int Col, int Row), int>();
-        int start = unit.Row * Cols + unit.Col;
+        int start = originRow * Cols + originCol;
         costs[start] = 0;
-        queue.Enqueue((unit.Col, unit.Row), 0);
+        queue.Enqueue((originCol, originRow), 0);
         (int Dx, int Dy)[] dirs = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
         while (queue.TryDequeue(out var cell, out int cost))
@@ -124,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 다른 인물이 선 칸은 파랑에서 뺀다.
         for (int i = 0; i < n; i++)
-            if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % Cols, i / Cols) != null) costs[i] = int.MaxValue;
+            if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % Cols, i / Cols) is { } other && other != unit) costs[i] = int.MaxValue;
 
         // 기본공격 모양 2(십자), 사거리 min 5 · max 8 (한 칸 = 4) → 정확히 2칸 떨어진 상하좌우.
         for (int i = 0; i < n; i++)
@@ -140,6 +148,39 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
         return new MoveRange(costs, prev, red);
+    }
+
+    /// <summary>
+    /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
+    /// </summary>
+    private static List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
+    {
+        int n = Cols * Rows, from = fromRow * Cols + fromCol;
+        if (from == target) return [];
+        var prev = new int[n];
+        Array.Fill(prev, -2);
+        prev[from] = -1;
+        var queue = new Queue<int>();
+        queue.Enqueue(from);
+        while (queue.TryDequeue(out int i))
+        {
+            int col = i % Cols, row = i / Cols;
+            foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
+            {
+                int nx = col + dx, ny = row + dy, j = ny * Cols + nx;
+                if ((uint)nx >= Cols || (uint)ny >= Rows || prev[j] != -2 || !range.CanReach(j)) continue;
+                prev[j] = i;
+                if (j == target)
+                {
+                    var path = new List<(int Col, int Row)>();
+                    for (int k = j; k != from; k = prev[k]) path.Add((k % Cols, k / Cols));
+                    path.Reverse();
+                    return path;
+                }
+                queue.Enqueue(j);
+            }
+        }
+        return null;
     }
 
     private void DrawMoveRange()

@@ -48,13 +48,13 @@ internal sealed unsafe partial class BattleSceneWindow
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
         int index = (by - oy - MenuHeadH) / MenuRowH;
-        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) return true;
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) { CancelTargeting(refund: true); return true; }
 
         var (name, w, enabled, reason) = rows[index];
         if (!enabled) { Toast($"{name}: {reason}"); _abilityMenu = true; return true; }
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
-        Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (Esc 취소)");
+        Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }
 

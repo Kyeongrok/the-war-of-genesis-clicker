@@ -26,11 +26,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly (RingCommand Command, string Label, string Hover)[] RingItems =
     [
         (RingCommand.Attack, "공격", "ATTACK"),
-        (RingCommand.Ability, "어빌", "ABILITY"),
+        (RingCommand.Rest, "휴식", "REST"),
         (RingCommand.Status, "상태", "STATUS"),
         (RingCommand.System, "시스템", "SYSTEM"),
         (RingCommand.Item, "아이템", "ITEM"),
-        (RingCommand.Rest, "휴식", "REST"),
+        (RingCommand.Ability, "어빌", "ABILITY"),
     ];
 
     private const int RingRadius = 89, RingItemRadius = 22, RingLift = 40;
@@ -76,12 +76,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return _db == null || unit.Tp + unit.Ctp >= _db.N(4);
     }
 
-    /// <summary>우클릭: 인물 위면 그 인물을 고르고 링을 연다. 빈 곳이면 열린 창을 닫는다.</summary>
+    /// <summary>우클릭: 열린 창·링을 닫거나, 목록·대상 고르기·걸음을 취소한다. 취소할 것이 없고 인물 위면 링을 연다.</summary>
     private void OnRightClick(int bx, int by)
     {
         if (_statusUnit >= 0) { _statusUnit = -1; return; }
+        if (_ringUnit >= 0) { _ringUnit = -1; return; }
+        if (CancelStep()) return;
         int index = UnitAtBoard(bx, by);
-        if (index < 0) { _ringUnit = -1; return; }
+        if (index < 0) return;
         _selected = index;
         _ringUnit = index;
         _ringHover = RingItemAt(bx, by);
@@ -116,7 +118,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case RingCommand.Status: _statusUnit = unit; break;
             case RingCommand.Rest: Toast($"{UnitName(unit)} 휴식"); Rest(unit); break;
             case RingCommand.Attack: BeginAttackTargeting(); break;
-            case RingCommand.Ability: _abilityMenu = true; break;
+            case RingCommand.Ability: CommitMoveForAction(); _abilityMenu = true; break;
             default: Toast($"{hover}: 아직 구현하지 않았습니다"); break;
         }
         return true;
