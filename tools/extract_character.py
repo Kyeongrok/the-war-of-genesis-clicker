@@ -293,12 +293,25 @@ def decode_obs_file(path, out_dir):
     structure = parse_obs_structure(b)
     os.makedirs(out_dir, exist_ok=True)
     count = 0
+    # 둘째 몸짓벌부터는 색인표 자리가 실제 머리에서 크게 어긋날 수 있다. 벌들은 파일 안에
+    # 잇달아 있으니, 앞 벌의 마지막 장이 끝난 자리를 먼저 짚고 안 되면 색인표 자리로 물러난다
+    # (WarOfGenesis.Assets/ObsSprite.cs 의 Decode 와 같은 방식).
+    next_search_from = structure["subentries"][0]["offset"]
     for sub_ref in structure["subentries"]:
-        try:
-            subentry = parse_subentry(b, sub_ref["offset"], sub_ref["id"])
-        except Exception as e:
-            print(f"  subentry {sub_ref['id']} error: {e}")
+        subentry = None
+        for offset in (next_search_from, sub_ref["offset"]):
+            try:
+                subentry = parse_subentry(b, offset, sub_ref["id"])
+                break
+            except Exception:
+                pass
+        if subentry is None:
+            print(f"  subentry {sub_ref['id']} not found near offset {sub_ref['offset']}")
+            next_search_from = sub_ref["offset"]
             continue
+        if subentry["slots"]:
+            last = subentry["slots"][-1]["offset"]
+            next_search_from = last + 14 + u32(b, last + 2)
         for slot_ref in subentry["slots"]:
             try:
                 decoded = decode_obs_slot(b, slot_ref["offset"], subentry["transparent_index"])
