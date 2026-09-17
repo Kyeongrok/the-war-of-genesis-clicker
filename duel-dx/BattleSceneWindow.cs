@@ -12,12 +12,14 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 「게임을 켜면 첫 전투 맵이 펼쳐지고, 거기 투입되는 캐릭터들이 배치되어 있다」는 첫 장면.
+/// 「게임을 켜면 전투 맵이 펼쳐지고, 거기 투입되는 캐릭터들이 배치되어 있다」는 장면 — 자료는
+/// <see cref="BattleDemoScene"/> 공용 상수를 그대로 쓴다.
 /// </summary>
 /// <remarks>
 /// 아군·적군 구성은 <c>Project/the-war-of-genesis/분석/분석-전투구성.md</c> 에서 정적
 /// 분석으로 찾아낸 <b>실제 <c>Btl/0173.btl</c> 자료</b>다 — "영혼의 검" 챕터(<c>0019.chp</c>)
-/// 의 첫 전투이자, 게임 전체를 통틀어 그 챕터에서 가장 먼저 나오는 전투. 캐릭터 배치
+/// 의 전투 중 하나. <b>챕터의 "첫" 전투라는 표시는 사용자가 아니라고 정정했다</b> — 진짜
+/// 순서는 아직 다시 확인 못 했다(<see cref="BattleDemoScene"/> 참고). 캐릭터 배치
 /// (Chr 코드·X/Y)는 이 파일에서 직접 읽어낸 값을 그대로 박아 뒀다 — 아직 <c>.btl</c> 을
 /// 일반적으로 읽어들이는 코드는 없다(이 전투 하나만 보여 주는 첫 데모).
 ///
@@ -28,31 +30,16 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe class BattleSceneWindow : IDisposable
 {
-    private readonly record struct Unit(int ChrCode, int Col, int Row, bool IsAlly);
-
-    /// <summary><c>Btl/0173.btl</c> 을 파싱해서 얻은 실제 배치. 아군 7 + 적군 15 = 22명.</summary>
-    private static readonly Unit[] Roster =
-    [
-        // 아군 — 천사(266)×2, 아델룬장교(302)×4, 세큘리티볼(19)×1
-        new(266, 17, 11, true), new(266, 13, 14, true),
-        new(302, 7, 30, true), new(302, 8, 18, true), new(302, 10, 24, true), new(302, 3, 27, true),
-        new(19, 5, 22, true),
-        // 적군 — 유블레인(33)×3, 엠블라(60)×6, 시녀(54)×6
-        new(33, 1, 20, false), new(33, 30, 30, false), new(33, 26, 8, false),
-        new(60, 15, 8, false), new(60, 19, 10, false), new(60, 13, 11, false),
-        new(60, 6, 16, false), new(60, 10, 19, false), new(60, 11, 20, false),
-        new(54, 9, 21, false), new(54, 5, 17, false), new(54, 11, 22, false),
-        new(54, 16, 14, false), new(54, 15, 10, false), new(54, 11, 13, false),
-    ];
+    private static readonly BattleUnit[] Roster = BattleDemoScene.Roster;
 
     private const int TileSize = 25;
-    private const int Cols = 32, Rows = 32;
+    private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
     private const int BoardWidth = Cols * TileSize, BoardHeight = GridTop + Rows * TileSize;
     private const int Zoom = 1;
 
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
-    private const string PlaceholderBgFile = "0200_placeholder.jpg";
+    private const string PlaceholderBgFile = BattleDemoScene.PlaceholderBackgroundFile;
 
     private const uint BgColor = 0xFF14100C;
     private const uint GridLine = 0x40FFFFFF;
@@ -262,7 +249,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, false);
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, "영혼의 검 — 첫 전투 (Btl 0173, 자리표시자 배경)",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, "영혼의 검 — 전투 Btl 0173 (자리표시자 배경)",
             Win32.WS_OVERLAPPEDWINDOW, Win32.CW_USEDEFAULT, Win32.CW_USEDEFAULT,
             rect.Width, rect.Height,
             IntPtr.Zero, IntPtr.Zero, Win32.GetModuleHandleW(null), IntPtr.Zero);
@@ -355,7 +342,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         }
 
         int allies = Roster.Count(u => u.IsAlly), enemies = Roster.Count(u => !u.IsAlly);
-        DrawText($"영혼의 검 — 첫 전투 (Btl 0173)   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
+        DrawText($"영혼의 검 — 전투 Btl 0173   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
                  4, 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
         else DrawText("파란 테두리 = 아군, 빨간 테두리 = 적군", 4, 20, DimGray);

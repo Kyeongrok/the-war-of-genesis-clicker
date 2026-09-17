@@ -128,6 +128,18 @@ public partial class MainWindow : Window
         window.Show();
     }
 
+    // ── 전투맵 보기 창 ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 게임 폴더를 안 열어도 된다 — 저장소에 내보내 둔 <c>assets/characters</c>·
+    /// <c>assets/backgrounds</c> 만으로 그린다(duel-dx 데모와 같은 자료).
+    /// </summary>
+    private void BattleMapMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new BattleMapWindow { Owner = this };
+        window.Show();
+    }
+
     // ── 이름 검색 ────────────────────────────────────────────────────────────
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)

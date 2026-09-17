@@ -15,6 +15,11 @@
                     Click="CharacterListMenuItem_Click"
                     Header="캐릭터 목록(id·이름·초상)(_C)" />
             </MenuItem>
+            <MenuItem
+                x:Name="BattleMapMenuItem"
+                AutomationProperties.AutomationId="BattleMapMenuItem"
+                Click="BattleMapMenuItem_Click"
+                Header="맵(_M)" />
         </Menu>
 
         <DockPanel Margin="8">
