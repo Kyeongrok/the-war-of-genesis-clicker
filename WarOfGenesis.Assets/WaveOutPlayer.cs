@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
-using WarOfGenesis.Assets;
 
-namespace WarOfGenesis.Editor;
+namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// 풀어 둔 16비트 PCM 을 Windows 기본 소리 장치로 트는 작은 재생기 — winmm <c>waveOut*</c> 을 바로 부른다.

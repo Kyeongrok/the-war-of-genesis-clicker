@@ -107,6 +107,12 @@ public sealed record CharacterData(
     /// <summary>장착 어빌리티 칸(<c>CChr+0x142</c>, 최대 3) — 패시브(분류 3) 어빌리티 번호, 0 은 빈 칸. .chr 파일에는 없어 처음엔 비어 있다.</summary>
     public ushort[] Passives { get; init; } = [0, 0, 0];
 
+    /// <summary>쌓인 경험치(<c>CChr+0x2e</c>) — 레벨 = 이 값 ÷ 100. .chr 파일에는 없다.</summary>
+    public int CumExp { get; init; }
+
+    /// <summary>목소리 묶음 번호(파일 6) — <c>Dat/Dmg.dat</c> 레코드(맞을 때·차례 부르는 목소리).</summary>
+    public ushort VoiceSet { get; init; }
+
     /// <summary>EXP(<c>CChr+0x30</c>) — 어빌리티를 올리고 배우는 데 쓴다. .chr 파일에는 없다.</summary>
     public int Exp { get; init; }
 
@@ -120,6 +126,7 @@ public sealed record CharacterData(
             [.. Enumerable.Range(0, 8).Select(i => (U(56 + 4 * i), U(58 + 4 * i))).Where(a => a.Item1 != 0)])
         {
             WeaponType = b[39],
+            VoiceSet = U(6),
         };
     }
 
@@ -149,12 +156,14 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 /// <summary>
 /// <c>Dat/NNNN.att</c> work 레코드(62바이트) 중 쓰는 칸. 이름 옆은 메모리 칸(파일 오프셋).
 /// </summary>
-/// <param name="RangeShape">+0x7(5) 사거리 모양 — 1 마름모, 2 십자(곧은 줄), 0 자기 자리.</param>
-/// <param name="RangeMin">+0xa(7) 사거리 최소 칸.</param>
-/// <param name="RangeMax">+0xc(9) 사거리 최대 칸.</param>
-/// <param name="TargetMode">+0x13(16) 1·4·5 = 커서 유닛 하나, 그 밖 = 효과 범위 안 모든 유닛(편 안 가림).</param>
-/// <param name="AreaShape">+0x14(17) 효과 범위 모양 1~9.</param>
-/// <param name="AreaArg">+0x1a(22) 효과 범위 인자.</param>
+/// <param name="RangeShape">+0x7(5) 사거리 모양 1~9 — 1 마름모, 2 십자, 3 부채꼴, 4 화면 전체, 5 직선, 6 폭3 줄, 7 폭5 줄, 8 대각선 X, 9 45° 삼각형. 0 = 자기 자리.</param>
+/// <param name="RangeMin">+0xa(7) 사거리 최소 — <b>4분의 1칸 단위</b>(로더: 값 ? 값×4−3 : 0).</param>
+/// <param name="RangeMax">+0xc(9) 사거리 최대 — 4분의 1칸 단위(로더: 값×4). 한 칸 = 4.</param>
+/// <param name="TargetMode">+0x13(16) 대상 방식 — 0·2 자기 자리, 1 적, 3·6 아무 칸, 4 아군, 5 아무 유닛, 7 빈 칸, 8 오브젝트.</param>
+/// <param name="AreaShape">+0x14(17) 효과 범위 모양 1~9(사거리와 같은 표).</param>
+/// <param name="AreaArg">+0x1a(22) 효과 범위 최대 — 칸 수(거리로는 ×4).</param>
+/// <param name="AreaMin">+0x1c(24) 효과 범위 최소 — c×(4c−3).</param>
+/// <param name="AreaMode">+0x1e(26) 효과 범위 안에서 누구를 맞히나(대상 방식과 같은 값).</param>
 /// <param name="Kind">+0x1f(27) 0 피해, 1·5 회복, 2·3 보조(HP 변화 없음), 4 오브젝트.</param>
 /// <param name="Power">+0x2a(37) 피해면 공격력 ×(200+값)/2000, 회복이면 최대 HP %.</param>
 /// <param name="Accuracy">+0x2c(39) 명중 바탕.</param>
@@ -168,11 +177,21 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeShape, ushort RangeMin, ushort RangeMax,
                               byte TargetMode, byte AreaShape, short AreaArg, byte Kind, short Power, byte Accuracy, byte Critical,
                               ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare,
-                              (byte Stat, short Value)[] Bonuses)
+                              (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0)
 {
     public bool IsDamage => Kind == 0;
     public bool IsHeal => Kind is 1 or 5;
-    public bool SingleTarget => TargetMode is 1 or 4 or 5;
+
+    /// <summary>겨냥 없이 자기 자리에 쓰는 work(모드 0·2) — 크래쉬 봄처럼 자기를 가운데로 터진다.</summary>
+    public bool SelfCentred => TargetMode is 0 or 2;
+
+    /// <summary>사거리 최소·최대(4분의 1칸)로 고친 값.</summary>
+    public int RangeMinQuarters => RangeMin == 0 ? 0 : RangeMin * 4 - 3;
+    public int RangeMaxQuarters => RangeMax * 4;
+
+    /// <summary>효과 범위 최대·최소(4분의 1칸).</summary>
+    public int AreaMaxQuarters => AreaArg * 4;
+    public int AreaMinQuarters => AreaMin * (4 * AreaMin - 3);
 }
 
 /// <summary>
@@ -191,6 +210,9 @@ public sealed class GameDatabase
     public IReadOnlyDictionary<int, AbilityData> Abilities { get; }
     public IReadOnlyDictionary<int, WorkData> Works { get; }
     public IReadOnlyDictionary<int, int> Num { get; }
+    /// <summary>이 표들을 읽은 자료 묶음 — 다른 파일(Dmg.dat 등)을 더 읽을 때 쓴다.</summary>
+    public GameFiles Files => _files;
+
     private readonly GameFiles _files;
 
     private GameDatabase(GameFiles files, TxrTable text, Dictionary<int, JobData> jobs, List<DepData> deps,
@@ -239,7 +261,8 @@ public sealed class GameDatabase
                 works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
                                                 a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
                                                 U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 57],
-                                                [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)]);
+                                                [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
+                                                U16(a, o + 24), a[o + 26]);
         }
 
         var abilities = new Dictionary<int, AbilityData>();
@@ -351,6 +374,43 @@ public sealed class GameDatabase
         }
     }
 
+    /// <summary>
+    /// 쓰러뜨렸을 때 받는 경험치(<c>0x10033020</c>) = Num[14] + Num[15] × (쓰러뜨린 적 레벨 − 내 레벨), Num[16]~Num[17] 로 자른다.
+    /// </summary>
+    public int ExpForKill(CharacterData killer, int targetLevel) =>
+        Math.Clamp(N(14) + N(15) * (targetLevel - killer.Level), N(16), N(17));
+
+    /// <summary>
+    /// 레벨업(<c>0x100318d0</c>) — 쌓인 경험치 ÷ 100 이 새 레벨. 오름 = 직업 성장률% × 기본값 / 100 × 오른 레벨 수(난수 없음).
+    /// TP 는 CTP 에서 옮겨 온다(CTP 바닥 100). HP·현재 TP 회복은 없다. 오른 능력치 목록을 <paramref name="gains"/> 로 준다.
+    /// </summary>
+    public CharacterData LevelUp(CharacterData c, out List<(string Stat, int Amount)> gains)
+    {
+        gains = [];
+        int level = Math.Max(1, c.CumExp / 100);
+        int d = level - c.Level;
+        if (d <= 0 || !Jobs.TryGetValue(c.JobId, out var job) || job.Growth.Length < 12) return c with { Level = (ushort)Math.Max(c.Level, level) };
+
+        int Grow(int index, int baseValue) => job.Growth[index] * baseValue / 100 * d;
+        int lp = Grow(6, (int)c.Lp), tp = Grow(7, c.Tp), psy = Grow(9, c.Psy), dep = Grow(10, c.Dep), dex = Grow(11, c.Dex);
+
+        int ctp = c.Ctp, gainTp = 0;
+        if (ctp - tp >= 100) { gainTp = tp; ctp -= tp; }
+        else if (ctp > 100) { gainTp = ctp - 100; ctp = 100; }
+
+        if (lp > 0) gains.Add(("LP", lp));
+        if (psy > 0) gains.Add(("PSY", psy));
+        if (gainTp > 0) gains.Add(("TP", gainTp));
+        if (dep > 0) gains.Add(("DEP", dep));
+        if (dex > 0) gains.Add(("DEX", dex));
+
+        return c with
+        {
+            Level = (ushort)level, Lp = c.Lp + (uint)lp, Psy = (ushort)(c.Psy + psy), Tp = (ushort)(c.Tp + gainTp),
+            Ctp = (ushort)ctp, Dep = (ushort)(c.Dep + dep), Dex = (ushort)(c.Dex + dex),
+        };
+    }
+
     /// <summary>DEP = 파일 DEP + 장비·패시브 보너스(0x20).</summary>
     public int Dep(CharacterData c) => c.Dep + EquipBonus(c, 0x20);
 
@@ -417,25 +477,29 @@ public sealed class GameDatabase
     }
 
     /// <summary>명중률 <c>0x1007b580</c>(%) = att+0x2c × 8/10 + 2 × (Num[7] + (공DEX − 방DEX)/Num[8] + (공TP − 방TP)/Num[9]) / 10.</summary>
-    public int HitChance(CharacterData a, int attackerTp, CharacterData d, int defenderTp, WorkData w)
+    public int HitChance(CharacterData a, int attackerTp, CharacterData d, int defenderTp, WorkData w, int defenderStance = 0)
     {
         int s = (Dex(a) - Dex(d)) / N(8) + (attackerTp - defenderTp) / N(9) + N(7);
-        return w.Accuracy * 8 / 10 + s * 2 / 10;
+        int hit = w.Accuracy * 8 / 10 + s * 2 / 10;
+        if (defenderStance == 2) hit -= Dex(d) / N(10);   // 회피 자세(work 515)
+        return hit;
     }
 
     /// <summary>
     /// 한 번의 판정 <c>0x1007b6f0</c>. 반환: (양, 결과 1 회복 / 2 맞음 / 3 빗나감, 치명).
     /// 피해 = (Num[3] − RDP) × 공격력 / Num[3] → 흔들기 ±Num[22]/2 % → 치명(rand%100 ≤ att+0x2d) × Num[23]/100.
-    /// 회복 = 최대 HP × 위력 / 100. 자세·상태 효과 보정은 뺐다.
+    /// 회복 = 최대 HP × 위력 / 100. 자세(방어·회피)는 넣었고 상태이상 보정은 뺐다.
     /// </summary>
     public (int Amount, int Result, bool Critical) Resolve(Random rng, CharacterData a, int aTp, int aSoul,
-                                                          CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w)
+                                                          CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w, int defenderStance = 0)
     {
         if (w.IsHeal) return (dMaxHp * w.Power / 100, 1, false);
         if (!w.IsDamage) return (0, 2, false);
-        if (rng.Next(100) >= HitChance(a, aTp, d, dTp, w)) return (0, 3, false);
+        if (rng.Next(100) >= HitChance(a, aTp, d, dTp, w, defenderStance)) return (0, 3, false);
 
         int dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * Atk(a, aSoul, w.Power) / N(3);
+        // 방어 자세(work 516): (DEX/Num11 + Num12)% 로 한 번 더 깎인다.
+        if (defenderStance == 1 && Dex(d) / N(11) + N(12) > rng.Next(100)) dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * dmg / N(3);
         int v = dmg * N(22) / 100;
         if (v > 0) dmg += rng.Next(v) - dmg * N(22) / 200;
         bool crit = rng.Next(100) <= w.Critical;

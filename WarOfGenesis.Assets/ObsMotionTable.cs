@@ -11,6 +11,12 @@ public readonly record struct MotionKey(int Start, int Length, int SubentryId, i
 /// <summary>모션 하나 — 번호, 전체 길이(틱), 그림 키들(시작 틱 순서).</summary>
 public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> Keys)
 {
+    /// <summary>시간줄 소리 키(종류 1) — 시작 틱에 소리 번호(<c>Snd/NNNN.snd</c>)를 한 번 튼다(<c>0x100e5410</c>, 분석-사운드).</summary>
+    public IReadOnlyList<(int Start, int Sound)> Sounds { get; init; } = [];
+
+    /// <summary>시간줄 자식 키(종류 2) — 시작 틱에 다른 Obs 의 모션(이펙트)을 띄운다. 그 모션의 소리도 난다.</summary>
+    public IReadOnlyList<(int Start, int Obs, int Motion)> Children { get; init; } = [];
+
     /// <summary><paramref name="tick"/> 틱에 보일 그림 키. 반복이면 길이로 감아 돌리고, 아니면 마지막 키에서 멈춘다.</summary>
     public MotionKey? KeyAt(int tick, bool loop)
     {
@@ -41,7 +47,8 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
 /// 모션: u16 번호, u16 nA, u16 nB, u16 길이(틱), u16 nU, (u16 벌, u16 장) × nU,
 ///       키 26바이트 × (nA + nB) — u16 종류, u16 시작틱, u16 길이, i16 × 10
 /// </code>
-/// 그림 키는 B 목록의 종류 0 이다(인자 0 = 몸짓벌 번호, 1 = 장 번호). 다른 종류(소리, 다른 Obs 모션 …)는 건너뛴다.
+/// B 목록(시간줄) 키: 종류 0 그림(인자 0 = 몸짓벌 번호, 1 = 장 번호), 1 소리(인자 0 = Snd 번호), 2 자식 모션(인자 0 = Obs, 1 = 모션).
+/// A 목록(시작 키, 모션 내내 되풀이하는 소리 등)은 건너뛴다.
 /// 모션 번호 = 동작 × 3 + 방향(0 뒷모습, 1 옆모습(왼쪽), 2 앞모습; 오른쪽은 옆모습을 뒤집음). 동작 0 = 서기, 1 = 걷기.
 /// 없는 모션이면 서기로 떨어진다(<c>SetAction 0x10072820</c>).
 /// </remarks>
@@ -77,13 +84,20 @@ public sealed class ObsMotionTable
                 p += 10 + 4 * nu;
 
                 var keys = new List<MotionKey>();
+                var sounds = new List<(int, int)>();
+                var children = new List<(int, int, int)>();
                 for (int k = 0; k < na + nb; k++, p += 26)
                 {
-                    if (k < na || U16(b, p) != 0) continue;
-                    keys.Add(new MotionKey(U16(b, p + 2), U16(b, p + 4), S16(b, p + 6), S16(b, p + 8)));
+                    if (k < na) continue;
+                    switch (U16(b, p))
+                    {
+                        case 0: keys.Add(new MotionKey(U16(b, p + 2), U16(b, p + 4), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 1: sounds.Add((U16(b, p + 2), S16(b, p + 6))); break;
+                        case 2: children.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                    }
                 }
                 keys.Sort((x, y) => x.Start.CompareTo(y.Start));
-                clips[id] = new ObsMotionClip(id, length, keys);
+                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children };
             }
             return new ObsMotionTable(clips);
         }

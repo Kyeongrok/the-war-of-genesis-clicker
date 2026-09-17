@@ -114,7 +114,7 @@ public static class VoiceLines
     }
 
     /// <summary>Tlk 글 표: u16 0 · u16 개수 n · u16 최대 번호 · u32 글 크기, 0x0A 부터 n×(u16 번호, u32 위치, u32 길이), 글은 (n+1)×10 부터.</summary>
-    private static Dictionary<int, string> ReadTlk(byte[]? d)
+    public static Dictionary<int, string> ReadTlk(byte[]? d)
     {
         var map = new Dictionary<int, string>();
         if (d == null || d.Length < 10) return map;

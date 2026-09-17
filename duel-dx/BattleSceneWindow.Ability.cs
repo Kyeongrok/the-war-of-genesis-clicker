@@ -54,6 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!enabled) { Toast($"{name}: {reason}"); _abilityMenu = true; return true; }
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
+        if (UseSelfCentredWork(w)) { Toast(name); return true; }
         Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }

@@ -1,7 +1,23 @@
 namespace WarOfGenesis.Assets;
 
 /// <summary>Btl 인물 레코드(29바이트) — 번호, Chr, 칸, 방향, 편(4 플레이어·3 동맹 AI·0~2 적), 레벨 보정.</summary>
-public sealed record BattleUnitRecord(int No, int ChrCode, int X, int Y, int Direction, int Side, int LevelOffset);
+public sealed record BattleUnitRecord(int No, int ChrCode, int X, int Y, int Direction, int Side, int LevelOffset)
+{
+    /// <summary>For.dat 편대 번호(파일 15) — 0 이 아니면 편대원이 대장 옆에 붙는다.</summary>
+    public int Squad { get; init; }
+
+    /// <summary>AI 이동 방식(꼬리 12B 의 첫 워드, 유닛 <c>+0x4dc</c>) 0~5 — ba-6, 이름은 가설.</summary>
+    public int AiMove { get; init; }
+
+    /// <summary>AI 깨어나는 조건(꼬리 +8, 유닛 <c>+0x4e4</c>): 0 처음부터, 1 깨어난 같은 편과 거리 ≤ 값, 2 적과 거리 ≤ 값, 3 시간 틱 ≥ 값.</summary>
+    public int WakeCondition { get; init; }
+
+    /// <summary>깨어나는 조건 값(꼬리 +10, 유닛 <c>+0x4e6</c>).</summary>
+    public int WakeValue { get; init; }
+
+    /// <summary>방향 바이트(0 뒤, 1 옆(왼쪽), 2 앞, 3 반대쪽 옆) → 바라보는 쪽(<c>SetAction 0x10072820</c>).</summary>
+    public Facing Facing => Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
+}
 
 /// <summary>Btl 오브젝트 레코드(11워드) — Obj 번호, 칸, 편.</summary>
 public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Team);
@@ -10,7 +26,7 @@ public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Tea
 public sealed record BattlePlacementCell(int X, int Y, int Direction);
 
 /// <summary>
-/// <c>Btl/NNNN.btl</c> 한 판의 머리·인물·오브젝트·배치 칸. 이벤트 절은 읽지 않는다.
+/// <c>Btl/NNNN.btl</c> 한 판의 머리·인물·오브젝트·배치 칸. 이벤트 절은 <see cref="BattleEvents"/> 가 읽는다.
 /// </summary>
 /// <remarks>
 /// 배치는 옵시디안 분석-전투(ba-1·ba-6)·<c>tools/re/btl_dump.py</c>:
@@ -41,9 +57,13 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
             {
                 int no = H(), chr = H(), x = H(), y = H();
                 int dir = b[o++];
-                int side = H(); H(); int lv = H(); H();
+                int side = H(); H(); int lv = H(); int squad = H();
+                int aiMove = BitConverter.ToInt16(b, o), wake = BitConverter.ToInt16(b, o + 8), wakeValue = BitConverter.ToInt16(b, o + 10);
                 o += 12;
-                units.Add(new BattleUnitRecord(no, chr, x, y, dir, side, lv));
+                units.Add(new BattleUnitRecord(no, chr, x, y, dir, side, lv)
+                {
+                    Squad = squad, AiMove = aiMove, WakeCondition = wake, WakeValue = wakeValue,
+                });
             }
             int nb = U(); U();
             for (int i = 0; i < nb; i++)
