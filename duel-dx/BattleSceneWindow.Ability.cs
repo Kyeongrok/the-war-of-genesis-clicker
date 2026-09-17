@@ -35,7 +35,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (fx, fy) = UnitFoot(_units[_turn]);
         int h = MenuHeadH + Math.Max(1, rowCount) * MenuRowH + 8;
         int x = fx + TileW < BoardWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
-        return (Math.Clamp(x, 8, BoardWidth - MenuW - 8), Math.Clamp(fy - h / 2, GridTop + 8, BoardHeight - h - 8));
+        return (Math.Clamp(x, 8, BoardWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
     }
 
     /// <summary>목록이 열려 있으면 클릭을 처리하고 true. 목록 밖을 누르면 닫는다.</summary>

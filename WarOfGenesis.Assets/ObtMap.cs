@@ -39,9 +39,13 @@ public static class ObtMap
     public const int CellWidth = 40, CellHeight = 32;
     private const int StripWidth = 40, StripHeight = 8;
 
-    public static ObtMapImage Load(string path)
+    public static ObtMapImage Load(string path) => Parse(File.ReadAllBytes(path), Path.GetFileName(path));
+
+    /// <summary>메모리에 읽어 둔 Obt(예: pak 안 파일)를 푼다.</summary>
+    public static ObtMapImage Parse(byte[] bytes, string name = "obt")
     {
-        using var reader = new BinaryReader(File.OpenRead(path));
+        using var reader = new BinaryReader(new MemoryStream(bytes));
+        string path = name;
 
         int version = reader.ReadUInt16();
         int cols = reader.ReadInt16(), rows = reader.ReadInt16();

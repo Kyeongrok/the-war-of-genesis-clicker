@@ -35,6 +35,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _targetWork = -1;
     private bool _targetIsBasicAttack;
 
+    /// <summary>공격 대상 커서 — 공격을 열면 칠 수 있는 적 중 HP 가 가장 낮은 적. 없으면 −1.</summary>
+    private int _attackCursor = -1;
+
     /// <summary>기본공격 work 1 의 동작 — 준비 5 → 베기 8 → 복귀 24(분석-모션 <c>0x1007f0a0</c>). 판정은 베기 끝에 들어간다.</summary>
     private static readonly int[] StrikeActions = [5, 8, 24];
     private const int StrikeHitStep = 1;
@@ -50,7 +53,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var unit in _units)
         {
             if (_db.Character(unit.ChrCode) is not { } c) continue;
-            unit.Data = c;
+            unit.Data = unit.IsAlly ? c with { Exp = DemoExp } : c;
             unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(c));
             unit.MaxTp = unit.Tp = _db.MaxTp(c);
             unit.Stp = Math.Max(1, _db.Stp(c));
@@ -58,6 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.Soul = _db.SoulStart;
             unit.HasTurn = true;
         }
+        FillDemoInventory();
     }
 
     private void UpdateTurn()
@@ -131,6 +135,7 @@ internal sealed unsafe partial class BattleSceneWindow
             (u.Tp, u.OriginCol, u.OriginRow) = undo;
         }
         _commitUndo = null;
+        _attackCursor = -1;
         _targetWork = -1;
         _abilityMenu = false;
     }
@@ -143,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
         CommitMove(u);
     }
 
-    /// <summary>우클릭·Esc 로 걸은 것을 물린다 — 차례 시작 자리로 되돌린다. 물렸으면 true.</summary>
+    /// <summary>Esc 로 걸은 것을 물린다 — 차례 시작 자리로 되돌린다. 물렸으면 true.</summary>
     private bool UndoMove()
     {
         if (!IsPlayerTurn) return false;
@@ -153,11 +158,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    /// <summary>우클릭·Esc 공통 취소 — 목록·대상 고르기(비용 돌려줌) → 걸음 물리기 순. 취소한 것이 있으면 true.</summary>
-    private bool CancelStep()
+    /// <summary>
+    /// 취소 — 목록·대상 고르기면 비용을 돌려주고 링을 다시 연다. <paramref name="undoMove"/> 면(Esc) 그다음 걸음도 물린다.
+    /// 우클릭은 걸음을 물리지 않는다. 취소한 것이 있으면 true.
+    /// </summary>
+    private bool CancelStep(bool undoMove)
     {
-        if (_abilityMenu || _targetWork >= 0) { CancelTargeting(refund: true); Toast("취소했습니다"); return true; }
-        return UndoMove();
+        if (_abilityMenu || _targetWork >= 0) { CancelTargeting(refund: true); OpenRing(_turn, reopen: true); return true; }
+        return undoMove && UndoMove();
     }
 
     /// <summary>차례 시작 자리에서 지금 자리까지 걸은 비용을 TP 에서 한 번에 빼고, 시작 자리를 지금 자리로 옮긴다.</summary>
@@ -274,7 +282,39 @@ internal sealed unsafe partial class BattleSceneWindow
         CommitMoveForAction();
         _targetWork = c.BasicWorkId;
         _targetIsBasicAttack = true;
-        Toast("공격할 적을 클릭하세요 — 빨간 칸 안의 적 (Esc 취소)");
+
+        var targets = AttackableEnemies();
+        if (targets.Count == 0)
+        {
+            CancelTargeting(refund: true);
+            Toast("공격할 수 있는 적이 없습니다");
+            return;
+        }
+        _attackCursor = targets[0];
+        string confirm = KeyBindings.KeyName(_keys[KeyAction.Attack]);
+        Toast($"{UnitName(_attackCursor)} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
+    }
+
+    /// <summary>차례인 인물이 지금 칠 수 있는 적 — HP 가 낮은 순(같으면 배열 순).</summary>
+    private List<int> AttackableEnemies() =>
+        [.. Enumerable.Range(0, _units.Length)
+            .Where(i => _units[i].Alive && !_units[i].IsAlly && FindAttackPath(_turn, i) != null)
+            .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
+
+    /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다.</summary>
+    private void CycleAttackCursor()
+    {
+        var targets = AttackableEnemies();
+        if (targets.Count == 0) return;
+        _attackCursor = targets[(targets.IndexOf(_attackCursor) + 1) % targets.Count];
+    }
+
+    /// <summary>커서의 적을 친다.</summary>
+    private void AttackCursorTarget()
+    {
+        if (_attackCursor < 0 || !IsPlayerTurn) return;
+        var (col, row) = (_units[_attackCursor].Col, _units[_attackCursor].Row);
+        OnTargetClick(col, row);
     }
 
     /// <summary>대상 고르는 중의 클릭. 처리했으면 true.</summary>
@@ -477,6 +517,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>어빌리티 대상 고르는 중이면 사거리 칸(노랑)을 깐다.</summary>
     private void DrawWorkRange()
     {
+        if (_targetWork >= 0 && _targetIsBasicAttack && _attackCursor >= 0)
+        {
+            // 노리는 적 칸에 깜빡이는 빨간 테두리
+            var t = _units[_attackCursor];
+            uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 4)));
+            uint color = alpha << 24 | 0xFF3030;
+            int cx = t.Col * TileW, cy = GridTop + t.Row * TileH;
+            for (int k = 0; k < 3; k++) StrokeRect(cx + k, cy + k, TileW - 2 * k, TileH - 2 * k, color);
+            return;
+        }
         if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || Work(_targetWork) is not { } w) return;
         var u = _units[_turn];
         for (int row = 0; row < Rows; row++)
@@ -494,8 +544,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_turn < 0) return $"틱 {_tick} — 차례를 기다리는 중";
         var u = _units[_turn];
         string help = !u.IsAlly ? "적군이 움직입니다"
-            : _targetWork >= 0 ? (_targetIsBasicAttack ? "공격할 적을 클릭 (우클릭·Esc 취소)" : "노란 칸 안의 대상을 클릭 (우클릭·Esc 취소)")
-            : "파란 칸 클릭·WASD: 걷기   우클릭·Space: 링   Q: 휴식   우클릭·Esc: 취소";
+            : _targetWork >= 0 ? (_targetIsBasicAttack ? "노리는 적: 클릭·Enter 공격, Tab 다른 적 (우클릭·Esc 취소)" : "노란 칸 안의 대상을 클릭 (우클릭·Esc 취소)")
+            : $"파란 칸 클릭·{KeyBindings.KeyName(_keys[KeyAction.MoveUp])}{KeyBindings.KeyName(_keys[KeyAction.MoveLeft])}{KeyBindings.KeyName(_keys[KeyAction.MoveDown])}{KeyBindings.KeyName(_keys[KeyAction.MoveRight])}: 걷기   우클릭·{KeyBindings.KeyName(_keys[KeyAction.Ring])}: 링   {KeyBindings.KeyName(_keys[KeyAction.Attack])}: 공격   {KeyBindings.KeyName(_keys[KeyAction.Rest])}: 휴식   우클릭: 취소   Esc: 취소·걸음 물리기";
         return $"틱 {_tick}   {(u.IsAlly ? "아군" : "적군")} {UnitName(_turn)} 차례   HP {u.Hp}/{u.MaxHp}  TP {u.Tp}/{u.MaxTp}  SOUL {u.Soul}   {help}";
     }
 
@@ -503,7 +553,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_outcome.Length == 0) return;
         var (_, w, h) = GetText(_outcome, 0xFFFFE070, 32);
-        int x = (BoardWidth - w) / 2, y = (BoardHeight - h) / 2;
+        int x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
         FillRect(x - 24, y - 14, w + 48, h + 28, 0xE0101828);
         StrokeRect(x - 24, y - 14, w + 48, h + 28, 0xFFFFE070);
         DrawText(_outcome, x, y, 0xFFFFE070, 32);

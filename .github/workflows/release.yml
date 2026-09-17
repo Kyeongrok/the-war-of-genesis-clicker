@@ -68,6 +68,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title $tag --generate-notes
           }
-          gh release upload $tag publish/DuelDx.exe publish/WarOfGenesis.Editor.exe --clobber
+          # 업로드가 GitHub 쪽 500·504 로 가끔 끊긴다 — 파일마다 몇 번 다시 시도한다.
+          foreach ($file in "publish/DuelDx.exe", "publish/WarOfGenesis.Editor.exe") {
+            for ($try = 1; $try -le 4; $try++) {
+              gh release upload $tag $file --clobber
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($try -eq 4) { exit 1 }
+              Write-Host "업로드 실패($file) — $try 번째, 30초 뒤 다시 시도"
+              Start-Sleep -Seconds 30
+            }
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

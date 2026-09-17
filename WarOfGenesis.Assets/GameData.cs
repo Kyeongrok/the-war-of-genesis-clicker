@@ -17,14 +17,50 @@ public sealed class GameFiles
     public static GameFiles FromGameRoot(string root) => new(root, pak: true);
     public static GameFiles FromFolder(string folder) => new(folder, pak: false);
 
-    public byte[]? Read(string folder, string name)
+    public byte[]? Read(string folder, string name) => ReadCore(folder, name, int.MaxValue);
+
+    /// <summary>파일 앞 <paramref name="count"/> 바이트까지만 읽는다(머리만 볼 때 — 목록을 채울 때 쓴다).</summary>
+    public byte[]? ReadHead(string folder, string name, int count) => ReadCore(folder, name, count);
+
+    /// <summary>폴더에 든 파일 이름과 크기 — 낱장과 <c>.idx</c> 색인을 합친 것(같은 이름이면 낱장 크기).</summary>
+    public IReadOnlyDictionary<string, long> List(string folder, string extension)
+    {
+        var result = new SortedDictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        if (_pak)
+            foreach (var (fn, ent) in IndexOf(folder))
+                if (fn.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) result[fn] = ent.End - ent.Start + 1;
+        string dir = Path.Combine(_root, folder);
+        if (Directory.Exists(dir))
+            foreach (var f in new DirectoryInfo(dir).EnumerateFiles("*" + extension)) result[f.Name] = f.Length;
+        return result;
+    }
+
+    private byte[]? ReadCore(string folder, string name, int maxBytes)
     {
         string loose = Path.Combine(_root, folder, name);
-        if (File.Exists(loose)) return File.ReadAllBytes(loose);
+        if (File.Exists(loose))
+        {
+            if (maxBytes == int.MaxValue) return File.ReadAllBytes(loose);
+            using var lf = File.OpenRead(loose);
+            var head = new byte[(int)Math.Min(maxBytes, lf.Length)];
+            lf.ReadExactly(head);
+            return head;
+        }
         if (!_pak) return null;
 
-        if (!_index.TryGetValue(folder, out var map))
+        if (!IndexOf(folder).TryGetValue(name, out var ent)) return null;
+        using var f = File.OpenRead(Path.Combine(_root, folder, ent.Pak));
+        f.Seek(ent.Start, SeekOrigin.Begin);
+        var buf = new byte[Math.Min(ent.End - ent.Start + 1, maxBytes)];
+        f.ReadExactly(buf);
+        return buf;
+    }
+
+    private Dictionary<string, (string Pak, int Start, int End)> IndexOf(string folder)
+    {
+        lock (_index)
         {
+            if (_index.TryGetValue(folder, out var map)) return map;
             map = new(StringComparer.OrdinalIgnoreCase);
             string dir = Path.Combine(_root, folder);
             if (Directory.Exists(dir))
@@ -41,13 +77,8 @@ public sealed class GameFiles
                 }
             }
             _index[folder] = map;
+            return map;
         }
-        if (!map.TryGetValue(name, out var ent)) return null;
-        using var f = File.OpenRead(Path.Combine(_root, folder, ent.Pak));
-        f.Seek(ent.Start, SeekOrigin.Begin);
-        var buf = new byte[ent.End - ent.Start + 1];
-        f.ReadExactly(buf);
-        return buf;
     }
 
     private static string XorName(byte[] d, int o, int n)
@@ -70,6 +101,15 @@ public sealed record CharacterData(
     ushort Psy, ushort Tp, ushort TpDivisor, ushort Ctp, ushort Dep, ushort Dex,
     ushort[] Items, (ushort Ability, ushort Level)[] Abilities)
 {
+    /// <summary>무기 종류(파일 39, <c>CChr+0x4a</c>) — 무기 칸에는 이 종류 아이템만 낀다(<c>0x10032d70</c>).</summary>
+    public byte WeaponType { get; init; }
+
+    /// <summary>장착 어빌리티 칸(<c>CChr+0x142</c>, 최대 3) — 패시브(분류 3) 어빌리티 번호, 0 은 빈 칸. .chr 파일에는 없어 처음엔 비어 있다.</summary>
+    public ushort[] Passives { get; init; } = [0, 0, 0];
+
+    /// <summary>EXP(<c>CChr+0x30</c>) — 어빌리티를 올리고 배우는 데 쓴다. .chr 파일에는 없다.</summary>
+    public int Exp { get; init; }
+
     public static CharacterData? Parse(int code, byte[]? b)
     {
         if (b == null || b.Length != 90) return null;
@@ -77,8 +117,13 @@ public sealed record CharacterData(
         return new CharacterData(code, U(2), U(4), U(8), U(10), U(12), b[14], U(15), U(19), U(21), BitConverter.ToUInt32(b, 23),
             U(27), U(29), U(31), U(33), U(35), U(37),
             [.. Enumerable.Range(0, 6).Select(i => U(42 + 2 * i))],
-            [.. Enumerable.Range(0, 8).Select(i => (U(56 + 4 * i), U(58 + 4 * i))).Where(a => a.Item1 != 0)]);
+            [.. Enumerable.Range(0, 8).Select(i => (U(56 + 4 * i), U(58 + 4 * i))).Where(a => a.Item1 != 0)])
+        {
+            WeaponType = b[39],
+        };
     }
+
+    public int AbilityLevel(int abilityId) => Abilities.FirstOrDefault(a => a.Ability == abilityId).Level;
 }
 
 /// <summary><c>Dat/Job.dat</c> 레코드(파일 67바이트). 53 오프셋 이름 6칸 = 체질(0 무속성 … 5 메텔)별 직업 이름.</summary>
@@ -90,8 +135,16 @@ public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 /// <summary><c>Dat/Itm.dat</c> 레코드(파일 48바이트). 종류 0 VES … 14 일반검, 15 대검 …; <see cref="Bonuses"/> = (능력치 번호, 값).</summary>
 public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense, (ushort Stat, ushort Value)[] Bonuses);
 
-/// <summary><c>Abi/NNNN.abi</c> 레코드(26바이트)와 레벨별 work 번호.</summary>
-public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Dictionary<int, int> WorkByLevel);
+/// <summary>
+/// <c>Abi/NNNN.abi</c> 레코드(26바이트)와 레벨별 work 번호. 파일 오프셋: 6 선행1·8 그 레벨, 9 선행2·11 그 레벨,
+/// 12 분류(0 전투 밖, 1 전투, 2 군단기, 3 패시브), 24 설명 TXR.
+/// </summary>
+public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Dictionary<int, int> WorkByLevel,
+                                 ushort Prereq1 = 0, byte Prereq1Level = 0, ushort Prereq2 = 0, byte Prereq2Level = 0,
+                                 byte Category = 0, ushort DescriptionId = 0)
+{
+    public bool IsPassive => Category == 3;
+}
 
 /// <summary>
 /// <c>Dat/NNNN.att</c> work 레코드(62바이트) 중 쓰는 칸. 이름 옆은 메모리 칸(파일 오프셋).
@@ -111,9 +164,11 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 /// <param name="TpBase">+0x32(45) TP 비용.</param>
 /// <param name="SoulBase">+0x34(47) SOUL 비용.</param>
 /// <param name="Prepare">+0x3f(57) 준비 동작 종류.</param>
+/// <param name="Bonuses">+0x20/+0x24 … (파일 28/29, 31/32, 34/35) (능력치 번호, 값) 세 짝 — 패시브 보너스(<c>0x10032af0</c>).</param>
 public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeShape, ushort RangeMin, ushort RangeMax,
                               byte TargetMode, byte AreaShape, short AreaArg, byte Kind, short Power, byte Accuracy, byte Critical,
-                              ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare)
+                              ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare,
+                              (byte Stat, short Value)[] Bonuses)
 {
     public bool IsDamage => Kind == 0;
     public bool IsHeal => Kind is 1 or 5;
@@ -124,8 +179,8 @@ public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeSh
 /// 캐릭터 화면에 필요한 게임 표 묶음 — 텍스트(TXR), 직업·계열·아이템·어빌리티·work·수치(Num) — 와 능력치 식.
 /// </summary>
 /// <remarks>
-/// 식은 <c>G3PartII.dll</c> 에서 옮겼다(옵시디안 분석-캐릭터·분석-전투). 전투 유닛 쪽 버프(+0x4c8 …)와
-/// 어빌리티 패시브 보너스(<c>0x10032af0</c>)는 넣지 않았다 — 파일 기본값 + 장비 보너스까지만이다.
+/// 식은 <c>G3PartII.dll</c> 에서 옮겼다(옵시디안 분석-캐릭터·분석-전투). 파일 기본값 + 장비 보너스 + 장착 어빌리티(패시브) 보너스까지다.
+/// 전투 유닛 쪽 버프(+0x4c8 …)는 넣지 않았다.
 /// </remarks>
 public sealed class GameDatabase
 {
@@ -183,7 +238,8 @@ public sealed class GameDatabase
             for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 62)
                 works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
                                                 a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
-                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 57]);
+                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 57],
+                                                [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)]);
         }
 
         var abilities = new Dictionary<int, AbilityData>();
@@ -191,7 +247,8 @@ public sealed class GameDatabase
         {
             if (files.Read("Abi", $"{f:D4}.abi") is not { } a) continue;
             for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
-                abilities[U16(a, o)] = new AbilityData(U16(a, o), U16(a, o + 2), U16(a, o + 4), []);
+                abilities[U16(a, o)] = new AbilityData(U16(a, o), U16(a, o + 2), U16(a, o + 4), [],
+                                                       U16(a, o + 6), a[o + 8], U16(a, o + 9), a[o + 11], a[o + 12], U16(a, o + 24));
         }
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && abilities.TryGetValue(w.AbilityId, out var ab))
@@ -233,7 +290,69 @@ public sealed class GameDatabase
 
     /// <summary>장비 보너스 합(<c>0x10032c60</c>): 아이템 (능력치 번호, 값) 짝 중 그 번호. 0x30 HP, 0x1f PSY, 0x1e DEX, 0x21 TP, 0x25 SOUL.</summary>
     public int EquipBonus(CharacterData c, int stat) =>
-        c.Items.Where(i => i != 0 && Items.ContainsKey(i)).SelectMany(i => Items[i].Bonuses).Where(b => b.Stat == stat).Sum(b => b.Value);
+        c.Items.Where(i => i != 0 && Items.ContainsKey(i)).SelectMany(i => Items[i].Bonuses.Take(3)).Where(b => b.Stat == stat).Sum(b => b.Value)
+        + PassiveBonus(c, stat);
+
+    /// <summary>장착 어빌리티 보너스 <c>0x10032af0</c> — 칸마다 그 어빌리티 지금 레벨 work 의 (능력치, 값) 짝을 더한다.</summary>
+    public int PassiveBonus(CharacterData c, int stat)
+    {
+        int sum = 0;
+        foreach (ushort id in c.Passives)
+        {
+            if (id == 0 || !Abilities.TryGetValue(id, out var ab) || !ab.WorkByLevel.TryGetValue(c.AbilityLevel(id), out int wid)
+                || !Works.TryGetValue(wid, out var w)) continue;
+            sum += w.Bonuses.Where(b => b.Stat == stat).Sum(b => b.Value);
+        }
+        return sum;
+    }
+
+    /// <summary>장착 어빌리티 칸 수 = 직업이 든 Dep 레코드 파일 4바이트(1~3). 직업 37 은 늘 3.</summary>
+    public int PassiveSlotCount(CharacterData c) =>
+        c.JobId == 37 ? 3 : Math.Clamp((int)(Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId))?.Tier ?? 1), 1, 3);
+
+    /// <summary>
+    /// 아이템을 끼울 수 있는 칸(<c>0x10032d70</c>/<c>0x10032cc0</c>): 0 무기 = 캐릭터 무기 종류와 같을 때, 1 갑옷 = 종류 2,
+    /// 2 목걸이 = 6, 3 반지 = 5, 4 벨트 = 4, 5 신발 = 3. 캡슐(7)은 못 낀다.
+    /// </summary>
+    public bool FitsSlot(CharacterData c, ItemData item, int slot) => slot switch
+    {
+        0 => item.Type == WeaponTypeOf(c),
+        1 => item.Type == 2,
+        2 => item.Type == 6,
+        3 => item.Type == 5,
+        4 => item.Type == 4,
+        5 => item.Type == 3,
+        _ => false,
+    };
+
+    /// <summary>
+    /// 무기 칸에 낄 종류. .chr 파일 39 가 0 인데 무기를 들고 있으면(제이슨 0062 가 일반 검을 들고 0) 든 무기 종류를 쓴다 —
+    /// 원본은 저장 파일의 캐릭터 기록(CChr+0x4a)을 쓰므로 .chr 값이 비어 있을 수 있다(가설).
+    /// </summary>
+    public int WeaponTypeOf(CharacterData c) =>
+        c.WeaponType == 0 && c.Items[0] != 0 && Items.TryGetValue(c.Items[0], out var w) ? w.Type : c.WeaponType;
+
+    /// <summary>그 레벨 work 의 EXP(+0x30) — Status 화면 빨간 숫자. 최대 레벨이거나 work 가 없으면 0.</summary>
+    public int AbilityExpCost(AbilityData ab, int level) =>
+        level < ab.MaxLevel && ab.WorkByLevel.TryGetValue(level, out int wid) && Works.TryGetValue(wid, out var w) ? w.ExpCost : 0;
+
+    /// <summary>
+    /// 배울 수 있는 어빌리티(<c>0x100324e0</c>) — 직업 어빌리티 목록 중 아직 안 배웠고, 선행 어빌리티 두 개의 레벨 조건을 채운 것.
+    /// </summary>
+    public IEnumerable<AbilityData> Learnable(CharacterData c)
+    {
+        if (!Jobs.TryGetValue(c.JobId, out var job)) yield break;
+        foreach (ushort id in job.AbilityList)
+        {
+            if (id == 0 || c.AbilityLevel(id) > 0 || !Abilities.TryGetValue(id, out var ab)) continue;
+            if (ab.Prereq1 != 0 && c.AbilityLevel(ab.Prereq1) < ab.Prereq1Level) continue;
+            if (ab.Prereq2 != 0 && c.AbilityLevel(ab.Prereq2) < ab.Prereq2Level) continue;
+            yield return ab;
+        }
+    }
+
+    /// <summary>DEP = 파일 DEP + 장비·패시브 보너스(0x20).</summary>
+    public int Dep(CharacterData c) => c.Dep + EquipBonus(c, 0x20);
 
     /// <summary>갑옷 배율 <c>0x1007b020</c> = 장비 2칸(갑옷) 아이템 방어값(Itm 파일 +13).</summary>
     public int ArmorRate(CharacterData c) => c.Items[1] != 0 && Items.TryGetValue(c.Items[1], out var it) ? it.Defense : 0;
@@ -288,13 +407,13 @@ public sealed class GameDatabase
     }
 
     /// <summary>RDP <c>0x1007abf0</c> — HP 가 가득이면 DEP 그대로다.</summary>
-    public int RdpAtFullHp(CharacterData c) => c.Dep;
+    public int RdpAtFullHp(CharacterData c) => Dep(c);
 
     /// <summary>RDP <c>0x1007abf0</c> = trunc(DEP × (1 + Num[39]% × (1 − HP/최대HP)²)) — HP 가 줄수록 단단해진다(0 이면 ×1.3).</summary>
     public int Rdp(CharacterData c, int hp, int maxHp)
     {
         double t = maxHp <= 0 ? 0 : 1.0 - (double)hp / maxHp;
-        return (int)(c.Dep * (t * N(39) * t * 0.01 + 1.0));
+        return (int)(Dep(c) * (t * N(39) * t * 0.01 + 1.0));
     }
 
     /// <summary>명중률 <c>0x1007b580</c>(%) = att+0x2c × 8/10 + 2 × (Num[7] + (공DEX − 방DEX)/Num[8] + (공TP − 방TP)/Num[9]) / 10.</summary>

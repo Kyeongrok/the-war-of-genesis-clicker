@@ -20,16 +20,26 @@ internal static class Win32
     public const uint WM_LBUTTONDOWN = 0x0201;
     public const uint WM_RBUTTONDOWN = 0x0204;
     public const uint WM_ERASEBKGND = 0x0014;
+    public const uint WM_COMMAND = 0x0111;
+    public const uint WM_MOUSEWHEEL = 0x020A;
+    /// <summary>테스트용 — 받으면 지금 화면을 %TEMP%\dueldx_snapshot.png 로 저장한다(창이 가려져 있어도 된다).</summary>
+    public const uint WM_APP_SNAPSHOT = 0x8001;
+    public const uint MF_STRING = 0x0000, MF_POPUP = 0x0010, MF_SEPARATOR = 0x0800;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CreateMenu();
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CreatePopupMenu();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool AppendMenuW(IntPtr menu, uint flags, nuint idOrSubMenu, string? text);
 
     public const uint PM_REMOVE = 0x0001;
 
     public const int VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
     public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B;
-    public const int VK_G = 0x47;
-    public const int VK_Q = 0x51;
-    public const int VK_H = 0x48;
     public const int VK_TAB = 0x09;
-    public const int VK_W = 0x57, VK_A = 0x41, VK_S = 0x53, VK_D = 0x44;
 
     public const int IDC_ARROW = 32512;
     public const uint SPI_GETWORKAREA = 0x0030;

@@ -40,9 +40,11 @@ public static class ObsSprite
     /// 하나가 백 장이 넘는다) 서 있는 그림 한 장만 필요할 때도 몇 초씩 걸린다. 이 쪽은
     /// 첫 벌의 첫 장 딱 하나만 풀어서 순식간에 끝난다.
     /// </remarks>
-    public static ObsFrame? DecodeFirstFrame(string path)
+    public static ObsFrame? DecodeFirstFrame(string path) => DecodeFirstFrame(File.ReadAllBytes(path));
+
+    /// <summary>메모리에 읽어 둔 Obs(예: pak 안 파일)의 첫 벌 첫 장.</summary>
+    public static ObsFrame? DecodeFirstFrame(byte[] b)
     {
-        byte[] b = File.ReadAllBytes(path);
         var subrefs = ParseStructure(b);
         if (subrefs.Count == 0) return null;
 
