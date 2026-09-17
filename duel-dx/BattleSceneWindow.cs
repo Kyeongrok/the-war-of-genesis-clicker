@@ -16,17 +16,15 @@ namespace DuelDx;
 /// <see cref="BattleDemoScene"/> 공용 상수를 그대로 쓴다.
 /// </summary>
 /// <remarks>
-/// 아군·적군 구성은 <c>Project/the-war-of-genesis/분석/분석-전투구성.md</c> 에서 정적
-/// 분석으로 찾아낸 <b>실제 <c>Btl/0173.btl</c> 자료</b>다 — "영혼의 검" 챕터(<c>0019.chp</c>)
-/// 의 전투 중 하나. <b>챕터의 "첫" 전투라는 표시는 사용자가 아니라고 정정했다</b> — 진짜
-/// 순서는 아직 다시 확인 못 했다(<see cref="BattleDemoScene"/> 참고). 캐릭터 배치
-/// (Chr 코드·X/Y)는 이 파일에서 직접 읽어낸 값을 그대로 박아 뒀다 — 아직 <c>.btl</c> 을
-/// 일반적으로 읽어들이는 코드는 없다(이 전투 하나만 보여 주는 첫 데모).
+/// 아군·적군 구성은 실제 게임을 DOSBox 에서 띄워 메모리를 읽어 찾은 <b><c>Btl/0045.btl</c></b>
+/// (코어헌터 훈련장 첫 전투)이다 — <c>Project/the-war-of-genesis/분석/분석-첫전투.md</c> 참고.
+/// 캐릭터 배치(Chr 코드·X/Y)는 이 파일에서 직접 읽어낸 값을 그대로 박아 뒀다 — 아직
+/// <c>.btl</c> 을 일반적으로 읽어들이는 코드는 없다(이 전투 하나만 보여 주는 데모).
 ///
 /// 배경 그림은 <b>확인 못 한 자리표시자</b>다 — 어느 <c>Map</c>/<c>Bgr</c> id가 이 전투에
-/// 진짜 쓰이는지는 <c>CBattle+0xa0</c> 을 채우는 함수가 실행 시점 상태(세이브 진행도)를
-/// 거쳐야 풀리는 값이라 정적 분석만으론 못 찾았다(분석 노트 참고). 그래서 <c>Bgr</c> 묶음
-/// 261장 중 위에서 내려다보는 전투 배경으로 보이는 <c>0200.bgr</c> 을 임시로 골라 썼다.
+/// 진짜 쓰이는지 아직 확인 못 했다(<c>.btl</c> 헤더 두 번째 워드 61이 <c>Map/0061.map</c> 일
+/// 수 있다). 그래서 <c>Bgr</c> 묶음 261장 중 위에서 내려다보는 전투 배경으로 보이는
+/// <c>0200.bgr</c> 을 임시로 골라 썼다.
 /// </remarks>
 internal sealed unsafe class BattleSceneWindow : IDisposable
 {
@@ -36,7 +34,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
     private const int BoardWidth = Cols * TileSize, BoardHeight = GridTop + Rows * TileSize;
-    private const int Zoom = 1;
+    private const int Zoom = 2;
 
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
     private const string PlaceholderBgFile = BattleDemoScene.PlaceholderBackgroundFile;
@@ -52,6 +50,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
     private volatile bool _loading = true;
+    private bool _showGrid;
 
     private readonly uint[] _fb = new uint[BoardWidth * BoardHeight];
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
@@ -75,7 +74,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     // ── 게임 자료 읽기 ───────────────────────────────────────────────────────
 
-    /// <summary>배경 스레드에서 배경 그림·캐릭터 22명(고유 5종)을 읽는다. 창은 먼저 뜬다.</summary>
+    /// <summary>배경 스레드에서 배경 그림·배치된 캐릭터들을 읽는다. 창은 먼저 뜬다.</summary>
     private void LoadScene()
     {
         try
@@ -117,8 +116,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     /// </summary>
     private static uint[] LoadBackground()
     {
-        string repoRoot = FindRepoRoot();
-        string path = Path.Combine(repoRoot, "assets", "backgrounds", PlaceholderBgFile);
+        string path = Path.Combine(AssetsFolder.Find("backgrounds"), PlaceholderBgFile);
         if (!File.Exists(path)) throw new FileNotFoundException($"배경 그림을 못 찾았습니다: {path}");
 
         using var bitmap = new Bitmap(path);
@@ -153,18 +151,9 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         return result;
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
-            if (Directory.Exists(Path.Combine(dir.FullName, "WarOfGenesis.Editor")))
-                return dir.FullName;
-        throw new DirectoryNotFoundException("저장소 뿌리(WarOfGenesis.Editor 옆)를 못 찾았습니다.");
-    }
-
     private static string FindRepoAssetsRoot()
     {
-        try { return Path.Combine(FindRepoRoot(), "assets", "characters"); }
+        try { return AssetsFolder.Find("characters"); }
         catch (DirectoryNotFoundException) { return ""; }
     }
 
@@ -249,7 +238,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, false);
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, "영혼의 검 — 전투 Btl 0173 (자리표시자 배경)",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4} (자리표시자 배경)",
             Win32.WS_OVERLAPPEDWINDOW, Win32.CW_USEDEFAULT, Win32.CW_USEDEFAULT,
             rect.Width, rect.Height,
             IntPtr.Zero, IntPtr.Zero, Win32.GetModuleHandleW(null), IntPtr.Zero);
@@ -267,6 +256,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
                 return (IntPtr)1;
             case Win32.WM_KEYDOWN:
                 if ((int)wParam == Win32.VK_ESCAPE) _running = false;
+                else if ((int)wParam == Win32.VK_G) _showGrid = !_showGrid;
                 return IntPtr.Zero;
         }
         return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
@@ -285,7 +275,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     {
         Array.Fill(_fb, BgColor);
         DrawBackground();
-        DrawGridLines();
+        if (_showGrid) DrawGridLines();
         DrawUnits();
         DrawStatus();
     }
@@ -342,10 +332,10 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         }
 
         int allies = Roster.Count(u => u.IsAlly), enemies = Roster.Count(u => !u.IsAlly);
-        DrawText($"영혼의 검 — 전투 Btl 0173   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
+        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
                  4, 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
-        else DrawText("파란 테두리 = 아군, 빨간 테두리 = 적군", 4, 20, DimGray);
+        else DrawText($"파란 테두리 = 아군, 빨간 테두리 = 적군   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────

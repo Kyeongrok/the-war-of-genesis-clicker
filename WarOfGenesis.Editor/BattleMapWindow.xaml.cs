@@ -10,7 +10,7 @@ using Rectangle = System.Windows.Shapes.Rectangle;
 namespace WarOfGenesis.Editor;
 
 /// <summary>
-/// <see cref="BattleDemoScene"/>(Btl 0173, "영혼의 검" 챕터)를 32×32 칸 판 위에 그려 보는 창.
+/// <see cref="BattleDemoScene"/>(Btl 0045, 코어헌터 훈련장)를 32×32 칸 판 위에 그려 보는 창.
 /// </summary>
 /// <remarks>
 /// duel-dx 데모의 D3D 렌더링을 WPF <see cref="Canvas"/> 로 옮긴 것 — 게임 폴더 없이도, 저장소에
@@ -96,8 +96,8 @@ public partial class BattleMapWindow : Window
         int allies = BattleDemoScene.Roster.Count(u => u.IsAlly);
         int enemies = BattleDemoScene.Roster.Count(u => !u.IsAlly);
         StatusText.Text =
-            $"영혼의 검 — 전투 Btl {BattleDemoScene.BtlId}   아군 {allies}   적군 {enemies}   " +
-            "배경: 자리표시자(Bgr 0200, 미확인) — \"챕터 첫 전투\" 표시는 정정 필요(재확인 전).\n" +
+            $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   " +
+            "배경: 자리표시자(Bgr 0200, 미확인)\n" +
             "파란 테두리 = 아군, 빨간 테두리 = 적군";
         if (loadError.Length > 0) StatusText.Text += $"\n못 읽은 자료가 있습니다: {loadError}";
     }
@@ -183,15 +183,5 @@ public partial class BattleMapWindow : Window
         return result;
     }
 
-    /// <summary>저장소 뿌리를 거슬러 올라가 <c>assets/&lt;subFolder&gt;</c> 를 찍어 준다.</summary>
-    private static string FindAssetsRoot(string subFolder)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
-        {
-            if (Directory.Exists(Path.Combine(dir.FullName, "duel-dx")))
-                return Path.Combine(dir.FullName, "assets", subFolder);
-        }
-        throw new DirectoryNotFoundException("저장소 뿌리(duel-dx 옆)를 못 찾았습니다.");
-    }
+    private static string FindAssetsRoot(string subFolder) => AssetsFolder.Find(subFolder);
 }
