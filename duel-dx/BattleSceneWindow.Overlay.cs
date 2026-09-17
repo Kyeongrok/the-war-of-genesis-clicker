@@ -67,11 +67,13 @@ internal sealed unsafe partial class BattleSceneWindow
         return -1;
     }
 
-    private bool RingItemEnabled(RingCommand command)
+    private bool RingItemEnabled(RingCommand command, int ringUnit)
     {
+        var unit = _units[ringUnit];
+        if (command is RingCommand.Status or RingCommand.System) return true;
+        if (!IsPlayerTurn || ringUnit != _turn || unit.IsBusy) return false;
         if (command is not (RingCommand.Attack or RingCommand.Ability)) return true;
-        if (_db?.Character(_units[_ringUnit].ChrCode) is not { } c) return true;
-        return _db.MaxTp(c) + c.Ctp >= _db.N(4);
+        return _db == null || unit.Tp + unit.Ctp >= _db.N(4);
     }
 
     /// <summary>우클릭: 인물 위면 그 인물을 고르고 링을 연다. 빈 곳이면 열린 창을 닫는다.</summary>
@@ -104,11 +106,17 @@ internal sealed unsafe partial class BattleSceneWindow
         if (item < 0) return true;
 
         var (command, _, hover) = RingItems[item];
-        if (!RingItemEnabled(command)) { Toast($"{hover}: TP 가 모자랍니다"); return true; }
+        if (!RingItemEnabled(command, unit))
+        {
+            Toast(unit != _turn || !_units[unit].IsAlly ? $"{hover}: 차례인 아군만 쓸 수 있습니다" : $"{hover}: TP 가 모자랍니다");
+            return true;
+        }
         switch (command)
         {
             case RingCommand.Status: _statusUnit = unit; break;
-            case RingCommand.Rest: Toast($"{UnitName(unit)} 휴식 — 턴을 끝냅니다(턴 진행은 아직 없음)"); break;
+            case RingCommand.Rest: Toast($"{UnitName(unit)} 휴식"); Rest(unit); break;
+            case RingCommand.Attack: BeginAttackTargeting(); break;
+            case RingCommand.Ability: _abilityMenu = true; break;
             default: Toast($"{hover}: 아직 구현하지 않았습니다"); break;
         }
         return true;
@@ -126,7 +134,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (by < GridTop) return -1;
         int col = bx / TileW, row = (by - GridTop) / TileH;
-        return Array.FindIndex(_units, u => u.Col == col && u.Row == row);
+        return Array.FindIndex(_units, u => u.Alive && u.Col == col && u.Row == row);
     }
 
     private void DrawRing()
@@ -139,7 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (command, label, _) = RingItems[i];
             var (x, y) = RingItemCenter(i);
-            bool enabled = RingItemEnabled(command), hover = i == _ringHover;
+            bool enabled = RingItemEnabled(command, _ringUnit), hover = i == _ringHover;
             FillCircle(x, y, RingItemRadius, hover ? 0xF0284C9C : 0xE0142850);
             StrokeCircle(x, y, RingItemRadius, enabled ? (hover ? 0xFFB0E0FF : 0xFF5A9CF0) : 0xFF505868, hover ? 3 : 2);
             var (_, w, h) = GetText(label, enabled ? White : DimGray);
@@ -187,7 +195,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         var db = _db;
-        int tp = db.MaxTp(c), soul = db.SoulStart, hp = db.MaxHp(c);
+        int tp = unit.Tp, soul = unit.Soul, hp = unit.Hp;
 
         // 1열 — 능력치
         int x = ox + 16, w = 184;
@@ -203,14 +211,14 @@ internal sealed unsafe partial class BattleSceneWindow
         Stat(x, oy + 162, w, db.T(161), "0");
 
         Box(x, oy + 186, w, 100);
-        StatBar(x, oy + 190, w, db.T(159), hp, hp);
-        StatBar(x, oy + 222, w, db.T(41), soul, db.MaxSoul(c));
-        StatBar(x, oy + 254, w, db.T(38), tp, tp);
+        StatBar(x, oy + 190, w, db.T(159), hp, unit.MaxHp);
+        StatBar(x, oy + 222, w, db.T(41), soul, unit.MaxSoul);
+        StatBar(x, oy + 254, w, db.T(38), tp, unit.MaxTp);
 
         Box(x, oy + 290, w, 60);
         Stat(x, oy + 294, w, db.T(156), db.Atk(c, soul).ToString());
         Stat(x, oy + 312, w, db.T(157), db.Acr(c, tp).ToString());
-        Stat(x, oy + 330, w, db.T(158), db.RdpAtFullHp(c).ToString());
+        Stat(x, oy + 330, w, db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
 
         Box(x, oy + 354, w, 112);
         (ushort Id, int Value)[] basics = [(34, (int)c.Lp), (39, c.Ctp), (40, db.Stp(c)), (35, db.Psy(c)), (37, c.Dep), (36, db.Dex(c))];

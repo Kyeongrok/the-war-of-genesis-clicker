@@ -49,7 +49,6 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private const uint BgColor = 0xFF14100C;
     private const uint GridLine = 0x40FFFFFF;
-    private const uint AllyMark = 0xFF5AA0F0, EnemyMark = 0xFFE05050, SelectMark = 0xFFFFD040;
     private const uint White = 0xFFF2EAD6;
     private const uint DimGray = 0xFFA09888;
 
@@ -61,6 +60,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private string _loadError = "";
     private volatile bool _loading = true;
     private bool _showGrid;
+    /// <summary>발밑 HP·TP 막대 — 원본에는 없어서 기본은 끔(H 키).</summary>
+    private bool _showGauges;
 
     private readonly uint[] _fb = new uint[BoardWidth * BoardHeight];
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
@@ -119,6 +120,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
                 if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
             }
+            InitBattle();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -296,13 +298,22 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.VK_ESCAPE:
                 if (_statusUnit >= 0) _statusUnit = -1;
                 else if (_ringUnit >= 0) _ringUnit = -1;
+                else if (_abilityMenu || _targetWork >= 0) CancelTargeting();
                 else _running = false;
                 break;
             case Win32.VK_G: _showGrid = !_showGrid; break;
-            case Win32.VK_TAB: _selected = (_selected + 1) % _units.Length; break;
+            case Win32.VK_H: _showGauges = !_showGauges; break;
+            case Win32.VK_R when IsPlayerTurn && !_units[_turn].IsBusy: Toast($"{UnitName(_turn)} 휴식"); Rest(_turn); break;
+            case Win32.VK_TAB:
+                for (int i = 1; i <= _units.Length; i++)
+                {
+                    int next = (Math.Max(_selected, 0) + i) % _units.Length;
+                    if (_units[next].Alive) { _selected = next; break; }
+                }
+                break;
             case Win32.VK_SPACE: ToggleRingForSelected(); break;
         }
-        if (_ringUnit >= 0) return;   // 링이 열려 있으면 걷지 않는다
+        if (_ringUnit >= 0 || _abilityMenu || _targetWork >= 0) return;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
         switch (key)
         {
             case Win32.VK_UP or Win32.VK_W or Win32.VK_DOWN or Win32.VK_S
@@ -314,33 +325,43 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    /// <summary>클릭한 칸에 선 인물을 고른다. 빈 칸이면 선택을 푼다.</summary>
+    /// <summary>
+    /// 클릭: 공격 고르는 중이면 그 적을 친다. 인물이면 그 인물을 고르고(수치·영역 보기),
+    /// 차례인 아군의 파란 칸이면 거기까지 걷는다. 빈 칸이면 차례인 인물로 선택을 되돌린다.
+    /// </summary>
     private void OnClick(int clientX, int clientY)
     {
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom);
-        if (OnStatusClick(bx, by) || OnRingClick(bx, by)) return;
+        if (OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
-        int boardY = (int)(clientY / _zoom) - GridTop;
+        int boardY = by - GridTop;
         if (boardY < 0) return;
-        int col = (int)(clientX / _zoom) / TileW, row = boardY / TileH;
-        _selected = Array.FindIndex(_units, u => u.Col == col && u.Row == row);
+        int col = bx / TileW, row = boardY / TileH;
+        if (OnTargetClick(col, row)) return;
+
+        int index = UnitAtBoard(bx, by);
+        if (index >= 0) { _selected = index; return; }
+        if (_selected == _turn && TryWalkTo(col, row)) return;
+        _selected = _turn;
     }
 
     /// <summary>
-    /// 고른 인물을 그쪽으로 돌려세우고, 판 안이고 다른 인물이 없으면 한 칸 걷게 한다. 걷는 중이면
-    /// 무시한다 — 방향키를 누르고 있으면 키 반복으로 한 칸 끝날 때마다 다시 들어와 계속 걷는다.
+    /// 차례인 아군을 그쪽으로 돌려세우고, 이동 영역(파랑) 안이면 한 칸 걷게 하며 그 걸음 TP 를 쓴다. 움직이는 중이면 무시한다.
     /// </summary>
     private void TryStep(Facing facing, int dx, int dy)
     {
-        if ((uint)_selected >= _units.Length) return;
-        var unit = _units[_selected];
-        if (unit.IsMoving) return;
+        if (!IsPlayerTurn) return;
+        _selected = _turn;
+        var unit = _units[_turn];
+        if (unit.IsBusy) return;
 
         unit.Facing = facing;
         int col = unit.Col + dx, row = unit.Row + dy;
-        if ((uint)col >= Cols || (uint)row >= Rows) return;
-        if (_units.Any(u => u.Col == col && u.Row == row)) return;
+        if ((uint)col >= Cols || (uint)row >= Rows || ComputeRange(unit) is not { } range) return;
+        int index = row * Cols + col;
+        if (!range.CanReach(index)) return;   // 막혔거나 TP 가 모자란다
 
+        unit.Tp -= range.Cost[index];
         unit.BeginStep(col, row);
     }
 
@@ -363,11 +384,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
-        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && (uint)_selected < _units.Length
-            && !_units[_selected].IsMoving)
+        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && !_abilityMenu && _targetWork < 0 && IsPlayerTurn && !_units[_turn].IsBusy)
             StepByKey(_heldMoveKeys[^1]);
 
+        // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
+        foreach (var unit in _units)
+        {
+            if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
+            unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
+            unit.BeginStep(cell.Col, cell.Row);
+        }
+
         foreach (var unit in _units) unit.SettleIfStopped();
+        UpdateTurn();
         RefreshMoveRange();
     }
 
@@ -385,12 +414,17 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         Array.Fill(_fb, BgColor);
         DrawBackground();
         DrawMoveRange();
+        DrawWorkRange();
         if (_showGrid) DrawGridLines();
         DrawUnits();
+        if (_showGauges) DrawGauges();
+        DrawPopups();
         DrawStatus();
         DrawRing();
+        DrawAbilityMenu();
         DrawStatusScreen();
         DrawToast();
+        DrawOutcome();
     }
 
     private void DrawBackground()
@@ -431,16 +465,34 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (int i in Enumerable.Range(0, _units.Length).OrderBy(i => _units[i].Y))
         {
             var unit = _units[i];
-            int tileX = unit.Col * TileW, tileY = GridTop + unit.Row * TileH;
-            uint mark = i == _selected ? SelectMark : unit.IsAlly ? AllyMark : EnemyMark;
-            FillRect(tileX + 2, tileY + 2, TileW - 4, TileH - 4, mark & 0x60FFFFFF | 0x60000000);
-            StrokeRect(tileX, tileY, TileW, TileH, mark);
-
-            if (!sprites.TryGetValue(unit.ChrCode, out var sprite)) continue;
-
-            var frame = sprite.FrameFor(unit);
+            if (!unit.Alive) continue;
             var (footX, footY) = UnitFoot(unit);
-            BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X, footY + frame.Y);
+            int headY = footY - TileH;
+
+            if (sprites.TryGetValue(unit.ChrCode, out var sprite))
+            {
+                var frame = sprite.FrameFor(unit);
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X, footY + frame.Y);
+                headY = footY + frame.Y;
+            }
+            if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
+        }
+    }
+
+    /// <summary>
+    /// 차례인 인물 머리 위의 반짝이는 역삼각형(원본 화면 캡처, 구현 노트 ui-2). 폭 13·높이 9 픽셀, 연보라, 밝기가 오르내린다.
+    /// </summary>
+    private void DrawTurnMarker(int x, int headY)
+    {
+        const int W = 13, H = 9, Gap = 4;
+        uint alpha = (uint)(150 + 105 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 2 * 1.5)));
+        uint fill = alpha << 24 | 0xE0D8FF, edge = alpha << 24 | 0x6050A0;
+        int top = headY - Gap - H;
+        for (int row = 0; row < H; row++)
+        {
+            int half = (W / 2) * (H - 1 - row) / (H - 1);
+            for (int dx = -half; dx <= half; dx++)
+                SetPixel(x + dx, top + row, dx == -half || dx == half || row == 0 ? edge : fill);
         }
     }
 
@@ -456,11 +508,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             return;
         }
 
-        int allies = Roster.Count(u => u.IsAlly), enemies = Roster.Count(u => !u.IsAlly);
-        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   배경: Obt {Path.GetFileNameWithoutExtension(BattleDemoScene.MapFile)}",
+        int allies = _units.Count(u => u.Alive && u.IsAlly), enemies = _units.Count(u => u.Alive && !u.IsAlly);
+        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   클릭·Tab: 인물 보기   G: 격자 {(_showGrid ? "끄기" : "켜기")}   H: 체력바 {(_showGauges ? "끄기" : "켜기")}",
                  4, 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
-        else DrawText($"클릭·Tab: 인물 고르기   우클릭·Space: 링 커맨드   방향키·WASD: 걷기   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
+        else DrawText(TurnLine(), 4, 20, 0xFFFFE8A0);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -689,9 +741,9 @@ internal sealed class UnitSprite
     /// </summary>
     public SpriteFrame FrameFor(UnitState unit)
     {
-        int action = unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+        int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
         var clip = _table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing));
-        var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: true);
+        var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: unit.Action < 0);
         if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return _first;
         if (unit.Facing != Facing.Right) return frame;
 
@@ -699,6 +751,10 @@ internal sealed class UnitSprite
             _mirrored[(k.SubentryId, k.Slot)] = mirrored = frame.Mirrored();
         return mirrored;
     }
+
+    /// <summary>한 번 재생할 동작의 길이(초). 모션표에 없으면 0.</summary>
+    public double ActionSeconds(int action, Facing facing) =>
+        (_table?.Resolve(action, ObsMotionTable.DirectionOf(facing))?.Length ?? 0) / BattleSceneWindow.TicksPerSecond;
 }
 
 /// <summary>판 위 인물 하나의 지금 상태 — 칸 자리, 바라보는 쪽, 걷는 중이면 어디서 어디로 얼마나 왔는지.</summary>
@@ -716,6 +772,36 @@ internal sealed class UnitState(BattleUnit unit)
     private double _progress = 1;
 
     public bool IsMoving => _progress < 1;
+
+    // ── 전투 수치 (게임 표를 읽은 뒤 채운다) ──
+    public CharacterData? Data { get; set; }
+    public int Hp { get; set; }
+    public int MaxHp { get; set; }
+    public int Tp { get; set; }
+    public int MaxTp { get; set; }
+    public int Stp { get; set; }
+    public int Soul { get; set; }
+    public int MaxSoul { get; set; }
+    public int Ctp => Data?.Ctp ?? 0;
+    public bool HasTurn { get; set; }
+    public bool Alive { get; set; } = true;
+
+    /// <summary>앞으로 밟을 칸들 — 한 칸 다 걸으면 다음 칸을 꺼낸다.</summary>
+    public Queue<(int Col, int Row)> Path { get; } = new();
+
+    /// <summary>한 번 재생 중인 동작(공격 등). −1 이면 서기/걷기를 알아서 고른다.</summary>
+    public int Action { get; private set; } = -1;
+    private double _actionLeft;
+
+    /// <summary>걷거나, 걸을 길이 남았거나, 동작을 재생하는 중.</summary>
+    public bool IsBusy => IsMoving || Path.Count > 0 || Action >= 0;
+
+    public void PlayAction(int action, double seconds)
+    {
+        Action = action;
+        AnimTime = 0;
+        _actionLeft = seconds;
+    }
 
     /// <summary>지금 동작(서기/걷기)을 시작한 뒤 흐른 시간(초). 동작이 바뀌면 0 부터 다시 센다.</summary>
     public double AnimTime { get; private set; }
@@ -746,6 +832,7 @@ internal sealed class UnitState(BattleUnit unit)
     public void Advance(double progressDelta, double dt)
     {
         AnimTime += dt;
+        if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; AnimTime = _idleOffset; }
         if (!IsMoving) return;
         double next = _progress + progressDelta;
         _progress = Math.Min(1, next);
