@@ -30,6 +30,9 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 {
     private static readonly BattleUnit[] Roster = BattleDemoScene.Roster;
 
+    /// <summary>한 칸 걸어가는 데 드는 시간(초)과 걷기 컷을 넘기는 빠르기(컷/초).</summary>
+    public const double StepSeconds = 0.25, WalkFps = 12;
+
     private const int TileSize = 25;
     private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
@@ -41,12 +44,14 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private const uint BgColor = 0xFF14100C;
     private const uint GridLine = 0x40FFFFFF;
-    private const uint AllyMark = 0xFF5AA0F0, EnemyMark = 0xFFE05050;
+    private const uint AllyMark = 0xFF5AA0F0, EnemyMark = 0xFFE05050, SelectMark = 0xFFFFD040;
     private const uint White = 0xFFF2EAD6;
     private const uint DimGray = 0xFFA09888;
 
     private uint[] _bgPixels = [];
-    private readonly Dictionary<int, (uint[] Px, int W, int H)> _sprites = [];
+    private Dictionary<int, UnitSprite> _sprites = [];
+    private readonly UnitState[] _units = [.. Roster.Select(u => new UnitState(u))];
+    private int _selected = -1;
     private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
     private volatile bool _loading = true;
@@ -56,6 +61,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
 
     private bool _running;
+    private double _lastTime;
 
     private IntPtr _hwnd;
     private static readonly Win32.WndProc StaticWndProcDelegate = StaticWndProcTrampoline;
@@ -83,6 +89,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
             string assetsRoot = FindRepoAssetsRoot();
             var manifests = CollectExportedManifests(assetsRoot);
+            var sprites = new Dictionary<int, UnitSprite>();
 
             foreach (int chrCode in Roster.Select(u => u.ChrCode).Distinct())
             {
@@ -92,13 +99,18 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
                 _names[chrCode] = name;
 
-                var frame = ObsSprite.DecodeFirstFrame(obsPath);
-                if (frame == null) continue;
+                int spriteCode = int.Parse(Path.GetFileNameWithoutExtension(obsPath));
+                var walk = WalkCycles.Find(spriteCode);
 
-                var px = new uint[frame.Width * frame.Height];
-                Buffer.BlockCopy(frame.Bgra, 0, px, 0, frame.Bgra.Length);
-                _sprites[chrCode] = (px, frame.Width, frame.Height);
+                // 걷기 표가 있는 인물만 몸짓벌을 다 푼다(느리다). 없으면 첫 컷 하나로 서 있는다.
+                List<ObsFrame> frames = walk != null
+                    ? [.. ObsSprite.Decode(obsPath).SelectMany(m => m.Frames)]
+                    : ObsSprite.DecodeFirstFrame(obsPath) is { } first ? [first] : [];
+                if (frames.Count == 0) continue;
+
+                sprites[chrCode] = new UnitSprite([.. frames.Select(SpriteFrame.From)], walk);
             }
+            _sprites = sprites;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -206,9 +218,12 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
             }
             if (!_running) break;
 
+            double now = clock.Elapsed.TotalSeconds;
+            Update(Math.Min(now - _lastTime, 0.1));
+            _lastTime = now;
+
             Render();
         }
-        _ = clock.Elapsed;
     }
 
     private static void RegisterClassOnce()
@@ -255,11 +270,61 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
             case Win32.WM_KEYDOWN:
-                if ((int)wParam == Win32.VK_ESCAPE) _running = false;
-                else if ((int)wParam == Win32.VK_G) _showGrid = !_showGrid;
+                OnKeyDown((int)wParam);
+                return IntPtr.Zero;
+            case Win32.WM_LBUTTONDOWN:
+                OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 return IntPtr.Zero;
         }
         return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+
+    // ── 입력 · 이동 ──────────────────────────────────────────────────────────
+
+    private void OnKeyDown(int key)
+    {
+        switch (key)
+        {
+            case Win32.VK_ESCAPE: _running = false; break;
+            case Win32.VK_G: _showGrid = !_showGrid; break;
+            case Win32.VK_TAB: _selected = (_selected + 1) % _units.Length; break;
+            case Win32.VK_UP: TryStep(Facing.Up, 0, -1); break;
+            case Win32.VK_DOWN: TryStep(Facing.Down, 0, 1); break;
+            case Win32.VK_LEFT: TryStep(Facing.Left, -1, 0); break;
+            case Win32.VK_RIGHT: TryStep(Facing.Right, 1, 0); break;
+        }
+    }
+
+    /// <summary>클릭한 칸에 선 인물을 고른다. 빈 칸이면 선택을 푼다.</summary>
+    private void OnClick(int clientX, int clientY)
+    {
+        int boardY = clientY / Zoom - GridTop;
+        if (boardY < 0) return;
+        int col = clientX / Zoom / TileSize, row = boardY / TileSize;
+        _selected = Array.FindIndex(_units, u => u.Col == col && u.Row == row);
+    }
+
+    /// <summary>
+    /// 고른 인물을 그쪽으로 돌려세우고, 판 안이고 다른 인물이 없으면 한 칸 걷게 한다. 걷는 중이면
+    /// 무시한다 — 방향키를 누르고 있으면 키 반복으로 한 칸 끝날 때마다 다시 들어와 계속 걷는다.
+    /// </summary>
+    private void TryStep(Facing facing, int dx, int dy)
+    {
+        if ((uint)_selected >= _units.Length) return;
+        var unit = _units[_selected];
+        if (unit.IsMoving) return;
+
+        unit.Facing = facing;
+        int col = unit.Col + dx, row = unit.Row + dy;
+        if ((uint)col >= Cols || (uint)row >= Rows) return;
+        if (_units.Any(u => u.Col == col && u.Row == row)) return;
+
+        unit.BeginStep(col, row);
+    }
+
+    private void Update(double dt)
+    {
+        foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -307,19 +372,23 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private void DrawUnits()
     {
-        foreach (var unit in Roster)
+        var sprites = _sprites;
+
+        // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
+        foreach (int i in Enumerable.Range(0, _units.Length).OrderBy(i => _units[i].Y))
         {
+            var unit = _units[i];
             int tileX = unit.Col * TileSize, tileY = GridTop + unit.Row * TileSize;
-            uint mark = unit.IsAlly ? AllyMark : EnemyMark;
+            uint mark = i == _selected ? SelectMark : unit.IsAlly ? AllyMark : EnemyMark;
             FillRect(tileX + 2, tileY + 2, TileSize - 4, TileSize - 4, mark & 0x60FFFFFF | 0x60000000);
             StrokeRect(tileX, tileY, TileSize, TileSize, mark);
 
-            if (_sprites.TryGetValue(unit.ChrCode, out var sprite))
-            {
-                int x = tileX + TileSize / 2 - sprite.W / 2;
-                int y = tileY + TileSize - sprite.H;
-                BlitMasked(sprite.Px, sprite.W, sprite.H, x, y);
-            }
+            if (!sprites.TryGetValue(unit.ChrCode, out var sprite)) continue;
+
+            var frame = sprite.FrameFor(unit);
+            int footX = (int)(unit.X * TileSize) + TileSize / 2;
+            int footY = GridTop + (int)(unit.Y * TileSize) + TileSize / 2;
+            BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X, footY + frame.Y);
         }
     }
 
@@ -335,7 +404,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
                  4, 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
-        else DrawText($"파란 테두리 = 아군, 빨간 테두리 = 적군   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
+        else DrawText($"클릭·Tab: 인물 고르기   방향키: 걷기   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -517,5 +586,82 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         _ctx?.Dispose();
         _device?.Dispose();
         if (_hwnd != IntPtr.Zero) { Win32.DestroyWindow(_hwnd); _hwnd = IntPtr.Zero; }
+    }
+}
+
+/// <summary>몸짓 한 컷 — BGRA 픽셀과, 발 자리에서 그림 왼쪽 위까지의 거리(X·Y).</summary>
+internal sealed record SpriteFrame(uint[] Px, int W, int H, int X, int Y)
+{
+    public static SpriteFrame From(ObsFrame f)
+    {
+        var px = new uint[f.Width * f.Height];
+        Buffer.BlockCopy(f.Bgra, 0, px, 0, f.Bgra.Length);
+        return new SpriteFrame(px, f.Width, f.Height, f.X, f.Y);
+    }
+
+    /// <summary>좌우로 뒤집은 컷 — 발 자리를 축으로 뒤집으니 X 도 따라 옮긴다.</summary>
+    public SpriteFrame Mirrored()
+    {
+        var px = new uint[Px.Length];
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+                px[y * W + x] = Px[y * W + (W - 1 - x)];
+        return new SpriteFrame(px, W, H, -(X + W), Y);
+    }
+}
+
+/// <summary>인물 하나의 컷 전부와 걷기 표. 오른쪽 컷은 처음 쓸 때 뒤집어 둔다.</summary>
+internal sealed class UnitSprite(SpriteFrame[] frames, WalkCycle? walk)
+{
+    private readonly Dictionary<int, SpriteFrame> _mirrored = [];
+
+    public SpriteFrame FrameFor(UnitState unit)
+    {
+        if (walk == null) return frames[0];
+
+        var range = walk.For(unit.Facing);
+        int step = unit.IsMoving ? (int)(unit.WalkTime * BattleSceneWindow.WalkFps) % range.Count : 0;
+        int index = Math.Min(range.Start + step, frames.Length - 1);
+        if (unit.Facing != Facing.Right) return frames[index];
+
+        if (!_mirrored.TryGetValue(index, out var mirrored))
+            _mirrored[index] = mirrored = frames[index].Mirrored();
+        return mirrored;
+    }
+}
+
+/// <summary>판 위 인물 하나의 지금 상태 — 칸 자리, 바라보는 쪽, 걷는 중이면 어디서 어디로 얼마나 왔는지.</summary>
+internal sealed class UnitState(BattleUnit unit)
+{
+    public int ChrCode { get; } = unit.ChrCode;
+    public bool IsAlly { get; } = unit.IsAlly;
+
+    /// <summary>도착할(걷는 중이면 향하는) 칸. 자리 차지 판정도 이 칸으로 한다.</summary>
+    public int Col { get; private set; } = unit.Col;
+    public int Row { get; private set; } = unit.Row;
+    public Facing Facing { get; set; } = unit.IsAlly ? Facing.Right : Facing.Left;
+
+    private int _fromCol = unit.Col, _fromRow = unit.Row;
+    private double _progress = 1;
+
+    public bool IsMoving => _progress < 1;
+    public double WalkTime { get; private set; }
+
+    /// <summary>그릴 자리(칸 단위, 소수) — 걷는 중이면 두 칸 사이.</summary>
+    public double X => _fromCol + (Col - _fromCol) * _progress;
+    public double Y => _fromRow + (Row - _fromRow) * _progress;
+
+    public void BeginStep(int col, int row)
+    {
+        _fromCol = Col; _fromRow = Row;
+        Col = col; Row = row;
+        _progress = 0;
+    }
+
+    public void Advance(double progressDelta, double dt)
+    {
+        if (!IsMoving) { WalkTime = 0; return; }
+        WalkTime += dt;
+        _progress = Math.Min(1, _progress + progressDelta);
     }
 }
