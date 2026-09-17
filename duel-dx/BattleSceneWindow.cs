@@ -298,12 +298,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.VK_ESCAPE:
                 if (_statusUnit >= 0) _statusUnit = -1;
                 else if (_ringUnit >= 0) _ringUnit = -1;
-                else if (_abilityMenu || _targetWork >= 0) CancelTargeting();
-                else _running = false;
+                else CancelStep();
                 break;
             case Win32.VK_G: _showGrid = !_showGrid; break;
             case Win32.VK_H: _showGauges = !_showGauges; break;
-            case Win32.VK_R when IsPlayerTurn && !_units[_turn].IsBusy: Toast($"{UnitName(_turn)} 휴식"); Rest(_turn); break;
+            case Win32.VK_Q when IsPlayerTurn && !_units[_turn].IsBusy && !_abilityMenu && _targetWork < 0: Toast($"{UnitName(_turn)} 휴식"); Rest(_turn); break;
             case Win32.VK_TAB:
                 for (int i = 1; i <= _units.Length; i++)
                 {
@@ -346,7 +345,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>
-    /// 차례인 아군을 그쪽으로 돌려세우고, 이동 영역(파랑) 안이면 한 칸 걷게 하며 그 걸음 TP 를 쓴다. 움직이는 중이면 무시한다.
+    /// 차례인 아군을 그쪽으로 돌려세우고, 이동 영역(파랑) 안이면 한 칸 걷게 한다(TP 는 행동할 때 한 번에 뺀다). 움직이는 중이면 무시한다.
     /// </summary>
     private void TryStep(Facing facing, int dx, int dy)
     {
@@ -359,9 +358,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         int col = unit.Col + dx, row = unit.Row + dy;
         if ((uint)col >= Cols || (uint)row >= Rows || ComputeRange(unit) is not { } range) return;
         int index = row * Cols + col;
-        if (!range.CanReach(index)) return;   // 막혔거나 TP 가 모자란다
+        if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
 
-        unit.Tp -= range.Cost[index];
         unit.BeginStep(col, row);
     }
 
@@ -786,6 +784,10 @@ internal sealed class UnitState(BattleUnit unit)
     public bool HasTurn { get; set; }
     public bool Alive { get; set; } = true;
 
+    /// <summary>차례를 시작한 칸 — 이동 영역과 걸음 비용을 이 칸에서 센다.</summary>
+    public int OriginCol { get; set; } = unit.Col;
+    public int OriginRow { get; set; } = unit.Row;
+
     /// <summary>앞으로 밟을 칸들 — 한 칸 다 걸으면 다음 칸을 꺼낸다.</summary>
     public Queue<(int Col, int Row)> Path { get; } = new();
 
@@ -818,6 +820,16 @@ internal sealed class UnitState(BattleUnit unit)
 
     /// <summary>이번 칸에서 남은 진행량(한 칸 = 1) — 이어 걸을 때 다음 칸에 넘겨 속도가 들쭉날쭉하지 않게 한다.</summary>
     private double _carry;
+
+    /// <summary>걷기 없이 바로 그 칸에 세운다(걸음 물리기).</summary>
+    public void WarpTo(int col, int row)
+    {
+        Path.Clear();
+        _justArrived = false;
+        _fromCol = Col = col;
+        _fromRow = Row = row;
+        _progress = 1;
+    }
 
     public void BeginStep(int col, int row)
     {

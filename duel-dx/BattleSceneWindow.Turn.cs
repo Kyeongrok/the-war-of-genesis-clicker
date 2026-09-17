@@ -12,7 +12,8 @@ namespace DuelDx;
 /// <item>시간 한 칸(틱)마다 살아 있는 모든 인물 TP += STP(최대 TP / TP 나눗수), 최대에서 자른다.</item>
 /// <item>TP 가 최대에 닿은 인물이 차례 표시를 받고, 표시가 있는 인물 중 <b>배열 번호가 작은 쪽</b>이 먼저 움직인다(아군·적 구분 없음).
 ///   전투 시작 때는 모두 TP 가 가득하다. 이 데모는 아군을 배열 앞에 두어 아군이 먼저 움직인다(Btl 파일은 적이 앞).</item>
-/// <item>걷기·work 가 TP 를 쓰고, TP 가 0 이하가 되면 자동으로 휴식 — (최대HP − HP) × 남은 TP 비율 × Num[35]% 를 채우고 남은 TP 를 버린다.</item>
+/// <item>걷는 동안에는 TP 를 안 쓰고, 공격·어빌리티·휴식 직전에 시작 자리→지금 자리 걸음 비용을 한 번에 뺀다.
+///   work 가 TP 를 쓰고, TP 가 0 이하가 되면 자동으로 휴식 — (최대HP − HP) × 남은 TP 비율 × Num[35]% 를 채우고 남은 TP 를 버린다.</item>
 /// <item>SOUL: work 끝에 종류별 +10/6/4/4, 맞으면 피해/Num[43], 쓰러뜨리면 +10. work 의 SOUL 비용은 뺀다.</item>
 /// </list>
 /// 판정(명중·피해·흔들기·치명·회복)은 <see cref="GameDatabase.Resolve"/>(<c>0x1007b6f0</c>) — 분석-전투 "공격·어빌리티 판정".
@@ -73,7 +74,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var u = _units[_turn];
             if (!u.Alive) EndTurn();
-            else if (u.IsAlly && !u.IsBusy && u.Tp <= 0) Rest(_turn);
+            else if (u.IsAlly && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
             return;
         }
 
@@ -101,6 +102,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _turn = index;
         _selected = index;
+        _units[index].OriginCol = _units[index].Col;
+        _units[index].OriginRow = _units[index].Row;
         CancelTargeting();
         _heldMoveKeys.Clear();
         if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례");
@@ -116,16 +119,60 @@ internal sealed unsafe partial class BattleSceneWindow
         _nextTickAt = _lastTime + TickDelaySeconds;
     }
 
-    private void CancelTargeting()
+    /// <summary>공격·어빌리티를 열 때 걸음 비용을 빼기 전 값 — 취소하면 되돌린다.</summary>
+    private (int Tp, int OriginCol, int OriginRow)? _commitUndo;
+
+    /// <summary>공격 대상 고르기·어빌리티 목록을 닫는다. <paramref name="refund"/> 면 열 때 뺀 걸음 비용을 돌려준다.</summary>
+    private void CancelTargeting(bool refund = false)
     {
+        if (refund && _commitUndo is { } undo && _turn >= 0)
+        {
+            var u = _units[_turn];
+            (u.Tp, u.OriginCol, u.OriginRow) = undo;
+        }
+        _commitUndo = null;
         _targetWork = -1;
         _abilityMenu = false;
+    }
+
+    /// <summary>공격·어빌리티를 열 때: 지금까지 걸은 비용을 한 번에 뺀다(취소하면 되돌림).</summary>
+    private void CommitMoveForAction()
+    {
+        var u = _units[_turn];
+        _commitUndo = (u.Tp, u.OriginCol, u.OriginRow);
+        CommitMove(u);
+    }
+
+    /// <summary>우클릭·Esc 로 걸은 것을 물린다 — 차례 시작 자리로 되돌린다. 물렸으면 true.</summary>
+    private bool UndoMove()
+    {
+        if (!IsPlayerTurn) return false;
+        var u = _units[_turn];
+        if (u.IsBusy || (u.Col == u.OriginCol && u.Row == u.OriginRow)) return false;
+        u.WarpTo(u.OriginCol, u.OriginRow);
+        return true;
+    }
+
+    /// <summary>우클릭·Esc 공통 취소 — 목록·대상 고르기(비용 돌려줌) → 걸음 물리기 순. 취소한 것이 있으면 true.</summary>
+    private bool CancelStep()
+    {
+        if (_abilityMenu || _targetWork >= 0) { CancelTargeting(refund: true); Toast("취소했습니다"); return true; }
+        return UndoMove();
+    }
+
+    /// <summary>차례 시작 자리에서 지금 자리까지 걸은 비용을 TP 에서 한 번에 빼고, 시작 자리를 지금 자리로 옮긴다.</summary>
+    private void CommitMove(UnitState u)
+    {
+        if (ComputeRange(u) is { } range && range.CanReach(u.Row * Cols + u.Col)) u.Tp -= range.Cost[u.Row * Cols + u.Col];
+        u.OriginCol = u.Col;
+        u.OriginRow = u.Row;
     }
 
     /// <summary>휴식 <c>0x1007a790</c>: (최대 HP − 현재 HP) × 남은 TP / 최대 TP × Num[35]% 를 채우고 남은 TP 를 버린다.</summary>
     private void Rest(int index)
     {
         var u = _units[index];
+        CommitMove(u);
         if (u.Tp > 0 && u.MaxTp > 0 && _db != null)
         {
             int heal = (int)((long)(u.MaxHp - u.Hp) * u.Tp / u.MaxTp * _db.N(35) / 100);
@@ -137,14 +184,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 걷기 ─────────────────────────────────────────────────────────────────
 
-    /// <summary>차례인 아군을 클릭한 파란 칸까지 걷게 한다. 걸은 만큼 TP 를 쓴다.</summary>
+    /// <summary>차례인 아군을 클릭한 파란 칸까지 걷게 한다. TP 는 행동할 때 한 번에 뺀다.</summary>
     private bool TryWalkTo(int col, int row)
     {
-        if (!IsPlayerTurn || _units[_turn].IsBusy || ComputeRange(_units[_turn]) is not { } range) return false;
-        int index = row * Cols + col;
-        if (!range.CanReach(index) || range.Cost[index] == 0) return false;
-        _units[_turn].Tp -= range.Cost[index];
-        foreach (var cell in range.PathTo(index)) _units[_turn].Path.Enqueue(cell);
+        var u = _units[_turn >= 0 ? _turn : 0];
+        if (!IsPlayerTurn || u.IsBusy || ComputeRange(u) is not { } range) return false;
+        if (PathWithin(range, u.Col, u.Row, row * Cols + col) is not { Count: > 0 } path) return false;
+        foreach (var cell in path) u.Path.Enqueue(cell);
         return true;
     }
 
@@ -199,7 +245,8 @@ internal sealed unsafe partial class BattleSceneWindow
         u.Data != null && _db != null && u.Tp + u.Ctp >= _db.WorkTpCost(u.Data, w.Id) && u.Soul >= w.SoulBase;
 
     /// <summary>
-    /// 기본공격 자리 찾기 — 지금 TP 로 갈 수 있는 칸(제자리 포함) 중 목표가 사거리에 드는 가장 싼 칸.
+    /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
+    /// 길은 지금 자리에서 그 칸까지다.
     /// </summary>
     private (List<(int Col, int Row)> Path, int Cost)? FindAttackPath(int attackerIndex, int targetIndex)
     {
@@ -215,7 +262,7 @@ internal sealed unsafe partial class BattleSceneWindow
             bestCost = range.Cost[i];
             best = i;
         }
-        return best < 0 ? null : (range.PathTo(best), bestCost);
+        return best < 0 || PathWithin(range, a.Col, a.Row, best) is not { } path ? null : (path, bestCost);
     }
 
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
@@ -224,6 +271,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void BeginAttackTargeting()
     {
         if (_units[_turn].Data is not { } c) return;
+        CommitMoveForAction();
         _targetWork = c.BasicWorkId;
         _targetIsBasicAttack = true;
         Toast("공격할 적을 클릭하세요 — 빨간 칸 안의 적 (Esc 취소)");
@@ -241,19 +289,17 @@ internal sealed unsafe partial class BattleSceneWindow
             int target = LiveUnitAt(col, row) is { } t ? Array.IndexOf(_units, t) : -1;
             if (target < 0 || _units[target].IsAlly || FindAttackPath(_turn, target) is not { } plan)
             {
-                CancelTargeting();
-                Toast("공격을 그만뒀습니다 — 빨간 칸 안의 적을 고르세요");
+                Toast("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");
                 return true;
             }
             CancelTargeting();
-            _routine = UseWorkRoutine(_turn, w, target, _units[target].Col, _units[target].Row, plan.Path, plan.Cost);
+            _routine = UseWorkRoutine(_turn, w, target, _units[target].Col, _units[target].Row, plan.Path);
             return true;
         }
 
         if (!InWorkRange(w, user.Col, user.Row, col, row))
         {
-            CancelTargeting();
-            Toast("사거리 밖입니다 — 어빌리티를 그만뒀습니다");
+            Toast("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");
             return true;
         }
         if (WorkTargets(w, user, col, row).Count == 0)
@@ -262,23 +308,23 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
         CancelTargeting();
-        _routine = UseWorkRoutine(_turn, w, -1, col, row, [], 0);
+        _routine = UseWorkRoutine(_turn, w, -1, col, row, []);
         return true;
     }
 
     // ── work 쓰기 (fg-5 공격 · fg-6 어빌리티) ───────────────────────────────
 
     /// <summary>
-    /// (필요하면 걸어가서) work 하나를 쓴다: 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 8 끝에 대상마다 판정,
+    /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 8 끝에 대상마다 판정,
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
     /// </summary>
     private IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
-                                             List<(int Col, int Row)> path, int walkCost)
+                                             List<(int Col, int Row)> path)
     {
         var a = _units[userIndex];
-        a.Tp -= walkCost;
         foreach (var cell in path) a.Path.Enqueue(cell);
         while (a.IsBusy) yield return true;
+        CommitMove(a);
 
         if (targetIndex >= 0) (col, row) = (_units[targetIndex].Col, _units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
@@ -361,7 +407,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (best is { } b && u.Data != null && Work(u.Data.BasicWorkId) is { } w)
         {
-            var attack = UseWorkRoutine(index, w, b.Target, 0, 0, b.Path, b.Cost);
+            var attack = UseWorkRoutine(index, w, b.Target, 0, 0, b.Path);
             while (attack.MoveNext()) yield return true;
         }
         else if (ComputeRange(u) is { } range)
@@ -377,7 +423,6 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             if (bestCell >= 0 && range.Cost[bestCell] > 0)
             {
-                u.Tp -= range.Cost[bestCell];
                 foreach (var cell in range.PathTo(bestCell)) u.Path.Enqueue(cell);
                 while (u.IsBusy) yield return true;
             }
@@ -449,8 +494,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_turn < 0) return $"틱 {_tick} — 차례를 기다리는 중";
         var u = _units[_turn];
         string help = !u.IsAlly ? "적군이 움직입니다"
-            : _targetWork >= 0 ? (_targetIsBasicAttack ? "공격할 적을 클릭 (Esc 취소)" : "노란 칸 안의 대상을 클릭 (Esc 취소)")
-            : "파란 칸 클릭·WASD: 걷기   우클릭·Space: 링(공격·어빌·휴식…)   R: 휴식";
+            : _targetWork >= 0 ? (_targetIsBasicAttack ? "공격할 적을 클릭 (우클릭·Esc 취소)" : "노란 칸 안의 대상을 클릭 (우클릭·Esc 취소)")
+            : "파란 칸 클릭·WASD: 걷기   우클릭·Space: 링   Q: 휴식   우클릭·Esc: 취소";
         return $"틱 {_tick}   {(u.IsAlly ? "아군" : "적군")} {UnitName(_turn)} 차례   HP {u.Hp}/{u.MaxHp}  TP {u.Tp}/{u.MaxTp}  SOUL {u.Soul}   {help}";
     }
 
