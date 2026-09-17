@@ -93,8 +93,32 @@ public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, usho
 /// <summary><c>Abi/NNNN.abi</c> 레코드(26바이트)와 레벨별 work 번호.</summary>
 public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Dictionary<int, int> WorkByLevel);
 
-/// <summary><c>Dat/NNNN.att</c> work 레코드(62바이트) 중 쓰는 칸. 파일 오프셋: 41 +0x2e, 43 +0x30 EXP 비용, 45 +0x32 TP, 47 +0x34 SOUL, 57 +0x3f 준비 동작.</summary>
-public sealed record WorkData(int Id, ushort AbilityId, byte Level, ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare);
+/// <summary>
+/// <c>Dat/NNNN.att</c> work 레코드(62바이트) 중 쓰는 칸. 이름 옆은 메모리 칸(파일 오프셋).
+/// </summary>
+/// <param name="RangeShape">+0x7(5) 사거리 모양 — 1 마름모, 2 십자(곧은 줄), 0 자기 자리.</param>
+/// <param name="RangeMin">+0xa(7) 사거리 최소 칸.</param>
+/// <param name="RangeMax">+0xc(9) 사거리 최대 칸.</param>
+/// <param name="TargetMode">+0x13(16) 1·4·5 = 커서 유닛 하나, 그 밖 = 효과 범위 안 모든 유닛(편 안 가림).</param>
+/// <param name="AreaShape">+0x14(17) 효과 범위 모양 1~9.</param>
+/// <param name="AreaArg">+0x1a(22) 효과 범위 인자.</param>
+/// <param name="Kind">+0x1f(27) 0 피해, 1·5 회복, 2·3 보조(HP 변화 없음), 4 오브젝트.</param>
+/// <param name="Power">+0x2a(37) 피해면 공격력 ×(200+값)/2000, 회복이면 최대 HP %.</param>
+/// <param name="Accuracy">+0x2c(39) 명중 바탕.</param>
+/// <param name="Critical">+0x2d(40) 치명 확률 − 1 (%).</param>
+/// <param name="HpFactor">+0x2e(41) TP 비용 체질 항.</param>
+/// <param name="ExpCost">+0x30(43) 다음 레벨 EXP.</param>
+/// <param name="TpBase">+0x32(45) TP 비용.</param>
+/// <param name="SoulBase">+0x34(47) SOUL 비용.</param>
+/// <param name="Prepare">+0x3f(57) 준비 동작 종류.</param>
+public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeShape, ushort RangeMin, ushort RangeMax,
+                              byte TargetMode, byte AreaShape, short AreaArg, byte Kind, short Power, byte Accuracy, byte Critical,
+                              ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare)
+{
+    public bool IsDamage => Kind == 0;
+    public bool IsHeal => Kind is 1 or 5;
+    public bool SingleTarget => TargetMode is 1 or 4 or 5;
+}
 
 /// <summary>
 /// 캐릭터 화면에 필요한 게임 표 묶음 — 텍스트(TXR), 직업·계열·아이템·어빌리티·work·수치(Num) — 와 능력치 식.
@@ -157,8 +181,9 @@ public sealed class GameDatabase
         {
             if (files.Read("Dat", $"{f:D4}.att") is not { } a) continue;
             for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 62)
-                works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], U16(a, o + 41), U16(a, o + 43),
-                                                U16(a, o + 45), U16(a, o + 47), a[o + 57]);
+                works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
+                                                a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
+                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 57]);
         }
 
         var abilities = new Dictionary<int, AbilityData>();
@@ -210,7 +235,20 @@ public sealed class GameDatabase
     public int EquipBonus(CharacterData c, int stat) =>
         c.Items.Where(i => i != 0 && Items.ContainsKey(i)).SelectMany(i => Items[i].Bonuses).Where(b => b.Stat == stat).Sum(b => b.Value);
 
-    public int MaxHp(CharacterData c) => (int)c.Lp + EquipBonus(c, 0x30);
+    /// <summary>갑옷 배율 <c>0x1007b020</c> = 장비 2칸(갑옷) 아이템 방어값(Itm 파일 +13).</summary>
+    public int ArmorRate(CharacterData c) => c.Items[1] != 0 && Items.TryGetValue(c.Items[1], out var it) ? it.Defense : 0;
+
+    /// <summary>
+    /// 화면 최대 HP <c>0x1007ad60</c> = 내부 최대 HP(LP + 장비 0x30) × (Num[6] + 갑옷 배율) / Num[6].
+    /// 죠안 LP 800 · 갑옷 100 → 1600 (게임 화면과 같음). 전투는 이 화면 값으로 셈한다 — 원본은 내부 HP 에서
+    /// 피해 × 100/(100+갑옷) 을 빼지만 화면에 보이는 감소량은 거의 같다.
+    /// </summary>
+    public int MaxHp(CharacterData c)
+    {
+        int inner = (int)c.Lp + EquipBonus(c, 0x30);
+        int armor = ArmorRate(c);
+        return armor == 0 || N(6) == 0 ? inner : inner * (armor + N(6)) / N(6);
+    }
     public int Psy(CharacterData c) => c.Psy + EquipBonus(c, 0x1f);
     /// <summary>DEX <c>0x1007ae50</c> — 걸음 비용·ACR 에 쓰는 값(파일 DEX + 장비 보너스; 전투 버프·효과 1 은 뺌).</summary>
     public int Dex(CharacterData c) => c.Dex + EquipBonus(c, 0x1e);
@@ -238,16 +276,53 @@ public sealed class GameDatabase
     /// <summary>ACR <c>0x1007ab90</c> = (2×CTP + 최대TP + 현재TP) / Num[9] + DEX / Num[8].</summary>
     public int Acr(CharacterData c, int currentTp) => (2 * c.Ctp + MaxTp(c) + currentTp) / N(9) + Dex(c) / N(8);
 
-    /// <summary>ATK <c>0x1007ab20</c> = ((무기 공격 + Num[1]) × PSY / Num[25]) × (SOUL + Num[2]) × Num[42] / Num[85].</summary>
-    public int Atk(CharacterData c, int soul)
+    /// <summary>
+    /// ATK <c>0x1007ab20</c>·공격력 <c>0x1007aa90</c> = ((무기 공격 + Num[1]) × PSY / Num[25]) × (SOUL + Num[2]) × (Num[42] + work 위력) / Num[85].
+    /// 화면 ATK 는 위력 0.
+    /// </summary>
+    public int Atk(CharacterData c, int soul, int workPower = 0)
     {
         int weapon = c.Items[0] != 0 && Items.TryGetValue(c.Items[0], out var w) ? w.Attack : 0;
         int v = (weapon + N(1)) * Psy(c) / N(25);
-        return v * (soul + N(2)) * N(42) / N(85);
+        return v * (soul + N(2)) * (N(42) + workPower) / N(85);
     }
 
-    /// <summary>RDP <c>0x1007abf0</c> — HP 가 가득이면 DEP 그대로다(HP 가 줄면 커진다; 줄었을 때 식은 아직 안 옮김).</summary>
+    /// <summary>RDP <c>0x1007abf0</c> — HP 가 가득이면 DEP 그대로다.</summary>
     public int RdpAtFullHp(CharacterData c) => c.Dep;
+
+    /// <summary>RDP <c>0x1007abf0</c> = trunc(DEP × (1 + Num[39]% × (1 − HP/최대HP)²)) — HP 가 줄수록 단단해진다(0 이면 ×1.3).</summary>
+    public int Rdp(CharacterData c, int hp, int maxHp)
+    {
+        double t = maxHp <= 0 ? 0 : 1.0 - (double)hp / maxHp;
+        return (int)(c.Dep * (t * N(39) * t * 0.01 + 1.0));
+    }
+
+    /// <summary>명중률 <c>0x1007b580</c>(%) = att+0x2c × 8/10 + 2 × (Num[7] + (공DEX − 방DEX)/Num[8] + (공TP − 방TP)/Num[9]) / 10.</summary>
+    public int HitChance(CharacterData a, int attackerTp, CharacterData d, int defenderTp, WorkData w)
+    {
+        int s = (Dex(a) - Dex(d)) / N(8) + (attackerTp - defenderTp) / N(9) + N(7);
+        return w.Accuracy * 8 / 10 + s * 2 / 10;
+    }
+
+    /// <summary>
+    /// 한 번의 판정 <c>0x1007b6f0</c>. 반환: (양, 결과 1 회복 / 2 맞음 / 3 빗나감, 치명).
+    /// 피해 = (Num[3] − RDP) × 공격력 / Num[3] → 흔들기 ±Num[22]/2 % → 치명(rand%100 ≤ att+0x2d) × Num[23]/100.
+    /// 회복 = 최대 HP × 위력 / 100. 자세·상태 효과 보정은 뺐다.
+    /// </summary>
+    public (int Amount, int Result, bool Critical) Resolve(Random rng, CharacterData a, int aTp, int aSoul,
+                                                          CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w)
+    {
+        if (w.IsHeal) return (dMaxHp * w.Power / 100, 1, false);
+        if (!w.IsDamage) return (0, 2, false);
+        if (rng.Next(100) >= HitChance(a, aTp, d, dTp, w)) return (0, 3, false);
+
+        int dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * Atk(a, aSoul, w.Power) / N(3);
+        int v = dmg * N(22) / 100;
+        if (v > 0) dmg += rng.Next(v) - dmg * N(22) / 200;
+        bool crit = rng.Next(100) <= w.Critical;
+        if (crit) dmg = dmg * N(23) / 100;
+        return (dmg, 2, crit);
+    }
 
     /// <summary>무기 종류 이름(장비 1번 칸 아이템 종류).</summary>
     public static string WeaponTypeName(byte type) => type switch
