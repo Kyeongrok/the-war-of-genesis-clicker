@@ -52,6 +52,13 @@
                     AutomationProperties.AutomationId="SearchButton"
                     Click="SearchButton_Click"
                     Content="검색" />
+                <Button
+                    x:Name="ExportButton"
+                    Width="90"
+                    Margin="16,0,0,0"
+                    AutomationProperties.AutomationId="ExportButton"
+                    Click="ExportButton_Click"
+                    Content="내보내기" />
                 <TextBlock
                     x:Name="SearchStatus"
                     Margin="12,0,0,0"

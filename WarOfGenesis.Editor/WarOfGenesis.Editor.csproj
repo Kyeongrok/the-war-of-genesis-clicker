@@ -10,4 +10,8 @@
         <RootNamespace>WarOfGenesis.Editor</RootNamespace>
     </PropertyGroup>
 
+    <ItemGroup>
+        <ProjectReference Include="..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
+    </ItemGroup>
+
 </Project>
