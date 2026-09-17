@@ -133,7 +133,16 @@ public partial class MainWindow : Window
 
     // ── 모션 매핑 창 ─────────────────────────────────────────────────────────
 
-    /// <summary>왼쪽에서 고른 캐릭터의 몸짓 파일(Obs) 모션표를 연다.</summary>
+    /// <summary>캐릭터 목록에서 우클릭한 항목을 먼저 고른다 — 컨텍스트 메뉴가 그 캐릭터를 대상으로 하도록.</summary>
+    private void CharacterList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ItemsControl.ContainerFromElement(CharacterList, (DependencyObject)e.OriginalSource) is ListBoxItem item)
+            item.IsSelected = true;
+        else
+            e.Handled = true;   // 빈 곳이면 메뉴를 띄우지 않는다
+    }
+
+    /// <summary>캐릭터 목록 항목의 컨텍스트 메뉴 — 고른 캐릭터의 몸짓 파일(Obs) 모션표를 연다.</summary>
     private void MotionMappingMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (_currentRecord is not { } record) { StatusText.Text = "먼저 왼쪽에서 캐릭터를 고르세요."; return; }
@@ -167,16 +176,68 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 스킬(어빌리티) 창 ────────────────────────────────────────────────────
+
+    private void SkillsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        try
+        {
+            _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+            new SkillsWindow(_database) { Owner = this }.Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
+    // ── 에셋: 소리(배경음악 · 효과음 · 인물 대사) 창 ────────────────────────
+
+    private SoundWindow? _soundWindow;
+
+    private void MusicMenuItem_Click(object sender, RoutedEventArgs e) => OpenSoundWindow(SoundWindow.Page.Music);
+
+    private void EffectSoundMenuItem_Click(object sender, RoutedEventArgs e) => OpenSoundWindow(SoundWindow.Page.Effect);
+
+    private void VoiceMenuItem_Click(object sender, RoutedEventArgs e) => OpenSoundWindow(SoundWindow.Page.Voice);
+
+    /// <summary>소리 창은 하나만 띄운다 — 이미 떠 있으면 그 탭으로 옮겨 앞으로 가져온다.</summary>
+    private void OpenSoundWindow(SoundWindow.Page page)
+    {
+        if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        string folder = page == SoundWindow.Page.Effect ? SoundCatalog.SndFolder : SoundCatalog.BgmFolder;
+        if (!Directory.Exists(Path.Combine(_gameRoot, folder)))
+        {
+            StatusText.Text = $"'{_gameRoot}' 에 {folder} 폴더가 없습니다.";
+            return;
+        }
+        if (_soundWindow is { IsLoaded: true })
+        {
+            _soundWindow.ShowPage(page);
+            _soundWindow.Activate();
+            return;
+        }
+        _soundWindow = new SoundWindow(_gameRoot, page) { Owner = this };
+        _soundWindow.Closed += (_, _) => _soundWindow = null;
+        _soundWindow.Show();
+    }
+
     // ── 전투맵 보기 창 ───────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 게임 폴더를 안 열어도 된다 — 저장소에 내보내 둔 <c>assets/characters</c>·
-    /// <c>assets/backgrounds</c> 만으로 그린다(duel-dx 데모와 같은 자료).
-    /// </summary>
+    /// <summary>게임 폴더의 모든 전투(Btl)·맵(Obt) 목록 창을 연다.</summary>
     private void BattleMapMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var window = new BattleMapWindow { Owner = this };
-        window.Show();
+        if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        try
+        {
+            _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+            new BattleMapWindow(_gameRoot, _database) { Owner = this }.Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다: {ex.Message}";
+        }
     }
 
     // ── 이름 검색 ────────────────────────────────────────────────────────────

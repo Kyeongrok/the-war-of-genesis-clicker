@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WarOfGenesis.Assets;
@@ -10,141 +12,244 @@ using Rectangle = System.Windows.Shapes.Rectangle;
 namespace WarOfGenesis.Editor;
 
 /// <summary>
-/// <see cref="BattleDemoScene"/>(Btl 0045, 코어헌터 훈련장)를 원본 전투 맵(<c>Obt</c>) 위 32×34 칸 판에 그려 보는 창.
+/// 게임의 모든 전투(<c>Btl</c>)와 전투 맵(<c>Obt</c>)을 목록으로 보고, 고른 것을 원본 맵 위에 인물·배치 칸과 함께 그리는 창.
 /// </summary>
 /// <remarks>
-/// duel-dx 데모의 D3D 렌더링을 WPF <see cref="Canvas"/> 로 옮긴 것 — 게임 폴더 없이도, 저장소에
-/// 내보내 둔 <c>assets/characters</c>·<c>assets/maps</c> 만으로 열어 볼 수 있다. 배치
-/// 자료는 duel-dx 와 이 창이 <see cref="BattleDemoScene"/> 하나를 함께 쓴다 — 둘 다 고칠 필요
-/// 없이 한 군데서만 고치면 된다.
+/// 전투 → <c>Map/NNNN.map</c> 둘째 워드 → 배경 <c>Obt</c>. 인물 그림은 Chr 의 sprite 번호로 <c>Obs</c> 첫 장을 쓴다.
+/// 게임 폴더(낱장 + pak)에서 바로 읽는다. 테두리 색: 파랑 플레이어, 초록 동맹 AI, 빨강 적. 노란 칸은 플레이어 배치 칸.
 /// </remarks>
 public partial class BattleMapWindow : Window
 {
     private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
 
-    public BattleMapWindow()
+    public sealed record Entry(string Label, BattleFile? Battle, int ObtId, string Title)
+    {
+        public override string ToString() => Label;
+    }
+
+    private readonly GameFiles? _files;
+    private readonly GameDatabase? _db;
+    private readonly List<Entry> _entries = [];
+    private ICollectionView? _view;
+    private readonly Dictionary<int, BitmapSource?> _spriteCache = [];
+    private int _loadVersion;
+
+    private (Entry Entry, ObtMapImage? Map, BitmapSource? Background, Dictionary<int, BitmapSource?> Sprites, string Error)? _shown;
+
+    public BattleMapWindow(string gameRoot, GameDatabase? db)
     {
         InitializeComponent();
-        Loaded += (_, _) => StartLoadingScene();
-    }
-
-    private void StartLoadingScene()
-    {
-        StatusText.Text = "전투 자료를 읽는 중...";
-        System.Threading.Tasks.Task.Run(LoadScene);
-    }
-
-    /// <summary>배경 스레드에서 배경 그림·캐릭터 그림을 읽는다. 창은 먼저 뜬다.</summary>
-    private void LoadScene()
-    {
-        BitmapSource? background = null;
-        var sprites = new Dictionary<int, BitmapSource>();
-        string loadError = "";
-
-        try
+        if (gameRoot.Length == 0 || !Directory.Exists(gameRoot))
         {
-            background = LoadBackground();
+            ListStatus.Text = "먼저 메인 창에서 게임 폴더를 여세요.";
+            return;
+        }
+        _files = GameFiles.FromGameRoot(gameRoot);
+        _db = db;
+        Loaded += (_, _) => StartLoadingList();
+    }
 
-            string charactersRoot = FindAssetsRoot("characters");
-            var manifests = CollectExportedManifests(charactersRoot);
+    // ── 목록 ─────────────────────────────────────────────────────────────────
 
-            foreach (int chrCode in BattleDemoScene.Roster.Select(u => u.ChrCode).Distinct())
+    private void StartLoadingList()
+    {
+        ListStatus.Text = "전투·맵 목록을 읽는 중...";
+        var files = _files!;
+        var db = _db;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            var entries = new List<Entry>();
+            var usedObt = new HashSet<int>();
+            var obtIds = files.List("Obt", ".obt").Keys.Select(IdOf).Where(i => i >= 0).ToHashSet();
+
+            foreach (string name in files.List("Btl", ".btl").Keys)
             {
-                if (!manifests.TryGetValue(chrCode, out var manifest)) continue;
-
-                string obsPath = Path.Combine(charactersRoot,
-                    CharacterExport.FolderNameFor(chrCode, manifest.Name),
-                    CharacterExport.ObsFileName(manifest.SpriteCode));
-
-                var frame = ObsSprite.DecodeFirstFrame(obsPath);
-                if (frame == null) continue;
-
-                var bitmap = BitmapSource.Create(frame.Width, frame.Height, 96, 96, PixelFormats.Bgra32,
-                                                  null, frame.Bgra, frame.Width * 4);
-                bitmap.Freeze();
-                sprites[chrCode] = bitmap;
+                int id = IdOf(name);
+                if (id < 0 || BattleFile.Parse(id, files.Read("Btl", name)) is not { } battle) continue;
+                int obt = BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) ?? -1;
+                if (obt >= 0) usedObt.Add(obt);
+                string title = db?.T(battle.TitleId) ?? "";
+                string label = $"Btl {id:D4}  {(title.Length > 0 ? title : "(이름 없음)")}  · Obt {(obt >= 0 ? obt.ToString("D4") : "?")}";
+                entries.Add(new Entry(label, battle, obt, title));
             }
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
-        {
-            loadError = ex.Message;
-        }
+            foreach (int obt in obtIds.Where(o => !usedObt.Contains(o)).OrderBy(o => o))
+                entries.Add(new Entry($"Obt {obt:D4}  (전투에 안 쓰임)", null, obt, ""));
 
-        Dispatcher.BeginInvoke(() => ShowScene(background, sprites, loadError));
+            Dispatcher.BeginInvoke(() => ShowList(entries, obtIds.Count));
+        });
     }
 
-    private void ShowScene(BitmapSource? background, Dictionary<int, BitmapSource> sprites, string loadError)
+    private static int IdOf(string fileName) => int.TryParse(Path.GetFileNameWithoutExtension(fileName), out int id) ? id : -1;
+
+    private void ShowList(List<Entry> entries, int obtCount)
+    {
+        _entries.Clear();
+        _entries.AddRange(entries);
+        MapList.ItemsSource = _entries;
+        _view = CollectionViewSource.GetDefaultView(_entries);
+        _view.Filter = Accept;
+        ListStatus.Text = $"전투 {entries.Count(e => e.Battle != null)}개 · 맵 {obtCount}개";
+        var first = _entries.FirstOrDefault(e => e.Battle?.Id == BattleDemoScene.BtlId) ?? _entries.FirstOrDefault();
+        if (first != null) MapList.SelectedItem = first;
+    }
+
+    private bool Accept(object o)
+    {
+        if (o is not Entry e) return false;
+        if (e.Battle == null && ShowBareMapsToggle.IsChecked != true) return false;
+        string q = FilterBox.Text.Trim();
+        return q.Length == 0 || e.Label.Contains(q, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void Filter_Changed(object sender, RoutedEventArgs e) => _view?.Refresh();
+
+    // ── 고른 맵 그리기 ───────────────────────────────────────────────────────
+
+    private void MapList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (MapList.SelectedItem is not Entry entry || _files == null) return;
+        int version = ++_loadVersion;
+        StatusText.Text = $"{entry.Label} 읽는 중...";
+        var files = _files;
+        var db = _db;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            ObtMapImage? map = null;
+            BitmapSource? background = null;
+            string error = "";
+            var sprites = new Dictionary<int, BitmapSource?>();
+            try
+            {
+                if (entry.ObtId >= 0 && files.Read("Obt", $"{entry.ObtId:D4}.obt") is { } obt)
+                {
+                    map = ObtMap.Parse(obt, $"{entry.ObtId:D4}.obt");
+                    background = BitmapSource.Create(map.Width, map.Height, 96, 96, PixelFormats.Bgra32, null, map.Bgra, map.Width * 4);
+                    background.Freeze();
+                }
+                else error = $"Obt {entry.ObtId:D4} 를 못 찾았습니다.";
+
+                foreach (var unit in entry.Battle?.Units ?? [])
+                    if (!sprites.ContainsKey(unit.ChrCode)) sprites[unit.ChrCode] = SpriteFor(files, db, unit.ChrCode);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or EndOfStreamException)
+            {
+                error = ex.Message;
+            }
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (version != _loadVersion) return;
+                _shown = (entry, map, background, sprites, error);
+                Redraw();
+            });
+        });
+    }
+
+    private BitmapSource? SpriteFor(GameFiles files, GameDatabase? db, int chrCode)
+    {
+        if (db?.Character(chrCode) is not { } c) return null;
+        lock (_spriteCache)
+            if (_spriteCache.TryGetValue(c.SpriteId, out var cached)) return cached;
+
+        BitmapSource? bitmap = null;
+        if (files.Read("Obs", $"{c.SpriteId:D4}.obs") is { } obs && ObsSprite.DecodeFirstFrame(obs) is { } frame)
+        {
+            bitmap = BitmapSource.Create(frame.Width, frame.Height, 96, 96, PixelFormats.Bgra32, null, frame.Bgra, frame.Width * 4);
+            bitmap.Freeze();
+        }
+        lock (_spriteCache) _spriteCache[c.SpriteId] = bitmap;
+        return bitmap;
+    }
+
+    private void View_Changed(object sender, RoutedEventArgs e) => Redraw();
+
+    private void Redraw()
     {
         Board.Children.Clear();
+        if (_shown is not { } shown) return;
+        var (entry, map, background, sprites, error) = shown;
+
+        int cols = map?.Cols ?? 0, rows = map?.Rows ?? 0;
+        Board.Width = Math.Max(cols * TileW, map?.Width ?? 0);
+        Board.Height = rows * TileH;
 
         if (background != null)
         {
-            var image = new Image
-            {
-                Source = background,
-                Width = background.PixelWidth,
-                Height = background.PixelHeight,
-            };
-            Canvas.SetLeft(image, 0);
-            Canvas.SetTop(image, _mapOriginY);
+            var image = new Image { Source = background, Width = background.PixelWidth, Height = background.PixelHeight };
+            Canvas.SetTop(image, map!.OriginY);
             Board.Children.Add(image);
         }
+        if (GridToggle.IsChecked == true) DrawGridLines(cols, rows);
+        if (UnitsToggle.IsChecked == true && entry.Battle is { } battle) DrawBattle(battle, sprites);
 
-        DrawGridLines();
-        DrawUnits(sprites);
-
-        int allies = BattleDemoScene.Roster.Count(u => u.IsAlly);
-        int enemies = BattleDemoScene.Roster.Count(u => !u.IsAlly);
-        StatusText.Text =
-            $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   " +
-            $"배경: Obt {Path.GetFileNameWithoutExtension(BattleDemoScene.MapFile)}\n" +
-            "파란 테두리 = 아군, 빨간 테두리 = 적군";
-        if (loadError.Length > 0) StatusText.Text += $"\n못 읽은 자료가 있습니다: {loadError}";
+        StatusText.Text = Describe(entry, map, error);
     }
 
-    private void DrawGridLines()
+    private string Describe(Entry entry, ObtMapImage? map, string error)
     {
-        double width = BattleDemoScene.Cols * TileW, height = BattleDemoScene.Rows * TileH;
+        var lines = new List<string>();
+        string size = map != null ? $"{map.Cols}×{map.Rows}칸" : "";
+        if (entry.Battle is { } b)
+        {
+            string T(ushort id) => _db?.T(id) ?? "";
+            lines.Add($"Btl {b.Id:D4}  「{entry.Title}」   Map {b.MapId:D4} → Obt {entry.ObtId:D4} {size}   BGM {b.Bgm}");
+            lines.Add($"승리: {T(b.WinId)}   패배: {T(b.LoseId)}");
+            var groups = b.Units.GroupBy(u => u.Side).OrderByDescending(g => g.Key)
+                .Select(g => $"{BattleFile.SideName(g.Key)} {g.Count()}: " + string.Join(", ", g.Select(u => $"{ChrName(u.ChrCode)}({u.X},{u.Y})")));
+            lines.AddRange(groups);
+            if (b.Placement.Count > 0) lines.Add($"배치 칸 {b.Placement.Count}개");
+            if (b.Objects.Count > 0) lines.Add($"오브젝트 {b.Objects.Count}개");
+            if (b.ParseError.Length > 0) lines.Add($"※ {b.ParseError}");
+        }
+        else lines.Add($"Obt {entry.ObtId:D4} {size} — 이 맵을 쓰는 전투(Btl)가 없습니다.");
+        if (error.Length > 0) lines.Add($"못 읽음: {error}");
+        return string.Join("\n", lines);
+    }
+
+    private string ChrName(int code)
+    {
+        if (_db?.Character(code) is not { } c) return $"Chr {code}";
+        string name = _db.T(c.NameId);
+        return name.Length > 0 ? name : $"Chr {code}";
+    }
+
+    private void DrawGridLines(int cols, int rows)
+    {
         var brush = new SolidColorBrush(Color.FromArgb(64, 255, 255, 255));
         brush.Freeze();
-
-        for (int c = 0; c <= BattleDemoScene.Cols; c++)
-        {
-            double x = c * TileW;
-            Board.Children.Add(new Line { X1 = x, X2 = x, Y1 = 0, Y2 = height, Stroke = brush, StrokeThickness = 1 });
-        }
-        for (int r = 0; r <= BattleDemoScene.Rows; r++)
-        {
-            double y = r * TileH;
-            Board.Children.Add(new Line { X1 = 0, X2 = width, Y1 = y, Y2 = y, Stroke = brush, StrokeThickness = 1 });
-        }
+        for (int c = 0; c <= cols; c++)
+            Board.Children.Add(new Line { X1 = c * TileW, X2 = c * TileW, Y1 = 0, Y2 = rows * TileH, Stroke = brush, StrokeThickness = 1 });
+        for (int r = 0; r <= rows; r++)
+            Board.Children.Add(new Line { X1 = 0, X2 = cols * TileW, Y1 = r * TileH, Y2 = r * TileH, Stroke = brush, StrokeThickness = 1 });
     }
 
-    private void DrawUnits(Dictionary<int, BitmapSource> sprites)
+    private void DrawBattle(BattleFile battle, Dictionary<int, BitmapSource?> sprites)
     {
-        foreach (var unit in BattleDemoScene.Roster)
+        var placeFill = Frozen(Color.FromArgb(70, 255, 220, 60));
+        var placeStroke = Frozen(Color.FromArgb(200, 255, 220, 60));
+        foreach (var cell in battle.Placement)
         {
-            double tileX = unit.Col * TileW, tileY = unit.Row * TileH;
-            Color color = unit.IsAlly ? Colors.DeepSkyBlue : Colors.OrangeRed;
-            var stroke = new SolidColorBrush(color);
-            stroke.Freeze();
-            var fill = new SolidColorBrush(Color.FromArgb(60, color.R, color.G, color.B));
-            fill.Freeze();
+            var box = new Rectangle { Width = TileW, Height = TileH, Fill = placeFill, Stroke = placeStroke, StrokeThickness = 1 };
+            Canvas.SetLeft(box, cell.X * TileW);
+            Canvas.SetTop(box, cell.Y * TileH);
+            Board.Children.Add(box);
+        }
 
-            var box = new Rectangle { Width = TileW, Height = TileH, Stroke = stroke, StrokeThickness = 2, Fill = fill };
+        foreach (var unit in battle.Units.OrderBy(u => u.Y))
+        {
+            Color color = unit.Side switch { 4 => Colors.DeepSkyBlue, 3 => Colors.LimeGreen, _ => Colors.OrangeRed };
+            double tileX = unit.X * TileW, tileY = unit.Y * TileH;
+            var box = new Rectangle
+            {
+                Width = TileW, Height = TileH, StrokeThickness = 2,
+                Stroke = Frozen(color), Fill = Frozen(Color.FromArgb(50, color.R, color.G, color.B)),
+                ToolTip = $"Chr {unit.ChrCode:D4} {ChrName(unit.ChrCode)} — {BattleFile.SideName(unit.Side)}, ({unit.X},{unit.Y}), 방향 {unit.Direction}",
+            };
             Canvas.SetLeft(box, tileX);
             Canvas.SetTop(box, tileY);
             Board.Children.Add(box);
 
-            if (!sprites.TryGetValue(unit.ChrCode, out var sprite)) continue;
-
-            var image = new Image
-            {
-                Source = sprite,
-                Width = sprite.PixelWidth,
-                Height = sprite.PixelHeight,
-                IsHitTestVisible = false,
-            };
+            if (sprites.GetValueOrDefault(unit.ChrCode) is not { } sprite) continue;
+            var image = new Image { Source = sprite, Width = sprite.PixelWidth, Height = sprite.PixelHeight, IsHitTestVisible = false };
             Canvas.SetLeft(image, tileX + TileW / 2.0 - sprite.PixelWidth / 2.0);
             Canvas.SetTop(image, tileY + TileH - sprite.PixelHeight);
             Canvas.SetZIndex(image, 10);
@@ -152,31 +257,10 @@ public partial class BattleMapWindow : Window
         }
     }
 
-    private double _mapOriginY;
-
-    /// <summary><c>assets/maps/</c> 의 전투 맵(<c>.obt</c>)을 풀어 그림으로 만든다.</summary>
-    private BitmapSource LoadBackground()
+    private static SolidColorBrush Frozen(Color color)
     {
-        var map = ObtMap.Load(Path.Combine(FindAssetsRoot("maps"), BattleDemoScene.MapFile));
-        _mapOriginY = map.OriginY;
-        var bitmap = BitmapSource.Create(map.Width, map.Height, 96, 96, PixelFormats.Bgra32, null, map.Bgra, map.Width * 4);
-        bitmap.Freeze();
-        return bitmap;
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
-
-    /// <summary><c>assets/characters/</c> 밑의 인물들을 전부 훑어 Chr 코드별로 모은다.</summary>
-    private static Dictionary<int, ExportedCharacter> CollectExportedManifests(string charactersRoot)
-    {
-        var result = new Dictionary<int, ExportedCharacter>();
-        if (!Directory.Exists(charactersRoot)) return result;
-
-        foreach (var folder in Directory.EnumerateDirectories(charactersRoot))
-        {
-            var manifest = CharacterExport.LoadManifest(folder);
-            if (manifest != null) result[manifest.ChrCode] = manifest;
-        }
-        return result;
-    }
-
-    private static string FindAssetsRoot(string subFolder) => AssetsFolder.Find(subFolder);
 }
