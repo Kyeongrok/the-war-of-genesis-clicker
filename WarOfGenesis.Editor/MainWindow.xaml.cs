@@ -114,6 +114,20 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 캐릭터 목록(id·이름·초상) 창 ──────────────────────────────────────────
+
+    private void CharacterListMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_txr == null || _allChrRecords.Count == 0)
+        {
+            StatusText.Text = "먼저 게임 폴더를 여세요.";
+            return;
+        }
+
+        var window = new CharactersWindow(_allChrRecords, _txr, _obsFolder) { Owner = this };
+        window.Show();
+    }
+
     // ── 이름 검색 ────────────────────────────────────────────────────────────
 
     private void SearchBox_KeyDown(object sender, KeyEventArgs e)

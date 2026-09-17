@@ -6,175 +6,187 @@
     Width="1150"
     Height="720"
     WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="8">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="보기(_V)">
+                <MenuItem
+                    x:Name="CharacterListMenuItem"
+                    AutomationProperties.AutomationId="CharacterListMenuItem"
+                    Click="CharacterListMenuItem_Click"
+                    Header="캐릭터 목록(id·이름·초상)(_C)" />
+            </MenuItem>
+        </Menu>
 
-        <!--  위: 게임 폴더 · 이름 검색  -->
-        <StackPanel Margin="0,0,0,8" DockPanel.Dock="Top">
-            <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
-                <TextBlock
-                    Width="70"
-                    VerticalAlignment="Center"
-                    Text="게임 폴더:" />
-                <TextBox
-                    x:Name="GameRootBox"
-                    Width="480"
-                    VerticalAlignment="Center"
-                    AutomationProperties.AutomationId="GameRootBox" />
-                <Button
-                    x:Name="BrowseButton"
-                    Width="70"
-                    Margin="6,0,0,0"
-                    Click="BrowseButton_Click"
-                    Content="찾기..." />
-                <Button
-                    x:Name="LoadButton"
-                    Width="90"
-                    Margin="6,0,0,0"
-                    AutomationProperties.AutomationId="LoadButton"
-                    Click="LoadButton_Click"
-                    Content="이 폴더 열기" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock
-                    Width="70"
-                    VerticalAlignment="Center"
-                    Text="캐릭터 이름:" />
-                <TextBox
-                    x:Name="SearchBox"
-                    Width="200"
-                    VerticalAlignment="Center"
-                    AutomationProperties.AutomationId="SearchBox"
-                    KeyDown="SearchBox_KeyDown" />
-                <Button
-                    x:Name="SearchButton"
-                    Width="70"
-                    Margin="6,0,0,0"
-                    AutomationProperties.AutomationId="SearchButton"
-                    Click="SearchButton_Click"
-                    Content="검색" />
-                <Button
-                    x:Name="ExportButton"
-                    Width="90"
-                    Margin="16,0,0,0"
-                    AutomationProperties.AutomationId="ExportButton"
-                    Click="ExportButton_Click"
-                    Content="내보내기" />
-                <TextBlock
-                    x:Name="SearchStatus"
-                    Margin="12,0,0,0"
-                    VerticalAlignment="Center"
-                    Foreground="DimGray" />
-            </StackPanel>
-        </StackPanel>
+        <DockPanel Margin="8">
 
-        <!--  아래: 상태 줄  -->
-        <TextBlock
-            x:Name="StatusText"
-            Margin="0,6,0,0"
-            DockPanel.Dock="Bottom"
-            Foreground="DimGray"
-            TextWrapping="Wrap" />
-
-        <!--  가운데: 캐릭터 · 몸짓 · 그림칸  -->
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="230" />
-                <ColumnDefinition Width="230" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <DockPanel Grid.Column="0" Margin="0,0,6,0">
-                <TextBlock
-                    Margin="0,0,0,4"
-                    DockPanel.Dock="Top"
-                    FontWeight="Bold"
-                    Text="캐릭터 (Chr 레코드)" />
-                <ListBox
-                    x:Name="CharacterList"
-                    AutomationProperties.AutomationId="CharacterList"
-                    SelectionChanged="CharacterList_SelectionChanged" />
-            </DockPanel>
-
-            <DockPanel Grid.Column="1" Margin="0,0,6,0">
-                <TextBlock
-                    Margin="0,0,0,4"
-                    DockPanel.Dock="Top"
-                    FontWeight="Bold"
-                    Text="몸짓 (Obs 몸짓 벌)" />
-                <ListBox
-                    x:Name="MotionList"
-                    AutomationProperties.AutomationId="MotionList"
-                    SelectionChanged="MotionList_SelectionChanged" />
-            </DockPanel>
-
-            <DockPanel Grid.Column="2">
-                <TextBlock
-                    Margin="0,0,0,4"
-                    DockPanel.Dock="Top"
-                    FontWeight="Bold"
-                    Text="한 컷씩 보기" />
-
-                <StackPanel
-                    Margin="0,8,0,0"
-                    HorizontalAlignment="Center"
-                    DockPanel.Dock="Bottom"
-                    Orientation="Horizontal">
-                    <Button
-                        x:Name="PrevButton"
-                        Width="70"
-                        Click="PrevButton_Click"
-                        Content="◀ 이전" />
+            <!--  위: 게임 폴더 · 이름 검색  -->
+            <StackPanel Margin="0,0,0,8" DockPanel.Dock="Top">
+                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
                     <TextBlock
-                        x:Name="FrameLabel"
                         Width="70"
                         VerticalAlignment="Center"
-                        FontWeight="Bold"
-                        Text="0 / 0"
-                        TextAlignment="Center" />
+                        Text="게임 폴더:" />
+                    <TextBox
+                        x:Name="GameRootBox"
+                        Width="480"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="GameRootBox" />
                     <Button
-                        x:Name="NextButton"
+                        x:Name="BrowseButton"
                         Width="70"
-                        AutomationProperties.AutomationId="NextButton"
-                        Click="NextButton_Click"
-                        Content="다음 ▶" />
-                    <ToggleButton
-                        x:Name="PlayToggle"
-                        Width="70"
-                        Margin="16,0,0,0"
-                        Checked="PlayToggle_Checked"
-                        Content="▶ 재생"
-                        Unchecked="PlayToggle_Unchecked" />
-                    <Slider
-                        x:Name="FrameSlider"
-                        Width="220"
-                        Margin="16,0,0,0"
-                        VerticalAlignment="Center"
-                        IsSnapToTickEnabled="True"
-                        Minimum="0"
-                        TickFrequency="1"
-                        ValueChanged="FrameSlider_ValueChanged" />
+                        Margin="6,0,0,0"
+                        Click="BrowseButton_Click"
+                        Content="찾기..." />
+                    <Button
+                        x:Name="LoadButton"
+                        Width="90"
+                        Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="LoadButton"
+                        Click="LoadButton_Click"
+                        Content="이 폴더 열기" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        Width="70"
+                        VerticalAlignment="Center"
+                        Text="캐릭터 이름:" />
+                    <TextBox
+                        x:Name="SearchBox"
+                        Width="200"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="SearchBox"
+                        KeyDown="SearchBox_KeyDown" />
+                    <Button
+                        x:Name="SearchButton"
+                        Width="70"
+                        Margin="6,0,0,0"
+                        AutomationProperties.AutomationId="SearchButton"
+                        Click="SearchButton_Click"
+                        Content="검색" />
+                    <Button
+                        x:Name="ExportButton"
+                        Width="90"
+                        Margin="16,0,0,0"
+                        AutomationProperties.AutomationId="ExportButton"
+                        Click="ExportButton_Click"
+                        Content="내보내기" />
+                    <TextBlock
+                        x:Name="SearchStatus"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center"
+                        Foreground="DimGray" />
+                </StackPanel>
+            </StackPanel>
 
-                <TextBlock
-                    x:Name="FrameInfo"
-                    Margin="0,4,0,0"
-                    DockPanel.Dock="Bottom"
-                    Foreground="DimGray" />
+            <!--  아래: 상태 줄  -->
+            <TextBlock
+                x:Name="StatusText"
+                Margin="0,6,0,0"
+                DockPanel.Dock="Bottom"
+                Foreground="DimGray"
+                TextWrapping="Wrap" />
 
-                <Border
-                    Background="#FF303030"
-                    BorderBrush="Gray"
-                    BorderThickness="1">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                        <Image
-                            x:Name="FrameImage"
-                            HorizontalAlignment="Center"
+            <!--  가운데: 캐릭터 · 몸짓 · 그림칸  -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="230" />
+                    <ColumnDefinition Width="230" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <DockPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock
+                        Margin="0,0,0,4"
+                        DockPanel.Dock="Top"
+                        FontWeight="Bold"
+                        Text="캐릭터 (Chr 레코드)" />
+                    <ListBox
+                        x:Name="CharacterList"
+                        AutomationProperties.AutomationId="CharacterList"
+                        SelectionChanged="CharacterList_SelectionChanged" />
+                </DockPanel>
+
+                <DockPanel Grid.Column="1" Margin="0,0,6,0">
+                    <TextBlock
+                        Margin="0,0,0,4"
+                        DockPanel.Dock="Top"
+                        FontWeight="Bold"
+                        Text="몸짓 (Obs 몸짓 벌)" />
+                    <ListBox
+                        x:Name="MotionList"
+                        AutomationProperties.AutomationId="MotionList"
+                        SelectionChanged="MotionList_SelectionChanged" />
+                </DockPanel>
+
+                <DockPanel Grid.Column="2">
+                    <TextBlock
+                        Margin="0,0,0,4"
+                        DockPanel.Dock="Top"
+                        FontWeight="Bold"
+                        Text="한 컷씩 보기" />
+
+                    <StackPanel
+                        Margin="0,8,0,0"
+                        HorizontalAlignment="Center"
+                        DockPanel.Dock="Bottom"
+                        Orientation="Horizontal">
+                        <Button
+                            x:Name="PrevButton"
+                            Width="70"
+                            Click="PrevButton_Click"
+                            Content="◀ 이전" />
+                        <TextBlock
+                            x:Name="FrameLabel"
+                            Width="70"
                             VerticalAlignment="Center"
-                            RenderOptions.BitmapScalingMode="NearestNeighbor"
-                            Stretch="None" />
-                    </ScrollViewer>
-                </Border>
-            </DockPanel>
-        </Grid>
+                            FontWeight="Bold"
+                            Text="0 / 0"
+                            TextAlignment="Center" />
+                        <Button
+                            x:Name="NextButton"
+                            Width="70"
+                            AutomationProperties.AutomationId="NextButton"
+                            Click="NextButton_Click"
+                            Content="다음 ▶" />
+                        <ToggleButton
+                            x:Name="PlayToggle"
+                            Width="70"
+                            Margin="16,0,0,0"
+                            Checked="PlayToggle_Checked"
+                            Content="▶ 재생"
+                            Unchecked="PlayToggle_Unchecked" />
+                        <Slider
+                            x:Name="FrameSlider"
+                            Width="220"
+                            Margin="16,0,0,0"
+                            VerticalAlignment="Center"
+                            IsSnapToTickEnabled="True"
+                            Minimum="0"
+                            TickFrequency="1"
+                            ValueChanged="FrameSlider_ValueChanged" />
+                    </StackPanel>
+
+                    <TextBlock
+                        x:Name="FrameInfo"
+                        Margin="0,4,0,0"
+                        DockPanel.Dock="Bottom"
+                        Foreground="DimGray" />
+
+                    <Border
+                        Background="#FF303030"
+                        BorderBrush="Gray"
+                        BorderThickness="1">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                            <Image
+                                x:Name="FrameImage"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                Stretch="None" />
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
+            </Grid>
+        </DockPanel>
     </DockPanel>
 </Window>
