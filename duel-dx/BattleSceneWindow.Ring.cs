@@ -44,7 +44,6 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _ringPicked = -1;
 
     private readonly Dictionary<int, UiSprite> _ui = [];
-    private readonly Dictionary<int, byte[]> _sounds = [];
 
     /// <summary>링 그림(assets/ui)·소리(assets/sounds)를 읽는다. 없으면 글자 링으로 그린다.</summary>
     private void LoadRingAssets()
@@ -54,9 +53,6 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("ui"), "*.obs"))
                 if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
                     _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path));
-            foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("sounds"), "*.wav"))
-                if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
-                    _sounds[id] = File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -64,10 +60,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void PlaySound(int id)
-    {
-        if (_sounds.TryGetValue(id, out var wav)) SoundPlayer.Play(wav);
-    }
+    private void PlaySound(int id) => Play(id);
 
     private int RingTick(double since) => (int)((_lastTime - since) * TicksPerSecond);
 
@@ -335,25 +328,5 @@ internal sealed class UiSprite
         if (_table?.Clips.GetValueOrDefault(motion)?.KeyAt(tick, loop: true) is { } k)
             return _frames.GetValueOrDefault((k.SubentryId, k.Slot));
         return _frames.GetValueOrDefault((0, 0));
-    }
-}
-
-/// <summary>WAV 한 개를 비동기로 튼다(winmm <c>PlaySound</c>, 메모리). 새 소리가 앞 소리를 끊는다.</summary>
-internal static class SoundPlayer
-{
-    private static System.Runtime.InteropServices.GCHandle _pinned;
-
-    [System.Runtime.InteropServices.DllImport("winmm.dll")]
-    private static extern bool PlaySoundW(IntPtr sound, IntPtr module, uint flags);
-
-    private const uint SND_ASYNC = 0x1, SND_NODEFAULT = 0x2, SND_MEMORY = 0x4;
-
-    public static void Play(byte[] wav)
-    {
-        // 비동기 재생은 버퍼를 계속 읽으니, 앞 소리를 멈춘 뒤 새 버퍼를 고정해 둔다.
-        PlaySoundW(IntPtr.Zero, IntPtr.Zero, 0);
-        if (_pinned.IsAllocated) _pinned.Free();
-        _pinned = System.Runtime.InteropServices.GCHandle.Alloc(wav, System.Runtime.InteropServices.GCHandleType.Pinned);
-        PlaySoundW(_pinned.AddrOfPinnedObject(), IntPtr.Zero, SND_ASYNC | SND_NODEFAULT | SND_MEMORY);
     }
 }

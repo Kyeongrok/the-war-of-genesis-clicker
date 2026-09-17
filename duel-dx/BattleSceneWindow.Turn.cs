@@ -42,6 +42,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly int[] StrikeActions = [5, 8, 24];
     private const int StrikeHitStep = 1;
     private const int DeathAction = 6;
+
+    /// <summary>자세를 세우는 work — 516 방어(맞을 때 한 번 더 깎임), 515 회피(상대 명중 −DEX/5).</summary>
+    private const int StanceDefendWork = 516, StanceEvadeWork = 515;
     private const double TickDelaySeconds = 0.05;
 
     private bool IsPlayerTurn => _turn >= 0 && _units[_turn].IsAlly && _routine == null && _outcome.Length == 0;
@@ -53,7 +56,10 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var unit in _units)
         {
             if (_db.Character(unit.ChrCode) is not { } c) continue;
-            unit.Data = unit.IsAlly ? c with { Exp = DemoExp } : c;
+            // 데모라 쌓인 경험치는 지금 레벨에 맞춰 시작한다(저장 파일이 없다).
+            // DUELDX_CUMEXP 로 아군 시작값을 바꿀 수 있다 — 레벨업 창을 시험할 때 쓴다(예: 190 이면 한 번만 쓰러뜨려도 오름).
+            int startCum = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CUMEXP"), out int v) ? v : c.Level * 100;
+            unit.Data = unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum } : c with { CumExp = c.Level * 100 };
             unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(c));
             unit.MaxTp = unit.Tp = _db.MaxTp(c);
             unit.Stp = Math.Max(1, _db.Stp(c));
@@ -67,6 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateTurn()
     {
         if (_loading || _db == null || _outcome.Length > 0) return;
+        if (UpdateLevelUp()) return;   // 레벨업 창이 떠 있는 동안은 차례가 멈춘다
 
         if (_routine != null)
         {
@@ -106,11 +113,12 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _turn = index;
         _selected = index;
+        _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
         _units[index].OriginCol = _units[index].Col;
         _units[index].OriginRow = _units[index].Row;
         CancelTargeting();
         _heldMoveKeys.Clear();
-        if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례");
+        if (_units[index].IsAlly) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
         else _routine = EnemyRoutine(index);
     }
 
@@ -205,48 +213,6 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── work 사거리·효과 범위 ────────────────────────────────────────────────
 
     private WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
-
-    /// <summary>
-    /// (fromCol, fromRow) 에서 work 가 (col, row) 칸을 겨눌 수 있나 — 사거리 모양 +0x7(1 마름모, 2 십자, 0 제자리)과
-    /// 최소·최대 칸 +0xa/+0xc, 지형 &amp; 0x8 칸 제외. 모양 번호 뜻은 기본공격(2, 2~2)·힐(1, 0~4)·크래쉬 봄(0) 값으로 짐작했다.
-    /// </summary>
-    private bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row)
-    {
-        if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is { } map && (map.FlagsAt(col, row) & 0x8) != 0) return false;
-        int dx = Math.Abs(col - fromCol), dy = Math.Abs(row - fromRow), d = dx + dy;
-        return w.RangeShape switch
-        {
-            0 => d == 0,
-            2 => (dx == 0 || dy == 0) && d >= w.RangeMin && d <= w.RangeMax,
-            _ => d >= w.RangeMin && d <= w.RangeMax,
-        };
-    }
-
-    /// <summary>
-    /// 겨눈 칸에서 맞는 인물들. +0x13 이 1·4·5 면 그 칸의 인물 하나, 아니면 효과 범위 칸 안의 모두(편 안 가림).
-    /// 효과 범위 모양 1 = 겨눈 칸 둘레 마름모(반경 +0x1a / 4), 6 = 쓰는 쪽에서 겨눈 칸 방향 곧은 줄(길이 +0x1a / 4 + 1) — 둘 다 <b>가설</b>.
-    /// </summary>
-    private List<int> WorkTargets(WorkData w, UnitState user, int col, int row)
-    {
-        if (w.SingleTarget)
-            return LiveUnitAt(col, row) is { } one ? [Array.IndexOf(_units, one)] : [];
-
-        var cells = new HashSet<(int, int)> { (col, row) };
-        int arg = Math.Max(0, w.AreaArg / 4);
-        if (w.AreaShape == 6)
-        {
-            int sx = Math.Sign(col - user.Col), sy = sx != 0 ? 0 : Math.Sign(row - user.Row);
-            for (int k = 1; k <= arg; k++) cells.Add((col + sx * k, row + sy * k));
-        }
-        else
-        {
-            for (int y = -arg; y <= arg; y++)
-                for (int x = -arg; x <= arg; x++)
-                    if (Math.Abs(x) + Math.Abs(y) <= arg) cells.Add((col + x, row + y));
-        }
-        return [.. Enumerable.Range(0, _units.Length).Where(i => _units[i].Alive && cells.Contains((_units[i].Col, _units[i].Row)))];
-    }
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
@@ -378,18 +344,21 @@ internal sealed unsafe partial class BattleSceneWindow
             if (step != StrikeHitStep) continue;
 
             var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
+            ScheduleAbilitySounds(w);
             foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
         }
 
+        if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
         if (a.Data != null && _db != null) a.Tp -= _db.WorkTpCost(a.Data, w.Id);
         a.Soul = Math.Clamp(a.Soul - w.SoulBase + (w.Kind switch { 0 => 10, 1 => 6, _ => 4 }), 0, a.MaxSoul);
 
         if (dying.Count > 0)
         {
-            foreach (var d in dying) PlayAction(d, DeathAction);
+            foreach (var d in dying) { PlayAction(d, DeathAction); Play(SoundDeath); }
             while (dying.Any(d => d.IsBusy)) yield return true;
             foreach (var d in dying) d.Alive = false;
             CheckOutcome();
+            QueueLevelUps();
         }
         for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
     }
@@ -397,7 +366,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
-        var (amount, result, crit) = _db.Resolve(_rng, a.Data, a.Tp, a.Soul, t.Data, t.Tp, t.Hp, t.MaxHp, w);
+        var (amount, result, crit) = _db.Resolve(_rng, a.Data, a.Tp, a.Soul, t.Data, t.Tp, t.Hp, t.MaxHp, w, t.Stance);
 
         if (result == 1)
         {
@@ -412,9 +381,20 @@ internal sealed unsafe partial class BattleSceneWindow
         t.Hp = Math.Max(0, t.Hp - amount);
         Popup(t, crit ? $"{amount}!" : amount.ToString(), crit ? 0xFFFF9040 : 0xFFFFE070, crit ? 24 : 18);
         t.Soul = Math.Min(t.MaxSoul, t.Soul + amount / Math.Max(1, _db.N(43)));
+        PlayHurtVoice(t);
         if (t.Hp > 0) return;
         a.Soul = Math.Min(a.MaxSoul, a.Soul + 10);   // 처치(메시지 1016)
+        GainKillExp(a, t);
         dying.Add(t);
+    }
+
+    /// <summary>자기 자리에 쓰는 work(모드 0·2)면 겨냥 없이 바로 쓴다.</summary>
+    private bool UseSelfCentredWork(WorkData w)
+    {
+        if (!w.SelfCentred) return false;
+        CancelTargeting();
+        _routine = UseWorkRoutine(_turn, w, -1, _units[_turn].Col, _units[_turn].Row, []);
+        return true;
     }
 
     private static Facing FacingToward(int fromCol, int fromRow, int toCol, int toRow)
@@ -426,8 +406,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void CheckOutcome()
     {
-        if (!_units.Any(u => u.Alive && !u.IsAlly)) _outcome = "승리 — 적을 모두 쓰러뜨렸습니다";
-        else if (!_units.Any(u => u.Alive && u.IsAlly)) _outcome = "패배 — 아군이 모두 쓰러졌습니다";
+        if (_outcome.Length > 0) return;
+        if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; PlayOutcomeMusic(win: true); }
+        else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; PlayOutcomeMusic(win: false); }
     }
 
     // ── 적 AI (fg-7) ─────────────────────────────────────────────────────────
@@ -480,6 +461,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         double seconds = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.ActionSeconds(action, u.Facing) : 0;
         u.PlayAction(action, seconds > 0 ? seconds : 0.3);
+        ScheduleActionSounds(u, action);
     }
 
     private void Popup(UnitState u, string text, uint color, float size = 18)

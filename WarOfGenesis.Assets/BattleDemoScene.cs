@@ -19,6 +19,9 @@ public readonly record struct BattleUnit(int ChrCode, int Col, int Row, bool IsA
 public static class BattleDemoScene
 {
     public const int BtlId = 45;
+
+    /// <summary>전투 배경음악 — Btl 머리 8번째 워드(분석-사운드 fa-5).</summary>
+    public const int Bgm = 42;
     public const string Title = "코어헌터 훈련장";
     public const int Cols = 32, Rows = 34;
 

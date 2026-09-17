@@ -126,6 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             }
             InitBattle();
             LoadRingAssets();
+            LoadAudio();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -309,6 +310,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnKeyDown(int key)
     {
         if (_keysOpen) { OnKeysKey(key); return; }
+        if (LevelUpOpen) { CloseLevelUp(); return; }
         if (key == Win32.VK_ESCAPE)
         {
             if (_statusUnit >= 0) _statusUnit = -1;
@@ -370,6 +372,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// </summary>
     private void OnClick(int clientX, int clientY)
     {
+        if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
         if (OnKeysClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
@@ -435,6 +438,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         foreach (var unit in _units) unit.SettleIfStopped();
         UpdateCamera(dt);
+        UpdateSounds();
         UpdateRing();
         UpdateTurn();
         RefreshMoveRange();
@@ -466,6 +470,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawToast();
         DrawOutcome();
         DrawKeysPanel();
+        DrawLevelUp();
     }
 
     private void DrawBackground()
@@ -727,6 +732,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     public void Dispose()
     {
         if (_active == this) _active = null;
+        _mixer.Dispose();
         _backBufferRtv?.Dispose();
         _swapChain?.Dispose();
         _boardSrv?.Dispose();
@@ -794,6 +800,9 @@ internal sealed class UnitSprite
         return mirrored;
     }
 
+    /// <summary>동작·방향의 모션(소리 키까지 들어 있다). 없으면 null.</summary>
+    public ObsMotionClip? Clip(int action, Facing facing) => _table?.Resolve(action, ObsMotionTable.DirectionOf(facing));
+
     /// <summary>한 번 재생할 동작의 길이(초). 모션표에 없으면 0.</summary>
     public double ActionSeconds(int action, Facing facing) =>
         (_table?.Resolve(action, ObsMotionTable.DirectionOf(facing))?.Length ?? 0) / BattleSceneWindow.TicksPerSecond;
@@ -827,6 +836,9 @@ internal sealed class UnitState(BattleUnit unit)
     public int Ctp => Data?.Ctp ?? 0;
     public bool HasTurn { get; set; }
     public bool Alive { get; set; } = true;
+
+    /// <summary>자세(<c>+0x4d4</c>) — 1 방어(work 516), 2 회피(work 515). 다음 차례가 오면 풀린다.</summary>
+    public int Stance { get; set; }
 
     /// <summary>차례를 시작한 칸 — 이동 영역과 걸음 비용을 이 칸에서 센다.</summary>
     public int OriginCol { get; set; } = unit.Col;

@@ -95,6 +95,42 @@ public static class ObsSprite
         return motions;
     }
 
+    /// <summary>
+    /// 고른 장만 푼다 — (몸짓벌 번호, 벌 안 장 순번) 가 <paramref name="wanted"/> 에 든 것. 모션표 키(<see cref="MotionKey"/>)가
+    /// 가리키는 컷 몇 장만 필요할 때(전투 화면의 서기 모션) 파일 전체를 푸는 <see cref="Decode"/> 보다 훨씬 빠르다.
+    /// 벌 머리 찾기는 <see cref="Decode"/> 와 같다(앞 벌 끝 자리 우선).
+    /// </summary>
+    public static Dictionary<(int Sub, int Slot), ObsFrame> DecodeFrames(byte[] b, IReadOnlySet<(int Sub, int Slot)> wanted)
+    {
+        var result = new Dictionary<(int, int), ObsFrame>();
+        var subrefs = ParseStructure(b);
+        var wantedSubs = wanted.Select(w => w.Sub).ToHashSet();
+        long nextSearchFrom = subrefs.Count > 0 ? subrefs[0].Offset : 0;
+
+        foreach (var subref in subrefs)
+        {
+            if (result.Count == wanted.Count) break;
+            SubEntry? entry = TryParseSubEntry(b, nextSearchFrom, subref.Id)
+                            ?? TryParseSubEntry(b, subref.Offset, subref.Id);
+            if (entry == null) { nextSearchFrom = subref.Offset; continue; }
+
+            if (wantedSubs.Contains(entry.Id))
+                for (int i = 0; i < entry.Slots.Count; i++)
+                {
+                    if (!wanted.Contains((entry.Id, i))) continue;
+                    try
+                    {
+                        var slot = DecodeSlot(b, entry.Slots[i].Offset, entry.TransparentIndex);
+                        byte[] bgra = ToBgra(slot.Indexed, slot.Width, slot.Height, entry.Palette, entry.TransparentIndex);
+                        result[(entry.Id, i)] = new ObsFrame(slot.SlotId, slot.Width, slot.Height, slot.X, slot.Y, bgra);
+                    }
+                    catch { /* 이 장만 건너뛴다 — Decode 와 같다. */ }
+                }
+            nextSearchFrom = EndOfLastSlot(b, entry);
+        }
+        return result;
+    }
+
     private static SubEntry? TryParseSubEntry(byte[] b, long listedOffset, ushort expectedId)
     {
         if (listedOffset < 0) return null;
