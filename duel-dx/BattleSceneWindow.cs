@@ -368,6 +368,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             StepByKey(_heldMoveKeys[^1]);
 
         foreach (var unit in _units) unit.SettleIfStopped();
+        RefreshMoveRange();
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -383,6 +384,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         Array.Fill(_fb, BgColor);
         DrawBackground();
+        DrawMoveRange();
         if (_showGrid) DrawGridLines();
         DrawUnits();
         DrawStatus();

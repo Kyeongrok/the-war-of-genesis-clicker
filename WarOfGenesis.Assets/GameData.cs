@@ -212,8 +212,25 @@ public sealed class GameDatabase
 
     public int MaxHp(CharacterData c) => (int)c.Lp + EquipBonus(c, 0x30);
     public int Psy(CharacterData c) => c.Psy + EquipBonus(c, 0x1f);
+    /// <summary>DEX <c>0x1007ae50</c> — 걸음 비용·ACR 에 쓰는 값(파일 DEX + 장비 보너스; 전투 버프·효과 1 은 뺌).</summary>
     public int Dex(CharacterData c) => c.Dex + EquipBonus(c, 0x1e);
     public int MaxTp(CharacterData c) => c.Tp + EquipBonus(c, 0x21);
+    /// <summary>
+    /// work 의 TP 비용 <c>0x10072610</c> = att+0x32 + att+0x2e × Num[43 + 3×체질] / 100 / Num[34] (체질 1~5, 무속성은 앞 항만).
+    /// 효과 0x14 가감은 넣지 않았다.
+    /// </summary>
+    public int WorkTpCost(CharacterData c, int workId)
+    {
+        if (!Works.TryGetValue(workId, out var w)) return 0;
+        int cost = w.TpBase;
+        if (c.Body is >= 1 and <= 5 && N(34) != 0) cost += w.HpFactor * N(43 + 3 * c.Body) / 100 / N(34);
+        return cost;
+    }
+
+    /// <summary>이동 예산(상태 12 <c>0x10069cc9</c>) = 현재TP + min(0, CTP − 기본공격 TP 비용).</summary>
+    public int MoveBudget(CharacterData c, int currentTp) => currentTp + Math.Min(0, c.Ctp - WorkTpCost(c, c.BasicWorkId));
+
+    /// <summary>STP <c>0x1007acf0</c> = 최대 TP / TP 나눗수 — 시간 한 칸마다 차는 TP.</summary>
     public int Stp(CharacterData c) => c.TpDivisor == 0 ? 0 : MaxTp(c) / c.TpDivisor;
     public int SoulStart => N(20);
     public int MaxSoul(CharacterData c) => N(19) + EquipBonus(c, 0x25);
