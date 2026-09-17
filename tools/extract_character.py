@@ -83,7 +83,9 @@ def parse_txr(data):
         relative_offset = struct.unpack_from("<I", data, record_offset)[0]
         byte_length = struct.unpack_from("<H", data, record_offset + 4)[0]
         group = struct.unpack_from("<H", data, record_offset + 6)[0]
-        txr_id = struct.unpack_from("<H", data, record_offset + 8)[0]
+        # 번호는 이 10바이트 조각 바로 앞 2바이트다. 게임(G3PartII.dll LoadTextData 0x1004a190)은 머리 10바이트 뒤
+        # 0x0a 부터 (u16 번호, u32 위치, u32 길이) 로 읽는다. 예전에는 +8 을 번호로 읽어 모든 글이 한 칸씩 밀렸다.
+        txr_id = struct.unpack_from("<H", data, record_offset - 2)[0]
         text_offset = text_base + relative_offset
         record_offset += 10
         if relative_offset >= max_relative or byte_length == 0 or byte_length > 1000 or text_offset + byte_length > len(data):
