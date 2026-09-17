@@ -14,6 +14,18 @@
                     AutomationProperties.AutomationId="CharacterListMenuItem"
                     Click="CharacterListMenuItem_Click"
                     Header="캐릭터 목록(id·이름·초상)(_C)" />
+                <MenuItem
+                    x:Name="MotionMappingMenuItem"
+                    AutomationProperties.AutomationId="MotionMappingMenuItem"
+                    Click="MotionMappingMenuItem_Click"
+                    Header="고른 캐릭터의 모션 매핑(_T)" />
+            </MenuItem>
+            <MenuItem Header="요소(_E)">
+                <MenuItem
+                    x:Name="CharacterStatsMenuItem"
+                    AutomationProperties.AutomationId="CharacterStatsMenuItem"
+                    Click="CharacterStatsMenuItem_Click"
+                    Header="캐릭터 스탯(_S)" />
             </MenuItem>
             <MenuItem
                 x:Name="BattleMapMenuItem"

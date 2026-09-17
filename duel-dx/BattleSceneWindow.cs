@@ -21,26 +21,31 @@ namespace DuelDx;
 /// 캐릭터 배치(Chr 코드·X/Y)는 이 파일에서 직접 읽어낸 값을 그대로 박아 뒀다 — 아직
 /// <c>.btl</c> 을 일반적으로 읽어들이는 코드는 없다(이 전투 하나만 보여 주는 데모).
 ///
-/// 배경 그림은 <b>확인 못 한 자리표시자</b>다 — 어느 <c>Map</c>/<c>Bgr</c> id가 이 전투에
-/// 진짜 쓰이는지 아직 확인 못 했다(<c>.btl</c> 헤더 두 번째 워드 61이 <c>Map/0061.map</c> 일
-/// 수 있다). 그래서 <c>Bgr</c> 묶음 261장 중 위에서 내려다보는 전투 배경으로 보이는
-/// <c>0200.bgr</c> 을 임시로 골라 썼다.
+/// 배경은 원본 전투 맵 <c>Obt/0153.obt</c> 를 <see cref="ObtMap"/> 으로 풀어 그린다. 칸 하나는
+/// 원본과 같은 40×32 픽셀이다. 화면에 들어가도록 확대 배율은 모니터 작업 영역에 맞춰 2배 안에서 정한다.
 /// </remarks>
-internal sealed unsafe class BattleSceneWindow : IDisposable
+internal sealed unsafe partial class BattleSceneWindow : IDisposable
 {
     private static readonly BattleUnit[] Roster = BattleDemoScene.Roster;
 
-    /// <summary>한 칸 걸어가는 데 드는 시간(초)과 걷기 컷을 넘기는 빠르기(컷/초).</summary>
-    public const double StepSeconds = 0.25, WalkFps = 12;
+    /// <summary>한 칸 걸어가는 데 드는 시간(초).</summary>
+    public const double StepSeconds = 0.25;
 
-    private const int TileSize = 25;
+    /// <summary>
+    /// 모션표 한 틱의 길이 — 1초에 몇 틱. 원본 게임의 틱 빠르기는 아직 확인 못 해서 눈으로 맞춘 값이다.
+    /// </summary>
+    public const double TicksPerSecond = 30;
+
+    private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
     private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
-    private const int BoardWidth = Cols * TileSize, BoardHeight = GridTop + Rows * TileSize;
-    private const int Zoom = 2;
+    private const int BoardWidth = Cols * TileW, BoardHeight = GridTop + Rows * TileH;
+    private const double MaxZoom = 2;
+
+    /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
+    private readonly double _zoom = FitZoom();
 
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
-    private const string PlaceholderBgFile = BattleDemoScene.PlaceholderBackgroundFile;
 
     private const uint BgColor = 0xFF14100C;
     private const uint GridLine = 0x40FFFFFF;
@@ -48,7 +53,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     private const uint White = 0xFFF2EAD6;
     private const uint DimGray = 0xFFA09888;
 
-    private uint[] _bgPixels = [];
+    private ObtMapImage? _map;
     private Dictionary<int, UnitSprite> _sprites = [];
     private readonly UnitState[] _units = [.. Roster.Select(u => new UnitState(u))];
     private int _selected = -1;
@@ -85,7 +90,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     {
         try
         {
-            _bgPixels = LoadBackground();
+            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), BattleDemoScene.MapFile));
 
             string assetsRoot = FindRepoAssetsRoot();
             var manifests = CollectExportedManifests(assetsRoot);
@@ -99,18 +104,21 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
                 _names[chrCode] = name;
 
-                int spriteCode = int.Parse(Path.GetFileNameWithoutExtension(obsPath));
-                var walk = WalkCycles.Find(spriteCode);
-
-                // 걷기 표가 있는 인물만 몸짓벌을 다 푼다(느리다). 없으면 첫 컷 하나로 서 있는다.
-                List<ObsFrame> frames = walk != null
-                    ? [.. ObsSprite.Decode(obsPath).SelectMany(m => m.Frames)]
-                    : ObsSprite.DecodeFirstFrame(obsPath) is { } first ? [first] : [];
-                if (frames.Count == 0) continue;
-
-                sprites[chrCode] = new UnitSprite([.. frames.Select(SpriteFrame.From)], walk);
+                // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
+                var motions = ObsSprite.Decode(obsPath);
+                if (motions.Count == 0) continue;
+                sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
             }
             _sprites = sprites;
+
+            // Status 화면용 게임 표와 초상(첫 컷). 없어도 전투판은 그린다.
+            _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data")));
+            foreach (var (code, m) in manifests)
+            {
+                if (!Roster.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
+                string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
+                if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -122,31 +130,15 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         }
     }
 
-    /// <summary>
-    /// <c>assets/backgrounds/</c> 의 자리표시자 배경(JPEG)을 GDI+ 로 읽어 보드 크기(800×800)에
-    /// 그대로 맞춘다 — 크기가 이미 딱 맞아서 늘리지 않는다.
-    /// </summary>
-    private static uint[] LoadBackground()
+    /// <summary>모니터 작업 영역(작업 표시줄 뺀 곳)에 창이 들어가는 가장 큰 배율 — 최대 <see cref="MaxZoom"/>.</summary>
+    private static double FitZoom()
     {
-        string path = Path.Combine(AssetsFolder.Find("backgrounds"), PlaceholderBgFile);
-        if (!File.Exists(path)) throw new FileNotFoundException($"배경 그림을 못 찾았습니다: {path}");
+        var work = new Win32.Rect();
+        if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 1;
 
-        using var bitmap = new Bitmap(path);
-        using var resized = new Bitmap(bitmap, new Size(Cols * TileSize, Rows * TileSize));
-
-        var rect = new Rectangle(0, 0, resized.Width, resized.Height);
-        var data = resized.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try
-        {
-            var px = new uint[resized.Width * resized.Height];
-            for (int y = 0; y < resized.Height; y++)
-            {
-                var row = new ReadOnlySpan<uint>((void*)(data.Scan0 + y * data.Stride), resized.Width);
-                row.CopyTo(px.AsSpan(y * resized.Width, resized.Width));
-            }
-            return px;
-        }
-        finally { resized.UnlockBits(data); }
+        // 제목 표시줄·테두리 몫을 조금 남긴다.
+        double fit = Math.Min((work.Width - 32) / (double)BoardWidth, (work.Height - 80) / (double)BoardHeight);
+        return Math.Clamp(Math.Floor(fit * 20) / 20, 0.5, MaxZoom);
     }
 
     /// <summary><c>assets/characters/</c> 밑의 인물들을 전부 훑어 Chr 코드별로 모은다.</summary>
@@ -247,13 +239,13 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private void CreateNativeWindow()
     {
-        int pixelW = BoardWidth * Zoom, pixelH = BoardHeight * Zoom;
+        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(BoardHeight * _zoom);
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, false);
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4} (자리표시자 배경)",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}",
             Win32.WS_OVERLAPPEDWINDOW, Win32.CW_USEDEFAULT, Win32.CW_USEDEFAULT,
             rect.Width, rect.Height,
             IntPtr.Zero, IntPtr.Zero, Win32.GetModuleHandleW(null), IntPtr.Zero);
@@ -270,11 +262,26 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
             case Win32.WM_KEYDOWN:
-                OnKeyDown((int)wParam);
+                // 키 반복(lParam 30번 비트)은 무시한다 — 누르고 있는 동안은 Update 가 알아서 이어 걷는다.
+                if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);
                 return IntPtr.Zero;
+            case Win32.WM_KEYUP:
+                _heldMoveKeys.Remove((int)wParam);
+                return IntPtr.Zero;
+            case Win32.WM_KILLFOCUS:
+                _heldMoveKeys.Clear();
+                return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
             case Win32.WM_LBUTTONDOWN:
                 OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 return IntPtr.Zero;
+            case Win32.WM_RBUTTONDOWN:
+            case Win32.WM_MOUSEMOVE:
+            {
+                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom);
+                if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
+                else _ringHover = RingItemAt(bx, by);
+                return IntPtr.Zero;
+            }
         }
         return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
     }
@@ -283,24 +290,39 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
+        if (_statusUnit >= 0 && key != Win32.VK_ESCAPE) return;
         switch (key)
         {
-            case Win32.VK_ESCAPE: _running = false; break;
+            case Win32.VK_ESCAPE:
+                if (_statusUnit >= 0) _statusUnit = -1;
+                else if (_ringUnit >= 0) _ringUnit = -1;
+                else _running = false;
+                break;
             case Win32.VK_G: _showGrid = !_showGrid; break;
             case Win32.VK_TAB: _selected = (_selected + 1) % _units.Length; break;
-            case Win32.VK_UP: TryStep(Facing.Up, 0, -1); break;
-            case Win32.VK_DOWN: TryStep(Facing.Down, 0, 1); break;
-            case Win32.VK_LEFT: TryStep(Facing.Left, -1, 0); break;
-            case Win32.VK_RIGHT: TryStep(Facing.Right, 1, 0); break;
+            case Win32.VK_SPACE: ToggleRingForSelected(); break;
+        }
+        if (_ringUnit >= 0) return;   // 링이 열려 있으면 걷지 않는다
+        switch (key)
+        {
+            case Win32.VK_UP or Win32.VK_W or Win32.VK_DOWN or Win32.VK_S
+                or Win32.VK_LEFT or Win32.VK_A or Win32.VK_RIGHT or Win32.VK_D:
+                _heldMoveKeys.Remove(key);
+                _heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
+                StepByKey(key);
+                break;
         }
     }
 
     /// <summary>클릭한 칸에 선 인물을 고른다. 빈 칸이면 선택을 푼다.</summary>
     private void OnClick(int clientX, int clientY)
     {
-        int boardY = clientY / Zoom - GridTop;
+        int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom);
+        if (OnStatusClick(bx, by) || OnRingClick(bx, by)) return;
+
+        int boardY = (int)(clientY / _zoom) - GridTop;
         if (boardY < 0) return;
-        int col = clientX / Zoom / TileSize, row = boardY / TileSize;
+        int col = (int)(clientX / _zoom) / TileW, row = boardY / TileH;
         _selected = Array.FindIndex(_units, u => u.Col == col && u.Row == row);
     }
 
@@ -322,9 +344,30 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         unit.BeginStep(col, row);
     }
 
+    /// <summary>누르고 있는 이동 키(누른 순서). 키보드 반복 대신 이걸로 한 칸이 끝나는 즉시 다음 칸을 잇는다.</summary>
+    private readonly List<int> _heldMoveKeys = [];
+
+    private void StepByKey(int key)
+    {
+        switch (key)
+        {
+            case Win32.VK_UP or Win32.VK_W: TryStep(Facing.Up, 0, -1); break;
+            case Win32.VK_DOWN or Win32.VK_S: TryStep(Facing.Down, 0, 1); break;
+            case Win32.VK_LEFT or Win32.VK_A: TryStep(Facing.Left, -1, 0); break;
+            case Win32.VK_RIGHT or Win32.VK_D: TryStep(Facing.Right, 1, 0); break;
+        }
+    }
+
     private void Update(double dt)
     {
         foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
+
+        // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
+        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && (uint)_selected < _units.Length
+            && !_units[_selected].IsMoving)
+            StepByKey(_heldMoveKeys[^1]);
+
+        foreach (var unit in _units) unit.SettleIfStopped();
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -343,16 +386,24 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         if (_showGrid) DrawGridLines();
         DrawUnits();
         DrawStatus();
+        DrawRing();
+        DrawStatusScreen();
+        DrawToast();
     }
 
     private void DrawBackground()
     {
-        if (_bgPixels.Length == 0) return;
-        for (int y = 0; y < Rows * TileSize; y++)
+        if (_map is not { } map) return;
+
+        int boardH = Rows * TileH;
+        for (int y = 0; y < map.Height; y++)
         {
-            var src = _bgPixels.AsSpan(y * Cols * TileSize, Cols * TileSize);
-            var dst = _fb.AsSpan((GridTop + y) * BoardWidth, Cols * TileSize);
-            src.CopyTo(dst);
+            int by = y + map.OriginY;
+            if ((uint)by >= boardH) continue;
+
+            int w = Math.Min(map.Width, BoardWidth);
+            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(map.Bgra.AsSpan(y * map.Width * 4, w * 4));
+            src.CopyTo(_fb.AsSpan((GridTop + by) * BoardWidth, w));
         }
     }
 
@@ -360,12 +411,12 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
     {
         for (int c = 0; c <= Cols; c++)
         {
-            int x = c * TileSize;
+            int x = Math.Min(c * TileW, BoardWidth - 1);
             for (int y = GridTop; y < BoardHeight; y++) SetPixel(x, y, GridLine);
         }
         for (int r = 0; r <= Rows; r++)
         {
-            int y = GridTop + r * TileSize;
+            int y = Math.Min(GridTop + r * TileH, BoardHeight - 1);
             for (int x = 0; x < BoardWidth; x++) SetPixel(x, y, GridLine);
         }
     }
@@ -378,19 +429,22 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         foreach (int i in Enumerable.Range(0, _units.Length).OrderBy(i => _units[i].Y))
         {
             var unit = _units[i];
-            int tileX = unit.Col * TileSize, tileY = GridTop + unit.Row * TileSize;
+            int tileX = unit.Col * TileW, tileY = GridTop + unit.Row * TileH;
             uint mark = i == _selected ? SelectMark : unit.IsAlly ? AllyMark : EnemyMark;
-            FillRect(tileX + 2, tileY + 2, TileSize - 4, TileSize - 4, mark & 0x60FFFFFF | 0x60000000);
-            StrokeRect(tileX, tileY, TileSize, TileSize, mark);
+            FillRect(tileX + 2, tileY + 2, TileW - 4, TileH - 4, mark & 0x60FFFFFF | 0x60000000);
+            StrokeRect(tileX, tileY, TileW, TileH, mark);
 
             if (!sprites.TryGetValue(unit.ChrCode, out var sprite)) continue;
 
             var frame = sprite.FrameFor(unit);
-            int footX = (int)(unit.X * TileSize) + TileSize / 2;
-            int footY = GridTop + (int)(unit.Y * TileSize) + TileSize / 2;
+            var (footX, footY) = UnitFoot(unit);
             BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X, footY + frame.Y);
         }
     }
+
+    /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
+    private static (int X, int Y) UnitFoot(UnitState unit) =>
+        ((int)(unit.X * TileW) + TileW / 2, GridTop + (int)(unit.Y * TileH) + TileH / 2);
 
     private void DrawStatus()
     {
@@ -401,30 +455,30 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
         }
 
         int allies = Roster.Count(u => u.IsAlly), enemies = Roster.Count(u => !u.IsAlly);
-        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   배경: 자리표시자(Bgr 0200, 미확인)",
+        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   배경: Obt {Path.GetFileNameWithoutExtension(BattleDemoScene.MapFile)}",
                  4, 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, 20, 0xFFD05050);
-        else DrawText($"클릭·Tab: 인물 고르기   방향키: 걷기   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
+        else DrawText($"클릭·Tab: 인물 고르기   우클릭·Space: 링 커맨드   방향키·WASD: 걷기   G: 격자 {(_showGrid ? "끄기" : "켜기")}", 4, 20, DimGray);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
 
-    private (uint[] Px, int W, int H) GetText(string text, uint argb)
+    private (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f)
     {
-        string key = text + ":" + argb;
+        string key = text + ":" + argb + ":" + size;
         if (_textCache.TryGetValue(key, out var cached)) return cached;
 
         var color = Color.FromArgb((int)argb);
-        var made = TextRaster.Render(text, color) ?? ([], 0, 0);
+        var made = TextRaster.Render(text, color, size) ?? ([], 0, 0);
         if (_textCache.Count > 500) _textCache.Clear();
         _textCache[key] = made;
         return made;
     }
 
-    private void DrawText(string text, int x, int y, uint argb)
+    private void DrawText(string text, int x, int y, uint argb, float size = 13f)
     {
         if (text.Length == 0) return;
-        var (px, w, h) = GetText(text, argb);
+        var (px, w, h) = GetText(text, argb, size);
         if (w > 0) BlitMasked(px, w, h, x, y);
     }
 
@@ -501,7 +555,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
             }
             float4 PS(VSOut i) : SV_Target
             {
-                int2 uv = int2(i.pos.x / {{Zoom}}.0, i.pos.y / {{Zoom}}.0);
+                int2 uv = int2(i.pos.xy / {{_zoom.ToString(System.Globalization.CultureInfo.InvariantCulture)}});
                 return Board.Load(int3(uv, 0));
             }
             """;
@@ -527,7 +581,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private void CreateSwapChain()
     {
-        int w = BoardWidth * Zoom, h = BoardHeight * Zoom;
+        int w = (int)(BoardWidth * _zoom), h = (int)(BoardHeight * _zoom);
         using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
         using var adapter = dxgiDevice.GetAdapter();
         using var factory = adapter.GetParent<IDXGIFactory2>();
@@ -563,7 +617,7 @@ internal sealed unsafe class BattleSceneWindow : IDisposable
 
     private void Draw()
     {
-        int w = BoardWidth * Zoom, h = BoardHeight * Zoom;
+        int w = (int)(BoardWidth * _zoom), h = (int)(BoardHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
         _ctx.RSSetViewport(0, 0, w, h);
         _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
@@ -611,21 +665,36 @@ internal sealed record SpriteFrame(uint[] Px, int W, int H, int X, int Y)
 }
 
 /// <summary>인물 하나의 컷 전부와 걷기 표. 오른쪽 컷은 처음 쓸 때 뒤집어 둔다.</summary>
-internal sealed class UnitSprite(SpriteFrame[] frames, WalkCycle? walk)
+internal sealed class UnitSprite
 {
-    private readonly Dictionary<int, SpriteFrame> _mirrored = [];
+    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
+    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
+    private readonly SpriteFrame _first;
+    private readonly ObsMotionTable? _table;
 
+    public UnitSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
+    {
+        _table = table;
+        foreach (var motion in motions)
+            for (int i = 0; i < motion.Frames.Count; i++)
+                _frames[(motion.Id, i)] = SpriteFrame.From(motion.Frames[i]);
+        _first = SpriteFrame.From(motions[0].Frames[0]);
+    }
+
+    /// <summary>
+    /// 지금 보일 컷 — 걷는 중이면 걷기(동작 1), 아니면 서기(동작 0, 까딱이는 숨쉬기) 모션을 틱에 맞춰 넘긴다.
+    /// 오른쪽을 보면 옆모습 컷을 뒤집는다.
+    /// </summary>
     public SpriteFrame FrameFor(UnitState unit)
     {
-        if (walk == null) return frames[0];
+        int action = unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+        var clip = _table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing));
+        var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: true);
+        if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return _first;
+        if (unit.Facing != Facing.Right) return frame;
 
-        var range = walk.For(unit.Facing);
-        int step = unit.IsMoving ? (int)(unit.WalkTime * BattleSceneWindow.WalkFps) % range.Count : 0;
-        int index = Math.Min(range.Start + step, frames.Length - 1);
-        if (unit.Facing != Facing.Right) return frames[index];
-
-        if (!_mirrored.TryGetValue(index, out var mirrored))
-            _mirrored[index] = mirrored = frames[index].Mirrored();
+        if (!_mirrored.TryGetValue((k.SubentryId, k.Slot), out var mirrored))
+            _mirrored[(k.SubentryId, k.Slot)] = mirrored = frame.Mirrored();
         return mirrored;
     }
 }
@@ -645,23 +714,47 @@ internal sealed class UnitState(BattleUnit unit)
     private double _progress = 1;
 
     public bool IsMoving => _progress < 1;
-    public double WalkTime { get; private set; }
+
+    /// <summary>지금 동작(서기/걷기)을 시작한 뒤 흐른 시간(초). 동작이 바뀌면 0 부터 다시 센다.</summary>
+    public double AnimTime { get; private set; }
+
+    // 인물마다 서기 숨쉬기가 한꺼번에 맞춰 움직이지 않게 시작 위치를 조금씩 흩뜨린다.
+    private readonly double _idleOffset = (unit.Col * 7 + unit.Row * 13) % 10 / 10.0;
 
     /// <summary>그릴 자리(칸 단위, 소수) — 걷는 중이면 두 칸 사이.</summary>
     public double X => _fromCol + (Col - _fromCol) * _progress;
     public double Y => _fromRow + (Row - _fromRow) * _progress;
 
+    /// <summary>방금 한 칸을 다 걸었는데 아직 다음 칸이 정해지지 않았다 — 이번 프레임 안에 이어 걸으면 걷기 컷을 잇는다.</summary>
+    private bool _justArrived;
+
+    /// <summary>이번 칸에서 남은 진행량(한 칸 = 1) — 이어 걸을 때 다음 칸에 넘겨 속도가 들쭉날쭉하지 않게 한다.</summary>
+    private double _carry;
+
     public void BeginStep(int col, int row)
     {
+        if (!IsMoving && !_justArrived) AnimTime = 0;
+        double carry = _justArrived ? _carry : 0;
+        _justArrived = false;
         _fromCol = Col; _fromRow = Row;
         Col = col; Row = row;
-        _progress = 0;
+        _progress = Math.Min(carry, 0.99);
     }
 
     public void Advance(double progressDelta, double dt)
     {
-        if (!IsMoving) { WalkTime = 0; return; }
-        WalkTime += dt;
-        _progress = Math.Min(1, _progress + progressDelta);
+        AnimTime += dt;
+        if (!IsMoving) return;
+        double next = _progress + progressDelta;
+        _progress = Math.Min(1, next);
+        if (!IsMoving) { _justArrived = true; _carry = next - 1; }
+    }
+
+    /// <summary>이어 걷지 않고 멈췄으면 서기 숨쉬기로 돌린다.</summary>
+    public void SettleIfStopped()
+    {
+        if (!_justArrived) return;
+        _justArrived = false;
+        AnimTime = _idleOffset;
     }
 }
