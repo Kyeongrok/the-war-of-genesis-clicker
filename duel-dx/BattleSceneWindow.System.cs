@@ -51,7 +51,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _confirm = null;
     }
 
-    private bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null;
+    private bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsOpen;
 
     private (int X, int Y, int H) SystemMenuRect()
     {
@@ -65,8 +65,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case SystemItem.Mission: _missionWindow = true; break;
             case SystemItem.Volume: _volumeWindow = true; break;
-            case SystemItem.Save: SaveBattle(); break;
-            case SystemItem.Load: LoadBattle(); break;
+            case SystemItem.Save: OpenSlots(0); break;
+            case SystemItem.Load: OpenSlots(1); break;
             case SystemItem.Restart:
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
                 break;
@@ -79,16 +79,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
     private bool OnSystemClick(int bx, int by)
     {
-        if (_confirm is { } confirm)
+        if (_confirm is not null && OnConfirmClick()) return true;
+        if (OnSlotsClick(bx, by)) return true;
+        return OnMenuClick(bx, by);
+
+        bool OnConfirmClick()
         {
+            var confirm = _confirm!;
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; confirm.Yes(); return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; confirm.Value.Yes(); return true; }
                 if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; return true; }
             }
             return true;
         }
+    }
+
+    private bool OnMenuClick(int bx, int by)
+    {
         if (_missionWindow || _volumeWindow)
         {
             if (_volumeWindow) OnVolumeClick(bx, by);
@@ -109,6 +118,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; return true; }
+        if (SlotsOpen) { _slotsMode = -1; return true; }
         if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
         return false;
@@ -116,6 +126,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawSystem()
     {
+        DrawSlots();
+        DrawNotice();
         if (_systemMenu) DrawSystemMenu();
         if (_missionWindow) DrawMissionWindow();
         if (_volumeWindow) DrawVolumeWindow();
@@ -255,6 +267,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _numbers.Clear();
         _effects.Clear();
         StartBattleMusic();
+        AutoSave();
         Toast("전투를 다시 시작했습니다");
     }
 
@@ -266,16 +279,21 @@ internal sealed unsafe partial class BattleSceneWindow
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities);
 
-    private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory);
+    /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
+    private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
+                                    int SceneText = 0, int SceneKind = 1, long PlayMs = 0);
 
-    private const int SaveVersion = 1;
+    private const int SaveVersion = 2;
 
-    private static string SavePath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "battle-save.json");
+    /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
+    private double _playBase;
+
+    private long PlayMs => (long)(_lastTime * 1000 + _playBase);
 
     private static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
 
-    private void SaveBattle()
+    /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
+    private bool SaveBattleTo(string path)
     {
         try
         {
@@ -284,33 +302,35 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))]))],
-                _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value));
+                _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
+                BattleDemoScene.TitleTextId, 1, PlayMs);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);
-            File.WriteAllText(SavePath, JsonSerializer.Serialize(state, SaveJson));
-            Play(SoundSaved);
-            Toast($"저장했습니다 — {state.SavedAt}");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Toast($"저장하지 못했습니다: {ex.Message}");
+            return false;
         }
     }
 
-    private void LoadBattle()
+    /// <summary>그 파일에서 전투판을 되살린다. 되살렸으면 true.</summary>
+    private bool LoadBattleFrom(string path)
     {
         SaveState? state;
         try
         {
-            if (!File.Exists(SavePath)) { Toast("저장한 전투가 없습니다"); return; }
-            state = JsonSerializer.Deserialize<SaveState>(File.ReadAllText(SavePath), SaveJson);
+            if (!File.Exists(path)) { Toast("저장한 전투가 없습니다"); return false; }
+            state = JsonSerializer.Deserialize<SaveState>(File.ReadAllText(path), SaveJson);
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
             Toast($"불러오지 못했습니다: {ex.Message}");
-            return;
+            return false;
         }
-        if (state is not { Version: SaveVersion } || state.Units.Length != _units.Length) { Toast("저장 파일을 읽을 수 없습니다"); return; }
+        if (state is not { Version: SaveVersion } || state.Units.Length != _units.Length) { Toast("저장 파일을 읽을 수 없습니다"); return false; }
 
         _routine = null;
         CancelTargeting();
@@ -350,6 +370,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _outcome = "";
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
         _nextTickAt = 0;
+        _playBase = state.PlayMs - _lastTime * 1000;
         Toast($"불러왔습니다 — {state.SavedAt}");
+        return true;
     }
 }
