@@ -17,25 +17,24 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int ChaptersW = 900, ChaptersRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
 
     private bool _chaptersOpen;
-    private List<(int Id, string Title, MosesChapterFile Chp)>? _chapters;
+    private List<(int Id, string Title, ChapterFile Chp)>? _chapters;
     private int _chaptersHover = -1;
 
     /// <summary>assets/moses/chp 를 모두 읽어 이야기 순서(제목 TXR)로 늘어놓는다.</summary>
-    private List<(int Id, string Title, MosesChapterFile Chp)> Chapters()
+    private List<(int Id, string Title, ChapterFile Chp)> Chapters()
     {
         if (_chapters != null) return _chapters;
-        var list = new List<(int, string, MosesChapterFile)>();
+        var list = new List<(int, string, ChapterFile)>();
         string folder = Path.Combine(AssetsFolder.Find("moses"), "chp");
         if (Directory.Exists(folder))
             foreach (string path in Directory.EnumerateFiles(folder, "*.chp"))
             {
                 if (!int.TryParse(Path.GetFileNameWithoutExtension(path), out int id)) continue;
-                if (MosesChapterFile.Parse(File.ReadAllBytes(path)) is not { } chp) continue;
-                chp.Id = id;
+                if (ChapterFile.Parse(id, File.ReadAllBytes(path)) is not { } chp) continue;
                 list.Add((id, Text(chp.TitleText), chp));
             }
         // 제목 TXR 2284~2313 이 이야기 순서다. 그 밖(외전·시험용)은 뒤로.
-        int Rank((int Id, string Title, MosesChapterFile Chp) c) => c.Chp.TitleText is >= 2284 and <= 2313 ? c.Chp.TitleText : 9999;
+        int Rank((int Id, string Title, ChapterFile Chp) c) => c.Chp.StoryRank;
         return _chapters = [.. list.OrderBy(Rank).ThenBy(c => c.Item1)];
     }
 
