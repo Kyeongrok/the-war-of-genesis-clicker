@@ -223,6 +223,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _camY = 0;
         if (same || _hwnd == IntPtr.Zero) return;
 
+        // 배율은 픽셀 셰이더에 박혀 있다 — 맵이 바뀌어 배율이 달라졌으면 셰이더부터 다시 빌드한다.
+        if (Math.Abs(_shaderZoom - _zoom) > 1e-9) CompileShaders();
+
         // 텍스처는 보이는 판 크기로 다시 만든다.
         _boardSrv?.Dispose();
         _boardTex?.Dispose();
@@ -852,6 +855,28 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _device = dev;
         _ctx = ctx;
 
+        CompileShaders();
+
+        _boardTex = _device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)BoardWidth,
+            Height = (uint)ViewHeight,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Dynamic,
+            BindFlags = BindFlags.ShaderResource,
+            CPUAccessFlags = CpuAccessFlags.Write,
+        });
+        _boardSrv = _device.CreateShaderResourceView(_boardTex);
+    }
+
+    /// <summary>
+    /// 화면을 그리는 셰이더 — <b>배율이 픽셀 셰이더에 박혀 있어</b>, 판 크기가 바뀌어 배율이 달라지면 다시 빌드해야 한다.
+    /// </summary>
+    private void CompileShaders()
+    {
         string shader = $$"""
             Texture2D<float4> Board : register(t0);
             struct VSOut { float4 pos : SV_Position; };
@@ -870,23 +895,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             """;
         var vsBlob = Compiler.Compile(shader, "VS", "battlescene.hlsl", "vs_4_0");
         var psBlob = Compiler.Compile(shader, "PS", "battlescene.hlsl", "ps_4_0");
+        _vs?.Dispose();
+        _ps?.Dispose();
         _vs = _device.CreateVertexShader(vsBlob.Span);
         _ps = _device.CreatePixelShader(psBlob.Span);
-
-        _boardTex = _device.CreateTexture2D(new Texture2DDescription
-        {
-            Width = (uint)BoardWidth,
-            Height = (uint)ViewHeight,
-            MipLevels = 1,
-            ArraySize = 1,
-            Format = Format.B8G8R8A8_UNorm,
-            SampleDescription = new SampleDescription(1, 0),
-            Usage = ResourceUsage.Dynamic,
-            BindFlags = BindFlags.ShaderResource,
-            CPUAccessFlags = CpuAccessFlags.Write,
-        });
-        _boardSrv = _device.CreateShaderResourceView(_boardTex);
+        _shaderZoom = _zoom;
     }
+
+    /// <summary>지금 셰이더에 박혀 있는 배율 — <see cref="_zoom"/> 과 달라지면 다시 빌드한다.</summary>
+    private double _shaderZoom;
 
     private void CreateSwapChain()
     {
