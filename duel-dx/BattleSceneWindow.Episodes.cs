@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -135,7 +135,14 @@ internal sealed unsafe partial class BattleSceneWindow
             int cx = ox + 320, cy = oy + 186 + EpisodeCellH * row + 58;
             if (!DrawUi(EpisodeObs, motion, tick, cx, cy, UiBlend.Alpha) && entry.Open)
                 DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
-            if (i == _episodePick) DrawUi(EpisodeObs, 4, tick, cx, cy, UiBlend.Alpha);   // 고른 표시 [ ]
+            // 고른 표시 — 이름 양 끝에 꺾쇠 한 쌍. 모션 4 는 표시가 아니라 <b>다른 장 이름판</b>이라 예전에는 이름이 겹쳐 찍혔다.
+            // Obs 0979 의 장 0~3 만 자리가 (0,0) 인 작은 그림이고, 그중 15틱짜리 모션 62·64 가 깜빡이는 꺾쇠다.
+            if (i == _episodePick && UiFor(EpisodeObs)?.FrameAt(motion, tick) is { } plate)
+            {
+                int mid = cy + plate.Y + plate.H / 2;
+                DrawUi(EpisodeObs, 62, tick, cx + plate.X - 12, mid - 22, UiBlend.Alpha);
+                DrawUi(EpisodeObs, 64, tick, cx + plate.X + plate.W + 12, mid - 22, UiBlend.Alpha);
+            }
         }
 
         DrawSystem();
