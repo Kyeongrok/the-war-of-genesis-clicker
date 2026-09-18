@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -298,7 +298,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private enum UiBlend { Alpha, Add, AddDim, Darken }
 
     /// <summary>UI Obs 한 장을 모션표 틱에 맞춰 (x, y) 에 그린다(컷의 X·Y 가 기준점에서 왼쪽 위까지 거리). 그렸으면 true.</summary>
-    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true)
+    /// <param name="fade">
+    /// 0~1 의 밝기 — 필드 인물이 서서히 사라지고 나타날 때(행동 210·211) 쓴다. 1 이면 그대로 그린다.
+    /// </param>
+    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1)
     {
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
@@ -314,13 +317,22 @@ internal sealed unsafe partial class BattleSceneWindow
                 if ((c & 0xFF000000) == 0) continue;
                 int i = py * BoardWidth + px;
                 uint d = _fb[i];
-                _fb[i] = blend switch
+                uint drawn = blend switch
                 {
                     UiBlend.Add => AddColor(d, c, 256),
                     UiBlend.AddDim => AddColor(d, c, 100),
                     UiBlend.Darken => ScaleColor(d, 11, 31),
                     _ => c | 0xFF000000,
                 };
+                // 밝기가 1 보다 작으면 바탕과 섞는다 — 원본의 8단계 밝기를 그대로 흉내 낸다.
+                if (fade < 1)
+                {
+                    int k = Math.Clamp((int)(fade * 256), 0, 256);
+                    uint Mix(int shift) =>
+                        (uint)(((int)(drawn >> shift & 0xFF) * k + (int)(d >> shift & 0xFF) * (256 - k)) / 256);
+                    drawn = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+                }
+                _fb[i] = drawn;
             }
         }
         return true;
@@ -366,6 +378,9 @@ internal sealed class UiSprite
         }
         return loop ? _frames.GetValueOrDefault((0, 0)) : null;
     }
+
+    /// <summary>그 모션이 한 바퀴 도는 데 걸리는 틱 — 모르면 0.</summary>
+    public int MotionLength(int motion) => _table?.Clips.GetValueOrDefault(motion)?.Length ?? 0;
 
     /// <summary>그 모션의 tick 틱 섞기 방식(17 = 더하기 합성).</summary>
     public int BlendAt(int motion, int tick) => _table?.Clips.GetValueOrDefault(motion)?.BlendAt(tick) ?? 0;
