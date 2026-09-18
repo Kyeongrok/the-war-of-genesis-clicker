@@ -66,14 +66,50 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool TouchNearestObjectForTest()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_TOUCH") is not { Length: > 0 }) return false;
-        if (!IsPlayerTurn) return false;
-        var user = _units[_turn];
-        var target = Objects.Where(o => !_opened.Contains(o) && o.Data.Kind is 2 or 6)
+        // 시험은 차례를 안 기다린다 — 첫 아군으로 친다.
+        var user = _units.FirstOrDefault(u => u.Alive && u.PlayerControlled);
+        if (user is null) return false;
+        // B 키면 부술 수 있는 물체를, 그 밖에는 열 수 있는 물체를 고른다.
+        bool breaking = Environment.GetEnvironmentVariable("DUELDX_TOUCH") == "break";
+        var target = Objects.Where(o => !_opened.Contains(o) && o.Alive
+                                        && (breaking ? o.Data.Breakable && o.Record.Team != 4 : o.Data.Kind is 2 or 6))
                             .OrderBy(o => Math.Abs(o.Col - user.Col) + Math.Abs(o.Row - user.Row))
                             .FirstOrDefault();
         if (target is null) return false;
-        user.ResetTo(target.Col, Math.Min(Rows - 1, target.Row + 1));
-        return TryTouchObject(target.Col, target.Row);
+        // 열 때는 옆 한 칸, 칠 때는 기본공격 자리(정확히 두 칸)로 세운다.
+        user.ResetTo(target.Col, Math.Clamp(target.Row + (breaking ? 2 : 1), 0, Rows - 1));
+        if (!breaking) return TryTouchObject(target.Col, target.Row);
+        _turn = Array.IndexOf(_units, user);
+        return TryBreakObject(target.Col, target.Row, force: true);
+    }
+
+    /// <summary>
+    /// 물체를 친다 — 물체에는 RDP 가 없어 <b>공격력이 그대로 피해</b>가 되고(<c>0x100e79ac</c>), 명중·치명·흔들기도 없다.
+    /// HP 가 0 이하면 부서지면서 친 인물에게 소울 10 과 경험치를 준다(<c>0x1006ab70</c>).
+    /// </summary>
+    private bool TryBreakObject(int col, int row, bool force = false)
+    {
+        if (!force && (!IsPlayerTurn || _units[_turn].IsBusy)) return false;
+        if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
+        var user = _units[_turn];
+        // 제 편 물체는 못 친다 — 종류 7(바리케이트)은 적·중립이면, 9·10 은 적이면 칠 수 있다.
+        bool foe = obj.Record.Team != (user.PlayerControlled ? 4 : 0);
+        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Record.Team < 0)) return false;
+        if (user.Data is not { } c || _db is null || Work(c.BasicWorkId) is not { } w) return false;
+        // 기본공격과 같은 자리 규칙 — 옆 두 칸(모양 2 십자, 사거리 5~8) 안이어야 친다.
+        if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
+
+        CommitMove(user);
+        user.Tp = Math.Max(0, user.Tp - w.TpBase);
+        int damage = _db.Atk(c, user.Soul, w.Power);
+        obj.Hp -= damage;
+        ShowNumber(user, damage.ToString(), DamageColor);
+        Play(MosesClickSound);
+
+        if (obj.Hp > 0) return true;
+        user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
+        Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
+        return true;
     }
 
     /// <summary>이미 연 상자 — 판에서 사라진다.</summary>
