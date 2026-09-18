@@ -70,10 +70,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (SystemOpen) return OnSystemClick(bx, by);
         switch (TitleButtonAt(bx, by))
         {
-            case 0:                                   // NEW GAME — 원본은 연대표를 거쳐 Chp 0010 → Btl 0045
-                _titleOpen = false;
+            case 0:                                   // NEW GAME — 원본처럼 연대표(장면 7)로 간다
                 _party.Clear();
-                if (!StartBattle(TitleFirstBattle)) OpenTitle();
+                if (Episodes().Count > 0) OpenEpisodes();
+                else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;
             case 1:                                   // CONTINUE — 불러오기 슬롯
                 OpenSlots(1);
