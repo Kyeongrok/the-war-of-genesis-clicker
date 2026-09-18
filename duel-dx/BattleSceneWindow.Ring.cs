@@ -170,10 +170,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_statusUnit >= 0) { _statusUnit = -1; return; }
         if (_ringUnit >= 0) { CancelRing(); return; }
         if (CancelStep(undoMove: false)) return;
+
         int index = UnitAtBoard(bx, by);
-        if (index < 0) return;
-        _selected = index;
-        OpenRing(index);
+        if (index >= 0 && _units[index].IsAlly) { _selected = index; OpenRing(index); return; }
+        if (index >= 0) return;   // 적군은 링을 안 연다(적 상태 창은 fa-8)
+
+        // 빈 칸에서 우클릭해도 차례인 아군의 링을 연다(fa-6 — 걷고 나서 바로 명령).
+        if (IsPlayerTurn && !_units[_turn].IsBusy) OpenRing(_turn);
     }
 
     /// <summary>링 키: 고른 인물의 링을 열거나 닫는다. 고른 인물이 없으면 알려 준다.</summary>

@@ -41,8 +41,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private const int GridTop = 40;
     private const int BoardWidth = Cols * TileW, BoardHeight = GridTop + Rows * TileH;
 
-    /// <summary>창에 보이는 판 높이 — 판 전체의 80%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
-    private const int ViewHeight = BoardHeight * 4 / 5;
+    /// <summary>창에 보이는 판 높이 — 판 전체의 70%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
+    private const int ViewHeight = BoardHeight * 7 / 10;
     private const double MaxZoom = 2;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
@@ -136,6 +136,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         {
             _loading = false;
         }
+    }
+
+    /// <summary>창을 작업 영역 가운데(가로)·맨 위(세로)에 놓는다 — 아래가 잘리지 않게(an-ui-2).</summary>
+    private static int WindowLeft(int windowWidth)
+    {
+        var work = new Win32.Rect();
+        if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 0;
+        return Math.Max(work.Left, work.Left + (work.Width - windowWidth) / 2);
     }
 
     /// <summary>모니터 작업 영역(작업 표시줄 뺀 곳)에 창이 들어가는 가장 큰 배율 — 최대 <see cref="MaxZoom"/>.</summary>
@@ -256,7 +264,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         _active = this;
         _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}",
-            Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : Win32.CW_USEDEFAULT, Offscreen ? 0 : Win32.CW_USEDEFAULT,
+            Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
             rect.Width, rect.Height,
             IntPtr.Zero, menu, Win32.GetModuleHandleW(null), IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("창을 만들지 못했습니다.");
@@ -350,7 +358,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 for (int i = 1; i <= _units.Length; i++)
                 {
                     int next = (Math.Max(_selected, 0) + i) % _units.Length;
-                    if (_units[next].Alive) { _selected = next; break; }
+                    if (_units[next].Alive && _units[next].IsAlly) { _selected = next; break; }
                 }
                 break;
             case KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight:
@@ -388,7 +396,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnTargetClick(col, row)) return;
 
         int index = UnitAtBoard(bx, by);
-        if (index >= 0) { _selected = index; return; }
+        if (index >= 0)
+        {
+            // 적군은 고를 수 없다(fa-9) — 적 정보는 우클릭으로 본다.
+            if (_units[index].IsAlly) _selected = index;
+            return;
+        }
         if (_selected == _turn && TryWalkTo(col, row)) return;
         _selected = _turn;
     }

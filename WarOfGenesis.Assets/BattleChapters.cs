@@ -3,6 +3,9 @@ namespace WarOfGenesis.Assets;
 /// <summary>전투 하나가 어디서 불리는지 — 부르는 곳 설명들과, 도달 관계로 닿는 챕터(제목 txr 순).</summary>
 public sealed record BattleOrigin(IReadOnlyList<string> Callers, IReadOnlyList<(int Chapter, string Title)> Chapters);
 
+/// <summary>챕터 하나 — 제목과 그 안의 항성계·행성 이름. 장소 이름은 전투마다 <see cref="BattleOrigin.Callers"/> 에 들어 있다.</summary>
+public sealed record ChapterInfo(int Id, int TitleId, string Title, IReadOnlyList<string> Systems, IReadOnlyList<string> Planets);
+
 /// <summary>
 /// 전투(Btl) → 챕터·장소 찾기. <c>tools/re/battle_list.py</c> 에서 표를 만드는 데 필요한 만큼만 옮겼다.
 /// </summary>
@@ -13,11 +16,16 @@ public sealed record BattleOrigin(IReadOnlyList<string> Callers, IReadOnlyList<(
 /// </remarks>
 public static class BattleChapters
 {
-    public static Dictionary<int, BattleOrigin> Build(GameFiles files, Func<ushort, string> text)
+    public static Dictionary<int, BattleOrigin> Build(GameFiles files, Func<ushort, string> text) =>
+        BuildAll(files, text).Origins;
+
+    /// <summary>전투마다의 <see cref="BattleOrigin"/> 과, 읽힌 챕터들(제목 txr 순 — 앞선 것이 먼저).</summary>
+    public static (Dictionary<int, BattleOrigin> Origins, List<ChapterInfo> Chapters) BuildAll(GameFiles files, Func<ushort, string> text)
     {
         var edges = new Dictionary<(char Kind, int Id), HashSet<(char, int)>>();
         var callers = new Dictionary<int, List<string>>();
         var titles = new Dictionary<int, int>();
+        var chapters = new List<ChapterInfo>();
 
         void Edge((char, int) from, (char, int) to)
         {
@@ -40,6 +48,9 @@ public static class BattleChapters
             foreach (var (name, places) in c.Planets)
                 foreach (int pid in places)
                     if (pid >= 0) planetOf.TryAdd(pid, T(name));
+            chapters.Add(new ChapterInfo(ci, c.Title, title,
+                                         [.. c.Systems.Select(T).Where(s => s.Length > 0).Distinct()],
+                                         [.. c.Planets.Select(p => T(p.Name)).Where(s => s.Length > 0).Distinct()]));
             foreach (var (no, name, v) in c.Places)
             {
                 if (v is > 0 and < 10000)
@@ -98,10 +109,10 @@ public static class BattleChapters
         var result = new Dictionary<int, BattleOrigin>();
         foreach (int btl in callers.Keys.Union(reach.Keys))
         {
-            var chapters = reach.GetValueOrDefault(btl)?.OrderBy(Rank).ThenBy(c => c).Select(c => (c, T(titles[c]))).ToList() ?? [];
-            result[btl] = new BattleOrigin(callers.GetValueOrDefault(btl) ?? [], chapters);
+            var reached = reach.GetValueOrDefault(btl)?.OrderBy(Rank).ThenBy(c => c).Select(c => (c, T(titles[c]))).ToList() ?? [];
+            result[btl] = new BattleOrigin(callers.GetValueOrDefault(btl) ?? [], reached);
         }
-        return result;
+        return (result, [.. chapters.OrderBy(c => Rank(c.Id)).ThenBy(c => c.Id)]);
     }
 
     private static IEnumerable<int> Ids(GameFiles files, string folder, string ext) =>
@@ -109,8 +120,8 @@ public static class BattleChapters
              .Select(n => int.TryParse(Path.GetFileNameWithoutExtension(n), out int id) ? id : -1)
              .Where(id => id >= 0).Distinct().OrderBy(id => id);
 
-    private sealed record Chp(int Title, List<(int Name, int[] Places)> Planets, List<(int No, int Name, int Value)> Places,
-                              List<(int Code, int Arg)> Script);
+    private sealed record Chp(int Title, List<int> Systems, List<(int Name, int[] Places)> Planets,
+                              List<(int No, int Name, int Value)> Places, List<(int Code, int Arg)> Script);
 
     private static short H(byte[] b, int o) => BitConverter.ToInt16(b, o);
 
@@ -125,7 +136,9 @@ public static class BattleChapters
             o += 10 + 12 * n1;
             o += 4 + 30 * H(b, o);
             int n3 = H(b, o);
-            o += 4 + 66 * n3;
+            o += 4;
+            var systems = new List<int>();               // 66B(8워드 + 16B×3 + u16): w2 = 항성계 이름 txr
+            for (int i = 0; i < n3; i++, o += 66) systems.Add(H(b, o + 4));
             int n4 = H(b, o);
             o += 4;
             var planets = new List<(int, int[])>();
@@ -137,7 +150,7 @@ public static class BattleChapters
             for (int i = 0; i < n5; i++, o += 20) places.Add((H(b, o), H(b, o + 2), H(b, o + 4)));
             o += 4 + 4 * H(b, o);
             var script = ParseScript(b, ref o, hasMax: false);
-            return o == b.Length ? new Chp(title, planets, places, script) : null;
+            return o == b.Length ? new Chp(title, systems, planets, places, script) : null;
         }
         catch (ArgumentException) { return null; }
     }
