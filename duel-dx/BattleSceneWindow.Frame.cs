@@ -64,6 +64,21 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>글을 읽는 창 밑은 먼저 어둡게 깐다 — 반투명 바탕만으로는 배경 그림이 비쳐 글이 안 읽힌다.</summary>
+    private void DarkenRect(int x, int y, int w, int h, int num = 8, int den = 31)
+    {
+        for (int yy = y; yy < y + h; yy++)
+        {
+            if ((uint)yy >= BoardHeight) continue;
+            for (int xx = x; xx < x + w; xx++)
+            {
+                if ((uint)xx >= BoardWidth) continue;
+                int i = yy * BoardWidth + xx;
+                _fb[i] = ScaleColor(_fb[i], num, den);
+            }
+        }
+    }
+
     /// <summary>바탕과 그림을 세기만큼 섞는다(원본 섞기 방식 2).</summary>
     private static uint MixColor(uint dst, uint src, int strength, int max)
     {

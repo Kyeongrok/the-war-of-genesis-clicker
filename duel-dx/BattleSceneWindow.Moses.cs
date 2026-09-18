@@ -30,6 +30,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MosesW = 640, MosesH = 480;
     private const int MosesObs = 291, MosesFrameObs = 246, MosesBackObs = 248;
     private const int MosesCellObs = 643, MosesCellIconObs = 498, MosesMarkObs = 163;
+    private const int MosesExitObs = 287, MosesMailBackground = 94;
     private const int MosesClickSound = 66, MosesFadeTicks = 15;
     private const int MosesChapter = 10;
     /// <summary>이 데모가 가진 단 하나의 전투 — Chp 0010 리치의 「코어헌터 훈련장」(장소 값 45).</summary>
@@ -172,7 +173,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
                 break;
-            case 1: Play(571); Toast("메일은 아직 만들지 않았습니다"); return;
+            case 1: Play(571); break;                                  // MAIL — 새 편지가 있으면 나는 소리
             case 2: Toast("통신은 아직 만들지 않았습니다"); return;
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
@@ -181,8 +182,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesPageAt = _lastTime;
         _mosesFade = MosesFadeTicks;
         _mosesHover = -1;
-        // 항행은 성계 배경, 파티는 주 화면과 같은 챕터 배경
-        ShowMosesBackground(page == 0 ? _mosesChp?.SystemBackground ?? 70 : _mosesChp?.Background ?? 52);
+        // 항행은 성계 배경, 메일은 94, 파티는 주 화면과 같은 챕터 배경
+        ShowMosesBackground(page switch
+        {
+            0 => _mosesChp?.SystemBackground ?? 70,
+            1 => MosesMailBackground,
+            _ => _mosesChp?.Background ?? 52,
+        });
     }
 
     /// <summary>뒤로 단추 — 단계가 최저면 주 화면으로. 소리는 단계별 569(장소→행성)·570(행성→성계).</summary>
@@ -244,6 +250,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (SystemOpen) return OnSystemClick(bx, by);
         if (_mosesFade > 0) return true;
         if (OnMosesShopClick(bx, by)) return true;
+        if (OnMosesMailClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
 
         int index = MosesIconAt(bx, by);
@@ -331,6 +338,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesPage is 3 or 4)
         {
             DrawMosesShop(ox, oy, tick);
+            return;
+        }
+        if (_mosesPage == 1)
+        {
+            DrawMosesMail(ox, oy, tick);
             return;
         }
 
