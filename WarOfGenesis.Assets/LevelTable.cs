@@ -1,11 +1,11 @@
-namespace WarOfGenesis.Assets;
+﻿namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// <c>Dat\Lev.dat</c> — 레벨마다 붙는 성장률(%)과, <c>Dat\0002.nch</c> — 그 성장을 <b>안 받는</b> 인물들.
 /// </summary>
 /// <remarks>
 /// 분석-전투 「전투 시작 TP · Lev.dat 성장」. 파일은 머리 낱말 셋 뒤에 <b>14바이트 × 200</b> 이 이어지고,
-/// 레코드는 <c>+4</c> 레벨 · <c>+6</c> LP% · <c>+8</c> TP% · <c>+0xa</c> PSY% · <c>+0xc</c> DEX% · <c>+0xe</c> DEP% 다.
+/// 레코드는 <c>+2</c> 레벨 · <c>+4</c> LP% · <c>+6</c> TP% · <c>+8</c> PSY% · <c>+0xa</c> DEX% · <c>+0xc</c> DEP% 다(자료로 검산).
 /// 레벨 설정(<c>0x1007a8e0</c>)은 <b>늘 <c>.chr</c> 원본에서</b> 다시 셈하므로 두 번 먹여도 쌓이지 않고,
 /// <b>TP 제수와 CTP 는 건드리지 않는다</b>.
 /// <para>
@@ -25,7 +25,8 @@ public sealed record LevelGrowth(int Lp, int Tp, int Psy, int Dex, int Dep)
             int o = 6 + 14 * i;
             if (o + 14 > b.Length) break;
             ushort U(int k) => BitConverter.ToUInt16(b, o + k);
-            rows.Add(new LevelGrowth(U(2), U(4), U(6), U(8), U(10)));
+            // 레코드 안: +2 레벨 · +4 LP% · +6 TP% · +8 PSY% · +10 DEX% · +12 DEP%.
+            rows.Add(new LevelGrowth(U(4), U(6), U(8), U(10), U(12)));
         }
         return rows;
     }
