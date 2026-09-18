@@ -246,6 +246,20 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
 
+    /// <summary>적을 클릭하면 링을 안 거치고 바로 친다(fa-12) — 걸음 비용도 그때 함께 뺀다.</summary>
+    private void QuickAttack(int targetIndex)
+    {
+        if (_units[_turn].Data is not { } c || Work(c.BasicWorkId) is not { } w) return;
+        if (FindAttackPath(_turn, targetIndex) is not { } plan)
+        {
+            Toast("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요");
+            return;
+        }
+        CommitMoveForAction();
+        _commitUndo = null;   // 바로 치므로 되돌릴 일이 없다
+        _routine = UseWorkRoutine(_turn, w, targetIndex, _units[targetIndex].Col, _units[targetIndex].Row, plan.Path);
+    }
+
     /// <summary>링 공격: 기본공격 대상 고르기(걸어가서 친다).</summary>
     private void BeginAttackTargeting()
     {

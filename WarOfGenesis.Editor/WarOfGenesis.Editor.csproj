@@ -8,7 +8,9 @@
         <UseWPF>true</UseWPF>
         <AssemblyName>WarOfGenesis.Editor</AssemblyName>
         <RootNamespace>WarOfGenesis.Editor</RootNamespace>
-    </PropertyGroup>
+        <!-- 창·실행 파일 아이콘 — 원본 게임 아이콘(G3_II.ico), 편집기는 아래에 Editor 글자를 얹었다(menu-5) -->
+    <ApplicationIcon>..\assets\icons\editor.ico</ApplicationIcon>
+  </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
