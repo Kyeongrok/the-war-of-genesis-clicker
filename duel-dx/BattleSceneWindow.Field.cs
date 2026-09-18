@@ -55,6 +55,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
 
+    /// <summary>전환 직전에 찍어 둔 640×480 화면 — 빗살 지우기·밀어내기가 이 위에서 걷힌다.</summary>
+    private uint[]? _fieldShot;
+
+    /// <summary>
+    /// 걷어내는 전환(903 빗살 지우기 · 904 밀어내기) — 찍어 둔 옛 화면을 새 화면 위에 덮고 조금씩 걷는다.
+    /// </summary>
+    private (int Kind, int Way, int Ticks, double Start)? _fieldWipe;
+
     /// <summary>
     /// 필드 인물 하나의 지금 모습 — 자리·모션·좌우반전, 그리고 걷는 중이면 어디서 어디로.
     /// </summary>
@@ -160,6 +168,8 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldChoices = null;
             _fieldPictures.Clear();
             _fieldFade = null;
+            _fieldShot = null;
+            _fieldWipe = null;
             _fieldActors = [.. field.People.Select(p => new FieldActor(p))];
             // 파일의 물체 — 갈래 칸이 곧 처음 모션이다.
             _fieldProps = [.. field.Objects.Select(o => new FieldProp
@@ -721,8 +731,58 @@ internal sealed unsafe partial class BattleSceneWindow
                 DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
         }
         _uiClip = null;
+        DrawFieldWipe(ox, oy);
         DrawFieldFade(ox, oy);
         DrawToast();
+    }
+
+    /// <summary>지금 필드 화면(640×480)을 그대로 찍어 둔다 — 걷어내는 전환이 그 위에서 시작한다.</summary>
+    private void CaptureFieldScreen()
+    {
+        var (ox, oy) = MosesOrigin();
+        _fieldShot = new uint[MosesW * MosesH];
+        for (int y = 0; y < MosesH; y++)
+            Array.Copy(_fb, (oy + y) * BoardWidth + ox, _fieldShot, y * MosesW, MosesW);
+    }
+
+    /// <summary>찍어 둔 옛 화면을 새 화면 위에 덮고, 전환 종류대로 걷어낸다.</summary>
+    private void DrawFieldWipe(int ox, int oy)
+    {
+        if (_fieldWipe is not { } wipe || _fieldShot is not { } shot) return;
+        int tick = (int)((_lastTime - wipe.Start) * TicksPerSecond);
+        if (tick >= wipe.Ticks) { _fieldWipe = null; _fieldShot = null; return; }
+        double done = (double)tick / wipe.Ticks;          // 0(옛 화면 그대로) ~ 1(다 걷힘)
+
+        for (int y = 0; y < MosesH; y++)
+            for (int x = 0; x < MosesW; x++)
+            {
+                if (!WipeKeeps(wipe, done, x, y, out int sx, out int sy)) continue;
+                SetPixel(ox + x, oy + y, shot[sy * MosesW + sx] | 0xFF000000);
+            }
+    }
+
+    /// <summary>그 점에 옛 화면이 아직 남아 있는지 — 남아 있으면 옛 화면의 어느 점을 가져올지도 알려 준다.</summary>
+    private static bool WipeKeeps((int Kind, int Way, int Ticks, double Start) wipe, double done, int x, int y,
+                                  out int sx, out int sy)
+    {
+        sx = x;
+        sy = y;
+        if (wipe.Kind == 903)
+        {
+            // 빗살 — 화면을 세로(또는 가로) 띠로 나누고, 띠마다 <b>번갈아 반대 쪽</b>에서 줄어든다.
+            const int CombWidth = 16;
+            int band = (wipe.Way is 0 or 1 ? x : y) / CombWidth;
+            int within = (wipe.Way is 0 or 1 ? x : y) % CombWidth;
+            double left = CombWidth * (1 - done);
+            return band % 2 == 0 ? within < left : within >= CombWidth - left;
+        }
+
+        // 밀어내기 — 옛 화면이 통째로 한 쪽으로 빠져 나간다.
+        int dx = wipe.Way switch { 0 => -(int)(MosesW * done), 1 => (int)(MosesW * done), _ => 0 };
+        int dy = wipe.Way switch { 2 => -(int)(MosesH * done), 3 => (int)(MosesH * done), _ => 0 };
+        sx = x - dx;
+        sy = y - dy;
+        return (uint)sx < MosesW && (uint)sy < MosesH;
     }
 
     /// <summary>덮기·걷기 — 눈금 0(안 덮임)~31(다 덮임)을 그대로 옮긴다.</summary>
