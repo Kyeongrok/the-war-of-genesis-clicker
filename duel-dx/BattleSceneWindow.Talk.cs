@@ -32,6 +32,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>글을 다 채웠나(흐르는 중이면 먼저 채우고, 다 채웠으면 넘긴다).</summary>
     private bool _talkFilled;
 
+    /// <summary>대사 상자에 그릴 초상화의 Chr 번호 — 필드처럼 말하는 이가 전투 유닛이 아닐 때 쓴다.</summary>
+    private int _talkFace;
+
     /// <summary>지금 떠 있는 대사 한 줄. 없으면 null.</summary>
     private (bool Box, int Speaker, string Name, string Text, int Face, double Start)? _talk;
 
@@ -143,7 +146,8 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawGameFrame(x, y, w, h, t.Name);
             // 초상화 — 인물 얼굴 그림을 왼쪽에. 원본은 Obs 모션 2×얼굴+11 이지만 데모는 뽑아 둔 얼굴 그림을 쓴다.
             int textLeft = x + 12;
-            if (t.Speaker >= 0 && _units[t.Speaker].Data is { } c && _faces.TryGetValue(c.Code, out var face))
+            int faceCode = t.Speaker >= 0 && _units[t.Speaker].Data is { } sc ? sc.Code : _talkFace;
+            if (faceCode != 0 && _faces.TryGetValue(faceCode, out var face))
             {
                 BlitScaled(face, x + 8, y + 6, 84, 84);
                 textLeft = x + 100;
