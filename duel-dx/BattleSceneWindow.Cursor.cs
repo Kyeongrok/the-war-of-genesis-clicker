@@ -60,9 +60,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 _fb[i] = 0xFF000000 | (c >> 16 & 0xFF) / 2 << 16 | (c >> 8 & 0xFF) / 2 << 8 | (c & 0xFF) / 2;
             }
 
-        int tick = (int)((_lastTime - _outcomeAt) * TicksPerSecond);
+        // 배너는 모션 0·1·2(승리) / 10·11·12(패배) 세 조각을 겹쳐 그린다 — 각 모션은 컷 하나(길이 0)다.
         int cx = BoardWidth / 2, cy = _camY + ViewHeight / 2;
-        if (DrawUi(BannerObs, win ? BannerWin : BannerLose, tick, cx, cy, UiBlend.Alpha, loop: false)) return;
+        bool drawn = false;
+        for (int i = 0; i < 3; i++)
+            drawn |= DrawUi(BannerObs, (win ? BannerWin : BannerLose) + i, 0, cx, cy, UiBlend.Alpha);
+        if (drawn) return;
 
         // 배너 그림이 없으면 글자로
         var (_, w, h) = GetText(_outcome, 0xFFFFE070, 32);
