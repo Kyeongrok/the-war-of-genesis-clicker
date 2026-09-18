@@ -26,6 +26,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int TalkBalloonObs = 111, TalkCloseSound = 95;
     private const int TalkAutoTicks = 118;
 
+    /// <summary>글자가 흘러나오는 빠르기 — 한 틱에 몇 글자.</summary>
+    private const double TalkCharsPerTick = 1.2;
+
+    /// <summary>글을 다 채웠나(흐르는 중이면 먼저 채우고, 다 채웠으면 넘긴다).</summary>
+    private bool _talkFilled;
+
     /// <summary>지금 떠 있는 대사 한 줄. 없으면 null.</summary>
     private (bool Box, int Speaker, string Name, string Text, int Face, double Start)? _talk;
 
@@ -65,6 +71,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int speaker = TalkSpeaker(A(0));
         string name = speaker >= 0 && _units[speaker].Data is { } c ? _db?.T(c.NameId) ?? "" : "";
         _talk = (box, speaker, name, text, A(4), _lastTime);
+        _talkFilled = false;
     }
 
     /// <summary>대사를 닫는다 — 넘기거나 저절로 넘어갈 때.</summary>
@@ -75,18 +82,32 @@ internal sealed unsafe partial class BattleSceneWindow
         Play(TalkCloseSound);
     }
 
-    /// <summary>클릭·키로 넘기기. 대사가 떠 있었으면 true.</summary>
+    /// <summary>
+    /// 클릭·키로 넘기기 — <b>글이 흐르는 중이면 먼저 다 채우고</b>, 다 채운 뒤 누르면 닫는다(<c>0x1003c029</c>).
+    /// </summary>
     private bool OnTalkInput()
     {
         if (_talk == null) return false;
+        if (!_talkFilled) { _talkFilled = true; return true; }
         CloseTalk();
         return true;
     }
 
-    /// <summary>가만히 두면 118틱 뒤 저절로 넘어간다.</summary>
+    /// <summary>글이 다 나온 뒤 118틱을 더 두면 저절로 넘어간다.</summary>
     private void UpdateTalk()
     {
-        if (_talk is { } t && (_lastTime - t.Start) * TicksPerSecond > TalkAutoTicks) CloseTalk();
+        if (_talk is not { } t) return;
+        int shown = (int)((_lastTime - t.Start) * TicksPerSecond * TalkCharsPerTick);
+        if (shown >= t.Text.Length) _talkFilled = true;
+        if (_talkFilled && (_lastTime - t.Start) * TicksPerSecond > TalkAutoTicks) CloseTalk();
+    }
+
+    /// <summary>지금까지 흘러나온 만큼만 잘라 낸 글.</summary>
+    private string TalkShownText((bool Box, int Speaker, string Name, string Text, int Face, double Start) t)
+    {
+        if (_talkFilled) return t.Text;
+        int shown = (int)((_lastTime - t.Start) * TicksPerSecond * TalkCharsPerTick);
+        return shown >= t.Text.Length ? t.Text : t.Text[..Math.Max(0, shown)];
     }
 
     /// <summary>글에 박힌 <c>$n</c>(줄바꿈)·<c>$m0</c>(색 전환)을 푼다.</summary>
@@ -98,7 +119,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_talk is not { } t) return;
         var (ox, oy) = (0, _camY);
         int tick = (int)((_lastTime - t.Start) * TicksPerSecond);
-        var lines = TalkLines(t.Text);
+        var lines = TalkLines(TalkShownText(t));
 
         if (t.Box)
         {
@@ -117,7 +138,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int i = 0; i < lines.Length && i < 4; i++)
                 DrawText(lines[i], textLeft, y + 10 + i * 20, White, 13);
             // 오른쪽 아래 「다음」 표시 — 깜빡인다.
-            if (tick % 20 < 12) DrawText("▼", x + w - 22, y + h - 22, 0xFFFFE070, 13);
+            if (_talkFilled && tick % 20 < 12) DrawText("▼", x + w - 22, y + h - 22, 0xFFFFE070, 13);
             return;
         }
 
@@ -136,15 +157,17 @@ internal sealed unsafe partial class BattleSceneWindow
             by = _camY + ViewHeight / 2 - bh;
         }
         // 글이 길면 창이 늘어난다 — 원본도 폭 200·높이 100 까지 늘린다.
-        int widest = lines.Max(l => GetText(l, White, 12).Item2);
+        // 크기는 <b>다 나온 글</b>로 재야 흐르는 동안 창이 들썩이지 않는다.
+        var full = TalkLines(t.Text);
+        int widest = full.Max(l => GetText(l, White, 12).Item2);
         bw = Math.Clamp(widest + 16, 50, 200);
-        bh = Math.Clamp(lines.Length * 18 + 26, 50, 100);
+        bh = Math.Clamp(full.Length * 18 + 26, 50, 100);
         bx = Math.Clamp(bx, 8, BoardWidth - bw - 8);
 
         DarkenRect(bx - 1, by - FrameTitleH - 1, bw + 2, bh + FrameTitleH + 2, 8);
         DrawGameFrame(bx, by, bw, bh, t.Name);
         for (int i = 0; i < lines.Length && i * 18 + 8 < bh; i++)
             DrawText(lines[i], bx + 8, by + 6 + i * 18, White, 12);
-        if (tick % 20 < 12) DrawText("▼", bx + bw - 18, by + bh - 20, 0xFFFFE070, 12);
+        if (_talkFilled && tick % 20 < 12) DrawText("▼", bx + bw - 18, by + bh - 20, 0xFFFFE070, 12);
     }
 }
