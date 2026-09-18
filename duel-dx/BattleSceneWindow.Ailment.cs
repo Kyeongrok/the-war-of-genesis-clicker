@@ -135,6 +135,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>칸 셋에 넣기 — 같은 번호면 센 쪽, 빈 칸, 아니면 이번에 안 쓴 칸 중 아무 데나.</summary>
     private void PutAilment(UnitState u, byte id, short value, List<int> used)
     {
+        // 마비·빙결·붙잡힘(5·6·25)이 걸리면 걷던 걸음을 그 자리에서 멈춘다(0x1007c480 이 이동을 막는다).
+        if (id is 5 or 6 or 25) u.Path.Clear();
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == id)
             {
@@ -193,8 +195,6 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (soul < u.Soul) { ShowNumber(u, $"{db.T(41)} {u.Soul - soul}", 0xFFC0A0FF); u.Soul = soul; }
             }
 
-            // 턴 속도(38) — TP 가 찰 때 그대로 더한다. <b>부호를 그대로 쓴다</b>(0x10071de9) — 아다지오처럼 −1 인 것도 있다.
-            if (u.HasStatus(38)) u.Tp = Math.Clamp(u.Tp + u.Status(38), 0, u.MaxTp);
         }
     }
 
