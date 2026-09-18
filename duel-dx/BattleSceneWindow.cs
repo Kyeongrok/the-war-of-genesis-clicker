@@ -573,7 +573,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             else if (IsPlayerTurn && !_units[_turn].IsBusy) QuickAttack(index);
             return;
         }
-        if (TryTouchObject(col, row)) return;
+        if (TryTouchObject(col, row) || TryBreakObject(col, row)) return;
         if (_selected == _turn && TryWalkTo(col, row)) return;
         _selected = _turn;
     }
