@@ -53,7 +53,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.WorkByLevel.TryGetValue(level, out int wid) || Work(wid) is not { } w) continue;
             string reason = w.Kind == 4 ? "쓸 수 없음"
                 : u.Tp + u.Ctp < _db.WorkTpCost(c, wid) ? "TP 부족"
-                : u.Soul < w.SoulBase ? "SOUL 부족" : "";
+                : u.Soul < _db.WorkSoulNeed(c, wid) ? "SOUL 부족" : "";
             rows.Add(($"{_db.T(ab.NameId)} Lv{level}", w, reason.Length == 0, reason));
         }
         return rows;
@@ -144,7 +144,8 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(name, rx + 46, y + 4, color, 12);
             if (!enabled) DrawText(reason, rx + 120, y + 4, Red, 11);
             RightText($"{_db.WorkTpCost(c, w.Id)}", rx + 210, y + 4, color, 12);
-            RightText($"{w.SoulBase}", rx + 240, y + 4, color, 12);
+            // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
+            RightText($"{_db.WorkSoulNeed(c, w.Id)}", rx + 240, y + 4, color, 12);
         }
     }
 }

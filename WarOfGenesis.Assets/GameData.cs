@@ -216,7 +216,7 @@ public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeSh
                               ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte MinTargets, byte AiCriterion, byte Prepare,
                               (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0,
                               byte RangeKind = 0, byte HeightRange = 0, byte Sight = 0, byte SameHeightRange = 0,
-                              byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0)
+                              byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0, byte SoulSpend = 0)
 {
     public bool IsDamage => Kind == 0;
     public bool IsHeal => Kind is 1 or 5;
@@ -304,7 +304,7 @@ public sealed class GameDatabase
                                                 U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
                                                 [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
                                                 U16(a, o + 24), a[o + 26],
-                                                a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21]);
+                                                a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
         }
 
         var abilities = new Dictionary<int, AbilityData>();
@@ -486,6 +486,28 @@ public sealed class GameDatabase
         if (c.Body is >= 1 and <= 5 && N(34) != 0) cost += w.HpFactor * N(43 + 3 * c.Body) / 100 / N(34);
         return cost;
     }
+
+    /// <summary>
+    /// 그 work 을 쓰려면 있어야 하는 SOUL(<c>0x10072440</c>) = <c>+0x34</c> + 체질 덧붙임.
+    /// 체질 덧붙임 = <c>+0x2e × Num[45+3(체질−1)]% ÷ Num[33]</c> — 체질마다 HP·SOUL·TP 로 나뉘는 비율이 다르다(분석-전투 ba-4).
+    /// </summary>
+    public int WorkSoulNeed(CharacterData c, int workId) =>
+        !Works.TryGetValue(workId, out var w) ? 0 : w.SoulBase + BodyShare(c, w, 45, 33);
+
+    /// <summary>
+    /// 그 work 을 쓰고 <b>실제로 깎이는</b> SOUL(<c>0x10072510</c>) — <c>+0x36</c> 이 0 이면 바탕은 안 깎이고 체질 덧붙임만 깎인다.
+    /// 그래서 사이클론(에텔)·포스트럴(코절) 체질은 SOUL 이 거의 안 줄고 HP·TP 로 낸다.
+    /// </summary>
+    public int WorkSoulCost(CharacterData c, int workId) =>
+        !Works.TryGetValue(workId, out var w) ? 0 : (w.SoulSpend != 0 ? w.SoulBase : 0) + BodyShare(c, w, 45, 33);
+
+    /// <summary>그 work 을 쓰고 깎이는 HP(<c>0x100726e0</c>) — 바탕 없이 체질 덧붙임뿐이다.</summary>
+    public int WorkHpCost(CharacterData c, int workId) =>
+        !Works.TryGetValue(workId, out var w) ? 0 : BodyShare(c, w, 44, 41);
+
+    /// <summary>체질 덧붙임 — <c>+0x2e × Num[표+3(체질−1)]% ÷ Num[나눗수]</c>.</summary>
+    private int BodyShare(CharacterData c, WorkData w, int table, int divisor) =>
+        c.Body is >= 1 and <= 5 && N(divisor) != 0 ? w.HpFactor * N(table + 3 * (c.Body - 1)) / 100 / N(divisor) : 0;
 
     /// <summary>이동 예산(상태 12 <c>0x10069cc9</c>) = 현재TP + min(0, CTP − 기본공격 TP 비용).</summary>
     public int MoveBudget(CharacterData c, int currentTp) => currentTp + Math.Min(0, c.Ctp - WorkTpCost(c, c.BasicWorkId));

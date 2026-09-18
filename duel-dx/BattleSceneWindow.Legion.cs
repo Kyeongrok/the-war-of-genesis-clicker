@@ -60,6 +60,15 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         foreach (var (_, _, member) in followers) list.Add(member);
+
+        // 아군이 하나도 없는 전투(개별훈련용 던젼 0060 처럼)는 배치 칸에 파티를 세운다.
+        if (!list.Any(u => u.PlayerControlled) && scene.Placement is { Count: > 0 } spots)
+        {
+            var party = _party.Keys.Count > 0 ? _party.Keys.ToList()
+                                              : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
+            for (int i = 0; i < spots.Count && i < party.Count; i++)
+                list.Add(new UnitState(new DemoUnit(party[i], spots[i].Col, spots[i].Row, 4, 0, spots[i].Facing)));
+        }
         return [.. list];
     }
 
