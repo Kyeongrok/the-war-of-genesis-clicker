@@ -27,6 +27,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _tick;
     private IEnumerator<bool>? _routine;
     private string _outcome = "";
+    private double _outcomeAt;
     private double _nextTickAt;
     private readonly Random _rng = new();
     private readonly List<(string Text, float Size, int X, int Y, double Start, uint Color)> _popups = [];
@@ -341,15 +342,29 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
 
         var dying = new List<UnitState>();
-        for (int step = 0; step < StrikeActions.Length; step++)
+        int[] actions = ActionsFor(w);
+        int hitStep = HitStepFor(w, actions.Length);
+        for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
-            PlayAction(a, StrikeActions[step]);
-            while (a.IsBusy) yield return true;
-            if (step != StrikeHitStep) continue;
+            if (step < actions.Length)
+            {
+                PlayAction(a, actions[step]);
+                while (a.IsBusy) yield return true;
+            }
+            if (step != hitStep) continue;
 
             var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
             ScheduleAbilitySounds(w);
+            SpawnAbilityEffects(w, a, col, row);
             foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
+        }
+
+        // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10).
+        if (w.Id == EscapeWork && LiveUnitAt(col, row) == null)
+        {
+            a.WarpTo(col, row);
+            a.OriginCol = col;
+            a.OriginRow = row;
         }
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
@@ -414,8 +429,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void CheckOutcome()
     {
         if (_outcome.Length > 0) return;
-        if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; PlayOutcomeMusic(win: true); }
-        else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; PlayOutcomeMusic(win: false); }
+        if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
+        else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
     }
 
     // ── 적 AI (fg-7) ─────────────────────────────────────────────────────────
@@ -538,13 +553,4 @@ internal sealed unsafe partial class BattleSceneWindow
         return $"틱 {_tick}   {(u.IsAlly ? "아군" : "적군")} {UnitName(_turn)} 차례   HP {u.Hp}/{u.MaxHp}  TP {u.Tp}/{u.MaxTp}  SOUL {u.Soul}   {help}";
     }
 
-    private void DrawOutcome()
-    {
-        if (_outcome.Length == 0) return;
-        var (_, w, h) = GetText(_outcome, 0xFFFFE070, 32);
-        int x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
-        FillRect(x - 24, y - 14, w + 48, h + 28, 0xE0101828);
-        StrokeRect(x - 24, y - 14, w + 48, h + 28, 0xFFFFE070);
-        DrawText(_outcome, x, y, 0xFFFFE070, 32);
-    }
 }

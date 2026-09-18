@@ -183,6 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_statusUnit >= 0) { _statusUnit = -1; return; }
         if (_ringUnit >= 0) { CancelRing(); return; }
+        if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
         if (CancelStep(undoMove: false)) return;
 
         int index = UnitAtBoard(bx, by);

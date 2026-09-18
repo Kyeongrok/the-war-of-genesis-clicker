@@ -101,6 +101,9 @@ public sealed record CharacterData(
     ushort Psy, ushort Tp, ushort TpDivisor, ushort Ctp, ushort Dep, ushort Dex,
     ushort[] Items, (ushort Ability, ushort Level)[] Abilities)
 {
+    /// <summary>Status 화면 "WEAPON ○○" 띠 그림(파일 40, <c>CChr+0x48</c>) — Obs 0326 모션. 0 이면 62.</summary>
+    public byte WeaponBand { get; init; }
+
     /// <summary>무기 종류(파일 39, <c>CChr+0x4a</c>) — 무기 칸에는 이 종류 아이템만 낀다(<c>0x10032d70</c>).</summary>
     public byte WeaponType { get; init; }
 
@@ -126,6 +129,7 @@ public sealed record CharacterData(
             [.. Enumerable.Range(0, 8).Select(i => (U(56 + 4 * i), U(58 + 4 * i))).Where(a => a.Item1 != 0)])
         {
             WeaponType = b[39],
+            WeaponBand = b[40],
             VoiceSet = U(6),
         };
     }
@@ -139,8 +143,18 @@ public sealed record JobData(int Id, ushort[] Growth, ushort[] AbilityList, usho
 /// <summary><c>Dat/Dep.dat</c> 레코드 — 직업 묶음(계열 이름, 단계, 직업 번호들).</summary>
 public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 
-/// <summary><c>Dat/Itm.dat</c> 레코드(파일 48바이트). 종류 0 VES … 14 일반검, 15 대검 …; <see cref="Bonuses"/> = (능력치 번호, 값).</summary>
-public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense, (ushort Stat, ushort Value)[] Bonuses);
+/// <summary>
+/// <c>Dat/Itm.dat</c> 레코드(파일 48바이트). 종류 0 VES … 14 일반검, 15 대검 …; <see cref="Bonuses"/> = (능력치 번호, 값).
+/// </summary>
+/// <param name="Picture">
+/// 파일 9 — 아이템 그림(<c>Obs 0326</c> 모션 번호). <c>0xffff</c> 면 <see cref="Type"/> 를 그림 번호로 쓴다(분석-캐릭터 "아이템 그림").
+/// </param>
+public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense,
+                              (ushort Stat, ushort Value)[] Bonuses, ushort Picture = 0xFFFF)
+{
+    /// <summary>실제로 그릴 Obs 0326 모션 번호.</summary>
+    public int PictureMotion => Picture == 0xFFFF ? Type : Picture;
+}
 
 /// <summary>
 /// <c>Abi/NNNN.abi</c> 레코드(26바이트)와 레벨별 work 번호. 파일 오프셋: 6 선행1·8 그 레벨, 9 선행2·11 그 레벨,
@@ -250,7 +264,7 @@ public sealed class GameDatabase
             var w = Words(d, o + 18, 15);
             var bonuses = Enumerable.Range(0, 7).Select(k => (w[2 * k], w[2 * k + 1])).Where(p => p.Item1 != 0).ToArray();
             items[U16(d, o)] = new ItemData(U16(d, o), U16(d, o + 2), BitConverter.ToUInt32(d, o + 4), d[o + 8],
-                                            U16(d, o + 11), U16(d, o + 13), bonuses);
+                                            U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9));
         }
 
         var works = new Dictionary<int, WorkData>();
