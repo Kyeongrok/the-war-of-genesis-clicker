@@ -1,4 +1,4 @@
-namespace WarOfGenesis.Assets;
+﻿namespace WarOfGenesis.Assets;
 
 /// <summary>Btl 인물 레코드(29바이트) — 번호, Chr, 칸, 방향, 편(4 플레이어·3 동맹 AI·0~2 적), 레벨 보정.</summary>
 public sealed record BattleUnitRecord(int No, int ChrCode, int X, int Y, int Direction, int Side, int LevelOffset)
@@ -20,7 +20,21 @@ public sealed record BattleUnitRecord(int No, int ChrCode, int X, int Y, int Dir
 }
 
 /// <summary>Btl 오브젝트 레코드(11워드) — Obj 번호, 칸, 편.</summary>
-public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Team);
+/// <summary>
+/// <c>Btl</c> 물체 레코드(11낱말) — 어느 <c>Obj</c> 를 어느 칸에 어느 편으로 놓을지.
+/// </summary>
+/// <remarks>
+/// 상자는 <see cref="ItemId"/> 나 <see cref="Gold"/> 둘 중 하나를 들고 있다(자료 541칸이 빠짐없이 그렇다).
+/// 남은 낱말 셋은 「이어진 물체」 자리인데 시판 자료에서는 다 비어 있다.
+/// </remarks>
+public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Team)
+{
+    /// <summary>상자 속 아이템(<c>Itm</c> 번호), 없으면 0.</summary>
+    public int ItemId { get; init; }
+
+    /// <summary>상자 속 돈, 없으면 0.</summary>
+    public int Gold { get; init; }
+}
 
 /// <summary>아군 배치 칸(6워드) — 칸과 방향.</summary>
 public sealed record BattlePlacementCell(int X, int Y, int Direction);
@@ -69,7 +83,7 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
             for (int i = 0; i < nb; i++)
             {
                 var w = Enumerable.Range(0, 11).Select(_ => H()).ToArray();
-                objects.Add(new BattleObjectRecord(w[0], w[1], w[2], w[3], w[4]));
+                objects.Add(new BattleObjectRecord(w[0], w[1], w[2], w[3], w[4]) { ItemId = w[5], Gold = w[7] });
             }
             int nc = U(); U();
             for (int i = 0; i < nc; i++)

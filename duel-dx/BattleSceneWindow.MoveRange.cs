@@ -143,6 +143,10 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
 
+        // 문·스위치문이 선 칸에는 <b>설 수</b> 없다 — 길은 안 막지만 목표 칸이 못 된다(0x100746b0).
+        for (int i = 0; i < n; i++)
+            if (costs[i] != int.MaxValue && ObjectBlocks(i % Cols, i / Cols)) costs[i] = int.MaxValue;
+
         // 다른 인물이 선 칸은 파랑에서 뺀다.
         for (int i = 0; i < n; i++)
             if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % Cols, i / Cols) is { } other && other != unit) costs[i] = int.MaxValue;
