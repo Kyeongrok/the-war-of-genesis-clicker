@@ -129,6 +129,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             LoadAudio();
             OpenMosesIfAsked();
             OpenLevelUpIfAsked();
+            AutoSave();   // 전투를 시작하면 자동 저장 슬롯(Load 21번째 줄)에 적어 둔다
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -319,6 +320,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 _mouse = (bx, by);
                 UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
+                UpdateSlotsHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
