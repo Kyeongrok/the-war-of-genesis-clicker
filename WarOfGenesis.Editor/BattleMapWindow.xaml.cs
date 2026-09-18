@@ -85,6 +85,7 @@ public partial class BattleMapWindow : Window
     private int _loadVersion;
     private Shown? _shown;
     private Dictionary<int, BattleOrigin>? _origins;
+    private int _wantedBattleId = -1;
 
     private readonly Dictionary<int, SpriteSet?> _sprites = [];
     private readonly HashSet<int> _spritesLoading = [];
@@ -158,8 +159,31 @@ public partial class BattleMapWindow : Window
         _view = CollectionViewSource.GetDefaultView(_entries);
         _view.Filter = Accept;
         ListStatus.Text = $"전투 {entries.Count(e => e.Battle != null)}개 · 맵 {obtCount}개";
+        if (SelectWantedBattle()) return;
         var first = _entries.FirstOrDefault(e => e.Battle?.Id == BattleDemoScene.BtlId) ?? _entries.FirstOrDefault();
         if (first != null) MapList.SelectedItem = first;
+    }
+
+    /// <summary>
+    /// 전투 번호로 목록에서 고른다 — 전투 목록 창(<see cref="BattleListWindow"/>)에서 줄을 두 번 눌렀을 때 쓴다.
+    /// 아직 목록을 읽는 중이면 다 읽은 뒤에 고른다.
+    /// </summary>
+    public void SelectBattle(int battleId)
+    {
+        _wantedBattleId = battleId;
+        if (_entries.Count > 0) SelectWantedBattle();
+    }
+
+    private bool SelectWantedBattle()
+    {
+        if (_wantedBattleId < 0) return false;
+        var entry = _entries.FirstOrDefault(e => e.Battle?.Id == _wantedBattleId);
+        _wantedBattleId = -1;
+        if (entry == null) return false;
+        if (!Accept(entry)) FilterBox.Text = "";   // 걸러내기에 가려 안 보이면 걸러내기를 지운다
+        MapList.SelectedItem = entry;
+        MapList.ScrollIntoView(entry);
+        return true;
     }
 
     private bool Accept(object o)

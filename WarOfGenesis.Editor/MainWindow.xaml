@@ -26,6 +26,11 @@
                     AutomationProperties.AutomationId="SkillsMenuItem"
                     Click="SkillsMenuItem_Click"
                     Header="스킬(어빌리티)(_K)" />
+                <MenuItem
+                    x:Name="BattleListMenuItem"
+                    AutomationProperties.AutomationId="BattleListMenuItem"
+                    Click="BattleListMenuItem_Click"
+                    Header="전투 목록(챕터별)(_L)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem

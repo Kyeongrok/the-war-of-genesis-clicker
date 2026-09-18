@@ -192,6 +192,23 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 전투 목록(챕터별) 창 ─────────────────────────────────────────────────
+
+    /// <summary>분석-전투목록(ba-7) 의 표 — 챕터별 전투 목록. 줄을 두 번 누르면 전투 보기 창이 그 전투를 연다.</summary>
+    private void BattleListMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        try
+        {
+            _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+            new BattleListWindow(_gameRoot, _database) { Owner = this }.Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     // ── 에셋: 소리(배경음악 · 효과음 · 인물 대사) 창 ────────────────────────
 
     private SoundWindow? _soundWindow;
