@@ -36,6 +36,10 @@ internal sealed unsafe partial class BattleSceneWindow
         (SystemItem.Exit, 4, "EXIT GAME"),
     ];
 
+    /// <summary>지금 화면의 시스템 메뉴 항목 — 모세스에서는 MISSION·RESTART 가 없다(분석-모세스 13절).</summary>
+    private (SystemItem Item, int Motion, string Label)[] MenuItems =>
+        _mosesOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+
     private bool _systemMenu;
     private bool _missionWindow, _volumeWindow;
     private (string Title, string Text, Action Yes)? _confirm;
@@ -51,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private (int X, int Y, int H) SystemMenuRect()
     {
-        int h = SystemPad * 2 + SystemItems.Length * SystemRowH;
+        int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
         return ((BoardWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
@@ -95,9 +99,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
         var (x, y, _) = SystemMenuRect();
         int index = (by - y - SystemPad) / SystemRowH;
-        if (bx < x + SystemPad || bx >= x + SystemPad + SystemRowW || index < 0 || index >= SystemItems.Length) { _systemMenu = false; return true; }
+        if (bx < x + SystemPad || bx >= x + SystemPad + SystemRowW || index < 0 || index >= MenuItems.Length) { _systemMenu = false; return true; }
         _systemMenu = false;
-        RunSystemItem(SystemItems[index].Item);
+        RunSystemItem(MenuItems[index].Item);
         return true;
     }
 
@@ -126,9 +130,10 @@ internal sealed unsafe partial class BattleSceneWindow
         StrokeRect(x, y, SystemW, h, BoxLine);
         DrawText("System Menu", x + SystemPad, y - 22, White, 15);
 
-        for (int i = 0; i < SystemItems.Length; i++)
+        var items = MenuItems;
+        for (int i = 0; i < items.Length; i++)
         {
-            var (item, motion, label) = SystemItems[i];
+            var (item, motion, label) = items[i];
             int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
             FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
             StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);

@@ -53,7 +53,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         try
         {
-            foreach (string folder in new[] { "ui", "effects" })
+            foreach (string folder in new[] { "ui", "effects", Path.Combine("moses", "obs") })
                 foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find(folder), "*.obs"))
                     if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
                         _uiPaths[id] = path;
