@@ -34,6 +34,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>이벤트가 정한 다음 전투 — 0 이면 <c>Btl</c> 자료의 값(또는 모세스)으로 간다.</summary>
     private int _eventNextBattle;
 
+    /// <summary>이벤트 행동 6 이 정한 다음 필드 — 0 이면 모세스로 간다.</summary>
+    private int _eventNextField;
+
     /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
     private void LoadEvents(int battleId)
     {
@@ -41,6 +44,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventFired = [];
         _turnNo = 0;
         _eventNextBattle = 0;
+        _eventNextField = 0;
         Array.Clear(_battleVars);
         try
         {
@@ -236,8 +240,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 _eventNextBattle = A(0);
                 SetEventOutcome(win: true);
                 break;
-            case 6:                                      // 끝내고 필드로 — 데모는 모세스로 간다
+            case 6:                                      // 끝내고 <b>그 필드로</b>
                 _eventNextBattle = 0;
+                _eventNextField = A(0);
                 SetEventOutcome(win: true);
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
