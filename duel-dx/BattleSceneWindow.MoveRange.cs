@@ -21,9 +21,11 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const uint MoveBlue = 0x786464FF, AttackRed = 0x78FF6428;
-    /// <summary>칸 사이 가는 줄 — 원본 화면(구현 노트 ui-3 캡처)처럼 어두운 남색.</summary>
-    private const uint RangeLine = 0xC0282C60;
+    /// <summary>
+    /// 칸에 <b>더하는</b> 색 — 원본은 층 색에 칸 밝기(평지 74)를 곱해 <b>가산</b>으로 얹는다(섞기 방식 17, `0x1000e150`).
+    /// 알파 섞기가 아니라 <b>밝히기만</b> 한다.
+    /// </summary>
+    private const uint MoveTint = 0x1C1C49, RangeTint = 0x491C0B;
     private const double RangeWaveCellsPerSecond = 30;
 
     /// <summary>한 인물의 이동 영역 — 칸마다 드는 TP(못 가면 <see cref="int.MaxValue"/>), 되짚을 앞 칸, 빨간 칸.</summary>
@@ -194,21 +196,53 @@ internal sealed unsafe partial class BattleSceneWindow
         return null;
     }
 
+    /// <summary>
+    /// 깔리는 물결의 반경 — 원본은 매 틀 <c>r += max(1, r×2/3)</c> 이라 0·1·2·3·5·8·13·21·35… 로 불어난다.
+    /// 여덟 틀(0.27초)이면 웬만한 판은 다 덮는다.
+    /// </summary>
+    private static int WaveRadius(int frames)
+    {
+        int r = 0;
+        for (int i = 0; i < frames && r < 64; i++) r += Math.Max(1, r * 2 / 3);
+        return r;
+    }
+
     private void DrawMoveRange()
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
-        int radius = (int)((_lastTime - _rangeStart) * RangeWaveCellsPerSecond);
+        int radius = WaveRadius((int)((_lastTime - _rangeStart) * TicksPerSecond));
 
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)
             {
                 if (Math.Abs(col - _rangeCol) + Math.Abs(row - _rangeRow) > radius) continue;
                 int i = row * Cols + col;
-                uint color = range.Cost[i] != int.MaxValue ? MoveBlue : range.Red[i] ? AttackRed : 0;
-                if (color == 0) continue;
+                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : range.Red[i] ? RangeTint : 0;
+                if (tint == 0) continue;
                 int x = col * TileW, y = GridTop + row * TileH;
-                FillRect(x, y, TileW, TileH, color);
-                StrokeRect(x, y, TileW + 1, TileH + 1, RangeLine);
+                AddRect(x, y, TileW, TileH, tint);
+                // 테두리는 <b>같은 색을 불투명으로</b>, 칸보다 1픽셀 크게 — 이웃 칸과 선을 나눠 쓴다.
+                StrokeRect(x, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
             }
+    }
+
+    /// <summary>네모 안을 색을 <b>더해서</b> 밝힌다(255 에서 멈춘다).</summary>
+    private void AddRect(int x, int y, int w, int h, uint tint)
+    {
+        uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
+        for (int yy = y; yy < y + h; yy++)
+        {
+            if ((uint)yy >= BoardHeight) continue;
+            for (int xx = x; xx < x + w; xx++)
+            {
+                if ((uint)xx >= BoardWidth) continue;
+                int i = yy * BoardWidth + xx;
+                uint c = _fb[i];
+                _fb[i] = c & 0xFF000000
+                       | Math.Min(255, (c >> 16 & 0xFF) + tr) << 16
+                       | Math.Min(255, (c >> 8 & 0xFF) + tg) << 8
+                       | Math.Min(255, (c & 0xFF) + tb);
+            }
+        }
     }
 }
