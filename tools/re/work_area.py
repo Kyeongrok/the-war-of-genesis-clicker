@@ -33,11 +33,12 @@ def dist(dx, dy):
 
 def shape_cells(shape, lo, hi, direction):
     """평지(높이 차 없음) 기준으로 원점(0,0)에서 켜지는 칸 집합. lo/hi 는 4분의 1 칸 단위."""
-    half = hi // 2
+    # 옆으로 벌어지는 폭(모양 6·7 의 ±1·±2)은 크기와 상관없고, 모양 4 는 최대를 아예 안 본다.
+    reach = 12 if shape == 4 else hi // 4 + 2
     out = set()
     dx, dy = DIRS[direction]
-    for y in range(-half - 1, half + 2):
-        for x in range(-half - 1, half + 2):
+    for y in range(-reach, reach + 1):
+        for x in range(-reach, reach + 1):
             d = dist(x, y)
             if shape == 1:                                  # 마름모 0x100db640
                 ok = True
@@ -63,6 +64,10 @@ def shape_cells(shape, lo, hi, direction):
                     ok = axis >= 1 and side <= axis - 1
             else:
                 ok = False
+            if shape == 4:                                  # 화면 전체는 최소만 본다
+                if ok and d >= lo:
+                    out.add((x, y))
+                continue
             if ok and lo <= d <= hi:
                 out.add((x, y))
     return out
