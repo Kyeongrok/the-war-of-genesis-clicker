@@ -41,10 +41,17 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db == null) return;
         var types = _units.Where(u => u.IsAlly && u.Data != null).Select(u => _db.WeaponTypeOf(u.Data!)).Distinct()
-            .Select(t => (Type: t, Count: 3)).Concat(new[] { 2, 3, 4, 5, 6 }.Select(t => (Type: t, Count: 4)));
+            .Select(t => (Type: t, Count: 3)).Concat(new[] { 2, 3, 4, 5, 6 }.Select(t => (Type: t, Count: 4)))
+;
         foreach (var (type, count) in types)
             foreach (var item in _db.Items.Values.Where(i => i.Type == type && _db.T(i.NameId).Length > 0).OrderBy(i => i.Id).Take(count))
                 _inventory[item.Id] = _inventory.GetValueOrDefault(item.Id) + 1;
+
+        // 전투에서 쓰는 캡슐(종류 7)도 몇 개 — 회복 캡슐 셋과 공격 캡슐 셋(분석-전투 「전투 중 아이템 쓰기」)
+        var capsules = _db.Items.Values.Where(i => i.IsConsumable && _db.T(i.NameId).Length > 0).ToList();
+        foreach (var item in capsules.Where(i => Work(i.UseWork) is { IsHeal: true }).OrderBy(i => i.Id).Take(3)
+                                     .Concat(capsules.Where(i => Work(i.UseWork) is { IsHeal: false }).OrderBy(i => i.Id).Take(3)))
+            _inventory[item.Id] = _inventory.GetValueOrDefault(item.Id) + 2;
     }
 
     /// <summary>장비·어빌리티가 바뀐 뒤 최대치들을 다시 셈한다(현재 HP·TP·SOUL 은 최대를 넘지 않게만).</summary>

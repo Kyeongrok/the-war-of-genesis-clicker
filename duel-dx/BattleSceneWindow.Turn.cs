@@ -159,7 +159,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _commitUndo = null;
         _attackCursor = -1;
         _targetWork = -1;
+        _targetItem = 0;
         _abilityMenu = false;
+        _itemMenu = false;
     }
 
     /// <summary>공격·어빌리티를 열 때: 지금까지 걸은 비용을 한 번에 뺀다(취소하면 되돌림).</summary>
@@ -346,6 +348,7 @@ internal sealed unsafe partial class BattleSceneWindow
             Toast("그 칸에는 대상이 없습니다");
             return true;
         }
+        ConsumeTargetItem();          // 아이템이면 이때 개수가 하나 준다
         CancelTargeting();
         _routine = UseWorkRoutine(_turn, w, -1, col, row, []);
         return true;

@@ -40,12 +40,15 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private readonly Random _ailmentRandom = new();
 
-    /// <summary>work 의 상태이상을 대상에게 건다(명중은 부른 쪽에서 이미 봤다).</summary>
+    /// <summary>work 의 상태이상을 대상에게 건다(명중은 부른 쪽에서 이미 봤다). 기본공격이면 <b>무기 아이템의 효과</b>를 건다.</summary>
     private void ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
-        if (w.Bonuses.Length == 0) return;
+        // 원본은 기본공격일 때 work 대신 무기 Itm 의 공격 효과(메모리 +0x24~)를 건다 —
+        // 그 칸은 우리가 읽는 장비 보정(파일 18~)과 다른 자리라 아직 안 읽는다(분석-전투 6절).
+        (int Id, int Value)[] effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
+        if (effects.Length == 0) return;
         var used = new List<int>();
-        foreach (var (id, value) in w.Bonuses)
+        foreach (var (id, value) in effects)
         {
             if (id == 0) continue;
             if (w.Kind is 0 or 2 && NeedsLevelEdge(id)
@@ -56,7 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 AddStatBonus(target, id, value);
                 continue;
             }
-            PutAilment(target, (byte)id, value, used);
+            PutAilment(target, (byte)id, (short)value, used);
         }
         RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
