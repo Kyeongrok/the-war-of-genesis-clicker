@@ -47,7 +47,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int StanceDefendWork = 516, StanceEvadeWork = 515;
     private const double TickDelaySeconds = 0.05;
 
-    private bool IsPlayerTurn => _turn >= 0 && _units[_turn].PlayerControlled && _routine == null && _outcome.Length == 0;
+    /// <summary>그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.</summary>
+    private bool IsMine(UnitState u) => u.PlayerControlled || (u.IsAlly && !_allyAi);
+
+    private bool IsPlayerTurn => _turn >= 0 && IsMine(_units[_turn]) && _routine == null && _outcome.Length == 0;
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
     private void InitBattle()
@@ -96,7 +99,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var u = _units[_turn];
             if (!u.Alive) EndTurn();
-            else if (u.PlayerControlled && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
+            else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
             return;
         }
 
@@ -133,7 +136,7 @@ internal sealed unsafe partial class BattleSceneWindow
         CancelTargeting();
         _heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
-        if (_units[index].PlayerControlled) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
+        if (IsMine(_units[index])) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
         else
         {
             if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");

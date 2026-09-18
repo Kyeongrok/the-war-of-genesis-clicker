@@ -10,8 +10,11 @@ namespace WarOfGenesis.Assets;
 /// <param name="Flags">칸 지형 플래그(칸 레코드 뒤 u16 격자). <c>&amp; 0x9</c> 면 못 들어가고, <c>&amp; 0x8</c> 이면 공격 범위에서도 빠진다.</param>
 public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, int Rows, byte[] Bgra, int[] Heights, ushort[] Flags)
 {
-    public int HeightAt(int col, int row) => Heights[row * Cols + col];
-    public ushort FlagsAt(int col, int row) => Flags[row * Cols + col];
+    /// <summary>맵 밖은 높이 0 · 막힌 칸(플래그 8)으로 본다 — 판이 맵보다 클 수 있다(전투마다 맵 크기가 다르다).</summary>
+    public int HeightAt(int col, int row) => Inside(col, row) ? Heights[row * Cols + col] : 0;
+    public ushort FlagsAt(int col, int row) => Inside(col, row) ? Flags[row * Cols + col] : (ushort)0x8;
+
+    private bool Inside(int col, int row) => (uint)col < Cols && (uint)row < Rows;
 }
 
 /// <summary>
