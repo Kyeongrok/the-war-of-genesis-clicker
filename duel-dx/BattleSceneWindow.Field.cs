@@ -186,6 +186,13 @@ internal sealed unsafe partial class BattleSceneWindow
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
             case 302: PlaceFieldPicture(A(0), A(2), A(3), A(4)); break;
+            case 512:                                        // BGM 바꾸기
+                _mixer.StopMusic();
+                if (A(0) > 0) PlayMusicFile(A(0), loop: true);
+                break;
+            case 517:                                        // 음량을 인자0 까지 인자1 틱에 걸쳐 — 데모는 0 이면 끄기만 한다
+                if (A(0) <= 0) _mixer.StopMusic();
+                break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;
         }
