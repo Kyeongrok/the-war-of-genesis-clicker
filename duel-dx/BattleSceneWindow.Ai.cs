@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -156,7 +156,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         int hpPercent = u.MaxHp == 0 ? 100 : u.Hp * 100 / u.MaxHp;
-        var enemies = _units.Where(t => t.Alive && t.IsAlly != u.IsAlly).ToList();
+        // 버서커(4)가 걸린 인물에게는 자기 말고 모두가 적이다.
+        var enemies = _units.Where(t => t.Alive && SeesAsFoe(u, t)).ToList();
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
 
         // 2단계 도망 — 피가 적고 적이 가까우면 가장 안전한 칸으로 물러난다.

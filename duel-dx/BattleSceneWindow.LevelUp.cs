@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -29,6 +29,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.IsAlly) return;
         int exp = _db.ExpForKill(k, v.Level);
+        // 11(경험치 증가) — 값% 만큼 더 받는다(0x100721dd).
+        if (killer.Status(11) is var more and > 0) exp += exp * more / 100;
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
     }

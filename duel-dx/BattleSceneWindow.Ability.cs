@@ -67,7 +67,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var user = _units[_turn];
         return [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && !_units[i].IsAlly
+            .Where(i => _units[i].Alive && SeesAsFoe(user, _units[i])
                         && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
             .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
     }

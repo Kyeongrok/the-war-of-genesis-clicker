@@ -74,6 +74,13 @@ internal sealed unsafe partial class BattleSceneWindow
         };
     }
 
+    /// <summary>
+    /// 그 인물 눈에 상대가 적으로 보이나 — <b>4(버서커)</b> 가 걸려 있으면 <b>자기 말고 모두</b>가 적이다(<c>0x1006fde0</c>).
+    /// </summary>
+    /// <remarks>판정은 <b>움직이는 쪽</b> 기준이다. 버서커가 걸린 인물만 편을 못 가리고, 남들이 그 인물을 보는 눈은 그대로다.</remarks>
+    private static bool SeesAsFoe(UnitState viewer, UnitState other) =>
+        viewer != other && (viewer.HasStatus(4) || viewer.IsAlly != other.IsAlly);
+
     /// <summary>레벨이 같거나 낮으면 안 걸리는 번호들(종류 0·2 일 때).</summary>
     private static bool NeedsLevelEdge(int id) => id is 5 or 6 or 12 or 19 or 22 or 23 or 24;
 
