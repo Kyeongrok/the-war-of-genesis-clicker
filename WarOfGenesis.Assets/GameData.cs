@@ -186,11 +186,13 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 /// <param name="ExpCost">+0x30(43) 다음 레벨 EXP.</param>
 /// <param name="TpBase">+0x32(45) TP 비용.</param>
 /// <param name="SoulBase">+0x34(47) SOUL 비용.</param>
+/// <param name="MinTargets">+0x3d(55) AI 가 쓸 만하다고 보는 최소 대상 수 − 1(분석-전투 ba-11).</param>
+/// <param name="AiCriterion">+0x3e(56) AI 의 칸 점수 기준: 값&gt;&gt;1 = 0 현재HP·1 SOUL·2 ATK·3 TP·4 RDP·5 ACR·6 잃은HP·7 세력점수·8 위험도, 짝수 = 최댓값·홀수 = 최솟값.</param>
 /// <param name="Prepare">+0x3f(57) 준비 동작 종류.</param>
 /// <param name="Bonuses">+0x20/+0x24 … (파일 28/29, 31/32, 34/35) (능력치 번호, 값) 세 짝 — 패시브 보너스(<c>0x10032af0</c>).</param>
 public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeShape, ushort RangeMin, ushort RangeMax,
                               byte TargetMode, byte AreaShape, short AreaArg, byte Kind, short Power, byte Accuracy, byte Critical,
-                              ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte Prepare,
+                              ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte MinTargets, byte AiCriterion, byte Prepare,
                               (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0)
 {
     public bool IsDamage => Kind == 0;
@@ -274,7 +276,7 @@ public sealed class GameDatabase
             for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 62)
                 works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
                                                 a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
-                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 57],
+                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
                                                 [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
                                                 U16(a, o + 24), a[o + 26]);
         }
