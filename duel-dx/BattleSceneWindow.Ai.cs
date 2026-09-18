@@ -167,27 +167,41 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>work 하나로 가장 좋은 (설 칸, 겨눌 칸)을 찾는다. 없으면 null.</summary>
+    /// <remarks>
+    /// 원본은 <b>두 단계</b>다(<c>0x1005d070</c>) — 먼저 <b>지금 자리 기준</b>으로 겨눌 칸의 점수를 매겨 가장 좋은 칸을 정하고,
+    /// 그다음 그 칸에 닿는 칸 가운데 <b>맨해튼으로 가장 가까운</b> 설 칸을 고른다.
+    /// 설 칸 × 겨눌 칸을 한꺼번에 재면 「멀리 가서 크게 때리는」 쪽이 과하게 뽑힌다.
+    /// </remarks>
     private (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range)
     {
         var user = _units[unitIndex];
         int num74 = _db?.N(74) ?? 4;
-        (int Stand, int Col, int Row, int Score)? best = null;
+        (int Col, int Row, int Score)? aim = null;
 
+        // ① 겨눌 칸 — 점수는 지금 서 있는 자리에서 잰다.
+        for (int row = 0; row < Rows; row++)
+            for (int col = 0; col < Cols; col++)
+            {
+                var targets = WorkTargets(w, user, col, row);
+                if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
+                int score = CDiv(TargetValue(user, w, targets) * num74 * 10,
+                                 4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
+                if (aim == null || score > aim.Value.Score) aim = (col, row, score);
+            }
+        if (aim is not { } pick) return null;
+
+        // ② 설 칸 — 그 칸에 닿는 칸 중 지금 자리에서 가장 가까운 곳.
+        int bestStand = -1, bestDist = int.MaxValue;
         for (int stand = 0; stand < range.Cost.Length; stand++)
         {
             if (!range.CanReach(stand)) continue;
             int sc = stand % Cols, sr = stand / Cols;
-            for (int row = 0; row < Rows; row++)
-                for (int col = 0; col < Cols; col++)
-                {
-                    if (!InWorkRange(w, sc, sr, col, row, user)) continue;
-                    var targets = WorkTargetsFrom(w, user, sc, sr, col, row);
-                    if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
-                    int score = CDiv(TargetValue(user, w, targets) * num74 * 10, 4 + Math.Abs(col - sc) + Math.Abs(row - sr));
-                    if (best == null || score > best.Value.Score) best = (stand, col, row, score);
-                }
+            if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
+            if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 }) continue;
+            int d = Math.Abs(sc - user.Col) + Math.Abs(sr - user.Row);
+            if (d < bestDist) { bestDist = d; bestStand = stand; }
         }
-        return best;
+        return bestStand < 0 ? null : (bestStand, pick.Col, pick.Row, pick.Score);
     }
 
     /// <summary>(sc, sr) 에 선다고 쳤을 때 (col, row) 를 겨누면 맞는 인물들.</summary>
