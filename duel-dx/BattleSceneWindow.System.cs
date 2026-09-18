@@ -327,6 +327,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int SaveVersion = 4;
 
+    /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
+    private const int OldestSaveVersion = 2;
+
     /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
     private double _playBase;
 
@@ -374,10 +377,15 @@ internal sealed unsafe partial class BattleSceneWindow
             Toast($"불러오지 못했습니다: {ex.Message}");
             return false;
         }
-        if (state is not { Version: SaveVersion }) { Toast("저장 파일을 읽을 수 없습니다"); return false; }
-        // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다.
-        if (state.Battle > 0 && state.Battle != _scene.Id && !StartBattle(state.Battle)) return false;
-        if (state.Units.Length != _units.Length) { Toast("저장 파일의 인물 수가 지금 전투와 다릅니다"); return false; }
+        if (state is not { } || state.Version is < OldestSaveVersion or > SaveVersion || state.Units.Length == 0)
+        {
+            Toast("저장 파일을 읽을 수 없습니다");
+            return false;
+        }
+        // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다(옛 저장은 전투 번호가 없어 첫 전투로 본다).
+        int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
+        if (battle != _scene.Id && !StartBattle(battle)) return false;
+        // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;
         CancelTargeting();
@@ -389,9 +397,14 @@ internal sealed unsafe partial class BattleSceneWindow
         _effects.Clear();
         _heldMoveKeys.Clear();
 
+        var pool = state.Units.ToList();
         for (int i = 0; i < _units.Length; i++)
         {
-            var (u, s) = (_units[i], state.Units[i]);
+            var u = _units[i];
+            // 같은 자리의 기록을 먼저 보고, 안 맞으면 같은 Chr 번호의 기록을 찾아 쓴다.
+            var s = i < pool.Count && pool[i].ChrCode == u.ChrCode ? pool[i] : pool.FirstOrDefault(r => r.ChrCode == u.ChrCode);
+            if (s == null) continue;
+            pool.Remove(s);
             u.WarpTo(s.Col, s.Row);
             u.OriginCol = s.Col;
             u.OriginRow = s.Row;
@@ -429,6 +442,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
         _nextTickAt = 0;
         _playBase = state.PlayMs - _lastTime * 1000;
+        // 타이틀에서 불러왔으면 타이틀을 내리고 전투 화면으로 바꾼다.
+        if (_titleOpen)
+        {
+            _titleOpen = false;
+            _mixer.StopMusic();
+            StartBattleMusic();
+        }
         Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
     }
