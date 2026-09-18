@@ -145,7 +145,11 @@ internal sealed unsafe partial class BattleSceneWindow
         _tick++;
         foreach (var u in _units.Where(u => u.Alive))
         {
-            u.Tp = Math.Min(u.MaxTp, u.Tp + u.Stp);
+            // 원본(0x10071db0)은 STP 와 턴 속도(38)를 <b>먼저 다 더하고</b> 한 번만 자른 뒤 차례 깃발을 세운다 —
+            // 나중에 더하면 38 이 양수일 때 차례가 한 틱 늦는다. 아래쪽 0 자르기는 원본에 없다.
+            u.Tp += u.Stp;
+            if (u.HasStatus(38)) u.Tp += u.Status(38);
+            if (u.Tp > u.MaxTp) u.Tp = u.MaxTp;
             if (u.Tp >= u.MaxTp) u.HasTurn = true;
         }
         TickAilments();
