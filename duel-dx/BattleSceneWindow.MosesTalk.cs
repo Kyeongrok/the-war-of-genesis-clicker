@@ -1,3 +1,4 @@
+using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -8,10 +9,10 @@ namespace DuelDx;
 /// <remarks>
 /// 옵시디안 분석-모세스 11절: 배경은 항행과 같은 항성계 배경이고, 지금 항성계의 <b>성도 점이 둘 이상</b>이어야 열린다.
 /// 조건을 통과한 인물(최대 여덟)마다 <c>Obs 1330</c> 스프라이트를 성도 점 두 곳 <b>사이를 3600프레임에 걸쳐 오가며</b> 그리고,
-/// 그 아래에 이름표(인물의 이름 TXR)를 붙인다. 누르면 174×60 말풍선과 초상화(<c>CChr+0x0E</c>, 없으면 <b>Obs 0229</b>)와
-/// 대사 TXR(인물 레코드의 대사 셋을 돌아가며)이 나온다.
-/// Chp 인물 레코드(파일 30바이트)의 워드: 0 번호 · 1 Chr · 8·9·10 대사 TXR 셋 · 11~13 조건.
-/// 모션 번호는 파일에 없고(메모리 <c>+0x22</c>) 자료가 모두 0 이라 <b>모션 0</b> 을 쓴다.
+/// 그 아래에 이름표(인물의 이름 TXR)를 붙인다. 누르면 174×60 말풍선과 초상화(<c>CChr+0x0E</c>, 없으면 <b>Obs 0229</b>)와 대사가 나온다.
+/// <b>대사는 TXR 이 아니라 그 챕터와 같은 번호의 Tlk 파일(<c>Tlk\NNNN.Tlc</c>)</b> 에서 온다(11절 2026-09-19 정정) —
+/// 인물 레코드(파일 30바이트)의 워드 8·9·10 이 그 표의 번호이고, 누를 때마다 −1 이 아닌 다음 칸으로 넘어간다.
+/// 그림 모션은 파일에 없다 — 원본은 인물마다 <c>rand()%12</c> 를 한 번 뽑아 둔다.
 /// Chp 0010(코어헌터)에는 인물이 없어 이 페이지가 비어 있다 — 챕터 고르기로 0011 같은 챕터를 열면 보인다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -19,9 +20,41 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int TalkObs = 1330, TalkFaceFallbackObs = 229;
     private const int TalkWalkFrames = 3600, TalkBubbleW = 174, TalkBubbleH = 60;
 
-    private int _talkPick = -1, _talkWord;
+    private int _talkPick = -1;
+    private TalkTable? _talkTable;
+    private int _talkTableChapter = -1;
+    private readonly Dictionary<int, int> _talkSlot = [];      // 인물 번호 -> 지금 대사 칸(0~2)
+    private readonly Dictionary<int, int> _talkMotion = [];    // 인물 번호 -> 뽑아 둔 Obs 1330 모션
 
     private List<ChapterFile.Person> TalkPeople() => [.. _mosesChp?.People ?? []];
+
+    /// <summary>그 챕터의 대사 표 — 챕터와 같은 번호의 Tlk 파일.</summary>
+    private TalkTable? TalkTableFor()
+    {
+        int id = _mosesChp?.Id ?? -1;
+        if (id < 0) return null;
+        if (_talkTableChapter == id) return _talkTable;
+        _talkTableChapter = id;
+        string path = Path.Combine(AssetsFolder.Find("moses"), "tlk", $"{id:D4}.tlc");
+        return _talkTable = File.Exists(path) ? TalkTable.Parse(File.ReadAllBytes(path)) : null;
+    }
+
+    /// <summary>인물마다 한 번 뽑아 두는 그림 모션(원본은 rand()%12).</summary>
+    private int TalkMotion(ChapterFile.Person person)
+    {
+        if (_talkMotion.TryGetValue(person.No, out int motion)) return motion;
+        return _talkMotion[person.No] = _ailmentRandom.Next(12);
+    }
+
+    /// <summary>그 인물의 대사 번호들 — 워드 8·9·10 중 −1 이 아닌 것.</summary>
+    private static List<int> TalkWords(ChapterFile.Person person) =>
+        [.. person.Words.Skip(8).Take(3).Where(v => v > 0)];
+
+    private void NextTalkSlot(ChapterFile.Person person)
+    {
+        int count = TalkWords(person).Count;
+        if (count > 0) _talkSlot[person.No] = (_talkSlot.GetValueOrDefault(person.No) + 1) % count;
+    }
 
     /// <summary>그 인물이 지금 서 있는 자리 — 성도 점 두 곳 사이를 오간다.</summary>
     private (int X, int Y) TalkSpot(int index)
@@ -49,7 +82,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (px, py) = TalkSpot(i);
             if (Math.Abs(x - px) > 20 || Math.Abs(y - py) > 24) continue;
-            _talkWord = _talkPick == i ? _talkWord + 1 : 0;              // 같은 사람을 또 누르면 다음 대사
+            if (_talkPick == i) NextTalkSlot(people[i]);                  // 같은 사람을 또 누르면 다음 대사
             _talkPick = i;
             Play(MosesClickSound);
             return true;
@@ -70,7 +103,7 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < people.Count && i < 8; i++)
         {
             var (px, py) = TalkSpot(i);
-            DrawUi(TalkObs, 0, tick, ox + px, oy + py, UiBlend.Alpha);
+            DrawUi(TalkObs, TalkMotion(people[i]), tick, ox + px, oy + py, UiBlend.Alpha);
             string name = _db?.Character(people[i].ChrCode) is { } c ? _db.T(c.NameId) : "";
             if (name.Length == 0) continue;
             var (_, nw, _) = GetText(name, White, 11);
@@ -86,9 +119,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>말풍선 — 초상화와 대사 한 줄(인물 레코드의 대사 셋을 돌아가며).</summary>
     private void DrawTalkBubble(int ox, int oy, int tick, ChapterFile.Person person)
     {
-        // 대사가 어디서 오는지 아직 못 밝혔다 — 노트가 가리키는 워드 8~10 을 TXR 로 풀면 「맨탈체2」 처럼 엉뚱한 글이 나온다.
-        // 밝혀질 때까지는 이름만 띄운다(분석 진행 중: 분석-모세스 11절 정정 예정).
-        string line = _db?.Character(person.ChrCode) is { } who ? _db.T(who.NameId) : "";
+        var words = TalkWords(person);
+        string line = TalkTableFor() is { } table && words.Count > 0
+            ? table[words[_talkSlot.GetValueOrDefault(person.No) % words.Count]] : "";
         var (px, py) = TalkSpot(_talkPick);
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
         int y = Math.Clamp(oy + py - TalkBubbleH - 30, oy + 4, oy + MosesH - TalkBubbleH - 4);
