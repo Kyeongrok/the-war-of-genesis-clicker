@@ -55,6 +55,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly (int Icon, ushort Text, string Name, int Sound)[] MosesPartyItems =
         [(0, 1326, "전직", 581), (1, 1327, "용병관리", 583)];
 
+    /// <summary>파티 칸을 누르면 하는 일 — 0 전직 페이지, 1 용병관리(아직 없음).</summary>
+    private void RunPartyItem(int index, string label)
+    {
+        if (index == 0) { OpenMosesStyle(); return; }
+        Play(MosesPartyItems[index].Sound);
+        Toast($"{label} — 아직 만들지 않았습니다");
+    }
+
     private bool _mosesOpen;
     private uint[]? _mosesBg;
     private int _mosesBgId = -1;
@@ -145,7 +153,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 int i = list.Count;
                 var (x, y) = MosesCells[i];
                 string label = Text(text) is { Length: > 0 } t ? t : name;
-                list.Add((x, y, label, icon, () => { Play(sound); Toast($"{label} — 아직 만들지 않았습니다"); }));
+                int index = list.Count;
+                list.Add((x, y, label, icon, () => RunPartyItem(index, label)));
             }
         return list;
     }
@@ -251,6 +260,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesFade > 0) return true;
         if (OnMosesShopClick(bx, by)) return true;
         if (OnMosesMailClick(bx, by)) return true;
+        if (OnMosesStyleClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
 
         int index = MosesIconAt(bx, by);
@@ -343,6 +353,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesPage == 1)
         {
             DrawMosesMail(ox, oy, tick);
+            return;
+        }
+        if (_mosesPage == 7)
+        {
+            DrawMosesStyle(ox, oy, tick);
             return;
         }
 
