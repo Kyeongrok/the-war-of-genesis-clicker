@@ -62,6 +62,16 @@ internal sealed unsafe partial class BattleSceneWindow
     private string AbilityName(WorkData w) =>
         _db != null && _db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{_db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
 
+    /// <summary>그 어빌리티가 지금 자리에서 겨눌 수 있는 적 — HP 가 낮은 순.</summary>
+    private List<int> AbilityTargets(WorkData w)
+    {
+        var user = _units[_turn];
+        return [.. Enumerable.Range(0, _units.Length)
+            .Where(i => _units[i].Alive && !_units[i].IsAlly
+                        && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
+            .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
+    }
+
     private (int X, int Y) MenuOrigin(int rowCount)
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
@@ -88,6 +98,14 @@ internal sealed unsafe partial class BattleSceneWindow
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
         if (UseSelfCentredWork(w)) { Toast(name); return true; }
+
+        // 적 하나를 겨누는 어빌리티는 기본공격처럼 사거리 안 가장 약한 적을 먼저 노려 준다(fa-12 와 같은 규칙).
+        if (w.TargetMode == 1 && AbilityTargets(w) is { Count: > 0 } aimed)
+        {
+            _attackCursor = aimed[0];
+            Toast($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 (Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
+            return true;
+        }
         Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }
