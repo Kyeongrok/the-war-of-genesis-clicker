@@ -24,6 +24,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private const int ObjectTouchTp = 80;
 
+    /// <summary>물체가 부서질 때의 폭발 그림.</summary>
+    private const int ObjectBreakObs = 1009;
+
     /// <summary>차례인 인물이 그 칸의 물체에 손을 댈 수 있나 — 옆 한 칸이고 TP 가 남아 있어야 한다.</summary>
     private bool CanTouchObject(UnitState user, DemoObject obj) =>
         Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1
@@ -107,6 +110,8 @@ internal sealed unsafe partial class BattleSceneWindow
         Play(MosesClickSound);
 
         if (obj.Hp > 0) return true;
+        // 부서지면 그 자리에 폭발이 한 번 돈다(Obs 1009, 0x100e7ba0).
+        _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, GridTop + row * TileH + TileH / 2));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         return true;
