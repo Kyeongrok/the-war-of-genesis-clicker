@@ -72,6 +72,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _mosesStep = 2;           // 항행 단계 — 1 행성 고르기 · 2 장소 고르기
     private int _mosesPlanet;             // 고른 행성 번호
     private int _mosesFade;               // 남은 페이드 틱
+    private bool _mosesBlueFade;          // 항행 진입(효과 1)은 검정이 아니라 파랑 씻김이다
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
     private ChapterFile? _mosesChp;
 
@@ -179,6 +180,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0:
                 Play(564);                                             // NAVIGATION
+                _mosesBlueFade = true;                                 // 효과 1 = 파랑만 씻어 내는 페이드
                 // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
@@ -188,6 +190,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
         }
+        if (page != 0) _mosesBlueFade = false;
         _mosesPage = page;
         _mosesPageAt = _lastTime;
         _talkPick = -1;
@@ -318,15 +321,23 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawSystem();
         DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
-        // 페이지 전환 — 원본은 15틱 알파 크로스페이드, 여기서는 같은 길이의 검은 페이드로 흉내
+        // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 검정 페이드(방식 2),
+        // 항행 진입(효과 1)만 파랑 채널을 흰색 쪽으로 씻었다가 되돌린다(방식 5).
         if (_mosesFade > 0)
         {
-            int dark = 31 * _mosesFade / MosesFadeTicks;
+            int alpha = 31 * _mosesFade / MosesFadeTicks;
             for (int y = _camY; y < _camY + ViewHeight; y++)
                 for (int x = 0; x < BoardWidth; x++)
                 {
                     int i = y * BoardWidth + x;
-                    _fb[i] = ScaleColor(_fb[i], 31 - dark, 31);
+                    uint c = _fb[i];
+                    if (_mosesBlueFade)
+                    {
+                        uint blue = c & 0xFF;
+                        blue += (255 - blue) * (uint)alpha / 31;
+                        _fb[i] = c & 0xFFFFFF00 | blue;
+                    }
+                    else _fb[i] = ScaleColor(c, 31 - alpha, 31);
                 }
             _mosesFade--;
         }

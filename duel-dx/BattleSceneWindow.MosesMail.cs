@@ -12,7 +12,7 @@ namespace DuelDx;
 /// 안 읽은 편지와 읽은 편지는 그리기 세기(2 / 0xff)로 갈린다 — 여기서는 안 읽은 것을 밝게, 읽은 것을 흐리게 그린다.
 /// 줄을 누르면 뷰어 <b>(164, 120) 313×239</b> 가 뜨고 닫으면 읽음 표시. 나가기 단추는 Obs 0287 @ (455, 430).
 /// 본문은 TXR 이 아니라 <c>Dat\MAIL.DAT</c> 안에 그대로 들어 있다 —
-/// 머리 <c>u16, u16 편지 수, u16 최대 번호</c>, 레코드 <c>번호·보낸이 Chr·제목 TXR·?·길이·본문 바이트·조건 3칸·?</c>.
+/// 머리 <c>u16, u16 편지 수, u16 최대 번호</c>, 레코드 <c>번호·보낸이 Chr·발신지 TXR·Bgm 번호·길이·본문 바이트·조건 3칸·안 쓰는 칸</c>.
 /// 원본은 챕터의 메일 트리거로 우편함에 하나씩 쌓지만, 이 데모에는 우편함이 없어 <b>파일에 든 편지를 모두</b> 보여 준다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -82,7 +82,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int rx = ox + MailListX, ry = oy + MailListY + r * MailRowH;
             DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
             bool read = _mailRead.Contains(index);
-            string line = $"{SenderName(mail.Sender)} : {_db?.T(mail.TitleText)}";
+            string line = $"{SenderName(mail.Sender)} : {_db?.T(mail.OriginText)}";
             DrawText(line, rx + 24, ry + 2, read ? DimGray : 0xFFFFFF80, 11);
         }
 
@@ -97,7 +97,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int x = ox + MailViewX, y = oy + MailViewY + FrameTitleH;
         DarkenRect(x - 1, y - FrameTitleH - 1, MailViewW + 2, MailViewH + FrameTitleH + 2);
-        DrawGameFrame(x, y, MailViewW, MailViewH, _db?.T(mail.TitleText) ?? "");
+        DrawGameFrame(x, y, MailViewW, MailViewH, _db?.T(mail.OriginText) ?? "");
         DrawText($"From. {SenderName(mail.Sender)}", x + 12, y + 8, 0xFFFFFF80, 12);
 
         int ty = y + 30;
@@ -131,7 +131,7 @@ internal sealed unsafe partial class BattleSceneWindow
 }
 
 /// <summary><c>Dat\MAIL.DAT</c> 의 편지 하나.</summary>
-internal sealed record MosesMail(int Id, int Sender, ushort TitleText, string Body)
+internal sealed record MosesMail(int Id, int Sender, ushort OriginText, ushort Bgm, string Body)
 {
     private static readonly Lazy<Encoding> Cp949 = new(() =>
     {
@@ -148,11 +148,12 @@ internal sealed record MosesMail(int Id, int Sender, ushort TitleText, string Bo
             for (int i = 0; i < count && o + 10 <= b.Length; i++)
             {
                 int id = BitConverter.ToUInt16(b, o), sender = BitConverter.ToUInt16(b, o + 2);
-                ushort title = BitConverter.ToUInt16(b, o + 4);
+                ushort origin = BitConverter.ToUInt16(b, o + 4);     // 「제목」이 아니라 발신지 TXR(11절 정정)
+                ushort bgm = BitConverter.ToUInt16(b, o + 6);        // 편지를 열 때 같이 트는 Bgm 번호(자료에는 쓰는 편지가 없다)
                 int length = BitConverter.ToUInt16(b, o + 8);
                 if (o + 10 + length > b.Length) break;
                 string body = Cp949.Value.GetString(b, o + 10, length).TrimEnd('\0');
-                list.Add(new MosesMail(id, sender, title, body));
+                list.Add(new MosesMail(id, sender, origin, bgm, body));
                 o += 10 + length + 8;                      // 본문 뒤에 조건 3칸 + ?
             }
         }
