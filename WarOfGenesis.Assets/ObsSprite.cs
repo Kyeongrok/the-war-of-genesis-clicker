@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace WarOfGenesis.Assets;
 
@@ -106,7 +106,7 @@ public static class ObsSprite
     }
 
     /// <summary>
-    /// 고른 장만 푼다 — (몸짓벌 번호, 벌 안 장 순번) 가 <paramref name="wanted"/> 에 든 것. 모션표 키(<see cref="MotionKey"/>)가
+    /// 고른 장만 푼다 — (몸짓벌 번호, <b>장 번호</b>) 가 <paramref name="wanted"/> 에 든 것. 모션표 키(<see cref="MotionKey"/>)가
     /// 가리키는 컷 몇 장만 필요할 때(전투 화면의 서기 모션) 파일 전체를 푸는 <see cref="Decode"/> 보다 훨씬 빠르다.
     /// 벌 머리 찾기는 <see cref="Decode"/> 와 같다(앞 벌 끝 자리 우선).
     /// </summary>
@@ -124,15 +124,16 @@ public static class ObsSprite
                             ?? TryParseSubEntry(b, subref.Offset, subref.Id);
             if (entry == null) { nextSearchFrom = subref.Offset; continue; }
 
+            // 모션표가 가리키는 것은 <b>장 번호</b>지 벌 안 순번이 아니다 — 번호에 구멍이 있는 Obs(0471·0138)에서 둘이 어긋난다.
             if (wantedSubs.Contains(entry.Id))
-                for (int i = 0; i < entry.Slots.Count; i++)
+                foreach (var slotRef in entry.Slots)
                 {
-                    if (!wanted.Contains((entry.Id, i))) continue;
+                    if (!wanted.Contains((entry.Id, slotRef.Id))) continue;
                     try
                     {
-                        var slot = DecodeSlot(b, entry.Slots[i].Offset, entry.TransparentIndex);
+                        var slot = DecodeSlot(b, slotRef.Offset, entry.TransparentIndex);
                         byte[] bgra = ToBgra(slot.Indexed, slot.Width, slot.Height, entry.Palette, entry.TransparentIndex);
-                        result[(entry.Id, i)] = new ObsFrame(slot.SlotId, slot.Width, slot.Height, slot.X, slot.Y, bgra);
+                        result[(entry.Id, slot.SlotId)] = new ObsFrame(slot.SlotId, slot.Width, slot.Height, slot.X, slot.Y, bgra);
                     }
                     catch { /* 이 장만 건너뛴다 — Decode 와 같다. */ }
                 }
