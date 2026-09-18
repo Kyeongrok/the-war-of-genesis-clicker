@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -137,8 +137,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    /// <summary>배경 스레드에서 배경 그림·배치된 캐릭터들을 읽는다. 창은 먼저 뜬다.</summary>
-    private void LoadScene()
+    /// <summary>
+    /// 전투 자료와 맵만 먼저 읽어 <b>판 크기를 정한다</b> — 창·텍스처를 만들기 전에, <b>주 스레드에서</b> 돈다.
+    /// </summary>
+    /// <remarks>
+    /// 전에는 이것까지 배경 스레드에서 했는데, 그러면 <see cref="ResizeBoard"/> 가 그리기 고리와 <b>같이</b> 돌아
+    /// 텍스처를 그 밑에서 갈아 치웠다. 맵이 큰 전투(예: Btl 0051)에서 화면 버퍼가 텍스처보다 커져 CLR 이 그대로 죽었다.
+    /// 인물 세우기도 판 크기를 정한 <b>뒤</b>여야 진형 칸이 옛 크기로 잘리지 않는다.
+    /// </remarks>
+    private void LoadBoard()
     {
         try
         {
@@ -146,10 +153,21 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             // DUELDX_BATTLE 로 다른 전투를 열 수 있다(화면 밖 시험용). 기본은 첫 전투 0045.
             int startId = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_BATTLE"), out int wanted) ? wanted : _scene.Id;
             if (DemoScene.Load(startId, _db) is { } loaded) _scene = loaded;
-            _units = BuildUnits(_scene);
             _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
             ResizeBoard(_map.Cols, _map.Rows);
+            _units = BuildUnits(_scene);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
+        {
+            _loadError = ex.Message;
+        }
+    }
 
+    /// <summary>나머지(그림·소리)는 배경 스레드에서 읽는다 — 창은 먼저 뜬다.</summary>
+    private void LoadScene()
+    {
+        try
+        {
             LoadRosterSprites();
             InitBattle();
             LoadRingAssets();
@@ -281,6 +299,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     public void Run()
     {
         RegisterClassOnce();
+        // 판 크기를 맨 먼저 정한다 — 화면 텍스처도, 픽셀 셰이더에 박히는 배율도 이 크기로 만들어진다.
+        LoadBoard();
         CreateDevice();
         CreateNativeWindow();
         CreateSwapChain();
