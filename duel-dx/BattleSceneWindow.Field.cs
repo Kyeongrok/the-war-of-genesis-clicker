@@ -44,6 +44,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private readonly List<(int Obs, int Motion, int X, int Y, double Start)> _fieldPictures = [];
 
+    /// <summary>
+    /// 화면 전환(행동 900) — 덮었다 걷는 연출.
+    /// </summary>
+    /// <remarks>
+    /// <c>900 [a0, a1, a2, a3, a4]</c> — a0 0 이면 찍어 둔 화면을 다시 쓰고 1 이면 새로 찍는다 · a1 무늬(1 → 물들이기 방식 2 = 검정) ·
+    /// <b>a2 덮는 틱</b>(0 이면 처음부터 덮인 채) · <b>a3 걷어내는 틱</b>(0 이면 안 걷음) · a4 화면에 넣을 층 수.
+    /// 정도 눈금은 0~31. 데모는 무늬를 <b>검정·흰색 두 가지</b>로만 흉내 내고, 층 수는 안 쓴다.
+    /// <c>Fld 0019</c> 는 시작에 <c>900 [1,1,0,40,8]</c>(40틱에 걸쳐 걷기), 끝에 <c>900 [0,1,40,0,8]</c>(40틱에 걸쳐 덮기)를 쓴다.
+    /// </remarks>
+    private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
+
     private bool FieldOpen => _field != null;
 
     /// <summary>DUELDX_FIELD=&lt;번호&gt; 면 그 필드를 바로 연다(화면 밖 시험용).</summary>
@@ -68,6 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldWaitUntil = 0;
             _fieldChoices = null;
             _fieldPictures.Clear();
+            _fieldFade = null;
             _mosesOpen = false;
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
@@ -186,6 +198,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
             case 302: PlaceFieldPicture(A(0), A(2), A(3), A(4)); break;
+            case 900:
+                _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
+                // 덮는 데 걸리는 틱만큼은 스크립트도 기다린다 — 안 그러면 화면이 덮이기 전에 다음 장면으로 넘어간다.
+                if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
+                break;
             case 512:                                        // BGM 바꾸기
                 _mixer.StopMusic();
                 if (A(0) > 0) PlayMusicFile(A(0), loop: true);
@@ -367,6 +384,31 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int i = 0; i < choices.Count; i++)
                 DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
         }
+        DrawFieldFade(ox, oy);
         DrawToast();
+    }
+
+    /// <summary>덮기·걷기 — 눈금 0(안 덮임)~31(다 덮임)을 그대로 옮긴다.</summary>
+    private void DrawFieldFade(int ox, int oy)
+    {
+        if (_fieldFade is not { } fade) return;
+        int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
+        int level;
+        if (fade.CoverTicks > 0) level = Math.Min(31, 31 * tick / fade.CoverTicks);          // 덮는 중
+        else if (fade.UncoverTicks > 0) level = Math.Max(0, 31 - 31 * tick / fade.UncoverTicks);  // 걷는 중
+        else level = 31;
+        if (level <= 0) { _fieldFade = null; return; }
+
+        for (int y = oy; y < oy + MosesH; y++)
+            for (int x = ox; x < ox + MosesW; x++)
+            {
+                uint c = _fb[y * BoardWidth + x];
+                uint Ch(int shift)
+                {
+                    uint v = c >> shift & 0xFF;
+                    return fade.White ? v + (255 - v) * (uint)level / 31 : v * (uint)(31 - level) / 31;
+                }
+                _fb[y * BoardWidth + x] = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+            }
     }
 }
