@@ -26,6 +26,36 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>C 정수 나눗셈(0 으로 나누면 0).</summary>
     private static int CDiv(int a, int b) => b == 0 ? 0 : a / b;
 
+    /// <summary>
+    /// 깨어남 조건을 지금 채웠나 — <c>0</c> 없음(바로 깸) · <c>1</c> 깨어 있는 같은 편까지 거리 · <c>2</c> 가장 가까운 적까지 거리 ·
+    /// <c>3</c> 전투 틱. <b>4 이상은 영영 안 깬다</b>(분기표 <c>0x1005baa8</c> 이 네 칸뿐).
+    /// </summary>
+    /// <remarks>
+    /// 거리는 <c>|Δ열| + |Δ행| + |Δ높이| / 2</c> 이고 <b>같거나 작으면</b> 깬다. 찾는 상대가 없으면 1000 으로 친다.
+    /// 자료 2182명 중 1798명이 0(바로), 315명이 2(적이 다가오면), 37명이 3(몇 틱 뒤)이다.
+    /// </remarks>
+    private bool WakesNow(UnitState u)
+    {
+        int WakeDistance(UnitState other) =>
+            Math.Abs(other.Col - u.Col) + Math.Abs(other.Row - u.Row)
+            + Math.Abs(HeightAt(other.Col, other.Row) - HeightAt(u.Col, u.Row)) / 2;
+
+        return u.WakeCondition switch
+        {
+            0 => true,
+            1 => Nearest(t => t.Alive && t != u && !SeesAsFoe(u, t) && t.Awake) <= u.WakeValue,
+            2 => Nearest(t => t.Alive && SeesAsFoe(u, t)) <= u.WakeValue,
+            3 => _tick >= u.WakeValue,
+            _ => false,
+        };
+
+        int Nearest(Func<UnitState, bool> pick)
+        {
+            var found = _units.Where(pick).Select(WakeDistance).ToList();
+            return found.Count == 0 ? 1000 : found.Min();
+        }
+    }
+
     /// <summary>세력 점수 — AI 가 "이 인물이 얼마나 센가" 를 재는 값.</summary>
     private int Power(UnitState u)
     {
@@ -153,6 +183,13 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             Rest(index);
             yield break;
+        }
+
+        // 1단계 깨어남 — 조건을 못 채우면 그 자리에서 쉰다(0x1005baa8). 깬 그 차례에 바로 움직인다.
+        if (!u.Awake)
+        {
+            if (!WakesNow(u)) { Rest(index); yield break; }
+            u.Awake = true;
         }
 
         int hpPercent = u.MaxHp == 0 ? 100 : u.Hp * 100 / u.MaxHp;
