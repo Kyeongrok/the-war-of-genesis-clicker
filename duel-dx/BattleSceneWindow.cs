@@ -279,6 +279,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
+            case Win32.WM_SETCURSOR:
+                // 게임 고유 커서를 우리가 그린다 — 판 위에서는 윈도 커서를 숨긴다(an-ui-1).
+                if ((((long)lParam) & 0xFFFF) == Win32.HTCLIENT) { Win32.SetCursor(IntPtr.Zero); return (IntPtr)1; }
+                break;
             case Win32.WM_KEYDOWN:
                 // 키 반복(lParam 30번 비트)은 무시한다 — 누르고 있는 동안은 Update 가 알아서 이어 걷는다.
                 if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);
@@ -301,10 +305,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_LBUTTONDOWN:
                 OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 return IntPtr.Zero;
+            case Win32.WM_RBUTTONUP:
+                CloseUnitInfo();
+                return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
                 int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
+                _mouse = (bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -490,10 +498,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawAbilityMenu();
         DrawStatusScreen();
         DrawToast();
-        DrawOutcome();
+        DrawOutcomeBanner();
+        DrawUnitInfo();
         DrawSystem();
         DrawKeysPanel();
         DrawLevelUp();
+        DrawCursor();
     }
 
     private void DrawBackground()

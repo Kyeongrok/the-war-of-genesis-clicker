@@ -23,6 +23,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private const uint PanelBg = 0xF00A1428, BoxBg = 0xFF13203A, BoxLine = 0xFF3C5C98, HeadBg = 0xFF34549A, Red = 0xFFE04040, Bar = 0xFF7A1C1C;
     private const int DemoExp = 5000;
 
+    /// <summary>아이템 그림과 WEAPON 띠가 들어 있는 Obs(분석-캐릭터 "아이템 그림").</summary>
+    private const int ItemPictureObs = 326;
+
     /// <summary>파티 가방 — 아이템 번호 → 개수.</summary>
     private readonly SortedDictionary<int, int> _inventory = [];
 
@@ -271,11 +274,16 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(x + 6, oy + 256, w - 12, 26, 0xFF0C1830);
         StrokeRect(x + 6, oy + 256, w - 12, 26, 0xFF8FB8F0);
         DrawText("WEAPON", x + 10, oy + 258, 0xFF8FB8F0);
-        if (weapon != null) DrawText(GameDatabase.WeaponTypeName(weapon.Type), x + 90, oy + 262, White, 15);
+        // 무기 종류 띠도 원본 그림(Obs 0326)이다 — .chr 40 이 모션 번호, 0 이면 62(분석-캐릭터 "아이템 그림").
+        if (!DrawUi(ItemPictureObs, c.WeaponBand == 0 ? 62 : c.WeaponBand, 0, x + w / 2, oy + 268, UiBlend.Alpha, loop: false)
+            && weapon != null)
+            DrawText(GameDatabase.WeaponTypeName(weapon.Type), x + 90, oy + 262, White, 15);
         for (int i = 0; i < 6; i++)
         {
-            string item = c.Items[i] != 0 && db.Items.TryGetValue(c.Items[i], out var it) ? db.T(it.NameId) : db.T(0);
+            var it = c.Items[i] != 0 && db.Items.TryGetValue(c.Items[i], out var found) ? found : null;
+            string item = it != null ? db.T(it.NameId) : db.T(0);
             int ry = oy + 292 + i * 28;
+            if (it != null) DrawUi(ItemPictureObs, it.PictureMotion, 0, x + 10, ry - 2, UiBlend.Alpha, loop: false);
             RightText(item, x + w - 12, ry, c.Items[i] != 0 ? White : DimGray);
             int slot = i;
             if (editable) AddHit(x + 6, ry - 6, w - 12, 28, () => ChooseEquipment(unit, slot));
