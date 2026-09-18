@@ -273,7 +273,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var a = _units[attackerIndex];
         var t = _units[targetIndex];
-        if (!a.Alive || !t.Alive || t.IsAlly == a.IsAlly || a.Data == null || Work(a.Data.BasicWorkId) is not { } w || !CanAfford(a, w)) return null;
+        if (!a.Alive || !t.Alive || !SeesAsFoe(a, t) || a.Data == null || Work(a.Data.BasicWorkId) is not { } w || !CanAfford(a, w)) return null;
         if (ComputeRange(a) is not { } range) return null;
 
         int best = -1, bestCost = int.MaxValue;
@@ -325,7 +325,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>차례인 인물이 지금 칠 수 있는 적 — HP 가 낮은 순(같으면 배열 순).</summary>
     private List<int> AttackableEnemies() =>
         [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && !_units[i].IsAlly && FindAttackPath(_turn, i) != null)
+            .Where(i => _units[i].Alive && SeesAsFoe(_units[_turn], _units[i]) && FindAttackPath(_turn, i) != null)
             .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
 
     /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다 — 어빌리티를 겨누는 중이면 그 어빌리티 사거리로 센다.</summary>
@@ -478,7 +478,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
-        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, a.Soul, EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance);
+        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, a.Soul, EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
 
         if (result == 1)
         {

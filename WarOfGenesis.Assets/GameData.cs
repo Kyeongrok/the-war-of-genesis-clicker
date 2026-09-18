@@ -548,9 +548,11 @@ public sealed class GameDatabase
     /// ATK <c>0x1007ab20</c>·공격력 <c>0x1007aa90</c> = ((무기 공격 + Num[1]) × PSY / Num[25]) × (SOUL + Num[2]) × (Num[42] + work 위력) / Num[85].
     /// 화면 ATK 는 위력 0.
     /// </summary>
-    public int Atk(CharacterData c, int soul, int workPower = 0)
+    /// <param name="weaponPercent">상태이상 <b>29(무기 공격력 %d 변화)</b> — 무기 공격력에만 먹는다(<c>0x1007afe5</c>).</param>
+    public int Atk(CharacterData c, int soul, int workPower = 0, int weaponPercent = 0)
     {
         int weapon = c.Items[0] != 0 && Items.TryGetValue(c.Items[0], out var w) ? w.Attack : 0;
+        if (weaponPercent != 0) weapon = Math.Max(0, weapon + weapon * weaponPercent / 100);
         int v = (weapon + N(1)) * Psy(c) / N(25);
         return v * (soul + N(2)) * (N(42) + workPower) / N(85);
     }
@@ -580,13 +582,14 @@ public sealed class GameDatabase
     /// 회복 = 최대 HP × 위력 / 100. 자세(방어·회피)는 넣었고 상태이상 보정은 뺐다.
     /// </summary>
     public (int Amount, int Result, bool Critical) Resolve(Random rng, CharacterData a, int aTp, int aSoul,
-                                                          CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w, int defenderStance = 0)
+                                                          CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w, int defenderStance = 0,
+                                                          int attackerWeaponPercent = 0)
     {
         if (w.IsHeal) return (dMaxHp * w.Power / 100, 1, false);
         if (!w.IsDamage) return (0, 2, false);
         if (rng.Next(100) >= HitChance(a, aTp, d, dTp, w, defenderStance)) return (0, 3, false);
 
-        int dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * Atk(a, aSoul, w.Power) / N(3);
+        int dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * Atk(a, aSoul, w.Power, attackerWeaponPercent) / N(3);
         // 방어 자세(work 516): (DEX/Num11 + Num12)% 로 한 번 더 깎인다.
         if (defenderStance == 1 && Dex(d) / N(11) + N(12) > rng.Next(100)) dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * dmg / N(3);
         int v = dmg * N(22) / 100;

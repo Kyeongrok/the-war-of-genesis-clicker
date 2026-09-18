@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -147,8 +147,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>그 칸의 인물이 이 대상 방식에 맞나 — 1 적, 4 아군, 5 아무 유닛, 3·6 아무 칸(유닛이면 맞음).</summary>
     private static bool ModeAccepts(int mode, UnitState user, UnitState target) => mode switch
     {
-        1 => target.IsAlly != user.IsAlly,
-        4 => target.IsAlly == user.IsAlly,
+        1 => SeesAsFoe(user, target),
+        4 => !user.HasStatus(4) && target.IsAlly == user.IsAlly,
         5 or 3 or 6 => true,
         0 or 2 => target == user,
         _ => false,
