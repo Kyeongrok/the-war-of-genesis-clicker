@@ -51,10 +51,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RefreshUnitStats(UnitState u)
     {
         if (_db == null || u.Data is not { } c) return;
-        u.MaxHp = Math.Max(1, _db.MaxHp(c));
-        u.MaxTp = _db.MaxTp(c);
+        // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
+        u.MaxHp = Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp);
+        u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
         u.Stp = Math.Max(1, _db.Stp(c));
-        u.MaxSoul = _db.MaxSoul(c);
+        u.MaxSoul = _db.MaxSoul(c) + u.BonusMaxSoul;
         u.Hp = Math.Min(u.Hp, u.MaxHp);
         u.Tp = Math.Min(u.Tp, u.MaxTp);
         u.Soul = Math.Min(u.Soul, u.MaxSoul);
@@ -246,13 +247,17 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < basics.Length; i++) Stat(x, oy + 358 + i * 18, w, db.T(basics[i].Id), basics[i].Value.ToString());
 
         // 2열 — 상태이상 · 장착 어빌리티 · 장비
+        var _statusAilments = AilmentLabels(unit);
         x = ox + 216; w = 184;
         Header(x, oy + 38, w, db.T(163));
         Box(x, oy + 60, w, 38);
         for (int i = 0; i < 3; i++)
         {
             StrokeRect(x + 10 + i * 58, oy + 70, 50, 18, BoxLine);
-            DrawText("EMPTY", x + 14 + i * 58, oy + 71, DimGray);
+            // 걸린 상태이상이 있으면 그 이름을, 없으면 EMPTY
+            string label = i < _statusAilments.Count ? _statusAilments[i] : "EMPTY";
+            var (_, lw, _) = GetText(label, White, 10);
+            DrawText(label, x + 10 + i * 58 + Math.Max(2, (50 - lw) / 2), oy + 72, i < _statusAilments.Count ? 0xFFFF9090 : DimGray, 10);
         }
 
         Header(x, oy + 110, w, db.T(166));

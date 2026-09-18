@@ -248,7 +248,12 @@ internal sealed unsafe partial class BattleSceneWindow
             case RingCommand.Status: _statusUnit = unit; break;
             case RingCommand.Rest: Toast($"{UnitName(unit)} 휴식"); Rest(unit); break;
             case RingCommand.Attack: BeginAttackTargeting(); break;
-            case RingCommand.Ability: CommitMoveForAction(); _abilityMenu = true; break;
+            case RingCommand.Ability:
+                // 12(어빌리티 사용 불가)면 목록 자체가 안 열린다(0x100e17d8).
+                if (_units[unit].HasStatus(12)) { Toast("어빌리티를 쓸 수 없습니다"); break; }
+                CommitMoveForAction();
+                _abilityMenu = true;
+                break;
             case RingCommand.System: OpenSystemMenu(); break;
             default: Toast($"{RingItems[(int)command].Hover}: 아직 구현하지 않았습니다"); break;
         }

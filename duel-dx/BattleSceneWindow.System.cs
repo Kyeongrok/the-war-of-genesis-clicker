@@ -283,7 +283,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
-                                   ushort[] Items, ushort[] Passives, SaveAbility[] Abilities);
+                                   ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
+                                   byte[]? StatusId = null, short[]? StatusValue = null);
 
     /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
     private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
@@ -308,7 +309,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _units.Select(u => new SaveUnit(u.ChrCode, u.Col, u.Row, (int)u.Facing, u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn,
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
-                    [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))]))],
+                    [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
+                    [.. u.StatusId], [.. u.StatusValue]))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 BattleDemoScene.TitleTextId, 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value));
@@ -366,6 +368,12 @@ internal sealed unsafe partial class BattleSceneWindow
                     Passives = s.Passives.Length == 3 ? s.Passives : c.Passives,
                     Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
                 };
+            u.ClearStatus();
+            for (int k = 0; k < 3; k++)
+            {
+                if (s.StatusId is { } ids && k < ids.Length) u.StatusId[k] = ids[k];
+                if (s.StatusValue is { } values && k < values.Length) u.StatusValue[k] = values[k];
+            }
             RefreshUnitStats(u);
         }
 
