@@ -30,10 +30,25 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
     public bool PlayerControlled => Side == 4;
 }
 
+/// <summary>
+/// 판에 놓인 물체 하나 — 상자·문·포탑·바리케이트. 규칙은 <see cref="Data"/> 의 종류가 가른다.
+/// </summary>
+/// <remarks>분석-전투 「물체(오브젝트) 배열 <c>+0x3c74</c>」. 전투 중에 새로 생기지 않는다 — 파일이 놓는 것이 전부다.</remarks>
+internal sealed class DemoObject(BattleObjectRecord record, ObjFile data)
+{
+    public BattleObjectRecord Record { get; } = record;
+    public ObjFile Data { get; } = data;
+    public int Col => Record.X;
+    public int Row => Record.Y;
+    public int Hp { get; set; } = data.MaxHp;
+    public bool Alive => !Data.Breakable || Hp > 0;
+}
+
 internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                                  ushort TitleTextId, ushort WinTextId, ushort LoseTextId,
                                  DemoUnit[] Roster, int NextBattle,
-                                 IReadOnlyList<(int Col, int Row, Facing Facing)>? Placement = null)
+                                 IReadOnlyList<(int Col, int Row, Facing Facing)>? Placement = null,
+                                 IReadOnlyList<DemoObject>? Objects = null)
 {
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
@@ -70,7 +85,15 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             var placement = battle.Placement
                 .Select(p => (p.X, p.Y, p.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left }))
                 .ToList();
-            return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId, roster, next, placement);
+            // 판에 놓인 물체 — <c>Obj</c> 파일이 없는 것은 그리지도 못하니 뺀다.
+            var objects = battle.Objects
+                .Select(o => ObjFile.Parse(o.ObjId, files.Read("Obj", $"{o.ObjId:D4}.obj")) is { } data
+                             ? new DemoObject(o, data) : null)
+                .OfType<DemoObject>()
+                .ToList();
+
+            return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId,
+                                 roster, next, placement, objects);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {

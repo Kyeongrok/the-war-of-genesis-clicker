@@ -669,6 +669,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawMoveRange();
         DrawWorkRange();
         if (_showGrid) DrawGridLines();
+        DrawObjects();
         DrawUnits();
         DrawEffects();
         if (_showGauges) DrawGauges();
