@@ -688,7 +688,6 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_field is null) return;
         var (ox, oy) = MosesOrigin();
-        int tick = (int)(_lastTime * TicksPerSecond);
 
         FillRect(0, _camY, BoardWidth, ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
