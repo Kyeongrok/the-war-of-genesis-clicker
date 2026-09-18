@@ -104,23 +104,26 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (int chrCode in _units.Select(u => u.ChrCode).Distinct())
         {
             if (sprites.ContainsKey(chrCode)) continue;
-            var (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
-                ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
-                : LoadFromGameFolder(chrCode);
-
-            _names[chrCode] = name;
+            string name = "";
 
             // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
-            // 그림이 assets 에 없는 인물은 그 사람만 빼고 간다(전투 전체가 안 열리면 안 된다).
+            // 그림이 assets 에 없는 인물은 <b>그 사람만</b> 빼고 간다 — 자리를 찾는 것까지 이 안에서 해야
+            // 원본 게임 폴더가 없는 기계에서도 전투가 열린다(군단 부하처럼 안 뽑아 둔 인물이 하나 있으면 전부 막혔다).
             try
             {
+                string obsPath;
+                (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
+                    ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
+                    : LoadFromGameFolder(chrCode);
+                _names[chrCode] = name;
                 var motions = ObsSprite.Decode(obsPath);
                 if (motions.Count == 0) continue;
                 sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException
+                                             or InvalidOperationException or ArgumentException)
             {
-                _loadError = $"{name}({chrCode}) 그림을 못 읽었습니다";
+                _loadError = $"{(name.Length > 0 ? name : "인물")}({chrCode}) 그림을 못 읽었습니다";
             }
         }
         _sprites = sprites;
@@ -727,11 +730,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void DrawUnits()
     {
         var sprites = _sprites;
+        // 그림을 읽는 스레드가 <b>인물 배열을 통째로 갈아 끼운다</b>(그림 없는 인물을 빼면서) —
+        // 그리는 동안 길이가 줄면 칸을 벗어난다. 한 벌을 붙잡아 놓고 그린다.
+        var units = _units;
 
         // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
-        foreach (int i in Enumerable.Range(0, _units.Length).OrderBy(i => _units[i].Y))
+        foreach (int i in Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y))
         {
-            var unit = _units[i];
+            var unit = units[i];
             if (!unit.Alive) continue;
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
