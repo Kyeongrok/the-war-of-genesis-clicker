@@ -97,12 +97,32 @@ def read_battle(bid):
     take('tlb', 'Tlk/%04d.tlb' % bid, 'assets/data/Tlk/%04d.tlb' % bid)
     b = open(src, 'rb').read()
     head = words(b, 0, 10)
+    # 맵은 `.map` 이 가리키는 `.obt` 를 쓰지만, 전투를 여는 쪽이 `.map` 을 먼저 읽는다 — 둘 다 묶어야 한다.
     map_src = os.path.join(G, 'Map', '%04d.map' % head[1])
     if os.path.exists(map_src):
+        take('map', 'Map/%04d.map' % head[1], 'assets/data/Map/%04d.map' % head[1])
         obt = struct.unpack_from('<H', open(map_src, 'rb').read(), 2)[0]
         take('obt', 'Obt/%04d.obt' % obt, 'assets/maps/%04d.obt' % obt)
     if head[8] > 0:
         take('bgm', 'BGM/%04d.bgm' % head[8], 'assets/bgm/%04d.bgm' % head[8])
+    # 배치 레코드 29바이트 — 인물마다 `.chr` 과 그 안이 가리키는 그림·얼굴까지 묶는다.
+    # 안 묶으면 전투는 열리되 유닛이 하나도 안 서서 그 자리에서 진다.
+    count = struct.unpack_from('<H', b, 20)[0]
+    o = 24
+    for _ in range(max(0, count)):
+        if o + 29 > len(b):
+            break
+        chr_code = struct.unpack_from('<H', b, o + 2)[0]
+        o += 29
+        chr_path = os.path.join(G, 'Chr', '%04d.chr' % chr_code)
+        if chr_code <= 0 or not os.path.exists(chr_path):
+            continue
+        take('chr', 'Chr/%04d.chr' % chr_code, 'assets/data/Chr/%04d.chr' % chr_code)
+        cb = open(chr_path, 'rb').read()
+        for off, kind in ((8, 'sprite'), (10, 'face')):
+            obs = struct.unpack_from('<H', cb, off)[0]
+            if obs > 0:
+                take(kind, 'Obs/%04d.obs' % obs, 'assets/moses/obs/%04d.obs' % obs)
     return []
 
 

@@ -83,19 +83,44 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             1 => true,                                  // 마름모(거리만)
             2 => dx == 0 || dy == 0,                    // 십자
-            3 => axis > 0 && a <= axis / 3,             // 부채꼴
+            3 => axis >= 0 && a <= axis / 3,            // 부채꼴 — 원점 줄도 덮는다
             4 => true,                                  // 화면 전체
             5 => axis >= 0 && side == 0,                // 직선
             6 => axis >= 0 && a <= 1,                   // 폭 3 줄(시전자 줄도 덮는다 — work_area.py 그림)
             7 => axis >= 0 && a <= 2,                   // 폭 5 줄
             8 => Math.Abs(dx) == Math.Abs(dy),          // 대각선 X
-            9 => axis > 0 && a <= axis,                 // 45° 삼각형
+            9 => axis >= 1 && a <= axis - 1,            // 45° 삼각형 — 앞으로 한 칸 간 뒤부터 벌어진다
             _ => dx == 0 && dy == 0,
         };
     }
 
     /// <summary>방향을 쓰는 모양인가 — 사거리를 그릴 때는 네 방향을 합쳐야 한다.</summary>
     private static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9;
+
+    /// <summary>
+    /// 그 모양이 <b>앞으로 간 거리만</b> 재는가 — 3·5·6·7·9 가 그렇다(<c>0x100dafe0</c>·<c>0x100db310</c>).
+    /// 옆으로 벌어진 만큼은 거리에 안 들어가므로, 맨해튼으로 자르면 바깥 줄이 통째로 잘려 나간다.
+    /// </summary>
+    private static bool ShapeUsesAxisDistance(int shape) => shape is 3 or 5 or 6 or 7 or 9;
+
+    /// <summary>바라보는 쪽으로 몇 칸 갔나(뒤쪽은 음수).</summary>
+    private static int AxisOf(int dx, int dy, Facing facing) => facing switch
+    {
+        Facing.Up => -dy,
+        Facing.Down => dy,
+        Facing.Left => -dx,
+        _ => dx,
+    };
+
+    /// <summary>모양과 거리를 함께 본다 — 모양마다 <b>거리 자가 다르기</b> 때문에 따로 볼 수 없다.</summary>
+    private static bool ShapeReaches(int shape, int dx, int dy, Facing facing,
+                                     int minQuarters, int maxQuarters, int graded, int plain)
+    {
+        if (!ShapeCovers(shape, dx, dy, facing)) return false;
+        if (!ShapeUsesAxisDistance(shape)) return plain >= minQuarters && graded <= maxQuarters;
+        int axis = 4 * AxisOf(dx, dy, facing);
+        return axis >= minQuarters && axis <= maxQuarters;
+    }
 
     /// <summary>
     /// (fromCol, fromRow) 에서 work 로 (col, row) 칸을 겨눌 수 있나 — 사거리 모양·최소·최대와 지형 &amp; 0x8 만 본다.
@@ -112,12 +137,14 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.Sight != 0 && !HasSight(fromCol, fromRow, col, row)) return false;
 
         var (graded, plain) = WorkDistance(fromCol, fromRow, col, row, w.HeightRange != 0, w.HeightGraded != 0);
-        if (plain < w.RangeMinQuarters || graded > RangeMaxOf(w, user)) return false;
-        if (!ShapeUsesFacing(w.RangeShape)) return ShapeCovers(w.RangeShape, dx, dy, Facing.Right);
+        int min = w.RangeMinQuarters, max = RangeMaxOf(w, user);
+        if (!ShapeUsesFacing(w.RangeShape))
+            return ShapeReaches(w.RangeShape, dx, dy, Facing.Right, min, max, graded, plain);
 
         // 사거리 그림은 네 방향을 다 그려 합친다.
-        return ShapeCovers(w.RangeShape, dx, dy, Facing.Up) || ShapeCovers(w.RangeShape, dx, dy, Facing.Down)
-            || ShapeCovers(w.RangeShape, dx, dy, Facing.Left) || ShapeCovers(w.RangeShape, dx, dy, Facing.Right);
+        foreach (var way in new[] { Facing.Up, Facing.Down, Facing.Left, Facing.Right })
+            if (ShapeReaches(w.RangeShape, dx, dy, way, min, max, graded, plain)) return true;
+        return false;
     }
 
     /// <summary>효과 범위 칸들 — 겨눈 칸(자기 자리에 쓰는 work 면 시전자 칸)을 가운데로, 시전자 → 겨눈 칸 방향으로.</summary>
@@ -128,7 +155,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.AreaShape == 0) { cells.Add((col, row)); return cells; }
 
         var facing = col == user.Col && row == user.Row ? user.Facing : FacingToward(user.Col, user.Row, col, row);
-        int reach = Math.Max(1, w.AreaMaxQuarters / 4);
+        // 옆으로 벌어지는 폭(모양 6·7 의 ±1·±2)은 크기와 상관없다 — 창을 그만큼 넓게 잡는다.
+        // 모양 4(화면 전체)는 최대를 아예 안 보므로 판 전체를 훑는다(0x100de010).
+        int reach = w.AreaShape == 4 ? Math.Max(Cols, Rows) : Math.Max(1, w.AreaMaxQuarters / 4) + 2;
         for (int dy = -reach; dy <= reach; dy++)
             for (int dx = -reach; dx <= reach; dx++)
             {
@@ -137,8 +166,18 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (_map is { } map && (map.FlagsAt(cx, cy) & 0x8) != 0) continue;
                 if (w.SameHeightArea != 0 && HeightAt(cx, cy) != HeightAt(col, row)) continue;
                 var (graded, plain) = WorkDistance(col, row, cx, cy, w.HeightArea != 0, graded: false);
-                if (plain < w.AreaMinQuarters || graded > w.AreaMaxQuarters) continue;
-                if (dx != 0 || dy != 0 ? !ShapeCovers(w.AreaShape, dx, dy, facing) : false) continue;
+                if (w.AreaShape == 4)
+                {
+                    // 화면 전체 — 화면에 보이는 만큼만이다(가로 8칸, 세로는 층까지 넣어 240점).
+                    if (plain < w.AreaMinQuarters) continue;
+                    if (Math.Abs(dx) > 8) continue;
+                    if (Math.Abs(32 * dy - 12 * (HeightAt(cx, cy) - HeightAt(col, row))) > 240) continue;
+                }
+                else if (dx != 0 || dy != 0)
+                {
+                    if (!ShapeReaches(w.AreaShape, dx, dy, facing, w.AreaMinQuarters, w.AreaMaxQuarters, graded, plain)) continue;
+                }
+                else if (plain < w.AreaMinQuarters) continue;
                 cells.Add((cx, cy));
             }
         return cells;
