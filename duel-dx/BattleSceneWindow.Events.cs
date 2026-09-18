@@ -156,27 +156,35 @@ internal sealed unsafe partial class BattleSceneWindow
         short A(int i) => i < c.Args.Length ? c.Args[i] : (short)0;
         switch (c.Code)
         {
+            case 0: return true;                                                // 엔진 기본 갈래 — 늘 참(전투 첫 대사 방아쇠, 37번 쓰인다)
             case 1: return _turnNo == 2;                                        // 시작 인트로 방아쇠
             case 3: return Compare(_turnNo, A(1), A(0));                        // 턴 수 비교
             case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
             case 101: return Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2));
-            case 102:                                                           // 상태이상 있나/없나
+            case 102:                                                           // <b>장비</b>를 가졌나(0x1004f2f0) — 상태이상이 아니다. 자료 사용 0회.
             {
                 var list = EventTargets(A(0), out _);
                 bool has = list.Any(u => u.Alive && u.HasStatus(A(1)));
                 return A(2) != 0 ? !has : has;
             }
-            case 200:                                                           // 전장에 있나
+            case 200:                                                           // 전장에 있나(0x1004f379)
             {
+                // <b>인자2 가 0 이면 「없어야」 참</b>이다 — 예전에는 거꾸로 읽어 「지켜야 할 사람이 죽으면 패배」가
+                // 첫 틱에 터졌다. 편을 가리키는 20000+ 는 극성이 또 반대다(0x1004f5da).
                 var list = EventTargets(A(0), out bool whole);
-                bool there = whole ? list.Count > 0 && list.All(u => u.Alive) : list.Any(u => u.Alive);
-                return A(2) != 0 ? !there : there;
+                if (A(0) >= 20000)
+                    return whole ? A(2) == 0 && !list.Any(u => u.Alive)
+                                 : A(2) != 0 && list.Any(u => u.Alive);
+                bool there = list.Any(u => u.Alive);
+                return A(2) != 0 ? there : !there;
             }
-            case 201:                                                           // 죽었나
+            case 201:                                                           // 죽었나·없나(0x1004f550)
             {
+                // 원본은 <b>인자1 을 안 읽는다</b>. 예전에는 그걸 「뒤집기」로 읽어, 살아 있는 사람 하나만으로도
+                // 「죽었다」 조건이 참이 되어 전투가 시작하자마자 끝났다.
                 var list = EventTargets(A(0), out bool whole);
-                bool dead = list.Count == 0 || (whole ? list.All(u => !u.Alive) : list.Any(u => !u.Alive));
-                return A(1) != 0 ? !dead : dead;
+                if (A(0) >= 20000) return whole && list.Count > 0 && list.All(u => u.Alive);
+                return list.Count == 0 || list.All(u => !u.Alive);
             }
             case 203:                                                           // HP 퍼센트 비교
             {
