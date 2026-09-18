@@ -30,7 +30,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>차례인 인물이 그 칸의 물체에 손을 댈 수 있나 — 옆 한 칸이고 TP 가 남아 있어야 한다.</summary>
     private bool CanTouchObject(UnitState user, DemoObject obj) =>
         Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1
-        && user.Tp >= ObjectTouchTp && obj.Data.Kind is 2 or 6 or 8;
+        && user.Tp >= ObjectTouchTp && obj.Data.Kind is 1 or 2 or 6 or 8;
 
     /// <summary>
     /// 상자를 연다 — 아이템이 들었으면 가방에, 아니면 돈을 지갑에 넣고 물체를 치운다(<c>0x100e7ce0</c>).
@@ -47,6 +47,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (obj.Data.Kind == 8)
         {
             Explode(obj);
+            return true;
+        }
+
+        if (obj.Data.Kind == 1)                          // 문 — 만지면 열린다(0x100e603f 의 갈래표)
+        {
+            Toast($"{_db?.T((ushort)obj.Data.NameId)} 이(가) 열렸습니다.");
+            Play(MosesClickSound);
             return true;
         }
 
