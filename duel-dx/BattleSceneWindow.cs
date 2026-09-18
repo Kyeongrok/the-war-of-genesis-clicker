@@ -600,8 +600,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void Update(double dt)
     {
-        // 타이틀 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 소리도 멈추고 화면만 그린다.
-        if (_titleOpen || _episodesOpen)
+        // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
+        // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
+        if (_titleOpen || _episodesOpen || _mosesOpen)
         {
             UpdateSounds();
             return;
