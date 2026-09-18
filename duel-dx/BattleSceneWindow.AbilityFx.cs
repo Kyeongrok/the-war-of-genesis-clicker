@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -45,7 +45,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int EscapeWork = 1583;
 
     private static int[] ActionsFor(WorkData w) =>
-        AbilityMotions.TryGetValue(w.Id, out var m) && m.Actions.Length > 0 ? m.Actions : StrikeActions;
+        AbilityMotions.TryGetValue(w.Id, out var m) && m.Actions.Length > 0 ? m.Actions
+        : BasicWorkActions.GetValueOrDefault(w.Id) ?? StrikeActions;
 
     /// <summary>
     /// 판정이 나는 동작 — 동작 사슬 안에서 <b>타격 동작</b>(8·9·13·14·26·27)이 있으면 그 첫 자리,
