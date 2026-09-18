@@ -114,6 +114,17 @@ internal sealed unsafe partial class BattleSceneWindow
         return friends == 0 ? enemies : (double)enemies / friends;
     }
 
+    /// <summary>
+    /// 도망이 재는 위험도 — 보통 위험도와 달리 <b>제 세력 점수를 뺀다</b>(<c>0x1005b4e0</c>).
+    /// 제가 버티고 있는 몫을 빼야 「내가 여기서 빠지면 이 칸이 얼마나 위험한가」가 나온다.
+    /// </summary>
+    private double FleeDanger(UnitState u, int col, int row)
+    {
+        int enemies = Influence(col, row, !u.IsAlly);
+        int friends = Influence(col, row, u.IsAlly) - Power(u);
+        return friends <= 0 ? enemies : (double)enemies / friends;
+    }
+
     /// <summary>work <c>+0x3e</c> 기준으로 그 대상들이 얼마나 좋은지 — 짝수면 최댓값, 홀수면 1000000 − 최솟값.</summary>
     private int TargetValue(UnitState user, WorkData w, List<int> targets)
     {
@@ -134,7 +145,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 5 => _db is { } db3 && t.Data is { } c3 ? db3.Acr(c3, t.Tp) : 0,
                 6 => t.MaxHp - t.Hp,
                 7 => Power(t),
-                _ => (int)(Danger(user, t.Col, t.Row) * 1000),
+                // 위험도는 <b>대상 자신의 시점</b>으로 잰다(0x1005c976) — 쓰는 쪽 시점으로 재면
+                // 아군 보조기(큐어 같은 것)에서 부호가 뒤집힌다.
+                _ => (int)(Danger(t, t.Col, t.Row) * 1000),
             };
             best = wantMax ? Math.Max(best, v) : Math.Min(best, v);
         }
@@ -225,18 +238,23 @@ internal sealed unsafe partial class BattleSceneWindow
         var enemies = _units.Where(t => t.Alive && SeesAsFoe(u, t)).ToList();
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
 
-        // 2단계 도망 — 피가 적고 적이 가까우면 가장 안전한 칸으로 물러난다.
+        // 2단계 도망 — 피가 적고 적이 가까우면 물러난다. 재는 값은 <b>제 점수를 뺀</b> 위험도이고,
+        // 시작값이 지금 칸이라 더 안전한 칸이 없으면 <b>안 움직인다</b>(0x1005b4e0).
         if (hpPercent < db.N(66) && nearest < db.N(90))
         {
-            int safest = -1;
-            double bestDanger = double.MaxValue;
+            int here = u.Row * Cols + u.Col;
+            int safest = here;
+            double bestDanger = FleeDanger(u, u.Col, u.Row);
             for (int i = 0; i < range.Cost.Length; i++)
             {
                 if (!range.CanReach(i)) continue;
-                double danger = Danger(u, i % Cols, i / Cols);
-                if (danger < bestDanger) { bestDanger = danger; safest = i; }
+                double danger = FleeDanger(u, i % Cols, i / Cols);
+                // 엇비슷하게 안전한 칸(0.70 안쪽)끼리는 <b>지금 자리에서 가까운 쪽</b>을 고른다.
+                bool closer = danger <= bestDanger / 0.70 && danger >= bestDanger * 0.70
+                              && range.Cost[i] < (safest == here ? int.MaxValue : range.Cost[safest]);
+                if (danger < bestDanger * 0.70 || closer) { bestDanger = Math.Min(bestDanger, danger); safest = i; }
             }
-            if (safest >= 0) foreach (var r in WalkTo(u, range, safest)) yield return r;
+            if (safest != here) foreach (var r in WalkTo(u, range, safest)) yield return r;
             Rest(index);
             yield break;
         }
