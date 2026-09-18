@@ -29,7 +29,7 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     private const int MosesW = 640, MosesH = 480;
     private const int MosesObs = 291, MosesFrameObs = 246, MosesBackObs = 248;
-    private const int MosesCellObs = 643, MosesCellIconObs = 498;
+    private const int MosesCellObs = 643, MosesCellIconObs = 498, MosesMarkObs = 163;
     private const int MosesClickSound = 66, MosesFadeTicks = 15;
     private const int MosesChapter = 10;
     /// <summary>이 데모가 가진 단 하나의 전투 — Chp 0010 리치의 「코어헌터 훈련장」(장소 값 45).</summary>
@@ -59,6 +59,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _mosesBgId = -1;
     private int _mosesHover = -1;
     private int _mosesPage = -1;          // -1 주 화면 · 0 항행 · 5 파티
+    private int _mosesStep = 2;           // 항행 단계 — 1 행성 고르기 · 2 장소 고르기
+    private int _mosesPlanet;             // 고른 행성 번호
     private int _mosesFade;               // 남은 페이드 틱
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
     private MosesChapterFile? _mosesChp;
@@ -71,12 +73,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (Environment.GetEnvironmentVariable("DUELDX_MOSES") == "1") OpenMoses();
     }
 
-    /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다.</summary>
-    private void OpenMoses()
+    /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>
+    private void OpenMoses(MosesChapterFile? chapter = null)
     {
         _mosesOpen = true;
         _mosesHover = -1;
         _mosesPage = -1;
+        if (chapter != null) _mosesChp = chapter;
         LoadMosesChapter();
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         _mixer.StopMusic();
@@ -123,7 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<(int X, int Y, string Name, int Icon, Action Click)> MosesCellList()
     {
         var list = new List<(int, int, string, int, Action)>();
-        if (_mosesPage == 0 && _mosesChp is { } chp && chp.PlanetOf(chp.StartNumber) is { } planet)
+        if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
         {
             foreach (int placeNo in planet.Places)
             {
@@ -163,7 +166,12 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         switch (page)
         {
-            case 0: Play(564); break;                                  // NAVIGATION
+            case 0:
+                Play(564);                                             // NAVIGATION
+                // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
+                _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
+                _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
+                break;
             case 1: Play(571); Toast("메일은 아직 만들지 않았습니다"); return;
             case 2: Toast("통신은 아직 만들지 않았습니다"); return;
             case 3 or 4: Play(572); Toast("상점은 아직 만들지 않았습니다"); return;
@@ -177,10 +185,19 @@ internal sealed unsafe partial class BattleSceneWindow
         ShowMosesBackground(page == 0 ? _mosesChp?.SystemBackground ?? 70 : _mosesChp?.Background ?? 52);
     }
 
-    /// <summary>뒤로 단추 — 단계가 최저면 주 화면으로. 소리는 단계별 569/570.</summary>
+    /// <summary>뒤로 단추 — 단계가 최저면 주 화면으로. 소리는 단계별 569(장소→행성)·570(행성→성계).</summary>
     private void MosesGoBack()
     {
-        Play(_mosesPage == 0 ? 569 : 570);
+        // 항행 단계 2 에서 최저 단계가 그보다 낮으면 행성 고르기로 한 단계만 내려간다.
+        if (_mosesPage == 0 && _mosesStep == 2 && (_mosesChp?.StartStep ?? 2) < 2)
+        {
+            Play(569);
+            _mosesStep = 1;
+            _mosesFade = MosesFadeTicks;
+            _mosesHover = -1;
+            return;
+        }
+        Play(_mosesPage == 0 ? 570 : 569);
         _mosesPage = -1;
         _mosesFade = MosesFadeTicks;
         _mosesHover = -1;
@@ -198,6 +215,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 int x = ox + icon.X, y = oy + icon.Y;
                 if (bx >= x && bx < x + 46 && by >= y && by < y + 33) return i;
             }
+            return -1;
+        }
+        if (_mosesPage == 0 && _mosesStep == 1)
+        {
+            var planets = _mosesChp?.Planets ?? [];
+            for (int i = 0; i < planets.Count; i++)
+                if (Math.Abs(bx - ox - planets[i].X) <= 20 && Math.Abs(by - oy - planets[i].Y) <= 20) return i;
             return -1;
         }
         var cells = MosesCellList();
@@ -227,6 +251,17 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             Play(MosesClickSound);
             MosesGoPage(MosesIcons[index].Page);
+        }
+        else if (_mosesPage == 0 && _mosesStep == 1)
+        {
+            if (_mosesChp is { } chp && index < chp.Planets.Count)
+            {
+                _mosesPlanet = chp.Planets[index].No;
+                _mosesStep = 2;
+                _mosesPageAt = _lastTime;
+                _mosesFade = MosesFadeTicks;
+                _mosesHover = -1;
+            }
         }
         else
         {
@@ -292,8 +327,28 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawMosesPage(int ox, int oy, int tick)
     {
+        // 항행 단계 1 — 성도 위 행성들. 마우스를 올린 행성에는 표 Obs 0163 모션 3 과 이름.
+        if (_mosesPage == 0 && _mosesStep == 1)
+        {
+            var planets = _mosesChp?.Planets ?? [];
+            for (int i = 0; i < planets.Count; i++)
+            {
+                var p = planets[i];
+                DrawUi(p.MapObs, p.MapMotion, tick, ox + p.X, oy + p.Y, UiBlend.Alpha);
+                if (i != _mosesHover) continue;
+                DrawUi(MosesMarkObs, 3, tick, ox + p.X, oy + p.Y - 20, UiBlend.Alpha);
+                string planetName = Text(p.NameText);
+                if (planetName.Length == 0) continue;
+                var (_, nw, _) = GetText(planetName, White);
+                DrawText(planetName, ox + p.X - nw / 2, oy + p.Y + 34, White);   // 그림에 든 로마자 이름 아래
+            }
+            if (!DrawUi(MosesBackObs, 0, tick, ox + 46, oy + 244, UiBlend.Alpha))
+                DrawText("BACK", ox + 46, oy + 248, White);
+            return;
+        }
+
         // 행성 구체 — 항행 단계 2 에서 화면 가운데 조금 위
-        if (_mosesPage == 0 && _mosesChp is { } chp && chp.PlanetOf(chp.StartNumber) is { } planet)
+        if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
             DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, UiBlend.Alpha);
 
         var cells = MosesCellList();
@@ -341,9 +396,11 @@ internal sealed unsafe partial class BattleSceneWindow
 /// </remarks>
 internal sealed class MosesChapterFile
 {
-    public sealed record Planet(int No, int NameText, int GlobeObs, int GlobeMotion, int[] Places);
+    public sealed record Planet(int No, int NameText, int MapObs, int MapMotion, int X, int Y, int GlobeObs, int GlobeMotion, int[] Places);
     public sealed record Place(int No, int NameText, int Value, int DescText, int Auto);
 
+    public int Id { get; set; }
+    public int TitleText { get; private init; }
     public int Background { get; private init; }
     public int Bgm { get; private init; }
     public int StartStep { get; private init; }
@@ -372,7 +429,7 @@ internal sealed class MosesChapterFile
             o += 4;
             var planets = new List<Planet>();
             for (int i = 0; i < planetCount; i++, o += 84)
-                planets.Add(new Planet(H(o), H(o + 4), H(o + 68), H(o + 70),
+                planets.Add(new Planet(H(o), H(o + 4), H(o + 2), H(o + 8), H(o + 80), H(o + 82), H(o + 68), H(o + 70),
                                        [.. Enumerable.Range(0, 8).Select(k => (int)H(o + 16 + 2 * k)).Where(v => v >= 0)]));
             int placeCount = H(o);
             o += 4;
@@ -381,6 +438,7 @@ internal sealed class MosesChapterFile
                 places.Add(new Place(H(o), H(o + 2), H(o + 4), H(o + 6), H(o + 18)));
             return new MosesChapterFile
             {
+                TitleText = H(46),
                 Background = H(2),
                 Bgm = H(4),
                 StartStep = H(42),
