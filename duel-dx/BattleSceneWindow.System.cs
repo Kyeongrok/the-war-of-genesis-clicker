@@ -295,9 +295,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
-        _inventory.Clear();
-        InitBattle();
-        FillDemoInventory();
+        // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
+        if (_chapterScriptDone.Count == 0)
+        {
+            _inventory.Clear();
+            InitBattle();
+            FillDemoInventory();
+        }
+        else InitBattle();
         _tick = 0;
         _turn = -1;
         _selected = -1;

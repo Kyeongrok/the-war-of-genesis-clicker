@@ -97,6 +97,15 @@ public sealed class ChapterFile
     public IReadOnlyList<Planet> Planets { get; private init; } = [];
     public IReadOnlyList<Place> Places { get; private init; } = [];
 
+    /// <summary>
+    /// 챕터 스크립트 — 필드와 <b>같은 꼴</b>이라 실행기도 같다(<see cref="FieldEvent"/>).
+    /// </summary>
+    /// <remarks>
+    /// 챕터에 들어갈 때 한 번 돌며 <b>동료·돈·아이템·진행 깃발</b>을 넣는다.
+    /// 예: <c>Chp 0010</c> 은 깃발 107·113·116·117·118·14 를 세우고 동료 둘(219·221)과 3000GP, 아이템 다섯 가지를 준다.
+    /// </remarks>
+    public IReadOnlyList<FieldEvent> Events { get; private init; } = [];
+
     /// <summary>레코드와 스크립트까지 다 읽고 남은 바이트 수 — <b>0 이어야</b> 레코드 크기를 옳게 잡은 것이다.</summary>
     public int TailBytes { get; private init; }
 
@@ -205,7 +214,7 @@ public sealed class ChapterFile
             // 여기까지 읽어 파일이 딱 끝나야 레코드 크기를 옳게 잡은 것이다.
             int tailRecords = Count();
             o += 4 * tailRecords;
-            SkipScript(b, ref o);
+            var events = ReadScript(b, ref o);
 
             return new ChapterFile
             {
@@ -226,25 +235,46 @@ public sealed class ChapterFile
                 Systems = systems,
                 Planets = planets,
                 Places = places,
+                Events = events,
                 TailBytes = b.Length - o,
             };
         }
         catch (ArgumentException) { return null; }   // 배치가 안 맞으면(파일 끝을 넘으면) 안 읽은 것으로 친다
     }
 
-    /// <summary>스크립트: 수 한 워드, 이벤트마다 (워드 하나, 조건 수, 조건 18바이트씩, 행동 수, 행동 18바이트씩).</summary>
-    private static void SkipScript(byte[] b, ref int o)
+    /// <summary>스크립트: 수 한 워드, 이벤트마다 (최대 발동 수, 조건 수, 조건 18바이트씩, 행동 수, 행동 18바이트씩).</summary>
+    private static List<FieldEvent> ReadScript(byte[] b, ref int o)
     {
         int n = BitConverter.ToInt16(b, o);
         o += 2;
         if (n < 0) throw new ArgumentException("스크립트 이벤트 수가 음수입니다.");
+        var events = new List<FieldEvent>(n);
         for (int i = 0; i < n; i++)
         {
-            int conditions = BitConverter.ToInt16(b, o + 2);
-            int actions = BitConverter.ToInt16(b, o + 4 + 18 * conditions);
-            if (conditions < 0 || actions < 0) throw new ArgumentException("스크립트 조건·행동 수가 음수입니다.");
-            o += 4 + 18 * conditions + 2 + 18 * actions;
+            int maxFire = BitConverter.ToInt16(b, o);
+            o += 2;
+            var conditions = ReadCommands(b, ref o);
+            var actions = ReadCommands(b, ref o);
+            events.Add(new FieldEvent(i, maxFire, conditions, actions));
         }
         if (o > b.Length) throw new ArgumentException("스크립트가 파일 끝을 넘습니다.");
+        return events;
+    }
+
+    private static List<ScriptCommand> ReadCommands(byte[] b, ref int o)
+    {
+        int n = BitConverter.ToInt16(b, o);
+        o += 2;
+        if (n < 0) throw new ArgumentException("명령 수가 음수입니다.");
+        var list = new List<ScriptCommand>(n);
+        for (int i = 0; i < n; i++)
+        {
+            int code = BitConverter.ToInt16(b, o);
+            var args = new short[8];
+            for (int k = 0; k < 8; k++) args[k] = BitConverter.ToInt16(b, o + 2 + 2 * k);
+            o += 18;
+            list.Add(new ScriptCommand(code, args));
+        }
+        return list;
     }
 }
