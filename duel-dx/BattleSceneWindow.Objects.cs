@@ -30,7 +30,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>차례인 인물이 그 칸의 물체에 손을 댈 수 있나 — 옆 한 칸이고 TP 가 남아 있어야 한다.</summary>
     private bool CanTouchObject(UnitState user, DemoObject obj) =>
         Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1
-        && user.Tp >= ObjectTouchTp && obj.Data.Kind is 2 or 6;
+        && user.Tp >= ObjectTouchTp && obj.Data.Kind is 2 or 6 or 8;
 
     /// <summary>
     /// 상자를 연다 — 아이템이 들었으면 가방에, 아니면 돈을 지갑에 넣고 물체를 치운다(<c>0x100e7ce0</c>).
@@ -43,6 +43,12 @@ internal sealed unsafe partial class BattleSceneWindow
         CommitMove(_units[_turn]);
         _units[_turn].Tp -= ObjectTouchTp;
         _opened.Add(obj);
+
+        if (obj.Data.Kind == 8)
+        {
+            Explode(obj);
+            return true;
+        }
 
         if (obj.Record.ItemId > 0)
         {
@@ -75,7 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // B 키면 부술 수 있는 물체를, 그 밖에는 열 수 있는 물체를 고른다.
         bool breaking = Environment.GetEnvironmentVariable("DUELDX_TOUCH") == "break";
         var target = Objects.Where(o => !_opened.Contains(o) && o.Alive
-                                        && (breaking ? o.Data.Breakable && o.Record.Team != 4 : o.Data.Kind is 2 or 6))
+                                        && (breaking ? o.Data.Breakable && o.Record.Team != 4 : o.Data.Kind is 2 or 6 or 8))
                             .OrderBy(o => Math.Abs(o.Col - user.Col) + Math.Abs(o.Row - user.Row))
                             .FirstOrDefault();
         if (target is null) return false;
@@ -115,6 +121,28 @@ internal sealed unsafe partial class BattleSceneWindow
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         return true;
+    }
+
+    /// <summary>
+    /// 폭탄 상자(종류 8)가 터진다 — 제 <c>ATK</c> 로 <b>반경 안의 모두</b>를 친다(적아 안 가린다).
+    /// </summary>
+    private void Explode(DemoObject obj)
+    {
+        _effects.Add((ObjectBreakObs, 0, _lastTime,
+                      obj.Col * TileW + TileW / 2, GridTop + obj.Row * TileH + TileH / 2));
+        Play(MosesClickSound);
+        if (_db is null) return;
+
+        int reach = Math.Max(1, obj.Data.Radius);
+        foreach (var u in _units.Where(u => u.Alive && u.Data is not null
+                                            && Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= reach))
+        {
+            int damage = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+            if (damage <= 0) continue;
+            u.Hp = Math.Max(0, u.Hp - damage);
+            ShowNumber(u, damage.ToString(), DamageColor);
+        }
+        Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 터졌습니다.");
     }
 
     /// <summary>
