@@ -193,18 +193,29 @@ internal sealed unsafe partial class BattleSceneWindow
             bx = (BoardWidth - bw) / 2;
             by = _camY + ViewHeight / 2 - bh;
         }
-        // 글이 길면 창이 늘어난다 — 원본도 폭 200·높이 100 까지 늘린다.
+        // 글이 길면 창이 늘어나지만 <b>폭 200·높이 100 까지</b>다 — 그보다 길면 줄을 접는다.
         // 크기는 <b>다 나온 글</b>로 재야 흐르는 동안 창이 들썩이지 않는다.
-        var full = TalkLines(t.Text);
+        const int BalloonMax = 200;
+        var full = WrapTalk(TalkLines(t.Text), BalloonMax - 16, 12);
         int widest = full.Max(l => GetText(l, White, 12).Item2);
-        bw = Math.Clamp(widest + 16, 50, 200);
-        bh = Math.Clamp(full.Length * 18 + 26, 50, 100);
-        bx = Math.Clamp(bx, 8, BoardWidth - bw - 8);
+        bw = Math.Clamp(widest + 16, 50, BalloonMax);
+        bh = Math.Clamp(full.Count * 18 + 26, 50, 100);
+
+        // 필드처럼 640×480 틀 안에서 도는 화면이면 말풍선도 그 틀을 넘지 않는다.
+        if (FieldOpen)
+        {
+            var (fx, fy) = MosesOrigin();
+            bx = Math.Clamp(bx, fx + 8, fx + MosesW - bw - 8);
+            by = Math.Clamp(by, fy + 8, fy + MosesH - bh - 8);
+        }
+        else
+            bx = Math.Clamp(bx, 8, BoardWidth - bw - 8);
 
         DarkenRect(bx - 1, by - FrameTitleH - 1, bw + 2, bh + FrameTitleH + 2, 8);
         DrawGameFrame(bx, by, bw, bh, t.Name);
-        for (int i = 0; i < lines.Length && i * 18 + 8 < bh; i++)
-            DrawText(lines[i], bx + 8, by + 6 + i * 18, White, 12);
+        var balloonLines = WrapTalk(lines, bw - 16, 12);
+        for (int i = 0; i < balloonLines.Count && i * 18 + 8 < bh; i++)
+            DrawText(balloonLines[i], bx + 8, by + 6 + i * 18, White, 12);
         if (_talkFilled && tick % 20 < 12) DrawText("▼", bx + bw - 18, by + bh - 20, 0xFFFFE070, 12);
     }
 }
