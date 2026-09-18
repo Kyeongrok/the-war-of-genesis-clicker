@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -91,7 +91,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Array.Fill(costs, int.MaxValue);
         Array.Fill(prev, -1);
 
-        int dex = Math.Max(1, db.Dex(c));
+        int dex = Math.Max(1, db.Dex(EffectiveData(unit) ?? c));
         int num5 = db.N(5);
         // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
         int budget = unit.HasStatus(25) ? 0 : db.MoveBudget(c, unit.Tp);
