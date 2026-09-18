@@ -688,6 +688,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ShowFieldTalk(bool box, int speaker, int textId)
     {
         string name = "";
+        _fieldTalkOf = speaker;
         if (_field is { } field && speaker >= 10000
             && field.People.FirstOrDefault(p => p.Key == speaker - 10000) is { } person
             && _db?.Character(person.ChrCode) is { } c)
@@ -699,6 +700,17 @@ internal sealed unsafe partial class BattleSceneWindow
         else _talkFace = 0;
         _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
         _talkFilled = false;
+    }
+
+    /// <summary>필드에서 지금 말하는 이(<c>10000+열쇠</c>) — 말풍선을 그 머리 위에 띄우려고 들고 있는다.</summary>
+    private int _fieldTalkOf;
+
+    /// <summary>말하는 이가 필드 인물이면 그 머리 위 자리(판 낱칸)를 알려 준다.</summary>
+    private (int X, int Y)? FieldTalkHead()
+    {
+        if (!FieldOpen || FieldActorOf(_fieldTalkOf) is not { Visible: true } who) return null;
+        var (ox, oy) = MosesOrigin();
+        return (ox + (int)who.X - _fieldCam.X, oy + (int)who.Y - _fieldCam.Y);
     }
 
     /// <summary>고르기 시작(행동 604) — 뒤이은 605 들이 항목을 더한다.</summary>

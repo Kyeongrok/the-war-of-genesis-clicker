@@ -182,7 +182,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 601 — 말하는 이 머리 위 말풍선. 화면 밖이면 판 가운데.
         int bw = 174, bh = 60;
         int bx, by;
-        if (t.Speaker >= 0 && _units[t.Speaker].Alive)
+        if (FieldTalkHead() is { } head)
+        {
+            // 필드에서는 말하는 이가 전투 유닛이 아니라 필드 인물이다 — 규칙은 같이 (x+30, y−200).
+            bx = head.X + 30;
+            by = head.Y - 200;
+        }
+        else if (t.Speaker >= 0 && _units[t.Speaker].Alive)
         {
             var (fx, fy) = UnitFoot(_units[t.Speaker]);
             bx = Math.Clamp(fx + 30, 8, BoardWidth - bw - 8);
