@@ -46,6 +46,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool FieldOpen => _field != null;
 
+    /// <summary>DUELDX_FIELD=&lt;번호&gt; 면 그 필드를 바로 연다(화면 밖 시험용).</summary>
+    private void OpenFieldIfAsked()
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_FIELD"), out int id) && id > 0) OpenField(id);
+    }
+
     /// <summary>그 필드를 연다. 자료가 없으면 false.</summary>
     private bool OpenField(int id)
     {
