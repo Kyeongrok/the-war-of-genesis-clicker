@@ -70,11 +70,10 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MenuOrigin(rows.Count);
         int h = MenuHeadH + Math.Max(1, rows.Count) * MenuRowH + 8;
 
-        FillRect(ox, oy, MenuW, h, PanelBg);
-        StrokeRect(ox, oy, MenuW, h, BoxLine);
-        FillRect(ox, oy, MenuW, MenuHeadH - 4, HeadBg);
-        DrawText($"{_db.T(3)} — {UnitName(_turn)}", ox + 8, oy + 3, White);
-        RightText("TP  SOUL", ox + MenuW - 8, oy + 3, White);
+        // 창은 게임 안 모든 창과 같은 원본 틀(분석-시스템메뉴 「메시지 창 틀」)
+        DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
+        DrawGameFrame(ox, oy, MenuW, h, $"{_db.T(3)} — {UnitName(_turn)}");
+        RightText("TP  SOUL", ox + MenuW - 8, oy + 3, White, 12);
 
         if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = _units[_turn].Data!;

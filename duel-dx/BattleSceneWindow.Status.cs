@@ -92,8 +92,9 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        bool inside = bx >= ox && by >= oy && bx < ox + StatusW && by < oy + StatusH;
-        bool close = bx >= ox + StatusW - 78 && bx < ox + StatusW - 6 && by >= oy + 6 && by < oy + 28;
+        bool inside = bx >= ox && by >= oy - FrameTitleH && bx < ox + StatusW && by < oy + StatusH;
+        // 닫기는 제목줄 오른쪽 X 단추(원본 자리 창폭−24, −24, 18×18)
+        bool close = bx >= ox + StatusW - 24 && bx < ox + StatusW - 6 && by >= oy - 24 && by < oy - 6;
         if (close || !inside) { _statusUnit = -1; return true; }
 
         foreach (var (x, y, w, h, click) in _statusHits)
@@ -211,11 +212,14 @@ internal sealed unsafe partial class BattleSceneWindow
         _statusHits.Clear();
         if (_statusUnit < 0) return;
         var (ox, oy) = StatusOrigin();
-        FillRect(ox, oy, StatusW, StatusH, PanelBg);
-        StrokeRect(ox, oy, StatusW, StatusH, BoxLine);
-        DrawText("STATUS", ox + 14, oy + 8, 0xFF80D0FF, 18);
-        FillRect(ox + StatusW - 78, oy + 6, 72, 22, HeadBg);
-        DrawText("CLOSE", ox + StatusW - 64, oy + 9, White);
+        // 창은 게임 안 모든 창과 같은 원본 틀로(분석-시스템메뉴 「메시지 창 틀」) — 글이 읽히게 밑을 먼저 어둡게 깐다.
+        DarkenRect(ox - 1, oy - FrameTitleH - 1, StatusW + 2, StatusH + FrameTitleH + 2, 6);
+        DrawGameFrame(ox, oy, StatusW, StatusH, "STATUS");
+        if (!DrawUi(FrameObs, 5, 0, ox + StatusW - 24, oy - 24, UiBlend.Alpha))
+        {
+            FillRect(ox + StatusW - 78, oy + 6, 72, 22, HeadBg);
+            DrawText("CLOSE", ox + StatusW - 64, oy + 9, White);
+        }
 
         var unit = _units[_statusUnit];
         if (_db is not { } db || unit.Data is not { } c)
@@ -224,7 +228,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         bool editable = unit.IsAlly && _outcome.Length == 0;
-        if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다", ox + 110, oy + 11, DimGray);
+        if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다", ox + 16, oy + 12, DimGray);
 
         // 1열 — 능력치
         int x = ox + 16, w = 184;

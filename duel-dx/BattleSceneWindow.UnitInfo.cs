@@ -36,10 +36,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!InfoOpen || _db is not { } db || _units[_infoUnit] is not { Data: { } c } unit) return;
         var (x, y) = _infoAt;
 
-        FillRect(x, y, InfoW, InfoH, 0xD00A1428);
-        StrokeRect(x, y, InfoW, InfoH, BoxLine);
-        FillRect(x, y, InfoW, 20, HeadBg);
-        Centre(db.T(c.NameId), x, y + 2, White);
+        // 원본 창 틀 — 제목줄에 이름(분석-시스템메뉴 「메시지 창 틀」)
+        DarkenRect(x - 1, y - FrameTitleH - 1, InfoW + 2, InfoH + FrameTitleH + 2, 8);
+        DrawGameFrame(x, y, InfoW, InfoH, db.T(c.NameId));
 
         Centre(db.T(c.TitleId), x, y + 20, DimGray);
         Centre(db.FamilyName(c), x, y + 36, DimGray);

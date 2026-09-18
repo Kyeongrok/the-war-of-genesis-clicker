@@ -26,7 +26,8 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow : IDisposable
 {
-    private static readonly BattleUnit[] Roster = BattleDemoScene.Roster;
+    /// <summary>지금 벌이는 전투 — 자료에서 읽는다(<see cref="DemoScene"/>). 못 읽으면 예전 상수 그대로.</summary>
+    private DemoScene _scene = DemoScene.Fallback;
 
     /// <summary>한 칸 걸어가는 데 드는 시간(초).</summary>
     public const double StepSeconds = 0.25;
@@ -57,7 +58,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private ObtMapImage? _map;
     private Dictionary<int, UnitSprite> _sprites = [];
-    private readonly UnitState[] _units = [.. Roster.Select(u => new UnitState(u))];
+    private UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];
     private int _selected = -1;
     private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
@@ -90,40 +91,51 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── 게임 자료 읽기 ───────────────────────────────────────────────────────
 
+    /// <summary>지금 전투에 나오는 인물들의 그림과 초상을 (없는 것만) 읽는다.</summary>
+    private void LoadRosterSprites()
+    {
+        string assetsRoot = FindRepoAssetsRoot();
+        var manifests = CollectExportedManifests(assetsRoot);
+        var sprites = new Dictionary<int, UnitSprite>(_sprites);
+
+        foreach (int chrCode in _scene.Roster.Select(u => u.ChrCode).Distinct())
+        {
+            if (sprites.ContainsKey(chrCode)) continue;
+            var (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
+                ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
+                : LoadFromGameFolder(chrCode);
+
+            _names[chrCode] = name;
+
+            // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
+            var motions = ObsSprite.Decode(obsPath);
+            if (motions.Count == 0) continue;
+            sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
+        }
+        _sprites = sprites;
+
+        // Status 화면용 초상(첫 컷). 없어도 전투판은 그린다.
+        foreach (var (code, m) in manifests)
+        {
+            if (_faces.ContainsKey(code) || !_scene.Roster.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
+            string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
+            if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
+        }
+    }
+
     /// <summary>배경 스레드에서 배경 그림·배치된 캐릭터들을 읽는다. 창은 먼저 뜬다.</summary>
     private void LoadScene()
     {
         try
         {
-            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), BattleDemoScene.MapFile));
-
-            string assetsRoot = FindRepoAssetsRoot();
-            var manifests = CollectExportedManifests(assetsRoot);
-            var sprites = new Dictionary<int, UnitSprite>();
-
-            foreach (int chrCode in Roster.Select(u => u.ChrCode).Distinct())
-            {
-                var (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
-                    ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
-                    : LoadFromGameFolder(chrCode);
-
-                _names[chrCode] = name;
-
-                // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
-                var motions = ObsSprite.Decode(obsPath);
-                if (motions.Count == 0) continue;
-                sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
-            }
-            _sprites = sprites;
-
-            // Status 화면용 게임 표와 초상(첫 컷). 없어도 전투판은 그린다.
             _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data")));
-            foreach (var (code, m) in manifests)
-            {
-                if (!Roster.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
-                string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
-                if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
-            }
+            // DUELDX_BATTLE 로 다른 전투를 열 수 있다(화면 밖 시험용). 기본은 첫 전투 0045.
+            int startId = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_BATTLE"), out int wanted) ? wanted : _scene.Id;
+            if (DemoScene.Load(startId, _db) is { } loaded) _scene = loaded;
+            _units = [.. _scene.Roster.Select(u => new UnitState(u))];
+            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
+
+            LoadRosterSprites();
             InitBattle();
             LoadRingAssets();
             LoadAudio();
@@ -268,7 +280,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         IntPtr menu = CreateMenuBar();
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{DemoScene.Fallback.Title} — 전투 Btl {DemoScene.Fallback.Id:D4}",
             Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
             rect.Width, rect.Height,
             IntPtr.Zero, menu, Win32.GetModuleHandleW(null), IntPtr.Zero);
@@ -336,8 +348,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         if (LevelUpOpen) { CloseLevelUp(); return; }
-        // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !_mosesOpen) { OpenMoses(); return; }
+        // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
+        // 없거나 졌으면 모세스 화면으로 간다(mo-1).
+        if (_outcome.Length > 0 && !_mosesOpen)
+        {
+            if (_outcome.StartsWith('승') && _scene.NextBattle > 0 && StartBattle(_scene.NextBattle)) return;
+            OpenMoses();
+            return;
+        }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (_mosesOpen)
         {
@@ -623,7 +641,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
 
         int allies = _units.Count(u => u.Alive && u.IsAlly), enemies = _units.Count(u => u.Alive && !u.IsAlly);
-        DrawText($"{BattleDemoScene.Title} — 전투 Btl {BattleDemoScene.BtlId:D4}   아군 {allies}   적군 {enemies}   클릭·{KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물 보기   {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자   {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바   설정 메뉴: 단축키",
+        DrawText($"{_scene.Title} — 전투 Btl {_scene.Id:D4}   아군 {allies}   적군 {enemies}   클릭·{KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물 보기   {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자   {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바   설정 메뉴: 단축키",
                  4, _camY + 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, _camY + 20, 0xFFD05050);
         else DrawText(TurnLine(), 4, _camY + 20, 0xFFFFE8A0);

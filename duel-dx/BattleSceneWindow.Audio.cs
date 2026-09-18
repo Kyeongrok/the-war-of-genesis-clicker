@@ -108,7 +108,7 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
-    private void StartBattleMusic() => PlayMusicFile(BattleDemoScene.Bgm, loop: true);
+    private void StartBattleMusic() => PlayMusicFile(_scene.Bgm, loop: true);
 
     private void PlayOutcomeMusic(bool win)
     {
