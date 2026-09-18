@@ -15,7 +15,7 @@ namespace DuelDx;
 /// <item><c>%dGP</c> (134, 26) · <c>Tp:%d</c> (134, 38) · <c>Soul:%d</c> (134, 50) — 오른쪽 맞춤, 흰색</item>
 /// </list>
 /// 창은 대사 중이나 몇몇 상태에서 숨고, TP·SOUL 은 고른 인물이 없으면 안 나온다.
-/// 이 데모에는 파티 소지금이 없어 <b>0GP</b> 로 둔다(원본은 파티 레코드 +0x10c).
+/// 소지금은 모세스 상점과 같은 지갑을 보여 준다(데모는 5000GP 로 시작).
 /// 자리는 원본과 같은 "오른쪽 위에서 10픽셀" 로 잡되, 판이 640 보다 넓어 판 오른쪽에 붙인다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -23,8 +23,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int HudW = 140, HudH = 60, HudObs = 894, HudPositionMotion = 12;
     private const uint HudYellow = 0xFFFFFF00;
 
-    /// <summary>데모에는 파티 소지금이 없다 — 원본은 파티 레코드 +0x10c 의 GP.</summary>
-    private const int Money = 0;
+    // 소지금은 모세스 상점이 쓰는 그 값이다(원본은 파티 레코드 +0x10c 의 GP).
 
     private void DrawHud()
     {
@@ -56,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Center($"{col}", 64, 38, White);
         Center($"{row}", 20, 44, White);
 
-        Right($"{Money}GP", 134, 24);
+        Right($"{_shopMoney}GP", 134, 24);
         if (_selected >= 0 && _units[_selected] is { Alive: true } unit)
         {
             Right($"Tp:{unit.Tp}", 134, 36);
