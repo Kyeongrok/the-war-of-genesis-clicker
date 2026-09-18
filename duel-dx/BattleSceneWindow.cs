@@ -128,6 +128,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             LoadRingAssets();
             LoadAudio();
             OpenMosesIfAsked();
+            OpenLevelUpIfAsked();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
