@@ -17,6 +17,8 @@ namespace DuelDx;
 /// (편 차례는 4·3·0·1·2). 비교 연산자는 0 <c>==</c> · 1 <c>!=</c> · 2 <c>&lt;</c> · 3 <c>&lt;=</c> · 4 <c>&gt;</c> · 5 <c>&gt;=</c>.
 /// </para>
 /// 아직 안 만든 조건·행동은 <b>거짓/무시</b>로 둔다 — 잘못 터뜨리는 것보다 안 터뜨리는 쪽이 낫다.
+/// 조건 <b>301</b>(한쪽이 다른 쪽을 지목)은 그 칸(<c>유닛+0xfc</c>)이 무엇을 담는지 아직 몰라 <b>300(맞닿음)</b> 으로 대신한다 —
+/// 쓰임새가 「아군과 적이 처음 붙는 순간의 대사」라 결과가 거의 같다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -198,7 +200,27 @@ internal sealed unsafe partial class BattleSceneWindow
                                                           && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 return Compare(n, A(1), A(2));
             }
-            default: return false;   // 아직 안 만든 조건(2·202·204·300·301)은 안 터뜨린다
+            case 202:                                                           // 편 번호 비교
+            {
+                var list = EventTargets(A(0), out _);
+                return list.Any(u => Compare(u.Side, A(3), A(2)));
+            }
+            case 204:                                                           // 이미 증원으로 들어왔나 — 데모는 처음부터 다 서 있다
+            {
+                var list = EventTargets(A(0), out _);
+                bool arrived = list.Any(u => u.Alive);
+                return A(1) != 0 ? !arrived : arrived;
+            }
+            case 300:                                                           // 두 유닛이 같은 줄에 있고 두 칸 이내 = 맞닿음
+            {
+                var a = EventTargets(A(0), out _).Where(u => u.Alive).ToList();
+                var b = EventTargets(A(2), out _).Where(u => u.Alive).ToList();
+                return a.Any(x => b.Any(y => x != y && (x.Col == y.Col || x.Row == y.Row)
+                                          && Math.Abs(x.Col - y.Col) + Math.Abs(x.Row - y.Row) <= 2));
+            }
+            case 301:                                                           // 한쪽이 다른 쪽을 지목하고 있다(교전) — 데모는 「맞닿음」으로 대신한다
+                goto case 300;
+            default: return false;   // 아직 안 만든 조건(2 = 전역 배열)은 안 터뜨린다
         }
     }
 
