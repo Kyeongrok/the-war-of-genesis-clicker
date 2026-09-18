@@ -14,8 +14,26 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
     /// <summary>시간줄 소리 키(종류 1) — 시작 틱에 소리 번호(<c>Snd/NNNN.snd</c>)를 한 번 튼다(<c>0x100e5410</c>, 분석-사운드).</summary>
     public IReadOnlyList<(int Start, int Sound)> Sounds { get; init; } = [];
 
-    /// <summary>시간줄 자식 키(종류 2) — 시작 틱에 다른 Obs 의 모션(이펙트)을 띄운다. 그 모션의 소리도 난다.</summary>
+    /// <summary>
+    /// 시간줄 자식 키(종류 2) — 시작 틱에 다른 Obs 의 모션을 같은 자리에 붙인다(제이슨의 무기 층 Obs 0426 이 이것).
+    /// 그 모션의 소리도 난다.
+    /// </summary>
     public IReadOnlyList<(int Start, int Obs, int Motion)> Children { get; init; } = [];
+
+    /// <summary>섞기 키(종류 3) — 그 틱부터 그리는 방식(17 = 더하기 합성).</summary>
+    public IReadOnlyList<(int Start, int Mode)> Blends { get; init; } = [];
+
+    /// <summary>tick 틱의 섞기 방식(없으면 0 = 보통).</summary>
+    public int BlendAt(int tick)
+    {
+        int mode = 0;
+        foreach (var (start, m) in Blends)
+        {
+            if (start > tick) break;
+            mode = m;
+        }
+        return mode;
+    }
 
     /// <summary>물들이기 키(종류 4) — 그 틱부터 (방식, 세기)로 그림을 물들인다. 맞을 때 흰 번쩍임이 여기 들어 있다.</summary>
     public IReadOnlyList<(int Start, int Mode, int Strength)> Tints { get; init; } = [];
@@ -78,7 +96,8 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
 ///       키 26바이트 × (nA + nB) — u16 종류, u16 시작틱, u16 길이, i16 × 10
 /// </code>
 /// B 목록(시간줄) 키: 종류 0 그림(인자 0 = 몸짓벌 번호, 1 = 장 번호), 1 소리(인자 0 = Snd 번호), 2 자식 모션(인자 0 = Obs, 1 = 모션),
-/// 4 물들이기(인자 0 = 방식, 1 = 세기), 7 자리 덮어쓰기(인자 0·1 = x·y 픽셀).
+/// 3 섞기 방식(인자 0, 17 = 더하기), 4 물들이기(인자 0 = 방식, 1 = 세기), 7 자리 덮어쓰기(인자 0·1 = x·y 픽셀).
+/// 자식 키(종류 2) 인자: 0 Obs · 1 모션 · 2 x · 3 y · 4 z · 5 반전 깃발 — 무기는 이 키로 붙는 딴 Obs 층이다(분석-모션 ba-8).
 /// A 목록(시작 키, 모션 내내 되풀이하는 소리 등)은 건너뛴다.
 /// 모션 번호 = 동작 × 3 + 방향(0 뒷모습, 1 옆모습(왼쪽), 2 앞모습; 오른쪽은 옆모습을 뒤집음). 동작 0 = 서기, 1 = 걷기.
 /// 없는 모션이면 서기로 떨어진다(<c>SetAction 0x10072820</c>).
@@ -117,22 +136,35 @@ public sealed class ObsMotionTable
                 var keys = new List<MotionKey>();
                 var sounds = new List<(int, int)>();
                 var children = new List<(int, int, int)>();
+                var blends = new List<(int, int)>();
                 var tints = new List<(int, int, int)>();
                 var offsets = new List<(int, int, int)>();
                 for (int k = 0; k < na + nb; k++, p += 26)
                 {
-                    if (k < na) continue;
+                    // A 목록(시작 키)은 모션 내내 걸린다 — 무기 층(종류 2)·섞기·물들이기는 시작 틱 0 으로 넣고,
+                    // 되풀이 소리(종류 1)만 건너뛴다.
+                    if (k < na)
+                    {
+                        switch (U16(b, p))
+                        {
+                            case 2: children.Add((0, S16(b, p + 6), S16(b, p + 8))); break;
+                            case 3: blends.Add((0, S16(b, p + 6))); break;
+                            case 4: tints.Add((0, S16(b, p + 6), S16(b, p + 8))); break;
+                        }
+                        continue;
+                    }
                     switch (U16(b, p))
                     {
                         case 0: keys.Add(new MotionKey(U16(b, p + 2), U16(b, p + 4), S16(b, p + 6), S16(b, p + 8))); break;
                         case 1: sounds.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 2: children.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 3: blends.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 4: tints.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                         case 7: offsets.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                     }
                 }
                 keys.Sort((x, y) => x.Start.CompareTo(y.Start));
-                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children, Tints = tints, Offsets = offsets };
+                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children, Tints = tints, Offsets = offsets, Blends = blends };
             }
             return new ObsMotionTable(clips);
         }
