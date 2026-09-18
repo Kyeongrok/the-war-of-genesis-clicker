@@ -317,6 +317,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
                 _mouse = (bx, by);
                 UpdateMosesHover(bx, by);
+                UpdateChaptersHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -330,6 +331,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnKeyDown(int key)
     {
         if (_keysOpen) { OnKeysKey(key); return; }
+        if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 모세스 화면으로 간다(mo-1).
         if (_outcome.Length > 0 && !_mosesOpen) { OpenMoses(); return; }
@@ -412,6 +414,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnChaptersClick(bx, by)) return;
         if (OnMosesClick(bx, by)) return;
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
@@ -522,6 +525,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawKeysPanel();
         DrawLevelUp();
         DrawMoses();
+        DrawChapters();
         DrawCursor();
     }
 
