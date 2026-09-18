@@ -218,18 +218,49 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    /// <summary>대장이 친 대상을 부하들도 함께 친다(군단 행동, 상태 15).</summary>
+    /// <summary>
+    /// 대장이 칠 때 부하들도 함께 친다(군단 행동, 상태 15) — <b>같은 대상이 아니라 제 기술로 제 겨냥</b>을 고른다.
+    /// </summary>
+    /// <remarks>
+    /// 원본(<c>0x1005f320</c>)은 부하가 <b>제 어빌리티 목록</b>(분류 1·2·4 + 기본공격, 그 차례가 곧 우선순위)을 훑어
+    /// <b>적 대상(<c>+0x1e</c> = 1)이면서 TP·사거리가 되는 첫 기술</b>을 고르고, 겨냥은
+    /// <c>칸점수 × rnd / (rnd + 대장 대상까지 거리)</c> 라 <b>대장이 겨눈 칸 가까운 쪽을 크게 선호</b>한다.
+    /// 데모는 난수 없이 「제 사거리 안의 적 중 대장 대상에 가장 가까운 쪽」으로 대신한다.
+    /// 사거리 밖이면 원본은 걸어가서 치는데, 데모는 아직 그 자리에서 아무것도 안 한다.
+    /// </remarks>
     private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying)
     {
-        if (_db is not { } db) return;
+        if (_db is null) return;
         foreach (var follower in FollowersOf(leaderIndex))
         {
-            if (!target.Alive || follower.Data is not { } c || Work(c.BasicWorkId) is not { } basic) continue;
-            if (!InWorkRange(basic, follower.Col, follower.Row, target.Col, target.Row, follower)) continue;
-            follower.Facing = FacingToward(follower.Col, follower.Row, target.Col, target.Row);
-            PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
-            ApplyWork(follower, basic, target, dying);
+            if (follower.Data is not { } c) continue;
+            foreach (var work in FollowerWorks(c))
+            {
+                if (!CanAfford(follower, work)) continue;
+                // 제 사거리 안의 적 중 대장이 겨눈 칸에 가장 가까운 쪽.
+                var pick = _units
+                    .Where(u => u.Alive && SeesAsFoe(follower, u)
+                                && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower))
+                    .OrderBy(u => Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))
+                    .FirstOrDefault();
+                if (pick is null) continue;
+                follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);
+                PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
+                ApplyWork(follower, work, pick, dying);
+                break;
+            }
         }
+    }
+
+    /// <summary>부하가 고를 수 있는 기술 — 익힌 어빌리티(그 차례가 우선순위) 다음에 기본공격.</summary>
+    private IEnumerable<WorkData> FollowerWorks(CharacterData c)
+    {
+        if (_db is not { } db) yield break;
+        foreach (var (abilityId, level) in c.Abilities)
+            if (db.Abilities.TryGetValue(abilityId, out var ab) && ab.WorkByLevel.TryGetValue(level, out int wid)
+                && Work(wid) is { IsDamage: true } w)
+                yield return w;
+        if (Work(c.BasicWorkId) is { } basic) yield return basic;
     }
 
     /// <summary>대장이 쓰러지면 — 첫 부하가 새 대장이 되고 세력이 0.6배가 된다.</summary>
