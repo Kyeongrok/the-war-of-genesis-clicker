@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -72,35 +72,103 @@ internal sealed unsafe partial class BattleSceneWindow
         return [.. list];
     }
 
-    /// <summary>진형 칸은 방향 0(위) 기준이다 — 대장이 보는 쪽으로 돌린다.</summary>
+    /// <summary>
+    /// 진형 칸은 방향 0(위) 기준이다 — 대장이 보는 쪽으로 돌린다(<c>LoadBtl 0x100634cd</c>).
+    /// </summary>
+    /// <remarks>진형 여섯이 모두 좌우 대칭이라 아래(방향 2)를 <c>(dx, -dy)</c> 로 두어도 칸 집합은 같고 슬롯 짝만 바뀐다 — 원본대로 맞춘다.</remarks>
     private static (int Dx, int Dy) RotateFormation((int Dx, int Dy) cell, Facing facing) => facing switch
     {
         Facing.Up => cell,
-        Facing.Down => (-cell.Dx, -cell.Dy),
+        Facing.Down => (cell.Dx, -cell.Dy),
         Facing.Left => (cell.Dy, -cell.Dx),
         _ => (-cell.Dy, cell.Dx),
     };
+
+    /// <summary>
+    /// 대장이 움직인 뒤 부하들이 노리는 <b>고정 8칸 고리</b> — 대장 자리에서 맨해튼 거리가 딱 2 인 칸 전부.
+    /// </summary>
+    /// <remarks>
+    /// 다시 세울 때는 <b>진형표도 대장이 보는 쪽도 안 쓴다</b>(<c>0x10073230</c>). 진형표는 <b>전투 시작 배치에만</b> 쓰인다.
+    /// 부하는 많아야 여섯이고 칸은 여덟이라 <b>배정에 실패하는 일이 없다</b>.
+    /// </remarks>
+    private static readonly (int Dx, int Dy)[] FormationRing =
+        [(0, -2), (-1, -1), (1, -1), (-2, 0), (2, 0), (-1, 1), (1, 1), (0, 2)];
+
+    /// <summary>진형을 마지막으로 셈한 대장 자리 — 같은 칸이면 다시 셈하지 않는다.</summary>
+    private readonly Dictionary<int, (int Col, int Row)> _formationAt = [];
 
     /// <summary>그 인물의 부하들(살아 있는 것만).</summary>
     private List<UnitState> FollowersOf(int leaderIndex) =>
         [.. _units.Where(u => u.Alive && u.LeaderIndex == leaderIndex)];
 
-    /// <summary>부하가 설 칸 — 대장 자리에 진형을 얹고, 막혔으면 대장 둘레에서 가까운 빈 칸.</summary>
-    private (int Col, int Row) FormationCellFor(UnitState leader, UnitState follower)
+    /// <summary>
+    /// 대장이 (<paramref name="destCol"/>, <paramref name="destRow"/>) 로 간 뒤 부하들이 설 칸을 <b>한꺼번에</b> 정한다.
+    /// </summary>
+    /// <remarks>
+    /// 원본(<c>0x10073230</c> · <c>0x10073100</c> · <c>0x10073480</c>) 차례 그대로:
+    /// <list type="number">
+    /// <item>부하를 <b>대장 목적지까지 가까운 순</b>으로 줄 세운다 — 가까운 쪽이 먼저 칸을 고른다.</item>
+    /// <item>「목적지 + (부하 지금 칸 − 대장 지금 칸)」에 가장 가까운 <b>아직 안 뽑힌 고리 칸</b>을 하나씩 가져간다.</item>
+    /// <item>그 고리 칸을 목표로, 부하 둘레에서 <b>갈 수 있고 비어 있는</b> 칸 중 점수가 가장 낮은 칸에 실제로 선다 —
+    /// 점수 = <c>11 × |(높이차 + |Δx| + |Δy|) − 2| + 10 × 고리칸까지 거리</c>. 하나도 없으면 고리 칸을 그대로 쓴다.</item>
+    /// </list>
+    /// 앞 부하가 고른 칸은 뒤 부하가 못 쓰게 잡아 둔다.
+    /// </remarks>
+    private List<(UnitState Follower, int Col, int Row)> FormationPlan(UnitState leader, int destCol, int destRow)
     {
-        if (Legions().GetValueOrDefault(leader.LegionId) is not { } legion || follower.FormationSlot < 0)
-            return (leader.Col, leader.Row);
+        var followers = FollowersOf(Array.IndexOf(_units, leader));
+        var plan = new List<(UnitState, int, int)>();
+        if (followers.Count == 0) return plan;
 
-        var cells = LegionData.FormationCells[Math.Clamp((int)legion.Formation, 0, 5)];
-        var (dx, dy) = RotateFormation(cells[Math.Clamp(follower.FormationSlot, 0, cells.Length - 1)], leader.Facing);
-        int col = leader.Col + dx, row = leader.Row + dy;
-        if (CanStand(col, row, follower)) return (col, row);
+        followers.Sort((a, b) => (Math.Abs(a.Col - destCol) + Math.Abs(a.Row - destRow))
+                               - (Math.Abs(b.Col - destCol) + Math.Abs(b.Row - destRow)));
+        var usedRing = new bool[FormationRing.Length];
+        var taken = new HashSet<(int, int)>();
 
-        for (int radius = 1; radius <= 3; radius++)
-            for (int ny = -radius; ny <= radius; ny++)
-                for (int nx = -radius; nx <= radius; nx++)
-                    if (CanStand(leader.Col + nx, leader.Row + ny, follower)) return (leader.Col + nx, leader.Row + ny);
-        return (follower.Col, follower.Row);
+        foreach (var follower in followers)
+        {
+            // 바라는 칸 = 대장을 따라 그대로 평행 이동한 자리.
+            int wantCol = Math.Clamp(destCol + follower.Col - leader.Col, 0, Cols - 1);
+            int wantRow = Math.Clamp(destRow + follower.Row - leader.Row, 0, Rows - 1);
+
+            int best = -1, bestScore = int.MaxValue;
+            for (int i = 0; i < FormationRing.Length; i++)
+            {
+                if (usedRing[i]) continue;
+                int rc = destCol + FormationRing[i].Dx, rr = destRow + FormationRing[i].Dy;
+                int score = Math.Abs(wantCol - rc) + Math.Abs(wantRow - rr);
+                if (score < bestScore) (best, bestScore) = (i, score);
+            }
+            if (best < 0) { plan.Add((follower, follower.Col, follower.Row)); continue; }
+            usedRing[best] = true;
+            int ringCol = Math.Clamp(destCol + FormationRing[best].Dx, 0, Cols - 1);
+            int ringRow = Math.Clamp(destRow + FormationRing[best].Dy, 0, Rows - 1);
+
+            var (col, row) = StandingCellFor(follower, destCol, destRow, ringCol, ringRow, taken);
+            taken.Add((col, row));
+            plan.Add((follower, col, row));
+        }
+        return plan;
+    }
+
+    /// <summary>고리 칸을 목표로 부하가 실제로 설 칸 — 못 찾으면 고리 칸 그대로(원본도 그렇다).</summary>
+    private (int Col, int Row) StandingCellFor(UnitState follower, int destCol, int destRow,
+                                               int ringCol, int ringRow, HashSet<(int, int)> taken)
+    {
+        int destHeight = _map?.HeightAt(destCol, destRow) ?? 0;
+        int best = int.MaxValue;
+        (int Col, int Row) pick = (ringCol, ringRow);
+        for (int row = follower.Row - 20; row <= follower.Row + 20; row++)
+            for (int col = follower.Col - 20; col <= follower.Col + 20; col++)
+            {
+                if (col == destCol && row == destRow) continue;          // 대장 자리는 비켜 준다
+                if (taken.Contains((col, row)) || !CanStand(col, row, follower)) continue;
+                int height = Math.Abs((_map?.HeightAt(col, row) ?? 0) - destHeight);
+                int score = 11 * Math.Abs(height + Math.Abs(col - destCol) + Math.Abs(row - destRow) - 2)
+                          + 10 * (Math.Abs(col - ringCol) + Math.Abs(row - ringRow));
+                if (score < best) (best, pick) = (score, (col, row));
+            }
+        return pick;
     }
 
     private bool CanStand(int col, int row, UnitState who)
@@ -110,27 +178,42 @@ internal sealed unsafe partial class BattleSceneWindow
         return LiveUnitAt(col, row) is not { } other || other == who;
     }
 
-    /// <summary>대장이 움직인 뒤 — 부하들을 제 진형 칸으로 옮긴다(걸어가는 대신 바로 선다).</summary>
+    /// <summary>
+    /// 대장이 움직인 뒤 — 부하들이 제 자리로 <b>걸어간다</b>.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 부하마다 경로 이동 명령(<c>0x2711</c>)을 내고 그 길을 실제로 밟는다(<c>0x1005f670</c>) — 순간이동이 아니다.
+    /// 길을 못 찾으면 제자리에 남는다.
+    /// </remarks>
     private void MoveFollowers(int leaderIndex)
     {
         var leader = _units[leaderIndex];
-        foreach (var follower in FollowersOf(leaderIndex))
+        foreach (var (follower, col, row) in FormationPlan(leader, leader.Col, leader.Row))
         {
-            var (col, row) = FormationCellFor(leader, follower);
             if (col == follower.Col && row == follower.Row) continue;
-            follower.WarpTo(col, row);
-            follower.Facing = leader.Facing;
+            if (ComputeRange(follower) is not { } range || !range.CanReach(row * Cols + col)) continue;
+            foreach (var step in range.PathTo(row * Cols + col)) follower.Path.Enqueue(step);
             PlayWalkSound(follower);
         }
     }
 
-    /// <summary>프레임마다 — 걸음을 멈춘 대장의 부하들을 제자리로 데려온다.</summary>
+    /// <summary>
+    /// 프레임마다 — 걸음을 멈춘 대장의 부하들이 아직 제자리가 아니면 걸어가게 한다.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 <b>대장이 「이동만·이동+휴식」 명령을 냈을 때만</b> 진형을 다시 세운다(이동 + 기술이면 아예 안 짓는다).
+    /// 데모는 명령 상자가 없어 「대장도 부하도 다 멈췄을 때」로 대신한다 — 결과는 같고 한 박자 늦다.
+    /// </remarks>
     private void SyncFollowers()
     {
         for (int i = 0; i < _units.Length; i++)
         {
             var leader = _units[i];
             if (!leader.Alive || leader.LeaderIndex >= 0 || leader.LegionId == 0 || leader.IsBusy) continue;
+            if (FollowersOf(i).Any(f => f.IsBusy)) continue;   // 아직 걷는 중이면 새 목표를 주지 않는다
+            // 대장이 같은 칸에 그대로 서 있으면 다시 셈하지 않는다 — 진형 셈은 칸을 넓게 훑어 값이 비싸다.
+            if (_formationAt.TryGetValue(i, out var last) && last == (leader.Col, leader.Row)) continue;
+            _formationAt[i] = (leader.Col, leader.Row);
             MoveFollowers(i);
         }
     }
