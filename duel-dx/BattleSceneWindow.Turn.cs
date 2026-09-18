@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -136,7 +136,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (u.Tp >= u.MaxTp) u.HasTurn = true;
         }
         TickAilments();
-        foreach (var u in _units.Where(u => u.Alive && u.Hp <= 0))
+        // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
+        foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
             if (!SurvivesFatal(u)) KillUnit(u);
     }
 
@@ -146,6 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _turn = index;
         _selected = index;
         _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
+        AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
         _units[index].OriginCol = _units[index].Col;
         _units[index].OriginRow = _units[index].Row;
         CancelTargeting();
@@ -261,7 +263,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
-        u.Data != null && _db != null && u.Tp + u.Ctp >= _db.WorkTpCost(u.Data, w.Id) && u.Soul >= _db.WorkSoulNeed(u.Data, w.Id);
+        u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id);
 
     /// <summary>
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
@@ -450,8 +452,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 비용은 행동이 끝난 뒤 TP → SOUL → HP 차례로 뺀다(0x10076380). 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
         if (a.Data is { } cost && _db is { } db2)
         {
-            a.Tp -= db2.WorkTpCost(cost, w.Id);
-            a.Soul = Math.Clamp(a.Soul - db2.WorkSoulCost(cost, w.Id) + (w.Kind switch { 0 => 10, 1 => 6, _ => 4 }), 0, a.MaxSoul);
+            a.Tp -= TpCostFor(a, cost, w.Id);
+            a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
+            AddSoul(a, w.Kind switch { 0 => 10, 1 => 6, _ => 4 });
             int hp = db2.WorkHpCost(cost, w.Id);
             if (hp > 0) a.Hp = Math.Max(1, a.Hp - hp);
         }
@@ -474,7 +477,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
-        var (amount, result, crit) = _db.Resolve(_rng, a.Data, a.Tp, a.Soul, t.Data, t.Tp, t.Hp, t.MaxHp, w, t.Stance);
+        // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
+        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, a.Soul, EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance);
 
         if (result == 1)
         {
@@ -494,16 +498,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
         amount = AilmentDamage(a, t, amount);
         t.Hp = Math.Max(0, t.Hp - amount);
+        // 10(피격 가속) — 맞으면 TP 가 값% 만큼 앞당겨진다(0x1007952c).
+        if (t.Status(10) is var rush and > 0) t.Tp = Math.Min(t.MaxTp, t.Tp + rush * t.MaxTp / Math.Max(1, t.Stp) / 100);
         ShowNumber(t, $"{_db.T(159)} {amount}", DamageColor);
         PlayHitReaction(t, damaged: true);
         if (crit) PlayCritFlash();
-        t.Soul = Math.Min(t.MaxSoul, t.Soul + amount / Math.Max(1, _db.N(43)));
+        AddSoul(t, amount / Math.Max(1, _db.N(43)));
         PlayHurtVoice(t);
         ApplyAilments(a, t, w);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
         if (SurvivesFatal(t)) return;
-        a.Soul = Math.Min(a.MaxSoul, a.Soul + 10);   // 처치(메시지 1016)
+        AddSoul(a, 10);   // 처치(메시지 1016)
         GainKillExp(a, t);
         dying.Add(t);
     }

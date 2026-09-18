@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -51,6 +51,29 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>슬롯이 아니라 전투 보정으로 들어가는 번호들.</summary>
     private static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 37 or 48;
 
+    /// <summary>
+    /// 상태이상까지 얹은 능력치 — 판정·이동 범위·능력치 표시는 모두 이것을 써야 한다.
+    /// </summary>
+    /// <remarks>
+    /// 칸 아닌 보정 <b>30 DEX · 31 PSY · 32 DEP</b> 를 더하고, 칸에 걸린 <b>1(DEX −1, <c>0x1007ae8e</c>)</b> 과
+    /// <b>40(DEP −1, <c>0x1007af85</c>)</b> 을 뺀다. 둘 다 0 밑으로는 안 내려간다. 최대 HP·TP·SOUL(33·37·48)은
+    /// <see cref="RefreshUnitStats"/> 가 이미 반영한다.
+    /// </remarks>
+    private static CharacterData? EffectiveData(UnitState u)
+    {
+        if (u.Data is not { } c) return null;
+        int dex = c.Dex + u.BonusDex - (u.HasStatus(1) ? 1 : 0);
+        int psy = c.Psy + u.BonusPsy;
+        int dep = c.Dep + u.BonusDep - (u.HasStatus(40) ? 1 : 0);
+        if (dex == c.Dex && psy == c.Psy && dep == c.Dep) return c;
+        return c with
+        {
+            Dex = (ushort)Math.Max(0, dex),
+            Psy = (ushort)Math.Max(0, psy),
+            Dep = (ushort)Math.Max(0, dep),
+        };
+    }
+
     /// <summary>레벨이 같거나 낮으면 안 걸리는 번호들(종류 0·2 일 때).</summary>
     private static bool NeedsLevelEdge(int id) => id is 5 or 6 or 12 or 19 or 22 or 23 or 24;
 
@@ -63,13 +86,15 @@ internal sealed unsafe partial class BattleSceneWindow
         // 그 칸은 우리가 읽는 장비 보정(파일 18~)과 다른 자리라 아직 안 읽는다(분석-전투 6절).
         (int Id, int Value)[] effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
         if (effects.Length == 0) return;
+        // 레벨 조건(표 0x1007be84)은 그 효과 하나만 빼는 것이 아니다 — 종류 0·2 이고 공격자 레벨이 대상 이하인데
+        // 세 효과 중 하나라도 5·6·12·19·22·23·24 이면 <b>work 전체가 실패</b>하고 회피 반응이 나온다(0x1007bcc0).
+        if (w.Kind is 0 or 2 && (attacker.Data?.Level ?? 0) <= (target.Data?.Level ?? 0)
+            && effects.Any(e => NeedsLevelEdge(e.Id))) return;
+
         var used = new List<int>();
         foreach (var (id, value) in effects)
         {
             if (id == 0) continue;
-            if (w.Kind is 0 or 2 && NeedsLevelEdge(id)
-                && (attacker.Data?.Level ?? 0) <= (target.Data?.Level ?? 0)) continue;
-
             if (IsStatBonus(id))
             {
                 AddStatBonus(target, id, value);
@@ -155,9 +180,49 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (soul < u.Soul) { ShowNumber(u, $"{db.T(41)} {u.Soul - soul}", 0xFFC0A0FF); u.Soul = soul; }
             }
 
-            // 턴 속도(38) — TP 가 차는 속도에 그대로 더한다
-            if (u.Status(38) is var speed and > 0) u.Tp = Math.Min(u.MaxTp, u.Tp + speed);
+            // 턴 속도(38) — TP 가 찰 때 그대로 더한다. <b>부호를 그대로 쓴다</b>(0x10071de9) — 아다지오처럼 −1 인 것도 있다.
+            if (u.HasStatus(38)) u.Tp = Math.Clamp(u.Tp + u.Status(38), 0, u.MaxTp);
         }
+    }
+
+    /// <summary>SOUL 을 채운다 — 19(소울이 차지 않음)가 걸려 있으면 하나도 안 들어간다(<c>0x10071d45</c>).</summary>
+    private static void AddSoul(UnitState u, int amount)
+    {
+        if (amount <= 0 || u.HasStatus(19)) return;
+        u.Soul = Math.Min(u.MaxSoul, u.Soul + amount);
+    }
+
+    /// <summary>work 이 무는 SOUL — 18(소울 소모량 %)만큼 늘거나 준다(<c>0x100724c4</c>).</summary>
+    private int SoulCostFor(UnitState u, CharacterData c, int workId) =>
+        Math.Max(0, (_db?.WorkSoulCost(c, workId) ?? 0) * (100 + u.Status(18)) / 100);
+
+    /// <summary>work 을 쓰려면 있어야 하는 SOUL — 비용과 같은 보정을 받는다.</summary>
+    private int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
+        Math.Max(0, (_db?.WorkSoulNeed(c, workId) ?? 0) * (100 + u.Status(18)) / 100);
+
+    /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
+    private int TpCostFor(UnitState u, CharacterData c, int workId) =>
+        Math.Max(0, (_db?.WorkTpCost(c, workId) ?? 0) * (100 + u.Status(20)) / 100);
+
+    /// <summary>
+    /// 상태이상이 거는 사망 조건 — 22 SOUL 이 값 아래 · 23 TP 가 값 아래 · 24 SOUL 이 가득(<c>0x1007c689</c>~).
+    /// </summary>
+    private static bool DiesByStatus(UnitState u) =>
+        (u.HasStatus(22) && u.Status(22) > u.Soul)
+        || (u.HasStatus(23) && u.Status(23) > u.Tp)
+        || (u.HasStatus(24) && u.Soul >= u.MaxSoul);
+
+    /// <summary>
+    /// 차례를 시작할 때 8(자동 회복) — HP 가 값(최대 HP 한도)보다 적으면 그 값까지 채운다(<c>0x10067dd1</c>).
+    /// </summary>
+    private void AutoHeal(UnitState u)
+    {
+        if (!u.HasStatus(8)) return;
+        int upTo = Math.Min(u.Status(8), u.MaxHp);
+        if (u.Hp >= upTo) return;
+        int before = u.Hp;
+        u.Hp = upTo;
+        ShowNumber(u, _db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
     }
 
     /// <summary>차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>).</summary>
@@ -188,9 +253,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>피해 보정 — 때리는 쪽 13(공격력), 맞는 쪽 14(방어력)·7(피해 감소).</summary>
     private static int AilmentDamage(UnitState attacker, UnitState target, int amount)
     {
+        // 곱하는 차례가 결과를 바꾼다(정수 나눗셈) — 원본은 7 → 13 → 14 순이다(0x1007b880 · 0x1007b8b3 · 0x1007b8e2).
+        if (target.Status(7) is var cut and > 0) amount = amount * (100 - cut) / 100;
         if (attacker.Status(13) is var atk and not 0) amount = amount * (100 + atk) / 100;
         if (target.Status(14) is var def and not 0) amount = amount * (100 - def) / 100;
-        if (target.Status(7) is var cut and > 0) amount = amount * (100 - cut) / 100;
         return Math.Max(0, amount);
     }
 
