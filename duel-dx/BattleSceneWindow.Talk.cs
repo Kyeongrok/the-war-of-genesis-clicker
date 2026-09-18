@@ -117,6 +117,25 @@ internal sealed unsafe partial class BattleSceneWindow
     private static string[] TalkLines(string text) =>
         text.Replace("$m0", "").Split("$n", StringSplitOptions.None);
 
+    /// <summary>창 너비에 맞춰 글자 단위로 줄을 접는다 — 한국어라 낱말 단위로 끊지 않는다.</summary>
+    private List<string> WrapTalk(IEnumerable<string> lines, int width, float size)
+    {
+        var wrapped = new List<string>();
+        foreach (string line in lines)
+        {
+            if (line.Length == 0) { wrapped.Add(""); continue; }
+            int start = 0;
+            while (start < line.Length)
+            {
+                int take = line.Length - start;
+                while (take > 1 && GetText(line.Substring(start, take), White, size).Item2 > width) take--;
+                wrapped.Add(line.Substring(start, take));
+                start += take;
+            }
+        }
+        return wrapped;
+    }
+
     private void DrawTalk()
     {
         if (_talk is not { } t) return;
@@ -152,8 +171,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 BlitScaled(face, x + 8, y + 6, 84, 84);
                 textLeft = x + 100;
             }
-            for (int i = 0; i < lines.Length && i < 4; i++)
-                DrawText(lines[i], textLeft, y + 10 + i * 20, White, 13);
+            var boxLines = WrapTalk(lines, x + w - 16 - textLeft, 13);
+            for (int i = 0; i < boxLines.Count && i < 4; i++)
+                DrawText(boxLines[i], textLeft, y + 10 + i * 20, White, 13);
             // 오른쪽 아래 「다음」 표시 — 깜빡인다.
             if (_talkFilled && tick % 20 < 12) DrawText("▼", x + w - 22, y + h - 22, 0xFFFFE070, 13);
             return;

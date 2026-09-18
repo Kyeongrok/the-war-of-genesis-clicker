@@ -328,12 +328,18 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_field is null) return;
         var (ox, oy) = MosesOrigin();
+        int tick = (int)(_lastTime * TicksPerSecond);
 
         FillRect(0, _camY, BoardWidth, ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
             for (int y = 0; y < MosesH; y++)
                 for (int x = 0; x < MosesW; x++)
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+
+        // 파일에 적힌 물체들 — 층 번호는 앞뒤 순서라 작은 층부터 그린다.
+        if (_field is { } drawing)
+            foreach (var o in drawing.Objects.OrderBy(o => o.Layer))
+                DrawUi(o.Picture, 0, tick, ox + o.X, oy + o.Y, UiBlend.Alpha);
 
         foreach (var (obs, motion, px, py, start) in _fieldPictures)
             DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond), ox + px, oy + py, UiBlend.Alpha);
