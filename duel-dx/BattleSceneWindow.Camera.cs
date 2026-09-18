@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 
@@ -21,8 +21,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void UpdateCamera(double dt)
     {
-        // 따라갈 인물: 차례인 인물(없으면 고른 인물). 그 인물이 바뀌거나 칸을 옮기면 화면 안으로 당긴다 — 휠로 옮긴 건 그대로 둔다.
-        int focus = _turn >= 0 ? _turn : _selected;
+        // 따라갈 인물: 대사 중이면 말하는 이, 아니면 차례인 인물(없으면 고른 인물).
+        // 원본도 대사 창을 띄우기 전에 말하는 이에게 카메라를 옮기고 멈출 때까지 기다린다(0x100eabe0).
+        int focus = _talk is { Speaker: >= 0 } t ? t.Speaker : _turn >= 0 ? _turn : _selected;
         if ((uint)focus < _units.Length)
         {
             var u = _units[focus];
