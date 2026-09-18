@@ -221,7 +221,10 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (Math.Abs(col - _rangeCol) + Math.Abs(row - _rangeRow) > radius) continue;
                 int i = row * Cols + col;
-                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : range.Red[i] ? RangeTint : 0;
+                // 원본은 <b>상태마다 칠하는 층이 다르다</b> — 그냥 걸을 때(상태 12)는 파랑만이고,
+                // 대상을 고를 때(상태 10·11)라야 사거리 빨강이 함께 깔린다.
+                bool aiming = _targetWork >= 0 || _attackCursor >= 0;
+                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : aiming && range.Red[i] ? RangeTint : 0;
                 if (tint == 0) continue;
                 int x = col * TileW, y = GridTop + row * TileH;
                 AddRect(x, y, TileW, TileH, tint);
