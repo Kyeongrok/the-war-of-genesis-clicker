@@ -69,6 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool _mosesOpen;
     private uint[]? _mosesBg;
     private int _mosesBgId = -1;
+    private (int X, int Y) _mosesBgAt;
     private int _mosesHover = -1;
     private int _mosesPage = -1;          // -1 주 화면 · 0 항행 · 5 파티
     private int _mosesStep = 2;           // 항행 단계 — 1 행성 고르기 · 2 장소 고르기
@@ -101,10 +102,32 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesPage = -1;
         if (chapter != null) _mosesChp = chapter;
         LoadMosesChapter();
+        if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         _mixer.StopMusic();
         PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true);   // 챕터 BGM — Chp 머리 셋째 워드
     }
+
+    /// <summary>아직 안 겪었고 조건이 열린 「자동 발생」 장소가 있으면 거기로 들어간다(<c>0x100fdd40</c>).</summary>
+    /// <remarks>
+    /// <c>Chp 0010</c> 은 이렇게 프롤로그(<c>Fld 0019</c>)로 먼저 들어가고, 그것이 첫 진행 깃발을 세운다.
+    /// 한 번 겪은 장소는 다시 안 일어난다 — 원본은 레코드에 표시를 남기고, 데모는 <see cref="_autoPlacesDone"/> 에 적어 둔다.
+    /// </remarks>
+    private bool EnterAutoPlace()
+    {
+        if (_mosesChp is not { } chp) return false;
+        foreach (var place in chp.Places)
+        {
+            if (!place.IsAuto || !_autoPlacesDone.Add((chp.Id, place.No))) continue;
+            if (!FlagsAllow(place.Conditions)) continue;
+            if (place.Value >= 10000 && place.Value < 20000 && OpenField(place.Value - 10000)) return true;
+            if (place.Value > 0 && place.Value < 10000 && StartBattle(place.Value)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>이미 겪은 자동 발생 장소 — (챕터, 장소).</summary>
+    private readonly HashSet<(int Chapter, int Place)> _autoPlacesDone = [];
 
     private void LoadMosesChapter()
     {
@@ -113,10 +136,14 @@ internal sealed unsafe partial class BattleSceneWindow
         if (File.Exists(path)) _mosesChp = ChapterFile.Parse(MosesChapter, File.ReadAllBytes(path));
     }
 
-    /// <summary>배경 그림(.bgr 은 그냥 JPEG)을 읽어 둔다.</summary>
-    private void ShowMosesBackground(int id)
+    /// <summary>
+    /// 배경 그림(.bgr 은 그냥 JPEG)을 읽어 둔다. 필드 배경은 640×480 보다 넓어서
+    /// <paramref name="srcX"/>·<paramref name="srcY"/> 부터 잘라 온다(필드 머리의 첫 화면 자리).
+    /// </summary>
+    private void ShowMosesBackground(int id, int srcX = 0, int srcY = 0)
     {
-        if (_mosesBgId == id) return;
+        if (_mosesBgId == id && (srcX, srcY) == _mosesBgAt) return;
+        _mosesBgAt = (srcX, srcY);
         try
         {
             string path = Path.Combine(AssetsFolder.Find("moses"), "bgr", $"{id:D4}.bgr");
@@ -125,10 +152,13 @@ internal sealed unsafe partial class BattleSceneWindow
             var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try
             {
+                int left = Math.Clamp(srcX, 0, Math.Max(0, bitmap.Width - MosesW));
+                int top = Math.Clamp(srcY, 0, Math.Max(0, bitmap.Height - MosesH));
                 var pixels = new uint[MosesW * MosesH];
-                for (int y = 0; y < Math.Min(MosesH, bitmap.Height); y++)
+                for (int y = 0; y + top < bitmap.Height && y < MosesH; y++)
                 {
-                    var row = new Span<uint>((void*)(data.Scan0 + y * data.Stride), Math.Min(MosesW, bitmap.Width));
+                    int width = Math.Min(MosesW, bitmap.Width - left);
+                    var row = new Span<uint>((void*)(data.Scan0 + (y + top) * data.Stride + 4 * left), width);
                     row.CopyTo(pixels.AsSpan(y * MosesW, row.Length));
                 }
                 _mosesBg = pixels;
@@ -177,7 +207,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private void MosesEnterPlace(int value)
     {
         if (value >= 20000) { OpenMosesShop(0, value - 20000); return; }
-        if (value >= 10000) { Toast($"필드 {value - 10000} 은 아직 만들지 않았습니다"); return; }
+        if (value >= 10000)
+        {
+            if (OpenField(value - 10000)) return;
+            Toast($"필드 {value - 10000} 자료가 assets 에 없습니다");
+            return;
+        }
         if (!StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
         _mixer.StopMusic();
         StartBattleMusic();
