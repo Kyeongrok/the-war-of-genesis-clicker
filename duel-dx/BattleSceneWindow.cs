@@ -437,6 +437,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
+        if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (OnTalkInput()) return;            // 대사는 아무 키로나 넘긴다
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }

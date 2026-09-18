@@ -55,13 +55,22 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
 
-    /// <summary>전환 직전에 찍어 둔 640×480 화면 — 빗살 지우기·밀어내기가 이 위에서 걷힌다.</summary>
-    private uint[]? _fieldShot;
-
     /// <summary>
-    /// 걷어내는 전환(903 빗살 지우기 · 904 밀어내기) — 찍어 둔 옛 화면을 새 화면 위에 덮고 조금씩 걷는다.
+    /// 걷어내는 전환(903 빗살 지우기 · 904 줄 늘여 쓸기).
     /// </summary>
-    private (int Kind, int Way, int Ticks, double Start)? _fieldWipe;
+    /// <remarks>
+    /// 901·903~909 는 원본에서 <b>한 함수</b>(<c>0x100f2770</c>)가 돌리고 인자 자리도 같다 —
+    /// <b>a0 방향</b>(0 이면 지금 화면 → 그림이라 끝나도 그림이 남고, ≠0 이면 그림 → 지금 화면이라 끝에 그림을 걷는다) ·
+    /// <b>a1 <c>Bgr</c> 번호</b> · <b>마지막 인자는 전환이 가리는 층 수</b>(0~8, 그보다 위 층은 전환 위에 덧그린다).
+    /// 전환이 도는 동안 스크립트는 멈춘다(<c>0x100f2b13</c>).
+    /// <para>
+    /// <c>Base</c> 는 바탕, <c>Over</c> 는 걷히면서 드러나는 그림이다. 904 는 그림 <b>한 장</b>만 쓰고
+    /// 바탕은 그 그림의 <b>경계 줄을 늘여</b> 채우므로 <c>Base</c> 가 없다.
+    /// </para>
+    /// </remarks>
+    private sealed record FieldWipe(int Kind, int Way, int Ticks, double Start, uint[]? Base, uint[] Over);
+
+    private FieldWipe? _fieldWipe;
 
     /// <summary>
     /// 필드 인물 하나의 지금 모습 — 자리·모션·좌우반전, 그리고 걷는 중이면 어디서 어디로.
@@ -151,6 +160,25 @@ internal sealed unsafe partial class BattleSceneWindow
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_FIELD"), out int id) && id > 0) OpenField(id);
     }
 
+    /// <summary>
+    /// DUELDX_WIPE=&lt;행동&gt;,&lt;a0&gt;,&lt;a1&gt;,&lt;a2&gt;,&lt;a3&gt; 면 필드를 연 뒤 그 전환을 한 번 건다(화면 밖 시험용).
+    /// 전환은 스크립트 한참 뒤에나 나와서, 그것만 따로 보려면 이렇게 부른다.
+    /// </summary>
+    private bool RunWipeIfAsked()
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_WIPE") is not { Length: > 0 } text) return false;
+        var n = text.Split(',').Select(t => int.TryParse(t.Trim(), out int v) ? v : 0).ToArray();
+        if (n.Length < 4) return false;
+        if (n[0] == 903)
+        {
+            int bands = Math.Max(1, n[3]);
+            BeginFieldWipe(903, bands, MosesW / bands + bands, n[1] == 0, n[2]);
+        }
+        else
+            BeginFieldWipe(904, n[3], Math.Max(1, n.Length > 4 ? n[4] : 60), n[1] == 0, n[2]);
+        return true;
+    }
+
     /// <summary>그 필드를 연다. 자료가 없으면 false.</summary>
     private bool OpenField(int id)
     {
@@ -168,7 +196,6 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldChoices = null;
             _fieldPictures.Clear();
             _fieldFade = null;
-            _fieldShot = null;
             _fieldWipe = null;
             _fieldActors = [.. field.People.Select(p => new FieldActor(p))];
             // 파일의 물체 — 갈래 칸이 곧 처음 모션이다.
@@ -438,6 +465,15 @@ internal sealed unsafe partial class BattleSceneWindow
                                  target.X - MosesW / 2.0, target.Y - MosesH / 2.0, camTicks, _lastTime);
                 break;
             }
+            case 903:                                        // 빗살 지우기 — a2 는 틀 수가 아니라 <b>세로 띠 수</b>다
+            {
+                int bands = Math.Max(1, (int)A(2));
+                BeginFieldWipe(903, bands, MosesW / bands + bands, A(0) == 0, A(1));
+                break;
+            }
+            case 904:                                        // 줄 늘여 쓸기 — a2 방향(0 아래→위, 1 위→아래, 2 오른→왼, 3 왼→오른)
+                BeginFieldWipe(904, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
+                break;
             case 404:
             case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 909 가 제 그림을 직접 읽으므로 안 쓴다
             case 909:                                        // 겹쳐 디졸브 — 전환의 대부분이 이것이다
@@ -736,53 +772,89 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawToast();
     }
 
-    /// <summary>지금 필드 화면(640×480)을 그대로 찍어 둔다 — 걷어내는 전환이 그 위에서 시작한다.</summary>
-    private void CaptureFieldScreen()
+    /// <summary>
+    /// 걷어내는 전환을 건다 — <paramref name="toPicture"/> 면 지금 화면에서 그림으로 가고(그림이 남는다),
+    /// 아니면 그림에서 지금 화면으로 돌아온다.
+    /// </summary>
+    private void BeginFieldWipe(int kind, int way, int ticks, bool toPicture, int background)
     {
-        var (ox, oy) = MosesOrigin();
-        _fieldShot = new uint[MosesW * MosesH];
-        for (int y = 0; y < MosesH; y++)
-            Array.Copy(_fb, (oy + y) * BoardWidth + ox, _fieldShot, y * MosesW, MosesW);
+        var shot = CaptureFieldScreen();
+        var picture = ReadBackground(background) ?? shot;
+        _fieldWipe = new FieldWipe(kind, way, ticks, _lastTime, toPicture ? shot : picture, toPicture ? picture : shot);
+        _fieldWaitUntil = _lastTime + ticks / TicksPerSecond;
+        // 그림으로 갔으면 전환이 끝난 뒤에도 그 그림이 화면에 남아 있어야 한다.
+        if (toPicture)
+        {
+            ShowMosesBackground(background);
+            _fieldCam = (0, 0);
+            _fieldCamMove = null;
+        }
     }
 
-    /// <summary>찍어 둔 옛 화면을 새 화면 위에 덮고, 전환 종류대로 걷어낸다.</summary>
+    /// <summary>지금 필드 화면(640×480)을 그대로 찍는다 — 걷어내는 전환이 이 그림에서 시작한다.</summary>
+    private uint[] CaptureFieldScreen()
+    {
+        var (ox, oy) = MosesOrigin();
+        var shot = new uint[MosesW * MosesH];
+        for (int y = 0; y < MosesH; y++)
+            Array.Copy(_fb, (oy + y) * BoardWidth + ox, shot, y * MosesW, MosesW);
+        return shot;
+    }
+
+    /// <summary>전환이 도는 동안은 화면 전체가 전환 것이다 — 바탕을 깔고 걷힌 만큼 덮는 그림을 올린다.</summary>
     private void DrawFieldWipe(int ox, int oy)
     {
-        if (_fieldWipe is not { } wipe || _fieldShot is not { } shot) return;
+        if (_fieldWipe is not { } wipe) return;
         int tick = (int)((_lastTime - wipe.Start) * TicksPerSecond);
-        if (tick >= wipe.Ticks) { _fieldWipe = null; _fieldShot = null; return; }
-        double done = (double)tick / wipe.Ticks;          // 0(옛 화면 그대로) ~ 1(다 걷힘)
+        if (tick >= wipe.Ticks) { _fieldWipe = null; return; }
+
+        if (wipe.Kind == 903) DrawCombWipe(ox, oy, wipe, tick);
+        else DrawStreakWipe(ox, oy, wipe, tick);
+    }
+
+    /// <summary>
+    /// 903 빗살 지우기 — 세로 띠 <c>a2</c>개로 나누고, 띠 <c>i</c> 는 <c>t = i+1</c> 부터 한 틀에 1픽셀씩 왼쪽부터 드러난다.
+    /// 그래서 걸리는 틀 수가 <c>640/a2 + a2</c> 다(<c>0x1002c4c0</c>).
+    /// </summary>
+    private void DrawCombWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        int bands = Math.Max(1, wipe.Way);
+        int width = MosesW / bands;
+        for (int y = 0; y < MosesH; y++)
+            for (int x = 0; x < MosesW; x++)
+            {
+                int band = Math.Min(bands - 1, x / width);
+                int shown = Math.Clamp(tick - band, 0, width);
+                uint[] from = x - band * width < shown ? wipe.Over : wipe.Base ?? wipe.Over;
+                SetPixel(ox + x, oy + y, from[y * MosesW + x] | 0xFF000000);
+            }
+    }
+
+    /// <summary>
+    /// 904 줄 늘여 쓸기 — 그림 <b>한 장</b>이 한 쪽에서 들어오는데, 아직 안 들어온 쪽은
+    /// <b>경계 줄 하나를 늘여</b> 채운다(<c>0x1002a876</c>). 그래서 첫 틀부터 화면 전체가 그 그림으로 덮인다.
+    /// </summary>
+    private void DrawStreakWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        bool sideways = wipe.Way is 2 or 3;
+        int span = sideways ? MosesW : MosesH;
+        int pos = Math.Clamp(span * tick / Math.Max(1, wipe.Ticks), 0, span);
+        if (pos <= 0) return;
 
         for (int y = 0; y < MosesH; y++)
             for (int x = 0; x < MosesW; x++)
             {
-                if (!WipeKeeps(wipe, done, x, y, out int sx, out int sy)) continue;
-                SetPixel(ox + x, oy + y, shot[sy * MosesW + sx] | 0xFF000000);
+                // 드러난 띠는 제자리 그대로, 나머지는 경계 줄을 그대로 되풀이한다.
+                int sx = x, sy = y;
+                switch (wipe.Way)
+                {
+                    case 0: sy = Math.Max(y, MosesH - pos); break;   // 아래에서 위로
+                    case 1: sy = Math.Min(y, pos - 1); break;        // 위에서 아래로
+                    case 2: sx = Math.Max(x, MosesW - pos); break;   // 오른쪽에서 왼쪽으로
+                    default: sx = Math.Min(x, pos - 1); break;       // 왼쪽에서 오른쪽으로
+                }
+                SetPixel(ox + x, oy + y, wipe.Over[sy * MosesW + sx] | 0xFF000000);
             }
-    }
-
-    /// <summary>그 점에 옛 화면이 아직 남아 있는지 — 남아 있으면 옛 화면의 어느 점을 가져올지도 알려 준다.</summary>
-    private static bool WipeKeeps((int Kind, int Way, int Ticks, double Start) wipe, double done, int x, int y,
-                                  out int sx, out int sy)
-    {
-        sx = x;
-        sy = y;
-        if (wipe.Kind == 903)
-        {
-            // 빗살 — 화면을 세로(또는 가로) 띠로 나누고, 띠마다 <b>번갈아 반대 쪽</b>에서 줄어든다.
-            const int CombWidth = 16;
-            int band = (wipe.Way is 0 or 1 ? x : y) / CombWidth;
-            int within = (wipe.Way is 0 or 1 ? x : y) % CombWidth;
-            double left = CombWidth * (1 - done);
-            return band % 2 == 0 ? within < left : within >= CombWidth - left;
-        }
-
-        // 밀어내기 — 옛 화면이 통째로 한 쪽으로 빠져 나간다.
-        int dx = wipe.Way switch { 0 => -(int)(MosesW * done), 1 => (int)(MosesW * done), _ => 0 };
-        int dy = wipe.Way switch { 2 => -(int)(MosesH * done), 3 => (int)(MosesH * done), _ => 0 };
-        sx = x - dx;
-        sy = y - dy;
-        return (uint)sx < MosesW && (uint)sy < MosesH;
     }
 
     /// <summary>덮기·걷기 — 눈금 0(안 덮임)~31(다 덮임)을 그대로 옮긴다.</summary>

@@ -144,11 +144,19 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ShowMosesBackground(int id, int srcX = 0, int srcY = 0)
     {
         if (_mosesBgId == id && (srcX, srcY) == _mosesBgAt) return;
+        if (ReadBackground(id, srcX, srcY) is not { } pixels) return;
         _mosesBgAt = (srcX, srcY);
+        _mosesBg = pixels;
+        _mosesBgId = id;
+    }
+
+    /// <summary>배경 그림 한 장을 640×480 낱칸으로 읽어 온다 — 화면에 걸지는 않는다(전환이 쓴다).</summary>
+    private uint[]? ReadBackground(int id, int srcX = 0, int srcY = 0)
+    {
         try
         {
             string path = Path.Combine(AssetsFolder.Find("moses"), "bgr", $"{id:D4}.bgr");
-            if (!File.Exists(path)) return;
+            if (!File.Exists(path)) return null;
             using var bitmap = new Bitmap(path);
             var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try
@@ -162,14 +170,14 @@ internal sealed unsafe partial class BattleSceneWindow
                     var row = new Span<uint>((void*)(data.Scan0 + (y + top) * data.Stride + 4 * left), width);
                     row.CopyTo(pixels.AsSpan(y * MosesW, row.Length));
                 }
-                _mosesBg = pixels;
-                _mosesBgId = id;
+                return pixels;
             }
             finally { bitmap.UnlockBits(data); }
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or OutOfMemoryException)
         {
             _loadError = $"모세스 배경: {ex.Message}";
+            return null;
         }
     }
 
