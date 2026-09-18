@@ -113,9 +113,11 @@ internal sealed unsafe partial class BattleSceneWindow
         return shown >= t.Text.Length ? t.Text : t.Text[..Math.Max(0, shown)];
     }
 
-    /// <summary>글에 박힌 <c>$n</c>(줄바꿈)·<c>$m0</c>(색 전환)을 푼다.</summary>
+    /// <summary>
+    /// 글에 박힌 표시를 푼다 — 강제 줄바꿈은 <c>$n $N $p $P</c> 넷이고(0x10028dc0), <c>$m0</c> 는 색 전환이라 지운다.
+    /// </summary>
     private static string[] TalkLines(string text) =>
-        text.Replace("$m0", "").Split("$n", StringSplitOptions.None);
+        text.Replace("$m0", "").Split(["$n", "$N", "$p", "$P"], StringSplitOptions.None);
 
     /// <summary>한 줄 내려가는 만큼 — 글자 높이 + 4픽셀(<c>0x1002993c</c>).</summary>
     private int TalkLineStep(float size) => GetText("가", White, size).H + 4;
