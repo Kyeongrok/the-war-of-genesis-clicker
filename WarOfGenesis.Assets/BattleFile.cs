@@ -108,6 +108,34 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
     /// <summary><c>Map/NNNN.map</c> 둘째 워드 = 배경 Obt 번호(<c>btl_dump.parse_map</c>).</summary>
     public static int? ObtOfMap(byte[]? mapFile) => mapFile is { Length: >= 4 } ? BitConverter.ToUInt16(mapFile, 2) : null;
 
+    /// <summary>
+    /// <c>Map</c> 파일이 놓는 물체 — 문·장식 상자 같은 <b>맵에 붙박인 것</b>들(22바이트 × n).
+    /// </summary>
+    /// <remarks>
+    /// 배치는 판 · Obt · Bsd · (판 ≥ 3 이면 두 낱말) 다음에 개수 한 낱말이 오고, 레코드는 낱말 11개다 —
+    /// <c>w1</c> 번호 · <c>w2</c> <c>Obj</c> 번호 · <c>w3·w4</c> 칸. 번호는 <c>Btl</c> 것과 겹치지 않게 <b>100 을 더해</b> 쓴다.
+    /// </remarks>
+    public static IReadOnlyList<BattleObjectRecord> ObjectsOfMap(byte[]? mapFile)
+    {
+        var list = new List<BattleObjectRecord>();
+        if (mapFile is not { Length: >= 8 } b) return list;
+        try
+        {
+            int version = BitConverter.ToUInt16(b, 0);
+            int o = 6 + (version >= 3 ? 4 : 0);
+            int count = BitConverter.ToUInt16(b, o);
+            o += 2;
+            for (int i = 0; i < count && o + 22 <= b.Length; i++, o += 22)
+            {
+                short W(int k) => BitConverter.ToInt16(b, o + 2 * k);
+                if (W(2) <= 0) continue;
+                list.Add(new BattleObjectRecord(100 + W(1), W(2), W(3), W(4), W(5)));
+            }
+        }
+        catch (ArgumentException) { list.Clear(); }
+        return list;
+    }
+
     public static string SideName(int side) => side switch
     {
         4 => "플레이어",

@@ -93,7 +93,8 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 .Select(p => (p.X, p.Y, p.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left }))
                 .ToList();
             // 판에 놓인 물체 — <c>Obj</c> 파일이 없는 것은 그리지도 못하니 뺀다.
-            var objects = battle.Objects
+            // 맵이 놓는 물체(문·장식)도 같이 세운다 — Btl 것과 번호가 겹치지 않게 100 을 더해 온다.
+            var objects = battle.Objects.Concat(BattleFile.ObjectsOfMap(files.Read("Map", $"{battle.MapId:D4}.map")))
                 .Select(o => ObjFile.Parse(o.ObjId, files.Read("Obj", $"{o.ObjId:D4}.obj")) is { } data
                              ? new DemoObject(o, data) : null)
                 .OfType<DemoObject>()
