@@ -1,6 +1,8 @@
 """전투 하나에 서는 인물을 `assets/characters/` 로 뽑는다.
 
-    python export_battle_chars.py <스크래치의 g 폴더> <전투번호> [<전투번호> ...]
+    python export_battle_chars.py <스크래치의 g 폴더> <전투번호> [<전투번호> ...] [c<Chr 코드> ...]
+
+`c274` 처럼 앞에 c 를 붙이면 그 인물 하나만 뽑는다 — 군단 부하처럼 배치 레코드에 안 적힌 인물용이다.
 
 `assets/characters/<코드>_<이름>/` 밑에 `.chr` 과 그 인물의 그림·얼굴 `.obs`, 그리고
 duel-dx 가 읽는 `character.json` 을 놓는다. 게임 폴더는 안 건드린다 — pak_extract.py 로
@@ -20,7 +22,8 @@ from extract_character import parse_txr  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
 G = sys.argv[1]
-BATTLES = [int(a) for a in sys.argv[2:]]
+BATTLES = [int(a) for a in sys.argv[2:] if not a.startswith('c')]
+LOOSE = [int(a[1:]) for a in sys.argv[2:] if a.startswith('c')]
 
 
 def chr_codes_of(bid):
@@ -39,6 +42,44 @@ def chr_codes_of(bid):
     return out
 
 
+def legion_members(codes_wanted):
+    """`Dat/For.dat` 의 군단 부하 — 배치 레코드의 군단 번호가 가리키는 여섯 명(레코드 59바이트)."""
+    path = os.path.join(G, 'Dat', 'For.dat')
+    if not os.path.exists(path):
+        return []
+    b = open(path, 'rb').read()
+    count = struct.unpack_from('<H', b, 2)[0]
+    out = []
+    for i in range(count):
+        o = 6 + 59 * i
+        if o + 59 > len(b):
+            break
+        legion = struct.unpack_from('<H', b, o)[0]
+        if legion not in codes_wanted:
+            continue
+        for k in range(6):
+            m = struct.unpack_from('<H', b, o + 4 + 2 * k)[0]
+            if m:
+                out.append(m)
+    return out
+
+
+def legions_of(bid):
+    """그 전투의 인물들이 이끄는 군단 번호(레코드 +15)."""
+    path = os.path.join(G, 'Btl', '%04d.btl' % bid)
+    if not os.path.exists(path):
+        return []
+    b = open(path, 'rb').read()
+    count = struct.unpack_from('<H', b, 20)[0]
+    out, o = [], 24
+    for _ in range(count):
+        if o + 29 > len(b):
+            break
+        out.append(struct.unpack_from('<H', b, o + 15)[0])
+        o += 29
+    return [x for x in out if x]
+
+
 def main():
     names = {}
     txr = os.path.join(G, 'TXR', 'Txr.dat')
@@ -47,8 +88,14 @@ def main():
             names[row['txr_id']] = row['text']
 
     made = []
+    wanted = list(LOOSE)
+    legions = set()
     for bid in BATTLES:
-        for code in sorted(set(chr_codes_of(bid))):
+        wanted += chr_codes_of(bid)
+        legions.update(legions_of(bid))
+    wanted += legion_members(legions)
+    for bid in [None]:
+        for code in sorted(set(wanted)):
             src = os.path.join(G, 'Chr', '%04d.chr' % code)
             if code <= 0 or not os.path.exists(src):
                 continue

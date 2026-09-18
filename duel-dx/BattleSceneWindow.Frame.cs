@@ -1,4 +1,4 @@
-namespace DuelDx;
+﻿namespace DuelDx;
 
 /// <summary>
 /// 게임 안 모든 창이 쓰는 원본 창 틀(fa-11 분석) — 바탕·테두리·제목줄·귀퉁이 장식.
@@ -6,7 +6,7 @@ namespace DuelDx;
 /// <remarks>
 /// 옵시디안 분석-시스템메뉴 「메시지 창 틀 (fa-11)」: 창 하나는 <c>0x10041700</c>(틀) + <c>0x1003ff90</c>(바탕 갈래)
 /// + <c>0x10040a60(2)</c>(귀퉁이 갈래) 세 줄로 만든다. 바탕 갈래는 아무도 안 고쳐 <b>늘 0 = Obs 0970 모션 7</b>
-/// (2×184 그라데이션을 창 크기로 늘려 섞기 2·세기 16 으로 반투명하게 덮는다).
+/// (2×184 그라데이션을 창 크기로 늘려 <b>알파 24/31</b> 로 반투명하게 덮는다).
 /// 테두리는 흰 1픽셀 사각형 <c>(x−1, y−31)~(x+w, y+h)</c>(제목이 없으면 <c>y−1</c>), 제목줄 높이는 30 이고 그 밑에 가로선이 있다.
 /// 귀퉁이는 Obs 0970 모션 0 왼위·1 오른위·2 왼아래·3 오른아래, 모션 4 는 제목줄 왼쪽 「—●」 막대(제목이 있을 때만).
 /// 제목 글은 제목줄 안 가운데·흰색이다.
@@ -14,7 +14,9 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private const int FrameObs = 970, FrameTitleH = 30;
-    private const int FrameBlend = 16, FrameBlendMax = 31;
+    // 바탕 그림은 스프라이트 효과 <b>6</b> 으로 섞인다 — 섞기 표(0x1000b7c0)가 (7·바탕 + 24·그림)/31 이라 알파가 24/31 이다.
+    // 예전에 쓰던 16/31 은 「못 쓰는 항목」 표시(방식 2·세기 16)의 값이었지 창 바탕의 것이 아니었다.
+    private const int FrameBlend = 24, FrameBlendMax = 31;
 
     /// <summary>원본 창 틀을 그린다. (x, y) 는 <b>본문</b> 왼위 — 제목줄은 그 위 30픽셀을 더 쓴다.</summary>
     private void DrawGameFrame(int x, int y, int w, int h, string? title = null)
