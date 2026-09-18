@@ -36,10 +36,20 @@ internal sealed unsafe partial class BattleSceneWindow
             if (record.Legion == 0 || legions.GetValueOrDefault(record.Legion) is not { } legion) continue;
 
             var cells = LegionData.FormationCells[Math.Clamp((int)legion.Formation, 0, 5)];
+            var taken = new HashSet<(int, int)>(list.Select(u => (u.Col, u.Row)).Concat(followers.Select(f => (f.Unit.Col, f.Unit.Row))));
             for (int i = 0; i < legion.Members.Length && i < cells.Length; i++)
             {
                 var (dx, dy) = RotateFormation(cells[i], record.Facing);
                 int col = Math.Clamp(record.Col + dx, 0, Cols - 1), row = Math.Clamp(record.Row + dy, 0, Rows - 1);
+                // 같은 칸에 둘이 서지 않게 — 겹치면 대장 둘레에서 빈 칸을 찾는다.
+                for (int r = 1; r <= 3 && taken.Contains((col, row)); r++)
+                    for (int ny = -r; ny <= r && taken.Contains((col, row)); ny++)
+                        for (int nx = -r; nx <= r && taken.Contains((col, row)); nx++)
+                        {
+                            int cx = Math.Clamp(record.Col + nx, 0, Cols - 1), cy = Math.Clamp(record.Row + ny, 0, Rows - 1);
+                            if (!taken.Contains((cx, cy))) (col, row) = (cx, cy);
+                        }
+                taken.Add((col, row));
                 var member = new UnitState(record with { ChrCode = legion.Members[i], Col = col, Row = row, Legion = 0 })
                 {
                     LeaderIndex = leaderIndex,
