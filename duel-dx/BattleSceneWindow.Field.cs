@@ -255,6 +255,25 @@ internal sealed unsafe partial class BattleSceneWindow
                             A(5) != 0 ? stand : walk, mirror);
                 break;
             }
+            case 203:                                        // 걷기(매 틀 증분) — 방향에 맞는 모션까지 202 와 같다
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                var (walk, stand, mirror) = FieldFacing(A(4));
+                int ticks = Math.Max(1, (int)A(3));
+                who.Motion = walk;
+                who.Mirror = mirror;
+                who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
+                            A(5) != 0 ? stand : walk, mirror);
+                break;
+            }
+            case 206:                                        // 자리 옮기기(매 틀 증분) — 모션은 안 건드린다
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                int ticks = Math.Max(1, (int)A(3));
+                who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
+                            who.Motion, who.Mirror);
+                break;
+            }
             case 205:                                        // 자리 옮기기 — 모션은 안 건드린다
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
