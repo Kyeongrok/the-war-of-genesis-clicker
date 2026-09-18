@@ -364,7 +364,9 @@ internal sealed unsafe partial class BattleSceneWindow
             Toast("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");
             return true;
         }
-        if (WorkTargets(w, user, col, row).Count == 0)
+        // 대상 방식 3·6(아무 칸)·7(빈 칸)은 메테오처럼 <b>칸을 고르는</b> 기술이라 그 칸에 아무도 없어도 된다.
+        bool needsUnit = w.TargetMode is 1 or 4 or 5;
+        if (needsUnit && WorkTargets(w, user, col, row).Count == 0)
         {
             Toast("그 칸에는 대상이 없습니다");
             return true;
@@ -407,21 +409,28 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
 
-            // 치는 동작은 끝까지 기다리지 않는다 — 모션 안 「치는 순간」(소리 키 자리)에 바로 판정을 내서
-            // 피해 숫자와 맞는 모션이 때리는 그림과 같이 나오게 한다.
+            // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,
+            // 그 모션에 든 타격 키 수(동작 13 = 2타, 14 = 3타)만큼 그 간격대로 판정을 낸다(분석-모션 ba-10).
+            var hitTimes = new List<double> { 0 };
             if (step < actions.Length)
             {
                 PlayAction(a, actions[step]);
-                double hitAt = _sprites.TryGetValue(a.ChrCode, out var sprite) ? sprite.HitMomentSeconds(actions[step], a.Facing) : 0;
-                for (double end = _lastTime + hitAt; _lastTime < end;) yield return true;
+                hitTimes = HitTimesFor(a, actions[step]);
+                for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
 
-            var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
             ScheduleAbilitySounds(w);
             SpawnAbilityEffects(w, a, col, row);
-            foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
-            // 군단 행동(상태 15) — 대장이 친 대상을 부하들도 함께 친다
-            if (w.IsDamage && targets.Count > 0) FollowersAttack(userIndex, _units[targets[0]], dying);
+            for (int hit = 0; hit < hitTimes.Count; hit++)
+            {
+                if (hit > 0)
+                    for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
+                var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
+                foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
+                // 군단 행동(상태 15) — 대장이 친 대상을 부하들도 함께 친다
+                if (w.IsDamage && targets.Count > 0) FollowersAttack(userIndex, _units[targets[0]], dying);
+                if (targets.Count == 0 || !_units[targets[0]].Alive) break;
+            }
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
@@ -515,6 +524,19 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── 표시 ─────────────────────────────────────────────────────────────────
 
     private const uint HealColor = 0xFF60E060;
+
+    /// <summary>
+    /// 그 동작에서 판정이 나는 시각들(초, 동작 시작 기준) — 모션의 타격 키(종류 6) 간격을 그대로 쓰되
+    /// 첫 타는 사용자가 원하는 대로 <b>0.05초</b>에 낸다. 타격 키가 없으면 한 번만.
+    /// </summary>
+    private List<double> HitTimesFor(UnitState u, int action)
+    {
+        const double first = 0.05;
+        if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { Hits.Count: > 0 } clip)
+            return [first];
+        var starts = clip.Hits.Select(h => h.Start).OrderBy(t => t).ToList();
+        return [.. starts.Select(t => first + (t - starts[0]) / TicksPerSecond)];
+    }
 
     private void PlayAction(UnitState u, int action)
     {

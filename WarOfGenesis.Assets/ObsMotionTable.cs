@@ -20,6 +20,13 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
     /// </summary>
     public IReadOnlyList<(int Start, int Obs, int Motion)> Children { get; init; } = [];
 
+    /// <summary>
+    /// 타격 키(종류 6) — 그 틱에 판정이 난다. 인자는 <b>어빌리티 번호</b>(25 접근공격·26 원거리 …)이고,
+    /// 게임은 그 번호로 인물 레벨에 맞는 work 를 골라 판정을 낸다(분석-모션 ba-10 「타격 판정은 어디서 나나」).
+    /// 한 모션에 여러 개면 그 수만큼 친다(동작 13 = 2타, 14 = 3타).
+    /// </summary>
+    public IReadOnlyList<(int Start, int Ability)> Hits { get; init; } = [];
+
     /// <summary>섞기 키(종류 3) — 그 틱부터 그리는 방식(17 = 더하기 합성).</summary>
     public IReadOnlyList<(int Start, int Mode)> Blends { get; init; } = [];
 
@@ -139,6 +146,7 @@ public sealed class ObsMotionTable
                 var blends = new List<(int, int)>();
                 var tints = new List<(int, int, int)>();
                 var offsets = new List<(int, int, int)>();
+                var hits = new List<(int, int)>();
                 for (int k = 0; k < na + nb; k++, p += 26)
                 {
                     // A 목록(시작 키)은 모션 내내 걸린다 — 무기 층(종류 2)·섞기·물들이기는 시작 틱 0 으로 넣고,
@@ -160,11 +168,12 @@ public sealed class ObsMotionTable
                         case 2: children.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                         case 3: blends.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 4: tints.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 6: hits.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 7: offsets.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                     }
                 }
                 keys.Sort((x, y) => x.Start.CompareTo(y.Start));
-                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children, Tints = tints, Offsets = offsets, Blends = blends };
+                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children, Tints = tints, Offsets = offsets, Blends = blends, Hits = hits };
             }
             return new ObsMotionTable(clips);
         }

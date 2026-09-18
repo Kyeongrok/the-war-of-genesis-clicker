@@ -23,11 +23,16 @@ internal sealed unsafe partial class BattleSceneWindow
         // 죠안
         [58] = ([6, 15], [new(297, 0, true, 0), new(312, 0, true, 42)]),        // 힐
         [87] = ([6, 15], [new(297, 1, true, 0), new(312, 1, true, 42)]),        // 큐어
-        [190] = ([5, 7, 13, 14, 13, 8, 24], []),                                // 연 Lv3
+        // 연 — 레벨 띠마다 사슬이 다르다(분석-모션 ba-10 「연 레벨별 동작 사슬과 타수」).
+        // Lv1~4 = 2타, 5~8 = 3타, 9~12 = 4타, 13~16 = 5타, 17~20 = 6타.
+        [12] = ([5, 7, 13, 24], []), [191] = ([5, 7, 13, 24], []), [190] = ([5, 7, 13, 24], []), [189] = ([5, 7, 13, 24], []),
+        [188] = ([5, 7, 14, 24], []), [187] = ([5, 7, 14, 24], []), [186] = ([5, 7, 14, 24], []), [185] = ([5, 7, 14, 24], []),
+        [184] = ([5, 7, 14, 8, 24], []), [183] = ([5, 7, 14, 8, 24], []), [200] = ([5, 7, 14, 8, 24], []), [199] = ([5, 7, 14, 8, 24], []),
+        [198] = ([5, 7, 13, 14, 24], []), [197] = ([5, 7, 13, 14, 24], []), [196] = ([5, 7, 13, 14, 24], []), [195] = ([5, 7, 13, 14, 24], []),
+        [194] = ([5, 7, 13, 14, 8, 24], []), [193] = ([5, 7, 13, 14, 8, 24], []), [201] = ([5, 7, 13, 14, 8, 24], []), [192] = ([5, 7, 13, 14, 8, 24], []),
         [1583] = ([], [new(1320, 0, false, 0)]),                                // 이스케이프(순간이동)
         [1641] = ([5, 7], []),                                                  // 발키리의혼
         // 살라딘
-        [12] = ([5, 7, 13, 14, 13, 8, 24], []),                                 // 연 Lv1
         [10] = ([5, 7, 12, 24], [new(379, 0, true, 0), new(109, 0, true, 0)]),  // 비
         [59] = ([6, 15], [new(1332, 0, false, 0), new(1324, 1, false, 0)]),     // 격려
         // 제이슨
@@ -42,9 +47,17 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int[] ActionsFor(WorkData w) =>
         AbilityMotions.TryGetValue(w.Id, out var m) && m.Actions.Length > 0 ? m.Actions : StrikeActions;
 
-    /// <summary>기본공격은 가운데(베기) 끝에, 어빌리티는 마지막 동작 끝에 판정한다.</summary>
-    private static int HitStepFor(WorkData w, int steps) =>
-        AbilityMotions.ContainsKey(w.Id) ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
+    /// <summary>
+    /// 판정이 나는 동작 — 동작 사슬 안에서 <b>타격 동작</b>(8·9·13·14·26·27)이 있으면 그 첫 자리,
+    /// 없으면 기본공격은 가운데(베기), 어빌리티는 마지막 동작이다(분석-모션 ba-10).
+    /// </summary>
+    private static int HitStepFor(WorkData w, int steps)
+    {
+        int[] actions = ActionsFor(w);
+        int strike = Array.FindIndex(actions, a => a is 8 or 9 or 13 or 14 or 26 or 27);
+        if (strike >= 0) return strike;
+        return AbilityMotions.ContainsKey(w.Id) ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
+    }
 
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
