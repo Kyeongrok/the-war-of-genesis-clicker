@@ -451,6 +451,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
         if (_outcome.Length > 0 && !_mosesOpen)
         {
+            if (_outcome.StartsWith('승')) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
             if (_outcome.StartsWith('승') && _scene.NextBattle > 0 && StartBattle(_scene.NextBattle)) return;
             OpenMoses();
             return;
