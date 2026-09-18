@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -51,7 +51,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Array.Clear(_shopTop);
         _mosesPage = kind == 1 ? 4 : 3;
         _mosesPageAt = _lastTime;
-        _mosesFade = MosesFadeTicks;
+        StartFade();
         _mosesHover = -1;
         Play(572);
         ShowMosesBackground(40);
