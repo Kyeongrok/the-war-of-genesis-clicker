@@ -1,0 +1,227 @@
+<Window
+    x:Class="WarOfGenesis.Editor.ChapterWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="챕터(모세스) 보기"
+    Width="1500"
+    Height="900"
+    WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <!--  긴 칸은 너비를 묶어 두고, 잘린 글은 마우스를 얹으면 다 보이게 한다.  -->
+        <Style x:Key="LongCell" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="8">
+        <StackPanel
+            Margin="0,0,0,8"
+            DockPanel.Dock="Top"
+            Orientation="Horizontal">
+            <TextBlock VerticalAlignment="Center" Text="찾기(번호·제목):" />
+            <TextBox
+                x:Name="FilterBox"
+                Width="220"
+                Margin="6,0,0,0"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="ChapterFilterBox"
+                TextChanged="Filter_Changed" />
+            <CheckBox
+                x:Name="StoryOnlyToggle"
+                Margin="12,0,0,0"
+                VerticalAlignment="Center"
+                Checked="Filter_Changed"
+                Content="이야기 챕터만(제목 TXR 2284~2313)"
+                Unchecked="Filter_Changed" />
+            <TextBlock
+                x:Name="StatusText"
+                Margin="12,0,0,0"
+                VerticalAlignment="Center"
+                Foreground="DimGray" />
+        </StackPanel>
+
+        <TextBlock
+            Margin="0,6,0,0"
+            DockPanel.Dock="Bottom"
+            Foreground="DimGray"
+            Text="옵시디안 분석-모세스 6절(Chp 레코드 — 성도 점 12B · 항성계 66B · 행성 84B · 장소 20B) · 10절(메일 Dat\MAIL.DAT) · 12절(상점 Shp\NNNN.shp). 항행은 항성계 → 행성 → 장소 세 단계이고 챕터가 정한 '최저 항행 단계' 부터 시작한다. 장소 값 v 는 10000 미만이면 전투 v · 10000+ 면 필드 v−10000 · 20000+ 면 상점 v−20000 이고, '자동 발생' 장소는 목록에 안 나오는 대신 챕터를 열자마자 그리로 간다. 오른쪽 나무에서 전투 장소를 두 번 누르면 전투 보기 창이 그 전투를 연다."
+            TextWrapping="Wrap" />
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="520" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  왼쪽: 챕터 목록  -->
+            <DataGrid
+                x:Name="ChapterGrid"
+                Grid.Column="0"
+                AutoGenerateColumns="False"
+                AutomationProperties.AutomationId="ChapterGrid"
+                CanUserAddRows="False"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                IsReadOnly="True"
+                SelectionChanged="ChapterGrid_SelectionChanged"
+                SelectionMode="Single"
+                VerticalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Binding="{Binding Id, StringFormat=D4}" Header="Chp" />
+                    <DataGridTextColumn
+                        MaxWidth="180"
+                        Binding="{Binding Title}"
+                        ElementStyle="{StaticResource LongCell}"
+                        Header="제목" />
+                    <DataGridTextColumn Binding="{Binding Background}" Header="배경 Bgr" />
+                    <DataGridTextColumn Binding="{Binding Bgm}" Header="BGM" />
+                    <DataGridTextColumn Binding="{Binding StepText}" Header="최저 항행 단계" />
+                    <DataGridTextColumn Binding="{Binding SystemCount}" Header="항성계" />
+                    <DataGridTextColumn Binding="{Binding PlanetCount}" Header="행성" />
+                    <DataGridTextColumn Binding="{Binding PlaceCount}" Header="장소" />
+                    <DataGridTextColumn
+                        MaxWidth="90"
+                        Binding="{Binding Note}"
+                        ElementStyle="{StaticResource LongCell}"
+                        Header="비고" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <GridSplitter
+                Grid.Column="1"
+                Width="6"
+                HorizontalAlignment="Stretch" />
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition Height="320" />
+                </Grid.RowDefinitions>
+
+                <!--  오른쪽 위: 항성계 → 행성 → 장소 나무  -->
+                <DockPanel Grid.Row="0">
+                    <TextBlock
+                        x:Name="TreeHeader"
+                        Margin="0,0,0,4"
+                        DockPanel.Dock="Top"
+                        FontWeight="Bold"
+                        Text="항성계 → 행성 → 장소" />
+                    <TreeView
+                        x:Name="PlaceTree"
+                        AutomationProperties.AutomationId="ChapterPlaceTree"
+                        KeyDown="PlaceTree_KeyDown"
+                        MouseDoubleClick="PlaceTree_MouseDoubleClick" />
+                </DockPanel>
+
+                <GridSplitter
+                    Grid.Row="1"
+                    Height="6"
+                    HorizontalAlignment="Stretch" />
+
+                <!--  오른쪽 아래: 상점 · 메일 · 성도 점  -->
+                <TabControl Grid.Row="2" AutomationProperties.AutomationId="ChapterTabs">
+                    <TabItem Header="상점">
+                        <DataGrid
+                            x:Name="ShopGrid"
+                            AutoGenerateColumns="False"
+                            AutomationProperties.AutomationId="ChapterShopGrid"
+                            CanUserAddRows="False"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            SelectionMode="Single"
+                            VerticalScrollBarVisibility="Auto">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Binding="{Binding No, StringFormat=D4}" Header="Shp" />
+                                <DataGridTextColumn
+                                    MaxWidth="200"
+                                    Binding="{Binding Use}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="쓰임" />
+                                <DataGridTextColumn
+                                    MaxWidth="130"
+                                    Binding="{Binding Name}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="이름" />
+                                <DataGridTextColumn Binding="{Binding KindText}" Header="종류" />
+                                <DataGridTextColumn Binding="{Binding RateText}" Header="가격률" />
+                                <DataGridTextColumn
+                                    MaxWidth="130"
+                                    Binding="{Binding Owner}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="점주" />
+                                <DataGridTextColumn
+                                    MaxWidth="700"
+                                    Binding="{Binding Items}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="파는 아이템 (이름 값)" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="메일">
+                        <DataGrid
+                            x:Name="MailGrid"
+                            AutoGenerateColumns="False"
+                            AutomationProperties.AutomationId="ChapterMailGrid"
+                            CanUserAddRows="False"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            SelectionMode="Single"
+                            VerticalScrollBarVisibility="Auto">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Binding="{Binding Id}" Header="번호" />
+                                <DataGridTextColumn
+                                    MaxWidth="130"
+                                    Binding="{Binding Sender}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="보낸이" />
+                                <DataGridTextColumn
+                                    MaxWidth="240"
+                                    Binding="{Binding Title}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="제목" />
+                                <DataGridTextColumn
+                                    MaxWidth="800"
+                                    Binding="{Binding Preview}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="본문 앞부분 (마우스를 얹으면 다 보인다)" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="성도 점">
+                        <DataGrid
+                            x:Name="LandmarkGrid"
+                            AutoGenerateColumns="False"
+                            AutomationProperties.AutomationId="ChapterLandmarkGrid"
+                            CanUserAddRows="False"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            IsReadOnly="True"
+                            SelectionMode="Single"
+                            VerticalScrollBarVisibility="Auto">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Binding="{Binding No}" Header="번호" />
+                                <DataGridTextColumn Binding="{Binding Obs, StringFormat=D4}" Header="Obs" />
+                                <DataGridTextColumn Binding="{Binding Motion}" Header="모션" />
+                                <DataGridTextColumn Binding="{Binding Pos}" Header="자리 (x, y)" />
+                                <DataGridTextColumn
+                                    MaxWidth="260"
+                                    Binding="{Binding System}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="항성계" />
+                                <DataGridTextColumn
+                                    MaxWidth="260"
+                                    Binding="{Binding Note}"
+                                    ElementStyle="{StaticResource LongCell}"
+                                    Header="비고" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -64,6 +64,28 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>그림 한 장을 칸 크기에 맞춰 줄여 그린다(가장 가까운 픽셀).</summary>
+    private void BlitScaled(SpriteFrame frame, int x, int y, int w, int h)
+    {
+        if (frame.W == 0 || frame.H == 0 || w <= 0 || h <= 0) return;
+        double scale = Math.Min((double)w / frame.W, (double)h / frame.H);
+        int dw = Math.Max(1, (int)(frame.W * scale)), dh = Math.Max(1, (int)(frame.H * scale));
+        int left = x + (w - dw) / 2, top = y + (h - dh) / 2;
+        for (int yy = 0; yy < dh; yy++)
+        {
+            int py = top + yy;
+            if ((uint)py >= BoardHeight) continue;
+            int sy = yy * frame.H / dh;
+            for (int xx = 0; xx < dw; xx++)
+            {
+                int px = left + xx;
+                if ((uint)px >= BoardWidth) continue;
+                uint c = frame.Px[sy * frame.W + xx * frame.W / dw];
+                if ((c & 0xFF000000) != 0) _fb[py * BoardWidth + px] = c | 0xFF000000;
+            }
+        }
+    }
+
     /// <summary>글을 읽는 창 밑은 먼저 어둡게 깐다 — 반투명 바탕만으로는 배경 그림이 비쳐 글이 안 읽힌다.</summary>
     private void DarkenRect(int x, int y, int w, int h, int num = 8, int den = 31)
     {

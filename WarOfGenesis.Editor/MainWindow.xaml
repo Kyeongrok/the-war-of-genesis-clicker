@@ -31,6 +31,11 @@
                     AutomationProperties.AutomationId="BattleListMenuItem"
                     Click="BattleListMenuItem_Click"
                     Header="전투 목록(챕터별)(_L)" />
+                <MenuItem
+                    x:Name="ChapterMenuItem"
+                    AutomationProperties.AutomationId="ChapterMenuItem"
+                    Click="ChapterMenuItem_Click"
+                    Header="챕터(모세스)(_M)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem
