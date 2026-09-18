@@ -423,6 +423,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateSlotsHover(bx, by);
                 UpdateAbilityHover(bx, by);
                 UpdateTitleHover(bx, by);
+                UpdateRecordsHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -543,6 +544,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
         if (OnFieldClick(bx, by)) return;
+        if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
@@ -604,7 +606,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
-        if (_titleOpen || _episodesOpen || _mosesOpen)
+        if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
         {
             UpdateSounds();
             return;
@@ -681,6 +683,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawLevelUp();
         DrawMoses();
         DrawField();
+        DrawRecords();
         DrawTitle();
         DrawEpisodes();
         DrawChapters();

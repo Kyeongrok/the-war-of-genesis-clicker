@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace DuelDx;
 
@@ -45,7 +45,18 @@ internal sealed unsafe partial class BattleSceneWindow
         _slotsHover = -1;
     }
 
-    private (int X, int Y) SlotsOrigin() => ((BoardWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
+    /// <summary>
+    /// 슬롯 창 자리 — 보통은 화면 가운데지만, 「Select your record」 화면에서는 원본대로 <b>(160, 148)</b> 이다.
+    /// </summary>
+    private (int X, int Y) SlotsOrigin()
+    {
+        if (_recordsOpen)
+        {
+            var (ox, oy) = MosesOrigin();
+            return (ox + 160, oy + 148);
+        }
+        return ((BoardWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
+    }
 
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
     private SaveState? SlotHead(int slot)
@@ -127,7 +138,8 @@ internal sealed unsafe partial class BattleSceneWindow
         var (x, y) = SlotsOrigin();
         int tick = (int)(_lastTime * TicksPerSecond);
 
-        DrawGameFrame(x, y, SlotsW, SlotsH, _slotsMode == 0 ? "Save" : "Load");
+        // 「Select your record」 화면에서는 배경 글씨가 제목 노릇을 해서 제목줄 글자를 안 그린다.
+        DrawGameFrame(x, y, SlotsW, SlotsH, _recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
         if (!DrawUi(FrameObs, 5, 0, x + 296, y - 24, UiBlend.Alpha))
             StrokeRect(x + 296, y - 24, 18, 18, White);
 
