@@ -429,7 +429,17 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             }
             case 404:
-            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 909 를 만들면 그때
+            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 909 가 제 그림을 직접 읽으므로 안 쓴다
+            case 909:                                        // 겹쳐 디졸브 — 전환의 대부분이 이것이다
+                // a0 이 0 이 아니면 앞뒤를 바꾼다. 데모는 <b>새 배경으로 갈아타는 것</b>만 흉내 낸다.
+                if (A(1) > 0)
+                {
+                    ShowMosesBackground(A(1));
+                    _fieldCam = (0, 0);
+                    _fieldCamMove = null;
+                }
+                if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
+                break;
             case 407:
             case 408:                                        // 층 감추기·보이기
                 foreach (var layerProp in _fieldProps.Where(o => o.Layer == A(0))) layerProp.Visible = a.Code == 408;
@@ -686,6 +696,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (int x = 0; x < MosesW; x++)
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
 
+        // 필드 화면은 640×480 틀 안이 전부다 — 물체·인물이 그 밖으로 새지 않게 자른다.
+        _uiClip = (ox, oy, MosesW, MosesH);
+
         // 물체 — 층 번호가 앞뒤 순서라 작은 층부터 그린다.
         foreach (var prop in _fieldProps.Where(o => o.Visible).OrderBy(o => o.Layer))
             DrawUi(prop.Obs, prop.Motion, (int)((_lastTime - prop.Start) * TicksPerSecond),
@@ -708,6 +721,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int i = 0; i < choices.Count; i++)
                 DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
         }
+        _uiClip = null;
         DrawFieldFade(ox, oy);
         DrawToast();
     }

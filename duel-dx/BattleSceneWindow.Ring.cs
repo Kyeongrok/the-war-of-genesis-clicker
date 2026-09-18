@@ -297,22 +297,28 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private enum UiBlend { Alpha, Add, AddDim, Darken }
 
+    /// <summary>그림을 이 네모 안으로만 그린다 — 필드처럼 640×480 틀 밖으로 새면 안 되는 화면이 쓴다.</summary>
+    private (int Left, int Top, int Width, int Height)? _uiClip;
+
     /// <summary>UI Obs 한 장을 모션표 틱에 맞춰 (x, y) 에 그린다(컷의 X·Y 가 기준점에서 왼쪽 위까지 거리). 그렸으면 true.</summary>
     /// <param name="fade">
     /// 0~1 의 밝기 — 필드 인물이 서서히 사라지고 나타날 때(행동 210·211) 쓴다. 1 이면 그대로 그린다.
     /// </param>
     private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1)
     {
+        var clip = _uiClip;
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
         for (int yy = 0; yy < f.H; yy++)
         {
             int py = top + yy;
             if ((uint)py >= BoardHeight) continue;
+            if (clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
             for (int xx = 0; xx < f.W; xx++)
             {
                 int px = left + xx;
                 if ((uint)px >= BoardWidth) continue;
+                if (clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
                 uint c = f.Px[yy * f.W + xx];
                 if ((c & 0xFF000000) == 0) continue;
                 int i = py * BoardWidth + px;
