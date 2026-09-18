@@ -45,7 +45,7 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(s, x + rx - w, y + ry, White, size);
         }
 
-        Center(BattleDemoScene.Title, 70, 3, HudYellow);
+        Center(_scene.Title, 70, 3, HudYellow);
         DrawUi(HudObs, HudPositionMotion, (int)(_lastTime * TicksPerSecond), x + 8, y + 30, UiBlend.Alpha);
 
         // 커서가 놓인 칸과 그 높이

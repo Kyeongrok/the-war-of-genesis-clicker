@@ -168,11 +168,11 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(x, y, w, h, PanelBg);
         StrokeRect(x, y, w, h, BoxLine);
         FillRect(x, y, w, 26, HeadBg);
-        DrawText(BattleDemoScene.Title, x + 12, y + 4, White, 15);
+        DrawText(_scene.Title, x + 12, y + 4, White, 15);
         DrawText("승리 조건", x + 20, y + 44, 0xFF80D0FF);
-        DrawText(_db?.T(BattleDemoScene.WinTextId) ?? "", x + 110, y + 44, White);
+        DrawText(_db?.T(_scene.WinTextId) ?? "", x + 110, y + 44, White);
         DrawText("패배 조건", x + 20, y + 96, 0xFFE08080);
-        DrawText(_db?.T(BattleDemoScene.LoseTextId) ?? "", x + 110, y + 96, White);
+        DrawText(_db?.T(_scene.LoseTextId) ?? "", x + 110, y + 96, White);
         DrawText("아무 곳이나 누르면 닫힙니다", x + 20, y + h - 28, DimGray);
     }
 
@@ -257,6 +257,38 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>RESTART — 같은 전투를 처음부터(원본은 전투 번호 그대로 장면 1 을 다시 연다).</summary>
+    /// <summary>
+    /// 다른 전투를 건다 — 그 <c>Btl</c> 자료를 읽어 맵·인물·배경음악을 갈아 끼운다(전투 이벤트 행동 10 「다음 전투」도 이 길로 온다).
+    /// </summary>
+    private bool StartBattle(int id)
+    {
+        if (DemoScene.Load(id, _db) is not { } scene)
+        {
+            Toast($"전투 {id:D4} 자료가 assets 에 없습니다");
+            return false;
+        }
+        try
+        {
+            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), scene.MapFile));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            Toast($"전투 {id:D4} 맵을 못 읽었습니다: {ex.Message}");
+            return false;
+        }
+
+        _scene = scene;
+        _units = [.. scene.Roster.Select(u => new UnitState(u))];
+        LoadRosterSprites();
+        _mosesOpen = false;
+        _statusUnit = -1;
+        _infoUnit = -1;
+        _ringUnit = -1;
+        RestartBattle();
+        Toast($"{scene.Title} — 전투 Btl {scene.Id:D4}");
+        return true;
+    }
+
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
@@ -272,9 +304,10 @@ internal sealed unsafe partial class BattleSceneWindow
         _levelUpUnit = -1;
         _numbers.Clear();
         _effects.Clear();
+        _nextTickAt = 0;
+        CancelTargeting();
         StartBattleMusic();
         AutoSave();
-        Toast("전투를 다시 시작했습니다");
     }
 
     // ── 저장 · 불러오기 ──────────────────────────────────────────────────────
@@ -312,7 +345,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
                     [.. u.StatusId], [.. u.StatusValue]))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                BattleDemoScene.TitleTextId, 1, PlayMs,
+                _scene.TitleTextId, 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value));
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

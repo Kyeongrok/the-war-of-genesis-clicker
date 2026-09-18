@@ -33,8 +33,6 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MosesExitObs = 287, MosesMailBackground = 94;
     private const int MosesClickSound = 66, MosesFadeTicks = 15;
     private const int MosesChapter = 10;
-    /// <summary>이 데모가 가진 단 하나의 전투 — Chp 0010 리치의 「코어헌터 훈련장」(장소 값 45).</summary>
-    private const int DemoBattle = 45;
 
     /// <summary>주 화면 아이콘 — 칸 왼위 자리와 Obs 0291 모션, 설명 TXR, 누르면 가는 페이지.</summary>
     private static readonly (int X, int Y, int Motion, ushort Text, string Name, int Page)[] MosesIcons =
@@ -168,10 +166,9 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (value >= 20000) { OpenMosesShop(0, value - 20000); return; }
         if (value >= 10000) { Toast($"필드 {value - 10000} 은 아직 만들지 않았습니다"); return; }
-        if (value != DemoBattle) { Toast($"전투 {value} 은 이 데모에 없습니다"); return; }
-        _mosesOpen = false;
+        if (!StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
         _mixer.StopMusic();
-        RestartBattle();
+        StartBattleMusic();
     }
 
     private void MosesGoPage(int page)

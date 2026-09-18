@@ -1,0 +1,56 @@
+using System.IO;
+using WarOfGenesis.Assets;
+
+namespace DuelDx;
+
+/// <summary>
+/// 데모가 지금 벌이는 전투 한 판 — <c>Btl\NNNN.btl</c> 에서 그대로 읽는다.
+/// </summary>
+/// <remarks>
+/// 전에는 Btl 0045 를 상수로 박아 두었지만(<see cref="BattleDemoScene"/>), 이제 자료에서 읽어 <b>다음 전투도 이어서</b> 할 수 있다.
+/// 배경 맵은 <c>Btl</c> 머리의 맵 번호 → <c>Map\NNNN.map</c> 둘째 워드 → <c>Obt\NNNN.obt</c> 로 이어 찾는다(분석-첫전투).
+/// 편 번호는 4 = 내가 움직이는 부대, 3 = 같은 편 AI, 0~2 = 적이다([[분석-전투]] ba-6).
+/// <c>NextBattle</c> 은 그 전투의 이벤트 행동 <b>10(다음 전투)</b> 이다 — 0045 는 0046 으로 이어진다.
+/// </remarks>
+internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
+                                 ushort TitleTextId, ushort WinTextId, ushort LoseTextId,
+                                 BattleUnit[] Roster, int NextBattle)
+{
+    /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
+    public static DemoScene Fallback { get; } = new(
+        BattleDemoScene.BtlId, BattleDemoScene.Title, BattleDemoScene.MapFile, BattleDemoScene.Bgm,
+        BattleDemoScene.TitleTextId, BattleDemoScene.WinTextId, BattleDemoScene.LoseTextId,
+        BattleDemoScene.Roster, NextBattle: 46);
+
+    /// <summary>그 번호의 전투를 assets 에서 읽는다. 자료가 없으면 null.</summary>
+    public static DemoScene? Load(int id, GameDatabase? db)
+    {
+        try
+        {
+            var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
+            if (BattleFile.Parse(id, files.Read("Btl", $"{id:D4}.btl")) is not { } battle) return null;
+            if (BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) is not { } obt) return null;
+
+            string mapFile = $"{obt:D4}.obt";
+            if (!File.Exists(Path.Combine(AssetsFolder.Find("maps"), mapFile))) return null;
+
+            var roster = battle.Units
+                .Where(u => u.ChrCode > 0)
+                .Select(u => new BattleUnit(u.ChrCode, u.X, u.Y, u.Side >= 3))
+                .ToArray();
+            if (roster.Length == 0) return null;
+
+            int next = 0;
+            if (BattleEvents.Parse(files.Read("Btl", $"{id:D4}.btl"), out _) is { } events)
+                foreach (var action in events.SelectMany(e => e.Actions))
+                    if (action.Code == 10 && next == 0) next = action.Args[0];
+
+            string title = db?.T(battle.TitleId) is { Length: > 0 } t ? t : $"전투 {id}";
+            return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId, roster, next);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        {
+            return null;
+        }
+    }
+}
