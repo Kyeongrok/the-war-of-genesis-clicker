@@ -341,6 +341,12 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var o in drawing.Objects.OrderBy(o => o.Layer))
                 DrawUi(o.Picture, 0, tick, ox + o.X, oy + o.Y, UiBlend.Alpha);
 
+        // 인물 — <c>.chr</c> 의 그림 번호로 서 있는 컷을 그린다(어느 모션이 「서기」인지는 아직 가설이라 0 을 쓴다).
+        if (_field is { } people)
+            foreach (var person in people.People.OrderBy(p => p.Layer))
+                if (_db?.Character(person.ChrCode) is { SpriteId: > 0 } pc)
+                    DrawUi(pc.SpriteId, 0, tick, ox + person.X, oy + person.Y, UiBlend.Alpha);
+
         foreach (var (obs, motion, px, py, start) in _fieldPictures)
             DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond), ox + px, oy + py, UiBlend.Alpha);
 
