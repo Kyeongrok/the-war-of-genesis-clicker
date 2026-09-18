@@ -22,6 +22,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int SystemObs = 894;
     private const int SystemW = 214, SystemRowH = 37, SystemRowW = 190, SystemPad = 12;
     private const int SoundSaved = 579;
+    /// <summary>목록 줄 바탕 그림 — 분석-시스템메뉴·분석-모션 「Obs 파일 갈래」.</summary>
+    private const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
     private enum SystemItem { Mission, Restart, Load, Save, Volume, Exit }
@@ -147,8 +149,12 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (item, motion, label) = items[i];
             int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
-            FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
-            StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
+            // 칸 바탕은 원본 보조 그림 Obs 0471 모션 7(190×37) — 없으면 예전 네모로
+            if (!DrawUi(ListRowObs, 7, 0, rx, ry, UiBlend.Alpha, loop: false))
+            {
+                FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
+                StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
+            }
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
             if (!DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, UiBlend.Alpha, loop: false))
                 DrawText(label, rx + 20, ry + 9, White);

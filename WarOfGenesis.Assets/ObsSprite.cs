@@ -3,6 +3,12 @@ using System.IO;
 namespace WarOfGenesis.Assets;
 
 /// <summary>몸짓(Obs) 한 장 — 자리(X·Y)까지 포함해 BGRA 로 다 풀어 둔 것.</summary>
+/// <param name="SlotId">
+/// 파일에 적힌 <b>장 번호</b>. 모션표(<see cref="ObsMotionTable"/>)의 키가 가리키는 것이 이 번호다.
+/// 인물 그림은 0부터 빈틈없이 이어져 <see cref="ObsMotion.Frames"/> 안의 순번과 같지만,
+/// <c>Obs/0471.obs</c> 같은 UI 그림은 번호에 구멍이 있어 순번과 다르다 — 모션표로 컷을 고를 때는
+/// 순번이 아니라 이 값으로 찾아야 한다.
+/// </param>
 public sealed record ObsFrame(int SlotId, int Width, int Height, int X, int Y, byte[] Bgra);
 
 /// <summary>몸짓 하나 — 여러 장(<see cref="ObsFrame"/>)이 한 벌이다. 이 벌 하나가 「한 동작」이다.</summary>
@@ -13,8 +19,12 @@ public sealed record ObsMotion(int Id, IReadOnlyList<ObsFrame> Frames);
 /// </summary>
 /// <remarks>
 /// <c>tools/extract_character.py</c> 의 <c>parse_obs_structure</c>/<c>parse_subentry</c>/
-/// <c>decode_obs_payload</c>/<c>decode_obs_slot</c>/<c>indexed_to_rgba</c> 를 그대로 옮겼다 —
-/// 갈무리로 하나하나 맞춰 본 자리표라 값 하나도 손대지 않았다.
+/// <c>decode_obs_payload</c>/<c>decode_obs_slot</c>/<c>indexed_to_rgba</c> 를 옮긴 것이다.
+/// 그림 푸는 셈(<see cref="DecodePayload"/>)은 값 하나 안 고쳤고, 머리 읽는 쪽만 게임 로더
+/// <c>LoadG4ObsFile</c>(<c>G3PartII.dll</c> <c>0x1002f050</c>, ImageBase <c>0x10000000</c>)에
+/// 맞춰 고쳤다 — 노트 「Obs 파일 갈래(0471 같은 UI 그림)」. 자세한 것은
+/// <see cref="ParseStructure"/>·<see cref="ParseSubEntry"/> 의 주석.
+/// 확인용 파이썬 도구: <c>tools/re/obs_layout.py</c>.
 ///
 /// 한 파일 안에 <b>몸짓(subentry) 여럿</b>이 있고, 몸짓 하나는 <b>장(slot) 여럿</b>으로
 /// 된 한 벌이다 — 이 장 벌을 한 칸씩 넘겨 보는 것이 "전투 모션을 한 컷씩 본다"는 것이다.
@@ -147,6 +157,16 @@ public static class ObsSprite
         return last.Offset + 14 + payloadSize;
     }
 
+    /// <summary>
+    /// 파일 머리 — <c>u16 ?(늘 0) · u16 몸짓벌 수 · u16 가장 큰 몸짓벌 번호</c> 다음에
+    /// <c>(u16 벌 번호, u32 자리)</c> 가 벌 수만큼 잇달아 온다(6바이트씩, <c>0x06</c> 부터).
+    /// 그 뒤가 모션표다(<see cref="ObsMotionTable"/>).
+    /// </summary>
+    /// <remarks>
+    /// 노트 「Obs 파일 갈래(0471 같은 UI 그림)」 — 게임 로더 <c>LoadG4ObsFile</c>
+    /// <c>0x1002f050</c>. 세 번째 값은 <b>벌 수 - 1</b> 이 아니라 <b>가장 큰 벌 번호</b>이고,
+    /// 로더는 여기에 1을 더해(<c>0x1002f103 inc</c>) 번호로 찾아 쓰는 배열 칸 수로 삼는다.
+    /// </remarks>
     private static List<SubRef> ParseStructure(byte[] b)
     {
         if (b.Length < 12) throw new InvalidDataException("OBS 머리가 너무 짧습니다.");
@@ -155,9 +175,9 @@ public static class ObsSprite
         if (subentryCount is < 1 or > 512)
             throw new InvalidDataException($"몸짓 수가 이상합니다: {subentryCount}");
 
-        var subrefs = new List<SubRef> { new(0, U32(b, 8)) };
-        int cursor = 0x0c;
-        for (int i = 0; i < subentryCount - 1; i++)
+        var subrefs = new List<SubRef>();
+        int cursor = 0x06;
+        for (int i = 0; i < subentryCount; i++)
         {
             if (cursor + 6 > b.Length) throw new InvalidDataException("몸짓 자리표가 잘렸습니다.");
             subrefs.Add(new SubRef((ushort)U16(b, cursor), U32(b, cursor + 2)));
@@ -169,6 +189,18 @@ public static class ObsSprite
     /// <summary>
     /// 몸짓 머리를 찾는다. 알려 준 자리에서 최대 96바이트 어긋나 있을 수 있어 하나씩 밀어 본다.
     /// </summary>
+    /// <remarks>
+    /// 벌 머리 배치(로더 <c>0x1002f22c</c>~<c>0x1002f38f</c>):
+    /// <c>u16 벌 번호 · u16 장 수 · u16 가장 큰 장 번호 · u8 투명 색인 · u8[768] 팔레트(RGB)</c>
+    /// 다음에 <c>(u16 장 번호, u32 자리)</c> 가 장 수만큼.
+    ///
+    /// 노트 「Obs 파일 갈래(0471 같은 UI 그림)」 — 셋째 값은 <b>장 수 - 1</b> 이 아니라
+    /// <b>가장 큰 장 번호</b>다(<c>0x1002f26a inc WORD PTR [edi]</c> 로 1을 더해 배열 칸
+    /// 수로 쓴다). 인물 그림은 장 번호가 0부터 빈틈없이 이어져 둘이 우연히 같지만,
+    /// <c>Obs/0471.obs</c> 같은 UI 그림은 <b>장 번호에 구멍이 있다</b>(벌 0 = 장 16개인데
+    /// 번호는 0,1,3,4,6,7,9…18). 예전처럼 <c>셋째 + 1 == 장 수</c> 를 따지면 이런 파일은
+    /// 벌을 하나도 못 찾는다. 그림 자료 꼴은 다른 Obs 와 똑같다(8비트 색인 + 768바이트 팔레트).
+    /// </remarks>
     private static SubEntry ParseSubEntry(byte[] b, long listedOffset, ushort expectedId)
     {
         for (int headerSkip = 0; headerSkip < 97; headerSkip++)
@@ -178,8 +210,9 @@ public static class ObsSprite
 
             int id = U16(b, header);
             int slotCount = U16(b, header + 2);
-            int slotCountMinusOne = U16(b, header + 4);
-            if (id != expectedId || slotCount is < 1 or > 256 || slotCountMinusOne + 1 != slotCount) continue;
+            int maxSlotId = U16(b, header + 4);
+            if (id != expectedId || slotCount is < 1 or > 256) continue;
+            if (maxSlotId > 255 || maxSlotId + 1 < slotCount) continue;
 
             byte transparentIndex = b[header + 6];
             var palette = new byte[768];

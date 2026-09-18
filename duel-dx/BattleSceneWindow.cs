@@ -854,9 +854,10 @@ internal sealed class UnitSprite
     public UnitSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
     {
         _table = table;
+        // 컷은 장 번호로 담는다(모션표 키가 장 번호다 — 분석-모션 「Obs 파일 갈래」).
         foreach (var motion in motions)
-            for (int i = 0; i < motion.Frames.Count; i++)
-                _frames[(motion.Id, i)] = SpriteFrame.From(motion.Frames[i]);
+            foreach (var frame in motion.Frames)
+                _frames[(motion.Id, frame.SlotId)] = SpriteFrame.From(frame);
         _first = SpriteFrame.From(motions[0].Frames[0]);
     }
 

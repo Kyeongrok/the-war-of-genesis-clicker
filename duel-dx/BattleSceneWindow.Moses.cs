@@ -154,7 +154,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>장소를 누르면 — 값 &lt;10000 전투 · 10000+ 필드 · 20000+ 상점.</summary>
     private void MosesEnterPlace(int value)
     {
-        if (value >= 20000) { Play(572); Toast("상점은 아직 만들지 않았습니다"); return; }
+        if (value >= 20000) { OpenMosesShop(0, value - 20000); return; }
         if (value >= 10000) { Toast($"필드 {value - 10000} 은 아직 만들지 않았습니다"); return; }
         if (value != DemoBattle) { Toast($"전투 {value} 은 이 데모에 없습니다"); return; }
         _mosesOpen = false;
@@ -174,7 +174,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 1: Play(571); Toast("메일은 아직 만들지 않았습니다"); return;
             case 2: Toast("통신은 아직 만들지 않았습니다"); return;
-            case 3 or 4: Play(572); Toast("상점은 아직 만들지 않았습니다"); return;
+            case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
         }
         _mosesPage = page;
@@ -243,6 +243,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_mosesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
         if (_mosesFade > 0) return true;
+        if (OnMosesShopClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
 
         int index = MosesIconAt(bx, by);
@@ -327,6 +328,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawMosesPage(int ox, int oy, int tick)
     {
+        if (_mosesPage is 3 or 4)
+        {
+            DrawMosesShop(ox, oy, tick);
+            return;
+        }
+
         // 항행 단계 1 — 성도 위 행성들. 마우스를 올린 행성에는 표 Obs 0163 모션 3 과 이름.
         if (_mosesPage == 0 && _mosesStep == 1)
         {
@@ -403,6 +410,8 @@ internal sealed class MosesChapterFile
     public int TitleText { get; private init; }
     public int Background { get; private init; }
     public int Bgm { get; private init; }
+    public int ItemShop { get; private init; }
+    public int VtShop { get; private init; }
     public int StartStep { get; private init; }
     public int StartNumber { get; private init; }
     public int SystemBackground { get; private init; }
@@ -440,6 +449,8 @@ internal sealed class MosesChapterFile
             {
                 TitleText = H(46),
                 Background = H(2),
+                ItemShop = H(6),
+                VtShop = H(8),
                 Bgm = H(4),
                 StartStep = H(42),
                 StartNumber = H(44),

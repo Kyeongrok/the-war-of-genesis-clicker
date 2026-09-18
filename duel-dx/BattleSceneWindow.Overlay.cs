@@ -64,10 +64,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (cost.Length > 0) RightText(cost, x + w - 10, y, affordable ? Red : 0xFF804848);
     }
 
-    private void RightText(string text, int right, int y, uint color)
+    private void RightText(string text, int right, int y, uint color, float size = 13f)
     {
-        var (_, w, _) = GetText(text, color);
-        DrawText(text, right - w, y, color);
+        var (_, w, _) = GetText(text, color, size);
+        DrawText(text, right - w, y, color, size);
     }
 
     private void BlitClipped(SpriteFrame f, int x, int y, int w, int h)
