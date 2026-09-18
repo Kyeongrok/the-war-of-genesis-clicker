@@ -135,6 +135,12 @@ public sealed record CharacterData(
     }
 
     public int AbilityLevel(int abilityId) => Abilities.FirstOrDefault(a => a.Ability == abilityId).Level;
+
+    /// <summary>
+    /// 그 어빌리티를 <b>가지고 있나</b> — 원본은 칸이 비었는지(<c>0xff</c>)로 보지 레벨로 보지 않는다(<c>0x100324e0</c>).
+    /// 레벨 0 으로 가진 것도 「가진 것」이라 다시 배울 수 없다.
+    /// </summary>
+    public bool HasAbility(int abilityId) => Abilities.Any(a => a.Ability == abilityId);
 }
 
 /// <summary><c>Dat/Job.dat</c> 레코드(파일 67바이트). 53 오프셋 이름 6칸 = 체질(0 무속성 … 5 메텔)별 직업 이름.</summary>
@@ -452,7 +458,7 @@ public sealed class GameDatabase
         if (!Jobs.TryGetValue(c.JobId, out var job)) yield break;
         foreach (ushort id in job.AbilityList)
         {
-            if (id == 0 || c.AbilityLevel(id) > 0 || !Abilities.TryGetValue(id, out var ab)) continue;
+            if (id == 0 || c.HasAbility(id) || !Abilities.TryGetValue(id, out var ab)) continue;
             if (ab.Prereq1 != 0 && c.AbilityLevel(ab.Prereq1) < ab.Prereq1Level) continue;
             if (ab.Prereq2 != 0 && c.AbilityLevel(ab.Prereq2) < ab.Prereq2Level) continue;
             yield return ab;
