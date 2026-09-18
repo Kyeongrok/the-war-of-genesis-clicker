@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -75,8 +75,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;
-            case 1:                                   // CONTINUE — 불러오기 슬롯
-                OpenSlots(1);
+            case 1:                                   // CONTINUE — 「Select your record」 화면(장면 9)
+                OpenRecords();
                 break;
             case 2:                                   // EXIT — 원본도 여기서만 진짜로 끝난다
                 _running = false;
