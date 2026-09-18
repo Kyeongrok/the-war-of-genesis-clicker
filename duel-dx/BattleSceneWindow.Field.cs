@@ -90,6 +90,31 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<FieldActor> _fieldActors = [];
 
     /// <summary>
+    /// 필드에 놓인 물체 하나 — 파일에 적힌 것과 스크립트가 새로 놓은 것을 같이 담는다.
+    /// </summary>
+    /// <remarks>
+    /// 물체 행동은 인물 행동과 <b>짝</b>이다 — 300·301·302·303·304·305·306·307 이 205·206·208·209·210·211·212·213 에 맞선다.
+    /// 층 번호는 파일 값 그대로 <b>0바탕</b>이고, <b>−1 은 배경에 붙는다</b>(로더가 <c>+0x150 + 층×4</c> 에 그대로 넣는다).
+    /// </remarks>
+    private sealed class FieldProp
+    {
+        public int Key { get; init; } = -1;
+        public int Obs { get; init; }
+        public int Motion { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public int Layer { get; set; }
+        public bool Mirror { get; set; }
+        public bool Visible { get; set; } = true;
+        public double Start { get; set; }
+
+        /// <summary>옮기는 중 — (시작, 목표, 틱 수, 시작한 때).</summary>
+        public (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start)? Move { get; set; }
+    }
+
+    private List<FieldProp> _fieldProps = [];
+
+    /// <summary>
     /// 화면이 배경의 어느 자리를 비추고 있나 — 물체·인물도 이만큼 밀어 그린다.
     /// </summary>
     /// <remarks>
@@ -97,6 +122,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 행동 <b>400</b> 은 그 자리를 <b>바로 잡고</b>, <b>401</b> 은 <b>그만큼 민다</b>(<c>0x100ee020</c> 이 층 자리에서 인자를 뺀다).
     /// </remarks>
     private (int X, int Y) _fieldCam;
+
+    /// <summary>카메라가 옮겨 가는 중 — (시작, 목표, 틱 수, 시작한 때).</summary>
+    private (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start)? _fieldCamMove;
 
     /// <summary>방향(0 뒤 · 1 옆 · 2 앞 · 3 옆 반대)에 맞는 걷기·서기 모션과 좌우반전.</summary>
     private static (int Walk, int Stand, bool Mirror) FieldFacing(int direction) => direction switch
@@ -133,7 +161,13 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldPictures.Clear();
             _fieldFade = null;
             _fieldActors = [.. field.People.Select(p => new FieldActor(p))];
+            // 파일의 물체 — 갈래 칸이 곧 처음 모션이다.
+            _fieldProps = [.. field.Objects.Select(o => new FieldProp
+            {
+                Key = o.Key, Obs = o.Picture, Motion = o.Kind, X = o.X, Y = o.Y, Layer = o.Layer,
+            })];
             _fieldCam = (Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
+            _fieldCamMove = null;
             _mosesOpen = false;
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
@@ -252,7 +286,59 @@ internal sealed unsafe partial class BattleSceneWindow
             case 600:
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
-            case 302: PlaceFieldPicture(A(0), A(2), A(3), A(4)); break;
+            case 300:                                        // 물체를 그 자리로 즉시
+            {
+                if (FieldPropOf(A(0)) is not { } prop) break;
+                prop.X = A(1);
+                prop.Y = A(2);
+                break;
+            }
+            case 301:                                        // 물체를 매 틀 그만큼씩
+            {
+                if (FieldPropOf(A(0)) is not { } prop) break;
+                int ticks = Math.Max(1, (int)A(3));
+                prop.Move = (prop.X, prop.Y, prop.X + A(1) * ticks, prop.Y + A(2) * ticks, ticks, _lastTime);
+                break;
+            }
+            case 302:
+                // 인자 0 이 10000 이상이면 <b>있는 물체에 모션을 지정</b>하고(전체 302 의 58%),
+                // 아니면 그 <c>Obs</c> 를 새 물체로 놓는다 — 새로 놓는 것은 늘 <b>층 7(맨 위)</b> 이다.
+                if (A(0) >= 10000)
+                {
+                    if (FieldPropOf(A(0)) is { } prop)
+                    {
+                        prop.Motion = A(1);
+                        prop.Mirror = A(5) != 0;
+                        prop.Start = _lastTime;
+                    }
+                }
+                else if (A(0) > 0)
+                    _fieldProps.Add(new FieldProp
+                    {
+                        Obs = A(0), Motion = A(1), X = A(3), Y = A(4), Layer = 7,
+                        Mirror = A(5) != 0, Start = _lastTime,
+                    });
+                break;
+            case 303: break;                                 // 물체 모션 멈추기 — 자료에 한 번도 안 쓴다
+            case 304:
+            case 305:
+            {
+                if (FieldPropOf(A(0)) is not { } prop) break;
+                prop.Visible = a.Code == 305;
+                break;
+            }
+            case 306:
+            {
+                if (FieldPropOf(A(0)) is not { } prop) break;
+                prop.Mirror = A(1) != 0;
+                break;
+            }
+            case 307:
+            {
+                if (FieldPropOf(A(0)) is not { } prop) break;
+                prop.Layer = A(1);
+                break;
+            }
             case 202:                                        // 걷기(목적지) — 걷는 동안 걷기 모션, 멈추면 서기 모션
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
@@ -323,11 +409,32 @@ internal sealed unsafe partial class BattleSceneWindow
                 who.Layer = A(1);
                 break;
             }
-            case 400: MoveFieldCamera(A(0), A(1)); break;                             // 화면을 그 자리로
-            case 402:
-            case 403:
-            case 407: break;                                 // 그 밖 카메라 연출은 아직 안 만든다
-            case 401: MoveFieldCamera(_fieldCam.X + A(0), _fieldCam.Y + A(1)); break; // 그만큼 밀기
+            case 400:                                        // 화면을 그 자리로(즉시)
+                _fieldCamMove = null;
+                MoveFieldCamera(A(0), A(1));
+                break;
+            case 401:                                        // <b>매 틀</b> (a0,a1)씩 a2 틀 동안 민다 — 한 번이 아니다
+            {
+                int camTicks = Math.Max(1, (int)A(2));
+                _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
+                                 _fieldCam.X + A(0) * camTicks, _fieldCam.Y + A(1) * camTicks, camTicks, _lastTime);
+                break;
+            }
+            case 402:                                        // 그 인물이 화면 한가운데 오도록 a1 틀에 걸쳐
+            {
+                if (FieldActorOf(A(0)) is not { } target) break;
+                int camTicks = Math.Max(1, (int)A(1));
+                _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
+                                 target.X - MosesW / 2.0, target.Y - MosesH / 2.0, camTicks, _lastTime);
+                break;
+            }
+            case 404:
+            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 909 를 만들면 그때
+            case 407:
+            case 408:                                        // 층 감추기·보이기
+                foreach (var layerProp in _fieldProps.Where(o => o.Layer == A(0))) layerProp.Visible = a.Code == 408;
+                foreach (var layerWho in _fieldActors.Where(w => w.Layer == A(0))) layerWho.Visible = a.Code == 408;
+                break;
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
                 // 덮는 데 걸리는 틱만큼은 스크립트도 기다린다 — 안 그러면 화면이 덮이기 전에 다음 장면으로 넘어간다.
@@ -415,6 +522,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_field is { } field) ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
     }
 
+    /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 물체.</summary>
+    private FieldProp? FieldPropOf(int value) =>
+        value >= 10000 ? _fieldProps.FirstOrDefault(o => o.Key == value - 10000) : null;
+
     /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 인물.</summary>
     private FieldActor? FieldActorOf(int value) =>
         value >= 10000 ? _fieldActors.FirstOrDefault(a => a.Key == value - 10000) : null;
@@ -437,6 +548,34 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             actor.X = walk.FromX + (walk.ToX - walk.FromX) * tick / walk.Ticks;
             actor.Y = walk.FromY + (walk.ToY - walk.FromY) * tick / walk.Ticks;
+        }
+
+        if (_fieldCamMove is { } cam)
+        {
+            int camTick = (int)((_lastTime - cam.Start) * TicksPerSecond);
+            if (camTick >= cam.Ticks)
+            {
+                MoveFieldCamera((int)cam.ToX, (int)cam.ToY);
+                _fieldCamMove = null;
+            }
+            else
+                MoveFieldCamera((int)(cam.FromX + (cam.ToX - cam.FromX) * camTick / cam.Ticks),
+                                (int)(cam.FromY + (cam.ToY - cam.FromY) * camTick / cam.Ticks));
+        }
+
+        foreach (var prop in _fieldProps)
+        {
+            if (prop.Move is not { } move) continue;
+            int tick = (int)((_lastTime - move.Start) * TicksPerSecond);
+            if (tick >= move.Ticks)
+            {
+                prop.X = move.ToX;
+                prop.Y = move.ToY;
+                prop.Move = null;
+                continue;
+            }
+            prop.X = move.FromX + (move.ToX - move.FromX) * tick / move.Ticks;
+            prop.Y = move.FromY + (move.ToY - move.FromY) * tick / move.Ticks;
         }
 
         foreach (var actor in _fieldActors)
@@ -547,10 +686,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (int x = 0; x < MosesW; x++)
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
 
-        // 파일에 적힌 물체들 — 층 번호는 앞뒤 순서라 작은 층부터 그린다. 갈래 칸이 곧 처음 모션이다.
-        if (_field is { } drawing)
-            foreach (var o in drawing.Objects.OrderBy(o => o.Layer))
-                DrawUi(o.Picture, o.Kind, tick, ox + o.X - _fieldCam.X, oy + o.Y - _fieldCam.Y, UiBlend.Alpha);
+        // 물체 — 층 번호가 앞뒤 순서라 작은 층부터 그린다.
+        foreach (var prop in _fieldProps.Where(o => o.Visible).OrderBy(o => o.Layer))
+            DrawUi(prop.Obs, prop.Motion, (int)((_lastTime - prop.Start) * TicksPerSecond),
+                   ox + (int)prop.X - _fieldCam.X, oy + (int)prop.Y - _fieldCam.Y, UiBlend.Alpha);
 
         // 인물 — 층 순서로, 저마다의 모션으로 그린다.
         foreach (var actor in _fieldActors.Where(a => a.Visible).OrderBy(a => a.Layer))
@@ -558,10 +697,6 @@ internal sealed unsafe partial class BattleSceneWindow
                 DrawUi(pc.SpriteId, actor.Motion, (int)((_lastTime - actor.MotionStart) * TicksPerSecond),
                        ox + (int)actor.X - _fieldCam.X, oy + (int)actor.Y - _fieldCam.Y, UiBlend.Alpha,
                        loop: true, fade: actor.Alpha);
-
-        foreach (var (obs, motion, px, py, start) in _fieldPictures)
-            DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond),
-                   ox + px - _fieldCam.X, oy + py - _fieldCam.Y, UiBlend.Alpha);
 
         DrawTalk();
 
