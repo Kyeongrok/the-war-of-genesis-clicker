@@ -1134,6 +1134,9 @@ internal sealed class UnitState(DemoUnit unit)
     public int LegionPowerPercent { get; set; } = 1000;
 
     /// <summary>도착할(걷는 중이면 향하는) 칸. 자리 차지 판정도 이 칸으로 한다.</summary>
+    /// <summary>배치 레코드의 레벨 보정 — 파티 레벨에 더해 그 인물의 레벨을 낸다.</summary>
+    public int LevelOffset { get; } = unit.LevelOffset;
+
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
     public Facing Facing { get; set; } = unit.Facing;

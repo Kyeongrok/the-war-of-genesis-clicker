@@ -90,6 +90,9 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.Data = _party.TryGetValue(unit.ChrCode, out var carried) ? carried
                       : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100) }
                       : c with { CumExp = c.Level * 100 };
+            // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물만(0x1007a8e0).
+            if (!unit.IsAlly || unit.Data is null) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset);
+
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
             var data = unit.Data ?? c;
             unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(data));
@@ -157,6 +160,42 @@ internal sealed unsafe partial class BattleSceneWindow
             if (next >= 0) { StartTurn(next); return; }
             AdvanceTick();
         }
+    }
+
+    /// <summary>
+    /// 아군 레벨 상위 셋의 평균 — 원본이 적 레벨을 맞추는 기준(분석-전투 「Lev.dat 성장」).
+    /// </summary>
+    private int PartyLevel()
+    {
+        var levels = _units.Where(u => u.IsAlly && u.Data is { } d).Select(u => (int)u.Data!.Level)
+                           .OrderByDescending(v => v).Take(3).ToList();
+        return levels.Count == 0 ? 1 : levels.Sum() / levels.Count;
+    }
+
+    /// <summary>
+    /// 그 인물을 <paramref name="offset"/> + 파티 레벨로 키운다 — <b>늘 <c>.chr</c> 원본에서</b> 다시 셈하므로 쌓이지 않고,
+    /// <b>TP 제수와 CTP 는 그대로</b> 둔다. 면제 명단에 있으면 그대로 돌려준다.
+    /// </summary>
+    private CharacterData GrowToPartyLevel(CharacterData c, int offset)
+    {
+        if (_db is null || _db.LevelExempt.Contains(c.Code)) return c;
+        var rows = _db.LevelGrowth;
+        if (rows.Count == 0) return c;
+
+        int level = Math.Max(1, offset + PartyLevel());
+        var g = rows[Math.Min(level, rows.Count) - 1];
+        int Grow(int v, int percent) => v + v * percent / 100;
+
+        return c with
+        {
+            Level = (ushort)level,
+            CumExp = level * 100,
+            Lp = (uint)Grow((int)c.Lp, g.Lp),
+            Tp = (ushort)Grow(c.Tp, g.Tp),
+            Psy = (ushort)Grow(c.Psy, g.Psy),
+            Dex = (ushort)Grow(c.Dex, g.Dex),
+            Dep = (ushort)Grow(c.Dep, g.Dep),
+        };
     }
 
     private void AdvanceTick()
