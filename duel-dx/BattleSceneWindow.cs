@@ -414,6 +414,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
         if (_titleOpen) { if (key == Win32.VK_ESCAPE) CloseSystemWindow(); return; }
+        // 연대표에서도 전투 키는 안 먹고 Esc 로 시스템 메뉴만 연다.
+        if (_episodesOpen)
+        {
+            if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
+            Play(578);
+            OpenSystemMenu();
+            return;
+        }
         if (OnAbilityMenuKey(key)) return;
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
@@ -504,6 +512,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
         if (OnItemMenuClick(bx, by)) return;
@@ -563,7 +572,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void Update(double dt)
     {
         // 타이틀 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 소리도 멈추고 화면만 그린다.
-        if (_titleOpen)
+        if (_titleOpen || _episodesOpen)
         {
             UpdateSounds();
             return;
@@ -628,6 +637,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawLevelUp();
         DrawMoses();
         DrawTitle();
+        DrawEpisodes();
         DrawChapters();
         DrawCursor();
     }
