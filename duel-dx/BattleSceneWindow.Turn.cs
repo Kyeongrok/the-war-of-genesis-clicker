@@ -90,10 +90,15 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.Data = _party.TryGetValue(unit.ChrCode, out var carried) ? carried
                       : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100) }
                       : c with { CumExp = c.Level * 100 };
-            unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(c));
-            unit.MaxTp = unit.Tp = _db.MaxTp(c);
-            unit.Stp = Math.Max(1, _db.Stp(c));
-            unit.MaxSoul = _db.MaxSoul(c);
+            // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
+            var data = unit.Data ?? c;
+            unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(data));
+            unit.MaxTp = _db.MaxTp(data);
+            // 원본은 유닛을 만들 때 <b>TP 를 0 으로 민다</b>(0x10071941) — 아무도 다시 안 채운다.
+            // 그래서 첫 차례는 「최대TP ÷ STP」가 가장 작은 인물이 가져간다.
+            unit.Tp = 0;
+            unit.Stp = Math.Max(1, _db.Stp(data));
+            unit.MaxSoul = _db.MaxSoul(data);
             // DUELDX_SOUL 로 시작 SOUL 을 올릴 수 있다 — 어빌리티·상태이상을 시험할 때 쓴다.
             unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : _db.SoulStart;
             // DUELDX_AILMENT=<번호>[:<값>][,<번호>[:<값>]…] 이면 그 상태이상들을 칸 순서대로 걸고 시작한다(화면 밖 시험용).
@@ -108,7 +113,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     unit.StatusValue[s] = parts.Length > 1 && short.TryParse(parts[1], out short v2) ? v2 : (short)10;
                 }
             }
-            unit.HasTurn = true;
+            // 차례 깃발도 0 으로 시작한다(0x1007196c) — 틱이 흘러 TP 가 가득 차야 차례가 온다.
+            unit.HasTurn = false;
         }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
         if (_chapterScriptDone.Count == 0) FillDemoInventory();
