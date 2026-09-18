@@ -35,11 +35,14 @@ internal sealed unsafe partial class BattleSceneWindow
 
         public bool CanReach(int index) => (uint)index < Cost.Length && Cost[index] != int.MaxValue;
 
+        /// <summary>판 너비 — 칸 번호를 (열, 줄)로 풀 때 쓴다(전투마다 판 크기가 다르다).</summary>
+        public int Width { get; init; } = 1;
+
         /// <summary>출발 칸을 뺀, 도착 칸까지 밟을 칸들.</summary>
         public List<(int Col, int Row)> PathTo(int index)
         {
             var path = new List<(int Col, int Row)>();
-            for (int i = index; i >= 0 && Prev[i] >= 0; i = Prev[i]) path.Add((i % Cols, i / Cols));
+            for (int i = index; i >= 0 && Prev[i] >= 0; i = Prev[i]) path.Add((i % Width, i / Width));
             path.Reverse();
             return path;
         }
@@ -116,6 +119,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         var queue = new PriorityQueue<(int Col, int Row), int>();
+        if (!InBounds(originCol, originRow)) return null;   // 판 밖에 선 인물(맵이 더 큰 전투)은 이동 영역이 없다
         int start = originRow * Cols + originCol;
         costs[start] = 0;
         queue.Enqueue((originCol, originRow), 0);
@@ -154,13 +158,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (costs[j] == int.MaxValue) red[j] = true;
             }
         }
-        return new MoveRange(costs, prev, red);
+        return new MoveRange(costs, prev, red) { Width = Cols };
     }
 
     /// <summary>
     /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
     /// </summary>
-    private static List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
+    private List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
     {
         int n = Cols * Rows, from = fromRow * Cols + fromCol;
         if (from == target) return [];

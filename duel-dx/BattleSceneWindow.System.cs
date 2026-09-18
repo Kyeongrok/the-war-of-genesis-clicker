@@ -270,6 +270,7 @@ internal sealed unsafe partial class BattleSceneWindow
         try
         {
             _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), scene.MapFile));
+            ResizeBoard(_map.Cols, _map.Rows);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {

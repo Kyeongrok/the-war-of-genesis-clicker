@@ -38,18 +38,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     public const double TicksPerSecond = 30;
 
     private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
-    // 판 크기는 전투마다 다른 맵 중 가장 큰 것에 맞춘다(0153 = 32×34, 0154 = 32×30, 0155 = 32×37).
-    // 맵보다 넓은 칸은 ObtMap 이 막힌 칸으로 돌려줘 아무도 못 들어간다.
-    private const int Cols = BattleDemoScene.Cols, Rows = 37;
+    // 판 크기는 <b>전투마다 맵을 따라</b> 바뀐다(0153 = 32×34, 0156 레이토스 = 37×71 …).
+    // 맵을 바꿀 때 ResizeBoard 가 화면 버퍼·텍스처·창 크기를 다시 잡는다.
+    private int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
-    private const int BoardWidth = Cols * TileW, BoardHeight = GridTop + Rows * TileH;
+    private int BoardWidth => Cols * TileW;
+    private int BoardHeight => GridTop + Rows * TileH;
 
     /// <summary>창에 보이는 판 높이 — 판 전체의 70%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
-    private const int ViewHeight = BoardHeight * 7 / 10;
+    private int ViewHeight => BoardHeight * 7 / 10;
     private const double MaxZoom = 2;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
-    private readonly double _zoom = FitZoom();
+    private double _zoom;
 
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
 
@@ -69,7 +70,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>발밑 HP·TP 막대 — 원본에는 없어서 기본은 끔(H 키).</summary>
     private bool _showGauges;
 
-    private readonly uint[] _fb = new uint[BoardWidth * BoardHeight];
+    private uint[] _fb = [];
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
 
     private bool _running;
@@ -147,6 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             if (DemoScene.Load(startId, _db) is { } loaded) _scene = loaded;
             _units = BuildUnits(_scene);
             _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
+            ResizeBoard(_map.Cols, _map.Rows);
 
             LoadRosterSprites();
             InitBattle();
@@ -177,7 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>모니터 작업 영역(작업 표시줄 뺀 곳)에 창이 들어가는 가장 큰 배율 — 최대 <see cref="MaxZoom"/>.</summary>
-    private static double FitZoom()
+    private double FitZoom()
     {
         var work = new Win32.Rect();
         if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 1;
@@ -185,6 +187,51 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 제목 표시줄·테두리 몫을 조금 남긴다.
         double fit = Math.Min((work.Width - 32) / (double)BoardWidth, (work.Height - 100) / (double)ViewHeight);
         return Math.Clamp(Math.Floor(fit * 20) / 20, 0.5, MaxZoom);
+    }
+
+    /// <summary>
+    /// 새 맵에 맞춰 판·화면 버퍼·텍스처·창 크기를 다시 잡는다(전투마다 맵 크기가 다르다).
+    /// 창을 아직 안 만들었으면 크기만 정해 두고, 만들었으면 텍스처와 창까지 다시 만든다.
+    /// </summary>
+    private void ResizeBoard(int cols, int rows)
+    {
+        cols = Math.Max(1, cols);
+        rows = Math.Max(1, rows);
+        bool same = cols == Cols && rows == Rows && _fb.Length == BoardWidth * BoardHeight;
+        Cols = cols;
+        Rows = rows;
+        _zoom = FitZoom();
+        if (_fb.Length != BoardWidth * BoardHeight) _fb = new uint[BoardWidth * BoardHeight];
+        _camY = 0;
+        if (same || _hwnd == IntPtr.Zero) return;
+
+        // 텍스처는 보이는 판 크기로 다시 만든다.
+        _boardSrv?.Dispose();
+        _boardTex?.Dispose();
+        _boardTex = _device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)BoardWidth,
+            Height = (uint)ViewHeight,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Dynamic,
+            BindFlags = BindFlags.ShaderResource,
+            CPUAccessFlags = CpuAccessFlags.Write,
+        });
+        _boardSrv = _device.CreateShaderResourceView(_boardTex);
+
+        // 창과 스왑체인도 새 크기로.
+        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
+        var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
+        Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
+        Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
+                           rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        _backBufferRtv?.Dispose();
+        _swapChain.ResizeBuffers(2, (uint)pixelW, (uint)pixelH, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
+        using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
+        _backBufferRtv = _device.CreateRenderTargetView(backBuffer);
     }
 
     /// <summary><c>assets/characters/</c> 밑의 인물들을 전부 훑어 Chr 코드별로 모은다.</summary>
@@ -288,6 +335,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void CreateNativeWindow()
     {
+        if (_fb.Length == 0) ResizeBoard(Cols, Rows);   // 창 크기를 정하기 전에 판 버퍼부터
         int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
@@ -795,8 +843,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         _boardTex = _device.CreateTexture2D(new Texture2DDescription
         {
-            Width = BoardWidth,
-            Height = ViewHeight,
+            Width = (uint)BoardWidth,
+            Height = (uint)ViewHeight,
             MipLevels = 1,
             ArraySize = 1,
             Format = Format.B8G8R8A8_UNorm,
