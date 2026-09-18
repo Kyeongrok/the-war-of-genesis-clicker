@@ -323,11 +323,16 @@ internal sealed unsafe partial class BattleSceneWindow
                                    byte[]? StatusId = null, short[]? StatusValue = null);
 
     /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
+    /// <param name="Flags">
+    /// 진행 깃발 — 「어느 장소가 열렸나」를 정하는 값이라 <b>저장에 반드시 들어가야 한다</b>(원본도 2000바이트를 통째로 적는다, <c>0x1004d9de</c>).
+    /// 0 이 아닌 칸만 (번호 → 값) 으로 적는다.
+    /// </param>
     private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
                                     int SceneText = 0, int SceneKind = 1, long PlayMs = 0,
-                                    int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0);
+                                    int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0,
+                                    Dictionary<string, int>? Flags = null);
 
-    private const int SaveVersion = 4;
+    private const int SaveVersion = 5;
 
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
@@ -352,7 +357,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. u.StatusId], [.. u.StatusValue]))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 _scene.TitleTextId, 1, PlayMs,
-                _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id);
+                _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
+                Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
+                          .ToDictionary(i => i.ToString(), i => (int)_flags[i]));
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -437,6 +444,11 @@ internal sealed unsafe partial class BattleSceneWindow
         _unitLegion.Clear();
         foreach (var (index, legion) in state.Legions ?? [])
             if (int.TryParse(index, out int unitIndex)) _unitLegion[unitIndex] = legion;
+
+        // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
+        Array.Clear(_flags);
+        foreach (var (number, value) in state.Flags ?? [])
+            if (int.TryParse(number, out int flag) && (uint)flag < _flags.Length) _flags[flag] = (byte)Math.Clamp(value, 0, 255);
 
         _tick = state.Tick;
         _turn = -1;
