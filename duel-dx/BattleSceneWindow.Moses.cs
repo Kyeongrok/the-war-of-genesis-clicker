@@ -23,7 +23,7 @@ namespace DuelDx;
 /// </list>
 /// 페이지를 바꿀 때 나는 소리: 항행 564 · 파티 580 · 상점 572 · 전직 581 · 용병관리 583 · 뒤로 569/570.
 /// 원본은 페이지 사이에 Mov 영상과 UI 전환 효과(15틱 알파 크로스페이드)를 거는데, 데모는 <b>15틱 검은 페이드</b>로만 흉내 낸다(가설 아님, 생략).
-/// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 메일·통신·상점·전직·용병관리 페이지는 아직 없다.
+/// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 BattleSceneWindow.Moses*.cs 로 나눠 두었다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -55,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly (int Icon, ushort Text, string Name, int Sound)[] MosesPartyItems =
         [(0, 1326, "전직", 581), (1, 1327, "용병관리", 583)];
 
-    /// <summary>파티 칸을 누르면 하는 일 — 0 전직 페이지, 1 용병관리(아직 없음).</summary>
+    /// <summary>파티 칸을 누르면 하는 일 — 0 전직 페이지, 1 용병관리 페이지.</summary>
     private void RunPartyItem(int index, string label)
     {
         if (index == 0) { OpenMosesStyle(); return; }

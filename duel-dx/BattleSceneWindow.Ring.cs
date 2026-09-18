@@ -255,7 +255,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 _abilityMenu = true;
                 break;
             case RingCommand.System: OpenSystemMenu(); break;
-            default: Toast($"{RingItems[(int)command].Hover}: 아직 구현하지 않았습니다"); break;
+            case RingCommand.Item:
+                CommitMoveForAction();
+                _itemMenu = true;
+                _itemTop = 0;
+                break;
         }
     }
 

@@ -418,6 +418,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
         if (OnChaptersClick(bx, by)) return;
+        if (OnItemMenuClick(bx, by)) return;
         if (OnMosesClick(bx, by)) return;
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
@@ -521,6 +522,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawHud();
         DrawRing();
         DrawAbilityMenu();
+        DrawItemMenu();
         DrawStatusScreen();
         DrawToast();
         DrawOutcomeBanner();

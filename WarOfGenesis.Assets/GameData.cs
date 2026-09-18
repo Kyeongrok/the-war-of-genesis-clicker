@@ -150,8 +150,12 @@ public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 /// 파일 9 — 아이템 그림(<c>Obs 0326</c> 모션 번호). <c>0xffff</c> 면 <see cref="Type"/> 를 그림 번호로 쓴다(분석-캐릭터 "아이템 그림").
 /// </param>
 public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense,
-                              (ushort Stat, ushort Value)[] Bonuses, ushort Picture = 0xFFFF)
+                              (ushort Stat, ushort Value)[] Bonuses, ushort Picture = 0xFFFF,
+                              ushort UseWork = 0, ushort DescriptionId = 0)
 {
+    /// <summary>전투에서 쓸 수 있는 소모품인가 — 종류 7(캡슐)이고 쓰는 work 이 있는 것(분석-전투 「전투 중 아이템 쓰기」).</summary>
+    public bool IsConsumable => Type == 7 && UseWork != 0;
+
     /// <summary>실제로 그릴 Obs 0326 모션 번호.</summary>
     public int PictureMotion => Picture == 0xFFFF ? Type : Picture;
 }
@@ -273,10 +277,12 @@ public sealed class GameDatabase
         d = Need("Dat", "itm.dat");
         for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 48)
         {
-            var w = Words(d, o + 18, 15);
-            var bonuses = Enumerable.Range(0, 7).Select(k => (w[2 * k], w[2 * k + 1])).Where(p => p.Item1 != 0).ToArray();
+            // 파일 18부터 (번호, 값) 짝 여섯이 장비 보정이고, 그 뒤 42 = 쓸 때 도는 work, 46 = 설명 TXR 이다.
+            var w = Words(d, o + 18, 12);
+            var bonuses = Enumerable.Range(0, 6).Select(k => (w[2 * k], w[2 * k + 1])).Where(p => p.Item1 != 0).ToArray();
             items[U16(d, o)] = new ItemData(U16(d, o), U16(d, o + 2), BitConverter.ToUInt32(d, o + 4), d[o + 8],
-                                            U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9));
+                                            U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9),
+                                            U16(d, o + 42), U16(d, o + 46));
         }
 
         var works = new Dictionary<int, WorkData>();
