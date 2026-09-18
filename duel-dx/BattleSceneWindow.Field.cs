@@ -35,6 +35,15 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<string>? _fieldChoices;
     private int _fieldChoiceVar, _fieldChoicePick;
 
+    /// <summary>
+    /// 스크립트가 놓은 그림들(행동 302) — 필드 640×480 틀 안 자리.
+    /// </summary>
+    /// <remarks>
+    /// 인자 0 이 10000 보다 작으면 그 <c>Obs</c> 를 새로 놓고, 10000 이상이면 파일에 있는 <b>물체 열쇠</b> 를 가리킨다(<c>0x100f1d90</c>).
+    /// 자리는 인자 3·4 다(<c>Fld 0019</c> 의 <c>302 [1457,0,0,318,255]</c> 처럼 — 자료로 미룬 것이라 가설).
+    /// </remarks>
+    private readonly List<(int Obs, int Motion, int X, int Y, double Start)> _fieldPictures = [];
+
     private bool FieldOpen => _field != null;
 
     /// <summary>그 필드를 연다. 자료가 없으면 false.</summary>
@@ -52,6 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldPc = 0;
             _fieldWaitUntil = 0;
             _fieldChoices = null;
+            _fieldPictures.Clear();
             _mosesOpen = false;
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
@@ -169,6 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 600:
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
+            case 302: PlaceFieldPicture(A(0), A(2), A(3), A(4)); break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;
         }
@@ -223,6 +234,18 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(1) > 0) _party.Remove(A(1));               // 동료 빼기
                 break;
         }
+    }
+
+    /// <summary>그림 하나를 놓는다 — 물체 열쇠를 가리키면 파일에 적힌 그림과 자리를 쓴다.</summary>
+    private void PlaceFieldPicture(int what, int motion, int x, int y)
+    {
+        if (what >= 10000)
+        {
+            if (_field?.Objects.FirstOrDefault(o => o.Key == what - 10000) is not { } target) return;
+            _fieldPictures.Add((target.Picture, motion, target.X, target.Y, _lastTime));
+            return;
+        }
+        if (what > 0) _fieldPictures.Add((what, motion, x, y, _lastTime));
     }
 
     private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(op switch
@@ -286,6 +309,9 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int y = 0; y < MosesH; y++)
                 for (int x = 0; x < MosesW; x++)
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+
+        foreach (var (obs, motion, px, py, start) in _fieldPictures)
+            DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond), ox + px, oy + py, UiBlend.Alpha);
 
         DrawTalk();
 
