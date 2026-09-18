@@ -98,14 +98,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
         var (originCol, originRow) = RangeOrigin(unit);
 
+        int unitIndex = Array.IndexOf(_units, unit);
+        // 제 군단 부하는 대장을 막지 않는다 — 대장이 움직이면 부하도 진형대로 따라오기 때문이다(분석-군단).
+        bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex;
+
         bool Enterable(int col, int row)
         {
             if (col == originCol && row == originRow) return true;
             if (!InBounds(col, row) || (map.FlagsAt(col, row) & 0x9) != 0) return false;
-            if (LiveUnitAt(col, row) is { } other && other != unit) return false;
+            if (LiveUnitAt(col, row) is { } other && Blocks(other)) return false;
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
             {
-                if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || e == unit) continue;
+                if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || !Blocks(e)) continue;
                 if (e.IsAlly != unit.IsAlly && Math.Abs(H(px, py) - H(col, row)) < 1) return false;
             }
             return true;
