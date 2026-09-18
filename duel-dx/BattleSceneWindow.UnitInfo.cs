@@ -54,14 +54,11 @@ internal sealed unsafe partial class BattleSceneWindow
         Row(db.T(157), db.Acr(c, unit.Tp).ToString(), y + 196);
         Row(db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString(), y + 212);
 
-        // 상태이상 칸 — 걸려 있는 것 이름을 적는다(분석-전투 6절).
+        // 상태이상 칸 셋 — 원본처럼 Obs 0489 아이콘 한 장씩, 빈 칸은 모션 0(「EMPTY」 판)이다(분석-전투 창 228).
         FillRect(x + 6, y + 228, InfoW - 12, 34, BoxBg);
         StrokeRect(x + 6, y + 228, InfoW - 12, 34, BoxLine);
-        var ailments = AilmentLabels(unit);
-        if (ailments.Count == 0) DrawText(db.T(163), x + 12, y + 234, DimGray);
-        else
-            for (int i = 0; i < ailments.Count && i < 2; i++)
-                DrawText(ailments[i], x + 12, y + 232 + i * 15, 0xFFFF9090, 11);
+        for (int i = 0; i < 3; i++)
+            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 10 + i * 40, y + 236, UiBlend.Alpha, loop: false);
 
         void Centre(string text, int left, int top, uint color)
         {

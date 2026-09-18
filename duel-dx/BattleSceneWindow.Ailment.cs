@@ -20,6 +20,22 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
+    /// <summary>상태이상 칸 그림 — <c>Obs 0489</c>(전투가 미리 읽어 두는 공용 그림 스물넷 중 하나).</summary>
+    private const int AilmentIconObs = 489;
+
+    /// <summary>
+    /// 그 유닛의 <paramref name="slot"/> 번째 상태이상 칸에 그릴 <c>Obs 0489</c> 모션.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 칸마다 <c>Sta.dat[번호]</c> 의 아이콘 번호를 그대로 모션으로 쓰고, <b>0 이면 「EMPTY」 판(모션 0)</b>이 나온다
+    /// (분석-전투 「상태이상 칸 3개」, 창 228). 「없음」인 44·45·46 도 자료에서 아이콘이 0 이라 저절로 빈 칸이 된다.
+    /// </remarks>
+    private int AilmentIconMotion(UnitState u, int slot)
+    {
+        int id = (uint)slot < 3 ? u.StatusId[slot] : 0;
+        return id != 0 && _db?.Statuses.GetValueOrDefault(id) is { } sta ? sta.Icon : 0;
+    }
+
     /// <summary>번호 → 짧은 이름(분석-전투 6절 표). 여기 없는 번호는 칸에 번호만 보인다.</summary>
     private static readonly Dictionary<int, string> AilmentNames = new()
     {

@@ -266,18 +266,12 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < basics.Length; i++) Stat(x, oy + 358 + i * 18, w, db.T(basics[i].Id), basics[i].Value.ToString());
 
         // 2열 — 상태이상 · 장착 어빌리티 · 장비
-        var _statusAilments = AilmentLabels(unit);
         x = ox + 216; w = 184;
         Header(x, oy + 38, w, db.T(163));
         Box(x, oy + 60, w, 38);
+        // 칸 셋은 원본대로 Obs 0489 아이콘 한 장씩 — 모션은 Sta.dat 의 아이콘 번호, 빈 칸은 모션 0(「EMPTY」 판).
         for (int i = 0; i < 3; i++)
-        {
-            StrokeRect(x + 10 + i * 58, oy + 70, 50, 18, BoxLine);
-            // 걸린 상태이상이 있으면 그 이름을, 없으면 EMPTY
-            string label = i < _statusAilments.Count ? _statusAilments[i] : "EMPTY";
-            var (_, lw, _) = GetText(label, White, 10);
-            DrawText(label, x + 10 + i * 58 + Math.Max(2, (50 - lw) / 2), oy + 72, i < _statusAilments.Count ? 0xFFFF9090 : DimGray, 10);
-        }
+            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 10 + i * 58, oy + 70, UiBlend.Alpha, loop: false);
 
         Header(x, oy + 110, w, db.T(166));
         Box(x, oy + 132, w, 84);
