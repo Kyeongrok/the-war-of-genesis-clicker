@@ -9,7 +9,8 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private bool _abilityMenu;
-    private const int MenuW = 300, MenuRowH = 26, MenuHeadH = 26;
+    // 원본 목록(분석-스킬 ba-12): 창 바깥 304, 줄 280×24 여덟 줄, 이름 x=46 · TP x=210 · SOUL x=240(오른쪽 맞춤).
+    private const int MenuW = 304, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 280, MenuRowX = 12;
 
     /// <summary>어빌리티 목록 줄 아이콘 — 분석-스킬 ba-12: Obs 0488 의 17×17 그림 24장(기준점 가운데).</summary>
     private const int AbilityIconObs = 488;
@@ -82,15 +83,18 @@ internal sealed unsafe partial class BattleSceneWindow
             var (name, w, enabled, reason) = rows[i];
             int y = oy + MenuHeadH + i * MenuRowH;
             uint color = enabled ? White : DimGray;
+            int rx = ox + MenuRowX;
+            DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);   // 원본 줄 바탕(280×24)
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
             if (_db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {
-                DrawUi(AbilityIconObs, ab.IconKindMotion, 0, ox + 14, y + MenuRowH / 2, UiBlend.Alpha);
-                DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, ox + 34, y + MenuRowH / 2, UiBlend.Alpha);
+                DrawUi(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2, UiBlend.Alpha);
+                DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2, UiBlend.Alpha);
             }
-            DrawText(name, ox + 46, y + 4, color);
-            if (!enabled) DrawText(reason, ox + 150, y + 4, Red);
-            RightText($"{_db.WorkTpCost(c, w.Id)}   {w.SoulBase}", ox + MenuW - 10, y + 4, color);
+            DrawText(name, rx + 46, y + 4, color, 12);
+            if (!enabled) DrawText(reason, rx + 120, y + 4, Red, 11);
+            RightText($"{_db.WorkTpCost(c, w.Id)}", rx + 210, y + 4, color, 12);
+            RightText($"{w.SoulBase}", rx + 240, y + 4, color, 12);
         }
     }
 }

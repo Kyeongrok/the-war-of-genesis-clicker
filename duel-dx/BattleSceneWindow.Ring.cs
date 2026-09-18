@@ -339,9 +339,11 @@ internal sealed class UiSprite
     public UiSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
     {
         _table = table;
+        // 모션표 키는 벌 안 순번이 아니라 <b>장 번호</b>다 — 0471 처럼 번호에 구멍이 있으면 둘이 다르다
+        // (분석-모션 「Obs 파일 갈래(0471 같은 UI 그림)」).
         foreach (var motion in motions)
-            for (int i = 0; i < motion.Frames.Count; i++)
-                _frames[(motion.Id, i)] = SpriteFrame.From(motion.Frames[i]);
+            foreach (var frame in motion.Frames)
+                _frames[(motion.Id, frame.SlotId)] = SpriteFrame.From(frame);
     }
 
     /// <summary>모션 m 의 tick 째 컷. 되풀이가 아니면 모션이 끝난 뒤에는 null(이펙트가 사라지는 때).</summary>

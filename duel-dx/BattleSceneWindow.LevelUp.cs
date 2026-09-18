@@ -92,7 +92,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// 옵시디안 분석-시스템메뉴 「메시지 창 틀 (fa-11)」: 메시지 창(<c>0x10034540</c>)은 글 크기에 맞춰 늘어난다 —
     /// <c>안쪽폭 = max(제목폭 + 100, 본문폭)</c>, <c>창 = (안쪽폭 + 40) × (본문높이 + 80)</c>, 본문은 덩어리 가운데 맞춤·흰색,
-    /// O.K 단추는 <c>(창폭/2 − 38, 창높이 − 40)</c> 에 76×23(원본 그림 Obs 0471 모션 31, 우리 파서가 아직 못 읽어 글자로).
+    /// O.K 단추는 <c>(창폭/2 − 38, 창높이 − 40)</c> 에 76×23 — 원본 그림 Obs 0471 모션 31(기준점이 한가운데).
     /// 틀·제목줄은 <see cref="DrawGameFrame"/> 가 그린다.
     /// </remarks>
     private void DrawLevelUp()
@@ -112,16 +112,15 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(lines[i], x + (w - lw) / 2, y + 20 + i * lineH, i == 0 ? 0xFFFFE070 : White);
         }
 
+        // O.K 단추 — 원본 그림(76×22)은 기준점이 한가운데라 칸 가운데에 찍는다. 글자는 그림에 들어 있다.
         int bx = x + w / 2 - 38, by = y + h - 40;
-        if (!DrawUi(OkButtonObs, OkButtonMotion, 0, bx, by, UiBlend.Alpha, loop: false))
-        {
-            FillRect(bx, by, 76, 23, HeadBg);
-            StrokeRect(bx, by, 76, 23, BoxLine);
-        }
+        if (DrawUi(OkButtonObs, OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
+        FillRect(bx, by, 76, 23, HeadBg);
+        StrokeRect(bx, by, 76, 23, BoxLine);
         var (_, ow, _) = GetText("O.K", White);
         DrawText("O.K", bx + (76 - ow) / 2, by + 4, White);
     }
 
-    /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림). 아직 그림을 못 읽어 글자로 그린다.</summary>
+    /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림).</summary>
     private const int OkButtonObs = 471, OkButtonMotion = 31;
 }
