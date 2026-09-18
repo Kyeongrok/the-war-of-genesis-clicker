@@ -41,6 +41,19 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>기본공격 work 1 의 동작 — 준비 5 → 베기 8 → 복귀 24(분석-모션 <c>0x1007f0a0</c>). 판정은 베기 끝에 들어간다.</summary>
     private static readonly int[] StrikeActions = [5, 8, 24];
+
+    /// <summary>
+    /// 기본공격 work 마다 도는 동작이 다르다(분석-모션 「인물별 동작 구간표는 없다」).
+    /// 288명은 work 1 로 베고, 48명은 387(때리는 동작이 없다), 47명은 1479, 48명은 6·1584 로 <b>쏜다</b>(동작 9).
+    /// </summary>
+    private static readonly Dictionary<int, int[]> BasicWorkActions = new()
+    {
+        [1] = [5, 8, 24],
+        [387] = [5, 7],
+        [1479] = [8],
+        [6] = [9],
+        [1584] = [9],
+    };
     private const int StrikeHitStep = 1;
 
     /// <summary>자세를 세우는 work — 516 방어(맞을 때 한 번 더 깎임), 515 회피(상대 명중 −DEX/5).</summary>
