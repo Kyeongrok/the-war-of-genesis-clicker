@@ -323,10 +323,11 @@ internal sealed unsafe partial class BattleSceneWindow
             .Where(i => _units[i].Alive && !_units[i].IsAlly && FindAttackPath(_turn, i) != null)
             .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
 
-    /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다.</summary>
+    /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다 — 어빌리티를 겨누는 중이면 그 어빌리티 사거리로 센다.</summary>
     private void CycleAttackCursor()
     {
-        var targets = AttackableEnemies();
+        var targets = !_targetIsBasicAttack && _targetWork >= 0 && Work(_targetWork) is { } aw
+            ? AbilityTargets(aw) : AttackableEnemies();
         if (targets.Count == 0) return;
         _attackCursor = targets[(targets.IndexOf(_attackCursor) + 1) % targets.Count];
     }

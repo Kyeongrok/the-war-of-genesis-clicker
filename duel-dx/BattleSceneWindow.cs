@@ -392,8 +392,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (key == Win32.VK_RETURN && _ringUnit >= 0 && _ringPhase == RingPhase.Idle && _ringHover >= 0) { PickRingItem(_ringHover); return; }
         if (_statusUnit >= 0) return;
 
-        // 공격 대상 고르는 중: Enter·공격 키 = 커서의 적 공격, 다음 인물 키(Tab) = 다른 적
-        if (_targetWork >= 0 && _targetIsBasicAttack && _ringUnit < 0)
+        // 대상 고르는 중: Enter·공격 키 = 커서의 적 치기, 다음 인물 키(Tab) = 다른 적
+        // 기본공격뿐 아니라 적 하나를 겨누는 어빌리티도 같게 다룬다.
+        if (_targetWork >= 0 && _attackCursor >= 0 && _ringUnit < 0)
         {
             if (key == Win32.VK_RETURN || _keys.ActionFor(key) == KeyAction.Attack) { AttackCursorTarget(); return; }
             if (_keys.ActionFor(key) == KeyAction.NextUnit) { CycleAttackCursor(); return; }
