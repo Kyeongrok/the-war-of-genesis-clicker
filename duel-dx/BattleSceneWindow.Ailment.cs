@@ -89,9 +89,15 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>work 의 상태이상을 대상에게 건다(명중은 부른 쪽에서 이미 봤다). 기본공격이면 <b>무기 아이템의 효과</b>를 건다.</summary>
     private void ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
-        // 원본은 기본공격일 때 work 대신 무기 Itm 의 공격 효과(메모리 +0x24~)를 건다 —
-        // 그 칸은 우리가 읽는 장비 보정(파일 18~)과 다른 자리라 아직 안 읽는다(분석-전투 6절).
-        (int Id, int Value)[] effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
+        // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
+        // 무기가 없으면 아무것도 안 건다(0x1007bda4). 지금 판 자료에는 이 칸이 든 아이템이 하나도 없다.
+        (int Id, int Value)[] effects;
+        if (attacker.Data is { } ac && w.Id == ac.BasicWorkId)
+        {
+            if (ac.Items[0] == 0 || _db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return;
+            effects = [.. (weapon.AttackEffects ?? []).Select(e => ((int)e.Status, (int)e.Value))];
+        }
+        else effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
         if (effects.Length == 0) return;
         // 레벨 조건(표 0x1007be84)은 그 효과 하나만 빼는 것이 아니다 — 종류 0·2 이고 공격자 레벨이 대상 이하인데
         // 세 효과 중 하나라도 5·6·12·19·22·23·24 이면 <b>work 전체가 실패</b>하고 회피 반응이 나온다(0x1007bcc0).

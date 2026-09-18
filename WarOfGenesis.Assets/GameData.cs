@@ -158,14 +158,22 @@ public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 public sealed record StatusData(int Id, ushort Icon, ushort DescriptionId);
 
 /// <summary>
-/// <c>Dat/Itm.dat</c> 레코드(파일 48바이트). 종류 0 VES … 14 일반검, 15 대검 …; <see cref="Bonuses"/> = (능력치 번호, 값).
+/// <c>Dat/Itm.dat</c> 레코드(파일 48바이트, 메모리 56바이트). 종류 0 VES … 14 일반검, 15 대검 …
+/// <para>
+/// 로더 <c>0x1004b120</c> 가 칸마다 한 번씩 읽는 것을 그대로 옮겼다. 파일에는 <b>(번호, 값) 짝이 두 무리</b> 있는데 뜻이 전혀 다르다 —
+/// <b>18/22/26 · 20/24/28 이 장비 보정</b>(<see cref="Bonuses"/>, 메모리 <c>+0x18</c>·<c>+0x1e</c>, 읽는 곳 <c>0x10032c60</c>)이고,
+/// <b>30/34/38 · 32/36/40 이 기본공격이 거는 상태이상</b>(<see cref="AttackEffects"/>, 메모리 <c>+0x24</c>·<c>+0x2a</c>, 읽는 곳 <c>0x1007bdd1</c>)이다.
+/// 무리마다 <b>셋</b>이고 값은 <b>부호 있는 수</b>다(리볼버발렌타인의 LP −10 처럼).
+/// 파일 15·44 는 엔진이 한 번도 안 읽는 죽은 칸이다.
+/// </para>
 /// </summary>
 /// <param name="Picture">
 /// 파일 9 — 아이템 그림(<c>Obs 0326</c> 모션 번호). <c>0xffff</c> 면 <see cref="Type"/> 를 그림 번호로 쓴다(분석-캐릭터 "아이템 그림").
 /// </param>
 public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense,
-                              (ushort Stat, ushort Value)[] Bonuses, ushort Picture = 0xFFFF,
-                              ushort UseWork = 0, ushort DescriptionId = 0, ushort Range = 0)
+                              (ushort Stat, short Value)[] Bonuses, ushort Picture = 0xFFFF,
+                              ushort UseWork = 0, ushort DescriptionId = 0, ushort Range = 0,
+                              (byte Status, short Value)[]? AttackEffects = null)
 {
     /// <summary>전투에서 쓸 수 있는 소모품인가 — 종류 7(캡슐)이고 쓰는 work 이 있는 것(분석-전투 「전투 중 아이템 쓰기」).</summary>
     public bool IsConsumable => Type == 7 && UseWork != 0;
@@ -304,12 +312,17 @@ public sealed class GameDatabase
         d = Need("Dat", "itm.dat");
         for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 48)
         {
-            // 파일 18부터 (번호, 값) 짝 여섯이 장비 보정이고, 그 뒤 42 = 쓸 때 도는 work, 46 = 설명 TXR 이다.
-            var w = Words(d, o + 18, 12);
-            var bonuses = Enumerable.Range(0, 6).Select(k => (w[2 * k], w[2 * k + 1])).Where(p => p.Item1 != 0).ToArray();
+            // 장비 보정 셋 — 파일 18/22/26 이 능력치 번호, 20/24/28 이 값(부호 있는 수).
+            var bonuses = Enumerable.Range(0, 3)
+                .Select(k => (Stat: U16(d, o + 18 + 4 * k), Value: (short)U16(d, o + 20 + 4 * k)))
+                .Where(p => p.Stat != 0).ToArray();
+            // 기본공격이 거는 상태이상 셋 — 파일 30/34/38 이 번호(엔진은 낮은 바이트만 쓴다), 32/36/40 이 값.
+            var attackEffects = Enumerable.Range(0, 3)
+                .Select(k => (Status: d[o + 30 + 4 * k], Value: (short)U16(d, o + 32 + 4 * k)))
+                .Where(p => p.Status != 0).ToArray();
             items[U16(d, o)] = new ItemData(U16(d, o), U16(d, o + 2), BitConverter.ToUInt32(d, o + 4), d[o + 8],
                                             U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9),
-                                            U16(d, o + 42), U16(d, o + 46), U16(d, o + 16));
+                                            U16(d, o + 42), U16(d, o + 46), U16(d, o + 16), attackEffects);
         }
 
         var works = new Dictionary<int, WorkData>();
@@ -380,7 +393,7 @@ public sealed class GameDatabase
 
     /// <summary>장비 보너스 합(<c>0x10032c60</c>): 아이템 (능력치 번호, 값) 짝 중 그 번호. 0x30 HP, 0x1f PSY, 0x1e DEX, 0x21 TP, 0x25 SOUL.</summary>
     public int EquipBonus(CharacterData c, int stat) =>
-        c.Items.Where(i => i != 0 && Items.ContainsKey(i)).SelectMany(i => Items[i].Bonuses.Take(3)).Where(b => b.Stat == stat).Sum(b => b.Value)
+        c.Items.Where(i => i != 0 && Items.ContainsKey(i)).SelectMany(i => Items[i].Bonuses).Where(b => b.Stat == stat).Sum(b => b.Value)
         + PassiveBonus(c, stat);
 
     /// <summary>장착 어빌리티 보너스 <c>0x10032af0</c> — 칸마다 그 어빌리티 지금 레벨 work 의 (능력치, 값) 짝을 더한다.</summary>
