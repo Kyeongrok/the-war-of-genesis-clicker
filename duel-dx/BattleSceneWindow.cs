@@ -434,6 +434,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
+        if (OnTalkInput()) return;            // 대사는 아무 키로나 넘긴다
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
@@ -538,6 +539,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnClick(int clientX, int clientY)
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
@@ -624,6 +626,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         UpdateCamera(dt);
         UpdateSounds();
         UpdateRing();
+        UpdateTalk();
+        StepEvent();
         UpdateTurn();
         RefreshMoveRange();
     }
@@ -656,6 +660,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawAbilityMenu();
         DrawItemMenu();
         DrawStatusScreen();
+        DrawTalk();
         DrawToast();
         DrawOutcomeBanner();
         DrawUnitInfo();
@@ -1080,6 +1085,9 @@ internal sealed class UnitState(DemoUnit unit)
 
     /// <summary>Btl 레코드의 편 번호 — 4 내 부대 · 3 동맹 · 0~2 적. 이벤트 조건이 이 번호로 부대를 고른다.</summary>
     public int Side { get; } = unit.Side;
+
+    /// <summary>Btl 배치표에서의 레코드 번호 — 이벤트가 <c>10000+N</c> 으로 가리키는 번호. 부하는 대장 것을 물려받는다.</summary>
+    public int Record { get; } = unit.Record;
 
     /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
     public bool PlayerControlled { get; } = unit.PlayerControlled;

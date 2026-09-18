@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -14,6 +14,15 @@ namespace DuelDx;
 /// </remarks>
 internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Legion, Facing Facing)
 {
+    /// <summary>
+    /// <c>Btl</c> 배치 레코드가 <b>파일에 직접 들고 있는 번호</b>(레코드 첫 낱말) — 줄 순서가 아니다.
+    /// </summary>
+    /// <remarks>
+    /// 이벤트가 사람을 <c>10000+N</c> 으로 가리킬 때 보는 번호다. <c>Btl 0045</c> 는 줄 순서가 0~5 인데 번호는 7·10·13·16·17·19 이라,
+    /// 줄 순서로 찾으면 엉뚱한 사람이 말한다.
+    /// </remarks>
+    public int Record { get; init; } = -1;
+
     /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
     public bool IsAlly => Side >= 3;
 
@@ -47,7 +56,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
 
             var roster = battle.Units
                 .Where(u => u.ChrCode > 0)
-                .Select(u => new DemoUnit(u.ChrCode, u.X, u.Y, u.Side, u.Squad, u.Facing))
+                .Select(u => new DemoUnit(u.ChrCode, u.X, u.Y, u.Side, u.Squad, u.Facing) { Record = u.No })
                 .ToArray();
             if (roster.Length == 0) return null;
 

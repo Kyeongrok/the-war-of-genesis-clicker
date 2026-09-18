@@ -103,6 +103,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateTurn()
     {
         if (_loading || _db == null || _outcome.Length > 0) return;
+        // 이벤트(대사)가 도는 동안은 틱도 차례도 안 흐른다(0x10066197).
+        if (EventsBusy) return;
+        RunEvents();                 // 틱이 안 흐르는 사이에도 조건(턴 수 따위)은 본다
+        if (EventsBusy) return;
         // DUELDX_WIN=1 이면 시작하자마자 이긴 것으로 친다 — 전투 이어짐·진행 깃발·모세스 전환을 화면 밖에서 시험할 때 쓴다.
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "1")
         {
