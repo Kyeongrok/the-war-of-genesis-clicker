@@ -53,6 +53,9 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("ui"), "*.obs"))
                 if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
                     _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path));
+            foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("effects"), "*.obs"))
+                if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
+                    _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -228,6 +231,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case RingCommand.Rest: Toast($"{UnitName(unit)} 휴식"); Rest(unit); break;
             case RingCommand.Attack: BeginAttackTargeting(); break;
             case RingCommand.Ability: CommitMoveForAction(); _abilityMenu = true; break;
+            case RingCommand.System: OpenSystemMenu(); break;
             default: Toast($"{RingItems[(int)command].Hover}: 아직 구현하지 않았습니다"); break;
         }
     }
@@ -267,9 +271,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private enum UiBlend { Alpha, Add, AddDim, Darken }
 
     /// <summary>UI Obs 한 장을 모션표 틱에 맞춰 (x, y) 에 그린다(컷의 X·Y 가 기준점에서 왼쪽 위까지 거리). 그렸으면 true.</summary>
-    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend)
+    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true)
     {
-        if (!_ui.TryGetValue(obs, out var sprite) || sprite.FrameAt(motion, tick) is not { } f) return false;
+        if (!_ui.TryGetValue(obs, out var sprite) || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
         for (int yy = 0; yy < f.H; yy++)
         {
@@ -322,11 +326,15 @@ internal sealed class UiSprite
                 _frames[(motion.Id, i)] = SpriteFrame.From(motion.Frames[i]);
     }
 
-    /// <summary>모션 m 의 tick 째 컷(되풀이). 모션표가 없으면 벌 0 첫 컷.</summary>
-    public SpriteFrame? FrameAt(int motion, int tick)
+    /// <summary>모션 m 의 tick 째 컷. 되풀이가 아니면 모션이 끝난 뒤에는 null(이펙트가 사라지는 때).</summary>
+    public SpriteFrame? FrameAt(int motion, int tick, bool loop = true)
     {
-        if (_table?.Clips.GetValueOrDefault(motion)?.KeyAt(tick, loop: true) is { } k)
-            return _frames.GetValueOrDefault((k.SubentryId, k.Slot));
-        return _frames.GetValueOrDefault((0, 0));
+        if (_table?.Clips.GetValueOrDefault(motion) is { } clip)
+        {
+            // 한 번만 재생하는 것(이펙트)은 모션이 끝나면 null — 그때 사라진다.
+            if (!loop && tick >= Math.Max(clip.Length, 1)) return null;
+            return clip.KeyAt(tick, loop) is { } k ? _frames.GetValueOrDefault((k.SubentryId, k.Slot)) : null;
+        }
+        return loop ? _frames.GetValueOrDefault((0, 0)) : null;
     }
 }

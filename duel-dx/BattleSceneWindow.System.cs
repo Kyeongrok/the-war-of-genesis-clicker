@@ -1,0 +1,350 @@
+using System.IO;
+using System.Text.Json;
+using WarOfGenesis.Assets;
+
+namespace DuelDx;
+
+/// <summary>
+/// 링 커맨드 "시스템" 메뉴(menu-1)와 저장·불러오기(menu-2)·끝내기(menu-3).
+/// </summary>
+/// <remarks>
+/// 옵시디안 분석-시스템메뉴 그대로: 항목 여섯 개(MISSION·RESTART·LOAD·SAVE·VOLUME·EXIT GAME), 칸 190×37,
+/// 안쪽 여백 12, 글자는 TXR 이 아니라 <c>Obs 0894</c> 그림(모션 11·3·1·0·2·4)이다. 마우스로만 고른다.
+/// RESTART·EXIT GAME 은 확인 창을 거치고, 저장에 성공하면 Snd 579 가 난다. 음량 창은 B.G.M·S.E 막대 20칸(5~100).
+/// <para>
+/// 원본 저장은 파티·인물만 담고 <b>전투 도중 상태는 담지 않아</b> 불러오면 그 전투를 처음부터 다시 연다.
+/// 이 데모에는 챕터가 없어 전투판 그대로를 <c>%APPDATA%\DuelDx\battle-save.json</c> 에 적는다(저장 칸 하나).
+/// 원본 EXIT GAME 은 바탕화면이 아니라 타이틀 화면으로 나가는데, 데모에는 타이틀이 없어 창을 닫는다.
+/// </para>
+/// </remarks>
+internal sealed unsafe partial class BattleSceneWindow
+{
+    private const int SystemObs = 894;
+    private const int SystemW = 214, SystemRowH = 37, SystemRowW = 190, SystemPad = 12;
+    private const int SoundSaved = 579;
+
+    /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
+    private enum SystemItem { Mission, Restart, Load, Save, Volume, Exit }
+
+    private static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
+    [
+        (SystemItem.Mission, 11, "MISSION"),
+        (SystemItem.Restart, 3, "RESTART"),
+        (SystemItem.Load, 1, "LOAD"),
+        (SystemItem.Save, 0, "SAVE"),
+        (SystemItem.Volume, 2, "VOLUME"),
+        (SystemItem.Exit, 4, "EXIT GAME"),
+    ];
+
+    private bool _systemMenu;
+    private bool _missionWindow, _volumeWindow;
+    private (string Title, string Text, Action Yes)? _confirm;
+
+    private void OpenSystemMenu()
+    {
+        _systemMenu = true;
+        _missionWindow = _volumeWindow = false;
+        _confirm = null;
+    }
+
+    private bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null;
+
+    private (int X, int Y, int H) SystemMenuRect()
+    {
+        int h = SystemPad * 2 + SystemItems.Length * SystemRowH;
+        return ((BoardWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
+    }
+
+    private void RunSystemItem(SystemItem item)
+    {
+        switch (item)
+        {
+            case SystemItem.Mission: _missionWindow = true; break;
+            case SystemItem.Volume: _volumeWindow = true; break;
+            case SystemItem.Save: SaveBattle(); break;
+            case SystemItem.Load: LoadBattle(); break;
+            case SystemItem.Restart:
+                _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
+                break;
+            case SystemItem.Exit:
+                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => _running = false);
+                break;
+        }
+    }
+
+    /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
+    private bool OnSystemClick(int bx, int by)
+    {
+        if (_confirm is { } confirm)
+        {
+            var (cx, cy, cw, ch) = ConfirmRect();
+            if (by >= cy + ch - 34 && by < cy + ch - 8)
+            {
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; confirm.Yes(); return true; }
+                if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; return true; }
+            }
+            return true;
+        }
+        if (_missionWindow || _volumeWindow)
+        {
+            if (_volumeWindow) OnVolumeClick(bx, by);
+            else _missionWindow = false;
+            return true;
+        }
+        if (!_systemMenu) return false;
+
+        var (x, y, _) = SystemMenuRect();
+        int index = (by - y - SystemPad) / SystemRowH;
+        if (bx < x + SystemPad || bx >= x + SystemPad + SystemRowW || index < 0 || index >= SystemItems.Length) { _systemMenu = false; return true; }
+        _systemMenu = false;
+        RunSystemItem(SystemItems[index].Item);
+        return true;
+    }
+
+    /// <summary>Esc — 열린 창을 하나씩 닫는다. 닫았으면 true.</summary>
+    private bool CloseSystemWindow()
+    {
+        if (_confirm != null) { _confirm = null; return true; }
+        if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; return true; }
+        if (_systemMenu) { _systemMenu = false; return true; }
+        return false;
+    }
+
+    private void DrawSystem()
+    {
+        if (_systemMenu) DrawSystemMenu();
+        if (_missionWindow) DrawMissionWindow();
+        if (_volumeWindow) DrawVolumeWindow();
+        if (_confirm != null) DrawConfirm();
+    }
+
+    private void DrawSystemMenu()
+    {
+        var (x, y, h) = SystemMenuRect();
+        FillRect(x - 4, y - 4, SystemW + 8, h + 8, 0x80000000);
+        FillRect(x, y, SystemW, h, 0xD00A1428);
+        StrokeRect(x, y, SystemW, h, BoxLine);
+        DrawText("System Menu", x + SystemPad, y - 22, White, 15);
+
+        for (int i = 0; i < SystemItems.Length; i++)
+        {
+            var (item, motion, label) = SystemItems[i];
+            int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
+            FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
+            StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
+            // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
+            if (!DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, UiBlend.Alpha, loop: false))
+                DrawText(label, rx + 20, ry + 9, White);
+        }
+    }
+
+    /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>
+    private void DrawMissionWindow()
+    {
+        int w = 400, h = 180, x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
+        FillRect(x, y, w, h, PanelBg);
+        StrokeRect(x, y, w, h, BoxLine);
+        FillRect(x, y, w, 26, HeadBg);
+        DrawText(BattleDemoScene.Title, x + 12, y + 4, White, 15);
+        DrawText("승리 조건", x + 20, y + 44, 0xFF80D0FF);
+        DrawText(_db?.T(BattleDemoScene.WinTextId) ?? "", x + 110, y + 44, White);
+        DrawText("패배 조건", x + 20, y + 96, 0xFFE08080);
+        DrawText(_db?.T(BattleDemoScene.LoseTextId) ?? "", x + 110, y + 96, White);
+        DrawText("아무 곳이나 누르면 닫힙니다", x + 20, y + h - 28, DimGray);
+    }
+
+    // ── 음량 창 ──────────────────────────────────────────────────────────────
+
+    private int _bgmVolume = 90, _seVolume = 90;
+    private const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
+
+    private (int X, int Y) VolumeOrigin() => ((BoardWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
+
+    private void OnVolumeClick(int bx, int by)
+    {
+        var (x, y) = VolumeOrigin();
+        foreach (var (rowY, setter) in new (int, Action<int>)[] { (40, v => _bgmVolume = v), (90, v => _seVolume = v) })
+        {
+            if (by < y + rowY || by >= y + rowY + 13) continue;
+            int cell = (bx - (x + 20)) / 9;
+            if (cell < 0 || cell >= VolumeCells) continue;
+            setter(5 * cell + 5);   // 원본 값 = 5n+5 (5~100)
+            ApplyVolumes();
+            return;
+        }
+        if (by >= y + VolumeH - 30) _volumeWindow = false;
+    }
+
+    private void ApplyVolumes()
+    {
+        _mixer.SetMusicGain(_bgmVolume / 100f);
+        _effectGain = _seVolume / 100f;
+    }
+
+    private void DrawVolumeWindow()
+    {
+        var (x, y) = VolumeOrigin();
+        FillRect(x, y, VolumeW, VolumeH, PanelBg);
+        StrokeRect(x, y, VolumeW, VolumeH, BoxLine);
+        FillRect(x, y, VolumeW, 26, HeadBg);
+        DrawText("Volume", x + 12, y + 4, White, 15);
+
+        foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume) })
+        {
+            DrawText(label, x + 20, y + rowY - 18, White);
+            for (int i = 0; i < VolumeCells; i++)
+            {
+                int cx = x + 20 + i * 9;
+                bool on = 5 * i + 5 <= value;
+                FillRect(cx, y + rowY, 8, 13, on ? 0xFF6AA8FF : 0xFF203050);
+                StrokeRect(cx, y + rowY, 8, 13, BoxLine);
+            }
+            RightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
+        }
+        DrawText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
+    }
+
+    // ── 확인 창 ──────────────────────────────────────────────────────────────
+
+    private (int X, int Y, int W, int H) ConfirmRect()
+    {
+        int w = 340, h = 120;
+        return ((BoardWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
+    }
+
+    private void DrawConfirm()
+    {
+        if (_confirm is not { } confirm) return;
+        var (x, y, w, h) = ConfirmRect();
+        FillRect(x - 4, y - 4, w + 8, h + 8, 0x80000000);
+        FillRect(x, y, w, h, PanelBg);
+        StrokeRect(x, y, w, h, BoxLine);
+        FillRect(x, y, w, 26, HeadBg);
+        DrawText(confirm.Title, x + 12, y + 4, White, 15);
+        var (_, tw, _) = GetText(confirm.Text, White);
+        DrawText(confirm.Text, x + (w - tw) / 2, y + 48, White);
+
+        foreach (var (bx, label) in new (int, string)[] { (x + w / 2 - 86, "예"), (x + w / 2 + 10, "아니오") })
+        {
+            FillRect(bx, y + h - 34, 76, 26, HeadBg);
+            StrokeRect(bx, y + h - 34, 76, 26, BoxLine);
+            var (_, lw, _) = GetText(label, White);
+            DrawText(label, bx + (76 - lw) / 2, y + h - 30, White);
+        }
+    }
+
+    /// <summary>RESTART — 같은 전투를 처음부터(원본은 전투 번호 그대로 장면 1 을 다시 연다).</summary>
+    private void RestartBattle()
+    {
+        foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        _inventory.Clear();
+        InitBattle();
+        FillDemoInventory();
+        _tick = 0;
+        _turn = -1;
+        _selected = -1;
+        _outcome = "";
+        _routine = null;
+        _levelUpQueue.Clear();
+        _levelUpUnit = -1;
+        _numbers.Clear();
+        _effects.Clear();
+        StartBattleMusic();
+        Toast("전투를 다시 시작했습니다");
+    }
+
+    // ── 저장 · 불러오기 ──────────────────────────────────────────────────────
+
+    private sealed record SaveAbility(int Id, int Level);
+
+    private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
+                                   bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
+                                   ushort[] Items, ushort[] Passives, SaveAbility[] Abilities);
+
+    private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory);
+
+    private const int SaveVersion = 1;
+
+    private static string SavePath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "battle-save.json");
+
+    private static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
+
+    private void SaveBattle()
+    {
+        try
+        {
+            var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), _tick, _turn,
+                [.. _units.Select(u => new SaveUnit(u.ChrCode, u.Col, u.Row, (int)u.Facing, u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn,
+                    u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
+                    u.Data?.Items ?? [], u.Data?.Passives ?? [],
+                    [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))]))],
+                _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);
+            File.WriteAllText(SavePath, JsonSerializer.Serialize(state, SaveJson));
+            Play(SoundSaved);
+            Toast($"저장했습니다 — {state.SavedAt}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Toast($"저장하지 못했습니다: {ex.Message}");
+        }
+    }
+
+    private void LoadBattle()
+    {
+        SaveState? state;
+        try
+        {
+            if (!File.Exists(SavePath)) { Toast("저장한 전투가 없습니다"); return; }
+            state = JsonSerializer.Deserialize<SaveState>(File.ReadAllText(SavePath), SaveJson);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            Toast($"불러오지 못했습니다: {ex.Message}");
+            return;
+        }
+        if (state is not { Version: SaveVersion } || state.Units.Length != _units.Length) { Toast("저장 파일을 읽을 수 없습니다"); return; }
+
+        _routine = null;
+        CancelTargeting();
+        _ringUnit = -1;
+        _statusUnit = -1;
+        _levelUpQueue.Clear();
+        _levelUpUnit = -1;
+        _numbers.Clear();
+        _effects.Clear();
+        _heldMoveKeys.Clear();
+
+        for (int i = 0; i < _units.Length; i++)
+        {
+            var (u, s) = (_units[i], state.Units[i]);
+            u.WarpTo(s.Col, s.Row);
+            u.OriginCol = s.Col;
+            u.OriginRow = s.Row;
+            u.Facing = (Facing)s.Facing;
+            (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, 0);
+            if (u.Data is { } c)
+                u.Data = c with
+                {
+                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
+                    Items = s.Items.Length == c.Items.Length ? s.Items : c.Items,
+                    Passives = s.Passives.Length == 3 ? s.Passives : c.Passives,
+                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+                };
+            RefreshUnitStats(u);
+        }
+
+        _inventory.Clear();
+        foreach (var (id, count) in state.Inventory)
+            if (int.TryParse(id, out int itemId)) _inventory[itemId] = count;
+
+        _tick = state.Tick;
+        _turn = -1;
+        _outcome = "";
+        _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
+        _nextTickAt = 0;
+        Toast($"불러왔습니다 — {state.SavedAt}");
+    }
+}

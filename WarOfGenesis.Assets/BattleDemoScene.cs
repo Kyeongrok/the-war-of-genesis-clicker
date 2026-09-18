@@ -22,6 +22,9 @@ public static class BattleDemoScene
 
     /// <summary>전투 배경음악 — Btl 머리 8번째 워드(분석-사운드 fa-5).</summary>
     public const int Bgm = 42;
+
+    /// <summary>승리·패배 조건 글(Btl 머리 워드 5·6 = TXR 번호) — 시스템 메뉴 MISSION 창에 쓴다.</summary>
+    public const ushort WinTextId = 1067, LoseTextId = 1066, TitleTextId = 1068;
     public const string Title = "코어헌터 훈련장";
     public const int Cols = 32, Rows = 34;
 

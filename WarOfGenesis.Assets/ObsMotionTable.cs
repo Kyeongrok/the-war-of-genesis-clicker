@@ -17,6 +17,36 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
     /// <summary>시간줄 자식 키(종류 2) — 시작 틱에 다른 Obs 의 모션(이펙트)을 띄운다. 그 모션의 소리도 난다.</summary>
     public IReadOnlyList<(int Start, int Obs, int Motion)> Children { get; init; } = [];
 
+    /// <summary>물들이기 키(종류 4) — 그 틱부터 (방식, 세기)로 그림을 물들인다. 맞을 때 흰 번쩍임이 여기 들어 있다.</summary>
+    public IReadOnlyList<(int Start, int Mode, int Strength)> Tints { get; init; } = [];
+
+    /// <summary>자리 덮어쓰기 키(종류 7) — 그 틱에 그림을 (x, y) 픽셀만큼 옮긴다. 맞을 때 1픽셀 떨림이 여기 들어 있다.</summary>
+    public IReadOnlyList<(int Start, int X, int Y)> Offsets { get; init; } = [];
+
+    /// <summary>tick 틱에 걸린 물들이기(없으면 null) — 키가 나온 틱부터 다음 키까지 이어진다.</summary>
+    public (int Mode, int Strength)? TintAt(int tick)
+    {
+        (int Mode, int Strength)? found = null;
+        foreach (var (start, mode, strength) in Tints)
+        {
+            if (start > tick) break;
+            found = strength == 0 ? null : (mode, strength);
+        }
+        return found;
+    }
+
+    /// <summary>tick 틱의 자리 덮어쓰기 — 키가 나온 틱부터 다음 키까지(없으면 0,0).</summary>
+    public (int X, int Y) OffsetAt(int tick)
+    {
+        (int X, int Y) found = (0, 0);
+        foreach (var (start, x, y) in Offsets)
+        {
+            if (start > tick) break;
+            found = (x, y);
+        }
+        return found;
+    }
+
     /// <summary><paramref name="tick"/> 틱에 보일 그림 키. 반복이면 길이로 감아 돌리고, 아니면 마지막 키에서 멈춘다.</summary>
     public MotionKey? KeyAt(int tick, bool loop)
     {
@@ -47,7 +77,8 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
 /// 모션: u16 번호, u16 nA, u16 nB, u16 길이(틱), u16 nU, (u16 벌, u16 장) × nU,
 ///       키 26바이트 × (nA + nB) — u16 종류, u16 시작틱, u16 길이, i16 × 10
 /// </code>
-/// B 목록(시간줄) 키: 종류 0 그림(인자 0 = 몸짓벌 번호, 1 = 장 번호), 1 소리(인자 0 = Snd 번호), 2 자식 모션(인자 0 = Obs, 1 = 모션).
+/// B 목록(시간줄) 키: 종류 0 그림(인자 0 = 몸짓벌 번호, 1 = 장 번호), 1 소리(인자 0 = Snd 번호), 2 자식 모션(인자 0 = Obs, 1 = 모션),
+/// 4 물들이기(인자 0 = 방식, 1 = 세기), 7 자리 덮어쓰기(인자 0·1 = x·y 픽셀).
 /// A 목록(시작 키, 모션 내내 되풀이하는 소리 등)은 건너뛴다.
 /// 모션 번호 = 동작 × 3 + 방향(0 뒷모습, 1 옆모습(왼쪽), 2 앞모습; 오른쪽은 옆모습을 뒤집음). 동작 0 = 서기, 1 = 걷기.
 /// 없는 모션이면 서기로 떨어진다(<c>SetAction 0x10072820</c>).
@@ -86,6 +117,8 @@ public sealed class ObsMotionTable
                 var keys = new List<MotionKey>();
                 var sounds = new List<(int, int)>();
                 var children = new List<(int, int, int)>();
+                var tints = new List<(int, int, int)>();
+                var offsets = new List<(int, int, int)>();
                 for (int k = 0; k < na + nb; k++, p += 26)
                 {
                     if (k < na) continue;
@@ -94,10 +127,12 @@ public sealed class ObsMotionTable
                         case 0: keys.Add(new MotionKey(U16(b, p + 2), U16(b, p + 4), S16(b, p + 6), S16(b, p + 8))); break;
                         case 1: sounds.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 2: children.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 4: tints.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 7: offsets.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                     }
                 }
                 keys.Sort((x, y) => x.Start.CompareTo(y.Start));
-                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children };
+                clips[id] = new ObsMotionClip(id, length, keys) { Sounds = sounds, Children = children, Tints = tints, Offsets = offsets };
             }
             return new ObsMotionTable(clips);
         }

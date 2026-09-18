@@ -5,7 +5,7 @@ using DuelDx.Native;
 namespace DuelDx;
 
 /// <summary>단축키로 바꿀 수 있는 동작.</summary>
-internal enum KeyAction { MoveUp, MoveDown, MoveLeft, MoveRight, Ring, Attack, Ability, Rest, Status, NextUnit, Grid, Gauges }
+internal enum KeyAction { MoveUp, MoveDown, MoveLeft, MoveRight, Ring, Attack, Ability, Rest, Status, Item, System, NextUnit, Grid, Gauges }
 
 /// <summary>
 /// 동작 ↔ 가상 키 표. <c>%APPDATA%\DuelDx\keys.json</c> 에 저장한다. 방향키(걷기)와 Esc(취소)는 늘 고정.
@@ -24,6 +24,8 @@ internal sealed class KeyBindings
         (KeyAction.Ability, "어빌리티", 'R'),
         (KeyAction.Rest, "휴식", 'Q'),
         (KeyAction.Status, "상태(Status)", 'C'),
+        (KeyAction.Item, "아이템", 'Z'),
+        (KeyAction.System, "시스템 메뉴", 'X'),
         (KeyAction.NextUnit, "다음 인물 보기", Win32.VK_TAB),
         (KeyAction.Grid, "격자 켜기·끄기", 'G'),
         (KeyAction.Gauges, "체력바 켜기·끄기", 'H'),

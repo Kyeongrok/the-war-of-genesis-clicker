@@ -41,7 +41,6 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>기본공격 work 1 의 동작 — 준비 5 → 베기 8 → 복귀 24(분석-모션 <c>0x1007f0a0</c>). 판정은 베기 끝에 들어간다.</summary>
     private static readonly int[] StrikeActions = [5, 8, 24];
     private const int StrikeHitStep = 1;
-    private const int DeathAction = 6;
 
     /// <summary>자세를 세우는 work — 516 방어(맞을 때 한 번 더 깎임), 515 회피(상대 명중 −DEX/5).</summary>
     private const int StanceDefendWork = 516, StanceEvadeWork = 515;
@@ -192,7 +191,12 @@ internal sealed unsafe partial class BattleSceneWindow
         if (u.Tp > 0 && u.MaxTp > 0 && _db != null)
         {
             int heal = (int)((long)(u.MaxHp - u.Hp) * u.Tp / u.MaxTp * _db.N(35) / 100);
-            if (heal > 0) { u.Hp += heal; Popup(u, $"+{heal}", HealColor); }
+            if (heal > 0)
+            {
+                int before = u.Hp;
+                u.Hp += heal;
+                ShowNumber(u, _db.T(159), HealColor2, rise: false, count: (before, u.Hp));
+            }
         }
         u.Tp = 0;
         EndTurn();
@@ -354,7 +358,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (dying.Count > 0)
         {
-            foreach (var d in dying) { PlayAction(d, DeathAction); Play(SoundDeath); }
+            foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); Play(SoundDeath); }
             while (dying.Any(d => d.IsBusy)) yield return true;
             foreach (var d in dying) d.Alive = false;
             CheckOutcome();
@@ -370,16 +374,19 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (result == 1)
         {
-            int healed = Math.Min(amount, t.MaxHp - t.Hp);
-            t.Hp += healed;
-            Popup(t, $"+{healed}", HealColor);
+            int before = t.Hp;
+            t.Hp = Math.Min(t.MaxHp, t.Hp + amount);
+            // 회복은 떠오르지 않고 옛 HP 에서 새 HP 로 세어 올라간다(노랑).
+            ShowNumber(t, _db.T(159), HealColor2, rise: false, count: (before, t.Hp));
             return;
         }
         if (!w.IsDamage) return;
-        if (result == 3 || amount <= 0) { Popup(t, "Miss", 0xFFC0C0C0); return; }
+        if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
 
         t.Hp = Math.Max(0, t.Hp - amount);
-        Popup(t, crit ? $"{amount}!" : amount.ToString(), crit ? 0xFFFF9040 : 0xFFFFE070, crit ? 24 : 18);
+        ShowNumber(t, $"{_db.T(159)} {amount}", DamageColor);
+        PlayHitReaction(t, damaged: true);
+        if (crit) PlayCritFlash();
         t.Soul = Math.Min(t.MaxSoul, t.Soul + amount / Math.Max(1, _db.N(43)));
         PlayHurtVoice(t);
         if (t.Hp > 0) return;
