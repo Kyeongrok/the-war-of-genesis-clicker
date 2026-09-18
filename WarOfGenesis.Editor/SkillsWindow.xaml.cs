@@ -38,8 +38,8 @@ public partial class SkillsWindow : Window
             {
                 if (!db.Works.TryGetValue(workId, out var w)) continue;
                 rows.Add(new Row(ab.Id, name, level, ab.MaxLevel, workId, KindName(w.Kind), w.Power, w.Accuracy, w.Critical + 1,
-                                 RangeText(w), w.SingleTarget ? $"한 명 ({w.TargetMode})" : $"범위 안 모두 ({w.TargetMode})",
-                                 $"모양 {w.AreaShape} · {w.AreaArg}", w.HpFactor == 0 ? $"{w.TpBase}" : $"{w.TpBase} + 체질({w.HpFactor})",
+                                 RangeText(w), TargetText(w.TargetMode),
+                                 $"모양 {w.AreaShape} · {w.AreaArg}칸", w.HpFactor == 0 ? $"{w.TpBase}" : $"{w.TpBase} + 체질({w.HpFactor})",
                                  w.SoulBase, level < ab.MaxLevel && w.ExpCost > 0 ? w.ExpCost.ToString() : "", jobs));
             }
         }
@@ -59,13 +59,28 @@ public partial class SkillsWindow : Window
         _ => kind.ToString(),
     };
 
-    private static string RangeText(WorkData w) => w.RangeShape switch
+    /// <summary>대상 방식(+0x13·+0x1e) — 분석-전투 "어빌리티 범위·자세·상태이상".</summary>
+    private static string TargetText(byte mode) => mode switch
     {
-        0 => "제자리",
-        1 => $"마름모 {w.RangeMin}~{w.RangeMax}",
-        2 => $"십자 {w.RangeMin}~{w.RangeMax}",
-        _ => $"모양 {w.RangeShape} {w.RangeMin}~{w.RangeMax}",
+        0 or 2 => "자기 자리",
+        1 => "적 하나",
+        3 or 6 => "아무 칸",
+        4 => "아군 하나",
+        5 => "아무 유닛",
+        7 => "빈 칸",
+        8 => "오브젝트",
+        _ => $"모드 {mode}",
     };
+
+    private static string RangeText(WorkData w)
+    {
+        string shape = w.RangeShape switch
+        {
+            0 => "제자리", 1 => "마름모", 2 => "십자", 3 => "부채꼴", 4 => "화면 전체",
+            5 => "직선", 6 => "폭3 줄", 7 => "폭5 줄", 8 => "대각선", 9 => "삼각형", _ => $"모양 {w.RangeShape}",
+        };
+        return w.RangeShape == 0 ? shape : $"{shape} {w.RangeMin}~{w.RangeMax}칸";
+    }
 
     private bool Accept(object o)
     {

@@ -311,6 +311,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_keysOpen) { OnKeysKey(key); return; }
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (key == Win32.VK_ESCAPE && CloseSystemWindow()) return;
         if (key == Win32.VK_ESCAPE)
         {
             if (_statusUnit >= 0) _statusUnit = -1;
@@ -339,6 +340,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case KeyAction.Status:
                 if (_ringUnit >= 0) RingShortcut(RingCommand.Status);
                 else if ((uint)_selected < _units.Length) _statusUnit = _selected;
+                break;
+            case KeyAction.Item: RingShortcut(RingCommand.Item); break;
+            case KeyAction.System:
+                if (_ringUnit >= 0) RingShortcut(RingCommand.System);
+                else OpenSystemMenu();
                 break;
             case KeyAction.NextUnit:
                 for (int i = 1; i <= _units.Length; i++)
@@ -374,7 +380,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
-        if (OnKeysClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
+        if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
         int boardY = by - GridTop;
         if (boardY < 0) return;
@@ -461,14 +467,18 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawWorkRange();
         if (_showGrid) DrawGridLines();
         DrawUnits();
+        DrawEffects();
         if (_showGauges) DrawGauges();
         DrawPopups();
+        DrawNumbers();
+        DrawCritFlash();
         DrawStatus();
         DrawRing();
         DrawAbilityMenu();
         DrawStatusScreen();
         DrawToast();
         DrawOutcome();
+        DrawSystem();
         DrawKeysPanel();
         DrawLevelUp();
     }
@@ -518,7 +528,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             if (sprites.TryGetValue(unit.ChrCode, out var sprite))
             {
                 var frame = sprite.FrameFor(unit);
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X, footY + frame.Y);
+                // 맞을 때의 흰 번쩍임(물들이기 키)과 1픽셀 떨림(자리 키)은 모션 자료에 들어 있다(분석-전투 fg-10).
+                var (clip, tick) = sprite.CurrentClip(unit);
+                var tint = clip?.TintAt(tick);
+                var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint);
                 headY = footY + frame.Y;
             }
             if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
@@ -603,8 +617,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         return 0xFF000000u | (br << 16) | (bgc << 8) | bb;
     }
 
-    private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY)
+    /// <summary>
+    /// 컷 한 장을 찍는다. <paramref name="tint"/> 가 있으면 물들인다 — 방식 k(1~7)는 (n·픽셀 + (31−n)·세기)/31,
+    /// 방식 3 은 n = 19 로 맞을 때의 흰 번쩍임이다(분석-전투 "맞는 효과").
+    /// </summary>
+    private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null)
     {
+        int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
+        int level = tint is { } tt ? Math.Clamp(tt.Strength, 0, 31) * 255 / 31 : 0;
+
         for (int y = 0; y < srcH; y++)
         {
             int dy = dstY + y;
@@ -615,6 +636,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 if ((uint)dx >= BoardWidth) continue;
                 uint c = src[y * srcW + x];
                 if ((c & 0xFF000000) == 0) continue;
+                if (n < 31)
+                {
+                    uint Ch(int shift) => (uint)Math.Clamp((n * (int)(c >> shift & 0xFF) + (31 - n) * level) / 31, 0, 255);
+                    c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+                }
                 SetPixel(dx, dy, c);
             }
         }
@@ -787,6 +813,13 @@ internal sealed class UnitSprite
     /// 지금 보일 컷 — 걷는 중이면 걷기(동작 1), 아니면 서기(동작 0, 까딱이는 숨쉬기) 모션을 틱에 맞춰 넘긴다.
     /// 오른쪽을 보면 옆모습 컷을 뒤집는다.
     /// </summary>
+    /// <summary>지금 재생 중인 모션(물들이기·자리 키까지 들어 있다)과 그 틱.</summary>
+    public (ObsMotionClip? Clip, int Tick) CurrentClip(UnitState unit)
+    {
+        int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+        return (_table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing)), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
+    }
+
     public SpriteFrame FrameFor(UnitState unit)
     {
         int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
@@ -837,6 +870,23 @@ internal sealed class UnitState(BattleUnit unit)
     public bool HasTurn { get; set; }
     public bool Alive { get; set; } = true;
 
+    /// <summary>전투를 시작한 칸 — RESTART 로 되돌릴 때 쓴다.</summary>
+    public int StartCol { get; } = unit.Col;
+    public int StartRow { get; } = unit.Row;
+
+    /// <summary>전투를 처음부터 다시 할 때 — 자리·상태를 처음으로 돌린다(수치는 InitBattle 이 다시 채운다).</summary>
+    public void ResetTo(int col, int row)
+    {
+        WarpTo(col, row);
+        OriginCol = col;
+        OriginRow = row;
+        Facing = IsAlly ? Facing.Right : Facing.Left;
+        Alive = true;
+        HasTurn = true;
+        Stance = 0;
+        Action = -1;
+    }
+
     /// <summary>자세(<c>+0x4d4</c>) — 1 방어(work 516), 2 회피(work 515). 다음 차례가 오면 풀린다.</summary>
     public int Stance { get; set; }
 
@@ -849,6 +899,7 @@ internal sealed class UnitState(BattleUnit unit)
 
     /// <summary>한 번 재생 중인 동작(공격 등). −1 이면 서기/걷기를 알아서 고른다.</summary>
     public int Action { get; private set; } = -1;
+
     private double _actionLeft;
 
     /// <summary>걷거나, 걸을 길이 남았거나, 동작을 재생하는 중.</summary>

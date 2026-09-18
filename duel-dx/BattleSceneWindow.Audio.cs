@@ -25,7 +25,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly Dictionary<int, (int[] Hurt, int[] Call)> _voices = [];
 
     private const int SoundDeath = 106, SoundLevelUp = 107;
-    private const float MusicGain = 0.9f, EffectGain = 0.9f;
+    private const float MusicGain = 0.9f;
+
+    /// <summary>효과음 크기(0~1) — 시스템 메뉴 음량 창에서 바꾼다.</summary>
+    private float _effectGain = 0.9f;
 
     /// <summary>work 번호 → 그 어빌리티를 쓸 때 (때리는 순간부터 몇 틱 뒤, Snd 번호). 분석-사운드 표에서 옮겼다.</summary>
     private static readonly (int Work, (int Tick, int Sound)[] Sounds)[] AbilityEffectSounds =
@@ -87,7 +90,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void Play(int sound, int tag = 0)
     {
-        if (!Muted && _sfx.TryGetValue(sound, out var pcm)) _mixer.PlayEffect(pcm, EffectGain, tag);
+        if (!Muted && _sfx.TryGetValue(sound, out var pcm)) _mixer.PlayEffect(pcm, _effectGain, tag);
     }
 
     /// <summary>배경음악(assets/bgm) 한 곡 — Bink 음악을 풀어 튼다. 푸는 데 1~2초 걸려 배경 실에서 한다.</summary>
