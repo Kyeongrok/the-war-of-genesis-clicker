@@ -283,6 +283,15 @@ public sealed class GameDatabase
     public IReadOnlyDictionary<int, int> Num { get; }
     /// <summary><c>Dat/Sta.dat</c> — 상태이상 번호 → 아이콘·설명.</summary>
     public IReadOnlyDictionary<int, StatusData> Statuses { get; }
+    /// <summary><c>Dat/Lev.dat</c> — 레벨마다 붙는 성장률(%). 색인은 레벨−1.</summary>
+    public IReadOnlyList<LevelGrowth> LevelGrowth => _levelGrowth ??= WarOfGenesis.Assets.LevelGrowth.Parse(_files.Read("Dat", "Lev.dat"));
+
+    /// <summary><c>Dat/0002.nch</c> — 파티 레벨 성장을 안 받는 Chr 번호들.</summary>
+    public IReadOnlySet<int> LevelExempt => _levelExempt ??= WarOfGenesis.Assets.LevelGrowth.ParseExempt(_files.Read("Dat", "0002.nch"));
+
+    private IReadOnlyList<LevelGrowth>? _levelGrowth;
+    private HashSet<int>? _levelExempt;
+
     /// <summary>이 표들을 읽은 자료 묶음 — 다른 파일(Dmg.dat 등)을 더 읽을 때 쓴다.</summary>
     public GameFiles Files => _files;
 

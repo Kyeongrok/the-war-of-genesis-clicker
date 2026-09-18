@@ -23,6 +23,9 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
     /// </remarks>
     public int Record { get; init; } = -1;
 
+    /// <summary>배치 레코드의 레벨 보정 — 파티 레벨에 이만큼 더한 값이 그 인물의 레벨이 된다.</summary>
+    public int LevelOffset { get; init; }
+
     /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
     public bool IsAlly => Side >= 3;
 
@@ -71,7 +74,11 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
 
             var roster = battle.Units
                 .Where(u => u.ChrCode > 0)
-                .Select(u => new DemoUnit(u.ChrCode, u.X, u.Y, u.Side, u.Squad, u.Facing) { Record = u.No })
+                .Select(u => new DemoUnit(u.ChrCode, u.X, u.Y, u.Side, u.Squad, u.Facing)
+                {
+                    Record = u.No,
+                    LevelOffset = u.LevelOffset,
+                })
                 .ToArray();
             if (roster.Length == 0) return null;
 
