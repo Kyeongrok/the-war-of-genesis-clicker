@@ -71,9 +71,17 @@ internal sealed unsafe partial class BattleSceneWindow
         public double X { get; set; } = person.X;
         public double Y { get; set; } = person.Y;
         public int Motion { get; set; } = 2;          // 앞모습 서기
+
+        /// <summary>그 모션을 건 때 — 모션마다 처음부터 돌게 한다.</summary>
+        public double MotionStart { get; set; }
         public bool Mirror { get; set; }
         public bool Visible { get; set; } = true;
+
+        /// <summary>지금 밝기 0~1 — 원본은 8단계다(행동 210·211).</summary>
         public double Alpha { get; set; } = 1;
+
+        /// <summary>밝기가 옮겨 가는 중 — (시작 밝기, 목표 밝기, 걸리는 틱, 시작한 때).</summary>
+        public (double From, double To, int Ticks, double Start)? Fade { get; set; }
 
         /// <summary>걷는 중 — (시작 자리, 목적지, 걸리는 틱, 시작한 때, 다 걸으면 설 모션).</summary>
         public (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start, int EndMotion, bool EndMirror)? Walk { get; set; }
@@ -285,6 +293,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldActorOf(A(0)) is not { } who) break;
                 who.Motion = A(1);
                 who.Mirror = A(3) != 0;
+                who.MotionStart = _lastTime;
+                // 인자2 가 1 이면 되풀이라 바로 다음 줄로 가고, 0 이면 <b>한 바퀴 다 돌 때까지</b> 스크립트가 기다린다.
+                if (A(2) != 1 && _db?.Character(who.ChrCode) is { SpriteId: > 0 } pc
+                    && UiFor(pc.SpriteId)?.MotionLength(A(1)) is > 0 and var length)
+                    _fieldWaitUntil = _lastTime + length / TicksPerSecond;
                 break;
             }
             case 209: break;                                 // 모션 멈추기 — 데모는 늘 그 모션을 보이므로 할 일이 없다
@@ -292,8 +305,10 @@ internal sealed unsafe partial class BattleSceneWindow
             case 211:                                        // 서서히 나타나기
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
-                who.Visible = a.Code == 211;
-                who.Alpha = a.Code == 211 ? 1 : 0;
+                double to = a.Code == 211 ? 1 : 0;
+                if (a.Code == 211) who.Visible = true;        // 나타날 때는 먼저 보이게 해 두고 밝기를 올린다
+                if (A(1) <= 0) { who.Alpha = to; who.Visible = to > 0; who.Fade = null; break; }
+                who.Fade = (who.Alpha, to, A(1), _lastTime);
                 break;
             }
             case 212:
@@ -423,6 +438,22 @@ internal sealed unsafe partial class BattleSceneWindow
             actor.X = walk.FromX + (walk.ToX - walk.FromX) * tick / walk.Ticks;
             actor.Y = walk.FromY + (walk.ToY - walk.FromY) * tick / walk.Ticks;
         }
+
+        foreach (var actor in _fieldActors)
+        {
+            if (actor.Fade is not { } fade) continue;
+            int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
+            if (tick >= fade.Ticks)
+            {
+                actor.Alpha = fade.To;
+                actor.Visible = fade.To > 0;
+                actor.Fade = null;
+                continue;
+            }
+            // 원본은 밝기 바이트를 8→1 로 내린다 — 8단계로 끊어 그 느낌을 맞춘다.
+            double t = (double)tick / fade.Ticks;
+            actor.Alpha = Math.Round((fade.From + (fade.To - fade.From) * t) * 8) / 8;
+        }
     }
 
     private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(op switch
@@ -524,8 +555,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 인물 — 층 순서로, 저마다의 모션으로 그린다.
         foreach (var actor in _fieldActors.Where(a => a.Visible).OrderBy(a => a.Layer))
             if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
-                DrawUi(pc.SpriteId, actor.Motion, tick,
-                       ox + (int)actor.X - _fieldCam.X, oy + (int)actor.Y - _fieldCam.Y, UiBlend.Alpha);
+                DrawUi(pc.SpriteId, actor.Motion, (int)((_lastTime - actor.MotionStart) * TicksPerSecond),
+                       ox + (int)actor.X - _fieldCam.X, oy + (int)actor.Y - _fieldCam.Y, UiBlend.Alpha,
+                       loop: true, fade: actor.Alpha);
 
         foreach (var (obs, motion, px, py, start) in _fieldPictures)
             DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond),
