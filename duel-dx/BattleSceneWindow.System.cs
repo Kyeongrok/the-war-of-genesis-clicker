@@ -303,7 +303,8 @@ internal sealed unsafe partial class BattleSceneWindow
             FillDemoInventory();
         }
         else InitBattle();
-        _tick = 0;
+        // 원본은 전투를 만들 때 이 값을 <b>1</b> 로 놓는다(0x100644d4) — 0 이면 표시가 늘 하나씩 작다.
+        _tick = 1;
         _turn = -1;
         _selected = -1;
         _outcome = "";
@@ -466,7 +467,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _chapterScriptDone.Clear();
         foreach (int chapter in state.DoneChapters ?? []) _chapterScriptDone.Add(chapter);
 
-        _tick = state.Tick;
+        _tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
         _turn = -1;
         _outcome = "";
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;

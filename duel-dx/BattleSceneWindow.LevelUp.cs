@@ -116,7 +116,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // O.K 단추 — 원본 그림(76×22)은 기준점이 한가운데라 칸 가운데에 찍는다. 글자는 그림에 들어 있다.
         int bx = x + w / 2 - 38, by = y + h - 40;
-        if (DrawUi(OkButtonObs, OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
+        // 단추 그림은 <b>두 장</b>이다 — 평소(31)와 골라짐(32). 원본도 마우스가 얹히면 밝은 쪽으로 바꿔 그린다.
+        bool over = _mouse.X >= bx && _mouse.X < bx + 76 && _mouse.Y >= by && _mouse.Y < by + 23;
+        if (DrawUi(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
         FillRect(bx, by, 76, 23, HeadBg);
         StrokeRect(bx, by, 76, 23, BoxLine);
         var (_, ow, _) = GetText("O.K", White);
@@ -124,5 +126,5 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림).</summary>
-    private const int OkButtonObs = 471, OkButtonMotion = 31;
+    private const int OkButtonObs = 471, OkButtonMotion = 31, OkButtonMotionOver = 32;
 }
