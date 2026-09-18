@@ -120,25 +120,72 @@ def label(a, canvas, s, wx, wy, ww, wh, halign=2, xoff=-15, valign=1, yoff=2,
 
 # ── Chp 읽기 (로더 0x100f6c80, [[분석-모세스]] 6절) ────────────────────
 class Chapter:
+    """머리는 24워드 고정이다(로더 0x100f6c80 이 조건 없이 24번 읽는다).
+
+    다만 자료에는 **제목 TXR 워드 하나가 없는 23워드짜리**가 셋(0038·0059·0065) 있어,
+    24 로 읽어 파일 끝과 안 맞으면 23 으로 한 번 더 읽는다. 머리 워드 0 은 **판 번호**이고
+    지금 게임이 읽는 것은 3 뿐이다 — 0·1·2 인 다섯(0002·0008·0009·0024·0037)은 배치가 아예 달라
+    게임 본체도 못 읽는 옛 자료라 여기서도 거절한다.
+    """
+
     def __init__(self, path):
-        d = open(path, 'rb').read()
-        self.o = 0
-        self.d = d
-        w = self._w
-        self.region, self.bgr, self.bgm, self.item_shop, self.wt_shop = (w(), w(), w(), w(), w())
-        [w() for _ in range(16)]
-        self.start_step, self.start_id, self.title = w(), w(), w()
-        n = w(); w()
-        self.points = [[w() for _ in range(6)] for _ in range(n)]
-        n = w(); w()
-        self.people = [[w() for _ in range(15)] for _ in range(n)]
-        n = w(); w()
-        self.systems = [self._rec(8, 3, 1) for _ in range(n)]
-        n = w(); w()
-        self.planets = [self._rec(8, 3, 10) for _ in range(n)]
-        n = w(); w()
-        self.places = [[w() for _ in range(10)] for _ in range(n)]
+        self.d = open(path, 'rb').read()
+        if len(self.d) >= 2 and struct.unpack_from('<h', self.d, 0)[0] != 3:
+            raise ValueError('%s: 판 번호가 3 이 아니다(게임도 못 읽는 옛 자료)' % os.path.basename(path))
+        try:
+            self._load(24)
+            if self.o != len(self.d):
+                raise ValueError('끝이 안 맞는다')
+        except (ValueError, struct.error):
+            self._load(23)                       # 제목 TXR 워드가 없는 중간 판
+            if self.o != len(self.d):
+                raise ValueError('%s: 어떤 머리 길이로도 파일 끝과 안 맞는다' % os.path.basename(path))
         self._normalize()
+
+    def _load(self, head_words):
+        self.o = 0
+        w = self._w
+        self.version, self.bgr, self.bgm, self.item_shop, self.wt_shop = (w(), w(), w(), w(), w())
+        # 5~12 · 13~20 은 인물 번호 8칸짜리 목록 둘이다(도우미 0x100f6880, 정규화기 0x100f68c0 가 둘 다 인물 표에 맞춘다).
+        self.people_a = [w() for _ in range(8)]
+        self.people_b = [w() for _ in range(8)]
+        self.start_step, self.start_id = w(), w()
+        self.title = w() if head_words >= 24 else -1
+        n = self._count()
+        self.points = [[w() for _ in range(6)] for _ in range(n)]
+        n = self._count()
+        self.people = [[w() for _ in range(15)] for _ in range(n)]
+        n = self._count()
+        self.systems = [self._rec(8, 3, 1) for _ in range(n)]
+        n = self._count()
+        self.planets = [self._rec(8, 3, 10) for _ in range(n)]
+        n = self._count()
+        self.places = [[w() for _ in range(10)] for _ in range(n)]
+        n = self._count()
+        self.o += 4 * n                          # 꼬리 4바이트 레코드 표
+        self._skip_script()
+        # 로더 0x100f7318 — 최저 단계가 1 보다 작으면 1(행성 고르기)로 올리고 첫 행성을 고른다.
+        if self.start_step < 1 and self.planets:
+            self.start_step, self.start_id = 1, self.planets[0]['w'][0]
+
+    def _count(self):
+        """묶음 머리 = 수 한 워드 + 여벌 한 워드. 음수면 배치가 어긋난 것이다."""
+        n = self._w(); self._w()
+        if n < 0:
+            raise ValueError('묶음 개수가 음수')
+        return n
+
+    def _skip_script(self):
+        """수 한 워드, 이벤트마다 (워드1, 조건수, 조건 18바이트, 행동수, 행동 18바이트)."""
+        n = self._w()
+        if n < 0:
+            raise ValueError('스크립트 이벤트 수가 음수')
+        for _ in range(n):
+            conditions = struct.unpack_from('<h', self.d, self.o + 2)[0]
+            actions = struct.unpack_from('<h', self.d, self.o + 4 + 18 * conditions)[0]
+            if conditions < 0 or actions < 0:
+                raise ValueError('스크립트 조건·행동 수가 음수')
+            self.o += 4 + 18 * conditions + 2 + 18 * actions
 
     def _normalize(self):
         """로더 0x100f68c0 — 슬롯에 적힌 '번호'를 배열 '인덱스'로 바꾼다."""
@@ -147,12 +194,19 @@ class Chapter:
                 if key(r) == num:
                     return i
             return num
+        # 칸 벌 세 개의 뜻(정규화기 0x100f68c0 로 확정): 항성계 = 행성·인물·인물, 행성 = 장소·인물·인물.
         for s in self.systems:
             s['slots'][0] = [idx(self.planets, v, lambda r: r['w'][0]) if v >= 0 else v
                              for v in s['slots'][0]]
+            for g in (1, 2):
+                s['slots'][g] = [idx(self.people, v, lambda r: r[0]) if v >= 0 else v
+                                 for v in s['slots'][g]]
         for p in self.planets:
             p['slots'][0] = [idx(self.places, v, lambda r: r[0]) if v >= 0 else v
                              for v in p['slots'][0]]
+            for g in (1, 2):
+                p['slots'][g] = [idx(self.people, v, lambda r: r[0]) if v >= 0 else v
+                                 for v in p['slots'][g]]
         for pt in self.points:
             pt[5] = idx(self.systems, pt[5], lambda r: r['w'][0])
 
