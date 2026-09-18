@@ -24,7 +24,8 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>지금 차례인 인물 번호. 차례를 기다리는 중이면 −1.</summary>
     private int _turn = -1;
-    private int _tick;
+    /// <summary>전투가 흐른 틱 — 원본은 전투를 만들 때 <b>1</b> 로 놓는다(<c>0x100644d4</c>).</summary>
+    private int _tick = 1;
     private IEnumerator<bool>? _routine;
     private string _outcome = "";
     private double _outcomeAt;

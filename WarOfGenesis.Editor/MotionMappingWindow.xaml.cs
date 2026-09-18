@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -53,7 +53,8 @@ public partial class MotionMappingWindow : Window
                 var f = sub.Frames[i];
                 var bmp = BitmapSource.Create(f.Width, f.Height, 96, 96, PixelFormats.Bgra32, null, f.Bgra, f.Width * 4);
                 bmp.Freeze();
-                _frames[(sub.Id, i)] = bmp;
+                // 모션표가 가리키는 것은 <b>장 번호</b>지 벌 안 순번이 아니다 — 못 푼 장이 하나라도 있으면 순번이 밀린다.
+                _frames[(sub.Id, f.SlotId)] = bmp;
             }
 
         int withKeys = table.Clips.Values.Count(c => c.Keys.Count > 0);
