@@ -9,6 +9,34 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private bool _abilityMenu;
+    private int _abilityHover = -1;
+
+    /// <summary>줄 단축키 — 앞에서부터 1·2·3·4·Q·W·E·R, 여덟 줄이 넘으면 단축키가 없다.</summary>
+    private static readonly int[] AbilityHotkeys = ['1', '2', '3', '4', 'Q', 'W', 'E', 'R'];
+
+    private static string HotkeyLabel(int index) =>
+        index < AbilityHotkeys.Length ? ((char)AbilityHotkeys[index]).ToString() : "";
+
+    /// <summary>목록이 열려 있을 때 키를 처리한다 — 단축키면 그 줄을 고른다.</summary>
+    private bool OnAbilityMenuKey(int key)
+    {
+        if (!_abilityMenu || _turn < 0) return false;
+        int index = Array.IndexOf(AbilityHotkeys, key);
+        if (index < 0) return false;
+        var rows = MenuRows();
+        if (index >= rows.Count) return true;
+        var (ox, oy) = MenuOrigin(rows.Count);
+        return OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);
+    }
+
+    private void UpdateAbilityHover(int bx, int by)
+    {
+        if (!_abilityMenu || _turn < 0) { _abilityHover = -1; return; }
+        var rows = MenuRows();
+        var (ox, oy) = MenuOrigin(rows.Count);
+        int row = (by - oy - MenuHeadH) / MenuRowH;
+        _abilityHover = bx >= ox + MenuRowX && bx < ox + MenuRowX + MenuRowW && row >= 0 && row < rows.Count ? row : -1;
+    }
     // 원본 목록(분석-스킬 ba-12): 창 바깥 304, 줄 280×24 여덟 줄, 이름 x=46 · TP x=210 · SOUL x=240(오른쪽 맞춤).
     private const int MenuW = 304, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 280, MenuRowX = 12;
 
@@ -36,7 +64,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private (int X, int Y) MenuOrigin(int rowCount)
     {
-        var (fx, fy) = UnitFoot(_units[_turn]);
+        // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
+        var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (BoardWidth / 2, _camY + ViewHeight / 2);
         int h = MenuHeadH + Math.Max(1, rowCount) * MenuRowH + 8;
         int x = fx + TileW < BoardWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
         return (Math.Clamp(x, 8, BoardWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
@@ -83,7 +112,11 @@ internal sealed unsafe partial class BattleSceneWindow
             int y = oy + MenuHeadH + i * MenuRowH;
             uint color = enabled ? White : DimGray;
             int rx = ox + MenuRowX;
-            DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);   // 원본 줄 바탕(280×24)
+            // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
+            if (i == _abilityHover) DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
+            // 단축키 글자는 아이콘과 겹치지 않게 줄 오른쪽 끝에
+            string hotkey = HotkeyLabel(i);
+            if (hotkey.Length > 0) DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
             if (_db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {

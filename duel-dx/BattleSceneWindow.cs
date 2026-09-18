@@ -346,6 +346,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
                 UpdateSlotsHover(bx, by);
+                UpdateAbilityHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -360,6 +361,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
+        if (OnAbilityMenuKey(key)) return;
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
@@ -902,8 +904,19 @@ internal sealed class UnitSprite
     /// <summary>지금 재생 중인 모션(물들이기·자리 키까지 들어 있다)과 그 틱.</summary>
     public (ObsMotionClip? Clip, int Tick) CurrentClip(UnitState unit)
     {
-        int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
-        return (_table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing)), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
+        return (_table?.Resolve(ActionOf(unit), ObsMotionTable.DirectionOf(unit.Facing)), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
+    }
+
+    /// <summary>
+    /// 지금 재생할 동작 — 걷는 중이면 걷기(1), 아니면 서기(0). 다만 <b>걷기 그림이 한 컷뿐인 인물</b>(카르마타처럼
+    /// 자료에 걷는 그림이 없는 쪽)은 걷는 동안에도 서기 모션을 돌려 미끄러지듯 굳어 보이지 않게 한다.
+    /// </summary>
+    private int ActionOf(UnitState unit)
+    {
+        if (unit.Action >= 0) return unit.Action;
+        if (!unit.IsMoving) return ObsMotionTable.ActionStand;
+        var walk = _table?.Resolve(ObsMotionTable.ActionWalk, ObsMotionTable.DirectionOf(unit.Facing));
+        return walk is { Keys.Count: > 1 } ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
     }
 
     /// <summary>걷기 모션에 달린 소리 키들(시작 틱, Snd 번호).</summary>
@@ -912,7 +925,7 @@ internal sealed class UnitSprite
 
     public SpriteFrame FrameFor(UnitState unit)
     {
-        int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+        int action = ActionOf(unit);
         var clip = _table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing));
         var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: unit.Action < 0);
         if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return _first;
@@ -925,6 +938,18 @@ internal sealed class UnitSprite
 
     /// <summary>동작·방향의 모션(소리 키까지 들어 있다). 없으면 null.</summary>
     public ObsMotionClip? Clip(int action, Facing facing) => _table?.Resolve(action, ObsMotionTable.DirectionOf(facing));
+
+    /// <summary>
+    /// 그 동작에서 <b>타격이 나는 순간</b>(초) — 모션에 붙은 첫 소리 키 자리, 없으면 길이의 60%.
+    /// 원본도 때리는 소리와 함께 피해가 뜬다(분석-사운드·분석-모션).
+    /// </summary>
+    public double HitMomentSeconds(int action, Facing facing)
+    {
+        if (_table?.Resolve(action, ObsMotionTable.DirectionOf(facing)) is not { } clip) return 0;
+        // 치는 동작이 뜨고 아주 잠깐(0.05초) 뒤에 피해가 뜬다 — 사용자가 원본을 보고 알려 준 감각이다.
+        // 모션이 그보다 짧으면 모션 길이를 넘지 않는다.
+        return Math.Min(0.05, Math.Max(0, clip.Length - 1) / BattleSceneWindow.TicksPerSecond);
+    }
 
     /// <summary>한 번 재생할 동작의 길이(초). 모션표에 없으면 0.</summary>
     public double ActionSeconds(int action, Facing facing) =>
