@@ -253,7 +253,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int best = -1, bestCost = int.MaxValue;
         for (int i = 0; i < range.Cost.Length; i++)
         {
-            if (range.Cost[i] >= bestCost || !InWorkRange(w, i % Cols, i / Cols, t.Col, t.Row)) continue;
+            if (range.Cost[i] >= bestCost || !InWorkRange(w, i % Cols, i / Cols, t.Col, t.Row, a)) continue;
             bestCost = range.Cost[i];
             best = i;
         }
@@ -338,7 +338,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        if (!InWorkRange(w, user.Col, user.Row, col, row))
+        if (!InWorkRange(w, user.Col, user.Row, col, row, user))
         {
             Toast("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");
             return true;
@@ -534,7 +534,7 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)
             {
-                if (!InWorkRange(w, u.Col, u.Row, col, row)) continue;
+                if (!InWorkRange(w, u.Col, u.Row, col, row, u)) continue;
                 int x = col * TileW, y = GridTop + row * TileH;
                 FillRect(x + 1, y + 1, TileW - 2, TileH - 2, 0x70F0D040);
                 StrokeRect(x + 1, y + 1, TileW - 2, TileH - 2, 0xFFF0D040);

@@ -109,7 +109,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int row = 0; row < Rows; row++)
                 for (int col = 0; col < Cols; col++)
                 {
-                    if (!InWorkRange(w, sc, sr, col, row)) continue;
+                    if (!InWorkRange(w, sc, sr, col, row, user)) continue;
                     var targets = WorkTargetsFrom(w, user, sc, sr, col, row);
                     if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
                     int score = CDiv(TargetValue(user, w, targets) * num74 * 10, 4 + Math.Abs(col - sc) + Math.Abs(row - sr));
