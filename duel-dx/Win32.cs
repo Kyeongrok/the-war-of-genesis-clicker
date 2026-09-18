@@ -45,6 +45,11 @@ internal static class Win32
     [DllImport("user32.dll")]
     public static extern uint CheckMenuItem(IntPtr menu, uint id, uint check);
 
+    public const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
     [DllImport("user32.dll")]
     public static extern IntPtr GetMenu(IntPtr hWnd);
 
