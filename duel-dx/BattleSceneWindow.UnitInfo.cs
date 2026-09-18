@@ -55,10 +55,14 @@ internal sealed unsafe partial class BattleSceneWindow
         Row(db.T(157), db.Acr(c, unit.Tp).ToString(), y + 196);
         Row(db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString(), y + 212);
 
-        // 상태이상 칸 — 아직 상태이상을 안 넣어서 비어 있다.
+        // 상태이상 칸 — 걸려 있는 것 이름을 적는다(분석-전투 6절).
         FillRect(x + 6, y + 228, InfoW - 12, 34, BoxBg);
         StrokeRect(x + 6, y + 228, InfoW - 12, 34, BoxLine);
-        DrawText(db.T(163), x + 12, y + 234, DimGray);
+        var ailments = AilmentLabels(unit);
+        if (ailments.Count == 0) DrawText(db.T(163), x + 12, y + 234, DimGray);
+        else
+            for (int i = 0; i < ailments.Count && i < 2; i++)
+                DrawText(ailments[i], x + 12, y + 232 + i * 15, 0xFFFF9090, 11);
 
         void Centre(string text, int left, int top, uint color)
         {

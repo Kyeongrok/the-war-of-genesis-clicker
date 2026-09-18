@@ -937,10 +937,44 @@ internal sealed class UnitState(BattleUnit unit)
         HasTurn = true;
         Stance = 0;
         Action = -1;
+        ClearStatus();
     }
 
     /// <summary>자세(<c>+0x4d4</c>) — 1 방어(work 516), 2 회피(work 515). 다음 차례가 오면 풀린다.</summary>
     public int Stance { get; set; }
+
+    /// <summary>상태이상 칸 셋(<c>+0x4bf[3]</c> 번호 · <c>+0x4c2[3]</c> 값) — 분석-전투 「6. 상태이상」.</summary>
+    public byte[] StatusId { get; } = new byte[3];
+    public short[] StatusValue { get; } = new short[3];
+
+    /// <summary>슬롯이 아니라 전투용 보정으로 바로 더해지는 것들(번호 30·31·32·33·37·48).</summary>
+    public int BonusDex { get; set; }
+    public int BonusPsy { get; set; }
+    public int BonusDep { get; set; }
+    public int BonusMaxTp { get; set; }
+    public int BonusMaxSoul { get; set; }
+    public int BonusMaxHp { get; set; }
+
+    /// <summary>그 상태이상이 걸려 있으면 값, 아니면 0. 44·45·46 은 「없음」이라 세지 않는다.</summary>
+    public int Status(int id)
+    {
+        for (int i = 0; i < 3; i++)
+            if (StatusId[i] == id && id is not (44 or 45 or 46)) return StatusValue[i];
+        return 0;
+    }
+
+    public bool HasStatus(int id)
+    {
+        for (int i = 0; i < 3; i++) if (StatusId[i] == id && id is not (44 or 45 or 46)) return true;
+        return false;
+    }
+
+    public void ClearStatus()
+    {
+        Array.Clear(StatusId);
+        Array.Clear(StatusValue);
+        BonusDex = BonusPsy = BonusDep = BonusMaxTp = BonusMaxSoul = BonusMaxHp = 0;
+    }
 
     /// <summary>차례를 시작한 칸 — 이동 영역과 걸음 비용을 이 칸에서 센다.</summary>
     public int OriginCol { get; set; } = unit.Col;

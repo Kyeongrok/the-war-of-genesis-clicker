@@ -90,7 +90,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         int dex = Math.Max(1, db.Dex(c));
         int num5 = db.N(5);
-        int budget = db.MoveBudget(c, unit.Tp);
+        // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
+        int budget = unit.HasStatus(25) ? 0 : db.MoveBudget(c, unit.Tp);
 
         int H(int col, int row) => map.HeightAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;

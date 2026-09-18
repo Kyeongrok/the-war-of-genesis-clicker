@@ -64,7 +64,18 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.MaxTp = unit.Tp = _db.MaxTp(c);
             unit.Stp = Math.Max(1, _db.Stp(c));
             unit.MaxSoul = _db.MaxSoul(c);
-            unit.Soul = _db.SoulStart;
+            // DUELDX_SOUL 로 시작 SOUL 을 올릴 수 있다 — 어빌리티·상태이상을 시험할 때 쓴다.
+            unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : _db.SoulStart;
+            // DUELDX_AILMENT=<번호>[:<값>] 이면 그 상태이상을 걸고 시작한다(화면 밖 시험용).
+            if (Environment.GetEnvironmentVariable("DUELDX_AILMENT") is { Length: > 0 } spec)
+            {
+                string[] parts = spec.Split(':');
+                if (byte.TryParse(parts[0], out byte id))
+                {
+                    unit.StatusId[0] = id;
+                    unit.StatusValue[0] = parts.Length > 1 && short.TryParse(parts[1], out short v2) ? v2 : (short)10;
+                }
+            }
             unit.HasTurn = true;
         }
         FillDemoInventory();
@@ -92,7 +103,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_lastTime < _nextTickAt) return;
         for (int guard = 0; guard < 10000; guard++)
         {
-            int next = Array.FindIndex(_units, u => u.Alive && u.HasTurn);
+            int next = Array.FindIndex(_units, u => u.Alive && u.HasTurn && CanTakeTurn(u));
             if (next >= 0) { StartTurn(next); return; }
             AdvanceTick();
         }
@@ -106,6 +117,9 @@ internal sealed unsafe partial class BattleSceneWindow
             u.Tp = Math.Min(u.MaxTp, u.Tp + u.Stp);
             if (u.Tp >= u.MaxTp) u.HasTurn = true;
         }
+        TickAilments();
+        foreach (var u in _units.Where(u => u.Alive && u.Hp <= 0))
+            if (!SurvivesFatal(u)) KillUnit(u);
     }
 
     /// <summary>차례 시작 — 그 인물을 고른다(fg-8). 적이면 AI 를 돌린다(fg-7).</summary>
@@ -189,7 +203,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var u = _units[index];
         CommitMove(u);
-        if (u.Tp > 0 && u.MaxTp > 0 && _db != null)
+        if (u.Tp > 0 && u.MaxTp > 0 && _db != null && !u.HasStatus(26))
         {
             int heal = (int)((long)(u.MaxHp - u.Hp) * u.Tp / u.MaxTp * _db.N(35) / 100);
             if (heal > 0)
@@ -407,18 +421,27 @@ internal sealed unsafe partial class BattleSceneWindow
             t.Hp = Math.Min(t.MaxHp, t.Hp + amount);
             // 회복은 떠오르지 않고 옛 HP 에서 새 HP 로 세어 올라간다(노랑).
             ShowNumber(t, _db.T(159), HealColor2, rise: false, count: (before, t.Hp));
+            ApplyAilments(a, t, w);
             return;
         }
-        if (!w.IsDamage) return;
+        if (!w.IsDamage)
+        {
+            if (result != 3) ApplyAilments(a, t, w);   // 종류 2·3(큐어·격려)은 상태이상만 건다
+            return;
+        }
         if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
 
+        amount = AilmentDamage(a, t, amount);
         t.Hp = Math.Max(0, t.Hp - amount);
         ShowNumber(t, $"{_db.T(159)} {amount}", DamageColor);
         PlayHitReaction(t, damaged: true);
         if (crit) PlayCritFlash();
         t.Soul = Math.Min(t.MaxSoul, t.Soul + amount / Math.Max(1, _db.N(43)));
         PlayHurtVoice(t);
+        ApplyAilments(a, t, w);
+        Counterattack(a, t, amount);
         if (t.Hp > 0) return;
+        if (SurvivesFatal(t)) return;
         a.Soul = Math.Min(a.MaxSoul, a.Soul + 10);   // 처치(메시지 1016)
         GainKillExp(a, t);
         dying.Add(t);
