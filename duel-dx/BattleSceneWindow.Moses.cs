@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using WarOfGenesis.Assets;
@@ -22,7 +22,8 @@ namespace DuelDx;
 /// <item>ESC — 모세스 전용 시스템 메뉴 네 줄(LOAD·SAVE·VOLUME·EXIT GAME, 전투와 달리 MISSION·RESTART 가 없다), Snd 578.</item>
 /// </list>
 /// 페이지를 바꿀 때 나는 소리: 항행 564 · 파티 580 · 상점 572 · 전직 581 · 용병관리 583 · 뒤로 569/570.
-/// 원본은 페이지 사이에 Mov 영상과 UI 전환 효과(15틱 알파 크로스페이드)를 거는데, 데모는 <b>15틱 검은 페이드</b>로만 흉내 낸다(가설 아님, 생략).
+/// 원본은 페이지 사이에 Mov 영상과 UI 전환 효과를 거는데, 데모는 페이드로만 흉내 낸다 —
+/// 보통은 <b>15틱 검은 페이드</b>(효과 2·3)이고, <b>항행 진입(효과 1)만 30틱에 걸쳐 파랑 채널을 씻어 낸다</b>.
 /// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 BattleSceneWindow.Moses*.cs 로 나눠 두었다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -32,6 +33,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MosesCellObs = 643, MosesCellIconObs = 498, MosesMarkObs = 163;
     private const int MosesExitObs = 287, MosesMailBackground = 94;
     private const int MosesClickSound = 66, MosesFadeTicks = 15;
+
+    /// <summary>항행 진입(효과 1)만 <b>30틱</b>에 걸쳐 파랑을 씻어 낸다 — 나머지는 15틱 검정([[분석-모세스]] 2절).</summary>
+    private const int MosesBlueFadeTicks = 30;
     private const int MosesChapter = 10;
 
     /// <summary>주 화면 아이콘 — 칸 왼위 자리와 Obs 0291 모션, 설명 TXR, 누르면 가는 페이지.</summary>
@@ -73,6 +77,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool _mosesBlueFade;          // 항행 진입(효과 1)은 검정이 아니라 파랑 씻김이다
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
     private ChapterFile? _mosesChp;
+
+    /// <summary>페이지 전환 페이드를 건다 — <paramref name="blue"/> 면 항행 진입용 30틱 파랑 씻김.</summary>
+    private void StartFade(bool blue = false)
+    {
+        _mosesBlueFade = blue;
+        _mosesFade = blue ? MosesBlueFadeTicks : MosesFadeTicks;
+    }
 
     private (int X, int Y) MosesOrigin() => ((BoardWidth - MosesW) / 2, _camY + (ViewHeight - MosesH) / 2);
 
@@ -177,7 +188,6 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0:
                 Play(564);                                             // NAVIGATION
-                _mosesBlueFade = true;                                 // 효과 1 = 파랑만 씻어 내는 페이드
                 // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
@@ -187,11 +197,10 @@ internal sealed unsafe partial class BattleSceneWindow
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
         }
-        if (page != 0) _mosesBlueFade = false;
         _mosesPage = page;
         _mosesPageAt = _lastTime;
         _talkPick = -1;
-        _mosesFade = MosesFadeTicks;
+        StartFade(page == 0);
         _mosesHover = -1;
         // 항행은 성계 배경, 메일은 94, 파티는 주 화면과 같은 챕터 배경
         ShowMosesBackground(page switch
@@ -210,13 +219,13 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             Play(569);
             _mosesStep = 1;
-            _mosesFade = MosesFadeTicks;
+            StartFade();
             _mosesHover = -1;
             return;
         }
         Play(_mosesPage == 0 ? 570 : 569);
         _mosesPage = -1;
-        _mosesFade = MosesFadeTicks;
+        StartFade();
         _mosesHover = -1;
         ShowMosesBackground(_mosesChp?.Background ?? 52);
     }
@@ -281,7 +290,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _mosesPlanet = chp.Planets[index].No;
                 _mosesStep = 2;
                 _mosesPageAt = _lastTime;
-                _mosesFade = MosesFadeTicks;
+                StartFade();
                 _mosesHover = -1;
             }
         }
@@ -322,9 +331,16 @@ internal sealed unsafe partial class BattleSceneWindow
         // 항행 진입(효과 1)만 파랑 채널을 흰색 쪽으로 씻었다가 되돌린다(방식 5).
         if (_mosesFade > 0)
         {
-            int alpha = 31 * _mosesFade / MosesFadeTicks;
-            for (int y = _camY; y < _camY + ViewHeight; y++)
-                for (int x = 0; x < BoardWidth; x++)
+            int total = _mosesBlueFade ? MosesBlueFadeTicks : MosesFadeTicks;
+            int alpha = 31 * _mosesFade / total;
+            // 원본은 640×480 이 화면 전부라 씻김도 화면 전부다 — 우리 판은 더 넓으니 그 네모 안에서만 씻는다.
+            var (fx, fy) = MosesOrigin();
+            int x0 = _mosesBlueFade ? Math.Max(0, fx) : 0;
+            int x1 = _mosesBlueFade ? Math.Min(BoardWidth, fx + MosesW) : BoardWidth;
+            int y0 = _mosesBlueFade ? Math.Max(_camY, fy) : _camY;
+            int y1 = _mosesBlueFade ? Math.Min(_camY + ViewHeight, fy + MosesH) : _camY + ViewHeight;
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++)
                 {
                     int i = y * BoardWidth + x;
                     uint c = _fb[i];

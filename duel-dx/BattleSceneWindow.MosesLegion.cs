@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -37,7 +37,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _mosesPage = 6;
         _mosesPageAt = _lastTime;
-        _mosesFade = MosesFadeTicks;
+        StartFade();
         _mosesHover = -1;
         _legionUnit = StyleParty().FirstOrDefault();
         _legionTop = 0;
