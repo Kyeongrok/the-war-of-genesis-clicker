@@ -66,6 +66,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OnTitleClick(int bx, int by)
     {
         if (!_titleOpen) return false;
+        // CONTINUE 로 연 슬롯 창이 떠 있으면 그 창이 먼저 클릭을 받는다.
+        if (SystemOpen) return OnSystemClick(bx, by);
         switch (TitleButtonAt(bx, by))
         {
             case 0:                                   // NEW GAME — 원본은 연대표를 거쳐 Chp 0010 → Btl 0045
