@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -51,10 +51,18 @@ internal sealed unsafe partial class BattleSceneWindow
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { }
     }
 
-    /// <summary>조건이 다 맞는 이벤트를 터뜨린다. 결과가 정해지면 더 보지 않는다.</summary>
+    /// <summary>지금 돌고 있는 이벤트 — 없으면 −1. 도는 동안 전투가 통째로 멈춘다(<c>0x10066197</c>).</summary>
+    private int _runningEvent = -1;
+    private int _eventPc;
+    private double _eventWaitUntil;
+
+    /// <summary>이벤트가 돌거나 대사가 떠 있으면 전투를 멈춘다.</summary>
+    private bool EventsBusy => _runningEvent >= 0 || _talk != null;
+
+    /// <summary>조건이 다 맞는 이벤트를 하나 켠다. 결과가 정해지면 더 보지 않는다.</summary>
     private void RunEvents()
     {
-        if (_events.Count == 0 || _outcome.Length > 0) return;
+        if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy) return;
         for (int i = 0; i < _events.Count; i++)
         {
             var e = _events[i];
@@ -62,8 +70,48 @@ internal sealed unsafe partial class BattleSceneWindow
             if (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire) continue;
             if (!e.Conditions.All(EventCondition)) continue;
             _eventFired[i]++;
-            foreach (var a in e.Actions) RunEventAction(a);
-            if (_outcome.Length > 0) return;
+            _runningEvent = i;
+            _eventPc = 0;
+            _eventWaitUntil = 0;
+            StepEvent();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// 돌고 있는 이벤트를 한 걸음 나아가게 한다 — 대사가 <b>한 줄씩</b> 나오는 것이 여기서 생긴다.
+    /// </summary>
+    /// <remarks>
+    /// 진행기 <c>0x10056fb0</c>: 행동 <b>0</b> 은 다른 이벤트 부르기, <b>1</b> 은 <b>앞서 띄운 것이 끝날 때까지 기다리기</b>,
+    /// <b>2</b> 는 틱 기다리기, <b>3</b> 은 중단이다. 나머지는 넣고 바로 다음 줄로 간다.
+    /// 대사 줄 사이에 낀 <c>1</c> 이 「눌러서 넘길 때까지 멈춤」을 만든다.
+    /// </remarks>
+    private void StepEvent()
+    {
+        while (_runningEvent >= 0)
+        {
+            if (_talk != null) return;                                  // 대사가 떠 있으면 기다린다
+            if (_eventWaitUntil > _lastTime) return;
+            var e = _events[_runningEvent];
+            if (_eventPc >= e.Actions.Count) { _runningEvent = -1; return; }
+
+            var a = e.Actions[_eventPc++];
+            switch (a.Code)
+            {
+                case 0: break;                                          // 다른 이벤트 부르기 — 그 이벤트가 제 조건으로 돈다
+                case 1: break;                                          // 기다리기 — 위에서 이미 봤다
+                case 2:
+                    _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
+                                                 | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
+                    break;
+                case 3: _runningEvent = -1; return;                     // 중단
+                case 600: ShowTalk(box: true, a); return;
+                case 601: ShowTalk(box: false, a); return;
+                default:
+                    RunEventAction(a);
+                    if (_outcome.Length > 0) { _runningEvent = -1; return; }
+                    break;
+            }
         }
     }
 
@@ -92,11 +140,8 @@ internal sealed unsafe partial class BattleSceneWindow
             int side = EventSideOrder[k];
             return [.. _units.Where(u => u.Side == side)];
         }
-        if (value >= 10000)
-        {
-            int index = value - 10000;
-            return (uint)index < _units.Length ? [_units[index]] : [];
-        }
+        // 10000+N 은 Btl 레코드 번호다(빈 칸을 걸러 낸 뒤의 배열 자리가 아니다).
+        if (value >= 10000) return [.. _units.Where(u => u.LeaderIndex < 0 && u.Record == value - 10000)];
         return value > 0 ? [.. _units.Where(u => u.ChrCode == value)] : [];
     }
 
