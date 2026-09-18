@@ -16,7 +16,8 @@ DLL 에서 확인한 규칙(자세한 근거는 옵시디안 분석-전투.md "�
     그다음 TP == TP최대 인 유닛에만 행동 플래그(+0xfe)를 세운다(0x1006da40 → 0x100743b0).
   - 플래그 선 유닛을 배열 앞에서부터 하나씩 고른다(0x1006db20). 고른 유닛은 TP 가 0 이하가 되거나
     Rest(명령 0x2716)로 남은 TP 를 모두 버릴 때까지 계속 행동한다.
-  - 전투 시작 때 TP 는 가득 차 있다고 본다(가설: 0x1007a8e0 레벨 설정).
+  - 전투 시작 때 TP 는 **0** 이다(확정: 유닛 초기화 0x10071941 이 0 으로 민다. 레벨 설정 0x1007a8e0 은 현재 HP 만 채운다).
+  - 그래서 첫 차례는 「최대TP ÷ STP」가 가장 작은 유닛이 가져간다 — 아래 마지막 칸이 그 틱 수다.
 
 흉내에서 뺀 것: 레벨(Lev.dat) 성장, 장비·어빌리티 보너스, 상태이상(5·6번은 차례를 건너뜀, 매 틱 3% 로 풀림),
 TP 38번 상태 보너스. 행동은 '한 번에 TP 를 다 쓰고 끝낸다'로 단순화했다.
@@ -67,17 +68,16 @@ def load_units(game_root, btl_no):
             stats = struct.unpack_from('<6H', c, 27)   # +0x3c PSY, +0x3e TP, +0x40 (TP 충전 제수), +0x42 CTP, +0x44 DEP, +0x46 DEX
             tp, div = stats[1], stats[2]
         units.append({'idx': i, 'chr': chr_no, 'x': x, 'y': y, 'force': force,
-                      'tpmax': tp, 'div': div, 'tp': tp})
+                      'tpmax': tp, 'div': div, 'tp': 0})   # 시작 TP 0 (0x10071941)
     return units
 
 
 def simulate(units, ticks):
     lines = []
     for tick in range(1, ticks + 1):
-        if tick > 1:
-            for u in units:                                   # 0x100eaad0 → 가상함수 +0xb0 → 0x10071db0
-                if u['div'] and u['div'] != 0xff:
-                    u['tp'] = min(u['tpmax'], u['tp'] + u['tpmax'] // u['div'])
+        for u in units:                                       # 0x100eaad0 → 가상함수 +0xb0 → 0x10071db0
+            if u['div'] and u['div'] != 0xff:
+                u['tp'] = min(u['tpmax'], u['tp'] + u['tpmax'] // u['div'])
         ready = [u for u in units if u['div'] != 0xff and u['tpmax'] > 0 and u['tp'] == u['tpmax']]  # 0x100743b0
         order = []
         for u in ready:                                       # 0x1006db20: 배열 앞에서부터
