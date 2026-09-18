@@ -152,6 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             InitBattle();
             LoadRingAssets();
             LoadAudio();
+            OpenTitleIfAsked();
             OpenMosesIfAsked();
             OpenLevelUpIfAsked();
             AutoSave();   // 전투를 시작하면 자동 저장 슬롯(Load 21번째 줄)에 적어 둔다
@@ -347,6 +348,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateChaptersHover(bx, by);
                 UpdateSlotsHover(bx, by);
                 UpdateAbilityHover(bx, by);
+                UpdateTitleHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -361,6 +363,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
+        // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
+        if (_titleOpen) { if (key == Win32.VK_ESCAPE) CloseSystemWindow(); return; }
         if (OnAbilityMenuKey(key)) return;
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
@@ -451,6 +455,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
         if (OnItemMenuClick(bx, by)) return;
         if (OnMosesClick(bx, by)) return;
@@ -566,6 +571,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawKeysPanel();
         DrawLevelUp();
         DrawMoses();
+        DrawTitle();
         DrawChapters();
         DrawCursor();
     }
