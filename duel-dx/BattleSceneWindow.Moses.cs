@@ -102,6 +102,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesPage = -1;
         if (chapter != null) _mosesChp = chapter;
         LoadMosesChapter();
+        if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         _mixer.StopMusic();

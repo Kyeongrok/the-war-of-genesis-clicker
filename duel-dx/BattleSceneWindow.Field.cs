@@ -175,6 +175,56 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
+    /// <summary>
+    /// 챕터에 들어갈 때 그 챕터 스크립트를 한 번 돌린다 — <b>동료·돈·아이템·진행 깃발</b>이 여기서 들어온다.
+    /// </summary>
+    /// <remarks>
+    /// 스크립트 꼴이 필드와 같아 같은 실행기를 쓴다. 다만 챕터 스크립트는 연출이 아니라 <b>세팅</b>이라
+    /// 기다림 없이 한 번에 훑고, 대사(600·601)는 건너뛴다.
+    /// <c>Chp 0010</c> 이라면 깃발 107·113·116·117·118·14 를 세우고 동료 둘(219·221)과 3000GP,
+    /// 아이템 122×10 · 124×3 · 125×10 · 84×2 · 126×1 을 준다.
+    /// </remarks>
+    private void RunChapterScript(ChapterFile chapter)
+    {
+        if (!_chapterScriptDone.Add(chapter.Id)) return;
+        foreach (var wanted in chapter.Events.Count > 0 ? chapter.Events[0].Actions : [])
+        {
+            int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
+            if ((uint)index >= chapter.Events.Count || index == 0) continue;
+            var e = chapter.Events[index];
+            if (!e.Conditions.All(FieldCondition)) continue;
+            foreach (var a in e.Actions) RunChapterAction(a);
+        }
+    }
+
+    /// <summary>스크립트를 이미 돌린 챕터.</summary>
+    private readonly HashSet<int> _chapterScriptDone = [];
+
+    private void RunChapterAction(ScriptCommand a)
+    {
+        short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        switch (a.Code)
+        {
+            case 102:
+                if (A(0) > 0 && A(0) < _flags.Length) _flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                break;
+            case 103:
+                if (A(0) > 0 && A(0) < _flags.Length)
+                    _flags[A(0)] = (byte)Math.Clamp(FieldArith(_flags[A(0)], A(1), A(2)) + A(1), 0, 255);
+                break;
+            case 703:                                            // 아이템 인자1 을 인자2 개
+                if (A(1) > 0) _inventory[A(1)] = _inventory.GetValueOrDefault(A(1)) + Math.Max(1, (int)A(2));
+                break;
+            case 705: _shopMoney += A(1); break;                 // 돈
+            case 801:                                            // 동료 넣기 — 다음 전투부터 파티에 든다
+                if (A(1) > 0 && _db?.Character(A(1)) is { } c) _party[A(1)] = c;
+                break;
+            case 802:
+                if (A(1) > 0) _party.Remove(A(1));               // 동료 빼기
+                break;
+        }
+    }
+
     private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(op switch
     {
         0 => now + value,
