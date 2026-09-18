@@ -1144,6 +1144,9 @@ internal sealed class UnitState(DemoUnit unit)
 
     public int WakeValue { get; } = unit.WakeValue;
 
+    /// <summary>깨어났나 — 깨기 전에는 제 차례마다 쉬기만 한다. 사람이 움직이는 인물은 늘 깨어 있다.</summary>
+    public bool Awake { get; set; } = unit.Side >= 3;
+
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
     public Facing Facing { get; set; } = unit.Facing;
