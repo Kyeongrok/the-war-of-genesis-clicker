@@ -103,6 +103,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateTurn()
     {
         if (_loading || _db == null || _outcome.Length > 0) return;
+        // DUELDX_WIN=1 이면 시작하자마자 이긴 것으로 친다 — 전투 이어짐·진행 깃발·모세스 전환을 화면 밖에서 시험할 때 쓴다.
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "1")
+        {
+            foreach (var u in _units.Where(u => !u.IsAlly)) u.Alive = false;
+            CheckOutcome();
+            return;
+        }
         if (UpdateLevelUp()) return;   // 레벨업 창이 떠 있는 동안은 차례가 멈춘다
 
         if (_routine != null)
@@ -140,6 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
         foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
             if (!SurvivesFatal(u)) KillUnit(u);
+        CheckOutcome();
     }
 
     /// <summary>차례 시작 — 그 인물을 고른다(fg-8). 적이면 AI 를 돌린다(fg-7).</summary>
