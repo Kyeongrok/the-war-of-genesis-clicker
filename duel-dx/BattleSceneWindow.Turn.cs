@@ -153,6 +153,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (u.Tp >= u.MaxTp) u.HasTurn = true;
         }
         TickAilments();
+        StepObjects();
         // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
         foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
             if (!SurvivesFatal(u)) KillUnit(u);
