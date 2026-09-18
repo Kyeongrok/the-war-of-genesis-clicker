@@ -158,13 +158,23 @@ public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, usho
 
 /// <summary>
 /// <c>Abi/NNNN.abi</c> 레코드(26바이트)와 레벨별 work 번호. 파일 오프셋: 6 선행1·8 그 레벨, 9 선행2·11 그 레벨,
-/// 12 분류(0 전투 밖, 1 전투, 2 군단기, 3 패시브), 24 설명 TXR.
+/// 12 분류(0 전투 밖, 1 전투, 2 군단기, 3 패시브), 18·20·22 목록 아이콘(A·B·C), 24 설명 TXR.
 /// </summary>
+/// <param name="IconSide">18(메모리 +0x16) 아이콘 색 무리 — 0 아군(파랑)·1 적(빨강)·2 피아무관(금색). 0xFFFF 면 아이콘 없음. 색 뜻은 가설.</param>
+/// <param name="IconArea">20(+0x18) 0 단일·1 광역 — 가설.</param>
+/// <param name="IconKind">22(+0x1a) 0 攻·1 回·2 異·3 軍(군단기, 확정)·4 必.</param>
 public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Dictionary<int, int> WorkByLevel,
                                  ushort Prereq1 = 0, byte Prereq1Level = 0, ushort Prereq2 = 0, byte Prereq2Level = 0,
-                                 byte Category = 0, ushort DescriptionId = 0)
+                                 byte Category = 0, ushort DescriptionId = 0,
+                                 ushort IconSide = 0xFFFF, ushort IconArea = 0, ushort IconKind = 0)
 {
     public bool IsPassive => Category == 3;
+
+    /// <summary>목록 왼쪽 아이콘(종류) — Obs 0488 모션 <c>A×10 + C</c>. 아이콘이 없으면 −1.</summary>
+    public int IconKindMotion => IconSide == 0xFFFF ? -1 : IconSide * 10 + IconKind;
+
+    /// <summary>목록 오른쪽 아이콘(대상) — Obs 0488 모션 <c>A×10 + B + 5</c>. 아이콘이 없으면 −1.</summary>
+    public int IconTargetMotion => IconSide == 0xFFFF ? -1 : IconSide * 10 + IconArea + 5;
 }
 
 /// <summary>
@@ -287,7 +297,8 @@ public sealed class GameDatabase
             if (files.Read("Abi", $"{f:D4}.abi") is not { } a) continue;
             for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
                 abilities[U16(a, o)] = new AbilityData(U16(a, o), U16(a, o + 2), U16(a, o + 4), [],
-                                                       U16(a, o + 6), a[o + 8], U16(a, o + 9), a[o + 11], a[o + 12], U16(a, o + 24));
+                                                       U16(a, o + 6), a[o + 8], U16(a, o + 9), a[o + 11], a[o + 12], U16(a, o + 24),
+                                                       U16(a, o + 18), U16(a, o + 20), U16(a, o + 22));
         }
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && abilities.TryGetValue(w.AbilityId, out var ab))

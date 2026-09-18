@@ -11,6 +11,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool _abilityMenu;
     private const int MenuW = 300, MenuRowH = 26, MenuHeadH = 26;
 
+    /// <summary>어빌리티 목록 줄 아이콘 — 분석-스킬 ba-12: Obs 0488 의 17×17 그림 24장(기준점 가운데).</summary>
+    private const int AbilityIconObs = 488;
+
     private List<(string Name, WorkData Work, bool Enabled, string Reason)> MenuRows()
     {
         var rows = new List<(string, WorkData, bool, string)>();
@@ -79,7 +82,13 @@ internal sealed unsafe partial class BattleSceneWindow
             var (name, w, enabled, reason) = rows[i];
             int y = oy + MenuHeadH + i * MenuRowH;
             uint color = enabled ? White : DimGray;
-            DrawText(name, ox + 10, y + 4, color);
+            // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
+            if (_db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
+            {
+                DrawUi(AbilityIconObs, ab.IconKindMotion, 0, ox + 14, y + MenuRowH / 2, UiBlend.Alpha);
+                DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, ox + 34, y + MenuRowH / 2, UiBlend.Alpha);
+            }
+            DrawText(name, ox + 46, y + 4, color);
             if (!enabled) DrawText(reason, ox + 150, y + 4, Red);
             RightText($"{_db.WorkTpCost(c, w.Id)}   {w.SoulBase}", ox + MenuW - 10, y + 4, color);
         }

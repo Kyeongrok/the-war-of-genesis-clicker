@@ -515,6 +515,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawNumbers();
         DrawCritFlash();
         DrawStatus();
+        DrawHud();
         DrawRing();
         DrawAbilityMenu();
         DrawStatusScreen();
