@@ -59,6 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RunPartyItem(int index, string label)
     {
         if (index == 0) { OpenMosesStyle(); return; }
+        if (index == 1) { OpenMosesLegion(); return; }
         Play(MosesPartyItems[index].Sound);
         Toast($"{label} — 아직 만들지 않았습니다");
     }
@@ -261,6 +262,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (OnMosesShopClick(bx, by)) return true;
         if (OnMosesMailClick(bx, by)) return true;
         if (OnMosesStyleClick(bx, by)) return true;
+        if (OnMosesLegionClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
 
         int index = MosesIconAt(bx, by);
@@ -358,6 +360,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesPage == 7)
         {
             DrawMosesStyle(ox, oy, tick);
+            return;
+        }
+        if (_mosesPage == 6)
+        {
+            DrawMosesLegion(ox, oy, tick);
             return;
         }
 
