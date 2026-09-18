@@ -73,7 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _mosesPlanet;             // 고른 행성 번호
     private int _mosesFade;               // 남은 페이드 틱
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
-    private MosesChapterFile? _mosesChp;
+    private ChapterFile? _mosesChp;
 
     private (int X, int Y) MosesOrigin() => ((BoardWidth - MosesW) / 2, _camY + (ViewHeight - MosesH) / 2);
 
@@ -84,7 +84,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>
-    private void OpenMoses(MosesChapterFile? chapter = null)
+    private void OpenMoses(ChapterFile? chapter = null)
     {
         _mosesOpen = true;
         _mosesHover = -1;
@@ -100,7 +100,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_mosesChp != null) return;
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{MosesChapter:D4}.chp");
-        if (File.Exists(path)) _mosesChp = MosesChapterFile.Parse(File.ReadAllBytes(path));
+        if (File.Exists(path)) _mosesChp = ChapterFile.Parse(MosesChapter, File.ReadAllBytes(path));
     }
 
     /// <summary>배경 그림(.bgr 은 그냥 JPEG)을 읽어 둔다.</summary>
@@ -184,18 +184,19 @@ internal sealed unsafe partial class BattleSceneWindow
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
                 break;
             case 1: Play(571); break;                                  // MAIL — 새 편지가 있으면 나는 소리
-            case 2: Toast("통신은 아직 만들지 않았습니다"); return;
+            case 2: break;                                             // MESSAGE — 소리 없음
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
         }
         _mosesPage = page;
         _mosesPageAt = _lastTime;
+        _talkPick = -1;
         _mosesFade = MosesFadeTicks;
         _mosesHover = -1;
         // 항행은 성계 배경, 메일은 94, 파티는 주 화면과 같은 챕터 배경
         ShowMosesBackground(page switch
         {
-            0 => _mosesChp?.SystemBackground ?? 70,
+            0 or 2 => _mosesChp?.Systems.FirstOrDefault()?.Background ?? 70,
             1 => MosesMailBackground,
             _ => _mosesChp?.Background ?? 52,
         });
@@ -263,6 +264,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (OnMosesMailClick(bx, by)) return true;
         if (OnMosesStyleClick(bx, by)) return true;
         if (OnMosesLegionClick(bx, by)) return true;
+        if (OnMosesTalkClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
 
         int index = MosesIconAt(bx, by);
@@ -367,6 +369,11 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawMosesLegion(ox, oy, tick);
             return;
         }
+        if (_mosesPage == 2)
+        {
+            DrawMosesTalk(ox, oy, tick);
+            return;
+        }
 
         // 항행 단계 1 — 성도 위 행성들. 마우스를 올린 행성에는 표 Obs 0163 모션 3 과 이름.
         if (_mosesPage == 0 && _mosesStep == 1)
@@ -426,73 +433,5 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xD00A1428);
         StrokeRect(tx - 4, ty - 2, w + 8, h + 4, BoxLine);
         DrawText(text, tx, ty, White);
-    }
-}
-
-/// <summary>모세스가 쓰는 만큼의 <c>Chp\NNNN.chp</c> — 머리·항성계·행성·장소.</summary>
-/// <remarks>
-/// 파일 배치는 <c>BattleChapters.ParseChp</c> 와 같다. 머리 워드: 1 배경 Bgr · 2 BGM · 21 최저 항행 단계 · 22 그 단계의 번호 · 23 제목 TXR.
-/// 행성 84바이트: 워드 0 번호 · 1 지도 Obs · 2 이름 TXR · 4 지도 모션 · 8~15 장소 번호 · 34·35 구체 Obs·모션 · 40·41 성도 자리.
-/// 항성계 66바이트: 워드 0 번호 · 2 이름 TXR · 8~15 행성 번호 · 32 배경 Bgr. 장소 20바이트: 0 번호 · 1 이름 TXR · 2 값 · 3 설명 TXR · 9 자동 발생.
-/// </remarks>
-internal sealed class MosesChapterFile
-{
-    public sealed record Planet(int No, int NameText, int MapObs, int MapMotion, int X, int Y, int GlobeObs, int GlobeMotion, int[] Places);
-    public sealed record Place(int No, int NameText, int Value, int DescText, int Auto);
-
-    public int Id { get; set; }
-    public int TitleText { get; private init; }
-    public int Background { get; private init; }
-    public int Bgm { get; private init; }
-    public int ItemShop { get; private init; }
-    public int VtShop { get; private init; }
-    public int StartStep { get; private init; }
-    public int StartNumber { get; private init; }
-    public int SystemBackground { get; private init; }
-    public IReadOnlyList<Planet> Planets { get; private init; } = [];
-    public IReadOnlyList<Place> Places { get; private init; } = [];
-
-    public Planet? PlanetOf(int no) => Planets.FirstOrDefault(p => p.No == no) ?? Planets.FirstOrDefault();
-    public Place? PlaceOf(int no) => Places.FirstOrDefault(p => p.No == no);
-
-    public static MosesChapterFile? Parse(byte[] b)
-    {
-        try
-        {
-            short H(int o) => BitConverter.ToInt16(b, o);
-            int o = 42;
-            int n1 = H(o + 6);
-            o += 10 + 12 * n1;                  // 성도 점 12바이트
-            o += 4 + 30 * H(o);                 // 인물 30바이트
-            int systems = H(o);
-            o += 4;
-            int systemBg = systems > 0 ? H(o + 64) : 70;
-            o += 66 * systems;
-            int planetCount = H(o);
-            o += 4;
-            var planets = new List<Planet>();
-            for (int i = 0; i < planetCount; i++, o += 84)
-                planets.Add(new Planet(H(o), H(o + 4), H(o + 2), H(o + 8), H(o + 80), H(o + 82), H(o + 68), H(o + 70),
-                                       [.. Enumerable.Range(0, 8).Select(k => (int)H(o + 16 + 2 * k)).Where(v => v >= 0)]));
-            int placeCount = H(o);
-            o += 4;
-            var places = new List<Place>();
-            for (int i = 0; i < placeCount; i++, o += 20)
-                places.Add(new Place(H(o), H(o + 2), H(o + 4), H(o + 6), H(o + 18)));
-            return new MosesChapterFile
-            {
-                TitleText = H(46),
-                Background = H(2),
-                ItemShop = H(6),
-                VtShop = H(8),
-                Bgm = H(4),
-                StartStep = H(42),
-                StartNumber = H(44),
-                SystemBackground = systemBg,
-                Planets = planets,
-                Places = places,
-            };
-        }
-        catch (ArgumentException) { return null; }
     }
 }
