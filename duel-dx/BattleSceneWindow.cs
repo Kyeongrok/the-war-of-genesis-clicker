@@ -155,7 +155,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenTitleIfAsked();
             OpenMosesIfAsked();
             OpenLevelUpIfAsked();
-            AutoSave();   // 전투를 시작하면 자동 저장 슬롯(Load 21번째 줄)에 적어 둔다
+            // 타이틀에서 시작하면 아직 전투를 건 게 아니라 자동 저장도 하지 않는다.
+            if (!_titleOpen) AutoSave();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -513,6 +514,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void Update(double dt)
     {
+        // 타이틀 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 소리도 멈추고 화면만 그린다.
+        if (_titleOpen)
+        {
+            UpdateSounds();
+            return;
+        }
+
         foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
