@@ -8,7 +8,8 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <!-- 글자를 찍는 데만 GDI+(System.Drawing)를 쓴다 — 화면 자체는 순수 Win32 창 + DirectX 다. -->
         <UseWindowsForms>true</UseWindowsForms>
-        <ApplicationIcon />
+        <!-- 창·실행 파일 아이콘 — 원본 게임 아이콘(menu-5) -->
+        <ApplicationIcon>..\assets\icons\game.ico</ApplicationIcon>
         <AssemblyName>DuelDx</AssemblyName>
         <RootNamespace>DuelDx</RootNamespace>
     </PropertyGroup>

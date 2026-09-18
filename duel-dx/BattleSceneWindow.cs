@@ -245,6 +245,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             WindowProc = StaticWndProcDelegate,
             Instance = Win32.GetModuleHandleW(null),
             Cursor = Win32.LoadCursorW(IntPtr.Zero, (IntPtr)Win32.IDC_ARROW),
+            // 창·작업 표시줄 아이콘 = 실행 파일에 박힌 원본 게임 아이콘(menu-5)
+            Icon = Win32.LoadIconW(Win32.GetModuleHandleW(null), (IntPtr)32512),
             ClassName = ClassName,
         };
         _classAtom = Win32.RegisterClassExW(ref wc);
@@ -330,9 +332,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (key == Win32.VK_ESCAPE && CloseSystemWindow()) return;
         if (key == Win32.VK_ESCAPE)
         {
+            // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6).
             if (_statusUnit >= 0) _statusUnit = -1;
             else if (_ringUnit >= 0) CancelRing();
-            else CancelStep(undoMove: true);
+            else if (!CancelStep(undoMove: true)) OpenSystemMenu();
             return;
         }
         if (key == Win32.VK_RETURN && _ringUnit >= 0 && _ringPhase == RingPhase.Idle && _ringHover >= 0) { PickRingItem(_ringHover); return; }
@@ -406,8 +409,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         int index = UnitAtBoard(bx, by);
         if (index >= 0)
         {
-            // 적군은 고를 수 없다(fa-9) — 적 정보는 우클릭으로 본다.
+            // 적군은 고를 수 없다(fa-9) — 대신 내 차례면 클릭만으로 바로 공격한다(fa-12).
             if (_units[index].IsAlly) _selected = index;
+            else if (IsPlayerTurn && !_units[_turn].IsBusy) QuickAttack(index);
             return;
         }
         if (_selected == _turn && TryWalkTo(col, row)) return;

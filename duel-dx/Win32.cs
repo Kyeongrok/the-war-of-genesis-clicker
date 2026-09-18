@@ -134,6 +134,9 @@ internal static class Win32
     public static extern IntPtr LoadCursorW(IntPtr instance, IntPtr cursorId);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr LoadIconW(IntPtr instance, IntPtr iconId);
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PeekMessageW(out Msg msg, IntPtr hWnd, uint filterMin, uint filterMax, uint remove);
 
