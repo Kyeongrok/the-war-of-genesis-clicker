@@ -27,6 +27,34 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int CDiv(int a, int b) => b == 0 ? 0 : a / b;
 
     /// <summary>
+    /// 이동 방식이 정하는 <b>목표 차례</b>(<c>0x1005c460</c>) — 앞에서부터 갈 칸이 나오는 첫 목표를 쓴다.
+    /// </summary>
+    /// <remarks>
+    /// <c>0</c> 가깝고 센 적 · <c>1</c> <b>내 편이 몰아붙이고 있는</b> 적 · <c>2</c> 먼 적 ·
+    /// <c>3</c> 가깝고 센 아군 곁 · <c>4</c> 멀고 약한 아군 곁 · <c>5</c> 위험한 아군 곁.
+    /// 그 밖(6 이상·음수)은 목록이 비어 제자리에서 쉰다. 시판 자료는 <b>0·1·2·3 만</b> 쓴다(2154·2·9·1명).
+    /// <para>동점이면 <c>Btl</c> 줄 순서를 지킨다 — 원본이 인접 맞바꿈으로 고르기 때문이다.</para>
+    /// </remarks>
+    private List<UnitState> MoveGoals(UnitState u, List<UnitState> enemies)
+    {
+        if (_db is not { } db) return [];
+        int Reach(UnitState t) => 4 + Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row);
+        var friends = _units.Where(t => t.Alive && t != u && !SeesAsFoe(u, t)).ToList();
+
+        return u.AiMove switch
+        {
+            0 => [.. enemies.OrderByDescending(t => CDiv(Power(t) * db.N(74), Reach(t)))],
+            1 => [.. enemies.OrderByDescending(t => Danger(t, t.Col, t.Row) * 4 / Reach(t))],
+            // 먼 적부터 — 원본은 앞뒤 원소를 다른 자로 재는 탓에 거리가 가로 4·세로 6 으로 어긋난다.
+            2 => [.. enemies.OrderByDescending(t => 4 * Math.Abs(t.Col - u.Col) + 6 * Math.Abs(t.Row - u.Row))],
+            3 => [.. friends.OrderByDescending(t => CDiv(Power(t) * db.N(74), Reach(t)))],
+            4 => [.. friends.OrderBy(t => CDiv(Power(t) * db.N(74), Reach(t)))],
+            5 => [.. friends.OrderByDescending(t => Danger(t, t.Col, t.Row) * 4 / Reach(t))],
+            _ => [],
+        };
+    }
+
+    /// <summary>
     /// 깨어남 조건을 지금 채웠나 — <c>0</c> 없음(바로 깸) · <c>1</c> 깨어 있는 같은 편까지 거리 · <c>2</c> 가장 가까운 적까지 거리 ·
     /// <c>3</c> 전투 틱. <b>4 이상은 영영 안 깬다</b>(분기표 <c>0x1005baa8</c> 이 네 칸뿐).
     /// </summary>
@@ -213,24 +241,32 @@ internal sealed unsafe partial class BattleSceneWindow
             yield break;
         }
 
-        // 3·4단계 — 회복이 먼저, 그다음 공격. 쓸 수 있는 work 를 차례로 보고 첫 번째를 쓴다.
-        foreach (var w in AiWorks(u))
-        {
-            if (hpPercent < db.N(70) && !w.IsHeal) continue;
-            if (BestUse(index, w, range) is not { } use) continue;
+        // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
+        // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
+        for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
+            foreach (var w in AiWorks(u))
+            {
+                if (pass == 0 && !w.IsHeal) continue;
+                if (BestUse(index, w, range) is not { } use) continue;
 
-            var path = PathWithin(range, u.Col, u.Row, use.Stand) ?? [];
-            var aimed = LiveUnitAt(use.Col, use.Row);
-            int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
-            var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
-            while (routine.MoveNext()) yield return true;
-            if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+                var path = PathWithin(range, u.Col, u.Row, use.Stand) ?? [];
+                var aimed = LiveUnitAt(use.Col, use.Row);
+                int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
+                var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
+                while (routine.MoveNext()) yield return true;
+                if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+                yield break;
+            }
+
+        // 5단계 휴식 — 피가 Num[71]% 이하면 움직이지 않고 그 자리에서 쉰다.
+        if (hpPercent <= db.N(71))
+        {
+            Rest(index);
             yield break;
         }
 
-        // 4(B)·6단계 — 칠 수 없으면 목표 쪽으로 다가가 쉰다. 이동 방식 0 = 가장 센 적부터.
-        var goal = enemies.OrderByDescending(t => CDiv(Power(t) * db.N(74), 4 + Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row))).FirstOrDefault();
-        if (goal != null)
+        // 6단계 — 칠 수 없으면 목표 쪽으로 다가가 쉰다. 목표 차례는 <b>이동 방식</b>이 정한다(0x1005c460).
+        foreach (var goal in MoveGoals(u, enemies))
         {
             int best = -1, bestDist = int.MaxValue, bestCost = int.MaxValue;
             for (int i = 0; i < range.Cost.Length; i++)
@@ -239,7 +275,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 int d = Math.Abs(goal.Col - i % Cols) + Math.Abs(goal.Row - i / Cols);
                 if (d < bestDist || d == bestDist && range.Cost[i] < bestCost) { bestDist = d; best = i; bestCost = range.Cost[i]; }
             }
-            if (best >= 0 && range.Cost[best] > 0) foreach (var r in WalkTo(u, range, best)) yield return r;
+            // 갈 칸이 나오는 <b>첫 목표에서 멈춘다</b> — 나머지 목표는 아예 안 본다.
+            if (best < 0 || range.Cost[best] <= 0) continue;
+            foreach (var r in WalkTo(u, range, best)) yield return r;
+            break;
         }
 
         for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
