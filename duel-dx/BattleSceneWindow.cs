@@ -711,7 +711,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 var (clip, tick) = sprite.CurrentClip(unit);
                 var tint = clip?.TintAt(tick);
                 var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint);
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit));
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy);
             }
@@ -801,7 +801,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 컷 한 장을 찍는다. <paramref name="tint"/> 가 있으면 물들인다 — 방식 k(1~7)는 (n·픽셀 + (31−n)·세기)/31,
     /// 방식 3 은 n = 19 로 맞을 때의 흰 번쩍임이다(분석-전투 "맞는 효과").
     /// </summary>
-    private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null)
+    private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
+                            (byte[] R, byte[] G, byte[] B)? status = null)
     {
         int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
         int level = tint is { } tt ? Math.Clamp(tt.Strength, 0, 31) * 255 / 31 : 0;
@@ -821,6 +822,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                     uint Ch(int shift) => (uint)Math.Clamp((n * (int)(c >> shift & 0xFF) + (31 - n) * level) / 31, 0, 255);
                     c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
                 }
+                if (status is { } st) c = ApplyStatusTint(c, st);
                 SetPixel(dx, dy, c);
             }
         }
