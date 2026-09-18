@@ -287,9 +287,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
     private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
-                                    int SceneText = 0, int SceneKind = 1, long PlayMs = 0);
+                                    int SceneText = 0, int SceneKind = 1, long PlayMs = 0,
+                                    int Money = 0, Dictionary<string, int>? Legions = null);
 
-    private const int SaveVersion = 2;
+    private const int SaveVersion = 3;
 
     /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
     private double _playBase;
@@ -309,7 +310,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))]))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                BattleDemoScene.TitleTextId, 1, PlayMs);
+                BattleDemoScene.TitleTextId, 1, PlayMs,
+                _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value));
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -370,6 +372,11 @@ internal sealed unsafe partial class BattleSceneWindow
         _inventory.Clear();
         foreach (var (id, count) in state.Inventory)
             if (int.TryParse(id, out int itemId)) _inventory[itemId] = count;
+
+        _shopMoney = state.Money;
+        _unitLegion.Clear();
+        foreach (var (index, legion) in state.Legions ?? [])
+            if (int.TryParse(index, out int unitIndex)) _unitLegion[unitIndex] = legion;
 
         _tick = state.Tick;
         _turn = -1;
