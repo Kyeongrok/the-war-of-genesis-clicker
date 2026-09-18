@@ -55,6 +55,50 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
 
+    /// <summary>
+    /// 필드 인물 하나의 지금 모습 — 자리·모션·좌우반전, 그리고 걷는 중이면 어디서 어디로.
+    /// </summary>
+    /// <remarks>
+    /// 모션 번호는 전투와 같은 규칙이다 — <b>모션 = 동작 × 3 + 방향</b>(0 뒷모습 · 1 옆모습 · 2 앞모습),
+    /// <b>방향 3 은 옆모습(1)을 좌우로 뒤집은 것</b>. 그래서 <b>서기는 동작 0 = 모션 0·1·2</b> 이고,
+    /// 필드 로더가 인물에 넣는 초기 모션은 <b>2(앞모습 서기)</b> 다(<c>0x100eca4f</c>) — 0 으로 두면 등을 보이고 선다.
+    /// </remarks>
+    private sealed class FieldActor(FieldPerson person)
+    {
+        public int Key { get; } = person.Key;
+        public int ChrCode { get; } = person.ChrCode;
+        public int Layer { get; set; } = person.Layer;
+        public double X { get; set; } = person.X;
+        public double Y { get; set; } = person.Y;
+        public int Motion { get; set; } = 2;          // 앞모습 서기
+        public bool Mirror { get; set; }
+        public bool Visible { get; set; } = true;
+        public double Alpha { get; set; } = 1;
+
+        /// <summary>걷는 중 — (시작 자리, 목적지, 걸리는 틱, 시작한 때, 다 걸으면 설 모션).</summary>
+        public (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start, int EndMotion, bool EndMirror)? Walk { get; set; }
+    }
+
+    private List<FieldActor> _fieldActors = [];
+
+    /// <summary>
+    /// 화면이 배경의 어느 자리를 비추고 있나 — 물체·인물도 이만큼 밀어 그린다.
+    /// </summary>
+    /// <remarks>
+    /// 배경은 640×480 보다 넓고(예: <c>Bgr 0047</c> 이 951×1000), 필드 머리가 첫 자리를 정한다.
+    /// 행동 <b>400</b> 은 그 자리를 <b>바로 잡고</b>, <b>401</b> 은 <b>그만큼 민다</b>(<c>0x100ee020</c> 이 층 자리에서 인자를 뺀다).
+    /// </remarks>
+    private (int X, int Y) _fieldCam;
+
+    /// <summary>방향(0 뒤 · 1 옆 · 2 앞 · 3 옆 반대)에 맞는 걷기·서기 모션과 좌우반전.</summary>
+    private static (int Walk, int Stand, bool Mirror) FieldFacing(int direction) => direction switch
+    {
+        0 => (3, 0, false),
+        1 => (4, 1, false),
+        2 => (5, 2, false),
+        _ => (4, 1, true),
+    };
+
     private bool FieldOpen => _field != null;
 
     /// <summary>DUELDX_FIELD=&lt;번호&gt; 면 그 필드를 바로 연다(화면 밖 시험용).</summary>
@@ -80,10 +124,12 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldChoices = null;
             _fieldPictures.Clear();
             _fieldFade = null;
+            _fieldActors = [.. field.People.Select(p => new FieldActor(p))];
+            _fieldCam = (Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
             _mosesOpen = false;
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
-            ShowMosesBackground(field.Background, field.CameraX, field.CameraY);
+            ShowMosesBackground(field.Background, Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
             _mixer.StopMusic();
             if (field.Bgm > 0) PlayMusicFile(field.Bgm, loop: true);
             return true;
@@ -111,6 +157,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateField()
     {
         if (_field is not { } field) return;
+        StepFieldActors();
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
         if (_fieldWaitUntil > _lastTime) return;
 
@@ -198,6 +245,55 @@ internal sealed unsafe partial class BattleSceneWindow
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
             case 302: PlaceFieldPicture(A(0), A(2), A(3), A(4)); break;
+            case 202:                                        // 걷기(목적지) — 걷는 동안 걷기 모션, 멈추면 서기 모션
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                var (walk, stand, mirror) = FieldFacing(A(4));
+                who.Motion = walk;
+                who.Mirror = mirror;
+                who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime,
+                            A(5) != 0 ? stand : walk, mirror);
+                break;
+            }
+            case 205:                                        // 자리 옮기기 — 모션은 안 건드린다
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime, who.Motion, who.Mirror);
+                break;
+            }
+            case 208:                                        // 모션 지정
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                who.Motion = A(1);
+                who.Mirror = A(3) != 0;
+                break;
+            }
+            case 209: break;                                 // 모션 멈추기 — 데모는 늘 그 모션을 보이므로 할 일이 없다
+            case 210:                                        // 서서히 사라지기
+            case 211:                                        // 서서히 나타나기
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                who.Visible = a.Code == 211;
+                who.Alpha = a.Code == 211 ? 1 : 0;
+                break;
+            }
+            case 212:
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                who.Mirror = A(1) != 0;
+                break;
+            }
+            case 213:
+            {
+                if (FieldActorOf(A(0)) is not { } who) break;
+                who.Layer = A(1);
+                break;
+            }
+            case 400: MoveFieldCamera(A(0), A(1)); break;                             // 화면을 그 자리로
+            case 402:
+            case 403:
+            case 407: break;                                 // 그 밖 카메라 연출은 아직 안 만든다
+            case 401: MoveFieldCamera(_fieldCam.X + A(0), _fieldCam.Y + A(1)); break; // 그만큼 밀기
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
                 // 덮는 데 걸리는 틱만큼은 스크립트도 기다린다 — 안 그러면 화면이 덮이기 전에 다음 장면으로 넘어간다.
@@ -278,6 +374,38 @@ internal sealed unsafe partial class BattleSceneWindow
         if (what > 0) _fieldPictures.Add((what, motion, x, y, _lastTime));
     }
 
+    /// <summary>화면을 옮긴다 — 배경도 그 자리부터 다시 잘라 온다.</summary>
+    private void MoveFieldCamera(int x, int y)
+    {
+        _fieldCam = (Math.Max(0, x), Math.Max(0, y));
+        if (_field is { } field) ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
+    }
+
+    /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 인물.</summary>
+    private FieldActor? FieldActorOf(int value) =>
+        value >= 10000 ? _fieldActors.FirstOrDefault(a => a.Key == value - 10000) : null;
+
+    /// <summary>걷는 중인 인물을 한 걸음 옮긴다 — 매 틱 선형 보간이다.</summary>
+    private void StepFieldActors()
+    {
+        foreach (var actor in _fieldActors)
+        {
+            if (actor.Walk is not { } walk) continue;
+            int tick = (int)((_lastTime - walk.Start) * TicksPerSecond);
+            if (tick >= walk.Ticks)
+            {
+                actor.X = walk.ToX;
+                actor.Y = walk.ToY;
+                actor.Motion = walk.EndMotion;
+                actor.Mirror = walk.EndMirror;
+                actor.Walk = null;
+                continue;
+            }
+            actor.X = walk.FromX + (walk.ToX - walk.FromX) * tick / walk.Ticks;
+            actor.Y = walk.FromY + (walk.ToY - walk.FromY) * tick / walk.Ticks;
+        }
+    }
+
     private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(op switch
     {
         0 => now + value,
@@ -341,6 +469,15 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>고르기 창 — 640×480 틀 안, 대사 상자 바로 위에 놓는다.</summary>
+    /// <summary>고르기 창에서 마우스가 얹힌 줄을 표시한다.</summary>
+    private void UpdateFieldHover(int bx, int by)
+    {
+        if (_fieldChoices is not { Count: > 0 } choices) return;
+        var (x, y, w, _) = FieldChoiceRect(choices.Count);
+        int row = (by - y - 12) / 22;
+        _fieldChoicePick = bx >= x && bx < x + w && row >= 0 && row < choices.Count ? row : -1;
+    }
+
     private (int X, int Y, int W, int H) FieldChoiceRect(int rows)
     {
         var (fx, fy) = MosesOrigin();
@@ -360,19 +497,20 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (int x = 0; x < MosesW; x++)
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
 
-        // 파일에 적힌 물체들 — 층 번호는 앞뒤 순서라 작은 층부터 그린다.
+        // 파일에 적힌 물체들 — 층 번호는 앞뒤 순서라 작은 층부터 그린다. 갈래 칸이 곧 처음 모션이다.
         if (_field is { } drawing)
             foreach (var o in drawing.Objects.OrderBy(o => o.Layer))
-                DrawUi(o.Picture, 0, tick, ox + o.X, oy + o.Y, UiBlend.Alpha);
+                DrawUi(o.Picture, o.Kind, tick, ox + o.X - _fieldCam.X, oy + o.Y - _fieldCam.Y, UiBlend.Alpha);
 
-        // 인물 — <c>.chr</c> 의 그림 번호로 서 있는 컷을 그린다(어느 모션이 「서기」인지는 아직 가설이라 0 을 쓴다).
-        if (_field is { } people)
-            foreach (var person in people.People.OrderBy(p => p.Layer))
-                if (_db?.Character(person.ChrCode) is { SpriteId: > 0 } pc)
-                    DrawUi(pc.SpriteId, 0, tick, ox + person.X, oy + person.Y, UiBlend.Alpha);
+        // 인물 — 층 순서로, 저마다의 모션으로 그린다.
+        foreach (var actor in _fieldActors.Where(a => a.Visible).OrderBy(a => a.Layer))
+            if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
+                DrawUi(pc.SpriteId, actor.Motion, tick,
+                       ox + (int)actor.X - _fieldCam.X, oy + (int)actor.Y - _fieldCam.Y, UiBlend.Alpha);
 
         foreach (var (obs, motion, px, py, start) in _fieldPictures)
-            DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond), ox + px, oy + py, UiBlend.Alpha);
+            DrawUi(obs, motion, (int)((_lastTime - start) * TicksPerSecond),
+                   ox + px - _fieldCam.X, oy + py - _fieldCam.Y, UiBlend.Alpha);
 
         DrawTalk();
 

@@ -424,6 +424,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateAbilityHover(bx, by);
                 UpdateTitleHover(bx, by);
                 UpdateRecordsHover(bx, by);
+                UpdateFieldHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
