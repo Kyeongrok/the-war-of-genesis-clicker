@@ -73,8 +73,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // DUELDX_CUMEXP 로 아군 시작값을 바꿀 수 있다 — 레벨업 창을 시험할 때 쓴다(예: 190 이면 한 번만 쓰러뜨려도 오름).
             int startCum = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CUMEXP"), out int v) ? v : c.Level * 100;
             // 앞 전투에서 얻은 레벨·경험치·장비는 다음 전투로 이어진다(_party 가 들고 있다).
+            // DUELDX_CUMEXP 를 주면 레벨도 그 값에 맞춘다 — 쌓인 경험치와 레벨은 늘 짝이 맞아야 한다(레벨 = 쌓인 경험치 ÷ 100).
             unit.Data = _party.TryGetValue(unit.ChrCode, out var carried) ? carried
-                      : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum }
+                      : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100) }
                       : c with { CumExp = c.Level * 100 };
             unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(c));
             unit.MaxTp = unit.Tp = _db.MaxTp(c);

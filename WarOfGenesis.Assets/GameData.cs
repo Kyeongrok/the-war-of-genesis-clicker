@@ -138,7 +138,11 @@ public sealed record CharacterData(
 }
 
 /// <summary><c>Dat/Job.dat</c> 레코드(파일 67바이트). 53 오프셋 이름 6칸 = 체질(0 무속성 … 5 메텔)별 직업 이름.</summary>
-public sealed record JobData(int Id, ushort[] Growth, ushort[] AbilityList, ushort[] NamesByBody, ushort DescriptionId);
+/// <param name="NeedLevel">파일 2(메모리 <c>+4</c>) — 이 직업으로 바꾸려면 있어야 하는 레벨. 전직 화면이 보는 <b>유일한</b> 조건이다(<c>0x100f9aae</c>).</param>
+/// <param name="NeedAbility">파일 4(메모리 <c>+6</c>) — 3단계 직업이 요구하는 어빌리티 번호. <b>가지고만 있으면 된다</b>(<c>0x100fa1b4</c>).</param>
+/// <param name="NeedAbilityLevel">파일 6(메모리 <c>+8</c>) — 자료에는 다 5 인데 <b>엔진이 한 번도 안 읽는다</b>.</param>
+public sealed record JobData(int Id, ushort[] Growth, ushort[] AbilityList, ushort[] NamesByBody, ushort DescriptionId,
+                             ushort NeedLevel = 0, ushort NeedAbility = 0, byte NeedAbilityLevel = 0);
 
 /// <summary><c>Dat/Dep.dat</c> 레코드 — 직업 묶음(계열 이름, 단계, 직업 번호들).</summary>
 public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
@@ -300,7 +304,8 @@ public sealed class GameDatabase
         var jobs = new Dictionary<int, JobData>();
         byte[] d = Need("Dat", "Job.dat");
         for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 67)
-            jobs[U16(d, o)] = new JobData(U16(d, o), Words(d, o + 7, 12), Words(d, o + 31, 11), Words(d, o + 53, 6), U16(d, o + 65));
+            jobs[U16(d, o)] = new JobData(U16(d, o), Words(d, o + 7, 12), Words(d, o + 31, 11), Words(d, o + 53, 6), U16(d, o + 65),
+                                          U16(d, o + 2), U16(d, o + 4), d[o + 6]);
 
         var deps = new List<DepData>();
         d = Need("Dat", "Dep.dat");
