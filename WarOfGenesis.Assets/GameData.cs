@@ -151,7 +151,7 @@ public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 /// </param>
 public sealed record ItemData(int Id, ushort NameId, uint Price, byte Type, ushort Attack, ushort Defense,
                               (ushort Stat, ushort Value)[] Bonuses, ushort Picture = 0xFFFF,
-                              ushort UseWork = 0, ushort DescriptionId = 0)
+                              ushort UseWork = 0, ushort DescriptionId = 0, ushort Range = 0)
 {
     /// <summary>전투에서 쓸 수 있는 소모품인가 — 종류 7(캡슐)이고 쓰는 work 이 있는 것(분석-전투 「전투 중 아이템 쓰기」).</summary>
     public bool IsConsumable => Type == 7 && UseWork != 0;
@@ -184,6 +184,13 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 /// <summary>
 /// <c>Dat/NNNN.att</c> work 레코드(62바이트) 중 쓰는 칸. 이름 옆은 메모리 칸(파일 오프셋).
 /// </summary>
+/// <param name="RangeKind">+0x8(6) 사거리 종류 — 0 없음, 1·3 자기 값, <b>2 무기 사거리</b>(Itm 파일 16 ×4), 4 무기 + 자기 값.</param>
+/// <param name="HeightRange">+0xf(12) 사거리 거리에 높이 차를 더한다.</param>
+/// <param name="Sight">+0x10(13) 시야 — 사이에 더 높은 칸이 있으면 못 겨눈다.</param>
+/// <param name="SameHeightRange">+0x11(14) 같은 높이 칸만.</param>
+/// <param name="HeightGraded">+0x12(15) 높이 차등 — 올려치기 +3/층, 내려치기 −2/층(끄면 +2×|층차|).</param>
+/// <param name="HeightArea">+0x16(19) 효과 범위 거리에 높이 차를 더한다.</param>
+/// <param name="SameHeightArea">+0x18(21) 효과 범위: 같은 높이 칸만.</param>
 /// <param name="RangeShape">+0x7(5) 사거리 모양 1~9 — 1 마름모, 2 십자, 3 부채꼴, 4 화면 전체, 5 직선, 6 폭3 줄, 7 폭5 줄, 8 대각선 X, 9 45° 삼각형. 0 = 자기 자리.</param>
 /// <param name="RangeMin">+0xa(7) 사거리 최소 — <b>4분의 1칸 단위</b>(로더: 값 ? 값×4−3 : 0).</param>
 /// <param name="RangeMax">+0xc(9) 사거리 최대 — 4분의 1칸 단위(로더: 값×4). 한 칸 = 4.</param>
@@ -207,7 +214,9 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeShape, ushort RangeMin, ushort RangeMax,
                               byte TargetMode, byte AreaShape, short AreaArg, byte Kind, short Power, byte Accuracy, byte Critical,
                               ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte MinTargets, byte AiCriterion, byte Prepare,
-                              (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0)
+                              (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0,
+                              byte RangeKind = 0, byte HeightRange = 0, byte Sight = 0, byte SameHeightRange = 0,
+                              byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0)
 {
     public bool IsDamage => Kind == 0;
     public bool IsHeal => Kind is 1 or 5;
@@ -282,7 +291,7 @@ public sealed class GameDatabase
             var bonuses = Enumerable.Range(0, 6).Select(k => (w[2 * k], w[2 * k + 1])).Where(p => p.Item1 != 0).ToArray();
             items[U16(d, o)] = new ItemData(U16(d, o), U16(d, o + 2), BitConverter.ToUInt32(d, o + 4), d[o + 8],
                                             U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9),
-                                            U16(d, o + 42), U16(d, o + 46));
+                                            U16(d, o + 42), U16(d, o + 46), U16(d, o + 16));
         }
 
         var works = new Dictionary<int, WorkData>();
@@ -294,7 +303,8 @@ public sealed class GameDatabase
                                                 a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
                                                 U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
                                                 [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
-                                                U16(a, o + 24), a[o + 26]);
+                                                U16(a, o + 24), a[o + 26],
+                                                a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21]);
         }
 
         var abilities = new Dictionary<int, AbilityData>();
