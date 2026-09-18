@@ -112,6 +112,60 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
+    /// <summary>
+    /// 물체의 차례 — 물체는 TP 게이지를 안 쓰고 <b><c>전투틱 % wtp == 0</c></b> 인 틱에만 움직인다(<c>0x100e71f0</c>).
+    /// 종류 3·9·10 만 차례를 받고, 그중 9·10 은 편이 중립(−1)이면 영영 안 움직인다.
+    /// </summary>
+    private void StepObjects()
+    {
+        foreach (var obj in Objects)
+        {
+            if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts) continue;
+            if (obj.Data.Kind is 9 or 10 && obj.Record.Team < 0) continue;
+            int every = Math.Max(1, obj.Data.TurnEvery);
+            if (_tick % every != 0) continue;
+            ObjectActs(obj);
+        }
+    }
+
+    /// <summary>
+    /// 포탑·힐 크리스탈이 한 번 움직인다 — 사거리 안의 상대를 친다.
+    /// 피해는 <c>(1000 − 대상 RDP) × 물체 공격력 / 1000</c> 이고 PSY·무기·치명타가 없다(<c>0x1007b8f4</c>).
+    /// </summary>
+    private void ObjectActs(DemoObject obj)
+    {
+        if (_db is null || obj.Data.Attack <= 0) return;
+        // 어디까지 닿는지는 그 물체가 쓰는 work 이 정한다(파일 +31). work 이 없으면 옆 한 칸으로 본다.
+        var work = Work(obj.Data.WorkId);
+        bool ally = obj.Record.Team == 4;
+
+        bool Reaches(UnitState u) => work is { } w
+            ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
+            : Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 1;
+
+        // 힐 크리스탈(종류 10)의 work 은 회복이다 — 제 편을 고쳐 준다. 나머지는 상대를 친다.
+        bool heals = work is { IsHeal: true };
+        var target = _units.Where(u => u.Alive && u.PlayerControlled == (heals ? ally : !ally) && Reaches(u))
+                           .OrderBy(u => heals ? u.Hp * 100 / Math.Max(1, u.MaxHp) : u.Hp)
+                           .FirstOrDefault();
+        if (target?.Data is not { } tc) return;
+
+        if (heals)
+        {
+            int heal = target.MaxHp * (work?.Power ?? 0) / 100;
+            if (heal <= 0 || target.Hp >= target.MaxHp) return;
+            int before = target.Hp;
+            target.Hp = Math.Min(target.MaxHp, target.Hp + heal);
+            ShowNumber(target, (target.Hp - before).ToString(), HealColor2);
+            return;
+        }
+
+        int damage = (_db.N(3) - _db.Rdp(tc, target.Hp, target.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+        if (damage <= 0) return;
+        target.Hp = Math.Max(0, target.Hp - damage);
+        ShowNumber(target, damage.ToString(), DamageColor);
+    }
+
     /// <summary>이미 연 상자 — 판에서 사라진다.</summary>
     private readonly HashSet<DemoObject> _opened = [];
 
