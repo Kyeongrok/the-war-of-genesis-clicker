@@ -12,15 +12,25 @@ namespace DuelDx;
 /// 편 번호는 4 = 내가 움직이는 부대, 3 = 같은 편 AI, 0~2 = 적이다([[분석-전투]] ba-6).
 /// <c>NextBattle</c> 은 그 전투의 이벤트 행동 <b>10(다음 전투)</b> 이다 — 0045 는 0046 으로 이어진다.
 /// </remarks>
+internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Legion, Facing Facing)
+{
+    /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
+    public bool IsAlly => Side >= 3;
+
+    /// <summary>플레이어가 직접 움직이는가 — 동맹 AI(3)는 제 차례에 스스로 움직인다.</summary>
+    public bool PlayerControlled => Side == 4;
+}
+
 internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                                  ushort TitleTextId, ushort WinTextId, ushort LoseTextId,
-                                 BattleUnit[] Roster, int NextBattle)
+                                 DemoUnit[] Roster, int NextBattle)
 {
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
         BattleDemoScene.BtlId, BattleDemoScene.Title, BattleDemoScene.MapFile, BattleDemoScene.Bgm,
         BattleDemoScene.TitleTextId, BattleDemoScene.WinTextId, BattleDemoScene.LoseTextId,
-        BattleDemoScene.Roster, NextBattle: 46);
+        [.. BattleDemoScene.Roster.Select(u => new DemoUnit(u.ChrCode, u.Col, u.Row, u.IsAlly ? 4 : 0, 0, u.IsAlly ? Facing.Right : Facing.Left))],
+        NextBattle: 46);
 
     /// <summary>그 번호의 전투를 assets 에서 읽는다. 자료가 없으면 null.</summary>
     public static DemoScene? Load(int id, GameDatabase? db)
@@ -36,7 +46,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
 
             var roster = battle.Units
                 .Where(u => u.ChrCode > 0)
-                .Select(u => new BattleUnit(u.ChrCode, u.X, u.Y, u.Side >= 3))
+                .Select(u => new DemoUnit(u.ChrCode, u.X, u.Y, u.Side, u.Squad, u.Facing))
                 .ToArray();
             if (roster.Length == 0) return null;
 

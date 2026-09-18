@@ -58,6 +58,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RefreshUnitStats(UnitState u)
     {
         if (_db == null || u.Data is not { } c) return;
+        // 군단 부하는 대장 세력만큼 LP·PSY·DEP 가 오른다(분석-군단 1절).
+        var (lp, psy, dep) = LegionBonusFor(u);
+        if (lp != 0 || psy != 0 || dep != 0) c = c with { Lp = (uint)Math.Max(0, c.Lp + lp), Psy = (ushort)Math.Max(0, c.Psy + psy), Dep = (ushort)Math.Max(0, c.Dep + dep) };
         // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
         u.MaxHp = Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp);
         u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;

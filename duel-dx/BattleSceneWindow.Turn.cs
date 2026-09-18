@@ -47,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int StanceDefendWork = 516, StanceEvadeWork = 515;
     private const double TickDelaySeconds = 0.05;
 
-    private bool IsPlayerTurn => _turn >= 0 && _units[_turn].IsAlly && _routine == null && _outcome.Length == 0;
+    private bool IsPlayerTurn => _turn >= 0 && _units[_turn].PlayerControlled && _routine == null && _outcome.Length == 0;
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
     private void InitBattle()
@@ -96,14 +96,14 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var u = _units[_turn];
             if (!u.Alive) EndTurn();
-            else if (u.IsAlly && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
+            else if (u.PlayerControlled && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
             return;
         }
 
         if (_lastTime < _nextTickAt) return;
         for (int guard = 0; guard < 10000; guard++)
         {
-            int next = Array.FindIndex(_units, u => u.Alive && u.HasTurn && CanTakeTurn(u));
+            int next = Array.FindIndex(_units, u => u.Alive && u.HasTurn && u.LeaderIndex < 0 && CanTakeTurn(u));
             if (next >= 0) { StartTurn(next); return; }
             AdvanceTick();
         }
@@ -132,8 +132,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _units[index].OriginRow = _units[index].Row;
         CancelTargeting();
         _heldMoveKeys.Clear();
-        if (_units[index].IsAlly) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
-        else _routine = AiRoutine(index);
+        // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
+        if (_units[index].PlayerControlled) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
+        else
+        {
+            if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
+            _routine = AiRoutine(index);
+        }
     }
 
     private void EndTurn()
@@ -372,6 +377,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
 
+        MoveFollowers(userIndex);          // 군단이면 부하가 대장 진형으로 따라온다
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
@@ -388,6 +394,8 @@ internal sealed unsafe partial class BattleSceneWindow
             ScheduleAbilitySounds(w);
             SpawnAbilityEffects(w, a, col, row);
             foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
+            // 군단 행동(상태 15) — 대장이 친 대상을 부하들도 함께 친다
+            if (w.IsDamage && targets.Count > 0) FollowersAttack(userIndex, _units[targets[0]], dying);
         }
 
         // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10).
@@ -406,7 +414,11 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); Play(SoundDeath); }
             while (dying.Any(d => d.IsBusy)) yield return true;
-            foreach (var d in dying) d.Alive = false;
+            foreach (var d in dying)
+            {
+                d.Alive = false;
+                PromoteFollower(Array.IndexOf(_units, d));   // 대장이 죽으면 첫 부하가 대장이 된다
+            }
             CheckOutcome();
             QueueLevelUps();
         }

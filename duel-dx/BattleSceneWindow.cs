@@ -58,7 +58,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private ObtMapImage? _map;
     private Dictionary<int, UnitSprite> _sprites = [];
-    private UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];
+    private UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];   // 자료를 읽으면 BuildUnits 로 다시 만든다
     private int _selected = -1;
     private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         var manifests = CollectExportedManifests(assetsRoot);
         var sprites = new Dictionary<int, UnitSprite>(_sprites);
 
-        foreach (int chrCode in _scene.Roster.Select(u => u.ChrCode).Distinct())
+        foreach (int chrCode in _units.Select(u => u.ChrCode).Distinct())
         {
             if (sprites.ContainsKey(chrCode)) continue;
             var (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
@@ -117,7 +117,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // Status 화면용 초상(첫 컷). 없어도 전투판은 그린다.
         foreach (var (code, m) in manifests)
         {
-            if (_faces.ContainsKey(code) || !_scene.Roster.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
+            if (_faces.ContainsKey(code) || !_units.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
             string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
             if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
         }
@@ -132,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             // DUELDX_BATTLE 로 다른 전투를 열 수 있다(화면 밖 시험용). 기본은 첫 전투 0045.
             int startId = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_BATTLE"), out int wanted) ? wanted : _scene.Id;
             if (DemoScene.Load(startId, _db) is { } loaded) _scene = loaded;
-            _units = [.. _scene.Roster.Select(u => new UnitState(u))];
+            _units = BuildUnits(_scene);
             _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
 
             LoadRosterSprites();
@@ -507,6 +507,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
 
         foreach (var unit in _units) unit.SettleIfStopped();
+        SyncFollowers();
         UpdateCamera(dt);
         UpdateSounds();
         UpdateRing();
@@ -892,6 +893,10 @@ internal sealed class UnitSprite
         return (_table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing)), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
     }
 
+    /// <summary>걷기 모션에 달린 소리 키들(시작 틱, Snd 번호).</summary>
+    public IReadOnlyList<(int Start, int Sound)> WalkSounds(Facing facing) =>
+        _table?.Resolve(ObsMotionTable.ActionWalk, ObsMotionTable.DirectionOf(facing))?.Sounds ?? [];
+
     public SpriteFrame FrameFor(UnitState unit)
     {
         int action = unit.Action >= 0 ? unit.Action : unit.IsMoving ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
@@ -914,15 +919,30 @@ internal sealed class UnitSprite
 }
 
 /// <summary>판 위 인물 하나의 지금 상태 — 칸 자리, 바라보는 쪽, 걷는 중이면 어디서 어디로 얼마나 왔는지.</summary>
-internal sealed class UnitState(BattleUnit unit)
+internal sealed class UnitState(DemoUnit unit)
 {
     public int ChrCode { get; } = unit.ChrCode;
     public bool IsAlly { get; } = unit.IsAlly;
 
+    /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
+    public bool PlayerControlled { get; } = unit.PlayerControlled;
+
+    /// <summary>For.dat 군단 번호(Btl 레코드 파일 15) — 0 이 아니면 부하들이 진형을 지어 따라다닌다.</summary>
+    public int LegionId { get; set; } = unit.Legion;
+
+    /// <summary>부하면 대장의 자리 번호, 대장·혼자면 −1. 부하는 차례를 안 받는다(분석-군단).</summary>
+    public int LeaderIndex { get; set; } = -1;
+
+    /// <summary>대장일 때 진형에서 내 자리(부하마다 0~5).</summary>
+    public int FormationSlot { get; set; } = -1;
+
+    /// <summary>군단 세력(원본 <c>CChr+0x148[군단]</c>) — 처음 1000, 대장이 죽어 물려받으면 0.6배.</summary>
+    public int LegionPowerPercent { get; set; } = 1000;
+
     /// <summary>도착할(걷는 중이면 향하는) 칸. 자리 차지 판정도 이 칸으로 한다.</summary>
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
-    public Facing Facing { get; set; } = unit.IsAlly ? Facing.Right : Facing.Left;
+    public Facing Facing { get; set; } = unit.Facing;
 
     private int _fromCol = unit.Col, _fromRow = unit.Row;
     private double _progress = 1;
