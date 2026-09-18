@@ -480,7 +480,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 BeginFieldWipe(904, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
                 break;
             case 404:
-            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 909 가 제 그림을 직접 읽으므로 안 쓴다
+            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 전환이 제 그림을 직접 읽으므로 안 쓴다
+            case 902: break;                                 // 동영상(<c>Mov\%04d.mov</c>) — 게임 쪽 영상만 405MB 라 데모는 안 묶는다
+            case 905:                                        // 뜻이 아직 가설인 전환들 — 자료에 한 번씩뿐이다.
+            case 907:                                        // 인자 자리(a0 방향 · a1 그림)는 다 같으니 <b>겹쳐 디졸브로 갈음</b>한다.
+            case 908:                                        // 걸리는 틀은 909 자리(a2)로 읽는다 — 제 자리는 저마다 다르다.
             case 909:                                        // 겹쳐 디졸브 — 전환의 대부분이 이것이다
                 // a0 이 0 이 아니면 앞뒤를 바꾼다. 데모는 <b>새 배경으로 갈아타는 것</b>만 흉내 낸다.
                 if (A(1) > 0)
