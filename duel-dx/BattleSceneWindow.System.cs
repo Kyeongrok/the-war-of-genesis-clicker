@@ -335,9 +335,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
                                     int SceneText = 0, int SceneKind = 1, long PlayMs = 0,
                                     int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0,
-                                    Dictionary<string, int>? Flags = null);
+                                    Dictionary<string, int>? Flags = null,
+                                    string[]? DonePlaces = null, int[]? DoneChapters = null);
 
-    private const int SaveVersion = 5;
+    private const int SaveVersion = 6;
 
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
@@ -364,7 +365,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 _scene.TitleTextId, 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
-                          .ToDictionary(i => i.ToString(), i => (int)_flags[i]));
+                          .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
+                // 이미 겪은 자동 발생 장소와 이미 돌린 챕터 스크립트 — 안 적으면 불러올 때마다 프롤로그가 되풀이된다.
+                [.. _autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
+                [.. _chapterScriptDone]);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -454,6 +458,13 @@ internal sealed unsafe partial class BattleSceneWindow
         Array.Clear(_flags);
         foreach (var (number, value) in state.Flags ?? [])
             if (int.TryParse(number, out int flag) && (uint)flag < _flags.Length) _flags[flag] = (byte)Math.Clamp(value, 0, 255);
+
+        _autoPlacesDone.Clear();
+        foreach (string pair in state.DonePlaces ?? [])
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
+                _autoPlacesDone.Add((chapter, place));
+        _chapterScriptDone.Clear();
+        foreach (int chapter in state.DoneChapters ?? []) _chapterScriptDone.Add(chapter);
 
         _tick = state.Tick;
         _turn = -1;
