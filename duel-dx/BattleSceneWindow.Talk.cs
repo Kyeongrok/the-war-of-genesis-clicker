@@ -117,6 +117,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private static string[] TalkLines(string text) =>
         text.Replace("$m0", "").Split("$n", StringSplitOptions.None);
 
+    /// <summary>한 줄 내려가는 만큼 — 글자 높이 + 4픽셀(<c>0x1002993c</c>).</summary>
+    private int TalkLineStep(float size) => GetText("가", White, size).H + 4;
+
     /// <summary>창 너비에 맞춰 글자 단위로 줄을 접는다 — 한국어라 낱말 단위로 끊지 않는다.</summary>
     private List<string> WrapTalk(IEnumerable<string> lines, int width, float size)
     {
@@ -171,9 +174,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 BlitScaled(face, x + 8, y + 6, 84, 84);
                 textLeft = x + 100;
             }
+            // 줄 내림은 <b>그 줄 가장 큰 글자 높이 + 4px</b> 이다(0x1002993c) — 원본 굴림 9pt 로 16px.
             var boxLines = WrapTalk(lines, x + w - 16 - textLeft, 13);
-            for (int i = 0; i < boxLines.Count && i < 4; i++)
-                DrawText(boxLines[i], textLeft, y + 10 + i * 20, White, 13);
+            int step = TalkLineStep(13);
+            for (int i = 0; i < boxLines.Count && 10 + (i + 1) * step <= h; i++)
+                DrawText(boxLines[i], textLeft, y + 10 + i * step, White, 13);
             // 오른쪽 아래 「다음」 표시 — 깜빡인다.
             if (_talkFilled && tick % 20 < 12) DrawText("▼", x + w - 22, y + h - 22, 0xFFFFE070, 13);
             return;
@@ -220,8 +225,9 @@ internal sealed unsafe partial class BattleSceneWindow
         DarkenRect(bx - 1, by - FrameTitleH - 1, bw + 2, bh + FrameTitleH + 2, 8);
         DrawGameFrame(bx, by, bw, bh, t.Name);
         var balloonLines = WrapTalk(lines, bw - 16, 12);
-        for (int i = 0; i < balloonLines.Count && i * 18 + 8 < bh; i++)
-            DrawText(balloonLines[i], bx + 8, by + 6 + i * 18, White, 12);
+        int balloonStep = TalkLineStep(12);
+        for (int i = 0; i < balloonLines.Count && i * balloonStep + 8 < bh; i++)
+            DrawText(balloonLines[i], bx + 8, by + 6 + i * balloonStep, White, 12);
         if (_talkFilled && tick % 20 < 12) DrawText("▼", bx + bw - 18, by + bh - 20, 0xFFFFE070, 12);
     }
 }
