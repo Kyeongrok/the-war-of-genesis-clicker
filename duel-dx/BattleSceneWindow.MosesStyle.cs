@@ -26,7 +26,10 @@ namespace DuelDx;
 /// 확인창 제목 TXR 932 「전직」, 본문은 <b>남은 EXP 가 0 이면 930, 아니면 931</b>(「… 경험치는 사라집니다」).
 /// 승인하면 <b>Snd 582</b> 와 알림창(TXR 934). 전직이 바꾸는 것은 <b>직업 번호와 남은 EXP = 0</b> 뿐이다 —
 /// 레벨·누적 경험치·능력치·배운 어빌리티는 하나도 다시 계산하지 않는다(<c>0x10101215</c>).
-/// 계열(Dep) 자체를 바꾸는 일(위 계열 단추)은 아직 안 만들었다 — 지금 계열을 보여 주기만 한다. 파티는 이 전투의 아군 셋이다.
+/// <b>계열 갈아타기</b>(위 단추 넷)는 <b>1단계이고 레벨 30 이상</b>일 때만 나오고, 제 계열을 뺀 네 계열의 <b>2단계 일반형</b> 하나로 간다 —
+/// 한 번 누르면 바로 확인창이고, 2단계에서는 단추가 아예 없다(계열 갈아타기는 평생 한 번).
+/// 3단계 단추 둘(레벨 60 + 필요 어빌리티, 「처음 계열」의 3단계)은 화면 자리를 아직 몰라 안 만들었다.
+/// 파티는 이 전투의 아군 셋이다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -78,6 +81,19 @@ internal sealed unsafe partial class BattleSceneWindow
                 return true;
             }
 
+        // 계열 단추 넷 — 한 번 누르면 바로 확인창(0x10100c4e).
+        var families = StyleFamilies();
+        for (int i = 0; i < families.Count && i < StyleFamilyCells.Length; i++)
+        {
+            var (fx, fy, fw, fh) = StyleFamilyCells[i];
+            if (x < fx || x >= fx + fw || y < fy || y >= fy + fh) continue;
+            ushort target = families[i].Job;
+            string ftitle = _db?.T(932) is { Length: > 0 } ft ? ft : "전직";
+            string ftext = _db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
+            _confirm = (ftitle, ftext, () => ChangeJob(target));
+            return true;
+        }
+
         var jobs = StyleJobs();
         for (int i = 0; i < StyleBodyCells.Length; i++)
         {
@@ -112,6 +128,35 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < dep.Jobs.Length; i++)
             if (db.Jobs.GetValueOrDefault(dep.Jobs[i]) is { } job && c.Level >= job.NeedLevel) count = i + 1;
         return [.. dep.Jobs.Take(count)];
+    }
+
+    /// <summary>고른 인물의 계열 레코드 — 직업 번호를 품은 <c>Dep</c>.</summary>
+    private DepData? StyleDep() =>
+        _db is { } db && _units[_styleUnit].Data is { } c ? db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) : null;
+
+    /// <summary>계열 안 단계 — 1·2·3. <c>Dep</c> 번호 셋이 한 계열이다.</summary>
+    private static int StyleTier(DepData dep) => (dep.Id - 1) % 3 + 1;
+
+    /// <summary>
+    /// 지금 고를 수 있는 <b>다른 계열</b>들 — 제 계열을 뺀 넷, 저마다 그 계열 <b>2단계 일반형</b> 하나로 간다.
+    /// </summary>
+    /// <remarks>
+    /// <b>1단계이고 레벨 30 이상</b>일 때만 만든다(<c>0x100f9cd8</c>) — 2단계에서는 단추를 부수고 다시 안 만들어,
+    /// <b>계열 갈아타기는 평생 한 번</b>이다. 제 계열은 목록에서 빠지므로 <b>제 계열의 2단계로는 갈 수 없다</b>(<c>0x10101434</c>).
+    /// </remarks>
+    private List<(int Family, ushort Job)> StyleFamilies()
+    {
+        if (_db is not { } db || _units[_styleUnit].Data is not { } c) return [];
+        if (StyleDep() is not { } dep || StyleTier(dep) != 1 || c.Level < 30) return [];
+        int mine = (dep.Id - 1) / 3;
+        var list = new List<(int, ushort)>();
+        for (int i = 0; i < 4; i++)
+        {
+            int family = i < mine ? i : i + 1;
+            if (db.Deps.FirstOrDefault(d => d.Id == 3 * family + 2) is { Jobs.Length: > 0 } target)
+                list.Add((family, target.Jobs[0]));
+        }
+        return list;
     }
 
     /// <summary>지금 직업이 앉아 있는 칸 번호 — 없으면 −1.</summary>
@@ -180,11 +225,13 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
         }
 
-        // 직업 계열 단추(1차) — 지금은 보여 주기만 한다
-        for (int i = 0; i < StyleFamilyCells.Length; i++)
+        // 계열 단추 넷 — 1단계·레벨 30 일 때만 나온다(못 가는 동안은 아예 없다).
+        var familyCells = StyleFamilies();
+        for (int i = 0; i < familyCells.Count && i < StyleFamilyCells.Length; i++)
         {
-            var (fx, fy, _, _) = StyleFamilyCells[i];
-            DrawUi(StyleFamilyObs, 2 * i, tick, ox + fx, oy + fy, UiBlend.Alpha);
+            // 이 그림들은 조각마다 <b>제 자리를 스스로 들고 있다</b> — 연대표 이름판과 같은 꼴이라
+            // 칸 자리가 아니라 <b>화면 가운데(320,240)</b>에 찍어야 제자리에 온다. 누르는 칸만 StyleFamilyCells 로 잡는다.
+            DrawUi(StyleFamilyObs, 2 * i, tick, ox + 320, oy + 240, UiBlend.Alpha);
         }
 
         if (!DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha))
