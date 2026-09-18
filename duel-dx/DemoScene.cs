@@ -23,7 +23,8 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
 
 internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                                  ushort TitleTextId, ushort WinTextId, ushort LoseTextId,
-                                 DemoUnit[] Roster, int NextBattle)
+                                 DemoUnit[] Roster, int NextBattle,
+                                 IReadOnlyList<(int Col, int Row, Facing Facing)>? Placement = null)
 {
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
@@ -56,7 +57,11 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                     if (action.Code == 10 && next == 0) next = action.Args[0];
 
             string title = db?.T(battle.TitleId) is { Length: > 0 } t ? t : $"전투 {id}";
-            return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId, roster, next);
+            // 아군을 미리 안 세운 전투는 「배치 칸」에 파티를 세운다(원본 배치 창 자리).
+            var placement = battle.Placement
+                .Select(p => (p.X, p.Y, p.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left }))
+                .ToList();
+            return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId, roster, next, placement);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {

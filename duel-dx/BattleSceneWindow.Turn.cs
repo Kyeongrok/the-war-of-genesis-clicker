@@ -257,8 +257,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
+    /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
-        u.Data != null && _db != null && u.Tp + u.Ctp >= _db.WorkTpCost(u.Data, w.Id) && u.Soul >= w.SoulBase;
+        u.Data != null && _db != null && u.Tp + u.Ctp >= _db.WorkTpCost(u.Data, w.Id) && u.Soul >= _db.WorkSoulNeed(u.Data, w.Id);
 
     /// <summary>
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
@@ -444,8 +445,14 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
-        if (a.Data != null && _db != null) a.Tp -= _db.WorkTpCost(a.Data, w.Id);
-        a.Soul = Math.Clamp(a.Soul - w.SoulBase + (w.Kind switch { 0 => 10, 1 => 6, _ => 4 }), 0, a.MaxSoul);
+        // 비용은 행동이 끝난 뒤 TP → SOUL → HP 차례로 뺀다(0x10076380). 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
+        if (a.Data is { } cost && _db is { } db2)
+        {
+            a.Tp -= db2.WorkTpCost(cost, w.Id);
+            a.Soul = Math.Clamp(a.Soul - db2.WorkSoulCost(cost, w.Id) + (w.Kind switch { 0 => 10, 1 => 6, _ => 4 }), 0, a.MaxSoul);
+            int hp = db2.WorkHpCost(cost, w.Id);
+            if (hp > 0) a.Hp = Math.Max(1, a.Hp - hp);
+        }
 
         if (dying.Count > 0)
         {
