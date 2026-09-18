@@ -79,6 +79,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void InitBattle()
     {
         if (_db == null) return;
+        // 적 레벨의 기준이 되는 파티 레벨은 <b>유닛을 채우기 전에</b> 한 번 셈한다 —
+        // 채우는 도중에 세면 아직 안 채워진 아군 때문에 순서에 따라 값이 흔들린다.
+        int partyLevel = PartyLevel();
         foreach (var unit in _units)
         {
             if (_db.Character(unit.ChrCode) is not { } c) continue;
@@ -91,7 +94,7 @@ internal sealed unsafe partial class BattleSceneWindow
                       : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100) }
                       : c with { CumExp = c.Level * 100 };
             // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물만(0x1007a8e0).
-            if (!unit.IsAlly || unit.Data is null) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset);
+            if (!unit.IsAlly) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
 
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
             var data = unit.Data ?? c;
@@ -167,7 +170,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private int PartyLevel()
     {
-        var levels = _units.Where(u => u.IsAlly && u.Data is { } d).Select(u => (int)u.Data!.Level)
+        var levels = _units.Where(u => u.IsAlly)
+                           .Select(u => _party.TryGetValue(u.ChrCode, out var carried) ? carried.Level
+                                      : _db?.Character(u.ChrCode)?.Level ?? 0)
+                           .Select(v => (int)v)
+                           .Where(v => v > 0)
                            .OrderByDescending(v => v).Take(3).ToList();
         return levels.Count == 0 ? 1 : levels.Sum() / levels.Count;
     }
@@ -176,13 +183,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그 인물을 <paramref name="offset"/> + 파티 레벨로 키운다 — <b>늘 <c>.chr</c> 원본에서</b> 다시 셈하므로 쌓이지 않고,
     /// <b>TP 제수와 CTP 는 그대로</b> 둔다. 면제 명단에 있으면 그대로 돌려준다.
     /// </summary>
-    private CharacterData GrowToPartyLevel(CharacterData c, int offset)
+    private CharacterData GrowToPartyLevel(CharacterData c, int offset, int partyLevel)
     {
         if (_db is null || _db.LevelExempt.Contains(c.Code)) return c;
         var rows = _db.LevelGrowth;
         if (rows.Count == 0) return c;
 
-        int level = Math.Max(1, offset + PartyLevel());
+        int level = Math.Max(1, offset + partyLevel);
         var g = rows[Math.Min(level, rows.Count) - 1];
         int Grow(int v, int percent) => v + v * percent / 100;
 
