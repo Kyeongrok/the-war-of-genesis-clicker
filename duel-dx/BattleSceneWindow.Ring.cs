@@ -43,24 +43,38 @@ internal sealed unsafe partial class BattleSceneWindow
     private double _ringPhaseStart, _ringOpenedAt, _ringHoverAt;
     private int _ringPicked = -1;
 
-    private readonly Dictionary<int, UiSprite> _ui = [];
+    private readonly Dictionary<int, UiSprite?> _ui = [];
+
+    /// <summary>아직 안 푼 그림 파일 자리 — 처음 쓸 때 푼다(이펙트가 많아 시작할 때 다 풀면 몇 초 걸린다).</summary>
+    private readonly Dictionary<int, string> _uiPaths = [];
 
     /// <summary>링 그림(assets/ui)·소리(assets/sounds)를 읽는다. 없으면 글자 링으로 그린다.</summary>
     private void LoadRingAssets()
     {
         try
         {
-            foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("ui"), "*.obs"))
-                if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
-                    _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path));
-            foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find("effects"), "*.obs"))
-                if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
-                    _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path));
+            foreach (string folder in new[] { "ui", "effects" })
+                foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find(folder), "*.obs"))
+                    if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
+                        _uiPaths[id] = path;
+
+            // 링 그림만 미리 풀어 둔다 — 나머지(이펙트·무기 층)는 처음 쓸 때 푼다.
+            foreach (int id in RingItems.Select(r => r.IconObs).Concat([86, 105, 106, 452])) UiFor(id);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
             _loadError = $"링 그림: {ex.Message}";
         }
+    }
+
+    /// <summary>그림을 (처음 쓸 때 풀어) 돌려준다.</summary>
+    private UiSprite? UiFor(int id)
+    {
+        if (_ui.TryGetValue(id, out var sprite)) return sprite;
+        // 아직 그림 목록을 못 읽었으면(자료 읽기 전) 기억해 두지 않는다 — 나중에 다시 묻는다.
+        if (!_uiPaths.TryGetValue(id, out string? path)) return null;
+        try { return _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path)); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { return _ui[id] = null; }
     }
 
     private void PlaySound(int id) => Play(id);
@@ -276,7 +290,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>UI Obs 한 장을 모션표 틱에 맞춰 (x, y) 에 그린다(컷의 X·Y 가 기준점에서 왼쪽 위까지 거리). 그렸으면 true.</summary>
     private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true)
     {
-        if (!_ui.TryGetValue(obs, out var sprite) || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
+        if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
         for (int yy = 0; yy < f.H; yy++)
         {
@@ -340,4 +354,7 @@ internal sealed class UiSprite
         }
         return loop ? _frames.GetValueOrDefault((0, 0)) : null;
     }
+
+    /// <summary>그 모션의 tick 틱 섞기 방식(17 = 더하기 합성).</summary>
+    public int BlendAt(int motion, int tick) => _table?.Clips.GetValueOrDefault(motion)?.BlendAt(tick) ?? 0;
 }
