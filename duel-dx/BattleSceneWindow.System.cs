@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using WarOfGenesis.Assets;
 
@@ -281,6 +281,7 @@ internal sealed unsafe partial class BattleSceneWindow
         RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
         _scene = scene;
         _units = BuildUnits(scene);
+        LoadEvents(scene.Id);
         LoadRosterSprites();
         _mosesOpen = false;
         _statusUnit = -1;

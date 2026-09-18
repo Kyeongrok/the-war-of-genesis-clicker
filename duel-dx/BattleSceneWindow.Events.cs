@@ -1,0 +1,187 @@
+using System.IO;
+using WarOfGenesis.Assets;
+
+namespace DuelDx;
+
+/// <summary>
+/// 전투 이벤트 스크립트 — 「언제 이기고 지는지」를 정하는 것은 적을 다 잡는 것만이 아니다.
+/// </summary>
+/// <remarks>
+/// 승패는 <b>두 갈래</b>로 정해진다([[분석-전투]]):
+/// ① <c>Btl</c> 머리 워드 9 가 1 이면 엔진이 「한쪽 전멸」을 스스로 본다(파일 126개),
+/// ② <b>모든</b> 전투에서 이벤트 스크립트가 조건을 보고 행동 <c>11</c>(승패)·<c>10</c>(다음 전투)·<c>6</c>(필드로)을 적는다.
+/// 데모는 그동안 ① 만 했다 — 그래서 「몇 턴 버티기」나 「누구를 지키기」 같은 전투가 끝나지 않았다.
+/// <para>
+/// 이벤트 하나는 조건 여러 개를 <b>모두</b> 만족해야 터지고(AND, <c>0x10056574</c>), 최대 발동 수(<c>+0xc</c>)가 0 이 아니면 그만큼만 터진다.
+/// 대상 지정(<c>0x1004eaa0</c>)은 <b>1~9999 = Chr 번호 · 10000+k = Btl 배치표 k번 · 20000+2f/2f+1 = 편 f 의 전부/누군가</b>
+/// (편 차례는 4·3·0·1·2). 비교 연산자는 0 <c>==</c> · 1 <c>!=</c> · 2 <c>&lt;</c> · 3 <c>&lt;=</c> · 4 <c>&gt;</c> · 5 <c>&gt;=</c>.
+/// </para>
+/// 아직 안 만든 조건·행동은 <b>거짓/무시</b>로 둔다 — 잘못 터뜨리는 것보다 안 터뜨리는 쪽이 낫다.
+/// </remarks>
+internal sealed unsafe partial class BattleSceneWindow
+{
+    private IReadOnlyList<BattleEvent> _events = [];
+    private int[] _eventFired = [];
+
+    /// <summary>턴 수 — 이벤트 조건 1·3 이 보는 값. 새 차례가 올 때마다 오른다(<c>0x10067d36</c>).</summary>
+    private int _turnNo;
+
+    /// <summary>전투 국소 변수 — 행동 100·101 이 고치고 조건 100 이 읽는다(<c>0x101b69a0</c>).</summary>
+    private readonly byte[] _battleVars = new byte[256];
+
+    /// <summary>이벤트가 정한 다음 전투 — 0 이면 <c>Btl</c> 자료의 값(또는 모세스)으로 간다.</summary>
+    private int _eventNextBattle;
+
+    /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
+    private void LoadEvents(int battleId)
+    {
+        _events = [];
+        _eventFired = [];
+        _turnNo = 0;
+        _eventNextBattle = 0;
+        Array.Clear(_battleVars);
+        try
+        {
+            var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
+            if (files.Read("Btl", $"{battleId:D4}.btl") is not { } bytes) return;
+            if (BattleEvents.Parse(bytes, out _) is not { } events) return;
+            _events = events;
+            _eventFired = new int[events.Count];
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { }
+    }
+
+    /// <summary>조건이 다 맞는 이벤트를 터뜨린다. 결과가 정해지면 더 보지 않는다.</summary>
+    private void RunEvents()
+    {
+        if (_events.Count == 0 || _outcome.Length > 0) return;
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0) continue;                      // 조건이 없으면 안 터진다(0x10056574)
+            if (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire) continue;
+            if (!e.Conditions.All(EventCondition)) continue;
+            _eventFired[i]++;
+            foreach (var a in e.Actions) RunEventAction(a);
+            if (_outcome.Length > 0) return;
+        }
+    }
+
+    private static bool Compare(int a, int op, int b) => op switch
+    {
+        0 => a == b,
+        1 => a != b,
+        2 => a < b,
+        3 => a <= b,
+        4 => a > b,
+        _ => a >= b,
+    };
+
+    /// <summary>편 번호를 이벤트가 쓰는 차례(4·3·0·1·2)에서 꺼낸다.</summary>
+    private static readonly int[] EventSideOrder = [4, 3, 0, 1, 2];
+
+    /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
+    private List<UnitState> EventTargets(int value, out bool wholeSide)
+    {
+        wholeSide = false;
+        if (value >= 20000)
+        {
+            int k = (value - 20000) / 2;
+            wholeSide = (value - 20000) % 2 == 0;      // 짝수 = 「그 편 전부/아무도」, 홀수 = 「누군가」
+            if (k >= EventSideOrder.Length) return [];
+            int side = EventSideOrder[k];
+            return [.. _units.Where(u => u.Side == side)];
+        }
+        if (value >= 10000)
+        {
+            int index = value - 10000;
+            return (uint)index < _units.Length ? [_units[index]] : [];
+        }
+        return value > 0 ? [.. _units.Where(u => u.ChrCode == value)] : [];
+    }
+
+    private bool EventCondition(ScriptCommand c)
+    {
+        short A(int i) => i < c.Args.Length ? c.Args[i] : (short)0;
+        switch (c.Code)
+        {
+            case 1: return _turnNo == 2;                                        // 시작 인트로 방아쇠
+            case 3: return Compare(_turnNo, A(1), A(0));                        // 턴 수 비교
+            case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
+            case 101: return Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2));
+            case 102:                                                           // 상태이상 있나/없나
+            {
+                var list = EventTargets(A(0), out _);
+                bool has = list.Any(u => u.Alive && u.HasStatus(A(1)));
+                return A(2) != 0 ? !has : has;
+            }
+            case 200:                                                           // 전장에 있나
+            {
+                var list = EventTargets(A(0), out bool whole);
+                bool there = whole ? list.Count > 0 && list.All(u => u.Alive) : list.Any(u => u.Alive);
+                return A(2) != 0 ? !there : there;
+            }
+            case 201:                                                           // 죽었나
+            {
+                var list = EventTargets(A(0), out bool whole);
+                bool dead = list.Count == 0 || (whole ? list.All(u => !u.Alive) : list.Any(u => !u.Alive));
+                return A(1) != 0 ? !dead : dead;
+            }
+            case 203:                                                           // HP 퍼센트 비교
+            {
+                var list = EventTargets(A(0), out _);
+                return list.Any(u => u.Alive && Compare(u.Hp, A(2), u.MaxHp * A(3) / 100));
+            }
+            case 401:                                                           // 그 편 전멸
+            {
+                int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
+                return side >= 0 && !_units.Any(u => u.Alive && u.Side == side);
+            }
+            case 402:                                                           // 사각형 안에 있나
+            {
+                var list = EventTargets(A(0), out _);
+                int x1 = Math.Min(A(2), A(4)), x2 = Math.Max(A(2), A(4));
+                int y1 = Math.Min(A(3), A(5)), y2 = Math.Max(A(3), A(5));
+                return list.Any(u => u.Alive && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
+            }
+            case 400:                                                           // 사각형 안에 있는 수 비교
+            {
+                int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
+                int x1 = Math.Min(A(3), A(5)), x2 = Math.Max(A(3), A(5));
+                int y1 = Math.Min(A(4), A(6)), y2 = Math.Max(A(4), A(6));
+                int n = side < 0 ? 0 : _units.Count(u => u.Alive && u.Side == side
+                                                          && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
+                return Compare(n, A(1), A(2));
+            }
+            default: return false;   // 아직 안 만든 조건(2·202·204·300·301)은 안 터뜨린다
+        }
+    }
+
+    private void RunEventAction(ScriptCommand a)
+    {
+        short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        switch (a.Code)
+        {
+            case 11:                                     // 승패 — 인자0 이 0 이면 승리, 3 이면 패배
+                SetEventOutcome(A(0) == 0);
+                break;
+            case 10:                                     // 이어지는 전투
+                _eventNextBattle = A(0);
+                SetEventOutcome(win: true);
+                break;
+            case 6:                                      // 끝내고 필드로 — 데모는 모세스로 간다
+                _eventNextBattle = 0;
+                SetEventOutcome(win: true);
+                break;
+            case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
+            case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;
+            case 102:
+                if (A(0) > 0 && A(0) < _flags.Length) _flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                break;
+            case 103:
+                if (A(0) > 0 && A(0) < _flags.Length)
+                    _flags[A(0)] = (byte)Math.Clamp(_flags[A(0)] + A(1), 0, 255);
+                break;
+        }
+    }
+}

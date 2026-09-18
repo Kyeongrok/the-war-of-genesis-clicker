@@ -155,6 +155,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _turn = index;
         _selected = index;
+        _turnNo++;                  // 이벤트 조건 1·3 이 보는 턴 수(0x10067d36)
         _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
         AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
         _units[index].OriginCol = _units[index].Col;
@@ -542,8 +543,20 @@ internal sealed unsafe partial class BattleSceneWindow
     private void CheckOutcome()
     {
         if (_outcome.Length > 0) return;
+        // 먼저 이벤트 스크립트 — 「몇 턴 버티기」·「누구를 지키기」처럼 전멸 말고 다른 조건으로 끝나는 전투가 있다.
+        RunEvents();
+        if (_outcome.Length > 0) return;
         if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
         else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
+    }
+
+    /// <summary>이벤트 행동 11·10·6 이 적는 결과.</summary>
+    private void SetEventOutcome(bool win)
+    {
+        if (_outcome.Length > 0) return;
+        _outcome = win ? "승리" : "패배";
+        _outcomeAt = _lastTime;
+        PlayOutcomeMusic(win);
     }
 
     // ── 표시 ─────────────────────────────────────────────────────────────────

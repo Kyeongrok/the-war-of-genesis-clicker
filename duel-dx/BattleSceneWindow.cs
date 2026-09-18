@@ -156,6 +156,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
             ResizeBoard(_map.Cols, _map.Rows);
             _units = BuildUnits(_scene);
+            LoadEvents(_scene.Id);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -452,7 +453,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_outcome.Length > 0 && !_mosesOpen)
         {
             if (_outcome.StartsWith('승')) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
-            if (_outcome.StartsWith('승') && _scene.NextBattle > 0 && StartBattle(_scene.NextBattle)) return;
+            // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
+            int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
+            if (_outcome.StartsWith('승') && next > 0 && StartBattle(next)) return;
             OpenMoses();
             return;
         }
@@ -1074,6 +1077,9 @@ internal sealed class UnitState(DemoUnit unit)
 {
     public int ChrCode { get; } = unit.ChrCode;
     public bool IsAlly { get; } = unit.IsAlly;
+
+    /// <summary>Btl 레코드의 편 번호 — 4 내 부대 · 3 동맹 · 0~2 적. 이벤트 조건이 이 번호로 부대를 고른다.</summary>
+    public int Side { get; } = unit.Side;
 
     /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
     public bool PlayerControlled { get; } = unit.PlayerControlled;
