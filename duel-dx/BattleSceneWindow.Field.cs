@@ -174,6 +174,8 @@ internal sealed unsafe partial class BattleSceneWindow
             int bands = Math.Max(1, n[3]);
             BeginFieldWipe(903, bands, MosesW / bands + bands, n[1] == 0, n[2]);
         }
+        else if (n[0] == 901)
+            BeginFieldWipe(901, n[3], Math.Max(1, n.Length > 4 ? n[4] : 60), n[1] == 0, n[2]);
         else
             BeginFieldWipe(904, n[3], Math.Max(1, n.Length > 4 ? n[4] : 60), n[1] == 0, n[2]);
         return true;
@@ -465,6 +467,9 @@ internal sealed unsafe partial class BattleSceneWindow
                                  target.X - MosesW / 2.0, target.Y - MosesH / 2.0, camTicks, _lastTime);
                 break;
             }
+            case 901:                                        // 밀어내기 — a2 는 화면 너비에 더하는 여분 거리다
+                BeginFieldWipe(901, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
+                break;
             case 903:                                        // 빗살 지우기 — a2 는 틀 수가 아니라 <b>세로 띠 수</b>다
             {
                 int bands = Math.Max(1, (int)A(2));
@@ -808,8 +813,27 @@ internal sealed unsafe partial class BattleSceneWindow
         int tick = (int)((_lastTime - wipe.Start) * TicksPerSecond);
         if (tick >= wipe.Ticks) { _fieldWipe = null; return; }
 
-        if (wipe.Kind == 903) DrawCombWipe(ox, oy, wipe, tick);
-        else DrawStreakWipe(ox, oy, wipe, tick);
+        switch (wipe.Kind)
+        {
+            case 901: DrawSlideWipe(ox, oy, wipe, tick); break;
+            case 903: DrawCombWipe(ox, oy, wipe, tick); break;
+            default: DrawStreakWipe(ox, oy, wipe, tick); break;
+        }
+    }
+
+    /// <summary>
+    /// 901 밀어내기 — 경계선 하나가 <b>왼쪽에서 오른쪽으로만</b> 지나가고, 지난 쪽이 새 그림이다.
+    /// 경계선은 <c>640 + a2</c> 까지 가므로 <c>a2</c>(여분 거리)만큼 다 지나고도 더 간다.
+    /// </summary>
+    private void DrawSlideWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        int edge = (MosesW + wipe.Way) * tick / Math.Max(1, wipe.Ticks);
+        for (int y = 0; y < MosesH; y++)
+            for (int x = 0; x < MosesW; x++)
+            {
+                uint[] from = x < edge ? wipe.Over : wipe.Base ?? wipe.Over;
+                SetPixel(ox + x, oy + y, from[y * MosesW + x] | 0xFF000000);
+            }
     }
 
     /// <summary>
