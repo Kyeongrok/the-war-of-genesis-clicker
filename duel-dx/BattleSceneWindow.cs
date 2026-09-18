@@ -541,6 +541,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnFieldClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
@@ -608,6 +609,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             return;
         }
 
+        // 필드도 전투와 따로 도는 장면이다 — 스크립트만 돌리고 전투는 멈춘다.
+        if (FieldOpen)
+        {
+            UpdateSounds();
+            UpdateTalk();
+            UpdateField();
+            return;
+        }
+
         foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
@@ -669,6 +679,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawKeysPanel();
         DrawLevelUp();
         DrawMoses();
+        DrawField();
         DrawTitle();
         DrawEpisodes();
         DrawChapters();

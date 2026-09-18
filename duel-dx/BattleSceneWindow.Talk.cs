@@ -123,9 +123,22 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (t.Box)
         {
-            // 600 — 화면 아래 고정 상자. 원본은 640×480 기준 (10,370) 620×100 이라 판 너비에 맞춰 가운데 둔다.
-            int w = Math.Min(620, BoardWidth - 20), h = 100;
-            int x = ox + (BoardWidth - w) / 2, y = oy + ViewHeight - h - 10;
+            // 600 — 원본은 640×480 기준 (10,370) 620×100 이다.
+            // 필드·모세스처럼 640×480 틀 안에서 도는 화면이면 그 틀 안에, 전투면 보이는 판 아래에 둔다.
+            int w, x, y, h = 100;
+            if (FieldOpen)
+            {
+                var (fx, fy) = MosesOrigin();
+                w = 620;
+                x = fx + 10;
+                y = fy + 370;
+            }
+            else
+            {
+                w = Math.Min(620, BoardWidth - 20);
+                x = ox + (BoardWidth - w) / 2;
+                y = oy + ViewHeight - h - 10;
+            }
             DarkenRect(x - 1, y - FrameTitleH - 1, w + 2, h + FrameTitleH + 2, 8);
             DrawGameFrame(x, y, w, h, t.Name);
             // 초상화 — 인물 얼굴 그림을 왼쪽에. 원본은 Obs 모션 2×얼굴+11 이지만 데모는 뽑아 둔 얼굴 그림을 쓴다.
