@@ -31,6 +31,7 @@ internal static class Win32
     /// <summary>테스트용 — 받으면 지금 화면을 %TEMP%\dueldx_snapshot.png 로 저장한다(창이 가려져 있어도 된다).</summary>
     public const uint WM_APP_SNAPSHOT = 0x8001;
     public const uint MF_STRING = 0x0000, MF_POPUP = 0x0010, MF_SEPARATOR = 0x0800;
+    public const uint MF_BYCOMMAND = 0x0000, MF_CHECKED = 0x0008, MF_UNCHECKED = 0x0000;
 
     [DllImport("user32.dll")]
     public static extern IntPtr CreateMenu();
@@ -40,6 +41,12 @@ internal static class Win32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern bool AppendMenuW(IntPtr menu, uint flags, nuint idOrSubMenu, string? text);
+
+    [DllImport("user32.dll")]
+    public static extern uint CheckMenuItem(IntPtr menu, uint id, uint check);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetMenu(IntPtr hWnd);
 
     public const uint PM_REMOVE = 0x0001;
 

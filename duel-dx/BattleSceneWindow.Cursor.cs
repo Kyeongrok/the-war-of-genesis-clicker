@@ -28,6 +28,12 @@ internal sealed unsafe partial class BattleSceneWindow
             if (LiveUnitAt(bx / TileW, (by - GridTop) / TileH) is not { } t) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
+        // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
+        if (IsPlayerTurn && by >= GridTop && LiveUnitAt(bx / TileW, (by - GridTop) / TileH) is { } who)
+        {
+            if (!who.IsAlly && FindAttackPath(_turn, Array.IndexOf(_units, who)) != null) return CursorAttack;
+            if (who.IsAlly) return CursorHand;
+        }
         if (_rangeUnit >= 0 && _range is { } range && by >= GridTop)
         {
             int index = (by - GridTop) / TileH * Cols + bx / TileW;

@@ -38,7 +38,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     public const double TicksPerSecond = 30;
 
     private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
-    private const int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
+    // 판 크기는 전투마다 다른 맵 중 가장 큰 것에 맞춘다(0153 = 32×34, 0154 = 32×30, 0155 = 32×37).
+    // 맵보다 넓은 칸은 ObtMap 이 막힌 칸으로 돌려줘 아무도 못 들어간다.
+    private const int Cols = BattleDemoScene.Cols, Rows = 37;
     private const int GridTop = 40;
     private const int BoardWidth = Cols * TileW, BoardHeight = GridTop + Rows * TileH;
 
@@ -108,11 +110,22 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             _names[chrCode] = name;
 
             // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
-            var motions = ObsSprite.Decode(obsPath);
-            if (motions.Count == 0) continue;
-            sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
+            // 그림이 assets 에 없는 인물은 그 사람만 빼고 간다(전투 전체가 안 열리면 안 된다).
+            try
+            {
+                var motions = ObsSprite.Decode(obsPath);
+                if (motions.Count == 0) continue;
+                sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+            {
+                _loadError = $"{name}({chrCode}) 그림을 못 읽었습니다";
+            }
         }
         _sprites = sprites;
+        // 그림이 없는 인물은 판에서 뺀다 — 안 그러면 보이지도 않는 인물 때문에 승패가 안 난다.
+        if (_units.Any(u => !sprites.ContainsKey(u.ChrCode)))
+            _units = [.. _units.Where(u => sprites.ContainsKey(u.ChrCode))];
 
         // Status 화면용 초상(첫 컷). 없어도 전투판은 그린다.
         foreach (var (code, m) in manifests)
