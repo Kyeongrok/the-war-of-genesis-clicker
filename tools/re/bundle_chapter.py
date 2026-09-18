@@ -11,7 +11,9 @@ import sys
 
 REPO = r'C:\Users\ocean\git\the-war-of-genesis-clicker'
 G = sys.argv[1]
-CHAPTERS = [int(a) for a in sys.argv[2:]]
+ARGS = sys.argv[2:]
+CHAPTERS = [int(a) for a in ARGS if not a.startswith('f')]
+START_FIELDS = [int(a[1:]) for a in ARGS if a.startswith('f')]   # f17 = 필드 17 부터
 
 copied = {}
 
@@ -104,6 +106,27 @@ def read_battle(bid):
     return []
 
 
+def bundle_chain(fields, battles):
+    """필드·전투 번호에서 시작해 이어지는 것을 모두 묶는다."""
+    seen_f, seen_b = set(), set()
+    while fields or battles:
+        while fields:
+            fid = fields.pop()
+            if fid in seen_f:
+                continue
+            seen_f.add(fid)
+            more_f, more_b = read_field(fid)
+            fields += more_f
+            battles += more_b
+        while battles:
+            bid = battles.pop()
+            if bid in seen_b:
+                continue
+            seen_b.add(bid)
+            read_battle(bid)
+    return seen_f, seen_b
+
+
 for chapter in CHAPTERS:
     path = os.path.join(REPO, 'assets', 'moses', 'chp', '%04d.chp' % chapter)
     if not os.path.exists(path):
@@ -138,22 +161,11 @@ for chapter in CHAPTERS:
         elif 10000 <= v < 20000:
             fields.append(v - 10000)
 
-    seen_f, seen_b = set(), set()
-    while fields or battles:
-        while fields:
-            fid = fields.pop()
-            if fid in seen_f:
-                continue
-            seen_f.add(fid)
-            more_f, more_b = read_field(fid)
-            fields += more_f
-            battles += more_b
-        while battles:
-            bid = battles.pop()
-            if bid in seen_b:
-                continue
-            seen_b.add(bid)
-            read_battle(bid)
+    seen_f, seen_b = bundle_chain(fields, battles)
     print('chapter %d: fields %d, battles %d' % (chapter, len(seen_f), len(seen_b)))
+
+if START_FIELDS:
+    f, b = bundle_chain(list(START_FIELDS), [])
+    print('from fields: fields %d, battles %d' % (len(f), len(b)))
 
 print('added:', {k: '%d KB' % (v // 1024) for k, v in sorted(copied.items())})

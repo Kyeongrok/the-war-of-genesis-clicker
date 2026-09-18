@@ -460,6 +460,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
             int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
             if (_outcome.StartsWith('승') && next > 0 && StartBattle(next)) return;
+            // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
+            if (_outcome.StartsWith('승') && _eventNextField > 0 && OpenField(_eventNextField)) return;
             OpenMoses();
             return;
         }
