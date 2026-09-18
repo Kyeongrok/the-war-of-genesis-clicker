@@ -264,14 +264,33 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private string FieldText(int id) => _fieldTalk?[id] ?? "";
 
-    /// <summary>필드 대사 — 말하는 이는 <c>10000+인물 열쇠</c> 다.</summary>
+    /// <summary>필드에 나오는 인물의 초상화 — 전투 인물과 달리 뽑아 둔 폴더가 없어 <c>.chr</c> 의 얼굴 Obs 를 바로 읽는다.</summary>
+    private void LoadFieldFace(CharacterData c)
+    {
+        if (_faces.ContainsKey(c.Code) || c.FaceId == 0) return;
+        try
+        {
+            string path = Path.Combine(AssetsFolder.Find("moses"), "obs", $"{c.FaceId:D4}.obs");
+            if (File.Exists(path) && ObsSprite.DecodeFirstFrame(path) is { } face) _faces[c.Code] = SpriteFrame.From(face);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+    }
+
+    /// <summary>
+    /// 필드 대사 — 말하는 이는 <c>10000+인물 열쇠</c> 다. 이름과 초상화는 그 인물의 <c>.chr</c> 에서 온다.
+    /// </summary>
     private void ShowFieldTalk(bool box, int speaker, int textId)
     {
         string name = "";
         if (_field is { } field && speaker >= 10000
             && field.People.FirstOrDefault(p => p.Key == speaker - 10000) is { } person
             && _db?.Character(person.ChrCode) is { } c)
+        {
             name = _db.T(c.NameId);
+            LoadFieldFace(c);
+            _talkFace = c.Code;
+        }
+        else _talkFace = 0;
         _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
         _talkFilled = false;
     }
