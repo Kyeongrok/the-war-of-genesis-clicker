@@ -137,6 +137,14 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (tick, sound) in sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
     }
 
+    /// <summary>한 걸음 뗄 때 나는 소리 — 걷기 모션(동작 1)의 소리 키를 그 틱에 맞춰 예약한다(가이아버그처럼 걸을 때 소리가 나는 인물이 있다).</summary>
+    private void PlayWalkSound(UnitState unit)
+    {
+        if (!_sprites.TryGetValue(unit.ChrCode, out var sprite)) return;
+        foreach (var (tick, sound) in sprite.WalkSounds(unit.Facing))
+            _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+    }
+
     private void UpdateSounds()
     {
         for (int i = _pendingSounds.Count - 1; i >= 0; i--)
