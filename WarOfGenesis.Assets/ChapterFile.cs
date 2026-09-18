@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace WarOfGenesis.Assets;
 
@@ -63,8 +63,11 @@ public sealed class ChapterFile
     public enum PlaceKind { Battle, Field, Shop }
 
     public int Id { get; private init; }
-    /// <summary>머리 워드 0 — 지역(쓰임은 아직 모른다).</summary>
-    public int Region { get; private init; }
+    /// <summary>
+    /// 머리 워드 0 — <b>파일 판 번호</b>. 지금 게임이 읽는 것은 <b>3</b> 뿐이고, 0·1·2 는 배치가 달라 본체도 못 읽는 옛 자료다(가설).
+    /// </summary>
+    /// <remarks>로더 <c>0x100f6c80</c> 는 이 워드를 읽어 스택에 버린다 — 검사 코드가 없어 "판 번호"는 자료 상관으로만 뒷받침된다.</remarks>
+    public int Version { get; private init; }
     /// <summary>머리 워드 1 — 주 화면·파티 페이지 배경 <c>Bgr\NNNN.bgr</c>.</summary>
     public int Background { get; private init; }
     /// <summary>머리 워드 2 — 챕터 배경음악.</summary>
@@ -73,12 +76,20 @@ public sealed class ChapterFile
     public int ItemShop { get; private init; }
     /// <summary>머리 워드 4 — 이 챕터의 기본 VT(무기) 상점 <c>Shp</c> 번호.</summary>
     public int VtShop { get; private init; }
-    /// <summary>머리 워드 21 — 최저 항행 단계(0 항성계 · 1 행성 · 2 장소). 뒤로 단추는 여기까지만 내려간다.</summary>
+    /// <summary>
+    /// 머리 워드 21 — 최저 항행 단계(1 행성 · 2 장소). 뒤로 단추는 여기까지만 내려간다.
+    /// 파일에 0(성도)이 적혀 있어도 로더가 1 로 올리므로(<c>0x100f7318</c>) <b>여기서 0 은 나오지 않는다</b>.
+    /// </summary>
     public int StartStep { get; private init; }
     /// <summary>머리 워드 22 — 그 단계에서 시작할 항성계(단계 1) 또는 행성(단계 2) 번호.</summary>
     public int StartNumber { get; private init; }
-    /// <summary>머리 워드 23 — 챕터 제목 TXR. 2284~2313 이 이야기 차례다.</summary>
+    /// <summary>머리 워드 23 — 챕터 제목 TXR. 2284~2313 이 이야기 차례다. 23워드짜리 옛 파일에는 없어 −1 이다.</summary>
     public int TitleText { get; private init; }
+
+    /// <summary>머리 워드 5~12 — 인물 번호 여덟 칸(빈 칸은 −1). 로더 도우미 <c>0x100f6880</c> 이 한 번에 읽어 개수를 센다.</summary>
+    public IReadOnlyList<int> HeadPeopleA { get; private init; } = [];
+    /// <summary>머리 워드 13~20 — 인물 번호 여덟 칸(빈 칸은 −1). 정규화기 <c>0x100f68c0</c> 가 둘 다 인물 표에 맞춘다.</summary>
+    public IReadOnlyList<int> HeadPeopleB { get; private init; } = [];
 
     public IReadOnlyList<Landmark> Landmarks { get; private init; } = [];
     public IReadOnlyList<Person> People { get; private init; } = [];
@@ -111,18 +122,37 @@ public sealed class ChapterFile
         return [.. list.OrderBy(c => c.StoryRank).ThenBy(c => c.Id)];
     }
 
+    /// <summary>
+    /// 머리를 <b>24워드</b>로 읽고, 파일 끝과 딱 안 맞으면 <b>23워드</b>로 한 번 더 읽는다.
+    /// </summary>
+    /// <remarks>
+    /// 원본 로더 <c>0x100f6c80</c> 는 머리를 24번 조건 없이 읽으므로 24가 맞는 배치다.
+    /// 그런데 자료에는 <b>제목 TXR 워드가 없는 23워드짜리</b>가 셋 있고(<c>0038</c>·<c>0059</c>·<c>0065</c>),
+    /// 그것만 23으로 읽어야 파일 끝과 맞는다. 판 번호(<see cref="Version"/>)가 3 이 아닌 옛 파일 다섯은
+    /// 어떤 배치로도 안 맞는다 — 게임 본체도 못 읽는 자료라 <see cref="Exact"/> 가 false 로 남는다.
+    /// </remarks>
     public static ChapterFile? Parse(int id, byte[]? b)
     {
         if (b == null || b.Length < 50) return null;
+        var full = ParseWith(id, b, 24);
+        if (full is { Exact: true }) return full;
+        var short23 = ParseWith(id, b, 23);
+        return short23 is { Exact: true } ? short23 : full ?? short23;
+    }
+
+    private static ChapterFile? ParseWith(int id, byte[] b, int headWords)
+    {
         try
         {
             int o = 0;
             short W() { short v = BitConverter.ToInt16(b, o); o += 2; return v; }
             int[] Words(int n) { var a = new int[n]; for (int i = 0; i < n; i++) a[i] = W(); return a; }
-            // 묶음 머리 = 수 한 워드 + 여벌 한 워드
-            int Count() { int n = W(); W(); return n; }
+            // 묶음 머리 = 수 한 워드 + 여벌 한 워드. 음수가 나오면 배치가 어긋난 것이라 읽기를 접는다.
+            int Count() { int n = W(); W(); return n >= 0 ? n : throw new ArgumentException("묶음 개수가 음수입니다."); }
 
-            var head = Words(24);
+            var head = Words(headWords);
+            // 23워드짜리에는 제목 TXR 이 없다 — 없는 자리는 −1 로 채워 뒤 코드가 그대로 돌게 한다.
+            if (head.Length < 24) head = [.. head, .. Enumerable.Repeat(-1, 24 - head.Length)];
             int landmarkCount = Count();
             var landmarks = new List<Landmark>();
             for (int i = 0; i < landmarkCount; i++)
@@ -180,14 +210,17 @@ public sealed class ChapterFile
             return new ChapterFile
             {
                 Id = id,
-                Region = head[0],
+                Version = head[0],
                 Background = head[1],
                 Bgm = head[2],
                 ItemShop = head[3],
                 VtShop = head[4],
-                StartStep = head[21],
-                StartNumber = head[22],
+                // 로더 0x100f7318 — 행성을 다 읽은 뒤 최저 단계가 1 보다 작으면 1(행성 고르기)로 올리고 첫 행성을 고른다.
+                StartStep = head[21] < 1 && planets.Count > 0 ? 1 : head[21],
+                StartNumber = head[21] < 1 && planets.Count > 0 ? planets[0].No : head[22],
                 TitleText = head[23],
+                HeadPeopleA = [.. head[5..13].Where(v => v >= 0)],
+                HeadPeopleB = [.. head[13..21].Where(v => v >= 0)],
                 Landmarks = landmarks,
                 People = people,
                 Systems = systems,
@@ -204,11 +237,13 @@ public sealed class ChapterFile
     {
         int n = BitConverter.ToInt16(b, o);
         o += 2;
+        if (n < 0) throw new ArgumentException("스크립트 이벤트 수가 음수입니다.");
         for (int i = 0; i < n; i++)
         {
-            o += 4 + 18 * BitConverter.ToInt16(b, o + 2);   // 조건
-            int actions = BitConverter.ToInt16(b, o);
-            o += 2 + 18 * actions;                          // 행동
+            int conditions = BitConverter.ToInt16(b, o + 2);
+            int actions = BitConverter.ToInt16(b, o + 4 + 18 * conditions);
+            if (conditions < 0 || actions < 0) throw new ArgumentException("스크립트 조건·행동 수가 음수입니다.");
+            o += 4 + 18 * conditions + 2 + 18 * actions;
         }
         if (o > b.Length) throw new ArgumentException("스크립트가 파일 끝을 넘습니다.");
     }

@@ -82,14 +82,16 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.MaxSoul = _db.MaxSoul(c);
             // DUELDX_SOUL 로 시작 SOUL 을 올릴 수 있다 — 어빌리티·상태이상을 시험할 때 쓴다.
             unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : _db.SoulStart;
-            // DUELDX_AILMENT=<번호>[:<값>] 이면 그 상태이상을 걸고 시작한다(화면 밖 시험용).
+            // DUELDX_AILMENT=<번호>[:<값>][,<번호>[:<값>]…] 이면 그 상태이상들을 칸 순서대로 걸고 시작한다(화면 밖 시험용).
             if (Environment.GetEnvironmentVariable("DUELDX_AILMENT") is { Length: > 0 } spec)
             {
-                string[] parts = spec.Split(':');
-                if (byte.TryParse(parts[0], out byte id))
+                var wanted = spec.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                for (int s = 0; s < wanted.Length && s < 3; s++)
                 {
-                    unit.StatusId[0] = id;
-                    unit.StatusValue[0] = parts.Length > 1 && short.TryParse(parts[1], out short v2) ? v2 : (short)10;
+                    string[] parts = wanted[s].Split(':');
+                    if (!byte.TryParse(parts[0], out byte id)) continue;
+                    unit.StatusId[s] = id;
+                    unit.StatusValue[s] = parts.Length > 1 && short.TryParse(parts[1], out short v2) ? v2 : (short)10;
                 }
             }
             unit.HasTurn = true;

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace WarOfGenesis.Assets;
 
@@ -144,6 +144,20 @@ public sealed record JobData(int Id, ushort[] Growth, ushort[] AbilityList, usho
 public sealed record DepData(int Id, ushort NameId, byte Tier, ushort[] Jobs);
 
 /// <summary>
+/// <c>Dat/Sta.dat</c> 레코드(머리 6바이트 + 18바이트 × 45) — 상태이상 번호마다 아이콘과 설명글.
+/// </summary>
+/// <param name="Icon">
+/// 파일 +2 — 상태이상 칸에 그릴 <c>Obs 0489</c> 모션 번호. <b>0 이면 빈 칸(모션 0 이 곧 「EMPTY」 판이다)</b>.
+/// 번호 44·45·46(「없음」)과 30~33·37·39·48 이 0 이다.
+/// </param>
+/// <param name="DescriptionId">파일 +5(짝수 자리가 아니다) — 설명 TXR. 32~70 이 대부분이고 41·42·43·47 만 835·850·851·2066 이다.</param>
+/// <remarks>
+/// 배치는 자료로 확정했다 — 설명글이 [[분석-전투]] 의 「번호 → 뜻」 표와 한 줄도 어긋나지 않고(예: 2 = 화염, 41 = 반격),
+/// 아이콘 번호 0~31 이 <c>Obs 0489</c> 의 장 번호 0~31 과 딱 맞는다. 파일 +4 한 바이트(0/1)는 아직 뜻을 모른다.
+/// </remarks>
+public sealed record StatusData(int Id, ushort Icon, ushort DescriptionId);
+
+/// <summary>
 /// <c>Dat/Itm.dat</c> 레코드(파일 48바이트). 종류 0 VES … 14 일반검, 15 대검 …; <see cref="Bonuses"/> = (능력치 번호, 값).
 /// </summary>
 /// <param name="Picture">
@@ -249,6 +263,8 @@ public sealed class GameDatabase
     public IReadOnlyDictionary<int, AbilityData> Abilities { get; }
     public IReadOnlyDictionary<int, WorkData> Works { get; }
     public IReadOnlyDictionary<int, int> Num { get; }
+    /// <summary><c>Dat/Sta.dat</c> — 상태이상 번호 → 아이콘·설명.</summary>
+    public IReadOnlyDictionary<int, StatusData> Statuses { get; }
     /// <summary>이 표들을 읽은 자료 묶음 — 다른 파일(Dmg.dat 등)을 더 읽을 때 쓴다.</summary>
     public GameFiles Files => _files;
 
@@ -256,9 +272,11 @@ public sealed class GameDatabase
 
     private GameDatabase(GameFiles files, TxrTable text, Dictionary<int, JobData> jobs, List<DepData> deps,
                          Dictionary<int, ItemData> items, Dictionary<int, AbilityData> abilities,
-                         Dictionary<int, WorkData> works, Dictionary<int, int> num)
+                         Dictionary<int, WorkData> works, Dictionary<int, int> num,
+                         Dictionary<int, StatusData> statuses)
     {
         _files = files; Text = text; Jobs = jobs; Deps = deps; Items = items; Abilities = abilities; Works = works; Num = num;
+        Statuses = statuses;
     }
 
     public static readonly int[] WorkFiles = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12];
@@ -325,7 +343,13 @@ public sealed class GameDatabase
         for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 6)
             num[U16(d, o)] = BitConverter.ToInt32(d, o + 2);
 
-        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num);
+        // 상태이상 표 — 머리 6바이트 + 18바이트 레코드. 아이콘(+2)은 Obs 0489 모션, 설명(+5)은 TXR 이다.
+        var statuses = new Dictionary<int, StatusData>();
+        d = Need("Dat", "Sta.dat");
+        for (int i = 0, n = U16(d, 2), o = 6; i < n && o + 18 <= d.Length; i++, o += 18)
+            statuses[U16(d, o)] = new StatusData(U16(d, o), U16(d, o + 2), U16(d, o + 5));
+
+        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses);
     }
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
