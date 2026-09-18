@@ -119,7 +119,7 @@ internal sealed unsafe partial class BattleSceneWindow
         CancelTargeting();
         _heldMoveKeys.Clear();
         if (_units[index].IsAlly) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
-        else _routine = EnemyRoutine(index);
+        else _routine = AiRoutine(index);
     }
 
     private void EndTurn()
@@ -431,48 +431,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_outcome.Length > 0) return;
         if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
         else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
-    }
-
-    // ── 적 AI (fg-7) ─────────────────────────────────────────────────────────
-
-    private IEnumerator<bool> EnemyRoutine(int index)
-    {
-        var u = _units[index];
-        for (double end = _lastTime + 0.5; _lastTime < end;) yield return true;
-
-        // 1) 칠 수 있는 아군 중 가장 적게 걸어도 되는 쪽을 친다.
-        (int Target, List<(int Col, int Row)> Path, int Cost)? best = null;
-        for (int i = 0; i < _units.Length; i++)
-        {
-            if (!_units[i].Alive || !_units[i].IsAlly || FindAttackPath(index, i) is not { } plan) continue;
-            if (best == null || plan.Cost < best.Value.Cost) best = (i, plan.Path, plan.Cost);
-        }
-
-        if (best is { } b && u.Data != null && Work(u.Data.BasicWorkId) is { } w)
-        {
-            var attack = UseWorkRoutine(index, w, b.Target, 0, 0, b.Path);
-            while (attack.MoveNext()) yield return true;
-        }
-        else if (ComputeRange(u) is { } range)
-        {
-            // 2) 못 치면 갈 수 있는 칸 중 가장 가까운 아군과의 거리가 제일 짧은 칸으로 걷는다.
-            var allies = _units.Where(a => a.Alive && a.IsAlly).ToList();
-            int bestCell = -1, bestDist = int.MaxValue, bestCost = int.MaxValue;
-            for (int i = 0; i < range.Cost.Length && allies.Count > 0; i++)
-            {
-                if (range.Cost[i] == int.MaxValue) continue;
-                int d = allies.Min(a => Math.Abs(a.Col - i % Cols) + Math.Abs(a.Row - i / Cols));
-                if (d < bestDist || d == bestDist && range.Cost[i] < bestCost) { bestDist = d; bestCell = i; bestCost = range.Cost[i]; }
-            }
-            if (bestCell >= 0 && range.Cost[bestCell] > 0)
-            {
-                foreach (var cell in range.PathTo(bestCell)) u.Path.Enqueue(cell);
-                while (u.IsBusy) yield return true;
-            }
-        }
-
-        for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
-        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
     }
 
     // ── 표시 ─────────────────────────────────────────────────────────────────
