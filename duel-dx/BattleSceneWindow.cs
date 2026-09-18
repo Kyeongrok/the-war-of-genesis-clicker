@@ -1137,6 +1137,13 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>배치 레코드의 레벨 보정 — 파티 레벨에 더해 그 인물의 레벨을 낸다.</summary>
     public int LevelOffset { get; } = unit.LevelOffset;
 
+    /// <summary>AI 이동 방식·깨어남 조건 — 배치 레코드가 사람마다 들고 있다.</summary>
+    public int AiMove { get; } = unit.AiMove;
+
+    public int WakeCondition { get; } = unit.WakeCondition;
+
+    public int WakeValue { get; } = unit.WakeValue;
+
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
     public Facing Facing { get; set; } = unit.Facing;

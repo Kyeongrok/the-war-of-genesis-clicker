@@ -26,6 +26,14 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
     /// <summary>배치 레코드의 레벨 보정 — 파티 레벨에 이만큼 더한 값이 그 인물의 레벨이 된다.</summary>
     public int LevelOffset { get; init; }
 
+    /// <summary>AI 이동 방식 — 제 차례에 어디로 가려 하는지.</summary>
+    public int AiMove { get; init; }
+
+    /// <summary>깨어남 조건과 그 값 — 못 채우면 그 자리에서 쉰다.</summary>
+    public int WakeCondition { get; init; }
+
+    public int WakeValue { get; init; }
+
     /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
     public bool IsAlly => Side >= 3;
 
@@ -78,6 +86,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 {
                     Record = u.No,
                     LevelOffset = u.LevelOffset,
+                    AiMove = u.AiMove,
+                    WakeCondition = u.WakeCondition,
+                    WakeValue = u.WakeValue,
                 })
                 .ToArray();
             if (roster.Length == 0) return null;
