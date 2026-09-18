@@ -127,6 +127,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             InitBattle();
             LoadRingAssets();
             LoadAudio();
+            OpenMosesIfAsked();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
@@ -315,6 +316,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             {
                 int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
                 _mouse = (bx, by);
+                UpdateMosesHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -329,6 +331,17 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_keysOpen) { OnKeysKey(key); return; }
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 모세스 화면으로 간다(mo-1).
+        if (_outcome.Length > 0 && !_mosesOpen) { OpenMoses(); return; }
+        // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
+        if (_mosesOpen)
+        {
+            if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
+            if (_mosesPage != -1) { MosesGoBack(); return; }
+            Play(578);
+            OpenSystemMenu();
+            return;
+        }
         if (key == Win32.VK_ESCAPE && CloseSystemWindow()) return;
         if (key == Win32.VK_ESCAPE)
         {
@@ -399,6 +412,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        if (OnMosesClick(bx, by)) return;
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
         int boardY = by - GridTop;
@@ -504,9 +518,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawToast();
         DrawOutcomeBanner();
         DrawUnitInfo();
-        DrawSystem();
+        if (!_mosesOpen) DrawSystem();
         DrawKeysPanel();
         DrawLevelUp();
+        DrawMoses();
         DrawCursor();
     }
 
