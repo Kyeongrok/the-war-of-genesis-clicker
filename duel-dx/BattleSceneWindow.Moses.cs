@@ -149,12 +149,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
         {
             // 자동 발생 장소는 목록에 없고, 진행 깃발 조건이 안 맞는 장소도 아직 안 열린 것이다(0x100fdaf0).
-            var open = planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
-                                    .Where(p => p.Auto == 0).ToList();
-            var passing = open.Where(p => FlagsAllow(p.Conditions)).ToList();
-            // 원본은 챕터에 들어갈 때 자동 발생 장소(Fld 프롤로그)가 먼저 돌며 첫 전투의 깃발을 세운다.
-            // 우리는 Fld 자료가 없어 그것을 못 돌린다 — 그래서 깃발로 걸러 아무 데도 못 가게 되면 조건을 무시하고 다 보여 준다.
-            foreach (var place in passing.Any(p => p.Kind != ChapterFile.PlaceKind.Shop) ? passing : open)
+            foreach (var place in planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
+                                               .Where(p => p.Auto == 0 && PlaceOpen(p)))
             {
                 int i = list.Count;
                 if (i >= MosesCells.Length) break;
