@@ -52,6 +52,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool IsPlayerTurn => _turn >= 0 && IsMine(_units[_turn]) && _routine == null && _outcome.Length == 0;
 
+    /// <summary>전투를 넘어 이어지는 파티 상태 — Chr 번호 → 그 인물의 레벨·경험치·장비·어빌리티.</summary>
+    private readonly Dictionary<int, CharacterData> _party = [];
+
+    /// <summary>지금 판의 아군 상태를 파티에 담아 둔다(다음 전투로 이어진다).</summary>
+    private void RememberParty()
+    {
+        foreach (var unit in _units)
+            if (unit.IsAlly && unit.Data is { } c) _party[unit.ChrCode] = c;
+    }
+
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
     private void InitBattle()
     {
@@ -62,7 +72,10 @@ internal sealed unsafe partial class BattleSceneWindow
             // 데모라 쌓인 경험치는 지금 레벨에 맞춰 시작한다(저장 파일이 없다).
             // DUELDX_CUMEXP 로 아군 시작값을 바꿀 수 있다 — 레벨업 창을 시험할 때 쓴다(예: 190 이면 한 번만 쓰러뜨려도 오름).
             int startCum = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CUMEXP"), out int v) ? v : c.Level * 100;
-            unit.Data = unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum } : c with { CumExp = c.Level * 100 };
+            // 앞 전투에서 얻은 레벨·경험치·장비는 다음 전투로 이어진다(_party 가 들고 있다).
+            unit.Data = _party.TryGetValue(unit.ChrCode, out var carried) ? carried
+                      : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum }
+                      : c with { CumExp = c.Level * 100 };
             unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(c));
             unit.MaxTp = unit.Tp = _db.MaxTp(c);
             unit.Stp = Math.Max(1, _db.Stp(c));
@@ -365,7 +378,7 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── work 쓰기 (fg-5 공격 · fg-6 어빌리티) ───────────────────────────────
 
     /// <summary>
-    /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 8 끝에 대상마다 판정,
+    /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 <b>치는 순간</b>에 대상마다 판정,
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
     /// </summary>
     private IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
@@ -386,12 +399,22 @@ internal sealed unsafe partial class BattleSceneWindow
         int hitStep = HitStepFor(w, actions.Length);
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
+            if (step != hitStep)
+            {
+                if (step >= actions.Length) continue;
+                PlayAction(a, actions[step]);
+                while (a.IsBusy) yield return true;
+                continue;
+            }
+
+            // 치는 동작은 끝까지 기다리지 않는다 — 모션 안 「치는 순간」(소리 키 자리)에 바로 판정을 내서
+            // 피해 숫자와 맞는 모션이 때리는 그림과 같이 나오게 한다.
             if (step < actions.Length)
             {
                 PlayAction(a, actions[step]);
-                while (a.IsBusy) yield return true;
+                double hitAt = _sprites.TryGetValue(a.ChrCode, out var sprite) ? sprite.HitMomentSeconds(actions[step], a.Facing) : 0;
+                for (double end = _lastTime + hitAt; _lastTime < end;) yield return true;
             }
-            if (step != hitStep) continue;
 
             var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
             ScheduleAbilitySounds(w);
@@ -399,6 +422,7 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
             // 군단 행동(상태 15) — 대장이 친 대상을 부하들도 함께 친다
             if (w.IsDamage && targets.Count > 0) FollowersAttack(userIndex, _units[targets[0]], dying);
+            while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
         // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10).
@@ -425,7 +449,7 @@ internal sealed unsafe partial class BattleSceneWindow
             CheckOutcome();
             QueueLevelUps();
         }
-        for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
+        for (double end = _lastTime + 0.1; _lastTime < end;) yield return true;
     }
 
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)

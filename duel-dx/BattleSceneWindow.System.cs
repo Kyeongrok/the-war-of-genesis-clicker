@@ -277,6 +277,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return false;
         }
 
+        RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
         _scene = scene;
         _units = BuildUnits(scene);
         LoadRosterSprites();

@@ -21,7 +21,12 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     private const int StatusW = 640, StatusH = 480;
     private const uint PanelBg = 0xF00A1428, BoxBg = 0xFF13203A, BoxLine = 0xFF3C5C98, HeadBg = 0xFF34549A, Red = 0xFFE04040, Bar = 0xFF7A1C1C;
-    private const int DemoExp = 5000;
+    /// <summary>
+    /// 어빌리티를 올리는 데 쓰는 EXP 의 시작값. 원본은 <b>0</b> 에서 시작해 처치로만 번다(분석-캐릭터 an-3) —
+    /// 예전에는 데모라 5000 을 줬는데 너무 넉넉해서 원본대로 되돌렸다. 시험할 때는 <c>DUELDX_EXP</c> 로 올린다.
+    /// </summary>
+    private static int DemoExp =>
+        int.TryParse(Environment.GetEnvironmentVariable("DUELDX_EXP"), out int exp) ? exp : 0;
 
     /// <summary>아이템 그림과 WEAPON 띠가 들어 있는 Obs(분석-캐릭터 "아이템 그림").</summary>
     private const int ItemPictureObs = 326;
