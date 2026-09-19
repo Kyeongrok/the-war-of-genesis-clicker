@@ -189,13 +189,13 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 자동 발생 장소는 목록에 없고, 진행 깃발 조건이 안 맞는 장소도 아직 안 열린 것이다(0x100fdaf0).
             foreach (var place in planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
-                                               .Where(p => p.Auto == 0 && PlaceOpen(p)))
+                                               .Where(p => p.Auto == 0 && !PlaceUsed(p) && PlaceOpen(p)))
             {
                 int i = list.Count;
                 if (i >= MosesCells.Length) break;
                 var (x, y) = MosesCells[i];
-                int value = place.Value;
-                list.Add((x, y, Text(place.NameText), 2, () => MosesEnterPlace(value)));
+                int value = place.Value, no = place.No;
+                list.Add((x, y, Text(place.NameText), 2, () => MosesEnterPlace(value, no)));
             }
         }
         else if (_mosesPage == 5)
@@ -213,18 +213,33 @@ internal sealed unsafe partial class BattleSceneWindow
     private string Text(int id) => id > 0 && _db is { } db ? db.T((ushort)id) : "";
 
     /// <summary>장소를 누르면 — 값 &lt;10000 전투 · 10000+ 필드 · 20000+ 상점.</summary>
-    private void MosesEnterPlace(int value)
+    /// <remarks>
+    /// 전투·필드로 들어간 장소는 <b>그 자리에서 소모</b>된다(<c>0x10101e20</c> 이 장소 <c>+0x14</c> 를 1 로 두고 세이브에 싣는다) —
+    /// 그래서 다녀오면 목록에서 사라진다. 상점은 장면이 안 바뀌므로 소모하지 않는다.
+    /// </remarks>
+    private void MosesEnterPlace(int value, int no = -1)
     {
         if (value >= 20000) { OpenMosesShop(0, value - 20000); return; }
         if (value >= 10000)
         {
-            if (OpenField(value - 10000)) return;
+            if (OpenField(value - 10000)) { UsePlace(no); return; }
             Toast($"필드 {value - 10000} 자료가 assets 에 없습니다");
             return;
         }
         if (!StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
+        UsePlace(no);
         _mixer.StopMusic();
         StartBattleMusic();
+    }
+
+    /// <summary>한 번 다녀온 장소 — (챕터, 장소 번호). 원본의 장소 <c>+0x14</c> 소모 표시다.</summary>
+    private readonly HashSet<(int Chapter, int Place)> _placesUsed = [];
+
+    private bool PlaceUsed(ChapterFile.Place place) => _placesUsed.Contains((_mosesChp?.Id ?? 0, place.No));
+
+    private void UsePlace(int no)
+    {
+        if (no >= 0 && _mosesChp is { } chp) _placesUsed.Add((chp.Id, no));
     }
 
     private void MosesGoPage(int page)

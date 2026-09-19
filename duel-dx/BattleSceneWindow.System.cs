@@ -14,7 +14,7 @@ namespace DuelDx;
 /// <para>
 /// 원본 저장은 파티·인물만 담고 <b>전투 도중 상태는 담지 않아</b> 불러오면 그 전투를 처음부터 다시 연다.
 /// 이 데모에는 챕터가 없어 전투판 그대로를 <c>%APPDATA%\DuelDx\battle-save.json</c> 에 적는다(저장 칸 하나).
-/// 원본 EXIT GAME 은 바탕화면이 아니라 타이틀 화면으로 나가는데, 데모에는 타이틀이 없어 창을 닫는다.
+/// EXIT GAME 은 바탕화면이 아니라 <b>타이틀 화면</b>으로 나간다 — 게임을 진짜 끝내는 곳은 타이틀의 EXIT 뿐이다.
 /// </para>
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -73,9 +73,28 @@ internal sealed unsafe partial class BattleSceneWindow
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
                 break;
             case SystemItem.Exit:
-                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => _running = false);
+                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", BackToTitle);
                 break;
         }
+    }
+
+    /// <summary>
+    /// EXIT GAME — <b>바탕화면이 아니라 타이틀 화면</b>으로 나간다. 원본이 그렇게 한다.
+    /// </summary>
+    /// <remarks>
+    /// 게임을 진짜로 끝내는 곳은 <b>타이틀의 EXIT</b> 뿐이다. 나가면서 전투·필드·모세스 창을 다 닫고,
+    /// 다시 CONTINUE 로 들어올 때 전투를 새로 읽도록 <see cref="_battleLoaded"/> 를 내린다.
+    /// </remarks>
+    private void BackToTitle()
+    {
+        _systemMenu = _missionWindow = _volumeWindow = false;
+        _slotsMode = -1;
+        CloseField();
+        _mosesOpen = false;
+        _mosesPage = -1;
+        _battleLoaded = false;
+        ResizeBoard(TitleBoardCols, TitleBoardRows);
+        OpenTitle();
     }
 
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
