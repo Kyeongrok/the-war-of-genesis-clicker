@@ -65,12 +65,22 @@ internal sealed unsafe partial class BattleSceneWindow
         int dex = c.Dex + u.BonusDex - (u.HasStatus(1) ? 1 : 0);
         int psy = c.Psy + u.BonusPsy;
         int dep = c.Dep + u.BonusDep - (u.HasStatus(40) ? 1 : 0);
-        if (dex == c.Dex && psy == c.Psy && dep == c.Dep) return c;
+        // 27(악세사리 무시) — 장비 셋째 칸을 없는 것으로 친다. 그 칸 보정이 능력치 계산에서 빠진다.
+        bool noAccessory = u.HasStatus(27) && c.Items.Length > 2 && c.Items[2] != 0;
+        if (dex == c.Dex && psy == c.Psy && dep == c.Dep && !noAccessory) return c;
+
+        var items = c.Items;
+        if (noAccessory)
+        {
+            items = [.. c.Items];
+            items[2] = 0;
+        }
         return c with
         {
             Dex = (ushort)Math.Max(0, dex),
             Psy = (ushort)Math.Max(0, psy),
             Dep = (ushort)Math.Max(0, dep),
+            Items = items,
         };
     }
 
