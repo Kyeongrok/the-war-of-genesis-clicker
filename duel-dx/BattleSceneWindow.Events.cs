@@ -131,6 +131,15 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => a >= b,
     };
 
+    /// <summary>들어오는 쪽(0 위·1 왼·2 아래·3 오른)을 <b>바라보는 쪽</b>으로 — 들어온 쪽의 반대를 본다.</summary>
+    private static Facing EdgeFacing(int edge) => (edge & 3) switch
+    {
+        0 => Facing.Down,
+        1 => Facing.Right,
+        2 => Facing.Up,
+        _ => Facing.Left,
+    };
+
     /// <summary>편 번호를 이벤트가 쓰는 차례(4·3·0·1·2)에서 꺼낸다.</summary>
     private static readonly int[] EventSideOrder = [4, 3, 0, 1, 2];
 
@@ -252,6 +261,49 @@ internal sealed unsafe partial class BattleSceneWindow
                 _eventNextBattle = 0;
                 _eventNextField = A(0);
                 SetEventOutcome(win: true);
+                break;
+            case 200:                                    // 증원 — 그 사람들을 전장에 세운다(0x10050eb0). 인자1 은 원본도 안 읽는다.
+            case 214:                                    // 워프 등장 — 자리는 200 과 같다.
+                foreach (var u in EventTargets(A(0), out _))
+                {
+                    u.OnField = true;
+                    u.ResetTo(A(2), A(3));
+                    u.Facing = EdgeFacing(A(4));
+                }
+                _eventWaitUntil = _lastTime + 0.4;       // 걸어 들어오는 사이만큼 기다린다
+                break;
+            case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로
+                foreach (var u in EventTargets(A(0), out _))
+                {
+                    u.ResetTo(A(2), A(3));
+                    u.OnField = false;
+                }
+                break;
+            case 202:                                    // 지정 칸으로 — 전장에 있는 사람만(원본도 맵 안인지 본다)
+                foreach (var u in EventTargets(A(0), out _))
+                    if (u.OnField) u.ResetTo(A(2), A(3));
+                break;
+            case 212:                                    // 바라보는 쪽
+                foreach (var u in EventTargets(A(0), out _)) u.Facing = EdgeFacing(A(1));
+                break;
+            case 706:                                    // 최대 HP 의 인자2 % 피해
+                foreach (var u in EventTargets(A(0), out _))
+                {
+                    if (!u.Alive) continue;
+                    u.Hp = Math.Max(0, u.Hp - u.MaxHp * A(2) / 100);
+                    if (u.Hp == 0) KillUnit(u);
+                }
+                break;
+            case 707:                                    // 잃은 HP 의 인자2 % 회복 — 자료는 전부 100(풀피)
+                foreach (var u in EventTargets(A(0), out _))
+                    if (u.Alive) u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
+                break;
+            case 713:                                    // 아이템 하나 주기
+                if (A(0) > 0) _inventory[A(0)] = _inventory.GetValueOrDefault(A(0)) + 1;
+                break;
+            case 512:                                    // BGM 바꾸기
+                _mixer.StopMusic();
+                if (A(0) > 1 && A(0) != 0xffff) PlayMusicFile(A(0), loop: true);
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;

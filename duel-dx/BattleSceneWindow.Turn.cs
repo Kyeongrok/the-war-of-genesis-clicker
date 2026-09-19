@@ -160,7 +160,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_lastTime < _nextTickAt) return;
         for (int guard = 0; guard < 10000; guard++)
         {
-            int next = Array.FindIndex(_units, u => u.Alive && u.HasTurn && u.LeaderIndex < 0 && CanTakeTurn(u));
+            int next = Array.FindIndex(_units, u => u.Alive && u.OnField && u.HasTurn && u.LeaderIndex < 0 && CanTakeTurn(u));
             if (next >= 0) { StartTurn(next); return; }
             AdvanceTick();
         }
@@ -622,8 +622,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 먼저 이벤트 스크립트 — 「몇 턴 버티기」·「누구를 지키기」처럼 전멸 말고 다른 조건으로 끝나는 전투가 있다.
         RunEvents();
         if (_outcome.Length > 0) return;
-        if (!_units.Any(u => u.Alive && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
-        else if (!_units.Any(u => u.Alive && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
+        // 아직 안 나온 사람은 세지 않는다 — 안 그러면 증원이 있는 전투가 영영 안 끝난다.
+        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
+        else if (!_units.Any(u => u.Alive && u.OnField && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
     }
 
     /// <summary>이벤트 행동 11·10·6 이 적는 결과.</summary>
