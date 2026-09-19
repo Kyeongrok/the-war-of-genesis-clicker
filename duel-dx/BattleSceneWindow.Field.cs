@@ -26,6 +26,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly byte[] _fieldVars = new byte[256];
 
     private int _fieldEvent = -1, _fieldPc;
+
+    /// <summary>행동 0 이 다른 사건을 부를 때 돌아올 자리 — (사건, 다음 줄).</summary>
+    private readonly Stack<(int Event, int Pc)> _fieldReturn = new();
     private double _fieldWaitUntil;
 
     /// <summary>이벤트마다 지금까지 돈 횟수.</summary>
@@ -193,6 +196,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldFired = new int[field.Events.Count];
             Array.Clear(_fieldVars);
             _fieldEvent = -1;
+            _fieldReturn.Clear();
             _fieldPc = 0;
             _fieldWaitUntil = 0;
             _fieldChoices = null;
@@ -259,11 +263,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_fieldEvent < 0) { LeaveField(); return; }           // 더 돌 이벤트가 없으면 나간다
         }
 
-        var running = field.Events[_fieldEvent];
         while (_fieldEvent >= 0 && _talk == null && _fieldWaitUntil <= _lastTime)
         {
-            // 그 사건이 끝나면 대사 건너뛰기도 끝난다.
-            if (_fieldPc >= running.Actions.Count) { _fieldEvent = -1; _talkSkip = false; return; }
+            var running = field.Events[_fieldEvent];
+            if (_fieldPc >= running.Actions.Count)
+            {
+                // 부른 데가 있으면 그 자리로 돌아가고, 없으면 이 사건이 끝난 것이다.
+                if (_fieldReturn.Count > 0) (_fieldEvent, _fieldPc) = _fieldReturn.Pop();
+                else { _fieldEvent = -1; _talkSkip = false; }
+                continue;
+            }
             // 고르기(604)를 낸 뒤에는 뒤따르는 605 들을 <b>먼저 다 읽어</b> 항목을 채우고, 그다음에 사람을 기다린다.
             if (_fieldChoices != null && running.Actions[_fieldPc].Code != 605) return;
             if (!RunFieldAction(running.Actions[_fieldPc++])) return;  // false = 필드를 떠났다
@@ -295,7 +304,22 @@ internal sealed unsafe partial class BattleSceneWindow
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         switch (a.Code)
         {
-            case 0:                                          // 다른 이벤트 부르기 — 이벤트 0 목록이 이미 돌리므로 넘긴다
+            case 0:
+            {
+                // 다른 이벤트 부르기 — 목록(이벤트 0) <b>밖에 있는 사건</b>들이 이렇게만 불린다.
+                // 부르는 자리를 쌓아 두고 갈아탔다가, 그 사건이 끝나면 돌아온다. 조건·최대 발동은 부를 때 본다.
+                int index = A(0);
+                if ((uint)index >= (_field?.Events.Count ?? 0) || index == 0) break;
+                var target = _field!.Events[index];
+                if (target.MaxFire > 0 && _fieldFired[index] >= target.MaxFire) break;
+                if (!target.Conditions.All(FieldCondition)) break;
+                if (_fieldReturn.Count >= 16) break;          // 서로 부르며 도는 자료를 막는다
+                _fieldFired[index]++;
+                _fieldReturn.Push((_fieldEvent, _fieldPc));
+                _fieldEvent = index;
+                _fieldPc = 0;
+                break;
+            }
             case 1: break;                                   // 띄운 것이 끝나기를 기다림 — 데모는 대사마다 이미 멈춘다
             case 2: _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond; break;
             case 3: _fieldEvent = -1; _talkSkip = false; break;  // 이 이벤트 접기
