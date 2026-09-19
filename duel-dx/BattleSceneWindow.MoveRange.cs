@@ -96,7 +96,10 @@ internal sealed unsafe partial class BattleSceneWindow
         int dex = Math.Max(1, db.Dex(EffectiveData(unit) ?? c));
         int num5 = db.N(5);
         // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
-        int budget = unit.HasStatus(25) ? 0 : db.MoveBudget(c, unit.Tp);
+        // 예산은 <b>지금 고른 work</b> 의 TP 를 남긴다(상태 12 는 어빌리티, 상태 10 은 기본공격) —
+        // 늘 기본공격으로 셈하면 비싼 어빌리티를 고른 채 너무 멀리 걸을 수 있다. TP 비용에는 상태 20(소모량 %)도 먹는다.
+        int workId = _targetWork > 0 ? _targetWork : c.BasicWorkId;
+        int budget = unit.HasStatus(25) ? 0 : unit.Tp + Math.Min(0, c.Ctp - TpCostFor(unit, c, workId));
 
         int H(int col, int row) => map.HeightAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
