@@ -199,6 +199,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldReturn.Clear();
             _fieldPc = 0;
             _fieldWaitUntil = 0;
+            _fieldHoldSince = 0;
             _fieldChoices = null;
             _fieldPictures.Clear();
             _fieldFade = null;
@@ -298,7 +299,24 @@ internal sealed unsafe partial class BattleSceneWindow
         };
     }
 
-    /// <summary>행동 하나. 필드를 떠났으면 false.</summary>
+    /// <summary>
+    /// 아직 굴러가는 연출이 있나 — 행동 1 이 이것을 기다린다.
+    /// </summary>
+    /// <remarks>
+    /// 덮기(900)는 넣지 않는다. 덮은 채로 두는 것이 제 일이라 영영 안 끝나고, 덮는 데 걸리는 틱은 900 이 따로 재운다.
+    /// </remarks>
+    private bool FieldBusy() =>
+        _fieldWipe != null || _fieldCamMove != null
+        || _fieldActors.Any(w => w.Walk != null || w.Fade != null)
+        || _fieldProps.Any(p => p.Move != null);
+
+    /// <summary>행동 1 이 한 줄에서 머문 시각 — 0 이면 안 머무는 중.</summary>
+    private double _fieldHoldSince;
+
+    /// <summary>행동 1 이 한 줄에서 참아 주는 시간(초).</summary>
+    private const double FieldHoldSeconds = 10;
+
+    /// <summary>행동 하나. 이 틀에 더 읽지 말아야 하면 false(필드를 떠났거나, 연출을 기다린다).</summary>
     private bool RunFieldAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
@@ -320,7 +338,17 @@ internal sealed unsafe partial class BattleSceneWindow
                 _fieldPc = 0;
                 break;
             }
-            case 1: break;                                   // 띄운 것이 끝나기를 기다림 — 데모는 대사마다 이미 멈춘다
+            case 1:
+            {
+                // 앞줄이 띄운 것이 끝나기를 기다린다 — 대사(600·601)뿐 아니라 <b>걷기·모션·카메라·전환</b>도 기다린다.
+                // 자료에서 이 행동 바로 앞에 놓인 것은 600·601 다음으로 302·208·900·202·517 차례다.
+                if (!FieldBusy()) { _fieldHoldSince = 0; break; }
+                // 안 끝나는 연출에 갇히지 않게, 한 줄에서 오래 머물면 그냥 다음 줄로 간다.
+                if (_fieldHoldSince <= 0) _fieldHoldSince = _lastTime;
+                else if (_lastTime - _fieldHoldSince > FieldHoldSeconds) { _fieldHoldSince = 0; break; }
+                _fieldPc--;                                  // 다음 틀에 이 줄을 다시 본다
+                return false;
+            }
             case 2: _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond; break;
             case 3: _fieldEvent = -1; _talkSkip = false; break;  // 이 이벤트 접기
 
@@ -554,19 +582,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private void RunChapterScript(ChapterFile chapter)
     {
-        if (!_chapterScriptDone.Add(chapter.Id)) return;
         foreach (var wanted in chapter.Events.Count > 0 ? chapter.Events[0].Actions : [])
         {
             int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
             if ((uint)index >= chapter.Events.Count || index == 0) continue;
             var e = chapter.Events[index];
+            if (e.MaxFire > 0 && _chapterFired.GetValueOrDefault((chapter.Id, index)) >= e.MaxFire) continue;
             if (!e.Conditions.All(FieldCondition)) continue;
+            _chapterFired[(chapter.Id, index)] = _chapterFired.GetValueOrDefault((chapter.Id, index)) + 1;
             foreach (var a in e.Actions) RunChapterAction(a);
         }
     }
 
-    /// <summary>스크립트를 이미 돌린 챕터.</summary>
-    private readonly HashSet<int> _chapterScriptDone = [];
+    /// <summary>챕터 사건이 이미 돈 횟수 — (챕터, 사건).</summary>
+    /// <remarks>
+    /// 챕터 이벤트는 대부분 <b>진행 깃발로 잠겨</b> 있다 — <c>Chp 0010</c> 은 조건 없는 이벤트 2 가 첫 동료·돈·아이템을 주고,
+    /// 이벤트 1·4 는 깃발 5 가 1 이어야, 이벤트 3 은 깃발 7 이 2 여야 돈다.
+    /// 그러니 챕터에 처음 들어갈 때 한 번이 아니라 <b>항행 화면에 올 때마다</b> 훑어야 뒤의 동료가 들어온다.
+    /// 대신 사건마다 제 「몇 번까지」를 지켜 같은 것을 두 번 주지 않는다.
+    /// </remarks>
+    private readonly Dictionary<(int Chapter, int Event), int> _chapterFired = [];
 
     private void RunChapterAction(ScriptCommand a)
     {
