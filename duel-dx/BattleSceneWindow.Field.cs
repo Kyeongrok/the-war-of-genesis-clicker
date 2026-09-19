@@ -574,8 +574,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 _mixer.StopMusic();
                 if (A(0) > 0) PlayMusicFile(A(0), loop: true);
                 break;
-            case 517:                                        // 음량을 인자0 까지 인자1 틱에 걸쳐 — 데모는 0 이면 끄기만 한다
-                if (A(0) <= 0) _mixer.StopMusic();
+            case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐
+                FadeMusic(A(0), A(1));
                 break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -97,6 +97,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void PlayMusicFile(int id, bool loop)
     {
         if (Muted) return;
+        // 새 음악은 늘 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다.
+        _musicFade = null;
+        _musicGain = MusicGain;
         System.Threading.Tasks.Task.Run(() =>
         {
             try
@@ -145,8 +148,46 @@ internal sealed unsafe partial class BattleSceneWindow
             _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
     }
 
+    /// <summary>배경음악 크기가 옮겨 가는 중 — (시작 크기, 목표 크기, 걸리는 틱, 시작한 때). 필드 행동 517.</summary>
+    private (float From, float To, int Ticks, double Start)? _musicFade;
+
+    /// <summary>
+    /// 배경음악 크기를 <paramref name="percent"/>(0~100)까지 <paramref name="ticks"/> 틱에 걸쳐 옮긴다.
+    /// </summary>
+    /// <remarks>
+    /// 필드 행동 517 이 쓴다. 자료의 a0 은 299번이 0(끄기) · 179번이 80 · 127번이 100 이고,
+    /// a1 은 20~80 틱이 대부분이라 <b>정말로 서서히 옮기는 연출</b>이다. 0 까지 다 내려가면 음악을 끊는다.
+    /// </remarks>
+    private void FadeMusic(int percent, int ticks)
+    {
+        float to = Math.Clamp(percent, 0, 100) / 100f * MusicGain;
+        if (ticks <= 0)
+        {
+            _musicFade = null;
+            if (to <= 0) _mixer.StopMusic();
+            else _mixer.SetMusicGain(to);
+            return;
+        }
+        _musicFade = (_musicGain, to, ticks, _lastTime);
+    }
+
+    /// <summary>지금 배경음악 크기 — 옮기는 중에도 어디까지 왔는지 알아야 해서 따로 들고 있다.</summary>
+    private float _musicGain = MusicGain;
+
+    private void StepMusicFade()
+    {
+        if (_musicFade is not { } fade) return;
+        double step = Math.Clamp((_lastTime - fade.Start) * TicksPerSecond / fade.Ticks, 0, 1);
+        _musicGain = (float)(fade.From + (fade.To - fade.From) * step);
+        _mixer.SetMusicGain(_musicGain);
+        if (step < 1) return;
+        _musicFade = null;
+        if (_musicGain <= 0) _mixer.StopMusic();
+    }
+
     private void UpdateSounds()
     {
+        StepMusicFade();
         for (int i = _pendingSounds.Count - 1; i >= 0; i--)
             if (_pendingSounds[i].Time <= _lastTime)
             {
