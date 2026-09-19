@@ -152,17 +152,23 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < n; i++)
             if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % Cols, i / Cols) is { } other && other != unit) costs[i] = int.MaxValue;
 
-        // 기본공격 모양 2(십자), 사거리 min 5 · max 8 (한 칸 = 4) → 정확히 2칸 떨어진 상하좌우.
-        for (int i = 0; i < n; i++)
+        // 붉은 칸 — 갈 수 있는 칸마다 <b>그 인물의 기본공격 모양</b>을 칠한다(0x100749b0).
+        // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.
+        if (Work(c.BasicWorkId) is { } basic)
         {
-            if (costs[i] == int.MaxValue) continue;
-            int col = i % Cols, row = i / Cols;
-            foreach (var (dx, dy) in dirs)
+            int reach = Math.Max(1, RangeMaxOf(basic, unit) / 4);
+            for (int i = 0; i < n; i++)
             {
-                int ax = col + 2 * dx, ay = row + 2 * dy;
-                if (!InBounds(ax, ay) || (map.FlagsAt(ax, ay) & 0x8) != 0) continue;
-                int j = ay * Cols + ax;
-                if (costs[j] == int.MaxValue) red[j] = true;
+                if (costs[i] == int.MaxValue) continue;
+                int col = i % Cols, row = i / Cols;
+                for (int ay = row - reach; ay <= row + reach; ay++)
+                    for (int ax = col - reach; ax <= col + reach; ax++)
+                    {
+                        if (!InBounds(ax, ay)) continue;
+                        int j = ay * Cols + ax;
+                        if (costs[j] != int.MaxValue || red[j]) continue;
+                        if (InWorkRange(basic, col, row, ax, ay, unit)) red[j] = true;
+                    }
             }
         }
         return new MoveRange(costs, prev, red) { Width = Cols };
