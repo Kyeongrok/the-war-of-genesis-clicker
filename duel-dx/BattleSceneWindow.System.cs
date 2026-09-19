@@ -319,7 +319,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
         // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
-        if (_chapterScriptDone.Count == 0)
+        if (_chapterFired.Count == 0)
         {
             _inventory.Clear();
             InitBattle();
@@ -360,9 +360,10 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int SceneText = 0, int SceneKind = 1, long PlayMs = 0,
                                     int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0,
                                     Dictionary<string, int>? Flags = null,
-                                    string[]? DonePlaces = null, int[]? DoneChapters = null);
+                                    string[]? DonePlaces = null, int[]? DoneChapters = null,
+                                    string[]? DoneEvents = null, string[]? UsedPlaces = null);
 
-    private const int SaveVersion = 6;
+    private const int SaveVersion = 7;
 
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
@@ -390,9 +391,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
-                // 이미 겪은 자동 발생 장소와 이미 돌린 챕터 스크립트 — 안 적으면 불러올 때마다 프롤로그가 되풀이된다.
+                // 이미 겪은 자동 발생 장소와 이미 돌린 챕터 사건 — 안 적으면 불러올 때마다 프롤로그가 되풀이되고
+                // 챕터 사건이 동료·돈을 두 번 준다. 다녀온 장소도 적어야 목록에 되살아나지 않는다.
                 [.. _autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
-                [.. _chapterScriptDone]);
+                [.. _chapterFired.Keys.Select(k => k.Chapter).Distinct()],
+                [.. _chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
+                [.. _placesUsed.Select(p => $"{p.Chapter}:{p.Place}")]);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -488,8 +492,18 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (string pair in state.DonePlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
                 _autoPlacesDone.Add((chapter, place));
-        _chapterScriptDone.Clear();
-        foreach (int chapter in state.DoneChapters ?? []) _chapterScriptDone.Add(chapter);
+        _chapterFired.Clear();
+        foreach (string triple in state.DoneEvents ?? [])
+            if (triple.Split(':') is [var c, var e, var n] && int.TryParse(c, out int chp)
+                && int.TryParse(e, out int ev) && int.TryParse(n, out int count))
+                _chapterFired[(chp, ev)] = count;
+        // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
+        if (state.DoneEvents == null)
+            foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
+        _placesUsed.Clear();
+        foreach (string pair in state.UsedPlaces ?? [])
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
+                _placesUsed.Add((chapter, place));
 
         _tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
         _turn = -1;
