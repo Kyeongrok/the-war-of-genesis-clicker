@@ -53,10 +53,15 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// <c>900 [a0, a1, a2, a3, a4]</c> — a0 0 이면 찍어 둔 화면을 다시 쓰고 1 이면 새로 찍는다 · a1 무늬(1 → 물들이기 방식 2 = 검정) ·
     /// <b>a2 덮는 틱</b>(0 이면 처음부터 덮인 채) · <b>a3 걷어내는 틱</b>(0 이면 안 걷음) · a4 화면에 넣을 층 수.
-    /// 정도 눈금은 0~31. 데모는 무늬를 <b>검정·흰색 두 가지</b>로만 흉내 내고, 층 수는 안 쓴다.
+    /// 정도 눈금은 0~31. 데모는 무늬를 <b>검정·흰색 두 가지</b>로만 흉내 낸다.
+/// <b>a4 는 가리는 층 수</b>다 — 8 이면 다 가리지만 자료의 131번은 그보다 작다(0 이 11번·7 이 61·6 이 20·5 가 24…).
+/// 그런 줄은 배경만 덮고 그 위 층의 인물·물체는 안 덮는 연출이라, 덮개보다 나중에 그린다.
     /// <c>Fld 0019</c> 는 시작에 <c>900 [1,1,0,40,8]</c>(40틱에 걸쳐 걷기), 끝에 <c>900 [0,1,40,0,8]</c>(40틱에 걸쳐 덮기)를 쓴다.
     /// </remarks>
     private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
+
+    /// <summary>덮기가 가리는 층 수(900 의 a4) — 8 이면 인물·물체까지 다 가린다.</summary>
+    private int _fieldFadeCover = 8;
 
     /// <summary>
     /// 걷어내는 전환(903 빗살 지우기 · 904 줄 늘여 쓸기).
@@ -539,13 +544,19 @@ internal sealed unsafe partial class BattleSceneWindow
             case 907:                                        // 인자 자리(a0 방향 · a1 그림)는 다 같으니 <b>겹쳐 디졸브로 갈음</b>한다.
             case 908:                                        // 걸리는 틀은 909 자리(a2)로 읽는다 — 제 자리는 저마다 다르다.
             case 909:                                        // 겹쳐 디졸브 — 전환의 대부분이 이것이다
-                // a0 이 0 이 아니면 앞뒤를 바꾼다. 데모는 <b>새 배경으로 갈아타는 것</b>만 흉내 낸다.
-                if (A(1) > 0)
+                // a0 이 방향이다. 0 이면 그 그림으로 갈아타고 <b>그림이 그대로 남는다</b>.
+                // 0 이 아니면 그림에서 <b>이 필드 화면으로 돌아오며 그림을 걷는다</b> — 909 27번·903 5번·904 1번·905 1번이 이쪽이다.
+                if (A(0) == 0)
                 {
-                    ShowMosesBackground(A(1));
-                    _fieldCam = (0, 0);
-                    _fieldCamMove = null;
+                    if (A(1) > 0)
+                    {
+                        ShowMosesBackground(A(1));
+                        _fieldCam = (0, 0);
+                        _fieldCamMove = null;
+                    }
                 }
+                else if (_field is { } back)
+                    ShowMosesBackground(back.Background, _fieldCam.X, _fieldCam.Y);
                 if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
                 break;
             case 407:
@@ -555,6 +566,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
+                _fieldFadeCover = Math.Clamp((int)A(4), 0, 8);   // 가리는 층 수 — 8 이면 다 가린다
                 // 덮는 데 걸리는 틱만큼은 스크립트도 기다린다 — 안 그러면 화면이 덮이기 전에 다음 장면으로 넘어간다.
                 if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
                 break;
@@ -828,17 +840,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 필드 화면은 640×480 틀 안이 전부다 — 물체·인물이 그 밖으로 새지 않게 자른다.
         _uiClip = (ox, oy, MosesW, MosesH);
 
-        // 물체 — 층 번호가 앞뒤 순서라 작은 층부터 그린다.
-        foreach (var prop in _fieldProps.Where(o => o.Visible).OrderBy(o => o.Layer))
-            DrawUi(prop.Obs, prop.Motion, (int)((_lastTime - prop.Start) * TicksPerSecond),
-                   ox + (int)prop.X - _fieldCam.X, oy + (int)prop.Y - _fieldCam.Y, UiBlend.Alpha);
-
-        // 인물 — 층 순서로, 저마다의 모션으로 그린다.
-        foreach (var actor in _fieldActors.Where(a => a.Visible).OrderBy(a => a.Layer))
-            if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
-                DrawUi(pc.SpriteId, actor.Motion, (int)((_lastTime - actor.MotionStart) * TicksPerSecond),
-                       ox + (int)actor.X - _fieldCam.X, oy + (int)actor.Y - _fieldCam.Y, UiBlend.Alpha,
-                       loop: true, fade: actor.Alpha);
+        // 덮기(900)가 가리는 층은 a4 까지다 — 8 이면 다 가리지만 자료의 131번은 그보다 작다.
+        // 그 위의 층은 덮개보다 <b>나중에</b> 그려서 안 가려진다.
+        int cover = _fieldFade is not null ? _fieldFadeCover : 8;
+        DrawFieldLayers(ox, oy, int.MinValue, cover);
 
         DrawTalk();
 
@@ -853,8 +858,41 @@ internal sealed unsafe partial class BattleSceneWindow
         _uiClip = null;
         DrawFieldWipe(ox, oy);
         DrawFieldFade(ox, oy);
+        if (cover < 8)
+        {
+            _uiClip = (ox, oy, MosesW, MosesH);
+            DrawFieldLayers(ox, oy, cover, int.MaxValue);
+            _uiClip = null;
+        }
         DrawToast();
     }
+
+    /// <summary>
+    /// 층 <paramref name="from"/> 이상 <paramref name="to"/> 미만의 물체·인물을 층 차례로 그린다.
+    /// </summary>
+    /// <remarks>
+    /// 층 <b>−1 은 화면 붙박이</b>다(인물 1174명 중 153명) — 화면이 움직여도 같은 자리에 남으므로 카메라를 빼지 않는다.
+    /// </remarks>
+    private void DrawFieldLayers(int ox, int oy, int from, int to)
+    {
+        foreach (var prop in _fieldProps.Where(o => o.Visible && o.Layer >= from && o.Layer < to).OrderBy(o => o.Layer))
+        {
+            var (px, py) = FieldScreenAt(prop.Layer, prop.X, prop.Y);
+            DrawUi(prop.Obs, prop.Motion, (int)((_lastTime - prop.Start) * TicksPerSecond),
+                   ox + px, oy + py, UiBlend.Alpha);
+        }
+
+        foreach (var actor in _fieldActors.Where(a => a.Visible && a.Layer >= from && a.Layer < to).OrderBy(a => a.Layer))
+            if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
+            {
+                var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
+                DrawUi(pc.SpriteId, actor.Motion, (int)((_lastTime - actor.MotionStart) * TicksPerSecond),
+                       ox + px, oy + py, UiBlend.Alpha, loop: true, fade: actor.Alpha);
+            }
+    }
+
+    private (int X, int Y) FieldScreenAt(int layer, double x, double y) =>
+        layer < 0 ? ((int)x, (int)y) : ((int)x - _fieldCam.X, (int)y - _fieldCam.Y);
 
     /// <summary>
     /// 걷어내는 전환을 건다 — <paramref name="toPicture"/> 면 지금 화면에서 그림으로 가고(그림이 남는다),
