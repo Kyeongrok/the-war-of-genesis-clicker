@@ -741,7 +741,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (int i in Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y))
         {
             var unit = units[i];
-            if (!unit.Alive) continue;
+            if (!unit.Alive || !unit.OnField) continue;
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
 
@@ -1146,6 +1146,16 @@ internal sealed class UnitState(DemoUnit unit)
 
     /// <summary>깨어났나 — 깨기 전에는 제 차례마다 쉬기만 한다. 사람이 움직이는 인물은 늘 깨어 있다.</summary>
     public bool Awake { get; set; } = unit.Side >= 3;
+
+    /// <summary>
+    /// 지금 전장에 서 있나 — <b>배치 칸이 (0,0) 이면 「아직 안 나온 사람」</b>이다.
+    /// </summary>
+    /// <remarks>
+    /// 원본 로더는 그런 줄의 자리를 <c>(−100,−100)</c> 으로 덮어써 맵 밖으로 보낸다(<c>0x10062263</c>).
+    /// 그래서 전멸 판정·차례·이벤트 조건이 그들을 세지 않는다. 이벤트 행동 200·214 가 불러들이고 201 이 내보낸다.
+    /// 자료에 그런 줄이 <b>221개</b>(아군 편 제외), 그것을 부르는 전투가 <b>74개</b>다.
+    /// </remarks>
+    public bool OnField { get; set; } = unit.Col != 0 || unit.Row != 0;
 
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
