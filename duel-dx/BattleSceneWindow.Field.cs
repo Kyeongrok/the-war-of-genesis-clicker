@@ -262,7 +262,8 @@ internal sealed unsafe partial class BattleSceneWindow
         var running = field.Events[_fieldEvent];
         while (_fieldEvent >= 0 && _talk == null && _fieldWaitUntil <= _lastTime)
         {
-            if (_fieldPc >= running.Actions.Count) { _fieldEvent = -1; return; }
+            // 그 사건이 끝나면 대사 건너뛰기도 끝난다.
+            if (_fieldPc >= running.Actions.Count) { _fieldEvent = -1; _talkSkip = false; return; }
             // 고르기(604)를 낸 뒤에는 뒤따르는 605 들을 <b>먼저 다 읽어</b> 항목을 채우고, 그다음에 사람을 기다린다.
             if (_fieldChoices != null && running.Actions[_fieldPc].Code != 605) return;
             if (!RunFieldAction(running.Actions[_fieldPc++])) return;  // false = 필드를 떠났다
@@ -297,7 +298,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 0:                                          // 다른 이벤트 부르기 — 이벤트 0 목록이 이미 돌리므로 넘긴다
             case 1: break;                                   // 띄운 것이 끝나기를 기다림 — 데모는 대사마다 이미 멈춘다
             case 2: _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond; break;
-            case 3: _fieldEvent = -1; break;                 // 이 이벤트 접기
+            case 3: _fieldEvent = -1; _talkSkip = false; break;  // 이 이벤트 접기
 
             case 6:                                          // 다른 필드로
                 if (OpenField(A(0))) return false;
@@ -687,6 +688,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void ShowFieldTalk(bool box, int speaker, int textId)
     {
+        if (_talkSkip) return;
         string name = "";
         _fieldTalkOf = speaker;
         if (_field is { } field && speaker >= 10000

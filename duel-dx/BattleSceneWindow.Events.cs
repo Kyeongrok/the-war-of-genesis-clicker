@@ -110,7 +110,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_talk != null) return;                                  // 대사가 떠 있으면 기다린다
             if (_eventWaitUntil > _lastTime) return;
             var e = _events[_runningEvent];
-            if (_eventPc >= e.Actions.Count) { _runningEvent = -1; return; }
+            // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
+            if (_eventPc >= e.Actions.Count) { _runningEvent = -1; _talkSkip = false; return; }
 
             var a = e.Actions[_eventPc++];
             switch (a.Code)
@@ -121,12 +122,12 @@ internal sealed unsafe partial class BattleSceneWindow
                     _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
                     break;
-                case 3: _runningEvent = -1; return;                     // 중단
+                case 3: _runningEvent = -1; _talkSkip = false; return;  // 중단
                 case 600: ShowTalk(box: true, a); return;
                 case 601: ShowTalk(box: false, a); return;
                 default:
                     RunEventAction(a);
-                    if (_outcome.Length > 0) { _runningEvent = -1; return; }
+                    if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
                     break;
             }
         }

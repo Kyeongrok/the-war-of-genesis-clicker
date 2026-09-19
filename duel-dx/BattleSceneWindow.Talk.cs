@@ -72,6 +72,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>대사 한 줄을 띄운다(행동 600·601).</summary>
     private void ShowTalk(bool box, ScriptCommand a)
     {
+        if (_talkSkip) return;
+
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         string text = TalkTableFor(_scene.Id)?[A(2)] ?? "";
         int speaker = TalkSpeaker(A(0));
@@ -91,12 +93,29 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 클릭·키로 넘기기 — <b>글이 흐르는 중이면 먼저 다 채우고</b>, 다 채운 뒤 누르면 닫는다(<c>0x1003c029</c>).
     /// </summary>
-    private bool OnTalkInput()
+    private bool OnTalkInput(bool skipAll = false)
     {
         if (_talk == null) return false;
+        if (skipAll) { SkipTalk(); return true; }
         if (!_talkFilled) { _talkFilled = true; return true; }
         CloseTalk();
         return true;
+    }
+
+    /// <summary>
+    /// 이 장면에 남은 대사를 <b>통째로</b> 건너뛴다 — 대사 중 <b>Esc·우클릭</b>.
+    /// </summary>
+    /// <remarks>
+    /// 켜 두면 <see cref="ShowTalk"/>·<see cref="ShowFieldTalk"/> 가 글을 안 띄우고 지나가므로,
+    /// 이벤트·필드 스크립트가 대사 줄에서 멈추지 않고 끝까지 달린다. 그 스크립트가 끝나면 저절로 꺼진다.
+    /// </remarks>
+    private bool _talkSkip;
+
+    private void SkipTalk()
+    {
+        _talkSkip = true;
+        CloseTalk();
+        Toast("대사를 건너뜁니다");
     }
 
     /// <summary>글이 다 나온 뒤 118틱을 더 두면 저절로 넘어간다.</summary>

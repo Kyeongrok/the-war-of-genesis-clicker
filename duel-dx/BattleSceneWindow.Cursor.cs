@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -25,7 +25,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_keysOpen || SystemOpen || _statusUnit >= 0 || _abilityMenu || _ringUnit >= 0) return CursorHand;
         if (_targetWork >= 0 && Work(_targetWork) is { } w)
         {
-            if (LiveUnitAt(bx / TileW, (by - GridTop) / TileH) is not { } t) return CursorArrow;
+            // 사거리 안이고 그 work 의 대상 방식에 맞는 칸에서만 칼·지팡이가 된다 — 아무 유닛 위나 아니다.
+            int col = bx / TileW, row = (by - GridTop) / TileH;
+            if (by < GridTop || _turn < 0 || !CanAimAt(w, _units[_turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
