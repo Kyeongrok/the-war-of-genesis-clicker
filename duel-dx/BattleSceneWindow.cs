@@ -790,7 +790,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             return;
         }
 
-        int allies = _units.Count(u => u.Alive && u.IsAlly), enemies = _units.Count(u => u.Alive && !u.IsAlly);
+        // 아직 안 나온 사람(배치 (0,0))은 세지 않는다 — 판에 보이는 수와 맞아야 한다.
+        int allies = _units.Count(u => u.Alive && u.OnField && u.IsAlly);
+        int enemies = _units.Count(u => u.Alive && u.OnField && !u.IsAlly);
         DrawText($"{_scene.Title} — 전투 Btl {_scene.Id:D4}   아군 {allies}   적군 {enemies}   클릭·{KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물 보기   {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자   {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바   설정 메뉴: 단축키",
                  4, _camY + 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, _camY + 20, 0xFFD05050);
