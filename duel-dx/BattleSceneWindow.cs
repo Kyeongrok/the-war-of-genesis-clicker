@@ -1161,6 +1161,12 @@ internal sealed class UnitState(DemoUnit unit)
     /// </remarks>
     public bool OnField { get; set; } = unit.Col != 0 || unit.Row != 0;
 
+    /// <summary>
+    /// 이 사람을 <b>마지막으로 때린</b> 사람 — 원본 <c>유닛+0xfc</c>. 전투 내내 안 지운다.
+    /// </summary>
+    /// <remarks>이벤트 조건 301 이 「누가 마지막에 때렸나」를 이 값으로 본다. 죽은 뒤에도 남아 있어야 한다.</remarks>
+    public UnitState? LastHitBy { get; set; }
+
     public int Col { get; private set; } = unit.Col;
     public int Row { get; private set; } = unit.Row;
     public Facing Facing { get; set; } = unit.Facing;

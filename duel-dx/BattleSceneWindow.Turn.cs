@@ -585,6 +585,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
 
         amount = AilmentDamage(a, t, amount);
+        t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         t.Hp = Math.Max(0, t.Hp - amount);
         // 10(피격 가속) — 맞으면 TP 가 값% 만큼 앞당겨진다(0x1007952c).
         if (t.Status(10) is var rush and > 0) t.Tp = Math.Min(t.MaxTp, t.Tp + rush * t.MaxTp / Math.Max(1, t.Stp) / 100);
