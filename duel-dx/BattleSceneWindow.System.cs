@@ -279,6 +279,10 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
+        _battleLoaded = true;
+        _titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
+        _recordsOpen = false;
+        _episodesOpen = false;
         _scene = scene;
         _units = BuildUnits(scene);
         LoadEvents(scene.Id);
@@ -403,7 +407,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다(옛 저장은 전투 번호가 없어 첫 전투로 본다).
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
-        if (battle != _scene.Id && !StartBattle(battle)) return false;
+        // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
+        if ((!_battleLoaded || battle != _scene.Id) && !StartBattle(battle)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;

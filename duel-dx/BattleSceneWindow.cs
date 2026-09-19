@@ -148,23 +148,61 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 텍스처를 그 밑에서 갈아 치웠다. 맵이 큰 전투(예: Btl 0051)에서 화면 버퍼가 텍스처보다 커져 CLR 이 그대로 죽었다.
     /// 인물 세우기도 판 크기를 정한 <b>뒤</b>여야 진형 칸이 옛 크기로 잘리지 않는다.
     /// </remarks>
+    /// <summary>
+    /// 타이틀·연대표·모세스가 쓰는 판 크기 — 그 화면들은 <b>640×480 틀</b>만 있으면 된다.
+    /// </summary>
+    /// <remarks>보이는 높이가 판의 <b>70%</b> 라, 480픽셀을 다 보이려면 줄 수를 그만큼 넉넉히 잡아야 한다.</remarks>
+    private const int TitleBoardCols = MosesW / ObtMap.CellWidth;
+    private const int TitleBoardRows = MosesH * 10 / 7 / ObtMap.CellHeight + 1;
+
     private void LoadBoard()
     {
         try
         {
             _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data")));
-            // DUELDX_BATTLE 로 다른 전투를 열 수 있다(화면 밖 시험용). 기본은 첫 전투 0045.
-            int startId = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_BATTLE"), out int wanted) ? wanted : _scene.Id;
-            if (DemoScene.Load(startId, _db) is { } loaded) _scene = loaded;
-            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
-            ResizeBoard(_map.Cols, _map.Rows);
-            _units = BuildUnits(_scene);
-            LoadEvents(_scene.Id);
+
+            // 시작하자마자 전투를 읽지는 않는다 — 어느 전투를 할지는 타이틀에서 고르고 나서야 정해진다.
+            // 이어하기로 다른 곳을 고르면 미리 읽은 것이 헛일이 되고, 그만큼 창이 늦게 뜬다.
+            if (!WantsBattleAtStart(out int startId))
+            {
+                ResizeBoard(TitleBoardCols, TitleBoardRows);
+                return;
+            }
+            LoadBattleBoard(startId);
+            _battleLoaded = true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {
             _loadError = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// 켜자마자 전투를 읽어야 하나 — <b>화면 밖 시험</b>에서 타이틀을 건너뛸 때뿐이다.
+    /// </summary>
+    private static bool WantsBattleAtStart(out int id)
+    {
+        id = 0;
+        bool skipTitle = Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0";
+        bool wanted = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_BATTLE"), out id) && id > 0;
+        if (wanted) return true;
+        id = BattleDemoScene.BtlId;
+        return skipTitle;
+    }
+
+    /// <summary>
+    /// 전투 자료를 한 번이라도 읽었나 — 타이틀에서 시작하면 <b>고르기 전까지 아무 전투도 안 읽는다</b>.
+    /// </summary>
+    private bool _battleLoaded;
+
+    /// <summary>그 전투의 자료·맵을 읽고 판을 그 크기로 잡는다.</summary>
+    private void LoadBattleBoard(int id)
+    {
+        if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
+        _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
+        ResizeBoard(_map.Cols, _map.Rows);
+        _units = BuildUnits(_scene);
+        LoadEvents(_scene.Id);
     }
 
     /// <summary>나머지(그림·소리)는 배경 스레드에서 읽는다 — 창은 먼저 뜬다.</summary>
