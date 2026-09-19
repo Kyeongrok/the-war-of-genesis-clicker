@@ -15,6 +15,9 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private const int CursorArrow = 44, CursorHand = 48, CursorAttack = 45, CursorSupport = 49;
+
+    /// <summary>물체(상자·문)를 만질 수 있는 칸의 커서 — 주먹(<c>Obs 0050</c>).</summary>
+    private const int CursorTouch = 50;
     private const int BannerObs = 491, BannerWin = 0, BannerLose = 10;
 
     private (int X, int Y) _mouse = (-1, -1);
@@ -30,6 +33,10 @@ internal sealed unsafe partial class BattleSceneWindow
             if (by < GridTop || _turn < 0 || !CanAimAt(w, _units[_turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
+        // 옆 칸 물체(상자·문)를 만질 수 있으면 주먹 커서.
+        if (IsPlayerTurn && by >= GridTop && ObjectAt(bx / TileW, (by - GridTop) / TileH) is { } near
+            && CanTouchObject(_units[_turn], near)) return CursorTouch;
+
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
         if (IsPlayerTurn && by >= GridTop && LiveUnitAt(bx / TileW, (by - GridTop) / TileH) is { } who)
         {
