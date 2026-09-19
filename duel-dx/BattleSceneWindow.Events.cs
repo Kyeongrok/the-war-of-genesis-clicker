@@ -31,6 +31,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>전투 국소 변수 — 행동 100·101 이 고치고 조건 100 이 읽는다(<c>0x101b69a0</c>).</summary>
     private readonly byte[] _battleVars = new byte[256];
 
+    /// <summary>
+    /// 이벤트 타이머 열 칸 — 행동 <c>900</c> 이 켜고 <b>턴이 하나 지날 때마다</b> 센다(<c>0x1004e9e0</c>).
+    /// 조건 <c>2</c> 가 그 세기를 견준다. <c>Btl 0170</c> 이 「적을 다 잡은 뒤 20턴·40턴」에 쓴다.
+    /// </summary>
+    private readonly int[] _eventTimer = new int[10];
+
+    private readonly bool[] _eventTimerRun = new bool[10];
+
     /// <summary>이벤트가 정한 다음 전투 — 0 이면 <c>Btl</c> 자료의 값(또는 모세스)으로 간다.</summary>
     private int _eventNextBattle;
 
@@ -46,6 +54,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventNextBattle = 0;
         _eventNextField = 0;
         Array.Clear(_battleVars);
+        Array.Clear(_eventTimer);
+        Array.Clear(_eventTimerRun);
         try
         {
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
@@ -167,6 +177,11 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0: return true;                                                // 엔진 기본 갈래 — 늘 참(전투 첫 대사 방아쇠, 37번 쓰인다)
             case 1: return _turnNo == 2;                                        // 시작 인트로 방아쇠
+            case 2:                                                             // 타이머 세기 비교(0x1004f230) — 인자1 이 값, 인자2 가 연산자
+            {
+                int slot = A(0);
+                return (uint)slot < 10 && Compare(_eventTimer[slot], A(2), A(1));
+            }
             case 3: return Compare(_turnNo, A(1), A(0));                        // 턴 수 비교
             case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
             case 101: return Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2));
@@ -297,6 +312,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 707:                                    // 잃은 HP 의 인자2 % 회복 — 자료는 전부 100(풀피)
                 foreach (var u in EventTargets(A(0), out _))
                     if (u.Alive) u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
+                break;
+            case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
+                if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;
             case 713:                                    // 아이템 하나 주기
                 if (A(0) > 0) _inventory[A(0)] = _inventory.GetValueOrDefault(A(0)) + 1;

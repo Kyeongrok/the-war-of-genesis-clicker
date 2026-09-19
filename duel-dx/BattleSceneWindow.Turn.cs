@@ -232,6 +232,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _turn = index;
         _selected = index;
         _turnNo++;                  // 이벤트 조건 1·3 이 보는 턴 수(0x10067d36)
+        // 켜 둔 이벤트 타이머는 턴마다 하나씩 센다(0x10067d3c 가 턴을 올린 바로 다음 줄에서 부른다).
+        for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
         _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
         AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
         _units[index].OriginCol = _units[index].Col;
