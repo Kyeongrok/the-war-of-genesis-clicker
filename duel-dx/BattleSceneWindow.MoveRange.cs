@@ -115,7 +115,8 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
             {
                 if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || !Blocks(e)) continue;
-                if (e.IsAlly != unit.IsAlly && Math.Abs(H(px, py) - H(col, row)) < 1) return false;
+                // 적인지는 <b>버서커(4)까지 보는</b> 편 판정으로 가른다(0x1006fde0) — 그게 걸리면 모두가 적이다.
+                if (SeesAsFoe(unit, e) && Math.Abs(H(px, py) - H(col, row)) < 1) return false;
             }
             return true;
         }
