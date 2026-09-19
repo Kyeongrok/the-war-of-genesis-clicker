@@ -480,7 +480,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
-        if (OnTalkInput()) return;            // 대사는 아무 키로나 넘긴다
+        // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다.
+        if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).

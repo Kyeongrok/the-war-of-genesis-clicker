@@ -118,8 +118,11 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (!ShapeCovers(shape, dx, dy, facing)) return false;
         if (!ShapeUsesAxisDistance(shape)) return plain >= minQuarters && graded <= maxQuarters;
+        // 축 거리에도 <b>높이항은 그대로 붙는다</b>(0x100db2bf~) — 맨해튼 자와 같은 식이다.
+        // 맨해튼 몫만 축 거리로 바꾸고, 높이 몫은 이미 잰 값에서 가져온다.
         int axis = 4 * AxisOf(dx, dy, facing);
-        return axis >= minQuarters && axis <= maxQuarters;
+        int flat = 4 * (Math.Abs(dx) + Math.Abs(dy));
+        return axis + (plain - flat) >= minQuarters && axis + (graded - flat) <= maxQuarters;
     }
 
     /// <summary>

@@ -181,6 +181,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>우클릭: 열린 창·링을 닫거나, 목록·대상 고르기를 취소한다(걸음은 안 물림). 취소할 것이 없고 인물 위면 링을 연다.</summary>
     private void OnRightClick(int bx, int by)
     {
+        // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
+        if (OnTalkInput(skipAll: true)) return;
         if (_statusUnit >= 0) { _statusUnit = -1; return; }
         if (_ringUnit >= 0) { CancelRing(); return; }
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
