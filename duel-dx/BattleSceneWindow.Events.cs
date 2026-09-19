@@ -51,6 +51,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _events = [];
         _eventFired = [];
         _turnNo = 0;
+        _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
         _eventNextField = 0;
         Array.Clear(_battleVars);
@@ -153,6 +154,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>편 번호를 이벤트가 쓰는 차례(4·3·0·1·2)에서 꺼낸다.</summary>
     private static readonly int[] EventSideOrder = [4, 3, 0, 1, 2];
 
+    /// <summary>조건 300·301 이 찾아 낸 두 사람 — 대사가 <c>20010</c>·<c>20011</c> 로 이들을 가리킨다.</summary>
+    private UnitState? _eventFoundA, _eventFoundB;
+
+    /// <summary>
+    /// 조건 300·301 이 쓰는 대상 고르기 — <b>죽은 사람도 든다</b>(걸러내기 갈래가 0 이라 NULL 검사뿐)이고,
+    /// 편 코드는 <b>홀수만</b> 받는다(짝수는 늘 거짓, <c>0x1005022c</c>).
+    /// </summary>
+    private List<UnitState> EventFighters(int value)
+    {
+        if (value is >= 20000 and <= 20009)
+            return (value - 20000) % 2 == 0
+                ? []
+                : [.. _units.Where(x => x.Side == EventSideOrder[(value - 20000) / 2])];
+        if (value == 20010) return _eventFoundA is null ? [] : [_eventFoundA];
+        if (value == 20011) return _eventFoundB is null ? [] : [_eventFoundB];
+        if (value >= 10000) return [.. _units.Where(x => x.Record == value - 10000)];
+        return value > 0 ? [.. _units.Where(x => x.ChrCode == value)] : [];
+    }
+
     /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
     private List<UnitState> EventTargets(int value, out bool wholeSide)
     {
@@ -247,15 +267,30 @@ internal sealed unsafe partial class BattleSceneWindow
                 bool arrived = list.Any(u => u.Alive);
                 return A(1) != 0 ? !arrived : arrived;
             }
-            case 300:                                                           // 두 유닛이 같은 줄에 있고 두 칸 이내 = 맞닿음
+            case 300:                                                           // 붙었다 — 같은 줄이고 두 칸 안(0x1004fac0)
             {
-                var a = EventTargets(A(0), out _).Where(u => u.Alive).ToList();
-                var b = EventTargets(A(2), out _).Where(u => u.Alive).ToList();
-                return a.Any(x => b.Any(y => x != y && (x.Col == y.Col || x.Row == y.Row)
-                                          && Math.Abs(x.Col - y.Col) + Math.Abs(x.Row - y.Row) <= 2));
+                foreach (var x in EventFighters(A(0)))
+                    foreach (var y in EventFighters(A(2)))
+                        if (!ReferenceEquals(x, y) && (x.Col == y.Col || x.Row == y.Row)
+                            && Math.Abs(x.Col - y.Col) + Math.Abs(x.Row - y.Row) <= 2)
+                        {
+                            (_eventFoundA, _eventFoundB) = (x, y);
+                            return true;
+                        }
+                return false;
             }
-            case 301:                                                           // 한쪽이 다른 쪽을 지목하고 있다(교전) — 데모는 「맞닿음」으로 대신한다
-                goto case 300;
+            case 301:                                                           // <b>인자0 이 인자2 를 때렸다</b>(0x100502d0)
+            {
+                // 거리도 편도 안 본다. 죽은 뒤에도 참이라야 「누가 죽였나」로 대사를 가르는 전투가 돈다.
+                var hitters = EventFighters(A(0));
+                foreach (var y in EventFighters(A(2)))
+                    if (y.LastHitBy is { } hit && !ReferenceEquals(hit, y) && hitters.Contains(hit))
+                    {
+                        (_eventFoundA, _eventFoundB) = (hit, y);
+                        return true;
+                    }
+                return false;
+            }
             default: return false;   // 아직 안 만든 조건(2 = 전역 배열)은 안 터뜨린다
         }
     }
@@ -297,6 +332,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case 202:                                    // 지정 칸으로 — 전장에 있는 사람만(원본도 맵 안인지 본다)
                 foreach (var u in EventTargets(A(0), out _))
                     if (u.OnField) u.ResetTo(A(2), A(3));
+                break;
+            case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
+                foreach (var u in EventTargets(A(0), out _))
+                    if (u.OnField) u.PlayAction(A(2) / 3, 0.6);
+                _eventWaitUntil = _lastTime + 0.6;
                 break;
             case 212:                                    // 바라보는 쪽
                 foreach (var u in EventTargets(A(0), out _)) u.Facing = EdgeFacing(A(1));
