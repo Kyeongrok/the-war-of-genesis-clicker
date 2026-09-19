@@ -313,6 +313,23 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var u in EventTargets(A(0), out _))
                     if (u.Alive) u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
                 break;
+            case 207:                                    // 보스 필살기 — 인자2 가 `.att` work 번호(0x10052400)
+            {
+                var caster = EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField);
+                if (caster is null || Work(A(2)) is not { } boss) break;
+                int casterIndex = Array.IndexOf(_units, caster);
+                // 겨눌 곳은 가장 가까운 상대 — 원본은 시전자 제 표적 고르기를 쓰지만 결과가 거의 같다.
+                var mark = _units.Where(t => t.Alive && t.OnField && SeesAsFoe(caster, t))
+                                 .OrderBy(t => Math.Abs(t.Col - caster.Col) + Math.Abs(t.Row - caster.Row))
+                                 .FirstOrDefault();
+                if (mark is null) break;
+                _routine = UseWorkRoutine(casterIndex, boss, Array.IndexOf(_units, mark), mark.Col, mark.Row, []);
+                _eventWaitUntil = _lastTime + 1.2;
+                break;
+            }
+            case 708:                                    // 소속 편 바꾸기 — 적이 아군이 되거나 그 반대(0x100553a0)
+                foreach (var u in EventTargets(A(0), out _)) u.Side = A(2);
+                break;
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;

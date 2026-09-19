@@ -1110,10 +1110,12 @@ internal sealed class UnitSprite
 internal sealed class UnitState(DemoUnit unit)
 {
     public int ChrCode { get; } = unit.ChrCode;
-    public bool IsAlly { get; } = unit.IsAlly;
+
+    /// <summary>편 3·4 는 내 쪽이다 — 이벤트 행동 708 이 편을 바꾸면 이 값도 따라 바뀐다.</summary>
+    public bool IsAlly => Side >= 3;
 
     /// <summary>Btl 레코드의 편 번호 — 4 내 부대 · 3 동맹 · 0~2 적. 이벤트 조건이 이 번호로 부대를 고른다.</summary>
-    public int Side { get; } = unit.Side;
+    public int Side { get; set; } = unit.Side;
 
     /// <summary>Btl 배치표에서의 레코드 번호 — 이벤트가 <c>10000+N</c> 으로 가리키는 번호. 부하는 대장 것을 물려받는다.</summary>
     public int Record { get; } = unit.Record;
