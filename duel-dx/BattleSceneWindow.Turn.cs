@@ -124,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.HasTurn = false;
         }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
-        if (_chapterScriptDone.Count == 0) FillDemoInventory();
+        if (_chapterFired.Count == 0) FillDemoInventory();
     }
 
     private void UpdateTurn()

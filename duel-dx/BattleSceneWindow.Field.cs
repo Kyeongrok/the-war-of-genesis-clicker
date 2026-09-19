@@ -582,6 +582,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private void RunChapterScript(ChapterFile chapter)
     {
+        // 사건별 횟수가 없던 옛 세이브에서 온 챕터는 「다 돌았다」로 본다(사건 −1 표시).
+        if (_chapterFired.ContainsKey((chapter.Id, -1))) return;
         foreach (var wanted in chapter.Events.Count > 0 ? chapter.Events[0].Actions : [])
         {
             int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
