@@ -86,9 +86,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private readonly Random _ailmentRandom = new();
 
-    /// <summary>work 의 상태이상을 대상에게 건다(명중은 부른 쪽에서 이미 봤다). 기본공격이면 <b>무기 아이템의 효과</b>를 건다.</summary>
+    /// <summary>
+    /// work 의 상태이상을 대상에게 건다. 기본공격이면 <b>무기 아이템의 효과</b>를 건다.
+    /// </summary>
+    /// <remarks>
+    /// 거는 함수(<c>0x1007bcc0</c>)는 들어오자마자 <b>명중을 제 손으로 한 번 더 굴린다</b> — 부르는 곳이 한 군데뿐이라
+    /// 피해형(종류 0)은 <b>두 번째</b> 굴림이고, 회복·보조(1·2·3)에는 이것이 <b>유일한</b> 굴림이다.
+    /// </remarks>
     private void ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
+        if (_db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
+            && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return;
+
         // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
         // 무기가 없으면 아무것도 안 건다(0x1007bda4). 지금 판 자료에는 이 칸이 든 아이템이 하나도 없다.
         (int Id, int Value)[] effects;
@@ -170,10 +179,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (u.StatusId[i] is 5 or 6 && _ailmentRandom.Next(100) < 3)
                     (u.StatusId[i], u.StatusValue[i]) = (0, 0);
 
+            // 세 값을 <b>각각</b> 「값% × 최대 HP」 로 셈해 더한다 — 퍼센트를 먼저 합치면 정수 나눗셈에서 한둘 어긋난다.
             int percent = u.Status(2) + u.Status(3) + u.Status(17);
             if (percent > 0)
             {
-                int damage = u.MaxHp * percent / 100;
+                int damage = u.MaxHp * u.Status(2) / 100 + u.MaxHp * u.Status(3) / 100 + u.MaxHp * u.Status(17) / 100;
                 int floor = db.N(36);
                 int hp = Math.Max(Math.Min(u.Hp, floor), u.Hp - damage);
                 if (hp < u.Hp)

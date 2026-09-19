@@ -582,9 +582,10 @@ internal sealed unsafe partial class BattleSceneWindow
             if (result != 3) ApplyAilments(a, t, w);   // 종류 2·3(큐어·격려)은 상태이상만 건다
             return;
         }
+        // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
+        amount = AilmentDamage(a, t, amount);
         if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
 
-        amount = AilmentDamage(a, t, amount);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         t.Hp = Math.Max(0, t.Hp - amount);
         // 10(피격 가속) — 맞으면 TP 가 값% 만큼 앞당겨진다(0x1007952c).
