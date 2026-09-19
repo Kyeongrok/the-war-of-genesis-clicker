@@ -376,6 +376,12 @@ internal sealed unsafe partial class BattleSceneWindow
             case 713:                                    // 아이템 하나 주기
                 if (A(0) > 0) _inventory[A(0)] = _inventory.GetValueOrDefault(A(0)) + 1;
                 break;
+            case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
+                if (A(0) > 0) PlayMusicFile(A(0), loop: false);
+                _eventWaitUntil = _lastTime + 2.0;
+                break;
+            case 400:
+            case 402: break;                             // 카메라 옮기기 — 데모 카메라는 말하는 이·차례인 이를 저절로 따라간다
             case 512:                                    // BGM 바꾸기
                 _mixer.StopMusic();
                 if (A(0) > 1 && A(0) != 0xffff) PlayMusicFile(A(0), loop: true);
