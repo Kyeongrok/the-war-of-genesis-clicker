@@ -667,6 +667,27 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(1) > 0) _inventory[A(1)] = _inventory.GetValueOrDefault(A(1)) + Math.Max(1, (int)A(2));
                 break;
             case 705: _shopMoney += A(1); break;                 // 돈
+            case 701:                                            // 인물 레코드 칸 고치기 [Chr, 칸, 값] (0x100efdf0)
+                // 칸: 0 그림 Obs(+0xc) · 1 초상화(+0xe) · 2 이름 TXR(+6) · 3 +0xa · 4 +0x10 · 5 체질(+0x12) · 6 직업(+0x16) ·
+                // 9~15 장비 칸 0~6(+0x4c~) · 16 WEAPON 띠(+0x48). Chp 0011 은 살라딘·죠안의 그림을 347·338 로, 살라딘 띠를 49 로 놓는다.
+                UpdateCharacter(A(0), c => A(1) switch
+                {
+                    0 => c with { SpriteId = (ushort)A(2) },
+                    1 => c with { FaceId = (ushort)A(2) },
+                    2 => c with { NameId = (ushort)A(2) },
+                    3 => c with { Name2Id = (ushort)A(2) },
+                    4 => c with { TitleId = (ushort)A(2) },
+                    5 => c with { Body = (byte)A(2) },
+                    6 => c with { JobId = (ushort)A(2) },
+                    >= 9 and <= 15 when A(1) - 9 < c.Items.Length => c with { Items = [.. c.Items.Select((it, k) => k == A(1) - 9 ? (ushort)A(2) : it)] },
+                    16 => c with { WeaponBand = (byte)A(2) },
+                    _ => c,
+                });
+                break;
+            case 704:                                            // 어빌리티 배우기 [Chr, 어빌리티] — 없거나 0 이면 레벨 1 로(0x100f06d0, CChr+0x7a)
+                UpdateCharacter(A(0), c => c.Abilities.Any(ab => ab.Ability == A(1) && ab.Level > 0) ? c
+                    : c with { Abilities = [.. c.Abilities.Where(ab => ab.Ability != A(1)), ((ushort)A(1), (ushort)1)] });
+                break;
             case 801:                                            // 동료 넣기 — 다음 전투부터 파티에 든다
                 if (A(1) > 0 && _db?.Character(A(1)) is { } c) { _party[A(1)] = c; _members.Add(A(1)); }
                 break;
@@ -674,6 +695,17 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(1) > 0) { _party.Remove(A(1)); _members.Remove(A(1)); }   // 동료 빼기
                 break;
         }
+    }
+
+    /// <summary>스크립트가 인물 레코드를 고칠 때 — 파티 자료와 (있으면) 전투 판의 유닛 둘 다 고친다. 파티에 없으면 .chr 에서 만들어 넣는다.</summary>
+    private void UpdateCharacter(int chr, Func<CharacterData, CharacterData> change)
+    {
+        if (chr <= 0) return;
+        var data = _units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr) ?? _db?.Character(chr);
+        if (data == null) return;
+        var changed = change(data);
+        _party[chr] = changed;
+        foreach (var u in _units) if (u.ChrCode == chr) u.Data = changed;
     }
 
     /// <summary>그림 하나를 놓는다 — 물체 열쇠를 가리키면 파일에 적힌 그림과 자리를 쓴다.</summary>
