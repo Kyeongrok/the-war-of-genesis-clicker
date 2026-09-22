@@ -249,7 +249,9 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_field is not { } field) return;
         StepFieldActors();
+        if (_fieldChoices != null) _talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
+        if (_talkSkip) { _fieldWaitUntil = 0; FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > _lastTime) return;
 
         if (_fieldEvent < 0)
@@ -315,6 +317,31 @@ internal sealed unsafe partial class BattleSceneWindow
         || _fieldActors.Any(w => w.Walk != null || w.Fade != null)
         || _fieldProps.Any(p => p.Move != null);
 
+    /// <summary>
+    /// 굴러가는 연출을 전부 끝난 자리로 보낸다 — Esc 건너뛰기. 걷기·자리 옮기기는 목적지로, 밝기는 목표값으로,
+    /// 카메라는 목표 자리로, 걷어내기 전환은 끝으로, 덮기(900)는 덮은 채로 둔다(걷는 중이면 걷어 낸다).
+    /// </summary>
+    private void FinishFieldAnimations()
+    {
+        foreach (var actor in _fieldActors)
+        {
+            if (actor.Walk is { } walk)
+            {
+                (actor.X, actor.Y, actor.Motion, actor.Mirror, actor.Walk) = (walk.ToX, walk.ToY, walk.EndMotion, walk.EndMirror, null);
+            }
+            if (actor.Fade is { } fade)
+            {
+                (actor.Alpha, actor.Visible, actor.Fade) = (fade.To, fade.To > 0, null);
+            }
+        }
+        foreach (var prop in _fieldProps)
+            if (prop.Move is { } move) (prop.X, prop.Y, prop.Move) = (move.ToX, move.ToY, null);
+        if (_fieldCamMove is { } cam) { MoveFieldCamera((int)cam.ToX, (int)cam.ToY); _fieldCamMove = null; }
+        _fieldWipe = null;                                   // 걷어내기 전환은 끝(원본도 끝나면 그림만 남긴다)
+        if (_fieldFade is { } fade2)
+            _fieldFade = fade2.CoverTicks > 0 ? (_lastTime - 1000, fade2.CoverTicks, fade2.UncoverTicks, fade2.White) : null;
+    }
+
     /// <summary>행동 1 이 한 줄에서 머문 시각 — 0 이면 안 머무는 중.</summary>
     private double _fieldHoldSince;
 
@@ -347,6 +374,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 // 앞줄이 띄운 것이 끝나기를 기다린다 — 대사(600·601)뿐 아니라 <b>걷기·모션·카메라·전환</b>도 기다린다.
                 // 자료에서 이 행동 바로 앞에 놓인 것은 600·601 다음으로 302·208·900·202·517 차례다.
+                if (_talkSkip) FinishFieldAnimations();       // 건너뛰는 중이면 연출을 끝자리로 보내고 지나간다
                 if (!FieldBusy()) { _fieldHoldSince = 0; break; }
                 // 안 끝나는 연출에 갇히지 않게, 한 줄에서 오래 머물면 그냥 다음 줄로 간다.
                 if (_fieldHoldSince <= 0) _fieldHoldSince = _lastTime;
