@@ -108,6 +108,12 @@ public sealed class ChapterFile
     /// </remarks>
     public IReadOnlyList<FieldEvent> Events { get; private init; } = [];
 
+    /// <summary>
+    /// 메일 방아쇠 — 장소 뒤 4바이트 표 (방아쇠 번호, 편지 번호). 스크립트 조건 <c>503 [방아쇠]</c> 는 이 표로 편지 번호를 찾아
+    /// 「그 편지가 우편함에 있고 읽혔나」를 본다(<c>0x100edc40</c>: 창 <c>+0x2ef0/+0x2eec</c> → 파티 <c>+0xa9a</c>·<c>+0xe9a</c>).
+    /// </summary>
+    public IReadOnlyList<(int Id, int Mail)> MailTriggers { get; private init; } = [];
+
     /// <summary>레코드와 스크립트까지 다 읽고 남은 바이트 수 — <b>0 이어야</b> 레코드 크기를 옳게 잡은 것이다.</summary>
     public int TailBytes { get; private init; }
 
@@ -215,7 +221,8 @@ public sealed class ChapterFile
             // 장소 뒤에 4바이트 레코드 표 하나와 스크립트가 더 있다(분석-전투목록 ba-7 의 Chp 파서와 같다).
             // 여기까지 읽어 파일이 딱 끝나야 레코드 크기를 옳게 잡은 것이다.
             int tailRecords = Count();
-            o += 4 * tailRecords;
+            var triggers = new List<(int, int)>();
+            for (int i = 0; i < tailRecords; i++) { int trigger = W(); int mail = W(); triggers.Add((trigger, mail)); }
             var events = ReadScript(b, ref o);
 
             return new ChapterFile
@@ -238,6 +245,7 @@ public sealed class ChapterFile
                 Planets = planets,
                 Places = places,
                 Events = events,
+                MailTriggers = triggers,
                 TailBytes = b.Length - o,
             };
         }

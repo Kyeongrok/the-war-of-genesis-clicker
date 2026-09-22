@@ -16,6 +16,8 @@ internal sealed unsafe partial class BattleSceneWindow
         public HashSet<int> Legions { get; } = [];
         public int Money { get; set; }
         public Dictionary<int, int> Inventory { get; } = [];
+        public List<int> Mailbox { get; } = [];
+        public HashSet<int> MailRead { get; } = [];
     }
 
     /// <summary>지금 파티가 아닌 파티들의 상태(파티 번호 → 상태). 세이브에 실린다.</summary>
@@ -94,6 +96,8 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (int m in _members) s.Members.Add(m);
         foreach (int l in _ownedLegions) s.Legions.Add(l);
         foreach (var (item, n) in _inventory) s.Inventory[item] = n;
+        s.Mailbox.AddRange(_mailbox);
+        foreach (int id in _mailRead) s.MailRead.Add(id);
         return s;
     }
 
@@ -108,6 +112,10 @@ internal sealed unsafe partial class BattleSceneWindow
         _inventory.Clear();
         foreach (var (item, n) in s.Inventory) _inventory[item] = n;
         _shopMoney = s.Money;
+        _mailbox.Clear();
+        _mailbox.AddRange(s.Mailbox);
+        _mailRead.Clear();
+        foreach (int id in s.MailRead) _mailRead.Add(id);
     }
 
     /// <summary>연대표에서 다른 파티의 에피소드로 갈 때 — 지금 파티를 은행에 넣고 그 파티를 꺼낸다(원본 <c>[0x101b6894] = 파티</c>).</summary>
@@ -121,13 +129,15 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>세이브에 실리는 다른 파티 하나.</summary>
-    private sealed record SaveParty(int No, int[] Members, int Money, Dictionary<string, int> Inventory, int[] Legions, SaveUnit[] Units);
+    private sealed record SaveParty(int No, int[] Members, int Money, Dictionary<string, int> Inventory, int[] Legions, SaveUnit[] Units,
+                                    int[]? Mailbox = null, int[]? MailRead = null);
 
     private SaveParty[] SaveBank() =>
         [.. _partyBank.Select(p => new SaveParty(p.Key, [.. p.Value.Members], p.Value.Money,
             p.Value.Inventory.ToDictionary(i => i.Key.ToString(), i => i.Value), [.. p.Value.Legions],
             [.. p.Value.Party.Select(c => new SaveUnit(c.Key, 0, 0, 0, 0, 0, 0, true, false, c.Value.Level, c.Value.CumExp, c.Value.Exp,
-                                                       c.Value.Items, c.Value.Passives, [.. c.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))]))];
+                                                       c.Value.Items, c.Value.Passives, [.. c.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
+            [.. p.Value.Mailbox], [.. p.Value.MailRead]))];
 
     private void RestoreBank(SaveParty[]? bank)
     {
@@ -138,6 +148,8 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int m in sp.Members) s.Members.Add(m);
             foreach (int l in sp.Legions) s.Legions.Add(l);
             foreach (var (id, n) in sp.Inventory) if (int.TryParse(id, out int item)) s.Inventory[item] = n;
+            s.Mailbox.AddRange(sp.Mailbox ?? []);
+            foreach (int id in sp.MailRead ?? []) s.MailRead.Add(id);
             foreach (var u in sp.Units)
                 if (_db?.Character(u.ChrCode) is { } pc)
                     s.Party[u.ChrCode] = pc with

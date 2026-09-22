@@ -13,7 +13,7 @@ namespace DuelDx;
 /// 줄을 누르면 뷰어 <b>(164, 120) 313×239</b> 가 뜨고 닫으면 읽음 표시. 나가기 단추는 Obs 0287 @ (455, 430).
 /// 본문은 TXR 이 아니라 <c>Dat\MAIL.DAT</c> 안에 그대로 들어 있다 —
 /// 머리 <c>u16, u16 편지 수, u16 최대 번호</c>, 레코드 <c>번호·보낸이 Chr·발신지 TXR·Bgm 번호·길이·본문 바이트·조건 3칸·안 쓰는 칸</c>.
-/// 원본은 챕터의 메일 트리거로 우편함에 하나씩 쌓지만, 이 데모에는 우편함이 없어 <b>파일에 든 편지를 모두</b> 보여 준다.
+/// 우편함은 메일 페이지에 들어갈 때 <see cref="DeliverMail"/> 가 조건(깃발)을 채운 편지를 하나씩 넣어 채운다(원본 <c>0x100fc6e0</c>).
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -22,13 +22,52 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MailRowObs = 1291;
 
     private List<MosesMail>? _mails;
+
+    /// <summary>우편함 — 도착한 편지 번호(도착 차례). 원본 파티 <c>+0xa98/+0xa9a</c>. 세이브에 실린다.</summary>
+    private readonly List<int> _mailbox = [];
+
+    /// <summary>읽은 편지 번호(원본 파티 <c>+0xe9a</c>). 세이브에 실린다.</summary>
     private readonly HashSet<int> _mailRead = [];
     private int _mailTop, _mailOpen = -1;
 
-    private List<MosesMail> Mails()
+    /// <summary><c>MAIL.DAT</c> 의 편지 전부(번호 차례).</summary>
+    private List<MosesMail> AllMails()
     {
         if (_mails != null) return _mails;
         return _mails = _db?.Files.Read("Dat", "MAIL.DAT") is { } bytes ? MosesMail.ParseAll(bytes) : [];
+    }
+
+    /// <summary>우편함에 든 편지(도착 차례).</summary>
+    private List<MosesMail> Mails()
+    {
+        var all = AllMails();
+        return [.. _mailbox.Select(id => all.FirstOrDefault(m => m.Id == id)).Where(m => m != null)!];
+    }
+
+    /// <summary>
+    /// 새 편지 배달 — 아직 안 온 편지 가운데 조건(깃발) 없는 것과 조건을 채운 것을 우편함에 넣는다(<c>0x100fc6e0</c>, 메일 페이지에 들어갈 때).
+    /// 늘어난 수를 돌려준다(늘었으면 원본은 Snd 571).
+    /// </summary>
+    private int DeliverMail()
+    {
+        int added = 0;
+        foreach (var mail in AllMails())
+        {
+            if (_mailbox.Contains(mail.Id)) continue;
+            if (mail.CondVar >= 0 && mail.CondVar != 0xffff && !FlagAllows(mail.CondVar, mail.CondValue, mail.CondOp)) continue;
+            _mailbox.Add(mail.Id);
+            added++;
+        }
+        return added;
+    }
+
+    /// <summary>스크립트 조건 503 [방아쇠] — 챕터 메일 방아쇠 표로 편지 번호를 찾아, 우편함에 있고 읽었으면 참.</summary>
+    private bool MailTriggerRead(int trigger)
+    {
+        if (_mosesChp is not { } chp) return false;
+        foreach (var (id, mail) in chp.MailTriggers)
+            if (id == trigger) return _mailbox.Contains(mail) && _mailRead.Contains(mail);
+        return false;
     }
 
     private string SenderName(int chrCode) =>
@@ -53,7 +92,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_mailOpen >= 0)                                   // 뷰어는 아무 데나 누르면 닫히고 읽음이 된다
         {
-            _mailRead.Add(_mailOpen);
+            var opened = Mails();
+            if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
             _mailOpen = -1;
             return true;
         }
@@ -81,7 +121,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var mail = mails[index];
             int rx = ox + MailListX, ry = oy + MailListY + r * MailRowH;
             DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
-            bool read = _mailRead.Contains(index);
+            bool read = _mailRead.Contains(mail.Id);
             string line = $"{SenderName(mail.Sender)} : {_db?.T(mail.OriginText)}";
             DrawText(line, rx + 24, ry + 2, read ? DimGray : 0xFFFFFF80, 11);
         }
@@ -132,7 +172,8 @@ internal sealed unsafe partial class BattleSceneWindow
 }
 
 /// <summary><c>Dat\MAIL.DAT</c> 의 편지 하나.</summary>
-internal sealed record MosesMail(int Id, int Sender, ushort OriginText, ushort Bgm, string Body)
+/// <param name="CondVar">도착 조건 (깃발, 값, 연산자) — 깃발이 0xffff(−1) 이면 조건 없이 온다(<c>0x100fc6e0</c>).</param>
+internal sealed record MosesMail(int Id, int Sender, ushort OriginText, ushort Bgm, string Body, int CondVar = -1, int CondValue = 0, int CondOp = 0)
 {
     private static readonly Lazy<Encoding> Cp949 = new(() =>
     {
@@ -154,8 +195,12 @@ internal sealed record MosesMail(int Id, int Sender, ushort OriginText, ushort B
                 int length = BitConverter.ToUInt16(b, o + 8);
                 if (o + 10 + length > b.Length) break;
                 string body = Cp949.Value.GetString(b, o + 10, length).TrimEnd('\0');
-                list.Add(new MosesMail(id, sender, origin, bgm, body));
-                o += 10 + length + 8;                      // 본문 뒤에 조건 3칸 + ?
+                int c = o + 10 + length;
+                int condVar = c + 6 <= b.Length ? BitConverter.ToInt16(b, c) : -1;
+                int condValue = c + 6 <= b.Length ? BitConverter.ToInt16(b, c + 2) : 0;
+                int condOp = c + 6 <= b.Length ? BitConverter.ToInt16(b, c + 4) : 0;
+                list.Add(new MosesMail(id, sender, origin, bgm, body, condVar, condValue, condOp));
+                o += 10 + length + 8;                      // 본문 뒤에 조건 3칸 + 안 쓰는 칸
             }
         }
         catch (ArgumentException) { /* 배치가 안 맞으면 읽은 데까지 */ }
