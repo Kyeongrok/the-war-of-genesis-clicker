@@ -663,10 +663,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(0) > 0 && A(0) < _flags.Length)
                     _flags[A(0)] = (byte)Math.Clamp(FieldArith(_flags[A(0)], A(1), A(2)) + A(1), 0, 255);
                 break;
-            case 703:                                            // 아이템 인자1 을 인자2 개
-                if (A(1) > 0) _inventory[A(1)] = _inventory.GetValueOrDefault(A(1)) + Math.Max(1, (int)A(2));
-                break;
-            case 705: _shopMoney += A(1); break;                 // 돈
+            case 703: AddItem(A(0), A(1), Math.Max(1, (int)A(2))); break;   // [파티, 아이템, 개수]
+            case 705: AddMoney(A(0), A(1)); break;                           // [파티, 돈] — 파티 객체 +0x10c
             case 701:                                            // 인물 레코드 칸 고치기 [Chr, 칸, 값] (0x100efdf0)
                 // 칸: 0 그림 Obs(+0xc) · 1 초상화(+0xe) · 2 이름 TXR(+6) · 3 +0xa · 4 +0x10 · 5 체질(+0x12) · 6 직업(+0x16) ·
                 // 9~15 장비 칸 0~6(+0x4c~) · 16 WEAPON 띠(+0x48). Chp 0011 은 살라딘·죠안의 그림을 347·338 로, 살라딘 띠를 49 로 놓는다.
@@ -698,11 +696,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
                 if (A(0) > 0) _ownedLegions.Add(A(0));
                 break;
-            case 801:                                            // 동료 넣기 — 다음 전투부터 파티에 든다
-                if (A(1) > 0 && _db?.Character(A(1)) is { } c) { _party[A(1)] = c; _members.Add(A(1)); }
-                break;
-            case 802:
-                if (A(1) > 0) { _party.Remove(A(1)); _members.Remove(A(1)); }   // 동료 빼기
+            case 801: AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
+            case 802: RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]
+            case 803: MergeParties(A(0), A(1)); break;           // 파티 합치기 [A, B] (0x100f0940, 가설)
+            case 804:                                            // 인물 옮기기 [Chr, 파티A → 파티B] (0x100f0ad0: 0x1004de10 빼고 0x1004ddd0 넣기)
+                if (A(0) > 0) AddMember(A(2), A(0), RemoveMember(A(1), A(0)));
                 break;
         }
     }

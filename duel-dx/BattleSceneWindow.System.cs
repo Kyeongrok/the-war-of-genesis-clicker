@@ -366,7 +366,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int EventNextBattle = 0, int EventNextField = 0,
                                     bool InMoses = false, int Chapter = 0,
                                     bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
-                                    SaveUnit[]? Party = null, int[]? OwnedLegions = null);
+                                    SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null);
 
     private const int SaveVersion = 8;
 
@@ -438,7 +438,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
                           .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
                                                     p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
-                [.. _ownedLegions]);
+                [.. _ownedLegions], SaveBank());
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -571,6 +571,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
         _ownedLegions.Clear();
         foreach (int id in state.OwnedLegions ?? []) _ownedLegions.Add(id);
+        RestoreBank(state.Bank);
         _placesUsed.Clear();
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
