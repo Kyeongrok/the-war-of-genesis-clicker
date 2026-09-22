@@ -349,7 +349,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
-                                   byte[]? StatusId = null, short[]? StatusValue = null);
+                                   byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1);
 
     /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
     /// <param name="Flags">
@@ -388,7 +388,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
-                    [.. u.StatusId], [.. u.StatusValue]))],
+                    [.. u.StatusId], [.. u.StatusValue], u.Side))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 _scene.TitleTextId, 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
@@ -467,6 +467,7 @@ internal sealed unsafe partial class BattleSceneWindow
             u.OriginRow = s.Row;
             u.Facing = (Facing)s.Facing;
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, 0);
+            if (s.Side >= 0) u.Side = s.Side;
             if (u.Data is { } c)
                 u.Data = c with
                 {
