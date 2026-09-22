@@ -79,8 +79,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 원본 파티 객체의 인원(801 로 들어온 동료) 차례 — 레이토스 길드처럼 주인공이 안 서는 전투 뒤에도 파티가 그대로 보여야 한다(사용자 지적).
         if (_members.Count > 0) return [.. _members.Where(c => _party.ContainsKey(c) || _units.Any(u => u.ChrCode == c))];
-        // 동료 목록이 없는 옛 세이브 — 내 편 유닛의 Chr.
-        return [.. _units.Where(u => u.IsAlly).Select(u => u.ChrCode).Distinct()];
+        // 동료 목록을 못 만든 옛 세이브 — 내가 움직이는 내 부대(편 4)만. 편 3 동맹 NPC(제이슨)는 뺀다.
+        return [.. _units.Where(u => u.PlayerControlled).Select(u => u.ChrCode).Distinct()];
     }
 
     /// <summary>스크립트 801 로 들어온 동료의 Chr 번호(802 로 빠진다) — 원본 파티 객체의 인원 목록. 세이브에 실린다.</summary>
