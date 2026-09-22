@@ -53,10 +53,11 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         try
         {
-            foreach (string folder in new[] { "ui", "effects", Path.Combine("moses", "obs") })
-                foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find(folder), "*.obs"))
-                    if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
-                        _uiPaths[id] = path;
+            lock (_ui)
+                foreach (string folder in new[] { "ui", "effects", Path.Combine("moses", "obs") })
+                    foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find(folder), "*.obs"))
+                        if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
+                            _uiPaths[id] = path;
 
             // 링 그림만 미리 풀어 둔다 — 나머지(이펙트·무기 층)는 처음 쓸 때 푼다.
             foreach (int id in RingItems.Select(r => r.IconObs).Concat([86, 105, 106, 452])) UiFor(id);
@@ -70,11 +71,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>그림을 (처음 쓸 때 풀어) 돌려준다.</summary>
     private UiSprite? UiFor(int id)
     {
-        if (_ui.TryGetValue(id, out var sprite)) return sprite;
-        // 아직 그림 목록을 못 읽었으면(자료 읽기 전) 기억해 두지 않는다 — 나중에 다시 묻는다.
-        if (!_uiPaths.TryGetValue(id, out string? path)) return null;
-        try { return _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path)); }
-        catch (Exception ex) when (ex is IOException or InvalidDataException) { return _ui[id] = null; }
+        // 자료는 배경 스레드(LoadScene)가 읽으면서도 이 캐시를 채우고, 그리기 스레드도 처음 쓰는 그림을 여기서 푼다 —
+        // 잠그지 않으면 Dictionary 가 깨진다(「Operations that change non-concurrent collections…」로 죽었다).
+        lock (_ui)
+        {
+            if (_ui.TryGetValue(id, out var sprite)) return sprite;
+            // 아직 그림 목록을 못 읽었으면(자료 읽기 전) 기억해 두지 않는다 — 나중에 다시 묻는다.
+            if (!_uiPaths.TryGetValue(id, out string? path)) return null;
+            try { return _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path)); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException) { return _ui[id] = null; }
+        }
     }
 
     private void PlaySound(int id) => Play(id);

@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 창에 보이는 판 높이 — 판 전체의 70%, 다만 원본 화면 높이(480 + 머리줄)까지만. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.
     /// 세로로 긴 맵(Obt 0156 은 2272 픽셀)도 원본처럼 줌아웃하지 않고 스크롤한다.
     /// </summary>
-    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, (int)Math.Round(_resH / _zoom)));
+    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, Math.Max(240, (int)Math.Round(_resH / _zoom)));
 
     /// <summary>설정 > 해상도 — <b>창 크기</b>(화면 픽셀). 원본은 640×480. 보이는 판은 이것을 배율로 나눈 만큼이다.</summary>
     private int _viewW = UserSettings.Current.ViewW, _viewH = UserSettings.Current.ViewH;
@@ -111,6 +111,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <see cref="_camX"/> 로 좌우 스크롤한다(차례인 인물을 따라간다).
     /// </summary>
     private int ViewWidth => Math.Min(BoardWidth, Math.Max(320, (int)Math.Round(_resW / _zoom)));
+
+    /// <summary>창 안에서 판 그림이 놓이는 자리(화면 픽셀) — 판이 창보다 작으면 가운데에 두고 둘레는 검게 남긴다.</summary>
+    private int ViewOffsetX => Math.Max(0, (_resW - (int)(ViewWidth * _zoom)) / 2);
+    private int ViewOffsetY => Math.Max(0, (_resH - (int)(ViewHeight * _zoom)) / 2);
+
+    /// <summary>화면 픽셀 → 판 픽셀(카메라 더한 것).</summary>
+    private (int X, int Y) BoardPoint(int clientX, int clientY) =>
+        ((int)Math.Floor((clientX - ViewOffsetX) / _zoom) + _camX, (int)Math.Floor((clientY - ViewOffsetY) / _zoom) + _camY);
     /// <summary>배율의 위아래 한계. 자동은 판이 창보다 작을 때(모세스·타이틀 640×480)만 창을 채우도록 키운다.</summary>
     private const double MinZoom = 0.5, MaxZoomChosen = 4;
 
@@ -304,9 +312,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>
-    /// 배율을 정한다 — 설정 > 해상도가 <b>창 크기</b>, 설정 > 배율이 확대다.
-    /// 배율 「자동」은 판이 창보다 작을 때(모세스·타이틀 640×480, 작은 맵) 창을 채우도록 키우고, 판이 더 크면 1배로 두어
-    /// 창 크기만큼 판을 보인다. 고른 배율은 그대로 쓰되 판 전체가 창보다 작아지지 않게(모세스가 잘리지 않게) 깎는다.
+    /// 배율을 정한다 — 설정 > 해상도가 <b>창 크기 그대로</b>, 설정 > 배율이 <b>확대 그대로</b>다(사용자 요청: 「해상도는 창 크기, 배율은 정직하게」).
+    /// 보이는 판 = 창 ÷ 배율. 판이 그보다 작으면(모세스·타이틀 640×480) 창 가운데에 두고 둘레를 검게 남긴다.
+    /// 배율 「자동」은 판 내용(모세스 640×480, 맵은 판의 70%)이 창을 채우는 가장 큰 배율(0.05 단위, 최대 4배, 최소 1배).
     /// 해상도가 모니터 작업 영역보다 크면 들어가는 데까지만(<see cref="_resW"/>·<see cref="_resH"/>).
     /// </summary>
     private double FitZoom()
@@ -316,16 +324,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         {
             // 제목 표시줄·메뉴·테두리 몫을 조금 남긴다.
             _resW = Math.Max(320, Math.Min(_viewW, work.Width - 32));
-            _resH = Math.Max(240, Math.Min(_viewH, work.Height - 100 - GridTop));
+            _resH = Math.Max(240, Math.Min(_viewH, work.Height - 100));
         }
         else { _resW = _viewW; _resH = _viewH; }
 
-        // 배율 1 에서 보이는 판 크기 — 판이 작으면 판 전체, 크면 창만큼.
-        int w1 = Math.Min(BoardWidth, Math.Max(320, _resW));
-        int h1 = Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, _resH));
-        // 세로는 머리줄(GridTop) 을 빼고 잰다 — 640×480 이 1배, 1280×960 이 꼭 2배가 되게.
-        double fill = Math.Floor(Math.Min(_resW / (double)w1, _resH / (double)Math.Max(1, h1 - GridTop)) * 20) / 20;
-        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, Math.Max(1, fill)), MinZoom, MaxZoomChosen);
+        if (_zoomPercent > 0) return Math.Clamp(_zoomPercent / 100.0, MinZoom, MaxZoomChosen);
+
+        int contentW = Math.Min(BoardWidth, _resW);
+        int contentH = Math.Min(BoardIsMap ? BoardHeight * 7 / 10 : GridTop + MosesH, _resH);
+        double fill = Math.Floor(Math.Min(_resW / (double)contentW, _resH / (double)contentH) * 20) / 20;
         return Math.Clamp(fill, 1, MaxZoomChosen);
     }
 
@@ -366,8 +373,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>보이는 판 크기·배율에 맞춰 셰이더·텍스처·창·스왑체인을 다시 만든다.</summary>
     private void RebuildView()
     {
-        // 배율은 픽셀 셰이더에 박혀 있다 — 맵이 바뀌어 배율이 달라졌으면 셰이더부터 다시 빌드한다.
-        if (Math.Abs(_shaderZoom - _zoom) > 1e-9) CompileShaders();
+        // 배율과 판 자리는 픽셀 셰이더에 박혀 있다 — 달라졌으면 셰이더부터 다시 빌드한다.
+        if (Math.Abs(_shaderZoom - _zoom) > 1e-9 || _shaderOffset != (ViewOffsetX, ViewOffsetY)) CompileShaders();
 
         // 텍스처는 보이는 판 크기로 다시 만든다.
         _boardSrv?.Dispose();
@@ -386,8 +393,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         });
         _boardSrv = _device.CreateShaderResourceView(_boardTex);
 
-        // 창과 스왑체인도 새 크기로.
-        int pixelW = (int)(ViewWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
+        // 창과 스왑체인은 해상도 그대로 — 판 그림은 그 안 가운데에 놓인다(Draw 의 뷰포트).
+        int pixelW = _resW, pixelH = _resH;
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
         Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
@@ -502,7 +509,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void CreateNativeWindow()
     {
         if (_fb.Length == 0) ResizeBoard(Cols, Rows);   // 창 크기를 정하기 전에 판 버퍼부터
-        int pixelW = (int)(ViewWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
+        _zoom = FitZoom();
+        int pixelW = _resW, pixelH = _resH;
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
@@ -562,7 +570,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
-                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom) + _camX, by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
+                var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
                 UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
@@ -714,7 +722,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen) { LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
-        int bx = (int)(clientX / _zoom) + _camX, by = (int)(clientY / _zoom) + _camY;
+        var (bx, by) = BoardPoint(clientX, clientY);
         if (OnFieldClick(bx, by)) return;
         if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
@@ -1098,7 +1106,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             }
             float4 PS(VSOut i) : SV_Target
             {
-                int2 uv = int2(i.pos.xy / {{_zoom.ToString(System.Globalization.CultureInfo.InvariantCulture)}});
+                // board sits at (offset) inside the window; SV_Position is window-based (ASCII only: the compiler is given a char count)
+                int2 uv = int2((i.pos.xy - float2({{ViewOffsetX}}, {{ViewOffsetY}})) / {{_zoom.ToString(System.Globalization.CultureInfo.InvariantCulture)}});
                 return Board.Load(int3(uv, 0));
             }
             """;
@@ -1109,14 +1118,18 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _vs = _device.CreateVertexShader(vsBlob.Span);
         _ps = _device.CreatePixelShader(psBlob.Span);
         _shaderZoom = _zoom;
+        _shaderOffset = (ViewOffsetX, ViewOffsetY);
     }
+
+    /// <summary>지금 셰이더에 박혀 있는 판 자리 — <see cref="ViewOffsetX"/>·<see cref="ViewOffsetY"/> 와 달라지면 다시 빌드한다.</summary>
+    private (int X, int Y) _shaderOffset;
 
     /// <summary>지금 셰이더에 박혀 있는 배율 — <see cref="_zoom"/> 과 달라지면 다시 빌드한다.</summary>
     private double _shaderZoom;
 
     private void CreateSwapChain()
     {
-        int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
+        int w = _resW, h = _resH;
         using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
         using var adapter = dxgiDevice.GetAdapter();
         using var factory = adapter.GetParent<IDXGIFactory2>();
@@ -1154,7 +1167,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
-        _ctx.RSSetViewport(0, 0, w, h);
+        _ctx.ClearRenderTargetView(_backBufferRtv, new Vortice.Mathematics.Color4(0, 0, 0, 1));
+        _ctx.RSSetViewport(ViewOffsetX, ViewOffsetY, w, h);   // 판이 창보다 작으면 가운데
         _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         _ctx.VSSetShader(_vs);
         _ctx.PSSetShader(_ps);
