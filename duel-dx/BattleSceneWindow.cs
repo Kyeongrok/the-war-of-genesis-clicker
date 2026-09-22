@@ -498,17 +498,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !_mosesOpen)
-        {
-            if (_outcome.StartsWith('승')) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
-            // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
-            int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
-            if (_outcome.StartsWith('승') && next > 0 && StartBattle(next)) return;
-            // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
-            if (_outcome.StartsWith('승') && _eventNextField > 0 && OpenField(_eventNextField)) return;
-            OpenMoses();
-            return;
-        }
+        if (_outcome.Length > 0 && !_mosesOpen) { LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (_mosesOpen)
         {
@@ -585,9 +575,26 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 클릭: 공격 고르는 중이면 그 적을 친다. 인물이면 그 인물을 고르고(수치·영역 보기),
     /// 차례인 아군의 파란 칸이면 거기까지 걷는다. 빈 칸이면 차례인 인물로 선택을 되돌린다.
     /// </summary>
+    /// <summary>
+    /// 전투가 끝나고 배너가 떠 있을 때 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
+    /// 없거나 졌으면 모세스 화면으로 간다(mo-1). 키든 클릭이든 한 번이면 넘어간다(원본도 배너를 눌러 건너뛴다, 분석-전투).
+    /// </summary>
+    private void LeaveFinishedBattle()
+    {
+        if (_outcome.StartsWith('승')) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
+        // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
+        int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
+        if (_outcome.StartsWith('승') && next > 0 && StartBattle(next)) return;
+        // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
+        if (_outcome.StartsWith('승') && _eventNextField > 0 && OpenField(_eventNextField)) return;
+        OpenMoses();
+    }
+
     private void OnClick(int clientX, int clientY)
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
+        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen) { LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
         if (OnFieldClick(bx, by)) return;
