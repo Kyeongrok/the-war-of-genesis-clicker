@@ -79,7 +79,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 아군이 하나도 없는 전투(개별훈련용 던젼 0060 처럼)는 배치 칸에 파티를 세운다.
         if (!list.Any(u => u.PlayerControlled) && scene.Placement is { Count: > 0 } spots)
         {
-            var party = _party.Keys.Count > 0 ? _party.Keys.ToList()
+            // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
+            // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
+            var party = _members.Count > 0 ? _members.Where(_party.ContainsKey).ToList()
+                      : _party.Keys.Count > 0 ? _party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
             for (int i = 0; i < spots.Count && i < party.Count; i++)
                 list.Add(new UnitState(new DemoUnit(party[i], spots[i].Col, spots[i].Row, 4, 0, spots[i].Facing)));
