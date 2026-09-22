@@ -530,6 +530,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
         _chapterDone = state.ChapterDone;
         _partyNo = state.PartyNo;
+        // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
+        // 지금 인원을 은행으로 치워 버린다.
+        if (state.InMoses && state.Chapter > 0 && Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) _partyNo = owner.Party;
         _members.Clear();
         foreach (int chr in state.Members ?? []) _members.Add(chr);
 
