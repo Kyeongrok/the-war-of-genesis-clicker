@@ -236,7 +236,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
                 uint tint = range.Cost[i] != int.MaxValue ? MoveTint : range.Red[i] ? RangeTint : 0;
                 if (tint == 0) continue;
-                int x = col * TileW, y = GridTop + row * TileH;
+                int x = col * TileW, y = CellTop(col, row);
                 AddRect(x, y, TileW, TileH, tint);
                 // 테두리는 <b>같은 색을 불투명으로</b>, 칸보다 1픽셀 크게 — 이웃 칸과 선을 나눠 쓴다.
                 StrokeRect(x, y, TileW + 1, TileH + 1, 0xFF000000 | tint);

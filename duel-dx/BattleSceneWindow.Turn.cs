@@ -728,7 +728,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var t = _units[_attackCursor];
             uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 4)));
             uint color = alpha << 24 | 0xFF3030;
-            int cx = t.Col * TileW, cy = GridTop + t.Row * TileH;
+            int cx = t.Col * TileW, cy = CellTop(t.Col, t.Row);
             for (int k = 0; k < 3; k++) StrokeRect(cx + k, cy + k, TileW - 2 * k, TileH - 2 * k, color);
             return;
         }
@@ -738,7 +738,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int col = 0; col < Cols; col++)
             {
                 if (!InWorkRange(w, u.Col, u.Row, col, row, u)) continue;
-                int x = col * TileW, y = GridTop + row * TileH;
+                int x = col * TileW, y = CellTop(col, row);
                 FillRect(x + 1, y + 1, TileW - 2, TileH - 2, 0x70F0D040);
                 StrokeRect(x + 1, y + 1, TileW - 2, TileH - 2, 0xFFF0D040);
             }
@@ -748,7 +748,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 4)));
             uint color = alpha << 24 | 0xFF3030;
-            int cx = a.Item1 * TileW, cy = GridTop + a.Item2 * TileH;
+            int cx = a.Item1 * TileW, cy = CellTop(a.Item1, a.Item2);
             for (int k = 0; k < 3; k++) StrokeRect(cx + k, cy + k, TileW - 2 * k, TileH - 2 * k, color);
         }
     }

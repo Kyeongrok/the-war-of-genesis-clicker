@@ -50,7 +50,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 커서가 놓인 칸과 그 높이
         int col = Math.Clamp(_mouse.X / TileW, 0, Cols - 1);
-        int row = Math.Clamp((_mouse.Y - GridTop) / TileH, 0, Rows - 1);
+        int row = Math.Clamp(RowAt(_mouse.X, _mouse.Y), 0, Rows - 1);
         Center($"{map.HeightAt(col, row)}", 40, 24, White);
         Center($"{col}", 64, 38, White);
         Center($"{row}", 20, 44, White);

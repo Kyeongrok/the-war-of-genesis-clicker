@@ -124,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (obj.Hp > 0) return true;
         // 부서지면 그 자리에 폭발이 한 번 돈다(Obs 1009, 0x100e7ba0).
-        _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, GridTop + row * TileH + TileH / 2));
+        _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, CellCenterY(col, row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         return true;
@@ -136,7 +136,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void Explode(DemoObject obj)
     {
         _effects.Add((ObjectBreakObs, 0, _lastTime,
-                      obj.Col * TileW + TileW / 2, GridTop + obj.Row * TileH + TileH / 2));
+                      obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
         Play(MosesClickSound);
         if (_db is null) return;
 
@@ -215,7 +215,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var obj in Objects)
         {
             if (!obj.Alive || _opened.Contains(obj) || obj.Data.SpriteId <= 0) continue;
-            int x = obj.Col * TileW + TileW / 2, y = GridTop + obj.Row * TileH + TileH;
+            int x = obj.Col * TileW + TileW / 2, y = CellTop(obj.Col, obj.Row) + TileH;
             DrawUi(obj.Data.SpriteId, 0, (int)(_lastTime * TicksPerSecond), x, y, UiBlend.Alpha);
         }
     }

@@ -69,7 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var e in m.Effects)
         {
             var (x, y) = e.OnTarget
-                ? (col * TileW + TileW / 2, GridTop + row * TileH + TileH / 2)
+                ? (col * TileW + TileW / 2, CellCenterY(col, row))
                 : UnitFoot(user);
             _effects.Add((e.Obs, e.Motion, _lastTime, x, y - e.Lift));
         }
