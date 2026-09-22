@@ -400,7 +400,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_units[_turn].Data is not { } c || Work(c.BasicWorkId) is not { } w) return;
         if (FindAttackPath(_turn, targetIndex) is not { } plan)
         {
-            Toast("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요");
+            Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요");
             return;
         }
         CommitMoveForAction();
@@ -425,7 +425,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         _attackCursor = targets[0];
         string confirm = KeyBindings.KeyName(_keys[KeyAction.Attack]);
-        Toast($"{UnitName(_attackCursor)} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
+        Hint($"{UnitName(_attackCursor)} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
     }
 
     /// <summary>
@@ -470,7 +470,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int target = LiveUnitAt(col, row) is { } t ? Array.IndexOf(_units, t) : -1;
             if (target < 0 || _units[target].IsAlly || FindAttackPath(_turn, target) is not { } plan)
             {
-                Toast("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");
+                Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");
                 return true;
             }
             CancelTargeting();
@@ -480,7 +480,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (!InWorkRange(w, user.Col, user.Row, col, row, user))
         {
-            Toast("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");
+            Hint("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");
             return true;
         }
         // 대상 방식 3·6(아무 칸)·7(빈 칸)은 메테오처럼 <b>칸을 고르는</b> 기술이라 그 칸에 아무도 없어도 된다.

@@ -9,8 +9,9 @@ namespace DuelDx;
 /// <param name="ZoomPercent">화면 배율 % — 0 이면 자동(모니터에 맞춤, 최대 200%). 100·150·200·300·400 을 고를 수 있다.</param>
 /// <param name="ViewW">창 너비(화면 픽셀) — 원본 640. 배율 자동이면 모세스·타이틀은 이 크기를 채우고, 큰 맵은 이만큼 보인다.</param>
 /// <param name="ViewH">창 높이(화면 픽셀, 머리줄 제외) — 원본 480.</param>
+/// <param name="ShowHints">조작 안내 글(「…을(를) 노립니다 — 클릭·Enter…」 따위)을 보일지. 설정 > 안내 글 켜기·끄기.</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
-                                    int ViewW = 1280, int ViewH = 960)
+                                    int ViewW = 1280, int ViewH = 960, bool ShowHints = true)
 {
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "settings.json");
 

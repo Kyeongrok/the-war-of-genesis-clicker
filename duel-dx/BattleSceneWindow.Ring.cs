@@ -206,7 +206,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ToggleRingForSelected()
     {
         if (_ringUnit >= 0) { CancelRing(); return; }
-        if ((uint)_selected >= _units.Length) { Toast("먼저 인물을 고르세요 (클릭·Tab)"); return; }
+        if ((uint)_selected >= _units.Length) { Hint("먼저 인물을 고르세요 (클릭·Tab)"); return; }
         OpenRing(_selected);
     }
 

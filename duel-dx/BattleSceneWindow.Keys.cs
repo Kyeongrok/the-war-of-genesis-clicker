@@ -102,7 +102,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _keysCapture = -1;
 
     private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
-    private const int MenuAllyAi = 1006;
+    private const int MenuAllyAi = 1006, MenuHints = 1007;
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
     private const int MenuZoomAuto = 1010;
     private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
@@ -125,6 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGrid, "격자 켜기·끄기(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGauges, "체력바 켜기·끄기(&H)");
+        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowHints ? Win32.MF_CHECKED : 0u), MenuHints, "조작 안내 글 보이기(&T)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -151,7 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints));
 
     private void OnMenuCommand(int id)
     {
@@ -163,6 +164,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 _allyAi = !_allyAi;
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuAllyAi, Win32.MF_BYCOMMAND | (_allyAi ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_allyAi ? "동맹은 AI 가 움직입니다" : "동맹도 내가 움직입니다");
+                SaveSettings();
+                break;
+            case MenuHints:
+                _showHints = !_showHints;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuHints, Win32.MF_BYCOMMAND | (_showHints ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                if (!_showHints) _toast = "";
+                Toast(_showHints ? "조작 안내 글을 보입니다" : "조작 안내 글을 숨깁니다");
                 SaveSettings();
                 break;
             case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
