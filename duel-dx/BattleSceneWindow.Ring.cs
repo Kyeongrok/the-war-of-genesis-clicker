@@ -306,10 +306,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <param name="fade">
     /// 0~1 의 밝기 — 필드 인물이 서서히 사라지고 나타날 때(행동 210·211) 쓴다. 1 이면 그대로 그린다.
     /// </param>
-    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1)
+    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1, bool mirror = false)
     {
         var clip = _uiClip;
-        if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
+        if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop, mirror) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
         for (int yy = 0; yy < f.H; yy++)
         {
@@ -363,6 +363,7 @@ internal sealed unsafe partial class BattleSceneWindow
 internal sealed class UiSprite
 {
     private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
+    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
     private readonly ObsMotionTable? _table;
 
     public UiSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
@@ -375,16 +376,28 @@ internal sealed class UiSprite
                 _frames[(motion.Id, frame.SlotId)] = SpriteFrame.From(frame);
     }
 
-    /// <summary>모션 m 의 tick 째 컷. 되풀이가 아니면 모션이 끝난 뒤에는 null(이펙트가 사라지는 때).</summary>
-    public SpriteFrame? FrameAt(int motion, int tick, bool loop = true)
+    private MotionKey? KeyAt(int motion, int tick, bool loop)
     {
         if (_table?.Clips.GetValueOrDefault(motion) is { } clip)
         {
             // 한 번만 재생하는 것(이펙트)은 모션이 끝나면 null — 그때 사라진다.
             if (!loop && tick >= Math.Max(clip.Length, 1)) return null;
-            return clip.KeyAt(tick, loop) is { } k ? _frames.GetValueOrDefault((k.SubentryId, k.Slot)) : null;
+            return clip.KeyAt(tick, loop);
         }
-        return loop ? _frames.GetValueOrDefault((0, 0)) : null;
+        return loop ? new MotionKey(0, 0, 0, 0) : null;
+    }
+
+    /// <summary>
+    /// 모션 m 의 tick 째 컷. 되풀이가 아니면 모션이 끝난 뒤에는 null(이펙트가 사라지는 때).
+    /// <paramref name="mirror"/> 면 좌우로 뒤집은 컷을 준다 — 인물이 오른쪽을 볼 때, 몸에 붙는 무기·검기 층도
+    /// 몸과 같이 뒤집어야 하기 때문이다(안 뒤집으면 왼쪽을 보고 치는 그림 그대로 남아 반대쪽에 나타나 보인다).
+    /// </summary>
+    public SpriteFrame? FrameAt(int motion, int tick, bool loop = true, bool mirror = false)
+    {
+        if (KeyAt(motion, tick, loop) is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return null;
+        if (!mirror) return frame;
+        if (!_mirrored.TryGetValue((k.SubentryId, k.Slot), out var m)) _mirrored[(k.SubentryId, k.Slot)] = m = frame.Mirrored();
+        return m;
     }
 
     /// <summary>그 모션이 한 바퀴 도는 데 걸리는 틱 — 모르면 0.</summary>
