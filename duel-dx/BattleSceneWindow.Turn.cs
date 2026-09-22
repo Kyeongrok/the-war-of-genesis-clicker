@@ -412,11 +412,18 @@ internal sealed unsafe partial class BattleSceneWindow
         Toast($"{UnitName(_attackCursor)} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
     }
 
-    /// <summary>차례인 인물이 지금 칠 수 있는 적 — HP 가 낮은 순(같으면 배열 순).</summary>
+    /// <summary>
+    /// 차례인 인물이 지금 칠 수 있는 적 — <b>걸어갈 비용이 적은(가까운) 순</b>, 같으면 HP 낮은 순.
+    /// 약한 적부터 노리면 멀리 걸어가 TP 를 헛되이 쓰기 일쑤라 가까운 적을 먼저 세운다.
+    /// </summary>
     private List<int> AttackableEnemies() =>
         [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && SeesAsFoe(_units[_turn], _units[i]) && FindAttackPath(_turn, i) != null)
-            .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
+            .Where(i => _units[i].Alive && SeesAsFoe(_units[_turn], _units[i]))
+            .Select(i => (Index: i, Plan: FindAttackPath(_turn, i)))
+            .Where(t => t.Plan != null)
+            .OrderBy(t => t.Plan!.Value.Cost).ThenBy(t => t.Plan!.Value.Path.Count)
+            .ThenBy(t => _units[t.Index].Hp).ThenBy(t => t.Index)
+            .Select(t => t.Index)];
 
     /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다 — 어빌리티를 겨누는 중이면 그 어빌리티 사거리로 센다.</summary>
     private void CycleAttackCursor()
