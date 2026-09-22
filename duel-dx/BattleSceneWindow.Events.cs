@@ -369,7 +369,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             }
             case 708:                                    // 소속 편 바꾸기 — 적이 아군이 되거나 그 반대(0x100553a0)
-                foreach (var u in EventTargets(A(0), out _)) u.Side = A(2);
+                // 인자1 이 1 이면 <b>부하까지</b> 같은 편으로 — Btl 0049 의 아지다하카는 군단째로 넘어온다.
+                // 부하를 안 바꾸면 군단원이 적으로 남아 계속 덤비고 「적 부대 전원의 패배」도 영영 안 난다.
+                foreach (var u in EventTargets(A(0), out _))
+                {
+                    u.Side = A(2);
+                    if (A(1) != 1) continue;
+                    int leader = Array.IndexOf(_units, u);
+                    foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.Side = A(2);
+                }
                 break;
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
