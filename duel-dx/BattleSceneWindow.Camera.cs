@@ -52,6 +52,21 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
 
+        // 마우스가 보이는 영역 가장자리(24픽셀 안)에 닿으면 그쪽으로 민다 — 원본처럼 화면 끝으로 가면 스크롤된다.
+        // 창·메뉴가 떠 있거나 모세스·필드·타이틀에서는 안 민다.
+        if (!_mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && _ringUnit < 0 && !_abilityMenu && _statusUnit < 0 && !SystemOpen)
+        {
+            const int edge = 24; double speed = 480 * dt;
+            int mx = _mouse.X - _camX, my = _mouse.Y - _camY;
+            if (mx >= 0 && mx < ViewWidth && my >= 0 && my < ViewHeight)
+            {
+                if (mx < edge) _camTargetX = Math.Clamp(_camTargetX - speed, 0, CamMaxX);
+                else if (mx >= ViewWidth - edge) _camTargetX = Math.Clamp(_camTargetX + speed, 0, CamMaxX);
+                if (my < GridTop + edge && my >= GridTop) _camTarget = Math.Clamp(_camTarget - speed, 0, CamMax);
+                else if (my >= ViewHeight - edge) _camTarget = Math.Clamp(_camTarget + speed, 0, CamMax);
+            }
+        }
+
         _camPos += (_camTarget - _camPos) * Math.Min(1, dt * 8);
         if (Math.Abs(_camTarget - _camPos) < 0.5) _camPos = _camTarget;
         _camY = Math.Clamp((int)Math.Round(_camPos), 0, CamMax);

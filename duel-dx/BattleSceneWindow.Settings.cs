@@ -6,7 +6,11 @@ namespace DuelDx;
 /// 메뉴에서 켜고 끄는 것들 — 다음에 켤 때도 그대로 남게 <c>%APPDATA%\DuelDx\settings.json</c> 에 적는다.
 /// 모드(동맹을 AI 가 움직임)·격자·체력바.
 /// </summary>
-internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false)
+/// <param name="ZoomPercent">화면 배율 % — 0 이면 자동(모니터에 맞춤, 최대 200%). 100·150·200·300·400 을 고를 수 있다.</param>
+/// <param name="ViewW">보이는 영역 너비(판 픽셀) — 원본 640. 넓히면 같은 배율에서 맵이 더 넓게 보인다.</param>
+/// <param name="ViewH">보이는 영역 높이(판 픽셀, 머리줄 제외) — 원본 480.</param>
+internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
+                                    int ViewW = 640, int ViewH = 480)
 {
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "settings.json");
 

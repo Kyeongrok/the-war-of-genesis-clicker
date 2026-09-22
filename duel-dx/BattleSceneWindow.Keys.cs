@@ -103,6 +103,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
     private const int MenuAllyAi = 1006;
+    /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
+    private const int MenuZoomAuto = 1010;
+    private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
+    /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
+    private const int MenuResBase = 1020;
+    private static readonly (int W, int H)[] ResChoices = [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080)];
 
     /// <summary>동맹(편 3)을 AI 가 움직이나 — 끄면 내가 직접 움직인다(설정 > 모드).</summary>
     private bool _allyAi = UserSettings.Current.AllyAi;
@@ -119,6 +125,24 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGrid, "격자 켜기·끄기(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGauges, "체력바 켜기·끄기(&H)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
+        // 해상도(배율) — 화면이 작다는 요청으로 넣었다. 창 크기 = 640×(480+머리줄) × 배율.
+        IntPtr res = Win32.CreatePopupMenu();
+        for (int i = 0; i < ResChoices.Length; i++)
+        {
+            var (w, h) = ResChoices[i];
+            bool chosen = UserSettings.Current.ViewW == w && UserSettings.Current.ViewH == h;
+            Win32.AppendMenuW(res, Win32.MF_STRING | (chosen ? Win32.MF_CHECKED : 0u), (nuint)(MenuResBase + i), i == 0 ? $"{w}×{h} (원본)" : $"{w}×{h}");
+        }
+        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)res, "해상도(&R)");
+        IntPtr zoom = Win32.CreatePopupMenu();
+        for (int i = 0; i < ZoomChoices.Length; i++)
+        {
+            bool chosen = UserSettings.Current.ZoomPercent == ZoomChoices[i];
+            string label = ZoomChoices[i] == 0 ? "자동(화면에 맞춤)(&A)" : $"{ZoomChoices[i]}%";
+            Win32.AppendMenuW(zoom, Win32.MF_STRING | (chosen ? Win32.MF_CHECKED : 0u), (nuint)(MenuZoomAuto + i), label);
+        }
+        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)zoom, "배율(&Z)");
+        Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)mode, "모드(&M)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
@@ -126,7 +150,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH));
 
     private void OnMenuCommand(int id)
     {
@@ -143,6 +167,26 @@ internal sealed unsafe partial class BattleSceneWindow
             case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
             case MenuGrid: _showGrid = !_showGrid; SaveSettings(); break;
             case MenuGauges: _showGauges = !_showGauges; SaveSettings(); break;
+            case >= MenuResBase and < MenuResBase + 7:
+            {
+                (_viewW, _viewH) = ResChoices[id - MenuResBase];
+                for (int i = 0; i < ResChoices.Length; i++)
+                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuResBase + i), Win32.MF_BYCOMMAND | (i == id - MenuResBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                SaveSettings();
+                ApplyZoom(force: true);      // 보이는 영역이 바뀌면 텍스처·창을 새로 잡는다
+                Toast($"해상도: {_viewW}×{_viewH} (맵이 그보다 작으면 맵 크기까지)");
+                break;
+            }
+            case >= MenuZoomAuto and < MenuZoomAuto + 6:
+            {
+                _zoomPercent = ZoomChoices[id - MenuZoomAuto];
+                for (int i = 0; i < ZoomChoices.Length; i++)
+                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuZoomAuto + i), Win32.MF_BYCOMMAND | (i == id - MenuZoomAuto ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                SaveSettings();
+                ApplyZoom();
+                Toast(_zoomPercent == 0 ? "해상도: 자동" : $"해상도: {_zoomPercent}% (모니터에 안 들어가면 들어가는 데까지)");
+                break;
+            }
             case MenuExit: _running = false; break;
         }
     }
