@@ -150,6 +150,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_shop is not { } shop) return;
 
         DrawUi(shop.OwnerObs, 0, tick, ox + 52, oy + 101, UiBlend.Alpha);   // 점주
+        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
 
         for (int i = 0; i < ShopLists.Length; i++)
         {
@@ -161,7 +163,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (index >= items.Count) break;
                 var (itemId, count) = items[index];
                 int rx = ox + lx, ry = oy + ly + r * ShopRowH;
-                DrawUi(ShopRowObs, i is ListStock or ListBag ? 1 : 2, tick, rx - 8, ry - 5, UiBlend.Alpha);
+                // 줄 틀 Obs 1291 모션 1(230×28)은 <b>마우스가 올라간 줄에만</b> 덧그리는 강조다(0x10043810 으로 달아 둔 덧그림,
+                // 세이브 슬롯의 Obs 0471 모션 20 과 같은 짜임). 줄마다 그리면 28픽셀짜리 틀이 21픽셀 줄을 넘어 겹쳐 어지럽다.
+                if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, UiBlend.Alpha);
                 if (_db?.Items.GetValueOrDefault(itemId) is not { } item) continue;
                 DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, UiBlend.Alpha);
                 DrawText(_db.T(item.NameId), rx + 20, ry + 4, White, 11);
@@ -193,9 +197,10 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? Red : White, 11);
         }
 
-        DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
-        DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, UiBlend.Alpha);
-        DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+        // Reset·Set·Ok 글자는 배경 그림(Bgr 0040)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림.
+        if (Over(418, 294, 68, 27)) DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
+        if (Over(522, 294, 68, 27)) DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, UiBlend.Alpha);
+        if (Over(455, 430, 163, 27)) DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
     }
 }
 
