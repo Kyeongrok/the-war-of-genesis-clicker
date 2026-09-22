@@ -70,7 +70,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _targetIsBasicAttack = false;
         _targetItem = item.Id;
         if (UseSelfCentredWork(w)) { ConsumeTargetItem(); Toast(_db?.T(item.NameId) ?? ""); return true; }
-        Toast($"{_db?.T(item.NameId)} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
+        Hint($"{_db?.T(item.NameId)} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }
 

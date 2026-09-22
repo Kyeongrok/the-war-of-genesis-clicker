@@ -99,12 +99,12 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.TargetMode == 1)
         {
             _attackCursor = targets[0];
-            Toast($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
+            Hint($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
             return;
         }
         var t = _units[targets[0]];
         _aimCell = (t.Col, t.Row);
-        Toast($"{name} — {UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
+        Hint($"{name} — {UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
     }
 
     /// <summary>같은 단축키를 한 번 더 누르거나 Enter — 저절로 겨눈 대상에게 쓴다. 처리했으면 true.</summary>
@@ -146,7 +146,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
         AutoAimAbility(w, name);
         if (_attackCursor >= 0 || _aimCell != null) return true;
-        Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
+        Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }
 

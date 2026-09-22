@@ -446,6 +446,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
         // 모세스가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
+        bool fromMoses = _mosesOpen || FieldOpen || _episodesOpen;
         if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
@@ -568,10 +569,14 @@ internal sealed unsafe partial class BattleSceneWindow
             Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
         }
-        // 타이틀에서 불러왔으면 타이틀을 내리고 전투 화면으로 바꾼다.
-        if (_titleOpen)
+        // 타이틀·모세스·필드에서 불러왔으면 그 화면을 내리고 전투 음악으로 바꾼다 — 모세스에서 전투 세이브를 부르면
+        // 모세스 음악이 그대로 흐르던 문제(사용자 보고).
+        if (_titleOpen || fromMoses)
         {
             _titleOpen = false;
+            CloseField();
+            _mosesOpen = false;
+            _episodesOpen = false;
             _mixer.StopMusic();
             StartBattleMusic();
         }
