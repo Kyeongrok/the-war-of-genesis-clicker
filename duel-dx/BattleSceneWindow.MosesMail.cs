@@ -86,8 +86,9 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(line, rx + 24, ry + 2, read ? DimGray : 0xFFFFFF80, 11);
         }
 
-        if (!DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha))
-            DrawText("EXIT", ox + 455, oy + 434, White);
+        // Exit 글자는 배경 그림(Bgr 0094)에 있다 — 알약 Obs 287 은 마우스 올림에만.
+        if (_mouse.X - ox >= 455 && _mouse.X - ox < 633 && _mouse.Y - oy >= 430 && _mouse.Y - oy < 457)
+            DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
 
         if (_mailOpen >= 0 && _mailOpen < mails.Count) DrawMailView(ox, oy, mails[_mailOpen]);
     }
