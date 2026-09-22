@@ -120,7 +120,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _chapterDone = false;
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
         // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인물은 챕터 스크립트(801)가 새로 넣는다.
-        if (entry.Party != _partyNo) { _party.Clear(); _members.Clear(); }
+        if (entry.Party != _partyNo) { _party.Clear(); _members.Clear(); _ownedLegions.Clear(); }
         _partyNo = entry.Party;
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;

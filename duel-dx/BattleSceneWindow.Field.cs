@@ -688,6 +688,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 UpdateCharacter(A(0), c => c.Abilities.Any(ab => ab.Ability == A(1) && ab.Level > 0) ? c
                     : c with { Abilities = [.. c.Abilities.Where(ab => ab.Ability != A(1)), ((ushort)A(1), (ushort)1)] });
                 break;
+            case 805:                                            // 레벨 맞추기 [Chr, Δ] — 파티 레벨(상위 셋 평균, 0x1004e070) + Δ 로(0x100f0b40 → 0x10031a50)
+                if (_db is { } db805)
+                    UpdateCharacter(A(0), c => GrowToPartyLevel(db805.Character(A(0)) ?? c, A(1), PartyLevel()) with
+                    {
+                        Items = c.Items, Passives = c.Passives, Abilities = c.Abilities,
+                    });
+                break;
+            case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
+                if (A(0) > 0) _ownedLegions.Add(A(0));
+                break;
             case 801:                                            // 동료 넣기 — 다음 전투부터 파티에 든다
                 if (A(1) > 0 && _db?.Character(A(1)) is { } c) { _party[A(1)] = c; _members.Add(A(1)); }
                 break;
