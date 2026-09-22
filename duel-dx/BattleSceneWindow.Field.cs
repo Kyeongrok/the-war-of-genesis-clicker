@@ -871,10 +871,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 층 <paramref name="from"/> 이상 <paramref name="to"/> 미만의 물체·인물을 층 차례로 그린다.
     /// </summary>
     /// <remarks>
-    /// 층 <b>−1 은 화면 붙박이</b>다(인물 1174명 중 153명) — 화면이 움직여도 같은 자리에 남으므로 카메라를 빼지 않는다.
+    /// 층 <b>−1 인물은 안 보인다</b>(1174명 중 153명, 82명은 자리도 (−1,−1)) — 원본 로더(<c>0x100eca39</c>)는 층 −1 을
+    /// 배경 묶음(<c>+0x128</c>)보다 <b>먼저 만든 층 <c>+0x14c</c></b> 에 넣어 배경 아래에 깔리므로, 대사의 말하는 이로만 쓰인다.
+    /// 예: 첫 프롤로그 <c>Fld 0019</c> 의 두 사람(367·472)이 같은 자리에 서 있지만 화면에는 안 나온다.
     /// </remarks>
     private void DrawFieldLayers(int ox, int oy, int from, int to)
     {
+        from = Math.Max(from, 0);
         foreach (var prop in _fieldProps.Where(o => o.Visible && o.Layer >= from && o.Layer < to).OrderBy(o => o.Layer))
         {
             var (px, py) = FieldScreenAt(prop.Layer, prop.X, prop.Y);
