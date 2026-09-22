@@ -364,7 +364,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? EventFired = null, int TurnNo = 0, Dictionary<string, int>? BattleVars = null,
                                     int[]? EventTimer = null, bool[]? EventTimerRun = null,
                                     int EventNextBattle = 0, int EventNextField = 0,
-                                    bool InMoses = false, int Chapter = 0);
+                                    bool InMoses = false, int Chapter = 0,
+                                    bool ChapterDone = false, int PartyNo = 0);
 
     private const int SaveVersion = 8;
 
@@ -408,7 +409,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 Enumerable.Range(0, _battleVars.Length).Where(i => _battleVars[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
                 [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
-                _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0);
+                _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0,
+                _chapterDone, _partyNo);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -496,6 +498,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _unitLegion.Clear();
         foreach (var (index, legion) in state.Legions ?? [])
             if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
+
+        _chapterDone = state.ChapterDone;
+        _partyNo = state.PartyNo;
 
         // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
         Array.Clear(_flags);

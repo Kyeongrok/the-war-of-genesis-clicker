@@ -72,6 +72,9 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0:                                   // NEW GAME — 원본처럼 연대표(장면 7)로 간다
                 _party.Clear();
+                Array.Clear(_flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
+                _chapterDone = false;
+                _partyNo = 0;
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;

@@ -115,6 +115,15 @@ internal sealed unsafe partial class BattleSceneWindow
         // (안 그러면 전투 맵 크기 창 한가운데에 모세스가 뜨고 둘레가 검게 남는다.)
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
         if (chapter != null) _mosesChp = chapter;
+        // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
+        // 다음 에피소드는 진행 깃발(Episode.dat 잠금 깃발 넷)이 다 서 있어야 열린다. 표시는 에피소드를 고를 때 내린다.
+        if (_chapterDone)
+        {
+            _mosesOpen = false;
+            _mixer.StopMusic();
+            OpenEpisodes();
+            return;
+        }
         LoadMosesChapter();
         if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
