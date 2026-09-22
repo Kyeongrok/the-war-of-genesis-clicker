@@ -91,7 +91,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>DUELDX_MOSES=1 이면 전투를 기다리지 않고 바로 모세스 화면을 연다(화면 밖 시험용).</summary>
     private void OpenMosesIfAsked()
     {
-        if (Environment.GetEnvironmentVariable("DUELDX_MOSES") == "1") OpenMoses();
+        if (Environment.GetEnvironmentVariable("DUELDX_MOSES") != "1") return;
+        OpenMoses();
+        // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page)) return;
+        if (FieldOpen) LeaveField();
+        switch (page)
+        {
+            case 7: OpenMosesStyle(); break;
+            case 6: OpenMosesLegion(); break;
+            case 3: OpenMosesShop(0); break;
+        }
     }
 
     /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>

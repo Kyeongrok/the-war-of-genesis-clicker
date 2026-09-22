@@ -495,7 +495,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _shopMoney = state.Money;
         _unitLegion.Clear();
         foreach (var (index, legion) in state.Legions ?? [])
-            if (int.TryParse(index, out int unitIndex)) _unitLegion[unitIndex] = legion;
+            if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
 
         // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
         Array.Clear(_flags);

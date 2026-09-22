@@ -27,8 +27,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private Dictionary<int, LegionData>? _legions;
     private int _legionUnit, _legionTop, _legionPick = -1;
 
-    /// <summary>인물마다 붙인 군단 번호(원본 <c>CChr+0x1c</c>) — 이 데모는 전투판 인물 단위로 기억한다.</summary>
+    /// <summary>인물마다 붙인 군단 번호(원본 <c>CChr+0x1c</c>) — <b>Chr 번호</b>로 기억한다(전투마다 명부가 다시 만들어지므로 자리 번호로는 못 잇는다).</summary>
     private readonly Dictionary<int, int> _unitLegion = [];
+
+    private int LegionKey(int unitIndex) => (uint)unitIndex < _units.Length ? _units[unitIndex].ChrCode : -1;
 
     private Dictionary<int, LegionData> Legions() =>
         _legions ??= LegionData.ParseAll(_db?.Files.Read("Dat", "For.dat"));
@@ -59,7 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (x >= 456 && x < 634 && y >= 430 && y < 457) { MosesGoBack(); return true; }           // 나가기
         if (x >= 70 && x < 138 && y >= 293 && y < 321)                                            // 해제
         {
-            _unitLegion.Remove(_legionUnit);
+            _unitLegion.Remove(LegionKey(_legionUnit));
             Play(MosesClickSound);
             return true;
         }
@@ -67,7 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (_legionPick >= 0 && _legionPick < list.Count)
             {
-                _unitLegion[_legionUnit] = list[_legionPick].Id;
+                _unitLegion[LegionKey(_legionUnit)] = list[_legionPick].Id;
                 Play(SoundLegionSet);
             }
             return true;
@@ -110,7 +112,7 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             if (_units[party[i]].Data is { } pc && _faces.TryGetValue(pc.Code, out var face))
                 BlitScaled(face, cx - 30, cy + 20, 60, 60);
-            if (_unitLegion.ContainsKey(party[i])) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
+            if (_unitLegion.ContainsKey(LegionKey(party[i]))) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
         }
 
         // 군단 목록
@@ -124,7 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         var shown = _legionPick >= 0 && _legionPick < list.Count ? list[_legionPick]
-                  : _unitLegion.TryGetValue(_legionUnit, out int id) ? Legions().GetValueOrDefault(id) : null;
+                  : _unitLegion.TryGetValue(LegionKey(_legionUnit), out int id) ? Legions().GetValueOrDefault(id) : null;
         if (shown != null) DrawLegionDetail(ox, oy, db, shown);
 
         DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);

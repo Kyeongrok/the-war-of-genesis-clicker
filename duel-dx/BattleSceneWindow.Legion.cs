@@ -28,8 +28,11 @@ internal sealed unsafe partial class BattleSceneWindow
         var list = new List<UnitState>();
         var followers = new List<(int Leader, int Slot, UnitState Unit)>();
 
-        foreach (var record in scene.Roster)
+        foreach (var rosterRecord in scene.Roster)
         {
+            // 모세스 용병관리에서 배속한 군단(CChr+0x1c)은 내 부대(편 4)의 그 인물에게 붙는다 — Btl 자료의 부대 번호보다 앞선다.
+            var record = rosterRecord.Side == 4 && _unitLegion.TryGetValue(rosterRecord.ChrCode, out int assigned)
+                ? rosterRecord with { Legion = assigned } : rosterRecord;
             int leaderIndex = list.Count;
             var leader = new UnitState(record);
             list.Add(leader);
