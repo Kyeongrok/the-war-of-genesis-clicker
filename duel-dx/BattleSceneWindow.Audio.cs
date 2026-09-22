@@ -138,7 +138,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { } clip) return;
         foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound));
-        foreach (var (start, obs, motion) in clip.Children)
+        foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
         {
             if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is not { } child) continue;
             foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((_lastTime + (start + s) / TicksPerSecond, sound));

@@ -60,12 +60,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1)
     {
         if (clip == null || fade <= 0) return;
-        foreach (var (start, obs, motion) in clip.Children)
+        foreach (var (start, obs, motion, dx, dy, _, flag) in clip.Children)
         {
             if (start > tick) continue;
             var blend = UiFor(obs)?.BlendAt(motion, tick - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
+            // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
+            bool flip = mirror && flag == 0;
             // 무기 층은 몸 모션과 같이 돈다 — 서기처럼 되풀이하는 모션이면 자식도 되풀이한다.
-            DrawUi(obs, motion, tick - start, footX, footY, blend, mirror: mirror, fade: fade);
+            DrawUi(obs, motion, tick - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
         }
     }
 
