@@ -54,6 +54,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 판정이 나는 동작 — 동작 사슬 안에서 <b>타격 동작</b>(8·9·13·14·26·27)이 있으면 그 첫 자리,
     /// 없으면 기본공격은 가운데(베기), 어빌리티는 마지막 동작이다(분석-모션 ba-10).
     /// </summary>
+    /// <summary>타격 판정이 드는 동작 — 8·9(베기·찌르기), 13·14(연속), 26·27.</summary>
+    private static bool IsStrikeAction(int action) => action is 8 or 9 or 13 or 14 or 26 or 27;
+
     private static int HitStepFor(WorkData w, int steps)
     {
         int[] actions = ActionsFor(w);
