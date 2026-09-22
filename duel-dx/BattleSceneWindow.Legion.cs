@@ -37,8 +37,20 @@ internal sealed unsafe partial class BattleSceneWindow
 
             var cells = LegionData.FormationCells[Math.Clamp((int)legion.Formation, 0, 5)];
             var taken = new HashSet<(int, int)>(list.Select(u => (u.Col, u.Row)).Concat(followers.Select(f => (f.Unit.Col, f.Unit.Row))));
+            // 대장이 아직 전장 밖(0,0)이면 부하도 전장 밖에 둔다 — 증원(200)이 대장을 세울 때 진형대로 같이 데려온다.
+            // 전에는 (0,0) 둘레 칸에 세워 부하만 맵 귀퉁이에 먼저 서 있었다.
+            bool offField = record.Col == 0 && record.Row == 0;
             for (int i = 0; i < legion.Members.Length && i < cells.Length; i++)
             {
+                if (offField)
+                {
+                    followers.Add((leaderIndex, i, new UnitState(record with { ChrCode = legion.Members[i], Col = 0, Row = 0, Legion = 0 })
+                    {
+                        LeaderIndex = leaderIndex,
+                        FormationSlot = i,
+                    }));
+                    continue;
+                }
                 var (dx, dy) = RotateFormation(cells[i], record.Facing);
                 int col = Math.Clamp(record.Col + dx, 0, Cols - 1), row = Math.Clamp(record.Row + dy, 0, Rows - 1);
                 // 같은 칸에 둘이 서지 않게 — 겹치면 대장 둘레에서 빈 칸을 찾는다.

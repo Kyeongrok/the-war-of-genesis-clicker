@@ -315,19 +315,32 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 200:                                    // 증원 — 그 사람들을 전장에 세운다(0x10050eb0). 인자1 은 원본도 안 읽는다.
             case 214:                                    // 워프 등장 — 자리는 200 과 같다.
+                // 원본은 대장에게 군단이 있으면 <b>부하까지 한 줄로</b> 세워(0x10050f16~0x10051296: 홀수 번째는 반 칸 앞, 짝수 번째는
+                // 한 칸 반 뒤, 두 명마다 한 칸씩 더 뒤) 가장자리에서 8픽셀/틱으로 걸어 들어오게 한다. 데모는 진형 자리에 바로 세운다.
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     u.Facing = EdgeFacing(A(4));
+                    int leader = Array.IndexOf(_units, u);
+                    foreach (var (follower, col, row) in FormationPlan(u, A(2), A(3)))
+                    {
+                        follower.OnField = true;
+                        follower.ResetTo(col, row);
+                        follower.Facing = u.Facing;
+                        _followerTarget[follower] = (col, row);
+                    }
+                    if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
                 _eventWaitUntil = _lastTime + 0.4;       // 걸어 들어오는 사이만큼 기다린다
                 break;
-            case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로
+            case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로(부하도 같이)
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     u.ResetTo(A(2), A(3));
                     u.OnField = false;
+                    int leader = Array.IndexOf(_units, u);
+                    foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
                 }
                 break;
             case 202:                                    // 지정 칸으로 — 전장에 있는 사람만(원본도 맵 안인지 본다)
