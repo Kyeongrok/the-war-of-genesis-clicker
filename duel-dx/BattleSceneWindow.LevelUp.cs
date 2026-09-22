@@ -14,7 +14,8 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int LevelUpTicks = 180;
+    /// <summary>레벨업 창이 저절로 닫히기까지 — 원본은 180틱이지만 사용자 요청으로 2초.</summary>
+    private const double LevelUpSeconds = 2.0;
     private const float DuckedMusicGain = 0.4f;
 
     private readonly Queue<int> _levelUpQueue = new();
@@ -61,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
         unit.Data = _db.LevelUp(c, out var gains);
         RefreshUnitStats(unit);
         _levelUpUnit = index;
-        _levelUpUntil = _lastTime + LevelUpTicks / TicksPerSecond;
+        _levelUpUntil = _lastTime + LevelUpSeconds;
         _levelUpTitle = _db.T(1090) is { Length: > 0 } t ? t : "Level Up";
         _levelUpBody = $"{UnitName(index)}의 레벨이 {unit.Data.Level}이 되었습니다.\n"
                      + string.Join("\n", gains.Select(g => $"{g.Stat}가 {g.Amount} 상승하였습니다."));
