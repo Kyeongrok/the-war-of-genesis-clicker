@@ -168,12 +168,12 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (item, motion, label) = items[i];
             int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
-            // 칸 바탕은 원본 보조 그림 Obs 0471 모션 7(190×37) — 없으면 예전 네모로
-            if (!DrawUi(ListRowObs, 7, 0, rx, ry, UiBlend.Alpha, loop: false))
-            {
-                FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
-                StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
-            }
+            // 평소 칸은 바탕 + 테두리(원본 갈래 0 단추 0x100432e0). Obs 0471 모션 7(190×37 파란 빛)은 <b>보조 그림</b>(단추 +0x10c)이라
+            // 마우스가 올라간 줄에만 덧그린다 — 전에는 모든 줄에 그려 전부 올림 상태로 보였다.
+            FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
+            StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
+            bool hover = _mouse.X >= rx && _mouse.X < rx + SystemRowW && _mouse.Y >= ry && _mouse.Y < ry + SystemRowH - 3;
+            if (hover) DrawUi(ListRowObs, 7, 0, rx, ry, UiBlend.Alpha, loop: false);
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
             if (!DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, UiBlend.Alpha, loop: false))
                 DrawText(label, rx + 20, ry + 9, White);
