@@ -241,7 +241,15 @@ internal sealed unsafe partial class BattleSceneWindow
         CancelTargeting();
         _heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
-        if (IsMine(_units[index])) { Toast($"{UnitName(index)} 차례"); PlayTurnVoice(_units[index]); }
+        if (IsMine(_units[index]))
+        {
+            Toast($"{UnitName(index)} 차례");
+            PlayTurnVoice(_units[index]);
+            // 자동 저장(슬롯 20) — 원본은 전투 시작·새 차례마다 깃발(+0x4cd8)을 세우고, 플레이어가 유닛을 고르는
+            // 상태 22 에 처음 들어설 때 SaveGame(20) 한 뒤 지운다(0x1006acc0). AI 차례는 상태 10~12 가 카메라만 옮기고
+            // 깃발을 저장 없이 지우므로 저장이 없다. 곧 「내 차례가 시작될 때마다 한 번」이다(분석-시스템메뉴 2.4).
+            AutoSave();
+        }
         else
         {
             if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");

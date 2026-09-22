@@ -267,8 +267,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenMosesIfAsked();
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
-            // 타이틀에서 시작하면 아직 전투를 건 게 아니라 자동 저장도 하지 않는다.
-            if (!_titleOpen) AutoSave();
+            // 자동 저장은 전투를 열 때가 아니라 내 차례가 시작될 때 한다(원본 상태 22, StartTurn).
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
         {

@@ -124,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!LoadBattleFrom(SlotPath(slot))) _notice = ("Error", _lastTime + 4);
     }
 
-    /// <summary>전투를 시작할 때 자동 저장 슬롯에 적어 둔다(Load 목록 21번째 줄).</summary>
+    /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
     private void AutoSave() => SaveBattleTo(SlotPath(AutoSlot));
 
     private void UpdateSlotsHover(int bx, int by)
