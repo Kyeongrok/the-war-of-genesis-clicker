@@ -62,7 +62,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private const double TickDelaySeconds = 0.05;
 
     /// <summary>그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.</summary>
-    private bool IsMine(UnitState u) => u.PlayerControlled || (u.IsAlly && !_allyAi);
+    private bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !_allyAi));
+
+    /// <summary>DUELDX_AUTOPLAY=1 이면 내 부대도 AI 가 움직인다 — 화면 밖 시험에서 전투를 저절로 돌리려고.</summary>
+    private static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
+
+    /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
+    private static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
 
     private bool IsPlayerTurn => _turn >= 0 && IsMine(_units[_turn]) && _routine == null && _outcome.Length == 0;
 
@@ -726,6 +732,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private void PlayAction(UnitState u, int action)
     {
         double seconds = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.ActionSeconds(action, u.Facing) : 0;
+        if (Trace)
+        {
+            var clip = sprite?.Clip(action, u.Facing);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"{_lastTime:F2} chr {u.ChrCode} action {action} facing {u.Facing} clip {(clip?.Id.ToString() ?? "none")} len {clip?.Length ?? 0} keys {clip?.Keys.Count ?? 0} seconds {seconds:F2}" + Environment.NewLine);
+        }
         u.PlayAction(action, seconds > 0 ? seconds : 0.3);
         ScheduleActionSounds(u, action);
     }
