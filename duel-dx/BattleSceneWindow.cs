@@ -43,7 +43,56 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
     private const int GridTop = 40;
     private int BoardWidth => Cols * TileW;
-    private int BoardHeight => GridTop + Rows * TileH;
+    private int BoardHeight => GridTop + BoardPad + Rows * TileH;
+
+    // ── 칸 높이(고도) → 화면 (분석-전투 「자리 갱신 0x100ea910」: 화면 y = 월드 y×32/40 − 월드 z×12/20, 유닛 z = 칸 높이×20) ──
+
+    /// <summary>칸 높이 한 층이 화면에서 위로 올라가는 픽셀 — 12.</summary>
+    private const int HeightStep = 12;
+
+    /// <summary>지금 판이 맵 크기 그대로인가(타이틀·모세스 틀이면 아니다 — 그때는 높이·여백을 안 쓴다).</summary>
+    private bool BoardIsMap => _map is { } m && m.Cols == Cols && m.Rows == Rows;
+
+    /// <summary>
+    /// 맵 그림이 0줄보다 위로 나온 만큼(높은 칸이 위로 올라가 그려진 부분) 판 위에 덧대는 여백.
+    /// 그림 원점이 −264 인 맵(Obt 0031)은 맨 윗줄이 22층 높이라 그만큼 위에 그려져 있다.
+    /// </summary>
+    private int BoardPad => BoardIsMap ? Math.Max(0, -_map!.OriginY) : 0;
+
+    private int HeightPx(int col, int row) => BoardIsMap ? HeightStep * _map!.HeightAt(col, row) : 0;
+
+    /// <summary>칸의 화면 윗줄 — 높이만큼 위로 올라간다.</summary>
+    private int CellTop(int col, int row) => GridTop + BoardPad + row * TileH - HeightPx(col, row);
+
+    private int CellCenterY(int col, int row) => CellTop(col, row) + TileH / 2;
+
+    /// <summary>칸 사이를 걷는 인물의 높이 — 네 이웃 칸을 거리로 섞어 층 사이를 매끄럽게 넘는다.</summary>
+    private double HeightPxAt(double x, double y)
+    {
+        int x0 = (int)Math.Floor(x), y0 = (int)Math.Floor(y);
+        double fx = x - x0, fy = y - y0;
+        return HeightPx(x0, y0) * (1 - fx) * (1 - fy) + HeightPx(x0 + 1, y0) * fx * (1 - fy)
+             + HeightPx(x0, y0 + 1) * (1 - fx) * fy + HeightPx(x0 + 1, y0 + 1) * fx * fy;
+    }
+
+    /// <summary>판 픽셀 (bx, by) 가 놓인 칸의 줄 — 높이 때문에 겹치면 아래 줄(나중에 그린 쪽)이 이긴다. 없으면 −1.</summary>
+    private int RowAt(int bx, int by)
+    {
+        int col = bx / TileW;
+        if ((uint)col >= Cols) return -1;
+        for (int row = Rows - 1; row >= 0; row--)
+        {
+            int top = CellTop(col, row);
+            if (by >= top && by < top + TileH) return row;
+        }
+        return -1;
+    }
+
+    /// <summary>맵 그림의 아랫끝(판 픽셀) — 카메라는 원본처럼 그림 밖으로 안 내려간다(맵 `+0x398~+0x39e` 로 자름).</summary>
+    private int PictureBottom => BoardIsMap ? GridTop + BoardPad + _map!.OriginY + _map.Height : BoardHeight;
+
+    /// <summary>카메라가 내려갈 수 있는 끝.</summary>
+    private int CamMax => Math.Max(0, Math.Min(BoardHeight, PictureBottom) - ViewHeight);
 
     /// <summary>창에 보이는 판 높이 — 판 전체의 70%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
     private int ViewHeight => BoardHeight * 7 / 10;
@@ -610,9 +659,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnMosesClick(bx, by)) return;
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
-        int boardY = by - GridTop;
-        if (boardY < 0) return;
-        int col = bx / TileW, row = boardY / TileH;
+        if (by < GridTop) return;
+        int col = bx / TileW, row = RowAt(bx, by);
+        if (row < 0) return;
         if (OnTargetClick(col, row)) return;
 
         int index = UnitAtBoard(bx, by);
@@ -754,10 +803,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_map is not { } map) return;
 
-        int boardH = Rows * TileH;
+        int boardH = BoardPad + Rows * TileH;
         for (int y = 0; y < map.Height; y++)
         {
-            int by = y + map.OriginY;
+            int by = y + map.OriginY + BoardPad;
             if ((uint)by >= boardH) continue;
 
             int w = Math.Min(map.Width, BoardWidth);
@@ -768,16 +817,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void DrawGridLines()
     {
-        for (int c = 0; c <= Cols; c++)
-        {
-            int x = Math.Min(c * TileW, BoardWidth - 1);
-            for (int y = GridTop; y < BoardHeight; y++) SetPixel(x, y, GridLine);
-        }
-        for (int r = 0; r <= Rows; r++)
-        {
-            int y = Math.Min(GridTop + r * TileH, BoardHeight - 1);
-            for (int x = 0; x < BoardWidth; x++) SetPixel(x, y, GridLine);
-        }
+        // 칸마다 제 높이 자리에 네모를 친다 — 층이 다른 칸은 격자도 어긋나 절벽이 보인다.
+        for (int row = 0; row < Rows; row++)
+            for (int col = 0; col < Cols; col++)
+                StrokeRect(col * TileW, CellTop(col, row), TileW + 1, TileH + 1, GridLine);
     }
 
     private void DrawUnits()
@@ -828,8 +871,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
-    private static (int X, int Y) UnitFoot(UnitState unit) =>
-        ((int)(unit.X * TileW) + TileW / 2, GridTop + (int)(unit.Y * TileH) + TileH / 2);
+    private (int X, int Y) UnitFoot(UnitState unit) =>
+        ((int)(unit.X * TileW) + TileW / 2,
+         GridTop + BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(HeightPxAt(unit.X, unit.Y)));
 
     private void DrawStatus()
     {

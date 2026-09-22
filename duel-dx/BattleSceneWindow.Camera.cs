@@ -17,7 +17,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int CamMarginTop = 120, CamMarginBottom = 140;
 
-    private void ScrollCamera(double delta) => _camTarget = Math.Clamp(_camTarget + delta, 0, BoardHeight - ViewHeight);
+    private void ScrollCamera(double delta) => _camTarget = Math.Clamp(_camTarget + delta, 0, CamMax);
 
     private void UpdateCamera(double dt)
     {
@@ -30,16 +30,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (focus != _camFocus.Unit || u.Col != _camFocus.Col || u.Row != _camFocus.Row)
             {
                 _camFocus = (focus, u.Col, u.Row);
-                int foot = GridTop + u.Row * TileH + TileH / 2;
+                int foot = CellCenterY(u.Col, u.Row);
                 if (foot < _camTarget + GridTop + CamMarginTop) _camTarget = foot - GridTop - CamMarginTop;
                 else if (foot > _camTarget + ViewHeight - CamMarginBottom) _camTarget = foot - ViewHeight + CamMarginBottom;
-                _camTarget = Math.Clamp(_camTarget, 0, BoardHeight - ViewHeight);
+                _camTarget = Math.Clamp(_camTarget, 0, CamMax);
             }
         }
 
         _camPos += (_camTarget - _camPos) * Math.Min(1, dt * 8);
         if (Math.Abs(_camTarget - _camPos) < 0.5) _camPos = _camTarget;
-        _camY = Math.Clamp((int)Math.Round(_camPos), 0, BoardHeight - ViewHeight);
+        _camY = Math.Clamp((int)Math.Round(_camPos), 0, CamMax);
     }
 
     /// <summary>지금 보이는 영역을 <c>%TEMP%\dueldx_snapshot.png</c> 로 저장한다 — 창을 화면에 띄우지 않고 확인하는 테스트용.</summary>

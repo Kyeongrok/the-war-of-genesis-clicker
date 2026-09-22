@@ -29,24 +29,24 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_targetWork >= 0 && Work(_targetWork) is { } w)
         {
             // 사거리 안이고 그 work 의 대상 방식에 맞는 칸에서만 칼·지팡이가 된다 — 아무 유닛 위나 아니다.
-            int col = bx / TileW, row = (by - GridTop) / TileH;
-            if (by < GridTop || _turn < 0 || !CanAimAt(w, _units[_turn], col, row)) return CursorArrow;
+            int col = bx / TileW, row = RowAt(bx, by);
+            if (by < GridTop || row < 0 || _turn < 0 || !CanAimAt(w, _units[_turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
         // 옆 칸 물체(상자·문)를 만질 수 있으면 주먹 커서.
-        if (IsPlayerTurn && by >= GridTop && ObjectAt(bx / TileW, (by - GridTop) / TileH) is { } near
+        if (IsPlayerTurn && by >= GridTop && ObjectAt(bx / TileW, RowAt(bx, by)) is { } near
             && CanTouchObject(_units[_turn], near)) return CursorTouch;
 
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
-        if (IsPlayerTurn && by >= GridTop && LiveUnitAt(bx / TileW, (by - GridTop) / TileH) is { } who)
+        if (IsPlayerTurn && by >= GridTop && LiveUnitAt(bx / TileW, RowAt(bx, by)) is { } who)
         {
             if (!who.IsAlly && FindAttackPath(_turn, Array.IndexOf(_units, who)) != null) return CursorAttack;
             if (who.IsAlly) return CursorHand;
         }
         if (_rangeUnit >= 0 && _range is { } range && by >= GridTop)
         {
-            int index = (by - GridTop) / TileH * Cols + bx / TileW;
-            if (range.CanReach(index)) return CursorHand;
+            int row = RowAt(bx, by);
+            if (row >= 0 && range.CanReach(row * Cols + bx / TileW)) return CursorHand;
         }
         return CursorArrow;
     }

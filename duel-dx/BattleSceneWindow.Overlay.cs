@@ -25,7 +25,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private int UnitAtBoard(int bx, int by)
     {
         if (by < GridTop) return -1;
-        int col = bx / TileW, row = (by - GridTop) / TileH;
+        int col = bx / TileW, row = RowAt(bx, by);
+        if (row < 0) return -1;
         return Array.FindIndex(_units, u => u.Alive && u.Col == col && u.Row == row);
     }
 
