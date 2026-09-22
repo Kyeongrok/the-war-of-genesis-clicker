@@ -10,6 +10,20 @@ internal sealed unsafe partial class BattleSceneWindow
     private GameDatabase? _db;
     private readonly Dictionary<int, SpriteFrame> _faces = [];
 
+    /// <summary>
+    /// 초상 Obs 에서 <b>60×60 얼굴 장</b>을 고른다 — 죠안·살라딘은 첫 장이 얼굴이지만 제이슨(Obs 0433)은 앞 네 장이
+    /// 392×480 전신 그림의 네 조각이고 다섯째가 얼굴이다. 60×60 이 없으면 첫 장(가설: 원본 Status 초상은 60×60).
+    /// </summary>
+    private static ObsFrame? DecodeFaceFrame(string path)
+    {
+        try
+        {
+            var face = ObsSprite.Decode(path).SelectMany(m => m.Frames).FirstOrDefault(f => f.Width == 60 && f.Height == 60);
+            return face ?? ObsSprite.DecodeFirstFrame(path);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { return null; }
+    }
+
     private int _statusUnit = -1;
     private string _toast = "";
     private double _toastUntil;

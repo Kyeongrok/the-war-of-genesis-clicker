@@ -185,7 +185,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         {
             if (_faces.ContainsKey(code) || !_units.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
             string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
-            if (File.Exists(facePath) && ObsSprite.DecodeFirstFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
+            if (File.Exists(facePath) && DecodeFaceFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
         }
     }
 

@@ -779,7 +779,7 @@ internal sealed unsafe partial class BattleSceneWindow
         try
         {
             string path = Path.Combine(AssetsFolder.Find("moses"), "obs", $"{c.FaceId:D4}.obs");
-            if (File.Exists(path) && ObsSprite.DecodeFirstFrame(path) is { } face) _faces[c.Code] = SpriteFrame.From(face);
+            if (File.Exists(path) && DecodeFaceFrame(path) is { } face) _faces[c.Code] = SpriteFrame.From(face);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException) { }
     }
