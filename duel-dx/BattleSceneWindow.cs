@@ -551,6 +551,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (_mosesOpen)
         {
+            if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) _statusUnit = -1; return; }   // 스테이터스 창은 Esc 로 닫는다
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
             if (_mosesPage != -1) { MosesGoBack(); return; }
             Play(578);

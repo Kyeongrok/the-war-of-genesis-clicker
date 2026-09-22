@@ -257,7 +257,8 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText("이 인물의 게임 자료(assets/data)를 못 읽었습니다.", ox + 20, oy + 60, Red);
             return;
         }
-        bool editable = unit.IsAlly && _outcome.Length == 0;
+        // 전투가 끝난 뒤 모세스에서 열면 결과 글이 남아 있어도 고칠 수 있어야 한다.
+        bool editable = unit.IsAlly && (_outcome.Length == 0 || _mosesOpen);
         if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다 — 어빌리티는 클릭 올리기·우클릭 내리기", ox + 16, oy + 12, DimGray);
 
         // 1열 — 능력치
