@@ -361,9 +361,12 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0,
                                     Dictionary<string, int>? Flags = null,
                                     string[]? DonePlaces = null, int[]? DoneChapters = null,
-                                    string[]? DoneEvents = null, string[]? UsedPlaces = null);
+                                    string[]? DoneEvents = null, string[]? UsedPlaces = null,
+                                    int[]? EventFired = null, int TurnNo = 0, Dictionary<string, int>? BattleVars = null,
+                                    int[]? EventTimer = null, bool[]? EventTimerRun = null,
+                                    int EventNextBattle = 0, int EventNextField = 0);
 
-    private const int SaveVersion = 7;
+    private const int SaveVersion = 8;
 
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
@@ -396,7 +399,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
                 [.. _chapterFired.Keys.Select(k => k.Chapter).Distinct()],
                 [.. _chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
-                [.. _placesUsed.Select(p => $"{p.Chapter}:{p.Place}")]);
+                [.. _placesUsed.Select(p => $"{p.Chapter}:{p.Place}")],
+                // 전투 이벤트 상태 — 안 적으면 불러올 때마다 시작 대사(조건 0·1)가 다시 뜨고 타이머·국소 변수가 처음으로 돌아간다.
+                // 원본은 전투 상태를 아예 저장하지 않고 그 전투를 처음부터 다시 열지만(분석-시스템메뉴), 우리는 판 한가운데를
+                // 저장하니 사건 횟수도 같이 싣는다. 차례 도중이면 불러올 때 그 차례가 다시 시작되어 턴 수가 하나 오르니 미리 뺀다.
+                [.. _eventFired], _turn >= 0 ? _turnNo - 1 : _turnNo,
+                Enumerable.Range(0, _battleVars.Length).Where(i => _battleVars[i] != 0)
+                          .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
+                [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -504,6 +514,35 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
                 _placesUsed.Add((chapter, place));
+
+        // 전투 이벤트 상태를 되살린다 — 이미 터진 사건은 다시 안 터진다.
+        if (state.EventFired is { } fired && fired.Length == _eventFired.Length)
+        {
+            Array.Copy(fired, _eventFired, fired.Length);
+            _turnNo = state.TurnNo;
+        }
+        else
+        {
+            // 사건 횟수가 없던 옛 세이브(또는 이벤트 수가 달라진 전투) — 시작 방아쇠(조건 0·1)만 있는 사건은
+            // 이미 본 것으로 치고, 턴 수도 인트로(턴 2)를 지난 값으로 둔다.
+            for (int i = 0; i < _events.Count; i++)
+                if (_events[i].MaxFire > 0 && _events[i].Conditions.Count > 0
+                    && _events[i].Conditions.All(c => c.Code is 0 or 1))
+                    _eventFired[i] = _events[i].MaxFire;
+            _turnNo = Math.Max(state.TurnNo, 3);
+        }
+        Array.Clear(_battleVars);
+        foreach (var (number, value) in state.BattleVars ?? [])
+            if (int.TryParse(number, out int slot) && (uint)slot < _battleVars.Length) _battleVars[slot] = (byte)Math.Clamp(value, 0, 255);
+        Array.Clear(_eventTimer);
+        Array.Clear(_eventTimerRun);
+        for (int i = 0; i < _eventTimer.Length; i++)
+        {
+            if (state.EventTimer is { } timer && i < timer.Length) _eventTimer[i] = timer[i];
+            if (state.EventTimerRun is { } run && i < run.Length) _eventTimerRun[i] = run[i];
+        }
+        _eventNextBattle = state.EventNextBattle;
+        _eventNextField = state.EventNextField;
 
         _tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
         _turn = -1;
