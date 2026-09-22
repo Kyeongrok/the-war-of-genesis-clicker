@@ -227,6 +227,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {
+            // 자료가 빠진 필드는 조용히 넘어가되, DUELDX_TRACE=1 이면 무엇이 빠졌는지 남긴다.
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"OpenField {id} failed: {ex.GetType().Name}: {ex.Message}" + Environment.NewLine);
             return false;
         }
     }
