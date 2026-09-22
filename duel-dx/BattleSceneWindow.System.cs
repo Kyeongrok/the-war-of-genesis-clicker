@@ -373,6 +373,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RebuildMembersFromChapters()
     {
         _members.Clear();
+        // 사건 차례대로 801 이 넣고 802 가 뺀다 — 챕터 스크립트의 조건(깃발)을 채워 돈 사건만 본다.
         foreach (var group in _chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
         {
             if (LoadChapterFile(group.Key) is not { } chp) continue;
@@ -545,7 +546,10 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
         // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
         // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
-        if (state.Members == null) RebuildMembersFromChapters();
+        // 목록이 비어 있어도(고치기 전 판이 빈 목록을 적은 세이브) 되살리고, 적힌 목록과 합친다.
+        var saved = _members.ToList();
+        RebuildMembersFromChapters();
+        foreach (int chr in saved) _members.Add(chr);
         _placesUsed.Clear();
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
