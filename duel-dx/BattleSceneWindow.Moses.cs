@@ -92,7 +92,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void OpenMosesIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_MOSES") != "1") return;
-        OpenMoses();
+        // DUELDX_CHAPTER=<Chp 번호> 면 그 챕터로 연다(화면 밖 시험용) — 없으면 첫 전투의 챕터.
+        OpenMoses(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int chapterId) ? LoadChapterFile(chapterId) : null);
         // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
         if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page)) return;
         if (FieldOpen) LeaveField();
