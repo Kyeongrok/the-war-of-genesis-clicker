@@ -75,6 +75,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 _members.Clear();
                 _ownedLegions.Clear();
                 _partyBank.Clear();
+                _mailbox.Clear();
+                _mailRead.Clear();
+                _planetVisits.Clear();
                 Array.Clear(_flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
                 _chapterDone = false;
                 _partyNo = 0;

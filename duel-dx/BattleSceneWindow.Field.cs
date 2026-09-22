@@ -304,6 +304,9 @@ internal sealed unsafe partial class BattleSceneWindow
             0 => true,                                                          // 언제나
             100 => Compare(_fieldVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수
             101 => Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2)),
+            102 => _inventory.ContainsKey(A(1)) || _party.Values.Any(pc => pc.Items.Contains((ushort)A(1))),   // [파티, 아이템] 가졌나(0x100edb40)
+            503 => MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
+            505 => _mosesChp is { } chp505 && _planetVisits.Remove((chp505.Id, A(0))),   // [행성] 방문 표시 — 한 번 참, 지운다(0x100edcd0)
             _ => false,                                                         // 안 만든 조건은 안 터뜨린다
         };
     }

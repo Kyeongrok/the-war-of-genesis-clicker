@@ -102,6 +102,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 7: OpenMosesStyle(); break;
             case 6: OpenMosesLegion(); break;
             case 3: OpenMosesShop(0); break;
+            case 1 or 2: MosesGoPage(page); _mosesPage = page; break;   // 메일 · 통신
             case 0: MosesGoPage(0); _mosesPageAt = _lastTime - 30.0 / TicksPerSecond; break;   // 항행 — 칸이 다 나온 뒤 모습
         }
     }
@@ -157,6 +158,9 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         return false;
     }
+
+    /// <summary>방문 표시가 선 행성 — (챕터, 행성). 스크립트 조건 <c>505 [행성]</c> 이 한 번 참이 되면서 지운다(<c>0x100edcd0</c>). 세이브에 실린다.</summary>
+    private readonly HashSet<(int Chapter, int Planet)> _planetVisits = [];
 
     /// <summary>이미 겪은 자동 발생 장소 — (챕터, 장소).</summary>
     private readonly HashSet<(int Chapter, int Place)> _autoPlacesDone = [];
@@ -296,7 +300,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
                 break;
-            case 1: Play(571); break;                                  // MAIL — 새 편지가 있으면 나는 소리
+            case 1: if (DeliverMail() > 0) Play(571); break;           // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
             case 2: break;                                             // MESSAGE — 소리 없음
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
@@ -393,6 +397,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_mosesChp is { } chp && index < chp.Planets.Count)
             {
                 _mosesPlanet = chp.Planets[index].No;
+                _planetVisits.Add((chp.Id, chp.Planets[index].No));   // 행성 +0x5c 방문 표시(가설: 고를 때 선다) — 조건 505 가 한 번 먹고 지운다
                 _mosesStep = 2;
                 _mosesPageAt = _lastTime;
                 StartFade();
