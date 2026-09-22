@@ -98,16 +98,18 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 창에 보이는 판 높이 — 판 전체의 70%, 다만 원본 화면 높이(480 + 머리줄)까지만. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.
     /// 세로로 긴 맵(Obt 0156 은 2272 픽셀)도 원본처럼 줌아웃하지 않고 스크롤한다.
     /// </summary>
-    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + ViewMaxHeight);
-    private const int ViewMaxHeight = 480;
+    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, _viewH));
+
+    /// <summary>설정 > 해상도 — 보이는 영역 크기(판 픽셀). 원본은 640×480.</summary>
+    private int _viewW = UserSettings.Current.ViewW, _viewH = UserSettings.Current.ViewH;
 
     /// <summary>
     /// 창에 보이는 판 너비 — 원본 화면 너비 640 까지만. 더 넓은 맵(Btl 0131 같은 1480 픽셀)은 원본처럼 <b>줌아웃하지 않고</b>
     /// <see cref="_camX"/> 로 좌우 스크롤한다(차례인 인물을 따라간다).
     /// </summary>
-    private int ViewWidth => Math.Min(BoardWidth, ViewMaxWidth);
-    private const int ViewMaxWidth = 640;
-    private const double MaxZoom = 2;
+    private int ViewWidth => Math.Min(BoardWidth, Math.Max(320, _viewW));
+    /// <summary>자동 맞춤의 최대 배율. 설정에서 고르면 <see cref="MaxZoomChosen"/> 까지.</summary>
+    private const double MaxZoom = 2, MaxZoomChosen = 4;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
     private double _zoom;
@@ -306,7 +308,24 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         // 제목 표시줄·테두리 몫을 조금 남긴다.
         double fit = Math.Min((work.Width - 32) / (double)ViewWidth, (work.Height - 100) / (double)ViewHeight);
-        return Math.Clamp(Math.Floor(fit * 20) / 20, 0.5, MaxZoom);
+        fit = Math.Floor(fit * 20) / 20;
+        // 설정 > 해상도에서 배율을 골랐으면 그 값 — 다만 모니터에 안 들어가는 크기는 들어가는 데까지만.
+        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, fit), 0.5, MaxZoomChosen);
+        return Math.Clamp(fit, 0.5, MaxZoom);
+    }
+
+    /// <summary>설정 > 해상도 — 고른 배율 %(0 = 자동). 켤 때 읽고 바꾸면 저장한다.</summary>
+    private int _zoomPercent = UserSettings.Current.ZoomPercent;
+
+    /// <summary>배율·해상도를 바꿨을 때 — 판은 그대로 두고 셰이더·텍스처·창만 다시 만든다.</summary>
+    private void ApplyZoom(bool force = false)
+    {
+        double zoom = FitZoom();
+        if (!force && Math.Abs(zoom - _zoom) < 1e-9) return;
+        _zoom = zoom;
+        _camTarget = Math.Clamp(_camTarget, 0, CamMax);
+        _camTargetX = Math.Clamp(_camTargetX, 0, CamMaxX);
+        if (_hwnd != IntPtr.Zero) RebuildView();
     }
 
     /// <summary>
@@ -326,7 +345,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _camX = 0;
         _camPosX = _camTargetX = 0;
         if (same || _hwnd == IntPtr.Zero) return;
+        RebuildView();
+    }
 
+    /// <summary>보이는 판 크기·배율에 맞춰 셰이더·텍스처·창·스왑체인을 다시 만든다.</summary>
+    private void RebuildView()
+    {
         // 배율은 픽셀 셰이더에 박혀 있다 — 맵이 바뀌어 배율이 달라졌으면 셰이더부터 다시 빌드한다.
         if (Math.Abs(_shaderZoom - _zoom) > 1e-9) CompileShaders();
 

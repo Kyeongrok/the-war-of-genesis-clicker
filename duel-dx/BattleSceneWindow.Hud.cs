@@ -55,11 +55,12 @@ internal sealed unsafe partial class BattleSceneWindow
         Center($"{col}", 64, 38, White);
         Center($"{row}", 20, 44, White);
 
-        Right($"{_shopMoney}GP", 134, 24);
+        // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
+        Right($"{_shopMoney}GP", 134, 20);
         if (_selected >= 0 && _units[_selected] is { Alive: true } unit)
         {
-            Right($"Tp:{unit.Tp}", 134, 36);
-            Right($"Soul:{unit.Soul}", 134, 48);
+            Right($"Tp:{unit.Tp}", 134, 32);
+            Right($"Soul:{unit.Soul}", 134, 44);
         }
     }
 }
