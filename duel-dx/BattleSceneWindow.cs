@@ -66,9 +66,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private readonly Dictionary<int, string> _names = [];
     private string _loadError = "";
     private volatile bool _loading = true;
-    private bool _showGrid;
+    private bool _showGrid = UserSettings.Current.ShowGrid;
     /// <summary>발밑 HP·TP 막대 — 원본에는 없어서 기본은 끔(H 키).</summary>
-    private bool _showGauges;
+    private bool _showGauges = UserSettings.Current.ShowGauges;
 
     private uint[] _fb = [];
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
@@ -480,7 +480,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
-        // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다.
+        // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
+        if (key == Win32.VK_ESCAPE && SkipScene()) return;
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
@@ -533,8 +534,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         switch (MoveActionFor(key) ?? _keys.ActionFor(key))
         {
-            case KeyAction.Grid: _showGrid = !_showGrid; break;
-            case KeyAction.Gauges: _showGauges = !_showGauges; break;
+            case KeyAction.Grid: _showGrid = !_showGrid; SaveSettings(); break;
+            case KeyAction.Gauges: _showGauges = !_showGauges; SaveSettings(); break;
             case KeyAction.Ring: ToggleRingForSelected(); break;
             case KeyAction.Attack: RingShortcut(RingCommand.Attack); break;
             case KeyAction.Ability: RingShortcut(RingCommand.Ability); break;
