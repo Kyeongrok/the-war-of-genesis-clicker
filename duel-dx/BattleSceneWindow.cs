@@ -812,6 +812,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenMosesIfAsked();
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
+            // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && LoadBattleFrom(SlotPath(slot)) && _mosesOpen
+                && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
+            {
+                if (page == 7) OpenMosesStyle(); else if (page == 6) OpenMosesLegion();
+            }
         }
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)

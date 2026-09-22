@@ -365,7 +365,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? EventTimer = null, bool[]? EventTimerRun = null,
                                     int EventNextBattle = 0, int EventNextField = 0,
                                     bool InMoses = false, int Chapter = 0,
-                                    bool ChapterDone = false, int PartyNo = 0, int[]? Members = null);
+                                    bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
+                                    SaveUnit[]? Party = null);
 
     private const int SaveVersion = 8;
 
@@ -432,7 +433,11 @@ internal sealed unsafe partial class BattleSceneWindow
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
                 [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
                 _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0,
-                _chapterDone, _partyNo, [.. _members]);
+                _chapterDone, _partyNo, [.. _members],
+                // 전투에 안 선 파티원(크리스티앙처럼 이번 전투에 없는 동료)의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다.
+                [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
+                          .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
+                                                    p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))]);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -550,6 +555,19 @@ internal sealed unsafe partial class BattleSceneWindow
         var saved = _members.ToList();
         RebuildMembersFromChapters();
         foreach (int chr in saved) _members.Add(chr);
+        // 전투에 안 선 파티원 자료 — 세이브에 적힌 것을 되살리고, 없으면 .chr 의 처음 값으로 만든다(옛 세이브의 크리스티앙).
+        RememberParty();
+        foreach (var s in state.Party ?? [])
+            if (!_units.Any(u => u.ChrCode == s.ChrCode) && _db?.Character(s.ChrCode) is { } pc)
+                _party[s.ChrCode] = pc with
+                {
+                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
+                    Items = s.Items.Length == pc.Items.Length ? s.Items : pc.Items,
+                    Passives = s.Passives.Length == 3 ? s.Passives : pc.Passives,
+                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+                };
+        foreach (int chr in _members)
+            if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
         _placesUsed.Clear();
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
