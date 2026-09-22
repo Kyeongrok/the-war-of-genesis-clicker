@@ -115,13 +115,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_unitLegion.ContainsKey(LegionKey(party[i]))) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
         }
 
+        int mx = _mouse.X - ox, my = _mouse.Y - oy;
         // 군단 목록
         for (int r = 0; r < LegionRows; r++)
         {
             int index = _legionTop + r;
             if (index >= list.Count) break;
             int rx = ox + 445, ry = oy + 70 + r * LegionRowH;
-            DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, UiBlend.Alpha);
+            // 줄 틀 Obs 1291 모션 5(138×28)는 0x10043810 으로 단 덧그림 — 마우스가 올라간 줄에만(0x100fae6b).
+            if (mx >= 445 && mx < 445 + LegionRowW && my >= 70 + r * LegionRowH && my < 70 + (r + 1) * LegionRowH)
+                DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, UiBlend.Alpha);
             DrawText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
         }
 
@@ -130,7 +133,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (shown != null) DrawLegionDetail(ox, oy, db, shown);
 
         // 해제(Reset)·배속(Set)·Ok 글자는 배경 그림(Bgr 0039)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림(상점과 같다).
-        int mx = _mouse.X - ox, my = _mouse.Y - oy;
         bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
         if (Over(70, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
         if (Over(160, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
