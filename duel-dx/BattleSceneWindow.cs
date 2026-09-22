@@ -567,6 +567,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_RBUTTONUP:
                 CloseUnitInfo();
                 return IntPtr.Zero;
+            case Win32.WM_LBUTTONUP:
+            {
+                var (ux, uy) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
+                OnAbilityMenuRelease(ux, uy);
+                return IntPtr.Zero;
+            }
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
@@ -576,6 +582,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateChaptersHover(bx, by);
                 UpdateSlotsHover(bx, by);
                 UpdateAbilityHover(bx, by);
+                UpdateAimHover(bx, by);
                 UpdateTitleHover(bx, by);
                 UpdateRecordsHover(bx, by);
                 UpdateFieldHover(bx, by);
@@ -783,6 +790,22 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
+    /// <summary>DUELDX_POSE=&lt;Chr&gt;:&lt;동작&gt;:&lt;L|R|U|D&gt; 면 그 인물이 그 동작을 그 방향으로 되풀이한다(화면 밖 그림 시험용 — 무기 층·이펙트 자리를 본다).</summary>
+    private static readonly string? PoseHook = Environment.GetEnvironmentVariable("DUELDX_POSE");
+
+    private void ApplyPoseHook()
+    {
+        if (PoseHook == null || _units.Length == 0) return;
+        var parts = PoseHook.Split(':');
+        if (parts.Length < 2 || !int.TryParse(parts[0], out int chr) || !int.TryParse(parts[1], out int action)) return;
+        foreach (var u in _units)
+        {
+            if (u.ChrCode != chr || !u.Alive) continue;
+            if (parts.Length > 2) u.Facing = parts[2] switch { "R" => Facing.Right, "U" => Facing.Up, "D" => Facing.Down, _ => Facing.Left };
+            if (u.Action < 0) PlayAction(u, action);
+        }
+    }
+
     private void Update(double dt)
     {
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
@@ -819,6 +842,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         foreach (var unit in _units) unit.SettleIfStopped();
         SyncFollowers();
         UpdateCamera(dt);
+        ApplyPoseHook();
         UpdateSounds();
         UpdateRing();
         UpdateTalk();

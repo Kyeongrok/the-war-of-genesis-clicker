@@ -78,8 +78,9 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_ui.TryGetValue(id, out var sprite)) return sprite;
             // 아직 그림 목록을 못 읽었으면(자료 읽기 전) 기억해 두지 않는다 — 나중에 다시 묻는다.
             if (!_uiPaths.TryGetValue(id, out string? path)) return null;
+            // 그림이 한 장도 없는 Obs(메테오의 Obs 0311 처럼 소리 키만 든 것)는 ArgumentException 으로 떨어진다 — 없는 그림으로 친다.
             try { return _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path)); }
-            catch (Exception ex) when (ex is IOException or InvalidDataException) { return _ui[id] = null; }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { return _ui[id] = null; }
         }
     }
 

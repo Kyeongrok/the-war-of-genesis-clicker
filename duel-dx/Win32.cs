@@ -20,6 +20,7 @@ internal static class Win32
     public const uint WM_LBUTTONDOWN = 0x0201;
     public const uint WM_RBUTTONDOWN = 0x0204;
     public const uint WM_RBUTTONUP = 0x0205;
+    public const uint WM_LBUTTONUP = 0x0202;
     public const uint WM_SETCURSOR = 0x0020;
     public const int HTCLIENT = 1;
 
