@@ -108,7 +108,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     private const int MenuResBase = 1020;
-    private static readonly (int W, int H)[] ResChoices = [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080)];
+    private static readonly (int W, int H)[] ResChoices =
+        [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160)];
 
     /// <summary>동맹(편 3)을 AI 가 움직이나 — 끄면 내가 직접 움직인다(설정 > 모드).</summary>
     private bool _allyAi = UserSettings.Current.AllyAi;
@@ -167,7 +168,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
             case MenuGrid: _showGrid = !_showGrid; SaveSettings(); break;
             case MenuGauges: _showGauges = !_showGauges; SaveSettings(); break;
-            case >= MenuResBase and < MenuResBase + 7:
+            case >= MenuResBase and < MenuResBase + 11:
             {
                 (_viewW, _viewH) = ResChoices[id - MenuResBase];
                 for (int i = 0; i < ResChoices.Length; i++)
