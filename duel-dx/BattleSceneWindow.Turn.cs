@@ -502,9 +502,15 @@ internal sealed unsafe partial class BattleSceneWindow
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
+        bool chained = AbilityMotions.TryGetValue(w.Id, out var chain) && chain.Actions.Length > 0;
+        bool effectsDone = false, followersDone = false;
+        _followerStrikes.Clear();
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
-            if (step != hitStep)
+            // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
+            // 2·3·4·5·6타가 된다(분석-모션 ba-10). 전에는 사슬의 첫 타격 동작에서만 판정을 내 3타에서 멈췄다.
+            bool strikes = step == hitStep || (chained && step < actions.Length && IsStrikeAction(actions[step]));
+            if (!strikes)
             {
                 if (step >= actions.Length) continue;
                 PlayAction(a, actions[step]);
@@ -522,19 +528,41 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
 
-            ScheduleAbilitySounds(w);
-            SpawnAbilityEffects(w, a, col, row);
+            // 「연」 사슬 끝의 동작 8 한 대는 연 위력이 아니라 기본공격 위력이다(키 인자 25 = work 1, 분석-모션 ba-10).
+            var hitWork = chained && step < actions.Length && actions[step] == 8 && a.Data is { } ad
+                          && Work(ad.BasicWorkId) is { } basic ? basic : w;
+            if (!effectsDone)
+            {
+                ScheduleAbilitySounds(w);
+                SpawnAbilityEffects(w, a, col, row);
+                effectsDone = true;
+            }
             for (int hit = 0; hit < hitTimes.Count; hit++)
             {
                 if (hit > 0)
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
-                foreach (int ti in targets) ApplyWork(a, w, _units[ti], dying);
-                // 군단 행동(상태 15) — 대장이 친 대상을 부하들도 함께 친다
-                if (w.IsDamage && targets.Count > 0) FollowersAttack(userIndex, _units[targets[0]], dying);
+                foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
+                // 군단 행동(상태 15) — 대장이 치면 부하들도 <b>한 번</b> 제 기술로 같이 친다(여러 타를 쳐도 부하는 한 번).
+                if (!followersDone && w.IsDamage && targets.Count > 0) { FollowersAttack(userIndex, _units[targets[0]], dying); followersDone = true; }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
+        }
+
+        // 사거리 밖이던 부하는 먼저 걸어간 뒤 친다(원본 0x1005f1c0: 명령1 이동 → 명령2 기술).
+        if (_followerStrikes.Count > 0)
+        {
+            while (_followerStrikes.Any(s => s.Follower.IsBusy)) yield return true;
+            foreach (var (follower, work, target) in _followerStrikes)
+            {
+                if (!follower.Alive || !target.Alive) continue;
+                follower.Facing = FacingToward(follower.Col, follower.Row, target.Col, target.Row);
+                PlayAction(follower, 8);
+                ApplyWork(follower, work, target, dying);
+            }
+            _followerStrikes.Clear();
+            for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
         }
 
         // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10) — 마리아·유블레인이 쓰는,
