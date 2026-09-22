@@ -129,12 +129,12 @@ internal sealed unsafe partial class BattleSceneWindow
                   : _unitLegion.TryGetValue(LegionKey(_legionUnit), out int id) ? Legions().GetValueOrDefault(id) : null;
         if (shown != null) DrawLegionDetail(ox, oy, db, shown);
 
-        DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
-        DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
-        DrawText("해제", ox + 88, oy + 300, White, 12);
-        DrawText("배속", ox + 178, oy + 300, White, 12);
-        if (!DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, UiBlend.Alpha))
-            DrawText("EXIT", ox + 456, oy + 434, White);
+        // 해제(Reset)·배속(Set)·Ok 글자는 배경 그림(Bgr 0039)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림(상점과 같다).
+        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
+        if (Over(70, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
+        if (Over(160, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
+        if (Over(456, 430, 178, 27)) DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, UiBlend.Alpha);
     }
 
     /// <summary>고른 군단 — 진형 칸에 대장·부하를 놓고 오른쪽에 이름·설명·진형을 적는다.</summary>

@@ -311,7 +311,7 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
         }
 
-        if (!DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha))
-            DrawText("EXIT", ox + 455, oy + 434, White);
+        // Ok 글자는 배경 그림(Bgr 0042)에 있다 — 알약 Obs 287 은 마우스 올림에만.
+        if (mx >= 455 && mx < 633 && my >= 430 && my < 457) DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
     }
 }
