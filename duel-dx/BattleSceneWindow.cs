@@ -98,20 +98,23 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 창에 보이는 판 높이 — 판 전체의 70%, 다만 원본 화면 높이(480 + 머리줄)까지만. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.
     /// 세로로 긴 맵(Obt 0156 은 2272 픽셀)도 원본처럼 줌아웃하지 않고 스크롤한다.
     /// </summary>
-    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, _viewH));
+    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, (int)Math.Round(_resH / _zoom)));
 
-    /// <summary>설정 > 해상도 — 보이는 영역 크기(판 픽셀). 원본은 640×480.</summary>
+    /// <summary>설정 > 해상도 — <b>창 크기</b>(화면 픽셀). 원본은 640×480. 보이는 판은 이것을 배율로 나눈 만큼이다.</summary>
     private int _viewW = UserSettings.Current.ViewW, _viewH = UserSettings.Current.ViewH;
+
+    /// <summary>모니터에 들어가게 깎은 해상도(<see cref="FitZoom"/> 가 채운다) — 창 너비·(머리줄 뺀) 창 높이.</summary>
+    private int _resW = UserSettings.Current.ViewW, _resH = UserSettings.Current.ViewH;
 
     /// <summary>
     /// 창에 보이는 판 너비 — 원본 화면 너비 640 까지만. 더 넓은 맵(Btl 0131 같은 1480 픽셀)은 원본처럼 <b>줌아웃하지 않고</b>
     /// <see cref="_camX"/> 로 좌우 스크롤한다(차례인 인물을 따라간다).
     /// </summary>
-    private int ViewWidth => Math.Min(BoardWidth, Math.Max(320, _viewW));
-    /// <summary>자동 맞춤의 최대 배율. 설정에서 고르면 <see cref="MaxZoomChosen"/> 까지.</summary>
-    private const double MaxZoom = 2, MaxZoomChosen = 4;
+    private int ViewWidth => Math.Min(BoardWidth, Math.Max(320, (int)Math.Round(_resW / _zoom)));
+    /// <summary>배율의 위아래 한계. 자동은 판이 창보다 작을 때(모세스·타이틀 640×480)만 창을 채우도록 키운다.</summary>
+    private const double MinZoom = 0.5, MaxZoomChosen = 4;
 
-    /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
+    /// <summary>화면 픽셀 ÷ 판 픽셀 — <see cref="FitZoom"/> 가 정한다.</summary>
     private double _zoom;
 
     private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
@@ -300,18 +303,30 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         return Math.Max(work.Left, work.Left + (work.Width - windowWidth) / 2);
     }
 
-    /// <summary>모니터 작업 영역(작업 표시줄 뺀 곳)에 창이 들어가는 가장 큰 배율 — 최대 <see cref="MaxZoom"/>.</summary>
+    /// <summary>
+    /// 배율을 정한다 — 설정 > 해상도가 <b>창 크기</b>, 설정 > 배율이 확대다.
+    /// 배율 「자동」은 판이 창보다 작을 때(모세스·타이틀 640×480, 작은 맵) 창을 채우도록 키우고, 판이 더 크면 1배로 두어
+    /// 창 크기만큼 판을 보인다. 고른 배율은 그대로 쓰되 판 전체가 창보다 작아지지 않게(모세스가 잘리지 않게) 깎는다.
+    /// 해상도가 모니터 작업 영역보다 크면 들어가는 데까지만(<see cref="_resW"/>·<see cref="_resH"/>).
+    /// </summary>
     private double FitZoom()
     {
         var work = new Win32.Rect();
-        if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 1;
+        if (Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0))
+        {
+            // 제목 표시줄·메뉴·테두리 몫을 조금 남긴다.
+            _resW = Math.Max(320, Math.Min(_viewW, work.Width - 32));
+            _resH = Math.Max(240, Math.Min(_viewH, work.Height - 100 - GridTop));
+        }
+        else { _resW = _viewW; _resH = _viewH; }
 
-        // 제목 표시줄·테두리 몫을 조금 남긴다.
-        double fit = Math.Min((work.Width - 32) / (double)ViewWidth, (work.Height - 100) / (double)ViewHeight);
-        fit = Math.Floor(fit * 20) / 20;
-        // 설정 > 해상도에서 배율을 골랐으면 그 값 — 다만 모니터에 안 들어가는 크기는 들어가는 데까지만.
-        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, fit), 0.5, MaxZoomChosen);
-        return Math.Clamp(fit, 0.5, MaxZoom);
+        // 배율 1 에서 보이는 판 크기 — 판이 작으면 판 전체, 크면 창만큼.
+        int w1 = Math.Min(BoardWidth, Math.Max(320, _resW));
+        int h1 = Math.Min(BoardHeight * 7 / 10, GridTop + Math.Max(240, _resH));
+        // 세로는 머리줄(GridTop) 을 빼고 잰다 — 640×480 이 1배, 1280×960 이 꼭 2배가 되게.
+        double fill = Math.Floor(Math.Min(_resW / (double)w1, _resH / (double)Math.Max(1, h1 - GridTop)) * 20) / 20;
+        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, Math.Max(1, fill)), MinZoom, MaxZoomChosen);
+        return Math.Clamp(fill, 1, MaxZoomChosen);
     }
 
     /// <summary>설정 > 해상도 — 고른 배율 %(0 = 자동). 켤 때 읽고 바꾸면 저장한다.</summary>
@@ -695,6 +710,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnClick(int clientX, int clientY)
     {
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen) { LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다

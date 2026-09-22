@@ -16,7 +16,7 @@ namespace DuelDx;
 /// <item>오른끝 x=270 — <c>%3d:%02d:%02d</c> 논 시간, 색 <c>0x64ff64</c></item>
 /// </list>
 /// 빈 슬롯은 TXR 0 「없음」 한 줄이고 <b>Load 에서만</b> 그 줄이 꺼진다. 줄 강조는 Obs 0471 모션 20 가로 띠다.
-/// 저장하면 Snd 579 와 「저장되었습니다.」 알림창(120틱).
+/// 저장하면 Snd 579 와 「저장되었습니다.」 알림창(원본 120틱 — 데모는 40틱, 클릭으로 닫힘).
 /// 원본 세이브는 파티만 담지만 이 데모는 전투판 그대로를 <c>%APPDATA%\DuelDx\battle-save-NN.json</c> 에 담는다.
 /// 자동 저장(슬롯 20)은 전투를 시작할 때 쓴다 — 원본이 어디서 쓰는지는 아직 안 봤다(데모 나름).
 /// </remarks>
@@ -115,7 +115,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _slotsMode = -1;
         if (!SaveBattleTo(SlotPath(slot))) { _notice = ("Error", _lastTime + 4); return; }
         Play(SoundSaved);
-        _notice = ("저장되었습니다.", _lastTime + 120 / TicksPerSecond);
+        // 원본은 120틱(4초)인데 너무 오래 떠 있다는 요청으로 40틱(약 1.3초)만 띄운다. 클릭하면 바로 닫힌다.
+        _notice = ("저장되었습니다.", _lastTime + 40 / TicksPerSecond);
     }
 
     private void LoadSlot(int slot)
