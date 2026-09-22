@@ -791,9 +791,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 var (clip, tick) = sprite.CurrentClip(unit);
                 var tint = clip?.TintAt(tick);
                 var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit));
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade);
                 headY = footY + frame.Y;
-                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right);
+                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade);
             }
             if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
         }
@@ -883,11 +883,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 컷 한 장을 찍는다. <paramref name="tint"/> 가 있으면 물들인다 — 방식 k(1~7)는 (n·픽셀 + (31−n)·세기)/31,
     /// 방식 3 은 n = 19 로 맞을 때의 흰 번쩍임이다(분석-전투 "맞는 효과").
     /// </summary>
+    /// <param name="fade">0~1 의 밝기 — 이스케이프처럼 인물이 사라졌다 나타날 때 쓴다(<see cref="UnitState.Fade"/>). 1 이면 그대로 그린다.</param>
     private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
-                            (byte[] R, byte[] G, byte[] B)? status = null)
+                            (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1)
     {
+        if (fade <= 0) return;
         int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
         int level = tint is { } tt ? Math.Clamp(tt.Strength, 0, 31) * 255 / 31 : 0;
+        int k = fade < 1 ? Math.Clamp((int)(fade * 256), 0, 256) : 256;
 
         for (int y = 0; y < srcH; y++)
         {
@@ -905,6 +908,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                     c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
                 }
                 if (status is { } st) c = ApplyStatusTint(c, st);
+                if (k < 256)
+                {
+                    uint d = _fb[dy * BoardWidth + dx];
+                    uint Mix(int shift) => (uint)(((int)(c >> shift & 0xFF) * k + (int)(d >> shift & 0xFF) * (256 - k)) / 256);
+                    c = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+                }
                 SetPixel(dx, dy, c);
             }
         }
@@ -1214,6 +1223,9 @@ internal sealed class UnitState(DemoUnit unit)
     private double _progress = 1;
 
     public bool IsMoving => _progress < 1;
+
+    /// <summary>그릴 밝기(0~1) — 이스케이프(work 1583)가 겨눈 칸으로 사라졌다 나타날 때만 코드가 손으로 움직인다.</summary>
+    public double Fade { get; set; } = 1;
 
     // ── 전투 수치 (게임 표를 읽은 뒤 채운다) ──
     public CharacterData? Data { get; set; }

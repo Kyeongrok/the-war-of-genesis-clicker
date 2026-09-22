@@ -56,15 +56,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 같이 붙는 무기·검기 층도 뒤집어야 한다. 안 그러면 왼쪽을 보고 치는 자료 그대로 나와 실제로는
     /// 오른쪽을 쳤는데 이펙트만 왼쪽에 남아 보인다(죠안의 「연」에서 나타난 증상).
     /// </param>
-    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror)
+    /// <param name="fade">몸 그림과 같이 사라졌다 나타나게(<see cref="UnitState.Fade"/>) — 몸만 사라지고 무기가 남으면 안 된다.</param>
+    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1)
     {
-        if (clip == null) return;
+        if (clip == null || fade <= 0) return;
         foreach (var (start, obs, motion) in clip.Children)
         {
             if (start > tick) continue;
             var blend = UiFor(obs)?.BlendAt(motion, tick - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
             // 무기 층은 몸 모션과 같이 돈다 — 서기처럼 되풀이하는 모션이면 자식도 되풀이한다.
-            DrawUi(obs, motion, tick - start, footX, footY, blend, mirror: mirror);
+            DrawUi(obs, motion, tick - start, footX, footY, blend, mirror: mirror, fade: fade);
         }
     }
 
