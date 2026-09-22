@@ -26,7 +26,44 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly Dictionary<int, int> _talkSlot = [];      // 인물 번호 -> 지금 대사 칸(0~2)
     private readonly Dictionary<int, int> _talkMotion = [];    // 인물 번호 -> 뽑아 둔 Obs 1330 모션
 
-    private List<ChapterFile.Person> TalkPeople() => [.. _mosesChp?.People ?? []];
+    /// <summary>통신 페이지가 보는 항성계 — 고른 행성이 속한 성계, 없으면 첫 성계(항행 배경과 같은 규칙).</summary>
+    private ChapterFile.StarSystem? TalkSystem()
+    {
+        if (_mosesChp is not { } chp) return null;
+        return chp.Systems.FirstOrDefault(s => s.Planets.Contains(_mosesPlanet)) ?? chp.Systems.FirstOrDefault();
+    }
+
+    /// <summary>이 항성계의 성도 점들 — 사람은 이 점들 사이를 오간다. 원본은 <b>둘 이상</b>일 때만 페이지를 연다.</summary>
+    private List<ChapterFile.Landmark> TalkMarks()
+    {
+        if (_mosesChp is not { } chp || TalkSystem() is not { } system) return [];
+        return [.. chp.Landmarks.Where(l => l.SystemNo == system.No)];
+    }
+
+    /// <summary>
+    /// 화면에 나올 사람들 — 원본(<c>0x100fdc80</c>)처럼 <b>지금 항성계의 인물 목록</b>(성계 레코드 <c>+0x30</c>)에서
+    /// 나타날 조건(인물 워드 11·12·13 = 변수·값·연산자, 변수가 0 이하면 조건 없음)을 통과한 사람만, 여덟까지.
+    /// 챕터의 모든 인물을 다 세우면 다른 성계 사람까지 나오고, 성도 점이 없는 성계에서는 전부 한자리에 겹친다.
+    /// </summary>
+    private List<ChapterFile.Person> TalkPeople()
+    {
+        if (_mosesChp is not { } chp || TalkSystem() is not { } system || TalkMarks().Count < 2) return [];
+        var people = new List<ChapterFile.Person>();
+        foreach (int no in system.People)
+        {
+            if (no < 0) continue;
+            var person = chp.People.FirstOrDefault(p => p.No == no) ?? (no < chp.People.Count ? chp.People[no] : null);
+            if (person == null || people.Contains(person)) continue;
+            int variable = person.Words.Count > 13 ? person.Words[11] : 0;
+            if (variable > 0 && !FlagsAllow([(variable, person.Words[12], person.Words[13])])) continue;
+            people.Add(person);
+            if (people.Count == 8) break;
+        }
+        return people;
+    }
+
+    /// <summary>사람마다 한 번 뽑아 두는 길 — 서로 다른 성도 점 둘과 출발 위상(원본은 <c>rand()</c>, 창 <c>+0x148+6i</c>).</summary>
+    private readonly Dictionary<(int Chapter, int Person), (int A, int B, int Phase)> _talkPath = [];
 
     /// <summary>그 챕터의 대사 표 — 챕터와 같은 번호의 Tlk 파일.</summary>
     private TalkTable? TalkTableFor()
@@ -56,16 +93,23 @@ internal sealed unsafe partial class BattleSceneWindow
         if (count > 0) _talkSlot[person.No] = (_talkSlot.GetValueOrDefault(person.No) + 1) % count;
     }
 
-    /// <summary>그 인물이 지금 서 있는 자리 — 성도 점 두 곳 사이를 오간다.</summary>
-    private (int X, int Y) TalkSpot(int index)
+    /// <summary>그 인물이 지금 서 있는 자리 — 제 성도 점 두 곳 사이를 3600프레임에 걸쳐 오간다.</summary>
+    private (int X, int Y) TalkSpot(ChapterFile.Person person)
     {
-        var marks = _mosesChp?.Landmarks ?? [];
-        if (marks.Count == 0) return (320, 240);
-        var a = marks[index % marks.Count];
-        var b = marks[(index + 1) % marks.Count];
-        int t = ((int)(_lastTime * TicksPerSecond) + index * 137) % (2 * TalkWalkFrames);
+        var marks = TalkMarks();
+        if (marks.Count < 2) return (320, 240);
+        var key = (_mosesChp?.Id ?? 0, person.No);
+        if (!_talkPath.TryGetValue(key, out var path) || path.A >= marks.Count || path.B >= marks.Count)
+        {
+            int a = _ailmentRandom.Next(marks.Count), b = _ailmentRandom.Next(marks.Count - 1);
+            if (b >= a) b++;                                              // 서로 다른 두 곳
+            _talkPath[key] = path = (a, b, _ailmentRandom.Next(TalkWalkFrames));
+        }
+        var from = marks[path.A];
+        var to = marks[path.B];
+        int t = ((int)(_lastTime * TicksPerSecond) + path.Phase) % (2 * TalkWalkFrames);
         int walk = t < TalkWalkFrames ? t : 2 * TalkWalkFrames - t;     // 갔다가 되돌아온다
-        return (a.X + (b.X - a.X) * walk / TalkWalkFrames, a.Y + (b.Y - a.Y) * walk / TalkWalkFrames);
+        return (from.X + (to.X - from.X) * walk / TalkWalkFrames, from.Y + (to.Y - from.Y) * walk / TalkWalkFrames);
     }
 
     /// <summary>통신 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
@@ -80,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var people = TalkPeople();
         for (int i = 0; i < people.Count && i < 8; i++)
         {
-            var (px, py) = TalkSpot(i);
+            var (px, py) = TalkSpot(people[i]);
             if (Math.Abs(x - px) > 20 || Math.Abs(y - py) > 24) continue;
             if (_talkPick == i) NextTalkSlot(people[i]);                  // 같은 사람을 또 누르면 다음 대사
             _talkPick = i;
@@ -102,7 +146,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         for (int i = 0; i < people.Count && i < 8; i++)
         {
-            var (px, py) = TalkSpot(i);
+            var (px, py) = TalkSpot(people[i]);
             DrawUi(TalkObs, TalkMotion(people[i]), tick, ox + px, oy + py, UiBlend.Alpha);
             string name = _db?.Character(people[i].ChrCode) is { } c ? _db.T(c.NameId) : "";
             if (name.Length == 0) continue;
@@ -122,7 +166,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var words = TalkWords(person);
         string line = TalkTableFor() is { } table && words.Count > 0
             ? table[words[_talkSlot.GetValueOrDefault(person.No) % words.Count]] : "";
-        var (px, py) = TalkSpot(_talkPick);
+        var (px, py) = TalkSpot(person);
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
         int y = Math.Clamp(oy + py - TalkBubbleH - 30, oy + 4, oy + MosesH - TalkBubbleH - 4);
 
