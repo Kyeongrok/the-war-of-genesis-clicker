@@ -47,8 +47,10 @@ public sealed class ChapterFile
                                 IReadOnlyList<(int Variable, int Value, int Operator)> Conditions);
 
     /// <summary>장소 하나 — 항행 단계 2 의 칸.</summary>
+    /// <param name="Lon">파일 워드 4(<c>+0x08</c>) — 레이더 격자 구의 경도칸 0~9(−1 = 없음, 자동 발생 장소). 분석-모세스 6절.</param>
+    /// <param name="Lat">파일 워드 5(<c>+0x0a</c>) — 위도칸 0~9(0 = 북극 쪽).</param>
     public sealed record Place(int No, int NameText, int Value, int DescText, int Auto,
-                               IReadOnlyList<(int Variable, int Value, int Operator)> Conditions)
+                               IReadOnlyList<(int Variable, int Value, int Operator)> Conditions, int Lon = -1, int Lat = -1)
     {
         /// <summary>값이 가리키는 곳: 전투 · 필드 · 상점(분석-모세스 6절).</summary>
         public PlaceKind Kind => Value >= 20000 ? PlaceKind.Shop : Value >= 10000 ? PlaceKind.Field : PlaceKind.Battle;
@@ -207,7 +209,7 @@ public sealed class ChapterFile
             {
                 var w = Words(10);
                 // 워드 6~8 = 조건 (변수, 값, 연산자) — 안 쓰면 −1 셋이다(가설: 항성계·행성 조건과 같은 꼴이고 값도 그렇게 들어 있다).
-                places.Add(new Place(w[0], w[1], w[2], w[3], w[9], [(w[6], w[7], w[8])]));
+                places.Add(new Place(w[0], w[1], w[2], w[3], w[9], [(w[6], w[7], w[8])], w[4], w[5]));
             }
 
             // 장소 뒤에 4바이트 레코드 표 하나와 스크립트가 더 있다(분석-전투목록 ba-7 의 Chp 파서와 같다).
