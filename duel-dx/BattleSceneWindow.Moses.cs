@@ -125,8 +125,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesChp is { } owner && Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
         // 다음 에피소드는 진행 깃발(Episode.dat 잠금 깃발 넷)이 다 서 있어야 열린다. 표시는 에피소드를 고를 때 내린다.
-        // 예전 판(행동 11 을 그냥 「모세스로」로 돌리던 때)에 챕터를 다 돈 세이브를 위한 보조 규칙 — 전투·필드 장소를 하나도 남김없이
-        // 겪었고(상점은 소모되지 않는다) 챕터 스크립트가 챕터 끝 필드를 이미 지났으면 끝난 것으로 본다(데모 규칙, 원본에는 없다).
+        // 모든 전투·필드 장소를 겪었으면(상점은 소모되지 않는다) 챕터가 끝난 것으로 본다 — 행동 11 을 그냥 「모세스로」로 돌리던 판의
+        // 세이브와, 끝 필드의 행동 11 이 실행기를 못 탄 경우를 구제하는 데모 규칙(원본에는 없다).
         if (!_chapterDone && _mosesChp is { } done && done.Places.Any(p => p.Value < 20000 && p.Auto == 0)
             && done.Places.Where(p => p.Value < 20000).All(p => _placesUsed.Contains((done.Id, p.No)) || _autoPlacesDone.Contains((done.Id, p.No))))
             _chapterDone = true;

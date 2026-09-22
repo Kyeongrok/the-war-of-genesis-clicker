@@ -44,17 +44,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool FlagsAllow(IReadOnlyList<(int Variable, int Value, int Operator)> conditions) =>
         conditions.All(c => FlagAllows(c.Variable, c.Value, c.Operator));
 
-    /// <summary>
-    /// 그 장소가 항행 목록에 나오나 — 조건이 통하거나, <b>그 깃발을 아직 아무도 건드리지 않았으면</b> 보여 준다.
-    /// </summary>
+    /// <summary>그 장소가 항행 목록에 나오나 — 원본대로 조건이 통해야 한다(<c>0x100fdaf0</c>).</summary>
     /// <remarks>
-    /// 원본은 챕터에 들어갈 때 자동 발생 장소(Fld 프롤로그)가 먼저 돌며 첫 전투의 깃발을 세운다.
-    /// 우리는 <c>Fld</c> 자료가 없어 그것을 못 돌리므로, <b>한 번도 세워진 적 없는 깃발은 「모른다」로 보고 막지 않는다</b>.
-    /// 깃발이 실제로 세워지고 나면(전투를 이기면) 그 뒤로는 조건이 그대로 먹는다 — 같은 칸에 다른 전투가 들어서는 자리도 제대로 갈린다.
+    /// 예전엔 「한 번도 세워진 적 없는 깃발은 모른다」로 보고 다 보여 줬다 — 필드 프롤로그가 없어 첫 깃발을 못 세우던 때의 임시 규칙.
+    /// 지금은 프롤로그·챕터 스크립트·전투 이벤트가 깃발을 세우니 조건대로 거른다(2026-09-23). 코어헌터는 훈련장(깃발 13)부터 하나씩 열린다.
     /// </remarks>
-    private bool PlaceOpen(ChapterFile.Place place) =>
-        FlagsAllow(place.Conditions)
-        || place.Conditions.All(c => c.Variable <= 0 || c.Variable >= _flags.Length || _flags[c.Variable] == 0);
+    private bool PlaceOpen(ChapterFile.Place place) => FlagsAllow(place.Conditions);
 
     /// <summary>
     /// 그 전투의 이벤트가 세우는 깃발을 적용한다 — 이긴 뒤 다음 화면이 달라지게.

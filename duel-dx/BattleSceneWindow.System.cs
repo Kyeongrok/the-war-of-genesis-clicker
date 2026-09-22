@@ -635,7 +635,13 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             _titleOpen = false;
             _mixer.StopMusic();
-            OpenMoses(state.Chapter > 0 ? LoadChapterFile(state.Chapter) : null);
+            var loadedChp = state.Chapter > 0 ? LoadChapterFile(state.Chapter) : null;
+            // 장소 조건을 안 거르던 판의 세이브(파티 칸이 없다) — 열린 전투·필드 장소가 하나도 없으면 챕터를 다 돈 것으로 본다.
+            // 그때는 장소를 순서 없이 겪을 수 있어 깃발이 원본 순서와 어긋나, 지금 규칙으로는 상점만 남아 갇힌다.
+            if (state.Party == null && loadedChp is { } oc
+                && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !_placesUsed.Contains((oc.Id, p.No)) && FlagsAllow(p.Conditions)))
+                _chapterDone = true;
+            OpenMoses(loadedChp);
             Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
         }
