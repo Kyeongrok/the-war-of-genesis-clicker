@@ -303,8 +303,12 @@ internal sealed unsafe partial class BattleSceneWindow
         OpenMoses();
     }
 
+    /// <summary>DUELDX_ALLEVENTS=1 이면 챕터 사건의 조건을 모두 참으로 본다(화면 밖 시험용 — 대사·고르기가 든 사건을 전부 돌려 본다).</summary>
+    private static readonly bool AllChapterEvents = Environment.GetEnvironmentVariable("DUELDX_ALLEVENTS") == "1";
+
     private bool FieldCondition(ScriptCommand c)
     {
+        if (AllChapterEvents && _field == null) return true;
         short A(int i) => i < c.Args.Length ? c.Args[i] : (short)0;
         return c.Code switch
         {
