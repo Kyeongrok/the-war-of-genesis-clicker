@@ -30,7 +30,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>인물마다 붙인 군단 번호(원본 <c>CChr+0x1c</c>) — <b>Chr 번호</b>로 기억한다(전투마다 명부가 다시 만들어지므로 자리 번호로는 못 잇는다).</summary>
     private readonly Dictionary<int, int> _unitLegion = [];
 
-    private int LegionKey(int unitIndex) => (uint)unitIndex < _units.Length ? _units[unitIndex].ChrCode : -1;
+    /// <summary>파티 목록(<see cref="StyleParty"/>)은 Chr 번호라 그대로 열쇠다.</summary>
+    private static int LegionKey(int chr) => chr;
 
     private Dictionary<int, LegionData> Legions() =>
         _legions ??= LegionData.ParseAll(_db?.Files.Read("Dat", "For.dat"));
@@ -110,8 +111,11 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
             DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
-            if (_units[party[i]].Data is { } pc && _faces.TryGetValue(pc.Code, out var face))
-                BlitScaled(face, cx - 30, cy + 20, 60, 60);
+            if (PartyData(party[i]) is { } pc)
+            {
+                LoadFieldFace(pc);
+                if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+            }
             if (_unitLegion.ContainsKey(LegionKey(party[i]))) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
         }
 
@@ -144,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 진형 칸 — 가운데(0,0)가 대장, 나머지는 진형표대로
         DarkenRect(ox + 60, oy + 100, 260, 190, 12);
-        DrawLegionCell(ox, oy, 0, 0, db.T(_units[_legionUnit].Data?.NameId ?? 0), 0xFFFFE070);
+        DrawLegionCell(ox, oy, 0, 0, db.T(PartyData(_legionUnit)?.NameId ?? 0), 0xFFFFE070);
         for (int i = 0; i < legion.Members.Length && i < LegionData.FormationCells[legion.Formation].Length; i++)
         {
             var (dx, dy) = LegionData.FormationCells[legion.Formation][i];
