@@ -713,7 +713,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     });
                 break;
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
-                if (A(0) > 0) _ownedLegions.Add(A(0));
+                if (A(0) > 0) { _ownedLegions.Add(A(0)); _legionsKnown = true; }
                 break;
             case 801: AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
             case 802: RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]

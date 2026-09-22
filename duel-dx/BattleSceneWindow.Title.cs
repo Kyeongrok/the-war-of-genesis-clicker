@@ -74,6 +74,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _party.Clear();
                 _members.Clear();
                 _ownedLegions.Clear();
+                _legionsKnown = true;
                 _partyBank.Clear();
                 _mailbox.Clear();
                 _mailRead.Clear();

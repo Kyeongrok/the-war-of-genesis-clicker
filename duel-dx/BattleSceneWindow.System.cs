@@ -576,6 +576,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
         _ownedLegions.Clear();
         foreach (int id in state.OwnedLegions ?? []) _ownedLegions.Add(id);
+        _legionsKnown = state.OwnedLegions != null;
         RestoreBank(state.Bank);
         _mailbox.Clear();
         foreach (int id in state.Mailbox ?? []) _mailbox.Add(id);
