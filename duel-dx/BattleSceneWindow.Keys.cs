@@ -105,13 +105,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MenuAllyAi = 1006;
 
     /// <summary>동맹(편 3)을 AI 가 움직이나 — 끄면 내가 직접 움직인다(설정 > 모드).</summary>
-    private bool _allyAi = true;
+    private bool _allyAi = UserSettings.Current.AllyAi;
 
     /// <summary>창 위 메뉴 막대 — 설정(단축키 설정·격자·체력바·끝내기).</summary>
     private static IntPtr CreateMenuBar()
     {
         IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu(), game = Win32.CreatePopupMenu(), mode = Win32.CreatePopupMenu();
-        Win32.AppendMenuW(mode, Win32.MF_STRING | Win32.MF_CHECKED, MenuAllyAi, "동맹을 AI 가 움직임(&A)");
+        Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.AllyAi ? Win32.MF_CHECKED : 0u), MenuAllyAi, "동맹을 AI 가 움직임(&A)");
         Win32.AppendMenuW(game, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)game, "게임(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
@@ -125,6 +125,9 @@ internal sealed unsafe partial class BattleSceneWindow
         return bar;
     }
 
+    /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges));
+
     private void OnMenuCommand(int id)
     {
         switch (id)
@@ -135,10 +138,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 _allyAi = !_allyAi;
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuAllyAi, Win32.MF_BYCOMMAND | (_allyAi ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_allyAi ? "동맹은 AI 가 움직입니다" : "동맹도 내가 움직입니다");
+                SaveSettings();
                 break;
             case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
-            case MenuGrid: _showGrid = !_showGrid; break;
-            case MenuGauges: _showGauges = !_showGauges; break;
+            case MenuGrid: _showGrid = !_showGrid; SaveSettings(); break;
+            case MenuGauges: _showGauges = !_showGauges; SaveSettings(); break;
             case MenuExit: _running = false; break;
         }
     }
