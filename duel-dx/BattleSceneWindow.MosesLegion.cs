@@ -49,7 +49,14 @@ internal sealed unsafe partial class BattleSceneWindow
         ShowMosesBackground(LegionBackground);
     }
 
-    private List<LegionData> LegionList() => [.. Legions().Values.OrderBy(l => l.Id)];
+    /// <summary>
+    /// 용병관리에 나오는 군단 — 스크립트 713 으로 <b>얻은 것</b>만(원본 파티 객체 `+0x910` 목록, 분석-군단). 얻은 기록이 없는 옛 세이브는 예전처럼 전부.
+    /// </summary>
+    private List<LegionData> LegionList() =>
+        [.. Legions().Values.Where(l => _ownedLegions.Count == 0 || _ownedLegions.Contains(l.Id)).OrderBy(l => l.Id)];
+
+    /// <summary>파티가 얻은 군단 번호(스크립트 713). 세이브에 실린다.</summary>
+    private readonly HashSet<int> _ownedLegions = [];
 
     /// <summary>용병관리 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
     private bool OnMosesLegionClick(int bx, int by)
