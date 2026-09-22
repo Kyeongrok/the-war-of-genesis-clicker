@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Threading;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -82,7 +83,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
         }
 
-        StartBattleMusic();
+        // 타이틀에서 시작하면 아직 아무 전투도 안 열렸다 — 그때 전투 음악을 걸면 타이틀 음악을 튼 뒤에야
+        // 풀리기가 끝나 타이틀 위로 전투 음악이 덮어씌워진다.
+        if (_battleLoaded) StartBattleMusic();
     }
 
     /// <summary>DUELDX_MUTE=1 이면 소리를 내지 않는다 — 자동 테스트가 사용자 스피커로 소리를 내지 않게.</summary>
@@ -100,16 +103,24 @@ internal sealed unsafe partial class BattleSceneWindow
         // 새 음악은 늘 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다.
         _musicFade = null;
         _musicGain = MusicGain;
+        // 풀리는 동안 다른 곡을 걸었으면 이 곡은 버린다 — 늦게 풀린 곡이 새 곡을 덮어쓰지 않게.
+        int request = Interlocked.Increment(ref _musicRequest);
         System.Threading.Tasks.Task.Run(() =>
         {
             try
             {
                 string path = Path.Combine(AssetsFolder.Find("bgm"), $"{id:D4}.bgm");
-                if (File.Exists(path)) _mixer.PlayMusic(BinkAudio.Open(path).Decode(), loop, MusicGain);
+                if (!File.Exists(path)) return;
+                var pcm = BinkAudio.Open(path).Decode();
+                if (request != Volatile.Read(ref _musicRequest)) return;
+                _mixer.PlayMusic(pcm, loop, MusicGain);
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
         });
     }
+
+    /// <summary>마지막으로 건 곡의 번호표 — 풀리는 데 1~2초 걸리는 사이 다른 곡이 걸리면 먼저 것은 버린다.</summary>
+    private int _musicRequest;
 
     private void StartBattleMusic() => PlayMusicFile(_scene.Bgm, loop: true);
 
