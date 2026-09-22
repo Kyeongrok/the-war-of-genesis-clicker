@@ -100,6 +100,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesOpen = true;
         _mosesHover = -1;
         _mosesPage = -1;
+        // 전투는 여기서 닫힌다 — 판을 전투 맵 크기에서 640×480 틀로 되돌려 모세스만 남긴다.
+        // (안 그러면 전투 맵 크기 창 한가운데에 모세스가 뜨고 둘레가 검게 남는다.)
+        if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
         if (chapter != null) _mosesChp = chapter;
         LoadMosesChapter();
         if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다
