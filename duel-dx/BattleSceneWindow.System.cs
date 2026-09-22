@@ -364,7 +364,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     string[]? DoneEvents = null, string[]? UsedPlaces = null,
                                     int[]? EventFired = null, int TurnNo = 0, Dictionary<string, int>? BattleVars = null,
                                     int[]? EventTimer = null, bool[]? EventTimerRun = null,
-                                    int EventNextBattle = 0, int EventNextField = 0);
+                                    int EventNextBattle = 0, int EventNextField = 0,
+                                    bool InMoses = false, int Chapter = 0);
 
     private const int SaveVersion = 8;
 
@@ -390,7 +391,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
                     [.. u.StatusId], [.. u.StatusValue], u.Side))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                _scene.TitleTextId, 1, PlayMs,
+                // 모세스에서 저장하면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 모세스로 돌아간다(원본 세이브 머리와 같다).
+                _mosesOpen && _mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId, _mosesOpen ? 4 : 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
@@ -406,7 +408,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _eventFired], _turn >= 0 ? _turnNo - 1 : _turnNo,
                 Enumerable.Range(0, _battleVars.Length).Where(i => _battleVars[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
-                [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField);
+                [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
+                _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -441,7 +444,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다(옛 저장은 전투 번호가 없어 첫 전투로 본다).
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
-        if ((!_battleLoaded || battle != _scene.Id) && !StartBattle(battle)) return false;
+        // 모세스가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
+        if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;
@@ -551,6 +555,15 @@ internal sealed unsafe partial class BattleSceneWindow
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
         _nextTickAt = 0;
         _playBase = state.PlayMs - _lastTime * 1000;
+        // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.
+        if (state.InMoses)
+        {
+            _titleOpen = false;
+            _mixer.StopMusic();
+            OpenMoses(state.Chapter > 0 ? LoadChapterFile(state.Chapter) : null);
+            Toast($"불러왔습니다 — {state.SavedAt}");
+            return true;
+        }
         // 타이틀에서 불러왔으면 타이틀을 내리고 전투 화면으로 바꾼다.
         if (_titleOpen)
         {

@@ -133,6 +133,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>이미 겪은 자동 발생 장소 — (챕터, 장소).</summary>
     private readonly HashSet<(int Chapter, int Place)> _autoPlacesDone = [];
 
+    /// <summary>그 번호의 챕터 파일을 읽는다 — 없으면 null.</summary>
+    private static ChapterFile? LoadChapterFile(int id)
+    {
+        string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{id:D4}.chp");
+        return File.Exists(path) ? ChapterFile.Parse(id, File.ReadAllBytes(path)) : null;
+    }
+
     private void LoadMosesChapter()
     {
         if (_mosesChp != null) return;
