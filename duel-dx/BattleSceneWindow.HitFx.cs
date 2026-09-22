@@ -51,7 +51,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 인물 그림에 붙는 자식 층 — 제이슨처럼 몸과 무기가 나뉜 인물의 <b>무기 그림</b>(Obs 0426)과 검기가 여기로 붙는다
     /// (분석-모션 ba-8: 캐릭터 모션마다 키 종류 2 로 같은 번호의 모션을 같은 자리에 겹친다).
     /// </summary>
-    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY)
+    /// <param name="mirror">
+    /// 인물이 오른쪽을 볼 때 참 — 몸 그림은 옆모습을 뒤집어 그리므로(<see cref="UnitSprite.FrameFor"/>),
+    /// 같이 붙는 무기·검기 층도 뒤집어야 한다. 안 그러면 왼쪽을 보고 치는 자료 그대로 나와 실제로는
+    /// 오른쪽을 쳤는데 이펙트만 왼쪽에 남아 보인다(죠안의 「연」에서 나타난 증상).
+    /// </param>
+    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror)
     {
         if (clip == null) return;
         foreach (var (start, obs, motion) in clip.Children)
@@ -59,7 +64,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (start > tick) continue;
             var blend = UiFor(obs)?.BlendAt(motion, tick - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
             // 무기 층은 몸 모션과 같이 돈다 — 서기처럼 되풀이하는 모션이면 자식도 되풀이한다.
-            DrawUi(obs, motion, tick - start, footX, footY, blend);
+            DrawUi(obs, motion, tick - start, footX, footY, blend, mirror: mirror);
         }
     }
 
