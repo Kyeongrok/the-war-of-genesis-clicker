@@ -339,7 +339,6 @@ internal sealed unsafe partial class BattleSceneWindow
         _nextTickAt = 0;
         CancelTargeting();
         StartBattleMusic();
-        AutoSave();
     }
 
     // ── 저장 · 불러오기 ──────────────────────────────────────────────────────
