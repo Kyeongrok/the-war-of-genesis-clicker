@@ -154,7 +154,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y, int H) KeysPanel()
     {
         int h = KeysTop + KeyBindings.All.Length * KeysRowH + 56;
-        return ((BoardWidth - KeysW) / 2, _camY + GridTop + (ViewHeight - GridTop - h) / 2, h);
+        return (_camX + (ViewWidth - KeysW) / 2, _camY + GridTop + (ViewHeight - GridTop - h) / 2, h);
     }
 
     private void OnKeysKey(int key)

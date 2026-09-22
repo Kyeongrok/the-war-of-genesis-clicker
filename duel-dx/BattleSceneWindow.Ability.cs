@@ -119,10 +119,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y) MenuOrigin(int rowCount)
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
-        var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (BoardWidth / 2, _camY + ViewHeight / 2);
+        var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (_camX + ViewWidth / 2, _camY + ViewHeight / 2);
         int h = MenuHeadH + Math.Max(1, rowCount) * MenuRowH + 8;
-        int x = fx + TileW < BoardWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
-        return (Math.Clamp(x, 8, BoardWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
+        int x = fx + TileW < _camX + ViewWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
+        return (Math.Clamp(x, _camX + 8, _camX + ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
     }
 
     /// <summary>목록이 열려 있으면 클릭을 처리하고 true. 목록 밖을 누르면 닫는다.</summary>

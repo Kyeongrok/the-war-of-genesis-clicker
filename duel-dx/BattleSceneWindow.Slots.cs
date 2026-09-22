@@ -55,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (ox, oy) = MosesOrigin();
             return (ox + 160, oy + 148);
         }
-        return ((BoardWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
+        return (_camX + (ViewWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
     }
 
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
@@ -197,7 +197,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_lastTime >= notice.Until) { _notice = null; return; }
         var (_, tw, th) = GetText(notice.Title, White);
         int w = tw + 60, h = th + 40;
-        int x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
+        int x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
         DrawGameFrame(x, y, w, h);
         DrawText(notice.Title, x + (w - tw) / 2, y + (h - th) / 2, White);
     }

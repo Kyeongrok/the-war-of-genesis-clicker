@@ -29,7 +29,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
 
-        int x = BoardWidth - HudW - 10, y = _camY + GridTop + 10;
+        int x = _camX + ViewWidth - HudW - 10, y = _camY + GridTop + 10;
         DrawGameFrame(x, y, HudW, HudH);
 
         // 원본 글꼴은 9~11픽셀이다 — 우리 기본 13픽셀이면 창 밖으로 나간다.

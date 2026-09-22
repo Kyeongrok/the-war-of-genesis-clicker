@@ -86,7 +86,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesFade = blue ? MosesBlueFadeTicks : MosesFadeTicks;
     }
 
-    private (int X, int Y) MosesOrigin() => ((BoardWidth - MosesW) / 2, _camY + (ViewHeight - MosesH) / 2);
+    private (int X, int Y) MosesOrigin() => (_camX + (ViewWidth - MosesW) / 2, _camY + (ViewHeight - MosesH) / 2);
 
     /// <summary>DUELDX_MOSES=1 이면 전투를 기다리지 않고 바로 모세스 화면을 연다(화면 밖 시험용).</summary>
     private void OpenMosesIfAsked()
@@ -402,7 +402,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int tick = (int)(_lastTime * TicksPerSecond);
 
         // 화면 밖은 검게, 가운데에 640×480 단말 화면
-        FillRect(0, _camY, BoardWidth, ViewHeight, 0xFF000000);
+        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
             for (int y = 0; y < MosesH; y++)
                 for (int x = 0; x < MosesW; x++)

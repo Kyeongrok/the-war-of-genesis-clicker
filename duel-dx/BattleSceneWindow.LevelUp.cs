@@ -106,7 +106,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (_, titleW, _) = GetText(_levelUpTitle, White, 15);
         int innerW = Math.Max(titleW + 100, lines.Max(l => GetText(l, White).W));
         int w = innerW + 40, h = bodyH + 80;
-        int x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2 + FrameTitleH / 2;
+        int x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2 + FrameTitleH / 2;
 
         DrawGameFrame(x, y, w, h, _levelUpTitle);
         for (int i = 0; i < lines.Length; i++)

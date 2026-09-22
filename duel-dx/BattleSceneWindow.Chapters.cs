@@ -42,7 +42,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int rows = (Chapters().Count + ChaptersCols - 1) / ChaptersCols;
         int h = ChaptersTop + rows * ChaptersRowH + 30;
-        return ((BoardWidth - ChaptersW) / 2, _camY + (ViewHeight - h) / 2, h);
+        return (_camX + (ViewWidth - ChaptersW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
     private int ChapterAt(int bx, int by)
@@ -78,7 +78,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var list = Chapters();
         int rows = (list.Count + ChaptersCols - 1) / ChaptersCols, colW = (ChaptersW - 24) / ChaptersCols;
 
-        FillRect(0, _camY, BoardWidth, ViewHeight, 0xC0000000);
+        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xC0000000);
         FillRect(x, y, ChaptersW, h, PanelBg);
         StrokeRect(x, y, ChaptersW, h, BoxLine);
         DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
