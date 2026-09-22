@@ -101,6 +101,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 7: OpenMosesStyle(); break;
             case 6: OpenMosesLegion(); break;
             case 3: OpenMosesShop(0); break;
+            case 0: MosesGoPage(0); _mosesPageAt = _lastTime - 30.0 / TicksPerSecond; break;   // 항행 — 칸이 다 나온 뒤 모습
         }
     }
 
@@ -202,6 +203,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>지금 페이지에 보이는 칸들 — (자리, 이름, 아이콘 모션, 누르면 할 일).</summary>
+    /// <summary>항행 단계 2 후보 장소들의 레이더 자리(경도칸, 위도칸) — <see cref="MosesCellList"/> 와 같은 차례.</summary>
+    private List<(int Lon, int Lat)> MosesPlacePatches(ChapterFile chp, ChapterFile.Planet planet) =>
+        [.. planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
+                         .Where(p => p.Auto == 0 && !PlaceUsed(p) && PlaceOpen(p))
+                         .Take(MosesCells.Length).Select(p => (p.Lon, p.Lat))];
+
     private List<(int X, int Y, string Name, int Icon, Action Click)> MosesCellList()
     {
         var list = new List<(int, int, string, int, Action)>();
@@ -501,13 +508,16 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
 
-        // 행성 구체 — 항행 단계 2 에서 화면 가운데 조금 위
-        if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
-            DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, UiBlend.Alpha);
-
         var cells = MosesCellList();
         // 칸은 10프레임 세로 와이프로 나타난다 — 여기서는 칸마다 한 틱씩 늦게 나오게 한다
         int since = (int)((_lastTime - _mosesPageAt) * TicksPerSecond);
+
+        // 행성 구체 — 항행 단계 2 에서 화면 가운데 조금 위. 그 위에 레이더 `+0x2f14`(초록 격자 구 + 장소 조각)를 돌린다.
+        if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
+        {
+            DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, UiBlend.Alpha);
+            DrawMosesRadar(ox, oy, since, MosesPlacePatches(chp, planet), _mosesHover);
+        }
         for (int i = 0; i < cells.Count; i++)
         {
             if (since < i + 1) continue;
