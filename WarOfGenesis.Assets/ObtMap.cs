@@ -8,10 +8,21 @@ namespace WarOfGenesis.Assets;
 /// <param name="OriginY">그림의 맨 윗줄이 칸 판의 몇 픽셀 자리에 오는지(음수면 판 위로 삐져나간다).</param>
 /// <param name="Heights">칸 높이(칸 수 = Cols×Rows, 행 우선) = (칸 레코드 첫 u16 + 19) / 20. 지형 비트 0x10 칸은 0.</param>
 /// <param name="Flags">칸 지형 플래그(칸 레코드 뒤 u16 격자). <c>&amp; 0x9</c> 면 못 들어가고, <c>&amp; 0x8</c> 이면 공격 범위에서도 빠진다.</param>
-public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, int Rows, byte[] Bgra, int[] Heights, ushort[] Flags)
+/// <param name="Corners">칸 네 모서리 높이(원 단위, 20 = 한 층) — 칸마다 레코드 앞 네 워드 차례: <c>+0</c> 남동 · <c>+2</c> 북서 · <c>+4</c> 북동 · <c>+6</c> 남서.
+/// 이웃 칸끼리 맞닿은 모서리 값이 이어지는 것으로 확인했다(Obt 0153). 밝기 계산 <c>0x10030cc0</c> 은 북서(+2)에서 북동(+4)·남서(+6)로의 기울기를 쓴다.</param>
+/// <param name="Slopes">칸 비탈 모양(레코드 <c>+0xa</c>, 0 평지 · 1~3 비탈) — 원본은 이 값으로 칸 칠하기 모양을 고른다.</param>
+public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, int Rows, byte[] Bgra, int[] Heights, ushort[] Flags,
+                                 short[]? Corners = null, byte[]? Slopes = null)
 {
     /// <summary>맵 밖은 높이 0 · 막힌 칸(플래그 8)으로 본다 — 판이 맵보다 클 수 있다(전투마다 맵 크기가 다르다).</summary>
     public int HeightAt(int col, int row) => Inside(col, row) ? Heights[row * Cols + col] : 0;
+
+    /// <summary>모서리 높이(원 단위) — k: 0 남동 · 1 북서 · 2 북동 · 3 남서. 자료가 없으면 칸 높이 × 20.</summary>
+    public int CornerAt(int col, int row, int k) =>
+        Inside(col, row) && Corners != null ? Corners[(row * Cols + col) * 4 + k] : HeightAt(col, row) * 20;
+
+    /// <summary>비탈 모양(0 평지 · 1~3 비탈). 맵 밖·자료 없음은 0.</summary>
+    public int SlopeAt(int col, int row) => Inside(col, row) && Slopes != null ? Slopes[row * Cols + col] : 0;
     public ushort FlagsAt(int col, int row) => Inside(col, row) ? Flags[row * Cols + col] : (ushort)0x8;
 
     private bool Inside(int col, int row) => (uint)col < Cols && (uint)row < Rows;
@@ -56,15 +67,25 @@ public static class ObtMap
         // 칸 높이·지형 플래그 (0x10028680, 0x10030919 — 옵시디안 분석-전투 "이동 가능 영역")
         var heights = new int[cols * rows];
         var flags = new ushort[cols * rows];
+        var corners = new short[cols * rows * 4];
+        var slopes = new byte[cols * rows];
         for (int i = 0; i < heights.Length; i++)
         {
-            heights[i] = (reader.ReadUInt16() + 19) / 20;
-            reader.BaseStream.Seek(cellRecordSize - 2, SeekOrigin.Current);
+            // 앞 네 워드 = 모서리 높이(남동·북서·북동·남서), 다섯째 워드 = 대표 높이, 그 뒤 바이트 = 비탈 모양(0x10030cc0·0x100d7ba3).
+            for (int k = 0; k < 4; k++)
+            {
+                int raw = reader.ReadUInt16();
+                corners[i * 4 + k] = (short)(version == 1 ? raw * 20 : raw);   // 판 1 파일은 ×20 해서 읽는다(분석-전투)
+            }
+            heights[i] = (corners[i * 4] + 19) / 20;
+            reader.ReadUInt16();
+            slopes[i] = reader.ReadByte();
+            reader.BaseStream.Seek(cellRecordSize - 11, SeekOrigin.Current);
         }
         for (int i = 0; i < flags.Length; i++)
         {
             ushort f = reader.ReadUInt16();
-            if ((f & 0x10) != 0) { heights[i] = 0; f = 0; }
+            if ((f & 0x10) != 0) { heights[i] = 0; f = 0; slopes[i] = 0; for (int k = 0; k < 4; k++) corners[i * 4 + k] = 0; }
             flags[i] = f;
         }
 
@@ -115,6 +136,6 @@ public static class ObtMap
             }
         }
 
-        return new ObtMapImage(width, height, layerY * StripHeight, cols, rows, bgra, heights, flags);
+        return new ObtMapImage(width, height, layerY * StripHeight, cols, rows, bgra, heights, flags, corners, slopes);
     }
 }

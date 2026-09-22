@@ -799,10 +799,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 bool inRange = InWorkRange(w, u.Col, u.Row, col, row, u), inSplash = splash.Contains((col, row));
                 if (!inRange && !inSplash) continue;
-                uint tint = inSplash ? 0x49310Bu : RangeTint;
-                int x = col * TileW, y = CellTop(col, row);
-                AddRect(x, y, TileW, TileH, tint);
-                StrokeRect(x, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
+                PaintCell(col, row, inSplash ? SplashLayer : RangeLayer);
             }
         // 저절로 겨눈 대상(적 커서나 칸)에도 깜빡이는 빨간 테두리
         if (aim is { } a)

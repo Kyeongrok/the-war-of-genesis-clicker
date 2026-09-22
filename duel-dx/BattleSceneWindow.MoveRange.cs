@@ -26,6 +26,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 알파 섞기가 아니라 <b>밝히기만</b> 한다.
     /// </summary>
     private const uint MoveTint = 0x1C1C49, RangeTint = 0x491C0B;
+
+    /// <summary>층 색 원값 — 이동 층 2 (100,100,255) · 사거리 층 12 (255,100,40) · 효과 범위 층 0 (255,170,40). 화면에는 × 칸밝기/256 을 더한다.</summary>
+    private const uint MoveLayer = 0x6464FF, RangeLayer = 0xFF6428, SplashLayer = 0xFFAA28;
     private const double RangeWaveCellsPerSecond = 30;
 
     /// <summary>한 인물의 이동 영역 — 칸마다 드는 TP(못 가면 <see cref="int.MaxValue"/>), 되짚을 앞 칸, 빨간 칸.</summary>
@@ -234,13 +237,69 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 대상을 딱히 고르는 중이 아니어도 사거리 빨강은 늘 파랑과 함께 뜬다 — 사용자가 원본에서
                 // 직접 본 그대로다("aiming일 때만 빨강"으로 좁혔던 이전 판단은 상태 번호를 오독한 것으로 보인다:
                 // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
-                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : range.Red[i] ? RangeTint : 0;
-                if (tint == 0) continue;
-                int x = col * TileW, y = CellTop(col, row);
-                AddRect(x, y, TileW, TileH, tint);
-                // 테두리는 <b>같은 색을 불투명으로</b>, 칸보다 1픽셀 크게 — 이웃 칸과 선을 나눠 쓴다.
-                StrokeRect(x, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
+                uint layer = range.Cost[i] != int.MaxValue ? MoveLayer : range.Red[i] ? RangeLayer : 0;
+                if (layer == 0) continue;
+                PaintCell(col, row, layer);
             }
+    }
+
+    /// <summary>
+    /// 칸 밝기 10~90 — 원본 <c>0x10030cc0</c> 이 Obt 를 읽은 뒤 칸마다 넣는 값. 평지는 74.
+    /// 비탈은 북서 모서리에서 북동·남서로의 기울기 벡터 (−40·Δ동, −40·Δ남, 1600) 로 빛을 셈한다:
+    /// <c>((1920·b + 4096000) / 40) / |(a, b, 1600)|</c> 를 80 에서 자르고 10 을 더한다(a = −40·(북동−북서), b = −40·(남서−북서), 16비트로 접힘).
+    /// </summary>
+    private int CellBrightness(int col, int row)
+    {
+        if (!BoardIsMap || _map!.SlopeAt(col, row) is 0 or > 3) return 74;
+        int nw = _map.CornerAt(col, row, 1), ne = _map.CornerAt(col, row, 2), sw = _map.CornerAt(col, row, 3);
+        int a = (short)(-40 * (ne - nw)), b = (short)(-40 * (sw - nw));
+        int len = (int)Math.Sqrt((double)a * a + (double)b * b + 2560000.0);
+        int v = (15 * b * 128 + 4096000) / 40 / Math.Max(1, len);
+        return Math.Max(10, Math.Min(80, v) + 10);
+    }
+
+    /// <summary>모서리 높이(원 단위) → 화면 픽셀: 원본은 <c>높이 × 12 / 20</c>(0x100d7bf3, 0 쪽으로 자름).</summary>
+    private static int CornerPx(int raw) => raw * 12 / 20;
+
+    /// <summary>
+    /// 칸 하나를 층 색으로 칠한다 — 원본처럼 ① 층색 × 칸밝기/256 을 <b>더해서</b> 채우고 ② 같은 색 불투명으로 테두리(41×33, 이웃과 선을 나눠 쓴다).
+    /// 평지는 40×32 네모. 비탈 칸은 네 모서리 높이(북서·북동·남서·남동)로 꼭짓점을 올린 사각형이다 —
+    /// 원본은 비탈 모양 3 을 「윗변 북서·아랫변 남서 높이의 네모」로, 1·2 는 선·삼각형 조각으로 그리는데(0x100d7ba3·0x100d7dcf·0x100d820e)
+    /// 조각 표까지는 못 옮겨 네 꼭짓점 사각형으로 근사한다(가설).
+    /// </summary>
+    private void PaintCell(int col, int row, uint layer)
+    {
+        int bright = CellBrightness(col, row);
+        uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
+        int x0 = col * TileW, x1 = x0 + TileW;
+        int baseTop = GridTop + BoardPad + row * TileH, baseBottom = baseTop + TileH;
+        if (!BoardIsMap || _map!.SlopeAt(col, row) == 0)
+        {
+            int y = CellTop(col, row);
+            AddRect(x0, y, TileW, TileH, tint);
+            StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
+            return;
+        }
+        int yNw = baseTop - CornerPx(_map.CornerAt(col, row, 1)), yNe = baseTop - CornerPx(_map.CornerAt(col, row, 2));
+        int ySw = baseBottom - CornerPx(_map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(_map.CornerAt(col, row, 0));
+        AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint);
+        uint line = 0xFF000000 | tint;
+        DrawSegment(x0, yNw, x1, yNe, line);
+        DrawSegment(x0, ySw, x1, ySe, line);
+        DrawSegment(x0, yNw, x0, ySw, line);
+        DrawSegment(x1, yNe, x1, ySe, line);
+    }
+
+    /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.</summary>
+    private void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint)
+    {
+        int w = Math.Max(1, x1 - x0);
+        for (int x = x0; x < x1; x++)
+        {
+            double t = (x - x0) / (double)w;
+            int top = (int)Math.Round(yNw + (yNe - yNw) * t), bottom = (int)Math.Round(ySw + (ySe - ySw) * t);
+            if (bottom > top) AddRect(x, top, 1, bottom - top, tint);
+        }
     }
 
     /// <summary>네모 안을 색을 <b>더해서</b> 밝힌다(255 에서 멈춘다).</summary>
