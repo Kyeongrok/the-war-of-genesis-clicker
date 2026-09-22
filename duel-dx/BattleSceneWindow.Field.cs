@@ -915,8 +915,11 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var prop in _fieldProps.Where(o => o.Visible && o.Layer >= from && o.Layer < to).OrderBy(o => o.Layer))
         {
             var (px, py) = FieldScreenAt(prop.Layer, prop.X, prop.Y);
-            DrawUi(prop.Obs, prop.Motion, (int)((_lastTime - prop.Start) * TicksPerSecond),
-                   ox + px, oy + py, UiBlend.Alpha);
+            int tick = (int)((_lastTime - prop.Start) * TicksPerSecond);
+            // 모션의 섞기 키(종류 3) — 17 은 더하기 합성이다(분석-UI 「섞기 방식 17」). 등불 빛(Obs 528 따위)이 이것이라
+            // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
+            var blend = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) == 17 ? UiBlend.Add : UiBlend.Alpha;
+            DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, blend);
         }
 
         foreach (var actor in _fieldActors.Where(a => a.Visible && a.Layer >= from && a.Layer < to).OrderBy(a => a.Layer))
