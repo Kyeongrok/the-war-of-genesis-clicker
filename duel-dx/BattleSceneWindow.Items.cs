@@ -43,7 +43,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int shown = Math.Clamp(rows.Count, 1, ItemRows);
         int h = shown * ItemRowH + 24;
         var (cx, cy) = RingCenter(_units[Math.Max(_turn, 0)]);
-        int x = Math.Clamp(cx - ItemMenuW / 2, 8, BoardWidth - ItemMenuW - 8);
+        int x = Math.Clamp(cx - ItemMenuW / 2, _camX + 8, _camX + ViewWidth - ItemMenuW - 8);
         int y = Math.Clamp(cy - h / 2, _camY + GridTop + 28, _camY + ViewHeight - h - 8);
         return (x, y, h);
     }

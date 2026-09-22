@@ -100,7 +100,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_toast.Length == 0 || _lastTime > _toastUntil) return;
         var (_, w, h) = GetText(_toast, White);
-        int x = (BoardWidth - w) / 2, y = _camY + ViewHeight - h - 24;
+        int x = _camX + (ViewWidth - w) / 2, y = _camY + ViewHeight - h - 24;
         FillRect(x - 10, y - 6, w + 20, h + 12, 0xD0101828);
         DrawText(_toast, x, y, White);
     }

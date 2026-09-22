@@ -94,8 +94,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>카메라가 내려갈 수 있는 끝.</summary>
     private int CamMax => Math.Max(0, Math.Min(BoardHeight, PictureBottom) - ViewHeight);
 
-    /// <summary>창에 보이는 판 높이 — 판 전체의 70%. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.</summary>
-    private int ViewHeight => BoardHeight * 7 / 10;
+    /// <summary>
+    /// 창에 보이는 판 높이 — 판 전체의 70%, 다만 원본 화면 높이(480 + 머리줄)까지만. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.
+    /// 세로로 긴 맵(Obt 0156 은 2272 픽셀)도 원본처럼 줌아웃하지 않고 스크롤한다.
+    /// </summary>
+    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, GridTop + ViewMaxHeight);
+    private const int ViewMaxHeight = 480;
+
+    /// <summary>
+    /// 창에 보이는 판 너비 — 원본 화면 너비 640 까지만. 더 넓은 맵(Btl 0131 같은 1480 픽셀)은 원본처럼 <b>줌아웃하지 않고</b>
+    /// <see cref="_camX"/> 로 좌우 스크롤한다(차례인 인물을 따라간다).
+    /// </summary>
+    private int ViewWidth => Math.Min(BoardWidth, ViewMaxWidth);
+    private const int ViewMaxWidth = 640;
     private const double MaxZoom = 2;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀. 창이 모니터 작업 영역에 들어가도록 <see cref="MaxZoom"/> 안에서 줄인다.</summary>
@@ -294,7 +305,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 1;
 
         // 제목 표시줄·테두리 몫을 조금 남긴다.
-        double fit = Math.Min((work.Width - 32) / (double)BoardWidth, (work.Height - 100) / (double)ViewHeight);
+        double fit = Math.Min((work.Width - 32) / (double)ViewWidth, (work.Height - 100) / (double)ViewHeight);
         return Math.Clamp(Math.Floor(fit * 20) / 20, 0.5, MaxZoom);
     }
 
@@ -312,6 +323,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _zoom = FitZoom();
         if (_fb.Length != BoardWidth * BoardHeight) _fb = new uint[BoardWidth * BoardHeight];
         _camY = 0;
+        _camX = 0;
+        _camPosX = _camTargetX = 0;
         if (same || _hwnd == IntPtr.Zero) return;
 
         // 배율은 픽셀 셰이더에 박혀 있다 — 맵이 바뀌어 배율이 달라졌으면 셰이더부터 다시 빌드한다.
@@ -322,7 +335,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _boardTex?.Dispose();
         _boardTex = _device.CreateTexture2D(new Texture2DDescription
         {
-            Width = (uint)BoardWidth,
+            Width = (uint)ViewWidth,
             Height = (uint)ViewHeight,
             MipLevels = 1,
             ArraySize = 1,
@@ -335,7 +348,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _boardSrv = _device.CreateShaderResourceView(_boardTex);
 
         // 창과 스왑체인도 새 크기로.
-        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
+        int pixelW = (int)(ViewWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
         Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
@@ -450,7 +463,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void CreateNativeWindow()
     {
         if (_fb.Length == 0) ResizeBoard(Cols, Rows);   // 창 크기를 정하기 전에 판 버퍼부터
-        int pixelW = (int)(BoardWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
+        int pixelW = (int)(ViewWidth * _zoom), pixelH = (int)(ViewHeight * _zoom);
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
@@ -485,7 +498,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 _heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL:
-                ScrollCamera(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileH * 2);
+                // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
+                if (((long)wParam & 0x0004) != 0) ScrollCameraX(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
+                else ScrollCamera(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileH * 2);
+                return IntPtr.Zero;
+            case 0x020E:   // WM_MOUSEHWHEEL — 가로 휠
+                ScrollCameraX((short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
                 return IntPtr.Zero;
             case Win32.WM_APP_SNAPSHOT:
                 SaveSnapshot();
@@ -505,7 +523,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
-                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom), by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
+                int bx = (int)((short)((long)lParam & 0xFFFF) / _zoom) + _camX, by = (int)((short)(((long)lParam >> 16) & 0xFFFF) / _zoom) + _camY;
                 _mouse = (bx, by);
                 UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
@@ -581,6 +599,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_targetWork >= 0 && !_targetIsBasicAttack && _ringUnit < 0
             && (key == _targetHotkey || key == Win32.VK_RETURN) && UseAimedAbility()) return;
 
+        // 어빌리티 목록을 안 열고도 1~4 를 누르면 그 줄의 어빌리티를 바로 고른다(Q·W·E·R 은 다른 단축키와 겹쳐 뺀다).
+        if (key is >= '1' and <= '4' && IsPlayerTurn && !_abilityMenu && _targetWork < 0 && _ringUnit < 0 && !_units[_turn].IsBusy)
+        {
+            RingShortcut(RingCommand.Ability);
+            if (_abilityMenu && OnAbilityMenuKey(key)) return;
+        }
+
         switch (MoveActionFor(key) ?? _keys.ActionFor(key))
         {
             case KeyAction.Grid: _showGrid = !_showGrid; SaveSettings(); break;
@@ -649,7 +674,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen) { LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
-        int bx = (int)(clientX / _zoom), by = (int)(clientY / _zoom) + _camY;
+        int bx = (int)(clientX / _zoom) + _camX, by = (int)(clientY / _zoom) + _camY;
         if (OnFieldClick(bx, by)) return;
         if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
@@ -877,10 +902,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void DrawStatus()
     {
-        FillRect(0, _camY, BoardWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
+        FillRect(_camX, _camY, ViewWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
         if (_loading)
         {
-            DrawText("전투 자료를 읽는 중...", 4, _camY + 4, White);
+            DrawText("전투 자료를 읽는 중...", _camX + 4, _camY + 4, White);
             return;
         }
 
@@ -888,9 +913,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         int allies = _units.Count(u => u.Alive && u.OnField && u.IsAlly);
         int enemies = _units.Count(u => u.Alive && u.OnField && !u.IsAlly);
         DrawText($"{_scene.Title} — 전투 Btl {_scene.Id:D4}   아군 {allies}   적군 {enemies}   클릭·{KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물 보기   {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자   {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바   설정 메뉴: 단축키",
-                 4, _camY + 4, White);
-        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", 4, _camY + 20, 0xFFD05050);
-        else DrawText(TurnLine(), 4, _camY + 20, 0xFFFFE8A0);
+                 _camX + 4, _camY + 4, White);
+        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 20, 0xFFD05050);
+        else DrawText(TurnLine(), _camX + 4, _camY + 20, 0xFFFFE8A0);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -1002,7 +1027,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         _boardTex = _device.CreateTexture2D(new Texture2DDescription
         {
-            Width = (uint)BoardWidth,
+            Width = (uint)ViewWidth,
             Height = (uint)ViewHeight,
             MipLevels = 1,
             ArraySize = 1,
@@ -1050,7 +1075,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void CreateSwapChain()
     {
-        int w = (int)(BoardWidth * _zoom), h = (int)(ViewHeight * _zoom);
+        int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
         using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
         using var adapter = dxgiDevice.GetAdapter();
         using var factory = adapter.GetParent<IDXGIFactory2>();
@@ -1077,8 +1102,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         {
             for (int y = 0; y < ViewHeight; y++)
             {
-                var dst = new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), BoardWidth);
-                _fb.AsSpan((_camY + y) * BoardWidth, BoardWidth).CopyTo(dst);
+                var dst = new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), ViewWidth);
+                _fb.AsSpan((_camY + y) * BoardWidth + _camX, ViewWidth).CopyTo(dst);
             }
         }
         finally { _ctx.Unmap(_boardTex, 0); }
@@ -1086,7 +1111,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void Draw()
     {
-        int w = (int)(BoardWidth * _zoom), h = (int)(ViewHeight * _zoom);
+        int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
         _ctx.RSSetViewport(0, 0, w, h);
         _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);

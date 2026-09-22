@@ -39,7 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<(string Label, string Right, bool Enabled, Action Apply)>? _popup;
     private const int PopupW = 320, PopupRowH = 24;
 
-    private (int X, int Y) StatusOrigin() => ((BoardWidth - StatusW) / 2, _camY + GridTop + (ViewHeight - GridTop - StatusH) / 2);
+    private (int X, int Y) StatusOrigin() => (_camX + (ViewWidth - StatusW) / 2, _camY + GridTop + (ViewHeight - GridTop - StatusH) / 2);
 
     /// <summary>데모 파티 가방 — 아군 무기 종류마다 무기 3개, 갑옷·신발·벨트·반지·목걸이 종류마다 4개씩(번호 순, 이름 있는 것).</summary>
     private void FillDemoInventory()

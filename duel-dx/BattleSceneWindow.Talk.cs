@@ -189,7 +189,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawTalk()
     {
         if (_talk is not { } t) return;
-        var (ox, oy) = (0, _camY);
+        var (ox, oy) = (_camX, _camY);
         int tick = (int)((_lastTime - t.Start) * TicksPerSecond);
         var lines = TalkLines(TalkShownText(t));
 
@@ -243,12 +243,12 @@ internal sealed unsafe partial class BattleSceneWindow
         else if (t.Speaker >= 0 && _units[t.Speaker].Alive)
         {
             var (fx, fy) = UnitFoot(_units[t.Speaker]);
-            bx = Math.Clamp(fx + 30, 8, BoardWidth - bw - 8);
+            bx = Math.Clamp(fx + 30, _camX + 8, _camX + ViewWidth - bw - 8);
             by = Math.Clamp(fy - 200, _camY + GridTop + 8, _camY + ViewHeight - bh - 8);
         }
         else
         {
-            bx = (BoardWidth - bw) / 2;
+            bx = _camX + (ViewWidth - bw) / 2;
             by = _camY + ViewHeight / 2 - bh;
         }
         // 글이 길면 창이 늘어나지만 <b>폭 200·높이 100 까지</b>다 — 그보다 길면 줄을 접는다.

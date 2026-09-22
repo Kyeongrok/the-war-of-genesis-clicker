@@ -85,7 +85,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y) RingCenter(UnitState unit)
     {
         var (fx, fy) = UnitFoot(unit);
-        return (Math.Clamp(fx, RingEdge, BoardWidth - RingEdge), Math.Clamp(fy - RingLift, _camY + GridTop + RingEdge, _camY + ViewHeight - RingEdge));
+        return (Math.Clamp(fx, _camX + RingEdge, _camX + ViewWidth - RingEdge), Math.Clamp(fy - RingLift, _camY + GridTop + RingEdge, _camY + ViewHeight - RingEdge));
     }
 
     /// <summary>지금 단계·틱에서 i 번 항목의 중심(링 중심 기준).</summary>

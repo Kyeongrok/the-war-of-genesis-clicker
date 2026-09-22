@@ -96,7 +96,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MosesOrigin();
         int tick = (int)(_lastTime * TicksPerSecond);
 
-        FillRect(0, _camY, BoardWidth, ViewHeight, 0xFF000000);
+        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
             for (int y = 0; y < MosesH; y++)
                 for (int x = 0; x < MosesW; x++)

@@ -58,7 +58,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
-        return ((BoardWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
+        return (_camX + (ViewWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
     private void RunSystemItem(SystemItem item)
@@ -183,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>
     private void DrawMissionWindow()
     {
-        int w = 400, h = 180, x = (BoardWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
+        int w = 400, h = 180, x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
         FillRect(x, y, w, h, PanelBg);
         StrokeRect(x, y, w, h, BoxLine);
         FillRect(x, y, w, 26, HeadBg);
@@ -200,7 +200,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _bgmVolume = 90, _seVolume = 90;
     private const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
 
-    private (int X, int Y) VolumeOrigin() => ((BoardWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
+    private (int X, int Y) VolumeOrigin() => (_camX + (ViewWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
 
     private void OnVolumeClick(int bx, int by)
     {
@@ -251,7 +251,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y, int W, int H) ConfirmRect()
     {
         int w = 340, h = 120;
-        return ((BoardWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
+        return (_camX + (ViewWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
     }
 
     private void DrawConfirm()

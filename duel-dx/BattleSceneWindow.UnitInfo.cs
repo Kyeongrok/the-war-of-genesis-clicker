@@ -25,7 +25,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int index = UnitAtBoard(bx, by);
         if (index < 0) return false;
         _infoUnit = index;
-        _infoAt = (Math.Clamp(bx + 16, 0, BoardWidth - InfoW), Math.Clamp(by + 16, _camY, _camY + ViewHeight - InfoH));
+        _infoAt = (Math.Clamp(bx + 16, _camX, _camX + ViewWidth - InfoW), Math.Clamp(by + 16, _camY, _camY + ViewHeight - InfoH));
         return true;
     }
 

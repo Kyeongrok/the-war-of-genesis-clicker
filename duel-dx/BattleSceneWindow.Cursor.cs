@@ -68,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 화면 전체를 절반 밝기로(원본 0x1002e8d0(2, 16))
         for (int y = _camY; y < _camY + ViewHeight; y++)
-            for (int x = 0; x < BoardWidth; x++)
+            for (int x = _camX; x < _camX + ViewWidth; x++)
             {
                 int i = y * BoardWidth + x;
                 uint c = _fb[i];
@@ -76,7 +76,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
 
         // 배너는 모션 0·1·2(승리) / 10·11·12(패배) 세 조각을 겹쳐 그린다 — 각 모션은 컷 하나(길이 0)다.
-        int cx = BoardWidth / 2, cy = _camY + ViewHeight / 2;
+        int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2;
         bool drawn = false;
         for (int i = 0; i < 3; i++)
             drawn |= DrawUi(BannerObs, (win ? BannerWin : BannerLose) + i, 0, cx, cy, UiBlend.Alpha);
