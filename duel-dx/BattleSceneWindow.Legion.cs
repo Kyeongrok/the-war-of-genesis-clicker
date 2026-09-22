@@ -272,12 +272,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 데모는 난수 없이 「제 사거리 안의 적 중 대장 대상에 가장 가까운 쪽」으로 대신한다.
     /// 사거리 밖이면 원본은 걸어가서 치는데, 데모는 아직 그 자리에서 아무것도 안 한다.
     /// </remarks>
+    /// <summary>사거리 밖이라 먼저 걸어가는 부하들 — 다 걸으면 대장 루틴이 치게 한다.</summary>
+    private readonly List<(UnitState Follower, WorkData Work, UnitState Target)> _followerStrikes = [];
+
     private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying)
     {
         if (_db is null) return;
         foreach (var follower in FollowersOf(leaderIndex))
         {
-            if (follower.Data is not { } c) continue;
+            if (follower.Data is not { } c || follower.IsBusy) continue;
+            bool done = false;
             foreach (var work in FollowerWorks(c))
             {
                 if (!CanAfford(follower, work)) continue;
@@ -291,6 +295,31 @@ internal sealed unsafe partial class BattleSceneWindow
                 follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);
                 PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
                 ApplyWork(follower, work, pick, dying);
+                done = true;
+                break;
+            }
+            if (done) continue;
+
+            // 제자리에서는 아무 적도 안 닿는다 — 원본(0x1005f1c0)처럼 <b>대장의 대상이 닿는 칸까지 걸어간 뒤</b> 친다.
+            // 걸을 수 있는 칸(대장 TP 를 빌린 이동 영역) 가운데 그 기술 사거리에 대상이 드는 가장 싼 칸을 고른다.
+            if (ComputeRange(follower) is not { } range) continue;
+            foreach (var work in FollowerWorks(c))
+            {
+                if (!CanAfford(follower, work)) continue;
+                int best = -1, bestCost = int.MaxValue;
+                for (int idx = 0; idx < Cols * Rows; idx++)
+                {
+                    if (!range.CanReach(idx) || range.Cost[idx] >= bestCost) continue;
+                    int cc = idx % Cols, rr = idx / Cols;
+                    if (LiveUnitAt(cc, rr) is { } other && other != follower) continue;
+                    if (!InWorkRange(work, cc, rr, target.Col, target.Row, follower)) continue;
+                    (best, bestCost) = (idx, range.Cost[idx]);
+                }
+                if (best < 0) continue;
+                foreach (var step in range.PathTo(best)) follower.Path.Enqueue(step);
+                PlayWalkSound(follower);
+                _followerTarget[follower] = (best % Cols, best / Cols);
+                _followerStrikes.Add((follower, work, target));
                 break;
             }
         }
