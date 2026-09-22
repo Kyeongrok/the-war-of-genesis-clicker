@@ -369,6 +369,27 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int SaveVersion = 8;
 
+    /// <summary>돌린 챕터 사건의 801(동료 넣기)·802(빼기)로 동료 목록을 다시 만든다 — 사건 −1 표시(옛 세이브)는 그 챕터 사건 전부로 본다.</summary>
+    private void RebuildMembersFromChapters()
+    {
+        _members.Clear();
+        foreach (var group in _chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
+        {
+            if (LoadChapterFile(group.Key) is not { } chp) continue;
+            bool whole = group.Any(f => f.Key.Event == -1);
+            for (int ev = 0; ev < chp.Events.Count; ev++)
+            {
+                if (!whole && !group.Any(f => f.Key.Event == ev)) continue;
+                foreach (var a in chp.Events[ev].Actions)
+                {
+                    if (a.Args.Length < 2 || a.Args[1] <= 0) continue;
+                    if (a.Code == 801) _members.Add(a.Args[1]);
+                    else if (a.Code == 802) _members.Remove(a.Args[1]);
+                }
+            }
+        }
+    }
+
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
 
@@ -522,6 +543,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
         if (state.DoneEvents == null)
             foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
+        // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
+        // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
+        if (state.Members == null) RebuildMembersFromChapters();
         _placesUsed.Clear();
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))

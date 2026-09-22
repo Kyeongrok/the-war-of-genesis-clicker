@@ -287,10 +287,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             InitBattle();
             LoadRingAssets();
             LoadAudio();
-            OpenTitleIfAsked();
-            OpenMosesIfAsked();
-            OpenFieldIfAsked();
-            OpenLevelUpIfAsked();
+            // 타이틀·모세스·필드를 여는 훅은 판(_fb·_map)을 갈아 끼우므로 <b>주 스레드</b>에서 돌린다(Update) — 여기서 부르면
+            // 그리는 중에 판이 바뀌어 DrawBackground 가 간헐적으로 죽었다.
+            _openHooksPending = true;
             // 자동 저장은 전투를 열 때가 아니라 내 차례가 시작될 때 한다(원본 상태 22, StartTurn).
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
@@ -806,8 +805,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
+    /// <summary>배경 읽기가 끝난 뒤 주 스레드에서 한 번 돌릴 시험 훅(DUELDX_TITLE·MOSES·FIELD·LEVELUP).</summary>
+    private volatile bool _openHooksPending;
+
     private void Update(double dt)
     {
+        if (_openHooksPending)
+        {
+            _openHooksPending = false;
+            OpenTitleIfAsked();
+            OpenMosesIfAsked();
+            OpenFieldIfAsked();
+            OpenLevelUpIfAsked();
+        }
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
         if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
@@ -843,6 +853,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         SyncFollowers();
         UpdateCamera(dt);
         ApplyPoseHook();
+        SyncVirtualStatus();
         UpdateSounds();
         UpdateRing();
         UpdateTalk();
@@ -898,7 +909,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void DrawBackground()
     {
-        if (_map is not { } map) return;
+        // 판이 맵 크기가 아니면(모세스·타이틀 틀로 바꾼 뒤, 또는 배경 스레드가 맵을 갈아 끼우는 중) 그리지 않는다 —
+        // 판 버퍼 길이와 맵 너비가 어긋나 AsSpan 이 밖으로 나가 죽었다(간헐).
+        if (_map is not { } map || !BoardIsMap) return;
 
         int boardH = BoardPad + Rows * TileH;
         for (int y = 0; y < map.Height; y++)

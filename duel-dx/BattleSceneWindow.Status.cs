@@ -80,6 +80,39 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 클릭 ─────────────────────────────────────────────────────────────────
 
+    /// <summary>모세스 전직 화면에서 전투에 안 선 파티원의 스테이터스를 열 때의 자리 번호 — <see cref="_statusVirtual"/> 을 보인다.</summary>
+    private const int VirtualStatus = 1_000_000;
+
+    /// <summary>전투 판에 없는 파티원을 위한 임시 유닛 — 창을 닫으면 <see cref="SyncVirtualStatus"/> 가 자료를 파티에 되돌려 적는다.</summary>
+    private UnitState? _statusVirtual;
+
+    private UnitState StatusUnit() => _statusUnit == VirtualStatus && _statusVirtual != null ? _statusVirtual : _units[_statusUnit];
+
+    /// <summary>파티원(Chr)의 스테이터스 창을 연다 — 전투에 서 있으면 그 유닛, 아니면 파티 자료로 임시 유닛을 만든다.</summary>
+    private void OpenStatusFor(int chr)
+    {
+        int index = Array.FindIndex(_units, u => u.ChrCode == chr);
+        if (index >= 0) { _statusUnit = index; return; }
+        if (_db is not { } db || _party.GetValueOrDefault(chr) is not { } c) return;
+        var unit = new UnitState(new DemoUnit(chr, 0, 0, 4, 0, Facing.Left)) { Data = c };
+        unit.MaxHp = unit.Hp = Math.Max(1, db.MaxHp(c));
+        unit.MaxTp = db.MaxTp(c);
+        unit.Stp = Math.Max(1, db.Stp(c));
+        unit.MaxSoul = db.MaxSoul(c);
+        unit.Soul = db.SoulStart;
+        LoadFieldFace(c);
+        _statusVirtual = unit;
+        _statusUnit = VirtualStatus;
+    }
+
+    /// <summary>임시 유닛으로 연 창이 닫혔으면 바뀐 자료(어빌리티 레벨·장비)를 파티에 되돌려 적는다 — 매 틀 부른다.</summary>
+    private void SyncVirtualStatus()
+    {
+        if (_statusVirtual is not { } v || _statusUnit == VirtualStatus) return;
+        if (v.Data is { } c) _party[v.ChrCode] = c;
+        _statusVirtual = null;
+    }
+
     private bool OnStatusClick(int bx, int by)
     {
         if (_statusUnit < 0) return false;
@@ -251,7 +284,7 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText("CLOSE", ox + StatusW - 64, oy + 9, White);
         }
 
-        var unit = _units[_statusUnit];
+        var unit = StatusUnit();
         if (_db is not { } db || unit.Data is not { } c)
         {
             DrawText("이 인물의 게임 자료(assets/data)를 못 읽었습니다.", ox + 20, oy + 60, Red);

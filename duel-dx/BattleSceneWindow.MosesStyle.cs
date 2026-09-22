@@ -109,8 +109,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // STATUS — 고른 인물의 스테이터스 창(장비·장착 어빌리티·어빌리티 올리기)을 모세스 위에 연다.
         if (x >= 455 && x < 523 && y >= 390 && y < 417)
         {
-            int index = Array.FindIndex(_units, u => u.ChrCode == _styleUnit);
-            if (index >= 0) _statusUnit = index; else Toast("이 전투에 안 선 인물의 스테이터스는 전투 안에서 보세요");
+            OpenStatusFor(_styleUnit);      // 전투에 안 선 파티원도 임시 유닛으로 연다
             Play(MosesClickSound);
             return true;
         }
