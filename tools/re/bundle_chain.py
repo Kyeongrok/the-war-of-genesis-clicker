@@ -89,7 +89,19 @@ def chp_places(chapter):
     for size in (6, 15, 33, 42):
         n = W(); W(); o[0] += 2 * size * n
     n = W(); W()
-    return [[W() for _ in range(10)] for _ in range(n)]
+    places = [[W() for _ in range(10)] for _ in range(n)]
+    # 장소 뒤 4바이트 표(메일 방아쇠) 다음이 챕터 스크립트 — 사건의 행동 6(필드)·10(전투)도 따라간다(그레이 팬텀은 스크립트가 바로 필드 223 으로 간다)
+    nt = W(); W(); o[0] += 4 * nt
+    try:
+        for _ in range(W()):
+            W(); nc = W(); o[0] += 18 * nc
+            for _ in range(W()):
+                code = W(); args = [W() for _ in range(8)]
+                if code == 6: places.append([0, 0, 10000 + args[0]] + [0] * 7)
+                elif code == 10: places.append([0, 0, args[0]] + [0] * 7)
+    except struct.error:
+        pass
+    return places
 
 
 def bundle_field(fid):
