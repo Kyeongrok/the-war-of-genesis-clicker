@@ -777,16 +777,22 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || Work(_targetWork) is not { } w) return;
         var u = _units[_turn];
+        // 원본 상태 11(어빌리티 대상 고르기, 분석-UI 「칸 깃발」): 사거리는 층 12 붉은색 (255,100,40)×74/256 = (73,28,11) 을
+        // <b>가산</b>으로 칠하고 테두리는 같은 색 불투명 41×33. 겨눈 칸의 효과 범위는 층 0 주황 (255,170,40) → (73,49,11) 로 덧칠한다
+        // (그리는 차례는 층 0 이 먼저라 주황이 이긴다).
+        var aim = _attackCursor >= 0 ? (_units[_attackCursor].Col, _units[_attackCursor].Row) : _aimCell;
+        var splash = aim is { } ac ? AreaCells(w, u, ac.Item1, ac.Item2).ToHashSet() : [];
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)
             {
-                if (!InWorkRange(w, u.Col, u.Row, col, row, u)) continue;
+                bool inRange = InWorkRange(w, u.Col, u.Row, col, row, u), inSplash = splash.Contains((col, row));
+                if (!inRange && !inSplash) continue;
+                uint tint = inSplash ? 0x49310Bu : RangeTint;
                 int x = col * TileW, y = CellTop(col, row);
-                FillRect(x + 1, y + 1, TileW - 2, TileH - 2, 0x70F0D040);
-                StrokeRect(x + 1, y + 1, TileW - 2, TileH - 2, 0xFFF0D040);
+                AddRect(x, y, TileW, TileH, tint);
+                StrokeRect(x, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
             }
         // 저절로 겨눈 대상(적 커서나 칸)에도 깜빡이는 빨간 테두리
-        var aim = _attackCursor >= 0 ? (_units[_attackCursor].Col, _units[_attackCursor].Row) : _aimCell;
         if (aim is { } a)
         {
             uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 4)));
