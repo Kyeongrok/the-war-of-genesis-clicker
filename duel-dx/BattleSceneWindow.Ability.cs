@@ -26,7 +26,10 @@ internal sealed unsafe partial class BattleSceneWindow
         var rows = MenuRows();
         if (index >= rows.Count) return true;
         var (ox, oy) = MenuOrigin(rows.Count);
-        return OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);
+        _targetHotkey = key;                       // 같은 키를 한 번 더 누르면 겨눈 대상에게 쓴다
+        bool handled = OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);
+        if (_targetWork < 0) _targetHotkey = -1;
+        return handled;
     }
 
     private void UpdateAbilityHover(int bx, int by)
@@ -63,13 +66,51 @@ internal sealed unsafe partial class BattleSceneWindow
         _db != null && _db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{_db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
 
     /// <summary>그 어빌리티가 지금 자리에서 겨눌 수 있는 적 — HP 가 낮은 순.</summary>
+    /// <summary>어빌리티 사거리 안의 적 — <b>가까운 순, 같으면 HP 낮은 순</b>(단축키 자동 조준의 우선순위).</summary>
     private List<int> AbilityTargets(WorkData w)
     {
         var user = _units[_turn];
         return [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && SeesAsFoe(user, _units[i])
+            .Where(i => _units[i].Alive && _units[i].OnField && SeesAsFoe(user, _units[i])
                         && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
-            .OrderBy(i => _units[i].Hp).ThenBy(i => i)];
+            .OrderBy(i => Math.Abs(_units[i].Col - user.Col) + Math.Abs(_units[i].Row - user.Row))
+            .ThenBy(i => _units[i].Hp).ThenBy(i => i)];
+    }
+
+    /// <summary>어빌리티를 고른 단축키 — 같은 키를 한 번 더 누르면 겨눈 대상에게 바로 쓴다.</summary>
+    private int _targetHotkey = -1;
+
+    /// <summary>칸을 고르는 어빌리티(범위 공격 따위)가 저절로 겨눈 칸 — 사거리 안 가장 가까운(같으면 약한) 적이 선 칸.</summary>
+    private (int Col, int Row)? _aimCell;
+
+    /// <summary>
+    /// 단축키로 고른 어빌리티에 대상을 저절로 붙인다. 적 하나를 겨누는 것은 공격 커서로, 칸을 고르는 것은 적이 선 칸으로.
+    /// 우선순위는 가까운 적, 그다음 약한 적이다.
+    /// </summary>
+    private void AutoAimAbility(WorkData w, string name)
+    {
+        var user = _units[_turn];
+        var targets = AbilityTargets(w).Where(i => CanAimAt(w, user, _units[i].Col, _units[i].Row)).ToList();
+        if (targets.Count == 0) return;
+        string again = _targetHotkey >= 0 ? $"{(char)_targetHotkey} 한 번 더·" : "";
+        if (w.TargetMode == 1)
+        {
+            _attackCursor = targets[0];
+            Toast($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
+            return;
+        }
+        var t = _units[targets[0]];
+        _aimCell = (t.Col, t.Row);
+        Toast($"{name} — {UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
+    }
+
+    /// <summary>같은 단축키를 한 번 더 누르거나 Enter — 저절로 겨눈 대상에게 쓴다. 처리했으면 true.</summary>
+    private bool UseAimedAbility()
+    {
+        if (_targetWork < 0 || _targetIsBasicAttack || !IsPlayerTurn) return false;
+        if (_attackCursor >= 0) { AttackCursorTarget(); return true; }
+        if (_aimCell is { } cell) { OnTargetClick(cell.Col, cell.Row); return true; }
+        return false;
     }
 
     private (int X, int Y) MenuOrigin(int rowCount)
@@ -99,13 +140,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _targetIsBasicAttack = false;
         if (UseSelfCentredWork(w)) { Toast(name); return true; }
 
-        // 적 하나를 겨누는 어빌리티는 기본공격처럼 사거리 안 가장 약한 적을 먼저 노려 준다(fa-12 와 같은 규칙).
-        if (w.TargetMode == 1 && AbilityTargets(w) is { Count: > 0 } aimed)
-        {
-            _attackCursor = aimed[0];
-            Toast($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 (Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
-            return true;
-        }
+        // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
+        AutoAimAbility(w, name);
+        if (_attackCursor >= 0 || _aimCell != null) return true;
         Toast($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }

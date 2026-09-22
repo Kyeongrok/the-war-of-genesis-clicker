@@ -527,6 +527,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             if (key == Win32.VK_RETURN || _keys.ActionFor(key) == KeyAction.Attack) { AttackCursorTarget(); return; }
             if (_keys.ActionFor(key) == KeyAction.NextUnit) { CycleAttackCursor(); return; }
         }
+        // 어빌리티를 고른 단축키를 한 번 더(또는 Enter) — 저절로 겨눈 대상에게 바로 쓴다.
+        if (_targetWork >= 0 && !_targetIsBasicAttack && _ringUnit < 0
+            && (key == _targetHotkey || key == Win32.VK_RETURN) && UseAimedAbility()) return;
 
         switch (MoveActionFor(key) ?? _keys.ActionFor(key))
         {

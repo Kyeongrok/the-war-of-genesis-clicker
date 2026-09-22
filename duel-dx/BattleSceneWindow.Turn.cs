@@ -271,6 +271,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         _commitUndo = null;
         _attackCursor = -1;
+        _aimCell = null;
+        _targetHotkey = -1;
         _targetWork = -1;
         _targetItem = 0;
         _abilityMenu = false;
@@ -733,6 +735,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 FillRect(x + 1, y + 1, TileW - 2, TileH - 2, 0x70F0D040);
                 StrokeRect(x + 1, y + 1, TileW - 2, TileH - 2, 0xFFF0D040);
             }
+        // 저절로 겨눈 대상(적 커서나 칸)에도 깜빡이는 빨간 테두리
+        var aim = _attackCursor >= 0 ? (_units[_attackCursor].Col, _units[_attackCursor].Row) : _aimCell;
+        if (aim is { } a)
+        {
+            uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 4)));
+            uint color = alpha << 24 | 0xFF3030;
+            int cx = a.Item1 * TileW, cy = GridTop + a.Item2 * TileH;
+            for (int k = 0; k < 3; k++) StrokeRect(cx + k, cy + k, TileW - 2 * k, TileH - 2 * k, color);
+        }
     }
 
     private string TurnLine()
