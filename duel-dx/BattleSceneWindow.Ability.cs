@@ -125,10 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return (Math.Clamp(x, _camX + 8, _camX + ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
     }
 
-    /// <summary>
-    /// 목록이 열려 있으면 누름을 처리하고 true. 목록 밖을 누르면 닫는다.
-    /// 원본처럼 줄을 <b>누르고 있는 동안</b> 그 어빌리티의 설명(abi `+0x1c` 설명 TXR)이 보이고, 같은 줄에서 <b>떼면</b> 고른다(사용자 요청).
-    /// </summary>
+    /// <summary>목록이 열려 있으면 클릭을 처리하고 true — 왼쪽 클릭은 바로 고르고, 목록 밖을 누르면 닫는다. 설명은 오른쪽 단추를 누르고 있는 동안 보인다.</summary>
     private bool OnAbilityMenuClick(int bx, int by)
     {
         if (!_abilityMenu) return false;
@@ -138,24 +135,22 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MenuOrigin(rows.Count);
         int index = (by - oy - MenuHeadH) / MenuRowH;
         if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) { _abilityMenu = false; CancelTargeting(refund: true); return true; }
-        _abilityPressed = index;
+        SelectAbilityRow(rows[index]);
         return true;
     }
 
-    /// <summary>누르고 있는 줄(설명이 보이는 줄) — 없으면 −1.</summary>
+    /// <summary>오른쪽 단추를 누른 채 있는 줄(설명이 보이는 줄) — 없으면 −1. 단추를 떼면(WM_RBUTTONUP) −1 로 돌아간다.</summary>
     private int _abilityPressed = -1;
 
-    /// <summary>왼쪽 단추를 뗐을 때 — 누른 줄 위에서 뗐으면 그 어빌리티를 고른다.</summary>
-    private bool OnAbilityMenuRelease(int bx, int by)
+    /// <summary>목록 줄 위에서 오른쪽 단추를 누르면 — 누르고 있는 동안 그 어빌리티의 설명이 보인다(사용자 요청). 처리했으면 true.</summary>
+    private bool OnAbilityMenuRightDown(int bx, int by)
     {
-        if (!_abilityMenu || _abilityPressed < 0) return false;
-        int pressed = _abilityPressed;
-        _abilityPressed = -1;
+        if (!_abilityMenu) return false;
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
         int index = (by - oy - MenuHeadH) / MenuRowH;
-        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index != pressed || index >= rows.Count) return true;
-        SelectAbilityRow(rows[index]);
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) return false;
+        _abilityPressed = index;
         return true;
     }
 
@@ -228,7 +223,7 @@ internal sealed unsafe partial class BattleSceneWindow
             RightText($"{SoulNeedFor(_units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
         }
 
-        // 누르고 있는 줄의 설명 — 목록 바로 아래(화면을 넘치면 위)에 같은 틀로.
+        // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 목록 바로 아래(화면을 넘치면 위)에 같은 틀로.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
             && _db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && _db.T(pressed.DescriptionId) is { Length: > 0 } desc)
         {

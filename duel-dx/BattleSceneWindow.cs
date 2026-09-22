@@ -565,13 +565,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONUP:
                 CloseUnitInfo();
+                _abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
                 return IntPtr.Zero;
-            case Win32.WM_LBUTTONUP:
-            {
-                var (ux, uy) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
-                OnAbilityMenuRelease(ux, uy);
-                return IntPtr.Zero;
-            }
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
