@@ -682,6 +682,21 @@ internal sealed unsafe partial class BattleSceneWindow
                     _ => c,
                 });
                 break;
+            case 702:                                            // 능력치 셈 [Chr, 칸, 값, 연산] (0x100f01b0) — 칸 0 레벨(+0x2c) · 1 LP(+0x38) · 2 PSY(+0x3c) · 3 TP(+0x3e) · 5 DEP(+0x44) · 6 DEX(+0x46), 연산 0 + · 1 − · 2 × · 3 ÷
+            {
+                int Calc(int v) => A(3) switch { 1 => v - A(2), 2 => v * A(2), 3 => A(2) == 0 ? v : v / A(2), _ => v + A(2) };
+                UpdateCharacter(A(0), c => A(1) switch
+                {
+                    0 => c with { Level = (ushort)Math.Clamp(Calc(c.Level), 1, 99) },
+                    1 => c with { Lp = (uint)Math.Max(1, Calc((int)c.Lp)) },
+                    2 => c with { Psy = (ushort)Math.Max(0, Calc(c.Psy)) },
+                    3 => c with { Tp = (ushort)Math.Max(0, Calc(c.Tp)) },
+                    5 => c with { Dep = (ushort)Math.Max(0, Calc(c.Dep)) },
+                    6 => c with { Dex = (ushort)Math.Max(0, Calc(c.Dex)) },
+                    _ => c,                                      // 4(+0x40)는 뜻을 몰라 둔다
+                });
+                break;
+            }
             case 704:                                            // 어빌리티 배우기 [Chr, 어빌리티] — 없거나 0 이면 레벨 1 로(0x100f06d0, CChr+0x7a)
                 UpdateCharacter(A(0), c => c.Abilities.Any(ab => ab.Ability == A(1) && ab.Level > 0) ? c
                     : c with { Abilities = [.. c.Abilities.Where(ab => ab.Ability != A(1)), ((ushort)A(1), (ushort)1)] });
