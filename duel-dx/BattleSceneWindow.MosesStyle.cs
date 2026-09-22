@@ -34,6 +34,15 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     private const int StyleBackground = 42, StylePortraitObs = 302, StyleBodyObs = 283, StyleFamilyObs = 329;
+    /// <summary>3단계 단추 안의 계열 아이콘(Obs 1334, 5장)과 「M.G」 표시(Obs 1426, 2장) — 분석-모세스 8절 「3단계 단추 둘」.</summary>
+    private const int StyleIconObs = 1334, StyleMarkObs = 1426;
+
+    /// <summary>3단계 단추 둘 — id 91 (107,70) 71×78 · id 92 (184,70) 70×78. 1차 계열 단추의 두 번째·세 번째 부채꼴 자리다(0x100fa1f5·0x100fa33a).</summary>
+    private static readonly (int X, int Y, int W, int H, int IconX, int IconY, int MarkX, int MarkY)[] StyleTierCells =
+        [(107, 70, 71, 78, 38, 31, 38, 26), (184, 70, 70, 78, 30, 31, 30, 26)];
+
+    /// <summary>계열 아이콘 Obs 1334 의 모션 — 0 PSYCLON · 1 FORCETRAL · 2 OZMA · 3 TAKIRION · 4 ARKLOST 를 계열 차례(사이클론·타키리온·포스트럴·아크로스트·오즈마)로.</summary>
+    private static readonly int[] StyleIconMotion = [0, 3, 1, 4, 2];
     private const int SoundStyleDone = 582;
 
     /// <summary>체질 단추 다섯 자리(분석-모세스 8절) — 글자는 TXR 878~882.</summary>
@@ -93,6 +102,19 @@ internal sealed unsafe partial class BattleSceneWindow
             string ftitle = _db?.T(932) is { Length: > 0 } ft ? ft : "전직";
             string ftext = _db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
             _confirm = (ftitle, ftext, () => ChangeJob(target));
+            return true;
+        }
+
+        // 3단계 단추 둘 — 계열 단추처럼 한 번에 확인창(0x100fa1f5·0x100fa33a).
+        var tiers = StyleTierJobs();
+        for (int i = 0; i < tiers.Count && i < StyleTierCells.Length; i++)
+        {
+            var cell = StyleTierCells[tiers[i].Slot];
+            if (x < cell.X || x >= cell.X + cell.W || y < cell.Y || y >= cell.Y + cell.H) continue;
+            ushort target = tiers[i].Job;
+            string ttitle = _db?.T(932) is { Length: > 0 } tt ? tt : "전직";
+            string ttext = _db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
+            _confirm = (ttitle, ttext, () => ChangeJob(target));
             return true;
         }
 
@@ -161,6 +183,34 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
+    /// <summary>
+    /// 3단계 후보 둘 — <b>2단계이고 레벨 ≥ 60</b>일 때, 제 계열 3단계 Dep(3f+3)의 직업 가운데 <b>Job `+6` 어빌리티를 가진 것</b>만
+    /// (0x100fa167: 레벨 < 60 이면 둘 다 없음, 0x100fa1c5: `CChr+0x1bc6[어빌리티]` 가 0·0xff 면 그 단추 없음). 칸 번호는 0·1 그대로 남긴다.
+    /// 원본은 「처음 계열」(CChr+0x3a0)을 보지만 데모는 지금 계열로 본다(가설 — 계열 갈아타기는 1단계에서만 되므로 같다).
+    /// </summary>
+    private List<(int Slot, ushort Job)> StyleTierJobs()
+    {
+        if (_db is not { } db || _units[_styleUnit].Data is not { } c) return [];
+        if (StyleDep() is not { } dep || StyleTier(dep) != 2 || c.Level < 60) return [];
+        int family = (dep.Id - 1) / 3;
+        if (db.Deps.FirstOrDefault(d => d.Id == 3 * family + 3) is not { } third) return [];
+        var list = new List<(int, ushort)>();
+        for (int k = 0; k < third.Jobs.Length && k < StyleTierCells.Length; k++)
+        {
+            if (db.Jobs.GetValueOrDefault(third.Jobs[k]) is not { } job) continue;
+            if (job.NeedAbility != 0 && !c.HasAbility(job.NeedAbility)) continue;
+            list.Add((k, third.Jobs[k]));
+        }
+        return list;
+    }
+
+    /// <summary>미리보기 중인 직업 — 형 칸을 골랐으면 그 직업, 아니면 지금 직업(원본 0x100fa4e0 이 채우는 목록의 주인).</summary>
+    private ushort StylePreviewJob()
+    {
+        var jobs = StyleJobs();
+        return _units[_styleUnit].Data is { } c && _stylePick >= 0 && _stylePick < jobs.Count ? jobs[_stylePick] : _units[_styleUnit].Data?.JobId ?? 0;
+    }
+
     /// <summary>지금 직업이 앉아 있는 칸 번호 — 없으면 −1.</summary>
     private int StyleCurrentCell()
     {
@@ -194,26 +244,31 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_units[_styleUnit].Data is not { } c || _db is not { } db) return;
 
-        // 능력치 패널 — 원본은 (100,100) 이지만 거기는 계열 그림과 겹쳐 글이 안 읽혀, 데모는 오른쪽 빈 곳에 놓는다.
-        DarkenRect(ox + 387, oy + 232, 180, 96);
-        DrawGameFrame(ox + 395, oy + 240, 164, 80, db.T(c.NameId));
+        // 능력치 패널(0x10034030: 이름 · 직업 · 체질 · LEVEL(TXR 160) · EXP(161) · LP(34) · TP(38)) — 원본 자리 (100,100) 140×164 는
+        // 형 단추 다섯과 겹쳐 글이 안 읽히므로, 데모는 오른쪽 어빌리티 목록 아래 빈 칸(395,232)에 둔다.
+        DarkenRect(ox + 387, oy + 224, 180, 126);
+        DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
         string[] stats =
         [
-            $"LEVEL {c.Level}",
-            $"체질  {db.BodyName(c.Body)}",
-            $"계열  {db.FamilyName(c)}",
-            $"직업  {db.JobName(c)}",
+            $"{db.JobName(c)} · {db.BodyName(c.Body)}",
+            $"{db.T(160)} {c.Level}",
+            $"{db.T(161)} {c.Exp}",
+            $"{db.T(34)} {c.Lp}",
+            $"{db.T(38)} {c.Tp}",
         ];
-        for (int i = 0; i < stats.Length; i++) DrawText(stats[i], ox + 405, oy + 246 + i * 17, White, 12);
+        for (int i = 0; i < stats.Length; i++) DrawText(stats[i], ox + 405, oy + 240 + i * 18, White, 12);
 
-        // 어빌리티 미리보기 (395,70) 164×20 여섯 줄
+        // 어빌리티 미리보기 (395,70) 164×20 여섯 줄 — 원본(0x100fa4e0)은 <b>미리보기 중인 직업</b>의 Job.dat 어빌리티 11칸을 이름만 나열한다.
+        // 형 칸을 누르면 그 직업 것으로 바뀐다.
         DarkenRect(ox + 391, oy + 66, 172, 128);
-        for (int i = 0; i < Math.Min(6, c.Abilities.Length); i++)
+        var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
+        for (int i = 0; i < Math.Min(6, previewList.Count); i++)
         {
-            var (abilityId, level) = c.Abilities[i];
-            if (!db.Abilities.TryGetValue(abilityId, out var ab)) continue;
-            DrawText($"{db.T(ab.NameId)} Lv{level}", ox + 397, oy + 74 + i * 20, White, 12);
+            if (!db.Abilities.TryGetValue(previewList[i], out var ab)) continue;
+            string mark = c.HasAbility(previewList[i]) ? $" Lv{c.AbilityLevel(previewList[i])}" : "";
+            DrawText($"{db.T(ab.NameId)}{mark}", ox + 397, oy + 74 + i * 20, c.HasAbility(previewList[i]) ? White : 0xFFB4B4B4, 12);
         }
+        if (previewList.Count > 6) DrawText($"… 외 {previewList.Count - 6}", ox + 397, oy + 74 + 6 * 20 - 6, 0xFFB4B4B4, 11);
 
         // 형 단추 — 레벨이 닿는 칸까지만 만든다(못 고르는 칸은 흐려지는 것이 아니라 아예 없다).
         var styleJobs = StyleJobs();
@@ -225,6 +280,18 @@ internal sealed unsafe partial class BattleSceneWindow
             var (_, lw, lh) = GetText(label, White, 12);
             uint colour = styleJobs[i] == c.JobId ? 0xFF00FF00 : i == _stylePick ? 0xFF00FFFF : 0xFFB4B4B4;
             DrawText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
+        }
+
+        // 3단계 단추 둘 — 2단계·레벨 60·필수 어빌리티가 있을 때만. 조각은 계열 단추처럼 제 자리를 들고 있어 (320,240)에 찍는다.
+        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        foreach (var (slot, tierJob) in StyleTierJobs())
+        {
+            var cell = StyleTierCells[slot];
+            bool over = mx >= cell.X && mx < cell.X + cell.W && my >= cell.Y && my < cell.Y + cell.H;
+            DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + 320, oy + 240, UiBlend.Alpha);
+            int family = StyleDep() is { } d ? (d.Id - 1) / 3 : 0;
+            DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
+            DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
         }
 
         // 계열 단추 넷 — 1단계·레벨 30 일 때만 나온다(못 가는 동안은 아예 없다).
