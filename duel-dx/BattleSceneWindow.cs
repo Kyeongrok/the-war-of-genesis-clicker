@@ -271,6 +271,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>그 전투의 자료·맵을 읽고 판을 그 크기로 잡는다.</summary>
     private void LoadBattleBoard(int id)
     {
+        // DUELDX_LEGION=<Chr>:<군단> 이면 그 인물에게 군단을 배속하고 시작한다(화면 밖 시험용 — 부하·군단기).
+        if (Environment.GetEnvironmentVariable("DUELDX_LEGION")?.Split(':') is [var lc, var ll] && int.TryParse(lc, out int lchr) && int.TryParse(ll, out int lid))
+            _unitLegion[lchr] = lid;
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
         _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
