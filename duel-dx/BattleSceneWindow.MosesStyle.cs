@@ -70,6 +70,8 @@ internal sealed unsafe partial class BattleSceneWindow
         int x = bx - ox, y = by - oy;
 
         if (x >= 455 && x < 633 && y >= 430 && y < 457) { MosesGoBack(); return true; }        // 나가기
+        // STATUS — 고른 인물의 스테이터스 창(장비·장착 어빌리티·어빌리티 올리기)을 모세스 위에 연다.
+        if (x >= 455 && x < 523 && y >= 390 && y < 417) { _statusUnit = _styleUnit; Play(MosesClickSound); return true; }
 
         var party = StyleParty();
         for (int i = 0; i < party.Count && i < 5; i++)
@@ -232,6 +234,14 @@ internal sealed unsafe partial class BattleSceneWindow
             // 이 그림들은 조각마다 <b>제 자리를 스스로 들고 있다</b> — 연대표 이름판과 같은 꼴이라
             // 칸 자리가 아니라 <b>화면 가운데(320,240)</b>에 찍어야 제자리에 온다. 누르는 칸만 StyleFamilyCells 로 잡는다.
             DrawUi(StyleFamilyObs, 2 * i, tick, ox + 320, oy + 240, UiBlend.Alpha);
+        }
+
+        // STATUS 단추 — 원본에는 없는 데모 단추. 형 단추와 같은 알약(Obs 283)에 글자를 얹는다.
+        {
+            int bx0 = ox + 455, by0 = oy + 390;
+            if (!DrawUi(StyleBodyObs, 0, tick, bx0, by0, UiBlend.Alpha)) StrokeRect(bx0, by0, 68, 28, White);
+            var (_, sw, sh) = GetText("STATUS", White, 12);
+            DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
         }
 
         if (!DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha))

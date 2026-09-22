@@ -338,6 +338,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (!_mosesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
+        if (_statusUnit >= 0) return OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
         if (_mosesFade > 0) return true;
         if (OnMosesShopClick(bx, by)) return true;
         if (OnMosesMailClick(bx, by)) return true;
@@ -395,6 +396,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         DrawMosesTooltip();
         DrawSystem();
+        DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
         DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
         // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 검정 페이드(방식 2),
