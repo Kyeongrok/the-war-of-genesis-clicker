@@ -57,7 +57,20 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>미리보기 중인 형 칸(원본 <c>+0x2de0</c>) — 같은 칸을 다시 눌러야 확인창이 뜬다.</summary>
     private int _stylePick = -1;
 
-    private List<int> StyleParty() => [.. Enumerable.Range(0, _units.Length).Where(i => _units[i].IsAlly)];
+    /// <summary>
+    /// 전직 단추에 서는 인물 — 스크립트 801 로 들어온 <b>동료(주인공들)</b>만. 전투 자료가 내 편에 끼워 준 코어헌터 용병 따위는 빼야 한다(사용자 지적).
+    /// 원본은 파티 객체(<c>0x101b6888</c>, `+8` Chr 번호 u32×64)의 인원을 보여 준다 — 그 목록은 801 이 채운다.
+    /// 옛 세이브(동료 목록이 없음)면 예전처럼 내 편 전부.
+    /// </summary>
+    private List<int> StyleParty()
+    {
+        var all = Enumerable.Range(0, _units.Length).Where(i => _units[i].IsAlly);
+        if (_members.Count > 0) all = all.Where(i => _members.Contains(_units[i].ChrCode));
+        return [.. all];
+    }
+
+    /// <summary>스크립트 801 로 들어온 동료의 Chr 번호(802 로 빠진다) — 원본 파티 객체의 인원 목록. 세이브에 실린다.</summary>
+    private readonly HashSet<int> _members = [];
 
     private void OpenMosesStyle()
     {
@@ -238,8 +251,9 @@ internal sealed unsafe partial class BattleSceneWindow
             int cx = ox + 70 * i + 48, cy = oy + 330;
             DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             // 초상화는 단추보다 커서 칸(60×60)에 맞춰 줄여 그린다 — 원본은 같은 크기라 그대로 얹는다.
+            // 초상화는 단추(64×130, 왼위 기준) 안 +(32,50) 을 가운데로 — 60×60 이니 왼위는 +(2,20). 전에는 30픽셀 왼쪽에 찍혀 틀과 어긋났다.
             if (_units[party[i]].Data is { } pc && _faces.TryGetValue(pc.Code, out var face))
-                BlitScaled(face, cx - 30, cy + 20, 60, 60);
+                BlitScaled(face, cx + 2, cy + 20, 60, 60);
         }
 
         if (_units[_styleUnit].Data is not { } c || _db is not { } db) return;

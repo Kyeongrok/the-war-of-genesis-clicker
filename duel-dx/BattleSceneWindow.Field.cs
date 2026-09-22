@@ -668,10 +668,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 705: _shopMoney += A(1); break;                 // 돈
             case 801:                                            // 동료 넣기 — 다음 전투부터 파티에 든다
-                if (A(1) > 0 && _db?.Character(A(1)) is { } c) _party[A(1)] = c;
+                if (A(1) > 0 && _db?.Character(A(1)) is { } c) { _party[A(1)] = c; _members.Add(A(1)); }
                 break;
             case 802:
-                if (A(1) > 0) _party.Remove(A(1));               // 동료 빼기
+                if (A(1) > 0) { _party.Remove(A(1)); _members.Remove(A(1)); }   // 동료 빼기
                 break;
         }
     }

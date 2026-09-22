@@ -125,29 +125,68 @@ internal sealed unsafe partial class BattleSceneWindow
         return (Math.Clamp(x, _camX + 8, _camX + ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
     }
 
-    /// <summary>목록이 열려 있으면 클릭을 처리하고 true. 목록 밖을 누르면 닫는다.</summary>
+    /// <summary>
+    /// 목록이 열려 있으면 누름을 처리하고 true. 목록 밖을 누르면 닫는다.
+    /// 원본처럼 줄을 <b>누르고 있는 동안</b> 그 어빌리티의 설명(abi `+0x1c` 설명 TXR)이 보이고, 같은 줄에서 <b>떼면</b> 고른다(사용자 요청).
+    /// </summary>
     private bool OnAbilityMenuClick(int bx, int by)
     {
         if (!_abilityMenu) return false;
-        _abilityMenu = false;
-        if (!IsPlayerTurn) return true;
+        if (!IsPlayerTurn) { _abilityMenu = false; return true; }
 
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
         int index = (by - oy - MenuHeadH) / MenuRowH;
-        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) { CancelTargeting(refund: true); return true; }
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) { _abilityMenu = false; CancelTargeting(refund: true); return true; }
+        _abilityPressed = index;
+        return true;
+    }
 
-        var (name, w, enabled, reason) = rows[index];
-        if (!enabled) { Toast($"{name}: {reason}"); _abilityMenu = true; return true; }
+    /// <summary>누르고 있는 줄(설명이 보이는 줄) — 없으면 −1.</summary>
+    private int _abilityPressed = -1;
+
+    /// <summary>왼쪽 단추를 뗐을 때 — 누른 줄 위에서 뗐으면 그 어빌리티를 고른다.</summary>
+    private bool OnAbilityMenuRelease(int bx, int by)
+    {
+        if (!_abilityMenu || _abilityPressed < 0) return false;
+        int pressed = _abilityPressed;
+        _abilityPressed = -1;
+        var rows = MenuRows();
+        var (ox, oy) = MenuOrigin(rows.Count);
+        int index = (by - oy - MenuHeadH) / MenuRowH;
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index != pressed || index >= rows.Count) return true;
+        SelectAbilityRow(rows[index]);
+        return true;
+    }
+
+    /// <summary>목록의 한 줄을 고른다 — 못 쓰는 줄이면 까닭만 알리고 창은 그대로 둔다.</summary>
+    private void SelectAbilityRow((string Name, WorkData Work, bool Enabled, string Reason) row)
+    {
+        var (name, w, enabled, reason) = row;
+        if (!enabled) { Toast($"{name}: {reason}"); return; }
+        _abilityMenu = false;
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
-        if (UseSelfCentredWork(w)) { Toast(name); return true; }
+        if (UseSelfCentredWork(w)) { Toast(name); return; }
 
         // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
         AutoAimAbility(w, name);
-        if (_attackCursor >= 0 || _aimCell != null) return true;
+        if (_attackCursor >= 0 || _aimCell != null) return;
         Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
-        return true;
+    }
+
+    /// <summary>
+    /// 칸을 고르는 어빌리티(메테오처럼 대상 방식이 한 명이 아닌 것)를 겨누는 동안 마우스 아래 칸이 사거리 안이면 그 칸을 겨눈 것으로 —
+    /// 원본은 커서가 움직일 때 그 칸의 효과 범위(층 0 주황)를 다시 깐다(<c>0x1006d581</c>). 전에는 저절로 겨눈 칸만 있어 범위가 안 따라왔다.
+    /// </summary>
+    private void UpdateAimHover(int bx, int by)
+    {
+        if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || _abilityMenu || Work(_targetWork) is not { } w || w.TargetMode == 1) return;
+        if (by < GridTop) return;
+        int col = bx / TileW, row = RowAt(bx, by);
+        if (row < 0 || !CanAimAt(w, _units[_turn], col, row)) return;
+        _aimCell = (col, row);
+        _attackCursor = -1;
     }
 
     private void DrawAbilityMenu()
@@ -187,6 +226,19 @@ internal sealed unsafe partial class BattleSceneWindow
             RightText($"{TpCostFor(_units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
             // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
             RightText($"{SoulNeedFor(_units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
+        }
+
+        // 누르고 있는 줄의 설명 — 목록 바로 아래(화면을 넘치면 위)에 같은 틀로.
+        if (_abilityPressed >= 0 && _abilityPressed < rows.Count
+            && _db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && _db.T(pressed.DescriptionId) is { Length: > 0 } desc)
+        {
+            var lines = WrapTalk([desc], MenuW - 28, 12);
+            int dh = MenuHeadH + lines.Count * 16 + 10;
+            int dy = oy + h + FrameTitleH + 6;
+            if (dy + dh > _camY + ViewHeight - 4) dy = oy - FrameTitleH - dh - 6;
+            DarkenRect(ox - 1, dy - FrameTitleH - 1, MenuW + 2, dh + FrameTitleH + 2, 8);
+            DrawGameFrame(ox, dy, MenuW, dh, rows[_abilityPressed].Name);
+            for (int i = 0; i < lines.Count; i++) DrawText(lines[i], ox + 14, dy + MenuHeadH + i * 16, White, 12);
         }
     }
 }

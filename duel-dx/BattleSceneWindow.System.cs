@@ -365,7 +365,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? EventTimer = null, bool[]? EventTimerRun = null,
                                     int EventNextBattle = 0, int EventNextField = 0,
                                     bool InMoses = false, int Chapter = 0,
-                                    bool ChapterDone = false, int PartyNo = 0);
+                                    bool ChapterDone = false, int PartyNo = 0, int[]? Members = null);
 
     private const int SaveVersion = 8;
 
@@ -410,7 +410,7 @@ internal sealed unsafe partial class BattleSceneWindow
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
                 [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
                 _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0,
-                _chapterDone, _partyNo);
+                _chapterDone, _partyNo, [.. _members]);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -502,6 +502,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         _chapterDone = state.ChapterDone;
         _partyNo = state.PartyNo;
+        _members.Clear();
+        foreach (int chr in state.Members ?? []) _members.Add(chr);
 
         // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
         Array.Clear(_flags);
