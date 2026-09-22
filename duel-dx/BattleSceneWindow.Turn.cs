@@ -553,8 +553,13 @@ internal sealed unsafe partial class BattleSceneWindow
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
-                // 군단 행동(상태 15) — 대장이 치면 부하들도 <b>한 번</b> 제 기술로 같이 친다(여러 타를 쳐도 부하는 한 번).
-                if (!followersDone && w.IsDamage && targets.Count > 0) { FollowersAttack(userIndex, _units[targets[0]], dying); followersDone = true; }
+                // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
+                // 아군 하나를 겨누는 기술(방식 4)이면 아군 패스(회복·보조), 피해 기술이면 적 패스.
+                if (!followersDone && targets.Count > 0 && (w.IsDamage || w.TargetMode == 4))
+                {
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: w.TargetMode == 4);
+                    followersDone = true;
+                }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
@@ -796,9 +801,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_turn < 0) return $"틱 {_tick} — 차례를 기다리는 중";
         var u = _units[_turn];
         string help = !u.IsAlly ? "적군이 움직입니다"
-            : _targetWork >= 0 ? (_targetIsBasicAttack ? "노리는 적: 클릭·Enter 공격, Tab 다른 적 (우클릭·Esc 취소)" : "노란 칸 안의 대상을 클릭 (우클릭·Esc 취소)")
-            : $"파란 칸 클릭·{KeyBindings.KeyName(_keys[KeyAction.MoveUp])}{KeyBindings.KeyName(_keys[KeyAction.MoveLeft])}{KeyBindings.KeyName(_keys[KeyAction.MoveDown])}{KeyBindings.KeyName(_keys[KeyAction.MoveRight])}: 걷기   우클릭·{KeyBindings.KeyName(_keys[KeyAction.Ring])}: 링   {KeyBindings.KeyName(_keys[KeyAction.Attack])}: 공격   {KeyBindings.KeyName(_keys[KeyAction.Rest])}: 휴식   우클릭: 취소   Esc: 취소·걸음 물리기";
-        return $"틱 {_tick}   {(u.IsAlly ? "아군" : "적군")} {UnitName(_turn)} 차례   HP {u.Hp}/{u.MaxHp}  TP {u.Tp}/{u.MaxTp}  SOUL {u.Soul}   {help}";
+            : _targetWork >= 0 ? (_targetIsBasicAttack ? "클릭·Enter 공격  Tab 다른 적  Esc 취소" : "노란 칸 클릭  Esc 취소")
+            : $"{KeyBindings.KeyName(_keys[KeyAction.MoveUp])}{KeyBindings.KeyName(_keys[KeyAction.MoveLeft])}{KeyBindings.KeyName(_keys[KeyAction.MoveDown])}{KeyBindings.KeyName(_keys[KeyAction.MoveRight])} 걷기  {KeyBindings.KeyName(_keys[KeyAction.Ring])} 링  {KeyBindings.KeyName(_keys[KeyAction.Attack])} 공격  {KeyBindings.KeyName(_keys[KeyAction.Rest])} 휴식  1~4 어빌리티  Esc 취소";
+        return $"틱 {_tick}  {(u.IsAlly ? "아군" : "적군")} {UnitName(_turn)}  HP {u.Hp}/{u.MaxHp}  TP {u.Tp}/{u.MaxTp}  SOUL {u.Soul}   {help}";
     }
 
 }

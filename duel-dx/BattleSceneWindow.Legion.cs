@@ -278,19 +278,24 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>사거리 밖이라 먼저 걸어가는 부하들 — 다 걸으면 대장 루틴이 치게 한다.</summary>
     private readonly List<(UnitState Follower, WorkData Work, UnitState Target)> _followerStrikes = [];
 
-    private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying)
+    /// <summary>
+    /// 대장이 기술을 쓰면 부하들도 같은 패스로 제 기술을 쓴다(상태 15, 분석-군단 「부하가 대장 차례에 하는 일」).
+    /// <paramref name="allyPass"/> 면 아군 패스(<c>0x1005fa90</c>) — 대장이 아군 대상 기술(방식 4)을 쓸 때로, 부하는 회복·보조 기술을
+    /// 대장이 겨눈 아군 가까이에 쓴다. 아니면 적 패스(<c>0x1005fd00</c>) — 피해 기술과 기본공격으로 적을 친다.
+    /// </summary>
+    private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying, bool allyPass = false)
     {
         if (_db is null) return;
         foreach (var follower in FollowersOf(leaderIndex))
         {
             if (follower.Data is not { } c || follower.IsBusy) continue;
             bool done = false;
-            foreach (var work in FollowerWorks(c))
+            foreach (var work in FollowerWorks(c, allyPass))
             {
                 if (!CanAfford(follower, work)) continue;
-                // 제 사거리 안의 적 중 대장이 겨눈 칸에 가장 가까운 쪽.
+                // 제 사거리 안의 대상(적 패스 = 적, 아군 패스 = 아군) 중 대장이 겨눈 칸에 가장 가까운 쪽.
                 var pick = _units
-                    .Where(u => u.Alive && SeesAsFoe(follower, u)
+                    .Where(u => u.Alive && u.OnField && (allyPass ? !SeesAsFoe(follower, u) && u != follower : SeesAsFoe(follower, u))
                                 && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower))
                     .OrderBy(u => Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))
                     .FirstOrDefault();
@@ -306,7 +311,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 제자리에서는 아무 적도 안 닿는다 — 원본(0x1005f1c0)처럼 <b>대장의 대상이 닿는 칸까지 걸어간 뒤</b> 친다.
             // 걸을 수 있는 칸(대장 TP 를 빌린 이동 영역) 가운데 그 기술 사거리에 대상이 드는 가장 싼 칸을 고른다.
             if (ComputeRange(follower) is not { } range) continue;
-            foreach (var work in FollowerWorks(c))
+            foreach (var work in FollowerWorks(c, allyPass))
             {
                 if (!CanAfford(follower, work)) continue;
                 int best = -1, bestCost = int.MaxValue;
@@ -328,15 +333,18 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    /// <summary>부하가 고를 수 있는 기술 — 익힌 어빌리티(그 차례가 우선순위) 다음에 기본공격.</summary>
-    private IEnumerable<WorkData> FollowerWorks(CharacterData c)
+    /// <summary>
+    /// 부하가 고를 수 있는 기술 — 익힌 어빌리티(그 차례가 우선순위) 다음에 기본공격.
+    /// 아군 패스면 아군 하나를 겨누는(방식 4) 회복·보조 기술만이고 기본공격은 없다.
+    /// </summary>
+    private IEnumerable<WorkData> FollowerWorks(CharacterData c, bool allyPass = false)
     {
         if (_db is not { } db) yield break;
         foreach (var (abilityId, level) in c.Abilities)
             if (db.Abilities.TryGetValue(abilityId, out var ab) && ab.WorkByLevel.TryGetValue(level, out int wid)
-                && Work(wid) is { IsDamage: true } w)
+                && Work(wid) is { } w && (allyPass ? w.TargetMode == 4 && !w.IsDamage : w.IsDamage))
                 yield return w;
-        if (Work(c.BasicWorkId) is { } basic) yield return basic;
+        if (!allyPass && Work(c.BasicWorkId) is { } basic) yield return basic;
     }
 
     /// <summary>대장이 쓰러지면 — 첫 부하가 새 대장이 되고 세력이 0.6배가 된다.</summary>
