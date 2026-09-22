@@ -27,8 +27,24 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int EpisodeBackground = 113, EpisodeObs = 979, EpisodeBgm = 3391;
     private const int EpisodeRows = 6, EpisodeCellW = 240, EpisodeCellH = 46;
 
-    /// <summary>연대표 한 줄 — 에피소드 번호와 그 챕터·파티.</summary>
-    private sealed record EpisodeEntry(int No, int Chapter, int Party, bool Open);
+    /// <summary>연대표 한 줄 — 에피소드 번호와 그 챕터·파티, 잠금 깃발 넷(−1 = 조건 없음).</summary>
+    private sealed record EpisodeEntry(int No, int Chapter, int Party, int[] Locks);
+
+    /// <summary>
+    /// 그 줄이 열렸나 — 잠금 깃발 넷이 <b>모두</b> −1 이거나 진행 깃발이 0 이 아니어야 한다(<c>0x10106f50</c> → <c>0x10106f20</c>, AND).
+    /// 새 게임이면 깃발이 다 0 이라 조건 없는 0번(코어헌터)·1번(홍련의 예언)만 열리고, 코어헌터의 챕터 스크립트가 깃발 14 를 세우면
+    /// 2번(샤이닝 스타)이 열린다.
+    /// </summary>
+    private bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < _flags.Length && _flags[f] != 0));
+
+    /// <summary>
+    /// 챕터가 끝났다는 표시 — 필드 행동 11 이 세우고(원본 챕터 상태 <c>+0x10</c>, <c>0x1004e6c0</c>), 모세스에 들어올 때 이것이 서 있으면
+    /// 항행 대신 연대표로 간다(<c>0x100f5b07</c>). 연대표에서 에피소드를 고르면 내린다. 세이브에 실린다.
+    /// </summary>
+    private bool _chapterDone;
+
+    /// <summary>지금 파티 번호(0 살라딘 · 1 베라모드 · 2 크리스티앙, Episode.dat 칸 8). 다른 파티의 에피소드로 가면 인물 상태를 새로 꾸린다.</summary>
+    private int _partyNo;
 
     private bool _episodesOpen;
     private List<EpisodeEntry>? _episodes;
@@ -50,11 +66,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     {
                         int o = 4 + 40 * r + 18 * side;          // 낱말 2~10(짝수) · 11~19(홀수)
                         short Word(int k) => BitConverter.ToInt16(b, o + 4 + 2 * k);
-                        // 잠금 깃발 넷 — 0xffff(−1)이 아니면 진행 깃발이 서 있어야 열린다. 새 게임이면 모두 0 이라 닫힌다.
-                        bool open = Enumerable.Range(0, 4).All(k => Word(k) < 0);
+                        // 잠금 깃발 넷 — 0xffff(−1)이 아니면 진행 깃발이 서 있어야 열린다(<see cref="EpisodeOpen"/>).
+                        int[] locks = [.. Enumerable.Range(0, 4).Select(k => (int)Word(k))];
                         int chapter = Word(7), party = Word(8);
                         if (chapter <= 0) continue;
-                        list.Add(new EpisodeEntry(2 * r + side, chapter, party, open));
+                        list.Add(new EpisodeEntry(2 * r + side, chapter, party, locks));
                     }
             }
         }
@@ -81,7 +97,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)
         {
-            if (!list[i].Open) continue;
+            if (!EpisodeOpen(list[i])) continue;
             var (x, y) = EpisodeCell(list[i].No);
             if (list[i].No / 2 >= EpisodeRows) continue;
             if (bx >= ox + x && bx < ox + x + EpisodeCellW && by >= oy + y && by < oy + y + EpisodeCellH) return i;
@@ -101,7 +117,11 @@ internal sealed unsafe partial class BattleSceneWindow
 
         var entry = Episodes()[index];
         _episodesOpen = false;
-        _party.Clear();
+        _chapterDone = false;
+        // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
+        // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인물은 챕터 스크립트(801)가 새로 넣는다.
+        if (entry.Party != _partyNo) _party.Clear();
+        _partyNo = entry.Party;
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
         OpenMoses(chapter);
@@ -127,13 +147,13 @@ internal sealed unsafe partial class BattleSceneWindow
             int row = entry.No / 2;
             if (row >= EpisodeRows) break;
             // 원본은 조건을 통과한 줄까지만 보이고, 못 여는 줄은 이름 없이 빈 채로 둔다.
-            if (!entry.Open) continue;
+            if (!EpisodeOpen(entry)) continue;
             // 이름판 — 짝수 번호는 모션 i+1, 홀수는 i+30. 가운데 x 는 왼쪽 160 · 오른쪽 480.
             int motion = entry.No % 2 == 0 ? entry.No + 1 : entry.No + 30;
             // 이름판 그림은 <b>화면 가운데(320)를 기준점</b>으로 왼·오른쪽 자리를 스스로 들고 있고(장 5 = −196, 장 20 = +112),
             // 세로는 기준점이 −58 이라 줄 자리에 58 을 더해 찍는다.
             int cx = ox + 320, cy = oy + 186 + EpisodeCellH * row + 58;
-            if (!DrawUi(EpisodeObs, motion, tick, cx, cy, UiBlend.Alpha) && entry.Open)
+            if (!DrawUi(EpisodeObs, motion, tick, cx, cy, UiBlend.Alpha))
                 DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
             // 고른 표시 — 이름 양 끝에 꺾쇠 한 쌍. 모션 4 는 표시가 아니라 <b>다른 장 이름판</b>이라 예전에는 이름이 겹쳐 찍혔다.
             // Obs 0979 의 장 0~3 만 자리가 (0,0) 인 작은 그림이고, 그중 15틱짜리 모션 62·64 가 깜빡이는 꺾쇠다.

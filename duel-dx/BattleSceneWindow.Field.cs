@@ -389,8 +389,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (OpenField(A(0))) return false;
                 LeaveField();
                 return false;
-            case 7:
-            case 11: LeaveField(); return false;             // 필드 끝 — 챕터가 있으니 모세스로
+            case 7: LeaveField(); return false;              // 필드 끝 — 챕터가 있으니 모세스로(0x100f2d90)
+            case 11:                                         // 필드 끝 + <b>챕터 끝</b>(0x100f2eb0 → 0x1004e6c0 이 챕터 상태 +0x10 = 1)
+                // 모세스는 이 표시를 보고 항행 대신 연대표(장면 7)로 간다 — 분석-모세스 「챕터가 끝나는 조건」.
+                _chapterDone = true;
+                LeaveField();
+                return false;
             case 10:                                         // 전투
                 CloseField();
                 if (!StartBattle(A(0))) OpenMoses();
