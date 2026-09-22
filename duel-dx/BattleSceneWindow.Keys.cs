@@ -103,6 +103,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
     private const int MenuAllyAi = 1006, MenuHints = 1007;
+    /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
+    private const int MenuClearEnemies = 1008;
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
     private const int MenuZoomAuto = 1010;
     private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
@@ -148,6 +150,9 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)mode, "모드(&M)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
+        IntPtr tools = Win32.CreatePopupMenu();
+        Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
+        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
         return bar;
     }
 
@@ -159,6 +164,7 @@ internal sealed unsafe partial class BattleSceneWindow
         switch (id)
         {
             case MenuChapters: _chaptersOpen = true; _chaptersHover = -1; break;
+            case MenuClearEnemies: ClearEnemiesForTest(); break;
             case MenuAllyAi:
                 // 동맹(편 3)의 제어권을 AI 에 줄지 — 켜면 AI 가, 끄면 내가 움직인다.
                 _allyAi = !_allyAi;
