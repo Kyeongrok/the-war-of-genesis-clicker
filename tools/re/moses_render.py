@@ -13,6 +13,8 @@
     moses-party.png       PARTY(신상관리) 페이지 — 활 목록 2칸
     moses-nav-planet.png  항행 단계 1(행성 고르기)
     moses-nav-place.png   항행 단계 2(장소 고르기)
+    moses-nav-radar.png   항행 단계 2 + 레이더(행성 구체 위를 도는 초록 격자 구와 장소 조각, 틱 20)
+    moses-style3.png      전직(STYLE CHANGE) 페이지 — 3단계 단추 둘이 나온 모습
 """
 import argparse
 import os
@@ -243,6 +245,135 @@ def arc_item(a, c, i, marker_motion, caption, hover=False):
     label(a, c, caption, x, y, w, h)
 
 
+# ── 레이더 `+0x2f14` (클래스 0x10103880, [[분석-모세스]] 6절) ──────────────
+# 반지름 74 의 구를 위도 11줄(0~180°, 18° 씩) × 경도 10줄(36° 씩) 격자로 잡아 (320,220) 에 놓고,
+# x 30° · z 160° 기울인 채 세로축으로 틱마다 3° 돌린다(120틱에 한 바퀴). 계산은 전부 10비트 고정소수점.
+RADAR_CENTER = (320 << 10, 220 << 10)
+RADAR_R = 74.0
+RADAR_TILT = (30, 160)                            # 0x101039e0(30, 160, 3*(틱%120))
+
+
+def _ftol(v):
+    """x87 `fistp`(0x10128f94)는 0 쪽으로 자른다."""
+    return int(v)
+
+
+def radar_tables():
+    """0x10103bf0 앞부분 — sin/cos 표 360칸, 1024 배, +0.5 뒤 자름."""
+    import math
+    sin = [_ftol(math.sin(i * 0.01745328888888889) * 1024.0 + 0.5) for i in range(360)]
+    cos = [_ftol(math.cos(i * 0.01745328888888889) * 1024.0 + 0.5) for i in range(360)]
+    return sin, cos
+
+
+def radar_lattice():
+    """0x10103bf0 뒷부분 — 점 110개, 번호 = 경도칸*11 + 위도칸. (X, D, Y): X·Y 는 화면 자리, D 는 깊이."""
+    import math
+    pts = []
+    for col in range(10):
+        b = (2 * col) * 0.3141592
+        for row in range(11):
+            a = row * 0.3141592
+            y = _ftol(math.cos(a) * 75776.0) + RADAR_CENTER[1]          # 74·1024
+            r = math.sin(a) * RADAR_R
+            x = RADAR_CENTER[0] - _ftol(math.cos(b) * r * -1024.0)
+            d = _ftol(math.sin(b) * r * 1024.0)
+            pts.append((x, d, y))
+    return pts
+
+
+def radar_rotate(pts, a1, a2, a3, tables=None):
+    """0x101039e0 — 세 각(도)을 표로 찾아 고정소수점 회전. 원본 식 그대로(>> 는 버림 시프트)."""
+    sin, cos = tables or radar_tables()
+    s1, c1 = sin[a1 % 360], cos[a1 % 360]
+    s2, c2 = sin[a2 % 360], cos[a2 % 360]
+    s3, c3 = sin[a3 % 360], cos[a3 % 360]
+    out = []
+    for x, d, y in pts:
+        xr, yr = x - RADAR_CENTER[0], y - RADAR_CENTER[1]
+        ox = ((xr * ((c3 * c2) >> 10) - d * ((s3 * c2) >> 10) + yr * s2) >> 10) + RADAR_CENTER[0]
+        od = (xr * (((s1 * s2) * c3 >> 20) + ((c1 * s3) >> 10))
+              + d * (((c1 * c3) >> 10) - ((s1 * s2) * s3 >> 20))
+              - yr * ((s1 * c2) >> 10)) >> 10
+        oy = ((xr * (((s1 * s3) >> 10) - ((c1 * s2) * c3 >> 20))
+               + d * (((c1 * s2) * s3 >> 20) + ((s1 * c3) >> 10))
+               + yr * ((c1 * c2) >> 10)) >> 10) + RADAR_CENTER[1]
+        out.append((ox, od, oy))
+    return out
+
+
+def _radar_shade(d_sum):
+    """0x10103d10 — 두 끝 깊이의 평균을 반지름 74 에 대한 백분율로 바꿔 127 을 더한 값.
+    128 미만이면 뒷면이라 안 그린다. 초록 5비트 = 값 >> 3."""
+    v = (d_sum >> 11) * 100
+    v = int(v / 74) if v >= 0 else -int(-v / 74)
+    v = (v + 0x7f) & 0xff
+    return v if v & 0x80 else None
+
+
+def _px(v):
+    return v >> 10
+
+
+def draw_radar(canvas, places, hover=-1, tick=20):
+    """places = [(경도칸, 위도칸), …] (장소 +0x08 · +0x0a, 후보 순서 = +0x2eae). hover = 마우스가 올라간 칸 번호.
+
+    격자선은 앞면만, 깊이가 얕을수록 밝은 초록. 장소는 격자 한 칸을 채운 조각인데
+    다른 것은 노랑, 마우스가 올라간 것은 빨강이고 둘 다 200틱 주기로 밝기가 오르내린다."""
+    d = ImageDraw.Draw(canvas, 'RGBA')
+    pts = radar_rotate(radar_lattice(), RADAR_TILT[0], RADAR_TILT[1], 3 * (tick % 120))
+
+    def line(k1, k2):
+        v = _radar_shade(pts[k1][1] + pts[k2][1])
+        if v is None:
+            return
+        g = (v & 0xf8)
+        d.line([(_px(pts[k1][0]), _px(pts[k1][2])), (_px(pts[k2][0]), _px(pts[k2][2]))],
+               fill=(8, g, 8, 255))
+
+    for col in range(10):                          # 경선 (0x10103d28)
+        for row in range(10):
+            line(col * 11 + row, col * 11 + row + 1)
+    for row in range(10):                          # 위선 (0x10103e05) — 남극(11번째 줄)은 안 잇는다
+        for col in range(10):
+            line(col * 11 + row, ((col + 1) % 10) * 11 + row)
+
+    pulse = abs(100 - (3 * tick) % 200)
+    c = (0xff - pulse) & 0xf8
+    for i, (col, row) in enumerate(places):
+        if col < 0 or row < 0:
+            continue
+        corners = [col * 11 + row, col * 11 + (row + 1) % 10,
+                   ((col + 1) % 10) * 11 + row, ((col + 1) % 10) * 11 + (row + 1) % 10]
+        if sum(pts[k][1] for k in corners) < 0:
+            continue
+        quad = [corners[0], corners[1], corners[3], corners[2]]
+        colour = (c, 0, 0, 255) if i == hover else (c, c, 0, 255)
+        d.polygon([(_px(pts[k][0]), _px(pts[k][2])) for k in quad], fill=colour)
+
+
+# ── 전직(STYLE CHANGE) 페이지 (0x100f9650, [[분석-모세스]] 8절 · [[분석-체질]]) ──
+STYLE_BGR = 42
+STYLE_FORM_XY = [(36, 200), (73, 244), (146, 280), (220, 244), (257, 200)]   # Obs 283, TXR 878~882
+STYLE_STAGE3 = [((107, 70), 2, (38, 31), (38, 26), 0),       # id 91: Obs 329 m2/3, Obs 1334 @+(38,31), Obs 1426 m0 @+(38,26)
+                ((184, 70), 4, (30, 31), (30, 26), 1)]       # id 92: Obs 329 m4/5, Obs 1334 @+(30,31), Obs 1426 m1 @+(30,26)
+STYLE_ICON_MOTION = [0, 3, 1, 4, 2]                          # Obs 1334 모션 = 표[(직업−1)/3]
+
+
+def style_stage3(a, c, icons=(0, 0), hover=1, current_form=0):
+    """3단계 단추 둘이 보이는 전직 페이지. icons = 두 단추의 Obs 1334 모션(계열 아이콘)."""
+    for i, (x, y) in enumerate(STYLE_FORM_XY):
+        blit(a, c, 283, 0, x, y)
+        colour = (0, 255, 0) if i == current_form else (0xb4, 0xb4, 0xb4)
+        label(a, c, a.text(878 + i), x, y, 68, 28, halign=1, xoff=0, colour=colour)
+    for k, ((x, y), m, icon_at, mark_at, mark_m) in enumerate(STYLE_STAGE3):
+        blit(a, c, 329, m + (1 if k == hover else 0), x, y)
+        blit(a, c, 1334, icons[k], x + icon_at[0], y + icon_at[1])
+        blit(a, c, 1426, mark_m, x + mark_at[0], y + mark_at[1])
+    blit(a, c, 302, 4, 48, 330)                    # 파티원 단추 0 (초상화는 Chr 자료가 있어야 한다)
+    blit(a, c, 287, 0, 455, 430)                   # 나가기
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('assets', help='pak_extract.py 로 풀어 둔 폴더(Obs, Bgr, Chp, TXR)')
@@ -299,6 +430,16 @@ def main():
     desktop(a, c)
     blit(a, c, *BACK_BUTTON, tick=5)
     c.convert('RGB').save(os.path.join(args.out, 'moses-nav-place.png'))
+
+    # 5) 항행 단계 2 + 레이더 — 장소 조각은 후보 순서(+0x2eae)대로, 칸 0 에 마우스가 올라간 상태
+    coords = [(chp.places[i][4], chp.places[i][5]) for i in planet['slots'][0] if i >= 0][:8]
+    draw_radar(c, coords, hover=0, tick=20)
+    c.convert('RGB').save(os.path.join(args.out, 'moses-nav-radar.png'))
+
+    # 6) 전직 페이지 — 3단계 단추 둘
+    c = a.bgr(STYLE_BGR)
+    style_stage3(a, c, icons=(STYLE_ICON_MOTION[0], STYLE_ICON_MOTION[0]))
+    c.convert('RGB').save(os.path.join(args.out, 'moses-style3.png'))
 
     print('만듦:', args.out)
 
