@@ -36,6 +36,35 @@ internal sealed unsafe partial class BattleSceneWindow
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
     }
 
+    /// <summary>
+    /// 도구 > 적 정리(시험용) — 판에 선 적을 모두 쓰러뜨리고, 적마다의 처치 경험치를 <b>내가 움직이는 동료</b>(AI 가 움직이는 동맹 NPC 는 뺌)끼리
+    /// 똑같이 나눈다. 죽음은 조건대로 사건을 부르고(바루스가 죽어야 끝나는 전투 따위) 승패 판정도 그대로 돈다.
+    /// </summary>
+    private void ClearEnemiesForTest()
+    {
+        if (_db == null || !_battleLoaded || _mosesOpen || FieldOpen || _outcome.Length > 0) { Toast("전투 중에만 쓸 수 있습니다"); return; }
+        var receivers = _units.Where(u => u.Alive && u.OnField && IsMine(u) && u.Data != null).ToList();
+        var victims = _units.Where(u => u.Alive && u.OnField && !u.IsAlly).ToList();
+        if (victims.Count == 0) { Toast("쓰러뜨릴 적이 없습니다"); return; }
+        var gained = new Dictionary<UnitState, int>();
+        foreach (var v in victims)
+        {
+            if (v.Data is { } vd)
+                foreach (var r in receivers)
+                {
+                    int exp = Math.Max(1, _db.ExpForKill(r.Data!, vd.Level) / receivers.Count);
+                    r.Data = r.Data! with { Exp = r.Data!.Exp + exp, CumExp = r.Data!.CumExp + exp };
+                    gained[r] = gained.GetValueOrDefault(r) + exp;
+                }
+            v.Alive = false;
+        }
+        foreach (var (r, exp) in gained) Popup(r, $"EXP +{exp}", 0xFF90D0FF, 15);
+        Play(SoundDeath);
+        QueueLevelUps();
+        Toast($"적 {victims.Count}명 정리 — 경험치를 {receivers.Count}명이 나눴습니다");
+        CheckOutcome();
+    }
+
     /// <summary>행동이 끝난 뒤 — 레벨이 오른 아군을 줄 세운다(원본 상태 21).</summary>
     private void QueueLevelUps()
     {
