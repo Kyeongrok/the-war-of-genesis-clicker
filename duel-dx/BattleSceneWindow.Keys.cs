@@ -125,7 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGrid, "격자 켜기·끄기(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGauges, "체력바 켜기·끄기(&H)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
-        // 해상도(배율) — 화면이 작다는 요청으로 넣었다. 창 크기 = 640×(480+머리줄) × 배율.
+        // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
         for (int i = 0; i < ResChoices.Length; i++)
         {
@@ -174,7 +174,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuResBase + i), Win32.MF_BYCOMMAND | (i == id - MenuResBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 ApplyZoom(force: true);      // 보이는 영역이 바뀌면 텍스처·창을 새로 잡는다
-                Toast($"해상도: {_viewW}×{_viewH} (맵이 그보다 작으면 맵 크기까지)");
+                Toast($"해상도: {_viewW}×{_viewH}");
                 break;
             }
             case >= MenuZoomAuto and < MenuZoomAuto + 6:
@@ -184,7 +184,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuZoomAuto + i), Win32.MF_BYCOMMAND | (i == id - MenuZoomAuto ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 ApplyZoom();
-                Toast(_zoomPercent == 0 ? "해상도: 자동" : $"해상도: {_zoomPercent}% (모니터에 안 들어가면 들어가는 데까지)");
+                Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");
                 break;
             }
             case MenuExit: _running = false; break;
