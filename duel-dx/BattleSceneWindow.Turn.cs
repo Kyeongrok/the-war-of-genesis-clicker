@@ -528,12 +528,26 @@ internal sealed unsafe partial class BattleSceneWindow
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
-        // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10).
+        // 이스케이프는 겨눈 빈 칸으로 순간이동한다(분석-모션 ba-10) — 마리아·유블레인이 쓰는,
+        // 사라졌다 나타나는 그 기술이다. 그냥 자리만 덮어쓰면 뚝 끊겨 보이니 짧게 사라졌다 나타나게 한다.
         if (w.Id == EscapeWork && LiveUnitAt(col, row) == null)
         {
+            const double fadeSeconds = 0.15;
+            for (double start = _lastTime, end = start + fadeSeconds; _lastTime < end;)
+            {
+                a.Fade = Math.Max(0, 1 - (_lastTime - start) / fadeSeconds);
+                yield return true;
+            }
+            a.Fade = 0;
             a.WarpTo(col, row);
             a.OriginCol = col;
             a.OriginRow = row;
+            for (double start = _lastTime, end = start + fadeSeconds; _lastTime < end;)
+            {
+                a.Fade = Math.Min(1, (_lastTime - start) / fadeSeconds);
+                yield return true;
+            }
+            a.Fade = 1;
         }
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
