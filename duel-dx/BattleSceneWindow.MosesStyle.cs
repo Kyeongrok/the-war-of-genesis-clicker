@@ -52,7 +52,20 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly (int X, int Y, int W, int H)[] StyleFamilyCells =
         [(70, 107, 79, 71), (107, 70, 71, 78), (184, 70, 70, 78), (213, 107, 78, 71)];
 
+    /// <summary>전직 화면에서 고른 인물의 <b>Chr 번호</b> — 전투 판의 자리 번호가 아니다. 파티원은 전투에 안 서 있어도 여기 나온다.</summary>
     private int _styleUnit;
+
+    /// <summary>고른 인물의 자료 — 전투 판에 서 있으면 그 유닛의 것(살아 있는 값), 아니면 파티가 들고 있는 것.</summary>
+    private CharacterData? StyleData() => _units.FirstOrDefault(u => u.ChrCode == _styleUnit)?.Data ?? _party.GetValueOrDefault(_styleUnit);
+
+    /// <summary>고른 인물의 자료를 바꾼다 — 파티와 (있으면) 전투 판의 유닛 둘 다.</summary>
+    private void SetStyleData(CharacterData c)
+    {
+        _party[_styleUnit] = c;
+        foreach (var u in _units) if (u.ChrCode == _styleUnit) u.Data = c;
+    }
+
+    private CharacterData? PartyData(int chr) => _units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr);
 
     /// <summary>미리보기 중인 형 칸(원본 <c>+0x2de0</c>) — 같은 칸을 다시 눌러야 확인창이 뜬다.</summary>
     private int _stylePick = -1;
@@ -64,9 +77,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private List<int> StyleParty()
     {
-        var all = Enumerable.Range(0, _units.Length).Where(i => _units[i].IsAlly);
-        if (_members.Count > 0) all = all.Where(i => _members.Contains(_units[i].ChrCode));
-        return [.. all];
+        // 원본 파티 객체의 인원(801 로 들어온 동료) 차례 — 레이토스 길드처럼 주인공이 안 서는 전투 뒤에도 파티가 그대로 보여야 한다(사용자 지적).
+        if (_members.Count > 0) return [.. _members.Where(c => _party.ContainsKey(c) || _units.Any(u => u.ChrCode == c))];
+        // 동료 목록이 없는 옛 세이브 — 내 편 유닛의 Chr.
+        return [.. _units.Where(u => u.IsAlly).Select(u => u.ChrCode).Distinct()];
     }
 
     /// <summary>스크립트 801 로 들어온 동료의 Chr 번호(802 로 빠진다) — 원본 파티 객체의 인원 목록. 세이브에 실린다.</summary>
@@ -93,7 +107,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (x >= 455 && x < 633 && y >= 430 && y < 457) { MosesGoBack(); return true; }        // 나가기
         // STATUS — 고른 인물의 스테이터스 창(장비·장착 어빌리티·어빌리티 올리기)을 모세스 위에 연다.
-        if (x >= 455 && x < 523 && y >= 390 && y < 417) { _statusUnit = _styleUnit; Play(MosesClickSound); return true; }
+        if (x >= 455 && x < 523 && y >= 390 && y < 417)
+        {
+            int index = Array.FindIndex(_units, u => u.ChrCode == _styleUnit);
+            if (index >= 0) _statusUnit = index; else Toast("이 전투에 안 선 인물의 스테이터스는 전투 안에서 보세요");
+            Play(MosesClickSound);
+            return true;
+        }
 
         var party = StyleParty();
         for (int i = 0; i < party.Count && i < 5; i++)
@@ -137,7 +157,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (cx, cy) = StyleBodyCells[i];
             if (x < cx || x >= cx + 68 || y < cy || y >= cy + 28) continue;
             // 만들어지지 않은 단추와 지금 직업 칸은 아무 일도 안 한다.
-            if (i >= jobs.Count || _units[_styleUnit].Data is not { } c || c.JobId == jobs[i]) return true;
+            if (i >= jobs.Count || StyleData() is not { } c || c.JobId == jobs[i]) return true;
             // 첫 클릭은 미리보기만, 같은 칸을 다시 눌러야 확인창이 뜬다(0x10100afa).
             if (_stylePick != i) { _stylePick = i; Play(MosesClickSound); return true; }
             ushort pick = jobs[i];
@@ -158,7 +178,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private List<ushort> StyleJobs()
     {
-        if (_db is not { } db || _units[_styleUnit].Data is not { } c) return [];
+        if (_db is not { } db || StyleData() is not { } c) return [];
         if (db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) is not { } dep) return [];
         if ((dep.Id - 1) % 3 + 1 == 3) return [];          // 3단계는 더 갈 곳이 없다(0x100fa43a)
         int count = 0;
@@ -169,7 +189,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>고른 인물의 계열 레코드 — 직업 번호를 품은 <c>Dep</c>.</summary>
     private DepData? StyleDep() =>
-        _db is { } db && _units[_styleUnit].Data is { } c ? db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) : null;
+        _db is { } db && StyleData() is { } c ? db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) : null;
 
     /// <summary>계열 안 단계 — 1·2·3. <c>Dep</c> 번호 셋이 한 계열이다.</summary>
     private static int StyleTier(DepData dep) => (dep.Id - 1) % 3 + 1;
@@ -183,7 +203,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private List<(int Family, ushort Job)> StyleFamilies()
     {
-        if (_db is not { } db || _units[_styleUnit].Data is not { } c) return [];
+        if (_db is not { } db || StyleData() is not { } c) return [];
         if (StyleDep() is not { } dep || StyleTier(dep) != 1 || c.Level < 30) return [];
         int mine = (dep.Id - 1) / 3;
         var list = new List<(int, ushort)>();
@@ -203,7 +223,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private List<(int Slot, ushort Job)> StyleTierJobs()
     {
-        if (_db is not { } db || _units[_styleUnit].Data is not { } c) return [];
+        if (_db is not { } db || StyleData() is not { } c) return [];
         if (StyleDep() is not { } dep || StyleTier(dep) != 2 || c.Level < 60) return [];
         int family = (dep.Id - 1) / 3;
         if (db.Deps.FirstOrDefault(d => d.Id == 3 * family + 3) is not { } third) return [];
@@ -221,13 +241,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private ushort StylePreviewJob()
     {
         var jobs = StyleJobs();
-        return _units[_styleUnit].Data is { } c && _stylePick >= 0 && _stylePick < jobs.Count ? jobs[_stylePick] : _units[_styleUnit].Data?.JobId ?? 0;
+        return StyleData() is { } c && _stylePick >= 0 && _stylePick < jobs.Count ? jobs[_stylePick] : StyleData()?.JobId ?? 0;
     }
 
     /// <summary>지금 직업이 앉아 있는 칸 번호 — 없으면 −1.</summary>
     private int StyleCurrentCell()
     {
-        if (_units[_styleUnit].Data is not { } c) return -1;
+        if (StyleData() is not { } c) return -1;
         var jobs = StyleJobs();
         return jobs.FindIndex(j => j == c.JobId);
     }
@@ -235,9 +255,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로).</summary>
     private void ChangeJob(ushort jobId)
     {
-        var unit = _units[_styleUnit];
-        if (unit.Data is not { } c) return;
-        unit.Data = c with { JobId = jobId, Exp = 0 };
+        if (StyleData() is not { } c) return;
+        SetStyleData(c with { JobId = jobId, Exp = 0 });
         _stylePick = StyleCurrentCell();
         Play(SoundStyleDone);
         _notice = (_db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", _lastTime + 60 / TicksPerSecond);
@@ -252,11 +271,14 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             // 초상화는 단추보다 커서 칸(60×60)에 맞춰 줄여 그린다 — 원본은 같은 크기라 그대로 얹는다.
             // 초상화는 단추(64×130, 왼위 기준) 안 +(32,50) 을 가운데로 — 60×60 이니 왼위는 +(2,20). 전에는 30픽셀 왼쪽에 찍혀 틀과 어긋났다.
-            if (_units[party[i]].Data is { } pc && _faces.TryGetValue(pc.Code, out var face))
-                BlitScaled(face, cx + 2, cy + 20, 60, 60);
+            if (PartyData(party[i]) is { } pc)
+            {
+                LoadFieldFace(pc);      // 전투에 안 선 동료는 얼굴을 아직 안 읽었을 수 있다
+                if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+            }
         }
 
-        if (_units[_styleUnit].Data is not { } c || _db is not { } db) return;
+        if (StyleData() is not { } c || _db is not { } db) return;
 
         // 능력치 패널(0x10034030: 이름 · 직업 · 체질 · LEVEL(TXR 160) · EXP(161) · LP(34) · TP(38)) — 원본 자리 (100,100) 140×164 는
         // 형 단추 다섯과 겹쳐 글이 안 읽히므로, 데모는 오른쪽 어빌리티 목록 아래 빈 칸(395,232)에 둔다.

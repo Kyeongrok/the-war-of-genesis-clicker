@@ -18,7 +18,12 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
     /// 시간줄 자식 키(종류 2) — 시작 틱에 다른 Obs 의 모션을 같은 자리에 붙인다(제이슨의 무기 층 Obs 0426 이 이것).
     /// 그 모션의 소리도 난다.
     /// </summary>
-    public IReadOnlyList<(int Start, int Obs, int Motion)> Children { get; init; } = [];
+    /// <summary>
+    /// 자식 Obs 키(종류 2) — 그 틱부터 다른 Obs 의 모션을 주인 자리에 겹친다(분석-모션 ba-8, <c>0x100e5410</c> case 2).
+    /// 인자 10칸 중 앞 6칸: Obs · 모션 · <b>x 치우침</b> · <b>y 치우침</b> · z · 좌우 반전 함께 하기 깃발.
+    /// 크리스티앙(323)의 사격은 두 총의 불꽃(Obs 322)을 다른 치우침으로 두 번 붙인다 — 치우침을 빼먹으면 불꽃이 총구에서 떨어진다.
+    /// </summary>
+    public IReadOnlyList<ChildKey> Children { get; init; } = [];
 
     /// <summary>
     /// 타격 키(종류 6) — 그 틱에 판정이 난다. 인자는 <b>어빌리티 번호</b>(25 접근공격·26 원거리 …)이고,
@@ -109,6 +114,9 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
 /// 모션 번호 = 동작 × 3 + 방향(0 뒷모습, 1 옆모습(왼쪽), 2 앞모습; 오른쪽은 옆모습을 뒤집음). 동작 0 = 서기, 1 = 걷기.
 /// 없는 모션이면 서기로 떨어진다(<c>SetAction 0x10072820</c>).
 /// </remarks>
+/// <summary>자식 Obs 키 하나 — Start 틱부터 Obs 의 Motion 을 주인 자리 + (X, Y) 에 겹친다. Flag 가 0 이면 주인이 반대쪽 옆을 볼 때 X 를 뒤집고 자식도 뒤집는다.</summary>
+public sealed record ChildKey(int Start, int Obs, int Motion, int X, int Y, int Z, int Flag);
+
 public sealed class ObsMotionTable
 {
     public const int ActionStand = 0, ActionWalk = 1;
@@ -142,7 +150,7 @@ public sealed class ObsMotionTable
 
                 var keys = new List<MotionKey>();
                 var sounds = new List<(int, int)>();
-                var children = new List<(int, int, int)>();
+                var children = new List<ChildKey>();
                 var blends = new List<(int, int)>();
                 var tints = new List<(int, int, int)>();
                 var offsets = new List<(int, int, int)>();
@@ -155,7 +163,7 @@ public sealed class ObsMotionTable
                     {
                         switch (U16(b, p))
                         {
-                            case 2: children.Add((0, S16(b, p + 6), S16(b, p + 8))); break;
+                            case 2: children.Add(new ChildKey(0, S16(b, p + 6), S16(b, p + 8), S16(b, p + 10), S16(b, p + 12), S16(b, p + 14), S16(b, p + 16))); break;
                             case 3: blends.Add((0, S16(b, p + 6))); break;
                             case 4: tints.Add((0, S16(b, p + 6), S16(b, p + 8))); break;
                         }
@@ -165,7 +173,7 @@ public sealed class ObsMotionTable
                     {
                         case 0: keys.Add(new MotionKey(U16(b, p + 2), U16(b, p + 4), S16(b, p + 6), S16(b, p + 8))); break;
                         case 1: sounds.Add((U16(b, p + 2), S16(b, p + 6))); break;
-                        case 2: children.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
+                        case 2: children.Add(new ChildKey(U16(b, p + 2), S16(b, p + 6), S16(b, p + 8), S16(b, p + 10), S16(b, p + 12), S16(b, p + 14), S16(b, p + 16))); break;
                         case 3: blends.Add((U16(b, p + 2), S16(b, p + 6))); break;
                         case 4: tints.Add((U16(b, p + 2), S16(b, p + 6), S16(b, p + 8))); break;
                         case 6: hits.Add((U16(b, p + 2), S16(b, p + 6))); break;
