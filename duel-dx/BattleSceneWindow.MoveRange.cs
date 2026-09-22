@@ -231,10 +231,10 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (Math.Abs(col - _rangeCol) + Math.Abs(row - _rangeRow) > radius) continue;
                 int i = row * Cols + col;
-                // 원본은 <b>상태마다 칠하는 층이 다르다</b> — 그냥 걸을 때(상태 12)는 파랑만이고,
-                // 대상을 고를 때(상태 10·11)라야 사거리 빨강이 함께 깔린다.
-                bool aiming = _targetWork >= 0 || _attackCursor >= 0;
-                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : aiming && range.Red[i] ? RangeTint : 0;
+                // 대상을 딱히 고르는 중이 아니어도 사거리 빨강은 늘 파랑과 함께 뜬다 — 사용자가 원본에서
+                // 직접 본 그대로다("aiming일 때만 빨강"으로 좁혔던 이전 판단은 상태 번호를 오독한 것으로 보인다:
+                // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
+                uint tint = range.Cost[i] != int.MaxValue ? MoveTint : range.Red[i] ? RangeTint : 0;
                 if (tint == 0) continue;
                 int x = col * TileW, y = GridTop + row * TileH;
                 AddRect(x, y, TileW, TileH, tint);
