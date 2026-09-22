@@ -92,6 +92,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private void OpenMosesIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_MOSES") != "1") return;
+        // DUELDX_FLAGS=5=1,7=2 면 진행 깃발을 미리 세운다(화면 밖 시험용 — 깃발로 잠긴 챕터 사건·장소를 본다).
+        foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < _flags.Length)
+                _flags[flag] = (byte)val;
         // DUELDX_CHAPTER=<Chp 번호> 면 그 챕터로 연다(화면 밖 시험용) — 없으면 첫 전투의 챕터.
         OpenMoses(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int chapterId) ? LoadChapterFile(chapterId) : null);
         // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
@@ -134,7 +138,12 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         LoadMosesChapter();
-        if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다
+        _fieldEvent = -1;                                    // 필드에서 돌던 실행기 자리를 비운다 — 챕터 스크립트가 처음부터 고른다
+        _fieldPc = 0;
+        _fieldReturn.Clear();
+        _fieldWaitUntil = 0;
+        _fieldChoices = null;
+        if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다(대사 든 사건은 실행기가)
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         _mixer.StopMusic();
@@ -434,6 +443,11 @@ internal sealed unsafe partial class BattleSceneWindow
         else DrawMosesPage(ox, oy, tick);
 
         DrawMosesTooltip();
+        // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
+        _uiClip = (ox, oy, MosesW, MosesH);
+        DrawTalk();
+        DrawFieldChoices();
+        _uiClip = null;
         DrawSystem();
         DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
         DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다

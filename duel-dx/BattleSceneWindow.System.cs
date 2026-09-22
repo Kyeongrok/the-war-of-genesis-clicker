@@ -367,7 +367,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     bool InMoses = false, int Chapter = 0,
                                     bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
                                     SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null,
-                                    int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null);
+                                    int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
+                                    Dictionary<string, int>? ChapterVars = null);
 
     private const int SaveVersion = 8;
 
@@ -440,7 +441,8 @@ internal sealed unsafe partial class BattleSceneWindow
                           .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
                                                     p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
                 [.. _ownedLegions], SaveBank(),
-                [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")]);
+                [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
+                Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]));
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -582,6 +584,9 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (int id in state.Mailbox ?? []) _mailbox.Add(id);
         _mailRead.Clear();
         foreach (int id in state.MailRead ?? []) _mailRead.Add(id);
+        Array.Clear(_chapterVars);
+        foreach (var (number, value) in state.ChapterVars ?? [])
+            if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
         _planetVisits.Clear();
         foreach (string pair in state.PlanetVisits ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) _planetVisits.Add((pc, pn));
