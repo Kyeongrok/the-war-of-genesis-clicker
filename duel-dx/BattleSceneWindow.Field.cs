@@ -249,33 +249,40 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private void UpdateField()
     {
-        if (_field is not { } field) return;
-        StepFieldActors();
+        // 필드가 없으면 모세스에 떠 있는 챕터의 스크립트 — 원본 챕터 장면도 같은 실행기로 대사·고르기·동료 넣기를 돈다.
+        var chapter = _field == null && _mosesOpen ? _mosesChp : null;
+        var events = _field?.Events ?? chapter?.Events;
+        if (events == null) return;
+        if (_field != null) StepFieldActors();
         if (_fieldChoices != null) _talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
-        if (_talkSkip) { _fieldWaitUntil = 0; FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
+        if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > _lastTime) return;
 
         if (_fieldEvent < 0)
         {
-            foreach (var wanted in field.Events.Count > 0 ? field.Events[0].Actions : [])
+            if (chapter != null && _chapterFired.ContainsKey((chapter.Id, -1))) return;   // 옛 세이브 표시 — 다 돌았다
+            foreach (var wanted in events.Count > 0 ? events[0].Actions : [])
             {
                 int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
-                if ((uint)index >= field.Events.Count || index == 0) continue;
-                var e = field.Events[index];
-                if (e.MaxFire > 0 && _fieldFired[index] >= e.MaxFire) continue;
+                if ((uint)index >= events.Count || index == 0) continue;
+                var e = events[index];
+                int fired = chapter != null ? _chapterFired.GetValueOrDefault((chapter.Id, index)) : _fieldFired[index];
+                if (e.MaxFire > 0 && fired >= e.MaxFire) continue;
                 if (!e.Conditions.All(FieldCondition)) continue;
-                _fieldFired[index]++;
+                if (chapter != null) _chapterFired[(chapter.Id, index)] = fired + 1; else _fieldFired[index]++;
                 _fieldEvent = index;
                 _fieldPc = 0;
+                _talkSkip = false;
                 break;
             }
-            if (_fieldEvent < 0) { LeaveField(); return; }           // 더 돌 이벤트가 없으면 나간다
+            if (_fieldEvent < 0) { if (_field != null) LeaveField(); return; }   // 필드는 더 돌 이벤트가 없으면 나간다
         }
 
         while (_fieldEvent >= 0 && _talk == null && _fieldWaitUntil <= _lastTime)
         {
-            var running = field.Events[_fieldEvent];
+            if (_fieldEvent >= events.Count) { _fieldEvent = -1; break; }
+            var running = events[_fieldEvent];
             if (_fieldPc >= running.Actions.Count)
             {
                 // 부른 데가 있으면 그 자리로 돌아가고, 없으면 이 사건이 끝난 것이다.
@@ -302,7 +309,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return c.Code switch
         {
             0 => true,                                                          // 언제나
-            100 => Compare(_fieldVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수
+            100 => Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
             101 => Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2)),
             102 => _inventory.ContainsKey(A(1)) || _party.Values.Any(pc => pc.Items.Contains((ushort)A(1))),   // [파티, 아이템] 가졌나(0x100edb40)
             503 => MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
@@ -365,12 +372,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 다른 이벤트 부르기 — 목록(이벤트 0) <b>밖에 있는 사건</b>들이 이렇게만 불린다.
                 // 부르는 자리를 쌓아 두고 갈아탔다가, 그 사건이 끝나면 돌아온다. 조건·최대 발동은 부를 때 본다.
                 int index = A(0);
-                if ((uint)index >= (_field?.Events.Count ?? 0) || index == 0) break;
-                var target = _field!.Events[index];
-                if (target.MaxFire > 0 && _fieldFired[index] >= target.MaxFire) break;
+                var chapter0 = _field == null && _mosesOpen ? _mosesChp : null;
+                var events0 = _field?.Events ?? chapter0?.Events;
+                if (events0 == null || (uint)index >= events0.Count || index == 0) break;
+                var target = events0[index];
+                int fired0 = chapter0 != null ? _chapterFired.GetValueOrDefault((chapter0.Id, index)) : _fieldFired[index];
+                if (target.MaxFire > 0 && fired0 >= target.MaxFire) break;
                 if (!target.Conditions.All(FieldCondition)) break;
                 if (_fieldReturn.Count >= 16) break;          // 서로 부르며 도는 자료를 막는다
-                _fieldFired[index]++;
+                if (chapter0 != null) _chapterFired[(chapter0.Id, index)] = fired0 + 1; else _fieldFired[index]++;
                 _fieldReturn.Push((_fieldEvent, _fieldPc));
                 _fieldEvent = index;
                 _fieldPc = 0;
@@ -406,9 +416,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (!StartBattle(A(0))) OpenMoses();
                 return false;
             case 12: CloseField(); OpenTitle(); return false;
+            default: RunChapterAction(a); break;              // 70x·80x(동료·돈·아이템·군단…)는 챕터와 같은 처리
 
-            case 100: _fieldVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
-            case 101: _fieldVars[A(0) & 0xFF] = FieldArith(_fieldVars[A(0) & 0xFF], A(1), A(2)); break;
+            case 100: ScriptVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
+            case 101: ScriptVars[A(0) & 0xFF] = FieldArith(ScriptVars[A(0) & 0xFF], A(1), A(2)); break;
             case 102:
                 if (A(0) > 0 && A(0) < _flags.Length) _flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
@@ -421,6 +432,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 600:
             case 601:
             case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
+            case 603: ShowFieldTalk(true, 0, A(0)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설)
             case 300:                                        // 물체를 그 자리로 즉시
             {
                 if (FieldPropOf(A(0)) is not { } prop) break;
@@ -641,6 +653,8 @@ internal sealed unsafe partial class BattleSceneWindow
             var e = chapter.Events[index];
             if (e.MaxFire > 0 && _chapterFired.GetValueOrDefault((chapter.Id, index)) >= e.MaxFire) continue;
             if (!e.Conditions.All(FieldCondition)) continue;
+            // 대사·고르기·기다림이 든 사건은 여기서 안 돌고 실행기(UpdateField)가 모세스 위에서 돈다.
+            if (e.Actions.Any(a => a.Code is 0 or 1 or 2 or 600 or 601 or 602 or 603 or 604 or 605 or 609)) continue;
             _chapterFired[(chapter.Id, index)] = _chapterFired.GetValueOrDefault((chapter.Id, index)) + 1;
             foreach (var a in e.Actions) RunChapterAction(a);
         }
@@ -835,7 +849,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => value != 0 ? now / value : now,
     }, 0, 255);
 
-    private string FieldText(int id) => _fieldTalk?[id] ?? "";
+    private string FieldText(int id) => (_field != null ? _fieldTalk : TalkTableFor())?[id] ?? "";
+
+    /// <summary>스크립트 변수 — 필드가 떠 있으면 그 필드의 것(필드마다 비운다), 아니면 챕터 것(원본 챕터 상태 <c>+0x88</c>, 세이브에 실린다).</summary>
+    private byte[] ScriptVars => _field != null ? _fieldVars : _chapterVars;
+
+    /// <summary>챕터 스크립트의 변수 256칸 — 고르기(604)의 답이 여기 들어가고 뒤 사건(조건 100)이 읽는다.</summary>
+    private readonly byte[] _chapterVars = new byte[256];
 
     /// <summary>필드에 나오는 인물의 초상화 — 전투 인물과 달리 뽑아 둔 폴더가 없어 <c>.chr</c> 의 얼굴 Obs 를 바로 읽는다.</summary>
     private void LoadFieldFace(CharacterData c)
@@ -864,6 +884,13 @@ internal sealed unsafe partial class BattleSceneWindow
             name = _db.T(c.NameId);
             LoadFieldFace(c);
             _talkFace = c.Code;
+        }
+        else if (_field == null && speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)
+        {
+            // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
+            name = _db.T(cc.NameId);
+            LoadFieldFace(cc);
+            _talkFace = cc.Code;
         }
         else _talkFace = 0;
         _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
@@ -896,7 +923,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (x, y, w, h) = FieldChoiceRect(choices.Count);
         int row = (by - y - 12) / 22;
         if (bx < x || bx >= x + w || row < 0 || row >= choices.Count) return true;
-        _fieldVars[_fieldChoiceVar] = (byte)(row + 1);      // 고른 차례는 1부터
+        ScriptVars[_fieldChoiceVar] = (byte)(row + 1);      // 고른 차례는 1부터
         _fieldChoices = null;
         Play(MosesClickSound);
         return true;
@@ -919,6 +946,17 @@ internal sealed unsafe partial class BattleSceneWindow
         return (fx + (MosesW - w) / 2, fy + 360 - h, w, h);
     }
 
+    /// <summary>고르기 창 — 대사 상자 위. 필드와 모세스(챕터 스크립트) 둘 다 쓴다.</summary>
+    private void DrawFieldChoices()
+    {
+        if (_fieldChoices is not { Count: > 0 } choices) return;
+        var (x, y, w, h) = FieldChoiceRect(choices.Count);
+        DarkenRect(x - 1, y - FrameTitleH - 1, w + 2, h + FrameTitleH + 2, 8);
+        DrawGameFrame(x, y, w, h, "");
+        for (int i = 0; i < choices.Count; i++)
+            DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
+    }
+
     private void DrawField()
     {
         if (_field is null) return;
@@ -939,15 +977,7 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawFieldLayers(ox, oy, int.MinValue, cover);
 
         DrawTalk();
-
-        if (_fieldChoices is { Count: > 0 } choices)
-        {
-            var (x, y, w, h) = FieldChoiceRect(choices.Count);
-            DarkenRect(x - 1, y - FrameTitleH - 1, w + 2, h + FrameTitleH + 2, 8);
-            DrawGameFrame(x, y, w, h, "");
-            for (int i = 0; i < choices.Count; i++)
-                DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
-        }
+        DrawFieldChoices();
         _uiClip = null;
         DrawFieldWipe(ox, oy);
         DrawFieldFade(ox, oy);

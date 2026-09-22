@@ -824,6 +824,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
         {
             UpdateSounds();
+            // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
+            if (_mosesOpen && !_chapterDone) { UpdateTalk(); UpdateField(); }
             return;
         }
 
