@@ -62,6 +62,21 @@ internal sealed unsafe partial class BattleSceneWindow
                 : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족" : "";
             rows.Add(($"{_db.T(ab.NameId)} Lv{level}", w, reason.Length == 0, reason));
         }
+        // 군단기 — 배속된 군단(CChr+0x1c)의 기술 다섯 칸 가운데 필요 세력을 채우고 대장 조건(0 이거나 나)이 맞는 것(0x10032760 뒷부분, 분석-군단 4.4).
+        // 부하가 <b>다 살아 있을 때만</b> 줄이 켜진다(0x100d58c2: 부하 수 == 군단 부하 칸 수). 레벨은 늘 1.
+        if (_unitLegion.TryGetValue(u.ChrCode, out int legionId) && Legions().TryGetValue(legionId, out var legion))
+        {
+            int alive = FollowersOf(_turn).Count, slots = legion.Members.Count(m => m != 0);
+            foreach (var (abilityId, power, leader) in legion.Skills)
+            {
+                if (abilityId == 0 || power > 1000 || (leader != 0 && leader != u.ChrCode)) continue;
+                if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.WorkByLevel.TryGetValue(1, out int wid) || Work(wid) is not { } w) continue;
+                string reason = alive < slots ? "부하가 모자람"
+                    : u.Tp + u.Ctp < TpCostFor(u, c, wid) ? "TP 부족"
+                    : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족" : "";
+                rows.Add(($"{_db.T(ab.NameId)}", w, reason.Length == 0, reason));
+            }
+        }
         return rows;
     }
 
