@@ -172,7 +172,7 @@ internal sealed unsafe partial class BattleSceneWindow
         OpenPopup("장착 어빌리티", rows);
     }
 
-    /// <summary>st-3: 배운 어빌리티를 누르면 레벨 올리기, 배울 수 있는 어빌리티를 누르면 배우기 — 확인 창을 거친다.</summary>
+    /// <summary>st-3: 배운 어빌리티를 누르면 <b>바로</b> 레벨을 올리고, 배울 수 있는 어빌리티를 누르면 배운다 — 묻지 않는다.</summary>
     private void ConfirmAbility(UnitState u, AbilityData ab, bool learn)
     {
         var c = u.Data!;
@@ -180,13 +180,34 @@ internal sealed unsafe partial class BattleSceneWindow
         int cost = _db!.AbilityExpCost(ab, learn ? 1 : level);
         if (!learn && cost == 0) { Toast("최대 레벨입니다"); return; }
         if (cost > c.Exp) { Toast($"EXP 가 모자랍니다 (필요 {cost}, 있음 {c.Exp})"); return; }
-
-        string what = learn ? $"{_db.T(ab.NameId)} 배우기" : $"{_db.T(ab.NameId)} Lv{level} → Lv{level + 1}";
-        OpenPopup(what, [
-            ($"예 — EXP {cost} 사용", "", true, () => ApplyAbility(u, ab, learn, cost)),
-            ("아니오", "", true, () => { }),
-        ]);
+        ApplyAbility(u, ab, learn, cost);
     }
+
+    /// <summary>우클릭 — 어빌리티 레벨을 하나 내리고 그 레벨에 썼던 EXP 를 돌려준다. Lv1 아래로는 안 내린다.</summary>
+    private void LowerAbility(UnitState u, AbilityData ab)
+    {
+        var c = u.Data!;
+        int level = c.AbilityLevel(ab.Id);
+        if (level <= 1) { Toast("Lv1 아래로는 내릴 수 없습니다"); return; }
+        int refund = _db!.AbilityExpCost(ab, level - 1);       // Lv(level−1) → Lv(level) 에 썼던 값
+        var list = c.Abilities.ToList();
+        int i = list.FindIndex(a => a.Ability == ab.Id);
+        list[i] = ((ushort)ab.Id, (ushort)(level - 1));
+        u.Data = c with { Abilities = [.. list], Exp = c.Exp + refund };
+        RefreshUnitStats(u);
+        Toast($"{_db.T(ab.NameId)} Lv{level - 1} — EXP {refund} 돌려받음");
+    }
+
+    /// <summary>스테이터스 창 안 우클릭 — 어빌리티 줄이면 레벨을 내린다. 처리했으면 true.</summary>
+    private bool OnStatusRightClick(int bx, int by)
+    {
+        if (_statusUnit < 0 || _popup != null) return false;
+        foreach (var (x, y, w, h, click) in _statusRightHits)
+            if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); return true; }
+        return false;
+    }
+
+    private readonly List<(int X, int Y, int W, int H, Action Click)> _statusRightHits = [];
 
     private void ApplyAbility(UnitState u, AbilityData ab, bool learn, int cost)
     {
@@ -218,6 +239,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawStatusScreen()
     {
         _statusHits.Clear();
+        _statusRightHits.Clear();
         if (_statusUnit < 0) return;
         var (ox, oy) = StatusOrigin();
         // 창은 게임 안 모든 창과 같은 원본 틀로(분석-시스템메뉴 「메시지 창 틀」) — 글이 읽히게 밑을 먼저 어둡게 깐다.
@@ -236,7 +258,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         bool editable = unit.IsAlly && _outcome.Length == 0;
-        if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다", ox + 16, oy + 12, DimGray);
+        if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다 — 어빌리티는 클릭 올리기·우클릭 내리기", ox + 16, oy + 12, DimGray);
 
         // 1열 — 능력치
         int x = ox + 16, w = 184;
@@ -319,6 +341,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int cost = db.AbilityExpCost(ab, level);
             AbilityRow(x, ry, w, AbilityLabel(ab, level), cost > 0 ? cost.ToString() : "", cost <= c.Exp);
             if (editable && cost > 0) AddHit(x + 4, ry - 2, w - 8, 22, () => ConfirmAbility(unit, ab, learn: false));
+            if (editable) _statusRightHits.Add((x + 4, ry - 2, w - 8, 22, () => LowerAbility(unit, ab)));
         }
 
         Header(x, oy + 228, w, db.T(13));

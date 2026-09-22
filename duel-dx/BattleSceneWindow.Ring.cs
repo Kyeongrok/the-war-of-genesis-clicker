@@ -183,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
         if (OnTalkInput(skipAll: true)) return;
-        if (_statusUnit >= 0) { _statusUnit = -1; return; }
+        if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 어빌리티 줄 우클릭 = 레벨 내리기
         if (_ringUnit >= 0) { CancelRing(); return; }
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
         if (CancelStep(undoMove: false)) return;
