@@ -115,7 +115,30 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _talkSkip = true;
         CloseTalk();
-        Toast("대사를 건너뜁니다");
+        Toast("장면을 건너뜁니다");
+    }
+
+    /// <summary>
+    /// 돌고 있는 이벤트 장면(전투 이벤트·필드 스크립트)을 <b>통째로</b> 건너뛴다 — Esc.
+    /// 대사는 안 띄우고, 기다림은 없는 셈 치고, 걷기·밝기·카메라·전환은 끝난 자리로 보낸다.
+    /// 고르기(604)는 사람이 골라야 하니 거기서 멈춘다. 건너뛸 장면이 없으면 false.
+    /// </summary>
+    private bool SkipScene()
+    {
+        bool battleScene = _runningEvent >= 0, fieldScene = FieldOpen && _fieldEvent >= 0;
+        if (!battleScene && !fieldScene) return false;
+        SkipTalk();
+        if (battleScene)
+        {
+            _eventWaitUntil = 0;
+            StepEvent();
+        }
+        if (fieldScene)
+        {
+            _fieldWaitUntil = 0;
+            FinishFieldAnimations();
+        }
+        return true;
     }
 
     /// <summary>글이 다 나온 뒤 118틱을 더 두면 저절로 넘어간다.</summary>
