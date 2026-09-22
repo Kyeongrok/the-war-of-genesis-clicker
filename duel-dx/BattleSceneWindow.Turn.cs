@@ -489,7 +489,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
 
-        MoveFollowers(userIndex);          // 군단이면 부하가 대장 진형으로 따라온다
+        ReformFollowers(userIndex);        // 군단이면 부하가 대장 진형으로 따라온다
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);

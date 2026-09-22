@@ -97,6 +97,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>진형을 마지막으로 셈한 대장 자리 — 같은 칸이면 다시 셈하지 않는다.</summary>
     private readonly Dictionary<int, (int Col, int Row)> _formationAt = [];
 
+    /// <summary>부하가 마지막으로 받은 진형 목표 칸 — 대장이 그 뒤로 안 움직여도 이 칸을 계속 따라잡으려 한다.</summary>
+    private readonly Dictionary<UnitState, (int Col, int Row)> _followerTarget = [];
+
+    /// <summary>부하마다 다음에 따라잡기를 다시 시도할 시각 — 매 프레임 길찾기를 돌리지 않게 늦춘다.</summary>
+    private readonly Dictionary<UnitState, double> _nextFollowerRetry = [];
+
     /// <summary>그 인물의 부하들(살아 있는 것만).</summary>
     private List<UnitState> FollowersOf(int leaderIndex) =>
         [.. _units.Where(u => u.Alive && u.LeaderIndex == leaderIndex)];
@@ -179,22 +185,36 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>
-    /// 대장이 움직인 뒤 — 부하들이 제 자리로 <b>걸어간다</b>.
+    /// 대장이 움직인 뒤 — 부하들의 새 진형 목표 칸을 정한다(실제로 걷는 건 <see cref="TryAdvanceFollower"/>).
     /// </summary>
-    /// <remarks>
-    /// 원본은 부하마다 경로 이동 명령(<c>0x2711</c>)을 내고 그 길을 실제로 밟는다(<c>0x1005f670</c>) — 순간이동이 아니다.
-    /// 길을 못 찾으면 제자리에 남는다.
-    /// </remarks>
-    private void MoveFollowers(int leaderIndex)
+    private void AssignFormationTargets(int leaderIndex)
     {
         var leader = _units[leaderIndex];
         foreach (var (follower, col, row) in FormationPlan(leader, leader.Col, leader.Row))
-        {
-            if (col == follower.Col && row == follower.Row) continue;
-            if (ComputeRange(follower) is not { } range || !range.CanReach(row * Cols + col)) continue;
-            foreach (var step in range.PathTo(row * Cols + col)) follower.Path.Enqueue(step);
-            PlayWalkSound(follower);
-        }
+            _followerTarget[follower] = (col, row);
+    }
+
+    /// <summary>
+    /// 부하 하나가 제 진형 목표 칸으로 <b>한 걸음</b> 걷게 시킨다 — 이미 그 자리거나, 바쁘거나, 목표가 없으면 아무것도 안 한다.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 부하마다 경로 이동 명령(<c>0x2711</c>)을 내고 그 길을 실제로 밟는다(<c>0x1005f670</c>) — 순간이동이 아니다.
+    /// 지금 예산으로 못 닿으면 이번엔 그냥 남되, <see cref="SyncFollowers"/>가 나중에 다시 시도한다 — 대장이
+    /// 그 뒤로 안 움직여도, 예산이 모자라 처음에 못 따라간 부하가 영영 그 자리에 남지 않게 하기 위해서다.
+    /// </remarks>
+    private void TryAdvanceFollower(UnitState follower)
+    {
+        if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) return;
+        if (ComputeRange(follower) is not { } range || !range.CanReach(target.Row * Cols + target.Col)) return;
+        foreach (var step in range.PathTo(target.Row * Cols + target.Col)) follower.Path.Enqueue(step);
+        PlayWalkSound(follower);
+    }
+
+    /// <summary>대장이 방금 확정한 자리 기준으로 부하 목표를 다시 잡고, 바로 한 걸음씩 걷게 한다.</summary>
+    private void ReformFollowers(int leaderIndex)
+    {
+        AssignFormationTargets(leaderIndex);
+        foreach (var follower in FollowersOf(leaderIndex)) TryAdvanceFollower(follower);
     }
 
     /// <summary>
@@ -211,10 +231,22 @@ internal sealed unsafe partial class BattleSceneWindow
             var leader = _units[i];
             if (!leader.Alive || leader.LeaderIndex >= 0 || leader.LegionId == 0 || leader.IsBusy) continue;
             if (FollowersOf(i).Any(f => f.IsBusy)) continue;   // 아직 걷는 중이면 새 목표를 주지 않는다
-            // 대장이 같은 칸에 그대로 서 있으면 다시 셈하지 않는다 — 진형 셈은 칸을 넓게 훑어 값이 비싸다.
+            // 대장이 같은 칸에 그대로 서 있으면 진형을 다시 셈하지 않는다 — 칸을 넓게 훑어 값이 비싸다.
             if (_formationAt.TryGetValue(i, out var last) && last == (leader.Col, leader.Row)) continue;
             _formationAt[i] = (leader.Col, leader.Row);
-            MoveFollowers(i);
+            ReformFollowers(i);
+        }
+
+        // 방금 목표를 받았든, 예전에 예산이 모자라 못 따라갔든 — 목표 자리에 아직 못 간 부하는 계속 다시 시도한다.
+        // 이게 없으면 대장이 한 번 크게 움직여 부하가 한 걸음에 못 따라잡은 뒤 대장이 그 자리에 눌러앉을 경우,
+        // 그 부하는 대장이 다시 움직일 때까지(=영영) 원래 자리에 남아 플레이어가 닿을 수 없는 낙오자가 된다.
+        foreach (var follower in _units)
+        {
+            if (!follower.Alive || follower.IsBusy || follower.LeaderIndex < 0) continue;
+            if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) continue;
+            if (_nextFollowerRetry.TryGetValue(follower, out var next) && _lastTime < next) continue;
+            _nextFollowerRetry[follower] = _lastTime + 0.5;
+            TryAdvanceFollower(follower);
         }
     }
 
