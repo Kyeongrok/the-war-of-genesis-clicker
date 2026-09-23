@@ -954,6 +954,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawObjects();
         DrawUnits();
         DrawEffects();
+        DrawMovies();
         if (_showGauges) DrawGauges();
         DrawPopups();
         DrawNumbers();

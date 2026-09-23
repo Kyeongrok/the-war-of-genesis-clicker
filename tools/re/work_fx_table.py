@@ -73,17 +73,29 @@ def add(effs, key):
         effs.append(key)
 
 
-rows = {}
+MOVIES = {34, 40, 41, 42, 61}                                # assets/effects/mov 에 풀어 둔 영상(mov_frames)
+rows, movies = {}, {}
+
+
+def s32(v):
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return 0
+    return v - (1 << 32) if v >= 1 << 31 else v
+
+
 for wid in sorted(works):
     w = works[wid]
     try:
         seq = ([ws.PRELUDE[w[0x3f]][0]] if w and w[0x3f] in ws.PRELUDE else []) + [dll.handler(wid)]
     except Exception:
         continue
-    acts, effs = [], []
-    for h in seq:
+    acts, effs, movs = [], [], []
+    for hi, h in enumerate(seq):
         if not h:
             continue
+        prelude = len(seq) == 2 and hi == 0
         try:
             recs = list(dll.script(h))
         except Exception:
@@ -103,6 +115,16 @@ for wid in sorted(works):
         except Exception:
             items = []
         for r in items:
+            if r['kind'] == 'mov' and r.get('mov') and r.get('movparam'):
+                try:
+                    num = int(os.path.basename(r['mov'])[:4])
+                except ValueError:
+                    num = -1
+                if num in MOVIES:
+                    key = (num, prelude, wx.where_of(r) != 'self', s32(r['movparam'][3]), s32(r['movparam'][4]))
+                    if key not in movs:
+                        movs.append(key)
+                continue
             obs, mo = r.get('obs'), r.get('motion')
             if not isinstance(obs, int) or r['kind'] not in ('obs', 'emit'):
                 continue
@@ -123,6 +145,8 @@ for wid in sorted(works):
                         if n < 2:
                             add(effs, (o, m3, place))
                             n += 1
+    if movs:
+        movies[wid] = movs
     if not acts and not effs:
         continue
     rows[wid] = (acts[:8], effs[:16])
@@ -150,6 +174,13 @@ for wid, (acts, effs) in rows.items():
     a = ', '.join(str(x) for x in acts)
     e = ', '.join('new(%d, %d, %s, 0)' % (o, m, 'true' if p == 'target' else 'false') for o, m, p in effs)
     lines.append('        [%d] = ([%s], [%s]),' % (wid, a, e))
+lines += ['    };', '',
+          '    /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>',
+          '    private static readonly Dictionary<int, MovieFx[]> WorkMovies = new()',
+          '    {']
+for wid, ms in movies.items():
+    lines.append('        [%d] = [%s],' % (wid, ', '.join('new(%d, %s, %s, %d, %d)' % (n, 'true' if p else 'false', 'true' if t else 'false', dx, dy)
+                                               for n, p, t, dx, dy in ms)))
 lines += ['    };', '}', '']
 with open(OUT, 'w', encoding='utf-8-sig', newline='\n') as f:
     f.write('\n'.join(lines))
