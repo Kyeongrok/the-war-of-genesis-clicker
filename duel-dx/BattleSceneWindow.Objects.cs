@@ -217,6 +217,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>이미 연 상자 — 판에서 사라진다.</summary>
     private readonly HashSet<DemoObject> _opened = [];
 
+    /// <summary>
+    /// 전투 이벤트 행동 <b>907</b> — 번호로 물체를 찾아 <b>여닫는다</b>(원본 <c>0x10055a50</c>).
+    /// </summary>
+    /// <remarks>
+    /// 원본은 물체 배열에서 <c>+0x140</c>(배치 번호)이 인자0 인 것을 찾고(<c>0x1004ed40</c>), 인자1 이 0 이 아니면
+    /// <b>닫혀 있을 때만</b>, 0 이면 <b>열려 있을 때만</b> 명령 <c>0x2713</c>(여닫기 토글, <c>0x100e7c00</c>)을 보낸 뒤
+    /// 그 물체가 다 움직일 때까지(<c>0x1006e320</c>) 다음 줄로 안 간다. 물체의 <c>+0x164</c> 가 0 닫힘 · 1 열림이다.
+    /// 번호는 <b>Btl 배치와 Map 배치를 이어 붙인 것</b>이라, 지도가 놓은 문도 이 번호로 잡힌다(Btl 0109 의 101 = Map 0127 의 문 Obj 71).
+    /// 쓰는 곳은 Btl 0109 한 곳뿐 — 둘째 턴에 카메라를 (7,18) 로 옮기고 그 옆 문을 연다.
+    /// 문 그림(Obs 1224)은 한 장뿐이라 열리면 <b>사라진다</b> — 데모가 손으로 연 문과 똑같이 다룬다.
+    /// </remarks>
+    private void ToggleObject(int no, bool open)
+    {
+        if (Objects.FirstOrDefault(o => o.Record.No == no) is not { } obj) return;
+        if (open == _opened.Contains(obj)) return;               // 이미 그 꼴이면 원본도 아무것도 안 한다
+        if (open) _opened.Add(obj); else _opened.Remove(obj);
+        _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
+        Play(MosesClickSound);
+    }
+
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>
     private void DrawObjects()
     {

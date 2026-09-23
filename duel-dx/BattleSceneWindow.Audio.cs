@@ -120,6 +120,46 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
+    /// <summary>이미 푼 대사 소리(BGM 번호 → 소리) — 행동 500 이 같은 것을 두 번 풀지 않게.</summary>
+    private readonly Dictionary<int, PcmSound> _eventVoices = [];
+
+    /// <summary>
+    /// 전투 이벤트 행동 500 — <c>BGM\NNNN.bgm</c> 을 <b>한 번</b> 틀고 그 소리가 끝날 때까지 이벤트를 멈춘다.
+    /// </summary>
+    /// <remarks>
+    /// 원본 <c>0x10053ec0</c> 은 0x74 바이트짜리 개체를 만들어(<c>0x100d2de0</c>) 인자0 번호로 <c>Bgm\%04d.bgm</c> 을 걸고,
+    /// 그 개체의 <c>+0x58</c> 이 0 이 될 때까지(=다 울릴 때까지) 다음 줄로 안 간다. 배경음악과는 <b>다른 개체</b>라 전투 BGM 은 그대로 흐른다 —
+    /// 그래서 여기서도 배경음악을 끄지 않고 효과음 쪽으로 낸다. 인자1 이 0 이 아니면 그 유닛에 매단다(좌우 소리는 안 넣었다).
+    /// 쓰는 곳은 Btl 0334~0338 의 3485 하나뿐이다.
+    /// </remarks>
+    private void PlayEventVoice(int id)
+    {
+        if (id <= 0) return;
+        if (_eventVoices.TryGetValue(id, out var have)) { StartEventVoice(have); return; }
+        _eventSoundLoading = true;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            PcmSound? pcm = null;
+            try
+            {
+                string path = Path.Combine(AssetsFolder.Find("bgm"), $"{id:D4}.bgm");
+                if (File.Exists(path)) pcm = BinkAudio.Open(path).Decode();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
+            if (pcm != null) { _eventVoices[id] = pcm; StartEventVoice(pcm); }
+            else _eventSoundSeconds = 0.1f;              // 소리가 없으면 곧바로 다음 줄로
+            _eventSoundLoading = false;
+        });
+    }
+
+    /// <summary>푼 소리를 틀고 그 길이만큼 이벤트를 멈추게 한다.</summary>
+    private void StartEventVoice(PcmSound pcm)
+    {
+        if (!Muted) _mixer.PlayEffect(pcm, _effectGain);
+        int frames = pcm.Channels > 0 ? pcm.Samples.Length / pcm.Channels : 0;
+        _eventSoundSeconds = pcm.SampleRate > 0 ? Math.Max(0.1f, frames / (float)pcm.SampleRate) : 0.1f;
+    }
+
     /// <summary>마지막으로 건 곡의 번호표 — 풀리는 데 1~2초 걸리는 사이 다른 곡이 걸리면 먼저 것은 버린다.</summary>
     private int _musicRequest;
 
