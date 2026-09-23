@@ -465,7 +465,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 return false;
             }
             case 2:
-                if (!(_skipTalkPauses && IsPauseBetweenLines())) _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond;
+                // 대사 사이의 멈춤은 설정한 초만큼만(음수면 스크립트 값 그대로 — 원본).
+                _fieldWaitUntil = _lastTime + (_talkPauseSeconds >= 0 && IsPauseBetweenLines()
+                                                   ? Math.Min(_talkPauseSeconds, A(0) / TicksPerSecond)
+                                                   : A(0) / TicksPerSecond);
                 break;
             case 504:                                        // [채널] 그 채널의 소리가 끝날 때까지(진행기 0x100f489b 가 직접 본다)
                 if (_talkSkip) { StopChannelSound(A(0)); break; }

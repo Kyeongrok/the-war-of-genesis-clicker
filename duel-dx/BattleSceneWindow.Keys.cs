@@ -102,7 +102,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _keysCapture = -1;
 
     private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
-    private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101, MenuSkipTalkPauses = 1102;
+    private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101;
+
+    /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
+    private const int MenuTalkPauseBase = 1130;
+
+    /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
+    private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
     private const int MenuClearEnemies = 1008;
 
@@ -145,7 +151,11 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowLevelUp ? Win32.MF_CHECKED : 0u), MenuLevelUpWindow, "레벨업 창 보이기(&L)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.KeepExpOnJobChange ? Win32.MF_CHECKED : 0u), MenuKeepJobExp, "전직할 때 EXP 유지(&E)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowStatusBar ? Win32.MF_CHECKED : 0u), MenuStatusBar, "상단 상태 줄 보이기(&B)");
-        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.SkipTalkPauses ? Win32.MF_CHECKED : 0u), MenuSkipTalkPauses, "대사 사이 멈춤 건너뛰기(&W)");
+        IntPtr pause = Win32.CreatePopupMenu();
+        for (int i = 0; i < TalkPauseChoices.Length; i++)
+            Win32.AppendMenuW(pause, Win32.MF_STRING | (TalkPauseIndex(UserSettings.Current.TalkPauseSeconds) == i ? Win32.MF_CHECKED : 0u), (nuint)(MenuTalkPauseBase + i),
+                              TalkPauseLabel(TalkPauseChoices[i]));
+        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -214,13 +224,19 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _skipTalkPauses));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds));
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
     private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
 
-    /// <summary>대사와 대사 사이의 멈춤(행동 2)을 건너뛰나 — 설정 > 대사 사이 멈춤 건너뛰기.</summary>
-    private bool _skipTalkPauses = UserSettings.Current.SkipTalkPauses;
+    /// <summary>대사와 대사 사이의 멈춤(초) — 설정 > 대사 사이 멈춤. 음수면 원본대로 스크립트 값.</summary>
+    private double _talkPauseSeconds = UserSettings.Current.TalkPauseSeconds;
+
+    /// <summary>그 값에 해당하는 메뉴 줄 — 목록에 없는 값(settings.json 을 손으로 고친 것)이면 −1(아무 줄도 체크 안 함).</summary>
+    private static int TalkPauseIndex(double seconds) =>
+        Array.FindIndex(TalkPauseChoices, c => c < 0 ? seconds < 0 : Math.Abs(c - seconds) < 1e-6);
+
+    private static string TalkPauseLabel(double seconds) => seconds < 0 ? "원본대로(보통 1초)" : $"{seconds:0.0#}초";
 
     /// <summary>게임 속도 %(100 = 원본). 게임 시계가 실제 시간의 이만큼 흐른다.</summary>
     private int _gameSpeed = UserSettings.Current.GameSpeed is 100 or 150 or 200 ? UserSettings.Current.GameSpeed : 100;
@@ -258,10 +274,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 Toast(_showLevelUp ? "레벨업 창을 보입니다" : "레벨업 창을 숨깁니다 — 레벨은 그대로 오릅니다");
                 SaveSettings();
                 break;
-            case MenuSkipTalkPauses:
-                _skipTalkPauses = !_skipTalkPauses;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuSkipTalkPauses, Win32.MF_BYCOMMAND | (_skipTalkPauses ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
-                Toast(_skipTalkPauses ? "대사 사이 멈춤을 건너뜁니다" : "대사 사이에 원본처럼 잠깐 멈춥니다");
+            case >= MenuTalkPauseBase and < MenuTalkPauseBase + 6:
+                _talkPauseSeconds = TalkPauseChoices[id - MenuTalkPauseBase];
+                for (int i = 0; i < TalkPauseChoices.Length; i++)
+                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuTalkPauseBase + i), Win32.MF_BYCOMMAND | (i == id - MenuTalkPauseBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast($"대사 사이 멈춤: {TalkPauseLabel(_talkPauseSeconds)}");
                 SaveSettings();
                 break;
             case MenuStatusBar:
