@@ -355,10 +355,53 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private sealed record SaveAbility(int Id, int Level);
 
+    /// <param name="Char">
+    /// 인물 레코드의 나머지 — 직업(전직·세부 체질)·체질·그림·이름·칭호·WEAPON 띠와 레벨업으로 오른 능력치.
+    /// 예전 세이브에는 없어서 불러오면 .chr 처음 값으로 돌아갔다 — 공격형으로 바꾼 체질이 일반형으로, 오른 LP·TP 가 처음 값으로(사용자 보고).
+    /// </param>
     private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
-                                   byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1);
+                                   byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null);
+
+    /// <summary>인물 레코드에서 세이브가 따로 적는 칸들(<see cref="SaveUnit.Char"/>).</summary>
+    private sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
+                                   ushort BasicWorkId, uint Lp, ushort Psy, ushort Tp, ushort TpDivisor, ushort Ctp, ushort Dep, ushort Dex,
+                                   byte WeaponBand, byte WeaponType);
+
+    private static SaveChar? SaveCharOf(CharacterData? c) => c == null ? null
+        : new SaveChar(c.NameId, c.Name2Id, c.SpriteId, c.FaceId, c.TitleId, c.Body, c.JobId, c.BasicWorkId,
+                       c.Lp, c.Psy, c.Tp, c.TpDivisor, c.Ctp, c.Dep, c.Dex, c.WeaponBand, c.WeaponType);
+
+    /// <summary>
+    /// 세이브의 인물 칸을 바탕 자료 위에 되살린다. <paramref name="regrow"/> 면 인물 레코드가 안 적힌 옛 세이브에서
+    /// 레벨업으로 오른 능력치를 <b>쌓인 경험치로 다시 키운다</b>(직업은 옛 세이브에 없어 못 되살린다).
+    /// </summary>
+    private CharacterData Restored(CharacterData baseData, SaveUnit s, bool regrow)
+    {
+        var c = baseData with
+        {
+            CumExp = s.CumExp, Exp = s.Exp,
+            Items = s.Items.Length == baseData.Items.Length ? s.Items : baseData.Items,
+            Passives = s.Passives.Length == 3 ? s.Passives : baseData.Passives,
+            Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+        };
+        if (s.Char is { } k)
+            c = c with
+            {
+                NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = k.FaceId, TitleId = k.TitleId, Body = k.Body,
+                JobId = k.JobId, BasicWorkId = k.BasicWorkId, Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, TpDivisor = k.TpDivisor, Ctp = k.Ctp,
+                Dep = k.Dep, Dex = k.Dex, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
+            };
+        else if (regrow && _db != null && s.CumExp / 100 > c.Level)
+        {
+            // 게임에서는 한 레벨씩 오르고 성장은 그때 능력치에 비례하므로(0x10031a50) 여기서도 한 레벨씩 올린다.
+            for (int level = c.Level + 1; level <= s.CumExp / 100; level++)
+                c = _db.LevelUp(c with { CumExp = level * 100 }, out _);
+            c = c with { CumExp = s.CumExp };
+        }
+        return c with { Level = (ushort)s.Level };
+    }
 
     /// <summary>세이브 머리 — 원본처럼 <b>저장할 때 장면 이름 TXR·장면 갈래·논 시간</b>을 함께 적는다(분석-시스템메뉴 2.1b).</summary>
     /// <param name="Flags">
@@ -458,22 +501,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
         foreach (var s in state.Units)
             if (s.Side == 4 && _db?.Character(s.ChrCode) is { } bc)
-                _party[s.ChrCode] = bc with
-                {
-                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
-                    Items = s.Items.Length == bc.Items.Length ? s.Items : bc.Items,
-                    Passives = s.Passives.Length == 3 ? s.Passives : bc.Passives,
-                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
-                };
+                _party[s.ChrCode] = Restored(bc, s, regrow: true);
         foreach (var s in state.Party ?? [])
             if (_db?.Character(s.ChrCode) is { } pc)
-                _party[s.ChrCode] = pc with
-                {
-                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
-                    Items = s.Items.Length == pc.Items.Length ? s.Items : pc.Items,
-                    Passives = s.Passives.Length == 3 ? s.Passives : pc.Passives,
-                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
-                };
+                _party[s.ChrCode] = Restored(pc, s, regrow: true);
         foreach (int chr in _members)
             if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
     }
@@ -533,7 +564,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
-                    [.. u.StatusId], [.. u.StatusValue], u.Side))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
+                    [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data)))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -562,7 +593,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 전투에 안 선 파티원(크리스티앙처럼 이번 전투에 없는 동료)의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다.
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
                           .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
-                                                    p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
+                                                    p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))],
+                                                    Char: SaveCharOf(p.Value)))],
                 [.. _ownedLegions], SaveBank(),
                 [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
                 Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]),
@@ -638,14 +670,8 @@ internal sealed unsafe partial class BattleSceneWindow
             u.Facing = (Facing)s.Facing;
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, 0);
             if (s.Side >= 0) u.Side = s.Side;
-            if (u.Data is { } c)
-                u.Data = c with
-                {
-                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
-                    Items = s.Items.Length == c.Items.Length ? s.Items : c.Items,
-                    Passives = s.Passives.Length == 3 ? s.Passives : c.Passives,
-                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
-                };
+            // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
+            if (u.Data is { } c) u.Data = Restored(c, s, regrow: false);
             u.ClearStatus();
             for (int k = 0; k < 3; k++)
             {

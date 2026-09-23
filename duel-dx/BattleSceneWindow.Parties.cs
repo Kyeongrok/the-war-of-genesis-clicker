@@ -143,7 +143,8 @@ internal sealed unsafe partial class BattleSceneWindow
         [.. _partyBank.Select(p => new SaveParty(p.Key, [.. p.Value.Members], p.Value.Money,
             p.Value.Inventory.ToDictionary(i => i.Key.ToString(), i => i.Value), [.. p.Value.Legions],
             [.. p.Value.Party.Select(c => new SaveUnit(c.Key, 0, 0, 0, 0, 0, 0, true, false, c.Value.Level, c.Value.CumExp, c.Value.Exp,
-                                                       c.Value.Items, c.Value.Passives, [.. c.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
+                                                       c.Value.Items, c.Value.Passives, [.. c.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))],
+                                                       Char: SaveCharOf(c.Value)))],
             [.. p.Value.Mailbox], [.. p.Value.MailRead]))];
 
     private void RestoreBank(SaveParty[]? bank)
@@ -159,13 +160,7 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int id in sp.MailRead ?? []) s.MailRead.Add(id);
             foreach (var u in sp.Units)
                 if (_db?.Character(u.ChrCode) is { } pc)
-                    s.Party[u.ChrCode] = pc with
-                    {
-                        Level = (ushort)u.Level, CumExp = u.CumExp, Exp = u.Exp,
-                        Items = u.Items.Length == pc.Items.Length ? u.Items : pc.Items,
-                        Passives = u.Passives.Length == 3 ? u.Passives : pc.Passives,
-                        Abilities = [.. u.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
-                    };
+                    s.Party[u.ChrCode] = Restored(pc, u, regrow: true);
             _partyBank[sp.No] = s;
         }
     }
