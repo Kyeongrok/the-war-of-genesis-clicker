@@ -392,6 +392,14 @@ internal sealed unsafe partial class BattleSceneWindow
                     foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.Side = A(2);
                 }
                 break;
+            case 909:                                    // 베라모드 폭주(0x10055b10) — 파티에 따라 Chr 223(베라모드)·37 을 찾아
+            {                                            // work 1582(어빌리티 160 「폭주」, 모션 48)를 쓰게 하고 화면을 물들인다.
+                var caster = _units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
+                if (caster is null || Work(1582) is not { } burst) break;
+                _routine = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []);
+                _eventWaitUntil = _lastTime + 1.2;
+                break;
+            }
             case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
             {
                 int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
