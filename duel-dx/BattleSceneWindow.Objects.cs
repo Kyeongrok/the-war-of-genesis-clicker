@@ -134,7 +134,7 @@ internal sealed unsafe partial class BattleSceneWindow
                             .FirstOrDefault();
         if (target is null) return false;
         // 열 때는 옆 한 칸, 칠 때는 기본공격 자리(정확히 두 칸)로 세운다.
-        user.ResetTo(target.Col, Math.Clamp(target.Row + (breaking ? 2 : 1), 0, Rows - 1));
+        user.ResetTo(target.Col, Math.Clamp(target.Row + (breaking ? 2 : 1), 0, Rows - 1), keepFacing: true);
         if (!breaking) { _turn = Array.IndexOf(_units, user); return TouchObject(target); }
         _turn = Array.IndexOf(_units, user);
         return TryBreakObject(target.Col, target.Row, force: true);
