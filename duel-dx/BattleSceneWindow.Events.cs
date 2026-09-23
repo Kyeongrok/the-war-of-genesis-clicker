@@ -392,6 +392,13 @@ internal sealed unsafe partial class BattleSceneWindow
                     foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.Side = A(2);
                 }
                 break;
+            case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
+            {
+                int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
+                _camTargetX = Math.Clamp(cx * TileW + TileW / 2 - ViewWidth / 2, 0, CamMaxX);
+                _camTarget = Math.Clamp(CellCenterY(Math.Clamp(cx, 0, Cols - 1), Math.Clamp(cy, 0, Rows - 1)) - ViewHeight / 2, 0, CamMax);
+                break;
+            }
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;
