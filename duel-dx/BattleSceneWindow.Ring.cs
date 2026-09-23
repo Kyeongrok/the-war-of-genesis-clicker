@@ -422,6 +422,9 @@ internal sealed class UiSprite
     /// <summary>그 모션이 한 바퀴 도는 데 걸리는 틱 — 모르면 0.</summary>
     public int MotionLength(int motion) => _table?.Clips.GetValueOrDefault(motion)?.Length ?? 0;
 
+    /// <summary>그 모션의 키 묶음(자식 그림·소리 따위) — 없으면 null.</summary>
+    public ObsMotionClip? Clip(int motion) => _table?.Clips.GetValueOrDefault(motion);
+
     /// <summary>그 모션의 tick 틱 섞기 방식(17 = 더하기 합성).</summary>
     public int BlendAt(int motion, int tick) => _table?.Clips.GetValueOrDefault(motion)?.BlendAt(tick) ?? 0;
 }
