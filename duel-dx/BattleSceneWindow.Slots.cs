@@ -186,7 +186,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             string title = _db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
             var (_, tw, th) = GetText(title, White);
-            string label = slot == AutoSlot ? "[자동 저장]" : $"[{slot:D2}:{(head.SceneKind == 4 ? "챕  터" : "전  투")}]";
+            string label = slot == AutoSlot ? "[자동 저장]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
             var (_, lw, _) = GetText(label, SlotLabelColor);
             // 이름은 가운데지만, 표시 글(특히 「[자동 저장]」)과 겹치면 그 뒤로 민다.
             DrawText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
