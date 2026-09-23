@@ -562,7 +562,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
     private double _playBase;
 
-    private long PlayMs => (long)(_lastTime * 1000 + _playBase);
+    private long PlayMs => (long)(_realTime * 1000 + _playBase);   // 실제 시간 — 게임 속도를 올려도 플레이 시간은 제대로 흐른다
+
+    /// <summary>연대표 장면의 이름 TXR — 원본 상수 2557(빈 글, 장면 7 vt+0x1c <c>0x10106420</c>).</summary>
+    private const int EpisodesSceneText = 2557;
 
     private static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
 
@@ -581,8 +584,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
                 // 샤이닝 스타 챕터인데 「코어헌터」로 보였다(사용자 보고).
-                InChapterScene && _mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId,
-                InChapterScene && _mosesChp != null ? 4 : 1, PlayMs,
+                // 연대표에서 저장하면 원본처럼 갈래 7 「[NN:연대표]」 + 이름 TXR 2557(빈 글, 0x10106420) — 앞 챕터 이름이 뜨던 것(사용자 보고).
+                _episodesOpen ? EpisodesSceneText
+                : InChapterScene && _mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId,
+                _episodesOpen ? 7 : InChapterScene && _mosesChp != null ? 4 : 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
@@ -736,7 +741,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
         _resumeTurn = _selected;            // 저장했던 인물의 차례로 곧장 돌아간다(UpdateTurn)
         _nextTickAt = 0;
-        _playBase = state.PlayMs - _lastTime * 1000;
+        _playBase = state.PlayMs - _realTime * 1000;
         // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.
         if (state.InMoses)
         {
