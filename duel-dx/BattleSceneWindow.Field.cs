@@ -204,6 +204,8 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldReturn.Clear();
             _fieldPc = 0;
             _fieldWaitUntil = 0;
+            _fieldWaitChannel = -1;
+            StopAllChannelSounds();
             _fieldHoldSince = 0;
             _fieldChoices = null;
             _fieldPictures.Clear();
@@ -258,6 +260,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
         if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > _lastTime) return;
+        // 행동 500·504 가 걸어 둔 「소리가 끝날 때까지」 — 건너뛰는 중이면 그 소리를 끊고 지나간다.
+        if (_fieldWaitChannel >= 0)
+        {
+            if (_talkSkip) StopChannelSound(_fieldWaitChannel);
+            else if (ChannelBusy(_fieldWaitChannel)) return;
+            _fieldWaitChannel = -1;
+        }
 
         if (_fieldEvent < 0)
         {
@@ -359,6 +368,12 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldFade = fade2.CoverTicks > 0 ? (_lastTime - 1000, fade2.CoverTicks, fade2.UncoverTicks, fade2.White) : null;
     }
 
+    /// <summary>행동 500·504 가 기다리는 소리 채널 — −1 이면 안 기다리는 중.</summary>
+    private int _fieldWaitChannel = -1;
+
+    /// <summary>행동 500 이 쓰는 채널 — 자료가 501 에 쓰는 번호(1·2)와 겹치지 않게 따로 둔다.</summary>
+    private const int FieldVoiceChannel = 900;
+
     /// <summary>행동 1 이 한 줄에서 머문 시각 — 0 이면 안 머무는 중.</summary>
     private double _fieldHoldSince;
 
@@ -403,6 +418,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 return false;
             }
             case 2: _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond; break;
+            case 504:                                        // [채널] 그 채널의 소리가 끝날 때까지(진행기 0x100f489b 가 직접 본다)
+                if (_talkSkip) { StopChannelSound(A(0)); break; }
+                _fieldWaitChannel = A(0);
+                return false;
             case 3: _fieldEvent = -1; _talkSkip = false; break;  // 이 이벤트 접기
 
             case 6:                                          // 다른 필드로
@@ -630,6 +649,28 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐
                 FadeMusic(A(0), A(1));
+                break;
+            case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
+                _mixer.StopMusic();
+                break;
+            case 500:                                        // 소리 한 번 내고 끝날 때까지 기다린다(0x100ee7b0) — 인자1 은 매달 인물
+                if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)
+                PlayChannelSound(FieldVoiceChannel, A(0), loop: false);
+                _fieldWaitChannel = FieldVoiceChannel;
+                return false;
+            case 501:                                        // [소리, 채널, 인물, 되풀이] 채널에 걸고 기다리지 않는다(0x100ee960)
+                if (_talkSkip) break;
+                PlayChannelSound(A(1), A(0), loop: A(3) != 0);
+                break;
+            case 505:                                        // [채널] 그 채널의 소리를 끊는다(0x100eeb30)
+                StopChannelSound(A(0));
+                if (_fieldWaitChannel == A(0)) _fieldWaitChannel = -1;
+                break;
+            case 1000:                                       // 건너뛰기 끝(0x100f2c20 — [0x101bffb0] = 0)
+                _talkSkip = false;                           // 여기서부터는 기다림을 다시 지킨다
+                break;
+            case 609:                                        // [인물, TXR 글, TXR 글2] 필드 Tlk 가 아니라 <b>전역 TXR</b> 에서 글을 꺼낸 대사(0x100efb30)
+                ShowFieldTalk(box: true, A(0), A(1), fromTxr: true);
                 break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;
@@ -876,7 +917,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 필드 대사 — 말하는 이는 <c>10000+인물 열쇠</c> 다. 이름과 초상화는 그 인물의 <c>.chr</c> 에서 온다.
     /// </summary>
-    private void ShowFieldTalk(bool box, int speaker, int textId)
+    /// <param name="fromTxr">글을 필드 <c>Tlk</c> 가 아니라 <b>전역 TXR</b> 에서 꺼낸다 — 행동 609 가 그렇다(<c>0x1004a3f0</c>).</param>
+    private void ShowFieldTalk(bool box, int speaker, int textId, bool fromTxr = false)
     {
         if (_talkSkip) return;
         string name = "";
@@ -897,7 +939,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _talkFace = cc.Code;
         }
         else _talkFace = 0;
-        _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
+        _talk = (box, -1, name, fromTxr ? _db?.T((ushort)textId) ?? "" : FieldText(textId), 0, _lastTime);
         _talkFilled = false;
     }
 

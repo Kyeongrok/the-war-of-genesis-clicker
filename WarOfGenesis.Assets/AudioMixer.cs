@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Runtime.InteropServices;
 
 namespace WarOfGenesis.Assets;
@@ -64,10 +64,17 @@ public sealed class AudioMixer : IDisposable
     }
 
     /// <summary>효과음을 한 번 튼다. <paramref name="tag"/> 는 <see cref="IsPlaying"/> 로 겹침을 막을 때 쓴다.</summary>
-    public void PlayEffect(PcmSound sound, float gain = 1f, int tag = 0)
+    /// <param name="loop">끝에서 처음으로 되감는다 — 필드 스크립트 행동 501 의 인자3 이 1 일 때.</param>
+    public void PlayEffect(PcmSound sound, float gain = 1f, int tag = 0, bool loop = false)
     {
         if (sound.FrameCount == 0) return;
-        lock (_gate) _effects.Add(new Voice(sound, gain, false, tag));
+        lock (_gate) _effects.Add(new Voice(sound, gain, loop, tag));
+    }
+
+    /// <summary>그 표를 단 효과음을 멈춘다 — 필드 스크립트 행동 505(채널 소리 끄기)가 쓴다.</summary>
+    public void StopEffect(int tag)
+    {
+        lock (_gate) _effects.RemoveAll(v => v.Tag == tag);
     }
 
     public bool IsPlaying(int tag)
