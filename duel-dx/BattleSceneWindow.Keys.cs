@@ -105,6 +105,15 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101;
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
     private const int MenuClearEnemies = 1008;
+
+    /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 줄 번호 — 1200 + 목록 순번.</summary>
+    private const int MenuReplayBase = 1200;
+
+    /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 — 펼칠 때마다 지금 챕터에서 다녀온 장소로 다시 채운다.</summary>
+    private static IntPtr _replayMenu;
+
+    /// <summary>하위 메뉴에 지금 올라 있는 장소들(줄 순번 차례).</summary>
+    private readonly List<(int Chapter, int Place)> _replayItems = [];
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
     private const int MenuZoomAuto = 1010;
     private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
@@ -155,8 +164,42 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
+        _replayMenu = Win32.CreatePopupMenu();
+        Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
         return bar;
+    }
+
+    /// <summary>
+    /// 「다녀온 장소 다시 열기」를 펼칠 때 — 지금 챕터에서 다녀온 장소(전투·필드)를 줄로 올린다.
+    /// 이야기 사슬이 끊겨(예: 전멸 승리가 전투 137 의 필드 55 행을 건너뛰던 버그) 다시 해야 할 때 쓴다(사용자 요청).
+    /// </summary>
+    private void RebuildReplayMenu()
+    {
+        while (Win32.GetMenuItemCount(_replayMenu) > 0) Win32.DeleteMenu(_replayMenu, 0, Win32.MF_BYPOSITION);
+        _replayItems.Clear();
+        if (_mosesChp is { } chp)
+            foreach (var place in chp.Places)
+                if (_placesUsed.Contains((chp.Id, place.No)) && _replayItems.Count < 500)
+                {
+                    string kind = place.Value >= 20000 ? "상점" : place.Value >= 10000 ? $"필드 {place.Value - 10000:D4}" : $"전투 {place.Value:D4}";
+                    string name = _db?.T((ushort)place.NameText) is { Length: > 0 } n ? n : $"장소 {place.No}";
+                    Win32.AppendMenuW(_replayMenu, Win32.MF_STRING, (nuint)(MenuReplayBase + _replayItems.Count), $"{name} — {kind}");
+                    _replayItems.Add((chp.Id, place.No));
+                }
+        if (_replayItems.Count == 0)
+            Win32.AppendMenuW(_replayMenu, Win32.MF_STRING | Win32.MF_GRAYED, 0, _mosesChp == null ? "(챕터 안이 아닙니다)" : "(이 챕터에서 다녀온 장소가 없습니다)");
+    }
+
+    /// <summary>다녀온 장소의 표시를 지워 항행에서 다시 고를 수 있게 한다 — 진행 깃발은 건드리지 않는다.</summary>
+    private void ReopenPlace(int index)
+    {
+        if ((uint)index >= _replayItems.Count) return;
+        var (chapter, place) = _replayItems[index];
+        if (!_placesUsed.Remove((chapter, place))) return;
+        _chapterDone = false;
+        string name = _mosesChp?.PlaceOf(place) is { } p && _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {place}";
+        Toast($"「{name}」 을(를) 다시 열었습니다 — 항행에서 다시 고를 수 있습니다");
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
@@ -174,6 +217,9 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case MenuChapters: _chaptersOpen = true; _chaptersHover = -1; break;
             case MenuClearEnemies: ClearEnemiesForTest(); break;
+            case >= MenuReplayBase and < MenuReplayBase + 500:
+                ReopenPlace(id - MenuReplayBase);
+                break;
             case MenuAllyAi:
                 // 동맹(편 3)의 제어권을 AI 에 줄지 — 켜면 AI 가, 끄면 내가 움직인다.
                 _allyAi = !_allyAi;

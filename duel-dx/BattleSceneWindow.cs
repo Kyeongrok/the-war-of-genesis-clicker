@@ -577,6 +577,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_APP_SNAPSHOT:
                 SaveSnapshot();
                 return IntPtr.Zero;
+            case Win32.WM_INITMENUPOPUP when wParam == _replayMenu:
+                RebuildReplayMenu();
+                return IntPtr.Zero;
             case Win32.WM_COMMAND:
                 OnMenuCommand((int)((long)wParam & 0xFFFF));
                 return IntPtr.Zero;
