@@ -4,6 +4,8 @@ obj/
 # 윈도우는 대소문자를 안 가려 assets/data/Obj(물체 규격)까지 obj/ 에 걸린다 — 그것만 다시 살린다.
 !assets/data/Obj/
 !assets/data/Obj/*.obj
+# 전역 무시 목록(~/Documents/gitignore_global.txt)의 *.tlb 가 전투 대사까지 먹는다 — 그것만 다시 살린다.
+!assets/data/Tlk/*.tlb
 
 # Visual Studio / Rider
 .vs/
