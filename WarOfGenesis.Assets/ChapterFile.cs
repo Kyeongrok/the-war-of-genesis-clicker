@@ -49,8 +49,10 @@ public sealed class ChapterFile
     /// <summary>장소 하나 — 항행 단계 2 의 칸.</summary>
     /// <param name="Lon">파일 워드 4(<c>+0x08</c>) — 레이더 격자 구의 경도칸 0~9(−1 = 없음, 자동 발생 장소). 분석-모세스 6절.</param>
     /// <param name="Lat">파일 워드 5(<c>+0x0a</c>) — 위도칸 0~9(0 = 북극 쪽).</param>
+    /// <param name="Offset">파일 안에서 이 레코드가 시작하는 바이트 자리 — <see cref="WritePlace"/> 가 그 자리에 고쳐 쓴다(−1 = 모름).</param>
     public sealed record Place(int No, int NameText, int Value, int DescText, int Auto,
-                               IReadOnlyList<(int Variable, int Value, int Operator)> Conditions, int Lon = -1, int Lat = -1)
+                               IReadOnlyList<(int Variable, int Value, int Operator)> Conditions, int Lon = -1, int Lat = -1,
+                               int Offset = -1)
     {
         /// <summary>값이 가리키는 곳: 전투 · 필드 · 상점(분석-모세스 6절).</summary>
         public PlaceKind Kind => Value >= 20000 ? PlaceKind.Shop : Value >= 10000 ? PlaceKind.Field : PlaceKind.Battle;
@@ -213,9 +215,10 @@ public sealed class ChapterFile
             var places = new List<Place>();
             for (int i = 0; i < placeCount; i++)
             {
+                int at = o;
                 var w = Words(10);
                 // 워드 6~8 = 조건 (변수, 값, 연산자) — 안 쓰면 −1 셋이다(가설: 항성계·행성 조건과 같은 꼴이고 값도 그렇게 들어 있다).
-                places.Add(new Place(w[0], w[1], w[2], w[3], w[9], [(w[6], w[7], w[8])], w[4], w[5]));
+                places.Add(new Place(w[0], w[1], w[2], w[3], w[9], [(w[6], w[7], w[8])], w[4], w[5], at));
             }
 
             // 장소 뒤에 4바이트 레코드 표 하나와 스크립트가 더 있다(분석-전투목록 ba-7 의 Chp 파서와 같다).
@@ -250,6 +253,22 @@ public sealed class ChapterFile
             };
         }
         catch (ArgumentException) { return null; }   // 배치가 안 맞으면(파일 끝을 넘으면) 안 읽은 것으로 친다
+    }
+
+    /// <summary>
+    /// 장소 레코드 하나를 파일 바이트의 제자리(<see cref="Place.Offset"/>)에 고쳐 쓴다 — 20바이트 고정이라 뒤 자료는 안 움직인다.
+    /// </summary>
+    /// <remarks>
+    /// 워드 차례는 읽을 때와 같다: 0 번호 · 1 이름 TXR · 2 값 · 3 설명 TXR · 4 경도칸 · 5 위도칸 · 6~8 조건 (변수, 값, 연산자) · 9 자동 발생.
+    /// 조건이 없으면 −1 셋을 쓴다(원본 자료가 비워 둔 모양).
+    /// </remarks>
+    public static void WritePlace(byte[] b, Place p)
+    {
+        if (p.Offset < 0 || p.Offset + 20 > b.Length) throw new ArgumentOutOfRangeException(nameof(p), "장소 레코드 자리를 모릅니다.");
+        var (variable, value, op) = p.Conditions.Count > 0 ? p.Conditions[0] : (-1, -1, -1);
+        int[] w = [p.No, p.NameText, p.Value, p.DescText, p.Lon, p.Lat, variable, value, op, p.Auto];
+        for (int i = 0; i < w.Length; i++)
+            BitConverter.TryWriteBytes(b.AsSpan(p.Offset + 2 * i, 2), checked((short)w[i]));
     }
 
     /// <summary>스크립트: 수 한 워드, 이벤트마다 (최대 발동 수, 조건 수, 조건 18바이트씩, 행동 수, 행동 18바이트씩).</summary>
