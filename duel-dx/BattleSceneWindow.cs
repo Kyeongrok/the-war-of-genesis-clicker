@@ -30,7 +30,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private DemoScene _scene = DemoScene.Fallback;
 
     /// <summary>한 칸 걸어가는 데 드는 시간(초).</summary>
-    public const double StepSeconds = 0.25;
+    public const double StepSeconds = StepTicks / TicksPerSecond;
+
+    /// <summary>
+    /// 한 칸을 걷는 틱 수 — 원본 틱(초당 30)에 맞춰 <b>8틱(0.267초)</b>. 가로 40픽셀이면 틱마다 5픽셀, 세로 32픽셀이면 4픽셀씩
+    /// 똑같이 움직인다. 예전에는 0.25초를 시간으로 나눠 한 프레임에 2.67픽셀 — 판을 낮은 해상도로 그리니 2·3픽셀이 번갈아
+    /// 속도가 프레임마다 출렁여 끊겨 보였다(사용자 보고).
+    /// </summary>
+    public const int StepTicks = 8;
 
     /// <summary>
     /// 모션표 한 틱의 길이 — 1초에 몇 틱. 원본 게임의 틱 빠르기는 아직 확인 못 해서 눈으로 맞춘 값이다.
@@ -896,7 +903,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             return;
         }
 
-        foreach (var unit in _units) unit.Advance(dt / StepSeconds, dt);
+        foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
         if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !_abilityMenu && _targetWork < 0 && IsPlayerTurn && !_units[_turn].IsBusy)
@@ -1577,8 +1584,11 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>방금 한 칸을 다 걸었는데 아직 다음 칸이 정해지지 않았다 — 이번 프레임 안에 이어 걸으면 걷기 컷을 잇는다.</summary>
     private bool _justArrived;
 
-    /// <summary>이번 칸에서 남은 진행량(한 칸 = 1) — 이어 걸을 때 다음 칸에 넘겨 속도가 들쭉날쭉하지 않게 한다.</summary>
+    /// <summary>이번 칸에서 남은 틱(한 칸 = <see cref="BattleSceneWindow.StepTicks"/>) — 이어 걸을 때 다음 칸에 넘겨 속도가 들쭉날쭉하지 않게 한다.</summary>
     private double _carry;
+
+    /// <summary>이번 칸을 걷기 시작한 뒤 흐른 틱 — 자리는 <b>다 채운 틱</b>만큼만 나아간다(틱마다 같은 픽셀).</summary>
+    private double _stepTicks;
 
     /// <summary>걷기 없이 바로 그 칸에 세운다(걸음 물리기).</summary>
     public void WarpTo(int col, int row)
@@ -1597,17 +1607,19 @@ internal sealed class UnitState(DemoUnit unit)
         _justArrived = false;
         _fromCol = Col; _fromRow = Row;
         Col = col; Row = row;
-        _progress = Math.Min(carry, 0.99);
+        _stepTicks = Math.Min(carry, BattleSceneWindow.StepTicks - 1);
+        _progress = Math.Min(Math.Floor(_stepTicks) / BattleSceneWindow.StepTicks, 0.99);
     }
 
-    public void Advance(double progressDelta, double dt)
+    /// <param name="ticks">이번 프레임에 흐른 틱(초당 30).</param>
+    public void Advance(double ticks, double dt)
     {
         AnimTime += dt;
         if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; AnimTime = _idleOffset; }
         if (!IsMoving) return;
-        double next = _progress + progressDelta;
-        _progress = Math.Min(1, next);
-        if (!IsMoving) { _justArrived = true; _carry = next - 1; }
+        _stepTicks += ticks;
+        _progress = Math.Min(1, Math.Floor(_stepTicks) / BattleSceneWindow.StepTicks);
+        if (!IsMoving) { _justArrived = true; _carry = _stepTicks - BattleSceneWindow.StepTicks; }
     }
 
     /// <summary>이어 걷지 않고 멈췄으면 서기 숨쉬기로 돌린다.</summary>
