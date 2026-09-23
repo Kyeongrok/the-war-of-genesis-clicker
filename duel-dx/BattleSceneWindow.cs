@@ -801,6 +801,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private bool _workHookDone;
 
+    /// <summary>DUELDX_SAVE=&lt;칸&gt; 이 걸어 둔 저장 — 한 번만 한다(화면 밖 시험용).</summary>
+    private int? _saveSlotPending;
+
+    /// <summary>DUELDX_SAVEAT=&lt;초&gt; 면 그때 저장한다(기본 3초) — 전투가 이어진 뒤를 저장해 보려고.</summary>
+    private static readonly double SaveHookAt =
+        double.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVEAT"), out double at) && at > 0 ? at : 3;
+
     private void ApplyWorkHook()
     {
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
@@ -841,6 +848,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenMosesIfAsked();
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
+            // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && LoadBattleFrom(SlotPath(slot)) && _mosesOpen
                 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
@@ -848,6 +857,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 if (page == 7) OpenMosesStyle(); else if (page == 6) OpenMosesLegion();
             }
         }
+        // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
+        // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
+        if (_saveSlotPending is { } pending && _lastTime > SaveHookAt) { _saveSlotPending = null; SaveBattleTo(SlotPath(pending)); }
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
         if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
