@@ -88,13 +88,19 @@ internal sealed unsafe partial class BattleSceneWindow
     private ChapterFile.StarSystem? MosesSystem() =>
         _mosesChp?.SystemOf(_mosesSystem) ?? _mosesChp?.Systems.FirstOrDefault();
 
-    /// <summary>지금 항성계에 딸린 행성만 — 항성계가 없는 챕터는 행성 전부.</summary>
+    /// <summary>지금 항성계에 딸린 행성만 — 항성계가 없는 챕터는 행성 전부. 그리기·마우스가 매 틀 물어 와서 한 번 골라 두고 쓴다.</summary>
     private IReadOnlyList<ChapterFile.Planet> MosesSystemPlanets()
     {
         if (_mosesChp is not { } chp) return [];
-        if (MosesSystem() is not { } sys || sys.Planets.Count == 0) return chp.Planets;
-        return [.. chp.Planets.Where(p => sys.Planets.Contains(p.No))];
+        if (_systemPlanetsOf == (chp.Id, _mosesSystem)) return _systemPlanets;
+        _systemPlanetsOf = (chp.Id, _mosesSystem);
+        return _systemPlanets = MosesSystem() is not { } sys || sys.Planets.Count == 0
+            ? chp.Planets
+            : [.. chp.Planets.Where(p => sys.Planets.Contains(p.No))];
     }
+
+    private (int Chapter, int System) _systemPlanetsOf = (-1, -1);
+    private IReadOnlyList<ChapterFile.Planet> _systemPlanets = [];
 
     /// <summary>그 행성이 딸린 항성계 번호 — 못 찾으면 첫 항성계.</summary>
     private int MosesSystemOfPlanet(int planet) =>
