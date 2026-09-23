@@ -36,8 +36,27 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool SlotsOpen => _slotsMode >= 0;
     private int SlotRows => _slotsMode == 1 ? AutoSlot + 1 : SaveSlots;
 
+    /// <summary>
+    /// 목록 줄 → 슬롯 번호. 원본은 자동 저장(20)을 Load 목록 <b>맨 끝(21번째)</b>에 표시 없이 두는데, 열 줄씩만 보이고
+    /// 화살표로 한 줄씩만 내려가서 사실상 안 보였다(사용자 보고). 데모는 Load 목록 <b>맨 위</b>에 「자동 저장」으로 둔다.
+    /// </summary>
+    private int SlotOfRow(int row) => _slotsMode == 1 ? (row == 0 ? AutoSlot : row - 1) : row;
+
+    /// <summary>슬롯 목록을 줄 단위로 굴린다 — 화살표·마우스 휠.</summary>
+    private void ScrollSlots(int rows) => _slotsTop = Math.Clamp(_slotsTop + rows, 0, Math.Max(0, SlotRows - SlotsVisible));
+
     private static string SlotPath(int slot) =>
         UserDataFolder.File($"battle-save-{slot:D2}.json");
+
+    /// <summary>DUELDX_SLOTS=load|save 면 시작하자마자 그 슬롯 목록을 연다(화면 밖 시험용).</summary>
+    private void OpenSlotsIfAsked()
+    {
+        switch (Environment.GetEnvironmentVariable("DUELDX_SLOTS"))
+        {
+            case "load": OpenSlots(1); break;
+            case "save": OpenSlots(0); break;
+        }
+    }
 
     private void OpenSlots(int mode)
     {
@@ -75,8 +94,8 @@ internal sealed unsafe partial class BattleSceneWindow
         var (x, y) = SlotsOrigin();
         int row = (by - y - SlotPad) / SlotRowH;
         if (bx < x + SlotPad || bx >= x + SlotPad + SlotRowW || row < 0 || row >= SlotsVisible) return -1;
-        int slot = _slotsTop + row;
-        return slot < SlotRows ? slot : -1;
+        int index = _slotsTop + row;
+        return index < SlotRows ? SlotOfRow(index) : -1;
     }
 
     /// <summary>슬롯 화면이 떠 있으면 클릭을 처리하고 true.</summary>
@@ -90,8 +109,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다)
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
         {
-            if (by < y + 16) _slotsTop = Math.Max(0, _slotsTop - 1);
-            else if (by >= y + SlotsH - 16) _slotsTop = Math.Min(SlotRows - SlotsVisible, _slotsTop + 1);
+            if (by < y + 16) ScrollSlots(-1);
+            else if (by >= y + SlotsH - 16) ScrollSlots(1);
             return true;
         }
 
@@ -147,8 +166,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         for (int i = 0; i < SlotsVisible; i++)
         {
-            int slot = _slotsTop + i;
-            if (slot >= SlotRows) break;
+            if (_slotsTop + i >= SlotRows) break;
+            int slot = SlotOfRow(_slotsTop + i);
             int rx = x + SlotPad, ry = y + SlotPad + i * SlotRowH;
             var head = SlotHead(slot);
             bool dim = _slotsMode == 1 && head == null;
@@ -159,6 +178,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (head == null)
             {
                 string none = _db?.T(0) is { Length: > 0 } t ? t : "없음";
+                if (slot == AutoSlot) none = $"자동 저장 — {none}";
                 var (_, nw, nh) = GetText(none, White);
                 DrawText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
                 continue;
@@ -166,9 +186,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
             string title = _db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
             var (_, tw, th) = GetText(title, White);
-            DrawText(title, rx + (SlotRowW - tw) / 2, ry + (SlotRowH - th) / 2, White);
-
-            string label = $"[{slot:D2}:{(head.SceneKind == 4 ? "챕  터" : "전  투")}]";
+            string label = slot == AutoSlot ? "[자동 저장]" : $"[{slot:D2}:{(head.SceneKind == 4 ? "챕  터" : "전  투")}]";
+            var (_, lw, _) = GetText(label, SlotLabelColor);
+            // 이름은 가운데지만, 표시 글(특히 「[자동 저장]」)과 겹치면 그 뒤로 민다.
+            DrawText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
             DrawText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
 
             long ms = head.PlayMs;
