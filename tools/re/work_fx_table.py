@@ -74,7 +74,7 @@ def add(effs, key):
 
 
 MOVIES = {34, 40, 41, 42, 61}                                # assets/effects/mov 에 풀어 둔 영상(mov_frames)
-rows, movies = {}, {}
+rows, movies, bodies = {}, {}, {}
 
 
 def s32(v):
@@ -91,7 +91,7 @@ for wid in sorted(works):
         seq = ([ws.PRELUDE[w[0x3f]][0]] if w and w[0x3f] in ws.PRELUDE else []) + [dll.handler(wid)]
     except Exception:
         continue
-    acts, effs, movs = [], [], []
+    acts, effs, movs, bods = [], [], [], []
     for hi, h in enumerate(seq):
         if not h:
             continue
@@ -115,6 +115,10 @@ for wid in sorted(works):
         except Exception:
             items = []
         for r in items:
+            if r['kind'] in ('body:self', 'body:target'):             # 몸 복제(파·혼 분신) — 모션을 코드가 셈하면 −1(지금 모션)
+                if len(bods) < 12:
+                    bods.append((r['motion'] if isinstance(r.get('motion'), int) else -1, r['kind'] == 'body:target'))
+                continue
             if r['kind'] == 'mov' and r.get('mov') and r.get('movparam'):
                 try:
                     num = int(os.path.basename(r['mov'])[:4])
@@ -147,6 +151,8 @@ for wid in sorted(works):
                             n += 1
     if movs:
         movies[wid] = movs
+    if bods:
+        bodies[wid] = bods
     if not acts and not effs:
         continue
     rows[wid] = (acts[:8], effs[:16])
@@ -181,6 +187,12 @@ lines += ['    };', '',
 for wid, ms in movies.items():
     lines.append('        [%d] = [%s],' % (wid, ', '.join('new(%d, %s, %s, %d, %d)' % (n, 'true' if p else 'false', 'true' if t else 'false', dx, dy)
                                                for n, p, t, dx, dy in ms)))
+lines += ['    };', '',
+          '    /// <summary>work 번호 → 몸 복제(분신) — (모션, 대상 몸인가). 모션 −1 은 그 유닛의 지금 모션. 분석-스킬 fx-189 「파」.</summary>',
+          '    private static readonly Dictionary<int, BodyFx[]> WorkBodies = new()',
+          '    {']
+for wid, bs in bodies.items():
+    lines.append('        [%d] = [%s],' % (wid, ', '.join('new(%d, %s)' % (m, 'true' if t else 'false') for m, t in bs)))
 lines += ['    };', '}', '']
 with open(OUT, 'w', encoding='utf-8-sig', newline='\n') as f:
     f.write('\n'.join(lines))

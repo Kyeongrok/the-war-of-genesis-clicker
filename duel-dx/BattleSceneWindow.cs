@@ -953,6 +953,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_showGrid) DrawGridLines();
         DrawObjects();
         DrawUnits();
+        DrawBodyClones();
         DrawEffects();
         DrawMovies();
         if (_showGauges) DrawGauges();
@@ -1400,6 +1401,17 @@ internal sealed class UnitSprite
         if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return _first;
         if (unit.Facing != Facing.Right) return frame;
 
+        if (!_mirrored.TryGetValue((k.SubentryId, k.Slot), out var mirrored))
+            _mirrored[(k.SubentryId, k.Slot)] = mirrored = frame.Mirrored();
+        return mirrored;
+    }
+
+    /// <summary>모션 번호(동작·방향이 아니라 Obs 안의 번호)로 그 틱의 컷 — 몸 복제(분신) 이펙트가 쓴다. 없으면 null.</summary>
+    public SpriteFrame? FrameOfMotion(int motion, int tick, bool mirror)
+    {
+        if (_table?.Clips.GetValueOrDefault(motion) is not { } clip || clip.KeyAt(tick, loop: false) is not { } k
+            || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return null;
+        if (!mirror) return frame;
         if (!_mirrored.TryGetValue((k.SubentryId, k.Slot), out var mirrored))
             _mirrored[(k.SubentryId, k.Slot)] = mirrored = frame.Mirrored();
         return mirrored;
