@@ -5,7 +5,11 @@
 `work_script.py` 가 이미 DLL 핸들러를 기호로 풀어 준다 — 여기서는 그 기록을 골라
 `('act', 기준동작)` 은 동작 번호(기준÷3)로, `('eff', Obs, 모션, x, y)` 는 이펙트로 옮긴다.
 이펙트 자리는 x 식으로 가른다: `나.대상.*` 이면 대상 자리, `나.*` 면 시전자 자리,
-그 밖(`esp+0x20` 처럼 코드가 셈해 넣는 자리)은 <b>안 옮긴다</b> — 어디인지 모르니 넣으면 엉뚱한 데 뜬다.
+그 밖(`esp+0x20` 처럼 코드가 셈해 넣는 자리 — 메테오의 떨어지는 자리 따위)은 <b>대상 자리</b>로 둔다.
+예전에는 이것을 버렸는데, 남은 것이 소리만 든 Obs(1338·311·1324 …)뿐인 기술이 87개나 되어 그림이 한 장도 안 나왔다.
+자리가 조금 틀려도 안 보이는 것보다 낫다.
+
+<b>그림 컷(종류 0 키)이 없는 Obs 모션은 뺀다</b> — 소리 껍데기다. 소리는 duel-dx 가 어빌리티 소리로 따로 낸다.
 
 손으로 맞춘 표(`AbilityMotions`)가 있는 work 은 그것이 이긴다 — 이 표는 <b>빈자리를 채우는 용도</b>다.
 """
@@ -15,6 +19,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import work_script as ws                                    # noqa: E402
+from obs_ui_dump import load_motions                        # noqa: E402
 
 GAME = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityScripts.g.cs')
@@ -25,14 +30,37 @@ works = ws.load_works(game)
 
 
 def where_of(x):
-    """이펙트 자리 — 'target' · 'self' · None(모르는 자리)."""
-    if not isinstance(x, str):
-        return None
-    if '대상' in x:
-        return 'target'
-    if x.startswith('나.'):
+    """이펙트 자리 — 'target' · 'self'. 코드가 셈하는 자리(모르는 자리)는 대상 자리로 본다."""
+    if isinstance(x, str) and x.startswith('나.') and '대상' not in x:
         return 'self'
-    return None
+    return 'target'
+
+
+_pictures = {}
+
+
+def pictures(obs, motion, depth=0):
+    """그 Obs 모션이 실제로 그리는 (Obs, 모션)들 — 제 그림 컷(종류 0 키)이 있으면 자신, 자식 키(종류 2)가 부르는 Obs 는 따라간다.
+    소리 키만 든 껍데기(1338 따위)는 빈 목록이다."""
+    if (obs, motion) in _pictures:
+        return _pictures[(obs, motion)]
+    out = []
+    try:
+        d = game.read('Obs', '%04d.obs' % obs)
+        m = load_motions(d).get(motion) if d else None
+    except Exception:
+        m = None
+    if m:
+        if any(k['kind'] == 0 for k in m['keys']):
+            out.append((obs, motion))
+        if depth < 3:
+            for k in m['keys']:
+                if k['kind'] == 2 and k['p'] and k['p'][0] > 0:
+                    for child in pictures(int(k['p'][0]), int(k['p'][1]), depth + 1):
+                        if child not in out:
+                            out.append(child)
+    _pictures[(obs, motion)] = out
+    return out
 
 
 rows = {}
@@ -56,14 +84,13 @@ for wid in sorted(works):
                 acts.append(rec[2] // 3)
             elif kind == 'eff' and isinstance(rec[2], int) and isinstance(rec[3], int):
                 place = where_of(rec[4])
-                if place is None:
-                    continue
-                key = (rec[2], rec[3], place)
-                if key not in effs:
-                    effs.append(key)
+                for o, mo in pictures(rec[2], rec[3]):      # 소리 껍데기는 빠지고, 자식 키가 부르는 그림은 들어온다
+                    key = (o, mo, place)
+                    if key not in effs:
+                        effs.append(key)
     if not acts and not effs:
         continue
-    rows[wid] = (acts[:8], effs[:6])
+    rows[wid] = (acts[:8], effs[:8])
 
 lines = [
     '// 이 파일은 tools/re/work_fx_table.py 가 만든다 — 손으로 고치지 말 것.',
@@ -77,7 +104,8 @@ lines = [
     '    /// work 번호 → (동작 차례, 이펙트) — <b>도구가 뽑은</b> 표. 손으로 맞춘 <see cref="AbilityMotions"/> 가 우선한다.',
     '    /// </summary>',
     '    /// <remarks>',
-    '    /// 자리를 코드가 셈해 넣는 이펙트(메테오의 떨어지는 자리 같은 것)는 <b>안 들어 있다</b> — 어디인지 모르기 때문이다.',
+    '    /// 자리를 코드가 셈해 넣는 이펙트(메테오의 떨어지는 자리 같은 것)는 <b>대상 자리</b>로 들어 있다(정확한 자리는 모른다).',
+    '    /// 그림 컷이 없는 Obs(소리 껍데기)는 빠져 있다.',
     '    /// 띄우는 높이(Lift)도 모르니 0 이다. 그 둘이 중요한 기술은 손 표에 따로 적는다.',
     '    /// </remarks>',
     '    private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> WorkScripts = new()',
