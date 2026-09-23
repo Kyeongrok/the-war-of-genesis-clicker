@@ -73,6 +73,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _eventPc;
     private double _eventWaitUntil;
 
+    /// <summary>행동 500 이 튼 소리를 푸는 중인가 — 다 풀릴 때까지 이벤트를 멈춘다(원본은 소리 개체의 +0x58 이 0 이 될 때까지 기다린다).</summary>
+    private volatile bool _eventSoundLoading;
+
+    /// <summary>다 푼 소리의 길이(초) — 배경 실이 채우고 <see cref="StepEvent"/> 가 기다림으로 바꾼다. 0 이면 없음.</summary>
+    private volatile float _eventSoundSeconds;
+
     /// <summary>이벤트가 돌거나 대사가 떠 있으면 전투를 멈춘다.</summary>
     private bool EventsBusy => _runningEvent >= 0 || _talk != null;
 
@@ -108,6 +114,8 @@ internal sealed unsafe partial class BattleSceneWindow
         while (_runningEvent >= 0)
         {
             if (_talk != null) return;                                  // 대사가 떠 있으면 기다린다
+            if (_eventSoundSeconds > 0) { _eventWaitUntil = _lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
+            if (_eventSoundLoading && !_talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
             if (_eventWaitUntil > _lastTime && !_talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
             var e = _events[_runningEvent];
             // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
@@ -400,6 +408,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 _eventWaitUntil = _lastTime + 1.2;
                 break;
             }
+            case 907:                                    // 물체 여닫기(0x10055a50) — 인자0 배치 번호, 인자1 0 닫기 · 그 밖 열기
+                ToggleObject(A(0), A(1) != 0);
+                _eventWaitUntil = _lastTime + 0.5;       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
+                break;
             case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
             {
                 int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
@@ -414,8 +426,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(0) > 0) _inventory[A(0)] = _inventory.GetValueOrDefault(A(0)) + 1;
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
-                if (A(0) > 0) PlayMusicFile(A(0), loop: false);
-                _eventWaitUntil = _lastTime + 2.0;
+                PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
                 break;
             case 400:
             case 402: break;                             // 카메라 옮기기 — 데모 카메라는 말하는 이·차례인 이를 저절로 따라간다
