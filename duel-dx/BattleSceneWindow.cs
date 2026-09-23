@@ -163,7 +163,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>
     /// 스왑체인이 새 프레임을 받을 수 있게 되면 신호가 오는 핸들 — 이걸 기다린 <b>다음에</b> 입력을 읽고 그린다.
     /// 기본값(최대 3프레임 미리 쌓기)이면 CPU 가 노는 동안(합성은 2~5ms) 프레임이 줄을 서서 입력이 늦게 보였다.
-    /// 줄은 2프레임 — 1이면 더 빠르지만 vsync 를 놓치는 프레임이 눈에 띄게 늘었다.
+    /// 줄은 1프레임 — 입력에서 화면까지 가장 짧다(화면 밖 시험에서는 2프레임보다 vsync 를 조금 더 놓쳤다).
     /// </summary>
     private IntPtr _frameWait;
     private ID3D11RenderTargetView _backBufferRtv = null!;
@@ -1239,7 +1239,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _swapChain = factory.CreateSwapChainForHwnd(_device, _hwnd, desc);
         using (var swapChain2 = _swapChain.QueryInterface<IDXGISwapChain2>())
         {
-            swapChain2.MaximumFrameLatency = 2;
+            swapChain2.MaximumFrameLatency = 1;
             _frameWait = swapChain2.FrameLatencyWaitableObject;
         }
         using var back = _swapChain.GetBuffer<ID3D11Texture2D>(0);
