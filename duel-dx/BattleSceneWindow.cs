@@ -556,6 +556,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_KEYUP:
                 _heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when SlotsOpen:
+                ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL:
                 // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
                 if (((long)wParam & 0x0004) != 0) ScrollCameraX(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
@@ -860,6 +863,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
             OpenStatusIfAsked();
+            OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
