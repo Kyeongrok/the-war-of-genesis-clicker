@@ -108,6 +108,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// 켜 두면 <see cref="ShowTalk"/>·<see cref="ShowFieldTalk"/> 가 글을 안 띄우고 지나가므로,
     /// 이벤트·필드 스크립트가 대사 줄에서 멈추지 않고 끝까지 달린다. 그 스크립트가 끝나면 저절로 꺼진다.
+    /// 필드 스크립트의 <b>행동 1000</b> 도 이것을 끈다 — 원본의 건너뛰기 깃발 <c>[0x101bffb0]</c> 을 0 으로 돌리는 줄이라,
+    /// 프롤로그를 건너뛰어도 1000 을 만나면 거기서부터 다시 제 속도로 흐른다(분석-필드 「행동 전수 대조」).
     /// </remarks>
     private bool _talkSkip;
 
