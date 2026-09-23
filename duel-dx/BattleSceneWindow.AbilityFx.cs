@@ -17,6 +17,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>이펙트 하나 — 어느 Obs 의 어느 모션을, 대상 자리(또는 내 자리)에서 몇 픽셀 위에 띄우나.</summary>
     private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift);
 
+    /// <summary>
+    /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
+    /// </summary>
+    /// <remarks>표(<see cref="AbilityMotions"/>)가 이것을 쓰므로 <b>표보다 먼저</b> 선언해야 한다 — 정적 초기화는 적은 차례대로 돈다.</remarks>
+    private static readonly AbilityEffect[] CounterBlade = [new(895, 0, false, 0), new(1365, 0, false, 0)];
+
     /// <summary>work 번호 → (동작 차례, 때리는 순간에 띄울 이펙트).</summary>
     private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
     {
@@ -41,7 +47,30 @@ internal sealed unsafe partial class BattleSceneWindow
         [467] = ([6, 15], [new(386, 0, true, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
         [469] = ([6, 15], [new(311, 0, true, 0), new(170, 0, true, 0), new(199, 0, true, 0), new(111, 0, true, 0)]),  // 메테오
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
+        // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
+        // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
+        [390] = ([5, 7, 12], CounterBlade),
+        [997] = ([5, 7, 12], CounterBlade),
+        [998] = ([5, 7, 12], CounterBlade),
+        [999] = ([5, 7, 12], CounterBlade),
+        [1000] = ([5, 7, 12], CounterBlade),
+        [1001] = ([5, 7, 12], CounterBlade),
+        [1002] = ([5, 7, 12], CounterBlade),
+        [1003] = ([5, 7, 12], CounterBlade),
+        [1004] = ([5, 7, 12], CounterBlade),
+        [1005] = ([5, 7, 12], CounterBlade),
+        [1006] = ([5, 7, 12], CounterBlade),
+        [1007] = ([5, 7, 12], CounterBlade),
+        [1008] = ([5, 7, 12], CounterBlade),
+        [1009] = ([5, 7, 12], CounterBlade),
+        [1010] = ([5, 7, 12], CounterBlade),
+        [1011] = ([5, 7, 12], CounterBlade),
+        [1012] = ([5, 7, 12], CounterBlade),
+        [1013] = ([5, 7, 12], CounterBlade),
+        [1014] = ([5, 7, 12], CounterBlade),
+        [1015] = ([5, 7, 12], CounterBlade),
     };
+
 
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
     private const int EscapeWork = 1583;
