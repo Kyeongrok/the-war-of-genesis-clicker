@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace DuelDx.Native;
 
 /// <summary>순수 네이티브(Win32) 창 하나를 만드는 데 필요한 최소한의 P/Invoke 묶음.</summary>
-internal static class Win32
+internal static unsafe class Win32
 {
     public const int CS_HREDRAW = 0x0002, CS_VREDRAW = 0x0001;
     public const int WS_OVERLAPPEDWINDOW = 0x00CF0000;
@@ -26,6 +26,38 @@ internal static class Win32
 
     [DllImport("user32.dll")]
     public static extern IntPtr SetCursor(IntPtr cursor);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct IconInfo
+    {
+        [MarshalAs(UnmanagedType.Bool)] public bool IsIcon;
+        public int HotspotX;
+        public int HotspotY;
+        public IntPtr Mask;
+        public IntPtr Color;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr CreateIconIndirect(ref IconInfo info);
+
+    [DllImport("user32.dll")]
+    public static extern bool DestroyCursor(IntPtr cursor);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateBitmap(int width, int height, uint planes, uint bitCount, void* bits);
+
+    [DllImport("gdi32.dll")]
+    public static extern bool DeleteObject(IntPtr obj);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(Point point);
+
+    [DllImport("user32.dll")]
+    public static extern bool ScreenToClient(IntPtr hWnd, ref Point point);
+
     public const uint WM_ERASEBKGND = 0x0014;
     public const uint WM_COMMAND = 0x0111;
     public const uint WM_MOUSEWHEEL = 0x020A;

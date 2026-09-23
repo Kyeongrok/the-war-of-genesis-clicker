@@ -483,6 +483,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             Update(Math.Min(now - _lastTime, 0.1));
             _lastTime = now;
 
+            UpdateCursor();
             Render();
         }
     }
@@ -536,8 +537,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
             case Win32.WM_SETCURSOR:
-                // 게임 고유 커서를 우리가 그린다 — 판 위에서는 윈도 커서를 숨긴다(an-ui-1).
-                if ((((long)lParam) & 0xFFFF) == Win32.HTCLIENT) { Win32.SetCursor(IntPtr.Zero); return (IntPtr)1; }
+                // 판 위에서는 게임 고유 커서(an-ui-1)를 하드웨어 커서로 건다 — UpdateCursor 가 컷에 맞춰 만든 것.
+                if ((((long)lParam) & 0xFFFF) == Win32.HTCLIENT) { Win32.SetCursor(_hwCursor); return (IntPtr)1; }
                 break;
             case Win32.WM_KEYDOWN:
                 // 키 반복(lParam 30번 비트)은 무시한다 — 누르고 있는 동안은 Update 가 알아서 이어 걷는다.
@@ -949,7 +950,6 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawTitle();
         DrawEpisodes();
         DrawChapters();
-        DrawCursor();
     }
 
     private void DrawBackground()
@@ -1263,6 +1263,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_active == this) _active = null;
         _mixer.Dispose();
+        DestroyCursors();
         _backBufferRtv?.Dispose();
         _swapChain?.Dispose();
         _boardSrv?.Dispose();
