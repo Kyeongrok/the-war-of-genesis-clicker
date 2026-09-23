@@ -1049,6 +1049,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void DrawStatus()
     {
+        // 설정 > 상단 상태 줄 보이기(기본 끔) — 꺼 두어도 자료를 못 읽었다는 경고는 보인다.
+        if (!_showStatusBar)
+        {
+            if (!_loading && _loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 4, 0xFFD05050);
+            return;
+        }
         FillRect(_camX, _camY, ViewWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
         if (_loading)
         {

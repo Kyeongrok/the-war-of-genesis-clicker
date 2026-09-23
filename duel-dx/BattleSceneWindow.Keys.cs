@@ -102,7 +102,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _keysCapture = -1;
 
     private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
-    private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100;
+    private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101;
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
     private const int MenuClearEnemies = 1008;
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
@@ -130,6 +130,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowHints ? Win32.MF_CHECKED : 0u), MenuHints, "조작 안내 글 보이기(&T)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowLevelUp ? Win32.MF_CHECKED : 0u), MenuLevelUpWindow, "레벨업 창 보이기(&L)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.KeepExpOnJobChange ? Win32.MF_CHECKED : 0u), MenuKeepJobExp, "전직할 때 EXP 유지(&E)");
+        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowStatusBar ? Win32.MF_CHECKED : 0u), MenuStatusBar, "상단 상태 줄 보이기(&B)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -159,7 +160,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar));
+
+    /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
+    private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
 
     /// <summary>전직할 때 EXP 를 남길지 — 설정 > 전직할 때 EXP 유지. 원본은 0 으로 비운다.</summary>
     private bool _keepJobExp = UserSettings.Current.KeepExpOnJobChange;
@@ -189,6 +193,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuLevelUpWindow, Win32.MF_BYCOMMAND | (_showLevelUp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 if (!_showLevelUp && LevelUpOpen) CloseLevelUp();
                 Toast(_showLevelUp ? "레벨업 창을 보입니다" : "레벨업 창을 숨깁니다 — 레벨은 그대로 오릅니다");
+                SaveSettings();
+                break;
+            case MenuStatusBar:
+                _showStatusBar = !_showStatusBar;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuStatusBar, Win32.MF_BYCOMMAND | (_showStatusBar ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 break;
             case MenuKeepJobExp:
