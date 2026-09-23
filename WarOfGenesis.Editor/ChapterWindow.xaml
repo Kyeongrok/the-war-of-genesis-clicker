@@ -2,7 +2,7 @@
     x:Class="WarOfGenesis.Editor.ChapterWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="챕터(모세스) 보기"
+    Title="챕터(모세스) 편집"
     Width="1500"
     Height="900"
     WindowStartupLocation="CenterOwner">
@@ -44,7 +44,7 @@
             Margin="0,6,0,0"
             DockPanel.Dock="Bottom"
             Foreground="DimGray"
-            Text="옵시디안 분석-모세스 6절(Chp 레코드 — 성도 점 12B · 항성계 66B · 행성 84B · 장소 20B) · 10절(메일 Dat\MAIL.DAT) · 12절(상점 Shp\NNNN.shp). 항행은 항성계 → 행성 → 장소 세 단계이고 챕터가 정한 '최저 항행 단계' 부터 시작한다. 장소 값 v 는 10000 미만이면 전투 v · 10000+ 면 필드 v−10000 · 20000+ 면 상점 v−20000 이고, '자동 발생' 장소는 목록에 안 나오는 대신 챕터를 열자마자 그리로 간다. 오른쪽 나무에서 전투 장소를 두 번 누르면 전투 보기 창이 그 전투를 연다."
+            Text="옵시디안 분석-모세스 6절(Chp 레코드 — 성도 점 12B · 항성계 66B · 행성 84B · 장소 20B) · 10절(메일 Dat\MAIL.DAT) · 12절(상점 Shp\NNNN.shp). 항행은 항성계 → 행성 → 장소 세 단계이고 챕터가 정한 '최저 항행 단계' 부터 시작한다. 장소 값 v 는 10000 미만이면 전투 v · 10000+ 면 필드 v−10000 · 20000+ 면 상점 v−20000 이고, '자동 발생' 장소는 목록에 안 나오는 대신 챕터를 열자마자 그리로 간다. 오른쪽 나무에서 전투 장소를 두 번 누르면 전투 보기 창이 그 전투를 연다. 장소를 고르면 아래에서 고칠 수 있고, 저장하면 저장소 assets/moses/chp 에 써서 게임(duel-dx)을 다시 켜면 반영된다 — 게임 폴더는 건드리지 않는다."
             TextWrapping="Wrap" />
 
         <Grid>
@@ -108,11 +108,156 @@
                         DockPanel.Dock="Top"
                         FontWeight="Bold"
                         Text="항성계 → 행성 → 장소" />
+                    <!--  고른 장소 고치기 — 레코드 20바이트를 제자리에 고쳐 쓴다(분석-모세스 6절).  -->
+                    <GroupBox
+                        x:Name="PlaceEditor"
+                        Margin="0,6,0,0"
+                        AutomationProperties.AutomationId="ChapterPlaceEditor"
+                        DockPanel.Dock="Bottom"
+                        Header="장소 고치기 — 나무에서 장소를 고르세요"
+                        IsEnabled="False">
+                        <StackPanel Margin="4">
+                            <WrapPanel>
+                                <TextBlock VerticalAlignment="Center" Text="이름 TXR" />
+                                <TextBox
+                                    x:Name="PlaceNameBox"
+                                    Width="60"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceNameBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBlock
+                                    x:Name="PlaceNamePreview"
+                                    Width="150"
+                                    Margin="4,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="DimGray"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock VerticalAlignment="Center" Text="가는 곳" />
+                                <ComboBox
+                                    x:Name="PlaceKindBox"
+                                    Width="80"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceKindBox"
+                                    SelectionChanged="PlaceField_Changed">
+                                    <ComboBoxItem Content="전투" />
+                                    <ComboBoxItem Content="필드" />
+                                    <ComboBoxItem Content="상점" />
+                                    <ComboBoxItem Content="없음" />
+                                </ComboBox>
+                                <TextBox
+                                    x:Name="PlaceTargetBox"
+                                    Width="60"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceTargetBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBlock
+                                    x:Name="PlaceTargetPreview"
+                                    Width="170"
+                                    Margin="4,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="DimGray"
+                                    TextTrimming="CharacterEllipsis" />
+                                <CheckBox
+                                    x:Name="PlaceAutoBox"
+                                    Margin="0,0,12,0"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="PlaceAutoBox"
+                                    Click="PlaceField_Changed"
+                                    Content="자동 발생" />
+                            </WrapPanel>
+                            <WrapPanel>
+                                <TextBlock VerticalAlignment="Center" Text="설명 TXR" />
+                                <TextBox
+                                    x:Name="PlaceDescBox"
+                                    Width="60"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceDescBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBlock
+                                    x:Name="PlaceDescPreview"
+                                    Width="150"
+                                    Margin="4,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="DimGray"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock VerticalAlignment="Center" Text="레이더 칸 경도·위도" />
+                                <TextBox
+                                    x:Name="PlaceLonBox"
+                                    Width="36"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceLonBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBox
+                                    x:Name="PlaceLatBox"
+                                    Width="36"
+                                    Margin="4,2,12,2"
+                                    AutomationProperties.AutomationId="PlaceLatBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBlock VerticalAlignment="Center" Text="열리는 조건(가설): 깃발" />
+                                <TextBox
+                                    x:Name="PlaceCondVarBox"
+                                    Width="50"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceCondVarBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <ComboBox
+                                    x:Name="PlaceCondOpBox"
+                                    Width="56"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceCondOpBox"
+                                    SelectionChanged="PlaceField_Changed">
+                                    <ComboBoxItem Content="==" />
+                                    <ComboBoxItem Content="!=" />
+                                    <ComboBoxItem Content="&lt;" />
+                                    <ComboBoxItem Content="&lt;=" />
+                                    <ComboBoxItem Content="&gt;" />
+                                    <ComboBoxItem Content="&gt;=" />
+                                </ComboBox>
+                                <TextBox
+                                    x:Name="PlaceCondValueBox"
+                                    Width="50"
+                                    Margin="4,2,0,2"
+                                    AutomationProperties.AutomationId="PlaceCondValueBox"
+                                    TextChanged="PlaceField_Changed" />
+                                <TextBlock
+                                    Margin="4,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="DimGray"
+                                    Text="(깃발 −1 = 조건 없음)" />
+                            </WrapPanel>
+                            <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                                <Button
+                                    Padding="12,2"
+                                    AutomationProperties.AutomationId="PlaceApplyButton"
+                                    Click="PlaceApply_Click"
+                                    Content="고치기" />
+                                <Button
+                                    Margin="6,0,0,0"
+                                    Padding="12,2"
+                                    AutomationProperties.AutomationId="ChapterSaveButton"
+                                    Click="Save_Click"
+                                    Content="저장" />
+                                <Button
+                                    Margin="6,0,0,0"
+                                    Padding="12,2"
+                                    AutomationProperties.AutomationId="ChapterRevertButton"
+                                    Click="Revert_Click"
+                                    Content="이 챕터 되돌리기" />
+                                <TextBlock
+                                    x:Name="PlaceEditStatus"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="DimGray"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
                     <TreeView
                         x:Name="PlaceTree"
                         AutomationProperties.AutomationId="ChapterPlaceTree"
                         KeyDown="PlaceTree_KeyDown"
-                        MouseDoubleClick="PlaceTree_MouseDoubleClick" />
+                        MouseDoubleClick="PlaceTree_MouseDoubleClick"
+                        SelectedItemChanged="PlaceTree_SelectedItemChanged" />
                 </DockPanel>
 
                 <GridSplitter

@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +23,12 @@ namespace WarOfGenesis.Editor;
 /// 자동 발생 장소는 항행 목록에 안 나오고 챕터를 열자마자 그리로 간다(분석-모세스 1절「들어오는 두 갈래」).
 /// 전투 장소를 두 번 누르면 <see cref="BattleMapWindow.SelectBattle"/> 로 전투 보기 창이 그 전투를 연다.
 /// </para>
+/// <para>
+/// <b>장소 고치기</b> — 챕터는 게임 폴더가 아니라 저장소 <c>assets/moses/chp</c> 에서 읽고(duel-dx 가 읽는 그 파일),
+/// 고른 장소의 레코드 20바이트를 <see cref="ChapterFile.WritePlace"/> 로 제자리에 고쳐 쓴다 — 뒤 자료가 안 움직인다.
+/// 장소를 더하거나 빼는 것은 행성 칸·스크립트가 번호로 가리키고 있어 여기서 하지 않는다.
+/// 저장하면 처음 한 번만 원본을 <c>.bak</c> 으로 남긴다(체질 어빌리티 창과 같다).
+/// </para>
 /// </remarks>
 public partial class ChapterWindow : Window
 {
@@ -31,7 +37,8 @@ public partial class ChapterWindow : Window
                                     int SystemCount, int PlanetCount, int PlaceCount, string Note,
                                     bool Story, string Search)
     {
-        public ChapterFile Chapter { get; init; } = null!;
+        /// <summary>장소를 고치면 다시 읽은 것으로 갈아 끼운다.</summary>
+        public ChapterFile Chapter { get; set; } = null!;
     }
 
     /// <summary>상점 탭 한 줄 — 그 챕터의 기본 상점 둘과 장소가 가리키는 상점들.</summary>
@@ -44,7 +51,7 @@ public partial class ChapterWindow : Window
     public sealed record LandmarkRow(int No, int Obs, int Motion, string Pos, string System, string Note);
 
     /// <summary>나무에서 두 번 누를 수 있는 것 — 장소가 가리키는 곳.</summary>
-    private sealed record PlaceTag(ChapterFile.PlaceKind Kind, int Target);
+    private sealed record PlaceTag(ChapterFile.Place Place);
 
     private readonly string _gameRoot;
     private readonly GameDatabase? _db;
@@ -53,6 +60,15 @@ public partial class ChapterWindow : Window
     private ICollectionView? _view;
     private BattleMapWindow? _mapWindow;
     private string _countText = "";
+
+    /// <summary>챕터를 읽은 폴더(<c>assets/moses/chp</c>) — 비어 있으면 게임 폴더에서 읽은 것이라 고칠 수 없다.</summary>
+    private string _chpFolder = "";
+    /// <summary>챕터 번호 → 파일 바이트(고친 것이 여기 먼저 들어가고 저장하면 파일로 간다).</summary>
+    private readonly Dictionary<int, byte[]> _bytes = [];
+    /// <summary>고치고 아직 저장 안 한 챕터들.</summary>
+    private readonly HashSet<int> _dirty = [];
+    /// <summary>편집 칸을 채우는 중에는 바뀜 알림을 무시한다.</summary>
+    private bool _fillingEditor;
 
     public ChapterWindow(string gameRoot, GameDatabase? db)
     {
@@ -84,8 +100,26 @@ public partial class ChapterWindow : Window
             string error = "";
             try
             {
-                chpFiles = files.List("Chp", ".chp").Count;
-                chapters = ChapterFile.LoadAll(files);
+                if (RepoChapterFolder() is { } folder)
+                {
+                    // 저장소 사본에서 읽는다 — 고친 것을 저장할 곳이자 게임(duel-dx)이 읽는 곳이다.
+                    foreach (string path in Directory.EnumerateFiles(folder, "*.chp"))
+                    {
+                        chpFiles++;
+                        if (!int.TryParse(Path.GetFileNameWithoutExtension(path), out int id)) continue;
+                        byte[] bytes = File.ReadAllBytes(path);
+                        if (ChapterFile.Parse(id, bytes) is not { } chapter) continue;
+                        chapters.Add(chapter);
+                        _bytes[id] = bytes;
+                    }
+                    chapters = [.. chapters.OrderBy(c => c.StoryRank).ThenBy(c => c.Id)];
+                    _chpFolder = folder;
+                }
+                else
+                {
+                    chpFiles = files.List("Chp", ".chp").Count;
+                    chapters = ChapterFile.LoadAll(files);
+                }
                 shops = ShopFile.LoadAll(files);
                 mails = MailFile.Load(files);
             }
@@ -95,6 +129,17 @@ public partial class ChapterWindow : Window
             }
             Dispatcher.BeginInvoke(() => Show(chapters, shops, mails, chpFiles, error));
         });
+    }
+
+    /// <summary>저장소 <c>assets/moses/chp</c> — 없으면(배포용 exe 등) null 이고 그때는 게임 폴더에서 읽기만 한다.</summary>
+    private static string? RepoChapterFolder()
+    {
+        try
+        {
+            string folder = Path.Combine(AssetsFolder.Find("moses"), "chp");
+            return Directory.Exists(folder) ? folder : null;
+        }
+        catch (DirectoryNotFoundException) { return null; }
     }
 
     private void Show(List<ChapterFile> chapters, Dictionary<int, ShopFile> shops, List<MailEntry> mails, int chpFiles, string error)
@@ -122,7 +167,8 @@ public partial class ChapterWindow : Window
         int story = _rows.Count(r => r.Story);
         _countText = $"챕터 {_rows.Count}개(이야기 {story}개 · 그 밖 {_rows.Count - story}개, Chp 파일 {chpFiles}개 중 {chpFiles - _rows.Count}개는 배치가 안 맞아 건너뜀)"
                      + $" · 상점 {shops.Count}개 · 편지 {mails.Count}통"
-                     + (error.Length > 0 ? $" · 읽기 실패: {error}" : "");
+                     + (error.Length > 0 ? $" · 읽기 실패: {error}" : "")
+                     + (_chpFolder.Length > 0 ? $" · 읽은 곳 {_chpFolder}" : " · 게임 폴더에서 읽음(저장소 assets 가 없어 고칠 수 없음)");
         UpdateStatus();
         if (_rows.Count > 0) ChapterGrid.SelectedIndex = 0;
     }
@@ -240,7 +286,7 @@ public partial class ChapterWindow : Window
         string text = $"장소 {place.No} 「{TextOr(place.NameText)}」 — {ValueText(place)}";
         if (place.IsAuto) text += "  ·  자동 발생(목록에 안 나오고 챕터를 열자마자 간다)";
         if (place.DescText > 0) text += $"  ·  설명 「{T(place.DescText)}」";
-        var node = Node(text, place.Value > 0 ? new PlaceTag(place.Kind, place.Target) : null);
+        var node = Node(text, new PlaceTag(place));
         if (place.Conditions.FirstOrDefault(c => c.Variable >= 0) is { Variable: >= 0 } cond)
             node.ToolTip = $"조건(가설): 변수 {cond.Variable} {OperatorText(cond.Operator)} {cond.Value}";
         return node;
@@ -346,10 +392,10 @@ public partial class ChapterWindow : Window
     /// <summary>고른 장소가 전투면 전투 보기 창에서 연다 — 창은 하나만 띄우고, 떠 있으면 전투만 바꾼다.</summary>
     private void OpenSelectedPlace()
     {
-        if (PlaceTree.SelectedItem is not TreeViewItem { Tag: PlaceTag tag }) return;
-        if (tag.Kind != ChapterFile.PlaceKind.Battle)
+        if (PlaceTree.SelectedItem is not TreeViewItem { Tag: PlaceTag { Place: { Value: > 0 } place } }) return;
+        if (place.Kind != ChapterFile.PlaceKind.Battle)
         {
-            StatusText.Text = $"{_countText} · {(tag.Kind == ChapterFile.PlaceKind.Shop ? $"상점 {tag.Target:D4} 은 아래 상점 탭에 있습니다" : $"필드 {tag.Target:D4} 를 여는 창은 아직 없습니다")}";
+            StatusText.Text = $"{_countText} · {(place.Kind == ChapterFile.PlaceKind.Shop ? $"상점 {place.Target:D4} 은 아래 상점 탭에 있습니다" : $"필드 {place.Target:D4} 를 여는 창은 아직 없습니다")}";
             return;
         }
         if (_mapWindow == null)
@@ -358,7 +404,212 @@ public partial class ChapterWindow : Window
             _mapWindow.Closed += (_, _) => _mapWindow = null;
             _mapWindow.Show();
         }
-        _mapWindow.SelectBattle(tag.Target);
+        _mapWindow.SelectBattle(place.Target);
         _mapWindow.Activate();
+    }
+
+    // ── 장소 고치기 ──────────────────────────────────────────────────────────
+
+    private ChapterRow? CurrentRow => ChapterGrid.SelectedItem as ChapterRow;
+
+    private ChapterFile.Place? SelectedPlace =>
+        PlaceTree.SelectedItem is TreeViewItem { Tag: PlaceTag tag } ? tag.Place : null;
+
+    private void PlaceTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) => FillEditor(SelectedPlace);
+
+    /// <summary>고른 장소를 편집 칸에 채운다 — 장소가 아니면(항성계·행성 줄) 칸을 잠근다.</summary>
+    private void FillEditor(ChapterFile.Place? place)
+    {
+        _fillingEditor = true;
+        try
+        {
+            bool editable = place != null && _chpFolder.Length > 0 && place.Offset >= 0;
+            PlaceEditor.IsEnabled = editable;
+            if (place == null)
+            {
+                PlaceEditor.Header = "장소 고치기 — 나무에서 장소를 고르세요";
+                return;
+            }
+            PlaceEditor.Header = $"장소 {place.No} 고치기 — Chp {CurrentRow?.Id:D4} 의 파일 +0x{place.Offset:X} 부터 20바이트"
+                                 + (_chpFolder.Length == 0 ? " (게임 폴더에서 읽어 고칠 수 없음)" : "");
+            PlaceNameBox.Text = place.NameText.ToString();
+            PlaceDescBox.Text = place.DescText.ToString();
+            PlaceKindBox.SelectedIndex = place.Value <= 0 ? 3 : (int)place.Kind;
+            PlaceTargetBox.Text = place.Value <= 0 ? "" : place.Target.ToString();
+            PlaceAutoBox.IsChecked = place.IsAuto;
+            PlaceLonBox.Text = place.Lon.ToString();
+            PlaceLatBox.Text = place.Lat.ToString();
+            var (variable, value, op) = place.Conditions.Count > 0 ? place.Conditions[0] : (-1, -1, -1);
+            PlaceCondVarBox.Text = variable.ToString();
+            PlaceCondValueBox.Text = variable < 0 ? "" : value.ToString();
+            PlaceCondOpBox.SelectedIndex = op is >= 0 and <= 5 ? op : -1;
+        }
+        finally
+        {
+            _fillingEditor = false;
+            UpdatePreviews();
+        }
+    }
+
+    private void PlaceField_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_fillingEditor) UpdatePreviews();
+    }
+
+    /// <summary>TXR 번호 옆에 그 글을, 가는 곳 번호 옆에 그 자료가 있는지를 보여 준다.</summary>
+    private void UpdatePreviews()
+    {
+        PlaceNamePreview.Text = int.TryParse(PlaceNameBox.Text, out int name) ? T(name) : "";
+        PlaceDescPreview.Text = int.TryParse(PlaceDescBox.Text, out int desc) ? T(desc) : "";
+        PlaceTargetBox.IsEnabled = PlaceKindBox.SelectedIndex is >= 0 and <= 2;
+        PlaceTargetPreview.Text = !int.TryParse(PlaceTargetBox.Text, out int target) || PlaceKindBox.SelectedIndex is < 0 or > 2 ? "" : PlaceKindBox.SelectedIndex switch
+        {
+            2 => _shops.TryGetValue(target, out var shop) ? $"상점 「{TextOr(shop.NameText)}」" : "Shp 파일이 없다",
+            1 => File.Exists(Path.Combine(AssetsFolderOrEmpty("data"), "Fld", $"{target:D4}.fld")) ? $"Fld {target:D4}" : $"Fld {target:D4} 가 assets 에 없다",
+            _ => File.Exists(Path.Combine(AssetsFolderOrEmpty("data"), "Btl", $"{target:D4}.btl")) ? $"Btl {target:D4}" : $"Btl {target:D4} 가 assets 에 없다",
+        };
+        PlaceCondValueBox.IsEnabled = PlaceCondOpBox.IsEnabled = int.TryParse(PlaceCondVarBox.Text, out int v) && v >= 0;
+    }
+
+    private static string AssetsFolderOrEmpty(string sub)
+    {
+        try { return AssetsFolder.Find(sub); }
+        catch (DirectoryNotFoundException) { return ""; }
+    }
+
+    /// <summary>편집 칸의 값으로 장소 레코드를 고쳐 쓰고 챕터를 다시 읽는다 — 파일에는 저장을 눌러야 간다.</summary>
+    private void PlaceApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentRow is not { } row || SelectedPlace is not { } place || !_bytes.TryGetValue(row.Id, out var bytes)) return;
+        if (ReadEdited(place) is not { } edited) return;
+
+        ChapterFile.WritePlace(bytes, edited);
+        if (ChapterFile.Parse(row.Id, bytes) is not { } reread)
+        {
+            PlaceEditStatus.Text = "고쳐 쓴 뒤 챕터를 다시 못 읽었습니다 — 되돌리기를 누르세요.";
+            return;
+        }
+        row.Chapter = reread;
+        _dirty.Add(row.Id);
+        BuildTree(reread);
+        SelectPlaceNode(edited.No);
+        PlaceEditStatus.Text = $"장소 {edited.No} 를 고쳤습니다 — 저장을 눌러야 파일에 남습니다. (저장 안 한 챕터 {_dirty.Count}개)";
+    }
+
+    /// <summary>편집 칸을 읽어 새 장소 레코드를 만든다. 값이 틀리면 알리고 null.</summary>
+    private ChapterFile.Place? ReadEdited(ChapterFile.Place place)
+    {
+        string? error = null;
+        int Word(TextBox box, string what, int min, int max, int blank = int.MinValue)
+        {
+            if (box.Text.Trim().Length == 0 && blank != int.MinValue) return blank;
+            if (int.TryParse(box.Text.Trim(), out int v) && v >= min && v <= max) return v;
+            error ??= $"{what} 은(는) {min}~{max} 사이 정수여야 합니다.";
+            return 0;
+        }
+
+        int name = Word(PlaceNameBox, "이름 TXR", -1, short.MaxValue);
+        int desc = Word(PlaceDescBox, "설명 TXR", -1, short.MaxValue);
+        int lon = Word(PlaceLonBox, "경도칸", -1, 9);
+        int lat = Word(PlaceLatBox, "위도칸", -1, 9);
+        // 장소 값: 전투 v · 필드 10000+v · 상점 20000+v(분석-모세스 6절). 「없음」이면 원래 값이 없던 모양(0 이하)을 그대로 두고, 아니면 −1.
+        int value = PlaceKindBox.SelectedIndex switch
+        {
+            0 => Word(PlaceTargetBox, "전투 번호", 1, 9999),
+            1 => 10000 + Word(PlaceTargetBox, "필드 번호", 0, 9999),
+            2 => 20000 + Word(PlaceTargetBox, "상점 번호", 0, 9999),
+            _ => place.Value <= 0 ? place.Value : -1,
+        };
+        int variable = Word(PlaceCondVarBox, "조건 깃발", -1, 1999);   // 진행 깃발은 2000칸(0x101b6050)
+        (int, int, int) condition = (-1, -1, -1);
+        if (variable >= 0)
+        {
+            if (PlaceCondOpBox.SelectedIndex < 0) error ??= "조건 연산자를 고르세요.";
+            condition = (variable, Word(PlaceCondValueBox, "조건 값", short.MinValue, short.MaxValue), PlaceCondOpBox.SelectedIndex);
+        }
+
+        if (error != null)
+        {
+            PlaceEditStatus.Text = error;
+            return null;
+        }
+        return place with
+        {
+            NameText = name, DescText = desc, Value = value, Lon = lon, Lat = lat,
+            Auto = PlaceAutoBox.IsChecked == true ? Math.Max(1, place.Auto) : 0,
+            Conditions = [condition],
+        };
+    }
+
+    private void SelectPlaceNode(int placeNo)
+    {
+        foreach (var item in AllNodes(PlaceTree.Items))
+            if (item.Tag is PlaceTag { Place.No: var no } && no == placeNo)
+            {
+                item.IsSelected = true;
+                item.BringIntoView();
+                return;
+            }
+    }
+
+    private static IEnumerable<TreeViewItem> AllNodes(ItemCollection items)
+    {
+        foreach (var item in items.OfType<TreeViewItem>())
+        {
+            yield return item;
+            foreach (var child in AllNodes(item.Items)) yield return child;
+        }
+    }
+
+    /// <summary>고친 챕터를 모두 저장소 <c>assets/moses/chp</c> 에 쓴다. 처음 한 번은 원본을 .bak 으로 남긴다.</summary>
+    private void Save_Click(object sender, RoutedEventArgs e) => SaveDirty();
+
+    private bool SaveDirty()
+    {
+        if (_dirty.Count == 0) { PlaceEditStatus.Text = "고친 챕터가 없습니다."; return true; }
+        try
+        {
+            foreach (int id in _dirty.Order())
+            {
+                string path = Path.Combine(_chpFolder, $"{id:D4}.chp");
+                string backup = path + ".bak";
+                if (!File.Exists(backup) && File.Exists(path)) File.Copy(path, backup);
+                File.WriteAllBytes(path, _bytes[id]);
+            }
+            PlaceEditStatus.Text = $"챕터 {string.Join(", ", _dirty.Order().Select(id => id.ToString("D4")))} 을(를) 저장했습니다 — 게임을 다시 켜면 반영됩니다(처음 원본은 .bak).";
+            _dirty.Clear();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            PlaceEditStatus.Text = $"저장하지 못했습니다: {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>고른 챕터를 파일에 있는 대로 다시 읽는다.</summary>
+    private void Revert_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentRow is not { } row || _chpFolder.Length == 0) return;
+        byte[] bytes = File.ReadAllBytes(Path.Combine(_chpFolder, $"{row.Id:D4}.chp"));
+        if (ChapterFile.Parse(row.Id, bytes) is not { } chapter) return;
+        _bytes[row.Id] = bytes;
+        row.Chapter = chapter;
+        _dirty.Remove(row.Id);
+        int? keep = SelectedPlace?.No;
+        BuildTree(chapter);
+        if (keep is { } no) SelectPlaceNode(no);
+        PlaceEditStatus.Text = $"Chp {row.Id:D4} 을(를) 파일에 있는 대로 되돌렸습니다.";
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_dirty.Count > 0)
+        {
+            var answer = MessageBox.Show(this, $"저장 안 한 챕터가 {_dirty.Count}개 있습니다. 저장할까요?", "챕터 편집",
+                                         MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveDirty())) e.Cancel = true;
+        }
+        base.OnClosing(e);
     }
 }
