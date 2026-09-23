@@ -963,7 +963,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
                 BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade);
                 headY = footY + frame.Y;
-                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade);
+                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Action < 0);
             }
             if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
         }
