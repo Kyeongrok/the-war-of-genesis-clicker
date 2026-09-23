@@ -241,6 +241,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _fieldTalk = null;
         _talk = null;
         _fieldChoices = null;
+        // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
+        _fieldWaitChannel = -1;
+        StopAllChannelSounds();
     }
 
     /// <summary>
