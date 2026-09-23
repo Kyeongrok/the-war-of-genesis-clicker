@@ -68,9 +68,18 @@ def pictures(obs, motion, depth=0):
 extra = wx.ExtraAnalyzer(os.path.join(GAME, 'G3PartII.dll'))
 
 
+FLYERS = {0x100c3340, 0x100c5940}                            # 시전자 → 대상으로 날려 보내는 이펙트 생성자(fx-189)
+
+
 def add(effs, key):
-    if key not in effs:
-        effs.append(key)
+    """key = (Obs, 모션, 자리, 지연틱, 개수, 날기). 같은 (Obs, 모션, 자리)는 하나만."""
+    key = key + (0, 1, False)[len(key) - 3:] if len(key) < 6 else key
+    for i, e in enumerate(effs):
+        if e[:3] == key[:3]:
+            if e[3:] == (0, 1, False) and key[3:] != (0, 1, False):
+                effs[i] = key                                # 지연·개수·날기를 아는 쪽으로 바꿔 끼운다
+            return
+    effs.append(key)
 
 
 MOVIES = {34, 40, 41, 42, 61}                                # assets/effects/mov 에 풀어 둔 영상(mov_frames)
@@ -133,11 +142,18 @@ for wid in sorted(works):
             if not isinstance(obs, int) or r['kind'] not in ('obs', 'emit'):
                 continue
             place = 'self' if wx.where_of(r) == 'self' else 'target'
+            delay = r['delay'] if isinstance(r.get('delay'), int) and 0 < r['delay'] < 300 else 0
+            count = 1
+            if r['kind'] == 'emit' and r.get('setter'):
+                args = r['setter'][1]
+                if len(args) > 2 and isinstance(args[2], int) and 1 < args[2] <= 16:
+                    count = args[2]                          # 뿌리개 설정 인자 3 = 개수(크래쉬 봄 110 은 8)
+            fly = r.get('ctor') in FLYERS
             if isinstance(mo, int):
                 if r['kind'] == 'obs':
-                    add(effs, (obs, mo, place))
+                    add(effs, (obs, mo, place, delay, count, fly))
                 for o, m2 in pictures(obs, mo):
-                    add(effs, (o, m2, place))
+                    add(effs, (o, m2, place, delay, count, fly))
             else:                                            # 뿌리개 모션을 코드가 고른다 — 그림 있는 첫 모션 둘
                 try:
                     mm = sorted(wx.load_motions(game.read('Obs', '%04d.obs' % obs)))
@@ -147,7 +163,7 @@ for wid in sorted(works):
                 for m2 in mm:
                     for o, m3 in pictures(obs, m2):
                         if n < 2:
-                            add(effs, (o, m3, place))
+                            add(effs, (o, m3, place, delay, count, fly))
                             n += 1
     if movs:
         movies[wid] = movs
@@ -178,7 +194,9 @@ lines = [
 ]
 for wid, (acts, effs) in rows.items():
     a = ', '.join(str(x) for x in acts)
-    e = ', '.join('new(%d, %d, %s, 0)' % (o, m, 'true' if p == 'target' else 'false') for o, m, p in effs)
+    e = ', '.join('new(%d, %d, %s, 0%s)' % (o, m, 'true' if p == 'target' else 'false',
+                                           '' if (d, c, f) == (0, 1, False) else ', %d, %d, %s' % (d, c, 'true' if f else 'false'))
+                  for o, m, p, d, c, f in effs)
     lines.append('        [%d] = ([%s], [%s]),' % (wid, a, e))
 lines += ['    };', '',
           '    /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>',
