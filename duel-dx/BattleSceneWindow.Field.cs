@@ -387,6 +387,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool RunFieldAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        // DUELDX_TRACE=1 이면 어느 줄을 읽었는지 남긴다 — 화면 밖 시험에서 스크립트가 어디서 멈췄는지 보려고.
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                               $"fld {(_field?.Id ?? _mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}: {a.Code} [{string.Join(", ", a.Args)}]" + Environment.NewLine);
         switch (a.Code)
         {
             case 0:
@@ -653,6 +657,14 @@ internal sealed unsafe partial class BattleSceneWindow
             case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐
                 FadeMusic(A(0), A(1));
                 break;
+            case 609:                                        // [인물, 이름 TXR, 챕터 Tlc 글, ?] 이름과 글을 <b>다른 표</b>에서 꺼내는 대사(0x100efb30)
+                // 원본은 0x1004a3f0(TXR)으로 이름을, 0x1004a650(Tlk\NNNN.Tlc = EvtText)으로 글을 읽어
+                // 0x160바이트 창을 [0x101bfe34] 에 만든다 — 600~603 의 대사창([0x101bfe30])과 다른 자리이고 틀은 (164,120)~(313,239).
+                // 데모는 창 생김새까지는 안 옮기고 <b>보통 대사창</b>으로 띄운다(가설) — 이름이 인물 이름이 아닌 것만 지킨다.
+                ShowFieldTalk(box: true, A(0), 0,
+                              nameOverride: _db?.T((ushort)A(1)) ?? "",
+                              textOverride: TalkTableFor()?[A(2)] ?? "");
+                break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
                 _mixer.StopMusic();
                 break;
@@ -917,7 +929,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 필드 대사 — 말하는 이는 <c>10000+인물 열쇠</c> 다. 이름과 초상화는 그 인물의 <c>.chr</c> 에서 온다.
     /// </summary>
-    private void ShowFieldTalk(bool box, int speaker, int textId)
+    /// <param name="nameOverride">말하는 이 자리에 넣을 이름 — 행동 609 는 인물 이름이 아니라 <b>인자1 의 TXR 이름</b>을 쓴다.</param>
+    /// <param name="textOverride">글 — 행동 609 는 필드 <c>Tlf</c> 가 아니라 <b>그 챕터의 <c>Tlc</c></b> 에서 꺼낸다.</param>
+    private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null)
     {
         if (_talkSkip) return;
         string name = "";
@@ -938,7 +952,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _talkFace = cc.Code;
         }
         else _talkFace = 0;
-        _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
+        _talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), 0, _lastTime);
         _talkFilled = false;
     }
 
