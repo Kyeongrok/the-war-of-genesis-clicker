@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -57,17 +57,24 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 오른쪽을 쳤는데 이펙트만 왼쪽에 남아 보인다(죠안의 「연」에서 나타난 증상).
     /// </param>
     /// <param name="fade">몸 그림과 같이 사라졌다 나타나게(<see cref="UnitState.Fade"/>) — 몸만 사라지고 무기가 남으면 안 된다.</param>
-    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1)
+    /// <param name="loop">몸 모션이 되풀이하는가(서기·걷기) — 되풀이하면 자식 키도 한 바퀴마다 다시 터진다.</param>
+    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1, bool loop = true)
     {
         if (clip == null || fade <= 0) return;
+        // 되풀이하는 몸 모션에서는 틱을 한 바퀴로 접는다 — 원본도 모션이 처음으로 돌아가면 키를 다시 읽는다.
+        int cycle = loop && clip.Length > 0 ? tick % clip.Length : tick;
         foreach (var (start, obs, motion, dx, dy, _, flag) in clip.Children)
         {
-            if (start > tick) continue;
-            var blend = UiFor(obs)?.BlendAt(motion, tick - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
+            if (start > cycle) continue;
+            // 자식은 <b>제 모션이 끝나면 사라진다</b> — 원본은 키마다 개체를 만들고 그 모션이 다 돌면 지운다(0x100e5410 case 2).
+            // 안 지우면 앞선 키가 그대로 남아, 크리스티앙의 총 넣기(동작 24)에서 든 총과 <b>머리 위에 뜬 총</b>이 함께 보였다(사용자 보고).
+            // 몸과 같이 도는 무기 층(제이슨 Obs 0426·Obs 0060)은 모션 길이가 몸과 같아 한 바퀴 내내 남는다.
+            int life = UiFor(obs)?.MotionLength(motion) ?? 0;
+            if (life > 0 && cycle - start >= life) continue;
+            var blend = UiFor(obs)?.BlendAt(motion, cycle - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
             bool flip = mirror && flag == 0;
-            // 무기 층은 몸 모션과 같이 돈다 — 서기처럼 되풀이하는 모션이면 자식도 되풀이한다.
-            DrawUi(obs, motion, tick - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
+            DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
         }
     }
 
