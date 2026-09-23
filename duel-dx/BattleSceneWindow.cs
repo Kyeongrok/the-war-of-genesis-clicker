@@ -159,6 +159,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private ID3D11Device _device = null!;
     private ID3D11DeviceContext _ctx = null!;
     private IDXGISwapChain1 _swapChain = null!;
+
+    /// <summary>
+    /// 스왑체인이 새 프레임을 받을 수 있게 되면 신호가 오는 핸들 — 이걸 기다린 <b>다음에</b> 입력을 읽고 그린다.
+    /// 기본값(최대 3프레임 미리 쌓기)이면 CPU 가 노는 동안(합성은 2~5ms) 프레임이 줄을 서서 입력이 늦게 보였다.
+    /// 줄은 2프레임 — 1이면 더 빠르지만 vsync 를 놓치는 프레임이 눈에 띄게 늘었다.
+    /// </summary>
+    private IntPtr _frameWait;
     private ID3D11RenderTargetView _backBufferRtv = null!;
     private ID3D11Texture2D _boardTex = null!;
     private ID3D11ShaderResourceView _boardSrv = null!;
@@ -402,7 +409,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
                            rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         _backBufferRtv?.Dispose();
-        _swapChain.ResizeBuffers(2, (uint)pixelW, (uint)pixelH, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
+        _swapChain.ResizeBuffers(2, (uint)pixelW, (uint)pixelH, Format.B8G8R8A8_UNorm, SwapChainFlags.FrameLatencyWaitableObject);
         using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
         _backBufferRtv = _device.CreateRenderTargetView(backBuffer);
     }
@@ -471,6 +478,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         while (_running)
         {
+            // 줄에 자리가 나면 그때 입력을 받아 그린다 — 미리 그려 둔 프레임 뒤에 입력이 밀리지 않게.
+            Win32.WaitForSingleObjectEx(_frameWait, 100, true);
             while (Win32.PeekMessageW(out var msg, IntPtr.Zero, 0, 0, Win32.PM_REMOVE))
             {
                 if (msg.Message == Win32.WM_QUIT) { _running = false; break; }
@@ -1225,8 +1234,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             SampleDescription = new SampleDescription(1, 0),
             SwapEffect = SwapEffect.FlipDiscard,
             Scaling = Scaling.None,
+            Flags = SwapChainFlags.FrameLatencyWaitableObject,
         };
         _swapChain = factory.CreateSwapChainForHwnd(_device, _hwnd, desc);
+        using (var swapChain2 = _swapChain.QueryInterface<IDXGISwapChain2>())
+        {
+            swapChain2.MaximumFrameLatency = 2;
+            _frameWait = swapChain2.FrameLatencyWaitableObject;
+        }
         using var back = _swapChain.GetBuffer<ID3D11Texture2D>(0);
         _backBufferRtv = _device.CreateRenderTargetView(back);
     }
@@ -1265,6 +1280,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _mixer.Dispose();
         DestroyCursors();
         _backBufferRtv?.Dispose();
+        if (_frameWait != IntPtr.Zero) { Win32.CloseHandle(_frameWait); _frameWait = IntPtr.Zero; }
         _swapChain?.Dispose();
         _boardSrv?.Dispose();
         _boardTex?.Dispose();
