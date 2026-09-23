@@ -1001,6 +1001,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawTitle();
         DrawEpisodes();
         DrawChapters();
+        DrawSceneTag();
     }
 
     private void DrawBackground()

@@ -107,6 +107,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
     private const int MenuTalkPauseBase = 1130;
 
+    private const int MenuSceneTag = 1103;
+
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
     private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
@@ -156,6 +158,7 @@ internal sealed unsafe partial class BattleSceneWindow
             Win32.AppendMenuW(pause, Win32.MF_STRING | (TalkPauseIndex(UserSettings.Current.TalkPauseSeconds) == i ? Win32.MF_CHECKED : 0u), (nuint)(MenuTalkPauseBase + i),
                               TalkPauseLabel(TalkPauseChoices[i]));
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
+        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -224,13 +227,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag));
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
     private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
 
     /// <summary>대사와 대사 사이의 멈춤(초) — 설정 > 대사 사이 멈춤. 음수면 원본대로 스크립트 값.</summary>
     private double _talkPauseSeconds = UserSettings.Current.TalkPauseSeconds;
+
+    /// <summary>화면 왼쪽 아래 장면 번호를 보이나 — 설정 > 장면 번호 보이기.</summary>
+    private bool _showSceneTag = UserSettings.Current.ShowSceneTag;
 
     /// <summary>그 값에 해당하는 메뉴 줄 — 목록에 없는 값(settings.json 을 손으로 고친 것)이면 −1(아무 줄도 체크 안 함).</summary>
     private static int TalkPauseIndex(double seconds) =>
@@ -279,6 +285,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (int i = 0; i < TalkPauseChoices.Length; i++)
                     Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuTalkPauseBase + i), Win32.MF_BYCOMMAND | (i == id - MenuTalkPauseBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast($"대사 사이 멈춤: {TalkPauseLabel(_talkPauseSeconds)}");
+                SaveSettings();
+                break;
+            case MenuSceneTag:
+                _showSceneTag = !_showSceneTag;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuSceneTag, Win32.MF_BYCOMMAND | (_showSceneTag ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 break;
             case MenuStatusBar:
