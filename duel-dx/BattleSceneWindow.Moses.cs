@@ -106,6 +106,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 7: OpenMosesStyle(); break;
             case 6: OpenMosesLegion(); break;
             case 3: OpenMosesShop(0); break;
+            case 4: OpenMosesShop(1); break;                            // VT 상점
             case 1 or 2: MosesGoPage(page); _mosesPage = page; break;   // 메일 · 통신
             case 0: MosesGoPage(0); _mosesPageAt = _lastTime - 30.0 / TicksPerSecond; break;   // 항행 — 칸이 다 나온 뒤 모습
         }
