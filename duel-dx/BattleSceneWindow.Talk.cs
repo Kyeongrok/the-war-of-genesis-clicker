@@ -143,6 +143,29 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
+    /// <summary>
+    /// 스크립트가 <b>지금 기다리는 것 하나만</b> 끝낸다 — 대사가 없을 때 클릭·Enter·Space.
+    /// 한 그림(컷씬)을 몇 초씩 띄워 두는 틱 기다리기(행동 2), 음성이 끝나기를 기다리는 504, 걷기·페이드·카메라를 기다리는 행동 1 을
+    /// 그 자리에서 끝내고 다음 줄로 간다. 장면 나머지는 그대로 돈다(통째로 넘기기는 Esc). 원본에는 없다 — 사용자 요청.
+    /// </summary>
+    private bool SkipCurrentWait()
+    {
+        if (_talk != null) return false;
+        bool skipped = false;
+        bool fieldScene = (_field != null || (_mosesOpen && _mosesChp != null)) && _fieldEvent >= 0 && _fieldChoices == null;
+        if (fieldScene)
+        {
+            if (_fieldWaitUntil > _lastTime) { _fieldWaitUntil = 0; skipped = true; }
+            if (_fieldWaitChannel >= 0) { StopChannelSound(_fieldWaitChannel); _fieldWaitChannel = -1; skipped = true; }
+            if (_field != null && FieldBusy()) { FinishFieldAnimations(); skipped = true; }
+        }
+        if (_runningEvent >= 0 && _eventWaitUntil > _lastTime) { _eventWaitUntil = 0; skipped = true; }
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                               $"click-skip {skipped} t {_lastTime:F2} ev {_fieldEvent} pc {_fieldPc} wait {_fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
+        return skipped;
+    }
+
     /// <summary>글이 다 나온 뒤 118틱을 더 두면 저절로 넘어간다.</summary>
     private void UpdateTalk()
     {
