@@ -376,7 +376,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                     bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
                                     SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null,
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
-                                    Dictionary<string, int>? ChapterVars = null);
+                                    Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0);
 
     private const int SaveVersion = 8;
 
@@ -495,6 +495,19 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>
+    /// 세이브가 가리키는 챕터 — 적혀 있으면 그것, 모세스 세이브면 그 챕터. 챕터를 안 적던 옛 전투 세이브는
+    /// <b>마지막으로 다녀온 장소의 챕터</b>로 본다(장소는 다녀온 차례대로 적힌다). 모르면 0.
+    /// </summary>
+    private static int SavedChapter(SaveState state)
+    {
+        if (state.CurrentChapter > 0) return state.CurrentChapter;
+        if (state.InMoses && state.Chapter > 0) return state.Chapter;
+        foreach (var list in new[] { state.UsedPlaces, state.DonePlaces })
+            if (list is { Length: > 0 } && list[^1].Split(':') is [var a, _] && int.TryParse(a, out int chapter)) return chapter;
+        return 0;
+    }
+
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
     private const int OldestSaveVersion = 2;
 
@@ -547,7 +560,10 @@ internal sealed unsafe partial class BattleSceneWindow
                                                     p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))]))],
                 [.. _ownedLegions], SaveBank(),
                 [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
-                Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]));
+                Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]),
+                // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
+                // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
+                _mosesChp?.Id ?? 0);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -588,6 +604,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
         RestorePartyBeforeBoard(state);
+        // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
+        if (SavedChapter(state) is > 0 and var chapterId && LoadChapterFile(chapterId) is { } savedChp) _mosesChp = savedChp;
         if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle, rememberParty: false)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
