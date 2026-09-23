@@ -133,6 +133,12 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Visible { get; set; } = true;
         public double Start { get; set; }
 
+        /// <summary>
+        /// 스크립트(302)가 건 모션이 한 바퀴 끝나는 때 — 그때까지 행동 1 이 기다린다. 원본 물체는 틱마다 셈을 올려
+        /// 모션 끝에 닿으면 끝 표시(<c>+0x68</c>)를 세운다(<c>0x100f4c80</c>). 자료에서 302 바로 뒤가 행동 1 인 곳이 869번이다.
+        /// </summary>
+        public double PlayUntil { get; set; }
+
         /// <summary>옮기는 중 — (시작, 목표, 틱 수, 시작한 때).</summary>
         public (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start)? Move { get; set; }
     }
@@ -199,6 +205,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _field = field;
             _fieldTalk = TalkTable.Parse(files.Read("Tlk", $"{id:D4}.tlf"));
             _fieldFired = new int[field.Events.Count];
+            _sideEvents.Clear();
             Array.Clear(_fieldVars);
             _fieldEvent = -1;
             _fieldReturn.Clear();
@@ -239,6 +246,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _field = null;
         _fieldTalk = null;
+        _sideEvents.Clear();
         _talk = null;
         _fieldChoices = null;
         // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
@@ -267,6 +275,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (events == null) return;
         if (_field != null) StepFieldActors();
         StepChannelFades();                                           // 행동 506 이 걸어 둔 채널 음량 바꾸기
+        if (_field != null) StepSideEvents(events);                    // 대사 없는 곁 사건(문 여닫기 따위)은 따로 나란히 돈다
         if (_fieldChoices != null) _talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
         if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
@@ -316,6 +325,63 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>나란히 도는 곁 사건 — (사건 번호, 다음 줄, 기다림이 끝나는 때).</summary>
+    private readonly List<(int Event, int Pc, double WaitUntil)> _sideEvents = [];
+
+    /// <summary>곁 사건으로 못 돌리는 행동 — 대사·고르기(사람이 봐야 한다)와 장면을 떠나는 것.</summary>
+    private static bool MainOnly(int code) => code is >= 600 and <= 605 or 609 or 6 or 7 or 10 or 11 or 0;
+
+    /// <summary>
+    /// 필드 사건을 <b>나란히</b> 돌린다 — 원본 진행기(<c>0x100f47f0</c>)는 사건마다 제 줄(<c>+0x16</c>)·기다림(<c>+0x1c</c>·<c>+0x24</c>)을 들고
+    /// 매 틀 살아 있는 사건을 다 한 걸음씩 민다. 그래서 대사가 도는 사건이 변수만 바꿔 두면(<c>100 [160, 2]</c>) 문을 여닫는 작은 사건
+    /// (Fld 0037 사건 13·14: 물체 10014 모션 1 열기 · 2 닫기)이 그 사이에 따로 돈다. 우리 실행기는 한 번에 한 사건이라,
+    /// 주 사건이 도는 동안 조건이 맞은 <b>대사·고르기·장면 떠나기가 없는</b> 사건만 곁에서 돌린다(사용자 보고: Fld 0037 문이 안 열림).
+    /// </summary>
+    private void StepSideEvents(IReadOnlyList<FieldEvent> events)
+    {
+        if (_fieldEvent >= 0 && events.Count > 0)
+            foreach (var wanted in events[0].Actions)
+            {
+                int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
+                if ((uint)index >= events.Count || index == 0 || index == _fieldEvent || (uint)index >= _fieldFired.Length) continue;
+                var e = events[index];
+                if (_sideEvents.Any(s => s.Event == index)) continue;
+                if (e.MaxFire > 0 && _fieldFired[index] >= e.MaxFire) continue;
+                if (e.Actions.Any(a => MainOnly(a.Code)) || !e.Conditions.All(FieldCondition)) continue;
+                _fieldFired[index]++;
+                _sideEvents.Add((index, 0, 0));
+            }
+        for (int i = _sideEvents.Count - 1; i >= 0; i--)
+        {
+            var (ev, pc, waitUntil) = _sideEvents[i];
+            var acts = events[ev].Actions;
+            bool done = false;
+            while (!done)
+            {
+                if (_talkSkip) waitUntil = 0;
+                if (waitUntil > _lastTime) break;
+                if (pc >= acts.Count) { done = true; break; }
+                var a = acts[pc];
+                short A0 = a.Args.Length > 0 ? a.Args[0] : (short)0;
+                switch (a.Code)
+                {
+                    case 1:                                    // 제가 건 물체 모션이 끝나기를
+                        if (!_talkSkip && _fieldProps.Any(p => p.PlayUntil > _lastTime)) goto hold;
+                        pc++;
+                        break;
+                    case 2: waitUntil = _lastTime + A0 / TicksPerSecond; pc++; break;
+                    case 3: done = true; break;
+                    case 504: pc++; break;                     // 소리 끝 기다림 — 곁 사건은 안 기다린다
+                    default: RunFieldAction(a); pc++; break;
+                }
+                continue;
+            hold:
+                break;
+            }
+            if (done) _sideEvents.RemoveAt(i); else _sideEvents[i] = (ev, pc, waitUntil);
+        }
+    }
+
     /// <summary>나갈 길이 없는 필드(찌꺼기)는 그냥 모세스로 돌아간다.</summary>
     private void LeaveField()
     {
@@ -352,7 +418,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool FieldBusy() =>
         _fieldWipe != null || _fieldCamMove != null
         || _fieldActors.Any(w => w.Walk != null || w.Fade != null)
-        || _fieldProps.Any(p => p.Move != null);
+        || _fieldProps.Any(p => p.Move != null || p.PlayUntil > _lastTime);
 
     /// <summary>
     /// 굴러가는 연출을 전부 끝난 자리로 보낸다 — Esc 건너뛰기. 걷기·자리 옮기기는 목적지로, 밝기는 목표값으로,
@@ -372,7 +438,10 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
         foreach (var prop in _fieldProps)
+        {
             if (prop.Move is { } move) (prop.X, prop.Y, prop.Move) = (move.ToX, move.ToY, null);
+            prop.PlayUntil = 0;                           // 모션은 그대로 두고 기다림만 푼다
+        }
         if (_fieldCamMove is { } cam) { MoveFieldCamera((int)cam.ToX, (int)cam.ToY); _fieldCamMove = null; }
         _fieldWipe = null;                                   // 걷어내기 전환은 끝(원본도 끝나면 그림만 남긴다)
         if (_fieldFade is { } fade2)
@@ -532,6 +601,8 @@ internal sealed unsafe partial class BattleSceneWindow
                         prop.Motion = A(1);
                         prop.Mirror = A(5) != 0;
                         prop.Start = _lastTime;
+                        prop.PlayUntil = _lastTime + (UiFor(prop.Obs)?.MotionLength(prop.Motion) ?? 0) / TicksPerSecond;
+                        SchedulePropSounds(prop);   // 문 여닫는 소리(Obs 529 모션 1·2 → 157·158) 같은 모션 소리
                     }
                 }
                 else if (A(0) > 0)
@@ -1109,6 +1180,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 배경 묶음(<c>+0x128</c>)보다 <b>먼저 만든 층 <c>+0x14c</c></b> 에 넣어 배경 아래에 깔리므로, 대사의 말하는 이로만 쓰인다.
     /// 예: 첫 프롤로그 <c>Fld 0019</c> 의 두 사람(367·472)이 같은 자리에 서 있지만 화면에는 안 나온다.
     /// </remarks>
+    /// <summary>물체 모션(과 그 자식 그림)에 박힌 소리를 틱에 맞춰 예약한다 — 인물 동작의 <see cref="ScheduleActionSounds"/> 와 같은 꼴.</summary>
+    private void SchedulePropSounds(FieldProp prop)
+    {
+        if (_talkSkip || UiFor(prop.Obs)?.Clip(prop.Motion) is not { } clip) return;
+        foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound));
+        foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
+            if (UiFor(obs)?.Clip(motion) is { } child)
+                foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((_lastTime + (start + s) / TicksPerSecond, sound));
+    }
+
     private void DrawFieldLayers(int ox, int oy, int from, int to)
     {
         from = Math.Max(from, 0);
@@ -1120,6 +1201,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
             var blend = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) == 17 ? UiBlend.Add : UiBlend.Alpha;
             DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, blend);
+            // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
+            // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
+            DrawUnitLayers(UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
         }
 
         foreach (var actor in _fieldActors.Where(a => a.Visible && a.Layer >= from && a.Layer < to).OrderBy(a => a.Layer))
