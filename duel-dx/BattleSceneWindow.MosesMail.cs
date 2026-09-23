@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -13,7 +13,8 @@ namespace DuelDx;
 /// 줄을 누르면 뷰어 <b>(164, 120) 313×239</b> 가 뜨고 닫으면 읽음 표시. 나가기 단추는 Obs 0287 @ (455, 430).
 /// 본문은 TXR 이 아니라 <c>Dat\MAIL.DAT</c> 안에 그대로 들어 있다 —
 /// 머리 <c>u16, u16 편지 수, u16 최대 번호</c>, 레코드 <c>번호·보낸이 Chr·발신지 TXR·Bgm 번호·길이·본문 바이트·조건 3칸·안 쓰는 칸</c>.
-/// 우편함은 메일 페이지에 들어갈 때 <see cref="DeliverMail"/> 가 조건(깃발)을 채운 편지를 하나씩 넣어 채운다(원본 <c>0x100fc6e0</c>).
+/// 우편함은 메일 페이지에 들어갈 때 <see cref="DeliverMail"/> 가 <b>지금 챕터 Chp 의 메일 표</b>에 든 편지 가운데 조건(깃발)을 채운 것을
+/// 넣어 채운다(원본 <c>0x100fc6e0</c>, 분석-모세스 「메일 배달과 진행 연동 (mo-mail)」). 목록은 최근 편지가 맨 위다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -37,37 +38,86 @@ internal sealed unsafe partial class BattleSceneWindow
         return _mails = _db?.Files.Read("Dat", "MAIL.DAT") is { } bytes ? MosesMail.ParseAll(bytes) : [];
     }
 
-    /// <summary>우편함에 든 편지(도착 차례).</summary>
+    /// <summary>우편함에 든 편지 — 목록 차례로(최근 편지가 맨 위, 원본 줄 i = 우편함[개수−1−i]).</summary>
     private List<MosesMail> Mails()
     {
         var all = AllMails();
-        return [.. _mailbox.Select(id => all.FirstOrDefault(m => m.Id == id)).Where(m => m != null)!];
+        return [.. Enumerable.Reverse(_mailbox).Select(id => all.FirstOrDefault(m => m.Id == id)).Where(m => m != null)!];
     }
 
+    /// <summary>우편함 상한 — 원본은 0x1fe 칸까지만 넣는다.</summary>
+    private const int MailboxLimit = 0x1ff;
+
     /// <summary>
-    /// 새 편지 배달 — 아직 안 온 편지 가운데 조건(깃발) 없는 것과 조건을 채운 것을 우편함에 넣는다(<c>0x100fc6e0</c>, 메일 페이지에 들어갈 때).
-    /// 늘어난 수를 돌려준다(늘었으면 원본은 Snd 571).
+    /// 새 편지 배달 — <b>지금 챕터 Chp 의 메일 표</b>(파일 차례)를 훑어, 아직 안 온 편지 가운데 조건을 채운 것을 우편함에 넣는다.
+    /// 메일 페이지에 들어갈 때 한 번뿐이다(<c>0x100febef</c> → <c>0x100fc6e0</c>). 늘어난 수를 돌려준다(늘었으면 Snd 571).
     /// </summary>
+    /// <remarks>
+    /// 예전에는 <c>MAIL.DAT</c> 92통을 전부 훑어 시험 챕터(0001·0040)에만 든 「디에네 : 테스트방어구」 같은 편지까지 처음부터 다 왔다(사용자 보고).
+    /// 편지를 넣는 스크립트 행동은 없다 — 우편함에 넣는 곳은 이 배달과 파티 합치기(행동 803)뿐이다.
+    /// </remarks>
     private int DeliverMail()
     {
+        if (_mosesChp is not { } chp) return 0;
+        var all = AllMails();
         int added = 0;
-        foreach (var mail in AllMails())
+        foreach (var (_, id) in chp.MailTriggers)
         {
-            if (_mailbox.Contains(mail.Id)) continue;
-            if (mail.CondVar >= 0 && mail.CondVar != 0xffff && !FlagAllows(mail.CondVar, mail.CondValue, mail.CondOp)) continue;
-            _mailbox.Add(mail.Id);
+            if (_mailbox.Contains(id) || _mailbox.Count >= MailboxLimit) continue;
+            if (all.FirstOrDefault(m => m.Id == id) is not { } mail || !MailArrives(mail)) continue;
+            _mailbox.Add(id);
             added++;
         }
         return added;
     }
 
-    /// <summary>스크립트 조건 503 [방아쇠] — 챕터 메일 방아쇠 표로 편지 번호를 찾아, 우편함에 있고 읽었으면 참.</summary>
+    /// <summary>
+    /// 편지의 도착 조건 (깃발, 값, 연산자) — 깃발이 0xffff 면 조건 없이 온다. 아니면 <c>0x100fda40(flags[깃발], 값, 연산자)</c>:
+    /// 0 == · 1 != · 2 &lt; · 3 &lt;= · 4 &gt; · 5 &gt;=, 6 이상은 거짓. 깃발 0 도 진짜 깃발로 본다(<see cref="FlagAllows"/> 는 0 을 「조건 없음」으로 흘린다).
+    /// </summary>
+    private bool MailArrives(MosesMail mail)
+    {
+        if (mail.CondVar is -1 or 0xffff) return true;
+        if ((uint)mail.CondVar >= _flags.Length) return false;
+        int now = _flags[mail.CondVar];
+        return mail.CondOp switch
+        {
+            0 => now == mail.CondValue,
+            1 => now != mail.CondValue,
+            2 => now < mail.CondValue,
+            3 => now <= mail.CondValue,
+            4 => now > mail.CondValue,
+            5 => now >= mail.CondValue,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// 옛 세이브(형식 8 이하)의 우편함 — 예전 배달이 챕터를 안 가려 미리 넣은 편지를 걷어 낸다. 들어가 본 챕터의 메일 표에 있고
+    /// 지금 조건을 채우는 편지만 남긴다(원본이라면 그때까지 왔을 편지). 읽음 표시는 남은 편지만 둔다.
+    /// </summary>
+    private void PruneLegacyMailbox(IEnumerable<int> chapters)
+    {
+        var all = AllMails();
+        var allowed = new HashSet<int>();
+        foreach (int id in chapters.Distinct())
+            if (LoadChapterFile(id) is { } chp)
+                foreach (var (_, mail) in chp.MailTriggers)
+                    if (all.FirstOrDefault(m => m.Id == mail) is { } m && MailArrives(m)) allowed.Add(mail);
+        _mailbox.RemoveAll(id => !allowed.Contains(id));
+        _mailRead.RemoveWhere(id => !allowed.Contains(id));
+    }
+
+    /// <summary>
+    /// 스크립트 조건 503 [방아쇠] — 챕터 메일 방아쇠 표에서 그 방아쇠가 맞는 <b>마지막</b> 칸의 편지가 지금 파티 우편함에 있고 읽혔으면 참(<c>0x100edc40</c>).
+    /// </summary>
     private bool MailTriggerRead(int trigger)
     {
         if (_mosesChp is not { } chp) return false;
-        foreach (var (id, mail) in chp.MailTriggers)
-            if (id == trigger) return _mailbox.Contains(mail) && _mailRead.Contains(mail);
-        return false;
+        int mail = -1;
+        foreach (var (id, m) in chp.MailTriggers)
+            if (id == trigger) mail = m;
+        return mail >= 0 && _mailbox.Contains(mail) && _mailRead.Contains(mail);
     }
 
     private string SenderName(int chrCode) =>
@@ -90,7 +140,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MosesOrigin();
         int x = bx - ox, y = by - oy;
 
-        if (_mailOpen >= 0)                                   // 뷰어는 아무 데나 누르면 닫히고 읽음이 된다
+        if (_mailOpen >= 0)                                   // 뷰어는 아무 데나 누르면 닫히고 읽음이 된다(닫을 때 0x100f809a) — 그 밖에 깃발·돈은 없다
         {
             var opened = Mails();
             if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
