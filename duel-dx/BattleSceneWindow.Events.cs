@@ -54,6 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
         _eventNextField = 0;
+        _eventSoundSeconds = 0;                  // 앞 전투에서 늦게 풀린 소리가 이 전투의 이벤트를 멈추지 않게
         Array.Clear(_battleVars);
         Array.Clear(_eventTimer);
         Array.Clear(_eventTimerRun);
