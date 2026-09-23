@@ -332,8 +332,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>뒤로 단추 — 단계가 최저면 주 화면으로. 소리는 단계별 569(장소→행성)·570(행성→성계).</summary>
     private void MosesGoBack()
     {
-        // 항행 단계 2 에서 최저 단계가 그보다 낮으면 행성 고르기로 한 단계만 내려간다.
-        if (_mosesPage == 0 && _mosesStep == 2 && (_mosesChp?.StartStep ?? 2) < 2)
+        // 항행 단계 2(장소 고르기)에서는 늘 행성 고르기로 한 단계만 내려간다.
+        // 전에는 챕터의 시작 단계(Chp 머리)가 2 보다 낮을 때만 내려갔는데, 그 값은 「들어갈 때 어디서 시작하나」일 뿐
+        // 바닥이 아니다 — 챕터 10·14·19·21·22 는 행성이 여럿인데 시작 단계가 2 라, 그 규칙으로는 첫 행성에 갇혀
+        // 다른 행성에 영영 못 갔다(사용자 보고: 우클릭하면 성계로 나가 다른 행성을 고를 수 있어야 한다).
+        if (_mosesPage == 0 && _mosesStep == 2)
         {
             Play(569);
             _mosesStep = 1;
