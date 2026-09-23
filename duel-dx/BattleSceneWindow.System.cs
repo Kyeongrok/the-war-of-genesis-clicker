@@ -517,8 +517,24 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var s in state.Party ?? [])
             if (_db?.Character(s.ChrCode) is { } pc)
                 _party[s.ChrCode] = Restored(pc, s, regrow: true);
+        ReturnStrayMembers();                // 다른 파티 사람은 제 파티로(파티를 안 가리던 옛 판의 세이브)
         foreach (int chr in _members)
             if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
+    }
+
+    /// <summary>
+    /// 다른 파티 사람이 지금 파티에 끼어 있으면 제 파티(은행)로 돌려보낸다 — 위 버그로 적힌 세이브를 고친다.
+    /// 끼어 있던 동안 더 자랐을 수 있으니 누적 경험치가 큰 쪽 자료를 남긴다.
+    /// </summary>
+    private void ReturnStrayMembers()
+    {
+        foreach (var (no, bank) in _partyBank)
+            foreach (int chr in bank.Members.Where(_members.Contains).ToList())
+            {
+                _members.Remove(chr);
+                if (_party.Remove(chr, out var here) && (!bank.Party.TryGetValue(chr, out var there) || here.CumExp > there.CumExp))
+                    bank.Party[chr] = here;
+            }
     }
 
     /// <summary>돌린 챕터 사건의 801(동료 넣기)·802(빼기)로 동료 목록을 다시 만든다 — 사건 −1 표시(옛 세이브)는 그 챕터 사건 전부로 본다.</summary>
@@ -536,6 +552,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var a in chp.Events[ev].Actions)
                 {
                     if (a.Args.Length < 2 || a.Args[1] <= 0) continue;
+                    // 인자0 은 <b>파티 번호</b>다 — 지금 파티 것만 센다. 전에는 파티를 안 가려서, 베라모드 파티(1)로 불러오면
+                    // 챕터 10·11 이 파티 0 에 넣은 살라딘·죠안·크리스티앙까지 끼어들었다(사용자 보고, Chp 0019 전직 화면).
+                    if (a.Args[0] != _partyNo) continue;
                     if (a.Code == 801) _members.Add(a.Args[1]);
                     else if (a.Code == 802) _members.Remove(a.Args[1]);
                 }
