@@ -109,12 +109,18 @@ internal sealed unsafe partial class BattleSceneWindow
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         if (ScriptFor(w.Id) is not { } m) return;
+        // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
+        bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);
         foreach (var e in m.Effects)
         {
             var (x, y) = e.OnTarget
                 ? (col * TileW + TileW / 2, CellCenterY(col, row))
                 : UnitFoot(user);
             _effects.Add((e.Obs, e.Motion, _lastTime, x, y - e.Lift));
+            // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
+            // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
+            if (!ownSounds || _effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) is not { } clip) continue;
+            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
         }
     }
 }
