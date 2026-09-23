@@ -251,7 +251,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
         if (IsMine(_units[index]))
         {
-            Toast($"{UnitName(index)} 차례");
+            // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
+            // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다.
             PlayTurnVoice(_units[index]);
             // 자동 저장(슬롯 20) — 원본은 전투 시작·새 차례마다 깃발(+0x4cd8)을 세우고, 플레이어가 유닛을 고르는
             // 상태 22 에 처음 들어설 때 SaveGame(20) 한 뒤 지운다(0x1006acc0). AI 차례는 상태 10~12 가 카메라만 옮기고
