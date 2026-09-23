@@ -147,6 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
+        SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
         if (ScriptFor(w.Id) is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);
