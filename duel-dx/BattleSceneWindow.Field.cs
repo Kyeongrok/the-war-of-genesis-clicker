@@ -244,6 +244,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
         _fieldWaitChannel = -1;
         StopAllChannelSounds();
+        // 굴러가던 연출도 함께 끝낸다. 걷기·밝기·물체 옮기기는 <b>필드가 열려 있을 때만</b> 한 걸음씩 나아가므로
+        // (StepFieldActors 는 _field 가 있을 때만 돈다), 걷는 채로 필드를 닫으면 FieldBusy() 가 영영 참이 되어
+        // 그다음 챕터 스크립트가 줄마다 참을성이 다 될 때까지(10초) 멈춰 선다.
+        _fieldActors = [];
+        _fieldProps = [];
+        _fieldWipe = null;
+        _fieldCamMove = null;
     }
 
     /// <summary>
