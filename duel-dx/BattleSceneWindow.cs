@@ -579,6 +579,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_RBUTTONUP:
                 CloseUnitInfo();
                 _abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
+                _statusTip = null;         // 스테이터스 설명도(0x10042c00)
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:

@@ -209,7 +209,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 창은 게임 안 모든 창과 같은 원본 틀(분석-시스템메뉴 「메시지 창 틀」)
         DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
         DrawGameFrame(ox, oy, MenuW, h, $"{_db.T(3)} — {UnitName(_turn)}");
-        RightText("TP  SOUL", ox + MenuW - 8, oy + 3, White, 12);
+        // 머리 글자는 아래 숫자 칸의 오른끝에 하나씩 맞춘다 — 한 덩이로 창 오른끝에 붙였더니 단축키 칸까지 밀려 한 칸씩 어긋났다(사용자 보고).
+        RightText("TP", ox + MenuRowX + 210, oy + 3, White, 12);
+        RightText("SOUL", ox + MenuRowX + 240, oy + 3, White, 12);
 
         if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = _units[_turn].Data!;
@@ -238,17 +240,9 @@ internal sealed unsafe partial class BattleSceneWindow
             RightText($"{SoulNeedFor(_units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
         }
 
-        // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 목록 바로 아래(화면을 넘치면 위)에 같은 틀로.
+        // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
             && _db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && _db.T(pressed.DescriptionId) is { Length: > 0 } desc)
-        {
-            var lines = WrapTalk([desc], MenuW - 28, 12);
-            int dh = MenuHeadH + lines.Count * 16 + 10;
-            int dy = oy + h + FrameTitleH + 6;
-            if (dy + dh > _camY + ViewHeight - 4) dy = oy - FrameTitleH - dh - 6;
-            DarkenRect(ox - 1, dy - FrameTitleH - 1, MenuW + 2, dh + FrameTitleH + 2, 8);
-            DrawGameFrame(ox, dy, MenuW, dh, rows[_abilityPressed].Name);
-            for (int i = 0; i < lines.Count; i++) DrawText(lines[i], ox + 14, dy + MenuHeadH + i * 16, White, 12);
-        }
+            DrawDescriptionTip(desc, _mouse.X, _mouse.Y, _camX, _camY, ViewWidth, ViewHeight);
     }
 }
