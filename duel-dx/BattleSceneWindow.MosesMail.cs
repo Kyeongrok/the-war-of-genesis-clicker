@@ -203,11 +203,14 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    /// <summary>글을 칸 너비에 맞춰 줄로 나눈다(원본은 여러 줄 글 객체가 한다).</summary>
+    /// <summary>
+    /// 글을 칸 너비에 맞춰 줄로 나눈다(원본은 여러 줄 글 객체가 한다). 글에 박힌 <c>$n</c> 따위 강제 줄바꿈 표시도
+    /// 대사와 같이 줄을 바꾼다 — 전에는 편지 본문에 「$n」이 글자 그대로 찍혔다(사용자 보고).
+    /// </summary>
     private List<string> WrapText(string text, int width, float size)
     {
         var lines = new List<string>();
-        foreach (string paragraph in text.Replace("\r", "").Split('\n'))
+        foreach (string paragraph in TalkLines(text.Replace("\r", "")).SelectMany(p => p.Split('\n')).Select(p => p.Trim()))
         {
             var line = new StringBuilder();
             foreach (char ch in paragraph)
