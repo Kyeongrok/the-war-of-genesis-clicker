@@ -432,7 +432,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (editable && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) DrawUi(RowObs, 4, 0, rx, ry, UiBlend.Alpha);
             DrawAbilityRow(ab, AbilityLabel(ab, level), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, RowH, 11);
             _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab)));
-            // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기(원본에 없는 데모 기능 — 오른쪽 단추는 원본대로 설명에 쓴다).
+            // 레벨 내리기(원본에 없는 데모 기능) — 마우스를 올린 줄의 비용 왼쪽에 작은 ▼ 단추(스크롤 막대 아래 화살표 Obs 0071 모션 4, 누름 5).
+            // 원본 그림이라 창에 어울리고, 올린 줄에만 떠 목록이 어지럽지 않다. 오른쪽 단추는 원본대로 설명에 쓴다. Shift+클릭도 된다.
+            if (editable && level > 1 && _popup == null && MouseIn(rx, ry, AbilityW, RowH))
+            {
+                int costW = cost > 0 ? GetText(cost.ToString(), CostRed, StatusFont).W : 0;
+                int ax = rx + AbilityW - 10 - costW - 20, ay = ry + (RowH - 16) / 2;
+                DrawUi(ScrollObs, MouseIn(ax, ay, 16, 16) ? 5 : 4, 0, ax, ay, UiBlend.Alpha, loop: false);
+                AddHit(ax, ay, 16, 16, () => LowerAbility(unit, ab));      // 줄 클릭보다 먼저 받는다(먼저 넣은 것이 이긴다)
+            }
+            // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기.
             if (editable) AddHit(rx, ry, AbilityW, RowH, () => { if (ShiftHeld) LowerAbility(unit, ab); else ConfirmAbility(unit, ab, learn: false); });
         }
         DrawScrollBar(ox + ScrollX, oy + LearnedScrollY, LearnedScrollH, _learnedTop, learned.Count, LearnedRows, top => _learnedTop = top);
