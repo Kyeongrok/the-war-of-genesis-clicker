@@ -23,6 +23,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>표(<see cref="AbilityMotions"/>)가 이것을 쓰므로 <b>표보다 먼저</b> 선언해야 한다 — 정적 초기화는 적은 차례대로 돈다.</remarks>
     private static readonly AbilityEffect[] CounterBlade = [new(895, 0, false, 0), new(1365, 0, false, 0)];
 
+    /// <summary>
+    /// 메테오(어빌리티 95) — 레벨마다 work 이 다르지만(Lv1 469 · Lv2~10 744→736 · Lv11~20 783→774) 핸들러가 같아 효과도 같다.
+    /// 뽑은 표(AbilityScripts.g.cs)는 Lv2 부터 소리만 든 Obs(1338·311)만 남겨 그림이 한 장도 안 나왔다(사용자 보고) — 모두 Lv1 효과를 쓴다.
+    /// 원본의 착탄(170:1, 50틱 뒤)·폭발(109:7)·여러 발 흩뿌리기는 효과 지연이 없어 아직 못 넣었다.
+    /// </summary>
+    private static readonly AbilityEffect[] Meteor = [new(311, 0, true, 0), new(170, 0, true, 0), new(199, 0, true, 0), new(111, 0, true, 0)];
+
     /// <summary>work 번호 → (동작 차례, 때리는 순간에 띄울 이펙트).</summary>
     private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
     {
@@ -45,7 +52,7 @@ internal sealed unsafe partial class BattleSceneWindow
         [59] = ([6, 15], [new(1332, 0, false, 0), new(1324, 1, false, 0)]),     // 격려
         // 제이슨
         [467] = ([6, 15], [new(386, 0, true, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
-        [469] = ([6, 15], [new(311, 0, true, 0), new(170, 0, true, 0), new(199, 0, true, 0), new(111, 0, true, 0)]),  // 메테오
+        [469] = ([6, 15], Meteor),  // 메테오 Lv1 — Lv2~20 은 아래 표 끝에서 같은 효과로 채운다
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
         // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
         // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
@@ -69,6 +76,26 @@ internal sealed unsafe partial class BattleSceneWindow
         [1013] = ([5, 7, 12], CounterBlade),
         [1014] = ([5, 7, 12], CounterBlade),
         [1015] = ([5, 7, 12], CounterBlade),
+        // 메테오 Lv2~10(744→736)·Lv11~20(783→774) — 핸들러가 Lv1 과 같다
+        [736] = ([6, 15], Meteor),
+        [737] = ([6, 15], Meteor),
+        [738] = ([6, 15], Meteor),
+        [739] = ([6, 15], Meteor),
+        [740] = ([6, 15], Meteor),
+        [741] = ([6, 15], Meteor),
+        [742] = ([6, 15], Meteor),
+        [743] = ([6, 15], Meteor),
+        [744] = ([6, 15], Meteor),
+        [774] = ([6, 15], Meteor),
+        [775] = ([6, 15], Meteor),
+        [776] = ([6, 15], Meteor),
+        [777] = ([6, 15], Meteor),
+        [778] = ([6, 15], Meteor),
+        [779] = ([6, 15], Meteor),
+        [780] = ([6, 15], Meteor),
+        [781] = ([6, 15], Meteor),
+        [782] = ([6, 15], Meteor),
+        [783] = ([6, 15], Meteor),
     };
 
 
