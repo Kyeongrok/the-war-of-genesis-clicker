@@ -282,7 +282,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>지금이 챕터 장면인가 — 모세스 주 화면·필드·연대표는 모두 한 챕터 안이다.</summary>
     private bool InChapterScene => _mosesOpen || _episodesOpen || FieldOpen;
 
-    private bool StartBattle(int id)
+    /// <param name="rememberParty">
+    /// 지금 판의 아군을 파티에 담고 시작할지 — 불러오기는 <b>false</b> 다. 불러오기는 세이브로 파티를 먼저 되살리는데,
+    /// 여기서 담으면 불러오기 전 판(타이틀 뒤 데모 전투, 하던 전투)의 유닛이 되살린 파티를 덮어써서
+    /// 그 전투에 안 선 파티원의 레벨·장착 어빌리티·어빌리티 레벨이 처음 값으로 돌아갔다(사용자 보고).
+    /// </param>
+    private bool StartBattle(int id, bool rememberParty = true)
     {
         if (DemoScene.Load(id, _db) is not { } scene)
         {
@@ -300,7 +305,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return false;
         }
 
-        RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
+        if (rememberParty) RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
         _battleLoaded = true;
         _titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
         _recordsOpen = false;
@@ -583,7 +588,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
         RestorePartyBeforeBoard(state);
-        if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle)) return false;
+        if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle, rememberParty: false)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;

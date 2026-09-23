@@ -858,6 +858,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenMosesIfAsked();
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
+            OpenStatusIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
