@@ -33,8 +33,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// 원본은 이동 칸(층 2)마다 work 386(십자 한 칸, 대상 방식 8 = 오브젝트)을 그려 <b>「닿을 수 있는 오브젝트 칸」 층 1</b> 로 모은다
     /// (<c>0x10074f20</c>, 상태 10 <c>0x1006961c</c>, 분석-UI 「칸 깃발」). 곧 <b>걸어가서 옆에 설 수 있는</b> 물체면 된다 — 지금 옆일 필요는 없다.
-    /// 노랑 칸·주먹 커서는 이 층 그대로 <b>TP 를 따로 안 본다</b>. 실제로 열 때(<paramref name="needTp"/>)만
-    /// 그 칸까지 걷는 비용 + 80 이 남았는지 본다 — TP 는 행동할 때 차례 시작 자리부터 걸은 값을 한 번에 빼기 때문이다.
+    /// 노랑 칸·주먹 커서는 이 층 그대로 <b>TP 를 따로 안 본다</b>. 실제로 열 때(<paramref name="needTp"/>)만 원본 이동 예산
+    /// <c>걷는 비용 ≤ 현재 TP + min(0, CTP − 80)</c> 을 본다(명령 0x2714 가 work 386 으로 예산을 셈한다, 분석-캐릭터 「CTP」) —
+    /// 곧 TP 가 모자라도 CTP 만큼은 끌어 쓴다(사용자 보고).
     /// 옆 칸 가운데 가장 싼 곳으로 가고, 지금 선 자리가 이미 닿는 자리면 걷지 않는다.
     /// </remarks>
     private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
@@ -42,7 +43,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (obj.Data.Kind is not (1 or 2 or 6 or 8) || (known ?? ComputeRange(user)) is not { } range) return null;
         bool Affordable(int col, int row) =>
             (uint)col < Cols && (uint)row < Rows && range.CanReach(row * Cols + col)
-            && (!needTp || range.Cost[row * Cols + col] + ObjectTouchTp <= user.Tp);
+            && (!needTp || range.Cost[row * Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
         if (Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1 && Affordable(user.Col, user.Row)) return [];
         int best = -1, bestCost = int.MaxValue;
         foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
@@ -67,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (ObjectAt(col, row) is not { } obj || FindTouchPath(_units[_turn], obj) == null) return false;
         if (FindTouchPath(_units[_turn], obj, needTp: true) is not { } path)
         {
-            Hint($"TP 가 모자랍니다 — 손을 대려면 옆 칸까지 걷고도 TP {ObjectTouchTp} 이 남아야 합니다");
+            Hint($"TP 가 모자랍니다 — 손을 대려면 옆 칸까지 걷고도 TP+CTP 로 {ObjectTouchTp} 을 낼 수 있어야 합니다");
             return true;
         }
         if (path.Count == 0) return TouchObject(obj);
@@ -294,7 +295,10 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var obj in Objects)
         {
             if (!obj.Alive || _opened.Contains(obj) || obj.Data.SpriteId <= 0) continue;
-            int x = obj.Col * TileW + TileW / 2, y = CellTop(obj.Col, obj.Row) + TileH;
+            // 그림 기준점 = 칸 왼쪽 위 + .obj 파일 16·18 의 그림 보정(원본은 ×4 · ×40/32 해서 화면 자리 +0x3e/+0x40 에 더한다, 분석-전투 「Obj 배치」).
+            // 1칸 물체는 가로 16~20(칸 가운데), 2칸 문은 36·39(두 칸 가운데)라 픽셀 거리로 본다(가설). 예전에는 칸 아래 모서리에 놓아
+            // 상자가 반 칸 넘게 내려가 노랑 칸(닿는 물체 칸)과 어긋났다(사용자 보고).
+            int x = obj.Col * TileW + obj.Data.DrawW, y = CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
             DrawUi(obj.Data.SpriteId, 0, (int)(_lastTime * TicksPerSecond), x, y, UiBlend.Alpha);
         }
     }
