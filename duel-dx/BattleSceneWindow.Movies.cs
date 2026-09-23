@@ -64,6 +64,47 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>
+    /// 익스퍼트 웨이브(어빌리티 54)의 파문 — 그림 자료가 없는 코드 이펙트(<c>0x100cfae0</c> ×3). 핸들러 <c>0x1008a880</c> 이
+    /// <c>0x100cfbd0(…, 80, …, 속도)</c> 로 셋을 반지름 80 까지 속도 1.5 · 0.833 · 0.167(틱당)로 퍼뜨린다. 색·굵기는 자료에 없어
+    /// 옅은 청백 더하기 테두리로 그린다(가설). 판 칸이 40×32 라 세로는 0.8 배로 눌린 타원이다.
+    /// </summary>
+    private readonly List<(double Start, int X, int Y, double Speed)> _ripples = [];
+
+    private const int RippleRadius = 80;
+    private static readonly double[] RippleSpeeds = [1.5, 0.833, 0.167];
+
+    private void SpawnRipples(WorkData w, int col, int row)
+    {
+        if (w.AbilityId != 54) return;
+        foreach (double speed in RippleSpeeds) _ripples.Add((_lastTime, col * TileW + TileW / 2, CellCenterY(col, row), speed));
+    }
+
+    private void DrawRipples()
+    {
+        _ripples.RemoveAll(r =>
+        {
+            double radius = (_lastTime - r.Start) * TicksPerSecond * r.Speed;
+            if (radius >= RippleRadius) return true;
+            int k = (int)(256 * (1 - radius / RippleRadius));
+            const uint color = 0xFF3C6490;
+            int steps = Math.Max(24, (int)(radius * 6));
+            for (int ring = 0; ring < 3; ring++)                       // 굵기 3픽셀
+            {
+                double rr = radius + ring;
+                for (int s = 0; s < steps; s++)
+                {
+                    double a = 2 * Math.PI * s / steps;
+                    int x = r.X + (int)Math.Round(Math.Cos(a) * rr), y = r.Y + (int)Math.Round(Math.Sin(a) * rr * 0.8);
+                    if ((uint)x >= BoardWidth || (uint)y >= BoardHeight) continue;
+                    int at = y * BoardWidth + x;
+                    _fb[at] = AddColor(_fb[at], color, k);
+                }
+            }
+            return false;
+        });
+    }
+
     /// <summary>영상 컷을 더하기로 얹는다 — 검은 바탕은 +0 이라 안 보인다. 끝난 영상은 지운다.</summary>
     private void DrawMovies()
     {
