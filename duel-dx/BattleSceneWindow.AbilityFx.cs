@@ -75,8 +75,19 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
     private const int EscapeWork = 1583;
 
+    /// <summary>
+    /// 그 work 의 대본 — <b>손으로 맞춘 표</b>가 먼저고, 없으면 도구가 뽑은 <see cref="WorkScripts"/> 다.
+    /// </summary>
+    /// <remarks>
+    /// 손 표는 자리·높이까지 맞춰 둔 서른 남짓이고, 뽑은 표는 1540개다. 둘 다 없으면 예전처럼 기본공격 동작을 빌린다.
+    /// </remarks>
+    private static (int[] Actions, AbilityEffect[] Effects)? ScriptFor(int work) =>
+        AbilityMotions.TryGetValue(work, out var hand) ? hand
+        : WorkScripts.TryGetValue(work, out var made) ? made
+        : null;
+
     private static int[] ActionsFor(WorkData w) =>
-        AbilityMotions.TryGetValue(w.Id, out var m) && m.Actions.Length > 0 ? m.Actions
+        ScriptFor(w.Id) is { Actions.Length: > 0 } m ? m.Actions
         : BasicWorkActions.GetValueOrDefault(w.Id) ?? StrikeActions;
 
     /// <summary>
@@ -91,13 +102,13 @@ internal sealed unsafe partial class BattleSceneWindow
         int[] actions = ActionsFor(w);
         int strike = Array.FindIndex(actions, a => a is 8 or 9 or 13 or 14 or 26 or 27);
         if (strike >= 0) return strike;
-        return AbilityMotions.ContainsKey(w.Id) ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
+        return ScriptFor(w.Id) != null ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
     }
 
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
-        if (!AbilityMotions.TryGetValue(w.Id, out var m)) return;
+        if (ScriptFor(w.Id) is not { } m) return;
         foreach (var e in m.Effects)
         {
             var (x, y) = e.OnTarget
