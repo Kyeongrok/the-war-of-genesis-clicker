@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using DuelDx.Native;
 
@@ -33,7 +33,7 @@ internal sealed class KeyBindings
 
     private readonly Dictionary<KeyAction, int> _keys = [];
 
-    private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "keys.json");
+    private static string FilePath => UserDataFolder.File("keys.json");
 
     public KeyBindings() => ResetDefaults();
 

@@ -13,7 +13,7 @@ namespace DuelDx;
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true)
 {
-    private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "settings.json");
+    private static string FilePath => UserDataFolder.File("settings.json");
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
