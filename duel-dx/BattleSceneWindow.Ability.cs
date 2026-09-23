@@ -210,8 +210,9 @@ internal sealed unsafe partial class BattleSceneWindow
         DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
         DrawGameFrame(ox, oy, MenuW, h, $"{_db.T(3)} — {UnitName(_turn)}");
         // 머리 글자는 아래 숫자 칸의 오른끝에 하나씩 맞춘다 — 한 덩이로 창 오른끝에 붙였더니 단축키 칸까지 밀려 한 칸씩 어긋났다(사용자 보고).
-        RightText("TP", ox + MenuRowX + 210, oy + 3, White, 12);
-        RightText("SOUL", ox + MenuRowX + 240, oy + 3, White, 12);
+        // 두 칸 오른끝이 30픽셀밖에 안 떨어져 그대로 맞추면 「TPSOUL」로 붙는다 — TP 는 조금 왼쪽, SOUL 은 조금 오른쪽으로 띄운다.
+        RightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
+        RightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
 
         if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = _units[_turn].Data!;
@@ -233,7 +234,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2, UiBlend.Alpha);
             }
             DrawText(name, rx + 46, y + 4, color, 12);
-            if (!enabled) DrawText(reason, rx + 120, y + 4, Red, 11);
+            // 못 쓰는 줄은 흐린 글자로만 알린다 — 「TP 부족」 같은 까닭 글은 이름과 겹치고 어차피 안다(사용자 요청). 누르면 알림으로 까닭을 준다.
             // 18·20(소울·TP 소모량 변화)까지 얹은 값을 보여 준다 — 실제로 물리는 값과 같아야 한다.
             RightText($"{TpCostFor(_units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
             // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
