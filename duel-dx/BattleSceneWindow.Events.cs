@@ -50,6 +50,12 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _events = [];
         _eventFired = [];
+        // 돌던 사건 자리를 반드시 비운다 — 안 비우면 앞 전투의 번호가 남아, 사건이 더 적은 전투를 읽었을 때
+        // StepEvent 의 _events[_runningEvent] 가 목록 밖을 짚어 죽는다(사용자 보고 crash).
+        _runningEvent = -1;
+        _eventPc = 0;
+        _eventWaitUntil = 0;
+        _talkSkip = false;
         _turnNo = 0;
         _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
@@ -118,6 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_eventSoundSeconds > 0) { _eventWaitUntil = _lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
             if (_eventSoundLoading && !_talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
             if (_eventWaitUntil > _lastTime && !_talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
+            if (_runningEvent >= _events.Count) { _runningEvent = -1; _talkSkip = false; return; }   // 판이 바뀌었다
             var e = _events[_runningEvent];
             // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
             if (_eventPc >= e.Actions.Count) { _runningEvent = -1; _talkSkip = false; return; }
