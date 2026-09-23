@@ -266,6 +266,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var events = _field?.Events ?? chapter?.Events;
         if (events == null) return;
         if (_field != null) StepFieldActors();
+        StepChannelFades();                                           // 행동 506 이 걸어 둔 채널 음량 바꾸기
         if (_fieldChoices != null) _talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
         if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
@@ -698,6 +699,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case 501:                                        // [소리, 채널, 인물, 되풀이] 채널에 걸고 기다리지 않는다(0x100ee960)
                 if (_talkSkip) break;
                 PlayChannelSound(A(1), A(0), loop: A(3) != 0);
+                break;
+            case 506:                                        // [채널, 음량, 틱] 채널 음량을 서서히 바꾼다(0x100eeb80) — 517 의 채널판
+                if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 건너뛴다([0x101bffb0] 검사)
+                FadeChannelSound(A(0), A(1), A(2));
+                _fieldWaitUntil = _lastTime + Math.Max(1, (int)A(2)) / TicksPerSecond;   // 원본은 그 틱만큼 줄에 머문다
                 break;
             case 505:                                        // [채널] 그 채널의 소리를 끊는다(0x100eeb30)
                 StopChannelSound(A(0));

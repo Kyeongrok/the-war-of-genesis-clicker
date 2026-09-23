@@ -217,7 +217,53 @@ internal sealed unsafe partial class BattleSceneWindow
             tag = cur.Tag;
             _soundChannels.Remove(channel);
         }
+        _channelFades.Remove(channel);
         _mixer.StopEffect(tag);
+    }
+
+    /// <summary>
+    /// 행동 <b>506</b> 이 걸어 둔 채널 음량 바꾸기 — 채널 번호 → (시작 크기, 목표 크기, 시작한 때, 걸리는 초).
+    /// </summary>
+    /// <remarks>
+    /// 원본 <c>0x100eeb80</c> 은 한 줄에 머물며 매 틀 <c>지금 = 시작 + (목표 − 시작) × 지난 틀 ÷ 인자2</c> 로 채널 개체의
+    /// 음량(<c>+0x4c</c>, 처음은 100)을 바꾸고(<c>0x100f5330</c>), 인자2 틀이 지나야 다음 줄로 간다. 배경음악의 517 과 같은 꼴이다.
+    /// 자료는 `506 [1, 0, 80]`·`506 [1, 0, 40]` 둘 — 채널 1 을 0 까지 서서히 줄여 끈다.
+    /// </remarks>
+    private readonly Dictionary<int, (float From, float To, double Start, double Seconds)> _channelFades = [];
+
+    /// <summary>행동 506 — 채널 음량을 <paramref name="percent"/>(0~100)까지 <paramref name="ticks"/> 틱에 걸쳐 바꾼다.</summary>
+    private void FadeChannelSound(int channel, int percent, int ticks)
+    {
+        float to = Math.Clamp(percent, 0, 100) / 100f * _effectGain;
+        // 바꾸는 도중에 또 걸면 지금 크기에서 이어 간다.
+        float from = _channelFades.TryGetValue(channel, out var cur) ? ChannelGainNow(cur, _lastTime) : _effectGain;
+        _channelFades[channel] = (from, to, _lastTime, Math.Max(1, ticks) / TicksPerSecond);
+    }
+
+    private static float ChannelGainNow((float From, float To, double Start, double Seconds) f, double now)
+    {
+        double t = Math.Clamp((now - f.Start) / f.Seconds, 0, 1);
+        return (float)(f.From + (f.To - f.From) * t);
+    }
+
+    /// <summary>걸어 둔 채널 음량 바꾸기를 한 걸음 나아가게 한다 — 매 틀 부른다.</summary>
+    private void StepChannelFades()
+    {
+        if (_channelFades.Count == 0) return;
+        foreach (int channel in _channelFades.Keys.ToArray())
+        {
+            var f = _channelFades[channel];
+            double t = Math.Clamp((_lastTime - f.Start) / f.Seconds, 0, 1);
+            float gain = ChannelGainNow(f, _lastTime);
+            int tag;
+            lock (_soundChannels)
+            {
+                if (!_soundChannels.TryGetValue(channel, out var cur)) { _channelFades.Remove(channel); continue; }
+                tag = cur.Tag;
+            }
+            _mixer.SetEffectGain(tag, gain);
+            if (t >= 1) _channelFades.Remove(channel);
+        }
     }
 
     /// <summary>행동 504 — 그 채널이 아직 울리고 있나.</summary>

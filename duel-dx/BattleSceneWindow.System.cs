@@ -372,6 +372,99 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int SaveVersion = 8;
 
+    /// <summary>
+    /// 판을 세우기 전에 되살려야 하는 것 — <b>파티·동료·깃발·군단·돈</b>.
+    /// </summary>
+    /// <remarks>
+    /// 아군을 미리 안 세운 전투는 <see cref="BuildUnits"/> 가 배치 칸에 <c>_members ∩ _party</c> 를 세운다.
+    /// 그래서 이것들은 <see cref="StartBattle"/> <b>앞</b>에서 채워야 한다 — 뒤에 채우면 타이틀에서 불러왔을 때
+    /// 둘 다 비어 기본 파티가 서고, 저장 당시 전투에 있던 인물(크리스티앙)이 빠진다.
+    /// 전투에 <b>서 있던</b> 아군은 <c>state.Party</c> 가 아니라 <c>state.Units</c> 에 적히므로 거기서도 파티를 채운다.
+    /// </remarks>
+    private void RestorePartyBeforeBoard(SaveState state)
+    {
+        _inventory.Clear();
+        foreach (var (id, count) in state.Inventory)
+            if (int.TryParse(id, out int itemId)) _inventory[itemId] = count;
+
+        _shopMoney = state.Money;
+        _unitLegion.Clear();
+        foreach (var (index, legion) in state.Legions ?? [])
+            if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
+
+        _chapterDone = state.ChapterDone;
+        _partyNo = state.PartyNo;
+        // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
+        // 지금 인원을 은행으로 치워 버린다.
+        if (state.InMoses && state.Chapter > 0 && Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) _partyNo = owner.Party;
+        _members.Clear();
+        foreach (int chr in state.Members ?? []) _members.Add(chr);
+
+        // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
+        Array.Clear(_flags);
+        foreach (var (number, value) in state.Flags ?? [])
+            if (int.TryParse(number, out int flag) && (uint)flag < _flags.Length) _flags[flag] = (byte)Math.Clamp(value, 0, 255);
+
+        _autoPlacesDone.Clear();
+        foreach (string pair in state.DonePlaces ?? [])
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
+                _autoPlacesDone.Add((chapter, place));
+        _chapterFired.Clear();
+        foreach (string triple in state.DoneEvents ?? [])
+            if (triple.Split(':') is [var c, var e, var n] && int.TryParse(c, out int chp)
+                && int.TryParse(e, out int ev) && int.TryParse(n, out int count))
+                _chapterFired[(chp, ev)] = count;
+        // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
+        if (state.DoneEvents == null)
+            foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
+        // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
+        // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
+        // 목록이 비어 있어도(고치기 전 판이 빈 목록을 적은 세이브) 되살리고, 적힌 목록과 합친다.
+        var saved = _members.ToList();
+        RebuildMembersFromChapters();
+        foreach (int chr in saved) _members.Add(chr);
+        _ownedLegions.Clear();
+        foreach (int id in state.OwnedLegions ?? []) _ownedLegions.Add(id);
+        _legionsKnown = state.OwnedLegions != null;
+        RestoreBank(state.Bank);
+        _mailbox.Clear();
+        foreach (int id in state.Mailbox ?? []) _mailbox.Add(id);
+        _mailRead.Clear();
+        foreach (int id in state.MailRead ?? []) _mailRead.Add(id);
+        Array.Clear(_chapterVars);
+        foreach (var (number, value) in state.ChapterVars ?? [])
+            if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
+        _planetVisits.Clear();
+        foreach (string pair in state.PlanetVisits ?? [])
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) _planetVisits.Add((pc, pn));
+        _placesUsed.Clear();
+        foreach (string pair in state.UsedPlaces ?? [])
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
+                _placesUsed.Add((chapter, place));
+        // 전투에 서 있던 아군도 파티에 넣는다 — 이것이 없으면 배치 칸 고르기가 그 인물을 못 본다.
+        // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
+        foreach (var s in state.Units)
+            if (s.Side == 4 && _db?.Character(s.ChrCode) is { } bc)
+                _party[s.ChrCode] = bc with
+                {
+                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
+                    Items = s.Items.Length == bc.Items.Length ? s.Items : bc.Items,
+                    Passives = s.Passives.Length == 3 ? s.Passives : bc.Passives,
+                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+                };
+        foreach (var s in state.Party ?? [])
+            if (_db?.Character(s.ChrCode) is { } pc)
+                _party[s.ChrCode] = pc with
+                {
+                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
+                    Items = s.Items.Length == pc.Items.Length ? s.Items : pc.Items,
+                    Passives = s.Passives.Length == 3 ? s.Passives : pc.Passives,
+                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+                };
+        foreach (int chr in _members)
+            if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
+    }
+
     /// <summary>돌린 챕터 사건의 801(동료 넣기)·802(빼기)로 동료 목록을 다시 만든다 — 사건 −1 표시(옛 세이브)는 그 챕터 사건 전부로 본다.</summary>
     private void RebuildMembersFromChapters()
     {
@@ -479,6 +572,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
         // 모세스가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
         bool fromMoses = _mosesOpen || FieldOpen || _episodesOpen;
+        // 판을 세우기 <b>전에</b> 파티·동료를 되살린다 — 아군을 미리 안 세운 전투는 BuildUnits 가 배치 칸에
+        // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
+        // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
+        RestorePartyBeforeBoard(state);
         if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
@@ -523,77 +620,8 @@ internal sealed unsafe partial class BattleSceneWindow
             RefreshUnitStats(u);
         }
 
-        _inventory.Clear();
-        foreach (var (id, count) in state.Inventory)
-            if (int.TryParse(id, out int itemId)) _inventory[itemId] = count;
-
-        _shopMoney = state.Money;
-        _unitLegion.Clear();
-        foreach (var (index, legion) in state.Legions ?? [])
-            if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
-
-        _chapterDone = state.ChapterDone;
-        _partyNo = state.PartyNo;
-        // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
-        // 지금 인원을 은행으로 치워 버린다.
-        if (state.InMoses && state.Chapter > 0 && Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) _partyNo = owner.Party;
-        _members.Clear();
-        foreach (int chr in state.Members ?? []) _members.Add(chr);
-
-        // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
-        Array.Clear(_flags);
-        foreach (var (number, value) in state.Flags ?? [])
-            if (int.TryParse(number, out int flag) && (uint)flag < _flags.Length) _flags[flag] = (byte)Math.Clamp(value, 0, 255);
-
-        _autoPlacesDone.Clear();
-        foreach (string pair in state.DonePlaces ?? [])
-            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
-                _autoPlacesDone.Add((chapter, place));
-        _chapterFired.Clear();
-        foreach (string triple in state.DoneEvents ?? [])
-            if (triple.Split(':') is [var c, var e, var n] && int.TryParse(c, out int chp)
-                && int.TryParse(e, out int ev) && int.TryParse(n, out int count))
-                _chapterFired[(chp, ev)] = count;
-        // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
-        if (state.DoneEvents == null)
-            foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
-        // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
-        // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
-        // 목록이 비어 있어도(고치기 전 판이 빈 목록을 적은 세이브) 되살리고, 적힌 목록과 합친다.
-        var saved = _members.ToList();
-        RebuildMembersFromChapters();
-        foreach (int chr in saved) _members.Add(chr);
-        // 전투에 안 선 파티원 자료 — 세이브에 적힌 것을 되살리고, 없으면 .chr 의 처음 값으로 만든다(옛 세이브의 크리스티앙).
+        // 전투에 선 아군의 되살린 값을 파티에 담는다 — 위에서 채워 둔 값을 지금 판의 값으로 덮어쓴다.
         RememberParty();
-        foreach (var s in state.Party ?? [])
-            if (!_units.Any(u => u.ChrCode == s.ChrCode) && _db?.Character(s.ChrCode) is { } pc)
-                _party[s.ChrCode] = pc with
-                {
-                    Level = (ushort)s.Level, CumExp = s.CumExp, Exp = s.Exp,
-                    Items = s.Items.Length == pc.Items.Length ? s.Items : pc.Items,
-                    Passives = s.Passives.Length == 3 ? s.Passives : pc.Passives,
-                    Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
-                };
-        foreach (int chr in _members)
-            if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
-        _ownedLegions.Clear();
-        foreach (int id in state.OwnedLegions ?? []) _ownedLegions.Add(id);
-        _legionsKnown = state.OwnedLegions != null;
-        RestoreBank(state.Bank);
-        _mailbox.Clear();
-        foreach (int id in state.Mailbox ?? []) _mailbox.Add(id);
-        _mailRead.Clear();
-        foreach (int id in state.MailRead ?? []) _mailRead.Add(id);
-        Array.Clear(_chapterVars);
-        foreach (var (number, value) in state.ChapterVars ?? [])
-            if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
-        _planetVisits.Clear();
-        foreach (string pair in state.PlanetVisits ?? [])
-            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) _planetVisits.Add((pc, pn));
-        _placesUsed.Clear();
-        foreach (string pair in state.UsedPlaces ?? [])
-            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
-                _placesUsed.Add((chapter, place));
 
         // 전투 이벤트 상태를 되살린다 — 이미 터진 사건은 다시 안 터진다.
         if (state.EventFired is { } fired && fired.Length == _eventFired.Length)
