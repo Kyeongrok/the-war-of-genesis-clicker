@@ -80,7 +80,14 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawEffects()
     {
-        _effects.RemoveAll(e => !DrawUi(e.Obs, e.Motion, (int)((_lastTime - e.Start) * TicksPerSecond), e.X, e.Y, UiBlend.Add, loop: false));
+        // 지우는 것은 모션이 <b>다 끝났을 때</b>다 — 첫 컷이 몇 틱 뒤에 시작하는 이펙트(크래쉬 봄의 폭탄, 메테오 착탄 170:1)는
+        // 첫 틀에 그릴 컷이 없어 예전에는 뜨기도 전에 지워졌다. 그림이 아예 없는 Obs(소리 껍데기)는 바로 지운다.
+        _effects.RemoveAll(e =>
+        {
+            int tick = (int)((_lastTime - e.Start) * TicksPerSecond);
+            if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, UiBlend.Add, loop: false)) return false;
+            return UiFor(e.Obs) is not { } sprite || tick >= sprite.MotionLength(e.Motion);
+        });
     }
 
     /// <summary>치명타 물들이기 — 방식 9(픽셀 절반)에 가깝게 한 프레임만 화면을 어둡게 번쩍인다.</summary>

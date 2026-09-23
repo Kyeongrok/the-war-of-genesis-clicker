@@ -108,10 +108,22 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// 손 표는 자리·높이까지 맞춰 둔 서른 남짓이고, 뽑은 표는 1540개다. 둘 다 없으면 예전처럼 기본공격 동작을 빌린다.
     /// </remarks>
-    private static (int[] Actions, AbilityEffect[] Effects)? ScriptFor(int work) =>
-        AbilityMotions.TryGetValue(work, out var hand) ? hand
-        : WorkScripts.TryGetValue(work, out var made) ? made
-        : null;
+    /// <summary>그림 컷 없이 소리 키만 든 Obs — 시전 소리(1338)·기술별 소리 껍데기(분석-스킬 fx-189).</summary>
+    private static readonly HashSet<int> SoundShellObs = [1338, 1332, 1324, 311, 312, 379, 487, 1320, 1479, 1483];
+
+    /// <summary>
+    /// work 의 동작 차례와 이펙트 — 동작 차례·이펙트 자리는 손 표가 이기고, 도구 표(원본 핸들러에서 뽑은 것)의 이펙트는 <b>늘 뒤에 합친다</b>.
+    /// 예전 도구가 파생 생성자로 만드는 이펙트를 놓쳐(분석-스킬 fx-189) 손 표에는 그림 하나(크래쉬 봄 1380)나 소리 껍데기만 적힌 줄이 많았다 —
+    /// 손 표가 있다고 도구 표를 무시하면 폭탄·착탄 같은 그림이 영영 안 나온다. 같은 (Obs, 모션)은 손 표 것 하나만 둔다.
+    /// </summary>
+    private static (int[] Actions, AbilityEffect[] Effects)? ScriptFor(int work)
+    {
+        bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
+        bool hasMade = WorkScripts.TryGetValue(work, out var made);
+        if (!hasHand) return hasMade ? made : null;
+        if (!hasMade) return hand;
+        return (hand.Actions, [.. hand.Effects, .. made.Effects.Where(e => !hand.Effects.Any(h => h.Obs == e.Obs && h.Motion == e.Motion))]);
+    }
 
     private static int[] ActionsFor(WorkData w) =>
         ScriptFor(w.Id) is { Actions.Length: > 0 } m ? m.Actions
