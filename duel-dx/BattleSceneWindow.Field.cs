@@ -396,6 +396,23 @@ internal sealed unsafe partial class BattleSceneWindow
         double.TryParse(Environment.GetEnvironmentVariable("DUELDX_HOLD"), out double hold) && hold > 0 ? hold : 10;
 
     /// <summary>행동 하나. 이 틀에 더 읽지 말아야 하면 false(필드를 떠났거나, 연출을 기다린다).</summary>
+    /// <summary>
+    /// 지금 읽은 행동 2(틱 기다리기)가 <b>대사와 대사 사이</b>의 멈춤인가 — 「대사(600~603) → 1(클릭 기다림) → 2 → 대사」.
+    /// 원본도 클릭 뒤 이 틱만큼(보통 30틱 = 1초) 배경만 보이다 다음 대사를 띄운다(<c>0x100f4946</c> 이 클릭 뒤에야 셈을 0 부터 시작).
+    /// </summary>
+    private bool IsPauseBetweenLines()
+    {
+        var events = _field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
+        if (events == null || (uint)_fieldEvent >= events.Count) return false;
+        var acts = events[_fieldEvent].Actions;
+        int at = _fieldPc - 1;                                 // 방금 읽은 행동 2
+        static bool Talk(int code) => code is >= 600 and <= 603;
+        if (at < 2 || at + 1 >= acts.Count || acts[at - 1].Code != 1 || !Talk(acts[at + 1].Code)) return false;
+        int before = at - 2;
+        while (before > 0 && acts[before].Code == 1000) before--;   // 1000(건너뛰기 깃발 내림)은 화면에 아무것도 안 한다
+        return Talk(acts[before].Code);
+    }
+
     private bool RunFieldAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
@@ -447,7 +464,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 _fieldPc--;                                  // 다음 틀에 이 줄을 다시 본다
                 return false;
             }
-            case 2: _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond; break;
+            case 2:
+                if (!(_skipTalkPauses && IsPauseBetweenLines())) _fieldWaitUntil = _lastTime + A(0) / TicksPerSecond;
+                break;
             case 504:                                        // [채널] 그 채널의 소리가 끝날 때까지(진행기 0x100f489b 가 직접 본다)
                 if (_talkSkip) { StopChannelSound(A(0)); break; }
                 _fieldWaitChannel = A(0);

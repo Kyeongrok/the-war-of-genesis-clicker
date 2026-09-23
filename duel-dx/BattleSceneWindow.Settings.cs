@@ -13,10 +13,12 @@ namespace DuelDx;
 /// <param name="ShowLevelUp">레벨업 창을 띄울지. 꺼도 <b>레벨은 그대로 오른다</b> — 창만 안 뜬다(사용자 요청).</param>
 /// <param name="ShowStatusBar">화면 맨 위 상태 줄(전투 이름·아군/적군 수·차례 인물 HP/TP/SOUL·조작 안내)을 보일지. 원본에 없는 데모 줄이라 기본은 끔(사용자 요청).</param>
 /// <param name="GameSpeed">게임 속도 % — 100 이 원본(33ms 타이머 = 30틱/초, <c>0x100081f0</c>). 150·200 이면 모션·걷기·이펙트가 그만큼 빨리 돈다(사용자 요청).</param>
+/// <param name="SkipTalkPauses">대사와 대사 사이의 멈춤(행동 2, 보통 1초 — 클릭 뒤 배경만 보이는 틈)을 건너뛸지. 원본은 기다린다 — 느리다는 사용자 요청으로 기본 켬.</param>
 /// <param name="KeepExpOnJobChange">전직(세부 체질 바꾸기)할 때 남은 EXP 를 그대로 둘지. 원본은 0 으로 비운다 — 켜면 원본과 다르다(사용자 요청).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
-                                    bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100)
+                                    bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
+                                    bool SkipTalkPauses = true)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 
