@@ -137,6 +137,18 @@ internal sealed unsafe partial class BattleSceneWindow
         if (id <= 0) return;
         if (_eventVoices.TryGetValue(id, out var have)) { StartEventVoice(have); return; }
         _eventSoundLoading = true;
+        LoadClip(id, pcm =>
+        {
+            if (pcm != null) StartEventVoice(pcm);
+            else _eventSoundSeconds = 0.1f;              // 소리가 없으면 곧바로 다음 줄로
+            _eventSoundLoading = false;
+        });
+    }
+
+    /// <summary><c>assets/bgm/NNNN.bgm</c> 한 자락을 배경 실에서 풀어 <paramref name="then"/> 에 넘긴다(못 읽으면 null).</summary>
+    private void LoadClip(int id, Action<PcmSound?> then)
+    {
+        if (_eventVoices.TryGetValue(id, out var cached)) { then(cached); return; }
         System.Threading.Tasks.Task.Run(() =>
         {
             PcmSound? pcm = null;
@@ -146,18 +158,82 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (File.Exists(path)) pcm = BinkAudio.Open(path).Decode();
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
-            if (pcm != null) { _eventVoices[id] = pcm; StartEventVoice(pcm); }
-            else _eventSoundSeconds = 0.1f;              // 소리가 없으면 곧바로 다음 줄로
-            _eventSoundLoading = false;
+            if (pcm != null) lock (_eventVoices) _eventVoices[id] = pcm;
+            then(pcm);
         });
+    }
+
+    private static float ClipSeconds(PcmSound pcm)
+    {
+        int frames = pcm.Channels > 0 ? pcm.Samples.Length / pcm.Channels : 0;
+        return pcm.SampleRate > 0 ? Math.Max(0.1f, frames / (float)pcm.SampleRate) : 0.1f;
+    }
+
+    /// <summary>
+    /// 필드 스크립트의 <b>소리 채널</b>(행동 501·504·505) — 채널 번호 → (끝나는 때, 소리표). 푸는 중이면 끝나는 때가 <see cref="double.MaxValue"/>.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 채널마다 0x58 바이트 개체를 만들어 <c>[0x101bfe1c + 채널*4 + 0x200]</c> 에 넣고(<c>0x100ee960</c>),
+    /// 그 개체가 <c>Bgm\%04d.bgm</c> 을 튼다. 행동 <b>504</b> 는 스크립트 진행기(<c>0x100f489b</c>)가 직접 보는 자리라
+    /// 그 칸이 빌 때까지 다음 줄로 안 간다. 행동 <b>505</b> 는 개체를 지워 소리를 끊는다.
+    /// </remarks>
+    private readonly Dictionary<int, (double Until, int Tag)> _soundChannels = [];
+
+    private int _soundTag;
+
+    /// <summary>행동 501 — 채널에 소리를 걸고 <b>기다리지 않는다</b>.</summary>
+    private void PlayChannelSound(int channel, int id, bool loop)
+    {
+        StopChannelSound(channel);
+        if (id <= 0) return;
+        int tag = ++_soundTag;
+        lock (_soundChannels) _soundChannels[channel] = (double.MaxValue, tag);
+        LoadClip(id, pcm =>
+        {
+            lock (_soundChannels)
+            {
+                if (!_soundChannels.TryGetValue(channel, out var cur) || cur.Tag != tag) return;   // 그 사이 다른 소리로 갈렸다
+                if (pcm == null) { _soundChannels.Remove(channel); return; }
+                // 되풀이하는 소리는 505 로 끌 때까지 도니, 504 가 영영 기다리지 않게 끝나는 때를 지금으로 둔다.
+                _soundChannels[channel] = (loop ? 0 : _lastTime + ClipSeconds(pcm), tag);
+            }
+            if (!Muted && pcm != null) _mixer.PlayEffect(pcm, _effectGain, tag, loop);
+        });
+    }
+
+    /// <summary>행동 505 — 그 채널의 소리를 끊는다.</summary>
+    private void StopChannelSound(int channel)
+    {
+        int tag;
+        lock (_soundChannels)
+        {
+            if (!_soundChannels.TryGetValue(channel, out var cur)) return;
+            tag = cur.Tag;
+            _soundChannels.Remove(channel);
+        }
+        _mixer.StopEffect(tag);
+    }
+
+    /// <summary>행동 504 — 그 채널이 아직 울리고 있나.</summary>
+    private bool ChannelBusy(int channel)
+    {
+        lock (_soundChannels)
+            return _soundChannels.TryGetValue(channel, out var cur) && cur.Until > _lastTime;
+    }
+
+    /// <summary>필드를 떠날 때 채널을 모두 끈다.</summary>
+    private void StopAllChannelSounds()
+    {
+        int[] channels;
+        lock (_soundChannels) channels = [.. _soundChannels.Keys];
+        foreach (int ch in channels) StopChannelSound(ch);
     }
 
     /// <summary>푼 소리를 틀고 그 길이만큼 이벤트를 멈추게 한다.</summary>
     private void StartEventVoice(PcmSound pcm)
     {
         if (!Muted) _mixer.PlayEffect(pcm, _effectGain);
-        int frames = pcm.Channels > 0 ? pcm.Samples.Length / pcm.Channels : 0;
-        _eventSoundSeconds = pcm.SampleRate > 0 ? Math.Max(0.1f, frames / (float)pcm.SampleRate) : 0.1f;
+        _eventSoundSeconds = ClipSeconds(pcm);
     }
 
     /// <summary>마지막으로 건 곡의 번호표 — 풀리는 데 1~2초 걸리는 사이 다른 곡이 걸리면 먼저 것은 버린다.</summary>
