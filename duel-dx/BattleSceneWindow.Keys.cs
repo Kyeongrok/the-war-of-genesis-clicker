@@ -106,6 +106,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
     private const int MenuClearEnemies = 1008;
 
+    /// <summary>「게임 속도」 줄 번호 — 1110 + <see cref="SpeedChoices"/> 순번.</summary>
+    private const int MenuSpeedBase = 1110;
+
+    private static readonly int[] SpeedChoices = [100, 150, 200];
+
     /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 줄 번호 — 1200 + 목록 순번.</summary>
     private const int MenuReplayBase = 1200;
 
@@ -158,6 +163,11 @@ internal sealed unsafe partial class BattleSceneWindow
             Win32.AppendMenuW(zoom, Win32.MF_STRING | (chosen ? Win32.MF_CHECKED : 0u), (nuint)(MenuZoomAuto + i), label);
         }
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)zoom, "배율(&Z)");
+        IntPtr speed = Win32.CreatePopupMenu();
+        for (int i = 0; i < SpeedChoices.Length; i++)
+            Win32.AppendMenuW(speed, Win32.MF_STRING | (UserSettings.Current.GameSpeed == SpeedChoices[i] ? Win32.MF_CHECKED : 0u), (nuint)(MenuSpeedBase + i),
+                              SpeedChoices[i] == 100 ? "보통(원본)(&1)" : $"{SpeedChoices[i] / 100.0:0.#}배(&{i + 1})");
+        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)speed, "게임 속도(&P)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)mode, "모드(&M)");
@@ -203,10 +213,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed));
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
     private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
+
+    /// <summary>게임 속도 %(100 = 원본). 게임 시계가 실제 시간의 이만큼 흐른다.</summary>
+    private int _gameSpeed = UserSettings.Current.GameSpeed is 100 or 150 or 200 ? UserSettings.Current.GameSpeed : 100;
 
     /// <summary>전직할 때 EXP 를 남길지 — 설정 > 전직할 때 EXP 유지. 원본은 0 으로 비운다.</summary>
     private bool _keepJobExp = UserSettings.Current.KeepExpOnJobChange;
@@ -255,6 +268,13 @@ internal sealed unsafe partial class BattleSceneWindow
             case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
             case MenuGrid: _showGrid = !_showGrid; SaveSettings(); break;
             case MenuGauges: _showGauges = !_showGauges; SaveSettings(); break;
+            case >= MenuSpeedBase and < MenuSpeedBase + 3:
+                _gameSpeed = SpeedChoices[id - MenuSpeedBase];
+                for (int i = 0; i < SpeedChoices.Length; i++)
+                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuSpeedBase + i), Win32.MF_BYCOMMAND | (i == id - MenuSpeedBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                SaveSettings();
+                Toast(_gameSpeed == 100 ? "게임 속도: 보통(원본)" : $"게임 속도: {_gameSpeed / 100.0:0.#}배");
+                break;
             case >= MenuResBase and < MenuResBase + 11:
             {
                 (_viewW, _viewH) = ResChoices[id - MenuResBase];

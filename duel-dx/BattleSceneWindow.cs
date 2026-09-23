@@ -495,14 +495,20 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             }
             if (!_running) break;
 
-            double now = clock.Elapsed.TotalSeconds;
-            Update(Math.Min(now - _lastTime, 0.1));
+            // 게임 시계 — 실제로 흐른 시간 × 게임 속도. 모션·걷기·이펙트·소리 예약이 모두 이 시계를 보므로 함께 빨라진다.
+            double real = clock.Elapsed.TotalSeconds, dt = Math.Min(real - _realTime, 0.1) * _gameSpeed / 100.0;
+            _realTime = real;
+            double now = _lastTime + dt;
+            Update(dt);
             _lastTime = now;
 
             UpdateCursor();
             Render();
         }
     }
+
+    /// <summary>지난 프레임의 실제 시각(초) — 게임 시계(<c>_lastTime</c>)는 여기서 흐른 만큼 × 게임 속도로 나아간다.</summary>
+    private double _realTime;
 
     private static void RegisterClassOnce()
     {
@@ -937,11 +943,24 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
 
+    /// <summary>DUELDX_PERF=1 이면 초마다 fps 와 합성·올리기·그리기 ms 를 <c>%TEMP%\dueldx_perf.log</c> 에 적는다(성능 확인용).</summary>
+    private static readonly bool PerfLog = Environment.GetEnvironmentVariable("DUELDX_PERF") == "1";
+    private readonly Stopwatch _perf = new();
+    private double _pc, _pu, _pd; private int _pn; private double _pStart;
+
     private void Render()
     {
-        Compose();
-        Upload();
-        Draw();
+        if (!PerfLog) { Compose(); Upload(); Draw(); return; }
+        _perf.Restart(); Compose(); double c = _perf.Elapsed.TotalMilliseconds;
+        Upload(); double u = _perf.Elapsed.TotalMilliseconds;
+        Draw(); double d = _perf.Elapsed.TotalMilliseconds;
+        _pc += c; _pu += u - c; _pd += d - u; _pn++;
+        if (_realTime - _pStart >= 1)
+        {
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_perf.log"),
+                $"fps {_pn / (_realTime - _pStart):F0} compose {_pc / _pn:F1} upload {_pu / _pn:F1} draw {_pd / _pn:F1} ms, game {_lastTime:F1}s real {_realTime:F1}s" + Environment.NewLine);
+            _pc = _pu = _pd = 0; _pn = 0; _pStart = _realTime;
+        }
     }
 
     private void Compose()
