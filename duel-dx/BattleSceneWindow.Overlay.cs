@@ -110,6 +110,27 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawText(_toast, x, y, White);
     }
 
+    /// <summary>
+    /// 지금 장면의 번호 — 화면 왼쪽 아래 작은 글(「Fld 0365 · 사건 3 · 줄 12」, 「Btl 0137 · 턴 4」, 「Chp 0011」).
+    /// 원본에는 없다 — 어느 장면 이야기인지 서로 짚기 쉽게(사용자 요청). 설정 > 장면 번호 보이기.
+    /// </summary>
+    private void DrawSceneTag()
+    {
+        if (!_showSceneTag || _titleOpen || _recordsOpen) return;
+        string tag;
+        if (_episodesOpen) tag = "연대표";
+        else if (_field != null) tag = $"Fld {_field.Id:D4}" + ScriptPlace(_fieldEvent, _fieldPc);
+        else if (_mosesOpen) tag = _mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(_fieldEvent, _fieldPc) : "모세스";
+        else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {_turnNo}" + (_runningEvent >= 0 ? $" · 사건 {_runningEvent}" : "");
+        else return;
+        var (_, w, h) = GetText(tag, White, 11f);
+        int x = _camX + 4, y = _camY + ViewHeight - h - 4;
+        FillRect(x - 2, y - 1, w + 4, h + 2, 0x90000000);
+        DrawText(tag, x, y, 0xFFB0B8C8, 11f);
+
+        static string ScriptPlace(int ev, int pc) => ev >= 0 ? $" · 사건 {ev} · 줄 {Math.Max(0, pc - 1)}" : "";
+    }
+
     // ── 원 ───────────────────────────────────────────────────────────────────
 
     private void FillCircle(int cx, int cy, int r, uint color)
