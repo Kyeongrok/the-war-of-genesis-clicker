@@ -194,13 +194,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 다른 행성을 고를 수 있다. Esc 와 같은 길을 탄다.
         if (_mosesOpen)
         {
-            if (_statusUnit >= 0) { _statusUnit = -1; return; }
+            if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명
             if (CloseSystemWindow()) return;
             if (_mosesPage != -1) MosesGoBack();
             return;
         }
         if (OnAbilityMenuRightDown(bx, by)) return;   // 어빌리티 목록 줄 = 누르고 있는 동안 설명
-        if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 어빌리티 줄 우클릭 = 레벨 내리기
+        if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명, 빈 곳 = 닫기
         if (_ringUnit >= 0) { CancelRing(); return; }
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
         if (CancelStep(undoMove: false)) return;
@@ -314,7 +314,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private enum UiBlend { Alpha, Add, AddDim, Darken }
+    /// <summary>그림 섞기. <c>Dim</c> 은 그림 색을 15/31 로 어둡게 찍는다 — 꺼진 목록 줄(원본 물들이기 방식 2 · 세기 16, 분석-캐릭터 st-5).</summary>
+    private enum UiBlend { Alpha, Add, AddDim, Darken, Dim }
 
     /// <summary>그림을 이 네모 안으로만 그린다 — 필드처럼 640×480 틀 밖으로 새면 안 되는 화면이 쓴다.</summary>
     private (int Left, int Top, int Width, int Height)? _uiClip;
@@ -347,6 +348,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     UiBlend.Add => AddColor(d, c, 256),
                     UiBlend.AddDim => AddColor(d, c, 100),
                     UiBlend.Darken => ScaleColor(d, 11, 31),
+                    UiBlend.Dim => ScaleColor(c, 15, 31),
                     _ => c | 0xFF000000,
                 };
                 // 밝기가 1 보다 작으면 바탕과 섞는다 — 원본의 8단계 밝기를 그대로 흉내 낸다.

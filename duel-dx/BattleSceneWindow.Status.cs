@@ -3,7 +3,7 @@
 namespace DuelDx;
 
 /// <summary>
-/// Status 화면 — 게임 화면(죠안 캡처) 칸 구성을 640×480 에 옮기고, 아군이면 장비 바꾸기(st-1)·장착 어빌리티 바꾸기(st-2)·
+/// Status 화면 — 원본처럼 화면 전체(640×480)에 배경 Bgr 0058 을 깔고 값·아이콘·스크롤 막대를 원본 자리에 얹으며, 아군이면 장비 바꾸기(st-1)·장착 어빌리티 바꾸기(st-2)·
 /// 어빌리티 올리기/배우기(st-3)를 할 수 있다.
 /// </summary>
 /// <remarks>
@@ -39,7 +39,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<(string Label, string Right, bool Enabled, Action Apply)>? _popup;
     private const int PopupW = 320, PopupRowH = 24;
 
-    private (int X, int Y) StatusOrigin() => (_camX + (ViewWidth - StatusW) / 2, _camY + GridTop + (ViewHeight - GridTop - StatusH) / 2);
+    /// <summary>Status 는 화면 전체 창이다 — 보이는 판 가운데에 640×480.</summary>
+    private (int X, int Y) StatusOrigin() => (_camX + (ViewWidth - StatusW) / 2, _camY + (ViewHeight - StatusH) / 2);
 
     /// <summary>데모 파티 가방 — 아군 무기 종류마다 무기 3개, 갑옷·신발·벨트·반지·목걸이 종류마다 4개씩(번호 순, 이름 있는 것).</summary>
     private void FillDemoInventory()
@@ -124,6 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OnStatusClick(int bx, int by)
     {
         if (_statusUnit < 0) return false;
+        if (_statusTip != null) return true;   // 설명이 떠 있는 동안은 다른 입력을 받지 않는다(0x10042c00)
         var (ox, oy) = StatusOrigin();
 
         if (_popup != null)
@@ -141,10 +143,10 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        bool inside = bx >= ox && by >= oy - FrameTitleH && bx < ox + StatusW && by < oy + StatusH;
-        // 닫기는 제목줄 오른쪽 X 단추(원본 자리 창폭−24, −24, 18×18)
-        bool close = bx >= ox + StatusW - 24 && bx < ox + StatusW - 6 && by >= oy - 24 && by < oy - 6;
-        if (close || !inside) { _statusUnit = -1; return true; }
+        bool inside = bx >= ox && by >= oy && bx < ox + StatusW && by < oy + StatusH;
+        // 닫기는 오른쪽 위 CLOSE 단추(0x100e05a2 — (565,1) 76×23)
+        bool close = bx >= ox + CloseX && bx < ox + CloseX + CloseW && by >= oy + CloseY && by < oy + CloseY + CloseH;
+        if (close || !inside) { _statusUnit = -1; _statusTip = null; return true; }
 
         foreach (var (x, y, w, h, click) in _statusHits)
             if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); break; }
@@ -239,10 +241,14 @@ internal sealed unsafe partial class BattleSceneWindow
         Toast($"{_db.T(ab.NameId)} Lv{level - 1} — EXP {refund} 돌려받음");
     }
 
-    /// <summary>스테이터스 창 안 우클릭 — 어빌리티 줄이면 레벨을 내린다. 처리했으면 true.</summary>
+    /// <summary>
+    /// 스테이터스 창 안 오른쪽 단추 누름 — 어빌리티·장비·상태이상 줄이면 설명을 띄운다(떼면 사라진다). 처리했으면 true.
+    /// 레벨 내리기는 Shift+클릭으로 옮겼다(원본은 오른쪽 단추가 설명이다).
+    /// </summary>
     private bool OnStatusRightClick(int bx, int by)
     {
-        if (_statusUnit < 0 || _popup != null) return false;
+        if (_statusUnit < 0) return false;
+        if (_popup != null) { _popup = null; return true; }
         foreach (var (x, y, w, h, click) in _statusRightHits)
             if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); return true; }
         return false;
@@ -276,6 +282,50 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     // ── 그리기 ───────────────────────────────────────────────────────────────
+    // 자리는 모두 640×480 화면 좌표다(원본 창 왼위 (1,21) 를 더한 값) — 옵시디안 분석-캐릭터 「Status 창 그림과 설명 표시 (st-5)」.
+    // 칸 틀·칸 제목·「STATUS」·LEVEL 같은 라벨·HP/SOUL/TP 밑 붉은 줄은 전부 배경 Bgr 0058 한 장에 그려져 있어 코드는 값만 얹는다.
+
+    private const int StatusBgr = 58;
+    private const int CloseX = 565, CloseY = 1, CloseW = 76, CloseH = 23;          // 0x100e05a2 — Obs 0471 모션 28(평소)·29(눌림), 기준점 = 단추 가운데
+    private const int RowObs = 471, ScrollObs = 71;
+    private const int StatRight = 181;                                             // 능력치 값 오른끝(칸 폭 − 10)
+    private const int SideX = 219, SideW = 162, RowH = 22;                         // 가운데 열 줄(장착 어빌리티·장비)
+    private const int PassiveY = 149, PassiveStep = 28, EquipY = 304, EquipStep = 26;
+    private const int AbilityX = 407, AbilityW = 190;                              // 오른쪽 열 줄
+    private const int LearnedY = 69, LearnedStep = 27, LearnedRows = 6;
+    private const int LearnableY = 279, LearnableStep = 46, LearnableRows = 4, LearnableRowH = 37;
+    private const int ScrollX = 603, LearnedScrollY = 63, LearnedScrollH = 169, LearnableScrollY = 273, LearnableScrollH = 187;
+    private const uint StatusWhite = 0xFFF8FCF8, StatusDim = 0xFF787C78, CostRed = 0xFFFF0000, CostYellow = 0xFFFFFF00, ScrollTrack = 0xFF636563;
+    private const float StatusFont = 12f;                                          // 굴림 9pt
+
+    /// <summary>두 어빌리티 목록의 맨윗줄 — 스크롤 화살표 한 번에 한 줄(0x10044e10).</summary>
+    private int _learnedTop, _learnableTop;
+
+    /// <summary>
+    /// 오른쪽 단추를 누르고 있는 동안 보이는 설명(원본 <c>0x10042c00</c>) — 글과 그때 마우스 자리. 떼면 사라지고,
+    /// 떠 있는 동안에는 다른 클릭을 받지 않는다.
+    /// </summary>
+    private (string Text, int X, int Y)? _statusTip;
+
+    private uint[]? _statusBg;
+    private bool _statusBgTried;
+
+    private uint[]? StatusBackground()
+    {
+        if (!_statusBgTried) { _statusBgTried = true; _statusBg = ReadBackground(StatusBgr); }
+        return _statusBg;
+    }
+
+    private bool MouseIn(int x, int y, int w, int h) => _mouse.X >= x && _mouse.X < x + w && _mouse.Y >= y && _mouse.Y < y + h;
+
+    /// <summary>줄 상자 안에 글을 세로 가운데로 찍는다 — 가로는 왼쪽 여백(<paramref name="left"/>) 또는 오른끝(<paramref name="right"/>).</summary>
+    private void RowText(string text, int x, int y, int h, uint color, int left = -1, int right = -1)
+    {
+        if (text.Length == 0) return;
+        var (_, tw, th) = GetText(text, color, StatusFont);
+        int tx = right >= 0 ? x + right - tw : x + Math.Max(0, left);
+        DrawText(text, tx, y + (h - th) / 2, color, StatusFont);
+    }
 
     private void DrawStatusScreen()
     {
@@ -283,14 +333,19 @@ internal sealed unsafe partial class BattleSceneWindow
         _statusRightHits.Clear();
         if (_statusUnit < 0) return;
         var (ox, oy) = StatusOrigin();
-        // 창은 게임 안 모든 창과 같은 원본 틀로(분석-시스템메뉴 「메시지 창 틀」) — 글이 읽히게 밑을 먼저 어둡게 깐다.
-        DarkenRect(ox - 1, oy - FrameTitleH - 1, StatusW + 2, StatusH + FrameTitleH + 2, 6);
-        DrawGameFrame(ox, oy, StatusW, StatusH, "STATUS");
-        if (!DrawUi(FrameObs, 5, 0, ox + StatusW - 24, oy - 24, UiBlend.Alpha))
+
+        // 원본 Status 는 화면 전체를 쓰는 창이다 — 둘레는 검게, 가운데 640×480 에 배경 한 장(0x100e09f0).
+        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
+        if (StatusBackground() is { } bg)
+            for (int y = 0; y < StatusH; y++)
+                for (int x = 0; x < StatusW; x++)
+                    SetPixel(ox + x, oy + y, bg[y * StatusW + x] | 0xFF000000);
+        else
         {
-            FillRect(ox + StatusW - 78, oy + 6, 72, 22, HeadBg);
-            DrawText("CLOSE", ox + StatusW - 64, oy + 9, White);
+            DrawGameFrame(ox, oy + FrameTitleH, StatusW, StatusH - FrameTitleH, "STATUS");
+            DrawText("assets/moses/bgr/0058.bgr 이 없어 틀만 그렸습니다", ox + 20, oy + 40, DimGray);
         }
+        DrawUi(RowObs, 28, 0, ox + CloseX + CloseW / 2, oy + CloseY + CloseH / 2, UiBlend.Alpha);
 
         var unit = StatusUnit();
         if (_db is not { } db || unit.Data is not { } c)
@@ -300,123 +355,207 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         // 전투가 끝난 뒤 모세스에서 열면 결과 글이 남아 있어도 고칠 수 있어야 한다.
         bool editable = unit.IsAlly && (_outcome.Length == 0 || _mosesOpen);
-        if (editable) DrawText("장비·장착 어빌리티·어빌리티 줄을 누르면 바꿀 수 있습니다 — 어빌리티는 클릭 올리기·우클릭 내리기", ox + 16, oy + 12, DimGray);
 
-        // 1열 — 능력치
-        int x = ox + 16, w = 184;
-        Header(x, oy + 38, w, db.T(11));
-        Box(x, oy + 60, w, 76);
-        if (_faces.TryGetValue(unit.ChrCode, out var face)) BlitClipped(face, x + 6, oy + 66, 64, 64);
-        StrokeRect(x + 6, oy + 66, 64, 64, BoxLine);
+        // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
+        if (!DrawUi(c.FaceId, 0, 0, ox + 62, oy + 103, UiBlend.Alpha, loop: false) && _faces.TryGetValue(unit.ChrCode, out var face))
+            BlitClipped(face, ox + 30, oy + 72, 64, 64);
+        void StatLine(int k, string value) => RowText(value, ox, oy + 81 + 15 * k - 8, 16, StatusWhite, right: StatRight);
         string[] names = [db.T(c.NameId), db.T(c.TitleId), db.FamilyName(c), db.JobName(c)];
-        for (int i = 0; i < names.Length; i++) RightText(names[i], x + w - 8, oy + 64 + i * 17, White);
+        for (int k = 0; k < names.Length; k++) StatLine(k, names[k]);
+        StatLine(5, c.Level.ToString());
+        StatLine(6, c.Exp.ToString());
+        StatLine(8, $"{unit.Hp} / {unit.MaxHp}");
+        StatLine(10, $"{unit.Soul} / {unit.MaxSoul}");
+        StatLine(12, $"{unit.Tp} / {unit.MaxTp}");
+        StatLine(15, db.Atk(c, unit.Soul).ToString());
+        StatLine(16, db.Acr(c, unit.Tp).ToString());
+        StatLine(17, db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
+        int[] basics = [(int)c.Lp + db.EquipBonus(c, 0x30), c.Ctp, db.Stp(c), db.Psy(c), db.Dep(c), db.Dex(c)];
+        for (int k = 0; k < basics.Length; k++) StatLine(19 + k, basics[k].ToString());
 
-        Box(x, oy + 140, w, 42);
-        Stat(x, oy + 144, w, db.T(160), c.Level.ToString());
-        Stat(x, oy + 162, w, db.T(161), c.Exp.ToString());
-
-        Box(x, oy + 186, w, 100);
-        StatBar(x, oy + 190, w, db.T(159), unit.Hp, unit.MaxHp);
-        StatBar(x, oy + 222, w, db.T(41), unit.Soul, unit.MaxSoul);
-        StatBar(x, oy + 254, w, db.T(38), unit.Tp, unit.MaxTp);
-
-        Box(x, oy + 290, w, 60);
-        Stat(x, oy + 294, w, db.T(156), db.Atk(c, unit.Soul).ToString());
-        Stat(x, oy + 312, w, db.T(157), db.Acr(c, unit.Tp).ToString());
-        Stat(x, oy + 330, w, db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
-
-        Box(x, oy + 354, w, 112);
-        (ushort Id, int Value)[] basics = [(34, (int)c.Lp + db.EquipBonus(c, 0x30)), (39, c.Ctp), (40, db.Stp(c)), (35, db.Psy(c)), (37, db.Dep(c)), (36, db.Dex(c))];
-        for (int i = 0; i < basics.Length; i++) Stat(x, oy + 358 + i * 18, w, db.T(basics[i].Id), basics[i].Value.ToString());
-
-        // 2열 — 상태이상 · 장착 어빌리티 · 장비
-        x = ox + 216; w = 184;
-        Header(x, oy + 38, w, db.T(163));
-        Box(x, oy + 60, w, 38);
-        // 칸 셋은 원본대로 Obs 0489 아이콘 한 장씩 — 모션은 Sta.dat 의 아이콘 번호, 빈 칸은 모션 0(「EMPTY」 판).
+        // ── 상태이상 셋(0x100d5448) — Obs 0489, 모션 = Sta 레코드 +4 칸(0 = EMPTY), 가운데 (242 + 53i, 81) ──
         for (int i = 0; i < 3; i++)
-            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 10 + i * 58, oy + 70, UiBlend.Alpha, loop: false);
+        {
+            int cx = ox + 242 + 53 * i, cy = oy + 81;
+            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, cx, cy, UiBlend.Alpha, loop: false);
+            int id = unit.StatusId[i];
+            if (id != 0 && db.Statuses.GetValueOrDefault(id) is { } sta && db.T(sta.DescriptionId) is { Length: > 0 } fmt)
+            {
+                string tip = FormatPrintf(fmt, unit.StatusValue[i]);
+                _statusRightHits.Add((cx - 22, cy - 11, 44, 22, () => ShowStatusTip(tip)));
+            }
+        }
 
-        Header(x, oy + 110, w, db.T(166));
-        Box(x, oy + 132, w, 84);
+        // ── 장착 어빌리티 세 줄(0x10035890) — 칸 수 = Dep +6, 넘는 줄은 꺼진 「없음」 ──
         int slots = db.PassiveSlotCount(c);
         for (int i = 0; i < 3; i++)
         {
+            int rx = ox + SideX, ry = oy + PassiveY + PassiveStep * i;
+            bool open = i < slots;
+            if (editable && open && _popup == null && MouseIn(rx, ry, SideW, RowH)) DrawUi(RowObs, 1, 0, rx - 4, ry, UiBlend.Alpha);
             ushort id = c.Passives[i];
-            string label = id != 0 && db.Abilities.TryGetValue(id, out var pab) ? AbilityLabel(pab, c.AbilityLevel(id)) : db.T(0);
-            int ry = oy + 140 + i * 24;
-            DrawText(label, x + 40, ry, i < slots ? White : DimGray);
+            if (id != 0 && open && db.Abilities.TryGetValue(id, out var pab))
+            {
+                DrawAbilityRow(pab, AbilityLabel(pab, c.AbilityLevel(id)), 0, false, rx, ry, SideW, RowH, 11);
+                _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowAbilityTip(pab)));
+            }
+            else RowText(db.T(0), rx, ry, RowH, open ? StatusWhite : StatusDim, left: 46);
             int slot = i;
-            if (editable && i < slots) AddHit(x + 4, ry - 4, w - 8, 24, () => ChoosePassive(unit, slot));
+            if (editable && open) AddHit(rx, ry, SideW, RowH, () => ChoosePassive(unit, slot));
         }
 
-        Header(x, oy + 228, w, db.T(14));
-        Box(x, oy + 250, w, 216);
-        var weapon = c.Items[0] != 0 && db.Items.TryGetValue(c.Items[0], out var wi) ? wi : null;
-        FillRect(x + 6, oy + 256, w - 12, 26, 0xFF0C1830);
-        StrokeRect(x + 6, oy + 256, w - 12, 26, 0xFF8FB8F0);
-        DrawText("WEAPON", x + 10, oy + 258, 0xFF8FB8F0);
-        // 무기 종류 띠도 원본 그림(Obs 0326)이다 — .chr 40 이 모션 번호, 0 이면 62(분석-캐릭터 "아이템 그림").
-        if (!DrawUi(ItemPictureObs, c.WeaponBand == 0 ? 62 : c.WeaponBand, 0, x + w / 2, oy + 268, UiBlend.Alpha, loop: false)
-            && weapon != null)
-            DrawText(GameDatabase.WeaponTypeName(weapon.Type), x + 90, oy + 262, White, 15);
+        // ── 장비 여섯 줄(0x100d3330) — WEAPON 띠 가운데 (296,288), 줄 그림 (8,2), 이름 오른쪽 맞춤 −16 ──
+        DrawUi(ItemPictureObs, c.WeaponBand == 0 ? 62 : c.WeaponBand, 0, ox + 296, oy + 288, UiBlend.Alpha, loop: false);
         for (int i = 0; i < 6; i++)
         {
+            int rx = ox + SideX, ry = oy + EquipY + EquipStep * i;
+            if (editable && _popup == null && MouseIn(rx, ry, SideW, RowH)) DrawUi(RowObs, 1, 0, rx - 4, ry, UiBlend.Alpha);
             var it = c.Items[i] != 0 && db.Items.TryGetValue(c.Items[i], out var found) ? found : null;
-            string item = it != null ? db.T(it.NameId) : db.T(0);
-            int ry = oy + 292 + i * 28;
-            if (it != null) DrawUi(ItemPictureObs, it.PictureMotion, 0, x + 10, ry - 2, UiBlend.Alpha, loop: false);
-            RightText(item, x + w - 12, ry, c.Items[i] != 0 ? White : DimGray);
+            if (it != null) DrawUi(ItemPictureObs, it.PictureMotion, 0, rx + 8, ry + 2, UiBlend.Alpha, loop: false);
+            RowText(it != null ? db.T(it.NameId) : db.T(0), rx, ry, RowH, StatusWhite, right: SideW - 16);
+            if (it != null && db.T(it.DescriptionId) is { Length: > 0 } desc)
+                _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowStatusTip(desc)));
             int slot = i;
-            if (editable) AddHit(x + 6, ry - 6, w - 12, 28, () => ChooseEquipment(unit, slot));
+            if (editable) AddHit(rx, ry, SideW, RowH, () => ChooseEquipment(unit, slot));
         }
 
-        // 3열 — 획득한 어빌리티 · 획득할 수 있는 어빌리티
-        x = ox + 420; w = 204;
-        Header(x, oy + 38, w, db.T(12));
-        Box(x, oy + 60, w, 156);
-        int row = 0;
-        foreach (var (abilityId, level) in c.Abilities.OrderBy(a => a.Ability).Take(7))
+        // ── 획득한 어빌리티(0x10035290) — 번호 차례, 여섯 줄씩 ──
+        var learned = c.Abilities.OrderBy(a => a.Ability)
+            .Select(a => (Ab: db.Abilities.GetValueOrDefault(a.Ability), Level: (int)a.Level)).Where(a => a.Ab != null).ToList();
+        _learnedTop = Math.Clamp(_learnedTop, 0, Math.Max(0, learned.Count - LearnedRows));
+        for (int k = 0; k < LearnedRows && _learnedTop + k < learned.Count; k++)
         {
-            if (!db.Abilities.TryGetValue(abilityId, out var ab)) continue;
-            int ry = oy + 66 + row++ * 22;
-            int cost = db.AbilityExpCost(ab, level);
-            AbilityRow(x, ry, w, AbilityLabel(ab, level), cost > 0 ? cost.ToString() : "", cost <= c.Exp);
-            if (editable && cost > 0) AddHit(x + 4, ry - 2, w - 8, 22, () => ConfirmAbility(unit, ab, learn: false));
-            if (editable) _statusRightHits.Add((x + 4, ry - 2, w - 8, 22, () => LowerAbility(unit, ab)));
+            var (found, level) = learned[_learnedTop + k];
+            var ab = found!;
+            int rx = ox + AbilityX, ry = oy + LearnedY + LearnedStep * k;
+            int cost = db.AbilityExpCost(ab, level);             // 다음 레벨로 올리는 EXP — 최대 레벨이면 0(숫자 없음)
+            if (editable && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) DrawUi(RowObs, 4, 0, rx, ry, UiBlend.Alpha);
+            DrawAbilityRow(ab, AbilityLabel(ab, level), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, RowH, 11);
+            _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab)));
+            // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기(원본에 없는 데모 기능 — 오른쪽 단추는 원본대로 설명에 쓴다).
+            if (editable) AddHit(rx, ry, AbilityW, RowH, () => { if (ShiftHeld) LowerAbility(unit, ab); else ConfirmAbility(unit, ab, learn: false); });
         }
+        DrawScrollBar(ox + ScrollX, oy + LearnedScrollY, LearnedScrollH, _learnedTop, learned.Count, LearnedRows, top => _learnedTop = top);
 
-        Header(x, oy + 228, w, db.T(13));
-        Box(x, oy + 250, w, 216);
-        row = 0;
-        foreach (var ab in db.Learnable(c).Take(7))
+        // ── 획득할 수 있는 어빌리티(0x100361e0) — 네 줄씩, 줄 높이 37 ──
+        var learnable = db.Learnable(c).ToList();
+        _learnableTop = Math.Clamp(_learnableTop, 0, Math.Max(0, learnable.Count - LearnableRows));
+        for (int k = 0; k < LearnableRows && _learnableTop + k < learnable.Count; k++)
         {
-            int ry = oy + 258 + row++ * 30;
+            var ab = learnable[_learnableTop + k];
+            int rx = ox + AbilityX, ry = oy + LearnableY + LearnableStep * k;
             int cost = db.AbilityExpCost(ab, 1);
-            AbilityRow(x, ry, w, AbilityLabel(ab, 1), cost > 0 ? cost.ToString() : "", cost <= c.Exp);
-            if (editable) AddHit(x + 4, ry - 4, w - 8, 28, () => ConfirmAbility(unit, ab, learn: true));
+            if (editable && _popup == null && MouseIn(rx, ry, AbilityW, LearnableRowH)) DrawUiStretched(RowObs, 7, rx, ry, AbilityW, LearnableRowH);
+            DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, LearnableRowH, 18);
+            _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab)));
+            if (editable) AddHit(rx, ry, AbilityW, LearnableRowH, () => ConfirmAbility(unit, ab, learn: true));
         }
+        DrawScrollBar(ox + ScrollX, oy + LearnableScrollY, LearnableScrollH, _learnableTop, learnable.Count, LearnableRows, top => _learnableTop = top);
 
         DrawPopup();
+        if (_statusTip is { } shown) DrawDescriptionTip(shown.Text, shown.X, shown.Y, ox, oy, StatusW, StatusH);
     }
+
+    /// <summary>
+    /// 어빌리티 한 줄 — 글 (46, 가운데) · 종류 아이콘 (14, iconY) · 대상 아이콘 (34, iconY) · 비용 오른끝 폭−10.
+    /// 꺼진 줄은 글·아이콘을 15/31 로 어둡게 하지만 비용 숫자는 꺼진 뒤에 만들어 안 흐리다(0x1003fdc0). 비용 &gt; EXP 면 빨강, 아니면 노랑.
+    /// </summary>
+    private void DrawAbilityRow(AbilityData ab, string label, int cost, bool off, int x, int y, int w, int h, int iconY)
+    {
+        RowText(label, x, y, h, off ? StatusDim : StatusWhite, left: 46);
+        var blend = off ? UiBlend.Dim : UiBlend.Alpha;
+        if (ab.IconKindMotion >= 0) DrawUi(AbilityIconObs, ab.IconKindMotion, 0, x + 14, y + iconY, blend, loop: false);
+        if (ab.IconTargetMotion >= 0) DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, x + 34, y + iconY, blend, loop: false);
+        if (cost > 0) RowText(cost.ToString(), x, y, h, cost > (StatusUnit().Data?.Exp ?? 0) ? CostRed : CostYellow, right: w - 10);
+    }
+
+    /// <summary>
+    /// 목록 스크롤 막대(0x10044e10) — 바탕 단색, 위 화살표 Obs 0071 모션 2 · 아래 4 · 손잡이 6(16×16).
+    /// 화살표 한 번 = 한 줄. 막대 빈 곳을 누르면 한 화면씩 옮긴다(손잡이 끌기는 아직 없다).
+    /// </summary>
+    private void DrawScrollBar(int x, int y, int h, int top, int count, int rows, Action<int> setTop)
+    {
+        FillRect(x, y, 16, h, ScrollTrack);
+        DrawUi(ScrollObs, 2, 0, x, y, UiBlend.Alpha, loop: false);
+        DrawUi(ScrollObs, 4, 0, x, y + h - 16, UiBlend.Alpha, loop: false);
+        int max = Math.Max(0, count - rows);
+        int thumbY = y + 16 + (max == 0 ? 0 : (h - 48) * top / max);
+        DrawUi(ScrollObs, 6, 0, x, thumbY, UiBlend.Alpha, loop: false);
+        AddHit(x, y, 16, 16, () => setTop(Math.Max(0, top - 1)));
+        AddHit(x, y + h - 16, 16, 16, () => setTop(Math.Min(max, top + 1)));
+        AddHit(x, y + 16, 16, thumbY - y - 16, () => setTop(Math.Max(0, top - rows)));
+        AddHit(x, thumbY + 16, 16, y + h - 16 - thumbY - 16, () => setTop(Math.Min(max, top + rows)));
+    }
+
+    /// <summary>UI 그림 한 컷을 네모에 맞춰 늘려 찍는다 — 「획득할 수 있는 어빌리티」 줄의 마우스 올림(Obs 0471 모션 7).</summary>
+    private void DrawUiStretched(int obs, int motion, int x, int y, int w, int h)
+    {
+        if (UiFor(obs)?.FrameAt(motion, 0, loop: false) is not { W: > 0, H: > 0 } f) return;
+        for (int yy = 0; yy < h; yy++)
+        {
+            int sy = yy * f.H / h;
+            for (int xx = 0; xx < w; xx++)
+            {
+                uint c = f.Px[sy * f.W + xx * f.W / w];
+                if ((c & 0xFF000000) != 0) SetPixel(x + xx, y + yy, c | 0xFF000000);
+            }
+        }
+    }
+
+    private void ShowAbilityTip(AbilityData ab)
+    {
+        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc);
+    }
+
+    private void ShowStatusTip(string text) => _statusTip = (text, _mouse.X, _mouse.Y);
+
+    /// <summary>
+    /// 설명 창(원본 <c>0x10042c00</c> → <c>0x100429a0</c>) — 게임 공통 틀(Obs 0970)이고 제목줄이 없다.
+    /// 크기 = 글 + 56, 글은 흰색 가운데, <c>$n</c> 에서 줄을 바꾼다. 자리는 마우스 + (16,16) 을 화면(<paramref name="areaX"/>… 네모) 안으로 밀어 넣은 곳.
+    /// </summary>
+    private void DrawDescriptionTip(string text, int mx, int my, int areaX, int areaY, int areaW, int areaH)
+    {
+        var lines = text.Replace("$N", "$n").Replace("$p", "$n").Replace("$P", "$n").Split("$n");
+        int tw = 0;
+        const int lh = 16;
+        foreach (string line in lines) tw = Math.Max(tw, GetText(line, StatusWhite, StatusFont).W);
+        int th = lh * lines.Length;
+        int w = tw + 56, h = th + 56;
+        int x = Math.Clamp(mx + 16, areaX + 1, Math.Max(areaX + 1, areaX + areaW - 1 - w));
+        int y = Math.Clamp(my + 16, areaY + 1, Math.Max(areaY + 1, areaY + areaH - 1 - h));
+        DrawGameFrame(x, y, w, h);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var (_, lw, _) = GetText(lines[i], StatusWhite, StatusFont);
+            DrawText(lines[i], x + (w - lw) / 2, y + (h - th) / 2 + i * lh, StatusWhite, StatusFont);
+        }
+    }
+
+    /// <summary>원본 설명 서식(<c>sprintf</c>)의 첫 <c>%d</c> 에 값을 넣는다 — 상태이상 설명이 남은 값을 이렇게 받는다.</summary>
+    private static string FormatPrintf(string format, int value)
+    {
+        int at = format.IndexOf("%d", StringComparison.Ordinal);
+        return at < 0 ? format : format[..at] + value + format[(at + 2)..];
+    }
+
+    private static bool ShiftHeld => (Native.Win32.GetKeyState(0x10) & 0x8000) != 0;
 
     private void AddHit(int x, int y, int w, int h, Action click) => _statusHits.Add((x, y, w, h, click));
 
+    /// <summary>장비·장착 어빌리티 고르기 목록 — 게임 공통 틀(제목줄 있음)에 줄마다 글.</summary>
     private void DrawPopup()
     {
         if (_popup == null) return;
         var (px, py, h) = PopupRect();
-        FillRect(px - 4, py - 4, PopupW + 8, h + 8, 0x80000000);
-        FillRect(px, py, PopupW, h, 0xFF0C1830);
-        StrokeRect(px, py, PopupW, h, 0xFF8FB8F0);
-        FillRect(px, py, PopupW, 26, HeadBg);
-        DrawText(_popupTitle, px + 10, py + 5, White);
+        DarkenRect(px - 1, py - 1, PopupW + 2, h + 2, 8);
+        DrawGameFrame(px, py + FrameTitleH, PopupW, h - FrameTitleH, _popupTitle);
         for (int i = 0; i < _popup.Count; i++)
         {
             var (label, right, enabled, _) = _popup[i];
             int ry = py + 30 + i * PopupRowH;
-            DrawText(label, px + 12, ry + 4, enabled ? White : DimGray);
-            if (right.Length > 0) RightText(right, px + PopupW - 12, ry + 4, DimGray);
+            if (enabled && MouseIn(px, ry, PopupW, PopupRowH)) DrawUi(RowObs, 1, 0, px + 6, ry + 1, UiBlend.Alpha);
+            RowText(label, px, ry, PopupRowH, enabled ? StatusWhite : StatusDim, left: 16);
+            if (right.Length > 0) RowText(right, px, ry, PopupRowH, StatusDim, right: PopupW - 16);
         }
     }
 }
