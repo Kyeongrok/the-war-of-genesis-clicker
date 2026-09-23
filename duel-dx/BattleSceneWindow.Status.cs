@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -103,6 +103,14 @@ internal sealed unsafe partial class BattleSceneWindow
         LoadFieldFace(c);
         _statusVirtual = unit;
         _statusUnit = VirtualStatus;
+    }
+
+    /// <summary>DUELDX_STATUS=&lt;Chr 번호&gt; 면 그 인물의 스테이터스 창을 바로 연다(화면 밖 시험용). 0 이면 첫 아군.</summary>
+    private void OpenStatusIfAsked()
+    {
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_STATUS"), out int chr)) return;
+        if (chr == 0 && Array.FindIndex(_units, u => u.IsAlly) is >= 0 and var ally) { _statusUnit = ally; return; }
+        OpenStatusFor(chr);
     }
 
     /// <summary>임시 유닛으로 연 창이 닫혔으면 바뀐 자료(어빌리티 레벨·장비)를 파티에 되돌려 적는다 — 매 틀 부른다.</summary>
