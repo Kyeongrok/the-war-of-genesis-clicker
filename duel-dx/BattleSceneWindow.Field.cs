@@ -669,9 +669,6 @@ internal sealed unsafe partial class BattleSceneWindow
             case 1000:                                       // 건너뛰기 끝(0x100f2c20 — [0x101bffb0] = 0)
                 _talkSkip = false;                           // 여기서부터는 기다림을 다시 지킨다
                 break;
-            case 609:                                        // [인물, TXR 글, TXR 글2] 필드 Tlk 가 아니라 <b>전역 TXR</b> 에서 글을 꺼낸 대사(0x100efb30)
-                ShowFieldTalk(box: true, A(0), A(1), fromTxr: true);
-                break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;
         }
@@ -917,8 +914,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 필드 대사 — 말하는 이는 <c>10000+인물 열쇠</c> 다. 이름과 초상화는 그 인물의 <c>.chr</c> 에서 온다.
     /// </summary>
-    /// <param name="fromTxr">글을 필드 <c>Tlk</c> 가 아니라 <b>전역 TXR</b> 에서 꺼낸다 — 행동 609 가 그렇다(<c>0x1004a3f0</c>).</param>
-    private void ShowFieldTalk(bool box, int speaker, int textId, bool fromTxr = false)
+    private void ShowFieldTalk(bool box, int speaker, int textId)
     {
         if (_talkSkip) return;
         string name = "";
@@ -939,7 +935,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _talkFace = cc.Code;
         }
         else _talkFace = 0;
-        _talk = (box, -1, name, fromTxr ? _db?.T((ushort)textId) ?? "" : FieldText(textId), 0, _lastTime);
+        _talk = (box, -1, name, FieldText(textId), 0, _lastTime);
         _talkFilled = false;
     }
 
