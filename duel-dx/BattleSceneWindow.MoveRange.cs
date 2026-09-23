@@ -29,6 +29,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>층 색 원값 — 이동 층 2 (100,100,255) · 사거리 층 12 (255,100,40) · 효과 범위 층 0 (255,170,40). 화면에는 × 칸밝기/256 을 더한다.</summary>
     private const uint MoveLayer = 0x6464FF, RangeLayer = 0xFF6428, SplashLayer = 0xFFAA28;
+    /// <summary>닿을 수 있는 오브젝트 칸(층 1) — 노랑 (255,255,20). 겹치면 이동 칸보다 먼저 칠한다(분석-UI 「칸 깃발」).</summary>
+    private const uint ObjectLayer = 0xFFFF14;
     private const double RangeWaveCellsPerSecond = 30;
 
     /// <summary>한 인물의 이동 영역 — 칸마다 드는 TP(못 가면 <see cref="int.MaxValue"/>), 되짚을 앞 칸, 빨간 칸.</summary>
@@ -228,6 +230,11 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
         int radius = WaveRadius((int)((_lastTime - _rangeStart) * TicksPerSecond));
+        // 차례인 인물의 영역이면 걸어가 손댈 수 있는 물체 칸도 칠한다(원본 상태 10 이 층 1 을 함께 만든다, 0x1006961c).
+        var touchable = new HashSet<int>();
+        if (_rangeUnit == _turn && IsPlayerTurn)
+            foreach (var obj in Objects)
+                if (ObjectAt(obj.Col, obj.Row) == obj && FindTouchPath(_units[_turn], obj, range) != null) touchable.Add(obj.Row * Cols + obj.Col);
 
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)
@@ -237,7 +244,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 대상을 딱히 고르는 중이 아니어도 사거리 빨강은 늘 파랑과 함께 뜬다 — 사용자가 원본에서
                 // 직접 본 그대로다("aiming일 때만 빨강"으로 좁혔던 이전 판단은 상태 번호를 오독한 것으로 보인다:
                 // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
-                uint layer = range.Cost[i] != int.MaxValue ? MoveLayer : range.Red[i] ? RangeLayer : 0;
+                uint layer = touchable.Contains(i) ? ObjectLayer : range.Cost[i] != int.MaxValue ? MoveLayer : range.Red[i] ? RangeLayer : 0;
                 if (layer == 0) continue;
                 PaintCell(col, row, layer);
             }

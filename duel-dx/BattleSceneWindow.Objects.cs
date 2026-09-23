@@ -27,19 +27,70 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>물체가 부서질 때의 폭발 그림.</summary>
     private const int ObjectBreakObs = 1009;
 
-    /// <summary>차례인 인물이 그 칸의 물체에 손을 댈 수 있나 — 옆 한 칸이고 TP 가 남아 있어야 한다.</summary>
-    private bool CanTouchObject(UnitState user, DemoObject obj) =>
-        Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1
-        && user.Tp >= ObjectTouchTp && obj.Data.Kind is 1 or 2 or 6 or 8;
+    /// <summary>
+    /// 차례인 인물이 그 물체에 손을 대러 가는 길 — 못 닿으면 null, 이미 옆이면 빈 길.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 이동 칸(층 2)마다 work 386(십자 한 칸, 대상 방식 8 = 오브젝트)을 그려 <b>「닿을 수 있는 오브젝트 칸」 층 1</b> 로 모은다
+    /// (<c>0x10074f20</c>, 상태 10 <c>0x1006961c</c>, 분석-UI 「칸 깃발」). 곧 <b>걸어가서 옆에 설 수 있는</b> 물체면 된다 — 지금 옆일 필요는 없다.
+    /// 노랑 칸·주먹 커서는 이 층 그대로 <b>TP 를 따로 안 본다</b>. 실제로 열 때(<paramref name="needTp"/>)만
+    /// 그 칸까지 걷는 비용 + 80 이 남았는지 본다 — TP 는 행동할 때 차례 시작 자리부터 걸은 값을 한 번에 빼기 때문이다.
+    /// 옆 칸 가운데 가장 싼 곳으로 가고, 지금 선 자리가 이미 닿는 자리면 걷지 않는다.
+    /// </remarks>
+    private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
+    {
+        if (obj.Data.Kind is not (1 or 2 or 6 or 8) || (known ?? ComputeRange(user)) is not { } range) return null;
+        bool Affordable(int col, int row) =>
+            (uint)col < Cols && (uint)row < Rows && range.CanReach(row * Cols + col)
+            && (!needTp || range.Cost[row * Cols + col] + ObjectTouchTp <= user.Tp);
+        if (Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1 && Affordable(user.Col, user.Row)) return [];
+        int best = -1, bestCost = int.MaxValue;
+        foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
+        {
+            int col = obj.Col + dx, row = obj.Row + dy;
+            if (!Affordable(col, row) || range.Cost[row * Cols + col] >= bestCost) continue;
+            best = row * Cols + col;
+            bestCost = range.Cost[best];
+        }
+        return best < 0 ? null : PathWithin(range, user.Col, user.Row, best);
+    }
+
+    /// <summary>걸어가서 열 물체 — 인물이 옆 칸에 멈추면 <see cref="ResolvePendingTouch"/> 가 연다(원본 명령 0x2714 가 걷고 나서 work 386 을 쓴다).</summary>
+    private DemoObject? _pendingTouch;
 
     /// <summary>
-    /// 상자를 연다 — 아이템이 들었으면 가방에, 아니면 돈을 지갑에 넣고 물체를 치운다(<c>0x100e7ce0</c>).
+    /// 물체 칸을 눌렀을 때 — 닿을 수 있으면 옆까지 걸어가서 연다(이미 옆이면 바로). 처리했으면 true.
     /// </summary>
     private bool TryTouchObject(int col, int row)
     {
         if (!IsPlayerTurn || _units[_turn].IsBusy) return false;
-        if (ObjectAt(col, row) is not { } obj || !CanTouchObject(_units[_turn], obj)) return false;
+        if (ObjectAt(col, row) is not { } obj || FindTouchPath(_units[_turn], obj) == null) return false;
+        if (FindTouchPath(_units[_turn], obj, needTp: true) is not { } path)
+        {
+            Hint($"TP 가 모자랍니다 — 손을 대려면 옆 칸까지 걷고도 TP {ObjectTouchTp} 이 남아야 합니다");
+            return true;
+        }
+        if (path.Count == 0) return TouchObject(obj);
+        foreach (var cell in path) _units[_turn].Path.Enqueue(cell);
+        _pendingTouch = obj;
+        return true;
+    }
 
+    /// <summary>걸어간 인물이 멈췄으면 기다리던 물체를 연다 — 매 틀 부른다. 차례가 바뀌었거나 못 닿게 됐으면 그만둔다.</summary>
+    private void ResolvePendingTouch()
+    {
+        if (_pendingTouch is not { } obj) return;
+        if (!IsPlayerTurn) { _pendingTouch = null; return; }
+        if (_units[_turn].IsBusy) return;
+        _pendingTouch = null;
+        if (ObjectAt(obj.Col, obj.Row) == obj && FindTouchPath(_units[_turn], obj, needTp: true) is { Count: 0 }) TouchObject(obj);
+    }
+
+    /// <summary>
+    /// 상자를 연다 — 아이템이 들었으면 가방에, 아니면 돈을 지갑에 넣고 물체를 치운다(<c>0x100e7ce0</c>).
+    /// </summary>
+    private bool TouchObject(DemoObject obj)
+    {
         CommitMove(_units[_turn]);
         _units[_turn].Tp -= ObjectTouchTp;
         _opened.Add(obj);
@@ -83,7 +134,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (target is null) return false;
         // 열 때는 옆 한 칸, 칠 때는 기본공격 자리(정확히 두 칸)로 세운다.
         user.ResetTo(target.Col, Math.Clamp(target.Row + (breaking ? 2 : 1), 0, Rows - 1));
-        if (!breaking) return TryTouchObject(target.Col, target.Row);
+        if (!breaking) { _turn = Array.IndexOf(_units, user); return TouchObject(target); }
         _turn = Array.IndexOf(_units, user);
         return TryBreakObject(target.Col, target.Row, force: true);
     }
