@@ -168,6 +168,26 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>초능력공격(work 1479) 의 번개 구슬 — 체질이 없는(0) 인물만 이것을 쏜다.</summary>
+    private const int PsychicBolt = 209;
+
+    /// <summary>
+    /// 초능력공격 핸들러 <c>0x10094590</c>: 유닛 <c>+0x122</c>(= 체질) 가 0 이면 번개 구슬 Obs 209 를 날리고(<c>0x100c3340</c>),
+    /// 아니면 체질별 빛 구슬(큰 것 <c>0x100c3d60</c> 모션 2, 꼬리 작은 것 <c>0x100c3dc0</c>, 수명 20틱)을 둘 날린다 — 표 <c>0x1009496c</c>:
+    /// 1 파랑(483·482) · 2 주황(479·478) · 3 빨강(475·472) · 4 보라(477·476) · 5 초록(481·480) · 그 밖 빨강(475·475).
+    /// btl 0132 블랙스피어스(chr 318, 체질 4)가 번개 대신 붉은 빛을 쏘던 까닭(사용자 제보).
+    /// </summary>
+    private static (int Big, int Small)? PsychicOrbs(UnitState user) => user.Data?.Body switch
+    {
+        null or 0 => null,
+        1 => (483, 482),
+        2 => (479, 478),
+        3 => (475, 472),
+        4 => (477, 476),
+        5 => (481, 480),
+        _ => (475, 475),
+    };
+
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
@@ -183,7 +203,15 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
-            if (e.Fly)
+            if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
+                for (int k = 0; k < 2; k++)
+                {
+                    // 체질이 있으면 빛 구슬 둘이 꼬리(작은 구슬)를 달고 날아간다 — 둘째는 조금 늦게(가설: 원본은 출발점을 15 앞으로 둔다).
+                    double at = start + k * 3 / TicksPerSecond;
+                    _flyingEffects.Add((big, 2, at, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                    _flyingEffects.Add((small, 2, at + 2 / TicksPerSecond, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                }
+            else if (e.Fly)
                 _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
             else
                 for (int k = 0; k < Math.Max(1, e.Count); k++)
