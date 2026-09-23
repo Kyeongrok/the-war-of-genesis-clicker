@@ -519,7 +519,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
-        bool chained = AbilityMotions.TryGetValue(w.Id, out var chain) && chain.Actions.Length > 0;
+        bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
         bool effectsDone = false, followersDone = false;
         _followerStrikes.Clear();
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
