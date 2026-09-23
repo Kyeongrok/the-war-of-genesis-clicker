@@ -77,6 +77,14 @@ public sealed class AudioMixer : IDisposable
         lock (_gate) _effects.RemoveAll(v => v.Tag == tag);
     }
 
+    /// <summary>그 표를 단 효과음의 소리 크기만 바꾼다 — 필드 스크립트 행동 506(채널 음량)이 쓴다.</summary>
+    public void SetEffectGain(int tag, float gain)
+    {
+        lock (_gate)
+            foreach (var v in _effects)
+                if (v.Tag == tag) v.Gain = gain;
+    }
+
     public bool IsPlaying(int tag)
     {
         lock (_gate) return _effects.Any(v => v.Tag == tag);
