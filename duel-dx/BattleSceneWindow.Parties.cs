@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -80,6 +80,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // B 를 은행 꼴로 꺼낸다
         PartyState src = from == _partyNo ? TakeCurrentAsState() : BankFor(from);
         foreach (var (chr, data) in src.Party) AddMember(into, chr, data);
+        // 우편함도 옮긴다 — B 의 편지를 A 에 붙이고, B 에서 읽은 것은 A 에서도 읽음(0x1004dd60(id, 읽음), 분석-모세스 mo-mail).
+        var (box, read) = into == _partyNo ? (_mailbox, _mailRead) : (BankFor(into).Mailbox, BankFor(into).MailRead);
+        foreach (int mail in src.Mailbox)
+        {
+            if (!box.Contains(mail) && box.Count < MailboxLimit) box.Add(mail);
+            if (src.MailRead.Contains(mail)) read.Add(mail);
+        }
         AddMoney(into, src.Money);
         foreach (var (item, n) in src.Inventory) AddItem(into, item, n);
         foreach (int legion in src.Legions)

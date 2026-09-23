@@ -380,7 +380,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0);
 
-    private const int SaveVersion = 8;
+    private const int SaveVersion = 9;   // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
 
     /// <summary>
     /// 판을 세우기 전에 되살려야 하는 것 — <b>파티·동료·깃발·군단·돈</b>.
@@ -441,6 +441,9 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (int id in state.Mailbox ?? []) _mailbox.Add(id);
         _mailRead.Clear();
         foreach (int id in state.MailRead ?? []) _mailRead.Add(id);
+        if (state.Version < 9)
+            PruneLegacyMailbox(_chapterFired.Keys.Select(k => k.Chapter).Concat(state.DoneChapters ?? [])
+                                .Append(state.CurrentChapter).Append(state.Chapter).Where(c => c > 0));
         Array.Clear(_chapterVars);
         foreach (var (number, value) in state.ChapterVars ?? [])
             if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);

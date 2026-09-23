@@ -737,9 +737,11 @@ internal sealed unsafe partial class BattleSceneWindow
             if ((uint)index >= chapter.Events.Count || index == 0) continue;
             var e = chapter.Events[index];
             if (e.MaxFire > 0 && _chapterFired.GetValueOrDefault((chapter.Id, index)) >= e.MaxFire) continue;
-            if (!e.Conditions.All(FieldCondition)) continue;
             // 대사·고르기·기다림이 든 사건은 여기서 안 돌고 실행기(UpdateField)가 모세스 위에서 돈다.
+            // 조건보다 <b>먼저</b> 거른다 — 조건 505(행성 방문)는 보는 순간 표시를 지우므로, 여기서 보고 건너뛰면
+            // 실행기가 볼 때는 이미 지워져 그 사건이 영영 안 돈다(0011 사건 14 등 11개, 분석-모세스 mo-mail).
             if (e.Actions.Any(a => a.Code is 0 or 1 or 2 or 600 or 601 or 602 or 603 or 604 or 605 or 609)) continue;
+            if (!e.Conditions.All(FieldCondition)) continue;
             _chapterFired[(chapter.Id, index)] = _chapterFired.GetValueOrDefault((chapter.Id, index)) + 1;
             foreach (var a in e.Actions) RunChapterAction(a);
         }
