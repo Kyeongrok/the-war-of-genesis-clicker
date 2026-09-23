@@ -279,6 +279,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 다른 전투를 건다 — 그 <c>Btl</c> 자료를 읽어 맵·인물·배경음악을 갈아 끼운다(전투 이벤트 행동 10 「다음 전투」도 이 길로 온다).
     /// </summary>
+    /// <summary>지금이 챕터 장면인가 — 모세스 주 화면·필드·연대표는 모두 한 챕터 안이다.</summary>
+    private bool InChapterScene => _mosesOpen || _episodesOpen || FieldOpen;
+
     private bool StartBattle(int id)
     {
         if (DemoScene.Load(id, _db) is not { } scene)
@@ -509,8 +512,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
                     [.. u.StatusId], [.. u.StatusValue], u.Side))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                // 모세스에서 저장하면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 모세스로 돌아간다(원본 세이브 머리와 같다).
-                _mosesOpen && _mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId, _mosesOpen ? 4 : 1, PlayMs,
+                // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
+                // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
+                // 샤이닝 스타 챕터인데 「코어헌터」로 보였다(사용자 보고).
+                InChapterScene && _mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId,
+                InChapterScene && _mosesChp != null ? 4 : 1, PlayMs,
                 _shopMoney, _unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
@@ -527,7 +533,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 Enumerable.Range(0, _battleVars.Length).Where(i => _battleVars[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
                 [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
-                _mosesOpen, _mosesOpen ? _mosesChp?.Id ?? 0 : 0,
+                // 필드·연대표에서 저장해도 챕터로 돌아가게 적는다 — 그때 전투 번호로 돌아가면 엉뚱한 옛 전투가 열린다.
+                InChapterScene && _mosesChp != null, InChapterScene ? _mosesChp?.Id ?? 0 : 0,
                 _chapterDone, _partyNo, [.. _members],
                 // 전투에 안 선 파티원(크리스티앙처럼 이번 전투에 없는 동료)의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다.
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
