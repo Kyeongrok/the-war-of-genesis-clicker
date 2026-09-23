@@ -63,6 +63,14 @@ internal static unsafe class Win32
 
     public const uint WM_ERASEBKGND = 0x0014;
     public const uint WM_COMMAND = 0x0111;
+    public const uint WM_INITMENUPOPUP = 0x0117;
+    public const uint MF_GRAYED = 0x0001, MF_BYPOSITION = 0x0400;
+
+    [DllImport("user32.dll")]
+    public static extern int GetMenuItemCount(IntPtr menu);
+
+    [DllImport("user32.dll")]
+    public static extern bool DeleteMenu(IntPtr menu, uint position, uint flags);
     public const uint WM_MOUSEWHEEL = 0x020A;
     /// <summary>테스트용 — 받으면 지금 화면을 %TEMP%\dueldx_snapshot.png 로 저장한다(창이 가려져 있어도 된다).</summary>
     public const uint WM_APP_SNAPSHOT = 0x8001;
