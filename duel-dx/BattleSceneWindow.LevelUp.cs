@@ -82,24 +82,35 @@ internal sealed unsafe partial class BattleSceneWindow
             CloseLevelUp();
             return LevelUpOpen;
         }
-        if (_levelUpQueue.Count == 0 || _routine != null) return false;
+        if (_routine != null) return false;
 
-        int index = _levelUpQueue.Dequeue();
-        var unit = _units[index];
-        if (_db == null || unit.Data is not { } c || c.CumExp / 100 <= c.Level) return false;
+        // 창을 숨겨 둔 사람(설정 > 레벨업 창 보이기)에게는 줄에 선 사람을 <b>한 틀에 모두</b> 올려 준다 —
+        // 레벨은 그대로 오르고 창만 안 뜬다.
+        while (_levelUpQueue.Count > 0)
+        {
+            int index = _levelUpQueue.Dequeue();
+            var unit = _units[index];
+            if (_db == null || unit.Data is not { } c || c.CumExp / 100 <= c.Level) continue;
 
-        unit.Data = _db.LevelUp(c, out var gains);
-        RefreshUnitStats(unit);
-        _levelUpUnit = index;
-        _levelUpUntil = _lastTime + LevelUpSeconds;
-        _levelUpTitle = _db.T(1090) is { Length: > 0 } t ? t : "Level Up";
-        _levelUpBody = $"{UnitName(index)}의 레벨이 {unit.Data.Level}이 되었습니다.\n"
-                     + string.Join("\n", gains.Select(g => $"{g.Stat}가 {g.Amount} 상승하였습니다."));
-        _selected = index;
-        Play(SoundLevelUp);
-        _mixer.SetMusicGain(DuckedMusicGain);
-        return true;
+            unit.Data = _db.LevelUp(c, out var gains);
+            RefreshUnitStats(unit);
+            if (!_showLevelUp) { Play(SoundLevelUp); continue; }
+
+            _levelUpUnit = index;
+            _levelUpUntil = _lastTime + LevelUpSeconds;
+            _levelUpTitle = _db.T(1090) is { Length: > 0 } t ? t : "Level Up";
+            _levelUpBody = $"{UnitName(index)}의 레벨이 {unit.Data.Level}이 되었습니다.\n"
+                         + string.Join("\n", gains.Select(g => $"{g.Stat}가 {g.Amount} 상승하였습니다."));
+            _selected = index;
+            Play(SoundLevelUp);
+            _mixer.SetMusicGain(DuckedMusicGain);
+            return true;
+        }
+        return false;
     }
+
+    /// <summary>레벨업 창을 띄울지 — 설정 > 레벨업 창 보이기. 꺼도 레벨은 그대로 오른다(사용자 요청).</summary>
+    private bool _showLevelUp = UserSettings.Current.ShowLevelUp;
 
     /// <summary>DUELDX_LEVELUP=1 이면 시작하자마자 레벨업 창을 띄운다(화면 밖 시험용).</summary>
     private void OpenLevelUpIfAsked()
