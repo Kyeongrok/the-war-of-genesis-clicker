@@ -135,7 +135,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void PlayEventVoice(int id)
     {
         if (id <= 0) return;
-        if (_eventVoices.TryGetValue(id, out var have)) { StartEventVoice(have); return; }
+        if (CachedClip(id) is { } have) { StartEventVoice(have); return; }
         _eventSoundLoading = true;
         LoadClip(id, pcm =>
         {
@@ -148,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary><c>assets/bgm/NNNN.bgm</c> 한 자락을 배경 실에서 풀어 <paramref name="then"/> 에 넘긴다(못 읽으면 null).</summary>
     private void LoadClip(int id, Action<PcmSound?> then)
     {
-        if (_eventVoices.TryGetValue(id, out var cached)) { then(cached); return; }
+        if (CachedClip(id) is { } cached) { then(cached); return; }
         System.Threading.Tasks.Task.Run(() =>
         {
             PcmSound? pcm = null;
@@ -161,6 +161,12 @@ internal sealed unsafe partial class BattleSceneWindow
             if (pcm != null) lock (_eventVoices) _eventVoices[id] = pcm;
             then(pcm);
         });
+    }
+
+    /// <summary>이미 푼 소리 — 배경 실이 같은 표에 쓰니 <b>잠그고</b> 본다(안 잠그면 Dictionary 가 깨진다).</summary>
+    private PcmSound? CachedClip(int id)
+    {
+        lock (_eventVoices) return _eventVoices.GetValueOrDefault(id);
     }
 
     private static float ClipSeconds(PcmSound pcm)
