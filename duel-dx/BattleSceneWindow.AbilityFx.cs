@@ -15,7 +15,10 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>이펙트 하나 — 어느 Obs 의 어느 모션을, 대상 자리(또는 내 자리)에서 몇 픽셀 위에 띄우나.</summary>
-    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift);
+    /// <param name="Delay">띄우기까지 기다리는 틱(원본 <c>0x100c2530</c>) — 메테오 착탄 따위.</param>
+    /// <param name="Count">뿌리개가 흩뿌리는 개수(설정 인자 3) — 대상 둘레 ±20·±10 픽셀에.</param>
+    /// <param name="Fly">시전자에서 대상으로 날아가는 이펙트(생성자 <c>0x100c3340</c>·<c>0x100c5940</c>) — 모션 길이 동안 옮긴다.</param>
+    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false);
 
     /// <summary>
     /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
@@ -152,16 +155,25 @@ internal sealed unsafe partial class BattleSceneWindow
         if (ScriptFor(w.Id) is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);
+        var (userX, userY) = UnitFoot(user);
+        int targetX = col * TileW + TileW / 2, targetY = CellCenterY(col, row);
         foreach (var e in m.Effects)
         {
-            var (x, y) = e.OnTarget
-                ? (col * TileW + TileW / 2, CellCenterY(col, row))
-                : UnitFoot(user);
-            _effects.Add((e.Obs, e.Motion, _lastTime, x, y - e.Lift));
+            var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
+            double start = _lastTime + e.Delay / TicksPerSecond;
+            if (e.Fly)
+                _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift));
+            else
+                for (int k = 0; k < Math.Max(1, e.Count); k++)
+                {
+                    // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
+                    int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
+                    _effects.Add((e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy));
+                }
             // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
             if (!ownSounds || _effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) is not { } clip) continue;
-            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((start + tick / TicksPerSecond, sound));
         }
     }
 }
