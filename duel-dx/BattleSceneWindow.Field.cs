@@ -380,8 +380,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>행동 1 이 한 줄에서 머문 시각 — 0 이면 안 머무는 중.</summary>
     private double _fieldHoldSince;
 
-    /// <summary>행동 1 이 한 줄에서 참아 주는 시간(초).</summary>
-    private const double FieldHoldSeconds = 10;
+    /// <summary>
+    /// 행동 1 이 한 줄에서 참아 주는 시간(초) — <c>DUELDX_HOLD=&lt;초&gt;</c> 로 줄일 수 있다(화면 밖 시험용).
+    /// </summary>
+    /// <remarks>원본에는 이런 참을성이 없다 — 데모가 아직 못 끝내는 연출에 갇히지 않으려고 둔 안전장치다.</remarks>
+    private static readonly double FieldHoldSeconds =
+        double.TryParse(Environment.GetEnvironmentVariable("DUELDX_HOLD"), out double hold) && hold > 0 ? hold : 10;
 
     /// <summary>행동 하나. 이 틀에 더 읽지 말아야 하면 false(필드를 떠났거나, 연출을 기다린다).</summary>
     private bool RunFieldAction(ScriptCommand a)
@@ -420,7 +424,18 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (!FieldBusy()) { _fieldHoldSince = 0; break; }
                 // 안 끝나는 연출에 갇히지 않게, 한 줄에서 오래 머물면 그냥 다음 줄로 간다.
                 if (_fieldHoldSince <= 0) _fieldHoldSince = _lastTime;
-                else if (_lastTime - _fieldHoldSince > FieldHoldSeconds) { _fieldHoldSince = 0; break; }
+                else if (_lastTime - _fieldHoldSince > FieldHoldSeconds)
+                {
+                    // 여기 걸렸다는 것은 데모가 못 끝내는 연출이 있다는 뜻이다 — 화면 밖 감사에서 찾으려고 남긴다.
+                    if (Trace)
+                        File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                                           $"HOLD fld {(_field?.Id ?? _mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}"
+                                           + $" (wipe {_fieldWipe != null}, cam {_fieldCamMove != null},"
+                                           + $" walk {_fieldActors.Count(w => w.Walk != null)}, fade {_fieldActors.Count(w => w.Fade != null)},"
+                                           + $" prop {_fieldProps.Count(pr => pr.Move != null)})" + Environment.NewLine);
+                    _fieldHoldSince = 0;
+                    break;
+                }
                 _fieldPc--;                                  // 다음 틀에 이 줄을 다시 본다
                 return false;
             }
