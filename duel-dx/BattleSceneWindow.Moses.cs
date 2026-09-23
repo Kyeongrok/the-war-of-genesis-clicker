@@ -74,6 +74,62 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _mosesPage = -1;          // -1 주 화면 · 0 항행 · 5 파티
     private int _mosesStep = 2;           // 항행 단계 — 1 행성 고르기 · 2 장소 고르기
     private int _mosesPlanet;             // 고른 행성 번호
+
+    /// <summary>
+    /// 지금 보고 있는 항성계 번호 — 항행 단계 1 의 성도는 <b>그 항성계의 행성만</b> 보인다.
+    /// </summary>
+    /// <remarks>
+    /// 챕터에 항성계가 여럿이면(11·12·13·16·40·44·45·46) 성도 좌우 단추로 옮긴다.
+    /// 전에는 모든 항성계의 행성을 한 성도에 같이 그려, 서로 다른 항성계의 행성이 뒤섞였다(사용자 보고).
+    /// </remarks>
+    private int _mosesSystem;
+
+    /// <summary>지금 항성계 — 번호가 안 맞으면 첫 항성계.</summary>
+    private ChapterFile.StarSystem? MosesSystem() =>
+        _mosesChp?.SystemOf(_mosesSystem) ?? _mosesChp?.Systems.FirstOrDefault();
+
+    /// <summary>지금 항성계에 딸린 행성만 — 항성계가 없는 챕터는 행성 전부.</summary>
+    private IReadOnlyList<ChapterFile.Planet> MosesSystemPlanets()
+    {
+        if (_mosesChp is not { } chp) return [];
+        if (MosesSystem() is not { } sys || sys.Planets.Count == 0) return chp.Planets;
+        return [.. chp.Planets.Where(p => sys.Planets.Contains(p.No))];
+    }
+
+    /// <summary>그 행성이 딸린 항성계 번호 — 못 찾으면 첫 항성계.</summary>
+    private int MosesSystemOfPlanet(int planet) =>
+        _mosesChp?.Systems.FirstOrDefault(sy => sy.Planets.Contains(planet))?.No
+        ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
+
+    /// <summary>성도 좌우의 항성계 옮기기 단추 — 항성계가 둘 이상일 때만 보인다. (x, y, 폭, 높이)</summary>
+    private static readonly (int X, int Y, int W, int H) MosesSystemLeft = (14, 44, 30, 30), MosesSystemRight = (596, 44, 30, 30);
+
+    /// <summary>성도 좌우의 항성계 단추 하나 — 테두리 안에 삼각형을 그린다(원본 그림을 아직 못 찾아 직접 그린다, 가설).</summary>
+    private void DrawSystemArrow((int X, int Y, int W, int H) box, int ox, int oy, bool left)
+    {
+        int x = ox + box.X, y = oy + box.Y;
+        FillRect(x, y, box.W, box.H, 0x90102040);
+        StrokeRect(x, y, box.W, box.H, 0xFF7FA6E8);
+        int cx = x + box.W / 2, cy = y + box.H / 2;
+        for (int i = 0; i < 9; i++)
+        {
+            int dx = left ? -4 + i / 2 : 4 - i / 2;
+            for (int dy = -i / 2; dy <= i / 2; dy++) SetPixel(cx + dx, cy + dy, 0xFFD8E8FF);
+        }
+    }
+
+    /// <summary>항성계를 <paramref name="step"/> 칸 옆으로 옮긴다(둘러 간다).</summary>
+    private void MosesTurnSystem(int step)
+    {
+        if (_mosesChp is not { } chp || chp.Systems.Count < 2) return;
+        int at = Math.Max(0, chp.Systems.ToList().FindIndex(sy => sy.No == _mosesSystem));
+        var next = chp.Systems[((at + step) % chp.Systems.Count + chp.Systems.Count) % chp.Systems.Count];
+        _mosesSystem = next.No;
+        Play(570);
+        _mosesHover = -1;
+        StartFade();
+        ShowMosesBackground(next.Background);
+    }
     private int _mosesFade;               // 남은 페이드 틱
     private bool _mosesBlueFade;          // 항행 진입(효과 1)은 검정이 아니라 파랑 씻김이다
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
@@ -309,6 +365,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
+                _mosesSystem = _mosesStep == 2 ? MosesSystemOfPlanet(_mosesPlanet)
+                                               : _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
                 break;
             case 1: if (DeliverMail() > 0) Play(571); break;           // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
             case 2: break;                                             // MESSAGE — 소리 없음
@@ -323,7 +381,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 항행은 성계 배경, 메일은 94, 파티는 주 화면과 같은 챕터 배경
         ShowMosesBackground(page switch
         {
-            0 or 2 => _mosesChp?.Systems.FirstOrDefault()?.Background ?? 70,
+            0 => MosesSystem()?.Background ?? 70,
+            2 => _mosesChp?.Systems.FirstOrDefault()?.Background ?? 70,
             1 => MosesMailBackground,
             _ => _mosesChp?.Background ?? 52,
         });
@@ -340,6 +399,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             Play(569);
             _mosesStep = 1;
+            _mosesSystem = MosesSystemOfPlanet(_mosesPlanet);
+            ShowMosesBackground(MosesSystem()?.Background ?? 70);
             StartFade();
             _mosesHover = -1;
             return;
@@ -366,7 +427,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (_mosesPage == 0 && _mosesStep == 1)
         {
-            var planets = _mosesChp?.Planets ?? [];
+            var planets = MosesSystemPlanets();
             for (int i = 0; i < planets.Count; i++)
                 if (Math.Abs(bx - ox - planets[i].X) <= 20 && Math.Abs(by - oy - planets[i].Y) <= 20) return i;
             return -1;
@@ -397,6 +458,15 @@ internal sealed unsafe partial class BattleSceneWindow
         if (OnMosesLegionClick(bx, by)) return true;
         if (OnMosesTalkClick(bx, by)) return true;
         if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
+        // 성도 좌우의 항성계 옮기기 단추(사용자 요청 — 다른 항성계로 가려면 여기서 옮긴다)
+        if (_mosesPage == 0 && _mosesStep == 1 && (_mosesChp?.Systems.Count ?? 0) > 1)
+        {
+            var (sx, sy) = MosesOrigin();
+            if (Hit(MosesSystemLeft)) { MosesTurnSystem(-1); return true; }
+            if (Hit(MosesSystemRight)) { MosesTurnSystem(1); return true; }
+            bool Hit((int X, int Y, int W, int H) b) =>
+                bx >= sx + b.X && bx < sx + b.X + b.W && by >= sy + b.Y && by < sy + b.Y + b.H;
+        }
 
         int index = MosesIconAt(bx, by);
         if (index < 0) return true;
@@ -407,10 +477,11 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         else if (_mosesPage == 0 && _mosesStep == 1)
         {
-            if (_mosesChp is { } chp && index < chp.Planets.Count)
+            var picked = MosesSystemPlanets();
+            if (_mosesChp is { } chp && index < picked.Count)
             {
-                _mosesPlanet = chp.Planets[index].No;
-                _planetVisits.Add((chp.Id, chp.Planets[index].No));   // 행성 +0x5c 방문 표시(가설: 고를 때 선다) — 조건 505 가 한 번 먹고 지운다
+                _mosesPlanet = picked[index].No;
+                _planetVisits.Add((chp.Id, picked[index].No));   // 행성 +0x5c 방문 표시(가설: 고를 때 선다) — 조건 505 가 한 번 먹고 지운다
                 _mosesStep = 2;
                 _mosesPageAt = _lastTime;
                 StartFade();
@@ -531,7 +602,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 항행 단계 1 — 성도 위 행성들. 마우스를 올린 행성에는 표 Obs 0163 모션 3 과 이름.
         if (_mosesPage == 0 && _mosesStep == 1)
         {
-            var planets = _mosesChp?.Planets ?? [];
+            var planets = MosesSystemPlanets();
             for (int i = 0; i < planets.Count; i++)
             {
                 var p = planets[i];
@@ -545,6 +616,17 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             if (!DrawUi(MosesBackObs, 0, tick, ox + 46, oy + 244, UiBlend.Alpha))
                 DrawText("BACK", ox + 46, oy + 248, White);
+            // 항성계가 둘 이상이면 성도 좌우에 옮기기 단추와 지금 항성계 이름을 얹는다.
+            if ((_mosesChp?.Systems.Count ?? 0) > 1)
+            {
+                DrawSystemArrow(MosesSystemLeft, ox, oy, left: true);
+                DrawSystemArrow(MosesSystemRight, ox, oy, left: false);
+                if (MosesSystem() is { } sys && Text(sys.NameText) is { Length: > 0 } sysName)
+                {
+                    var (_, sw, _) = GetText(sysName, White);
+                    DrawText(sysName, ox + (MosesW - sw) / 2, oy + 50, White);
+                }
+            }
             return;
         }
 
