@@ -647,7 +647,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !_mosesOpen) { LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (_mosesOpen)
         {
@@ -747,12 +747,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// </summary>
     private void LeaveFinishedBattle()
     {
-        if (_outcome.StartsWith('승')) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
+        // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
+        // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
+        bool won = _outcome.StartsWith('승');
+        int nextField = _eventNextField;
+        _outcome = "";
+        _eventNextField = 0;
+        if (won) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
         // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
         int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
-        if (_outcome.StartsWith('승') && next > 0 && StartBattle(next)) return;
+        _eventNextBattle = 0;
+        if (won && next > 0 && StartBattle(next)) return;
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
-        if (_outcome.StartsWith('승') && _eventNextField > 0 && OpenField(_eventNextField)) return;
+        if (won && nextField > 0 && OpenField(nextField)) return;
         OpenMoses();
     }
 
@@ -761,7 +768,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
-        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen) { LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
