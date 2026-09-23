@@ -481,9 +481,13 @@ public sealed class GameDatabase
         Math.Clamp(N(14) + N(15) * (targetLevel - killer.Level), N(16), N(17));
 
     /// <summary>
-    /// 레벨업(<c>0x100318d0</c>) — 쌓인 경험치 ÷ 100 이 새 레벨. 오름 = 직업 성장률% × 기본값 / 100 × 오른 레벨 수(난수 없음).
+    /// 레벨업(<c>0x100318d0</c>) — 쌓인 경험치 ÷ 100 이 새 레벨. 오름 = 직업 성장률% × <b>기본값</b> / 100 × 오른 레벨 수(난수 없음).
     /// TP 는 CTP 에서 옮겨 온다(CTP 바닥 100). HP·현재 TP 회복은 없다. 오른 능력치 목록을 <paramref name="gains"/> 로 준다.
     /// </summary>
+    /// <remarks>
+    /// 기본값은 <b>불러올 때 값</b>(.chr 파일 — TP 는 Load 끝에서 <c>CChr+0x26</c> 에 복사해 둔 것, 분석-캐릭터 an-3)이라 레벨마다
+    /// <b>같은 양씩</b> 오른다. 예전에는 지금 능력치를 넣어 레벨이 오를수록 복리로 불어났다 — 살라딘 Lv35 에 PSY 986·ATK 1906(사용자 보고).
+    /// </remarks>
     public CharacterData LevelUp(CharacterData c, out List<(string Stat, int Amount)> gains)
     {
         gains = [];
@@ -491,8 +495,9 @@ public sealed class GameDatabase
         int d = level - c.Level;
         if (d <= 0 || !Jobs.TryGetValue(c.JobId, out var job) || job.Growth.Length < 12) return c with { Level = (ushort)Math.Max(c.Level, level) };
 
+        var b = Character(c.Code) ?? c;                   // 기본값 = .chr 처음 값
         int Grow(int index, int baseValue) => job.Growth[index] * baseValue / 100 * d;
-        int lp = Grow(6, (int)c.Lp), tp = Grow(7, c.Tp), psy = Grow(9, c.Psy), dep = Grow(10, c.Dep), dex = Grow(11, c.Dex);
+        int lp = Grow(6, (int)b.Lp), tp = Grow(7, b.Tp), psy = Grow(9, b.Psy), dep = Grow(10, b.Dep), dex = Grow(11, b.Dex);
 
         int ctp = c.Ctp, gainTp = 0;
         if (ctp - tp >= 100) { gainTp = tp; ctp -= tp; }

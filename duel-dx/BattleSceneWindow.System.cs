@@ -386,19 +386,23 @@ internal sealed unsafe partial class BattleSceneWindow
             Passives = s.Passives.Length == 3 ? s.Passives : baseData.Passives,
             Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
         };
+        // 형식 9 이하의 능력치는 복리로 불어난 옛 레벨업 식으로 쌓인 것이라 믿지 않는다 — 아군은 아래에서 다시 센다.
+        bool trustStats = _restoreVersion >= 10;
         if (s.Char is { } k)
+        {
             c = c with
             {
                 NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = k.FaceId, TitleId = k.TitleId, Body = k.Body,
-                JobId = k.JobId, BasicWorkId = k.BasicWorkId, Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, TpDivisor = k.TpDivisor, Ctp = k.Ctp,
-                Dep = k.Dep, Dex = k.Dex, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
+                JobId = k.JobId, BasicWorkId = k.BasicWorkId, TpDivisor = k.TpDivisor, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
             };
-        else if (regrow && _db != null && s.CumExp / 100 > c.Level)
+            if (trustStats) c = c with { Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, Ctp = k.Ctp, Dep = k.Dep, Dex = k.Dex };
+        }
+        if (regrow && (s.Char == null || !trustStats) && _db?.Character(c.Code) is { } b)
         {
-            // 게임에서는 한 레벨씩 오르고 성장은 그때 능력치에 비례하므로(0x10031a50) 여기서도 한 레벨씩 올린다.
-            for (int level = c.Level + 1; level <= s.CumExp / 100; level++)
-                c = _db.LevelUp(c with { CumExp = level * 100 }, out _);
-            c = c with { CumExp = s.CumExp };
+            // .chr 처음 능력치에서 쌓인 경험치만큼 원본 식(기본값 기준, 레벨마다 같은 양)으로 다시 키운다.
+            // 스크립트 702 가 바꾼 능력치는 여기서 되살리지 못한다(드물다).
+            c = _db.LevelUp(c with { Lp = b.Lp, Psy = b.Psy, Tp = b.Tp, Ctp = b.Ctp, Dep = b.Dep, Dex = b.Dex, Level = b.Level }, out _)
+                with { CumExp = s.CumExp };
         }
         return c with { Level = (ushort)s.Level };
     }
@@ -423,7 +427,11 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0);
 
-    private const int SaveVersion = 9;   // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
+    private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
+                                         // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
+
+    /// <summary>지금 불러오는 세이브의 형식 — <see cref="Restored"/> 가 옛 형식의 능력치를 다시 셀지 정한다.</summary>
+    private int _restoreVersion = SaveVersion;
 
     /// <summary>
     /// 판을 세우기 전에 되살려야 하는 것 — <b>파티·동료·깃발·군단·돈</b>.
@@ -640,6 +648,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 판을 세우기 <b>전에</b> 파티·동료를 되살린다 — 아군을 미리 안 세운 전투는 BuildUnits 가 배치 칸에
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
+        _restoreVersion = state.Version;
         RestorePartyBeforeBoard(state);
         // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
         if (SavedChapter(state) is > 0 and var chapterId && LoadChapterFile(chapterId) is { } savedChp) _mosesChp = savedChp;
@@ -732,6 +741,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !_placesUsed.Contains((oc.Id, p.No)) && FlagsAllow(p.Conditions)))
                 _chapterDone = true;
             OpenMoses(loadedChp);
+            _restoreVersion = SaveVersion;
             Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
         }
@@ -746,6 +756,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _mixer.StopMusic();
             StartBattleMusic();
         }
+        _restoreVersion = SaveVersion;
         Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
     }
