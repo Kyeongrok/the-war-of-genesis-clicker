@@ -349,6 +349,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _flyingEffects.Clear();
+        _ripples.Clear();
         _nextTickAt = 0;
         CancelTargeting();
         StartBattleMusic();
@@ -669,6 +670,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _flyingEffects.Clear();
+        _ripples.Clear();
         _heldMoveKeys.Clear();
 
         var pool = state.Units.ToList();
