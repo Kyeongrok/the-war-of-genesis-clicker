@@ -36,7 +36,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int SlotRows => _slotsMode == 1 ? AutoSlot + 1 : SaveSlots;
 
     private static string SlotPath(int slot) =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", $"battle-save-{slot:D2}.json");
+        UserDataFolder.File($"battle-save-{slot:D2}.json");
 
     private void OpenSlots(int mode)
     {
