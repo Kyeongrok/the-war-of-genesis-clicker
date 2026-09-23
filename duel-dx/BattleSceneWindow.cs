@@ -1555,13 +1555,20 @@ internal sealed class UnitState(DemoUnit unit)
     public int StartCol { get; } = unit.Col;
     public int StartRow { get; } = unit.Row;
 
-    /// <summary>전투를 처음부터 다시 할 때 — 자리·상태를 처음으로 돌린다(수치는 InitBattle 이 다시 채운다).</summary>
-    public void ResetTo(int col, int row)
+    /// <summary>전투를 시작할 때 보는 쪽 — Btl 레코드의 방향(파일 8, <c>SetAction(0, 방향)</c>: 0 위 · 1 왼 · 2 아래 · 3 오른).</summary>
+    public Facing StartFacing { get; } = unit.Facing;
+
+    /// <summary>
+    /// 전투를 처음부터 다시 할 때 — 자리·상태를 처음으로 돌린다(수치는 InitBattle 이 다시 채운다).
+    /// 보는 쪽은 Btl 에 적힌 방향으로 되돌린다 — 전에는 아군은 오른쪽·적은 왼쪽으로 박아서, 오른쪽에서 시작하는
+    /// 아군(Btl 0281 의 란·베라모드, 방향 1)도 벽을 보고 섰다(사용자 보고). <paramref name="keepFacing"/> 면 지금 쪽을 둔다.
+    /// </summary>
+    public void ResetTo(int col, int row, bool keepFacing = false)
     {
         WarpTo(col, row);
         OriginCol = col;
         OriginRow = row;
-        Facing = IsAlly ? Facing.Right : Facing.Left;
+        if (!keepFacing) Facing = StartFacing;
         Alive = true;
         HasTurn = true;
         Stance = 0;

@@ -382,7 +382,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 202:                                    // 지정 칸으로 — 전장에 있는 사람만(원본도 맵 안인지 본다)
                 foreach (var u in EventTargets(A(0), out _))
-                    if (u.OnField) u.ResetTo(A(2), A(3));
+                    if (u.OnField) u.ResetTo(A(2), A(3), keepFacing: true);
                 break;
             case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
                 foreach (var u in EventTargets(A(0), out _))
