@@ -90,6 +90,27 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool EventsBusy => _runningEvent >= 0 || _talk != null;
 
     /// <summary>조건이 다 맞는 이벤트를 하나 켠다. 결과가 정해지면 더 보지 않는다.</summary>
+    /// <summary>
+    /// 적을 다 쓰러뜨려 이기는 순간 — 아직 안 돈 「다음 장소로 보내는」 사건(행동 6 필드 · 10 전투)이 있고 <b>턴·타이머 말고</b> 나머지 조건이
+    /// 맞으면 그 행선지를 쓴다. 그 사건이 턴 수를 기다리는 동안 전멸 승리가 먼저 전투를 끝내 이야기 사슬이 끊겼다 —
+    /// 샤이닝 스타 <c>Btl 0137</c> 사건 5(턴 &gt; 5 · 열쇠 10006 없음 → <c>Fld 0055</c> → 행동 11 챕터 끝)를 건너뛰어 챕터가 안 끝났다(사용자 보고).
+    /// </summary>
+    private void ScriptedDestinationOnWipe()
+    {
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0 || (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire)) continue;
+            if (e.Actions.FirstOrDefault(a => a.Code is 6 or 10) is not { } go) continue;
+            if (!e.Conditions.Where(c => c.Code is not (1 or 2 or 3)).All(EventCondition)) continue;
+            _eventFired[i]++;
+            int to = go.Args.Length > 0 ? go.Args[0] : 0;
+            if (go.Code == 6) { _eventNextBattle = 0; _eventNextField = to; }
+            else _eventNextBattle = to;
+            return;
+        }
+    }
+
     private void RunEvents()
     {
         if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy) return;
