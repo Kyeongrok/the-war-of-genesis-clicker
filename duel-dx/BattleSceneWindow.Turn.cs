@@ -723,7 +723,11 @@ internal sealed unsafe partial class BattleSceneWindow
         RunEvents();
         if (_outcome.Length > 0) return;
         // 아직 안 나온 사람은 세지 않는다 — 안 그러면 증원이 있는 전투가 영영 안 끝난다.
-        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly)) { _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true); }
+        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
+        {
+            ScriptedDestinationOnWipe();
+            _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true);
+        }
         else if (!_units.Any(u => u.Alive && u.OnField && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
     }
 
