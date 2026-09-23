@@ -1,4 +1,5 @@
-﻿using WarOfGenesis.Assets;
+﻿using DuelDx.Native;
+using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -51,13 +52,74 @@ internal sealed unsafe partial class BattleSceneWindow
         return CursorArrow;
     }
 
-    private void DrawCursor()
+    /// <summary>
+    /// 커서 컷을 판에 그리지 않고 <b>윈도 하드웨어 커서</b>로 건다 — 판에 그리면 60Hz 로만 움직이고
+    /// 스왑체인을 거치느라 2~3프레임 늦으며, 판을 키운 화면(모세스 640×480)에서는 배율만큼 칸칸이 뛰었다.
+    /// 컷마다 배율로 키운 커서를 한 번 만들어 두고, 컷 기준점을 핫스팟으로 삼는다.
+    /// </summary>
+    private readonly Dictionary<(SpriteFrame Frame, double Zoom), IntPtr> _hwCursors = [];
+    private static readonly IntPtr ArrowCursor = Win32.LoadCursorW(IntPtr.Zero, Win32.IDC_ARROW);
+    private IntPtr _hwCursor = ArrowCursor;
+
+    /// <summary>프레임마다 — 지금 커서 컷(모양·애니)이 바뀌었으면 윈도 커서를 갈아 건다.</summary>
+    private void UpdateCursor()
     {
         var (bx, by) = _mouse;
-        if (bx < 0 || by < 0) return;
+        int obs = bx < 0 || by < 0 ? CursorArrow : CursorFor(bx, by);
         int tick = (int)(_lastTime * TicksPerSecond);
-        if (!DrawUi(CursorFor(bx, by), 0, tick, bx, by, UiBlend.Alpha))
-            StrokeRect(bx - 3, by - 3, 7, 7, White);   // 그림이 없으면 작은 네모
+        IntPtr want = UiFor(obs)?.FrameAt(0, tick) is { } f ? HardwareCursor(f) : ArrowCursor;
+        if (want == _hwCursor) return;
+        _hwCursor = want;
+        if (CursorOverClient()) Win32.SetCursor(want);
+    }
+
+    /// <summary>마우스가 이 창의 판(클라이언트) 위에 있나 — 메뉴·테두리·다른 창 위의 커서는 건드리지 않는다.</summary>
+    private bool CursorOverClient()
+    {
+        if (!Win32.GetCursorPos(out var p) || Win32.WindowFromPoint(p) != _hwnd) return false;
+        Win32.ScreenToClient(_hwnd, ref p);
+        return Win32.GetClientRect(_hwnd, out var rc) && p.X >= 0 && p.Y >= 0 && p.X < rc.Right && p.Y < rc.Bottom;
+    }
+
+    private IntPtr HardwareCursor(SpriteFrame f)
+    {
+        if (_hwCursors.TryGetValue((f, _zoom), out var cached)) return cached;
+        int w = Math.Max(1, (int)Math.Round(f.W * _zoom)), h = Math.Max(1, (int)Math.Round(f.H * _zoom));
+        var color = new uint[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            int sy = Math.Min(f.H - 1, (int)(y / _zoom));
+            for (int x = 0; x < w; x++)
+            {
+                uint c = f.Px[sy * f.W + Math.Min(f.W - 1, (int)(x / _zoom))];
+                color[y * w + x] = (c & 0xFF000000) == 0 ? 0 : c | 0xFF000000;   // 판에 그릴 때처럼 알파는 있고 없고 둘뿐
+            }
+        }
+        // 32비트 색 비트맵에 알파가 있으면 마스크는 안 쓰인다 — 그래도 꼭 넘겨야 해서 0 으로 채운 1비트 비트맵.
+        var mask = new byte[(w + 15) / 16 * 2 * h];
+        IntPtr colorBmp, maskBmp;
+        fixed (uint* pc = color) colorBmp = Win32.CreateBitmap(w, h, 1, 32, pc);
+        fixed (byte* pm = mask) maskBmp = Win32.CreateBitmap(w, h, 1, 1, pm);
+        var info = new Win32.IconInfo
+        {
+            IsIcon = false,
+            HotspotX = Math.Clamp((int)(-f.X * _zoom), 0, w - 1),
+            HotspotY = Math.Clamp((int)(-f.Y * _zoom), 0, h - 1),
+            Mask = maskBmp,
+            Color = colorBmp,
+        };
+        IntPtr cursor = Win32.CreateIconIndirect(ref info);
+        Win32.DeleteObject(colorBmp);
+        Win32.DeleteObject(maskBmp);
+        if (cursor == IntPtr.Zero) return ArrowCursor;
+        _hwCursors[(f, _zoom)] = cursor;
+        return cursor;
+    }
+
+    private void DestroyCursors()
+    {
+        foreach (var cursor in _hwCursors.Values) Win32.DestroyCursor(cursor);
+        _hwCursors.Clear();
     }
 
     /// <summary>전투 끝 배너 — 화면을 어둡게 하고 가운데에 任務終了 / Game Over 를 띄운다.</summary>
