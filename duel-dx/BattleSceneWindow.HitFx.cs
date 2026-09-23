@@ -79,7 +79,8 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>시전자에서 대상으로 날아가는 이펙트 — (Obs, 모션, 시작, 출발 x·y, 도착 x·y).</summary>
-    private readonly List<(int Obs, int Motion, double Start, int FromX, int FromY, int ToX, int ToY)> _flyingEffects = [];
+    /// <remarks>Ticks 가 0 보다 크면 그 틱 동안 옮기며 모션을 되풀이한다(초상 컷인처럼 한 장짜리 모션). 0 이면 모션 길이 동안 한 번.</remarks>
+    private readonly List<(int Obs, int Motion, double Start, int FromX, int FromY, int ToX, int ToY, int Ticks)> _flyingEffects = [];
 
     /// <summary>날아가는 이펙트를 모션 길이 동안 출발에서 도착으로 옮기며 그린다.</summary>
     private void DrawFlyingEffects()
@@ -89,10 +90,11 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_lastTime < f.Start) return false;
             int tick = (int)((_lastTime - f.Start) * TicksPerSecond);
             if (UiFor(f.Obs) is not { } sprite) return true;
-            int length = Math.Max(1, sprite.MotionLength(f.Motion));
+            int length = f.Ticks > 0 ? f.Ticks : Math.Max(1, sprite.MotionLength(f.Motion));
             if (tick >= length) return true;
             double t = (double)tick / length;
-            DrawUi(f.Obs, f.Motion, tick, (int)(f.FromX + (f.ToX - f.FromX) * t), (int)(f.FromY + (f.ToY - f.FromY) * t), UiBlend.Add, loop: false);
+            DrawUi(f.Obs, f.Motion, tick, (int)(f.FromX + (f.ToX - f.FromX) * t), (int)(f.FromY + (f.ToY - f.FromY) * t),
+                   f.Ticks > 0 ? UiBlend.Alpha : UiBlend.Add, loop: f.Ticks > 0);
             return false;
         });
     }

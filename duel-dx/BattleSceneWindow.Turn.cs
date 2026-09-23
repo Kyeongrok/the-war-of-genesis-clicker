@@ -546,6 +546,7 @@ internal sealed unsafe partial class BattleSceneWindow
         bool effectsDone = false, followersDone = false;
         _followerStrikes.Clear();
         SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
+        SpawnFinisherCutIns(w, a);                          // 필살기(준비 7)면 초상 컷인
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나

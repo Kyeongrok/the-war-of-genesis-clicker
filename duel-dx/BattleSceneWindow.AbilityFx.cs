@@ -147,6 +147,27 @@ internal sealed unsafe partial class BattleSceneWindow
         return ScriptFor(w.Id) != null ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
     }
 
+    /// <summary>
+    /// 필살기 초상 컷인 — 준비 동작 7 인 기술은 시전 때 그 인물의 초상(<c>.chr</c> 10 face Obs, 유닛 <c>+0x11e</c>)을 모션 2·1 로 네 번 띄워
+    /// 화면을 가로지르게 한다(<c>0x1007eac4</c>·<c>0x1007eb60</c>·<c>0x1007ecdd</c>·<c>0x1007ed76</c>: 출발 x = 화면 스크롤 + 540, 날기 <c>0x100c3490</c>
+    /// 속도 0.9, 지연 30틱, 수명 100틱). 도착 자리는 못 풀어(스택 인자) 화면 왼쪽 끝으로 둔다 — 가설. 분석-스킬 fx-189.
+    /// </summary>
+    private void SpawnFinisherCutIns(WorkData w, UnitState user)
+    {
+        if (w.Prepare != 7 || user.Data is not { FaceId: > 0 } c || UiFor(c.FaceId) == null) return;
+        var sprite = UiFor(c.FaceId)!;
+        for (int i = 0; i < 4; i++)
+        {
+            int motion = i % 2 == 0 ? 2 : 1;
+            if (sprite.FrameAt(motion, 0, loop: true) is not { } f) continue;
+            // 그림 가운데가 화면을 넷으로 나눈 줄에 오고, 오른쪽 밖에서 들어와 왼쪽 밖으로 나간다.
+            int center = _camY + ViewHeight * (i + 1) / 5;
+            int y = center - (f.Y + f.H / 2);
+            double start = _lastTime + (30 + i * 8) / TicksPerSecond;
+            _flyingEffects.Add((c.FaceId, motion, start, _camX + ViewWidth - f.X, y, _camX - f.X - f.W, y, 40));
+        }
+    }
+
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
@@ -162,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
             if (e.Fly)
-                _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift));
+                _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
             else
                 for (int k = 0; k < Math.Max(1, e.Count); k++)
                 {
