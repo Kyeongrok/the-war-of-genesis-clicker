@@ -11,8 +11,10 @@ namespace DuelDx;
 /// <param name="ViewH">창 높이(화면 픽셀, 머리줄 제외) — 원본 480.</param>
 /// <param name="ShowHints">조작 안내 글(「…을(를) 노립니다 — 클릭·Enter…」 따위)을 보일지. 설정 > 안내 글 켜기·끄기.</param>
 /// <param name="ShowLevelUp">레벨업 창을 띄울지. 꺼도 <b>레벨은 그대로 오른다</b> — 창만 안 뜬다(사용자 요청).</param>
+/// <param name="KeepExpOnJobChange">전직(세부 체질 바꾸기)할 때 남은 EXP 를 그대로 둘지. 원본은 0 으로 비운다 — 켜면 원본과 다르다(사용자 요청).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
-                                    int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true)
+                                    int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
+                                    bool KeepExpOnJobChange = false)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 

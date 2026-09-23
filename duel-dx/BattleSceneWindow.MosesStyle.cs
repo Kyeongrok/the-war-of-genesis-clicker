@@ -161,8 +161,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_stylePick != i) { _stylePick = i; Play(MosesClickSound); return true; }
             ushort pick = jobs[i];
             string title = _db?.T(932) is { Length: > 0 } t ? t : "전직";
-            // 남은 EXP 가 있으면 「사라집니다」 본문(931), 없으면 930.
-            string text = c.Exp == 0
+            // 남은 EXP 가 있으면 「사라집니다」 본문(931), 없으면 930. 설정으로 EXP 를 남기면 사라질 것이 없으니 930.
+            string text = c.Exp == 0 || _keepJobExp
                 ? _db?.T(930) is { Length: > 0 } b2 ? b2 : "전직하시겠습니까?"
                 : $"{_db?.T(c.NameId)}의 경험치가 {c.Exp} 남았습니다.\n전직하면 {c.Exp} 의 경험치는 사라집니다.\n전직할까요?";
             _confirm = (title, text, () => ChangeJob(pick));
@@ -251,11 +251,11 @@ internal sealed unsafe partial class BattleSceneWindow
         return jobs.FindIndex(j => j == c.JobId);
     }
 
-    /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로).</summary>
+    /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로). 설정 「전직할 때 EXP 유지」면 EXP 도 남긴다.</summary>
     private void ChangeJob(ushort jobId)
     {
         if (StyleData() is not { } c) return;
-        SetStyleData(c with { JobId = jobId, Exp = 0 });
+        SetStyleData(c with { JobId = jobId, Exp = _keepJobExp ? c.Exp : 0 });
         _stylePick = StyleCurrentCell();
         Play(SoundStyleDone);
         _notice = (_db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", _lastTime + 60 / TicksPerSecond);
