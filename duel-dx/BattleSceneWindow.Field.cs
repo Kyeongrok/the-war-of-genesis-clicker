@@ -575,7 +575,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             case 600:
             case 601:
-            case 602: ShowFieldTalk(a.Code == 600, A(0), A(1)); break;
+            case 602: ShowFieldTalk(a.Code == 600, A(0), A(1), pose: A(3)); break;   // 인자 3 = 초상화 표정(모션 2×표정+11)
             case 603: ShowFieldTalk(true, 0, A(0)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설)
             case 300:                                        // 물체를 그 자리로 즉시
             {
@@ -1054,7 +1054,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     /// <param name="nameOverride">말하는 이 자리에 넣을 이름 — 행동 609 는 인물 이름이 아니라 <b>인자1 의 TXR 이름</b>을 쓴다.</param>
     /// <param name="textOverride">글 — 행동 609 는 필드 <c>Tlf</c> 가 아니라 <b>그 챕터의 <c>Tlc</c></b> 에서 꺼낸다.</param>
-    private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null)
+    private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0)
     {
         if (_talkSkip) return;
         string name = "";
@@ -1075,7 +1075,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _talkFace = cc.Code;
         }
         else _talkFace = 0;
-        _talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), 0, _lastTime);
+        _talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), pose, _lastTime);
         _talkFilled = false;
     }
 

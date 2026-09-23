@@ -23,7 +23,8 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int TalkBalloonObs = 111, TalkCloseSound = 95;
+    /// <summary>대사창 그림 — 말풍선 틀 Obs 0221 · 아래 상자 틀 Obs 0224 · 「다음」 ▼ Obs 0071(분석-UI 「대사창 모양 (talk-ui)」).</summary>
+    private const int TalkBalloonObs = 221, TalkBoxObs = 224, TalkNextObs = 71, TalkCloseSound = 95;
     private const int TalkAutoTicks = 118;
 
     /// <summary>글자가 흘러나오는 빠르기 — 한 틱에 몇 글자.</summary>
@@ -214,92 +215,73 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawTalk()
     {
         if (_talk is not { } t) return;
-        var (ox, oy) = (_camX, _camY);
         int tick = (int)((_lastTime - t.Start) * TicksPerSecond);
         var lines = TalkLines(TalkShownText(t));
+        // 원본 대사창은 640×480 화면 기준이다 — 필드는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
+        var (sx, sy) = FieldOpen ? MosesOrigin() : (_camX, _camY);
+        int screenW = FieldOpen ? MosesW : ViewWidth, screenH = FieldOpen ? MosesH : ViewHeight;
+        int faceCode = t.Speaker >= 0 && _units[t.Speaker].Data is { } sc ? sc.Code : _talkFace;
+        _faces.TryGetValue(faceCode, out var face);
 
         if (t.Box)
         {
-            // 600 — 원본은 640×480 기준 (10,370) 620×100 이다.
-            // 필드·모세스처럼 640×480 틀 안에서 도는 화면이면 그 틀 안에, 전투면 보이는 판 아래에 둔다.
-            int w, x, y, h = 100;
-            if (FieldOpen)
-            {
-                var (fx, fy) = MosesOrigin();
-                w = 620;
-                x = fx + 10;
-                y = fy + 370;
-            }
-            else
-            {
-                w = Math.Min(620, BoardWidth - 20);
-                x = ox + (BoardWidth - w) / 2;
-                y = oy + ViewHeight - h - 10;
-            }
-            DarkenRect(x - 1, y - FrameTitleH - 1, w + 2, h + FrameTitleH + 2, 8);
-            DrawGameFrame(x, y, w, h, t.Name);
-            // 초상화 — 인물 얼굴 그림을 왼쪽에. 원본은 Obs 모션 2×얼굴+11 이지만 데모는 뽑아 둔 얼굴 그림을 쓴다.
+            // 600 아래 상자(0x1003c0d0, 그리기 0x1003c630) — 창 (10,370) 620×100. 틀은 통짜 그림 Obs 0224 를 창 (0,−25) 에:
+            // 바탕 조각(모션 3·4·5)을 효과 5((11·바탕+20·그림)/31)로 먼저, 테두리(모션 0·1·2)를 불투명으로 위에 얹는다.
+            int x = sx + (FieldOpen ? 10 : (screenW - 620) / 2), y = sy + screenH - 110;
+            // 큰 반신 초상화 — 말하는 이 Chr 의 얼굴 Obs(.chr 10, CChr+0x0e), 모션 2×표정+11 을 화면 (320,480) 기준으로 상자 <b>뒤</b>에
+            // 세운다(0x1003c0d0 → 0x100f4a70). 표정은 대사 명령 인자(필드 3 · 전투 4). 원본은 틱마다 1/45 확률로 모션+1(눈)을 겹쳐
+            // 깜빡이는데, 데모는 3초마다 한 번 겹친다(가설). 그 모션이 없는 얼굴은 초상화 없이 작은 얼굴로 대신한다.
+            int portraitObs = t.Speaker >= 0 ? _units[t.Speaker].Data?.FaceId ?? 0 : _db?.Character(_talkFace)?.FaceId ?? 0;
+            int pose = 2 * Math.Max(0, t.Face) + 11;
+            bool portrait = portraitObs > 0 && UiFor(portraitObs)?.MotionLength(pose) > 0
+                            && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, UiBlend.Alpha);
+            if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink && tick % 90 < blink)
+                DrawUi(portraitObs, pose + 1, tick % 90, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
+            for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha, fade: 20 / 31.0);
+            for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha);
+            // 이름 — 탭(틀 x 0~124) 가운데 x = 창x+61, 윗변 y = 창y−16.
+            var (_, nw, _) = GetText(t.Name, White, 12);
+            DrawText(t.Name, x + 61 - nw / 2, y - 16, White, 12);
+            // 원본 상자에는 작은 얼굴이 없다(큰 반신 초상화를 상자 뒤에 세운다 — 아직 없음). 얼굴이 있으면 데모는 글 왼쪽에 둔다.
             int textLeft = x + 12;
-            int faceCode = t.Speaker >= 0 && _units[t.Speaker].Data is { } sc ? sc.Code : _talkFace;
-            if (faceCode != 0 && _faces.TryGetValue(faceCode, out var face))
-            {
-                BlitScaled(face, x + 8, y + 6, 84, 84);
-                textLeft = x + 100;
-            }
-            // 줄 내림은 <b>그 줄 가장 큰 글자 높이 + 4px</b> 이다(0x1002993c) — 원본 굴림 9pt 로 16px.
-            var boxLines = WrapTalk(lines, x + w - 16 - textLeft, 13);
-            int step = TalkLineStep(13);
-            for (int i = 0; i < boxLines.Count && 10 + (i + 1) * step <= h; i++)
-                DrawText(boxLines[i], textLeft, y + 10 + i * step, White, 13);
-            // 오른쪽 아래 「다음」 표시 — 깜빡인다.
-            if (_talkFilled && tick % 20 < 12) DrawText("▼", x + w - 22, y + h - 22, 0xFFFFE070, 13);
+            if (!portrait && face != null) { BlitScaled(face, x + 12, y + 8, 84, 84); textLeft = x + 104; }
+            var boxLines = WrapTalk(lines, x + 606 - textLeft, 12);
+            for (int i = 0; i < boxLines.Count && i < 4; i++)
+                DrawText(boxLines[i], textLeft, y + 10 + i * 16, White, 12);
+            if (_talkFilled) DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, UiBlend.Alpha);
             return;
         }
 
-        // 601 — 말하는 이 머리 위 말풍선. 화면 밖이면 판 가운데.
-        int bw = 174, bh = 60;
+        // 601 말풍선(0x1003b130, 틀 0x1003bdc0) — 174×60 고정. 자리는 말하는 이 발밑 (x, y) 에서
+        // 전투 (x+30, max(y−200, 50)−20) · 필드 (x+30, max(y−180, 50)−20). 말하는 이가 없으면 전투 (120,120) · 필드 (350,100).
         int bx, by;
         if (FieldTalkHead() is { } head)
-        {
-            // 필드에서는 말하는 이가 전투 유닛이 아니라 필드 인물이다 — 규칙은 같이 (x+30, y−200).
-            bx = head.X + 30;
-            by = head.Y - 200;
-        }
+            (bx, by) = (head.X - sx + 30, Math.Max(head.Y - sy - 180, 50) - 20);
         else if (t.Speaker >= 0 && _units[t.Speaker].Alive)
         {
             var (fx, fy) = UnitFoot(_units[t.Speaker]);
-            bx = Math.Clamp(fx + 30, _camX + 8, _camX + ViewWidth - bw - 8);
-            by = Math.Clamp(fy - 200, _camY + GridTop + 8, _camY + ViewHeight - bh - 8);
+            (bx, by) = (fx - sx + 30, Math.Max(fy - sy - 200, 50) - 20);
         }
-        else
-        {
-            bx = _camX + (ViewWidth - bw) / 2;
-            by = _camY + ViewHeight / 2 - bh;
-        }
-        // 글이 길면 창이 늘어나지만 <b>폭 200·높이 100 까지</b>다 — 그보다 길면 줄을 접는다.
-        // 크기는 <b>다 나온 글</b>로 재야 흐르는 동안 창이 들썩이지 않는다.
-        const int BalloonMax = 200;
-        var full = WrapTalk(TalkLines(t.Text), BalloonMax - 16, 12);
-        int widest = full.Max(l => GetText(l, White, 12).Item2);
-        bw = Math.Clamp(widest + 16, 50, BalloonMax);
-        bh = Math.Clamp(full.Count * 18 + 26, 50, 100);
+        else (bx, by) = FieldOpen ? (350, 100) : (120, 120);
+        // 화면 안으로(0x1003b6ac~) — 오른쪽 끝, 얼굴 자리, 아래 끝, 왼쪽·위.
+        if (bx + 200 >= screenW) bx = screenW - 200;
+        if (face != null && bx - 60 < 5) bx = 65;
+        if (by + 60 >= screenH) by = screenH - 60;
+        bx = Math.Max(bx, 0);
+        by = Math.Max(by, 30);
+        bx += sx;
+        by += sy;
 
-        // 필드처럼 640×480 틀 안에서 도는 화면이면 말풍선도 그 틀을 넘지 않는다.
-        if (FieldOpen)
-        {
-            var (fx, fy) = MosesOrigin();
-            bx = Math.Clamp(bx, fx + 8, fx + MosesW - bw - 8);
-            by = Math.Clamp(by, fy + 8, fy + MosesH - bh - 8);
-        }
-        else
-            bx = Math.Clamp(bx, 8, BoardWidth - bw - 8);
-
-        DarkenRect(bx - 1, by - FrameTitleH - 1, bw + 2, bh + FrameTitleH + 2, 8);
-        DrawGameFrame(bx, by, bw, bh, t.Name);
-        var balloonLines = WrapTalk(lines, bw - 16, 12);
-        int balloonStep = TalkLineStep(12);
-        for (int i = 0; i < balloonLines.Count && i * balloonStep + 8 < bh; i++)
-            DrawText(balloonLines[i], bx + 8, by + 6 + i * balloonStep, White, 12);
-        if (_talkFilled && tick % 20 < 12) DrawText("▼", bx + bw - 18, by + bh - 20, 0xFFFFE070, 12);
+        // 틀 Obs 0221 을 창 (−60, −20) 에 — 바탕(모션 1)은 효과 5, 테두리(모션 0)는 불투명. 이름은 탭 가운데 (창x−11, 창y−15).
+        DrawUi(TalkBalloonObs, 1, 0, bx - 60, by - 20, UiBlend.Alpha, fade: 20 / 31.0);
+        DrawUi(TalkBalloonObs, 0, 0, bx - 60, by - 20, UiBlend.Alpha);
+        var (_, bnw, _) = GetText(t.Name, White, 12);
+        DrawText(t.Name, bx - 11 - bnw / 2, by - 15, White, 12);
+        if (face != null) BlitScaled(face, bx - 57, by, 60, 60);
+        // 글은 (창x+12, 창y+10) 부터, 폭 153 · 세 줄 · 줄 내림 16(굴림 9pt).
+        var balloonLines = WrapTalk(lines, 153, 12);
+        for (int i = 0; i < balloonLines.Count && i < 3; i++)
+            DrawText(balloonLines[i], bx + 12, by + 10 + i * 16, White, 12);
+        if (_talkFilled) DrawUi(TalkNextObs, 0, tick, bx + 174, by + 60, UiBlend.Alpha);
     }
 }
