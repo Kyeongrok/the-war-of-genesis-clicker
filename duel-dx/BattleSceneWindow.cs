@@ -621,6 +621,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_mosesOpen)
         {
             if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) _statusUnit = -1; return; }   // 스테이터스 창은 Esc 로 닫는다
+            // 성도에서는 ←·→ 로도 항성계를 옮긴다(좌우 단추와 같은 일).
+            if (_mosesPage == 0 && _mosesStep == 1 && key is Win32.VK_LEFT or Win32.VK_RIGHT)
+            {
+                MosesTurnSystem(key == Win32.VK_LEFT ? -1 : 1);
+                return;
+            }
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
             if (_mosesPage != -1) { MosesGoBack(); return; }
             Play(578);
