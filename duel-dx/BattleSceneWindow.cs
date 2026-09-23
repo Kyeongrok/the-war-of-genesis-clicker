@@ -871,6 +871,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
             {
                 if (page == 7) OpenMosesStyle(); else if (page == 6) OpenMosesLegion();
+                else if (page == 1) { MosesGoPage(1); _mosesPage = 1; }   // 메일 — 배달까지 돈다
             }
         }
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
