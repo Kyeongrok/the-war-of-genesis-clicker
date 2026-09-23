@@ -906,6 +906,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
 
         foreach (var unit in _units) unit.SettleIfStopped();
+        ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
         SyncFollowers();
         UpdateCamera(dt);
         ApplyPoseHook();
