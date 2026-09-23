@@ -1024,7 +1024,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 var (clip, tick) = sprite.CurrentClip(unit);
                 var tint = clip?.TintAt(tick);
                 var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade);
+                // 몸 그림도 모션표의 섞기 키(종류 3)를 따른다 — 17 이면 더하기. 장교(Obs 0165·0863)는 걸을 때 몸이 빛 공으로 바뀌는데,
+                // 불투명으로 찍어 공 둘레의 검은 부분이 원판처럼 남았다(사용자 보고, Btl 0256). 딸린 층·필드 소품은 이미 이렇게 그린다.
+                bool additive = clip?.BlendAt(tick) == 17;
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade, additive);
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Action < 0);
             }
@@ -1126,7 +1129,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// </summary>
     /// <param name="fade">0~1 의 밝기 — 이스케이프처럼 인물이 사라졌다 나타날 때 쓴다(<see cref="UnitState.Fade"/>). 1 이면 그대로 그린다.</param>
     private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
-                            (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1)
+                            (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1, bool additive = false)
     {
         if (fade <= 0) return;
         int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
@@ -1149,6 +1152,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                     c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
                 }
                 if (status is { } st) c = ApplyStatusTint(c, st);
+                if (additive)
+                {
+                    // 더하기 합성 — 검정은 +0 이라 안 보인다. 흐려지는 중(fade)이면 덜 더한다.
+                    int at = dy * BoardWidth + dx;
+                    _fb[at] = AddColor(_fb[at], c, k);
+                    continue;
+                }
                 if (k < 256)
                 {
                     uint d = _fb[dy * BoardWidth + dx];

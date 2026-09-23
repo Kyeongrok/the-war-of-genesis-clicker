@@ -1104,8 +1104,10 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
             {
                 var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
-                DrawUi(pc.SpriteId, actor.Motion, (int)((_lastTime - actor.MotionStart) * TicksPerSecond),
-                       ox + px, oy + py, UiBlend.Alpha, loop: true, fade: actor.Alpha);
+                int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
+                // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
+                var actorBlend = UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
+                DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha);
             }
     }
 
