@@ -725,7 +725,10 @@ internal sealed unsafe partial class BattleSceneWindow
         RunEvents();
         if (_outcome.Length > 0) return;
         // 아직 안 나온 사람은 세지 않는다 — 안 그러면 증원이 있는 전투가 영영 안 끝난다.
-        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
+        // 다만 머리 워드 9 가 0 인 전투(엔진이 전멸을 안 봄)에서 적이 아직 들어오기 전이면 전멸이 아니다 —
+        // Btl 0137 은 보스·적 전부가 턴 2 이벤트로 들어와, 시작하자마자 「승리」가 떠 버렸다(사용자 제보).
+        bool enemiesPending = !_scene.EngineJudgesWipe && _units.Any(u => u.Alive && !u.OnField && !u.IsAlly);
+        if (!enemiesPending && !_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
         {
             ScriptedDestinationOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true);

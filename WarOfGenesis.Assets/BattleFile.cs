@@ -52,6 +52,12 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
                                 IReadOnlyList<BattleUnitRecord> Units, IReadOnlyList<BattleObjectRecord> Objects,
                                 IReadOnlyList<BattlePlacementCell> Placement, string ParseError)
 {
+    /// <summary>
+    /// 머리 워드 9(<c>CBattle+0x3c68</c>) 가 1 — 엔진이 대기 상태 4 의 <c>0x1006ed10</c> 에서 「적 전멸 = 승리 / 아군 전멸 = 패배」를 스스로 본다.
+    /// 0 이면 승패는 이벤트 스크립트(행동 11·10·6)만 정한다(분석-전투 「승리 판정 주체」).
+    /// </summary>
+    public bool EngineJudgesWipe { get; init; }
+
     public static BattleFile? Parse(int id, byte[]? b)
     {
         if (b == null || b.Length < 20) return null;
@@ -102,7 +108,10 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
             error = "레코드가 파일 끝을 넘습니다(옛 형식으로 보임)";
             units.Clear(); objects.Clear(); placement.Clear();
         }
-        return new BattleFile(id, hdr[1], (ushort)hdr[4], (ushort)hdr[5], (ushort)hdr[6], hdr[8], units, objects, placement, error);
+        return new BattleFile(id, hdr[1], (ushort)hdr[4], (ushort)hdr[5], (ushort)hdr[6], hdr[8], units, objects, placement, error)
+        {
+            EngineJudgesWipe = hdr[9] == 1,
+        };
     }
 
     /// <summary><c>Map/NNNN.map</c> 둘째 워드 = 배경 Obt 번호(<c>btl_dump.parse_map</c>).</summary>

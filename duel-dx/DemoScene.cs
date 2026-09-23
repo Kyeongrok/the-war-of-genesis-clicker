@@ -59,7 +59,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                                  ushort TitleTextId, ushort WinTextId, ushort LoseTextId,
                                  DemoUnit[] Roster, int NextBattle,
                                  IReadOnlyList<(int Col, int Row, Facing Facing)>? Placement = null,
-                                 IReadOnlyList<DemoObject>? Objects = null)
+                                 IReadOnlyList<DemoObject>? Objects = null, bool EngineJudgesWipe = true)
 {
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
@@ -112,7 +112,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 .ToList();
 
             return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId,
-                                 roster, next, placement, objects);
+                                 roster, next, placement, objects, battle.EngineJudgesWipe);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {
