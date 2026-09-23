@@ -57,19 +57,8 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        if (obj.Record.ItemId > 0)
-        {
-            _inventory[obj.Record.ItemId] = _inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
-            string itemName = _db?.Items.GetValueOrDefault(obj.Record.ItemId) is { } item ? _db.T(item.NameId) : "";
-            Toast($"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
-        }
-        else if (obj.Record.Gold > 0)
-        {
-            _shopMoney += obj.Record.Gold;
-            Toast($"{obj.Record.Gold}GP 를 획득하였습니다.");
-        }
-        else
-            Toast("비어 있습니다.");
+        if (obj.Record.ItemId > 0 || obj.Record.Gold > 0) GiveObjectSpoils(obj);
+        else Toast("비어 있습니다.");
 
         Play(MosesClickSound);
         return true;
@@ -127,7 +116,26 @@ internal sealed unsafe partial class BattleSceneWindow
         _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, CellCenterY(col, row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
+        // 부서진 상자도 든 것을 떨군다 — 원본은 상태 19 에서 `.obj +0x144` 아이템(명령 0x3f4)·`+0x146` GP(명령 0x3f5)를
+        // 그 칸에 선 인물에게 준다(0x100e7d31~). 아이템이 있으면 아이템만, 없으면 GP.
+        GiveObjectSpoils(obj);
         return true;
+    }
+
+    /// <summary>부서지거나 열린 상자가 든 것을 준다 — 아이템이 있으면 아이템, 없으면 GP(0x100e7d31, 명령 0x3f4·0x3f5).</summary>
+    private void GiveObjectSpoils(DemoObject obj)
+    {
+        if (obj.Record.ItemId > 0)
+        {
+            _inventory[obj.Record.ItemId] = _inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
+            string itemName = _db?.Items.GetValueOrDefault(obj.Record.ItemId) is { } item ? _db.T(item.NameId) : "";
+            Toast($"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
+        }
+        else if (obj.Record.Gold > 0)
+        {
+            _shopMoney += obj.Record.Gold;
+            Toast($"{obj.Record.Gold}GP 를 획득하였습니다.");
+        }
     }
 
     /// <summary>
