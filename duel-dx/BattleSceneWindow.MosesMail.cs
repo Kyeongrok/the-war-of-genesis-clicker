@@ -164,13 +164,16 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawMosesMail(int ox, int oy, int tick)
     {
         var mails = Mails();
+        // 줄 틀(Obs 1291 모션 0)은 목록 덧그림(0x10043810)이라 <b>마우스가 올라간 줄에만</b> 그린다 — 상점 목록·세이브 슬롯 강조와 같다.
+        // 예전에는 모든 줄에 그려 목록이 줄무늬 표처럼 보였다(사용자 보고).
+        int hover = _mailOpen < 0 ? MailRowAt(_mouse.X, _mouse.Y) : -1;
         for (int r = 0; r < MailRows; r++)
         {
             int index = _mailTop + r;
             if (index >= mails.Count) break;
             var mail = mails[index];
             int rx = ox + MailListX, ry = oy + MailListY + r * MailRowH;
-            DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
+            if (index == hover) DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
             bool read = _mailRead.Contains(mail.Id);
             string line = $"{SenderName(mail.Sender)} : {_db?.T(mail.OriginText)}";
             DrawText(line, rx + 24, ry + 2, read ? DimGray : 0xFFFFFF80, 11);
