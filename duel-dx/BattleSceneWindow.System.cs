@@ -12,8 +12,9 @@ namespace DuelDx;
 /// 안쪽 여백 12, 글자는 TXR 이 아니라 <c>Obs 0894</c> 그림(모션 11·3·1·0·2·4)이다. 마우스로만 고른다.
 /// RESTART·EXIT GAME 은 확인 창을 거치고, 저장에 성공하면 Snd 579 가 난다. 음량 창은 B.G.M·S.E 막대 20칸(5~100).
 /// <para>
-/// 원본 저장은 파티·인물만 담고 <b>전투 도중 상태는 담지 않아</b> 불러오면 그 전투를 처음부터 다시 연다.
-/// 이 데모에는 챕터가 없어 전투판 그대로를 <c>%APPDATA%\DuelDx\battle-save.json</c> 에 적는다(저장 칸 하나).
+/// 원본 저장도 파티뿐 아니라 <b>전투판 전체</b>(전투 장면 자기 저장 <c>vt+0x18 = 0x10061960</c>)를 담고, 불러오면 저장했던
+/// 인물의 차례 처음(상태 22)으로 돌아온다(분석-시스템메뉴 2.4b — 예전 노트의 「처음부터 다시 연다」는 틀렸다).
+/// 이 데모는 같은 것을 JSON 으로 <c>%APPDATA%\DuelDx\battle-save-NN.json</c> 에 적는다.
 /// EXIT GAME 은 바탕화면이 아니라 <b>타이틀 화면</b>으로 나간다 — 게임을 진짜 끝내는 곳은 타이틀의 EXIT 뿐이다.
 /// </para>
 /// </remarks>
@@ -307,6 +308,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (rememberParty) RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
         _battleLoaded = true;
+        _resumeTurn = -1;         // 새 판 — 불러오기는 판을 세운 뒤 다시 정한다
         _titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
         _recordsOpen = false;
         _episodesOpen = false;
@@ -545,8 +547,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
                 [.. _placesUsed.Select(p => $"{p.Chapter}:{p.Place}")],
                 // 전투 이벤트 상태 — 안 적으면 불러올 때마다 시작 대사(조건 0·1)가 다시 뜨고 타이머·국소 변수가 처음으로 돌아간다.
-                // 원본은 전투 상태를 아예 저장하지 않고 그 전투를 처음부터 다시 열지만(분석-시스템메뉴), 우리는 판 한가운데를
-                // 저장하니 사건 횟수도 같이 싣는다. 차례 도중이면 불러올 때 그 차례가 다시 시작되어 턴 수가 하나 오르니 미리 뺀다.
+                // 원본도 전투판을 통째로 저장하고 불러오면 저장했던 차례로 돌아온다(분석-시스템메뉴 2.4b) — 사건 횟수도 같이 싣는다.
+                // 차례 도중이면 불러올 때 그 차례를 이어 받으며 턴 수가 하나 오르니 미리 뺀다(타이머는 이어 받을 때 안 센다).
                 [.. _eventFired], _turn >= 0 ? _turnNo - 1 : _turnNo,
                 Enumerable.Range(0, _battleVars.Length).Where(i => _battleVars[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_battleVars[i]),
@@ -686,6 +688,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _turn = -1;
         _outcome = "";
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
+        _resumeTurn = _selected;            // 저장했던 인물의 차례로 곧장 돌아간다(UpdateTurn)
         _nextTickAt = 0;
         _playBase = state.PlayMs - _lastTime * 1000;
         // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.

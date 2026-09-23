@@ -165,6 +165,19 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
 
+        // 불러온 판은 저장했던 인물의 차례로 곧장 돌아간다 — 원본도 판을 읽은 뒤 Active 유닛(+0x4cf4)의 상태 22 로 선다
+        // (0x100619c0, 분석-시스템메뉴 2.4b). 틱을 흘려 다시 고르면 같은 틱에 TP 가 찬 앞 번호 적이 먼저 움직였다.
+        if (_resumeTurn >= 0)
+        {
+            int r = _resumeTurn;
+            _resumeTurn = -1;
+            if (r < _units.Length && _units[r] is { Alive: true, OnField: true, HasTurn: true } ru && ru.LeaderIndex < 0 && CanTakeTurn(ru))
+            {
+                StartTurn(r, resume: true);
+                return;
+            }
+        }
+
         if (_lastTime < _nextTickAt) return;
         for (int guard = 0; guard < 10000; guard++)
         {
@@ -235,15 +248,25 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>차례 시작 — 그 인물을 고른다(fg-8). 적이면 AI 를 돌린다(fg-7).</summary>
-    private void StartTurn(int index)
+    /// <summary>불러온 뒤 이어 받을 차례 — 저장할 때 차례였던 인물. 없으면 −1.</summary>
+    private int _resumeTurn = -1;
+
+    /// <param name="resume">
+    /// 불러온 판의 차례를 이어 받는 것 — 턴 수만 맞추고(저장 때 하나 빼 둔 것), 이벤트 타이머·자동 회복은 이미 그 차례에 돌았으니 다시 안 돌린다.
+    /// 원본도 판을 읽으면 차례 시작 처리 없이 상태 22 로 선다(0x100619c0).
+    /// </param>
+    private void StartTurn(int index, bool resume = false)
     {
         _turn = index;
         _selected = index;
         _turnNo++;                  // 이벤트 조건 1·3 이 보는 턴 수(0x10067d36)
-        // 켜 둔 이벤트 타이머는 턴마다 하나씩 센다(0x10067d3c 가 턴을 올린 바로 다음 줄에서 부른다).
-        for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
-        _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
-        AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
+        if (!resume)
+        {
+            // 켜 둔 이벤트 타이머는 턴마다 하나씩 센다(0x10067d3c 가 턴을 올린 바로 다음 줄에서 부른다).
+            for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
+            _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
+            AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
+        }
         _units[index].OriginCol = _units[index].Col;
         _units[index].OriginRow = _units[index].Row;
         CancelTargeting();
