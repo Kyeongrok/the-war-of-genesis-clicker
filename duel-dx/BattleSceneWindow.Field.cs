@@ -303,6 +303,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
                 if ((uint)index >= events.Count || index == 0) continue;
                 var e = events[index];
+                // 되풀이하는 곁 사건(보초 왔다 갔다 따위)은 주 사건으로 잡지 않는다 — 곁에서 돈다(StepSideEvents).
+                if (_field != null && IsRepeatingSide(e)) continue;
                 int fired = chapter != null ? _chapterFired.GetValueOrDefault((chapter.Id, index)) : _fieldFired[index];
                 if (e.MaxFire > 0 && fired >= e.MaxFire) continue;
                 if (!e.Conditions.All(FieldCondition)) continue;
@@ -312,7 +314,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 _talkSkip = false;
                 break;
             }
-            if (_fieldEvent < 0) { if (_field != null) LeaveField(); return; }   // 필드는 더 돌 이벤트가 없으면 나간다
+            if (_fieldEvent < 0)
+            {
+                // 필드는 더 돌 이벤트가 없으면 나간다 — 곁에서 도는 사건이 남아 있으면 그것이 끝나기(또는 조건이 바뀌기)를 기다린다.
+                if (_field != null && _sideEvents.Count == 0) LeaveField();
+                return;
+            }
         }
 
         while (_fieldEvent >= 0 && _talk == null && _fieldWaitUntil <= _lastTime)
@@ -343,6 +350,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>원본에서 끝날 때까지 그 줄에 머무는 움직임 — 202·203 걷기, 205·206 자리 옮기기.</summary>
     private static bool IsBlockingMove(ScriptCommand a) => a.Code is 202 or 203 or 205 or 206 && a.Args.Length > 0;
 
+    /// <summary>
+    /// 곁에서만 돌리는 사건 — 대사 없이 <b>여러 번</b>(최대 발동 0 또는 2 이상) 도는 것. 원본은 사건을 다 나란히 돌리므로
+    /// Fld 0065 사건 4(조건 「변수 20 = 0」, 999번: 보초가 70틱 걷고 돌아온다)가 이야기 사건과 함께 돈다. 우리 실행기가
+    /// 이것을 주 사건으로 잡으면 목록에서 앞에 있는 이것만 되풀이해 뒤의 이야기 사건 5·6·7 이 영영 안 돌았다(사용자 보고).
+    /// </summary>
+    private static bool IsRepeatingSide(FieldEvent e) => e.MaxFire is 0 or > 1 && !e.Actions.Any(a => MainOnly(a.Code));
+
     /// <summary>곁 사건으로 못 돌리는 행동 — 대사·고르기(사람이 봐야 한다)와 장면을 떠나는 것.</summary>
     private static bool MainOnly(int code) => code is >= 600 and <= 605 or 609 or 6 or 7 or 10 or 11 or 0;
 
@@ -354,12 +368,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void StepSideEvents(IReadOnlyList<FieldEvent> events)
     {
-        if (_fieldEvent >= 0 && events.Count > 0)
+        if (events.Count > 0)
             foreach (var wanted in events[0].Actions)
             {
                 int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
                 if ((uint)index >= events.Count || index == 0 || index == _fieldEvent || (uint)index >= _fieldFired.Length) continue;
                 var e = events[index];
+                // 주 사건이 쉬고 있을 때는 되풀이하는 사건만 곁에서 연다 — 한 번 도는 연출은 주 사건이 제 기다림(카메라·전환)을 지키며 돈다.
+                if (_fieldEvent < 0 && !IsRepeatingSide(e)) continue;
                 if (_sideEvents.Any(s => s.Event == index)) continue;
                 if (e.MaxFire > 0 && _fieldFired[index] >= e.MaxFire) continue;
                 if (e.Actions.Any(a => MainOnly(a.Code)) || !e.Conditions.All(FieldCondition)) continue;
@@ -390,10 +406,17 @@ internal sealed unsafe partial class BattleSceneWindow
                     case 3: done = true; break;
                     case 504: pc++; break;                     // 소리 끝 기다림 — 곁 사건은 안 기다린다
                     default:
+                    {
+                        // 행동이 거는 기다림(208 모션 한 바퀴 · 900 덮기 따위)은 <b>이 곁 사건</b>의 것이다 — 주 사건의 기다림을 밀면
+                        // Fld 0012 사건 11(208 되풀이)이 주 사건을 굶겨 사건 4 가 영영 안 잡혔다.
+                        var (mainWait, mainChannel) = (_fieldWaitUntil, _fieldWaitChannel);
                         RunFieldAction(a);
+                        if (_fieldWaitUntil != mainWait) waitUntil = Math.Max(waitUntil, _fieldWaitUntil);
+                        (_fieldWaitUntil, _fieldWaitChannel) = (mainWait, mainChannel);
                         pc++;
                         if (IsBlockingMove(a) && FieldActorOf(a.Args[0]) is { Walk: not null } w) walker = w;
                         break;
+                    }
                 }
                 continue;
             hold:
