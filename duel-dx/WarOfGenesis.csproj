@@ -25,6 +25,19 @@
         <ProjectReference Include="..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
     </ItemGroup>
 
+    <!-- 손으로 빌드할 때는 git 의 마지막 태그를 버전으로 싣는다(v0.10.0-2-gabc1234 → 창 제목 v0.10.0+2).
+         릴리즈는 -p:Version 으로 태그를 주므로 건드리지 않는다. git 이 없으면 개발판 그대로. -->
+    <Target Name="StampGitVersion" BeforeTargets="GetAssemblyAttributes" Condition="'$(Version)' == '0.0.0-dev'">
+        <Exec Command="git describe --tags --long --match v*" ConsoleToMSBuild="true" StandardOutputImportance="low"
+              IgnoreExitCode="true" WorkingDirectory="$(MSBuildProjectDirectory)">
+            <Output TaskParameter="ConsoleOutput" PropertyName="GitDescribe" />
+            <Output TaskParameter="ExitCode" PropertyName="GitDescribeExit" />
+        </Exec>
+        <PropertyGroup Condition="'$(GitDescribeExit)' == '0'">
+            <InformationalVersion>$(GitDescribe.TrimStart('v'))</InformationalVersion>
+        </PropertyGroup>
+    </Target>
+
     <!-- 배포용 exe 에 저장소의 assets 폴더(캐릭터·배경)를 함께 싣는다. 단일 exe 로 publish 할 때
          IncludeAllContentForSelfExtract 로 exe 안에 묶여 실행 시 풀린다(AssetsFolder 가 찾는다). -->
     <ItemGroup>
