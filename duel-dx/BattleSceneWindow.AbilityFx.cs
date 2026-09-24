@@ -60,6 +60,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 나인 크루세이더 — 앞머리는 FinisherPrelude, 칼은 BattleSceneWindow.NineCrusader.cs 가 한다.
         // 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
         [NineCrusaderWork] = ([6, 15], []),
+        [HeavenEarthWork] = ([6, 15], []),                                      // 천지 파열무 — 핸들러는 BattleSceneWindow.HeavenEarth.cs
         // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
         // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
         [390] = ([5, 7, 12], CounterBlade),
@@ -109,7 +110,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly HashSet<int> TeleportWorks = [397, 584, 583, 582, 581, 580, 579, 578, 577, 576, 575, 593, 592, 591, 590, 589, 588, 587, 586, 585];
 
     /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
-    private static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork];
+    private static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork, HeavenEarthWork];
 
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
     private const int EscapeWork = 1583;

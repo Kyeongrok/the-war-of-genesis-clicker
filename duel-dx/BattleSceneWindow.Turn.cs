@@ -588,6 +588,21 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 천지 파열무 — X 자로 땅이 터진 뒤 대상마다 폭발한다. 피해는 그 폭발 때 대상마다 한 번.
+            if (w.Id == HeavenEarthWork && targetIndex < 0)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in HeavenEarthRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                    yield return true;
+                if (!followersDone && targets.Count > 0)
+                {
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    followersDone = true;
+                }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             // 나인 크루세이더 — 칼이 날아다니며 차례로 꿰뚫는다. 피해는 대상마다 처음 꿰뚫릴 때 준다.
             if (w.Id == NineCrusaderWork && targetIndex < 0)
             {
