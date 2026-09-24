@@ -128,7 +128,18 @@ public sealed class ObsMotionTable
 
     public IReadOnlyDictionary<int, ObsMotionClip> Clips => _clips;
 
-    public static ObsMotionTable? Load(string path) => Parse(File.ReadAllBytes(path));
+    /// <summary>
+    /// Obs 파일의 모션표를 읽고, 파일 이름(<c>NNNN.obs</c>)의 번호로 <see cref="MotionEdits"/> 손질을 덧입힌다.
+    /// 편집기가 원본을 볼 때는 <paramref name="applyEdits"/> 를 끈다.
+    /// </summary>
+    public static ObsMotionTable? Load(string path, bool applyEdits = true)
+    {
+        var table = Parse(File.ReadAllBytes(path));
+        if (table == null || !applyEdits || !int.TryParse(Path.GetFileNameWithoutExtension(path), out int obs)) return table;
+        foreach (int id in table._clips.Keys.ToList())
+            if (MotionEdits.Get(obs, id) is { } edit) table._clips[id] = MotionEdits.Apply(table._clips[id], edit);
+        return table;
+    }
 
     public static ObsMotionTable? Parse(byte[] b)
     {

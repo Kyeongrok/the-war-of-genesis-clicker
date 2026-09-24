@@ -90,14 +90,25 @@
                     DockPanel.Dock="Bottom"
                     Foreground="DimGray" />
 
-                <TextBox
+                <StackPanel
+                    Margin="0,4,0,0"
+                    DockPanel.Dock="Bottom"
+                    Orientation="Horizontal">
+                    <Button Padding="8,2" Click="DeleteKey_Click" Content="장 지우기" ToolTip="고른 그림 키를 뺀다 — 그 안의 소리·타격은 다음 키로" />
+                    <Button Margin="6,0,0,0" Padding="8,2" Click="Shorter_Click" Content="−1틱" ToolTip="고른 키를 1틱 짧게" />
+                    <Button Margin="4,0,0,0" Padding="8,2" Click="Longer_Click" Content="+1틱" ToolTip="고른 키를 1틱 길게" />
+                    <Button Margin="12,0,0,0" Padding="8,2" Click="Faster_Click" Content="빠르게 ×0.8" ToolTip="모든 키 길이를 0.8배(최소 1틱)" />
+                    <Button Margin="4,0,0,0" Padding="8,2" Click="Slower_Click" Content="느리게 ×1.25" ToolTip="모든 키 길이를 1.25배" />
+                    <Button Margin="12,0,0,0" Padding="8,2" Click="Reset_Click" Content="초기화" ToolTip="이 모션을 원본 틱으로 되돌린다" />
+                    <TextBlock x:Name="EditState" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="DimGray" />
+                </StackPanel>
+
+                <ListBox
                     x:Name="KeyList"
                     Height="170"
                     Margin="0,6,0,0"
                     DockPanel.Dock="Bottom"
-                    FontFamily="Consolas"
-                    IsReadOnly="True"
-                    VerticalScrollBarVisibility="Auto" />
+                    FontFamily="Consolas" />
 
                 <Border
                     Background="#FF303030"

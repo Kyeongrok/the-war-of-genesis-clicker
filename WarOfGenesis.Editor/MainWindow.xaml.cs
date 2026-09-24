@@ -156,7 +156,8 @@ public partial class MainWindow : Window
             return;
         }
         var subentries = _currentSpriteMotions.Count > 0 ? _currentSpriteMotions : ObsSprite.Decode(path);
-        new MotionMappingWindow($"{_currentName} (Chr {record.ChrCode:D4}, sprite {record.SpriteCode})", table, subentries) { Owner = this }.Show();
+        new MotionMappingWindow($"{_currentName} (Chr {record.ChrCode:D4}, sprite {record.SpriteCode})", table, subentries,
+                                record.SpriteCode, ObsMotionTable.Load(path, applyEdits: false)) { Owner = this }.Show();
     }
 
     // ── 캐릭터 스탯 창 ───────────────────────────────────────────────────────
