@@ -429,7 +429,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
                                     SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null,
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
-                                    Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0);
+                                    Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0,
+                                    int[]? EpisodesPicked = null);
 
     private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
@@ -503,6 +504,12 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (number, value) in state.ChapterVars ?? [])
             if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
         _planetVisits.Clear();
+        _episodesPicked.Clear();
+        if (state.EpisodesPicked is { } picked) foreach (int no in picked) _episodesPicked.Add(no);
+        else
+            // 표시를 안 적던 옛 세이브 — 챕터 사건이 한 번이라도 돈 에피소드와 지금 챕터의 에피소드를 고른 것으로 본다.
+            foreach (var ep in Episodes())
+                if (_chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) _episodesPicked.Add(ep.No);
         foreach (string pair in state.PlanetVisits ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) _planetVisits.Add((pc, pn));
         _placesUsed.Clear();
@@ -636,7 +643,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]),
                 // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
                 // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
-                _mosesChp?.Id ?? 0);
+                _mosesChp?.Id ?? 0,
+                [.. _episodesPicked]);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));

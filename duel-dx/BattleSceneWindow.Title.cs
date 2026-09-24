@@ -81,6 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _planetVisits.Clear();
                 Array.Clear(_flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
                 _chapterDone = false;
+                _episodesPicked.Clear();              // 고른 에피소드 표시도 NEW GAME 만 지운다(0x1004d870)
                 _partyNo = 0;
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
