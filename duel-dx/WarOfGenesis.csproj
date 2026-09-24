@@ -10,7 +10,9 @@
         <UseWindowsForms>true</UseWindowsForms>
         <!-- 창·실행 파일 아이콘 — 원본 게임 아이콘(menu-5) -->
         <ApplicationIcon>..\assets\icons\game.ico</ApplicationIcon>
-        <AssemblyName>DuelDx</AssemblyName>
+        <AssemblyName>WarOfGenesis</AssemblyName>
+        <!-- 창 제목에 찍는 버전 — 릴리즈는 태그로 덮어쓴다(-p:Version). 손으로 빌드하면 개발판. -->
+        <Version>0.0.0-dev</Version>
         <RootNamespace>DuelDx</RootNamespace>
     </PropertyGroup>
 

@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WarOfGenesis.Editor", "WarO
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "duel-dx", "duel-dx", "{BBE98B53-1E83-3422-817B-99A88A610CC8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuelDx", "duel-dx\DuelDx.csproj", "{6076D895-2E7D-4FA9-8AB9-B5047CAFBBCE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WarOfGenesis", "duel-dx\WarOfGenesis.csproj", "{6076D895-2E7D-4FA9-8AB9-B5047CAFBBCE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
