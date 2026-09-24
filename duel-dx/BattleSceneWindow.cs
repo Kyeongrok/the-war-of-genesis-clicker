@@ -862,7 +862,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>DUELDX_POSE=&lt;Chr&gt;:&lt;동작&gt;:&lt;L|R|U|D&gt; 면 그 인물이 그 동작을 그 방향으로 되풀이한다(화면 밖 그림 시험용 — 무기 층·이펙트 자리를 본다).</summary>
     private static readonly string? PoseHook = Environment.GetEnvironmentVariable("DUELDX_POSE");
 
-    /// <summary>DUELDX_WORK=&lt;work 번호&gt; 면 첫 아군이 그 기술을 한 번 쓴다(화면 밖 이펙트 시험용 — 모션·이펙트 자리를 본다).</summary>
+    /// <summary>DUELDX_WORK=&lt;work 번호&gt;[:near] 면 첫 아군이 그 기술을 한 번 쓴다(화면 밖 이펙트 시험용 — 모션·이펙트 자리를 본다). near 면 적 셋을 곁으로 옮긴다.</summary>
     private static readonly string? WorkHook = Environment.GetEnvironmentVariable("DUELDX_WORK");
 
     private bool _workHookDone;
@@ -878,12 +878,28 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
-        if (!int.TryParse(WorkHook, out int id) || Work(id) is not { } w) return;
+        var parts = WorkHook.Split(':');
+        if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
         int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly);
         if (caster < 0) return;
         _workHookDone = true;
-        int target = Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
         var a = _units[caster];
+        // 「<work>:near」 면 적 셋을 시전자 곁 칸으로 옮겨 둔다 — 자기 중심 범위기(나인 크루세이더)를 시험할 때 대상이 있게.
+        if (parts.Length > 1 && parts[1] == "near")
+        {
+            (int C, int R)[] spots = [(a.Col + 2, a.Row), (a.Col, a.Row + 2), (a.Col + 1, a.Row - 2)];
+            int k = 0;
+            foreach (var enemy in _units.Where(u => u.Alive && u.OnField && !u.IsAlly))
+            {
+                if (k >= spots.Length) break;
+                var (c, r) = spots[k++];
+                if (c < 0 || r < 0 || c >= Cols || r >= Rows) continue;
+                enemy.WarpTo(c, r);
+            }
+        }
+        int target = Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
+        // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
+        if (w.SelfCentred) { _routine = UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
         _routine = UseWorkRoutine(caster, w, target,
                                   target >= 0 ? _units[target].Col : a.Col,
                                   target >= 0 ? _units[target].Row : a.Row, []);

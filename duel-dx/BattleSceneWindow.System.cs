@@ -351,6 +351,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _flyingEffects.Clear();
+        _swords.Clear();
         _ripples.Clear();
         _nextTickAt = 0;
         CancelTargeting();
@@ -704,6 +705,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _flyingEffects.Clear();
+        _swords.Clear();
         _ripples.Clear();
         _heldMoveKeys.Clear();
 

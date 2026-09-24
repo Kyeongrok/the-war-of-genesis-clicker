@@ -579,6 +579,28 @@ internal sealed unsafe partial class BattleSceneWindow
                 SpawnAbilityEffects(w, a, col, row);
                 effectsDone = true;
             }
+            // 나인 크루세이더 — 칼이 날아다니며 차례로 꿰뚫는다. 피해는 대상마다 처음 꿰뚫릴 때 준다.
+            if (w.Id == NineCrusaderWork && targetIndex < 0)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var flight = StartNineCrusader(a, targets);
+                var struck = new HashSet<int>();
+                while (!flight.Done)
+                {
+                    StepSword(flight);
+                    while (flight.Pierced.TryDequeue(out int ti))
+                        if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying);
+                    yield return true;
+                }
+                foreach (int ti in targets.Where(struck.Add)) ApplyWork(a, hitWork, _units[ti], dying);   // 칼이 못 닿은 대상(없어야 한다)
+                if (!followersDone && targets.Count > 0)
+                {
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    followersDone = true;
+                }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             for (int hit = 0; hit < hitTimes.Count; hit++)
             {
                 if (hit > 0)
