@@ -904,6 +904,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     UpdateCharacter(A(0), c => GrowToPartyLevel(db805.Character(A(0)) ?? c, A(1), PartyLevel()) with
                     {
                         Items = c.Items, Passives = c.Passives, Abilities = c.Abilities,
+                        // 원본 0x10031a50 은 레벨·누적 EXP·능력치만 쓴다 — 직업(세부 체질)·체질·남은 EXP 는 그대로 둔다.
+                        // 전에는 .chr 새 자료로 덮어 전직한 형이 일반형으로 돌아갔다(사용자 보고 「불러오면 맨날 일반형」).
+                        JobId = c.JobId, Body = c.Body, Exp = c.Exp,
                     });
                 break;
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
