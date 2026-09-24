@@ -103,14 +103,18 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         DrawFlyingEffects();
         DrawSwords();                                       // 나인 크루세이더의 나는 칼
+        DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
         // 지우는 것은 모션이 <b>다 끝났을 때</b>다 — 첫 컷이 몇 틱 뒤에 시작하는 이펙트(크래쉬 봄의 폭탄, 메테오 착탄 170:1)는
         // 첫 틀에 그릴 컷이 없어 예전에는 뜨기도 전에 지워졌다. 그림이 아예 없는 Obs(소리 껍데기)는 바로 지운다.
         _effects.RemoveAll(e =>
         {
             if (_lastTime < e.Start) return false;             // 아직 기다리는 이펙트(지연)
             int tick = (int)((_lastTime - e.Start) * TicksPerSecond);
+            // 자식 키만으로 된 모션(필살기 금빛 띠 344:18·19 — 제 컷 없이 자식 여섯)도 있다 — 원본 애니메이터처럼 자식을 함께 그린다(0x100e5410).
+            var clip = UiFor(e.Obs)?.Clip(e.Motion);
+            if (clip is { Children.Count: > 0 }) DrawUnitLayers(clip, tick, e.X, e.Y, mirror: false, loop: false);
             if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, UiBlend.Add, loop: false)) return false;
-            return UiFor(e.Obs) is not { } sprite || tick >= sprite.MotionLength(e.Motion);
+            return UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
         });
     }
 
