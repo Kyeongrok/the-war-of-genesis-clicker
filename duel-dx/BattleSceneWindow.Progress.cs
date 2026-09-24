@@ -54,11 +54,37 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 줄 목록을 만든 뒤 굴린 만큼 잘라 그린다.
         var rows = new List<Action<int>>();
-        rows.Add(y => DrawText("장소", x0 + 12, y, 0xFF9FC0FF, 12));
-        foreach (var place in chp.Places)
+        rows.Add(y => DrawText("장소 (행성별)", x0 + 12, y, 0xFF9FC0FF, 12));
+        // 행성마다 머리 줄(항성계 › 행성, 행성·항성계 조건) 뒤에 그 행성의 장소를 늘어놓는다 — 행성이 잠기면 그 장소도 항행에 안 나온다.
+        var grouped = chp.Planets.Select(pl => (Planet: pl, Places: chp.Places.Where(pp => pl.Places.Contains(pp.No)).ToList()))
+                                 .Where(g => g.Places.Count > 0).ToList();
+        var loose = chp.Places.Where(pp => !chp.Planets.Any(pl => pl.Places.Contains(pp.No))).ToList();
+        foreach (var (planet, places) in grouped)
+        {
+            var pl = planet;
+            var system = chp.Systems.FirstOrDefault(sy => sy.Planets.Contains(pl.No));
+            rows.Add(y =>
+            {
+                bool open = FlagsAllow(pl.Conditions) && (system is null || FlagsAllow(system.Conditions));
+                var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < _flags.Length)
+                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {_flags[c.Variable]})").ToList();
+                string where = $"{(system is null ? "" : _db?.T((ushort)system.NameText) + " › ")}{_db?.T((ushort)pl.NameText)}";
+                DrawText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
+                if (!open || conds.Count > 0)
+                    DrawText((open ? "" : "행성 잠김 · ") + string.Join(", ", conds), x0 + 330, y, open ? 0xFF9098B0 : 0xFFE07070, 12);
+            });
+            foreach (var place in places) rows.Add(PlaceRow(place));
+        }
+        if (loose.Count > 0)
+        {
+            rows.Add(y => DrawText("■ 행성 밖(자동 발생 따위)", x0 + 16, y, 0xFFB0C8E0, 12));
+            foreach (var place in loose) rows.Add(PlaceRow(place));
+        }
+
+        Action<int> PlaceRow(ChapterFile.Place place)
         {
             var p = place;
-            rows.Add(y =>
+            return y =>
             {
                 bool used = _placesUsed.Contains((chp.Id, p.No)) || _autoPlacesDone.Contains((chp.Id, p.No));
                 bool open = PlaceOpen(p);
@@ -68,17 +94,16 @@ internal sealed unsafe partial class BattleSceneWindow
                     ChapterFile.PlaceKind.Field => $"필드 {p.Value - 10000:D4}",
                     _ => $"전투 {p.Value:D4}",
                 };
-                string state = used ? "다녀옴" : open ? "열림" : "잠김";
-                uint color = used ? 0xFF8088A0 : open ? 0xFF70E070 : 0xFFE07070;
+                var (state, color) = (used ? "다녀옴" : open ? "열림" : "잠김", used ? 0xFF8088A0u : open ? 0xFF70E070u : 0xFFE07070u);
                 var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < _flags.Length)
                     .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {_flags[c.Variable]})").ToList();
                 string name = _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {p.No}";
-                DrawText($"{p.No,3}", x0 + 16, y, 0xFF9098B0, 12);
-                DrawText(name, x0 + 48, y, White, 12);
-                DrawText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 210, y, 0xFFB0B8C8, 12);
-                DrawText(state, x0 + 320, y, color, 12);
-                DrawText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 380, y, color, 12);
-            });
+                DrawText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
+                DrawText(name, x0 + 56, y, White, 12);
+                DrawText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 200, y, 0xFFB0B8C8, 12);
+                DrawText(state, x0 + 300, y, color, 12);
+                DrawText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 350, y, color, 12);
+            };
         }
         rows.Add(_ => { });
         rows.Add(y => DrawText("깃발 (이 챕터가 보거나 바꾸는 것)", x0 + 12, y, 0xFF9FC0FF, 12));
