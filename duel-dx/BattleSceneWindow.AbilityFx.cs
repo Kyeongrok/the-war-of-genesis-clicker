@@ -57,6 +57,10 @@ internal sealed unsafe partial class BattleSceneWindow
         [467] = ([6, 15], [new(386, 0, true, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
         [469] = ([6, 15], Meteor),  // 메테오 Lv1 — Lv2~20 은 아래 표 끝에서 같은 효과로 채운다
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
+        // 나인 크루세이더 — 공통 앞머리(시전 소리 1338:1 · 487:0/1/2 · 343:0 30틱 뒤 · 금빛 날개 344:18/19)만 두고,
+        // 칼은 BattleSceneWindow.NineCrusader.cs 가 날린다. 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
+        [NineCrusaderWork] = ([6, 15], [new(1338, 1, false, 0), new(487, 0, false, 0), new(487, 1, false, 0), new(487, 2, false, 0),
+                                        new(343, 0, false, 0, 30), new(344, 18, false, 0), new(344, 19, false, 0)]),
         // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
         // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
         [390] = ([5, 7, 12], CounterBlade),
@@ -102,6 +106,9 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
 
+    /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
+    private static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork];
+
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
     private const int EscapeWork = 1583;
 
@@ -124,7 +131,7 @@ internal sealed unsafe partial class BattleSceneWindow
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
         if (!hasHand) return hasMade ? made : null;
-        if (!hasMade) return hand;
+        if (!hasMade || HandOnlyWorks.Contains(work)) return hand;
         return (hand.Actions, [.. hand.Effects, .. made.Effects.Where(e => !hand.Effects.Any(h => h.Obs == e.Obs && h.Motion == e.Motion))]);
     }
 
