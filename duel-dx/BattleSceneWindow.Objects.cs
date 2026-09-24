@@ -1,4 +1,5 @@
-﻿namespace DuelDx;
+﻿using WarOfGenesis.Assets;
+namespace DuelDx;
 
 /// <summary>
 /// 전투판에 놓인 물체 — 상자·문·포탑·바리케이트(분석-전투 「물체(오브젝트) 배열 <c>+0x3c74</c>」).
@@ -243,6 +244,8 @@ internal sealed unsafe partial class BattleSceneWindow
             ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
             : Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 1;
 
+        if (work is { Id: 1525 or 1526 } area) { ObjectBarrage(obj, area, ally); return; }
+
         // 힐 크리스탈(종류 10)의 work 은 회복이다 — 제 편을 고쳐 준다. 나머지는 상대를 친다.
         bool heals = work is { IsHeal: true };
         var target = _units.Where(u => u.Alive && u.PlayerControlled == (heals ? ally : !ally) && Reaches(u))
@@ -264,6 +267,38 @@ internal sealed unsafe partial class BattleSceneWindow
         if (damage <= 0) return;
         target.Hp = Math.Max(0, target.Hp - damage);
         ShowNumber(target, damage.ToString(), DamageColor);
+    }
+
+    /// <summary>
+    /// 기총포탑(Obj 54, work 1525)·산성 웅덩이(1526) — 한 칸이 아니라 <b>범위</b>를 쏜다(핸들러 <c>0x100e9400</c>).
+    /// 제 칸과 위아래·좌우 네 칸 가운데 반지름 3(맨해튼) 안의 상대가 가장 많은 칸을 고르고(<c>0x1005dd60</c>), 없으면 안 쏜다.
+    /// 그 안의 상대를 <b>하나마다 네 번</b> <c>(1000 − RDP) × 공격력 / 1000</c> 씩 친다. 불꽃 Obs 0330(모션 0~2)을 120틱 동안 흩뿌리고
+    /// 사격 소리 423 을 낸다. 모션 14→15→16 과 전투를 멈추고 기다리는 것은 아직 없다(가설 — 1526 의 그림·타수는 확인 못 함).
+    /// Btl 0298 해적선의 초록 불빛 원판이 이것이다(사용자 보고 「작동을 안 한다」).
+    /// </summary>
+    private void ObjectBarrage(DemoObject obj, WorkData work, bool ally)
+    {
+        if (_db is null) return;
+        bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && u.PlayerControlled != ally;
+        (int Col, int Row)[] candidates = [(obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row)];
+        var best = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) <= 3).ToList()))
+                             .OrderByDescending(x => x.Hits.Count).First();
+        if (best.Hits.Count == 0) return;
+        Play(423);
+        for (int k = 0; k < 24; k++)
+        {
+            int dc = _rng.Next(-3, 4), dr = _rng.Next(-3 + Math.Abs(dc), 4 - Math.Abs(dc));
+            int col = best.Cell.Col + dc, row = best.Cell.Row + dr;
+            _effects.Add((330, _rng.Next(3), _lastTime + _rng.Next(0, 120) / TicksPerSecond, col * TileW + TileW / 2, CellCenterY(col, row)));
+        }
+        foreach (var u in best.Hits)
+        {
+            int one = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+            if (one <= 0) continue;
+            int total = Math.Min(u.Hp, one * 4);
+            u.Hp -= total;
+            ShowNumber(u, total.ToString(), DamageColor);
+        }
     }
 
     /// <summary>이미 연 상자 — 판에서 사라진다.</summary>
