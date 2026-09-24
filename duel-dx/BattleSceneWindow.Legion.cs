@@ -227,8 +227,25 @@ internal sealed unsafe partial class BattleSceneWindow
     private void TryAdvanceFollower(UnitState follower)
     {
         if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) return;
-        if (ComputeRange(follower) is not { } range || !range.CanReach(target.Row * Cols + target.Col)) return;
-        foreach (var step in range.PathTo(target.Row * Cols + target.Col)) follower.Path.Enqueue(step);
+        if (ComputeRange(follower) is not { } range) return;
+        int goal = target.Row * Cols + target.Col;
+        if (!range.CanReach(goal))
+        {
+            // 한 번에 못 닿으면 닿을 수 있는 칸 가운데 목표에 가장 가까운 빈 칸까지라도 간다 — 전에는 아예 안 움직여,
+            // 이동력이 작은 부하(Btl 0142 글로리가드 chr 274)가 대장이 떠난 첫 자리에 영영 서 있었다(사용자 보고).
+            int best = -1, bestDist = Math.Abs(follower.Col - target.Col) + Math.Abs(follower.Row - target.Row);
+            for (int i = 0; i < range.Cost.Length; i++)
+            {
+                if (!range.CanReach(i)) continue;
+                int c = i % Cols, r = i / Cols;
+                if (!CanStand(c, r, follower)) continue;
+                int dist = Math.Abs(c - target.Col) + Math.Abs(r - target.Row);
+                if (dist < bestDist) (best, bestDist) = (i, dist);
+            }
+            if (best < 0) return;
+            goal = best;
+        }
+        foreach (var step in range.PathTo(goal)) follower.Path.Enqueue(step);
         PlayWalkSound(follower);
     }
 
@@ -252,6 +269,9 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var leader = _units[i];
             if (!leader.Alive || leader.LeaderIndex >= 0 || leader.LegionId == 0 || leader.IsBusy) continue;
+            // 아직 전장 밖(증원 전)인 대장의 부하는 전장 밖 (0,0) 에 그대로 둔다 — 진형을 짜면 (0,0) 둘레 칸으로 걸어 나와
+            // 맵 귀퉁이에 서 있었다(Btl 0142 끝 장면의 글로리가드 셋).
+            if (!leader.OnField) continue;
             if (FollowersOf(i).Any(f => f.IsBusy)) continue;   // 아직 걷는 중이면 새 목표를 주지 않는다
             // 대장이 같은 칸에 그대로 서 있으면 진형을 다시 셈하지 않는다 — 칸을 넓게 훑어 값이 비싸다.
             if (_formationAt.TryGetValue(i, out var last) && last == (leader.Col, leader.Row)) continue;
@@ -264,7 +284,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 그 부하는 대장이 다시 움직일 때까지(=영영) 원래 자리에 남아 플레이어가 닿을 수 없는 낙오자가 된다.
         foreach (var follower in _units)
         {
-            if (!follower.Alive || follower.IsBusy || follower.LeaderIndex < 0) continue;
+            if (!follower.Alive || follower.IsBusy || follower.LeaderIndex < 0 || !follower.OnField) continue;
             if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) continue;
             if (_nextFollowerRetry.TryGetValue(follower, out var next) && _lastTime < next) continue;
             _nextFollowerRetry[follower] = _lastTime + 0.5;
