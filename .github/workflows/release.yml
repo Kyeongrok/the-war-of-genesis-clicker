@@ -56,6 +56,46 @@ jobs:
           Compress-Archive -Path publish/WarOfGenesis.exe, publish/WarOfGenesis.Editor.exe -DestinationPath "dist/WarOfGenesis-v$v.zip" -Force
           Get-ChildItem publish, dist | Select-Object Name, Length | Format-Table -AutoSize
 
+      # 설치판 — 대항해시대(cds-remake)처럼 Velopack 으로 Setup.exe 와 자동 업데이트 꾸러미를 만든다.
+      # 게임과 에디터를 한 폴더(pack)에 나란히 publish 한다. 단일 파일이 아니라 폴더라 assets 도 폴더째 들어가고,
+      # 델타 업데이트가 바뀐 파일만 받게 된다. 태그로 돌 때만 만든다(손으로 돌리면 올릴 릴리즈가 없다).
+      - name: Publish for installer
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          foreach ($proj in 'duel-dx/WarOfGenesis.csproj', 'WarOfGenesis.Editor/WarOfGenesis.Editor.csproj') {
+            dotnet publish $proj -c Release -r win-x64 --self-contained true -o pack `
+              -p:DebugType=none `
+              -p:Version=$v -p:AssemblyVersion=$v -p:FileVersion=$v -p:InformationalVersion=$v
+            if ($LASTEXITCODE -ne 0) { throw "$proj publish(설치판) 실패" }
+          }
+
+      - name: Install vpk
+        if: startsWith(github.ref, 'refs/tags/v')
+        # CLI 와 라이브러리(Velopack 0.0.1298, WarOfGenesis.csproj) 버전을 맞춘다.
+        run: dotnet tool install -g vpk --version 0.0.1298
+
+      - name: Download previous release for delta updates
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} --outputDir releases
+        continue-on-error: true
+
+      - name: Pack with Velopack
+        if: startsWith(github.ref, 'refs/tags/v')
+        # --mainExe: 설치가 끝나면 띄우고 바로가기를 거는 exe — 게임. 그 exe 는 Main 맨 앞에서 VelopackApp.Build().Run() 을 부른다(Program.cs).
+        #   빠지면 Setup.exe 를 안 만들고 nupkg/RELEASES 만 만든다.
+        # --noPortable: 설치 없이 도는 판은 단일 파일 exe 가 따로 있어 Portable.zip 은 안 만든다(1GB 넘는 파일을 하나 줄인다).
+        run: vpk pack --packId WarOfGenesis --packTitle "창세기전3 파트2" --packAuthors "Kyeongrok" --packVersion ${{ steps.version.outputs.version }} --packDir pack --mainExe WarOfGenesis.exe --outputDir releases --icon assets/icons/game.ico --noPortable
+
+      - name: List releases folder
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          Get-ChildItem releases | Select-Object Name, Length | Format-Table -AutoSize
+          if (-not (Get-ChildItem releases -Filter "*Setup.exe")) { throw "Setup.exe 가 없습니다" }
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -64,6 +104,13 @@ jobs:
             publish/*.exe
             dist/*.zip
 
+      # 설치판 꾸러미(Setup.exe · nupkg · releases.win.json)를 먼저 올린다 — 이것이 릴리즈를 세운다.
+      # --publish: draft 가 아니라 정식 릴리즈로. --merge: 이미 선 릴리즈가 있으면 거기에 합친다.
+      - name: Upload installer to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: vpk upload github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} --tag ${{ github.ref_name }} --releaseName "${{ github.ref_name }}" --outputDir releases --publish --merge
+
+      # 단일 파일 exe 둘과 zip 은 Velopack 이 모르는 덤이라 따로 붙인다.
       - name: Upload to GitHub Releases
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
