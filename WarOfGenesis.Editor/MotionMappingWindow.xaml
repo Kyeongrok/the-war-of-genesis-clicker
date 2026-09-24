@@ -108,7 +108,8 @@
                     Height="170"
                     Margin="0,6,0,0"
                     DockPanel.Dock="Bottom"
-                    FontFamily="Consolas" />
+                    FontFamily="Consolas"
+                    SelectionChanged="KeyList_SelectionChanged" />
 
                 <Border
                     Background="#FF303030"
