@@ -414,7 +414,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                  .OrderBy(t => Math.Abs(t.Col - caster.Col) + Math.Abs(t.Row - caster.Row))
                                  .FirstOrDefault();
                 if (mark is null) break;
-                _routine = UseWorkRoutine(casterIndex, boss, Array.IndexOf(_units, mark), mark.Col, mark.Row, []);
+                _routine = AfterRunning(_routine, UseWorkRoutine(casterIndex, boss, Array.IndexOf(_units, mark), mark.Col, mark.Row, []));
                 _eventWaitUntil = _lastTime + 1.2;
                 break;
             }
@@ -433,7 +433,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {                                            // work 1582(어빌리티 160 「폭주」, 모션 48)를 쓰게 하고 화면을 물들인다.
                 var caster = _units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
                 if (caster is null || Work(1582) is not { } burst) break;
-                _routine = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []);
+                _routine = AfterRunning(_routine, UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []));
                 _eventWaitUntil = _lastTime + 1.2;
                 break;
             }
@@ -476,5 +476,17 @@ internal sealed unsafe partial class BattleSceneWindow
                     _flags[A(0)] = FieldArith(_flags[A(0)], A(1), A(2));
                 break;
         }
+    }
+
+    /// <summary>
+    /// 사건이 거는 기술(207 보스 필살기 · 909 폭주)은 <b>돌던 루틴을 끝까지 돌린 뒤</b> 잇는다. 사건 조건은 루틴 도중에도 보므로
+    /// (301 「가 나를 때렸다」는 적의 공격 루틴 한가운데서 참이 된다) 전에는 <c>_routine</c> 을 덮어써 적의 AI 루틴이 버려졌고,
+    /// 그 끝의 <c>Rest</c> 가 안 불려 차례가 영영 안 넘어갔다(Btl 0143 사건 6 — 디에네의 나인 크루세이더, 사용자 보고).
+    /// </summary>
+    private static IEnumerator<bool> AfterRunning(IEnumerator<bool>? running, IEnumerator<bool> next)
+    {
+        if (running != null)
+            while (running.MoveNext()) yield return true;
+        while (next.MoveNext()) yield return true;
     }
 }
