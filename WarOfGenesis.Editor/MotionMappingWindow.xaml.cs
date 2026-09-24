@@ -29,6 +29,12 @@ public partial class MotionMappingWindow : Window
     private static readonly string[] DirectionNames = ["뒷모습", "옆모습", "앞모습"];
 
     private readonly ObsMotionTable _table;
+
+    /// <summary>손질을 안 입힌 원본 모션표 — 손질은 늘 이것에서 다시 만든다.</summary>
+    private readonly ObsMotionTable _original;
+
+    /// <summary>이 몸짓 파일 번호 — 손질을 이 번호로 적는다(<see cref="MotionEdits"/>).</summary>
+    private readonly int _obs;
     private readonly Dictionary<(int Sub, int Slot), BitmapSource> _frames = [];
     private readonly Dictionary<(int Sub, int Slot), BitmapSource> _mirrored = [];
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(15) };
@@ -41,10 +47,12 @@ public partial class MotionMappingWindow : Window
         public override string ToString() => label;
     }
 
-    public MotionMappingWindow(string title, ObsMotionTable table, IReadOnlyList<ObsMotion> subentries)
+    public MotionMappingWindow(string title, ObsMotionTable table, IReadOnlyList<ObsMotion> subentries, int obs = 0, ObsMotionTable? original = null)
     {
         InitializeComponent();
         _table = table;
+        _obs = obs;
+        _original = original ?? table;
         Title = $"모션 매핑 — {title}";
 
         foreach (var sub in subentries)
@@ -59,7 +67,7 @@ public partial class MotionMappingWindow : Window
 
         int withKeys = table.Clips.Values.Count(c => c.Keys.Count > 0);
         HeaderText.Text = $"{title}   모션 {table.Clips.Count}개(그림 있는 것 {withKeys}개), 몸짓벌 {subentries.Count}개 — " +
-                          "모션 번호 = 동작 × 3 + 방향. 동작 이름에 ? 가 붙은 것은 추정.";
+                          "모션 번호 = 동작 × 3 + 방향. 동작 이름에 ? 가 붙은 것은 추정. 틱 손질은 게임에도 들어간다(assets/data/motion_edits.json).";
 
         DirectionFilter.Items.Add("전체");
         foreach (var d in DirectionNames) DirectionFilter.Items.Add(d);
@@ -80,23 +88,109 @@ public partial class MotionMappingWindow : Window
             if (clip.Keys.Count == 0 && EmptyToggle.IsChecked != true) continue;
             int action = clip.Id / 3;
             string name = ActionNames.GetValueOrDefault(action, "");
-            MotionList.Items.Add(new ClipItem(clip,
-                $"모션 {clip.Id,3} = 동작 {action,2} {name} · {DirectionNames[clip.Id % 3]} · {clip.Length}틱 · 그림 {clip.Keys.Count}"));
+            MotionList.Items.Add(new ClipItem(clip, ClipLabel(clip)));
         }
         if (MotionList.Items.Count > 0) MotionList.SelectedIndex = 0;
+    }
+
+    private string ClipLabel(ObsMotionClip clip)
+    {
+        int action = clip.Id / 3;
+        string name = ActionNames.GetValueOrDefault(action, "");
+        string edited = MotionEdits.Get(_obs, clip.Id) != null ? " · 손질됨" : "";
+        return $"모션 {clip.Id,3} = 동작 {action,2} {name} · {DirectionNames[clip.Id % 3]} · {clip.Length}틱 · 그림 {clip.Keys.Count}{edited}";
     }
 
     private void MotionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _current = (MotionList.SelectedItem as ClipItem)?.Clip;
-        if (_current == null) { FrameImage.Source = null; KeyList.Text = ""; return; }
-
-        KeyList.Text = string.Join(Environment.NewLine, _current.Keys.Select((k, i) =>
-            $"{i,3}: 틱 {k.Start,4} ~ {k.Start + k.Length - 1,4} ({k.Length,2}틱)  몸짓벌 {k.SubentryId}  장 {k.Slot,3}" +
-            (_frames.ContainsKey((k.SubentryId, k.Slot)) ? "" : "  (그림 없음)")));
+        if (_current == null) { FrameImage.Source = null; KeyList.Items.Clear(); return; }
+        FillKeyList(0);
         _clock.Restart();
         if (PlayToggle.IsChecked == true) _timer.Start();
         ShowTick();
+    }
+
+    private void FillKeyList(int select)
+    {
+        KeyList.Items.Clear();
+        if (_current == null) return;
+        foreach (var (k, i) in _current.Keys.Select((k, i) => (k, i)))
+            KeyList.Items.Add($"{i,3}: 틱 {k.Start,4} ~ {k.Start + k.Length - 1,4} ({k.Length,2}틱)  몸짓벌 {k.SubentryId}  장 {k.Slot,3}" +
+                              (_frames.ContainsKey((k.SubentryId, k.Slot)) ? "" : "  (그림 없음)"));
+        if (KeyList.Items.Count > 0) KeyList.SelectedIndex = Math.Clamp(select, 0, KeyList.Items.Count - 1);
+        EditState.Text = _obs <= 0 ? "(파일 번호를 몰라 저장 안 됨)"
+                       : MotionEdits.Get(_obs, _current.Id) != null ? "손질됨 — 게임에 들어감" : "원본";
+    }
+
+    // ── 틱 손질 ──────────────────────────────────────────────────────────────
+
+    /// <summary>지금 모션의 손질(없으면 원본 그대로인 꼴) — 남길 원본 키 번호와 길이.</summary>
+    private (List<int> Keep, List<int> Lengths)? CurrentEdit()
+    {
+        if (_current == null || !_original.Clips.TryGetValue(_current.Id, out var orig)) return null;
+        if (MotionEdits.Get(_obs, _current.Id) is { } e) return ([.. e.Keep], [.. e.Lengths]);
+        var keys = orig.Keys.OrderBy(k => k.Start).ToList();
+        return ([.. Enumerable.Range(0, keys.Count)], [.. keys.Select(k => Math.Max(1, k.Length))]);
+    }
+
+    /// <summary>손질을 적고 그 모션을 다시 만들어 보인다. 원본과 같으면 손질을 지운다.</summary>
+    private void Commit(List<int> keep, List<int> lengths, int select)
+    {
+        if (_current == null || _obs <= 0 || !_original.Clips.TryGetValue(_current.Id, out var orig)) return;
+        var keys = orig.Keys.OrderBy(k => k.Start).ToList();
+        bool same = keep.Count == keys.Count && keep.Select((k, i) => k == i && lengths[i] == Math.Max(1, keys[i].Length)).All(x => x);
+        var edit = same || keep.Count == 0 ? null : new MotionEdits.Edit([.. keep], [.. lengths]);
+        MotionEdits.Set(_obs, _current.Id, edit);
+        _current = edit == null ? orig : MotionEdits.Apply(orig, edit);
+        if (MotionList.SelectedItem is ClipItem)
+        {
+            int at = MotionList.SelectedIndex;
+            MotionList.SelectionChanged -= MotionList_SelectionChanged;
+            MotionList.Items[at] = new ClipItem(_current, ClipLabel(_current));
+            MotionList.SelectedIndex = at;
+            MotionList.SelectionChanged += MotionList_SelectionChanged;
+        }
+        FillKeyList(select);
+        _clock.Restart();
+        ShowTick();
+    }
+
+    private void DeleteKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentEdit() is not var (keep, lengths) || KeyList.SelectedIndex < 0 || keep.Count <= 1) return;
+        int i = KeyList.SelectedIndex;
+        keep.RemoveAt(i);
+        lengths.RemoveAt(i);
+        Commit(keep, lengths, i);
+    }
+
+    private void ChangeLength(int delta)
+    {
+        if (CurrentEdit() is not var (keep, lengths) || KeyList.SelectedIndex < 0) return;
+        int i = KeyList.SelectedIndex;
+        lengths[i] = Math.Max(1, lengths[i] + delta);
+        Commit(keep, lengths, i);
+    }
+
+    private void Shorter_Click(object sender, RoutedEventArgs e) => ChangeLength(-1);
+    private void Longer_Click(object sender, RoutedEventArgs e) => ChangeLength(+1);
+
+    private void Scale(double factor)
+    {
+        if (CurrentEdit() is not var (keep, lengths)) return;
+        for (int i = 0; i < lengths.Count; i++) lengths[i] = Math.Max(1, (int)Math.Round(lengths[i] * factor));
+        Commit(keep, lengths, KeyList.SelectedIndex);
+    }
+
+    private void Faster_Click(object sender, RoutedEventArgs e) => Scale(0.8);
+    private void Slower_Click(object sender, RoutedEventArgs e) => Scale(1.25);
+
+    private void Reset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null || !_original.Clips.TryGetValue(_current.Id, out var orig)) return;
+        var keys = orig.Keys.OrderBy(k => k.Start).ToList();
+        Commit([.. Enumerable.Range(0, keys.Count)], [.. keys.Select(k => Math.Max(1, k.Length))], KeyList.SelectedIndex);
     }
 
     private void PlayToggle_Changed(object sender, RoutedEventArgs e)
