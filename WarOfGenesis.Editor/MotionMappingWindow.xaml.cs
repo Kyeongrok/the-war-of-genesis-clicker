@@ -39,6 +39,12 @@ public partial class MotionMappingWindow : Window
     private readonly Dictionary<(int Sub, int Slot), BitmapSource> _mirrored = [];
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(15) };
     private readonly Stopwatch _clock = new();
+
+    /// <summary>재생 시계에 더하는 틱 — 틱 줄을 눌러 멈춘 자리. 다시 재생하면 여기서부터 이어 간다.</summary>
+    private int _tickOffset;
+
+    /// <summary>재생이 지금 컷의 줄을 고르는 중 — 이때의 고르기는 사람이 누른 것이 아니다.</summary>
+    private bool _syncingKey;
     private ObsMotionClip? _current;
 
     private sealed class ClipItem(ObsMotionClip clip, string label)
@@ -106,8 +112,23 @@ public partial class MotionMappingWindow : Window
         _current = (MotionList.SelectedItem as ClipItem)?.Clip;
         if (_current == null) { FrameImage.Source = null; KeyList.Items.Clear(); return; }
         FillKeyList(0);
+        _tickOffset = 0;
         _clock.Restart();
         if (PlayToggle.IsChecked == true) _timer.Start();
+        ShowTick();
+    }
+
+    /// <summary>
+    /// 틱 줄을 사람이 누르면 재생을 멈추고 그 컷을 위에 보인다 — 편집할 컷을 눈으로 고르려고.
+    /// 재생 중에 지금 컷의 줄을 따라 고르는 것(<see cref="_syncingKey"/>)은 여기서 무시한다.
+    /// </summary>
+    private void KeyList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingKey || _current == null || KeyList.SelectedIndex < 0 || KeyList.SelectedIndex >= _current.Keys.Count) return;
+        if (!KeyList.IsKeyboardFocusWithin && !KeyList.IsMouseOver) return;   // 코드가 고른 것(목록 다시 채우기)은 넘긴다
+        PlayToggle.IsChecked = false;
+        _tickOffset = _current.Keys[KeyList.SelectedIndex].Start;
+        _clock.Reset();
         ShowTick();
     }
 
@@ -152,7 +173,9 @@ public partial class MotionMappingWindow : Window
             MotionList.SelectionChanged += MotionList_SelectionChanged;
         }
         FillKeyList(select);
+        _tickOffset = _current.Keys.Count > 0 ? _current.Keys[Math.Clamp(select, 0, _current.Keys.Count - 1)].Start : 0;
         _clock.Restart();
+        if (PlayToggle.IsChecked != true) _clock.Stop();
         ShowTick();
     }
 
@@ -205,8 +228,21 @@ public partial class MotionMappingWindow : Window
     private void ShowTick()
     {
         if (_current == null) return;
-        int tick = (int)(_clock.Elapsed.TotalSeconds * SpeedSlider.Value);
+        int tick = _tickOffset + (int)(_clock.Elapsed.TotalSeconds * SpeedSlider.Value);
         var key = _current.KeyAt(tick, loop: true);
+        // 재생 중이면 지금 보이는 컷의 줄을 따라 고른다 — 몇 번째 장·몇 틱인지 바로 보이게.
+        if (key is { } shown && PlayToggle.IsChecked == true)
+        {
+            int index = -1;
+            for (int i = 0; i < _current.Keys.Count; i++) if (_current.Keys[i].Start <= shown.Start) index = i;
+            if (index >= 0 && KeyList.SelectedIndex != index)
+            {
+                _syncingKey = true;
+                KeyList.SelectedIndex = index;
+                KeyList.ScrollIntoView(KeyList.SelectedItem);
+                _syncingKey = false;
+            }
+        }
         if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var bmp))
         {
             FrameImage.Source = null;
