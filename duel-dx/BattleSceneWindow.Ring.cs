@@ -324,6 +324,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
     private static UiBlend BlendOf(int key) => key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
 
+    /// <summary>
+    /// 섞기 키 1~7 의 비침 — 원본 색표(<c>0x1000b7c0</c>)는 k 에서 <c>(4k·그림 + (31−4k)·바탕)/31</c>, 8 은 그림 그대로다.
+    /// 그 밖의 키는 1(불투명). 분석-필드 「Fld 0354 돌문」.
+    /// </summary>
+    private static double BlendFade(int key) => key is >= 1 and <= 7 ? 4 * key / 31.0 : 1;
+
     private static uint DodgeColor(uint d, uint c)
     {
         uint Ch(int shift)

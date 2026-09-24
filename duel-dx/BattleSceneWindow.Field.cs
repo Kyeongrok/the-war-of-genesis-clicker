@@ -206,6 +206,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldTalk = TalkTable.Parse(files.Read("Tlk", $"{id:D4}.tlf"));
             _fieldFired = new int[field.Events.Count];
             _sideEvents.Clear();
+            _fieldWaitWalker = null;
             Array.Clear(_fieldVars);
             _fieldEvent = -1;
             _fieldReturn.Clear();
@@ -247,6 +248,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _field = null;
         _fieldTalk = null;
         _sideEvents.Clear();
+        _fieldWaitWalker = null;
         _talk = null;
         _fieldChoices = null;
         // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
@@ -280,6 +282,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
         if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > _lastTime) return;
+        // 걷기(202·203)·자리 옮기기(205·206)는 원본에서 <b>그 줄에 머문다</b> — 핸들러(0x100f0be0 등)가 매 틀 불려 보간하고
+        // 셈이 틀 수에 닿아야 다음 줄로 간다(0x100f0dfd). 안 기다리면 뒤따르는 208(서기 모션·방향)이 걷는 도중에 걸려
+        // 오른쪽으로 가면서 왼쪽을 보는 인물이 됐다(사용자 보고, Fld 0057·0354).
+        if (_fieldWaitWalker is { Walk: not null } && !_talkSkip) return;
+        _fieldWaitWalker = null;
         // 행동 500·504 가 걸어 둔 「소리가 끝날 때까지」 — 건너뛰는 중이면 그 소리를 끊고 지나간다.
         if (_fieldWaitChannel >= 0)
         {
@@ -321,12 +328,20 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             // 고르기(604)를 낸 뒤에는 뒤따르는 605 들을 <b>먼저 다 읽어</b> 항목을 채우고, 그다음에 사람을 기다린다.
             if (_fieldChoices != null && running.Actions[_fieldPc].Code != 605) return;
-            if (!RunFieldAction(running.Actions[_fieldPc++])) return;  // false = 필드를 떠났다
+            var action = running.Actions[_fieldPc++];
+            if (!RunFieldAction(action)) return;  // false = 필드를 떠났다
+            if (IsBlockingMove(action) && FieldActorOf(action.Args[0]) is { Walk: not null } walker) { _fieldWaitWalker = walker; return; }
         }
     }
 
-    /// <summary>나란히 도는 곁 사건 — (사건 번호, 다음 줄, 기다림이 끝나는 때).</summary>
-    private readonly List<(int Event, int Pc, double WaitUntil)> _sideEvents = [];
+    /// <summary>나란히 도는 곁 사건 — (사건 번호, 다음 줄, 기다림이 끝나는 때, 다 걷기를 기다리는 인물).</summary>
+    private readonly List<(int Event, int Pc, double WaitUntil, FieldActor? Walker)> _sideEvents = [];
+
+    /// <summary>주 사건이 다 걷기를 기다리는 인물 — 걷기·자리 옮기기 줄에 머무는 동안.</summary>
+    private FieldActor? _fieldWaitWalker;
+
+    /// <summary>원본에서 끝날 때까지 그 줄에 머무는 움직임 — 202·203 걷기, 205·206 자리 옮기기.</summary>
+    private static bool IsBlockingMove(ScriptCommand a) => a.Code is 202 or 203 or 205 or 206 && a.Args.Length > 0;
 
     /// <summary>곁 사건으로 못 돌리는 행동 — 대사·고르기(사람이 봐야 한다)와 장면을 떠나는 것.</summary>
     private static bool MainOnly(int code) => code is >= 600 and <= 605 or 609 or 6 or 7 or 10 or 11 or 0;
@@ -349,17 +364,19 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (e.MaxFire > 0 && _fieldFired[index] >= e.MaxFire) continue;
                 if (e.Actions.Any(a => MainOnly(a.Code)) || !e.Conditions.All(FieldCondition)) continue;
                 _fieldFired[index]++;
-                _sideEvents.Add((index, 0, 0));
+                _sideEvents.Add((index, 0, 0, null));
             }
         for (int i = _sideEvents.Count - 1; i >= 0; i--)
         {
-            var (ev, pc, waitUntil) = _sideEvents[i];
+            var (ev, pc, waitUntil, walker) = _sideEvents[i];
             var acts = events[ev].Actions;
             bool done = false;
             while (!done)
             {
                 if (_talkSkip) waitUntil = 0;
                 if (waitUntil > _lastTime) break;
+                if (walker is { Walk: not null } && !_talkSkip) break;
+                walker = null;
                 if (pc >= acts.Count) { done = true; break; }
                 var a = acts[pc];
                 short A0 = a.Args.Length > 0 ? a.Args[0] : (short)0;
@@ -372,13 +389,17 @@ internal sealed unsafe partial class BattleSceneWindow
                     case 2: waitUntil = _lastTime + A0 / TicksPerSecond; pc++; break;
                     case 3: done = true; break;
                     case 504: pc++; break;                     // 소리 끝 기다림 — 곁 사건은 안 기다린다
-                    default: RunFieldAction(a); pc++; break;
+                    default:
+                        RunFieldAction(a);
+                        pc++;
+                        if (IsBlockingMove(a) && FieldActorOf(a.Args[0]) is { Walk: not null } w) walker = w;
+                        break;
                 }
                 continue;
             hold:
                 break;
             }
-            if (done) _sideEvents.RemoveAt(i); else _sideEvents[i] = (ev, pc, waitUntil);
+            if (done) _sideEvents.RemoveAt(i); else _sideEvents[i] = (ev, pc, waitUntil, walker);
         }
     }
 
@@ -1202,8 +1223,9 @@ internal sealed unsafe partial class BattleSceneWindow
             int tick = (int)((_lastTime - prop.Start) * TicksPerSecond);
             // 모션의 섞기 키(종류 3) — 17 은 더하기 합성이다(분석-UI 「섞기 방식 17」). 등불 빛(Obs 528 따위)이 이것이라
             // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
-            var blend = BlendOf(UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0);   // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058)
-            DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, blend);
+            int key = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0;
+            // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058), 1~7 은 반투명 — 돌문(Obs 1233, Fld 0354)이 8→1 로 옅어지며 열린다.
+            DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, BlendOf(key), fade: BlendFade(key));
             // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
             // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
             DrawUnitLayers(UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
