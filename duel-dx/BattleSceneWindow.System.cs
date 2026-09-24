@@ -251,7 +251,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private (int X, int Y, int W, int H) ConfirmRect()
     {
-        int w = 340, h = 120;
+        // 높이는 본문 줄 수에 맞춘다 — 고정 120 이면 세 줄짜리 전직 확인(「…사라집니다 / 전직할까요?」)의 끝 줄이 단추에 가렸다.
+        int textH = _confirm is { } cf ? GetText(cf.Text, White).Item3 : 16;
+        int w = 340, h = Math.Max(120, 48 + textH + 14 + 34);
         return (_camX + (ViewWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
     }
 
