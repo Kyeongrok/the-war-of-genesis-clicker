@@ -107,7 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
     private const int MenuTalkPauseBase = 1130;
 
-    private const int MenuSceneTag = 1103;
+    private const int MenuSceneTag = 1103, MenuProgress = 1104;
 
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
     private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
@@ -190,6 +190,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
         _replayMenu = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
+        Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
         return bar;
     }
@@ -287,6 +288,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 Toast($"대사 사이 멈춤: {TalkPauseLabel(_talkPauseSeconds)}");
                 SaveSettings();
                 break;
+            case MenuProgress: ToggleProgress(); break;
             case MenuSceneTag:
                 _showSceneTag = !_showSceneTag;
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuSceneTag, Win32.MF_BYCOMMAND | (_showSceneTag ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));

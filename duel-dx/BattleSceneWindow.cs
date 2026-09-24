@@ -569,6 +569,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_KEYUP:
                 _heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _progressOpen:
+                _progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
@@ -628,6 +631,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
+        if (_progressOpen) { if (key == Win32.VK_ESCAPE) ToggleProgress(); return; }
         if (key == Win32.VK_ESCAPE && SkipScene()) return;
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
@@ -765,6 +769,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void OnClick(int clientX, int clientY)
     {
+        if (_progressOpen) { var (px, py) = BoardPoint(clientX, clientY); OnProgressClick(px, py); return; }
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
@@ -1009,6 +1014,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawEpisodes();
         DrawChapters();
         DrawSceneTag();
+        DrawProgress();
     }
 
     private void DrawBackground()
