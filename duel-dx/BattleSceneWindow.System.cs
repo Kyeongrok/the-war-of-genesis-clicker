@@ -724,7 +724,8 @@ internal sealed unsafe partial class BattleSceneWindow
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
             if (u.Data is { } c) u.Data = Restored(c, s, regrow: false);
             u.ClearStatus();
-            for (int k = 0; k < 3; k++)
+            // 모세스에서 적은 세이브는 끝난 전투의 상태이상을 들고 있을 수 있다(고치기 전 판) — 되살리지 않는다.
+            for (int k = 0; k < 3 && !state.InMoses; k++)
             {
                 if (s.StatusId is { } ids && k < ids.Length) u.StatusId[k] = ids[k];
                 if (s.StatusValue is { } values && k < values.Length) u.StatusValue[k] = values[k];

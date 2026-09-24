@@ -510,7 +510,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>지난 프레임의 실제 시각(초) — 게임 시계(<c>_lastTime</c>)는 여기서 흐른 만큼 × 게임 속도로 나아간다.</summary>
     private double _realTime;
 
-    /// <summary>창 제목에 찍는 버전 — 릴리즈 빌드의 태그(v0.10.0 따위). 손으로 빌드한 것은 「개발판」.</summary>
+    /// <summary>
+    /// 창 제목에 찍는 버전 — 릴리즈 빌드는 태그(v0.10.0 따위). 손으로 빌드한 것은 git 마지막 태그와 그 뒤 커밋 수(v0.10.0+2),
+    /// git 이 없어 못 셌으면 「개발판」.
+    /// </summary>
     private static string AppVersion
     {
         get
@@ -519,7 +522,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                 .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "";
             v = v.Split('+')[0];                                   // 커밋 해시(+abc…) 꼬리는 뗀다
-            return v.Length == 0 || v.EndsWith("-dev") ? "개발판" : "v" + v;
+            if (v.Length == 0 || v.EndsWith("-dev")) return "개발판";
+            // git describe 꼴(0.10.0-2-gabc1234) — 태그 바로 위면 태그만, 뒤에 커밋이 더 있으면 +개수.
+            if (System.Text.RegularExpressions.Regex.Match(v, @"^(.+)-(\d+)-g[0-9a-f]+$") is { Success: true } m)
+                return m.Groups[2].Value == "0" ? "v" + m.Groups[1].Value : $"v{m.Groups[1].Value}+{m.Groups[2].Value}";
+            return "v" + v;
         }
     }
 
@@ -770,6 +777,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         int nextField = _eventNextField;
         _outcome = "";
         _eventNextField = 0;
+        // 상태이상은 그 전투에서만 간다 — 판에 남은 유닛에 붙어 있으면 모세스 스테이터스 창에 그대로 보였다(사용자 보고).
+        foreach (var u in _units) u.ClearStatus();
         if (won) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
         // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
         int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
