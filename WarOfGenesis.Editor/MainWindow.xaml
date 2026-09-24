@@ -46,6 +46,11 @@
                     AutomationProperties.AutomationId="ScriptOpsMenuItem"
                     Click="ScriptOpsMenuItem_Click"
                     Header="스크립트 명령 사전(_S)" />
+                <MenuItem
+                    x:Name="EffectViewerMenuItem"
+                    AutomationProperties.AutomationId="EffectViewerMenuItem"
+                    Click="EffectViewerMenuItem_Click"
+                    Header="이펙트 보기(_E)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem

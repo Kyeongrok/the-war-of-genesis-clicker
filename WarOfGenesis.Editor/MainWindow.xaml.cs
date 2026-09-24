@@ -268,6 +268,22 @@ public partial class MainWindow : Window
     /// <summary>전투·필드·챕터 스크립트의 조건·행동 코드(200 증원, 909 베라모드 폭주 …)의 뜻과 쓰인 곳. 게임 폴더 없이 연다.</summary>
     private void ScriptOpsMenuItem_Click(object sender, RoutedEventArgs e) => new ScriptOpsWindow { Owner = this }.Show();
 
+    // ── 이펙트 보기 ────────────────────────────────────────────────────────
+
+    /// <summary>기술이 쓰는 이펙트와 Obs 모션을 재생해 본다. 게임 폴더가 열려 있으면 기술 이름과 assets 에 없는 Obs 도 보인다.</summary>
+    private void EffectViewerMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_gameRoot.Length > 0) _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다(이름 없이 엽니다): {ex.Message}";
+        }
+        new EffectViewerWindow(_gameRoot, _database) { Owner = this }.Show();
+    }
+
     // ── 에셋: 소리(배경음악 · 효과음 · 인물 대사) 창 ────────────────────────
 
     private SoundWindow? _soundWindow;
