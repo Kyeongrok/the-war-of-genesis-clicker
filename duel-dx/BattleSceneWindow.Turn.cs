@@ -566,7 +566,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (step < actions.Length)
             {
                 PlayAction(a, actions[step]);
-                hitTimes = HitTimesFor(a, actions[step]);
+                hitTimes = HitTimesFor(a, actions[step], ranged: w.RangeMax > 4);
                 for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
 
@@ -752,14 +752,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 그 동작에서 판정이 나는 시각들(초, 동작 시작 기준) — 모션의 타격 키(종류 6) 간격을 그대로 쓰되
     /// 첫 타는 사용자가 원하는 대로 <b>0.05초</b>에 낸다. 타격 키가 없으면 한 번만.
+    /// 다만 <b>원거리</b>(사거리 1칸 넘음)는 모션의 타격 키 그 틱에 낸다 — 총은 쏘는 컷에 타격 키가 있어서, 0.05초로 당기면
+    /// 크리스티앙처럼 피해 숫자가 총을 쏘기 전에 떴다(사용자 보고).
     /// </summary>
-    private List<double> HitTimesFor(UnitState u, int action)
+    private List<double> HitTimesFor(UnitState u, int action, bool ranged = false)
     {
         const double first = 0.05;
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { Hits.Count: > 0 } clip)
             return [first];
         var starts = clip.Hits.Select(h => h.Start).OrderBy(t => t).ToList();
-        return [.. starts.Select(t => first + (t - starts[0]) / TicksPerSecond)];
+        double at = ranged ? Math.Max(first, starts[0] / TicksPerSecond) : first;
+        return [.. starts.Select(t => at + (t - starts[0]) / TicksPerSecond)];
     }
 
     private void PlayAction(UnitState u, int action)
