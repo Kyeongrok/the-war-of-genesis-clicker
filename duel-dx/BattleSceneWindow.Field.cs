@@ -1202,7 +1202,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int tick = (int)((_lastTime - prop.Start) * TicksPerSecond);
             // 모션의 섞기 키(종류 3) — 17 은 더하기 합성이다(분석-UI 「섞기 방식 17」). 등불 빛(Obs 528 따위)이 이것이라
             // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
-            var blend = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) == 17 ? UiBlend.Add : UiBlend.Alpha;
+            var blend = BlendOf(UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0);   // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058)
             DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, blend);
             // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
             // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
