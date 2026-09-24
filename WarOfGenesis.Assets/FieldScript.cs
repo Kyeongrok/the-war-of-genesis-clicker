@@ -98,6 +98,22 @@ public static class FieldScript
         _ => "",
     };
 
+    /// <summary>뜻을 아는 조건 전부 — 이름의 「[인자]」 를 따로 뗀다(편집기의 명령 사전).</summary>
+    public static IReadOnlyList<ScriptOpInfo> Conditions { get; } = Table(ConditionName);
+
+    /// <summary>뜻을 아는 행동 전부.</summary>
+    public static IReadOnlyList<ScriptOpInfo> Actions { get; } = Table(ActionName);
+
+    private static List<ScriptOpInfo> Table(Func<int, string> name) =>
+    [
+        .. Enumerable.Range(0, 1100).Select(code => (code, text: name(code))).Where(x => x.text.Length > 0).Select(x =>
+        {
+            int open = x.text.IndexOf(" [", StringComparison.Ordinal);
+            return open < 0 ? new ScriptOpInfo(x.code, x.text, "", "")
+                            : new ScriptOpInfo(x.code, x.text[..open], x.text[(open + 2)..].TrimEnd(']'), "");
+        }),
+    ];
+
     /// <summary>대사 행동이면 그 글 번호(Tlk 표의 줄) 가 몇 번째 인자인가 — 아니면 −1.</summary>
     public static int TalkArg(int code) => code switch
     {

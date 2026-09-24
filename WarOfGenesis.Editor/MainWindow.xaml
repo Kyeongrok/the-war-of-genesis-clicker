@@ -41,6 +41,11 @@
                     AutomationProperties.AutomationId="FieldMenuItem"
                     Click="FieldMenuItem_Click"
                     Header="필드(Fld)(_F)" />
+                <MenuItem
+                    x:Name="ScriptOpsMenuItem"
+                    AutomationProperties.AutomationId="ScriptOpsMenuItem"
+                    Click="ScriptOpsMenuItem_Click"
+                    Header="스크립트 명령 사전(_S)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem
