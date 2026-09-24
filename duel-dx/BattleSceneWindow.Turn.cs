@@ -579,6 +579,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 SpawnAbilityEffects(w, a, col, row);
                 effectsDone = true;
             }
+            // 하이 텔레포트 — 피해 없이 고른 칸 둘레로 순간이동한다(범위는 빗나가는 정도).
+            if (IsTeleportWork(w))
+            {
+                foreach (bool _ in TeleportRoutine(w, a, col, row)) yield return true;
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             // 나인 크루세이더 — 칼이 날아다니며 차례로 꿰뚫는다. 피해는 대상마다 처음 꿰뚫릴 때 준다.
             if (w.Id == NineCrusaderWork && targetIndex < 0)
             {
