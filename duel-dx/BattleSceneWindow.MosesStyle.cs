@@ -218,22 +218,33 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 3단계 후보 둘 — <b>2단계이고 레벨 ≥ 60</b>일 때, 제 계열 3단계 Dep(3f+3)의 직업 가운데 <b>Job `+6` 어빌리티를 가진 것</b>만
     /// (0x100fa167: 레벨 < 60 이면 둘 다 없음, 0x100fa1c5: `CChr+0x1bc6[어빌리티]` 가 0·0xff 면 그 단추 없음). 칸 번호는 0·1 그대로 남긴다.
-    /// 원본은 「처음 계열」(CChr+0x3a0)을 보지만 데모는 지금 계열로 본다(가설 — 계열 갈아타기는 1단계에서만 되므로 같다).
+    /// 계열은 <b>처음 계열</b>(<c>CChr+0x3a0</c> — 로드 때 .chr 직업의 Dep 을 한 번 베낀 값)이다. 2단계는 늘 다른 계열이라 지금 계열로 보면
+    /// 죠안(메텔 → 오즈클론)이 엘샤루핌·가프리스 대신 엉뚱한 3단계를 찾았다(분석-체질 「전직과 배운 어빌리티」).
     /// </summary>
     private List<(int Slot, ushort Job)> StyleTierJobs()
     {
         if (_db is not { } db || StyleData() is not { } c) return [];
         if (StyleDep() is not { } dep || StyleTier(dep) != 2 || c.Level < 60) return [];
-        int family = (dep.Id - 1) / 3;
+        int family = StyleOriginFamily(c);
         if (db.Deps.FirstOrDefault(d => d.Id == 3 * family + 3) is not { } third) return [];
         var list = new List<(int, ushort)>();
         for (int k = 0; k < third.Jobs.Length && k < StyleTierCells.Length; k++)
         {
             if (db.Jobs.GetValueOrDefault(third.Jobs[k]) is not { } job) continue;
-            if (job.NeedAbility != 0 && !c.HasAbility(job.NeedAbility)) continue;
+            // 필요 어빌리티는 레벨이 0 도 0xff 도 아니어야 한다(0x100fa1c5).
+            if (job.NeedAbility != 0 && !c.Abilities.Any(a => a.Ability == job.NeedAbility && a.Level is > 0 and < 0xff)) continue;
             list.Add((k, third.Jobs[k]));
         }
         return list;
+    }
+
+    /// <summary>처음 계열(0~4) — 그 인물 .chr 직업이 든 Dep 의 계열. 못 찾으면 지금 계열.</summary>
+    private int StyleOriginFamily(CharacterData c)
+    {
+        if (_db is { } db && db.Character(c.Code) is { } baseChr
+            && db.Deps.FirstOrDefault(d => d.Jobs.Contains(baseChr.JobId)) is { } origin)
+            return (origin.Id - 1) / 3;
+        return StyleDep() is { } d ? (d.Id - 1) / 3 : 0;
     }
 
     /// <summary>미리보기 중인 직업 — 형 칸을 골랐으면 그 직업, 아니면 지금 직업(원본 0x100fa4e0 이 채우는 목록의 주인).</summary>
@@ -324,7 +335,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var cell = StyleTierCells[slot];
             bool over = mx >= cell.X && mx < cell.X + cell.W && my >= cell.Y && my < cell.Y + cell.H;
             DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + 320, oy + 240, UiBlend.Alpha);
-            int family = StyleDep() is { } d ? (d.Id - 1) / 3 : 0;
+            int family = StyleData() is { } oc ? StyleOriginFamily(oc) : 0;
             DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
             DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
         }
