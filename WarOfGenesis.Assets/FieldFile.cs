@@ -25,6 +25,9 @@ public sealed record FieldFile(int Id, int Background, int CameraX, int CameraY,
     /// <summary>스크립트까지 읽고 파일 끝과 딱 맞았나.</summary>
     public bool Exact => TailBytes == 0;
 
+    /// <summary>인물 10바이트 레코드들이 시작하는 자리 — 고쳐 쓸 때(<see cref="WritePerson"/>) 쓴다.</summary>
+    public int PeopleOffset { get; private init; }
+
     public static FieldFile? Parse(int id, byte[]? b)
     {
         if (b == null || b.Length < 16) return null;
@@ -50,6 +53,7 @@ public sealed record FieldFile(int Id, int Background, int CameraX, int CameraY,
             o += 16 * pictureCount;                        // 그림 조각은 아직 안 쓴다
 
             int peopleCount = Count();
+            int peopleOffset = o;
             var people = new List<FieldPerson>();
             for (int i = 0; i < peopleCount; i++)
             {
@@ -62,13 +66,20 @@ public sealed record FieldFile(int Id, int Background, int CameraX, int CameraY,
             if (eventCount < 0) return null;
             for (int i = 0; i < eventCount; i++)
             {
+                int maxFireOffset = o;
                 int maxFire = W();
-                var conditions = ReadCommands(b, ref o);
-                var actions = ReadCommands(b, ref o);
-                events.Add(new FieldEvent(i, maxFire, conditions, actions));
+                var conditions = ReadCommands(b, ref o, out var conditionOffsets);
+                var actions = ReadCommands(b, ref o, out var actionOffsets);
+                events.Add(new FieldEvent(i, maxFire, conditions, actions)
+                {
+                    MaxFireOffset = maxFireOffset, ConditionOffsets = conditionOffsets, ActionOffsets = actionOffsets,
+                });
             }
 
-            return new FieldFile(id, head[1], head[2], head[3], head[5], objects, people, events, b.Length - o);
+            return new FieldFile(id, head[1], head[2], head[3], head[5], objects, people, events, b.Length - o)
+            {
+                PeopleOffset = peopleOffset,
+            };
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException)
         {
@@ -76,14 +87,16 @@ public sealed record FieldFile(int Id, int Background, int CameraX, int CameraY,
         }
     }
 
-    private static List<ScriptCommand> ReadCommands(byte[] b, ref int o)
+    private static List<ScriptCommand> ReadCommands(byte[] b, ref int o, out List<int> offsets)
     {
         int n = BitConverter.ToInt16(b, o);
         o += 2;
         if (n < 0) throw new ArgumentException("명령 수가 음수입니다.");
         var list = new List<ScriptCommand>(n);
+        offsets = new List<int>(n);
         for (int i = 0; i < n; i++)
         {
+            offsets.Add(o);
             int code = BitConverter.ToInt16(b, o);
             var args = new short[8];
             for (int k = 0; k < 8; k++) args[k] = BitConverter.ToInt16(b, o + 2 + 2 * k);
@@ -94,6 +107,58 @@ public sealed record FieldFile(int Id, int Background, int CameraX, int CameraY,
     }
 }
 
+/// <summary>
+/// 제자리 고쳐 쓰기 — 레코드 크기가 정해져 있어 뒤 자료가 안 움직인다. 물체·인물·명령을 <b>더하거나 빼는 것</b>은
+/// 스크립트가 열쇠·차례로 가리키고 있어 하지 않는다(챕터 편집의 <c>ChapterFile.WritePlace</c> 와 같은 생각).
+/// </summary>
+public static class FieldFileWriter
+{
+    /// <summary>머리 — 배경 <c>Bgr</c>(워드 1) · 첫 화면 자리(2·3) · BGM(5).</summary>
+    public static void WriteHeader(byte[] b, int background, int cameraX, int cameraY, int bgm)
+    {
+        Put(b, 2, background);
+        Put(b, 4, cameraX);
+        Put(b, 6, cameraY);
+        Put(b, 10, bgm);
+    }
+
+    /// <summary>물체 16바이트 — 머리(16바이트) 바로 뒤 <paramref name="index"/> 번째.</summary>
+    public static void WriteObject(byte[] b, int index, FieldObject o)
+    {
+        int at = 16 + 16 * index;
+        Put(b, at, o.Key);
+        Put(b, at + 2, o.Picture);
+        Put(b, at + 4, o.X);
+        Put(b, at + 6, o.Y);
+        Put(b, at + 8, o.Kind);
+        // 읽을 때 층을 0~7 로 자르므로(0096·0165·0321 에 범위 밖 값이 있다), 뜻이 같으면 파일의 원래 값을 둔다.
+        if (Math.Clamp(BitConverter.ToInt16(b, at + 10), (short)0, (short)7) != o.Layer) Put(b, at + 10, o.Layer);
+    }
+
+    /// <summary>인물 10바이트 — <see cref="FieldFile.PeopleOffset"/> 에서 <paramref name="index"/> 번째.</summary>
+    public static void WritePerson(byte[] b, FieldFile field, int index, FieldPerson p)
+    {
+        int at = field.PeopleOffset + 10 * index;
+        Put(b, at, p.Key);
+        Put(b, at + 2, p.ChrCode);
+        Put(b, at + 4, p.X);
+        Put(b, at + 6, p.Y);
+        if (Math.Min(BitConverter.ToInt16(b, at + 8), (short)7) != p.Layer) Put(b, at + 8, p.Layer);   // 읽을 때 7 로 자른다
+    }
+
+    /// <summary>스크립트 명령 18바이트(코드 + 인자 8개) — 자리는 <see cref="FieldEvent.ConditionOffsets"/>·<see cref="FieldEvent.ActionOffsets"/>.</summary>
+    public static void WriteCommand(byte[] b, int offset, ScriptCommand c)
+    {
+        Put(b, offset, c.Code);
+        for (int k = 0; k < 8; k++) Put(b, offset + 2 + 2 * k, k < c.Args.Length ? c.Args[k] : 0);
+    }
+
+    /// <summary>이벤트의 최대 발동 수 워드.</summary>
+    public static void WriteMaxFire(byte[] b, FieldEvent e, int maxFire) => Put(b, e.MaxFireOffset, maxFire);
+
+    private static void Put(byte[] b, int at, int value) => BitConverter.TryWriteBytes(b.AsSpan(at, 2), (short)value);
+}
+
 /// <summary>필드에 놓인 그림 하나 — 스크립트는 <c>10000+<see cref="Key"/></c> 로 가리킨다.</summary>
 public sealed record FieldObject(int Key, int Picture, int X, int Y, int Kind, int Layer);
 
@@ -102,4 +167,12 @@ public sealed record FieldPerson(int Key, int ChrCode, int X, int Y, int Layer);
 
 /// <summary>필드 스크립트의 이벤트 하나. <see cref="MaxFire"/> 가 0 이면 몇 번이고 돈다.</summary>
 public sealed record FieldEvent(int Index, int MaxFire,
-                                IReadOnlyList<ScriptCommand> Conditions, IReadOnlyList<ScriptCommand> Actions);
+                                IReadOnlyList<ScriptCommand> Conditions, IReadOnlyList<ScriptCommand> Actions)
+{
+    /// <summary>파일에서 최대 발동 수 워드의 자리.</summary>
+    public int MaxFireOffset { get; init; }
+    /// <summary>조건 명령마다 파일 속 자리(18바이트 레코드 시작).</summary>
+    public IReadOnlyList<int> ConditionOffsets { get; init; } = [];
+    /// <summary>행동 명령마다 파일 속 자리.</summary>
+    public IReadOnlyList<int> ActionOffsets { get; init; } = [];
+}
