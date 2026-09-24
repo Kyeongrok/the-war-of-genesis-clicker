@@ -73,6 +73,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _camPosX += (_camTargetX - _camPosX) * Math.Min(1, dt * 8);
         if (Math.Abs(_camTargetX - _camPosX) < 0.5) _camPosX = _camTargetX;
         _camX = Math.Clamp((int)Math.Round(_camPosX), 0, CamMaxX);
+        // 기술의 화면 흔들림(천지 파열무 등) — 틀마다 ±세기로 번갈아 민다.
+        var (sx, sy) = ShakeOffset();
+        if (sx != 0 || sy != 0)
+        {
+            _camX = Math.Clamp(_camX + sx, 0, CamMaxX);
+            _camY = Math.Clamp(_camY + sy, 0, CamMax);
+        }
     }
 
     /// <summary>지금 보이는 영역을 <c>%TEMP%\dueldx_snapshot.png</c> 로 저장한다 — 창을 화면에 띄우지 않고 확인하는 테스트용.</summary>

@@ -354,6 +354,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _swords.Clear();
         _preludeDots.Clear();
         _fxFlights.Clear();
+        _timedFx.Clear();
+        _debris.Clear();
+        _shakes.Clear();
         _ripples.Clear();
         _nextTickAt = 0;
         CancelTargeting();
@@ -710,6 +713,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _swords.Clear();
         _preludeDots.Clear();
         _fxFlights.Clear();
+        _timedFx.Clear();
+        _debris.Clear();
+        _shakes.Clear();
         _ripples.Clear();
         _heldMoveKeys.Clear();
 
