@@ -315,7 +315,34 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그림 섞기. <c>Dim</c> 은 그림 색을 15/31 로 어둡게 찍는다 — 꺼진 목록 줄(원본 물들이기 방식 2 · 세기 16, 분석-캐릭터 st-5).</summary>
-    private enum UiBlend { Alpha, Add, AddDim, Darken, Dim }
+    /// <summary>
+    /// 그림 섞기. Dodge·Screen 은 모션 섞기 키 10·12 — 원본 색표(<c>0x1000b7c0</c>, 5비트 채널 a=바탕·b=그림):
+    /// 10 = <c>min(31, a·32 / (32−b))</c>(닷지 — 검은 그림은 바탕 그대로), 12 = <c>max + (31−max)·min/31</c>(스크린).
+    /// </summary>
+    private enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen }
+
+    /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
+    private static UiBlend BlendOf(int key) => key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
+
+    private static uint DodgeColor(uint d, uint c)
+    {
+        uint Ch(int shift)
+        {
+            int a = (int)(d >> shift & 0xFF), b = (int)(c >> shift & 0xFF);
+            return (uint)Math.Min(255, b >= 255 ? 255 : a * 256 / (256 - b));
+        }
+        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+    }
+
+    private static uint ScreenColor(uint d, uint c)
+    {
+        uint Ch(int shift)
+        {
+            int a = (int)(d >> shift & 0xFF), b = (int)(c >> shift & 0xFF), hi = Math.Max(a, b), lo = Math.Min(a, b);
+            return (uint)Math.Min(255, hi + (255 - hi) * lo / 255);
+        }
+        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+    }
 
     /// <summary>그림을 이 네모 안으로만 그린다 — 필드처럼 640×480 틀 밖으로 새면 안 되는 화면이 쓴다.</summary>
     private (int Left, int Top, int Width, int Height)? _uiClip;
@@ -349,6 +376,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     UiBlend.AddDim => AddColor(d, c, 100),
                     UiBlend.Darken => ScaleColor(d, 11, 31),
                     UiBlend.Dim => ScaleColor(c, 15, 31),
+                    UiBlend.Dodge => DodgeColor(d, c),
+                    UiBlend.Screen => ScreenColor(d, c),
                     _ => c | 0xFF000000,
                 };
                 // 밝기가 1 보다 작으면 바탕과 섞는다 — 원본의 8단계 밝기를 그대로 흉내 낸다.

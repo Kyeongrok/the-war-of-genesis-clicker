@@ -71,7 +71,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 몸과 같이 도는 무기 층(제이슨 Obs 0426·Obs 0060)은 모션 길이가 몸과 같아 한 바퀴 내내 남는다.
             int life = UiFor(obs)?.MotionLength(motion) ?? 0;
             if (life > 0 && cycle - start >= life) continue;
-            var blend = UiFor(obs)?.BlendAt(motion, cycle - start) == 17 ? UiBlend.Add : UiBlend.Alpha;
+            var blend = BlendOf(UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
             bool flip = mirror && flag == 0;
             DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
