@@ -57,10 +57,9 @@ internal sealed unsafe partial class BattleSceneWindow
         [467] = ([6, 15], [new(386, 0, true, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
         [469] = ([6, 15], Meteor),  // 메테오 Lv1 — Lv2~20 은 아래 표 끝에서 같은 효과로 채운다
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
-        // 나인 크루세이더 — 공통 앞머리(시전 소리 1338:1 · 487:0/1/2 · 343:0 30틱 뒤 · 금빛 날개 344:18/19)만 두고,
-        // 칼은 BattleSceneWindow.NineCrusader.cs 가 날린다. 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
-        [NineCrusaderWork] = ([6, 15], [new(1338, 1, false, 0), new(487, 0, false, 0), new(487, 1, false, 0), new(487, 2, false, 0),
-                                        new(343, 0, false, 0, 30), new(344, 18, false, 0), new(344, 19, false, 0)]),
+        // 나인 크루세이더 — 앞머리는 FinisherPrelude, 칼은 BattleSceneWindow.NineCrusader.cs 가 한다.
+        // 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
+        [NineCrusaderWork] = ([6, 15], []),
         // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
         // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
         [390] = ([5, 7, 12], CounterBlade),
@@ -159,27 +158,6 @@ internal sealed unsafe partial class BattleSceneWindow
         return ScriptFor(w.Id) != null ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);
     }
 
-    /// <summary>
-    /// 필살기 초상 컷인 — 준비 동작 7 인 기술은 시전 때 그 인물의 초상(<c>.chr</c> 10 face Obs, 유닛 <c>+0x11e</c>)을 모션 2·1 로 네 번 띄워
-    /// 화면을 가로지르게 한다(<c>0x1007eac4</c>·<c>0x1007eb60</c>·<c>0x1007ecdd</c>·<c>0x1007ed76</c>: 출발 x = 화면 스크롤 + 540, 날기 <c>0x100c3490</c>
-    /// 속도 0.9, 지연 30틱, 수명 100틱). 도착 자리는 못 풀어(스택 인자) 화면 왼쪽 끝으로 둔다 — 가설. 분석-스킬 fx-189.
-    /// </summary>
-    private void SpawnFinisherCutIns(WorkData w, UnitState user)
-    {
-        if (w.Prepare != 7 || user.Data is not { FaceId: > 0 } c || UiFor(c.FaceId) == null) return;
-        var sprite = UiFor(c.FaceId)!;
-        for (int i = 0; i < 4; i++)
-        {
-            int motion = i % 2 == 0 ? 2 : 1;
-            if (sprite.FrameAt(motion, 0, loop: true) is not { } f) continue;
-            // 그림 가운데가 화면을 넷으로 나눈 줄에 오고, 오른쪽 밖에서 들어와 왼쪽 밖으로 나간다.
-            int center = _camY + ViewHeight * (i + 1) / 5;
-            int y = center - (f.Y + f.H / 2);
-            double start = _lastTime + (30 + i * 8) / TicksPerSecond;
-            _flyingEffects.Add((c.FaceId, motion, start, _camX + ViewWidth - f.X, y, _camX - f.X - f.W, y, 40));
-        }
-    }
-
     /// <summary>초능력공격(work 1479) 의 번개 구슬 — 체질이 없는(0) 인물만 이것을 쏜다.</summary>
     private const int PsychicBolt = 209;
 
@@ -213,6 +191,8 @@ internal sealed unsafe partial class BattleSceneWindow
         int targetX = col * TileW + TileW / 2, targetY = CellCenterY(col, row);
         foreach (var e in m.Effects)
         {
+            // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
+            if (w.Prepare == 7 && e.Obs is 1338 or 487 or PreludeDotObs or PreludeBandObs) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
             if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))

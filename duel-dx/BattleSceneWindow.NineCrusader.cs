@@ -34,6 +34,8 @@ internal sealed unsafe partial class BattleSceneWindow
         public int Index;
         public int Pause;
         public double Speed = speed, Factor = factor;
+        /// <summary>빠르기 아래·위 한계(<c>0x100c25c0</c>·<c>0x100c25e0</c>).</summary>
+        public double Min = 1, Max = 400;
         public readonly IReadOnlyList<(double X, double Y)> Points = points;
         public bool Done => Index >= Points.Count;
 
@@ -45,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
             double dx = tx - X, dy = ty - Y, dist = Math.Sqrt(dx * dx + dy * dy);
             if (dist <= Speed) (X, Y) = (tx, ty);
             else { X += dx / dist * Speed; Y += dy / dist * Speed; }
-            Speed = Math.Clamp(Speed * Factor, 1, 400);   // 곱셈 방식(0x10037fef), 아래는 멈춰 서지 않게
+            Speed = Math.Clamp(Speed * Factor, Min, Max);   // 곱셈 방식(0x10037fef)
             if (Math.Round(X) == Math.Round(tx) && Math.Round(Y) == Math.Round(ty)) Index++;
         }
     }
@@ -103,7 +105,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             User = user,
             Rise = new SwordMover((ux + 11, uy), [(ux + 11, uy + 400)], 10, 1.1),
-            Main = new SwordMover((ux, uy + 480), points, 100, 0.9),
+            Main = new SwordMover((ux, uy + 480), points, 100, 0.9) { Min = 10, Max = 80 },   // 0x1009cff0·0x1009cff9
             PointTarget = [.. pointTarget],
             LastStep = _lastTime,
             // 처음부터 첫 대상을 본다 — 한 칸씩 돌리며 들어오면 빠르기 100 으로 첫 대상과 그 지나친 점을 돌기도 전에 지나쳐 첫 찌르기가 빠졌다(가설).
@@ -173,14 +175,14 @@ internal sealed unsafe partial class BattleSceneWindow
         if (next % 2 == 0)
         {
             // 대상(또는 끝)으로 — 10틱 겨누고 빠르게 찌르러 간다.
-            m.Pause = 10; m.Speed = 110; m.Factor = 0.9;
+            m.Pause = 10; m.Speed = 110; m.Factor = 0.9; m.Max = 110; m.Min = 40;   // 0x100ced56~0x100ced88
             SwordSound(2);
             f.TurnSound = true;
         }
         else
         {
             // 방금 대상을 꿰뚫었다 — 불꽃·피해, 그리고 지나친 점까지 미끄러진다.
-            m.Speed = 40; m.Factor = 0.65;
+            m.Speed = 40; m.Factor = 0.65; m.Min = 5;                             // 0x100cedf2~0x100cee11
             int pierced = f.PointTarget[next - 1];
             if (pierced >= 0) f.Pierced.Enqueue(pierced);
             _effects.Add((SwordSparkObs, 0, _lastTime, (int)m.X, (int)m.Y - 30));

@@ -546,7 +546,9 @@ internal sealed unsafe partial class BattleSceneWindow
         bool effectsDone = false, followersDone = false;
         _followerStrikes.Clear();
         SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
-        SpawnFinisherCutIns(w, a);                          // 필살기(준비 7)면 초상 컷인
+        // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
+        bool finisher = w.Prepare == 7;
+        if (finisher) foreach (bool _ in FinisherPrelude(w, a)) yield return true;
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
@@ -554,7 +556,7 @@ internal sealed unsafe partial class BattleSceneWindow
             bool strikes = step == hitStep || (chained && step < actions.Length && IsStrikeAction(actions[step]));
             if (!strikes)
             {
-                if (step >= actions.Length) continue;
+                if (step >= actions.Length || finisher) continue;   // 필살기의 준비 동작(6·15)은 앞머리가 이미 했다
                 PlayAction(a, actions[step]);
                 while (a.IsBusy) yield return true;
                 continue;
