@@ -19,6 +19,8 @@
     <ItemGroup>
         <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
         <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+        <!-- 설치판(Setup.exe)과 자동 업데이트 — CLI(vpk, release.yml)와 버전을 맞춘다. -->
+        <PackageReference Include="Velopack" Version="0.0.1298" />
     </ItemGroup>
 
     <ItemGroup>
