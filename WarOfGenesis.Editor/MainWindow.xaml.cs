@@ -246,6 +246,23 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 필드(Fld) 편집 창 ──────────────────────────────────────────────────
+
+    /// <summary>필드 파일 — 배경 위 물체·인물 미리보기와 머리·물체·인물·스크립트 고치기. 저장소 assets/data/Fld 를 고친다.</summary>
+    private void FieldMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        // 필드는 저장소 assets 에서 읽으니 게임 폴더가 없어도 연다 — 있으면 인물 이름·그림을 게임 자료에서 가져온다.
+        try
+        {
+            if (_gameRoot.Length > 0) _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다(이름 없이 엽니다): {ex.Message}";
+        }
+        new FieldWindow(_gameRoot, _database) { Owner = this }.Show();
+    }
+
     // ── 에셋: 소리(배경음악 · 효과음 · 인물 대사) 창 ────────────────────────
 
     private SoundWindow? _soundWindow;
