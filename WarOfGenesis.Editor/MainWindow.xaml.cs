@@ -263,6 +263,11 @@ public partial class MainWindow : Window
         new FieldWindow(_gameRoot, _database) { Owner = this }.Show();
     }
 
+    // ── 스크립트 명령 사전 ─────────────────────────────────────────────────
+
+    /// <summary>전투·필드·챕터 스크립트의 조건·행동 코드(200 증원, 909 베라모드 폭주 …)의 뜻과 쓰인 곳. 게임 폴더 없이 연다.</summary>
+    private void ScriptOpsMenuItem_Click(object sender, RoutedEventArgs e) => new ScriptOpsWindow { Owner = this }.Show();
+
     // ── 에셋: 소리(배경음악 · 효과음 · 인물 대사) 창 ────────────────────────
 
     private SoundWindow? _soundWindow;
