@@ -38,6 +38,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < _flags.Length && _flags[f] != 0));
 
     /// <summary>
+    /// 이미 고른 에피소드(번호) — 원본 <c>0x101b68a0[i]</c>. <b>고르는 순간</b> 1 이 되고(<c>0x10106722</c>·<c>0x1010689e</c>), NEW GAME 만 지운다(<c>0x1004d870</c>).
+    /// 고른 줄은 이름판을 약 절반 밝기(색마다 ×15/31, <c>0x1000c650</c> 섞기 2·세기 16)로 그리고 눌러도 아무 일이 없다(<c>0x10043ab0</c>: <c>+0x44</c> 면 되돌아감).
+    /// 세이브에 실린다. 분석-UI 「8. 이미 고른 에피소드 줄은 어떻게 그리나」.
+    /// </summary>
+    private readonly HashSet<int> _episodesPicked = [];
+
+    /// <summary>
     /// 챕터가 끝났다는 표시 — 필드 행동 11 이 세우고(원본 챕터 상태 <c>+0x10</c>, <c>0x1004e6c0</c>), 모세스에 들어올 때 이것이 서 있으면
     /// 항행 대신 연대표로 간다(<c>0x100f5b07</c>). 연대표에서 에피소드를 고르면 내린다. 세이브에 실린다.
     /// </summary>
@@ -97,7 +104,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)
         {
-            if (!EpisodeOpen(list[i])) continue;
+            if (!EpisodeOpen(list[i]) || _episodesPicked.Contains(list[i].No)) continue;   // 고른 줄은 못 누른다
             var (x, y) = EpisodeCell(list[i].No);
             if (list[i].No / 2 >= EpisodeRows) continue;
             if (bx >= ox + x && bx < ox + x + EpisodeCellW && by >= oy + y && by < oy + y + EpisodeCellH) return i;
@@ -116,6 +123,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_episodePick != index) { _episodePick = index; return true; }
 
         var entry = Episodes()[index];
+        _episodesPicked.Add(entry.No);
         _episodesOpen = false;
         _chapterDone = false;
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
@@ -152,11 +160,12 @@ internal sealed unsafe partial class BattleSceneWindow
             // 이름판 그림은 <b>화면 가운데(320)를 기준점</b>으로 왼·오른쪽 자리를 스스로 들고 있고(장 5 = −196, 장 20 = +112),
             // 세로는 기준점이 −58 이라 줄 자리에 58 을 더해 찍는다.
             int cx = ox + 320, cy = oy + 186 + EpisodeCellH * row + 58;
-            if (!DrawUi(EpisodeObs, motion, tick, cx, cy, UiBlend.Alpha))
+            bool picked = _episodesPicked.Contains(entry.No);
+            if (!DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? UiBlend.Dim : UiBlend.Alpha))
                 DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
             // 고른 표시 — 이름 양 끝에 꺾쇠 한 쌍. 모션 4 는 표시가 아니라 <b>다른 장 이름판</b>이라 예전에는 이름이 겹쳐 찍혔다.
             // Obs 0979 의 장 0~3 만 자리가 (0,0) 인 작은 그림이고, 그중 15틱짜리 모션 62·64 가 깜빡이는 꺾쇠다.
-            if (i == _episodePick && UiFor(EpisodeObs)?.FrameAt(motion, tick) is { } plate)
+            if (i == _episodePick && !picked && UiFor(EpisodeObs)?.FrameAt(motion, tick) is { } plate)
             {
                 int mid = cy + plate.Y + plate.H / 2;
                 DrawUi(EpisodeObs, 62, tick, cx + plate.X - 12, mid - 22, UiBlend.Alpha);
