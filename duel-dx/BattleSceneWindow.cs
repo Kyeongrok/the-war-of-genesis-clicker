@@ -510,6 +510,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>지난 프레임의 실제 시각(초) — 게임 시계(<c>_lastTime</c>)는 여기서 흐른 만큼 × 게임 속도로 나아간다.</summary>
     private double _realTime;
 
+    /// <summary>창 제목에 찍는 버전 — 릴리즈 빌드의 태그(v0.10.0 따위). 손으로 빌드한 것은 「개발판」.</summary>
+    private static string AppVersion
+    {
+        get
+        {
+            string v = typeof(BattleSceneWindow).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "";
+            v = v.Split('+')[0];                                   // 커밋 해시(+abc…) 꼬리는 뗀다
+            return v.Length == 0 || v.EndsWith("-dev") ? "개발판" : "v" + v;
+        }
+    }
+
     private static void RegisterClassOnce()
     {
         if (_classAtom != 0) return;
@@ -542,7 +555,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         IntPtr menu = CreateMenuBar();
 
         _active = this;
-        _hwnd = Win32.CreateWindowExW(0, ClassName, $"{DemoScene.Fallback.Title} — 전투 Btl {DemoScene.Fallback.Id:D4}",
+        _hwnd = Win32.CreateWindowExW(0, ClassName, $"창세기전3 파트2 — WarOfGenesis {AppVersion}",
             Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
             rect.Width, rect.Height,
             IntPtr.Zero, menu, Win32.GetModuleHandleW(null), IntPtr.Zero);

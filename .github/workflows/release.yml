@@ -33,13 +33,13 @@ jobs:
           $version = $parts -join '.'
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
-      # 게임(DuelDx.exe)과 에디터(WarOfGenesis.Editor.exe)를 각각 설치 없이 도는 단일 exe 로 낸다.
+      # 게임(WarOfGenesis.exe)과 에디터(WarOfGenesis.Editor.exe)를 각각 설치 없이 도는 단일 exe 로 낸다.
       # IncludeAllContentForSelfExtract — csproj 가 싣는 assets 폴더(캐릭터·배경)까지 exe 안에 묶는다.
       - name: Publish (game, editor)
         shell: pwsh
         run: |
           $v = "${{ steps.version.outputs.version }}"
-          foreach ($proj in 'duel-dx/DuelDx.csproj', 'WarOfGenesis.Editor/WarOfGenesis.Editor.csproj') {
+          foreach ($proj in 'duel-dx/WarOfGenesis.csproj', 'WarOfGenesis.Editor/WarOfGenesis.Editor.csproj') {
             dotnet publish $proj -c Release -r win-x64 --self-contained true -o publish `
               -p:PublishSingleFile=true `
               -p:IncludeAllContentForSelfExtract=true `
@@ -48,16 +48,21 @@ jobs:
               -p:Version=$v -p:AssemblyVersion=$v -p:FileVersion=$v -p:InformationalVersion=$v
             if ($LASTEXITCODE -ne 0) { throw "$proj publish 실패" }
           }
-          foreach ($exe in 'DuelDx.exe', 'WarOfGenesis.Editor.exe') {
+          foreach ($exe in 'WarOfGenesis.exe', 'WarOfGenesis.Editor.exe') {
             if (-not (Test-Path "publish/$exe")) { throw "publish 에 $exe 가 없습니다" }
           }
-          Get-ChildItem publish | Select-Object Name, Length | Format-Table -AutoSize
+          # 두 exe 를 zip 하나로도 묶는다 — exe 를 막는 메일·보안 프로그램을 거치거나 한 번에 받을 때.
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path publish/WarOfGenesis.exe, publish/WarOfGenesis.Editor.exe -DestinationPath "dist/WarOfGenesis-v$v.zip" -Force
+          Get-ChildItem publish, dist | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: the-war-of-genesis-${{ steps.version.outputs.version }}
-          path: publish/*.exe
+          path: |
+            publish/*.exe
+            dist/*.zip
 
       - name: Upload to GitHub Releases
         if: startsWith(github.ref, 'refs/tags/v')
@@ -69,7 +74,7 @@ jobs:
             gh release create $tag --title $tag --generate-notes
           }
           # 업로드가 GitHub 쪽 500·504 로 가끔 끊긴다 — 파일마다 몇 번 다시 시도한다.
-          foreach ($file in "publish/DuelDx.exe", "publish/WarOfGenesis.Editor.exe") {
+          foreach ($file in "publish/WarOfGenesis.exe", "publish/WarOfGenesis.Editor.exe", "dist/WarOfGenesis-v${{ steps.version.outputs.version }}.zip") {
             for ($try = 1; $try -le 4; $try++) {
               gh release upload $tag $file --clobber
               if ($LASTEXITCODE -eq 0) { break }
