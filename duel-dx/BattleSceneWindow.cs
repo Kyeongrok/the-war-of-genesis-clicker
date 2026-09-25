@@ -908,9 +908,29 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {_routine != null} toast '{_toast}' hp {before}" + Environment.NewLine);
     }
 
+    /// <summary>DUELDX_CLICKCELL=&lt;열&gt;,&lt;줄&gt; 면 플레이어 차례에 그 칸 한가운데를 한 번 누른다(화면 밖 시험용 — 클릭 이동).</summary>
+    private bool _clickHookDone;
+
+    private void ApplyClickHook()
+    {
+        if (_clickHookDone || Environment.GetEnvironmentVariable("DUELDX_CLICKCELL")?.Split(',') is not [var cs, var rs]
+            || !int.TryParse(cs, out int col) || !int.TryParse(rs, out int row)) return;
+        if (!IsPlayerTurn || _routine != null || _talk != null || _units[_turn].IsBusy) return;
+        _clickHookDone = true;
+        var u = _units[_turn];
+        int bx = col * TileW + TileW / 2, by = CellTop(col, row) + TileH / 2;
+        var range = ComputeRange(u);
+        string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {RowAt(bx, by)} unitAt {UnitAtBoard(bx, by)} object {ObjectAt(col, RowAt(bx, by))?.Data.Id} "
+                   + $"turn {u.ChrCode}({u.Col},{u.Row}) reach {range?.CanReach(row * Cols + col)} path {(range is { } r ? PathWithin(r, u.Col, u.Row, row * Cols + col)?.Count : null)}";
+        OnClick((int)((bx - _camX) * _zoom + ViewOffsetX), (int)((by - _camY) * _zoom + ViewOffsetY));
+        why += $" → queued {u.Path.Count} toast '{_toast}'";
+        if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);
+    }
+
     private void ApplyWorkHook()
     {
         ApplyAimHook();
+        ApplyClickHook();
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
         if (_turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다

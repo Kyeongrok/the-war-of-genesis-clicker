@@ -84,7 +84,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int Col, int Row) RangeOrigin(UnitState unit) =>
         _turn >= 0 && _units[_turn] == unit ? (unit.OriginCol, unit.OriginRow) : (unit.Col, unit.Row);
 
-    private UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row);
+    // 전장에 있는 사람만 — 퇴장(사건 201)한 사람은 살아 있는 채 좌표가 남아, 그 칸을 누르면 보이지 않는 사람을 골라 걷지 못했다
+    // (사용자 보고: Btl 0150 (21,22) 는 WASD 로는 가는데 클릭으로는 안 감).
+    private UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 
     /// <summary>인물의 지금 자리·TP 로 이동 영역을 셈한다. 지도·게임 표가 없으면 null.</summary>
     private MoveRange? ComputeRange(UnitState unit)
