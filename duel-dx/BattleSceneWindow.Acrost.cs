@@ -9,7 +9,7 @@ namespace DuelDx;
 /// <remarks>
 /// <para><b>엘레맨탈 파이어</b> — 핸들러 <c>0x1009ea80</c>, 대상 j/n 마다:
 /// 불덩이 637:0 이 시전자 머리 위(z+120)에서 반지름 80 으로 돌고(<c>0x100c5460</c>·<c>0x100c5550</c>, 고른 간격 j/n 에서 출발, 150+10j 틱),
-/// 5틱마다 꼬리 321:0 을 남긴다(<c>0x100c55a0(321, 5, 4)</c>). 다 돌면 그 불덩이가 대상에게 날아가(빠르기 5, ×1.5, 위 80) 터진다 —
+/// 4틱마다 꼬리 321:5(불똥)를 남긴다(<c>0x100c55a0(321, 5, 4)</c> = Obs · 모션 · 간격, 갱신 <c>0x100c55f0</c>). 다 돌면 그 불덩이가 대상에게 날아가(빠르기 5, ×1.5, 위 80) 터진다 —
 /// 252:0 → 252:1, 피해는 터질 때(<c>0x100c2950</c>). 소리 1331:0(돌기 시작) · 1331:1(날기 시작) · 1331:0(터짐).
 /// 원 궤도의 빠르기는 곡선 이동기(<c>0x100384c0</c>) 안쪽이라 못 풀었다 — 인자의 10.0 을 틱당 10° 로 읽었다(가설).</para>
 /// <para><b>서몬 몬스터</b> — 핸들러 <c>0x100af1e0</c>, 대상 j 마다 난수 넷 중 하나로 몬스터가 대상의 한쪽에 나타나 친다(j+10 틱 뒤):
@@ -65,7 +65,13 @@ internal sealed unsafe partial class BattleSceneWindow
         while (balls.Any(b => !b.Done))
         {
             StepFireBalls(ux, uy);
-            foreach (var b in balls.Where(b => b.Done && struck.Add(b))) hit(b.Target);
+            foreach (var b in balls.Where(b => b.Done && struck.Add(b)))
+            {
+                hit(b.Target);
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"elemental fire: target {b.Target} hit at {_lastTime - balls[0].Start:0.00}s (orbit {b.OrbitTicks} ticks, {_timedFx.Count(f => f.Obs == FireTrailObs)} trail puffs alive)" + Environment.NewLine);
+            }
             yield return true;
         }
         // 마지막 폭발(252:1)이 끝날 때까지
@@ -87,7 +93,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     b.Angle += Math.PI / 18;                                     // 10°
                     b.X = cx + Math.Cos(b.Angle) * 80;
                     b.Y = cy + Math.Sin(b.Angle) * 80 * 0.8 - 120 * 0.6;         // 반지름 80(월드), 머리 위 120
-                    if (b.Tick % 5 == 0) _timedFx.Add(new TimedFx(FireTrailObs, 0, _fireLastStep, (int)b.X, (int)b.Y, null, false));
+                    // 꼬리 — 갱신 0x100c55f0: 4틱마다(+0x132) 321 의 모션 5(+0x130, 10틱 불똥)를 그 자리에 한 번, 3틱 뒤에 띄운다.
+                    // 예전에는 모션 0(254×219 큰 섬광)을 5틱마다 깔아 화면이 깜빡였다(사용자 보고).
+                    if (b.Tick % 4 == 0) _timedFx.Add(new TimedFx(FireTrailObs, 5, _fireLastStep + 3 / TicksPerSecond, (int)b.X, (int)b.Y, null, false));
                     if (b.Tick >= b.OrbitTicks) { b.Diving = true; FxSound(FireSoundObs, 1, _fireLastStep); }
                     continue;
                 }
