@@ -555,7 +555,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private string WorkEffect(WorkData w)
     {
         var bits = new List<string>();
-        if (w.IsHeal && w.Power > 0) bits.Add($"최대 HP의 {w.Power}% 회복");
+        if (w.AbilityId == EncourageAbility) bits.Add($"아군 SOUL +{w.Power}");
+        else if (w.IsHeal && w.Power > 0) bits.Add($"최대 HP의 {w.Power}% 회복");
         else if (w.IsDamage && w.Power > 0) bits.Add($"위력 {w.Power}");
         foreach (var (stat, value) in w.Bonuses)
         {

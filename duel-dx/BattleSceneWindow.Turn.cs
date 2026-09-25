@@ -393,6 +393,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── work 사거리·효과 범위 ────────────────────────────────────────────────
 
+    /// <summary>격려 — 아군 하나의 SOUL 을 위력만큼 올린다.</summary>
+    private const int EncourageAbility = 10;
+
     private WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
@@ -788,9 +791,20 @@ internal sealed unsafe partial class BattleSceneWindow
             ApplyAilments(a, t, w);
             return;
         }
+        // 격려(어빌리티 10) — 대상 SOUL 을 위력만큼 올린다(0x10091ae0). 공통 함수를 안 거쳐 19(소울 정지)도 무시하고, 최대치에서 자른다.
+        if (w.AbilityId == EncourageAbility)
+        {
+            int before = t.Soul;
+            t.Soul = Math.Min(t.MaxSoul, t.Soul + Math.Max(0, (int)w.Power));
+            ShowNumber(t, $"{_db.T(41)} +{t.Soul - before}", HealColor2);
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"encourage work {w.Id}: {a.ChrCode} → {t.ChrCode} SOUL {before} → {t.Soul} (위력 {w.Power})" + Environment.NewLine);
+            return;
+        }
         if (!w.IsDamage)
         {
-            if (result != 3) ApplyAilments(a, t, w);   // 종류 2·3(큐어·격려)은 상태이상만 건다
+            if (result != 3) ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
             return;
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
