@@ -1272,7 +1272,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
                 // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
                 var actorBlend = UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
-                DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha);
+                // 좌우반전(걷기 방향 3 · 208 인자 3 · 212)을 넘겨야 한다 — 빠져 있어 오른쪽으로 걷는 인물이 왼쪽을 보고 뒷걸음질 쳤다(사용자 보고: Fld 0076).
+                DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha, mirror: actor.Mirror);
             }
     }
 
