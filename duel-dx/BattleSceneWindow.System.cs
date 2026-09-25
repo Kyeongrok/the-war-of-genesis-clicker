@@ -375,7 +375,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
-                                   byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null);
+                                   byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null,
+                                   bool? OnField = null);
 
     /// <summary>인물 레코드에서 세이브가 따로 적는 칸들(<see cref="SaveUnit.Char"/>).</summary>
     private sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
@@ -614,7 +615,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
-                    [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data)))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
+                    [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -730,6 +731,9 @@ internal sealed unsafe partial class BattleSceneWindow
             if (s == null) continue;
             pool.Remove(s);
             u.WarpTo(s.Col, s.Row);
+            // 전장에 섰는지도 되살린다 — 배치 자료로만 정하면, 같은 Chr 가 둘일 때(한 명은 대기 (0,0)) 칸 차례로 짝지으며 뒤바뀌어
+            // 보이지 않는 「전장의 적」이 (0,0)에 남아 전멸이 안 됐다(사용자 보고: Btl 0155). 옛 세이브는 (0,0)이면 전장 밖으로 본다.
+            u.OnField = s.OnField ?? (s.Col != 0 || s.Row != 0);
             u.OriginCol = s.Col;
             u.OriginRow = s.Row;
             u.Facing = (Facing)s.Facing;
