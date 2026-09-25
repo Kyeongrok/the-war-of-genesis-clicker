@@ -57,8 +57,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 상태이상 칸 셋 — 원본처럼 Obs 0489 아이콘 한 장씩, 빈 칸은 모션 0(「EMPTY」 판)이다(분석-전투 창 228).
         FillRect(x + 6, y + 228, InfoW - 12, 34, BoxBg);
         StrokeRect(x + 6, y + 228, InfoW - 12, 34, BoxLine);
+        // 아이콘 기준점은 그림 <b>가운데</b>다(스테이터스 창도 가운데 자리로 찍는다) — 왼쪽 위 자리로 찍어 칸 밖으로 반쯤 삐져나왔다(사용자 보고).
         for (int i = 0; i < 3; i++)
-            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 10 + i * 40, y + 236, UiBlend.Alpha, loop: false);
+            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 6 + 22 + i * 42, y + 228 + 17, UiBlend.Alpha, loop: false);
 
         void Centre(string text, int left, int top, uint color)
         {
