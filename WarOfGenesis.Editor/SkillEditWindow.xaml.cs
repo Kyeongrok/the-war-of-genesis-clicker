@@ -194,7 +194,7 @@ public partial class SkillEditWindow : Window
 
     /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
     /// <summary>스피너로 고치는 레벨별 칸과 한 번에 오르내리는 폭 — tp 는 10씩(사용자 요청).</summary>
-    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10, ["areaMax"] = 1 };
+    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10, ["areaMax"] = 1, ["rangeMax"] = 1 };
 
     private void LevelGrid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
