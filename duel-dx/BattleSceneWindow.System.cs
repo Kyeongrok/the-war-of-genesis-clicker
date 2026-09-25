@@ -813,6 +813,9 @@ internal sealed unsafe partial class BattleSceneWindow
             _mixer.StopMusic();
             StartBattleMusic();
         }
+        // 세이브의 인물 기록(701 로 바뀐 그림 +0xc 따위)은 판을 세운 <b>뒤에</b> 덮여서, 판을 세울 때 읽은 그림과 어긋날 수 있다 —
+        // 바뀐 인물만 다시 읽는다(건슬라이서 살라딘, Btl 0150).
+        LoadRosterSprites();
         _restoreVersion = SaveVersion;
         Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
