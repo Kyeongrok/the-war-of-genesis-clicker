@@ -145,6 +145,33 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
+    /// <summary>지금 울리는 대사 음성의 표지 — 다음 대사가 뜨거나 대사를 닫으면 끊는다.</summary>
+    private int _talkVoiceTag;
+
+    /// <summary>
+    /// 대사 음성 — 전투 대사 상자(600) 인자 3, 필드 600~602 인자 2 · 603 인자 1 · 609 인자 3 이 <c>Bgm\NNNN.bgm</c> 번호다(0 이면 목소리 없음).
+    /// 원본은 음성을 <c>0x100f5170</c> 으로 튼다. 배경음악과 다른 개체라 BGM 은 그대로 흐른다. 푸는 사이에 다음 대사로 넘어갔으면 틀지 않는다.
+    /// </summary>
+    private void PlayTalkVoice(int id)
+    {
+        StopTalkVoice();
+        if (id <= 0) return;
+        int tag = _talkVoiceTag = ++_soundTag;
+        LoadClip(id, pcm =>
+        {
+            if (!Muted && pcm != null && tag == Volatile.Read(ref _talkVoiceTag)) _mixer.PlayEffect(pcm, _effectGain, tag);
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                                   $"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}" + Environment.NewLine);
+        });
+    }
+
+    private void StopTalkVoice()
+    {
+        if (_talkVoiceTag != 0) _mixer.StopEffect(_talkVoiceTag);
+        _talkVoiceTag = 0;
+    }
+
     /// <summary><c>assets/bgm/NNNN.bgm</c> 한 자락을 배경 실에서 풀어 <paramref name="then"/> 에 넘긴다(못 읽으면 null).</summary>
     private void LoadClip(int id, Action<PcmSound?> then)
     {

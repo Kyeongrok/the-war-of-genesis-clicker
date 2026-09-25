@@ -13,7 +13,7 @@ namespace DuelDx;
 /// <list type="bullet">
 /// <item><b>0 말하는 이</b> — <c>10000+N</c> 이면 Btl 배치표 N번, 1~9999 면 인물 번호, 0 이면 없음(화면 가운데).</item>
 /// <item><b>2 글 번호</b> — 그 전투 <c>.tlb</c> 의 번호.</item>
-/// <item><b>3 음성</b>(600 만, 데모는 아직 안 냄) · <b>4 얼굴</b> — 초상화 모션 = <c>2×값 + 11</c>.</item>
+/// <item><b>3 음성</b>(600 만 — <c>Bgm\NNNN.bgm</c>, 0 이면 없음) · <b>4 얼굴</b> — 초상화 모션 = <c>2×값 + 11</c>.</item>
 /// </list>
 /// <b>600</b> 은 화면 아래 <c>(10, 370) 620×100</c> 고정 상자에 초상화와 이름을 얹고,
 /// <b>601</b> 은 말하는 이 머리 위 <c>(x+30, y−200) 174×60</c> 말풍선이다(틀 <c>Obs 0111</c>, 모션 1 아군 · 8 적 · 9 화면 밖).
@@ -81,6 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
         string name = speaker >= 0 && _units[speaker].Data is { } c ? _db?.T(c.NameId) ?? "" : "";
         _talk = (box, speaker, name, text, A(4), _lastTime);
         _talkFilled = false;
+        PlayTalkVoice(box ? A(3) : 0);      // 대사 상자(600)만 음성 칸이 있다 — 말풍선(601)은 없다
     }
 
     /// <summary>대사를 닫는다 — 넘기거나 저절로 넘어갈 때.</summary>
@@ -88,6 +89,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_talk == null) return;
         _talk = null;
+        StopTalkVoice();
         Play(TalkCloseSound);
     }
 
