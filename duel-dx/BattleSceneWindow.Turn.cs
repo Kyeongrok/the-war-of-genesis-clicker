@@ -636,6 +636,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 메테오 — 운석 한 발이 범위 안 한 칸에 떨어지고, 닿으면 범위 안 대상마다 피해가 한 번.
+            if (w.AbilityId == MeteorAbility)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in MeteorRoutine(w, a, col, row, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                    yield return true;
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             if (w.AbilityId == GravityFieldAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
