@@ -22,15 +22,10 @@
                     Click="CharacterStatsMenuItem_Click"
                     Header="캐릭터 스탯(_S)" />
                 <MenuItem
-                    x:Name="SkillsMenuItem"
-                    AutomationProperties.AutomationId="SkillsMenuItem"
-                    Click="SkillsMenuItem_Click"
-                    Header="스킬(어빌리티)(_K)" />
-                <MenuItem
                     x:Name="SkillEditMenuItem"
                     AutomationProperties.AutomationId="SkillEditMenuItem"
                     Click="SkillEditMenuItem_Click"
-                    Header="스킬 편집 — 공통·레벨별(_E)" />
+                    Header="스킬(어빌리티)(_K)" />
                 <MenuItem
                     x:Name="BattleListMenuItem"
                     AutomationProperties.AutomationId="BattleListMenuItem"
