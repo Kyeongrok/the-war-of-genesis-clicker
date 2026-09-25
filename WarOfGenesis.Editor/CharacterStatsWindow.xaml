@@ -3,37 +3,33 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="캐릭터 스탯"
-    Width="1400"
-    Height="800"
+    Width="1100"
+    Height="760"
     WindowStartupLocation="CenterOwner">
-    <DockPanel Margin="8">
-        <StackPanel
-            Margin="0,0,0,8"
-            DockPanel.Dock="Top"
-            Orientation="Horizontal">
-            <TextBlock VerticalAlignment="Center" Text="찾기(이름·칭호·직업·번호):" />
-            <TextBox
-                x:Name="FilterBox"
-                Width="220"
-                Margin="6,0,0,0"
-                VerticalAlignment="Center"
-                AutomationProperties.AutomationId="StatsFilterBox"
-                TextChanged="FilterBox_TextChanged" />
-            <CheckBox
-                x:Name="HideEmptyToggle"
-                Margin="12,0,0,0"
-                VerticalAlignment="Center"
-                Checked="FilterBox_TextChanged"
-                Content="이름 없는·자리표시 레코드 숨기기"
-                IsChecked="True"
-                Unchecked="FilterBox_TextChanged" />
-            <TextBlock
-                x:Name="StatusText"
-                Margin="12,0,0,0"
-                VerticalAlignment="Center"
-                Foreground="DimGray" />
-        </StackPanel>
+    <Window.Resources>
+        <!--  상세의 「이름 : 값」 한 줄  -->
+        <DataTemplate x:Key="StatTemplate">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="56" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Foreground="DimGray" Text="{Binding Label}" />
+                <TextBlock
+                    Grid.Column="1"
+                    FontWeight="SemiBold"
+                    Text="{Binding Value}"
+                    TextAlignment="Right" />
+            </Grid>
+        </DataTemplate>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,14,0,4" />
+            <Setter Property="Foreground" Value="#2B4C7E" />
+        </Style>
+    </Window.Resources>
 
+    <DockPanel Margin="8">
         <TextBlock
             Margin="0,6,0,0"
             DockPanel.Dock="Bottom"
@@ -41,39 +37,112 @@
             Text="값은 .chr 파일 기본값 + 장비 보너스(G3PartII.dll 식). HP 는 갑옷 배율을 곱한 화면 값이고, 어빌리티 패시브 보너스는 아직 안 넣었다. SOUL 은 전투 시작값/최대. ATK·ACR 은 시작 SOUL·가득 찬 TP 기준."
             TextWrapping="Wrap" />
 
-        <DataGrid
-            x:Name="Grid"
-            AutoGenerateColumns="False"
-            CanUserAddRows="False"
-            FrozenColumnCount="2"
-            GridLinesVisibility="Horizontal"
-            HeadersVisibility="Column"
-            IsReadOnly="True"
-            VerticalScrollBarVisibility="Auto">
-            <DataGrid.Columns>
-                <DataGridTextColumn Binding="{Binding Code, StringFormat=D4}" Header="Chr" />
-                <DataGridTextColumn Binding="{Binding Name}" Header="이름" />
-                <DataGridTextColumn Binding="{Binding Title}" Header="칭호" />
-                <DataGridTextColumn Binding="{Binding Body}" Header="체질" />
-                <DataGridTextColumn Binding="{Binding Family}" Header="계열" />
-                <DataGridTextColumn Binding="{Binding Job}" Header="직업" />
-                <DataGridTextColumn Binding="{Binding Level}" Header="LV" />
-                <DataGridTextColumn Binding="{Binding Hp}" Header="HP" />
-                <DataGridTextColumn Binding="{Binding Soul}" Header="SOUL" />
-                <DataGridTextColumn Binding="{Binding Tp}" Header="TP" />
-                <DataGridTextColumn Binding="{Binding Atk}" Header="ATK" />
-                <DataGridTextColumn Binding="{Binding Acr}" Header="ACR" />
-                <DataGridTextColumn Binding="{Binding Rdp}" Header="RDP" />
-                <DataGridTextColumn Binding="{Binding Lp}" Header="LP" />
-                <DataGridTextColumn Binding="{Binding Ctp}" Header="CTP" />
-                <DataGridTextColumn Binding="{Binding Stp}" Header="STP" />
-                <DataGridTextColumn Binding="{Binding Psy}" Header="PSY" />
-                <DataGridTextColumn Binding="{Binding Dep}" Header="DEP" />
-                <DataGridTextColumn Binding="{Binding Dex}" Header="DEX" />
-                <DataGridTextColumn Binding="{Binding Weapon}" Header="무기" />
-                <DataGridTextColumn Binding="{Binding Equipment}" Header="장비" />
-                <DataGridTextColumn Binding="{Binding Abilities}" Header="어빌리티 (레벨, 다음 레벨 EXP)" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  왼쪽 — 찾기와 캐릭터 목록  -->
+            <DockPanel>
+                <StackPanel Margin="0,0,0,6" DockPanel.Dock="Top">
+                    <TextBox
+                        x:Name="FilterBox"
+                        AutomationProperties.AutomationId="StatsFilterBox"
+                        TextChanged="FilterBox_TextChanged"
+                        ToolTip="이름·칭호·직업·계열·번호로 찾기" />
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock
+                            x:Name="StatusText"
+                            DockPanel.Dock="Right"
+                            Foreground="DimGray" />
+                        <CheckBox
+                            x:Name="HideEmptyToggle"
+                            Checked="FilterBox_TextChanged"
+                            Content="자리표시 레코드 숨기기"
+                            IsChecked="True"
+                            Unchecked="FilterBox_TextChanged" />
+                    </DockPanel>
+                </StackPanel>
+                <ListBox
+                    x:Name="List"
+                    AutomationProperties.AutomationId="StatsList"
+                    HorizontalContentAlignment="Stretch"
+                    SelectionChanged="List_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,2">
+                                <TextBlock
+                                    Width="40"
+                                    Foreground="DimGray"
+                                    Text="{Binding Code, StringFormat=D4}" />
+                                <TextBlock
+                                    DockPanel.Dock="Right"
+                                    Foreground="DimGray"
+                                    Text="{Binding Level, StringFormat=Lv{0}}" />
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="Gray"
+                                        Text="{Binding Subtitle}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter
+                Grid.Column="1"
+                Width="8"
+                HorizontalAlignment="Stretch" />
+
+            <!--  오른쪽 — 고른 캐릭터의 상세  -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="Detail" Margin="8,0,8,8">
+                    <TextBlock FontSize="22" FontWeight="Bold">
+                        <Run Text="{Binding Name, Mode=OneWay}" />
+                        <Run
+                            FontSize="13"
+                            Foreground="DimGray"
+                            Text="{Binding Code, StringFormat=Chr {0:D4}, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock
+                        Margin="0,2,0,0"
+                        Foreground="DimGray"
+                        Text="{Binding Profile}" />
+
+                    <TextBlock Style="{StaticResource Section}" Text="능력치" />
+                    <UniformGrid Width="560" HorizontalAlignment="Left" Columns="3">
+                        <ItemsControl ItemTemplate="{StaticResource StatTemplate}" ItemsSource="{Binding Vitals}" Margin="0,0,24,0" />
+                        <ItemsControl ItemTemplate="{StaticResource StatTemplate}" ItemsSource="{Binding Combat}" Margin="0,0,24,0" />
+                        <ItemsControl ItemTemplate="{StaticResource StatTemplate}" ItemsSource="{Binding Bases}" />
+                    </UniformGrid>
+
+                    <TextBlock Style="{StaticResource Section}" Text="무기" />
+                    <TextBlock Text="{Binding Weapon}" TextWrapping="Wrap" />
+
+                    <TextBlock Style="{StaticResource Section}" Text="장비" />
+                    <ItemsControl ItemsSource="{Binding EquipmentItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,1" Text="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Style="{StaticResource Section}" Text="어빌리티 (레벨 · 다음 레벨 EXP)" />
+                    <ItemsControl ItemsSource="{Binding AbilityItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,1" Text="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </DockPanel>
 </Window>
