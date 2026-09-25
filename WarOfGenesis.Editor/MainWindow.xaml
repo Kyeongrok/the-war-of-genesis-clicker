@@ -22,11 +22,6 @@
                     Click="CharacterStatsMenuItem_Click"
                     Header="캐릭터 스탯(_S)" />
                 <MenuItem
-                    x:Name="SkillEditMenuItem"
-                    AutomationProperties.AutomationId="SkillEditMenuItem"
-                    Click="SkillEditMenuItem_Click"
-                    Header="스킬(어빌리티)(_K)" />
-                <MenuItem
                     x:Name="BattleListMenuItem"
                     AutomationProperties.AutomationId="BattleListMenuItem"
                     Click="BattleListMenuItem_Click"
@@ -51,6 +46,13 @@
                     AutomationProperties.AutomationId="EffectViewerMenuItem"
                     Click="EffectViewerMenuItem_Click"
                     Header="이펙트 보기(_E)" />
+            </MenuItem>
+            <MenuItem Header="어빌리티(_B)">
+                <MenuItem
+                    x:Name="SkillEditMenuItem"
+                    AutomationProperties.AutomationId="SkillEditMenuItem"
+                    Click="SkillEditMenuItem_Click"
+                    Header="스킬(_K)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem
