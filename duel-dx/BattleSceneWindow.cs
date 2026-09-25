@@ -899,6 +899,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (!IsPlayerTurn || _routine != null || _talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
         _aimHookDone = true;
         var u = _units[_turn];
+        // DUELDX_AIMSHOW=1 이면 누르지 않고 어빌리티 목록에서 고른 것처럼만 한다 — 범위를 먼저 보이는 기술을 시험할 때.
+        if (Environment.GetEnvironmentVariable("DUELDX_AIMSHOW") == "1") { SelectAbilityRow((_db?.Abilities.GetValueOrDefault(w.AbilityId) is { } ab ? _db.T(ab.NameId) : "", w, true, "")); return; }
         (_targetWork, _targetIsBasicAttack) = (w.Id, false);
         u.Hp = Math.Max(1, u.Hp / 2);
         int before = u.Hp;
