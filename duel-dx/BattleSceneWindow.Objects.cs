@@ -13,9 +13,18 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     private IReadOnlyList<DemoObject> Objects => _scene.Objects ?? [];
 
-    /// <summary>그 칸에 선 물체 — 없으면 null.</summary>
+    /// <summary>그 칸에 선 물체 — 없으면 null. 두 칸짜리 문은 오른쪽 칸도 제 칸이다(<see cref="ObjectWidth"/>).</summary>
     private DemoObject? ObjectAt(int col, int row) =>
-        Objects.FirstOrDefault(o => o.Alive && !_opened.Contains(o) && o.Col == col && o.Row == row);
+        Objects.FirstOrDefault(o => o.Alive && !_opened.Contains(o) && o.Row == row && col >= o.Col && col < o.Col + ObjectWidth(o));
+
+    /// <summary>
+    /// 물체가 차지하는 칸 수 — 그림 보정 가로(.obj 16)가 36 이상이면 두 칸(두 칸 가운데에 그린다, 가설)이다.
+    /// 문(Obj 69 · 71, 보정 39)이 그렇다. 예전에는 왼쪽 칸만 물체로 쳐서, 문 그림의 오른쪽 절반을 누르면 아무 일도 없었다(사용자 보고: Btl 0146 위쪽 문).
+    /// </summary>
+    private static int ObjectWidth(DemoObject o) => o.Data.DrawW >= 36 ? 2 : 1;
+
+    /// <summary>문이 열린 때 — 그때부터 여는 모션(1)을 한 번 돌고 열린 모션(2)에 머문다.</summary>
+    private readonly Dictionary<DemoObject, double> _openedAt = [];
 
     /// <summary>그 칸이 물체 때문에 설 수 없는 칸인가 — 문과 스위치문뿐이다.</summary>
     private bool ObjectBlocks(int col, int row) => ObjectAt(col, row) is { Data.BlocksStanding: true };
@@ -96,6 +105,7 @@ internal sealed unsafe partial class BattleSceneWindow
         CommitMove(_units[_turn]);
         _units[_turn].Tp -= ObjectTouchTp;
         _opened.Add(obj);
+        _openedAt[obj] = _lastTime;
 
         if (obj.Data.Kind == 8)
         {
@@ -129,6 +139,15 @@ internal sealed unsafe partial class BattleSceneWindow
         if (user is null) return false;
         // B 키면 부술 수 있는 물체를, 그 밖에는 열 수 있는 물체를 고른다.
         bool breaking = Environment.GetEnvironmentVariable("DUELDX_TOUCH") == "break";
+        // 「열,줄」 이면 그 칸의 물체를 연다(두 칸 문의 오른쪽 칸 따위를 시험할 때).
+        var cell = Environment.GetEnvironmentVariable("DUELDX_TOUCH")!.Split(',');
+        if (cell.Length == 2 && int.TryParse(cell[0], out int tc) && int.TryParse(cell[1], out int tr))
+        {
+            if (ObjectAt(tc, tr) is not { } there) return false;
+            user.ResetTo(there.Col, Math.Clamp(there.Row + 1, 0, Rows - 1), keepFacing: true);
+            _turn = Array.IndexOf(_units, user);
+            return TouchObject(there);
+        }
         var target = Objects.Where(o => !_opened.Contains(o) && o.Alive
                                         && (breaking ? o.Data.Breakable && o.Record.Team != 4 : o.Data.Kind is 2 or 6 or 8))
                             .OrderBy(o => Math.Abs(o.Col - user.Col) + Math.Abs(o.Row - user.Row))
@@ -319,7 +338,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (Objects.FirstOrDefault(o => o.Record.No == no) is not { } obj) return;
         if (open == _opened.Contains(obj)) return;               // 이미 그 꼴이면 원본도 아무것도 안 한다
-        if (open) _opened.Add(obj); else _opened.Remove(obj);
+        if (open) { _opened.Add(obj); _openedAt[obj] = _lastTime; } else { _opened.Remove(obj); _openedAt.Remove(obj); }
         _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
         Play(MosesClickSound);
     }
@@ -329,12 +348,21 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         foreach (var obj in Objects)
         {
-            if (!obj.Alive || _opened.Contains(obj) || obj.Data.SpriteId <= 0) continue;
+            if (!obj.Alive || obj.Data.SpriteId <= 0) continue;
+            // 열린 물체 — 문(1·4)은 여는 모션 1 을 한 번 돌고 열린 모션 2 로 남는다(Obs 1217: 0 닫힘 · 1 열림 11틱 · 2 열린 채). 상자 따위는 치운다.
+            int motion = 0, tick = (int)(_lastTime * TicksPerSecond);
+            if (_opened.Contains(obj))
+            {
+                if (obj.Data.Kind is not (1 or 4)) continue;
+                int since = (int)((_lastTime - _openedAt.GetValueOrDefault(obj, _lastTime)) * TicksPerSecond);
+                int length = UiFor(obj.Data.SpriteId)?.MotionLength(1) ?? 0;
+                (motion, tick) = since < length ? (1, since) : (2, 0);
+            }
             // 그림 기준점 = 칸 왼쪽 위 + .obj 파일 16·18 의 그림 보정(원본은 ×4 · ×40/32 해서 화면 자리 +0x3e/+0x40 에 더한다, 분석-전투 「Obj 배치」).
             // 1칸 물체는 가로 16~20(칸 가운데), 2칸 문은 36·39(두 칸 가운데)라 픽셀 거리로 본다(가설). 예전에는 칸 아래 모서리에 놓아
             // 상자가 반 칸 넘게 내려가 노랑 칸(닿는 물체 칸)과 어긋났다(사용자 보고).
             int x = obj.Col * TileW + obj.Data.DrawW, y = CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
-            DrawUi(obj.Data.SpriteId, 0, (int)(_lastTime * TicksPerSecond), x, y, UiBlend.Alpha);
+            DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: motion == 0);
         }
     }
 }
