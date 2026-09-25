@@ -13,12 +13,30 @@
             DockPanel.Dock="Top"
             Orientation="Horizontal">
             <TextBlock VerticalAlignment="Center" Text="찾기(이름·번호):" />
-            <TextBox
-                x:Name="FilterBox"
-                Width="200"
-                Margin="6,0,0,0"
-                AutomationProperties.AutomationId="SkillEditFilter"
-                TextChanged="Filter_Changed" />
+            <!--  찾기 칸 — 끝의 ✕ 로 지운다. 넣은 글은 창을 닫아도 남아 다음에 열 때 다시 들어간다(사용자 요청)  -->
+            <Grid Width="200" Margin="6,0,0,0">
+                <TextBox
+                    x:Name="FilterBox"
+                    Padding="0,0,20,0"
+                    AutomationProperties.AutomationId="SkillEditFilter"
+                    TextChanged="Filter_Changed" />
+                <Button
+                    x:Name="FilterClear"
+                    Width="18"
+                    Margin="0,1,2,1"
+                    Padding="0"
+                    HorizontalAlignment="Right"
+                    AutomationProperties.AutomationId="SkillEditFilterClear"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="FilterClear_Click"
+                    Content="✕"
+                    Cursor="Arrow"
+                    Focusable="False"
+                    Foreground="Gray"
+                    ToolTip="찾기 글 지우기"
+                    Visibility="Collapsed" />
+            </Grid>
             <Button
                 Margin="12,0,0,0"
                 Padding="10,2"

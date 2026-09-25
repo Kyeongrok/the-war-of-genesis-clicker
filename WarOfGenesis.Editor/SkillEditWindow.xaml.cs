@@ -74,6 +74,7 @@ public partial class SkillEditWindow : Window
     public SkillEditWindow()
     {
         InitializeComponent();
+        FilterBox.Text = LoadFilter();   // 지난번 찾기 글 — 목록이 채워지면 이 글로 거른다
         Loaded += (_, _) => Load();
     }
 
@@ -114,7 +115,38 @@ public partial class SkillEditWindow : Window
                || r.Ability.ToString() == q || r.Skill.Levels.Any(l => l.Work.ToString() == q);
     }
 
-    private void Filter_Changed(object sender, TextChangedEventArgs e) => _view?.Refresh();
+    private void Filter_Changed(object sender, TextChangedEventArgs e)
+    {
+        FilterClear.Visibility = FilterBox.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _view?.Refresh();
+        SaveFilter(FilterBox.Text);
+    }
+
+    private void FilterClear_Click(object sender, RoutedEventArgs e)
+    {
+        FilterBox.Clear();
+        FilterBox.Focus();
+    }
+
+    /// <summary>찾기 글을 두는 곳 — 게임 폴더 자리(gameroot.txt)와 같은 편집기 설정 폴더.</summary>
+    private static readonly string FilterPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WarOfGenesis.Editor", "skillfilter.txt");
+
+    private static string LoadFilter()
+    {
+        try { return File.Exists(FilterPath) ? File.ReadAllText(FilterPath) : ""; }
+        catch (IOException) { return ""; }
+    }
+
+    private static void SaveFilter(string text)
+    {
+        try
+        {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilterPath)!);
+            File.WriteAllText(FilterPath, text);
+        }
+        catch (IOException) { /* 못 남겨도 이번에 쓰는 데는 지장 없다 */ }
+    }
 
     private void UpdateStatus()
     {
