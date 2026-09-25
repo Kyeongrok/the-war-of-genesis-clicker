@@ -368,7 +368,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db is not { } db) yield break;
         foreach (var (abilityId, level) in c.Abilities)
-            if (db.Abilities.TryGetValue(abilityId, out var ab) && ab.WorkByLevel.TryGetValue(level, out int wid)
+            if (db.Abilities.TryGetValue(abilityId, out var ab) && ab.TryWorkAt(level, out int wid)
                 && Work(wid) is { } w && (allyPass ? w.TargetMode == 4 && !w.IsDamage : w.IsDamage))
                 yield return w;
         if (!allyPass && Work(c.BasicWorkId) is { } basic) yield return basic;

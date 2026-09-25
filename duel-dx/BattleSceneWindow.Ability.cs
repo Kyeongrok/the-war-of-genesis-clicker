@@ -54,7 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var u = _units[_turn];
         foreach (var (abilityId, level) in c.Abilities.OrderBy(a => a.Ability))
         {
-            if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.WorkByLevel.TryGetValue(level, out int wid) || Work(wid) is not { } w) continue;
+            if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.TryWorkAt(level, out int wid) || Work(wid) is not { } w) continue;
             // 전투 목록(0x10032760)은 분류 1(전투)·4 만 보여 준다(분석-스킬) — 비전투 수련(0, 발키리의 혼 따위)·군단기(2)·
             // 장착형 패시브(3, PSY증가 따위)는 안 나온다.
             if (ab.Category is not (1 or 4)) continue;

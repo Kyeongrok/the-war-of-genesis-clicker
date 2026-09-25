@@ -222,7 +222,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (abilityId, level) in c.Abilities)
         {
             if (!db.Abilities.TryGetValue(abilityId, out var ab) || ab.Category is not (1 or 2 or 4)) continue;
-            if (ab.WorkByLevel.TryGetValue(level, out int wid) && Work(wid) is { } w && CanAfford(u, w)) list.Add(w);
+            if (ab.TryWorkAt(level, out int wid) && Work(wid) is { } w && CanAfford(u, w)) list.Add(w);
         }
         if (Work(c.BasicWorkId) is { } basic) list.Add(basic);
         return list;
