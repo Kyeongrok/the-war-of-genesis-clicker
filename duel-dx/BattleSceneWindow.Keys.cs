@@ -107,7 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
     private const int MenuTalkPauseBase = 1130;
 
-    private const int MenuSceneTag = 1103, MenuProgress = 1104;
+    private const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105;
 
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
     private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
@@ -143,6 +143,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu(), game = Win32.CreatePopupMenu(), mode = Win32.CreatePopupMenu();
         Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.AllyAi ? Win32.MF_CHECKED : 0u), MenuAllyAi, "동맹을 AI 가 움직임(&A)");
+        Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.ShowChestContents ? Win32.MF_CHECKED : 0u), MenuChestContents, "상자 내용물 보기(&C)");
         Win32.AppendMenuW(game, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)game, "게임(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
@@ -228,7 +229,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents));
+
+    /// <summary>지금 전투의 상자에 든 것을 왼쪽 위에 보이나 — 모드 > 상자 내용물 보기(원본에 없는 도움 기능, 기본 끔).</summary>
+    private bool _showChestContents = UserSettings.Current.ShowChestContents;
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
     private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
@@ -289,6 +293,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 SaveSettings();
                 break;
             case MenuProgress: ToggleProgress(); break;
+            case MenuChestContents:
+                _showChestContents = !_showChestContents;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuChestContents, Win32.MF_BYCOMMAND | (_showChestContents ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_showChestContents ? "상자 내용물을 왼쪽 위에 보입니다" : "상자 내용물을 숨깁니다");
+                SaveSettings();
+                break;
             case MenuSceneTag:
                 _showSceneTag = !_showSceneTag;
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuSceneTag, Win32.MF_BYCOMMAND | (_showSceneTag ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));

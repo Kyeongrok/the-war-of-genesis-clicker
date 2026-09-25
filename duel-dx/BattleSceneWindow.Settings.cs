@@ -20,7 +20,7 @@ namespace DuelDx;
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
-                                    double TalkPauseSeconds = 0.1, bool ShowSceneTag = true)
+                                    double TalkPauseSeconds = 0.1, bool ShowSceneTag = true, bool ShowChestContents = false)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 
