@@ -41,7 +41,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _abilityHover = bx >= ox + MenuRowX && bx < ox + MenuRowX + MenuRowW && row >= 0 && row < rows.Count ? row : -1;
     }
     // 원본 목록(분석-스킬 ba-12): 창 바깥 304, 줄 280×24 여덟 줄, 이름 x=46 · TP x=210 · SOUL x=240(오른쪽 맞춤).
-    private const int MenuW = 304, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 280, MenuRowX = 12;
+    // 원본에 없는 「소모」(실제로 깎이는 SOUL) 칸을 SOUL 오른쪽에 더해 창을 40 넓혔다(사용자 요청).
+    private const int MenuW = 344, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 320, MenuRowX = 12;
 
     /// <summary>어빌리티 목록 줄 아이콘 — 분석-스킬 ba-12: Obs 0488 의 17×17 그림 24장(기준점 가운데).</summary>
     private const int AbilityIconObs = 488;
@@ -88,6 +89,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<int> AbilityTargets(WorkData w)
     {
         var user = _units[_turn];
+        // 아군을 겨누는 기술(힐 따위, 대상 방식 4)은 <b>자기까지 포함한 아군</b> 가운데 HP 비율이 가장 낮은 쪽부터 —
+        // 전에는 적만 찾아 힐을 단축키로 고르면 아무도 안 겨눠, 한 번 더 눌러도 자기에게 못 썼다(사용자 보고).
+        if (w.TargetMode == 4)
+            return [.. Enumerable.Range(0, _units.Length)
+                .Where(i => _units[i].Alive && _units[i].OnField && ModeAccepts(4, user, _units[i])
+                            && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
+                .OrderBy(i => _units[i].Hp * 1000L / Math.Max(1, _units[i].MaxHp)).ThenBy(i => i != _turn).ThenBy(i => i)];
         return [.. Enumerable.Range(0, _units.Length)
             .Where(i => _units[i].Alive && _units[i].OnField && SeesAsFoe(user, _units[i])
                         && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
@@ -213,6 +221,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 두 칸 오른끝이 30픽셀밖에 안 떨어져 그대로 맞추면 「TPSOUL」로 붙는다 — TP 는 조금 왼쪽, SOUL 은 조금 오른쪽으로 띄운다.
         RightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
         RightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
+        RightText("소모", ox + MenuRowX + 286, oy + 3, White, 12);
 
         if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = _units[_turn].Data!;
@@ -239,6 +248,8 @@ internal sealed unsafe partial class BattleSceneWindow
             RightText($"{TpCostFor(_units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
             // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
             RightText($"{SoulNeedFor(_units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
+            // 쓰면 실제로 깎이는 SOUL(소모량) — 필요 SOUL 과 다를 수 있다(18 소울 소모량 % 보정까지 얹은 값).
+            RightText($"{SoulCostFor(_units[_turn], c, w.Id)}", rx + 280, y + 4, color, 12);
         }
 
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
