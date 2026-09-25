@@ -229,6 +229,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawMoveRange()
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
+        // 어빌리티 대상을 고르는 중(원본 상태 11)에는 이동 영역(파랑)·공격 사거리(빨강)를 걷고 그 기술의 사거리·효과 범위만 깐다 —
+        // 겹쳐 칠하면 사거리 칸이 묻혀 안 보였다(사용자 보고). 기본공격 겨냥은 예전처럼 둔다.
+        if (_targetWork >= 0 && !_targetIsBasicAttack) return;
         int radius = WaveRadius((int)((_lastTime - _rangeStart) * TicksPerSecond));
         // 차례인 인물의 영역이면 걸어가 손댈 수 있는 물체 칸도 칠한다(원본 상태 10 이 층 1 을 함께 만든다, 0x1006961c).
         var touchable = new HashSet<int>();
