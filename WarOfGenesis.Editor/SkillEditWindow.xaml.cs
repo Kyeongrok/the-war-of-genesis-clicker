@@ -26,6 +26,14 @@ public partial class SkillEditWindow : Window
         public int Ability => Skill.Ability;
         public string Name => Skill.Ability > 0 ? Skill.Name : $"(work {Skill.Levels.FirstOrDefault()?.Work})";
         public int Levels => Skill.Levels.Count;
+
+        /// <summary>work 번호 — 한 레벨이면 그 번호, 여럿이면 첫 레벨…끝 레벨. 기본공격(근접 work 1·원거리 work 6)도 어빌리티 이름으로만 떠서 찾기 어려웠다.</summary>
+        public string Works => Skill.Levels.Count switch
+        {
+            0 => "",
+            1 => Skill.Levels[0].Work.ToString(),
+            _ => $"{Skill.Levels[0].Work}…{Skill.Levels[^1].Work}",
+        };
         public int Varying => Skill.Levels.SelectMany(l => l.Fields.Keys).Where(k => k != "att").Distinct().Count();
         public string Dirty { get; set; } = "";
     }
@@ -110,16 +118,30 @@ public partial class SkillEditWindow : Window
 
     private void SkillGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => Fill();
 
+    /// <summary>「범위」 탭 칸 — 레코드에서 rangeShape 부터 areaMode 까지(사거리·높이·시야·대상 방식·효과 범위).</summary>
+    private static readonly HashSet<string> RangeFields = [.. SkillBook.Fields.Select(f => f.Name)
+        .SkipWhile(n => n != "rangeShape").TakeWhile(n => n != "kind")];
+
+    private void CommonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.OriginalSource == CommonTabs && IsLoaded) Fill();
+    }
+
     private void Fill()
     {
         if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; SkillDescription.Text = ""; return; }
         SkillDescription.Text = DescriptionOf(row.Ability);
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
-        CommonGrid.ItemsSource = row.Skill.Common.Select(kv => new CommonRow
+        bool rangeTab = CommonTabs.SelectedItem != OtherTab;
+        var common = row.Skill.Common.Where(kv => RangeFields.Contains(kv.Key) == rangeTab).ToList();
+        CommonGrid.ItemsSource = common.Select(kv => new CommonRow
         {
             Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, ""), Choices = Choices.GetValueOrDefault(kv.Key),
         }).ToList();
+        int ranges = row.Skill.Common.Keys.Count(RangeFields.Contains);
+        RangeTab.Header = $"범위 ({ranges})";
+        OtherTab.Header = $"나머지 ({row.Skill.Common.Count - ranges})";
         CommonHeader.Text = $"공통 — 모든 레벨이 같은 칸 ({row.Skill.Common.Count}개)";
 
         var table = new DataTable();

@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     x:Class="WarOfGenesis.Editor.SkillEditWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -60,6 +60,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Binding="{Binding Ability}" Header="어빌" />
                     <DataGridTextColumn Binding="{Binding Name}" Header="이름" />
+                    <DataGridTextColumn Binding="{Binding Works}" Header="work" />
                     <DataGridTextColumn Binding="{Binding Levels}" Header="레벨" />
                     <DataGridTextColumn Binding="{Binding Varying}" Header="레벨별 칸" />
                     <DataGridTextColumn Binding="{Binding Dirty}" Header="고침" />
@@ -98,9 +99,19 @@
                         FontWeight="Bold"
                         Text="공통 — 모든 레벨이 같은 칸" />
                 </DockPanel>
+                <!--  공통 칸이 45개라 한 표로는 보기 힘들다 — 사거리·대상·효과 범위 칸과 나머지로 나눠 보인다(사용자 요청)  -->
+                <TabControl
+                    x:Name="CommonTabs"
+                    Grid.Row="1"
+                    AutomationProperties.AutomationId="SkillEditCommonTabs"
+                    SelectionChanged="CommonTabs_SelectionChanged">
+                    <TabItem x:Name="RangeTab" Header="범위" />
+                    <TabItem x:Name="OtherTab" Header="나머지" />
+                </TabControl>
                 <DataGrid
                     x:Name="CommonGrid"
                     Grid.Row="1"
+                    Margin="2,26,2,2"
                     AutoGenerateColumns="False"
                     AutomationProperties.AutomationId="SkillEditCommon"
                     CanUserAddRows="False"
