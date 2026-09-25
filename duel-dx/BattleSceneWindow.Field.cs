@@ -109,6 +109,13 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Mirror { get; set; }
         public bool Visible { get; set; } = true;
 
+        /// <summary>
+        /// 모션을 한 바퀴 돌고 <b>마지막 장에 멈추나</b> — 208 인자 2 가 1 이 아니면 원본은 끝날 때까지 기다린 뒤 물체를 멈춘다
+        /// (<c>0x100f163f</c> → 틱 셈을 멈추는 <c>0x100f4c30</c>). 걷기가 새 모션을 걸면 풀린다.
+        /// 전에는 늘 되풀이해 Fld 0083 엠블라의 안경 만지기(모션 21)가 끝없이 돌았다(사용자 보고).
+        /// </summary>
+        public bool Hold { get; set; }
+
         /// <summary>지금 밝기 0~1 — 원본은 8단계다(행동 210·211).</summary>
         public double Alpha { get; set; } = 1;
 
@@ -489,7 +496,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (actor.Walk is { } walk)
             {
-                (actor.X, actor.Y, actor.Motion, actor.Mirror, actor.Walk) = (walk.ToX, walk.ToY, walk.EndMotion, walk.EndMirror, null);
+                (actor.X, actor.Y, actor.Motion, actor.Mirror, actor.Walk, actor.Hold) = (walk.ToX, walk.ToY, walk.EndMotion, walk.EndMirror, null, false);
             }
             if (actor.Fade is { } fade)
             {
@@ -698,6 +705,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldActorOf(A(0)) is not { } who) break;
                 var (walk, stand, mirror) = FieldFacing(A(4));
                 who.Motion = walk;
+                who.Hold = false;
                 who.Mirror = mirror;
                 who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime,
                             A(5) != 0 ? stand : walk, mirror);
@@ -709,6 +717,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 var (walk, stand, mirror) = FieldFacing(A(4));
                 int ticks = Math.Max(1, (int)A(3));
                 who.Motion = walk;
+                who.Hold = false;
                 who.Mirror = mirror;
                 who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
                             A(5) != 0 ? stand : walk, mirror);
@@ -734,6 +743,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 who.Motion = A(1);
                 who.Mirror = A(3) != 0;
                 who.MotionStart = _lastTime;
+                who.Hold = A(2) != 1;
                 // 인자2 가 1 이면 되풀이라 바로 다음 줄로 가고, 0 이면 <b>한 바퀴 다 돌 때까지</b> 스크립트가 기다린다.
                 if (A(2) != 1 && _db?.Character(who.ChrCode) is { SpriteId: > 0 } pc
                     && UiFor(pc.SpriteId)?.MotionLength(A(1)) is > 0 and var length)
@@ -1039,6 +1049,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 actor.X = walk.ToX;
                 actor.Y = walk.ToY;
                 actor.Motion = walk.EndMotion;
+                actor.Hold = false;
                 actor.Mirror = walk.EndMirror;
                 actor.Walk = null;
                 continue;
@@ -1285,6 +1296,8 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
                 int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
+                if (actor.Hold && UiFor(pc.SpriteId)?.MotionLength(actor.Motion) is > 0 and var holdLength)
+                    actorTick = Math.Min(actorTick, holdLength - 1);   // 한 바퀴 돈 뒤 마지막 장에 멈춘다
                 // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
                 var actorBlend = UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
                 // 좌우반전(걷기 방향 3 · 208 인자 3 · 212)을 넘겨야 한다 — 빠져 있어 오른쪽으로 걷는 인물이 왼쪽을 보고 뒷걸음질 쳤다(사용자 보고: Fld 0076).
