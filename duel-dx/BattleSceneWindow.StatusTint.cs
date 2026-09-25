@@ -14,8 +14,11 @@ namespace DuelDx;
 /// <item><b>민짜</b> <c>0x10185818</c> — <c>v = c</c>(그대로).</item>
 /// <item><b>검정쪽</b> <c>0x1018b818</c> — <c>v = c(31−α)/31</c>. α=30 이니 <b>사실상 그 채널을 죽인다</b>.</item>
 /// <item><b>특수곡선</b> <c>0x10188818</c> — <c>s = (31−c)/4 + 3; v = (31 − αs/5) × c / 31</c>, 그 뒤 <b>16비트 부호 없는 비교</b>로
-/// 31 을 넘으면 31. α 가 크면 값이 음수로 내려가 <b>31 로 감긴다</b> — 원본에 그대로 남아 있는 자국이라 여기서도 그대로 둔다.</item>
+/// 31 을 넘으면 31. 글자 그대로면 α=30 에서 음수가 31 로 감겨 어두운 쪽이 <b>형광으로 튄다</b> — 화상이 형광 초록·자홍으로 보였고
+/// 원본은 불붙은 주황이었다(사용자 보고). 빙결도 같은 표를 빨강·초록에 쓰는데 감기면 파랗게가 아니라 노랗게 된다 — 그래서 감김은
+/// 우리 읽기가 틀린 것으로 보고(뒤에 붙는 합성 표 단계를 다 못 풀었다) <b>0 에서 자른다</b>.</item>
 /// </list>
+/// 화상은 원본 갈래(방식 15)가 초록만 곡선에 넣지만, 파랑이 그대로면 주황이 아니라 자홍이 된다 — 사용자가 기억하는 주황에 맞춰 파랑도 죽인다(가설).
 /// 마비(5)는 색표가 아니라 딴 합성 함수(<c>ds:0x101737d8</c>)를 타는 번쩍임이라 여기서는 아무것도 안 바꾼다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -32,7 +35,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int s = (31 - c) / 4 + 3;
         int v = (31 - StatusTintAlpha * s / 5) * c / 31;
-        return (ushort)v > 31 ? 31 : v;      // 음수가 16비트로 감겨 31 이 되는 것까지 원본 그대로
+        return Math.Clamp(v, 0, 31);         // 감김(음수 → 31)은 형광이 되어 0 에서 자른다 — 위 설명
     });
 
     /// <summary>그 인물에게 걸 색표 셋(빨강·초록·파랑). 물들일 것이 없으면 null.</summary>
@@ -40,7 +43,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (u.HasStatus(6)) return (TintCurve, TintCurve, TintIdentity);      // 빙결 — 파랗게 씻긴다
         if (u.HasStatus(5)) return null;                                      // 마비 — 색표를 안 쓴다
-        if (u.HasStatus(2)) return (TintIdentity, TintCurve, TintIdentity);   // 화염 — 붉게(초록만 뭉갬)
+        if (u.HasStatus(2)) return (TintIdentity, TintCurve, TintToBlack);    // 화염 — 주황(초록은 곡선, 파랑은 죽임)
         if (u.HasStatus(4)) return (TintIdentity, TintToBlack, TintIdentity); // 버서커 — 자홍
         if (u.HasStatus(3)) return (TintToBlack, TintIdentity, TintIdentity); // 중독 — 청록
         return null;
