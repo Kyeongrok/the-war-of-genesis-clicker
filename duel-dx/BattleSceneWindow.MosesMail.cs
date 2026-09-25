@@ -45,6 +45,18 @@ internal sealed unsafe partial class BattleSceneWindow
         return [.. Enumerable.Reverse(_mailbox).Select(id => all.FirstOrDefault(m => m.Id == id)).Where(m => m != null)!];
     }
 
+    /// <summary>
+    /// 새 편지가 있나 — 우편함에 안 읽은 편지가 있거나, 메일 페이지에 들어가면 배달될 편지(조건을 채운 지금 챕터의 편지)가 있으면.
+    /// 모세스 첫 화면 MAIL 아이콘의 빨간 점(원본에 없는 데모 표시, 사용자 요청). 다 읽으면 사라진다.
+    /// </summary>
+    private bool HasNewMail()
+    {
+        if (_mailbox.Any(id => !_mailRead.Contains(id))) return true;
+        if (_mosesChp is not { } chp || _mailbox.Count >= MailboxLimit) return false;
+        var all = AllMails();
+        return chp.MailTriggers.Any(t => !_mailbox.Contains(t.Item2) && all.FirstOrDefault(m => m.Id == t.Item2) is { } mail && MailArrives(mail));
+    }
+
     /// <summary>우편함 상한 — 원본은 0x1fe 칸까지만 넣는다.</summary>
     private const int MailboxLimit = 0x1ff;
 
