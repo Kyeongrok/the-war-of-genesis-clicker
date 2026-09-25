@@ -991,8 +991,20 @@ internal sealed unsafe partial class BattleSceneWindow
             FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
             FillRect(x, y, w * u.Hp / u.MaxHp, 3, u.IsAlly ? 0xFF50D060 : 0xFFE05050);
             if (u.MaxTp > 0) FillRect(x, y + 3, w * Math.Clamp(u.Tp, 0, u.MaxTp) / u.MaxTp, 2, 0xFFE8C040);
+            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다.
+            if (u.IsAlly && u.Data is { } d)
+            {
+                string lv = d.Level.ToString();
+                var (_, tw, th) = GetText(lv, 0xFFFFFFFF, GaugeLevelFont);
+                int r = Math.Max(5, (tw + 3) / 2), cx = x - 2 - r, cy = y + 2;
+                FillCircle(cx, cy, r + 1, 0xE0000000);
+                FillCircle(cx, cy, r, 0xE0305070);
+                DrawText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont);
+            }
         }
     }
+
+    private const float GaugeLevelFont = 7f;
 
     /// <summary>어빌리티 대상 고르는 중이면 사거리 칸(노랑)을 깐다.</summary>
     private void DrawWorkRange()
