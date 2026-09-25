@@ -876,8 +876,27 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private static readonly double SaveHookAt =
         double.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVEAT"), out double at) && at > 0 ? at : 3;
 
+    /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).</summary>
+    private bool _aimHookDone;
+
+    private void ApplyAimHook()
+    {
+        if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
+        if (!IsPlayerTurn || _routine != null || _talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
+        _aimHookDone = true;
+        var u = _units[_turn];
+        (_targetWork, _targetIsBasicAttack) = (w.Id, false);
+        u.Hp = Math.Max(1, u.Hp / 2);
+        int before = u.Hp;
+        bool took = OnTargetClick(u.Col, u.Row);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {_routine != null} toast '{_toast}' hp {before}" + Environment.NewLine);
+    }
+
     private void ApplyWorkHook()
     {
+        ApplyAimHook();
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
         if (_turnNo < 1 || _runningEvent >= 0) return;      // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
