@@ -21,14 +21,14 @@
             <Button
                 Margin="12,0,0,0"
                 Padding="10,2"
-                AutomationProperties.AutomationId="SkillEditSave"
-                Click="Save_Click"
-                Content="저장(_S)" />
+                Click="Revert_Click"
+                Content="이 스킬 되돌리기" />
             <Button
                 Margin="6,0,0,0"
                 Padding="10,2"
-                Click="Revert_Click"
-                Content="이 스킬 되돌리기" />
+                AutomationProperties.AutomationId="SkillEditSave"
+                Click="Save_Click"
+                Content="저장(_S)" />
             <TextBlock
                 x:Name="StatusText"
                 Margin="12,0,0,0"
