@@ -64,6 +64,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _fieldFadeCover = 8;
 
     /// <summary>
+    /// 전환(901·903·904·909)으로 그림(Bgr)을 깔았을 때 그 그림이 가리는 층 수 — 이 층 <b>아래</b>의 물체·인물은 그림 밑에 묻혀 안 보인다.
+    /// 자리는 전환마다 다르다(901·904 인자 4, 903·909 인자 3 — 대부분 8 = 다). 필드 화면으로 돌아오면 0.
+    /// 전에는 배경만 그림으로 바꾸고 방 조각(창문·복도 물체)을 그 위에 그대로 그려 Fld 0081 의 컷씬과 섞였다(사용자 보고).
+    /// </summary>
+    private int _fieldPictureCover;
+
+    /// <summary>
     /// 걷어내는 전환(903 빗살 지우기 · 904 줄 늘여 쓸기).
     /// </summary>
     /// <remarks>
@@ -205,6 +212,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>그 필드를 연다. 자료가 없으면 false.</summary>
     private bool OpenField(int id)
     {
+        _fieldPictureCover = 0;
         try
         {
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
@@ -776,15 +784,18 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             case 901:                                        // 밀어내기 — a2 는 화면 너비에 더하는 여분 거리다
                 BeginFieldWipe(901, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
+                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(4), 0, 8) : 0;
                 break;
             case 903:                                        // 빗살 지우기 — a2 는 틀 수가 아니라 <b>세로 띠 수</b>다
             {
                 int bands = Math.Max(1, (int)A(2));
                 BeginFieldWipe(903, bands, MosesW / bands + bands, A(0) == 0, A(1));
+                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(3), 0, 8) : 0;
                 break;
             }
             case 904:                                        // 줄 늘여 쓸기 — a2 방향(0 아래→위, 1 위→아래, 2 오른→왼, 3 왼→오른)
                 BeginFieldWipe(904, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
+                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(4), 0, 8) : 0;
                 break;
             case 404:
             case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 전환이 제 그림을 직접 읽으므로 안 쓴다
@@ -802,10 +813,14 @@ internal sealed unsafe partial class BattleSceneWindow
                         ShowMosesBackground(A(1));
                         _fieldCam = (0, 0);
                         _fieldCamMove = null;
+                        _fieldPictureCover = Math.Clamp((int)A(3), 0, 8);
                     }
                 }
                 else if (_field is { } back)
+                {
                     ShowMosesBackground(back.Background, _fieldCam.X, _fieldCam.Y);
+                    _fieldPictureCover = 0;
+                }
                 if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
                 break;
             case 407:
@@ -1214,7 +1229,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 덮기(900)가 가리는 층은 a4 까지다 — 8 이면 다 가리지만 자료의 131번은 그보다 작다.
         // 그 위의 층은 덮개보다 <b>나중에</b> 그려서 안 가려진다.
         int cover = _fieldFade is not null ? _fieldFadeCover : 8;
-        DrawFieldLayers(ox, oy, int.MinValue, cover);
+        DrawFieldLayers(ox, oy, _fieldPictureCover > 0 ? _fieldPictureCover : int.MinValue, cover);   // 그림에 묻힌 층은 건너뛴다
 
         DrawTalk();
         DrawFieldChoices();
@@ -1224,7 +1239,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (cover < 8)
         {
             _uiClip = (ox, oy, MosesW, MosesH);
-            DrawFieldLayers(ox, oy, cover, int.MaxValue);
+            DrawFieldLayers(ox, oy, Math.Max(cover, _fieldPictureCover), int.MaxValue);
             _uiClip = null;
         }
         DrawToast();
