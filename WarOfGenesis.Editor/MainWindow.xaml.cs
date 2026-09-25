@@ -403,7 +403,7 @@ public partial class MainWindow : Window
         public ChrRecord Record { get; } = record;
         public string Name { get; } = name;
         public override string ToString() =>
-            $"{(Name.Length > 0 ? Name : "(이름 없음)")}  [{Record.File}]  job={Record.JobCode}";   // 그림·초상 번호는 보기 > 캐릭터 목록에 있다
+            $"{(Name.Length > 0 ? Name : "(이름 없음)")}  [{Record.File}]  직업 {Record.JobCode}";   // 그림·초상 번호는 캐릭터 > 캐릭터 목록에 있다
     }
 
     // ── 인물 → 몸짓 벌 ───────────────────────────────────────────────────────

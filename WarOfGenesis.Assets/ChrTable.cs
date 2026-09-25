@@ -28,7 +28,7 @@ public static class ChrTable
     {
         int chrCode = int.TryParse(Path.GetFileNameWithoutExtension(fileName), out int n) ? n : -1;
         return new ChrRecord(fileName, chrCode, BitConverter.ToUInt16(data, 2), BitConverter.ToUInt16(data, 4), BitConverter.ToUInt16(data, 6),
-                             BitConverter.ToUInt16(data, 8), BitConverter.ToUInt16(data, 10), BitConverter.ToUInt16(data, 12));
+                             BitConverter.ToUInt16(data, 8), BitConverter.ToUInt16(data, 10), data.Length >= 17 ? BitConverter.ToUInt16(data, 15) : (ushort)0);
     }
 
     public static List<ChrRecord> Scan(string chrFolder)
@@ -37,14 +37,15 @@ public static class ChrTable
         foreach (var path in Directory.EnumerateFiles(chrFolder, "*.chr").OrderBy(p => p))
         {
             byte[] data = File.ReadAllBytes(path);
-            if (data.Length < 14) continue;
+            if (data.Length < 17) continue;
 
             ushort nameCode = BitConverter.ToUInt16(data, 2);
             ushort altNameCode = BitConverter.ToUInt16(data, 4);
             ushort voiceCode = BitConverter.ToUInt16(data, 6);
             ushort spriteCode = BitConverter.ToUInt16(data, 8);
             ushort faceCode = BitConverter.ToUInt16(data, 10);
-            ushort jobCode = BitConverter.ToUInt16(data, 12);
+            // 직업은 파일 15(CharacterData.JobId 와 같은 자리) — 12 는 칭호 TXR 이다(예전에는 12 를 직업으로 읽었다).
+            ushort jobCode = BitConverter.ToUInt16(data, 15);
 
             string fileName = Path.GetFileName(path);
             int chrCode = int.TryParse(Path.GetFileNameWithoutExtension(path), out int n) ? n : -1;
