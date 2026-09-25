@@ -66,9 +66,11 @@ public static class ObsSprite
         return new ObsFrame(slot.SlotId, slot.Width, slot.Height, slot.X, slot.Y, bgra);
     }
 
-    public static List<ObsMotion> Decode(string path)
+    public static List<ObsMotion> Decode(string path) => Decode(File.ReadAllBytes(path));
+
+    /// <summary>파일 대신 이미 읽은 바이트로 — pak 에서 꺼낸 그림을 임시 파일 없이 푼다.</summary>
+    public static List<ObsMotion> Decode(byte[] b)
     {
-        byte[] b = File.ReadAllBytes(path);
         var subrefs = ParseStructure(b);
 
         var motions = new List<ObsMotion>();
