@@ -106,6 +106,7 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
         DrawHeavenEarthFx();                                // 천지 파열무의 X 자 불길·파편(시각표 효과 — 서몬 몬스터도 쓴다)
         DrawFireBalls();                                    // 엘레맨탈 파이어의 도는 불덩이
+        DrawArrows();                                       // 아스트럴 애로우의 오르내리는 화살
         // 지우는 것은 모션이 <b>다 끝났을 때</b>다 — 첫 컷이 몇 틱 뒤에 시작하는 이펙트(크래쉬 봄의 폭탄, 메테오 착탄 170:1)는
         // 첫 틀에 그릴 컷이 없어 예전에는 뜨기도 전에 지워졌다. 그림이 아예 없는 Obs(소리 껍데기)는 바로 지운다.
         _effects.RemoveAll(e =>
