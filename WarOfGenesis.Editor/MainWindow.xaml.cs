@@ -32,7 +32,29 @@ public partial class MainWindow : Window
         GameRootBox.Text = LoadSavedGameRoot() ?? DefaultGameRoot;
         Stats.MotionMappingRequested += ShowMotionMapping;
         Stats.ExportRequested += ExportCharacter;
-        Loaded += (_, _) => TryLoadGameRoot(GameRootBox.Text);
+        Loaded += (_, _) =>
+        {
+            LoadStats();
+            TryLoadGameRoot(GameRootBox.Text);
+        };
+    }
+
+    // ── 캐릭터 스탯(첫 화면) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// 스탯은 원본 게임 폴더가 아니라 저장소 <c>assets/data</c> 로 본다 — 우리 게임이 실제로 쓰는 자료라, 뺀 레코드(Chr 0006)는 안 보이고
+    /// 편집기에서 고친 스킬·직업 JSON 도 곧바로 반영된다. 모션 매핑·내보내기는 여전히 원본 폴더(Obs·Chr pak)를 쓴다.
+    /// </summary>
+    private void LoadStats()
+    {
+        try
+        {
+            Stats.Load(GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))), Enumerable.Range(0, 1000));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"assets/data 를 읽지 못했습니다: {ex.Message}";
+        }
     }
 
     // ── 게임 폴더 ────────────────────────────────────────────────────────────
@@ -87,10 +109,8 @@ public partial class MainWindow : Window
             // 이야기용 레코드가 빠지고 0006·0075 같은 시험·다른 판 살라딘만 보였다(사용자 보고). 게임 폴더에는 아무것도 안 쓴다.
             _allChrRecords = ChrTable.ScanAll(GameFiles.FromGameRoot(root));
             _gameRoot = root;
-            _database = GameDatabase.Load(GameFiles.FromGameRoot(root));
+            _database = null;
             SaveGameRoot(root);
-            // 게임 폴더에는 낱장 Chr 가 일부만 있다 — pak 안 레코드까지 보려고 번호대를 통째로 훑는다(없는 번호는 건너뜀).
-            Stats.Load(_database, Enumerable.Range(0, 1000));
             StatusText.Text = $"열었습니다 — 인물 레코드 {_allChrRecords.Count}개. 목록을 우클릭하면 모션 매핑 보기·내보내기.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)

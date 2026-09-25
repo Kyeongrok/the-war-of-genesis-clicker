@@ -48,7 +48,6 @@ public partial class CharacterStatsView : UserControl
     }
 
     private ICollectionView? _view;
-    private GameDatabase? _db;
 
     /// <summary>목록 우클릭 「모션 매핑 보기」 — 고른 레코드 번호.</summary>
     public event Action<int>? MotionMappingRequested;
@@ -58,10 +57,9 @@ public partial class CharacterStatsView : UserControl
 
     public CharacterStatsView() => InitializeComponent();
 
-    /// <summary>게임 폴더를 열 때마다 목록을 새로 채운다.</summary>
+    /// <summary>목록을 채운다 — 원본 게임 폴더가 아니라 우리 게임이 쓰는 <c>assets/data</c> 자료로(사용자 요청).</summary>
     public void Load(GameDatabase db, IEnumerable<int> codes)
     {
-        _db = db;
         _portraits.Clear();
 
         var rows = new List<Row>();
@@ -88,7 +86,24 @@ public partial class CharacterStatsView : UserControl
 
     private readonly Dictionary<int, IReadOnlyList<Portrait>> _portraits = [];
 
-    /// <summary>초상 Obs 의 모션(표정)마다 첫 컷 — 게임 pak 에서 읽고, 한 번 푼 것은 들고 있는다.</summary>
+    private Dictionary<int, string>? _obsPaths;
+
+    /// <summary>저장소 <c>assets</c> 아래 모든 <c>.obs</c> — 번호 → 파일(초상은 <c>moses/obs</c>·<c>characters/*</c> 에 흩어져 있다).</summary>
+    private Dictionary<int, string> ObsPaths => _obsPaths ??= IndexObs();
+
+    private static Dictionary<int, string> IndexObs()
+    {
+        var map = new Dictionary<int, string>();
+        try
+        {
+            foreach (string path in Directory.EnumerateFiles(AssetsFolder.Find(""), "*.obs", SearchOption.AllDirectories))
+                if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id)) map.TryAdd(id, path);
+        }
+        catch (DirectoryNotFoundException) { }
+        return map;
+    }
+
+    /// <summary>초상 Obs 의 모션(표정)마다 첫 컷 — 저장소 assets 에서 읽고, 한 번 푼 것은 들고 있는다.</summary>
     private IReadOnlyList<Portrait> PortraitsOf(int faceId)
     {
         if (faceId == 0) return [];
@@ -96,8 +111,8 @@ public partial class CharacterStatsView : UserControl
         var list = new List<Portrait>();
         try
         {
-            if (_db?.Files.Read("Obs", $"{faceId:D4}.obs") is { } bytes)
-                foreach (var motion in ObsSprite.Decode(bytes))
+            if (ObsPaths.TryGetValue(faceId, out var path))
+                foreach (var motion in ObsSprite.Decode(File.ReadAllBytes(path)))
                 {
                     var f = motion.Frames[0];
                     var bitmap = BitmapSource.Create(f.Width, f.Height, 96, 96, PixelFormats.Bgra32, null, f.Bgra, f.Width * 4);
