@@ -325,7 +325,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             int id = u.StatusId[i];
             if (id is 0 or 44 or 45 or 46) continue;
-            string name = AilmentNames.GetValueOrDefault(id, $"상태 {id}");
+            string name = AilmentNames.TryGetValue(id, out var n) ? n : StatBonusNames.GetValueOrDefault(id, $"상태 {id}");
             list.Add(u.StatusValue[i] != 0 ? $"{name} {u.StatusValue[i]}" : name);
         }
         return list;
