@@ -149,8 +149,8 @@
                                     <Grid>
                                         <TextBlock Text="{Binding Display}" Visibility="{Binding TextVisibility}" />
                                         <controls:NumericSpinner
-                                            Maximum="65535"
-                                            Minimum="0"
+                                            Maximum="{Binding SpinnerMax}"
+                                            Minimum="{Binding SpinnerMin}"
                                             Step="{Binding SpinnerStep}"
                                             Value="{Binding Value, Mode=OneWay}"
                                             ValueChanged="CommonSpinner_ValueChanged"

@@ -55,6 +55,9 @@ public partial class SkillEditWindow : Window
         /// <summary>스피너로 고치는 칸이면 한 번에 움직일 양(tp 10 · areaMax 1) — 이 칸은 편집 상태 없이 늘 스피너로 보인다.</summary>
         public double? Step { get; init; }
         public double SpinnerStep => Step ?? 1;
+        public bool Signed { get; init; }
+        public double SpinnerMin => Signed ? -32768 : 0;
+        public double SpinnerMax => Signed ? 32767 : 65535;
         public Visibility SpinnerVisibility => Step != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility TextVisibility => Step == null ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -177,6 +180,7 @@ public partial class SkillEditWindow : Window
         {
             Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, ""), Choices = Choices.GetValueOrDefault(kv.Key),
             Step = SpinnerSteps.TryGetValue(kv.Key, out double step) ? step : null,
+            Signed = SkillBook.Fields.FirstOrDefault(f => f.Name == kv.Key)?.Signed == true,
         }).ToList();
         int ranges = row.Skill.Common.Keys.Count(RangeFields.Contains);
         RangeTab.Header = $"범위 ({ranges})";
@@ -226,7 +230,7 @@ public partial class SkillEditWindow : Window
 
     /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
     /// <summary>스피너로 고치는 레벨별 칸과 한 번에 오르내리는 폭 — tp 는 10씩(사용자 요청).</summary>
-    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10, ["areaMax"] = 1, ["rangeMax"] = 1 };
+    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10, ["areaMax"] = 1, ["rangeMax"] = 1, ["bonus1Value"] = 5, ["power"] = 5, ["exp"] = 5 };
 
     private void LevelGrid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
@@ -238,8 +242,10 @@ public partial class SkillEditWindow : Window
             spinner.SetBinding(Controls.NumericSpinner.ValueProperty,
                 new Binding($"[{e.PropertyName}]") { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
             spinner.SetValue(Controls.NumericSpinner.StepProperty, step);
-            spinner.SetValue(Controls.NumericSpinner.MinimumProperty, 0.0);
-            spinner.SetValue(Controls.NumericSpinner.MaximumProperty, 65535.0);
+            // 부호 있는 칸(power·bonus 값 — 약화는 음수)은 음수도 둔다.
+            bool signed = SkillBook.Fields.FirstOrDefault(f => f.Name == e.PropertyName)?.Signed == true;
+            spinner.SetValue(Controls.NumericSpinner.MinimumProperty, signed ? -32768.0 : 0.0);
+            spinner.SetValue(Controls.NumericSpinner.MaximumProperty, signed ? 32767.0 : 65535.0);
             e.Column = new DataGridTemplateColumn { Header = e.PropertyName, MinWidth = 70, CellTemplate = new DataTemplate { VisualTree = spinner } };
             return;
         }
