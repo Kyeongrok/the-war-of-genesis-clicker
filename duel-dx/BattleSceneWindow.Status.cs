@@ -410,7 +410,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (id != 0 && open && db.Abilities.TryGetValue(id, out var pab))
             {
                 DrawAbilityRow(pab, AbilityLabel(pab, c.AbilityLevel(id)), 0, false, rx, ry, SideW, RowH, 11);
-                _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowAbilityTip(pab)));
+                _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowAbilityTip(pab, c.AbilityLevel(id))));
             }
             else RowText(db.T(0), rx, ry, RowH, open ? StatusWhite : StatusDim, left: 46);
             int slot = i;
@@ -444,7 +444,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int cost = db.AbilityExpCost(ab, level);             // 다음 레벨로 올리는 EXP — 최대 레벨이면 0(숫자 없음)
             if (editable && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) DrawUi(RowObs, 4, 0, rx, ry, UiBlend.Alpha);
             DrawAbilityRow(ab, AbilityLabel(ab, level), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, RowH, 11);
-            _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab)));
+            _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab, level)));
             // 레벨 내리기(원본에 없는 데모 기능) — 마우스를 올린 줄의 비용 왼쪽에 작은 ▼ 단추(스크롤 막대 아래 화살표 Obs 0071 모션 4, 누름 5).
             // 원본 그림이라 창에 어울리고, 올린 줄에만 떠 목록이 어지럽지 않다. 오른쪽 단추는 원본대로 설명에 쓴다. Shift+클릭도 된다.
             if (editable && level > 1 && _popup == null && MouseIn(rx, ry, AbilityW, RowH))
@@ -469,7 +469,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int cost = db.AbilityExpCost(ab, 1);
             if (editable && _popup == null && MouseIn(rx, ry, AbilityW, LearnableRowH)) DrawUiStretched(RowObs, 7, rx, ry, AbilityW, LearnableRowH);
             DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, LearnableRowH, 18);
-            _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab)));
+            _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab, 0)));
             if (editable) AddHit(rx, ry, AbilityW, LearnableRowH, () => ConfirmAbility(unit, ab, learn: true));
         }
         DrawScrollBar(ox + ScrollX, oy + LearnableScrollY, LearnableScrollH, _learnableTop, learnable.Count, LearnableRows, top => _learnableTop = top);
@@ -524,9 +524,48 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void ShowAbilityTip(AbilityData ab)
+    private void ShowAbilityTip(AbilityData ab, int level)
     {
-        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc);
+        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level));
+    }
+
+    /// <summary>능력치 보정 번호(패시브·버프) — 슬롯이 아니라 능력치에 바로 더해지는 것(0x10032af0).</summary>
+    private static readonly Dictionary<int, string> StatBonusNames = new()
+    {
+        [30] = "DEX", [31] = "PSY", [32] = "DEP", [33] = "최대 TP", [37] = "최대 SOUL", [48] = "LP",
+    };
+
+    /// <summary>
+    /// 설명 창 아래에 붙일 <b>레벨별 효과 수치</b> — 지금 레벨과 다음 레벨(배우기 전이면 Lv1).
+    /// 원본 설명문은 레벨과 상관없는 한 줄뿐이라 레벨을 올려 얼마나 달라지는지 안 보였다(사용자 요청: 리미트플로우).
+    /// </summary>
+    private string AbilityEffectText(AbilityData ab, int level)
+    {
+        string Line(int lv) =>
+            ab.WorkByLevel.TryGetValue(lv, out int wid) && Work(wid) is { } w ? WorkEffect(w) : "";
+        var parts = new List<string>();
+        if (level > 0 && Line(level) is { Length: > 0 } now) parts.Add($"Lv{level}: {now}");
+        int next = level + 1;
+        if (next <= ab.MaxLevel && Line(next) is { Length: > 0 } then) parts.Add($"{(level == 0 ? "배우면 " : "다음 ")}Lv{next}: {then}");
+        else if (level >= ab.MaxLevel && level > 0) parts.Add("(최대 레벨)");
+        return parts.Count == 0 ? "" : "$n$n" + string.Join("$n", parts);
+    }
+
+    /// <summary>work 하나의 효과 — 위력(피해·회복)과 보정 셋을 한 줄로.</summary>
+    private string WorkEffect(WorkData w)
+    {
+        var bits = new List<string>();
+        if (w.IsHeal && w.Power > 0) bits.Add($"최대 HP의 {w.Power}% 회복");
+        else if (w.IsDamage && w.Power > 0) bits.Add($"위력 {w.Power}");
+        foreach (var (stat, value) in w.Bonuses)
+        {
+            if (stat is 0 or 44 or 45 or 46) continue;          // 44~46 은 원본의 「없음」 칸
+            if (StatBonusNames.TryGetValue(stat, out var statName)) { bits.Add($"{statName} {value:+#;-#;0}"); continue; }
+            string desc = _db?.Statuses.GetValueOrDefault(stat) is { } st ? _db.T(st.DescriptionId) : "";
+            if (desc.Contains("%d")) bits.Add(FormatPrintf(desc, value).TrimEnd('.', ' '));
+            else bits.Add(value != 0 ? $"{AilmentNames.GetValueOrDefault(stat, $"효과 {stat}")} {value}" : AilmentNames.GetValueOrDefault(stat, $"효과 {stat}"));
+        }
+        return string.Join(" · ", bits);
     }
 
     private void ShowStatusTip(string text) => _statusTip = (text, _mouse.X, _mouse.Y);
