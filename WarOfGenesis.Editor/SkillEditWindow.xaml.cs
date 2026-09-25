@@ -54,6 +54,9 @@ public partial class SkillEditWindow : Window
     private string _folder = "";
     private bool _filling;
 
+    /// <summary>어빌리티 이름·설명(TXR)을 읽으려고 드는 저장소 자료 — 못 읽으면 설명 없이 연다.</summary>
+    private GameDatabase? _db;
+
     public SkillEditWindow()
     {
         InitializeComponent();
@@ -67,6 +70,8 @@ public partial class SkillEditWindow : Window
         try { _folder = System.IO.Path.Combine(AssetsFolder.Find("data"), "skills"); }
         catch (DirectoryNotFoundException) { StatusText.Text = "저장소 assets/data 를 못 찾았습니다."; return; }
         if (!Directory.Exists(_folder)) { StatusText.Text = $"{_folder} 가 없습니다."; return; }
+        try { _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { _db = null; }
         foreach (string path in Directory.EnumerateFiles(_folder, "*.json"))
             if (SkillBook.FromJson(File.ReadAllText(path, Encoding.UTF8)) is { } skill)
                 _rows.Add(new SkillRow { Skill = skill, Path = path });
@@ -74,6 +79,18 @@ public partial class SkillEditWindow : Window
         _view.Filter = o => o is SkillRow r && Matches(r);
         SkillGrid.ItemsSource = _view;
         UpdateStatus();
+    }
+
+    /// <summary>어빌리티 설명(abi +0x1c TXR, 「$n」 줄바꿈)과 분류·최대 레벨·선행 조건 — 전에는 스킬 편집에 설명이 아예 안 보였다(사용자 보고).</summary>
+    private string DescriptionOf(int abilityId)
+    {
+        if (_db == null) return "(설명을 읽지 못했습니다 — 저장소 TXR 자료가 없습니다)";
+        if (!_db.Abilities.TryGetValue(abilityId, out var ab)) return abilityId == 0 ? "(어빌리티에 안 묶인 work)" : $"어빌리티 {abilityId} 자료 없음";
+        string text = _db.T(ab.DescriptionId).Replace("$n", Environment.NewLine);
+        var extra = new List<string> { $"최대 Lv{ab.MaxLevel}" };
+        if (ab.Prereq1 != 0 && _db.Abilities.TryGetValue(ab.Prereq1, out var p1)) extra.Add($"선행 {_db.T(p1.NameId)} Lv{ab.Prereq1Level}");
+        if (ab.Prereq2 != 0 && _db.Abilities.TryGetValue(ab.Prereq2, out var p2)) extra.Add($"선행 {_db.T(p2.NameId)} Lv{ab.Prereq2Level}");
+        return (text.Length > 0 ? text : "(설명 없음)") + Environment.NewLine + string.Join(" · ", extra);
     }
 
     private bool Matches(SkillRow r)
@@ -95,7 +112,8 @@ public partial class SkillEditWindow : Window
 
     private void Fill()
     {
-        if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; return; }
+        if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; SkillDescription.Text = ""; return; }
+        SkillDescription.Text = DescriptionOf(row.Ability);
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
         CommonGrid.ItemsSource = row.Skill.Common.Select(kv => new CommonRow
