@@ -114,6 +114,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
     private const int MenuClearEnemies = 1008;
 
+    /// <summary>개발 &gt; 어빌리티 반영 — 편집기에서 고친 스킬 파일을 게임을 끄지 않고 다시 읽는다.</summary>
+    private const int MenuReloadSkills = 1107;
+
     /// <summary>「게임 속도」 줄 번호 — 1110 + <see cref="SpeedChoices"/> 순번.</summary>
     private const int MenuSpeedBase = 1110;
 
@@ -194,6 +197,9 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
+        IntPtr dev = Win32.CreatePopupMenu();
+        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuReloadSkills, "어빌리티 반영(&A)");
+        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
         return bar;
     }
 
@@ -297,6 +303,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 SaveSettings();
                 break;
             case MenuProgress: ToggleProgress(); break;
+            case MenuReloadSkills:
+                ReloadSkills();
+                break;
             case MenuFullSoul:
                 _fullSoulAtStart = !_fullSoulAtStart;
                 Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuFullSoul, Win32.MF_BYCOMMAND | (_fullSoulAtStart ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
@@ -429,5 +438,13 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(x + KeysW - 116, by, 100, 28, HeadBg);
         DrawText("닫기", x + KeysW - 80, by + 6, White);
         DrawText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
+    }
+
+    /// <summary>개발 &gt; 어빌리티 반영 — 스킬 파일을 다시 읽는다. 비용·범위·위력 등은 다음에 쓰는 기술부터 새 값으로 셈한다.</summary>
+    private void ReloadSkills()
+    {
+        if (_db is not { } db) { Toast("게임 자료가 아직 없습니다"); return; }
+        int n = db.ReloadSkills();
+        Toast(n > 0 ? $"어빌리티 {n}개를 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 반영할 것이 없습니다");
     }
 }
