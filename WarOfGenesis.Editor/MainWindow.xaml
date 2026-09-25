@@ -17,6 +17,11 @@
             </MenuItem>
             <MenuItem Header="요소(_E)">
                 <MenuItem
+                    x:Name="JobViewerMenuItem"
+                    AutomationProperties.AutomationId="JobViewerMenuItem"
+                    Click="JobViewerMenuItem_Click"
+                    Header="직업(_J)" />
+                <MenuItem
                     x:Name="BattleListMenuItem"
                     AutomationProperties.AutomationId="BattleListMenuItem"
                     Click="BattleListMenuItem_Click"

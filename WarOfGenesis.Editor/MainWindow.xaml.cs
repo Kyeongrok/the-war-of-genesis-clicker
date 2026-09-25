@@ -177,6 +177,22 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 요소 > 직업 창 ───────────────────────────────────────────────────────
+
+    private void JobViewerMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
+        try
+        {
+            _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
+            new JobViewerWindow(_database) { Owner = this }.Show();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            StatusText.Text = $"게임 자료를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     // ── 개발 > 체질(배울 수 있는 어빌리티) 창 ───────────────────────────────
 
     /// <summary>계열(체질)별 직업의 어빌리티 11칸(Job.dat)을 더하고 뺀다. 저장은 저장소 assets/data/Dat/Job.dat 에 — 게임 폴더는 안 건드린다.</summary>
