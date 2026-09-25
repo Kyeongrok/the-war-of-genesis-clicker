@@ -79,8 +79,17 @@ public partial class BodyAbilitiesWindow : Window
             if (placed.Add(jobId)) _jobs.Add(new JobRow(o, jobId, $"그 밖 — {JobName(jobId)} ({jobId})"));
     }
 
-    private string JobName(int jobId) =>
-        _db.Jobs.TryGetValue(jobId, out var job) ? job.NamesByBody.Select(_db.T).FirstOrDefault(n => n.Length > 0) ?? $"직업 {jobId}" : $"직업 {jobId}";
+    /// <summary>
+    /// 직업 이름 — 체질(에텔·멘탈·아스트럴·코절·메텔)마다 이름 칸이 따로 있고, 그 체질이 못 가는 칸은 TXR 「없음」이다.
+    /// 1단계·3단계는 제 체질 칸 하나만, 2단계는 <b>제 체질을 뺀 넷</b>이 차 있다(분석-체질 1-2). 빈 칸을 빼고 모두 「/」로 잇는다 —
+    /// 전에는 첫 칸만 보다가 「없음」이 이름으로 나왔다(사용자 보고).
+    /// </summary>
+    private string JobName(int jobId)
+    {
+        if (!_db.Jobs.TryGetValue(jobId, out var job)) return $"직업 {jobId}";
+        var names = job.NamesByBody.Select(_db.T).Where(n => n.Length > 0 && n != "없음").Distinct().ToList();
+        return names.Count > 0 ? string.Join("/", names) : $"직업 {jobId}";
+    }
 
     private void RefreshJobList()
     {
