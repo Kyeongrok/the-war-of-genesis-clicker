@@ -413,8 +413,7 @@ public partial class MainWindow : Window
             ? _currentSpriteMotions
             : LoadMotions(record.FaceCode, "초상");
 
-        foreach (var motion in _currentSpriteMotions)
-            MotionList.Items.Add(new MotionItem($"몸짓 #{record.SpriteCode} — 몸짓 {motion.Id} ({motion.Frames.Count}컷)", motion));
+        // 몸짓 줄은 목록에 안 넣는다(사용자 요청) — 몸짓 그림은 내보내기가 여전히 쓰므로 읽어 둔다.
         foreach (var motion in _currentFaceMotions)
             MotionList.Items.Add(new MotionItem($"초상 #{record.FaceCode} — 몸짓 {motion.Id} ({motion.Frames.Count}컷)", motion));
 
