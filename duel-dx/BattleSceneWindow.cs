@@ -878,6 +878,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
+        if (_turnNo < 1 || _runningEvent >= 0) return;      // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
         var parts = WorkHook.Split(':');
         if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
         int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly);
@@ -1627,6 +1628,12 @@ internal sealed class UnitState(DemoUnit unit)
     public byte[] StatusId { get; } = new byte[3];
     public short[] StatusValue { get; } = new short[3];
 
+    /// <summary>
+    /// 칸마다 그 상태이상을 건 인물 — 원본에는 없다. 상태이상(22·23·24 사망 조건)으로 쓰러지면 처치 경험치를 이들이 나눠 받는다.
+    /// 세이브에는 안 실린다(불러온 뒤에 쓰러지면 아무도 안 받는다).
+    /// </summary>
+    public UnitState?[] StatusSource { get; } = new UnitState?[3];
+
     /// <summary>슬롯이 아니라 전투용 보정으로 바로 더해지는 것들(번호 30·31·32·33·37·48).</summary>
     public int BonusDex { get; set; }
     public int BonusPsy { get; set; }
@@ -1653,6 +1660,7 @@ internal sealed class UnitState(DemoUnit unit)
     {
         Array.Clear(StatusId);
         Array.Clear(StatusValue);
+        Array.Clear(StatusSource);
         BonusDex = BonusPsy = BonusDep = BonusMaxTp = BonusMaxSoul = BonusMaxHp = 0;
     }
 

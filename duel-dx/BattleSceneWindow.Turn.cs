@@ -243,7 +243,7 @@ internal sealed unsafe partial class BattleSceneWindow
         StepObjects();
         // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
         foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
-            if (!SurvivesFatal(u)) KillUnit(u);
+            if (!SurvivesFatal(u)) { GainAilmentKillExp(u); KillUnit(u); }
         CheckOutcome();
     }
 
@@ -606,6 +606,16 @@ internal sealed unsafe partial class BattleSceneWindow
                     FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
                     followersDone = true;
                 }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
+            // 그라비티 필드 — 대상마다 중력장(219:0)이 차례로 깔리고, 끝날 때 효과가 든다.
+            if (w.AbilityId == GravityFieldAbility)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in GravityFieldRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                    yield return true;
                 while (a.IsBusy) yield return true;
                 continue;
             }
