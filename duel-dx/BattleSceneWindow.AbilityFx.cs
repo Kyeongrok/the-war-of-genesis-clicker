@@ -109,6 +109,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>하이 텔레포트 레벨 1~20 의 work(어빌리티 37).</summary>
     private static readonly HashSet<int> TeleportWorks = [397, 584, 583, 582, 581, 580, 579, 578, 577, 576, 575, 593, 592, 591, 590, 589, 588, 587, 586, 585];
 
+    /// <summary>그라비티 필드 레벨 1~10 의 work(어빌리티 110).</summary>
+    private static readonly HashSet<int> GravityFieldWorks = [484, 950, 949, 948, 947, 946, 945, 944, 943, 942];
+
     /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
     private static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork, HeavenEarthWork];
 
@@ -134,6 +137,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 하이 텔레포트 — 떠나는 자리의 빛만. 나타나는 빛(381:1)은 새 칸에서 TeleportRoutine 이 띄운다.
         // 엘레맨탈 파이어·서몬 몬스터 — 효과는 BattleSceneWindow.Acrost.cs 가 대상마다 깐다(준비의 시전 영상만 남긴다).
         if (AcrostWorks.Contains(work)) return ([6, 15], []);
+        // 그라비티 필드 — 중력장은 BattleSceneWindow.GravityField.cs 가 대상마다 깐다.
+        if (GravityFieldWorks.Contains(work)) return ([6, 15], []);
         if (TeleportWorks.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(381, 0, false, 0), new(210, 3, false, 0)]);
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
