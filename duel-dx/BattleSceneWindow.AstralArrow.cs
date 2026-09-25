@@ -1,4 +1,4 @@
-namespace DuelDx;
+﻿namespace DuelDx;
 
 /// <summary>
 /// 아스트럴 애로우(어빌리티 87) — 핸들러 <c>0x100a5ac0</c> 가 세 단계로 도는 연출을 옮겼다. 뽑은 표(AbilityScripts.g.cs)는 활·화살·폭발을
@@ -26,6 +26,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>날아가는 화살 하나 — 곧게 목표로, 틱마다 빨라진다. 닿으면 <see cref="OnArrive"/>.</summary>
     private sealed class Arrow
     {
+        /// <summary>그릴 Obs — 화살(839)이 기본, 메테오의 운석은 200.</summary>
+        public int Obs = ArrowObs;
         public int Motion;
         public double Start, X, Y, ToX, ToY, Speed, Factor, Max;
         public int Tick;
@@ -112,6 +114,6 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawArrows()
     {
         foreach (var a in _arrows.Where(a => _lastTime >= a.Start && !a.Done))
-            DrawUi(ArrowObs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(UiFor(ArrowObs)?.BlendAt(a.Motion, a.Tick) ?? 0));
+            DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));
     }
 }
