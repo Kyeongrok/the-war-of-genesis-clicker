@@ -961,7 +961,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 enemy.WarpTo(c, r);
             }
         }
-        int target = Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
+        // 「<work>:ally」 면 시전자 말고 가장 먼 아군을 대상으로 — 리콜처럼 아군에게 쓰는 기술을 시험할 때.
+        int target = parts.Length > 1 && parts[1] == "ally"
+            ? Array.IndexOf(_units, _units.Where(u => u.Alive && u.OnField && u.IsAlly && u != a).OrderByDescending(u => Math.Abs(u.Col - a.Col) + Math.Abs(u.Row - a.Row)).FirstOrDefault())
+            : Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
         // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
         if (w.SelfCentred) { _routine = UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
         _routine = UseWorkRoutine(caster, w, target,

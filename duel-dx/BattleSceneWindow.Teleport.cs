@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -74,5 +74,57 @@ internal sealed unsafe partial class BattleSceneWindow
             yield return true;
         }
         user.Fade = 1;
+    }
+
+    /// <summary>리콜(어빌리티 61) — 「아군 한명을 자신의 주위로 소환한다」. 전에는 종류 1(회복)로만 돌아 아무도 오지 않았다(사용자 보고).</summary>
+    private const int RecallAbility = 61;
+
+    /// <summary>시전자 둘레에서 설 수 있는 가장 가까운 빈 칸 — 한 칸 둘레부터 넓혀 간다. 없으면 null.</summary>
+    private (int Col, int Row)? RecallLanding(UnitState caster, UnitState target)
+    {
+        for (int d = 1; d <= 4; d++)
+        {
+            var ring = new List<(int, int)>();
+            for (int dy = -d; dy <= d; dy++)
+                for (int dx = -d; dx <= d; dx++)
+                {
+                    if (Math.Abs(dx) + Math.Abs(dy) != d) continue;
+                    int c = caster.Col + dx, r = caster.Row + dy;
+                    if (c < 0 || r < 0 || c >= Cols || r >= Rows) continue;
+                    if (_map is { } map && (c >= map.Cols || r >= map.Rows || (map.FlagsAt(c, r) & 0x9) != 0)) continue;
+                    if (LiveUnitAt(c, r) is { } other && other != target) continue;
+                    if (ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
+                    ring.Add((c, r));
+                }
+            if (ring.Count > 0) return ring[_rng.Next(ring.Count)];
+        }
+        return null;
+    }
+
+    /// <summary>리콜 연출 — 대상이 사라지고(40틱) 시전자 옆에 빛(210:3)과 함께 나타난다(40틱).</summary>
+    private IEnumerable<bool> RecallRoutine(UnitState caster, UnitState target)
+    {
+        const double Tick = 1 / TicksPerSecond;
+        if (target == caster || RecallLanding(caster, target) is not var (lc, lr)) { Toast("불러올 자리가 없습니다"); yield break; }
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                               $"recall: {target.ChrCode} ({target.Col},{target.Row}) → ({lc},{lr}) beside {caster.ChrCode} ({caster.Col},{caster.Row})" + Environment.NewLine);
+        for (double start = _lastTime, end = start + 40 * Tick; _lastTime < end;)
+        {
+            target.Fade = Math.Max(0, 1 - (_lastTime - start) / (40 * Tick));
+            yield return true;
+        }
+        target.WarpTo(lc, lr);
+        target.OriginCol = lc;
+        target.OriginRow = lr;
+        target.Facing = caster.Facing;
+        var (x, y) = UnitFoot(target);
+        _effects.Add((210, 3, _lastTime, x, y));
+        for (double start = _lastTime, end = start + 40 * Tick; _lastTime < end;)
+        {
+            target.Fade = Math.Min(1, (_lastTime - start) / (40 * Tick));
+            yield return true;
+        }
+        target.Fade = 1;
     }
 }
