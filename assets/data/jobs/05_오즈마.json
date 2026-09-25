@@ -4,33 +4,33 @@
   "forms": [
     {
       "form": "일반형",
-      "abilities": [158],
+      "abilities": [31, 94, 97, 158],
       "stage1": { "job": 50, "needLevel": 1, "growth": [0, 0, 0, 0, 0, 0, 4, 1, 0, 6, 1, 1], "names": [0, 0, 0, 0, 0, 410], "description": 1348 },
-      "stage2": { "job": 55, "needLevel": 30, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 4, 1, 1], "names": [0, 415, 420, 425, 430, 0], "description": 1348, "add": [{ "ability": 31, "at": 0 }, { "ability": 94, "at": 1 }, { "ability": 97, "at": 2 }] }
+      "stage2": { "job": 55, "needLevel": 30, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 4, 1, 1], "names": [0, 415, 420, 425, 430, 0], "description": 1348 }
     },
     {
       "form": "공격형",
-      "abilities": [95, 96, 102],
+      "abilities": [95, 96, 101, 102],
       "stage1": { "job": 51, "needLevel": 4, "growth": [0, 0, 0, 0, 0, 0, 2, 1, 0, 7, 2, 1], "names": [0, 0, 0, 0, 0, 411], "description": 1349 },
-      "stage2": { "job": 56, "needLevel": 33, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 5, 2, 1], "names": [0, 416, 421, 426, 431, 0], "description": 1349, "add": [{ "ability": 101, "at": 2 }] }
+      "stage2": { "job": 56, "needLevel": 33, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 5, 2, 1], "names": [0, 416, 421, 426, 431, 0], "description": 1349 }
     },
     {
       "form": "방어형",
-      "abilities": [99, 100, 113],
+      "abilities": [98, 99, 100, 113],
       "stage1": { "job": 52, "needLevel": 8, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 5, 3, 2], "names": [0, 0, 0, 0, 0, 412], "description": 1350 },
-      "stage2": { "job": 57, "needLevel": 36, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 5, 3, 2], "names": [0, 417, 422, 427, 432, 0], "description": 1350, "add": [{ "ability": 144, "at": 0 }, { "ability": 98, "at": 1 }] }
+      "stage2": { "job": 57, "needLevel": 36, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 5, 3, 2], "names": [0, 417, 422, 427, 432, 0], "description": 1350, "add": [{ "ability": 144, "at": 0 }] }
     },
     {
       "form": "고속형",
-      "abilities": [110, 111],
+      "abilities": [103, 104, 110, 111],
       "stage1": { "job": 53, "needLevel": 10, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 5, 2, 3], "names": [0, 0, 0, 0, 0, 413], "description": 1351 },
-      "stage2": { "job": 58, "needLevel": 39, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 4, 2, 2], "names": [0, 418, 423, 428, 433, 0], "description": 1351, "add": [{ "ability": 103, "at": 0 }, { "ability": 104, "at": 1 }] }
+      "stage2": { "job": 58, "needLevel": 39, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 4, 2, 2], "names": [0, 418, 423, 428, 433, 0], "description": 1351 }
     },
     {
       "form": "보조형",
-      "abilities": [112],
+      "abilities": [105, 106, 108, 107, 112],
       "stage1": { "job": 54, "needLevel": 12, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 4, 2, 1], "names": [0, 0, 0, 0, 0, 414], "description": 1352 },
-      "stage2": { "job": 59, "needLevel": 42, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 3, 2, 1], "names": [0, 419, 424, 429, 434, 0], "description": 1352, "add": [{ "ability": 105, "at": 0 }, { "ability": 106, "at": 1 }, { "ability": 108, "at": 2 }, { "ability": 107, "at": 3 }] }
+      "stage2": { "job": 59, "needLevel": 42, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 3, 2, 1], "names": [0, 419, 424, 429, 434, 0], "description": 1352 }
     }
   ],
   "standalone": [
