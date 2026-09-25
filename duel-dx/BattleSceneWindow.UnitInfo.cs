@@ -31,14 +31,33 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void CloseUnitInfo() => _infoUnit = -1;
 
+    /// <summary>DUELDX_INFO=1 이면 첫 아군의 정보 창을 띄워 둔다(화면 밖 시험용 — 오른쪽 단추를 누르고 있는 것처럼).</summary>
+    private void OpenUnitInfoIfAsked()
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_INFO") != "1" || InfoOpen || _units.Length == 0) return;
+        int ally = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly);
+        if (ally < 0) return;
+        _infoUnit = ally;
+        _infoAt = (_camX + 300, _camY + 80);
+    }
+
     private void DrawUnitInfo()
     {
         if (!InfoOpen || _db is not { } db || _units[_infoUnit] is not { Data: { } c } unit) return;
         var (x, y) = _infoAt;
 
+        // 걸린 상태이상·버프를 아이콘 아래에 글로 — 누르고 있는 동안 무엇이 걸렸는지 바로 보이게(원본에 없는 덧붙임, 사용자 요청).
+        var effects = AilmentLabels(unit);
+        foreach (var (label, value) in new[] { ("DEX", unit.BonusDex), ("PSY", unit.BonusPsy), ("DEP", unit.BonusDep),
+                                               ("최대 TP", unit.BonusMaxTp), ("최대 SOUL", unit.BonusMaxSoul), ("최대 HP", unit.BonusMaxHp) })
+            if (value != 0) effects.Add($"{label} {value:+#;-#}");
+        const int EffectLineH = 16;
+        int h = InfoH + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0);
+        y = Math.Min(y, _camY + ViewHeight - h);
+
         // 원본 창 틀 — 제목줄에 이름(분석-시스템메뉴 「메시지 창 틀」)
-        DarkenRect(x - 1, y - FrameTitleH - 1, InfoW + 2, InfoH + FrameTitleH + 2, 8);
-        DrawGameFrame(x, y, InfoW, InfoH, db.T(c.NameId));
+        DarkenRect(x - 1, y - FrameTitleH - 1, InfoW + 2, h + FrameTitleH + 2, 8);
+        DrawGameFrame(x, y, InfoW, h, db.T(c.NameId));
 
         Centre(db.T(c.TitleId), x, y + 20, DimGray);
         Centre(db.FamilyName(c), x, y + 36, DimGray);
@@ -60,6 +79,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 아이콘 기준점은 그림 <b>가운데</b>다(스테이터스 창도 가운데 자리로 찍는다) — 왼쪽 위 자리로 찍어 칸 밖으로 반쯤 삐져나왔다(사용자 보고).
         for (int i = 0; i < 3; i++)
             DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 6 + 22 + i * 42, y + 228 + 17, UiBlend.Alpha, loop: false);
+        for (int i = 0; i < effects.Count; i++)
+            DrawText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
 
         void Centre(string text, int left, int top, uint color)
         {

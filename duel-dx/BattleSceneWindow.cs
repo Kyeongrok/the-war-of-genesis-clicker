@@ -931,6 +931,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         ApplyAimHook();
         ApplyClickHook();
+        if (_turnNo >= 1) OpenUnitInfoIfAsked();
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
         if (_turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
