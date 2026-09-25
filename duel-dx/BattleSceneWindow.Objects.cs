@@ -394,6 +394,32 @@ internal sealed unsafe partial class BattleSceneWindow
         Play(MosesClickSound);
     }
 
+    /// <summary>
+    /// 모드 &gt; 상자 내용물 보기 — 지금 전투의 상자(종류 2)·폭탄 상자(8)와 든 것을 화면 왼쪽 위에 적는다. 연 것은 흐리게.
+    /// 원본에 없는 도움 기능이다(사용자 요청). 든 것 = 아이템(.btl 물체 +0x144)이 있으면 아이템, 없으면 GP(+0x146).
+    /// </summary>
+    private void DrawChestList()
+    {
+        if (!_showChestContents || !_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen || _db is not { } db) return;
+        var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
+        var lines = new List<(string Text, uint Color)>
+        {
+            (chests.Count == 0 ? "상자 없음" : $"상자 {chests.Count(o => !_opened.Contains(o))}/{chests.Count}", 0xFFFFE070),
+        };
+        foreach (var o in chests)
+        {
+            string what = o.Data.Kind == 8 ? $"폭탄 (공격 {o.Data.Attack}, 반경 {o.Data.Radius})"
+                : o.Record.ItemId > 0 ? (db.Items.GetValueOrDefault(o.Record.ItemId) is { } item ? db.T(item.NameId) : $"아이템 {o.Record.ItemId}")
+                : o.Record.Gold > 0 ? $"{o.Record.Gold} GP" : "비어 있음";
+            bool opened = _opened.Contains(o);
+            lines.Add(($"({o.Col},{o.Row}) {what}{(opened ? " — 열었음" : "")}", opened ? 0xFF808080 : White));
+        }
+        int x = _camX + 8, y = _camY + (_showStatusBar ? GridTop + 4 : 8);
+        int w = lines.Max(l => GetText(l.Text, l.Color, 12).W) + 12, lineH = 17;
+        FillRect(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
+        for (int i = 0; i < lines.Count; i++) DrawText(lines[i].Text, x + 2, y + i * lineH, lines[i].Color, 12);
+    }
+
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>
     private void DrawObjects()
     {
