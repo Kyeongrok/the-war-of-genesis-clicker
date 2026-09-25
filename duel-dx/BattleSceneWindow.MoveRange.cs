@@ -69,7 +69,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         var unit = _units[_selected];
         var (oc, or) = RangeOrigin(unit);
-        if (_selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp) return;
+        if (_selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp
+            && _range is { } cached && cached.Cost.Length == Cols * Rows) return;   // 판 크기가 바뀌었으면 다시 셈한다
 
         _range = ComputeRange(unit);
         if (_range == null) { _rangeUnit = -1; return; }
@@ -231,6 +232,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawMoveRange()
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
+        // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.
+        if (range.Cost.Length != Cols * Rows || range.Red.Length != Cols * Rows) { _range = null; _rangeUnit = -1; return; }
         // 어빌리티 대상을 고르는 중(원본 상태 11)에는 이동 영역(파랑)·공격 사거리(빨강)를 걷고 그 기술의 사거리·효과 범위만 깐다 —
         // 겹쳐 칠하면 사거리 칸이 묻혀 안 보였다(사용자 보고). 기본공격 겨냥은 예전처럼 둔다.
         if (_targetWork >= 0 && !_targetIsBasicAttack) return;
