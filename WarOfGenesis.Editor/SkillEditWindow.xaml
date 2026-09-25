@@ -75,7 +75,6 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="6" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,0,0,4">
@@ -155,7 +154,9 @@
                     Grid.Row="2"
                     Height="6"
                     HorizontalAlignment="Stretch" />
-                <DockPanel Grid.Row="3" Margin="0,4">
+                <!--  제목 줄과 표를 한 칸에 묶는다 — 따로 두면 가름대가 표 대신 제목 줄(Auto)만 늘였다 줄였다 했다(사용자 보고)  -->
+                <DockPanel Grid.Row="3">
+                <DockPanel Margin="0,4" DockPanel.Dock="Top">
                     <Button
                         Padding="8,2"
                         AutomationProperties.AutomationId="SkillEditToCommon"
@@ -169,7 +170,6 @@
                 </DockPanel>
                 <DataGrid
                     x:Name="LevelGrid"
-                    Grid.Row="4"
                     AutoGenerateColumns="True"
                     AutoGeneratingColumn="LevelGrid_AutoGeneratingColumn"
                     AutomationProperties.AutomationId="SkillEditLevels"
@@ -179,6 +179,7 @@
                     CellEditEnding="LevelGrid_CellEditEnding"
                     HeadersVisibility="Column"
                     SelectionUnit="Cell" />
+                </DockPanel>
             </Grid>
         </Grid>
     </DockPanel>
