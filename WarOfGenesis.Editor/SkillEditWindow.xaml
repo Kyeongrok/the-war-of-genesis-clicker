@@ -78,6 +78,14 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                    <!--  어빌리티 설명(abi +0x1c TXR)과 선행 조건 — 게임 안 설명 창과 같은 글  -->
+                    <TextBlock
+                        x:Name="SkillDescription"
+                        Margin="0,0,0,8"
+                        AutomationProperties.AutomationId="SkillEditDescription"
+                        DockPanel.Dock="Top"
+                        Foreground="#2B4C7E"
+                        TextWrapping="Wrap" />
                     <Button
                         Padding="8,2"
                         AutomationProperties.AutomationId="SkillEditToLevels"
