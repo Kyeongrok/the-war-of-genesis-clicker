@@ -139,6 +139,13 @@ internal sealed unsafe partial class BattleSceneWindow
         /// </summary>
         public double PlayUntil { get; set; }
 
+        /// <summary>
+        /// 302 가 새로 놓은 물체 중 인자 2 가 0 인 것 — 모션을 한 번 돌고 나면 <b>스스로 지워진다</b>(<c>0x100f4c80</c>: 열쇠 −1 이고
+        /// <c>+0x60</c>(= 인자 2) 이 0 이면 셈이 모션 길이를 넘을 때 소멸자). 그 때. 인자 2 가 0 이 아니면 null(남는다).
+        /// 전에는 다 남겨 Fld 0074 디에네의 「!」(Obs 1180)가 계속 떠 있었다(사용자 보고).
+        /// </summary>
+        public double? RemoveAt { get; init; }
+
         /// <summary>옮기는 중 — (시작, 목표, 틱 수, 시작한 때).</summary>
         public (double FromX, double FromY, double ToX, double ToY, int Ticks, double Start)? Move { get; set; }
     }
@@ -486,6 +493,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (prop.Move is { } move) (prop.X, prop.Y, prop.Move) = (move.ToX, move.ToY, null);
             prop.PlayUntil = 0;                           // 모션은 그대로 두고 기다림만 푼다
         }
+        _fieldProps.RemoveAll(p => p.RemoveAt != null);  // 건너뛰면 한 번 돌고 사라질 물체(「!」 따위)도 치운다
         if (_fieldCamMove is { } cam) { MoveFieldCamera((int)cam.ToX, (int)cam.ToY); _fieldCamMove = null; }
         _fieldWipe = null;                                   // 걷어내기 전환은 끝(원본도 끝나면 그림만 남긴다)
         if (_fieldFade is { } fade2)
@@ -654,6 +662,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     {
                         Obs = A(0), Motion = A(1), X = A(3), Y = A(4), Layer = 7,
                         Mirror = A(5) != 0, Start = _lastTime,
+                        RemoveAt = A(2) == 0 ? _lastTime + (UiFor(A(0))?.MotionLength(A(1)) ?? 0) / TicksPerSecond : null,
                     });
                 break;
             case 303: break;                                 // 물체 모션 멈추기 — 자료에 한 번도 안 쓴다
@@ -1036,6 +1045,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                 (int)(cam.FromY + (cam.ToY - cam.FromY) * camTick / cam.Ticks));
         }
 
+        _fieldProps.RemoveAll(p => p.RemoveAt is { } gone && _lastTime > gone);   // 한 번 돌고 사라지는 물체(302 인자 2 = 0)
         foreach (var prop in _fieldProps)
         {
             if (prop.Move is not { } move) continue;
