@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.IO;
 using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using WarOfGenesis.Assets;
 
 namespace WarOfGenesis.Editor;
@@ -19,7 +22,13 @@ public partial class CharacterStatsWindow : Window
     /// <summary>상세의 「이름 : 값」 한 줄.</summary>
     public sealed record Stat(string Label, string Value);
 
-    public sealed record Row(int Code, string Name, string Title, string Body, string Family, string Job, int Level,
+    /// <summary>초상화 한 장 — 모션(표정) 하나의 첫 컷.</summary>
+    public sealed record Portrait(ImageSource Picture, int Width, int Height, string Label)
+    {
+        public string Size => $"{Width}×{Height}";
+    }
+
+    public sealed record Row(int Code, int FaceId, string Name, string Title, string Body, string Family, string Job, int Level,
                              int Hp, string Soul, int Tp, int Atk, int Acr, int Rdp, uint Lp, int Ctp, int Stp,
                              int Psy, int Dep, int Dex, string Weapon, IReadOnlyList<string> EquipmentItems,
                              IReadOnlyList<string> AbilityItems, bool IsPlaceholder)
@@ -37,10 +46,12 @@ public partial class CharacterStatsWindow : Window
     }
 
     private readonly ICollectionView _view;
+    private readonly GameDatabase _db;
 
     public CharacterStatsWindow(GameDatabase db, IEnumerable<int> codes)
     {
         InitializeComponent();
+        _db = db;
 
         var rows = new List<Row>();
         foreach (int code in codes.OrderBy(c => c))
@@ -55,8 +66,37 @@ public partial class CharacterStatsWindow : Window
         List.SelectedIndex = 0;
     }
 
-    private void List_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
+    private void List_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
         Detail.DataContext = List.SelectedItem;
+        var faceId = (List.SelectedItem as Row)?.FaceId ?? 0;
+        var portraits = PortraitsOf(faceId);
+        Portraits.ItemsSource = portraits;
+        PortraitHeader.Text = faceId == 0 ? "초상화 (없음)" : $"초상화 — Obs {faceId:D4} · {portraits.Count}장";
+    }
+
+    private readonly Dictionary<int, IReadOnlyList<Portrait>> _portraits = [];
+
+    /// <summary>초상 Obs 의 모션(표정)마다 첫 컷 — 게임 pak 에서 읽고, 한 번 푼 것은 들고 있는다.</summary>
+    private IReadOnlyList<Portrait> PortraitsOf(int faceId)
+    {
+        if (faceId == 0) return [];
+        if (_portraits.TryGetValue(faceId, out var cached)) return cached;
+        var list = new List<Portrait>();
+        try
+        {
+            if (_db.Files.Read("Obs", $"{faceId:D4}.obs") is { } bytes)
+                foreach (var motion in ObsSprite.Decode(bytes))
+                {
+                    var f = motion.Frames[0];
+                    var bitmap = BitmapSource.Create(f.Width, f.Height, 96, 96, PixelFormats.Bgra32, null, f.Bgra, f.Width * 4);
+                    bitmap.Freeze();
+                    list.Add(new Portrait(bitmap, f.Width, f.Height, $"#{motion.Id}"));
+                }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+        return _portraits[faceId] = list;
+    }
 
     private static Row MakeRow(GameDatabase db, CharacterData c)
     {
@@ -80,7 +120,7 @@ public partial class CharacterStatsWindow : Window
         if (abilities.Count == 0) abilities.Add("없음");
 
         bool placeholder = name.Length == 0 || c.Lp <= 1 || name.StartsWith('<') || name.StartsWith('=') || name.StartsWith('-');
-        return new Row(c.Code, name, db.T(c.TitleId), db.BodyName(c.Body), db.FamilyName(c), db.JobName(c), c.Level,
+        return new Row(c.Code, c.FaceId, name, db.T(c.TitleId), db.BodyName(c.Body), db.FamilyName(c), db.JobName(c), c.Level,
                        db.MaxHp(c), $"{soul}/{db.MaxSoul(c)}", tp, db.Atk(c, soul), db.Acr(c, tp), db.RdpAtFullHp(c),
                        c.Lp, c.Ctp, db.Stp(c), db.Psy(c), c.Dep, db.Dex(c), weaponText.Length > 0 ? weaponText : "없음", equipment, abilities, placeholder);
     }
