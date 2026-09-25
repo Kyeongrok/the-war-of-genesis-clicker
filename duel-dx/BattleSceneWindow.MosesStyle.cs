@@ -238,6 +238,13 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
+    /// <summary>그림 한 컷을 네모 가운데에 찍는다 — 계열 단추 위의 계열 아이콘(Obs 1334).</summary>
+    private void DrawCentredIcon(int obs, int motion, int x, int y, int w, int h)
+    {
+        if (UiFor(obs)?.FrameAt(motion, 0, loop: true) is not { } f) return;
+        DrawUi(obs, motion, 0, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
+    }
+
     /// <summary>처음 계열(0~4) — 그 인물 .chr 직업이 든 Dep 의 계열. 못 찾으면 지금 계열.</summary>
     private int StyleOriginFamily(CharacterData c)
     {
@@ -334,7 +341,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var cell = StyleTierCells[slot];
             bool over = mx >= cell.X && mx < cell.X + cell.W && my >= cell.Y && my < cell.Y + cell.H;
-            DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + 320, oy + 240, UiBlend.Alpha);
+            DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + cell.X, oy + cell.Y, UiBlend.Alpha);   // 계열 단추처럼 칸 자리에
             int family = StyleData() is { } oc ? StyleOriginFamily(oc) : 0;
             DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
             DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
@@ -344,9 +351,13 @@ internal sealed unsafe partial class BattleSceneWindow
         var familyCells = StyleFamilies();
         for (int i = 0; i < familyCells.Count && i < StyleFamilyCells.Length; i++)
         {
-            // 이 그림들은 조각마다 <b>제 자리를 스스로 들고 있다</b> — 연대표 이름판과 같은 꼴이라
-            // 칸 자리가 아니라 <b>화면 가운데(320,240)</b>에 찍어야 제자리에 온다. 누르는 칸만 StyleFamilyCells 로 잡는다.
-            DrawUi(StyleFamilyObs, 2 * i, tick, ox + 320, oy + 240, UiBlend.Alpha);
+            // Obs 329 의 조각은 제 자리값이 (0,0)이고 크기가 누르는 칸과 같다(77×71 · 71×78 · 70×78 · 78×71) — <b>칸 자리에</b> 찍는다.
+            // 예전에는 조각이 제 자리를 든다고 보고 화면 가운데(320,240)에 넷을 겹쳐 찍어, 30레벨이 넘어도 계열 단추가 안 보였다(사용자 보고).
+            // 짝수 모션이 가만히 있는 판, 홀수 모션이 마우스를 올렸을 때 빛나는 판이다.
+            var (fx, fy, fw, fh) = StyleFamilyCells[i];
+            bool over = mx >= fx && mx < fx + fw && my >= fy && my < fy + fh;
+            DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, UiBlend.Alpha);
+            DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], ox + fx, oy + fy, fw, fh);
         }
 
         // STATUS 단추 — 원본에는 없는 데모 단추. 형 단추와 같은 알약(Obs 283)에 글자를 얹는다.
