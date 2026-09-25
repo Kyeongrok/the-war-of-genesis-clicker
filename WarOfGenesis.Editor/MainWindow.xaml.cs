@@ -98,11 +98,9 @@ public partial class MainWindow : Window
             _chrFolder = chrFolder;
             _obsFolder = obsFolder;
 
-            // Chr.pak 만 있고 낱장이 없으면 통째로 푼다 — Chr 은 578개뿐이라 금방 끝난다.
-            if (!Directory.EnumerateFiles(chrFolder, "*.chr").Any() && File.Exists(Path.Combine(chrFolder, "Chr.idx")))
-                PakArchive.Extract(chrFolder, "Chr");
-
-            _allChrRecords = ChrTable.Scan(chrFolder);
+            // 낱장과 Chr.pak 안의 레코드를 합쳐 읽는다 — 게임 폴더에는 낱장이 일부(86개)만 있어, 낱장만 읽으면 살라딘 0219 같은
+            // 이야기용 레코드가 빠지고 0006·0075 같은 시험·다른 판 살라딘만 보였다(사용자 보고). 게임 폴더에는 아무것도 안 쓴다.
+            _allChrRecords = ChrTable.ScanAll(GameFiles.FromGameRoot(root));
             _gameRoot = root;
             _database = null;
             SaveGameRoot(root);
@@ -475,6 +473,8 @@ public partial class MainWindow : Window
         if (_currentRecord is not { } record) { StatusText.Text = "먼저 왼쪽에서 인물을 고르세요."; return; }
 
         string chrPath = Path.Combine(_chrFolder, CharacterExport.ChrFileName(record.ChrCode));
+        // pak 에만 있는 레코드(살라딘 0219 따위)는 낱장으로 꺼내 둔다 — Obs 를 꺼내는 것과 같은 길.
+        if (!File.Exists(chrPath)) PakArchive.EnsureFile(_chrFolder, "Chr", Path.GetFileName(chrPath));
         if (!File.Exists(chrPath))
         {
             StatusText.Text = $"{Path.GetFileName(chrPath)} 을(를) 못 찾았습니다.";
