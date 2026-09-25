@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -21,6 +21,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private const int ElementalFireAbility = 29, SummonMonsterAbility = 60;
     private const int FireBallObs = 637, FireTrailObs = 321, FireBlastObs = 252, FireSoundObs = 1331;
     private const int MonsterObs = 919, MonsterSoundObs = 1356;
+
+    /// <summary>
+    /// 불덩이가 도는 틱 — 원본은 150+10j 틱(5초 남짓)인데 너무 길다고 해서 <b>1/3</b>(50+3j)로 줄였다(사용자 요청). 원본으로 되돌리려면 150·10.
+    /// </summary>
+    private const int FireOrbitTicks = 50, FireOrbitStep = 3;
 
     /// <summary>엘레맨탈 파이어 레벨 1~20 · 서몬 몬스터 레벨 1~20 의 work — 뽑은 표 대신 손으로 그린다.</summary>
     private static readonly HashSet<int> AcrostWorks =
@@ -55,9 +60,9 @@ internal sealed unsafe partial class BattleSceneWindow
         var balls = new List<FireBall>();
         for (int j = 0; j < n; j++)
         {
-            var ball = new FireBall { Start = _lastTime, Angle = 2 * Math.PI * j / n, OrbitTicks = 150 + 10 * j, Target = targets[j] };
+            var ball = new FireBall { Start = _lastTime, Angle = 2 * Math.PI * j / n, OrbitTicks = FireOrbitTicks + FireOrbitStep * j, Target = targets[j] };
             balls.Add(ball);
-            FxSound(FireSoundObs, 0, _lastTime + 150.0 * j / n / TicksPerSecond);
+            FxSound(FireSoundObs, 0, _lastTime + (double)FireOrbitTicks * j / n / TicksPerSecond);
         }
         _fireBalls.AddRange(balls);
         var (ux, uy) = UnitFoot(user);
