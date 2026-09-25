@@ -58,6 +58,11 @@
                     AutomationProperties.AutomationId="CharacterStatsMenuItem"
                     Click="CharacterStatsMenuItem_Click"
                     Header="캐릭터 스탯(_S)" />
+                <MenuItem
+                    x:Name="BodyAbilitiesMenuItem"
+                    AutomationProperties.AutomationId="BodyAbilitiesMenuItem"
+                    Click="BodyAbilitiesMenuItem_Click"
+                    Header="체질 — 배울 수 있는 어빌리티(_B)" />
             </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem
@@ -81,13 +86,6 @@
                 AutomationProperties.AutomationId="BattleMapMenuItem"
                 Click="BattleMapMenuItem_Click"
                 Header="맵(_M)" />
-            <MenuItem Header="개발(_D)">
-                <MenuItem
-                    x:Name="BodyAbilitiesMenuItem"
-                    AutomationProperties.AutomationId="BodyAbilitiesMenuItem"
-                    Click="BodyAbilitiesMenuItem_Click"
-                    Header="체질 — 배울 수 있는 어빌리티(_B)" />
-            </MenuItem>
         </Menu>
 
         <DockPanel Margin="8">
