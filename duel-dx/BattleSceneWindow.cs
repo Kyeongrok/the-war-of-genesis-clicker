@@ -141,6 +141,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private ObtMapImage? _map;
     private Dictionary<int, UnitSprite> _sprites = [];
+
+    /// <summary>인물마다 읽어 둔 그림이 어느 레코드 그림(+0xc) 값으로 읽은 것인가 — 바뀌면 다시 읽는다.</summary>
+    private readonly Dictionary<int, int> _spriteCodes = [];
     private UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];   // 자료를 읽으면 BuildUnits 로 다시 만든다
     private int _selected = -1;
     private readonly Dictionary<int, string> _names = [];
@@ -190,7 +193,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         foreach (int chrCode in _units.Select(u => u.ChrCode).Distinct())
         {
-            if (sprites.ContainsKey(chrCode)) continue;
+            // 인물 레코드의 그림(+0xc)은 필드 행동 701 칸 0 이 바꾼다 — Fld 0088 이 살라딘을 건슬라이서 그림 1185 로 바꾼다.
+            // 전에는 뽑아 둔 목록의 그림만 써서 바뀐 모션이 전투에 안 나왔다(사용자 보고: Btl 0150).
+            int wanted = _units.FirstOrDefault(u => u.ChrCode == chrCode)?.Data?.SpriteId ?? 0;
+            if (sprites.ContainsKey(chrCode) && (wanted == 0 || _spriteCodes.GetValueOrDefault(chrCode) == wanted)) continue;
             string name = "";
 
             // 몸짓벌을 모두 풀고 모션표(서기·걷기 …)를 같이 읽는다. 모션표가 없으면 첫 컷 하나로 서 있는다.
@@ -202,6 +208,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 (name, obsPath) = manifests.TryGetValue(chrCode, out var m)
                     ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
                     : LoadFromGameFolder(chrCode);
+                // 바뀐 그림이 그 인물 폴더에 있으면 그것을 쓴다(없으면 목록 그림 그대로).
+                if (wanted > 0 && Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changed && File.Exists(changed))
+                {
+                    obsPath = changed;
+                    if (Trace)
+                        File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"sprite {chrCode}: record picture {wanted} → {obsPath}" + Environment.NewLine);
+                }
+                _spriteCodes[chrCode] = wanted;
                 _names[chrCode] = name;
                 var motions = ObsSprite.Decode(obsPath);
                 if (motions.Count == 0) continue;
