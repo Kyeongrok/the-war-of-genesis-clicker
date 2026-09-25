@@ -135,6 +135,16 @@ public partial class SkillEditWindow : Window
             foreach (string f in varying) dr[f] = level.Fields.GetValueOrDefault(f);
             table.Rows.Add(dr);
         }
+        // 스피너(tp)처럼 편집 상태를 거치지 않고 바뀐 값도 스킬 자료에 옮긴다 — CellEditEnding 은 편집 상태에서만 온다.
+        table.ColumnChanged += (_, ev) =>
+        {
+            if (_filling || ev.Column is not { } col || !varying.Contains(col.ColumnName)) return;
+            int i = table.Rows.IndexOf(ev.Row);
+            if (i < 0 || i >= row.Skill.Levels.Count || ev.Row[col] is not int v) return;
+            if (row.Skill.Levels[i].Fields.GetValueOrDefault(col.ColumnName) == v) return;
+            row.Skill.Levels[i].Fields[col.ColumnName] = v;
+            MarkDirty(row);
+        };
         LevelGrid.ItemsSource = table.DefaultView;
         _filling = false;
     }
@@ -154,8 +164,24 @@ public partial class SkillEditWindow : Window
     }
 
     /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
+    /// <summary>스피너로 고치는 레벨별 칸과 한 번에 오르내리는 폭 — tp 는 10씩(사용자 요청).</summary>
+    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10 };
+
     private void LevelGrid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
+        if (SpinnerSteps.TryGetValue(e.PropertyName, out double step))
+        {
+            // 늘 스피너로 보인다 — 칸을 편집 상태로 바꾸지 않고 ▲▼·휠·↑↓ 로 바로 고친다. 값은 표(DataTable)에 바로 들어가고
+            // 표의 ColumnChanged 가 스킬 자료로 옮긴다(Fill).
+            var spinner = new FrameworkElementFactory(typeof(Controls.NumericSpinner));
+            spinner.SetBinding(Controls.NumericSpinner.ValueProperty,
+                new Binding($"[{e.PropertyName}]") { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
+            spinner.SetValue(Controls.NumericSpinner.StepProperty, step);
+            spinner.SetValue(Controls.NumericSpinner.MinimumProperty, 0.0);
+            spinner.SetValue(Controls.NumericSpinner.MaximumProperty, 65535.0);
+            e.Column = new DataGridTemplateColumn { Header = e.PropertyName, MinWidth = 70, CellTemplate = new DataTemplate { VisualTree = spinner } };
+            return;
+        }
         if (!Choices.TryGetValue(e.PropertyName, out var choices)) return;
         e.Column = new DataGridComboBoxColumn
         {
