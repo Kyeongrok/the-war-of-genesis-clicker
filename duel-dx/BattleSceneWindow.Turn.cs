@@ -560,7 +560,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!strikes)
             {
                 if (step >= actions.Length || finisher) continue;   // 필살기의 준비 동작(6·15)은 앞머리가 이미 했다
-                PlayAction(a, actions[step]);
+                PlayAction(a, DrawnAction(a, actions[step]));
                 while (a.IsBusy) yield return true;
                 continue;
             }
@@ -570,8 +570,8 @@ internal sealed unsafe partial class BattleSceneWindow
             var hitTimes = new List<double> { 0 };
             if (step < actions.Length)
             {
-                PlayAction(a, actions[step]);
-                hitTimes = HitTimesFor(a, actions[step], ranged: w.RangeMax > 4);
+                PlayAction(a, DrawnAction(a, actions[step]));
+                hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
                 for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
 
@@ -856,6 +856,21 @@ internal sealed unsafe partial class BattleSceneWindow
         var starts = clip.Hits.Select(h => h.Start).OrderBy(t => t).ToList();
         double at = ranged ? Math.Max(first, starts[0] / TicksPerSecond) : first;
         return [.. starts.Select(t => at + (t - starts[0]) / TicksPerSecond)];
+    }
+
+    /// <summary>
+    /// 그 인물 그림에 그 동작이 비어 있으면(키 없음) 대신 그릴 동작 — 7(쏘기·휘두르기), 그다음 5. 판정 자리는 원래 동작 목록대로 둔다.
+    /// 원거리 기본공격(work 6)은 동작 9 를 부르는데, 팡테온가드(그림 1111)는 9 가 비어 있고 사격(소리 8·총구 불꽃 108)이 7 에 있어
+    /// 공격 이펙트가 안 나왔다(사용자 보고: Btl 0154).
+    /// </summary>
+    private int DrawnAction(UnitState u, int action)
+    {
+        if (!_sprites.TryGetValue(u.ChrCode, out var sprite)) return action;
+        bool Empty(int a) => sprite.Clip(a, u.Facing) is not { Keys.Count: > 0 };   // 키가 하나도 없는 동작(정지 한 장짜리는 둔다)
+        if (!Empty(action)) return action;
+        foreach (int alt in new[] { 7, 5 })
+            if (alt != action && !Empty(alt)) return alt;
+        return action;
     }
 
     private void PlayAction(UnitState u, int action)
