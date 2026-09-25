@@ -279,7 +279,7 @@ public sealed class GameDatabase
     public IReadOnlyList<DepData> Deps { get; }
     public IReadOnlyDictionary<int, ItemData> Items { get; }
     public IReadOnlyDictionary<int, AbilityData> Abilities { get; }
-    public IReadOnlyDictionary<int, WorkData> Works { get; }
+    public IReadOnlyDictionary<int, WorkData> Works { get; private set; }
     public IReadOnlyDictionary<int, int> Num { get; }
     /// <summary><c>Dat/Sta.dat</c> — 상태이상 번호 → 아이콘·설명.</summary>
     public IReadOnlyDictionary<int, StatusData> Statuses { get; }
@@ -394,6 +394,24 @@ public sealed class GameDatabase
             [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
             U16(a, o + 24), a[o + 26],
             a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
+
+    /// <summary>
+    /// 스킬 파일(<c>assets/data/skills</c>)을 다시 읽어 work 표와 어빌리티의 레벨 → work 짝을 새로 채운다 — 편집기에서 고친 것을
+    /// 게임을 끄지 않고 반영할 때 쓴다(게임 메뉴 개발 > 어빌리티 반영). 스킬 파일이 없으면(원본 .att) 아무것도 안 하고 0 을 돌려준다.
+    /// </summary>
+    public int ReloadSkills()
+    {
+        var skills = SkillBook.Load(_files);
+        if (skills.Count == 0) return 0;
+        var works = new Dictionary<int, WorkData>();
+        foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
+        foreach (var ab in Abilities.Values) ab.WorkByLevel.Clear();
+        foreach (var w in works.Values)
+            if (w.AbilityId != 0 && w.Level != 0 && Abilities.TryGetValue(w.AbilityId, out var ab))
+                ab.WorkByLevel[w.Level] = w.Id;
+        Works = works;
+        return skills.Count;
+    }
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
 
