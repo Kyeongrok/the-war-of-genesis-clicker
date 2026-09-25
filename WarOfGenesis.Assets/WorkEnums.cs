@@ -115,6 +115,17 @@ public enum StatusEffect : byte
     [Description("48 최대 HP 변화(보정)")] S48 = 48,
 }
 
+/// <summary>
+/// SOUL 을 쓰나 — work 파일 49바이트(soulSpend, 메모리 <c>+0x36</c>). 0 이 아니면 soul 도 소모에 든다(<c>0x10072510</c>).
+/// 0 이면 soul 은 <b>필요량에만</b> 들고 빠지지 않는다. 자료에는 1 과 255 가 섞여 있는데 둘 다 참이다.
+/// </summary>
+public enum SoulSpend : byte
+{
+    [Description("False — soul 은 필요량만")] False = 0,
+    [Description("True — soul 도 소모")] True = 1,
+    [Description("True (255)")] True255 = 255,
+}
+
 /// <summary>enum 값과 보기 이름(<see cref="DescriptionAttribute"/>) — 편집기 드롭다운에 쓴다.</summary>
 public static class EnumChoices
 {
