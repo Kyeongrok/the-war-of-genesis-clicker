@@ -275,8 +275,10 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             case 401:                                                           // 그 편 전멸
             {
+                // 전장에 선 사람만 센다 — 아직 안 나온 증원((0,0) 대기)까지 세면, 「전멸하면 증원을 부르는」 사건이 영영 안 터진다.
+                // Btl 0151 은 사건 2(편 0 전멸 → 강화아델룬 둘 증원)가 안 터져 적을 다 쓰러뜨려도 전투가 안 끝났다(사용자 보고).
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
-                return side >= 0 && !_units.Any(u => u.Alive && u.Side == side);
+                return side >= 0 && !_units.Any(u => u.Alive && u.OnField && u.Side == side);
             }
             case 402:                                                           // 사각형 안에 있나
             {
