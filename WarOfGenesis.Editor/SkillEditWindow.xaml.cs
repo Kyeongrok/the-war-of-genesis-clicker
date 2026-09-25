@@ -36,6 +36,9 @@ public partial class SkillEditWindow : Window
         };
         public int Varying => Skill.Levels.SelectMany(l => l.Fields.Keys).Where(k => k != "att").Distinct().Count();
         public string Dirty { get; set; } = "";
+
+        /// <summary>레벨 줄을 지웠나 — 저장할 때 .abi 최대 레벨도 줄 수로 줄인다.</summary>
+        public bool LevelsTrimmed { get; set; }
     }
 
     public sealed class CommonRow
@@ -307,6 +310,32 @@ public partial class SkillEditWindow : Window
         Fill();
     }
 
+    /// <summary>
+    /// 고른 셀의 레벨 줄을 지운다 — 뒤 레벨을 하나씩 당겨(10 → 9 …) 빈 레벨이 안 생기게 한다. 9 만 빼고 두면 Lv8 인물이 Lv9 에 오를 때
+    /// 쓸 work 이 없어 기술이 사라지고, 다음 레벨 EXP 도 0 이 된다. work 번호는 그대로 둔다(연출·AI·전투 스크립트가 work 로 가리킨다).
+    /// 최대 레벨(.abi +4)은 저장할 때 줄 수에 맞춰 줄인다.
+    /// </summary>
+    private void DeleteLevel_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row) return;
+        if (LevelGrid.CurrentCell.Item is not DataRowView view || view.Row["level"] is not int level)
+        {
+            StatusText.Text = "레벨별 표에서 지울 레벨의 셀을 하나 고르세요.";
+            return;
+        }
+        if (row.Skill.Levels.Count <= 1) { StatusText.Text = "마지막 한 레벨은 지울 수 없습니다."; return; }
+        int index = row.Skill.Levels.FindIndex(l => l.Level == level);
+        if (index < 0) return;
+        if (MessageBox.Show(this, $"{row.Name} Lv{level} (work {row.Skill.Levels[index].Work}) 줄을 지우고 뒤 레벨을 하나씩 당길까요?",
+                            "레벨 지우기", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        row.Skill.Levels.RemoveAt(index);
+        for (int i = index; i < row.Skill.Levels.Count; i++) row.Skill.Levels[i].Level--;
+        row.LevelsTrimmed = true;
+        MarkDirty(row);
+        Fill();
+        StatusText.Text = $"Lv{level} 을(를) 지웠습니다 — 이제 최대 Lv{row.Skill.Levels.Count}. 저장하면 반영됩니다.";
+    }
+
     /// <summary>레벨별 열 하나를 공통으로 올린다 — 첫 레벨 값이 모든 레벨의 값이 된다.</summary>
     private void ToCommon_Click(object sender, RoutedEventArgs e)
     {
@@ -336,6 +365,13 @@ public partial class SkillEditWindow : Window
             foreach (var r in dirty)
             {
                 File.WriteAllText(r.Path, SkillBook.ToJson(r.Skill), new UTF8Encoding(false));
+                if (r.LevelsTrimmed && r.Ability > 0 && _db?.Abilities.GetValueOrDefault(r.Ability) is { } ab)
+                {
+                    // 원본에서 이미 최대 레벨이 줄 수보다 작은 어빌리티(희생 10·20줄 따위)는 그 값을 넘기지 않는다.
+                    int max = Math.Min(ab.MaxLevel, r.Skill.Levels.Count);
+                    GameDatabase.WriteAbilityMaxLevel(System.IO.Path.GetDirectoryName(_folder)!, r.Ability, max);
+                    r.LevelsTrimmed = false;
+                }
                 r.Dirty = "";
             }
             SkillGrid.Items.Refresh();

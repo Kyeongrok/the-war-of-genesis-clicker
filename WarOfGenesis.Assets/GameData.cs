@@ -206,6 +206,16 @@ public sealed record AbilityData(int Id, ushort NameId, ushort MaxLevel, Diction
 {
     public bool IsPassive => Category == 3;
 
+    /// <summary>
+    /// 그 레벨의 work — 없으면 그 밑 가장 가까운 레벨 것. 편집기에서 레벨을 지워 최대 레벨이 줄면 저장된 인물의 레벨이 최대보다 클 수 있다.
+    /// </summary>
+    public bool TryWorkAt(int level, out int workId)
+    {
+        if (WorkByLevel.TryGetValue(level, out workId)) return true;
+        var below = WorkByLevel.Keys.Where(k => k <= level).DefaultIfEmpty(0).Max();
+        return WorkByLevel.TryGetValue(below, out workId);
+    }
+
     /// <summary>목록 왼쪽 아이콘(종류) — Obs 0488 모션 <c>A×10 + C</c>. 아이콘이 없으면 −1.</summary>
     public int IconKindMotion => IconSide == 0xFFFF ? -1 : IconSide * 10 + IconKind;
 
@@ -409,8 +419,39 @@ public sealed class GameDatabase
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && Abilities.TryGetValue(w.AbilityId, out var ab))
                 ab.WorkByLevel[w.Level] = w.Id;
+        // 편집기가 레벨 줄을 지우면 .abi 의 최대 레벨(+4)도 고친다 — 그것도 다시 읽는다.
+        if (Abilities is Dictionary<int, AbilityData> abilities)
+            foreach (int f in AbilityFiles)
+            {
+                if (_files.Read("Abi", $"{f:D4}.abi") is not { } a) continue;
+                for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
+                    if (abilities.TryGetValue(U16(a, o), out var ab) && ab.MaxLevel != U16(a, o + 4))
+                        abilities[ab.Id] = ab with { MaxLevel = U16(a, o + 4) };
+            }
         Works = works;
         return skills.Count;
+    }
+
+    /// <summary>
+    /// <c>Abi/NNNN.abi</c> 에서 그 어빌리티의 최대 레벨(레코드 +4)을 고쳐 쓴다 — 편집기에서 레벨 줄을 지울 때. 찾아 고쳤으면 true.
+    /// </summary>
+    public static bool WriteAbilityMaxLevel(string dataFolder, int abilityId, int maxLevel)
+    {
+        foreach (int f in AbilityFiles)
+        {
+            string path = Path.Combine(dataFolder, "Abi", $"{f:D4}.abi");
+            if (!File.Exists(path)) continue;
+            byte[] a = File.ReadAllBytes(path);
+            for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
+            {
+                if (U16(a, o) != abilityId) continue;
+                a[o + 4] = (byte)maxLevel;
+                a[o + 5] = (byte)(maxLevel >> 8);
+                File.WriteAllBytes(path, a);
+                return true;
+            }
+        }
+        return false;
     }
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
@@ -450,7 +491,7 @@ public sealed class GameDatabase
         int sum = 0;
         foreach (ushort id in c.Passives)
         {
-            if (id == 0 || !Abilities.TryGetValue(id, out var ab) || !ab.WorkByLevel.TryGetValue(c.AbilityLevel(id), out int wid)
+            if (id == 0 || !Abilities.TryGetValue(id, out var ab) || !ab.TryWorkAt(c.AbilityLevel(id), out int wid)
                 || !Works.TryGetValue(wid, out var w)) continue;
             sum += w.Bonuses.Where(b => b.Stat == stat).Sum(b => b.Value);
         }

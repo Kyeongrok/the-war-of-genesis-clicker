@@ -191,6 +191,14 @@
                         Click="ToCommon_Click"
                         Content="고른 열을 공통으로 ↑ (첫 레벨 값)"
                         DockPanel.Dock="Right" />
+                    <Button
+                        Margin="0,0,6,0"
+                        Padding="8,2"
+                        AutomationProperties.AutomationId="SkillEditDeleteLevel"
+                        Click="DeleteLevel_Click"
+                        Content="고른 레벨 지우기"
+                        DockPanel.Dock="Right"
+                        ToolTip="고른 셀의 레벨 줄을 지우고 뒤 레벨을 하나씩 당긴다 — 최대 레벨도 하나 준다(저장할 때 .abi 에도 적는다)" />
                     <TextBlock
                         VerticalAlignment="Center"
                         FontWeight="Bold"
