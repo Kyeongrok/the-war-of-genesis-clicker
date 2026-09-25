@@ -46,7 +46,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (by < GridTop) return -1;
         int col = bx / TileW, row = RowAt(bx, by);
         if (row < 0) return -1;
-        return Array.FindIndex(_units, u => u.Alive && u.Col == col && u.Row == row);
+        return Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && u.Row == row);   // 퇴장한 사람은 안 잡는다(LiveUnitAt 과 같다)
     }
 
     // ── Status 화면 그리기 도구 (화면은 BattleSceneWindow.Status.cs) ──────────
