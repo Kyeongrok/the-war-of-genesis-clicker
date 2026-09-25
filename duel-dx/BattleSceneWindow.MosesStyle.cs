@@ -238,11 +238,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
-    /// <summary>그림 한 컷을 네모 가운데에 찍는다 — 계열 단추 위의 계열 아이콘(Obs 1334).</summary>
-    private void DrawCentredIcon(int obs, int motion, int x, int y, int w, int h)
+    /// <summary>
+    /// 움직이는 그림을 네모 가운데에 돌린다 — 계열 단추 위의 계열 아이콘(Obs 1334, 모션마다 59틱). 자리는 첫 장으로 한 번 맞춰
+    /// 장마다 크기가 달라도 흔들리지 않게 한다. 예전에는 첫 장만 찍어 원본과 달리 멈춰 있었다(사용자 보고).
+    /// </summary>
+    private void DrawCentredIcon(int obs, int motion, int tick, int x, int y, int w, int h)
     {
         if (UiFor(obs)?.FrameAt(motion, 0, loop: true) is not { } f) return;
-        DrawUi(obs, motion, 0, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
+        DrawUi(obs, motion, tick, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
     }
 
     /// <summary>처음 계열(0~4) — 그 인물 .chr 직업이 든 Dep 의 계열. 못 찾으면 지금 계열.</summary>
@@ -357,7 +360,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (fx, fy, fw, fh) = StyleFamilyCells[i];
             bool over = mx >= fx && mx < fx + fw && my >= fy && my < fy + fh;
             DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, UiBlend.Alpha);
-            DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], ox + fx, oy + fy, fw, fh);
+            DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], tick, ox + fx, oy + fy, fw, fh);
         }
 
         // STATUS 단추 — 원본에는 없는 데모 단추. 형 단추와 같은 알약(Obs 283)에 글자를 얹는다.
