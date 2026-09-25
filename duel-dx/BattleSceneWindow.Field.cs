@@ -619,8 +619,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
             case 600:
             case 601:
-            case 602: ShowFieldTalk(a.Code == 600, A(0), A(1), pose: A(3)); break;   // 인자 3 = 초상화 표정(모션 2×표정+11)
-            case 603: ShowFieldTalk(true, 0, A(0)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설)
+            case 602: ShowFieldTalk(a.Code == 600, A(0), A(1), pose: A(3), voice: A(2)); break;   // 인자 2 = 음성, 3 = 초상화 표정(모션 2×표정+11)
+            case 603: ShowFieldTalk(true, 0, A(0), voice: A(1)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설) — 인자 1 = 음성
             case 300:                                        // 물체를 그 자리로 즉시
             {
                 if (FieldPropOf(A(0)) is not { } prop) break;
@@ -823,7 +823,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 데모는 창 생김새까지는 안 옮기고 <b>보통 대사창</b>으로 띄운다(가설) — 이름이 인물 이름이 아닌 것만 지킨다.
                 ShowFieldTalk(box: true, A(0), 0,
                               nameOverride: _db?.T((ushort)A(1)) ?? "",
-                              textOverride: TalkTableFor()?[A(2)] ?? "");
+                              textOverride: TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
                 _mixer.StopMusic();
@@ -1101,9 +1101,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     /// <param name="nameOverride">말하는 이 자리에 넣을 이름 — 행동 609 는 인물 이름이 아니라 <b>인자1 의 TXR 이름</b>을 쓴다.</param>
     /// <param name="textOverride">글 — 행동 609 는 필드 <c>Tlf</c> 가 아니라 <b>그 챕터의 <c>Tlc</c></b> 에서 꺼낸다.</param>
-    private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0)
+    private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0, int voice = 0)
     {
         if (_talkSkip) return;
+        PlayTalkVoice(voice);
         string name = "";
         _fieldTalkOf = speaker;
         if (_field is { } field && speaker >= 10000
