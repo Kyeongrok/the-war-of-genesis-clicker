@@ -610,6 +610,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             // 그라비티 필드 — 대상마다 중력장(219:0)이 차례로 깔리고, 끝날 때 효과가 든다.
+            // 아스트럴 애로우 — 활을 당겨 화살을 쏘아 올리고, 대상마다 화살이 쏟아진다. 피해는 화살이 닿을 때 대상마다 한 번.
+            if (w.AbilityId == AstralArrowAbility)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in AstralArrowRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                    yield return true;
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             if (w.AbilityId == GravityFieldAbility)
             {
                 var targets = WorkTargets(w, a, col, row);

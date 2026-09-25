@@ -139,6 +139,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (AcrostWorks.Contains(work)) return ([6, 15], []);
         // 그라비티 필드 — 중력장은 BattleSceneWindow.GravityField.cs 가 대상마다 깐다.
         if (GravityFieldWorks.Contains(work)) return ([6, 15], []);
+        // 아스트럴 애로우 — 활·화살·폭발은 BattleSceneWindow.AstralArrow.cs 가 시각대로 깐다.
+        if (AstralArrowWorks.Contains(work)) return ([6], []);
         if (TeleportWorks.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(381, 0, false, 0), new(210, 3, false, 0)]);
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
