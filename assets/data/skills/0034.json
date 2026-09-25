@@ -3,7 +3,7 @@
   "name": "일루션 히트",
   "att": 2,
   "common": {
-    "rangeShape": 1,
+    "rangeShape": 2,
     "rangeKind": 1,
     "rangeMin": 2,
     "rangeMax": 2,
@@ -29,7 +29,7 @@
     "bonus3Value": 0,
     "accuracy": 90,
     "critical": 10,
-    "soul": 60,
+    "soul": 2,
     "soulSpend": 0,
     "b50": 0,
     "b51": 0,
