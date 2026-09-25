@@ -302,6 +302,19 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _learnedTop, _learnableTop;
 
     /// <summary>
+    /// 스테이터스 창의 마우스 휠 — 커서가 놓인 어빌리티 목록을 한 칸에 한 줄씩 굴린다(원본은 스크롤 막대만 있다).
+    /// 목록 밖이면 false(휠이 다른 데로 간다). 끝 자르기는 다음 그리기가 한다. 자리는 클릭처럼 지금의 <see cref="StatusOrigin"/> 으로 잰다.
+    /// </summary>
+    private bool ScrollStatusLists(int lines)
+    {
+        var (ox, oy) = StatusOrigin();
+        int x = ox + AbilityX, w = ScrollX + 16 - AbilityX;
+        if (MouseIn(x, oy + LearnedScrollY, w, LearnedScrollH)) { _learnedTop = Math.Max(0, _learnedTop + lines); return true; }
+        if (MouseIn(x, oy + LearnableScrollY, w, LearnableScrollH)) { _learnableTop = Math.Max(0, _learnableTop + lines); return true; }
+        return false;
+    }
+
+    /// <summary>
     /// 오른쪽 단추를 누르고 있는 동안 보이는 설명(원본 <c>0x10042c00</c>) — 글과 그때 마우스 자리. 떼면 사라지고,
     /// 떠 있는 동안에는 다른 클릭을 받지 않는다.
     /// </summary>
