@@ -50,7 +50,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
     {
-        if (obj.Data.Kind is not (1 or 2 or 6 or 8) || (known ?? ComputeRange(user)) is not { } range) return null;
+        if (obj.Data.Kind is not (1 or 2 or 6 or 8 or 10) || (known ?? ComputeRange(user)) is not { } range) return null;
         bool Affordable(int col, int row) =>
             (uint)col < Cols && (uint)row < Rows && range.CanReach(row * Cols + col)
             && (!needTp || range.Cost[row * Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
@@ -102,6 +102,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private bool TouchObject(DemoObject obj)
     {
+        if (obj.Data.Kind == 10) return TouchHealCrystal(obj);
         CommitMove(_units[_turn]);
         _units[_turn].Tp -= ObjectTouchTp;
         _opened.Add(obj);
@@ -149,7 +150,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return TouchObject(there);
         }
         var target = Objects.Where(o => !_opened.Contains(o) && o.Alive
-                                        && (breaking ? o.Data.Breakable && o.Record.Team != 4 : o.Data.Kind is 2 or 6 or 8))
+                                        && (breaking ? o.Data.Breakable && o.Team != 4 : o.Data.Kind is 2 or 6 or 8))
                             .OrderBy(o => Math.Abs(o.Col - user.Col) + Math.Abs(o.Row - user.Row))
                             .FirstOrDefault();
         if (target is null) return false;
@@ -158,6 +159,55 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!breaking) { _turn = Array.IndexOf(_units, user); return TouchObject(target); }
         _turn = Array.IndexOf(_units, user);
         return TryBreakObject(target.Col, target.Row, force: true);
+    }
+
+    /// <summary>
+    /// 힐 크리스탈(종류 10) 만지기 — 원본 갈래 <c>0x100e60fb</c>. 중립(−1)이면 만진 쪽 편이 되고(명령 0x2717),
+    /// 제 편이고 다 찼으면(<c>+0x160</c>) <b>만진 인물의 칸</b>에 제 work(<c>+0x134</c>, Obj 59 는 1472 = 최대 HP 50% 회복)을 쓴 뒤
+    /// 꺼지고 다시 찬다(명령 0x271a → <c>0x100e80a0</c> → 0x2719 <c>0x100e8070</c>). 덜 찼으면 아무 일도 없다.
+    /// 예전에는 만질 수 없는 종류로 쳐서 크리스탈 옆에서 눌러도 아무것도 안 됐다(사용자 보고: Btl 0147 (3,24)).
+    /// </summary>
+    private bool TouchHealCrystal(DemoObject obj)
+    {
+        var user = _units[_turn];
+        string name = _db?.T((ushort)obj.Data.NameId) ?? "";
+        if (obj.Team < 0)
+        {
+            CommitMove(user);
+            user.Tp -= ObjectTouchTp;
+            obj.Team = user.Side;
+            Toast($"{name} 이(가) 아군 편이 되었습니다.");
+            Play(MosesClickSound);
+            return true;
+        }
+        if (!obj.Charged)
+        {
+            Hint($"{name} 이(가) 아직 충전 중입니다 ({obj.Charge}/{Math.Max(1, obj.Data.TurnEvery)})");
+            return true;
+        }
+        CommitMove(user);
+        user.Tp -= ObjectTouchTp;
+        (obj.Charged, obj.Charge) = (false, 0);
+        Play(MosesClickSound);
+        if (Work(obj.Data.WorkId) is { IsHeal: true } w && user.Hp < user.MaxHp)
+        {
+            int before = user.Hp;
+            user.Hp = Math.Min(user.MaxHp, user.Hp + user.MaxHp * w.Power / 100);
+            ShowNumber(user, (user.Hp - before).ToString(), HealColor2);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 힐 크리스탈 충전 — 편이 있으면 한 번에 1 씩 차고 한도(.obj 차례 간격, Obj 59 는 15)에서 멈춘다(<c>0x100e65f0</c>).
+    /// 한도에 닿으면 차례를 받아(<c>0x100e71f0</c>) 켜진다(명령 0x2718 → <c>0x100e8040</c>, 모션 9).
+    /// 원본이 이 충전을 부르는 주기(가상 함수 칸)는 못 찾아 전투 틱마다로 둔다(가설).
+    /// </summary>
+    private static void ChargeHealCrystal(DemoObject obj)
+    {
+        int full = Math.Max(1, obj.Data.TurnEvery);
+        obj.Charge = Math.Min(full, obj.Charge + 1);
+        if (obj.Charge >= full) obj.Charged = true;
     }
 
     /// <summary>
@@ -170,8 +220,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
         var user = _units[_turn];
         // 제 편 물체는 못 친다 — 종류 7(바리케이트)은 적·중립이면, 9·10 은 적이면 칠 수 있다.
-        bool foe = obj.Record.Team != (user.PlayerControlled ? 4 : 0);
-        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Record.Team < 0)) return false;
+        bool foe = obj.Team != (user.PlayerControlled ? 4 : 0);
+        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Team < 0)) return false;
         if (user.Data is not { } c || _db is null || Work(c.BasicWorkId) is not { } w) return false;
         // 기본공격과 같은 자리 규칙 — 옆 두 칸(모양 2 십자, 사거리 5~8) 안이어야 친다.
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
@@ -241,7 +291,8 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var obj in Objects)
         {
             if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts) continue;
-            if (obj.Data.Kind is 9 or 10 && obj.Record.Team < 0) continue;
+            if (obj.Data.Kind is 9 or 10 && obj.Team < 0) continue;
+            if (obj.Data.Kind == 10) { ChargeHealCrystal(obj); continue; }
             int every = Math.Max(1, obj.Data.TurnEvery);
             if (_tick % every != 0) continue;
             ObjectActs(obj);
@@ -257,7 +308,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is null || obj.Data.Attack <= 0) return;
         // 어디까지 닿는지는 그 물체가 쓰는 work 이 정한다(파일 +31). work 이 없으면 옆 한 칸으로 본다.
         var work = Work(obj.Data.WorkId);
-        bool ally = obj.Record.Team == 4;
+        bool ally = obj.Team == 4;
 
         bool Reaches(UnitState u) => work is { } w
             ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
@@ -361,8 +412,10 @@ internal sealed unsafe partial class BattleSceneWindow
             // 그림 기준점 = 칸 왼쪽 위 + .obj 파일 16·18 의 그림 보정(원본은 ×4 · ×40/32 해서 화면 자리 +0x3e/+0x40 에 더한다, 분석-전투 「Obj 배치」).
             // 1칸 물체는 가로 16~20(칸 가운데), 2칸 문은 36·39(두 칸 가운데)라 픽셀 거리로 본다(가설). 예전에는 칸 아래 모서리에 놓아
             // 상자가 반 칸 넘게 내려가 노랑 칸(닿는 물체 칸)과 어긋났다(사용자 보고).
+            // 힐 크리스탈은 다 차면 켜진 모션 9, 쓰고 나면 꺼진 모션 10(0x100e8040 · 0x100e8070).
+            if (obj.Data.Kind == 10 && !_opened.Contains(obj)) motion = obj.Charged ? 9 : 10;
             int x = obj.Col * TileW + obj.Data.DrawW, y = CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
-            DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: motion == 0);
+            DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: motion is 0 or 9 or 10);
         }
     }
 }
