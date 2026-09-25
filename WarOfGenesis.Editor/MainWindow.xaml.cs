@@ -195,16 +195,16 @@ public partial class MainWindow : Window
 
     // ── 개발 > 체질(배울 수 있는 어빌리티) 창 ───────────────────────────────
 
-    /// <summary>계열(체질)별 직업의 어빌리티 11칸(Job.dat)을 더하고 뺀다. 저장은 저장소 assets/data/Dat/Job.dat 에 — 게임 폴더는 안 건드린다.</summary>
+    /// <summary>계열 × 형마다 배울 수 있는 어빌리티를 더하고 뺀다. 저장은 저장소 assets/data/jobs/*.json 에 — 게임 폴더는 안 건드린다.</summary>
     private void BodyAbilitiesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (_gameRoot.Length == 0) { StatusText.Text = "먼저 게임 폴더를 여세요."; return; }
         try
         {
             _database ??= GameDatabase.Load(GameFiles.FromGameRoot(_gameRoot));
-            string jobDat = Path.Combine(AssetsFolder.Find("data"), "Dat", "Job.dat");
-            if (!File.Exists(jobDat)) { StatusText.Text = $"저장소 자료가 없습니다: {jobDat}"; return; }
-            new BodyAbilitiesWindow(_database, jobDat) { Owner = this }.Show();
+            string jobs = Path.Combine(AssetsFolder.Find("data"), JobBook.Folder);
+            if (!Directory.Exists(jobs)) { StatusText.Text = $"저장소 자료가 없습니다: {jobs}"; return; }
+            new BodyAbilitiesWindow(_database, jobs) { Owner = this }.Show();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
         {

@@ -11,7 +11,7 @@
             Margin="0,6,0,0"
             DockPanel.Dock="Bottom"
             Foreground="DimGray"
-            Text="Dat/Job.dat 레코드의 어빌리티 11칸(파일 31~52). 직업은 Dep.dat 계열(사이클론·타키리온·포스트럴·아크로스트·오즈마) × 단계 × 형(일반·공격·방어·고속·보조)으로 묶었다. 저장하면 저장소 assets/data/Dat/Job.dat 에 쓰고(처음 한 번 .bak 를 남긴다) 게임(duel-dx)이 그 파일을 읽는다."
+            Text="직업마다 배울 수 있는 어빌리티(11칸). 계열(사이클론·타키리온·포스트럴·아크로스트·오즈마) × 형(일반·공격·방어·고속·보조)마다 1·2단계 공통 목록 한 벌을 고치면 두 단계에 같이 들어간다. 2단계에만 있는 것·3단계·몬스터 직업은 제 줄에서. 저장하면 저장소 assets/data/jobs/*.json 에 쓰고 게임(duel-dx)이 그것을 읽는다."
             TextWrapping="Wrap" />
 
         <Grid>
