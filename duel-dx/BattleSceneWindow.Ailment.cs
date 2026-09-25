@@ -132,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 AddStatBonus(target, id, value);
                 continue;
             }
-            PutAilment(target, (byte)id, (short)value, used);
+            PutAilment(target, (byte)id, (short)value, used, attacker);
         }
         RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
@@ -152,28 +152,28 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>칸 셋에 넣기 — 같은 번호면 센 쪽, 빈 칸, 아니면 이번에 안 쓴 칸 중 아무 데나.</summary>
-    private void PutAilment(UnitState u, byte id, short value, List<int> used)
+    private void PutAilment(UnitState u, byte id, short value, List<int> used, UnitState? source = null)
     {
         // 마비·빙결·붙잡힘(5·6·25)이 걸리면 걷던 걸음을 그 자리에서 멈춘다(0x1007c480 이 이동을 막는다).
         if (id is 5 or 6 or 25) u.Path.Clear();
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == id)
             {
-                if (Math.Abs(value) > Math.Abs(u.StatusValue[i])) u.StatusValue[i] = value;
+                if (Math.Abs(value) > Math.Abs(u.StatusValue[i])) (u.StatusValue[i], u.StatusSource[i]) = (value, source);
                 used.Add(i);
                 return;
             }
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == 0)
             {
-                (u.StatusId[i], u.StatusValue[i]) = (id, value);
+                (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (id, value, source);
                 used.Add(i);
                 return;
             }
         var free = Enumerable.Range(0, 3).Where(i => !used.Contains(i)).ToList();
         if (free.Count == 0) return;
         int slot = free[_ailmentRandom.Next(free.Count)];
-        (u.StatusId[slot], u.StatusValue[slot]) = (id, value);
+        (u.StatusId[slot], u.StatusValue[slot], u.StatusSource[slot]) = (id, value, source);
         used.Add(slot);
     }
 
@@ -187,7 +187,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             for (int i = 0; i < 3; i++)
                 if (u.StatusId[i] is 5 or 6 && _ailmentRandom.Next(100) < 3)
-                    (u.StatusId[i], u.StatusValue[i]) = (0, 0);
+                    (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (0, 0, null);
 
             // 세 값을 <b>각각</b> 「값% × 최대 HP」 로 셈해 더한다 — 퍼센트를 먼저 합치면 정수 나눗셈에서 한둘 어긋난다.
             int percent = u.Status(2) + u.Status(3) + u.Status(17);
@@ -267,12 +267,24 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == 47)
             {
-                (u.StatusId[i], u.StatusValue[i]) = (0, 0);
+                (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (0, 0, null);
                 u.Hp = Math.Max(1, _db?.N(36) ?? 10);
                 Popup(u, AilmentNames[47], 0xFFFFE070, 15);
                 return true;
             }
         return false;
+    }
+
+    /// <summary>
+    /// 상태이상으로 쓰러진 인물의 처치 경험치 — 그 상태이상을 건 인물들(살아 있고 편이 다른 쪽, 겹치면 한 번)이 똑같이 나눈다.
+    /// 원본은 피해를 준 순간에만 경험치를 줘서(메시지 1016) 커스 따위로 쓰러지면 아무도 못 받았다.
+    /// </summary>
+    private void GainAilmentKillExp(UnitState victim)
+    {
+        var sources = victim.StatusSource.OfType<UnitState>().Distinct()
+                            .Where(s => s.Alive && s.IsAlly != victim.IsAlly).ToList();
+        foreach (var s in sources) GainKillExp(s, victim, sources.Count);
+        if (sources.Count > 0) QueueLevelUps();
     }
 
     /// <summary>상태이상이 매 틱 깎아 쓰러뜨린 인물 — 동작 없이 바로 눕힌다.</summary>
