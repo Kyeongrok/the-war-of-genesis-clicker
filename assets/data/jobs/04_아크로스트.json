@@ -1,0 +1,40 @@
+{
+  "family": 4,
+  "name": "아크로스트",
+  "forms": [
+    {
+      "form": "일반형",
+      "abilities": [29, 56, 57, 61],
+      "stage1": { "job": 38, "needLevel": 1, "growth": [0, 0, 0, 0, 0, 0, 4, 1, 0, 3, 3, 1], "names": [0, 0, 0, 0, 383, 0], "description": 2725 },
+      "stage2": { "job": 43, "needLevel": 30, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 2, 2, 1], "names": [0, 388, 393, 398, 0, 403], "description": 2725, "add": [{ "ability": 157, "at": 4 }] }
+    },
+    {
+      "form": "공격형",
+      "abilities": [58, 59, 60, 64],
+      "stage1": { "job": 39, "needLevel": 4, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 4, 3, 1], "names": [0, 0, 0, 0, 384, 0], "description": 2726 },
+      "stage2": { "job": 44, "needLevel": 33, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 3, 2, 1], "names": [0, 389, 394, 399, 0, 404], "description": 2726 }
+    },
+    {
+      "form": "방어형",
+      "abilities": [62, 0, 69, 76],
+      "stage1": { "job": 40, "needLevel": 8, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 3, 4, 2], "names": [0, 0, 0, 0, 385, 0], "description": 2727 },
+      "stage2": { "job": 45, "needLevel": 36, "growth": [0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 3, 2], "names": [0, 390, 395, 400, 0, 405], "description": 2727, "add": [{ "ability": 143, "at": 0 }], "remove": [0] }
+    },
+    {
+      "form": "고속형",
+      "abilities": [67, 117, 71],
+      "stage1": { "job": 41, "needLevel": 10, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 3, 3, 2], "names": [0, 0, 0, 0, 386, 0], "description": 2728 },
+      "stage2": { "job": 46, "needLevel": 39, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 2, 2, 2], "names": [0, 391, 396, 401, 0, 406], "description": 2728 }
+    },
+    {
+      "form": "보조형",
+      "abilities": [70, 65, 66, 72, 75],
+      "stage1": { "job": 42, "needLevel": 12, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 2, 3, 1], "names": [0, 0, 0, 0, 387, 0], "description": 2729 },
+      "stage2": { "job": 47, "needLevel": 42, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 2, 2, 1], "names": [0, 392, 397, 402, 0, 407], "description": 2729 }
+    }
+  ],
+  "standalone": [
+    { "job": 48, "needLevel": 60, "needAbility": 72, "needAbilityLevel": 5, "growth": [0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0], "names": [0, 0, 0, 0, 408, 0], "description": 2736, "abilities": [74, 167, 152, 155, 156, 158] },
+    { "job": 49, "needLevel": 60, "needAbility": 76, "needAbilityLevel": 5, "growth": [0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0], "names": [0, 0, 0, 0, 409, 0], "description": 2737, "abilities": [73, 166, 152, 155, 156, 158] }
+  ]
+}

@@ -321,6 +321,8 @@ public sealed class GameDatabase
         for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 67)
             jobs[U16(d, o)] = new JobData(U16(d, o), Words(d, o + 7, 12), Words(d, o + 31, 11), Words(d, o + 53, 6), U16(d, o + 65),
                                           U16(d, o + 2), U16(d, o + 4), d[o + 6]);
+        // 저장소 assets/data/jobs(계열 × 형마다 공통 어빌리티 목록 + 단계별 칸, JobBook)가 있으면 그것이 이긴다 — Job.dat 은 그 없을 때의 바탕.
+        foreach (var job in JobBook.Load(files).SelectMany(JobBook.Expand)) jobs[job.Id] = job;
 
         var deps = new List<DepData>();
         d = Need("Dat", "Dep.dat");
