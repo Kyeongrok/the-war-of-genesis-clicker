@@ -913,10 +913,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         ApplyAimHook();
         if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
         if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
-        if (_turnNo < 1 || _runningEvent >= 0) return;      // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
+        if (_turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
         var parts = WorkHook.Split(':');
         if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
-        int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly);
+        // DUELDX_WORKBY=<Chr> 면 그 인물이 쓴다(없으면 첫 아군).
+        int by = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_WORKBY"), out int chrBy) ? chrBy : 0;
+        int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly && (by == 0 || u.ChrCode == by));
         if (caster < 0) return;
         _workHookDone = true;
         var a = _units[caster];

@@ -94,7 +94,11 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void Play(int sound, int tag = 0)
     {
-        if (!Muted && _sfx.TryGetValue(sound, out var pcm)) _mixer.PlayEffect(pcm, _effectGain, tag);
+        bool loaded = _sfx.TryGetValue(sound, out var pcm);
+        // DUELDX_TRACE 면 무슨 소리를 틀었는지(파일이 있었는지) 적는다 — 음소거한 화면 밖 시험에서도 재생 여부를 본다.
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"sound {sound} {(loaded ? "재생" : "파일 없음")} at {_lastTime:0.00}" + Environment.NewLine);
+        if (!Muted && loaded) _mixer.PlayEffect(pcm!, _effectGain, tag);
     }
 
     /// <summary>배경음악(assets/bgm) 한 곡 — Bink 음악을 풀어 튼다. 푸는 데 1~2초 걸려 배경 실에서 한다.</summary>
