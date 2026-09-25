@@ -588,6 +588,26 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 아크로스트의 엘레맨탈 파이어(불덩이가 돌다 대상마다 날아가 터짐)·서몬 몬스터(대상마다 몬스터가 나타나 침) — 피해는 대상마다 그때 한 번.
+            if (w.AbilityId is ElementalFireAbility or SummonMonsterAbility && targetIndex < 0)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                void Hit(int ti) { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"acrost work {w.Id}: caster {a.ChrCode}({a.Col},{a.Row}) targets " +
+                        string.Join(", ", targets.Select(t => $"{_units[t].ChrCode}({_units[t].Col},{_units[t].Row}){(_units[t].IsAlly ? " 아군" : "")}")) + Environment.NewLine);
+                var routine = w.AbilityId == ElementalFireAbility ? ElementalFireRoutine(a, targets, Hit) : SummonMonsterRoutine(a, targets, Hit);
+                foreach (bool _ in routine) yield return true;
+                if (!followersDone && targets.Count > 0)
+                {
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    followersDone = true;
+                }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             // 천지 파열무 — X 자로 땅이 터진 뒤 대상마다 폭발한다. 피해는 그 폭발 때 대상마다 한 번.
             if (w.Id == HeavenEarthWork && targetIndex < 0)
             {
