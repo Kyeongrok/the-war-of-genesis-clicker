@@ -263,6 +263,11 @@ public partial class MainWindow : Window
         new FieldWindow(_gameRoot, _database) { Owner = this }.Show();
     }
 
+    // ── 스킬 편집 ──────────────────────────────────────────────────────────
+
+    /// <summary>assets/data/skills — 스킬마다 공통 칸 한 벌과 레벨별 칸을 고친다. 게임 폴더 없이 연다.</summary>
+    private void SkillEditMenuItem_Click(object sender, RoutedEventArgs e) => new SkillEditWindow { Owner = this }.Show();
+
     // ── 스크립트 명령 사전 ─────────────────────────────────────────────────
 
     /// <summary>전투·필드·챕터 스크립트의 조건·행동 코드(200 증원, 909 베라모드 폭주 …)의 뜻과 쓰인 곳. 게임 폴더 없이 연다.</summary>
