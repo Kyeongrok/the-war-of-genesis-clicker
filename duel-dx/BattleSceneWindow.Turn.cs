@@ -116,6 +116,8 @@ internal sealed unsafe partial class BattleSceneWindow
             unit.MaxSoul = _db.MaxSoul(data);
             // DUELDX_SOUL 로 시작 SOUL 을 올릴 수 있다 — 어빌리티·상태이상을 시험할 때 쓴다.
             unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : _db.SoulStart;
+            // 모드 > 전투 시작 시 소울 가득 — 내 편(편 4)만 SOUL 을 최대로 채우고 시작한다(원본에 없는 편의 기능, 사용자 요청).
+            if (_fullSoulAtStart && unit.PlayerControlled) unit.Soul = unit.MaxSoul;
             // DUELDX_AILMENT=<번호>[:<값>][,<번호>[:<값>]…] 이면 그 상태이상들을 칸 순서대로 걸고 시작한다(화면 밖 시험용).
             if (Environment.GetEnvironmentVariable("DUELDX_AILMENT") is { Length: > 0 } spec)
             {
