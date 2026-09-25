@@ -51,6 +51,12 @@ public partial class SkillEditWindow : Window
         public string Display => Choices?.FirstOrDefault(c => c.Value == Value)?.Label ?? Value.ToString();
         public Visibility ChoicesVisibility => Choices != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility NumberVisibility => Choices == null ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>스피너로 고치는 칸이면 한 번에 움직일 양(tp 10 · areaMax 1) — 이 칸은 편집 상태 없이 늘 스피너로 보인다.</summary>
+        public double? Step { get; init; }
+        public double SpinnerStep => Step ?? 1;
+        public Visibility SpinnerVisibility => Step != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility TextVisibility => Step == null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>칸 이름 → 그 칸의 고를 거리(enum 이 있는 칸만).</summary>
@@ -138,6 +144,7 @@ public partial class SkillEditWindow : Window
         CommonGrid.ItemsSource = common.Select(kv => new CommonRow
         {
             Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, ""), Choices = Choices.GetValueOrDefault(kv.Key),
+            Step = SpinnerSteps.TryGetValue(kv.Key, out double step) ? step : null,
         }).ToList();
         int ranges = row.Skill.Common.Keys.Count(RangeFields.Contains);
         RangeTab.Header = $"범위 ({ranges})";
@@ -187,7 +194,7 @@ public partial class SkillEditWindow : Window
 
     /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
     /// <summary>스피너로 고치는 레벨별 칸과 한 번에 오르내리는 폭 — tp 는 10씩(사용자 요청).</summary>
-    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10 };
+    private static readonly Dictionary<string, double> SpinnerSteps = new() { ["tp"] = 10, ["areaMax"] = 1 };
 
     private void LevelGrid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
     {
@@ -213,6 +220,17 @@ public partial class SkillEditWindow : Window
             SelectedValuePath = "Value",
             SelectedValueBinding = new Binding($"[{e.PropertyName}]"),
         };
+    }
+
+    /// <summary>공통 표의 스피너 칸 — 편집 상태를 거치지 않으니 값이 바뀔 때마다 스킬 자료로 바로 옮긴다.</summary>
+    private void CommonSpinner_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_filling || Current is not { } row || (sender as FrameworkElement)?.DataContext is not CommonRow c) return;
+        int v = (int)e.NewValue;
+        if (row.Skill.Common.GetValueOrDefault(c.Field) == v) return;
+        c.Value = v;
+        row.Skill.Common[c.Field] = v;
+        MarkDirty(row);
     }
 
     private void CommonGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)

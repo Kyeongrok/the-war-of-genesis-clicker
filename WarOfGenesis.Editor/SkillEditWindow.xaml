@@ -2,6 +2,7 @@
     x:Class="WarOfGenesis.Editor.SkillEditWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:WarOfGenesis.Editor.Controls"
     Title="스킬 편집 (공통 · 레벨별)"
     Width="1500"
     Height="900"
@@ -127,7 +128,16 @@
                         <DataGridTemplateColumn Width="190" Header="값">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Display}" />
+                                    <Grid>
+                                        <TextBlock Text="{Binding Display}" Visibility="{Binding TextVisibility}" />
+                                        <controls:NumericSpinner
+                                            Maximum="65535"
+                                            Minimum="0"
+                                            Step="{Binding SpinnerStep}"
+                                            Value="{Binding Value, Mode=OneWay}"
+                                            ValueChanged="CommonSpinner_ValueChanged"
+                                            Visibility="{Binding SpinnerVisibility}" />
+                                    </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                             <DataGridTemplateColumn.CellEditingTemplate>
