@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
 using System.IO;
+using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WarOfGenesis.Assets;
@@ -9,7 +11,7 @@ using WarOfGenesis.Assets;
 namespace WarOfGenesis.Editor;
 
 /// <summary>
-/// 모든 캐릭터 레코드(<c>Chr/*.chr</c>)의 기본정보·능력치를 보는 창 — 왼쪽 목록에서 고르면 오른쪽에 상세가 나온다
+/// 모든 캐릭터 레코드(<c>Chr/*.chr</c>)의 기본정보·능력치를 보는 편집기 첫 화면 — 왼쪽 목록에서 고르면 오른쪽에 상세가 나온다
 /// (이름, 칭호, 체질, 계열, 직업, Status 화면 수치 LV·HP·SOUL·TP·ATK·ACR·RDP·LP·CTP·STP·PSY·DEP·DEX, 무기·장비, 어빌리티).
 /// 예전에는 22열짜리 표 한 장이라 읽기 어려웠다(사용자 요청).
 /// </summary>
@@ -17,7 +19,7 @@ namespace WarOfGenesis.Editor;
 /// 수치는 <see cref="GameDatabase"/> 의 식(<c>G3PartII.dll</c> 에서 옮김)으로 셈한다. 죠안(Chr 0221)은 게임 Status
 /// 화면과 HP 만 빼고 모두 맞는다(HP 는 어빌리티 패시브 보너스를 아직 안 넣음).
 /// </remarks>
-public partial class CharacterStatsWindow : Window
+public partial class CharacterStatsView : UserControl
 {
     /// <summary>상세의 「이름 : 값」 한 줄.</summary>
     public sealed record Stat(string Label, string Value);
@@ -45,13 +47,22 @@ public partial class CharacterStatsWindow : Window
                                              new("PSY", Psy.ToString()), new("DEP", Dep.ToString()), new("DEX", Dex.ToString())];
     }
 
-    private readonly ICollectionView _view;
-    private readonly GameDatabase _db;
+    private ICollectionView? _view;
+    private GameDatabase? _db;
 
-    public CharacterStatsWindow(GameDatabase db, IEnumerable<int> codes)
+    /// <summary>목록 우클릭 「모션 매핑 보기」 — 고른 레코드 번호.</summary>
+    public event Action<int>? MotionMappingRequested;
+
+    /// <summary>목록 우클릭 「내보내기」 — 고른 레코드 번호.</summary>
+    public event Action<int>? ExportRequested;
+
+    public CharacterStatsView() => InitializeComponent();
+
+    /// <summary>게임 폴더를 열 때마다 목록을 새로 채운다.</summary>
+    public void Load(GameDatabase db, IEnumerable<int> codes)
     {
-        InitializeComponent();
         _db = db;
+        _portraits.Clear();
 
         var rows = new List<Row>();
         foreach (int code in codes.OrderBy(c => c))
@@ -85,7 +96,7 @@ public partial class CharacterStatsWindow : Window
         var list = new List<Portrait>();
         try
         {
-            if (_db.Files.Read("Obs", $"{faceId:D4}.obs") is { } bytes)
+            if (_db?.Files.Read("Obs", $"{faceId:D4}.obs") is { } bytes)
                 foreach (var motion in ObsSprite.Decode(bytes))
                 {
                     var f = motion.Frames[0];
@@ -132,6 +143,23 @@ public partial class CharacterStatsWindow : Window
         string q = FilterBox.Text.Trim();
         return q.Length == 0 || r.Name.Contains(q) || r.Title.Contains(q) || r.Job.Contains(q) || r.Family.Contains(q)
                || r.Code.ToString("D4").Contains(q);
+    }
+
+    private void MotionMappingMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (List.SelectedItem is Row r) MotionMappingRequested?.Invoke(r.Code);
+    }
+
+    private void ExportMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (List.SelectedItem is Row r) ExportRequested?.Invoke(r.Code);
+    }
+
+    /// <summary>우클릭한 항목을 먼저 고른다 — 컨텍스트 메뉴가 그 캐릭터를 대상으로 하도록.</summary>
+    protected override void OnPreviewMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseRightButtonDown(e);
+        if (ItemsControl.ContainerFromElement(List, (DependencyObject)e.OriginalSource) is ListBoxItem item) item.IsSelected = true;
     }
 
     private void FilterBox_TextChanged(object sender, RoutedEventArgs e)
