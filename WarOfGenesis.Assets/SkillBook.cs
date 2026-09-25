@@ -60,7 +60,8 @@ public static class SkillBook
     /// 칸 하나 — 이름 · 파일 오프셋 · 크기(1·2) · 부호. 뜻은 <see cref="WorkData"/> 의 매개변수 설명을 따른다(오프셋이 같다).
     /// <c>work</c>(0)·<c>level</c>(4)은 레벨 줄의 <see cref="SkillLevel.Work"/>·<see cref="SkillLevel.Level"/> 로, <c>ability</c>(2)는 파일의 것으로 채운다.
     /// </summary>
-    public sealed record Field(string Name, int Offset, int Size, bool Signed, string Meaning);
+    /// <param name="Enum">값이 정해진 칸이면 그 enum(<see cref="TargetMode"/> 등) — 편집기가 드롭다운으로 고르게 한다.</param>
+    public sealed record Field(string Name, int Offset, int Size, bool Signed, string Meaning, Type? Enum = null);
 
     public const int RecordSize = 62;
 
@@ -69,8 +70,8 @@ public static class SkillBook
         new("work", 0, 2, false, "work 번호"),
         new("ability", 2, 2, false, "어빌리티 번호"),
         new("level", 4, 1, false, "어빌리티 레벨"),
-        new("rangeShape", 5, 1, false, "사거리 모양 — 0 자기 자리, 1 마름모, 2 십자, 3 부채꼴, 4 화면 전체, 5 직선, 6 폭3 줄, 7 폭5 줄, 8 대각선 X, 9 45° 삼각형"),
-        new("rangeKind", 6, 1, false, "사거리 종류 — 0 없음, 1·3 자기 값, 2 무기 사거리, 4 무기 + 자기 값"),
+        new("rangeShape", 5, 1, false, "사거리 모양 — 0 자기 자리, 1 마름모, 2 십자, 3 부채꼴, 4 화면 전체, 5 직선, 6 폭3 줄, 7 폭5 줄, 8 대각선 X, 9 45° 삼각형", typeof(AreaShape)),
+        new("rangeKind", 6, 1, false, "사거리 종류 — 0 없음, 1·3 자기 값, 2 무기 사거리, 4 무기 + 자기 값", typeof(RangeKind)),
         new("rangeMin", 7, 2, false, "사거리 최소(4분의 1칸: 값×4−3)"),
         new("rangeMax", 9, 2, false, "사거리 최대(칸)"),
         new("b11", 11, 1, false, "(모름)"),
@@ -78,16 +79,16 @@ public static class SkillBook
         new("sight", 13, 1, false, "시야 — 사이에 더 높은 칸이 있으면 못 겨눈다"),
         new("sameHeightRange", 14, 1, false, "사거리: 같은 높이 칸만"),
         new("heightGraded", 15, 1, false, "높이 차등(올려치기 +3/층, 내려치기 −2/층)"),
-        new("targetMode", 16, 1, false, "대상 방식 — 0·2 자기 자리, 1 적, 3·6 아무 칸, 4 아군, 5 아무 유닛, 7 빈 칸, 8 오브젝트"),
-        new("areaShape", 17, 1, false, "효과 범위 모양(사거리와 같은 표)"),
+        new("targetMode", 16, 1, false, "대상 방식 — 0·2 자기 자리, 1 적, 3·6 아무 칸, 4 아군, 5 아무 유닛, 7 빈 칸, 8 오브젝트", typeof(TargetMode)),
+        new("areaShape", 17, 1, false, "효과 범위 모양(사거리와 같은 표)", typeof(AreaShape)),
         new("b18", 18, 1, false, "(모름)"),
         new("heightArea", 19, 1, false, "효과 범위에 높이 차를 더한다"),
         new("b20", 20, 1, false, "(모름)"),
         new("sameHeightArea", 21, 1, false, "효과 범위: 같은 높이 칸만"),
         new("areaMax", 22, 2, true, "효과 범위 최대(칸)"),
         new("areaMin", 24, 2, false, "효과 범위 최소"),
-        new("areaMode", 26, 1, false, "효과 범위 안에서 맞히는 대상(대상 방식과 같은 값)"),
-        new("kind", 27, 1, false, "종류 — 0 피해, 1·5 회복, 2·3 보조, 4 오브젝트"),
+        new("areaMode", 26, 1, false, "효과 범위 안에서 맞히는 대상(대상 방식과 같은 값)", typeof(TargetMode)),
+        new("kind", 27, 1, false, "종류 — 0 피해, 1·5 회복, 2·3 보조, 4 오브젝트", typeof(WorkKind)),
         new("bonus1Stat", 28, 1, false, "패시브 보너스 1 능력치"),
         new("bonus1Value", 29, 2, true, "패시브 보너스 1 값"),
         new("bonus2Stat", 31, 1, false, "패시브 보너스 2 능력치"),

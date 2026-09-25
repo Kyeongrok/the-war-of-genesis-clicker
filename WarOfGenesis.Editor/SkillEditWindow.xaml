@@ -105,7 +105,27 @@
                             Binding="{Binding Field}"
                             Header="칸"
                             IsReadOnly="True" />
-                        <DataGridTextColumn Binding="{Binding Value}" Header="값" />
+                        <!--  값 — 정해진 값이 있는 칸(대상 방식·모양·종류)은 드롭다운, 나머지는 수  -->
+                        <DataGridTemplateColumn Width="190" Header="값">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Display}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn.CellEditingTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <ComboBox
+                                            DisplayMemberPath="Label"
+                                            ItemsSource="{Binding Choices}"
+                                            SelectedValue="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                            SelectedValuePath="Value"
+                                            Visibility="{Binding ChoicesVisibility}" />
+                                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding NumberVisibility}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellEditingTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn
                             Binding="{Binding Meaning}"
                             Header="뜻"
@@ -132,6 +152,7 @@
                     x:Name="LevelGrid"
                     Grid.Row="4"
                     AutoGenerateColumns="True"
+                    AutoGeneratingColumn="LevelGrid_AutoGeneratingColumn"
                     AutomationProperties.AutomationId="SkillEditLevels"
                     CanUserAddRows="False"
                     CanUserDeleteRows="False"
