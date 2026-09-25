@@ -35,7 +35,19 @@ public partial class SkillEditWindow : Window
         public string Field { get; init; } = "";
         public int Value { get; set; }
         public string Meaning { get; init; } = "";
+
+        /// <summary>정해진 값이 있는 칸이면 고를 거리(<see cref="TargetMode"/> 등) — 없으면 null 이고 수로 적는다.</summary>
+        public IReadOnlyList<EnumChoices.Choice>? Choices { get; init; }
+
+        /// <summary>표에 보일 글 — 고를 거리가 있으면 그 이름(「3 아무 칸」), 없으면 수.</summary>
+        public string Display => Choices?.FirstOrDefault(c => c.Value == Value)?.Label ?? Value.ToString();
+        public Visibility ChoicesVisibility => Choices != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility NumberVisibility => Choices == null ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>칸 이름 → 그 칸의 고를 거리(enum 이 있는 칸만).</summary>
+    private static readonly Dictionary<string, IReadOnlyList<EnumChoices.Choice>> Choices =
+        SkillBook.Fields.Where(f => f.Enum != null).ToDictionary(f => f.Name, f => EnumChoices.Of(f.Enum!));
 
     private readonly List<SkillRow> _rows = [];
     private ICollectionView? _view;
@@ -86,7 +98,10 @@ public partial class SkillEditWindow : Window
         if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; return; }
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
-        CommonGrid.ItemsSource = row.Skill.Common.Select(kv => new CommonRow { Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, "") }).ToList();
+        CommonGrid.ItemsSource = row.Skill.Common.Select(kv => new CommonRow
+        {
+            Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, ""), Choices = Choices.GetValueOrDefault(kv.Key),
+        }).ToList();
         CommonHeader.Text = $"공통 — 모든 레벨이 같은 칸 ({row.Skill.Common.Count}개)";
 
         var table = new DataTable();
@@ -120,6 +135,20 @@ public partial class SkillEditWindow : Window
         UpdateStatus();
     }
 
+    /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
+    private void LevelGrid_AutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
+    {
+        if (!Choices.TryGetValue(e.PropertyName, out var choices)) return;
+        e.Column = new DataGridComboBoxColumn
+        {
+            Header = e.PropertyName,
+            ItemsSource = choices,
+            DisplayMemberPath = "Label",
+            SelectedValuePath = "Value",
+            SelectedValueBinding = new Binding($"[{e.PropertyName}]"),
+        };
+    }
+
     private void CommonGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
     {
         if (_filling || e.EditAction != DataGridEditAction.Commit || Current is not { } row) return;
@@ -128,6 +157,7 @@ public partial class SkillEditWindow : Window
             if (CommonGrid.ItemsSource is not List<CommonRow> list) return;
             foreach (var c in list) row.Skill.Common[c.Field] = c.Value;
             MarkDirty(row);
+            CommonGrid.Items.Refresh();         // 드롭다운으로 고른 이름(「3 아무 칸」)을 칸에 다시 보인다
         });
     }
 
