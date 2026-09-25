@@ -1,0 +1,227 @@
+using System.ComponentModel;
+using System.Data;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Threading;
+using WarOfGenesis.Assets;
+
+namespace WarOfGenesis.Editor;
+
+/// <summary>
+/// 스킬 편집 — <c>assets/data/skills/NNNN.json</c>(<see cref="SkillBook"/>)을 「공통 칸 한 벌 + 레벨마다 다른 칸」으로 고친다.
+/// </summary>
+/// <remarks>
+/// 공통 칸은 한 번 고치면 모든 레벨에 든다. 칸을 레벨별로 내리면 모든 레벨에 지금 값이 복사되고, 레벨별 열을 공통으로 올리면 첫 레벨 값을 쓴다.
+/// work·레벨 번호는 고치지 않는다 — 기술 연출·AI·전투 스크립트(행동 207)가 work 번호로 기술을 가리킨다.
+/// </remarks>
+public partial class SkillEditWindow : Window
+{
+    public sealed class SkillRow
+    {
+        public required SkillFile Skill { get; set; }
+        public string Path { get; init; } = "";
+        public int Ability => Skill.Ability;
+        public string Name => Skill.Ability > 0 ? Skill.Name : $"(work {Skill.Levels.FirstOrDefault()?.Work})";
+        public int Levels => Skill.Levels.Count;
+        public int Varying => Skill.Levels.SelectMany(l => l.Fields.Keys).Where(k => k != "att").Distinct().Count();
+        public string Dirty { get; set; } = "";
+    }
+
+    public sealed class CommonRow
+    {
+        public string Field { get; init; } = "";
+        public int Value { get; set; }
+        public string Meaning { get; init; } = "";
+    }
+
+    private readonly List<SkillRow> _rows = [];
+    private ICollectionView? _view;
+    private string _folder = "";
+    private bool _filling;
+
+    public SkillEditWindow()
+    {
+        InitializeComponent();
+        Loaded += (_, _) => Load();
+    }
+
+    private SkillRow? Current => SkillGrid.SelectedItem as SkillRow;
+
+    private void Load()
+    {
+        try { _folder = System.IO.Path.Combine(AssetsFolder.Find("data"), "skills"); }
+        catch (DirectoryNotFoundException) { StatusText.Text = "저장소 assets/data 를 못 찾았습니다."; return; }
+        if (!Directory.Exists(_folder)) { StatusText.Text = $"{_folder} 가 없습니다."; return; }
+        foreach (string path in Directory.EnumerateFiles(_folder, "*.json"))
+            if (SkillBook.FromJson(File.ReadAllText(path, Encoding.UTF8)) is { } skill)
+                _rows.Add(new SkillRow { Skill = skill, Path = path });
+        _view = CollectionViewSource.GetDefaultView(_rows.OrderBy(r => r.Ability == 0).ThenBy(r => r.Ability).ThenBy(r => r.Name).ToList());
+        _view.Filter = o => o is SkillRow r && Matches(r);
+        SkillGrid.ItemsSource = _view;
+        UpdateStatus();
+    }
+
+    private bool Matches(SkillRow r)
+    {
+        string q = FilterBox.Text.Trim();
+        return q.Length == 0 || r.Name.Replace(" ", "").Contains(q.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)
+               || r.Ability.ToString() == q || r.Skill.Levels.Any(l => l.Work.ToString() == q);
+    }
+
+    private void Filter_Changed(object sender, TextChangedEventArgs e) => _view?.Refresh();
+
+    private void UpdateStatus()
+    {
+        int dirty = _rows.Count(r => r.Dirty.Length > 0);
+        StatusText.Text = $"스킬 파일 {_rows.Count}개" + (dirty > 0 ? $" · 저장 안 한 스킬 {dirty}개" : "");
+    }
+
+    private void SkillGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => Fill();
+
+    private void Fill()
+    {
+        if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; return; }
+        _filling = true;
+        var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
+        CommonGrid.ItemsSource = row.Skill.Common.Select(kv => new CommonRow { Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, "") }).ToList();
+        CommonHeader.Text = $"공통 — 모든 레벨이 같은 칸 ({row.Skill.Common.Count}개)";
+
+        var table = new DataTable();
+        table.Columns.Add("level", typeof(int)).ReadOnly = true;
+        table.Columns.Add("work", typeof(int)).ReadOnly = true;
+        var varying = VaryingFields(row.Skill);
+        foreach (string f in varying) table.Columns.Add(f, typeof(int));
+        foreach (var level in row.Skill.Levels)
+        {
+            var dr = table.NewRow();
+            dr["level"] = level.Level;
+            dr["work"] = level.Work;
+            foreach (string f in varying) dr[f] = level.Fields.GetValueOrDefault(f);
+            table.Rows.Add(dr);
+        }
+        LevelGrid.ItemsSource = table.DefaultView;
+        _filling = false;
+    }
+
+    /// <summary>레벨별 칸 — 칸 표 차례대로(att 는 빼고).</summary>
+    private static List<string> VaryingFields(SkillFile skill)
+    {
+        var names = skill.Levels.SelectMany(l => l.Fields.Keys).Where(k => k != "att").ToHashSet();
+        return [.. SkillBook.Fields.Select(f => f.Name).Where(names.Contains)];
+    }
+
+    private void MarkDirty(SkillRow row)
+    {
+        row.Dirty = "●";
+        SkillGrid.Items.Refresh();
+        UpdateStatus();
+    }
+
+    private void CommonGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (_filling || e.EditAction != DataGridEditAction.Commit || Current is not { } row) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (CommonGrid.ItemsSource is not List<CommonRow> list) return;
+            foreach (var c in list) row.Skill.Common[c.Field] = c.Value;
+            MarkDirty(row);
+        });
+    }
+
+    private void LevelGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (_filling || e.EditAction != DataGridEditAction.Commit || Current is not { } row) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (LevelGrid.ItemsSource is not DataView view) return;
+            var varying = VaryingFields(row.Skill);
+            for (int i = 0; i < view.Count && i < row.Skill.Levels.Count; i++)
+                foreach (string f in varying)
+                    if (view[i][f] is int v) row.Skill.Levels[i].Fields[f] = v;
+            MarkDirty(row);
+        });
+    }
+
+    /// <summary>공통 칸 하나를 레벨별로 내린다 — 모든 레벨에 지금 값을 넣는다.</summary>
+    private void ToLevels_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row || CommonGrid.SelectedItem is not CommonRow c) { StatusText.Text = "공통 표에서 칸을 하나 고르세요."; return; }
+        foreach (var level in row.Skill.Levels) level.Fields[c.Field] = c.Value;
+        row.Skill.Common.Remove(c.Field);
+        MarkDirty(row);
+        Fill();
+    }
+
+    /// <summary>레벨별 열 하나를 공통으로 올린다 — 첫 레벨 값이 모든 레벨의 값이 된다.</summary>
+    private void ToCommon_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row) return;
+        string? field = LevelGrid.CurrentCell.Column?.Header as string;
+        if (field is null or "level" or "work") { StatusText.Text = "레벨별 표에서 올릴 칸의 셀을 하나 고르세요."; return; }
+        int value = row.Skill.Levels.FirstOrDefault()?.Fields.GetValueOrDefault(field) ?? 0;
+        var distinct = row.Skill.Levels.Select(l => l.Fields.GetValueOrDefault(field)).Distinct().Count();
+        if (distinct > 1 && MessageBox.Show(this, $"「{field}」 는 레벨마다 값이 다릅니다. 첫 레벨 값 {value} 로 모두 맞출까요?", "공통으로",
+                                            MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        foreach (var level in row.Skill.Levels) level.Fields.Remove(field);
+        // 칸 표 차례를 지키며 공통에 넣는다.
+        var common = new Dictionary<string, int>(row.Skill.Common) { [field] = value };
+        row.Skill.Common = SkillBook.Fields.Where(f => common.ContainsKey(f.Name)).ToDictionary(f => f.Name, f => common[f.Name]);
+        MarkDirty(row);
+        Fill();
+    }
+
+    private void Save_Click(object sender, RoutedEventArgs e) => SaveDirty();
+
+    private bool SaveDirty()
+    {
+        var dirty = _rows.Where(r => r.Dirty.Length > 0).ToList();
+        if (dirty.Count == 0) { StatusText.Text = "고친 스킬이 없습니다."; return true; }
+        try
+        {
+            foreach (var r in dirty)
+            {
+                File.WriteAllText(r.Path, SkillBook.ToJson(r.Skill), new UTF8Encoding(false));
+                r.Dirty = "";
+            }
+            SkillGrid.Items.Refresh();
+            StatusText.Text = $"스킬 {string.Join(", ", dirty.Select(r => r.Name))} 을(를) 저장했습니다 — 게임을 다시 켜면 반영됩니다.";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = $"저장하지 못했습니다: {ex.Message}";
+            return false;
+        }
+    }
+
+    private void Revert_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row || SkillBook.FromJson(File.ReadAllText(row.Path, Encoding.UTF8)) is not { } skill) return;
+        row.Skill = skill;
+        row.Dirty = "";
+        SkillGrid.Items.Refresh();
+        Fill();
+        UpdateStatus();
+    }
+
+    /// <summary>그 어빌리티를 골라 보여 준다 — 스킬 창에서 부른다.</summary>
+    public void SelectAbility(int ability)
+    {
+        FilterBox.Text = "";
+        if (_rows.FirstOrDefault(r => r.Ability == ability) is { } row) { SkillGrid.SelectedItem = row; SkillGrid.ScrollIntoView(row); }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        int dirty = _rows.Count(r => r.Dirty.Length > 0);
+        if (dirty > 0)
+        {
+            var answer = MessageBox.Show(this, $"저장 안 한 스킬이 {dirty}개 있습니다. 저장할까요?", "스킬 편집", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveDirty())) e.Cancel = true;
+        }
+        base.OnClosing(e);
+    }
+}

@@ -345,18 +345,17 @@ public sealed class GameDatabase
                                             U16(d, o + 42), U16(d, o + 46), U16(d, o + 16), attackEffects);
         }
 
+        // work — 저장소 assets/data/skills(어빌리티마다 공통 정의 + 레벨별 칸, SkillBook)가 있으면 거기서, 없으면(게임 폴더) .att 에서.
         var works = new Dictionary<int, WorkData>();
-        foreach (int f in WorkFiles)
-        {
-            if (files.Read("Dat", $"{f:D4}.att") is not { } a) continue;
-            for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 62)
-                works[U16(a, o)] = new WorkData(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
-                                                a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
-                                                U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
-                                                [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
-                                                U16(a, o + 24), a[o + 26],
-                                                a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
-        }
+        var skills = SkillBook.Load(files);
+        if (skills.Count > 0)
+            foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
+        else
+            foreach (int f in WorkFiles)
+            {
+                if (files.Read("Dat", $"{f:D4}.att") is not { } a) continue;
+                for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 62) works[U16(a, o)] = ParseWork(a, o);
+            }
 
         var abilities = new Dictionary<int, AbilityData>();
         foreach (int f in AbilityFiles)
@@ -384,6 +383,15 @@ public sealed class GameDatabase
 
         return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses);
     }
+
+    /// <summary>work 레코드 62바이트(<paramref name="o"/> 부터) 하나 — <c>.att</c> 에서도, <see cref="SkillBook.Expand"/> 가 펼친 것에서도 같은 식으로 읽는다.</summary>
+    public static WorkData ParseWork(byte[] a, int o) =>
+        new(U16(a, o), U16(a, o + 2), a[o + 4], a[o + 5], U16(a, o + 7), U16(a, o + 9),
+            a[o + 16], a[o + 17], (short)U16(a, o + 22), a[o + 27], (short)U16(a, o + 37), a[o + 39], a[o + 40],
+            U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
+            [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
+            U16(a, o + 24), a[o + 26],
+            a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
 
