@@ -272,7 +272,9 @@ internal sealed unsafe partial class BattleSceneWindow
         CancelTargeting();
         _heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
-        if (IsMine(_units[index]))
+        // 버서커(상태 4)면 내 인물이라도 AI 가 움직인다 — 편 판정(0x1006fde0)이 버서커에게는 모두를 적으로 돌려, 가까운 아군도 친다.
+        // 원본에서 조종권을 넘기는 줄은 못 찾았지만(상태 4 를 보는 곳은 편 판정과 물들이기 둘뿐) 원본은 스스로 움직인다(사용자 보고).
+        if (IsMine(_units[index]) && !_units[index].HasStatus(4))
         {
             // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
             // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다.
@@ -284,7 +286,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         else
         {
-            if (_units[index].IsAlly) Toast($"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
+            if (_units[index].IsAlly)
+                Toast(_units[index].HasStatus(4) ? $"{UnitName(index)} 이(가) 버서커 상태라 스스로 움직입니다" : $"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
             _routine = AiRoutine(index);
         }
     }
