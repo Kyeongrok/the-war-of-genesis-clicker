@@ -589,7 +589,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             // 아크로스트의 엘레맨탈 파이어(불덩이가 돌다 대상마다 날아가 터짐)·서몬 몬스터(대상마다 몬스터가 나타나 침) — 피해는 대상마다 그때 한 번.
-            if (w.AbilityId is ElementalFireAbility or SummonMonsterAbility && targetIndex < 0)
+            // 편집기에서 대상 방식을 「아무 칸」(메테오처럼)으로 바꿔도 같은 연출 — 불덩이는 시전자 위에서 돌고 고른 범위의 대상에게 날아간다.
+            if (w.AbilityId is ElementalFireAbility or SummonMonsterAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
