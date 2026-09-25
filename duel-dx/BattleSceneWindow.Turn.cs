@@ -507,6 +507,17 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
+        // 자기 자리에 쓰는 범위 기술 — 보여 준 범위(또는 제 칸)를 한 번 더 누르면 쓴다.
+        if (w.SelfCentred)
+        {
+            if ((col, row) != (user.Col, user.Row) && !AreaCells(w, user, col, row).Contains((col, row)))
+            {
+                Hint("범위 밖입니다 — 주황 칸을 누르세요 (우클릭·Esc 취소)");
+                return true;
+            }
+            UseSelfCentredWork(w);
+            return true;
+        }
         if (!InWorkRange(w, user.Col, user.Row, col, row, user))
         {
             Hint("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)");

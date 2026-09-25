@@ -185,6 +185,15 @@ internal sealed unsafe partial class BattleSceneWindow
         _abilityMenu = false;
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
+        // 자기 자리에 쓰되 효과 범위가 있는 기술(카운터 필드 따위)은 바로 쓰지 않고 범위를 먼저 보인다 — 한 번 더 누르면 쓴다(사용자 요청).
+        if (w.SelfCentred && w.AreaShape != 0)
+        {
+            var self = _units[_turn];
+            _aimCell = (self.Col, self.Row);
+            string again = _targetHotkey >= 0 ? $"{(char)_targetHotkey}·" : "";
+            Hint($"{name} — 주황 칸이 효과 범위입니다 (범위 안 클릭·{again}Enter: 쓰기, 우클릭·Esc 취소)");
+            return;
+        }
         if (UseSelfCentredWork(w)) { Toast(name); return; }
 
         // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
