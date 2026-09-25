@@ -574,6 +574,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var (dx, motion) in new[] { (-8, 0), (2, 1), (26, 2) })
                     DrawUi(MosesFrameObs, motion, tick, x + dx, y, UiBlend.Alpha);
             DrawUi(MosesObs, icon.Motion, tick, x + 14, y + 19, UiBlend.Alpha);
+            // 새 편지가 있으면 MAIL 아이콘 오른쪽 위에 빨간 점 — 다 읽으면 사라진다(사용자 요청).
+            if (icon.Page == 1 && HasNewMail())
+            {
+                FillCircle(x + 27, y - 2, 5, 0xFFFFFFFF);
+                FillCircle(x + 27, y - 2, 4, 0xFFE02020);
+            }
         }
     }
 
