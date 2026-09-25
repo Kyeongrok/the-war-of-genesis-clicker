@@ -16,7 +16,7 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="420" />
+                <ColumnDefinition Width="200" />
                 <ColumnDefinition Width="8" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -27,10 +27,10 @@
                     Margin="0,0,0,6"
                     DockPanel.Dock="Top"
                     Orientation="Horizontal">
-                    <TextBlock VerticalAlignment="Center" Text="직업 찾기:" />
+                    <TextBlock VerticalAlignment="Center" Text="찾기:" />
                     <TextBox
                         x:Name="JobFilterBox"
-                        Width="200"
+                        Width="140"
                         Margin="6,0,0,0"
                         AutomationProperties.AutomationId="BodyJobFilterBox"
                         TextChanged="JobFilterBox_TextChanged" />
@@ -56,7 +56,8 @@
                     DockPanel.Dock="Top"
                     FontSize="14"
                     FontWeight="Bold"
-                    Text="왼쪽에서 직업을 고르세요" />
+                    Text="왼쪽에서 계열을 고르세요"
+                    TextWrapping="Wrap" />
 
                 <StackPanel
                     Margin="0,0,0,6"
@@ -90,6 +91,13 @@
                         AutomationProperties.AutomationId="BodyRemoveButton"
                         Click="RemoveButton_Click"
                         Content="삭제(_D)" />
+                    <CheckBox
+                        x:Name="Stage2Only"
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="BodyStage2Only"
+                        Content="2단계에만"
+                        ToolTip="켜면 고른 형의 「2단계에만 더함」 쪽에 더한다(다른 체질이 이 계열로 갈아탔을 때만 배움)" />
                 </StackPanel>
 
                 <StackPanel
@@ -116,10 +124,19 @@
                         Foreground="DimGray" />
                 </StackPanel>
 
-                <ListBox
-                    x:Name="SlotList"
-                    AutomationProperties.AutomationId="BodySlotList"
-                    DisplayMemberPath="Label" />
+                <!--  열 = 형(일반·공격·방어·고속·보조)과 3단계, 행 = 어빌리티 칸. 칸을 고르고 추가·삭제한다.  -->
+                <DataGrid
+                    x:Name="Table"
+                    AutomationProperties.AutomationId="BodyTable"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    CanUserReorderColumns="False"
+                    CanUserSortColumns="False"
+                    GridLinesVisibility="All"
+                    HeadersVisibility="Column"
+                    IsReadOnly="True"
+                    SelectionMode="Single"
+                    SelectionUnit="Cell" />
             </DockPanel>
         </Grid>
     </DockPanel>
