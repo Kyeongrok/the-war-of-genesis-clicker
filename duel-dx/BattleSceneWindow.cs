@@ -837,7 +837,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             else if (IsPlayerTurn && !_units[_turn].IsBusy) QuickAttack(index);
             return;
         }
-        if (TryTouchObject(col, row) || TryBreakObject(col, row)) return;
+        if (TryTouchObject(col, row) || TryAttackObject(col, row)) return;
         if (_selected == _turn && TryWalkTo(col, row)) return;
         _selected = _turn;
     }
@@ -920,6 +920,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (!IsPlayerTurn || _routine != null || _talk != null || _units[_turn].IsBusy) return;
         _clickHookDone = true;
         var u = _units[_turn];
+        // DUELDX_CLICKFROM=<열>,<줄> 이면 누르기 전에 차례인 인물을 그 칸에 세운다 — 걸어가서 치는 거리를 시험할 때.
+        if (Environment.GetEnvironmentVariable("DUELDX_CLICKFROM")?.Split(',') is [var fc, var fr] && int.TryParse(fc, out int fromCol) && int.TryParse(fr, out int fromRow))
+            u.ResetTo(fromCol, fromRow, keepFacing: true);
         int bx = col * TileW + TileW / 2, by = CellTop(col, row) + TileH / 2;
         var range = ComputeRange(u);
         string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {RowAt(bx, by)} unitAt {UnitAtBoard(bx, by)} object {ObjectAt(col, RowAt(bx, by))?.Data.Id} "

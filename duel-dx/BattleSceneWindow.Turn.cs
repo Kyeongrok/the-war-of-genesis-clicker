@@ -531,6 +531,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_targetIsBasicAttack)
         {
             int target = LiveUnitAt(col, row) is { } t ? Array.IndexOf(_units, t) : -1;
+            // 유닛이 없는 칸이면 부술 수 있는 적 물체(기총포탑 따위)를 친다.
+            if (target < 0 && ObjectAt(col, row) is { Data.Breakable: true })
+            {
+                CancelTargeting();
+                if (!TryAttackObject(col, row)) Hint("칠 수 없는 물체입니다");
+                return true;
+            }
             if (target < 0 || _units[target].IsAlly || FindAttackPath(_turn, target) is not { } plan)
             {
                 Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");

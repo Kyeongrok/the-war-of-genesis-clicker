@@ -244,6 +244,46 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
+    /// <summary>
+    /// 부술 수 있는 적 물체(기총포탑 따위)를 적처럼 친다 — 사거리 밖이면 기본공격 자리까지 걸어가서 친다.
+    /// 전에는 이미 사거리 안에 서 있을 때만 클릭이 먹고, 링 「공격」 겨누기는 유닛만 봐서 Btl 0081 의 기총포탑을 못 쳤다(사용자 보고).
+    /// </summary>
+    private bool TryAttackObject(int col, int row)
+    {
+        if (!IsPlayerTurn || _units[_turn].IsBusy || _routine != null) return false;
+        if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
+        var user = _units[_turn];
+        bool foe = obj.Team != (user.PlayerControlled ? 4 : 0);
+        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Team < 0)) return false;
+        if (user.Data is not { } c || Work(c.BasicWorkId) is not { } w || !CanAfford(user, w)) return false;
+        if (InWorkRange(w, user.Col, user.Row, obj.Col, obj.Row, user)) return TryBreakObject(obj.Col, obj.Row);
+        if (ComputeRange(user) is not { } range) return false;
+        int best = -1, bestCost = int.MaxValue;
+        for (int i = 0; i < range.Cost.Length; i++)
+        {
+            if (range.Cost[i] >= bestCost || !range.CanReach(i) || !InWorkRange(w, i % Cols, i / Cols, obj.Col, obj.Row, user)) continue;
+            bestCost = range.Cost[i];
+            best = i;
+        }
+        if (best < 0 || PathWithin(range, user.Col, user.Row, best) is not { } path)
+        {
+            Hint("거기까지 가서 칠 수 없습니다");
+            return true;
+        }
+        CommitMoveForAction();
+        _commitUndo = null;
+        _routine = WalkThenBreak(user, path, obj.Col, obj.Row);
+        return true;
+    }
+
+    private IEnumerator<bool> WalkThenBreak(UnitState user, List<(int Col, int Row)> path, int col, int row)
+    {
+        foreach (var cell in path) user.Path.Enqueue(cell);
+        while (user.IsBusy) yield return true;
+        user.Facing = FacingToward(user.Col, user.Row, col, row);
+        TryBreakObject(col, row, force: true);
+    }
+
     /// <summary>부서지거나 열린 상자가 든 것을 준다 — 아이템이 있으면 아이템, 없으면 GP(0x100e7d31, 명령 0x3f4·0x3f5).</summary>
     private void GiveObjectSpoils(DemoObject obj)
     {
