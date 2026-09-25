@@ -592,6 +592,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when _progressOpen:
                 _progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _statusUnit >= 0 && ScrollStatusLists(-(short)(((long)wParam >> 16) & 0xFFFF) / 120):
+                return IntPtr.Zero;                                          // 스테이터스 창의 어빌리티 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
@@ -931,7 +933,6 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             OpenMosesIfAsked();
             OpenFieldIfAsked();
             OpenLevelUpIfAsked();
-            OpenStatusIfAsked();
             OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
@@ -942,6 +943,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 if (page == 7) OpenMosesStyle(); else if (page == 6) OpenMosesLegion();
                 else if (page == 1) { MosesGoPage(1); _mosesPage = 1; }   // 메일 — 배달까지 돈다
             }
+            OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
         }
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
         // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
