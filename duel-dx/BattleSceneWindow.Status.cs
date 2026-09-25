@@ -526,7 +526,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void ShowAbilityTip(AbilityData ab, int level)
     {
-        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level));
+        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level, StatusUnit()));
     }
 
     /// <summary>능력치 보정 번호(패시브·버프) — 슬롯이 아니라 능력치에 바로 더해지는 것(0x10032af0).</summary>
@@ -539,10 +539,23 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 설명 창 아래에 붙일 <b>레벨별 효과 수치</b> — 지금 레벨과 다음 레벨(배우기 전이면 Lv1).
     /// 원본 설명문은 레벨과 상관없는 한 줄뿐이라 레벨을 올려 얼마나 달라지는지 안 보였다(사용자 요청: 리미트플로우).
     /// </summary>
-    private string AbilityEffectText(AbilityData ab, int level)
+    /// <remarks>
+    /// <paramref name="user"/> 가 있으면 그 인물의 <b>SOUL 필요·소모</b>도 붙인다 — 체질 비용(hpFactor)이 체질마다 달라 같은 기술도 사람마다 다르다(사용자 요청).
+    /// </remarks>
+    private string AbilityEffectText(AbilityData ab, int level, UnitState? user = null)
     {
-        string Line(int lv) =>
-            ab.WorkByLevel.TryGetValue(lv, out int wid) && Work(wid) is { } w ? WorkEffect(w) : "";
+        string Line(int lv)
+        {
+            if (!ab.WorkByLevel.TryGetValue(lv, out int wid) || Work(wid) is not { } w) return "";
+            var bits = new List<string>();
+            if (WorkEffect(w) is { Length: > 0 } effect) bits.Add(effect);
+            if (user?.Data is { } c)
+            {
+                int need = SoulNeedFor(user, c, wid), spend = SoulCostFor(user, c, wid);
+                if (need > 0 || spend > 0) bits.Add(need == spend ? $"SOUL {spend} 소모" : $"SOUL {need} 필요 · {spend} 소모");
+            }
+            return string.Join(" · ", bits);
+        }
         var parts = new List<string>();
         if (level > 0 && Line(level) is { Length: > 0 } now) parts.Add($"Lv{level}: {now}");
         int next = level + 1;

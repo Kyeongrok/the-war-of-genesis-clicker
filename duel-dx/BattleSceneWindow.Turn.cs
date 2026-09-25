@@ -393,6 +393,33 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── work 사거리·효과 범위 ────────────────────────────────────────────────
 
+    /// <summary>버프 경험치 — 보조·회복 스킬이 든 아군 한 명마다 시전자가 받는 EXP(원본에 없는 규칙, 사용자 요청).</summary>
+    private const int BuffExpPerAlly = 5;
+
+    /// <summary>이번 기술로 보조·회복을 받은 아군(시전자 자신 포함) — 기술이 끝날 때 <see cref="GainBuffExp"/> 가 센다.</summary>
+    private readonly HashSet<UnitState> _buffedAllies = [];
+
+    /// <summary>보조(종류 2·3)·회복(1·5) 어빌리티가 같은 편에게 들었으면 센다 — 아이템(어빌리티 0)은 빼고, 적에게 건 약화도 뺀다.</summary>
+    private void MarkBuffed(UnitState a, UnitState t, WorkData w)
+    {
+        if (w.AbilityId != 0 && !w.IsDamage && t.IsAlly == a.IsAlly) _buffedAllies.Add(t);
+    }
+
+    /// <summary>버프를 받은 아군 한 명마다 <see cref="BuffExpPerAlly"/> 씩 — 내 편(경험치를 쌓는 쪽)만 받는다.</summary>
+    private void GainBuffExp(UnitState a)
+    {
+        int n = _buffedAllies.Count;
+        _buffedAllies.Clear();
+        if (n == 0 || !a.IsAlly || a.Data is not { } c) return;
+        int exp = BuffExpPerAlly * n;
+        a.Data = c with { Exp = c.Exp + exp, CumExp = c.CumExp + exp };
+        Popup(a, $"EXP +{exp}", 0xFF90D0FF, 15);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"buff exp: {a.ChrCode} +{exp} ({n}명) → EXP {a.Data.Exp}" + Environment.NewLine);
+        QueueLevelUps();
+    }
+
     /// <summary>격려 — 아군 하나의 SOUL 을 위력만큼 올린다.</summary>
     private const int EncourageAbility = 10;
 
@@ -552,6 +579,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var cell in path) a.Path.Enqueue(cell);
         while (a.IsBusy) yield return true;
         CommitMove(a);
+        _buffedAllies.Clear();
 
         if (targetIndex >= 0) (col, row) = (_units[targetIndex].Col, _units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
@@ -751,6 +779,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
+        GainBuffExp(a);
         // 비용은 행동이 끝난 뒤 TP → SOUL → HP 차례로 뺀다(0x10076380). 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
         if (a.Data is { } cost && _db is { } db2)
         {
@@ -789,6 +818,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 회복은 떠오르지 않고 옛 HP 에서 새 HP 로 세어 올라간다(노랑).
             ShowNumber(t, _db.T(159), HealColor2, rise: false, count: (before, t.Hp));
             ApplyAilments(a, t, w);
+            MarkBuffed(a, t, w);
             return;
         }
         // 격려(어빌리티 10) — 대상 SOUL 을 위력만큼 올린다(0x10091ae0). 공통 함수를 안 거쳐 19(소울 정지)도 무시하고, 최대치에서 자른다.
@@ -800,11 +830,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                     $"encourage work {w.Id}: {a.ChrCode} → {t.ChrCode} SOUL {before} → {t.Soul} (위력 {w.Power})" + Environment.NewLine);
+            MarkBuffed(a, t, w);
             return;
         }
         if (!w.IsDamage)
         {
-            if (result != 3) ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
+            if (result != 3)
+            {
+                ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
+                MarkBuffed(a, t, w);
+            }
             return;
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
