@@ -52,6 +52,13 @@ internal sealed class DemoObject(BattleObjectRecord record, ObjFile data)
     public int Col => Record.X;
     public int Row => Record.Y;
     public int Hp { get; set; } = data.MaxHp;
+
+    /// <summary>지금 편(<c>+0x78</c>) — 중립(−1) 포탑·힐 크리스탈은 손을 댄 쪽 편이 된다(명령 0x2717).</summary>
+    public int Team { get; set; } = record.Team;
+
+    /// <summary>힐 크리스탈(종류 10)의 충전(<c>+0x15c</c>, 차는 한도 = .obj 의 차례 간격)과 다 찼나(<c>+0x160</c>).</summary>
+    public int Charge { get; set; }
+    public bool Charged { get; set; }
     public bool Alive => !Data.Breakable || Hp > 0;
 }
 
