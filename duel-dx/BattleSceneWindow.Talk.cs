@@ -235,15 +235,17 @@ internal sealed unsafe partial class BattleSceneWindow
             // 깜빡이는데, 데모는 3초마다 한 번 겹친다(가설). 그 모션이 없는 얼굴은 초상화 없이 작은 얼굴로 대신한다.
             int portraitObs = t.Speaker >= 0 ? _units[t.Speaker].Data?.FaceId ?? 0 : _db?.Character(_talkFace)?.FaceId ?? 0;
             int pose = 2 * Math.Max(0, t.Face) + 11;
-            bool portrait = portraitObs > 0 && UiFor(portraitObs)?.MotionLength(pose) > 0
+            // 초상 모션은 키가 있으면 된다 — 한 장짜리 정지 초상(퉁 파오 Obs 0786 모션 11: 길이 0, 키 1)도 있다.
+            // 예전에는 길이 > 0 만 봐서 정지 초상인 인물은 작은 얼굴로 떨어졌다(사용자 보고: Fld 0094).
+            bool portrait = portraitObs > 0 && UiFor(portraitObs)?.Clip(pose) is { Keys.Count: > 0 }
                             && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, UiBlend.Alpha);
             if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink && tick % 90 < blink)
                 DrawUi(portraitObs, pose + 1, tick % 90, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
             for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha, fade: 20 / 31.0);
             for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha);
-            // 이름 — 탭(틀 x 0~124) 가운데 x = 창x+61, 윗변 y = 창y−16.
-            var (_, nw, _) = GetText(t.Name, White, 12);
-            DrawText(t.Name, x + 61 - nw / 2, y - 16, White, 12);
+            // 이름 — 탭(틀 x 0~124, y 창y−25~창y) 가운데. 윗변을 창y−16 에 두었더니 글자가 탭 아래 선에 걸쳤다(사용자 보고).
+            var (_, nw, nh) = GetText(t.Name, White, 12);
+            DrawText(t.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
             // 원본 상자에는 작은 얼굴이 없다(큰 반신 초상화를 상자 뒤에 세운다 — 아직 없음). 얼굴이 있으면 데모는 글 왼쪽에 둔다.
             int textLeft = x + 12;
             if (!portrait && face != null) { BlitScaled(face, x + 12, y + 8, 84, 84); textLeft = x + 104; }
