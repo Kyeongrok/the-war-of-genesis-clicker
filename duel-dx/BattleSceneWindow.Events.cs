@@ -109,6 +109,26 @@ internal sealed unsafe partial class BattleSceneWindow
             else _eventNextBattle = to;
             return;
         }
+        // 엔진이 전멸을 안 보는 전투(머리 워드 9 = 0)는 원본에서 적을 다 쓰러뜨려도 끝나지 않고 스크립트 조건(특정 칸 도달 따위)을 채워야 넘어간다.
+        // 우리는 전멸이면 승리로 끝내므로, 그때 스크립트의 나가는 길(행동 6 필드·10 전투)을 대신 탄다 — 안 그러면 뒤 필드를 건너뛴다.
+        // Btl 0084 「벨로스」는 아군이 (6~11, 0~2) 에 들어가야 Fld 0222(챕터 끝)로 가는데, 적을 다 잡으면 그냥 모세스로 돌아가 챕터 22 가 안 끝났다(사용자 보고).
+        // 아군 전멸(401 [4])이 조건인 나가는 길은 패배 쪽이라 뺀다.
+        if (_scene.EngineJudgesWipe) return;
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0 || (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire)) continue;
+            if (e.Actions.FirstOrDefault(a => a.Code is 6 or 10) is not { } go) continue;
+            if (e.Conditions.Any(c => c.Code == 401 && c.Args.Length > 0 && c.Args[0] == 4)) continue;
+            _eventFired[i]++;
+            int to = go.Args.Length > 0 ? go.Args[0] : 0;
+            if (go.Code == 6) { _eventNextBattle = 0; _eventNextField = to; }
+            else _eventNextBattle = to;
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"wipe exit: 사건 {i} 의 {(go.Code == 6 ? "필드" : "전투")} {to} 로" + Environment.NewLine);
+            return;
+        }
     }
 
     private void RunEvents()
