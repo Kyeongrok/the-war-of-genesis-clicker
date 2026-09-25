@@ -393,19 +393,23 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── work 사거리·효과 범위 ────────────────────────────────────────────────
 
-    /// <summary>버프 경험치 — 보조·회복 스킬이 든 아군 한 명마다 시전자가 받는 EXP(원본에 없는 규칙, 사용자 요청).</summary>
+    /// <summary>버프·약화 경험치 — 보조·회복 스킬이 든 대상 한 명마다 시전자가 받는 EXP(원본에 없는 규칙, 사용자 요청).</summary>
     private const int BuffExpPerAlly = 5;
 
-    /// <summary>이번 기술로 보조·회복을 받은 아군(시전자 자신 포함) — 기술이 끝날 때 <see cref="GainBuffExp"/> 가 센다.</summary>
+    /// <summary>이번 기술로 보조·회복이 든 대상(시전자 자신 포함) — 기술이 끝날 때 <see cref="GainBuffExp"/> 가 센다.</summary>
     private readonly HashSet<UnitState> _buffedAllies = [];
 
-    /// <summary>보조(종류 2·3)·회복(1·5) 어빌리티가 같은 편에게 들었으면 센다 — 아이템(어빌리티 0)은 빼고, 적에게 건 약화도 뺀다.</summary>
+    /// <summary>
+    /// 보조(종류 2·3)가 든 대상은 편을 가리지 않고(아군 버프·적 약화 모두), 회복(1·5)은 같은 편에게 든 것만 센다. 아이템(어빌리티 0)은 뺀다.
+    /// </summary>
     private void MarkBuffed(UnitState a, UnitState t, WorkData w)
     {
-        if (w.AbilityId != 0 && !w.IsDamage && t.IsAlly == a.IsAlly) _buffedAllies.Add(t);
+        if (w.AbilityId == 0 || w.IsDamage) return;
+        if (w.IsHeal && t.IsAlly != a.IsAlly) return;
+        _buffedAllies.Add(t);
     }
 
-    /// <summary>버프를 받은 아군 한 명마다 <see cref="BuffExpPerAlly"/> 씩 — 내 편(경험치를 쌓는 쪽)만 받는다.</summary>
+    /// <summary>든 대상 한 명마다 <see cref="BuffExpPerAlly"/> 씩 — 내 편(경험치를 쌓는 쪽)만 받는다.</summary>
     private void GainBuffExp(UnitState a)
     {
         int n = _buffedAllies.Count;
