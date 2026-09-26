@@ -53,7 +53,7 @@
     { "work": 561, "level": 6, "rangeMax": 4, "bonus1Value": -7, "power": -20, "exp": 50, "tp": 155 },
     { "work": 560, "level": 7, "rangeMax": 4, "bonus1Value": -7, "power": -10, "exp": 50, "tp": 160 },
     { "work": 559, "level": 8, "rangeMax": 4, "bonus1Value": -7, "power": 0, "exp": 50, "tp": 165 },
-    { "work": 558, "level": 9, "rangeMax": 4, "bonus1Value": -7, "power": 5, "exp": 50, "tp": 170 },
+    { "work": 558, "level": 9, "rangeMax": 4, "bonus1Value": -7, "power": 20, "exp": 50, "tp": 170 },
     { "work": 557, "level": 10, "rangeMax": 4, "bonus1Value": -7, "power": 10, "exp": 50, "tp": 175 },
     { "work": 556, "level": 11, "rangeMax": 5, "bonus1Value": -10, "power": 15, "exp": 100, "tp": 180 },
     { "work": 574, "level": 12, "rangeMax": 5, "bonus1Value": -10, "power": 20, "exp": 100, "tp": 185 },
@@ -62,8 +62,8 @@
     { "work": 571, "level": 15, "rangeMax": 5, "bonus1Value": -13, "power": 35, "exp": 100, "tp": 200 },
     { "work": 570, "level": 16, "rangeMax": 6, "bonus1Value": -13, "power": 40, "exp": 100, "tp": 200 },
     { "work": 569, "level": 17, "rangeMax": 6, "bonus1Value": -13, "power": 45, "exp": 100, "tp": 200 },
-    { "work": 568, "level": 18, "rangeMax": 6, "bonus1Value": -13, "power": 50, "exp": 100, "tp": 200 },
+    { "work": 568, "level": 18, "rangeMax": 9, "bonus1Value": -13, "power": 50, "exp": 100, "tp": 200 },
     { "work": 567, "level": 19, "rangeMax": 7, "bonus1Value": -15, "power": 60, "exp": 100, "tp": 200 },
-    { "work": 566, "level": 20, "rangeMax": 8, "bonus1Value": -15, "power": 80, "exp": 100, "tp": 200 }
+    { "work": 566, "level": 20, "rangeMax": 7, "bonus1Value": -15, "power": 80, "exp": 100, "tp": 200 }
   ]
 }
