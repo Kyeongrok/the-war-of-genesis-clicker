@@ -310,6 +310,50 @@ public partial class SkillEditWindow : Window
         Fill();
     }
 
+    /// <summary>work 번호 → 그 work 을 쓰는 곳 설명들(전투 이벤트 필살기·기본공격 인물). 처음 볼 때 한 번 훑는다.</summary>
+    private Dictionary<int, List<string>>? _workRefs;
+
+    private Dictionary<int, List<string>> WorkRefIndex()
+    {
+        if (_workRefs != null) return _workRefs;
+        var map = new Dictionary<int, List<string>>();
+        void Add(int work, string where) { if (!map.TryGetValue(work, out var l)) map[work] = l = []; if (!l.Contains(where)) l.Add(where); }
+        try
+        {
+            string data = AssetsFolder.Find("data");
+            var files = GameFiles.FromFolder(data);
+            // 전투 이벤트 행동 207 「기술 시전(보스 필살기)」 — 인자 2 가 work 번호(0x10052400).
+            foreach (string path in Directory.EnumerateFiles(System.IO.Path.Combine(data, "Btl"), "*.btl"))
+            {
+                if (!int.TryParse(System.IO.Path.GetFileNameWithoutExtension(path), out int id)) continue;
+                foreach (var e in BattleEvents.Parse(File.ReadAllBytes(path)) ?? [])
+                    foreach (var a in e.Actions.Where(a => a.Code == 207 && a.Args.Length > 2))
+                        Add(a.Args[2], $"Btl {id:D4} 이벤트 {e.Index} 필살기");
+            }
+            // 기본공격 — .chr 의 기본공격 work.
+            if (_db != null)
+                foreach (string path in Directory.EnumerateFiles(System.IO.Path.Combine(data, "Chr"), "*.chr"))
+                    if (int.TryParse(System.IO.Path.GetFileNameWithoutExtension(path), out int code) && _db.Character(code) is { } c)
+                        Add(c.BasicWorkId, $"기본공격 {_db.T(c.NameId)}({code:D4})");
+        }
+        catch (Exception ex) when (ex is IOException or DirectoryNotFoundException or InvalidDataException) { }
+        return _workRefs = map;
+    }
+
+    private void LevelGrid_CurrentCellChanged(object? sender, EventArgs e)
+    {
+        if (LevelGrid.CurrentCell.Item is not DataRowView view || view.Row["work"] is not int work || view.Row["level"] is not int level)
+        {
+            WorkRefs.Text = "";
+            return;
+        }
+        var refs = WorkRefIndex().GetValueOrDefault(work) ?? [];
+        const int Shown = 12;
+        string list = refs.Count == 0 ? "어빌리티 레벨 말고는 쓰는 곳 없음"
+            : string.Join(" · ", refs.Take(Shown)) + (refs.Count > Shown ? $" 외 {refs.Count - Shown}곳" : "");
+        WorkRefs.Text = $"Lv{level} = work {work} — {list}";
+    }
+
     /// <summary>
     /// 고른 셀의 레벨 줄을 지운다 — 뒤 레벨을 하나씩 당겨(10 → 9 …) 빈 레벨이 안 생기게 한다. 9 만 빼고 두면 Lv8 인물이 Lv9 에 오를 때
     /// 쓸 work 이 없어 기술이 사라지고, 다음 레벨 EXP 도 0 이 된다. work 번호는 그대로 둔다(연출·AI·전투 스크립트가 work 로 가리킨다).
