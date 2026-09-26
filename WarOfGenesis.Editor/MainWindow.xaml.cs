@@ -30,31 +30,40 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         GameRootBox.Text = LoadSavedGameRoot() ?? DefaultGameRoot;
-        Stats.MotionMappingRequested += ShowMotionMapping;
-        Stats.ExportRequested += ExportCharacter;
-        Loaded += (_, _) =>
-        {
-            LoadStats();
-            TryLoadGameRoot(GameRootBox.Text);
-        };
+        Loaded += (_, _) => TryLoadGameRoot(GameRootBox.Text);
     }
 
-    // ── 캐릭터 스탯(첫 화면) ──────────────────────────────────────────────────
+    // ── 캐릭터 > 캐릭터 스탯 창 ─────────────────────────────────────────────
+
+    private CharacterStatsWindow? _statsWindow;
 
     /// <summary>
     /// 스탯은 원본 게임 폴더가 아니라 저장소 <c>assets/data</c> 로 본다 — 우리 게임이 실제로 쓰는 자료라, 뺀 레코드(Chr 0006)는 안 보이고
     /// 편집기에서 고친 스킬·직업 JSON 도 곧바로 반영된다. 모션 매핑·내보내기는 여전히 원본 폴더(Obs·Chr pak)를 쓴다.
     /// </summary>
-    private void LoadStats()
+    private void CharacterStatsMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        if (_statsWindow is { IsLoaded: true }) { _statsWindow.Activate(); return; }
         try
         {
-            Stats.Load(GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))), Enumerable.Range(0, 1000));
+            var window = new CharacterStatsWindow { Owner = this };
+            window.View.MotionMappingRequested += ShowMotionMapping;
+            window.View.ExportRequested += ExportCharacter;
+            window.View.Load(GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))), Enumerable.Range(0, 1000));
+            window.Show();
+            _statsWindow = window;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
         {
             StatusText.Text = $"assets/data 를 읽지 못했습니다: {ex.Message}";
         }
+    }
+
+    /// <summary>첫 화면의 스킬 편집에 저장 안 한 것이 있으면 닫기 전에 묻는다.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!Skills.ConfirmClose()) e.Cancel = true;
+        base.OnClosing(e);
     }
 
     // ── 게임 폴더 ────────────────────────────────────────────────────────────
@@ -111,7 +120,7 @@ public partial class MainWindow : Window
             _gameRoot = root;
             _database = null;
             SaveGameRoot(root);
-            StatusText.Text = $"열었습니다 — 인물 레코드 {_allChrRecords.Count}개. 목록을 우클릭하면 모션 매핑 보기·내보내기.";
+            StatusText.Text = $"열었습니다 — 인물 레코드 {_allChrRecords.Count}개. 캐릭터 > 캐릭터 스탯 목록을 우클릭하면 모션 매핑 보기·내보내기.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -231,11 +240,6 @@ public partial class MainWindow : Window
         }
         new FieldWindow(_gameRoot, _database) { Owner = this }.Show();
     }
-
-    // ── 스킬(어빌리티) 창 ────────────────────────────────────────────────────
-
-    /// <summary>assets/data/skills — 스킬마다 공통 칸 한 벌과 레벨별 칸을 보고 고친다. 게임 폴더 없이 연다.</summary>
-    private void SkillEditMenuItem_Click(object sender, RoutedEventArgs e) => new SkillEditWindow { Owner = this }.Show();
 
     // ── 스크립트 명령 사전 ─────────────────────────────────────────────────
 

@@ -4,11 +4,18 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:WarOfGenesis.Editor"
     Title="WarOfGenesis Editor"
-    Width="1150"
-    Height="720"
+    Width="1500"
+    Height="900"
     WindowStartupLocation="CenterScreen">
     <DockPanel>
         <Menu DockPanel.Dock="Top">
+            <MenuItem Header="캐릭터(_C)">
+                <MenuItem
+                    x:Name="CharacterStatsMenuItem"
+                    AutomationProperties.AutomationId="CharacterStatsMenuItem"
+                    Click="CharacterStatsMenuItem_Click"
+                    Header="캐릭터 스탯(_S)" />
+            </MenuItem>
             <MenuItem Header="요소(_E)">
                 <MenuItem
                     x:Name="JobViewerMenuItem"
@@ -42,11 +49,6 @@
                     Header="이펙트 보기(_E)" />
             </MenuItem>
             <MenuItem Header="어빌리티(_B)">
-                <MenuItem
-                    x:Name="SkillEditMenuItem"
-                    AutomationProperties.AutomationId="SkillEditMenuItem"
-                    Click="SkillEditMenuItem_Click"
-                    Header="스킬(_K)" />
                 <MenuItem
                     x:Name="BodyAbilitiesMenuItem"
                     AutomationProperties.AutomationId="BodyAbilitiesMenuItem"
@@ -115,8 +117,8 @@
                 Foreground="DimGray"
                 TextWrapping="Wrap" />
 
-            <!--  가운데: 캐릭터 스탯(첫 화면)  -->
-            <local:CharacterStatsView x:Name="Stats" />
+            <!--  가운데: 스킬 편집(첫 화면) — 캐릭터 스탯은 메뉴 캐릭터 > 캐릭터 스탯  -->
+            <local:SkillEditView x:Name="Skills" />
         </DockPanel>
     </DockPanel>
 </Window>
