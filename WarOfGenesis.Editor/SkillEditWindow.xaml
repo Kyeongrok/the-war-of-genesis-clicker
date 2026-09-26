@@ -204,8 +204,17 @@
                         FontWeight="Bold"
                         Text="레벨별 — 레벨마다 다른 칸만 (열 머리를 눌러 고른 뒤 올린다)" />
                 </DockPanel>
+                <!--  고른 레벨 work 을 쓰는 곳 — 전투 이벤트 필살기(행동 207)·기본공격 인물. work 번호로 가리키므로 레벨을 지우거나 옮길 때 본다  -->
+                <TextBlock
+                    x:Name="WorkRefs"
+                    Margin="0,4,0,0"
+                    AutomationProperties.AutomationId="SkillEditWorkRefs"
+                    DockPanel.Dock="Bottom"
+                    Foreground="#2B4C7E"
+                    TextWrapping="Wrap" />
                 <DataGrid
                     x:Name="LevelGrid"
+                    CurrentCellChanged="LevelGrid_CurrentCellChanged"
                     AutoGenerateColumns="True"
                     AutoGeneratingColumn="LevelGrid_AutoGeneratingColumn"
                     AutomationProperties.AutomationId="SkillEditLevels"
