@@ -1549,6 +1549,10 @@ internal sealed class UnitSprite
     }
 
     /// <summary>모션 번호(동작·방향이 아니라 Obs 안의 번호)로 그 틱의 컷 — 몸 복제(분신) 이펙트가 쓴다. 없으면 null.</summary>
+    /// <summary>그 모션의 길이(틱) — 없으면 0. 한 번 도는 분신을 언제 지울지 셀 때 쓴다.</summary>
+    public int MotionTicks(int motion) =>
+        _table?.Clips.GetValueOrDefault(motion) is { } clip ? Math.Max(clip.Length, clip.Keys.Count > 0 ? clip.Keys[^1].Start + clip.Keys[^1].Length : 0) : 0;
+
     public SpriteFrame? FrameOfMotion(int motion, int tick, bool mirror)
     {
         if (_table?.Clips.GetValueOrDefault(motion) is not { } clip || clip.KeyAt(tick, loop: false) is not { } k

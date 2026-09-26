@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -72,6 +72,9 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             else
             {
+                // 모션이 끝나면 지운다 — 모션 읽기는 끝을 넘으면 마지막 컷을 붙들고 있어서, 다크 스크림(51·52)·폭풍검(98)의 분신이
+                // 필살기가 끝난 뒤에도 그 자리에 잔상으로 남았다(사용자 보고).
+                if (tick >= Math.Max(1, sprite.MotionTicks(c.Motion))) { _bodyClones.RemoveAt(i); continue; }
                 frame = sprite.FrameOfMotion(c.Motion, tick, c.Mirror);
                 if (frame == null) { _bodyClones.RemoveAt(i); continue; }
                 fade = CloneFade;
