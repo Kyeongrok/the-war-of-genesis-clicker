@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Threading;
 using WarOfGenesis.Assets;
 
@@ -81,7 +82,8 @@ public partial class SkillEditView : UserControl
     {
         InitializeComponent();
         FilterBox.Text = LoadFilter();   // 지난번 찾기 글 — 목록이 채워지면 이 글로 거른다
-        Loaded += (_, _) => { if (_folder.Length == 0) Load(); };   // 창에 다시 붙어도 한 번만 읽는다
+        Loaded += (_, _) => { if (_folder.Length == 0) Load(); };
+        PreviewKeyDown += OnPreviewKeyDownForUndo;   // 창에 다시 붙어도 한 번만 읽는다
     }
 
     private SkillRow? Current => SkillGrid.SelectedItem as SkillRow;
@@ -95,7 +97,11 @@ public partial class SkillEditView : UserControl
         catch (Exception ex) when (ex is IOException or InvalidDataException) { _db = null; }
         foreach (string path in Directory.EnumerateFiles(_folder, "*.json"))
             if (SkillBook.FromJson(File.ReadAllText(path, Encoding.UTF8)) is { } skill)
-                _rows.Add(new SkillRow { Skill = skill, Path = path });
+            {
+                var added = new SkillRow { Skill = skill, Path = path };
+                _rows.Add(added);
+                Remember(added);
+            }
         _view = CollectionViewSource.GetDefaultView(_rows.OrderBy(r => r.Ability == 0).ThenBy(r => r.Ability).ThenBy(r => r.Name).ToList());
         _view.Filter = o => o is SkillRow r && Matches(r);
         SkillGrid.ItemsSource = _view;
@@ -224,8 +230,61 @@ public partial class SkillEditView : UserControl
         return [.. SkillBook.Fields.Select(f => f.Name).Where(names.Contains)];
     }
 
+    // ── 되돌리기(Ctrl+Z) ─────────────────────────────────────────────────────
+
+    /// <summary>스킬마다 마지막으로 본 상태(JSON) — 고칠 때 이것을 되돌리기 더미에 쌓는다.</summary>
+    private readonly Dictionary<SkillRow, string> _lastJson = [];
+
+    /// <summary>되돌리기 더미 — 고친 스킬과 그 직전 상태. 스피너 한 칸·셀 하나·단추 하나가 한 걸음이다.</summary>
+    private readonly Stack<(SkillRow Row, string Json, bool Trimmed)> _undo = new();
+
+    private const int UndoLimit = 500;
+
+    private void Remember(SkillRow row) => _lastJson[row] = SkillBook.ToJson(row.Skill);
+
+    /// <summary>직전에 고친 것 하나를 되돌린다(사용자 요청: Ctrl+Z). 저장한 뒤라도 되돌리면 다시 「고침」 표시가 붙는다.</summary>
+    private void Undo()
+    {
+        if (_undo.Count == 0) { StatusText.Text = "되돌릴 것이 없습니다."; return; }
+        var (row, json, trimmed) = _undo.Pop();
+        if (SkillBook.FromJson(json) is not { } skill) return;
+        row.Skill = skill;
+        row.LevelsTrimmed = trimmed;
+        _lastJson[row] = json;
+        row.Dirty = DiskJson(row) == json ? "" : "●";
+        if (SkillGrid.SelectedItem != row) { SkillGrid.SelectedItem = row; SkillGrid.ScrollIntoView(row); }
+        else Fill();
+        SkillGrid.Items.Refresh();
+        UpdateStatus();
+        StatusText.Text = $"{row.Name} 을(를) 한 걸음 되돌렸습니다 (남은 되돌리기 {_undo.Count}).";
+    }
+
+    /// <summary>파일에 저장된 상태를 같은 모양의 JSON 으로 — 되돌린 결과가 저장본과 같으면 「고침」 표시를 뗀다.</summary>
+    private static string? DiskJson(SkillRow row)
+    {
+        try { return SkillBook.FromJson(File.ReadAllText(row.Path, Encoding.UTF8)) is { } s ? SkillBook.ToJson(s) : null; }
+        catch (IOException) { return null; }
+    }
+
+    private void OnPreviewKeyDownForUndo(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Z || Keyboard.Modifiers != ModifierKeys.Control) return;
+        if (Keyboard.FocusedElement == FilterBox) return;          // 찾기 칸은 글자 되돌리기를 그대로 둔다
+        CommonGrid.CancelEdit();
+        LevelGrid.CancelEdit();
+        Undo();
+        e.Handled = true;
+    }
+
     private void MarkDirty(SkillRow row)
     {
+        string now = SkillBook.ToJson(row.Skill);
+        if (_lastJson.TryGetValue(row, out var before) && before != now)
+        {
+            _undo.Push((row, before, row.LevelsTrimmed));
+            if (_undo.Count > UndoLimit) { var keep = _undo.Take(UndoLimit).Reverse().ToList(); _undo.Clear(); foreach (var k in keep) _undo.Push(k); }
+        }
+        _lastJson[row] = now;
         row.Dirty = "●";
         SkillGrid.Items.Refresh();
         UpdateStatus();
@@ -432,8 +491,11 @@ public partial class SkillEditView : UserControl
     private void Revert_Click(object sender, RoutedEventArgs e)
     {
         if (Current is not { } row || SkillBook.FromJson(File.ReadAllText(row.Path, Encoding.UTF8)) is not { } skill) return;
+        // 되돌리기 전 상태도 더미에 넣어, 「이 스킬 되돌리기」 자체를 Ctrl+Z 로 무를 수 있게 한다.
+        if (_lastJson.TryGetValue(row, out var before)) _undo.Push((row, before, row.LevelsTrimmed));
         row.Skill = skill;
         row.Dirty = "";
+        Remember(row);
         SkillGrid.Items.Refresh();
         Fill();
         UpdateStatus();
