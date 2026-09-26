@@ -17,7 +17,7 @@ namespace WarOfGenesis.Editor;
 /// 공통 칸은 한 번 고치면 모든 레벨에 든다. 칸을 레벨별로 내리면 모든 레벨에 지금 값이 복사되고, 레벨별 열을 공통으로 올리면 첫 레벨 값을 쓴다.
 /// work·레벨 번호는 고치지 않는다 — 기술 연출·AI·전투 스크립트(행동 207)가 work 번호로 기술을 가리킨다.
 /// </remarks>
-public partial class SkillEditWindow : Window
+public partial class SkillEditView : UserControl
 {
     public sealed class SkillRow
     {
@@ -77,11 +77,11 @@ public partial class SkillEditWindow : Window
     /// <summary>어빌리티 이름·설명(TXR)을 읽으려고 드는 저장소 자료 — 못 읽으면 설명 없이 연다.</summary>
     private GameDatabase? _db;
 
-    public SkillEditWindow()
+    public SkillEditView()
     {
         InitializeComponent();
         FilterBox.Text = LoadFilter();   // 지난번 찾기 글 — 목록이 채워지면 이 글로 거른다
-        Loaded += (_, _) => Load();
+        Loaded += (_, _) => { if (_folder.Length == 0) Load(); };   // 창에 다시 붙어도 한 번만 읽는다
     }
 
     private SkillRow? Current => SkillGrid.SelectedItem as SkillRow;
@@ -370,7 +370,7 @@ public partial class SkillEditWindow : Window
         if (row.Skill.Levels.Count <= 1) { StatusText.Text = "마지막 한 레벨은 지울 수 없습니다."; return; }
         int index = row.Skill.Levels.FindIndex(l => l.Level == level);
         if (index < 0) return;
-        if (MessageBox.Show(this, $"{row.Name} Lv{level} (work {row.Skill.Levels[index].Work}) 줄을 지우고 뒤 레벨을 하나씩 당길까요?",
+        if (MessageBox.Show(Window.GetWindow(this)!, $"{row.Name} Lv{level} (work {row.Skill.Levels[index].Work}) 줄을 지우고 뒤 레벨을 하나씩 당길까요?",
                             "레벨 지우기", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         row.Skill.Levels.RemoveAt(index);
         for (int i = index; i < row.Skill.Levels.Count; i++) row.Skill.Levels[i].Level--;
@@ -388,7 +388,7 @@ public partial class SkillEditWindow : Window
         if (field is null or "level" or "work") { StatusText.Text = "레벨별 표에서 올릴 칸의 셀을 하나 고르세요."; return; }
         int value = row.Skill.Levels.FirstOrDefault()?.Fields.GetValueOrDefault(field) ?? 0;
         var distinct = row.Skill.Levels.Select(l => l.Fields.GetValueOrDefault(field)).Distinct().Count();
-        if (distinct > 1 && MessageBox.Show(this, $"「{field}」 는 레벨마다 값이 다릅니다. 첫 레벨 값 {value} 로 모두 맞출까요?", "공통으로",
+        if (distinct > 1 && MessageBox.Show(Window.GetWindow(this)!, $"「{field}」 는 레벨마다 값이 다릅니다. 첫 레벨 값 {value} 로 모두 맞출까요?", "공통으로",
                                             MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         foreach (var level in row.Skill.Levels) level.Fields.Remove(field);
         // 칸 표 차례를 지키며 공통에 넣는다.
@@ -446,14 +446,12 @@ public partial class SkillEditWindow : Window
         if (_rows.FirstOrDefault(r => r.Ability == ability) is { } row) { SkillGrid.SelectedItem = row; SkillGrid.ScrollIntoView(row); }
     }
 
-    protected override void OnClosing(CancelEventArgs e)
+    /// <summary>창을 닫아도 되나 — 저장 안 한 스킬이 있으면 물어본다(아니오·저장 성공이면 true, 취소면 false). 편집기 첫 화면이 닫힐 때 부른다.</summary>
+    public bool ConfirmClose()
     {
         int dirty = _rows.Count(r => r.Dirty.Length > 0);
-        if (dirty > 0)
-        {
-            var answer = MessageBox.Show(this, $"저장 안 한 스킬이 {dirty}개 있습니다. 저장할까요?", "스킬 편집", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-            if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveDirty())) e.Cancel = true;
-        }
-        base.OnClosing(e);
+        if (dirty == 0) return true;
+        var answer = MessageBox.Show(Window.GetWindow(this)!, $"저장 안 한 스킬이 {dirty}개 있습니다. 저장할까요?", "스킬 편집", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return answer != MessageBoxResult.Cancel && (answer != MessageBoxResult.Yes || SaveDirty());
     }
 }
