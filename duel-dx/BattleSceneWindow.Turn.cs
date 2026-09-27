@@ -204,12 +204,27 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>
+    /// 지금 파티 부대원 레벨 상위 셋의 평균(<c>0x1004e070</c>) — 전투 밖(챕터·필드 스크립트)에서 쓴다.
+    /// <see cref="PartyLevel"/> 은 전장의 아군을 세므로, 모세스에서 돌면 지난 전투의 판이나 빈 판을 센다.
+    /// </summary>
+    private int RosterLevel()
+    {
+        var levels = _members.Select(chr => (int)((_units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr))?.Level ?? 0))
+                             .Where(v => v > 0).OrderByDescending(v => v).Take(3).ToList();
+        return levels.Count == 0 ? PartyLevel() : levels.Sum() / levels.Count;
+    }
+
+    /// <summary>
     /// 그 인물을 <paramref name="offset"/> + 파티 레벨로 키운다 — <b>늘 <c>.chr</c> 원본에서</b> 다시 셈하므로 쌓이지 않고,
     /// <b>TP 제수와 CTP 는 그대로</b> 둔다. 면제 명단에 있으면 그대로 돌려준다.
     /// </summary>
-    private CharacterData GrowToPartyLevel(CharacterData c, int offset, int partyLevel)
+    /// <param name="ignoreExempt">
+    /// 스크립트 805(레벨 맞추기, <c>0x10031a50</c>)는 면제 명단을 안 본다 — 면제 명단은 전투 유닛을 만들 때(<c>0x1007a8e0</c>)만 쓴다.
+    /// 805 가 겨누는 인물은 <b>모두</b> 면제 명단에 있는 합류 인물이라, 명단을 보면 805 가 한 번도 안 먹어 리엔·유진이 Lv1 로 합류했다(사용자 보고).
+    /// </param>
+    private CharacterData GrowToPartyLevel(CharacterData c, int offset, int partyLevel, bool ignoreExempt = false)
     {
-        if (_db is null || _db.LevelExempt.Contains(c.Code)) return c;
+        if (_db is null || (!ignoreExempt && _db.LevelExempt.Contains(c.Code))) return c;
         var rows = _db.LevelGrowth;
         if (rows.Count == 0) return c;
 
