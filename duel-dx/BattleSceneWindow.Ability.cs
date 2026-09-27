@@ -208,8 +208,20 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void UpdateAimHover(int bx, int by)
     {
-        if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || _abilityMenu || Work(_targetWork) is not { } w || w.TargetMode == 1) return;
+        if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || _abilityMenu || Work(_targetWork) is not { } w) return;
         if (by < GridTop) return;
+        // 적을 겨누는 기술(대상 방식 1)은 겨눈 적(_attackCursor)을 따라 범위를 그린다 — 전에는 마우스를 아예 안 봐서
+        // 처음 고른 적에 붙은 채 다른 적 위로 옮겨도 범위가 안 나왔다(사용자 보고: 오버플로우). 몸통을 가리켜도 그 적으로 친다.
+        if (w.TargetMode == 1)
+        {
+            int foe = UnitOrFoeAt(bx, by);
+            if (foe >= 0 && SeesAsFoe(_units[_turn], _units[foe]) && CanAimAt(w, _units[_turn], _units[foe].Col, _units[foe].Row))
+            {
+                _attackCursor = foe;
+                _aimCell = null;
+            }
+            return;
+        }
         int col = bx / TileW, row = RowAt(bx, by);
         if (row < 0 || !CanAimAt(w, _units[_turn], col, row)) return;
         _aimCell = (col, row);
