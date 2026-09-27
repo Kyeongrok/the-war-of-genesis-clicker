@@ -44,6 +44,17 @@ public sealed class SkillFile
     /// </summary>
     public int MaxLevel { get; set; }
 
+    /// <summary>
+    /// 목록 아이콘 덮어쓰기 — −1 이면 원본(<c>.abi</c>). 색 <c>+0x16</c>(0 파랑 아군 · 1 빨강 적 · 2 노랑 피아 무관),
+    /// 대상 수 <c>+0x18</c>(0 한 사람 · 1 여럿), 글자 <c>+0x1a</c>(0 攻 · 1 回 · 2 異 · 3 軍 · 4 必).
+    /// 오버플로우는 원본부터 적을 겨누는데 파랑이라(리미트플로우를 베낀 흔적) 고칠 수 있게 둔다(사용자 요청). <c>.abi</c> 는 안 고친다.
+    /// </summary>
+    public int IconSide { get; set; } = -1;
+
+    public int IconArea { get; set; } = -1;
+
+    public int IconKind { get; set; } = -1;
+
     /// <summary>원래 들어 있던 <c>.att</c> 파일 번호 — 되돌려 쓸 때(내보내기)를 위해 남긴다.</summary>
     public int Att { get; set; }
 
@@ -218,6 +229,9 @@ public static class SkillBook
         sb.Append($"  \"name\": {JsonSerializer.Serialize(skill.Name, Json)},\n");
         if (skill.Description.Length > 0) sb.Append($"  \"description\": {JsonSerializer.Serialize(skill.Description, Json)},\n");
         if (skill.MaxLevel > 0) sb.Append($"  \"maxLevel\": {skill.MaxLevel},\n");
+        if (skill.IconSide >= 0) sb.Append($"  \"iconSide\": {skill.IconSide},\n");
+        if (skill.IconArea >= 0) sb.Append($"  \"iconArea\": {skill.IconArea},\n");
+        if (skill.IconKind >= 0) sb.Append($"  \"iconKind\": {skill.IconKind},\n");
         sb.Append($"  \"att\": {skill.Att},\n");
         sb.Append("  \"common\": {");
         sb.Append(string.Join(",", skill.Common.Select(kv => $"\n    \"{kv.Key}\": {kv.Value}")));
@@ -239,6 +253,9 @@ public static class SkillBook
             Name = o["name"]?.GetValue<string>() ?? "",
             Description = o["description"]?.GetValue<string>() ?? "",
             MaxLevel = o["maxLevel"]?.GetValue<int>() ?? 0,
+            IconSide = o["iconSide"]?.GetValue<int>() ?? -1,
+            IconArea = o["iconArea"]?.GetValue<int>() ?? -1,
+            IconKind = o["iconKind"]?.GetValue<int>() ?? -1,
             Att = o["att"]?.GetValue<int>() ?? 0,
         };
         if (o["common"] is JsonObject common)

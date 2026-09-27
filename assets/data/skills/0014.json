@@ -2,6 +2,8 @@
   "ability": 14,
   "name": "오버플로우",
   "maxLevel": 10,
+  "iconSide": 1,
+  "iconArea": 1,
   "att": 1,
   "common": {
     "rangeShape": 1,
