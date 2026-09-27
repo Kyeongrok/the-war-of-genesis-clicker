@@ -77,7 +77,14 @@
                                 Margin="0,2,0,8"
                                 AutomationProperties.AutomationId="LegionEditFormation"
                                 SelectionChanged="FormationBox_SelectionChanged" />
-                            <TextBlock FontWeight="Bold" Text="부하 (진형 자리 1~6 차례, 비우면 없음)" />
+                            <TextBlock FontWeight="Bold" Text="리더 (0 이면 전투 자료대로)" />
+                            <StackPanel x:Name="LeaderPanel" Margin="0,2,0,0" />
+                            <TextBlock
+                                x:Name="BattleLeadersText"
+                                Margin="18,0,0,8"
+                                Foreground="Gray"
+                                TextWrapping="Wrap" />
+                            <TextBlock FontWeight="Bold" Text="부하 (진형 자리 1~6 차례, 비우면 없음 — 「고르기…」로 인물을 보며 고른다)" />
                             <StackPanel x:Name="MembersPanel" Margin="0,2,0,8" />
                         </StackPanel>
                         <StackPanel Margin="16,0,0,0">

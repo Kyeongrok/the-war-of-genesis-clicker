@@ -177,6 +177,29 @@ public partial class CharacterStatsView : UserControl
         if (ItemsControl.ContainerFromElement(List, (DependencyObject)e.OriginalSource) is ListBoxItem item) item.IsSelected = true;
     }
 
+    /// <summary>지금 고른 인물의 Chr 번호 — 없으면 null. 군단 편집기의 구성원 고르기 창이 쓴다.</summary>
+    public int? SelectedCode => (List.SelectedItem as Row)?.Code;
+
+    /// <summary>
+    /// 목록 줄을 두 번 누른 인물 — 구성원 고르기 창이 「이 인물로」와 같게 받는다.
+    /// </summary>
+    public event Action<int>? RowDoubleClicked;
+
+    /// <summary>그 번호의 인물을 고르고 보이게 한다 — 찾기 글이 그 인물을 가리면 찾기를 비운다.</summary>
+    public void Select(int code)
+    {
+        if (List.ItemsSource is not IEnumerable<Row> rows || rows.FirstOrDefault(r => r.Code == code) is not { } row) return;
+        if (_view != null && !_view.Contains(row)) { FilterBox.Text = ""; HideEmptyToggle.IsChecked = false; _view.Refresh(); }
+        List.SelectedItem = row;
+        List.ScrollIntoView(row);
+    }
+
+    protected override void OnPreviewMouseDoubleClick(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseDoubleClick(e);
+        if (ItemsControl.ContainerFromElement(List, (DependencyObject)e.OriginalSource) is ListBoxItem { Content: Row r }) RowDoubleClicked?.Invoke(r.Code);
+    }
+
     private void FilterBox_TextChanged(object sender, RoutedEventArgs e)
     {
         if (_view == null) return;

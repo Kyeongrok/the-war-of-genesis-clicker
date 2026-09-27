@@ -33,6 +33,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 모세스 용병관리에서 배속한 군단(CChr+0x1c)은 내 부대(편 4)의 그 인물에게 붙는다 — Btl 자료의 부대 번호보다 앞선다.
             var record = rosterRecord.Side == 4 && _unitLegion.TryGetValue(rosterRecord.ChrCode, out int assigned)
                 ? rosterRecord with { Legion = assigned } : rosterRecord;
+            // 군단 편집기가 리더를 바꿔 두었으면(legions/*.json 의 leader) 전투 자료의 적·동맹 대장을 그 인물로 세운다(ed-1).
+            if (record.Side != 4 && record.Legion != 0 && legions.GetValueOrDefault(record.Legion) is { Leader: > 0 } withLeader)
+                record = record with { ChrCode = withLeader.Leader };
             int leaderIndex = list.Count;
             var leader = new UnitState(record);
             list.Add(leader);

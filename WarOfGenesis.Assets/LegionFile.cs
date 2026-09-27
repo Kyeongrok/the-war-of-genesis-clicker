@@ -24,6 +24,12 @@ public sealed record LegionData(int Id, ushort NameId, ushort[] Members, byte Fo
         [(0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)],    // 5 이자형
     ];
 
+    /// <summary>
+    /// 리더 덮어쓰기(Chr) — 원본 For.dat 에는 없는 칸이다. 대장은 전투 자료(Btl 인물 줄의 편대 번호)가 정하는데, 0 이 아니면
+    /// 이 군단을 쓰는 모든 전투에서 적·동맹 대장을 이 인물로 바꾼다(군단 편집기, 사용자 요청 ed-1). 내 부대(편 4)의 군단 대장은 안 바꾼다.
+    /// </summary>
+    public ushort Leader { get; init; }
+
     /// <summary>진형 이름 TXR — 813 + 진형.</summary>
     public ushort FormationNameId => (ushort)(813 + Formation);
 

@@ -36,6 +36,9 @@ public partial class LegionEditWindow : Window
     private readonly Dictionary<int, string> _chrNames = [];
     private bool _filling;
 
+    /// <summary>군단마다 전투 자료가 세우는 대장(Chr → 몇 전투) — 리더 칸 옆에 「지금 리더」로 보인다.</summary>
+    private readonly Dictionary<int, Dictionary<int, int>> _battleLeaders = [];
+
     private static readonly string[] FormationNames = ["0 학익진", "1 일자형", "2 십자형", "3 역학익진", "4 젓가락형", "5 이자형"];
 
     public LegionEditWindow()
@@ -63,7 +66,11 @@ public partial class LegionEditWindow : Window
         foreach (var name in files.List("Btl", ".btl").Keys)
             if (int.TryParse(System.IO.Path.GetFileNameWithoutExtension(name), out int btl) && BattleFile.Parse(btl, files.Read("Btl", name)) is { } bf)
                 foreach (var u in bf.Units.Where(u => u.Squad > 0))
+                {
                     (battles.TryGetValue(u.Squad, out var set) ? set : battles[u.Squad] = []).Add(btl);
+                    var leaders = _battleLeaders.TryGetValue(u.Squad, out var l) ? l : _battleLeaders[u.Squad] = [];
+                    leaders[u.ChrCode] = leaders.GetValueOrDefault(u.ChrCode) + 1;
+                }
 
         var original = LegionBook.LoadOriginal(files);
         foreach (var (id, legion) in LegionBook.LoadAll(files).OrderBy(kv => kv.Key))
@@ -78,6 +85,7 @@ public partial class LegionEditWindow : Window
             _rows.Add(row);
         }
         LegionGrid.ItemsSource = _rows;
+        BuildLeaderRow();
         BuildMemberBoxes();
         BuildSkillRows();
         StatusText.Text = $"군단 {_rows.Count}개 — 고친 것 {_rows.Count(r => r.Changed)}개. 고치고 「저장」을 누르면 게임이 다음 전투부터 쓴다(게임 켜 둔 채면 개발 > 어빌리티 반영).";
@@ -110,11 +118,43 @@ public partial class LegionEditWindow : Window
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal };
             line.Children.Add(new TextBlock { Text = $"{i + 1} ", Width = 16, VerticalAlignment = VerticalAlignment.Center });
-            var box = NewChoiceBox(_chrChoices, 280, $"LegionEditMember{i + 1}");
+            var box = NewChoiceBox(_chrChoices, 240, $"LegionEditMember{i + 1}");
             _memberBoxes.Add(box);
             line.Children.Add(box);
+            line.Children.Add(PickButton(box, $"부하 {i + 1}", $"LegionEditPickMember{i + 1}"));
             MembersPanel.Children.Add(line);
         }
+    }
+
+    private ComboBox _leaderBox = null!;
+
+    /// <summary>리더 줄 — 고르기 칸 + 「고르기…」. 0 은 전투 자료대로.</summary>
+    private void BuildLeaderRow()
+    {
+        var line = new StackPanel { Orientation = Orientation.Horizontal };
+        line.Children.Add(new TextBlock { Text = "★ ", Width = 16, VerticalAlignment = VerticalAlignment.Center });
+        _leaderBox = NewChoiceBox(["0 전투 자료대로", .. _chrChoices], 240, "LegionEditLeader");
+        line.Children.Add(_leaderBox);
+        line.Children.Add(PickButton(_leaderBox, "리더", "LegionEditPickLeader"));
+        LeaderPanel.Children.Add(line);
+    }
+
+    /// <summary>
+    /// 「고르기…」 — 구성원 고르기 창(캐릭터 스탯과 같은 목록·초상·능력치)을 띄워 그 칸에 고른 인물을 넣는다(ed-1: 구성원을 누르면 편집 화면).
+    /// </summary>
+    private Button PickButton(ComboBox box, string what, string automationId)
+    {
+        var button = new Button { Content = "고르기…", Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(0, 1, 6, 1) };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, automationId);
+        button.Click += (_, _) =>
+        {
+            if (Current is null) return;
+            var pick = new MemberPickWindow(_db, LeadingNumber(box.Text), $"{what} — 군단 {Current.Id} {Current.Name}") { Owner = this };
+            if (pick.ShowDialog() != true || pick.Chosen is not { } code) return;
+            box.Text = code == 0 ? (box == _leaderBox ? "0 전투 자료대로" : "") : ChrLabel(code);
+            Commit();
+        };
+        return button;
     }
 
     private void BuildSkillRows()
@@ -150,6 +190,11 @@ public partial class LegionEditWindow : Window
         DescriptionText.Text = (_db.T(l.DescriptionId) is { Length: > 0 } d ? d.Replace("$n", " ") : "(설명 없음)")
                                + $"  ·  이 군단을 쓰는 전투 {row.Battles}개";
         FormationBox.SelectedIndex = l.Formation;
+        _leaderBox.Text = l.Leader == 0 ? "0 전투 자료대로" : ChrLabel(l.Leader);
+        BattleLeadersText.Text = _battleLeaders.TryGetValue(l.Id, out var bl) && bl.Count > 0
+            ? "전투 자료의 리더: " + string.Join(", ", bl.OrderByDescending(k => k.Value).Select(k => $"{_chrNames.GetValueOrDefault(k.Key, k.Key.ToString())}({k.Key}) {k.Value}번"))
+              + (l.Leader > 0 ? $" → 모두 {ChrLabel(l.Leader)} 로 바뀜" : "")
+            : "이 군단을 쓰는 전투가 없다(모세스에서 얻는 아군 군단일 수 있다 — 아군 대장은 안 바꾼다)";
         for (int i = 0; i < 6; i++) _memberBoxes[i].Text = i < l.Members.Length ? ChrLabel(l.Members[i]) : "";
         LpBox.Text = l.LpBonus.ToString();
         PsyBox.Text = l.PsyBonus.ToString();
@@ -227,6 +272,7 @@ public partial class LegionEditWindow : Window
             .Where(s => s.Ability != 0).ToArray();
         var next = old with
         {
+            Leader = Clamp(LeadingNumber(_leaderBox.Text)),
             Members = members,
             Formation = (byte)Math.Max(0, FormationBox.SelectedIndex),
             LpBonus = Parse(LpBox, old.LpBonus),
