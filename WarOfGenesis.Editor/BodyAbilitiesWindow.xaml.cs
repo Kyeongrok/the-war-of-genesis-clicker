@@ -120,7 +120,8 @@ public partial class BodyAbilitiesWindow : Window
     /// <summary>고른 계열의 표를 다시 그린다 — 칸 선택은 되도록 지킨다.</summary>
     private void RefreshTable()
     {
-        var keep = (Table.CurrentCell.Column?.DisplayIndex, Table.CurrentCell.Item as TableRow);
+        var keepCell = Table.SelectedCells.Count > 0 ? Table.SelectedCells[0] : Table.CurrentCell;
+        var keep = (keepCell.Column?.DisplayIndex, keepCell.Item as TableRow);
         if (JobList.SelectedItem is not FamilyRow family) { Table.ItemsSource = null; Table.Columns.Clear(); JobTitle.Text = "왼쪽에서 계열을 고르세요"; return; }
         _columns = BuildColumns(family.File);
         var common = _columns.Select(c => c.Get()).ToList();
@@ -148,7 +149,12 @@ public partial class BodyAbilitiesWindow : Window
 
         if (keep.Item1 is int col && col < Table.Columns.Count && keep.Item2 is { } old
             && rows.FirstOrDefault(r => r.Stage2 == old.Stage2 && r.Index == old.Index) is { } again)
-            Table.CurrentCell = new DataGridCellInfo(again, Table.Columns[col]);
+        {
+            var cell = new DataGridCellInfo(again, Table.Columns[col]);
+            Table.CurrentCell = cell;
+            Table.SelectedCells.Clear();
+            Table.SelectedCells.Add(cell);   // 칠해진 칸도 같이 되살린다 — 삭제를 이어서 누를 수 있게
+        }
     }
 
     private void RefreshAbilityPicker()
@@ -159,10 +165,18 @@ public partial class BodyAbilitiesWindow : Window
         if (AbilityPicker.Items.Count > 0 && AbilityPicker.SelectedIndex < 0) AbilityPicker.SelectedIndex = 0;
     }
 
-    /// <summary>지금 고른 칸 — (열, 행). 칸 열(0번)이나 아무것도 안 골랐으면 null.</summary>
-    private (Column Col, TableRow Row)? Picked() =>
-        Table.CurrentCell.Column?.DisplayIndex is int d && d >= 1 && d - 1 < _columns.Count && Table.CurrentCell.Item is TableRow row
-            ? (_columns[d - 1], row) : null;
+    /// <summary>
+    /// 지금 고른 칸 — (열, 행). 칸 열(0번)이나 아무것도 안 골랐으면 null.
+    /// <b>화면에 칠해진 칸(SelectedCells)</b>을 먼저 본다 — 전에는 표의 현재 칸(CurrentCell)만 봤는데, 둘이 어긋나면
+    /// 폭을 골라 칠해 두고 삭제를 눌러도 「칸을 고르세요」로 빠져 안 지워졌다(사용자 보고).
+    /// </summary>
+    private (Column Col, TableRow Row)? Picked()
+    {
+        foreach (var cell in Table.SelectedCells.Append(Table.CurrentCell))
+            if (cell.Column?.DisplayIndex is int d && d >= 1 && d - 1 < _columns.Count && cell.Item is TableRow row)
+                return (_columns[d - 1], row);
+        return null;
+    }
 
     private void JobList_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefreshTable();
 
