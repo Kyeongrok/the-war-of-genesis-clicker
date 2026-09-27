@@ -129,6 +129,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private int TargetValue(UnitState user, WorkData w, List<int> targets)
     {
         if (targets.Count == 0) return 0;
+        if (w.IsDamage && SmartAi(user)) return SmartValue(user, w, targets);   // 어려움 이상: 가장 많이 깎는 곳(Difficulty.cs)
         int criterion = w.AiCriterion >> 1;
         bool wantMax = (w.AiCriterion & 1) == 0;
         int best = wantMax ? int.MinValue : int.MaxValue;
@@ -228,6 +229,18 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
+    /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓰고, 차례가 남았으면 쉰다.</summary>
+    private IEnumerable<bool> AiUseWork(int index, WorkData w, (int Stand, int Col, int Row, int Score) use, MoveRange range)
+    {
+        var u = _units[index];
+        var path = PathWithin(range, u.Col, u.Row, use.Stand) ?? [];
+        var aimed = LiveUnitAt(use.Col, use.Row);
+        int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
+        var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
+        while (routine.MoveNext()) yield return true;
+        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+    }
+
     /// <summary>AI 차례 — 분석-전투 ba-11 의 여섯 단계.</summary>
     private IEnumerator<bool> AiRoutine(int index)
     {
@@ -276,19 +289,21 @@ internal sealed unsafe partial class BattleSceneWindow
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
         // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
         for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
+        {
+            // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
+            if (pass == 1 && SmartAi(u) && SmartPick(index, range) is { } smart)
+            {
+                foreach (bool r in AiUseWork(index, smart.Work, smart.Use, range)) yield return r;
+                yield break;
+            }
             foreach (var w in AiWorks(u))
             {
                 if (pass == 0 && !w.IsHeal) continue;
                 if (BestUse(index, w, range) is not { } use) continue;
-
-                var path = PathWithin(range, u.Col, u.Row, use.Stand) ?? [];
-                var aimed = LiveUnitAt(use.Col, use.Row);
-                int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
-                var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
-                while (routine.MoveNext()) yield return true;
-                if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+                foreach (bool r in AiUseWork(index, w, use, range)) yield return r;
                 yield break;
             }
+        }
 
         // 5단계 휴식 — 피가 Num[71]% 이하면 움직이지 않고 그 자리에서 쉰다.
         if (hpPercent <= db.N(71))

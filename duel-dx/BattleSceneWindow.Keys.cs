@@ -164,6 +164,7 @@ internal sealed unsafe partial class BattleSceneWindow
                               TalkPauseLabel(TalkPauseChoices[i]));
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
+        AppendDifficultyMenu(settings);
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -236,7 +237,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty));
 
     /// <summary>전투를 시작할 때 내 편 SOUL 을 가득 채우나 — 모드 > 전투 시작 시 소울 가득(원본에 없는 편의 기능, 기본 끔).</summary>
     private bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;
@@ -267,6 +268,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void OnMenuCommand(int id)
     {
+        if (OnDifficultyMenu(id)) return;
         switch (id)
         {
             case MenuChapters: _chaptersOpen = true; _chaptersHover = -1; break;

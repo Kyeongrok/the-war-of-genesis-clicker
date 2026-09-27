@@ -68,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (lp, psy, dep) = LegionBonusFor(u);
         if (lp != 0 || psy != 0 || dep != 0) c = c with { Lp = (uint)Math.Max(0, c.Lp + lp), Psy = (ushort)Math.Max(0, c.Psy + psy), Dep = (ushort)Math.Max(0, c.Dep + dep) };
         // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
-        u.MaxHp = Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp);
+        u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp));
         u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
         u.Stp = Math.Max(1, _db.Stp(c));
         u.MaxSoul = _db.MaxSoul(c) + u.BonusMaxSoul;
