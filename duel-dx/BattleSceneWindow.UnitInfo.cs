@@ -22,7 +22,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>인물 위에서 오른쪽 단추를 누르면 정보 창을 띄운다. 띄웠으면 true.</summary>
     private bool OpenUnitInfo(int bx, int by)
     {
-        int index = UnitAtBoard(bx, by);
+        int index = UnitAtPoint(bx, by);
         if (index < 0) return false;
         _infoUnit = index;
         _infoAt = (Math.Clamp(bx + 16, _camX, _camX + ViewWidth - InfoW), Math.Clamp(by + 16, _camY, _camY + ViewHeight - InfoH));

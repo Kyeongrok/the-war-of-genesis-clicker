@@ -49,6 +49,29 @@ internal sealed unsafe partial class BattleSceneWindow
         return Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && u.Row == row);   // 퇴장한 사람은 안 잡는다(LiveUnitAt 과 같다)
     }
 
+    /// <summary>
+    /// 오른쪽 클릭용 — 발밑 칸에 없으면 <b>그려진 그림</b>(투명 아닌 픽셀)을 눌렀는지로 찾는다. 앞에 그린(발이 아래인) 인물이 먼저다.
+    /// 인물 그림은 두 칸쯤 높아 몸통을 누르면 윗칸이 잡혀, 적 정보 창 대신 차례인 아군의 링이 열렸다(사용자 보고).
+    /// 왼쪽 클릭은 인물 뒤 칸으로 걷기도 하므로 발밑 칸(<see cref="UnitAtBoard"/>)만 본다.
+    /// </summary>
+    private int UnitAtPoint(int bx, int by)
+    {
+        int onTile = UnitAtBoard(bx, by);
+        if (onTile >= 0) return onTile;
+        var units = _units;
+        var sprites = _sprites;
+        foreach (int i in Enumerable.Range(0, units.Length).OrderByDescending(i => units[i].Y))
+        {
+            var u = units[i];
+            if (!u.Alive || !u.OnField || !sprites.TryGetValue(u.ChrCode, out var sprite)) continue;
+            var f = sprite.FrameFor(u);
+            var (footX, footY) = UnitFoot(u);
+            int x = bx - (footX + f.X), y = by - (footY + f.Y);
+            if ((uint)x < f.W && (uint)y < f.H && (f.Px[y * f.W + x] & 0xFF000000) != 0) return i;
+        }
+        return -1;
+    }
+
     // ── Status 화면 그리기 도구 (화면은 BattleSceneWindow.Status.cs) ──────────
 
     private void Header(int x, int y, int w, string text)
