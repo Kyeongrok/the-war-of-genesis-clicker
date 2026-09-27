@@ -858,7 +858,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
-        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, a.Soul, EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, AttackSoul(w, a.Soul), EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
 
         if (result == 1)
         {

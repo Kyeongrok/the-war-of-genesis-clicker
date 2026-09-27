@@ -69,7 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Row(db.T(41), $"{unit.Soul}/{unit.MaxSoul}", y + 132);
         Row(db.T(38), $"{unit.Tp}/{unit.MaxTp}", y + 148);
         Rule(x, y + 170);
-        Row(db.T(156), AtkWithSoul(db, c, unit.Soul, compact: true), y + 180);
+        Row(db.T(156), AtkWithSoul(db, c, BasicAttackSoul(unit.Soul), compact: true), y + 180);
         Row(db.T(157), db.Acr(c, unit.Tp).ToString(), y + 196);
         Row(db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString(), y + 212);
 

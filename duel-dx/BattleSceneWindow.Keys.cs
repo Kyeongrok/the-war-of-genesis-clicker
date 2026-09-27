@@ -148,6 +148,8 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.AllyAi ? Win32.MF_CHECKED : 0u), MenuAllyAi, "동맹을 AI 가 움직임(&A)");
         Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.ShowChestContents ? Win32.MF_CHECKED : 0u), MenuChestContents, "상자 내용물 보기(&C)");
         Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.FullSoulAtStart ? Win32.MF_CHECKED : 0u), MenuFullSoul, "전투 시작 시 소울 가득(&S)");
+        Win32.AppendMenuW(mode, Win32.MF_SEPARATOR, 0, null);
+        Win32.AppendMenuW(mode, Win32.MF_STRING, MenuTuning, "조정(&J)...");
         Win32.AppendMenuW(game, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)game, "게임(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
@@ -237,7 +239,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight));
 
     /// <summary>전투를 시작할 때 내 편 SOUL 을 가득 채우나 — 모드 > 전투 시작 시 소울 가득(원본에 없는 편의 기능, 기본 끔).</summary>
     private bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;
@@ -269,6 +271,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void OnMenuCommand(int id)
     {
         if (OnDifficultyMenu(id)) return;
+        if (id == MenuTuning) { _tuningOpen = true; _tuningListOpen = false; return; }
         switch (id)
         {
             case MenuChapters: _chaptersOpen = true; _chaptersHover = -1; break;

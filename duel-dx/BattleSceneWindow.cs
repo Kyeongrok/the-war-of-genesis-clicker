@@ -672,6 +672,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (key == Win32.VK_ESCAPE && SkipScene()) return;
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
+        if (_tuningOpen) { OnTuningKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
@@ -816,6 +817,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
+        if (OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (OnFieldClick(bx, by)) return;
         if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
@@ -1118,6 +1120,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawUnitInfo();
         if (!_mosesOpen) DrawSystem();
         DrawKeysPanel();
+        DrawTuning();
         DrawLevelUp();
         DrawMoses();
         DrawField();
