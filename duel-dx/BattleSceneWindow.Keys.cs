@@ -451,6 +451,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is not { } db) { Toast("게임 자료가 아직 없습니다"); return; }
         int n = db.ReloadSkills();
         _legions = null;
-        Toast(n > 0 ? $"어빌리티 {n}개와 군단을 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 군단만 다시 읽었습니다");
+        Toast(n > 0 ? $"어빌리티 {n}개·체질·군단을 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 군단만 다시 읽었습니다");
     }
 }
