@@ -133,6 +133,10 @@ internal sealed unsafe partial class BattleSceneWindow
             // 차례 깃발도 0 으로 시작한다(0x1007196c) — 틱이 흘러 TP 가 가득 차야 차례가 온다.
             unit.HasTurn = false;
         }
+        // 군단 부하는 LP 게터가 늘 대장 세력 × For.dat 보정을 더한다(0x1007ac70) — 위에서는 보정 없이 셌으므로 다시 세고 가득 채운다.
+        // 전에는 레벨업·대장 교체 때만 붙어 가이아 버그즈 부하(LP +20)가 보정 없이 시작했다.
+        foreach (var unit in _units)
+            if (unit.LeaderIndex >= 0 && unit.Data != null) { RefreshUnitStats(unit); unit.Hp = unit.MaxHp; }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
         if (_chapterFired.Count == 0) FillDemoInventory();
     }
