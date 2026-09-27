@@ -244,12 +244,19 @@ internal sealed unsafe partial class BattleSceneWindow
         ApplyAbility(u, ab, learn, cost);
     }
 
-    /// <summary>우클릭 — 어빌리티 레벨을 하나 내리고 그 레벨에 썼던 EXP 를 돌려준다. Lv1 아래로는 안 내린다.</summary>
+    /// <summary>
+    /// ▼ 단추·Shift+클릭 — 어빌리티 레벨을 하나 내리고 그 레벨에 썼던 EXP 를 돌려준다.
+    /// Lv1 이면 확인창을 띄워 <b>어빌리티를 지운다</b> — 배울 때 쓴 EXP 는 돌려주지 않는다(사용자 요청 st-6).
+    /// </summary>
     private void LowerAbility(UnitState u, AbilityData ab)
     {
         var c = u.Data!;
         int level = c.AbilityLevel(ab.Id);
-        if (level <= 1) { Toast("Lv1 아래로는 내릴 수 없습니다"); return; }
+        if (level <= 1)
+        {
+            _confirm = ($"{_db!.T(ab.NameId)} 지우기", "지우시겠습니까?\n경험치는 돌려받을 수 없습니다.", () => RemoveAbility(u, ab));
+            return;
+        }
         int refund = _db!.AbilityExpCost(ab, level - 1);       // Lv(level−1) → Lv(level) 에 썼던 값
         var list = c.Abilities.ToList();
         int i = list.FindIndex(a => a.Ability == ab.Id);
@@ -257,6 +264,16 @@ internal sealed unsafe partial class BattleSceneWindow
         u.Data = c with { Abilities = [.. list], Exp = c.Exp + refund };
         RefreshUnitStats(u);
         Toast($"{_db.T(ab.NameId)} Lv{level - 1} — EXP {refund} 돌려받음");
+    }
+
+    /// <summary>배운 어빌리티를 지운다 — EXP 는 돌려주지 않고, 장착 칸에 끼워 둔 패시브였으면 그 칸도 비운다.</summary>
+    private void RemoveAbility(UnitState u, AbilityData ab)
+    {
+        if (u.Data is not { } c) return;
+        var passives = c.Passives.Select(p => p == ab.Id ? (ushort)0 : p).ToArray();
+        u.Data = c with { Abilities = [.. c.Abilities.Where(a => a.Ability != ab.Id)], Passives = passives };
+        RefreshUnitStats(u);
+        Toast($"{_db!.T(ab.NameId)} 을(를) 지웠습니다");
     }
 
     /// <summary>
@@ -468,7 +485,8 @@ internal sealed unsafe partial class BattleSceneWindow
             _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab, level)));
             // 레벨 내리기(원본에 없는 데모 기능) — 마우스를 올린 줄의 비용 왼쪽에 작은 ▼ 단추(스크롤 막대 아래 화살표 Obs 0071 모션 4, 누름 5).
             // 원본 그림이라 창에 어울리고, 올린 줄에만 떠 목록이 어지럽지 않다. 오른쪽 단추는 원본대로 설명에 쓴다. Shift+클릭도 된다.
-            if (editable && level > 1 && _popup == null && MouseIn(rx, ry, AbilityW, RowH))
+            // Lv1 에서 누르면 지울지 묻는다(st-6).
+            if (editable && level >= 1 && _popup == null && _confirm == null && MouseIn(rx, ry, AbilityW, RowH))
             {
                 int costW = cost > 0 ? GetText(cost.ToString(), CostRed, StatusFont).W : 0;
                 int ax = rx + AbilityW - 10 - costW - 20, ay = ry + (RowH - 16) / 2;
