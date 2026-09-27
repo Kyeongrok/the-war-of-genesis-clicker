@@ -96,6 +96,8 @@ public partial class SkillEditView : UserControl
         if (!Directory.Exists(_folder)) { StatusText.Text = $"{_folder} 가 없습니다."; return; }
         try { _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))); }
         catch (Exception ex) when (ex is IOException or InvalidDataException) { _db = null; }
+        try { FillBodyFilter(GameFiles.FromFolder(AssetsFolder.Find("data"))); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException) { BodyFilterBox.IsEnabled = false; }
         foreach (string path in Directory.EnumerateFiles(_folder, "*.json"))
             if (SkillBook.FromJson(File.ReadAllText(path, Encoding.UTF8)) is { } skill)
             {
@@ -124,10 +126,35 @@ public partial class SkillEditView : UserControl
 
     private bool Matches(SkillRow r)
     {
+        if (BodyFilterBox.SelectedItem is BodyChoice { Abilities: { } allowed } && !allowed.Contains(r.Ability)) return false;
         string q = FilterBox.Text.Trim();
         return q.Length == 0 || r.Name.Replace(" ", "").Contains(q.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)
                || r.Ability.ToString() == q || r.Skill.Levels.Any(l => l.Work.ToString() == q);
     }
+
+    /// <summary>체질 고르기 줄 — 「전체」는 거르지 않는다(Abilities = null).</summary>
+    private sealed record BodyChoice(string Label, HashSet<int>? Abilities)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>
+    /// 체질(계열) 고르기 채우기 — 계열마다 그 계열 직업들(형 다섯 × 1·2단계 + 3단계)이 <b>배울 수 있는</b> 어빌리티를 모은다(assets/data/jobs, 사용자 요청 ed-sk-3).
+    /// 「그 밖」은 계열에 안 든 직업(몬스터·NPC) 것이다.
+    /// </summary>
+    private void FillBodyFilter(GameFiles files)
+    {
+        var choices = new List<BodyChoice> { new("전체", null) };
+        foreach (var file in JobBook.Load(files).OrderBy(f => f.Family == 0 ? 99 : f.Family))
+        {
+            var set = JobBook.Expand(file).SelectMany(j => j.AbilityList).Where(a => a != 0).Select(a => (int)a).ToHashSet();
+            choices.Add(new BodyChoice(file.Family == 0 ? "그 밖 (몬스터·NPC)" : file.Name, set));
+        }
+        BodyFilterBox.ItemsSource = choices;
+        BodyFilterBox.SelectedIndex = 0;
+    }
+
+    private void BodyFilter_Changed(object sender, SelectionChangedEventArgs e) => _view?.Refresh();
 
     private void Filter_Changed(object sender, TextChangedEventArgs e)
     {
