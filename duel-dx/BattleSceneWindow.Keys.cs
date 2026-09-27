@@ -442,11 +442,15 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
     }
 
-    /// <summary>개발 &gt; 어빌리티 반영 — 스킬 파일을 다시 읽는다. 비용·범위·위력 등은 다음에 쓰는 기술부터 새 값으로 셈한다.</summary>
+    /// <summary>
+    /// 개발 &gt; 어빌리티 반영 — 스킬 파일과 군단 덮어쓰기(assets/data/legions)를 다시 읽는다. 비용·범위·위력 등은 다음에 쓰는 기술부터,
+    /// 군단 구성(부하·진형·보정)은 다음 전투부터 새 값이다.
+    /// </summary>
     private void ReloadSkills()
     {
         if (_db is not { } db) { Toast("게임 자료가 아직 없습니다"); return; }
         int n = db.ReloadSkills();
-        Toast(n > 0 ? $"어빌리티 {n}개를 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 반영할 것이 없습니다");
+        _legions = null;
+        Toast(n > 0 ? $"어빌리티 {n}개와 군단을 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 군단만 다시 읽었습니다");
     }
 }

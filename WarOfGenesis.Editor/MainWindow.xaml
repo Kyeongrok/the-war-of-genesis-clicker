@@ -47,6 +47,11 @@
                     AutomationProperties.AutomationId="EffectViewerMenuItem"
                     Click="EffectViewerMenuItem_Click"
                     Header="이펙트 보기(_E)" />
+                <MenuItem
+                    x:Name="LegionEditMenuItem"
+                    AutomationProperties.AutomationId="LegionEditMenuItem"
+                    Click="LegionEditMenuItem_Click"
+                    Header="군단 편집(_L)" />
             </MenuItem>
             <MenuItem Header="어빌리티(_B)">
                 <MenuItem

@@ -34,7 +34,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int LegionKey(int chr) => chr;
 
     private Dictionary<int, LegionData> Legions() =>
-        _legions ??= LegionData.ParseAll(_db?.Files.Read("Dat", "For.dat"));
+        // 원본 For.dat 위에 편집기가 고친 군단(assets/data/legions/*.json)을 얹는다.
+        _legions ??= _db is { } db ? LegionBook.LoadAll(db.Files) : [];
 
     private void OpenMosesLegion()
     {

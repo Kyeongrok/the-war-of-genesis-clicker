@@ -246,6 +246,18 @@ public partial class MainWindow : Window
     /// <summary>전투·필드·챕터 스크립트의 조건·행동 코드(200 증원, 909 베라모드 폭주 …)의 뜻과 쓰인 곳. 게임 폴더 없이 연다.</summary>
     private void ScriptOpsMenuItem_Click(object sender, RoutedEventArgs e) => new ScriptOpsWindow { Owner = this }.Show();
 
+    // ── 군단 편집 ──────────────────────────────────────────────────────────
+
+    /// <summary>군단(For.dat) — 부하·진형·보정·군단기. 저장소 assets/data 를 읽고 고친 것은 assets/data/legions 에 적는다.</summary>
+    private void LegionEditMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { new LegionEditWindow { Owner = this }.Show(); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+        {
+            StatusText.Text = $"assets/data 를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     // ── 이펙트 보기 ────────────────────────────────────────────────────────
 
     /// <summary>기술이 쓰는 이펙트와 Obs 모션을 재생해 본다. 게임 폴더가 열려 있으면 기술 이름과 assets 에 없는 Obs 도 보인다.</summary>
