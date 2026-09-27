@@ -380,7 +380,7 @@ internal sealed unsafe partial class BattleSceneWindow
         StatLine(8, $"{unit.Hp} / {unit.MaxHp}");
         StatLine(10, $"{unit.Soul} / {unit.MaxSoul}");
         StatLine(12, $"{unit.Tp} / {unit.MaxTp}");
-        StatLine(15, db.Atk(c, unit.Soul).ToString());
+        StatLine(15, AtkWithSoul(db, c, unit.Soul));
         StatLine(16, db.Acr(c, unit.Tp).ToString());
         StatLine(17, db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
         int[] basics = [(int)c.Lp + db.EquipBonus(c, 0x30), c.Ctp, db.Stp(c), db.Psy(c), db.Dep(c), db.Dex(c)];
@@ -562,6 +562,17 @@ internal sealed unsafe partial class BattleSceneWindow
         if (next <= ab.MaxLevel && Line(next) is { Length: > 0 } then) parts.Add($"{(level == 0 ? "배우면 " : "다음 ")}Lv{next}: {then}");
         else if (level >= ab.MaxLevel && level > 0) parts.Add("(최대 레벨)");
         return parts.Count == 0 ? "" : "$n$n" + string.Join("$n", parts);
+    }
+
+    /// <summary>
+    /// ATK 와 그 안에 든 <b>소울 배율</b> — ATK = 바탕 × (SOUL + Num[2]) × Num[42] / Num[85](<c>0x1007ab20</c>), 지금 자료로는 (SOUL + 10) ÷ 10 배.
+    /// SOUL 이 차면 공격력이 몇 배가 되는지 보이게 한다(사용자 요청: SOUL 40 이면 ×5.0, 150 이면 ×16.0).
+    /// </summary>
+    /// <param name="compact">정보 창(폭 140)은 「ATK」 글자와 겹치지 않게 「100 ×5.0」 으로 줄인다.</param>
+    private static string AtkWithSoul(GameDatabase db, CharacterData c, int soul, bool compact = false)
+    {
+        double factor = db.N(85) == 0 ? 0 : (double)(soul + db.N(2)) * db.N(42) / db.N(85);
+        return compact ? $"{db.Atk(c, soul)} ×{factor:0.0}" : $"{db.Atk(c, soul)} (소울×{factor:0.0})";
     }
 
     /// <summary>work 하나의 효과 — 위력(피해·회복)과 보정 셋을 한 줄로.</summary>
