@@ -979,16 +979,24 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 805:                                            // 레벨 맞추기 [Chr, Δ] — 파티 레벨(상위 셋 평균, 0x1004e070) + Δ 로(0x100f0b40 → 0x10031a50)
                 if (_db is { } db805)
-                    UpdateCharacter(A(0), c => GrowToPartyLevel(db805.Character(A(0)) ?? c, A(1), RosterLevel(), ignoreExempt: true) with
+                    UpdateCharacter(A(0), c =>
                     {
-                        Items = c.Items, Passives = c.Passives, Abilities = c.Abilities,
-                        // 원본 0x10031a50 은 레벨·누적 EXP·능력치만 쓴다 — 직업(세부 체질)·체질·남은 EXP 는 그대로 둔다.
-                        // 전에는 .chr 새 자료로 덮어 전직한 형이 일반형으로 돌아갔다(사용자 보고 「불러오면 맨날 일반형」).
-                        JobId = c.JobId, Body = c.Body, Exp = c.Exp,
+                        var grown = GrowToPartyLevel(db805.Character(A(0)) ?? c, A(1), RosterLevel(), ignoreExempt: true);
+                        // 원본 0x10031a50 은 레벨·누적 EXP·능력치만 쓰고 남은 EXP(어빌리티를 배우는 데 쓰는 것)는 안 건드린다.
+                        // 그러면 Lv60 으로 합류한 유진이 누적 6000 을 번 셈인데 배울 EXP 는 0 이라 스킬이 다 낮다(사용자 보고) —
+                        // 레벨 맞추기로 늘어난 누적 EXP 만큼 남은 EXP 도 준다(원본과 다르다).
+                        int before = Math.Max(c.CumExp, c.Level * 100);
+                        int gained = Math.Max(0, grown.CumExp - before);
+                        return grown with
+                        {
+                            Items = c.Items, Passives = c.Passives, Abilities = c.Abilities,
+                            // 직업(세부 체질)·체질은 그대로 둔다 — 전에는 .chr 새 자료로 덮어 전직한 형이 일반형으로 돌아갔다(사용자 보고 「불러오면 맨날 일반형」).
+                            JobId = c.JobId, Body = c.Body, Exp = c.Exp + gained,
+                        };
                     });
                 if (Trace)
                     File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                        $"805: Chr {A(0)} → Lv {_party.GetValueOrDefault(A(0))?.Level} (파티 {RosterLevel()} + {A(1)})" + Environment.NewLine);
+                        $"805: Chr {A(0)} → Lv {_party.GetValueOrDefault(A(0))?.Level} EXP {_party.GetValueOrDefault(A(0))?.Exp} (파티 {RosterLevel()} + {A(1)})" + Environment.NewLine);
                 break;
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
                 if (A(0) > 0) { _ownedLegions.Add(A(0)); _legionsKnown = true; }
