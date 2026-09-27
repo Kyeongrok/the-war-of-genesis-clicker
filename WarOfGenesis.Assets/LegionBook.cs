@@ -27,6 +27,7 @@ public static class LegionBook
         sb.Append("{\n");
         sb.Append($"  \"id\": {l.Id},\n");
         sb.Append($"  \"name\": {JsonSerializer.Serialize(name, Json)},\n");
+        if (l.Leader > 0) sb.Append($"  \"leader\": {l.Leader},\n");
         sb.Append($"  \"members\": [{string.Join(", ", l.Members)}],\n");
         sb.Append($"  \"formation\": {l.Formation},\n");
         sb.Append($"  \"lpBonus\": {l.LpBonus},\n");
@@ -54,7 +55,10 @@ public static class LegionBook
                               o["lpBonus"] is { } lp ? U(lp) : original?.LpBonus ?? 0,
                               o["psyBonus"] is { } psy ? U(psy) : original?.PsyBonus ?? 0,
                               o["depBonus"] is { } dep ? U(dep) : original?.DepBonus ?? 0,
-                              skills, original?.DescriptionId ?? 0);
+                              skills, original?.DescriptionId ?? 0)
+        {
+            Leader = o["leader"] is { } leader ? U(leader) : original?.Leader ?? 0,
+        };
     }
 
     /// <summary>원본 For.dat 만 — 편집기가 「원본과 다른가」를 가를 때.</summary>
@@ -83,6 +87,6 @@ public static class LegionBook
 
     /// <summary>두 군단이 같은 구성인가 — 편집기가 원본과 같으면 덮어쓰기 파일을 안 남긴다.</summary>
     public static bool SameContent(LegionData a, LegionData b) =>
-        a.Members.SequenceEqual(b.Members) && a.Formation == b.Formation && a.LpBonus == b.LpBonus && a.PsyBonus == b.PsyBonus
+        a.Leader == b.Leader && a.Members.SequenceEqual(b.Members) && a.Formation == b.Formation && a.LpBonus == b.LpBonus && a.PsyBonus == b.PsyBonus
         && a.DepBonus == b.DepBonus && a.Skills.SequenceEqual(b.Skills);
 }
