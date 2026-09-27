@@ -179,8 +179,10 @@ public partial class SkillEditView : UserControl
 
     private void Fill()
     {
-        if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; SkillDescription.Text = ""; return; }
+        if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; SkillDescription.Text = ""; DescriptionOverride.Text = ""; return; }
         SkillDescription.Text = DescriptionOf(row.Ability);
+        DescriptionOverride.Text = row.Skill.Description.Replace("$n", Environment.NewLine);
+        DescriptionOverride.IsEnabled = row.Ability > 0;   // 어빌리티에 안 묶인 work 는 설명 창이 없다
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
         bool rangeTab = CommonTabs.SelectedItem != OtherTab;
@@ -221,6 +223,20 @@ public partial class SkillEditView : UserControl
         };
         LevelGrid.ItemsSource = table.DefaultView;
         _filling = false;
+    }
+
+    /// <summary>
+    /// 설명 덮어쓰기 칸을 떠날 때 스킬 자료에 옮긴다 — 글자마다 옮기면 되돌리기(Ctrl+Z)가 한 글자씩 쌓인다.
+    /// 줄바꿈은 원본 설명처럼 <c>$n</c> 으로 적는다(게임 설명 창이 <c>$n</c> 에서 줄을 바꾼다).
+    /// </summary>
+    private void DescriptionOverride_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row || row.Ability <= 0) return;
+        string text = DescriptionOverride.Text.Trim().Replace("\r\n", "\n").Replace("\n", "$n");
+        if (text == row.Skill.Description) return;
+        row.Skill.Description = text;
+        MarkDirty(row);
+        StatusText.Text = text.Length == 0 ? $"{row.Name}: 원본 설명으로 되돌렸습니다 (저장해야 반영)." : $"{row.Name}: 설명을 바꿨습니다 (저장해야 반영).";
     }
 
     /// <summary>레벨별 칸 — 칸 표 차례대로(att 는 빼고).</summary>

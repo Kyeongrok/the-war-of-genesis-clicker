@@ -526,7 +526,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void ShowAbilityTip(AbilityData ab, int level)
     {
-        if (_db?.T(ab.DescriptionId) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level, StatusUnit()));
+        if (_db?.AbilityDescription(ab) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level, StatusUnit()));
     }
 
     /// <summary>능력치 보정 번호(패시브·버프) — 슬롯이 아니라 능력치에 바로 더해지는 것(0x10032af0).</summary>
