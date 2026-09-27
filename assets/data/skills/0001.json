@@ -47,15 +47,15 @@
     "b61": 0
   },
   "levels": [
-    { "work": 191, "level": 1, "power": -30, "hpFactor": 150, "exp": 50, "tp": 110 },
-    { "work": 189, "level": 2, "power": -24, "hpFactor": 150, "exp": 50, "tp": 120 },
-    { "work": 187, "level": 3, "power": -20, "hpFactor": 150, "exp": 50, "tp": 130 },
-    { "work": 185, "level": 4, "power": -16, "hpFactor": 150, "exp": 50, "tp": 140 },
+    { "work": 191, "level": 1, "power": -30, "hpFactor": 150, "exp": 100, "tp": 110 },
+    { "work": 189, "level": 2, "power": -24, "hpFactor": 150, "exp": 100, "tp": 120 },
+    { "work": 187, "level": 3, "power": -20, "hpFactor": 150, "exp": 100, "tp": 130 },
+    { "work": 185, "level": 4, "power": -16, "hpFactor": 150, "exp": 100, "tp": 140 },
     { "work": 183, "level": 5, "power": -12, "hpFactor": 150, "exp": 100, "tp": 150 },
-    { "work": 199, "level": 6, "power": -8, "hpFactor": 170, "exp": 100, "tp": 200 },
-    { "work": 197, "level": 7, "power": -4, "hpFactor": 190, "exp": 100, "tp": 200 },
-    { "work": 195, "level": 8, "power": 0, "hpFactor": 200, "exp": 100, "tp": 200 },
-    { "work": 193, "level": 9, "power": 5, "hpFactor": 200, "exp": 100, "tp": 200 },
-    { "work": 192, "level": 10, "power": 10, "hpFactor": 200, "exp": 100, "tp": 200 }
+    { "work": 199, "level": 6, "power": -8, "hpFactor": 170, "exp": 150, "tp": 200 },
+    { "work": 197, "level": 7, "power": -4, "hpFactor": 190, "exp": 150, "tp": 200 },
+    { "work": 195, "level": 8, "power": 0, "hpFactor": 200, "exp": 150, "tp": 200 },
+    { "work": 193, "level": 9, "power": 5, "hpFactor": 200, "exp": 150, "tp": 200 },
+    { "work": 192, "level": 10, "power": 10, "hpFactor": 200, "exp": 150, "tp": 200 }
   ]
 }
