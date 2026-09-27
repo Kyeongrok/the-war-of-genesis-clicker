@@ -579,11 +579,63 @@ internal sealed unsafe partial class BattleSceneWindow
             return string.Join(" · ", bits);
         }
         var parts = new List<string>();
+        // 대상·범위 — 자료(대상 방식·사거리·범위 모양·크기)로 만든 줄이라 스킬을 고치면 저절로 따라온다(사용자 요청: 오버플로우 설명이 「적군 한명」 그대로).
+        // 지금 레벨(배우기 전이면 Lv1) 것을 보이고, 다음 레벨에서 달라지면 그것도 보인다.
+        int shown = Math.Max(1, level);
+        string? reachNow = ab.WorkByLevel.TryGetValue(shown, out int nowWork) && Work(nowWork) is { } nw ? TargetText(nw) : null;
+        if (reachNow != null) parts.Add(reachNow);
+        if (ab.WorkByLevel.TryGetValue(shown + 1, out int nextWork) && Work(nextWork) is { } xw && TargetText(xw) is var reachNext && reachNext != reachNow)
+            parts.Add($"(Lv{shown + 1}부터 {reachNext})");
         if (level > 0 && Line(level) is { Length: > 0 } now) parts.Add($"Lv{level}: {now}");
         int next = level + 1;
         if (next <= ab.MaxLevel && Line(next) is { Length: > 0 } then) parts.Add($"{(level == 0 ? "배우면 " : "다음 ")}Lv{next}: {then}");
         else if (level >= ab.MaxLevel && level > 0) parts.Add("(최대 레벨)");
         return parts.Count == 0 ? "" : "$n$n" + string.Join("$n", parts);
+    }
+
+    /// <summary>
+    /// work 의 대상·사거리·범위를 한 줄로 — 「적 · 사거리 1~4칸 · 겨눈 칸 둘레 1칸(5칸)」 따위.
+    /// 대상 방식(+0x13/+0x1e: 0·2 자기, 1 적, 3·6 아무 칸, 4 아군, 5 아무 유닛)과 범위 모양(분석-스킬 8절: 1 마름모 … 9 삼각형)으로 만든다.
+    /// </summary>
+    private static string TargetText(WorkData w)
+    {
+        static string Who(int mode) => mode switch
+        {
+            0 or 2 => "자기",
+            1 => "적",
+            4 => "아군",
+            3 or 5 or 6 => "적·아군 모두",
+            7 => "빈 칸",
+            8 => "물체",
+            _ => "?",
+        };
+        int rMin = w.RangeMin, rMax = w.RangeMaxQuarters / 4, n = w.AreaMaxQuarters / 4;
+        // 크기 0 인 마름모는 그 칸 하나 — 범위가 없는 것과 같다.
+        bool area = w.AreaShape != 0 && !(w.AreaShape == 1 && n == 0 && w.AreaMin == 0);
+        string who = Who(area && w.AreaMode != 0 ? w.AreaMode : w.TargetMode);
+        // 사거리 최소 파일값 k 는 4k−3(4분의 1칸) — 곧 k 칸부터다. 0 이면 자기 칸도 되는데, 적만 겨누는 기술에는 뜻이 없어 안 적는다.
+        bool selfOnly = !w.SelfCentred && w.RangeShape != 0 && rMax == 0;
+        if (selfOnly && !area) return "대상: 자기에게";
+        bool canSelf = w.TargetMode is 3 or 4 or 5 or 6;
+        string aim = w.SelfCentred || w.RangeShape == 0 || selfOnly ? "자기 자리에서"
+                   : rMin == 0 ? $"사거리 {rMax}칸 안{(canSelf ? "(자기 포함)" : "")}"
+                   : rMin == rMax ? $"사거리 {rMax}칸" : $"사거리 {rMin}~{rMax}칸";
+        string centre = w.AreaMin > 0 ? ", 가운데 빼고" : "";
+        string shape = w.AreaShape switch
+        {
+            0 => "한 명",
+            1 => n == 0 ? "한 명" : $"둘레 {n}칸 마름모({2 * n * (n + 1) + 1}칸{centre})",
+            2 => $"십자 {n}칸",
+            3 => $"앞 부채꼴 {n}칸",
+            4 => "화면 안 전체",
+            5 => $"앞 일직선 {Math.Max(1, n)}칸",
+            6 => n == 0 ? "앞 가로 3칸" : $"폭 3칸 × 앞 {n + 1}줄",
+            7 => n == 0 ? "앞 가로 5칸" : $"폭 5칸 × 앞 {n + 1}줄",
+            8 => $"대각선 X {n}칸",
+            9 => $"앞 삼각형 {n}칸",
+            _ => $"모양 {w.AreaShape}",
+        };
+        return $"대상: {who} · {aim} · 범위: {shape}";
     }
 
     /// <summary>
