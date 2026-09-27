@@ -444,6 +444,10 @@ public sealed class GameDatabase
         }
         Works = works;
         _descriptions = DescriptionsOf(skills);
+        // 체질(직업)별 배울 수 있는 어빌리티(assets/data/jobs)도 다시 읽는다 — 편집기에서 빼고 저장해도 게임을 켜 둔 채면
+        // 어빌리티 반영이 직업을 안 읽어 그대로 배울 수 있게 보였다(사용자 보고: 체질에서 어빌리티 빼기가 안 된다).
+        if (Jobs is Dictionary<int, JobData> jobs)
+            foreach (var job in JobBook.Load(_files).SelectMany(JobBook.Expand)) jobs[job.Id] = job;
         return skills.Count;
     }
 
