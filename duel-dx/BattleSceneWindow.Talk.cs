@@ -219,9 +219,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_talk is not { } t) return;
         int tick = (int)((_lastTime - t.Start) * TicksPerSecond);
         var lines = TalkLines(TalkShownText(t));
-        // 원본 대사창은 640×480 화면 기준이다 — 필드는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
-        var (sx, sy) = FieldOpen ? MosesOrigin() : (_camX, _camY);
-        int screenW = FieldOpen ? MosesW : ViewWidth, screenH = FieldOpen ? MosesH : ViewHeight;
+        // 원본 대사창은 640×480 화면 기준이다 — 필드·모세스는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
+        // 모세스 대화도 창 아래 끝이 아니라 모세스 틀 아래 끝에 맞춘다 — 창이 틀보다 길면 상자 아래가 틀 밖으로 잘렸다(사용자 보고: Chp 0049).
+        bool framed = FieldOpen || _mosesOpen;
+        var (sx, sy) = framed ? MosesOrigin() : (_camX, _camY);
+        int screenW = framed ? MosesW : ViewWidth, screenH = framed ? MosesH : ViewHeight;
         int faceCode = t.Speaker >= 0 && _units[t.Speaker].Data is { } sc ? sc.Code : _talkFace;
         _faces.TryGetValue(faceCode, out var face);
 
@@ -229,7 +231,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 600 아래 상자(0x1003c0d0, 그리기 0x1003c630) — 창 (10,370) 620×100. 틀은 통짜 그림 Obs 0224 를 창 (0,−25) 에:
             // 바탕 조각(모션 3·4·5)을 효과 5((11·바탕+20·그림)/31)로 먼저, 테두리(모션 0·1·2)를 불투명으로 위에 얹는다.
-            int x = sx + (FieldOpen ? 10 : (screenW - 620) / 2), y = sy + screenH - 110;
+            int x = sx + (framed ? 10 : (screenW - 620) / 2), y = sy + screenH - 110;
             // 큰 반신 초상화 — 말하는 이 Chr 의 얼굴 Obs(.chr 10, CChr+0x0e), 모션 2×표정+11 을 화면 (320,480) 기준으로 상자 <b>뒤</b>에
             // 세운다(0x1003c0d0 → 0x100f4a70). 표정은 대사 명령 인자(필드 3 · 전투 4). 원본은 틱마다 1/45 확률로 모션+1(눈)을 겹쳐
             // 깜빡이는데, 데모는 3초마다 한 번 겹친다(가설). 그 모션이 없는 얼굴은 초상화 없이 작은 얼굴로 대신한다.

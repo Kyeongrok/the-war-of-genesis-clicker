@@ -205,7 +205,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
         if (CancelStep(undoMove: false)) return;
 
-        int index = UnitAtBoard(bx, by);
+        int index = UnitAtPoint(bx, by);
         if (index >= 0 && _units[index].IsAlly) { _selected = index; OpenRing(index); return; }
         if (index >= 0) return;   // 적군은 링을 안 연다(적 상태 창은 fa-8)
 
