@@ -32,6 +32,12 @@ public sealed class SkillFile
     /// <summary>보기용 이름(읽을 때 안 쓴다).</summary>
     public string Name { get; set; } = "";
 
+    /// <summary>
+    /// 설명 글 덮어쓰기 — 비어 있으면 원본 설명(<c>.abi</c> <c>+0x1c</c> TXR)을 쓴다. 줄바꿈은 원본 글처럼 <c>$n</c>.
+    /// 효과를 바꾼 스킬(오버플로우를 범위 공격력 감소로 바꾸는 따위)의 설명이 원본 글과 어긋나지 않게 둔다(사용자 요청).
+    /// </summary>
+    public string Description { get; set; } = "";
+
     /// <summary>원래 들어 있던 <c>.att</c> 파일 번호 — 되돌려 쓸 때(내보내기)를 위해 남긴다.</summary>
     public int Att { get; set; }
 
@@ -204,6 +210,7 @@ public static class SkillBook
         sb.Append("{\n");
         sb.Append($"  \"ability\": {skill.Ability},\n");
         sb.Append($"  \"name\": {JsonSerializer.Serialize(skill.Name, Json)},\n");
+        if (skill.Description.Length > 0) sb.Append($"  \"description\": {JsonSerializer.Serialize(skill.Description, Json)},\n");
         sb.Append($"  \"att\": {skill.Att},\n");
         sb.Append("  \"common\": {");
         sb.Append(string.Join(",", skill.Common.Select(kv => $"\n    \"{kv.Key}\": {kv.Value}")));
@@ -223,6 +230,7 @@ public static class SkillBook
         {
             Ability = o["ability"]?.GetValue<int>() ?? 0,
             Name = o["name"]?.GetValue<string>() ?? "",
+            Description = o["description"]?.GetValue<string>() ?? "",
             Att = o["att"]?.GetValue<int>() ?? 0,
         };
         if (o["common"] is JsonObject common)

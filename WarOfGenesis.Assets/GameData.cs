@@ -360,6 +360,7 @@ public sealed class GameDatabase
         // work — 저장소 assets/data/skills(어빌리티마다 공통 정의 + 레벨별 칸, SkillBook)가 있으면 거기서, 없으면(게임 폴더) .att 에서.
         var works = new Dictionary<int, WorkData>();
         var skills = SkillBook.Load(files);
+        var descriptions = DescriptionsOf(skills);
         if (skills.Count > 0)
             foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
         else
@@ -393,7 +394,7 @@ public sealed class GameDatabase
         for (int i = 0, n = U16(d, 2), o = 6; i < n && o + 18 <= d.Length; i++, o += 18)
             statuses[U16(d, o)] = new StatusData(U16(d, o), U16(d, o + 2), U16(d, o + 5));
 
-        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses);
+        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses) { _descriptions = descriptions };
     }
 
     /// <summary>work 레코드 62바이트(<paramref name="o"/> 부터) 하나 — <c>.att</c> 에서도, <see cref="SkillBook.Expand"/> 가 펼친 것에서도 같은 식으로 읽는다.</summary>
@@ -404,6 +405,15 @@ public sealed class GameDatabase
             [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
             U16(a, o + 24), a[o + 26],
             a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
+
+    /// <summary>스킬 파일이 덮어쓴 어빌리티 설명(어빌리티 번호 → 글). 비어 있으면 원본 TXR 을 쓴다.</summary>
+    private Dictionary<int, string> _descriptions = [];
+
+    private static Dictionary<int, string> DescriptionsOf(List<SkillFile> skills) =>
+        skills.Where(s => s.Ability > 0 && s.Description.Length > 0).GroupBy(s => s.Ability).ToDictionary(g => g.Key, g => g.First().Description);
+
+    /// <summary>어빌리티 설명 — 스킬 파일의 <c>description</c> 이 있으면 그것, 없으면 원본(<c>.abi</c> <c>+0x1c</c> TXR).</summary>
+    public string AbilityDescription(AbilityData ab) => _descriptions.TryGetValue(ab.Id, out var d) ? d : T(ab.DescriptionId);
 
     /// <summary>
     /// 스킬 파일(<c>assets/data/skills</c>)을 다시 읽어 work 표와 어빌리티의 레벨 → work 짝을 새로 채운다 — 편집기에서 고친 것을
@@ -429,6 +439,7 @@ public sealed class GameDatabase
                         abilities[ab.Id] = ab with { MaxLevel = U16(a, o + 4) };
             }
         Works = works;
+        _descriptions = DescriptionsOf(skills);
         return skills.Count;
     }
 

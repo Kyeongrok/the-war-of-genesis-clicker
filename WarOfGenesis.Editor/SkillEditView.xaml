@@ -102,6 +102,21 @@
                         DockPanel.Dock="Top"
                         Foreground="#2B4C7E"
                         TextWrapping="Wrap" />
+                    <!--  설명 덮어쓰기(스킬 JSON "description") — 비우면 위의 원본 설명을 쓴다. 칸을 떠날 때 반영된다.  -->
+                    <DockPanel Margin="0,0,0,8" DockPanel.Dock="Top">
+                        <TextBlock
+                            Margin="0,0,0,2"
+                            DockPanel.Dock="Top"
+                            Foreground="Gray"
+                            Text="설명 덮어쓰기 — 비우면 원본 설명, Enter 는 줄바꿈" />
+                        <TextBox
+                            x:Name="DescriptionOverride"
+                            MinHeight="40"
+                            AcceptsReturn="True"
+                            AutomationProperties.AutomationId="SkillEditDescriptionOverride"
+                            LostFocus="DescriptionOverride_LostFocus"
+                            TextWrapping="Wrap" />
+                    </DockPanel>
                     <Button
                         Padding="8,2"
                         AutomationProperties.AutomationId="SkillEditToLevels"
