@@ -415,10 +415,11 @@ internal sealed unsafe partial class BattleSceneWindow
         StatLine(8, $"{unit.Hp} / {unit.MaxHp}");
         StatLine(10, $"{unit.Soul} / {unit.MaxSoul}");
         StatLine(12, $"{unit.Tp} / {unit.MaxTp}");
-        StatLine(15, AtkWithSoul(db, c, unit.Soul));
+        StatLine(15, AtkWithSoul(db, c, BasicAttackSoul(unit.Soul)));   // 일반 공격 ATK — 조정의 소울 기여도가 걸린 값
         // ATK 줄에 마우스를 올리면 바탕 × 소울 배율로 풀어 보인다(사용자 요청) — 그림은 창 맨 위에 그린다.
         int atkY = oy + 81 + 15 * 15 - 8;
-        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, c, unit.Soul) : null;
+        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, c, BasicAttackSoul(unit.Soul))
+              + (_soulWeight != 100 ? $"$n(모드 > 조정: 소울 기여도 {_soulWeight}% — SOUL {unit.Soul} 을 {BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
         StatLine(16, db.Acr(c, unit.Tp).ToString());
         StatLine(17, db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
         int[] basics = [(int)c.Lp + db.EquipBonus(c, 0x30), c.Ctp, db.Stp(c), db.Psy(c), db.Dep(c), db.Dex(c)];

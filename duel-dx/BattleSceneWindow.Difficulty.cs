@@ -55,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var t = _units[i];
             if (t.Data is not { } d || t.MaxHp <= 0) continue;
-            int dmg = (db.N(3) - db.Rdp(d, t.Hp, t.MaxHp)) * db.Atk(a, user.Soul, w.Power) / Math.Max(1, db.N(3));
+            int dmg = (db.N(3) - db.Rdp(d, t.Hp, t.MaxHp)) * db.Atk(a, AttackSoul(w, user.Soul), w.Power) / Math.Max(1, db.N(3));
             dmg = ScaleDamage(user, t, Math.Max(0, dmg));
             int hit = Math.Clamp(db.HitChance(a, user.Tp, d, t.Tp, w, t.Stance), 0, 100);
             long value = (long)Math.Min(dmg, t.Hp) * 1000 / t.MaxHp * hit / 100;
