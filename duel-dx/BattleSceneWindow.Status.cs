@@ -381,6 +381,9 @@ internal sealed unsafe partial class BattleSceneWindow
         StatLine(10, $"{unit.Soul} / {unit.MaxSoul}");
         StatLine(12, $"{unit.Tp} / {unit.MaxTp}");
         StatLine(15, AtkWithSoul(db, c, unit.Soul));
+        // ATK 줄에 마우스를 올리면 바탕 × 소울 배율로 풀어 보인다(사용자 요청) — 그림은 창 맨 위에 그린다.
+        int atkY = oy + 81 + 15 * 15 - 8;
+        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, c, unit.Soul) : null;
         StatLine(16, db.Acr(c, unit.Tp).ToString());
         StatLine(17, db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
         int[] basics = [(int)c.Lp + db.EquipBonus(c, 0x30), c.Ctp, db.Stp(c), db.Psy(c), db.Dep(c), db.Dex(c)];
@@ -476,6 +479,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         DrawPopup();
         if (_statusTip is { } shown) DrawDescriptionTip(shown.Text, shown.X, shown.Y, ox, oy, StatusW, StatusH);
+        else if (atkHover != null) DrawDescriptionTip(atkHover, _mouse.X, _mouse.Y, ox, oy, StatusW, StatusH);
     }
 
     /// <summary>
@@ -573,6 +577,22 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         double factor = db.N(85) == 0 ? 0 : (double)(soul + db.N(2)) * db.N(42) / db.N(85);
         return compact ? $"{db.Atk(c, soul)} ×{factor:0.0}" : $"{db.Atk(c, soul)} (소울×{factor:0.0})";
+    }
+
+    /// <summary>
+    /// ATK 풀이 — 바탕(무기·PSY) × 소울 배율, 그리고 그것이 피해가 되는 식. 원본 <c>0x1007ab20</c>:
+    /// ATK = ((무기 + Num[1]) × PSY / Num[25]) × (SOUL + Num[2]) × Num[42] / Num[85].
+    /// </summary>
+    private static string AtkBreakdown(GameDatabase db, CharacterData c, int soul)
+    {
+        int weapon = c.Items[0] != 0 && db.Items.TryGetValue(c.Items[0], out var w) ? w.Attack : 0;
+        int psy = db.Psy(c);
+        int baseAtk = db.N(25) == 0 ? 0 : (weapon + db.N(1)) * psy / db.N(25);
+        double factor = db.N(85) == 0 ? 0 : (double)(soul + db.N(2)) * db.N(42) / db.N(85);
+        return $"ATK {db.Atk(c, soul)} = 바탕 {baseAtk} × 소울 {factor:0.0}배$n"
+             + $"바탕 = (무기 {weapon} + {db.N(1)}) × PSY {psy} ÷ {db.N(25)}$n"
+             + $"소울 배율 = (SOUL {soul} + {db.N(2)}) × {db.N(42)} ÷ {db.N(85)}$n"
+             + $"피해 = ATK × (1000 − 상대 RDP) ÷ 1000, 어빌리티는 × (200 + 위력) ÷ 200";
     }
 
     /// <summary>work 하나의 효과 — 위력(피해·회복)과 보정 셋을 한 줄로.</summary>
