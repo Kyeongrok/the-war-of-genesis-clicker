@@ -195,6 +195,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesOpen)
         {
             if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명
+            if (OnMosesStyleRightDown(bx, by)) return;   // 전직 화면 어빌리티 줄 = 누르고 있는 동안 설명
             if (CloseSystemWindow()) return;
             if (_mosesPage != -1) MosesGoBack();
             return;
