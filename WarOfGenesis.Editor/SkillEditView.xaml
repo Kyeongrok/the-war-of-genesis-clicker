@@ -34,6 +34,17 @@
                     ToolTip="찾기 글 지우기"
                     Visibility="Collapsed" />
             </Grid>
+            <!--  체질(계열)로 거르기 — 그 계열 직업들이 배울 수 있는 어빌리티만(assets/data/jobs)  -->
+            <TextBlock
+                Margin="12,0,0,0"
+                VerticalAlignment="Center"
+                Text="체질:" />
+            <ComboBox
+                x:Name="BodyFilterBox"
+                Width="130"
+                Margin="6,0,0,0"
+                AutomationProperties.AutomationId="SkillEditBodyFilter"
+                SelectionChanged="BodyFilter_Changed" />
             <Button
                 Margin="12,0,0,0"
                 Padding="10,2"
