@@ -1,6 +1,7 @@
 {
   "ability": 18,
   "name": "포스 리젼",
+  "maxLevel": 5,
   "att": 1,
   "common": {
     "rangeShape": 0,
@@ -50,14 +51,9 @@
   },
   "levels": [
     { "work": 331, "level": 1, "bonus1Value": 30 },
-    { "work": 340, "level": 2, "bonus1Value": 36 },
-    { "work": 339, "level": 3, "bonus1Value": 40 },
-    { "work": 338, "level": 4, "bonus1Value": 44 },
-    { "work": 337, "level": 5, "bonus1Value": 48 },
-    { "work": 336, "level": 6, "bonus1Value": 52 },
-    { "work": 335, "level": 7, "bonus1Value": 56 },
-    { "work": 334, "level": 8, "bonus1Value": 60 },
-    { "work": 333, "level": 9, "bonus1Value": 65 },
-    { "work": 332, "level": 10, "bonus1Value": 70 }
+    { "work": 340, "level": 2, "bonus1Value": 40 },
+    { "work": 339, "level": 3, "bonus1Value": 50 },
+    { "work": 338, "level": 4, "bonus1Value": 60 },
+    { "work": 337, "level": 5, "bonus1Value": 70 }
   ]
 }
