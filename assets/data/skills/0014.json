@@ -1,6 +1,7 @@
 {
   "ability": 14,
   "name": "오버플로우",
+  "maxLevel": 10,
   "att": 1,
   "common": {
     "rangeShape": 1,
@@ -55,16 +56,6 @@
     { "work": 145, "level": 7, "rangeMax": 4, "bonus1Value": 16, "exp": 50, "tp": 160 },
     { "work": 144, "level": 8, "rangeMax": 5, "bonus1Value": 17, "exp": 50, "tp": 170 },
     { "work": 143, "level": 9, "rangeMax": 5, "bonus1Value": 18, "exp": 50, "tp": 180 },
-    { "work": 142, "level": 10, "rangeMax": 5, "bonus1Value": 19, "exp": 50, "tp": 190 },
-    { "work": 141, "level": 11, "rangeMax": 5, "bonus1Value": 20, "exp": 100, "tp": 200 },
-    { "work": 159, "level": 12, "rangeMax": 5, "bonus1Value": 21, "exp": 100, "tp": 200 },
-    { "work": 158, "level": 13, "rangeMax": 5, "bonus1Value": 22, "exp": 100, "tp": 200 },
-    { "work": 157, "level": 14, "rangeMax": 6, "bonus1Value": 23, "exp": 100, "tp": 200 },
-    { "work": 156, "level": 15, "rangeMax": 6, "bonus1Value": 24, "exp": 100, "tp": 200 },
-    { "work": 155, "level": 16, "rangeMax": 6, "bonus1Value": 25, "exp": 100, "tp": 200 },
-    { "work": 154, "level": 17, "rangeMax": 6, "bonus1Value": 26, "exp": 100, "tp": 200 },
-    { "work": 153, "level": 18, "rangeMax": 7, "bonus1Value": 27, "exp": 100, "tp": 200 },
-    { "work": 152, "level": 19, "rangeMax": 7, "bonus1Value": 28, "exp": 100, "tp": 200 },
-    { "work": 151, "level": 20, "rangeMax": 7, "bonus1Value": 20, "exp": 100, "tp": 200 }
+    { "work": 142, "level": 10, "rangeMax": 5, "bonus1Value": 19, "exp": 50, "tp": 190 }
   ]
 }
