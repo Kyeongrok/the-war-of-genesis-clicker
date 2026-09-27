@@ -38,6 +38,12 @@ public sealed class SkillFile
     /// </summary>
     public string Description { get; set; } = "";
 
+    /// <summary>
+    /// 최대 레벨 덮어쓰기 — 0 이면 원본(<c>.abi</c> <c>+4</c>)을 쓴다. 편집기에서 레벨 줄을 지우면 여기에 적는다(<c>.abi</c> 는 안 고친다, 사용자 요청).
+    /// 원본부터 <c>.abi</c> 최대 레벨과 줄 수가 어긋난 어빌리티(희생 10·20줄, 미완성 기술 20·1줄)가 있어 줄 수를 그대로 최대로 삼지 않는다.
+    /// </summary>
+    public int MaxLevel { get; set; }
+
     /// <summary>원래 들어 있던 <c>.att</c> 파일 번호 — 되돌려 쓸 때(내보내기)를 위해 남긴다.</summary>
     public int Att { get; set; }
 
@@ -211,6 +217,7 @@ public static class SkillBook
         sb.Append($"  \"ability\": {skill.Ability},\n");
         sb.Append($"  \"name\": {JsonSerializer.Serialize(skill.Name, Json)},\n");
         if (skill.Description.Length > 0) sb.Append($"  \"description\": {JsonSerializer.Serialize(skill.Description, Json)},\n");
+        if (skill.MaxLevel > 0) sb.Append($"  \"maxLevel\": {skill.MaxLevel},\n");
         sb.Append($"  \"att\": {skill.Att},\n");
         sb.Append("  \"common\": {");
         sb.Append(string.Join(",", skill.Common.Select(kv => $"\n    \"{kv.Key}\": {kv.Value}")));
@@ -231,6 +238,7 @@ public static class SkillBook
             Ability = o["ability"]?.GetValue<int>() ?? 0,
             Name = o["name"]?.GetValue<string>() ?? "",
             Description = o["description"]?.GetValue<string>() ?? "",
+            MaxLevel = o["maxLevel"]?.GetValue<int>() ?? 0,
             Att = o["att"]?.GetValue<int>() ?? 0,
         };
         if (o["common"] is JsonObject common)
