@@ -93,6 +93,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void OpenStatusFor(int chr)
     {
         int index = Array.FindIndex(_units, u => u.ChrCode == chr);
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"status open: Chr {chr} → {(index >= 0 ? $"전투 유닛 {index}" : "임시 유닛")}, 파티 자료 EXP {_party.GetValueOrDefault(chr)?.Exp}" + Environment.NewLine);
         if (index >= 0) { _statusUnit = index; return; }
         if (_db is not { } db || _party.GetValueOrDefault(chr) is not { } c) return;
         var unit = new UnitState(new DemoUnit(chr, 0, 0, 4, 0, Facing.Left)) { Data = c };
@@ -117,8 +120,23 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>임시 유닛으로 연 창이 닫혔으면 바뀐 자료(어빌리티 레벨·장비)를 파티에 되돌려 적는다 — 매 틀 부른다.</summary>
     private void SyncVirtualStatus()
     {
+        // 전투 밖(모세스·필드)에서 여는 스테이터스가 <b>지난 전투에 남은 유닛</b>이면 그 유닛 자료만 바뀌고 파티 자료(_party)에는 안 적혔다 —
+        // 파티 자료는 전투가 끝날 때만 유닛에서 옮겨 적기 때문이다. 그래서 유진의 LP증가를 Lv10 까지 올려도 필드에 나갔다 오거나
+        // 다음 전투를 시작하면 되돌아갔다(사용자 보고). 전투 밖에서는 열려 있는 동안 파티 자료에도 곧바로 적는다.
+        // 편은 안 본다 — 세이브에서 불러온 파티원 유닛은 편이 −1 이라 IsAlly 로 거르면 빠졌다. 파티에 있는 인물이면 된다.
+        if ((_mosesOpen || FieldOpen) && _statusUnit >= 0 && _statusUnit != VirtualStatus && _statusUnit < _units.Length
+            && _units[_statusUnit] is { Data: { } live } su && _party.ContainsKey(su.ChrCode) && !ReferenceEquals(_party[su.ChrCode], live))
+        {
+            _party[su.ChrCode] = live;
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"status sync: Chr {su.ChrCode} (전투 유닛) EXP {live.Exp}" + Environment.NewLine);
+        }
         if (_statusVirtual is not { } v || _statusUnit == VirtualStatus) return;
         if (v.Data is { } c) _party[v.ChrCode] = c;
+        if (Trace && v.Data is { } t)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"status sync: Chr {v.ChrCode} EXP {t.Exp} 어빌리티 {string.Join(" ", t.Abilities.Select(a => $"{a.Ability}:{a.Level}"))}" + Environment.NewLine);
         _statusVirtual = null;
     }
 

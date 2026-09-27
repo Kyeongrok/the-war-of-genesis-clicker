@@ -1019,6 +1019,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
         {
             UpdateSounds();
+            // 모세스 전직 화면의 STATUS 로 고친 어빌리티·장비를 파티 자료에 적는다 — 전에는 여기서 돌아가 버려 한 번도 안 적혔다(사용자 보고: 유진 LP증가).
+            SyncVirtualStatus();
             // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
             if (_mosesOpen && !_chapterDone) { UpdateTalk(); UpdateField(); }
             return;
@@ -1028,6 +1030,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (FieldOpen)
         {
             UpdateSounds();
+            SyncVirtualStatus();
             UpdateTalk();
             UpdateField();
             return;
