@@ -826,10 +826,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         if (by < GridTop) return;
         int col = bx / TileW, row = RowAt(bx, by);
+        // 적 몸통을 눌렀으면 그 적의 칸을 누른 것으로 본다 — 발밑 칸만 보면 몸통 클릭이 윗칸(빈 칸)으로 갔다.
+        int index = UnitOrFoeAt(bx, by);
+        if (index >= 0) (col, row) = (_units[index].Col, _units[index].Row);
         if (row < 0) return;
         if (OnTargetClick(col, row)) return;
 
-        int index = UnitAtBoard(bx, by);
         if (index >= 0)
         {
             // 적군은 고를 수 없다(fa-9) — 대신 내 차례면 클릭만으로 바로 공격한다(fa-12).
