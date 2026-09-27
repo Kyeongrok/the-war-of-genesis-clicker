@@ -107,7 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
             var data = unit.Data ?? c;
-            unit.MaxHp = unit.Hp = Math.Max(1, _db.MaxHp(data));
+            unit.MaxHp = unit.Hp = ScaleMaxHp(unit, Math.Max(1, _db.MaxHp(data)));
             unit.MaxTp = _db.MaxTp(data);
             // 원본은 유닛을 만들 때 <b>TP 를 0 으로 민다</b>(0x10071941) — 아무도 다시 안 채운다.
             // 그래서 첫 차례는 「최대TP ÷ STP」가 가장 작은 인물이 가져간다.
@@ -888,9 +888,12 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
-        amount = AilmentDamage(a, t, amount);
+        amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
         if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
 
+        if (Trace && IsFoeSide(a) && !IsFoeSide(t))
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"foe hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         t.Hp = Math.Max(0, t.Hp - amount);
         // 10(피격 가속) — 맞으면 TP 가 값% 만큼 앞당겨진다(0x1007952c).

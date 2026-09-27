@@ -16,12 +16,13 @@ namespace DuelDx;
 /// <param name="TalkPauseSeconds">대사와 대사 사이의 멈춤(행동 2, 보통 1초 — 클릭 뒤 배경만 보이는 틈)을 몇 초로 줄일지. 음수면 원본대로 스크립트 값.
 /// 스크립트 값보다 길게는 안 늘린다. 기본 0.1초(사용자 요청).</param>
 /// <param name="ShowSceneTag">화면 왼쪽 아래에 지금 장면 번호(Fld·Btl·Chp, 사건·줄)를 보일지 — 대화할 때 짚기 쉽게(사용자 요청, 기본 켬).</param>
+/// <param name="Difficulty">난이도 — 0 보통(원본) · 1 어려움 · 2 매우 어려움(BattleSceneWindow.Difficulty.cs).</param>
 /// <param name="KeepExpOnJobChange">전직(세부 체질 바꾸기)할 때 남은 EXP 를 그대로 둘지. 원본은 0 으로 비운다 — 켜면 원본과 다르다(사용자 요청).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
                                     double TalkPauseSeconds = 0.1, bool ShowSceneTag = true, bool ShowChestContents = false,
-                                    bool FullSoulAtStart = false)
+                                    bool FullSoulAtStart = false, int Difficulty = 0)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 
