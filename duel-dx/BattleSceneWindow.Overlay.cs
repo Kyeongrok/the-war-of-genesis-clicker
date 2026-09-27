@@ -72,6 +72,18 @@ internal sealed unsafe partial class BattleSceneWindow
         return -1;
     }
 
+    /// <summary>
+    /// 왼쪽 클릭·칼 커서용 — 발밑 칸의 인물, 없으면 그림을 누른 <b>적</b>. 적 몸통을 눌러도 칠 수 있게 한다(사용자 보고: 네리사 차례).
+    /// 아군 그림은 안 본다 — 아군 뒤 칸을 눌러 걸어가는 것을 막지 않으려고.
+    /// </summary>
+    private int UnitOrFoeAt(int bx, int by)
+    {
+        int onTile = UnitAtBoard(bx, by);
+        if (onTile >= 0) return onTile;
+        int hit = UnitAtPoint(bx, by);
+        return hit >= 0 && !_units[hit].IsAlly ? hit : -1;
+    }
+
     // ── Status 화면 그리기 도구 (화면은 BattleSceneWindow.Status.cs) ──────────
 
     private void Header(int x, int y, int w, string text)

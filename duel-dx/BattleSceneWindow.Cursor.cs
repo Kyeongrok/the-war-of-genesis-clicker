@@ -39,7 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
             && FindTouchPath(_units[_turn], near) != null) return CursorTouch;
 
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
-        if (IsPlayerTurn && by >= GridTop && LiveUnitAt(bx / TileW, RowAt(bx, by)) is { } who)
+        if (IsPlayerTurn && by >= GridTop && UnitOrFoeAt(bx, by) is var hit and >= 0 && _units[hit] is var who)
         {
             if (!who.IsAlly && FindAttackPath(_turn, Array.IndexOf(_units, who)) != null) return CursorAttack;
             if (who.IsAlly) return CursorHand;
