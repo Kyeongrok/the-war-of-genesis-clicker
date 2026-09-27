@@ -117,6 +117,41 @@
                             LostFocus="DescriptionOverride_LostFocus"
                             TextWrapping="Wrap" />
                     </DockPanel>
+                    <!--  목록 아이콘 덮어쓰기(스킬 JSON iconSide·iconArea·iconKind) — 「원본」이면 .abi 값을 쓴다.  -->
+                    <StackPanel
+                        Margin="0,0,0,8"
+                        DockPanel.Dock="Top"
+                        Orientation="Horizontal">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="Gray"
+                            Text="아이콘 — 색 " />
+                        <ComboBox
+                            x:Name="IconSideBox"
+                            Width="150"
+                            AutomationProperties.AutomationId="SkillEditIconSide"
+                            SelectionChanged="Icon_SelectionChanged" />
+                        <TextBlock
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            Foreground="Gray"
+                            Text="대상 수 " />
+                        <ComboBox
+                            x:Name="IconAreaBox"
+                            Width="110"
+                            AutomationProperties.AutomationId="SkillEditIconArea"
+                            SelectionChanged="Icon_SelectionChanged" />
+                        <TextBlock
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            Foreground="Gray"
+                            Text="글자 " />
+                        <ComboBox
+                            x:Name="IconKindBox"
+                            Width="100"
+                            AutomationProperties.AutomationId="SkillEditIconKind"
+                            SelectionChanged="Icon_SelectionChanged" />
+                    </StackPanel>
                     <Button
                         Padding="8,2"
                         AutomationProperties.AutomationId="SkillEditToLevels"

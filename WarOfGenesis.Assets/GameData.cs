@@ -430,15 +430,15 @@ public sealed class GameDatabase
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && Abilities.TryGetValue(w.AbilityId, out var ab))
                 ab.WorkByLevel[w.Level] = w.Id;
-        // 최대 레벨 — 원본(.abi +4)으로 되돌린 뒤 스킬 파일의 maxLevel 로 덮는다(편집기가 레벨 줄을 지우면 maxLevel 을 적는다).
+        // 최대 레벨·아이콘 — 원본(.abi +4, +0x16/+0x18/+0x1a)으로 되돌린 뒤 스킬 파일의 덮어쓰기(maxLevel·icon*)를 얹는다.
         if (Abilities is Dictionary<int, AbilityData> abilities)
         {
             foreach (int f in AbilityFiles)
             {
                 if (_files.Read("Abi", $"{f:D4}.abi") is not { } a) continue;
                 for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
-                    if (abilities.TryGetValue(U16(a, o), out var ab) && ab.MaxLevel != U16(a, o + 4))
-                        abilities[ab.Id] = ab with { MaxLevel = U16(a, o + 4) };
+                    if (abilities.TryGetValue(U16(a, o), out var ab))
+                        abilities[ab.Id] = ab with { MaxLevel = U16(a, o + 4), IconSide = U16(a, o + 18), IconArea = U16(a, o + 20), IconKind = U16(a, o + 22) };
             }
             ApplyMaxLevels(abilities, skills);
         }
@@ -448,14 +448,22 @@ public sealed class GameDatabase
     }
 
     /// <summary>
-    /// 스킬 파일의 <c>maxLevel</c>(0 이 아니면)로 어빌리티 최대 레벨을 덮는다 — <c>.abi</c> 파일은 안 고친다(사용자 요청).
-    /// 편집기에서 레벨 줄을 지우면 그 값이 적힌다.
+    /// 스킬 파일의 <c>maxLevel</c>(0 이 아니면)·<c>iconSide/iconArea/iconKind</c>(−1 이 아니면)로 어빌리티를 덮는다 — <c>.abi</c> 파일은 안 고친다(사용자 요청).
+    /// 편집기에서 레벨 줄을 지우면 maxLevel 이, 아이콘을 고르면 icon* 이 적힌다.
     /// </summary>
     private static void ApplyMaxLevels(Dictionary<int, AbilityData> abilities, List<SkillFile> skills)
     {
         foreach (var s in skills)
-            if (s.Ability > 0 && s.MaxLevel > 0 && abilities.TryGetValue(s.Ability, out var ab) && ab.MaxLevel != s.MaxLevel)
-                abilities[s.Ability] = ab with { MaxLevel = (ushort)s.MaxLevel };
+        {
+            if (s.Ability <= 0 || !abilities.TryGetValue(s.Ability, out var ab)) continue;
+            abilities[s.Ability] = ab with
+            {
+                MaxLevel = s.MaxLevel > 0 ? (ushort)s.MaxLevel : ab.MaxLevel,
+                IconSide = s.IconSide >= 0 ? (ushort)s.IconSide : ab.IconSide,
+                IconArea = s.IconArea >= 0 ? (ushort)s.IconArea : ab.IconArea,
+                IconKind = s.IconKind >= 0 ? (ushort)s.IconKind : ab.IconKind,
+            };
+        }
     }
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));

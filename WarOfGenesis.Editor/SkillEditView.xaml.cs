@@ -78,6 +78,10 @@ public partial class SkillEditView : UserControl
     public SkillEditView()
     {
         InitializeComponent();
+        // 아이콘 고르기 — 0 번은 「원본」(.abi 값을 쓴다), 그다음이 값 0, 1, 2 …
+        IconSideBox.ItemsSource = IconSideChoices;
+        IconAreaBox.ItemsSource = IconAreaChoices;
+        IconKindBox.ItemsSource = IconKindChoices;
         FilterBox.Text = LoadFilter();   // 지난번 찾기 글 — 목록이 채워지면 이 글로 거른다
         Loaded += (_, _) => { if (_folder.Length == 0) Load(); };
         PreviewKeyDown += OnPreviewKeyDownForUndo;   // 창에 다시 붙어도 한 번만 읽는다
@@ -181,6 +185,12 @@ public partial class SkillEditView : UserControl
         SkillDescription.Text = DescriptionOf(row.Ability, row.Skill.MaxLevel);
         DescriptionOverride.Text = row.Skill.Description.Replace("$n", Environment.NewLine);
         DescriptionOverride.IsEnabled = row.Ability > 0;   // 어빌리티에 안 묶인 work 는 설명 창이 없다
+        _iconFilling = true;
+        IconSideBox.SelectedIndex = Math.Clamp(row.Skill.IconSide + 1, 0, IconSideChoices.Length - 1);
+        IconAreaBox.SelectedIndex = Math.Clamp(row.Skill.IconArea + 1, 0, IconAreaChoices.Length - 1);
+        IconKindBox.SelectedIndex = Math.Clamp(row.Skill.IconKind + 1, 0, IconKindChoices.Length - 1);
+        _iconFilling = false;
+        IconSideBox.IsEnabled = IconAreaBox.IsEnabled = IconKindBox.IsEnabled = row.Ability > 0;
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
         bool rangeTab = CommonTabs.SelectedItem != OtherTab;
@@ -227,6 +237,28 @@ public partial class SkillEditView : UserControl
     /// 설명 덮어쓰기 칸을 떠날 때 스킬 자료에 옮긴다 — 글자마다 옮기면 되돌리기(Ctrl+Z)가 한 글자씩 쌓인다.
     /// 줄바꿈은 원본 설명처럼 <c>$n</c> 으로 적는다(게임 설명 창이 <c>$n</c> 에서 줄을 바꾼다).
     /// </summary>
+    // ── 목록 아이콘 덮어쓰기 ───────────────────────────────────────────────────
+
+    /// <summary>아이콘 고르기 칸의 줄 — 0 번이 「원본」, i 번이 값 i−1(분석-스킬 「아이콘」 표).</summary>
+    private static readonly string[] IconSideChoices = ["원본 (.abi)", "0 파랑 — 아군", "1 빨강 — 적", "2 노랑 — 피아 무관"];
+    private static readonly string[] IconAreaChoices = ["원본 (.abi)", "0 한 사람", "1 여럿"];
+    private static readonly string[] IconKindChoices = ["원본 (.abi)", "0 攻 공격", "1 回 회복", "2 異 보조", "3 軍 군단기", "4 必 필살기"];
+
+    private bool _iconFilling;
+
+    /// <summary>아이콘을 고르면 스킬 자료(iconSide·iconArea·iconKind, −1 = 원본)에 옮긴다 — 한 번 고른 것이 되돌리기 한 걸음.</summary>
+    private void Icon_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_iconFilling || Current is not { } row || row.Ability <= 0) return;
+        int side = IconSideBox.SelectedIndex - 1, area = IconAreaBox.SelectedIndex - 1, kind = IconKindBox.SelectedIndex - 1;
+        if (side == row.Skill.IconSide && area == row.Skill.IconArea && kind == row.Skill.IconKind) return;
+        row.Skill.IconSide = side;
+        row.Skill.IconArea = area;
+        row.Skill.IconKind = kind;
+        MarkDirty(row);
+        StatusText.Text = $"{row.Name}: 목록 아이콘을 바꿨습니다 (저장해야 반영).";
+    }
+
     private void DescriptionOverride_LostFocus(object sender, RoutedEventArgs e)
     {
         if (Current is not { } row || row.Ability <= 0) return;
