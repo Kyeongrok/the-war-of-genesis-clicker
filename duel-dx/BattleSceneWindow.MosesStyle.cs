@@ -373,5 +373,29 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // Ok 글자는 배경 그림(Bgr 0042)에 있다 — 알약 Obs 287 은 마우스 올림에만.
         if (mx >= 455 && mx < 633 && my >= 430 && my < 457) DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+
+        // 어빌리티 줄을 오른쪽 단추로 누르고 있는 동안의 설명 — 맨 위에 그린다.
+        if (_styleTip is { } tip) DrawDescriptionTip(tip, _mouse.X, _mouse.Y, ox, oy, MosesW, MosesH);
+    }
+
+    /// <summary>전직 화면 어빌리티 미리보기 줄을 오른쪽 단추로 누르고 있는 동안 띄우는 설명(떼면 사라진다).</summary>
+    private string? _styleTip;
+
+    /// <summary>
+    /// 전직 화면에서 오른쪽 단추 누름 — 어빌리티 미리보기 줄(395,70 부터 20 간격 여섯 줄) 위면 그 어빌리티 설명을 띄우고 true(사용자 요청).
+    /// 줄 밖이면 false 라서 모세스의 우클릭 = 뒤로 가기가 그대로 돈다. 설명은 Status 창과 같은 글(설명 + 레벨별 효과)이다.
+    /// </summary>
+    private bool OnMosesStyleRightDown(int bx, int by)
+    {
+        if (_mosesPage != 7 || _db is not { } db || StyleData() is not { } c) return false;
+        var (ox, oy) = MosesOrigin();
+        int x = bx - ox, y = by - oy;
+        if (x < 391 || x >= 563 || y < 70) return false;
+        int row = (y - 70) / 20;
+        var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
+        if (row >= Math.Min(6, previewList.Count) || !db.Abilities.TryGetValue(previewList[row], out var ab)) return false;
+        string desc = db.AbilityDescription(ab);
+        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + AbilityEffectText(ab, c.AbilityLevel(ab.Id));
+        return true;
     }
 }
