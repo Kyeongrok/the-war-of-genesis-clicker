@@ -37,9 +37,6 @@ public partial class SkillEditView : UserControl
         };
         public int Varying => Skill.Levels.SelectMany(l => l.Fields.Keys).Where(k => k != "att").Distinct().Count();
         public string Dirty { get; set; } = "";
-
-        /// <summary>레벨 줄을 지웠나 — 저장할 때 .abi 최대 레벨도 줄 수로 줄인다.</summary>
-        public bool LevelsTrimmed { get; set; }
     }
 
     public sealed class CommonRow
@@ -109,12 +106,13 @@ public partial class SkillEditView : UserControl
     }
 
     /// <summary>어빌리티 설명(abi +0x1c TXR, 「$n」 줄바꿈)과 분류·최대 레벨·선행 조건 — 전에는 스킬 편집에 설명이 아예 안 보였다(사용자 보고).</summary>
-    private string DescriptionOf(int abilityId)
+    /// <param name="maxLevel">스킬 파일의 maxLevel(0 이면 .abi 값을 보인다).</param>
+    private string DescriptionOf(int abilityId, int maxLevel = 0)
     {
         if (_db == null) return "(설명을 읽지 못했습니다 — 저장소 TXR 자료가 없습니다)";
         if (!_db.Abilities.TryGetValue(abilityId, out var ab)) return abilityId == 0 ? "(어빌리티에 안 묶인 work)" : $"어빌리티 {abilityId} 자료 없음";
         string text = _db.T(ab.DescriptionId).Replace("$n", Environment.NewLine);
-        var extra = new List<string> { $"최대 Lv{ab.MaxLevel}" };
+        var extra = new List<string> { maxLevel > 0 ? $"최대 Lv{maxLevel} (원본 {ab.MaxLevel})" : $"최대 Lv{ab.MaxLevel}" };
         if (ab.Prereq1 != 0 && _db.Abilities.TryGetValue(ab.Prereq1, out var p1)) extra.Add($"선행 {_db.T(p1.NameId)} Lv{ab.Prereq1Level}");
         if (ab.Prereq2 != 0 && _db.Abilities.TryGetValue(ab.Prereq2, out var p2)) extra.Add($"선행 {_db.T(p2.NameId)} Lv{ab.Prereq2Level}");
         return (text.Length > 0 ? text : "(설명 없음)") + Environment.NewLine + string.Join(" · ", extra);
@@ -180,7 +178,7 @@ public partial class SkillEditView : UserControl
     private void Fill()
     {
         if (Current is not { } row) { CommonGrid.ItemsSource = null; LevelGrid.ItemsSource = null; SkillDescription.Text = ""; DescriptionOverride.Text = ""; return; }
-        SkillDescription.Text = DescriptionOf(row.Ability);
+        SkillDescription.Text = DescriptionOf(row.Ability, row.Skill.MaxLevel);
         DescriptionOverride.Text = row.Skill.Description.Replace("$n", Environment.NewLine);
         DescriptionOverride.IsEnabled = row.Ability > 0;   // 어빌리티에 안 묶인 work 는 설명 창이 없다
         _filling = true;
@@ -252,7 +250,7 @@ public partial class SkillEditView : UserControl
     private readonly Dictionary<SkillRow, string> _lastJson = [];
 
     /// <summary>되돌리기 더미 — 고친 스킬과 그 직전 상태. 스피너 한 칸·셀 하나·단추 하나가 한 걸음이다.</summary>
-    private readonly Stack<(SkillRow Row, string Json, bool Trimmed)> _undo = new();
+    private readonly Stack<(SkillRow Row, string Json)> _undo = new();
 
     private const int UndoLimit = 500;
 
@@ -262,10 +260,9 @@ public partial class SkillEditView : UserControl
     private void Undo()
     {
         if (_undo.Count == 0) { StatusText.Text = "되돌릴 것이 없습니다."; return; }
-        var (row, json, trimmed) = _undo.Pop();
+        var (row, json) = _undo.Pop();
         if (SkillBook.FromJson(json) is not { } skill) return;
         row.Skill = skill;
-        row.LevelsTrimmed = trimmed;
         _lastJson[row] = json;
         row.Dirty = DiskJson(row) == json ? "" : "●";
         if (SkillGrid.SelectedItem != row) { SkillGrid.SelectedItem = row; SkillGrid.ScrollIntoView(row); }
@@ -297,7 +294,7 @@ public partial class SkillEditView : UserControl
         string now = SkillBook.ToJson(row.Skill);
         if (_lastJson.TryGetValue(row, out var before) && before != now)
         {
-            _undo.Push((row, before, row.LevelsTrimmed));
+            _undo.Push((row, before));
             if (_undo.Count > UndoLimit) { var keep = _undo.Take(UndoLimit).Reverse().ToList(); _undo.Clear(); foreach (var k in keep) _undo.Push(k); }
         }
         _lastJson[row] = now;
@@ -449,10 +446,14 @@ public partial class SkillEditView : UserControl
                             "레벨 지우기", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         row.Skill.Levels.RemoveAt(index);
         for (int i = index; i < row.Skill.Levels.Count; i++) row.Skill.Levels[i].Level--;
-        row.LevelsTrimmed = true;
+        // 최대 레벨은 .abi 를 안 고치고 스킬 파일의 maxLevel 에 적는다(사용자 요청). 원본에서 이미 최대 레벨이 줄 수보다
+        // 작은 어빌리티(희생 10·20줄 따위)는 그 값을 넘기지 않는다.
+        int abiMax = _db?.Abilities.GetValueOrDefault(row.Ability)?.MaxLevel ?? row.Skill.Levels.Count + 1;
+        int before = row.Skill.MaxLevel > 0 ? row.Skill.MaxLevel : abiMax;
+        if (row.Ability > 0) row.Skill.MaxLevel = Math.Min(before, row.Skill.Levels.Count);
         MarkDirty(row);
         Fill();
-        StatusText.Text = $"Lv{level} 을(를) 지웠습니다 — 이제 최대 Lv{row.Skill.Levels.Count}. 저장하면 반영됩니다.";
+        StatusText.Text = $"Lv{level} 을(를) 지웠습니다 — 이제 최대 Lv{(row.Skill.MaxLevel > 0 ? row.Skill.MaxLevel : row.Skill.Levels.Count)} (.abi 는 그대로, 스킬 파일에 적음). 저장하면 반영됩니다.";
     }
 
     /// <summary>레벨별 열 하나를 공통으로 올린다 — 첫 레벨 값이 모든 레벨의 값이 된다.</summary>
@@ -484,13 +485,6 @@ public partial class SkillEditView : UserControl
             foreach (var r in dirty)
             {
                 File.WriteAllText(r.Path, SkillBook.ToJson(r.Skill), new UTF8Encoding(false));
-                if (r.LevelsTrimmed && r.Ability > 0 && _db?.Abilities.GetValueOrDefault(r.Ability) is { } ab)
-                {
-                    // 원본에서 이미 최대 레벨이 줄 수보다 작은 어빌리티(희생 10·20줄 따위)는 그 값을 넘기지 않는다.
-                    int max = Math.Min(ab.MaxLevel, r.Skill.Levels.Count);
-                    GameDatabase.WriteAbilityMaxLevel(System.IO.Path.GetDirectoryName(_folder)!, r.Ability, max);
-                    r.LevelsTrimmed = false;
-                }
                 r.Dirty = "";
             }
             SkillGrid.Items.Refresh();
@@ -508,7 +502,7 @@ public partial class SkillEditView : UserControl
     {
         if (Current is not { } row || SkillBook.FromJson(File.ReadAllText(row.Path, Encoding.UTF8)) is not { } skill) return;
         // 되돌리기 전 상태도 더미에 넣어, 「이 스킬 되돌리기」 자체를 Ctrl+Z 로 무를 수 있게 한다.
-        if (_lastJson.TryGetValue(row, out var before)) _undo.Push((row, before, row.LevelsTrimmed));
+        if (_lastJson.TryGetValue(row, out var before)) _undo.Push((row, before));
         row.Skill = skill;
         row.Dirty = "";
         Remember(row);

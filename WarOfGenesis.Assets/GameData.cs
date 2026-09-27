@@ -382,6 +382,7 @@ public sealed class GameDatabase
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && abilities.TryGetValue(w.AbilityId, out var ab))
                 ab.WorkByLevel[w.Level] = w.Id;
+        ApplyMaxLevels(abilities, skills);
 
         var num = new Dictionary<int, int>();
         d = Need("Dat", "Num.dat");
@@ -429,8 +430,9 @@ public sealed class GameDatabase
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && Abilities.TryGetValue(w.AbilityId, out var ab))
                 ab.WorkByLevel[w.Level] = w.Id;
-        // 편집기가 레벨 줄을 지우면 .abi 의 최대 레벨(+4)도 고친다 — 그것도 다시 읽는다.
+        // 최대 레벨 — 원본(.abi +4)으로 되돌린 뒤 스킬 파일의 maxLevel 로 덮는다(편집기가 레벨 줄을 지우면 maxLevel 을 적는다).
         if (Abilities is Dictionary<int, AbilityData> abilities)
+        {
             foreach (int f in AbilityFiles)
             {
                 if (_files.Read("Abi", $"{f:D4}.abi") is not { } a) continue;
@@ -438,31 +440,22 @@ public sealed class GameDatabase
                     if (abilities.TryGetValue(U16(a, o), out var ab) && ab.MaxLevel != U16(a, o + 4))
                         abilities[ab.Id] = ab with { MaxLevel = U16(a, o + 4) };
             }
+            ApplyMaxLevels(abilities, skills);
+        }
         Works = works;
         _descriptions = DescriptionsOf(skills);
         return skills.Count;
     }
 
     /// <summary>
-    /// <c>Abi/NNNN.abi</c> 에서 그 어빌리티의 최대 레벨(레코드 +4)을 고쳐 쓴다 — 편집기에서 레벨 줄을 지울 때. 찾아 고쳤으면 true.
+    /// 스킬 파일의 <c>maxLevel</c>(0 이 아니면)로 어빌리티 최대 레벨을 덮는다 — <c>.abi</c> 파일은 안 고친다(사용자 요청).
+    /// 편집기에서 레벨 줄을 지우면 그 값이 적힌다.
     /// </summary>
-    public static bool WriteAbilityMaxLevel(string dataFolder, int abilityId, int maxLevel)
+    private static void ApplyMaxLevels(Dictionary<int, AbilityData> abilities, List<SkillFile> skills)
     {
-        foreach (int f in AbilityFiles)
-        {
-            string path = Path.Combine(dataFolder, "Abi", $"{f:D4}.abi");
-            if (!File.Exists(path)) continue;
-            byte[] a = File.ReadAllBytes(path);
-            for (int i = 0, n = U16(a, 2), o = 6; i < n; i++, o += 26)
-            {
-                if (U16(a, o) != abilityId) continue;
-                a[o + 4] = (byte)maxLevel;
-                a[o + 5] = (byte)(maxLevel >> 8);
-                File.WriteAllBytes(path, a);
-                return true;
-            }
-        }
-        return false;
+        foreach (var s in skills)
+            if (s.Ability > 0 && s.MaxLevel > 0 && abilities.TryGetValue(s.Ability, out var ab) && ab.MaxLevel != s.MaxLevel)
+                abilities[s.Ability] = ab with { MaxLevel = (ushort)s.MaxLevel };
     }
 
     public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
