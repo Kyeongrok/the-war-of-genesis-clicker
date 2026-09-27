@@ -1,6 +1,7 @@
 {
   "ability": 14,
   "name": "오버플로우",
+  "description": "범위 안 적들이 어빌리티를 쓸 때 드는 소울을 늘린다",
   "maxLevel": 10,
   "iconSide": 1,
   "iconArea": 1,
