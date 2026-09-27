@@ -1625,8 +1625,12 @@ internal sealed class UnitState(DemoUnit unit)
 
     public int WakeValue { get; } = unit.WakeValue;
 
-    /// <summary>깨어났나 — 깨기 전에는 제 차례마다 쉬기만 한다. 사람이 움직이는 인물은 늘 깨어 있다.</summary>
-    public bool Awake { get; set; } = unit.Side >= 3;
+    /// <summary>
+    /// 깨어났나 — 깨기 전에는 제 차례마다 쉬기만 한다. 사람이 움직이는 인물(편 4)만 늘 깨어 있다.
+    /// 동맹 AI(편 3)도 적처럼 AI 꼬리의 깨어나는 조건을 따른다 — Btl 0096 의 루시엔은 세뇌당해 「조건 3 · 1000틱」으로
+    /// 묶여 있는데, 편 3 을 처음부터 깨워 두어 대사와 달리 멋대로 움직였다(사용자 보고).
+    /// </summary>
+    public bool Awake { get; set; } = unit.PlayerControlled;
 
     /// <summary>
     /// 지금 전장에 서 있나 — <b>배치 칸이 (0,0) 이면 「아직 안 나온 사람」</b>이다.
