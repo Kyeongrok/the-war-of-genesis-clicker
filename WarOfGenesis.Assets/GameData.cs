@@ -470,7 +470,47 @@ public sealed class GameDatabase
         }
     }
 
-    public CharacterData? Character(int code) => CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
+    public CharacterData? Character(int code)
+    {
+        var c = CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
+        return c != null && CharacterEdits.TryGetValue(code, out var edit) ? edit(c) : c;
+    }
+
+    /// <summary>인물 덮어쓰기 폴더(<c>assets/data/chr-edits/NNNN.json</c>) — 원본 <c>.chr</c> 은 그대로 둔다.</summary>
+    public const string CharacterEditFolder = "chr-edits";
+
+    private Dictionary<int, Func<CharacterData, CharacterData>>? _characterEdits;
+
+    /// <summary>
+    /// 인물 덮어쓰기 — <c>{ "code": 577, "faceId": 229 }</c> 처럼 바꿀 칸만 적는다(<c>faceId</c> 얼굴 Obs · <c>spriteId</c> 몸 그림 Obs).
+    /// Fld 0239 의 구룡방원(Chr 577)은 원본 자료부터 얼굴이 나탈리 초상(Obs 0974)이라 대사에 나탈리가 떴다 — 다른 구룡방원(435~437)처럼 229 로 둔다(사용자 요청 mo-5).
+    /// </summary>
+    private Dictionary<int, Func<CharacterData, CharacterData>> CharacterEdits => _characterEdits ??= LoadCharacterEdits(_files);
+
+    private static Dictionary<int, Func<CharacterData, CharacterData>> LoadCharacterEdits(GameFiles files)
+    {
+        var edits = new Dictionary<int, Func<CharacterData, CharacterData>>();
+        IReadOnlyDictionary<string, long> names;
+        try { names = files.List(CharacterEditFolder, ".json"); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return edits; }
+        foreach (var name in names.Keys)
+        {
+            try
+            {
+                if (files.Read(CharacterEditFolder, name) is not { } b
+                    || System.Text.Json.Nodes.JsonNode.Parse(System.Text.Encoding.UTF8.GetString(b)) is not System.Text.Json.Nodes.JsonObject o
+                    || o["code"]?.GetValue<int>() is not int code) continue;
+                int? face = o["faceId"]?.GetValue<int>(), sprite = o["spriteId"]?.GetValue<int>();
+                edits[code] = c => c with
+                {
+                    FaceId = face is int f ? (ushort)f : c.FaceId,
+                    SpriteId = sprite is int s ? (ushort)s : c.SpriteId,
+                };
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException) { }
+        }
+        return edits;
+    }
 
     public string T(ushort id) => Text.TextOf(id);
 
