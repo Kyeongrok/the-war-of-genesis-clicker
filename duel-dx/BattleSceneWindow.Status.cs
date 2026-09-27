@@ -575,6 +575,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (stat is 0 or 44 or 45 or 46) continue;          // 44~46 은 원본의 「없음」 칸
             if (StatBonusNames.TryGetValue(stat, out var statName)) { bits.Add($"{statName} {value:+#;-#;0}"); continue; }
+            if (ChangeText(stat, value) is { } change) { bits.Add(change); continue; }
             string desc = _db?.Statuses.GetValueOrDefault(stat) is { } st ? _db.T(st.DescriptionId) : "";
             if (desc.Contains("%d")) bits.Add(FormatPrintf(desc, value).TrimEnd('.', ' '));
             else bits.Add(value != 0 ? $"{AilmentNames.GetValueOrDefault(stat, $"효과 {stat}")} {value}" : AilmentNames.GetValueOrDefault(stat, $"효과 {stat}"));

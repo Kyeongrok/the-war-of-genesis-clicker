@@ -36,6 +36,29 @@ internal sealed unsafe partial class BattleSceneWindow
         return id != 0 && _db?.Statuses.GetValueOrDefault(id) is { } sta ? sta.Icon : 0;
     }
 
+    /// <summary>
+    /// 퍼센트로 늘리거나 줄이는 효과를 「무엇이 N% 감소/증가」로 풀어 쓴다(분석-전투 6절 표의 쓰임 그대로).
+    /// 원본 문구는 「TP 소모량이 %d 변화」라 −30 이 붙으면 줄어드는지 늘어나는지 알기 어려웠다(사용자 보고: 리미트 크래쉬).
+    /// 13 은 피해 ×(100+값), 14 는 받는 피해 ×(100−값) 이라 둘 다 값이 양수면 좋아진다. 38 은 %가 아니라 틱마다 TP 에 더하는 값이다.
+    /// </summary>
+    private static string? ChangeText(int id, int value)
+    {
+        if (value == 0) return null;
+        string Pct(string what) => $"{what} {Math.Abs(value)}% {(value < 0 ? "감소" : "증가")}";
+        return id switch
+        {
+            // 10(피격 가속) — 맞을 때마다 TP 가 (값% × 가득 차기까지의 틱 수)만큼 찬다. 기가실드 설명은 「엘레맨탈 실드를 건다」뿐이라 여기서 풀어 준다(사용자 보고).
+            10 => $"맞으면 다음 차례가 빨리 온다 (세기 {value})",
+            13 => Pct("공격력"),
+            14 => Pct("방어력"),
+            18 => Pct("소울 소모량"),
+            20 => Pct("TP 소모량"),
+            29 => Pct("무기 공격력"),
+            38 => $"턴 속도 {(value < 0 ? "느려짐" : "빨라짐")} (틱마다 TP {value:+#;-#})",
+            _ => null,
+        };
+    }
+
     /// <summary>번호 → 짧은 이름(분석-전투 6절 표). 여기 없는 번호는 칸에 번호만 보인다.</summary>
     private static readonly Dictionary<int, string> AilmentNames = new()
     {
@@ -332,7 +355,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int id = u.StatusId[i];
             if (id is 0 or 44 or 45 or 46) continue;
             string name = AilmentNames.TryGetValue(id, out var n) ? n : StatBonusNames.GetValueOrDefault(id, $"상태 {id}");
-            list.Add(u.StatusValue[i] != 0 ? $"{name} {u.StatusValue[i]}" : name);
+            list.Add(ChangeText(id, u.StatusValue[i]) ?? (u.StatusValue[i] != 0 ? $"{name} {u.StatusValue[i]}" : name));
         }
         return list;
     }

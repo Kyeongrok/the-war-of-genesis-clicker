@@ -811,6 +811,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (a.Data is { } cost && _db is { } db2)
         {
             a.Tp -= TpCostFor(a, cost, w.Id);
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"work {w.Id} by {a.ChrCode}: TP {db2.WorkTpCost(cost, w.Id)} × (100{a.Status(20):+#;-#;+0})% = {TpCostFor(a, cost, w.Id)}, 남은 TP {a.Tp}" + Environment.NewLine);
             a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
             AddSoul(a, w.Kind switch { 0 => 10, 1 => 6, _ => 4 });
             int hp = db2.WorkHpCost(cost, w.Id);
