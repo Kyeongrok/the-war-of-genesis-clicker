@@ -531,6 +531,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _uiClip = null;
         DrawSystem();
         DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
+        if (_statusUnit >= 0) DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에
         DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
         // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 검정 페이드(방식 2),
