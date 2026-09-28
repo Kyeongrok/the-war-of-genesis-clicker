@@ -53,8 +53,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 용병관리에 나오는 군단 — 스크립트 713 으로 <b>얻은 것</b>만(원본 파티 객체 `+0x910` 목록, 분석-군단). 얻은 기록이 없는 옛 세이브는 예전처럼 전부.
     /// </summary>
+    /// <summary>배속할 수 있는 군단 — 얻은 것 가운데 <b>아직 아무에게도 배속 안 된 것</b>(원본은 배속하면 파티 군단 목록에서 빼고 해제·교체 때 되돌린다, 0x1010106f·0x10100ed0, ba-15).</summary>
     private List<LegionData> LegionList() =>
-        [.. Legions().Values.Where(l => !_legionsKnown || _ownedLegions.Contains(l.Id)).OrderBy(l => l.Id)];
+        [.. Legions().Values.Where(l => (!_legionsKnown || _ownedLegions.Contains(l.Id))
+                                        && !_unitLegion.Any(p => p.Value == l.Id && p.Key != LegionKey(_legionUnit))).OrderBy(l => l.Id)];
 
     /// <summary>파티가 얻은 군단 번호(스크립트 713). 세이브에 실린다.</summary>
     private readonly HashSet<int> _ownedLegions = [];
@@ -82,6 +84,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_legionPick >= 0 && _legionPick < list.Count)
             {
                 _unitLegion[LegionKey(_legionUnit)] = list[_legionPick].Id;
+                _legionPick = -1;                // 목록이 바뀌었다(배속한 군단은 빠진다)
                 Play(SoundLegionSet);
             }
             return true;
