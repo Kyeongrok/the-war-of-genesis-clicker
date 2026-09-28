@@ -76,6 +76,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 _ownedLegions.Clear();
                 _legionsKnown = true;
                 _partyBank.Clear();
+                // 파티의 가방·GP·군단 배속과 「이미 겪은」 표시(자동 장소·챕터 사건 횟수·다녀온 장소)도 비운다 — 안 비우면 같은 실행에서
+                // 두 번째 새 게임이 프롤로그·동료 합류·3000GP 를 건너뛰고 지난 판의 가방을 들고 시작한다(원본 0x1004d870 은 파티를 새로 만든다).
+                _inventory.Clear();
+                _shopMoney = 0;
+                _unitLegion.Clear();
+                _placesUsed.Clear();
+                _autoPlacesDone.Clear();
+                _chapterFired.Clear();
                 _mailbox.Clear();
                 _mailRead.Clear();
                 _planetVisits.Clear();

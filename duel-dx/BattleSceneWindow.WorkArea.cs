@@ -202,7 +202,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var cells = AreaCells(w, user, col, row).ToHashSet();
         int mode = w.AreaMode != 0 ? w.AreaMode : w.TargetMode;
         return [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]))];
+            .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]))];
     }
 
     /// <summary>겨눌 수 있는 칸인가 — 대상 방식이 유닛을 고르는 것이면 그 칸에 맞는 유닛이 있어야 한다.</summary>

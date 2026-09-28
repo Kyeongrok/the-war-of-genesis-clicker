@@ -139,8 +139,15 @@ internal sealed unsafe partial class BattleSceneWindow
         var unit = _units[ringUnit];
         if (command is RingCommand.Status or RingCommand.System) return true;
         if (!IsPlayerTurn || ringUnit != _turn || unit.IsBusy) return false;
-        if (command is not (RingCommand.Attack or RingCommand.Ability)) return true;
-        return _db == null || unit.Tp + unit.Ctp >= _db.N(4);
+        // 원본 0x100e16b0 — Attack 은 늘 켜져 있고, Ability·Item 은 TP+CTP 가 문턱(Num 4) 아래면 꺼진다. Ability 는 상태이상 12(봉인)로도 꺼진다.
+        // 전에는 거꾸로 Attack·Ability 를 끄고 Item 은 안 껐다.
+        bool enoughTp = _db == null || unit.Tp + unit.Ctp >= _db.N(4);
+        return command switch
+        {
+            RingCommand.Ability => enoughTp && !unit.HasStatus(12),
+            RingCommand.Item => enoughTp,
+            _ => true,
+        };
     }
 
     private void OpenRing(int unit, bool reopen = false)

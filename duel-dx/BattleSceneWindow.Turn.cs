@@ -450,6 +450,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>격려 — 아군 하나의 SOUL 을 위력만큼 올린다.</summary>
     private const int EncourageAbility = 10;
 
+    /// <summary>쇼크 — 대상 SOUL 을 위력만큼 깎는다(0x100ae140).</summary>
+    private const int ShockAbility = 39;
+
     private WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
@@ -918,6 +921,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                     $"encourage work {w.Id}: {a.ChrCode} → {t.ChrCode} SOUL {before} → {t.Soul} (위력 {w.Power})" + Environment.NewLine);
             MarkBuffed(a, t, w);
+            return;
+        }
+        // 쇼크(어빌리티 39) — 피해 판정 없이 대상 SOUL 을 위력만큼 깎는다(0x100ae140, 격려의 반대). 전에는 아무 효과가 없었다(fg-21 ⑥).
+        if (w.AbilityId == ShockAbility)
+        {
+            int drain = Math.Min(Math.Max(0, (int)w.Power), t.Soul);
+            t.Soul -= drain;
+            ShowNumber(t, $"{_db.T(41)} -{drain}", MissColor);
+            PlayHitReaction(t, damaged: false);
             return;
         }
         if (!w.IsDamage)

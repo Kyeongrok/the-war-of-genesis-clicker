@@ -71,8 +71,9 @@ internal sealed unsafe partial class BattleSceneWindow
         return u.WakeCondition switch
         {
             0 => true,
-            1 => Nearest(t => t.Alive && t != u && !SeesAsFoe(u, t) && t.Awake) <= u.WakeValue,
-            2 => Nearest(t => t.Alive && SeesAsFoe(u, t)) <= u.WakeValue,
+            // 전장 밖((0,0) 대기) 인물은 안 센다(0x1006e940) — 안 나온 증원과의 거리로 깨지 않게.
+            1 => Nearest(t => t.Alive && t.OnField && t != u && !SeesAsFoe(u, t) && t.Awake && !t.PlayerControlled) <= u.WakeValue,
+            2 => Nearest(t => t.Alive && t.OnField && SeesAsFoe(u, t)) <= u.WakeValue,
             3 => _tick >= u.WakeValue,
             _ => false,
         };
@@ -99,7 +100,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int num65 = _db?.N(65) ?? 6, sum = 0;
         foreach (var u in _units)
         {
-            if (!u.Alive || u.IsAlly != ally) continue;
+            if (!u.Alive || !u.OnField || u.IsAlly != ally) continue;
             int d = Math.Abs(u.Col - col) + Math.Abs(u.Row - row);
             sum += CDiv(Power(u) * num65, d + num65);
         }
@@ -229,7 +230,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
-    /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓰고, 차례가 남았으면 쉰다.</summary>
+    /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓴다.</summary>
     private IEnumerable<bool> AiUseWork(int index, WorkData w, (int Stand, int Col, int Row, int Score) use, MoveRange range)
     {
         var u = _units[index];
@@ -238,31 +239,45 @@ internal sealed unsafe partial class BattleSceneWindow
         int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
         var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
         while (routine.MoveNext()) yield return true;
-        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
     }
 
-    /// <summary>AI 차례 — 분석-전투 ba-11 의 여섯 단계.</summary>
+    /// <summary>
+    /// AI 차례 — 명령 하나를 만들어 실행한 뒤 <b>TP 가 남으면 처음부터 다시 생각한다</b>(원본 0x1006db20 은 지금 유닛부터 다시 훑어
+    /// TP&gt;0 이면 같은 유닛을 또 뽑는다, ba-2·ba-11). 기본공격 80 이면 TP 155 인 적이 두 번 친다. 전에는 한 번 쓰고 곧장 쉬어
+    /// 적의 손 수가 원본의 절반쯤이었고 남은 TP 로 회복까지 받았다(fg-21 ①). 아무것도 못 하거나 TP 가 다하면 쉰다(WAITNEXT 자동 휴식).
+    /// </summary>
     private IEnumerator<bool> AiRoutine(int index)
     {
         var u = _units[index];
         for (double end = _lastTime + 0.4; _lastTime < end;) yield return true;
-
-        if (_db is not { } db || ComputeRange(u) is not { } range)
+        for (int think = 0; think < 8; think++)
         {
-            Rest(index);
-            yield break;
+            bool acted = false;
+            foreach (bool r in AiThink(index, a => acted = a)) yield return r;
+            if (!acted || _turn != index || _outcome.Length > 0 || !u.Alive) break;
+            CommitMove(u);                                   // 걸은 비용을 빼야 남은 TP 로 다시 생각할 수 있다
+            if (u.Tp <= 0) break;
+            for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
         }
+        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+    }
+
+    /// <summary>한 번 생각하기 — 분석-전투 ba-11 의 여섯 단계. 기술을 쓰거나 걸었으면 <paramref name="report"/>(true).</summary>
+    private IEnumerable<bool> AiThink(int index, Action<bool> report)
+    {
+        var u = _units[index];
+        if (_db is not { } db || ComputeRange(u) is not { } range) yield break;
 
         // 1단계 깨어남 — 조건을 못 채우면 그 자리에서 쉰다(0x1005baa8). 깬 그 차례에 바로 움직인다.
         if (!u.Awake)
         {
-            if (!WakesNow(u)) { Rest(index); yield break; }
+            if (!WakesNow(u)) yield break;
             u.Awake = true;
         }
 
         int hpPercent = u.MaxHp == 0 ? 100 : u.Hp * 100 / u.MaxHp;
         // 버서커(4)가 걸린 인물에게는 자기 말고 모두가 적이다.
-        var enemies = _units.Where(t => t.Alive && SeesAsFoe(u, t)).ToList();
+        var enemies = _units.Where(t => t.Alive && t.OnField && SeesAsFoe(u, t)).ToList();
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
 
         // 2단계 도망 — 피가 적고 적이 가까우면 물러난다. 재는 값은 <b>제 점수를 뺀</b> 위험도이고,
@@ -282,8 +297,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (danger < bestDanger * 0.70 || closer) { bestDanger = Math.Min(bestDanger, danger); safest = i; }
             }
             if (safest != here) foreach (var r in WalkTo(u, range, safest)) yield return r;
-            Rest(index);
-            yield break;
+            yield break;                                     // 도망 뒤에는 쉰다(원본 0x2716)
         }
 
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
@@ -293,6 +307,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
             if (pass == 1 && SmartAi(u) && SmartPick(index, range) is { } smart)
             {
+                report(true);
                 foreach (bool r in AiUseWork(index, smart.Work, smart.Use, range)) yield return r;
                 yield break;
             }
@@ -300,17 +315,14 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (pass == 0 && !w.IsHeal) continue;
                 if (BestUse(index, w, range) is not { } use) continue;
+                report(true);
                 foreach (bool r in AiUseWork(index, w, use, range)) yield return r;
                 yield break;
             }
         }
 
         // 5단계 휴식 — 피가 Num[71]% 이하면 움직이지 않고 그 자리에서 쉰다.
-        if (hpPercent <= db.N(71))
-        {
-            Rest(index);
-            yield break;
-        }
+        if (hpPercent <= db.N(71)) yield break;
 
         // 6단계 — 칠 수 없으면 목표 쪽으로 다가가 쉰다. 목표 차례는 <b>이동 방식</b>이 정한다(0x1005c460).
         foreach (var goal in MoveGoals(u, enemies))
@@ -327,9 +339,8 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var r in WalkTo(u, range, best)) yield return r;
             break;
         }
-
+        // 이동만 했으면 원본은 0x2710 뒤 0x2716(휴식)으로 끝낸다 — 다시 생각하지 않는다.
         for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
-        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
     }
 
     private IEnumerable<bool> WalkTo(UnitState u, MoveRange range, int cell)
