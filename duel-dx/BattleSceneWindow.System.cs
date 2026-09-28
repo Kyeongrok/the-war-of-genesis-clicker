@@ -64,6 +64,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void RunSystemItem(SystemItem item)
     {
+        // MISSION·SAVE·LOAD 는 메뉴를 숨기기만 하고, 그 창이 닫히면 메뉴가 다시 보인다(0x100e39f0 → vt+0xcc). fg-22.
+        _systemMenuReturn = item is SystemItem.Mission or SystemItem.Save or SystemItem.Load;
         switch (item)
         {
             case SystemItem.Mission: _missionWindow = true; break;
@@ -118,12 +120,23 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>하위 창(MISSION·SAVE·LOAD)이 닫히면 시스템 메뉴를 다시 보일지.</summary>
+    private bool _systemMenuReturn;
+
+    /// <summary>하위 창이 닫혔다 — 메뉴에서 열었으면 메뉴로 돌아간다.</summary>
+    private void ReturnToSystemMenu()
+    {
+        if (!_systemMenuReturn) return;
+        _systemMenuReturn = false;
+        if (!_titleOpen && !_recordsOpen) _systemMenu = true;
+    }
+
     private bool OnMenuClick(int bx, int by)
     {
         if (_missionWindow || _volumeWindow)
         {
             if (_volumeWindow) OnVolumeClick(bx, by);
-            else _missionWindow = false;
+            else { _missionWindow = false; ReturnToSystemMenu(); }
             return true;
         }
         if (!_systemMenu) return false;
@@ -140,8 +153,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; return true; }
-        if (SlotsOpen) { _slotsMode = -1; return true; }
-        if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; return true; }
+        if (SlotsOpen) { _slotsMode = -1; ReturnToSystemMenu(); return true; }
+        if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; ReturnToSystemMenu(); return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
         return false;
     }
@@ -198,7 +211,11 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 음량 창 ──────────────────────────────────────────────────────────────
 
-    private int _bgmVolume = 90, _seVolume = 90;
+    private int _bgmVolume = Math.Clamp(UserSettings.Current.BgmVolume, 5, 100), _seVolume = Math.Clamp(UserSettings.Current.SeVolume, 5, 100);
+
+    /// <summary>「배경음악」 체크 상자(원본 0x2728, (78,120)) — 끄면 음악을 멈추고 켜면 지금 곡을 다시 튼다.</summary>
+    private bool _bgmOn = UserSettings.Current.BgmOn;
+
     private const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
 
     private (int X, int Y) VolumeOrigin() => (_camX + (ViewWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
@@ -213,9 +230,20 @@ internal sealed unsafe partial class BattleSceneWindow
             if (cell < 0 || cell >= VolumeCells) continue;
             setter(5 * cell + 5);   // 원본 값 = 5n+5 (5~100)
             ApplyVolumes();
+            SaveSettings();
             return;
         }
-        if (by >= y + VolumeH - 30) _volumeWindow = false;
+        // 「배경음악」 체크 상자 — (78,120) 언저리.
+        if (bx >= x + 70 && bx < x + 200 && by >= y + 116 && by < y + 134)
+        {
+            _bgmOn = !_bgmOn;
+            if (!_bgmOn) _mixer.StopMusic();   // 곡 번호는 남긴다 — 켜면 되살린다
+            else if (_musicId > 0) PlayMusicFile(_musicId, loop: true);
+            SaveSettings();
+            return;
+        }
+        if (bx >= x + VolumeW - 24 && by < y + 26) _volumeWindow = false;   // 창 X
+        else if (by >= y + VolumeH - 30) _volumeWindow = false;
     }
 
     private void ApplyVolumes()
@@ -244,6 +272,11 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             RightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
         }
+        // 「배경음악」 체크 상자(Obs 806 모션 1/2 자리) — 그림 대신 네모.
+        StrokeRect(x + 78, y + 118, 14, 14, White);
+        if (_bgmOn) FillRect(x + 81, y + 121, 8, 8, White);
+        DrawText("배경음악", x + 98, y + 117, White);
+        DrawText("X", x + VolumeW - 18, y + 5, White, 15);
         DrawText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
     }
 
@@ -359,6 +392,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _turn = -1;
         _selected = -1;
         _outcome = "";
+        _eventCheckDue = 0xF;
         _routine = null;
         _levelUpQueue.Clear();
         _levelUpUnit = -1;
@@ -810,7 +844,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (state.InMoses)
         {
             _titleOpen = false;
-            _mixer.StopMusic();
+            StopMusic();
             var loadedChp = state.Chapter > 0 ? LoadChapterFile(state.Chapter) : null;
             // 장소 조건을 안 거르던 판의 세이브(파티 칸이 없다) — 열린 전투·필드 장소가 하나도 없으면 챕터를 다 돈 것으로 본다.
             // 그때는 장소를 순서 없이 겪을 수 있어 깃발이 원본 순서와 어긋나, 지금 규칙으로는 상점만 남아 갇힌다.
@@ -830,7 +864,7 @@ internal sealed unsafe partial class BattleSceneWindow
             CloseField();
             _mosesOpen = false;
             _episodesOpen = false;
-            _mixer.StopMusic();
+            StopMusic();
             StartBattleMusic();
         }
         // 세이브의 인물 기록(701 로 바뀐 그림 +0xc 따위)은 판을 세운 <b>뒤에</b> 덮여서, 판을 세울 때 읽은 그림과 어긋날 수 있다 —

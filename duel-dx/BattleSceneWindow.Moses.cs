@@ -183,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 전투는 여기서 닫힌다 — 판을 전투 맵 크기에서 640×480 틀로 되돌려 모세스만 남긴다.
         // (안 그러면 전투 맵 크기 창 한가운데에 모세스가 뜨고 둘레가 검게 남는다.)
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
-        if (chapter != null) _mosesChp = chapter;
+        if (chapter != null) { _mosesChp = chapter; Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
         if (_mosesChp is { } owner && Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
@@ -196,7 +196,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_chapterDone)
         {
             _mosesOpen = false;
-            _mixer.StopMusic();
+            StopMusic();
             OpenEpisodes();
             return;
         }
@@ -209,7 +209,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다(대사 든 사건은 실행기가)
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
-        _mixer.StopMusic();
+        StopMusic();
         PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true);   // 챕터 BGM — Chp 머리 셋째 워드
     }
 
@@ -348,7 +348,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (!StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
         UsePlace(no);
-        _mixer.StopMusic();
+        StopMusic();
         StartBattleMusic();
     }
 
@@ -368,6 +368,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0:
                 Play(564);                                             // NAVIGATION
+                Play(566);                                             // 성계 지도 연출 소리(큐 20566, 분석-모세스 14절)
                 // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
                 _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
                 _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;

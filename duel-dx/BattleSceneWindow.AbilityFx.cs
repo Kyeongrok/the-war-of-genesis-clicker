@@ -24,7 +24,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
     /// </summary>
     /// <remarks>표(<see cref="AbilityMotions"/>)가 이것을 쓰므로 <b>표보다 먼저</b> 선언해야 한다 — 정적 초기화는 적은 차례대로 돈다.</remarks>
-    private static readonly AbilityEffect[] CounterBlade = [new(895, 0, false, 0), new(1365, 0, false, 0)];
+    private static readonly AbilityEffect[] CounterBlade = [new(1365, 0, false, 0)];   // 칼날 895 는 SpawnCounterBlades 가 다섯 칸에 띄운다
+
+    /// <summary>카운터 블레이드 work(390 · 997~1015).</summary>
+    private static readonly HashSet<int> CounterBladeWorks = [390, .. Enumerable.Range(997, 19)];
+
+    /// <summary>
+    /// 카운터 블레이드 0x100a8df0 — 칼날 895:0 다섯을 시전자 <b>앞 두 칸 줄</b>의 가로 −2~+2 칸에 0·4·8·12·16틱 늦춰 띄운다(fg-22).
+    /// 전에는 시전자 자리에 하나만 띄웠다.
+    /// </summary>
+    private void SpawnCounterBlades(UnitState user)
+    {
+        var (fx, fy) = user.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+        var (sx, sy) = (fy, fx);                                   // 옆 방향
+        for (int k = -2; k <= 2; k++)
+        {
+            int col = user.Col + fx * 2 + sx * k, row = user.Row + fy * 2 + sy * k;
+            if ((uint)col >= Cols || (uint)row >= Rows) continue;
+            _effects.Add((895, 0, _lastTime + (k + 2) * 4 / TicksPerSecond, col * TileW + TileW / 2, CellCenterY(col, row)));
+        }
+    }
 
     /// <summary>work 번호 → (동작 차례, 때리는 순간에 띄울 이펙트).</summary>
     private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
@@ -210,6 +229,7 @@ internal sealed unsafe partial class BattleSceneWindow
         SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
         SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
+        if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         if (ScriptFor(w.Id) is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);

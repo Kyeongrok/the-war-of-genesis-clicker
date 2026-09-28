@@ -70,7 +70,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
         u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp));
         u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
-        u.Stp = Math.Max(1, _db.Stp(c));
+        // STP 는 최대 TP 가감(상태 33)까지 넣은 최대 TP ÷ 제수다(0x1007acf0) — 최대 TP 를 올리면 차례 간격도 짧아진다(fg-22).
+        u.Stp = Math.Max(1, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
         u.MaxSoul = _db.MaxSoul(c) + u.BonusMaxSoul;
         u.Hp = Math.Min(u.Hp, u.MaxHp);
         u.Tp = Math.Min(u.Tp, u.MaxTp);
@@ -190,14 +191,15 @@ internal sealed unsafe partial class BattleSceneWindow
         var db = _db!;
         var c = u.Data!;
         var rows = new List<(string, string, bool, Action)>();
-        if (c.Items[slot] != 0) rows.Add(("해제", "", true, () => SetEquipment(u, slot, 0)));
+        // 첫 줄은 늘 「해제」(TXR 1693)다 — 빈 칸이면 꺼진 줄. 넣을 아이템이 없어도 창은 뜬다(0x100d3830).
+        string unequip = db.T(1693) is { Length: > 0 } t1693 ? t1693 : "해제";
+        rows.Add((unequip, "", c.Items[slot] != 0, () => { if (c.Items[slot] != 0) SetEquipment(u, slot, 0); }));
         foreach (var (id, count) in _inventory)
         {
             if (count <= 0 || !db.Items.TryGetValue(id, out var item) || !db.FitsSlot(c, item, slot)) continue;
             string stat = slot == 0 ? $"공격 {item.Attack}" : item.Defense > 0 ? $"방어 {item.Defense}" : "";
             rows.Add(($"{db.T(item.NameId)} ×{count}", stat, true, () => SetEquipment(u, slot, (ushort)id)));
         }
-        if (rows.Count == 0) { Toast("가방에 이 칸에 낄 아이템이 없습니다"); return; }
         OpenPopup("장비 바꾸기", rows);
     }
 

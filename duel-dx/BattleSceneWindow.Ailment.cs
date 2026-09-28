@@ -262,11 +262,14 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>work 이 무는 SOUL — 18(소울 소모량 %)만큼 늘거나 준다(<c>0x100724c4</c>).</summary>
     private int SoulCostFor(UnitState u, CharacterData c, int workId) =>
-        Math.Max(0, (_db?.WorkSoulCost(c, workId) ?? 0) * (100 + u.Status(18)) / 100);
+        u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
 
     /// <summary>work 을 쓰려면 있어야 하는 SOUL — 비용과 같은 보정을 받는다.</summary>
     private int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
-        Math.Max(0, (_db?.WorkSoulNeed(c, workId) ?? 0) * (100 + u.Status(18)) / 100);
+        u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
+
+    /// <summary><c>cost += cost × 값 / 100</c>(0x100726a1) — 곱한 몫만 0 쪽으로 버린다. <c>cost × (100+값) / 100</c> 은 값이 음수일 때 1 작게 나왔다(fg-22).</summary>
+    private static int PercentAdjust(int cost, int percent) => Math.Max(0, cost + cost * percent / 100);
 
     /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
     private int TpCostFor(UnitState u, CharacterData c, int workId) =>

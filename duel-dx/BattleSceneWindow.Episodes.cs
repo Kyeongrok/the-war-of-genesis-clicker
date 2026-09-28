@@ -91,7 +91,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _titleOpen = false;
         _episodePick = -1;
         ShowMosesBackground(EpisodeBackground);
-        _mixer.StopMusic();
+        StopMusic();
         PlayMusicFile(EpisodeBgm, loop: true);
     }
 

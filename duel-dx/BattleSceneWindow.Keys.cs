@@ -239,7 +239,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn));
 
     /// <summary>전투를 시작할 때 내 편 SOUL 을 가득 채우나 — 모드 > 전투 시작 시 소울 가득(원본에 없는 편의 기능, 기본 끔).</summary>
     private bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;

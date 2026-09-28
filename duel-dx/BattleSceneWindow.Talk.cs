@@ -63,6 +63,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 20010·20011 은 조건 300·301 이 방금 찾아 낸 두 사람이다(0x1004eba5) — 대사 49줄이 이걸 쓴다.
         if (value == 20010) return _eventFoundA is null ? -1 : Array.IndexOf(_units, _eventFoundA);
         if (value == 20011) return _eventFoundB is null ? -1 : Array.IndexOf(_units, _eventFoundB);
+        // 20001~20009 는 그 편의 첫 유닛이 말한다(원본 — 전에는 −1 로 가운데에 띄웠다).
+        if (value >= 20000 && value < 20010)
+            return EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(_units, first) : -1;
         if (value >= 20000) return -1;
         // 10000+N 은 배열 자리가 아니라 <b>Btl 레코드 번호</b>다 — 빈 칸을 걸러 낸 뒤의 자리와 다르다.
         if (value >= 10000) return Array.FindIndex(_units, u => u.LeaderIndex < 0 && u.Record == value - 10000);

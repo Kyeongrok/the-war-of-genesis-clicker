@@ -253,7 +253,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
             ShowMosesBackground(field.Background, Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
-            _mixer.StopMusic();
+            StopMusic();
             if (field.Bgm > 0) PlayMusicFile(field.Bgm, loop: true);
             return true;
         }
@@ -845,7 +845,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
                 break;
             case 512:                                        // BGM 바꾸기
-                _mixer.StopMusic();
+                StopMusic();
                 if (A(0) > 0) PlayMusicFile(A(0), loop: true);
                 break;
             case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐
@@ -860,7 +860,7 @@ internal sealed unsafe partial class BattleSceneWindow
                               textOverride: TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
-                _mixer.StopMusic();
+                StopMusic();
                 break;
             case 500:                                        // 소리 한 번 내고 끝날 때까지 기다린다(0x100ee7b0) — 인자1 은 매달 인물
                 if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)

@@ -109,8 +109,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
         // 예산은 <b>지금 고른 work</b> 의 TP 를 남긴다(상태 12 는 어빌리티, 상태 10 은 기본공격) —
         // 늘 기본공격으로 셈하면 비싼 어빌리티를 고른 채 너무 멀리 걸을 수 있다. TP 비용에는 상태 20(소모량 %)도 먹는다.
+        bool playerBrowse = workId <= 0 && tp == null && origin == null && _targetWork <= 0 && IsMine(unit);
         if (workId <= 0) workId = _targetWork > 0 ? _targetWork : c.BasicWorkId;
-        int budget = unit.HasStatus(25) ? 0 : (tp ?? unit.Tp) + Math.Min(0, c.Ctp - TpCostFor(unit, c, workId));
+        int narrow = unit.HasStatus(25) ? 0 : (tp ?? unit.Tp) + Math.Min(0, c.Ctp - TpCostFor(unit, c, workId));
+        // 플레이어가 인물을 고른 상태 10 은 파랑을 <b>현재 TP 전부</b>로 한 번 더 칠한다(0x10069659) — 멀리 걸어가 쉴 수 있다.
+        // 빨강(기본공격 자리)은 좁은 예산 기준이고, TP+CTP 가 기본공격 비용에 못 미치면 아예 없다(0x10069524). fg-22.
+        int budget = playerBrowse && !unit.HasStatus(25) ? Math.Max(narrow, unit.Tp) : narrow;
+        bool redAllowed = !playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId);
 
         int H(int col, int row) => map.HeightAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
@@ -121,11 +126,20 @@ internal sealed unsafe partial class BattleSceneWindow
         // 제 군단 부하는 대장을 막지 않는다 — 대장이 움직이면 부하도 진형대로 따라오기 때문이다(분석-군단).
         bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex;
 
+        bool big = c.Big;
         bool Enterable(int col, int row)
         {
             if (col == originCol && row == originRow) return true;
             if (!InBounds(col, row) || (map.FlagsAt(col, row) & 0x9) != 0) return false;
             if (LiveUnitAt(col, row) is { } other && Blocks(other)) return false;
+            // 큰 유닛(.chr 18 = 1)은 3×3 이 모두 판 안이고 갈 수 있어야 들어간다(0x100d9c7d).
+            if (big)
+                for (int by = row - 1; by <= row + 1; by++)
+                    for (int bx = col - 1; bx <= col + 1; bx++)
+                    {
+                        if (!InBounds(bx, by) || (map.FlagsAt(bx, by) & 0x9) != 0) return false;
+                        if (LiveUnitAt(bx, by) is { } o2 && Blocks(o2)) return false;
+                    }
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
             {
                 if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || !Blocks(e)) continue;
@@ -168,12 +182,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 붉은 칸 — 갈 수 있는 칸마다 <b>그 인물의 기본공격 모양</b>을 칠한다(0x100749b0).
         // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.
-        if (Work(c.BasicWorkId) is { } basic)
+        if (redAllowed && Work(c.BasicWorkId) is { } basic)
         {
             int reach = Math.Max(1, RangeMaxOf(basic, unit) / 4);
             for (int i = 0; i < n; i++)
             {
-                if (costs[i] == int.MaxValue) continue;
+                if (costs[i] == int.MaxValue || costs[i] > narrow) continue;   // 빨강은 좁은 예산 안에서만
                 int col = i % Cols, row = i / Cols;
                 for (int ay = row - reach; ay <= row + reach; ay++)
                     for (int ax = col - reach; ax <= col + reach; ax++)

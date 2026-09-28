@@ -34,8 +34,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var (c, r) = cells[_rng.Next(cells.Count)];
             if ((c, r) == (user.Col, user.Row)) return (c, r);
-            if (LiveUnitAt(c, r) != null) continue;
-            if (_map is { } map && (c >= map.Cols || r >= map.Rows || (map.FlagsAt(c, r) & 0x9) != 0)) continue;
+            if (!CanLandOn(c, r, user)) continue;         // 적 옆 칸(ZOC)·물체 칸에는 안 떨어진다(0x100d99a0)
             return (c, r);
         }
         return null;

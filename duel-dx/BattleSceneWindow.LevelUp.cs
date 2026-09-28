@@ -126,6 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void CloseLevelUp()
     {
         _levelUpUnit = -1;
+        _eventCheckDue |= 1 << 1;                // 갈래 1 = 레벨업 끝(0x10068270)
         if (_levelUpQueue.Count == 0) _mixer.SetMusicGain(MusicGain);
     }
 

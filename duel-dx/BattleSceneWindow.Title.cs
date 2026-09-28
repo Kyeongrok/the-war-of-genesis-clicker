@@ -47,7 +47,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _titleOpenedAt = _lastTime;
         _mosesOpen = false;
         ShowMosesBackground(TitleBackground);
-        _mixer.StopMusic();
+        // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
+        if (_musicId == TitleBgm) return;
+        StopMusic();
         PlayMusicFile(TitleBgm, loop: true);
     }
 
