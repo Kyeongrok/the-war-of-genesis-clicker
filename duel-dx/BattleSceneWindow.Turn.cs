@@ -842,6 +842,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
+            // 사이킥 크로스 — 두 획이 겹치는 가운데 칸의 대상은 5틱 뒤 한 번 더 맞는다(ba-14 H4).
+            if (PsychicCrossWorks.Contains(w.Id))
+            {
+                for (double end = _lastTime + 5 / TicksPerSecond; _lastTime < end;) yield return true;
+                if (LiveUnitAt(col, row) is { } centre && centre != a && !dying.Contains(centre) && SeesAsFoe(a, centre)) ApplyWork(a, hitWork, centre, dying);
+            }
             // 여러 번 치는 기술 — 무신멸뢰옥 3타·선 블래스트 4타·카운터 미사일 Lv11↑ 2회(fg-21 ⑩). 간격은 원본 핸들러 틱.
             foreach (int gap in ExtraHitGaps(w))
             {
