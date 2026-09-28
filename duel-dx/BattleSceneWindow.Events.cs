@@ -200,6 +200,15 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => a >= b,
     };
 
+    /// <summary>원본 방향 번호(0 위·1 왼·2 아래·3 오른) 그대로 바라보는 쪽.</summary>
+    private static Facing DirectionFacing(int direction) => (direction & 3) switch
+    {
+        0 => Facing.Up,
+        1 => Facing.Left,
+        2 => Facing.Down,
+        _ => Facing.Right,
+    };
+
     /// <summary>들어오는 쪽(0 위·1 왼·2 아래·3 오른)을 <b>바라보는 쪽</b>으로 — 들어온 쪽의 반대를 본다.</summary>
     private static Facing EdgeFacing(int edge) => (edge & 3) switch
     {
@@ -273,11 +282,12 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 // <b>인자2 가 0 이면 「없어야」 참</b>이다 — 예전에는 거꾸로 읽어 「지켜야 할 사람이 죽으면 패배」가
                 // 첫 틱에 터졌다. 편을 가리키는 20000+ 는 극성이 또 반대다(0x1004f5da).
+                // 전장 밖((0,0) 대기·201 로 나간) 인물은 「없다」(0x1006e940 는 맵 밖 자리를 없음으로 친다).
                 var list = EventTargets(A(0), out bool whole);
                 if (A(0) >= 20000)
-                    return whole ? A(2) == 0 && !list.Any(u => u.Alive)
-                                 : A(2) != 0 && list.Any(u => u.Alive);
-                bool there = list.Any(u => u.Alive);
+                    return whole ? A(2) == 0 && !list.Any(u => u.Alive && u.OnField)
+                                 : A(2) != 0 && list.Any(u => u.Alive && u.OnField);
+                bool there = list.Any(u => u.Alive && u.OnField);
                 return A(2) != 0 ? there : !there;
             }
             case 201:                                                           // 죽었나·없나(0x1004f550)
@@ -285,8 +295,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 원본은 <b>인자1 을 안 읽는다</b>. 예전에는 그걸 「뒤집기」로 읽어, 살아 있는 사람 하나만으로도
                 // 「죽었다」 조건이 참이 되어 전투가 시작하자마자 끝났다.
                 var list = EventTargets(A(0), out bool whole);
-                if (A(0) >= 20000) return whole && list.Count > 0 && list.All(u => u.Alive);
-                return list.Count == 0 || list.All(u => !u.Alive);
+                if (A(0) >= 20000) return whole && list.Count > 0 && list.All(u => u.Alive && u.OnField);
+                return list.Count == 0 || list.All(u => !u.Alive || !u.OnField);   // 전장 밖도 「없다」
             }
             case 203:                                                           // HP 퍼센트 비교
             {
@@ -411,8 +421,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (u.OnField) u.PlayAction(A(2) / 3, 0.6);
                 _eventWaitUntil = _lastTime + 0.6;
                 break;
-            case 212:                                    // 바라보는 쪽
-                foreach (var u in EventTargets(A(0), out _)) u.Facing = EdgeFacing(A(1));
+            case 212:                                    // 바라보는 쪽 — 인자1 이 곧 방향(0 위·1 왼·2 아래·3 오른, 0x10053170 SetAction(0, 인자1, 10000))
+                foreach (var u in EventTargets(A(0), out _)) u.Facing = DirectionFacing(A(1));   // 전에는 들어온 쪽의 반대로 읽어 거꾸로 봤다
                 break;
             case 706:                                    // 최대 HP 의 인자2 % 피해
                 foreach (var u in EventTargets(A(0), out _))
@@ -473,8 +483,8 @@ internal sealed unsafe partial class BattleSceneWindow
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;
-            case 713:                                    // 아이템 하나 주기
-                if (A(0) > 0) _inventory[A(0)] = _inventory.GetValueOrDefault(A(0)) + 1;
+            case 713:                                    // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x10055480 → 0x1004df50, 필드 713 과 같은 함수)
+                if (A(0) > 0) { _ownedLegions.Add(A(0)); _legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
                 PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
