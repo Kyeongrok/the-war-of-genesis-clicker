@@ -58,9 +58,12 @@ internal sealed unsafe partial class BattleSceneWindow
             // 전투 목록(0x10032760)은 분류 1(전투)·4 만 보여 준다(분석-스킬) — 비전투 수련(0, 발키리의 혼 따위)·군단기(2)·
             // 장착형 패시브(3, PSY증가 따위)는 안 나온다.
             if (ab.Category is not (1 or 4)) continue;
+            // 직업 37 은 부족해도 줄이 안 흐려진다(0x100d58a1). HP 비용도 본다(0x100d588b).
             string reason = w.Kind == 4 ? "쓸 수 없음"
+                : c.JobId == 37 ? ""
                 : u.Tp + u.Ctp < TpCostFor(u, c, wid) ? "TP 부족"
-                : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족" : "";
+                : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족"
+                : u.Hp <= _db.WorkHpCost(c, wid) ? "HP 부족" : "";
             rows.Add(($"{_db.T(ab.NameId)} Lv{level}", w, reason.Length == 0, reason));
         }
         // 군단기 — 배속된 군단(CChr+0x1c)의 기술 다섯 칸 가운데 필요 세력을 채우고 대장 조건(0 이거나 나)이 맞는 것(0x10032760 뒷부분, 분석-군단 4.4).

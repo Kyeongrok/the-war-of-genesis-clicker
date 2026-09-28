@@ -339,11 +339,17 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var work in FollowerWorks(c, allyPass))
             {
                 if (!CanAfford(follower, work)) continue;
-                // 제 사거리 안의 대상(적 패스 = 적, 아군 패스 = 아군) 중 대장이 겨눈 칸에 가장 가까운 쪽.
+                // 제 사거리 안의 대상(적 패스 = 적, 아군 패스 = 아군) 가운데 점수 = 값 × Num74 × 10 / (Num74 + |칸 − 대장이 겨눈 칸|) 이 가장 큰 쪽
+                // (0x1005e6d7~0x1005e725, 난수 없음 — ba-14 A9). 값은 그 work 의 +0x3e 기준.
+                int num74 = _db.N(74);
                 var pick = _units
                     .Where(u => u.Alive && u.OnField && (allyPass ? !SeesAsFoe(follower, u) && u != follower : SeesAsFoe(follower, u))
                                 && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower))
-                    .OrderBy(u => Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))
+                    .Select(u => (Unit: u, Score: CDiv(TargetValue(follower, work, [Array.IndexOf(_units, u)]) * num74 * 10,
+                                                        num74 + Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))))
+                    .Where(p => p.Score > 0)
+                    .OrderByDescending(p => p.Score)
+                    .Select(p => p.Unit)
                     .FirstOrDefault();
                 if (pick is null) continue;
                 follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);

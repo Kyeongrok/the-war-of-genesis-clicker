@@ -87,20 +87,21 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>◀ ▶ 를 눌렀나 — 왼쪽 가장자리(x&lt;28)·다섯째 단추 오른쪽(x 398~426), y 320~400.</summary>
+    /// <summary>화살표는 인원이 여섯 이상일 때만, Obs 302 모션 0(왼)·1(오른)이 (20,370)·(400,370)에, 판정 20×50, 한 명씩 넘긴다(ba-14 U10).</summary>
     private bool OnStylePartyArrow(int x, int y)
     {
-        if (y < 320 || y >= 400) return false;
         int count = StyleParty().Count;
-        if (x < 28 && _stylePartyTop > 0) { _stylePartyTop--; Play(MosesClickSound); return true; }
-        if (x >= 398 && x < 426 && _stylePartyTop + 5 < count) { _stylePartyTop++; Play(MosesClickSound); return true; }
+        if (count < 6 || y < 370 || y >= 420) return false;
+        if (x >= 20 && x < 40 && _stylePartyTop > 0) { _stylePartyTop--; Play(MosesClickSound); return true; }
+        if (x >= 400 && x < 420 && _stylePartyTop + 5 < count) { _stylePartyTop++; Play(MosesClickSound); return true; }
         return false;
     }
 
     private void DrawStylePartyArrows(int ox, int oy)
     {
-        int count = StyleParty().Count;
-        if (_stylePartyTop > 0) DrawText("◀", ox + 6, oy + 350, White, 18);
-        if (_stylePartyTop + 5 < count) DrawText("▶", ox + 402, oy + 350, White, 18);
+        if (StyleParty().Count < 6) return;
+        if (!DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha)) DrawText("◀", ox + 20, oy + 385, White, 18);
+        if (!DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha)) DrawText("▶", ox + 400, oy + 385, White, 18);
     }
 
     private List<int> StyleParty()

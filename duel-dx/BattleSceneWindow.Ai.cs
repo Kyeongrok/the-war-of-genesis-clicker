@@ -45,13 +45,33 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             0 => [.. enemies.OrderByDescending(t => CDiv(Power(t) * db.N(74), Reach(t)))],
             1 => [.. enemies.OrderByDescending(t => Danger(t, t.Col, t.Row) * 4 / Reach(t))],
-            // 먼 적부터 — 원본은 앞뒤 원소를 다른 자로 재는 탓에 거리가 가로 4·세로 6 으로 어긋난다.
-            2 => [.. enemies.OrderByDescending(t => 4 * Math.Abs(t.Col - u.Col) + 6 * Math.Abs(t.Row - u.Row))],
+            // 먼 적부터 — 원본 0x10060d10 은 앞 원소를 4|Δx|+6|Δy|, 뒤 원소를 4|Δx|+4|Δy|+2|Δz| 로 재는 비대칭 버블 정렬이라 그대로 흉내 낸다(ba-14 A3).
+            2 => FarSortLikeOriginal(u, enemies),
             3 => [.. friends.OrderByDescending(t => CDiv(Power(t) * db.N(74), Reach(t)))],
             4 => [.. friends.OrderBy(t => CDiv(Power(t) * db.N(74), Reach(t)))],
             5 => [.. friends.OrderByDescending(t => Danger(t, t.Col, t.Row) * 4 / Reach(t))],
             _ => [],
         };
+    }
+
+    /// <summary>
+    /// 이동 방식 2 의 정렬(<c>0x10060d10</c>) — 유닛 배열 순서에서 시작해, 앞 원소 Da = 4|Δx|+6|Δy|, 뒤 원소 Db = 4|Δx|+4|Δy|+2|Δz| 로 재고
+    /// Da &lt; Db 면 바꾼다(먼 쪽이 앞). 같으면 y 가 작은 쪽, 그다음 x 가 작은 쪽이 앞. 비추이적 비교라 초기 순서까지 같아야 결과가 같다.
+    /// </summary>
+    private List<UnitState> FarSortLikeOriginal(UnitState u, List<UnitState> enemies)
+    {
+        var list = enemies.OrderBy(t => Array.IndexOf(_units, t)).Take(100).ToList();
+        int mz = HeightAt(u.Col, u.Row);
+        for (int pass = list.Count - 1; pass >= 1; pass--)
+            for (int j = 0; j < pass; j++)
+            {
+                var a = list[j]; var b = list[j + 1];
+                int da = 4 * Math.Abs(u.Col - a.Col) + 6 * Math.Abs(u.Row - a.Row);
+                int db = 4 * Math.Abs(u.Col - b.Col) + 4 * Math.Abs(u.Row - b.Row) + 2 * Math.Abs(mz - HeightAt(b.Col, b.Row));
+                bool swap = da < db || da == db && (a.Row > b.Row || a.Row == b.Row && a.Col > b.Col);
+                if (swap) (list[j], list[j + 1]) = (b, a);
+            }
+        return list;
     }
 
     /// <summary>
@@ -171,11 +191,34 @@ internal sealed unsafe partial class BattleSceneWindow
             int lost = targets.Sum(i => _units[i].MaxHp == 0 ? 0 : (_units[i].MaxHp - _units[i].Hp) * 100 / _units[i].MaxHp);
             return lost > (_db?.N(79) ?? 30) * need;
         }
-        // 보조(상태이상) 기술은 <b>이득이 있는 대상만</b> 센다(0x1005c480 — 상태 점수 비교). 여기서는 「그 상태가 아직 안 걸린 대상」으로 근사한다(가설).
-        if (w.Kind is 2 or 3 && w.Bonuses.Length > 0)
-            targets = [.. targets.Where(i => w.Bonuses.Any(b => IsStatBonus(b.Stat) || !_units[i].HasStatus(b.Stat)))];
+        // 종류 3(보조·상태이상)은 <b>이득이 있는 대상만</b> 센다(0x1005c480·0x1005c6c7) — 대상이 가진 상태 3칸의 점수 합 A 와
+        // work 가 거는 상태 3칸의 점수 합 B 를 견줘, 적(+0x3c=1)이면 A>B, 아군(+0x3c=4)이면 A<B 인 대상만. 그 밖의 +0x3c 는 아무도 안 센다(ba-14 A2).
+        if (w.Kind == 3)
+        {
+            if (targets.Count < need) return false;
+            int b = w.Bonuses.Sum(x => AilmentScore(x.Stat, x.Value));
+            int count = 0;
+            foreach (int i in targets)
+            {
+                var t = _units[i];
+                int a = 0;
+                for (int k = 0; k < 3; k++) a += AilmentScore(t.StatusId[k], t.StatusValue[k]);
+                if (w.AiTargetSide == 1 ? a > b : w.AiTargetSide == 4 && a < b) count++;
+            }
+            return count >= need;
+        }
         return targets.Count >= need;
     }
+
+    /// <summary>상태 점수표 <c>0x1005c4e0</c> — 해로운 것 −1, 이로운 것 +1, 값의 부호로 갈리는 것(13·14·21·29 는 양수가 이득, 18·20·38 은 음수가 이득), 나머지 0.</summary>
+    private static int AilmentScore(int id, int value) => id switch
+    {
+        2 or 3 or 4 or 5 or 6 or 12 or 15 or 16 or 17 or 19 or 22 or 23 or 24 or 25 or 26 or 27 => -1,
+        7 or 8 or 9 or 10 or 11 or 41 or 47 => 1,
+        13 or 14 or 21 or 29 => value > 0 ? 1 : -1,
+        18 or 20 or 38 => value < 0 ? 1 : -1,
+        _ => 0,
+    };
 
     /// <summary>work 하나로 가장 좋은 (설 칸, 겨눌 칸)을 찾는다. 없으면 null.</summary>
     /// <remarks>
@@ -187,6 +230,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var user = _units[unitIndex];
         int num74 = _db?.N(74) ?? 4;
+        // 효과 모양이 0 인 work(이스케이프·혼 등 387개)는 칠할 칸이 없어 대상 0 → 값 0 → AI 가 절대 안 고른다(0x100704f0 → 0x1005d4d7, ba-14 A5).
+        if (w.AreaShape == 0) return null;
 
         // 겨눌 칸 후보는 <b>갈 수 있는 칸에서 사거리에 드는 칸</b>뿐이다(층 12, 0x100749b0) — 맵 전체를 채점하면 못 닿는 1등 칸 때문에
         // 닿는 다른 적이 있어도 기술을 통째로 버렸다(fg-21 ⑮). 대상 방식 6(방향기)은 제자리 네 이웃 칸만 본다.
@@ -221,7 +266,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
             int score = CDiv(TargetValue(user, w, targets) * num74 * 10,
                              4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
-            if (aim == null || score > aim.Value.Score) aim = (col, row, score);
+            if (score > 0 && (aim == null || score > aim.Value.Score)) aim = (col, row, score);   // 점수 > 0 인 칸만(0x1005d4d7)
         }
         if (aim is not { } pick) return null;
 
@@ -413,10 +458,14 @@ internal sealed unsafe partial class BattleSceneWindow
             // 목표까지 <b>경로 비용</b>이 가장 짧은 칸(0x10059a20). 갈 칸이 나오는 <b>첫 목표에서 멈춘다</b> — 그 칸이 제자리면 쉰다.
             int best = NearestReachableTo(u, range, goal.Col, goal.Row);
             if (best < 0) continue;
-            if (range.Cost[best] > 0) foreach (var r in WalkTo(u, range, best)) yield return r;
-            break;
+            if (range.Cost[best] > 0)
+            {
+                // 이동은 명령 0x2710 하나뿐이다 — 걸은 뒤 TP 가 남으면 <b>처음부터 다시 생각</b>해 공격할 수 있다(0x1005c42b·0x100688ae, ba-14 A1).
+                foreach (var r in WalkTo(u, range, best)) yield return r;
+                report(true);
+            }
+            break;                                       // 제자리가 최선이면 쉰다
         }
-        // 이동만 했으면 원본은 0x2710 뒤 0x2716(휴식)으로 끝낸다 — 다시 생각하지 않는다.
         for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
     }
 

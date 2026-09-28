@@ -171,6 +171,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawDeployCells()
     {
+        // 행동 906 의 초록 사각형 — 같은 층 13 그림(200틱).
+        if (_highlightRect is var (x1, y1, x2, y2) && _lastTime < _highlightUntil)
+            for (int r = Math.Max(0, y1); r <= Math.Min(Rows - 1, y2); r++)
+                for (int c = Math.Max(0, x1); c <= Math.Min(Cols - 1, x2); c++) PaintCell(c, r, DeployLayer);
         if (!_deployOpen) return;
         foreach (var (col, row, _) in _deploySpots) PaintCell(col, row, DeployLayer);
     }
