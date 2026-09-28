@@ -656,6 +656,8 @@ internal sealed unsafe partial class BattleSceneWindow
         SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
         // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
         bool finisher = w.Prepare == 7;
+        // 준비 2·3·5·6 — 시전 소리 1338:1(694)은 시전 시작 +2틱(0x1007def0 단계 1). 핸들러는 동작 15 가 끝난 뒤에 돈다(ba-15 R6).
+        if (w.Prepare is 2 or 3 or 5 or 6) _pendingSounds.AddRange((_effectTables.GetValueOrDefault(1338)?.Clips.GetValueOrDefault(1)?.Sounds ?? []).Select(s => (_lastTime + (2 + s.Item1) / TicksPerSecond, s.Item2)));
         if (finisher) foreach (bool _ in FinisherPrelude(w, a)) yield return true;
         // 필살기는 앞머리가 준비 동작(사슬 앞의 6·15)을 이미 했다 — <b>그 둘만</b> 건너뛴다. 전에는 타격 아닌 동작을 모두 건너뛰어
         // 오메가 스윙·더블 브레이크·이데아 캐논 따위가 마지막 동작 하나만 했다(fg-20).
@@ -689,6 +691,9 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 PlayAction(a, DrawnAction(a, actions[step]));
                 hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
+                // 준비 2·3·5·6 의 발동 동작 15 는 끝까지 튼 뒤에 핸들러가 돈다 — 효과·판정을 그때로(ba-15 R6).
+                if (w.Prepare is 2 or 3 or 5 or 6 && actions[step] == 15 && _sprites.TryGetValue(a.ChrCode, out var sp15))
+                    hitTimes = [Math.Max(0.05, sp15.ActionSeconds(DrawnAction(a, 15), a.Facing))];
                 for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
             int effectMark = _effects.Count;
