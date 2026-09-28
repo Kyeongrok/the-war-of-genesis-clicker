@@ -125,7 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>전투 끝 배너 — 화면을 어둡게 하고 가운데에 任務終了 / Game Over 를 띄운다.</summary>
     private void DrawOutcomeBanner()
     {
-        if (_outcome.Length == 0) return;
+        if (_outcome.Length == 0 || _outcomeQuiet) return;
         bool win = _outcome.StartsWith('승');
 
         // 화면 전체를 절반 밝기로(원본 0x1002e8d0(2, 16))

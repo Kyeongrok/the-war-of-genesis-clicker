@@ -297,7 +297,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (u.StatusId[i] == 47)
             {
                 (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (0, 0, null);
-                u.Hp = Math.Max(1, _db?.N(36) ?? 10);
+                u.Hp = Math.Max(1, u.MaxHp);         // 원본은 최대 HP 로 되살린다(0x10068147 → 0x1007ac70). 전에는 Num 36(≈10)이었다.
                 Popup(u, AilmentNames[47], 0xFFFFE070, 15);
                 return true;
             }
@@ -339,11 +339,18 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int percent = target.Status(41);
         if (percent <= 0 || amount <= 0 || !attacker.Alive) return;
+        // 맞은 쪽의 기본공격 사거리 안에 공격자가 있을 때만 돌려준다(0x1007b400) — 멀리서 쏜 공격자는 안 맞는다(fg-21 ⑪).
+        if (target.Data is { } td && Work(td.BasicWorkId) is { } basic && !InWorkRange(basic, target.Col, target.Row, attacker.Col, attacker.Row, target)) return;
         int back = amount * percent / 100;
         if (back <= 0) return;
         attacker.Hp = Math.Max(0, attacker.Hp - back);
         ShowNumber(attacker, $"{_db?.T(159)} {back}", DamageColor);
-        if (attacker.Hp <= 0 && !SurvivesFatal(attacker)) KillUnit(attacker);
+        if (attacker.Hp > 0) return;
+        // 반사로 쓰러뜨리면 반사한 쪽(부하면 대장)이 처치 보상을 받는다(메시지 1016).
+        var winner = target.LeaderIndex >= 0 && target.LeaderIndex < _units.Length ? _units[target.LeaderIndex] : target;
+        AddSoul(winner, 10);
+        GainKillExp(winner, attacker);
+        if (!SurvivesFatal(attacker)) KillUnit(attacker);
     }
 
     /// <summary>칸에 보이는 상태이상 이름들(빈 칸은 제외).</summary>
