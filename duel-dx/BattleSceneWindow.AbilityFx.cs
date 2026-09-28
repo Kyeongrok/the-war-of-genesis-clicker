@@ -46,7 +46,7 @@ internal sealed unsafe partial class BattleSceneWindow
         [1479] = ([8], [new(1401, 0, true, 0)]),
         [1641] = ([5, 7], []),                                                  // 발키리의혼
         // 살라딘
-        [10] = ([5, 7, 12, 24], [new(379, 0, true, 0), new(109, 0, true, 0)]),  // 비
+        // 비 — BiScript(BattleSceneWindow.Knockback.cs). 레벨마다 work 가 따로라(10 · 221~239) 거기서 모두 잡는다.
         [59] = ([6, 15], [new(1332, 0, false, 0), new(1324, 1, false, 0)]),     // 격려
         // 제이슨
         [467] = ([6, 15], [new(386, 0, true, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
@@ -117,6 +117,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (AstralArrowWorks.Contains(work)) return ([6], []);
         // 메테오 — 운석·착탄·폭발은 BattleSceneWindow.Meteor.cs 가 시각대로 깐다.
         if (MeteorWorks.Contains(work)) return ([6, 15], []);
+        // 비 — 도구 표의 동작 2·0 은 맞은 인물의 것이라 시전자 사슬에서 뺀다. 밀어내기는 KnockbackRoutine.
+        if (BiWorks.Contains(work)) return BiScript;
         if (TeleportWorks.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(381, 0, false, 0), new(210, 3, false, 0)]);
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);

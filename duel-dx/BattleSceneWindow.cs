@@ -1191,7 +1191,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 bool additive = clip?.BlendAt(tick) == 17;
                 BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade, additive);
                 headY = footY + frame.Y;
-                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Action < 0);
+                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }
             if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
         }
@@ -1531,8 +1531,14 @@ internal sealed class UnitSprite
     /// <summary>지금 재생 중인 모션(물들이기·자리 키까지 들어 있다)과 그 틱.</summary>
     public (ObsMotionClip? Clip, int Tick) CurrentClip(UnitState unit)
     {
-        return (_table?.Resolve(ActionOf(unit), ObsMotionTable.DirectionOf(unit.Facing)), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
+        return (ClipOf(unit), (int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond));
     }
+
+    /// <summary>지금 모션 — 모션 번호를 바로 튼 중이면(<see cref="UnitState.Motion"/>) 그것, 아니면 동작·방향으로 찾은 것.</summary>
+    private ObsMotionClip? ClipOf(UnitState unit) =>
+        unit.Motion >= 0 && _table?.Clips.GetValueOrDefault(unit.Motion) is { Keys.Count: > 0 } raw
+            ? raw
+            : _table?.Resolve(ActionOf(unit), ObsMotionTable.DirectionOf(unit.Facing));
 
     /// <summary>
     /// 지금 재생할 동작 — 걷는 중이면 걷기(1), 아니면 서기(0). 다만 <b>걷기 그림이 한 컷뿐인 인물</b>(카르마타처럼
@@ -1552,9 +1558,8 @@ internal sealed class UnitSprite
 
     public SpriteFrame FrameFor(UnitState unit)
     {
-        int action = ActionOf(unit);
-        var clip = _table?.Resolve(action, ObsMotionTable.DirectionOf(unit.Facing));
-        var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: unit.Action < 0);
+        var clip = ClipOf(unit);
+        var key = clip?.KeyAt((int)(unit.AnimTime * BattleSceneWindow.TicksPerSecond), loop: unit.Loops);
         if (key is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return _first;
         if (unit.Facing != Facing.Right) return frame;
 
@@ -1565,6 +1570,8 @@ internal sealed class UnitSprite
 
     /// <summary>모션 번호(동작·방향이 아니라 Obs 안의 번호)로 그 틱의 컷 — 몸 복제(분신) 이펙트가 쓴다. 없으면 null.</summary>
     /// <summary>그 모션의 길이(틱) — 없으면 0. 한 번 도는 분신을 언제 지울지 셀 때 쓴다.</summary>
+    public ObsMotionClip? RawClip(int motion) => _table?.Clips.GetValueOrDefault(motion);
+
     public int MotionTicks(int motion) =>
         _table?.Clips.GetValueOrDefault(motion) is { } clip ? Math.Max(clip.Length, clip.Keys.Count > 0 ? clip.Keys[^1].Start + clip.Keys[^1].Length : 0) : 0;
 
@@ -1708,6 +1715,8 @@ internal sealed class UnitState(DemoUnit unit)
         HasTurn = true;
         Stance = 0;
         Action = -1;
+        Motion = -1;
+        MotionLoops = false;
         ClearStatus();
     }
 
@@ -1772,8 +1781,30 @@ internal sealed class UnitState(DemoUnit unit)
     public void PlayAction(int action, double seconds)
     {
         Action = action;
+        Motion = -1;
+        MotionLoops = false;
         AnimTime = 0;
         _actionLeft = seconds;
+    }
+
+    /// <summary>
+    /// 동작·방향이 아니라 <b>모션 번호</b>를 바로 트는 중이면 그 번호, 아니면 −1 — 원본 <c>0x100e53c0</c>(PlayMotion).
+    /// 천지 파열무의 칼 꽂기(모션 48 → 49 → 50)처럼 방향과 상관없이 한 모션을 쓰는 핸들러가 부른다.
+    /// </summary>
+    public int Motion { get; private set; } = -1;
+
+    /// <summary>바로 튼 모션을 되풀이하나(원본 반복 1000 — 다음 모션을 틀 때까지 붙들고 있는 자세).</summary>
+    public bool MotionLoops { get; private set; }
+
+    /// <summary>모션 컷을 되풀이해 그리나 — 서기·걷기, 또는 되풀이로 튼 모션.</summary>
+    public bool Loops => Action < 0 || MotionLoops;
+
+    /// <summary>모션 번호를 <paramref name="seconds"/> 동안 튼다(그동안 바쁨). <paramref name="loop"/> 면 컷을 되풀이한다.</summary>
+    public void PlayMotion(int motion, double seconds, bool loop)
+    {
+        PlayAction(motion / 3, seconds);
+        Motion = motion;
+        MotionLoops = loop;
     }
 
     /// <summary>지금 동작(서기/걷기)을 시작한 뒤 흐른 시간(초). 동작이 바뀌면 0 부터 다시 센다.</summary>
@@ -1800,9 +1831,34 @@ internal sealed class UnitState(DemoUnit unit)
     {
         Path.Clear();
         _justArrived = false;
+        _sliding = false;
         _fromCol = Col = col;
         _fromRow = Row = row;
         _progress = 1;
+    }
+
+    /// <summary>밀려나는 중 — 걷기와 달리 두 칸 사이 자리를 코드가 준다(<see cref="SetSlide"/>).</summary>
+    private bool _sliding;
+
+    /// <summary>걷지 않고 그 칸으로 밀려나기 시작한다(비의 넉백) — 자리는 <see cref="SetSlide"/> 로 민다.</summary>
+    public void BeginSlide(int col, int row)
+    {
+        Path.Clear();
+        _justArrived = false;
+        _fromCol = Col; _fromRow = Row;
+        Col = col; Row = row;
+        OriginCol = col; OriginRow = row;
+        _progress = 0;
+        _sliding = true;
+    }
+
+    /// <summary>밀려난 정도(0~1) — 1 이면 다 밀려나 그 칸에 선다.</summary>
+    public void SetSlide(double progress)
+    {
+        _progress = Math.Clamp(progress, 0, 1);
+        if (_progress < 1) return;
+        _sliding = false;
+        _fromCol = Col; _fromRow = Row;
     }
 
     public void BeginStep(int col, int row)
@@ -1820,8 +1876,8 @@ internal sealed class UnitState(DemoUnit unit)
     public void Advance(double ticks, double dt)
     {
         AnimTime += dt;
-        if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; AnimTime = _idleOffset; }
-        if (!IsMoving) return;
+        if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; Motion = -1; MotionLoops = false; AnimTime = _idleOffset; }
+        if (!IsMoving || _sliding) return;
         _stepTicks += ticks;
         _progress = Math.Min(1, Math.Floor(_stepTicks) / BattleSceneWindow.StepTicks);
         if (!IsMoving) { _justArrived = true; _carry = _stepTicks - BattleSceneWindow.StepTicks; }
