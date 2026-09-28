@@ -797,16 +797,20 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         bool won = _outcome.StartsWith('승');
         int nextField = _eventNextField;
         _outcome = "";
+        _outcomeQuiet = false;
         _eventNextField = 0;
         // 상태이상은 그 전투에서만 간다 — 판에 남은 유닛에 붙어 있으면 모세스 스테이터스 창에 그대로 보였다(사용자 보고).
         foreach (var u in _units) u.ClearStatus();
-        if (won) ApplyBattleFlags(_scene.Id);   // 이긴 전투가 세우는 진행 깃발
-        // 이어지는 전투는 이벤트 행동 10 이 정한 것이 먼저다(Btl 자료의 값은 그 다음).
-        int next = _eventNextBattle > 0 ? _eventNextBattle : _scene.NextBattle;
+        // 진행 깃발은 <b>실제로 돈</b> 행동 102 만 세운다(RunEventAction) — 이긴 뒤 파일의 102 를 모두 적용하던 것은 안 터진 갈래의 깃발까지 세웠다(fg-21 ⑬).
+        // 이어지는 전투는 이벤트 행동 10 이 정한 것뿐이다. Btl 자료의 첫 행동 10 은 챕터 자료가 없는 데모 흐름에서만 쓴다 —
+        // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
+        int next = _eventNextBattle > 0 ? _eventNextBattle : Episodes().Count == 0 ? _scene.NextBattle : 0;
         _eventNextBattle = 0;
         if (won && next > 0 && StartBattle(next)) return;
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
         if (won && nextField > 0 && OpenField(nextField)) return;
+        // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
+        if (!won && Episodes().Count > 0) { OpenTitle(); return; }
         OpenMoses();
     }
 
@@ -976,6 +980,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             : Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
         // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
         if (w.SelfCentred) { _routine = UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
+        // 빈 칸을 겨누는 기술(방식 7 — 혼·오메가 스윙)은 그 적 너머의 빈 칸을 겨눈다(돌진 시험).
+        if (w.TargetMode == 7 && target >= 0)
+        {
+            var t = _units[target];
+            int tc = t.Col + Math.Sign(t.Col - a.Col), tr = t.Row + Math.Sign(t.Row - a.Row);
+            _routine = UseWorkRoutine(caster, w, -1, tc, tr, []);
+            return;
+        }
         _routine = UseWorkRoutine(caster, w, target,
                                   target >= 0 ? _units[target].Col : a.Col,
                                   target >= 0 ? _units[target].Row : a.Row, []);

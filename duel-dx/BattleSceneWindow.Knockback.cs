@@ -34,7 +34,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 밀어내기 — <paramref name="target"/> 을 시전자가 보는 쪽으로 사거리 끝까지(막히면 거기까지) 밀고, 시전자는 동작 24 로 돌아온다.
     /// </summary>
-    private IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target)
+    private IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0)
     {
         var (dc, dr) = user.Facing switch
         {
@@ -77,7 +77,14 @@ internal sealed unsafe partial class BattleSceneWindow
             target.SetSlide(1);
             target.PlayAction(ObsMotionTable.ActionStand, 0);
         }
-        PlayAction(user, DrawnAction(user, 24));
+        // 다이나믹 크래쉬 — 다 밀린 뒤 대상 SOUL −min(10, SOUL)(0x1009fd40 단계 2).
+        if (soulDrain > 0 && _db is { } db)
+        {
+            int drain = Math.Min(soulDrain, target.Soul);
+            target.Soul -= drain;
+            ShowNumber(target, $"{db.T(41)} -{drain}", MissColor);
+        }
+        if (BiWorks.Contains(w.Id)) PlayAction(user, DrawnAction(user, 24));
     }
 
     private static Facing Opposite(Facing f) => f switch

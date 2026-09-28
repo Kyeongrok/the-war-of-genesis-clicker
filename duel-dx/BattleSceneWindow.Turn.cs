@@ -143,7 +143,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void UpdateTurn()
     {
-        if (_loading || _db == null || _outcome.Length > 0) return;
+        if (_loading || _db == null) return;
+        if (_outcome.Length > 0)
+        {
+            // 조용한 결과(행동 10·6·11[1])는 클릭을 기다리지 않고 제때 넘어간다(원본 120틱).
+            if (_outcomeQuiet && _lastTime >= _outcomeLeaveAt && !_mosesOpen && !FieldOpen && !_episodesOpen) LeaveFinishedBattle();
+            return;
+        }
         if (_deployOpen) { StepDeploy(); return; }     // 캐릭터 배치 중에는 틱·차례·이벤트가 멈춘다(원본 상태 2)
         // 이벤트(대사)가 도는 동안은 틱도 차례도 안 흐른다(0x10066197).
         if (EventsBusy) return;
@@ -678,6 +684,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 SpawnAbilityEffects(w, a, col, row);
                 effectsDone = true;
             }
+            // 혼·비연참·오메가 스윙 — 겨눈 빈 칸까지 돌진하며 지나는 칸의 적을 때린다(fg-21 ⑨). 돌진 자세(붙듦)는 이미 틀었다.
+            if (DashWorks.Contains(w.Id))
+            {
+                foreach (bool _ in DashRoutine(a, w, col, row, dying)) yield return true;
+                holding = false;
+                continue;
+            }
             // 하이 텔레포트 — 피해 없이 고른 칸 둘레로 순간이동한다(범위는 빗나가는 정도).
             if (IsTeleportWork(w))
             {
@@ -806,14 +819,33 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
-            // 비 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18). 쓰러질 인물은 밀지 않는다.
-            if (BiWorks.Contains(w.Id))
+            // 여러 번 치는 기술 — 무신멸뢰옥 3타·선 블래스트 4타·카운터 미사일 Lv11↑ 2회(fg-21 ⑩). 간격은 원본 핸들러 틱.
+            foreach (int gap in ExtraHitGaps(w))
+            {
+                for (double end = _lastTime + gap / TicksPerSecond; _lastTime < end;) yield return true;
+                if (w.Id == SunBlastWork) _shakes.Add((_lastTime, _lastTime + 6 / TicksPerSecond, 6, false));
+                if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{_lastTime:F2} extra hit work {w.Id} after {gap} ticks" + Environment.NewLine);
+                foreach (int ti in (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)))
+                    if (_units[ti].Alive && !dying.Contains(_units[ti])) ApplyWork(a, hitWork, _units[ti], dying);
+            }
+            // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 쓰러질 인물은 밀지 않는다.
+            if (BiWorks.Contains(w.Id) || DynamicCrashWorks.Contains(w.Id))
             {
                 var knocked = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
                               .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a && !dying.Contains(u));
                 if (knocked != null)
-                    foreach (bool _ in KnockbackRoutine(a, w, knocked)) yield return true;
-                else PlayAction(a, DrawnAction(a, 24));
+                    foreach (bool _ in KnockbackRoutine(a, w, knocked, soulDrain: DynamicCrashWorks.Contains(w.Id) ? 10 : 0)) yield return true;
+                else if (BiWorks.Contains(w.Id)) PlayAction(a, DrawnAction(a, 24));
+            }
+            // 리인카네이션 — 범위 안 적을 시전자 반대쪽으로 범위 밖까지 밀어낸다(fg-21 ⑧).
+            if (ReincarnationWorks.Contains(w.Id))
+                foreach (bool _ in RadialPushRoutine(a, w, col, row, WorkTargets(w, a, col, row), dying)) yield return true;
+            // 워핑 — 대상을 멀리 날려 보낸다(fg-21 ⑧).
+            if (WarpingWorks.Contains(w.Id))
+            {
+                var thrown = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
+                             .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a && !dying.Contains(u));
+                if (thrown != null) foreach (bool _ in ThrowRoutine(a, thrown)) yield return true;
             }
             if (holding)
             {
@@ -943,15 +975,21 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
-        if (result == 3 || amount <= 0) { ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor); return; }
+        if (result == 3 || amount <= 0)
+        {
+            ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
+            // 빗나가도 원본은 상태이상을 따로 굴리고(0x1007a285 → 0x1007bcc0) 피격 가속(10)도 건다(0x10079f59, 결과 2·3 모두) — fg-21 ⑪.
+            RushTp(t);
+            ApplyAilments(a, t, w);
+            return;
+        }
 
         if (Trace && IsFoeSide(a) && !IsFoeSide(t))
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"foe hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         t.Hp = Math.Max(0, t.Hp - amount);
-        // 10(피격 가속) — 맞으면 TP 가 값% 만큼 앞당겨진다(0x1007952c).
-        if (t.Status(10) is var rush and > 0) t.Tp = Math.Min(t.MaxTp, t.Tp + rush * t.MaxTp / Math.Max(1, t.Stp) / 100);
+        RushTp(t);
         ShowNumber(t, $"{_db.T(159)} {amount}", DamageColor);
         PlayHitReaction(t, damaged: true);
         if (crit) PlayCritFlash();
@@ -960,10 +998,17 @@ internal sealed unsafe partial class BattleSceneWindow
         ApplyAilments(a, t, w);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
-        if (SurvivesFatal(t)) return;
-        AddSoul(a, 10);   // 처치(메시지 1016)
+        // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).
+        AddSoul(a, 10);
         GainKillExp(a, t);
+        if (SurvivesFatal(t)) return;
         dying.Add(t);
+    }
+
+    /// <summary>10(피격 가속) — 맞으면(빗나가도) TP 가 값% × STP 만큼 앞당겨진다(0x10079f59: 값 × 최대TP ÷ 제수 ÷ 100). 전에는 값% × 제수였다.</summary>
+    private void RushTp(UnitState t)
+    {
+        if (t.Status(10) is var rush and > 0) t.Tp = Math.Min(t.MaxTp, t.Tp + rush * t.Stp / 100);
     }
 
     /// <summary>자기 자리에 쓰는 work(모드 0·2)면 겨냥 없이 바로 쓴다.</summary>
@@ -991,25 +1036,34 @@ internal sealed unsafe partial class BattleSceneWindow
         // 사건이 정한 행선지를 잃고 Btl 자료의 다음 전투로 샜다. Btl 0147 사건 3(→ Fld 0073 → 0074 깃발 99=6)을 건너뛰고 Btl 0312 로 가
         // 델라리움 연구소로(0148)가 안 열렸다(사용자 보고). 틱마다 다시 보니 사건이 끝난 뒤에 판정한다.
         if (_outcome.Length > 0 || EventsBusy) return;
-        // 아직 안 나온 사람은 세지 않는다 — 안 그러면 증원이 있는 전투가 영영 안 끝난다.
-        // 다만 머리 워드 9 가 0 인 전투(엔진이 전멸을 안 봄)에서 적이 아직 들어오기 전이면 전멸이 아니다 —
-        // Btl 0137 은 보스·적 전부가 턴 2 이벤트로 들어와, 시작하자마자 「승리」가 떠 버렸다(사용자 제보).
-        bool enemiesPending = !_scene.EngineJudgesWipe && _units.Any(u => u.Alive && !u.OnField && !u.IsAlly);
-        if (!enemiesPending && !_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
+        // 머리 워드 9 가 0 인 전투는 엔진이 전멸을 아예 안 본다(0x1006ed10 첫머리) — 승패는 스크립트(행동 11·10·6)만 낸다.
+        // 적을 다 잡아도 조건(특정 칸 도달 따위)을 채워야 넘어간다. 전에는 전멸이면 끝내고 스크립트의 나가는 길을 대신 골랐다(fg-21 ⑬).
+        if (!_scene.EngineJudgesWipe) return;
+        // 전장에 선 사람만 센다(원본도 맵 밖은 안 센다).
+        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
         {
             ScriptedDestinationOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true);
         }
-        else if (!_units.Any(u => u.Alive && u.OnField && u.IsAlly)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
+        // 패배는 <b>사람이 모는 편(편 4)</b>이 다 쓰러졌을 때다(0x1006ec00 — 세력 +8 조종 주체 0 인 편만) — 편 3 동맹이 남아도 진다.
+        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
     }
 
-    /// <summary>이벤트 행동 11·10·6 이 적는 결과.</summary>
-    private void SetEventOutcome(bool win)
+    /// <summary>배너·음악 없이 끝나는 결과(행동 10·6 의 결과 5·6, 행동 11[1] 의 결과 2) — 원본 상태 24 는 결과 1·4 만 그린다(0x1006afa0).</summary>
+    private bool _outcomeQuiet;
+
+    /// <summary>조용한 결과가 저절로 넘어가는 때(초).</summary>
+    private double _outcomeLeaveAt;
+
+    /// <summary>이벤트 행동 11·10·6 이 적는 결과. <paramref name="quiet"/> 면 배너 없이 <paramref name="leaveAfterTicks"/> 뒤 넘어간다.</summary>
+    private void SetEventOutcome(bool win, bool quiet = false, int leaveAfterTicks = 120)
     {
         if (_outcome.Length > 0) return;
         _outcome = win ? "승리" : "패배";
         _outcomeAt = _lastTime;
-        PlayOutcomeMusic(win);
+        _outcomeQuiet = quiet;
+        _outcomeLeaveAt = _lastTime + leaveAfterTicks / TicksPerSecond;
+        if (!quiet) PlayOutcomeMusic(win);
     }
 
     // ── 표시 ─────────────────────────────────────────────────────────────────

@@ -370,17 +370,17 @@ internal sealed unsafe partial class BattleSceneWindow
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         switch (a.Code)
         {
-            case 11:                                     // 승패 — 인자0 이 0 이면 승리, 3 이면 패배
-                SetEventOutcome(A(0) == 0);
+            case 11:                                     // 승패 — 결과 = 인자0 + 1: 0 승리(배너), 3 패배(Game Over 배너), 1 은 배너·음악 없이 조용히 끝(호위 실패)
+                SetEventOutcome(A(0) == 0, quiet: A(0) == 1, leaveAfterTicks: 15);
                 break;
-            case 10:                                     // 이어지는 전투
+            case 10:                                     // 이어지는 전투(결과 5) — 배너 없이 120틱 뒤 넘어간다(0x1006afa0)
                 _eventNextBattle = A(0);
-                SetEventOutcome(win: true);
+                SetEventOutcome(win: true, quiet: true);
                 break;
-            case 6:                                      // 끝내고 <b>그 필드로</b>
+            case 6:                                      // 끝내고 <b>그 필드로</b>(결과 6) — 배너 없이 120틱 뒤
                 _eventNextBattle = 0;
                 _eventNextField = A(0);
-                SetEventOutcome(win: true);
+                SetEventOutcome(win: true, quiet: true);
                 break;
             case 200:                                    // 증원 — 그 사람들을 전장에 세운다(0x10050eb0). 인자1 은 원본도 안 읽는다.
             case 214:                                    // 워프 등장 — 자리는 200 과 같다.
@@ -465,7 +465,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {                                            // work 1582(어빌리티 160 「폭주」, 모션 48)를 쓰게 하고 화면을 물들인다.
                 var caster = _units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
                 if (caster is null || Work(1582) is not { } burst) break;
-                _routine = AfterRunning(_routine, UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []));
+                _routine = AfterRunning(_routine, BerserkSwapRoutine(caster, burst));
                 _eventWaitUntil = _lastTime + 1.2;
                 break;
             }
@@ -515,6 +515,33 @@ internal sealed unsafe partial class BattleSceneWindow
     /// (301 「가 나를 때렸다」는 적의 공격 루틴 한가운데서 참이 된다) 전에는 <c>_routine</c> 을 덮어써 적의 AI 루틴이 버려졌고,
     /// 그 끝의 <c>Rest</c> 가 안 불려 차례가 영영 안 넘어갔다(Btl 0143 사건 6 — 디에네의 나인 크루세이더, 사용자 보고).
     /// </summary>
+    /// <summary>
+    /// 행동 909 — 폭주(work 1582) 뒤 베라모드(Chr 223)를 지우고 <b>같은 칸에 Chr 37 을 편 3(동맹 AI)으로</b> 새로 세운다
+    /// (0x10055cb1~0x10055d37). 전에는 기술만 썼다(fg-21 ⑫). 이미 37 이면 기술만.
+    /// </summary>
+    private IEnumerator<bool> BerserkSwapRoutine(UnitState caster, WorkData burst)
+    {
+        var use = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []);
+        while (use.MoveNext()) yield return true;
+        if (caster.ChrCode != 223 || _db?.Character(37) is not { } c) yield break;
+        int col = caster.Col, row = caster.Row;
+        caster.Alive = false;
+        caster.OnField = false;
+        var born = new UnitState(new DemoUnit(37, col, row, 3, 0, caster.Facing)) { Data = c with { CumExp = c.Level * 100 } };
+        born.MaxHp = born.Hp = ScaleMaxHp(born, Math.Max(1, _db.MaxHp(born.Data!)));
+        born.MaxTp = _db.MaxTp(born.Data!);
+        born.Tp = 0;
+        born.Stp = Math.Max(1, _db.Stp(born.Data!));
+        born.MaxSoul = _db.MaxSoul(born.Data!);
+        born.Soul = Math.Min(born.MaxSoul, caster.Soul);
+        born.Awake = true;
+        _units = [.. _units, born];
+        LoadRosterSprites();
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"909: 223 → 37 편 3 at ({col},{row}), 그림 {(_sprites.ContainsKey(37) ? "있음" : "없음")}" + Environment.NewLine);
+    }
+
     private static IEnumerator<bool> AfterRunning(IEnumerator<bool>? running, IEnumerator<bool> next)
     {
         if (running != null)
