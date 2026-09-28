@@ -23,7 +23,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
                                     double TalkPauseSeconds = 0.1, bool ShowSceneTag = true, bool ShowChestContents = false,
-                                    bool FullSoulAtStart = false, int Difficulty = 0, int SoulWeight = 100)
+                                    bool FullSoulAtStart = false, int Difficulty = 0, int SoulWeight = 100,
+                                    int BgmVolume = 90, int SeVolume = 90, bool BgmOn = true)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 

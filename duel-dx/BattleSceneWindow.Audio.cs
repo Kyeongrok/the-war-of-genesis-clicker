@@ -102,9 +102,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>배경음악(assets/bgm) 한 곡 — Bink 음악을 풀어 튼다. 푸는 데 1~2초 걸려 배경 실에서 한다.</summary>
+    /// <summary>지금 걸린(또는 마지막으로 건) 곡 번호 — 타이틀이 같은 곡을 다시 안 걸고, 배경음악 체크 상자가 켤 때 되살린다.</summary>
+    private int _musicId;
+
+    /// <summary>음악을 멈춘다 — 곡 번호도 지워 타이틀이 「같은 곡이 돌고 있다」고 착각하지 않게.</summary>
+    private void StopMusic() { _musicId = 0; _mixer.StopMusic(); }
+
     private void PlayMusicFile(int id, bool loop)
     {
-        if (Muted) return;
+        _musicId = id;
+        if (Muted || !_bgmOn) return;
         // 새 음악은 늘 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다.
         _musicFade = null;
         _musicGain = MusicGain;
@@ -326,7 +333,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void PlayOutcomeMusic(bool win)
     {
-        _mixer.StopMusic();
+        StopMusic();
         PlayMusicFile(win ? 3392 : 55, loop: false);
     }
 

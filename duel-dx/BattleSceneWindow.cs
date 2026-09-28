@@ -704,7 +704,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return;
             }
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
-            if (_mosesPage != -1) { MosesGoBack(); return; }
+            if (_mosesPage is not (-1 or 0)) { MosesGoBack(); return; }   // 주 화면·항행에서는 Esc 가 시스템 메뉴다(분석-모세스 13절)
             Play(578);
             OpenSystemMenu();
             return;

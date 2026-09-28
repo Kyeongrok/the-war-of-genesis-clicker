@@ -30,6 +30,26 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool ObjectBlocks(int col, int row) => ObjectAt(col, row) is { Data.BlocksStanding: true };
 
     /// <summary>
+    /// 물체가 그 인물에게 적인가 — 편 행렬(편 3·4 만 한편)로 가른다(0x1006fde0). 중립(−1) 물체는 바리케이트(7)만 누구나 부술 수 있고
+    /// 포탑·힐 크리스탈(9·10)은 손을 댄 쪽 편이 되기 전엔 적이 아니다. 전에는 편 4 기준 이분법이라 편 3 동맹을 안 쐈다(fg-22).
+    /// </summary>
+    private static bool ObjectHostile(DemoObject obj, UnitState u) =>
+        obj.Team < 0 ? obj.Data.Kind is not (9 or 10) : obj.Team != u.Side && !(obj.Team >= 3 && u.Side >= 3);
+
+    /// <summary>물체에 피해를 준다 — 부서지면 폭발·SOUL +10·든 것 떨구기(0x100e7ba0~). 어빌리티 범위 피해도 여기로 온다.</summary>
+    private void DamageObject(UnitState user, DemoObject obj, int damage)
+    {
+        if (_db is null || damage <= 0 || !obj.Alive) return;
+        obj.Hp -= damage;
+        ShowNumber(user, damage.ToString(), DamageColor);
+        if (obj.Hp > 0) return;
+        _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
+        user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
+        Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
+        GiveObjectSpoils(obj);
+    }
+
+    /// <summary>
     /// 물체를 만지는 work <b>386</b> — 상하좌우 한 칸, <b>TP 80</b>. 원본은 명령 0x2714 가 이 work 으로 물체에 손을 댄다.
     /// </summary>
     private const int ObjectTouchTp = 80;
@@ -220,8 +240,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
         var user = _units[_turn];
         // 제 편 물체는 못 친다 — 종류 7(바리케이트)은 적·중립이면, 9·10 은 적이면 칠 수 있다.
-        bool foe = obj.Team != (user.PlayerControlled ? 4 : 0);
-        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Team < 0)) return false;
+        if (!ObjectHostile(obj, user)) return false;
         if (user.Data is not { } c || _db is null || Work(c.BasicWorkId) is not { } w) return false;
         // 기본공격과 같은 자리 규칙 — 옆 두 칸(모양 2 십자, 사거리 5~8) 안이어야 친다.
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
@@ -253,8 +272,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!IsPlayerTurn || _units[_turn].IsBusy || _routine != null) return false;
         if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
         var user = _units[_turn];
-        bool foe = obj.Team != (user.PlayerControlled ? 4 : 0);
-        if (!foe || (obj.Data.Kind is 9 or 10 && obj.Team < 0)) return false;
+        if (!ObjectHostile(obj, user)) return false;
         if (user.Data is not { } c || Work(c.BasicWorkId) is not { } w || !CanAfford(user, w)) return false;
         if (InWorkRange(w, user.Col, user.Row, obj.Col, obj.Row, user)) return TryBreakObject(obj.Col, obj.Row);
         if (ComputeRange(user) is not { } range) return false;
@@ -318,6 +336,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (damage <= 0) continue;
             u.Hp = Math.Max(0, u.Hp - damage);
             ShowNumber(u, damage.ToString(), DamageColor);
+            AddSoul(u, damage / Math.Max(1, _db.N(43)));   // 물체에 맞아도 SOUL 은 오른다(0x10078f8d)
         }
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 터졌습니다.");
     }
@@ -358,7 +377,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 힐 크리스탈(종류 10)의 work 은 회복이다 — 제 편을 고쳐 준다. 나머지는 상대를 친다.
         bool heals = work is { IsHeal: true };
-        var target = _units.Where(u => u.Alive && u.PlayerControlled == (heals ? ally : !ally) && Reaches(u))
+        var target = _units.Where(u => u.Alive && u.OnField && (heals ? !ObjectHostile(obj, u) && obj.Team >= 0 : ObjectHostile(obj, u)) && Reaches(u))
                            .OrderBy(u => heals ? u.Hp * 100 / Math.Max(1, u.MaxHp) : u.Hp)
                            .FirstOrDefault();
         if (target?.Data is not { } tc) return;
@@ -377,6 +396,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (damage <= 0) return;
         target.Hp = Math.Max(0, target.Hp - damage);
         ShowNumber(target, damage.ToString(), DamageColor);
+        AddSoul(target, damage / Math.Max(1, _db.N(43)));   // 물체에 맞아도 SOUL 은 오른다(0x10078f8d)
     }
 
     /// <summary>
@@ -389,7 +409,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ObjectBarrage(DemoObject obj, WorkData work, bool ally)
     {
         if (_db is null) return;
-        bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && u.PlayerControlled != ally;
+        bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && ObjectHostile(obj, u);
         (int Col, int Row)[] candidates = [(obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row)];
         var best = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) <= 3).ToList()))
                              .OrderByDescending(x => x.Hits.Count).First();
@@ -408,6 +428,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int total = Math.Min(u.Hp, one * 4);
             u.Hp -= total;
             ShowNumber(u, total.ToString(), DamageColor);
+            AddSoul(u, total / Math.Max(1, _db.N(43)));
         }
     }
 

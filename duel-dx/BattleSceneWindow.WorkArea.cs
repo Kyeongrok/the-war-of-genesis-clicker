@@ -137,6 +137,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.SelfCentred || w.RangeShape == 0) return dx == 0 && dy == 0;
 
         if (w.SameHeightRange != 0 && HeightAt(col, row) != HeightAt(fromCol, fromRow)) return false;
+        // 모양 1 의 보조(종류 2) work 은 물체가 선 칸을 못 겨눈다(0x100db640).
+        if (w.RangeShape == 1 && w.Kind == 2 && ObjectAt(col, row) != null) return false;
         if (w.Sight != 0 && !HasSight(fromCol, fromRow, col, row)) return false;
 
         var (graded, plain) = WorkDistance(fromCol, fromRow, col, row, w.HeightRange != 0, w.HeightGraded != 0);
@@ -205,12 +207,30 @@ internal sealed unsafe partial class BattleSceneWindow
             .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]))];
     }
 
+    /// <summary>
+    /// 그 칸에 내려설 수 있나(<c>0x100d99a0</c>) — 판 안, 플래그 &amp;9 없음, 다른 유닛 없음, <b>적 옆 칸(ZOC)이 아님</b>, 물체 없음.
+    /// 돌진·이스케이프의 겨눔과 하이 텔레포트의 착지가 쓴다.
+    /// </summary>
+    private bool CanLandOn(int col, int row, UnitState user)
+    {
+        if ((uint)col >= Cols || (uint)row >= Rows) return false;
+        if (_map is not { } map || col >= map.Cols || row >= map.Rows || (map.FlagsAt(col, row) & 0x9) != 0) return false;
+        if (LiveUnitAt(col, row) is { } other && other != user) return false;
+        if (ObjectAt(col, row) is { Alive: true }) return false;
+        foreach (var (dx, dy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
+            if (LiveUnitAt(col + dx, row + dy) is { } e && e != user && SeesAsFoe(user, e) && HeightAt(col + dx, row + dy) == HeightAt(col, row)) return false;
+        return true;
+    }
+
     /// <summary>겨눌 수 있는 칸인가 — 대상 방식이 유닛을 고르는 것이면 그 칸에 맞는 유닛이 있어야 한다.</summary>
     private bool CanAimAt(WorkData w, UnitState user, int col, int row)
     {
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
         if (w.TargetMode is 3 or 6 or 0 or 2) return true;
-        if (w.TargetMode == 7) return LiveUnitAt(col, row) == null && _map is { } m && (m.FlagsAt(col, row) & 0x9) == 0;
+        // 모드 7(빈 칸) — 들어갈 수 있고(플래그·유닛·적 옆 칸 ZOC), 물체가 없고, 시전자와 높이가 같은 칸만(0x100daca0 모드 7 → 0x100d9a20).
+        if (w.TargetMode == 7) return CanLandOn(col, row, user) && HeightAt(col, row) == HeightAt(user.Col, user.Row);
+        // 모드 1 은 적 유닛뿐 아니라 <b>적 물체</b>(포탑·바리케이트)도 겨눈다(0x100daca0).
+        if (w.TargetMode == 1 && ObjectAt(col, row) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user)) return true;
         return LiveUnitAt(col, row) is { } t && ModeAccepts(w.TargetMode, user, t);
     }
 }

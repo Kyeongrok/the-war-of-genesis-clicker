@@ -131,22 +131,31 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
+    /// <summary>
+    /// 이벤트를 볼 때(비트) — 원본 <c>CheckEvents(갈래)</c> 는 세 자리에서만 돈다: 1 레벨업 끝(0x10068270) · 2 행동 끝(0x100680a3) · 3 새 틱(0x10067d5c).
+    /// 사건의 갈래(레코드 +0xe, <see cref="BattleEvent.Word2"/>)가 0 이면 셋 다, 아니면 그때만. 전에는 프레임마다 봤다(fg-22).
+    /// </summary>
+    private int _eventCheckDue = 0xF;
+
     private void RunEvents()
     {
-        if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy) return;
+        if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy || _eventCheckDue == 0) return;
         for (int i = 0; i < _events.Count; i++)
         {
             var e = _events[i];
             if (e.Conditions.Count == 0) continue;                      // 조건이 없으면 안 터진다(0x10056574)
             if (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire) continue;
+            int branch = e.Word2 & 3;
+            if (branch != 0 && (_eventCheckDue & (1 << branch)) == 0) continue;
             if (!e.Conditions.All(EventCondition)) continue;
             _eventFired[i]++;
             _runningEvent = i;
             _eventPc = 0;
             _eventWaitUntil = 0;
             StepEvent();
-            return;
+            return;                                                     // 나머지는 이 사건이 끝난 뒤 같은 시점 표시로 다시 본다
         }
+        _eventCheckDue = 0;
     }
 
     /// <summary>
@@ -224,6 +233,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>조건 300·301 이 찾아 낸 두 사람 — 대사가 <c>20010</c>·<c>20011</c> 로 이들을 가리킨다.</summary>
     private UnitState? _eventFoundA, _eventFoundB;
 
+    /// <summary>조건 200·203·204·402 가 찾은 사람도 20010 이 된다(0x101b699c 에 적는 조건들) — 20011 은 그대로.</summary>
+    private void RememberFound(UnitState? found) { if (found != null) _eventFoundA = found; }
+
     /// <summary>
     /// 조건 300·301 이 쓰는 대상 고르기 — <b>죽은 사람도 든다</b>(걸러내기 갈래가 0 이라 NULL 검사뿐)이고,
     /// 편 코드는 <b>홀수만</b> 받는다(짝수는 늘 거짓, <c>0x1005022c</c>).
@@ -263,13 +275,13 @@ internal sealed unsafe partial class BattleSceneWindow
         switch (c.Code)
         {
             case 0: return true;                                                // 엔진 기본 갈래 — 늘 참(전투 첫 대사 방아쇠, 37번 쓰인다)
-            case 1: return _turnNo == 2;                                        // 시작 인트로 방아쇠
+            case 1: return _tick == 2;                                          // 시작 인트로 방아쇠 — 시간 틱 2(아무도 움직이기 전, 0x1004f218)
             case 2:                                                             // 타이머 세기 비교(0x1004f230) — 인자1 이 값, 인자2 가 연산자
             {
                 int slot = A(0);
                 return (uint)slot < 10 && Compare(_eventTimer[slot], A(2), A(1));
             }
-            case 3: return Compare(_turnNo, A(1), A(0));                        // 턴 수 비교
+            case 3: return Compare(_tick, A(1), A(0));                          // 시간 틱 비교(0x1004f272 — [+0x4cf0] 는 빈 틱마다 오른다)
             case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
             case 101: return Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2));
             case 102:                                                           // <b>장비</b>를 가졌나(0x1004f2f0) — 상태이상이 아니다. 자료 사용 0회.
@@ -284,6 +296,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 첫 틱에 터졌다. 편을 가리키는 20000+ 는 극성이 또 반대다(0x1004f5da).
                 // 전장 밖((0,0) 대기·201 로 나간) 인물은 「없다」(0x1006e940 는 맵 밖 자리를 없음으로 친다).
                 var list = EventTargets(A(0), out bool whole);
+                RememberFound(list.FirstOrDefault(u => u.Alive && u.OnField));   // 조건 200 도 20010 을 남긴다(0x1004f465)
                 if (A(0) >= 20000)
                     return whole ? A(2) == 0 && !list.Any(u => u.Alive && u.OnField)
                                  : A(2) != 0 && list.Any(u => u.Alive && u.OnField);
@@ -301,7 +314,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 203:                                                           // HP 퍼센트 비교
             {
                 var list = EventTargets(A(0), out _);
-                return list.Any(u => u.Alive && Compare(u.Hp, A(2), u.MaxHp * A(3) / 100));
+                var low = list.FirstOrDefault(u => u.Alive && Compare(u.Hp, A(2), u.MaxHp * A(3) / 100));
+                if (low != null) RememberFound(low);                            // 조건 203 도 20010 을 남긴다(0x1004f7f5)
+                return low != null;
             }
             case 401:                                                           // 그 편 전멸
             {
@@ -315,7 +330,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 var list = EventTargets(A(0), out _);
                 int x1 = Math.Min(A(2), A(4)), x2 = Math.Max(A(2), A(4));
                 int y1 = Math.Min(A(3), A(5)), y2 = Math.Max(A(3), A(5));
-                return list.Any(u => u.Alive && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
+                var inside = list.FirstOrDefault(u => u.Alive && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
+                if (inside != null) RememberFound(inside);                      // 조건 402 도 20010 을 남긴다(0x10050a32)
+                return inside != null;
             }
             case 400:                                                           // 사각형 안에 있는 수 비교
             {
@@ -388,6 +405,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 한 칸 반 뒤, 두 명마다 한 칸씩 더 뒤) 가장자리에서 8픽셀/틱으로 걸어 들어오게 한다. 데모는 진형 자리에 바로 세운다.
                 foreach (var u in EventTargets(A(0), out _))
                 {
+                    if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     u.Facing = EdgeFacing(A(4));
@@ -403,11 +421,13 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
                 _eventWaitUntil = _lastTime + 0.4;       // 걸어 들어오는 사이만큼 기다린다
                 break;
-            case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로(부하도 같이)
+            case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로. 인자1 이 1 이면 부대째(원본 — 전에는 늘 부하까지 데려갔다)
                 foreach (var u in EventTargets(A(0), out _))
                 {
+                    if (!u.Alive) continue;
                     u.ResetTo(A(2), A(3));
                     u.OnField = false;
+                    if (A(1) != 1) continue;
                     int leader = Array.IndexOf(_units, u);
                     foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
                 }
@@ -417,10 +437,21 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (u.OnField) u.ResetTo(A(2), A(3), keepFacing: true);
                 break;
             case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
+            {
+                // 원본은 그 모션이 <b>끝날 때까지</b> 기다린다(인자4 반복) — 모션 길이만큼.
+                double longest = 0.2;
                 foreach (var u in EventTargets(A(0), out _))
-                    if (u.OnField) u.PlayAction(A(2) / 3, 0.6);
-                _eventWaitUntil = _lastTime + 0.6;
+                {
+                    if (!u.OnField) continue;
+                    double seconds = _sprites.TryGetValue(u.ChrCode, out var sp) ? sp.MotionTicks(A(2)) / TicksPerSecond : 0;
+                    if (seconds <= 0) seconds = 0.6;
+                    int repeat = Math.Clamp((int)A(4), 1, 4);
+                    u.PlayAction(A(2) / 3, seconds * repeat);
+                    longest = Math.Max(longest, seconds * repeat);
+                }
+                _eventWaitUntil = _lastTime + longest;
                 break;
+            }
             case 212:                                    // 바라보는 쪽 — 인자1 이 곧 방향(0 위·1 왼·2 아래·3 오른, 0x10053170 SetAction(0, 인자1, 10000))
                 foreach (var u in EventTargets(A(0), out _)) u.Facing = DirectionFacing(A(1));   // 전에는 들어온 쪽의 반대로 읽어 거꾸로 봤다
                 break;
@@ -502,7 +533,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 400:
             case 402: break;                             // 카메라 옮기기 — 데모 카메라는 말하는 이·차례인 이를 저절로 따라간다
             case 512:                                    // BGM 바꾸기
-                _mixer.StopMusic();
+                StopMusic();
                 if (A(0) > 1 && A(0) != 0xffff) PlayMusicFile(A(0), loop: true);
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;

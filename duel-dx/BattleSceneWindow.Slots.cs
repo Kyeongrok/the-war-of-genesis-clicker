@@ -104,7 +104,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!SlotsOpen) return false;
         var (x, y) = SlotsOrigin();
 
-        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; return true; }   // 닫기 X
+        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; ReturnToSystemMenu(); return true; }   // 닫기 X
 
         // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다)
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
@@ -132,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void SaveSlot(int slot)
     {
-        _slotsMode = -1;
+        // 저장한 뒤에도 슬롯 창은 열린 채다 — 이어서 다른 칸에 저장할 수 있다(원본 vt[0x40] 다시 보이기, fg-22).
         if (!SaveBattleTo(SlotPath(slot))) { _notice = ("Error", _lastTime + 4); return; }
         Play(SoundSaved);
         // 원본은 120틱(4초)인데 너무 오래 떠 있다는 요청으로 40틱(약 1.3초)만 띄운다. 클릭하면 바로 닫힌다.

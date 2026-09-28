@@ -102,8 +102,9 @@ internal sealed unsafe partial class BattleSceneWindow
                                                // DUELDX_JOB=<직업> 이면 아군 직업을 바꾼다 — 전직 화면(2단계·3단계 단추)을 시험할 때 쓴다.
                                                JobId = ushort.TryParse(Environment.GetEnvironmentVariable("DUELDX_JOB"), out ushort job) ? job : c.JobId }
                       : c with { CumExp = c.Level * 100 };
-            // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물만(0x1007a8e0).
-            if (!unit.IsAlly) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
+            // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물은 <b>편과 상관없이</b>(0x100633ff — 편 3 손님 제이슨도 자란다).
+            // 파티 객체에서 온 인물(_party)은 제 레벨을 그대로 쓴다.
+            if (!unit.IsAlly || !_party.ContainsKey(unit.ChrCode)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
 
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
             var data = unit.Data ?? c;
@@ -166,7 +167,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_routine != null)
         {
-            if (!_routine.MoveNext()) _routine = null;
+            if (!_routine.MoveNext()) { _routine = null; _eventCheckDue |= 1 << 2; }   // 행동이 끝났다 — 갈래 2 검사
             return;
         }
 
@@ -205,6 +206,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private int PartyLevel()
     {
+        // 원본은 플레이어 <b>부대원 명부</b>의 상위 셋이다(0x1004e070) — 명부가 있으면 그것으로(편 3 손님은 안 센다).
+        if (_members.Count > 0)
+        {
+            var roster = _members.Select(chr => (int)(_party.GetValueOrDefault(chr)?.Level ?? _db?.Character(chr)?.Level ?? 0))
+                                 .Where(v => v > 0).OrderByDescending(v => v).Take(3).ToList();
+            if (roster.Count > 0) return roster.Sum() / roster.Count;
+        }
         var levels = _units.Where(u => u.IsAlly)
                            .Select(u => _party.TryGetValue(u.ChrCode, out var carried) ? carried.Level
                                       : _db?.Character(u.ChrCode)?.Level ?? 0)
@@ -268,8 +276,16 @@ internal sealed unsafe partial class BattleSceneWindow
             if (u.HasStatus(38)) u.Tp += u.Status(38);
             if (u.Tp > u.MaxTp) u.Tp = u.MaxTp;
             if (u.Tp >= u.MaxTp) u.HasTurn = true;
-            if (u.HasTurn && !hadTurn) turnStarts.Add(u);
+            if (u.HasTurn && !hadTurn)
+            {
+                turnStarts.Add(u);
+                // 방어·회피 자세는 TP 가 가득 찬 <b>그 틱</b>에 풀린다(0x1006da40 → 0x10072d90) — 마비·빙결이면 안 풀린다.
+                if (CanTakeTurn(u)) u.Stance = 0;
+            }
         }
+        // 켜 둔 이벤트 타이머는 틱마다 하나씩 센다(0x10067d3c — 틱을 올린 바로 다음 줄). 갈래 3 이벤트 검사도 이때다.
+        for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
+        _eventCheckDue |= 1 << 3;
         TickAilments(turnStarts);
         StepObjects();
         // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
@@ -290,12 +306,10 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _turn = index;
         _selected = index;
-        _turnNo++;                  // 이벤트 조건 1·3 이 보는 턴 수(0x10067d36)
+        _turnNo++;
         if (!resume)
         {
-            // 켜 둔 이벤트 타이머는 턴마다 하나씩 센다(0x10067d3c 가 턴을 올린 바로 다음 줄에서 부른다).
-            for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
-            _units[index].Stance = 0;   // 자세는 다음 차례가 오면 풀린다(0x10072d90)
+            // 이벤트 타이머·자세 풀기는 틱에서 한다(AdvanceTick) — 원본 [+0x4cf0] 은 빈 틱마다 오르는 시간 틱이다(0x10067d36, fg-22).
             AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
         }
         _units[index].OriginCol = _units[index].Col;
@@ -325,6 +339,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void EndTurn()
     {
+        _eventCheckDue |= 1 << 2;                // 갈래 2 = 행동 끝(0x100680a3)
         if (_turn >= 0) _units[_turn].HasTurn = false;
         _turn = -1;
         _ringUnit = -1;
@@ -627,6 +642,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (targetIndex >= 0) (col, row) = (_units[targetIndex].Col, _units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
+        if (w.Id == StanceDefendWork) a.Facing = Facing.Down;   // 방어 0x100b2d50 은 방향 2 를 박아 넣는다 — 늘 아래를 본다
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
 
         ReformFollowers(userIndex);        // 군단이면 부하가 대장 진형으로 따라온다
@@ -811,6 +827,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
+                // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
+                if (hit == 0 && w.IsDamage && a.Data is { } od)
+                    foreach (var (oc, or) in AreaCells(w, a, col, row).Distinct())
+                        if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
+                            DamageObject(a, obj, _db!.Atk(od, a.Soul, hitWork.Power));
                 // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
                 // 아군 하나를 겨누는 기술(방식 4)이면 아군 패스(회복·보조), 피해 기술이면 적 패스.
                 if (!followersDone && targets.Count > 0 && (w.IsDamage || w.TargetMode == 4))
@@ -908,7 +929,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                     $"work {w.Id} by {a.ChrCode}: TP {db2.WorkTpCost(cost, w.Id)} × (100{a.Status(20):+#;-#;+0})% = {TpCostFor(a, cost, w.Id)}, 남은 TP {a.Tp}" + Environment.NewLine);
             a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
-            AddSoul(a, w.Kind switch { 0 => 10, 1 => 6, _ => 4 });
+            // 행동 뒤 SOUL 증가(0x10076586 점프표): 종류 0 → Num26 · 1 → Num27 · 2 → Num29 · 3 → Num28 · 4·5·7 → 0.
+            AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(29), 3 => db2.N(28), _ => 0 });
             int hp = db2.WorkHpCost(cost, w.Id);
             if (hp > 0) a.Hp = Math.Max(1, a.Hp - hp);
         }
@@ -967,11 +989,11 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (!w.IsDamage)
         {
-            if (result != 3)
-            {
-                ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
-                MarkBuffed(a, t, w);
-            }
+            // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).
+            if (result == 3) { ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor); return; }
+            ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
+            MarkBuffed(a, t, w);
+            if (t != a) PlayHitReaction(t, damaged: false);
             return;
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
@@ -1033,6 +1055,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_outcome.Length > 0) return;
         // 먼저 이벤트 스크립트 — 「몇 턴 버티기」·「누구를 지키기」처럼 전멸 말고 다른 조건으로 끝나는 전투가 있다.
+        _eventCheckDue |= 1 << 2;               // 쓰러짐은 행동 끝에서 본다
         RunEvents();
         // 방금 켜진 사건이 아직 도는 중이면 그것이 끝나기를 기다린다 — 전멸 사건(대사 → 행동 6 필드)이 도는 사이에 기본 「승리」를 내면
         // 사건이 정한 행선지를 잃고 Btl 자료의 다음 전투로 샜다. Btl 0147 사건 3(→ Fld 0073 → 0074 깃발 99=6)을 건너뛰고 Btl 0312 로 가

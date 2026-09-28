@@ -116,6 +116,9 @@ public sealed record CharacterData(
     /// <summary>목소리 묶음 번호(파일 6) — <c>Dat/Dmg.dat</c> 레코드(맞을 때·차례 부르는 목소리).</summary>
     public ushort VoiceSet { get; init; }
 
+    /// <summary>큰 유닛(파일 18 = 1) — 3×3 칸이 모두 비어야 들어간다(<c>0x100d9c7d</c>). 스파이더·퉁 파오·바루스 등 11명.</summary>
+    public bool Big { get; init; }
+
     /// <summary>EXP(<c>CChr+0x30</c>) — 어빌리티를 올리고 배우는 데 쓴다. .chr 파일에는 없다.</summary>
     public int Exp { get; init; }
 
@@ -131,6 +134,7 @@ public sealed record CharacterData(
             WeaponType = b[39],
             WeaponBand = b[40],
             VoiceSet = U(6),
+            Big = b[18] == 1,
         };
     }
 

@@ -132,6 +132,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _ringHover = hover;
         _ringHoverAt = _lastTime;
         if (hover >= 0) PlaySound(SoundHover);
+        // 항목 설명(TXR 1375~1380 — 「적에게 일반공격을 행한다…」) — 원본은 항목마다 설명 창을 단다(0x10042c00). 올렸을 때 안내 줄로(가설).
+        if (hover >= 0 && _db?.T((ushort)(1375 + hover)) is { Length: > 0 } help) Hint(help.Replace("$n", " "));
     }
 
     private bool RingItemEnabled(RingCommand command, int ringUnit)
@@ -141,7 +143,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!IsPlayerTurn || ringUnit != _turn || unit.IsBusy) return false;
         // 원본 0x100e16b0 — Attack 은 늘 켜져 있고, Ability·Item 은 TP+CTP 가 문턱(Num 4) 아래면 꺼진다. Ability 는 상태이상 12(봉인)로도 꺼진다.
         // 전에는 거꾸로 Attack·Ability 를 끄고 Item 은 안 껐다.
-        bool enoughTp = _db == null || unit.Tp + unit.Ctp >= _db.N(4);
+        // 문턱은 <b>걸은 비용을 뺀</b> TP(+0x4da = 현재 TP − 경로 비용) 로 본다(0x10074280) — 걷고 나서 링을 열 때.
+        int walked = (unit.Col != unit.OriginCol || unit.Row != unit.OriginRow) && ComputeRange(unit) is { } r && r.CanReach(unit.Row * Cols + unit.Col)
+                     ? r.Cost[unit.Row * Cols + unit.Col] : 0;
+        bool enoughTp = _db == null || unit.Tp - walked + unit.Ctp >= _db.N(4);
         return command switch
         {
             RingCommand.Ability => enoughTp && !unit.HasStatus(12),
