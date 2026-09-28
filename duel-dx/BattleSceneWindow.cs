@@ -306,6 +306,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
         _units = BuildUnits(_scene);
+        // 첫 판(시험 훅 포함)은 배치 단계 없이 — 새로 거는 전투(StartBattle)만 연다. DUELDX_DEPLOY=1 이면 첫 판에서도 연다(화면 밖 시험용).
+        BeginDeployOrDrop(_scene, fresh: Environment.GetEnvironmentVariable("DUELDX_DEPLOY") == "1");
         LoadEvents(_scene.Id);
     }
 
@@ -673,6 +675,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
         if (_tuningOpen) { OnTuningKey(key); return; }
+        if (_deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
         // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
@@ -818,6 +821,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
         if (OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
+        if (OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
         if (OnFieldClick(bx, by)) return;
         if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
@@ -1095,6 +1099,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         Array.Fill(_fb, BgColor);
         DrawBackground();
         DrawMoveRange();
+        DrawDeployCells();
         DrawWorkRange();
         if (_showGrid) DrawGridLines();
         DrawObjects();
@@ -1119,6 +1124,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawOutcomeBanner();
         DrawUnitInfo();
         if (!_mosesOpen) DrawSystem();
+        DrawDeployPanel();
         DrawKeysPanel();
         DrawTuning();
         DrawLevelUp();
@@ -1681,11 +1687,11 @@ internal sealed class UnitState(DemoUnit unit)
     public bool Alive { get; set; } = true;
 
     /// <summary>전투를 시작한 칸 — RESTART 로 되돌릴 때 쓴다.</summary>
-    public int StartCol { get; } = unit.Col;
-    public int StartRow { get; } = unit.Row;
+    public int StartCol { get; set; } = unit.Col;   // 배치 단계가 옮기면 RESTART 도 그 자리로
+    public int StartRow { get; set; } = unit.Row;
 
     /// <summary>전투를 시작할 때 보는 쪽 — Btl 레코드의 방향(파일 8, <c>SetAction(0, 방향)</c>: 0 위 · 1 왼 · 2 아래 · 3 오른).</summary>
-    public Facing StartFacing { get; } = unit.Facing;
+    public Facing StartFacing { get; set; } = unit.Facing;
 
     /// <summary>
     /// 전투를 처음부터 다시 할 때 — 자리·상태를 처음으로 돌린다(수치는 InitBattle 이 다시 채운다).

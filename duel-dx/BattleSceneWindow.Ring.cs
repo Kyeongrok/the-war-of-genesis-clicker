@@ -190,6 +190,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
         if (OnTalkInput(skipAll: true)) return;
+        if (_deployOpen) { _deployPick = null; return; }   // 배치 중 우클릭 = 고른 사람 놓기
         // 모세스에서는 우클릭이 <b>뒤로</b>다(원본과 같게, 사용자 보고) — 행성에서 우클릭하면 행성 고르기로 돌아가
         // 다른 행성을 고를 수 있다. Esc 와 같은 길을 탄다.
         if (_mosesOpen)
