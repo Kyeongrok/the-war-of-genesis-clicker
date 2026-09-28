@@ -18,7 +18,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <param name="Delay">띄우기까지 기다리는 틱(원본 <c>0x100c2530</c>) — 메테오 착탄 따위.</param>
     /// <param name="Count">뿌리개가 흩뿌리는 개수(설정 인자 3) — 대상 둘레 ±20·±10 픽셀에.</param>
     /// <param name="Fly">시전자에서 대상으로 날아가는 이펙트(생성자 <c>0x100c3340</c>·<c>0x100c5940</c>) — 모션 길이 동안 옮긴다.</param>
-    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false);
+    /// <param name="Life">수명(틱, <c>0x100c2530</c>) — 0 이면 모션 한 번, 아니면 그동안 모션을 되풀이한다(힐 297:1 120틱 따위, ba-15 R2).</param>
+    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false, int Life = 0);
 
     /// <summary>
     /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
@@ -49,8 +50,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
     {
         // 죠안
-        [58] = ([6, 15], [new(297, 0, true, 0), new(312, 0, true, 42)]),        // 힐
-        [87] = ([6, 15], [new(297, 1, true, 0), new(312, 1, true, 42)]),        // 큐어
+        // 힐·큐어 — 이펙트(높이·지연·수명)는 뽑은 표가 원본대로 채운다(ba-15: 297 이 z+70 = 42px, 312 는 소리 껍데기).
+        [58] = ([6, 15], []),                                                   // 힐
+        [87] = ([6, 15], []),                                                   // 큐어
         // 연 — 레벨 띠마다 사슬이 다르다(분석-모션 ba-10 「연 레벨별 동작 사슬과 타수」).
         // Lv1~4 = 2타, 5~8 = 3타, 9~12 = 4타, 13~16 = 5타, 17~20 = 6타.
         // 표는 work 번호로 찾는다 — 스킬 파일(0001.json)은 원본 짝수 레벨 work 만 남겨 Lv1~10 으로 줄였으므로(새 Lv N = 원본 Lv 2N)
@@ -239,6 +241,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
             if (w.Prepare == 7 && e.Obs is 1338 or 487 or PreludeDotObs or PreludeBandObs) continue;
+            // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
+            if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
             if (CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
@@ -256,6 +260,12 @@ internal sealed unsafe partial class BattleSceneWindow
             else
                 for (int k = 0; k < Math.Max(1, e.Count); k++)
                 {
+                    if (e.Life > 0)
+                    {
+                        // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
+                        AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                        continue;
+                    }
                     // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
                     int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
                     _effects.Add((e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy));

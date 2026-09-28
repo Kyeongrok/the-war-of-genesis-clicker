@@ -19,6 +19,7 @@
 손으로 맞춘 표(`AbilityMotions`)가 있는 work 은 그것이 이긴다 — 이 표는 <b>빈자리를 채우는 용도</b>다.
 """
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -85,14 +86,28 @@ FLYERS = {0x100c3340, 0x100c5940}                            # 시전자 → 대
 
 
 def add(effs, key):
-    """key = (Obs, 모션, 자리, 지연틱, 개수, 날기). 같은 (Obs, 모션, 자리)는 하나만."""
-    key = key + (0, 1, False)[len(key) - 3:] if len(key) < 6 else key
+    """key = (Obs, 모션, 자리, 지연틱, 개수, 날기, 높이px, 수명틱). 같은 (Obs, 모션, 자리)는 하나만 — 아는 값이 많은 쪽을 남긴다."""
+    default = (0, 1, False, 0, 0)
+    key = tuple(key) + default[len(key) - 3:]
     for i, e in enumerate(effs):
         if e[:3] == key[:3]:
-            if e[3:] == (0, 1, False) and key[3:] != (0, 1, False):
-                effs[i] = key                                # 지연·개수·날기를 아는 쪽으로 바꿔 끼운다
-            return
+            if e[3:] == default and key[3:] != default:
+                effs[i] = key
+            return i
     effs.append(key)
+    return len(effs) - 1
+
+
+def zlift(z):
+    """높이 — 월드 z 치우침 × 0.6 픽셀(화면 y = 월드y×0.8 − 월드z×0.6, 0x100ea910). 「나.z+50」·「나.대상.z+70」·숫자."""
+    if isinstance(z, int):
+        v = z - (1 << 32) if z >= 1 << 31 else z
+        return round(v * 0.6) if abs(v) < 2000 else 0
+    if isinstance(z, str):
+        m = re.search(r'\.z([+-]\d+)$', z)
+        if m:
+            return round(int(m.group(1)) * 0.6)
+    return 0
 
 
 MOVIES = {34, 40, 41, 42, 61}                                # assets/effects/mov 에 풀어 둔 영상(mov_frames)
@@ -122,6 +137,7 @@ for wid in sorted(works):
             recs = list(dll.script(h))
         except Exception:
             recs = []
+        last_eff = None
         for rec in recs:
             kind = rec[1]
             if kind == 'act' and isinstance(rec[2], int):
@@ -137,9 +153,14 @@ for wid in sorted(works):
                 acts[-1] += RAW_HOLD - RAW_ONCE              # 바로 앞 모션을 붙든다(반복 1000)
             elif kind == 'eff' and isinstance(rec[2], int) and isinstance(rec[3], int):
                 place = where_of(rec[4])
-                add(effs, (rec[2], rec[3], place))           # 소리 껍데기도 남긴다 — 소리 키로 소리를 낸다
-                for o, mo in pictures(rec[2], rec[3]):
-                    add(effs, (o, mo, place))
+                # 부모만 넣는다 — 자식 키는 duel-dx 가 DrawUnitLayers 로 그 틱·치우침대로 그린다(ba-15 R4, 넣으면 두 번 그려졌다).
+                last_eff = add(effs, (rec[2], rec[3], place, 0, 1, False, zlift(rec[6]), 0))
+            elif kind == 'delay' and isinstance(rec[2], int) and last_eff is not None and 0 < rec[2] < 600:
+                e = effs[last_eff]
+                effs[last_eff] = e[:3] + (rec[2],) + e[4:]
+            elif kind == 'life' and isinstance(rec[2], int) and last_eff is not None and 0 < rec[2] < 3000:
+                e = effs[last_eff]
+                effs[last_eff] = e[:7] + (rec[2],)
         # 파생 클래스 생성자로 만드는 이펙트·뿌리개(fx-189) — 직접 호출만 보는 script() 가 놓친다.
         try:
             items = extra.effects(h)
@@ -164,7 +185,9 @@ for wid in sorted(works):
             if not isinstance(obs, int) or r['kind'] not in ('obs', 'emit'):
                 continue
             place = 'self' if wx.where_of(r) == 'self' else 'target'
-            delay = r['delay'] if isinstance(r.get('delay'), int) and 0 < r['delay'] < 300 else 0
+            delay = r['delay'] if isinstance(r.get('delay'), int) and 0 < r['delay'] < 600 else 0
+            life = r['life'] if isinstance(r.get('life'), int) and 0 < r['life'] < 3000 else 0
+            lift = zlift(r.get('z'))
             count = 1
             if r['kind'] == 'emit' and r.get('setter'):
                 args = r['setter'][1]
@@ -172,10 +195,7 @@ for wid in sorted(works):
                     count = args[2]                          # 뿌리개 설정 인자 3 = 개수(크래쉬 봄 110 은 8)
             fly = r.get('ctor') in FLYERS
             if isinstance(mo, int):
-                if r['kind'] == 'obs':
-                    add(effs, (obs, mo, place, delay, count, fly))
-                for o, m2 in pictures(obs, mo):
-                    add(effs, (o, m2, place, delay, count, fly))
+                add(effs, (obs, mo, place, delay, count, fly, lift, life))   # 부모만(자식은 DrawUnitLayers)
             else:                                            # 뿌리개 모션을 코드가 고른다 — 그림 있는 첫 모션 둘
                 try:
                     mm = sorted(wx.load_motions(game.read('Obs', '%04d.obs' % obs)))
@@ -185,7 +205,7 @@ for wid in sorted(works):
                 for m2 in mm:
                     for o, m3 in pictures(obs, m2):
                         if n < 2:
-                            add(effs, (o, m3, place, delay, count, fly))
+                            add(effs, (o, m3, place, delay, count, fly, lift, life))
                             n += 1
     if movs:
         movies[wid] = movs
@@ -209,16 +229,16 @@ lines = [
     '    /// <remarks>',
     '    /// 자리를 코드가 셈해 넣는 이펙트(메테오의 떨어지는 자리 같은 것)는 <b>대상 자리</b>로 들어 있다(정확한 자리는 모른다).',
     '    /// 그림 컷이 없는 Obs(소리 껍데기)는 빠져 있다.',
-    '    /// 띄우는 높이(Lift)도 모르니 0 이다. 그 둘이 중요한 기술은 손 표에 따로 적는다.',
+    '    /// 높이(Lift)는 월드 z × 0.6, 지연·수명은 0x100c24d0·0x100c2530 에서 읽었다(ba-15). 자식 키는 넣지 않는다 — 부모가 그린다.',
     '    /// </remarks>',
     '    private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> WorkScripts = new()',
     '    {',
 ]
 for wid, (acts, effs) in rows.items():
     a = ', '.join(str(x) for x in acts)
-    e = ', '.join('new(%d, %d, %s, 0%s)' % (o, m, 'true' if p == 'target' else 'false',
-                                           '' if (d, c, f) == (0, 1, False) else ', %d, %d, %s' % (d, c, 'true' if f else 'false'))
-                  for o, m, p, d, c, f in effs)
+    e = ', '.join('new(%d, %d, %s, %d%s)' % (o, m, 'true' if p == 'target' else 'false', lf,
+                                            '' if (d, c, f, li) == (0, 1, False, 0) else ', %d, %d, %s, %d' % (d, c, 'true' if f else 'false', li))
+                  for o, m, p, d, c, f, lf, li in effs)
     lines.append('        [%d] = ([%s], [%s]),' % (wid, a, e))
 lines += ['    };', '',
           '    /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>',

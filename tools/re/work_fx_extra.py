@@ -62,8 +62,8 @@ EMITTERS = {
     0x100ccbd0: (0, None),  # 0x100ccb50 — 모션 = 방향 번호
     0x100ccf60: (0, None),  # 0x100ccee0 — 모션 = 방향 번호
 }
-DELAY = ws.DELAY           # 0x100c2530(n) 시작 지연
-LIFE = ws.LIFE             # 0x100c24d0(n) 수명
+DELAY = ws.DELAY           # 0x100c24d0(n) 시작 지연
+LIFE = ws.LIFE             # 0x100c2530(n) 수명
 
 
 class ExtraAnalyzer(ws.Analyzer):

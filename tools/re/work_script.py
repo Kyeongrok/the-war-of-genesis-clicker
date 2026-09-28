@@ -15,7 +15,7 @@
   0x100c1fa0   CEffect::CEffect(Obs, 모션, x, y, z, 맵 0x101be2dc, 주인, work)
                → 화면 자리는 (x, y, z). 유닛 필드 +0x3e/+0x40/+0x42 = 월드 x·y·z
   0x100cb8a0   입자(particle) 이펙트 생성 (Obs 는 뒤이은 0x100cb980 의 첫 인자)
-  0x100c2530(n) 이펙트 시작 지연 n틱, 0x100c24d0(n) 이펙트 수명/뒤늦은 처리 n틱
+  0x100c24d0(n) 이펙트 시작 지연 n틱, 0x100c2530(n) 이펙트 수명 n틱(0 = 모션 한 번)
   유닛 필드: +0x80 지금 work 번호, +0x8c 목표 유닛, +0x94 단계, +0x96 단계 안 틱
   소리: Obs 모션 키 종류 1(Snd 번호) — 이펙트 Obs 의 모션에도 들어 있다 (obs_sounds.py)
 """
@@ -40,8 +40,8 @@ SETMOT = 0x100e53c0
 EFFECT = 0x100c1fa0
 PARTICLE = 0x100cb8a0
 PARTSET = 0x100cb980
-DELAY = 0x100c2530
-LIFE = 0x100c24d0
+DELAY = 0x100c24d0    # +0x6c 시작 지연(틱) — 이름이 뒤바뀌어 있던 것을 바로잡음(ba-15 R2)
+LIFE = 0x100c2530     # +0x86 수명(틱, 0 = 모션 한 번)
 WORKEND = 0x100762d0
 DISPATCH_SWITCH = 0x1007cb13
 MAP_GLOBAL = 0x101be2dc
