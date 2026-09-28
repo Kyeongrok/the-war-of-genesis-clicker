@@ -112,7 +112,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     /// <remarks>판정은 <b>움직이는 쪽</b> 기준이다. 버서커가 걸린 인물만 편을 못 가리고, 남들이 그 인물을 보는 눈은 그대로다.</remarks>
     private static bool SeesAsFoe(UnitState viewer, UnitState other) =>
-        viewer != other && (viewer.HasStatus(4) || viewer.IsAlly != other.IsAlly);
+        viewer != other && (viewer.HasStatus(4) || Hostile(viewer, other));
+
+    /// <summary>
+    /// 두 편이 적인가 — 원본 세력 행렬(<c>0x1006b76f</c>)은 편 3·4 만 한편이고 <b>편 0·1·2 는 서로도 적</b>이다(fg-21 ⑭).
+    /// 전에는 「편 ≥ 3 이냐」 하나로 갈라 적 세력끼리 안 싸웠다(Btl 0136 칼리오페 vs 로브 같은 3자전).
+    /// </summary>
+    private static bool Hostile(UnitState a, UnitState b) => a.Side != b.Side && !(a.IsAlly && b.IsAlly);
 
     /// <summary>레벨이 같거나 낮으면 안 걸리는 번호들(종류 0·2 일 때).</summary>
     private static bool NeedsLevelEdge(int id) => id is 5 or 6 or 12 or 19 or 22 or 23 or 24;

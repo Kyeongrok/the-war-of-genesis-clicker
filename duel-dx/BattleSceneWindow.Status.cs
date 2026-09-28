@@ -402,7 +402,10 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         // 전투가 끝난 뒤 모세스에서 열면 결과 글이 남아 있어도 고칠 수 있어야 한다.
-        bool editable = unit.IsAlly && (_outcome.Length == 0 || _mosesOpen);
+        // 원본은 Status 를 링(차례인 유닛)에서만 열고, 파티 밖 인물은 아이템 교환이 막힌다 — 전투에서는 <b>차례인 내 유닛</b>만,
+        // 모세스에서는 파티원만 고칠 수 있다(fg-21 ⑰). 편 3 동맹은 보기만.
+        bool editable = _mosesOpen ? unit.IsAlly && (_members.Count == 0 || _members.Contains(unit.ChrCode))
+                                   : unit.PlayerControlled && _outcome.Length == 0 && _turn >= 0 && _units[_turn] == unit;
 
         // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
         if (!DrawUi(c.FaceId, 0, 0, ox + 62, oy + 103, UiBlend.Alpha, loop: false) && _faces.TryGetValue(unit.ChrCode, out var face))

@@ -94,37 +94,43 @@ internal sealed unsafe partial class BattleSceneWindow
         return CDiv(u.Hp + u.MaxHp, db.N(62)) * v;
     }
 
-    /// <summary>그 칸이 받는 영향력 — 살아 있는 인물들의 세력을 거리로 나눠 더한다.</summary>
-    private int Influence(int col, int row, bool ally)
+    /// <summary>
+    /// 그 칸이 받는 영향력 — <paramref name="viewer"/> 눈에 적(<paramref name="foes"/>)인, 또는 한편인 살아 있는 인물들의 세력을 거리로 나눠 더한다.
+    /// 편은 세력 행렬로 가른다(편 0·1·2 는 서로 적). <paramref name="viewer"/> 자신은 넣지 않는다(원본 지도 <c>0x1005b5e0</c> 자기포함=0).
+    /// </summary>
+    private int Influence(int col, int row, UnitState viewer, bool foes)
     {
         int num65 = _db?.N(65) ?? 6, sum = 0;
         foreach (var u in _units)
         {
-            if (!u.Alive || !u.OnField || u.IsAlly != ally) continue;
+            if (!u.Alive || !u.OnField || u == viewer || Hostile(viewer, u) != foes) continue;
             int d = Math.Abs(u.Col - col) + Math.Abs(u.Row - row);
             sum += CDiv(Power(u) * num65, d + num65);
         }
         return sum;
     }
 
-    /// <summary>그 칸의 위험도 — 적 영향력 / (내 세력 + 아군 영향력).</summary>
+    /// <summary>그 칸의 위험도(기준 16·17, 이동 방식 1·5) — 적 영향력 / 아군 영향력(자기 몫은 안 넣는다 — 전에는 두 번 넣었다).</summary>
     private double Danger(UnitState u, int col, int row)
     {
-        int enemies = Influence(col, row, !u.IsAlly);
-        int friends = Power(u) + Influence(col, row, u.IsAlly);
+        int enemies = Influence(col, row, u, foes: true);
+        int friends = Influence(col, row, u, foes: false);
         return friends == 0 ? enemies : (double)enemies / friends;
     }
 
     /// <summary>
-    /// 도망이 재는 위험도 — 보통 위험도와 달리 <b>제 세력 점수를 뺀다</b>(<c>0x1005b4e0</c>).
-    /// 제가 버티고 있는 몫을 빼야 「내가 여기서 빠지면 이 칸이 얼마나 위험한가」가 나온다.
+    /// 도망이 재는 위험도(<c>0x1005b4e0</c>) — 제 번짐을 지도에서 뺀 뒤 적 영향력 / (제 세력 점수 + 남은 아군 영향력).
+    /// 자기 몫이 모든 칸에서 같아야 「어디로 가면 안전한가」만 남는다.
     /// </summary>
     private double FleeDanger(UnitState u, int col, int row)
     {
-        int enemies = Influence(col, row, !u.IsAlly);
-        int friends = Influence(col, row, u.IsAlly) - Power(u);
+        int enemies = Influence(col, row, u, foes: true);
+        int friends = Power(u) + Influence(col, row, u, foes: false);
         return friends <= 0 ? enemies : (double)enemies / friends;
     }
+
+    /// <summary>도망의 안전 문턱 — 위험도 이 값 이하인 칸이면 된다(원본 절댓값 0.70).</summary>
+    private const double SafeDanger = 0.70;
 
     /// <summary>work <c>+0x3e</c> 기준으로 그 대상들이 얼마나 좋은지 — 짝수면 최댓값, 홀수면 1000000 − 최솟값.</summary>
     private int TargetValue(UnitState user, WorkData w, List<int> targets)
@@ -165,6 +171,9 @@ internal sealed unsafe partial class BattleSceneWindow
             int lost = targets.Sum(i => _units[i].MaxHp == 0 ? 0 : (_units[i].MaxHp - _units[i].Hp) * 100 / _units[i].MaxHp);
             return lost > (_db?.N(79) ?? 30) * need;
         }
+        // 보조(상태이상) 기술은 <b>이득이 있는 대상만</b> 센다(0x1005c480 — 상태 점수 비교). 여기서는 「그 상태가 아직 안 걸린 대상」으로 근사한다(가설).
+        if (w.Kind is 2 or 3 && w.Bonuses.Length > 0)
+            targets = [.. targets.Where(i => w.Bonuses.Any(b => IsStatBonus(b.Stat) || !_units[i].HasStatus(b.Stat)))];
         return targets.Count >= need;
     }
 
@@ -178,25 +187,48 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var user = _units[unitIndex];
         int num74 = _db?.N(74) ?? 4;
-        (int Col, int Row, int Score)? aim = null;
+
+        // 겨눌 칸 후보는 <b>갈 수 있는 칸에서 사거리에 드는 칸</b>뿐이다(층 12, 0x100749b0) — 맵 전체를 채점하면 못 닿는 1등 칸 때문에
+        // 닿는 다른 적이 있어도 기술을 통째로 버렸다(fg-21 ⑮). 대상 방식 6(방향기)은 제자리 네 이웃 칸만 본다.
+        var stands = new List<int>();
+        var candidates = new HashSet<(int Col, int Row)>();
+        int here = user.Row * Cols + user.Col;
+        if (w.TargetMode == 6)
+        {
+            stands.Add(here);
+            foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
+                if ((uint)(user.Col + dx) < Cols && (uint)(user.Row + dy) < Rows) candidates.Add((user.Col + dx, user.Row + dy));
+        }
+        else
+        {
+            int reach = Math.Max(1, RangeMaxOf(w, user) / 4) + 1;
+            for (int stand = 0; stand < range.Cost.Length; stand++)
+            {
+                if (!range.CanReach(stand)) continue;
+                stands.Add(stand);
+                int sc = stand % Cols, sr = stand / Cols;
+                for (int ay = Math.Max(0, sr - reach); ay <= Math.Min(Rows - 1, sr + reach); ay++)
+                    for (int ax = Math.Max(0, sc - reach); ax <= Math.Min(Cols - 1, sc + reach); ax++)
+                        if (!candidates.Contains((ax, ay)) && InWorkRange(w, sc, sr, ax, ay, user)) candidates.Add((ax, ay));
+            }
+        }
 
         // ① 겨눌 칸 — 점수는 지금 서 있는 자리에서 잰다.
-        for (int row = 0; row < Rows; row++)
-            for (int col = 0; col < Cols; col++)
-            {
-                var targets = WorkTargets(w, user, col, row);
-                if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
-                int score = CDiv(TargetValue(user, w, targets) * num74 * 10,
-                                 4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
-                if (aim == null || score > aim.Value.Score) aim = (col, row, score);
-            }
+        (int Col, int Row, int Score)? aim = null;
+        foreach (var (col, row) in candidates)
+        {
+            var targets = WorkTargets(w, user, col, row);
+            if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
+            int score = CDiv(TargetValue(user, w, targets) * num74 * 10,
+                             4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
+            if (aim == null || score > aim.Value.Score) aim = (col, row, score);
+        }
         if (aim is not { } pick) return null;
 
         // ② 설 칸 — 그 칸에 닿는 칸 중 지금 자리에서 가장 가까운 곳.
         int bestStand = -1, bestDist = int.MaxValue;
-        for (int stand = 0; stand < range.Cost.Length; stand++)
+        foreach (int stand in stands)
         {
-            if (!range.CanReach(stand)) continue;
             int sc = stand % Cols, sr = stand / Cols;
             if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
             if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 }) continue;
@@ -204,6 +236,27 @@ internal sealed unsafe partial class BattleSceneWindow
             if (d < bestDist) { bestDist = d; bestStand = stand; }
         }
         return bestStand < 0 ? null : (bestStand, pick.Col, pick.Row, pick.Score);
+    }
+
+    /// <summary>
+    /// 목표 칸까지의 <b>경로 비용 지도</b> — 목표에서 출발하는 이동 영역을 예산 없이 잰다. 갈 수 있는 칸 중 이 값이 가장 작은 칸이
+    /// 「목표에 가장 가까운 칸」이다(원본 <c>0x10059a20</c>). 전에는 맨해튼 거리로 골라 벽·강 너머 목표에서 벽에 붙어 멈췄다.
+    /// </summary>
+    private int[]? CostMapFrom(UnitState u, int col, int row) =>
+        ComputeRange(u, workId: 0, tp: 1 << 20, origin: (col, row))?.Cost;
+
+    /// <summary>갈 수 있는 칸 가운데 목표까지 경로 비용이 가장 작은 칸(같으면 지금 자리에서 싼 칸). 없으면 −1.</summary>
+    private int NearestReachableTo(UnitState u, MoveRange range, int goalCol, int goalRow)
+    {
+        var cost = CostMapFrom(u, goalCol, goalRow);
+        int best = -1, bestCost = int.MaxValue, bestOwn = int.MaxValue;
+        for (int i = 0; i < range.Cost.Length; i++)
+        {
+            if (!range.CanReach(i)) continue;
+            int d = cost != null && cost[i] != int.MaxValue ? cost[i] : Math.Abs(goalCol - i % Cols) + Math.Abs(goalRow - i / Cols) + 1000000;
+            if (d < bestCost || d == bestCost && range.Cost[i] < bestOwn) { bestCost = d; best = i; bestOwn = range.Cost[i]; }
+        }
+        return best;
     }
 
     /// <summary>(sc, sr) 에 선다고 쳤을 때 (col, row) 를 겨누면 맞는 인물들.</summary>
@@ -217,14 +270,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 인물이 쓸 수 있는 work 차례 — 익힌 어빌리티(분류 1·2·4) 다음에 기본공격.</summary>
-    private List<WorkData> AiWorks(UnitState u)
+    private List<WorkData> AiWorks(UnitState u, bool ignoreCost = false)
     {
         var list = new List<WorkData>();
         if (_db is not { } db || u.Data is not { } c) return list;
         foreach (var (abilityId, level) in c.Abilities)
         {
             if (!db.Abilities.TryGetValue(abilityId, out var ab) || ab.Category is not (1 or 2 or 4)) continue;
-            if (ab.TryWorkAt(level, out int wid) && Work(wid) is { } w && CanAfford(u, w)) list.Add(w);
+            if (ab.TryWorkAt(level, out int wid) && Work(wid) is { } w && (ignoreCost || CanAfford(u, w))) list.Add(w);
         }
         if (Work(c.BasicWorkId) is { } basic) list.Add(basic);
         return list;
@@ -280,23 +333,36 @@ internal sealed unsafe partial class BattleSceneWindow
         var enemies = _units.Where(t => t.Alive && t.OnField && SeesAsFoe(u, t)).ToList();
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
 
-        // 2단계 도망 — 피가 적고 적이 가까우면 물러난다. 재는 값은 <b>제 점수를 뺀</b> 위험도이고,
-        // 시작값이 지금 칸이라 더 안전한 칸이 없으면 <b>안 움직인다</b>(0x1005b4e0).
+        // 2단계 도망(0x1005b4e0) — 피가 적고 적이 가까우면 물러난다. 위험도 0.70 이하인 칸 중 <b>지금 자리에서 맨해튼으로 가장 가까운 칸</b>,
+        // 없으면 위험도가 가장 작은 칸. 지금 칸이 이미 0.70 이하면 안 움직인다. 부대장이 아니고 회복기가 있으면 물러난 자리에서 회복기를 쓴다.
         if (hpPercent < db.N(66) && nearest < db.N(90))
         {
-            int here = u.Row * Cols + u.Col;
-            int safest = here;
-            double bestDanger = FleeDanger(u, u.Col, u.Row);
-            for (int i = 0; i < range.Cost.Length; i++)
+            var heal = FollowersOf(index).Count == 0 ? AiWorks(u).FirstOrDefault(x => x.IsHeal) : null;
+            var fleeRange = heal != null ? ComputeRange(u, heal.Id) ?? range : range;
+            int here = u.Row * Cols + u.Col, safest = here;
+            if (FleeDanger(u, u.Col, u.Row) > SafeDanger)
             {
-                if (!range.CanReach(i)) continue;
-                double danger = FleeDanger(u, i % Cols, i / Cols);
-                // 엇비슷하게 안전한 칸(0.70 안쪽)끼리는 <b>지금 자리에서 가까운 쪽</b>을 고른다.
-                bool closer = danger <= bestDanger / 0.70 && danger >= bestDanger * 0.70
-                              && range.Cost[i] < (safest == here ? int.MaxValue : range.Cost[safest]);
-                if (danger < bestDanger * 0.70 || closer) { bestDanger = Math.Min(bestDanger, danger); safest = i; }
+                int bestDist = int.MaxValue;
+                double bestDanger = double.MaxValue;
+                int leastDangerous = here;
+                for (int i = 0; i < fleeRange.Cost.Length; i++)
+                {
+                    if (!fleeRange.CanReach(i)) continue;
+                    double danger = FleeDanger(u, i % Cols, i / Cols);
+                    if (danger < bestDanger) { bestDanger = danger; leastDangerous = i; }
+                    if (danger > SafeDanger) continue;
+                    int d = Math.Abs(i % Cols - u.Col) + Math.Abs(i / Cols - u.Row);
+                    if (d < bestDist) { bestDist = d; safest = i; }
+                }
+                if (bestDist == int.MaxValue) safest = leastDangerous;
             }
-            if (safest != here) foreach (var r in WalkTo(u, range, safest)) yield return r;
+            if (safest != here) foreach (var r in WalkTo(u, fleeRange, safest)) yield return r;
+            if (heal != null && CanAfford(u, heal))
+            {
+                CommitMove(u);
+                var use = UseWorkRoutine(index, heal, index, u.Col, u.Row, []);
+                while (use.MoveNext()) yield return true;
+            }
             yield break;                                     // 도망 뒤에는 쉰다(원본 0x2716)
         }
 
@@ -314,10 +380,27 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var w in AiWorks(u))
             {
                 if (pass == 0 && !w.IsHeal) continue;
-                if (BestUse(index, w, range) is not { } use) continue;
+                // 이동 예산은 <b>그 기술</b>의 TP 비용을 뺀 만큼이다(0x1005d070) — 늘 기본공격 기준이면 비싼 기술도 너무 멀리 걸어가 쓴다.
+                var workRange = ComputeRange(u, w.Id) ?? range;
+                if (BestUse(index, w, workRange) is not { } use) continue;
                 report(true);
-                foreach (bool r in AiUseWork(index, w, use, range)) yield return r;
+                foreach (bool r in AiUseWork(index, w, use, workRange)) yield return r;
                 yield break;
+            }
+        }
+
+        // 4단계 (B) 접근(0x1005e39b) — 지금은 못 치지만 <b>최대 TP</b> 로는 닿는 적이 있으면, 목록 차례로 첫 성공 기술이 겨눌 칸을 향해
+        // 지금 TP 로 갈 수 있는 칸 중 경로 비용이 가장 짧은 칸으로 가서 쉰다. 이 단계는 5단계 휴식보다 앞이다(fg-21 ⑮).
+        if (u.Data is { } cd && Work(cd.BasicWorkId) is { } basicWork && ComputeRange(u, basicWork.Id, tp: u.MaxTp) is { } fullRange
+            && BestUse(index, basicWork, fullRange) != null)
+        {
+            foreach (var w in AiWorks(u, ignoreCost: true))
+            {
+                var wRange = ComputeRange(u, w.Id, tp: u.MaxTp) ?? fullRange;
+                if (BestUse(index, w, wRange) is not { } use) continue;
+                int go = NearestReachableTo(u, range, use.Col, use.Row);
+                if (go >= 0 && range.Cost[go] > 0) foreach (var r in WalkTo(u, range, go)) yield return r;
+                yield break;                                 // 접근 뒤에는 쉰다(0x2716)
             }
         }
 
@@ -327,16 +410,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 6단계 — 칠 수 없으면 목표 쪽으로 다가가 쉰다. 목표 차례는 <b>이동 방식</b>이 정한다(0x1005c460).
         foreach (var goal in MoveGoals(u, enemies))
         {
-            int best = -1, bestDist = int.MaxValue, bestCost = int.MaxValue;
-            for (int i = 0; i < range.Cost.Length; i++)
-            {
-                if (!range.CanReach(i)) continue;
-                int d = Math.Abs(goal.Col - i % Cols) + Math.Abs(goal.Row - i / Cols);
-                if (d < bestDist || d == bestDist && range.Cost[i] < bestCost) { bestDist = d; best = i; bestCost = range.Cost[i]; }
-            }
-            // 갈 칸이 나오는 <b>첫 목표에서 멈춘다</b> — 나머지 목표는 아예 안 본다.
-            if (best < 0 || range.Cost[best] <= 0) continue;
-            foreach (var r in WalkTo(u, range, best)) yield return r;
+            // 목표까지 <b>경로 비용</b>이 가장 짧은 칸(0x10059a20). 갈 칸이 나오는 <b>첫 목표에서 멈춘다</b> — 그 칸이 제자리면 쉰다.
+            int best = NearestReachableTo(u, range, goal.Col, goal.Row);
+            if (best < 0) continue;
+            if (range.Cost[best] > 0) foreach (var r in WalkTo(u, range, best)) yield return r;
             break;
         }
         // 이동만 했으면 원본은 0x2710 뒤 0x2716(휴식)으로 끝낸다 — 다시 생각하지 않는다.

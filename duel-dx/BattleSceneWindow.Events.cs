@@ -441,12 +441,22 @@ internal sealed unsafe partial class BattleSceneWindow
                 var caster = EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField);
                 if (caster is null || Work(A(2)) is not { } boss) break;
                 int casterIndex = Array.IndexOf(_units, caster);
-                // 겨눌 곳은 가장 가까운 상대 — 원본은 시전자 제 표적 고르기를 쓰지만 결과가 거의 같다.
-                var mark = _units.Where(t => t.Alive && t.OnField && SeesAsFoe(caster, t))
-                                 .OrderBy(t => Math.Abs(t.Col - caster.Col) + Math.Abs(t.Row - caster.Row))
-                                 .FirstOrDefault();
-                if (mark is null) break;
-                _routine = AfterRunning(_routine, UseWorkRoutine(casterIndex, boss, Array.IndexOf(_units, mark), mark.Col, mark.Row, []));
+                // 겨눌 곳은 <b>제자리 사거리 안</b>에서 AI 칸 점수(+0x3e 기준, 거리 가중)로 고른다(0x1005d860). 못 찾으면 안 쏜다 — fg-21 ⑮.
+                (int Col, int Row, int Score)? aim = null;
+                int reach = Math.Max(1, RangeMaxOf(boss, caster) / 4) + 1, num74 = _db?.N(74) ?? 4;
+                for (int ay = Math.Max(0, caster.Row - reach); ay <= Math.Min(Rows - 1, caster.Row + reach); ay++)
+                    for (int ax = Math.Max(0, caster.Col - reach); ax <= Math.Min(Cols - 1, caster.Col + reach); ax++)
+                    {
+                        if (!InWorkRange(boss, caster.Col, caster.Row, ax, ay, caster)) continue;
+                        var targets = WorkTargets(boss, caster, ax, ay);
+                        if (targets.Count == 0) continue;
+                        int score = CDiv(TargetValue(caster, boss, targets) * num74 * 10, 4 + Math.Abs(ax - caster.Col) + Math.Abs(ay - caster.Row));
+                        if (aim == null || score > aim.Value.Score) aim = (ax, ay, score);
+                    }
+                if (aim is not { } mark) break;
+                var aimedUnit = LiveUnitAt(mark.Col, mark.Row);
+                int markIndex = boss.TargetMode is 1 or 4 or 5 && aimedUnit != null ? Array.IndexOf(_units, aimedUnit) : -1;
+                _routine = AfterRunning(_routine, UseWorkRoutine(casterIndex, boss, markIndex, mark.Col, mark.Row, []));
                 _eventWaitUntil = _lastTime + 1.2;
                 break;
             }

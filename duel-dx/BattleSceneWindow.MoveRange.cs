@@ -90,7 +90,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 
     /// <summary>인물의 지금 자리·TP 로 이동 영역을 셈한다. 지도·게임 표가 없으면 null.</summary>
-    private MoveRange? ComputeRange(UnitState unit)
+    /// <param name="workId">예산에서 뺄 기술(0 이면 플레이어가 고른 기술·기본공격) — AI 는 기술마다 예산이 다르다(0x1005d070).</param>
+    /// <param name="tp">지금 TP 대신 쓸 값(접근 단계는 최대 TP 로 잰다) — null 이면 지금 TP.</param>
+    /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
+    private MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null)
     {
         if (_map is not { } map || _db is not { } db || unit.Data is not { } c) return null;
 
@@ -106,13 +109,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
         // 예산은 <b>지금 고른 work</b> 의 TP 를 남긴다(상태 12 는 어빌리티, 상태 10 은 기본공격) —
         // 늘 기본공격으로 셈하면 비싼 어빌리티를 고른 채 너무 멀리 걸을 수 있다. TP 비용에는 상태 20(소모량 %)도 먹는다.
-        int workId = _targetWork > 0 ? _targetWork : c.BasicWorkId;
-        int budget = unit.HasStatus(25) ? 0 : unit.Tp + Math.Min(0, c.Ctp - TpCostFor(unit, c, workId));
+        if (workId <= 0) workId = _targetWork > 0 ? _targetWork : c.BasicWorkId;
+        int budget = unit.HasStatus(25) ? 0 : (tp ?? unit.Tp) + Math.Min(0, c.Ctp - TpCostFor(unit, c, workId));
 
         int H(int col, int row) => map.HeightAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
 
-        var (originCol, originRow) = RangeOrigin(unit);
+        var (originCol, originRow) = origin ?? RangeOrigin(unit);
 
         int unitIndex = Array.IndexOf(_units, unit);
         // 제 군단 부하는 대장을 막지 않는다 — 대장이 움직이면 부하도 진형대로 따라오기 때문이다(분석-군단).

@@ -464,7 +464,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
-        u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id);
+        u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
+        && u.Hp > _db.WorkHpCost(u.Data, w.Id);   // HP 비용도 본다(0x100726e0)
 
     /// <summary>
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
@@ -713,7 +714,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (bool _ in routine) yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
-                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false, leaderWork: w);
                     followersDone = true;
                 }
                 while (a.IsBusy) yield return true;
@@ -771,7 +772,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
-                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false, leaderWork: w);
                     followersDone = true;
                 }
                 while (a.IsBusy) yield return true;
@@ -798,7 +799,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (release <= 0) a.PlayAction(ObsMotionTable.ActionStand, 0);
                 if (!followersDone && targets.Count > 0)
                 {
-                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false, leaderWork: w);
                     followersDone = true;
                 }
                 while (a.IsBusy) yield return true;
@@ -814,7 +815,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 아군 하나를 겨누는 기술(방식 4)이면 아군 패스(회복·보조), 피해 기술이면 적 패스.
                 if (!followersDone && targets.Count > 0 && (w.IsDamage || w.TargetMode == 4))
                 {
-                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: w.TargetMode == 4);
+                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: w.TargetMode == 4, leaderWork: w);
                     followersDone = true;
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
@@ -999,8 +1000,9 @@ internal sealed unsafe partial class BattleSceneWindow
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
         // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).
+        // SOUL 은 때린 사람이, 경험치는 군단 부하가 쓰러뜨렸으면 <b>대장</b>이 받는다(0x10079b14).
         AddSoul(a, 10);
-        GainKillExp(a, t);
+        GainKillExp(a.LeaderIndex >= 0 && a.LeaderIndex < _units.Length ? _units[a.LeaderIndex] : a, t);
         if (SurvivesFatal(t)) return;
         dying.Add(t);
     }

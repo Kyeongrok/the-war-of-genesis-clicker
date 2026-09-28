@@ -211,6 +211,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (OnAbilityMenuRightDown(bx, by)) return;   // 어빌리티 목록 줄 = 누르고 있는 동안 설명
         if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명, 빈 곳 = 닫기
         if (_ringUnit >= 0) { CancelRing(); return; }
+        // 어빌리티·아이템 대상을 고르는 중이면 우클릭은 <b>취소</b>다(원본) — 인물 위라도 정보 창을 열지 않는다.
+        if (_targetWork >= 0 && CancelStep(undoMove: false)) return;
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
         if (CancelStep(undoMove: false)) return;
 

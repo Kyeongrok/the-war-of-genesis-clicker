@@ -327,9 +327,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <paramref name="allyPass"/> 면 아군 패스(<c>0x1005fa90</c>) — 대장이 아군 대상 기술(방식 4)을 쓸 때로, 부하는 회복·보조 기술을
     /// 대장이 겨눈 아군 가까이에 쓴다. 아니면 적 패스(<c>0x1005fd00</c>) — 피해 기술과 기본공격으로 적을 친다.
     /// </summary>
-    private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying, bool allyPass = false)
+    private void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying, bool allyPass = false, WorkData? leaderWork = null)
     {
         if (_db is null) return;
+        // 대장이 쓴 기술의 +0x41 이 0 이면 부하는 안 따라 친다(0x1005fd00) — 피해 work 469개가 그렇다(fg-21 ⑯).
+        if (leaderWork is { FollowersAct: false }) return;
         foreach (var follower in FollowersOf(leaderIndex))
         {
             if (follower.Data is not { } c || follower.IsBusy) continue;
@@ -346,7 +348,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (pick is null) continue;
                 follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);
                 PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
-                ApplyWork(follower, work, pick, dying);
+                // 부하의 기술도 정상 실행이다 — 광역기면 범위 안 전원이 맞는다(전에는 한 명만).
+                var struck = WorkTargets(work, follower, pick.Col, pick.Row);
+                if (struck.Count == 0) ApplyWork(follower, work, pick, dying);
+                else foreach (int ti in struck) ApplyWork(follower, work, _units[ti], dying);
                 done = true;
                 break;
             }
@@ -396,6 +401,9 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var followers = FollowersOf(leaderIndex);
         if (followers.Count == 0) return;
+        // 플레이어 군단의 대장이 죽으면 떨어져 나온 부하들은 <b>편 3(동맹 AI)</b>이 된다(0x100716c0) — 더는 명령할 수 없다.
+        if (_units[leaderIndex].Side == 4)
+            foreach (var f in followers) { f.Side = 3; f.Awake = true; }
         var newLeader = followers[0];
         int newIndex = Array.IndexOf(_units, newLeader);
         newLeader.LeaderIndex = -1;

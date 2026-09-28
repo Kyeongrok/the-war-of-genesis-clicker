@@ -322,6 +322,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _statusUnit = -1;
         _infoUnit = -1;
         _ringUnit = -1;
+        // RESTART 가 되돌릴 가방·GP(원본은 전투 전 파티 상태로 되돌린다) — fg-21 ⑰.
+        _restartInventory = new SortedDictionary<int, int>(_inventory);
+        _restartMoney = _shopMoney;
         RestartBattle();
         // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
         BeginDeployOrDrop(scene, fresh: rememberParty);
@@ -329,9 +332,20 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
+    /// <summary>전투에 들어올 때의 가방·GP — RESTART 가 되돌린다.</summary>
+    private SortedDictionary<int, int>? _restartInventory;
+    private int _restartMoney;
+
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        // 전투 중에 쓰거나 얻은 아이템·GP 는 전투 전으로(원본 RESTART 는 파티를 통째로 되돌린다).
+        if (_restartInventory != null)
+        {
+            _inventory.Clear();
+            foreach (var (id, n) in _restartInventory) _inventory[id] = n;
+            _shopMoney = _restartMoney;
+        }
         // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
         if (_chapterFired.Count == 0)
         {

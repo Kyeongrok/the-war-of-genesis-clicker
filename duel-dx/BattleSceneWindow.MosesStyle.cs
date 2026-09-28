@@ -75,6 +75,34 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본은 파티 객체(<c>0x101b6888</c>, `+8` Chr 번호 u32×64)의 인원을 보여 준다 — 그 목록은 801 이 채운다.
     /// 옛 세이브(동료 목록이 없음)면 예전처럼 내 편 전부.
     /// </summary>
+    /// <summary>전직·용병관리 인물 단추의 첫 칸 — 파티가 다섯을 넘으면 ◀ ▶ 로 넘긴다(원본 화살표, fg-21 ⑰).</summary>
+    private int _stylePartyTop;
+
+    /// <summary>지금 보이는 다섯 명.</summary>
+    private List<int> StylePartyPage()
+    {
+        var party = StyleParty();
+        _stylePartyTop = Math.Clamp(_stylePartyTop, 0, Math.Max(0, party.Count - 5));
+        return [.. party.Skip(_stylePartyTop).Take(5)];
+    }
+
+    /// <summary>◀ ▶ 를 눌렀나 — 왼쪽 가장자리(x&lt;28)·다섯째 단추 오른쪽(x 398~426), y 320~400.</summary>
+    private bool OnStylePartyArrow(int x, int y)
+    {
+        if (y < 320 || y >= 400) return false;
+        int count = StyleParty().Count;
+        if (x < 28 && _stylePartyTop > 0) { _stylePartyTop--; Play(MosesClickSound); return true; }
+        if (x >= 398 && x < 426 && _stylePartyTop + 5 < count) { _stylePartyTop++; Play(MosesClickSound); return true; }
+        return false;
+    }
+
+    private void DrawStylePartyArrows(int ox, int oy)
+    {
+        int count = StyleParty().Count;
+        if (_stylePartyTop > 0) DrawText("◀", ox + 6, oy + 350, White, 18);
+        if (_stylePartyTop + 5 < count) DrawText("▶", ox + 402, oy + 350, White, 18);
+    }
+
     private List<int> StyleParty()
     {
         // 원본 파티 객체의 인원(801 로 들어온 동료) 차례 — 레이토스 길드처럼 주인공이 안 서는 전투 뒤에도 파티가 그대로 보여야 한다(사용자 지적).
@@ -114,7 +142,8 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        var party = StyleParty();
+        if (OnStylePartyArrow(x, y)) return true;
+        var party = StylePartyPage();
         for (int i = 0; i < party.Count && i < 5; i++)
             if (x >= 70 * i + 48 - 32 && x < 70 * i + 48 + 32 && y >= 330 - 10 && y < 330 + 70)
             {
@@ -284,7 +313,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawMosesStyle(int ox, int oy, int tick)
     {
-        var party = StyleParty();
+        var party = StylePartyPage();
+        DrawStylePartyArrows(ox, oy);
         for (int i = 0; i < party.Count && i < 5; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
