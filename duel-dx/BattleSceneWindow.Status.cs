@@ -313,7 +313,7 @@ internal sealed unsafe partial class BattleSceneWindow
             int i = list.FindIndex(a => a.Ability == ab.Id);
             list[i] = ((ushort)ab.Id, (ushort)(list[i].Level + 1));
         }
-        u.Data = c with { Abilities = [.. list], Passives = passives, Exp = c.Exp - cost };
+        u.Data = c with { Abilities = [.. list], Passives = passives, Exp = c.JobId == 37 ? c.Exp : c.Exp - cost };   // 직업 37 은 EXP 면제(0x100e128c)
         RefreshUnitStats(u);
         Toast(learn ? $"{_db!.T(ab.NameId)} 을(를) 배웠습니다" : $"{_db!.T(ab.NameId)} Lv{u.Data.AbilityLevel(ab.Id)}");
     }

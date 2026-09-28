@@ -40,6 +40,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DamageObject(UnitState user, DemoObject obj, int damage)
     {
         if (_db is null || damage <= 0 || !obj.Alive) return;
+        // 물체 쪽 1001 처리(0x100e77e0 → 0x100e72f0)는 명중·RDP·치명 없이 공격자 ATK ±10% 만 뺀다(ba-14 O1).
+        damage = damage * (90 + _rng.Next(21)) / 100;
         obj.Hp -= damage;
         ShowNumber(user, damage.ToString(), DamageColor);
         if (obj.Hp > 0) return;
@@ -329,10 +331,13 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is null) return;
 
         int reach = Math.Max(1, obj.Data.Radius);
-        foreach (var u in _units.Where(u => u.Alive && u.Data is not null
-                                            && Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= reach))
+        // 반경은 맨해튼 + |Δ높이|/2, 편 검사 없음, (1000−RDP)×공격력/1000 ±10%(0x100e7e90 → work 1596, ba-14 O3).
+        foreach (var u in _units.Where(u => u.Alive && u.OnField && u.Data is not null
+                                            && Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row)
+                                               + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(obj.Col, obj.Row)) / 2 <= reach))
         {
             int damage = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+            damage = damage * (90 + _rng.Next(21)) / 100;
             if (damage <= 0) continue;
             u.Hp = Math.Max(0, u.Hp - damage);
             ShowNumber(u, damage.ToString(), DamageColor);
@@ -409,11 +414,36 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ObjectBarrage(DemoObject obj, WorkData work, bool ally)
     {
         if (_db is null) return;
+        int Dist(UnitState u, (int Col, int Row) c) => Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c.Col, c.Row)) / 2;
+        int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+
+        // 산성 웅덩이 1526 — 범위 안 <b>전원</b>(편 안 가림, 아군 포함)에게 1타 + 중독(상태 3, 값 10) 100%(종류 4 는 굴림 없음). ba-14 O2.
+        if (work.Id == 1526)
+        {
+            var all = _units.Where(u => u.Alive && u.OnField && u.Data is not null && Dist(u, (obj.Col, obj.Row)) <= 3).ToList();
+            if (all.Count == 0) return;
+            Play(423);
+            foreach (var u in all)
+            {
+                int dmg = One(u);
+                if (dmg > 0) { u.Hp = Math.Max(0, u.Hp - dmg); ShowNumber(u, dmg.ToString(), DamageColor); AddSoul(u, dmg / Math.Max(1, _db.N(43))); }
+                PutAilment(u, 3, 10, [], null);
+                if (u.Hp <= 0 && !SurvivesFatal(u)) KillUnit(u);
+            }
+            return;
+        }
+
+        // 기총포탑 1525 — 제 칸과 네 이웃 칸 가운데, 반경 3 안의 적 최저 HP 로 점수(1,000,000 − 최저 HP)를 매기고
+        // 값 × Num74 × 10 / (Num74 + 거리) 가 가장 큰 칸(0x1005c510·0x1005dd60). 적이 없는 칸은 후보가 아니다.
         bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && ObjectHostile(obj, u);
+        int num74 = _db.N(74);
         (int Col, int Row)[] candidates = [(obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row)];
-        var best = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) <= 3).ToList()))
-                             .OrderByDescending(x => x.Hits.Count).First();
-        if (best.Hits.Count == 0) return;
+        var scored = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Dist(u, c) <= 3).ToList()))
+                               .Where(x => x.Hits.Count > 0)
+                               .Select(x => (x.Cell, x.Hits, Score: CDiv((1000000 - x.Hits.Min(u => u.Hp)) * num74 * 10, num74 + Math.Abs(x.Cell.Col - obj.Col) + Math.Abs(x.Cell.Row - obj.Row))))
+                               .OrderByDescending(x => x.Score).ToList();
+        if (scored.Count == 0) return;
+        var best = scored[0];
         Play(423);
         for (int k = 0; k < 24; k++)
         {
@@ -421,14 +451,32 @@ internal sealed unsafe partial class BattleSceneWindow
             int col = best.Cell.Col + dc, row = best.Cell.Row + dr;
             _effects.Add((330, _rng.Next(3), _lastTime + _rng.Next(0, 120) / TicksPerSecond, col * TileW + TileW / 2, CellCenterY(col, row)));
         }
+        // 적마다 독립 타격 개체 넷 — 각각 rand()%100+2 틱 뒤에 따로 맞는다(숫자 넷). 물체는 안 맞는다.
         foreach (var u in best.Hits)
         {
-            int one = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+            int one = One(u);
             if (one <= 0) continue;
-            int total = Math.Min(u.Hp, one * 4);
-            u.Hp -= total;
-            ShowNumber(u, total.ToString(), DamageColor);
-            AddSoul(u, total / Math.Max(1, _db.N(43)));
+            for (int k = 0; k < 4; k++) _delayedHits.Add((_lastTime + (_rng.Next(100) + 2) / TicksPerSecond, u, one));
+        }
+    }
+
+    /// <summary>나중에 맞는 타격들(포탑 사격) — (때, 대상, 피해).</summary>
+    private readonly List<(double At, UnitState Unit, int Damage)> _delayedHits = [];
+
+    private void StepDelayedHits()
+    {
+        if (_delayedHits.Count == 0 || _db is null) return;
+        for (int i = _delayedHits.Count - 1; i >= 0; i--)
+        {
+            var (at, u, damage) = _delayedHits[i];
+            if (_lastTime < at) continue;
+            _delayedHits.RemoveAt(i);
+            if (!u.Alive || u.Hp <= 0) continue;
+            int dmg = Math.Min(u.Hp, damage);
+            u.Hp -= dmg;
+            ShowNumber(u, dmg.ToString(), DamageColor);
+            AddSoul(u, dmg / Math.Max(1, _db.N(43)));
+            if (u.Hp <= 0 && !SurvivesFatal(u)) KillUnit(u);
         }
     }
 

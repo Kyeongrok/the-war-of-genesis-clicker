@@ -132,8 +132,6 @@ internal sealed unsafe partial class BattleSceneWindow
         _ringHover = hover;
         _ringHoverAt = _lastTime;
         if (hover >= 0) PlaySound(SoundHover);
-        // 항목 설명(TXR 1375~1380 — 「적에게 일반공격을 행한다…」) — 원본은 항목마다 설명 창을 단다(0x10042c00). 올렸을 때 안내 줄로(가설).
-        if (hover >= 0 && _db?.T((ushort)(1375 + hover)) is { Length: > 0 } help) Hint(help.Replace("$n", " "));
     }
 
     private bool RingItemEnabled(RingCommand command, int ringUnit)
@@ -143,10 +141,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!IsPlayerTurn || ringUnit != _turn || unit.IsBusy) return false;
         // 원본 0x100e16b0 — Attack 은 늘 켜져 있고, Ability·Item 은 TP+CTP 가 문턱(Num 4) 아래면 꺼진다. Ability 는 상태이상 12(봉인)로도 꺼진다.
         // 전에는 거꾸로 Attack·Ability 를 끄고 Item 은 안 껐다.
-        // 문턱은 <b>걸은 비용을 뺀</b> TP(+0x4da = 현재 TP − 경로 비용) 로 본다(0x10074280) — 걷고 나서 링을 열 때.
-        int walked = (unit.Col != unit.OriginCol || unit.Row != unit.OriginRow) && ComputeRange(unit) is { } r && r.CanReach(unit.Row * Cols + unit.Col)
-                     ? r.Cost[unit.Row * Cols + unit.Col] : 0;
-        bool enoughTp = _db == null || unit.Tp - walked + unit.Ctp >= _db.N(4);
+        // 문턱의 +0x4da 는 미리보기로는 안 바뀌고 차례 시작에 TP 로 놓인다(0x10072d90, ba-14 U2) — 걷기 전 TP 그대로 본다.
+        bool enoughTp = _db == null || unit.Tp + unit.Ctp >= _db.N(4);
         return command switch
         {
             RingCommand.Ability => enoughTp && !unit.HasStatus(12),
@@ -215,7 +211,14 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (OnAbilityMenuRightDown(bx, by)) return;   // 어빌리티 목록 줄 = 누르고 있는 동안 설명
         if (_statusUnit >= 0) { if (!OnStatusRightClick(bx, by)) _statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명, 빈 곳 = 닫기
-        if (_ringUnit >= 0) { CancelRing(); return; }
+        if (_ringUnit >= 0)
+        {
+            // 항목 위에서 오른쪽 단추를 누르고 있는 동안 설명(TXR 1375~1380, 0x1003fc80 모달 · 떼면 0x10042ac0) — 항목 밖 우클릭만 링 취소(0x100e1540). ba-14 U1.
+            int item = RingItemAt(bx, by);
+            if (item >= 0 && _ringPhase == RingPhase.Idle) { _ringHelp = _db?.T((ushort)(1375 + item)); return; }
+            CancelRing();
+            return;
+        }
         // 어빌리티·아이템 대상을 고르는 중이면 우클릭은 <b>취소</b>다(원본) — 인물 위라도 정보 창을 열지 않는다.
         if (_targetWork >= 0 && CancelStep(undoMove: false)) return;
         if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
@@ -328,7 +331,11 @@ internal sealed unsafe partial class BattleSceneWindow
             if (hover && !DrawUi(452, labelMotion, RingTick(_ringHoverAt), x - 23, y + 7, UiBlend.Alpha))
                 DrawText(hoverName, x - 23, y + 12, White, 15);
         }
+        if (_ringHelp is { Length: > 0 } help) DrawDescriptionTip(help, _mouse.X, _mouse.Y, _camX, _camY, ViewWidth, ViewHeight);
     }
+
+    /// <summary>오른쪽 단추를 누르고 있는 동안 보이는 링 항목 설명 — 떼면 지운다(WM_RBUTTONUP).</summary>
+    private string? _ringHelp;
 
     /// <summary>그림 섞기. <c>Dim</c> 은 그림 색을 15/31 로 어둡게 찍는다 — 꺼진 목록 줄(원본 물들이기 방식 2 · 세기 16, 분석-캐릭터 st-5).</summary>
     /// <summary>

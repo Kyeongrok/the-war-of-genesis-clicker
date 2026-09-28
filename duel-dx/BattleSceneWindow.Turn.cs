@@ -145,6 +145,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateTurn()
     {
         if (_loading || _db == null) return;
+        StepDelayedHits();                       // 포탑 사격처럼 나중에 맞는 타격
         if (_outcome.Length > 0)
         {
             // 조용한 결과(행동 10·6·11[1])는 클릭을 기다리지 않고 제때 넘어간다(원본 120틱).
@@ -317,9 +318,9 @@ internal sealed unsafe partial class BattleSceneWindow
         CancelTargeting();
         _heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
-        // 버서커(상태 4)면 내 인물이라도 AI 가 움직인다 — 편 판정(0x1006fde0)이 버서커에게는 모두를 적으로 돌려, 가까운 아군도 친다.
-        // 원본에서 조종권을 넘기는 줄은 못 찾았지만(상태 4 를 보는 곳은 편 판정과 물들이기 둘뿐) 원본은 스스로 움직인다(사용자 보고).
-        if (IsMine(_units[index]) && !_units[index].HasStatus(4))
+        // 버서커(상태 4)라도 조종권은 그대로다 — 원본은 편 판정(0x1006fde0)에서 「모두가 적」이 될 뿐, +0x78·+0x4e9·+0x4ec 를 안 건드리고
+        // WAITNEXT 도 +0x78==4 만 본다(ba-14 A4 확정). 전에는 사용자 보고를 근거로 AI 에게 넘겼다.
+        if (IsMine(_units[index]))
         {
             // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
             // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다.
@@ -480,7 +481,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
         u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
-        && u.Hp > _db.WorkHpCost(u.Data, w.Id);   // HP 비용도 본다(0x100726e0)
+        && (u.Data.JobId == 37 || u.Hp > _db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
 
     /// <summary>
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
@@ -932,7 +933,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 행동 뒤 SOUL 증가(0x10076586 점프표): 종류 0 → Num26 · 1 → Num27 · 2 → Num29 · 3 → Num28 · 4·5·7 → 0.
             AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(29), 3 => db2.N(28), _ => 0 });
             int hp = db2.WorkHpCost(cost, w.Id);
-            if (hp > 0) a.Hp = Math.Max(1, a.Hp - hp);
+            if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
         }
 
         if (dying.Count > 0)

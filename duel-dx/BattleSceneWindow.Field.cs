@@ -225,6 +225,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
             if (FieldFile.Parse(id, files.Read("Fld", $"{id:D4}.fld")) is not { } field) return false;
             _field = field;
+            _fieldGray = false;
             _fieldTalk = TalkTable.Parse(files.Read("Tlk", $"{id:D4}.tlf"));
             _fieldFired = new int[field.Events.Count];
             _sideEvents.Clear();
@@ -268,6 +269,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void CloseField()
     {
         _field = null;
+        _fieldGray = false;
         _fieldTalk = null;
         _sideEvents.Clear();
         _fieldWaitWalker = null;
@@ -838,6 +840,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var layerProp in _fieldProps.Where(o => o.Layer == A(0))) layerProp.Visible = a.Code == 408;
                 foreach (var layerWho in _fieldActors.Where(w => w.Layer == A(0))) layerWho.Visible = a.Code == 408;
                 break;
+            case 412:                                        // 화면 흑백 [0/1] — 회상 장면. 그리기가 (7R+2G+B)/10 회색 팔레트로 바꿔 그린다(0x100ee750 → 0x10026280, ba-14 E4)
+                _fieldGray = A(0) != 0;
+                break;
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
                 _fieldFadeCover = Math.Clamp((int)A(4), 0, 8);   // 가리는 층 수 — 8 이면 다 가린다
@@ -1234,9 +1239,32 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
     }
 
+    /// <summary>필드 행동 412 — 화면을 회색조로(회상 장면).</summary>
+    private bool _fieldGray;
+
+    /// <summary>회색조 — 원본 팔레트 변환 <c>(7R + 2G + B) / 10</c>(0x100262e0). 필드를 다 그린 뒤 화면 네모 안을 바꾼다.</summary>
+    private void ApplyFieldGray()
+    {
+        if (!_fieldGray) return;
+        for (int y = _camY; y < _camY + ViewHeight; y++)
+            for (int x = _camX; x < _camX + ViewWidth; x++)
+            {
+                int i = y * BoardWidth + x;
+                uint c = _fb[i];
+                uint g = (7 * (c >> 16 & 0xFF) + 2 * (c >> 8 & 0xFF) + (c & 0xFF)) / 10;
+                _fb[i] = 0xFF000000 | g << 16 | g << 8 | g;
+            }
+    }
+
     private void DrawField()
     {
         if (_field is null) return;
+        DrawFieldBody();
+        ApplyFieldGray();
+    }
+
+    private void DrawFieldBody()
+    {
         var (ox, oy) = MosesOrigin();
 
         FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);

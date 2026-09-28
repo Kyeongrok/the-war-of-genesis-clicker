@@ -236,6 +236,19 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>조건 200·203·204·402 가 찾은 사람도 20010 이 된다(0x101b699c 에 적는 조건들) — 20011 은 그대로.</summary>
     private void RememberFound(UnitState? found) { if (found != null) _eventFoundA = found; }
 
+    /// <summary>행동 906 이 초록으로 칠하는 사각형과 그 끝나는 때.</summary>
+    private (int X1, int Y1, int X2, int Y2)? _highlightRect;
+    private double _highlightUntil;
+
+    /// <summary>행동 200 의 들어오는 변(0 위·1 왼·2 아래·3 오른) 가장자리 칸 — 목표 칸과 같은 열/줄.</summary>
+    private (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
+    {
+        0 => (Math.Clamp(col, 0, Cols - 1), 0),
+        1 => (0, Math.Clamp(row, 0, Rows - 1)),
+        2 => (Math.Clamp(col, 0, Cols - 1), Rows - 1),
+        _ => (Cols - 1, Math.Clamp(row, 0, Rows - 1)),
+    };
+
     /// <summary>
     /// 조건 300·301 이 쓰는 대상 고르기 — <b>죽은 사람도 든다</b>(걸러내기 갈래가 0 이라 NULL 검사뿐)이고,
     /// 편 코드는 <b>홀수만</b> 받는다(짝수는 늘 거짓, <c>0x1005022c</c>).
@@ -330,7 +343,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 var list = EventTargets(A(0), out _);
                 int x1 = Math.Min(A(2), A(4)), x2 = Math.Max(A(2), A(4));
                 int y1 = Math.Min(A(3), A(5)), y2 = Math.Max(A(3), A(5));
-                var inside = list.FirstOrDefault(u => u.Alive && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
+                // 원본 0x1006e940(u,0) 은 NULL 검사뿐이라 <b>쓰러진 인물도</b> 그 칸에 남아 있으면 센다(ba-14 E2).
+                var inside = list.FirstOrDefault(u => u.OnField && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 if (inside != null) RememberFound(inside);                      // 조건 402 도 20010 을 남긴다(0x10050a32)
                 return inside != null;
             }
@@ -339,7 +353,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
                 int x1 = Math.Min(A(3), A(5)), x2 = Math.Max(A(3), A(5));
                 int y1 = Math.Min(A(4), A(6)), y2 = Math.Max(A(4), A(6));
-                int n = side < 0 ? 0 : _units.Count(u => u.Alive && u.Side == side
+                int n = side < 0 ? 0 : _units.Count(u => u.OnField && u.Side == side              // 쓰러진 인물도 센다(ba-14 E2)
                                                           && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 return Compare(n, A(1), A(2));
             }
@@ -351,7 +365,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 204:                                                           // 이미 증원으로 들어왔나 — 데모는 처음부터 다 서 있다
             {
                 var list = EventTargets(A(0), out _);
-                bool arrived = list.Any(u => u.Alive);
+                var first = list.FirstOrDefault(u => u.Alive && u.OnField);
+                RememberFound(first);                                          // 조건 204 도 20010 을 남긴다(ba-14 E8)
+                bool arrived = first != null;
                 return A(1) != 0 ? !arrived : arrived;
             }
             case 300:                                                           // 붙었다 — 같은 줄이고 두 칸 안(0x1004fac0)
@@ -400,15 +416,33 @@ internal sealed unsafe partial class BattleSceneWindow
                 SetEventOutcome(win: true, quiet: true);
                 break;
             case 200:                                    // 증원 — 그 사람들을 전장에 세운다(0x10050eb0). 인자1 은 원본도 안 읽는다.
-            case 214:                                    // 워프 등장 — 자리는 200 과 같다.
-                // 원본은 대장에게 군단이 있으면 <b>부하까지 한 줄로</b> 세워(0x10050f16~0x10051296: 홀수 번째는 반 칸 앞, 짝수 번째는
-                // 한 칸 반 뒤, 두 명마다 한 칸씩 더 뒤) 가장자리에서 8픽셀/틱으로 걸어 들어오게 한다. 데모는 진형 자리에 바로 세운다.
+            case 214:                                    // 워프 등장 — 자리는 200 과 같고 하이 텔레포트(work 585) 연출로 나타난다(0x10052bf0).
+            {
+                // 200 은 인자4 의 변(0 위·1 왼·2 아래·3 오른) 바깥 100px 에서 8px/틱으로 곧장 들어와 맵 안에 들어서면 걷는다(ba-14 E7).
+                // 부하는 대장 옆으로 엇갈려 선 뒤 진형으로 따라온다(0x10050f16~). 여기서는 변의 가장자리 칸에서 걸어 들어오게 한다.
+                double longest = 0.4;
                 foreach (var u in EventTargets(A(0), out _))
                 {
-                    if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다
+                    if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다(0x1006e940(u,1))
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     u.Facing = EdgeFacing(A(4));
+                    if (a.Code == 200 && EdgeCell(A(4), A(2), A(3)) is var (ec, er) && (ec, er) != (A(2), A(3)))
+                    {
+                        u.WarpTo(ec, er);
+                        var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(A(3) * Cols + A(2)) ? PathWithin(wr, ec, er, A(3) * Cols + A(2)) : null;
+                        if (walk is { Count: > 0 }) { foreach (var step in walk) u.Path.Enqueue(step); longest = Math.Max(longest, walk.Count * StepTicks / TicksPerSecond); }
+                        else u.WarpTo(A(2), A(3));
+                        u.OriginCol = A(2); u.OriginRow = A(3);
+                    }
+                    else if (a.Code == 214)
+                    {
+                        var (wx, wy) = UnitFoot(u);
+                        _effects.Add((381, 1, _lastTime, wx, wy));
+                        _effects.Add((210, 3, _lastTime, wx, wy));
+                        PlayEventVoice(694);
+                        longest = Math.Max(longest, 80 / TicksPerSecond);
+                    }
                     int leader = Array.IndexOf(_units, u);
                     foreach (var (follower, col, row) in FormationPlan(u, A(2), A(3)))
                     {
@@ -419,8 +453,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     }
                     if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
-                _eventWaitUntil = _lastTime + 0.4;       // 걸어 들어오는 사이만큼 기다린다
+                _eventWaitUntil = _lastTime + longest;   // 걸어 들어오는 사이만큼 기다린다
                 break;
+            }
             case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로. 인자1 이 1 이면 부대째(원본 — 전에는 늘 부하까지 데려갔다)
                 foreach (var u in EventTargets(A(0), out _))
                 {
@@ -432,10 +467,28 @@ internal sealed unsafe partial class BattleSceneWindow
                     foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
                 }
                 break;
-            case 202:                                    // 지정 칸으로 — 전장에 있는 사람만(원본도 맵 안인지 본다)
+            case 202:                                    // 지정 칸으로 <b>걸어서</b>(0x10075ff0, ba-14 E5) — 전장에 있는 사람만. 막힌 칸이면 가장 가까운 갈 수 있는 칸.
+            {
+                double longest = 0;
                 foreach (var u in EventTargets(A(0), out _))
-                    if (u.OnField) u.ResetTo(A(2), A(3), keepFacing: true);
+                {
+                    if (!u.OnField || !u.Alive) continue;
+                    var wr = ComputeRange(u, tp: 1 << 20);
+                    int goal = wr != null ? NearestReachableTo(u, wr, A(2), A(3)) : -1;
+                    var walk = wr != null && goal >= 0 ? PathWithin(wr, u.Col, u.Row, goal) : null;
+                    if (walk is { Count: > 0 })
+                    {
+                        foreach (var step in walk) u.Path.Enqueue(step);
+                        longest = Math.Max(longest, walk.Count * StepTicks / TicksPerSecond);
+                        u.OriginCol = goal % Cols; u.OriginRow = goal / Cols;
+                    }
+                    else u.ResetTo(A(2), A(3), keepFacing: true);
+                    // 인자1 이 1 이면 부대째 — 부하는 진형으로 따라온다.
+                    if (A(1) == 1 && _units.Any(f => f.LeaderIndex == Array.IndexOf(_units, u))) AssignFormationTargets(Array.IndexOf(_units, u));
+                }
+                _eventWaitUntil = _lastTime + longest;
                 break;
+            }
             case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
             {
                 // 원본은 그 모션이 <b>끝날 때까지</b> 기다린다(인자4 반복) — 모션 길이만큼.
@@ -519,6 +572,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
                 _camTargetX = Math.Clamp(cx * TileW + TileW / 2 - ViewWidth / 2, 0, CamMaxX);
                 _camTarget = Math.Clamp(CellCenterY(Math.Clamp(cx, 0, Cols - 1), Math.Clamp(cy, 0, Rows - 1)) - ViewHeight / 2, 0, CamMax);
+                // 사각형 안 칸을 층 13 초록(배치 칸과 같은 그림)으로 200틱 동안 칠한다(ba-14 E6) — 「여기로 가라」 표시.
+                _highlightRect = (Math.Min(A(0), A(2)), Math.Min(A(1), A(3)), Math.Max(A(0), A(2)), Math.Max(A(1), A(3)));
+                _highlightUntil = _lastTime + 200 / TicksPerSecond;
                 break;
             }
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)

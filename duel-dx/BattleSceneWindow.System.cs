@@ -65,7 +65,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RunSystemItem(SystemItem item)
     {
         // MISSION·SAVE·LOAD 는 메뉴를 숨기기만 하고, 그 창이 닫히면 메뉴가 다시 보인다(0x100e39f0 → vt+0xcc). fg-22.
-        _systemMenuReturn = item is SystemItem.Mission or SystemItem.Save or SystemItem.Load;
+        _systemMenuReturn = item is SystemItem.Mission or SystemItem.Save or SystemItem.Load or SystemItem.Restart or SystemItem.Exit;   // 확인창 「아니오」도 메뉴로(0x100e3ce9)
         switch (item)
         {
             case SystemItem.Mission: _missionWindow = true; break;
@@ -113,8 +113,8 @@ internal sealed unsafe partial class BattleSceneWindow
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; confirm.Value.Yes(); return true; }
-                if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; _systemMenuReturn = false; confirm.Value.Yes(); return true; }
+                if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; ReturnToSystemMenu(); return true; }
             }
             return true;
         }
@@ -152,7 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>Esc — 열린 창을 하나씩 닫는다. 닫았으면 true.</summary>
     private bool CloseSystemWindow()
     {
-        if (_confirm != null) { _confirm = null; return true; }
+        if (_confirm != null) { _confirm = null; ReturnToSystemMenu(); return true; }
         if (SlotsOpen) { _slotsMode = -1; ReturnToSystemMenu(); return true; }
         if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; ReturnToSystemMenu(); return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
@@ -398,6 +398,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _levelUpUnit = -1;
         _numbers.Clear();
         _effects.Clear();
+        _delayedHits.Clear();
         _movies.Clear();
         _bodyClones.Clear();
         _flyingEffects.Clear();
