@@ -114,9 +114,12 @@ internal sealed unsafe partial class BattleSceneWindow
         int itemId = items[row].Item;
         switch (list)
         {
-            case ListStock: _shopBuy.Add(itemId); break;                        // 사려고 담기
+            // 사려고 담기 — 한 칸 99개(0x100ff63e), 합계 5천만 GP(0x100ff677)까지.
+            case ListStock when _shopBuy.Count(i => i == itemId) + _inventory.GetValueOrDefault(itemId) < 99
+                                && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000: _shopBuy.Add(itemId); break;
             case ListBuy: _shopBuy.Remove(itemId); break;                       // 담은 것 빼기
-            case ListBag when _shopSell.Count(i => i == itemId) < items[row].Count: _shopSell.Add(itemId); break;
+            // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
+            case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count: _shopSell.Add(itemId); break;
             case ListSell: _shopSell.Remove(itemId); break;
         }
         return true;
@@ -132,9 +135,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             Play(SoundShopFail);
             _notice = (_db?.T(1318) is { Length: > 0 } t ? t : "돈이 모자랍니다.", _lastTime + 150 / TicksPerSecond);
-            _shopBuy.Clear();
-            _shopSell.Clear();
-            return;
+            return;                              // 목록은 그대로 둔다(0x101001f6 — 알림과 소리만, ba-15)
         }
         _shopMoney = ShopBalance();
         foreach (int id in _shopBuy) _inventory[id] = _inventory.GetValueOrDefault(id) + 1;

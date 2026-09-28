@@ -162,7 +162,11 @@ internal sealed unsafe partial class BattleSceneWindow
             if (x < fx || x >= fx + fw || y < fy || y >= fy + fh) continue;
             ushort target = families[i].Job;
             string ftitle = _db?.T(932) is { Length: > 0 } ft ? ft : "전직";
-            string ftext = _db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
+            // 계열 단추도 남은 EXP 가 있으면 931 본문이다(0x10100c76, ba-15).
+            var fc = PartyData(_styleUnit);
+            string ftext = fc is { Exp: > 0 } && !_keepJobExp
+                ? $"{_db?.T(fc.NameId)}의 경험치가 {fc.Exp} 남았습니다.\n전직하면 {fc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
+                : _db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
             _confirm = (ftitle, ftext, () => ChangeJob(target));
             return true;
         }
@@ -175,7 +179,10 @@ internal sealed unsafe partial class BattleSceneWindow
             if (x < cell.X || x >= cell.X + cell.W || y < cell.Y || y >= cell.Y + cell.H) continue;
             ushort target = tiers[i].Job;
             string ttitle = _db?.T(932) is { Length: > 0 } tt ? tt : "전직";
-            string ttext = _db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
+            var tc = PartyData(_styleUnit);          // 3단계도 같다(0x10100d49)
+            string ttext = tc is { Exp: > 0 } && !_keepJobExp
+                ? $"{_db?.T(tc.NameId)}의 경험치가 {tc.Exp} 남았습니다.\n전직하면 {tc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
+                : _db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
             _confirm = (ttitle, ttext, () => ChangeJob(target));
             return true;
         }
