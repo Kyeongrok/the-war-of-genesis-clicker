@@ -35,6 +35,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private const int MusinWork = 1530, SunBlastWork = 1585;
 
+    /// <summary>사이킥 크로스(어빌리티 84) Lv1~10 — 「\」 획 뒤 5틱마다 「/」 획이 겹쳐 <b>가운데 칸은 두 번</b> 맞는다(0x100ab290, ba-14 H4).</summary>
+    private static readonly HashSet<int> PsychicCrossWorks = [1111, .. Enumerable.Range(1112, 9)];
+
     /// <summary>첫 타 뒤에 더 치는 간격(틱) — 없으면 빈 목록.</summary>
     private int[] ExtraHitGaps(WorkData w) => w.Id switch
     {
@@ -157,22 +160,33 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private IEnumerable<bool> DashRoutine(UnitState a, WorkData w, int col, int row, List<UnitState> dying)
     {
-        // 지나는 칸들 — 브레젠험 한 줄.
+        // 원본 이동기 0x100ca9a0(ba-14 H1): 시전자가 <b>보는 쪽</b>으로 틱마다 한 칸씩 곧장 간다. 겨눈 칸이 축에서 벗어나면 보는 축의 거리만 쓴다.
+        // 지형·물체에만 막히고 유닛은 안 막는다. 혼은 지난 칸만, 비연참·오메가 스윙은 지난 칸의 3칸 폭 띠를 친다(한 유닛에 한 번).
+        var (dc, dr) = a.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+        int dist = dc != 0 ? (col - a.Col) * dc : (row - a.Row) * dr;
         var cells = new List<(int Col, int Row)>();
-        int x0 = a.Col, y0 = a.Row, dx = Math.Abs(col - x0), dy = Math.Abs(row - y0), sx = Math.Sign(col - x0), sy = Math.Sign(row - y0), err = dx - dy;
-        for (int guard = 0; (x0 != col || y0 != row) && guard < 64; guard++)
+        for (int k = 1; k <= dist; k++)
         {
-            int e2 = err * 2;
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx) { err += dx; y0 += sy; }
-            cells.Add((x0, y0));
+            int c = a.Col + dc * k, r = a.Row + dr * k;
+            if ((uint)c >= Cols || (uint)r >= Rows || _map is not { } map || c >= map.Cols || r >= map.Rows || (map.FlagsAt(c, r) & 0x9) != 0) break;
+            if (ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
+            cells.Add((c, r));
         }
-        if (cells.Count == 0 || LiveUnitAt(col, row) != null) yield break;
+        // 마지막 칸에 누가 서 있으면 그 앞에서 멈춘다(겹쳐 서지 않게 — 가설).
+        while (cells.Count > 0 && LiveUnitAt(cells[^1].Col, cells[^1].Row) is { } blocker && blocker != a) cells.RemoveAt(cells.Count - 1);
+        if (cells.Count == 0) yield break;
+        var (endCol, endRow) = cells[^1];
+        bool band = w.Id != 8 && !(w.Id >= 259 && w.Id <= 277);   // 혼만 한 줄, 나머지(비연참·오메가 스윙)는 3칸 폭
+        bool InBand(UnitState t, (int Col, int Row) c) => dc != 0 ? t.Col == c.Col && Math.Abs(t.Row - c.Row) <= (band ? 1 : 0)
+                                                                  : t.Row == c.Row && Math.Abs(t.Col - c.Col) <= (band ? 1 : 0);
 
-        var steps = SlideSteps(cells.Count, speed: 24, factor: 1, floor: 24);
-        a.BeginSlide(col, row);
-        a.OriginCol = col;
-        a.OriginRow = row;
+        // 혼·비연참은 한 칸(40px)/틱, 오메가 스윙은 15px/틱.
+        double perTick = w.Id == 517 ? 15.0 / WorldPerCell : 1;
+        var steps = new List<double>();
+        for (double pos = 0; pos < cells.Count;) { pos = Math.Min(cells.Count, pos + perTick); steps.Add(pos / cells.Count); }
+        a.BeginSlide(endCol, endRow);
+        a.OriginCol = endCol;
+        a.OriginRow = endRow;
         var struck = new HashSet<UnitState>();
         double start = _lastTime;
         for (int k; (k = (int)((_lastTime - start) * TicksPerSecond)) < steps.Count;)
@@ -182,14 +196,15 @@ internal sealed unsafe partial class BattleSceneWindow
             // 지난 칸까지의 적을 친다.
             int passed = Math.Min(cells.Count, (int)Math.Floor(p * cells.Count + 0.5));
             for (int i = 0; i < passed; i++)
-                foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && t.Col == cells[i].Col && t.Row == cells[i].Row && SeesAsFoe(a, t)))
+                foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && InBand(t, cells[i]) && SeesAsFoe(a, t)))
                     if (struck.Add(t)) ApplyWork(a, w, t, dying);
             yield return true;
         }
         a.SetSlide(1);
         foreach (var c in cells)
-            foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && t.Col == c.Col && t.Row == c.Row && SeesAsFoe(a, t)))
+            foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && InBand(t, c) && SeesAsFoe(a, t)))
                 if (struck.Add(t)) ApplyWork(a, w, t, dying);
+        col = endCol; row = endRow;
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"dash work {w.Id}: {a.ChrCode} → ({col},{row}) {cells.Count}칸, 맞은 {struck.Count}명" + Environment.NewLine);

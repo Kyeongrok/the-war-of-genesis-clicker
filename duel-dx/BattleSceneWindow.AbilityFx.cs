@@ -239,6 +239,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
             if (w.Prepare == 7 && e.Obs is 1338 or 487 or PreludeDotObs or PreludeBandObs) continue;
+            // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
+            if (CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
             if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
