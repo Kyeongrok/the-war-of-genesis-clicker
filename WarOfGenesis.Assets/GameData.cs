@@ -258,8 +258,12 @@ public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeSh
                               ushort HpFactor, ushort ExpCost, ushort TpBase, ushort SoulBase, byte MinTargets, byte AiCriterion, byte Prepare,
                               (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0,
                               byte RangeKind = 0, byte HeightRange = 0, byte Sight = 0, byte SameHeightRange = 0,
-                              byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0, byte SoulSpend = 0)
+                              byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0, byte SoulSpend = 0,
+                              byte FollowersJoin = 1)
 {
+    /// <summary>군단 부하가 따라 치나(메모리 <c>+0x41</c>, 파일 59) — 0 이면 대장 혼자 쓴다(<c>0x1005fd00</c>). 피해 work 469개가 0 이다.</summary>
+    public bool FollowersAct => FollowersJoin != 0;
+
     public bool IsDamage => Kind == 0;
     public bool IsHeal => Kind is 1 or 5;
 
@@ -405,7 +409,7 @@ public sealed class GameDatabase
             U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
             [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
             U16(a, o + 24), a[o + 26],
-            a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49]);
+            a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49], a[o + 59]);
 
     /// <summary>스킬 파일이 덮어쓴 어빌리티 설명(어빌리티 번호 → 글). 비어 있으면 원본 TXR 을 쓴다.</summary>
     private Dictionary<int, string> _descriptions = [];
@@ -602,8 +606,13 @@ public sealed class GameDatabase
     /// <summary>
     /// 쓰러뜨렸을 때 받는 경험치(<c>0x10033020</c>) = Num[14] + Num[15] × (쓰러뜨린 적 레벨 − 내 레벨), Num[16]~Num[17] 로 자른다.
     /// </summary>
-    public int ExpForKill(CharacterData killer, int targetLevel) =>
-        Math.Clamp(N(14) + N(15) * (targetLevel - killer.Level), N(16), N(17));
+    /// <param name="bonusPercent">상태 11(경험치 증가) 값% — 자르기 <b>앞</b>에 더한다(<c>0x10072285</c>~).</param>
+    public int ExpForKill(CharacterData killer, int targetLevel, int bonusPercent = 0)
+    {
+        int exp = N(14) + N(15) * (targetLevel - killer.Level);
+        if (bonusPercent > 0) exp += exp * bonusPercent / 100;
+        return Math.Clamp(exp, N(16), N(17));
+    }
 
     /// <summary>
     /// 레벨업(<c>0x100318d0</c>) — 쌓인 경험치 ÷ 100 이 새 레벨. 오름 = 직업 성장률% × <b>기본값</b> / 100 × 오른 레벨 수(난수 없음).

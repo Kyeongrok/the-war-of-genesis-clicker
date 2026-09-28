@@ -812,6 +812,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
         if (!won && Episodes().Count > 0) { OpenTitle(); return; }
         OpenMoses();
+        // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
+        if (won && _mosesOpen && _mosesChp != null) MosesGoPage(0);
     }
 
     private void OnClick(int clientX, int clientY)
@@ -1632,7 +1634,8 @@ internal sealed class UnitState(DemoUnit unit)
     public int Record { get; } = unit.Record;
 
     /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
-    public bool PlayerControlled { get; } = unit.PlayerControlled;
+    /// <summary>사람이 명령하는 유닛인가 — 편 4. 이벤트 행동 708 로 편이 바뀌면 조종 주체도 따라간다(원본 WAITNEXT 는 매번 +0x78 을 본다).</summary>
+    public bool PlayerControlled => Side == 4;
 
     /// <summary>For.dat 군단 번호(Btl 레코드 파일 15) — 0 이 아니면 부하들이 진형을 지어 따라다닌다.</summary>
     public int LegionId { get; set; } = unit.Legion;

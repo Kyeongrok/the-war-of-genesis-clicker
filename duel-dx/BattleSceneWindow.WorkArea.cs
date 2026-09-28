@@ -190,7 +190,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private static bool ModeAccepts(int mode, UnitState user, UnitState target) => mode switch
     {
         1 => SeesAsFoe(user, target),
-        4 => !user.HasStatus(4) && target.IsAlly == user.IsAlly,
+        4 => !user.HasStatus(4) && !Hostile(user, target),
         5 or 3 or 6 => true,
         0 or 2 => target == user,
         _ => false,

@@ -28,10 +28,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>쓰러뜨린 쪽에 경험치를 준다(메시지 1016). 여럿이 나누면 <paramref name="share"/> 로 나눈 몫(1 이상).</summary>
     private void GainKillExp(UnitState killer, UnitState victim, int share = 1)
     {
-        if (_db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.IsAlly) return;
-        int exp = Math.Max(1, _db.ExpForKill(k, v.Level) / share);
-        // 11(경험치 증가) — 값% 만큼 더 받는다(0x100721dd).
-        if (killer.Status(11) is var more and > 0) exp += exp * more / 100;
+        // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
+        if (_db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
+        // 11(경험치 증가)은 자르기 <b>앞</b>에 더한다(0x10072285~) — 그래서 한 번에 상한(Num 17)을 넘지 않는다.
+        int exp = Math.Max(1, _db.ExpForKill(k, v.Level, killer.Status(11)) / share);
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
     }

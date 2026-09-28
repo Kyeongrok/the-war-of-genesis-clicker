@@ -87,7 +87,8 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        var party = StyleParty();
+        if (OnStylePartyArrow(x, y)) return true;
+        var party = StylePartyPage();
         for (int i = 0; i < party.Count && i < 5; i++)
             if (x >= 70 * i + 48 - 32 && x < 70 * i + 48 + 32 && y >= 330 - 10 && y < 330 + 70)
             {
@@ -115,7 +116,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db is not { } db) return;
         var list = LegionList();
-        var party = StyleParty();
+        var party = StylePartyPage();
+        DrawStylePartyArrows(ox, oy);
 
         // 인물 단추 — 배속된 인물은 표(모션 14)를 단추 아래에
         for (int i = 0; i < party.Count && i < 5; i++)
