@@ -62,16 +62,27 @@ internal sealed unsafe partial class BattleSceneWindow
         Play(SoundDeath);
         QueueLevelUps();
         Toast($"적 {victims.Count}명 정리 — 경험치를 {receivers.Count}명이 나눴습니다");
-        CheckOutcome();
+        // 레벨업 창이 먼저, 전멸 판정은 그 뒤(상태 21 → 4, ba-15 Q7).
+        if (_levelUpQueue.Count == 0) CheckOutcome();
+        else _outcomeAfterLevelUp = true;
     }
 
-    /// <summary>행동이 끝난 뒤 — 레벨이 오른 아군을 줄 세운다(원본 상태 21).</summary>
+    /// <summary>
+    /// 행동이 끝난 뒤 — 레벨이 오른 아군을 줄 세운다(원본 상태 21 부속 0, <c>0x100681ef~0x1006820b</c>).
+    /// 원본은 <c>0x1006e940(u,2)</c>(살아 있음·판 안)인 유닛만 본다 — 쓰러진 인물은 죽은 채 레벨업하지 않는다(ba-15 Q7).
+    /// </summary>
     private void QueueLevelUps()
     {
         for (int i = 0; i < _units.Length; i++)
-            if (_units[i].IsAlly && _units[i].Data is { } c && c.CumExp / 100 > c.Level && !_levelUpQueue.Contains(i))
+            if (_units[i] is { IsAlly: true, Alive: true, OnField: true, Data: { } c } && c.CumExp / 100 > c.Level && !_levelUpQueue.Contains(i))
                 _levelUpQueue.Enqueue(i);
     }
+
+    /// <summary>
+    /// 레벨업 줄이 빌 때까지 미뤄 둔 전멸 판정 — 원본은 상태 21(레벨업) 뒤 상태 4 에서 전멸을 본다(<c>0x1006ed10</c>).
+    /// 마지막 처치의 레벨업 창이 결과 배너에 가려 다음 전투로 밀리지 않게 한다(ba-15 Q7).
+    /// </summary>
+    private bool _outcomeAfterLevelUp;
 
     /// <summary>창을 띄울 차례면 띄우고, 시간이 다 되면 닫는다. 창이 떠 있는 동안 true.</summary>
     private bool UpdateLevelUp()
@@ -80,7 +91,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (_lastTime < _levelUpUntil) return true;
             CloseLevelUp();
-            return LevelUpOpen;
+            // 줄에 남은 사람은 같은 틀에 곧바로 띄운다 — 사이에 한 틀이라도 차례가 돌면 틱이 흘러 미뤄 둔 전멸 판정을 앞지른다.
         }
         if (_routine != null) return false;
 
@@ -90,7 +101,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             int index = _levelUpQueue.Dequeue();
             var unit = _units[index];
-            if (_db == null || unit.Data is not { } c || c.CumExp / 100 <= c.Level) continue;
+            if (_db == null || !unit.Alive || unit.Data is not { } c || c.CumExp / 100 <= c.Level) continue;
 
             unit.Data = _db.LevelUp(c, out var gains);
             RefreshUnitStats(unit);
@@ -105,6 +116,12 @@ internal sealed unsafe partial class BattleSceneWindow
             Play(SoundLevelUp);
             _mixer.SetMusicGain(DuckedMusicGain);
             return true;
+        }
+        if (_outcomeAfterLevelUp)
+        {
+            _outcomeAfterLevelUp = false;
+            CheckOutcome();
+            if (_outcome.Length > 0 || EventsBusy) return true;   // 결과·사건이 섰으면 이번 틀의 차례는 돌리지 않는다
         }
         return false;
     }

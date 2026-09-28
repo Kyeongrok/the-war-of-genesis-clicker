@@ -183,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 전투는 여기서 닫힌다 — 판을 전투 맵 크기에서 640×480 틀로 되돌려 모세스만 남긴다.
         // (안 그러면 전투 맵 크기 창 한가운데에 모세스가 뜨고 둘레가 검게 남는다.)
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
-        if (chapter != null) { _mosesChp = chapter; Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절)
+        if (chapter != null) { _mosesChp = chapter; _navStart = null; Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
         if (_mosesChp is { } owner && Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
@@ -206,7 +206,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _fieldReturn.Clear();
         _fieldWaitUntil = 0;
         _fieldChoices = null;
-        if (_mosesChp is { } chp) RunChapterScript(chp);     // 동료·돈·아이템·깃발은 챕터 스크립트가 준다(대사 든 사건은 실행기가)
+        // 동료·돈·아이템·깃발은 챕터 스크립트가 준다(대사 든 사건은 실행기가). 스크립트가 곧장 전투·필드로 떠나면(Chp 0057 사건 1 의 10[110]) 여기서 끝.
+        if (_mosesChp is { } chp && RunChapterScript(chp)) return;
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         StopMusic();
@@ -230,6 +231,15 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         return false;
     }
+
+    /// <summary>
+    /// 필드 행동 911 이 정한 항행 시작 — (챕터, 단계, 번호). 원본 챕터 <c>+0x2e40/+0x2e42</c> 로, Chp 머리 값(StartStep/StartNumber)을 덮는다.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 이 두 워드를 세이브 레코드 <c>+0x190/+0x192</c> 에 싣는다(<c>0x100f5d70</c> 저장 · <c>0x100f57c0</c> 복원) — 데모 세이브에는 아직 안 싣는다
+    /// (세이브 형식이 System.cs 에 있다 — 자료의 911 은 Chp 0050·0056·0064 셋 다 <c>[1, 0]</c>). 챕터를 새로 열면 지운다.
+    /// </remarks>
+    private (int Chapter, int Step, int Number)? _navStart;
 
     /// <summary>방문 표시가 선 행성 — (챕터, 행성). 스크립트 조건 <c>505 [행성]</c> 이 한 번 참이 되면서 지운다(<c>0x100edcd0</c>). 세이브에 실린다.</summary>
     private readonly HashSet<(int Chapter, int Planet)> _planetVisits = [];
@@ -369,12 +379,20 @@ internal sealed unsafe partial class BattleSceneWindow
             case 0:
                 Play(564);                                             // NAVIGATION
                 Play(566);                                             // 성계 지도 연출 소리(큐 20566, 분석-모세스 14절)
-                // 챕터가 정한 최저 단계에서 시작한다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
-                _mosesStep = Math.Max(1, _mosesChp?.StartStep ?? 1);
-                _mosesPlanet = _mosesStep == 2 ? _mosesChp?.StartNumber ?? 0 : 0;
+            {
+                // 챕터가 정한 시작 단계에서 연다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
+                // 원본은 챕터 +0x2e40/+0x2e42(시작 단계·번호)를 쓰고(0x100fcf00), 머리 값(0x100f6c80)을 스크립트 행동 911 이 덮는다.
+                var (startStep, startNo) = _navStart is { } nav && nav.Chapter == _mosesChp?.Id
+                    ? (nav.Step, nav.Number)
+                    : (_mosesChp?.StartStep ?? 1, _mosesChp?.StartNumber ?? 0);
+                _mosesStep = Math.Max(1, startStep);
+                _mosesPlanet = _mosesStep == 2 ? startNo : 0;
+                // 단계 1 은 번호가 <b>항성계</b> 번호다 — 항성계 표에서 그 번호의 칸을 찾는다(0x100fa830). 없으면 첫 항성계.
                 _mosesSystem = _mosesStep == 2 ? MosesSystemOfPlanet(_mosesPlanet)
-                                               : _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
+                                               : _mosesChp?.Systems.FirstOrDefault(sy => sy.No == startNo)?.No
+                                                 ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
                 break;
+            }
             case 1: if (DeliverMail() > 0) Play(571); break;           // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
             case 2: break;                                             // MESSAGE — 소리 없음
             case 3 or 4: OpenMosesShop(page - 3); return;

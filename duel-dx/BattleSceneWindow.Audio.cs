@@ -108,13 +108,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>음악을 멈춘다 — 곡 번호도 지워 타이틀이 「같은 곡이 돌고 있다」고 착각하지 않게.</summary>
     private void StopMusic() { _musicId = 0; _mixer.StopMusic(); }
 
-    private void PlayMusicFile(int id, bool loop)
+    /// <summary>
+    /// 필드 행동 512 — 새 곡을 <b>옛 곡의 지금 크기</b>로 튼다(<c>0x100eed8a</c>: 옛 음악 개체의 음량 <c>+0xc</c> 를 새 곡에 넣는다,
+    /// <c>0x10025320</c>). 옛 곡이 없으면(514 로 멈췄거나 필드 머리 BGM 이 없었으면) <b>0</b> 에서 시작한다.
+    /// 자료 512 358곳 중 346곳이 바로 뒤 517 로 키우는 페이드인이다.
+    /// </summary>
+    private void PlayMusicInherit(int id)
+    {
+        float gain = _musicId != 0 ? _musicGain : 0;
+        StopMusic();
+        if (id > 0) PlayMusicFile(id, loop: true, gain);
+    }
+
+    /// <param name="gain">시작 크기 — 없으면 제 크기(<see cref="MusicGain"/>). 필드 밖(모세스·전투)의 새 곡은 늘 제 크기로 시작한다.</param>
+    private void PlayMusicFile(int id, bool loop, float? gain = null)
     {
         _musicId = id;
         if (Muted || !_bgmOn) return;
-        // 새 음악은 늘 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다.
+        // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
         _musicFade = null;
-        _musicGain = MusicGain;
+        _musicGain = gain ?? MusicGain;
         // 풀리는 동안 다른 곡을 걸었으면 이 곡은 버린다 — 늦게 풀린 곡이 새 곡을 덮어쓰지 않게.
         int request = Interlocked.Increment(ref _musicRequest);
         System.Threading.Tasks.Task.Run(() =>
@@ -125,7 +138,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (!File.Exists(path)) return;
                 var pcm = BinkAudio.Open(path).Decode();
                 if (request != Volatile.Read(ref _musicRequest)) return;
-                _mixer.PlayMusic(pcm, loop, MusicGain);
+                // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다.
+                _mixer.PlayMusic(pcm, loop, _musicGain);
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
         });
@@ -171,11 +185,14 @@ internal sealed unsafe partial class BattleSceneWindow
         LoadClip(id, pcm =>
         {
             if (!Muted && pcm != null && tag == Volatile.Read(ref _talkVoiceTag)) _mixer.PlayEffect(pcm, _effectGain, tag);
-            if (Trace)
-                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                                   $"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}" + Environment.NewLine);
+            // 이 부름은 배경 실에서 온다 — 기록 파일에 바로 쓰면 주 실의 기록(필드 스크립트 줄)과 부딪쳐 IOException 으로 죽는다.
+            // 대사가 줄을 안 막게 된 뒤로 대사 바로 다음 줄을 같은 틀에 적어 자주 부딪쳤다. 주 실(UpdateSounds)이 대신 적는다.
+            if (Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
         });
     }
+
+    /// <summary>배경 실이 남긴 추적 줄 — 주 실이 <see cref="UpdateSounds"/> 에서 파일에 옮겨 적는다.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _backgroundTrace = new();
 
     private void StopTalkVoice()
     {
@@ -382,6 +399,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (ticks <= 0)
         {
             _musicFade = null;
+            _musicGain = to;                             // 다음 512 가 이 크기를 물려받는다
             if (to <= 0) _mixer.StopMusic();
             else _mixer.SetMusicGain(to);
             return;
@@ -405,6 +423,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void UpdateSounds()
     {
+        while (_backgroundTrace.TryDequeue(out string? line))
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), line + Environment.NewLine);
         StepMusicFade();
         for (int i = _pendingSounds.Count - 1; i >= 0; i--)
             if (_pendingSounds[i].Time <= _lastTime)

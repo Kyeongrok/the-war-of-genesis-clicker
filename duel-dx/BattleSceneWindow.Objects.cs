@@ -359,6 +359,9 @@ internal sealed unsafe partial class BattleSceneWindow
             if (obj.Data.Kind == 10) { ChargeHealCrystal(obj); continue; }
             int every = Math.Max(1, obj.Data.TurnEvery);
             if (_tick % every != 0) continue;
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"object tick {_tick} no {obj.Record.No} work {obj.Data.WorkId} team {obj.Team} at ({obj.Col},{obj.Row})" + Environment.NewLine);
             ObjectActs(obj);
         }
     }
@@ -417,11 +420,24 @@ internal sealed unsafe partial class BattleSceneWindow
         int Dist(UnitState u, (int Col, int Row) c) => Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c.Col, c.Row)) / 2;
         int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
 
-        // 산성 웅덩이 1526 — 범위 안 <b>전원</b>(편 안 가림, 아군 포함)에게 1타 + 중독(상태 3, 값 10) 100%(종류 4 는 굴림 없음). ba-14 O2.
+        // 겨냥은 1525·1526 이 같다 — 물체 차례 0x1006a541 → 0x10060830 → 0x1005dd60 을 둘 다 타고, work 표의 겨냥 인자
+        // (+0x14/+0x16/+0x1a/+0x3c)도 한 바이트 안 다르다. 제 칸과 네 이웃 칸 가운데, 반경 3 안의 적 최저 HP 로 점수(1,000,000 − 최저 HP)를 매기고
+        // 값 × Num74 × 10 / (Num74 + 거리) 가 가장 큰 칸(0x1005c510·0x1005dd60). 적이 없는 칸은 후보가 아니고, 후보가 없으면 안 쏜다(0x10060894).
+        bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && ObjectHostile(obj, u);
+        int num74 = _db.N(74);
+        (int Col, int Row)[] candidates = [(obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row)];
+        var scored = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Dist(u, c) <= 3).ToList()))
+                               .Where(x => x.Hits.Count > 0)
+                               .Select(x => (x.Cell, x.Hits, Score: CDiv((1000000 - x.Hits.Min(u => u.Hp)) * num74 * 10, num74 + Math.Abs(x.Cell.Col - obj.Col) + Math.Abs(x.Cell.Row - obj.Row))))
+                               .OrderByDescending(x => x.Score).ToList();
+        if (scored.Count == 0) return;
+        var best = scored[0];
+
+        // 산성 웅덩이 1526 — <b>고른 칸</b> 둘레 반경 3(효과 범위 층 0) 안 <b>전원</b>(편 안 가림, 아군 포함)에게 즉시 1타 +
+        // 중독(상태 3, 값 10) 100%(종류 4 는 굴림 없음). 핸들러 0x100e96d0 의 고리 0x100e9974~0x100e999f 는 적대 검사·늦춤이 없다.
         if (work.Id == 1526)
         {
-            var all = _units.Where(u => u.Alive && u.OnField && u.Data is not null && Dist(u, (obj.Col, obj.Row)) <= 3).ToList();
-            if (all.Count == 0) return;
+            var all = _units.Where(u => u.Alive && u.OnField && u.Data is not null && Dist(u, best.Cell) <= 3).ToList();
             Play(423);
             foreach (var u in all)
             {
@@ -433,17 +449,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
 
-        // 기총포탑 1525 — 제 칸과 네 이웃 칸 가운데, 반경 3 안의 적 최저 HP 로 점수(1,000,000 − 최저 HP)를 매기고
-        // 값 × Num74 × 10 / (Num74 + 거리) 가 가장 큰 칸(0x1005c510·0x1005dd60). 적이 없는 칸은 후보가 아니다.
-        bool Hostile(UnitState u) => u.Alive && u.OnField && u.Data is not null && ObjectHostile(obj, u);
-        int num74 = _db.N(74);
-        (int Col, int Row)[] candidates = [(obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row)];
-        var scored = candidates.Select(c => (Cell: c, Hits: _units.Where(u => Hostile(u) && Dist(u, c) <= 3).ToList()))
-                               .Where(x => x.Hits.Count > 0)
-                               .Select(x => (x.Cell, x.Hits, Score: CDiv((1000000 - x.Hits.Min(u => u.Hp)) * num74 * 10, num74 + Math.Abs(x.Cell.Col - obj.Col) + Math.Abs(x.Cell.Row - obj.Row))))
-                               .OrderByDescending(x => x.Score).ToList();
-        if (scored.Count == 0) return;
-        var best = scored[0];
+        // 기총포탑 1525 — 고른 칸 둘레의 적대 유닛마다 4타(0x100e9400).
         Play(423);
         for (int k = 0; k < 24; k++)
         {

@@ -168,7 +168,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_routine != null)
         {
-            if (!_routine.MoveNext()) { _routine = null; _eventCheckDue |= 1 << 2; }   // 행동이 끝났다 — 갈래 2 검사
+            if (!_routine.MoveNext())
+            {
+                // 행동이 끝났다 — 갈래 2 검사. 휴식·물체 만지기처럼 UseWorkRoutine 을 안 거치는 행동도 상태 21 을 지난다(0x100681a0 → 갈래 1).
+                _routine = null;
+                _eventCheckDue |= (1 << 2) | (1 << 1);
+                QueueLevelUps();
+            }
             return;
         }
 
@@ -198,6 +204,16 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             int next = Array.FindIndex(_units, u => u.Alive && u.OnField && u.HasTurn && u.LeaderIndex < 0 && CanTakeTurn(u));
             if (next >= 0) { StartTurn(next); return; }
+            // 물체는 그 틱의 유닛 차례가 <b>모두 끝난 뒤</b>에야 움직인다 — 유닛 고르기(0x1006db20)가 −1 일 때만 물체 고르기(0x1006dbf0)로 간다
+            // (GETNEXT 0x10067d0c, ba-15 Q6). 전에는 틱을 올리자마자 유닛보다 먼저 쐈다.
+            if (_objectsDue)
+            {
+                _objectsDue = false;
+                StepObjects();
+                SweepTickDeaths();
+                if (_outcome.Length > 0 || EventsBusy) return;
+                continue;
+            }
             AdvanceTick();
         }
     }
@@ -264,32 +280,59 @@ internal sealed unsafe partial class BattleSceneWindow
         };
     }
 
+    /// <summary>이번 틱에 물체 깃발이 섰나(0x1006dab0) — 유닛 차례가 다 끝나면 <see cref="StepObjects"/> 가 돈다(Q6).</summary>
+    private bool _objectsDue;
+
     private void AdvanceTick()
     {
         _tick++;
         var turnStarts = new HashSet<UnitState>();
+        // 틱 처리 차례(0x10067d36~): 틱++ → 스크립트 타이머 → 전 유닛 vt+0xb0(0x10071f10: TP 회복 → 6·5 풀림 굴림) → 유닛 깃발(0x1006da40)
+        // → 물체 깃발(0x1006dab0) → 갈래 3 검사 → 상태 16(매 턴 피해). 풀림 굴림은 깃발 <b>앞</b>이다(ba-15 Q4·Q6).
+        // 켜 둔 이벤트 타이머는 틱마다 하나씩 센다(0x10067d3c — 틱을 올린 바로 다음 줄). 갈래 3 이벤트 검사도 이때다.
+        for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
         foreach (var u in _units.Where(u => u.Alive))
         {
-            bool hadTurn = u.HasTurn;
             // 원본(0x10071db0)은 STP 와 턴 속도(38)를 <b>먼저 다 더하고</b> 한 번만 자른 뒤 차례 깃발을 세운다 —
-            // 나중에 더하면 38 이 양수일 때 차례가 한 틱 늦는다. 아래쪽 0 자르기는 원본에 없다.
+            // 나중에 더하면 38 이 양수일 때 차례가 한 틱 늦는다. 아래쪽 0 자르기는 원본에 없다. 마비·빙결 중에도 TP 는 찬다.
             u.Tp += u.Stp;
             if (u.HasStatus(38)) u.Tp += u.Status(38);
             if (u.Tp > u.MaxTp) u.Tp = u.MaxTp;
-            if (u.Tp >= u.MaxTp) u.HasTurn = true;
-            if (u.HasTurn && !hadTurn)
-            {
-                turnStarts.Add(u);
-                // 방어·회피 자세는 TP 가 가득 찬 <b>그 틱</b>에 풀린다(0x1006da40 → 0x10072d90) — 마비·빙결이면 안 풀린다.
-                if (CanTakeTurn(u)) u.Stance = 0;
-            }
+            ReleaseFreeze(u);
         }
-        // 켜 둔 이벤트 타이머는 틱마다 하나씩 센다(0x10067d3c — 틱을 올린 바로 다음 줄). 갈래 3 이벤트 검사도 이때다.
-        for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
+        foreach (var u in _units.Where(u => u.Alive))
+        {
+            // 깃발은 <b>차례를 받을 수 있을 때만</b> 선다(0x1006e940(u,4) = 0x1007c480: 마비·빙결이면 거짓) — TP 가 정확히 최대일 때(0x100743f2 sete).
+            // 전에는 마비 중에도 깃발을 세워(고르기에서만 뺌) 매 턴 피해를 맞고, 자세가 영영 안 풀리기도 했다. 이미 선 깃발은 그대로.
+            if (u.HasTurn || u.Tp < u.MaxTp || !CanTakeTurn(u)) continue;
+            u.HasTurn = true;
+            turnStarts.Add(u);
+            // 방어·회피 자세는 깃발이 서는 <b>그 틱</b>에 풀린다(0x100743b0 → 0x10072d90, +0x4d4 = 0).
+            u.Stance = 0;
+        }
+        _objectsDue = Objects.Count > 0;
         _eventCheckDue |= 1 << 3;
         TickAilments(turnStarts);
-        StepObjects();
-        // 22·23·24 는 HP 가 남아 있어도 SOUL·TP 가 조건에 닿으면 쓰러뜨린다(0x1007c689~).
+        SweepTickDeaths();
+    }
+
+    /// <summary>
+    /// 틱 처리(<c>vt+0xb0</c> = <c>0x10071f10</c>) 끝의 풀림 굴림 — <b>상태 6 먼저, 그다음 5</b>를 각각 <c>rand()%100 &lt; 3</c> 이면 지운다
+    /// (<c>0x10071f19~0x10071f70</c>, <c>0x1007c470</c>). TP 회복 뒤, 차례 깃발 앞이라 풀린 그 틱에 TP 가 가득이면 곧바로 깃발이 선다.
+    /// </summary>
+    private void ReleaseFreeze(UnitState u)
+    {
+        foreach (int id in (ReadOnlySpan<int>)[6, 5])
+        {
+            if (!u.HasStatus(id) || _ailmentRandom.Next(100) >= 3) continue;
+            for (int i = 0; i < 3; i++)
+                if (u.StatusId[i] == id) (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (0, 0, null);
+        }
+    }
+
+    /// <summary>틱·물체 차례 뒤 — HP 0 이나 22·23·24(SOUL·TP 가 조건에 닿으면, 0x1007c689~)로 쓰러진 인물을 치우고 승패를 본다.</summary>
+    private void SweepTickDeaths()
+    {
         foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
             if (!SurvivesFatal(u)) { GainAilmentKillExp(u); KillUnit(u); }
         CheckOutcome();
@@ -308,6 +351,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _turn = index;
         _selected = index;
         _turnNo++;
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"turn tick {_tick} unit {index} chr {_units[index].ChrCode} side {_units[index].Side} TP {_units[index].Tp}/{_units[index].MaxTp}" + Environment.NewLine);
         if (!resume)
         {
             // 이벤트 타이머·자세 풀기는 틱에서 한다(AdvanceTick) — 원본 [+0x4cf0] 은 빈 틱마다 오르는 시간 틱이다(0x10067d36, fg-22).
@@ -320,11 +366,11 @@ internal sealed unsafe partial class BattleSceneWindow
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
         // 버서커(상태 4)라도 조종권은 그대로다 — 원본은 편 판정(0x1006fde0)에서 「모두가 적」이 될 뿐, +0x78·+0x4e9·+0x4ec 를 안 건드리고
         // WAITNEXT 도 +0x78==4 만 본다(ba-14 A4 확정). 전에는 사용자 보고를 근거로 AI 에게 넘겼다.
+        // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
+        // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다 — AI·동맹 차례도(상태 8).
+        PlayTurnCall(_units[index]);
         if (IsMine(_units[index]))
         {
-            // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
-            // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다.
-            PlayTurnVoice(_units[index]);
             // 자동 저장(슬롯 20) — 원본은 전투 시작·새 차례마다 깃발(+0x4cd8)을 세우고, 플레이어가 유닛을 고르는
             // 상태 22 에 처음 들어설 때 SaveGame(20) 한 뒤 지운다(0x1006acc0). AI 차례는 상태 10~12 가 카메라만 옮기고
             // 깃발을 저장 없이 지우므로 저장이 없다. 곧 「내 차례가 시작될 때마다 한 번」이다(분석-시스템메뉴 2.4).
@@ -336,6 +382,34 @@ internal sealed unsafe partial class BattleSceneWindow
                 Toast(_units[index].HasStatus(4) ? $"{UnitName(index)} 이(가) 버서커 상태라 스스로 움직입니다" : $"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
             _routine = AiRoutine(index);
         }
+    }
+
+    /// <summary>맞는 목소리의 재생 표지 바탕 — 표지 = 바탕 + 소리 번호. 「그 소리가 어디서든 울리는 중인가」를 번호로 본다.</summary>
+    private const int HurtVoiceTag = 30000;
+
+    /// <summary>
+    /// 맞았을 때 나는 목소리(<c>0x10079c0f</c>, 맞음 종류 2 · 피해 &gt; 0) — Dmg.dat 묶음의 맞는 소리 둘 가운데 <b>어느 것도</b> 울리는 중이 아닐 때만
+    /// (<c>0x10028810</c> = 번호로 32칸 전역 슬롯 검사, 누가 낸 것이든) 유닛 <c>+0x4c &amp; 1</c> 로 고른 하나를 낸다.
+    /// <c>+0x4c</c> 의 뜻은 못 가렸다(가설) — 유닛마다 늘 같은 쪽이 나게 자리 번호의 홀짝으로 대신한다. 전에는 유닛별 표지로만 막고 난수로 골랐다.
+    /// </summary>
+    private void PlayHurtCry(UnitState u)
+    {
+        if (u.Data == null || _voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
+        if (hurt.Any(id => _mixer.IsPlaying(HurtVoiceTag + id))) return;
+        int id = hurt[(Array.IndexOf(_units, u) & 1) % hurt.Length];
+        Play(id, HurtVoiceTag + id);
+    }
+
+    /// <summary>
+    /// 차례가 왔을 때 부르는 목소리 — 원본은 AI 차례(상태 8, <c>0x10068600~0x10068698</c>)와 플레이어 고르기 상태(<c>0x100693a7~0x10069461</c>) 두 곳에서,
+    /// <b>TP 가 최대일 때만</b>(<c>0x1007aef0 == 0x1007aeb0</c>) <c>call[frame &amp; 3]</c> 을 낸다. 플레이어 쪽은 <b>원래 칸에 있을 때만</b>
+    /// (<c>+0x4b8/+0x4ba == +0x44/+0x46</c>) — 차례를 막 받은 지금은 늘 원래 칸이다. 전에는 내 편만, 조건 없이 냈다(ba-15 목소리).
+    /// </summary>
+    private void PlayTurnCall(UnitState u)
+    {
+        if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
+        if (_voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
+            Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(_units, u));
     }
 
     private void EndTurn()
@@ -956,8 +1030,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 d.Alive = false;
                 PromoteFollower(Array.IndexOf(_units, d));   // 대장이 죽으면 첫 부하가 대장이 된다
             }
-            CheckOutcome();
-            QueueLevelUps();
+        }
+        // 행동 끝 상태 21(0x100681a0) — 처치가 없어도 <b>매 행동마다</b> 레벨업을 보고, 그다음 갈래 1 검사(0x10068270)를 한다.
+        // 전멸 판정(상태 4, 0x1006ed10)은 그 뒤라 마지막 적을 쓰러뜨린 사람의 레벨업 창도 전투가 끝나기 전에 뜬다(ba-15 Q7).
+        // 전에는 CheckOutcome 이 먼저 결과를 세워 UpdateTurn 이 레벨업 창 앞에서 돌아가 버렸다.
+        QueueLevelUps();
+        _eventCheckDue |= 1 << 1;
+        if (dying.Count > 0)
+        {
+            if (_levelUpQueue.Count == 0) CheckOutcome();
+            else _outcomeAfterLevelUp = true;       // 레벨업 줄이 다 빠진 뒤 UpdateLevelUp 이 본다
         }
         for (double end = _lastTime + 0.1; _lastTime < end;) yield return true;
     }
@@ -1029,7 +1111,7 @@ internal sealed unsafe partial class BattleSceneWindow
         PlayHitReaction(t, damaged: true);
         if (crit) PlayCritFlash();
         AddSoul(t, amount / Math.Max(1, _db.N(43)));
-        PlayHurtVoice(t);
+        PlayHurtCry(t);
         ApplyAilments(a, t, w);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;

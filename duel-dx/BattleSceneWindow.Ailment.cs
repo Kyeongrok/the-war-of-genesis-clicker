@@ -197,23 +197,19 @@ internal sealed unsafe partial class BattleSceneWindow
         used.Add(slot);
     }
 
-    /// <summary>TP 틱마다 — 매 턴 깎이는 것들과 마비·빙결 풀림(3%).</summary>
+    /// <summary>TP 틱마다 — 매 턴 깎이는 것들(상태 16 처리, 명령 0x2719 <c>0x1007a360</c>).</summary>
     /// <param name="turnStarts">
-    /// 이번 틱에 차례가 돌아온 인물들 — 매 턴 피해(2·3·17 HP · 16 TP · 15 SOUL)는 <b>그 인물의 차례가 올 때 한 번</b>만 든다.
+    /// 이번 틱에 차례 깃발(<c>+0xfe</c>)이 선 인물들 — 매 턴 피해(2·3·17 HP · 16 TP · 15 SOUL)는 <b>그 인물의 차례가 올 때 한 번</b>만 든다
+    /// (<c>0x1006a6f9~0x1006a730</c>: 살아 있음 && 차례 깃발 && 상태 2·3·15·16·17). 마비·빙결 중에는 깃발이 안 서므로 풀릴 때까지 안 맞는다.
     /// 전에는 시간 틱마다 들어가 오버 드라이브(17, 최대 HP 10%)가 차례 하나 사이에 여러 번 깎였다(사용자 보고). 설명도 「매턴마다」다.
-    /// 마비·빙결(5·6)이 풀리는 3% 굴림은 틱마다 그대로 둔다.
+    /// 마비·빙결(5·6)이 풀리는 3% 굴림은 깃발 앞으로 옮겼다(<see cref="ReleaseFreeze"/>, ba-15 Q4).
     /// </param>
     private void TickAilments(IReadOnlySet<UnitState> turnStarts)
     {
         if (_db is not { } db) return;
         foreach (var u in _units)
         {
-            if (!u.Alive) continue;
-
-            for (int i = 0; i < 3; i++)
-                if (u.StatusId[i] is 5 or 6 && _ailmentRandom.Next(100) < 3)
-                    (u.StatusId[i], u.StatusValue[i], u.StatusSource[i]) = (0, 0, null);
-            if (!turnStarts.Contains(u)) continue;
+            if (!u.Alive || !turnStarts.Contains(u)) continue;
 
             // 세 값을 <b>각각</b> 「값% × 최대 HP」 로 셈해 더한다 — 퍼센트를 먼저 합치면 정수 나눗셈에서 한둘 어긋난다.
             int percent = u.Status(2) + u.Status(3) + u.Status(17);
