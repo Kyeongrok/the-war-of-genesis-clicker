@@ -127,9 +127,44 @@ internal sealed unsafe partial class BattleSceneWindow
         return (hand.Actions, [.. hand.Effects, .. made.Effects.Where(e => !hand.Effects.Any(h => h.Obs == e.Obs && h.Motion == e.Motion))]);
     }
 
+    /// <summary>
+    /// 대본이 있으면 그 동작 차례 — <b>비어 있어도</b> 그대로다. 원본이 시전자에게 아무 동작도 안 거는 기술(이스케이프·회피·아이템 1599~1622)이
+    /// 칼을 휘두르면 안 된다(fg-20). 대본이 아예 없을 때만 기본공격 동작을 빌린다.
+    /// </summary>
     private static int[] ActionsFor(WorkData w) =>
-        ScriptFor(w.Id) is { Actions.Length: > 0 } m ? m.Actions
+        ScriptFor(w.Id) is { } m ? m.Actions
         : BasicWorkActions.GetValueOrDefault(w.Id) ?? StrikeActions;
+
+    /// <summary>
+    /// 동작 칸에 적힌 <b>모션 번호</b> — 1000+m 은 모션 m 을 한 번, 2000+m 은 붙든다(원본 PlayMotion <c>0x100e53c0</c> + 되풀이 1000).
+    /// 폭·메테오스트라이크 30→31→32, 다크 스크림 48→49→50, 헬 카이트 90 따위(tools/re/work_fx_table.py).
+    /// </summary>
+    private const int RawOnce = 1000, RawHold = 2000;
+
+    /// <summary>3000+동작 — 원본 SetAction 되풀이 1000 이상으로 <b>붙드는 동작</b>(혼·비연참·오메가 스윙의 돌진 자세 따위).</summary>
+    private const int ActHold = 3000;
+
+    /// <summary>붙드는 모션의 최대 길이(초) — 치는 칸에서는 이펙트가 끝나면(길어도 3초) 다음 칸이 덮는다.</summary>
+    private const double HoldSeconds = 4;
+
+    /// <summary>필살기 앞머리가 이미 한 준비 동작(사슬 앞의 6·15) 수.</summary>
+    private static int PreludeSteps(int[] actions) =>
+        actions is [6, 15, ..] ? 2 : actions is [6, ..] ? 1 : 0;
+
+    /// <summary>사슬 한 칸을 튼다 — 동작이면 그 동작, 모션 번호면 그 모션. 붙드는 모션은 <paramref name="holdSeconds"/> 동안 붙든다.</summary>
+    private void PlayChainStep(UnitState a, int code, double holdSeconds)
+    {
+        if (code >= ActHold)
+        {
+            // 붙드는 동작 — 그 방향의 모션을 되풀이로 튼다(없는 인물이면 그냥 동작).
+            int action = DrawnAction(a, code - ActHold);
+            if (_sprites.TryGetValue(a.ChrCode, out var sprite) && sprite.Clip(action, a.Facing) is { } clip)
+                PlayRawMotion(a, clip.Id, loop: true, holdSeconds);
+            else PlayAction(a, action);
+        }
+        else if (code >= RawOnce) PlayRawMotion(a, code % RawOnce, loop: code >= RawHold, holdSeconds);
+        else PlayAction(a, DrawnAction(a, code));
+    }
 
     /// <summary>
     /// 판정이 나는 동작 — 동작 사슬 안에서 <b>타격 동작</b>(8·9·13·14·26·27)이 있으면 그 첫 자리,
@@ -141,6 +176,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int HitStepFor(WorkData w, int steps)
     {
         int[] actions = ActionsFor(w);
+        // 붙드는 모션(칼 꽂은 채·손 든 채)이 있으면 그동안 이펙트가 터진다 — 거기서 친다.
+        int hold = Array.FindIndex(actions, a => a >= RawHold);
+        if (hold >= 0) return hold;
         int strike = Array.FindIndex(actions, a => a is 8 or 9 or 13 or 14 or 26 or 27);
         if (strike >= 0) return strike;
         return ScriptFor(w.Id) != null ? Math.Max(0, steps - 1) : Math.Min(StrikeHitStep, steps - 1);

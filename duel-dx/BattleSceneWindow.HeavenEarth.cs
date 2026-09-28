@@ -54,11 +54,15 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 인물에게 모션 번호를 바로 튼다(<c>0x100e53c0</c>)고 그 모션의 소리 키를 예약한다. 한 번 도는 길이(초)를 돌려준다 — 그 모션이 없으면 0.
     /// </summary>
-    private double PlayRawMotion(UnitState u, int motion, bool loop)
+    private double PlayRawMotion(UnitState u, int motion, bool loop, double holdSeconds = 1000)
     {
-        if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.RawClip(motion) is not { Keys.Count: > 0 } clip) return 0;
+        var found = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.RawClip(motion) : null;
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"{_lastTime:F2} chr {u.ChrCode} motion {motion}{(loop ? " hold" : "")} keys {found?.Keys.Count ?? 0}" + Environment.NewLine);
+        if (sprite == null || found is not { Keys.Count: > 0 } clip) return 0;
         double seconds = sprite.MotionTicks(motion) / TicksPerSecond;
-        u.PlayMotion(motion, loop ? 1000 : seconds, loop);
+        u.PlayMotion(motion, loop ? holdSeconds : seconds, loop);
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
         return seconds;
     }
