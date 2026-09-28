@@ -144,6 +144,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateTurn()
     {
         if (_loading || _db == null || _outcome.Length > 0) return;
+        if (_deployOpen) { StepDeploy(); return; }     // 캐릭터 배치 중에는 틱·차례·이벤트가 멈춘다(원본 상태 2)
         // 이벤트(대사)가 도는 동안은 틱도 차례도 안 흐른다(0x10066197).
         if (EventsBusy) return;
         RunEvents();                 // 틱이 안 흐르는 사이에도 조건(턴 수 따위)은 본다

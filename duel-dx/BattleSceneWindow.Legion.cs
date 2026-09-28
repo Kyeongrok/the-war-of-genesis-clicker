@@ -26,6 +26,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var legions = Legions();
         var list = new List<UnitState>();
+        _deployMovable.Clear();
+        _deployBench.Clear();
         var followers = new List<(int Leader, int Slot, UnitState Unit)>();
 
         foreach (var rosterRecord in scene.Roster)
@@ -92,7 +94,19 @@ internal sealed unsafe partial class BattleSceneWindow
             party = [.. party.Where(chr => !list.Any(u => u.ChrCode == chr))];
             var free = spots.Where(sp => !list.Any(u => u.Col == sp.Col && u.Row == sp.Row)).ToList();
             for (int i = 0; i < free.Count && i < party.Count; i++)
-                list.Add(new UnitState(new DemoUnit(party[i], free[i].Col, free[i].Row, 4, 0, free[i].Facing)));
+            {
+                var placed = new UnitState(new DemoUnit(party[i], free[i].Col, free[i].Row, 4, 0, free[i].Facing));
+                list.Add(placed);
+                _deployMovable.Add(placed);
+            }
+            // 칸이 모자라 못 선 파티원은 맵 밖(0,0)에 만들어 둔다 — 배치 단계에서 바꿔 세울 수 있게. 배치 단계를 안 열면 지운다(Deploy.cs).
+            for (int i = free.Count; i < party.Count; i++)
+            {
+                var bench = new UnitState(new DemoUnit(party[i], 0, 0, 4, 0, Facing.Up));
+                list.Add(bench);
+                _deployMovable.Add(bench);
+                _deployBench.Add(bench);
+            }
         }
         return [.. list];
     }

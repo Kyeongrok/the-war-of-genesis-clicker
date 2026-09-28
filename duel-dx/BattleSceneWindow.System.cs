@@ -323,6 +323,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _infoUnit = -1;
         _ringUnit = -1;
         RestartBattle();
+        // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
+        BeginDeployOrDrop(scene, fresh: rememberParty);
         Toast($"{scene.Title} — 전투 Btl {scene.Id:D4}");
         return true;
     }
