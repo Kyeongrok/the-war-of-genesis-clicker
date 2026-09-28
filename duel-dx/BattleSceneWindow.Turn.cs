@@ -936,8 +936,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                     $"work {w.Id} by {a.ChrCode}: TP {db2.WorkTpCost(cost, w.Id)} × (100{a.Status(20):+#;-#;+0})% = {TpCostFor(a, cost, w.Id)}, 남은 TP {a.Tp}" + Environment.NewLine);
             a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
-            // 행동 뒤 SOUL 증가(0x10076586 점프표): 종류 0 → Num26 · 1 → Num27 · 2 → Num29 · 3 → Num28 · 4·5·7 → 0.
-            AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(29), 3 => db2.N(28), _ => 0 });
+            // 행동 뒤 SOUL 증가(0x10076586 점프표 0x100765ec): 종류 0 → Num26 · 1 → Num27 · 2 → Num28 · 3 → Num29 · 4·5·7 → 0(ba-15 재확인).
+            AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 });
             int hp = db2.WorkHpCost(cost, w.Id);
             if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
         }
