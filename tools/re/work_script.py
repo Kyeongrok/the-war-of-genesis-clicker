@@ -137,7 +137,7 @@ class Analyzer:
         """핸들러 하나를 훑어 [(VA, 종류, 값…)] 목록을 만든다.
 
         종류: 'stage'(단계 비교), 'act'(SetAction), 'mot'(PlayMotion),
-              'eff'(이펙트), 'part'(입자), 'delay', 'life', 'end'(work 끝)
+              'rep'(애니 되풀이 +0x7a 쓰기), 'eff'(이펙트), 'part'(입자), 'delay', 'life', 'end'(work 끝)
         """
         _seen = _seen if _seen is not None else set()
         if start in _seen or depth < 0:
@@ -178,6 +178,9 @@ class Analyzer:
                 if m == 'lea' and ops[1].type == X86_OP_MEM:
                     v = '&' + v
                 reg[base] = v
+            elif m == 'mov' and ops[0].type == X86_OP_MEM and ops[0].mem.disp == 0x7a and ops[0].mem.base:
+                # 애니 되풀이 횟수(유닛 +0x7a) — PlayMotion 뒤에 1(한 번)이나 1000(붙듦)을 적는다(천지파열무 0x100b4417·0x100b445a)
+                out.append((i.address, 'rep', rd(ops[1], i), reg.get(i.reg_name(ops[0].mem.base), i.reg_name(ops[0].mem.base))))
             elif m in ('add', 'sub') and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM:
                 r = i.reg_name(ops[0].reg)
                 base = {'cx': 'ecx', 'dx': 'edx', 'ax': 'eax', 'bx': 'ebx'}.get(r, r)

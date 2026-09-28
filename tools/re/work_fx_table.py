@@ -4,6 +4,10 @@
 
 `work_script.py` 가 이미 DLL 핸들러를 기호로 풀어 준다 — 여기서는 그 기록을 골라
 `('act', 기준동작)` 은 동작 번호(기준÷3)로, `('eff', Obs, 모션, x, y)` 는 이펙트로 옮긴다.
+동작은 <b>시전자에게 거는 것만</b> 넣는다 — this 가 대상(`나.대상`)이면 맞은 쪽 반응이라 뺀다(비·쇼크·브레인 스톰, fg-20).
+모션 번호를 바로 트는 PlayMotion(`0x100e53c0`, 칼 꽂기 48→49→50 따위)은 동작 칸에 1000+모션(한 번)으로,
+그 뒤에 되풀이 1000(`+0x7a`)을 적으면 2000+모션(붙듦)으로 넣는다. SetAction 의 되풀이 인자가 1000 이상이면(시전 자세 6 은 빼고)
+3000+동작(붙듦)이다.
 이펙트 자리는 x 식으로 가른다: `나.대상.*` 이면 대상 자리, `나.*` 면 시전자 자리,
 그 밖(`esp+0x20` 처럼 코드가 셈해 넣는 자리 — 메테오의 떨어지는 자리 따위)은 <b>대상 자리</b>로 둔다.
 예전에는 이것을 버렸는데, 남은 것이 소리만 든 Obs(1338·311·1324 …)뿐인 기술이 87개나 되어 그림이 한 장도 안 나왔다.
@@ -29,6 +33,15 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel
 game = ws.Game(GAME)
 dll = ws.Analyzer(os.path.join(GAME, 'G3PartII.dll'))
 works = ws.load_works(game)
+
+
+RAW_ONCE, RAW_HOLD = 1000, 2000                             # 동작 칸에 모션 번호를 적는 꼴 — 1000+m 한 번, 2000+m 붙듦(duel-dx RawOnce·RawHold)
+ACT_HOLD = 3000                                             # 3000+동작 — 되풀이 1000 이상으로 붙드는 동작(duel-dx ActHold)
+
+
+def is_target(this):
+    """SetAction·PlayMotion 의 this 가 대상 유닛인가(ecx = [나+0x8c]) — 그런 동작은 시전자 사슬에 넣지 않는다."""
+    return isinstance(this, str) and ('.대상' in this)
 
 
 def where_of(x):
@@ -112,7 +125,16 @@ for wid in sorted(works):
         for rec in recs:
             kind = rec[1]
             if kind == 'act' and isinstance(rec[2], int):
-                acts.append(rec[2] // 3)
+                if is_target(rec[5]):
+                    continue                                 # 대상에게 거는 동작(비·쇼크의 맞음 2·서기 0) — 시전자 사슬이 아니다
+                act = rec[2] // 3
+                # 되풀이 1000 이상 = 다음 단계까지 붙드는 동작(오메가 스윙 17 = 돌진하는 동안). 시전 자세 6 은 늘 붙들므로 뺀다.
+                acts.append(ACT_HOLD + act if isinstance(rec[4], int) and rec[4] >= 1000 and act != 6 else act)
+            elif kind == 'mot' and isinstance(rec[2], int) and not is_target(rec[3]):
+                acts.append(RAW_ONCE + rec[2])               # 모션 번호를 바로 튼다(0x100e53c0)
+            elif kind == 'rep' and isinstance(rec[2], int) and rec[2] >= 1000 and not is_target(rec[3]) \
+                    and acts and RAW_ONCE <= acts[-1] < RAW_HOLD:
+                acts[-1] += RAW_HOLD - RAW_ONCE              # 바로 앞 모션을 붙든다(반복 1000)
             elif kind == 'eff' and isinstance(rec[2], int) and isinstance(rec[3], int):
                 place = where_of(rec[4])
                 add(effs, (rec[2], rec[3], place))           # 소리 껍데기도 남긴다 — 소리 키로 소리를 낸다
@@ -171,7 +193,7 @@ for wid in sorted(works):
         bodies[wid] = bods
     if not acts and not effs:
         continue
-    rows[wid] = (acts[:8], effs[:16])
+    rows[wid] = (acts[:12], effs[:16])
 
 lines = [
     '// 이 파일은 tools/re/work_fx_table.py 가 만든다 — 손으로 고치지 말 것.',

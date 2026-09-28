@@ -630,6 +630,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
         bool finisher = w.Prepare == 7;
         if (finisher) foreach (bool _ in FinisherPrelude(w, a)) yield return true;
+        // 필살기는 앞머리가 준비 동작(사슬 앞의 6·15)을 이미 했다 — <b>그 둘만</b> 건너뛴다. 전에는 타격 아닌 동작을 모두 건너뛰어
+        // 오메가 스윙·더블 브레이크·이데아 캐논 따위가 마지막 동작 하나만 했다(fg-20).
+        int preludeSteps = finisher ? PreludeSteps(actions) : 0;
+        bool holding = false;                               // 붙드는 모션(2000+m)을 치는 칸에서 틀었나
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
@@ -637,21 +641,30 @@ internal sealed unsafe partial class BattleSceneWindow
             bool strikes = step == hitStep || (chained && step < actions.Length && IsStrikeAction(actions[step]));
             if (!strikes)
             {
-                if (step >= actions.Length || finisher) continue;   // 필살기의 준비 동작(6·15)은 앞머리가 이미 했다
-                PlayAction(a, DrawnAction(a, actions[step]));
-                while (a.IsBusy) yield return true;
+                if (step >= actions.Length || step < preludeSteps) continue;
+                PlayChainStep(a, actions[step], HoldSeconds);
+                if (actions[step] >= RawHold) for (double end = _lastTime + 0.5; _lastTime < end;) yield return true;   // 치는 칸이 아닌 붙듦(드묾)은 잠깐만
+                else while (a.IsBusy) yield return true;
                 continue;
             }
 
             // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,
             // 그 모션에 든 타격 키 수(동작 13 = 2타, 14 = 3타)만큼 그 간격대로 판정을 낸다(분석-모션 ba-10).
             var hitTimes = new List<double> { 0 };
-            if (step < actions.Length)
+            if (step < actions.Length && step >= preludeSteps && actions[step] >= RawOnce)
+            {
+                // 모션 번호 — 붙드는 모션이면 그 자세로 이펙트가 터지고, 한 번 트는 모션이면 뜨자마자 친다.
+                PlayChainStep(a, actions[step], HoldSeconds);
+                holding = actions[step] >= RawHold;
+                for (double end = _lastTime + 0.05; _lastTime < end;) yield return true;
+            }
+            else if (step < actions.Length && step >= preludeSteps)
             {
                 PlayAction(a, DrawnAction(a, actions[step]));
                 hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
                 for (double end = _lastTime + hitTimes[0]; _lastTime < end;) yield return true;
             }
+            int effectMark = _effects.Count;
 
             // 「연」 사슬 끝의 동작 8 한 대는 연 위력이 아니라 기본공격 위력이다(키 인자 25 = work 1, 분석-모션 ba-10).
             var hitWork = chained && step < actions.Length && actions[step] == 8 && a.Data is { } ad
@@ -752,6 +765,9 @@ internal sealed unsafe partial class BattleSceneWindow
             if (w.Id == NineCrusaderWork && targetIndex < 0)
             {
                 var targets = WorkTargets(w, a, col, row);
+                // 원본 0x1009cb50 — 모션 48(칼을 들어 올림) 뒤 칼이 나는 동안 49 를 붙들고, 다 날면 51(fg-20).
+                for (double end = _lastTime + PlayRawMotion(a, 48, loop: false); _lastTime < end;) yield return true;
+                PlayRawMotion(a, 49, loop: true, holdSeconds: 30);
                 var flight = StartNineCrusader(a, targets);
                 var struck = new HashSet<int>();
                 while (!flight.Done)
@@ -762,6 +778,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     yield return true;
                 }
                 foreach (int ti in targets.Where(struck.Add)) ApplyWork(a, hitWork, _units[ti], dying);   // 칼이 못 닿은 대상(없어야 한다)
+                double release = PlayRawMotion(a, 51, loop: false);
+                if (release <= 0) a.PlayAction(ObsMotionTable.ActionStand, 0);
                 if (!followersDone && targets.Count > 0)
                 {
                     FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: false);
@@ -793,6 +811,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (knocked != null)
                     foreach (bool _ in KnockbackRoutine(a, w, knocked)) yield return true;
                 else PlayAction(a, DrawnAction(a, 24));
+            }
+            if (holding)
+            {
+                // 붙든 자세는 이 기술의 이펙트가 다 터질 때까지(길어도 3초) — 그 뒤 다음 칸(놓는 모션)으로, 없으면 선다.
+                var spawned = _effects.Skip(effectMark).ToList();
+                for (double start = _lastTime; _lastTime - start < 3 && (_lastTime - start < 0.5 || spawned.Any(_effects.Contains));)
+                    yield return true;
+                holding = false;
+                if (step + 1 >= actions.Length) a.PlayAction(ObsMotionTable.ActionStand, 0);
+                continue;
             }
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
