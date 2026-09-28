@@ -31,6 +31,59 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly Stack<(int Event, int Pc)> _fieldReturn = new();
     private double _fieldWaitUntil;
 
+    /// <summary>
+    /// 사건이 띄워 둔 「슬롯」 — (띄운 사건, 아직 살아 있나, 대사창인가).
+    /// </summary>
+    /// <remarks>
+    /// 원본 진행기(<c>0x100f47f0</c>)에서 사건 줄을 붙드는 것은 <b>행동 0·1·2·504 뿐</b>이다. 나머지 행동은 <c>0x100f3400</c> 으로
+    /// 슬롯을 잡고(사건 <c>+0x20</c> 셈 ++) 핸들러를 한 번 부른 뒤 <b>곧장 다음 줄</b>로 간다 — 걷기·모션·대사·전환·음악 페이드는
+    /// 슬롯 실행기(<c>0x100f35f0</c>)가 매 틀 밀고, 끝나면 핸들러가 <c>0x100f3490</c> 으로 풀어 셈을 내린다.
+    /// 뒤따르는 행동 1 은 <b>그 사건이 띄운</b> 슬롯이 다 풀리기를 기다린다(<c>0x100f488a</c>) — 화면의 다른 움직임은 안 본다.
+    /// 그래서 <c>208 [10005,87,0] 208 [10006,87,0] 1</c>(Fld 0012 사건 11)은 두 훈련병이 <b>함께</b> 움직인다.
+    /// </remarks>
+    private readonly List<(int Owner, Func<bool> Alive, bool Talk)> _fieldSlots = [];
+
+    /// <summary>지금 행동을 읽고 있는 사건 — 행동이 띄우는 슬롯의 주인(<c>0x100f3400</c> 의 사건 인자).</summary>
+    private int _fieldOwner = -1;
+
+    /// <summary>이 사건 몫의 슬롯을 하나 띄운다 — 처음부터 끝나 있으면(0틱) 안 띄운다.</summary>
+    private void HoldSlot(Func<bool> alive, bool talk = false)
+    {
+        if (alive()) _fieldSlots.Add((_fieldOwner, alive, talk));
+    }
+
+    /// <summary>틱 수만큼 사는 슬롯(208 모션 한 바퀴 · 517 음악 페이드 · 900 덮기·걷기 · 전환).</summary>
+    private void HoldSlotTicks(double ticks)
+    {
+        double end = _lastTime + ticks / TicksPerSecond;
+        HoldSlot(() => _lastTime < end);
+    }
+
+    /// <summary>인물이 이 걷기(202·203·205·206)를 다 걸을 때까지 사는 슬롯 — 새 걷기가 덮으면 풀린다.</summary>
+    private void HoldWalkSlot(FieldActor who)
+    {
+        if (who.Walk is not { } walk) return;
+        HoldSlot(() => who.Walk is { } now && now.Start == walk.Start && _fieldActors.Contains(who));
+    }
+
+    /// <summary>카메라가 이번 옮기기(401·402)를 마칠 때까지 사는 슬롯 — 새 옮기기·400 이 덮으면 풀린다.</summary>
+    private void HoldCameraSlot()
+    {
+        if (_fieldCamMove is not { } cam) return;
+        HoldSlot(() => _fieldCamMove is { } now && now.Start == cam.Start);
+    }
+
+    /// <summary>그 사건이 띄운 슬롯이 아직 남았나 — 행동 1 이 본다. 대사창 슬롯이 남았으면 <paramref name="talk"/> 가 참.</summary>
+    private bool SlotsBusy(int owner, out bool talk)
+    {
+        _fieldSlots.RemoveAll(s => !s.Alive());
+        talk = false;
+        bool busy = false;
+        foreach (var s in _fieldSlots)
+            if (s.Owner == owner) { busy = true; talk |= s.Talk; }
+        return busy;
+    }
+
     /// <summary>이벤트마다 지금까지 돈 횟수.</summary>
     private int[] _fieldFired = [];
 
@@ -77,7 +130,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 901·903~909 는 원본에서 <b>한 함수</b>(<c>0x100f2770</c>)가 돌리고 인자 자리도 같다 —
     /// <b>a0 방향</b>(0 이면 지금 화면 → 그림이라 끝나도 그림이 남고, ≠0 이면 그림 → 지금 화면이라 끝에 그림을 걷는다) ·
     /// <b>a1 <c>Bgr</c> 번호</b> · <b>마지막 인자는 전환이 가리는 층 수</b>(0~8, 그보다 위 층은 전환 위에 덧그린다).
-    /// 전환이 도는 동안 스크립트는 멈춘다(<c>0x100f2b13</c>).
+    /// 전환이 도는 동안 슬롯이 살아 있어 뒤따르는 행동 1 이 기다린다(<c>0x100f2b13</c>) — 줄 자체는 안 막는다.
     /// <para>
     /// <c>Base</c> 는 바탕, <c>Over</c> 는 걷히면서 드러나는 그림이다. 904 는 그림 <b>한 장</b>만 쓰고
     /// 바탕은 그 그림의 <b>경계 줄을 늘여</b> 채우므로 <c>Base</c> 가 없다.
@@ -229,7 +282,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldTalk = TalkTable.Parse(files.Read("Tlk", $"{id:D4}.tlf"));
             _fieldFired = new int[field.Events.Count];
             _sideEvents.Clear();
-            _fieldWaitWalker = null;
+            _fieldSlots.Clear();
             Array.Clear(_fieldVars);
             _fieldEvent = -1;
             _fieldReturn.Clear();
@@ -272,7 +325,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _fieldGray = false;
         _fieldTalk = null;
         _sideEvents.Clear();
-        _fieldWaitWalker = null;
+        _fieldSlots.Clear();
         _talk = null;
         _fieldChoices = null;
         // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
@@ -303,15 +356,16 @@ internal sealed unsafe partial class BattleSceneWindow
         StepChannelFades();                                           // 행동 506 이 걸어 둔 채널 음량 바꾸기
         if (_field != null) StepSideEvents(events);                    // 대사 없는 곁 사건(문 여닫기 따위)은 따로 나란히 돈다
         if (_fieldChoices != null) _talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
-        if (_talk != null || _fieldChoices != null) return;          // 대사·고르기가 떠 있으면 기다린다
+        // 고르기가 떠 있으면 기다린다. 대사창(600·601)은 <b>줄을 안 막는다</b> — 원본은 창을 슬롯으로 띄우고 다음 줄로 가며,
+        // 창이 닫히기를 기다리는 것은 뒤따르는 행동 1 이다(0x100f488a, 자료의 600→1 이 2980/3073). 600 에 이어 208·900·517 이
+        // 대사와 함께 시작해야 한다(Fld 600→(1 아님) 93곳).
+        if (_fieldChoices != null) return;
         if (_talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > _lastTime) return;
-        // 걷기(202·203)·자리 옮기기(205·206)는 원본에서 <b>그 줄에 머문다</b> — 핸들러(0x100f0be0 등)가 매 틀 불려 보간하고
-        // 셈이 틀 수에 닿아야 다음 줄로 간다(0x100f0dfd). 안 기다리면 뒤따르는 208(서기 모션·방향)이 걷는 도중에 걸려
-        // 오른쪽으로 가면서 왼쪽을 보는 인물이 됐다(사용자 보고, Fld 0057·0354).
-        if (_fieldWaitWalker is { Walk: not null } && !_talkSkip) return;
-        _fieldWaitWalker = null;
-        // 행동 500·504 가 걸어 둔 「소리가 끝날 때까지」 — 건너뛰는 중이면 그 소리를 끊고 지나간다.
+        // 걷기(202·203)·자리 옮기기(205·206)도 줄을 안 막는다 — 핸들러(0x100f0be0)는 슬롯만 붙들고 끝나면 0x100f3490 으로 풀 뿐,
+        // 사건 pc 는 진행기가 곧장 올린다(0x100f0dfd 는 슬롯을 풀지 말지의 갈래다). 여럿이 <b>함께 걷고</b>, 뒤따르는 1 이 다 걷기를 기다린다.
+        // 걷는 도중의 208 은 원본에서도 보이며, 202 인자 5 ≠ 0 이면 끝날 때 방향표의 서기 모션이 다시 덮는다(StepFieldActors).
+        // 행동 504 가 걸어 둔 「소리가 끝날 때까지」 — 건너뛰는 중이면 그 소리를 끊고 지나간다.
         if (_fieldWaitChannel >= 0)
         {
             if (_talkSkip) StopChannelSound(_fieldWaitChannel);
@@ -341,12 +395,13 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_fieldEvent < 0)
             {
                 // 필드는 더 돌 이벤트가 없으면 나간다 — 곁에서 도는 사건이 남아 있으면 그것이 끝나기(또는 조건이 바뀌기)를 기다린다.
-                if (_field != null && _sideEvents.Count == 0) LeaveField();
+                // 마지막 대사가 행동 1 없이 끝났으면 그 창이 닫힐 때까지는 남는다(원본은 아예 안 나간다 — 데모 안전장치).
+                if (_field != null && _sideEvents.Count == 0 && _talk == null) LeaveField();
                 return;
             }
         }
 
-        while (_fieldEvent >= 0 && _talk == null && _fieldWaitUntil <= _lastTime)
+        while (_fieldEvent >= 0 && _fieldWaitUntil <= _lastTime)
         {
             if (_fieldEvent >= events.Count) { _fieldEvent = -1; break; }
             var running = events[_fieldEvent];
@@ -360,19 +415,13 @@ internal sealed unsafe partial class BattleSceneWindow
             // 고르기(604)를 낸 뒤에는 뒤따르는 605 들을 <b>먼저 다 읽어</b> 항목을 채우고, 그다음에 사람을 기다린다.
             if (_fieldChoices != null && running.Actions[_fieldPc].Code != 605) return;
             var action = running.Actions[_fieldPc++];
-            if (!RunFieldAction(action)) return;  // false = 필드를 떠났다
-            if (IsBlockingMove(action) && FieldActorOf(action.Args[0]) is { Walk: not null } walker) { _fieldWaitWalker = walker; return; }
+            _fieldOwner = _fieldEvent;                  // 이 행동이 띄우는 슬롯은 이 사건 것이다
+            if (!RunFieldAction(action)) return;  // false = 필드를 떠났거나 줄에 머문다(0·1·2·504)
         }
     }
 
-    /// <summary>나란히 도는 곁 사건 — (사건 번호, 다음 줄, 기다림이 끝나는 때, 다 걷기를 기다리는 인물).</summary>
-    private readonly List<(int Event, int Pc, double WaitUntil, FieldActor? Walker)> _sideEvents = [];
-
-    /// <summary>주 사건이 다 걷기를 기다리는 인물 — 걷기·자리 옮기기 줄에 머무는 동안.</summary>
-    private FieldActor? _fieldWaitWalker;
-
-    /// <summary>원본에서 끝날 때까지 그 줄에 머무는 움직임 — 202·203 걷기, 205·206 자리 옮기기.</summary>
-    private static bool IsBlockingMove(ScriptCommand a) => a.Code is 202 or 203 or 205 or 206 && a.Args.Length > 0;
+    /// <summary>나란히 도는 곁 사건 — (사건 번호, 다음 줄, 기다림이 끝나는 때).</summary>
+    private readonly List<(int Event, int Pc, double WaitUntil)> _sideEvents = [];
 
     /// <summary>
     /// 곁에서만 돌리는 사건 — 대사 없이 <b>여러 번</b>(최대 발동 0 또는 2 이상) 도는 것. 원본은 사건을 다 나란히 돌리므로
@@ -404,41 +453,40 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (e.MaxFire > 0 && _fieldFired[index] >= e.MaxFire) continue;
                 if (e.Actions.Any(a => MainOnly(a.Code)) || !e.Conditions.All(FieldCondition)) continue;
                 _fieldFired[index]++;
-                _sideEvents.Add((index, 0, 0, null));
+                _sideEvents.Add((index, 0, 0));
             }
         for (int i = _sideEvents.Count - 1; i >= 0; i--)
         {
-            var (ev, pc, waitUntil, walker) = _sideEvents[i];
+            var (ev, pc, waitUntil) = _sideEvents[i];
             var acts = events[ev].Actions;
             bool done = false;
             while (!done)
             {
                 if (_talkSkip) waitUntil = 0;
                 if (waitUntil > _lastTime) break;
-                if (walker is { Walk: not null } && !_talkSkip) break;
-                walker = null;
                 if (pc >= acts.Count) { done = true; break; }
                 var a = acts[pc];
                 short A0 = a.Args.Length > 0 ? a.Args[0] : (short)0;
                 switch (a.Code)
                 {
-                    case 1:                                    // 제가 건 물체 모션이 끝나기를
-                        if (!_talkSkip && _fieldProps.Any(p => p.PlayUntil > _lastTime)) goto hold;
+                    case 1:                                    // <b>이 곁 사건이 띄운</b> 슬롯(걷기·모션·물체 모션)이 끝나기를(0x100f488a)
+                        if (_talkSkip) _fieldSlots.RemoveAll(s => s.Owner == ev);
+                        if (SlotsBusy(ev, out _)) goto hold;
                         pc++;
                         break;
                     case 2: waitUntil = _lastTime + A0 / TicksPerSecond; pc++; break;
-                    case 3: done = true; break;
+                    case 3: _fieldSlots.RemoveAll(s => s.Owner == ev); done = true; break;   // 제 슬롯을 지우고 접는다
                     case 504: pc++; break;                     // 소리 끝 기다림 — 곁 사건은 안 기다린다
                     default:
                     {
-                        // 행동이 거는 기다림(208 모션 한 바퀴 · 900 덮기 따위)은 <b>이 곁 사건</b>의 것이다 — 주 사건의 기다림을 밀면
-                        // Fld 0012 사건 11(208 되풀이)이 주 사건을 굶겨 사건 4 가 영영 안 잡혔다.
-                        var (mainWait, mainChannel) = (_fieldWaitUntil, _fieldWaitChannel);
+                        // 행동이 띄우는 슬롯(208 모션 한 바퀴 · 걷기 따위)은 <b>이 곁 사건</b>의 것이다 — 주 사건의 행동 1 은 안 기다린다.
+                        // 줄을 붙드는 기다림(_fieldWaitUntil·채널)은 주 사건 것이라 건드리지 않게 되돌린다.
+                        var (mainWait, mainChannel, mainOwner) = (_fieldWaitUntil, _fieldWaitChannel, _fieldOwner);
+                        _fieldOwner = ev;
                         RunFieldAction(a);
                         if (_fieldWaitUntil != mainWait) waitUntil = Math.Max(waitUntil, _fieldWaitUntil);
-                        (_fieldWaitUntil, _fieldWaitChannel) = (mainWait, mainChannel);
+                        (_fieldWaitUntil, _fieldWaitChannel, _fieldOwner) = (mainWait, mainChannel, mainOwner);
                         pc++;
-                        if (IsBlockingMove(a) && FieldActorOf(a.Args[0]) is { Walk: not null } w) walker = w;
                         break;
                     }
                 }
@@ -446,7 +494,7 @@ internal sealed unsafe partial class BattleSceneWindow
             hold:
                 break;
             }
-            if (done) _sideEvents.RemoveAt(i); else _sideEvents[i] = (ev, pc, waitUntil, walker);
+            if (done) _sideEvents.RemoveAt(i); else _sideEvents[i] = (ev, pc, waitUntil);
         }
     }
 
@@ -478,15 +526,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>
-    /// 아직 굴러가는 연출이 있나 — 행동 1 이 이것을 기다린다.
+    /// 화면 어디에든 아직 굴러가는 연출이 있나 — 클릭 한 번으로 기다림을 끝내는 <c>SkipCurrentWait</c> 가 본다.
     /// </summary>
     /// <remarks>
-    /// 덮기(900)는 넣지 않는다. 덮은 채로 두는 것이 제 일이라 영영 안 끝나고, 덮는 데 걸리는 틱은 900 이 따로 재운다.
+    /// 행동 1 은 이것이 아니라 <b>제 사건의 슬롯</b>만 본다(<see cref="SlotsBusy"/>). 대사창 슬롯은 넣지 않는다(클릭이 창을 닫는다).
     /// </remarks>
     private bool FieldBusy() =>
         _fieldWipe != null || _fieldCamMove != null
         || _fieldActors.Any(w => w.Walk != null || w.Fade != null)
-        || _fieldProps.Any(p => p.Move != null || p.PlayUntil > _lastTime);
+        || _fieldProps.Any(p => p.Move != null || p.PlayUntil > _lastTime)
+        || _fieldSlots.Any(s => !s.Talk && s.Alive());
 
     /// <summary>
     /// 굴러가는 연출을 전부 끝난 자리로 보낸다 — Esc 건너뛰기. 걷기·자리 옮기기는 목적지로, 밝기는 목표값으로,
@@ -498,7 +547,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (actor.Walk is { } walk)
             {
-                (actor.X, actor.Y, actor.Motion, actor.Mirror, actor.Walk, actor.Hold) = (walk.ToX, walk.ToY, walk.EndMotion, walk.EndMirror, null, false);
+                (actor.X, actor.Y, actor.Walk) = (walk.ToX, walk.ToY, null);
+                if (walk.EndMotion >= 0) (actor.Motion, actor.Mirror, actor.Hold) = (walk.EndMotion, walk.EndMirror, false);
             }
             if (actor.Fade is { } fade)
             {
@@ -515,6 +565,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _fieldWipe = null;                                   // 걷어내기 전환은 끝(원본도 끝나면 그림만 남긴다)
         if (_fieldFade is { } fade2)
             _fieldFade = fade2.CoverTicks > 0 ? (_lastTime - 1000, fade2.CoverTicks, fade2.UncoverTicks, fade2.White) : null;
+        // 틱으로 사는 슬롯(208 모션 · 517 음악 페이드 · 900 · 전환)도 다 풀었다 — 대사창 슬롯만 남긴다(창은 클릭·건너뛰기가 닫는다).
+        _fieldSlots.RemoveAll(s => !s.Talk);
     }
 
     /// <summary>행동 500·504 가 기다리는 소리 채널 — −1 이면 안 기다리는 중.</summary>
@@ -551,13 +603,21 @@ internal sealed unsafe partial class BattleSceneWindow
         return Talk(acts[before].Code);
     }
 
+    /// <summary>추적 기록에 마지막으로 적은 줄 — (사건, 다음 줄).</summary>
+    private (int Owner, int Pc) _traceLastLine = (-2, -1);
+
     private bool RunFieldAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         // DUELDX_TRACE=1 이면 어느 줄을 읽었는지 남긴다 — 화면 밖 시험에서 스크립트가 어디서 멈췄는지 보려고.
-        if (Trace)
+        // 행동 1 이 같은 줄에서 틀마다 다시 읽히는 것은 처음 한 번만 적는다(대사창을 기다리는 동안 줄이 쌓이지 않게).
+        bool traceRepeat = a.Code == 1 && _traceLastLine == (_fieldOwner, _fieldPc);
+        _traceLastLine = (_fieldOwner, _fieldPc);
+        if (Trace && !traceRepeat)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                               $"fld {(_field?.Id ?? _mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}: {a.Code} [{string.Join(", ", a.Args)}]" + Environment.NewLine);
+                               $"fld {(_field?.Id ?? _mosesChp?.Id ?? 0)} "
+                               + (_fieldOwner == _fieldEvent ? $"ev {_fieldEvent} pc {_fieldPc - 1}" : $"side ev {_fieldOwner}")
+                               + $" t {_lastTime:F2}: {a.Code} [{string.Join(", ", a.Args)}]" + Environment.NewLine);
         switch (a.Code)
         {
             case 0:
@@ -581,10 +641,17 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             case 1:
             {
-                // 앞줄이 띄운 것이 끝나기를 기다린다 — 대사(600·601)뿐 아니라 <b>걷기·모션·카메라·전환</b>도 기다린다.
-                // 자료에서 이 행동 바로 앞에 놓인 것은 600·601 다음으로 302·208·900·202·517 차례다.
-                if (_talkSkip) FinishFieldAnimations();       // 건너뛰는 중이면 연출을 끝자리로 보내고 지나간다
-                if (!FieldBusy()) { _fieldHoldSince = 0; break; }
+                // <b>이 사건이 띄운</b> 슬롯(대사창·걷기·모션·카메라·전환·900·517…)이 다 끝나기를 기다린다 — 원본은 [사건+0x20] == 0 까지(0x100f488a).
+                // 전에는 화면 전체의 움직임(FieldBusy)을 기다려, Fld 0065 사건 7 의 대사마다 곁 사건 4 의 보초가 한 구간 걷기를 마칠 때까지 멈췄다.
+                if (_talkSkip) { FinishFieldAnimations(); _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner); }   // 건너뛰는 중이면 끝자리로 보내고 지나간다
+                if (!SlotsBusy(_fieldOwner, out bool talkOpen)) { _fieldHoldSince = 0; break; }
+                if (talkOpen)
+                {
+                    // 대사창은 사람이 닫을 때까지(또는 저절로 넘길 때까지) — 참을성 셈에 넣지 않는다.
+                    _fieldHoldSince = 0;
+                    _fieldPc--;
+                    return false;
+                }
                 // 안 끝나는 연출에 갇히지 않게, 한 줄에서 오래 머물면 그냥 다음 줄로 간다.
                 if (_fieldHoldSince <= 0) _fieldHoldSince = _lastTime;
                 else if (_lastTime - _fieldHoldSince > FieldHoldSeconds)
@@ -593,9 +660,10 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (Trace)
                         File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                            $"HOLD fld {(_field?.Id ?? _mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}"
-                                           + $" (wipe {_fieldWipe != null}, cam {_fieldCamMove != null},"
+                                           + $" (slots {_fieldSlots.Count(s => s.Owner == _fieldOwner)}, wipe {_fieldWipe != null}, cam {_fieldCamMove != null},"
                                            + $" walk {_fieldActors.Count(w => w.Walk != null)}, fade {_fieldActors.Count(w => w.Fade != null)},"
                                            + $" prop {_fieldProps.Count(pr => pr.Move != null)})" + Environment.NewLine);
+                    _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner);
                     _fieldHoldSince = 0;
                     break;
                 }
@@ -612,7 +680,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (_talkSkip) { StopChannelSound(A(0)); break; }
                 _fieldWaitChannel = A(0);
                 return false;
-            case 3: _fieldEvent = -1; _talkSkip = false; break;  // 이 이벤트 접기
+            case 3:
+                // 이 사건 접기 — 원본은 제 슬롯을 다 지우고(0x100f3490) 사건을 되돌린 뒤 1 을 돌려준다. 행동 0 으로 불린 하위 사건이면
+                // 부모가 그 1 을 받고 다음 줄로 간다(§ 진행기 0x100f47f0). 전에는 _fieldReturn 을 안 비워, 하위 사건에서 쓰면
+                // 다음 사건이 끝날 때 엉뚱한 부모 자리로 돌아갔다.
+                _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner);
+                if (_fieldReturn.Count > 0) (_fieldEvent, _fieldPc) = _fieldReturn.Pop();
+                else { _fieldEvent = -1; _talkSkip = false; }
+                break;
 
             case 6:                                          // 다른 필드로
                 if (OpenField(A(0))) return false;
@@ -632,7 +707,9 @@ internal sealed unsafe partial class BattleSceneWindow
             default: RunChapterAction(a); break;              // 70x·80x(동료·돈·아이템·군단…)는 챕터와 같은 처리
 
             case 100: ScriptVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
-            case 101: ScriptVars[A(0) & 0xFF] = FieldArith(ScriptVars[A(0) & 0xFF], A(1), A(2)); break;
+            case 101:                                        // [변수, 연산, 값] — 원본은 바이트에 그대로 써서 <b>넘치면 돈다</b>(0x100f2fa0, 자르지 않는다)
+                ScriptVars[A(0) & 0xFF] = unchecked((byte)FieldArithRaw(ScriptVars[A(0) & 0xFF], A(1), A(2)));
+                break;
             case 102:
                 if (A(0) > 0 && A(0) < _flags.Length) _flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
@@ -657,7 +734,9 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (FieldPropOf(A(0)) is not { } prop) break;
                 int ticks = Math.Max(1, (int)A(3));
-                prop.Move = (prop.X, prop.Y, prop.X + A(1) * ticks, prop.Y + A(2) * ticks, ticks, _lastTime);
+                double moveStart = _lastTime;
+                prop.Move = (prop.X, prop.Y, prop.X + A(1) * ticks, prop.Y + A(2) * ticks, ticks, moveStart);
+                HoldSlot(() => prop.Move is { } now && now.Start == moveStart && _fieldProps.Contains(prop));   // 다 옮길 때까지 슬롯(행동 1 이 기다린다)
                 break;
             }
             case 302:
@@ -671,6 +750,8 @@ internal sealed unsafe partial class BattleSceneWindow
                         prop.Mirror = A(5) != 0;
                         prop.Start = _lastTime;
                         prop.PlayUntil = _lastTime + (UiFor(prop.Obs)?.MotionLength(prop.Motion) ?? 0) / TicksPerSecond;
+                        // 인자 2 가 1 이면 슬롯이 곧장 풀리고, 아니면 모션 끝(+0x68)까지 산다(0x100f1d90) — 뒤따르는 행동 1 이 이것을 기다린다.
+                        if (A(2) != 1) HoldSlot(() => prop.PlayUntil > _lastTime && _fieldProps.Contains(prop));
                         SchedulePropSounds(prop);   // 문 여닫는 소리(Obs 529 모션 1·2 → 157·158) 같은 모션 소리
                     }
                 }
@@ -709,8 +790,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 who.Motion = walk;
                 who.Hold = false;
                 who.Mirror = mirror;
+                // 인자 5 가 0 이면 끝날 때 모션을 안 건드린다(원본은 a5 ≠ 0 일 때만 방향표 0x100f0fd8 로 서기 모션을 건다) —
+                // 걷는 도중 걸린 208 모션이 그대로 남는다. −1 = 그대로.
                 who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime,
-                            A(5) != 0 ? stand : walk, mirror);
+                            A(5) != 0 ? stand : -1, mirror);
+                HoldWalkSlot(who);                           // 줄은 안 막고 슬롯만 — 뒤따르는 1 이 다 걷기를 기다린다
                 break;
             }
             case 203:                                        // 걷기(매 틀 증분) — 방향에 맞는 모션까지 202 와 같다
@@ -722,7 +806,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 who.Hold = false;
                 who.Mirror = mirror;
                 who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
-                            A(5) != 0 ? stand : walk, mirror);
+                            A(5) != 0 ? stand : -1, mirror);
+                HoldWalkSlot(who);
                 break;
             }
             case 206:                                        // 자리 옮기기(매 틀 증분) — 모션은 안 건드린다
@@ -730,13 +815,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldActorOf(A(0)) is not { } who) break;
                 int ticks = Math.Max(1, (int)A(3));
                 who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
-                            who.Motion, who.Mirror);
+                            -1, who.Mirror);
+                HoldWalkSlot(who);
                 break;
             }
             case 205:                                        // 자리 옮기기 — 모션은 안 건드린다
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
-                who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime, who.Motion, who.Mirror);
+                who.Walk = (who.X, who.Y, A(1), A(2), Math.Max(1, (int)A(3)), _lastTime, -1, who.Mirror);
+                HoldWalkSlot(who);
                 break;
             }
             case 208:                                        // 모션 지정
@@ -746,10 +833,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 who.Mirror = A(3) != 0;
                 who.MotionStart = _lastTime;
                 who.Hold = A(2) != 1;
-                // 인자2 가 1 이면 되풀이라 바로 다음 줄로 가고, 0 이면 <b>한 바퀴 다 돌 때까지</b> 스크립트가 기다린다.
+                // 인자2 가 1 이면 되풀이라 슬롯이 곧장 풀리고, 아니면 <b>한 바퀴 다 돌 때까지</b> 슬롯이 산다(0x100f1510).
+                // 줄은 안 막는다 — 원본은 여럿의 208 이 한 틀에 함께 시작하고 뒤따르는 행동 1 이 다 돌기를 기다린다
+                // (Fld 0012 사건 11 의 두 훈련병, 208→208 752곳). 전에는 208 마다 줄을 막아 한 명씩 차례로 움직였다.
                 if (A(2) != 1 && _db?.Character(who.ChrCode) is { SpriteId: > 0 } pc
                     && UiFor(pc.SpriteId)?.MotionLength(A(1)) is > 0 and var length)
-                    _fieldWaitUntil = _lastTime + length / TicksPerSecond;
+                    HoldSlotTicks(length);
                 break;
             }
             case 209: break;                                 // 모션 멈추기 — 데모는 늘 그 모션을 보이므로 할 일이 없다
@@ -760,7 +849,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 double to = a.Code == 211 ? 1 : 0;
                 if (a.Code == 211) who.Visible = true;        // 나타날 때는 먼저 보이게 해 두고 밝기를 올린다
                 if (A(1) <= 0) { who.Alpha = to; who.Visible = to > 0; who.Fade = null; break; }
-                who.Fade = (who.Alpha, to, A(1), _lastTime);
+                double fadeStart = _lastTime;
+                who.Fade = (who.Alpha, to, A(1), fadeStart);
+                HoldSlot(() => who.Fade is { } now && now.Start == fadeStart && _fieldActors.Contains(who));
                 break;
             }
             case 212:
@@ -784,6 +875,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 int camTicks = Math.Max(1, (int)A(2));
                 _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
                                  _fieldCam.X + A(0) * camTicks, _fieldCam.Y + A(1) * camTicks, camTicks, _lastTime);
+                HoldCameraSlot();
                 break;
             }
             case 402:                                        // 그 인물이 화면 한가운데 오도록 a1 틀에 걸쳐
@@ -792,6 +884,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 int camTicks = Math.Max(1, (int)A(1));
                 _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
                                  target.X - MosesW / 2.0, target.Y - MosesH / 2.0, camTicks, _lastTime);
+                HoldCameraSlot();
                 break;
             }
             case 901:                                        // 밀어내기 — a2 는 화면 너비에 더하는 여분 거리다
@@ -833,7 +926,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     ShowMosesBackground(back.Background, _fieldCam.X, _fieldCam.Y);
                     _fieldPictureCover = 0;
                 }
-                if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
+                if (A(2) > 0) HoldSlotTicks(A(2));           // 전환 물체 +0x58 이 설 때까지 슬롯 — 줄은 안 막는다(909→205 7곳은 원본에서 디졸브와 함께)
                 break;
             case 407:
             case 408:                                        // 층 감추기·보이기
@@ -846,15 +939,23 @@ internal sealed unsafe partial class BattleSceneWindow
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
                 _fieldFadeCover = Math.Clamp((int)A(4), 0, 8);   // 가리는 층 수 — 8 이면 다 가린다
-                // 덮는 데 걸리는 틱만큼은 스크립트도 기다린다 — 안 그러면 화면이 덮이기 전에 다음 장면으로 넘어간다.
-                if (A(2) > 0) _fieldWaitUntil = _lastTime + A(2) / TicksPerSecond;
+                // 덮기(a2)·걷어내기(a3)가 끝날 때까지 슬롯이 산다(전환 물체 +0x58, 0x100f26ee) — 줄은 안 막고 뒤따르는 1 이 기다린다.
+                // Fld 0012 사건 4 의 900[1,1,0,45,8] → 517[100,60] → 1 → 2[30] → 600 은 밝아지기와 음악 페이드가 <b>함께</b> 돌고,
+                // 둘 다 끝난 뒤 1초 쉬고 첫 대사가 뜬다(전에는 걷어내기를 안 기다려 밝아지는 도중에 대사가 떴다).
+                HoldSlotTicks(A(2) > 0 ? A(2) : A(3));
                 break;
-            case 512:                                        // BGM 바꾸기
-                StopMusic();
-                if (A(0) > 0) PlayMusicFile(A(0), loop: true);
+            case 512:                                        // BGM 바꾸기 — 새 곡은 <b>옛 곡의 지금 크기</b>로 시작한다(0x100eed8a, 옛 곡이 없으면 0)
+                // 512 358곳 중 346곳이 바로 뒤 517 로 키운다 — 0(또는 줄여 둔 크기)에서 서서히 커지는 연출이다.
+                PlayMusicInherit(A(0));
                 break;
-            case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐
+            case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐 — 그동안 슬롯이 산다(0x100eee70, +4 ≥ a1 에서 풀림)
                 FadeMusic(A(0), A(1));
+                HoldSlotTicks(A(1));
+                break;
+            case 910:                                        // [v] 챕터 주 화면 가운데 구체를 Obs 562 ↔ 587 로(Chp 0045·0050) —
+                break;                                       // 데모 모세스 주 화면은 그 구체를 안 그려 할 일이 없다
+            case 911:                                        // [단계, 번호] 항행 시작 단계·번호(챕터 +0x2e40/+0x2e42, 0x100f6c60) — a ≥ 1 일 때만
+                if (A(0) >= 1 && _mosesChp is { } navChp) _navStart = (navChp.Id, A(0), A(1));
                 break;
             case 609:                                        // [인물, 이름 TXR, 챕터 Tlc 글, ?] 이름과 글을 <b>다른 표</b>에서 꺼내는 대사(0x100efb30)
                 // 원본은 0x1004a3f0(TXR)으로 이름을, 0x1004a650(Tlk\NNNN.Tlc = EvtText)으로 글을 읽어
@@ -867,11 +968,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
                 StopMusic();
                 break;
-            case 500:                                        // 소리 한 번 내고 끝날 때까지 기다린다(0x100ee7b0) — 인자1 은 매달 인물
+            case 500:                                        // 소리 한 번 내고 끝날 때까지 슬롯(0x100ee7b0) — 인자1 은 매달 인물. 뒤따르는 1 이 기다린다
                 if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)
                 PlayChannelSound(FieldVoiceChannel, A(0), loop: false);
-                _fieldWaitChannel = FieldVoiceChannel;
-                return false;
+                HoldSlot(() => ChannelBusy(FieldVoiceChannel));
+                break;
             case 501:                                        // [소리, 채널, 인물, 되풀이] 채널에 걸고 기다리지 않는다(0x100ee960)
                 if (_talkSkip) break;
                 PlayChannelSound(A(1), A(0), loop: A(3) != 0);
@@ -879,7 +980,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 506:                                        // [채널, 음량, 틱] 채널 음량을 서서히 바꾼다(0x100eeb80) — 517 의 채널판
                 if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 건너뛴다([0x101bffb0] 검사)
                 FadeChannelSound(A(0), A(1), A(2));
-                _fieldWaitUntil = _lastTime + Math.Max(1, (int)A(2)) / TicksPerSecond;   // 원본은 그 틱만큼 줄에 머문다
+                HoldSlotTicks(Math.Max(1, (int)A(2)));       // 그 틱만큼 슬롯이 산다 — 줄은 안 막고 뒤따르는 1 이 기다린다(자료 둘 다 뒤가 1)
                 break;
             case 505:                                        // [채널] 그 채널의 소리를 끊는다(0x100eeb30)
                 StopChannelSound(A(0));
@@ -898,29 +999,36 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 챕터에 들어갈 때 그 챕터 스크립트를 한 번 돌린다 — <b>동료·돈·아이템·진행 깃발</b>이 여기서 들어온다.
     /// </summary>
     /// <remarks>
-    /// 스크립트 꼴이 필드와 같아 같은 실행기를 쓴다. 다만 챕터 스크립트는 연출이 아니라 <b>세팅</b>이라
-    /// 기다림 없이 한 번에 훑고, 대사(600·601)는 건너뛴다.
+    /// 스크립트 꼴이 필드와 같아 같은 실행기(<see cref="RunFieldAction"/>)를 쓴다. 기다림 없는 사건만 여기서 한 번에 훑고,
+    /// 대사·고르기·기다림이 든 사건은 모세스 위의 실행기(<see cref="UpdateField"/>)에 맡긴다.
     /// <c>Chp 0010</c> 이라면 깃발 107·113·116·117·118·14 를 세우고 동료 둘(219·221)과 3000GP,
     /// 아이템 122×10 · 124×3 · 125×10 · 84×2 · 126×1 을 준다.
     /// </remarks>
-    private void RunChapterScript(ChapterFile chapter)
+    /// <returns>스크립트가 장면을 떠났으면(6 필드 · 7 · 10 전투 · 11 · 12) true — 부른 쪽은 모세스 화면을 더 꾸미지 않는다.</returns>
+    private bool RunChapterScript(ChapterFile chapter)
     {
         // 사건별 횟수가 없던 옛 세이브에서 온 챕터는 「다 돌았다」로 본다(사건 −1 표시).
-        if (_chapterFired.ContainsKey((chapter.Id, -1))) return;
+        if (_chapterFired.ContainsKey((chapter.Id, -1))) return false;
         foreach (var wanted in chapter.Events.Count > 0 ? chapter.Events[0].Actions : [])
         {
             int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
             if ((uint)index >= chapter.Events.Count || index == 0) continue;
             var e = chapter.Events[index];
             if (e.MaxFire > 0 && _chapterFired.GetValueOrDefault((chapter.Id, index)) >= e.MaxFire) continue;
-            // 대사·고르기·기다림이 든 사건은 여기서 안 돌고 실행기(UpdateField)가 모세스 위에서 돈다.
+            // 대사·고르기·기다림(줄을 붙드는 0·1·2·504)이 든 사건은 여기서 안 돌고 실행기(UpdateField)가 모세스 위에서 돈다.
             // 조건보다 <b>먼저</b> 거른다 — 조건 505(행성 방문)는 보는 순간 표시를 지우므로, 여기서 보고 건너뛰면
             // 실행기가 볼 때는 이미 지워져 그 사건이 영영 안 돈다(0011 사건 14 등 11개, 분석-모세스 mo-mail).
-            if (e.Actions.Any(a => a.Code is 0 or 1 or 2 or 600 or 601 or 602 or 603 or 604 or 605 or 609)) continue;
+            if (e.Actions.Any(a => a.Code is 0 or 1 or 2 or 504 or 600 or 601 or 602 or 603 or 604 or 605 or 609)) continue;
             if (!e.Conditions.All(FieldCondition)) continue;
             _chapterFired[(chapter.Id, index)] = _chapterFired.GetValueOrDefault((chapter.Id, index)) + 1;
-            foreach (var a in e.Actions) RunChapterAction(a);
+            // 챕터 사건도 필드와 <b>같은 실행기</b>다 — 모든 행동을 돈다. 전에는 70x·80x·102·103 만 돌리고 6·10·100·101·910·911 을
+            // 버린 채 횟수만 올려, Chp 0057 사건 1(102[38,1] → 10[110])의 자동 전투가 사라지고 Chp 0050 사건 1 의 100[87,1]·100[32,1],
+            // Chp 0013 사건 4 의 100[77,10] 이 안 섰다.
+            _fieldOwner = index;
+            foreach (var a in e.Actions)
+                if (!RunFieldAction(a)) return true;         // 필드·전투·타이틀로 떠났다
         }
+        return false;
     }
 
     /// <summary>챕터 사건이 이미 돈 횟수 — (챕터, 사건).</summary>
@@ -1064,9 +1172,12 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 actor.X = walk.ToX;
                 actor.Y = walk.ToY;
-                actor.Motion = walk.EndMotion;
-                actor.Hold = false;
-                actor.Mirror = walk.EndMirror;
+                if (walk.EndMotion >= 0)                      // −1 = 끝날 때 모션을 안 건드린다(202 인자 5 = 0 · 205·206)
+                {
+                    actor.Motion = walk.EndMotion;
+                    actor.Hold = false;
+                    actor.Mirror = walk.EndMirror;
+                }
                 actor.Walk = null;
                 continue;
             }
@@ -1120,13 +1231,15 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(op switch
+    private static byte FieldArith(byte now, int op, int value) => (byte)Math.Clamp(FieldArithRaw(now, op, value), 0, 255);
+
+    private static int FieldArithRaw(byte now, int op, int value) => op switch
     {
         0 => now + value,
         1 => now - value,
         2 => now * value,
         _ => value != 0 ? now / value : now,
-    }, 0, 255);
+    };
 
     private string FieldText(int id) => (_field != null ? _fieldTalk : TalkTableFor())?[id] ?? "";
 
@@ -1177,7 +1290,14 @@ internal sealed unsafe partial class BattleSceneWindow
         else _talkFace = 0;
         _talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), pose, _lastTime);
         _talkFilled = false;
+        // 대사창도 슬롯이다 — 창이 닫힐 때(+0x108 == 4)까지 살고, 뒤따르는 행동 1 이 그것을 기다린다(0x100eeef0).
+        // 새 창이 이 창을 바꿔 치면(원본도 새 600 은 있던 창을 지운다) 이 슬롯은 풀린다.
+        int serial = ++_fieldTalkSerial;
+        HoldSlot(() => _talk != null && _fieldTalkSerial == serial, talk: true);
     }
+
+    /// <summary>필드 대사창을 띄운 차례 — 대사창 슬롯이 「내 창이 아직 떠 있나」를 가린다.</summary>
+    private int _fieldTalkSerial;
 
     /// <summary>필드에서 지금 말하는 이(<c>10000+열쇠</c>) — 말풍선을 그 머리 위에 띄우려고 들고 있는다.</summary>
     private int _fieldTalkOf;
@@ -1356,7 +1476,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var shot = CaptureFieldScreen();
         var picture = ReadBackground(background) ?? shot;
         _fieldWipe = new FieldWipe(kind, way, ticks, _lastTime, toPicture ? shot : picture, toPicture ? picture : shot);
-        _fieldWaitUntil = _lastTime + ticks / TicksPerSecond;
+        HoldSlotTicks(ticks);   // 전환이 끝날 때까지 슬롯 — 줄은 안 막는다(903→603 은 전환 중에 글이 뜬다). 뒤따르는 1 이 기다린다
         // 그림으로 갔으면 전환이 끝난 뒤에도 그 그림이 화면에 남아 있어야 한다.
         if (toPicture)
         {

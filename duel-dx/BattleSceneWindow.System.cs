@@ -393,6 +393,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _selected = -1;
         _outcome = "";
         _eventCheckDue = 0xF;
+        _objectsDue = false;
+        _outcomeAfterLevelUp = false;
         _routine = null;
         _levelUpQueue.Clear();
         _levelUpUnit = -1;
@@ -427,7 +429,19 @@ internal sealed unsafe partial class BattleSceneWindow
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
                                    byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null,
-                                   bool? OnField = null);
+                                   bool? OnField = null, int[]? Bonus = null, int Stance = 0, bool? Awake = null, int LastHitBy = -1,
+                                   int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null);
+
+    // 위 꼬리 칸(형식 10 에 덧붙임, 없으면 옛 세이브라 예전처럼 둔다) — 원본 유닛 기록 0x1007c710 이 적는 것(ba-15 Q5):
+    // Bonus = 전투 보정 +0x4c8 DEX · +0x4ca PSY · +0x4cc DEP · +0x4d0 최대TP · +0x4d2 최대SOUL · +0x4ce 최대HP(이 차례로),
+    // Stance = 자세 +0x4d4, Awake = 깨어남 +0x4e8, LastHitBy = 마지막 때린 자 +0xfc(자리 번호, 없으면 −1),
+    // LeaderIndex·FormationSlot·LegionId·LegionPower = 군단 +0x4ea~+0x4fd 와 CChr 세력 — 대장이 죽어 물려받은 뒤를 되살린다.
+
+    /// <summary>
+    /// 물체 하나의 세이브 칸 — 원본 물체 기록 <c>0x100e80f0</c>(편 <c>+0x78</c>, 부서짐/열림 <c>+0x101</c>, HP <c>+0x13c~</c>, 충전 <c>+0x15c</c>·다 참 <c>+0x160</c>).
+    /// 안 적으면 불러올 때 판을 새로 세워 부순 물체·연 상자가 되살아나 상자를 또 열 수 있었다(ba-15 Q5 #1).
+    /// </summary>
+    private sealed record SaveObject(int Index, int No, int Hp, int Team, bool Opened, int Charge, bool Charged);
 
     /// <summary>인물 레코드에서 세이브가 따로 적는 칸들(<see cref="SaveUnit.Char"/>).</summary>
     private sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
@@ -491,7 +505,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null,
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0,
-                                    int[]? EpisodesPicked = null);
+                                    int[]? EpisodesPicked = null,
+                                    SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false);
 
     private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
@@ -666,7 +681,10 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
-                    [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField))],   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
+                    [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField,   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
+                    [u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp], u.Stance, u.Awake,
+                    u.LastHitBy is { } hitter ? Array.IndexOf(_units, hitter) : -1,
+                    u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -705,7 +723,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
                 // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
                 _mosesChp?.Id ?? 0,
-                [.. _episodesPicked]);
+                [.. _episodesPicked],
+                // 물체(0x100e80f0)·찾은 사람 20010/20011(0x101b6994/0x101b6996)·이 틱에 남은 물체 차례도 싣는다(ba-15 Q5).
+                [.. Objects.Select((o, i) => new SaveObject(i, o.Record.No, o.Hp, o.Team, _opened.Contains(o), o.Charge, o.Charged))],
+                _eventFoundA is { } fa ? Array.IndexOf(_units, fa) : -1,
+                _eventFoundB is { } fb ? Array.IndexOf(_units, fb) : -1,
+                _objectsDue);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -753,6 +776,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;
+        _outcomeAfterLevelUp = false;
         CancelTargeting();
         _ringUnit = -1;
         _statusUnit = -1;
@@ -774,13 +798,21 @@ internal sealed unsafe partial class BattleSceneWindow
         _heldMoveKeys.Clear();
 
         var pool = state.Units.ToList();
+        // 세이브 자리 번호 → 지금 판 자리 번호 — 마지막 때린 자·군단 대장·찾은 사람은 자리 번호로 적혀 있다.
+        var indexMap = new Dictionary<int, int>();
+        int Mapped(int saved) => indexMap.TryGetValue(saved, out int now) ? now : -1;
+        var restored = new List<(UnitState Unit, SaveUnit Save)>();
         for (int i = 0; i < _units.Length; i++)
         {
             var u = _units[i];
-            // 같은 자리의 기록을 먼저 보고, 안 맞으면 같은 Chr 번호의 기록을 찾아 쓴다.
-            var s = i < pool.Count && pool[i].ChrCode == u.ChrCode ? pool[i] : pool.FirstOrDefault(r => r.ChrCode == u.ChrCode);
+            // 같은 자리의 기록을 먼저 보고, 안 맞으면 같은 Chr 번호의 기록을 찾아 쓴다. 「같은 자리」는 세이브 배열의 i 번째다 —
+            // 전에는 쓴 기록을 빼 가며 줄어든 목록의 i 번째를 봐서, 같은 Chr 가 여럿인 판(Btl 0298 해적 셋)에서 둘째·셋째가 뒤바뀌었다.
+            var s = i < state.Units.Length && state.Units[i].ChrCode == u.ChrCode && pool.Any(r => ReferenceEquals(r, state.Units[i]))
+                ? state.Units[i] : pool.FirstOrDefault(r => r.ChrCode == u.ChrCode);
             if (s == null) continue;
-            pool.Remove(s);
+            pool.RemoveAt(pool.FindIndex(r => ReferenceEquals(r, s)));   // 기록은 값 비교 record 라 Remove 는 쌍둥이 기록을 지울 수 있다
+            indexMap[Array.FindIndex(state.Units, r => ReferenceEquals(r, s))] = i;
+            restored.Add((u, s));
             u.WarpTo(s.Col, s.Row);
             // 전장에 섰는지도 되살린다 — 배치 자료로만 정하면, 같은 Chr 가 둘일 때(한 명은 대기 (0,0)) 칸 차례로 짝지으며 뒤바뀌어
             // 보이지 않는 「전장의 적」이 (0,0)에 남아 전멸이 안 됐다(사용자 보고: Btl 0155). 옛 세이브는 (0,0)이면 전장 밖으로 본다.
@@ -788,8 +820,10 @@ internal sealed unsafe partial class BattleSceneWindow
             u.OriginCol = s.Col;
             u.OriginRow = s.Row;
             u.Facing = (Facing)s.Facing;
-            (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, 0);
+            // 자세(+0x4d4)도 되살린다 — 전에는 0 으로 덮어 방어·회피 자세로 차례를 넘긴 인물이 불러오면 자세를 잃었다(ba-15 Q5 #4).
+            (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, s.Stance);
             if (s.Side >= 0) u.Side = s.Side;
+            if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
             if (u.Data is { } c) u.Data = Restored(c, s, regrow: false);
             u.ClearStatus();
@@ -799,8 +833,28 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (s.StatusId is { } ids && k < ids.Length) u.StatusId[k] = ids[k];
                 if (s.StatusValue is { } values && k < values.Length) u.StatusValue[k] = values[k];
             }
+            // 전투 보정 +0x4c8~+0x4d2(상태 30·31·32·33·37·48 이 더한 값) — ClearStatus 가 지운 뒤에 채운다(Q5 #2).
+            if (!state.InMoses && s.Bonus is [var dex, var psy, var dep, var maxTp, var maxSoul, var maxHp, ..])
+                (u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp) = (dex, psy, dep, maxTp, maxSoul, maxHp);
+        }
+        // 자리 번호로 적힌 것들은 모두 짝지은 뒤에 — 마지막 때린 자(+0xfc, 조건 301)와 군단 물려받기(+0x4ea~, Legion.cs PromoteFollower).
+        foreach (var (u, s) in restored)
+        {
+            u.LastHitBy = Mapped(s.LastHitBy) is >= 0 and var hit ? _units[hit] : null;
+            if (s.LeaderIndex is { } leader) u.LeaderIndex = leader < 0 ? -1 : Mapped(leader);
+            if (s.FormationSlot is { } slot) u.FormationSlot = slot;
+            if (s.LegionId is { } legion) u.LegionId = legion;
+            if (s.LegionPower is { } power) u.LegionPowerPercent = power;
+        }
+        // 최대치는 군단 대장·보정을 다 놓은 뒤에 센다 — 먼저 세면 HP 가 틀린 최대치로 잘린다.
+        foreach (var (u, s) in restored)
+        {
+            (u.Hp, u.Tp, u.Soul) = (s.Hp, s.Tp, s.Soul);
             RefreshUnitStats(u);
         }
+        _eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? _units[foundA] : null;
+        _eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? _units[foundB] : null;
+        RestoreObjects(state);
 
         // 전투에 선 아군의 되살린 값을 파티에 담는다 — 위에서 채워 둔 값을 지금 판의 값으로 덮어쓴다.
         RememberParty();
@@ -835,6 +889,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventNextField = state.EventNextField;
 
         _tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
+        _objectsDue = state.ObjectsDue;           // 그 틱의 물체 차례가 아직 안 돌았으면 이어서 돈다(Q6)
         _turn = -1;
         _outcome = "";
         _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
@@ -874,5 +929,28 @@ internal sealed unsafe partial class BattleSceneWindow
         _restoreVersion = SaveVersion;
         Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
+    }
+
+    /// <summary>
+    /// 세이브의 물체 칸을 판에 되살린다(원본 <c>0x100e80f0</c> 의 짝) — HP·편·열림/부서짐·충전.
+    /// 물체 칸이 없는 옛 세이브는 판을 세운 그대로 둔다. 같은 번호(배치 +0x140)끼리 짝짓고, 안 맞으면 자리 순번으로 본다.
+    /// </summary>
+    private void RestoreObjects(SaveState state)
+    {
+        if (state.Objects is not { } saved) return;
+        var objects = Objects;
+        for (int i = 0; i < objects.Count; i++)
+        {
+            var o = objects[i];
+            var s = saved.FirstOrDefault(x => x.Index == i && x.No == o.Record.No) ?? saved.FirstOrDefault(x => x.No == o.Record.No && x.Index >= 0);
+            if (s == null) continue;
+            (o.Hp, o.Team, o.Charge, o.Charged) = (s.Hp, s.Team, s.Charge, s.Charged);
+            if (s.Opened)
+            {
+                _opened.Add(o);
+                _openedAt[o] = _lastTime - 1000;     // 여는 모션은 이미 끝났다 — 문은 곧장 열린 모션 2 로 선다
+            }
+            else { _opened.Remove(o); _openedAt.Remove(o); }
+        }
     }
 }
