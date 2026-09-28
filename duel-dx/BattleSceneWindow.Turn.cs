@@ -785,6 +785,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
+            // 비 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18). 쓰러질 인물은 밀지 않는다.
+            if (BiWorks.Contains(w.Id))
+            {
+                var knocked = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
+                              .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a && !dying.Contains(u));
+                if (knocked != null)
+                    foreach (bool _ in KnockbackRoutine(a, w, knocked)) yield return true;
+                else PlayAction(a, DrawnAction(a, 24));
+            }
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 

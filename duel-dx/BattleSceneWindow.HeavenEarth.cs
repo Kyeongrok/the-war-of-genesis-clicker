@@ -48,6 +48,21 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private double Ticks(double n) => n / TicksPerSecond;
 
+    /// <summary>칼 꽂기 모션 — 48 꽂기 · 49 꽂은 채(반복 1000) · 50 뽑기. 방향과 상관없이 이 번호 그대로 튼다.</summary>
+    private const int StabMotion = 48;
+
+    /// <summary>
+    /// 인물에게 모션 번호를 바로 튼다(<c>0x100e53c0</c>)고 그 모션의 소리 키를 예약한다. 한 번 도는 길이(초)를 돌려준다 — 그 모션이 없으면 0.
+    /// </summary>
+    private double PlayRawMotion(UnitState u, int motion, bool loop)
+    {
+        if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.RawClip(motion) is not { Keys.Count: > 0 } clip) return 0;
+        double seconds = sprite.MotionTicks(motion) / TicksPerSecond;
+        u.PlayMotion(motion, loop ? 1000 : seconds, loop);
+        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+        return seconds;
+    }
+
     /// <summary>그 모션 한 번의 길이(초) — 자식까지는 안 본다.</summary>
     private double OnceSeconds(int obs, int motion) => Math.Max(1, UiFor(obs)?.MotionLength(motion) ?? 1) / TicksPerSecond;
 
@@ -65,6 +80,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private IEnumerable<bool> HeavenEarthRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
+        // ── 단계 0 — 칼을 땅에 꽂는다(모션 48 한 번, 0x100b4410). 다 꽂으면 꽂은 자세(49)를 붙든 채 땅이 터진다(fg-19).
+        for (double end = _lastTime + PlayRawMotion(user, StabMotion, loop: false); _lastTime < end;) yield return true;
+        PlayRawMotion(user, StabMotion + 1, loop: true);
+
         var (ux, uy) = UnitFoot(user);
         (double, double) Diagonal(int d, bool first) => (ux + d, uy + (first ? d : -d) * 0.8);
         int V(int k) => (k + 7) % 3;
@@ -146,6 +165,10 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         double finish = s3 + Ticks(t + 68 + 35);
         while (_lastTime < finish || _debris.Count > 0 && _lastTime < finish + 3) { StepDebris(); yield return true; }
+        // 칼을 뽑는다(모션 50) — 그 모션이 없는 인물이면 붙든 자세를 풀기만 한다.
+        double pull = PlayRawMotion(user, StabMotion + 2, loop: false);
+        if (pull <= 0) user.PlayAction(ObsMotionTable.ActionStand, 0);
+        for (double end = _lastTime + pull; _lastTime < end;) yield return true;
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"heaven-earth: targets {count}, fx {_timedFx.Count}, debris {_debris.Count}, took {_lastTime - s1:0.0}s" + Environment.NewLine);
