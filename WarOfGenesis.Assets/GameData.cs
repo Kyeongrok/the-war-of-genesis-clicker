@@ -592,8 +592,9 @@ public sealed class GameDatabase
         c.WeaponType == 0 && c.Items[0] != 0 && Items.TryGetValue(c.Items[0], out var w) ? w.Type : c.WeaponType;
 
     /// <summary>그 레벨 work 의 EXP(+0x30) — Status 화면 빨간 숫자. 최대 레벨이거나 work 가 없으면 0.</summary>
+    /// <summary>레벨 <paramref name="level"/> → +1 로 올리는(0 이면 배우는) EXP — <b>올라갈 레벨</b> work 의 <c>+0x30</c>(<c>0x10032450</c> → <c>0x10035604</c>, ba-15). 전에는 지금 레벨 work 를 써서 한 단계 어긋났다.</summary>
     public int AbilityExpCost(AbilityData ab, int level) =>
-        level < ab.MaxLevel && ab.WorkByLevel.TryGetValue(level, out int wid) && Works.TryGetValue(wid, out var w) ? w.ExpCost : 0;
+        level < ab.MaxLevel && ab.WorkByLevel.TryGetValue(level + 1, out int wid) && Works.TryGetValue(wid, out var w) ? w.ExpCost : 0;
 
     /// <summary>
     /// 배울 수 있는 어빌리티(<c>0x100324e0</c>) — 직업 어빌리티 목록 중 아직 안 배웠고, 선행 어빌리티 두 개의 레벨 조건을 채운 것.
@@ -668,9 +669,10 @@ public sealed class GameDatabase
     /// 죠안 LP 800 · 갑옷 100 → 1600 (게임 화면과 같음). 전투는 이 화면 값으로 셈한다 — 원본은 내부 HP 에서
     /// 피해 × 100/(100+갑옷) 을 빼지만 화면에 보이는 감소량은 거의 같다.
     /// </summary>
-    public int MaxHp(CharacterData c)
+    /// <param name="innerBonus">상태 48(최대 HP 가감, 유닛 <c>+0x4ce</c>) — 원본은 <b>내부 최대 HP 에 더한 뒤</b> 갑옷 배율을 곱한다(ba-15).</param>
+    public int MaxHp(CharacterData c, int innerBonus = 0)
     {
-        int inner = (int)c.Lp + EquipBonus(c, 0x30);
+        int inner = (int)c.Lp + EquipBonus(c, 0x30) + innerBonus;
         int armor = ArmorRate(c);
         return armor == 0 || N(6) == 0 ? inner : inner * (armor + N(6)) / N(6);
     }

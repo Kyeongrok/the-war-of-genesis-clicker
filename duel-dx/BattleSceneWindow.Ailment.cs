@@ -88,22 +88,13 @@ internal sealed unsafe partial class BattleSceneWindow
         int dex = c.Dex + u.BonusDex - (u.HasStatus(1) ? 1 : 0);
         int psy = c.Psy + u.BonusPsy;
         int dep = c.Dep + u.BonusDep - (u.HasStatus(40) ? 1 : 0);
-        // 27(악세사리 무시) — 장비 셋째 칸을 없는 것으로 친다. 그 칸 보정이 능력치 계산에서 빠진다.
-        bool noAccessory = u.HasStatus(27) && c.Items.Length > 2 && c.Items[2] != 0;
-        if (dex == c.Dex && psy == c.Psy && dep == c.Dep && !noAccessory) return c;
-
-        var items = c.Items;
-        if (noAccessory)
-        {
-            items = [.. c.Items];
-            items[2] = 0;
-        }
+        // 27(악세사리 무시)은 DLL 에서 읽는 곳이 없다(0x1007bf20/0x1007bb10 검색, ba-15) — 전에 셋째 칸을 빼던 것을 뺐다.
+        if (dex == c.Dex && psy == c.Psy && dep == c.Dep) return c;
         return c with
         {
             Dex = (ushort)Math.Max(0, dex),
             Psy = (ushort)Math.Max(0, psy),
             Dep = (ushort)Math.Max(0, dep),
-            Items = items,
         };
     }
 
@@ -273,7 +264,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
     private int TpCostFor(UnitState u, CharacterData c, int workId) =>
-        Math.Max(0, (_db?.WorkTpCost(c, workId) ?? 0) * (100 + u.Status(20)) / 100);
+        PercentAdjust(_db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
 
     /// <summary>
     /// 상태이상이 거는 사망 조건 — 22 SOUL 이 값 아래 · 23 TP 가 값 아래 · 24 SOUL 이 가득(<c>0x1007c689</c>~).
@@ -337,9 +328,10 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int AilmentDamage(UnitState attacker, UnitState target, int amount)
     {
         // 곱하는 차례가 결과를 바꾼다(정수 나눗셈) — 원본은 7 → 13 → 14 순이다(0x1007b880 · 0x1007b8b3 · 0x1007b8e2).
-        if (target.Status(7) is var cut and > 0) amount = amount * (100 - cut) / 100;
-        if (attacker.Status(13) is var atk and not 0) amount = amount * (100 + atk) / 100;
-        if (target.Status(14) is var def and not 0) amount = amount * (100 - def) / 100;
+        // 꼴은 dmg += trunc(±값 × dmg / 100) — 곱한 몫만 0 쪽으로 버린다(음수 쪽에서 dmg×(100−값)/100 보다 1 크다, ba-15).
+        if (target.Status(7) is var cut and > 0) amount += -cut * amount / 100;
+        if (attacker.Status(13) is var atk and not 0) amount += atk * amount / 100;
+        if (target.Status(14) is var def and not 0) amount += -def * amount / 100;
         return Math.Max(0, amount);
     }
 

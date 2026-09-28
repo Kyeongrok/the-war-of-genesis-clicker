@@ -68,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (lp, psy, dep) = LegionBonusFor(u);
         if (lp != 0 || psy != 0 || dep != 0) c = c with { Lp = (uint)Math.Max(0, c.Lp + lp), Psy = (ushort)Math.Max(0, c.Psy + psy), Dep = (ushort)Math.Max(0, c.Dep + dep) };
         // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
-        u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c) + u.BonusMaxHp));
+        u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c, u.BonusMaxHp)));   // 48 은 갑옷 배율 앞에서 더한다(ba-15)
         u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
         // STP 는 최대 TP 가감(상태 33)까지 넣은 최대 TP ÷ 제수다(0x1007acf0) — 최대 TP 를 올리면 차례 간격도 짧아진다(fg-22).
         u.Stp = Math.Max(1, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
@@ -240,7 +240,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var c = u.Data!;
         int level = learn ? 0 : c.AbilityLevel(ab.Id);
-        int cost = _db!.AbilityExpCost(ab, learn ? 1 : level);
+        int cost = _db!.AbilityExpCost(ab, level);   // 배우기는 0 → Lv1 work
         if (!learn && cost == 0) { Toast("최대 레벨입니다"); return; }
         if (cost > c.Exp) { Toast($"EXP 가 모자랍니다 (필요 {cost}, 있음 {c.Exp})"); return; }
         ApplyAbility(u, ab, learn, cost);
@@ -511,7 +511,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var ab = learnable[_learnableTop + k];
             int rx = ox + AbilityX, ry = oy + LearnableY + LearnableStep * k;
-            int cost = db.AbilityExpCost(ab, 1);
+            int cost = db.AbilityExpCost(ab, 0);
             if (editable && _popup == null && MouseIn(rx, ry, AbilityW, LearnableRowH)) DrawUiStretched(RowObs, 7, rx, ry, AbilityW, LearnableRowH);
             DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, LearnableRowH, 18);
             _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab, 0)));
