@@ -26,12 +26,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly Dictionary<int, int> _talkSlot = [];      // 인물 번호 -> 지금 대사 칸(0~2)
     private readonly Dictionary<int, int> _talkMotion = [];    // 인물 번호 -> 뽑아 둔 Obs 1330 모션
 
-    /// <summary>통신 페이지가 보는 항성계 — 고른 행성이 속한 성계, 없으면 첫 성계(항행 배경과 같은 규칙).</summary>
-    private ChapterFile.StarSystem? TalkSystem()
-    {
-        if (_mosesChp is not { } chp) return null;
-        return chp.Systems.FirstOrDefault(s => s.Planets.Contains(_mosesPlanet)) ?? chp.Systems.FirstOrDefault();
-    }
+    /// <summary>
+    /// 통신 페이지가 보는 항성계 — <b>지금 항행 항성계</b>(<c>+0x2e98</c>, 단계 1 에서 옮긴 것 포함). 배경·성도 점·인물 모두 이 성계다
+    /// (<c>0x100fc2d0</c>, 감사5 T1). 전에는 고른 행성의 성계라 둘째 성계 사람이 첫 성계 배경 위를 걸었다.
+    /// </summary>
+    private ChapterFile.StarSystem? TalkSystem() => MosesSystem();
 
     /// <summary>이 항성계의 성도 점들 — 사람은 이 점들 사이를 오간다. 원본은 <b>둘 이상</b>일 때만 페이지를 연다.</summary>
     private List<ChapterFile.Landmark> TalkMarks()
@@ -119,24 +118,40 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MosesOrigin();
         int x = bx - ox, y = by - oy;
 
-        if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
+        // 말풍선은 모달 — 떠 있으면 어디를 누르든 접히며 Snd 95(0x1003cce0, ba16-talk-hud T0, 감사5 T3).
+        if (_talkPick >= 0)
+        {
+            _talkPick = -1;
+            Play(95);
+            return true;
+        }
+        if (MosesBackAt(bx, by)) { Play(MosesClickSound); MosesGoBack(); return true; }
 
         var people = TalkPeople();
         for (int i = 0; i < people.Count && i < 8; i++)
         {
             var (px, py) = TalkSpot(people[i]);
             if (Math.Abs(x - px) > 20 || Math.Abs(y - py) > 24) continue;
-            if (_talkPick == i) NextTalkSlot(people[i]);                  // 같은 사람을 또 누르면 다음 대사
+            // 누를 때마다 지금 칸을 보여 주고 다음 칸으로 넘긴다(0x100ff273~).
+            var words = TalkWords(people[i]);
+            _talkShowSlot = words.Count > 0 ? _talkSlot.GetValueOrDefault(people[i].No) % words.Count : 0;
+            NextTalkSlot(people[i]);
             _talkPick = i;
             Play(MosesClickSound);
             return true;
         }
-        _talkPick = -1;
         return true;
     }
 
+    /// <summary>지금 말풍선이 보여 주는 대사 칸.</summary>
+    private int _talkShowSlot;
+
     private void DrawMosesTalk(int ox, int oy, int tick)
     {
+        // 지금 성계의 성도 점(행성 성도 그림, 예 Chp 10 = Obs 0547 모션 6~14)을 켜 둔다 — 사람은 그 사이를 걷는다(0x100fc30c~0x100fc345, 감사5 N9).
+        foreach (var mark in TalkMarks())
+            DrawUi(mark.Obs, mark.Motion, 0, ox + mark.X, oy + mark.Y, UiBlend.Alpha);
+
         var people = TalkPeople();
         if (people.Count == 0)
         {
@@ -156,8 +171,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_talkPick >= 0 && _talkPick < people.Count) DrawTalkBubble(ox, oy, tick, people[_talkPick]);
 
-        if (!DrawUi(MosesBackObs, 0, tick, ox + 46, oy + 244, UiBlend.Alpha))
-            DrawText("BACK", ox + 46, oy + 248, White);
+        DrawMosesBack(ox, oy, tick);
     }
 
     /// <summary>말풍선 — 초상화와 대사 한 줄(인물 레코드의 대사 셋을 돌아가며).</summary>
@@ -165,7 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var words = TalkWords(person);
         string line = TalkTableFor() is { } table && words.Count > 0
-            ? table[words[_talkSlot.GetValueOrDefault(person.No) % words.Count]] : "";
+            ? table[words[_talkShowSlot % words.Count]] : "";
         var (px, py) = TalkSpot(person);
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
         int y = Math.Clamp(oy + py - TalkBubbleH - 30, oy + 4, oy + MosesH - TalkBubbleH - 4);

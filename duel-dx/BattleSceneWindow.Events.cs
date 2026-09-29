@@ -55,6 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _runningEvent = -1;
         _eventPc = 0;
         _eventWaitUntil = 0;
+        _eventRoutine = null;
         _talkSkip = false;
         _turnNo = 0;
         _eventFoundA = _eventFoundB = null;
@@ -79,6 +80,15 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _runningEvent = -1;
     private int _eventPc;
     private double _eventWaitUntil;
+
+    /// <summary>
+    /// 사건 줄이 건 기술(207 보스 필살기 · 909 폭주) — 끝날 때까지 사건이 <b>그 줄에 머문다</b>. 원본 207(<c>0x10052400</c>)은 단계 0 기술 →
+    /// 1 모두 설 때까지(<c>0x1006e320</c>) → 2 쓰러짐(<c>0x1004e6d0</c>) → 3 물체(<c>0x1004e850</c>)를 다 거쳐야 <c>0x10056380</c> 이 줄을 넘긴다.
+    /// 전에는 <c>_routine</c> 뒤에 붙였는데 사건 중엔 <c>_routine</c> 이 안 돌아(UpdateTurn 의 EventsBusy) 필살기가 사건이 <b>끝난 뒤</b>에 나갔고,
+    /// 뒤에 결과(11)·필드(6) 줄이 있으면 아예 안 나갔다(감사5 B1·B4). <see cref="StepEvent"/> 가 틀마다 한 번 돌린다.
+    /// </summary>
+    private IEnumerator<bool>? _eventRoutine;
+    private double _eventRoutineStepAt = -1;
 
     /// <summary>행동 500 이 튼 소리를 푸는 중인가 — 다 풀릴 때까지 이벤트를 멈춘다(원본은 소리 개체의 +0x58 이 0 이 될 때까지 기다린다).</summary>
     private volatile bool _eventSoundLoading;
@@ -171,6 +181,16 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         while (_runningEvent >= 0)
         {
+            if (_eventRoutine != null)
+            {
+                // 사건이 건 기술이 끝날 때까지 이 줄에 머문다 — 한 틀에 한 번만 돌린다(StepEvent 는 한 틀에 여러 번 불릴 수 있다).
+                if (_eventRoutineStepAt == _lastTime) return;
+                _eventRoutineStepAt = _lastTime;
+                if (_eventRoutine.MoveNext()) return;
+                _eventRoutine = null;
+                _eventCheckDue |= (1 << 2) | (1 << 1);                  // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
+                if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+            }
             if (_talk != null) return;                                  // 대사가 떠 있으면 기다린다
             if (_eventSoundSeconds > 0) { _eventWaitUntil = _lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
             if (_eventSoundLoading && !_talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
@@ -457,6 +477,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RunEventAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        if (Trace && a.Code is 6 or 11 or 207 or 706 or 707 or 708 or 909)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"event action: 사건 {_runningEvent} 줄 {_eventPc - 1} 행동 {a.Code} [{string.Join(",", a.Args)}]" + Environment.NewLine);
         switch (a.Code)
         {
             case 11:                                     // 승패 — 결과 = 인자0 + 1: 0 승리(배너), 3 패배(Game Over 배너), 1 은 배너·음악 없이 조용히 끝(호위 실패)
@@ -579,7 +602,13 @@ internal sealed unsafe partial class BattleSceneWindow
             case 207:                                    // 보스 필살기 — 인자2 가 `.att` work 번호(0x10052400)
             {
                 var caster = EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField);
-                if (caster is null || Work(A(2)) is not { } boss) break;
+                if (caster is null || Work(A(2)) is not { } boss)
+                {
+                    if (Trace)
+                        System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                            $"207: 시전자 {A(0)} 없음(살아 판 위) 또는 work {A(2)} 없음 — 안 쏜다" + Environment.NewLine);
+                    break;
+                }
                 int casterIndex = Array.IndexOf(_units, caster);
                 // 겨눌 곳은 <b>제자리 사거리 안</b>에서 AI 칸 점수(+0x3e 기준, 거리 가중)로 고른다(0x1005d860). 못 찾으면 안 쏜다 — fg-21 ⑮.
                 (int Col, int Row, int Score)? aim = null;
@@ -590,14 +619,20 @@ internal sealed unsafe partial class BattleSceneWindow
                         if (!InWorkRange(boss, caster.Col, caster.Row, ax, ay, caster)) continue;
                         var targets = WorkTargets(boss, caster, ax, ay);
                         if (targets.Count == 0) continue;
-                        int score = CDiv(TargetValue(caster, boss, targets) * num74 * 10, 4 + Math.Abs(ax - caster.Col) + Math.Abs(ay - caster.Row));
+                        int score = CDiv(TargetValue(caster, boss, targets, plain: true) * num74 * 10, 4 + Math.Abs(ax - caster.Col) + Math.Abs(ay - caster.Row));
                         if (aim == null || score > aim.Value.Score) aim = (ax, ay, score);
                     }
-                if (aim is not { } mark) break;
+                if (aim is not { } mark)
+                {
+                    if (Trace)
+                        System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                            $"207: 시전 {caster.ChrCode}(편 {caster.Side}, {caster.Col},{caster.Row}) work {boss.Id} 사거리 {reach} 안에 대상 없음 — 안 쏜다" + Environment.NewLine);
+                    break;
+                }
                 var aimedUnit = LiveUnitAt(mark.Col, mark.Row);
                 int markIndex = boss.TargetMode is 1 or 4 or 5 && aimedUnit != null ? Array.IndexOf(_units, aimedUnit) : -1;
-                _routine = AfterRunning(_routine, UseWorkRoutine(casterIndex, boss, markIndex, mark.Col, mark.Row, []));
-                _eventWaitUntil = _lastTime + 1.2;
+                // 사건 안에서 끝까지 돌린다(B1) — 공짜 필살기(0x10052651 → 0x10075ff0 인자5 = 1 → +0xa4, B2), 지금 차례 유닛은 HP 1 로 버틴다(0x1004e757, B3).
+                _eventRoutine = EventWorkRoutine(caster, UseWorkRoutine(casterIndex, boss, markIndex, mark.Col, mark.Row, [], eventFinisher: true));
                 break;
             }
             case 708:                                    // 소속 편 바꾸기 — 적이 아군이 되거나 그 반대(0x100553a0)
@@ -615,8 +650,8 @@ internal sealed unsafe partial class BattleSceneWindow
             {                                            // work 1582(어빌리티 160 「폭주」, 모션 48)를 쓰게 하고 화면을 물들인다.
                 var caster = _units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
                 if (caster is null || Work(1582) is not { } burst) break;
-                _routine = AfterRunning(_routine, BerserkSwapRoutine(caster, burst));
-                _eventWaitUntil = _lastTime + 1.2;
+                // 교대가 끝나야 다음 줄 — 0231 의 207 [Chr 37]·706 [37] 이 새로 선 37 을 찾는다(B4).
+                _eventRoutine = BerserkSwapRoutine(caster, burst);
                 break;
             }
             case 907:                                    // 물체 여닫기(0x10055a50) — 인자0 배치 번호, 인자1 0 닫기 · 그 밖 열기
@@ -665,21 +700,17 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>
-    /// 사건이 거는 기술(207 보스 필살기 · 909 폭주)은 <b>돌던 루틴을 끝까지 돌린 뒤</b> 잇는다. 사건 조건은 루틴 도중에도 보므로
-    /// (301 「가 나를 때렸다」는 적의 공격 루틴 한가운데서 참이 된다) 전에는 <c>_routine</c> 을 덮어써 적의 AI 루틴이 버려졌고,
-    /// 그 끝의 <c>Rest</c> 가 안 불려 차례가 영영 안 넘어갔다(Btl 0143 사건 6 — 디에네의 나인 크루세이더, 사용자 보고).
-    /// </summary>
-    /// <summary>
     /// 행동 909 — 폭주(work 1582) 뒤 베라모드(Chr 223)를 지우고 <b>같은 칸에 Chr 37 을 편 3(동맹 AI)으로</b> 새로 세운다
     /// (0x10055cb1~0x10055d37). 전에는 기술만 썼다(fg-21 ⑫). 이미 37 이면 기술만.
     /// </summary>
     private IEnumerator<bool> BerserkSwapRoutine(UnitState caster, WorkData burst)
     {
-        var use = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, []);
+        // 909 도 공짜다 — 0x10055c3a 가 0x10075ff0(0x62e, x, y, 1, 1, 1, …) 로 +0xa0 = +0xa4 = 1(감사5 B2 보충).
+        var use = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, [], eventFinisher: true);
         while (use.MoveNext()) yield return true;
         if (caster.ChrCode != 223 || _db?.Character(37) is not { } c) yield break;
         int col = caster.Col, row = caster.Row;
-        caster.Alive = false;
+        MarkDead(caster);                        // 교대도 승계를 부른다(0x10055cb1 → 0x100716c0)
         caster.OnField = false;
         var born = new UnitState(new DemoUnit(37, col, row, 3, 0, caster.Facing)) { Data = c with { CumExp = c.Level * 100 } };
         born.MaxHp = born.Hp = ScaleMaxHp(born, Math.Max(1, _db.MaxHp(born.Data!)));
@@ -696,10 +727,23 @@ internal sealed unsafe partial class BattleSceneWindow
                 $"909: 223 → 37 편 3 at ({col},{row}), 그림 {(_sprites.ContainsKey(37) ? "있음" : "없음")}" + Environment.NewLine);
     }
 
-    private static IEnumerator<bool> AfterRunning(IEnumerator<bool>? running, IEnumerator<bool> next)
+    /// <summary>
+    /// 사건이 건 기술 하나 — 시전자가 이미 쓰러졌으면 그만(B4), 아니면 끝까지 돌리고 판의 모든 유닛이 설 때까지(<c>0x1006e320</c>, 단계 1) 기다린다.
+    /// 돌던 <c>_routine</c> 은 건드리지 않는다 — 사건 조건은 루틴 도중에도 보므로(301 「가 나를 때렸다」는 적의 공격 루틴 한가운데서 참이 된다)
+    /// 예전처럼 덮어쓰면 AI 루틴 끝의 <c>Rest</c> 가 안 불려 차례가 영영 안 넘어갔다(Btl 0143 사건 6). 사건이 끝나면 그대로 이어 돈다.
+    /// </summary>
+    private IEnumerator<bool> EventWorkRoutine(UnitState caster, IEnumerator<bool> use)
     {
-        if (running != null)
-            while (running.MoveNext()) yield return true;
-        while (next.MoveNext()) yield return true;
+        if (!caster.Alive || !caster.OnField) yield break;
+        void Log(string what)
+        {
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"event finisher {what}: 사건 {_runningEvent} 줄 {_eventPc - 1} 시전 {caster.ChrCode} TP {caster.Tp} SOUL {caster.Soul} 턴 {_turnNo}" + Environment.NewLine);
+        }
+        Log("시작");
+        while (use.MoveNext()) yield return true;
+        for (double end = _lastTime + 5; _lastTime < end && _units.Any(u => u.Alive && u.OnField && u.IsBusy);) yield return true;
+        Log("끝");
     }
 }

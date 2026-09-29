@@ -153,10 +153,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private const double SafeDanger = 0.70;
 
     /// <summary>work <c>+0x3e</c> 기준으로 그 대상들이 얼마나 좋은지 — 짝수면 최댓값, 홀수면 1000000 − 최솟값.</summary>
-    private int TargetValue(UnitState user, WorkData w, List<int> targets)
+    /// <param name="plain">난이도 겨냥(SmartAi)을 끄고 원본 칸 값만 — 사건 207 필살기의 겨냥은 원본 그대로(0x1005d860, 감사5 B6).</param>
+    private int TargetValue(UnitState user, WorkData w, List<int> targets, bool plain = false)
     {
         if (targets.Count == 0) return 0;
-        if (w.IsDamage && SmartAi(user)) return SmartValue(user, w, targets);   // 어려움 이상: 가장 많이 깎는 곳(Difficulty.cs)
+        if (!plain && w.IsDamage && SmartAi(user)) return SmartValue(user, w, targets);   // 어려움 이상: 가장 많이 깎는 곳(Difficulty.cs)
         int criterion = w.AiCriterion >> 1;
         bool wantMax = (w.AiCriterion & 1) == 0;
         int best = wantMax ? int.MinValue : int.MaxValue;
@@ -397,6 +398,9 @@ internal sealed unsafe partial class BattleSceneWindow
             CommitMove(u);                                   // 걸은 비용을 빼야 남은 TP 로 다시 생각할 수 있다
             if (u.Tp <= 0) break;
             for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
+            // 다시 생각하기 전에 판의 모든 유닛이 설 때까지 — 상태 15 갈래 1 이 0x1006e320(모든 유닛 +0x80 == 0)을 기다린 뒤 GETNEXT(0x1006a241).
+            // 이동만 한 군단 대장의 부하가 진형 자리로 다 걸어간 뒤에 다음 공격을 해야 부하가 모두 낀다(감사5 L-A). 멈춤 대비 5초 상한.
+            for (double end = _lastTime + 5; _lastTime < end && _units.Any(x => x.Alive && x.OnField && x.IsBusy);) yield return true;
         }
         if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
     }

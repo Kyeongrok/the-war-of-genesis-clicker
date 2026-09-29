@@ -315,9 +315,22 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>상태이상이 매 틱 깎아 쓰러뜨린 인물 — 동작 없이 바로 눕힌다.</summary>
     private void KillUnit(UnitState u)
     {
-        u.Alive = false;
+        MarkDead(u);
         Play(SoundDeath);
         CheckOutcome();
+    }
+
+    /// <summary>
+    /// 쓰러뜨리기의 공통 끝 — 판에서 빼고, 군단 대장이면 첫 부하를 새 대장으로(승계 <c>0x100716c0</c>). 원본은 CHRDIE(<c>0x1006a9b8</c>·<c>0x1006ab5f</c>)·
+    /// 207(<c>0x1004e845</c>)·909(<c>0x10055cb1</c>) 어디서 죽든 승계한다 — 전에는 기술 죽음에서만 해서 틱·반사·706·포탑·폭발로 쓰러진 대장의
+    /// 부하가 영영 안 움직였다(감사5 L-B).
+    /// </summary>
+    private void MarkDead(UnitState u)
+    {
+        if (!u.Alive) return;
+        u.Alive = false;
+        int index = Array.IndexOf(_units, u);
+        if (index >= 0) PromoteFollower(index);
     }
 
     /// <summary>피해 보정 — 때리는 쪽 13(공격력), 맞는 쪽 14(방어력)·7(피해 감소).</summary>
