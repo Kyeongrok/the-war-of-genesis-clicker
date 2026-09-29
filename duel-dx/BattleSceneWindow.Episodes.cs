@@ -12,7 +12,8 @@ namespace DuelDx;
 /// <item>배경은 <c>Bgr 0113</c> 한 장 — 로고와 「Episode 4 / 영혼의 검」·「Episode 5 / 뫼비우스의 우주」 머리글이 그림에 들어 있다.</item>
 /// <item>목록은 <b>(75,174) 에 2열 6행, 칸 240×46</b> — 칸 왼위 = <c>(80 + 240×(i%2), 179 + 46×(i/2))</c>.
 /// <b>짝수 번호가 왼쪽(Episode 4 줄기), 홀수가 오른쪽(Episode 5 줄기)</b>이다.</item>
-/// <item>이름판은 <c>Obs 0979</c> 한 장에 다 들어 있다 — 모션은 짝수 <c>i+1</c>, 홀수 <c>i+30</c>, 고른 표시 <c>[ ]</c> 는 모션 4.
+/// <item>이름판은 <c>Obs 0979</c> 한 장에 다 들어 있다 — 모션은 짝수 <c>i+1</c>, 홀수 <c>i+30</c>, 고른 표시 <c>[ ]</c> 는 모션 0,
+/// 6줄이 넘으면 오른쪽 스크롤 막대(모션 61~66).
 /// 이름판 가운데 x = 왼쪽 160 · 오른쪽 480, 윗변 y = 186 + 46×줄. <b>TXR·글꼴은 한 번도 안 쓴다.</b></item>
 /// <item><b>두 번 눌러야 시작</b>한다 — 첫 누름은 고른 표시, 그 줄을 다시 누르면 간다. 마우스 올림 반응도 효과음도 없다.</item>
 /// <item>음악은 <c>BGM 3391</c> 반복. ESC 는 시스템 메뉴(EXIT GAME 은 타이틀로 돌아간다).</item>
@@ -85,18 +86,62 @@ internal sealed unsafe partial class BattleSceneWindow
         return _episodes = list;
     }
 
+    /// <summary>
+    /// 목록의 맨 윗줄(스크롤) — 원본 목록 창 <c>0x100482e0(…, 2열, 6행, 240, 46, …, 스크롤 갈래 3)</c> 은 6행이 넘으면 스크롤 막대
+    /// (id 0x2718)로 넘긴다. 전에는 이것이 없어 7번째 줄(에피소드 12 우주의 슈미터)부터 그리지도 누르지도 못해 본편 후반이 막혔다(감사 F1).
+    /// </summary>
+    private int _episodeTop;
+
+    /// <summary>스크롤 막대 — 화면 (567,174), 높이 286. 위 화살표·아래 화살표는 <c>Obs 0979</c> 장 2·3(19×45), 손잡이는 장 0·1(분석-UI 2.5).</summary>
+    private const int EpisodeBarX = 567, EpisodeBarY = 174, EpisodeBarH = 286, EpisodeArrowW = 19, EpisodeArrowH = 45;
+
+    /// <summary>
+    /// 목록 줄 수 — 원본 <c>0x10106fe0</c> 은 <b>열리는 가장 큰 번호 + 1</b> 만큼 칸을 넣는다(<c>0x1010716e</c>~<c>0x10107290</c>).
+    /// 2열이니 줄 수는 그 절반(올림).
+    /// </summary>
+    private int EpisodeRowCount()
+    {
+        int visible = Episodes().Where(EpisodeOpen).Select(e => e.No + 1).DefaultIfEmpty(0).Max();
+        return (visible + 1) / 2;
+    }
+
+    private void ScrollEpisodes(int delta) =>
+        _episodeTop = Math.Clamp(_episodeTop + delta, 0, Math.Max(0, EpisodeRowCount() - EpisodeRows));
+
     private void OpenEpisodes()
     {
         _episodesOpen = true;
         _titleOpen = false;
+        _recordsOpen = false;
         _episodePick = -1;
+        _episodeTop = 0;
         ShowMosesBackground(EpisodeBackground);
         StopMusic();
         PlayMusicFile(EpisodeBgm, loop: true);
     }
 
-    /// <summary>그 에피소드 줄이 놓이는 칸(왼위).</summary>
-    private static (int X, int Y) EpisodeCell(int no) => (80 + EpisodeCellW * (no % 2), 179 + EpisodeCellH * (no / 2));
+    /// <summary>
+    /// DUELDX_EPISODES=1 이면 곧장 연대표를 연다(화면 밖 시험용). DUELDX_FLAGS 로 깃발을 세워 뒤 에피소드를 열고,
+    /// DUELDX_EPISODETOP=&lt;줄&gt; 이면 그만큼 내려 둔다.
+    /// </summary>
+    private void OpenEpisodesIfAsked()
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") != "1") return;
+        foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < _flags.Length)
+                _flags[flag] = (byte)val;
+        if (Environment.GetEnvironmentVariable("DUELDX_FLAGS") == "all")
+            foreach (var e in Episodes()) foreach (int f in e.Locks) if ((uint)f < _flags.Length) _flags[f] = 1;
+        if (Cols != TitleBoardCols || Rows != TitleBoardRows) { ResizeBoard(TitleBoardCols, TitleBoardRows); _battleLoaded = false; }
+        OpenEpisodes();
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_EPISODETOP"), out int top)) ScrollEpisodes(top);
+    }
+
+    /// <summary>그 에피소드 줄이 놓이는 칸(왼위) — 스크롤한 만큼 올린다.</summary>
+    private (int X, int Y) EpisodeCell(int no) => (80 + EpisodeCellW * (no % 2), 179 + EpisodeCellH * (no / 2 - _episodeTop));
+
+    /// <summary>그 줄이 지금 보이는 6행 안에 있나.</summary>
+    private bool EpisodeRowShown(int no) => no / 2 >= _episodeTop && no / 2 < _episodeTop + EpisodeRows;
 
     private int EpisodeAt(int bx, int by)
     {
@@ -105,11 +150,44 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < list.Count; i++)
         {
             if (!EpisodeOpen(list[i]) || _episodesPicked.Contains(list[i].No)) continue;   // 고른 줄은 못 누른다
+            if (!EpisodeRowShown(list[i].No)) continue;
             var (x, y) = EpisodeCell(list[i].No);
-            if (list[i].No / 2 >= EpisodeRows) continue;
             if (bx >= ox + x && bx < ox + x + EpisodeCellW && by >= oy + y && by < oy + y + EpisodeCellH) return i;
         }
         return -1;
+    }
+
+    /// <summary>
+    /// 스크롤 막대 누름 — 위·아래 화살표는 한 줄, 손잡이 위·아래 빈 곳은 한 쪽(6줄)씩(흔한 목록 막대 동작, 원본 갈래 3 의 세부는 가설).
+    /// 손잡이 끌기와 마우스 휠은 넣지 않았다(원본 확인 안 함). 막대를 눌렀으면 true.
+    /// </summary>
+    private bool OnEpisodeBarClick(int bx, int by)
+    {
+        int rows = EpisodeRowCount();
+        if (rows <= EpisodeRows) return false;
+        var (ox, oy) = MosesOrigin();
+        int x = bx - ox - EpisodeBarX, y = by - oy - EpisodeBarY;
+        // 화살표 그림은 장 자리만큼 비껴 찍히므로 누름 칸도 그림 칸으로 본다(그림이 없으면 19×45).
+        bool Hit(int motion, int top) => UiFor(EpisodeObs)?.FrameAt(motion, 0) is { W: > 0 } f
+            ? x >= f.X && x < f.X + f.W && y >= top + f.Y && y < top + f.Y + f.H
+            : x >= 0 && x < EpisodeArrowW && y >= top && y < top + EpisodeArrowH;
+        if (Hit(61, 0)) { ScrollEpisodes(-1); return true; }
+        if (Hit(63, EpisodeBarH - EpisodeArrowH)) { ScrollEpisodes(1); return true; }
+        if (x < 0 || x >= EpisodeArrowW || y < 0 || y >= EpisodeBarH) return false;
+        // 길(화살표 사이)을 누르면 손잡이 그림 가운데보다 위면 한 쪽 위로, 아래면 한 쪽 아래로.
+        var (thumbY, thumbH) = EpisodeThumb(rows);
+        int thumbMid = thumbY + (UiFor(EpisodeObs)?.FrameAt(65, 0)?.Y ?? 0) + thumbH / 2;
+        ScrollEpisodes(y < thumbMid ? -EpisodeRows : EpisodeRows);
+        return true;
+    }
+
+    /// <summary>손잡이 자리(막대 윗변 기준 y)와 높이 — 화살표 둘 사이 길에서 맨 윗줄 비율만큼 내려 놓는다.</summary>
+    private (int Y, int H) EpisodeThumb(int rows)
+    {
+        int thumbH = UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
+        int track = EpisodeBarH - 2 * EpisodeArrowH - thumbH;
+        int span = Math.Max(1, rows - EpisodeRows);
+        return (EpisodeArrowH + track * Math.Clamp(_episodeTop, 0, span) / span, thumbH);
     }
 
     /// <summary>연대표가 떠 있으면 클릭을 처리하고 true. 원본처럼 <b>두 번 눌러야</b> 그 에피소드로 간다.</summary>
@@ -117,6 +195,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (!_episodesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
+        if (OnEpisodeBarClick(bx, by)) return true;
 
         int index = EpisodeAt(bx, by);
         if (index < 0) return true;
@@ -126,9 +205,11 @@ internal sealed unsafe partial class BattleSceneWindow
         _episodesPicked.Add(entry.No);
         _episodesOpen = false;
         _chapterDone = false;
+        // 연대표가 에피소드를 고르면 챕터 상태를 버린다(0x101066a0~) — 새 챕터의 스크립트 변수(0x101bfeac)는 0 에서 시작한다(감사 F10).
+        Array.Clear(_chapterVars);
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
-        // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인물은 챕터 스크립트(801)가 새로 넣는다.
-        SwitchParty(entry.Party);           // 다른 파티면 지금 파티를 은행에 넣고 그 파티를 꺼낸다
+        // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인원은 챕터 스크립트(801)가 넣는다 — 인물 자료는 명부 하나라 다른 파티에서 겪은 것이 그대로다.
+        SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
         OpenMoses(chapter);
@@ -151,8 +232,8 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < list.Count; i++)
         {
             var entry = list[i];
-            int row = entry.No / 2;
-            if (row >= EpisodeRows) break;
+            if (!EpisodeRowShown(entry.No)) continue;
+            int row = entry.No / 2 - _episodeTop;           // 보이는 6행 안의 줄
             // 원본은 조건을 통과한 줄까지만 보이고, 못 여는 줄은 이름 없이 빈 채로 둔다.
             if (!EpisodeOpen(entry)) continue;
             // 이름판 — 짝수 번호는 모션 i+1, 홀수는 i+30. 가운데 x 는 왼쪽 160 · 오른쪽 480.
@@ -163,14 +244,24 @@ internal sealed unsafe partial class BattleSceneWindow
             bool picked = _episodesPicked.Contains(entry.No);
             if (!DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? UiBlend.Dim : UiBlend.Alpha))
                 DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
-            // 고른 표시 — 이름 양 끝에 꺾쇠 한 쌍. 모션 4 는 표시가 아니라 <b>다른 장 이름판</b>이라 예전에는 이름이 겹쳐 찍혔다.
-            // Obs 0979 의 장 0~3 만 자리가 (0,0) 인 작은 그림이고, 그중 15틱짜리 모션 62·64 가 깜빡이는 꺾쇠다.
-            if (i == _episodePick && !picked && UiFor(EpisodeObs)?.FrameAt(motion, tick) is { } plate)
+            // 고른 표시 [ ] — 원본은 줄마다 0x10043810(x, 65, Obs 0979, 모션 0) 이고 x 는 짝수 237(0x101071de)·홀수 315(0x10107213).
+            // 모션 0 = 장 4(163×29, 자리 (−241,−59)) → 화면 (76 또는 394, 185 + 46×줄). 줄 +0x58 이 설 때만 그린다(0x10043040).
+            // (전에는 스크롤 화살표 그림인 모션 62·64 를 이름판 양옆에 찍었다 — 감사 F4.)
+            if (i == _episodePick && !picked)
             {
-                int mid = cy + plate.Y + plate.H / 2;
-                DrawUi(EpisodeObs, 62, tick, cx + plate.X - 12, mid - 22, UiBlend.Alpha);
-                DrawUi(EpisodeObs, 64, tick, cx + plate.X + plate.W + 12, mid - 22, UiBlend.Alpha);
+                var (x, y) = EpisodeCell(entry.No);
+                DrawUi(EpisodeObs, 0, tick, ox + x + (entry.No % 2 == 0 ? 237 : 315), oy + y + 65, UiBlend.Alpha);
             }
+        }
+
+        // 스크롤 막대 — 6줄이 넘을 때만(원본 목록 창 갈래 3). 위 화살표 모션 61 @ (567,174), 아래 63 @ (567,415), 손잡이 65.
+        int rows = EpisodeRowCount();
+        if (rows > EpisodeRows)
+        {
+            DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, UiBlend.Alpha);
+            DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, UiBlend.Alpha);
+            var (thumbY, _) = EpisodeThumb(rows);
+            DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, UiBlend.Alpha);
         }
 
         DrawSystem();

@@ -28,6 +28,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawHud()
     {
         if (_mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
+        // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
+        if (EventsBusy || _deployOpen) return;
 
         int x = _camX + ViewWidth - HudW - 10, y = _camY + GridTop + 10;
         DrawGameFrame(x, y, HudW, HudH);
@@ -48,12 +50,15 @@ internal sealed unsafe partial class BattleSceneWindow
         Center(_scene.Title, 70, 3, HudYellow);
         DrawUi(HudObs, HudPositionMotion, (int)(_lastTime * TicksPerSecond), x + 8, y + 30, UiBlend.Alpha);
 
-        // 커서가 놓인 칸과 그 높이
-        int col = Math.Clamp(_mouse.X / TileW, 0, Cols - 1);
-        int row = Math.Clamp(RowAt(_mouse.X, _mouse.Y), 0, Rows - 1);
-        Center($"{map.HeightAt(col, row)}", 40, 24, White);
-        Center($"{col}", 64, 38, White);
-        Center($"{row}", 20, 44, White);
+        // 커서가 놓인 칸과 그 높이 — 판 밖(칸 −1)이면 원본은 숫자를 지운다(0x100e4250).
+        int col = _mouse.X >= 0 ? _mouse.X / TileW : -1;
+        int row = RowAt(_mouse.X, _mouse.Y);
+        if ((uint)col < Cols && (uint)row < Rows)
+        {
+            Center($"{map.HeightAt(col, row)}", 40, 24, White);
+            Center($"{col}", 64, 38, White);
+            Center($"{row}", 20, 44, White);
+        }
 
         // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
         Right($"{_shopMoney}GP", 134, 20);

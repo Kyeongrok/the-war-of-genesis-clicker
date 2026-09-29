@@ -39,9 +39,12 @@ internal sealed unsafe partial class BattleSceneWindow
         (SystemItem.Exit, 4, "EXIT GAME"),
     ];
 
-    /// <summary>지금 화면의 시스템 메뉴 항목 — 모세스에서는 MISSION·RESTART 가 없다(분석-모세스 13절).</summary>
+    /// <summary>
+    /// 지금 화면의 시스템 메뉴 항목 — 모세스(분석-모세스 13절)와 연대표에서는 MISSION·RESTART 가 없다. 연대표 ESC(<c>0x10106e50</c>)도
+    /// 모세스와 같은 <c>0x10102ba0</c> 로 LOAD·SAVE·VOLUME·EXIT GAME 넷만 만든다(<c>0x10102c3c</c>~<c>0x10102d0f</c>, 감사 F2).
+    /// </summary>
     private (SystemItem Item, int Motion, string Label)[] MenuItems =>
-        _mosesOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+        _mosesOpen || _episodesOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
 
     private bool _systemMenu;
     private bool _missionWindow, _volumeWindow;
@@ -95,6 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow
         CloseField();
         _mosesOpen = false;
         _mosesPage = -1;
+        _episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
         _battleLoaded = false;
         ResizeBoard(TitleBoardCols, TitleBoardRows);
         OpenTitle();
@@ -506,7 +510,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0,
                                     int[]? EpisodesPicked = null,
-                                    SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false);
+                                    SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false,
+                                    int[]? NavStart = null);
 
     private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
@@ -592,22 +597,28 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
                 _placesUsed.Add((chapter, place));
-        // 전투에 서 있던 아군도 파티에 넣는다 — 이것이 없으면 배치 칸 고르기가 그 인물을 못 본다.
+        // 인물 명부(원본 0x101b6884 — 파티와 무관한 전 인물)를 세이브 값으로 새로 채운다. 전에 하던 판의 인물이 남지 않게 비우고 시작한다.
+        _party.Clear();
+        // 전투에 서 있던 아군도 명부에 넣는다 — 이것이 없으면 배치 칸 고르기가 그 인물을 못 본다.
         // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
         foreach (var s in state.Units)
             if (s.Side == 4 && _db?.Character(s.ChrCode) is { } bc)
                 _party[s.ChrCode] = Restored(bc, s, regrow: true);
+        // 전투 밖 인물 — 이제는 명부 전체(어느 파티에 있든, 파티에서 빠졌든)가 여기 실린다. 옛 세이브는 지금 파티 사람만 적혀 있다.
         foreach (var s in state.Party ?? [])
             if (_db?.Character(s.ChrCode) is { } pc)
                 _party[s.ChrCode] = Restored(pc, s, regrow: true);
         ReturnStrayMembers();                // 다른 파티 사람은 제 파티로(파티를 안 가리던 옛 판의 세이브)
+        MergeLegacyBankCopies();             // 파티마다 인물 사본을 들던 옛 세이브(은행 Units)를 명부 하나로 합친다
         foreach (int chr in _members)
             if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
+        // 항행 시작(911) — 옛 세이브는 없다(null). 모세스 세이브는 OpenMoses(챕터) 가 지우므로 거기서 한 번 더 넣는다(감사 R2).
+        _navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
     }
 
     /// <summary>
     /// 다른 파티 사람이 지금 파티에 끼어 있으면 제 파티(은행)로 돌려보낸다 — 위 버그로 적힌 세이브를 고친다.
-    /// 끼어 있던 동안 더 자랐을 수 있으니 누적 경험치가 큰 쪽 자료를 남긴다.
+    /// 끼어 있던 동안 더 자랐을 수 있으니 누적 경험치가 큰 쪽 자료를 명부에 남긴다.
     /// </summary>
     private void ReturnStrayMembers()
     {
@@ -615,8 +626,8 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int chr in bank.Members.Where(_members.Contains).ToList())
             {
                 _members.Remove(chr);
-                if (_party.Remove(chr, out var here) && (!bank.Party.TryGetValue(chr, out var there) || here.CumExp > there.CumExp))
-                    bank.Party[chr] = here;
+                if (bank.Party.Remove(chr, out var there) && (!_party.TryGetValue(chr, out var here) || there.CumExp > here.CumExp))
+                    _party[chr] = there;
             }
     }
 
@@ -712,7 +723,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 필드·연대표에서 저장해도 챕터로 돌아가게 적는다 — 그때 전투 번호로 돌아가면 엉뚱한 옛 전투가 열린다.
                 InChapterScene && _mosesChp != null, InChapterScene ? _mosesChp?.Id ?? 0 : 0,
                 _chapterDone, _partyNo, [.. _members],
-                // 전투에 안 선 파티원(크리스티앙처럼 이번 전투에 없는 동료)의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다.
+                // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
+                // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
                           .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
                                                     p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))],
@@ -728,7 +740,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. Objects.Select((o, i) => new SaveObject(i, o.Record.No, o.Hp, o.Team, _opened.Contains(o), o.Charge, o.Charged))],
                 _eventFoundA is { } fa ? Array.IndexOf(_units, fa) : -1,
                 _eventFoundB is { } fb ? Array.IndexOf(_units, fb) : -1,
-                _objectsDue);
+                _objectsDue,
+                // 항행 시작(911) — 원본 챕터 레코드 +0x190/+0x192(0x1004e2e3/0x1004e2f4). 장면 7(연대표) 저장에는 레코드가 없다(감사 R2).
+                NavStart: !_episodesOpen && _navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -755,7 +769,8 @@ internal sealed unsafe partial class BattleSceneWindow
             Toast($"불러오지 못했습니다: {ex.Message}");
             return false;
         }
-        if (state is not { } || state.Version is < OldestSaveVersion or > SaveVersion || state.Units.Length == 0)
+        // 연대표(장면 7) 세이브는 전투판이 비어 있어도 된다 — 새 게임 직후에는 아직 전투가 없다.
+        if (state is not { } || state.Version is < OldestSaveVersion or > SaveVersion || (state.Units.Length == 0 && state.SceneKind != 7))
         {
             Toast("저장 파일을 읽을 수 없습니다");
             return false;
@@ -763,16 +778,36 @@ internal sealed unsafe partial class BattleSceneWindow
         // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다(옛 저장은 전투 번호가 없어 첫 전투로 본다).
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
-        // 모세스가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
+        // 모세스·필드·연대표가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
         bool fromMoses = _mosesOpen || FieldOpen || _episodesOpen;
         // 판을 세우기 <b>전에</b> 파티·동료를 되살린다 — 아군을 미리 안 세운 전투는 BuildUnits 가 배치 칸에
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
         _restoreVersion = state.Version;
         RestorePartyBeforeBoard(state);
+        // 연대표에서 저장한 것(머리 장면 7) — 원본은 챕터 상태를 안 싣고 불러오면 0x10007030(7, …) 로 연대표를 연다.
+        // 전에는 InMoses 만 보아서 새 게임 직후면 옛 전투(state.Battle)가, 앞 판을 했으면 그 챕터 모세스가 열렸다(감사 F6).
+        if (state.SceneKind == 7)
+        {
+            _playBase = state.PlayMs - _realTime * 1000;
+            _titleOpen = false;
+            CloseField();
+            _mosesOpen = false;
+            _mosesPage = -1;
+            _mosesChp = null;                // 챕터 상태 없음 — 연대표에서 에피소드를 고르면 새로 정한다
+            _navStart = null;
+            _outcome = "";
+            if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
+            _battleLoaded = false;           // 뒤에 남은 전투판은 버린다 — 다음 전투 세이브를 부르면 판을 새로 세운다
+            StopMusic();
+            OpenEpisodes();
+            _restoreVersion = SaveVersion;
+            Toast($"불러왔습니다 — {state.SavedAt}");
+            return true;
+        }
         // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
         if (SavedChapter(state) is > 0 and var chapterId && LoadChapterFile(chapterId) is { } savedChp) _mosesChp = savedChp;
-        if ((!_battleLoaded || battle != _scene.Id || _mosesOpen) && !StartBattle(battle, rememberParty: false)) return false;
+        if ((!_battleLoaded || battle != _scene.Id || fromMoses) && !StartBattle(battle, rememberParty: false)) return false;
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;
@@ -908,6 +943,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !_placesUsed.Contains((oc.Id, p.No)) && FlagsAllow(p.Conditions)))
                 _chapterDone = true;
             OpenMoses(loadedChp);
+            // OpenMoses(챕터) 가 항행 시작을 파일 값으로 지우므로 그 뒤에 세이브 값으로 덮는다 — 원본도 −1 복원이 파일 값 읽기(0x100f58af)
+            // 뒤에 +0x2e40/+0x2e42 를 덮는다(0x100f5994/0x100f59ab, 감사 R2).
+            _navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
             _restoreVersion = SaveVersion;
             Toast($"불러왔습니다 — {state.SavedAt}");
             return true;

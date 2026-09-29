@@ -58,6 +58,12 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
     /// </summary>
     public bool EngineJudgesWipe { get; init; }
 
+    /// <summary>
+    /// 머리 워드 7(<c>CBattle+0x3c66</c>) ≠ 0 — 군단을 쓸 수 있는 전투. 인물 레코드의 군단 칸이 1 이면 그 인물에게 배속된 군단을 쓰고
+    /// (<c>LoadBtl 0x100634f9</c>), 배치 단계의 「군단사용」 기본값도 이것이다(<c>0x100673dd~</c>, 감사3 L4).
+    /// </summary>
+    public bool LegionsAllowed { get; init; }
+
     public static BattleFile? Parse(int id, byte[]? b)
     {
         if (b == null || b.Length < 20) return null;
@@ -111,6 +117,7 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
         return new BattleFile(id, hdr[1], (ushort)hdr[4], (ushort)hdr[5], (ushort)hdr[6], hdr[8], units, objects, placement, error)
         {
             EngineJudgesWipe = hdr[9] == 1,
+            LegionsAllowed = hdr[7] != 0,
         };
     }
 

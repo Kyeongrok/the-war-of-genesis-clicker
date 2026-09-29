@@ -122,23 +122,56 @@ internal sealed unsafe partial class BattleSceneWindow
         _hwCursors.Clear();
     }
 
-    /// <summary>전투 끝 배너 — 화면을 어둡게 하고 가운데에 任務終了 / Game Over 를 띄운다.</summary>
+    /// <summary>배너가 뜨기까지 — 어둡게 한 뒤 16틱(0x1006afa0 하위 0 → 1). 입력도 그 뒤부터 받는다(하위 2).</summary>
+    private const int OutcomeBannerDelayTicks = 16, OutcomeAutoTicks = 120;
+
+    /// <summary>결과 음악 길이(초) — 모르면 −1. 배경 실이 쓴다.</summary>
+    private float _outcomeMusicSeconds = -1;
+    private double _outcomeMusicFor = -1;
+
+    /// <summary>배너가 입력을 받을 때가 됐나 — 조용한 결과는 배너가 없으니 늘 참.</summary>
+    private bool OutcomeInputReady => _outcomeQuiet || (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
+
+    /// <summary>
+    /// 배너 결과의 저절로 넘김 — 입력이 없으면 승리·패배 음악이 끝날 때까지 기다린 뒤 120틱이 넘으면 끝(0x1006afa0).
+    /// 클릭·키로 넘기기는 그대로 둔다(사용자 요청).
+    /// </summary>
+    private void UpdateOutcomeBanner()
+    {
+        if (_outcome.Length == 0 || _outcomeQuiet || _mosesOpen || FieldOpen || _episodesOpen) return;
+        if (_outcomeMusicFor != _outcomeAt)
+        {
+            _outcomeMusicFor = _outcomeAt;
+            _outcomeMusicSeconds = -1;
+            if (Muted || !_bgmOn) _outcomeMusicSeconds = 0;
+            else LoadClip(_outcome.StartsWith('승') ? 3392 : 55, pcm => Volatile.Write(ref _outcomeMusicSeconds, pcm == null ? 0 : ClipSeconds(pcm)));
+        }
+        float music = Volatile.Read(ref _outcomeMusicSeconds);
+        if (music < 0) return;
+        double since = (_lastTime - _outcomeAt) * TicksPerSecond;
+        if (since >= Math.Max(OutcomeBannerDelayTicks, music * TicksPerSecond) + OutcomeAutoTicks) LeaveFinishedBattle();
+    }
+
+    /// <summary>전투 끝 배너 — 화면을 어둡게 하고 16틱 뒤 (320,220) 에 任務終了 / Game Over 를 띄운다.</summary>
     private void DrawOutcomeBanner()
     {
         if (_outcome.Length == 0 || _outcomeQuiet) return;
         bool win = _outcome.StartsWith('승');
 
-        // 화면 전체를 절반 밝기로(원본 0x1002e8d0(2, 16))
+        // 화면 전체를 물들이기 방식 2·세기 16 으로(0x1002e8d0(2, 16)) — 채널마다 (23·c + 8·16)/31(5비트) ≈ 74% 밝기 + 검정이 조금 뜬다.
         for (int y = _camY; y < _camY + ViewHeight; y++)
             for (int x = _camX; x < _camX + ViewWidth; x++)
             {
                 int i = y * BoardWidth + x;
                 uint c = _fb[i];
-                _fb[i] = 0xFF000000 | (c >> 16 & 0xFF) / 2 << 16 | (c >> 8 & 0xFF) / 2 << 8 | (c & 0xFF) / 2;
+                uint Dim(int shift) => (uint)((int)(c >> shift & 0xFF) * 23 / 31 + 34);
+                _fb[i] = 0xFF000000 | Dim(16) << 16 | Dim(8) << 8 | Dim(0);
             }
+        if ((_lastTime - _outcomeAt) * TicksPerSecond < OutcomeBannerDelayTicks) return;
 
         // 배너는 모션 0·1·2(승리) / 10·11·12(패배) 세 조각을 겹쳐 그린다 — 각 모션은 컷 하나(길이 0)다.
-        int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2;
+        // 기준점은 640×480 의 (320, 220) — 가운데보다 20픽셀 위.
+        int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2 - 20;
         bool drawn = false;
         for (int i = 0; i < 3; i++)
             drawn |= DrawUi(BannerObs, (win ? BannerWin : BannerLose) + i, 0, cx, cy, UiBlend.Alpha);

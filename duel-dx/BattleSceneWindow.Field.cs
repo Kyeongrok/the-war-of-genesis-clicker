@@ -279,6 +279,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (FieldFile.Parse(id, files.Read("Fld", $"{id:D4}.fld")) is not { } field) return false;
             _field = field;
             _fieldGray = false;
+            _screenWaveOwner = null;   // 필드 개체 생성자 0x100ec180 이 +0x294 = 0
             _fieldTalk = TalkTable.Parse(files.Read("Tlk", $"{id:D4}.tlf"));
             _fieldFired = new int[field.Events.Count];
             _sideEvents.Clear();
@@ -323,6 +324,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _field = null;
         _fieldGray = false;
+        _screenWaveOwner = null;   // 돌아갈 챕터는 원본에서 다시 만들어진다(0x100f755e → 0x100ec0a0)
         _fieldTalk = null;
         _sideEvents.Clear();
         _fieldSlots.Clear();
@@ -517,7 +519,8 @@ internal sealed unsafe partial class BattleSceneWindow
             0 => true,                                                          // 언제나
             100 => Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
             101 => Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2)),
-            102 => _inventory.ContainsKey(A(1)) || _party.Values.Any(pc => pc.Items.Contains((ushort)A(1))),   // [파티, 아이템] 가졌나(0x100edb40)
+            // [파티, 아이템] 가졌나(0x100edb40) — 가방이나 <b>지금 파티원</b>의 장비. 명부가 하나로 합쳐졌으니 파티 밖 인물은 빼야 한다.
+            102 => _inventory.ContainsKey(A(1)) || _party.Where(p => _members.Count == 0 || _members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
             503 => MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
             505 => _mosesChp is { } chp505 && _planetVisits.Remove((chp505.Id, A(0))),   // [행성] 방문 표시 — 한 번 참, 지운다(0x100edcd0)
             // 평가기(0x100f34f0)가 모르는 조건 번호는 <b>참</b>으로 흘린다(갈래 없음 → eax = 사건 포인터 ≠ 0). 샤이닝 스타 사건 5 의 504 가 그렇다.
@@ -721,7 +724,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             case 600:
             case 601:
-            case 602: ShowFieldTalk(a.Code == 600, A(0), A(1), pose: A(3), voice: A(2)); break;   // 인자 2 = 음성, 3 = 초상화 표정(모션 2×표정+11)
+            case 602: FieldTalkCommand(a); break;            // 인자 2 = 음성, 3 = 600 표정 / 602 틀(Obs 222+값), 4 = 602 지직거림 — 창 칸은 Talk.cs(감사 3 T6·T7)
             case 603: ShowFieldTalk(true, 0, A(0), voice: A(1)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설) — 인자 1 = 음성
             case 300:                                        // 물체를 그 자리로 즉시
             {
@@ -935,6 +938,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 412:                                        // 화면 흑백 [0/1] — 회상 장면. 그리기가 (7R+2G+B)/10 회색 팔레트로 바꿔 그린다(0x100ee750 → 0x10026280, ba-14 E4)
                 _fieldGray = A(0) != 0;
+                break;
+            case 409:                                        // 화면 물결 [0/1] — [[0x101bfe1c]+0x294] = a0(0x100ee710). 필드·챕터 둘 다(audit3 R3)
+                _screenWaveOwner = A(0) != 0 ? (object?)_field ?? _mosesChp : null;
                 break;
             case 900:
                 _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
@@ -1376,6 +1382,39 @@ internal sealed unsafe partial class BattleSceneWindow
             }
     }
 
+    /// <summary>
+    /// 필드 행동 409 로 물결을 켠 필드/챕터 개체 — null 이면 꺼짐. 원본 깃발 <c>+0x294</c> 는 필드 개체 생성자 <c>0x100ec0a0</c>(<c>0x100ec180</c>)만 0 으로 되돌리고,
+    /// 그 생성자는 필드 장면(<c>0x100ebbc0</c>)과 챕터 Chp 읽기(<c>0x100f755e</c>) 둘 다에서 불린다 — 곧 새 필드·챕터를 열면 꺼진다.
+    /// 켠 주인이 지금 화면의 필드/챕터가 아니면 꺼진 것으로 본다(새 챕터를 열면 저절로 꺼짐).
+    /// </summary>
+    private object? _screenWaveOwner;
+
+    /// <summary>물결 사인표 <c>0x101bf848</c>(필드, <c>0x100eba28~0x100eba60</c>) = 챕터 <c>0x101e8220</c> — <c>ftol(sin(i·3.141592/180)·1024 + 0.5)</c>, 0 쪽 자름.</summary>
+    private static readonly int[] WaveSin = [.. Enumerable.Range(0, 360).Select(i => (int)(Math.Sin(i * 3.141592 * (1 / 180.0)) * 1024.0 + 0.5))];
+
+    /// <summary>
+    /// 화면 물결 <c>0x100eb8f0(P, T)</c> — 640×480 틀의 줄 y 를 <c>T[(4·tick + 479 − y) mod 360] &gt;&gt; 6</c> 픽셀(−16~16, 양수 = 오른쪽) 민다.
+    /// 드러난 가장자리는 밀기 전 그 줄의 픽셀이 남는다(제자리 memmove <c>0x10129140</c>). 필드는 <c>0x100ec03d</c>(창 나무 다음, 커서 앞),
+    /// 챕터는 <c>0x100f667b</c>(위상 = 챕터 장면 <c>+0x17c</c> × 4). 전투에는 없다.
+    /// </summary>
+    private void ApplyScreenWave(int ox, int oy, int tick)
+    {
+        if (_screenWaveOwner is null || !ReferenceEquals(_screenWaveOwner, _field is not null ? _field : _mosesChp)) return;
+        var line = new uint[MosesW];
+        int idx = (int)((long)tick * 4 % 360);
+        if (idx < 0) idx += 360;
+        for (int y = MosesH - 1; y >= 0; y--, idx = (idx + 1) % 360)   // 0x101bf844(줄 479) 부터 줄 0 까지
+        {
+            int s = WaveSin[idx] >> 6;                   // 산술 시프트 — 음수는 −∞ 쪽
+            int fy = oy + y;
+            if (s == 0 || ox < 0 || ox + MosesW > BoardWidth || fy < 0 || (fy + 1) * BoardWidth > _fb.Length) continue;
+            int row = fy * BoardWidth + ox;
+            Array.Copy(_fb, row, line, 0, MosesW);
+            if (s > 0) Array.Copy(line, 0, _fb, row + s, MosesW - s);    // 오른쪽으로 — 왼쪽 s 픽셀은 그대로
+            else Array.Copy(line, -s, _fb, row, MosesW + s);             // 왼쪽으로 — 오른쪽 |s| 픽셀은 그대로
+        }
+    }
+
     private void DrawField()
     {
         if (_field is null) return;
@@ -1404,6 +1443,7 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawTalk();
         DrawFieldChoices();
         _uiClip = null;
+        ApplyScreenWave(ox, oy, (int)(_lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)
         DrawFieldWipe(ox, oy);
         DrawFieldFade(ox, oy);
         if (cover < 8)

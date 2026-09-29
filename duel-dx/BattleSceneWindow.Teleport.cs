@@ -90,7 +90,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (Math.Abs(dx) + Math.Abs(dy) != d) continue;
                     int c = caster.Col + dx, r = caster.Row + dy;
                     if (c < 0 || r < 0 || c >= Cols || r >= Rows) continue;
-                    if (_map is { } map && (c >= map.Cols || r >= map.Rows || (map.FlagsAt(c, r) & 0x9) != 0)) continue;
+                    if (_map is { } map && (c >= map.Cols || r >= map.Rows || (CellFlagsAt(c, r) & 0x9) != 0)) continue;
                     if (LiveUnitAt(c, r) is { } other && other != target) continue;
                     if (ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
                     ring.Add((c, r));

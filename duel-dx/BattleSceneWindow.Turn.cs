@@ -79,7 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RememberParty()
     {
         foreach (var unit in _units)
-            if (unit.IsAlly && unit.Data is { } c) _party[unit.ChrCode] = c;
+            if (unit.IsAlly && unit.LeaderIndex < 0 && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
     }
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
@@ -418,6 +418,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_turn >= 0) _units[_turn].HasTurn = false;
         _turn = -1;
         _ringUnit = -1;
+        _skillLeader = -1;
         CancelTargeting();
         _nextTickAt = _lastTime + TickDelaySeconds;
     }
@@ -484,6 +485,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var u = _units[index];
         CommitMove(u);
+        RestFollowers(index);        // 대장이 쉬면 부하도 먼저 쉰다(0x1005f62a, 감사3 L3)
         if (u.Tp > 0 && u.MaxTp > 0 && _db != null && !u.HasStatus(26))
         {
             int heal = (int)((long)(u.MaxHp - u.Hp) * u.Tp / u.MaxTp * _db.N(35) / 100);
@@ -710,6 +712,9 @@ internal sealed unsafe partial class BattleSceneWindow
                                              List<(int Col, int Row)> path)
     {
         var a = _units[userIndex];
+        // 이동 + 기술이면 진형을 다시 세우지 않는다 — 원본은 계산만 하고 결과를 안 읽는다(0x1005fa90·0x1005fd00, 분석-군단).
+        // 진형은 「이동만」·「이동+휴식」(0x1005f670·0x1005f870)에서만 다시 선다. 전에는 기술 앞에서 늘 다시 세웠다.
+        _skillLeader = userIndex;
         foreach (var cell in path) a.Path.Enqueue(cell);
         while (a.IsBusy) yield return true;
         CommitMove(a);
@@ -720,7 +725,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.Id == StanceDefendWork) a.Facing = Facing.Down;   // 방어 0x100b2d50 은 방향 2 를 박아 넣는다 — 늘 아래를 본다
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
 
-        ReformFollowers(userIndex);        // 군단이면 부하가 대장 진형으로 따라온다
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
@@ -901,7 +905,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            for (int hit = 0; hit < hitTimes.Count; hit++)
+            // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
+            for (int hit = 0; hit < (ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
             {
                 if (hit > 0)
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
@@ -913,10 +918,15 @@ internal sealed unsafe partial class BattleSceneWindow
                         if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
                             DamageObject(a, obj, _db!.Atk(od, a.Soul, hitWork.Power));
                 // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
-                // 아군 하나를 겨누는 기술(방식 4)이면 아군 패스(회복·보조), 피해 기술이면 적 패스.
-                if (!followersDone && targets.Count > 0 && (w.IsDamage || w.TargetMode == 4))
+                // 합류는 대장 work +0x41 만 본다(0x1006a110 → 0x1005fa90, FollowersAttack 첫머리). 패스는 대장 work 의 <b>효과 대상 +0x1e</b> 로 가른다
+                // (0x1005fb6d~0x1005fbca): 4 → 아군 패스, 5 → 겨눈 유닛이 적이 아니면 아군 패스, 그 밖 → 적 패스. 종류(피해·보조)는 안 본다.
+                // 전에는 「피해 기술이거나 방식 4」일 때만 따라가 약화 캡슐·저주·버프에 부하가 가만히 있었다(감사3 L7).
+                // 겨눈 대상이 없는 제자리 기술도 패스가 돈다 — 기준 칸은 대장 자리, 걸어가 치기는 없다.
+                if (!followersDone && w.FollowersAct)
                 {
-                    FollowersAttack(userIndex, _units[targets[0]], dying, allyPass: w.TargetMode == 4, leaderWork: w);
+                    var aimed = targetIndex >= 0 ? _units[targetIndex] : LiveUnitAt(col, row);
+                    bool allyPass = w.AreaMode == 4 || (w.AreaMode == 5 && aimed != null && !SeesAsFoe(a, aimed));
+                    FollowersAttack(userIndex, targets.Count > 0 ? _units[targets[0]] : a, dying, allyPass, leaderWork: w, walk: targets.Count > 0);
                     followersDone = true;
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
@@ -974,10 +984,12 @@ internal sealed unsafe partial class BattleSceneWindow
             while (_followerStrikes.Any(s => s.Follower.IsBusy)) yield return true;
             foreach (var (follower, work, target) in _followerStrikes)
             {
-                if (!follower.Alive || !target.Alive) continue;
+                // 걸어가는 사이 TP 가 모자라게 됐으면(걸음 값을 이미 냈다) 안 친다 — 원본도 명령2 기술을 끝처리에서 제 TP 로 정산한다(감사3 L1).
+                if (!follower.Alive || !target.Alive || !CanAfford(follower, work)) continue;
                 follower.Facing = FacingToward(follower.Col, follower.Row, target.Col, target.Row);
                 PlayAction(follower, 8);
                 ApplyWork(follower, work, target, dying);
+                PayWorkCost(follower, work);
             }
             _followerStrikes.Clear();
             for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
@@ -1007,19 +1019,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
         GainBuffExp(a);
-        // 비용은 행동이 끝난 뒤 TP → SOUL → HP 차례로 뺀다(0x10076380). 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
-        if (a.Data is { } cost && _db is { } db2)
-        {
-            a.Tp -= TpCostFor(a, cost, w.Id);
-            if (Trace)
-                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                    $"work {w.Id} by {a.ChrCode}: TP {db2.WorkTpCost(cost, w.Id)} × (100{a.Status(20):+#;-#;+0})% = {TpCostFor(a, cost, w.Id)}, 남은 TP {a.Tp}" + Environment.NewLine);
-            a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
-            // 행동 뒤 SOUL 증가(0x10076586 점프표 0x100765ec): 종류 0 → Num26 · 1 → Num27 · 2 → Num28 · 3 → Num29 · 4·5·7 → 0(ba-15 재확인).
-            AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 });
-            int hp = db2.WorkHpCost(cost, w.Id);
-            if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
-        }
+        PayWorkCost(a, w);
+        // 기술 뒤 대장 자리를 「진형을 짠 자리」로 적어 둔다 — SyncFollowers 가 이 자리로 진형을 다시 세우지 않게.
+        _formationAt[userIndex] = (a.Col, a.Row);
+        _skillLeader = -1;
 
         if (dying.Count > 0)
         {
@@ -1044,11 +1047,30 @@ internal sealed unsafe partial class BattleSceneWindow
         for (double end = _lastTime + 0.1; _lastTime < end;) yield return true;
     }
 
+    /// <summary>
+    /// work 끝처리 <c>0x10076380</c> — TP → SOUL → HP 차례로 비용을 빼고 행동 뒤 SOUL 을 올린다. 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
+    /// 군단 부하도 같은 끝처리를 지난다(<c>0x10071e20</c> 은 부하면 차례 끝 검사만 건너뜀, 감사3 L1).
+    /// </summary>
+    private void PayWorkCost(UnitState a, WorkData w)
+    {
+        if (a.Data is not { } cost || _db is not { } db2) return;
+        a.Tp -= TpCostFor(a, cost, w.Id);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"work {w.Id} by {a.ChrCode}{(a.LeaderIndex >= 0 ? " (부하)" : "")}: TP {db2.WorkTpCost(cost, w.Id)} × (100{a.Status(20):+#;-#;+0})% = {TpCostFor(a, cost, w.Id)}, 남은 TP {a.Tp}" + Environment.NewLine);
+        a.Soul = Math.Max(0, a.Soul - SoulCostFor(a, cost, w.Id));
+        // 행동 뒤 SOUL 증가(0x10076586 점프표 0x100765ec): 종류 0 → Num26 · 1 → Num27 · 2 → Num28 · 3 → Num29 · 4·5·7 → 0(ba-15 재확인).
+        AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 });
+        int hp = db2.WorkHpCost(cost, w.Id);
+        if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
+    }
+
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
-        var (amount, result, crit) = _db.Resolve(_rng, EffectiveData(a)!, a.Tp, AttackSoul(w, a.Soul), EffectiveData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+        // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
+        var (amount, result, crit) = _db.Resolve(_rng, CombatData(a)!, a.Tp, AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
 
         if (result == 1)
         {
@@ -1133,6 +1155,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool UseSelfCentredWork(WorkData w)
     {
         if (!w.SelfCentred) return false;
+        ConsumeTargetItem();          // 겨누지 않는 아이템(라이징스톰·블리자드캡슐)도 쓰면 하나 준다(0x100698af) — CancelTargeting 앞이어야 한다
         CancelTargeting();
         _routine = UseWorkRoutine(_turn, w, -1, _units[_turn].Col, _units[_turn].Row, []);
         return true;

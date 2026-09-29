@@ -157,9 +157,10 @@ internal sealed unsafe partial class BattleSceneWindow
             int lift = 24;
             if (rise)
             {
-                double z = 40;
-                for (int age = 2; age <= tick; age++) z += 40.0 / age;
-                lift = (int)(z * 12 / 20);
+                // 0x100d2610: 틱마다 나이++ 뒤 z += 40/나이 — <b>정수 나눗셈, 나이 1 부터</b>(z 40 → 80, 100, 113, 123 …, 20틱째 178).
+                int z = 40;
+                for (int age = 1; age <= tick; age++) z += 40 / age;
+                lift = z * 12 / 20;
             }
             string shown = text;
             if (count is { } c)
@@ -169,10 +170,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 shown = $"{text} {value}";
             }
             var (_, w, _) = GetText(shown, color, 16);
+            // 피해 숫자는 유닛 기준 x −30 에서 왼쪽 맞춤(0x100d22e0(−30, 0, 40, …)) — Miss·회복은 전처럼 가운데.
+            int left = color == DamageColor ? x - 30 : x - w / 2;
             // 검정 1픽셀 테두리 뒤에 제 색
             foreach (var (ox, oy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-                DrawText(shown, x - w / 2 + ox, y - lift + oy, 0xFF000000, 16);
-            DrawText(shown, x - w / 2, y - lift, color, 16);
+                DrawText(shown, left + ox, y - lift + oy, 0xFF000000, 16);
+            DrawText(shown, left, y - lift, color, 16);
         }
     }
 }

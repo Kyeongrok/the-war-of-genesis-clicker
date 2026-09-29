@@ -48,7 +48,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     && Environment.GetEnvironmentVariable("DUELDX_NODEPLOY") != "1" && _deployMovable.Count > 0;
         if (!open)
         {
-            if (_deployBench.Count > 0) _units = [.. _units.Where(u => !_deployBench.Contains(u))];
+            if (_deployBench.Count > 0) DropUnits(_deployBench.Contains);   // 맵 밖 여분의 부하도 함께, 대장 번호는 다시 맞춘다
             _deployBench.Clear();
             return;
         }
@@ -87,6 +87,7 @@ internal sealed unsafe partial class BattleSceneWindow
         u.StartRow = row;
         u.Facing = u.StartFacing = facing;
         u.OnField = true;
+        PlaceLegionAround(u);    // 군단 대장이면 부하도 새 자리 둘레에 진형대로
     }
 
     private void Unplace(UnitState u)
@@ -94,6 +95,7 @@ internal sealed unsafe partial class BattleSceneWindow
         u.OnField = false;
         u.ResetTo(0, 0);
         u.StartCol = u.StartRow = 0;
+        PlaceLegionAround(u);
     }
 
     /// <summary>자동배치 — 안 놓인 사람 중 명단 첫 사람을 칸 순서 첫 빈 칸에(원본 상태 1).</summary>
@@ -112,7 +114,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void FinishDeploy()
     {
         if (!DeployRoster().Any(u => u.OnField)) { Toast("한 명 이상 세워야 합니다"); return; }
-        _units = [.. _units.Where(u => !(DeployMovable(u) && !u.OnField))];
+        DropUnits(u => DeployMovable(u) && !u.OnField);
         _deployBench.Clear();
         _deployMovable.Clear();
         _deployPick = null;
