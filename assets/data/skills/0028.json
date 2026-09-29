@@ -1,6 +1,7 @@
 {
   "ability": 28,
   "name": "소울 블레스트",
+  "maxLevel": 10,
   "att": 2,
   "common": {
     "rangeShape": 1,
@@ -45,25 +46,15 @@
     "b61": 0
   },
   "levels": [
-    { "work": 388, "level": 1, "rangeMax": 7, "bonus1Value": -2, "power": -50, "exp": 50, "tp": 120 },
-    { "work": 514, "level": 2, "rangeMax": 7, "bonus1Value": -2, "power": -40, "exp": 50, "tp": 125 },
-    { "work": 513, "level": 3, "rangeMax": 7, "bonus1Value": -2, "power": -30, "exp": 50, "tp": 130 },
-    { "work": 512, "level": 4, "rangeMax": 7, "bonus1Value": -4, "power": -20, "exp": 50, "tp": 135 },
-    { "work": 511, "level": 5, "rangeMax": 7, "bonus1Value": -4, "power": -10, "exp": 50, "tp": 140 },
-    { "work": 510, "level": 6, "rangeMax": 8, "bonus1Value": -4, "power": 0, "exp": 50, "tp": 145 },
-    { "work": 509, "level": 7, "rangeMax": 8, "bonus1Value": -4, "power": 5, "exp": 50, "tp": 150 },
-    { "work": 508, "level": 8, "rangeMax": 8, "bonus1Value": -6, "power": 10, "exp": 50, "tp": 155 },
-    { "work": 507, "level": 9, "rangeMax": 8, "bonus1Value": -6, "power": 15, "exp": 50, "tp": 160 },
-    { "work": 506, "level": 10, "rangeMax": 8, "bonus1Value": -6, "power": 20, "exp": 50, "tp": 165 },
-    { "work": 505, "level": 11, "rangeMax": 9, "bonus1Value": -6, "power": 25, "exp": 100, "tp": 170 },
-    { "work": 504, "level": 12, "rangeMax": 9, "bonus1Value": -8, "power": 30, "exp": 100, "tp": 175 },
-    { "work": 503, "level": 13, "rangeMax": 9, "bonus1Value": -8, "power": 35, "exp": 100, "tp": 180 },
-    { "work": 502, "level": 14, "rangeMax": 9, "bonus1Value": -8, "power": 40, "exp": 100, "tp": 185 },
-    { "work": 501, "level": 15, "rangeMax": 9, "bonus1Value": -8, "power": 45, "exp": 100, "tp": 190 },
-    { "work": 500, "level": 16, "rangeMax": 10, "bonus1Value": -10, "power": 50, "exp": 100, "tp": 200 },
-    { "work": 499, "level": 17, "rangeMax": 10, "bonus1Value": -10, "power": 60, "exp": 100, "tp": 200 },
-    { "work": 498, "level": 18, "rangeMax": 10, "bonus1Value": -10, "power": 70, "exp": 100, "tp": 200 },
-    { "work": 497, "level": 19, "rangeMax": 11, "bonus1Value": -10, "power": 85, "exp": 100, "tp": 200 },
-    { "work": 496, "level": 20, "rangeMax": 12, "bonus1Value": -10, "power": 100, "exp": 100, "tp": 200 }
+    { "work": 388, "level": 1, "rangeMax": 7, "bonus1Value": -15, "power": -50, "exp": 50, "tp": 120 },
+    { "work": 514, "level": 2, "rangeMax": 7, "bonus1Value": -20, "power": -30, "exp": 50, "tp": 130 },
+    { "work": 513, "level": 3, "rangeMax": 7, "bonus1Value": -25, "power": -10, "exp": 50, "tp": 140 },
+    { "work": 512, "level": 4, "rangeMax": 8, "bonus1Value": -30, "power": 5, "exp": 50, "tp": 150 },
+    { "work": 511, "level": 5, "rangeMax": 8, "bonus1Value": -35, "power": 15, "exp": 50, "tp": 160 },
+    { "work": 510, "level": 6, "rangeMax": 9, "bonus1Value": -40, "power": 25, "exp": 100, "tp": 170 },
+    { "work": 509, "level": 7, "rangeMax": 9, "bonus1Value": -45, "power": 35, "exp": 100, "tp": 180 },
+    { "work": 508, "level": 8, "rangeMax": 9, "bonus1Value": -50, "power": 45, "exp": 100, "tp": 190 },
+    { "work": 507, "level": 9, "rangeMax": 10, "bonus1Value": -55, "power": 60, "exp": 100, "tp": 200 },
+    { "work": 506, "level": 10, "rangeMax": 12, "bonus1Value": -60, "power": 100, "exp": 100, "tp": 200 }
   ]
 }
