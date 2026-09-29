@@ -292,7 +292,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <remarks>
     /// 원본 넘김 <c>0x1003bfe0</c> 은 <c>[0x10173534]</c>(DVD 판 설정값 0x15e, 쓰는 곳 없음 — 늘 참) 가지로 가서 글 상태를 4 로 적고
     /// <b>같은 함수에서 바로</b> 닫기(vt+0xdc)를 부른다(<c>0x1003c029</c>) — 음성이 도는 중이어도 닫힌다(감사 3 T1). 전에는 첫 클릭이 글을 채웠다.
-    /// 설정 &gt; 「대사 첫 클릭은 글 채우기」(<see cref="UserSettings.TalkClickFills"/>)를 켜면 예전처럼 첫 번째는 채우고 두 번째에 닫는다.
+    /// 설정 &gt; 「대사 첫 클릭은 글 채우기」(<see cref="UserSettings.TalkFillFirst"/>)를 켜면 예전처럼 첫 번째는 채우고 두 번째에 닫는다.
     /// 키 넘김(원본은 왼쪽 클릭만)·우클릭/Esc 장면 건너뛰기는 사용자 요청으로 남긴다 — 키도 클릭과 같은 규칙을 따른다.
     /// </remarks>
     private bool OnTalkInput(bool skipAll = false)
