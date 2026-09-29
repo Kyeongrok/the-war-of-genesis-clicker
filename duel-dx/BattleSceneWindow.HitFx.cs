@@ -134,11 +134,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 숫자·글자 ────────────────────────────────────────────────────────────
 
-    private const uint DamageColor = 0xFFFF3030, HealColor2 = 0xFFFFFF60, MissColor = 0xFF64FF64;
+    /// <summary>
+    /// 숫자 색 — 원본 COLORREF 그대로 순색: 피해 0x0000ff = (255,0,0) · 회복 0x00ffff = (255,255,0) · Miss 0x64ff64(<c>0x100d2580</c>, 감사 3 H3).
+    /// 전에는 피해 (255,48,48)·회복 (255,255,96) 으로 조금 바랬다.
+    /// </summary>
+    private const uint DamageColor = 0xFFFF0000, HealColor2 = 0xFFFFFF00, MissColor = 0xFF64FF64;
 
     /// <summary>
     /// 떠오르는 숫자·글자 — 피해는 빨강 "HP 91", 회복은 노랑(안 떠오르고 옛 HP 에서 새 HP 로 세어 올라감),
     /// Miss 는 연두. 떠오름은 틱마다 z += 40/나이, 20틱에 사라진다(화면 픽셀 = z×12/20).
+    /// 세어 올라가는 회복 숫자는 <b>목표 HP 에 닿는 그 틱에</b> 사라진다(<c>0x100d2950</c> — 차이/10(최소 1)씩이라 보통 10~11틱).
     /// </summary>
     private void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
     {
@@ -150,7 +155,15 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawNumbers()
     {
-        _numbers.RemoveAll(n => (_lastTime - n.Start) * TicksPerSecond > 20);
+        _numbers.RemoveAll(n =>
+        {
+            double age = (_lastTime - n.Start) * TicksPerSecond;
+            if (age > 20) return true;
+            // 세어 올라가는 숫자 — 목표에 닿는 틱에 지운다(전에는 닿은 뒤로도 20틱까지 남았다, 감사 3 H3).
+            if (n.Count is not { } c) return false;
+            int diff = Math.Abs(c.To - c.From);
+            return Math.Max(1, diff / 10) * (int)age >= diff;
+        });
         foreach (var (text, color, x, y, start, rise, count) in _numbers)
         {
             int tick = (int)((_lastTime - start) * TicksPerSecond);

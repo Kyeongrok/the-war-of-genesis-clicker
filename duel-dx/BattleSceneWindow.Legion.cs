@@ -61,7 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var free = spots.Where(sp => !list.Any(u => u.Col == sp.Col && u.Row == sp.Row)).ToList();
             // 배치 단계로 세우는 파티원은 「군단사용」(명단 +0x30, 기본 = 워드 7 켜짐 && 배속 있음)이면 배속 군단(+0x12c)으로 부하를 만든다
             // (0x100673dd~0x10067717, 분석-전투 ba-6). 전에는 늘 군단 0 이라 모세스에서 배속해도 대부분의 전투에서 부하가 안 나왔다(감사3 L4).
-            // 「군단사용」 단추는 아직 없어 늘 기본값(켜짐)이다. 부하는 파티원들 뒤에 붙인다 — 맵 밖 여분을 지울 때 DropUnits 가 번호를 다시 맞춘다.
+            // 여기서는 기본값(켜짐)으로 만들고, 배치 창의 「군단사용」 단추가 끄면 배치종료 때 부하를 지운다(Deploy.cs). 부하는 파티원들 뒤에 붙인다 — 맵 밖 여분을 지울 때 DropUnits 가 번호를 다시 맞춘다.
             var placedFollowers = new List<UnitState>();
             int LegionOf(int chr) => scene.LegionsAllowed ? _unitLegion.GetValueOrDefault(chr) : 0;
             for (int i = 0; i < free.Count && i < party.Count; i++)

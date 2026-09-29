@@ -52,14 +52,52 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>
     /// 용병관리에 나오는 군단 — 스크립트 713 으로 <b>얻은 것</b>만(원본 파티 객체 `+0x910` 목록, 분석-군단). 얻은 기록이 없는 옛 세이브는 예전처럼 전부.
-    /// </summary>
-    /// <summary>배속할 수 있는 군단 — 얻은 것 가운데 <b>아직 아무에게도 배속 안 된 것</b>(원본은 배속하면 파티 군단 목록에서 빼고 해제·교체 때 되돌린다, 0x1010106f·0x10100ed0, ba-15).</summary>
-    private List<LegionData> LegionList() =>
-        [.. Legions().Values.Where(l => (!_legionsKnown || _ownedLegions.Contains(l.Id))
-                                        && !_unitLegion.Any(p => p.Value == l.Id && p.Key != LegionKey(_legionUnit))).OrderBy(l => l.Id)];
+    /// 배속할 수 있는 군단 — 얻은 것 가운데 <b>아직 아무에게도 배속 안 된 것</b>(원본은 배속하면 파티 군단 목록에서 빼고 해제·교체 때 되돌린다, 0x1010106f·0x10100ed0, ba-15).</summary>
+    /// <remarks>
+    /// 원본 파티 군단 목록은 <b>(군단, 개수)</b>다(<c>0x1004df50</c>: 같은 군단을 또 얻으면 개수 +1) — 31 스트라이커즈(Chp 0016·0061)·74 해커(Chp 0049·Btl 0305)는
+    /// 두 번 얻으므로 두 인물에게 하나씩 붙일 수 있다. 남은 개수 = 얻은 개수 − 이 파티의 다른 인물이 붙인 수(감사3 L8). 전에는 개수가 없어 한 명만 붙였다.
+    /// </remarks>
+    private List<LegionData> LegionList()
+    {
+        // 이 파티 동료만 센다 — 다른 파티 인물의 배속은 그 파티 목록에서 빠진 것이다(파티 객체마다 +0x910 목록).
+        bool InParty(int chr) => _members.Count == 0 || _members.Contains(chr);
+        return [.. Legions().Values.Where(l => (_legionsKnown ? _ownedLegions.CountOf(l.Id) : 1)
+                                             > _unitLegion.Count(p => p.Value == l.Id && p.Key != LegionKey(_legionUnit) && InParty(p.Key))).OrderBy(l => l.Id)];
+    }
 
-    /// <summary>파티가 얻은 군단 번호(스크립트 713). 세이브에 실린다.</summary>
-    private readonly HashSet<int> _ownedLegions = [];
+    /// <summary>파티가 얻은 군단 번호와 개수(스크립트 713). 세이브에 실린다 — 개수만큼 번호를 되풀이해 적는다(옛 세이브는 모두 1개).</summary>
+    private readonly LegionCounts _ownedLegions = new();
+
+    /// <summary>
+    /// 파티 군단 목록 — 원본 파티 객체 <c>+0x910</c> (군단, 개수) 최대 32가지(<c>0x1004df50</c>). 새 군단이 33가지째면 버린다.
+    /// 훑으면 번호를 개수만큼 되풀이해 낸다(세이브·파티 합치기가 그대로 옮기게).
+    /// </summary>
+    private sealed class LegionCounts : IEnumerable<int>
+    {
+        private const int MaxKinds = 32;
+        private readonly Dictionary<int, int> _count = [];
+
+        /// <summary>하나 더 얻는다(713). 늘었으면 true.</summary>
+        public bool Add(int id)
+        {
+            if (_count.TryGetValue(id, out int n)) { _count[id] = n + 1; return true; }
+            if (_count.Count >= MaxKinds) return false;
+            _count[id] = 1;
+            return true;
+        }
+
+        public bool Contains(int id) => _count.ContainsKey(id);
+        public int CountOf(int id) => _count.GetValueOrDefault(id);
+        public void Clear() => _count.Clear();
+
+        public IEnumerator<int> GetEnumerator()
+        {
+            foreach (var (id, n) in _count)
+                for (int i = 0; i < n; i++) yield return id;
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 
     /// <summary>얻은 군단을 세고 있나 — 새 게임과 그 뒤 세이브는 참(얻은 것만 보인다), 그 전 세이브는 거짓(전부 보인다).</summary>
     private bool _legionsKnown;

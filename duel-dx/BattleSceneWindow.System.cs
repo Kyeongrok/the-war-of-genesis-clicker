@@ -62,6 +62,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
+        // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 640×480 틀의 <b>(100,100)</b> 에
+        // 제목줄부터 선다 — 제목(창 y−22)이 y 100 에 오게 둔다(감사 F16). 전투 링 메뉴는 전처럼 가운데.
+        if (_episodesOpen || _mosesOpen)
+        {
+            var (ox, oy) = MosesOrigin();
+            return (ox + 100, oy + 100 + 22, h);
+        }
         return (_camX + (ViewWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
@@ -360,7 +367,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _infoUnit = -1;
         _ringUnit = -1;
         // RESTART 가 되돌릴 가방·GP(원본은 전투 전 파티 상태로 되돌린다) — fg-21 ⑰.
-        _restartInventory = new SortedDictionary<int, int>(_inventory);
+        _restartInventory = [.. _inventory];           // 들어온 차례 그대로(감사3 I4)
         _restartMoney = _shopMoney;
         RestartBattle();
         // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
@@ -370,7 +377,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전투에 들어올 때의 가방·GP — RESTART 가 되돌린다.</summary>
-    private SortedDictionary<int, int>? _restartInventory;
+    private List<KeyValuePair<int, int>>? _restartInventory;
     private int _restartMoney;
 
     private void RestartBattle()

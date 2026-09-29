@@ -31,8 +31,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>아이템 그림과 WEAPON 띠가 들어 있는 Obs(분석-캐릭터 "아이템 그림").</summary>
     private const int ItemPictureObs = 326;
 
-    /// <summary>파티 가방 — 아이템 번호 → 개수.</summary>
-    private readonly SortedDictionary<int, int> _inventory = [];
+    /// <summary>파티 가방 — 아이템 번호 → 개수. <b>들어온 차례</b>를 지킨다(원본 파티 객체 +0x110 배열, 감사3 I4 — <see cref="ItemBag"/>).</summary>
+    private readonly ItemBag _inventory = new();
 
     private readonly List<(int X, int Y, int W, int H, Action Click)> _statusHits = [];
     private string _popupTitle = "";

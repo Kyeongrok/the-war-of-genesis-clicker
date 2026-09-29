@@ -58,8 +58,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>떠 있는 대사창 하나(원본 창 객체 <c>0x1003b130</c>/<c>0x1003c0d0</c> 한 개).</summary>
     private sealed class TalkWindow
     {
-        /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선.</summary>
+        /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선 · 609 제 칸의 상자(<c>[0x101bfe34]</c>).</summary>
         public int Kind;
+        /// <summary>아래 상자 꼴인가 — 600 과 609(609 틀 (164,120)~(313,239) 은 아직 안 옮겨 600 상자로 그린다).</summary>
+        public bool IsBox => Kind is 600 or 609;
         /// <summary>601 칸 0/1(<c>[0x101bfe20]</c>/<c>[0x101bfe24]</c>).</summary>
         public int Slot;
         /// <summary>전투 유닛 자리(없으면 −1) · 필드 말하는 이(<c>10000+열쇠</c>, 머리 위 자리를 찾는다).</summary>
@@ -76,7 +78,7 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Tint, Glitch;
 
         public double OpenedAt, ClosingAt = -1, DoneAt = -1;
-        public int OpenTicks => Kind == 600 ? 8 : 10;
+        public int OpenTicks => IsBox ? 8 : 10;
 
         // 음성 — 다 펴진 뒤에 튼다(0x1003ba38).
         public int Voice, VoiceTag, ExternalVoiceTag;
@@ -105,7 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private (bool Box, int Speaker, string Name, string Text, int Face, double Start)? _talk
     {
-        get => _talks.Count == 0 ? null : (_talks[^1].Kind == 600, _talks[^1].Speaker, _talks[^1].Name, _talks[^1].Text, _talks[^1].Pose, _talks[^1].OpenedAt);
+        get => _talks.Count == 0 ? null : (_talks[^1].IsBox, _talks[^1].Speaker, _talks[^1].Name, _talks[^1].Text, _talks[^1].Pose, _talks[^1].OpenedAt);
         set
         {
             if (value is not { } v)
@@ -115,12 +117,24 @@ internal sealed unsafe partial class BattleSceneWindow
                 return;
             }
             // ShowFieldTalk 는 음성을 먼저 틀어 두었다 — 그 표지를 들고 「음성 끝남」을 본다.
+            // 609 는 제 칸([0x101bfe34])이라 600 과 서로 안 지운다 — Fld 0360 은 609 창 위에 600 이 겹쳐 뜬다(감사 3 T8).
             OpenTalkWindow(new TalkWindow
             {
-                Kind = v.Box ? 600 : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
+                Kind = v.Box ? (RunningField609() ? 609 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
                 FaceCode = _talkFace, FieldSpeaker = _fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
             });
         }
+    }
+
+    /// <summary>
+    /// 지금 필드·챕터 주 사건이 막 읽은 줄이 609 인가 — 609 는 <see cref="ShowFieldTalk"/> 를 거쳐 <see cref="_talk"/> 로 오므로 여기서 칸을 가린다.
+    /// 609 는 곁 사건에선 안 돈다(<c>MainOnly</c>).
+    /// </summary>
+    private bool RunningField609()
+    {
+        var events = _field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
+        return events != null && (uint)_fieldEvent < (uint)events.Count && _fieldPc > 0 && _fieldPc <= events[_fieldEvent].Actions.Count
+               && events[_fieldEvent].Actions[_fieldPc - 1].Code == 609;
     }
 
     /// <summary>맨 나중 창의 글이 다 나왔나 — 넣는 쪽(필드의 false)은 무시한다.</summary>
@@ -273,17 +287,20 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>
-    /// 클릭·키로 넘기기 — 맨 나중에 연 창부터. 글이 흐르는 중이면 먼저 다 채우고, 다 채운 뒤 누르면 닫는다.
+    /// 클릭·키로 넘기기 — 맨 나중에 연 창부터, <b>누르면 곧바로 닫는다</b>(글이 덜 나왔어도 채우는 단계 없이 접힘으로).
     /// </summary>
     /// <remarks>
-    /// 원본(<c>0x1003bfe0</c>, <c>[0x10173534]</c>≠0 가지)은 왼쪽 클릭 한 번에 곧바로 닫는다 — 채우기 단계와 키 넘김은 데모의 편의(감사 3 T1).
+    /// 원본 넘김 <c>0x1003bfe0</c> 은 <c>[0x10173534]</c>(DVD 판 설정값 0x15e, 쓰는 곳 없음 — 늘 참) 가지로 가서 글 상태를 4 로 적고
+    /// <b>같은 함수에서 바로</b> 닫기(vt+0xdc)를 부른다(<c>0x1003c029</c>) — 음성이 도는 중이어도 닫힌다(감사 3 T1). 전에는 첫 클릭이 글을 채웠다.
+    /// 설정 &gt; 「대사 첫 클릭은 글 채우기」(<see cref="UserSettings.TalkClickFills"/>)를 켜면 예전처럼 첫 번째는 채우고 두 번째에 닫는다.
+    /// 키 넘김(원본은 왼쪽 클릭만)·우클릭/Esc 장면 건너뛰기는 사용자 요청으로 남긴다 — 키도 클릭과 같은 규칙을 따른다.
     /// </remarks>
     private bool OnTalkInput(bool skipAll = false)
     {
         if (_talks.Count == 0) return false;
         if (skipAll) { SkipTalk(); return true; }
         if (_talks.LastOrDefault(t => t.ClosingAt < 0) is not { } w) return true;   // 접히는 중이면 입력만 먹는다
-        if (!w.AllRevealed) { FillTalk(w); return true; }
+        if (_talkClickFills && !w.AllRevealed) { FillTalk(w); return true; }
         BeginCloseTalk(w);
         return true;
     }
@@ -488,7 +505,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.Lines != null) return;
         w.Clean = CleanTalkText(w.Text);
         int width;
-        if (w.Kind == 600)
+        if (w.IsBox)
         {
             // 상자 글은 (창x+12) 부터 창x+606 까지. 반신 초상이 없고 작은 얼굴이 있으면 얼굴 오른쪽(창x+104)부터.
             int portraitObs = TalkPortraitObs(w);
@@ -573,7 +590,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int screenW = framed ? MosesW : ViewWidth, screenH = framed ? MosesH : ViewHeight;
         _faces.TryGetValue(TalkFaceCode(w), out var face);
 
-        if (w.Kind == 600)
+        if (w.IsBox)
         {
             // 600 아래 상자(0x1003c0d0, 그리기 0x1003c630) — 창 (10,370) 620×100. 틀은 통짜 그림 Obs 0224 를 창 (0,−25) 에:
             // 바탕 조각(모션 3·4·5)을 효과 5((11·바탕+20·그림)/31)로 먼저, 테두리(모션 0·1·2)를 불투명으로 위에 얹는다.

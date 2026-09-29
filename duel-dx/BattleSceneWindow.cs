@@ -679,8 +679,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (_chaptersOpen) { if (key == Win32.VK_ESCAPE) _chaptersOpen = false; return; }
-        // 타이틀 화면에서는 슬롯 창만 키를 받는다(원본 타이틀은 키 처리가 없다).
-        if (_titleOpen) { if (key == Win32.VK_ESCAPE) CloseSystemWindow(); return; }
+        // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
+        if (OnTitleKey(key)) return;
         // 연대표에서도 전투 키는 안 먹고 Esc 로 시스템 메뉴만 연다.
         if (_episodesOpen)
         {

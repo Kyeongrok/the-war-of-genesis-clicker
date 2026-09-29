@@ -107,7 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
     private const int MenuTalkPauseBase = 1130;
 
-    private const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106;
+    private const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106, MenuTalkClickFills = 1108;
 
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
     private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
@@ -165,6 +165,7 @@ internal sealed unsafe partial class BattleSceneWindow
             Win32.AppendMenuW(pause, Win32.MF_STRING | (TalkPauseIndex(UserSettings.Current.TalkPauseSeconds) == i ? Win32.MF_CHECKED : 0u), (nuint)(MenuTalkPauseBase + i),
                               TalkPauseLabel(TalkPauseChoices[i]));
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
+        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.TalkClickFills ? Win32.MF_CHECKED : 0u), MenuTalkClickFills, "대사 첫 클릭은 글 채우기(&F)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
         AppendDifficultyMenu(settings);
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
@@ -239,7 +240,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills));
+
+    /// <summary>대사 첫 클릭은 글 채우기 — 설정 > 대사 첫 클릭은 글 채우기. 끄면(기본) 원본처럼 첫 클릭에 곧바로 닫는다(감사 3 T1).</summary>
+    private bool _talkClickFills = UserSettings.Current.TalkClickFills;
 
     /// <summary>전투를 시작할 때 내 편 SOUL 을 가득 채우나 — 모드 > 전투 시작 시 소울 가득(원본에 없는 편의 기능, 기본 끔).</summary>
     private bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;
@@ -305,6 +309,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 for (int i = 0; i < TalkPauseChoices.Length; i++)
                     Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuTalkPauseBase + i), Win32.MF_BYCOMMAND | (i == id - MenuTalkPauseBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast($"대사 사이 멈춤: {TalkPauseLabel(_talkPauseSeconds)}");
+                SaveSettings();
+                break;
+            case MenuTalkClickFills:
+                _talkClickFills = !_talkClickFills;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuTalkClickFills, Win32.MF_BYCOMMAND | (_talkClickFills ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_talkClickFills ? "대사: 첫 클릭은 글을 채우고, 다음 클릭에 닫습니다" : "대사: 클릭하면 곧바로 닫습니다(원본)");
                 SaveSettings();
                 break;
             case MenuProgress: ToggleProgress(); break;
