@@ -19,14 +19,14 @@ namespace DuelDx;
 /// <param name="SoulWeight">일반 공격 소울 기여도 % — 100 이 원본(모드 &gt; 조정, BattleSceneWindow.Tuning.cs).</param>
 /// <param name="Difficulty">난이도 — 0 보통(원본) · 1 어려움 · 2 매우 어려움(BattleSceneWindow.Difficulty.cs).</param>
 /// <param name="KeepExpOnJobChange">전직(세부 체질 바꾸기)할 때 남은 EXP 를 그대로 둘지. 원본은 0 으로 비운다 — 켜면 원본과 다르다(사용자 요청).</param>
-/// <param name="TalkClickFills">대사 첫 클릭·키가 흐르는 글을 <b>채우기만</b> 하고 두 번째에 닫을지. 원본(<c>0x1003bfe0</c>)은 첫 클릭에 곧바로 닫는다 —
+/// <param name="TalkFillFirst">대사 첫 클릭·키가 흐르는 글을 <b>채우기만</b> 하고 두 번째에 닫을지. 원본(<c>0x1003bfe0</c>)은 첫 클릭에 곧바로 닫는다 —
 /// 기본 끔(원본대로), 켜면 예전 데모 동작(감사 3 T1).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
                                     double TalkPauseSeconds = 0.1, bool ShowSceneTag = true, bool ShowChestContents = false,
                                     bool FullSoulAtStart = false, int Difficulty = 0, int SoulWeight = 100,
-                                    int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkClickFills = false)
+                                    int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkFillFirst = true)
 {
     private static string FilePath => UserDataFolder.File("settings.json");
 
