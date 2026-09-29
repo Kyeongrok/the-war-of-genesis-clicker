@@ -1,6 +1,7 @@
 {
   "ability": 61,
   "name": "리콜",
+  "maxLevel": 5,
   "att": 3,
   "common": {
     "rangeShape": 1,
@@ -48,14 +49,9 @@
   },
   "levels": [
     { "work": 421, "level": 1, "rangeMax": 15, "power": 10, "tp": 150 },
-    { "work": 1300, "level": 2, "rangeMax": 15, "power": 11, "tp": 160 },
-    { "work": 1299, "level": 3, "rangeMax": 15, "power": 12, "tp": 170 },
-    { "work": 1298, "level": 4, "rangeMax": 20, "power": 13, "tp": 180 },
-    { "work": 1297, "level": 5, "rangeMax": 20, "power": 14, "tp": 190 },
-    { "work": 1296, "level": 6, "rangeMax": 20, "power": 15, "tp": 200 },
-    { "work": 1295, "level": 7, "rangeMax": 25, "power": 16, "tp": 200 },
-    { "work": 1294, "level": 8, "rangeMax": 25, "power": 17, "tp": 200 },
-    { "work": 1293, "level": 9, "rangeMax": 25, "power": 18, "tp": 200 },
-    { "work": 1292, "level": 10, "rangeMax": 30, "power": 20, "tp": 200 }
+    { "work": 1300, "level": 2, "rangeMax": 20, "power": 12, "tp": 165 },
+    { "work": 1299, "level": 3, "rangeMax": 20, "power": 15, "tp": 180 },
+    { "work": 1298, "level": 4, "rangeMax": 25, "power": 17, "tp": 190 },
+    { "work": 1297, "level": 5, "rangeMax": 30, "power": 20, "tp": 200 }
   ]
 }
