@@ -402,6 +402,10 @@ internal sealed unsafe partial class BattleSceneWindow
         StopTalkVoice();
         if (Muted) { w.VoiceLoaded = -1; return; }
         int tag = _talkVoiceTag = ++_soundTag;
+        // 말하는 이의 화면 x 로 좌우를 가른다(≤192 왼쪽 · ≥448 오른쪽, 감사4 S2). 판 좌표 → 640 틀 x.
+        float speakerX = w.Speaker >= 0 && w.Speaker < _units.Length
+            ? (float)((UnitFoot(_units[w.Speaker]).X - _camX) * 640.0 / Math.Max(1, ViewWidth)) : float.NaN;
+        var (panL, panR) = VoicePan(speakerX);
         w.VoiceTag = tag;
         int id = w.Voice;
         LoadClip(id, pcm =>
@@ -410,7 +414,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (play)
             {
                 w.VoiceSeconds = ClipSeconds(pcm!);
-                _mixer.PlayEffect(pcm!, _effectGain, tag);
+                _mixer.PlayEffect(pcm!, _effectGain, tag, left: panL, right: panR);
             }
             Volatile.Write(ref w.VoiceLoaded, play ? 1 : -1);
             // 배경 실에서 올 수 있다 — 기록은 주 실이 옮겨 적는다(PlayTalkVoice 와 같다).

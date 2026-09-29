@@ -34,6 +34,11 @@ public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Tea
 
     /// <summary>상자 속 돈, 없으면 0.</summary>
     public int Gold { get; init; }
+
+    /// <summary>
+    /// 레벨 보정(낱말 6) — 물체 레벨 = 이 값 + 파티 레벨(<c>0x100e73f0</c>, <c>LoadBtl 0x10062ab2</c>). 시판 자료는 전부 0 이다.
+    /// </summary>
+    public int LevelOffset { get; init; }
 }
 
 /// <summary>아군 배치 칸(6워드) — 칸과 방향.</summary>
@@ -63,6 +68,12 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
     /// (<c>LoadBtl 0x100634f9</c>), 배치 단계의 「군단사용」 기본값도 이것이다(<c>0x100673dd~</c>, 감사3 L4).
     /// </summary>
     public bool LegionsAllowed { get; init; }
+
+    /// <summary>
+    /// 머리 워드 2·3 — 첫 화면 가운데에 둘 칸(x, y). 원본 불러오기가 <c>스크롤 = 칸 가운데 − 화면/2</c> 로 놓는다(<c>0x10063e44~0x10063f5x</c>, 감사4 C5).
+    /// </summary>
+    public int StartX { get; init; }
+    public int StartY { get; init; }
 
     public static BattleFile? Parse(int id, byte[]? b)
     {
@@ -95,7 +106,7 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
             for (int i = 0; i < nb; i++)
             {
                 var w = Enumerable.Range(0, 11).Select(_ => H()).ToArray();
-                objects.Add(new BattleObjectRecord(w[0], w[1], w[2], w[3], w[4]) { ItemId = w[5], Gold = w[7] });
+                objects.Add(new BattleObjectRecord(w[0], w[1], w[2], w[3], w[4]) { ItemId = w[5], LevelOffset = w[6], Gold = w[7] });
             }
             int nc = U(); U();
             for (int i = 0; i < nc; i++)
@@ -118,6 +129,8 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
         {
             EngineJudgesWipe = hdr[9] == 1,
             LegionsAllowed = hdr[7] != 0,
+            StartX = hdr[2],
+            StartY = hdr[3],
         };
     }
 

@@ -309,7 +309,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
             ShowMosesBackground(field.Background, Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
             StopMusic();
-            if (field.Bgm > 0) PlayMusicFile(field.Bgm, loop: true);
+            // 머리 곡은 논리 크기 0 으로 건다(0x100ec3fb~0x100ec449: 0x10025320(0) → 곧 재개) — 들리기는 100 %(×B.G.M)지만
+            // 첫 517 은 0 에서 올린다(뚝 끊겼다 커짐), 첫 512 는 0 을 물려받는다(감사4 M3).
+            if (field.Bgm > 0) PlayMusicFile(field.Bgm, loop: true, gain: 0, audible: MusicGain);
             return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
@@ -952,7 +954,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 512:                                        // BGM 바꾸기 — 새 곡은 <b>옛 곡의 지금 크기</b>로 시작한다(0x100eed8a, 옛 곡이 없으면 0)
                 // 512 358곳 중 346곳이 바로 뒤 517 로 키운다 — 0(또는 줄여 둔 크기)에서 서서히 커지는 연출이다.
+                // 대사 건너뛰기 중([0x101bffb0] ≠ 0)이면 원본은 통째로 무시한다(0x100eed6d~0x100eed74, 감사4 M4).
+                if (_talkSkip) break;
                 PlayMusicInherit(A(0));
+                // 챕터 사건이 건 곡은 챕터 창이 80 % 까지 틱마다 1 % 올린다(0x100f80c9, 감사4 M1).
+                if (_field is null && _mosesOpen) MarkChapterEventMusic();
+                break;
+            case 515:                                        // 멈춘 배경음악 잇기(0x100eee50 → 0x10025480, 감사4 M5) — Fld 360 사건 1
+                ResumeMusic();
                 break;
             case 517:                                        // 음량을 인자0(0~100)까지 인자1 틱에 걸쳐 — 그동안 슬롯이 산다(0x100eee70, +4 ≥ a1 에서 풀림)
                 FadeMusic(A(0), A(1));
@@ -972,16 +981,17 @@ internal sealed unsafe partial class BattleSceneWindow
                               textOverride: TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
-                StopMusic();
+                // 되감아 멈출 뿐 개체와 크기(%)는 남는다 — 뒤따르는 512 가 그 크기로 바로 튼다(감사4 M2).
+                RewindMusic();
                 break;
             case 500:                                        // 소리 한 번 내고 끝날 때까지 슬롯(0x100ee7b0) — 인자1 은 매달 인물. 뒤따르는 1 이 기다린다
                 if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)
-                PlayChannelSound(FieldVoiceChannel, A(0), loop: false);
+                PlayChannelSound(FieldVoiceChannel, A(0), loop: false, FieldSoundX(A(1)));
                 HoldSlot(() => ChannelBusy(FieldVoiceChannel));
                 break;
             case 501:                                        // [소리, 채널, 인물, 되풀이] 채널에 걸고 기다리지 않는다(0x100ee960)
                 if (_talkSkip) break;
-                PlayChannelSound(A(1), A(0), loop: A(3) != 0);
+                PlayChannelSound(A(1), A(0), loop: A(3) != 0, FieldSoundX(A(2)));
                 break;
             case 506:                                        // [채널, 음량, 틱] 채널 음량을 서서히 바꾼다(0x100eeb80) — 517 의 채널판
                 if (_talkSkip) break;                        // 건너뛰는 중이면 원본도 건너뛴다([0x101bffb0] 검사)
@@ -1275,7 +1285,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0, int voice = 0)
     {
         if (_talkSkip) return;
-        PlayTalkVoice(voice);
+        // 말하는 이 자리로 좌우를 가른다(0x1003ba76 꼬리점 → 0x100f5350, 감사4 S2). 필드 대사 상자는 꼬리를 말하는 이에게 댄다 — 그 x.
+        PlayTalkVoice(voice, FieldSoundX(speaker));
         string name = "";
         _fieldTalkOf = speaker;
         if (_field is { } field && speaker >= 10000
@@ -1333,7 +1344,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (bx < x || bx >= x + w || row < 0 || row >= choices.Count) return true;
         ScriptVars[_fieldChoiceVar] = (byte)(row + 1);      // 고른 차례는 1부터
         _fieldChoices = null;
-        Play(MosesClickSound);
+        // 원본 필드 고르기(604)는 소리를 안 낸다 — Snd 66 은 모세스 주 화면 단추뿐(0x10104950, 감사4 S5).
         return true;
     }
 
@@ -1467,10 +1478,23 @@ internal sealed unsafe partial class BattleSceneWindow
     private void SchedulePropSounds(FieldProp prop)
     {
         if (_talkSkip || UiFor(prop.Obs)?.Clip(prop.Motion) is not { } clip) return;
-        foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound));
+        float x = FieldScreenAt(prop.Layer, prop.X, prop.Y).X;   // 좌우 소리(감사4 S1) — 640 틀 안 x
+        foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound, x));
         foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
             if (UiFor(obs)?.Clip(motion) is { } child)
-                foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((_lastTime + (start + s) / TicksPerSecond, sound));
+                foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((_lastTime + (start + s) / TicksPerSecond, sound, x));
+    }
+
+    /// <summary>
+    /// 소리를 매단 인물·물체(<c>10000+열쇠</c>)의 640 틀 화면 x — 없으면 NaN(가운데). 원본 <c>0x100f5300</c> 은 매단 물체의
+    /// <c>+0x54</c> 를, 매단 것이 없으면 (320, 240) 을 쓴다.
+    /// </summary>
+    private float FieldSoundX(int target)
+    {
+        // 층 −1·숨은 인물은 화면에 없다(말하는 이로만 쓰인다, 자리도 (−1,−1)이 많다) — 가운데로 둔다(가설).
+        if (FieldActorOf(target) is { } actor) return actor.Layer >= 0 && actor.Visible ? FieldScreenAt(actor.Layer, actor.X, actor.Y).X : float.NaN;
+        if (FieldPropOf(target) is { } prop) return FieldScreenAt(prop.Layer, prop.X, prop.Y).X;
+        return float.NaN;
     }
 
     private void DrawFieldLayers(int ox, int oy, int from, int to)

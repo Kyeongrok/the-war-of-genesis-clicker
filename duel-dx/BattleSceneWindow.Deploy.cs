@@ -109,15 +109,11 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool _deployCamPending;
 
-    /// <summary>배치 단계의 한 틀 — 처음 한 번 카메라를 배치칸 가운데로 옮긴다.</summary>
-    private void StepDeploy()
-    {
-        if (!_deployCamPending || _deploySpots.Count == 0) return;
-        _deployCamPending = false;
-        int col = (int)_deploySpots.Average(s => s.Col), row = (int)_deploySpots.Average(s => s.Row);
-        _camTargetX = Math.Clamp(col * TileW + TileW / 2 - ViewWidth / 2 + DeployW / 2, 0, CamMaxX);
-        _camTarget = Math.Clamp(CellTop(col, row) - ViewHeight / 2, 0, CamMax);
-    }
+    /// <summary>
+    /// 배치 단계의 한 틀 — 원본 상태 2 에는 카메라 명령이 없다(감사4 C5): 첫 화면은 Btl 머리 워드 2·3 자리 그대로이고
+    /// 가장자리 스크롤로만 옮긴다. 예전에는 배치칸 평균으로 옮겼다.
+    /// </summary>
+    private void StepDeploy() => _deployCamPending = false;
 
     private UnitState? UnitOnCell(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 

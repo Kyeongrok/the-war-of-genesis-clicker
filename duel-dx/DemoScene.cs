@@ -77,6 +77,10 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     /// <summary>Btl 머리 워드 7 — 군단을 쓸 수 있는 전투인가(<see cref="BattleFile.LegionsAllowed"/>, 감사3 L4).</summary>
     public bool LegionsAllowed { get; init; }
 
+    /// <summary>Btl 머리 워드 2·3 — 첫 화면 가운데 칸(<see cref="BattleFile.StartX"/>, 감사4 C5). 없으면 −1(예전처럼 왼쪽 위).</summary>
+    public int StartCol { get; init; } = -1;
+    public int StartRow { get; init; } = -1;
+
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
         BattleDemoScene.BtlId, BattleDemoScene.Title, BattleDemoScene.MapFile, BattleDemoScene.Bgm,
@@ -135,7 +139,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 .ToList();
 
             return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId,
-                                 roster, next, placement, objects, battle.EngineJudgesWipe) { LegionsAllowed = battle.LegionsAllowed };
+                                 roster, next, placement, objects, battle.EngineJudgesWipe) { LegionsAllowed = battle.LegionsAllowed, StartCol = battle.StartX, StartRow = battle.StartY };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {

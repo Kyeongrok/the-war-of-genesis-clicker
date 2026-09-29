@@ -185,6 +185,7 @@ internal sealed unsafe partial class BattleSceneWindow
             else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
             return;
         }
+        if (StepAilmentTicks()) return;          // 매 턴 피해 — 유닛마다 카메라가 선 뒤(감사4 C17)
 
         // 불러온 판은 저장했던 인물의 차례로 곧장 돌아간다 — 원본도 판을 읽은 뒤 Active 유닛(+0x4cf4)의 상태 22 로 선다
         // (0x100619c0, 분석-시스템메뉴 2.4b). 틱을 흘려 다시 고르면 같은 틱에 TP 가 찬 앞 번호 적이 먼저 움직였다.
@@ -215,6 +216,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             AdvanceTick();
+            if (_ailmentTickQueue.Count > 0) return;   // 매 턴 피해를 먼저 — 다음 틀부터 StepAilmentTicks 가 한 명씩
         }
     }
 
@@ -312,8 +314,40 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         _objectsDue = Objects.Count > 0;
         _eventCheckDue |= 1 << 3;
-        TickAilments(turnStarts);
+        // 매 턴 피해(상태 16 → 17 PRETURN 0x1006a791)는 걸린 유닛마다 카메라를 가운데로 보내고 멈춘 뒤에 든다(감사4 C17) —
+        // 줄을 세워 두고 UpdateTurn 이 한 명씩 처리한다. 걸린 사람이 없으면 곧바로 쓰러짐을 본다.
+        foreach (var u in _units)
+            if (u.Alive && turnStarts.Contains(u) && (u.Status(2) + u.Status(3) + u.Status(17) > 0 || u.Status(16) > 0 || u.Status(15) > 0))
+                _ailmentTickQueue.Enqueue(u);
+        if (_ailmentTickQueue.Count == 0) SweepTickDeaths();
+        else _ailmentSweepDue = true;
+    }
+
+    /// <summary>매 턴 피해를 받을 차례인 유닛 — 카메라가 그 유닛에게 선 뒤 하나씩 든다.</summary>
+    private readonly Queue<UnitState> _ailmentTickQueue = new();
+
+    /// <summary>줄 머리 유닛에게 카메라 명령을 걸었나 · 줄이 다 빠지면 쓰러짐을 봐야 하나.</summary>
+    private bool _ailmentCamSent, _ailmentSweepDue;
+
+    /// <summary>매 턴 피해 줄을 한 걸음 — 처리 중이면 true(그동안 틱·차례는 멈춘다).</summary>
+    private bool StepAilmentTicks()
+    {
+        while (_ailmentTickQueue.Count > 0)
+        {
+            var u = _ailmentTickQueue.Peek();
+            // 판이 바뀌었거나(RESTART·다른 전투) 그새 쓰러진 사람은 건너뛴다.
+            if (!u.Alive || !u.OnField || Array.IndexOf(_units, u) < 0) { _ailmentTickQueue.Dequeue(); _ailmentCamSent = false; continue; }
+            if (!_ailmentCamSent) { _ailmentCamSent = true; CenterOnUnit(u); return true; }
+            if (CameraBusy) return true;
+            _ailmentTickQueue.Dequeue();
+            _ailmentCamSent = false;
+            TickAilments(new HashSet<UnitState> { u });   // 멈추면 0x2719(0x1007a360)
+            return true;
+        }
+        if (!_ailmentSweepDue) return false;
+        _ailmentSweepDue = false;
         SweepTickDeaths();
+        return true;
     }
 
     /// <summary>
@@ -334,7 +368,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private void SweepTickDeaths()
     {
         foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
-            if (!SurvivesFatal(u)) { GainAilmentKillExp(u); KillUnit(u); }
+            if (!SurvivesFatal(u))
+            {
+                CenterOnUnit(u);                  // 쓰러지는 유닛마다 가운데 — 마지막이 이긴다(0x1006a8b1, 감사4 C17)
+                GainAilmentKillExp(u);
+                KillUnit(u);
+            }
         CheckOutcome();
     }
 
@@ -380,7 +419,8 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (_units[index].IsAlly)
                 Toast(_units[index].HasStatus(4) ? $"{UnitName(index)} 이(가) 버서커 상태라 스스로 움직입니다" : $"{UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
-            _routine = AiRoutine(index);
+            // AI 는 행동 전에 카메라가 그 인물에게 가서 선다(상태 14 CHRWORK 0x10069df0, 감사4 C4). 내 차례(상태 22)는 안 옮긴다(C3).
+            _routine = CameraThen(_units[index], AiRoutine(index));
         }
     }
 
@@ -715,6 +755,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 이동 + 기술이면 진형을 다시 세우지 않는다 — 원본은 계산만 하고 결과를 안 읽는다(0x1005fa90·0x1005fd00, 분석-군단).
         // 진형은 「이동만」·「이동+휴식」(0x1005f670·0x1005f870)에서만 다시 선다. 전에는 기술 앞에서 늘 다시 세웠다.
         _skillLeader = userIndex;
+        // 행동 실행(상태 14) — 행동 인물을 가운데로 보내고 멈춘 뒤에 걷기·기술을 시작한다(0x10069df0, 감사4 C1·C4).
+        foreach (bool _ in CenterUnitAndWait(a)) yield return true;
         foreach (var cell in path) a.Path.Enqueue(cell);
         while (a.IsBusy) yield return true;
         CommitMove(a);
@@ -741,6 +783,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 오메가 스윙·더블 브레이크·이데아 캐논 따위가 마지막 동작 하나만 했다(fg-20).
         int preludeSteps = finisher ? PreludeSteps(actions) : 0;
         bool holding = false;                               // 붙드는 모션(2000+m)을 치는 칸에서 틀었나
+        bool targetCentred = false;                         // 대상 칸 가운데 맞추기를 했나(치는 단계 첫 한 번)
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
@@ -755,6 +798,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
 
+            // 기술은 치는 단계에 들어서면 대상 칸을 가운데로 보내고 멈출 때까지 기다린다 — 스킬 핸들러 27곳의 첫 단계
+            // 0x100eab80(대상칸, 0, 0) → 0x1006e850 대기(감사4 C14). 기본공격(명령 0x2712)은 카메라 명령이 없다.
+            if (!targetCentred)
+            {
+                targetCentred = true;
+                if (!BasicWorkActions.ContainsKey(w.Id) && a.Data?.BasicWorkId != w.Id && (uint)col < Cols && (uint)row < Rows)
+                    foreach (bool _ in CenterAndWait(col * TileW + TileW / 2, CellCenterY(col, row))) yield return true;
+            }
             // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,
             // 그 모션에 든 타격 키 수(동작 13 = 2타, 14 = 3타)만큼 그 간격대로 판정을 낸다(분석-모션 ba-10).
             var hitTimes = new List<double> { 0 };
@@ -1026,6 +1077,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (dying.Count > 0)
         {
+            // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).
+            CenterOnUnit(dying.OrderBy(d => Array.IndexOf(_units, d)).Last());
             foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); Play(SoundDeath); }
             while (dying.Any(d => d.IsBusy)) yield return true;
             foreach (var d in dying)
@@ -1185,10 +1238,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
         {
             ScriptedDestinationOnWipe();
-            _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: true);
+            _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime;   // 음악은 배너와 함께 16틀 뒤(UpdateOutcomeBanner, 사운드 B1)
         }
         // 패배는 <b>사람이 모는 편(편 4)</b>이 다 쓰러졌을 때다(0x1006ec00 — 세력 +8 조종 주체 0 인 편만) — 편 3 동맹이 남아도 진다.
-        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; PlayOutcomeMusic(win: false); }
+        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; }
     }
 
     /// <summary>배너·음악 없이 끝나는 결과(행동 10·6 의 결과 5·6, 행동 11[1] 의 결과 2) — 원본 상태 24 는 결과 1·4 만 그린다(0x1006afa0).</summary>
@@ -1197,15 +1250,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>조용한 결과가 저절로 넘어가는 때(초).</summary>
     private double _outcomeLeaveAt;
 
-    /// <summary>이벤트 행동 11·10·6 이 적는 결과. <paramref name="quiet"/> 면 배너 없이 <paramref name="leaveAfterTicks"/> 뒤 넘어간다.</summary>
-    private void SetEventOutcome(bool win, bool quiet = false, int leaveAfterTicks = 120)
+    /// <summary>
+    /// 이벤트 행동 11·10·6 이 적는 결과. <paramref name="quiet"/> 면 배너 없이 넘어간다 — 상태 24 는 결과와 상관없이 어둡게(하위 0) →
+    /// 16틱 → 하위 2 에서 입력 또는 틱 &gt; 120 이라 <b>16 + 121 = 137틱</b>(감사4 C9). 배너 결과의 음악은 배너와 함께 건다(사운드 B1).
+    /// </summary>
+    private void SetEventOutcome(bool win, bool quiet = false)
     {
         if (_outcome.Length > 0) return;
         _outcome = win ? "승리" : "패배";
         _outcomeAt = _lastTime;
         _outcomeQuiet = quiet;
-        _outcomeLeaveAt = _lastTime + leaveAfterTicks / TicksPerSecond;
-        if (!quiet) PlayOutcomeMusic(win);
+        _outcomeLeaveAt = _lastTime + (OutcomeBannerDelayTicks + OutcomeAutoTicks + 1) / TicksPerSecond;
     }
 
     // ── 표시 ─────────────────────────────────────────────────────────────────

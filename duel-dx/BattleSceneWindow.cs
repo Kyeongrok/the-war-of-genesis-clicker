@@ -395,9 +395,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         Rows = rows;
         _zoom = FitZoom();
         if (_fb.Length != BoardWidth * BoardHeight) _fb = new uint[BoardWidth * BoardHeight];
-        _camY = 0;
-        _camX = 0;
-        _camPosX = _camTargetX = 0;
+        // 세로 자리·명령까지 지운다 — 예전엔 가로만 지워 새 전투가 앞 전투의 세로 자리에서 미끄러져 왔다(감사4 C5).
+        ResetCamera();
+        // 전투 맵이면 다음 전투 틀에 시작 카메라(Btl 워드 2·3)와 16틀 페이드인을 건다(0x10061ad0, 감사4 C6).
+        _battleIntroPending = BoardIsMap;
+        // 판을 갈았으면 장면이 바뀐 것 — 남은 페이드는 버린다(메뉴로 불러오기·타이틀로 가면 끝나지 않은 페이드가 남아 입력을 막았다).
+        if (_fadeOutStart >= 0) _mixer.SetMusicGain(_musicGain);   // 줄이던 음악 크기도 되돌린다
+        _fadeInStart = _fadeOutStart = -1;
         if (same || _hwnd == IntPtr.Zero) return;
         RebuildView();
     }
@@ -648,6 +652,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             {
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
+                _mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
                 UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
                 UpdateSlotsHover(bx, by);
@@ -670,6 +675,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
+        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
         if (_progressOpen) { if (key == Win32.VK_ESCAPE) ToggleProgress(); return; }
         if (key == Win32.VK_ESCAPE && SkipScene()) return;
@@ -793,6 +799,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// </summary>
     private void LeaveFinishedBattle()
     {
+        // 원본은 상태 24 가 끝나면 루프를 빠져나와 16틀 동안 화면을 검게, 음악을 100→10% 로 줄인 뒤 장면을 지운다
+        // (0x10061d91~0x10061ea9, 감사4 C7·사운드 B3). 이미 페이드 중이면 그대로 둔다 — 끝나면 StepSceneFade 가 넘긴다.
+        if (_fadeOutStart >= 0) return;
+        _fadeInStart = -1;
+        _fadeOutStart = _lastTime;
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"{_lastTime:F2} battle fade-out ({(_lastTime - _outcomeAt) * TicksPerSecond:F0} ticks after outcome '{_outcome}')" + Environment.NewLine);
+    }
+
+    /// <summary>페이드아웃이 끝난 뒤 — 결과대로 다음 장면을 연다.</summary>
+    private void LeaveFinishedBattleNow()
+    {
         // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
         // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
         bool won = _outcome.StartsWith('승');
@@ -820,6 +839,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnClick(int clientX, int clientY)
     {
         if (_progressOpen) { var (px, py) = BoardPoint(clientX, clientY); OnProgressClick(px, py); return; }
+        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
@@ -875,6 +895,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
 
         unit.BeginStep(col, row);
+        FollowUnit(_turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
     }
 
     /// <summary>누르고 있는 이동 키(누른 순서). 키보드 반복 대신 이걸로 한 칸이 끝나는 즉시 다음 칸을 잇는다.</summary>
@@ -1070,22 +1091,29 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
             unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
             unit.BeginStep(cell.Col, cell.Row);
+            // 걷기(명령 0x2710)는 칸 경계마다 걷는 인물 따라가기를 건다(0x10076ef8 → 0x100eac40(8), 감사4 C2).
+            // 군단 부하는 대장만 따라간다(0x2711 은 대장일 때만, 0x10077786).
+            if (unit.LeaderIndex < 0 && unit.OnField) FollowUnit(Array.IndexOf(_units, unit));
         }
 
         foreach (var unit in _units) unit.SettleIfStopped();
         ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
         SyncFollowers();
+        StepSceneFade();                        // 새 판이면 시작 카메라·페이드인, 끝났으면 페이드아웃 뒤 다음 장면
+        if (_mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
         UpdateCamera(dt);
         ApplyPoseHook();
-        ApplyWorkHook();
+        if (_fadeInStart < 0) ApplyWorkHook();
         SyncVirtualStatus();
         UpdateSounds();
         UpdateRing();
         UpdateTalk();
+        // 페이드인 동안은 틱·이벤트가 멈춘다(원본은 페이드를 다 한 뒤에 루프로 들어간다, 0x10061ad0).
+        if (_fadeInStart >= 0) return;
         StepEvent();
         UpdateTurn();
         RefreshMoveRange();
-        UpdateOutcomeBanner();                  // 배너는 음악이 끝나고 120틱 뒤 저절로 넘어간다(0x1006afa0)
+        UpdateOutcomeBanner();                  // 배너는 음악이 끝나고(최소 121틱) 저절로 넘어간다(0x1006afa0)
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -1150,6 +1178,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawTitle();
         DrawEpisodes();
         DrawChapters();
+        DrawSceneFade();                       // 전투 시작·끝 16틀 페이드(감사4 C6·C7)
         DrawSceneTag();
         DrawProgress();
     }

@@ -232,7 +232,14 @@ internal sealed unsafe partial class BattleSceneWindow
         SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
-        if (ScriptFor(w.Id) is not { } m) return;
+        var script = ScriptFor(w.Id);
+        if (DuckWorks.Contains(w.Id))
+        {
+            // 줄여 둘 동안 — 가장 늦게 끝나는 이펙트까지(지연 + 수명 또는 모션 길이). 대본이 없으면 40틱.
+            double ticks = (script?.Effects ?? []).Select(e => e.Delay + (e.Life > 0 ? e.Life : EffectTicks(e.Obs, e.Motion))).DefaultIfEmpty(0).Max();
+            DuckMusicForWork(ticks / TicksPerSecond);
+        }
+        if (script is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);
         var (userX, userY) = UnitFoot(user);
@@ -272,8 +279,18 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
             // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
+            // 썬더 스톰의 217:0 은 시작(A) 목록 소리 114 를 이펙트가 도는 동안 되풀이한다(0x100d2aa0, 감사4 S3).
+            if (!e.Fly) QueueEffectLoopSound(e.Obs, e.Motion, start, e.Life > 0 ? e.Life : EffectTicks(e.Obs, e.Motion), x);
             if (!ownSounds || _effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) is not { } clip) continue;
-            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((start + tick / TicksPerSecond, sound));
+            // 좌우 소리(감사4 S1) — 이펙트가 뜨는 자리 x. 날아가는 것은 떠나는 자리.
+            float sx = e.Fly ? userX : x;
+            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((start + tick / TicksPerSecond, sound, sx));
         }
     }
+
+    /// <summary>
+    /// 핸들러가 음악을 40 % 로 줄였다가 되돌리는 work — 1467(헬 카이트 계열)·1521~1524·1528·1588~1590
+    /// (<c>0x100c7710(40, 20)</c> 호출 22곳을 핸들러에 맞춘 것, 감사4 B4).
+    /// </summary>
+    private static readonly HashSet<int> DuckWorks = [1467, 1521, 1522, 1523, 1524, 1528, 1588, 1589, 1590];
 }
