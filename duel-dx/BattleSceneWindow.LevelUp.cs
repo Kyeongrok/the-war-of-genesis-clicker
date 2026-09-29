@@ -160,18 +160,19 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (!LevelUpOpen) return;
         string[] lines = _levelUpBody.Split('\n');
-        int lineH = 20, bodyH = lines.Length * lineH;
+        // 줄 내림 16(굴림 9pt + 4) — 메시지 창 0x10034540.
+        int lineH = 16, bodyH = lines.Length * lineH;
         var (_, titleW, _) = GetText(_levelUpTitle, White, 15);
-        int innerW = Math.Max(titleW + 100, lines.Max(l => GetText(l, White).W));
+        int bodyW = lines.Max(l => GetText(l, White).W);
+        int innerW = Math.Max(titleW + 100, bodyW);
         int w = innerW + 40, h = bodyH + 80;
         int x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2 + FrameTitleH / 2;
 
         DrawGameFrame(x, y, w, h, _levelUpTitle);
+        // 본문은 덩어리째 가운데, 줄마다 <b>왼쪽 맞춤</b>·흰색(0x10034540 — 첫 줄도 흰색).
+        int left = x + 20 + (innerW - bodyW) / 2;
         for (int i = 0; i < lines.Length; i++)
-        {
-            var (_, lw, _) = GetText(lines[i], White);
-            DrawText(lines[i], x + (w - lw) / 2, y + 20 + i * lineH, i == 0 ? 0xFFFFE070 : White);
-        }
+            DrawText(lines[i], left, y + 20 + i * lineH, White);
 
         // O.K 단추 — 원본 그림(76×22)은 기준점이 한가운데라 칸 가운데에 찍는다. 글자는 그림에 들어 있다.
         int bx = x + w / 2 - 38, by = y + h - 40;

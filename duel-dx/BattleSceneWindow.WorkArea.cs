@@ -15,7 +15,8 @@ namespace DuelDx;
 /// <para>
 /// 높이(2026-09-19): 높이 반영 플래그가 서 있으면 거리에 <b>차등이면 올려치기 +3/층·내려치기 −2/층, 아니면 +2×|층차|</b> 를 더한다.
 /// 칸을 켤지는 <b>최대 ≥ 차등까지 넣은 거리</b>이고 <b>최소 ≤ 차등 없이 잰 거리</b>일 때다. 「같은 높이만」 플래그가 서면 층이 다른 칸은 빠지고,
-/// 「시야」 플래그가 서면 두 칸을 잇는 직선(브레젠험)을 훑어 중간 칸이 <c>높이+3</c> 선보다 높으면 막힌 것으로 본다.
+/// 「시야」 플래그가 서면 대상에서 시전자로 직선을 훑어 칸 높이가 <c>높이+3</c> 선 이상이면 막힌 것으로 본다(<see cref="HasSight"/>).
+/// 플래그 &amp;8 은 물체까지 찍은 판(<see cref="CellFlagsAt"/>)으로 본다.
 /// 사거리 종류 2·4 는 <b>무기 사거리</b>(Itm 파일 16 ×4)를 최대로 쓴다. 오브젝트(대상 8)는 아직 없다.
 /// </para>
 /// </remarks>
@@ -25,7 +26,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private static int CellDistance(int fromCol, int fromRow, int col, int row) =>
         4 * (Math.Abs(col - fromCol) + Math.Abs(row - fromRow));
 
-    private int HeightAt(int col, int row) => _map is { } map ? map.HeightAt(col, row) : 0;
+    /// <summary>
+    /// 거리 자·같은 높이·모드 7·화면 창이 쓰는 칸 높이 — 원본 <c>+0x80</c>(지형 + 종류 0·3·4·5 물체 도장, <c>0x100daca0</c>·<c>0x100db787</c>, 감사3 R9).
+    /// 걷기·ZOC·시야는 모든 물체를 찍은 <see cref="WalkHeightAt"/>(<c>+0x78</c>)를 쓴다.
+    /// </summary>
+    private int HeightAt(int col, int row) => AimHeightAt(col, row);
 
     /// <summary>높이까지 넣은 거리 — 차등을 넣은 값과 안 넣은 값 둘 다 돌려준다(최대는 앞, 최소는 뒤로 잰다).</summary>
     private (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded)
@@ -38,17 +43,41 @@ internal sealed unsafe partial class BattleSceneWindow
         return (gradedDistance, plain);
     }
 
-    /// <summary>시야 — 두 칸을 잇는 직선을 훑어 중간 칸이 그 선보다 높으면 막힌 것으로 본다(<c>0x100daaf0</c>).</summary>
+    /// <summary>
+    /// 시야 — 원본 <c>0x100daaf0(x0,y0,h0, x1,y1,h1)</c> 그대로(감사3 R2). 모양 함수가 (대상 칸, 대상 높이+3, 시전자 칸, 시전자 높이+3)으로
+    /// 부르므로(<c>0x100db95f~0x100db987</c>) 선은 <b>대상 → 시전자</b>로 긋는다. 큰 축으로 한 칸씩 가며 작은 축은 오차를 쌓아 넘기고,
+    /// 선 높이는 16.16 고정소수로 더해 가다 산술 시프트(내림)로 읽는다. <b>칸 높이 ≥ 선 높이</b>면 막힌다 — 끝 칸(시전자 칸)까지 본다.
+    /// 높이는 모든 물체를 찍은 <c>+0x78</c>(<see cref="WalkHeightAt"/>) — 석상·크리스탈·닫힌 문이 시야를 막는다.
+    /// 전에는 시전자 → 대상, 0 쪽 자름 보간, <c>&gt;</c> 부등호, 지형 높이만 써서 무작위 판의 31% 가 원본과 달랐다.
+    /// </summary>
     private bool HasSight(int fromCol, int fromRow, int col, int row)
     {
-        if (_map is not { } map) return true;
-        int h0 = map.HeightAt(fromCol, fromRow) + 3, h1 = map.HeightAt(col, row) + 3;
-        int dx = Math.Abs(col - fromCol), dy = Math.Abs(row - fromRow);
-        int steps = Math.Max(dx, dy);
-        for (int i = 1; i < steps; i++)
+        if (_map is null) return true;
+        int x0 = col, y0 = row, x1 = fromCol, y1 = fromRow;          // 대상 → 시전자
+        int adx = Math.Abs(x1 - x0), ady = Math.Abs(y1 - y0);
+        if (adx == 0 && ady == 0) return true;
+        int h = (WalkHeightAt(x0, y0) + 3) << 16;
+        int num = ((WalkHeightAt(x1, y1) + 3) << 16) - h;
+        int sx = x0 >= x1 ? -1 : 1, sy = y0 >= y1 ? -1 : 1, err = 0, x = x0, y = y0;
+        if (adx > ady)
         {
-            int cx = fromCol + (col - fromCol) * i / steps, cy = fromRow + (row - fromRow) * i / steps;
-            if (map.HeightAt(cx, cy) > h0 + (h1 - h0) * i / steps) return false;
+            int slope = num / adx;                                   // idiv — 0 쪽으로 자른다
+            do
+            {
+                x += sx; err += ady; h += slope;
+                if (err >= adx) { err -= adx; y += sy; }
+                if (WalkHeightAt(x, y) >= h >> 16) return false;
+            } while (x != x1);
+        }
+        else
+        {
+            int slope = num / ady;
+            do
+            {
+                y += sy; err += adx; h += slope;
+                if (err >= ady) { err -= ady; x += sx; }
+                if (WalkHeightAt(x, y) >= h >> 16) return false;
+            } while (y != y1);
         }
         return true;
     }
@@ -131,7 +160,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row, UnitState? user = null)
     {
         if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is { } map && (map.FlagsAt(col, row) & 0x8) != 0) return false;
+        if (_map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
 
         int dx = col - fromCol, dy = row - fromRow;
         if (w.SelfCentred || w.RangeShape == 0) return dx == 0 && dy == 0;
@@ -168,7 +197,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 int cx = col + dx, cy = row + dy;
                 if ((uint)cx >= Cols || (uint)cy >= Rows) continue;
-                if (_map is { } map && (map.FlagsAt(cx, cy) & 0x8) != 0) continue;
+                if (_map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0) continue;
                 if (w.SameHeightArea != 0 && HeightAt(cx, cy) != HeightAt(col, row)) continue;
                 var (graded, plain) = WorkDistance(col, row, cx, cy, w.HeightArea != 0, graded: false);
                 if (w.AreaShape == 4)
@@ -182,7 +211,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 {
                     if (!ShapeReaches(w.AreaShape, dx, dy, facing, w.AreaMinQuarters, w.AreaMaxQuarters, graded, plain)) continue;
                 }
-                else if (plain < w.AreaMinQuarters) continue;
+                // 겨눈 칸 자체도 모양이 덮어야 한다 — 모양 9(삼각형)는 축 ≥ 1 부터라 겨눈 칸이 절대 안 켜진다
+                // (0x100dd2d0 방향 0 이 원점y−1 줄부터 훑는다 0x100dd380, 감사3 R5). 전에는 모양을 안 보고 넣었다.
+                else if (!ShapeCovers(w.AreaShape, 0, 0, facing) || plain < w.AreaMinQuarters) continue;
                 cells.Add((cx, cy));
             }
         return cells;
@@ -214,11 +245,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool CanLandOn(int col, int row, UnitState user)
     {
         if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is not { } map || col >= map.Cols || row >= map.Rows || (map.FlagsAt(col, row) & 0x9) != 0) return false;
+        if (_map is not { } map || col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0) return false;
         if (LiveUnitAt(col, row) is { } other && other != user) return false;
         if (ObjectAt(col, row) is { Alive: true }) return false;
+        // ZOC 높이는 걷기 높이 +0x78(0x100d9b47 → 0x10073de0, 감사3 R9).
         foreach (var (dx, dy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-            if (LiveUnitAt(col + dx, row + dy) is { } e && e != user && SeesAsFoe(user, e) && HeightAt(col + dx, row + dy) == HeightAt(col, row)) return false;
+            if (LiveUnitAt(col + dx, row + dy) is { } e && e != user && SeesAsFoe(user, e) && WalkHeightAt(col + dx, row + dy) == WalkHeightAt(col, row)) return false;
         return true;
     }
 

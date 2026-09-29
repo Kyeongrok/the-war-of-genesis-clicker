@@ -5,28 +5,166 @@ namespace DuelDx;
 /// 전투판에 놓인 물체 — 상자·문·포탑·바리케이트(분석-전투 「물체(오브젝트) 배열 <c>+0x3c74</c>」).
 /// </summary>
 /// <remarks>
-/// 물체는 <b>파일이 놓는 것이 전부</b>다 — 전투 중에 새로 생기지 않는다. 길은 안 막고, <b>문(종류 1·4)만</b>
-/// 걸어 들어갈 목표 칸이 될 수 없다(<c>0x100746b0</c>). 데모는 아직 그리기와 목표 칸 막기까지만 한다 —
-/// 상자 열기(work 386)·부수기·포탑의 차례는 아직이다.
+/// 물체는 <b>파일이 놓는 것이 전부</b>다 — 전투 중에 새로 생기지 않는다. 원본처럼 제 Obt 를 판에 <b>찍어</b>
+/// 발자국 칸의 플래그·높이를 바꾼다(아래 「물체 도장 판」, 감사3 R1) — 상자·포탑·바리케이트·크리스탈·닫힌 문은 벽이다.
+/// 열린 문(종류 1·4)은 도장에서 빠져 지나갈 수 있지만 걸어 들어갈 목표 칸은 될 수 없다(<c>0x100746b0</c>).
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
     private IReadOnlyList<DemoObject> Objects => _scene.Objects ?? [];
 
-    /// <summary>그 칸에 선 물체 — 없으면 null. 두 칸짜리 문은 오른쪽 칸도 제 칸이다(<see cref="ObjectWidth"/>).</summary>
-    private DemoObject? ObjectAt(int col, int row) =>
-        Objects.FirstOrDefault(o => o.Alive && !_opened.Contains(o) && o.Row == row && col >= o.Col && col < o.Col + ObjectWidth(o));
+    /// <summary>
+    /// 그 칸의 물체 — 없으면 null. 원본 물체 격자 <c>+0x74</c>(<c>0x100d93e0</c>)처럼 <b>Obt 발자국 전체</b>(비트 0x10 아닌 칸)가 제 칸이고,
+    /// <b>열린 문·연 상자도 돌려준다</b>(열린 문은 도장은 빠져도 격자에 남는다, 감사3 R1). 부서진 물체·터진 폭탄 상자만 뺀다.
+    /// 예전에는 그림 폭(.obj 16 ≥ 36 이면 두 칸)으로 짐작하고 연 물체를 뺐다 — 1×2 바리케이트·3×1 문(Obj 71)이 틀렸다.
+    /// </summary>
+    private DemoObject? ObjectAt(int col, int row)
+    {
+        EnsureStamp();
+        if ((uint)col >= (uint)_stampCols || (uint)row >= (uint)_stampRows) return null;
+        int k = _objGrid[row * _stampCols + col];
+        var objects = Objects;
+        return k >= 0 && k < objects.Count && !ObjectGone(objects[k]) ? objects[k] : null;
+    }
+
+    /// <summary>판에서 사라진 물체 — 부서졌거나(<c>+0x101</c>) 터진 폭탄 상자.</summary>
+    private bool ObjectGone(DemoObject o) => !o.Alive || (o.Data.Kind == 8 && _opened.Contains(o));
 
     /// <summary>
-    /// 물체가 차지하는 칸 수 — 그림 보정 가로(.obj 16)가 36 이상이면 두 칸(두 칸 가운데에 그린다, 가설)이다.
-    /// 문(Obj 69 · 71, 보정 39)이 그렇다. 예전에는 왼쪽 칸만 물체로 쳐서, 문 그림의 오른쪽 절반을 누르면 아무 일도 없었다(사용자 보고: Btl 0146 위쪽 문).
+    /// Obt 가 없을 때의 짐작 폭 — 그림 보정 가로(.obj 16)가 36 이상이면 두 칸(예전 규칙). 저장소에 Obt 가 없는 물체만 쓴다.
     /// </summary>
     private static int ObjectWidth(DemoObject o) => o.Data.DrawW >= 36 ? 2 : 1;
+
+    /// <summary>물체 발자국 칸들(판 좌표) — Obt 격자에서 비트 0x10 이 아닌 칸. Obt 가 없으면 그림 폭으로 짐작한 가로 칸들.</summary>
+    private static IEnumerable<(int Col, int Row, int Raw, ushort Flags)> FootprintCells(DemoObject o)
+    {
+        if (o.Footprint is not { } fp)
+        {
+            for (int c = 0; c < ObjectWidth(o); c++) yield return (o.Col + c, o.Row, 0, 0x1);
+            yield break;
+        }
+        for (int r = 0; r < fp.Rows; r++)
+            for (int c = 0; c < fp.Cols; c++)
+            {
+                int i = r * fp.Cols + c;
+                if ((fp.Flags[i] & 0x10) == 0) yield return (o.Col + c, o.Row + r, fp.Raw[i], fp.Flags[i]);
+            }
+    }
+
+    // ── 물체 도장 판(감사3 R1) ─────────────────────────────────────────────────────────────
+    // 원본 판(CBMap)은 지형 위에 물체 Obt 를 찍은 배열을 따로 든다:
+    //   +0x78 걷기 높이(모든 물체) — 걷기 높이차·걸음 비용·ZOC·시야, +0x80 겨눔 높이(종류 표 +0x14 가 선 종류 0·3·4·5 만) — 거리 자·같은 높이·모드 7·화면 창,
+    //   +0x88 플래그(Obt 플래그로 덮어씀) — 걷기 &9 · 사거리 &8, +0x74 물체 번호 격자(발자국 전체).
+    // LoadBtl 0x10062b11(+0x78/+0x88)·0x10062b78(+0x80) 이 0x10028620 으로 찍고, 부서짐(0x100e7be9)·문 여닫기(0x100e7c70·0x100e7cc5)가
+    // 판에 0x3f1 을 보내면 0x100ead80 이 지형으로 되돌린 뒤(0x100d91e0) 물체마다 다시 찍는다(0x100e6620: 사라진 것 +0x101 과 열린 문 1·4 는 건너뜀).
+    // 상자(2)는 열어도(0x100e7ce0, 0x3f1 을 안 보낸다) 계속 찍힌다.
+    private ObtMapImage? _stampMap;
+    private IReadOnlyList<DemoObject>? _stampObjects;
+    private int _stampKey, _stampCols, _stampRows;
+    private double _stampTime = double.NaN;
+    private bool _stampDirty = true;
+    private int[] _walkH = [], _aimH = [], _objGrid = [];
+    private ushort[] _cellFlags = [];
+
+    /// <summary>물체 상태가 바뀌었다(부서짐·여닫기) — 원본이 판에 0x3f1 을 보내는 자리. 다음 조회 때 판을 다시 찍는다.</summary>
+    private void RestampObjects() => _stampDirty = true;
+
+    /// <summary>도장 판이 지금 판·물체 상태와 맞는지 보고, 아니면 다시 찍는다. 물체 상태 서명은 틀마다 한 번만 잰다(세이브 되살리기도 잡힌다).</summary>
+    private void EnsureStamp()
+    {
+        if (_map is not { } map) { _stampCols = _stampRows = 0; return; }
+        var objects = Objects;
+        if (!_stampDirty && ReferenceEquals(map, _stampMap) && ReferenceEquals(objects, _stampObjects))
+        {
+            if (_stampTime == _lastTime) return;
+            _stampTime = _lastTime;
+            if (StampKey(objects) == _stampKey) return;
+        }
+        RebuildStamp(map, objects);
+    }
+
+    private int StampKey(IReadOnlyList<DemoObject> objects)
+    {
+        var hash = new HashCode();
+        foreach (var o in objects) hash.Add((o.Alive ? 1 : 0) | (_opened.Contains(o) ? 2 : 0));
+        return hash.ToHashCode();
+    }
+
+    /// <summary>지형에서 새로 시작해 살아 있고(종류 1·4 면) 닫혀 있는 물체를 차례로 찍는다(<c>0x100ead80</c> → <c>0x100e6620</c> → <c>0x10028620</c>).</summary>
+    private void RebuildStamp(ObtMapImage map, IReadOnlyList<DemoObject> objects)
+    {
+        int cols = map.Cols, rows = map.Rows, n = cols * rows;
+        if (_walkH.Length != n) { _walkH = new int[n]; _aimH = new int[n]; _cellFlags = new ushort[n]; _objGrid = new int[n]; }
+        Array.Copy(map.Heights, _walkH, n);
+        Array.Copy(map.Heights, _aimH, n);
+        Array.Copy(map.Flags, _cellFlags, n);
+        Array.Fill(_objGrid, -1);
+        for (int k = 0; k < objects.Count; k++)
+        {
+            var o = objects[k];
+            // 물체 격자 +0x74 — 발자국 전체. 열린 문도 남는다(0x100746b0 목표 칸 금지에 걸린다).
+            // 겹치면 사라지지 않은 물체가 이긴다.
+            foreach (var (c, r, _, _) in FootprintCells(o))
+                if ((uint)c < cols && (uint)r < rows && (_objGrid[r * cols + c] < 0 || ObjectGone(objects[_objGrid[r * cols + c]])))
+                    _objGrid[r * cols + c] = k;
+            if (ObjectGone(o) || (o.Data.Kind is 1 or 4 && _opened.Contains(o))) continue;
+            // 바닥층 = 기준점 칸 높이를 바이트로 자른 값(원본 bl). 겨눔 높이(+0x80)는 종류 표 +0x14 가 선 종류(0·3·4·5)만 찍는다(0x10062b78).
+            bool aim = o.Data.Kind is 0 or 3 or 4 or 5;
+            bool originInside = (uint)o.Col < cols && (uint)o.Row < rows;
+            int walkBase = originInside ? _walkH[o.Row * cols + o.Col] & 0xFF : 0;
+            int aimBase = originInside ? _aimH[o.Row * cols + o.Col] & 0xFF : 0;
+            foreach (var (c, r, raw, flags) in FootprintCells(o))
+            {
+                if ((uint)c >= cols || (uint)r >= rows) continue;
+                int i = r * cols + c;
+                if (raw != 0)
+                {
+                    _walkH[i] = (raw + 19) / 20 + walkBase;
+                    if (aim) _aimH[i] = (raw + 19) / 20 + aimBase;
+                }
+                _cellFlags[i] = flags;                  // 플래그는 그대로 덮어쓴다(0x10028620)
+            }
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"stamp: obj {o.Data.Id} kind {o.Data.Kind} at ({o.Col},{o.Row}) cells "
+                    + string.Join(" ", FootprintCells(o).Where(p => (uint)p.Col < cols && (uint)p.Row < rows)
+                                                        .Select(p => $"({p.Col},{p.Row}) h{_walkH[p.Row * cols + p.Col]} f{_cellFlags[p.Row * cols + p.Col]:x}"))
+                    + Environment.NewLine);
+        }
+        (_stampMap, _stampObjects, _stampCols, _stampRows) = (map, objects, cols, rows);
+        _stampKey = StampKey(objects);
+        _stampTime = _lastTime;
+        _stampDirty = false;
+    }
+
+    /// <summary>걷기 높이(<c>+0x78</c>, 모든 물체 포함) — 걷기 높이차·걸음 비용·ZOC·시야가 쓴다. 판 밖은 0.</summary>
+    private int WalkHeightAt(int col, int row)
+    {
+        EnsureStamp();
+        return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _walkH[row * _stampCols + col] : 0;
+    }
+
+    /// <summary>겨눔 높이(<c>+0x80</c>, 종류 0·3·4·5 물체만) — 거리 자·같은 높이·모드 7·화면 창이 쓴다. 판 밖은 0.</summary>
+    private int AimHeightAt(int col, int row)
+    {
+        EnsureStamp();
+        return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _aimH[row * _stampCols + col] : 0;
+    }
+
+    /// <summary>물체까지 찍은 칸 플래그(<c>+0x88</c>) — &amp;9 걷기 금지 · &amp;8 사거리 제외. 판 밖은 0x8.</summary>
+    private ushort CellFlagsAt(int col, int row)
+    {
+        EnsureStamp();
+        return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _cellFlags[row * _stampCols + col] : (ushort)0x8;
+    }
 
     /// <summary>문이 열린 때 — 그때부터 여는 모션(1)을 한 번 돌고 열린 모션(2)에 머문다.</summary>
     private readonly Dictionary<DemoObject, double> _openedAt = [];
 
-    /// <summary>그 칸이 물체 때문에 설 수 없는 칸인가 — 문과 스위치문뿐이다.</summary>
+    /// <summary>
+    /// 그 칸이 물체 때문에 설 수 없는 칸인가 — 문과 스위치문뿐이다(<c>0x100746b0</c>). 닫힌 문은 도장 플래그로 이미 벽이고,
+    /// 이것이 실제로 거르는 것은 <b>열린 문</b>이다 — 지나갈 수는 있어도 멈춰 설 수는 없다(감사3 R1).
+    /// </summary>
     private bool ObjectBlocks(int col, int row) => ObjectAt(col, row) is { Data.BlocksStanding: true };
 
     /// <summary>
@@ -45,10 +183,11 @@ internal sealed unsafe partial class BattleSceneWindow
         obj.Hp -= damage;
         ShowNumber(user, damage.ToString(), DamageColor);
         if (obj.Hp > 0) return;
+        RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
         _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
-        GiveObjectSpoils(obj);
+        GiveObjectSpoils(obj, user);
     }
 
     /// <summary>
@@ -72,19 +211,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
     {
-        if (obj.Data.Kind is not (1 or 2 or 6 or 8 or 10) || (known ?? ComputeRange(user)) is not { } range) return null;
+        // 연 물체는 더 손댈 것이 없다 — 원본 상자 열기 0x100e7ce0 도 +0x164(열림)이면 아무것도 안 한다. 이제 ObjectAt 이 연 물체도 돌려준다.
+        if (obj.Data.Kind is not (1 or 2 or 6 or 8 or 10) || _opened.Contains(obj) || ObjectGone(obj)
+            || (known ?? ComputeRange(user)) is not { } range) return null;
         bool Affordable(int col, int row) =>
             (uint)col < Cols && (uint)row < Rows && range.CanReach(row * Cols + col)
             && (!needTp || range.Cost[row * Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
-        if (Math.Abs(user.Col - obj.Col) + Math.Abs(user.Row - obj.Row) == 1 && Affordable(user.Col, user.Row)) return [];
+        // work 386 은 십자 한 칸, 대상 8(물체) — 발자국 칸 어디든 옆이면 닿는다(여러 칸짜리 문·아크방전기).
+        var cells = FootprintCells(obj).Select(c => (c.Col, c.Row)).ToList();
+        if (cells.Count == 0) cells.Add((obj.Col, obj.Row));
+        bool Adjacent(int col, int row) => !cells.Contains((col, row)) && cells.Any(c => Math.Abs(c.Col - col) + Math.Abs(c.Row - row) == 1);
+        if (Adjacent(user.Col, user.Row) && Affordable(user.Col, user.Row)) return [];
         int best = -1, bestCost = int.MaxValue;
-        foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
-        {
-            int col = obj.Col + dx, row = obj.Row + dy;
-            if (!Affordable(col, row) || range.Cost[row * Cols + col] >= bestCost) continue;
-            best = row * Cols + col;
-            bestCost = range.Cost[best];
-        }
+        foreach (var (oc, or) in cells)
+            foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
+            {
+                int col = oc + dx, row = or + dy;
+                if (!Adjacent(col, row) || !Affordable(col, row) || range.Cost[row * Cols + col] >= bestCost) continue;
+                best = row * Cols + col;
+                bestCost = range.Cost[best];
+            }
         return best < 0 ? null : PathWithin(range, user.Col, user.Row, best);
     }
 
@@ -129,6 +275,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _units[_turn].Tp -= ObjectTouchTp;
         _opened.Add(obj);
         _openedAt[obj] = _lastTime;
+        RestampObjects();                                 // 문이 열리면 도장이 빠진다(0x100e7cc5 → 0x3f1). 상자는 그대로 찍힌다.
 
         if (obj.Data.Kind == 8)
         {
@@ -143,7 +290,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        if (obj.Record.ItemId > 0 || obj.Record.Gold > 0) GiveObjectSpoils(obj);
+        if (obj.Record.ItemId > 0 || obj.Record.Gold > 0) GiveObjectSpoils(obj, _units[_turn]);
         else Toast("비어 있습니다.");
 
         Play(MosesClickSound);
@@ -255,13 +402,14 @@ internal sealed unsafe partial class BattleSceneWindow
         Play(MosesClickSound);
 
         if (obj.Hp > 0) return true;
+        RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
         // 부서지면 그 자리에 폭발이 한 번 돈다(Obs 1009, 0x100e7ba0).
         _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, CellCenterY(col, row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         // 부서진 상자도 든 것을 떨군다 — 원본은 상태 19 에서 `.obj +0x144` 아이템(명령 0x3f4)·`+0x146` GP(명령 0x3f5)를
         // 그 칸에 선 인물에게 준다(0x100e7d31~). 아이템이 있으면 아이템만, 없으면 GP.
-        GiveObjectSpoils(obj);
+        GiveObjectSpoils(obj, user);
         return true;
     }
 
@@ -305,11 +453,19 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>부서지거나 열린 상자가 든 것을 준다 — 아이템이 있으면 아이템, 없으면 GP(0x100e7d31, 명령 0x3f4·0x3f5).</summary>
-    private void GiveObjectSpoils(DemoObject obj)
+    /// <remarks>
+    /// 아이템 얻기(유닛 메시지 0x3f4, <c>0x10071ffc~0x1007209c</c>): 받는 인물이 파티에 들었으면 장비 칸 표 <c>0x10032d70</c>
+    /// (무기 종류 == 제 무기 → 0 · 갑옷 2 → 1 · 6 → 2 · 5 → 3 · 4 → 4 · 3 → 5, 캡슐 따위 → 없음)로 칸을 찾아 <b>그 칸이 비었으면 바로 낀다</b>(<c>+0x15c[칸]</c>).
+    /// 칸이 없거나 차 있으면 가방으로. 받는 사람은 부서진·열린 물체 칸의 인물이다 — 없으면 연 사람.
+    /// 전에는 늘 가방에만 넣었다(감사3 I2). 가방은 파티별이 아니라 지금 가방 하나다(파티가 갈린 챕터는 원본과 다를 수 있다).
+    /// </remarks>
+    private void GiveObjectSpoils(DemoObject obj, UnitState? opener = null)
     {
         if (obj.Record.ItemId > 0)
         {
-            _inventory[obj.Record.ItemId] = _inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
+            var taker = LiveUnitAt(obj.Col, obj.Row) ?? opener;
+            if (!TryEquipSpoil(taker, obj.Record.ItemId))
+                _inventory[obj.Record.ItemId] = _inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
             string itemName = _db?.Items.GetValueOrDefault(obj.Record.ItemId) is { } item ? _db.T(item.NameId) : "";
             Toast($"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
         }
@@ -318,6 +474,30 @@ internal sealed unsafe partial class BattleSceneWindow
             _shopMoney += obj.Record.Gold;
             Toast($"{obj.Record.Gold}GP 를 획득하였습니다.");
         }
+    }
+
+    /// <summary>얻은 장비를 그 인물의 맞는 빈 칸에 바로 낀다(<c>0x10032d70</c> → <c>+0x15c[칸]</c>). 꼈으면 true.</summary>
+    private bool TryEquipSpoil(UnitState? taker, int itemId)
+    {
+        // 파티에 든 인물만(0x1007b030 ≠ −1) — 동맹 손님·군단 부하·적은 가방으로.
+        if (taker is not { Alive: true, Data: { } c } || taker.LeaderIndex >= 0 || !taker.IsAlly
+            || !(_members.Contains(taker.ChrCode) || _party.ContainsKey(taker.ChrCode)) || _db is not { } db
+            || !db.Items.TryGetValue(itemId, out var item)) return false;
+        for (int slot = 0; slot < Math.Min(6, c.Items.Length); slot++)
+        {
+            if (!db.FitsSlot(c, item, slot)) continue;
+            if (c.Items[slot] != 0) return false;           // 맞는 칸이 이미 차 있으면 가방으로
+            var items = (ushort[])c.Items.Clone();
+            items[slot] = (ushort)itemId;
+            taker.Data = c with { Items = items };
+            RefreshUnitStats(taker);
+            if (_party.ContainsKey(taker.ChrCode)) _party[taker.ChrCode] = taker.Data;
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"spoil equip: chr {taker.ChrCode} slot {slot} ← item {itemId}" + Environment.NewLine);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -351,8 +531,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 종류 3·9·10 만 차례를 받고, 그중 9·10 은 편이 중립(−1)이면 영영 안 움직인다.
     /// </summary>
     private void StepObjects()
-    {
-        foreach (var obj in Objects)
+    {        foreach (var obj in Objects)
         {
             if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts) continue;
             if (obj.Data.Kind is 9 or 10 && obj.Team < 0) continue;
@@ -486,7 +665,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    /// <summary>이미 연 상자 — 판에서 사라진다.</summary>
+    /// <summary>이미 연 물체(원본 <c>+0x164</c>) — 열린 문은 도장이 빠지고, 상자는 열린 그림으로 남아 계속 길을 막는다. 터진 폭탄 상자만 사라진다.</summary>
     private readonly HashSet<DemoObject> _opened = [];
 
     /// <summary>
@@ -505,6 +684,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (Objects.FirstOrDefault(o => o.Record.No == no) is not { } obj) return;
         if (open == _opened.Contains(obj)) return;               // 이미 그 꼴이면 원본도 아무것도 안 한다
         if (open) { _opened.Add(obj); _openedAt[obj] = _lastTime; } else { _opened.Remove(obj); _openedAt.Remove(obj); }
+        RestampObjects();                                 // 여닫으면 판을 다시 찍는다(0x100e7c70·0x100e7cc5 → 0x3f1)
         _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
         Play(MosesClickSound);
     }
@@ -543,12 +723,18 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!obj.Alive || obj.Data.SpriteId <= 0) continue;
             // 열린 물체 — 문(1·4)은 여는 모션 1 을 한 번 돌고 열린 모션 2 로 남는다(Obs 1217: 0 닫힘 · 1 열림 11틱 · 2 열린 채). 상자 따위는 치운다.
             int motion = 0, tick = (int)(_lastTime * TicksPerSecond);
+            // 상자(2)·스위치(6)도 원본은 치우지 않는다 — 여는 모션 1 을 한 번 돌고 모션 2 에 머물며(0x100e7cfb·0x100e7d28) 판에 계속 찍힌다(감사3 R1).
+            // 그림에 모션 2 가 없으면 닫힌 그림(0)으로 둔다 — 치우면 보이지 않는 벽이 된다. 터진 폭탄 상자(8)만 사라진다.
             if (_opened.Contains(obj))
             {
-                if (obj.Data.Kind is not (1 or 4)) continue;
-                int since = (int)((_lastTime - _openedAt.GetValueOrDefault(obj, _lastTime)) * TicksPerSecond);
-                int length = UiFor(obj.Data.SpriteId)?.MotionLength(1) ?? 0;
-                (motion, tick) = since < length ? (1, since) : (2, 0);
+                if (ObjectGone(obj)) continue;
+                var sprite = UiFor(obj.Data.SpriteId);
+                if (obj.Data.Kind is 1 or 4 || (sprite?.MotionLength(2) ?? 0) > 0)
+                {
+                    int since = (int)((_lastTime - _openedAt.GetValueOrDefault(obj, _lastTime)) * TicksPerSecond);
+                    int length = sprite?.MotionLength(1) ?? 0;
+                    (motion, tick) = since < length ? (1, since) : (2, 0);
+                }
             }
             // 그림 기준점 = 칸 왼쪽 위 + .obj 파일 16·18 의 그림 보정(원본은 ×4 · ×40/32 해서 화면 자리 +0x3e/+0x40 에 더한다, 분석-전투 「Obj 배치」).
             // 1칸 물체는 가로 16~20(칸 가운데), 2칸 문은 36·39(두 칸 가운데)라 픽셀 거리로 본다(가설). 예전에는 칸 아래 모서리에 놓아

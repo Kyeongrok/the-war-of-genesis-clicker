@@ -9,7 +9,7 @@ namespace DuelDx;
 /// <remarks>
 /// <list type="bullet">
 /// <item><b>다이나믹 크래쉬</b>(<c>0x1009fd40</c>) — 비와 같은 밀어내기(시전자가 보는 쪽으로 사거리 끝까지) 뒤 대상 SOUL −10.</item>
-/// <item><b>리인카네이션</b>(<c>0x1008d940</c>) — 범위 안 적마다 시전자 반대쪽(8방향)으로 범위 밖까지 밀고, 막히면 한 번 더 때린다(뜻은 가설).</item>
+/// <item><b>리인카네이션</b>(<c>0x1008d940</c>) — 범위 안 유닛마다 시전자 반대쪽(8방향)으로 범위 밖까지 민다. 피해는 이동기 슬롯뿐 — 보통 0타, 막힘 뒤 1타, 제자리 막힘 2타(audit3 R1).</item>
 /// <item><b>워핑</b>(<c>0x1009d100</c>) — 대상을 시전자→대상 쪽으로 13±2 칸 밖의 설 수 있는 칸으로 날려 보낸다. 못 찾으면 10칸부터 당겨 온다.</item>
 /// <item><b>혼·비연참·오메가 스윙</b>(<c>0x1007f220</c>·<c>0x10080430</c>·<c>0x100891a0</c>) — 시전자가 겨눈 빈 칸까지 돌진하며 지나는 칸의 적을 때린다.
 /// 원본은 이동기에 타격 개체를 붙인다 — 지나는 길 한 줄만 맞는 것으로 했다(판정 폭은 가설).</item>
@@ -61,9 +61,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>여러 인물을 한꺼번에 미끄러뜨린다 — 각자 제 칸까지, 틱마다 한 걸음.</summary>
-    private IEnumerable<bool> SlideAll(List<(UnitState Unit, int Col, int Row, List<double> Steps)> moves)
+    /// <param name="begun">이미 <see cref="UnitState.BeginSlide"/> 로 칸을 옮겨 둔 경우(리인카네이션 — 처리 차례대로 등록표를 바꾼다).</param>
+    private IEnumerable<bool> SlideAll(List<(UnitState Unit, int Col, int Row, List<double> Steps)> moves, bool begun = false)
     {
-        foreach (var (u, col, row, _) in moves) u.BeginSlide(col, row);
+        if (!begun) foreach (var (u, col, row, _) in moves) u.BeginSlide(col, row);
         double start = _lastTime;
         int longest = moves.Max(m => m.Steps.Count);
         for (int k; (k = (int)((_lastTime - start) * TicksPerSecond)) < longest;)
@@ -74,41 +75,68 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (u, _, _, _) in moves) u.SetSlide(1);
     }
 
-    /// <summary>리인카네이션 — 범위 안 대상들을 시전자 반대쪽으로 범위 밖까지 밀어낸다. 막힌 인물은 한 번 더 맞는다.</summary>
+    /// <summary>
+    /// 리인카네이션(<c>0x1008d940</c>, audit3 R1) — 범위 안 유닛(편 무관, 시전자 빼고)을 시전자 반대쪽(8방향)으로 범위 밖 첫 칸까지 민다.
+    /// 피해는 일반 타격이 아니라 이동기 슬롯 둘뿐이다.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>처리 차례 = 범위 사각형을 행(y) 오름차순, 행 안에서 열(x) 오름차순(<c>0x100df5c0</c>, <c>0x100df5ed~0x100df694</c>). 유닛은 차례대로 곧바로 새 칸에 등록된다(<c>0x1008df5a</c> 해제 → <c>0x1008dfa5</c> 등록).</item>
+    /// <item>슬롯 0(<c>0x1008eac8</c>) — 다음 틱 <b>출발 칸</b>에서 한 번. 그때 출발 칸은 이미 비었으므로 보통은 아무도 안 맞는다.
+    /// 제자리에 막힌 유닛, 또는 남이 떠난 출발 칸으로 되돌아와 선 유닛만 맞는다(<c>0x100c2d9c</c>, <c>0x100d9b17</c>).</item>
+    /// <item>슬롯 1(<c>0x1008eb15</c>) — 이동이 끝날 때 <b>도착 칸</b>에서 한 번. 막힘 깃발 <c>[esp+0x30]</c> 은 고리 밖 <c>0x1008de68</c> 에서만 0 으로 두므로
+    /// 한 번 막힌 유닛이 나온 뒤로 처리되는 유닛은 막히지 않았어도 모두 받는다.</item>
+    /// <item>효과 범위 밖·시전자·물체는 밀리지도 맞지도 않는다.</item>
+    /// </list>
+    /// </remarks>
     private IEnumerable<bool> RadialPushRoutine(UnitState user, WorkData w, int col, int row, List<int> targets, List<UnitState> dying)
     {
-        var area = AreaCells(w, user, col, row).ToHashSet();
+        _ = targets;   // 원본은 WorkTargets(적만) 가 아니라 범위 안 모든 유닛을 모은다(방식 5).
+        var cells = AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
+        var area = cells.ToHashSet();
+        // 먼저 모아 둔다(0x100df5c0 이 버퍼에 모은 뒤 고리를 돈다) — 밀려난 유닛이 다시 잡히지 않게.
+        var order = cells.Select(c => LiveUnitAt(c.Col, c.Row)).OfType<UnitState>()
+                         .Where(t => t != user && !dying.Contains(t)).Distinct().ToList();
+        // 되돌아올 때 설 수 있는 칸 0x100d9a20 — 지형 &9 · 다른 유닛 등록 · 물체 없음(자기 칸은 늘 참).
+        bool Stand(int c, int r, UnitState t) => CanStand(c, r, t) && ObjectAt(c, r) is not { Alive: true, Data.BlocksStanding: true };
+
+        bool stuckFlag = false;   // 0x1008de68 — 고리 밖에서 한 번만 0
+        var starts = new List<(int Col, int Row)>();
+        var slot1 = new List<UnitState>();
         var moves = new List<(UnitState, int, int, List<double>)>();
-        var blocked = new List<UnitState>();
-        foreach (int ti in targets)
+        foreach (var t in order)
         {
-            var t = _units[ti];
-            if (!t.Alive || dying.Contains(t) || t == user) continue;
             int dc = Math.Sign(t.Col - user.Col), dr = Math.Sign(t.Row - user.Row);
             if (dc == 0 && dr == 0) continue;
-            int c = t.Col, r = t.Row, moved = 0;
-            bool stuck = false;
-            // 범위 안에 있는 동안 나아가고, 범위를 벗어난 첫 칸에 선다. 갈 수 없으면 거기서 멈춘다(원본은 되돌아오며 깃발을 세운다).
-            while (area.Contains((c, r)) || moved == 0)
+            int c = t.Col, r = t.Row, nc = c, nr = r;
+            starts.Add((c, r));
+            // 범위 안인 동안 나아가 범위 밖 첫 칸. 못 서면 깃발을 세우고 한 칸씩 되돌아오며 처음 설 수 있는 칸(0x1008df33 …).
+            do { nc += dc; nr += dr; } while (area.Contains((nc, nr)));
+            if (!Stand(nc, nr, t))
             {
-                if (!CanStand(c + dc, r + dr, t) || moves.Any(m => m.Item2 == c + dc && m.Item3 == r + dr)) { stuck = true; break; }
-                c += dc; r += dr; moved++;
-                if (moved > 12) break;
+                stuckFlag = true;
+                do { nc -= dc; nr -= dr; } while (!(nc == c && nr == r) && !Stand(nc, nr, t));
             }
-            if (stuck) blocked.Add(t);
+            if (stuckFlag) slot1.Add(t);
+            int moved = Math.Max(Math.Abs(nc - c), Math.Abs(nr - r));
             if (moved == 0) continue;
-            t.Facing = FacingToward(c, r, user.Col, user.Row);
+            t.Facing = FacingToward(nc, nr, user.Col, user.Row);
             t.PlayAction(HitAction, 1000);
             var (fx, fy) = UnitFoot(t);
             _effects.Add((BiTrailObs, 0, _lastTime, fx, fy));
-            moves.Add((t, c, r, SlideSteps(moved)));
+            t.BeginSlide(nc, nr);   // 곧바로 새 칸에 등록 — 뒤에 처리되는 유닛은 이 칸에 막히고, 비운 출발 칸에는 설 수 있다
+            moves.Add((t, nc, nr, SlideSteps(moved)));
         }
+        // 슬롯 0 — 출발 칸에 지금 선 유닛(제자리에 막힌 유닛, 또는 남의 출발 칸으로 되돌아온 유닛).
+        var slot0 = starts.Select(s => LiveUnitAt(s.Col, s.Row)).OfType<UnitState>().ToList();
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"radial push work {w.Id}: {string.Join(", ", moves.Select(m => $"{m.Item1.ChrCode}→({m.Item2},{m.Item3})"))} 막힘 {blocked.Count}" + Environment.NewLine);
-        if (moves.Count > 0) foreach (bool _ in SlideAll(moves)) yield return true;
+                $"radial push work {w.Id}: {string.Join(", ", moves.Select(m => $"{m.Item1.ChrCode}→({m.Item2},{m.Item3})"))} " +
+                $"슬롯0 [{string.Join(",", slot0.Select(u => u.ChrCode))}] 슬롯1 [{string.Join(",", slot1.Select(u => u.ChrCode))}]" + Environment.NewLine);
+        foreach (var v in slot0) if (v.Alive && !dying.Contains(v)) ApplyWork(user, w, v, dying);
+        if (moves.Count > 0) foreach (bool _ in SlideAll(moves, begun: true)) yield return true;
         foreach (var (t, _, _, _) in moves) t.PlayAction(ObsMotionTable.ActionStand, 0);
-        foreach (var t in blocked) if (t.Alive && !dying.Contains(t)) ApplyWork(user, w, t, dying);
+        foreach (var t in slot1) if (t.Alive && !dying.Contains(t)) ApplyWork(user, w, t, dying);
     }
 
     /// <summary>워핑 — 대상을 시전자→대상 쪽으로 13±2 칸 밖의 설 수 있는 칸에 떨어뜨린다. 없으면 10칸부터 한 칸씩 당겨 찾는다.</summary>
@@ -168,7 +196,7 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int k = 1; k <= dist; k++)
         {
             int c = a.Col + dc * k, r = a.Row + dr * k;
-            if ((uint)c >= Cols || (uint)r >= Rows || _map is not { } map || c >= map.Cols || r >= map.Rows || (map.FlagsAt(c, r) & 0x9) != 0) break;
+            if ((uint)c >= Cols || (uint)r >= Rows || _map is not { } map || c >= map.Cols || r >= map.Rows || (CellFlagsAt(c, r) & 0x9) != 0) break;
             if (ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
             cells.Add((c, r));
         }

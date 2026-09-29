@@ -246,10 +246,16 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         else
         {
+            // 군단 대장이 아군 대상(+0x3c = 4) 기술을 쓸 때는 자리를 옮기지 않는다 — 제자리에서 닿는 칸만 후보(0x10075420,
+            // 0x1005d070 안의 토막, 분석-군단 「+0x3c == 4 분기」). 전에는 걸어가서 썼다(원본차이-AI 23).
+            bool stayPut = w.AiTargetSide == 4 && user.LeaderIndex < 0 && FollowersOf(unitIndex).Count > 0;
             int reach = Math.Max(1, RangeMaxOf(w, user) / 4) + 1;
+            // 원본 AI 는 사거리를 그리기 = 0 으로 칠해(0x1005cbd2·0x1005d355·0x1005e5bd·0x1005eae2 → 0x100749b0(…, 0)) 대상 방식 0·2·6 +
+            // 높이반영 work 은 거리 자 0x100daca0 이 대상 높이를 칸 높이가 아니라 <b>모드 값 그 자체</b>로 잰다(0x100daf27, 버그) — 화이어 웨이브 등
+            // 128개를 시전자가 6층에 서 있지 않으면 사실상 못 쓴다(감사3 R8). 리메이크는 일부러 따라가지 않고 늘 칸 높이로 잰다.
             for (int stand = 0; stand < range.Cost.Length; stand++)
             {
-                if (!range.CanReach(stand)) continue;
+                if (!range.CanReach(stand) || (stayPut && stand != here)) continue;
                 stands.Add(stand);
                 int sc = stand % Cols, sr = stand / Cols;
                 for (int ay = Math.Max(0, sr - reach); ay <= Math.Min(Rows - 1, sr + reach); ay++)
@@ -287,8 +293,43 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 목표 칸까지의 <b>경로 비용 지도</b> — 목표에서 출발하는 이동 영역을 예산 없이 잰다. 갈 수 있는 칸 중 이 값이 가장 작은 칸이
     /// 「목표에 가장 가까운 칸」이다(원본 <c>0x10059a20</c>). 전에는 맨해튼 거리로 골라 벽·강 너머 목표에서 벽에 붙어 멈췄다.
     /// </summary>
-    private int[]? CostMapFrom(UnitState u, int col, int row) =>
-        ComputeRange(u, workId: 0, tp: 1 << 20, origin: (col, row))?.Cost;
+    /// <remarks>
+    /// 원본 지도는 <b>지형만</b> 본다 — 시작 칸 <c>0x100d9e40</c> 은 판 안 + 플래그 <c>&amp;9</c> 없음, 한 걸음 <c>0x100da180</c> 은 거기에
+    /// <c>|Δ높이(+0x78)| ≤ 2</c> 만 더하고, 비용 <c>0x100da760</c> 은 걷기와 같은 걸음 비용식이다. 유닛·ZOC·문 목표 칸 금지는 없다(감사3 R4).
+    /// 전에는 이동 영역(<see cref="ComputeRange"/>)을 그대로 써서 적을 목표로 하면 둘레 네 칸이 모두 ZOC 라 지도가 목표 칸 하나로 끝나고,
+    /// 모두 맨해튼 대체값으로 떨어져 벽 너머 적 앞에서 벽에 붙어 멈췄다. 플래그·높이는 물체까지 찍은 판으로 본다(감사3 R1).
+    /// 목표 칸 자체는 물체 칸(포탑 따위)이어도 출발로 친다(가설 — 원본이 시작 칸이 막혔을 때 무엇을 돌려주는지는 안 봤다).
+    /// </remarks>
+    private int[]? CostMapFrom(UnitState u, int col, int row)
+    {
+        if (_map is not { } map || _db is not { } db || u.Data is not { } c) return null;
+        bool InBounds(int x, int y) => (uint)x < Cols && (uint)y < Rows && x < map.Cols && y < map.Rows;
+        if (!InBounds(col, row)) return null;
+        int dex = Math.Max(1, db.Dex(CombatData(u) ?? c)), num5 = db.N(5);
+        var costs = new int[Cols * Rows];
+        Array.Fill(costs, int.MaxValue);
+        costs[row * Cols + col] = 0;
+        var queue = new PriorityQueue<(int Col, int Row), int>();
+        queue.Enqueue((col, row), 0);
+        (int Dx, int Dy)[] dirs = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+        while (queue.TryDequeue(out var cell, out int cost))
+        {
+            if (cost > costs[cell.Row * Cols + cell.Col]) continue;
+            int h = WalkHeightAt(cell.Col, cell.Row);
+            foreach (var (dx, dy) in dirs)
+            {
+                int nx = cell.Col + dx, ny = cell.Row + dy;
+                if (!InBounds(nx, ny) || (CellFlagsAt(nx, ny) & 0x9) != 0) continue;
+                int nh = WalkHeightAt(nx, ny);
+                if (Math.Abs(nh - h) > 2) continue;
+                int next = cost + num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(nh - h) / dex) / 2;
+                if (next >= costs[ny * Cols + nx]) continue;
+                costs[ny * Cols + nx] = next;
+                queue.Enqueue((nx, ny), next);
+            }
+        }
+        return costs;
+    }
 
     /// <summary>갈 수 있는 칸 가운데 목표까지 경로 비용이 가장 작은 칸(같으면 지금 자리에서 싼 칸). 없으면 −1.</summary>
     private int NearestReachableTo(UnitState u, MoveRange range, int goalCol, int goalRow)

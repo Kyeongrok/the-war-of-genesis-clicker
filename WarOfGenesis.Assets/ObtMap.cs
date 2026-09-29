@@ -29,6 +29,17 @@ public sealed record ObtMapImage(int Width, int Height, int OriginY, int Cols, i
 }
 
 /// <summary>
+/// 물체(Obj) 가 판에 찍는 발자국 — 물체의 <c>.obj +12</c> 가 가리키는 Obt 의 칸 레코드만 읽은 것.
+/// </summary>
+/// <param name="Raw">칸 레코드 첫 u16(원높이, 판 1 파일은 ×20). 도장 높이 = (원높이 + 19) / 20 + 바닥층, 0 이면 높이를 안 쓴다.</param>
+/// <param name="Flags">칸 뒤 u16 격자 그대로 — 비트 <c>0x10</c> 인 칸은 발자국이 아니다. 나머지는 판 플래그를 <b>덮어쓴다</b>(<c>0x10028620</c>).</param>
+public sealed record ObtFootprint(int Cols, int Rows, ushort[] Raw, ushort[] Flags)
+{
+    /// <summary>그 칸이 발자국인가(격자 비트 0x10 이 아닌 칸).</summary>
+    public bool Covers(int col, int row) => (uint)col < Cols && (uint)row < Rows && (Flags[row * Cols + col] & 0x10) == 0;
+}
+
+/// <summary>
 /// <c>Obt/NNNN.obt</c> — 전투 맵. 칸별 지형 정보와, 맵 그림을 이루는 40×8 픽셀 띠 타일이 들어 있다.
 /// </summary>
 /// <remarks>
@@ -54,6 +65,30 @@ public static class ObtMap
     private const int StripWidth = 40, StripHeight = 8;
 
     public static ObtMapImage Load(string path) => Parse(File.ReadAllBytes(path), Path.GetFileName(path));
+
+    /// <summary>
+    /// 물체 발자국만 읽는다 — 칸 레코드 첫 u16(원높이)과 뒤 u16 격자(플래그). 그림은 안 푼다.
+    /// 원본 LoadBtl 이 물체마다 이것을 판에 찍는다(<c>0x10062b11</c> → <c>0x10028620</c>). 모자라면 null.
+    /// </summary>
+    public static ObtFootprint? ReadFootprint(byte[]? bytes)
+    {
+        if (bytes == null || bytes.Length < 6) return null;
+        int version = BitConverter.ToUInt16(bytes, 0);
+        int cols = BitConverter.ToInt16(bytes, 2), rows = BitConverter.ToInt16(bytes, 4);
+        if (cols <= 0 || rows <= 0) return null;
+        int cellRecordSize = 10 + 1 + 16 + 2 + 2 + 2 + (version >= 4 ? 12 : 0);
+        int n = cols * rows, grid = 6 + n * cellRecordSize;
+        if (bytes.Length < grid + n * 2) return null;
+        var raw = new ushort[n];
+        var flags = new ushort[n];
+        for (int i = 0; i < n; i++)
+        {
+            int v = BitConverter.ToUInt16(bytes, 6 + i * cellRecordSize);
+            raw[i] = (ushort)(version == 1 ? v * 20 : v);   // 판 1 파일은 ×20 해서 읽는다(분석-전투)
+            flags[i] = BitConverter.ToUInt16(bytes, grid + i * 2);
+        }
+        return new ObtFootprint(cols, rows, raw, flags);
+    }
 
     /// <summary>메모리에 읽어 둔 Obt(예: pak 안 파일)를 푼다.</summary>
     public static ObtMapImage Parse(byte[] bytes, string name = "obt")

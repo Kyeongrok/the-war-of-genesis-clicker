@@ -32,8 +32,10 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db is not { } db) return [];
         var list = new List<(ItemData Item, int Count)>();
+        // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
+        // 전에는 work 이 있는 것만 보였다(원본차이-전투규칙 25).
         foreach (var (id, count) in _inventory)
-            if (count > 0 && db.Items.GetValueOrDefault(id) is { IsConsumable: true } item) list.Add((item, count));
+            if (count > 0 && db.Items.GetValueOrDefault(id) is { Type: 7 } item) list.Add((item, count));
         return [.. list.OrderBy(p => p.Item.Id)];
     }
 
@@ -65,11 +67,20 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         var (item, _) = rows[index];
-        if (Work(item.UseWork) is not { } w) { Toast($"{_db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }
+        if (Work(item.UseWork) is not { } w) { _itemMenu = true; Toast($"{_db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
         _targetItem = item.Id;
-        if (UseSelfCentredWork(w)) { ConsumeTargetItem(); Toast(_db?.T(item.NameId) ?? ""); return true; }
+        // 겨누지 않는 아이템(방식 0·2 — 라이징스톰·블리자드캡슐)도 원본은 늘 대상 고르기(상태 11, 0x10068c60)로 가 범위를 보인 뒤
+        // 확정 클릭(0x10069b95)에 쓰고 하나 준다 — 우클릭이면 안 쓴다(0x10069c20). 전에는 목록에서 누르자마자 썼다(감사3 I3).
+        // 확정은 OnTargetClick 의 제자리 기술 갈래가 받는다(UseSelfCentredWork 가 그때 하나 뺀다).
+        if (w.SelfCentred)
+        {
+            var self = _units[_turn];
+            _aimCell = (self.Col, self.Row);
+            Hint($"{_db?.T(item.NameId)} — 주황 칸이 효과 범위입니다 (범위 안 클릭·Enter: 쓰기, 우클릭·Esc 취소)");
+            return true;
+        }
         Hint($"{_db?.T(item.NameId)} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }

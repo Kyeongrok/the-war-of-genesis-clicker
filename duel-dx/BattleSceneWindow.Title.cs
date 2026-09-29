@@ -13,7 +13,7 @@ namespace DuelDx;
 /// 마우스를 올리면 <c>Obs 0370</c> 모션 0(170×18, 가산 합성)만 덧그리고, 누름 표시도 소리도 없다.</item>
 /// <item>아래쪽 반짝임 <c>Obs 0374</c> 다섯 벌을 (80·200·320·440·560, 440) 에 0·10·20·30·40틱 시차로.</item>
 /// <item>오른쪽 위 (560,10) 에 <c>Ver %5.3f</c> = <c>Num.dat[0]</c> × 0.001 → 「Ver 1.005」.</item>
-/// <item>음악은 <c>BGM\0021</c> 통째 반복, 효과음은 하나도 없다. 커서는 화살표(Obs 0044) 그대로.</item>
+/// <item>음악은 <c>BGM\0021</c> 한 번(반복 안 함 — <c>0x100252a0(21, 1, 0)</c> 의 셋째 인자, 감사 F8), 효과음은 하나도 없다. 커서는 화살표(Obs 0044) 그대로.</item>
 /// </list>
 /// NEW GAME 은 원본에서 연대표(장면 7)를 거쳐 <c>Chp 0010</c>「코어헌터」 → 첫 전투 <c>Btl 0045</c> 로 간다 —
 /// 이 데모는 연대표가 없어 곧바로 첫 전투를 연다. CONTINUE 는 불러오기 슬롯(21칸), EXIT 는 정말로 창을 닫는다.
@@ -36,6 +36,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>게임을 켜면 타이틀부터 — <c>DUELDX_TITLE=0</c> 이면 건너뛰고 바로 전투로 간다.</summary>
     private void OpenTitleIfAsked()
     {
+        if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") == "1") { OpenEpisodesIfAsked(); return; }
         if (Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0") return;
         OpenTitle();
     }
@@ -46,11 +47,19 @@ internal sealed unsafe partial class BattleSceneWindow
         _titleHover = -1;
         _titleOpenedAt = _lastTime;
         _mosesOpen = false;
+        // 연대표·기록 화면도 내린다 — 원본 0x10106530(EXIT GAME, 0x452)은 연대표 장면을 끝내고 장면 6 을 세운다.
+        // 안 내리면 연대표가 타이틀 위에 그대로 그려지고 클릭도 먼저 먹었다(감사 F3).
+        _episodesOpen = false;
+        _recordsOpen = false;
+        _episodePick = -1;
+        // 게임오버(LeaveFinishedBattle)에서 오면 판이 아직 전투 맵 크기다 — 원본은 장면이 새로 선다(감사 F15, 모세스와 같은 까닭).
+        if (Cols != TitleBoardCols || Rows != TitleBoardRows) { ResizeBoard(TitleBoardCols, TitleBoardRows); _battleLoaded = false; }
         ShowMosesBackground(TitleBackground);
         // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
         if (_musicId == TitleBgm) return;
         StopMusic();
-        PlayMusicFile(TitleBgm, loop: true);
+        // 반복하지 않는다 — 원본 0x1010583c: 0x100252a0(21, 1, 0), 셋째 인자 0 = 한 번(끝나면 BinkGoto(1)·BinkPause). 감사 F8.
+        PlayMusicFile(TitleBgm, loop: false);
     }
 
     private int TitleButtonAt(int bx, int by)
@@ -93,6 +102,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 _chapterDone = false;
                 _episodesPicked.Clear();              // 고른 에피소드 표시도 NEW GAME 만 지운다(0x1004d870)
                 _partyNo = 0;
+                // 플레이 시간 0([0x101737a4] = 0)·챕터 상태(0x101b6898 — 지금 챕터·스크립트 변수·항행 시작) 버림(0x1004d870, 감사 F10).
+                // 지금 챕터가 남으면 연대표 세이브를 부를 때 앞 판 챕터가 열렸다(F6).
+                _playBase = -_realTime * 1000;
+                _mosesChp = null;
+                _navStart = null;
+                Array.Clear(_chapterVars);
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;

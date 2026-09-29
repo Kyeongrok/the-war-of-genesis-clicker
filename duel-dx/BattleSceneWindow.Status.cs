@@ -72,10 +72,20 @@ internal sealed unsafe partial class BattleSceneWindow
         u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
         // STP 는 최대 TP 가감(상태 33)까지 넣은 최대 TP ÷ 제수다(0x1007acf0) — 최대 TP 를 올리면 차례 간격도 짧아진다(fg-22).
         u.Stp = Math.Max(1, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
+        // 군단 부하의 최대 TP·STP 제수는 대장 것이다(0x1007aeb0·0x1007afa0 이 +0x508 사슬로 대장에서 읽음) — 부하 TP 는 대장과 같은 속도로
+        // 대장 최대치까지 찬다(틱 0x10071db0). 전에는 부하 제 값으로 셌다(감사3 L2). 대장 값이 먼저 셈되어 있어야 한다(아래 되풀이).
+        if (StatOwner(u) is var owner && owner != u && owner.MaxTp > 0)
+        {
+            u.MaxTp = owner.MaxTp;
+            u.Stp = Math.Max(1, owner.Stp);
+        }
         u.MaxSoul = _db.MaxSoul(c) + u.BonusMaxSoul;
         u.Hp = Math.Min(u.Hp, u.MaxHp);
         u.Tp = Math.Min(u.Tp, u.MaxTp);
         u.Soul = Math.Min(u.Soul, u.MaxSoul);
+        // 대장 값이 바뀌면 부하도 다시 센다(상태 33 버프·레벨업·대장 교체).
+        if (u.LeaderIndex < 0 && u.LegionId > 1 && Array.IndexOf(_units, u) is var li and >= 0)
+            foreach (var f in FollowersOf(li)) RefreshUnitStats(f);
     }
 
     private string AbilityLabel(AbilityData ab, int level) => $"{_db!.T(ab.NameId)} Lv{level}";

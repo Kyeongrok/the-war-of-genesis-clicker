@@ -17,7 +17,7 @@ namespace DuelDx;
 /// </list>
 /// 차례인 인물은 <b>차례를 시작한 자리</b>에서 셈한다 — 걷는 동안에는 TP 를 안 쓰고 그 안에서 마음대로 오가며,
 /// 공격·어빌리티·휴식을 할 때 시작 자리에서 지금 자리까지의 걸음 비용을 한 번에 뺀다(<see cref="CommitMove"/>).
-/// Btl 오브젝트(Obj)·날기·큰 유닛·높이 보정이 붙는 공격 모양은 빠져 있다.
+/// 물체는 판에 찍은 플래그·높이로 막는다(<see cref="CellFlagsAt"/>·<see cref="WalkHeightAt"/>, 감사3 R1). 날기는 자료에 쓰는 인물이 없어 빠져 있다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -104,7 +104,7 @@ internal sealed unsafe partial class BattleSceneWindow
         Array.Fill(costs, int.MaxValue);
         Array.Fill(prev, -1);
 
-        int dex = Math.Max(1, db.Dex(EffectiveData(unit) ?? c));
+        int dex = Math.Max(1, db.Dex(CombatData(unit) ?? c));   // 군단 부하는 대장 DEX(0x1007ae50, 감사3 L2)
         int num5 = db.N(5);
         // 25(이동 불가)면 갈 수 있는 칸이 자기 칸뿐이다(0x10074510).
         // 예산은 <b>지금 고른 work</b> 의 TP 를 남긴다(상태 12 는 어빌리티, 상태 10 은 기본공격) —
@@ -117,29 +117,39 @@ internal sealed unsafe partial class BattleSceneWindow
         int budget = playerBrowse && !unit.HasStatus(25) ? Math.Max(narrow, unit.Tp) : narrow;
         bool redAllowed = !playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId);
 
-        int H(int col, int row) => map.HeightAt(col, row);
+        // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).
+        int H(int col, int row) => WalkHeightAt(col, row);
+        ushort F(int col, int row) => CellFlagsAt(col, row);
         bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
 
         var (originCol, originRow) = origin ?? RangeOrigin(unit);
 
         int unitIndex = Array.IndexOf(_units, unit);
         // 제 군단 부하는 대장을 막지 않는다 — 대장이 움직이면 부하도 진형대로 따라오기 때문이다(분석-군단).
+        // 원본 0x100d9a20(0x100d9b17~0x100d9b2e)은 자기 말고 모든 유닛이 막고, 부하·대장이 서로 지나가는 것은 진형 다시 세우기
+        // (0x100da220·0x100da390, 이동 명령 0x2711 중일 때)뿐이다(감사3 R3). 그래도 사용자 요청(fg-15)으로 리메이크는 대장이 제 부하를
+        // 지나가게 둔다 — 원본대로 막으면 부하에 둘러싸인 대장이 못 움직인다. 일부러 남긴 차이다.
         bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex;
 
         bool big = c.Big;
         bool Enterable(int col, int row)
         {
             if (col == originCol && row == originRow) return true;
-            if (!InBounds(col, row) || (map.FlagsAt(col, row) & 0x9) != 0) return false;
+            if (!InBounds(col, row) || (F(col, row) & 0x9) != 0) return false;
             if (LiveUnitAt(col, row) is { } other && Blocks(other)) return false;
-            // 큰 유닛(.chr 18 = 1)은 3×3 이 모두 판 안이고 갈 수 있어야 들어간다(0x100d9c7d).
+            // 큰 유닛(.chr 18 = 1)은 3×3 이 모두 판 안이고, 플래그 &9 가 없고, 가운데와 높이차 ≤ 2 이고, 다른 유닛이 없어야 들어간다 —
+            // 이것뿐이고 <b>ZOC 는 안 본다</b>(0x100d9c7d~0x100d9e22, 땅 유닛 갈래 0x100d9d70~, 감사3 R6). 전에는 높이차를 안 보고 ZOC 를 봤다.
             if (big)
+            {
                 for (int by = row - 1; by <= row + 1; by++)
                     for (int bx = col - 1; bx <= col + 1; bx++)
                     {
-                        if (!InBounds(bx, by) || (map.FlagsAt(bx, by) & 0x9) != 0) return false;
+                        if (!InBounds(bx, by) || (F(bx, by) & 0x9) != 0) return false;
+                        if (Math.Abs(H(bx, by) - H(col, row)) > 2) return false;
                         if (LiveUnitAt(bx, by) is { } o2 && Blocks(o2)) return false;
                     }
+                return true;
+            }
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
             {
                 if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || !Blocks(e)) continue;
@@ -172,7 +182,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
 
-        // 문·스위치문이 선 칸에는 <b>설 수</b> 없다 — 길은 안 막지만 목표 칸이 못 된다(0x100746b0).
+        // 문·스위치문 칸에는 <b>설 수</b> 없다(0x100746b0) — 닫힌 문은 도장 플래그로 이미 벽이고, 열린 문은 지나가기만 한다.
         for (int i = 0; i < n; i++)
             if (costs[i] != int.MaxValue && ObjectBlocks(i % Cols, i / Cols)) costs[i] = int.MaxValue;
 
@@ -184,7 +194,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.
         if (redAllowed && Work(c.BasicWorkId) is { } basic)
         {
-            int reach = Math.Max(1, RangeMaxOf(basic, unit) / 4);
+            // 훑는 창은 최대/2 칸 — 원본 모양 함수가 그만큼 네모를 훑는다(0x100db6d4~0x100db6df, 0x100dc63c~). 내리막 차등(−2/층)으로
+            // 사거리 칸 수보다 먼 칸도 켜질 수 있어서다. 전에는 최대/4 라 그런 칸이 빨강에서 빠지고 겨눔(CanAimAt)과 어긋났다(감사3 R7).
+            int reach = Math.Max(1, RangeMaxOf(basic, unit) / 2);
             for (int i = 0; i < n; i++)
             {
                 if (costs[i] == int.MaxValue || costs[i] > narrow) continue;   // 빨강은 좁은 예산 안에서만
@@ -259,7 +271,9 @@ internal sealed unsafe partial class BattleSceneWindow
         var touchable = new HashSet<int>();
         if (_rangeUnit == _turn && IsPlayerTurn)
             foreach (var obj in Objects)
-                if (ObjectAt(obj.Col, obj.Row) == obj && FindTouchPath(_units[_turn], obj, range) != null) touchable.Add(obj.Row * Cols + obj.Col);
+                if (FindTouchPath(_units[_turn], obj, range) != null)
+                    foreach (var (fc, fr, _, _) in FootprintCells(obj))   // 발자국 칸 모두(여러 칸짜리 문)
+                        if ((uint)fc < Cols && (uint)fr < Rows && ObjectAt(fc, fr) == obj) touchable.Add(fr * Cols + fc);
 
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)

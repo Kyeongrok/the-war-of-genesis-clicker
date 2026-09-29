@@ -188,16 +188,25 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesChp is { } owner && Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
         // 다음 에피소드는 진행 깃발(Episode.dat 잠금 깃발 넷)이 다 서 있어야 열린다. 표시는 에피소드를 고를 때 내린다.
-        // 모든 전투·필드 장소를 겪었으면(상점은 소모되지 않는다) 챕터가 끝난 것으로 본다 — 행동 11 을 그냥 「모세스로」로 돌리던 판의
-        // 세이브와, 끝 필드의 행동 11 이 실행기를 못 탄 경우를 구제하는 데모 규칙(원본에는 없다).
-        if (!_chapterDone && _mosesChp is { } done && done.Places.Any(p => p.Value < 20000 && p.Auto == 0)
-            && done.Places.Where(p => p.Value < 20000).All(p => _placesUsed.Contains((done.Id, p.No)) || _autoPlacesDone.Contains((done.Id, p.No))))
-            _chapterDone = true;
+        // (전에 있던 「상점 뺀 장소를 다 쓰면 챕터 끝」 데모 규칙은 뺐다 — 아벨리안(Chp 21)·계시(Chp 52)의 끝 대사와 함정(Chp 47) 본편을
+        //  건너뛰었다. 옛 세이브 구제는 불러오기 쪽 규칙(System.cs, 파티 칸 없는 세이브)이 맡는다. 감사 F5.)
         if (_chapterDone)
         {
             _mosesOpen = false;
             StopMusic();
             OpenEpisodes();
+            return;
+        }
+        // 원본 0x100f5b77: 장소가 하나도 없거나 <b>모든</b> 장소(상점·자동·잠긴 것 포함)의 +0x14(들어가 본 표시, 0x10101f30)가 서 있으면
+        // 장면 6(타이틀)로 간다. 상점은 표시가 안 서니 상점 있는 챕터는 절대 안 탄다 — 상점 없는 챕터 23·57·47·53 에서만 드러난다.
+        // 원본은 챕터 끝(→ 7) 갈래를 지나서도 이 검사를 돌아 7 을 6 이 덮는다. 그러면 달(Chp 53)은 선택 장소 23 까지 다 돌고
+        // 끝내면 연대표 대신 타이틀로 가 버리는데, 이것은 원본 흠으로 보여 따르지 않는다 — 챕터가 끝났으면 위에서 이미 연대표로 갔다.
+        if (_mosesChp is { } spent
+            && (spent.Places.Count == 0 || spent.Places.All(p => _placesUsed.Contains((spent.Id, p.No)) || _autoPlacesDone.Contains((spent.Id, p.No)))))
+        {
+            _mosesOpen = false;
+            StopMusic();
+            OpenTitle();
             return;
         }
         LoadMosesChapter();
@@ -224,8 +233,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_mosesChp is not { } chp) return false;
         foreach (var place in chp.Places)
         {
-            if (!place.IsAuto || !_autoPlacesDone.Add((chp.Id, place.No))) continue;
+            // 조건을 통과한 것만 「겪음」으로 표시한다 — 원본 0x100fdd40 은 실제로 들어갈 때만 +0x14=1 을 세운다(ba15-moses N1).
+            // 전에는 조건 검사 전에 표시해 조건이 뒤늦게 열리는 자동 장소가 영영 안 떴다. 위 타이틀 규칙도 이 표시를 「들어가 봄」으로 센다.
+            if (!place.IsAuto || _autoPlacesDone.Contains((chp.Id, place.No))) continue;
             if (!FlagsAllow(place.Conditions)) continue;
+            _autoPlacesDone.Add((chp.Id, place.No));
             if (place.Value >= 10000 && place.Value < 20000 && OpenField(place.Value - 10000)) return true;
             if (place.Value > 0 && place.Value < 10000 && StartBattle(place.Value)) return true;
         }
@@ -548,6 +560,7 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawTalk();
         DrawFieldChoices();
         _uiClip = null;
+        ApplyScreenWave(ox, oy, tick);   // 409 물결 — 챕터 화면에서도(0x100f667b, Chp 0059, audit3 R3)
         DrawSystem();
         DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
         if (_statusUnit >= 0) DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에

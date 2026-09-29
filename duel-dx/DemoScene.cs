@@ -60,6 +60,12 @@ internal sealed class DemoObject(BattleObjectRecord record, ObjFile data)
     public int Charge { get; set; }
     public bool Charged { get; set; }
     public bool Alive => !Data.Breakable || Hp > 0;
+
+    /// <summary>
+    /// 판에 찍는 발자국 — <c>.obj +12</c> 의 Obt(<c>assets/maps/NNNN.obt</c>). 기준점 = 물체 (x, y) 가 Obt 왼쪽 위(<c>0x10028620</c>, 감사3 R1).
+    /// 파일이 없으면 null(그림 폭으로 짐작한다).
+    /// </summary>
+    public ObtFootprint? Footprint { get; init; }
 }
 
 internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
@@ -68,6 +74,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                                  IReadOnlyList<(int Col, int Row, Facing Facing)>? Placement = null,
                                  IReadOnlyList<DemoObject>? Objects = null, bool EngineJudgesWipe = true)
 {
+    /// <summary>Btl 머리 워드 7 — 군단을 쓸 수 있는 전투인가(<see cref="BattleFile.LegionsAllowed"/>, 감사3 L4).</summary>
+    public bool LegionsAllowed { get; init; }
+
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
         BattleDemoScene.BtlId, BattleDemoScene.Title, BattleDemoScene.MapFile, BattleDemoScene.Bgm,
@@ -112,14 +121,21 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 .ToList();
             // 판에 놓인 물체 — <c>Obj</c> 파일이 없는 것은 그리지도 못하니 뺀다.
             // 맵이 놓는 물체(문·장식)도 같이 세운다 — Btl 것과 번호가 겹치지 않게 100 을 더해 온다.
+            // 물체마다 제 Obt 발자국도 읽는다 — 원본 LoadBtl 이 판에 찍는 것(0x10062b11, 감사3 R1).
+            string mapsFolder = AssetsFolder.Find("maps");
+            ObtFootprint? FootprintOf(int obtId)
+            {
+                string path = Path.Combine(mapsFolder, $"{obtId:D4}.obt");
+                return File.Exists(path) ? ObtMap.ReadFootprint(File.ReadAllBytes(path)) : null;
+            }
             var objects = battle.Objects.Concat(BattleFile.ObjectsOfMap(files.Read("Map", $"{battle.MapId:D4}.map")))
                 .Select(o => ObjFile.Parse(o.ObjId, files.Read("Obj", $"{o.ObjId:D4}.obj")) is { } data
-                             ? new DemoObject(o, data) : null)
+                             ? new DemoObject(o, data) { Footprint = FootprintOf(data.ObtId) } : null)
                 .OfType<DemoObject>()
                 .ToList();
 
             return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId,
-                                 roster, next, placement, objects, battle.EngineJudgesWipe);
+                                 roster, next, placement, objects, battle.EngineJudgesWipe) { LegionsAllowed = battle.LegionsAllowed };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {

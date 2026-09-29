@@ -693,7 +693,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (_mosesOpen)
         {
@@ -823,7 +823,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
-        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
@@ -1085,6 +1085,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         StepEvent();
         UpdateTurn();
         RefreshMoveRange();
+        UpdateOutcomeBanner();                  // 배너는 음악이 끝나고 120틱 뒤 저절로 넘어간다(0x1006afa0)
     }
 
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
@@ -1208,15 +1209,26 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }
-            if (i == _turn && _outcome.Length == 0) DrawTurnMarker(footX, headY);
+            // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
+            bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
+            if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY);
         }
     }
 
+    /// <summary>차례 표시 그림 — Obs 0163(0x100d1de0 → 0x100e5310(Obs 0xa3, 모션)).</summary>
+    private const int TurnMarkerObs = 163;
+
     /// <summary>
-    /// 차례인 인물 머리 위의 반짝이는 역삼각형(원본 화면 캡처, 구현 노트 ui-2). 폭 13·높이 9 픽셀, 연보라, 밝기가 오르내린다.
+    /// TP 가 찬 유닛 머리 위의 역삼각형(0x1006da40 → 0x10074320 이 붙이는 표시 객체). 모션 = (AI 편 ? 2 : 0) + (군단 부하 ? 1 : 0):
+    /// 0 사람 편 연보라 · 1 사람 편 부하(작은 것) · 2 AI 편 주황 · 3 AI 편 부하. 모션마다 15틱에 4픽셀 까딱인다.
+    /// 그림이 없으면 예전처럼 코드로 연보라 삼각형을 그린다.
     /// </summary>
-    private void DrawTurnMarker(int x, int headY)
+    private void DrawTurnMarker(UnitState unit, int x, int headY)
     {
+        // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
+        bool human = unit.PlayerControlled || (unit.IsAlly && !_allyAi);
+        int motion = (human ? 0 : 2) + (unit.LeaderIndex >= 0 ? 1 : 0);
+        if (DrawUi(TurnMarkerObs, motion, (int)(_lastTime * TicksPerSecond), x, headY, UiBlend.Alpha)) return;
         const int W = 13, H = 9, Gap = 4;
         uint alpha = (uint)(150 + 105 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 2 * 1.5)));
         uint fill = alpha << 24 | 0xE0D8FF, edge = alpha << 24 | 0x6050A0;
