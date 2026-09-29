@@ -25,7 +25,7 @@ public partial class BodyAbilitiesWindow : Window
                                  Func<List<int>>? Get2 = null, Action<List<int>>? Set2 = null, Func<int>? Room2 = null, string Note = "");
 
     /// <summary>표의 행 — 「공통」(2단계 아님) 또는 「2단계만」의 몇째 칸. 칸 글은 열 차례로.</summary>
-    public sealed record TableRow(string Label, bool Stage2, int Index, string[] Cells);
+    public sealed record TableRow(string Label, bool Stage2, int Index, string[] Cells, int[] Ids);
 
     private sealed record FamilyRow(JobFile File, string Label);
 
@@ -131,9 +131,11 @@ public partial class BodyAbilitiesWindow : Window
 
         var rows = new List<TableRow>();
         for (int i = 0; i < commonRows; i++)
-            rows.Add(new TableRow($"공통 {i + 1}", false, i, [.. common.Select(l => i < l.Count ? AbilityName(l[i]) : "")]));
+            rows.Add(new TableRow($"공통 {i + 1}", false, i, [.. common.Select(l => i < l.Count ? AbilityName(l[i]) : "")],
+                [.. common.Select(l => i < l.Count ? l[i] : 0)]));
         for (int i = 0; i < stage2Rows; i++)
-            rows.Add(new TableRow($"2단계만 {i + 1}", true, i, [.. stage2.Select(l => i < l.Count ? AbilityName(l[i]) : "")]));
+            rows.Add(new TableRow($"2단계만 {i + 1}", true, i, [.. stage2.Select(l => i < l.Count ? AbilityName(l[i]) : "")],
+                [.. stage2.Select(l => i < l.Count ? l[i] : 0)]));
 
         Table.Columns.Clear();
         Table.Columns.Add(new DataGridTextColumn { Header = "칸", Binding = new Binding(nameof(TableRow.Label)), FontWeight = FontWeights.SemiBold });
@@ -243,6 +245,47 @@ public partial class BodyAbilitiesWindow : Window
         RefreshJobList();
         RefreshTable();
         Status("파일에 있는 대로 되돌렸습니다.");
+    }
+
+    /// <summary>어빌리티 칸을 더블클릭하면 그 어빌리티의 설명 창을 띄운다(사용자 요청). 빈 칸·「칸」 열은 무시.</summary>
+    private void Table_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        var cell = (e.OriginalSource as DependencyObject) is { } src ? FindParent<DataGridCell>(src) : null;
+        if (cell?.DataContext is not TableRow row || cell.Column?.DisplayIndex is not int d || d < 1 || d - 1 >= row.Ids.Length) return;
+        int id = row.Ids[d - 1];
+        if (id == 0 || !_db.Abilities.TryGetValue(id, out var ab)) return;
+        e.Handled = true;
+
+        string text = _db.AbilityDescription(ab).Replace("$n", Environment.NewLine);
+        var info = new List<string> { $"번호 {ab.Id:D4}", $"최대 Lv{ab.MaxLevel}" };
+        if (CategoryTag(ab.Category).Trim(' ', '(', ')') is { Length: > 0 } cat) info.Add(cat);
+        if (ab.Prereq1 != 0) info.Add($"선행 {AbilityName(ab.Prereq1)} Lv{ab.Prereq1Level}");
+        if (ab.Prereq2 != 0) info.Add($"선행 {AbilityName(ab.Prereq2)} Lv{ab.Prereq2Level}");
+
+        var body = new DockPanel { Margin = new Thickness(12) };
+        var close = new Button { Content = "닫기", Padding = new Thickness(14, 3, 14, 3), IsCancel = true, IsDefault = true,
+                                 HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        DockPanel.SetDock(close, Dock.Bottom);
+        body.Children.Add(close);
+        var head = new TextBlock { Text = AbilityName(id), FontSize = 16, FontWeight = FontWeights.Bold };
+        DockPanel.SetDock(head, Dock.Top);
+        body.Children.Add(head);
+        var meta = new TextBlock { Text = string.Join(" · ", info), Foreground = System.Windows.Media.Brushes.DimGray, Margin = new Thickness(0, 2, 0, 8) };
+        DockPanel.SetDock(meta, Dock.Top);
+        body.Children.Add(meta);
+        body.Children.Add(new TextBox { Text = text.Length > 0 ? text : "(설명 없음)", IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
+                                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, BorderThickness = new Thickness(0), FontSize = 13 });
+        var win = new Window { Title = $"어빌리티 설명 — {AbilityName(id)}", Owner = this, Content = body, Width = 420, Height = 260,
+                               WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.CanResizeWithGrip };
+        close.Click += (_, _) => win.Close();
+        win.ShowDialog();
+    }
+
+    private static T? FindParent<T>(DependencyObject? d) where T : DependencyObject
+    {
+        while (d != null && d is not T) d = d is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+            ? System.Windows.Media.VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+        return d as T;
     }
 
     private void Status(string text) => StatusText.Text = (_changed.Count > 0 ? "[저장 안 됨] " : "") + text;
