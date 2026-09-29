@@ -257,9 +257,13 @@ internal sealed unsafe partial class BattleSceneWindow
         else if (by >= y + VolumeH - 30) _volumeWindow = false;
     }
 
+    /// <summary>
+    /// 음량 막대를 믹서에 넣는다 — B.G.M 은 믹서 전체 크기라 <b>모든 곡·페이드·줄이기</b>에 곱해진다(감사4 V1).
+    /// S.E 는 음성의 선형 크기이고, Snd 효과음은 <see cref="SndGain"/> 이 막대 1점당 −0.5 dB 로 셈한다(V3). 시작 때도 한 번 부른다(V2).
+    /// </summary>
     private void ApplyVolumes()
     {
-        _mixer.SetMusicGain(_bgmVolume / 100f);
+        _mixer.MusicVolume = _bgmVolume / 100f;
         _effectGain = _seVolume / 100f;
     }
 

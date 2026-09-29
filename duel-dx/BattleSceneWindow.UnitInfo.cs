@@ -69,16 +69,20 @@ internal sealed unsafe partial class BattleSceneWindow
         Row(db.T(41), $"{unit.Soul}/{unit.MaxSoul}", y + 132);
         Row(db.T(38), $"{unit.Tp}/{unit.MaxTp}", y + 148);
         Rule(x, y + 170);
-        Row(db.T(156), AtkWithSoul(db, c, BasicAttackSoul(unit.Soul), compact: true), y + 180);
-        Row(db.T(157), db.Acr(c, unit.Tp).ToString(), y + 196);
-        Row(db.T(158), db.Rdp(c, unit.Hp, unit.MaxHp).ToString(), y + 212);
+        // ATK·ACR·RDP 는 원본 게터(0x1007ab20·ab90·abf0)처럼 상태이상·군단 보정·부하=대장 DEX/최대 TP 를 얹은 값 — Status 와 같은 헬퍼(감사4 S1).
+        var (shown, acr, rdp, _) = ShownStats(db, unit, c);
+        Row(db.T(156), AtkWithSoul(db, shown, BasicAttackSoul(unit.Soul), compact: true, weaponPercent: unit.Status(29)), y + 180);
+        Row(db.T(157), acr.ToString(), y + 196);
+        Row(db.T(158), rdp.ToString(), y + 212);
 
         // 상태이상 칸 셋 — 원본처럼 Obs 0489 아이콘 한 장씩, 빈 칸은 모션 0(「EMPTY」 판)이다(분석-전투 창 228).
         FillRect(x + 6, y + 228, InfoW - 12, 34, BoxBg);
         StrokeRect(x + 6, y + 228, InfoW - 12, 34, BoxLine);
         // 아이콘 기준점은 그림 <b>가운데</b>다(스테이터스 창도 가운데 자리로 찍는다) — 왼쪽 위 자리로 찍어 칸 밖으로 반쯤 삐져나왔다(사용자 보고).
+        // 원본 상태이상 칸(0x100d53c0, 정보 창에선 (0,228,140,40)): s = (폭 − 40)/3, 가운데 x = 10 + s/2 + (s + 10)·i, y = (높이 − 20)/2 + 10
+        // → 본문 (26 + 43i, 248)(0x100d5437~0x100d54dd, 감사4 I4).
         for (int i = 0; i < 3; i++)
-            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 6 + 22 + i * 42, y + 228 + 17, UiBlend.Alpha, loop: false);
+            DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 26 + 43 * i, y + 248, UiBlend.Alpha, loop: false);
         for (int i = 0; i < effects.Count; i++)
             DrawText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
 

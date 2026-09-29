@@ -10,7 +10,7 @@ namespace DuelDx;
 /// 레벨 = 쌓인 경험치 ÷ 100, 오름은 직업 성장률 × 기본값(난수 없음), HP·TP 회복은 없다.
 /// 창은 화면 한가운데에 제목 TXR 1090 「Level Up」과 본문 TXR 1091 + 오른 능력치 줄, 효과음 Snd 107,
 /// 배경음악 40% 로 줄었다가 창이 닫히면 되돌아온다. 180틱(6초) 뒤 저절로 닫히고 아무 키·클릭으로도 닫힌다.
-/// 여러 명이면 한 명씩 잇따라 뜬다. 원본의 카메라 이동은 우리 화면 따라가기로 대신한다.
+/// 여러 명이면 한 명씩 잇따라 뜬다. 창을 띄우기 전에 카메라를 그 유닛 가운데로 보내고 멈출 때까지 기다린다(0x1006823e).
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -24,6 +24,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private string _levelUpTitle = "", _levelUpBody = "";
 
     private bool LevelUpOpen => _levelUpUnit >= 0;
+
+    /// <summary>줄 머리 유닛에게 카메라 명령을 걸었나 — 멈추면 창을 띄운다.</summary>
+    private bool _levelUpCamSent;
 
     /// <summary>쓰러뜨린 쪽에 경험치를 준다(메시지 1016). 여럿이 나누면 <paramref name="share"/> 로 나눈 몫(1 이상).</summary>
     private void GainKillExp(UnitState killer, UnitState victim, int share = 1)
@@ -99,9 +102,14 @@ internal sealed unsafe partial class BattleSceneWindow
         // 레벨은 그대로 오르고 창만 안 뜬다.
         while (_levelUpQueue.Count > 0)
         {
-            int index = _levelUpQueue.Dequeue();
+            int index = _levelUpQueue.Peek();
             var unit = _units[index];
-            if (_db == null || !unit.Alive || unit.Data is not { } c || c.CumExp / 100 <= c.Level) continue;
+            if (_db == null || !unit.Alive || unit.Data is not { } c || c.CumExp / 100 <= c.Level) { _levelUpQueue.Dequeue(); _levelUpCamSent = false; continue; }
+            // 21 레벨업(0x1006823e) — 그 유닛을 가운데로 보내고 멈춘 뒤에 올리고 창을 띄운다(감사4 C17). 창을 숨겨 둔 사람은 안 기다린다.
+            if (_showLevelUp && !_levelUpCamSent) { _levelUpCamSent = true; CenterOnUnit(unit); return true; }
+            if (_showLevelUp && CameraBusy) return true;
+            _levelUpQueue.Dequeue();
+            _levelUpCamSent = false;
 
             unit.Data = _db.LevelUp(c, out var gains);
             RefreshUnitStats(unit);

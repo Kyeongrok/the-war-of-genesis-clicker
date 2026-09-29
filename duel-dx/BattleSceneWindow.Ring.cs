@@ -219,10 +219,12 @@ internal sealed unsafe partial class BattleSceneWindow
             CancelRing();
             return;
         }
-        // 어빌리티·아이템 대상을 고르는 중이면 우클릭은 <b>취소</b>다(원본) — 인물 위라도 정보 창을 열지 않는다.
-        if (_targetWork >= 0 && CancelStep(undoMove: false)) return;
-        if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다
-        if (CancelStep(undoMove: false)) return;
+        // 어빌리티·아이템 대상을 고르는 중이면 우클릭은 <b>취소</b>다(원본 상태 11) — 인물 위라도 정보 창을 열지 않는다.
+        // 일반공격 대상 고르기(상태 10 0x10069330)는 다르다 — 마우스 칸에 유닛이 있으면 정보 창(0x100696af~0x1006976e → 0x1006974b),
+        // 칸이 −1 이거나 비었으면 취소(0x10069110). 전에는 일반공격도 무조건 취소해 공격 전에 적 정보를 못 봤다(감사4 I1).
+        if (_targetWork >= 0 && !_targetIsBasicAttack && CancelStep(undoMove: false)) return;
+        if (OpenUnitInfo(bx, by)) return;   // 인물 위 = 정보 창(fa-8), 단추를 떼면 닫힌다(일반공격 대상 고르기 중에도)
+        if (CancelStep(undoMove: false)) return;   // 일반공격 대상에서 빈 칸 = 취소
 
         int index = UnitAtPoint(bx, by);
         if (index >= 0 && _units[index].IsAlly) { _selected = index; OpenRing(index); return; }

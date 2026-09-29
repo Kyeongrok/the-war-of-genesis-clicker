@@ -131,7 +131,9 @@ internal sealed unsafe partial class BattleSceneWindow
         int at = Math.Max(0, chp.Systems.ToList().FindIndex(sy => sy.No == _mosesSystem));
         var next = chp.Systems[((at + step) % chp.Systems.Count + chp.Systems.Count) % chp.Systems.Count];
         _mosesSystem = next.No;
-        Play(570);
+        // 이전·다음 성계 단추(127/128, 메시지 0x2710)는 Snd 565(0x235) — 뒤로 소리 570 이 아니다(0x100ff403~0x100ff535, 감사4 S6).
+        // (챕터 +0x2ec4 가 서 있으면 590 이지만 그 표시는 데모에 없다.)
+        Play(565);
         _mosesHover = -1;
         StartFade();
         ShowMosesBackground(next.Background);
@@ -220,7 +222,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         StopMusic();
-        PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true);   // 챕터 BGM — Chp 머리 셋째 워드
+        // 챕터 BGM — Chp 머리 셋째 워드. 원본 챕터 장면은 논리 0 으로 걸고(0x100fe66f~0x100fe6d2), 화면이 15틀 밝아지는 동안
+        // 0 → 6 → … → 84 % 로 올린 뒤 84 % 에 머문다(0x100f5f04~0x100f5f58, 감사4 M1). 전에는 100 % 로 바로 켰다.
+        PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true, gain: 0);
+        FadeMusic(84, MosesFadeTicks);
     }
 
     /// <summary>아직 안 겪었고 조건이 열린 「자동 발생」 장소가 있으면 거기로 들어간다(<c>0x100fdd40</c>).</summary>

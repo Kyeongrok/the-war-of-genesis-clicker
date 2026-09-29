@@ -8,20 +8,31 @@ namespace WarOfGenesis.Assets;
 /// </summary>
 /// <remarks>
 /// 원본 게임은 효과음을 겹쳐 튼다(분석-사운드 "전투 효과음") — <c>PlaySound</c> 처럼 앞 소리를 끊으면 안 된다.
-/// 효과음은 표본율이 달라도 되고(22050 모노 등), 가장 가까운 표본으로 늘린다. 뒤쪽 실 하나가 40ms 버퍼를 몇 개씩 밀어 넣는다.
+/// 효과음은 표본율이 달라도 되고(22050 모노 등), 이웃 두 표본 사이를 선형으로 이어 늘린다(감사4 S8 — 원본은 DirectSound 가 늘린다.
+/// 전에는 가장 가까운 표본이라 22 kHz 효과음에 고역 잡음이 섞였다). 뒤쪽 실 하나가 40ms 버퍼를 몇 개씩 밀어 넣는다.
 /// </remarks>
 public sealed class AudioMixer : IDisposable
 {
     private const int Rate = 44100, BufferFrames = Rate / 25, QueuedBuffers = 3;
     private const uint WhdrDone = 1;
 
-    private sealed class Voice(PcmSound sound, float gain, bool loop, int tag)
+    /// <summary>
+    /// Snd 효과음 칸 수 — 원본은 DirectSound 버퍼 칸 32개(<c>0x101a99f8</c>~<c>0x101a9a78</c>)가 다 차면
+    /// <b>새 소리를 버린다</b>(<c>0x10028898~0x100288be</c>, 감사4 S7). 음성·채널 소리(Bink 쪽)는 셈 밖.
+    /// </summary>
+    public const int EffectSlots = 32;
+
+    private sealed class Voice(PcmSound sound, float gain, bool loop, int tag, float left = 1f, float right = 1f, bool slotted = false)
     {
         public readonly PcmSound Sound = sound;
         public readonly double Step = (double)sound.SampleRate / Rate;
         public float Gain = gain;
-        public readonly bool Loop = loop;
+        public bool Loop = loop;
         public readonly int Tag = tag;
+        /// <summary>좌우 곱 — 팬(감사4 S1·S2). 1 이면 그 쪽을 줄이지 않는다.</summary>
+        public readonly float Left = left, Right = right;
+        /// <summary>효과음 칸 하나를 차지하나(<see cref="EffectSlots"/>).</summary>
+        public readonly bool Slotted = slotted;
         public double Position;
     }
 
@@ -65,10 +76,27 @@ public sealed class AudioMixer : IDisposable
 
     /// <summary>효과음을 한 번 튼다. <paramref name="tag"/> 는 <see cref="IsPlaying"/> 로 겹침을 막을 때 쓴다.</summary>
     /// <param name="loop">끝에서 처음으로 되감는다 — 필드 스크립트 행동 501 의 인자3 이 1 일 때.</param>
-    public void PlayEffect(PcmSound sound, float gain = 1f, int tag = 0, bool loop = false)
+    /// <param name="left">왼쪽 곱(팬) — 1 이면 줄이지 않는다.</param>
+    /// <param name="right">오른쪽 곱(팬).</param>
+    /// <param name="slotted">Snd 효과음 칸을 쓰나 — 칸 <see cref="EffectSlots"/> 개가 다 차 있으면 이 소리는 버린다.</param>
+    /// <returns>틀었으면 true, 칸이 차서 버렸으면 false.</returns>
+    public bool PlayEffect(PcmSound sound, float gain = 1f, int tag = 0, bool loop = false, float left = 1f, float right = 1f, bool slotted = false)
     {
-        if (sound.FrameCount == 0) return;
-        lock (_gate) _effects.Add(new Voice(sound, gain, loop, tag));
+        if (sound.FrameCount == 0) return false;
+        lock (_gate)
+        {
+            if (slotted && _effects.Count(v => v.Slotted) >= EffectSlots) return false;
+            _effects.Add(new Voice(sound, gain, loop, tag, left, right, slotted));
+        }
+        return true;
+    }
+
+    /// <summary>그 표를 단 되풀이 소리를 <b>이번 바퀴까지만</b> 돌게 한다 — 원본은 모션이 바뀌면 되풀이를 끄고 끝까지 울린다(감사4 S3).</summary>
+    public void EndLoop(int tag)
+    {
+        lock (_gate)
+            foreach (var v in _effects)
+                if (v.Tag == tag) v.Loop = false;
     }
 
     /// <summary>그 표를 단 효과음을 멈춘다 — 필드 스크립트 행동 505(채널 소리 끄기)가 쓴다.</summary>
@@ -93,10 +121,27 @@ public sealed class AudioMixer : IDisposable
     /// <summary>배경음악을 바꾼다(처음부터). <paramref name="loop"/> 면 끝에서 처음으로 되감는다.</summary>
     public void PlayMusic(PcmSound sound, bool loop, float gain)
     {
-        lock (_gate) _music = sound.FrameCount == 0 ? null : new Voice(sound, gain, loop, -1);
+        lock (_gate)
+        {
+            _music = sound.FrameCount == 0 ? null : new Voice(sound, gain, loop, -1);
+            _musicPaused = false;
+        }
     }
 
-    /// <summary>배경음악 소리 크기만 바꾼다(레벨업 창이 뜨면 40%).</summary>
+    /// <summary>
+    /// 배경음악 전체 크기(0~1) — 설정 창의 B.G.M 막대. 원본은 <b>모든 곡·페이드·줄이기</b>에 이 설정을 곱한다
+    /// (<c>0x10025320</c>: 크기 × <c>[0x10163f80]</c>/100, 곡 생성자 <c>0x100252a0</c> → <c>0x100253e0</c>, 감사4 V1).
+    /// 그래서 곡마다의 크기(<see cref="SetMusicGain"/>)와 따로 들고 섞을 때만 곱한다.
+    /// </summary>
+    public float MusicVolume
+    {
+        get { lock (_gate) return _musicVolume; }
+        set { lock (_gate) _musicVolume = Math.Clamp(value, 0f, 1f); }
+    }
+
+    private float _musicVolume = 1f;
+
+    /// <summary>배경음악 소리 크기만 바꾼다(레벨업 창이 뜨면 40%). 실제 크기는 여기에 <see cref="MusicVolume"/> 를 곱한 것.</summary>
     public void SetMusicGain(float gain)
     {
         lock (_gate) if (_music != null) _music.Gain = gain;
@@ -104,7 +149,29 @@ public sealed class AudioMixer : IDisposable
 
     public void StopMusic()
     {
-        lock (_gate) _music = null;
+        lock (_gate) { _music = null; _musicPaused = false; }
+    }
+
+    /// <summary>음악이 멈춰 있나(개체는 남아 있다) — <see cref="PauseMusic"/>.</summary>
+    private bool _musicPaused;
+
+    /// <summary>
+    /// 배경음악을 <b>지우지 않고</b> 멈춘다 — 원본 크기 0 = 일시정지(<c>0x10025000</c>, 감사4 M5).
+    /// <paramref name="rewind"/> 면 처음으로 되감는다 — 필드 514(<c>0x10024fb0</c>, 감사4 M2).
+    /// </summary>
+    public void PauseMusic(bool rewind = false)
+    {
+        lock (_gate)
+        {
+            _musicPaused = true;
+            if (rewind && _music != null) _music.Position = 0;
+        }
+    }
+
+    /// <summary>멈춘 배경음악을 그 자리에서 이어 튼다(<c>0x10025480</c>).</summary>
+    public void ResumeMusic()
+    {
+        lock (_gate) _musicPaused = false;
     }
 
     private void Pump(IntPtr device)
@@ -137,8 +204,8 @@ public sealed class AudioMixer : IDisposable
                     Array.Clear(mix);
                     lock (_gate)
                     {
-                        if (_music != null && !Mix(_music, mix)) _music = null;
-                        _effects.RemoveAll(v => !Mix(v, mix));
+                        if (_music != null && !_musicPaused && !Mix(_music, mix, _musicVolume)) _music = null;
+                        _effects.RemoveAll(v => !Mix(v, mix, 1f));
                     }
                     for (int i = 0; i < mix.Length; i++) pcm[i] = (short)Math.Clamp(mix[i], short.MinValue, short.MaxValue);
                     if (_dump != null) { _dump.Write(MemoryMarshal.AsBytes<short>(pcm)); _dump.Flush(); }
@@ -172,24 +239,37 @@ public sealed class AudioMixer : IDisposable
         }
     }
 
-    /// <summary>목소리 하나를 버퍼에 더한다. 끝났으면 false.</summary>
-    private static bool Mix(Voice v, int[] mix)
+    /// <summary>
+    /// 목소리 하나를 버퍼에 더한다. 끝났으면 false. 이웃 두 표본 사이는 선형으로 잇는다(감사4 S8) — 끝 표본의 다음은
+    /// 되풀이면 처음 표본, 아니면 끝 표본 그대로.
+    /// </summary>
+    /// <param name="master">목소리 크기에 더 곱할 값 — 배경음악은 <see cref="MusicVolume"/>.</param>
+    private static bool Mix(Voice v, int[] mix, float master)
     {
         var s = v.Sound;
         int ch = s.Channels;
         long frames = s.FrameCount;
+        float gl = v.Gain * master * v.Left, gr = v.Gain * master * v.Right;
         for (int i = 0; i < BufferFrames; i++)
         {
             long idx = (long)v.Position;
             if (idx >= frames)
             {
                 if (!v.Loop) return false;
-                v.Position -= frames;
+                v.Position -= frames * Math.Floor(v.Position / frames);
                 idx = (long)v.Position;
             }
-            int l = s.Samples[idx * ch], r = ch > 1 ? s.Samples[idx * ch + 1] : l;
-            mix[2 * i] += (int)(l * v.Gain);
-            mix[2 * i + 1] += (int)(r * v.Gain);
+            long next = idx + 1 < frames ? idx + 1 : v.Loop ? 0 : idx;
+            float frac = (float)(v.Position - idx);
+            float l0 = s.Samples[idx * ch], l1 = s.Samples[next * ch];
+            float l = l0 + (l1 - l0) * frac, r = l;
+            if (ch > 1)
+            {
+                float r0 = s.Samples[idx * ch + 1], r1 = s.Samples[next * ch + 1];
+                r = r0 + (r1 - r0) * frac;
+            }
+            mix[2 * i] += (int)(l * gl);
+            mix[2 * i + 1] += (int)(r * gr);
             v.Position += v.Step;
         }
         return true;

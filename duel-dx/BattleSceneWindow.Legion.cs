@@ -512,7 +512,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private CharacterData? CombatData(UnitState u)
     {
         var own = EffectiveData(u);
-        if (own is null || _db is not { } db || StatOwner(u) is var owner && owner == u || EffectiveData(owner) is not { } lead) return own;
+        if (own is null || _db is not { } db) return own;
+        // 군단 부하 보정 PSY·DEP(For +0x18·+0x1c × 세력 / 100) — 판정도 이것으로 셈한다(0x1007ade0·0x1007af20, 감사4 S1).
+        var (_, lPsy, lDep) = LegionBonusFor(u);
+        if (lPsy != 0 || lDep != 0)
+            own = own with { Psy = (ushort)Math.Max(0, own.Psy + lPsy), Dep = (ushort)Math.Max(0, own.Dep + lDep) };
+        if (StatOwner(u) is var owner && owner == u || EffectiveData(owner) is not { } lead) return own;
         int dex = db.Dex(lead) - db.EquipBonus(own, 0x1e);
         return own with { Dex = (ushort)Math.Max(0, dex) };
     }

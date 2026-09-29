@@ -129,33 +129,50 @@ internal sealed unsafe partial class BattleSceneWindow
     private float _outcomeMusicSeconds = -1;
     private double _outcomeMusicFor = -1;
 
-    /// <summary>배너가 입력을 받을 때가 됐나 — 조용한 결과는 배너가 없으니 늘 참.</summary>
-    private bool OutcomeInputReady => _outcomeQuiet || (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
+    /// <summary>
+    /// 배너가 입력을 받을 때가 됐나 — 결과와 상관없이 어둡게 한 뒤 16틱부터(하위 2, 0x1006b1f9). 조용한 결과도 같다(감사4 C9).
+    /// </summary>
+    private bool OutcomeInputReady => (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
+
+    /// <summary>승패 음악을 건 결과(그 결과의 <c>_outcomeAt</c>) — 배너가 뜰 때 한 번만 건다.</summary>
+    private double _outcomeMusicPlayedFor = -1;
 
     /// <summary>
-    /// 배너 결과의 저절로 넘김 — 입력이 없으면 승리·패배 음악이 끝날 때까지 기다린 뒤 120틱이 넘으면 끝(0x1006afa0).
+    /// 배너 결과의 저절로 넘김(0x1006afa0). 승패 음악(3392/55)은 판정 순간이 아니라 <b>어둡게 끝난 16틀째, 배너와 함께</b> 건다
+    /// (0x1006b03b 카운터 == 0x10 → 0x1006b117/0x1006b1c2, 사운드 B1). 하위 2 는 음악이 도는 동안 기다리고, 끝났으면 카운터 &gt; 120 일 때 끝 —
+    /// 카운터는 음악을 기다리는 동안에도 오르므로 배너 뒤 <b>max(음악 길이, 121틱)</b>(사운드 B2·감사4 C8). 예전엔 음악 + 120틱.
     /// 클릭·키로 넘기기는 그대로 둔다(사용자 요청).
     /// </summary>
     private void UpdateOutcomeBanner()
     {
         if (_outcome.Length == 0 || _outcomeQuiet || _mosesOpen || FieldOpen || _episodesOpen) return;
+        bool win = _outcome.StartsWith('승');
         if (_outcomeMusicFor != _outcomeAt)
         {
             _outcomeMusicFor = _outcomeAt;
             _outcomeMusicSeconds = -1;
             if (Muted || !_bgmOn) _outcomeMusicSeconds = 0;
-            else LoadClip(_outcome.StartsWith('승') ? 3392 : 55, pcm => Volatile.Write(ref _outcomeMusicSeconds, pcm == null ? 0 : ClipSeconds(pcm)));
+            else LoadClip(win ? 3392 : 55, pcm => Volatile.Write(ref _outcomeMusicSeconds, pcm == null ? 0 : ClipSeconds(pcm)));
+        }
+        double since = (_lastTime - _outcomeAt) * TicksPerSecond;
+        if (since < OutcomeBannerDelayTicks) return;
+        if (_outcomeMusicPlayedFor != _outcomeAt)
+        {
+            _outcomeMusicPlayedFor = _outcomeAt;
+            PlayOutcomeMusic(win);
         }
         float music = Volatile.Read(ref _outcomeMusicSeconds);
         if (music < 0) return;
-        double since = (_lastTime - _outcomeAt) * TicksPerSecond;
-        if (since >= Math.Max(OutcomeBannerDelayTicks, music * TicksPerSecond) + OutcomeAutoTicks) LeaveFinishedBattle();
+        if (since - OutcomeBannerDelayTicks >= Math.Max(music * TicksPerSecond, OutcomeAutoTicks + 1)) LeaveFinishedBattle();
     }
 
-    /// <summary>전투 끝 배너 — 화면을 어둡게 하고 16틱 뒤 (320,220) 에 任務終了 / Game Over 를 띄운다.</summary>
+    /// <summary>
+    /// 전투 끝 — 화면을 어둡게 하고 16틱 뒤 (320,220) 에 任務終了 / Game Over 를 띄운다. 어둡게 하기는 <b>결과와 상관없이</b>
+    /// 한다(상태 24 하위 0 0x1006b00e, 감사4 C9) — 배너·음악이 없는 조용한 결과(다음 전투·필드·호위 실패)도 어두워진다.
+    /// </summary>
     private void DrawOutcomeBanner()
     {
-        if (_outcome.Length == 0 || _outcomeQuiet) return;
+        if (_outcome.Length == 0) return;
         bool win = _outcome.StartsWith('승');
 
         // 화면 전체를 물들이기 방식 2·세기 16 으로(0x1002e8d0(2, 16)) — 채널마다 (23·c + 8·16)/31(5비트) ≈ 74% 밝기 + 검정이 조금 뜬다.
@@ -167,7 +184,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 uint Dim(int shift) => (uint)((int)(c >> shift & 0xFF) * 23 / 31 + 34);
                 _fb[i] = 0xFF000000 | Dim(16) << 16 | Dim(8) << 8 | Dim(0);
             }
-        if ((_lastTime - _outcomeAt) * TicksPerSecond < OutcomeBannerDelayTicks) return;
+        if (_outcomeQuiet || (_lastTime - _outcomeAt) * TicksPerSecond < OutcomeBannerDelayTicks) return;
 
         // 배너는 모션 0·1·2(승리) / 10·11·12(패배) 세 조각을 겹쳐 그린다 — 각 모션은 컷 하나(길이 0)다.
         // 기준점은 640×480 의 (320, 220) — 가운데보다 20픽셀 위.

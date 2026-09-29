@@ -174,10 +174,71 @@ internal sealed unsafe partial class BattleSceneWindow
     private static bool ObjectHostile(DemoObject obj, UnitState u) =>
         obj.Team < 0 ? obj.Data.Kind is not (9 or 10) : obj.Team != u.Side && !(obj.Team >= 3 && u.Side >= 3);
 
+    // ── 물체 레벨 성장(감사4 K2) ────────────────────────────────────────────────────────────
+    // 원본 0x100e73f0: 레벨 = Btl 레코드 w6 + 파티 레벨(LoadBtl 0x10062ab2 · Map 물체 0x10062fd3·0x1006331c), 1 미만이면 1.
+    // Lev.dat 메모리 레코드(+6 LP% · +0xa PSY%, 유닛 성장 0x1007a8e0 과 같은 표)로 최대·현재 HP += HP×LP%/100, ATK += ATK×PSY%/100 을 한 번.
+    // DemoObject 는 파일값만 들고 있어 성장값은 이 사전에 따로 둔다 — 판(물체 목록)이 바뀌면 다시 셈한다.
+    private readonly Dictionary<DemoObject, (int Level, int MaxHp, int Attack)> _objGrowth = [];
+    private IReadOnlyList<DemoObject>? _objGrowthFor;
+
+    /// <summary>판의 물체들에 파티 레벨 성장을 먹인다 — 판마다 한 번. 현재 HP 가 파일값 그대로인 물체만 새 최대로 채운다(세이브에서 되살린 HP 는 그대로).</summary>
+    private void EnsureObjectGrowth()
+    {
+        var objects = Objects;
+        if (ReferenceEquals(objects, _objGrowthFor) || !_battleLoaded || _units.Length == 0) return;
+        _objGrowthFor = objects;
+        _objGrowth.Clear();
+        int party = PartyLevel();
+        var rows = _db?.LevelGrowth ?? [];
+        foreach (var o in objects)
+        {
+            int level = Math.Max(1, o.Record.LevelOffset + party);
+            int maxHp = o.Data.MaxHp, attack = o.Data.Attack;
+            if (rows.Count > 0)
+            {
+                var g = rows[Math.Min(level, rows.Count) - 1];
+                maxHp += maxHp * g.Lp / 100;
+                attack += attack * g.Psy / 100;
+            }
+            _objGrowth[o] = (level, maxHp, attack);
+            if (o.Hp == o.Data.MaxHp) o.Hp = maxHp;
+            if (Trace && (o.Data.Breakable || attack > 0))
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"obj growth: no {o.Record.No} obj {o.Data.Id} kind {o.Data.Kind} lv {level} hp {o.Data.MaxHp}→{maxHp} atk {o.Data.Attack}→{attack}" + Environment.NewLine);
+        }
+    }
+
+    /// <summary>성장을 먹인 물체 레벨(<c>0x100e73f0</c>).</summary>
+    private int ObjLevel(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Level : 1; }
+
+    /// <summary>성장을 먹인 물체 공격력 — 포탑·함정·폭탄 상자가 쓴다.</summary>
+    private int ObjAttack(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Attack : o.Data.Attack; }
+
+    /// <summary>
+    /// 물체를 부순 인물에게 처치 경험치(메시지 1016)를 준다 — 물체 레벨로 셈한다(<c>0x100e79fc~</c>). SOUL +10 과 따로다.
+    /// 군단 부하가 부수면 대장이 받고(<c>0x10079b14</c>), 사람이 명령하는 유닛만 받는다(<c>0x100742e0</c>).
+    /// </summary>
+    private void GainObjectKillExp(UnitState breaker, DemoObject obj)
+    {
+        var killer = breaker.LeaderIndex >= 0 && breaker.LeaderIndex < _units.Length ? _units[breaker.LeaderIndex] : breaker;
+        if (_db == null || killer.Data is not { } k || !killer.PlayerControlled) return;
+        int exp = Math.Max(1, _db.ExpForKill(k, ObjLevel(obj), killer.Status(11)));
+        killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
+        Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
+        QueueLevelUps();
+    }
+
+    /// <summary>
+    /// 물체가 차례를 받을 수 있는 자리인가 — 칸이 맵 경계 상자(<c>맵+0x390..+0x396</c>) 안이어야 한다(<c>0x100e7130</c>, 감사4 K10).
+    /// 리메이크는 이벤트로 경계를 줄이는 길을 아직 안 들고 있어 판 전체를 경계로 본다.
+    /// </summary>
+    private bool ObjectInBounds(DemoObject o) => (uint)o.Col < (uint)Cols && (uint)o.Row < (uint)Rows;
+
     /// <summary>물체에 피해를 준다 — 부서지면 폭발·SOUL +10·든 것 떨구기(0x100e7ba0~). 어빌리티 범위 피해도 여기로 온다.</summary>
     private void DamageObject(UnitState user, DemoObject obj, int damage)
     {
         if (_db is null || damage <= 0 || !obj.Alive) return;
+        EnsureObjectGrowth();                            // HP 가 레벨 성장을 먹은 뒤에 깎는다(0x100e73f0)
         // 물체 쪽 1001 처리(0x100e77e0 → 0x100e72f0)는 명중·RDP·치명 없이 공격자 ATK ±10% 만 뺀다(ba-14 O1).
         damage = damage * (90 + _rng.Next(21)) / 100;
         obj.Hp -= damage;
@@ -186,6 +247,7 @@ internal sealed unsafe partial class BattleSceneWindow
         RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
         _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
+        GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         GiveObjectSpoils(obj, user);
     }
@@ -211,9 +273,19 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
     {
-        // 연 물체는 더 손댈 것이 없다 — 원본 상자 열기 0x100e7ce0 도 +0x164(열림)이면 아무것도 안 한다. 이제 ObjectAt 이 연 물체도 돌려준다.
-        if (obj.Data.Kind is not (1 or 2 or 6 or 8 or 10) || _opened.Contains(obj) || ObjectGone(obj)
-            || (known ?? ComputeRange(user)) is not { } range) return null;
+        // 만질 수 있는 종류는 종류 표 0x1016f438 의 [중립, 아군, 적] 바이트가 1 인 것(work 386):
+        //   1 문 · 2 상자 · 6 스위치 · 8 폭탄 상자 = 누구나, 9 포탑 = 중립일 때만(만지면 편 가져오기 0x100e6184 → 0x2717, 감사4 K1),
+        //   10 힐 크리스탈 = 중립이거나 제 편이고 다 찼을 때만(0x1006fef0 이 +0x160 을 본다) — 적 편은 표 2 라 때려 부술 뿐 못 만진다(K6).
+        // 연 상자(2)만 더 손댈 것이 없다 — 0x100e7ce0 은 +0x164(열림)이면 아무것도 안 한다. 문(1)·스위치(6)는 토글이라 다시 만져 닫는다(0x2713·0x2715, K5).
+        bool touchable = obj.Data.Kind switch
+        {
+            1 or 6 => true,
+            2 or 8 => !_opened.Contains(obj),
+            9 => obj.Team < 0,
+            10 => obj.Team < 0 || (!ObjectHostile(obj, user) && obj.Charged),
+            _ => false,
+        };
+        if (!touchable || ObjectGone(obj) || (known ?? ComputeRange(user)) is not { } range) return null;
         bool Affordable(int col, int row) =>
             (uint)col < Cols && (uint)row < Rows && range.CanReach(row * Cols + col)
             && (!needTp || range.Cost[row * Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
@@ -271,11 +343,38 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool TouchObject(DemoObject obj)
     {
         if (obj.Data.Kind == 10) return TouchHealCrystal(obj);
-        CommitMove(_units[_turn]);
-        _units[_turn].Tp -= ObjectTouchTp;
+        var user = _units[_turn];
+        string name = _db?.T((ushort)obj.Data.NameId) ?? "";
+
+        // 중립 포탑(9) — 만진 쪽 편이 되어 그때부터 차례를 받아 적을 쏜다(갈래 0x100e6184: +0x78 = 만진 이 편 → 명령 0x2717 깨우기 0x100e7ff0, 감사4 K1).
+        if (obj.Data.Kind == 9)
+        {
+            if (obj.Team >= 0) return false;
+            CommitMove(user);
+            user.Tp -= ObjectTouchTp;
+            obj.Team = user.Side;
+            _wokenAt[obj] = _lastTime;
+            Toast($"{name} 이(가) 아군 편이 되었습니다.");
+            return true;
+        }
+
+        // 문(1)·스위치(6) — 만질 때마다 여닫기 토글(0x2713 0x100e7c00 · 0x2715 0x100e7da0, 감사4 K5/K9).
+        // 열린 것을 만지면 닫힌다: 문은 모션 3 → 0, +0x164 = 0, 판을 다시 찍는다(0x3f1). 스위치의 연결 물체(w8~w10)는 시판 자료에 없어 안 한다.
+        if (obj.Data.Kind is 1 or 6)
+        {
+            CommitMove(user);
+            user.Tp -= ObjectTouchTp;
+            bool open = !_opened.Contains(obj);
+            SetObjectOpen(obj, open);
+            Toast($"{name} 이(가) {(open ? "열렸" : "닫혔")}습니다.");
+            return true;
+        }
+
+        CommitMove(user);
+        user.Tp -= ObjectTouchTp;
         _opened.Add(obj);
         _openedAt[obj] = _lastTime;
-        RestampObjects();                                 // 문이 열리면 도장이 빠진다(0x100e7cc5 → 0x3f1). 상자는 그대로 찍힌다.
+        RestampObjects();                                 // 상자는 열려도 그대로 찍힌다(0x100e7ce0 은 0x3f1 을 안 보낸다). 폭탄 상자만 사라진다.
 
         if (obj.Data.Kind == 8)
         {
@@ -283,17 +382,9 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
 
-        if (obj.Data.Kind == 1)                          // 문 — 만지면 열린다(0x100e603f 의 갈래표)
-        {
-            Toast($"{_db?.T((ushort)obj.Data.NameId)} 이(가) 열렸습니다.");
-            Play(MosesClickSound);
-            return true;
-        }
-
         if (obj.Record.ItemId > 0 || obj.Record.Gold > 0) GiveObjectSpoils(obj, _units[_turn]);
         else Toast("비어 있습니다.");
 
-        Play(MosesClickSound);
         return true;
     }
 
@@ -315,8 +406,12 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (ObjectAt(tc, tr) is not { } there) return false;
             user.ResetTo(there.Col, Math.Clamp(there.Row + 1, 0, Rows - 1), keepFacing: true);
+            // 차례를 잠깐 빌렸다가 돌려준다 — 안 돌려주면 진짜 차례인 인물이 영영 안 움직여 자동 진행이 멈췄다.
+            int was = _turn;
             _turn = Array.IndexOf(_units, user);
-            return TouchObject(there);
+            bool done = TouchObject(there);
+            if (was >= 0 && was != _turn) _turn = was;
+            return done;
         }
         var target = Objects.Where(o => !_opened.Contains(o) && o.Alive
                                         && (breaking ? o.Data.Breakable && o.Team != 4 : o.Data.Kind is 2 or 6 or 8))
@@ -346,7 +441,6 @@ internal sealed unsafe partial class BattleSceneWindow
             user.Tp -= ObjectTouchTp;
             obj.Team = user.Side;
             Toast($"{name} 이(가) 아군 편이 되었습니다.");
-            Play(MosesClickSound);
             return true;
         }
         if (!obj.Charged)
@@ -354,15 +448,32 @@ internal sealed unsafe partial class BattleSceneWindow
             Hint($"{name} 이(가) 아직 충전 중입니다 ({obj.Charge}/{Math.Max(1, obj.Data.TurnEvery)})");
             return true;
         }
+        // 적 편 크리스탈은 만질 수 없다(표 [1,1,2] 의 2 = 일반 공격, 감사4 K6) — FindTouchPath 가 걸러도 시험 훅 따위가 곧장 부를 수 있다.
+        if (ObjectHostile(obj, user)) return false;
         CommitMove(user);
         user.Tp -= ObjectTouchTp;
         (obj.Charged, obj.Charge) = (false, 0);
-        Play(MosesClickSound);
-        if (Work(obj.Data.WorkId) is { IsHeal: true } w && user.Hp < user.MaxHp)
+        var w = Work(obj.Data.WorkId);
+        if (w is { IsHeal: true } && user.Hp < user.MaxHp)
         {
             int before = user.Hp;
             user.Hp = Math.Min(user.MaxHp, user.Hp + user.MaxHp * w.Power / 100);
             ShowNumber(user, (user.Hp - before).ToString(), HealColor2);
+        }
+        else if (w is { Kind: 7 })
+        {
+            // 그린크리스탈(Obj 27, work 1474 0x100e8ad0) — 1472 와 같은 꼴에 종류 7(보조): 만진 이에게 work 의 효과(상태 43 값 40)를 건다(감사4 K7).
+            var used = new List<int>();
+            var effects = w.Bonuses.Where(b => b.Stat != 0).ToList();
+            if (effects.Count == 0) effects.Add((43, 40));
+            foreach (var (id, value) in effects)
+            {
+                if (IsStatBonus(id)) AddStatBonus(user, id, value);
+                else PutAilment(user, id, value, used, null);
+            }
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"crystal buff: work {w.Id} → chr {user.ChrCode} " + string.Join(" ", effects.Select(e => $"{e.Stat}={e.Value}")) + Environment.NewLine);
         }
         return true;
     }
@@ -394,18 +505,19 @@ internal sealed unsafe partial class BattleSceneWindow
         // 기본공격과 같은 자리 규칙 — 옆 두 칸(모양 2 십자, 사거리 5~8) 안이어야 친다.
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
 
+        EnsureObjectGrowth();                            // HP 가 레벨 성장을 먹은 뒤에 깎는다(0x100e73f0)
         CommitMove(user);
         user.Tp = Math.Max(0, user.Tp - w.TpBase);
         int damage = _db.Atk(c, user.Soul, w.Power);
         obj.Hp -= damage;
         ShowNumber(user, damage.ToString(), DamageColor);
-        Play(MosesClickSound);
 
         if (obj.Hp > 0) return true;
         RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
         // 부서지면 그 자리에 폭발이 한 번 돈다(Obs 1009, 0x100e7ba0).
         _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, CellCenterY(col, row)));
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
+        GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
         // 부서진 상자도 든 것을 떨군다 — 원본은 상태 19 에서 `.obj +0x144` 아이템(명령 0x3f4)·`+0x146` GP(명령 0x3f5)를
         // 그 칸에 선 인물에게 준다(0x100e7d31~). 아이템이 있으면 아이템만, 없으면 GP.
@@ -507,7 +619,6 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _effects.Add((ObjectBreakObs, 0, _lastTime,
                       obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
-        Play(MosesClickSound);
         if (_db is null) return;
 
         int reach = Math.Max(1, obj.Data.Radius);
@@ -516,7 +627,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                             && Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row)
                                                + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(obj.Col, obj.Row)) / 2 <= reach))
         {
-            int damage = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+            int damage = (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * ObjAttack(obj) / Math.Max(1, _db.N(3));
             damage = damage * (90 + _rng.Next(21)) / 100;
             if (damage <= 0) continue;
             u.Hp = Math.Max(0, u.Hp - damage);
@@ -531,9 +642,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 종류 3·9·10 만 차례를 받고, 그중 9·10 은 편이 중립(−1)이면 영영 안 움직인다.
     /// </summary>
     private void StepObjects()
-    {        foreach (var obj in Objects)
+    {
+        EnsureObjectGrowth();
+        foreach (var obj in Objects)
         {
-            if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts) continue;
+            // 0x100e7130: 사라지지 않았고 칸이 맵 경계 상자 안이고 종류 표 +0xc(차례)가 선 것만(감사4 K10).
+            if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts || !ObjectInBounds(obj)) continue;
             if (obj.Data.Kind is 9 or 10 && obj.Team < 0) continue;
             if (obj.Data.Kind == 10) { ChargeHealCrystal(obj); continue; }
             int every = Math.Max(1, obj.Data.TurnEvery);
@@ -552,6 +666,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void ObjectActs(DemoObject obj)
     {
         if (_db is null || obj.Data.Attack <= 0) return;
+        int attack = ObjAttack(obj);                     // 레벨 성장을 먹은 ATK(0x100e73f0)
         // 어디까지 닿는지는 그 물체가 쓰는 work 이 정한다(파일 +31). work 이 없으면 옆 한 칸으로 본다.
         var work = Work(obj.Data.WorkId);
         bool ally = obj.Team == 4;
@@ -560,7 +675,7 @@ internal sealed unsafe partial class BattleSceneWindow
             ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
             : Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 1;
 
-        if (work is { Id: 1525 or 1526 } area) { ObjectBarrage(obj, area, ally); return; }
+        if (work is { Id: 1525 or 1526 or 1527 } area) { ObjectBarrage(obj, area, ally); return; }
 
         // 힐 크리스탈(종류 10)의 work 은 회복이다 — 제 편을 고쳐 준다. 나머지는 상대를 친다.
         bool heals = work is { IsHeal: true };
@@ -579,7 +694,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
 
-        int damage = (_db.N(3) - _db.Rdp(tc, target.Hp, target.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+        int damage = (_db.N(3) - _db.Rdp(tc, target.Hp, target.MaxHp)) * attack / Math.Max(1, _db.N(3));
         if (damage <= 0) return;
         target.Hp = Math.Max(0, target.Hp - damage);
         ShowNumber(target, damage.ToString(), DamageColor);
@@ -597,7 +712,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db is null) return;
         int Dist(UnitState u, (int Col, int Row) c) => Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c.Col, c.Row)) / 2;
-        int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * obj.Data.Attack / Math.Max(1, _db.N(3));
+        int attack = ObjAttack(obj);                     // 레벨 성장을 먹은 ATK(0x100e73f0)
+        int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * attack / Math.Max(1, _db.N(3));
 
         // 겨냥은 1525·1526 이 같다 — 물체 차례 0x1006a541 → 0x10060830 → 0x1005dd60 을 둘 다 타고, work 표의 겨냥 인자
         // (+0x14/+0x16/+0x1a/+0x3c)도 한 바이트 안 다르다. 제 칸과 네 이웃 칸 가운데, 반경 3 안의 적 최저 HP 로 점수(1,000,000 − 최저 HP)를 매기고
@@ -624,6 +740,19 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (dmg > 0) { u.Hp = Math.Max(0, u.Hp - dmg); ShowNumber(u, dmg.ToString(), DamageColor); AddSoul(u, dmg / Math.Max(1, _db.N(43))); }
                 PutAilment(u, 3, 10, [], null);
                 if (u.Hp <= 0 && !SurvivesFatal(u)) KillUnit(u);
+            }
+            return;
+        }
+
+        // 럭키가이 1527 — 고른 칸의 효과 범위(층 0, +0x1a = 3)를 0x100df5c0 로 모아 0x1006fde0 이 적대라 보는 유닛마다
+        // 투사체 1발(0x100ea040~0x100ea307, 감사4 K4). 투사체 그림은 아직 없어 날아가는 틈만 늦춤으로 둔다(가설: 10~40틱).
+        if (work.Id == 1527)
+        {
+            Play(423);
+            foreach (var u in best.Hits)
+            {
+                int one = One(u);
+                if (one > 0) _delayedHits.Add((_lastTime + (10 + _rng.Next(31)) / TicksPerSecond, u, one));
             }
             return;
         }
@@ -683,10 +812,22 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (Objects.FirstOrDefault(o => o.Record.No == no) is not { } obj) return;
         if (open == _opened.Contains(obj)) return;               // 이미 그 꼴이면 원본도 아무것도 안 한다
-        if (open) { _opened.Add(obj); _openedAt[obj] = _lastTime; } else { _opened.Remove(obj); _openedAt.Remove(obj); }
-        RestampObjects();                                 // 여닫으면 판을 다시 찍는다(0x100e7c70·0x100e7cc5 → 0x3f1)
-        _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
-        Play(MosesClickSound);
+        // 원본 0x2713 은 모션 1→2(열기)/3→0(닫기)만 튼다 — 폭발 그림은 없다(감사4 K8). 전에는 Obs 1009 를 띄웠다.
+        SetObjectOpen(obj, open);
+    }
+
+    /// <summary>문이 닫힌 때 — 그때부터 닫는 모션(3)을 한 번 돌고 닫힌 모션(0)으로 선다(<c>0x100e7c00</c>: 모션 3 → 0, <c>+0x164 = 0</c>).</summary>
+    private readonly Dictionary<DemoObject, double> _closedAt = [];
+
+    /// <summary>중립 포탑을 깨운 때 — 깨우기 모션 9 를 한 번 돈다(명령 0x2717 <c>0x100e7ff0</c>).</summary>
+    private readonly Dictionary<DemoObject, double> _wokenAt = [];
+
+    /// <summary>문·스위치를 열거나 닫는다 — 모션 시각을 적고 판을 다시 찍는다(0x100e7c70·0x100e7cc5 → 0x3f1).</summary>
+    private void SetObjectOpen(DemoObject obj, bool open)
+    {
+        if (open) { _opened.Add(obj); _openedAt[obj] = _lastTime; _closedAt.Remove(obj); }
+        else { _opened.Remove(obj); _openedAt.Remove(obj); _closedAt[obj] = _lastTime; }
+        RestampObjects();
     }
 
     /// <summary>
@@ -703,7 +844,7 @@ internal sealed unsafe partial class BattleSceneWindow
         };
         foreach (var o in chests)
         {
-            string what = o.Data.Kind == 8 ? $"폭탄 (공격 {o.Data.Attack}, 반경 {o.Data.Radius})"
+            string what = o.Data.Kind == 8 ? $"폭탄 (공격 {ObjAttack(o)}, 반경 {o.Data.Radius})"
                 : o.Record.ItemId > 0 ? (db.Items.GetValueOrDefault(o.Record.ItemId) is { } item ? db.T(item.NameId) : $"아이템 {o.Record.ItemId}")
                 : o.Record.Gold > 0 ? $"{o.Record.Gold} GP" : "비어 있음";
             bool opened = _opened.Contains(o);
@@ -718,6 +859,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>
     private void DrawObjects()
     {
+        EnsureObjectGrowth();                            // 판을 세운 첫 틀에 레벨 성장을 먹인다(0x100e73f0)
+        // 겨누는 동안(원본 전투 상태 0xa·0xb) 종류 표 +8(만질 수 있음: 1·2·6·8·10)·+0x10(HP 있음: 7·9·10)이 선 종류는
+        // 그림 그리기 방식 바이트([+0x58]+0x13)를 4 로 — 섞기 방식 4 = 그림 가중 16/31 반투명(0x100e6250, 되돌림 0x100e62a0).
+        // 리메이크의 상태 0xa = 차례인 인물의 이동 영역이 떠 있을 때, 0xb = 어빌리티·공격 대상을 고를 때.
+        bool aiming = _battleLoaded && IsPlayerTurn && ((_rangeUnit == _turn && _range != null) || _targetWork >= 0);
         foreach (var obj in Objects)
         {
             if (!obj.Alive || obj.Data.SpriteId <= 0) continue;
@@ -741,8 +887,24 @@ internal sealed unsafe partial class BattleSceneWindow
             // 상자가 반 칸 넘게 내려가 노랑 칸(닿는 물체 칸)과 어긋났다(사용자 보고).
             // 힐 크리스탈은 다 차면 켜진 모션 9, 쓰고 나면 꺼진 모션 10(0x100e8040 · 0x100e8070).
             if (obj.Data.Kind == 10 && !_opened.Contains(obj)) motion = obj.Charged ? 9 : 10;
+            // 닫힌 문 — 닫는 모션 3 을 한 번 돈 뒤 닫힌 모션 0(0x100e7c00). 그림에 모션 3 이 없으면 곧장 0.
+            bool once = false;
+            if (!_opened.Contains(obj) && _closedAt.TryGetValue(obj, out double closedAt))
+            {
+                int since = (int)((_lastTime - closedAt) * TicksPerSecond);
+                if (since < (UiFor(obj.Data.SpriteId)?.MotionLength(3) ?? 0)) (motion, tick, once) = (3, since, true);
+                else _closedAt.Remove(obj);
+            }
+            // 깨운 포탑 — 깨우기 모션 9 를 한 번(0x2717 0x100e7ff0). 그림에 없으면 그대로.
+            if (obj.Data.Kind == 9 && _wokenAt.TryGetValue(obj, out double wokenAt))
+            {
+                int since = (int)((_lastTime - wokenAt) * TicksPerSecond);
+                if (since < (UiFor(obj.Data.SpriteId)?.MotionLength(9) ?? 0)) (motion, tick, once) = (9, since, true);
+                else _wokenAt.Remove(obj);
+            }
             int x = obj.Col * TileW + obj.Data.DrawW, y = CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
-            DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: motion is 0 or 9 or 10);
+            double fade = aiming && obj.Data.Kind is 1 or 2 or 6 or 7 or 8 or 9 or 10 ? BlendFade(4) : 1;
+            DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: !once && motion is 0 or 9 or 10, fade: fade);
         }
     }
 }

@@ -36,8 +36,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private readonly List<(int X, int Y, int W, int H, Action Click)> _statusHits = [];
     private string _popupTitle = "";
-    private List<(string Label, string Right, bool Enabled, Action Apply)>? _popup;
-    private const int PopupW = 320, PopupRowH = 24;
+
+    /// <summary>고르기 목록 한 줄 — 글·오른쪽 글·켜짐·누르면 할 일, 아이콘 그리기(줄 왼위 x,y, 꺼짐)와 오른쪽 단추 설명.</summary>
+    private sealed record PopupRow(string Label, string Right, bool Enabled, Action Apply, Action<int, int, bool>? Icon = null, Action? Tip = null);
+
+    private List<PopupRow>? _popup;
+    /// <summary>
+    /// 고르기 창 폭·보이는 줄 수·맨윗줄 — 장비 182×10줄(0x100d3830, 폭 0xb6), 장착 어빌리티 154×8줄(0x10035c50, 폭 0x9a), 줄 높이 22(0x16), 스크롤 막대.
+    /// 전에는 폭 320 에 모든 줄을 한 번에 그려 가방이 크면 창이 화면 밖으로 넘쳤다(감사4 S7·S8).
+    /// </summary>
+    private int _popupW = 182, _popupRows = 10, _popupTop;
+    private const int PopupRowH = 22, PopupListX = 6, PopupScrollW = 16;
+    private readonly List<(int X, int Y, int W, int H, Action Click)> _popupHits = [];
 
     /// <summary>Status 는 화면 전체 창이다 — 보이는 판 가운데에 640×480.</summary>
     private (int X, int Y) StatusOrigin() => (_camX + (ViewWidth - StatusW) / 2, _camY + (ViewHeight - StatusH) / 2);
@@ -159,16 +169,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_popup != null)
         {
-            var (px, py, _) = PopupRect();
-            int row = (by - py - 30) / PopupRowH;
-            if (bx >= px && bx < px + PopupW && by >= py + 30 && row < _popup.Count)
+            foreach (var (x, y, w, h, click) in _popupHits)                    // 스크롤 막대
+                if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); return true; }
+            var (px, py, ph) = PopupRect();
+            int row = PopupRowAt(bx, by);
+            if (row >= 0)
             {
-                var (_, _, enabled, apply) = _popup[row];
-                if (!enabled) return true;
+                var r = _popup[row];
+                if (!r.Enabled) return true;                                    // 꺼진 줄은 클릭 없음
                 _popup = null;
-                apply();
+                r.Apply();
             }
-            else _popup = null;
+            else if (bx < px || bx >= px + _popupW || by < py || by >= py + ph) _popup = null;   // 창 밖 = 닫기(원본 CLOSE 없음 — 편의)
             return true;
         }
 
@@ -182,35 +194,63 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void OpenPopup(string title, List<(string, string, bool, Action)> rows)
+    private void OpenPopup(string title, List<PopupRow> rows, int width, int visibleRows)
     {
         _popupTitle = title;
         _popup = rows;
+        _popupW = width;
+        _popupRows = visibleRows;
+        _popupTop = 0;
     }
 
+    /// <summary>고르기 창 네모 — 원본은 만든 뒤 화면 가운데로 옮긴다(0x100d37a1~0x100d37c5). 높이는 보이는 줄 수로 정해진다.</summary>
     private (int X, int Y, int H) PopupRect()
     {
         var (ox, oy) = StatusOrigin();
-        int h = 30 + (_popup?.Count ?? 0) * PopupRowH + 8;
-        return (ox + (StatusW - PopupW) / 2, oy + Math.Max(40, (StatusH - h) / 2), h);
+        int h = 30 + _popupRows * PopupRowH + 8;
+        return (ox + (StatusW - _popupW) / 2, oy + (StatusH - h) / 2, h);
     }
+
+    /// <summary>마우스 자리의 고르기 줄 번호(목록 전체 기준), 없으면 −1. 스크롤 막대 칸은 빼고 본다.</summary>
+    private int PopupRowAt(int bx, int by)
+    {
+        if (_popup == null) return -1;
+        var (px, py, _) = PopupRect();
+        int lx = px + PopupListX, lw = _popupW - 2 * PopupListX - PopupScrollW, top = py + 30;
+        if (bx < lx || bx >= lx + lw || by < top || by >= top + _popupRows * PopupRowH) return -1;
+        int row = _popupTop + (by - top) / PopupRowH;
+        return row < _popup.Count ? row : -1;
+    }
+
+    /// <summary>원본 파티 이름 — 장비 고르기 창 제목(0x100d35cd, 파티 번호 0x1007b030 마다).</summary>
+    private static readonly string[] PartyTitles = ["살라딘 파티", "베라모드 파티", "크리스티앙 파티"];
 
     /// <summary>st-1: 장비 칸을 누르면 "해제" + 그 칸에 맞는 가방 아이템 목록.</summary>
     private void ChooseEquipment(UnitState u, int slot)
     {
         var db = _db!;
         var c = u.Data!;
-        var rows = new List<(string, string, bool, Action)>();
-        // 첫 줄은 늘 「해제」(TXR 1693)다 — 빈 칸이면 꺼진 줄. 넣을 아이템이 없어도 창은 뜬다(0x100d3830).
+        var rows = new List<PopupRow>();
+        // 첫 줄은 늘 「해제」(TXR 1693, 꺼지지 않음) — 설명 TXR 1696 「선택된 아이템을 창고로 보냅니다.」(0x100d397e~0x100d399c).
         string unequip = db.T(1693) is { Length: > 0 } t1693 ? t1693 : "해제";
-        rows.Add((unequip, "", c.Items[slot] != 0, () => { if (c.Items[slot] != 0) SetEquipment(u, slot, 0); }));
+        string unequipTip = db.T(1696);
+        rows.Add(new(unequip, "", true, () => { if (u.Data!.Items[slot] != 0) SetEquipment(u, slot, 0); },
+            Tip: unequipTip.Length > 0 ? () => ShowStatusTip(unequipTip) : null));
+        // 아이템 줄 = 아이콘 Obs 0326 (8,2)(0x100d3bcc) + 이름(0x100d3b78) + 오른쪽 "(x%d)"(0x1016f1e4), 설명 = Itm +0x34(0x100d3c5b).
+        // 원본에 없는 「공격 N/방어 N」 열은 뺐다(감사4 S7).
+        int fitting = 0;
         foreach (var (id, count) in _inventory)
         {
             if (count <= 0 || !db.Items.TryGetValue(id, out var item) || !db.FitsSlot(c, item, slot)) continue;
-            string stat = slot == 0 ? $"공격 {item.Attack}" : item.Defense > 0 ? $"방어 {item.Defense}" : "";
-            rows.Add(($"{db.T(item.NameId)} ×{count}", stat, true, () => SetEquipment(u, slot, (ushort)id)));
+            fitting++;
+            string desc = db.T(item.DescriptionId);
+            rows.Add(new(db.T(item.NameId), $"(x{count})", true, () => SetEquipment(u, slot, (ushort)id),
+                Icon: (x, y, _) => DrawUi(ItemPictureObs, item.PictureMotion, 0, x + 8, y + 2, UiBlend.Alpha, loop: false),
+                Tip: desc.Length > 0 ? () => ShowStatusTip(desc) : null));
         }
-        OpenPopup("장비 바꾸기", rows);
+        // 맞는 아이템이 하나도 없으면 꺼진 TXR 0 「없음」 줄 하나(0x100d3c8e~0x100d3cf9).
+        if (fitting == 0) rows.Add(new(db.T(0), "", false, () => { }));
+        OpenPopup(PartyTitles[Math.Clamp(_partyNo, 0, PartyTitles.Length - 1)], rows, 182, 10);
     }
 
     private void SetEquipment(UnitState u, int slot, ushort itemId)
@@ -229,20 +269,23 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var db = _db!;
         var c = u.Data!;
-        var rows = new List<(string, string, bool, Action)>();
+        var rows = new List<PopupRow>();
+        // 줄마다 아이콘·"%s Lv%d"·오른쪽 단추 설명(목록 0x10035e50).
         foreach (var (id, level) in c.Abilities.OrderBy(a => a.Ability))
         {
             if (!db.Abilities.TryGetValue(id, out var ab) || !ab.IsPassive || c.Passives.Contains(id)) continue;
-            rows.Add((AbilityLabel(ab, level), "", true, () =>
+            int lv = level;
+            rows.Add(new(AbilityLabel(ab, lv), "", true, () =>
             {
                 var passives = (ushort[])u.Data!.Passives.Clone();
                 passives[slot] = id;
                 u.Data = u.Data with { Passives = passives };
                 RefreshUnitStats(u);
-            }));
+            }, Icon: (x, y, off) => DrawAbilityIcons(ab, x, y + PopupRowH / 2, off), Tip: () => ShowAbilityTip(ab, lv)));
         }
-        if (rows.Count == 0) { Toast("장착할 패시브 어빌리티를 배우지 않았습니다"); return; }
-        OpenPopup("장착 어빌리티", rows);
+        // 고를 것이 없어도 창은 뜬다 — 꺼진 빈 줄 하나(0x10035741~0x100357f5, 볼트 st-2, 감사4 S8). 전에는 토스트만 떴다.
+        if (rows.Count == 0) rows.Add(new("", "", false, () => { }));
+        OpenPopup("장착 어빌리티", rows, 154, 8);
     }
 
     /// <summary>st-3: 배운 어빌리티를 누르면 <b>바로</b> 레벨을 올리고, 배울 수 있는 어빌리티를 누르면 배운다 — 묻지 않는다.</summary>
@@ -295,7 +338,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OnStatusRightClick(int bx, int by)
     {
         if (_statusUnit < 0) return false;
-        if (_popup != null) { _popup = null; return true; }
+        if (_popup != null)
+        {
+            // 고르기 창 줄 = 누르고 있는 동안 설명(0x100d3c5b·0x10035e50). 창 밖 = 창 닫기(편의 — 원본은 오른쪽 단추 닫기가 없다).
+            var (px, py, ph) = PopupRect();
+            if (PopupRowAt(bx, by) is var row and >= 0) { if (_popup[row].Enabled) _popup[row].Tip?.Invoke(); }
+            else if (bx < px || bx >= px + _popupW || by < py || by >= py + ph) _popup = null;
+            return true;
+        }
         foreach (var (x, y, w, h, click) in _statusRightHits)
             if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); return true; }
         return false;
@@ -354,6 +404,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private bool ScrollStatusLists(int lines)
     {
+        if (_popup != null)
+        {
+            // 고르기 창이 떠 있으면 휠은 그 목록만 굴린다(원본은 스크롤 막대만).
+            _popupTop = Math.Clamp(_popupTop + lines, 0, Math.Max(0, _popup.Count - _popupRows));
+            return true;
+        }
         var (ox, oy) = StatusOrigin();
         int x = ox + AbilityX, w = ScrollX + 16 - AbilityX;
         if (MouseIn(x, oy + LearnedScrollY, w, LearnedScrollH)) { _learnedTop = Math.Max(0, _learnedTop + lines); return true; }
@@ -420,24 +476,34 @@ internal sealed unsafe partial class BattleSceneWindow
                                    : unit.PlayerControlled && _outcome.Length == 0 && _turn >= 0 && _units[_turn] == unit;
 
         // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
-        if (!DrawUi(c.FaceId, 0, 0, ox + 62, oy + 103, UiBlend.Alpha, loop: false) && _faces.TryGetValue(unit.ChrCode, out var face))
+        // 초상 번호가 0 이면 원본은 Obs 0229(0xe5)를 찍는다(볼트 st-5 「초상」, 감사4 S11). 그것도 없으면 필드 얼굴.
+        if (!DrawUi(c.FaceId != 0 ? c.FaceId : 229, 0, 0, ox + 62, oy + 103, UiBlend.Alpha, loop: false) && _faces.TryGetValue(unit.ChrCode, out var face))
             BlitClipped(face, ox + 30, oy + 72, 64, 64);
         void StatLine(int k, string value) => RowText(value, ox, oy + 81 + 15 * k - 8, 16, StatusWhite, right: StatRight);
         string[] names = [db.T(c.NameId), db.T(c.TitleId), db.FamilyName(c), db.JobName(c)];
         for (int k = 0; k < names.Length; k++) StatLine(k, names[k]);
         StatLine(5, c.Level.ToString());
         StatLine(6, c.Exp.ToString());
-        StatLine(8, $"{unit.Hp} / {unit.MaxHp}");
-        StatLine(10, $"{unit.Soul} / {unit.MaxSoul}");
-        StatLine(12, $"{unit.Tp} / {unit.MaxTp}");
-        StatLine(15, AtkWithSoul(db, c, BasicAttackSoul(unit.Soul)));   // 일반 공격 ATK — 조정의 소울 기여도가 걸린 값
+        // HP·SOUL·TP — 보정(장비 0x10032c60 + 장착 0x10032af0 + 유닛 가감 +0x4ce/+0x4d2/+0x4d0)이 0 보다 크면 "%d / %d(+%d)"(0x1016f230),
+        // 아니면 "%d / %d"(0x1016f21c). HP 보정은 0x10032e80 으로 갑옷 배율을 곱해 화면 단위로 찍는다(0x100d4913~0x100d4dcb, 감사4 S2).
+        static string WithBonus(int now, int max, int bonus) => bonus > 0 ? $"{now} / {max}(+{bonus})" : $"{now} / {max}";
+        int hpBonus = db.EquipBonus(c, 0x30) + unit.BonusMaxHp, armor = db.ArmorRate(c);
+        if (hpBonus > 0 && armor != 0 && db.N(6) != 0) hpBonus = hpBonus * (armor + db.N(6)) / db.N(6);
+        StatLine(8, WithBonus(unit.Hp, unit.MaxHp, hpBonus));
+        StatLine(10, WithBonus(unit.Soul, unit.MaxSoul, db.EquipBonus(c, 0x25) + unit.BonusMaxSoul));
+        StatLine(12, WithBonus(unit.Tp, unit.MaxTp, db.EquipBonus(c, 0x21) + unit.BonusMaxTp));
+        // ATK·ACR·RDP·LP·PSY·DEP·DEX 는 판정과 같은 값(상태이상·군단 보정·부하=대장 DEX/최대 TP) — 감사4 S1·S3·S4.
+        var (eff, acr, rdp, lp) = ShownStats(db, unit, c);
+        int weaponPct = unit.Status(29);                                   // 상태 29 — 무기 공격력 %(0x1007afd0)
+        StatLine(15, AtkWithSoul(db, eff, BasicAttackSoul(unit.Soul), weaponPercent: weaponPct));   // 일반 공격 ATK — 조정의 소울 기여도가 걸린 값
         // ATK 줄에 마우스를 올리면 바탕 × 소울 배율로 풀어 보인다(사용자 요청) — 그림은 창 맨 위에 그린다.
         int atkY = oy + 81 + 15 * 15 - 8;
-        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, c, BasicAttackSoul(unit.Soul))
+        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, eff, BasicAttackSoul(unit.Soul), weaponPct)
               + (_soulWeight != 100 ? $"$n(모드 > 조정: 소울 기여도 {_soulWeight}% — SOUL {unit.Soul} 을 {BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
-        StatLine(16, db.Acr(c, unit.Tp).ToString());
-        StatLine(17, db.Rdp(c, unit.Hp, unit.MaxHp).ToString());
-        int[] basics = [(int)c.Lp + db.EquipBonus(c, 0x30), c.Ctp, db.Stp(c), db.Psy(c), db.Dep(c), db.Dex(c)];
+        StatLine(16, acr.ToString());
+        StatLine(17, rdp.ToString());
+        // STP 0x1007acf0 = 최대 TP(상태 33 포함) / 제수, 부하는 대장 것 — RefreshUnitStats 가 셈해 둔 unit.Stp(감사4 S3).
+        int[] basics = [lp, c.Ctp, unit.Stp, db.Psy(eff), db.Dep(eff), db.Dex(eff)];
         for (int k = 0; k < basics.Length; k++) StatLine(19 + k, basics[k].ToString());
 
         // ── 상태이상 셋(0x100d5448) — Obs 0489, 모션 = Sta 레코드 +4 칸(0 = EMPTY), 가운데 (242 + 53i, 81) ──
@@ -449,7 +515,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (id != 0 && db.Statuses.GetValueOrDefault(id) is { } sta && db.T(sta.DescriptionId) is { Length: > 0 } fmt)
             {
                 string tip = FormatPrintf(fmt, unit.StatusValue[i]);
-                _statusRightHits.Add((cx - 22, cy - 11, 44, 22, () => ShowStatusTip(tip)));
+                _statusRightHits.Add((cx - 15, cy - 10, 30, 20, () => ShowStatusTip(tip)));   // 판정 칸 30×20(0x100d54e5 → 0x10041380(−15,−10,30,20))
             }
         }
 
@@ -488,17 +554,29 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // ── 획득한 어빌리티(0x10035290) — 번호 차례, 여섯 줄씩 ──
         var learned = c.Abilities.OrderBy(a => a.Ability)
-            .Select(a => (Ab: db.Abilities.GetValueOrDefault(a.Ability), Level: (int)a.Level)).Where(a => a.Ab != null).ToList();
+            .Select(a => (Ab: db.Abilities.GetValueOrDefault(a.Ability), Level: (int)a.Level, Legion: false)).Where(a => a.Ab != null).ToList();
+        // 군단기 — 배속 군단(CChr+0x1c)의 기술 다섯 칸(For +0x1e, 6바이트씩) 가운데 필요 세력·대장 조건이 맞는 것을 목록 끝에(0x100326bd~0x1003274c).
+        // 레벨 게터 0x10032a30 은 분류 2 면 늘 1, 다음 레벨(0x10032450)은 최대 레벨 1 을 넘어 −1 → 숫자 없는 꺼진 줄 「이름 Lv1」, 설명만 된다(감사4 S6).
+        // 조건은 전투 어빌리티 메뉴(MenuRows)와 같다.
+        if (_unitLegion.TryGetValue(unit.ChrCode, out int statusLegion) && Legions().GetValueOrDefault(statusLegion) is { } myLegion)
+            foreach (var (abilityId, power, leader) in myLegion.Skills)
+            {
+                if (abilityId == 0 || power > 1000 || (leader != 0 && leader != unit.ChrCode)) continue;
+                if (db.Abilities.GetValueOrDefault(abilityId) is { } lab && !learned.Any(l => l.Ab == lab)) learned.Add((lab, 1, true));
+            }
         _learnedTop = Math.Clamp(_learnedTop, 0, Math.Max(0, learned.Count - LearnedRows));
         for (int k = 0; k < LearnedRows && _learnedTop + k < learned.Count; k++)
         {
-            var (found, level) = learned[_learnedTop + k];
+            var (found, level, legionRow) = learned[_learnedTop + k];
             var ab = found!;
             int rx = ox + AbilityX, ry = oy + LearnedY + LearnedStep * k;
-            int cost = db.AbilityExpCost(ab, level);             // 다음 레벨로 올리는 EXP — 최대 레벨이면 0(숫자 없음)
-            if (editable && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) DrawUi(RowObs, 4, 0, rx, ry, UiBlend.Alpha);
-            DrawAbilityRow(ab, AbilityLabel(ab, level), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, RowH, 11);
+            int cost = legionRow ? 0 : db.AbilityExpCost(ab, level);             // 다음 레벨로 올리는 EXP — 최대 레벨이면 0(숫자 없음)
+            // 꺼진 줄(비용 > EXP·최대 레벨·군단기)은 0x1003fdc0 으로 꺼져 강조·클릭이 없다(0x10035412, 감사4 S9).
+            bool off = cost == 0 || cost > c.Exp;
+            if (editable && !off && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) DrawUi(RowObs, 4, 0, rx, ry, UiBlend.Alpha);
+            DrawAbilityRow(ab, AbilityLabel(ab, level), cost, off, rx, ry, AbilityW, RowH, 11);
             _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab, level)));
+            if (legionRow) continue;                                            // 군단기는 설명만
             // 레벨 내리기(원본에 없는 데모 기능) — 마우스를 올린 줄의 비용 왼쪽에 작은 ▼ 단추(스크롤 막대 아래 화살표 Obs 0071 모션 4, 누름 5).
             // 원본 그림이라 창에 어울리고, 올린 줄에만 떠 목록이 어지럽지 않다. 오른쪽 단추는 원본대로 설명에 쓴다. Shift+클릭도 된다.
             // Lv1 에서 누르면 지울지 묻는다(st-6).
@@ -509,8 +587,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 DrawUi(ScrollObs, MouseIn(ax, ay, 16, 16) ? 5 : 4, 0, ax, ay, UiBlend.Alpha, loop: false);
                 AddHit(ax, ay, 16, 16, () => LowerAbility(unit, ab));      // 줄 클릭보다 먼저 받는다(먼저 넣은 것이 이긴다)
             }
-            // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기.
-            if (editable) AddHit(rx, ry, AbilityW, RowH, () => { if (ShiftHeld) LowerAbility(unit, ab); else ConfirmAbility(unit, ab, learn: false); });
+            // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기(꺼진 줄도 — 사용자 요청 기능). 꺼진 줄의 그냥 클릭은 아무 일 없다(S9).
+            if (editable) AddHit(rx, ry, AbilityW, RowH, () => { if (ShiftHeld) LowerAbility(unit, ab); else if (!off) ConfirmAbility(unit, ab, learn: false); });
         }
         DrawScrollBar(ox + ScrollX, oy + LearnedScrollY, LearnedScrollH, _learnedTop, learned.Count, LearnedRows, top => _learnedTop = top);
 
@@ -522,10 +600,19 @@ internal sealed unsafe partial class BattleSceneWindow
             var ab = learnable[_learnableTop + k];
             int rx = ox + AbilityX, ry = oy + LearnableY + LearnableStep * k;
             int cost = db.AbilityExpCost(ab, 0);
-            if (editable && _popup == null && MouseIn(rx, ry, AbilityW, LearnableRowH)) DrawUiStretched(RowObs, 7, rx, ry, AbilityW, LearnableRowH);
-            DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, cost == 0 || cost > c.Exp, rx, ry, AbilityW, LearnableRowH, 18);
+            bool off = cost == 0 || cost > c.Exp;                                // 꺼진 줄은 강조·클릭 없음(S9)
+            if (editable && !off && _popup == null && MouseIn(rx, ry, AbilityW, LearnableRowH)) DrawUiStretched(RowObs, 7, rx, ry, AbilityW, LearnableRowH);
+            // 선행 어빌리티 1 이 있으면 두 줄 — 위 "%s Lv%d ->"(선행 이름·필요 레벨, 아이콘 y 9) / 아래 "  %s Lv%d"(새것 Lv1, 아이콘 y 27).
+            // 배우면 선행이 지워진다는 것을 화면이 알린다(0x100361e0, 볼트 st-5, 감사4 S5). 없으면 한 줄 + 아이콘 y 18.
+            if (ab.Prereq1 != 0 && db.Abilities.GetValueOrDefault(ab.Prereq1) is { } pre)
+            {
+                DrawAbilityRow(pre, $"{db.T(pre.NameId)} Lv{ab.Prereq1Level} ->", 0, off, rx, ry, AbilityW, 18, 9);
+                DrawAbilityRow(ab, $"  {db.T(ab.NameId)} Lv1", 0, off, rx, ry + 18, AbilityW, 19, 27 - 18);
+                if (cost > 0) RowText(cost.ToString(), rx, ry, LearnableRowH, cost > c.Exp ? CostRed : CostYellow, right: AbilityW - 10);
+            }
+            else DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, off, rx, ry, AbilityW, LearnableRowH, 18);
             _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab, 0)));
-            if (editable) AddHit(rx, ry, AbilityW, LearnableRowH, () => ConfirmAbility(unit, ab, learn: true));
+            if (editable && !off) AddHit(rx, ry, AbilityW, LearnableRowH, () => ConfirmAbility(unit, ab, learn: true));
         }
         DrawScrollBar(ox + ScrollX, oy + LearnableScrollY, LearnableScrollH, _learnableTop, learnable.Count, LearnableRows, top => _learnableTop = top);
 
@@ -541,10 +628,16 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawAbilityRow(AbilityData ab, string label, int cost, bool off, int x, int y, int w, int h, int iconY)
     {
         RowText(label, x, y, h, off ? StatusDim : StatusWhite, left: 46);
-        var blend = off ? UiBlend.Dim : UiBlend.Alpha;
-        if (ab.IconKindMotion >= 0) DrawUi(AbilityIconObs, ab.IconKindMotion, 0, x + 14, y + iconY, blend, loop: false);
-        if (ab.IconTargetMotion >= 0) DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, x + 34, y + iconY, blend, loop: false);
+        DrawAbilityIcons(ab, x, y + iconY, off);
         if (cost > 0) RowText(cost.ToString(), x, y, h, cost > (StatusUnit().Data?.Exp ?? 0) ? CostRed : CostYellow, right: w - 10);
+    }
+
+    /// <summary>어빌리티 아이콘 둘 — 종류 (14, cy) · 대상 (34, cy), 꺼진 줄은 어둡게.</summary>
+    private void DrawAbilityIcons(AbilityData ab, int x, int cy, bool off)
+    {
+        var blend = off ? UiBlend.Dim : UiBlend.Alpha;
+        if (ab.IconKindMotion >= 0) DrawUi(AbilityIconObs, ab.IconKindMotion, 0, x + 14, cy, blend, loop: false);
+        if (ab.IconTargetMotion >= 0) DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, x + 34, cy, blend, loop: false);
     }
 
     /// <summary>
@@ -677,23 +770,44 @@ internal sealed unsafe partial class BattleSceneWindow
     /// SOUL 이 차면 공격력이 몇 배가 되는지 보이게 한다(사용자 요청: SOUL 40 이면 ×5.0, 150 이면 ×16.0).
     /// </summary>
     /// <param name="compact">정보 창(폭 140)은 「ATK」 글자와 겹치지 않게 「100 ×5.0」 으로 줄인다.</param>
-    private static string AtkWithSoul(GameDatabase db, CharacterData c, int soul, bool compact = false)
+    private static string AtkWithSoul(GameDatabase db, CharacterData c, int soul, bool compact = false, int weaponPercent = 0)
     {
         double factor = db.N(85) == 0 ? 0 : (double)(soul + db.N(2)) * db.N(42) / db.N(85);
-        return compact ? $"{db.Atk(c, soul)} ×{factor:0.0}" : $"{db.Atk(c, soul)} (소울×{factor:0.0})";
+        int atk = db.Atk(c, soul, weaponPercent: weaponPercent);
+        return compact ? $"{atk} ×{factor:0.0}" : $"{atk} (소울×{factor:0.0})";
+    }
+
+    /// <summary>
+    /// 화면에 보일 능력치 — 판정과 같은 값. 원본 게터(<c>0x1007ade0</c> PSY·<c>0x1007af20</c> DEP·<c>0x1007ae50</c> DEX·<c>0x1007aeb0</c> 최대 TP·
+    /// <c>0x1007ac70</c> LP)는 상태 1·30·31·32·40·48 과 군단 부하 보정(LP·PSY·DEP)을 얹고, 부하면 DEX·최대 TP 를 대장에서 읽는다.
+    /// ATK(<c>0x1007ab20</c>)·ACR(<c>0x1007ab90</c>)·RDP(<c>0x1007abf0</c>)는 그 게터를 부른다. 전에는 날 자료(<c>unit.Data</c>)로 셈해
+    /// 버프·군단이 걸린 유닛의 표시값이 판정과 달랐다(감사4 S1).
+    /// </summary>
+    /// <returns><c>E</c> = PSY·DEP·DEX 가 얹힌 자료(<see cref="GameDatabase.Psy"/> 따위로 읽는다), 그리고 ATK·ACR·RDP·LP.</returns>
+    private (CharacterData E, int Acr, int Rdp, int Lp) ShownStats(GameDatabase db, UnitState unit, CharacterData c)
+    {
+        var e = CombatData(unit) ?? c;                          // 상태 1·30·31·32·40 + 군단 PSY·DEP + 부하는 대장 DEX
+        var (lLp, _, _) = LegionBonusFor(unit);                  // 군단 LP(For +0x14 × 세력 / 100) — PSY·DEP 는 CombatData 가 이미 얹었다
+        // ACR 0x1007ab90 = (2×CTP + 최대TP(0x1007aeb0 — 상태 33·부하=대장) + 현재TP) / N9 + DEX(0x1007ae50) / N8
+        int acr = (db.N(9) == 0 ? 0 : (2 * c.Ctp + unit.MaxTp + unit.Tp) / db.N(9)) + (db.N(8) == 0 ? 0 : db.Dex(e) / db.N(8));
+        int rdp = db.Rdp(e, unit.Hp, unit.MaxHp);
+        // LP 0x1007ac70 = CChr LP + 장비·장착 + 상태 48(+0x4ce) + 군단 LP
+        int lp = (int)c.Lp + db.EquipBonus(c, 0x30) + unit.BonusMaxHp + lLp;
+        return (e, acr, rdp, lp);
     }
 
     /// <summary>
     /// ATK 풀이 — 바탕(무기·PSY) × 소울 배율, 그리고 그것이 피해가 되는 식. 원본 <c>0x1007ab20</c>:
     /// ATK = ((무기 + Num[1]) × PSY / Num[25]) × (SOUL + Num[2]) × Num[42] / Num[85].
     /// </summary>
-    private static string AtkBreakdown(GameDatabase db, CharacterData c, int soul)
+    private static string AtkBreakdown(GameDatabase db, CharacterData c, int soul, int weaponPercent = 0)
     {
         int weapon = c.Items[0] != 0 && db.Items.TryGetValue(c.Items[0], out var w) ? w.Attack : 0;
+        if (weaponPercent != 0) weapon = Math.Max(0, weapon + weapon * weaponPercent / 100);   // 상태 29 — 무기 공격력 %(0x1007afe5)
         int psy = db.Psy(c);
         int baseAtk = db.N(25) == 0 ? 0 : (weapon + db.N(1)) * psy / db.N(25);
         double factor = db.N(85) == 0 ? 0 : (double)(soul + db.N(2)) * db.N(42) / db.N(85);
-        return $"ATK {db.Atk(c, soul)} = 바탕 {baseAtk} × 소울 {factor:0.0}배$n"
+        return $"ATK {db.Atk(c, soul, weaponPercent: weaponPercent)} = 바탕 {baseAtk} × 소울 {factor:0.0}배$n"
              + $"바탕 = (무기 {weapon} + {db.N(1)}) × PSY {psy} ÷ {db.N(25)}$n"
              + $"소울 배율 = (SOUL {soul} + {db.N(2)}) × {db.N(42)} ÷ {db.N(85)}$n"
              + $"피해 = ATK × (1000 − 상대 RDP) ÷ 1000, 어빌리티는 × (200 + 위력) ÷ 200";
@@ -753,20 +867,33 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void AddHit(int x, int y, int w, int h, Action click) => _statusHits.Add((x, y, w, h, click));
 
-    /// <summary>장비·장착 어빌리티 고르기 목록 — 게임 공통 틀(제목줄 있음)에 줄마다 글.</summary>
+    /// <summary>
+    /// 장비·장착 어빌리티 고르기 목록 — 게임 공통 틀(제목줄 있음, 0x101b5fec + 장식 2), 1열 · 보이는 줄 <see cref="_popupRows"/> · 오른쪽 스크롤 막대.
+    /// 줄 = 아이콘 + 글(아이콘 있으면 46, 없으면 16) + 오른쪽 글. 꺼진 줄은 어둡고 강조·클릭이 없다.
+    /// </summary>
     private void DrawPopup()
     {
+        _popupHits.Clear();
         if (_popup == null) return;
         var (px, py, h) = PopupRect();
-        DarkenRect(px - 1, py - 1, PopupW + 2, h + 2, 8);
-        DrawGameFrame(px, py + FrameTitleH, PopupW, h - FrameTitleH, _popupTitle);
-        for (int i = 0; i < _popup.Count; i++)
+        DarkenRect(px - 1, py - 1, _popupW + 2, h + 2, 8);
+        DrawGameFrame(px, py + FrameTitleH, _popupW, h - FrameTitleH, _popupTitle);
+        _popupTop = Math.Clamp(_popupTop, 0, Math.Max(0, _popup.Count - _popupRows));
+        int lx = px + PopupListX, lw = _popupW - 2 * PopupListX - PopupScrollW, top = py + 30;
+        int hover = _statusTip == null ? PopupRowAt(_mouse.X, _mouse.Y) : -1;
+        for (int k = 0; k < _popupRows && _popupTop + k < _popup.Count; k++)
         {
-            var (label, right, enabled, _) = _popup[i];
-            int ry = py + 30 + i * PopupRowH;
-            if (enabled && MouseIn(px, ry, PopupW, PopupRowH)) DrawUi(RowObs, 1, 0, px + 6, ry + 1, UiBlend.Alpha);
-            RowText(label, px, ry, PopupRowH, enabled ? StatusWhite : StatusDim, left: 16);
-            if (right.Length > 0) RowText(right, px, ry, PopupRowH, StatusDim, right: PopupW - 16);
+            var r = _popup[_popupTop + k];
+            int ry = top + k * PopupRowH;
+            if (r.Enabled && hover == _popupTop + k) DrawUiStretched(RowObs, 1, lx, ry, lw, PopupRowH);
+            r.Icon?.Invoke(lx, ry, !r.Enabled);
+            RowText(r.Label, lx, ry, PopupRowH, r.Enabled ? StatusWhite : StatusDim, left: r.Icon != null ? 46 : 10);
+            if (r.Right.Length > 0) RowText(r.Right, lx, ry, PopupRowH, r.Enabled ? StatusWhite : StatusDim, right: lw - 4);
         }
+        // 스크롤 막대(0x10044e10) — 원본 목록 창은 스크롤을 켜고 만든다. 클릭 칸은 고르기 창 몫으로 따로 모은다.
+        int start = _statusHits.Count;
+        DrawScrollBar(lx + lw, top, _popupRows * PopupRowH, _popupTop, _popup.Count, _popupRows, t => _popupTop = t);
+        _popupHits.AddRange(_statusHits.Skip(start));
+        _statusHits.RemoveRange(start, _statusHits.Count - start);
     }
 }

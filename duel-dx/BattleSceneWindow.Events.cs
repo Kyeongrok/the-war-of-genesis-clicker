@@ -152,6 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _runningEvent = i;
             _eventPc = 0;
             _eventWaitUntil = 0;
+            _eventCamLine = (-1, -1);
             StepEvent();
             return;                                                     // 나머지는 이 사건이 끝난 뒤 같은 시점 표시로 다시 본다
         }
@@ -189,6 +190,9 @@ internal sealed unsafe partial class BattleSceneWindow
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
                     break;
                 case 3: _runningEvent = -1; _talkSkip = false; return;  // 중단
+                case 400 or 402 or 600 or 601 or 906 when !_talkSkip && EventCameraWaits(a):
+                    _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
+                    return;
                 case 600: ShowTalk(box: true, a); if (_talk == null) break; return;    // 건너뛰는 중이면 안 뜬다
                 case 601: ShowTalk(box: false, a); if (_talk == null) break; return;
                 default:
@@ -197,6 +201,58 @@ internal sealed unsafe partial class BattleSceneWindow
                     break;
             }
         }
+    }
+
+    /// <summary>카메라 명령을 건 이벤트 줄 — (사건, 줄 번호). 같은 줄에 다시 오면 명령은 안 걸고 멈췄는지만 본다.</summary>
+    private (int Event, int Pc) _eventCamLine = (-1, -1);
+
+    /// <summary>
+    /// 이벤트 줄의 카메라 — 처음 오면 명령을 걸고, 카메라가 서기 전까지 true(그 줄에 머문다). 설 일이 없으면 false.
+    /// 400(0x100531f0): 큐를 비우고 칸 가운데 · 402(0x10053350): 살아 판 위에 있으면 그 유닛(부하면 대장)을 <b>한 번</b> 가운데(따라가기 아님),
+    /// 죽었거나 없으면 곧바로 다음 줄 · 600·601(0x100537d0·0x10053b62): 말하는 이(부하면 대장) 가운데 뒤 창 ·
+    /// 906(0x10055810): 단계 0 카메라 → 스크롤이 끝난 뒤 단계 1 강조(감사4 C15·C16).
+    /// </summary>
+    private bool EventCameraWaits(ScriptCommand a)
+    {
+        short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        var line = (_runningEvent, _eventPc);   // _eventPc 는 이미 다음 줄을 가리킨다 — 이 줄마다 하나
+        if (_eventCamLine == line)
+        {
+            if (CameraBusy) return true;
+            _eventCamLine = (-1, -1);
+            return false;
+        }
+        UnitState? LeaderOf(UnitState u) => u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length ? _units[u.LeaderIndex] : u;
+        switch (a.Code)
+        {
+            case 400:
+                _camGoal = null;                                        // 큐 비우기(0x1006e830)
+                CenterOnCell(A(0), A(1));
+                break;
+            case 402:
+            {
+                if (EventTargets(A(0), out _).FirstOrDefault() is not { Alive: true, OnField: true } u) return false;
+                CenterOnUnit(LeaderOf(u)!);
+                break;
+            }
+            case 600 or 601:
+            {
+                int speaker = TalkSpeaker(A(0));
+                if ((uint)speaker >= _units.Length || _units[speaker] is not { Alive: true, OnField: true } s) return false;
+                CenterOnUnit(LeaderOf(s)!);
+                break;
+            }
+            case 906:
+            {
+                int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
+                CenterOnCell(cx, cy);
+                break;
+            }
+            default: return false;
+        }
+        if (!CameraBusy) return false;                                  // 이미 그 자리 — 곧바로
+        _eventCamLine = line;
+        return true;
     }
 
     private static bool Compare(int a, int op, int b) => op switch
@@ -404,7 +460,7 @@ internal sealed unsafe partial class BattleSceneWindow
         switch (a.Code)
         {
             case 11:                                     // 승패 — 결과 = 인자0 + 1: 0 승리(배너), 3 패배(Game Over 배너), 1 은 배너·음악 없이 조용히 끝(호위 실패)
-                SetEventOutcome(A(0) == 0, quiet: A(0) == 1, leaveAfterTicks: 15);
+                SetEventOutcome(A(0) == 0, quiet: A(0) == 1);
                 break;
             case 10:                                     // 이어지는 전투(결과 5) — 배너 없이 120틱 뒤 넘어간다(0x1006afa0)
                 _eventNextBattle = A(0);
@@ -569,9 +625,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
             {
-                int cx = (A(0) + A(2) + 1) / 2, cy = (A(1) + A(3) + 1) / 2;
-                _camTargetX = Math.Clamp(cx * TileW + TileW / 2 - ViewWidth / 2, 0, CamMaxX);
-                _camTarget = Math.Clamp(CellCenterY(Math.Clamp(cx, 0, Cols - 1), Math.Clamp(cy, 0, Rows - 1)) - ViewHeight / 2, 0, CamMax);
+                // 카메라는 StepEvent 가 먼저 옮기고 멈출 때까지 이 줄을 붙든다(EventCameraWaits) — 강조는 스크롤이 끝난 틀에 켠다(단계 1).
+                // 건너뛰는 중이면 카메라 없이 바로 온다.
+                if (_talkSkip) CenterOnCell((A(0) + A(2) + 1) / 2, (A(1) + A(3) + 1) / 2);
                 // 사각형 안 칸을 층 13 초록(배치 칸과 같은 그림)으로 200틱 동안 칠한다(ba-14 E6) — 「여기로 가라」 표시.
                 _highlightRect = (Math.Min(A(0), A(2)), Math.Min(A(1), A(3)), Math.Max(A(0), A(2)), Math.Max(A(1), A(3)));
                 _highlightUntil = _lastTime + 200 / TicksPerSecond;
@@ -586,8 +642,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
                 PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
                 break;
-            case 400:
-            case 402: break;                             // 카메라 옮기기 — 데모 카메라는 말하는 이·차례인 이를 저절로 따라간다
+            case 400:                                    // 카메라 칸 가운데로 · 402 유닛 가운데로 — StepEvent 가 EventCameraWaits 로 옮기고 기다린다.
+            case 402:                                    // 건너뛰는 중에는 카메라 명령 없이 지나간다.
+                break;
             case 512:                                    // BGM 바꾸기
                 StopMusic();
                 if (A(0) > 1 && A(0) != 0xffff) PlayMusicFile(A(0), loop: true);
