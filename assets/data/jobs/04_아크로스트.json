@@ -10,15 +10,15 @@
     },
     {
       "form": "공격형",
-      "abilities": [58, 59, 60, 64],
+      "abilities": [58, 60],
       "stage1": { "job": 39, "needLevel": 4, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 4, 3, 1], "names": [0, 0, 0, 0, 384, 0], "description": 2726 },
       "stage2": { "job": 44, "needLevel": 33, "growth": [0, 0, 0, 0, 0, 0, 2, 3, 0, 3, 2, 1], "names": [0, 389, 394, 399, 0, 404], "description": 2726 }
     },
     {
       "form": "방어형",
-      "abilities": [62, 0, 69, 76],
+      "abilities": [69, 76, 143],
       "stage1": { "job": 40, "needLevel": 8, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 3, 4, 2], "names": [0, 0, 0, 0, 385, 0], "description": 2727 },
-      "stage2": { "job": 45, "needLevel": 36, "growth": [0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 3, 2], "names": [0, 390, 395, 400, 0, 405], "description": 2727, "add": [{ "ability": 143, "at": 0 }], "remove": [0] }
+      "stage2": { "job": 45, "needLevel": 36, "growth": [0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 3, 2], "names": [0, 390, 395, 400, 0, 405], "description": 2727 }
     },
     {
       "form": "고속형",
@@ -28,7 +28,7 @@
     },
     {
       "form": "보조형",
-      "abilities": [70, 65, 66, 72, 75],
+      "abilities": [70, 72, 75],
       "stage1": { "job": 42, "needLevel": 12, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 2, 3, 1], "names": [0, 0, 0, 0, 387, 0], "description": 2729 },
       "stage2": { "job": 47, "needLevel": 42, "growth": [0, 0, 0, 0, 0, 0, 2, 2, 0, 2, 2, 1], "names": [0, 392, 397, 402, 0, 407], "description": 2729 }
     }
