@@ -377,6 +377,8 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var follower in _units)
         {
             if (!follower.Alive || follower.IsBusy || follower.LeaderIndex < 0 || !follower.OnField) continue;
+            // 기술을 쓰는 대장의 부하는 다시 걷기 시작하지 않는다 — 걷기 시작하면 FollowersAttack 이 그 부하를 못 쓴다(감사5 L-A).
+            if (follower.LeaderIndex == _skillLeader) continue;
             if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) continue;
             if (_nextFollowerRetry.TryGetValue(follower, out var next) && _lastTime < next) continue;
             _nextFollowerRetry[follower] = _lastTime + 0.5;
@@ -410,6 +412,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (leaderWork is { FollowersAct: false }) return;
         foreach (var follower in FollowersOf(leaderIndex))
         {
+            // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
             if (follower.Data is not { } c || follower.IsBusy) continue;
             bool done = false;
             foreach (var work in FollowerWorks(c, allyPass))
@@ -494,8 +497,18 @@ internal sealed unsafe partial class BattleSceneWindow
         newLeader.FormationSlot = -1;
         newLeader.LegionId = _units[leaderIndex].LegionId;
         newLeader.LegionPowerPercent = _units[leaderIndex].LegionPowerPercent * 6 / 10;
-        foreach (var follower in followers.Skip(1)) follower.LeaderIndex = newIndex;
+        // 다시 붙는 부하(0x10072ef0(새대장, 부하, 0))는 TP 를 새 대장 것으로 덮는다(감사5 L-C). AI 꼬리는 처음부터 대장 레코드 복사라 같다.
+        foreach (var follower in followers.Skip(1)) { follower.LeaderIndex = newIndex; follower.Tp = newLeader.Tp; }
         RefreshUnitStats(newLeader);
+    }
+
+    /// <summary>
+    /// 기술 앞 — 그 대장의 부하가 아직 걷고 있으면 다 설 때까지 기다린다(원본은 이동 명령 뒤 상태 15 갈래 1 이 <c>0x1006e320</c> 로 모두 설 때까지
+    /// 다음 명령을 안 받는다). 전에는 <see cref="FollowersAttack"/> 가 걷는 부하를 건너뛰어 대장이 걸은 직후 친 공격에 부하가 빠졌다(감사5 L-A). 5초 상한.
+    /// </summary>
+    private IEnumerable<bool> WaitFollowersStopped(int leaderIndex)
+    {
+        for (double end = _lastTime + 5; _lastTime < end && FollowersOf(leaderIndex).Any(f => f.OnField && f.IsBusy);) yield return true;
     }
 
     /// <summary>

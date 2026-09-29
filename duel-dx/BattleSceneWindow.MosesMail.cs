@@ -70,6 +70,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private int DeliverMail()
     {
+        // DUELDX_MAILBOX=all 이면 MAIL.DAT 편지를 모두 우편함에 넣는다(화면 밖 시험용 — 17통이 넘는 목록의 스크롤).
+        if (Environment.GetEnvironmentVariable("DUELDX_MAILBOX") == "all")
+            foreach (var m in AllMails())
+                if (!_mailbox.Contains(m.Id)) _mailbox.Add(m.Id);
         if (_mosesChp is not { } chp) return 0;
         var all = AllMails();
         int added = 0;
@@ -157,25 +161,75 @@ internal sealed unsafe partial class BattleSceneWindow
             var opened = Mails();
             if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
             _mailOpen = -1;
+            Play(95);                                         // 뷰어(말풍선 클래스) 닫기 vt+0xdc = 0x1003cce0 → Snd 95(감사5 L3)
             return true;
         }
-        if (x >= 455 && x < 618 && y >= 430 && y < 457) { Play(576); MosesGoBack(); return true; }
+        // 나가기(10002, 0x10100e1b) = 뒤로 처리기 페이지 1 갈래(0x10101ba0) — 소리 없음(감사5 D3). 전에는 576 + 569 두 번 났다.
+        if (x >= 455 && x < 618 && y >= 430 && y < 457) { MosesGoBack(); return true; }
+        if (OnMailBarClick(x, y)) return true;
 
+        // 줄 누름은 목록 창 메시지 0x272a — 소리가 없다(0x100fff86, 목록 클래스에 0x10028850 호출 0개, 감사5 L2).
         int index = MailRowAt(bx, by);
-        if (index >= 0) { _mailOpen = index; Play(MosesClickSound); }
+        if (index >= 0) _mailOpen = index;
         return true;
     }
 
-    /// <summary>바퀴 대신 — 목록 위·아래 끝을 누르면 한 쪽씩 넘긴다.</summary>
+    /// <summary>
+    /// 목록 스크롤 막대 — 원본 목록 창(<c>0x100482e0(…, 1열, 17행, 427, 19, …, 스크롤 갈래 2)</c>, <c>0x100fc84e</c>)은 17줄을 넘으면
+    /// 오른쪽 가장자리에 공용 막대를 단다(분석-UI 2.5). 연대표와 같은 <c>Obs 0979</c> 장 61(위)·63(아래) 화살표 19×45 와 손잡이 65 로 그린다.
+    /// 전에는 <see cref="ScrollMail"/> 을 부르는 곳이 없어 18번째(가장 오래된) 편지부터 영영 못 읽었다(감사5 M1).
+    /// </summary>
+    private const int MailBarX = MailListX + MailRowW, MailBarY = MailListY, MailBarH = MailRows * MailRowH, MailArrowW = 19, MailArrowH = 45;
+
+    /// <summary>막대 누름 — 화살표는 한 줄, 손잡이 위·아래 빈 곳은 한 쪽(17줄)씩. 모세스 화면 좌표. 막대를 눌렀으면 true.</summary>
+    private bool OnMailBarClick(int x, int y)
+    {
+        int count = Mails().Count;
+        if (count <= MailRows) return false;
+        x -= MailBarX;
+        y -= MailBarY;
+        if (x < 0 || x >= MailArrowW || y < 0 || y >= MailBarH) return false;
+        if (y < MailArrowH) { ScrollMail(-1); return true; }
+        if (y >= MailBarH - MailArrowH) { ScrollMail(1); return true; }
+        var (thumbY, thumbH) = MailThumb(count);
+        ScrollMail(y < thumbY + thumbH / 2 ? -MailRows : MailRows);
+        return true;
+    }
+
+    /// <summary>손잡이 자리(막대 위에서부터)와 높이.</summary>
+    private (int Y, int H) MailThumb(int count)
+    {
+        int thumbH = UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
+        int track = MailBarH - 2 * MailArrowH - thumbH;
+        int span = Math.Max(1, count - MailRows);
+        return (MailArrowH + track * Math.Clamp(_mailTop, 0, span) / span, thumbH);
+    }
+
+    /// <summary>
+    /// 편지 목록을 <paramref name="delta"/> 줄 굴린다 — 막대 화살표·빈 곳이 부른다.
+    /// 마우스 휠은 WndProc(BattleSceneWindow.cs)가 메일 페이지에서 <c>ScrollMail(-휠/120)</c> 으로 보내야 한다.
+    /// </summary>
     private void ScrollMail(int delta)
     {
         int max = Math.Max(0, Mails().Count - MailRows);
         _mailTop = Math.Clamp(_mailTop + delta, 0, max);
     }
 
+    /// <summary>메일 페이지가 떠 있고 뷰어가 닫혀 있으면 휠로 목록을 굴린다 — WndProc 의 WM_MOUSEWHEEL 이 부른다. 받았으면 true.</summary>
+    private bool OnMosesMailWheel(int notches)
+    {
+        if (!_mosesOpen || _mosesPage != 1 || _mailOpen >= 0 || SystemOpen) return false;
+        ScrollMail(-notches);
+        return true;
+    }
+
+    /// <summary>줄 글 색 — 원본 0xFFFF(COLORREF) = 노랑 (255,255,0), 읽음·안 읽음 같다(0x100fca31~0x100fca97).</summary>
+    private const uint MailLineColor = 0xFFFFFF00;
+
     private void DrawMosesMail(int ox, int oy, int tick)
     {
         var mails = Mails();
+        _mailTop = Math.Clamp(_mailTop, 0, Math.Max(0, mails.Count - MailRows));
         // 줄 틀(Obs 1291 모션 0)은 목록 덧그림(0x10043810)이라 <b>마우스가 올라간 줄에만</b> 그린다 — 상점 목록·세이브 슬롯 강조와 같다.
         // 예전에는 모든 줄에 그려 목록이 줄무늬 표처럼 보였다(사용자 보고).
         int hover = _mailOpen < 0 ? MailRowAt(_mouse.X, _mouse.Y) : -1;
@@ -186,9 +240,23 @@ internal sealed unsafe partial class BattleSceneWindow
             var mail = mails[index];
             int rx = ox + MailListX, ry = oy + MailListY + r * MailRowH;
             if (index == hover) DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
-            bool read = _mailRead.Contains(mail.Id);
+            // 줄 글 = 0x10040600(글, 가로 1(가운데), 0, 세로 1(가운데), 0, 글꼴, 0xFFFF, …) — 가운데 정렬 노랑.
+            // 글꼴은 읽음 표시가 0 이면 2(굴림 9 굵게), 아니면 기본 글꼴 — 뷰어를 여는 순간 그 줄은 기본 글꼴로 바뀐다(0x10100129~0x10100166).
+            // 데모 글꼴은 늘 굵어서, 안 읽은 줄은 한 픽셀 옆에 한 번 더 찍어 더 굵게 한다(감사5 L1).
+            bool read = _mailRead.Contains(mail.Id) || index == _mailOpen;
             string line = $"{SenderName(mail.Sender)} : {_db?.T(mail.OriginText)}";
-            DrawText(line, rx + 24, ry + 2, read ? DimGray : 0xFFFFFF80, 11);
+            var (_, w, h) = GetText(line, MailLineColor, 12);
+            int tx = rx + (MailRowW - w) / 2, ty = ry + (MailRowH - h) / 2;
+            DrawText(line, tx, ty, MailLineColor, 12);
+            if (!read) DrawText(line, tx + 1, ty, MailLineColor, 12);
+        }
+
+        if (mails.Count > MailRows)
+        {
+            DrawUi(EpisodeObs, 61, 0, ox + MailBarX, oy + MailBarY, UiBlend.Alpha);
+            DrawUi(EpisodeObs, 63, 0, ox + MailBarX, oy + MailBarY + MailBarH - MailArrowH, UiBlend.Alpha);
+            var (thumbY, _) = MailThumb(mails.Count);
+            DrawUi(EpisodeObs, 65, 0, ox + MailBarX, oy + MailBarY + thumbY, UiBlend.Alpha);
         }
 
         // Exit 글자는 배경 그림(Bgr 0094)에 있다 — 알약 Obs 287 은 마우스 올림에만.

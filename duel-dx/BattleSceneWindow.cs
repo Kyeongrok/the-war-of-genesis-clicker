@@ -614,6 +614,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when _statusUnit >= 0 && ScrollStatusLists(-(short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 스테이터스 창의 어빌리티 목록 위면 그 목록을 굴린다
+            case Win32.WM_MOUSEWHEEL when OnMosesMailWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
+                return IntPtr.Zero;                                          // 모세스 메일 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
@@ -717,12 +719,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             return;
         }
         if (key == Win32.VK_ESCAPE && CloseSystemWindow()) return;
+        // 전투에서 메뉴·창이 떠 있는 동안은 다른 키도 안 받는다 — 전투가 상태 25 에 서 있다(0x1006b290 하위 1, 감사5 S1).
+        if (SystemOpen && !FieldOpen) return;
         if (key == Win32.VK_ESCAPE)
         {
-            // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6).
+            // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6). 전투에서는 내 유닛 조종 상태(원본 상태 22)일 때만 —
+            // AI 차례·행동·이벤트·배치·레벨업·결과 중에는 취소로만 쓰인다(감사5 S1·S8). 필드는 편의로 열되 SAVE 는 꺼져 있다(S3).
             if (_statusUnit >= 0) _statusUnit = -1;
             else if (_ringUnit >= 0) CancelRing();
-            else if (!CancelStep(undoMove: true)) OpenSystemMenu();
+            else if (!CancelStep(undoMove: true) && (FieldOpen || CanOpenBattleMenu)) OpenSystemMenu();
             return;
         }
         if (key == Win32.VK_RETURN && _ringUnit >= 0 && _ringPhase == RingPhase.Idle && _ringHover >= 0) { PickRingItem(_ringHover); return; }
@@ -761,7 +766,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case KeyAction.Item: RingShortcut(RingCommand.Item); break;
             case KeyAction.System:
                 if (_ringUnit >= 0) RingShortcut(RingCommand.System);
-                else OpenSystemMenu();
+                else if (FieldOpen || CanOpenBattleMenu) OpenSystemMenu();   // Esc 와 같은 문(감사5 S1·S8)
                 break;
             case KeyAction.NextUnit:
                 for (int i = 1; i <= _units.Length; i++)
@@ -1057,6 +1062,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
         // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
         if (_saveSlotPending is { } pending && _lastTime > SaveHookAt) { _saveSlotPending = null; SaveBattleTo(SlotPath(pending)); }
+        UpdateSlotArrows();                     // 슬롯 스크롤 화살표 누르고 있기(감사5 S9) — 타이틀·기록 화면에서도 돈다
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
         if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
@@ -1078,6 +1084,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             UpdateField();
             return;
         }
+
+        // 시스템 메뉴·슬롯·확인·음량·MISSION 창이 떠 있는 동안 전투는 선다 — 원본 상태 25(CTRL_SYS, 0x1006b290) 하위 1 은 아무것도 안 해
+        // 틱·AI·이벤트·걷기가 멈춘다. 전에는 뒤에서 계속 돌아 AI 차례·행동 도중이 저장됐다(감사5 S1).
+        if (SystemOpen) { UpdateSounds(); return; }
 
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 

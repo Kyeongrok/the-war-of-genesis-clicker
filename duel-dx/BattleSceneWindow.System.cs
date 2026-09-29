@@ -43,8 +43,34 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 지금 화면의 시스템 메뉴 항목 — 모세스(분석-모세스 13절)와 연대표에서는 MISSION·RESTART 가 없다. 연대표 ESC(<c>0x10106e50</c>)도
     /// 모세스와 같은 <c>0x10102ba0</c> 로 LOAD·SAVE·VOLUME·EXIT GAME 넷만 만든다(<c>0x10102c3c</c>~<c>0x10102d0f</c>, 감사 F2).
     /// </summary>
+    /// <remarks>
+    /// 필드(장면 3 <c>0x100eb9e0</c>)에는 원본에 시스템 메뉴가 아예 없다(감사5 S3). 데모는 편의로 메뉴를 열어 주되 모세스와 같은 넷만 두고
+    /// (뒤에 남은 옛 전투의 MISSION·RESTART 는 뜻이 없다) SAVE 는 꺼 둔다(<see cref="SaveBlockedReason"/>).
+    /// </remarks>
     private (SystemItem Item, int Motion, string Label)[] MenuItems =>
-        _mosesOpen || _episodesOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+        _mosesOpen || _episodesOpen || FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+
+    /// <summary>
+    /// 전투 시스템 메뉴를 열어도 되나 — 원본은 <b>플레이어 조종 유닛 차례의 상태 22</b>(<c>0x1006acc0</c>, 입력 깃발 <c>+0x4d17</c>
+    /// → 메뉴 <c>0x100e3700</c> → 상태 25, <c>0x1006ae3b~0x1006ae8f</c>)나 그 유닛의 링(<c>0x10068cb2</c>·<c>0x100e1e6c</c>)에서만 연다.
+    /// AI 차례·행동 연출·이벤트(<c>0x10066197</c>)·배치(상태 2)·레벨업·결과 중에는 같은 키가 취소/무시일 뿐이다(감사5 S1·S8).
+    /// </summary>
+    private bool CanOpenBattleMenu =>
+        IsPlayerTurn && !_units[_turn].IsBusy && !EventsBusy && !_deployOpen && _levelUpUnit < 0 && _levelUpQueue.Count == 0
+        && _delayedHits.Count == 0 && !SceneFading;
+
+    /// <summary>모세스 위에서 챕터 사건이 도는 중인가 — 원본 챕터 장면 Esc 는 <c>[0x101bffac]</c>(도는 사건 수)가 0 일 때만 메뉴를 연다(<c>0x100f78ec~0x100f7922</c>).</summary>
+    private bool ChapterEventRunning => _mosesOpen && (_fieldEvent >= 0 || _talk != null || _fieldChoices != null);
+
+    /// <summary>
+    /// 지금 SAVE 를 못 하는 까닭 — 할 수 있으면 null. 필드(원본에 저장 없음, 감사5 S3)·모세스 챕터 사건 도중(S4)·
+    /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
+    /// </summary>
+    private string? SaveBlockedReason =>
+        FieldOpen ? "필드에서는 저장할 수 없습니다"
+        : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
+        : !_mosesOpen && !_episodesOpen && !_titleOpen && !_recordsOpen && _battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
+        : null;
 
     private bool _systemMenu;
     private bool _missionWindow, _volumeWindow;
@@ -80,7 +106,11 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case SystemItem.Mission: _missionWindow = true; break;
             case SystemItem.Volume: _volumeWindow = true; break;
-            case SystemItem.Save: OpenSlots(0); break;
+            case SystemItem.Save:
+                // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
+                if (SaveBlockedReason is { } why) { Toast(why); _systemMenuReturn = false; _systemMenu = true; break; }
+                OpenSlots(0);
+                break;
             case SystemItem.Load: OpenSlots(1); break;
             case SystemItem.Restart:
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
@@ -197,11 +227,14 @@ internal sealed unsafe partial class BattleSceneWindow
             // 마우스가 올라간 줄에만 덧그린다 — 전에는 모든 줄에 그려 전부 올림 상태로 보였다.
             FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
             StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
-            bool hover = _mouse.X >= rx && _mouse.X < rx + SystemRowW && _mouse.Y >= ry && _mouse.Y < ry + SystemRowH - 3;
+            bool disabled = item == SystemItem.Save && SaveBlockedReason != null;
+            bool hover = !disabled && _mouse.X >= rx && _mouse.X < rx + SystemRowW && _mouse.Y >= ry && _mouse.Y < ry + SystemRowH - 3;
             if (hover) DrawUi(ListRowObs, 7, 0, rx, ry, UiBlend.Alpha, loop: false);
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
             if (!DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, UiBlend.Alpha, loop: false))
-                DrawText(label, rx + 20, ry + 9, White);
+                DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
+            // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
+            if (disabled) FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
         }
     }
 
@@ -373,6 +406,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // RESTART 가 되돌릴 가방·GP(원본은 전투 전 파티 상태로 되돌린다) — fg-21 ⑰.
         _restartInventory = [.. _inventory];           // 들어온 차례 그대로(감사3 I4)
         _restartMoney = _shopMoney;
+        // 전투 전 명부·군단도 — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티다(전투 안 값은 판 부분의 복사본, 감사5 S5).
+        _entryRoster = _party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
+        _entryLegions = new Dictionary<int, int>(_unitLegion);
+        _entryOwnedLegions = [.. _ownedLegions];
         RestartBattle();
         // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
         BeginDeployOrDrop(scene, fresh: rememberParty);
@@ -384,6 +421,18 @@ internal sealed unsafe partial class BattleSceneWindow
     private List<KeyValuePair<int, int>>? _restartInventory;
     private int _restartMoney;
 
+    /// <summary>
+    /// 전투에 들어올 때의 명부(Chr → 인물)·군단 배속·가진 군단 — RESTART 가 되돌린다. 전투 세이브에도 실려서 불러온 뒤 RESTART 도
+    /// 전투 전 파티로 시작한다(원본 RESTART 결과 7 은 소멸자 되돌리기 <c>0x10064920</c> 를 건너뛰고 전역 본문 = 전투 전 파티로 다시 연다, 감사5 S5).
+    /// </summary>
+    private Dictionary<int, CharacterData>? _entryRoster;
+    private Dictionary<int, int>? _entryLegions;
+    private List<int>? _entryOwnedLegions;
+
+    /// <summary>인물 자료 복사 — 배열 칸(아이템·장착·어빌리티)까지 새로 떠서 전투 중 고친 것이 스냅숏에 번지지 않게.</summary>
+    private static CharacterData CopyChar(CharacterData c) =>
+        c with { Items = [.. c.Items], Passives = [.. c.Passives], Abilities = [.. c.Abilities] };
+
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
@@ -393,6 +442,19 @@ internal sealed unsafe partial class BattleSceneWindow
             _inventory.Clear();
             foreach (var (id, n) in _restartInventory) _inventory[id] = n;
             _shopMoney = _restartMoney;
+        }
+        // 명부·군단도 전투 전으로 — 이것이 없으면 불러온 뒤 RESTART 가 그 전투에서 얻은 EXP·레벨·상자 아이템을 들고 다시 시작했다(감사5 S5).
+        if (_entryRoster != null)
+            foreach (var (chr, c) in _entryRoster) _party[chr] = CopyChar(c);
+        if (_entryLegions != null)
+        {
+            _unitLegion.Clear();
+            foreach (var (chr, legion) in _entryLegions) _unitLegion[chr] = legion;
+        }
+        if (_entryOwnedLegions != null)
+        {
+            _ownedLegions.Clear();
+            foreach (int id in _entryOwnedLegions) _ownedLegions.Add(id);
         }
         // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
         if (_chapterFired.Count == 0)
@@ -445,7 +507,11 @@ internal sealed unsafe partial class BattleSceneWindow
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
                                    byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null,
                                    bool? OnField = null, int[]? Bonus = null, int Stance = 0, bool? Awake = null, int LastHitBy = -1,
-                                   int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null);
+                                   int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null,
+                                   int? OriginCol = null, int? OriginRow = null);
+
+    // OriginCol·OriginRow = 기준 칸 +0x4b8/+0x4ba(원본 유닛 기록 0x1007c710 이 차례 시작 TP +0x4da 와 함께 적는다, ba-15 Q5).
+    // 걸음 비용은 행동할 때 한꺼번에 빠지므로(CommitMove) 기준 칸이 없으면 걸은 뒤 저장·불러오기로 걸음이 공짜가 됐다(감사5 S2).
 
     // 위 꼬리 칸(형식 10 에 덧붙임, 없으면 옛 세이브라 예전처럼 둔다) — 원본 유닛 기록 0x1007c710 이 적는 것(ba-15 Q5):
     // Bonus = 전투 보정 +0x4c8 DEX · +0x4ca PSY · +0x4cc DEP · +0x4d0 최대TP · +0x4d2 최대SOUL · +0x4ce 최대HP(이 차례로),
@@ -522,7 +588,17 @@ internal sealed unsafe partial class BattleSceneWindow
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0,
                                     int[]? EpisodesPicked = null,
                                     SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false,
-                                    int[]? NavStart = null);
+                                    int[]? NavStart = null,
+                                    SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null);
+
+    // 꼬리 셋(없으면 옛 세이브라 예전처럼):
+    // Entry = 전투 들어가기 직전 가방·GP·명부·군단 — 원본 전투 세이브의 전역 본문(판 부분과 따로, 분석-시스템메뉴 2.3/2.4b). RESTART 기준(감사5 S5).
+    // Camera = 스크롤 CBattle +0x3cae/+0x3cb0(0x1006efe0 적기 · 0x1006f3a0 읽기, 감사5 S7).
+    // EventCheckDue = 아직 안 본 이벤트 갈래 깃발(감사5 S6).
+
+    /// <summary>전투 전 스냅숏(<see cref="SaveState.Entry"/>).</summary>
+    private sealed record SaveEntry(Dictionary<string, int> Inventory, int Money, SaveUnit[] Roster,
+                                    Dictionary<string, int>? Legions = null, int[]? OwnedLegions = null);
 
     private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
@@ -693,9 +769,15 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
 
+    /// <summary>판 밖 인물 한 명의 세이브 칸(자리·HP 없음) — 명부·전투 전 스냅숏에 쓴다.</summary>
+    private static SaveUnit PartyUnit(int chr, CharacterData c) =>
+        new(chr, 0, 0, 0, 0, 0, 0, true, false, c.Level, c.CumExp, c.Exp, c.Items, c.Passives,
+            [.. c.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))], Char: SaveCharOf(c));
+
     /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
     private bool SaveBattleTo(string path)
     {
+        bool battleSave = !InChapterScene && !_titleOpen && !_recordsOpen && _battleLoaded;
         try
         {
             var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), _tick, _turn,
@@ -706,7 +788,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField,   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                     [u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp], u.Stance, u.Awake,
                     u.LastHitBy is { } hitter ? Array.IndexOf(_units, hitter) : -1,
-                    u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent))],
+                    u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -736,10 +818,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _chapterDone, _partyNo, [.. _members],
                 // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
                 // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
-                [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key))
-                          .Select(p => new SaveUnit(p.Key, 0, 0, 0, 0, 0, 0, true, false, p.Value.Level, p.Value.CumExp, p.Value.Exp,
-                                                    p.Value.Items, p.Value.Passives, [.. p.Value.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))],
-                                                    Char: SaveCharOf(p.Value)))],
+                [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
                 [.. _ownedLegions], SaveBank(),
                 [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
                 Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]),
@@ -753,7 +832,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 _eventFoundB is { } fb ? Array.IndexOf(_units, fb) : -1,
                 _objectsDue,
                 // 항행 시작(911) — 원본 챕터 레코드 +0x190/+0x192(0x1004e2e3/0x1004e2f4). 장면 7(연대표) 저장에는 레코드가 없다(감사 R2).
-                NavStart: !_episodesOpen && _navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null);
+                NavStart: !_episodesOpen && _navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null,
+                // 전투 전 스냅숏·카메라·이벤트 갈래 깃발은 전투 판에서 저장할 때만(챕터·연대표 세이브는 전투가 없다).
+                Entry: battleSave && _entryRoster != null && _restartInventory != null
+                    ? new SaveEntry(_restartInventory.ToDictionary(p => p.Key.ToString(), p => p.Value), _restartMoney,
+                                    [.. _entryRoster.Select(p => PartyUnit(p.Key, p.Value))],
+                                    _entryLegions?.ToDictionary(p => p.Key.ToString(), p => p.Value), _entryOwnedLegions?.ToArray())
+                    : null,
+                Camera: battleSave ? [_camX, _camY] : null,
+                EventCheckDue: battleSave ? _eventCheckDue : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -863,8 +950,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 전장에 섰는지도 되살린다 — 배치 자료로만 정하면, 같은 Chr 가 둘일 때(한 명은 대기 (0,0)) 칸 차례로 짝지으며 뒤바뀌어
             // 보이지 않는 「전장의 적」이 (0,0)에 남아 전멸이 안 됐다(사용자 보고: Btl 0155). 옛 세이브는 (0,0)이면 전장 밖으로 본다.
             u.OnField = s.OnField ?? (s.Col != 0 || s.Row != 0);
-            u.OriginCol = s.Col;
-            u.OriginRow = s.Row;
+            // 기준 칸(+0x4b8/+0x4ba)은 적힌 값으로 — 걸은 뒤 저장했으면 걸음 비용이 그대로 남는다(감사5 S2). 옛 세이브는 지금 자리.
+            u.OriginCol = s.OriginCol ?? s.Col;
+            u.OriginRow = s.OriginRow ?? s.Row;
             u.Facing = (Facing)s.Facing;
             // 자세(+0x4d4)도 되살린다 — 전에는 0 으로 덮어 방어·회피 자세로 차례를 넘긴 인물이 불러오면 자세를 잃었다(ba-15 Q5 #4).
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, s.Stance);
@@ -902,8 +990,31 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? _units[foundB] : null;
         RestoreObjects(state);
 
-        // 전투에 선 아군의 되살린 값을 파티에 담는다 — 위에서 채워 둔 값을 지금 판의 값으로 덮어쓴다.
-        RememberParty();
+        // 전투 전 스냅숏(감사5 S5) — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티이고 전투 안 값은 판 부분(유닛)에 따로 있다.
+        // 스냅숏이 있으면 명부를 그것으로 두고(전투 안 값은 유닛이 들고 있다) RESTART 기준도 그것으로 한다.
+        if (!state.InMoses && state.Entry is { } entry)
+        {
+            _restartInventory = [.. entry.Inventory.Where(p => int.TryParse(p.Key, out _)).Select(p => KeyValuePair.Create(int.Parse(p.Key), p.Value))];
+            _restartMoney = entry.Money;
+            _entryRoster = [];
+            foreach (var s in entry.Roster)
+                if (_db?.Character(s.ChrCode) is { } bc) _entryRoster[s.ChrCode] = Restored(bc, s, regrow: true);
+            // 명부 = 전투 전 값(스냅숏에 없는 사람 — 전투 중에 합류한 사람 — 은 판 값 그대로).
+            foreach (var (chr, c) in _entryRoster) _party[chr] = CopyChar(c);
+            _entryLegions = entry.Legions?.Where(p => int.TryParse(p.Key, out _)).ToDictionary(p => int.Parse(p.Key), p => p.Value);
+            _entryOwnedLegions = entry.OwnedLegions?.ToList();
+        }
+        else
+        {
+            // 스냅숏이 없는 옛 세이브 — 예전처럼 전투에 선 아군의 되살린 값을 명부에 담고, RESTART 는 저장 시점 가방·GP 로 한다
+            // (같은 전투에서 불러오면 앞 세션의 기준이 남던 것도 막는다).
+            RememberParty();
+            _restartInventory = [.. _inventory];
+            _restartMoney = _shopMoney;
+            _entryRoster = null;
+            _entryLegions = null;
+            _entryOwnedLegions = null;
+        }
 
         // 전투 이벤트 상태를 되살린다 — 이미 터진 사건은 다시 안 터진다.
         if (state.EventFired is { } fired && fired.Length == _eventFired.Length)
@@ -942,6 +1053,12 @@ internal sealed unsafe partial class BattleSceneWindow
         _resumeTurn = _selected;            // 저장했던 인물의 차례로 곧장 돌아간다(UpdateTurn)
         _nextTickAt = 0;
         _playBase = state.PlayMs - _realTime * 1000;
+        // 아직 안 본 이벤트 갈래 깃발(감사5 S6) — 옛 세이브는 지금 값(판을 새로 세웠으면 0xF) 그대로.
+        if (state.EventCheckDue is { } due) _eventCheckDue = due;
+        // 카메라 스크롤(원본 +0x3cae/+0x3cb0, 감사5 S7) — 판을 새로 세웠으면 시작 카메라·페이드인이 먼저 서므로 되살린 차례가 시작될 때 놓는다.
+        _loadCamera = state.Camera is [var camX, var camY, ..] ? (camX, camY) : null;
+        _loadCameraPending = !state.InMoses;
+        if (_loadCameraPending && !_battleIntroPending && _loadCamera is { } cam) { ApplySavedCamera(cam); _loadCameraPending = false; }
         // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.
         if (state.InMoses)
         {
@@ -978,6 +1095,20 @@ internal sealed unsafe partial class BattleSceneWindow
         _restoreVersion = SaveVersion;
         Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
+    }
+
+    /// <summary>불러온 세이브의 카메라 스크롤(없으면 null) · 아직 안 놓았나 — 되살린 차례가 시작될 때(StartTurn) 놓는다.</summary>
+    private (int X, int Y)? _loadCamera;
+    private bool _loadCameraPending;
+
+    /// <summary>스크롤을 그 자리로 바로(보간·명령 없이) — 원본 불러오기 <c>0x1006f3a0</c> 이 +0x3cae/+0x3cb0 을 그대로 넣는 것.</summary>
+    private void ApplySavedCamera((int X, int Y) cam)
+    {
+        _camGoal = null;
+        _camPosX = _camTargetX = Math.Clamp(cam.X, 0, CamMaxX);
+        _camPos = _camTarget = Math.Clamp(cam.Y, 0, CamMax);
+        _camX = (int)_camPosX;
+        _camY = (int)_camPos;
     }
 
     /// <summary>

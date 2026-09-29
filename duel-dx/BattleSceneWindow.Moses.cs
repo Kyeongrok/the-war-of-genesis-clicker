@@ -21,9 +21,11 @@ namespace DuelDx;
 /// <item>파티 — 배경은 주 화면과 같고 같은 칸 표의 두 칸(전직 TXR 1326 · 용병관리 1327, 아이콘 Obs 0498 모션 0·1).</item>
 /// <item>ESC — 모세스 전용 시스템 메뉴 네 줄(LOAD·SAVE·VOLUME·EXIT GAME, 전투와 달리 MISSION·RESTART 가 없다), Snd 578.</item>
 /// </list>
-/// 페이지를 바꿀 때 나는 소리: 항행 564 · 파티 580 · 상점 572 · 전직 581 · 용병관리 583 · 뒤로 569/570.
+/// 페이지를 바꿀 때 나는 소리: 항행 564 · 파티 580 · 상점 572 · 전직 581 · 용병관리 583 · 뒤로는 항행 장소→행성 569 와 상점 나가기 576 뿐.
 /// 원본은 페이지 사이에 Mov 영상과 UI 전환 효과를 거는데, 데모는 페이드로만 흉내 낸다 —
-/// 보통은 <b>15틱 검은 페이드</b>(효과 2·3)이고, <b>항행 진입(효과 1)만 30틱에 걸쳐 파랑 채널을 씻어 낸다</b>.
+/// 메일·상점·파티·전직·용병관리·뒤로 대부분은 <b>효과 4 = 15틱 알파 크로스페이드</b>(<c>0x1002cc60</c>, 검정을 안 거친다),
+/// 항행 → 주 화면과 행성 고르기는 검은 페이드(효과 2·3), <b>항행 진입(효과 1)만 30틱에 걸쳐 파랑 채널을 씻어 낸다</b>.
+/// 아이콘 여섯은 주 화면·항행·메일·통신·파티 페이지에 늘 떠 있는 「도크」다(상점·전직·용병관리만 숨김, <c>0x100f968f</c>·<c>0x100fad23</c>·<c>0x100fb216</c>).
 /// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 BattleSceneWindow.Moses*.cs 로 나눠 두었다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -107,48 +109,161 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesChp?.Systems.FirstOrDefault(sy => sy.Planets.Contains(planet))?.No
         ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
 
-    /// <summary>성도 좌우의 항성계 옮기기 단추 — 항성계가 둘 이상일 때만 보인다. (x, y, 폭, 높이)</summary>
-    private static readonly (int X, int Y, int W, int H) MosesSystemLeft = (14, 44, 30, 30), MosesSystemRight = (596, 44, 30, 30);
+    /// <summary>다른 항성계 단추 그림 — Obs 0680 모션 0(왼쪽)·1(오른쪽), 20×50 반쪽 화살(0x100fd4f2~0x100fd670).</summary>
+    private const int MosesSystemObs = 680;
 
-    /// <summary>성도 좌우의 항성계 단추 하나 — 테두리 안에 삼각형을 그린다(원본 그림을 아직 못 찾아 직접 그린다, 가설).</summary>
-    private void DrawSystemArrow((int X, int Y, int W, int H) box, int ox, int oy, bool left)
+    /// <summary>다른 항성계 단추 두 자리 — 첫째 (30,40) id 127 · 둘째 (630,40) id 128.</summary>
+    private static readonly (int X, int Y)[] MosesSystemButtons = [(30, 40), (630, 40)];
+
+    /// <summary>
+    /// 항행 단계 1 의 다른 항성계 단추가 가리키는 항성계 — 항성계 표를 차례로 훑어 <b>조건을 통과하고 지금 성계가 아닌 것</b> 앞의 둘
+    /// (원본 <c>0x100fd4f2</c>~<c>0x100fd670</c>). 항성계가 둘인 챕터는 왼쪽 단추 하나뿐이다.
+    /// 조건 있는 항성계는 Chp 0016 가브리엘(깃발 184 == 1)·Chp 0044 아르케(깃발 209 == 1) — 깃발 전에는 못 간다(감사5 N5).
+    /// </summary>
+    private List<ChapterFile.StarSystem> MosesOtherSystems() =>
+        _mosesChp is not { } chp ? []
+            : [.. chp.Systems.Where(s => s.No != _mosesSystem && s.Conditions.All(c => c.Variable < 0 || MosesFlagTest(c.Variable, c.Value, c.Operator))).Take(2)];
+
+    /// <summary>깃발 비교 <c>0x100fda40(flags[변수], 값, 연산자)</c> — 0 == · 1 != · 2 &lt; · 3 &lt;= · 4 &gt; · 5 &gt;=, 6 이상은 거짓. 깃발 0 도 진짜 깃발이다.</summary>
+    private bool MosesFlagTest(int variable, int value, int op)
     {
-        int x = ox + box.X, y = oy + box.Y;
-        FillRect(x, y, box.W, box.H, 0x90102040);
-        StrokeRect(x, y, box.W, box.H, 0xFF7FA6E8);
-        int cx = x + box.W / 2, cy = y + box.H / 2;
-        for (int i = 0; i < 9; i++)
-        {
-            int dx = left ? -4 + i / 2 : 4 - i / 2;
-            for (int dy = -i / 2; dy <= i / 2; dy++) SetPixel(cx + dx, cy + dy, 0xFFD8E8FF);
-        }
+        if ((uint)variable >= _flags.Length) return false;
+        int now = _flags[variable];
+        return op switch { 0 => now == value, 1 => now != value, 2 => now < value, 3 => now <= value, 4 => now > value, 5 => now >= value, _ => false };
     }
 
-    /// <summary>항성계를 <paramref name="step"/> 칸 옆으로 옮긴다(둘러 간다).</summary>
+    /// <summary>다른 항성계 단추 i 의 누름 칸 — 그림 사각형(없으면 기준점 가운데 20×50). 판 좌표.</summary>
+    private (int X, int Y, int W, int H) MosesSystemButtonRect(int i, int ox, int oy)
+    {
+        var (x, y) = MosesSystemButtons[i];
+        return UiFor(MosesSystemObs)?.FrameAt(i, 0) is { W: > 0 } f
+            ? (ox + x + f.X, oy + y + f.Y, f.W, f.H)
+            : (ox + x - 10, oy + y - 25, 20, 50);
+    }
+
+    /// <summary>←·→ 키 — 왼쪽 단추(첫째)·오른쪽 단추(둘째, 없으면 첫째) 성계로. 조건은 단추와 같게 지킨다.</summary>
     private void MosesTurnSystem(int step)
     {
-        if (_mosesChp is not { } chp || chp.Systems.Count < 2) return;
-        int at = Math.Max(0, chp.Systems.ToList().FindIndex(sy => sy.No == _mosesSystem));
-        var next = chp.Systems[((at + step) % chp.Systems.Count + chp.Systems.Count) % chp.Systems.Count];
-        _mosesSystem = next.No;
-        // 이전·다음 성계 단추(127/128, 메시지 0x2710)는 Snd 565(0x235) — 뒤로 소리 570 이 아니다(0x100ff403~0x100ff535, 감사4 S6).
-        // (챕터 +0x2ec4 가 서 있으면 590 이지만 그 표시는 데모에 없다.)
+        if (_mosesSystemSwitch != null) return;
+        var others = MosesOtherSystems();
+        if (others.Count == 0) return;
+        MosesSwitchSystem(others[step < 0 || others.Count == 1 ? 0 : 1].No);
+    }
+
+    /// <summary>
+    /// 다른 항성계로 옮긴다 — 원본(<c>0x100ff49e</c>~<c>0x100ff5ed</c>): Snd 565 → 큐 10100(<b>100틱 대기</b>) → 떠나는 영상·오는 영상
+    /// → 효과 4 → 큐 20566 = <b>Snd 566</b>(DLL 에서 566 을 넣는 곳은 여기 하나, <c>0x100ff5d7</c>). 영상은 생략하고(원본차이 F9)
+    /// 100틱 입력을 막은 뒤 크로스페이드로 바꾼다. (챕터 +0x2ec4 가 서 있으면 565 대신 590 이지만 그 표시는 데모에 없다.)
+    /// </summary>
+    private void MosesSwitchSystem(int system)
+    {
         Play(565);
         _mosesHover = -1;
-        StartFade();
-        ShowMosesBackground(next.Background);
+        _mosesSystemSwitch = (system, _lastTime + 100 / TicksPerSecond);
     }
+
+    /// <summary>기다리던 항성계 옮기기 — 100틱이 지나면 새 성계를 차린다. 방금 그린 화면에서 크로스페이드하려고 DrawMoses 끝에서 부른다.</summary>
+    private void StepMosesSystemSwitch()
+    {
+        if (_mosesSystemSwitch is not { } sw || _lastTime < sw.At) return;
+        _mosesSystemSwitch = null;
+        _mosesSystem = sw.System;
+        _mosesHover = -1;
+        StartFade();
+        ShowMosesBackground(MosesSystem()?.Background ?? 70);
+        _pendingSounds.Add((_lastTime + MosesFadeTicks / TicksPerSecond, 566));   // 효과 4 뒤 큐 20566
+    }
+
+    /// <summary>기다리는 항성계 옮기기 — (성계, 바꿀 때).</summary>
+    private (int System, double At)? _mosesSystemSwitch;
+
     private int _mosesFade;               // 남은 페이드 틱
     private bool _mosesBlueFade;          // 항행 진입(효과 1)은 검정이 아니라 파랑 씻김이다
+    private bool _mosesBlackFade;         // 효과 2·3 — 검정에서 밝아짐(항행 → 주 화면, 행성 고르기)
+    private uint[]? _mosesFadeFrom;       // 효과 4 크로스페이드의 전 화면(판 가로 전부 × 보이는 줄)
     private double _mosesPageAt;          // 페이지를 연 때(칸 와이프용)
     private ChapterFile? _mosesChp;
 
-    /// <summary>페이지 전환 페이드를 건다 — <paramref name="blue"/> 면 항행 진입용 30틱 파랑 씻김.</summary>
-    private void StartFade(bool blue = false)
+    /// <summary>
+    /// 페이지 전환 효과를 건다 — <paramref name="blue"/> 면 항행 진입용 30틱 파랑 씻김(효과 1), <paramref name="black"/> 면 15틱 검은 페이드(효과 2·3),
+    /// 아니면 <b>효과 4 = 15틱 알파 크로스페이드</b>(<c>0x1002cc60(전 화면, 새 화면, 15)</c>, 감사5 P1) — 지금 판(마지막으로 그린 화면)을 떠 둔다.
+    /// 단추가 미끄러져 들어오는 시계도 효과가 끝날 때로 맞춘다(모세스 장면은 큐가 비어야 그린다).
+    /// </summary>
+    private void StartFade(bool blue = false, bool black = false)
     {
         _mosesBlueFade = blue;
+        _mosesBlackFade = black;
         _mosesFade = blue ? MosesBlueFadeTicks : MosesFadeTicks;
+        _mosesFadeFrom = null;
+        if (!blue && !black && _fb.Length >= (_camY + ViewHeight) * BoardWidth && _camY >= 0)
+            _mosesFadeFrom = _fb.AsSpan(_camY * BoardWidth, ViewHeight * BoardWidth).ToArray();
+        ResetMosesSlide(_mosesFade);
     }
+
+    // ── 단추 클래스 0x101042e0 — 미끄러져 들어오기(B3)·올린 것만 움직임(B2) ─────────────────────
+
+    private const int SlideTrailObs = 6;
+    private double _mosesSlideAt, _mosesSceneAt;   // 페이지 단추 · 도크 아이콘이 들어오기 시작하는 때
+    private int _mosesSlideSeed, _mosesSceneSeed;
+    private double _mosesHoverAt, _mosesDockHoverAt;
+    private int _mosesDockHover = -1;
+
+    /// <summary>
+    /// 항행을 한 번이라도 열었나 — 원본 항행 단계 <c>+0x2e6a ≠ −1</c>. 메일·통신·상점·파티에서 뒤로 가면 이것이 서 있을 때 항행으로 돌아간다
+    /// (<c>0x10101a90</c>, 감사5 D2). 항행에서 주 화면으로 나가면 내린다.
+    /// </summary>
+    private bool _mosesNavVisited;
+
+    /// <summary>페이지 단추들이 <paramref name="delayTicks"/> 뒤부터 새로 미끄러져 들어오게 한다.</summary>
+    private void ResetMosesSlide(int delayTicks)
+    {
+        _mosesSlideAt = _lastTime + delayTicks / TicksPerSecond;
+        _mosesSlideSeed = _ailmentRandom.Next();
+    }
+
+    /// <summary>
+    /// 단추 하나의 들어오기(<c>0x10104404</c>·<c>0x101045c0</c>): 시작 x = 640 + 24 + 80·(rand&amp;7), 틱마다 −20 px,
+    /// 자리에 닿으면 10틱 세로 와이프(높이 × n/10). 와이프가 10 이 되기 전엔 안 눌린다(<c>0x10104880</c>). (지금 x, 와이프 0~10)
+    /// </summary>
+    private static (int X, int Wipe) MosesSlide(int key, int targetX, double sinceTicks, int seed)
+    {
+        int start = MosesW + 24 + 80 * (int)((uint)HashCode.Combine(seed, key) & 7);
+        if (sinceTicks < 0) return (start, 0);
+        int x = start - 20 * (int)sinceTicks;
+        if (x > targetX) return (x, 0);
+        int arrive = (start - targetX + 19) / 20;
+        return (targetX, Math.Clamp((int)sinceTicks - arrive, 0, 10));
+    }
+
+    private (int X, int Wipe) PageSlide(int key, int targetX) =>
+        MosesSlide(key, targetX, (_lastTime - _mosesSlideAt) * TicksPerSecond, _mosesSlideSeed);
+
+    private (int X, int Wipe) DockSlide(int key, int targetX) =>
+        MosesSlide(key, targetX, (_lastTime - _mosesSceneAt) * TicksPerSecond, _mosesSceneSeed);
+
+    /// <summary>들어오는 단추의 꼬리 — Obs 0006 24개를 (x+i−24) 에, 제각기 i/2+12 장(<c>0x1010444a</c>). 모세스 네모 밖으로는 안 그린다.</summary>
+    private void DrawSlideTrail(int ox, int oy, int x, int y)
+    {
+        var saved = _uiClip;
+        _uiClip = (ox, oy, MosesW, MosesH);
+        for (int i = 0; i < 24; i++)
+            DrawUi(SlideTrailObs, 0, i / 2 + 12, x + i - 24, y, UiBlend.Add, loop: false);
+        _uiClip = saved;
+    }
+
+    /// <summary>단추 그림 — 와이프 n/10 만큼 위에서부터 보인다. 다 나왔으면 그대로 그린다.</summary>
+    private void DrawButtonUi(int obs, int motion, int tick, int x, int y, int wipe)
+    {
+        if (wipe >= 10) { DrawUi(obs, motion, tick, x, y, UiBlend.Alpha); return; }
+        if (wipe <= 0 || UiFor(obs)?.FrameAt(motion, tick) is not { } f) return;
+        var saved = _uiClip;
+        _uiClip = (x + f.X, y + f.Y, f.W, f.H * wipe / 10);
+        DrawUi(obs, motion, tick, x, y, UiBlend.Alpha);
+        _uiClip = saved;
+    }
+
+    /// <summary>올린 단추만 움직인다 — 평소는 첫 장에 멈춰 두고(<c>+0x28 = −1</c>, <c>0x1010448a</c>), 올리면 처음부터(<c>0x10104990</c>/<c>0x101049c0</c>).</summary>
+    private int HoverTick(bool hovered, double since) => hovered ? (int)((_lastTime - since) * TicksPerSecond) : 0;
 
     private (int X, int Y) MosesOrigin() => (_camX + (ViewWidth - MosesW) / 2, _camY + (ViewHeight - MosesH) / 2);
 
@@ -173,7 +288,25 @@ internal sealed unsafe partial class BattleSceneWindow
             case 4: OpenMosesShop(1); break;                            // VT 상점
             case 1 or 2: MosesGoPage(page); _mosesPage = page; break;   // 메일 · 통신
             case 0: MosesGoPage(0); _mosesPageAt = _lastTime - 30.0 / TicksPerSecond; break;   // 항행 — 칸이 다 나온 뒤 모습
+            case 5: MosesGoPage(5); break;                                                     // 파티
         }
+        // DUELDX_MOSESSTEP=1 이면 항행을 행성 고르기(단계 1)로 연다(화면 밖 시험용 — 행성 설명·항성계 단추).
+        if (page == 0 && Environment.GetEnvironmentVariable("DUELDX_MOSESSTEP") == "1")
+        {
+            _mosesStep = 1;
+            ShowMosesBackground(MosesSystem()?.Background ?? 70);
+        }
+        // 시험 훅으로 연 페이지는 단추·도크가 이미 다 들어온 모습으로(들어오기는 최대 약 55틱).
+        _mosesSlideAt = _mosesSceneAt = _lastTime - 80 / TicksPerSecond;
+        // DUELDX_MOSESCLICKS=x,y@초;x,y@초… 면 그 때 모세스 화면의 그 자리를 누른다(화면 밖 시험용 — 뒤로 가는 곳·도크·스크롤).
+        foreach (string item in (Environment.GetEnvironmentVariable("DUELDX_MOSESCLICKS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+            if (item.Split('@') is [var at, var sec] && at.Split(',') is [var cx, var cy]
+                && int.TryParse(cx, out int clickX) && int.TryParse(cy, out int clickY) && double.TryParse(sec, out double seconds))
+                _mosesTestClicks.Add((_lastTime + seconds, clickX, clickY));
+        // DUELDX_MOSESHOVER=x,y 면 마우스가 모세스 화면의 그 자리에 있는 것처럼 둔다(화면 밖 시험용 — 툴팁·올림 그림).
+        // 창이 화면 밖이라도 WM_MOUSEMOVE 가 한 번씩 와서 덮으므로 틀마다 다시 둔다(DrawMoses).
+        if (Environment.GetEnvironmentVariable("DUELDX_MOSESHOVER")?.Split(',') is [var hx, var hy] && int.TryParse(hx, out int mx) && int.TryParse(hy, out int my))
+            _mosesTestHover = (mx, my);
     }
 
     /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>
@@ -185,7 +318,12 @@ internal sealed unsafe partial class BattleSceneWindow
         // 전투는 여기서 닫힌다 — 판을 전투 맵 크기에서 640×480 틀로 되돌려 모세스만 남긴다.
         // (안 그러면 전투 맵 크기 창 한가운데에 모세스가 뜨고 둘레가 검게 남는다.)
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
-        if (chapter != null) { _mosesChp = chapter; _navStart = null; Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
+        _mosesDockHover = -1;
+        _mosesSystemSwitch = null;
+        // 도크 아이콘은 장면을 만들 때(전투·필드에서 돌아올 때마다) 한 번 미끄러져 들어온다 — 화면이 밝아지는 15틱 뒤부터(0x100fe4e4).
+        _mosesSceneAt = _lastTime + MosesFadeTicks / TicksPerSecond;
+        _mosesSceneSeed = _ailmentRandom.Next();
+        if (chapter != null) { _mosesChp = chapter; _navStart = null; _mosesNavVisited = false; Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
         if (_mosesChp is { } owner && Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
@@ -366,7 +504,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private void MosesEnterPlace(int value, int no = -1)
     {
-        if (value >= 20000) { OpenMosesShop(0, value - 20000); return; }
+        // 장소 값 ≥ 20000 은 페이지 3 + 0x100fb1f0(0, n) 뿐 — 소리·효과가 없다(0x100feff3, 감사5 P2).
+        if (value >= 20000) { OpenMosesShop(0, value - 20000, quiet: true); return; }
         if (value >= 10000)
         {
             if (OpenField(value - 10000)) { UsePlace(no); return; }
@@ -394,8 +533,10 @@ internal sealed unsafe partial class BattleSceneWindow
         switch (page)
         {
             case 0:
-                Play(564);                                             // NAVIGATION
-                Play(566);                                             // 성계 지도 연출 소리(큐 20566, 분석-모세스 14절)
+                // NAVIGATION — 항행 진입(명령 0, 0x100feb58~0x100feba0)은 큐 2 → −12 → 1 + Snd 564 뿐이다.
+                // 566(큐 20566)은 항성계 옮기기 끝에만 난다(0x100ff5d7, 감사5 N8) — MosesSwitchSystem.
+                Play(564);
+                _mosesNavVisited = true;
             {
                 // 챕터가 정한 시작 단계에서 연다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
                 // 원본은 챕터 +0x2e40/+0x2e42(시작 단계·번호)를 쓰고(0x100fcf00), 머리 값(0x100f6c80)을 스크립트 행동 911 이 덮는다.
@@ -410,7 +551,11 @@ internal sealed unsafe partial class BattleSceneWindow
                                                  ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
                 break;
             }
-            case 1: if (DeliverMail() > 0) Play(571); break;           // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
+            case 1:                                                    // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
+                if (DeliverMail() > 0) Play(571);
+                _mailTop = 0;                                          // 목록 창은 들어갈 때마다 새로 만든다(0x100fc84e)
+                _mailOpen = -1;
+                break;
             case 2: break;                                             // MESSAGE — 소리 없음
             case 3 or 4: OpenMosesShop(page - 3); return;
             case 5: Play(580); break;                                  // PARTY
@@ -418,19 +563,41 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesPage = page;
         _mosesPageAt = _lastTime;
         _talkPick = -1;
-        StartFade(page == 0);
+        // 통신(명령 2, 0x100fec2a)은 큐에 아무것도 안 넣는다 — 효과 없이 곧장(감사5 P2). 항행은 파랑 씻김, 나머지는 효과 4.
+        if (page == 2) { _mosesFade = 0; ResetMosesSlide(0); }
+        else StartFade(page == 0);
         _mosesHover = -1;
-        // 항행은 성계 배경, 메일은 94, 파티는 주 화면과 같은 챕터 배경
+        // 항행·통신은 지금 항행 항성계(+0x2e98)의 배경(0x100fc2d0, 감사5 T1), 메일은 94, 파티는 주 화면과 같은 챕터 배경
         ShowMosesBackground(page switch
         {
-            0 => MosesSystem()?.Background ?? 70,
-            2 => _mosesChp?.Systems.FirstOrDefault()?.Background ?? 70,
+            0 or 2 => MosesSystem()?.Background ?? 70,
             1 => MosesMailBackground,
             _ => _mosesChp?.Background ?? 52,
         });
     }
 
-    /// <summary>뒤로 단추 — 단계가 최저면 주 화면으로. 소리는 단계별 569(장소→행성)·570(행성→성계).</summary>
+    /// <summary>항행 페이지를 <b>지금 단계 그대로</b> 다시 차린다(<c>0x100fcf00(단계)</c>) — 메일·통신·상점·파티에서 뒤로 올 때. 소리 없음, 효과 4.</summary>
+    private void ReturnToMosesNav()
+    {
+        _mosesPage = 0;
+        _mosesPageAt = _lastTime;
+        _mosesHover = -1;
+        _talkPick = -1;
+        _mailOpen = -1;
+        StartFade();
+        ShowMosesBackground(MosesSystem()?.Background ?? 70);
+    }
+
+    /// <summary>
+    /// 뒤로(<c>0x10101a90</c>, 표 <c>0x10101dfc</c>, 감사5 D2·D3):
+    /// <list type="bullet">
+    /// <item>항행 장소 고르기 → 행성 고르기, Snd 569, 효과 4.</item>
+    /// <item>항행 최저 단계 → 주 화면, <b>무음</b>(원본 소리는 Mov 0015 영상 몫 — 영상 생략), 검은 페이드(효과 3).</item>
+    /// <item>메일·통신·상점·파티 → 항행을 열어 두었으면 <b>항행</b>, 아니면 주 화면. 효과 4, 무음(상점만 Snd 576, <c>0x10101d26</c>).</item>
+    /// <item>전직·용병관리 → <b>파티 페이지</b>(<c>0x10101d63</c>·<c>0x10101d8a</c>), 효과 4, 무음.</item>
+    /// </list>
+    /// 뒤로 <b>단추</b>를 누른 소리 66 은 단추 쪽(OnMosesClick)이 낸다 — Esc·우클릭으로 올 때는 안 난다.
+    /// </summary>
     private void MosesGoBack()
     {
         // 항행 단계 2(장소 고르기)에서는 늘 행성 고르기로 한 단계만 내려간다.
@@ -443,30 +610,53 @@ internal sealed unsafe partial class BattleSceneWindow
             _mosesStep = 1;
             _mosesSystem = MosesSystemOfPlanet(_mosesPlanet);
             ShowMosesBackground(MosesSystem()?.Background ?? 70);
+            _mosesPageAt = _lastTime;
             StartFade();
             _mosesHover = -1;
             return;
         }
-        Play(_mosesPage == 0 ? 570 : 569);
+        if (_mosesPage is 6 or 7)
+        {
+            _mosesPage = 5;
+            _mosesPageAt = _lastTime;
+            _mosesHover = -1;
+            StartFade();
+            ShowMosesBackground(_mosesChp?.Background ?? 52);
+            return;
+        }
+        if (_mosesPage is 3 or 4) Play(SoundShopLeave);
+        if (_mosesPage != 0 && _mosesNavVisited) { ReturnToMosesNav(); return; }
+        bool fromNav = _mosesPage == 0;
+        if (fromNav) _mosesNavVisited = false;                 // 단계 = −1
         _mosesPage = -1;
-        StartFade();
+        _mailOpen = -1;
+        _talkPick = -1;
+        StartFade(black: fromNav);
         _mosesHover = -1;
         ShowMosesBackground(_mosesChp?.Background ?? 52);
+    }
+
+    /// <summary>아이콘 도크가 보이는 페이지 — 주 화면·항행·메일·통신·파티(상점·전직·용병관리만 숨긴다, 감사5 D1).</summary>
+    private bool MosesDockShown => _mosesPage is -1 or 0 or 1 or 2 or 5;
+
+    /// <summary>마우스 밑 도크 아이콘 — 다 들어온(와이프 10) 것만.</summary>
+    private int MosesDockAt(int bx, int by)
+    {
+        if (!MosesDockShown) return -1;
+        var (ox, oy) = MosesOrigin();
+        for (int i = 0; i < MosesIcons.Length; i++)
+        {
+            var icon = MosesIcons[i];
+            int x = ox + icon.X, y = oy + icon.Y;
+            if (bx >= x && bx < x + 46 && by >= y && by < y + 33 && DockSlide(1000 + i, icon.X).Wipe >= 10) return i;
+        }
+        return -1;
     }
 
     private int MosesIconAt(int bx, int by)
     {
         var (ox, oy) = MosesOrigin();
-        if (_mosesPage == -1)
-        {
-            for (int i = 0; i < MosesIcons.Length; i++)
-            {
-                var icon = MosesIcons[i];
-                int x = ox + icon.X, y = oy + icon.Y;
-                if (bx >= x && bx < x + 46 && by >= y && by < y + 33) return i;
-            }
-            return -1;
-        }
+        if (_mosesPage == -1) return -1;
         if (_mosesPage == 0 && _mosesStep == 1)
         {
             var planets = MosesSystemPlanets();
@@ -476,7 +666,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         var cells = MosesCellList();
         for (int i = 0; i < cells.Count; i++)
-            if (bx >= ox + cells[i].X && bx < ox + cells[i].X + 178 && by >= oy + cells[i].Y && by < oy + cells[i].Y + 27)
+            if (bx >= ox + cells[i].X && bx < ox + cells[i].X + 178 && by >= oy + cells[i].Y && by < oy + cells[i].Y + 27
+                && PageSlide(10 + i, cells[i].X).Wipe >= 10)
                 return i;
         return -1;
     }
@@ -484,69 +675,109 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool MosesBackAt(int bx, int by)
     {
         var (ox, oy) = MosesOrigin();
-        return _mosesPage != -1 && bx >= ox + 46 && bx < ox + 71 && by >= oy + 244 && by < oy + 270;
+        return _mosesPage != -1 && bx >= ox + 46 && bx < ox + 71 && by >= oy + 244 && by < oy + 270 && PageSlide(100, 46).Wipe >= 10;
     }
 
     /// <summary>모세스 화면이 떠 있으면 클릭을 처리하고 true.</summary>
+    /// <remarks>
+    /// 아이콘·행성·장소 칸·항성계 단추·뒤로 단추·통신 인물은 모두 단추 클래스 <c>0x101042e0</c> 라 누르면 늘 Snd 66 이 난다
+    /// (<c>0x10104950</c> → <c>0x10028850(0x42)</c>, 감사5 B1) — 처리기 쪽 소리(565·569·581…)는 그 위에 더해진다.
+    /// </remarks>
     private bool OnMosesClick(int bx, int by)
     {
         if (!_mosesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
         if (_statusUnit >= 0) return OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
-        if (_mosesFade > 0) return true;
+        if (_mosesFade > 0 || _mosesSystemSwitch != null) return true;
         if (OnMosesShopClick(bx, by)) return true;
+        // 편지 뷰어·통신 말풍선은 모달이라 떠 있으면 누름은 닫기만 한다 — 도크보다 먼저.
+        if (_mosesPage == 1 && _mailOpen >= 0 && OnMosesMailClick(bx, by)) return true;
+        if (_mosesPage == 2 && _talkPick >= 0 && OnMosesTalkClick(bx, by)) return true;
+        // 도크 — 같은 페이지면 무시, 아니면 지금 페이지를 걷고 새 페이지(0x100febcd~).
+        if (MosesDockAt(bx, by) is >= 0 and var dock)
+        {
+            Play(MosesClickSound);
+            if (MosesIcons[dock].Page != _mosesPage) MosesGoPage(MosesIcons[dock].Page);
+            return true;
+        }
         if (OnMosesMailClick(bx, by)) return true;
         if (OnMosesStyleClick(bx, by)) return true;
         if (OnMosesLegionClick(bx, by)) return true;
         if (OnMosesTalkClick(bx, by)) return true;
-        if (MosesBackAt(bx, by)) { MosesGoBack(); return true; }
-        // 성도 좌우의 항성계 옮기기 단추(사용자 요청 — 다른 항성계로 가려면 여기서 옮긴다)
-        if (_mosesPage == 0 && _mosesStep == 1 && (_mosesChp?.Systems.Count ?? 0) > 1)
+        if (MosesBackAt(bx, by)) { Play(MosesClickSound); MosesGoBack(); return true; }
+        // 다른 항성계 단추(127/128) — 조건을 통과한 다른 성계 앞의 둘, 누르면 <b>그 성계로</b>(0x100ff403~).
+        if (_mosesPage == 0 && _mosesStep == 1)
         {
             var (sx, sy) = MosesOrigin();
-            if (Hit(MosesSystemLeft)) { MosesTurnSystem(-1); return true; }
-            if (Hit(MosesSystemRight)) { MosesTurnSystem(1); return true; }
-            bool Hit((int X, int Y, int W, int H) b) =>
-                bx >= sx + b.X && bx < sx + b.X + b.W && by >= sy + b.Y && by < sy + b.Y + b.H;
+            var others = MosesOtherSystems();
+            for (int i = 0; i < others.Count; i++)
+            {
+                var r = MosesSystemButtonRect(i, sx, sy);
+                if (bx < r.X || bx >= r.X + r.W || by < r.Y || by >= r.Y + r.H || PageSlide(127 + i, MosesSystemButtons[i].X).Wipe < 10) continue;
+                Play(MosesClickSound);
+                MosesSwitchSystem(others[i].No);
+                return true;
+            }
         }
 
         int index = MosesIconAt(bx, by);
         if (index < 0) return true;
-        if (_mosesPage == -1)
-        {
-            Play(MosesClickSound);
-            MosesGoPage(MosesIcons[index].Page);
-        }
-        else if (_mosesPage == 0 && _mosesStep == 1)
+        if (_mosesPage == 0 && _mosesStep == 1)
         {
             var picked = MosesSystemPlanets();
             if (_mosesChp is { } chp && index < picked.Count)
             {
+                Play(MosesClickSound);
                 _mosesPlanet = picked[index].No;
                 _planetVisits.Add((chp.Id, picked[index].No));   // 행성 +0x5c 방문 표시(가설: 고를 때 선다) — 조건 505 가 한 번 먹고 지운다
                 _mosesStep = 2;
                 _mosesPageAt = _lastTime;
-                StartFade();
+                // 원본은 줌 연출(Obs 0561 + 행성 줌 그림, 73틱, 0x10102210) 뒤 효과 3 — 연출은 아직 없고 검은 페이드만(감사5 N7).
+                StartFade(black: true);
                 _mosesHover = -1;
             }
         }
         else
         {
             var cells = MosesCellList();
-            if (index < cells.Count) cells[index].Click();
+            if (index < cells.Count) { Play(MosesClickSound); cells[index].Click(); }
         }
         return true;
     }
 
     private void UpdateMosesHover(int bx, int by)
     {
-        if (_mosesOpen) _mosesHover = MosesIconAt(bx, by);
+        if (!_mosesOpen) return;
+        int dock = MosesDockAt(bx, by);
+        if (dock != _mosesDockHover) { _mosesDockHover = dock; _mosesDockHoverAt = _lastTime; }
+        int hover = MosesIconAt(bx, by);
+        if (hover != _mosesHover) { _mosesHover = hover; _mosesHoverAt = _lastTime; }
     }
+
+    /// <summary>시험 훅 DUELDX_MOSESCLICKS 가 걸어 둔 누름 — (때, 모세스 x, 모세스 y).</summary>
+    private readonly List<(double At, int X, int Y)> _mosesTestClicks = [];
+
+    /// <summary>시험 훅 DUELDX_MOSESHOVER 의 마우스 자리(모세스 좌표).</summary>
+    private (int X, int Y)? _mosesTestHover;
 
     private void DrawMoses()
     {
         if (!_mosesOpen) return;
         var (ox, oy) = MosesOrigin();
+        if (_mosesTestHover is { } th)
+        {
+            _mouse = (ox + th.X, oy + th.Y);
+            UpdateMosesHover(_mouse.X, _mouse.Y);
+        }
+        if (_mosesTestClicks.Count > 0 && _mosesTestClicks[0].At <= _lastTime)
+        {
+            var click = _mosesTestClicks[0];
+            _mosesTestClicks.RemoveAt(0);
+            _mouse = (ox + click.X, oy + click.Y);
+            UpdateMosesHover(_mouse.X, _mouse.Y);
+            OnMosesClick(_mouse.X, _mouse.Y);
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"moses click ({click.X},{click.Y}) → page {_mosesPage} step {_mosesStep} system {_mosesSystem}" + Environment.NewLine);
+        }
         int tick = (int)(_lastTime * TicksPerSecond);
 
         // 화면 밖은 검게, 가운데에 640×480 단말 화면
@@ -557,7 +788,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
 
         if (_mosesPage == -1) DrawMosesDesktop(ox, oy, tick);
-        else DrawMosesPage(ox, oy, tick);
+        else
+        {
+            DrawMosesPage(ox, oy, tick);
+            if (MosesDockShown) DrawMosesDock(ox, oy, tick);
+        }
 
         DrawMosesTooltip();
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
@@ -572,11 +807,27 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawTuning();
         DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
-        // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 검정 페이드(방식 2),
+        // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 효과 4 크로스페이드, 항행 → 주 화면·행성 고르기는 검정 페이드(방식 2),
         // 항행 진입(효과 1)만 파랑 채널을 흰색 쪽으로 씻었다가 되돌린다(방식 5).
-        if (_mosesFade > 0)
+        int fadeTotal = _mosesBlueFade ? MosesBlueFadeTicks : MosesFadeTicks;
+        if (_mosesFade > 0 && !_mosesBlueFade && !_mosesBlackFade
+            && _mosesFadeFrom is { } from && from.Length == ViewHeight * BoardWidth && _fb.Length >= (_camY + ViewHeight) * BoardWidth)
         {
-            int total = _mosesBlueFade ? MosesBlueFadeTicks : MosesFadeTicks;
+            // 효과 4 — 전 화면과 새 화면을 15틱에 걸쳐 섞는다(0x1002cc60). 검정을 거치지 않는다(감사5 P1).
+            int k = 256 * _mosesFade / fadeTotal;
+            for (int y = 0; y < ViewHeight; y++)
+                for (int x = 0; x < BoardWidth; x++)
+                {
+                    int i = (y + _camY) * BoardWidth + x;
+                    uint a = from[y * BoardWidth + x], b = _fb[i];
+                    uint Mix(int shift) => (uint)(((int)(a >> shift & 0xFF) * k + (int)(b >> shift & 0xFF) * (256 - k)) >> 8);
+                    _fb[i] = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+                }
+            if (--_mosesFade == 0) _mosesFadeFrom = null;
+        }
+        else if (_mosesFade > 0)
+        {
+            int total = fadeTotal;
             int alpha = 31 * _mosesFade / total;
             // 원본은 640×480 이 화면 전부라 씻김도 화면 전부다 — 우리 판은 더 넓으니 그 네모 안에서만 씻는다.
             var (fx, fy) = MosesOrigin();
@@ -599,27 +850,49 @@ internal sealed unsafe partial class BattleSceneWindow
                 }
             _mosesFade--;
         }
+        StepMosesSystemSwitch();
     }
 
     private void DrawMosesDesktop(int ox, int oy, int tick)
     {
         DrawUi(MosesObs, 1, tick, ox + 10, oy + 10, UiBlend.Alpha);   // 로고
+        DrawMosesDock(ox, oy, tick);
+    }
+
+    /// <summary>
+    /// 아이콘 여섯과 창틀 — 주 화면·항행·메일·통신·파티에 늘 떠 있다(감사5 D1).
+    /// 창틀 Obs 0246 세 조각은 <b>여섯 칸 모두 늘 보이고 멈춰 있다</b>(<c>0x100fe2dd</c>~<c>0x100fe3f6</c>, vt+0xc0(−1), 감사5 B4).
+    /// 아이콘은 단추 클래스라 오른쪽에서 미끄러져 들어오고(B3), 마우스를 올린 것만 움직인다(B2).
+    /// </summary>
+    private void DrawMosesDock(int ox, int oy, int tick)
+    {
         for (int i = 0; i < MosesIcons.Length; i++)
         {
             var icon = MosesIcons[i];
             int x = ox + icon.X, y = oy + icon.Y;
-            // 칸 틀 Obs 0246 세 조각 — 마우스를 올린 칸만 밝게
-            if (i == _mosesHover)
-                foreach (var (dx, motion) in new[] { (-8, 0), (2, 1), (26, 2) })
-                    DrawUi(MosesFrameObs, motion, tick, x + dx, y, UiBlend.Alpha);
-            DrawUi(MosesObs, icon.Motion, tick, x + 14, y + 19, UiBlend.Alpha);
+            foreach (var (dx, motion) in new[] { (-8, 0), (2, 1), (26, 2) })
+                DrawUi(MosesFrameObs, motion, 0, x + dx, y, UiBlend.Alpha);
+            var (sx, wipe) = DockSlide(1000 + i, icon.X);
+            if (sx > icon.X) { DrawSlideTrail(ox, oy, ox + sx + 14, y + 19); continue; }
+            DrawButtonUi(MosesObs, icon.Motion, HoverTick(i == _mosesDockHover, _mosesDockHoverAt), x + 14, y + 19, wipe);
             // 새 편지가 있으면 MAIL 아이콘 오른쪽 위에 빨간 점 — 다 읽으면 사라진다(사용자 요청).
-            if (icon.Page == 1 && HasNewMail())
+            if (icon.Page == 1 && wipe >= 10 && HasNewMail())
             {
                 FillCircle(x + 27, y - 2, 5, 0xFFFFFFFF);
                 FillCircle(x + 27, y - 2, 4, 0xFFE02020);
             }
         }
+    }
+
+    /// <summary>뒤로 단추 Obs 0248 @ (46,244) — 단추 클래스(id 100)라 들어오고 올리면 움직인다.</summary>
+    private void DrawMosesBack(int ox, int oy, int tick)
+    {
+        var (sx, wipe) = PageSlide(100, 46);
+        if (sx > 46) { DrawSlideTrail(ox, oy, ox + sx, oy + 257); return; }
+        var r = (X: ox + 46, Y: oy + 244);
+        bool hovered = _mouse.X >= r.X && _mouse.X < r.X + 25 && _mouse.Y >= r.Y && _mouse.Y < r.Y + 26;
+        if (UiFor(MosesBackObs) != null) DrawButtonUi(MosesBackObs, 0, hovered ? tick : 0, r.X, r.Y, wipe);
+        else if (wipe >= 10) DrawText("BACK", ox + 46, oy + 248, White);
     }
 
     private void DrawMosesPage(int ox, int oy, int tick)
@@ -650,39 +923,40 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
 
-        // 항행 단계 1 — 성도 위 행성들. 마우스를 올린 행성에는 표 Obs 0163 모션 3 과 이름.
+        // 항행 단계 1 — 성도 위 행성들(0x100fd69c~0x100fd891). 행성 단추는 +0x118 = 1 이라 미끄러져 들어오지 않고 바로 멈춘 그림이다.
+        // 덧그림 표 Obs 0163 모션 3 은 <b>모든 행성 위에 늘</b> (0, −10 − 높이/2) 에(0x100fd767~0x100fd77e, 감사5 N6).
+        // 이름 글은 없다 — 마우스를 올리면 설명 툴팁(TXR 행성+6)이 뜬다(DrawMosesTooltip).
         if (_mosesPage == 0 && _mosesStep == 1)
         {
             var planets = MosesSystemPlanets();
             for (int i = 0; i < planets.Count; i++)
             {
                 var p = planets[i];
-                DrawUi(p.MapObs, p.MapMotion, tick, ox + p.X, oy + p.Y, UiBlend.Alpha);
-                if (i != _mosesHover) continue;
-                DrawUi(MosesMarkObs, 3, tick, ox + p.X, oy + p.Y - 20, UiBlend.Alpha);
-                string planetName = Text(p.NameText);
-                if (planetName.Length == 0) continue;
-                var (_, nw, _) = GetText(planetName, White);
-                DrawText(planetName, ox + p.X - nw / 2, oy + p.Y + 34, White);   // 그림에 든 로마자 이름 아래
+                int ptick = HoverTick(i == _mosesHover, _mosesHoverAt);
+                DrawUi(p.MapObs, p.MapMotion, ptick, ox + p.X, oy + p.Y, UiBlend.Alpha);
+                int h = UiFor(p.MapObs)?.FrameAt(p.MapMotion, 0)?.H ?? 40;
+                DrawUi(MosesMarkObs, 3, ptick, ox + p.X, oy + p.Y - 10 - h / 2, UiBlend.Alpha);
             }
-            if (!DrawUi(MosesBackObs, 0, tick, ox + 46, oy + 244, UiBlend.Alpha))
-                DrawText("BACK", ox + 46, oy + 248, White);
-            // 항성계가 둘 이상이면 성도 좌우에 옮기기 단추와 지금 항성계 이름을 얹는다.
-            if ((_mosesChp?.Systems.Count ?? 0) > 1)
+            DrawMosesBack(ox, oy, tick);
+            // 다른 항성계 단추 — 조건을 통과한 다른 성계 앞의 둘, Obs 0680 모션 0 (30,40) · 1 (630,40),
+            // 옆에 <b>그 성계 이름</b>(TXR 성계+4) — 왼쪽은 +20 왼쪽 정렬, 오른쪽은 −20 오른쪽 정렬, 흰색(세로는 단추 가운데, 가설).
+            var others = MosesOtherSystems();
+            for (int i = 0; i < others.Count; i++)
             {
-                DrawSystemArrow(MosesSystemLeft, ox, oy, left: true);
-                DrawSystemArrow(MosesSystemRight, ox, oy, left: false);
-                if (MosesSystem() is { } sys && Text(sys.NameText) is { Length: > 0 } sysName)
-                {
-                    var (_, sw, _) = GetText(sysName, White);
-                    DrawText(sysName, ox + (MosesW - sw) / 2, oy + 50, White);
-                }
+                var (bx0, by0) = MosesSystemButtons[i];
+                var (sx, wipe) = PageSlide(127 + i, bx0);
+                if (sx > bx0) { DrawSlideTrail(ox, oy, ox + sx, oy + by0); continue; }
+                var r = MosesSystemButtonRect(i, ox, oy);
+                bool hovered = _mouse.X >= r.X && _mouse.X < r.X + r.W && _mouse.Y >= r.Y && _mouse.Y < r.Y + r.H;
+                DrawButtonUi(MosesSystemObs, i, hovered ? tick : 0, ox + bx0, oy + by0, wipe);
+                if (wipe < 10 || Text(others[i].NameText) is not { Length: > 0 } sysName) continue;
+                var (_, sw, sh) = GetText(sysName, White);
+                DrawText(sysName, i == 0 ? ox + bx0 + 20 : ox + bx0 - 20 - sw, oy + by0 - sh / 2, White);
             }
             return;
         }
 
         var cells = MosesCellList();
-        // 칸은 10프레임 세로 와이프로 나타난다 — 여기서는 칸마다 한 틱씩 늦게 나오게 한다
         int since = (int)((_lastTime - _mosesPageAt) * TicksPerSecond);
 
         // 행성 구체 — 항행 단계 2 에서 화면 가운데 조금 위. 그 위에 레이더 `+0x2f14`(초록 격자 구 + 장소 조각)를 돌린다.
@@ -691,16 +965,20 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, UiBlend.Alpha);
             DrawMosesRadar(ox, oy, since, MosesPlacePatches(chp, planet), _mosesHover);
         }
+        // 장소·파티 칸도 단추 클래스 — 오른쪽 밖에서 꼬리를 끌고 들어와 10틱 세로 와이프로 나타나고, 올린 칸만 움직인다(감사5 B2·B3).
         for (int i = 0; i < cells.Count; i++)
         {
-            if (since < i + 1) continue;
             var (cx, cy, name, icon, _) = cells[i];
+            var (sx, wipe) = PageSlide(10 + i, cx);
+            if (sx > cx) { DrawSlideTrail(ox, oy, ox + sx, oy + cy + 13); continue; }
             int x = ox + cx, y = oy + cy;
-            DrawUi(MosesCellObs, 0, tick, x, y, UiBlend.Alpha);
+            int ctick = HoverTick(i == _mosesHover, _mosesHoverAt);
+            DrawButtonUi(MosesCellObs, 0, ctick, x, y, wipe);
+            if (wipe < 10) continue;
             if (i == _mosesHover)
                 foreach (var (dx, motion) in new[] { (0, 0), (10, 1), (168, 2) })
-                    DrawUi(MosesFrameObs, motion, tick, x + dx, y, UiBlend.Alpha);
-            DrawUi(MosesCellIconObs, icon, tick, x + 20, y + 14, UiBlend.Alpha);
+                    DrawUi(MosesFrameObs, motion, ctick, x + dx, y, UiBlend.Alpha);
+            DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, UiBlend.Alpha);
             if (name.Length > 0)
             {
                 var (_, w, h) = GetText(name, White);
@@ -708,19 +986,41 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
 
-        if (!DrawUi(MosesBackObs, 0, tick, ox + 46, oy + 244, UiBlend.Alpha))
-            DrawText("BACK", ox + 46, oy + 248, White);
+        DrawMosesBack(ox, oy, tick);
     }
 
+    /// <summary>
+    /// 툴팁 — 도크 아이콘 설명(TXR 485~490, 도크가 보이는 페이지마다)과 항행 단계 1 의 행성 설명(TXR 행성+6, 폭 200,
+    /// <c>0x10042d10(단추, 뿌리, 0, 0, 200, 0, TXR)</c>, 감사5 N6). 자리는 마우스 +(16,16)(주 화면 툴팁과 같은 규칙으로 가정).
+    /// </summary>
     private void DrawMosesTooltip()
     {
-        if (_mosesPage != -1 || _mosesHover < 0 || _mosesFade > 0) return;
-        string text = Text(MosesIcons[_mosesHover].Text);
-        if (text.Length == 0) text = MosesIcons[_mosesHover].Name;
-        var (_, w, h) = GetText(text, White);
-        int tx = _mouse.X + 16, ty = _mouse.Y + 16;
+        if (_mosesFade > 0 || _mosesSystemSwitch != null) return;
+        List<string> lines;
+        if (MosesDockShown && _mosesDockHover >= 0)
+        {
+            string text = Text(MosesIcons[_mosesDockHover].Text);
+            lines = [text.Length > 0 ? text : MosesIcons[_mosesDockHover].Name];
+        }
+        else if (_mosesPage == 0 && _mosesStep == 1 && _mosesHover >= 0 && _mosesHover < MosesSystemPlanets().Count
+                 && Text(MosesSystemPlanets()[_mosesHover].DescText) is { Length: > 0 } desc)
+            lines = WrapText(desc, 200, 13f);
+        else return;
+        int w = 0, h = 0;
+        foreach (string line in lines)
+        {
+            var (_, lw, lh) = GetText(line, White);
+            w = Math.Max(w, lw);
+            h += Math.Max(lh, 16);
+        }
+        var (ox, oy) = MosesOrigin();
+        int tx = Math.Min(_mouse.X + 16, ox + MosesW - w - 6), ty = Math.Min(_mouse.Y + 16, oy + MosesH - h - 4);
         FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xD00A1428);
         StrokeRect(tx - 4, ty - 2, w + 8, h + 4, BoxLine);
-        DrawText(text, tx, ty, White);
+        foreach (string line in lines)
+        {
+            DrawText(line, tx, ty, White);
+            ty += Math.Max(GetText(line, White).H, 16);
+        }
     }
 }

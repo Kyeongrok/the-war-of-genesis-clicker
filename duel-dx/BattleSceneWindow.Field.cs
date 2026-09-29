@@ -111,17 +111,43 @@ internal sealed unsafe partial class BattleSceneWindow
 /// 그런 줄은 배경만 덮고 그 위 층의 인물·물체는 안 덮는 연출이라, 덮개보다 나중에 그린다.
     /// <c>Fld 0019</c> 는 시작에 <c>900 [1,1,0,40,8]</c>(40틱에 걸쳐 걷기), 끝에 <c>900 [0,1,40,0,8]</c>(40틱에 걸쳐 덮기)를 쓴다.
     /// </remarks>
-    private (double Start, int CoverTicks, int UncoverTicks, bool White)? _fieldFade;
+    /// <remarks>
+    /// 감사5 D10: 원본 페이드 물체(<c>0x10029f80</c>)의 눈금은 0→31(a2 틱) 뒤 31→63(a3 틱)으로 간다(<c>0x1002a030</c>).
+    /// 눈금 &lt; 32 이면 그 세기로 덮고, 이상이면 <b>a0 ≠ 0 일 때만</b> 63−눈금으로 걷는다 — a0 = 0 이면 두 번째 그림도 단색이라 덮인 채 남는다.
+    /// <c>Color</c> 는 무늬 a1 의 단색(<c>0x100f1fc0</c>: 0 흰 · 1 검정 · 2 빨강, 감사5 D13), <c>Back</c> 은 a0 ≠ 0.
+    /// </remarks>
+    private (double Start, int CoverTicks, int UncoverTicks, uint Color, bool Back)? _fieldFade;
 
     /// <summary>덮기가 가리는 층 수(900 의 a4) — 8 이면 인물·물체까지 다 가린다.</summary>
     private int _fieldFadeCover = 8;
 
     /// <summary>
-    /// 전환(901·903·904·909)으로 그림(Bgr)을 깔았을 때 그 그림이 가리는 층 수 — 이 층 <b>아래</b>의 물체·인물은 그림 밑에 묻혀 안 보인다.
-    /// 자리는 전환마다 다르다(901·904 인자 4, 903·909 인자 3 — 대부분 8 = 다). 필드 화면으로 돌아오면 0.
+    /// 전환(901·903·904·909)·404·900 이 남긴 그림이 가리는 층 수 — 이 층 <b>아래</b>의 물체·인물은 그림 밑에 묻혀 안 보인다.
+    /// 자리는 전환마다 다르다(901·904 인자 4, 903·909 인자 3, 404 인자 1, 900 인자 4 — 대부분 8 = 다). 필드 화면으로 돌아오면 0.
     /// 전에는 배경만 그림으로 바꾸고 방 조각(창문·복도 물체)을 그 위에 그대로 그려 Fld 0081 의 컷씬과 섞였다(사용자 보고).
     /// </summary>
     private int _fieldPictureCover;
+
+    /// <summary>
+    /// 남은 그림 <c>[0x101bfe18]</c>(640×480) — 404·900 끝·전환 a0 = 0 이 남긴다. 있으면 배경 대신 화면 (0,0)에 그리고
+    /// 가림 이상 층만 위에 덧그린다(<c>0x100ebeb9~0x100ec020</c>). <b>배경·카메라는 그대로</b> 둔다(감사5 D8) —
+    /// 전에는 그림으로 갈 때 <c>_fieldCam = (0,0)</c> 으로 바꿔 돌아온 필드가 다른 자리를 비췄다(Fld 0176·0195).
+    /// </summary>
+    private uint[]? _fieldPicture;
+
+    /// <summary>필드 배경 한 장 전체(자르지 않은 것) — 카메라 한계(감사5 D2)와 노란 창 뚫기(D1)에 쓴다.</summary>
+    private (uint[] Px, int W, int H)? _fieldBg;
+
+    /// <summary>
+    /// 배경 뒤 조각 그림(파일의 B 덩이, 감사5 D1) — 세계 자리 (X1,Y1) 에 W×H 네모로, 내용은 그림 한 장(<c>Px</c>, PicW×PicH)을 감아 두른다.
+    /// </summary>
+    private readonly List<(int X1, int Y1, int W, int H, uint[] Px, int PicW, int PicH)> _fieldPieces = [];
+
+    /// <summary>407·408 로 숨긴 층 창(0~8) — 층 창 <c>+0x5c</c> 하나의 보이기다(<c>0x100ee690</c>/<c>0x100ee6d0</c>, 감사5 D16).</summary>
+    private readonly bool[] _fieldLayerHidden = new bool[9];
+
+    /// <summary>213·307·302 가 층 안 차례를 매길 때 쓰는 셈(감사5 D3).</summary>
+    private long _fieldOrderSeq;
 
     /// <summary>
     /// 걷어내는 전환(903 빗살 지우기 · 904 줄 늘여 쓸기).
@@ -136,7 +162,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 바탕은 그 그림의 <b>경계 줄을 늘여</b> 채우므로 <c>Base</c> 가 없다.
     /// </para>
     /// </remarks>
-    private sealed record FieldWipe(int Kind, int Way, int Ticks, double Start, uint[]? Base, uint[] Over);
+    /// <remarks>
+    /// <c>Cover</c> 는 전환이 가리는 층 수 — 전환 물체 위에 층 (가림)~7 을 산 채로 덧그린다(<c>0x100ebe66~0x100ebea1</c>, 감사5 D12).
+    /// 909 겹쳐 디졸브도 여기로 온다(감사5 D5).
+    /// </remarks>
+    private sealed record FieldWipe(int Kind, int Way, int Ticks, double Start, uint[]? Base, uint[] Over, int Cover = 8);
 
     private FieldWipe? _fieldWipe;
 
@@ -169,6 +199,9 @@ internal sealed unsafe partial class BattleSceneWindow
         /// </summary>
         public bool Hold { get; set; }
 
+        /// <summary>같은 층 안 그리는 차례 — 작을수록 먼저(아래). 로더는 인물을 물체보다 아래에, 앞 번호를 위에 둔다(감사5 D3).</summary>
+        public long Order { get; set; }
+
         /// <summary>지금 밝기 0~1 — 원본은 8단계다(행동 210·211).</summary>
         public double Alpha { get; set; } = 1;
 
@@ -199,6 +232,15 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Mirror { get; set; }
         public bool Visible { get; set; } = true;
         public double Start { get; set; }
+
+        /// <summary>같은 층 안 그리는 차례 — 작을수록 먼저(아래)(감사5 D3).</summary>
+        public long Order { get; set; }
+
+        /// <summary>
+        /// 모션을 한 바퀴 돌고 마지막 장에 멈추나 — 302 인자 2 ≠ 1 이면 모션 끝(<c>+0x68</c>)에서 <c>vt+0xc0(−1)</c> 로
+        /// 애니메이터를 멈춘다(<c>0x100f1f78</c> → <c>0x100274e0</c>, 감사5 D15). 파일 처음 모션·302 a2 = 1 은 되풀이.
+        /// </summary>
+        public bool Hold { get; set; }
 
         /// <summary>
         /// 스크립트(302)가 건 모션이 한 바퀴 끝나는 때 — 그때까지 행동 1 이 기다린다. 원본 물체는 틱마다 셈을 올려
@@ -273,10 +315,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OpenField(int id)
     {
         _fieldPictureCover = 0;
+        _fieldPicture = null;
+        Array.Clear(_fieldLayerHidden);
+        _fieldOrderSeq = 0;
         try
         {
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
-            if (FieldFile.Parse(id, files.Read("Fld", $"{id:D4}.fld")) is not { } field) return false;
+            var bytes = files.Read("Fld", $"{id:D4}.fld");
+            if (FieldFile.Parse(id, bytes) is not { } field || bytes == null) return false;
             _field = field;
             _fieldGray = false;
             _screenWaveOwner = null;   // 필드 개체 생성자 0x100ec180 이 +0x294 = 0
@@ -296,18 +342,24 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldPictures.Clear();
             _fieldFade = null;
             _fieldWipe = null;
-            _fieldActors = [.. field.People.Select(p => new FieldActor(p))];
-            // 파일의 물체 — 갈래 칸이 곧 처음 모션이다.
-            _fieldProps = [.. field.Objects.Select(o => new FieldProp
+            // 층 안 차례(감사5 D3): 로더는 물체 전부(0x100ec8f5) → 인물 전부(0x100eca0d) 순으로 만들고, 생성자가 부모 창 <b>머리에 끼우므로</b>
+            // (0x10001560 → 0x10001650(…,1)) 나중에 만든 것이 먼저(아래) 그려진다 — 한 층 = [마지막 인물 … 첫 인물, 마지막 물체 … 첫 물체].
+            _fieldActors = [.. field.People.Select((p, i) => new FieldActor(p) { Order = -1_000_000 - i })];
+            // 파일의 물체 — 갈래 칸이 곧 처음 모션이다. 층은 파일 값 그대로(감사5 D17): −1 은 뿌리 창(배경 아래, 안 보임),
+            // 8 은 층 7 안의 창 +0x170 — FieldFile 은 0~7 로 잘라 두므로 원래 워드를 다시 읽는다(물체 16바이트의 +10).
+            _fieldProps = [.. field.Objects.Select((o, i) => new FieldProp
             {
-                Key = o.Key, Obs = o.Picture, Motion = o.Kind, X = o.X, Y = o.Y, Layer = o.Layer,
+                Key = o.Key, Obs = o.Picture, Motion = o.Kind, X = o.X, Y = o.Y,
+                Layer = 16 + 16 * i + 12 <= bytes.Length ? BitConverter.ToInt16(bytes, 16 + 16 * i + 10) : o.Layer,
+                Order = -i,
             })];
-            _fieldCam = (Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
+            LoadFieldBackdrop(field, bytes);
+            _fieldCam = ClampFieldCam(field.CameraX, field.CameraY);   // 필드 시작도 [0, 폭−640]×[0, 높이−480] 로(0x100ec6c3~, 감사5 D2)
             _fieldCamMove = null;
             _mosesOpen = false;
             _talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
-            ShowMosesBackground(field.Background, Math.Max(0, field.CameraX), Math.Max(0, field.CameraY));
+            ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
             StopMusic();
             // 머리 곡은 논리 크기 0 으로 건다(0x100ec3fb~0x100ec449: 0x10025320(0) → 곧 재개) — 들리기는 100 %(×B.G.M)지만
             // 첫 517 은 0 에서 올린다(뚝 끊겼다 커짐), 첫 512 는 0 을 물려받는다(감사4 M3).
@@ -342,6 +394,73 @@ internal sealed unsafe partial class BattleSceneWindow
         _fieldProps = [];
         _fieldWipe = null;
         _fieldCamMove = null;
+        _fieldPicture = null;
+        _fieldPictureCover = 0;
+        _fieldBg = null;
+        _fieldPieces.Clear();
+    }
+
+    /// <summary>
+    /// 필드 배경 전체와 B 덩이 조각 그림을 읽는다(감사5 D1·D2).
+    /// </summary>
+    /// <remarks>
+    /// B 덩이는 물체 뒤 <c>[수, 예비] + 16바이트 × n</c> — 워드 1 <c>Bgr</c> · 4·5 (x1,y1) · 6·7 (x2,y2). 조각 그림은 <c>Bgr 0148</c>·<c>0100</c>(우주)이고,
+    /// 이 덩이를 가진 22필드는 모두 노란 창이 뚫린 배경(<c>Bgr 0120</c>·<c>0149</c>·<c>0179</c>)을 쓴다.
+    /// 조각 생성자 <c>0x100eaff0</c> 뒤의 <c>0x100eb7d0</c> 이 자리를 0 으로 되돌리는 것처럼 보여 <b>화면 자리는 가설</b>이다 —
+    /// 여기서는 (x1,y1) 을 세계 자리로 쓴다(그래야 네모가 노란 창들을 덮는다: Fld 0050 네모 94~687×34~460 ⊃ 노랑 114~681×45~447).
+    /// </remarks>
+    private void LoadFieldBackdrop(FieldFile field, byte[] bytes)
+    {
+        _fieldBg = LoadFieldBgr(field.Background);
+        _fieldPieces.Clear();
+        int at = 16 + 16 * field.Objects.Count;
+        if (at + 4 > bytes.Length) return;
+        int count = BitConverter.ToInt16(bytes, at);
+        for (int i = 0; i < count && at + 4 + 16 * (i + 1) <= bytes.Length; i++)
+        {
+            short W(int k) => BitConverter.ToInt16(bytes, at + 4 + 16 * i + 2 * k);
+            int x1 = W(4), y1 = W(5), w = W(6) - x1, h = W(7) - y1;
+            if (w <= 0 || h <= 0 || LoadFieldBgr(W(1)) is not { } pic) continue;   // Fld 0198·0207 의 조각 10 은 0×0
+            _fieldPieces.Add((x1, y1, w, h, pic.Px, pic.W, pic.H));
+        }
+    }
+
+    /// <summary>배경 그림 한 장을 자르지 않고 통째로 읽는다(.bgr = JPEG·GIF).</summary>
+    private (uint[] Px, int W, int H)? LoadFieldBgr(int id)
+    {
+        try
+        {
+            string path = Path.Combine(AssetsFolder.Find("moses"), "bgr", $"{id:D4}.bgr");
+            if (!File.Exists(path)) return null;
+            using var bitmap = new System.Drawing.Bitmap(path);
+            int w = bitmap.Width, h = bitmap.Height;
+            var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                                       System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                var px = new uint[w * h];
+                for (int y = 0; y < h; y++)
+                    new Span<uint>((void*)(data.Scan0 + y * data.Stride), w).CopyTo(px.AsSpan(y * w, w));
+                return (px, w, h);
+            }
+            finally { bitmap.UnlockBits(data); }
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 카메라를 배경 안으로 자른다 — 400·401·402·필드 시작 모두 뿌리 창을 <c>[640−폭, 0]×[480−높이, 0]</c> 로 자른다
+    /// (<c>0x100edd80</c>·<c>0x100ee020</c>·<c>0x100ee431~</c>·<c>0x100ec6c3~</c>, 감사5 D2). 전에는 아래(0)만 잘라, 배경은
+    /// 멈추는데 인물·물체만 계속 밀려 Fld 0376·0405 의 사람들이 화면 밖으로 나갔다. 배경을 못 읽었으면 위는 안 자른다.
+    /// </summary>
+    private (int X, int Y) ClampFieldCam(double x, double y)
+    {
+        int maxX = _fieldBg is { } bg ? Math.Max(0, bg.W - MosesW) : int.MaxValue;
+        int maxY = _fieldBg is { } bg2 ? Math.Max(0, bg2.H - MosesH) : int.MaxValue;
+        return ((int)Math.Clamp(x, 0, maxX), (int)Math.Clamp(y, 0, maxY));
     }
 
     /// <summary>
@@ -569,7 +688,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_fieldCamMove is { } cam) { MoveFieldCamera((int)cam.ToX, (int)cam.ToY); _fieldCamMove = null; }
         _fieldWipe = null;                                   // 걷어내기 전환은 끝(원본도 끝나면 그림만 남긴다)
         if (_fieldFade is { } fade2)
-            _fieldFade = fade2.CoverTicks > 0 ? (_lastTime - 1000, fade2.CoverTicks, fade2.UncoverTicks, fade2.White) : null;
+        {
+            // 끝 눈금(63)으로 — a0 = 0 이면 단색 그림이 남고, a0 ≠ 0 이면 걷힌다(감사5 D10).
+            _fieldFade = (_lastTime - 100000, fade2.CoverTicks, fade2.UncoverTicks, fade2.Color, fade2.Back);
+            StepFieldFade();
+        }
         // 틱으로 사는 슬롯(208 모션 · 517 음악 페이드 · 900 · 전환)도 다 풀었다 — 대사창 슬롯만 남긴다(창은 클릭·건너뛰기가 닫는다).
         _fieldSlots.RemoveAll(s => !s.Talk);
     }
@@ -740,7 +863,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldPropOf(A(0)) is not { } prop) break;
                 int ticks = Math.Max(1, (int)A(3));
                 double moveStart = _lastTime;
-                prop.Move = (prop.X, prop.Y, prop.X + A(1) * ticks, prop.Y + A(2) * ticks, ticks, moveStart);
+                // 핸들러는 틱 0…a3 의 a3+1 번 더한다(감사5 D14 — 첫 틀에 실행기 + 슬롯 실행기 0x100f49df 로 두 걸음).
+                int steps = Math.Max(0, (int)A(3)) + 1;
+                prop.Move = (prop.X, prop.Y, prop.X + A(1) * steps, prop.Y + A(2) * steps, ticks, moveStart);
                 HoldSlot(() => prop.Move is { } now && now.Start == moveStart && _fieldProps.Contains(prop));   // 다 옮길 때까지 슬롯(행동 1 이 기다린다)
                 break;
             }
@@ -754,6 +879,7 @@ internal sealed unsafe partial class BattleSceneWindow
                         prop.Motion = A(1);
                         prop.Mirror = A(5) != 0;
                         prop.Start = _lastTime;
+                        prop.Hold = A(2) != 1;               // a2 ≠ 1 은 모션 끝에서 멈춤(0x100f1f78, 감사5 D15)
                         prop.PlayUntil = _lastTime + (UiFor(prop.Obs)?.MotionLength(prop.Motion) ?? 0) / TicksPerSecond;
                         // 인자 2 가 1 이면 슬롯이 곧장 풀리고, 아니면 모션 끝(+0x68)까지 산다(0x100f1d90) — 뒤따르는 행동 1 이 이것을 기다린다.
                         if (A(2) != 1) HoldSlot(() => prop.PlayUntil > _lastTime && _fieldProps.Contains(prop));
@@ -764,8 +890,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     _fieldProps.Add(new FieldProp
                     {
                         Obs = A(0), Motion = A(1), X = A(3), Y = A(4), Layer = 7,
-                        Mirror = A(5) != 0, Start = _lastTime,
-                        RemoveAt = A(2) == 0 ? _lastTime + (UiFor(A(0))?.MotionLength(A(1)) ?? 0) / TicksPerSecond : null,
+                        Mirror = A(5) != 0, Start = _lastTime, Hold = A(2) != 1,
+                        // 층 7 창을 부모로 생성(0x100f1e9b) — 머리에 끼워져 층 7 맨 아래(감사5 D3).
+                        Order = -3_000_000 - ++_fieldOrderSeq,
+                        // a2 ≠ 1 이면 모션 끝에 핸들러가 지운다(0x100f1f97), a2 = 0 은 물체 틱이 지운다(감사5 D18) — a2 = 1 만 되풀이하며 남는다.
+                        RemoveAt = A(2) != 1 ? _lastTime + (UiFor(A(0))?.MotionLength(A(1)) ?? 0) / TicksPerSecond : null,
                     });
                 break;
             case 303: break;                                 // 물체 모션 멈추기 — 자료에 한 번도 안 쓴다
@@ -786,13 +915,14 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (FieldPropOf(A(0)) is not { } prop) break;
                 prop.Layer = A(1);
+                prop.Order = ++_fieldOrderSeq;               // 새 층 창 꼬리에 붙인다(0x100f1d50 → 0x10001650(…,0)) — 그 층 맨 위(감사5 D3)
                 break;
             }
             case 202:                                        // 걷기(목적지) — 걷는 동안 걷기 모션, 멈추면 서기 모션
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
                 var (walk, stand, mirror) = FieldFacing(A(4));
-                who.Motion = walk;
+                SetActorMotion(who, walk);
                 who.Hold = false;
                 who.Mirror = mirror;
                 // 인자 5 가 0 이면 끝날 때 모션을 안 건드린다(원본은 a5 ≠ 0 일 때만 방향표 0x100f0fd8 로 서기 모션을 건다) —
@@ -807,10 +937,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldActorOf(A(0)) is not { } who) break;
                 var (walk, stand, mirror) = FieldFacing(A(4));
                 int ticks = Math.Max(1, (int)A(3));
-                who.Motion = walk;
+                int steps = Math.Max(0, (int)A(3)) + 1;      // 틱 0…a3 의 a3+1 번(0x100f116c·0x100f11a6, 감사5 D14 — Fld 0354 돌문 155px)
+                SetActorMotion(who, walk);
                 who.Hold = false;
                 who.Mirror = mirror;
-                who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
+                who.Walk = (who.X, who.Y, who.X + A(1) * steps, who.Y + A(2) * steps, ticks, _lastTime,
                             A(5) != 0 ? stand : -1, mirror);
                 HoldWalkSlot(who);
                 break;
@@ -819,7 +950,8 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
                 int ticks = Math.Max(1, (int)A(3));
-                who.Walk = (who.X, who.Y, who.X + A(1) * ticks, who.Y + A(2) * ticks, ticks, _lastTime,
+                int steps = Math.Max(0, (int)A(3)) + 1;      // a3+1 번 더한다(감사5 D14)
+                who.Walk = (who.X, who.Y, who.X + A(1) * steps, who.Y + A(2) * steps, ticks, _lastTime,
                             -1, who.Mirror);
                 HoldWalkSlot(who);
                 break;
@@ -834,9 +966,15 @@ internal sealed unsafe partial class BattleSceneWindow
             case 208:                                        // 모션 지정
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
+                // 같은 모션이 아직 도는 중이면 처음으로 안 돌린다(0x10027090, 감사5 D19) — 되풀이 중이거나 한 바퀴를 아직 안 돈 때.
+                // 마지막 장에 멈춰 선(Hold) 모션이면 애니메이터가 멈춘 것이라 처음부터 다시 돈다.
+                bool running = who.Motion == A(1)
+                               && !(who.Hold && _db?.Character(who.ChrCode) is { SpriteId: > 0 } spc
+                                    && UiFor(spc.SpriteId)?.MotionLength(A(1)) is > 0 and var runLength
+                                    && (_lastTime - who.MotionStart) * TicksPerSecond >= runLength - 1);
                 who.Motion = A(1);
                 who.Mirror = A(3) != 0;
-                who.MotionStart = _lastTime;
+                if (!running) who.MotionStart = _lastTime;
                 who.Hold = A(2) != 1;
                 // 인자2 가 1 이면 되풀이라 슬롯이 곧장 풀리고, 아니면 <b>한 바퀴 다 돌 때까지</b> 슬롯이 산다(0x100f1510).
                 // 줄은 안 막는다 — 원본은 여럿의 208 이 한 틀에 함께 시작하고 뒤따르는 행동 1 이 다 돌기를 기다린다
@@ -869,6 +1007,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (FieldActorOf(A(0)) is not { } who) break;
                 who.Layer = A(1);
+                who.Order = ++_fieldOrderSeq;                // 새 층 창 꼬리에(0x100f1966 → 0x10001650(…,0)) — 그 층 맨 위(감사5 D3)
                 break;
             }
             case 400:                                        // 화면을 그 자리로(즉시)
@@ -877,9 +1016,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 401:                                        // <b>매 틀</b> (a0,a1)씩 a2 틀 동안 민다 — 한 번이 아니다
             {
+                // 원본은 틀마다 (a0,a1) 을 더하고 배경 안으로 자른다(0x100ee045) — 벽에 닿으면 거기서 선다. 틱 0…a2 의 a2+1 번(감사5 D2·D14).
+                // 한 방향으로만 더하므로 「틀마다 자르기」 = 「끝자리를 보간해 틀마다 자르기」(MoveFieldCamera 가 자른다).
                 int camTicks = Math.Max(1, (int)A(2));
+                int camSteps = Math.Max(0, (int)A(2)) + 1;
                 _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
-                                 _fieldCam.X + A(0) * camTicks, _fieldCam.Y + A(1) * camTicks, camTicks, _lastTime);
+                                 _fieldCam.X + A(0) * camSteps, _fieldCam.Y + A(1) * camSteps, camTicks, _lastTime);
                 HoldCameraSlot();
                 break;
             }
@@ -887,28 +1029,36 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (FieldActorOf(A(0)) is not { } target) break;
                 int camTicks = Math.Max(1, (int)A(1));
-                _fieldCamMove = (_fieldCam.X, _fieldCam.Y,
-                                 target.X - MosesW / 2.0, target.Y - MosesH / 2.0, camTicks, _lastTime);
+                // 목표를 먼저 배경 안으로 자르고 보간한다(0x100ee431~0x100ee493, 감사5 D2).
+                var (goalX, goalY) = ClampFieldCam(target.X - MosesW / 2.0, target.Y - MosesH / 2.0);
+                _fieldCamMove = (_fieldCam.X, _fieldCam.Y, goalX, goalY, camTicks, _lastTime);
                 HoldCameraSlot();
                 break;
             }
             case 901:                                        // 밀어내기 — a2 는 화면 너비에 더하는 여분 거리다
-                BeginFieldWipe(901, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
-                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(4), 0, 8) : 0;
+                BeginFieldWipe(901, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1), A(4));
                 break;
             case 903:                                        // 빗살 지우기 — a2 는 틀 수가 아니라 <b>세로 띠 수</b>다
             {
                 int bands = Math.Max(1, (int)A(2));
-                BeginFieldWipe(903, bands, MosesW / bands + bands, A(0) == 0, A(1));
-                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(3), 0, 8) : 0;
+                BeginFieldWipe(903, bands, MosesW / bands + bands, A(0) == 0, A(1), A(3));
                 break;
             }
             case 904:                                        // 줄 늘여 쓸기 — a2 방향(0 아래→위, 1 위→아래, 2 오른→왼, 3 왼→오른)
-                BeginFieldWipe(904, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1));
-                _fieldPictureCover = A(0) == 0 ? Math.Clamp((int)A(4), 0, 8) : 0;
+                BeginFieldWipe(904, A(2), Math.Max(1, (int)A(3)), A(0) == 0, A(1), A(4));
                 break;
-            case 404:
-            case 405: break;                                 // 전환용 그림 미리 얹기·버리기 — 전환이 제 그림을 직접 읽으므로 안 쓴다
+            case 404:                                        // [Bgr, 가림] 그림 띄우기 — 남은 그림 = Bgr a0, 가림 = a1(0x100f2180, 감사5 D6)
+                // 즉시 그 그림 + 층 a1~7. 카메라는 그대로(감사5 D8). 전에는 무동작이라 Fld 0038 사건 18 의 컷(206 → 97)이 안 바뀌었다.
+                if (ReadBackground(A(0)) is { } picture404)
+                {
+                    _fieldPicture = picture404;
+                    _fieldPictureCover = Math.Clamp((int)A(1), 0, 8);
+                }
+                break;
+            case 405:                                        // 그림 걷기 — 남은 그림을 지워 필드로(0x100f21c0, 감사5 D6)
+                _fieldPicture = null;
+                _fieldPictureCover = 0;
+                break;
             case 902: break;                                 // 동영상(<c>Mov\%04d.mov</c>) — 게임 쪽 영상만 405MB 라 데모는 안 묶는다
             case 905:                                        // 뜻이 아직 가설인 전환들 — 자료에 한 번씩뿐이다.
             case 907:                                        // 인자 자리(a0 방향 · a1 그림)는 다 같으니 <b>겹쳐 디졸브로 갈음</b>한다.
@@ -916,27 +1066,29 @@ internal sealed unsafe partial class BattleSceneWindow
             case 909:                                        // 겹쳐 디졸브 — 전환의 대부분이 이것이다
                 // a0 이 방향이다. 0 이면 그 그림으로 갈아타고 <b>그림이 그대로 남는다</b>.
                 // 0 이 아니면 그림에서 <b>이 필드 화면으로 돌아오며 그림을 걷는다</b> — 909 27번·903 5번·904 1번·905 1번이 이쪽이다.
-                if (A(0) == 0)
+                // 원본 0x1002cc60 은 a2 틱 동안 8단계로 겹친다(감사5 D5) — 전에는 그림을 즉시 바꾸고 기다리기만 했다.
+                // 전환 물체 +0x58 이 설 때까지 슬롯 — 줄은 안 막는다(909→205 7곳은 원본에서 디졸브와 함께). 카메라는 안 건드린다(D8).
+                if (A(0) == 0 && A(1) <= 0) { if (A(2) > 0) HoldSlotTicks(A(2)); break; }
+                if (A(2) > 0) BeginFieldWipe(909, 0, A(2), A(0) == 0, A(1), A(3));
+                else if (A(0) == 0)
                 {
-                    if (A(1) > 0)
+                    if (ReadBackground(A(1)) is { } picture909)
                     {
-                        ShowMosesBackground(A(1));
-                        _fieldCam = (0, 0);
-                        _fieldCamMove = null;
+                        _fieldPicture = picture909;
                         _fieldPictureCover = Math.Clamp((int)A(3), 0, 8);
                     }
                 }
-                else if (_field is { } back)
+                else
                 {
-                    ShowMosesBackground(back.Background, _fieldCam.X, _fieldCam.Y);
+                    _fieldPicture = null;                    // 필드 화면으로(감사5 D9)
                     _fieldPictureCover = 0;
                 }
-                if (A(2) > 0) HoldSlotTicks(A(2));           // 전환 물체 +0x58 이 설 때까지 슬롯 — 줄은 안 막는다(909→205 7곳은 원본에서 디졸브와 함께)
                 break;
             case 407:
-            case 408:                                        // 층 감추기·보이기
-                foreach (var layerProp in _fieldProps.Where(o => o.Layer == A(0))) layerProp.Visible = a.Code == 408;
-                foreach (var layerWho in _fieldActors.Where(w => w.Layer == A(0))) layerWho.Visible = a.Code == 408;
+            case 408:                                        // 층 창 하나 감추기·보이기 — 층 창 +0x5c = 0/1(0x100ee690/0x100ee6d0, 감사5 D16)
+                // 자식의 제 보이기(304·305·210·211)는 그대로 둔다 — 전에는 그 층 것 하나하나의 Visible 을 바꿔 304 로 숨긴 물체까지 살아났고
+                // (Fld 0186 사건 6~8), 407 로 숨긴 층에서 307 로 옮겨 나간 물체가 계속 안 보였다(Fld 0376 사건 2·6).
+                if ((uint)A(0) < (uint)_fieldLayerHidden.Length) _fieldLayerHidden[A(0)] = a.Code == 407;
                 break;
             case 412:                                        // 화면 흑백 [0/1] — 회상 장면. 그리기가 (7R+2G+B)/10 회색 팔레트로 바꿔 그린다(0x100ee750 → 0x10026280, ba-14 E4)
                 _fieldGray = A(0) != 0;
@@ -945,13 +1097,32 @@ internal sealed unsafe partial class BattleSceneWindow
                 _screenWaveOwner = A(0) != 0 ? (object?)_field ?? _mosesChp : null;
                 break;
             case 900:
-                _fieldFade = (_lastTime, A(2), A(3), A(1) == 0);
-                _fieldFadeCover = Math.Clamp((int)A(4), 0, 8);   // 가리는 층 수 — 8 이면 다 가린다
-                // 덮기(a2)·걷어내기(a3)가 끝날 때까지 슬롯이 산다(전환 물체 +0x58, 0x100f26ee) — 줄은 안 막고 뒤따르는 1 이 기다린다.
+            {
+                int cover900 = Math.Clamp((int)A(4), 0, 8);   // 가리는 층 수 — 8 이면 다 가린다
+                // a0 ≠ 0(원래 화면으로 돌아오기)이면 남은 그림(앞 900 의 단색·404 그림)을 치운다(끝 0x100f26ee 의 0x100f20d0 — 여기서는
+                // 밝아지는 동안 필드가 보이게 처음에 치운다). a5 > 0 이면 Bgr a5 를 새 남은 그림(가림 a4)으로 두고 그 그림으로 밝아진다
+                // (0x100f2243~0x100f225d · 0x100f2735~0x100f2746, 감사5 D7 — Fld 0233 회상 컷 92·91·90, 0411 엔딩 251).
+                if (A(0) != 0)
+                {
+                    _fieldPicture = null;
+                    _fieldPictureCover = 0;
+                    if (A(5) > 0 && ReadBackground(A(5)) is { } picture900)
+                    {
+                        _fieldPicture = picture900;
+                        _fieldPictureCover = cover900;
+                    }
+                }
+                _fieldWipe = null;                            // 전환 물체는 하나뿐이다([0x101c0014])
+                // 무늬(0x100f1fc0): 0 흰(0x7fff/0xffff) · 1 검정 · 2 빨강(0x7c00/0xf800) 단색(감사5 D13).
+                uint color900 = A(1) switch { 0 => 0xFFFFFFFF, 2 => 0xFFFF0000, _ => 0xFF000000 };
+                _fieldFade = (_lastTime, Math.Max(0, (int)A(2)), Math.Max(0, (int)A(3)), color900, A(0) != 0);
+                _fieldFadeCover = cover900;
+                // 눈금이 63 에 닿을 때(a2 + a3 틱)까지 슬롯이 산다(전환 물체 +0x58, 0x100f26ee) — 줄은 안 막고 뒤따르는 1 이 기다린다.
                 // Fld 0012 사건 4 의 900[1,1,0,45,8] → 517[100,60] → 1 → 2[30] → 600 은 밝아지기와 음악 페이드가 <b>함께</b> 돌고,
                 // 둘 다 끝난 뒤 1초 쉬고 첫 대사가 뜬다(전에는 걷어내기를 안 기다려 밝아지는 도중에 대사가 떴다).
-                HoldSlotTicks(A(2) > 0 ? A(2) : A(3));
+                HoldSlotTicks(Math.Max(0, (int)A(2)) + Math.Max(0, (int)A(3)));
                 break;
+            }
             case 512:                                        // BGM 바꾸기 — 새 곡은 <b>옛 곡의 지금 크기</b>로 시작한다(0x100eed8a, 옛 곡이 없으면 0)
                 // 512 358곳 중 346곳이 바로 뒤 517 로 키운다 — 0(또는 줄여 둔 크기)에서 서서히 커지는 연출이다.
                 // 대사 건너뛰기 중([0x101bffb0] ≠ 0)이면 원본은 통째로 무시한다(0x100eed6d~0x100eed74, 감사4 M4).
@@ -1165,8 +1336,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>화면을 옮긴다 — 배경도 그 자리부터 다시 잘라 온다.</summary>
     private void MoveFieldCamera(int x, int y)
     {
-        _fieldCam = (Math.Max(0, x), Math.Max(0, y));
-        if (_field is { } field) ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
+        _fieldCam = ClampFieldCam(x, y);                     // 배경 안으로(감사5 D2)
+        if (_field is { } field && _fieldBg is null) ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
     }
 
     /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 물체.</summary>
@@ -1176,6 +1347,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 인물.</summary>
     private FieldActor? FieldActorOf(int value) =>
         value >= 10000 ? _fieldActors.FirstOrDefault(a => a.Key == value - 10000) : null;
+
+    /// <summary>
+    /// 걷기·서기 모션을 건다 — 다른 모션이면 틱 0 부터, 같은 모션이 도는 중이면 그대로(0x10027090, 감사5 D19).
+    /// 전에는 MotionStart 를 안 고쳐 걷기 첫 걸음이 아무 장에서나 시작했다.
+    /// </summary>
+    private void SetActorMotion(FieldActor who, int motion)
+    {
+        if (who.Motion == motion) return;
+        who.Motion = motion;
+        who.MotionStart = _lastTime;
+    }
 
     /// <summary>걷는 중인 인물을 한 걸음 옮긴다 — 매 틱 선형 보간이다.</summary>
     private void StepFieldActors()
@@ -1190,7 +1372,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 actor.Y = walk.ToY;
                 if (walk.EndMotion >= 0)                      // −1 = 끝날 때 모션을 안 건드린다(202 인자 5 = 0 · 205·206)
                 {
-                    actor.Motion = walk.EndMotion;
+                    SetActorMotion(actor, walk.EndMotion);
                     actor.Hold = false;
                     actor.Mirror = walk.EndMirror;
                 }
@@ -1438,32 +1620,108 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MosesOrigin();
 
         FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (_mosesBg is { } bg)
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
-
         // 필드 화면은 640×480 틀 안이 전부다 — 물체·인물이 그 밖으로 새지 않게 자른다.
         _uiClip = (ox, oy, MosesW, MosesH);
 
-        // 덮기(900)가 가리는 층은 a4 까지다 — 8 이면 다 가리지만 자료의 131번은 그보다 작다.
-        // 그 위의 층은 덮개보다 <b>나중에</b> 그려서 안 가려진다.
-        int cover = _fieldFade is not null ? _fieldFadeCover : 8;
-        DrawFieldLayers(ox, oy, _fieldPictureCover > 0 ? _fieldPictureCover : int.MinValue, cover);   // 그림에 묻힌 층은 건너뛴다
+        // 원본 매 틀 그리기 0x100ebe20 의 차례(감사5 D4·D12):
+        //  전환 물체가 있으면 그것 → 층 (가림)~7 을 산 채로(0x100ebe66~0x100ebea1),
+        //  아니면 남은 그림 → 층 (가림)~7(0x100ebeb9~), 아니면 필드 나무 전체(0x100ec022),
+        //  그다음 <b>창 나무(대사·고르기)</b>(0x100ec02a) — 대사창은 늘 전환·덮개 <b>위</b>다. 전에는 덮개를 대사창 뒤에 칠해
+        //  검정 31단계면 대사가 새까맣게 사라졌다(Fld 0012 사건 3 끝 900[0,1,30,0,8] → 600 따위 약 150번).
+        StepFieldFade();
+        if (_fieldWipe is { } wipe && DrawFieldWipe(ox, oy))
+            DrawFieldLayers(ox, oy, Math.Max(wipe.Cover, _fieldPicture != null ? _fieldPictureCover : 0), 9);
+        else if (_fieldFade is not null)
+        {
+            // 덮기(900)가 가리는 층은 a4 까지다 — 그 위 층은 덮개보다 나중에 그려 안 가려진다.
+            // 원본은 시작 때 찍은 사진을 섞지만(감사5 D11) 여기서는 산 화면 위에 덮개를 얹는다.
+            int start = DrawFieldScene(ox, oy, _fieldFadeCover);
+            DrawFieldFade(ox, oy);
+            DrawFieldLayers(ox, oy, Math.Max(_fieldFadeCover, start), 9);
+        }
+        else DrawFieldScene(ox, oy, 9);
 
         DrawTalk();
         DrawFieldChoices();
         _uiClip = null;
         ApplyScreenWave(ox, oy, (int)(_lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)
-        DrawFieldWipe(ox, oy);
-        DrawFieldFade(ox, oy);
-        if (cover < 8)
-        {
-            _uiClip = (ox, oy, MosesW, MosesH);
-            DrawFieldLayers(ox, oy, Math.Max(cover, _fieldPictureCover), int.MaxValue);
-            _uiClip = null;
-        }
         DrawToast();
+    }
+
+    /// <summary>
+    /// 전환·덮개 없는 필드 장면을 층 <paramref name="to"/> 아래까지 그린다 — 남은 그림이 있으면 그 그림과 층 (가림)~,
+    /// 없으면 조각·배경과 층 0~. 그린 첫 층을 돌려준다.
+    /// </summary>
+    private int DrawFieldScene(int ox, int oy, int to)
+    {
+        int start = 0;
+        if (_fieldPicture is { } picture)
+        {
+            // 남은 그림은 화면 (0,0)에 따로 그린다 — 필드 카메라는 안 건드린다(감사5 D8).
+            for (int y = 0; y < MosesH; y++)
+                for (int x = 0; x < MosesW; x++)
+                    SetPixel(ox + x, oy + y, picture[y * MosesW + x] | 0xFF000000);
+            start = _fieldPictureCover;
+        }
+        else DrawFieldBackdrop(ox, oy);
+        DrawFieldLayers(ox, oy, start, to);
+        return start;
+    }
+
+    /// <summary>색 키 노랑인가 — 원본 표면 키 0x7fe0(555)/0xffe0(565)(<c>0x10002f9c</c>·<c>0x10004154</c>). 565 로 줄였을 때 키와 같으면 뚫는다.</summary>
+    private static bool IsFieldKey(uint c) => (c & 0x00F8FCF8) == 0x00F8FC00;
+
+    /// <summary>
+    /// 필드 배경 — B 덩이 조각을 <b>먼저</b> 그리고 배경은 노란 색 키를 뚫어 얹는다(감사5 D1).
+    /// </summary>
+    /// <remarks>
+    /// 원본 배경 창은 <c>Blt(…, DDBLT_KEYSRC=0x8000)</c>(<c>0x100eb785</c>)로 찍혀 노랑(0x7fe0/0xffe0)이 뚫리고, 조각은 뿌리 창 머리에
+    /// 끼워져(<c>0x10001650(…,1)</c>) 배경보다 먼저 — 곧 노란 창 너머로만 — 보인다. 조각의 내용은 카메라에 따라 시차로 밀린다:
+    /// <c>조각+0x54 = (조각그림폭 − 조각네모폭) × 뿌리x / (배경폭 − 640)</c>(세로도 같은 꼴, 배경폭이 640 이면 0 — <c>0x100ee152~0x100ee28a</c>),
+    /// 그림은 2×2 조각으로 감아 두른다(<c>0x100eb324~0x100eb65f</c>). <b>밀리는 방향(부호)과 네모의 화면 자리는 가설</b>이다 —
+    /// 뿌리x = −카메라x 이므로 그림을 왼쪽으로 민다(그림 x = 네모 x + 시차)로 읽었다.
+    /// 전에는 조각을 건너뛰고 배경을 불투명으로 칠해 22필드(Fld 0050·0108·0132·0207…)의 창이 샛노랬다.
+    /// </remarks>
+    private void DrawFieldBackdrop(int ox, int oy)
+    {
+        var (cx, cy) = _fieldCam;
+        if (_fieldBg is not { } bg)
+        {
+            if (_mosesBg is { } crop)                        // 배경을 통째로 못 읽었으면 예전처럼 잘라 둔 것을
+                for (int y = 0; y < MosesH; y++)
+                    for (int x = 0; x < MosesW; x++)
+                        SetPixel(ox + x, oy + y, crop[y * MosesW + x] | 0xFF000000);
+            return;
+        }
+        // 조각 — 나중 것이 먼저(앞에 끼움).
+        for (int i = _fieldPieces.Count - 1; i >= 0; i--)
+        {
+            var p = _fieldPieces[i];
+            int shiftX = bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0;
+            int shiftY = bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0;
+            for (int y = 0; y < p.H; y++)
+            {
+                int sy = p.Y1 + y - cy;
+                if ((uint)sy >= MosesH) continue;
+                int py = ((y + shiftY) % p.PicH + p.PicH) % p.PicH;
+                for (int x = 0; x < p.W; x++)
+                {
+                    int sx = p.X1 + x - cx;
+                    if ((uint)sx >= MosesW) continue;
+                    int px = ((x + shiftX) % p.PicW + p.PicW) % p.PicW;
+                    SetPixel(ox + sx, oy + sy, p.Px[py * p.PicW + px] | 0xFF000000);
+                }
+            }
+        }
+        for (int y = 0; y < MosesH && y + cy < bg.H; y++)
+        {
+            int row = (y + cy) * bg.W + cx;
+            for (int x = 0; x < MosesW && x + cx < bg.W; x++)
+            {
+                uint c = bg.Px[row + x];
+                if (!IsFieldKey(c)) SetPixel(ox + x, oy + y, c | 0xFF000000);
+            }
+        }
     }
 
     /// <summary>
@@ -1497,35 +1755,68 @@ internal sealed unsafe partial class BattleSceneWindow
         return float.NaN;
     }
 
+    /// <summary>그 층(−1~8)이 층 창으로 보이나 — 층 8 은 층 7 창 안(+0x170)이라 7 이 숨으면 함께 숨는다. −1 은 배경 아래라 안 보인다(감사5 D16·D17).</summary>
+    private bool FieldLayerShown(int layer) =>
+        layer is >= 0 and <= 8 && !_fieldLayerHidden[layer] && !(layer == 8 && _fieldLayerHidden[7]);
+
+    /// <remarks>
+    /// 층 창 0~7 을 차례로, <b>한 층 안에 물체·인물을 함께</b> 그린다(감사5 D3) — 차례 값(<c>Order</c>)이 작은 것부터:
+    /// 파일 인물(뒤 번호부터) → 파일 물체(뒤 번호부터) → 213·307 로 옮겨 온 것(옮긴 차례). 302 새 물체는 층 7 맨 아래.
+    /// 층 8 은 층 7 과 함께, 그 층의 맨 아래로 그린다(감사5 D17). 전에는 물체를 전 층 먼저, 인물을 그 뒤 전 층 그려
+    /// 높은 층 물체(앞 기둥·등불)가 낮은 층 인물 뒤로 숨었다(178쌍/46필드).
+    /// </remarks>
     private void DrawFieldLayers(int ox, int oy, int from, int to)
     {
         from = Math.Max(from, 0);
-        foreach (var prop in _fieldProps.Where(o => o.Visible && o.Layer >= from && o.Layer < to).OrderBy(o => o.Layer))
+        var items = new List<(int Layer, int Sub, long Order, FieldProp? Prop, FieldActor? Actor)>();
+        foreach (var prop in _fieldProps)
         {
-            var (px, py) = FieldScreenAt(prop.Layer, prop.X, prop.Y);
-            int tick = (int)((_lastTime - prop.Start) * TicksPerSecond);
-            // 모션의 섞기 키(종류 3) — 17 은 더하기 합성이다(분석-UI 「섞기 방식 17」). 등불 빛(Obs 528 따위)이 이것이라
-            // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
-            int key = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0;
-            // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058), 1~7 은 반투명 — 돌문(Obs 1233, Fld 0354)이 8→1 로 옅어지며 열린다.
-            DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, BlendOf(key), fade: BlendFade(key));
-            // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
-            // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
-            DrawUnitLayers(UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
+            int eff = Math.Min(prop.Layer, 7);
+            if (prop.Visible && FieldLayerShown(prop.Layer) && eff >= from && eff < to)
+                items.Add((eff, prop.Layer == 8 ? 0 : 1, prop.Order, prop, null));
         }
+        foreach (var actor in _fieldActors)
+        {
+            int eff = Math.Min(actor.Layer, 7);
+            if (actor.Visible && FieldLayerShown(actor.Layer) && eff >= from && eff < to)
+                items.Add((eff, actor.Layer == 8 ? 0 : 1, actor.Order, null, actor));
+        }
+        items.Sort((a, b) => a.Layer != b.Layer ? a.Layer.CompareTo(b.Layer) : a.Sub != b.Sub ? a.Sub.CompareTo(b.Sub) : a.Order.CompareTo(b.Order));
+        foreach (var item in items)
+        {
+            if (item.Prop is { } prop) DrawFieldProp(ox, oy, prop);
+            else if (item.Actor is { } actor) DrawFieldActor(ox, oy, actor);
+        }
+    }
 
-        foreach (var actor in _fieldActors.Where(a => a.Visible && a.Layer >= from && a.Layer < to).OrderBy(a => a.Layer))
-            if (_db?.Character(actor.ChrCode) is { SpriteId: > 0 } pc)
-            {
-                var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
-                int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
-                if (actor.Hold && UiFor(pc.SpriteId)?.MotionLength(actor.Motion) is > 0 and var holdLength)
-                    actorTick = Math.Min(actorTick, holdLength - 1);   // 한 바퀴 돈 뒤 마지막 장에 멈춘다
-                // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
-                var actorBlend = UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
-                // 좌우반전(걷기 방향 3 · 208 인자 3 · 212)을 넘겨야 한다 — 빠져 있어 오른쪽으로 걷는 인물이 왼쪽을 보고 뒷걸음질 쳤다(사용자 보고: Fld 0076).
-                DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha, mirror: actor.Mirror);
-            }
+    private void DrawFieldProp(int ox, int oy, FieldProp prop)
+    {
+        var (px, py) = FieldScreenAt(prop.Layer, prop.X, prop.Y);
+        int tick = (int)((_lastTime - prop.Start) * TicksPerSecond);
+        // 302 a2 ≠ 1 은 모션 끝 장에 선다 — 섞기 키(BlendAt)도 같은 틱으로(감사5 D15). 돌문(Obs 1233)이 옅어졌다 다시 불투명해지지 않게.
+        if (prop.Hold && UiFor(prop.Obs)?.MotionLength(prop.Motion) is > 0 and var propLength)
+            tick = Math.Min(tick, propLength - 1);
+        // 모션의 섞기 키(종류 3) — 17 은 더하기 합성이다(분석-UI 「섞기 방식 17」). 등불 빛(Obs 528 따위)이 이것이라
+        // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
+        int key = UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0;
+        // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058), 1~7 은 반투명 — 돌문(Obs 1233, Fld 0354)이 8→1 로 옅어지며 열린다.
+        DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, BlendOf(key), loop: !prop.Hold, fade: BlendFade(key));
+        // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
+        // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
+        DrawUnitLayers(UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
+    }
+
+    private void DrawFieldActor(int ox, int oy, FieldActor actor)
+    {
+        if (_db?.Character(actor.ChrCode) is not { SpriteId: > 0 } pc) return;
+        var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
+        int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
+        if (actor.Hold && UiFor(pc.SpriteId)?.MotionLength(actor.Motion) is > 0 and var holdLength)
+            actorTick = Math.Min(actorTick, holdLength - 1);   // 한 바퀴 돈 뒤 마지막 장에 멈춘다
+        // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
+        var actorBlend = UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
+        // 좌우반전(걷기 방향 3 · 208 인자 3 · 212)을 넘겨야 한다 — 빠져 있어 오른쪽으로 걷는 인물이 왼쪽을 보고 뒷걸음질 쳤다(사용자 보고: Fld 0076).
+        DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha, mirror: actor.Mirror);
     }
 
     private (int X, int Y) FieldScreenAt(int layer, double x, double y) =>
@@ -1535,22 +1826,41 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 걷어내는 전환을 건다 — <paramref name="toPicture"/> 면 지금 화면에서 그림으로 가고(그림이 남는다),
     /// 아니면 그림에서 지금 화면으로 돌아온다.
     /// </summary>
-    private void BeginFieldWipe(int kind, int way, int ticks, bool toPicture, int background)
+    /// <remarks>
+    /// <paramref name="cover"/> 는 전환이 가리는 층 수 — 사진에는 배경과 층 0~(가림−1)만 담고 윗층은 전환 위에 산 채로 그린다(감사5 D12).
+    /// 카메라는 안 건드린다(감사5 D8). 돌아오는 쪽(a0 ≠ 0)은 먼저 남은 그림을 걷어 필드 배경을 되살리고, 그 필드 장면을 새로 그려
+    /// 드러날 그림으로 쓴다(감사5 D9 — 전에는 바탕·덮개가 둘 다 그 그림이라 전환이 안 보이고 그림이 남았다: Fld 0111 사건 5·0376 사건 3).
+    /// </remarks>
+    private void BeginFieldWipe(int kind, int way, int ticks, bool toPicture, int background, int cover = 8)
     {
-        var shot = CaptureFieldScreen();
-        var picture = ReadBackground(background) ?? shot;
-        _fieldWipe = new FieldWipe(kind, way, ticks, _lastTime, toPicture ? shot : picture, toPicture ? picture : shot);
-        HoldSlotTicks(ticks);   // 전환이 끝날 때까지 슬롯 — 줄은 안 막는다(903→603 은 전환 중에 글이 뜬다). 뒤따르는 1 이 기다린다
-        // 그림으로 갔으면 전환이 끝난 뒤에도 그 그림이 화면에 남아 있어야 한다.
+        cover = Math.Clamp(cover, 0, 8);
+        _fieldFade = null;                                   // 전환 물체는 하나뿐이다([0x101c0014])
+        uint[] under, over;
         if (toPicture)
         {
-            ShowMosesBackground(background);
-            _fieldCam = (0, 0);
-            _fieldCamMove = null;
+            under = RenderFieldShot(cover);                  // 지금 장면(남은 그림이 있으면 그 그림)
+            var picture = ReadBackground(background);
+            over = picture ?? under;
+            // 그림으로 갔으면 전환이 끝난 뒤에도 그 그림이 남는다 — 남은 그림 + 가림.
+            if (picture != null)
+            {
+                _fieldPicture = picture;
+                _fieldPictureCover = cover;
+            }
         }
+        else
+        {
+            var picture = ReadBackground(background) ?? _fieldPicture;
+            _fieldPicture = null;
+            _fieldPictureCover = 0;
+            over = RenderFieldShot(cover);                   // 되살린 필드 화면
+            under = picture ?? over;
+        }
+        _fieldWipe = new FieldWipe(kind, way, ticks, _lastTime, under, over, cover);
+        HoldSlotTicks(ticks);   // 전환이 끝날 때까지 슬롯 — 줄은 안 막는다(903→603 은 전환 중에 글이 뜬다). 뒤따르는 1 이 기다린다
     }
 
-    /// <summary>지금 필드 화면(640×480)을 그대로 찍는다 — 걷어내는 전환이 이 그림에서 시작한다.</summary>
+    /// <summary>지금 필드 화면(640×480)을 그대로 찍는다.</summary>
     private uint[] CaptureFieldScreen()
     {
         var (ox, oy) = MosesOrigin();
@@ -1560,18 +1870,61 @@ internal sealed unsafe partial class BattleSceneWindow
         return shot;
     }
 
-    /// <summary>전환이 도는 동안은 화면 전체가 전환 것이다 — 바탕을 깔고 걷힌 만큼 덮는 그림을 올린다.</summary>
-    private void DrawFieldWipe(int ox, int oy)
+    /// <summary>
+    /// 전환 사진 — 필드 장면(남은 그림 또는 조각·배경)과 층 <paramref name="cover"/> 아래까지만 뒷면에 그려 찍는다(<c>0x10022490</c>).
+    /// 대사창·고르기·토스트는 안 들어간다(감사5 D12 — 전에는 지난 틀 화면 전부를 찍어 사진에 대사창이 박혔다).
+    /// </summary>
+    private uint[] RenderFieldShot(int cover)
     {
-        if (_fieldWipe is not { } wipe) return;
+        var (ox, oy) = MosesOrigin();
+        var saved = CaptureFieldScreen();
+        var clip = _uiClip;
+        FillRect(ox, oy, MosesW, MosesH, 0xFF000000);
+        _uiClip = (ox, oy, MosesW, MosesH);
+        DrawFieldScene(ox, oy, cover);
+        _uiClip = clip;
+        var shot = CaptureFieldScreen();
+        for (int y = 0; y < MosesH; y++)
+            Array.Copy(saved, y * MosesW, _fb, (oy + y) * BoardWidth + ox, MosesW);
+        return shot;
+    }
+
+    /// <summary>전환이 도는 동안은 가림 아래가 전환 것이다 — 바탕을 깔고 걷힌 만큼 덮는 그림을 올린다. 끝났으면 false.</summary>
+    private bool DrawFieldWipe(int ox, int oy)
+    {
+        if (_fieldWipe is not { } wipe) return false;
         int tick = (int)((_lastTime - wipe.Start) * TicksPerSecond);
-        if (tick >= wipe.Ticks) { _fieldWipe = null; return; }
+        if (tick >= wipe.Ticks) { _fieldWipe = null; return false; }
 
         switch (wipe.Kind)
         {
             case 901: DrawSlideWipe(ox, oy, wipe, tick); break;
             case 903: DrawCombWipe(ox, oy, wipe, tick); break;
+            case 909: DrawDissolveWipe(ox, oy, wipe, tick); break;
             default: DrawStreakWipe(ox, oy, wipe, tick); break;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 909 겹쳐 디졸브 — 바닥 그림 위에 다른 그림을 <c>k = t·8/a2 + 1</c> 단계(1~8)로 겹친다(<c>0x1002cc60</c>/<c>0x1002ccd0</c>, 감사5 D5).
+    /// 방식 1~7 은 알파 4k/31, 8 은 불투명.
+    /// </summary>
+    private void DrawDissolveWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        int k = Math.Min(8, tick * 8 / Math.Max(1, wipe.Ticks) + 1);
+        uint a = k >= 8 ? 256u : (uint)(4 * k * 256 / 31);
+        var under = wipe.Base ?? wipe.Over;
+        for (int y = 0; y < MosesH; y++)
+        {
+            int row = (oy + y) * BoardWidth + ox;
+            if (oy + y < 0 || row + MosesW > _fb.Length || ox < 0) continue;
+            for (int x = 0; x < MosesW; x++)
+            {
+                uint b = under[y * MosesW + x], o = wipe.Over[y * MosesW + x];
+                uint Mix(int s) => ((b >> s & 0xFF) * (256 - a) + (o >> s & 0xFF) * a) >> 8;
+                _fb[row + x] = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+            }
         }
     }
 
@@ -1635,25 +1988,53 @@ internal sealed unsafe partial class BattleSceneWindow
             }
     }
 
-    /// <summary>덮기·걷기 — 눈금 0(안 덮임)~31(다 덮임)을 그대로 옮긴다.</summary>
+    /// <summary>
+    /// 900 의 눈금(0~63) — 0 에서 <c>31/a2</c> 씩 31 까지(a2 = 0 이면 처음부터 31), 그다음 <c>31/a3</c> 씩 63 까지(a3 = 0 이면 곧장 63)
+    /// (<c>0x1002a030</c>, 감사5 D10).
+    /// </summary>
+    private static int FieldFadeLevel(int tick, int coverTicks, int uncoverTicks)
+    {
+        if (tick < coverTicks) return Math.Min(31, 31 * tick / coverTicks);
+        return uncoverTicks > 0 ? Math.Min(63, 31 + 31 * (tick - coverTicks) / uncoverTicks) : 63;
+    }
+
+    /// <summary>
+    /// 눈금이 63 에 닿으면 페이드 물체가 끝난다(<c>+0x58 = 1</c>, <c>0x1002a0cb</c> → <c>0x100f26ee</c>): a0 ≠ 0 이면 그냥 걷히고,
+    /// a0 = 0 이면 <b>단색 그림이 남은 그림으로 남는다</b>(가림 a4) — 그 뒤 405·900[1,…]·전환이 걷는다.
+    /// 전에는 a0 를 안 보고 a2 > 0 이면 덮고 끝, a2 = 0 이면 a3 틱에 걸쳐 걷어, Fld 0132 의 흰 번쩍 [1,0,5,5] 이 흰 화면으로 굳고
+    /// Fld 0015·0081 의 [0,…,0,a3] 은 덮여 있어야 할 화면이 다시 밝아졌다.
+    /// </summary>
+    private void StepFieldFade()
+    {
+        if (_fieldFade is not { } fade) return;
+        int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
+        if (FieldFadeLevel(tick, fade.CoverTicks, fade.UncoverTicks) < 63) return;
+        _fieldFade = null;
+        if (fade.Back) return;
+        var solid = new uint[MosesW * MosesH];
+        Array.Fill(solid, fade.Color);
+        _fieldPicture = solid;
+        _fieldPictureCover = _fieldFadeCover;
+    }
+
+    /// <summary>덮기·걷기 — 세기 = 눈금 &lt; 32 이면 눈금, 이상이면 a0 ≠ 0 일 때 63 − 눈금(걷기), a0 = 0 이면 31(덮인 채)(<c>0x1002a0e0</c>).</summary>
     private void DrawFieldFade(int ox, int oy)
     {
         if (_fieldFade is not { } fade) return;
         int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
-        int level;
-        if (fade.CoverTicks > 0) level = Math.Min(31, 31 * tick / fade.CoverTicks);          // 덮는 중
-        else if (fade.UncoverTicks > 0) level = Math.Max(0, 31 - 31 * tick / fade.UncoverTicks);  // 걷는 중
-        else level = 31;
-        if (level <= 0) { _fieldFade = null; return; }
+        int level = FieldFadeLevel(tick, fade.CoverTicks, fade.UncoverTicks);
+        int power = level < 32 ? level : fade.Back ? 63 - level : 31;
+        if (power <= 0) return;
 
+        uint color = fade.Color;
         for (int y = oy; y < oy + MosesH; y++)
             for (int x = ox; x < ox + MosesW; x++)
             {
                 uint c = _fb[y * BoardWidth + x];
                 uint Ch(int shift)
                 {
-                    uint v = c >> shift & 0xFF;
-                    return fade.White ? v + (255 - v) * (uint)level / 31 : v * (uint)(31 - level) / 31;
+                    int v = (int)(c >> shift & 0xFF), to = (int)(color >> shift & 0xFF);
+                    return (uint)(v + (to - v) * power / 31);
                 }
                 _fb[y * BoardWidth + x] = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
             }

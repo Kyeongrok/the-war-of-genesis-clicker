@@ -157,6 +157,12 @@ internal sealed unsafe partial class BattleSceneWindow
         if (EventsBusy) return;
         RunEvents();                 // 틱이 안 흐르는 사이에도 조건(턴 수 따위)은 본다
         if (EventsBusy) return;
+        // 자동 저장(슬롯 20) — 그 틱 이벤트 검사가 끝나고 이벤트가 안 돌 때, 아직 그 내 차례의 조종 상태면(상태 22 첫 진입, 감사5 S6).
+        if (_autoSaveFor >= 0)
+        {
+            if (_autoSaveFor != _turn) _autoSaveFor = -1;          // 그새 차례가 넘어갔다 — 원본도 깃발을 저장 없이 지운다
+            else if (IsPlayerTurn && !_units[_turn].IsBusy) { _autoSaveFor = -1; AutoSave(); }
+        }
         // DUELDX_WIN=1 이면 시작하자마자 이긴 것으로 친다 — 전투 이어짐·진행 깃발·모세스 전환을 화면 밖에서 시험할 때 쓴다.
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "1")
         {
@@ -381,6 +387,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>불러온 뒤 이어 받을 차례 — 저장할 때 차례였던 인물. 없으면 −1.</summary>
     private int _resumeTurn = -1;
 
+    /// <summary>자동 저장을 걸어 둔 내 차례(원본 깃발 +0x4cd8) — 이벤트 검사 뒤 UpdateTurn 이 적는다. 없으면 −1(감사5 S6).</summary>
+    private int _autoSaveFor = -1;
+
     /// <param name="resume">
     /// 불러온 판의 차례를 이어 받는 것 — 턴 수만 맞추고(저장 때 하나 빼 둔 것), 이벤트 타이머·자동 회복은 이미 그 차례에 돌았으니 다시 안 돌린다.
     /// 원본도 판을 읽으면 차례 시작 처리 없이 상태 22 로 선다(0x100619c0).
@@ -397,9 +406,19 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 이벤트 타이머·자세 풀기는 틱에서 한다(AdvanceTick) — 원본 [+0x4cf0] 은 빈 틱마다 오르는 시간 틱이다(0x10067d36, fg-22).
             AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
+            // 기준 칸은 새 차례에만 — 이어 받는 차례는 세이브의 기준 칸(+0x4b8/+0x4ba)을 그대로 둔다. 전에는 여기서 지금 자리로 덮어
+            // 걸은 뒤 저장·불러오기면 걸음 비용이 사라졌다(감사5 S2).
+            _units[index].OriginCol = _units[index].Col;
+            _units[index].OriginRow = _units[index].Row;
         }
-        _units[index].OriginCol = _units[index].Col;
-        _units[index].OriginRow = _units[index].Row;
+        // 불러온 판의 카메라(감사5 S7) — 시작 카메라·페이드인 뒤, 되살린 차례가 서는 이 자리에서 놓는다. 카메라가 없는 옛 세이브는
+        // 되살린 내 유닛을 한 번 가운데로(AI 차례는 아래 CameraThen 이 옮긴다).
+        if (_loadCameraPending)
+        {
+            _loadCameraPending = false;
+            if (_loadCamera is { } cam) ApplySavedCamera(cam);
+            else if (resume && IsMine(_units[index])) CenterOnUnit(_units[index]);
+        }
         CancelTargeting();
         _heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
@@ -413,7 +432,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 자동 저장(슬롯 20) — 원본은 전투 시작·새 차례마다 깃발(+0x4cd8)을 세우고, 플레이어가 유닛을 고르는
             // 상태 22 에 처음 들어설 때 SaveGame(20) 한 뒤 지운다(0x1006acc0). AI 차례는 상태 10~12 가 카메라만 옮기고
             // 깃발을 저장 없이 지우므로 저장이 없다. 곧 「내 차례가 시작될 때마다 한 번」이다(분석-시스템메뉴 2.4).
-            AutoSave();
+            // 원본 순서는 틱++ → … → 갈래 3 이벤트 검사 → 상태 16 → 상태 22 첫 진입에서 SaveGame(20) 이라, 그 틱 이벤트를 다 본 뒤에 적힌다.
+            // 여기서 곧장 적으면 이벤트 검사(다음 틀 RunEvents)보다 앞서므로 깃발만 세우고 UpdateTurn 이 이벤트 뒤에 적는다(감사5 S6).
+            _autoSaveFor = index;
         }
         else
         {
@@ -749,7 +770,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
     /// </summary>
     private IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
-                                             List<(int Col, int Row)> path)
+                                             List<(int Col, int Row)> path, bool eventFinisher = false)
     {
         var a = _units[userIndex];
         // 이동 + 기술이면 진형을 다시 세우지 않는다 — 원본은 계산만 하고 결과를 안 읽는다(0x1005fa90·0x1005fd00, 분석-군단).
@@ -759,6 +780,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (bool _ in CenterUnitAndWait(a)) yield return true;
         foreach (var cell in path) a.Path.Enqueue(cell);
         while (a.IsBusy) yield return true;
+        foreach (bool _ in WaitFollowersStopped(userIndex)) yield return true;   // 걷던 부하가 다 선 뒤(감사5 L-A)
         CommitMove(a);
         _buffedAllies.Clear();
 
@@ -1070,10 +1092,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
         GainBuffExp(a);
-        PayWorkCost(a, w);
+        PayWorkCost(a, w, free: eventFinisher);   // 사건 207·909 는 +0xa4 = 1 — 비용 없이 SOUL 증가만(0x1007638c, 감사5 B2)
         // 기술 뒤 대장 자리를 「진형을 짠 자리」로 적어 둔다 — SyncFollowers 가 이 자리로 진형을 다시 세우지 않게.
         _formationAt[userIndex] = (a.Col, a.Row);
         _skillLeader = -1;
+        // 사건 207 의 쓰러짐 처리(0x1004e6d0)는 지금 차례 유닛([ctrl+0x4ce8])이면 HP 1 로 남긴다(0x1004e757~0x1004e765, 감사5 B3).
+        if (eventFinisher && (uint)_turn < _units.Length && _units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
 
         if (dying.Count > 0)
         {
@@ -1083,8 +1107,7 @@ internal sealed unsafe partial class BattleSceneWindow
             while (dying.Any(d => d.IsBusy)) yield return true;
             foreach (var d in dying)
             {
-                d.Alive = false;
-                PromoteFollower(Array.IndexOf(_units, d));   // 대장이 죽으면 첫 부하가 대장이 된다
+                MarkDead(d);                             // 대장이 죽으면 첫 부하가 대장이 된다(승계는 MarkDead 한 곳에서, 감사5 L-B)
             }
         }
         // 행동 끝 상태 21(0x100681a0) — 처치가 없어도 <b>매 행동마다</b> 레벨업을 보고, 그다음 갈래 1 검사(0x10068270)를 한다.
@@ -1104,9 +1127,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// work 끝처리 <c>0x10076380</c> — TP → SOUL → HP 차례로 비용을 빼고 행동 뒤 SOUL 을 올린다. 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
     /// 군단 부하도 같은 끝처리를 지난다(<c>0x10071e20</c> 은 부하면 차례 끝 검사만 건너뜀, 감사3 L1).
     /// </summary>
-    private void PayWorkCost(UnitState a, WorkData w)
+    private void PayWorkCost(UnitState a, WorkData w, bool free = false)
     {
         if (a.Data is not { } cost || _db is not { } db2) return;
+        // +0xa4 ≠ 0(사건 207·909)이면 TP·SOUL·HP 비용을 통째로 건너뛰고(0x10076384 jne 0x10076586) SOUL 증가만 한다(감사5 B2).
+        if (free) { AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 }); return; }
         a.Tp -= TpCostFor(a, cost, w.Id);
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),

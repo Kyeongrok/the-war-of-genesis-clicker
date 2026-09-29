@@ -106,11 +106,15 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; ReturnToSystemMenu(); return true; }   // 닫기 X
 
-        // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다)
+        // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다). 누르고 있으면 되풀이한다(UpdateSlotArrows).
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
         {
-            if (by < y + 16) ScrollSlots(-1);
-            else if (by >= y + SlotsH - 16) ScrollSlots(1);
+            int arrow = SlotArrowAt(bx, by);
+            if (arrow != 0)
+            {
+                ScrollSlots(arrow);
+                (_slotArrow, _slotArrowAt, _slotArrowTicks) = (arrow, _lastTime, 0);
+            }
             return true;
         }
 
@@ -134,6 +138,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 저장한 뒤에도 슬롯 창은 열린 채다 — 이어서 다른 칸에 저장할 수 있다(원본 vt[0x40] 다시 보이기, fg-22).
         // 실패 알림은 원본 문구(0x100372ae·0x10037693, 120틱): 빈 칸이면 「Error」, 덮어쓰기면 「Save」 머리에 「저장되지 않았습니다.」
+        // 저장할 수 없는 때(필드·챕터 사건 도중·내 차례 조종 상태가 아님)는 막는다 — 메뉴가 SAVE 를 꺼 두지만 한 번 더(감사5 S1 방어·S3·S4).
+        if (SaveBlockedReason is { } why) { _notice = (why, _lastTime + 40 / TicksPerSecond); return; }
         if (!SaveBattleTo(SlotPath(slot))) { _notice = ($"{(SlotHead(slot) != null ? "Save" : "Error")} — 저장되지 않았습니다.", _lastTime + 120 / TicksPerSecond); return; }
         Play(SoundSaved);
         // 원본은 120틱(4초)인데 너무 오래 떠 있다는 요청으로 40틱(약 1.3초)만 띄운다. 클릭하면 바로 닫힌다.
@@ -149,6 +155,35 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
     private void AutoSave() => SaveBattleTo(SlotPath(AutoSlot));
+
+    /// <summary>누르고 있는 스크롤 화살표(−1 위 · +1 아래 · 0 없음) · 누른 때 · 누른 뒤 센 틀 수.</summary>
+    private int _slotArrow;
+    private double _slotArrowAt;
+    private int _slotArrowTicks;
+
+    /// <summary>그 점이 스크롤 막대의 위(−1)·아래(+1) 화살표인가 — 아니면 0.</summary>
+    private int SlotArrowAt(int bx, int by)
+    {
+        var (x, y) = SlotsOrigin();
+        if (bx < x + 304 || bx >= x + 320 || by < y || by >= y + SlotsH) return 0;
+        return by < y + 16 ? -1 : by >= y + SlotsH - 16 ? 1 : 0;
+    }
+
+    /// <summary>
+    /// 화살표 누르고 있기 — 원본 화살표 단추(<c>0x10044960</c>/<c>0x10044b60</c>)는 누를 때 <c>0x10044a80</c> 이 <c>[+0x13c]=1</c> 과 0x2724 한 번,
+    /// 틀마다 <c>0x10044b00</c> 이 <c>[+0x13c]++</c> 해서 <b>10 을 넘으면 틀마다</b> 0x2724(<c>0x10044b0e cmp eax,0xa</c>), 떼면 0(감사5 S9).
+    /// 데모는 틀을 틱(초당 30)으로 세고, 메시지 하나를 한 줄로 본다(가설). 단추를 떼거나 화살표 밖으로 나가면 멈춘다.
+    /// </summary>
+    private void UpdateSlotArrows()
+    {
+        if (_slotArrow == 0) return;
+        if (!SlotsOpen || (Native.Win32.GetKeyState(0x01) & 0x8000) == 0 || SlotArrowAt(_mouse.X, _mouse.Y) != _slotArrow) { _slotArrow = 0; return; }
+        int held = (int)((_lastTime - _slotArrowAt) * TicksPerSecond);
+        // 누른 틀의 셈이 1 이고 틀마다 하나씩 오른다 — 셈 1 + t 가 10 을 넘는 틀(t ≥ 10)부터 틀마다 한 줄. 늦은 틀은 몇 줄 몰아서(최대 6).
+        for (int guard = 0; _slotArrowTicks < held && guard < 6; guard++)
+            if (1 + ++_slotArrowTicks > 10) ScrollSlots(_slotArrow);
+        if (_slotArrowTicks < held) _slotArrowTicks = held;
+    }
 
     private void UpdateSlotsHover(int bx, int by)
     {

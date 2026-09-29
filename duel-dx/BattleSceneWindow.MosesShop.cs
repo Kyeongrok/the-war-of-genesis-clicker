@@ -36,7 +36,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _shopMoney = 5000;
 
     /// <summary>상점 페이지를 연다 — 번호가 없으면 챕터의 기본 상점(아이템 0 · VT 1).</summary>
-    private void OpenMosesShop(int kind, int shopNo = -1)
+    /// <param name="quiet">장소(값 ≥ 20000)로 열 때 — 원본은 페이지 3 + <c>0x100fb1f0(0, n)</c> 뿐, 소리·효과가 없다(<c>0x100feff3</c>, 감사5 P2).</param>
+    private void OpenMosesShop(int kind, int shopNo = -1, bool quiet = false)
     {
         int no = shopNo >= 0 ? shopNo : kind == 1 ? _mosesChp?.VtShop ?? 3 : _mosesChp?.ItemShop ?? 4;
         string path = Path.Combine(AssetsFolder.Find("moses"), "shp", $"{no:D4}.shp");
@@ -51,9 +52,13 @@ internal sealed unsafe partial class BattleSceneWindow
         Array.Clear(_shopTop);
         _mosesPage = kind == 1 ? 4 : 3;
         _mosesPageAt = _lastTime;
-        StartFade();
         _mosesHover = -1;
-        Play(572);
+        if (quiet) { _mosesFade = 0; ResetMosesSlide(0); }
+        else
+        {
+            StartFade();
+            Play(572);
+        }
         ShowMosesBackground(40);
     }
 
@@ -93,7 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var (ox, oy) = MosesOrigin();
         int x = bx - ox, y = by - oy;
 
-        if (Hit(455, 430, 163, 27)) { Play(SoundShopLeave); MosesGoBack(); return true; }          // 나가기
+        if (Hit(455, 430, 163, 27)) { MosesGoBack(); return true; }          // 나가기 — Snd 576 은 뒤로 처리기의 상점 갈래가 낸다(0x10101d26)
         if (Hit(418, 294, 68, 27)) { _shopBuy.Clear(); _shopSell.Clear(); return true; }           // 취소(Reset)
         if (Hit(522, 294, 68, 27)) { ShopSettle(); return true; }                                  // 결제(Set)
 
