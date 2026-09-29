@@ -760,6 +760,7 @@ internal sealed unsafe partial class BattleSceneWindow
             7 => n == 0 ? "앞 가로 5칸" : $"폭 5칸 × 앞 {n + 1}줄",
             8 => $"대각선 X {n}칸",
             9 => $"앞 삼각형 {n}칸",
+            10 => "앞 ^ 모양 3칸(두 칸 앞·양 대각선)",
             _ => $"모양 {w.AreaShape}",
         };
         return $"대상: {who} · {aim} · 범위: {shape}";
