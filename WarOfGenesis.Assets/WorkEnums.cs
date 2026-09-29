@@ -32,6 +32,7 @@ public enum AreaShape : byte
     [Description("7 폭 5 줄")] Line5 = 7,
     [Description("8 대각선 X")] DiagonalX = 8,
     [Description("9 45° 삼각형")] Triangle = 9,
+    [Description("10 ^ 호(겨눈 칸 앞·양옆, 데모 추가)")] Arc = 10,
 }
 
 /// <summary>사거리 종류 — work <c>+0x8</c>(rangeKind).</summary>

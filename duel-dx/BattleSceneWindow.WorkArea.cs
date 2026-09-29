@@ -119,12 +119,15 @@ internal sealed unsafe partial class BattleSceneWindow
             7 => axis >= 0 && a <= 2,                   // 폭 5 줄
             8 => Math.Abs(dx) == Math.Abs(dy),          // 대각선 X
             9 => axis >= 1 && a <= axis - 1,            // 45° 삼각형 — 앞으로 한 칸 간 뒤부터 벌어진다
+            // 10 = ^ 호(데모 추가, 원본 표는 9 까지) — 겨눈 칸 기준 한 칸 더 앞과 양옆. 파(gm-skil-14)가 옆 칸을 겨누면 시전자 기준
+            // 12시(두 칸 앞)·11시·1시(대각선)가 된다. 겨눈 칸 자체는 안 든다.
+            10 => axis == 1 && side == 0 || axis == 0 && a == 1,
             _ => dx == 0 && dy == 0,
         };
     }
 
     /// <summary>방향을 쓰는 모양인가 — 사거리를 그릴 때는 네 방향을 합쳐야 한다.</summary>
-    private static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9;
+    private static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9 or 10;
 
     /// <summary>
     /// 그 모양이 <b>앞으로 간 거리만</b> 재는가 — 3·5·6·7·9 가 그렇다(<c>0x100dafe0</c>·<c>0x100db310</c>).
