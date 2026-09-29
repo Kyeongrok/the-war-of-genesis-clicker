@@ -979,23 +979,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
-            var missedFirst = new HashSet<int>();
             for (int hit = 0; hit < (ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
             {
                 if (hit > 0)
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
-                // 한 동작의 여러 발(리차드 총 3연사 따위)은 명중을 <b>첫 발에서 대상마다 한 번</b>만 굴린다 — 발마다 굴리면
-                // 명중 80% 에도 3발 중 1~2발이 Miss 로 떴다(fg-23, 사용자 보고). 첫 발이 빗나간 대상은 나머지 발도 넘어가고, 맞았으면 다 맞는다.
-                if (hit == 0) missedFirst.Clear();
-                foreach (int ti in targets)
-                {
-                    if (hit > 0 && missedFirst.Contains(ti)) continue;
-                    _sureHit = hit > 0;
-                    ApplyWork(a, hitWork, _units[ti], dying);
-                    _sureHit = false;
-                    if (hit == 0 && _lastWorkMissed) missedFirst.Add(ti);
-                }
+                foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
                 // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
                 if (hit == 0 && w.IsDamage && a.Data is { } od)
                     foreach (var (oc, or) in AreaCells(w, a, col, row).Distinct())
@@ -1028,12 +1017,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (w.Id == SunBlastWork) _shakes.Add((_lastTime, _lastTime + 6 / TicksPerSecond, 6, false));
                 if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{_lastTime:F2} extra hit work {w.Id} after {gap} ticks" + Environment.NewLine);
                 foreach (int ti in (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)))
-                    if (_units[ti].Alive && !dying.Contains(_units[ti]) && !missedFirst.Contains(ti))   // 첫 발 명중을 따른다(fg-23)
-                    {
-                        _sureHit = true;
-                        ApplyWork(a, hitWork, _units[ti], dying);
-                        _sureHit = false;
-                    }
+                    if (_units[ti].Alive && !dying.Contains(_units[ti])) ApplyWork(a, hitWork, _units[ti], dying);
             }
             // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 쓰러질 인물은 밀지 않는다.
             if (BiWorks.Contains(w.Id) || DynamicCrashWorks.Contains(w.Id))
@@ -1159,19 +1143,12 @@ internal sealed unsafe partial class BattleSceneWindow
         if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
     }
 
-    /// <summary>다음 <see cref="ApplyWork"/> 는 명중 굴림 없이 맞는다 — 여러 발 동작의 둘째 발부터(fg-23).</summary>
-    private bool _sureHit;
-
-    /// <summary>방금 <see cref="ApplyWork"/> 가 빗나갔나(Miss 를 띄웠나).</summary>
-    private bool _lastWorkMissed;
-
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
-        _lastWorkMissed = false;
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
-        var (amount, result, crit) = _db.Resolve(_rng, CombatData(a)!, a.Tp, AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), sureHit: _sureHit);
+        var (amount, result, crit) = _db.Resolve(_rng, CombatData(a)!, a.Tp, AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
 
         if (result == 1)
         {
@@ -1207,7 +1184,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!w.IsDamage)
         {
             // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).
-            if (result == 3) { _lastWorkMissed = true; ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor); return; }
+            if (result == 3) { ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor); return; }
             ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
             MarkBuffed(a, t, w);
             if (t != a) PlayHitReaction(t, damaged: false);
@@ -1217,7 +1194,6 @@ internal sealed unsafe partial class BattleSceneWindow
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
         if (result == 3 || amount <= 0)
         {
-            _lastWorkMissed = result == 3;                  // 피해가 0 으로 깎인 것은 명중은 했다 — 나머지 발은 친다
             ShowNumber(t, _db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
             // 빗나가도 원본은 상태이상을 따로 굴리고(0x1007a285 → 0x1007bcc0) 피격 가속(10)도 건다(0x10079f59, 결과 2·3 모두) — fg-21 ⑪.
             RushTp(t);

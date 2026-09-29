@@ -761,15 +761,14 @@ public sealed class GameDatabase
     /// 한 번의 판정 <c>0x1007b6f0</c>. 반환: (양, 결과 1 회복 / 2 맞음 / 3 빗나감, 치명).
     /// 피해 = (Num[3] − RDP) × 공격력 / Num[3] → 흔들기 ±Num[22]/2 % → 치명(rand%100 ≤ att+0x2d) × Num[23]/100.
     /// 회복 = 최대 HP × 위력 / 100. 자세(방어·회피)는 넣었고 상태이상 보정은 뺐다.
-    /// <paramref name="sureHit"/> 면 명중 굴림을 건너뛴다 — 한 동작의 여러 발(총 3연사 따위)은 첫 발이 맞으면 나머지도 맞는다(fg-23).
     /// </summary>
     public (int Amount, int Result, bool Critical) Resolve(Random rng, CharacterData a, int aTp, int aSoul,
                                                           CharacterData d, int dTp, int dHp, int dMaxHp, WorkData w, int defenderStance = 0,
-                                                          int attackerWeaponPercent = 0, bool sureHit = false)
+                                                          int attackerWeaponPercent = 0)
     {
         if (w.IsHeal) return (dMaxHp * w.Power / 100, 1, false);
         if (!w.IsDamage) return (0, 2, false);
-        if (!sureHit && rng.Next(100) >= HitChance(a, aTp, d, dTp, w, defenderStance)) return (0, 3, false);
+        if (rng.Next(100) >= HitChance(a, aTp, d, dTp, w, defenderStance)) return (0, 3, false);
 
         int dmg = (N(3) - Rdp(d, dHp, dMaxHp)) * Atk(a, aSoul, w.Power, attackerWeaponPercent) / N(3);
         // 방어 자세(work 516): (DEX/Num11 + Num12)% 로 한 번 더 깎인다.
