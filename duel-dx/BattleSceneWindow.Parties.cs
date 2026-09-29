@@ -24,7 +24,8 @@ internal sealed unsafe partial class BattleSceneWindow
         /// </summary>
         public Dictionary<int, CharacterData> Party { get; } = [];
         public HashSet<int> Members { get; } = [];
-        public HashSet<int> Legions { get; } = [];
+        /// <summary>군단 번호 — 개수만큼 되풀이(원본 +0x910 (군단, 개수), 감사3 L8).</summary>
+        public List<int> Legions { get; } = [];
         public int Money { get; set; }
         public Dictionary<int, int> Inventory { get; } = [];
         public List<int> Mailbox { get; } = [];

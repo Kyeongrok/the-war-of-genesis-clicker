@@ -10,7 +10,9 @@ namespace DuelDx;
 /// 분석-전투 ba-6: 배치칸(Btl C 절)마다 층 13 초록 (20,200,60). 창 명단 = 플레이어 부대 전원, Btl 에 이미 선 부대원은 「Entry」로 고정.
 /// 한 명 놓기 = 초록이고 빈 칸일 때만, 방향 = 그 칸 레코드의 방향. 자동배치(상태 1 <c>0x10066480</c>) = 안 놓인 사람 중 명단 첫 사람 →
 /// 칸 순서 첫 빈 칸을 되풀이. 배치종료 = 안 놓인 부대원 유닛을 지우고 상태 5 로.
-/// 데모는 처음부터 자동배치한 채로 연다(그대로 배치종료만 눌러도 된다). 원본의 「군단사용」 단추는 아직 없다 — 모세스에서 붙인 군단을 따른다.
+/// 데모는 처음부터 자동배치한 채로 연다(그대로 배치종료만 눌러도 된다).
+/// 「군단사용」(단추 0x4b8, 명단 레코드 <c>+0x30</c>) — 고른 사람의 군단을 켜고 끈다. 기본 = 머리 워드 7 켜짐 && 배속 군단 있음,
+/// 워드 7 이 꺼진 전투에선 단추가 안 먹는다(<c>0x100e257c</c>). 끈 사람은 부하 없이 서고, 배치종료 때 부하를 지운다.
 /// 불러온 판·RESTART·화면 밖 자동 진행(DUELDX_AUTOPLAY)에는 이 단계가 없다.
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
@@ -39,11 +41,58 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private readonly HashSet<UnitState> _deployMovable = [];
 
+    /// <summary>「군단사용」을 끈 대장(명단 +0x30 = 0) — 부하를 맵 밖에 두었다가 배치종료 때 지운다.</summary>
+    private readonly HashSet<UnitState> _deployNoLegion = [];
+
+    /// <summary>이 전투가 군단을 허용하나(머리 워드 7) — 「군단사용」 단추가 켜지는 조건(<c>0x100e257c</c>).</summary>
+    private bool _deployLegionsAllowed;
+
+    /// <summary>「군단사용」을 켜고 끌 수 있는 사람 — 옮길 수 있고 배치 단계가 부하를 만들어 둔 대장.</summary>
+    private bool DeployHasLegion(UnitState u) =>
+        DeployMovable(u) && Array.IndexOf(_units, u) is var li and >= 0 && _units.Any(f => f.LeaderIndex == li);
+
+    /// <summary>
+    /// 「군단사용」 단추(0x4b8) — 고른 사람의 명단 <c>+0x30</c> 을 뒤집는다. 켜면 부하를 진형대로 다시 세우고(0x100673dd~), 끄면 맵 밖으로 뺀다.
+    /// </summary>
+    private void ToggleDeployLegion()
+    {
+        if (!_deployLegionsAllowed) { Toast("이 전투에서는 군단을 쓸 수 없습니다"); return; }
+        if (_deployPick is not { } u) { Toast("군단을 켜고 끌 사람을 명단에서 고르세요"); return; }
+        if (!DeployHasLegion(u)) { Toast($"{UnitName(Array.IndexOf(_units, u))} — 배속된 군단이 없습니다"); return; }
+        if (_deployNoLegion.Remove(u))
+        {
+            PlaceLegionAround(u);
+            Toast($"{UnitName(Array.IndexOf(_units, u))} — 군단사용 켬");
+        }
+        else
+        {
+            _deployNoLegion.Add(u);
+            HideDeployFollowers(u);
+            Toast($"{UnitName(Array.IndexOf(_units, u))} — 군단사용 끔");
+        }
+    }
+
+    /// <summary>군단을 끈 대장의 부하를 맵 밖(0,0)으로 — 배치 단계 동안만 남겨 둔다.</summary>
+    private void HideDeployFollowers(UnitState leader)
+    {
+        int li = Array.IndexOf(_units, leader);
+        if (li < 0) return;
+        foreach (var f in FollowersOf(li))
+        {
+            _followerTarget.Remove(f);
+            f.ResetTo(0, 0);
+            f.StartCol = f.StartRow = 0;
+            f.OnField = false;
+        }
+    }
+
     /// <summary>새 전투를 열 때 — 배치칸이 있으면 배치 단계를 연다, 아니면 맵 밖에 둔 여분을 지운다.</summary>
     private void BeginDeployOrDrop(DemoScene scene, bool fresh)
     {
         _deployOpen = false;
         _deployPick = null;
+        _deployNoLegion.Clear();
+        _deployLegionsAllowed = scene.LegionsAllowed;
         bool open = fresh && scene.Placement is { Count: > 0 } && !AutoPlay
                     && Environment.GetEnvironmentVariable("DUELDX_NODEPLOY") != "1" && _deployMovable.Count > 0;
         if (!open)
@@ -87,7 +136,8 @@ internal sealed unsafe partial class BattleSceneWindow
         u.StartRow = row;
         u.Facing = u.StartFacing = facing;
         u.OnField = true;
-        PlaceLegionAround(u);    // 군단 대장이면 부하도 새 자리 둘레에 진형대로
+        // 군단 대장이면 부하도 새 자리 둘레에 진형대로 — 「군단사용」을 끈 사람은 부하를 맵 밖에 둔다.
+        if (_deployNoLegion.Contains(u)) HideDeployFollowers(u); else PlaceLegionAround(u);
     }
 
     private void Unplace(UnitState u)
@@ -95,7 +145,7 @@ internal sealed unsafe partial class BattleSceneWindow
         u.OnField = false;
         u.ResetTo(0, 0);
         u.StartCol = u.StartRow = 0;
-        PlaceLegionAround(u);
+        if (_deployNoLegion.Contains(u)) HideDeployFollowers(u); else PlaceLegionAround(u);
     }
 
     /// <summary>자동배치 — 안 놓인 사람 중 명단 첫 사람을 칸 순서 첫 빈 칸에(원본 상태 1).</summary>
@@ -114,7 +164,12 @@ internal sealed unsafe partial class BattleSceneWindow
     private void FinishDeploy()
     {
         if (!DeployRoster().Any(u => u.OnField)) { Toast("한 명 이상 세워야 합니다"); return; }
-        DropUnits(u => DeployMovable(u) && !u.OnField);
+        // 「군단사용」을 끈 대장 — 이 전투의 군단(+0x4ea)은 0 이고 부하는 없다(원본은 켜진 사람만 부하를 만든다, 0x100673dd~).
+        var noLegion = _deployNoLegion.Where(u => u.OnField).ToHashSet();
+        foreach (var leader in noLegion) leader.LegionId = 0;
+        DropUnits(u => (DeployMovable(u) && !u.OnField)
+                       || (u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length && noLegion.Contains(_units[u.LeaderIndex])));
+        _deployNoLegion.Clear();
         _deployBench.Clear();
         _deployMovable.Clear();
         _deployPick = null;
@@ -132,7 +187,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var roster = DeployRoster();
         var (px, py) = DeployPanel();
         int listBottom = py + DeployTop + roster.Count * DeployRowH;
-        if (bx >= px && bx < px + DeployW && by >= py && by < listBottom + 110)
+        if (bx >= px && bx < px + DeployW && by >= py && by < listBottom + 142)
         {
             int row = (by - py - DeployTop) / DeployRowH;
             if (by >= py + DeployTop && row >= 0 && row < roster.Count)
@@ -149,7 +204,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 else AutoDeploy();
                 return true;
             }
-            if (by >= by0 + 32 && by < by0 + 60) { FinishDeploy(); return true; }
+            if (by >= by0 + 32 && by < by0 + 58) { ToggleDeployLegion(); return true; }
+            if (by >= by0 + 64 && by < by0 + 92) { FinishDeploy(); return true; }
             return true;
         }
 
@@ -186,7 +242,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_deployOpen || _db is not { } db) return;
         var roster = DeployRoster();
         var (x, y) = DeployPanel();
-        int h = DeployTop + roster.Count * DeployRowH + 76;
+        int h = DeployTop + roster.Count * DeployRowH + 108;
         FillRect(x, y, DeployW, h, PanelBg);
         StrokeRect(x, y, DeployW, h, BoxLine);
         FillRect(x, y, DeployW, 26, HeadBg);
@@ -200,6 +256,12 @@ internal sealed unsafe partial class BattleSceneWindow
             string name = u.Data is { } c ? db.T(c.NameId) : $"Chr {u.ChrCode}";
             uint colour = !DeployMovable(u) ? 0xFFB4B4B4 : u.OnField ? White : 0xFF909090;
             DrawText(name, x + 12, ry + 2, colour);
+            // 군단을 거느리고 서는 사람은 이름 뒤에 표시 — 「군단사용」을 끄면 사라진다.
+            if (DeployHasLegion(u) && !_deployNoLegion.Contains(u))
+            {
+                var (_, nw, _) = GetText(name, colour);
+                DrawText("군단", x + 16 + nw, ry + 3, 0xFF80D0FF, 11);
+            }
             string tag = !DeployMovable(u) ? "Entry" : u.OnField ? "배치" : "대기";
             var (_, tw, _) = GetText(tag, colour);
             DrawText(tag, x + DeployW - 12 - tw, ry + 2, !DeployMovable(u) ? 0xFFFFE070 : colour);
@@ -209,10 +271,15 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawText("배치취소", x + 28, by + 4, White);
         FillRect(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, HeadBg);
         DrawText("자동배치", x + DeployW / 2 + 24, by + 4, White);
-        FillRect(x + 8, by + 32, DeployW - 16, 28, 0xFF2A6A3A);
-        StrokeRect(x + 8, by + 32, DeployW - 16, 28, BoxLine);
+        // 「군단사용」 — 고른 사람의 군단 켬/끔. 워드 7 이 꺼진 전투면 흐리게(0x100e257c).
+        FillRect(x + 8, by + 32, DeployW - 16, 26, HeadBg);
+        string legionLabel = _deployPick is { } lp && DeployHasLegion(lp) ? (_deployNoLegion.Contains(lp) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
+        var (_, lw, _) = GetText(legionLabel, White);
+        DrawText(legionLabel, x + (DeployW - lw) / 2, by + 36, _deployLegionsAllowed ? White : 0xFF707070);
+        FillRect(x + 8, by + 64, DeployW - 16, 28, 0xFF2A6A3A);
+        StrokeRect(x + 8, by + 64, DeployW - 16, 28, BoxLine);
         var (_, fw, _) = GetText("배치종료 (Enter)", White);
-        DrawText("배치종료 (Enter)", x + (DeployW - fw) / 2, by + 37, White);
+        DrawText("배치종료 (Enter)", x + (DeployW - fw) / 2, by + 69, White);
 
         // 고른 사람은 발밑에 표시
         if (_deployPick is { OnField: true } pick)

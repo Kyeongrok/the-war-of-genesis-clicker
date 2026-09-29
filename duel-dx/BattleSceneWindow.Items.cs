@@ -34,9 +34,10 @@ internal sealed unsafe partial class BattleSceneWindow
         var list = new List<(ItemData Item, int Count)>();
         // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
         // 전에는 work 이 있는 것만 보였다(원본차이-전투규칙 25).
+        // 줄 차례는 가방에 <b>들어온 차례</b>(i = 0 … +0x108 을 그대로 훑는다) — 전에는 번호 차례로 늘어놓았다(감사3 I4).
         foreach (var (id, count) in _inventory)
             if (count > 0 && db.Items.GetValueOrDefault(id) is { Type: 7 } item) list.Add((item, count));
-        return [.. list.OrderBy(p => p.Item.Id)];
+        return list;
     }
 
     private (int X, int Y, int H) ItemMenuRect()
@@ -130,5 +131,31 @@ internal sealed unsafe partial class BattleSceneWindow
             var (_, aw, _) = GetText(amount, White, 12);
             DrawText(amount, rx + ItemRowW - 6 - aw, ry + 4, White, 12);
         }
+    }
+}
+
+/// <summary>
+/// 파티 가방 — 아이템 번호 → 개수를 <b>들어온 차례대로</b> 든다. 원본 파티 객체의 가방은 (아이템, 개수) 배열 <c>+0x110</c> 과 칸 수 <c>+0x108</c> 이라
+/// 새 아이템은 끝에 붙고(<c>0x1004de60</c>), 전투 아이템 목록(<c>0x100d39a6</c>~<c>0x100d39fc</c>)·상점 가방 목록도 그 차례로 훑는다(감사3 I4).
+/// </summary>
+/// <remarks>
+/// .NET <see cref="Dictionary{TKey,TValue}"/> 는 지운 칸을 다음 넣기가 메워 차례가 흐트러지므로, 지울 때마다 남은 것을 다시 채워 빈칸을 없앤다.
+/// 개수를 0 이하로 적으면 그 줄을 지운다(개수 0 인 줄이 102 「아이템 있음」 조건에 걸리지 않게).
+/// </remarks>
+internal sealed class ItemBag : Dictionary<int, int>
+{
+    public new int this[int id]
+    {
+        get => base[id];
+        set { if (value <= 0) Remove(id); else base[id] = value; }
+    }
+
+    public new bool Remove(int id)
+    {
+        if (!base.Remove(id)) return false;
+        var rest = this.ToArray();
+        base.Clear();
+        foreach (var (k, v) in rest) base.Add(k, v);
+        return true;
     }
 }

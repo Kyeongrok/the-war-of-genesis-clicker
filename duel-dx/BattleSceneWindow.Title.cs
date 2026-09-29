@@ -1,4 +1,5 @@
-﻿using WarOfGenesis.Assets;
+﻿using DuelDx.Native;
+using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -79,7 +80,25 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_titleOpen) return false;
         // CONTINUE 로 연 슬롯 창이 떠 있으면 그 창이 먼저 클릭을 받는다.
         if (SystemOpen) return OnSystemClick(bx, by);
-        switch (TitleButtonAt(bx, by))
+        PressTitleButton(TitleButtonAt(bx, by));
+        return true;
+    }
+
+    /// <summary>
+    /// 타이틀 키 — Esc 는 CONTINUE 가 연 슬롯 창을 닫고, <b>Enter 는 초점 단추 NEW GAME 을 누른다</b>
+    /// (NEW GAME 이 만들어질 때 <c>vt+0x40</c> 으로 초점을 받는다, 감사 F13). 전에는 Esc 말고는 무시했다.
+    /// </summary>
+    private bool OnTitleKey(int key)
+    {
+        if (!_titleOpen) return false;
+        if (key == Win32.VK_ESCAPE) CloseSystemWindow();
+        else if (key == Win32.VK_RETURN && !SystemOpen) PressTitleButton(0);
+        return true;
+    }
+
+    private void PressTitleButton(int button)
+    {
+        switch (button)
         {
             case 0:                                   // NEW GAME — 원본처럼 연대표(장면 7)로 간다
                 _party.Clear();
@@ -118,7 +137,6 @@ internal sealed unsafe partial class BattleSceneWindow
                 _running = false;
                 break;
         }
-        return true;
     }
 
     private void UpdateTitleHover(int bx, int by)
@@ -142,11 +160,12 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < 5; i++)
             DrawUi(TitleSparkObs, 0, tick + i * 10, ox + 80 + i * 120, oy + 440, UiBlend.Add);
 
-        // 마우스를 올린 단추에만 빛(가산)
+        // 마우스를 올린 단추에만 빛(가산) — 단추 왼위 (0,0) 그대로(0x10044320(0, 0, 370, 0, …) → 단추 +0x140/+0x142 = (0,0), 장 자리 (0,0)).
+        // 전에는 2픽셀 올려 그렸다(감사 F14, 장 자리 값은 분석-UI 기록에 기댄 가설).
         if (_titleHover >= 0)
         {
             var (x, y, _) = TitleButtons[_titleHover];
-            DrawUi(TitleGlowObs, 0, (int)((_lastTime - _titleOpenedAt) * TicksPerSecond), ox + x, oy + y - 2, UiBlend.Add);
+            DrawUi(TitleGlowObs, 0, (int)((_lastTime - _titleOpenedAt) * TicksPerSecond), ox + x, oy + y, UiBlend.Add);
         }
 
         // 오른쪽 위 판 번호 — Num.dat[0] × 0.001
