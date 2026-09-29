@@ -10,7 +10,7 @@ namespace DuelDx;
 /// <list type="number">
 /// <item>피해와 같은 명중식을 먼저 본다(빗나가면 아무것도 안 걸린다).</item>
 /// <item>종류 0·2 이고 <b>공격자 레벨 ≤ 대상 레벨</b>이면 번호 5·6·12·19·22·23·24 는 실패한다.</item>
-/// <item>번호 30·31·32·33·37·48 은 슬롯이 아니라 전투 보정(DEX·PSY·DEP·최대TP·최대SOUL·최대HP)에 바로 더한다.</item>
+/// <item>번호 30·31·32·33·37·48 은 슬롯이 아니라 전투 보정(DEX·PSY·DEP·최대TP·최대SOUL·최대HP)에 바로 더한다. 34(최대 TP %)는 데모가 붙인 뜻이다.</item>
 /// <item>나머지는 칸 셋에 — 같은 번호면 |값| 이 큰 쪽, 빈 칸, 그것도 없으면 이번에 안 쓴 칸 중 아무 데나.</item>
 /// <item>44·45·46 은 이름이 「없음」인 <b>빈칸 표시</b>다 — 큐어처럼 셋을 걸면 칸 셋이 모두 지워진다.</item>
 /// </list>
@@ -52,6 +52,7 @@ internal sealed unsafe partial class BattleSceneWindow
             13 => Pct("공격력"),
             14 => Pct("방어력"),
             18 => Pct("소울 소모량"),
+            34 => Pct("최대 TP"),
             20 => Pct("TP 소모량"),
             29 => Pct("무기 공격력"),
             38 => $"턴 속도 {(value < 0 ? "느려짐" : "빨라짐")} (틱마다 TP {value:+#;-#})",
@@ -72,7 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>슬롯이 아니라 전투 보정으로 들어가는 번호들.</summary>
-    private static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 37 or 48;
+    private static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 34 or 37 or 48;
 
     /// <summary>
     /// 상태이상까지 얹은 능력치 — 판정·이동 범위·능력치 표시는 모두 이것을 써야 한다.
@@ -166,6 +167,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 31: u.BonusPsy += value; break;
             case 32: u.BonusDep += value; break;
             case 33: u.BonusMaxTp += value; break;
+            // 34 = 최대 TP 값% 가감 — 원본은 34 를 아무도 안 읽는 빈 번호다(WorkEnums). 마인드 어택이 고정 −5~−15 로는 거의 안 깎여
+            // 퍼센트로 쓰려고 데모가 뜻을 붙였다(gm-skil-13). <b>지금</b> 최대 TP 에 곱하므로 겹쳐 맞아도 0 이 되지 않는다.
+            case 34: u.BonusMaxTp += u.MaxTp * value / 100; break;
             case 37: u.BonusMaxSoul += value; break;
             case 48: u.BonusMaxHp += value; break;
         }
