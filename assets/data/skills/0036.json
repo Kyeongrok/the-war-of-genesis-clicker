@@ -1,6 +1,7 @@
 {
   "ability": 36,
   "name": "마인드 어택",
+  "maxLevel": 10,
   "att": 2,
   "common": {
     "rangeShape": 2,
@@ -21,7 +22,7 @@
     "areaMin": 0,
     "areaMode": 1,
     "kind": 0,
-    "bonus1Stat": 33,
+    "bonus1Stat": 34,
     "bonus2Stat": 0,
     "bonus2Value": 0,
     "bonus3Stat": 0,
@@ -46,24 +47,14 @@
   },
   "levels": [
     { "work": 396, "level": 1, "rangeMax": 3, "bonus1Value": -5, "power": -70, "exp": 50, "tp": 130 },
-    { "work": 565, "level": 2, "rangeMax": 3, "bonus1Value": -5, "power": -60, "exp": 50, "tp": 135 },
-    { "work": 564, "level": 3, "rangeMax": 3, "bonus1Value": -5, "power": -50, "exp": 50, "tp": 140 },
-    { "work": 563, "level": 4, "rangeMax": 3, "bonus1Value": -5, "power": -40, "exp": 50, "tp": 145 },
-    { "work": 562, "level": 5, "rangeMax": 3, "bonus1Value": -5, "power": -30, "exp": 50, "tp": 150 },
-    { "work": 561, "level": 6, "rangeMax": 4, "bonus1Value": -7, "power": -20, "exp": 50, "tp": 155 },
-    { "work": 560, "level": 7, "rangeMax": 4, "bonus1Value": -7, "power": -10, "exp": 50, "tp": 160 },
-    { "work": 559, "level": 8, "rangeMax": 4, "bonus1Value": -7, "power": 0, "exp": 50, "tp": 165 },
-    { "work": 558, "level": 9, "rangeMax": 4, "bonus1Value": -7, "power": 20, "exp": 50, "tp": 170 },
-    { "work": 557, "level": 10, "rangeMax": 4, "bonus1Value": -7, "power": 10, "exp": 50, "tp": 175 },
-    { "work": 556, "level": 11, "rangeMax": 5, "bonus1Value": -10, "power": 15, "exp": 100, "tp": 180 },
-    { "work": 574, "level": 12, "rangeMax": 5, "bonus1Value": -10, "power": 20, "exp": 100, "tp": 185 },
-    { "work": 573, "level": 13, "rangeMax": 5, "bonus1Value": -10, "power": 25, "exp": 100, "tp": 190 },
-    { "work": 572, "level": 14, "rangeMax": 5, "bonus1Value": -10, "power": 30, "exp": 100, "tp": 195 },
-    { "work": 571, "level": 15, "rangeMax": 5, "bonus1Value": -13, "power": 35, "exp": 100, "tp": 200 },
-    { "work": 570, "level": 16, "rangeMax": 6, "bonus1Value": -13, "power": 40, "exp": 100, "tp": 200 },
-    { "work": 569, "level": 17, "rangeMax": 6, "bonus1Value": -13, "power": 45, "exp": 100, "tp": 200 },
-    { "work": 568, "level": 18, "rangeMax": 9, "bonus1Value": -13, "power": 50, "exp": 100, "tp": 200 },
-    { "work": 567, "level": 19, "rangeMax": 7, "bonus1Value": -15, "power": 60, "exp": 100, "tp": 200 },
-    { "work": 566, "level": 20, "rangeMax": 7, "bonus1Value": -15, "power": 80, "exp": 100, "tp": 200 }
+    { "work": 565, "level": 2, "rangeMax": 3, "bonus1Value": -10, "power": -50, "exp": 50, "tp": 140 },
+    { "work": 564, "level": 3, "rangeMax": 3, "bonus1Value": -15, "power": -30, "exp": 50, "tp": 150 },
+    { "work": 563, "level": 4, "rangeMax": 4, "bonus1Value": -20, "power": -10, "exp": 50, "tp": 160 },
+    { "work": 562, "level": 5, "rangeMax": 4, "bonus1Value": -25, "power": 5, "exp": 50, "tp": 170 },
+    { "work": 561, "level": 6, "rangeMax": 5, "bonus1Value": -30, "power": 15, "exp": 100, "tp": 180 },
+    { "work": 560, "level": 7, "rangeMax": 5, "bonus1Value": -35, "power": 25, "exp": 100, "tp": 190 },
+    { "work": 559, "level": 8, "rangeMax": 5, "bonus1Value": -40, "power": 35, "exp": 100, "tp": 200 },
+    { "work": 558, "level": 9, "rangeMax": 6, "bonus1Value": -45, "power": 45, "exp": 100, "tp": 200 },
+    { "work": 557, "level": 10, "rangeMax": 7, "bonus1Value": -50, "power": 80, "exp": 100, "tp": 200 }
   ]
 }

@@ -59,7 +59,7 @@ public enum WorkKind : byte
 /// 효과 번호 — work <c>+0x1c·+0x1f·+0x22</c>(bonus1~3Stat). 맞힌 대상에게 거는 상태이상(Sta.dat 번호)이고,
 /// 30·31·32·33·37·48 은 상태이상 칸이 아니라 전투 끝까지 쌓이는 능력치 보정이다(<c>0x1007c210</c>, 분석-전투 6절).
 /// 값(bonusNValue)이 세기·변화량이다 — 예: 31 에 −10 이면 PSY −10.
-/// 28·34·35·36·39 는 거는 함수가 그냥 칸에 넣지만 DLL 어디서도 그 번호를 검사하지 않아(검사 함수 <c>0x1007bf20</c>·<c>0x1007bb10</c>·
+/// 34 는 데모가 「최대 TP 값% 가감」으로 쓴다(원본엔 없음, 마인드 어택). 28·35·36·39 는 거는 함수가 그냥 칸에 넣지만 DLL 어디서도 그 번호를 검사하지 않아(검사 함수 <c>0x1007bf20</c>·<c>0x1007bb10</c>·
 /// <c>0x1007bec0</c> 를 부르는 곳 전부) 아무 효과가 없다. Sta.dat 에도 28·34·35·36 은 레코드가 없고 39 는 「없음」이다.
 /// </summary>
 public enum StatusEffect : byte
@@ -98,7 +98,7 @@ public enum StatusEffect : byte
     [Description("31 PSY 변화(보정)")] S31 = 31,
     [Description("32 DEP 변화(보정)")] S32 = 32,
     [Description("33 최대 TP 변화(보정)")] S33 = 33,
-    [Description("34 효과 없음(원본도 안 읽음)")] S34 = 34,
+    [Description("34 최대 TP % 변화(보정, 데모 추가)")] S34 = 34,
     [Description("35 효과 없음(원본도 안 읽음)")] S35 = 35,
     [Description("36 효과 없음(원본도 안 읽음)")] S36 = 36,
     [Description("37 최대 SOUL 변화(보정)")] S37 = 37,

@@ -79,7 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (lp != 0 || psy != 0 || dep != 0) c = c with { Lp = (uint)Math.Max(0, c.Lp + lp), Psy = (ushort)Math.Max(0, c.Psy + psy), Dep = (ushort)Math.Max(0, c.Dep + dep) };
         // 상태이상 30~48 은 능력치에 바로 더한다(분석-전투 6절) — 최대치 셋만 여기서 반영한다.
         u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c, u.BonusMaxHp)));   // 48 은 갑옷 배율 앞에서 더한다(ba-15)
-        u.MaxTp = _db.MaxTp(c) + u.BonusMaxTp;
+        u.MaxTp = Math.Max(1, _db.MaxTp(c) + u.BonusMaxTp);   // 마인드 어택(33·34)이 겹쳐도 0 밑으로 안 간다
         // STP 는 최대 TP 가감(상태 33)까지 넣은 최대 TP ÷ 제수다(0x1007acf0) — 최대 TP 를 올리면 차례 간격도 짧아진다(fg-22).
         u.Stp = Math.Max(1, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
         // 군단 부하의 최대 TP·STP 제수는 대장 것이다(0x1007aeb0·0x1007afa0 이 +0x508 사슬로 대장에서 읽음) — 부하 TP 는 대장과 같은 속도로
@@ -89,7 +89,7 @@ internal sealed unsafe partial class BattleSceneWindow
             u.MaxTp = owner.MaxTp;
             u.Stp = Math.Max(1, owner.Stp);
         }
-        u.MaxSoul = _db.MaxSoul(c) + u.BonusMaxSoul;
+        u.MaxSoul = Math.Max(0, _db.MaxSoul(c) + u.BonusMaxSoul);   // 소울 블레스트(37)가 겹쳐도 음수가 안 되게
         u.Hp = Math.Min(u.Hp, u.MaxHp);
         u.Tp = Math.Min(u.Tp, u.MaxTp);
         u.Soul = Math.Min(u.Soul, u.MaxSoul);
