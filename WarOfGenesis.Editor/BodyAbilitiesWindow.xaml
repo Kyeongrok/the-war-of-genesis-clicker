@@ -135,6 +135,7 @@
                     GridLinesVisibility="All"
                     HeadersVisibility="Column"
                     IsReadOnly="True"
+                    MouseDoubleClick="Table_MouseDoubleClick"
                     SelectionMode="Single"
                     SelectionUnit="Cell" />
             </DockPanel>
