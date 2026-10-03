@@ -81,13 +81,13 @@ internal sealed unsafe partial class BattleSceneWindow
         u.MaxHp = ScaleMaxHp(u, Math.Max(1, _db.MaxHp(c, u.BonusMaxHp)));   // 48 은 갑옷 배율 앞에서 더한다(ba-15)
         u.MaxTp = Math.Max(1, _db.MaxTp(c) + u.BonusMaxTp);   // 마인드 어택(33·34)이 겹쳐도 0 밑으로 안 간다
         // STP 는 최대 TP 가감(상태 33)까지 넣은 최대 TP ÷ 제수다(0x1007acf0) — 최대 TP 를 올리면 차례 간격도 짧아진다(fg-22).
-        u.Stp = Math.Max(1, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
+        u.Stp = Math.Max(0, c.TpDivisor == 0 ? _db.Stp(c) : u.MaxTp / c.TpDivisor);
         // 군단 부하의 최대 TP·STP 제수는 대장 것이다(0x1007aeb0·0x1007afa0 이 +0x508 사슬로 대장에서 읽음) — 부하 TP 는 대장과 같은 속도로
         // 대장 최대치까지 찬다(틱 0x10071db0). 전에는 부하 제 값으로 셌다(감사3 L2). 대장 값이 먼저 셈되어 있어야 한다(아래 되풀이).
         if (StatOwner(u) is var owner && owner != u && owner.MaxTp > 0)
         {
             u.MaxTp = owner.MaxTp;
-            u.Stp = Math.Max(1, owner.Stp);
+            u.Stp = Math.Max(0, owner.Stp);
         }
         u.MaxSoul = Math.Max(0, _db.MaxSoul(c) + u.BonusMaxSoul);   // 소울 블레스트(37)가 겹쳐도 음수가 안 되게
         u.Hp = Math.Min(u.Hp, u.MaxHp);
@@ -122,7 +122,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var unit = new UnitState(new DemoUnit(chr, 0, 0, 4, 0, Facing.Left)) { Data = c };
         unit.MaxHp = unit.Hp = Math.Max(1, db.MaxHp(c));
         unit.MaxTp = db.MaxTp(c);
-        unit.Stp = Math.Max(1, db.Stp(c));
+        unit.Stp = Math.Max(0, db.Stp(c));
         unit.MaxSoul = db.MaxSoul(c);
         unit.Soul = db.SoulStart;
         LoadFieldFace(c);

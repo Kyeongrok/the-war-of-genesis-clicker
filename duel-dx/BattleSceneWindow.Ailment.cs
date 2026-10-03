@@ -126,7 +126,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
-        if (_db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
+        // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
+        if (w.Kind <= 3 && _db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
             && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
 
         // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
@@ -291,7 +292,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void AutoHeal(UnitState u)
     {
-        if (!u.HasStatus(8)) return;
+        if (!u.HasStatus(8) || u.Hp <= 0) return;
         int upTo = Math.Min(u.Status(8), u.MaxHp);
         if (u.Hp >= upTo) return;
         int before = u.Hp;

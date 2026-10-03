@@ -113,7 +113,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 원본은 유닛을 만들 때 <b>TP 를 0 으로 민다</b>(0x10071941) — 아무도 다시 안 채운다.
             // 그래서 첫 차례는 「최대TP ÷ STP」가 가장 작은 인물이 가져간다.
             unit.Tp = 0;
-            unit.Stp = Math.Max(1, _db.Stp(data));
+            unit.Stp = Math.Max(0, _db.Stp(data));   // 제수 0 이면 TP 가 영영 안 찬다(0x10071db0) — 호위 대상(필그림·피맨·인질·리온)은 차례를 안 받는다(ba-20 K2)
             unit.MaxSoul = _db.MaxSoul(data);
             // DUELDX_SOUL 로 시작 SOUL 을 올릴 수 있다 — 어빌리티·상태이상을 시험할 때 쓴다.
             unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : _db.SoulStart;
@@ -548,6 +548,14 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var u = _units[index];
         CommitMove(u);
+        // TP 를 다 쓰고(≤ 0) 끝나는 차례는 휴식이 아니다 — 원본은 깃발만 내리고(0x10071e20 → 0x10074400) 자동 휴식(WAITNEXT 0x10067a7a)에
+        // 오지 않아 <b>음수 TP(빚)가 그대로 남는다</b>. 다음 차례가 그만큼 늦다(ba-20 K1). 전에는 늘 0 으로 올려 줘 연속 행동이 공짜였다.
+        if (u.Tp <= 0 && !FollowersOf(index).Any(f => f.Tp > 0))
+        {
+            AutoHealAll();
+            EndTurn();
+            return;
+        }
         RestFollowers(index);        // 대장이 쉬면 부하도 먼저 쉰다(0x1005f62a, 감사3 L3)
         if (u.Tp > 0 && u.MaxTp > 0 && _db != null && !u.HasStatus(26))
         {
@@ -559,7 +567,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 ShowNumber(u, _db.T(159), HealColor2, rise: false, count: (before, u.Hp));
             }
         }
-        u.Tp = 0;
+        if (u.Tp > 0) u.Tp = 0;
         AutoHealAll();   // 휴식도 행동 끝(상태 20)을 지난다 — 8(자동 회복)
         EndTurn();
     }
@@ -1120,6 +1128,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 사건 207 의 쓰러짐 처리(0x1004e6d0)는 지금 차례 유닛([ctrl+0x4ce8])이면 HP 1 로 남긴다(0x1004e757~0x1004e765, 감사5 B3).
         if (eventFinisher && (uint)_turn < _units.Length && _units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
 
+        // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
+        foreach (var d in _units)
+            if (d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; dying.Add(d); }
         if (dying.Count > 0)
         {
             // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).
@@ -1231,7 +1242,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 return;
             }
             MarkBuffed(a, t, w);
-            if (t != a) PlayHitReaction(t, damaged: false);
+            // 맞음 동작은 없다 — 거는 함수는 0(성공)·3(실패)만 돌려줘 「2 → 맞음 동작」 가지(0x1007a2ba)가 죽은 코드다(ba-20 K6).
             return;
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
@@ -1261,7 +1272,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (t.Hp > 0) return;
         // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).
         // SOUL 은 때린 사람이, 경험치는 군단 부하가 쓰러뜨렸으면 <b>대장</b>이 받는다(0x10079b14).
-        AddSoul(a, 10);
+        // 처치 보상(1016)은 받는 유닛에게 SOUL +Num30 과 EXP 를 같이 준다(0x1007214f) — 부하가 쓰러뜨리면 둘 다 대장 몫(ba-20 K4).
+        AddSoul(a.LeaderIndex >= 0 && a.LeaderIndex < _units.Length ? _units[a.LeaderIndex] : a, _db.N(30));
         GainKillExp(a.LeaderIndex >= 0 && a.LeaderIndex < _units.Length ? _units[a.LeaderIndex] : a, t);
         if (SurvivesFatal(t)) return;
         dying.Add(t);
