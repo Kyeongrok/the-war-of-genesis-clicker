@@ -225,6 +225,13 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_objectsDue)
             {
                 _objectsDue = false;
+                // 쏠 상대가 있는 물체가 있으면 하나씩 카메라·모션을 돌며 쏜다(ObjectTurns). 없으면 전처럼 그 틀에 끝낸다(충전·빈 차례).
+                if (Objects.Any(obj => obj.Alive && !_opened.Contains(obj) && obj.Data.Acts && obj.Data.Kind != 10 && !(obj.Data.Kind == 9 && obj.Team < 0)
+                                       && ObjectInBounds(obj) && _tick % Math.Max(1, obj.Data.TurnEvery) == 0 && ObjectHasTarget(obj)))
+                {
+                    _routine = ObjectTurns();
+                    return;
+                }
                 StepObjects();
                 SweepTickDeaths();
                 if (_outcome.Length > 0 || EventsBusy) return;
