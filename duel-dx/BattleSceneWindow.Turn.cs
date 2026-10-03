@@ -465,7 +465,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (u.Data == null || _voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
         if (hurt.Any(id => _mixer.IsPlaying(HurtVoiceTag + id))) return;
         int id = hurt[(Array.IndexOf(_units, u) & 1) % hurt.Length];
-        Play(id, HurtVoiceTag + id);
+        Play(id, HurtVoiceTag + id, SoundScreenX(UnitFoot(u).X));   // 비명은 그 유닛 화면 자리에서(0x10079c68~0x10079c9a, ba-20 Q S-3)
     }
 
     /// <summary>
@@ -477,7 +477,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         if (_voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
-            Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(_units, u));
+            Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(_units, u), SoundScreenX(UnitFoot(u).X));   // 유닛 자리에서(0x1006866b)
     }
 
     private void EndTurn()
