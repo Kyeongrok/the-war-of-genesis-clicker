@@ -890,6 +890,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 ScheduleAbilitySounds(w);
                 SpawnAbilityEffects(w, a, col, row);
+                SpawnWorkShakes(w);
                 effectsDone = true;
             }
             // 혼·비연참·오메가 스윙 — 겨눈 빈 칸까지 돌진하며 지나는 칸의 적을 때린다(fg-21 ⑨). 돌진 자세(붙듦)는 이미 틀었다.
