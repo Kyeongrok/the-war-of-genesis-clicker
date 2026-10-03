@@ -151,6 +151,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _numbers.Add((text, color, x, y, _lastTime, rise, count));
     }
 
+    /// <summary>판의 그 자리에 숫자를 띄운다 — 물체가 맞을 때는 물체 자리에 뜬다(0x100e77e0, ba-20 O P2).</summary>
+    private void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, _lastTime, true, null));
+
     private readonly List<(string Text, uint Color, int X, int Y, double Start, bool Rise, (int From, int To)? Count)> _numbers = [];
 
     private void DrawNumbers()
