@@ -425,7 +425,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     .Where(u => u.Alive && u.OnField && (allyPass ? !SeesAsFoe(follower, u) && u != follower : SeesAsFoe(follower, u))
                                 && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower)
                                 // 아군 패스는 이득이 있을 때만(0x1005c510 — 회복은 잃은 HP, 보조는 상태 점수). 안 그러면 회복기를 가진 부하가 늘 회복만 쓴다.
-                                && (!allyPass || WorthUsing(follower, work, [Array.IndexOf(_units, u)])))
+                                && (!allyPass || WorthUsing(follower, work, WorkTargets(work, follower, u.Col, u.Row) is { Count: > 0 } area ? area : [Array.IndexOf(_units, u)])))
                     .Select(u => (Unit: u, Score: CDiv(TargetValue(follower, work, [Array.IndexOf(_units, u)]) * num74 * 10,
                                                         num74 + Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))))
                     .Where(p => p.Score > 0)
@@ -438,6 +438,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 부하의 기술도 정상 work 실행이다(0x10075ff0) — 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
                 if (work.Id != c.BasicWorkId)
                 {
+                    if (work.Prepare is 2 or 3 or 5 or 6) Play(694);   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
                     ScheduleAbilitySounds(work);
                     SpawnAbilityEffects(work, follower, pick.Col, pick.Row);
                 }
