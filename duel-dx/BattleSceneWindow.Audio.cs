@@ -246,7 +246,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             try
             {
-                string path = Path.Combine(AssetsFolder.Find("bgm"), $"{id:D4}.bgm");
+                string path = VoicePack.BgmPath(id);
                 if (!File.Exists(path)) return;
                 var pcm = BinkAudio.Open(path).Decode();
                 if (request != Volatile.Read(ref _musicRequest)) return;
@@ -325,7 +325,7 @@ internal sealed unsafe partial class BattleSceneWindow
             PcmSound? pcm = null;
             try
             {
-                string path = Path.Combine(AssetsFolder.Find("bgm"), $"{id:D4}.bgm");
+                string path = VoicePack.BgmPath(id);
                 if (File.Exists(path)) pcm = BinkAudio.Open(path).Decode();
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }

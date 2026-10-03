@@ -14,6 +14,7 @@ internal static class Program
         // 곧바로 끝나기를 기다리므로 <b>맨 앞</b>에서 받아 준다. 그냥 켰으면 아무 일 없이 지나간다.
         Velopack.VelopackApp.Build().Run();
         Updater.CheckInBackground();
+        VoicePack.EnsureInBackground();   // 대사 음성이 없으면 뒤에서 받는다
 
         // 게임 창 스레드가 아닌 곳에서 죽어도 같은 창을 띄운다.
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) ReportCrash(ex); };
