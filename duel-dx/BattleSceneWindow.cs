@@ -640,6 +640,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _itemMenu:
+                // 아이템 목록은 8줄 창이다(0x100d3830) — 휠로 굴린다. 전에는 9종째부터 고를 수 없었다(ba-20 G1).
+                _itemTop = Math.Clamp(_itemTop - (short)(((long)wParam >> 16) & 0xFFFF) / 120, 0, Math.Max(0, ItemRowsList().Count - ItemRows));
+                return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when SystemOpen || LevelUpOpen || _abilityMenu || _mosesOpen:
+                return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:
                 // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
                 if (((long)wParam & 0x0004) != 0) ScrollCameraX(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
@@ -883,9 +889,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
-        if (OnItemMenuClick(bx, by)) return;
         if (OnMosesClick(bx, by)) return;
-        if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by) || OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
+        // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
+        if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by)) return;
+        if (OnItemMenuClick(bx, by)) return;
+        if (OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
 
         if (by < GridTop) return;
         int col = bx / TileW, row = RowAt(bx, by);

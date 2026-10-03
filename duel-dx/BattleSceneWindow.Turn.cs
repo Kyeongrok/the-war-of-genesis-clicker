@@ -529,6 +529,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private bool CancelStep(bool undoMove)
     {
+        // 아이템 목록도 우클릭·Esc 로 닫힌다(목록 창 0x100d3830 — 우클릭 = 취소, ba-20 G1). 전에는 Esc 가 시스템 메뉴를 열었다.
+        if (_itemMenu) { _itemMenu = false; CancelTargeting(refund: true); if (IsPlayerTurn) OpenRing(_turn, reopen: true); return true; }
         if (_abilityMenu || _targetWork >= 0) { CancelTargeting(refund: true); OpenRing(_turn, reopen: true); return true; }
         return undoMove && UndoMove();
     }

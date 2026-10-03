@@ -583,7 +583,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _mosesPageAt = _lastTime;
         _mosesHover = -1;
         _talkPick = -1;
-        _mailOpen = -1;
+        CloseMailViewer();
         StartFade();
         ShowMosesBackground(MosesSystem()?.Background ?? 70);
     }
@@ -600,6 +600,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void MosesGoBack()
     {
+        if (_mosesSystemSwitch != null || _mosesFade > 0) return;   // 항성계 옮기기·페이드 중에는 입력 잠금(ba-20 G4)
         // 항행 단계 2(장소 고르기)에서는 늘 행성 고르기로 한 단계만 내려간다.
         // 전에는 챕터의 시작 단계(Chp 머리)가 2 보다 낮을 때만 내려갔는데, 그 값은 「들어갈 때 어디서 시작하나」일 뿐
         // 바닥이 아니다 — 챕터 10·14·19·21·22 는 행성이 여럿인데 시작 단계가 2 라, 그 규칙으로는 첫 행성에 갇혀
@@ -629,7 +630,7 @@ internal sealed unsafe partial class BattleSceneWindow
         bool fromNav = _mosesPage == 0;
         if (fromNav) _mosesNavVisited = false;                 // 단계 = −1
         _mosesPage = -1;
-        _mailOpen = -1;
+        CloseMailViewer();
         _talkPick = -1;
         StartFade(black: fromNav);
         _mosesHover = -1;

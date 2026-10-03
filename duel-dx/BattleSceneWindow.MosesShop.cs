@@ -120,11 +120,14 @@ internal sealed unsafe partial class BattleSceneWindow
         switch (list)
         {
             // 사려고 담기 — 한 칸 99개(0x100ff63e), 합계 5천만 GP(0x100ff677)까지.
-            case ListStock when _shopBuy.Count(i => i == itemId) + _inventory.GetValueOrDefault(itemId) < 99
+            // 99 는 <b>담은 수</b>만 센다(보유 수는 안 더한다, ba-20 G8).
+            case ListStock when _shopBuy.Count(i => i == itemId) < 99
                                 && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000: _shopBuy.Add(itemId); break;
             case ListBuy: _shopBuy.Remove(itemId); break;                       // 담은 것 빼기
             // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
-            case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count: _shopSell.Add(itemId); break;
+            // 매각 합계도 5천만 GP 까지다(0x100ff66d~0x100ff691).
+            case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count
+                              && _shopSell.Sum(ShopSellPrice) + ShopSellPrice(itemId) <= 50_000_000: _shopSell.Add(itemId); break;
             case ListSell: _shopSell.Remove(itemId); break;
         }
         return true;
