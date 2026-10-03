@@ -59,15 +59,20 @@ internal sealed unsafe partial class BattleSceneWindow
         DarkenRect(x - 1, y - FrameTitleH - 1, InfoW + 2, h + FrameTitleH + 2, 8);
         DrawGameFrame(x, y, InfoW, h, db.T(c.NameId));
 
-        Centre(db.T(c.TitleId), x, y + 20, DimGray);
-        Centre(db.FamilyName(c), x, y + 36, DimGray);
+        // 글자는 모두 흰색이다(0x10041450 색 −1, 분석-전투 「정보 창」) — 전에는 칭호·계열이 회색이었다(ba-20 G17).
+        Centre(db.T(c.TitleId), x, y + 20, White);
+        Centre(db.FamilyName(c), x, y + 36, White);
         Rule(x, y + 58);
         Row(db.T(160), c.Level.ToString(), y + 68);
         Row(db.T(161), c.Exp.ToString(), y + 84);
         Rule(x, y + 106);
-        Row(db.T(159), $"{unit.Hp}/{unit.MaxHp}", y + 116);
-        Row(db.T(41), $"{unit.Soul}/{unit.MaxSoul}", y + 132);
-        Row(db.T(38), $"{unit.Tp}/{unit.MaxTp}", y + 148);
+        // 보정(장비 + 장착 어빌리티 + 유닛 가감)이 0 보다 크면 "%d/%d(+%d)"(0x1016f200), 아니면 "%d/%d"(0x1016f1ec) — Status 창과 같은 값.
+        static string WithBonus(int now, int max, int bonus) => bonus > 0 ? $"{now}/{max}(+{bonus})" : $"{now}/{max}";
+        int hpBonus = db.EquipBonus(c, 0x30) + unit.BonusMaxHp, armor = db.ArmorRate(c);
+        if (hpBonus > 0 && armor != 0 && db.N(6) != 0) hpBonus = hpBonus * (armor + db.N(6)) / db.N(6);
+        Row(db.T(159), WithBonus(unit.Hp, unit.MaxHp, hpBonus), y + 116);
+        Row(db.T(41), WithBonus(unit.Soul, unit.MaxSoul, db.EquipBonus(c, 0x25) + unit.BonusMaxSoul), y + 132);
+        Row(db.T(38), WithBonus(unit.Tp, unit.MaxTp, db.EquipBonus(c, 0x21) + unit.BonusMaxTp), y + 148);
         Rule(x, y + 170);
         // ATK·ACR·RDP 는 원본 게터(0x1007ab20·ab90·abf0)처럼 상태이상·군단 보정·부하=대장 DEX/최대 TP 를 얹은 값 — Status 와 같은 헬퍼(감사4 S1).
         var (shown, acr, rdp, _) = ShownStats(db, unit, c);
