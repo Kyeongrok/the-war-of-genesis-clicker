@@ -17,6 +17,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>블랙홀 0x1008d200(489 · 978~986).</summary>
     private static bool IsBlackHoleWork(int id) => id == 489 || id is >= 978 and <= 986;
 
+    /// <summary>더블 브레이크 0x100825e0(work 393).</summary>
+    private const int DoubleBreakWork = 393;
+
     /// <summary>그리는 동안 틀마다 불리는 연출 — false 를 돌려주면 끝난 것이다.</summary>
     private readonly List<Func<bool>> _stageDraws = [];
 
@@ -29,6 +32,35 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>치는 단계에서 판정 바로 앞에 도는 연출. 연출이 없는 기술은 곧장 끝난다.</summary>
     private IEnumerable<bool> StageBeforeHit(WorkData w, UnitState a, int targetIndex, int col, int row)
     {
+        if (w.Id == DoubleBreakWork)
+        {
+            // 분신 A(시전자 Obs 모션 75)가 앞 한 칸 자리에서 「범위 최대」칸을 40px/틱(틱마다 ×0.92, 최소 6)으로 날아가고,
+            // 이어 분신 B 가 그 자리에서 10px/틱(×1.11, 최대 40)으로 돌아온다(0x10082756~0x10082894). 높이 +30/+20.
+            // 판정은 A 가 다 날아간 뒤 한 번에 낸다(원본은 칸을 넘을 때마다 3칸 띠 — 범위는 같다).
+            if (!_sprites.TryGetValue(a.ChrCode, out var sprite) || sprite.MotionTicks(75) <= 0) yield break;
+            int n = Math.Max(1, w.AreaMaxQuarters / 4);
+            var (dx, dy) = a.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+            var (ox, oy) = UnitFoot(a);
+            double lead = dx != 0 ? 50 : 40, total = 40.0 * n;
+            bool mirror = a.Facing == Facing.Right;
+            var outward = new List<double>();
+            for (double pos = 0, speed = 40; pos < total; speed = Math.Max(6, speed * 0.92)) { pos = Math.Min(total, pos + speed); outward.Add(pos); }
+            var back = new List<double>();
+            for (double pos = total, speed = 10; pos > 0; speed = Math.Min(40, speed * 1.11)) { pos = Math.Max(0, pos - speed); back.Add(pos); }
+            double flyAt = _lastTime;
+            _stageDraws.Add(() =>
+            {
+                int k = (int)((_lastTime - flyAt) * TicksPerSecond);
+                if (k < 0 || k >= outward.Count + back.Count) return false;
+                double pos = lead + (k < outward.Count ? outward[k] : back[k - outward.Count]);
+                int lift = k < outward.Count ? 18 : 12;
+                if (sprite.FrameOfMotion(75, Math.Min(k, sprite.MotionTicks(75) - 1), mirror) is not { } frame) return false;
+                BlitMasked(frame.Px, frame.W, frame.H, ox + (int)(dx * pos) + frame.X, oy + (int)(dy * pos * 0.8) - lift + frame.Y, fade: 24 / 31.0);
+                return true;
+            });
+            while ((_lastTime - flyAt) * TicksPerSecond < outward.Count) yield return true;
+            yield break;
+        }
         if (!IsBalancingWork(w.Id) && !IsWeaponCrashWork(w.Id) && !IsBlackHoleWork(w.Id)) yield break;
         var targets = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)).Select(i => _units[i]).ToList();
         double start = _lastTime;
