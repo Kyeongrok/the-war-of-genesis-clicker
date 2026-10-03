@@ -278,20 +278,41 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>편지 보기 — 원본 창 틀에 보낸이·제목·본문.</summary>
     private void DrawMailView(int ox, int oy, MosesMail mail)
     {
-        int x = ox + MailViewX, y = oy + MailViewY + FrameTitleH;
-        DarkenRect(x - 1, y - FrameTitleH - 1, MailViewW + 2, MailViewH + FrameTitleH + 2);
-        DrawGameFrame(x, y, MailViewW, MailViewH, _db?.T(mail.OriginText) ?? "");
-        DrawText($"From. {SenderName(mail.Sender)}", x + 12, y + 8, 0xFFFFFF80, 12);
+        // 뷰어 0x1003c870(그리기 0x1003cd90, ba-20 S 4) — 창 (164,100) 313×239, 틀 Obs 226 넉 장(바탕 모션 2·3 은 효과 6 = 24/31, 테두리 0·1),
+        // 얼굴 60×60 @ (+4,+8), 첫 줄 「이름」(+73,+12) / 보낸이 이름 오른끝 +303, 둘째 줄 발신지 (+73,+54) / 「LOCATION」 오른끝 +303,
+        // 본문 (+15,+76) 폭 298 · 10줄. 원본은 3틱에 한 글자씩 흘리며 줄을 올리는데, 여기서는 한꺼번에 띄우고 휠로 굴린다.
+        int x = ox + MailViewX, y = oy + MailViewY - 20;
+        const uint tag = 0xFFF2DB6F, value = 0xFFDAE6FC;
+        if (UiFor(226) != null)
+        {
+            DrawUi(226, 2, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
+            DrawUi(226, 3, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
+            DrawUi(226, 0, 0, x, y, UiBlend.Alpha);
+            DrawUi(226, 1, 0, x, y, UiBlend.Alpha);
+        }
+        else
+        {
+            DarkenRect(x - 1, y - 1, MailViewW + 2, MailViewH + 2);
+            StrokeRect(x, y, MailViewW, MailViewH, White);
+        }
+        if (_db?.Character(mail.Sender) is { } sender)
+        {
+            LoadFieldFace(sender);
+            if (_faces.TryGetValue(sender.Code, out var face)) BlitScaled(face, x + 4, y + 8, 60, 60);
+        }
+        DrawText("이름", x + 73, y + 12, tag, 12);
+        RightText(SenderName(mail.Sender), x + 303, y + 12, value, 12);
+        DrawText(_db?.T(mail.OriginText) ?? "", x + 73, y + 54, value, 12);
+        RightText("LOCATION", x + 303, y + 54, tag, 12);
 
-        // 긴 편지는 휠로 굴려 읽는다 — 전에는 창을 넘는 끝줄이 잘려 읽을 수 없었다(ba-20 S 4). 원본은 3틱에 한 글자씩 흘리며 한 줄씩 올린다.
-        var lines = WrapText(mail.Body, MailViewW - 24, 12f);
-        int rows = Math.Max(1, (MailViewH - 30 - 16) / 16 + 1);
+        var lines = WrapText(mail.Body, 298 - 6, 12f);
+        const int rows = 10;
         _mailViewTop = Math.Clamp(_mailViewTop, 0, Math.Max(0, lines.Count - rows));
-        int ty = y + 30;
+        int ty = y + 76;
         for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
-            DrawText(lines[i], x + 12, ty, White, 12);
-        if (_mailViewTop + rows < lines.Count) DrawText("▼", x + MailViewW - 20, y + MailViewH - 18, 0xFFFFFF80, 12);
-        if (_mailViewTop > 0) DrawText("▲", x + MailViewW - 20, y + 30, 0xFFFFFF80, 12);
+            DrawText(lines[i], x + 15, ty, White, 12);
+        if (_mailViewTop + rows < lines.Count) DrawUi(TalkNextObs, 0, (int)(_lastTime * TicksPerSecond), x + 300, y + 232, UiBlend.Alpha);
+        if (_mailViewTop > 0) DrawText("▲", x + 296, y + 76, tag, 11);
     }
 
     /// <summary>편지 뷰어에서 맨 위에 보이는 줄 — 휠로 굴린다.</summary>
