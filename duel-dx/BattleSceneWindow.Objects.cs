@@ -666,9 +666,17 @@ internal sealed unsafe partial class BattleSceneWindow
         bool heals = work is { IsHeal: true };
         return _units.Any(u => u.Alive && u.OnField && u.Data is not null
             && (heals ? !ObjectHostile(obj, u) && obj.Team >= 0 && u.Hp < u.MaxHp : ObjectHostile(obj, u))
-            && (work is { Id: 1525 or 1526 or 1527 } ? Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 4
+            && (work is { Id: 1525 or 1526 or 1527 } ? BarrageReaches(obj, u)
                 : work is { } w ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
                 : Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 1));
+    }
+
+    /// <summary>흩뿌리는 포탑의 후보 칸(제 칸과 네 이웃) 가운데 그 유닛이 반경 3(높이 차 절반 포함) 안에 드는 칸이 있나 — ObjectBarrage 와 같은 잣대.</summary>
+    private bool BarrageReaches(DemoObject obj, UnitState u)
+    {
+        foreach (var (c, r) in new[] { (obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row) })
+            if (Math.Abs(u.Col - c) + Math.Abs(u.Row - r) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c, r)) / 2 <= 3) return true;
+        return false;
     }
 
     /// <summary>쏘는 동작(모션 14 → 15 → 16)을 도는 물체와 시작한 때 — DrawObjects 가 그린다.</summary>
