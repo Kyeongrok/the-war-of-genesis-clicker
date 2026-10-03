@@ -237,10 +237,18 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, UiBlend.Alpha);
                 if (_db?.Items.GetValueOrDefault(itemId) is not { } item) continue;
                 DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, UiBlend.Alpha);
-                DrawText(_db.T(item.NameId), rx + 20, ry + 4, White, 11);
-                string value = $"{(i is ListBag or ListSell ? ShopSellPrice(itemId) : ShopPrice(itemId))} X {count:D2}";
-                var (_, vw, _) = GetText(value, White, 11);
-                DrawText(value, rx + lw - 2 - vw, ry + 4, White, 11);
+                // 줄 글(0x100f8900~ · 0x100f8f10~, ba-20 S 5): 재고 줄의 수 = 담은 수(처음 X 00), 소지품 줄의 수 = 보유 − 팔려고 담은 수,
+                // 매입·매각 목록은 「이름(X nn)」이고 값이 없다. 값 글은 노랑. 가격 0 인 소지품은 「판매 불가」로 꺼진다(0x1003fdc0).
+                bool unsellable = i == ListBag && ShopSellPrice(itemId) <= 0;
+                int shown = i == ListStock ? _shopBuy.Count(b => b == itemId) : i == ListBag ? count - _shopSell.Count(b => b == itemId) : count;
+                string label = i is ListBuy or ListSell ? $"{_db.T(item.NameId)}(X {shown:D2})" : _db.T(item.NameId);
+                DrawText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
+                if (i is ListStock or ListBag)
+                {
+                    string value = unsellable ? "판매 불가" : $"{(i == ListBag ? ShopSellPrice(itemId) : ShopPrice(itemId))} X {shown:D2}";
+                    var (_, vw, _) = GetText(value, White, 11);
+                    DrawText(value, rx + lw - 5 - vw, ry + 4, unsellable ? DimGray : 0xFFFFFF00, 11);
+                }
             }
             // 줄이 넘치면 오른쪽에 위·아래 화살표
             if (items.Count > ShopRows)

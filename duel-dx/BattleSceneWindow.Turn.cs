@@ -636,6 +636,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
+    /// <summary>핸들러 첫 단계에서 대상 칸으로 카메라를 보내는 어빌리티(0x100eab80 을 부르는 28개 핸들러 — ba17-camera C14 · ba-20 O P7).</summary>
+    private static readonly HashSet<int> TargetCameraAbilities =
+        [31, 37, 39, 40, 42, 43, 50, 55, 56, 72, 79, 81, 88, 93, 97, 107, 108, 116, 126, 141, 142, 166, 169, 171, 186, 191, 192];
+
     private bool CanAfford(UnitState u, WorkData w) =>
         u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
         && (u.Data.JobId == 37 || u.Hp >= _db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
@@ -854,7 +858,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!targetCentred)
             {
                 targetCentred = true;
-                if (!BasicWorkActions.ContainsKey(w.Id) && a.Data?.BasicWorkId != w.Id && (uint)col < Cols && (uint)row < Rows)
+                // 대상 칸으로 카메라를 보내는 핸들러(0x100eab80 호출)는 28개뿐이다 — 나머지 기술은 카메라가 시전자에 머문다(ba-20 O P7).
+                if (TargetCameraAbilities.Contains(w.AbilityId) && a.Data?.BasicWorkId != w.Id && (uint)col < Cols && (uint)row < Rows)
                     foreach (bool _ in CenterAndWait(col * TileW + TileW / 2, CellCenterY(col, row))) yield return true;
             }
             // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,
