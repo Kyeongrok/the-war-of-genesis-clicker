@@ -1199,6 +1199,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawUnits();
         DrawBodyClones();
         DrawBlinkGhosts();
+        DrawStageFx();
         DrawEffects();
         DrawMovies();
         DrawRipples();
@@ -1786,6 +1787,9 @@ internal sealed class UnitState(DemoUnit unit)
 
     /// <summary>그릴 밝기(0~1) — 이스케이프(work 1583)가 겨눈 칸으로 사라졌다 나타날 때만 코드가 손으로 움직인다.</summary>
     public double Fade { get; set; } = 1;
+
+    /// <summary>마비·빙결·이동 불가로 군단에서 떨어진 부하(Legion.cs DetachFollower) — 대장의 레코드 번호로 사건 대상에 잡히거나 파티에 들어가지 않게.</summary>
+    public bool Detached { get; set; }
 
     // ── 전투 수치 (게임 표를 읽은 뒤 채운다) ──
     public CharacterData? Data { get; set; }

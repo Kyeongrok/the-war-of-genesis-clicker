@@ -482,6 +482,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _bodyClones.Clear();
         _blinks.Clear();
         _blinkGhosts.Clear();
+        _stageDraws.Clear();
         _flyingEffects.Clear();
         _swords.Clear();
         _preludeDots.Clear();
@@ -960,6 +961,7 @@ internal sealed unsafe partial class BattleSceneWindow
             u.Facing = (Facing)s.Facing;
             // 자세(+0x4d4)도 되살린다 — 전에는 0 으로 덮어 방어·회피 자세로 차례를 넘긴 인물이 불러오면 자세를 잃었다(ba-15 Q5 #4).
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, s.Stance);
+            u.Fade = 1;   // 쓰러짐·순간이동 페이드 도중에 불러와도 흐린 채 남지 않게
             if (s.Side >= 0) u.Side = s.Side;
             if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.

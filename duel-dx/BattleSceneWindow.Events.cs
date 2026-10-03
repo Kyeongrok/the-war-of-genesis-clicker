@@ -354,7 +354,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return [.. _units.Where(u => u.Side == side)];
         }
         // 10000+N 은 Btl 레코드 번호다(빈 칸을 걸러 낸 뒤의 배열 자리가 아니다).
-        if (value >= 10000) return [.. _units.Where(u => u.LeaderIndex < 0 && u.Record == value - 10000)];
+        if (value >= 10000) return [.. _units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000)];
         return value > 0 ? [.. _units.Where(u => u.ChrCode == value)] : [];
     }
 
