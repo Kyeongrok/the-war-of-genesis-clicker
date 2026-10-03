@@ -1039,7 +1039,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 {
                     var aimed = targetIndex >= 0 ? _units[targetIndex] : LiveUnitAt(col, row);
                     bool allyPass = w.AreaMode == 4 || (w.AreaMode == 5 && aimed != null && !SeesAsFoe(a, aimed));
-                    FollowersAttack(userIndex, targets.Count > 0 ? _units[targets[0]] : a, dying, allyPass, leaderWork: w, walk: targets.Count > 0);
+                    FollowersAttack(userIndex, targets.Count > 0 ? _units[targets[0]] : a, dying, allyPass, leaderWork: w, walk: targets.Count > 0 && !allyPass);   // 아군 패스는 제자리만(0x1005f1c0 → 0x1005e820, ba-20 Q3)
                     followersDone = true;
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
