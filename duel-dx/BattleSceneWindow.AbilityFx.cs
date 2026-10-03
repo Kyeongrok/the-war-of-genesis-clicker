@@ -72,7 +72,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 비 — BiScript(BattleSceneWindow.Knockback.cs). 레벨마다 work 가 따로라(10 · 221~239) 거기서 모두 잡는다.
         [59] = ([6, 15], [new(1332, 0, false, 0), new(1324, 1, false, 0)]),     // 격려
         // 제이슨
-        [467] = ([6, 15], [new(386, 0, false, 0), new(171, 9, true, 30)]),       // 블레이드 미사일
+        [467] = ([6, 15], [new(386, 0, false, 0), new(171, 9, true, 30, 0, 1, false, 0, 0)]),       // 블레이드 미사일
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
         // 나인 크루세이더 — 앞머리는 FinisherPrelude, 칼은 BattleSceneWindow.NineCrusader.cs 가 한다.
         // 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
