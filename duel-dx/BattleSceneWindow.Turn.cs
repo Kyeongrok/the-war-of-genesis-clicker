@@ -59,7 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>자세를 세우는 work — 516 방어(맞을 때 한 번 더 깎임), 515 회피(상대 명중 −DEX/5).</summary>
     private const int StanceDefendWork = 516, StanceEvadeWork = 515;
-    private const double TickDelaySeconds = 0.05;
+    private const double TickDelaySeconds = 0.2;   // 행동 끝 → 다음 GETNEXT 까지 상태 20·18·19·21·4 를 지나 약 6걸음(ba-20 W)
 
     /// <summary>그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.</summary>
     private bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !_allyAi));
@@ -241,6 +241,11 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int g = 0; g < 8 && _events.Count > 0 && _eventCheckDue != 0 && !EventsBusy && _outcome.Length == 0; g++) RunEvents();
             if (_outcome.Length > 0 || EventsBusy) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
             if (_ailmentTickQueue.Count > 0) return;   // 매 턴 피해를 먼저 — 다음 틀부터 StepAilmentTicks 가 한 명씩
+            // 원본은 논리 한 걸음(33ms)에 전투 틱을 많아야 하나 올린다 — 전투 걸음 0x10066070 은 상태 핸들러를 한 번만 부르고,
+            // GETNEXT(0x10067cdc)는 유닛이 없으면 틱++ 뒤 그냥 돌아간다(ba-20 W). 빈 틱이 초당 30개로 눈에 보이게 흐른다.
+            // 전에는 한 틀 안에서 차례가 나올 때까지 몰아 올려 차례 사이 쉼((최대TP−TP)/STP 틱)이 없었다.
+            _nextTickAt = _lastTime + 1.0 / TicksPerSecond;
+            return;
         }
     }
 
