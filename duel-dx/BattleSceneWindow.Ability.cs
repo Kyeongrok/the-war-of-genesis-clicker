@@ -39,7 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (index < 0) return false;
         var rows = MenuRows();
         if (index >= rows.Count) return true;
-        _abilityTop = 0;                           // 단축키는 늘 앞 여덟 줄이다
+        if (_abilityTop != 0) { _abilityTop = 0; UpdateAbilityHover(_mouse.X, _mouse.Y); }   // 단축키는 늘 앞 여덟 줄이다
         var (ox, oy) = MenuOrigin(rows.Count);
         _targetHotkey = key;                       // 같은 키를 한 번 더 누르면 겨눈 대상에게 쓴다
         bool handled = OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);

@@ -490,6 +490,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _bodyClones.Clear();
         _blinks.Clear();
         _pendingExits.Clear();
+        _exitOutcomeDue = false;
         _brokenAt.Clear();
         _objActing.Clear();
         _objectRoutine = false;
@@ -937,6 +938,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _bodyClones.Clear();
         _blinks.Clear();
         _pendingExits.Clear();
+        _exitOutcomeDue = false;
         _brokenAt.Clear();
         _objActing.Clear();
         _objectRoutine = false;

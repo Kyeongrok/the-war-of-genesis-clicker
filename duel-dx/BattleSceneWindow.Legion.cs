@@ -414,7 +414,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var follower in FollowersOf(leaderIndex))
         {
             // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
-            if (follower.Data is not { } c || follower.IsBusy) continue;
+            if (follower.Data is not { } c || follower.IsBusy || !follower.OnField || follower.Hp <= 0) continue;   // 판 밖·쓰러질 부하는 뺀다
             bool done = false;
             foreach (var work in FollowerWorks(c, allyPass))
             {
@@ -462,7 +462,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 int best = -1, bestCost = int.MaxValue;
                 for (int idx = 0; idx < Cols * Rows; idx++)
                 {
-                    if (!range.CanReach(idx) || range.Cost[idx] >= bestCost) continue;
+                    if (!range.CanReach(idx) || range.Cost[idx] >= bestCost || approached.Contains(idx)) continue;   // 앞 부하가 잡은 칸은 뺀다
                     int cc = idx % Cols, rr = idx / Cols;
                     if (LiveUnitAt(cc, rr) is { } other && other != follower) continue;
                     if (!InWorkRange(work, cc, rr, target.Col, target.Row, follower)) continue;
@@ -474,6 +474,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 PlayWalkSound(follower);
                 _followerTarget[follower] = (best % Cols, best / Cols);
                 _followerStrikes.Add((follower, work, target));
+                approached.Add(best);
                 planned = true;
                 break;
             }
@@ -481,7 +482,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             // 칠 수 있는 칸이 없으면 <b>다가가기만</b> 한다(적 고르개 뒷부분 0x1005f4f4~0x1005f5f4 → 이동만 0x2710, ba-20 Q4) — 대장이 겨눈 칸에
             // 가장 가까이 닿는 칸으로 걷는다. 전에는 그 자리에 섰고, 기술 뒤에는 진형 다시 세우기도 안 불려 뒤처진 부하가 영영 못 따라왔다.
-            // 예산은 지금 TP 전부(가설 — AI 의 (B) 접근과 같다고 본다).
+            // 예산은 보통 이동 범위와 같다(ComputeRange — AI 부하는 기본공격 값을 남긴 만큼). 원본 예산은 가설.
             if (ComputeRange(follower) is not { } near) continue;
             var toAim = CostMapFrom(follower, target.Col, target.Row);
             if (toAim is null) continue;
