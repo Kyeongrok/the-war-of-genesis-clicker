@@ -602,7 +602,9 @@ internal sealed unsafe partial class BattleSceneWindow
             var items = (ushort[])c.Items.Clone();
             items[slot] = (ushort)itemId;
             taker.Data = c with { Items = items };
+            int oldHp = taker.Hp, oldMax = taker.MaxHp;   // 화면 HP 는 새 갑옷 배율로 같은 비율(ba-20 C3, Status.cs SetEquipment)
             RefreshUnitStats(taker);
+            if (oldMax > 0 && taker.MaxHp != oldMax) taker.Hp = Math.Clamp((int)((long)oldHp * taker.MaxHp / oldMax), oldHp > 0 ? 1 : 0, taker.MaxHp);
             if (_party.ContainsKey(taker.ChrCode)) _party[taker.ChrCode] = taker.Data;
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),

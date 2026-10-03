@@ -189,6 +189,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         /// <summary>그 모션을 건 때 — 모션마다 처음부터 돌게 한다.</summary>
         public double MotionStart { get; set; }
+        /// <summary>행동 209 가 애니메이션을 세운 때(<c>0x100f1680</c> → <c>vt+0xc0(-1)</c>) — 다음 208·걷기까지 그 장에 멈춰 있다(ba-20 B1).</summary>
+        public double? FrozenAt { get; set; }
         public bool Mirror { get; set; }
         public bool Visible { get; set; } = true;
 
@@ -974,6 +976,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                     && (_lastTime - who.MotionStart) * TicksPerSecond >= runLength - 1);
                 who.Motion = A(1);
                 who.Mirror = A(3) != 0;
+                if (who.FrozenAt != null) { running = false; who.FrozenAt = null; }   // 209 로 선 모션은 다시 돈다(vt+0xc0(0))
                 if (!running) who.MotionStart = _lastTime;
                 who.Hold = A(2) != 1;
                 // 인자2 가 1 이면 되풀이라 슬롯이 곧장 풀리고, 아니면 <b>한 바퀴 다 돌 때까지</b> 슬롯이 산다(0x100f1510).
@@ -984,7 +987,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     HoldSlotTicks(length);
                 break;
             }
-            case 209: break;                                 // 모션 멈추기 — 데모는 늘 그 모션을 보이므로 할 일이 없다
+            case 209:                                        // 모션 멈추기 — 애니메이션을 지금 장에서 세운다(0x100f1680, ba-20 B1)
+                if (FieldActorOf(A(0)) is { } still) still.FrozenAt ??= _lastTime;
+                break;
             case 210:                                        // 서서히 사라지기
             case 211:                                        // 서서히 나타나기
             {
@@ -1354,9 +1359,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void SetActorMotion(FieldActor who, int motion)
     {
-        if (who.Motion == motion) return;
+        if (who.Motion == motion && who.FrozenAt == null) return;
         who.Motion = motion;
         who.MotionStart = _lastTime;
+        who.FrozenAt = null;
     }
 
     /// <summary>걷는 중인 인물을 한 걸음 옮긴다 — 매 틱 선형 보간이다.</summary>
@@ -1810,7 +1816,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db?.Character(actor.ChrCode) is not { SpriteId: > 0 } pc) return;
         var (px, py) = FieldScreenAt(actor.Layer, actor.X, actor.Y);
-        int actorTick = (int)((_lastTime - actor.MotionStart) * TicksPerSecond);
+        int actorTick = (int)(((actor.FrozenAt ?? _lastTime) - actor.MotionStart) * TicksPerSecond);
         if (actor.Hold && UiFor(pc.SpriteId)?.MotionLength(actor.Motion) is > 0 and var holdLength)
             actorTick = Math.Min(actorTick, holdLength - 1);   // 한 바퀴 돈 뒤 마지막 장에 멈춘다
         // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.

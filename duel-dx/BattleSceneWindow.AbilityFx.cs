@@ -37,7 +37,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void SpawnCounterBlades(UnitState user)
     {
         var (fx, fy) = user.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
-        var (sx, sy) = (fy, fx);                                   // 옆 방향
+        // 옆 방향 — 왼쪽을 볼 때도 위 → 아래 차례로 뜬다(0x100a9027~0x100a90ec, ba-20 P10). 전에는 왼쪽만 아래 → 위였다.
+        var (sx, sy) = user.Facing == Facing.Left ? (0, 1) : (fy, fx);
         for (int k = -2; k <= 2; k++)
         {
             int col = user.Col + fx * 2 + sx * k, row = user.Row + fy * 2 + sy * k;

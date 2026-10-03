@@ -483,6 +483,20 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!allyPass && Work(c.BasicWorkId) is { } basic) yield return basic;
     }
 
+    /// <summary>
+    /// 부하가 마비·빙결·이동 불가(5·6·25)에 걸리면 군단에서 떨어진다(<c>0x10072fd0(대장, 부하)</c>, ba-20 C2) — 대장 연결이 끊기고
+    /// 편 4 면 편 3(동맹 AI)이 되며 HP 를 제 최대치에서 자른다. 대장 부하 수가 줄어 군단기가 꺼질 수 있다.
+    /// 떨어진 뒤 혼자 움직이는지는 가설(차례 고르기가 대장 없는 유닛을 받으므로 그렇게 둔다).
+    /// </summary>
+    private void DetachFollower(UnitState u)
+    {
+        if (u.LeaderIndex < 0) return;
+        u.LeaderIndex = -1;
+        u.FormationSlot = -1;
+        if (u.Side == 4) { u.Side = 3; u.Awake = true; }
+        RefreshUnitStats(u);
+    }
+
     /// <summary>대장이 쓰러지면 — 첫 부하가 새 대장이 되고 세력이 0.6배가 된다.</summary>
     private void PromoteFollower(int leaderIndex)
     {

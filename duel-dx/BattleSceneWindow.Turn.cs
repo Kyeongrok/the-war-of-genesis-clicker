@@ -179,6 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 행동이 끝났다 — 갈래 2 검사. 휴식·물체 만지기처럼 UseWorkRoutine 을 안 거치는 행동도 상태 21 을 지난다(0x100681a0 → 갈래 1).
                 _routine = null;
                 _eventCheckDue |= (1 << 2) | (1 << 1);
+                AutoHealAll();   // 8(자동 회복)도 행동 끝마다 전원에게(ba-20 C1)
                 QueueLevelUps();
             }
             return;
@@ -405,7 +406,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!resume)
         {
             // 이벤트 타이머·자세 풀기는 틱에서 한다(AdvanceTick) — 원본 [+0x4cf0] 은 빈 틱마다 오르는 시간 틱이다(0x10067d36, fg-22).
-            AutoHeal(_units[index]);    // 8(자동 회복)은 차례를 받는 순간 채운다
             // 기준 칸은 새 차례에만 — 이어 받는 차례는 세이브의 기준 칸(+0x4b8/+0x4ba)을 그대로 둔다. 전에는 여기서 지금 자리로 덮어
             // 걸은 뒤 저장·불러오기면 걸음 비용이 사라졌다(감사5 S2).
             _units[index].OriginCol = _units[index].Col;
@@ -1090,6 +1090,13 @@ internal sealed unsafe partial class BattleSceneWindow
             a.Fade = 1;
         }
 
+        // 희생(13)·익스플로젼(22) — 아군을 회복시킨 뒤 시전자 HP 를 0 으로 쓴다(0x10090d62 · 0x100915f9, ba-20 D1).
+        // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)이 되살리는지는 가설.
+        if (w.AbilityId is SacrificeAbility or ExplosionAbility && a.Alive && !dying.Contains(a))
+        {
+            a.Hp = 0;
+            if (!SurvivesFatal(a)) dying.Add(a);
+        }
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
         GainBuffExp(a);
         PayWorkCost(a, w, free: eventFinisher);   // 사건 207·909 는 +0xa4 = 1 — 비용 없이 SOUL 증가만(0x1007638c, 감사5 B2)
@@ -1104,7 +1111,14 @@ internal sealed unsafe partial class BattleSceneWindow
             // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).
             CenterOnUnit(dying.OrderBy(d => Array.IndexOf(_units, d)).Last());
             foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); Play(SoundDeath); }
-            while (dying.Any(d => d.IsBusy)) yield return true;
+            // 쓰러지는 21틱 동안 옅어진다 — 섞기 단계 = 8 − 카운터/3, 가중 4k/31(그리기 0x10071af5~0x10071bdd, ba-20 P3).
+            for (double fallAt = _lastTime; dying.Any(d => d.IsBusy);)
+            {
+                int n = 1 + (int)((_lastTime - fallAt) * TicksPerSecond);
+                foreach (var d in dying) d.Fade = Math.Clamp((8 - n / 3) * 4 / 31.0, 0, 1);
+                yield return true;
+            }
+            foreach (var d in dying) d.Fade = 1;
             foreach (var d in dying)
             {
                 MarkDead(d);                             // 대장이 죽으면 첫 부하가 대장이 된다(승계는 MarkDead 한 곳에서, 감사5 L-B)
@@ -1113,6 +1127,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 행동 끝 상태 21(0x100681a0) — 처치가 없어도 <b>매 행동마다</b> 레벨업을 보고, 그다음 갈래 1 검사(0x10068270)를 한다.
         // 전멸 판정(상태 4, 0x1006ed10)은 그 뒤라 마지막 적을 쓰러뜨린 사람의 레벨업 창도 전투가 끝나기 전에 뜬다(ba-15 Q7).
         // 전에는 CheckOutcome 이 먼저 결과를 세워 UpdateTurn 이 레벨업 창 앞에서 돌아가 버렸다.
+        AutoHealAll();   // 상태 20 갈래 0(0x10067d70) — 행동이 끝날 때마다 8(자동 회복)을 전원에게(ba-20 C1)
         QueueLevelUps();
         _eventCheckDue |= 1 << 1;
         if (dying.Count > 0)
@@ -1181,11 +1196,26 @@ internal sealed unsafe partial class BattleSceneWindow
             PlayHitReaction(t, damaged: false);
             return;
         }
+        // 블랙홀(115) — 피해 판정이 없다. 화면 HP 가 위력(500~1000)보다 적은 유닛만 HP 0(0x1008d85f~0x1008d885, ba-20 D2).
+        // 명중 굴림·상태·맞음 SOUL·처치 보상이 없고(1016 을 안 보냄 — 가설), 시전자·아군도 범위에 든다(범위 대상 5).
+        if (w.AbilityId == BlackHoleAbility)
+        {
+            if (t.Hp < w.Power)
+            {
+                t.Hp = 0;
+                if (!SurvivesFatal(t)) dying.Add(t);
+            }
+            return;
+        }
         if (!w.IsDamage)
         {
             // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).
-            if (result == 3) { ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor); return; }
-            ApplyAilments(a, t, w);   // 종류 2·3(큐어 따위)은 상태이상만 건다
+            // 명중 굴림은 거는 함수(0x1007bcc0) 안에 있다 — 그 결과가 3(명중·레벨 조건 실패)이면 Miss 만 뜨고 맞음 동작·EXP 가 없다(ba-20 C5).
+            if (result == 3 || !ApplyAilments(a, t, w))   // 종류 2·3(큐어 따위)은 상태이상만 건다
+            {
+                ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor);
+                return;
+            }
             MarkBuffed(a, t, w);
             if (t != a) PlayHitReaction(t, damaged: false);
             return;
@@ -1264,9 +1294,14 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             ScriptedDestinationOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime;   // 음악은 배너와 함께 16틀 뒤(UpdateOutcomeBanner, 사운드 B1)
+            TestRunTrace($"outcome wipe-win btl {_scene.Id} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
         }
         // 패배는 <b>사람이 모는 편(편 4)</b>이 다 쓰러졌을 때다(0x1006ec00 — 세력 +8 조종 주체 0 인 편만) — 편 3 동맹이 남아도 진다.
-        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4)) { _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime; }
+        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4))
+        {
+            _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime;
+            TestRunTrace($"outcome wipe-lose btl {_scene.Id} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
+        }
     }
 
     /// <summary>배너·음악 없이 끝나는 결과(행동 10·6 의 결과 5·6, 행동 11[1] 의 결과 2) — 원본 상태 24 는 결과 1·4 만 그린다(0x1006afa0).</summary>
@@ -1285,6 +1320,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _outcome = win ? "승리" : "패배";
         _outcomeAt = _lastTime;
         _outcomeQuiet = quiet;
+        // 시험 전용: 사건이 낸 결과를 남긴다(DUELDX_TESTRUN 일 때만).
+        TestRunTrace($"outcome event btl {_scene.Id} win {win} quiet {quiet} 사건 {_runningEvent} 줄 {_eventPc - 1} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {_lastTime:F1}");
         _outcomeLeaveAt = _lastTime + (OutcomeBannerDelayTicks + OutcomeAutoTicks + 1) / TicksPerSecond;
     }
 

@@ -385,7 +385,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 첫 틱에 터졌다. 편을 가리키는 20000+ 는 극성이 또 반대다(0x1004f5da).
                 // 전장 밖((0,0) 대기·201 로 나간) 인물은 「없다」(0x1006e940 는 맵 밖 자리를 없음으로 친다).
                 var list = EventTargets(A(0), out bool whole);
-                RememberFound(list.FirstOrDefault(u => u.Alive && u.OnField));   // 조건 200 도 20010 을 남긴다(0x1004f465)
+                // 20010 은 <b>편 코드 홀수 · 인자2≠0</b> 갈래에서 찾은 유닛만 남긴다(0x1004f465) — 홑 유닛 갈래는 안 적는다(ba-20 B2).
+                if (A(0) >= 20000 && !whole && A(2) != 0) RememberFound(list.FirstOrDefault(u => u.Alive && u.OnField));
                 if (A(0) >= 20000)
                     return whole ? A(2) == 0 && !list.Any(u => u.Alive && u.OnField)
                                  : A(2) != 0 && list.Any(u => u.Alive && u.OnField);
@@ -404,7 +405,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 var list = EventTargets(A(0), out _);
                 var low = list.FirstOrDefault(u => u.Alive && Compare(u.Hp, A(2), u.MaxHp * A(3) / 100));
-                if (low != null) RememberFound(low);                            // 조건 203 도 20010 을 남긴다(0x1004f7f5)
+                if (low != null && A(0) >= 20000) RememberFound(low);           // 편 갈래만 20010 을 남긴다(0x1004f7f5, ba-20 B2)
                 return low != null;
             }
             case 401:                                                           // 그 편 전멸

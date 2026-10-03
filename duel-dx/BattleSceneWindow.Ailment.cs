@@ -124,25 +124,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 거는 함수(<c>0x1007bcc0</c>)는 들어오자마자 <b>명중을 제 손으로 한 번 더 굴린다</b> — 부르는 곳이 한 군데뿐이라
     /// 피해형(종류 0)은 <b>두 번째</b> 굴림이고, 회복·보조(1·2·3)에는 이것이 <b>유일한</b> 굴림이다.
     /// </remarks>
-    private void ApplyAilments(UnitState attacker, UnitState target, WorkData w)
+    private bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
         if (_db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
-            && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return;
+            && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
 
         // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
         // 무기가 없으면 아무것도 안 건다(0x1007bda4). 지금 판 자료에는 이 칸이 든 아이템이 하나도 없다.
         (int Id, int Value)[] effects;
         if (attacker.Data is { } ac && w.Id == ac.BasicWorkId)
         {
-            if (ac.Items[0] == 0 || _db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return;
+            if (ac.Items[0] == 0 || _db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return true;
             effects = [.. (weapon.AttackEffects ?? []).Select(e => ((int)e.Status, (int)e.Value))];
         }
         else effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
-        if (effects.Length == 0) return;
+        if (effects.Length == 0) return true;
         // 레벨 조건(표 0x1007be84)은 그 효과 하나만 빼는 것이 아니다 — 종류 0·2 이고 공격자 레벨이 대상 이하인데
         // 세 효과 중 하나라도 5·6·12·19·22·23·24 이면 <b>work 전체가 실패</b>하고 회피 반응이 나온다(0x1007bcc0).
         if (w.Kind is 0 or 2 && (attacker.Data?.Level ?? 0) <= (target.Data?.Level ?? 0)
-            && effects.Any(e => NeedsLevelEdge(e.Id))) return;
+            && effects.Any(e => NeedsLevelEdge(e.Id))) return false;
 
         var used = new List<int>();
         foreach (var (id, value) in effects)
@@ -157,6 +157,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
+        return true;
     }
 
     private static void AddStatBonus(UnitState u, int id, int value)
@@ -179,7 +180,11 @@ internal sealed unsafe partial class BattleSceneWindow
     private void PutAilment(UnitState u, byte id, short value, List<int> used, UnitState? source = null)
     {
         // 마비·빙결·붙잡힘(5·6·25)이 걸리면 걷던 걸음을 그 자리에서 멈춘다(0x1007c480 이 이동을 막는다).
-        if (id is 5 or 6 or 25) u.Path.Clear();
+        if (id is 5 or 6 or 25)
+        {
+            u.Path.Clear();
+            DetachFollower(u);   // 군단 부하면 군단에서 떨어진다(0x1007c3dd → 0x10072fd0, ba-20 C2)
+        }
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == id)
             {
@@ -275,8 +280,15 @@ internal sealed unsafe partial class BattleSceneWindow
         || (u.HasStatus(24) && u.Soul >= u.MaxSoul);
 
     /// <summary>
-    /// 차례를 시작할 때 8(자동 회복) — HP 가 값(최대 HP 한도)보다 적으면 그 값까지 채운다(<c>0x10067dd1</c>).
+    /// 8(자동 회복) — HP 가 값(최대 HP 한도)보다 적으면 그 값까지 채운다(<c>0x10067dd1</c>).
+    /// 원본은 차례 시작이 아니라 <b>행동 하나가 끝날 때마다</b> 상태 20(<c>0x10067d70</c> 갈래 0)이 모든 유닛을 훑는다(ba-20 C1).
     /// </summary>
+    private void AutoHealAll()
+    {
+        foreach (var u in _units)
+            if (u.Alive && u.OnField) AutoHeal(u);
+    }
+
     private void AutoHeal(UnitState u)
     {
         if (!u.HasStatus(8)) return;
@@ -342,7 +354,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 곱하는 차례가 결과를 바꾼다(정수 나눗셈) — 원본은 7 → 13 → 14 순이다(0x1007b880 · 0x1007b8b3 · 0x1007b8e2).
         // 꼴은 dmg += trunc(±값 × dmg / 100) — 곱한 몫만 0 쪽으로 버린다(음수 쪽에서 dmg×(100−값)/100 보다 1 크다, ba-15).
-        if (target.Status(7) is var cut and > 0) amount += -cut * amount / 100;
+        if (target.Status(7) is var cut and not 0) amount += -cut * amount / 100;
         if (attacker.Status(13) is var atk and not 0) amount += atk * amount / 100;
         if (target.Status(14) is var def and not 0) amount += -def * amount / 100;
         return Math.Max(0, amount);
