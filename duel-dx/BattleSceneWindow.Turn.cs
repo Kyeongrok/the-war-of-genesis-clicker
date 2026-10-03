@@ -244,7 +244,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 원본은 논리 한 걸음(33ms)에 전투 틱을 많아야 하나 올린다 — 전투 걸음 0x10066070 은 상태 핸들러를 한 번만 부르고,
             // GETNEXT(0x10067cdc)는 유닛이 없으면 틱++ 뒤 그냥 돌아간다(ba-20 W). 빈 틱이 초당 30개로 눈에 보이게 흐른다.
             // 전에는 한 틀 안에서 차례가 나올 때까지 몰아 올려 차례 사이 쉼((최대TP−TP)/STP 틱)이 없었다.
-            _nextTickAt = _lastTime + 1.0 / TicksPerSecond;
+            _nextTickAt = Math.Max(_nextTickAt, _lastTime - 1.0 / TicksPerSecond) + 1.0 / TicksPerSecond;   // 누적 — 틀 시간에 물려 처지지 않게
             return;
         }
     }

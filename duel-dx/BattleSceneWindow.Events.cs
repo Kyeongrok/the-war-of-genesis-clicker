@@ -133,16 +133,22 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>걸어 나가던 유닛이 다 걸었으면(또는 전투 결과가 났으면) 판에서 뺀다 — 매 틀 부른다.</summary>
     private void StepPendingExits()
     {
-        for (int i = _pendingExits.Count - 1; i >= 0; i--)
+        if (_pendingExits.Count == 0) return;
+        // 행동(쓰러지는 동작)·레벨업 창 도중에는 빼지 않는다 — 여기서 승패가 서면 그 루틴이 멈춰 쓰러짐·레벨업이 건너뛰어진다.
+        if (_outcome.Length == 0 && (_routine != null || LevelUpOpen)) return;
+        var done = _pendingExits.Where(x => !(_lastTime < x.At && _outcome.Length == 0 && x.Unit.Alive && x.Unit.IsBusy)).ToList();
+        if (done.Count == 0) return;
+        _pendingExits.RemoveAll(done.Contains);   // 먼저 지운다 — CheckOutcome 이 사건을 돌려 이 목록을 바꿀 수 있다
+        bool left = false;
+        foreach (var (u, _, col, row, withFollowers) in done)
         {
-            var (u, at, col, row, withFollowers) = _pendingExits[i];
-            if (_lastTime < at && _outcome.Length == 0 && u.Alive && u.IsBusy) continue;
-            _pendingExits.RemoveAt(i);
             if (!u.Alive || Array.IndexOf(_units, u) < 0) continue;
             LeaveField(u, col, row, withFollowers);
-            _eventCheckDue |= (1 << 2) | (1 << 1);   // 「그 유닛이 없다」 조건·전멸 판정을 다시 본다
-            CheckOutcome();
+            left = true;
         }
+        if (!left) return;
+        _eventCheckDue |= (1 << 2) | (1 << 1);   // 「그 유닛이 없다」 조건·전멸 판정을 다시 본다
+        CheckOutcome();
     }
 
     private IEnumerator<bool>? _eventRoutine;
@@ -277,13 +283,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 case 400 or 402 or 600 or 601 or 906 when !_talkSkip && EventCameraWaits(a):
                     _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
                     return;
-                case 600: ShowTalk(box: true, a); if (_talk == null) break; return;    // 건너뛰는 중이면 안 뜬다
+                case 600: ShowTalk(box: true, a); if (_talk == null) break; _talkNoWait = false; return;    // 건너뛰는 중이면 안 뜬다
                 case 601:
                     ShowTalk(box: false, a);
                     if (_talk == null) break;
                     // 「601 → 2[틱]」 꼴(행동 1 없이)은 클릭을 안 기다린다 — 말풍선이 뜬 채 틱만 세고 다음 줄로 간다(진행기 0x10056fb0 은 1 만 기다린다,
                     // ba-20 V2: 11곳/7전투, 대표 Btl 0145 사건 4 — 필살기 도중 말풍선). 말풍선은 다음 601 이 덮거나 120틱 뒤 저절로 닫힌다.
                     if (_eventPc < e.Actions.Count && e.Actions[_eventPc].Code == 2) { _talkNoWait = true; break; }
+                    _talkNoWait = false;                                // 앞 말풍선의 「안 기다림」이 이 대사로 새지 않게
                     return;
                 default:
                     RunEventAction(a);
