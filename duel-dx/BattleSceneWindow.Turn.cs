@@ -30,6 +30,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private string _outcome = "";
     private double _outcomeAt;
     private double _nextTickAt;
+
+    /// <summary>지금 도는 루틴이 물체 차례(ObjectTurns)인가 — 끝날 때 자동 회복을 돌리지 않는다.</summary>
+    private bool _objectRoutine;
     private readonly Random _rng = new();
     private readonly List<(string Text, float Size, int X, int Y, double Start, uint Color)> _popups = [];
 
@@ -187,7 +190,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 행동이 끝났다 — 갈래 2 검사. 휴식·물체 만지기처럼 UseWorkRoutine 을 안 거치는 행동도 상태 21 을 지난다(0x100681a0 → 갈래 1).
                 _routine = null;
                 _eventCheckDue |= (1 << 2) | (1 << 1);
-                AutoHealAll();   // 8(자동 회복)도 행동 끝마다 전원에게(ba-20 C1)
+                // 물체 차례(ObjectTurns)는 유닛의 행동 끝이 아니다 — 쏜 틱에만 자동 회복이 한 번 더 돌지 않게.
+                if (_objectRoutine) _objectRoutine = false;
+                else AutoHealAll();   // 8(자동 회복)도 행동 끝마다 전원에게(ba-20 C1)
                 QueueLevelUps();
             }
             return;
@@ -230,6 +235,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                        && ObjectInBounds(obj) && _tick % Math.Max(1, obj.Data.TurnEvery) == 0 && ObjectHasTarget(obj)))
                 {
                     _routine = ObjectTurns();
+                    _objectRoutine = true;
                     return;
                 }
                 StepObjects();

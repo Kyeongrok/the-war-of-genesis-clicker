@@ -492,6 +492,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _pendingExits.Clear();
         _brokenAt.Clear();
         _objActing.Clear();
+        _objectRoutine = false;
         _blinkGhosts.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
@@ -938,6 +939,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _pendingExits.Clear();
         _brokenAt.Clear();
         _objActing.Clear();
+        _objectRoutine = false;
         _blinkGhosts.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
