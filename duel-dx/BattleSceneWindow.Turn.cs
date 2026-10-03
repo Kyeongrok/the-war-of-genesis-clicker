@@ -1528,7 +1528,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         foreach (var u in _units)
         {
-            if (!u.Alive || u.MaxHp <= 0) continue;
+            if (!u.Alive || !u.OnField || u.MaxHp <= 0) continue;   // 판 밖(증원 전·퇴장) 유닛의 막대가 빈 칸에 뜨지 않게(ba-20 G22)
             var (fx, fy) = UnitFoot(u);
             int w = TileW - 8, x = fx - w / 2, y = fy + TileH / 2 - 7;
             FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
