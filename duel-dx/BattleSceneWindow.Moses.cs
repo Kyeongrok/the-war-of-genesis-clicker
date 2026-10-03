@@ -917,13 +917,23 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>뒤로 단추 Obs 0248 @ (46,244) — 단추 클래스(id 100)라 들어오고 올리면 움직인다.</summary>
+    /// <summary>단추에 마우스를 올린 때 — 올림 모션은 올린 순간부터 처음 장에서 돈다(전에는 전역 틱이라 모션 중간부터 돌았다, ba-20 S B2).</summary>
+    private readonly Dictionary<int, double> _hoverSince = [];
+
+    private int HoverTick(int key, bool hovered)
+    {
+        if (!hovered) { _hoverSince.Remove(key); return 0; }
+        if (!_hoverSince.TryGetValue(key, out double since)) _hoverSince[key] = since = _lastTime;
+        return (int)((_lastTime - since) * TicksPerSecond);
+    }
+
     private void DrawMosesBack(int ox, int oy, int tick)
     {
         var (sx, wipe) = PageSlide(100, 46);
         if (sx > 46) { DrawSlideTrail(ox, oy, ox + sx, oy + 257); return; }
         var r = (X: ox + 46, Y: oy + 244);
         bool hovered = _mouse.X >= r.X && _mouse.X < r.X + 25 && _mouse.Y >= r.Y && _mouse.Y < r.Y + 26;
-        if (UiFor(MosesBackObs) != null) DrawButtonUi(MosesBackObs, 0, hovered ? tick : 0, r.X, r.Y, wipe);
+        if (UiFor(MosesBackObs) != null) DrawButtonUi(MosesBackObs, 0, HoverTick(1000, hovered), r.X, r.Y, wipe);
         else if (wipe >= 10) DrawText("BACK", ox + 46, oy + 248, White);
     }
 
@@ -980,7 +990,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (sx > bx0) { DrawSlideTrail(ox, oy, ox + sx, oy + by0); continue; }
                 var r = MosesSystemButtonRect(i, ox, oy);
                 bool hovered = _mouse.X >= r.X && _mouse.X < r.X + r.W && _mouse.Y >= r.Y && _mouse.Y < r.Y + r.H;
-                DrawButtonUi(MosesSystemObs, i, hovered ? tick : 0, ox + bx0, oy + by0, wipe);
+                DrawButtonUi(MosesSystemObs, i, HoverTick(1100 + i, hovered), ox + bx0, oy + by0, wipe);
                 if (wipe < 10 || Text(others[i].NameText) is not { Length: > 0 } sysName) continue;
                 var (_, sw, sh) = GetText(sysName, White);
                 DrawText(sysName, i == 0 ? ox + bx0 + 20 : ox + bx0 - 20 - sw, oy + by0 - sh / 2, White);
