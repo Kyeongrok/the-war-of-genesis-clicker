@@ -50,6 +50,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _shopBuy.Clear();
         _shopSell.Clear();
         Array.Clear(_shopTop);
+        _shopCompareItem = 0;
+        _shopCompareTop = 0;
         _mosesPage = kind == 1 ? 4 : 3;
         _mosesPageAt = _lastTime;
         _mosesHover = -1;
@@ -92,6 +94,61 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>상점 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
+    /// <summary>
+    /// 장비 상점(Shp+4 == 2)의 캐릭터 비교창 0x10103080(ba-20 G7) — 화면 (48,330) 에 인물 칸 다섯(Obs 302 모션 i+4, 올리면 i+9, 얼굴 +(32,50)).
+    /// 재고 줄을 눌러 <b>담을 때만</b> 비교 글이 바뀐다(0x100ff660 → 0x10103640): 무기는 무기 종류가 같은 인물만 지금 무기와, 갑옷(종류 2)은 지금 갑옷과.
+    /// 여섯 명이 넘으면 ←/→ (Obs 302 모션 0/1 @ (20,370)/(400,370), 20×50)로 한 명씩 넘긴다.
+    /// </summary>
+    private int _shopCompareItem, _shopCompareTop;
+
+    private bool ShopCompares => _shop is { Kind: 2 };
+
+    private void DrawShopCompare(int ox, int oy, int tick)
+    {
+        if (!ShopCompares || _db is not { } db) return;
+        var party = StyleParty();
+        _shopCompareTop = Math.Clamp(_shopCompareTop, 0, Math.Max(0, party.Count - 5));
+        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        var item = _shopCompareItem != 0 ? db.Items.GetValueOrDefault(_shopCompareItem) : null;
+        for (int i = 0; i < 5 && _shopCompareTop + i < party.Count; i++)
+        {
+            int cx = ox + 70 * i + 48, cy = oy + 330;
+            bool over = mx >= 70 * i + 48 && mx < 70 * i + 48 + 64 && my >= 330 && my < 460;
+            DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            if (PartyData(party[_shopCompareTop + i]) is not { } pc) continue;
+            LoadFieldFace(pc);
+            if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+            if (item == null) continue;
+            // 종류 0·1·8~17 = 무기(인물의 무기 종류와 같을 때만), 2 = 갑옷, 그 밖은 글 없음(표 0x10103758).
+            int slot = item.Type is 0 or 1 or (>= 8 and <= 17) ? (db.WeaponTypeOf(pc) == item.Type ? 0 : -1) : item.Type == 2 ? 1 : -1;
+            if (slot < 0) continue;
+            var worn = pc.Items.Length > slot && pc.Items[slot] != 0 ? db.Items.GetValueOrDefault(pc.Items[slot]) : null;
+            string[] lines = [$"Atk = {item.Attack - (worn?.Attack ?? 0),3:+0;-0;+0}", $"Dep = {item.Defense - (worn?.Defense ?? 0),3:+0;-0;+0}"];
+            for (int l = 0; l < lines.Length; l++)
+            {
+                var (_, tw, _) = GetText(lines[l], 0xFFFFFF00, 11);
+                DrawText(lines[l], cx + 32 - tw / 2, cy + 65 + 35 - 12 + l * 13, 0xFFFFFF00, 11);
+            }
+        }
+        if (party.Count >= 6)
+        {
+            DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha);
+            DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha);
+        }
+    }
+
+    private bool OnShopCompareClick(int x, int y)
+    {
+        if (!ShopCompares) return false;
+        int count = StyleParty().Count;
+        if (count >= 6 && y >= 370 && y < 420)
+        {
+            if (x >= 20 && x < 40) { if (_shopCompareTop > 0) { _shopCompareTop--; Play(66); } return true; }
+            if (x >= 400 && x < 420) { if (_shopCompareTop < count - 5) { _shopCompareTop++; Play(66); } return true; }
+        }
+        return false;
+    }
+
     private bool OnMosesShopClick(int bx, int by)
     {
         if (_mosesPage is not (3 or 4) || _shop == null) return false;
@@ -113,7 +170,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         var (list, row) = ShopRowAt(bx, by);
-        if (list < 0) return true;
+        if (list < 0) { OnShopCompareClick(x, y); return true; }
         var items = ShopListItems(list);
         if (row < 0 || row >= items.Count) return true;
         int itemId = items[row].Item;
@@ -122,7 +179,10 @@ internal sealed unsafe partial class BattleSceneWindow
             // 사려고 담기 — 한 칸 99개(0x100ff63e), 합계 5천만 GP(0x100ff677)까지.
             // 99 는 <b>담은 수</b>만 센다(보유 수는 안 더한다, ba-20 G8).
             case ListStock when _shopBuy.Count(i => i == itemId) < 99
-                                && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000: _shopBuy.Add(itemId); break;
+                                && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000:
+                _shopBuy.Add(itemId);
+                _shopCompareItem = itemId;   // 비교 글은 담을 때만 바뀐다(0x100ff660)
+                break;
             case ListBuy: _shopBuy.Remove(itemId); break;                       // 담은 것 빼기
             // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
             // 매각 합계도 5천만 GP 까지다(0x100ff66d~0x100ff691).
@@ -205,6 +265,8 @@ internal sealed unsafe partial class BattleSceneWindow
             var (_, vw, _) = GetText(value, White, 11);
             DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? Red : White, 11);
         }
+
+        DrawShopCompare(ox, oy, tick);
 
         // Reset·Set·Ok 글자는 배경 그림(Bgr 0040)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림.
         if (Over(418, 294, 68, 27)) DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
