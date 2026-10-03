@@ -239,6 +239,34 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool SceneFading => _fadeInStart >= 0 || _fadeOutStart >= 0;
 
+    /// <summary>페이드아웃이 끝나면 할 일 — 없으면 전투 결과대로 다음 장면(<see cref="LeaveFinishedBattleNow"/>).</summary>
+    private Action? _afterFadeOut;
+
+    /// <summary>나가는 동안 음악을 안 건드리나 — 타이틀 ↔ 기록 화면은 곡이 이어진다(0x101056b9 · 0x101050e1).</summary>
+    private bool _fadeOutKeepMusic;
+
+    /// <summary>
+    /// 장면을 떠난다 — 16틀 동안 화면을 검게, 음악을 100 → 10% 로 줄인 뒤 <paramref name="next"/> 를 한다. 타이틀(0x10105420)·연대표(0x101060d0)·
+    /// 기록(0x10104e60) 화면이 모두 이렇게 나간다(ba-21 outer #1). 전에는 뚝 바뀌었다. 이미 나가는 중이면 아무것도 안 한다.
+    /// </summary>
+    private void LeaveScene(Action next, bool keepMusic = false)
+    {
+        if (_fadeOutStart >= 0) return;
+        _afterFadeOut = next;
+        _fadeOutKeepMusic = keepMusic;
+        _fadeInStart = -1;
+        _fadeOutStart = _lastTime;
+    }
+
+    /// <summary>새 장면이 섰다 — 검정에서 밝아진다(타이틀·연대표·기록은 15틀, 세기 31 − 2i).</summary>
+    private void EnterSceneFade()
+    {
+        _fadeOutStart = -1;
+        _afterFadeOut = null;
+        _fadeInMusicHeld = false;
+        _fadeInStart = _lastTime;
+    }
+
     /// <summary>
     /// 전투 틀마다 — 새 판이면 시작 카메라를 놓고 16틀 검정→화면 페이드인을 건다. 원본 0x10061ad0 은 페이드가 <b>끝난 뒤</b>
     /// BGM(워드 8)을 100% 로 건다 — 판을 세울 때 이미 건 음악은 멈춰 두었다가 페이드 끝에 다시 건다.
@@ -259,6 +287,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 StopMusic();
             }
         }
+        StepSceneFadeClock();
+    }
+
+    /// <summary>페이드 시계 — 전투가 아닌 화면(타이틀·연대표·기록·모세스)에서도 돈다.</summary>
+    private void StepSceneFadeClock()
+    {
         if (_fadeInStart >= 0 && (_lastTime - _fadeInStart) * TicksPerSecond >= SceneFadeTicks)
         {
             _fadeInStart = -1;
@@ -271,15 +305,21 @@ internal sealed unsafe partial class BattleSceneWindow
             if (t < SceneFadeTicks)
             {
                 // 틀마다 음악 100, 94, … , 10 %(0x10061e83~0x10061e9d).
-                _mixer.SetMusicGain(_musicGain * Math.Max(10, 100 - 6 * t) / 100f);
+                if (!_fadeOutKeepMusic) _mixer.SetMusicGain(_musicGain * Math.Max(10, 100 - 6 * t) / 100f);
                 return;
             }
             _fadeOutStart = -1;
-            // 장면 소멸자가 음악 개체를 지운다(0x10062020) — 끄고 크기는 되돌린다(다음 곡은 제 크기로 튼다).
-            Interlocked.Increment(ref _musicRequest);
-            StopMusic();
-            _mixer.SetMusicGain(_musicGain);
-            LeaveFinishedBattleNow();
+            if (!_fadeOutKeepMusic)
+            {
+                // 장면 소멸자가 음악 개체를 지운다(0x10062020) — 끄고 크기는 되돌린다(다음 곡은 제 크기로 튼다).
+                Interlocked.Increment(ref _musicRequest);
+                StopMusic();
+                _mixer.SetMusicGain(_musicGain);
+            }
+            _fadeOutKeepMusic = false;
+            var next = _afterFadeOut ?? LeaveFinishedBattleNow;
+            _afterFadeOut = null;
+            next();
         }
     }
 
@@ -294,7 +334,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>보이는 판을 페이드 밝기로 어둡게 — c·k/31(방식 2).</summary>
     private void DrawSceneFade()
     {
-        if (!SceneFading || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return;
+        // 필드는 제 화면 전환(900)이 있다. 타이틀·연대표·기록·모세스 위에도 덮는다(Compose 맨 끝).
+        if (!SceneFading || (FieldOpen && _afterFadeOut == null)) return;
         int k = SceneFadeLevel();
         if (k >= 31) return;
         for (int y = _camY; y < _camY + ViewHeight && y < BoardHeight; y++)

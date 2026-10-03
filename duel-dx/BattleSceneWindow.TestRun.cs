@@ -29,9 +29,38 @@ internal sealed unsafe partial class BattleSceneWindow
     private static readonly bool TestClick = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "2";
     private double _testClickAt;
 
+    /// <summary>
+    /// 시험 전용: <c>DUELDX_CLICKS=x,y@초;x,y@초…</c> — 그 때(실제 초) <b>보이는 화면 좌표</b>(스냅숏 그림의 좌표)를 왼쪽 클릭한다.
+    /// 창 클라이언트 좌표는 배율·여백 때문에 스냅숏과 달라 PostMessage 클릭이 빗나갔다 — 여기서는 화면 좌표를 클라이언트 좌표로 바꿔 넣는다.
+    /// </summary>
+    private List<(double At, int X, int Y)>? _testClicks;
+
+    private void TestClicksTick()
+    {
+        if (_testClicks == null)
+        {
+            _testClicks = [];
+            foreach (string item in (Environment.GetEnvironmentVariable("DUELDX_CLICKS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+                if (item.Split('@') is [var at, var when] && at.Split(',') is [var sx, var sy]
+                    && int.TryParse(sx, out int x) && int.TryParse(sy, out int y)
+                    && double.TryParse(when, System.Globalization.CultureInfo.InvariantCulture, out double seconds))
+                    _testClicks.Add((seconds, x, y));
+        }
+        while (_testClicks.Count > 0 && _testClicks[0].At <= _realTime)
+        {
+            var (_, x, y) = _testClicks[0];
+            _testClicks.RemoveAt(0);
+            int cx = ViewOffsetX + (int)(x * _zoom), cy = ViewOffsetY + (int)(y * _zoom);
+            var (bx, by) = BoardPoint(cx, cy);
+            _mouse = (bx, by);
+            OnClick(cx, cy);
+        }
+    }
+
     /// <summary>시험 전용: 갱신 한 번 뒤 — 사건 건너뛰기, 몇 초마다 상태 줄.</summary>
     private void TestRunTick()
     {
+        TestClicksTick();
         if (!TestRun) return;
         if (TestSkip && _battleLoaded && !FieldOpen && !_mosesOpen && !_titleOpen && _outcome.Length == 0)
         {
