@@ -74,6 +74,21 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private int CellCenterY(int col, int row) => CellTop(col, row) + TileH / 2;
 
+    /// <summary>
+    /// 한 칸을 걷는 틱 — 평지 5, 한 층 차 6, 두 층 차 8, 비탈(다음 칸 깃발 0x40)·뛰어넘기(두 층 차 + 0x20)는 10
+    /// (걷기 0x10073920 의 높이 갈래 0x10073b54~0x10073d57, ba-20 P5). 틱별 깡충 뛰는 z 곡선은 따르지 않고 고르게 넘는다.
+    /// </summary>
+    private int StepTicksBetween(int fromCol, int fromRow, int toCol, int toRow)
+    {
+        if (!BoardIsMap || _map is not { } map || (uint)toCol >= map.Cols || (uint)toRow >= map.Rows
+            || (uint)fromCol >= map.Cols || (uint)fromRow >= map.Rows) return StepTicks;
+        int diff = Math.Abs(map.HeightAt(toCol, toRow) - map.HeightAt(fromCol, fromRow));
+        if (diff == 0) return StepTicks;
+        int flags = CellFlagsAt(toCol, toRow);
+        if ((flags & 0x40) != 0 || (diff >= 2 && (flags & 0x20) != 0)) return 10;
+        return diff == 1 ? 6 : 8;
+    }
+
     /// <summary>칸 사이를 걷는 인물의 높이 — 네 이웃 칸을 거리로 섞어 층 사이를 매끄럽게 넘는다.</summary>
     private double HeightPxAt(double x, double y)
     {
@@ -908,7 +923,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         int index = row * Cols + col;
         if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
 
-        unit.BeginStep(col, row);
+        unit.BeginStep(col, row, StepTicksBetween(unit.Col, unit.Row, col, row));
         FollowUnit(_turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
     }
 
@@ -1111,7 +1126,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             if (_blinks.ContainsKey(unit) || TryBeginBlink(unit)) continue;   // 이동 종류 1 은 걷지 않고 순간이동한다(ba-20 P4)
             if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
             unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
-            unit.BeginStep(cell.Col, cell.Row);
+            unit.BeginStep(cell.Col, cell.Row, StepTicksBetween(unit.Col, unit.Row, cell.Col, cell.Row));
             // 걷기(명령 0x2710)는 칸 경계마다 걷는 인물 따라가기를 건다(0x10076ef8 → 0x100eac40(8), 감사4 C2).
             // 군단 부하는 대장만 따라간다(0x2711 은 대장일 때만, 0x10077786).
             if (unit.LeaderIndex < 0 && unit.OnField) FollowUnit(Array.IndexOf(_units, unit));
@@ -1972,15 +1987,19 @@ internal sealed class UnitState(DemoUnit unit)
         _fromCol = Col; _fromRow = Row;
     }
 
-    public void BeginStep(int col, int row)
+    /// <summary>이번 칸을 걷는 데 드는 틱 — 평지 5, 높이가 다르면 6·8·10(<see cref="BattleSceneWindow.StepTicksBetween"/>).</summary>
+    private int _stepLength = BattleSceneWindow.StepTicks;
+
+    public void BeginStep(int col, int row, int ticks = BattleSceneWindow.StepTicks)
     {
+        _stepLength = Math.Max(1, ticks);
         if (!IsMoving && !_justArrived) AnimTime = 0;
         double carry = _justArrived ? _carry : 0;
         _justArrived = false;
         _fromCol = Col; _fromRow = Row;
         Col = col; Row = row;
-        _stepTicks = Math.Min(carry, BattleSceneWindow.StepTicks - 1);
-        _progress = Math.Min(Math.Floor(_stepTicks) / BattleSceneWindow.StepTicks, 0.99);
+        _stepTicks = Math.Min(carry, _stepLength - 1);
+        _progress = Math.Min(Math.Floor(_stepTicks) / _stepLength, 0.99);
     }
 
     /// <param name="ticks">이번 프레임에 흐른 틱(초당 30).</param>
@@ -1990,8 +2009,8 @@ internal sealed class UnitState(DemoUnit unit)
         if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; Motion = -1; MotionLoops = false; AnimTime = _idleOffset; }
         if (!IsMoving || _sliding) return;
         _stepTicks += ticks;
-        _progress = Math.Min(1, Math.Floor(_stepTicks) / BattleSceneWindow.StepTicks);
-        if (!IsMoving) { _justArrived = true; _carry = _stepTicks - BattleSceneWindow.StepTicks; }
+        _progress = Math.Min(1, Math.Floor(_stepTicks) / _stepLength);
+        if (!IsMoving) { _justArrived = true; _carry = _stepTicks - _stepLength; }
     }
 
     /// <summary>이어 걷지 않고 멈췄으면 서기 숨쉬기로 돌린다.</summary>
