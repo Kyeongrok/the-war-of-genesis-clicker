@@ -981,6 +981,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             if (step == hitStep) foreach (bool _ in StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
+            // 소닉 블레이드·크레이지 샷 — 핸들러가 자료 범위와 다르게 친다(ba-20 E1·E2).
+            if (step == hitStep && HasSpecialHit(w))
+            {
+                foreach (bool _ in SpecialHitRoutine(a, w, hitWork, col, row, dying)) yield return true;
+                while (a.IsBusy) yield return true;
+                holding = false;
+                continue;
+            }
             // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
             for (int hit = 0; hit < (ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
             {
@@ -1292,20 +1300,47 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_outcome.Length > 0 || EventsBusy) return;
         // 머리 워드 9 가 0 인 전투는 엔진이 전멸을 아예 안 본다(0x1006ed10 첫머리) — 승패는 스크립트(행동 11·10·6)만 낸다.
         // 적을 다 잡아도 조건(특정 칸 도달 따위)을 채워야 넘어간다. 전에는 전멸이면 끝내고 스크립트의 나가는 길을 대신 골랐다(fg-21 ⑬).
-        if (!_scene.EngineJudgesWipe) return;
+        if (!_scene.EngineJudgesWipe)
+        {
+            // 원본은 여기서 AI 차례만 영영 돈다(0x1006ed6c — 시스템 메뉴도 못 여는 막다른 길, Btl 0079·0102·0252·0221).
+            // 끝날 길이 없을 때만 패배로 닫는다(ba-20 F, 원본에 없는 편의): 편 4 가 맵에 섰던 전투에서 맵 위·대기 중인 편 3·4 가 하나도 없고
+            // 틱·타이머로 끝나는 사건(0076·0083·0090)도 안 남았을 때.
+            if (_units.Any(u => u.Side == 4 && !u.Alive)
+                && !_units.Any(u => u.Alive && u.Side is 3 or 4)
+                && !PendingTimedEnd())
+            {
+                _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime;
+                TestRunTrace($"outcome softlock-lose btl {_scene.Id} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
+            }
+            return;
+        }
         // 전장에 선 사람만 센다(원본도 맵 밖은 안 센다).
-        if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
+        // 패배는 <b>사람이 모는 편(편 4)</b>이 다 쓰러졌을 때다(0x1006ec00 — 세력 +8 조종 주체 0 인 편만) — 편 3 동맹이 남아도 진다.
+        // 마지막 적과 마지막 아군이 같은 행동에서 쓰러지면 패배다 — 0x1006edb0 은 플레이어 0 을 먼저 본다(ba-20 F 덤).
+        if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4))
+        {
+            _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime;
+            TestRunTrace($"outcome wipe-lose btl {_scene.Id} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
+        }
+        else if (!_units.Any(u => u.Alive && u.OnField && !u.IsAlly))
         {
             ScriptedDestinationOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = _lastTime;   // 음악은 배너와 함께 16틀 뒤(UpdateOutcomeBanner, 사운드 B1)
             TestRunTrace($"outcome wipe-win btl {_scene.Id} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
         }
-        // 패배는 <b>사람이 모는 편(편 4)</b>이 다 쓰러졌을 때다(0x1006ec00 — 세력 +8 조종 주체 0 인 편만) — 편 3 동맹이 남아도 진다.
-        else if (!_units.Any(u => u.Alive && u.OnField && u.Side == 4))
+    }
+
+    /// <summary>아직 덜 터진 사건 가운데 틱·타이머 조건(2·3)으로 전투를 끝내는(행동 6·10·11) 것이 남았나.</summary>
+    private bool PendingTimedEnd()
+    {
+        var events = _events;
+        for (int i = 0; i < events.Count; i++)
         {
-            _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime;
-            TestRunTrace($"outcome wipe-lose btl {_scene.Id} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
+            var e = events[i];
+            if (e.MaxFire > 0 && i < _eventFired.Length && _eventFired[i] >= e.MaxFire) continue;
+            if (e.Conditions.Any(c => c.Code is 2 or 3) && e.Actions.Any(x => x.Code is 6 or 10 or 11)) return true;
         }
+        return false;
     }
 
     /// <summary>배너·음악 없이 끝나는 결과(행동 10·6 의 결과 5·6, 행동 11[1] 의 결과 2) — 원본 상태 24 는 결과 1·4 만 그린다(0x1006afa0).</summary>

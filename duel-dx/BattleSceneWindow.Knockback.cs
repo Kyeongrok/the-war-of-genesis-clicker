@@ -34,7 +34,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 밀어내기 — <paramref name="target"/> 을 시전자가 보는 쪽으로 사거리 끝까지(막히면 거기까지) 밀고, 시전자는 동작 24 로 돌아온다.
     /// </summary>
-    private IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0)
+    private IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0, int pushCells = -1)
     {
         var (dc, dr) = user.Facing switch
         {
@@ -44,7 +44,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _ => (1, 0),
         };
         int distance = dc != 0 ? Math.Abs(target.Col - user.Col) : Math.Abs(target.Row - user.Row);
-        int push = Math.Max(0, w.RangeMax - distance);
+        int push = pushCells >= 0 ? pushCells : Math.Max(0, w.RangeMax - distance);
         int col = target.Col, row = target.Row, moved = 0;
         while (moved < push && CanStand(col + dc, row + dr, target)) { col += dc; row += dr; moved++; }
         if (Trace)

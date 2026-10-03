@@ -242,8 +242,14 @@ internal sealed unsafe partial class BattleSceneWindow
         // 폭(6)·인페르노(159)·템페스트(186) — 효과 대상은 3(아무 칸)이지만 핸들러가 0x1006fde0 으로 적만 거른다
         // (0x10083760 · 0x100b220d · 0x100bddd6, ba-20 D3). 전에는 아군과 시전자 자신도 맞았다. 소울 블레스트의 관통탄도 적만(슬롯 2 의 +0x1e = 1).
         if (w.AbilityId is 6 or 159 or 186 or SoulBlastAbility) mode = 1;
-        return [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]))];
+        if (w.AbilityId == HellLaserAbility) mode = 1;
+        var hit = Enumerable.Range(0, _units.Length)
+            .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]));
+        // 대상 상한 — 모으는 함수(0x100df5c0 · 0x10070bb0)는 위 행부터, 행 안에서는 왼쪽부터 훑다가 상한에서 멈춘다(ba-20 E8).
+        // 블레이드 샤워 16명(0x100844aa), 카운터 스피어·진 풍아열공참·빅 뱅 20명.
+        int cap = w.AbilityId switch { 112 => 16, 77 or 127 or 166 => 20, _ => int.MaxValue };
+        if (cap != int.MaxValue) hit = hit.OrderBy(i => _units[i].Row).ThenBy(i => _units[i].Col).Take(cap);
+        return [.. hit];
     }
 
     /// <summary>실제로 판정이 나는 칸 — 자료 범위(<see cref="AreaCells"/>)에 핸들러가 박아 둔 예외를 얹는다. 겨눔 미리보기도 이것을 쓴다.</summary>
@@ -256,14 +262,22 @@ internal sealed unsafe partial class BattleSceneWindow
         // (슬롯 2 0x100c28f0, 0x1009e9e5, ba-20 D5). 지나는 칸은 직선을 칸으로 자른 것(가설).
         if (w.AbilityId == SoulBlastAbility)
         {
-            int x = user.Col, y = user.Row, dx = Math.Abs(col - x), dy = -Math.Abs(row - y), sx = x < col ? 1 : -1, sy = y < row ? 1 : -1, err = dx + dy;
-            while ((x, y) != (col, row))
+            // 탄은 칸 가운데에서 칸 가운데로 10px/틱 직선 — 틱마다 표본 자리의 칸이 바뀌면 그 칸을 친다(0x100c2e90, 트윈 0x10037b50, ba-20 E6).
+            double x0 = user.Col * 40 + 20, y0 = user.Row * 40 + 20, x1 = col * 40 + 20, y1 = row * 40 + 20;
+            double length = Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+            for (double d = 10; d < length; d += 10)
             {
-                int e2 = 2 * err;
-                if (e2 >= dy) { err += dy; x += sx; }
-                if (e2 <= dx) { err += dx; y += sy; }
-                cells.Add((x, y));
+                var cell = ((int)((x0 + (x1 - x0) * d / length) / 40), (int)((y0 + (y1 - y0) * d / length) / 40));
+                if (cell != (user.Col, user.Row)) cells.Add(cell);
             }
+        }
+        // 헬 레이져(172) — 타격 이펙트 Obs 1050 다섯이 시전자 <b>앞 5칸</b> 줄의 옆 −2..+2 칸에 놓이고 그 칸 하나씩만 친다
+        // (0x100b39a0 · 0x100b3c6d~, ba-20 E3). 자료 범위(2칸 앞 줄)와 다르다 — 화면 확인은 못 했다(코드로만 확정).
+        if (w.AbilityId == HellLaserAbility)
+        {
+            var facing = (col, row) == (user.Col, user.Row) ? user.Facing : FacingToward(user.Col, user.Row, col, row);
+            var (fx, fy) = facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+            cells = [.. Enumerable.Range(-2, 5).Select(k => (user.Col + 5 * fx + k * fy, user.Row + 5 * fy + k * fx))];
         }
         return cells;
     }
