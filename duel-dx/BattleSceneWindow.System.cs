@@ -101,7 +101,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RunSystemItem(SystemItem item)
     {
         // MISSION·SAVE·LOAD 는 메뉴를 숨기기만 하고, 그 창이 닫히면 메뉴가 다시 보인다(0x100e39f0 → vt+0xcc). fg-22.
-        _systemMenuReturn = item is SystemItem.Mission or SystemItem.Save or SystemItem.Load or SystemItem.Restart or SystemItem.Exit;   // 확인창 「아니오」도 메뉴로(0x100e3ce9)
+        _systemMenuReturn = item is SystemItem.Mission or SystemItem.Volume or SystemItem.Save or SystemItem.Load or SystemItem.Restart or SystemItem.Exit;   // 확인창 「아니오」도 메뉴로(0x100e3ce9)
         switch (item)
         {
             case SystemItem.Mission: _missionWindow = true; break;
@@ -282,8 +282,8 @@ internal sealed unsafe partial class BattleSceneWindow
             SaveSettings();
             return;
         }
-        if (bx >= x + VolumeW - 24 && by < y + 26) _volumeWindow = false;   // 창 X
-        else if (by >= y + VolumeH - 30) _volumeWindow = false;
+        // 닫으면 메뉴로 돌아간다 — 다른 하위 창과 같다(0x100e39f0 → vt+0xcc, ba-20 G22). 전에는 메뉴까지 닫혔다.
+        if (bx >= x + VolumeW - 24 && by < y + 26 || by >= y + VolumeH - 30) { _volumeWindow = false; ReturnToSystemMenu(); }
     }
 
     /// <summary>
