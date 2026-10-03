@@ -25,6 +25,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private double _testRunStatAt;
 
+    /// <summary>시험 전용: 대사를 눌러 넘길지(DUELDX_TESTSKIP=2)와 다음에 누를 때.</summary>
+    private static readonly bool TestClick = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "2";
+    private double _testClickAt;
+
     /// <summary>시험 전용: 갱신 한 번 뒤 — 사건 건너뛰기, 몇 초마다 상태 줄.</summary>
     private void TestRunTick()
     {
@@ -33,6 +37,12 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (_runningEvent >= 0 && !_talkSkip) SkipScene();
             else if (_talks.Count > 0) OnTalkInput(skipAll: true);
+        }
+        // DUELDX_TESTSKIP=2 — 건너뛰지 않고 대사만 0.5초마다 한 번씩 눌러 넘긴다(건너뛰지 않는 사건 진행 길을 시험하려고).
+        if (TestClick && _talks.Count > 0 && _lastTime >= _testClickAt && _outcome.Length == 0)
+        {
+            _testClickAt = _lastTime + 0.5;
+            OnTalkInput();
         }
         if (_lastTime < _testRunStatAt) return;
         _testRunStatAt = _lastTime + 10;

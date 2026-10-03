@@ -59,6 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventMoveUntil = 0;
         _pendingExits.Clear();
         _eventRoutine = null;
+        _eventRoutineFree = _eventCamPending = false;
         _talkSkip = false;
         _turnNo = 0;
         _eventFoundA = _eventFoundB = null;
@@ -233,6 +234,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _eventPc = 0;
             _eventWaitUntil = 0;
             _eventCamLine = (-1, -1);
+            _eventCamPending = false;
             StepEvent();
             return;                                                     // 나머지는 이 사건이 끝난 뒤 같은 시점 표시로 다시 본다
         }
@@ -253,13 +255,20 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             if (_eventRoutine != null)
             {
-                // 사건이 건 기술이 끝날 때까지 이 줄에 머문다 — 한 틀에 한 번만 돌린다(StepEvent 는 한 틀에 여러 번 불릴 수 있다).
-                if (_eventRoutineStepAt == _lastTime) return;
-                _eventRoutineStepAt = _lastTime;
-                if (_eventRoutine.MoveNext()) return;
-                _eventRoutine = null;
-                _eventCheckDue |= (1 << 2) | (1 << 1);                  // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
-                if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+                // 사건이 건 기술(207·909) — 한 틀에 한 번만 돌린다(StepEvent 는 한 틀에 여러 번 불릴 수 있다).
+                if (_eventRoutineStepAt != _lastTime)
+                {
+                    _eventRoutineStepAt = _lastTime;
+                    if (!_eventRoutine.MoveNext())
+                    {
+                        _eventRoutine = null;
+                        _eventRoutineFree = false;
+                        _eventCheckDue |= (1 << 2) | (1 << 1);          // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
+                        if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+                    }
+                }
+                // 뒤에 행동 1 이 없으면 줄을 안 붙든다(슬롯만 잡는다, 0x10056fb0) — Btl 0145 사건 4 는 필살기 도중 말풍선이 뜬다(ba-20 V2 b).
+                if (_eventRoutine != null && !_eventRoutineFree) return;
             }
             if (_talk == null) _talkNoWait = false;
             if (_talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
@@ -269,42 +278,85 @@ internal sealed unsafe partial class BattleSceneWindow
             if (_runningEvent >= _events.Count) { _runningEvent = -1; _talkSkip = false; return; }   // 판이 바뀌었다
             var e = _events[_runningEvent];
             // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
-            if (_eventPc >= e.Actions.Count) { _runningEvent = -1; _talkSkip = false; return; }
+            if (_eventPc >= e.Actions.Count)
+            {
+                if (_eventRoutine != null) { _eventRoutineFree = false; return; }   // 돌던 기술이 끝나야 사건도 끝난다
+                _runningEvent = -1; _talkSkip = false; return;
+            }
 
             var a = e.Actions[_eventPc++];
+            // 원본 진행기는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 줄을 붙드는 것은 뒤따르는 행동 1 뿐이다.
+            // 그래서 「바로 뒤가 1 인가」로 가른다: 1 이면 전처럼 끝날 때까지 머물고, 아니면 걸어 두고 다음 줄로 간다(ba-20 V2).
+            bool waitNext = _eventPc < e.Actions.Count && e.Actions[_eventPc].Code == 1;
             switch (a.Code)
             {
                 case 0: break;                                          // 다른 이벤트 부르기 — 그 이벤트가 제 조건으로 돈다
                 case 1:                                                 // 기다리기 — 앞서 띄운 것(걷기 200·202·214)이 끝날 때까지
                     // 원본 진행기(0x10056fb0)는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 행동 1 없이 이어진
                     // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
-                    if (_eventMoveUntil > _lastTime) _eventWaitUntil = _eventMoveUntil;
                     _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
+                    if (_talk != null) { _eventPc--; return; }
+                    if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술도
+                    if (_eventCamPending && CameraBusy && !_talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
+                    _eventCamPending = false;
+                    if (_eventMoveUntil > _lastTime) _eventWaitUntil = _eventMoveUntil;            // 걷기·동작도
                     break;
                 case 2:
                     _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
                     break;
                 case 3: _runningEvent = -1; _talkSkip = false; return;  // 중단
+                case 400 or 402 or 906 when !_talkSkip && !waitNext:
+                    // 뒤에 1 이 없는 카메라 줄(400 → 2 27곳 · 400 → 200 3곳 · 906 → 2 4곳)은 스크롤을 걸어만 두고 다음 줄과 같이 간다.
+                    EventCameraWaits(a);
+                    _eventCamLine = (-1, -1);
+                    _eventCamPending = true;
+                    RunEventAction(a);
+                    break;
                 case 400 or 402 or 600 or 601 or 906 when !_talkSkip && EventCameraWaits(a):
                     _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
                     return;
-                case 600: ShowTalk(box: true, a); if (_talk == null) break; _talkNoWait = false; return;    // 건너뛰는 중이면 안 뜬다
+                case 600:
+                    ShowTalk(box: true, a);
+                    if (_talk == null) break;                           // 건너뛰는 중이면 안 뜬다
+                    if (TalkRidesOn(e)) { _talkNoWait = true; break; }
+                    _talkNoWait = false;
+                    return;
                 case 601:
                     ShowTalk(box: false, a);
                     if (_talk == null) break;
                     // 「601 → 2[틱]」 꼴(행동 1 없이)은 클릭을 안 기다린다 — 말풍선이 뜬 채 틱만 세고 다음 줄로 간다(진행기 0x10056fb0 은 1 만 기다린다,
                     // ba-20 V2: 11곳/7전투, 대표 Btl 0145 사건 4 — 필살기 도중 말풍선). 말풍선은 다음 601 이 덮거나 120틱 뒤 저절로 닫힌다.
-                    if (_eventPc < e.Actions.Count && e.Actions[_eventPc].Code == 2) { _talkNoWait = true; break; }
+                    // 1 없이 다른 행동이 이어지는 22곳(601 → 200 0335 · 601 → 214 0161 · 601 → 202 0139·0288 · 600 → 212 0278·0296 …)도 같다(V2 c).
+                    if (TalkRidesOn(e)) { _talkNoWait = true; break; }
                     _talkNoWait = false;                                // 앞 말풍선의 「안 기다림」이 이 대사로 새지 않게
                     return;
+                case 207 or 909 when _eventRoutine != null:
+                    _eventRoutineFree = false;                          // 앞 기술이 아직 돈다 — 끝난 뒤 이 줄을 다시 본다
+                    _eventPc--;
+                    return;
                 default:
+                    bool hadRoutine = _eventRoutine != null;
                     RunEventAction(a);
                     if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+                    if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !_talkSkip;
                     break;
             }
         }
     }
+
+    /// <summary>
+    /// 방금 띄운 대사가 클릭을 안 기다리고 다음 줄과 같이 가나 — 바로 뒤가 행동 1 이 아닐 때. 다만 뒤가 또 대사(창이 하나라 겹쳐 못 띄운다)거나
+    /// 전투 결과(6·10·11 — 원본은 말풍선이 뜨자마자 전투가 끝난다, 0262 한 곳)거나 사건의 끝이면 읽을 수 있게 기다린다(일부러 둔 차이).
+    /// </summary>
+    private bool TalkRidesOn(BattleEvent e) =>
+        _eventPc < e.Actions.Count && e.Actions[_eventPc].Code is not (1 or 3 or 6 or 10 or 11 or 600 or 601);
+
+    /// <summary>사건이 건 기술(207·909)이 줄을 안 붙들고 도는 중인가 — 뒤에 행동 1 이 없을 때.</summary>
+    private bool _eventRoutineFree;
+
+    /// <summary>줄을 안 붙들고 보내 둔 카메라가 있나 — 다음 행동 1 이 설 때까지 기다린다.</summary>
+    private bool _eventCamPending;
 
     /// <summary>카메라 명령을 건 이벤트 줄 — (사건, 줄 번호). 같은 줄에 다시 오면 명령은 안 걸고 멈췄는지만 본다.</summary>
     private (int Event, int Pc) _eventCamLine = (-1, -1);
@@ -680,7 +732,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     u.PlayAction(A(2) / 3, seconds * repeat);
                     longest = Math.Max(longest, seconds * repeat);
                 }
-                _eventWaitUntil = _lastTime + longest;
+                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);   // 슬롯만 — 「208 → 2」 23곳에서 모션만큼 더 길었다(ba-20 V2 b)
                 break;
             }
             case 212:                                    // 바라보는 쪽 — 인자1 이 곧 방향(0 위·1 왼·2 아래·3 오른, 0x10053170 SetAction(0, 인자1, 10000))
@@ -766,7 +818,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             case 907:                                    // 물체 여닫기(0x10055a50) — 인자0 배치 번호, 인자1 0 닫기 · 그 밖 열기
                 ToggleObject(A(0), A(1) != 0);
-                _eventWaitUntil = _lastTime + 0.5;       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
+                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + 0.5);       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
                 break;
             case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
             {
