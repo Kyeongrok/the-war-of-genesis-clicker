@@ -1129,14 +1129,11 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_followerStrikes.Count > 0)
         {
             while (_followerStrikes.Any(s => s.Follower.IsBusy)) yield return true;
-            foreach (var (follower, work, target) in _followerStrikes)
+            foreach (var (follower, work, aimCol, aimRow) in _followerStrikes)
             {
                 // 걸어가는 사이 TP 가 모자라게 됐으면(걸음 값을 이미 냈다) 안 친다 — 원본도 명령2 기술을 끝처리에서 제 TP 로 정산한다(감사3 L1).
-                if (!follower.Alive || !target.Alive || !CanAfford(follower, work)) continue;
-                follower.Facing = FacingToward(follower.Col, follower.Row, target.Col, target.Row);
-                PlayAction(follower, 8);
-                ApplyWork(follower, work, target, dying);
-                PayWorkCost(follower, work);
+                if (!follower.Alive || !follower.OnField || follower.Hp <= 0 || !CanAfford(follower, work)) continue;
+                FollowerStrike(follower, work, aimCol, aimRow, dying);
             }
             _followerStrikes.Clear();
             for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
