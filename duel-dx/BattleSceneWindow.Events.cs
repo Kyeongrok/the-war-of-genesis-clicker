@@ -55,6 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _runningEvent = -1;
         _eventPc = 0;
         _eventWaitUntil = 0;
+        _talkNoWait = false;
         _eventMoveUntil = 0;
         _pendingExits.Clear();
         _eventRoutine = null;
@@ -82,6 +83,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _runningEvent = -1;
     private int _eventPc;
     private double _eventWaitUntil;
+    /// <summary>방금 띄운 말풍선(601)을 안 기다리고 다음 줄로 가는 중 — 뒤따르는 줄이 2(틱 기다리기)일 때.</summary>
+    private bool _talkNoWait;
     /// <summary>사건이 건 걸음들이 다 끝나는 때 — 행동 1 이 이때까지 기다린다.</summary>
     private double _eventMoveUntil;
 
@@ -246,7 +249,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 _eventCheckDue |= (1 << 2) | (1 << 1);                  // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
                 if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
             }
-            if (_talk != null) return;                                  // 대사가 떠 있으면 기다린다
+            if (_talk == null) _talkNoWait = false;
+            if (_talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
             if (_eventSoundSeconds > 0) { _eventWaitUntil = _lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
             if (_eventSoundLoading && !_talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
             if (_eventWaitUntil > _lastTime && !_talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
@@ -263,6 +267,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     // 원본 진행기(0x10056fb0)는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 행동 1 없이 이어진
                     // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
                     if (_eventMoveUntil > _lastTime) _eventWaitUntil = _eventMoveUntil;
+                    _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
                     break;
                 case 2:
                     _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
@@ -273,7 +278,13 @@ internal sealed unsafe partial class BattleSceneWindow
                     _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
                     return;
                 case 600: ShowTalk(box: true, a); if (_talk == null) break; return;    // 건너뛰는 중이면 안 뜬다
-                case 601: ShowTalk(box: false, a); if (_talk == null) break; return;
+                case 601:
+                    ShowTalk(box: false, a);
+                    if (_talk == null) break;
+                    // 「601 → 2[틱]」 꼴(행동 1 없이)은 클릭을 안 기다린다 — 말풍선이 뜬 채 틱만 세고 다음 줄로 간다(진행기 0x10056fb0 은 1 만 기다린다,
+                    // ba-20 V2: 11곳/7전투, 대표 Btl 0145 사건 4 — 필살기 도중 말풍선). 말풍선은 다음 601 이 덮거나 120틱 뒤 저절로 닫힌다.
+                    if (_eventPc < e.Actions.Count && e.Actions[_eventPc].Code == 2) { _talkNoWait = true; break; }
+                    return;
                 default:
                     RunEventAction(a);
                     if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
