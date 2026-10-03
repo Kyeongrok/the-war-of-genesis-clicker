@@ -105,6 +105,13 @@ internal sealed unsafe partial class BattleSceneWindow
             // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물은 <b>편과 상관없이</b>(0x100633ff — 편 3 손님 제이슨도 자란다).
             // 파티 객체에서 온 인물(_party)은 제 레벨을 그대로 쓴다.
             if (!unit.IsAlly || !_party.ContainsKey(unit.ChrCode)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
+            // 군단 부하는 능력치는 제 레벨 줄로 키우되 <b>적히는 레벨은 절반</b>이다(0x1007a916~0x1007a948 — max(1, L/2), EXP 는 그 ×100).
+            // 처치 EXP(레벨 차)·상태이상 레벨 조건·정보 창이 이 값을 읽는다(ba-20 M1). 전에는 부하를 잡으면 EXP 가 과했다.
+            if (unit.LeaderIndex >= 0 && unit.Data is { } fd)
+            {
+                int half = Math.Max(1, fd.Level / 2);
+                unit.Data = fd with { Level = (ushort)half, CumExp = half * 100 };
+            }
 
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
             var data = unit.Data ?? c;
@@ -642,14 +649,20 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!a.Alive || !t.Alive || !SeesAsFoe(a, t) || a.Data == null || Work(a.Data.BasicWorkId) is not { } w || !CanAfford(a, w)) return null;
         if (ComputeRange(a) is not { } range) return null;
 
-        int best = -1, bestCost = int.MaxValue;
+        // 원본 0x100608e0 — 기준 칸에서 칠한 파랑(좁은 예산) 가운데 대상이 사거리에 드는 칸 중 <b>지금 선 칸에서 가장 가까운</b> 칸
+        // (맨해튼, 같으면 배열 번호 순). 비용은 기준 칸 → 그 칸 한 번이다(ba-20 M2). 전에는 기준 칸에서 가장 싼 칸을 골라,
+        // 미리 걸어가 자리를 잡고 적을 눌러도 싼 칸으로 되걸어갔다.
+        int narrow = a.HasStatus(25) ? 0 : a.Tp + Math.Min(0, a.Ctp - TpCostFor(a, a.Data, w.Id));
+        int best = -1, bestDist = int.MaxValue;
         for (int i = 0; i < range.Cost.Length; i++)
         {
-            if (range.Cost[i] >= bestCost || !InWorkRange(w, i % Cols, i / Cols, t.Col, t.Row, a)) continue;
-            bestCost = range.Cost[i];
+            if (!range.CanReach(i) || range.Cost[i] > narrow) continue;
+            int d = Math.Abs(i % Cols - a.Col) + Math.Abs(i / Cols - a.Row);
+            if (d >= bestDist || !InWorkRange(w, i % Cols, i / Cols, t.Col, t.Row, a)) continue;
+            bestDist = d;
             best = i;
         }
-        return best < 0 || PathWithin(range, a.Col, a.Row, best) is not { } path ? null : (path, bestCost);
+        return best < 0 || PathWithin(range, a.Col, a.Row, best) is not { } path ? null : (path, range.Cost[best]);
     }
 
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
@@ -663,7 +676,7 @@ internal sealed unsafe partial class BattleSceneWindow
             Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요");
             return;
         }
-        CommitMoveForAction();
+        // 걸음 비용은 여기서 미리 빼지 않는다 — UseWorkRoutine 의 CommitMove 가 「기준 칸 → 친 칸」을 한 번만 뺀다(ba-20 M2).
         _commitUndo = null;   // 바로 치므로 되돌릴 일이 없다
         _routine = UseWorkRoutine(_turn, w, targetIndex, _units[targetIndex].Col, _units[targetIndex].Row, plan.Path);
     }
@@ -672,7 +685,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void BeginAttackTargeting()
     {
         if (_units[_turn].Data is not { } c) return;
-        CommitMoveForAction();
+        _commitUndo = null;   // 기본공격은 걸음을 미리 굳히지 않는다(ba-20 M2)
         _targetWork = c.BasicWorkId;
         _targetIsBasicAttack = true;
 
