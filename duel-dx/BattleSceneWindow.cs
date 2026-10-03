@@ -644,6 +644,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 // 아이템 목록은 8줄 창이다(0x100d3830) — 휠로 굴린다. 전에는 9종째부터 고를 수 없었다(ba-20 G1).
                 _itemTop = Math.Clamp(_itemTop - (short)(((long)wParam >> 16) & 0xFFFF) / 120, 0, Math.Max(0, ItemRowsList().Count - ItemRows));
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _abilityMenu && !SystemOpen:
+                ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when SystemOpen || LevelUpOpen || _abilityMenu || _mosesOpen:
                 return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:

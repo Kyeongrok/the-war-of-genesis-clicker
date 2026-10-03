@@ -11,6 +11,20 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool _abilityMenu;
     private int _abilityHover = -1;
 
+    /// <summary>목록 창은 여덟 줄이다(분석-스킬 ba-12 · ba-20 G12) — 더 많으면 휠로 굴린다. 맨 위에 보이는 줄.</summary>
+    private const int AbilityMenuRows = 8;
+    private int _abilityTop;
+
+    private int AbilityTopFor(int count) => _abilityTop = Math.Clamp(_abilityTop, 0, Math.Max(0, count - AbilityMenuRows));
+
+    /// <summary>휠 — 목록이 여덟 줄을 넘으면 굴린다.</summary>
+    private void ScrollAbilityMenu(int rows)
+    {
+        _abilityTop += rows;
+        AbilityTopFor(MenuRows().Count);
+        UpdateAbilityHover(_mouse.X, _mouse.Y);
+    }
+
     /// <summary>줄 단축키 — 앞에서부터 1·2·3·4·Q·W·E·R, 여덟 줄이 넘으면 단축키가 없다.</summary>
     private static readonly int[] AbilityHotkeys = ['1', '2', '3', '4', 'Q', 'W', 'E', 'R'];
 
@@ -25,6 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (index < 0) return false;
         var rows = MenuRows();
         if (index >= rows.Count) return true;
+        _abilityTop = 0;                           // 단축키는 늘 앞 여덟 줄이다
         var (ox, oy) = MenuOrigin(rows.Count);
         _targetHotkey = key;                       // 같은 키를 한 번 더 누르면 겨눈 대상에게 쓴다
         bool handled = OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);
@@ -37,8 +52,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_abilityMenu || _turn < 0) { _abilityHover = -1; return; }
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
-        int row = (by - oy - MenuHeadH) / MenuRowH;
-        _abilityHover = bx >= ox + MenuRowX && bx < ox + MenuRowX + MenuRowW && row >= 0 && row < rows.Count ? row : -1;
+        int row = by >= oy + MenuHeadH ? (by - oy - MenuHeadH) / MenuRowH : -1;
+        int top = AbilityTopFor(rows.Count);
+        _abilityHover = bx >= ox + MenuRowX && bx < ox + MenuRowX + MenuRowW && row >= 0 && row < AbilityMenuRows && top + row < rows.Count ? top + row : -1;
     }
     // 원본 목록(분석-스킬 ba-12): 창 바깥 304, 줄 280×24 여덟 줄, 이름 x=46 · TP x=210 · SOUL x=240(오른쪽 맞춤).
     // 원본에 없는 「소모」(실제로 깎이는 SOUL) 칸을 SOUL 오른쪽에 더해 창을 40 넓혔다(사용자 요청).
@@ -151,7 +167,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
         var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (_camX + ViewWidth / 2, _camY + ViewHeight / 2);
-        int h = MenuHeadH + Math.Max(1, rowCount) * MenuRowH + 8;
+        int h = MenuHeadH + Math.Clamp(rowCount, 1, AbilityMenuRows) * MenuRowH + 8;
         int x = fx + TileW < _camX + ViewWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
         return (Math.Clamp(x, _camX + 8, _camX + ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
     }
@@ -164,8 +180,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
-        int index = (by - oy - MenuHeadH) / MenuRowH;
-        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) { _abilityMenu = false; CancelTargeting(refund: true); return true; }
+        int line = (by - oy - MenuHeadH) / MenuRowH, index = AbilityTopFor(rows.Count) + line;
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || line >= AbilityMenuRows || index >= rows.Count) { _abilityMenu = false; CancelTargeting(refund: true); return true; }
         SelectAbilityRow(rows[index]);
         return true;
     }
@@ -179,8 +195,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_abilityMenu) return false;
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
-        int index = (by - oy - MenuHeadH) / MenuRowH;
-        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || index >= rows.Count) return false;
+        int line = (by - oy - MenuHeadH) / MenuRowH, index = AbilityTopFor(rows.Count) + line;
+        if (bx < ox || bx >= ox + MenuW || by < oy + MenuHeadH || line >= AbilityMenuRows || index >= rows.Count) return false;
         _abilityPressed = index;
         return true;
     }
@@ -241,7 +257,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_abilityMenu || _turn < 0 || _db == null) return;
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
-        int h = MenuHeadH + Math.Max(1, rows.Count) * MenuRowH + 8;
+        int h = MenuHeadH + Math.Clamp(rows.Count, 1, AbilityMenuRows) * MenuRowH + 8;
+        int top = AbilityTopFor(rows.Count);
 
         // 창은 게임 안 모든 창과 같은 원본 틀(분석-시스템메뉴 「메시지 창 틀」)
         DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
@@ -254,10 +271,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = _units[_turn].Data!;
-        for (int i = 0; i < rows.Count; i++)
+        // 여덟 줄을 넘으면 휠로 굴린다 — 전에는 창이 화면 아래로 넘쳐 아랫줄을 고를 수 없었다(ba-20 G12).
+        if (top > 0) DrawText("▲", ox + MenuW - 14, oy + MenuHeadH + 2, 0xFFFFFF80, 10);
+        if (top + AbilityMenuRows < rows.Count) DrawText("▼", ox + MenuW - 14, oy + h - 22, 0xFFFFFF80, 10);
+        for (int i = top; i < rows.Count && i < top + AbilityMenuRows; i++)
         {
             var (name, w, enabled, reason) = rows[i];
-            int y = oy + MenuHeadH + i * MenuRowH;
+            int y = oy + MenuHeadH + (i - top) * MenuRowH;
             uint color = enabled ? White : DimGray;
             int rx = ox + MenuRowX;
             // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
