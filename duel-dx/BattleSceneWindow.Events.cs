@@ -785,10 +785,15 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(0) > 0) { _ownedLegions.Add(A(0)); _legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
+                if (_talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
                 PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
                 break;
             case 400:                                    // 카메라 칸 가운데로 · 402 유닛 가운데로 — StepEvent 가 EventCameraWaits 로 옮기고 기다린다.
-            case 402:                                    // 건너뛰는 중에는 카메라 명령 없이 지나간다.
+                if (_talkSkip) { _camGoal = null; CenterOnCell(A(0), A(1)); }   // 건너뛰는 중에도 카메라는 보내 둔다(기다리지만 않는다) —
+                break;                                   // 전에는 건너뛴 뒤 화면이 증원·보스를 안 비췄다(ba-20 V13)
+            case 402:
+                if (_talkSkip && EventTargets(A(0), out _).FirstOrDefault() is { Alive: true, OnField: true } seen)
+                    CenterOnUnit(seen.LeaderIndex >= 0 && seen.LeaderIndex < _units.Length ? _units[seen.LeaderIndex] : seen);
                 break;
             case 512:                                    // BGM 바꾸기
                 StopMusic();
