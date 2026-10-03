@@ -1039,7 +1039,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 {
                     var aimed = targetIndex >= 0 ? _units[targetIndex] : LiveUnitAt(col, row);
                     bool allyPass = w.AreaMode == 4 || (w.AreaMode == 5 && aimed != null && !SeesAsFoe(a, aimed));
-                    FollowersAttack(userIndex, targets.Count > 0 ? _units[targets[0]] : a, dying, allyPass, leaderWork: w, walk: targets.Count > 0 && !allyPass);   // 아군 패스는 제자리만(0x1005f1c0 → 0x1005e820, ba-20 Q3)
+                    // 군단 행동은 두 패스가 늘 다 돈다 — 아군 패스(0x1005fa90) → 적 패스(0x1005fd00). 부하는 두 패스 모두에서 고르고
+                    // 대장만 제 work 에 맞는 패스에서 움직인다(ba-20 Q1). 아군 패스는 제자리만(0x1005f1c0 → 0x1005e820, Q3).
+                    // 아군 패스에서 기술을 쓴 부하는 동작 중이라 적 패스에서 빠진다.
+                    var anchor = targets.Count > 0 ? _units[targets[0]] : a;
+                    FollowersAttack(userIndex, anchor, dying, allyPass: true, leaderWork: w, walk: false);
+                    FollowersAttack(userIndex, anchor, dying, allyPass: false, leaderWork: w, walk: targets.Count > 0 && !allyPass);
                     followersDone = true;
                 }
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
