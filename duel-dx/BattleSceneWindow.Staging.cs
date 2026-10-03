@@ -80,6 +80,10 @@ internal sealed unsafe partial class BattleSceneWindow
                         u.Facing = u.Facing switch { Facing.Up => Facing.Right, Facing.Right => Facing.Down, Facing.Down => Facing.Left, _ => Facing.Up };
                 yield return true;
             }
+            // 틀을 건너뛰어 덜 돈 것을 마저 돈다 — 40번(10바퀴)이라야 처음 방향으로 돌아온다.
+            for (; done < 40; done++)
+                foreach (var u in targets.Where(u => u.Alive))
+                    u.Facing = u.Facing switch { Facing.Up => Facing.Right, Facing.Right => Facing.Down, Facing.Down => Facing.Left, _ => Facing.Up };
             yield break;
         }
 

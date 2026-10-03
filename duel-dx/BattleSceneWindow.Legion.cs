@@ -573,7 +573,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                     $"follower rest: chr {f.ChrCode} (leader {_units[leaderIndex].ChrCode}) TP {f.Tp}/{f.MaxTp} → 0, HP {f.Hp}/{f.MaxHp}" + Environment.NewLine);
-            f.Tp = 0;
+            if (f.Tp > 0) f.Tp = 0;   // 빚(음수 TP)은 그대로 남는다(ba-20 K1)
         }
     }
 

@@ -1203,14 +1203,15 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         double ticks = Math.Clamp((_lastTime - _mapTintClock) * TicksPerSecond, 0, 4);
         _mapTintClock = _lastTime;
+        if (!_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen) { _mapTint = _mapTintTarget = -1; return; }
         if (_routine == null && _eventRoutine == null) _mapTintTarget = -1;   // 행동이 끊겨도(불러오기·전투 끝) 남지 않게
         if (_mapTint < _mapTintTarget) _mapTint = Math.Min(_mapTintTarget, Math.Max(_mapTint, -1) + ticks);
         else if (_mapTint > _mapTintTarget) _mapTint = Math.Max(_mapTintTarget, _mapTint - ticks);
         if (_mapTint <= -1) return;
         // 방식 2: 5비트 채널 v = (23·c + 8·세기)/31 — 세기 0 이면 74% 로 어두워지고 세기가 오를수록 회색이 뜬다.
         int add = (int)(Math.Max(0, Math.Floor(_mapTint)) * 8 * 255 / (31 * 31));
-        for (int y = _camY; y < _camY + ViewHeight; y++)
-            for (int x = _camX; x < _camX + ViewWidth; x++)
+        for (int y = Math.Max(0, _camY); y < Math.Min(BoardHeight, _camY + ViewHeight); y++)
+            for (int x = Math.Max(0, _camX); x < Math.Min(BoardWidth, _camX + ViewWidth); x++)
             {
                 int i = y * BoardWidth + x;
                 uint c = _fb[i];
@@ -1861,6 +1862,8 @@ internal sealed class UnitState(DemoUnit unit)
         Action = -1;
         Motion = -1;
         MotionLoops = false;
+        Fade = 1;
+        Detached = false;
         ClearStatus();
     }
 

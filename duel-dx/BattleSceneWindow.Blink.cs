@@ -15,7 +15,7 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     private sealed class Blink
     {
-        public (int Col, int Row) Dest;
+        public (int Col, int Row) Dest, From;
         public double Start;
         public int Stage;
         public int Dir;      // 0 위 · 1 옆 · 2 아래 — 모션 57+Dir / 60+Dir
@@ -40,7 +40,7 @@ internal sealed unsafe partial class BattleSceneWindow
         unit.Facing = FacingToward(unit.Col, unit.Row, dest.Col, dest.Row);
         _ = first;
         int dir = unit.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
-        _blinks[unit] = new Blink { Dest = dest, Start = _lastTime, Stage = 0, Dir = dir };
+        _blinks[unit] = new Blink { Dest = dest, From = (unit.Col, unit.Row), Start = _lastTime, Stage = 0, Dir = dir };
         PlayBlinkMotion(unit, 57 + dir, BlinkFadeTicks + 2 * BlinkHiddenTicks);
         SpawnBlinkGhosts(unit, 57 + dir, arriving: false);
         return true;
@@ -74,14 +74,15 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (unit, b) in _blinks.ToArray())
         {
             double t = (_lastTime - b.Start) * TicksPerSecond;
-            if (!unit.Alive) { unit.Fade = 1; _blinks.Remove(unit); continue; }
+            // 죽었거나, 그 사이 사건이 자리를 옮겼으면(200·201·ResetTo) 순간이동을 그만둔다 — 옛 도착 칸으로 되돌리지 않게.
+            if (!unit.Alive || (b.Stage < 2 && (unit.Col, unit.Row) != b.From)) { unit.Fade = 1; _blinks.Remove(unit); continue; }
             switch (b.Stage)
             {
                 case 0:   // 2틱마다 한 단계씩 옅어진다(보통 → 단계 1 = 13%)
                     unit.Fade = Math.Max(4 / 31.0, 1 - t / BlinkFadeTicks * (1 - 4 / 31.0));
                     if (t < BlinkFadeTicks) break;
                     unit.Fade = 0;
-                    if (unit.OnField) CenterOnCell(b.Dest.Col, b.Dest.Row);
+                    if (unit.OnField && unit.LeaderIndex < 0) CenterOnCell(b.Dest.Col, b.Dest.Row);   // 부하는 카메라를 안 끈다
                     b.Stage = 1;
                     break;
                 case 1:   // 15틱 뒤 칸을 옮기고 도착 잔상을 띄운다. 본체는 15틱 더 숨는다.
