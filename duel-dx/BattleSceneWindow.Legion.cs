@@ -493,6 +493,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (u.LeaderIndex < 0) return;
         u.LeaderIndex = -1;
         u.FormationSlot = -1;
+        u.Detached = true;
         if (u.Side == 4) { u.Side = 3; u.Awake = true; }
         RefreshUnitStats(u);
     }

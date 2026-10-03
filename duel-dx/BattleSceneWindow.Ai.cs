@@ -187,6 +187,13 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool WorthUsing(UnitState user, WorkData w, List<int> targets)
     {
         int need = w.MinTargets + 1;
+        if (w.AbilityId == CureAbility) need = 1;   // 큐어는 한 명에게만 간다(WorkTargets) — 최소 대상 수를 못 채워 영영 안 쓰는 일이 없게
+        // 블랙홀은 화면 HP 가 위력보다 적은 유닛만 쓰러뜨린다 — 쓰러질 적이 쓰러질 제 편(시전자 포함)보다 많을 때만 쓴다(데모 판단, 원본 AI 는 대상 수만 본다).
+        if (w.AbilityId == BlackHoleAbility)
+        {
+            var doomed = targets.Select(i => _units[i]).Where(t => t.Hp < w.Power).ToList();
+            return doomed.Count(t => Hostile(user, t)) > doomed.Count(t => !Hostile(user, t));
+        }
         if (w.IsHeal)
         {
             int lost = targets.Sum(i => _units[i].MaxHp == 0 ? 0 : (_units[i].MaxHp - _units[i].Hp) * 100 / _units[i].MaxHp);

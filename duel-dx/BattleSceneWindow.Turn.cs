@@ -79,7 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RememberParty()
     {
         foreach (var unit in _units)
-            if (unit.IsAlly && unit.LeaderIndex < 0 && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
+            if (unit.IsAlly && unit.LeaderIndex < 0 && !unit.Detached && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
     }
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
@@ -558,6 +558,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
         }
         u.Tp = 0;
+        AutoHealAll();   // 휴식도 행동 끝(상태 20)을 지난다 — 8(자동 회복)
         EndTurn();
     }
 
@@ -979,6 +980,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            if (step == hitStep) foreach (bool _ in StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
             // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
             for (int hit = 0; hit < (ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
             {
@@ -987,7 +989,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
                 // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
-                if (hit == 0 && w.IsDamage && a.Data is { } od)
+                if (hit == 0 && w.IsDamage && w.AbilityId != BlackHoleAbility && a.Data is { } od)
                     foreach (var (oc, or) in AreaCells(w, a, col, row).Distinct())
                         if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
                             DamageObject(a, obj, _db!.Atk(od, a.Soul, hitWork.Power));
@@ -1157,7 +1159,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 행동 뒤 SOUL 증가(0x10076586 점프표 0x100765ec): 종류 0 → Num26 · 1 → Num27 · 2 → Num28 · 3 → Num29 · 4·5·7 → 0(ba-15 재확인).
         AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 });
         int hp = db2.WorkHpCost(cost, w.Id);
-        if (hp > 0 && cost.JobId != 37) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
+        if (hp > 0 && cost.JobId != 37 && a.Hp > 0) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
     }
 
     private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
@@ -1213,7 +1215,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).
             // 명중 굴림은 거는 함수(0x1007bcc0) 안에 있다 — 그 결과가 3(명중·레벨 조건 실패)이면 Miss 만 뜨고 맞음 동작·EXP 가 없다(ba-20 C5).
-            if (result == 3 || !ApplyAilments(a, t, w))   // 종류 2·3(큐어 따위)은 상태이상만 건다
+            if (result == 3 || (!ApplyAilments(a, t, w) && t != a))   // 종류 2·3(큐어 따위)은 상태이상만 건다. 제게 거는 것(방어·회피 자세)은 Miss 를 안 띄운다
             {
                 ShowNumber(t, _db.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor);
                 return;
@@ -1438,7 +1440,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // <b>가산</b>으로 칠하고 테두리는 같은 색 불투명 41×33. 겨눈 칸의 효과 범위는 층 0 주황 (255,170,40) → (73,49,11) 로 덧칠한다
         // (그리는 차례는 층 0 이 먼저라 주황이 이긴다).
         var aim = _attackCursor >= 0 ? (_units[_attackCursor].Col, _units[_attackCursor].Row) : _aimCell;
-        var splash = aim is { } ac ? AreaCells(w, u, ac.Item1, ac.Item2).ToHashSet() : [];
+        var splash = aim is { } ac ? EffectCells(w, u, ac.Item1, ac.Item2) : [];
         for (int row = 0; row < Rows; row++)
             for (int col = 0; col < Cols; col++)
             {
