@@ -20,6 +20,36 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>더블 브레이크 0x100825e0(work 393).</summary>
     private const int DoubleBreakWork = 393;
 
+    /// <summary>
+    /// 핸들러가 거는 화면 흔들림(생성자 0x100c6f70 가로 · 0x100c7120 세로, 세기 0x100cda20, 길이 0x100c2530 — 직접 호출 23곳 전수, ba-20 O P8).
+    /// 세기·길이는 원본 값이고, 시작은 이펙트가 뜨는 때부터 차례로 잇는다(단계별 시작 틱은 못 뽑았다 — 가설).
+    /// </summary>
+    private void SpawnWorkShakes(WorkData w)
+    {
+        (int Strength, int Ticks, bool Vertical, int Delay)[] shakes = w.Id switch
+        {
+            1523 => [(2, 30, false, 0)],                                          // 타이타니아 슈발츠
+            1528 => [(2, 250, false, 0), (3, 180, false, 0)],                     // 코메트
+            1589 => [(2, 15, false, 0), (2, 15, false, 30)],                      // 아수라 파천무
+            1590 => [(2, 145, true, 0)],                                          // 진무 천지파열
+            1665 => [(3, 210, true, 40)],                                         // 레드 크로스
+            _ => w.AbilityId switch
+            {
+                74 => [(1, 50, false, 0), (3, 25, false, 0), (5, 60, false, 0), (3, 45, false, 0), (1, 30, false, 0)],   // 어스퀘이크 0x100ad9a0
+                67 => [(1, 170, false, 0)],                                       // 엘레맨탈 베이스 0x100a37d0
+                111 => [(2, 100, false, 0)],                                      // 그라비티 밸런스 0x100a2b00(20n+80)
+                _ => [],
+            },
+        };
+        double at = _lastTime;
+        foreach (var (strength, ticks, vertical, delay) in shakes)
+        {
+            at += delay / TicksPerSecond;
+            _shakes.Add((at, at + ticks / TicksPerSecond, strength, vertical));
+            at += ticks / TicksPerSecond;
+        }
+    }
+
     /// <summary>그리는 동안 틀마다 불리는 연출 — false 를 돌려주면 끝난 것이다.</summary>
     private readonly List<Func<bool>> _stageDraws = [];
 
