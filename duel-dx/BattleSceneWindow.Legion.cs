@@ -410,7 +410,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is null) return;
         // 대장이 쓴 기술의 +0x41 이 0 이면 부하는 안 따라 친다(0x1005fd00) — 피해 work 469개가 그렇다(fg-21 ⑯).
         if (leaderWork is { FollowersAct: false }) return;
+        // 잡힌 칸 — 이번에 부하가 고른 설 칸과, 지금 걷고 있는 유닛(다른 군단 부하 포함)의 도착 칸. 아직 출발 칸에 서 있어 LiveUnitAt 에 안 잡힌다.
         var approached = new HashSet<int>();
+        foreach (var walker in _units)
+            if (walker.Alive && walker.Path.Count > 0) { var (lc, lr) = walker.Path.Last(); approached.Add(lr * Cols + lc); }
         foreach (var follower in FollowersOf(leaderIndex))
         {
             // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
