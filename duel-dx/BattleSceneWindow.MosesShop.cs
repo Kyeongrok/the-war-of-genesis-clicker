@@ -81,6 +81,16 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => [.. _shopSell.GroupBy(i => i).Select(g => (g.Key, g.Count()))],
     };
 
+    /// <summary>상점 페이지에서 마우스가 놓인 목록을 휠로 굴린다(편의 — 원본은 화살표만, ba-20 G22). 받았으면 true.</summary>
+    private bool OnMosesShopWheel(int notches)
+    {
+        if (!_mosesOpen || _mosesPage != 3 || SystemOpen) return false;
+        int list = ShopRowAt(_mouse.X, _mouse.Y).List;
+        if (list < 0) return false;
+        _shopTop[list] = Math.Clamp(_shopTop[list] - notches, 0, Math.Max(0, ShopListItems(list).Count - ShopRows));
+        return true;
+    }
+
     private (int List, int Row) ShopRowAt(int bx, int by)
     {
         var (ox, oy) = MosesOrigin();
