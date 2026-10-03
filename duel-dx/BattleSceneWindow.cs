@@ -1157,10 +1157,38 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// 기술을 쓰는 동안 맵이 물든다(ba-20 P2) — 상태 14 CHRWORK 가 work <c>+0x3a</c>(1 → 방식 2)·<c>+0x3b</c>(세기)로 <c>0x1002e8d0</c> 을 부르고
+    /// 행동이 끝나면 <c>0x1002e920</c>(목표 −1). 지금 세기는 틱마다 한 칸씩 목표로 간다(<c>0x1006408a</c>). 맵 그리기만 이 값을 본다(유닛·이펙트는 그대로 — 가설).
+    /// </summary>
+    private double _mapTint = -1, _mapTintClock;
+    private int _mapTintTarget = -1;
+
+    private void DrawMapTint()
+    {
+        double ticks = Math.Clamp((_lastTime - _mapTintClock) * TicksPerSecond, 0, 4);
+        _mapTintClock = _lastTime;
+        if (_routine == null && _eventRoutine == null) _mapTintTarget = -1;   // 행동이 끊겨도(불러오기·전투 끝) 남지 않게
+        if (_mapTint < _mapTintTarget) _mapTint = Math.Min(_mapTintTarget, Math.Max(_mapTint, -1) + ticks);
+        else if (_mapTint > _mapTintTarget) _mapTint = Math.Max(_mapTintTarget, _mapTint - ticks);
+        if (_mapTint <= -1) return;
+        // 방식 2: 5비트 채널 v = (23·c + 8·세기)/31 — 세기 0 이면 74% 로 어두워지고 세기가 오를수록 회색이 뜬다.
+        int add = (int)(Math.Max(0, Math.Floor(_mapTint)) * 8 * 255 / (31 * 31));
+        for (int y = _camY; y < _camY + ViewHeight; y++)
+            for (int x = _camX; x < _camX + ViewWidth; x++)
+            {
+                int i = y * BoardWidth + x;
+                uint c = _fb[i];
+                uint Dim(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 23 / 31 + add);
+                _fb[i] = 0xFF000000 | Dim(16) << 16 | Dim(8) << 8 | Dim(0);
+            }
+    }
+
     private void Compose()
     {
         Array.Fill(_fb, BgColor);
         DrawBackground();
+        DrawMapTint();
         DrawMoveRange();
         DrawDeployCells();
         DrawWorkRange();

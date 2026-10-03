@@ -263,7 +263,8 @@ public sealed record WorkData(int Id, ushort AbilityId, byte Level, byte RangeSh
                               (byte Stat, short Value)[] Bonuses, int AreaMin = 0, byte AreaMode = 0,
                               byte RangeKind = 0, byte HeightRange = 0, byte Sight = 0, byte SameHeightRange = 0,
                               byte HeightGraded = 0, byte HeightArea = 0, byte SameHeightArea = 0, byte SoulSpend = 0,
-                              byte FollowersJoin = 1, byte AiSide = 1)
+                              byte FollowersJoin = 1, byte AiSide = 1,
+                              byte TintMode = 0, byte TintLevel = 0)
 {
     /// <summary>AI 가 세는 대상 편(메모리 <c>+0x3c</c>, 파일 54) — 1 적 · 4 아군 · 2 자기. 종류 3(보조) 이득 판정이 이것으로 갈린다(<c>0x1005c766</c>).</summary>
     public int AiTargetSide => AiSide;
@@ -416,7 +417,8 @@ public sealed class GameDatabase
             U16(a, o + 41), U16(a, o + 43), U16(a, o + 45), U16(a, o + 47), a[o + 55], a[o + 56], a[o + 57],
             [.. new[] { 28, 31, 34 }.Select(k => (a[o + k], (short)U16(a, o + k + 1))).Where(p => p.Item1 != 0)],
             U16(a, o + 24), a[o + 26],
-            a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49], a[o + 59], a[o + 54]);
+            a[o + 6], a[o + 12], a[o + 13], a[o + 14], a[o + 15], a[o + 19], a[o + 21], a[o + 49], a[o + 59], a[o + 54],
+            a[o + 52], a[o + 53]);   // 맵 물들이기 방식·세기(메모리 +0x3a·+0x3b, ba-20 P2)
 
     /// <summary>스킬 파일이 덮어쓴 어빌리티 설명(어빌리티 번호 → 글). 비어 있으면 원본 TXR 을 쓴다.</summary>
     private Dictionary<int, string> _descriptions = [];

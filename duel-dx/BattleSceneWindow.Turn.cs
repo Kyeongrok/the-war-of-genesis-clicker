@@ -788,6 +788,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
         if (w.Id == StanceDefendWork) a.Facing = Facing.Down;   // 방어 0x100b2d50 은 방향 2 를 박아 넣는다 — 늘 아래를 본다
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
+        if (w.TintMode == 1) _mapTintTarget = w.TintLevel;   // 기술을 쓰는 동안 맵이 물든다(0x10069efa, ba-20 P2)
 
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
@@ -1090,6 +1091,7 @@ internal sealed unsafe partial class BattleSceneWindow
             a.Fade = 1;
         }
 
+        _mapTintTarget = -1;   // 행동이 끝나면 맵 물들이기를 푼다(0x1002e920)
         // 희생(13)·익스플로젼(22) — 아군을 회복시킨 뒤 시전자 HP 를 0 으로 쓴다(0x10090d62 · 0x100915f9, ba-20 D1).
         // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)이 되살리는지는 가설.
         if (w.AbilityId is SacrificeAbility or ExplosionAbility && a.Alive && !dying.Contains(a))
