@@ -480,6 +480,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _delayedHits.Clear();
         _movies.Clear();
         _bodyClones.Clear();
+        _blinks.Clear();
+        _blinkGhosts.Clear();
         _flyingEffects.Clear();
         _swords.Clear();
         _preludeDots.Clear();
@@ -919,6 +921,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _effects.Clear();
         _movies.Clear();
         _bodyClones.Clear();
+        _blinks.Clear();
+        _blinkGhosts.Clear();
         _flyingEffects.Clear();
         _swords.Clear();
         _preludeDots.Clear();
