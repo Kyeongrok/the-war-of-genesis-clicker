@@ -96,6 +96,20 @@ internal sealed unsafe partial class BattleSceneWindow
         return ticks / TicksPerSecond;
     }
 
+    /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
+    private (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
+    {
+        if (LiveUnitAt(col, row) is not { } other || other == who) return (col, row);
+        for (int radius = 1; radius <= 6; radius++)
+            for (int dy = -radius; dy <= radius; dy++)
+                foreach (int dx in new[] { -(radius - Math.Abs(dy)), radius - Math.Abs(dy) }.Distinct())
+                {
+                    int c = col + dx, r = row + dy;
+                    if ((uint)c < Cols && (uint)r < Rows && LiveUnitAt(c, r) == null && CanStand(c, r, who)) return (c, r);
+                }
+        return (col, row);
+    }
+
     private IEnumerator<bool>? _eventRoutine;
     private double _eventRoutineStepAt = -1;
 
@@ -515,14 +529,17 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다(0x1006e940(u,1))
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
+                    // 그 칸에 누가 서 있으면 가장 가까운 빈 칸에 세운다(200 0x1004ef60 · 214 0x1004f0f0, ba-20 V5). 전에는 겹쳐 섰다.
+                    var (landCol, landRow) = FreeCellNear(A(2), A(3), u);
+                    if ((landCol, landRow) != (A(2), A(3))) u.ResetTo(landCol, landRow);
                     u.Facing = EdgeFacing(A(4));
-                    if (a.Code == 200 && EdgeCell(A(4), A(2), A(3)) is var (ec, er) && (ec, er) != (A(2), A(3)))
+                    if (a.Code == 200 && EdgeCell(A(4), A(2), A(3)) is var (ec, er) && (ec, er) != (landCol, landRow))
                     {
                         u.WarpTo(ec, er);
-                        var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(A(3) * Cols + A(2)) ? PathWithin(wr, ec, er, A(3) * Cols + A(2)) : null;
+                        var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(landRow * Cols + landCol) ? PathWithin(wr, ec, er, landRow * Cols + landCol) : null;
                         if (walk is { Count: > 0 }) { foreach (var step in walk) u.Path.Enqueue(step); longest = Math.Max(longest, WalkSeconds(u, ec, er, walk)); }
-                        else u.WarpTo(A(2), A(3));
-                        u.OriginCol = A(2); u.OriginRow = A(3);
+                        else u.WarpTo(landCol, landRow);
+                        u.OriginCol = landCol; u.OriginRow = landRow;
                     }
                     else if (a.Code == 214)
                     {
@@ -602,13 +619,24 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.Alive) continue;
-                    u.Hp = Math.Max(0, u.Hp - u.MaxHp * A(2) / 100);
-                    if (u.Hp == 0) KillUnit(u);
+                    // 피해 숫자를 띄우고(0x10054eb0), 지금 차례 유닛이면 HP 1 로 남긴다(0x1004e765, ba-20 V9).
+                    int cut = Math.Min(u.Hp, u.MaxHp * A(2) / 100);
+                    u.Hp -= cut;
+                    if (cut > 0 && u.OnField) ShowNumber(u, cut.ToString(), DamageColor);
+                    if (u.Hp > 0) continue;
+                    if ((uint)_turn < _units.Length && _units[_turn] == u) u.Hp = 1;
+                    else KillUnit(u);
                 }
                 break;
             case 707:                                    // 잃은 HP 의 인자2 % 회복 — 자료는 전부 100(풀피)
                 foreach (var u in EventTargets(A(0), out _))
-                    if (u.Alive) u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
+                {
+                    if (!u.Alive) continue;
+                    int before = u.Hp;
+                    u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
+                    // 회복 숫자(0x100551e0, ba-20 V9) — 옛 HP 에서 새 HP 로 세어 올라간다.
+                    if (u.Hp > before && u.OnField && _db != null) ShowNumber(u, _db.T(159), HealColor2, rise: false, count: (before, u.Hp));
+                }
                 break;
             case 207:                                    // 보스 필살기 — 인자2 가 `.att` work 번호(0x10052400)
             {

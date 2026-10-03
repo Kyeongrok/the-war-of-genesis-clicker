@@ -195,8 +195,17 @@ internal sealed unsafe partial class BattleSceneWindow
         string text = TalkTableFor(_scene.Id)?[A(2)] ?? "";
         int speaker = TalkSpeaker(A(0));
         string name = speaker >= 0 && _units[speaker].Data is { } c ? _db?.T(c.NameId) ?? "" : "";
+        int faceCode = 0;
+        // 말하는 이가 판에 없으면(0x1004ebd0, ba-20 V6): Chr 번호(1~9999)는 명부에서 이름·얼굴을 달아 가운데 창으로, 말하는 이 0 은 그 줄을 건너뛴다.
+        if (speaker < 0 && A(0) == 0) return;
+        if (speaker < 0 && A(0) > 0 && A(0) < 10000 && _db?.Character(A(0)) is { } absent)
+        {
+            name = _db.T(absent.NameId);
+            LoadFieldFace(absent);
+            faceCode = absent.Code;
+        }
         // 대사 상자(600)만 음성 칸이 있다 — 전투 말풍선(601)은 a17 = −1(0x10053c46).
-        OpenTalkWindow(new TalkWindow { Kind = box ? 600 : 601, Speaker = speaker, Name = name, Text = text, Pose = A(4), Voice = box ? A(3) : 0 });
+        OpenTalkWindow(new TalkWindow { Kind = box ? 600 : 601, Speaker = speaker, Name = name, Text = text, Pose = A(4), Voice = box ? A(3) : 0, FaceCode = faceCode });
     }
 
     /// <summary>
