@@ -103,13 +103,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
     private (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
     {
-        if (LiveUnitAt(col, row) is not { } other || other == who) return (col, row);
+        if (!_units.Any(x => x != who && x.Alive && x.OnField && x.Col == col && x.Row == row)) return (col, row);
         for (int radius = 1; radius <= 6; radius++)
             for (int dy = -radius; dy <= radius; dy++)
                 foreach (int dx in new[] { -(radius - Math.Abs(dy)), radius - Math.Abs(dy) }.Distinct())
                 {
                     int c = col + dx, r = row + dy;
-                    if ((uint)c < Cols && (uint)r < Rows && LiveUnitAt(c, r) == null && CanStand(c, r, who)) return (c, r);
+                    if ((uint)c < Cols && (uint)r < Rows && !_units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r) && CanStand(c, r, who)) return (c, r);
                 }
         return (col, row);
     }
@@ -120,6 +120,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void LeaveField(UnitState u, int col, int row, bool withFollowers)
     {
         u.ResetTo(col, row);
+        if (u.Hp <= 0) u.Hp = 1;   // HP 0 으로 물러난 보스가 판 밖에서 죽은 것으로 처리되지 않게
         u.OnField = false;
         if (!withFollowers) return;
         int leader = Array.IndexOf(_units, u);
@@ -659,7 +660,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 706:                                    // 최대 HP 의 인자2 % 피해
                 foreach (var u in EventTargets(A(0), out _))
                 {
-                    if (!u.Alive) continue;
+                    if (!u.Alive || u.Hp <= 0) continue;
                     // 피해 숫자를 띄우고(0x10054eb0), 지금 차례 유닛이면 HP 1 로 남긴다(0x1004e765, ba-20 V9).
                     int cut = Math.Min(u.Hp, u.MaxHp * A(2) / 100);
                     u.Hp -= cut;

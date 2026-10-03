@@ -154,7 +154,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; if (!SlotsOpen) _systemMenuReturn = false; confirm.Value.Yes(); return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; bool slots = SlotsOpen; confirm.Value.Yes(); if (!slots || !SlotsOpen) _systemMenuReturn = false; return true; }
                 if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; ReturnToSystemMenu(); return true; }
             }
             return true;
@@ -429,6 +429,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        // 사건 발동 횟수·전투 변수·타이머도 처음으로 — 안 그러면 시작 사건(최대 발동 1)이 RESTART 뒤에 다시 안 터진다.
+        LoadEvents(_scene.Id);
         // 진행 깃발도 전투 전으로 — 원본은 깃발 사본(CBattle+0xa4)에 쓰고 RESTART(결과 7)면 되돌려 적지 않는다.
         // 전에는 시작 사건이 「깃발 += 1」인 Btl 0239·0240(깃발 110)·0179·0180(깃발 208)이 RESTART 마다 한 번씩 더 올랐다.
         if (_entryFlags is { } entryFlags) Array.Copy(entryFlags, _flags, Math.Min(entryFlags.Length, _flags.Length));
