@@ -720,8 +720,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_episodesOpen)
         {
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
-            Play(578);
-            OpenSystemMenu();
+            OpenSystemMenu();   // 연대표 Esc 에는 소리가 없다(0x10106e50, ba-20 T6)
             return;
         }
         if (OnAbilityMenuKey(key)) return;
@@ -741,6 +740,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             }
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
             if (_mosesPage is not (-1 or 0)) { MosesGoBack(); return; }   // 주 화면·항행에서는 Esc 가 시스템 메뉴다(분석-모세스 13절)
+            if (ChapterEventRunning) return;                              // 챕터 사건이 도는 동안은 메뉴가 안 열린다(0x100f78ec, ba-20 T7)
             Play(578);
             OpenSystemMenu();
             return;
@@ -866,14 +866,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
         if (!won && Episodes().Count > 0) { TestRunTrace("dest title"); OpenTitle(); return; }   // 시험 전용 줄
         TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
-        var navBefore = (Chapter: _mosesChp?.Id ?? -1, Step: _mosesStep, Planet: _mosesPlanet, System: _mosesSystem, Visited: _mosesNavVisited);
+        var navBefore = (Chapter: _mosesChp?.Id ?? -1, Step: _mosesStep, Planet: _mosesPlanet, System: _mosesSystem, Visited: _mosesNavVisited, Start: _navStart);
         OpenMoses();
         // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
         if (won && _mosesOpen && _mosesChp != null)
         {
             MosesGoPage(0);
             // 떠날 때의 단계·행성·성계 그대로 돌아온다(0x100fcf00(저장 단계), ba-20 G6) — 전에는 늘 챕터 시작 행성·단계로 돌아갔다.
-            if (navBefore.Visited && navBefore.Chapter == _mosesChp.Id)
+            if (navBefore.Visited && navBefore.Chapter == _mosesChp.Id && Equals(navBefore.Start, _navStart))   // 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다
             {
                 (_mosesStep, _mosesPlanet, _mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
                 ShowMosesBackground(MosesSystem()?.Background ?? 70);
@@ -1825,6 +1825,9 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>마비·빙결·이동 불가로 군단에서 떨어진 부하(Legion.cs DetachFollower) — 대장의 레코드 번호로 사건 대상에 잡히거나 파티에 들어가지 않게.</summary>
     public bool Detached { get; set; }
 
+    /// <summary>군단 부하로 판에 선 유닛 — 대장을 물려받아도 파티(_party)에는 안 들어간다(절반 레벨·옛 능력치가 다음 전투로 새지 않게).</summary>
+    public bool WasFollower { get; set; }
+
     // ── 전투 수치 (게임 표를 읽은 뒤 채운다) ──
     public CharacterData? Data { get; set; }
     public int Hp { get; set; }
@@ -1863,7 +1866,6 @@ internal sealed class UnitState(DemoUnit unit)
         Motion = -1;
         MotionLoops = false;
         Fade = 1;
-        Detached = false;
         ClearStatus();
     }
 

@@ -79,7 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RememberParty()
     {
         foreach (var unit in _units)
-            if (unit.IsAlly && unit.LeaderIndex < 0 && !unit.Detached && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
+            if (unit.IsAlly && unit.LeaderIndex < 0 && !unit.Detached && !unit.WasFollower && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
     }
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
@@ -111,6 +111,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 int half = Math.Max(1, fd.Level / 2);
                 unit.Data = fd with { Level = (ushort)half, CumExp = half * 100 };
+                unit.WasFollower = true;
             }
 
             // 최대치는 <b>이어받은 인물</b>로 셈한다 — 앞 전투에서 레벨이 올랐으면 그 값이 따라와야 한다.
@@ -195,7 +196,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_turn >= 0)
         {
             var u = _units[_turn];
-            if (!u.Alive) EndTurn();
+            if (!u.Alive || !u.OnField) EndTurn();   // 사건이 지금 차례 유닛을 판에서 빼면 차례를 버린다(0x100661b2, ba-20 V10)
             else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && !_itemMenu && _targetWork < 0) Rest(_turn);
             return;
         }
@@ -230,6 +231,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             AdvanceTick();
+            if (_outcome.Length > 0 || EventsBusy) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
             if (_ailmentTickQueue.Count > 0) return;   // 매 턴 피해를 먼저 — 다음 틀부터 StepAilmentTicks 가 한 명씩
         }
     }
@@ -662,7 +664,9 @@ internal sealed unsafe partial class BattleSceneWindow
             bestDist = d;
             best = i;
         }
-        return best < 0 || PathWithin(range, a.Col, a.Row, best) is not { } path ? null : (path, range.Cost[best]);
+        // 길은 넓은 예산(지금 TP 전부)으로 찾는다 — 대상 고르기 중의 range 는 좁은 예산이라, 멀리 걸어가 있으면 지금 칸이 그 밖이라 길이 안 나왔다.
+        var wide = ComputeRange(a, tp: Math.Max(a.Tp, 0)) ?? range;
+        return best < 0 || (PathWithin(wide, a.Col, a.Row, best) ?? PathWithin(range, a.Col, a.Row, best)) is not { } path ? null : (path, range.Cost[best]);
     }
 
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
@@ -1155,6 +1159,16 @@ internal sealed unsafe partial class BattleSceneWindow
         // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
         foreach (var d in _units)
             if (d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
+        // 행동 끝 사건 검사(갈래 2, 0x100680a3)는 쓰러짐 처리(상태 18)보다 <b>앞</b>이다 — HP 0 유닛이 아직 서 있을 때 본다(ba-20 V1).
+        // 보스가 죽지 않고 물러나는 사건(201)·풀피 회복(707)·HP 조건(203) 사건이 이때 터진다. 전에는 쓰러뜨린 뒤에 봐서
+        // Btl 0092 사건 3·0145 사건 4(그 전투의 유일한 끝 사건)가 통째로 빠졌다.
+        if (dying.Count > 0 && !eventFinisher)
+        {
+            _eventCheckDue |= 1 << 2;
+            RunEvents();
+            if (EventsBusy) yield return true;      // 사건이 도는 동안 이 루틴은 멈춘다(UpdateTurn)
+            dying.RemoveAll(d => d.Hp > 0 || !d.OnField || !d.Alive);
+        }
         if (dying.Count > 0)
         {
             // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).

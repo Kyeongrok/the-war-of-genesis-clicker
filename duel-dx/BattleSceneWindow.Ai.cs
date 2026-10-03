@@ -283,18 +283,27 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // ① 겨눌 칸 — 점수는 지금 서 있는 자리에서 잰다.
         (int Col, int Row, int Score)? aim = null;
+        bool aimIsObject = false;
         foreach (var (col, row) in candidates)
         {
             var targets = WorkTargets(w, user, col, row);
             int value;
+            bool onObject = false;
             if (targets.Count > 0 && WorthUsing(user, w, targets)) value = TargetValue(user, w, targets);
             // 때릴 수 있는 물체(중립·적 바리케이트, 적 포탑·크리스탈)도 겨눈다 — 거리 자 0x100daca0 방식 1·5 가 그 칸을 켜고
             // 0x1005c8fc 가 물체 값을 낸다(ba-20 J N3). 값이 사람과 거의 같아 닿는 것 중 가장 가까운 것을 친다. 물체 쪽으로 다가가지는 않는다.
-            else if (targets.Count == 0 && AiObjectAt(w, user, col, row) is { } obj) value = AiObjectValue(w, obj);
+            // 접근 (B) 단계에서는 물체를 후보로 안 넣는다(물체 쪽으로 다가가지 않는다). 어려움 AI 는 유닛 후보가 하나도 없을 때만 물체를 본다.
+            else if (targets.Count == 0 && !approach && AiObjectAt(w, user, col, row) is { } obj)
+            {
+                if (SmartAi(user) && aim != null && !aimIsObject) continue;
+                value = AiObjectValue(w, obj);
+                onObject = true;
+            }
             else continue;
+            if (!onObject && aimIsObject && SmartAi(user)) aim = null;   // 유닛 후보가 나오면 물체 후보를 버린다
             int score = CDiv(value * num74 * 10,
                              4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
-            if (score > 0 && (aim == null || score > aim.Value.Score)) aim = (col, row, score);   // 점수 > 0 인 칸만(0x1005d4d7)
+            if (score > 0 && (aim == null || score > aim.Value.Score)) { aim = (col, row, score); aimIsObject = onObject; }   // 점수 > 0 인 칸만(0x1005d4d7)
         }
         if (aim is not { } pick) return null;
 
@@ -313,8 +322,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>AI 가 그 칸에서 때릴 수 있는 물체 — 피해 기술(대상 방식 1·5, 최소 대상 1)이고 부술 수 있는 적대 물체일 때.</summary>
     private DemoObject? AiObjectAt(WorkData w, UnitState user, int col, int row) =>
-        w.IsDamage && w.TargetMode is 1 or 5 && w.MinTargets == 0
-        && ObjectAt(col, row) is { Alive: true, Data.Breakable: true } obj && ObjectHostile(obj, user) && !_opened.Contains(obj) ? obj : null;
+        // 기본공격으로만 친다 — 전용 연출 갈래를 타는 기술은 물체 피해 고리를 안 지나 헛손질이 된다. 종류는 바리케이트(7)·포탑(9)·크리스탈(10)만
+        // (상자·폭탄 상자는 표 값이 1 이라 못 때린다, 0x1006fe40).
+        w.IsDamage && w.TargetMode is 1 or 5 && w.MinTargets == 0 && user.Data?.BasicWorkId == w.Id
+        && ObjectAt(col, row) is { Alive: true, Data.Breakable: true, Data.Kind: 7 or 9 or 10 } obj && ObjectHostile(obj, user) && !_opened.Contains(obj) ? obj : null;
 
     /// <summary>물체의 칸 값(0x1005c8fc 물체 가지) — 기준 0/1 HP, 4/5 공격력, 12/13 잃은 HP, 그 밖 0. 짝수는 최댓값, 홀수는 1000000 − 최솟값.</summary>
     private int AiObjectValue(WorkData w, DemoObject obj)

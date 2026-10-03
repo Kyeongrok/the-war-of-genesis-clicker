@@ -408,7 +408,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 「죽었다」 조건이 참이 되어 전투가 시작하자마자 끝났다.
                 var list = EventTargets(A(0), out bool whole);
                 if (A(0) >= 20000) return whole && list.Count > 0 && list.All(u => u.Alive && u.OnField);
-                return list.Count == 0 || list.All(u => !u.Alive || !u.OnField);   // 전장 밖도 「없다」
+                return list.Count == 0 || list.All(u => !u.Alive || !u.OnField || u.Hp <= 0);   // 전장 밖도 「없다」
             }
             case 203:                                                           // HP 퍼센트 비교
             {
