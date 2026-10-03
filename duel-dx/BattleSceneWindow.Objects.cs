@@ -242,10 +242,10 @@ internal sealed unsafe partial class BattleSceneWindow
         // 물체 쪽 1001 처리(0x100e77e0 → 0x100e72f0)는 명중·RDP·치명 없이 공격자 ATK ±10% 만 뺀다(ba-14 O1).
         damage = damage * (90 + _rng.Next(21)) / 100;
         obj.Hp -= damage;
-        ShowNumber(user, damage.ToString(), DamageColor);
+        ShowNumberAt(obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row), damage.ToString(), DamageColor);   // 숫자는 물체 자리에
         if (obj.Hp > 0) return;
         RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
-        _effects.Add((ObjectBreakObs, 0, _lastTime, obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
+        _brokenAt[obj] = (_lastTime, 4);                  // 제 그림의 모션 4 를 한 번 돌고 사라진다 — 0x3f1 은 그림 번호가 아니라 판 다시 찍기 메시지다(ba-20 O P4)
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
@@ -257,8 +257,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private const int ObjectTouchTp = 80;
 
-    /// <summary>물체가 부서질 때의 폭발 그림.</summary>
-    private const int ObjectBreakObs = 1009;
+    /// <summary>부서진(모션 4)·터진(폭탄 상자 모션 8) 물체가 마지막 모션을 한 번 도는 동안 — (때, 모션).</summary>
+    private readonly Dictionary<DemoObject, (double At, int Motion)> _brokenAt = [];
 
     /// <summary>
     /// 차례인 인물이 그 물체에 손을 대러 가는 길 — 못 닿으면 null, 이미 옆이면 빈 길.
@@ -505,23 +505,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 기본공격과 같은 자리 규칙 — 옆 두 칸(모양 2 십자, 사거리 5~8) 안이어야 친다.
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
 
-        EnsureObjectGrowth();                            // HP 가 레벨 성장을 먹은 뒤에 깎는다(0x100e73f0)
-        CommitMove(user);
-        user.Tp = Math.Max(0, user.Tp - w.TpBase);
-        int damage = _db.Atk(c, user.Soul, w.Power);
-        obj.Hp -= damage;
-        ShowNumber(user, damage.ToString(), DamageColor);
-
-        if (obj.Hp > 0) return true;
-        RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
-        // 부서지면 그 자리에 폭발이 한 번 돈다(Obs 1009, 0x100e7ba0).
-        _effects.Add((ObjectBreakObs, 0, _lastTime, col * TileW + TileW / 2, CellCenterY(col, row)));
-        user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
-        GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
-        Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
-        // 부서진 상자도 든 것을 떨군다 — 원본은 상태 19 에서 `.obj +0x144` 아이템(명령 0x3f4)·`+0x146` GP(명령 0x3f5)를
-        // 그 칸에 선 인물에게 준다(0x100e7d31~). 아이템이 있으면 아이템만, 없으면 GP.
-        GiveObjectSpoils(obj, user);
+        // 보통 기본공격이다(0x1007f0a0 — 타격 키 0x10072b40 → 1001): 칼질을 하고, 피해 ±10%·숫자·부서짐은 물체 피해 고리(DamageObject)가 낸다
+        // (ba-20 O P3). 전에는 동작 없이 곧바로 깎았고 ±10% 도 없었다.
+        _routine = UseWorkRoutine(_turn, w, -1, col, row, []);
         return true;
     }
 
@@ -561,7 +547,12 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var cell in path) user.Path.Enqueue(cell);
         while (user.IsBusy) yield return true;
         user.Facing = FacingToward(user.Col, user.Row, col, row);
-        TryBreakObject(col, row, force: true);
+        if (ObjectAt(col, row) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user)
+            && user.Data is { } c && Work(c.BasicWorkId) is { } w && InWorkRange(w, user.Col, user.Row, col, row, user))
+        {
+            var attack = UseWorkRoutine(Array.IndexOf(_units, user), w, -1, col, row, []);
+            while (attack.MoveNext()) yield return true;
+        }
     }
 
     /// <summary>부서지거나 열린 상자가 든 것을 준다 — 아이템이 있으면 아이템, 없으면 GP(0x100e7d31, 명령 0x3f4·0x3f5).</summary>
@@ -619,8 +610,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void Explode(DemoObject obj)
     {
-        _effects.Add((ObjectBreakObs, 0, _lastTime,
-                      obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row)));
+        _brokenAt[obj] = (_lastTime, 8);   // 폭탄 상자는 모션 8(Obs 460 = 35틱)을 한 번 돈다(0x100e7e90)
         if (_db is null) return;
 
         int reach = Math.Max(1, obj.Data.Radius);
@@ -637,6 +627,8 @@ internal sealed unsafe partial class BattleSceneWindow
             AddSoul(u, damage / Math.Max(1, _db.N(43)));   // 물체에 맞아도 SOUL 은 오른다(0x10078f8d)
         }
         Toast($"{_db.T((ushort)obj.Data.NameId)} 이(가) 터졌습니다.");
+        // 폭발로 HP 0 이 된 유닛은 그 행동 끝에 쓰러진다 — 전에는 HP 0 인 채 계속 움직였다(ba-20 O P5). 만진 본인이 죽으면 UpdateTurn 이 차례를 넘긴다.
+        SweepTickDeaths();
     }
 
     /// <summary>
@@ -682,7 +674,9 @@ internal sealed unsafe partial class BattleSceneWindow
         // 힐 크리스탈(종류 10)의 work 은 회복이다 — 제 편을 고쳐 준다. 나머지는 상대를 친다.
         bool heals = work is { IsHeal: true };
         var target = _units.Where(u => u.Alive && u.OnField && (heals ? !ObjectHostile(obj, u) && obj.Team >= 0 : ObjectHostile(obj, u)) && Reaches(u))
-                           .OrderBy(u => heals ? u.Hp * 100 / Math.Max(1, u.MaxHp) : u.Hp)
+                           // 겨냥은 0x10060830 → 0x1005dd60: 값 N74 × (1,000,000 − HP) × 10 / (N74 + 거리) 가 큰 쪽 — 사실상 가장 가까운 적(ba-20 O P6).
+                           .OrderBy(u => heals ? u.Hp * 100 / Math.Max(1, u.MaxHp)
+                                               : -CDiv((1000000 - u.Hp) * _db.N(74) * 10, _db.N(74) + Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row)))
                            .FirstOrDefault();
         if (target?.Data is not { } tc) return;
 
@@ -697,6 +691,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         int damage = (_db.N(3) - _db.Rdp(tc, target.Hp, target.MaxHp)) * attack / Math.Max(1, _db.N(3));
+        damage = damage * (90 + _rng.Next(21)) / 100;   // 물체가 주는 피해도 ±Num22% 흔든다(0x1007b8f4 종류 4, ba-20 O P9)
         if (damage <= 0) return;
         target.Hp = Math.Max(0, target.Hp - damage);
         ShowNumber(target, damage.ToString(), DamageColor);
@@ -715,7 +710,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is null) return;
         int Dist(UnitState u, (int Col, int Row) c) => Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c.Col, c.Row)) / 2;
         int attack = ObjAttack(obj);                     // 레벨 성장을 먹은 ATK(0x100e73f0)
-        int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * attack / Math.Max(1, _db.N(3));
+        int One(UnitState u) => (_db.N(3) - _db.Rdp(u.Data!, u.Hp, u.MaxHp)) * attack / Math.Max(1, _db.N(3)) * (90 + _rng.Next(21)) / 100;   // ±10%
 
         // 겨냥은 1525·1526 이 같다 — 물체 차례 0x1006a541 → 0x10060830 → 0x1005dd60 을 둘 다 타고, work 표의 겨냥 인자
         // (+0x14/+0x16/+0x1a/+0x3c)도 한 바이트 안 다르다. 제 칸과 네 이웃 칸 가운데, 반경 3 안의 적 최저 HP 로 점수(1,000,000 − 최저 HP)를 매기고
@@ -868,7 +863,17 @@ internal sealed unsafe partial class BattleSceneWindow
         bool aiming = _battleLoaded && IsPlayerTurn && ((_rangeUnit == _turn && _range != null) || _targetWork >= 0);
         foreach (var obj in Objects)
         {
-            if (!obj.Alive || obj.Data.SpriteId <= 0) continue;
+            if (obj.Data.SpriteId <= 0) continue;
+            // 부서진·터진 물체는 마지막 모션(4 · 폭탄 상자 8)을 한 번 돌고 사라진다.
+            if (_brokenAt.TryGetValue(obj, out var broken))
+            {
+                int sinceBroken = (int)((_lastTime - broken.At) * TicksPerSecond);
+                if (sinceBroken >= 0 && sinceBroken < (UiFor(obj.Data.SpriteId)?.MotionLength(broken.Motion) ?? 0))
+                    DrawUi(obj.Data.SpriteId, broken.Motion, sinceBroken, obj.Col * TileW + obj.Data.DrawW, CellTop(obj.Col, obj.Row) + obj.Data.DrawH, UiBlend.Alpha, loop: false);
+                else _brokenAt.Remove(obj);
+                continue;
+            }
+            if (!obj.Alive) continue;
             // 열린 물체 — 문(1·4)은 여는 모션 1 을 한 번 돌고 열린 모션 2 로 남는다(Obs 1217: 0 닫힘 · 1 열림 11틱 · 2 열린 채). 상자 따위는 치운다.
             int motion = 0, tick = (int)(_lastTime * TicksPerSecond);
             // 상자(2)·스위치(6)도 원본은 치우지 않는다 — 여는 모션 1 을 한 번 돌고 모션 2 에 머물며(0x100e7cfb·0x100e7d28) 판에 계속 찍힌다(감사3 R1).
