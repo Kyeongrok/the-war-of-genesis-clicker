@@ -213,10 +213,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawSystemMenu()
     {
         var (x, y, h) = SystemMenuRect();
-        FillRect(x - 4, y - 4, SystemW + 8, h + 8, 0x80000000);
-        FillRect(x, y, SystemW, h, 0xD00A1428);
-        StrokeRect(x, y, SystemW, h, BoxLine);
-        DrawText("System Menu", x + SystemPad, y - 22, White, 15);
+        // 모든 창은 원본 틀(Obs 0970 — 바탕 모션 7, 귀퉁이 0~3, 제목줄 4, 바깥 1px 흰 선)이다(ba-20 G13). 전에는 단색 네모였다.
+        DrawGameFrame(x, y, SystemW, h, "System Menu");
 
         var items = MenuItems;
         for (int i = 0; i < items.Length; i++)
@@ -242,10 +240,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawMissionWindow()
     {
         int w = 400, h = 180, x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
-        FillRect(x, y, w, h, PanelBg);
-        StrokeRect(x, y, w, h, BoxLine);
-        FillRect(x, y, w, 26, HeadBg);
-        DrawText(_scene.Title, x + 12, y + 4, White, 15);
+        DrawGameFrame(x, y + 26, w, h - 26, _scene.Title);
         DrawText("승리 조건", x + 20, y + 44, 0xFF80D0FF);
         DrawText(_db?.T(_scene.WinTextId) ?? "", x + 110, y + 44, White);
         DrawText("패배 조건", x + 20, y + 96, 0xFFE08080);
@@ -303,10 +298,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawVolumeWindow()
     {
         var (x, y) = VolumeOrigin();
-        FillRect(x, y, VolumeW, VolumeH, PanelBg);
-        StrokeRect(x, y, VolumeW, VolumeH, BoxLine);
-        FillRect(x, y, VolumeW, 26, HeadBg);
-        DrawText("Volume", x + 12, y + 4, White, 15);
+        DrawGameFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
 
         foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume) })
         {
@@ -342,11 +334,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_confirm is not { } confirm) return;
         var (x, y, w, h) = ConfirmRect();
-        FillRect(x - 4, y - 4, w + 8, h + 8, 0x80000000);
-        FillRect(x, y, w, h, PanelBg);
-        StrokeRect(x, y, w, h, BoxLine);
-        FillRect(x, y, w, 26, HeadBg);
-        DrawText(confirm.Title, x + 12, y + 4, White, 15);
+        DrawGameFrame(x, y + 26, w, h - 26, confirm.Title);
         var (_, tw, _) = GetText(confirm.Text, White);
         DrawText(confirm.Text, x + (w - tw) / 2, y + 48, White);
 
