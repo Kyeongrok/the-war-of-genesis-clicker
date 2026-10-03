@@ -709,9 +709,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
-        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
+        if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
+        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && !_recordsOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
         if (_progressOpen) { if (key == Win32.VK_ESCAPE) ToggleProgress(); return; }
+        if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (key == Win32.VK_ESCAPE && SkipScene()) return;
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
@@ -1119,6 +1121,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             SyncVirtualStatus();
             // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
             if (_mosesOpen && !_chapterDone) { UpdateTalk(); UpdateField(); }
+            StepSceneFadeClock();               // 타이틀·연대표·기록 화면의 들고 나는 페이드
             return;
         }
 

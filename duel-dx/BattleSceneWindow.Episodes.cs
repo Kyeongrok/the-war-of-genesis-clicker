@@ -116,8 +116,10 @@ internal sealed unsafe partial class BattleSceneWindow
         _episodePick = -1;
         _episodeTop = 0;
         ShowMosesBackground(EpisodeBackground);
+        EnterSceneFade();
         StopMusic();
-        PlayMusicFile(EpisodeBgm, loop: true);
+        PlayMusicFile(EpisodeBgm, loop: true, gain: 0);   // 0 → 84%, 15틀(ba-21 outer #3)
+        FadeMusic(84, 15);
     }
 
     /// <summary>
@@ -212,7 +214,9 @@ internal sealed unsafe partial class BattleSceneWindow
         SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
-        OpenMoses(chapter);
+        // 연대표도 16틀 검게 나간 뒤 챕터(모세스)가 선다(0x101060d0). 그동안은 연대표가 그대로 보인다.
+        _episodesOpen = true;
+        LeaveScene(() => { _episodesOpen = false; OpenMoses(chapter); });
         return true;
     }
 

@@ -58,12 +58,15 @@ internal sealed unsafe partial class BattleSceneWindow
         // 게임오버(LeaveFinishedBattle)에서 오면 판이 아직 전투 맵 크기다 — 원본은 장면이 새로 선다(감사 F15, 모세스와 같은 까닭).
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) { ResizeBoard(TitleBoardCols, TitleBoardRows); _battleLoaded = false; }
         ShowMosesBackground(TitleBackground);
+        EnterSceneFade();
         // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
         if (_musicId == TitleBgm) return;
         StopMusic();
         _titleMusicAt = _lastTime;
         // 반복하지 않는다 — 원본 0x1010583c: 0x100252a0(21, 1, 0), 셋째 인자 0 = 한 번(끝나면 BinkGoto(1)·BinkPause). 감사 F8.
-        PlayMusicFile(TitleBgm, loop: false);
+        // 0 에서 15틀에 84% 로 올라 거기 머문다(ba-21 outer #3).
+        PlayMusicFile(TitleBgm, loop: false, gain: 0);
+        FadeMusic(84, 15);
     }
 
     private int TitleButtonAt(int bx, int by)
@@ -99,7 +102,11 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void PressTitleButton(int button)
+    private void PressTitleButton(int button) =>
+        // 16틀 검게 + 음악 100 → 10% 뒤에 넘어간다(0x10105420). CONTINUE 는 곡이 이어진다. EXIT 도 페이드 뒤 끝난다.
+        LeaveScene(() => RunTitleButton(button), keepMusic: button == 1);
+
+    private void RunTitleButton(int button)
     {
         switch (button)
         {

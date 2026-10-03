@@ -30,15 +30,18 @@ internal sealed unsafe partial class BattleSceneWindow
         _titleOpen = false;
         _recordsExitHover = false;
         ShowMosesBackground(RecordsBackground);
+        EnterSceneFade();
         OpenSlots(1);                                  // 불러오기 목록(같은 창을 그대로 쓴다)
     }
 
-    private void CloseRecords()
-    {
-        _recordsOpen = false;
-        CloseSystemWindow();
-        OpenTitle();                                   // 음악은 이어진다 — OpenTitle 이 같은 곡을 다시 걸지 않게 본다
-    }
+    private void CloseRecords() =>
+        // 기록 화면도 16틀 검게 나간다(0x10104e60) — 음악은 이어진다.
+        LeaveScene(() =>
+        {
+            _recordsOpen = false;
+            CloseSystemWindow();
+            OpenTitle();                               // OpenTitle 이 같은 곡을 다시 걸지 않게 본다
+        }, keepMusic: true);
 
     /// <summary>이 화면이 떠 있으면 클릭을 처리하고 true.</summary>
     private bool OnRecordsClick(int bx, int by)
