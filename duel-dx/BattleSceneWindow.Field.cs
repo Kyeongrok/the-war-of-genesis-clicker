@@ -1532,9 +1532,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OnFieldClick(int bx, int by)
     {
         if (_fieldChoices is not { Count: > 0 } choices) return false;
-        var (x, y, w, h) = FieldChoiceRect(choices.Count);
-        int row = (by - y - 12) / 22;
-        if (bx < x || bx >= x + w || row < 0 || row >= choices.Count) return true;
+        int row = FieldChoiceAt(bx, by, choices.Count);
+        if (row < 0) return true;
         ScriptVars[_fieldChoiceVar] = (byte)(row + 1);      // 고른 차례는 1부터
         _fieldChoices = null;
         // 원본 필드 고르기(604)는 소리를 안 낸다 — Snd 66 은 모세스 주 화면 단추뿐(0x10104950, 감사4 S5).
@@ -1546,27 +1545,41 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateFieldHover(int bx, int by)
     {
         if (_fieldChoices is not { Count: > 0 } choices) return;
-        var (x, y, w, _) = FieldChoiceRect(choices.Count);
-        int row = (by - y - 12) / 22;
-        _fieldChoicePick = bx >= x && bx < x + w && row >= 0 && row < choices.Count ? row : -1;
+        _fieldChoicePick = FieldChoiceAt(bx, by, choices.Count);
     }
 
-    private (int X, int Y, int W, int H) FieldChoiceRect(int rows)
+    /// <summary>
+    /// 고르기(604·605) 항목 k 의 띠 — 원본은 항목마다 620×32 띠(틀 Obs 0225)를 x 10, y 230 에서 시작해 항목이 늘 때마다 25px 위로,
+    /// 50px 간격으로 놓는다(0x100f3120 · 0x1003d1d0 · 0x1003d440, ba-20 N4). 띠의 정확한 y 는 가설.
+    /// </summary>
+    private (int X, int Y) FieldChoiceBand(int k, int rows)
     {
         var (fx, fy) = MosesOrigin();
-        int w = 360, h = rows * 22 + 24;
-        return (fx + (MosesW - w) / 2, fy + 360 - h, w, h);
+        return (fx + 10, fy + 230 - 25 * (rows - 1) + 50 * k);
     }
 
-    /// <summary>고르기 창 — 대사 상자 위. 필드와 모세스(챕터 스크립트) 둘 다 쓴다.</summary>
+    /// <summary>그 자리의 항목 번호(없으면 −1).</summary>
+    private int FieldChoiceAt(int bx, int by, int rows)
+    {
+        for (int k = 0; k < rows; k++)
+        {
+            var (x, y) = FieldChoiceBand(k, rows);
+            if (bx >= x && bx < x + 620 && by >= y && by < y + 32) return k;
+        }
+        return -1;
+    }
+
+    /// <summary>고르기 띠 묶음 — 필드와 모세스(챕터 스크립트) 둘 다 쓴다.</summary>
     private void DrawFieldChoices()
     {
         if (_fieldChoices is not { Count: > 0 } choices) return;
-        var (x, y, w, h) = FieldChoiceRect(choices.Count);
-        DarkenRect(x - 1, y - FrameTitleH - 1, w + 2, h + FrameTitleH + 2, 8);
-        DrawGameFrame(x, y, w, h, "");
         for (int i = 0; i < choices.Count; i++)
-            DrawText(choices[i], x + 16, y + 14 + i * 22, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
+        {
+            var (x, y) = FieldChoiceBand(i, choices.Count);
+            for (int m = 3; m <= 5; m++) DrawUi(TalkBandObs, m, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, x, y, UiBlend.Alpha);
+            DrawText(choices[i], x + 12, y + 10, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
+        }
     }
 
     /// <summary>필드 행동 412 — 화면을 회색조로(회상 장면).</summary>
