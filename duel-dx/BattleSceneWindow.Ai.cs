@@ -286,8 +286,13 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (col, row) in candidates)
         {
             var targets = WorkTargets(w, user, col, row);
-            if (targets.Count == 0 || !WorthUsing(user, w, targets)) continue;
-            int score = CDiv(TargetValue(user, w, targets) * num74 * 10,
+            int value;
+            if (targets.Count > 0 && WorthUsing(user, w, targets)) value = TargetValue(user, w, targets);
+            // 때릴 수 있는 물체(중립·적 바리케이트, 적 포탑·크리스탈)도 겨눈다 — 거리 자 0x100daca0 방식 1·5 가 그 칸을 켜고
+            // 0x1005c8fc 가 물체 값을 낸다(ba-20 J N3). 값이 사람과 거의 같아 닿는 것 중 가장 가까운 것을 친다. 물체 쪽으로 다가가지는 않는다.
+            else if (targets.Count == 0 && AiObjectAt(w, user, col, row) is { } obj) value = AiObjectValue(w, obj);
+            else continue;
+            int score = CDiv(value * num74 * 10,
                              4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
             if (score > 0 && (aim == null || score > aim.Value.Score)) aim = (col, row, score);   // 점수 > 0 인 칸만(0x1005d4d7)
         }
@@ -299,11 +304,29 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             int sc = stand % Cols, sr = stand / Cols;
             if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
-            if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 }) continue;
+            if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 } && AiObjectAt(w, user, pick.Col, pick.Row) == null) continue;
             int d = Math.Abs(sc - user.Col) + Math.Abs(sr - user.Row);
             if (d < bestDist) { bestDist = d; bestStand = stand; }
         }
         return bestStand < 0 ? null : (bestStand, pick.Col, pick.Row, pick.Score);
+    }
+
+    /// <summary>AI 가 그 칸에서 때릴 수 있는 물체 — 피해 기술(대상 방식 1·5, 최소 대상 1)이고 부술 수 있는 적대 물체일 때.</summary>
+    private DemoObject? AiObjectAt(WorkData w, UnitState user, int col, int row) =>
+        w.IsDamage && w.TargetMode is 1 or 5 && w.MinTargets == 0
+        && ObjectAt(col, row) is { Alive: true, Data.Breakable: true } obj && ObjectHostile(obj, user) && !_opened.Contains(obj) ? obj : null;
+
+    /// <summary>물체의 칸 값(0x1005c8fc 물체 가지) — 기준 0/1 HP, 4/5 공격력, 12/13 잃은 HP, 그 밖 0. 짝수는 최댓값, 홀수는 1000000 − 최솟값.</summary>
+    private int AiObjectValue(WorkData w, DemoObject obj)
+    {
+        int v = (w.AiCriterion >> 1) switch
+        {
+            0 => obj.Hp,
+            2 => _objGrowth.TryGetValue(obj, out var g) ? g.Attack : 0,
+            6 => (_objGrowth.TryGetValue(obj, out var g2) ? g2.MaxHp : obj.Data.MaxHp) - obj.Hp,
+            _ => 0,
+        };
+        return (w.AiCriterion & 1) == 0 ? v : 1000000 - v;
     }
 
     /// <summary>
