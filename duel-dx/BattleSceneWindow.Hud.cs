@@ -62,7 +62,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
         Right($"{_shopMoney}GP", 134, 20);
-        if (_selected >= 0 && _units[_selected] is { Alive: true } unit)
+        // Tp·Soul 은 고른 유닛이 아니라 <b>지금 차례인 유닛</b>([CBattle+0x4ce8])의 것이다(0x100e3f60, ba-20 G16) — AI 차례에도 그 유닛 값이 보인다.
+        if (_turn >= 0 && _turn < _units.Length && _units[_turn] is { Alive: true } unit)
         {
             Right($"Tp:{unit.Tp}", 134, 32);
             Right($"Soul:{unit.Soul}", 134, 44);
