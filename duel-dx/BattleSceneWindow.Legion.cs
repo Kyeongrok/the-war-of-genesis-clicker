@@ -435,6 +435,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (pick is null) continue;
                 follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);
                 PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
+                // 부하의 기술도 정상 work 실행이다(0x10075ff0) — 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
+                if (work.Id != c.BasicWorkId)
+                {
+                    ScheduleAbilitySounds(work);
+                    SpawnAbilityEffects(work, follower, pick.Col, pick.Row);
+                }
                 // 부하의 기술도 정상 실행이다 — 광역기면 범위 안 전원이 맞는다(전에는 한 명만).
                 var struck = WorkTargets(work, follower, pick.Col, pick.Row);
                 if (struck.Count == 0) ApplyWork(follower, work, pick, dying);
