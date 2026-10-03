@@ -119,6 +119,9 @@ public sealed record CharacterData(
     /// <summary>큰 유닛(파일 18 = 1) — 3×3 칸이 모두 비어야 들어간다(<c>0x100d9c7d</c>). 스파이더·퉁 파오·바루스 등 11명.</summary>
     public bool Big { get; init; }
 
+    /// <summary>이동 종류(파일 17, 메모리 +0x128) — 1 이면 걷지 않고 순간이동한다(0x10076680, ba-20 P4). 2 는 0 과 같은 걷기.</summary>
+    public byte MoveKind { get; init; }
+
     /// <summary>EXP(<c>CChr+0x30</c>) — 어빌리티를 올리고 배우는 데 쓴다. .chr 파일에는 없다.</summary>
     public int Exp { get; init; }
 
@@ -135,6 +138,7 @@ public sealed record CharacterData(
             WeaponBand = b[40],
             VoiceSet = U(6),
             Big = b[18] == 1,
+            MoveKind = b[17],
         };
     }
 

@@ -1105,8 +1105,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             StepByKey(_heldMoveKeys[^1]);
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
+        StepBlinks();
         foreach (var unit in _units)
         {
+            if (_blinks.ContainsKey(unit) || TryBeginBlink(unit)) continue;   // 이동 종류 1 은 걷지 않고 순간이동한다(ba-20 P4)
             if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
             unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
             unit.BeginStep(cell.Col, cell.Row);
@@ -1196,6 +1198,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawObjects();
         DrawUnits();
         DrawBodyClones();
+        DrawBlinkGhosts();
         DrawEffects();
         DrawMovies();
         DrawRipples();
