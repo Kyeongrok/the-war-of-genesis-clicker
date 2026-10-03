@@ -149,7 +149,7 @@ internal sealed unsafe partial class BattleSceneWindow
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
         if (!hasHand) return hasMade ? made : null;
         if (!hasMade || HandOnlyWorks.Contains(work)) return hand;
-        return (hand.Actions, [.. hand.Effects, .. made.Effects.Where(e => !hand.Effects.Any(h => h.Obs == e.Obs && h.Motion == e.Motion))]);
+        return (hand.Actions, [.. hand.Effects, .. made.Effects.Where(e => !hand.Effects.Any(h => h.Obs == e.Obs && h.Motion == e.Motion && h.Facing == e.Facing))]);
     }
 
     /// <summary>

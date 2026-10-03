@@ -231,7 +231,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             AdvanceTick();
-            if (_outcome.Length > 0 || EventsBusy) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
+            if (_outcome.Length > 0 || EventsBusy || _eventCheckDue != 0) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
             if (_ailmentTickQueue.Count > 0) return;   // 매 턴 피해를 먼저 — 다음 틀부터 StepAilmentTicks 가 한 명씩
         }
     }
@@ -383,7 +383,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>틱·물체 차례 뒤 — HP 0 이나 22·23·24(SOUL·TP 가 조건에 닿으면, 0x1007c689~)로 쓰러진 인물을 치우고 승패를 본다.</summary>
     private void SweepTickDeaths()
     {
-        foreach (var u in _units.Where(u => u.Alive && (u.Hp <= 0 || DiesByStatus(u))))
+        foreach (var u in _units.Where(u => u.Alive && u.OnField && (u.Hp <= 0 || DiesByStatus(u))))   // 판 밖(201 로 물러난 HP 0 보스)은 안 죽는다
             if (!SurvivesFatal(u))
             {
                 CenterOnUnit(u);                  // 쓰러지는 유닛마다 가운데 — 마지막이 이긴다(0x1006a8b1, 감사4 C17)
@@ -1162,11 +1162,19 @@ internal sealed unsafe partial class BattleSceneWindow
         // 행동 끝 사건 검사(갈래 2, 0x100680a3)는 쓰러짐 처리(상태 18)보다 <b>앞</b>이다 — HP 0 유닛이 아직 서 있을 때 본다(ba-20 V1).
         // 보스가 죽지 않고 물러나는 사건(201)·풀피 회복(707)·HP 조건(203) 사건이 이때 터진다. 전에는 쓰러뜨린 뒤에 봐서
         // Btl 0092 사건 3·0145 사건 4(그 전투의 유일한 끝 사건)가 통째로 빠졌다.
+        bool hadDying = dying.Count > 0;
         if (dying.Count > 0 && !eventFinisher)
         {
             _eventCheckDue |= 1 << 2;
-            RunEvents();
-            if (EventsBusy) yield return true;      // 사건이 도는 동안 이 루틴은 멈춘다(UpdateTurn)
+            // 참인 사건이 여럿이면 다 돌 때까지 — 한 틀에 끝나는 사건 뒤의 사건(707 회복·201 퇴장)이 죽는 동작 도중에 돌지 않게.
+            for (int guard = 0; guard < 16; guard++)
+            {
+                RunEvents();
+                if (!EventsBusy) break;
+                yield return true;                  // 사건이 도는 동안 이 루틴은 멈춘다(UpdateTurn)
+                if (_outcome.Length > 0) break;
+            }
+            hadDying = true;
             dying.RemoveAll(d => d.Hp > 0 || !d.OnField || !d.Alive);
         }
         if (dying.Count > 0)
@@ -1184,6 +1192,7 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var d in dying) d.Fade = 1;
             foreach (var d in dying)
             {
+                if (d.Hp > 0 || !d.OnField) continue;    // 그 사이 사건이 되살렸거나 판에서 뺐다
                 MarkDead(d);                             // 대장이 죽으면 첫 부하가 대장이 된다(승계는 MarkDead 한 곳에서, 감사5 L-B)
             }
         }
@@ -1193,7 +1202,7 @@ internal sealed unsafe partial class BattleSceneWindow
         AutoHealAll();   // 상태 20 갈래 0(0x10067d70) — 행동이 끝날 때마다 8(자동 회복)을 전원에게(ba-20 C1)
         QueueLevelUps();
         _eventCheckDue |= 1 << 1;
-        if (dying.Count > 0)
+        if (dying.Count > 0 || hadDying)            // 사건이 쓰러질 유닛을 빼거나(201) 죽였어도(706) 전멸 판정은 한다
         {
             if (_levelUpQueue.Count == 0) CheckOutcome();
             else _outcomeAfterLevelUp = true;       // 레벨업 줄이 다 빠진 뒤 UpdateLevelUp 이 본다

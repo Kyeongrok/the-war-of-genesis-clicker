@@ -300,10 +300,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 onObject = true;
             }
             else continue;
-            if (!onObject && aimIsObject && SmartAi(user)) aim = null;   // 유닛 후보가 나오면 물체 후보를 버린다
+
             int score = CDiv(value * num74 * 10,
                              4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
-            if (score > 0 && (aim == null || score > aim.Value.Score)) { aim = (col, row, score); aimIsObject = onObject; }   // 점수 > 0 인 칸만(0x1005d4d7)
+            // 어려움 AI 는 점수가 나는 유닛 후보가 있으면 물체 후보를 버린다.
+            if (score > 0 && (aim == null || (aimIsObject && !onObject && SmartAi(user)) || score > aim.Value.Score)) { aim = (col, row, score); aimIsObject = onObject; }   // 점수 > 0 인 칸만(0x1005d4d7)
         }
         if (aim is not { } pick) return null;
 
@@ -446,7 +447,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             bool acted = false;
             foreach (bool r in AiThink(index, a => acted = a)) yield return r;
-            if (!acted || _turn != index || _outcome.Length > 0 || !u.Alive) break;
+            if (!acted || _turn != index || _outcome.Length > 0 || !u.Alive || !u.OnField) break;
             CommitMove(u);                                   // 걸은 비용을 빼야 남은 TP 로 다시 생각할 수 있다
             if (u.Tp <= 0) break;
             for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
@@ -454,7 +455,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 이동만 한 군단 대장의 부하가 진형 자리로 다 걸어간 뒤에 다음 공격을 해야 부하가 모두 낀다(감사5 L-A). 멈춤 대비 5초 상한.
             for (double end = _lastTime + 5; _lastTime < end && _units.Any(x => x.Alive && x.OnField && x.IsBusy);) yield return true;
         }
-        if (_turn == index && _outcome.Length == 0 && u.Alive) Rest(index);
+        if (_turn == index && _outcome.Length == 0 && u.Alive && u.OnField) Rest(index);
     }
 
     /// <summary>한 번 생각하기 — 분석-전투 ba-11 의 여섯 단계. 기술을 쓰거나 걸었으면 <paramref name="report"/>(true).</summary>
