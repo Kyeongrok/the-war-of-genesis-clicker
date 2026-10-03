@@ -1,6 +1,10 @@
 """work(기술)마다 <b>동작 차례와 이펙트</b>를 뽑아 duel-dx 가 읽는 C# 표로 적는다.
 
     python tools/re/work_fx_table.py "<게임 폴더>" [출력.cs]
+    python tools/re/work_fx_patch.py "<게임 폴더>"            ← 뽑은 뒤 <b>꼭</b> 이어서 돌린다 (ba-20 X)
+
+이 도구는 핸들러를 코드 주소 순으로 읽어 지연·수명을 「바로 앞 이펙트」에 붙이고 이펙트를 16개에서 자른다.
+`work_fx_patch.py` 가 단계 순 기호 실행(`work_fx_emu.py`)으로 지연·수명·높이·빠진 이펙트·아이템 work 줄을 바로잡는다.
 
 `work_script.py` 가 이미 DLL 핸들러를 기호로 풀어 준다 — 여기서는 그 기록을 골라
 `('act', 기준동작)` 은 동작 번호(기준÷3)로, `('eff', Obs, 모션, x, y)` 는 이펙트로 옮긴다.
@@ -257,3 +261,4 @@ lines += ['    };', '}', '']
 with open(OUT, 'w', encoding='utf-8-sig', newline='\n') as f:
     f.write('\n'.join(lines))
 print('work %d개를 %s 에 적었다' % (len(rows), os.path.relpath(OUT, os.path.join(HERE, '..', '..'))))
+print('이어서 work_fx_patch.py 를 돌려 이펙트 칸을 바로잡을 것')

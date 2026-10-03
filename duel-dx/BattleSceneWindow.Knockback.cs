@@ -29,7 +29,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>시전자 쪽 동작만 — 맞음(2)·서기(0)는 맞은 인물의 것이다. 24 는 다 밀려난 뒤 넉백 루틴이 튼다.</summary>
     private static readonly (int[] Actions, AbilityEffect[] Effects) BiScript =
-        ([5, 7, 12], [new(379, 0, false, 0), new(43, 0, false, 0, 0, 1, true)]);
+        ([5, 7, 12], [new(379, 0, false, 0), new(43, 0, false, 42, 0, 1, true)]);
 
     /// <summary>
     /// 밀어내기 — <paramref name="target"/> 을 시전자가 보는 쪽으로 사거리 끝까지(막히면 거기까지) 밀고, 시전자는 동작 24 로 돌아온다.

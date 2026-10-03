@@ -55,6 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _runningEvent = -1;
         _eventPc = 0;
         _eventWaitUntil = 0;
+        _eventMoveUntil = 0;
         _eventRoutine = null;
         _talkSkip = false;
         _turnNo = 0;
@@ -80,6 +81,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private int _runningEvent = -1;
     private int _eventPc;
     private double _eventWaitUntil;
+    /// <summary>사건이 건 걸음들이 다 끝나는 때 — 행동 1 이 이때까지 기다린다.</summary>
+    private double _eventMoveUntil;
 
     /// <summary>
     /// 사건 줄이 건 기술(207 보스 필살기 · 909 폭주) — 끝날 때까지 사건이 <b>그 줄에 머문다</b>. 원본 207(<c>0x10052400</c>)은 단계 0 기술 →
@@ -227,7 +230,11 @@ internal sealed unsafe partial class BattleSceneWindow
             switch (a.Code)
             {
                 case 0: break;                                          // 다른 이벤트 부르기 — 그 이벤트가 제 조건으로 돈다
-                case 1: break;                                          // 기다리기 — 위에서 이미 봤다
+                case 1:                                                 // 기다리기 — 앞서 띄운 것(걷기 200·202·214)이 끝날 때까지
+                    // 원본 진행기(0x10056fb0)는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 행동 1 없이 이어진
+                    // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
+                    if (_eventMoveUntil > _lastTime) _eventWaitUntil = _eventMoveUntil;
+                    break;
                 case 2:
                     _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
@@ -559,7 +566,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     }
                     if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
-                _eventWaitUntil = _lastTime + longest;   // 걸어 들어오는 사이만큼 기다린다
+                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);   // 줄은 안 붙든다 — 뒤따르는 행동 1 이 기다린다(ba-20 V2)
                 break;
             }
             case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로. 인자1 이 1 이면 부대째(원본 — 전에는 늘 부하까지 데려갔다)
@@ -593,7 +600,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     // 인자1 이 1 이면 부대째 — 부하는 진형으로 따라온다.
                     if (A(1) == 1 && _units.Any(f => f.LeaderIndex == Array.IndexOf(_units, u))) AssignFormationTargets(Array.IndexOf(_units, u));
                 }
-                _eventWaitUntil = _lastTime + longest;
+                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);
                 break;
             }
             case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
