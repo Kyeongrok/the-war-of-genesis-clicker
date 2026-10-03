@@ -74,7 +74,7 @@ internal sealed unsafe partial class BattleSceneWindow
         (WorkData, (int, int, int, int))? best = null;
         foreach (var w in AiWorks(_units[index]))
         {
-            if (!w.IsDamage || BestUse(index, w, range) is not { } use) continue;
+            if (!w.IsDamage || BestUse(index, w, ComputeRange(_units[index], w.Id) ?? range) is not { } use) continue;   // 이동 예산은 그 기술 기준(ba-20 J N13)
             if (best is not { } b || use.Score > b.Item2.Item4) best = (w, use);
         }
         if (Trace && best is var (bw, bu))

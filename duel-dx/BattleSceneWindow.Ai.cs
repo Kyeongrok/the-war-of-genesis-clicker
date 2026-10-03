@@ -134,7 +134,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private double Danger(UnitState u, int col, int row)
     {
         int enemies = Influence(col, row, u, foes: true);
-        int friends = Influence(col, row, u, foes: false);
+        // 지도에는 제 번짐이 한 번 들어 있다(0x1005b5e0(t, 0) — 기준 16·17 0x1005c976, 이동 방식 1·5 0x100612b0, ba-20 J N4).
+        int friends = Influence(col, row, u, foes: false)
+                      + CDiv(Power(u) * (_db?.N(65) ?? 6), Math.Abs(u.Col - col) + Math.Abs(u.Row - row) + (_db?.N(65) ?? 6));
         return friends == 0 ? enemies : (double)enemies / friends;
     }
 
@@ -234,7 +236,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그다음 그 칸에 닿는 칸 가운데 <b>맨해튼으로 가장 가까운</b> 설 칸을 고른다.
     /// 설 칸 × 겨눌 칸을 한꺼번에 재면 「멀리 가서 크게 때리는」 쪽이 과하게 뽑힌다.
     /// </remarks>
-    private (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range)
+    private (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range, bool approach = false)
     {
         var user = _units[unitIndex];
         int num74 = _db?.N(74) ?? 4;
@@ -246,7 +248,14 @@ internal sealed unsafe partial class BattleSceneWindow
         var stands = new List<int>();
         var candidates = new HashSet<(int Col, int Row)>();
         int here = user.Row * Cols + user.Col;
-        if (w.TargetMode == 6)
+        // 제자리 기술(사거리 대상 0·2)은 <b>지금 칸에서만</b> 쓴다(0x1005d269 → 0x1005d725) — 걸어가서 쓰지 않는다(ba-20 J N1).
+        // 접근 (B) 단계만 「최대 TP 로 닿을 칸」을 찾느라 이동을 허용한다.
+        if (w.SelfCentred && !approach)
+        {
+            stands.Add(here);
+            candidates.Add((user.Col, user.Row));
+        }
+        else if (w.TargetMode == 6)
         {
             stands.Add(here);
             foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
@@ -346,8 +355,10 @@ internal sealed unsafe partial class BattleSceneWindow
         int best = -1, bestCost = int.MaxValue, bestOwn = int.MaxValue;
         for (int i = 0; i < range.Cost.Length; i++)
         {
-            if (!range.CanReach(i)) continue;
-            int d = cost != null && cost[i] != int.MaxValue ? cost[i] : Math.Abs(goalCol - i % Cols) + Math.Abs(goalRow - i / Cols) + 1000000;
+            // 길이 없는 칸은 후보가 아니다 — 원본 0x10059a20 은 0xffff 를 돌려줘 ⑥은 다음 목표로, 다 없으면 제자리에서 쉰다.
+            // 전에는 맨해튼 거리로 대신해 벽 쪽으로 걸어갔다(ba-20 J N2).
+            if (!range.CanReach(i) || cost == null || cost[i] == int.MaxValue) continue;
+            int d = cost[i];
             if (d < bestCost || d == bestCost && range.Cost[i] < bestOwn) { bestCost = d; best = i; bestOwn = range.Cost[i]; }
         }
         return best;
@@ -465,8 +476,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 CommitMove(u);
                 var use = UseWorkRoutine(index, heal, index, u.Col, u.Row, []);
                 while (use.MoveNext()) yield return true;
+                report(true);                                // 이동 + 회복기뿐이라 TP 가 남으면 다시 생각한다(0x1005bcd6, ba-20 J N5)
             }
-            yield break;                                     // 도망 뒤에는 쉰다(원본 0x2716)
+            yield break;                                     // 도망만 했으면 쉰다(원본 0x2716)
         }
 
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
@@ -477,7 +489,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (pass == 1 && SmartAi(u) && SmartPick(index, range) is { } smart)
             {
                 report(true);
-                foreach (bool r in AiUseWork(index, smart.Work, smart.Use, range)) yield return r;
+                foreach (bool r in AiUseWork(index, smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range)) yield return r;
                 yield break;
             }
             foreach (var w in AiWorks(u))
@@ -495,14 +507,15 @@ internal sealed unsafe partial class BattleSceneWindow
         // 4단계 (B) 접근(0x1005e39b) — 지금은 못 치지만 <b>최대 TP</b> 로는 닿는 적이 있으면, 목록 차례로 첫 성공 기술이 겨눌 칸을 향해
         // 지금 TP 로 갈 수 있는 칸 중 경로 비용이 가장 짧은 칸으로 가서 쉰다. 이 단계는 5단계 휴식보다 앞이다(fg-21 ⑮).
         if (u.Data is { } cd && Work(cd.BasicWorkId) is { } basicWork && ComputeRange(u, basicWork.Id, tp: u.MaxTp) is { } fullRange
-            && BestUse(index, basicWork, fullRange) != null)
+            && BestUse(index, basicWork, fullRange, approach: true) != null)
         {
             foreach (var w in AiWorks(u, ignoreCost: true))
             {
                 var wRange = ComputeRange(u, w.Id, tp: u.MaxTp) ?? fullRange;
-                if (BestUse(index, w, wRange) is not { } use) continue;
+                if (BestUse(index, w, wRange, approach: true) is not { } use) continue;
                 int go = NearestReachableTo(u, range, use.Col, use.Row);
-                if (go >= 0 && range.Cost[go] > 0) foreach (var r in WalkTo(u, range, go)) yield return r;
+                if (go < 0) continue;                        // 길이 없으면 다음 기술(0x1005cb40, ba-20 J N2)
+                if (range.Cost[go] > 0) foreach (var r in WalkTo(u, range, go)) yield return r;
                 yield break;                                 // 접근 뒤에는 쉰다(0x2716)
             }
         }
