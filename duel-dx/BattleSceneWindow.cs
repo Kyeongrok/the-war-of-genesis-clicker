@@ -866,9 +866,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
         if (!won && Episodes().Count > 0) { TestRunTrace("dest title"); OpenTitle(); return; }   // 시험 전용 줄
         TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
+        var navBefore = (Chapter: _mosesChp?.Id ?? -1, Step: _mosesStep, Planet: _mosesPlanet, System: _mosesSystem, Visited: _mosesNavVisited);
         OpenMoses();
         // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
-        if (won && _mosesOpen && _mosesChp != null) MosesGoPage(0);
+        if (won && _mosesOpen && _mosesChp != null)
+        {
+            MosesGoPage(0);
+            // 떠날 때의 단계·행성·성계 그대로 돌아온다(0x100fcf00(저장 단계), ba-20 G6) — 전에는 늘 챕터 시작 행성·단계로 돌아갔다.
+            if (navBefore.Visited && navBefore.Chapter == _mosesChp.Id)
+            {
+                (_mosesStep, _mosesPlanet, _mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
+                ShowMosesBackground(MosesSystem()?.Background ?? 70);
+            }
+        }
     }
 
     private void OnClick(int clientX, int clientY)
