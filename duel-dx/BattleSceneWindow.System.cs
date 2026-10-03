@@ -471,6 +471,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _blinks.Clear();
         _blinkGhosts.Clear();
         _stageDraws.Clear();
+        _planetZoomAt = -1;
         _flyingEffects.Clear();
         _swords.Clear();
         _preludeDots.Clear();
@@ -499,7 +500,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                    byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null,
                                    bool? OnField = null, int[]? Bonus = null, int Stance = 0, bool? Awake = null, int LastHitBy = -1,
                                    int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null,
-                                   int? OriginCol = null, int? OriginRow = null);
+                                   int? OriginCol = null, int? OriginRow = null, bool? Detached = null);
 
     // OriginCol·OriginRow = 기준 칸 +0x4b8/+0x4ba(원본 유닛 기록 0x1007c710 이 차례 시작 TP +0x4da 와 함께 적는다, ba-15 Q5).
     // 걸음 비용은 행동할 때 한꺼번에 빠지므로(CommitMove) 기준 칸이 없으면 걸은 뒤 저장·불러오기로 걸음이 공짜가 됐다(감사5 S2).
@@ -779,7 +780,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField,   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                     [u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp], u.Stance, u.Awake,
                     u.LastHitBy is { } hitter ? Array.IndexOf(_units, hitter) : -1,
-                    u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow))],
+                    u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow, u.Detached ? true : null))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -912,6 +913,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _bodyClones.Clear();
         _blinks.Clear();
         _blinkGhosts.Clear();
+        _stageDraws.Clear();
+        _planetZoomAt = -1;
         _flyingEffects.Clear();
         _swords.Clear();
         _preludeDots.Clear();
@@ -951,6 +954,7 @@ internal sealed unsafe partial class BattleSceneWindow
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, s.Stance);
             u.Fade = 1;   // 쓰러짐·순간이동 페이드 도중에 불러와도 흐린 채 남지 않게
             if (s.Side >= 0) u.Side = s.Side;
+            u.Detached = s.Detached ?? false;
             if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
             if (u.Data is { } c) u.Data = Restored(c, s, regrow: false);

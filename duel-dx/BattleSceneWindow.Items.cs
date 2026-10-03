@@ -61,7 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var rows = ItemRowsList();
         var (x, y, h) = ItemMenuRect();
         int index = _itemTop + (by - y - 12) / ItemRowH;
-        if (bx < x || bx >= x + ItemMenuW || by < y + 12 || index < 0 || index >= rows.Count)
+        if (bx < x || bx >= x + ItemMenuW || by < y + 12 || by >= y + 12 + ItemRows * ItemRowH || index < 0 || index >= rows.Count)
         {
             CancelTargeting(refund: true);
             return true;

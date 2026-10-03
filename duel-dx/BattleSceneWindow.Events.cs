@@ -87,6 +87,15 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 전에는 <c>_routine</c> 뒤에 붙였는데 사건 중엔 <c>_routine</c> 이 안 돌아(UpdateTurn 의 EventsBusy) 필살기가 사건이 <b>끝난 뒤</b>에 나갔고,
     /// 뒤에 결과(11)·필드(6) 줄이 있으면 아예 안 나갔다(감사5 B1·B4). <see cref="StepEvent"/> 가 틀마다 한 번 돌린다.
     /// </summary>
+    /// <summary>사건이 건 걸음이 끝나는 데 드는 시간 — 높이 차 칸은 6·8·10틱, 순간이동꾼(이동 종류 1)은 길이와 상관없이 64틱.</summary>
+    private double WalkSeconds(UnitState u, int fromCol, int fromRow, IReadOnlyList<(int Col, int Row)> walk)
+    {
+        if (u.Data is { MoveKind: 1 }) return (BlinkFadeTicks + 2 * BlinkHiddenTicks + 18 + 1) / TicksPerSecond;
+        int ticks = 0;
+        foreach (var (c, r) in walk) { ticks += StepTicksBetween(fromCol, fromRow, c, r); (fromCol, fromRow) = (c, r); }
+        return ticks / TicksPerSecond;
+    }
+
     private IEnumerator<bool>? _eventRoutine;
     private double _eventRoutineStepAt = -1;
 
@@ -511,7 +520,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     {
                         u.WarpTo(ec, er);
                         var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(A(3) * Cols + A(2)) ? PathWithin(wr, ec, er, A(3) * Cols + A(2)) : null;
-                        if (walk is { Count: > 0 }) { foreach (var step in walk) u.Path.Enqueue(step); longest = Math.Max(longest, walk.Count * StepTicks / TicksPerSecond); }
+                        if (walk is { Count: > 0 }) { foreach (var step in walk) u.Path.Enqueue(step); longest = Math.Max(longest, WalkSeconds(u, ec, er, walk)); }
                         else u.WarpTo(A(2), A(3));
                         u.OriginCol = A(2); u.OriginRow = A(3);
                     }
@@ -559,10 +568,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (walk is { Count: > 0 })
                     {
                         foreach (var step in walk) u.Path.Enqueue(step);
-                        longest = Math.Max(longest, walk.Count * StepTicks / TicksPerSecond);
+                        longest = Math.Max(longest, WalkSeconds(u, u.Col, u.Row, walk));
                         u.OriginCol = goal % Cols; u.OriginRow = goal / Cols;
                     }
-                    else u.ResetTo(A(2), A(3), keepFacing: true);
+                    // 길이 없으면 제자리에 둔다 — 전에는 못 가는 칸에도 순간이동시키고 상태까지 초기화했다. 이미 그 칸이면 할 일이 없다.
+                    else if (wr == null) u.ResetTo(A(2), A(3), keepFacing: true);
                     // 인자1 이 1 이면 부대째 — 부하는 진형으로 따라온다.
                     if (A(1) == 1 && _units.Any(f => f.LeaderIndex == Array.IndexOf(_units, u))) AssignFormationTargets(Array.IndexOf(_units, u));
                 }

@@ -189,7 +189,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             var u = _units[_turn];
             if (!u.Alive) EndTurn();
-            else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && _targetWork < 0) Rest(_turn);
+            else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && !_itemMenu && _targetWork < 0) Rest(_turn);
             return;
         }
         if (StepAilmentTicks()) return;          // 매 턴 피해 — 유닛마다 카메라가 선 뒤(감사4 C17)
@@ -567,7 +567,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 ShowNumber(u, _db.T(159), HealColor2, rise: false, count: (before, u.Hp));
             }
         }
-        if (u.Tp > 0) u.Tp = 0;
+        u.Tp = 0;   // 부하 TP 가 남아 대장이 자동 휴식에 오면 대장의 빚도 지워진다(0x1007a790 → 0x10071e20, ba-20 M4)
         AutoHealAll();   // 휴식도 행동 끝(상태 20)을 지난다 — 8(자동 회복)
         EndTurn();
     }
@@ -995,6 +995,12 @@ internal sealed unsafe partial class BattleSceneWindow
             if (step == hitStep && HasSpecialHit(w))
             {
                 foreach (bool _ in SpecialHitRoutine(a, w, hitWork, col, row, dying)) yield return true;
+                if (!followersDone && w.FollowersAct)
+                {
+                    FollowersAttack(userIndex, LiveUnitAt(col, row) ?? a, dying, allyPass: false, leaderWork: w, walk: false);
+                    followersDone = true;
+                }
+                if (holding) a.PlayAction(ObsMotionTable.ActionStand, 0);
                 while (a.IsBusy) yield return true;
                 holding = false;
                 continue;
@@ -1008,7 +1014,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
                 // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
                 if (hit == 0 && w.IsDamage && w.AbilityId != BlackHoleAbility && a.Data is { } od)
-                    foreach (var (oc, or) in AreaCells(w, a, col, row).Distinct())
+                    foreach (var (oc, or) in EffectCells(w, a, col, row))
                         if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
                             DamageObject(a, obj, _db!.Atk(od, a.Soul, hitWork.Power));
                 // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
@@ -1130,7 +1136,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
         foreach (var d in _units)
-            if (d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; dying.Add(d); }
+            if (d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
         if (dying.Count > 0)
         {
             // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).
@@ -1319,10 +1325,15 @@ internal sealed unsafe partial class BattleSceneWindow
             // 원본은 여기서 AI 차례만 영영 돈다(0x1006ed6c — 시스템 메뉴도 못 여는 막다른 길, Btl 0079·0102·0252·0221).
             // 끝날 길이 없을 때만 패배로 닫는다(ba-20 F, 원본에 없는 편의): 편 4 가 맵에 섰던 전투에서 맵 위·대기 중인 편 3·4 가 하나도 없고
             // 틱·타이머로 끝나는 사건(0076·0083·0090)도 안 남았을 때.
-            if (_units.Any(u => u.Side == 4 && !u.Alive)
-                && !_units.Any(u => u.Alive && u.Side is 3 or 4)
-                && !PendingTimedEnd())
+            // 스크립트의 「아군 전멸」·「그 인물 사망」 사건(401[4]·200·201)이 먼저 터질 틈을 준다 — 그 조건이 5초(게임 시간) 이어질 때만 닫는다.
+            bool dead = _units.Any(u => u.Side == 4 && !u.Alive)
+                        && !_units.Any(u => u.Alive && u.Side is 3 or 4)
+                        && !PendingTimedEnd();
+            if (!dead) _softlockSince = -1;
+            else if (_softlockSince < 0) _softlockSince = _lastTime;
+            else if (_lastTime - _softlockSince >= 5)
             {
+                _softlockSince = -1;
                 _outcome = "패배 — 아군이 모두 쓰러졌습니다"; _outcomeAt = _lastTime;
                 TestRunTrace($"outcome softlock-lose btl {_scene.Id} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
             }
@@ -1343,6 +1354,8 @@ internal sealed unsafe partial class BattleSceneWindow
             TestRunTrace($"outcome wipe-win btl {_scene.Id} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {_lastTime:F1}");   // 시험 전용
         }
     }
+
+    private double _softlockSince = -1;
 
     /// <summary>아직 덜 터진 사건 가운데 틱·타이머 조건(2·3)으로 전투를 끝내는(행동 6·10·11) 것이 남았나.</summary>
     private bool PendingTimedEnd()
