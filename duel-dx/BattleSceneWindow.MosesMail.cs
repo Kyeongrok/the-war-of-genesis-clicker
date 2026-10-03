@@ -153,6 +153,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void CloseMailViewer()
     {
         if (_mailOpen < 0) return;
+        _mailViewTop = 0;
         var opened = Mails();
         if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
         _mailOpen = -1;
@@ -225,7 +226,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>메일 페이지가 떠 있고 뷰어가 닫혀 있으면 휠로 목록을 굴린다 — WndProc 의 WM_MOUSEWHEEL 이 부른다. 받았으면 true.</summary>
     private bool OnMosesMailWheel(int notches)
     {
-        if (!_mosesOpen || _mosesPage != 1 || _mailOpen >= 0 || SystemOpen) return false;
+        if (!_mosesOpen || _mosesPage != 1 || SystemOpen) return false;
+        if (_mailOpen >= 0) { _mailViewTop = Math.Max(0, _mailViewTop - notches); return true; }   // 뷰어가 열려 있으면 본문을 굴린다
         ScrollMail(-notches);
         return true;
     }
@@ -281,14 +283,19 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawGameFrame(x, y, MailViewW, MailViewH, _db?.T(mail.OriginText) ?? "");
         DrawText($"From. {SenderName(mail.Sender)}", x + 12, y + 8, 0xFFFFFF80, 12);
 
+        // 긴 편지는 휠로 굴려 읽는다 — 전에는 창을 넘는 끝줄이 잘려 읽을 수 없었다(ba-20 S 4). 원본은 3틱에 한 글자씩 흘리며 한 줄씩 올린다.
+        var lines = WrapText(mail.Body, MailViewW - 24, 12f);
+        int rows = Math.Max(1, (MailViewH - 30 - 16) / 16 + 1);
+        _mailViewTop = Math.Clamp(_mailViewTop, 0, Math.Max(0, lines.Count - rows));
         int ty = y + 30;
-        foreach (string line in WrapText(mail.Body, MailViewW - 24, 12f))
-        {
-            if (ty > y + MailViewH - 16) break;
-            DrawText(line, x + 12, ty, White, 12);
-            ty += 16;
-        }
+        for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
+            DrawText(lines[i], x + 12, ty, White, 12);
+        if (_mailViewTop + rows < lines.Count) DrawText("▼", x + MailViewW - 20, y + MailViewH - 18, 0xFFFFFF80, 12);
+        if (_mailViewTop > 0) DrawText("▲", x + MailViewW - 20, y + 30, 0xFFFFFF80, 12);
     }
+
+    /// <summary>편지 뷰어에서 맨 위에 보이는 줄 — 휠로 굴린다.</summary>
+    private int _mailViewTop;
 
     /// <summary>
     /// 글을 칸 너비에 맞춰 줄로 나눈다(원본은 여러 줄 글 객체가 한다). 글에 박힌 <c>$n</c> 따위 강제 줄바꿈 표시도

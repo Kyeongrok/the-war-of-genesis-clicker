@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 이 파티 동료만 센다 — 다른 파티 인물의 배속은 그 파티 목록에서 빠진 것이다(파티 객체마다 +0x910 목록).
         bool InParty(int chr) => _members.Count == 0 || _members.Contains(chr);
         return [.. Legions().Values.Where(l => (_legionsKnown ? _ownedLegions.CountOf(l.Id) : 1)
-                                             > _unitLegion.Count(p => p.Value == l.Id && p.Key != LegionKey(_legionUnit) && InParty(p.Key))).OrderBy(l => l.Id)];
+                                             > _unitLegion.Count(p => p.Value == l.Id && InParty(p.Key))).OrderBy(l => l.Id)];
     }
 
     /// <summary>파티가 얻은 군단 번호와 개수(스크립트 713). 세이브에 실린다 — 개수만큼 번호를 되풀이해 적는다(옛 세이브는 모두 1개).</summary>
@@ -113,8 +113,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (x >= 456 && x < 634 && y >= 430 && y < 457) { MosesGoBack(); return true; }           // 나가기
         if (x >= 70 && x < 138 && y >= 293 && y < 321)                                            // 해제
         {
-            _unitLegion.Remove(LegionKey(_legionUnit));
-            Play(MosesClickSound);
+            _unitLegion.Remove(LegionKey(_legionUnit));   // 해제는 소리가 없다(0x10100e53, ba-20 S L2)
             return true;
         }
         if (x >= 160 && x < 228 && y >= 293 && y < 321)                                           // 배속
