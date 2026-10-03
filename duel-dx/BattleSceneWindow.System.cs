@@ -429,6 +429,16 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        // 물체도 처음으로 — 전에는 RESTART 뒤에도 부순 물체는 부서진 채, 연 상자는 열린 채였다(가방은 전투 전으로 돌아가 상자 아이템이 사라졌다).
+        foreach (var obj in Objects)
+            (obj.Hp, obj.Team, obj.Charge, obj.Charged) = (obj.Data.MaxHp, obj.Record.Team, 0, false);
+        _opened.Clear();
+        _openedAt.Clear();
+        _closedAt.Clear();
+        _wokenAt.Clear();
+        _objGrowth.Clear();
+        _objGrowthFor = null;
+        RestampObjects();
         // 사건 발동 횟수·전투 변수·타이머도 처음으로 — 안 그러면 시작 사건(최대 발동 1)이 RESTART 뒤에 다시 안 터진다.
         LoadEvents(_scene.Id);
         // 진행 깃발도 전투 전으로 — 원본은 깃발 사본(CBattle+0xa4)에 쓰고 RESTART(결과 7)면 되돌려 적지 않는다.
@@ -479,6 +489,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _blinks.Clear();
+        _pendingExits.Clear();
+        _brokenAt.Clear();
+        _objActing.Clear();
         _blinkGhosts.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
@@ -922,6 +935,9 @@ internal sealed unsafe partial class BattleSceneWindow
         _movies.Clear();
         _bodyClones.Clear();
         _blinks.Clear();
+        _pendingExits.Clear();
+        _brokenAt.Clear();
+        _objActing.Clear();
         _blinkGhosts.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
