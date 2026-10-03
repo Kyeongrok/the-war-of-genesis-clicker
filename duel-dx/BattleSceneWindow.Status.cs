@@ -46,6 +46,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 전에는 폭 320 에 모든 줄을 한 번에 그려 가방이 크면 창이 화면 밖으로 넘쳤다(감사4 S7·S8).
     /// </summary>
     private int _popupW = 182, _popupRows = 10, _popupTop;
+
+    /// <summary>고르기 창 닫기 단추의 한 변.</summary>
+    private const int PopupCloseW = 20;
     private const int PopupRowH = 22, PopupListX = 6, PopupScrollW = 16;
     private readonly List<(int X, int Y, int W, int H, Action Click)> _popupHits = [];
 
@@ -172,6 +175,8 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (var (x, y, w, h, click) in _popupHits)                    // 스크롤 막대
                 if (bx >= x && bx < x + w && by >= y && by < y + h) { click(); return true; }
             var (px, py, ph) = PopupRect();
+            // 오른쪽 위 닫기 단추(사용자 요청 — 원본 목록 창에는 없다)
+            if (bx >= px + _popupW - PopupCloseW - 6 && bx < px + _popupW - 6 && by >= py + 5 && by < py + 5 + PopupCloseW) { _popup = null; return true; }
             int row = PopupRowAt(bx, by);
             if (row >= 0)
             {
@@ -894,7 +899,15 @@ internal sealed unsafe partial class BattleSceneWindow
             RowText(r.Label, lx, ry, PopupRowH, r.Enabled ? StatusWhite : StatusDim, left: r.Icon != null ? 46 : 10);
             if (r.Right.Length > 0) RowText(r.Right, lx, ry, PopupRowH, r.Enabled ? StatusWhite : StatusDim, right: lw - 4);
         }
-        // 스크롤 막대(0x10044e10) — 원본 목록 창은 스크롤을 켜고 만든다. 클릭 칸은 고르기 창 몫으로 따로 모은다.
+        // 닫기 단추 — 제목줄 오른쪽 끝(사용자 요청). 마우스를 올리면 밝아진다.
+        int cx = px + _popupW - PopupCloseW - 6, cy = py + 5;
+        bool overClose = _mouse.X >= cx && _mouse.X < cx + PopupCloseW && _mouse.Y >= cy && _mouse.Y < cy + PopupCloseW;
+        FillRect(cx, cy, PopupCloseW, PopupCloseW, overClose ? 0xFF2A4A8A : BoxBg);
+        StrokeRect(cx, cy, PopupCloseW, PopupCloseW, BoxLine);
+        DrawText("✕", cx + 4, cy + 1, White, 12);
+        // 스크롤 막대(0x10044e10) — 굴릴 것이 없으면(줄 수 ≤ 보이는 줄 수) 그리지 않는다(사용자 요청 — 원본은 늘 켜고 만든다).
+        // 클릭 칸은 고르기 창 몫으로 따로 모은다.
+        if (_popup.Count <= _popupRows) return;
         int start = _statusHits.Count;
         DrawScrollBar(lx + lw, top, _popupRows * PopupRowH, _popupTop, _popup.Count, _popupRows, t => _popupTop = t);
         _popupHits.AddRange(_statusHits.Skip(start));
