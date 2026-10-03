@@ -621,7 +621,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     private bool CanAfford(UnitState u, WorkData w) =>
         u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
-        && (u.Data.JobId == 37 || u.Hp > _db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
+        && (u.Data.JobId == 37 || u.Hp >= _db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
 
     /// <summary>
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
