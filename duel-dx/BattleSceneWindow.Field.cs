@@ -713,7 +713,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     /// <remarks>원본에는 이런 참을성이 없다 — 데모가 아직 못 끝내는 연출에 갇히지 않으려고 둔 안전장치다.</remarks>
     private static readonly double FieldHoldSeconds =
-        double.TryParse(Environment.GetEnvironmentVariable("DUELDX_HOLD"), out double hold) && hold > 0 ? hold : 10;
+        double.TryParse(Environment.GetEnvironmentVariable("DUELDX_HOLD"), out double hold) && hold > 0 ? hold : 30;   // 13초짜리 연출(Fld 0165 사건 6)이 잘리지 않게 넉넉히(ba-20 N9)
 
     /// <summary>행동 하나. 이 틀에 더 읽지 말아야 하면 false(필드를 떠났거나, 연출을 기다린다).</summary>
     /// <summary>
@@ -801,6 +801,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 return false;
             }
             case 2:
+                if (_talkSkip) break;   // 건너뛰는 중이면 기다림(행동 2)은 그냥 지나간다(0x100f4844, ba-20 N6)
                 // 대사 사이의 멈춤은 설정한 초만큼만(음수면 스크립트 값 그대로 — 원본).
                 _fieldWaitUntil = _lastTime + (_talkPauseSeconds >= 0 && IsPauseBetweenLines()
                                                    ? Math.Min(_talkPauseSeconds, A(0) / TicksPerSecond)
@@ -1073,6 +1074,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 0 이 아니면 그림에서 <b>이 필드 화면으로 돌아오며 그림을 걷는다</b> — 909 27번·903 5번·904 1번·905 1번이 이쪽이다.
                 // 원본 0x1002cc60 은 a2 틱 동안 8단계로 겹친다(감사5 D5) — 전에는 그림을 즉시 바꾸고 기다리기만 했다.
                 // 전환 물체 +0x58 이 설 때까지 슬롯 — 줄은 안 막는다(909→205 7곳은 원본에서 디졸브와 함께). 카메라는 안 건드린다(D8).
+                // 908(0x1002c980)은 60틱 고정에 가림이 a2, 907(0x1002c6b0)은 a4 틱에 가림 a5 다(가림 표 0x100f2b6c, ba-20 N7) — 909 자리로 읽으면
+                // Fld 0355 의 908[0,209,4] 가 4틱 디졸브 + 가림 0 이 됐다.
+                if (a.Code == 908) { BeginFieldWipe(909, 0, 60, A(0) == 0, A(1), A(2)); break; }
+                if (a.Code == 907 && A(4) > 0) { BeginFieldWipe(909, 0, A(4), A(0) == 0, A(1), A(5)); break; }
                 if (A(0) == 0 && A(1) <= 0) { if (A(2) > 0) HoldSlotTicks(A(2)); break; }
                 if (A(2) > 0) BeginFieldWipe(909, 0, A(2), A(0) == 0, A(1), A(3));
                 else if (A(0) == 0)

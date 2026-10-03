@@ -227,7 +227,8 @@ internal sealed unsafe partial class BattleSceneWindow
             LoadFieldFace(c);
             w.FaceCode = c.Code;
         }
-        else if (_field == null && speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)
+        // 필드의 600·602 도 말하는 이가 Chr 번호(10000 미만)일 수 있다 — 임시 CChr 를 .chr 에서 읽어 이름·얼굴을 쓴다(0x100eefb3·0x100ef63b, ba-20 N1).
+        else if (speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)
         {
             // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
             w.Name = _db.T(cc.NameId);
