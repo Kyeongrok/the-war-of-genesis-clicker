@@ -421,7 +421,13 @@ internal sealed unsafe partial class BattleSceneWindow
         // 1단계 깨어남 — 조건을 못 채우면 그 자리에서 쉰다(0x1005baa8). 깬 그 차례에 바로 움직인다.
         if (!u.Awake)
         {
-            if (!WakesNow(u)) yield break;
+            if (!WakesNow(u))
+            {
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"ai asleep: unit {index} chr {u.ChrCode} ({u.Col},{u.Row}) wake {u.WakeCondition}:{u.WakeValue}" + Environment.NewLine);
+                yield break;
+            }
             u.Awake = true;
         }
 
@@ -503,6 +509,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 5단계 휴식 — 피가 Num[71]% 이하면 움직이지 않고 그 자리에서 쉰다.
         if (hpPercent <= db.N(71)) yield break;
+        if (Trace)
+        {
+            var goals = MoveGoals(u, enemies).ToList();
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"ai no attack: unit {index} chr {u.ChrCode} side {u.Side} ({u.Col},{u.Row}) TP {u.Tp} works [{string.Join(",", AiWorks(u).Select(x => x.Id))}] enemies {enemies.Count} nearest {nearest} goals {goals.Count}"
+                + (goals.Count > 0 ? $" first ({goals[0].Col},{goals[0].Row}) reach {NearestReachableTo(u, range, goals[0].Col, goals[0].Row)}" : "") + Environment.NewLine);
+        }
 
         // 6단계 — 칠 수 없으면 목표 쪽으로 다가가 쉰다. 목표 차례는 <b>이동 방식</b>이 정한다(0x1005c460).
         foreach (var goal in MoveGoals(u, enemies))
