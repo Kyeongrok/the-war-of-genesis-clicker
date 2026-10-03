@@ -779,6 +779,14 @@ internal sealed unsafe partial class BattleSceneWindow
         if (t >= 73 || _mosesPage != 0 || !_mosesOpen) { _planetZoomAt = -1; if (!_planetZoomFaded) StartFade(black: true); return; }
         if (t < 43) FillRect(ox, oy, MosesW, MosesH, 0xFF000000);
         else if (!_planetZoomFaded) { _planetZoomFaded = true; StartFade(black: true); }
+        // 줌 그림 쌍은 구체 Obs 의 모션 0(떠오르는 15틱 페이드, 틱 4~19 @ (320,220))과 모션 2(행성 이름표, 틱 40~ @ (320,350))다
+        // (행성 +0x4e~+0x54 = Chp 꼬리 워드 4~7, 0x10102210 · ba-20 S 2). 틱 19 부터는 도는 구체.
+        if (_mosesChp?.PlanetOf(_mosesPlanet) is { } zoomPlanet)
+        {
+            if (t >= 4 && t < 19) DrawUi(zoomPlanet.GlobeObs, 0, t - 4, ox + 320, oy + 220, UiBlend.Alpha, loop: false);
+            else if (t >= 19 && t < 43) DrawUi(zoomPlanet.GlobeObs, zoomPlanet.GlobeMotion, (int)(_lastTime * TicksPerSecond), ox + 320, oy + 220, UiBlend.Alpha);
+            if (t >= 40) DrawUi(zoomPlanet.GlobeObs, 2, Math.Min(t - 40, 20), ox + 320, oy + 350, UiBlend.Alpha, loop: false);
+        }
         foreach (var (motion, from) in new[] { (0, 0), (1, 0), (2, 7), (3, 12) })
             if (t >= from) DrawUi(561, motion, t - from, ox + 320, oy + 220, UiBlend.Add, loop: false);
     }
