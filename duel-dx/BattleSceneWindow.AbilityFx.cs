@@ -141,6 +141,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (MeteorWorks.Contains(work)) return ([6, 15], []);
         // 비 — 도구 표의 동작 2·0 은 맞은 인물의 것이라 시전자 사슬에서 뺀다. 밀어내기는 KnockbackRoutine.
         if (BiWorks.Contains(work)) return BiScript;
+        // 더블 브레이크 — 도구가 동작을 코드 주소 순으로 뽑아 16 이 맨 뒤로 갔다. 원본은 16 → 17(붙듦) → 18(0x100825e0, ba-20 P9).
+        if (work == DoubleBreakWork && WorkScripts.TryGetValue(work, out var doubleBreak)) return ([6, 15, 16, 3017, 18], doubleBreak.Effects);
         if (TeleportWorks.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(381, 0, false, 0), new(210, 3, false, 0)]);
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
