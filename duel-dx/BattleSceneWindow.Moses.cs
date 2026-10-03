@@ -600,7 +600,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void MosesGoBack()
     {
-        if (_mosesSystemSwitch != null || _mosesFade > 0) return;   // 항성계 옮기기·페이드 중에는 입력 잠금(ba-20 G4)
+        if (_mosesSystemSwitch != null || _mosesFade > 0 || PlanetZooming) return;   // 항성계 옮기기·페이드·행성 줌 중에는 입력 잠금(ba-20 G4)
         // 항행 단계 2(장소 고르기)에서는 늘 행성 고르기로 한 단계만 내려간다.
         // 전에는 챕터의 시작 단계(Chp 머리)가 2 보다 낮을 때만 내려갔는데, 그 값은 「들어갈 때 어디서 시작하나」일 뿐
         // 바닥이 아니다 — 챕터 10·14·19·21·22 는 행성이 여럿인데 시작 단계가 2 라, 그 규칙으로는 첫 행성에 갇혀
@@ -689,7 +689,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_mosesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
         if (_statusUnit >= 0) return OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
-        if (_mosesFade > 0 || _mosesSystemSwitch != null) return true;
+        if (_mosesFade > 0 || _mosesSystemSwitch != null || PlanetZooming) return true;
         if (OnMosesShopClick(bx, by)) return true;
         // 편지 뷰어·통신 말풍선은 모달이라 떠 있으면 누름은 닫기만 한다 — 도크보다 먼저.
         if (_mosesPage == 1 && _mailOpen >= 0 && OnMosesMailClick(bx, by)) return true;
@@ -733,8 +733,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 _planetVisits.Add((chp.Id, picked[index].No));   // 행성 +0x5c 방문 표시(가설: 고를 때 선다) — 조건 505 가 한 번 먹고 지운다
                 _mosesStep = 2;
                 _mosesPageAt = _lastTime;
-                // 원본은 줌 연출(Obs 0561 + 행성 줌 그림, 73틱, 0x10102210) 뒤 효과 3 — 연출은 아직 없고 검은 페이드만(감사5 N7).
-                StartFade(black: true);
+                // 줌 연출(Obs 0561, 73틱, 0x10102210) — 검은 화면에 막대·조준 틀·▼ 가 차례로 뜨고 43틱에 장소 화면이 밝아진다(DrawPlanetZoom).
+                _planetZoomAt = _lastTime;
+                _planetZoomFaded = false;
                 _mosesHover = -1;
             }
         }
@@ -760,6 +761,27 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>시험 훅 DUELDX_MOSESHOVER 의 마우스 자리(모세스 좌표).</summary>
     private (int X, int Y)? _mosesTestHover;
+
+    /// <summary>
+    /// 행성을 고르면 도는 줌 연출(ba-20 G10, 0x10102210 · 틱 표 0x10102858) — 화면이 검어지고 Obs 561 의 좌우 막대(모션 0·1, 틱 0),
+    /// 조준 틀(모션 2, 틱 7), ▼(모션 3, 틱 12)가 (320,220) 에 차례로 뜬 뒤 43틱에 장소 화면이 밝아지고 73틱에 입력이 풀린다.
+    /// 행성 줌 그림 쌍(행성 +0x4e~+0x54)과 구체는 아직 안 그린다. 0~43틱의 바탕이 검정이라는 것은 가설.
+    /// </summary>
+    private double _planetZoomAt = -1;
+    private bool _planetZoomFaded;
+
+    private bool PlanetZooming => _planetZoomAt >= 0;
+
+    private void DrawPlanetZoom(int ox, int oy)
+    {
+        if (_planetZoomAt < 0) return;
+        int t = (int)((_lastTime - _planetZoomAt) * TicksPerSecond);
+        if (t >= 73 || _mosesPage != 0 || !_mosesOpen) { _planetZoomAt = -1; if (!_planetZoomFaded) StartFade(black: true); return; }
+        if (t < 43) FillRect(ox, oy, MosesW, MosesH, 0xFF000000);
+        else if (!_planetZoomFaded) { _planetZoomFaded = true; StartFade(black: true); }
+        foreach (var (motion, from) in new[] { (0, 0), (1, 0), (2, 7), (3, 12) })
+            if (t >= from) DrawUi(561, motion, t - from, ox + 320, oy + 220, UiBlend.Add, loop: false);
+    }
 
     private void DrawMoses()
     {
@@ -795,6 +817,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (MosesDockShown) DrawMosesDock(ox, oy, tick);
         }
 
+        DrawPlanetZoom(ox, oy);
         DrawMosesTooltip();
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
         _uiClip = (ox, oy, MosesW, MosesH);
