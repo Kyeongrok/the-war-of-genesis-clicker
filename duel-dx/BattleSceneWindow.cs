@@ -637,6 +637,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return IntPtr.Zero;                                          // 스테이터스 창의 어빌리티 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when OnMosesMailWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 모세스 메일 목록 위면 그 목록을 굴린다
+            case Win32.WM_MOUSEWHEEL when OnMosesShopWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
+                return IntPtr.Zero;                                          // 모세스 상점 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
