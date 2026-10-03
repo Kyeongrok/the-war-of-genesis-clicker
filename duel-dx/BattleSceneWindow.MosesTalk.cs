@@ -122,7 +122,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_talkPick >= 0)
         {
             // 글이 다 나온 뒤에만 닫힌다(0x1003bfe0) — 그 전의 클릭은 남은 글을 한꺼번에 낸다.
-            if (!TalkBubbleTextDone()) { _talkBubbleAt = _lastTime - 1000; return true; }
+            if (!TalkBubbleTextDone()) { _talkBubbleAt = _lastTime - (10 + 3 * TalkBubbleText().Length) / TicksPerSecond; return true; }
             _talkPick = -1;
             Play(95);
             return true;
@@ -159,7 +159,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var people = TalkPeople();
         if (_talkPick < 0 || _talkPick >= people.Count) return "";
         var words = TalkWords(people[_talkPick]);
-        return TalkTableFor() is { } table && words.Count > 0 ? table[words[_talkShowSlot % words.Count]] : "";
+        return TalkTableFor() is { } table && words.Count > 0 ? CleanTalkText(table[words[_talkShowSlot % words.Count]]) : "";
     }
 
     /// <summary>글자는 10틱 펴진 뒤 3틱에 하나씩 나온다 — 지금까지 나온 글자 수.</summary>
@@ -208,6 +208,7 @@ internal sealed unsafe partial class BattleSceneWindow
         string line = TalkTableFor() is { } table && words.Count > 0
             ? table[words[_talkShowSlot % words.Count]] : "";
         var (px, py) = _talkBubbleSpot;
+        line = CleanTalkText(line);              // 제어 글($n·$c1)을 지운 글로 자른다 — 전에는 걸친 동안 「$」 가 찍혔다
         int shown = TalkBubbleShown();
         if (shown < line.Length) line = line[..shown];
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
