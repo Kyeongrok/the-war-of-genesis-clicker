@@ -227,6 +227,33 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         for (int xx = ox + 450; xx < ox + 620; xx++) SetPixel(xx, oy + 360, BoxLine);
         DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
+        // 부하 칸 도움말(0x100f7b50, ba-20 S 6) — 마우스가 얹힌 진형 칸(dx = ⌊(mx−130)/40⌋, dy = ⌊(my−170)/32⌋, |dx|+|dy| ≤ 2, 대장 칸 제외)에
+        // 부하가 있으면 화면 (296,75) 에 틀 없이 흰 글: 이름·소속·직업 / LP·PSY·DEP·DEX / [어빌리티] 최대 다섯 줄. 딱지는 TXR 827~834.
+        int hx = (int)Math.Floor((_mouse.X - ox - 130) / 40.0), hy = (int)Math.Floor((_mouse.Y - oy - 170) / 32.0);
+        if (Math.Abs(hx) + Math.Abs(hy) > 2 || (hx, hy) == (0, 0)) return;
+        var formation = LegionData.FormationCells[legion.Formation];
+        for (int i = 0; i < legion.Members.Length && i < formation.Length; i++)
+        {
+            if (formation[i] != (hx, hy) || legion.Members[i] == 0 || db.Character(legion.Members[i]) is not { } m) continue;
+            string T(ushort id, string fallback) => db.T(id) is { Length: > 0 } t ? t : fallback;
+            var lines = new List<string>
+            {
+                $"{T(827, "이름")} : {db.T(m.NameId)}",
+                $"{T(828, "소속")} : {db.T(legion.NameId)}",
+                $"{T(829, "직업")} : {db.JobName(m)}",
+                "---------------------",
+                $"{T(830, "LP")} : {m.Lp}",
+                $"{T(831, "PSY")} : {db.Psy(m)}",
+                $"{T(832, "DEP")} : {db.Dep(m)}",
+                $"{T(833, "DEX")} : {db.Dex(m)}",
+                "---------------------",
+                $"[ {T(834, "어빌리티")} ]",
+            };
+            foreach (var (ability, level) in m.Abilities.Where(a => a.Ability > 0).Take(5))
+                if (db.Abilities.TryGetValue(ability, out var ab)) lines.Add($"{db.T(ab.NameId)} Lv {level}");
+            for (int l = 0; l < lines.Count; l++) DrawText(lines[l], ox + 296, oy + 75 + l * 14, White, 11);
+            return;
+        }
     }
 
     private readonly Dictionary<int, UnitSprite?> _previewSprites = [];
