@@ -19,7 +19,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <param name="Count">뿌리개가 흩뿌리는 개수(설정 인자 3) — 대상 둘레 ±20·±10 픽셀에.</param>
     /// <param name="Fly">시전자에서 대상으로 날아가는 이펙트(생성자 <c>0x100c3340</c>·<c>0x100c5940</c>) — 모션 길이 동안 옮긴다.</param>
     /// <param name="Life">수명(틱, <c>0x100c2530</c>) — 0 이면 모션 한 번, 아니면 그동안 모션을 되풀이한다(힐 297:1 120틱 따위, ba-15 R2).</param>
-    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false, int Life = 0);
+    /// <param name="Facing">그 방향을 볼 때만 뜬다 — 원본 방향 번호 0 위 · 1 왼 · 2 아래 · 3 오른(−1 = 늘). 핸들러의 방향 가지(ba-20 X).</param>
+    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false, int Life = 0, int Facing = -1);
 
     /// <summary>
     /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
@@ -255,6 +256,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
             if (CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
+            if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
             if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
