@@ -135,7 +135,10 @@ internal sealed unsafe partial class BattleSceneWindow
             var (u, at, col, row, withFollowers) = _pendingExits[i];
             if (_lastTime < at && _outcome.Length == 0 && u.Alive && u.IsBusy) continue;
             _pendingExits.RemoveAt(i);
-            if (u.Alive && Array.IndexOf(_units, u) >= 0) LeaveField(u, col, row, withFollowers);
+            if (!u.Alive || Array.IndexOf(_units, u) < 0) continue;
+            LeaveField(u, col, row, withFollowers);
+            _eventCheckDue |= (1 << 2) | (1 << 1);   // 「그 유닛이 없다」 조건·전멸 판정을 다시 본다
+            CheckOutcome();
         }
     }
 
@@ -560,6 +563,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다(0x1006e940(u,1))
+                    _pendingExits.RemoveAll(x => x.Unit == u);   // 걸어 나가던 중이면 그 예약을 버린다
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     // 그 칸에 누가 서 있으면 가장 가까운 빈 칸에 세운다(200 0x1004ef60 · 214 0x1004f0f0, ba-20 V5). 전에는 겹쳐 섰다.
@@ -601,6 +605,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (!u.Alive) continue;
                     // 원본(0x100519c0)은 그 칸까지 걸어간 뒤 맵 밖으로 나가 사라진다(ba-20 V4). 걸을 길이 있고 멀쩡히 서 있는 유닛만 걸려 보낸다 —
                     // HP 0 으로 물러나는 보스·건너뛰는 중·판 밖 유닛은 전처럼 곧바로 뺀다.
+                    if (_pendingExits.RemoveAll(x => x.Unit == u) > 0) u.Path.Clear();   // 같은 유닛에 201 이 또 오면 앞 길을 버린다
                     var exitRange = u.OnField && u.Hp > 0 && !_talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
                     int exitGoal = exitRange != null ? NearestReachableTo(u, exitRange, A(2), A(3)) : -1;
                     var exitWalk = exitRange != null && exitGoal >= 0 ? PathWithin(exitRange, u.Col, u.Row, exitGoal) : null;

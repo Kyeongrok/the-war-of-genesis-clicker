@@ -238,7 +238,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 continue;
             }
             AdvanceTick();
-            if (_outcome.Length > 0 || EventsBusy || _eventCheckDue != 0) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
+            for (int g = 0; g < 8 && _events.Count > 0 && _eventCheckDue != 0 && !EventsBusy && _outcome.Length == 0; g++) RunEvents();
+            if (_outcome.Length > 0 || EventsBusy) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
             if (_ailmentTickQueue.Count > 0) return;   // 매 턴 피해를 먼저 — 다음 틀부터 StepAilmentTicks 가 한 명씩
         }
     }
@@ -1183,8 +1184,8 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int guard = 0; guard < 16; guard++)
             {
                 RunEvents();
-                if (!EventsBusy) break;
-                yield return true;                  // 사건이 도는 동안 이 루틴은 멈춘다(UpdateTurn)
+                if (!EventsBusy && (_eventCheckDue == 0 || _events.Count == 0)) break;
+                if (EventsBusy) yield return true;  // 사건이 도는 동안 이 루틴은 멈춘다(UpdateTurn)
                 if (_outcome.Length > 0) break;
             }
             hadDying = true;

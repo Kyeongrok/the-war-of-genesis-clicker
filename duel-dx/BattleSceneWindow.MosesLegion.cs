@@ -113,6 +113,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (x >= 456 && x < 634 && y >= 430 && y < 457) { MosesGoBack(); return true; }           // 나가기
         if (x >= 70 && x < 138 && y >= 293 && y < 321)                                            // 해제
         {
+            _legionPick = -1;                              // 목록이 바뀐다(해제한 군단이 돌아온다)
             _unitLegion.Remove(LegionKey(_legionUnit));   // 해제는 소리가 없다(0x10100e53, ba-20 S L2)
             return true;
         }

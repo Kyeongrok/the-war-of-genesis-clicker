@@ -178,7 +178,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 줄 누름은 목록 창 메시지 0x272a — 소리가 없다(0x100fff86, 목록 클래스에 0x10028850 호출 0개, 감사5 L2).
         int index = MailRowAt(bx, by);
-        if (index >= 0) _mailOpen = index;
+        if (index >= 0) { _mailOpen = index; _mailViewTop = 0; }
         return true;
     }
 

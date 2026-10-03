@@ -33,6 +33,8 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool _titleOpen;
     private int _titleHover = -1;
     private double _titleOpenedAt;
+    /// <summary>타이틀 곡을 건 때 — 3340틱 뒤 다시 건다(기록 화면을 다녀와도 안 바뀐다).</summary>
+    private double _titleMusicAt;
 
     /// <summary>게임을 켜면 타이틀부터 — <c>DUELDX_TITLE=0</c> 이면 건너뛰고 바로 전투로 간다.</summary>
     private void OpenTitleIfAsked()
@@ -59,6 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
         if (_musicId == TitleBgm) return;
         StopMusic();
+        _titleMusicAt = _lastTime;
         // 반복하지 않는다 — 원본 0x1010583c: 0x100252a0(21, 1, 0), 셋째 인자 0 = 한 번(끝나면 BinkGoto(1)·BinkPause). 감사 F8.
         PlayMusicFile(TitleBgm, loop: false);
     }
@@ -149,9 +152,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_titleOpen) return;
         // 원본 타이틀 틱(0x10105920)은 3340틱(약 111초)을 넘으면 오프닝 필드(Fld 0022·0413 — Mov)로 갔다가 돌아온다(ba-20 T2).
         // 오프닝 영상은 없으니 곡만 처음부터 다시 건다 — 전에는 곡이 한 번 끝나면 계속 조용했다.
-        if (_titleOpen && !SystemOpen && (_lastTime - _titleOpenedAt) * TicksPerSecond > 3340)
+        if (_titleOpen && !SystemOpen && (_lastTime - _titleMusicAt) * TicksPerSecond > 3340)
         {
-            _titleOpenedAt = _lastTime;
+            _titleMusicAt = _lastTime;
             StopMusic();
             PlayMusicFile(TitleBgm, loop: false);
         }
