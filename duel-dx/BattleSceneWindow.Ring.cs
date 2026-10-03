@@ -141,8 +141,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!IsPlayerTurn || ringUnit != _turn || unit.IsBusy) return false;
         // 원본 0x100e16b0 — Attack 은 늘 켜져 있고, Ability·Item 은 TP+CTP 가 문턱(Num 4) 아래면 꺼진다. Ability 는 상태이상 12(봉인)로도 꺼진다.
         // 전에는 거꾸로 Attack·Ability 를 끄고 Item 은 안 껐다.
-        // 문턱의 +0x4da 는 미리보기로는 안 바뀌고 차례 시작에 TP 로 놓인다(0x10072d90, ba-14 U2) — 걷기 전 TP 그대로 본다.
-        bool enoughTp = _db == null || unit.Tp + unit.Ctp >= _db.N(4);
+        // 문턱은 +0x4da = TP − (기준 칸 → 지금 칸 걸음 비용)을 본다 — 플레이어 걷기(+0xa8 = 0)도 이 값을 고쳐 적는다(0x10076437, ba-20 M3).
+        int walked = ComputeRange(unit) is { } walkRange && walkRange.CanReach(unit.Row * Cols + unit.Col) ? walkRange.Cost[unit.Row * Cols + unit.Col] : 0;
+        bool enoughTp = _db == null || unit.Tp - walked + unit.Ctp >= _db.N(4);
         return command switch
         {
             RingCommand.Ability => enoughTp && !unit.HasStatus(12),
