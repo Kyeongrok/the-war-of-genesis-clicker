@@ -61,7 +61,11 @@ internal sealed unsafe partial class BattleSceneWindow
         /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선 · 609 제 칸의 상자(<c>[0x101bfe34]</c>).</summary>
         public int Kind;
         /// <summary>아래 상자 꼴인가 — 600 과 609(609 틀 (164,120)~(313,239) 은 아직 안 옮겨 600 상자로 그린다).</summary>
-        public bool IsBox => Kind is 600 or 609;
+        public bool IsBox => Kind is 600 or 609 or 603;
+        /// <summary>603 — 화면 맨 위 한 줄 띠(자막·알림, 0x100ef9d0): 창 (10,0) 620×34, 틀 Obs 0225, 이름·초상 없음, 펴짐 없이 곧바로 뜬다(ba-20 N2).</summary>
+        public bool IsBand => Kind == 603;
+        /// <summary>600 인자 6 ≠ 0 — 반신 초상 없이(0x100ef169, ba-20 N3).</summary>
+        public bool NoPortrait;
         /// <summary>601 칸 0/1(<c>[0x101bfe20]</c>/<c>[0x101bfe24]</c>).</summary>
         public int Slot;
         /// <summary>전투 유닛 자리(없으면 −1) · 필드 말하는 이(<c>10000+열쇠</c>, 머리 위 자리를 찾는다).</summary>
@@ -78,7 +82,7 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Tint, Glitch;
 
         public double OpenedAt, ClosingAt = -1, DoneAt = -1;
-        public int OpenTicks => IsBox ? 8 : 10;
+        public int OpenTicks => IsBand ? 1 : IsBox ? 8 : 10;
 
         // 음성 — 다 펴진 뒤에 튼다(0x1003ba38).
         public int Voice, VoiceTag, ExternalVoiceTag;
@@ -120,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 609 는 제 칸([0x101bfe34])이라 600 과 서로 안 지운다 — Fld 0360 은 609 창 위에 600 이 겹쳐 뜬다(감사 3 T8).
             OpenTalkWindow(new TalkWindow
             {
-                Kind = v.Box ? (RunningField609() ? 609 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
+                Kind = v.Box ? (RunningFieldCode(609) ? 609 : RunningFieldCode(603) ? 603 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
                 FaceCode = _talkFace, FieldSpeaker = _fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
             });
         }
@@ -130,11 +134,15 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 지금 필드·챕터 주 사건이 막 읽은 줄이 609 인가 — 609 는 <see cref="ShowFieldTalk"/> 를 거쳐 <see cref="_talk"/> 로 오므로 여기서 칸을 가린다.
     /// 609 는 곁 사건에선 안 돈다(<c>MainOnly</c>).
     /// </summary>
-    private bool RunningField609()
+    private const int TalkBandObs = 225;
+
+    private bool RunningField609() => RunningFieldCode(609);
+
+    private bool RunningFieldCode(int code)
     {
         var events = _field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
         return events != null && (uint)_fieldEvent < (uint)events.Count && _fieldPc > 0 && _fieldPc <= events[_fieldEvent].Actions.Count
-               && events[_fieldEvent].Actions[_fieldPc - 1].Code == 609;
+               && events[_fieldEvent].Actions[_fieldPc - 1].Code == code;
     }
 
     /// <summary>맨 나중 창의 글이 다 나왔나 — 넣는 쪽(필드의 false)은 무시한다.</summary>
@@ -210,7 +218,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         int speaker = A(0);
         var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = FieldText(A(1)), Voice = A(2) };
-        if (a.Code == 600) w.Pose = A(3);
+        if (a.Code == 600) { w.Pose = A(3); w.NoPortrait = A(6) != 0; }
         if (a.Code == 602)
         {
             w.FrameObs = TalkRadioObs + Math.Clamp((int)A(3), 0, 1);
@@ -510,13 +518,20 @@ internal sealed unsafe partial class BattleSceneWindow
         if (w.Lines != null) return;
         w.Clean = CleanTalkText(w.Text);
         int width;
-        if (w.IsBox)
+        if (w.IsBand)
+        {
+            w.Portrait = false;
+            w.TextLeft = 12;
+            width = 594;
+            w.MaxLines = 1;
+        }
+        else if (w.IsBox)
         {
             // 상자 글은 (창x+12) 부터 창x+606 까지. 반신 초상이 없고 작은 얼굴이 있으면 얼굴 오른쪽(창x+104)부터.
             int portraitObs = TalkPortraitObs(w);
             int pose = 2 * Math.Max(0, w.Pose) + 11;
-            w.Portrait = portraitObs > 0 && UiFor(portraitObs)?.Clip(pose) is { Keys.Count: > 0 };
-            w.TextLeft = !w.Portrait && _faces.ContainsKey(TalkFaceCode(w)) ? 104 : 12;
+            w.Portrait = !w.NoPortrait && portraitObs > 0 && UiFor(portraitObs)?.Clip(pose) is { Keys.Count: > 0 };
+            w.TextLeft = !w.NoPortrait && !w.Portrait && _faces.ContainsKey(TalkFaceCode(w)) ? 104 : 12;
             width = 606 - w.TextLeft;
             w.MaxLines = 4;
         }
@@ -595,6 +610,16 @@ internal sealed unsafe partial class BattleSceneWindow
         int screenW = framed ? MosesW : ViewWidth, screenH = framed ? MosesH : ViewHeight;
         _faces.TryGetValue(TalkFaceCode(w), out var face);
 
+        if (w.IsBand)
+        {
+            // 603 띠 — 틀 Obs 0225(바탕 모션 3·4·5 비침 24/31, 테두리 0·1·2)를 창 (10,0) 에, 글 한 줄(자리 (12,10)은 가설).
+            int bandX = sx + 10, bandY = sy;
+            for (int m = 3; m <= 5; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, UiBlend.Alpha);
+            DrawTalkLines(w, bandX + w.TextLeft, bandY + 10);
+            if (ready) DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, UiBlend.Alpha);
+            return;
+        }
         if (w.IsBox)
         {
             // 600 아래 상자(0x1003c0d0, 그리기 0x1003c630) — 창 (10,370) 620×100. 틀은 통짜 그림 Obs 0224 를 창 (0,−25) 에:
@@ -624,7 +649,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (_, nw, nh) = GetText(w.Name, White, 12);
             DrawText(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
             // 원본 상자에는 작은 얼굴이 없다(큰 반신 초상화를 상자 뒤에 세운다). 초상 모션이 없는 얼굴이면 데모는 글 왼쪽에 둔다.
-            if (!w.Portrait && face != null && w.TextLeft > 12) BlitScaled(face, x + 12, y + 8, 84, 84);
+            if (!w.NoPortrait && !w.Portrait && face != null && w.TextLeft > 12) BlitScaled(face, x + 12, y + 8, 84, 84);
             // 글은 4줄 — 넘치면 한 줄씩 올린다(0x100290f0).
             DrawTalkLines(w, x + w.TextLeft, y + 10);
             if (ready) DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, UiBlend.Alpha);
