@@ -121,6 +121,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 말풍선은 모달 — 떠 있으면 어디를 누르든 접히며 Snd 95(0x1003cce0, ba16-talk-hud T0, 감사5 T3).
         if (_talkPick >= 0)
         {
+            // 글이 다 나온 뒤에만 닫힌다(0x1003bfe0) — 그 전의 클릭은 남은 글을 한꺼번에 낸다.
+            if (!TalkBubbleTextDone()) { _talkBubbleAt = _lastTime - 1000; return true; }
             _talkPick = -1;
             Play(95);
             return true;
@@ -137,6 +139,8 @@ internal sealed unsafe partial class BattleSceneWindow
             _talkShowSlot = words.Count > 0 ? _talkSlot.GetValueOrDefault(people[i].No) % words.Count : 0;
             NextTalkSlot(people[i]);
             _talkPick = i;
+            _talkBubbleAt = _lastTime;
+            _talkBubbleSpot = (px, py);          // 말풍선은 누른 순간의 자리에 서고 그 뒤로 안 움직인다(0x100ff273)
             Play(MosesClickSound);
             return true;
         }
@@ -145,6 +149,23 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>지금 말풍선이 보여 주는 대사 칸.</summary>
     private int _talkShowSlot;
+
+    /// <summary>말풍선을 띄운 때와 그 순간 인물이 서 있던 자리.</summary>
+    private double _talkBubbleAt;
+    private (int X, int Y) _talkBubbleSpot;
+
+    private string TalkBubbleText()
+    {
+        var people = TalkPeople();
+        if (_talkPick < 0 || _talkPick >= people.Count) return "";
+        var words = TalkWords(people[_talkPick]);
+        return TalkTableFor() is { } table && words.Count > 0 ? table[words[_talkShowSlot % words.Count]] : "";
+    }
+
+    /// <summary>글자는 10틱 펴진 뒤 3틱에 하나씩 나온다 — 지금까지 나온 글자 수.</summary>
+    private int TalkBubbleShown() => Math.Max(0, ((int)((_lastTime - _talkBubbleAt) * TicksPerSecond) - 10 + 2) / 3);
+
+    private bool TalkBubbleTextDone() => TalkBubbleShown() >= TalkBubbleText().Length;
 
     private void DrawMosesTalk(int ox, int oy, int tick)
     {
@@ -166,10 +187,16 @@ internal sealed unsafe partial class BattleSceneWindow
             string name = _db?.Character(people[i].ChrCode) is { } c ? _db.T(c.NameId) : "";
             if (name.Length == 0) continue;
             var (_, nw, _) = GetText(name, White, 11);
-            DrawText(name, ox + px - nw / 2, oy + py + 8, i == _talkPick ? 0xFF00FF00 : White, 11);
+            DrawText(name, ox + px - nw / 2, oy + py + 8, White, 11);   // 이름표는 늘 흰색(0x10040600)
         }
 
-        if (_talkPick >= 0 && _talkPick < people.Count) DrawTalkBubble(ox, oy, tick, people[_talkPick]);
+        if (_talkPick >= 0 && _talkPick < people.Count)
+        {
+            // 글이 다 나오고 120틱이 지나면 저절로 닫힌다(0x1003b9be) — 닫힐 때 Snd 95.
+            int shownTicks = (int)((_lastTime - _talkBubbleAt) * TicksPerSecond) - 10 - 3 * TalkBubbleText().Length;
+            if (shownTicks > 120) { _talkPick = -1; Play(95); }
+            else DrawTalkBubble(ox, oy, tick, people[_talkPick]);
+        }
 
         DrawMosesBack(ox, oy, tick);
     }
@@ -180,7 +207,9 @@ internal sealed unsafe partial class BattleSceneWindow
         var words = TalkWords(person);
         string line = TalkTableFor() is { } table && words.Count > 0
             ? table[words[_talkShowSlot % words.Count]] : "";
-        var (px, py) = TalkSpot(person);
+        var (px, py) = _talkBubbleSpot;
+        int shown = TalkBubbleShown();
+        if (shown < line.Length) line = line[..shown];
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
         int y = Math.Clamp(oy + py - TalkBubbleH - 30, oy + 4, oy + MosesH - TalkBubbleH - 4);
 
