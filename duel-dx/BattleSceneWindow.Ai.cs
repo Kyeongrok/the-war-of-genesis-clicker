@@ -236,7 +236,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그다음 그 칸에 닿는 칸 가운데 <b>맨해튼으로 가장 가까운</b> 설 칸을 고른다.
     /// 설 칸 × 겨눌 칸을 한꺼번에 재면 「멀리 가서 크게 때리는」 쪽이 과하게 뽑힌다.
     /// </remarks>
-    private (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range, bool approach = false)
+    /// <param name="anchor">점수의 거리 기준 칸 — 군단 부하면 대장이 겨눈 칸(0x1005e6e0~0x1005e70a). 없으면 제 칸. 주면 물체는 후보에서 뺀다.</param>
+    /// <param name="taken">앞 부하가 먼저 잡은 설 칸(0x1005ff9a) — 설 칸 후보에서 뺀다.</param>
+    private (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range, bool approach = false,
+                                                              (int Col, int Row)? anchor = null, HashSet<int>? taken = null)
     {
         var user = _units[unitIndex];
         int num74 = _db?.N(74) ?? 4;
@@ -293,7 +296,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 때릴 수 있는 물체(중립·적 바리케이트, 적 포탑·크리스탈)도 겨눈다 — 거리 자 0x100daca0 방식 1·5 가 그 칸을 켜고
             // 0x1005c8fc 가 물체 값을 낸다(ba-20 J N3). 값이 사람과 거의 같아 닿는 것 중 가장 가까운 것을 친다. 물체 쪽으로 다가가지는 않는다.
             // 접근 (B) 단계에서는 물체를 후보로 안 넣는다(물체 쪽으로 다가가지 않는다). 어려움 AI 는 유닛 후보가 하나도 없을 때만 물체를 본다.
-            else if (targets.Count == 0 && !approach && AiObjectAt(w, user, col, row) is { } obj)
+            else if (targets.Count == 0 && !approach && anchor == null && AiObjectAt(w, user, col, row) is { } obj)
             {
                 if (SmartAi(user) && aim != null && !aimIsObject) continue;
                 value = AiObjectValue(w, obj);
@@ -301,8 +304,9 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             else continue;
 
+            var (fromCol, fromRow) = anchor ?? (user.Col, user.Row);
             int score = CDiv(value * num74 * 10,
-                             4 + Math.Abs(col - user.Col) + Math.Abs(row - user.Row));
+                             4 + Math.Abs(col - fromCol) + Math.Abs(row - fromRow));
             // 어려움 AI 는 점수가 나는 유닛 후보가 있으면 물체 후보를 버린다.
             if (score > 0 && (aim == null || (aimIsObject && !onObject && SmartAi(user)) || score > aim.Value.Score)) { aim = (col, row, score); aimIsObject = onObject; }   // 점수 > 0 인 칸만(0x1005d4d7)
         }
@@ -313,6 +317,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (int stand in stands)
         {
             int sc = stand % Cols, sr = stand / Cols;
+            if (taken != null && stand != here && taken.Contains(stand)) continue;
             if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
             if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 } && AiObjectAt(w, user, pick.Col, pick.Row) == null) continue;
             int d = Math.Abs(sc - user.Col) + Math.Abs(sr - user.Row);

@@ -397,7 +397,42 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 사거리 밖이면 원본은 걸어가서 치는데, 데모는 아직 그 자리에서 아무것도 안 한다.
     /// </remarks>
     /// <summary>사거리 밖이라 먼저 걸어가는 부하들 — 다 걸으면 대장 루틴이 치게 한다.</summary>
-    private readonly List<(UnitState Follower, WorkData Work, UnitState Target)> _followerStrikes = [];
+    private readonly List<(UnitState Follower, WorkData Work, int Col, int Row)> _followerStrikes = [];
+
+    /// <summary>제 칸 하나만 갈 수 있는 이동 범위 — 자리를 옮기지 않는 겨냥(아군 패스·제자리 기술 합류)에 쓴다.</summary>
+    private MoveRange StandOnly(UnitState u)
+    {
+        int n = Cols * Rows;
+        var cost = new int[n];
+        var prev = new int[n];
+        Array.Fill(cost, int.MaxValue);
+        Array.Fill(prev, -1);
+        cost[u.Row * Cols + u.Col] = 0;
+        return new MoveRange(cost, prev, new bool[n]) { Width = Cols };
+    }
+
+    /// <summary>
+    /// 부하가 (col, row) 를 겨눠 그 기술을 쓴다 — 정상 work 실행(0x10075ff0): 광역기면 범위 안 전원이 맞고, 제 TP·SOUL·HP 를 낸다(0x10076380).
+    /// 맞을 대상이 없어졌으면(걸어오는 사이 죽었거나 옮겨 갔다) 아무것도 안 하고 false.
+    /// </summary>
+    private bool FollowerStrike(UnitState follower, WorkData work, int col, int row, List<UnitState> dying)
+    {
+        if (follower.Data is not { } c) return false;
+        var struck = WorkTargets(work, follower, col, row);
+        if (struck.Count == 0) return false;
+        follower.Facing = FacingToward(follower.Col, follower.Row, col, row);
+        PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
+        // 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
+        if (work.Id != c.BasicWorkId)
+        {
+            if (work.Prepare is 2 or 3 or 5 or 6) Play(694);   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
+            ScheduleAbilitySounds(work);
+            SpawnAbilityEffects(work, follower, col, row);
+        }
+        foreach (int ti in struck) ApplyWork(follower, work, _units[ti], dying);
+        PayWorkCost(follower, work);
+        return true;
+    }
 
     /// <summary>
     /// 대장이 기술을 쓰면 부하들도 같은 패스로 제 기술을 쓴다(상태 15, 분석-군단 「부하가 대장 차례에 하는 일」).
@@ -418,69 +453,30 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
             if (follower.Data is not { } c || follower.IsBusy || !follower.OnField || follower.Hp <= 0) continue;   // 판 밖·쓰러질 부하는 뺀다
-            bool done = false;
-            foreach (var work in FollowerWorks(c, allyPass))
-            {
-                if (!CanAfford(follower, work)) continue;
-                // 제 사거리 안의 대상(적 패스 = 적, 아군 패스 = 아군) 가운데 점수 = 값 × Num74 × 10 / (Num74 + |칸 − 대장이 겨눈 칸|) 이 가장 큰 쪽
-                // (0x1005e6d7~0x1005e725, 난수 없음 — ba-14 A9). 값은 그 work 의 +0x3e 기준.
-                int num74 = _db.N(74);
-                var pick = _units
-                    .Where(u => u.Alive && u.OnField && (allyPass ? !SeesAsFoe(follower, u) && u != follower : SeesAsFoe(follower, u))
-                                && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower)
-                                // 아군 패스는 이득이 있을 때만(0x1005c510 — 회복은 잃은 HP, 보조는 상태 점수). 안 그러면 회복기를 가진 부하가 늘 회복만 쓴다.
-                                && (!allyPass || WorthUsing(follower, work, WorkTargets(work, follower, u.Col, u.Row) is { Count: > 0 } area ? area : [Array.IndexOf(_units, u)])))
-                    .Select(u => (Unit: u, Score: CDiv(TargetValue(follower, work, [Array.IndexOf(_units, u)]) * num74 * 10,
-                                                        num74 + Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))))
-                    .Where(p => p.Score > 0)
-                    .OrderByDescending(p => p.Score)
-                    .Select(p => p.Unit)
-                    .FirstOrDefault();
-                if (pick is null) continue;
-                follower.Facing = FacingToward(follower.Col, follower.Row, pick.Col, pick.Row);
-                PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
-                // 부하의 기술도 정상 work 실행이다(0x10075ff0) — 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
-                if (work.Id != c.BasicWorkId)
-                {
-                    if (work.Prepare is 2 or 3 or 5 or 6) Play(694);   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
-                    ScheduleAbilitySounds(work);
-                    SpawnAbilityEffects(work, follower, pick.Col, pick.Row);
-                }
-                // 부하의 기술도 정상 실행이다 — 광역기면 범위 안 전원이 맞는다(전에는 한 명만).
-                var struck = WorkTargets(work, follower, pick.Col, pick.Row);
-                if (struck.Count == 0) ApplyWork(follower, work, pick, dying);
-                else foreach (int ti in struck) ApplyWork(follower, work, _units[ti], dying);
-                PayWorkCost(follower, work);      // 부하도 제 TP·SOUL·HP 를 낸다(0x10076380, 감사3 L1)
-                done = true;
-                break;
-            }
-            if (done || !walk) continue;
-
-            // 제자리에서는 아무 적도 안 닿는다 — 원본(0x1005f1c0)처럼 <b>대장의 대상이 닿는 칸까지 걸어간 뒤</b> 친다.
-            // 이동 예산은 부하 <b>자신의</b> TP 에서 그 기술 값을 남긴 만큼이다(0x1005f40f~0x1005f430 → 0x1005e4d0, 감사3 L1).
+            // 부하 겨냥(0x1005e4d0, ba-20 Q2 = N11): 갈 수 있는 칸(층 2) + 그 칸들의 사거리(층 12)를 <b>한 번에</b> 채점한다 —
+            // 점수 = 값 × Num74 × 10 / (Num74 + |칸 − 대장이 겨눈 칸|), 값은 0x1005c510(최소 대상·종류 3 이득·회복 문턱, WorthUsing).
+            // 전에는 제자리 사거리 안의 유닛 칸만 먼저 보고, 없을 때만 대장 대상이 닿는 가장 싼 칸으로 걸어가 대장 대상을 쳤다.
+            // 아군 패스(0x1005e820 → 0x10075420)와 걷지 않는 호출은 설 칸이 제 칸 하나다.
+            int fi = Array.IndexOf(_units, follower), here = follower.Row * Cols + follower.Col;
             bool planned = false;
             foreach (var work in FollowerWorks(c, allyPass))
             {
-                if (!CanAfford(follower, work) || ComputeRange(follower, work.Id) is not { } range) continue;
-                int best = -1, bestCost = int.MaxValue;
-                for (int idx = 0; idx < Cols * Rows; idx++)
-                {
-                    if (!range.CanReach(idx) || range.Cost[idx] >= bestCost || approached.Contains(idx)) continue;   // 앞 부하가 잡은 칸은 뺀다
-                    int cc = idx % Cols, rr = idx / Cols;
-                    if (LiveUnitAt(cc, rr) is { } other && other != follower) continue;
-                    if (!InWorkRange(work, cc, rr, target.Col, target.Row, follower)) continue;
-                    (best, bestCost) = (idx, range.Cost[idx]);
-                }
-                if (best < 0) continue;
-                foreach (var step in range.PathTo(best)) follower.Path.Enqueue(step);
-                PayFollowerWalk(follower, range, best);
-                PlayWalkSound(follower);
-                _followerTarget[follower] = (best % Cols, best / Cols);
-                _followerStrikes.Add((follower, work, target));
-                approached.Add(best);
+                if (!CanAfford(follower, work)) continue;
+                // 이동 예산은 부하 <b>자신의</b> TP 에서 그 기술 값을 남긴 만큼이다(0x1005f40f~0x1005f430, 감사3 L1).
+                var range = allyPass || !walk ? StandOnly(follower) : ComputeRange(follower, work.Id);
+                if (range is null) continue;
+                if (BestUse(fi, work, range, anchor: (target.Col, target.Row), taken: approached) is not { } use) continue;
                 planned = true;
+                if (use.Stand == here) { FollowerStrike(follower, work, use.Col, use.Row, dying); break; }
+                foreach (var step in range.PathTo(use.Stand)) follower.Path.Enqueue(step);
+                PayFollowerWalk(follower, range, use.Stand);
+                PlayWalkSound(follower);
+                _followerTarget[follower] = (use.Stand % Cols, use.Stand / Cols);
+                _followerStrikes.Add((follower, work, use.Col, use.Row));   // 다 걸어간 뒤 친다(명령1 이동 → 명령2 기술, 0x1005f1c0)
+                approached.Add(use.Stand);
                 break;
             }
+            if (!walk) continue;
             if (planned || allyPass) continue;
 
             // 칠 수 있는 칸이 없으면 <b>다가가기만</b> 한다(적 고르개 뒷부분 0x1005f4f4~0x1005f5f4 → 이동만 0x2710, ba-20 Q4) — 대장이 겨눈 칸에
