@@ -303,6 +303,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (_units[unit].HasStatus(12)) { Toast("어빌리티를 쓸 수 없습니다"); break; }
                 CommitMoveForAction();
                 _abilityMenu = true;
+                _abilityTop = 0;
                 break;
             case RingCommand.System: OpenSystemMenu(); break;
             case RingCommand.Item:
