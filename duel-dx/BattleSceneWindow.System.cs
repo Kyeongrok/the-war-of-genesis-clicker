@@ -359,6 +359,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 여기서 담으면 불러오기 전 판(타이틀 뒤 데모 전투, 하던 전투)의 유닛이 되살린 파티를 덮어써서
     /// 그 전투에 안 선 파티원의 레벨·장착 어빌리티·어빌리티 레벨이 처음 값으로 돌아갔다(사용자 보고).
     /// </param>
+    /// <summary>전투에 들어올 때의 진행 깃발 — RESTART 가 되돌린다.</summary>
+    private byte[]? _entryFlags;
+
     private bool StartBattle(int id, bool rememberParty = true)
     {
         if (DemoScene.Load(id, _db) is not { } scene)
@@ -392,7 +395,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _infoUnit = -1;
         _ringUnit = -1;
         // RESTART 가 되돌릴 가방·GP(원본은 전투 전 파티 상태로 되돌린다) — fg-21 ⑰.
-        _restartInventory = [.. _inventory];           // 들어온 차례 그대로(감사3 I4)
+        _restartInventory = [.. _inventory];
+        _entryFlags = (byte[])_flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)           // 들어온 차례 그대로(감사3 I4)
         _restartMoney = _shopMoney;
         // 전투 전 명부·군단도 — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티다(전투 안 값은 판 부분의 복사본, 감사5 S5).
         _entryRoster = _party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
@@ -424,6 +428,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        // 진행 깃발도 전투 전으로 — 원본은 깃발 사본(CBattle+0xa4)에 쓰고 RESTART(결과 7)면 되돌려 적지 않는다.
+        // 전에는 시작 사건이 「깃발 += 1」인 Btl 0239·0240(깃발 110)·0179·0180(깃발 208)이 RESTART 마다 한 번씩 더 올랐다.
+        if (_entryFlags is { } entryFlags) Array.Copy(entryFlags, _flags, Math.Min(entryFlags.Length, _flags.Length));
         // 전투 중에 쓰거나 얻은 아이템·GP 는 전투 전으로(원본 RESTART 는 파티를 통째로 되돌린다).
         if (_restartInventory != null)
         {
@@ -993,6 +1000,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!state.InMoses && state.Entry is { } entry)
         {
             _restartInventory = [.. entry.Inventory.Where(p => int.TryParse(p.Key, out _)).Select(p => KeyValuePair.Create(int.Parse(p.Key), p.Value))];
+            _entryFlags = (byte[])_flags.Clone();   // 세이브에는 전투 전 깃발이 없다 — 불러온 시점 깃발을 기준으로 삼는다
             _restartMoney = entry.Money;
             _entryRoster = [];
             foreach (var s in entry.Roster)
@@ -1008,6 +1016,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // (같은 전투에서 불러오면 앞 세션의 기준이 남던 것도 막는다).
             RememberParty();
             _restartInventory = [.. _inventory];
+        _entryFlags = (byte[])_flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)
             _restartMoney = _shopMoney;
             _entryRoster = null;
             _entryLegions = null;
