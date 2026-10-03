@@ -56,6 +56,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _eventPc = 0;
         _eventWaitUntil = 0;
         _eventMoveUntil = 0;
+        _pendingExits.Clear();
         _eventRoutine = null;
         _talkSkip = false;
         _turnNo = 0;
@@ -111,6 +112,30 @@ internal sealed unsafe partial class BattleSceneWindow
                     if ((uint)c < Cols && (uint)r < Rows && LiveUnitAt(c, r) == null && CanStand(c, r, who)) return (c, r);
                 }
         return (col, row);
+    }
+
+    /// <summary>행동 201 로 걸어 나가는 중인 유닛 — 다 걸으면 판에서 뺀다.</summary>
+    private readonly List<(UnitState Unit, double At, int Col, int Row, bool WithFollowers)> _pendingExits = [];
+
+    private void LeaveField(UnitState u, int col, int row, bool withFollowers)
+    {
+        u.ResetTo(col, row);
+        u.OnField = false;
+        if (!withFollowers) return;
+        int leader = Array.IndexOf(_units, u);
+        foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
+    }
+
+    /// <summary>걸어 나가던 유닛이 다 걸었으면(또는 전투 결과가 났으면) 판에서 뺀다 — 매 틀 부른다.</summary>
+    private void StepPendingExits()
+    {
+        for (int i = _pendingExits.Count - 1; i >= 0; i--)
+        {
+            var (u, at, col, row, withFollowers) = _pendingExits[i];
+            if (_lastTime < at && _outcome.Length == 0 && u.Alive && u.IsBusy) continue;
+            _pendingExits.RemoveAt(i);
+            if (u.Alive && Array.IndexOf(_units, u) >= 0) LeaveField(u, col, row, withFollowers);
+        }
     }
 
     private IEnumerator<bool>? _eventRoutine;
@@ -573,11 +598,20 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.Alive) continue;
-                    u.ResetTo(A(2), A(3));
-                    u.OnField = false;
-                    if (A(1) != 1) continue;
-                    int leader = Array.IndexOf(_units, u);
-                    foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
+                    // 원본(0x100519c0)은 그 칸까지 걸어간 뒤 맵 밖으로 나가 사라진다(ba-20 V4). 걸을 길이 있고 멀쩡히 서 있는 유닛만 걸려 보낸다 —
+                    // HP 0 으로 물러나는 보스·건너뛰는 중·판 밖 유닛은 전처럼 곧바로 뺀다.
+                    var exitRange = u.OnField && u.Hp > 0 && !_talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
+                    int exitGoal = exitRange != null ? NearestReachableTo(u, exitRange, A(2), A(3)) : -1;
+                    var exitWalk = exitRange != null && exitGoal >= 0 ? PathWithin(exitRange, u.Col, u.Row, exitGoal) : null;
+                    if (exitWalk is { Count: > 0 })
+                    {
+                        foreach (var step in exitWalk) u.Path.Enqueue(step);
+                        double seconds = WalkSeconds(u, u.Col, u.Row, exitWalk);
+                        _pendingExits.Add((u, _lastTime + seconds, A(2), A(3), A(1) == 1));
+                        _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + seconds);
+                        continue;
+                    }
+                    LeaveField(u, A(2), A(3), A(1) == 1);
                 }
                 break;
             case 202:                                    // 지정 칸으로 <b>걸어서</b>(0x10075ff0, ba-14 E5) — 전장에 있는 사람만. 막힌 칸이면 가장 가까운 갈 수 있는 칸.
