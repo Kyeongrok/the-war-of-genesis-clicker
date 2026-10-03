@@ -717,7 +717,7 @@ internal sealed unsafe partial class BattleSceneWindow
         born.MaxHp = born.Hp = ScaleMaxHp(born, Math.Max(1, _db.MaxHp(born.Data!)));
         born.MaxTp = _db.MaxTp(born.Data!);
         born.Tp = 0;
-        born.Stp = Math.Max(1, _db.Stp(born.Data!));
+        born.Stp = Math.Max(0, _db.Stp(born.Data!));
         born.MaxSoul = _db.MaxSoul(born.Data!);
         born.Soul = Math.Min(born.MaxSoul, caster.Soul);
         born.Awake = true;
