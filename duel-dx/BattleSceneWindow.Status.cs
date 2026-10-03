@@ -261,7 +261,10 @@ internal sealed unsafe partial class BattleSceneWindow
         if (itemId != 0 && (_inventory[itemId] -= 1) <= 0) _inventory.Remove(itemId);
         items[slot] = itemId;
         u.Data = c with { Items = items };
+        // 원본은 내부 HP(갑옷 배율을 곱하기 전)를 그대로 둔다(장비 쓰기 0x100e13b5 는 칸만 쓴다) — 화면 HP 는 새 최대치에 같은 비율로 따라간다(ba-20 C3).
+        int oldHp = u.Hp, oldMax = u.MaxHp;
         RefreshUnitStats(u);
+        if (oldMax > 0 && u.MaxHp != oldMax) u.Hp = Math.Clamp((int)((long)oldHp * u.MaxHp / oldMax), oldHp > 0 ? 1 : 0, u.MaxHp);
     }
 
     /// <summary>st-2: 장착 어빌리티 칸 — 배운 패시브 중 다른 칸에 없는 것.</summary>

@@ -33,11 +33,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     public const double StepSeconds = StepTicks / TicksPerSecond;
 
     /// <summary>
-    /// 한 칸을 걷는 틱 수 — 원본 틱(초당 30)에 맞춰 <b>8틱(0.267초)</b>. 가로 40픽셀이면 틱마다 5픽셀, 세로 32픽셀이면 4픽셀씩
+    /// 한 칸을 걷는 틱 수 — 원본은 평지에서 틱마다 8픽셀, 곧 <b>한 칸 5틱(0.167초)</b>이다(0x10073920 · 0x10073b4a mov eax,8, ba-20 P1).
+    /// 전에는 8틱(틱마다 5픽셀)으로 원본보다 1.6배 느렸다. 틱마다 정수 픽셀로
     /// 똑같이 움직인다. 예전에는 0.25초를 시간으로 나눠 한 프레임에 2.67픽셀 — 판을 낮은 해상도로 그리니 2·3픽셀이 번갈아
     /// 속도가 프레임마다 출렁여 끊겨 보였다(사용자 보고).
     /// </summary>
-    public const int StepTicks = 8;
+    public const int StepTicks = 5;
 
     /// <summary>
     /// 모션표 한 틱의 길이 — 1초에 몇 틱. 원본 게임의 틱 빠르기는 아직 확인 못 해서 눈으로 맞춘 값이다.
@@ -518,9 +519,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             // 게임 시계 — 실제로 흐른 시간 × 게임 속도. 모션·걷기·이펙트·소리 예약이 모두 이 시계를 보므로 함께 빨라진다.
             double real = clock.Elapsed.TotalSeconds, dt = Math.Min(real - _realTime, 0.1) * _gameSpeed / 100.0;
             _realTime = real;
-            double now = _lastTime + dt;
-            Update(dt);
-            _lastTime = now;
+            // 시험 전용: DUELDX_TESTRUN=N 이면 한 프레임에 N 번 갱신한다(기본 1 — 평소대로, BattleSceneWindow.TestRun.cs).
+            for (int step = 0; step < TestRunSteps && _running; step++)
+            {
+                double now = _lastTime + dt;
+                Update(dt);
+                _lastTime = now;
+                TestRunTick();
+            }
 
             UpdateCursor();
             Render();
@@ -821,6 +827,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
         bool won = _outcome.StartsWith('승');
         int nextField = _eventNextField;
+        // 시험 전용: 결과와 행선지를 남긴다(DUELDX_TESTRUN 일 때만).
+        TestRunTrace($"leave btl {_scene.Id} won {won} outcome '{_outcome}' nextBattle {_eventNextBattle} nextField {nextField} sceneNext {_scene.NextBattle} episodes {Episodes().Count} turnNo {_turnNo} t {_lastTime:F1}");
         _outcome = "";
         _outcomeQuiet = false;
         _eventNextField = 0;
@@ -831,11 +839,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
         int next = _eventNextBattle > 0 ? _eventNextBattle : Episodes().Count == 0 ? _scene.NextBattle : 0;
         _eventNextBattle = 0;
-        if (won && next > 0 && StartBattle(next)) return;
+        if (won && next > 0 && StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
-        if (won && nextField > 0 && OpenField(nextField)) return;
+        if (won && nextField > 0 && OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
-        if (!won && Episodes().Count > 0) { OpenTitle(); return; }
+        if (!won && Episodes().Count > 0) { TestRunTrace("dest title"); OpenTitle(); return; }   // 시험 전용 줄
+        TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
         OpenMoses();
         // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
         if (won && _mosesOpen && _mosesChp != null) MosesGoPage(0);

@@ -556,7 +556,8 @@ public sealed class GameDatabase
     public int PassiveBonus(CharacterData c, int stat)
     {
         int sum = 0;
-        foreach (ushort id in c.Passives)
+        // 직업이 연 칸까지만 더한다(0x10032af0 — 직업 37 은 3칸, 아니면 Dep 의 칸 수). 전직으로 칸이 줄면 남은 칸의 것은 안 먹는다(ba-20 C6).
+        foreach (ushort id in c.Passives.Take(PassiveSlotCount(c)))
         {
             if (id == 0 || !Abilities.TryGetValue(id, out var ab) || !ab.TryWorkAt(c.AbilityLevel(id), out int wid)
                 || !Works.TryGetValue(wid, out var w)) continue;

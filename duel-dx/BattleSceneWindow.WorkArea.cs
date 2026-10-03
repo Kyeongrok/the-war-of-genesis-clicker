@@ -232,11 +232,33 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => false,
     };
 
+    private const int CureAbility = 11, SoulBlastAbility = 28, SacrificeAbility = 13, ExplosionAbility = 22, BlackHoleAbility = 115;
+
     /// <summary>겨눈 칸에서 실제로 맞는 인물들 — 효과 범위 칸 안에서 효과 대상 방식(<c>+0x1e</c>)으로 거른다.</summary>
     private List<int> WorkTargets(WorkData w, UnitState user, int col, int row)
     {
+        // 큐어(11) — 자료 범위는 레벨 따라 0→3 이지만 핸들러 0x10081830 은 겨눈 유닛 하나에게만 보낸다(0x10081b3c, ba-20 D4).
+        if (w.AbilityId == CureAbility)
+            return [.. Enumerable.Range(0, _units.Length).Where(i => _units[i].Alive && _units[i].OnField && (_units[i].Col, _units[i].Row) == (col, row))];
         var cells = AreaCells(w, user, col, row).ToHashSet();
         int mode = w.AreaMode != 0 ? w.AreaMode : w.TargetMode;
+        // 폭(6)·인페르노(159)·템페스트(186) — 효과 대상은 3(아무 칸)이지만 핸들러가 0x1006fde0 으로 적만 거른다
+        // (0x10083760 · 0x100b220d · 0x100bddd6, ba-20 D3). 전에는 아군과 시전자 자신도 맞았다.
+        if (w.AbilityId is 6 or 159 or 186) mode = 1;
+        // 소울 블레스트(28) — 탄(Obs 0x319)이 시전자 자리에서 겨눈 칸까지 날며 지나는 칸마다 적을 한 번씩 친다
+        // (슬롯 2 0x100c28f0, 0x1009e9e5, ba-20 D5). 지나는 칸은 직선을 칸으로 자른 것(가설).
+        if (w.AbilityId == SoulBlastAbility)
+        {
+            mode = 1;
+            int x = user.Col, y = user.Row, dx = Math.Abs(col - x), dy = -Math.Abs(row - y), sx = x < col ? 1 : -1, sy = y < row ? 1 : -1, err = dx + dy;
+            while ((x, y) != (col, row))
+            {
+                int e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x += sx; }
+                if (e2 <= dx) { err += dx; y += sy; }
+                cells.Add((x, y));
+            }
+        }
         return [.. Enumerable.Range(0, _units.Length)
             .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]))];
     }
