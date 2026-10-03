@@ -410,6 +410,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_db is null) return;
         // 대장이 쓴 기술의 +0x41 이 0 이면 부하는 안 따라 친다(0x1005fd00) — 피해 work 469개가 그렇다(fg-21 ⑯).
         if (leaderWork is { FollowersAct: false }) return;
+        var approached = new HashSet<int>();
         foreach (var follower in FollowersOf(leaderIndex))
         {
             // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
@@ -454,6 +455,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
             // 제자리에서는 아무 적도 안 닿는다 — 원본(0x1005f1c0)처럼 <b>대장의 대상이 닿는 칸까지 걸어간 뒤</b> 친다.
             // 이동 예산은 부하 <b>자신의</b> TP 에서 그 기술 값을 남긴 만큼이다(0x1005f40f~0x1005f430 → 0x1005e4d0, 감사3 L1).
+            bool planned = false;
             foreach (var work in FollowerWorks(c, allyPass))
             {
                 if (!CanAfford(follower, work) || ComputeRange(follower, work.Id) is not { } range) continue;
@@ -472,8 +474,30 @@ internal sealed unsafe partial class BattleSceneWindow
                 PlayWalkSound(follower);
                 _followerTarget[follower] = (best % Cols, best / Cols);
                 _followerStrikes.Add((follower, work, target));
+                planned = true;
                 break;
             }
+            if (planned || allyPass) continue;
+
+            // 칠 수 있는 칸이 없으면 <b>다가가기만</b> 한다(적 고르개 뒷부분 0x1005f4f4~0x1005f5f4 → 이동만 0x2710, ba-20 Q4) — 대장이 겨눈 칸에
+            // 가장 가까이 닿는 칸으로 걷는다. 전에는 그 자리에 섰고, 기술 뒤에는 진형 다시 세우기도 안 불려 뒤처진 부하가 영영 못 따라왔다.
+            // 예산은 지금 TP 전부(가설 — AI 의 (B) 접근과 같다고 본다).
+            if (ComputeRange(follower) is not { } near) continue;
+            var toAim = CostMapFrom(follower, target.Col, target.Row);
+            if (toAim is null) continue;
+            int go = -1, goCost = int.MaxValue, goOwn = int.MaxValue;
+            for (int idx = 0; idx < Cols * Rows; idx++)
+            {
+                if (!near.CanReach(idx) || toAim[idx] == int.MaxValue || approached.Contains(idx)) continue;
+                if (LiveUnitAt(idx % Cols, idx / Cols) is { } other && other != follower) continue;
+                if (toAim[idx] < goCost || toAim[idx] == goCost && near.Cost[idx] < goOwn) (go, goCost, goOwn) = (idx, toAim[idx], near.Cost[idx]);
+            }
+            if (go < 0 || near.Cost[go] <= 0) continue;
+            approached.Add(go);                    // 뒤 부하가 같은 칸을 고르지 않게(0x1005ff9a)
+            foreach (var step in near.PathTo(go)) follower.Path.Enqueue(step);
+            PayFollowerWalk(follower, near, go);
+            PlayWalkSound(follower);
+            _followerTarget[follower] = (go % Cols, go / Cols);
         }
     }
 
