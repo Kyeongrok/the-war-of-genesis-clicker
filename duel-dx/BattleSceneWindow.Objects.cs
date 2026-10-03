@@ -640,17 +640,66 @@ internal sealed unsafe partial class BattleSceneWindow
         EnsureObjectGrowth();
         foreach (var obj in Objects)
         {
-            // 0x100e7130: 사라지지 않았고 칸이 맵 경계 상자 안이고 종류 표 +0xc(차례)가 선 것만(감사4 K10).
-            if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts || !ObjectInBounds(obj)) continue;
-            if (obj.Data.Kind is 9 or 10 && obj.Team < 0) continue;
-            if (obj.Data.Kind == 10) { ChargeHealCrystal(obj); continue; }
-            int every = Math.Max(1, obj.Data.TurnEvery);
-            if (_tick % every != 0) continue;
+            if (!ObjectDue(obj)) continue;
             if (Trace)
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                     $"object tick {_tick} no {obj.Record.No} work {obj.Data.WorkId} team {obj.Team} at ({obj.Col},{obj.Row})" + Environment.NewLine);
             ObjectActs(obj);
         }
+    }
+
+    /// <summary>이번 틱에 차례가 온 물체인가 — 힐 크리스탈은 여기서 충전만 하고 거짓을 돌려준다.</summary>
+    private bool ObjectDue(DemoObject obj)
+    {
+        // 0x100e7130: 사라지지 않았고 칸이 맵 경계 상자 안이고 종류 표 +0xc(차례)가 선 것만(감사4 K10).
+        if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts || !ObjectInBounds(obj)) return false;
+        if (obj.Data.Kind is 9 or 10 && obj.Team < 0) return false;
+        if (obj.Data.Kind == 10) { ChargeHealCrystal(obj); return false; }
+        return _tick % Math.Max(1, obj.Data.TurnEvery) == 0;
+    }
+
+    /// <summary>그 물체가 이번 차례에 쏠 상대가 있나(대략 — 사거리 안, 흩뿌리는 포탑은 4칸 안에 적대 유닛).</summary>
+    private bool ObjectHasTarget(DemoObject obj)
+    {
+        if (obj.Data.Attack <= 0) return false;
+        var work = Work(obj.Data.WorkId);
+        bool heals = work is { IsHeal: true };
+        return _units.Any(u => u.Alive && u.OnField && u.Data is not null
+            && (heals ? !ObjectHostile(obj, u) && obj.Team >= 0 && u.Hp < u.MaxHp : ObjectHostile(obj, u))
+            && (work is { Id: 1525 or 1526 or 1527 } ? Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 4
+                : work is { } w ? InWorkRange(w, obj.Col, obj.Row, u.Col, u.Row)
+                : Math.Abs(u.Col - obj.Col) + Math.Abs(u.Row - obj.Row) <= 1));
+    }
+
+    /// <summary>쏘는 동작(모션 14 → 15 → 16)을 도는 물체와 시작한 때 — DrawObjects 가 그린다.</summary>
+    private readonly Dictionary<DemoObject, double> _objActing = [];
+
+    /// <summary>
+    /// 물체 차례(상태 16, 0x1006a4c0) — 물체 하나씩: 상대가 있으면 카메라를 물체로 보내고 설 때까지 기다린 뒤(0x1006e570 · 0x1006e850)
+    /// 쏘는 모션 14 → 15 → 16 을 돌며 실행한다(0x100e7510). 상대가 없는 물체는 카메라 없이 건너뛴다(ba-20 O P1).
+    /// 전에는 한 틀에 전부 숫자만 떴다.
+    /// </summary>
+    private IEnumerator<bool> ObjectTurns()
+    {
+        EnsureObjectGrowth();
+        foreach (var obj in Objects.ToList())
+        {
+            if (_outcome.Length > 0) yield break;
+            if (!ObjectDue(obj)) continue;
+            if (!ObjectHasTarget(obj)) { ObjectActs(obj); continue; }
+            foreach (bool _ in CenterAndWait(obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row))) yield return true;
+            var sprite = UiFor(obj.Data.SpriteId);
+            int wind = sprite?.MotionLength(14) ?? 0, fire = sprite?.MotionLength(15) ?? 0, rest = sprite?.MotionLength(16) ?? 0;
+            if (wind + fire + rest > 0) _objActing[obj] = _lastTime;
+            for (double end = _lastTime + wind / TicksPerSecond; _lastTime < end;) yield return true;
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"object tick {_tick} no {obj.Record.No} work {obj.Data.WorkId} team {obj.Team} at ({obj.Col},{obj.Row})" + Environment.NewLine);
+            ObjectActs(obj);
+            for (double end = _lastTime + (fire + rest) / TicksPerSecond; _lastTime < end;) yield return true;
+            _objActing.Remove(obj);
+        }
+        SweepTickDeaths();
     }
 
     /// <summary>
@@ -908,6 +957,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 int since = (int)((_lastTime - wokenAt) * TicksPerSecond);
                 if (since < (UiFor(obj.Data.SpriteId)?.MotionLength(9) ?? 0)) (motion, tick, once) = (9, since, true);
                 else _wokenAt.Remove(obj);
+            }
+            // 쏘는 중인 포탑·함정 — 모션 14 → 15 → 16 을 차례로 한 번씩.
+            if (_objActing.TryGetValue(obj, out double actingAt) && UiFor(obj.Data.SpriteId) is { } actSprite)
+            {
+                int since = (int)((_lastTime - actingAt) * TicksPerSecond), l14 = actSprite.MotionLength(14), l15 = actSprite.MotionLength(15), l16 = actSprite.MotionLength(16);
+                if (since < l14) (motion, tick, once) = (14, since, true);
+                else if (since < l14 + l15) (motion, tick, once) = (15, since - l14, true);
+                else if (since < l14 + l15 + l16) (motion, tick, once) = (16, since - l14 - l15, true);
             }
             int x = obj.Col * TileW + obj.Data.DrawW, y = CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
             double fade = aiming && obj.Data.Kind is 1 or 2 or 6 or 7 or 8 or 9 or 10 ? BlendFade(4) : 1;
