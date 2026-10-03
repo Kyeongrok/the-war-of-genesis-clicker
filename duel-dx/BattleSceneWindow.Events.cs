@@ -133,9 +133,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>걸어 나가던 유닛이 다 걸었으면(또는 전투 결과가 났으면) 판에서 뺀다 — 매 틀 부른다.</summary>
     private void StepPendingExits()
     {
+        // 승패 판정만 행동(쓰러지는 동작)·레벨업 창 뒤로 미룬다 — 그 도중에 승패가 서면 루틴이 멈춰 쓰러짐·레벨업이 건너뛰어진다.
+        // 판에서 빼는 것은 미루지 않는다(다 걸어 나간 유닛이 같은 AI 차례에 또 치거나 맞지 않게).
+        bool hold = _outcome.Length == 0 && (_routine != null || LevelUpOpen);
+        if (_exitOutcomeDue && !hold) { _exitOutcomeDue = false; CheckOutcome(); }
         if (_pendingExits.Count == 0) return;
-        // 행동(쓰러지는 동작)·레벨업 창 도중에는 빼지 않는다 — 여기서 승패가 서면 그 루틴이 멈춰 쓰러짐·레벨업이 건너뛰어진다.
-        if (_outcome.Length == 0 && (_routine != null || LevelUpOpen)) return;
         var done = _pendingExits.Where(x => !(_lastTime < x.At && _outcome.Length == 0 && x.Unit.Alive && x.Unit.IsBusy)).ToList();
         if (done.Count == 0) return;
         _pendingExits.RemoveAll(done.Contains);   // 먼저 지운다 — CheckOutcome 이 사건을 돌려 이 목록을 바꿀 수 있다
@@ -148,8 +150,12 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (!left) return;
         _eventCheckDue |= (1 << 2) | (1 << 1);   // 「그 유닛이 없다」 조건·전멸 판정을 다시 본다
-        CheckOutcome();
+        if (hold) _exitOutcomeDue = true;
+        else CheckOutcome();
     }
+
+    /// <summary>걸어 나간 유닛 때문에 승패를 다시 봐야 한다 — 루틴·레벨업 창이 끝나면 본다.</summary>
+    private bool _exitOutcomeDue;
 
     private IEnumerator<bool>? _eventRoutine;
     private double _eventRoutineStepAt = -1;
