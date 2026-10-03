@@ -154,7 +154,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; _systemMenuReturn = false; confirm.Value.Yes(); return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; if (!SlotsOpen) _systemMenuReturn = false; confirm.Value.Yes(); return true; }
                 if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; ReturnToSystemMenu(); return true; }
             }
             return true;
@@ -167,7 +167,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>하위 창이 닫혔다 — 메뉴에서 열었으면 메뉴로 돌아간다.</summary>
     private void ReturnToSystemMenu()
     {
-        if (!_systemMenuReturn) return;
+        // 슬롯 창 위의 확인창이 닫혔을 뿐이면 슬롯 창이 그대로 남는다 — 메뉴는 슬롯 창이 닫힐 때 돌아온다(ba-20 G3).
+        if (!_systemMenuReturn || SlotsOpen) return;
         _systemMenuReturn = false;
         if (!_titleOpen && !_recordsOpen) _systemMenu = true;
     }

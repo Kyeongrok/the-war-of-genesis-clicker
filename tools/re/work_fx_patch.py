@@ -9,14 +9,18 @@
   1. 지연(Delay, 0x100c24d0)·수명(Life, 0x100c2530) — 이펙트 객체를 따라가 붙인 값. 표 값이 원본 값 집합에 없고 5틱 넘게
      다르면 원본 값으로(원본 값이 여럿이면 가장 작은 것). 높이(Lift = 월드 z 치우침 × 0.6)도 6px 넘게 다르면 고친다.
   2. 자리(OnTarget) — asm 으로 확인한 것만(PLACE_FIX): 혼 379:1(붙일 곳 = 시전자, 0x1007f70f), 워핑 209:0(시전자 머리 위, 0x1009d85a).
-  3. 원본이 띄우는데 표에 없는 (Obs, 모션) 을 줄 끝에 더한다 — 네 방향 모두에서 뜨는 것만(방향 가지는 `AbilityEffect` 에 방향 칸이
-     없어 넣지 않는다). 자리를 코드가 셈하는 것은 `work_fx_table.py` 와 같이 대상 자리로 둔다. 예전 표의 16개 자르기로 빠진 것도 여기서 든다.
+  3. 원본이 띄우는데 표에 없는 (Obs, 모션) 을 줄 끝에 더한다(한 방향에서만 뜨는 것은 7 처럼 Facing 을 달아). 자리를 코드가 셈하는 것은 `work_fx_table.py` 와 같이 대상 자리로 둔다. 예전 표의 16개 자르기로 빠진 것도 여기서 든다.
   4. 다크 스크림 1492 의 쓰레기 줄(300:53·300:52·0:52·9:52 — `push 0x12c; call new` 따위를 생성자로 잘못 읽은 것)을 뺀다.
   5. 아이템 work 1611·1618·1619 — 핸들러가 메테오·썬더 스톰·블리자드로 바로 뛴다(jmp 0x100866f0·0x10087ff0·0x1008b630).
      동작 `[]` + work 469·436·437 의 이펙트를 준다.
   6. 동작도 이펙트도 없는 공통 핸들러 work(EMPTY_ROWS)에 빈 줄 `([], [])` — 줄이 없으면 duel-dx 가 기본 사슬 [5,8,24] 로 칼을 휘두른다.
      인물의 기본공격 work 으로 쓰이는 번호(Chr +19 — 0·1·6·25·387·392·1479·1584)는 `BasicWorkActions`/기본 사슬에 기대므로 넣지 않는다.
-안 건드리는 것: 동작 차례(Actions), 표에만 있는 이펙트(「덤」 — 실행기가 못 닿은 가지일 수 있다), 방향 가지, 영상·몸 복제 표.
+  7. 방향 가지 — 원본이 한 방향(+0x5c)에서만 띄우는 이펙트는 방향마다 한 줄씩, 끝 인자 Facing(0 위 · 1 왼 · 2 아래 · 3 오른)을 단다
+     (`new(348, 0, false, 0, 0, 1, false, 0, 2)`). 표에 방향 없이 있던 줄은 방향 줄로 나누고, 없던 것은 더한다. 지연·수명·높이는
+     그 방향의 값으로. 카운터 미사일의 637 은 duel-dx 가 따로 거르므로 안 건드린다.
+     방향 가지로 보는 것은 한두 방향에서만 뜨는 것이다(0 · 2 · 1과 3 · 0과 2). 세 방향에서 뜨는 것은 실행기가 한 방향의 길을
+     놓친 것이라(화이어 웨이브 383:2, 헬 레이져 670:4) 방향 없이 둔다.
+안 건드리는 것: 동작 차례(Actions), 표에만 있는 이펙트(「덤」 — 실행기가 못 닿은 가지일 수 있다), 영상·몸 복제 표.
 근거: 옵시디안 분석/원본차이/ba20-fxtable.md
 """
 import argparse
@@ -40,15 +44,16 @@ PLACE_FIX = {
 }
 GARBAGE = {1492: {(300, 53), (300, 52), (0, 52), (9, 52)}}
 ITEM_COPY = {1611: 469, 1618: 436, 1619: 437}
+NO_FACING = {(0x100a9260, 637)}     # (핸들러, Obs) — 방향 줄로 안 나누는 것(카운터 미사일: duel-dx 가 637:6 만 남긴다)
 EMPTY_ROWS = [4, 5, 13, 386, 1468, 1472, 1473, 1474, 1475, 1476, 1477, 1525, 1526, 1527]   # 0 은 인물 넷의 기본공격 work 이라 뺀다
-DEFAULT = (0, 1, False, 0)
+DEFAULT = (0, 1, False, 0)          # (지연, 개수, 날기, 수명) — 이대로면 줄에서 줄인다
 
 
 def parse_effs(s):
     out = []
     for m in re.finditer(r'new\(([^)]*)\)', s):
         a = [x.strip() for x in m.group(1).split(',')]
-        v = [int(a[0]), int(a[1]), a[2] == 'true', int(a[3]), 0, 1, False, 0]
+        v = [int(a[0]), int(a[1]), a[2] == 'true', int(a[3]), 0, 1, False, 0, -1]
         if len(a) > 4:
             v[4] = int(a[4])
         if len(a) > 5:
@@ -57,12 +62,16 @@ def parse_effs(s):
             v[6] = a[6] == 'true'
         if len(a) > 7:
             v[7] = int(a[7])
+        if len(a) > 8:
+            v[8] = int(a[8])
         out.append(v)
     return out
 
 
 def fmt_eff(e):
-    o, m, p, lf, d, c, f, li = e
+    o, m, p, lf, d, c, f, li, fc = e
+    if fc >= 0:
+        return 'new(%d, %d, %s, %d, %d, %d, %s, %d, %d)' % (o, m, 'true' if p else 'false', lf, d, c, 'true' if f else 'false', li, fc)
     return 'new(%d, %d, %s, %d%s)' % (o, m, 'true' if p else 'false', lf,
                                       '' if (d, c, f, li) == DEFAULT else ', %d, %d, %s, %d' % (d, c, 'true' if f else 'false', li))
 
@@ -114,20 +123,43 @@ def original_effects(r):
                 obs &= 0xffff
                 mo &= 0xffff
                 n += 1
-                x = out.setdefault((obs, mo), dict(place=set(), delay=set(), life=set(), lift=set(), dirs=set(), count=set(),
-                                                   fly=False, va=ev['va'], order=n, emit=False))
-                x['place'].add(where_of(ev))
-                x['delay'].add(None if ev['delay'] == '?' else rng(ev['delay'], 600))     # None = 값을 못 푼 호출
-                x['life'].add(None if ev['life'] == '?' else rng(ev['life'], 3000))
-                x['lift'].add(zlift(ev['z']))
-                x['dirs'].add(d)
-                if ev['kind'] == 'emit':
-                    x['emit'] = True
-                    if isinstance(ev.get('count'), int) and 1 < ev['count'] <= 16:
-                        x['count'].add(ev['count'])
-                if ev['ctor'] in FLYERS:
-                    x['fly'] = True
+                top = out.setdefault((obs, mo), dict(place=set(), delay=set(), life=set(), lift=set(), dirs=set(), count=set(),
+                                                     fly=False, va=ev['va'], order=n, emit=False, by={}))
+                one = top['by'].setdefault(d, dict(place=set(), delay=set(), life=set(), lift=set(), count=set(),
+                                                   fly=False, va=ev['va'], emit=False))
+                top['dirs'].add(d)
+                for x in (top, one):                 # 네 방향을 합친 것과 그 방향만의 것
+                    x['place'].add(where_of(ev))
+                    x['delay'].add(None if ev['delay'] == '?' else rng(ev['delay'], 600))     # None = 값을 못 푼 호출
+                    x['life'].add(None if ev['life'] == '?' else rng(ev['life'], 3000))
+                    x['lift'].add(zlift(ev['z']))
+                    if ev['kind'] == 'emit':
+                        x['emit'] = True
+                        if isinstance(ev.get('count'), int) and 1 < ev['count'] <= 16:
+                            x['count'].add(ev['count'])
+                    if ev['ctor'] in FLYERS:
+                        x['fly'] = True
     return out
+
+
+def fix_values(x, o):
+    """표 줄 x 의 지연·수명·높이를 원본 기록 o(합친 것 또는 한 방향 것)에 맞춘다. 값을 못 푼 호출(None)이 섞인 칸은 안 건드린다."""
+    if None not in o['delay'] and x[4] not in o['delay'] and min(abs(x[4] - v) for v in o['delay']) >= 5:
+        x[4] = min(o['delay'])
+    if None not in o['life'] and x[7] not in o['life'] and min(abs(x[7] - v) for v in o['life']) >= 5:
+        x[7] = min(o['life'])
+    lf = {v for v in o['lift'] if v is not None}
+    if lf and x[3] not in lf and min(abs(x[3] - v) for v in lf) >= 6:
+        x[3] = min(lf, key=abs)
+
+
+def new_line(obs, mo, o, facing=-1):
+    """원본 기록 o 로 새 표 줄을 만든다 — 자리를 코드가 셈하면 대상 자리."""
+    place = o['place'] - {'cell'}
+    lf = {v for v in o['lift'] if v is not None}
+    return [obs, mo, 'self' not in place if place else True, min(lf, key=abs) if lf else 0,
+            min(v or 0 for v in o['delay']), min(o['count']) if o['count'] else 1, o['fly'] and not o['emit'],
+            min(v or 0 for v in o['life']), facing]
 
 
 def main():
@@ -180,34 +212,42 @@ def main():
                 log.append((w, '쓰레기 뺌', x[0], x[1], fmt_eff(x), '', ''))
         orig = original_effects(r)
         have = {(x[0], x[1]) for x in effs}
+        out = []
         for x in effs:
             o = orig.get((x[0], x[1]))
             if o is None:
-                continue                     # 표에만 있는 것(덤)은 그대로 둔다
+                out.append(x)                # 표에만 있는 것(덤)은 그대로 둔다
+                continue
             before = fmt_eff(x)
-            # 값을 못 푼 호출(None)이 섞여 있으면 그 칸은 안 건드린다
-            if None not in o['delay'] and x[4] not in o['delay'] and min(abs(x[4] - v) for v in o['delay']) >= 5:
-                x[4] = min(o['delay'])
-            if None not in o['life'] and x[7] not in o['life'] and min(abs(x[7] - v) for v in o['life']) >= 5:
-                x[7] = min(o['life'])
-            lf = {v for v in o['lift'] if v is not None}
-            if lf and x[3] not in lf and min(abs(x[3] - v) for v in lf) >= 6:
-                x[3] = min(lf, key=abs)
+            if x[8] < 0 and len(o['dirs']) <= 2 and (r['handler'], x[0]) not in NO_FACING:
+                # 방향 가지 — 그 방향에서만 뜬다. 방향마다 한 줄씩, 값은 그 방향의 것(자리는 표의 것을 지킨다).
+                for d in sorted(o['dirs']):
+                    y = list(x)
+                    y[8] = d
+                    fix_values(y, o['by'][d])
+                    out.append(y)
+                    log.append((w, '방향 나눔', x[0], x[1], before, fmt_eff(y), hex(o['by'][d]['va'])))
+                continue
+            fix_values(x, o['by'][x[8]] if x[8] in o['by'] else o)
             pf = PLACE_FIX.get((r['handler'], x[0], x[1]))
             if pf is not None and not x[6]:
                 x[2] = pf
             if fmt_eff(x) != before:
                 log.append((w, '값 고침', x[0], x[1], before, fmt_eff(x), hex(o['va'])))
+            out.append(x)
+        effs[:] = out
         for (obs, mo), o in sorted(orig.items(), key=lambda kv: kv[1]['order']):
-            if (obs, mo) in have or len(o['dirs']) < 4 or not has_motion(obs, mo):
+            if (obs, mo) in have or not has_motion(obs, mo):
                 continue
-            place = o['place'] - {'cell'}
-            lf = {v for v in o['lift'] if v is not None}
-            x = [obs, mo, 'self' not in place if place else True, min(lf, key=abs) if lf else 0,
-                 min(v or 0 for v in o['delay']), min(o['count']) if o['count'] else 1, o['fly'] and not o['emit'],
-                 min(v or 0 for v in o['life'])]
-            effs.append(x)
-            log.append((w, '더함', obs, mo, '', fmt_eff(x), hex(o['va'])))
+            if len(o['dirs']) > 2:
+                x = new_line(obs, mo, o)
+                effs.append(x)
+                log.append((w, '더함', obs, mo, '', fmt_eff(x), hex(o['va'])))
+            elif (r['handler'], obs) not in NO_FACING:
+                for d in sorted(o['dirs']):
+                    x = new_line(obs, mo, o['by'][d], d)
+                    effs.append(x)
+                    log.append((w, '더함(방향)', obs, mo, '', fmt_eff(x), hex(o['by'][d]['va'])))
 
     for w, srcw in ITEM_COPY.items():
         if w not in rows and srcw in rows:
