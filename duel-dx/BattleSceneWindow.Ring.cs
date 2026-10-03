@@ -199,6 +199,15 @@ internal sealed unsafe partial class BattleSceneWindow
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
         if (OnTalkInput(skipAll: true)) return;
         if (_deployOpen) { _deployPick = null; return; }   // 배치 중 우클릭 = 고른 사람 놓기
+        // 창은 모달이다(0x1003fc80) — 레벨업·알림·결과 배너·시스템 창이 떠 있으면 우클릭이 뒤의 유닛 정보 창·링을 열지 않는다(ba-20 G2).
+        if (!_mosesOpen && !FieldOpen)
+        {
+            if (LevelUpOpen || _notice != null || _outcome.Length > 0) return;
+            if (SystemOpen) { CloseSystemWindow(); return; }
+            if (_itemMenu) { CancelStep(undoMove: false); return; }
+        }
+        // 모세스 항성계 옮기기(100틱 대기)·페이드가 도는 동안은 입력을 안 받는다(ba-20 G4).
+        if (_mosesOpen && (_mosesSystemSwitch != null || _mosesFade > 0)) return;
         // 모세스에서는 우클릭이 <b>뒤로</b>다(원본과 같게, 사용자 보고) — 행성에서 우클릭하면 행성 고르기로 돌아가
         // 다른 행성을 고를 수 있다. Esc 와 같은 길을 탄다.
         if (_mosesOpen)

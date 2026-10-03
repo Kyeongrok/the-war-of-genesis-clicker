@@ -149,6 +149,15 @@ internal sealed unsafe partial class BattleSceneWindow
         return index < Mails().Count ? index : -1;
     }
 
+    /// <summary>뷰어를 닫는다 — 읽음 표시는 닫을 때 선다(0x1003cce0). 우클릭·Esc 로 나갈 때도 같아야 조건 503 이 안 어긋난다(ba-20 G5).</summary>
+    private void CloseMailViewer()
+    {
+        if (_mailOpen < 0) return;
+        var opened = Mails();
+        if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
+        _mailOpen = -1;
+    }
+
     /// <summary>메일 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
     private bool OnMosesMailClick(int bx, int by)
     {
@@ -158,9 +167,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
         if (_mailOpen >= 0)                                   // 뷰어는 아무 데나 누르면 닫히고 읽음이 된다(닫을 때 0x100f809a) — 그 밖에 깃발·돈은 없다
         {
-            var opened = Mails();
-            if (_mailOpen < opened.Count) _mailRead.Add(opened[_mailOpen].Id);
-            _mailOpen = -1;
+            CloseMailViewer();
             Play(95);                                         // 뷰어(말풍선 클래스) 닫기 vt+0xdc = 0x1003cce0 → Snd 95(감사5 L3)
             return true;
         }
