@@ -182,6 +182,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 오른쪽 위 판 번호 — Num.dat[0] × 0.001
         string version = $"Ver {(_db?.N(0) ?? 1005) * 0.001:0.000}";
         DrawText(version, ox + 560, oy + 10, White, 12);
+        // 대사 음성을 뒤에서 받는 동안 진행을 왼쪽 위에 보인다(VoicePack).
+        if (VoicePack.Status is { Length: > 0 } voices) DrawText(voices, ox + 8, oy + 10, White, 12);
 
         DrawSystem();     // CONTINUE 가 연 슬롯 창
         DrawToast();
