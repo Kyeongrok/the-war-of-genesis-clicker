@@ -9,7 +9,9 @@ internal sealed unsafe partial class BattleSceneWindow
 {
     private const int SonicBladeAbility = 20, CrazyShotAbility = 126, HellLaserAbility = 172;
 
-    private bool HasSpecialHit(WorkData w) => w.AbilityId is SonicBladeAbility or CrazyShotAbility;
+    private const int ThunderStormAbility = 75;
+
+    private bool HasSpecialHit(WorkData w) => w.AbilityId is SonicBladeAbility or CrazyShotAbility or ThunderStormAbility;
 
     private IEnumerable<bool> SpecialHitRoutine(UnitState a, WorkData w, WorkData hitWork, int col, int row, List<UnitState> dying)
     {
@@ -38,6 +40,31 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (!dying.Contains(t) && t.Alive)
                     foreach (bool _ in KnockbackRoutine(a, w, t, pushCells: reach - k)) yield return true;
             }
+            yield break;
+        }
+
+        if (w.AbilityId == ThunderStormAbility)
+        {
+            // 썬더 스톰 0x10087ff0 — 번개 줄기 넷이 위 → 오른 → 아래 → 왼 사분면 차례로 훑으며 한 명씩 25틱 간격으로 친다
+            // (훑개 0x100c9d40, ba-20 E5). 사분면은 시전자 기준 화면 좌표로 가른다. 위·아래 사분면에서 빠지는 유닛 규칙은 따르지 않는다(가설이라).
+            int Quadrant(UnitState t)
+            {
+                int dx = 40 * (t.Col - a.Col), dy = 32 * (t.Row - a.Row) - 12 * (HeightAt(t.Col, t.Row) - HeightAt(a.Col, a.Row));
+                int q = -1;
+                if (Math.Abs(dx) <= Math.Abs(dy)) q = dy < 0 ? 0 : 2;
+                if (Math.Abs(dx) >= Math.Abs(dy)) q = dx > 0 ? 3 : dx < 0 ? 1 : q;
+                return q < 0 ? 0 : q;
+            }
+            var storm = WorkTargets(w, a, col, row).Select(i => _units[i]).OrderBy(t => t.Row).ThenBy(t => t.Col).ToList();
+            foreach (int q in new[] { 0, 3, 2, 1 })
+                foreach (var t in storm.Where(t => Quadrant(t) == q))
+                {
+                    if (!t.Alive || dying.Contains(t)) continue;
+                    var (tx, ty) = UnitFoot(t);
+                    _effects.Add((204, 1, _lastTime, tx, ty));
+                    ApplyWork(a, hitWork, t, dying);
+                    for (double end = _lastTime + 25 / TicksPerSecond; _lastTime < end;) yield return true;
+                }
             yield break;
         }
 
