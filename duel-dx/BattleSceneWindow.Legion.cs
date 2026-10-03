@@ -423,7 +423,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 int num74 = _db.N(74);
                 var pick = _units
                     .Where(u => u.Alive && u.OnField && (allyPass ? !SeesAsFoe(follower, u) && u != follower : SeesAsFoe(follower, u))
-                                && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower))
+                                && InWorkRange(work, follower.Col, follower.Row, u.Col, u.Row, follower)
+                                // 아군 패스는 이득이 있을 때만(0x1005c510 — 회복은 잃은 HP, 보조는 상태 점수). 안 그러면 회복기를 가진 부하가 늘 회복만 쓴다.
+                                && (!allyPass || WorthUsing(follower, work, [Array.IndexOf(_units, u)])))
                     .Select(u => (Unit: u, Score: CDiv(TargetValue(follower, work, [Array.IndexOf(_units, u)]) * num74 * 10,
                                                         num74 + Math.Abs(u.Col - target.Col) + Math.Abs(u.Row - target.Row))))
                     .Where(p => p.Score > 0)
