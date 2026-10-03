@@ -201,13 +201,21 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawLegionDetail(int ox, int oy, GameDatabase db, LegionData legion)
     {
         // 진형 칸 — 가운데(0,0)가 대장, 나머지는 진형표대로
+        // 원본은 이 자리에 전투 유닛 그림(모션 2 = 앞모습 서기)을 세운다 — 대장 @ (150,186), 부하 @ (40dx+150, 32dy+186),
+        // 아래 칸이 앞에 오게(0x1010072c~0x10100abf, ba-20 G9). 그림이 assets 에 없는 인물만 예전처럼 네모+이름.
         DarkenRect(ox + 60, oy + 100, 260, 190, 12);
-        DrawLegionCell(ox, oy, 0, 0, db.T(PartyData(_legionUnit)?.NameId ?? 0), 0xFFFFE070);
+        var cells = new List<(int Dx, int Dy, int Chr, string Name, uint Color)> { (0, 0, _legionUnit, db.T(PartyData(_legionUnit)?.NameId ?? 0), 0xFFFFE070) };
         for (int i = 0; i < legion.Members.Length && i < LegionData.FormationCells[legion.Formation].Length; i++)
         {
             var (dx, dy) = LegionData.FormationCells[legion.Formation][i];
-            string name = db.Character(legion.Members[i]) is { } m ? db.T(m.NameId) : $"Chr {legion.Members[i]}";
-            DrawLegionCell(ox, oy, dx, dy, name, White);
+            if (legion.Members[i] == 0) continue;
+            cells.Add((dx, dy, legion.Members[i], db.Character(legion.Members[i]) is { } m ? db.T(m.NameId) : $"Chr {legion.Members[i]}", White));
+        }
+        foreach (var (dx, dy, chr, name, color) in cells.OrderBy(c => c.Dy))
+        {
+            if (PreviewSprite(chr)?.FrameOfMotion(2, 0, false) is { } frame)
+                BlitMasked(frame.Px, frame.W, frame.H, ox + 40 * dx + 150 + frame.X, oy + 32 * dy + 186 + frame.Y);
+            else DrawLegionCell(ox, oy, dx, dy, name, color);
         }
 
         DarkenRect(ox + 440, oy + 225, 190, 165, 12);
@@ -219,6 +227,30 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         for (int xx = ox + 450; xx < ox + 620; xx++) SetPixel(xx, oy + 360, BoxLine);
         DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
+    }
+
+    private readonly Dictionary<int, UnitSprite?> _previewSprites = [];
+    private Dictionary<int, (string Name, ushort SpriteCode)>? _previewManifests;
+
+    /// <summary>모세스 화면에서 세워 보이는 인물 그림 — 전투에 이미 읽은 것을 쓰고, 없으면 assets/characters 에서 처음 쓸 때 읽는다. 없으면 null.</summary>
+    private UnitSprite? PreviewSprite(int chr)
+    {
+        if (_sprites.TryGetValue(chr, out var loaded)) return loaded;
+        if (_previewSprites.TryGetValue(chr, out var cached)) return cached;
+        UnitSprite? sprite = null;
+        try
+        {
+            string root = FindRepoAssetsRoot();
+            _previewManifests ??= CollectExportedManifests(root).ToDictionary(kv => kv.Key, kv => (kv.Value.Name, (ushort)kv.Value.SpriteCode));
+            if (_previewManifests.TryGetValue(chr, out var m))
+            {
+                string path = Path.Combine(root, CharacterExport.FolderNameFor(chr, m.Name), CharacterExport.ObsFileName(m.SpriteCode));
+                var motions = ObsSprite.Decode(path);
+                if (motions.Count > 0) sprite = new UnitSprite(motions, ObsMotionTable.Load(path));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException) { }
+        return _previewSprites[chr] = sprite;
     }
 
     private void DrawLegionCell(int ox, int oy, int dx, int dy, string name, uint color)
