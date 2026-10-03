@@ -144,12 +144,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>창 위 메뉴 막대 — 설정(단축키 설정·격자·체력바·끝내기).</summary>
     private static IntPtr CreateMenuBar()
     {
-        IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu(), game = Win32.CreatePopupMenu(), mode = Win32.CreatePopupMenu();
-        Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.AllyAi ? Win32.MF_CHECKED : 0u), MenuAllyAi, "동맹을 AI 가 움직임(&A)");
-        Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.ShowChestContents ? Win32.MF_CHECKED : 0u), MenuChestContents, "상자 내용물 보기(&C)");
-        Win32.AppendMenuW(mode, Win32.MF_STRING | (UserSettings.Current.FullSoulAtStart ? Win32.MF_CHECKED : 0u), MenuFullSoul, "전투 시작 시 소울 가득(&S)");
-        Win32.AppendMenuW(mode, Win32.MF_SEPARATOR, 0, null);
-        Win32.AppendMenuW(mode, Win32.MF_STRING, MenuTuning, "조정(&J)...");
+        IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu(), game = Win32.CreatePopupMenu();
         Win32.AppendMenuW(game, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)game, "게임(&G)");
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
@@ -193,7 +188,8 @@ internal sealed unsafe partial class BattleSceneWindow
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)speed, "게임 속도(&P)");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
-        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)mode, "모드(&M)");
+        // 모드는 펼침 메뉴가 아니라 누르면 곧바로 창이 뜬다 — 네 항목(동맹 AI·상자 내용물·소울 가득·소울 기여도)은 그 창 안에(사용자 요청).
+        Win32.AppendMenuW(bar, Win32.MF_STRING, MenuTuning, "모드(&M)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");

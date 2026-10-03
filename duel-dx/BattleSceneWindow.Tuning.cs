@@ -4,7 +4,8 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 모드 &gt; 조정 창 — 원본과 달라지는 전투 수치를 게임 안에서 고른다(사용자 요청 menu-7). 지금은 「일반 공격 소울 기여도」 하나.
+/// 모드 창 — 메뉴 막대의 「모드」를 누르면 뜬다. 원본과 달라지는 것 네 가지를 게임 안에서 고른다(사용자 요청 menu-7):
+/// 동맹을 AI 가 움직임 · 상자 내용물 보기 · 전투 시작 시 소울 가득(체크 셋) · 일반 공격 소울 기여도(선택 상자).
 /// </summary>
 /// <remarks>
 /// ATK = 바탕 × (SOUL + 10) ÷ 10 이라 SOUL 150 이면 일반 공격이 시작(SOUL 40, ×5.0)의 3.2배(×16.0)가 된다. 그래서 SOUL 을 아끼고
@@ -26,7 +27,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     private bool _tuningListOpen;
 
-    private const int TuningW = 600, TuningH = 270, TuningBoxX = 300, TuningBoxY = 48, TuningBoxW = 180, TuningRowH = 24;
+    private const int TuningW = 600, TuningH = 366, TuningBoxX = 300, TuningBoxY = 144, TuningBoxW = 180, TuningRowH = 24;
+
+    /// <summary>체크 줄 셋 — 창 위에서부터 y 44 · 76 · 108. 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
+    private const int TuningCheckY = 44, TuningCheckH = 32;
+
+    private (string Label, string Note, int Command, bool On)[] TuningChecks() =>
+    [
+        ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, _allyAi),
+        ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, _showChestContents),
+        ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, _fullSoulAtStart),
+    ];
 
     private static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };
 
@@ -58,6 +69,9 @@ internal sealed unsafe partial class BattleSceneWindow
             return true;
         }
         if (bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
+        var checks = TuningChecks();
+        int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
+        if (line >= 0 && line < checks.Length && bx >= x + 12 && bx < x + TuningW - 12) { OnMenuCommand(checks[line].Command); return true; }
         if (bx >= x + TuningW - 116 && bx < x + TuningW - 16 && by >= y + TuningH - 40 && by < y + TuningH - 12) _tuningOpen = false;
         return true;
     }
@@ -76,7 +90,19 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(x, y, TuningW, TuningH, PanelBg);
         StrokeRect(x, y, TuningW, TuningH, BoxLine);
         FillRect(x, y, TuningW, 28, HeadBg);
-        DrawText("조정 — 원본과 달라지는 값", x + 10, y + 6, White);
+        DrawText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
+
+        var checks = TuningChecks();
+        for (int i = 0; i < checks.Length; i++)
+        {
+            int cy = y + TuningCheckY + i * TuningCheckH;
+            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) FillRect(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
+            FillRect(x + 18, cy + 6, 16, 16, BoxBg);
+            StrokeRect(x + 18, cy + 6, 16, 16, BoxLine);
+            if (checks[i].On) DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
+            DrawText(checks[i].Label, x + 44, cy + 6, White);
+            DrawText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
+        }
 
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         DrawText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
@@ -95,7 +121,7 @@ internal sealed unsafe partial class BattleSceneWindow
             $"                         SOUL 150: ×{Original(150):0.0} → ×{Factor(150):0.0}",
             "어빌리티는 원본대로라 SOUL 을 모아 쓰는 쪽이 나아진다. 적의 일반 공격에도 걸린다.",
         ];
-        for (int i = 0; i < lines.Length; i++) DrawText(lines[i], x + 16, y + 92 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
+        for (int i = 0; i < lines.Length; i++) DrawText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
         int by = y + TuningH - 40;
         FillRect(x + TuningW - 116, by, 100, 28, HeadBg);
