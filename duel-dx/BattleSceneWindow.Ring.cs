@@ -401,16 +401,37 @@ internal sealed unsafe partial class BattleSceneWindow
         var clip = _uiClip;
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop, mirror) is not { } f) return false;
         int left = x + f.X, top = y + f.Y;
-        for (int yy = 0; yy < f.H; yy++)
+        // 그릴 네모를 판과 자르기 네모로 먼저 자른다 — 전에는 픽셀마다 경계를 검사해, 화면보다 큰 필드 그림(층마다 통짜 그림)이 여러 장이면
+        // 한 틀에 40~160ms 가 들었다(사용자 보고: Fld 0017 이 툭툭 끊김).
+        int x0 = Math.Max(0, left), x1 = Math.Min(BoardWidth, left + f.W), y0 = Math.Max(0, top), y1 = Math.Min(BoardHeight, top + f.H);
+        if (clip is { } box)
         {
-            int py = top + yy;
-            if ((uint)py >= BoardHeight) continue;
-            if (clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
-            for (int xx = 0; xx < f.W; xx++)
+            x0 = Math.Max(x0, box.Left); x1 = Math.Min(x1, box.Left + box.Width);
+            y0 = Math.Max(y0, box.Top); y1 = Math.Min(y1, box.Top + box.Height);
+        }
+        if (x0 >= x1 || y0 >= y1) return true;
+        var src = f.Px;
+        var fb = _fb;
+        // 가장 흔한 꼴(불투명 덮어쓰기)은 곧바로 옮긴다.
+        if (blend == UiBlend.Alpha && fade >= 1)
+        {
+            for (int py = y0; py < y1; py++)
             {
-                int px = left + xx;
-                if ((uint)px >= BoardWidth) continue;
-                if (clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
+                int si = (py - top) * f.W + (x0 - left), di = py * BoardWidth + x0;
+                for (int n = x1 - x0; n > 0; n--, si++, di++)
+                {
+                    uint c = src[si];
+                    if ((c & 0xFF000000) != 0) fb[di] = c | 0xFF000000;
+                }
+            }
+            return true;
+        }
+        for (int py = y0; py < y1; py++)
+        {
+            int yy = py - top;
+            for (int px = x0; px < x1; px++)
+            {
+                int xx = px - left;
                 uint c = f.Px[yy * f.W + xx];
                 if ((c & 0xFF000000) == 0) continue;
                 int i = py * BoardWidth + px;

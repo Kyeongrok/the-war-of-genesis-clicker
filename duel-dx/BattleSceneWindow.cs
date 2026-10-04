@@ -1203,6 +1203,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private static readonly bool PerfLog = Environment.GetEnvironmentVariable("DUELDX_PERF") == "1";
     private readonly Stopwatch _perf = new();
     private double _pc, _pu, _pd; private int _pn; private double _pStart;
+    /// <summary>성능 기록용 — 한 틀의 합성 가운데 전투 판 · 모세스 · 필드 그리기에 든 ms 누적.</summary>
+    private double _pBattle, _pMoses, _pField;
 
     private void Render()
     {
@@ -1214,8 +1216,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_realTime - _pStart >= 1)
         {
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_perf.log"),
-                $"fps {_pn / (_realTime - _pStart):F0} compose {_pc / _pn:F1} upload {_pu / _pn:F1} draw {_pd / _pn:F1} ms, game {_lastTime:F1}s real {_realTime:F1}s" + Environment.NewLine);
+                $"fps {_pn / (_realTime - _pStart):F0} compose {_pc / _pn:F1} upload {_pu / _pn:F1} draw {_pd / _pn:F1} ms, game {_lastTime:F1}s real {_realTime:F1}s" + $" (battle {_pBattle / _pn:F1} moses {_pMoses / _pn:F1} field {_pField / _pn:F1})" + Environment.NewLine);
             _pc = _pu = _pd = 0; _pn = 0; _pStart = _realTime;
+            _pBattle = _pMoses = _pField = 0;
         }
     }
 
@@ -1284,8 +1287,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawKeysPanel();
         DrawTuning();
         DrawLevelUp();
+        double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         DrawMoses();
+        double perfB = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         DrawField();
+        if (PerfLog) { _pBattle += perfA; _pMoses += perfB - perfA; _pField += _perf.Elapsed.TotalMilliseconds - perfB; }
         DrawRecords();
         DrawTitle();
         DrawEpisodes();
@@ -1502,9 +1508,22 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void FillRect(int x, int y, int w, int h, uint color)
     {
-        for (int yy = y; yy < y + h; yy++)
-            for (int xx = x; xx < x + w; xx++)
-                SetPixel(xx, yy, color);
+        // 네모를 판 안으로 자르고, 불투명이면 줄 단위로 채운다 — 픽셀마다 SetPixel 을 부르던 때는 화면 가득 한 번에 30ms 가 들어
+        // 필드(틀마다 화면 전체를 검게 지운다)가 15~20fps 로 끊겼다(사용자 보고: Fld 0017).
+        int x0 = Math.Max(0, x), x1 = Math.Min(BoardWidth, x + w), y0 = Math.Max(0, y), y1 = Math.Min(BoardHeight, y + h);
+        if (x0 >= x1 || y0 >= y1) return;
+        uint a = color >> 24;
+        if (a == 0) return;
+        if (a == 0xFF)
+        {
+            for (int yy = y0; yy < y1; yy++) _fb.AsSpan(yy * BoardWidth + x0, x1 - x0).Fill(color);
+            return;
+        }
+        for (int yy = y0; yy < y1; yy++)
+        {
+            int i = yy * BoardWidth + x0;
+            for (int n = x1 - x0; n > 0; n--, i++) _fb[i] = Blend(_fb[i], color, a);
+        }
     }
 
     private void StrokeRect(int x, int y, int w, int h, uint color)
