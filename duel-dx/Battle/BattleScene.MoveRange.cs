@@ -134,8 +134,13 @@ internal sealed unsafe partial class BattleScene
         // 내가 움직이는 인물은 <b>같은 편(아군·동맹)</b>도 지나간다 — 서지는 못한다(아래에서 선 칸을 파랑에서 뺀다). 사용자 보고: 다른 대장의
         // 용병들에 둘러싸이면 한 칸도 못 움직였다(원본에서는 칸을 찍으면 아군이 비켜 주거나 지나갔다고 한다 — 분석(감사3 R3)과 다르지만 사용자 기억을 따른다).
         // AI 가 움직이는 인물은 전처럼 막힌다(전투 결과가 달라지지 않게).
+        // 원본을 다시 읽은 결과(0x10074510 → 군단 유닛은 0x100da390): 지나가는 것은 <b>제 군단 안에서만</b>이다 — 대장은 제 부하를,
+        // 부하는 같은 대장의 부하와 제 대장을. 다른 대장의 부하·군단 아닌 아군·동맹은 원본에서도 막는다. 그래도 「같은 편은 지나간다」는
+        // 사용자 요청으로 남긴다(일부러 남긴 차이). 부하 쪽 규칙은 전에 빠져 있었다.
         bool passAllies = IsMine(unit);
-        bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex && !(passAllies && other.IsAlly);
+        bool SameLegion(UnitState other) => other.LeaderIndex == unitIndex
+            || (unit.LeaderIndex >= 0 && (other.LeaderIndex == unit.LeaderIndex || Array.IndexOf(host._units, other) == unit.LeaderIndex));
+        bool Blocks(UnitState other) => other != unit && !SameLegion(other) && !(passAllies && other.IsAlly);
 
         bool big = c.Big;
         bool Enterable(int col, int row)
