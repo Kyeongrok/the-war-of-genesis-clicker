@@ -761,7 +761,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         string shape = w.AreaShape switch
         {
             0 => "한 명",
-            1 => n == 0 ? "한 명" : $"둘레 {n}칸 마름모({2 * n * (n + 1) + 1}칸{centre})",
+            1 => n == 0 ? "한 명" : $"둘레 {n}칸 마름모({2 * n * (n + 1) + (w.AreaMin > 0 ? 0 : 1)}칸{centre})"   // 가운데를 빼면 칸 수도 하나 적다(전에는 41칸이라 적고 「가운데 빼고」라 했다),
             2 => $"십자 {n}칸",
             3 => $"앞 부채꼴 {n}칸",
             4 => "화면 안 전체",
