@@ -98,8 +98,10 @@ internal sealed unsafe partial class BattleScene
             double reach = Math.Max(0, w.AreaMaxQuarters - 2) * 40;      // 메모리의 +0x1a(파일값 × 4) − 2 — 파일값 1 이면 80
             (double Dx, double Dy, int Shot, int Tail, bool Mirror)[] ways =
             [
-                (reach, 0, 34, 37, true), (0, reach, 35, 38, false), (-reach, 0, 34, 37, false), (0, -reach, 33, 36, false),
-                (reach / 2, -reach / 2, 37, 37, true), (reach / 2, reach / 2, 37, 37, true), (-reach / 2, reach / 2, 37, 37, false), (-reach / 2, -reach / 2, 37, 37, false),
+                // 만드는 차례(0x10082af4~0x10083040)와 꼬리 모션 표(0x10083558): 오른쪽 34/37 · 대각 · 대각 · 왼쪽 34/38 · 대각 · 대각 · 아래 35/37 · 위 33/36.
+                // 왼쪽 탄의 꼬리가 38, 아래 탄의 꼬리가 37 인 것은 원본 표 그대로다. 대각 넷의 차례는 가설.
+                (reach, 0, 34, 37, true), (reach / 2, -reach / 2, 37, 37, true), (reach / 2, reach / 2, 37, 37, true), (-reach, 0, 34, 38, false),
+                (-reach / 2, reach / 2, 37, 37, false), (-reach / 2, -reach / 2, 37, 37, false), (0, reach, 35, 37, false), (0, -reach, 33, 36, false),
             ];
             for (int i = 0; i < ways.Length; i++)
                 _bodyShots.Add((user, ways[i].Shot, ways[i].Tail, host._lastTime + 3 * i / TicksPerSecond, px, py, px + ways[i].Dx, py + ways[i].Dy * 0.8, ways[i].Mirror));
