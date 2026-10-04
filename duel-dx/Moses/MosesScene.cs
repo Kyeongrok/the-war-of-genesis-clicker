@@ -454,8 +454,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     {
         try
         {
-            string path = Path.Combine(AssetsFolder.Find("moses"), "bgr", $"{id:D4}.bgr");
-            if (!File.Exists(path)) return null;
+            if (AssetPack.Fetch("moses/bgr", $"{id:D4}.bgr") is not { } path) return null;
             using var bitmap = new Bitmap(path);
             var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try

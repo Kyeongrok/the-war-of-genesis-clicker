@@ -183,6 +183,8 @@
                     SelectionChanged="CommonTabs_SelectionChanged">
                     <TabItem x:Name="RangeTab" Header="범위" />
                     <TabItem x:Name="OtherTab" Header="나머지" />
+                    <TabItem x:Name="AiTab" Header="AI" />
+                    <TabItem x:Name="MiscTab" Header="기타" />
                 </TabControl>
                 <DataGrid
                     x:Name="CommonGrid"

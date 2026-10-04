@@ -220,17 +220,24 @@ public partial class SkillEditView : UserControl
         IconSideBox.IsEnabled = IconAreaBox.IsEnabled = IconKindBox.IsEnabled = row.Ability > 0;
         _filling = true;
         var meaning = SkillBook.Fields.ToDictionary(f => f.Name, f => f.Meaning);
-        bool rangeTab = CommonTabs.SelectedItem != OtherTab;
-        var common = row.Skill.Common.Where(kv => RangeFields.Contains(kv.Key) == rangeTab).ToList();
+        // 탭 넷 — 범위 · 나머지 · AI(AI 가 쓸지 고를 때 보는 칸) · 기타(뜻을 모르는 bNN 칸, 사용자 요청).
+        static int TabOf(string field) =>
+            field.Length > 1 && field[0] == 'b' && field.Skip(1).All(char.IsDigit) ? 3
+            : field is "minTargets" || field.StartsWith("ai", StringComparison.Ordinal) ? 2
+            : RangeFields.Contains(field) ? 0 : 1;
+        int tab = CommonTabs.SelectedItem == MiscTab ? 3 : CommonTabs.SelectedItem == AiTab ? 2 : CommonTabs.SelectedItem == OtherTab ? 1 : 0;
+        var common = row.Skill.Common.Where(kv => TabOf(kv.Key) == tab).ToList();
         CommonGrid.ItemsSource = common.Select(kv => new CommonRow
         {
             Field = kv.Key, Value = kv.Value, Meaning = meaning.GetValueOrDefault(kv.Key, ""), Choices = Choices.GetValueOrDefault(kv.Key),
             Step = SpinnerSteps.TryGetValue(kv.Key, out double step) ? step : null,
             Signed = SkillBook.Fields.FirstOrDefault(f => f.Name == kv.Key)?.Signed == true,
         }).ToList();
-        int ranges = row.Skill.Common.Keys.Count(RangeFields.Contains);
-        RangeTab.Header = $"범위 ({ranges})";
-        OtherTab.Header = $"나머지 ({row.Skill.Common.Count - ranges})";
+        int Count(int t) => row.Skill.Common.Keys.Count(k => TabOf(k) == t);
+        RangeTab.Header = $"범위 ({Count(0)})";
+        OtherTab.Header = $"나머지 ({Count(1)})";
+        AiTab.Header = $"AI ({Count(2)})";
+        MiscTab.Header = $"기타 ({Count(3)})";
         CommonHeader.Text = $"공통 — 모든 레벨이 같은 칸 ({row.Skill.Common.Count}개)";
 
         var table = new DataTable();

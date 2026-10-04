@@ -201,6 +201,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
     // ── 게임 자료 읽기 ───────────────────────────────────────────────────────
 
     /// <summary>지금 전투에 나오는 인물들의 그림과 초상을 (없는 것만) 읽는다.</summary>
+    /// <summary>
+    /// 인물 폴더(<c>assets/characters/NNNN_이름</c>)의 파일 자리 — 설치판은 첫 챕터에 안 나오는 인물의 그림을 따로 받는다(AssetPack).
+    /// 없으면 받을 때까지 기다렸다가 받은 자리를 돌려준다(끝내 없으면 본디 경로 — 부르는 쪽이 「못 읽음」으로 다룬다).
+    /// </summary>
+    internal static string CharacterFile(string path, int wait = 90)
+    {
+        string folder = Path.GetFileName(Path.GetDirectoryName(path) ?? ""), file = Path.GetFileName(path);
+        if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log)
+            try { File.AppendAllText(log, $"characters/{folder}/{file}" + Environment.NewLine); } catch (IOException) { }
+        if (File.Exists(path)) return path;
+        return AssetPack.Fetch($"characters/{folder}", file, wait) ?? path;
+    }
+
     internal void LoadRosterSprites()
     {
         string assetsRoot = FindRepoAssetsRoot();
@@ -229,7 +242,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                     ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
                     : LoadFromGameFolder(chrCode);
                 // 바뀐 그림이 그 인물 폴더에 있으면 그것을 쓴다(없으면 목록 그림 그대로).
-                if (wanted > 0 && Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changed && File.Exists(changed))
+                if (wanted > 0 && Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changedPath && CharacterFile(changedPath, 30) is var changed && File.Exists(changed))
                 {
                     obsPath = changed;
                     if (BattleScene.Trace)
@@ -237,6 +250,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 }
                 _spriteCodes[chrCode] = wanted;
                 _names[chrCode] = name;
+                obsPath = CharacterFile(obsPath);
                 var motions = ObsSprite.Decode(obsPath);
                 if (motions.Count == 0) continue;
                 sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
@@ -257,6 +271,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             if (_faces.ContainsKey(code) || !_units.Any(u => u.ChrCode == code) || m.FaceCode == 0) continue;
             string facePath = Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), CharacterExport.ObsFileName(m.FaceCode));
+            facePath = CharacterFile(facePath, wait: 20);
             if (File.Exists(facePath) && DecodeFaceFrame(facePath) is { } face) _faces[code] = SpriteFrame.From(face);
         }
     }
