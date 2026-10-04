@@ -385,6 +385,43 @@ internal sealed unsafe partial class BattleScene
                     }
                     continue;
                 }
+                // 리인카네이션 279:4(0x100c4810 → 틱 0x100380f0): 안 보이는 앞잡이가 시전자 둘레 아홉 점을 틱당 3 으로 돌고, 이 그림이 틱당 2 로 그 뒤를 쫓는다.
+                if (extra is { Move: 9 } && !e.Fly && e.Obs == 279 && e.Motion == 4)
+                {
+                    _chasers.Add((e.Obs, e.Motion, start, userX, userY, mirrored));
+                    _fxLatestStart = Math.Max(_fxLatestStart, start + 97 / TicksPerSecond);   // 아홉 점을 도는 데 약 97틱 — 그동안 행동이 안 끝난다(가설)
+                    continue;
+                }
+                // 엘레맨탈 라이트 211:0(클래스 틱 0x100d1090): 빛덩이가 시전자 위(높이 100)에 30틱 떠 있다가 겨눈 칸 쪽으로 16방향 모션을 한 틱에 한 칸씩 돌리고,
+                // 반대로 100 물러났다가(빠르기 10 × 0.9) 겨눈 쪽으로 600~700 을 내달린다(빠르기 40 × 1.1, 최대 100). 잔상 셋이 2틱씩 늦게 따라간다.
+                if (extra is { Move: 9 } && !e.Fly && e.Obs == 211 && e.Motion == 0)
+                {
+                    int ox = userX, oy = userY - 60, dc = col - user.Col, dr = row - user.Row;
+                    double bearing = Math.Atan2(dc, -dr);
+                    int want = Math.Min(9, 1 + (int)((Math.Abs(bearing) + Math.PI / 16) / (Math.PI / 8)));
+                    if (bearing > 0 && want > 1) want = 18 - want;
+                    _movers.Add((211, 0, start, 7, ox, oy, 0, 0, 31, 0, 0, 0, 0, false));
+                    int turned = 0, cur = 1;
+                    for (; cur != want; turned++)
+                    {
+                        cur += Math.Sign(want - cur);
+                        _movers.Add((211, 4 * (cur > 9 ? 18 - cur : cur) + 8, start + (31 + turned) / TicksPerSecond, 7, ox, oy, 0, 0, 1, 0, 0, 0, 0, cur > 9));
+                    }
+                    int pose = cur > 9 ? 18 - cur : cur;
+                    bool flip = cur > 9;
+                    var (backX, backY, endX, endY) = Math.Abs(dr) > Math.Abs(dc) && dr < 0 ? (ox, oy + 80, ox, oy - 480)
+                        : Math.Abs(dc) >= Math.Abs(dr) && dc < 0 ? (ox + 100, oy, ox - 700, oy)
+                        : Math.Abs(dc) >= Math.Abs(dr) && dc > 0 ? (ox - 100, oy, ox + 700, oy)
+                        : (ox, oy - 80, ox, oy + 480);
+                    double dashAt = start + (31 + turned) / TicksPerSecond, recoil = 0, speed = 10;
+                    int recoilTicks = 0;
+                    for (; recoil < 100 && recoilTicks < 200; recoilTicks++) { recoil += speed; speed = Math.Max(1, speed * 0.9); }
+                    _shots.Add((211, 4 * pose + 8, dashAt, ox, oy, backX, backY, 10, 0.9, 1, 1, 0, flip));
+                    for (int k = 0; k < 4; k++)
+                        _shots.Add((211, 4 * pose + 8 + k, dashAt + (recoilTicks + 2 * k) / TicksPerSecond, backX, backY, endX, endY, 40, 1.1, 1, 0, 100, flip));
+                    _fxLatestStart = Math.Max(_fxLatestStart, dashAt + recoilTicks / TicksPerSecond);
+                    continue;
+                }
                 // 소울 블레스트 793:4(0x100d1970 → 틱 0x100d19e0): 시전자 → 겨눈 칸을 틱당 10 으로 곧게 가는 머리가 틱마다 그림을 남긴다 —
                 // 남기는 자리는 가는 길에서 옆으로 15 × sin(n × π/6) 만큼 물결친다. 머리 자체는 안 보인다(가설).
                 if (extra is { Move: 9 } && !e.Fly && e.Obs == 793 && e.Motion == 4 && (userX != targetX || userY != targetY))

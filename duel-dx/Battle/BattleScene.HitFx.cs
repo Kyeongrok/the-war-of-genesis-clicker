@@ -115,6 +115,43 @@ internal sealed unsafe partial class BattleScene
     /// <summary>연출 전용 난수 — 전투 판정의 난수 차례를 안 건드린다.</summary>
     internal readonly Random _fxRandom = new();
 
+    /// <summary>
+    /// 리인카네이션의 쫓는 그림(0x100c4810) — 앞잡이(안 보임, 0x100c45b0)는 (0,−51)에서 아홉 점을 틱당 3 으로 돌고, 그림은 (0,−52)에서 틱당 2 로 앞잡이를 향한다.
+    /// 앞잡이가 끝난 다음 틱에 사라진다. 자리는 시전자 발 기준 월드 단위(화면 y × 0.8).
+    /// </summary>
+    internal readonly List<(int Obs, int Motion, double Start, int X, int Y, bool Mirror)> _chasers = [];
+
+    internal static readonly (double X, double Y)[] ChaserPath =
+        [(-30, -30), (-50, 0), (-30, 30), (0, 50), (30, 30), (50, 0), (30, -30), (20, -40), (0, -50)];
+
+    internal void DrawChasers()
+    {
+        _chasers.RemoveAll(c =>
+        {
+            if (host._lastTime < c.Start) return false;
+            if (host.UiFor(c.Obs) == null) return true;
+            int ticks = (int)((host._lastTime - c.Start) * TicksPerSecond), at = 0;
+            double lx = 0, ly = -51, fx = 0, fy = -52;
+            for (int t = 0; t < ticks; t++)
+            {
+                if (at >= ChaserPath.Length) return true;       // 앞잡이가 끝난 다음 틱
+                double left = 3;
+                while (left > 0 && at < ChaserPath.Length)
+                {
+                    double dx = ChaserPath[at].X - lx, dy = ChaserPath[at].Y - ly, d = Math.Sqrt(dx * dx + dy * dy);
+                    if (d <= left) { (lx, ly) = ChaserPath[at]; at++; break; }      // 점에 닿으면 그 틱은 거기서 멈춘다
+                    (lx, ly, left) = (lx + dx / d * left, ly + dy / d * left, 0);
+                }
+                double cx = lx - fx, cy = ly - fy, far = Math.Sqrt(cx * cx + cy * cy);
+                (fx, fy) = far <= 2 ? (lx, ly) : (fx + cx / far * 2, fy + cy / far * 2);
+            }
+            int key = host.UiFor(c.Obs)?.BlendAt(c.Motion, ticks) ?? 0;
+            host.DrawUi(c.Obs, c.Motion, ticks, (int)(c.X + fx), (int)(c.Y + fy * 0.8), key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+                        loop: true, fade: BlendFade(key), mirror: c.Mirror);
+            return false;
+        });
+    }
+
     /// <summary>고리 이동기의 꼬리 — 틱마다 한 점(미리 셈한 화면 자리)에 그림을 남긴다(0x100cd3d0, 수명 = 모션 길이 − 1).</summary>
     internal readonly List<(int Obs, int Motion, double Start, (int X, int Y)[] Points, bool Mirror)> _ringTrails = [];
 
@@ -165,6 +202,7 @@ internal sealed unsafe partial class BattleScene
     {
         DrawFallers();
         DrawRingTrails();
+        DrawChasers();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;
@@ -172,6 +210,7 @@ internal sealed unsafe partial class BattleScene
             if (host.UiFor(m.Obs) == null) return true;
             if (ticks >= m.Ticks) return true;
             double k = ticks / Math.Max(1, m.Ticks), x = m.X0 + (m.X1 - m.X0) * k, y = m.Y0 + (m.Y1 - m.Y0) * k;
+            if (m.Kind == 7) (x, y) = (m.X0, m.Y0);   // 제자리에 Ticks 틱(엘레맨탈 라이트의 빛덩이)
             if (m.Kind == 6)        // 떠오르는 나선 — 반지름 R0 원을 각속도 W 로 돌며 틱당 R1 씩 뜬다(높이 × 0.6)
                 (x, y) = (m.X0 + m.R0 * Math.Cos(m.A0 + m.W * (int)ticks), m.Y0 + m.R0 * Math.Sin(m.A0 + m.W * (int)ticks) * TileH / TileW - m.R1 * (int)ticks * 0.6);
             int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
