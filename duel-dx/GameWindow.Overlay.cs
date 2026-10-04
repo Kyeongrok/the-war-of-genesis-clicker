@@ -46,11 +46,9 @@ internal sealed unsafe partial class GameWindow
         if (by < GridTop) return -1;
         int col = bx / TileW, row = RowAt(bx, by);
         if (row < 0) return -1;
-        int at = Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && u.Row == row);   // 퇴장한 사람은 안 잡는다(LiveUnitAt 과 같다)
-        if (at >= 0) return at;
-        // 높이가 다른 두 칸이 화면의 같은 자리에 겹치면 RowAt 은 앞(아래) 칸을 준다 — 그 칸이 비었으면 그 자리에 윗면이 걸친, 인물이 선 칸을 본다.
-        // 전에는 그런 칸에 선 적의 발밑 타일에서 커서가 칼로 안 바뀌고 클릭도 안 먹었다(Btl 0298 (21,12)·(22,13)).
-        return Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && CellTop(u.Col, u.Row) is var top && by >= top && by < top + TileH);
+        // 높은 벽 칸이 화면에서 겹쳐도 RowAt 이 설 수 있는 칸을 먼저 준다(Btl 0298 (21,12)) — 여기서 따로 겹친 칸의 유닛을 찾지는 않는다
+        // (계단처럼 설 수 있는 두 칸이 겹칠 때 앞 칸 클릭이 뒤 칸 유닛으로 가면 안 된다).
+        return Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && u.Row == row);   // 퇴장한 사람은 안 잡는다(LiveUnitAt 과 같다)
     }
 
     /// <summary>
