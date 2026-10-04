@@ -60,6 +60,8 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선 · 609 제 칸의 상자(<c>[0x101bfe34]</c>).</summary>
         public int Kind;
+        /// <summary>눈 깜빡임 — 시작한 틱(−1 이면 안 깜빡이는 중)과 확률을 굴린 마지막 틱.</summary>
+        public int BlinkAt = -1, BlinkTick = int.MaxValue;
         /// <summary>아래 상자 꼴인가 — 600 과 609(609 틀 (164,120)~(313,239) 은 아직 안 옮겨 600 상자로 그린다).</summary>
         public bool IsBox => Kind is 600 or 609 or 603;
         /// <summary>603 — 화면 맨 위 한 줄 띠(자막·알림, 0x100ef9d0): 창 (10,0) 620×34, 틀 Obs 0225, 이름·초상 없음, 펴짐 없이 곧바로 뜬다(ba-20 N2).</summary>
@@ -650,8 +652,17 @@ internal sealed unsafe partial class BattleSceneWindow
             // 초상 모션은 키가 있으면 된다 — 한 장짜리 정지 초상(퉁 파오 Obs 0786 모션 11: 길이 0, 키 1)도 있다.
             // 예전에는 길이 > 0 만 봐서 정지 초상인 인물은 작은 얼굴로 떨어졌다(사용자 보고: Fld 0094).
             bool portrait = w.Portrait && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, UiBlend.Alpha);
-            if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink && tick % 90 < blink)
-                DrawUi(portraitObs, pose + 1, tick % 90, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
+            // 눈 깜빡임(0x1003c55b): 깜빡이는 중이 아니면 틱마다 1/45 확률로 모션 (표정+1)을 한 번 겹친다 — 전에는 3초마다 규칙적으로 깜빡였다(ba-21 field Y5).
+            if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink)
+            {
+                int now = (int)(_lastTime * TicksPerSecond);
+                if (w.BlinkTick == int.MaxValue || now - w.BlinkTick > 60) w.BlinkTick = now;   // 창이 처음 그려질 때부터 센다
+                if (w.BlinkAt >= 0 && now - w.BlinkAt >= blink) w.BlinkAt = -1;
+                for (; w.BlinkTick < now; w.BlinkTick++)
+                    if (w.BlinkAt < 0 && _rng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
+                if (w.BlinkAt >= 0 && now >= w.BlinkAt)
+                    DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
+            }
             for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha, fade: 20 / 31.0);
             for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha);
             // 이름 — 탭(틀 x 0~124, y 창y−25~창y) 가운데. 윗변을 창y−16 에 두었더니 글자가 탭 아래 선에 걸쳤다(사용자 보고).
