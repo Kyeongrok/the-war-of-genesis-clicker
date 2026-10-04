@@ -35,6 +35,7 @@ internal sealed unsafe partial class BattleSceneWindow
             1665 => [(3, 210, true, 40)],                                         // 레드 크로스
             _ => w.AbilityId switch
             {
+                6 => [(2, 4, false, 0)],                                          // 폭 0x10083660(세기 2, 4틱 — ba-21 fx F17)
                 74 => [(1, 50, false, 0), (3, 25, false, 0), (5, 60, false, 0), (3, 45, false, 0), (1, 30, false, 0)],   // 어스퀘이크 0x100ad9a0
                 67 => [(1, 170, false, 0)],                                       // 엘레맨탈 베이스 0x100a37d0
                 111 => [(2, 100, false, 0)],                                      // 그라비티 밸런스 0x100a2b00(20n+80)
