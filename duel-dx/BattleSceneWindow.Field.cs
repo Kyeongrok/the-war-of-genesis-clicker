@@ -1693,6 +1693,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 전환·덮개 없는 필드 장면을 층 <paramref name="to"/> 아래까지 그린다 — 남은 그림이 있으면 그 그림과 층 (가림)~,
     /// 없으면 조각·배경과 층 0~. 그린 첫 층을 돌려준다.
     /// </summary>
+
     private int DrawFieldScene(int ox, int oy, int to)
     {
         int start = 0;
@@ -1734,34 +1735,45 @@ internal sealed unsafe partial class BattleSceneWindow
                         SetPixel(ox + x, oy + y, crop[y * MosesW + x] | 0xFF000000);
             return;
         }
-        // 조각 — 나중 것이 먼저(앞에 끼움).
-        for (int i = _fieldPieces.Count - 1; i >= 0; i--)
+        // 배경은 노란 색 키만 뚫리고, 그 구멍으로 조각이 보인다(조각은 앞 번호가 위). 화면 픽셀을 한 번만 돌며 배경이 키인 곳에서만
+        // 맨 위 조각을 찾는다 — 전에는 조각을 전부 화면 가득 그린 뒤 배경으로 덮어, 조각이 여럿인 필드가 한 틀에 40ms 넘게 걸렸다
+        // (사용자 보고: Fld 0017 이 툭툭 끊김 — 15~20fps).
+        int flow = (int)(_lastTime * TicksPerSecond);
+        int pieces = _fieldPieces.Count;
+        Span<int> shiftXs = pieces <= 64 ? stackalloc int[pieces] : new int[pieces];
+        Span<int> shiftYs = pieces <= 64 ? stackalloc int[pieces] : new int[pieces];
+        for (int i = 0; i < pieces; i++)
         {
             var p = _fieldPieces[i];
-            int flow = (int)(_lastTime * TicksPerSecond);
-            int shiftX = (bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0) - p.Vx * flow;
-            int shiftY = (bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0) - p.Vy * flow;
-            for (int y = 0; y < p.H; y++)
-            {
-                int sy = p.Y1 + y - cy;
-                if ((uint)sy >= MosesH) continue;
-                int py = ((y + shiftY) % p.PicH + p.PicH) % p.PicH;
-                for (int x = 0; x < p.W; x++)
-                {
-                    int sx = p.X1 + x - cx;
-                    if ((uint)sx >= MosesW) continue;
-                    int px = ((x + shiftX) % p.PicW + p.PicW) % p.PicW;
-                    SetPixel(ox + sx, oy + sy, p.Px[py * p.PicW + px] | 0xFF000000);
-                }
-            }
+            shiftXs[i] = (bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0) - p.Vx * flow;
+            shiftYs[i] = (bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0) - p.Vy * flow;
         }
-        for (int y = 0; y < MosesH && y + cy < bg.H; y++)
+        for (int y = 0; y < MosesH; y++)
         {
+            int fy = oy + y;
+            if ((uint)fy >= BoardHeight) continue;
+            bool inBg = y + cy >= 0 && y + cy < bg.H;
             int row = (y + cy) * bg.W + cx;
-            for (int x = 0; x < MosesW && x + cx < bg.W; x++)
+            for (int x = 0; x < MosesW; x++)
             {
-                uint c = bg.Px[row + x];
-                if (!IsFieldKey(c)) SetPixel(ox + x, oy + y, c | 0xFF000000);
+                int fx = ox + x;
+                if ((uint)fx >= BoardWidth) continue;
+                if (inBg && x + cx >= 0 && x + cx < bg.W)
+                {
+                    uint c = bg.Px[row + x];
+                    if (!IsFieldKey(c)) { _fb[fy * BoardWidth + fx] = c | 0xFF000000; continue; }
+                }
+                // 키(또는 배경 밖) — 그 점을 덮는 맨 위 조각.
+                int wx = x + cx, wy = y + cy;
+                for (int i = 0; i < pieces; i++)
+                {
+                    var p = _fieldPieces[i];
+                    int lx = wx - p.X1, ly = wy - p.Y1;
+                    if ((uint)lx >= (uint)p.W || (uint)ly >= (uint)p.H) continue;
+                    int px = ((lx + shiftXs[i]) % p.PicW + p.PicW) % p.PicW, py = ((ly + shiftYs[i]) % p.PicH + p.PicH) % p.PicH;
+                    _fb[fy * BoardWidth + fx] = p.Px[py * p.PicW + px] | 0xFF000000;
+                    break;
+                }
             }
         }
     }
