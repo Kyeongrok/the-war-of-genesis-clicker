@@ -494,7 +494,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._effects.Clear();
         host.Btl._delayedHits.Clear();
         host.Mov._movies.Clear();
-        host.Btl._bodyClones.Clear();
+        host.Btl._bodyClones.Clear();  host.Btl._bodyShapes.Clear();
         host.Btl._blinks.Clear();
         host.Btl._pendingExits.Clear();
         host.Btl._exitOutcomeDue = false;
@@ -993,7 +993,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._numbers.Clear();
         host.Btl._effects.Clear();
         host.Mov._movies.Clear();
-        host.Btl._bodyClones.Clear();
+        host.Btl._bodyClones.Clear();  host.Btl._bodyShapes.Clear();
         host.Btl._blinks.Clear();
         host.Btl._pendingExits.Clear();
         host.Btl._exitOutcomeDue = false;
