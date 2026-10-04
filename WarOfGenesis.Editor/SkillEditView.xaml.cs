@@ -500,7 +500,13 @@ public partial class SkillEditView : UserControl
     private void DeleteLevel_Click(object sender, RoutedEventArgs e)
     {
         if (Current is not { } row) return;
-        if (LevelGrid.CurrentCell.Item is not DataRowView view || view.Row["level"] is not int level)
+        // 고른 줄 — 지금 셀이 없으면(단추를 누르며 초점이 옮겨 가거나, 줄 머리로 고른 때) 고른 셀·고른 줄에서 찾는다.
+        // 전에는 지금 셀만 봐서, 줄을 골라 두고 단추를 눌러도 「셀을 고르세요」만 뜨고 안 지워졌다(사용자 보고: 메테오).
+        LevelGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        var view = LevelGrid.CurrentCell.Item as DataRowView
+                   ?? LevelGrid.SelectedCells.Select(c => c.Item).OfType<DataRowView>().FirstOrDefault()
+                   ?? LevelGrid.SelectedItem as DataRowView;
+        if (view == null || !int.TryParse(Convert.ToString(view.Row["level"]), out int level))
         {
             StatusText.Text = "레벨별 표에서 지울 레벨의 셀을 하나 고르세요.";
             return;
@@ -516,7 +522,9 @@ public partial class SkillEditView : UserControl
         // 작은 어빌리티(희생 10·20줄 따위)는 그 값을 넘기지 않는다.
         int abiMax = _db?.Abilities.GetValueOrDefault(row.Ability)?.MaxLevel ?? row.Skill.Levels.Count + 1;
         int before = row.Skill.MaxLevel > 0 ? row.Skill.MaxLevel : abiMax;
-        if (row.Ability > 0) row.Skill.MaxLevel = Math.Min(before, row.Skill.Levels.Count);
+        // 배울 수 있는 레벨 안의 줄을 지웠으면 최대 레벨도 하나 준다 — 메테오처럼 줄(20)이 최대 레벨(10)보다 많은 어빌리티는
+        // 뒤 줄이 당겨 올라와 최대 레벨이 그대로라 「안 지워진」 것처럼 보였다(사용자 보고).
+        if (row.Ability > 0) row.Skill.MaxLevel = Math.Max(1, Math.Min(level <= before ? before - 1 : before, row.Skill.Levels.Count));
         MarkDirty(row);
         Fill();
         StatusText.Text = $"Lv{level} 을(를) 지웠습니다 — 이제 최대 Lv{(row.Skill.MaxLevel > 0 ? row.Skill.MaxLevel : row.Skill.Levels.Count)} (.abi 는 그대로, 스킬 파일에 적음). 저장하면 반영됩니다.";
