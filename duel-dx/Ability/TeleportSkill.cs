@@ -110,6 +110,8 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"recall: {target.ChrCode} ({target.Col},{target.Row}) → ({lc},{lr}) beside {caster.ChrCode} ({caster.Col},{caster.Row})" + Environment.NewLine);
+        // 사라지는 크기 복제(가늘고 길게) — 뜨는 때는 사라짐 첫머리로 둔다(가설).
+        host.Btl._bodyShapes.Add((target, 6, host._lastTime, 0, null, 0, 0, 3 / 9.0, null));
         for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {
             target.Fade = Math.Max(0, 1 - (host._lastTime - start) / (40 * Tick));
@@ -121,6 +123,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         target.Facing = caster.Facing;
         var (x, y) = host.Btl.UnitFoot(target);
         host.Btl._effects.Add((210, 3, host._lastTime, x, y));
+        host.Btl._bodyShapes.Add((target, 6, host._lastTime, 1, null, 0, 0, 3 / 9.0, null));     // 길쭉한 꼴에서 제 크기로
         for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {
             target.Fade = Math.Min(1, (host._lastTime - start) / (40 * Tick));

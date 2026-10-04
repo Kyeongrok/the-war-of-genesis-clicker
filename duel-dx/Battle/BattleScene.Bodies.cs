@@ -129,7 +129,7 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>
     /// 꼴이 있는 복제 — 1 늘어남(Param = 틱 수, 20 또는 120) · 2 떨림(Param = 치우침) · 3 꼬리(Param 틱 전 자리 + (Dx, Dy)) · 4 메아리(Param 틱 전 모습을 제자리에) ·
-    /// 5 크기(1.84배에서 틱마다 × 0.97, 10틱). History 는 주인이 틱마다 지나온 자리·모습(같은 묶음이 함께 쓴다). Fade 는 그리기 칸(+0x13) ÷ 9.
+    /// 5 크기(1.84배에서 틱마다 × 0.97, 10틱) · 6 리콜의 사라짐/나타남 크기(Param 0/1). History 는 주인이 틱마다 지나온 자리·모습(같은 묶음이 함께 쓴다). Fade 는 그리기 칸(+0x13) ÷ 9.
     /// </summary>
     internal readonly List<(UnitState Owner, int Kind, double Start, int Param, List<(int X, int Y, SpriteFrame? Frame, bool Busy)>? History,
                            int Dx, int Dy, double Fade, SpriteFrame? Snapshot)> _bodyShapes = [];
@@ -184,6 +184,16 @@ internal sealed unsafe partial class BattleScene
                     if (c.Snapshot == null) { c = c with { Snapshot = frame }; _bodyShapes[i] = c; }
                     double scale = Math.Pow(0.97, tick + 1 - 20);
                     Stretched(c.Snapshot!, scale, scale);
+                    break;
+                }
+                case 6:
+                {
+                    // 리콜(0x1009da20) — Param 0: 사라질 때 제 크기에서 틱마다 가로 × 0.8 · 세로 × 1.2(0x100c6590, 0x1009dc89),
+                    // Param 1: 나타날 때 가로 1.1^−10 · 세로 0.9^−10 에서 틱마다 × 1.1 · × 0.9 로 제 크기까지(0x100c6600, 0x1009e08b). 둘 다 10틱 · 그리기 칸 3.
+                    if (tick >= 10) { _bodyShapes.RemoveAt(i); continue; }
+                    if (c.Snapshot == null) { c = c with { Snapshot = frame }; _bodyShapes[i] = c; }
+                    if (c.Param == 0) Stretched(c.Snapshot!, Math.Pow(0.8, tick), Math.Pow(1.2, tick));
+                    else Stretched(c.Snapshot!, Math.Pow(1.1, tick - 10), Math.Pow(0.9, tick - 10));
                     break;
                 }
                 default:
