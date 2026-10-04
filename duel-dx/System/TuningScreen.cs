@@ -50,6 +50,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("레벨업 창 보이기", "레벨이 오를 때 능력치 창을 띄운다", MenuLevelUpWindow, host.Btl._showLevelUp),
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
+        ("전직할 때 EXP 유지", "전직해도 쌓인 EXP 를 지우지 않는다", MenuKeepJobExp, host._keepJobExp),
+        ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
@@ -88,7 +90,6 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 int px = x + 16 + i * (PauseW + PauseGap);
                 if (bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
             }
-            if (bx >= x + 12 && bx < x + TuningW - 12 && by >= y + StoryCheckY && by < y + StoryCheckY + TuningCheckH) host.OnMenuCommand(MenuTalkClickFills);
             return true;
         }
         if (_tuningTab == 2)
@@ -213,14 +214,6 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.StrokeRect(px, y + PauseY, PauseW, PauseH, StatusScreen.BoxLine);
             host.DrawText(TalkPauseChoices[i] < 0 ? "원본(1초)" : TalkPauseLabel(TalkPauseChoices[i]), px + 8, y + PauseY + 5, on ? 0xFF00FFFF : White, 12);
         }
-        int cy = y + StoryCheckY;
-        if (MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.FillRect(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
-        host.FillRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
-        host.StrokeRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
-        if (host._talkClickFills) host.DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
-        host.DrawText("대사 첫 클릭은 글 채우기", x + 44, cy + 6, White);
-        host.DrawText("끄면 원본처럼 첫 클릭에 바로 넘어간다", x + TuningBoxX, cy + 7, DimGray, 12);
-        host.DrawText("「대사 첫 클릭은 글 채우기」는 설정 메뉴에도 있다(같은 값).", x + 16, cy + 48, DimGray, 12);
     }
 
     internal bool MouseInBoard(int x, int y, int w, int h) => host._mouse.X >= x && host._mouse.X < x + w && host._mouse.Y >= y && host._mouse.Y < y + h;
