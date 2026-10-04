@@ -114,6 +114,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <param name="loop">되풀이 — 되풀이 소리(감사4 S3)만 쓴다. 끌 때는 <see cref="AudioMixer.EndLoop"/>.</param>
     private void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false)
     {
+        if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
         if (_mosesAltVoice && _mosesOpen && MosesAltSounds.Contains(sound)) sound += 25;   // 910 이 갈아 끼운 모세스 안내 음성
         bool loaded = _sfx.TryGetValue(sound, out var pcm);
         var (left, right) = SndPan(screenX);

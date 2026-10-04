@@ -27,9 +27,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     private bool _tuningListOpen;
 
-    private const int TuningW = 600, TuningH = 366, TuningBoxX = 300, TuningBoxY = 144, TuningBoxW = 180, TuningRowH = 24;
+    private const int TuningW = 600, TuningH = 398, TuningBoxX = 300, TuningBoxY = 176, TuningBoxW = 180, TuningRowH = 24;
 
-    /// <summary>체크 줄 셋 — 창 위에서부터 y 44 · 76 · 108. 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
+    /// <summary>체크 줄 넷 — 창 위에서부터 y 44 · 76 · 108 · 140. 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
     private const int TuningCheckY = 44, TuningCheckH = 32;
 
     private (string Label, string Note, int Command, bool On)[] TuningChecks() =>
@@ -37,6 +37,7 @@ internal sealed unsafe partial class BattleSceneWindow
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, _allyAi),
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, _showChestContents),
         ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, _fullSoulAtStart),
+        ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, _skipEnemyAction),
     ];
 
     private static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };

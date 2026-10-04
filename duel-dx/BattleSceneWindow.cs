@@ -544,6 +544,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 _lastTime = now;
                 TestRunTick();
             }
+            // 적 행동 건너뛰기(모드) — 그 행동이 끝날 때까지 한 틀에 여러 번, 한 틱씩 갱신한다.
+            for (int step = 0; step < 240 && _skippingAction && _running; step++)
+            {
+                double tickDt = 1.0 / TicksPerSecond, now = _lastTime + tickDt;
+                Update(tickDt);
+                _lastTime = now;
+                StepSkipEnemyAction();
+            }
 
             UpdateCursor();
             Render();
@@ -895,8 +903,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     private void OnClick(int clientX, int clientY)
     {
         if (_progressOpen) { var (px, py) = BoardPoint(clientX, clientY); OnProgressClick(px, py); return; }
+        if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
         if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (TrySkipEnemyAction()) return;      // 적이 행동하는 동안의 클릭 = 그 행동 건너뛰기(모드)
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }

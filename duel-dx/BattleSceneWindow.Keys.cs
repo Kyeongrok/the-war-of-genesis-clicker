@@ -236,7 +236,45 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills));
+    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
+
+    /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
+    private bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
+
+    /// <summary>지금 AI 행동을 건너뛰는 중인가 — 그 유닛의 차례가 끝날 때까지 한 틀에 여러 번 갱신한다. 그동안 효과음은 안 낸다.</summary>
+    private bool _skippingAction;
+
+    /// <summary>건너뛰기를 시작한 때(게임 초) — 그 뒤에 뜬 숫자는 건너뛰기가 끝난 때로 다시 맞춰 결과가 보이게 한다.</summary>
+    private double _skipFrom;
+
+    private const int MenuSkipEnemy = 1109;
+
+    /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
+    private bool TrySkipEnemyAction()
+    {
+        if (!_skipEnemyAction || _skippingAction || !_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return false;
+        if (IsPlayerTurn || _routine == null || _outcome.Length > 0 || EventsBusy || LevelUpOpen || SystemOpen || _deployOpen) return false;
+        _skippingAction = true;
+        _skipFrom = _lastTime;
+        return true;
+    }
+
+    /// <summary>건너뛰는 중이면 갱신 한 번 뒤에 부른다 — 그 행동이 끝났거나 사람이 봐야 할 것(대사·사건·결과·레벨업·내 차례)이 생기면 멈춘다.</summary>
+    private void StepSkipEnemyAction()
+    {
+        if (!_skippingAction) return;
+        if (_routine != null && !IsPlayerTurn && _outcome.Length == 0 && !EventsBusy && !LevelUpOpen && _lastTime - _skipFrom < 60) return;
+        _skippingAction = false;
+        // 건너뛰는 동안 뜬 숫자를 지금으로 다시 맞춘다 — 결과(피해·회복·Miss)는 보인다.
+        for (int i = 0; i < _numbers.Count; i++)
+            if (_numbers[i].Start >= _skipFrom) _numbers[i] = _numbers[i] with { Start = _lastTime };
+        // 지나간 이펙트는 지운다(때가 지나 한 틀 번쩍이고 사라지지 않게).
+        _effects.RemoveAll(e => e.Start < _lastTime);
+        _effectMirrors.RemoveAll(e => e.Start < _lastTime);
+        _shots.Clear();
+        _movers.Clear();
+        _flyingEffects.Clear();
+    }
 
     /// <summary>대사 첫 클릭은 글 채우기 — 설정 > 대사 첫 클릭은 글 채우기. 끄면(기본) 원본처럼 첫 클릭에 곧바로 닫는다(감사 3 T1).</summary>
     private bool _talkClickFills = UserSettings.Current.TalkFillFirst;
@@ -316,6 +354,11 @@ internal sealed unsafe partial class BattleSceneWindow
             case MenuProgress: ToggleProgress(); break;
             case MenuReloadSkills:
                 ReloadSkills();
+                break;
+            case MenuSkipEnemy:
+                _skipEnemyAction = !_skipEnemyAction;
+                Toast(_skipEnemyAction ? "적이 행동할 때 클릭하면 모션을 건너뜁니다" : "적 행동을 건너뛰지 않습니다");
+                SaveSettings();
                 break;
             case MenuFullSoul:
                 _fullSoulAtStart = !_fullSoulAtStart;

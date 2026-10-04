@@ -242,11 +242,16 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int w = 400, h = 180, x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
         DrawGameFrame(x, y + 26, w, h - 26, _scene.Title);
-        DrawText("승리 조건", x + 20, y + 44, 0xFF80D0FF);
-        DrawText(_db?.T(_scene.WinTextId) ?? "", x + 110, y + 44, White);
-        DrawText("패배 조건", x + 20, y + 96, 0xFFE08080);
-        DrawText(_db?.T(_scene.LoseTextId) ?? "", x + 110, y + 96, White);
-        DrawText("아무 곳이나 누르면 닫힙니다", x + 20, y + h - 28, DimGray);
+        // 원본 0x100e3d60(400×180): 깃발 Obs 0894 모션 9 @ (20,20), 「승리 조건」 @ (50,20) 노랑, 조건 글 @ (50,50) 흰,
+        // 해골 모션 10 @ (20,100), 「패배 조건」 @ (50,100) 노랑, 글 @ (50,130) 흰(ba-21 battle-flow 4). 전에는 라벨이 하늘색·붉은색이고 글이 같은 줄이었다.
+        int by = y + 26;
+        DrawUi(HudObs, 9, 0, x + 20, by + 20, UiBlend.Alpha, loop: false);
+        DrawText("승리 조건", x + 50, by + 14, HudYellow);
+        DrawText(_db?.T(_scene.WinTextId) ?? "", x + 50, by + 44, White);
+        DrawUi(HudObs, 10, 0, x + 20, by + 100, UiBlend.Alpha, loop: false);
+        DrawText("패배 조건", x + 50, by + 94, HudYellow);
+        DrawText(_db?.T(_scene.LoseTextId) ?? "", x + 50, by + 124, White);
+
     }
 
     // ── 음량 창 ──────────────────────────────────────────────────────────────
