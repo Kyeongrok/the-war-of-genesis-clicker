@@ -919,6 +919,11 @@ internal sealed unsafe partial class BattleSceneWindow
                 SpawnAbilityEffects(w, a, col, row);
                 SpawnWorkShakes(w);
                 effectsAt = _lastTime;
+                // 카메라 따라가기(0x100eac00, ba-21 fx F7) — 힐·큐어·배리어류 189개는 겨눈 대상을, 34개는 시전자를 따라간다. 탄을 따라가는 60개는 아직.
+                if (WorkCameraFollow.Target.Contains(w.Id) && !WorkCameraFollow.Shot.Contains(w.Id)
+                    && (targetIndex >= 0 ? _units[targetIndex] : LiveUnitAt(col, row)) is { } followed && followed != a)
+                    CenterOnUnit(followed);
+                else if (WorkCameraFollow.Caster.Contains(w.Id) && !WorkCameraFollow.Target.Contains(w.Id)) CenterOnUnit(a);
                 // 군단기면 부하 잔상(ba-21 C) — 피해는 그 연출의 끝 무렵에 들어간다.
                 for (double end = _lastTime + StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
                 effectsDone = true;
@@ -1049,7 +1054,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
             if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
-                && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) && (handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id)))
+                && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 double hitAt = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond;
                 // 핸들러가 대상을 붙드는 기술(브레인 스톰·블라인드·안티 밸런싱·미라클·아이템 1609~1617) — 판정까지 맞음 자세(미라클은 시전 자세로 아래를 봄)로
@@ -1164,6 +1169,9 @@ internal sealed unsafe partial class BattleSceneWindow
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
+        // 늦게 뜨는 이펙트(단계·사슬 지연)가 시작할 때까지는 행동이 안 끝난다 — 상한 200틱.
+        for (double cap = _lastTime + 200 / TicksPerSecond; _lastTime < _fxLatestStart && _lastTime < cap;) yield return true;
+        _fxLatestStart = 0;
         // 군단기 연출이 끝나 모두 다시 보일 때까지 기다린다 — 부하의 걸어가 치기도 그 뒤에.
         while (_lastTime < _legionStageEnd) yield return true;
         // 사거리 밖이던 부하는 먼저 걸어간 뒤 친다(원본 0x1005f1c0: 명령1 이동 → 명령2 기술).

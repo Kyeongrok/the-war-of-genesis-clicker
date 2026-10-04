@@ -8,8 +8,8 @@ namespace DuelDx;
 /// </summary>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    /// <summary>하드 밸런싱 0x100b7d20(426 · 1376~1394) / 소프트 밸런싱 0x100b8110(59~78).</summary>
-    private static bool IsBalancingWork(int id) => id == 426 || id is >= 1376 and <= 1394 || id is >= 59 and <= 78;
+    /// <summary>하드 밸런싱 0x100b7d20(426 · 1376~1394) / 소프트 밸런싱 0x100b8110(427 · 1357~1375) — 59~78 은 격려였다(ba-21 fx 표 재생성 기록 11).</summary>
+    private static bool IsBalancingWork(int id) => id is 426 or 427 || id is >= 1376 and <= 1394 || id is >= 1357 and <= 1375;
 
     /// <summary>웹폰 크래쉬 0x100a20a0(442 · 1503~1506).</summary>
     private static bool IsWeaponCrashWork(int id) => id == 442 || id is >= 1503 and <= 1506;

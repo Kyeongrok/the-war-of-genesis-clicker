@@ -2,6 +2,7 @@
 
     python tools/re/work_fx_table.py "<게임 폴더>" [출력.cs]
     python tools/re/work_fx_patch.py "<게임 폴더>"            ← 뽑은 뒤 <b>꼭</b> 이어서 돌린다 (ba-20 X)
+    python tools/re/work_fx_timing.py "<게임 폴더>"           ← 그 뒤 <b>꼭</b> 이어서 돌린다 (ba-21 F — 뜨는 때·수명×n·카메라 집합)
 
 이 도구는 핸들러를 코드 주소 순으로 읽어 지연·수명을 「바로 앞 이펙트」에 붙이고 이펙트를 16개에서 자른다.
 `work_fx_patch.py` 가 단계 순 기호 실행(`work_fx_emu.py`)으로 지연·수명·높이·빠진 이펙트·아이템 work 줄을 바로잡는다.
@@ -261,4 +262,4 @@ lines += ['    };', '}', '']
 with open(OUT, 'w', encoding='utf-8-sig', newline='\n') as f:
     f.write('\n'.join(lines))
 print('work %d개를 %s 에 적었다' % (len(rows), os.path.relpath(OUT, os.path.join(HERE, '..', '..'))))
-print('이어서 work_fx_patch.py 를 돌려 이펙트 칸을 바로잡을 것')
+print('이어서 work_fx_patch.py → work_fx_timing.py 를 돌려 이펙트 칸·뜨는 때를 바로잡을 것')
