@@ -919,6 +919,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 ScheduleAbilitySounds(w);
                 _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
                 _fxStagger = 0;
+                _fxArriveAt = 0;
                 SpawnAbilityEffects(w, a, col, row);
                 _fxTargets = null;
                 // 판정을 기다릴 상한 — 이 work 의 이펙트가 다 끝나는 때(지연 + 수명 또는 모션 길이). 길이를 모르는 단계가 낀 표 값이 이펙트보다 길어 빈 대기가 되지 않게.
@@ -930,6 +931,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     && (targetIndex >= 0 ? _units[targetIndex] : LiveUnitAt(col, row)) is { } followed && followed != a)
                     CenterOnUnit(followed);
                 else if (WorkCameraFollow.Caster.Contains(w.Id) && !WorkCameraFollow.Target.Contains(w.Id)) CenterOnUnit(a);
+                // 탄을 따라가는 60개 — 탄이 가는 쪽(겨눈 칸)으로 카메라를 보낸다(탄 자체를 따라가지는 않는다 — 근사).
+                else if (WorkCameraFollow.Shot.Contains(w.Id) && _fxArriveAt > 0 && (uint)col < Cols && (uint)row < Rows) CenterOnCell(col, row);
                 // 군단기면 부하 잔상(ba-21 C) — 피해는 그 연출의 끝 무렵에 들어간다.
                 for (double end = _lastTime + StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
                 effectsDone = true;
@@ -1060,7 +1063,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
             if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
-                && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
+                && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (WorkFxExtra.ArriveHitWorks.Contains(w.Id) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);
                 double hitAt = effectsAt + Math.Min(Math.Min(handlerHit.Ticks, 240), sureHit ? 240 : Math.Max(10, fxSpan)) / TicksPerSecond;
@@ -1076,6 +1079,8 @@ internal sealed unsafe partial class BattleSceneWindow
                         if (w.Id == 490) t.Facing = Facing.Down;
                         t.PlayAction(w.Id == 490 ? 6 : HitAction, hitAt - _lastTime);
                     }
+                // 「탄이 사라질 때 판정」 work(카운터 미사일 · 블레이드 샤워 …, 41개)은 탄이 닿는 때에 맞는다(ba-21 fx 덧정보 표 생성 기록).
+                if (WorkFxExtra.ArriveHitWorks.Contains(w.Id) && _fxArriveAt > 0) hitAt = Math.Min(_fxArriveAt, effectsAt + 300 / TicksPerSecond);
                 while (_lastTime < hitAt) yield return true;
                 foreach (var (t, was) in held)
                 {
