@@ -1,7 +1,7 @@
-"""work(기술) 핸들러가 대상에게 판정 메시지 1001 을 보내기까지의 틱 수를 뽑아 `duel-dx/WorkHitTicks.g.cs` 로 적는다 (ba-21 T1).
+"""work(기술) 핸들러가 대상에게 판정 메시지 1001 을 보내기까지의 틱 수를 뽑아 `duel-dx/Ability/WorkHitTicks.g.cs` 로 적는다 (ba-21 T1).
 
 쓰는 법
-    python tools/re/work_hit_ticks.py "<게임 폴더>"                 # duel-dx/WorkHitTicks.g.cs 를 다시 만든다
+    python tools/re/work_hit_ticks.py "<게임 폴더>"                 # duel-dx/Ability/WorkHitTicks.g.cs 를 다시 만든다
     python tools/re/work_hit_ticks.py "<게임 폴더>" --out 다른.cs    # 다른 곳에 적는다
     python tools/re/work_hit_ticks.py "<게임 폴더>" --dump 435 1589  # 그 work 의 단계별 셈을 찍기만 한다(파일 안 씀)
     python tools/re/work_hit_ticks.py "<게임 폴더>" --tsv 표.tsv     # 전체 work 의 단계별 셈을 TSV 로도 남긴다
@@ -429,7 +429,7 @@ def main():
     if not args:
         raise SystemExit(__doc__)
     game = args[0]
-    out = os.path.normpath(os.path.join(HERE, '..', '..', 'duel-dx', 'WorkHitTicks.g.cs'))
+    out = os.path.normpath(os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkHitTicks.g.cs'))
     tsv, dump = None, None
     k = 1
     while k < len(args):
