@@ -274,13 +274,32 @@ internal sealed unsafe partial class BattleScene
     /// 1: 떠오르는 나선(반지름 RangeX, 틱당 P0/1000 점 · 높이 P1/1000)을 타며 틱마다 그림을 남김(따라 뜨는 알갱이 셋은 안 넣음, 시작 각은 가설).
     /// 7 은 길을 못 읽어 전처럼 둔다. 조각 탄의 P0 = 빠르기, P1 = 틱마다 바뀜(양수 × P1/1000, 음수 + |P1|/1000). 수명 = 모션 길이 − 1.
     /// </summary>
+    /// <summary>
+    /// 원 윤곽의 점 목록(0x100090e0 → 0x100091b0) — 점은 8r 개, 0번이 맨 위(0, −r+1)이고 화면에서 시계 방향으로 돈다(위 → 오른쪽 → 아래 → 왼쪽).
+    /// 한 점이 x 나 y 로 한 칸이라 각은 번호에 고르지 않다. 가운데 기준 월드 단위.
+    /// </summary>
+    internal static List<(int X, int Y)> CirclePoints(int r)
+    {
+        var quarter = new List<(int X, int Y)> { (0, -r + 1) };
+        for (int s = r - 1, e = 1; s >= 0 && quarter.Count < 2 * r;)
+        {
+            quarter.Add((e, -s));
+            if ((int)Math.Sqrt(s * s + e * e) == r) s--; else e++;
+        }
+        var all = new List<(int X, int Y)>(8 * r);
+        for (int turn = 0; turn < 4; turn++)
+            foreach (var (px, py) in quarter)
+                all.Add(turn switch { 0 => (px, py), 1 => (-py, px), 2 => (-px, -py), _ => (py, -px) });
+        return all;
+    }
+
     internal bool SpawnSpray(WorkData w, AbilityEffect e, double start, int x, int y)
     {
         if (!WorkFxSpray.Table.TryGetValue(w.Id, out var rows)) return false;
         bool any = false;
         foreach (var r in rows)
         {
-            if (r.Obs != e.Obs || r.Delay != e.Delay || (r.Kind != 8 && r.Motion != e.Motion) || r.Kind == 7) continue;
+            if (r.Obs != e.Obs || r.Delay != e.Delay || (r.Kind != 8 && r.Motion != e.Motion)) continue;
             double scale = r.P1 > 0 ? r.P1 / 1000.0 : -r.P1 / 1000.0;
             int mode = r.P1 > 0 ? 1 : 0;
             double at = start + 1 / TicksPerSecond;
@@ -323,12 +342,50 @@ internal sealed unsafe partial class BattleScene
                     break;
                 case 1:
                 {
-                    int ticks = Math.Min(e.Life > 0 ? e.Life : r.Life, 150);
-                    var points = new (int X, int Y)[Math.Max(1, ticks)];
-                    double turn = r.P0 / 1000.0 / Math.Max(1, r.RangeX);
-                    for (int t = 0; t < points.Length; t++)
-                        points[t] = ((int)(x + r.RangeX * Math.Cos(turn * t)), (int)(y + r.RangeX * Math.Sin(turn * t) * 0.8 - r.P1 / 1000.0 * t * 0.6));
-                    _ringTrails.Add((e.Obs, e.Motion, start, points, false));
+                    // 힐(0x10081410): 뿌리개 둘 — 하나는 원 맨 위(점 0)에서 시계 방향, 하나는 점 100 에서 반대 방향. 반지름 30 원의 점 240개를 틱당 6점,
+                    // 높이 틱당 1.15, 수명 96. 틱마다 그 자리에 그림 하나 + 알갱이 6:1 셋이 대상 발 높이까지 틱당 3 으로 내려온다(좌우 흔들림은 안 넣음).
+                    // 같은 틀의 다른 줄(work 1599 의 7:2)은 뿌리개 하나, 알갱이 없이.
+                    int ticks = Math.Clamp(e.Life > 0 ? e.Life : r.Life, 1, 150);
+                    var ring = CirclePoints(Math.Max(1, r.RangeX));
+                    bool heal = e.Obs == 478;
+                    foreach (var (from, reverse) in heal ? new[] { (0.0, false), (100.0, true) } : [(0.0, false)])
+                    {
+                        var points = new (int X, int Y)[ticks];
+                        double pos = from;
+                        for (int t = 0; t < ticks; t++)
+                        {
+                            int i = (int)pos % ring.Count;
+                            var (dx, dy) = ring[reverse ? ring.Count - i - 1 : i];
+                            double z = Math.Truncate(r.P1 / 1000.0 * t);
+                            points[t] = (x + dx, (int)(y + dy * 0.8 - z * 0.6));
+                            if (heal && z >= 3)
+                                for (int n = 0; n < 3; n++)
+                                    _pieces.Add((6, 1, start + t / TicksPerSecond, points[t].X, points[t].Y, points[t].X, points[t].Y + z * 0.6, 1.8, 0, 0, (int)(z / 3) + 1, false));
+                            pos += r.P0 / 1000.0;
+                        }
+                        _ringTrails.Add((e.Obs, e.Motion, start, points, false));
+                    }
+                    break;
+                }
+                case 7 when e.Obs == 480:
+                {
+                    // 큐어(0x10081830): 대상 위(높이 105 — 표의 Lift)에서 반지름 10 · 12 · … · 28 의 원 열 개를 차례로 반시계로 돈다(0x10038650 — 틱당 7점, × 1.00015).
+                    // 틱마다 그림 하나 + 알갱이 8:1 셋이 땅까지(105) 틱당 3 으로 내려온다. 약 217틱.
+                    var points = new List<(int X, int Y)>();
+                    double speed = 7;
+                    for (int k = 0; k < 10; k++)
+                    {
+                        var ring = CirclePoints(10 + 2 * k);
+                        for (double pos = 0; pos < ring.Count && points.Count < 400; pos += speed, speed = Math.Min(40, speed * 1.00015))
+                        {
+                            var (dx, dy) = ring[ring.Count - (int)pos - 1];
+                            points.Add((x + dx, (int)(y + dy * 0.8)));
+                        }
+                    }
+                    for (int t = 0; t < points.Count; t++)
+                        for (int n = 0; n < 3; n++)
+                            _pieces.Add((8, 1, start + t / TicksPerSecond, points[t].X, points[t].Y, points[t].X, points[t].Y + 63, 1.8, 0, 0, 36, false));
+                    _ringTrails.Add((e.Obs, e.Motion, start, [.. points], false));
                     break;
                 }
                 default: continue;

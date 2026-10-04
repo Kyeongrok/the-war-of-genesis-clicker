@@ -997,6 +997,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>성능 기록용 — 한 틀의 합성 가운데 전투 판 · 모세스 · 필드 그리기에 든 ms 누적.</summary>
     internal double _pBattle, _pMoses, _pField;
 
+    /// <summary>성능 기록(DUELDX_PERF)의 전투 그리기 구간별 합 — 어느 그리기가 느린지 가른다.</summary>
+    internal readonly Dictionary<string, double> _pParts = [];
+    internal double _pMark;
+
+    internal void PerfMark(string part)
+    {
+        if (!PerfLog) return;
+        double now = _perf.Elapsed.TotalMilliseconds;
+        _pParts[part] = _pParts.GetValueOrDefault(part) + now - _pMark;
+        _pMark = now;
+    }
+
     internal void Render()
     {
         if (!PerfLog) { Compose(); Upload(); Draw(); return; }
@@ -1008,8 +1020,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_perf.log"),
                 $"fps {_pn / (_realTime - _pStart):F0} compose {_pc / _pn:F1} upload {_pu / _pn:F1} draw {_pd / _pn:F1} ms, game {_lastTime:F1}s real {_realTime:F1}s" + $" (battle {_pBattle / _pn:F1} moses {_pMoses / _pn:F1} field {_pField / _pn:F1})" + Environment.NewLine);
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_perf.log"),
+                "  parts " + string.Join(" ", _pParts.OrderByDescending(p => p.Value).Take(5).Select(p => $"{p.Key} {p.Value / _pn:F1}")) + Environment.NewLine);
             _pc = _pu = _pd = 0; _pn = 0; _pStart = _realTime;
             _pBattle = _pMoses = _pField = 0;
+            _pParts.Clear();
         }
     }
 
@@ -1019,6 +1034,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// </summary>
     internal double _mapTint = -1, _mapTintClock;
     internal int _mapTintTarget = -1;
+
+    internal readonly byte[] _mapTintLut = new byte[256];
+    internal int _mapTintLutFor = -1;
 
     internal void DrawMapTint()
     {
@@ -1031,38 +1049,57 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_mapTint <= -1) return;
         // 방식 2: 5비트 채널 v = (23·c + 8·세기)/31 — 세기 0 이면 74% 로 어두워지고 세기가 오를수록 회색이 뜬다.
         int add = (int)(Math.Max(0, Math.Floor(_mapTint)) * 8 * 255 / (31 * 31));
-        for (int y = Math.Max(0, _camY); y < Math.Min(BoardHeight, _camY + ViewHeight); y++)
-            for (int x = Math.Max(0, _camX); x < Math.Min(BoardWidth, _camX + ViewWidth); x++)
+        // 채널 값 256가지를 미리 셈해 두고 줄 단위로 바꾼다 — 전에는 픽셀마다 식을 세 번 셈해 한 틀에 38ms 를 먹었다(기술 쓰는 내내 15fps).
+        if (_mapTintLutFor != add)
+        {
+            for (int v = 0; v < 256; v++) _mapTintLut[v] = (byte)Math.Min(255, v * 23 / 31 + add);
+            _mapTintLutFor = add;
+        }
+        int x0 = Math.Max(0, _camX), x1 = Math.Min(BoardWidth, _camX + ViewWidth), width = BoardWidth;
+        int y0 = Math.Max(0, _camY), y1 = Math.Min(BoardHeight, _camY + ViewHeight);
+        if (x1 <= x0) return;
+        var lut = _mapTintLut;
+        for (int y = y0; y < y1; y++)
+        {
+            var line = _fb.AsSpan(y * width + x0, x1 - x0);
+            for (int i = 0; i < line.Length; i++)
             {
-                int i = y * BoardWidth + x;
-                uint c = _fb[i];
-                uint Dim(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 23 / 31 + add);
-                _fb[i] = 0xFF000000 | Dim(16) << 16 | Dim(8) << 8 | Dim(0);
+                uint c = line[i];
+                line[i] = 0xFF000000 | (uint)lut[(int)(c >> 16 & 0xFF)] << 16 | (uint)lut[(int)(c >> 8 & 0xFF)] << 8 | lut[(int)(c & 0xFF)];
             }
+        }
     }
 
     internal void Compose()
     {
+        if (PerfLog) _pMark = _perf.Elapsed.TotalMilliseconds;
         Array.Fill(_fb, BgColor);
         DrawBackground();
+        PerfMark("바탕");
         DrawMapTint();
+        PerfMark("물들임");
         Btl.DrawMoveRange();
         Btl.DrawDeployCells();
         Btl.DrawWorkRange();
         if (_showGrid) Btl.DrawGridLines();
+        PerfMark("영역");
         Btl.DrawObjects();
+        PerfMark("물체");
         Btl.DrawUnits();
+        PerfMark("유닛");
         Btl.DrawBodyClones();
         Btl.DrawBlinkGhosts();
         StagingAb.DrawStageFx();
         Btl.DrawEffects();
         Mov.DrawMovies();
         Mov.DrawRipples();
+        PerfMark("이펙트");
         if (_showGauges) Btl.DrawGauges();
         Btl.DrawPopups();
         Btl.DrawNumbers();
         Btl.DrawCritFlash();
         DrawStatus();
+        PerfMark("숫자");
         Btl.DrawHud();
         Btl.DrawChestList();
         Btl.DrawRing();
@@ -1078,6 +1115,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DrawKeysPanel();
         TuningScr.DrawTuning();
         Btl.DrawLevelUp();
+        PerfMark("창");
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         Mos.DrawMoses();
         double perfB = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;

@@ -260,6 +260,10 @@ internal sealed unsafe partial class BattleScene
         return r;
     }
 
+    /// <summary>걸어가 손댈 수 있는 물체 칸(이동 영역과 함께 칠함) — 무엇으로 셈했는지와 함께 들고 있는다.</summary>
+    internal readonly HashSet<int> _touchable = [];
+    internal (object? Range, int Turn, bool Mine, int Objects) _touchableFor;
+
     internal void DrawMoveRange()
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
@@ -270,12 +274,21 @@ internal sealed unsafe partial class BattleScene
         if (_targetWork >= 0 && !_targetIsBasicAttack) return;
         int radius = WaveRadius((int)((host._lastTime - _rangeStart) * TicksPerSecond));
         // 차례인 인물의 영역이면 걸어가 손댈 수 있는 물체 칸도 칠한다(원본 상태 10 이 층 1 을 함께 만든다, 0x1006961c).
-        var touchable = new HashSet<int>();
-        if (_rangeUnit == _turn && IsPlayerTurn)
-            foreach (var obj in Objects)
-                if (FindTouchPath(host._units[_turn], obj, range) != null)
-                    foreach (var (fc, fr, _, _) in FootprintCells(obj))   // 발자국 칸 모두(여러 칸짜리 문)
-                        if ((uint)fc < host.Cols && (uint)fr < host.Rows && ObjectAt(fc, fr) == obj) touchable.Add(fr * host.Cols + fc);
+        // 물체마다 길찾기를 하므로 틀마다 다시 세지 않는다 — 같은 영역·같은 차례·같은 물체 수인 동안은 앞 틀의 것을 쓴다
+        // (전에는 내 차례에 이동 영역이 떠 있는 내내 한 틀에 40ms 를 먹었다).
+        bool mine = _rangeUnit == _turn && IsPlayerTurn;
+        int liveObjects = Objects.Count(o => o.Alive);
+        if (!ReferenceEquals(range, _touchableFor.Range) || _touchableFor.Turn != _turn || _touchableFor.Mine != mine || _touchableFor.Objects != liveObjects)
+        {
+            _touchable.Clear();
+            if (mine)
+                foreach (var obj in Objects)
+                    if (FindTouchPath(host._units[_turn], obj, range) != null)
+                        foreach (var (fc, fr, _, _) in FootprintCells(obj))   // 발자국 칸 모두(여러 칸짜리 문)
+                            if ((uint)fc < host.Cols && (uint)fr < host.Rows && ObjectAt(fc, fr) == obj) _touchable.Add(fr * host.Cols + fc);
+            _touchableFor = (range, _turn, mine, liveObjects);
+        }
+        var touchable = _touchable;
 
         for (int row = 0; row < host.Rows; row++)
             for (int col = 0; col < host.Cols; col++)
