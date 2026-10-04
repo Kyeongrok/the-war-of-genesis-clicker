@@ -101,6 +101,9 @@ internal sealed unsafe partial class BattleScene
 
         void Row(string label, string value, int top)
         {
+            // 값이 길어 이름 위로 넘치면(HP 2034/3658(+320) 같은 네 자리 + 보정) 보정 괄호를 뗀다 — 전에는 「HP」 글자 위에 겹쳐 찍혔다(사용자 화면).
+            int room = 130 - 10 - host.GetText(label, White).W - 4;
+            if (host.GetText(value, White).W > room && value.IndexOf('(') is > 0 and var cut) value = value[..cut];
             host.DrawText(label, x + 10, top, White);
             host.RightText(value, x + 130, top, White);
         }
