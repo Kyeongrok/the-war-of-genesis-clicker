@@ -95,8 +95,37 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>좌우를 뒤집어 그릴 이펙트(_effects 의 줄) — 시전자가 오른쪽을 볼 때 따위(0x100e56c0, ba-21 fx F10).</summary>
     private readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effectMirrors = [];
 
+    /// <summary>
+    /// 고리(0x100cd310)·포물선(0x100cb550) 이동기 — 고리: 가운데 둘레를 반지름 R0 → R1, 처음 각 A0 에서 각속도 W 로 Ticks 틱 돈다.
+    /// 포물선: From → To 를 Ticks 틱에 가며 가운데가 솟는다. 길 식은 인자에서 짠 것(가설, ba-21 fx F2).
+    /// </summary>
+    private readonly List<(int Obs, int Motion, double Start, int Kind, double X0, double Y0, double X1, double Y1,
+                           int Ticks, double R0, double R1, double A0, double W, bool Mirror)> _movers = [];
+
+    private void DrawMovers()
+    {
+        _movers.RemoveAll(m =>
+        {
+            if (_lastTime < m.Start) return false;
+            double ticks = (_lastTime - m.Start) * TicksPerSecond;
+            if (ticks >= m.Ticks || UiFor(m.Obs) == null) return true;
+            double k = ticks / Math.Max(1, m.Ticks), x, y;
+            if (m.Kind == 4)
+            {
+                double r = m.R0 + (m.R1 - m.R0) * k, angle = m.A0 + m.W * ticks;
+                (x, y) = (m.X0 + r * Math.Cos(angle), m.Y0 + r * Math.Sin(angle) * TileH / TileW);
+            }
+            else (x, y) = (m.X0 + (m.X1 - m.X0) * k, m.Y0 + (m.Y1 - m.Y0) * k - 60 * 4 * k * (1 - k));
+            int key = UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
+            DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+                   loop: true, fade: BlendFade(key), mirror: m.Mirror);
+            return false;
+        });
+    }
+
     private void DrawShots()
     {
+        DrawMovers();
         _shots.RemoveAll(s =>
         {
             if (_lastTime < s.Start) return false;
