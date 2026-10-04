@@ -44,9 +44,10 @@ internal sealed unsafe partial class BattleScene
             if (list.Length == 2 && list.All(b => b.OnTarget))
             {
                 // 떨리는 복제(0x100c6d70 + 0x100c6e20) — 마인드 어택: 복제 둘이 ±5 로, 나이 % 4 가 0·2 면 제자리 · 1 이면 −치우침 · 3 이면 +치우침, 40틱.
-                // 쇼크는 ±6 · 50틱인데 여기서는 같은 값으로 둔다.
-                _bodyShapes.Add((body, 2, host._lastTime, 5, null));
-                _bodyShapes.Add((body, 2, host._lastTime, -5, null));
+                // 쇼크(0x100ae41c — 조각 떼 표에 482:3 × 80 이 있는 work)는 ±6 · 50틱.
+                int sway = WorkFxSwarm.Table.TryGetValue(w.Id, out var swarm) && swarm.Any(r => r.Obs == 482 && r.Count == 80) ? 6 : 5;
+                _bodyShapes.Add((body, 2, host._lastTime, sway, null));
+                _bodyShapes.Add((body, 2, host._lastTime, -sway, null));
                 return;
             }
             if (list.Length >= 3 && list.All(b => !b.OnTarget))
@@ -109,7 +110,7 @@ internal sealed unsafe partial class BattleScene
                 }
                 case 2:
                 {
-                    if (tick >= 40) { _bodyShapes.RemoveAt(i); continue; }
+                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40)) { _bodyShapes.RemoveAt(i); continue; }
                     int shift = (tick % 4) switch { 1 => -c.Param, 3 => c.Param, _ => 0 };
                     host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: CloneFade);
                     break;
