@@ -1,6 +1,6 @@
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 항행 단계 2(장소 고르기)의 레이더 — 행성 구체 위를 도는 초록 격자 구와 장소 조각(분석-모세스 6절 「레이더가 그리는 것」, 클래스 <c>0x10103880</c>).

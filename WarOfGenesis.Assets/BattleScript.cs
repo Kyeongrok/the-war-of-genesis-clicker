@@ -8,7 +8,7 @@ public sealed record ScriptOpInfo(int Code, string Name, string Args, string Not
 /// </summary>
 /// <remarks>
 /// 옵시디안 분석-전투 「조건 열여섯 개 — 인자 자리까지」·「행동 코드 점프표 전수」·「안 만든 행동의 인자 자리표」와
-/// duel-dx <c>BattleSceneWindow.Events.cs</c> 를 옮겼다. 인자 번호는 코드 뒤 16바이트를 워드로 끊은 차례(a0~a7)다.
+/// duel-dx <c>GameWindow.Events.cs</c> 를 옮겼다. 인자 번호는 코드 뒤 16바이트를 워드로 끊은 차례(a0~a7)다.
 /// 대상 인자는 10000+n = 배치 번호 n 의 유닛, 20000+2k = 편 k 전체(짝수)·20001+2k = 편 k 의 누구(홀수), 그 밖은 Chr 번호.
 /// </remarks>
 public static class BattleScript

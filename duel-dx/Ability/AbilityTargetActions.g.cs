@@ -3,7 +3,7 @@
 
 namespace DuelDx;
 
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class GameWindow
 {
     /// <summary>
     /// work 번호 → 대상에게 거는 동작 (틱, 동작, 붙듦) — 시전자 사슬(<see cref="WorkScripts"/> 의 Actions)과 따로다.

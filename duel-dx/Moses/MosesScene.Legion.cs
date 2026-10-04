@@ -2,7 +2,7 @@
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 모세스 용병관리(MERCENARY) 페이지(mo-1, 페이지 6) — 파티원에게 군단을 붙이고 뗀다.

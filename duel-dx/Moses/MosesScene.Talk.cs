@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 모세스 통신(MESSAGE) 페이지(mo-1, 페이지 2) — 성도 위를 걸어 다니는 사람들과 이야기한다.

@@ -4,7 +4,7 @@ namespace WarOfGenesis.Assets;
 /// 필드·챕터 스크립트(<see cref="FieldFile"/>·<see cref="ChapterFile"/>) 명령 이름 — 편집기가 줄마다 붙여 보여 준다.
 /// </summary>
 /// <remarks>
-/// 뜻은 게임 실행기(duel-dx <c>BattleSceneWindow.Field.cs</c> 의 <c>FieldCondition</c>·<c>RunFieldAction</c>·<c>RunChapterAction</c>)의
+/// 뜻은 게임 실행기(duel-dx <c>GameWindow.Field.cs</c> 의 <c>FieldCondition</c>·<c>RunFieldAction</c>·<c>RunChapterAction</c>)의
 /// 주석을 옮긴 것이다. 괄호 안은 인자 차례. 모르는 번호는 빈 문자열이다.
 /// </remarks>
 public static class FieldScript
