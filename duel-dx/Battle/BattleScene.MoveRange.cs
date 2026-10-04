@@ -131,7 +131,11 @@ internal sealed unsafe partial class BattleScene
         // 원본 0x100d9a20(0x100d9b17~0x100d9b2e)은 자기 말고 모든 유닛이 막고, 부하·대장이 서로 지나가는 것은 진형 다시 세우기
         // (0x100da220·0x100da390, 이동 명령 0x2711 중일 때)뿐이다(감사3 R3). 그래도 사용자 요청(fg-15)으로 리메이크는 대장이 제 부하를
         // 지나가게 둔다 — 원본대로 막으면 부하에 둘러싸인 대장이 못 움직인다. 일부러 남긴 차이다.
-        bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex;
+        // 내가 움직이는 인물은 <b>같은 편(아군·동맹)</b>도 지나간다 — 서지는 못한다(아래에서 선 칸을 파랑에서 뺀다). 사용자 보고: 다른 대장의
+        // 용병들에 둘러싸이면 한 칸도 못 움직였다(원본에서는 칸을 찍으면 아군이 비켜 주거나 지나갔다고 한다 — 분석(감사3 R3)과 다르지만 사용자 기억을 따른다).
+        // AI 가 움직이는 인물은 전처럼 막힌다(전투 결과가 달라지지 않게).
+        bool passAllies = IsMine(unit);
+        bool Blocks(UnitState other) => other != unit && other.LeaderIndex != unitIndex && !(passAllies && other.IsAlly);
 
         bool big = c.Big;
         bool Enterable(int col, int row)
