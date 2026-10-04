@@ -92,7 +92,7 @@ internal sealed unsafe partial class BattleScene
             var c = _bodyShapes[i];
             int tick = (int)((host._lastTime - c.Start) * TicksPerSecond);
             if (!c.Owner.OnField || !host._sprites.TryGetValue(c.Owner.ChrCode, out var sprite) || sprite.FrameFor(c.Owner) is not { } frame || tick > 300)
-            { _bodyShapes.RemoveAt(i); continue; }
+            { if (c.Kind == 2) c.Owner.Fade = 1; _bodyShapes.RemoveAt(i); continue; }
             var (fx, fy) = host.Btl.UnitFoot(c.Owner);
             switch (c.Kind)
             {
@@ -105,14 +105,17 @@ internal sealed unsafe partial class BattleScene
                     for (int y = 0; y < h; y++)
                         for (int x = 0; x < w; x++)
                             px[y * w + x] = frame.Px[Math.Min(frame.H - 1, y * frame.H / h) * frame.W + Math.Min(frame.W - 1, x * frame.W / w)];
-                    host.BlitMasked(px, w, h, fx + frame.X - (w - frame.W) / 2, fy + frame.Y - (h - frame.H), fade: CloneFade);
+                    host.BlitMasked(px, w, h, fx + frame.X - (w - frame.W) / 2, fy + frame.Y - (h - frame.H), fade: 4 / 9.0);   // 그리기 칸 +0x13 = 4(밝기 0~9 와 같은 칸)
                     break;
                 }
                 case 2:
                 {
-                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40)) { _bodyShapes.RemoveAt(i); continue; }
+                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40)) { c.Owner.Fade = 1; _bodyShapes.RemoveAt(i); continue; }
                     int shift = (tick % 4) switch { 1 => -c.Param, 3 => c.Param, _ => 0 };
-                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: CloneFade);
+                    // 복제는 +0x13 = 3, 그동안 본체는 5(끝나면 0 = 또렷) — 밝기 칸(0~9, WorkUnitFx 와 같은 칸)으로 읽어 3/9 · 5/9 로 그린다(가설).
+                    c.Owner.Fade = 5 / 9.0;
+                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40) - 1) c.Owner.Fade = 1;
+                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: 3 / 9.0);
                     break;
                 }
                 default:
