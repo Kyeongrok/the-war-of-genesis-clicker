@@ -110,7 +110,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             int top = CellTop(col, row);
             if (by < top || by >= top + TileH) continue;
-            if (!_battleLoaded || _map is null || (Btl.CellFlagsAt(col, row) & 0x9) == 0 || Btl.ObjectAt(col, row) != null) return row;   // 물체가 선 칸은 벽이 아니다
+            if (!_battleLoaded || _map is null || Fld.FieldOpen || Mos._mosesOpen || (Btl.CellFlagsAt(col, row) & 0x9) == 0 || Btl.ObjectAt(col, row) != null) return row;   // 물체가 선 칸은 벽이 아니다
             if (wall < 0) wall = row;
         }
         return wall;
