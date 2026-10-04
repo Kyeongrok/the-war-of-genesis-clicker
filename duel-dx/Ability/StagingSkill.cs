@@ -2,11 +2,13 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 판정 앞 연출 — 핸들러가 틱을 세며 대상을 돌리거나 복제를 띄우는 기술(ba-20 P6·P7·P8).
 /// 밸런싱(대상이 돈다)·웹폰 크래쉬(대상 복제가 가로로 부푼다)·블랙홀(대상 복제가 소용돌이로 빨려 든다).
 /// </summary>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class StagingSkill(GameWindow host)
 {
     /// <summary>하드 밸런싱 0x100b7d20(426 · 1376~1394) / 소프트 밸런싱 0x100b8110(427 · 1357~1375) — 59~78 은 격려였다(ba-21 fx 표 재생성 기록 11).</summary>
     internal static bool IsBalancingWork(int id) => id is 426 or 427 || id is >= 1376 and <= 1394 || id is >= 1357 and <= 1375;
@@ -42,11 +44,11 @@ internal sealed unsafe partial class GameWindow
                 _ => [],
             },
         };
-        double at = _lastTime;
+        double at = host._lastTime;
         foreach (var (strength, ticks, vertical, delay) in shakes)
         {
             at += delay / TicksPerSecond;
-            _shakes.Add((at, at + ticks / TicksPerSecond, strength, vertical));
+            host.HeavenEarthAb._shakes.Add((at, at + ticks / TicksPerSecond, strength, vertical));
             at += ticks / TicksPerSecond;
         }
     }
@@ -68,34 +70,34 @@ internal sealed unsafe partial class GameWindow
             // 분신 A(시전자 Obs 모션 75)가 앞 한 칸 자리에서 「범위 최대」칸을 40px/틱(틱마다 ×0.92, 최소 6)으로 날아가고,
             // 이어 분신 B 가 그 자리에서 10px/틱(×1.11, 최대 40)으로 돌아온다(0x10082756~0x10082894). 높이 +30/+20.
             // 판정은 A 가 다 날아간 뒤 한 번에 낸다(원본은 칸을 넘을 때마다 3칸 띠 — 범위는 같다).
-            if (!_sprites.TryGetValue(a.ChrCode, out var sprite) || sprite.MotionTicks(75) <= 0) yield break;
+            if (!host._sprites.TryGetValue(a.ChrCode, out var sprite) || sprite.MotionTicks(75) <= 0) yield break;
             int n = Math.Max(1, w.AreaMaxQuarters / 4);
             var (dx, dy) = a.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
-            var (ox, oy) = UnitFoot(a);
+            var (ox, oy) = host.UnitFoot(a);
             double lead = dx != 0 ? 50 : 40, total = 40.0 * n;
             bool mirror = a.Facing == Facing.Right;
             var outward = new List<double>();
             for (double pos = 0, speed = 40; pos < total; speed = Math.Max(6, speed * 0.92)) { pos = Math.Min(total, pos + speed); outward.Add(pos); }
             var back = new List<double>();
             for (double pos = total, speed = 10; pos > 0; speed = Math.Min(40, speed * 1.11)) { pos = Math.Max(0, pos - speed); back.Add(pos); }
-            double flyAt = _lastTime;
+            double flyAt = host._lastTime;
             _stageDraws.Add(() =>
             {
-                int k = (int)((_lastTime - flyAt) * TicksPerSecond);
+                int k = (int)((host._lastTime - flyAt) * TicksPerSecond);
                 if (k < 0 || k >= outward.Count + back.Count) return false;
                 double pos = lead + (k < outward.Count ? outward[k] : back[k - outward.Count]);
                 int lift = k < outward.Count ? 18 : 12;
                 if (sprite.FrameOfMotion(75, Math.Min(k, sprite.MotionTicks(75) - 1), mirror) is not { } frame) return false;
-                BlitMasked(frame.Px, frame.W, frame.H, ox + (int)(dx * pos) + frame.X, oy + (int)(dy * pos * 0.8) - lift + frame.Y, fade: 24 / 31.0);
+                host.BlitMasked(frame.Px, frame.W, frame.H, ox + (int)(dx * pos) + frame.X, oy + (int)(dy * pos * 0.8) - lift + frame.Y, fade: 24 / 31.0);
                 return true;
             });
-            while ((_lastTime - flyAt) * TicksPerSecond < outward.Count) yield return true;
+            while ((host._lastTime - flyAt) * TicksPerSecond < outward.Count) yield return true;
             yield break;
         }
         if (!IsBalancingWork(w.Id) && !IsWeaponCrashWork(w.Id) && !IsBlackHoleWork(w.Id)) yield break;
-        var targets = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)).Select(i => _units[i]).ToList();
-        double start = _lastTime;
-        int Tick() => (int)((_lastTime - start) * TicksPerSecond);
+        var targets = (targetIndex >= 0 ? [targetIndex] : host.WorkTargets(w, a, col, row)).Select(i => host._units[i]).ToList();
+        double start = host._lastTime;
+        int Tick() => (int)((host._lastTime - start) * TicksPerSecond);
 
         if (IsBalancingWork(w.Id))
         {
@@ -122,15 +124,15 @@ internal sealed unsafe partial class GameWindow
         {
             // 대상의 그 순간 컷을 섞기 4(52%)로 띄워 120틱 동안 가로로만 1.00 → 1.57, 1.40 → 0.83 을 40틱 주기로 세 번
             // (0x100a21b0~0x100a2234, 그리기 0x100c6bf0 — 가로는 컷 가운데, 세로는 발 기준). 대상은 맞음 자세를 붙든다.
-            foreach (var u in targets.Where(u => u.Alive && _sprites.ContainsKey(u.ChrCode)))
+            foreach (var u in targets.Where(u => u.Alive && host._sprites.ContainsKey(u.ChrCode)))
             {
-                var frame = _sprites[u.ChrCode].FrameFor(u);
-                var (fx, fy) = UnitFoot(u);
+                var frame = host._sprites[u.ChrCode].FrameFor(u);
+                var (fx, fy) = host.UnitFoot(u);
                 if (frame == null) continue;
-                PlayActionFor(u, HitAction, 60);
+                host.PlayActionFor(u, HitAction, 60);
                 _stageDraws.Add(() =>
                 {
-                    int n = (int)((_lastTime - start) * TicksPerSecond);
+                    int n = (int)((host._lastTime - start) * TicksPerSecond);
                     if (n >= 120 || n < 0) return false;
                     int k = n % 40;
                     double scale = k < 20 ? 1.0 + 0.03 * k : 1.4 - 0.03 * (k - 20);
@@ -147,13 +149,13 @@ internal sealed unsafe partial class GameWindow
         // 100틱 동안 시전자 둘레를 약 2.3바퀴 돌며 빨려 든다(길 표 0x10039410). 잔상 넷이 5·10·15·20틱 늦게 따라온다.
         // 틱 200 에 판정, 본체는 35틱에 걸쳐 돌아온다(0x1008d55e~0x1008d8fa).
         while (Tick() < 50) yield return true;
-        var (cx, cy) = UnitFoot(a);
-        double swirlAt = _lastTime;
-        var pulled = targets.Where(u => u != a && u.Alive && _sprites.ContainsKey(u.ChrCode)).ToList();
+        var (cx, cy) = host.UnitFoot(a);
+        double swirlAt = host._lastTime;
+        var pulled = targets.Where(u => u != a && u.Alive && host._sprites.ContainsKey(u.ChrCode)).ToList();
         foreach (var u in pulled)
         {
-            var frame = _sprites[u.ChrCode].FrameFor(u);
-            var (ux, uy) = UnitFoot(u);
+            var frame = host._sprites[u.ChrCode].FrameFor(u);
+            var (ux, uy) = host.UnitFoot(u);
             if (frame == null) continue;
             // 길 100점: 반지름 r0 → 10, 각속도 0.015 에서 틱마다 ×1.02(각도 단위 π). 화면 y 는 ×0.8.
             double wx = ux - cx, wy = (uy - cy) / 0.8, r0 = Math.Sqrt(wx * wx + wy * wy), angle = Math.Atan2(wy, wx) / Math.PI, speed = 0.015, r = r0;
@@ -168,7 +170,7 @@ internal sealed unsafe partial class GameWindow
             }
             _stageDraws.Add(() =>
             {
-                int n = (int)((_lastTime - swirlAt) * TicksPerSecond);
+                int n = (int)((host._lastTime - swirlAt) * TicksPerSecond);
                 if (u.Alive) u.Fade = n < 150 ? Math.Max(8 / 31.0, 1 - n / 12.0 * (1 - 8 / 31.0))
                                               : Math.Min(1, 8 / 31.0 + (n - 150) / 35.0 * (1 - 8 / 31.0));
                 if (n >= 185) { u.Fade = 1; return false; }
@@ -176,7 +178,7 @@ internal sealed unsafe partial class GameWindow
                 {
                     int i = n - 20 - late;
                     if (i < 0 || i >= 100) continue;
-                    BlitMasked(frame.Px, frame.W, frame.H, path[i].X + frame.X, path[i].Y + frame.Y, fade: fade);
+                    host.BlitMasked(frame.Px, frame.W, frame.H, path[i].X + frame.X, path[i].Y + frame.Y, fade: fade);
                 }
                 return true;
             });
@@ -192,6 +194,6 @@ internal sealed unsafe partial class GameWindow
         for (int y = 0; y < frame.H; y++)
             for (int x = 0; x < w; x++)
                 px[y * w + x] = frame.Px[y * frame.W + Math.Min(frame.W - 1, x * frame.W / w)];
-        BlitMasked(px, w, frame.H, footX + frame.X - (w - frame.W) / 2, footY + frame.Y, fade: fade);
+        host.BlitMasked(px, w, frame.H, footX + frame.X - (w - frame.W) / 2, footY + frame.Y, fade: fade);
     }
 }

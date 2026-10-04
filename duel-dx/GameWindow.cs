@@ -1162,8 +1162,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
         StepBlinks();
-        StepLegionFades();
-        StepUnitFx();
+        LegionStageAb.StepLegionFades();
+        UnitFxAb.StepUnitFx();
         StepPendingExits();
         foreach (var unit in _units)
         {
@@ -1264,7 +1264,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DrawUnits();
         DrawBodyClones();
         DrawBlinkGhosts();
-        DrawStageFx();
+        StagingAb.DrawStageFx();
         DrawEffects();
         DrawMovies();
         DrawRipples();

@@ -107,7 +107,7 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawBlinkGhosts()
     {
-        DrawLegionGhosts();
+        LegionStageAb.DrawLegionGhosts();
         for (int i = _blinkGhosts.Count - 1; i >= 0; i--)
         {
             var g = _blinkGhosts[i];

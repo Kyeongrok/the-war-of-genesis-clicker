@@ -13,4 +13,46 @@ internal sealed unsafe partial class GameWindow
     /// <summary>MosesScene — 처음 쓸 때 만든다(장면마다 따로 선 클래스).</summary>
     internal MosesScene? _mosScene;
     internal MosesScene Mos => _mosScene ??= new MosesScene(this);
+
+    internal AcrostSkill? _acrostAb;
+    internal AcrostSkill AcrostAb => _acrostAb ??= new AcrostSkill(this);
+
+    internal AstralArrowSkill? _astralArrowAb;
+    internal AstralArrowSkill AstralArrowAb => _astralArrowAb ??= new AstralArrowSkill(this);
+
+    internal GravityFieldSkill? _gravityFieldAb;
+    internal GravityFieldSkill GravityFieldAb => _gravityFieldAb ??= new GravityFieldSkill(this);
+
+    internal MeteorSkill? _meteorAb;
+    internal MeteorSkill MeteorAb => _meteorAb ??= new MeteorSkill(this);
+
+    internal HeavenEarthSkill? _heavenEarthAb;
+    internal HeavenEarthSkill HeavenEarthAb => _heavenEarthAb ??= new HeavenEarthSkill(this);
+
+    internal NineCrusaderSkill? _nineCrusaderAb;
+    internal NineCrusaderSkill NineCrusaderAb => _nineCrusaderAb ??= new NineCrusaderSkill(this);
+
+    internal TeleportSkill? _teleportAb;
+    internal TeleportSkill TeleportAb => _teleportAb ??= new TeleportSkill(this);
+
+    internal FinisherPreludeSkill? _finisherPreludeAb;
+    internal FinisherPreludeSkill FinisherPreludeAb => _finisherPreludeAb ??= new FinisherPreludeSkill(this);
+
+    internal KnockbackSkill? _knockbackAb;
+    internal KnockbackSkill KnockbackAb => _knockbackAb ??= new KnockbackSkill(this);
+
+    internal PushSkill? _pushAb;
+    internal PushSkill PushAb => _pushAb ??= new PushSkill(this);
+
+    internal SpecialHitsSkill? _specialHitsAb;
+    internal SpecialHitsSkill SpecialHitsAb => _specialHitsAb ??= new SpecialHitsSkill(this);
+
+    internal StagingSkill? _stagingAb;
+    internal StagingSkill StagingAb => _stagingAb ??= new StagingSkill(this);
+
+    internal LegionStageSkill? _legionStageAb;
+    internal LegionStageSkill LegionStageAb => _legionStageAb ??= new LegionStageSkill(this);
+
+    internal UnitFxSkill? _unitFxAb;
+    internal UnitFxSkill UnitFxAb => _unitFxAb ??= new UnitFxSkill(this);
 }

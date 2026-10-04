@@ -26,7 +26,7 @@ internal sealed unsafe partial class GameWindow
 
     internal void SpawnBodyClones(WorkData w, UnitState user, UnitState? target, int col, int row)
     {
-        if (w.Id == DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
+        if (w.Id == StagingSkill.DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
         var (ux, uy) = UnitFoot(user);
         var (tx, ty) = target != null ? UnitFoot(target) : (col * TileW + TileW / 2, CellCenterY(col, row));

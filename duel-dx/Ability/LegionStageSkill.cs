@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 군단기(392 · 1659~1666)의 부하 연출 — 옵시디안 ba21-bubble-reinforce-legion C절.
 /// </summary>
@@ -11,7 +13,7 @@ namespace DuelDx;
 /// 뛰는 자리·틱은 노트 C-1 표대로 넣었고, <b>다시 보이는 때</b>는 표에서 단계 틱을 다 못 푼 군단기(1659·1661·1663)에서 가설이다.
 /// 1660·1665 의 틱은 표의 단계 틱을 이어 붙인 것이다(다시 보이는 때는 가설).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class LegionStageSkill(GameWindow host)
 {
     /// <summary>움직이는 유닛 잔상 — 제 그림의 한 모션을 From → To 로 옮기며 그린다. 때는 게임 초.</summary>
     internal sealed record LegionGhost(UnitState Owner, int Motion, bool Mirror, double Start, double X0, double Y0, double X1, double Y1,
@@ -32,21 +34,21 @@ internal sealed unsafe partial class GameWindow
     internal double StartLegionStage(UnitState leader, WorkData w, int col, int row, IReadOnlyList<int> targets)
     {
         if (!IsLegionSkill(w.Id)) return 0;
-        int leaderIndex = Array.IndexOf(_units, leader);
-        var followers = FollowersOf(leaderIndex).Where(f => f.OnField && f.Hp > 0).OrderBy(f => f.FormationSlot).ToList();
+        int leaderIndex = Array.IndexOf(host._units, leader);
+        var followers = host.FollowersOf(leaderIndex).Where(f => f.OnField && f.Hp > 0).OrderBy(f => f.FormationSlot).ToList();
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"legion stage work {w.Id} leader {leader.ChrCode} followers {followers.Count}" + Environment.NewLine);
         if (followers.Count == 0) return 0;
-        double t0 = _lastTime;
+        double t0 = host._lastTime;
         int fadesBefore = _legionFades.Count;
-        var (lx, ly) = UnitFoot(leader);
-        var aim = (X: col * TileW + TileW / 2, Y: CellCenterY(col, row));
-        int reach = Math.Max(1, RangeMaxOf(w, leader) / 4);
+        var (lx, ly) = host.UnitFoot(leader);
+        var aim = (X: col * TileW + TileW / 2, Y: host.CellCenterY(col, row));
+        int reach = Math.Max(1, host.RangeMaxOf(w, leader) / 4);
 
         double At(int tick) => t0 + tick / TicksPerSecond;
         (int Motion, bool Mirror) Pose(UnitState u, int action, Facing facing) =>
-            (_sprites.TryGetValue(u.ChrCode, out var s) ? s.Clip(action, facing)?.Id ?? -1 : -1, facing == Facing.Right);
+            (host._sprites.TryGetValue(u.ChrCode, out var s) ? s.Clip(action, facing)?.Id ?? -1 : -1, facing == Facing.Right);
         void Ghost(UnitState u, int action, Facing facing, int startTick, (double X, double Y) from, (double X, double Y) to,
                    int moveTicks, int life, bool arc = false, double fade0 = 1, double fade1 = 1)
         {
@@ -57,7 +59,7 @@ internal sealed unsafe partial class GameWindow
         }
         void Hide(UnitState u, int tick) => _legionFades.Add((At(tick), u, 0));
         void Show(UnitState u, int tick) => _legionFades.Add((At(tick), u, 1));
-        (double X, double Y) Foot(UnitState u) { var (x, y) = UnitFoot(u); return (x, y); }
+        (double X, double Y) Foot(UnitState u) { var (x, y) = host.UnitFoot(u); return (x, y); }
         Facing Toward((double X, double Y) from, (double X, double Y) to) =>
             Math.Abs(to.X - from.X) >= Math.Abs(to.Y - from.Y) ? (to.X >= from.X ? Facing.Right : Facing.Left) : (to.Y >= from.Y ? Facing.Down : Facing.Up);
 
@@ -70,7 +72,7 @@ internal sealed unsafe partial class GameWindow
                 var spots = new (double X, double Y)[all.Count];
                 for (int i = 0; i < all.Count; i++)
                 {
-                    double turn = (2 * i + (_rng.Next(20) - 10) / 15.0) / all.Count * Math.PI;
+                    double turn = (2 * i + (host._rng.Next(20) - 10) / 15.0) / all.Count * Math.PI;
                     spots[i] = (lx + 1000 * Math.Cos(turn), ly + 1000 * Math.Sin(turn) * LegionYScale);
                     Hide(all[i], 0);
                     Ghost(all[i], Run, Toward(Foot(all[i]), spots[i]), 0, Foot(all[i]), spots[i], 20, 20);
@@ -79,10 +81,10 @@ internal sealed unsafe partial class GameWindow
                 for (int k = 0; k < n && k < targets.Count; k++)
                 {
                     var m = all[k % all.Count];
-                    var (tx, ty) = UnitFoot(_units[targets[k]]);
-                    bool fromLeft = _rng.Next(2) == 0;
-                    (double X, double Y) a = (tx + (fromLeft ? -700 : 700), ty - 80 + _rng.Next(-200, 200)), hit = (tx, ty - 80 * LegionYScale),
-                                         b = (tx + (fromLeft ? 700 : -700), ty - 80 + _rng.Next(-200, 200));
+                    var (tx, ty) = host.UnitFoot(host._units[targets[k]]);
+                    bool fromLeft = host._rng.Next(2) == 0;
+                    (double X, double Y) a = (tx + (fromLeft ? -700 : 700), ty - 80 + host._rng.Next(-200, 200)), hit = (tx, ty - 80 * LegionYScale),
+                                         b = (tx + (fromLeft ? 700 : -700), ty - 80 + host._rng.Next(-200, 200));
                     Ghost(m, Run + 1, Toward(a, hit), 100 + 20 * k, a, hit, 60, 60);
                     Ghost(m, Run + 1, Toward(hit, b), 160 + 20 * k, hit, b, 20, 20);
                 }
@@ -130,13 +132,13 @@ internal sealed unsafe partial class GameWindow
             case 1665:                              // 레드 크로스(0x100c0880) — 넷의 그림만 화면 네 점에 뜬다(유닛은 안 숨긴다): 모션 30 → 31(150틱) → 32 → 2(40틱 흐려짐)
             {
                 (int X, int Y)[] points = [(-120, -80), (120, -80), (-120, 80), (120, 80)];
-                int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2;
+                int cx = host._camX + host.ViewWidth / 2, cy = host._camY + host.ViewHeight / 2;
                 for (int i = 0; i < Math.Min(4, all.Count); i++)
                 {
                     var u = all[i];
-                    if (!_sprites.TryGetValue(u.ChrCode, out var sp) || sp.MotionTicks(31) <= 0) continue;
+                    if (!host._sprites.TryGetValue(u.ChrCode, out var sp) || sp.MotionTicks(31) <= 0) continue;
                     (double X, double Y) p = (cx + points[i].X, cy + points[i].Y);
-                    int delay = _rng.Next(60), rise = Math.Max(1, sp.MotionTicks(30)), fall = Math.Max(1, sp.MotionTicks(32));
+                    int delay = host._rng.Next(60), rise = Math.Max(1, sp.MotionTicks(30)), fall = Math.Max(1, sp.MotionTicks(32));
                     void Raw(int motion, int at, int life, double f0 = 1, double f1 = 1) =>
                         _legionGhosts.Add(new LegionGhost(u, motion, false, At(at), p.X, p.Y, p.X, p.Y, 1, false, life, f0, f1));
                     Raw(30, delay, rise);
@@ -249,7 +251,7 @@ internal sealed unsafe partial class GameWindow
     {
         for (int i = 0; i < _legionLater.Count; i++)
         {
-            if (_lastTime < _legionLater[i].At) continue;
+            if (host._lastTime < _legionLater[i].At) continue;
             var todo = _legionLater[i].Do;
             _legionLater.RemoveAt(i--);
             todo();
@@ -257,7 +259,7 @@ internal sealed unsafe partial class GameWindow
         for (int i = _legionFades.Count - 1; i >= 0; i--)
         {
             var (at, unit, fade) = _legionFades[i];
-            if (_lastTime < at) continue;
+            if (host._lastTime < at) continue;
             if (unit.Alive || fade >= 1) unit.Fade = fade;   // 다시 보이기는 쓰러진 유닛에도 건다
             _legionFades.RemoveAt(i);
         }
@@ -269,9 +271,9 @@ internal sealed unsafe partial class GameWindow
         for (int i = _legionGhosts.Count - 1; i >= 0; i--)
         {
             var g = _legionGhosts[i];
-            if (_lastTime < g.Start) continue;
-            double ticks = (_lastTime - g.Start) * TicksPerSecond;
-            if (ticks >= g.Life || !_sprites.TryGetValue(g.Owner.ChrCode, out var sprite)
+            if (host._lastTime < g.Start) continue;
+            double ticks = (host._lastTime - g.Start) * TicksPerSecond;
+            if (ticks >= g.Life || !host._sprites.TryGetValue(g.Owner.ChrCode, out var sprite)
                 || sprite.FrameOfMotion(g.Motion, (int)ticks % Math.Max(1, sprite.MotionTicks(g.Motion)), g.Mirror) is not { } frame)
             {
                 _legionGhosts.RemoveAt(i);
@@ -282,7 +284,7 @@ internal sealed unsafe partial class GameWindow
             if (g.Arc) y -= 60 * 4 * k * (1 - k);                       // 포물선으로 뛰기(0x100cb550)
             double fade = g.Fade0 + (g.Fade1 - g.Fade0) * life;
             if (fade <= 0.02) continue;
-            BlitMasked(frame.Px, frame.W, frame.H, (int)x + frame.X, (int)y + frame.Y, fade: Math.Min(1, fade));
+            host.BlitMasked(frame.Px, frame.W, frame.H, (int)x + frame.X, (int)y + frame.Y, fade: Math.Min(1, fade));
         }
     }
 }

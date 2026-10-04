@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 비(어빌리티 3) — 검기가 날아가 맞은 적을 <b>시전자가 보는 쪽으로 밀어낸다</b>(fg-18). 핸들러 <c>0x1007fed0</c>.
 /// </summary>
@@ -17,7 +19,7 @@ namespace DuelDx;
 /// 막힌 칸·다른 인물·맵 끝에서는 거기서 멈춘다(원본 이동기의 막힘 처리는 확인 안 함 — 가설).
 /// 전에는 도구 표(동작 5·7·12·<b>2</b>·0·24)를 모두 시전자에게 틀어서 시전자가 맞는 모션을 했고, 밀어내기는 없었다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class KnockbackSkill(GameWindow host)
 {
     /// <summary>비 레벨 1~20 의 work.</summary>
     internal static readonly HashSet<int> BiWorks = [10, .. Enumerable.Range(221, 19)];
@@ -46,7 +48,7 @@ internal sealed unsafe partial class GameWindow
         int distance = dc != 0 ? Math.Abs(target.Col - user.Col) : Math.Abs(target.Row - user.Row);
         int push = pushCells >= 0 ? pushCells : Math.Max(0, w.RangeMax - distance);
         int col = target.Col, row = target.Row, moved = 0;
-        while (moved < push && CanStand(col + dc, row + dr, target)) { col += dc; row += dr; moved++; }
+        while (moved < push && host.CanStand(col + dc, row + dr, target)) { col += dc; row += dr; moved++; }
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"knockback work {w.Id}: {user.ChrCode}({user.Col},{user.Row}) {user.Facing} → {target.ChrCode}({target.Col},{target.Row}) 거리 {distance} 밀 칸 {push} → {moved}칸 ({col},{row})" + Environment.NewLine);
@@ -65,11 +67,11 @@ internal sealed unsafe partial class GameWindow
 
             target.Facing = Opposite(user.Facing);
             target.PlayAction(HitAction, steps.Count / TicksPerSecond + 0.05);
-            var (tx, ty) = UnitFoot(target);
-            _effects.Add((BiTrailObs, 0, _lastTime, tx, ty));
+            var (tx, ty) = host.UnitFoot(target);
+            host._effects.Add((BiTrailObs, 0, host._lastTime, tx, ty));
             target.BeginSlide(col, row);
-            double start = _lastTime;
-            for (int k; (k = (int)((_lastTime - start) * TicksPerSecond)) < steps.Count;)
+            double start = host._lastTime;
+            for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < steps.Count;)
             {
                 target.SetSlide(steps[k]);
                 yield return true;
@@ -78,13 +80,13 @@ internal sealed unsafe partial class GameWindow
             target.PlayAction(ObsMotionTable.ActionStand, 0);
         }
         // 다이나믹 크래쉬 — 다 밀린 뒤 대상 SOUL −min(10, SOUL)(0x1009fd40 단계 2).
-        if (soulDrain > 0 && _db is { } db)
+        if (soulDrain > 0 && host._db is { } db)
         {
             int drain = Math.Min(soulDrain, target.Soul);
             target.Soul -= drain;
-            ShowNumber(target, $"{db.T(41)} -{drain}", MissColor);
+            host.ShowNumber(target, $"{db.T(41)} -{drain}", MissColor);
         }
-        if (BiWorks.Contains(w.Id)) PlayAction(user, DrawnAction(user, 24));
+        if (BiWorks.Contains(w.Id)) host.PlayAction(user, host.DrawnAction(user, 24));
     }
 
     internal static Facing Opposite(Facing f) => f switch

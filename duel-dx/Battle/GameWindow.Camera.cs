@@ -135,7 +135,7 @@ internal sealed unsafe partial class GameWindow
         _camX = Math.Clamp((int)Math.Round(_camPosX), 0, CamMaxX);
         // 기술의 화면 흔들림 — 원본 흔들림 개체(0x100c7040)는 지금 스크롤 기준 +세기 → −세기 로 번갈아 카메라 명령을 걸어
         // 스크롤이 원자리 ↔ 원자리+세기 를 오간다(한쪽, 폭 = 세기, 감사4 C18). ShakeOffset 의 ±세기 중 음수 쪽을 0 으로 접는다.
-        var (sx, sy) = ShakeOffset();
+        var (sx, sy) = HeavenEarthAb.ShakeOffset();
         sx = Math.Max(0, sx);
         sy = Math.Max(0, sy);
         if (sx != 0 || sy != 0)

@@ -76,8 +76,8 @@ internal sealed unsafe partial class GameWindow
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
         // 나인 크루세이더 — 앞머리는 FinisherPrelude, 칼은 GameWindow.NineCrusader.cs 가 한다.
         // 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
-        [NineCrusaderWork] = ([6, 15], []),
-        [HeavenEarthWork] = ([6, 15], []),                                      // 천지 파열무 — 핸들러는 GameWindow.HeavenEarth.cs
+        [NineCrusaderSkill.NineCrusaderWork] = ([6, 15], []),
+        [HeavenEarthSkill.HeavenEarthWork] = ([6, 15], []),                                      // 천지 파열무 — 핸들러는 GameWindow.HeavenEarth.cs
         // 카운터 블레이드 — 준비(동작 5 → 7) 뒤 핸들러 0x100a8df0 이 동작 12 를 쓰고 이펙트 둘을 시전자에게 띄운다
         // (tools/re/work_script.py --work 390). 레벨마다 work 가 따로라(390 · 997~1015) 모두 같은 대본을 쓴다.
         [390] = ([5, 7, 12], CounterBlade),
@@ -110,7 +110,7 @@ internal sealed unsafe partial class GameWindow
     internal static readonly HashSet<int> GravityFieldWorks = [484, 950, 949, 948, 947, 946, 945, 944, 943, 942];
 
     /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
-    internal static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork, HeavenEarthWork];
+    internal static readonly HashSet<int> HandOnlyWorks = [NineCrusaderSkill.NineCrusaderWork, HeavenEarthSkill.HeavenEarthWork];
 
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
     internal const int EscapeWork = 1583;
@@ -133,17 +133,17 @@ internal sealed unsafe partial class GameWindow
     {
         // 하이 텔레포트 — 떠나는 자리의 빛만. 나타나는 빛(381:1)은 새 칸에서 TeleportRoutine 이 띄운다.
         // 엘레맨탈 파이어·서몬 몬스터 — 효과는 GameWindow.Acrost.cs 가 대상마다 깐다(준비의 시전 영상만 남긴다).
-        if (AcrostWorks.Contains(work)) return ([6, 15], []);
+        if (AcrostSkill.AcrostWorks.Contains(work)) return ([6, 15], []);
         // 그라비티 필드 — 중력장은 GameWindow.GravityField.cs 가 대상마다 깐다.
         if (GravityFieldWorks.Contains(work)) return ([6, 15], []);
         // 아스트럴 애로우 — 활·화살·폭발은 GameWindow.AstralArrow.cs 가 시각대로 깐다.
-        if (AstralArrowWorks.Contains(work)) return ([6], []);
+        if (AstralArrowSkill.AstralArrowWorks.Contains(work)) return ([6], []);
         // 메테오 — 운석·착탄·폭발은 GameWindow.Meteor.cs 가 시각대로 깐다.
-        if (MeteorWorks.Contains(work)) return ([6, 15], []);
+        if (MeteorSkill.MeteorWorks.Contains(work)) return ([6, 15], []);
         // 비 — 도구 표의 동작 2·0 은 맞은 인물의 것이라 시전자 사슬에서 뺀다. 밀어내기는 KnockbackRoutine.
-        if (BiWorks.Contains(work)) return BiScript;
+        if (KnockbackSkill.BiWorks.Contains(work)) return KnockbackSkill.BiScript;
         // 더블 브레이크 — 도구가 동작을 코드 주소 순으로 뽑아 16 이 맨 뒤로 갔다. 원본은 16 → 17(붙듦) → 18(0x100825e0, ba-20 P9).
-        if (work == DoubleBreakWork && WorkScripts.TryGetValue(work, out var doubleBreak)) return ([6, 15, 16, 3017, 18], doubleBreak.Effects);
+        if (work == StagingSkill.DoubleBreakWork && WorkScripts.TryGetValue(work, out var doubleBreak)) return ([6, 15, 16, 3017, 18], doubleBreak.Effects);
         if (TeleportWorks.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(381, 0, false, 0), new(210, 3, false, 0)]);
         bool hasHand = AbilityMotions.TryGetValue(work, out var hand);
         bool hasMade = WorkScripts.TryGetValue(work, out var made);
@@ -184,10 +184,10 @@ internal sealed unsafe partial class GameWindow
             // 붙드는 동작 — 그 방향의 모션을 되풀이로 튼다(없는 인물이면 그냥 동작).
             int action = DrawnAction(a, code - ActHold);
             if (_sprites.TryGetValue(a.ChrCode, out var sprite) && sprite.Clip(action, a.Facing) is { } clip)
-                PlayRawMotion(a, clip.Id, loop: true, holdSeconds);
+                HeavenEarthAb.PlayRawMotion(a, clip.Id, loop: true, holdSeconds);
             else PlayAction(a, action);
         }
-        else if (code >= RawOnce) PlayRawMotion(a, code % RawOnce, loop: code >= RawHold, holdSeconds);
+        else if (code >= RawOnce) HeavenEarthAb.PlayRawMotion(a, code % RawOnce, loop: code >= RawHold, holdSeconds);
         else PlayAction(a, DrawnAction(a, code));
     }
 
@@ -265,7 +265,7 @@ internal sealed unsafe partial class GameWindow
         SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
-        StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
+        UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, _lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
@@ -283,11 +283,11 @@ internal sealed unsafe partial class GameWindow
         foreach (var e in m.Effects)
         {
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
-            if (w.Prepare == 7 && e.Obs is 1338 or 487 or PreludeDotObs or PreludeBandObs) continue;
+            if (w.Prepare == 7 && e.Obs is 1338 or 487 or FinisherPreludeSkill.PreludeDotObs or FinisherPreludeSkill.PreludeBandObs) continue;
             // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
-            if (CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
+            if (PushSkill.CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
@@ -356,7 +356,7 @@ internal sealed unsafe partial class GameWindow
                     {
                         var (tx, ty) = UnitFoot(_units[eachTargets[i]]);
                         double at = start + i * each.Stagger / TicksPerSecond;
-                        if (e.Life > 0) AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
+                        if (e.Life > 0) HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
                         else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
                     }
                     if (each.StaggerSure) _fxStagger = Math.Max(_fxStagger, each.Stagger);
@@ -379,7 +379,7 @@ internal sealed unsafe partial class GameWindow
                         if (e.Life > 0)
                         {
                             // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
-                            AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                            HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
                             continue;
                         }
                         // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).

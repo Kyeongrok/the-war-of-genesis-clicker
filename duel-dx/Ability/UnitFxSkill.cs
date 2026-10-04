@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 기술이 <b>유닛 자체</b>를 숨기거나 흐리게 하는 연출(ba-21 fx F13) — 원본 핸들러가 애니메이터의 「안 그림」 깃발(<c>0x100eadb0</c>)과
 /// 밝기 0~9(<c>0x100d0470</c>)를 틱에 맞춰 건다. 표는 <see cref="WorkUnitFx"/>(도구 <c>tools/re/work_unit_fx.py</c>).
@@ -12,7 +14,7 @@ namespace DuelDx;
 /// (Push.cs · Teleport.cs · Turn.cs — 둘이 같은 <see cref="UnitState.Fade"/> 를 다투지 않게).
 /// 밝기 값을 화면 밝기로 옮기는 식(값 ÷ 9)은 가설이다 — 원본은 그 값을 섞기 단계로 쓴다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class UnitFxSkill(GameWindow host)
 {
     /// <summary>손으로 Fade 를 움직이는 work — 워핑 422 · 1301~1309, 리콜 421 · 1292~1300, 이스케이프 1583, 회피 515.</summary>
     internal static bool UnitFxByHand(int id) => id is 421 or 422 or 515 or 1583 || id is >= 1292 and <= 1309;
@@ -27,13 +29,13 @@ internal sealed unsafe partial class GameWindow
         WorkUnitFx.Table.TryGetValue(w.Id, out var own);
         WorkUnitFx.Others.TryGetValue(w.Id, out var others);
         if (own == null && others == null) return;
-        var aimed = LiveUnitAt(col, row);
-        var inArea = (_fxTargets ?? WorkTargets(w, user, col, row)).Select(i => _units[i]).ToList();
+        var aimed = host.LiveUnitAt(col, row);
+        var inArea = (host._fxTargets ?? host.WorkTargets(w, user, col, row)).Select(i => host._units[i]).ToList();
         void Add(UnitState u, WorkUnitFx.Ev[] events)
         {
             if (events.Length == 0 || !u.OnField) return;
             _unitFx.RemoveAll(f => f.Unit == u);
-            _unitFx.Add((u, _lastTime, events));
+            _unitFx.Add((u, host._lastTime, events));
         }
         if (own != null)
         {
@@ -43,7 +45,7 @@ internal sealed unsafe partial class GameWindow
                 foreach (var t in inArea.Where(t => t != user)) Add(t, onEach);
         }
         if (others != null)
-            foreach (var u in _units.Where(u => u.Alive && u.OnField && u != user && u != aimed)) Add(u, [.. others.Where(e => e.Who == 3)]);
+            foreach (var u in host._units.Where(u => u.Alive && u.OnField && u != user && u != aimed)) Add(u, [.. others.Where(e => e.Who == 3)]);
     }
 
     /// <summary>매 갱신 — 사건을 틱에 맞춰 <see cref="UnitState.Fade"/> 로 옮긴다. 마지막 사건이 끝나면 또렷하게 되돌리고 뺀다.</summary>
@@ -52,7 +54,7 @@ internal sealed unsafe partial class GameWindow
         for (int i = _unitFx.Count - 1; i >= 0; i--)
         {
             var (unit, start, events) = _unitFx[i];
-            int tick = (int)((_lastTime - start) * TicksPerSecond);
+            int tick = (int)((host._lastTime - start) * TicksPerSecond);
             int hiddenUntil = -1, level = 9, end = 0;
             foreach (var e in events)
             {
