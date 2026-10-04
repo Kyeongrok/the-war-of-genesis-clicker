@@ -211,7 +211,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             // 인물 레코드의 그림(+0xc)은 필드 행동 701 칸 0 이 바꾼다 — Fld 0088 이 살라딘을 건슬라이서 그림 1185 로 바꾼다.
             // 전에는 뽑아 둔 목록의 그림만 써서 바뀐 모션이 전투에 안 나왔다(사용자 보고: Btl 0150).
-            int wanted = _units.FirstOrDefault(u => u.ChrCode == chrCode)?.Data?.SpriteId ?? 0;
+            // 전투를 막 세운 때에는 유닛의 자료(Data)가 아직 비어 있다(InitBattle 이 뒤에 채운다) — 그때는 명부(_party)의 그림을 본다.
+            // 전에는 이때 「바뀐 그림 없음」으로 보아 옛 그림으로 섰고, 불러오면(자료가 찬 뒤 다시 읽어) 그제야 바뀐 그림이 떠서
+            // 「저장했다 불러오면 복장이 바뀐다」로 보였다(사용자 보고: Btl 0050 의 죠안 — 챕터 10 이 그림을 441 로 놓았다).
+            var shown = _units.FirstOrDefault(u => u.ChrCode == chrCode);
+            int wanted = shown?.Data?.SpriteId ?? (shown is { IsAlly: true } ? _party.GetValueOrDefault(chrCode)?.SpriteId : null) ?? 0;
             if (sprites.ContainsKey(chrCode) && (wanted == 0 || _spriteCodes.GetValueOrDefault(chrCode) == wanted)) continue;
             string name = "";
 

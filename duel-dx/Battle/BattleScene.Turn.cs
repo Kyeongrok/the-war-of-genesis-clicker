@@ -503,7 +503,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         if (host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
-            host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u), host.SoundScreenX(host.Btl.UnitFoot(u).X));   // 유닛 자리에서(0x1006866b)
+        {
+            // 차례를 부르는 목소리는 <b>가운데에서 제 크기로</b> 낸다(사용자 보고 — 「작게 나온다」). 원본은 유닛 자리에서 내는데(0x1006866b)
+            // 그 식(SetPan((x − 320) × 7))으로는 화면 가장자리의 인물이면 반대쪽이 −20 dB 로 줄어 한쪽에서만 작게 들리고,
+            // 부르는 순간에 카메라가 아직 그 인물에게 안 가 있으면 화면 밖 소리로 쳐져 −15 dB 까지 더 줄었다.
+            host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u));
+        }
     }
 
     internal void EndTurn()
