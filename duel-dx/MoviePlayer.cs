@@ -61,7 +61,7 @@ internal sealed unsafe partial class MoviePlayer(GameWindow host)
         foreach (var m in list)
         {
             if (m.Prelude != prelude) continue;
-            var (x, y) = m.OnTarget ? (col * TileW + TileW / 2, host.CellCenterY(col, row)) : host.UnitFoot(user);
+            var (x, y) = m.OnTarget ? (col * TileW + TileW / 2, host.CellCenterY(col, row)) : host.Btl.UnitFoot(user);
             _movies.Add((m.Movie, host._lastTime, x + m.Dx, y + m.Dy));
         }
     }

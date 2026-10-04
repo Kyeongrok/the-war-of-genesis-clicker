@@ -90,7 +90,7 @@ internal sealed unsafe class HeavenEarthSkill(GameWindow host)
         for (double end = host._lastTime + PlayRawMotion(user, StabMotion, loop: false); host._lastTime < end;) yield return true;
         PlayRawMotion(user, StabMotion + 1, loop: true);
 
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         (double, double) Diagonal(int d, bool first) => (ux + d, uy + (first ? d : -d) * 0.8);
         int V(int k) => (k + 7) % 3;
         int Burst(int v) => 7 - v == 5 ? 5 - host._rng.Next(2) : 7 - v;
@@ -140,7 +140,7 @@ internal sealed unsafe class HeavenEarthSkill(GameWindow host)
         for (int j = 0; j < count; j++)
         {
             var target = host._units[targets[j]];
-            var (tx, ty) = host.UnitFoot(target);
+            var (tx, ty) = host.Btl.UnitFoot(target);
             double at = s3 + Ticks(5 * j);
             AddTimedFx(BlastObs, 0, at, (tx, ty), null, false);
             HeavenEarthSound(6, at);

@@ -31,7 +31,7 @@ internal sealed unsafe class GravityFieldSkill(GameWindow host)
         for (int j = 0; j < n; j++)
         {
             double start = t0 + host.HeavenEarthAb.Ticks(50 + 15 * j), end = start + host.HeavenEarthAb.OnceSeconds(GravityObs, 0);
-            var (tx, ty) = host.UnitFoot(host._units[targets[j]]);
+            var (tx, ty) = host.Btl.UnitFoot(host._units[targets[j]]);
             host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(GravityObs, 0, start, tx, ty, null, false));
             host.AcrostAb.FxSound(GravitySoundObs, 1, start);
             hits.Add((end, targets[j]));

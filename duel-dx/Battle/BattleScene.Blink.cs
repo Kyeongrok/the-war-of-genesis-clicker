@@ -59,7 +59,7 @@ internal sealed unsafe partial class BattleScene
     internal void SpawnBlinkGhosts(UnitState unit, int motion, bool arriving)
     {
         if (!host._sprites.TryGetValue(unit.ChrCode, out var sprite) || sprite.MotionTicks(motion) <= 0) return;
-        var (fx, fy) = host.UnitFoot(unit);
+        var (fx, fy) = host.Btl.UnitFoot(unit);
         bool mirror = unit.Facing == Facing.Right;
         for (int i = 1; i <= 3; i++)
         {

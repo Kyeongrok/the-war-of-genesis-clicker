@@ -431,7 +431,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         int tag = host._talkVoiceTag = ++host._soundTag;
         // 말하는 이의 화면 x 로 좌우를 가른다(≤192 왼쪽 · ≥448 오른쪽, 감사4 S2). 판 좌표 → 640 틀 x.
         float speakerX = w.Speaker >= 0 && w.Speaker < host._units.Length
-            ? (float)((host.UnitFoot(host._units[w.Speaker]).X - host._camX) * 640.0 / Math.Max(1, host.ViewWidth)) : float.NaN;
+            ? (float)((host.Btl.UnitFoot(host._units[w.Speaker]).X - host._camX) * 640.0 / Math.Max(1, host.ViewWidth)) : float.NaN;
         var (panL, panR) = VoicePan(speakerX);
         w.VoiceTag = tag;
         int id = w.Voice;
@@ -731,7 +731,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         }
         else if (w.Speaker >= 0 && host._units[w.Speaker].Alive)
         {
-            var (fx, fy) = host.UnitFoot(host._units[w.Speaker]);
+            var (fx, fy) = host.Btl.UnitFoot(host._units[w.Speaker]);
             (bx, by) = (fx - sx + 30, Math.Max(fy - sy - 200, 50) - 20);
             (tailX, tailY) = (fx - sx, fy - sy - 100);
         }

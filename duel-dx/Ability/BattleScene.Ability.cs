@@ -168,7 +168,7 @@ internal sealed unsafe partial class BattleScene
     internal (int X, int Y) MenuOrigin(int rowCount)
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
-        var (fx, fy) = _turn >= 0 && _turn < host._units.Length ? host.UnitFoot(host._units[_turn]) : (host._camX + host.ViewWidth / 2, host._camY + host.ViewHeight / 2);
+        var (fx, fy) = _turn >= 0 && _turn < host._units.Length ? host.Btl.UnitFoot(host._units[_turn]) : (host._camX + host.ViewWidth / 2, host._camY + host.ViewHeight / 2);
         int h = MenuHeadH + Math.Clamp(rowCount, 1, AbilityMenuRows) * MenuRowH + 8;
         int x = fx + TileW < host._camX + host.ViewWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
         return (Math.Clamp(x, host._camX + 8, host._camX + host.ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, host._camY + GridTop + 8, host._camY + host.ViewHeight - h - 8));

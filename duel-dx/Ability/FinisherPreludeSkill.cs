@@ -63,7 +63,7 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
 
         // 단계 2
         host.Btl.PlayAction(user, 15);
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         foreach (int m in new[] { 0, 1, 2 }) { host.Btl._effects.Add((487, m, host._lastTime, ux, uy)); PreludeSound(487, m); }
         SpawnPreludeDots(ux, uy);
         for (double end = host._lastTime + 10 * Tick; host._lastTime < end;) yield return true;

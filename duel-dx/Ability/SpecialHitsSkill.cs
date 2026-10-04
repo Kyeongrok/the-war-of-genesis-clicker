@@ -62,7 +62,7 @@ internal sealed unsafe class SpecialHitsSkill(GameWindow host)
                 foreach (var t in storm.Where(t => Quadrant(t) == q))
                 {
                     if (!t.Alive || dying.Contains(t)) continue;
-                    var (tx, ty) = host.UnitFoot(t);
+                    var (tx, ty) = host.Btl.UnitFoot(t);
                     host.Btl._effects.Add((204, 1, host._lastTime, tx, ty));
                     host.Btl.ApplyWork(a, hitWork, t, dying);
                     for (double end = host._lastTime + 25 / TicksPerSecond; host._lastTime < end;) yield return true;

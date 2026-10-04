@@ -68,7 +68,7 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
             FxSound(FireSoundObs, 0, host._lastTime + (double)FireOrbitTicks * j / n / TicksPerSecond);
         }
         _fireBalls.AddRange(balls);
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         var struck = new HashSet<FireBall>();
         while (balls.Any(b => !b.Done))
         {
@@ -107,7 +107,7 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
                     if (b.Tick >= b.OrbitTicks) { b.Diving = true; FxSound(FireSoundObs, 1, _fireLastStep); }
                     continue;
                 }
-                var (tx, ty) = host.UnitFoot(host._units[b.Target]);
+                var (tx, ty) = host.Btl.UnitFoot(host._units[b.Target]);
                 double dx = tx - b.X, dy = ty - b.Y, dist = Math.Sqrt(dx * dx + dy * dy);
                 if (dist <= b.Speed)
                 {
@@ -133,12 +133,12 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
     internal IEnumerable<bool> SummonMonsterRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         double t0 = host._lastTime;
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         var hits = new List<(double At, int Target)>();
         double finish = t0;
         for (int j = 0; j < targets.Count; j++)
         {
-            var (tx, ty) = host.UnitFoot(host._units[targets[j]]);
+            var (tx, ty) = host.Btl.UnitFoot(host._units[targets[j]]);
             // 원본 갈래(rand%4) — (몬스터 모션, 시전자 쪽 모션, 치우침, 뒤집기)
             var (motion, casterMotion, ox, oy, mirror) = host._rng.Next(4) switch
             {

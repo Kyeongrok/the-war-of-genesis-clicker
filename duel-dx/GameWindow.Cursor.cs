@@ -163,7 +163,7 @@ internal sealed unsafe partial class GameWindow
         }
         float music = Volatile.Read(ref _outcomeMusicSeconds);
         if (music < 0) return;
-        if (since - OutcomeBannerDelayTicks >= Math.Max(music * TicksPerSecond, OutcomeAutoTicks + 1)) LeaveFinishedBattle();
+        if (since - OutcomeBannerDelayTicks >= Math.Max(music * TicksPerSecond, OutcomeAutoTicks + 1)) Btl.LeaveFinishedBattle();
     }
 
     /// <summary>

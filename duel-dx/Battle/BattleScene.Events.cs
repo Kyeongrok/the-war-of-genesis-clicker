@@ -699,13 +699,13 @@ internal sealed unsafe partial class BattleScene
                             var arriving = u;
                             double t0 = host._lastTime;
                             u.Fade = 0;
-                            host._pendingSounds.Add((host._lastTime, 694, host.UnitFoot(u).X));
+                            host._pendingSounds.Add((host._lastTime, 694, host.Btl.UnitFoot(u).X));
                             host.LegionStageAb._legionLater.Add((t0 + 56 / TicksPerSecond, () => host.Play(90)));
                             host.LegionStageAb._legionLater.Add((t0 + 166 / TicksPerSecond, () =>
                             {
                                 if (!arriving.Alive || !arriving.OnField) return;
                                 CenterOnUnit(arriving);
-                                var (wx, wy) = host.UnitFoot(arriving);
+                                var (wx, wy) = UnitFoot(arriving);
                                 _effects.Add((381, 1, host._lastTime, wx, wy));
                                 _effects.Add((210, 3, host._lastTime, wx, wy));
                                 host._pendingSounds.Add((host._lastTime, 91, wx));

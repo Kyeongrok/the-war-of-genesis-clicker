@@ -63,7 +63,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
             user.OriginCol = lc;
             user.OriginRow = lr;
         }
-        var (x, y) = host.UnitFoot(user);
+        var (x, y) = host.Btl.UnitFoot(user);
         host.Btl._effects.Add((381, 1, host._lastTime, x, y));
         host.Btl._effects.Add((210, 3, host._lastTime, x, y));
         if (host._effectTables.GetValueOrDefault(381)?.Clips.GetValueOrDefault(1) is { } appear)
@@ -119,7 +119,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         target.OriginCol = lc;
         target.OriginRow = lr;
         target.Facing = caster.Facing;
-        var (x, y) = host.UnitFoot(target);
+        var (x, y) = host.Btl.UnitFoot(target);
         host.Btl._effects.Add((210, 3, host._lastTime, x, y));
         for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {

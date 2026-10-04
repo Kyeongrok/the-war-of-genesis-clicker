@@ -42,7 +42,7 @@ internal sealed unsafe class LegionStageSkill(GameWindow host)
         if (followers.Count == 0) return 0;
         double t0 = host._lastTime;
         int fadesBefore = _legionFades.Count;
-        var (lx, ly) = host.UnitFoot(leader);
+        var (lx, ly) = host.Btl.UnitFoot(leader);
         var aim = (X: col * TileW + TileW / 2, Y: host.CellCenterY(col, row));
         int reach = Math.Max(1, host.Btl.RangeMaxOf(w, leader) / 4);
 
@@ -59,7 +59,7 @@ internal sealed unsafe class LegionStageSkill(GameWindow host)
         }
         void Hide(UnitState u, int tick) => _legionFades.Add((At(tick), u, 0));
         void Show(UnitState u, int tick) => _legionFades.Add((At(tick), u, 1));
-        (double X, double Y) Foot(UnitState u) { var (x, y) = host.UnitFoot(u); return (x, y); }
+        (double X, double Y) Foot(UnitState u) { var (x, y) = host.Btl.UnitFoot(u); return (x, y); }
         Facing Toward((double X, double Y) from, (double X, double Y) to) =>
             Math.Abs(to.X - from.X) >= Math.Abs(to.Y - from.Y) ? (to.X >= from.X ? Facing.Right : Facing.Left) : (to.Y >= from.Y ? Facing.Down : Facing.Up);
 
@@ -81,7 +81,7 @@ internal sealed unsafe class LegionStageSkill(GameWindow host)
                 for (int k = 0; k < n && k < targets.Count; k++)
                 {
                     var m = all[k % all.Count];
-                    var (tx, ty) = host.UnitFoot(host._units[targets[k]]);
+                    var (tx, ty) = host.Btl.UnitFoot(host._units[targets[k]]);
                     bool fromLeft = host._rng.Next(2) == 0;
                     (double X, double Y) a = (tx + (fromLeft ? -700 : 700), ty - 80 + host._rng.Next(-200, 200)), hit = (tx, ty - 80 * LegionYScale),
                                          b = (tx + (fromLeft ? 700 : -700), ty - 80 + host._rng.Next(-200, 200));

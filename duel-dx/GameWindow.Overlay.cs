@@ -65,7 +65,7 @@ internal sealed unsafe partial class GameWindow
             var u = units[i];
             if (!u.Alive || !u.OnField || !sprites.TryGetValue(u.ChrCode, out var sprite)) continue;
             var f = sprite.FrameFor(u);
-            var (footX, footY) = UnitFoot(u);
+            var (footX, footY) = Btl.UnitFoot(u);
             int x = bx - (footX + f.X), y = by - (footY + f.Y);
             if ((uint)x < f.W && (uint)y < f.H && (f.Px[y * f.W + x] & 0xFF000000) != 0) return i;
         }

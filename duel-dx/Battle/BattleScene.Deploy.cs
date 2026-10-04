@@ -286,7 +286,7 @@ internal sealed unsafe partial class BattleScene
         // 고른 사람은 발밑에 표시
         if (_deployPick is { OnField: true } pick)
         {
-            var (fx, fy) = host.UnitFoot(pick);
+            var (fx, fy) = host.Btl.UnitFoot(pick);
             host.StrokeRect(fx - TileW / 2, fy - TileH / 2, TileW, TileH, 0xFFFFE070);
         }
     }
