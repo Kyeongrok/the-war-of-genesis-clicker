@@ -60,7 +60,7 @@ internal sealed unsafe partial class BattleSceneWindow
         && _delayedHits.Count == 0 && !SceneFading;
 
     /// <summary>모세스 위에서 챕터 사건이 도는 중인가 — 원본 챕터 장면 Esc 는 <c>[0x101bffac]</c>(도는 사건 수)가 0 일 때만 메뉴를 연다(<c>0x100f78ec~0x100f7922</c>).</summary>
-    private bool ChapterEventRunning => _mosesOpen && (_fieldEvent >= 0 || _talk != null || _fieldChoices != null);
+    private bool ChapterEventRunning => _mosesOpen && (Fld._fieldEvent >= 0 || _talk != null || Fld._fieldChoices != null);
 
     /// <summary>
     /// 지금 SAVE 를 못 하는 까닭 — 할 수 있으면 null. 필드(원본에 저장 없음, 감사5 S3)·모세스 챕터 사건 도중(S4)·
@@ -132,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _systemMenu = _missionWindow = _volumeWindow = false;
         _slotsMode = -1;
-        CloseField();
+        Fld.CloseField();
         _mosesOpen = false;
         _mosesPage = -1;
         _episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
@@ -470,7 +470,7 @@ internal sealed unsafe partial class BattleSceneWindow
             foreach (int id in _entryOwnedLegions) _ownedLegions.Add(id);
         }
         // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
-        if (_chapterFired.Count == 0)
+        if (Fld._chapterFired.Count == 0)
         {
             _inventory.Clear();
             InitBattle();
@@ -681,14 +681,14 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (string pair in state.DonePlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
                 _autoPlacesDone.Add((chapter, place));
-        _chapterFired.Clear();
+        Fld._chapterFired.Clear();
         foreach (string triple in state.DoneEvents ?? [])
             if (triple.Split(':') is [var c, var e, var n] && int.TryParse(c, out int chp)
                 && int.TryParse(e, out int ev) && int.TryParse(n, out int count))
-                _chapterFired[(chp, ev)] = count;
+                Fld._chapterFired[(chp, ev)] = count;
         // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
         if (state.DoneEvents == null)
-            foreach (int chapter in state.DoneChapters ?? []) _chapterFired[(chapter, -1)] = 1;
+            foreach (int chapter in state.DoneChapters ?? []) Fld._chapterFired[(chapter, -1)] = 1;
         // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
         // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
         // 목록이 비어 있어도(고치기 전 판이 빈 목록을 적은 세이브) 되살리고, 적힌 목록과 합친다.
@@ -704,18 +704,18 @@ internal sealed unsafe partial class BattleSceneWindow
         _mailRead.Clear();
         foreach (int id in state.MailRead ?? []) _mailRead.Add(id);
         if (state.Version < 9)
-            PruneLegacyMailbox(_chapterFired.Keys.Select(k => k.Chapter).Concat(state.DoneChapters ?? [])
+            PruneLegacyMailbox(Fld._chapterFired.Keys.Select(k => k.Chapter).Concat(state.DoneChapters ?? [])
                                 .Append(state.CurrentChapter).Append(state.Chapter).Where(c => c > 0));
-        Array.Clear(_chapterVars);
+        Array.Clear(Fld._chapterVars);
         foreach (var (number, value) in state.ChapterVars ?? [])
-            if (int.TryParse(number, out int slot) && (uint)slot < _chapterVars.Length) _chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
+            if (int.TryParse(number, out int slot) && (uint)slot < Fld._chapterVars.Length) Fld._chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
         _planetVisits.Clear();
         _episodesPicked.Clear();
         if (state.EpisodesPicked is { } picked) foreach (int no in picked) _episodesPicked.Add(no);
         else
             // 표시를 안 적던 옛 세이브 — 챕터 사건이 한 번이라도 돈 에피소드와 지금 챕터의 에피소드를 고른 것으로 본다.
             foreach (var ep in Episodes())
-                if (_chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) _episodesPicked.Add(ep.No);
+                if (Fld._chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) _episodesPicked.Add(ep.No);
         foreach (string pair in state.PlanetVisits ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) _planetVisits.Add((pc, pn));
         _placesUsed.Clear();
@@ -761,7 +761,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         _members.Clear();
         // 사건 차례대로 801 이 넣고 802 가 뺀다 — 챕터 스크립트의 조건(깃발)을 채워 돈 사건만 본다.
-        foreach (var group in _chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
+        foreach (var group in Fld._chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
         {
             if (LoadChapterFile(group.Key) is not { } chp) continue;
             bool whole = group.Any(f => f.Key.Event == -1);
@@ -843,8 +843,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 이미 겪은 자동 발생 장소와 이미 돌린 챕터 사건 — 안 적으면 불러올 때마다 프롤로그가 되풀이되고
                 // 챕터 사건이 동료·돈을 두 번 준다. 다녀온 장소도 적어야 목록에 되살아나지 않는다.
                 [.. _autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
-                [.. _chapterFired.Keys.Select(k => k.Chapter).Distinct()],
-                [.. _chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
+                [.. Fld._chapterFired.Keys.Select(k => k.Chapter).Distinct()],
+                [.. Fld._chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
                 [.. _placesUsed.Select(p => $"{p.Chapter}:{p.Place}")],
                 // 전투 이벤트 상태 — 안 적으면 불러올 때마다 시작 대사(조건 0·1)가 다시 뜨고 타이머·국소 변수가 처음으로 돌아간다.
                 // 원본도 전투판을 통째로 저장하고 불러오면 저장했던 차례로 돌아온다(분석-시스템메뉴 2.4b) — 사건 횟수도 같이 싣는다.
@@ -861,7 +861,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
                 [.. _ownedLegions], SaveBank(),
                 [.. _mailbox], [.. _mailRead], [.. _planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
-                Enumerable.Range(0, _chapterVars.Length).Where(i => _chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)_chapterVars[i]),
+                Enumerable.Range(0, Fld._chapterVars.Length).Where(i => Fld._chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)Fld._chapterVars[i]),
                 // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
                 // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
                 _mosesChp?.Id ?? 0,
@@ -931,7 +931,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             _playBase = state.PlayMs - _realTime * 1000;
             _titleOpen = false;
-            CloseField();
+            Fld.CloseField();
             _mosesOpen = false;
             _mosesPage = -1;
             _mosesChp = null;                // 챕터 상태 없음 — 연대표에서 에피소드를 고르면 새로 정한다
@@ -1189,7 +1189,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_titleOpen || fromMoses)
         {
             _titleOpen = false;
-            CloseField();
+            Fld.CloseField();
             _mosesOpen = false;
             _episodesOpen = false;
             StopMusic();

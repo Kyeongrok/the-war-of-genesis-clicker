@@ -208,7 +208,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _episodesOpen = false;
         _chapterDone = false;
         // 연대표가 에피소드를 고르면 챕터 상태를 버린다(0x101066a0~) — 새 챕터의 스크립트 변수(0x101bfeac)는 0 에서 시작한다(감사 F10).
-        Array.Clear(_chapterVars);
+        Array.Clear(Fld._chapterVars);
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
         // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인원은 챕터 스크립트(801)가 넣는다 — 인물 자료는 명부 하나라 다른 파티에서 겪은 것이 그대로다.
         SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다

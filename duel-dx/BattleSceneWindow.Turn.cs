@@ -153,7 +153,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var unit in _units)
             if (unit.LeaderIndex >= 0 && unit.Data != null) { RefreshUnitStats(unit); unit.Hp = unit.MaxHp; }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
-        if (_chapterFired.Count == 0) FillDemoInventory();
+        if (Fld._chapterFired.Count == 0) FillDemoInventory();
     }
 
     private void UpdateTurn()

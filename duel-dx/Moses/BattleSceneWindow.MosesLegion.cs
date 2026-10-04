@@ -167,7 +167,7 @@ internal sealed unsafe partial class BattleSceneWindow
             DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             if (PartyData(party[i]) is { } pc)
             {
-                LoadFieldFace(pc);
+                Fld.LoadFieldFace(pc);
                 if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
             }
             if (_unitLegion.ContainsKey(LegionKey(party[i]))) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);

@@ -128,7 +128,7 @@ internal sealed unsafe partial class BattleSceneWindow
         unit.Stp = Math.Max(0, db.Stp(c));
         unit.MaxSoul = db.MaxSoul(c);
         unit.Soul = db.SoulStart;
-        LoadFieldFace(c);
+        Fld.LoadFieldFace(c);
         _statusVirtual = unit;
         _statusUnit = VirtualStatus;
     }

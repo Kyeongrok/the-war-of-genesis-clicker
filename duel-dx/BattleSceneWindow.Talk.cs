@@ -131,8 +131,8 @@ internal sealed unsafe partial class BattleSceneWindow
             OpenTalkWindow(new TalkWindow
             {
                 Kind = v.Box ? (RunningFieldCode(609) ? 609 : RunningFieldCode(603) ? 603 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
-                FaceCode = _talkFace, FieldSpeaker = _fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
-                Location = v.Box && RunningFieldCode(609) ? _talkLocation : "",
+                FaceCode = _talkFace, FieldSpeaker = Fld._fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
+                Location = v.Box && RunningFieldCode(609) ? Fld._talkLocation : "",
             });
         }
     }
@@ -147,9 +147,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool RunningFieldCode(int code)
     {
-        var events = _field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
-        return events != null && (uint)_fieldEvent < (uint)events.Count && _fieldPc > 0 && _fieldPc <= events[_fieldEvent].Actions.Count
-               && events[_fieldEvent].Actions[_fieldPc - 1].Code == code;
+        var events = Fld._field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
+        return events != null && (uint)Fld._fieldEvent < (uint)events.Count && Fld._fieldPc > 0 && Fld._fieldPc <= events[Fld._fieldEvent].Actions.Count
+               && events[Fld._fieldEvent].Actions[Fld._fieldPc - 1].Code == code;
     }
 
     /// <summary>맨 나중 창의 글이 다 나왔나 — 넣는 쪽(필드의 false)은 무시한다.</summary>
@@ -208,7 +208,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (speaker < 0 && A(0) > 0 && A(0) < 10000 && _db?.Character(A(0)) is { } absent)
         {
             name = _db.T(absent.NameId);
-            LoadFieldFace(absent);
+            Fld.LoadFieldFace(absent);
             faceCode = absent.Code;
         }
         // 대사 상자(600)만 음성 칸이 있다 — 전투 말풍선(601)은 a17 = −1(0x10053c46).
@@ -233,7 +233,7 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         int speaker = A(0);
-        var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = FieldText(A(1)), Voice = A(2) };
+        var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = Fld.FieldText(A(1)), Voice = A(2) };
         if (a.Code == 600) { w.Pose = A(3); w.NoPortrait = A(6) != 0; }
         if (a.Code == 602)
         {
@@ -242,13 +242,13 @@ internal sealed unsafe partial class BattleSceneWindow
             w.Tint = true;
             w.Glitch = A(4) != 0;                    // 값 크기는 안 쓴다 — 0 이냐 아니냐만(0x1003bcae)
         }
-        _fieldTalkOf = speaker;
-        if (_field is { } field && speaker >= 10000
+        Fld._fieldTalkOf = speaker;
+        if (Fld._field is { } field && speaker >= 10000
             && field.People.FirstOrDefault(p => p.Key == speaker - 10000) is { } person
             && _db?.Character(person.ChrCode) is { } c)
         {
             w.Name = _db.T(c.NameId);
-            LoadFieldFace(c);
+            Fld.LoadFieldFace(c);
             w.FaceCode = c.Code;
         }
         // 필드의 600·602 도 말하는 이가 Chr 번호(10000 미만)일 수 있다 — 임시 CChr 를 .chr 에서 읽어 이름·얼굴을 쓴다(0x100eefb3·0x100ef63b, ba-20 N1).
@@ -256,12 +256,12 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
             w.Name = _db.T(cc.NameId);
-            LoadFieldFace(cc);
+            Fld.LoadFieldFace(cc);
             w.FaceCode = cc.Code;
         }
         _talkFace = w.FaceCode;
         OpenTalkWindow(w);
-        HoldSlot(() => _talks.Contains(w), talk: true);
+        Fld.HoldSlot(() => _talks.Contains(w), talk: true);
     }
 
     /// <summary>창을 제 칸에 연다 — 칸에 있던 옛 창은 곧바로 지운다(접힘 없이).</summary>
@@ -355,7 +355,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private bool SkipScene()
     {
-        bool battleScene = _runningEvent >= 0, fieldScene = FieldOpen && _fieldEvent >= 0;
+        bool battleScene = _runningEvent >= 0, fieldScene = FieldOpen && Fld._fieldEvent >= 0;
         if (!battleScene && !fieldScene) return false;
         SkipTalk();
         if (battleScene)
@@ -365,8 +365,8 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (fieldScene)
         {
-            _fieldWaitUntil = 0;
-            FinishFieldAnimations();
+            Fld._fieldWaitUntil = 0;
+            Fld.FinishFieldAnimations();
         }
         return true;
     }
@@ -380,17 +380,17 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_talk != null) return false;
         bool skipped = false;
-        bool fieldScene = (_field != null || (_mosesOpen && _mosesChp != null)) && _fieldEvent >= 0 && _fieldChoices == null;
+        bool fieldScene = (Fld._field != null || (_mosesOpen && _mosesChp != null)) && Fld._fieldEvent >= 0 && Fld._fieldChoices == null;
         if (fieldScene)
         {
-            if (_fieldWaitUntil > _lastTime) { _fieldWaitUntil = 0; skipped = true; }
-            if (_fieldWaitChannel >= 0) { StopChannelSound(_fieldWaitChannel); _fieldWaitChannel = -1; skipped = true; }
-            if (_field != null && FieldBusy()) { FinishFieldAnimations(); skipped = true; }
+            if (Fld._fieldWaitUntil > _lastTime) { Fld._fieldWaitUntil = 0; skipped = true; }
+            if (Fld._fieldWaitChannel >= 0) { StopChannelSound(Fld._fieldWaitChannel); Fld._fieldWaitChannel = -1; skipped = true; }
+            if (Fld._field != null && Fld.FieldBusy()) { Fld.FinishFieldAnimations(); skipped = true; }
         }
         if (_runningEvent >= 0 && _eventWaitUntil > _lastTime) { _eventWaitUntil = 0; skipped = true; }
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                               $"click-skip {skipped} t {_lastTime:F2} ev {_fieldEvent} pc {_fieldPc} wait {_fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
+                               $"click-skip {skipped} t {_lastTime:F2} ev {Fld._fieldEvent} pc {Fld._fieldPc} wait {Fld._fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
         return skipped;
     }
 
@@ -787,9 +787,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>필드 말하는 이의 발 자리(판 낱칸) — 창마다 제 말하는 이.</summary>
     private (int X, int Y)? TalkHead(TalkWindow w)
     {
-        if (!FieldOpen || w.FieldSpeaker == 0 || FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
+        if (!FieldOpen || w.FieldSpeaker == 0 || Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
         var (ox, oy) = MosesOrigin();
-        return (ox + (int)who.X - _fieldCam.X, oy + (int)who.Y - _fieldCam.Y);
+        return (ox + (int)who.X - Fld._fieldCam.X, oy + (int)who.Y - Fld._fieldCam.Y);
     }
 
     /// <summary>
