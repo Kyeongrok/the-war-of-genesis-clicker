@@ -159,7 +159,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     /// </summary>
     internal void MosesSwitchSystem(int system)
     {
-        host.Play(565);
+        host.Play(565, WarpVoiceTag);
         _mosesHover = -1;
         _mosesSystemSwitch = (system, host._lastTime + 100 / TicksPerSecond);
     }
@@ -175,6 +175,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         ShowMosesBackground(MosesSystem()?.Background ?? 70);
         host._pendingSounds.Add((host._lastTime + MosesFadeTicks / TicksPerSecond, 566));   // 효과 4 뒤 큐 20566
     }
+
+    /// <summary>워프 안내 음성(Snd 565)에 붙이는 꼬리표 — 누르면 끊으려고.</summary>
+    internal const int WarpVoiceTag = 5650;
 
     /// <summary>기다리는 항성계 옮기기 — (성계, 바꿀 때).</summary>
     internal (int System, double At)? _mosesSystemSwitch;
@@ -715,6 +718,13 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         if (!_mosesOpen) return false;
         if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
         if (host._statusUnit >= 0) return host.StatusScr.OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
+        // 워프 안내(「지금부터 워프를 시작합니다」, 100틱)를 기다리는 동안 누르면 곧바로 넘어간다 — 안내 음성도 끊는다(사용자 요청, 원본은 끝까지 기다린다).
+        if (_mosesSystemSwitch is { } warp && _mosesFade <= 0)
+        {
+            _mosesSystemSwitch = (warp.System, host._lastTime);
+            host._mixer.StopEffect(WarpVoiceTag);
+            return true;
+        }
         if (_mosesFade > 0 || _mosesSystemSwitch != null || PlanetZooming) return true;
         if (OnMosesShopClick(bx, by)) return true;
         // 편지 뷰어·통신 말풍선은 모달이라 떠 있으면 누름은 닫기만 한다 — 도크보다 먼저.
