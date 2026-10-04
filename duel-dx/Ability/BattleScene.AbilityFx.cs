@@ -267,7 +267,10 @@ internal sealed unsafe partial class BattleScene
     /// 30 × 0.65(바닥 5)로 120 을 지나친다. 마지막에는 칼이 사라지고 211:10 이 29틱에 시전자 위(높이 200)로 돌아간다 + 384:4.
     /// 자리는 월드 단위로 세고 화면에는 y × 0.8 − z × 0.6. 칼에 붙는 384 는 생긴 자리에 세운다(원본은 칼을 따라간다). 판정 때는 안 바꿨다.
     /// </summary>
-    internal void SpawnSabreBlade(double start, int userX, int userY, List<(int X, int Y)> targets)
+    /// <summary>이펙트가 대상에 닿는 때(게임 초) — 있으면 그 대상의 판정은 그때 든다(라이트닝 샤벨: 칼이 그 칸에 닿을 때, 0x100704f0 → 0x3e9).</summary>
+    internal readonly Dictionary<UnitState, double> _fxHitAt = [];
+
+    internal void SpawnSabreBlade(double start, int userX, int userY, List<(int X, int Y)> targets, List<UnitState> units)
     {
         double Wy(int screenY) => screenY / 0.8;
         var points = new List<(double X, double Y, double Z)>();
@@ -326,7 +329,11 @@ internal sealed unsafe partial class BattleScene
                 Hold(ghost: true);
                 for (int wait = 1; wait < 10; wait++) Hold(ghost: false);
             }
-            else _effects.Add((384, 3, At(tick), bx, by));
+            else
+            {
+                _effects.Add((384, 3, At(tick), bx, by));
+                _fxHitAt[units[idx / 2]] = At(tick);        // 대상 칸에 닿아 방향을 잡은 틱에 그 칸의 유닛이 맞는다
+            }
             double speed = idx % 2 == 0 ? 80 : 30, scale = idx % 2 == 0 ? 0.9 : 0.65, floor = idx % 2 == 0 ? 40 : 5;
             for (int guard = 0; guard < 200; guard++)
             {
@@ -470,9 +477,10 @@ internal sealed unsafe partial class BattleScene
                 // 라이트닝 샤벨 211:1(클래스 0x100cdf40, 틱 0x100ce030) — 칼이 위에서 와 대상마다 꿰뚫고 120 지나쳤다가 다음 대상으로 돈다.
                 if (extra is { Move: 9 } && e.Obs == 211 && e.Motion == 1)
                 {
-                    var pierced = (_fxTargets ?? WorkTargets(w, user, col, row)).Select(i => UnitFoot(host._units[i])).Take(10).ToList();
+                    var piercedUnits = (_fxTargets ?? WorkTargets(w, user, col, row)).Select(i => host._units[i]).Take(10).ToList();
+                    var pierced = piercedUnits.Select(UnitFoot).ToList();
                     // 칼은 앞머리(위로 솟는 211:1 — 빠르기 100 뒤 40, 약 14틱)가 끝난 뒤에 선다.
-                    if (pierced.Count > 0) { SpawnSabreBlade(start + 14 / TicksPerSecond, userX, userY, pierced); continue; }
+                    if (pierced.Count > 0) { SpawnSabreBlade(start + 14 / TicksPerSecond, userX, userY, pierced, piercedUnits); continue; }
                 }
                 // 리인카네이션 279:4(0x100c4810 → 틱 0x100380f0): 안 보이는 앞잡이가 시전자 둘레 아홉 점을 틱당 3 으로 돌고, 이 그림이 틱당 2 로 그 뒤를 쫓는다.
                 if (extra is { Move: 9 } && !e.Fly && e.Obs == 279 && e.Motion == 4)
