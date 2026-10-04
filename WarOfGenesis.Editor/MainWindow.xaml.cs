@@ -68,7 +68,7 @@ public partial class MainWindow : Window
 
     // ── 게임 폴더 ────────────────────────────────────────────────────────────
 
-    private static string? LoadSavedGameRoot()
+    internal static string? LoadSavedGameRoot()
     {
         try { return File.Exists(SettingsPath) ? File.ReadAllText(SettingsPath).Trim() : null; }
         catch (IOException) { return null; }

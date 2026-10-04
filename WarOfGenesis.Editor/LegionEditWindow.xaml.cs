@@ -227,11 +227,45 @@ public partial class LegionEditWindow : Window
         return end > 0 && int.TryParse(text[..end], out int v) ? v : 0;
     }
 
-    /// <summary>진형 그림 — 대장 가운데, 부하 자리 번호(위를 볼 때, <see cref="LegionData.FormationCells"/>).</summary>
+    /// <summary>인물 그림(첫 벌 첫 장) — 한 번 푼 것은 들고 있는다. 못 찾으면 null.</summary>
+    private readonly Dictionary<int, System.Windows.Media.Imaging.BitmapSource?> _chrImages = [];
+
+    /// <summary>게임 폴더(편집기 첫 화면에서 연 것) — 저장소에 안 뽑아 둔 인물의 그림을 여기서 읽는다.</summary>
+    private readonly GameFiles? _game = MainWindow.LoadSavedGameRoot() is { Length: > 0 } root && System.IO.Directory.Exists(root) ? GameFiles.FromGameRoot(root) : null;
+
+    /// <summary>
+    /// 그 Chr 의 실제 그림 — 인물 레코드의 그림 Obs(<c>+0xc</c>)를 저장소(<c>assets/characters/NNNN_이름</c>)에서, 없으면 게임 폴더의 <c>Obs</c> 에서 읽는다.
+    /// </summary>
+    private System.Windows.Media.Imaging.BitmapSource? ChrImage(int chr)
+    {
+        if (chr <= 0) return null;
+        if (_chrImages.TryGetValue(chr, out var known)) return known;
+        System.Windows.Media.Imaging.BitmapSource? image = null;
+        try
+        {
+            if (_db.Character(chr) is { SpriteId: > 0 } c)
+            {
+                byte[]? obs = null;
+                string characters = AssetsFolder.Find("characters");
+                foreach (string folder in System.IO.Directory.Exists(characters) ? System.IO.Directory.GetDirectories(characters, $"{chr:D4}_*") : [])
+                    if (System.IO.Path.Combine(folder, $"{c.SpriteId:D4}.obs") is var path && System.IO.File.Exists(path)) obs = System.IO.File.ReadAllBytes(path);
+                obs ??= _game?.Read("Obs", $"{c.SpriteId:D4}.obs");
+                if (obs != null && ObsSprite.DecodeFirstFrame(obs) is { Width: > 0, Height: > 0 } f)
+                {
+                    image = System.Windows.Media.Imaging.BitmapSource.Create(f.Width, f.Height, 96, 96, PixelFormats.Bgra32, null, f.Bgra, f.Width * 4);
+                    image.Freeze();
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or System.IO.InvalidDataException or ArgumentException or IndexOutOfRangeException) { }
+        return _chrImages[chr] = image;
+    }
+
+    /// <summary>진형 그림 — 대장 가운데, 부하 자리에 그 인물의 실제 그림과 자리 번호(위를 볼 때, <see cref="LegionData.FormationCells"/>).</summary>
     private void DrawFormation(LegionData l)
     {
         FormationCanvas.Children.Clear();
-        const int cell = 25, half = 3;   // 7×7 칸, 가운데가 대장
+        const int cell = 44, half = 3;   // 7×7 칸, 가운데가 대장
         for (int y = -half; y <= half; y++)
             for (int x = -half; x <= half; x++)
             {
@@ -247,10 +281,28 @@ public partial class LegionEditWindow : Window
             Canvas.SetTop(b, (dy + half) * cell);
             FormationCanvas.Children.Add(b);
         }
-        Label(0, 0, "★", Brushes.Gold);
+        // 칸 위에 그 인물의 그림을 얹는다 — 발이 칸 아래에 오게 키를 맞춰(칸보다 크면 위로 삐져나온다) 그리고, 구석에 번호를 남긴다.
+        void Unit(int dx, int dy, int chr, string mark, Brush fill)
+        {
+            Label(dx, dy, ChrImage(chr) == null ? mark : "", fill);
+            if (ChrImage(chr) is not { } picture) return;
+            double scale = Math.Min(1.0, Math.Min((cell + 12.0) / picture.PixelWidth, (cell * 1.6) / picture.PixelHeight));
+            var image = new Image { Source = picture, Width = picture.PixelWidth * scale, Height = picture.PixelHeight * scale, ToolTip = _chrNames.GetValueOrDefault(chr, chr.ToString()) };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+            Canvas.SetLeft(image, (dx + half) * cell + (cell - image.Width) / 2);
+            Canvas.SetTop(image, (dy + half) * cell + cell - 2 - image.Height);
+            Panel.SetZIndex(image, 10 + dy);       // 아랫줄이 윗줄을 가린다
+            FormationCanvas.Children.Add(image);
+            var tag = new TextBlock { Text = mark, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Brushes.Black, Background = fill, Padding = new Thickness(2, 0, 2, 0) };
+            Canvas.SetLeft(tag, (dx + half) * cell + 1);
+            Canvas.SetTop(tag, (dy + half) * cell + 1);
+            Panel.SetZIndex(tag, 30);
+            FormationCanvas.Children.Add(tag);
+        }
+        Unit(0, 0, l.Leader, "★", Brushes.Gold);
         var cells = LegionData.FormationCells[Math.Clamp((int)l.Formation, 0, 5)];
         for (int i = 0; i < 6; i++)
-            Label(cells[i].Dx, cells[i].Dy, (i + 1).ToString(), i < l.Members.Length ? Brushes.LightSkyBlue : Brushes.WhiteSmoke);
+            Unit(cells[i].Dx, cells[i].Dy, i < l.Members.Length ? l.Members[i] : 0, (i + 1).ToString(), i < l.Members.Length ? Brushes.LightSkyBlue : Brushes.WhiteSmoke);
     }
 
     // ── 고치기 ───────────────────────────────────────────────────────────────

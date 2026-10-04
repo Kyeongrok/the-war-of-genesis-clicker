@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="군단 편집 — For.dat (고친 것은 assets/data/legions/*.json)"
-    Width="1060"
+    Width="1200"
     Height="700"
     WindowStartupLocation="CenterOwner">
     <DockPanel Margin="8">
@@ -88,11 +88,11 @@
                             <StackPanel x:Name="MembersPanel" Margin="0,2,0,8" />
                         </StackPanel>
                         <StackPanel Margin="16,0,0,0">
-                            <TextBlock FontWeight="Bold" Text="진형 미리보기 (위를 볼 때, ★ 대장)" />
+                            <TextBlock FontWeight="Bold" Text="진형 미리보기 (위를 볼 때 — 가운데가 대장, 번호는 부하 자리)" />
                             <Canvas
                                 x:Name="FormationCanvas"
-                                Width="175"
-                                Height="175"
+                                Width="308"
+                                Height="308"
                                 Margin="0,4,0,0"
                                 Background="#F4F6FA" />
                         </StackPanel>
