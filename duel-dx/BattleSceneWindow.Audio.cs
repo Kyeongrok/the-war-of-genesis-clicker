@@ -117,6 +117,9 @@ internal sealed unsafe partial class BattleSceneWindow
         bool loaded = _sfx.TryGetValue(sound, out var pcm);
         var (left, right) = SndPan(screenX);
         float gain = SndGain;
+        // 화면 밖에서 난 소리는 작게 들린다 — 원본(0x10028c18~0x10028cef)은 화면 밖이면 −(d² % 5000)/100 dB(평균 약 −15 dB, 거리에 단조가 아님)다.
+        // 리메이크는 화면 너비가 달라 그 식을 그대로 못 쓰니 평균값으로 줄인다(근사 — ba-21 sound D6). 전에는 화면 밖 소리도 제 크기였다.
+        if (!float.IsNaN(screenX) && (screenX < 0 || screenX > 640)) gain *= 0.18f;
         bool played = !Muted && loaded && _mixer.PlayEffect(pcm!, gain, tag, loop, left, right, slotted: true);
         // DUELDX_TRACE 면 무슨 소리를 틀었는지(파일이 있었는지·크기·좌우) 적는다 — 음소거한 화면 밖 시험에서도 재생 여부를 본다.
         if (Trace)
