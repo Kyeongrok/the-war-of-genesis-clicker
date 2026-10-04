@@ -1150,6 +1150,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         StepPendingExits();
         foreach (var unit in _units)
         {
+            // 증원(행동 200)이 맵 변 밖에서 곧게 걸어 들어오는 중 — 한 틱에 8px(0x10050eb0 단계 1). 다 들어온 뒤에 길을 걷는다.
+            if (unit.Entering) { unit.StepEntry(8 * TicksPerSecond * dt); continue; }
             if (_blinks.ContainsKey(unit) || TryBeginBlink(unit)) continue;   // 이동 종류 1 은 걷지 않고 순간이동한다(ba-20 P4)
             if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
             unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
@@ -1366,8 +1368,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
     private (int X, int Y) UnitFoot(UnitState unit) =>
-        ((int)(unit.X * TileW) + TileW / 2,
-         GridTop + BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(HeightPxAt(unit.X, unit.Y)));
+        ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX,
+         GridTop + BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY);
 
     private void DrawStatus()
     {
@@ -1697,7 +1699,7 @@ internal sealed class UnitSprite
     private int ActionOf(UnitState unit)
     {
         if (unit.Action >= 0) return unit.Action;
-        if (!unit.IsMoving) return ObsMotionTable.ActionStand;
+        if (!unit.IsMoving && !unit.Entering) return ObsMotionTable.ActionStand;
         var walk = _table?.Resolve(ObsMotionTable.ActionWalk, ObsMotionTable.DirectionOf(unit.Facing));
         return walk is { Keys.Count: > 1 } ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
     }
@@ -1865,6 +1867,7 @@ internal sealed class UnitState(DemoUnit unit)
     public void ResetTo(int col, int row, bool keepFacing = false)
     {
         WarpTo(col, row);
+        (EntryX, EntryY) = (0, 0);
         OriginCol = col;
         OriginRow = row;
         if (!keepFacing) Facing = StartFacing;
@@ -1934,7 +1937,25 @@ internal sealed class UnitState(DemoUnit unit)
     private double _actionLeft;
 
     /// <summary>걷거나, 걸을 길이 남았거나, 동작을 재생하는 중.</summary>
-    public bool IsBusy => IsMoving || Path.Count > 0 || Action >= 0;
+    public bool IsBusy => IsMoving || Path.Count > 0 || Action >= 0 || Entering;
+
+    /// <summary>
+    /// 그릴 때만 더하는 픽셀 어긋남 — 증원이 맵 변 밖(혼자 140px · 군단 대장 100px · 부하 140~220px)에서 걸어 들어올 때 쓴다(ba-21 B-4).
+    /// 논리 칸은 들어설 칸 그대로다(맵 밖 칸을 Col/Row 에 넣으면 칸 번호가 겹친다).
+    /// </summary>
+    public double EntryX { get; private set; }
+    public double EntryY { get; private set; }
+
+    public bool Entering => EntryX != 0 || EntryY != 0;
+
+    public void BeginEntry(double x, double y) => (EntryX, EntryY) = (x, y);
+
+    /// <summary>어긋남을 0 쪽으로 <paramref name="px"/> 만큼 줄인다.</summary>
+    public void StepEntry(double px)
+    {
+        EntryX = Math.Abs(EntryX) <= px ? 0 : EntryX - Math.Sign(EntryX) * px;
+        EntryY = Math.Abs(EntryY) <= px ? 0 : EntryY - Math.Sign(EntryY) * px;
+    }
 
     public void PlayAction(int action, double seconds)
     {

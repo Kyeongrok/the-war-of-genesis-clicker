@@ -452,6 +452,18 @@ internal sealed unsafe partial class BattleSceneWindow
     private double _highlightUntil;
 
     /// <summary>행동 200 의 들어오는 변(0 위·1 왼·2 아래·3 오른) 가장자리 칸 — 목표 칸과 같은 열/줄.</summary>
+    /// <summary>그 유닛을 변(0 위·1 왼·2 아래·3 오른) 밖 <paramref name="px"/> 픽셀에서 걸어 들어오게 한다.</summary>
+    private static void BeginEdgeEntry(UnitState u, int edge, double px)
+    {
+        switch (edge & 3)
+        {
+            case 0: u.BeginEntry(0, -px); break;
+            case 1: u.BeginEntry(-px, 0); break;
+            case 2: u.BeginEntry(0, px); break;
+            default: u.BeginEntry(px, 0); break;
+        }
+    }
+
     private (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
     {
         0 => (Math.Clamp(col, 0, Cols - 1), 0),
@@ -636,6 +648,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 200 은 인자4 의 변(0 위·1 왼·2 아래·3 오른) 바깥 100px 에서 8px/틱으로 곧장 들어와 맵 안에 들어서면 걷는다(ba-14 E7).
                 // 부하는 대장 옆으로 엇갈려 선 뒤 진형으로 따라온다(0x10050f16~). 여기서는 변의 가장자리 칸에서 걸어 들어오게 한다.
                 double longest = 0.4;
+                int entered = 0;
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다(0x1006e940(u,1))
@@ -654,7 +667,15 @@ internal sealed unsafe partial class BattleSceneWindow
                         else u.WarpTo(landCol, landRow);
                         u.OriginCol = landCol; u.OriginRow = landRow;
                     }
-                    else if (a.Code == 214)
+                    // 변 밖에서 곧게 걸어 들어온다 — 혼자면 140px, 군단 대장이면 100px 밖에서 틱당 8px(0x10051659 · 0x10050fb2, ba-21 B1).
+                    // 전에는 맵 안 가장자리 칸에 곧바로 나타났다. 건너뛰는 중이면 곧바로 선다.
+                    bool hasFollowers = FollowersOf(Array.IndexOf(_units, u)).Count > 0;
+                    if (a.Code == 200 && !_talkSkip)
+                    {
+                        BeginEdgeEntry(u, A(4), hasFollowers ? 100 : 140);
+                        longest += (hasFollowers ? 100 : 140) / 8.0 / TicksPerSecond;
+                    }
+                    if (a.Code == 214)
                     {
                         var (wx, wy) = UnitFoot(u);
                         _effects.Add((381, 1, _lastTime, wx, wy));
@@ -669,6 +690,8 @@ internal sealed unsafe partial class BattleSceneWindow
                         follower.ResetTo(col, row);
                         follower.Facing = u.Facing;
                         _followerTarget[follower] = (col, row);
+                        // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2).
+                        if (a.Code == 200 && !_talkSkip) BeginEdgeEntry(follower, A(4), 140 + 40 * (entered++ / 2));
                     }
                     if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
