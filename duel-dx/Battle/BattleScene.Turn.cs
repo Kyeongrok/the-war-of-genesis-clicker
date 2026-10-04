@@ -818,7 +818,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         // 대상 방식 3·6(아무 칸)·7(빈 칸)은 메테오처럼 <b>칸을 고르는</b> 기술이라 그 칸에 아무도 없어도 된다.
         bool needsUnit = w.TargetMode is 1 or 4 or 5;
-        if (needsUnit && WorkTargets(w, user, col, row).Count == 0)
+        // 적 물체(바리케이트·포탑 따위 부술 수 있는 것)도 대상이다 — 피해 기술은 범위 안의 적 물체를 친다(아래 판정, 0x100d9510 은 물체를 먼저 돌려준다).
+        // 전에는 유닛만 세어, 기본공격으로는 칠 수 있는 물체에 기술을 쓰면 「대상이 없습니다」가 떴다(사용자 보고: Btl 0133 (1,15)).
+        bool hitsObject = w.IsDamage && w.TargetMode is 1 or 5 && w.AbilityId != BlackHoleAbility
+            && EffectCells(w, user, col, row).Any(c => ObjectAt(c.Item1, c.Item2) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user) && !_opened.Contains(obj));
+        if (needsUnit && !hitsObject && WorkTargets(w, user, col, row).Count == 0)
         {
             host.Toast("그 칸에는 대상이 없습니다");
             return true;
