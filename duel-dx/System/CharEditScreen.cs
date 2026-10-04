@@ -17,7 +17,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal const int MenuCharEdit = 1160;
     internal const int W = 600, H = 400, ListW = 170, RowH = 22;
 
-    internal bool _open;
+    /// <summary>DUELDX_CHAREDIT 가 있으면 열어 둔 채 시작한다(화면 밖 시험용).</summary>
+    internal bool _open = Environment.GetEnvironmentVariable("DUELDX_CHAREDIT") != null;
     internal int _chosen;           // 고른 인물(목록 순번)
     internal int _top;              // 목록 스크롤
 
@@ -54,7 +55,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if (host._db is not { } db || DataOf(chr) is not { } c || (uint)slot >= c.Items.Length) return;
         // 0(비움)과 있는 아이템 번호들을 한 줄로 놓고 앞뒤로 넘긴다.
         var ids = new List<int> { 0 };
-        ids.AddRange(db.Items.Keys.OrderBy(i => i));
+        // 아이템 표에는 갈래 머리줄(「=== 요요 ===」)과 이름 없는 빈 줄이 섞여 있다 — 건너뛴다.
+        ids.AddRange(db.Items.Where(kv => kv.Key != 0 && db.T(kv.Value.NameId) is { Length: > 0 } name && !name.StartsWith('=')).Select(kv => kv.Key).OrderBy(i => i));
         int at = Math.Max(0, ids.IndexOf(c.Items[slot]));
         int next = ids[((at + delta) % ids.Count + ids.Count) % ids.Count];
         Apply(chr, c with { Items = [.. c.Items.Select((it, k) => k == slot ? (ushort)next : it)] });
