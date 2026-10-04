@@ -255,7 +255,7 @@ internal sealed unsafe partial class GameWindow
         }
         // 맞는 아이템이 하나도 없으면 꺼진 TXR 0 「없음」 줄 하나(0x100d3c8e~0x100d3cf9).
         if (fitting == 0) rows.Add(new(db.T(0), "", false, () => { }));
-        OpenPopup(PartyTitles[Math.Clamp(_partyNo, 0, PartyTitles.Length - 1)], rows, 182, 10);
+        OpenPopup(PartyTitles[Math.Clamp(EpisodesScr._partyNo, 0, PartyTitles.Length - 1)], rows, 182, 10);
     }
 
     internal void SetEquipment(UnitState u, int slot, ushort itemId)
@@ -503,11 +503,11 @@ internal sealed unsafe partial class GameWindow
         // ATK·ACR·RDP·LP·PSY·DEP·DEX 는 판정과 같은 값(상태이상·군단 보정·부하=대장 DEX/최대 TP) — 감사4 S1·S3·S4.
         var (eff, acr, rdp, lp) = ShownStats(db, unit, c);
         int weaponPct = unit.Status(29);                                   // 상태 29 — 무기 공격력 %(0x1007afd0)
-        StatLine(15, AtkWithSoul(db, eff, BasicAttackSoul(unit.Soul), weaponPercent: weaponPct));   // 일반 공격 ATK — 조정의 소울 기여도가 걸린 값
+        StatLine(15, AtkWithSoul(db, eff, TuningScr.BasicAttackSoul(unit.Soul), weaponPercent: weaponPct));   // 일반 공격 ATK — 조정의 소울 기여도가 걸린 값
         // ATK 줄에 마우스를 올리면 바탕 × 소울 배율로 풀어 보인다(사용자 요청) — 그림은 창 맨 위에 그린다.
         int atkY = oy + 81 + 15 * 15 - 8;
-        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, eff, BasicAttackSoul(unit.Soul), weaponPct)
-              + (_soulWeight != 100 ? $"$n(모드 > 조정: 소울 기여도 {_soulWeight}% — SOUL {unit.Soul} 을 {BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
+        string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, eff, TuningScr.BasicAttackSoul(unit.Soul), weaponPct)
+              + (TuningScr._soulWeight != 100 ? $"$n(모드 > 조정: 소울 기여도 {TuningScr._soulWeight}% — SOUL {unit.Soul} 을 {TuningScr.BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
         StatLine(16, acr.ToString());
         StatLine(17, rdp.ToString());
         // STP 0x1007acf0 = 최대 TP(상태 33 포함) / 제수, 부하는 대장 것 — RefreshUnitStats 가 셈해 둔 unit.Stp(감사4 S3).

@@ -1,5 +1,7 @@
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 「Select your record」 화면(장면 9) — 타이틀에서 CONTINUE 를 누르면 나오는 <b>불러오기 전용 화면</b>.
 /// </summary>
@@ -15,7 +17,7 @@ namespace DuelDx;
 /// (타이틀은 다음이 9 면 페이드아웃을 건너뛰고, 이 화면은 다음이 6 이 아닐 때만 소리를 죽인다).</item>
 /// </list>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class RecordsScreen(GameWindow host)
 {
     internal const int RecordsBackground = 131, RecordsExitObs = 287;
     internal static readonly (int X, int Y, int W, int H) RecordsExit = (246, 441, 148, 27);
@@ -27,37 +29,37 @@ internal sealed unsafe partial class GameWindow
     internal void OpenRecords()
     {
         _recordsOpen = true;
-        _titleOpen = false;
+        host.TitleScr._titleOpen = false;
         _recordsExitHover = false;
-        Mos.ShowMosesBackground(RecordsBackground);
-        EnterSceneFade();
-        OpenSlots(1);                                  // 불러오기 목록(같은 창을 그대로 쓴다)
+        host.Mos.ShowMosesBackground(RecordsBackground);
+        host.EnterSceneFade();
+        host.SlotsScr.OpenSlots(1);                                  // 불러오기 목록(같은 창을 그대로 쓴다)
     }
 
     internal void CloseRecords() =>
         // 기록 화면도 16틀 검게 나간다(0x10104e60) — 음악은 이어진다.
-        LeaveScene(() =>
+        host.LeaveScene(() =>
         {
             _recordsOpen = false;
-            CloseSystemWindow();
-            OpenTitle();                               // OpenTitle 이 같은 곡을 다시 걸지 않게 본다
+            host.CloseSystemWindow();
+            host.TitleScr.OpenTitle();                               // OpenTitle 이 같은 곡을 다시 걸지 않게 본다
         }, keepMusic: true);
 
     /// <summary>이 화면이 떠 있으면 클릭을 처리하고 true.</summary>
     internal bool OnRecordsClick(int bx, int by)
     {
         if (!_recordsOpen) return false;
-        var (ox, oy) = Mos.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         var (ex, ey, ew, eh) = RecordsExit;
         if (bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh) { CloseRecords(); return true; }
-        if (SystemOpen) return OnSystemClick(bx, by);
+        if (host.SystemOpen) return host.OnSystemClick(bx, by);
         return true;
     }
 
     internal void UpdateRecordsHover(int bx, int by)
     {
         if (!_recordsOpen) return;
-        var (ox, oy) = Mos.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         var (ex, ey, ew, eh) = RecordsExit;
         _recordsExitHover = bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh;
     }
@@ -65,19 +67,19 @@ internal sealed unsafe partial class GameWindow
     internal void DrawRecords()
     {
         if (!_recordsOpen) return;
-        var (ox, oy) = Mos.MosesOrigin();
-        int tick = (int)(_lastTime * TicksPerSecond);
+        var (ox, oy) = host.Mos.MosesOrigin();
+        int tick = (int)(host._lastTime * TicksPerSecond);
 
-        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (Mos._mosesBg is { } bg)
+        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
+        if (host.Mos._mosesBg is { } bg)
             for (int y = 0; y < MosesScene.MosesH; y++)
                 for (int x = 0; x < MosesScene.MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
+                    host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         var (ex, ey, _, _) = RecordsExit;
-        if (_recordsExitHover) DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, UiBlend.Add);
+        if (_recordsExitHover) host.DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, UiBlend.Add);
 
-        DrawSystem();
-        DrawToast();
+        host.DrawSystem();
+        host.DrawToast();
     }
 }

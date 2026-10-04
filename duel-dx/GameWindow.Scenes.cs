@@ -55,4 +55,25 @@ internal sealed unsafe partial class GameWindow
 
     internal UnitFxSkill? _unitFxAb;
     internal UnitFxSkill UnitFxAb => _unitFxAb ??= new UnitFxSkill(this);
+
+    internal TitleScreen? _titleScr;
+    internal TitleScreen TitleScr => _titleScr ??= new TitleScreen(this);
+
+    internal EpisodesScreen? _episodesScr;
+    internal EpisodesScreen EpisodesScr => _episodesScr ??= new EpisodesScreen(this);
+
+    internal ChaptersScreen? _chaptersScr;
+    internal ChaptersScreen ChaptersScr => _chaptersScr ??= new ChaptersScreen(this);
+
+    internal RecordsScreen? _recordsScr;
+    internal RecordsScreen RecordsScr => _recordsScr ??= new RecordsScreen(this);
+
+    internal SlotsScreen? _slotsScr;
+    internal SlotsScreen SlotsScr => _slotsScr ??= new SlotsScreen(this);
+
+    internal ProgressScreen? _progressScr;
+    internal ProgressScreen ProgressScr => _progressScr ??= new ProgressScreen(this);
+
+    internal TuningScreen? _tuningScr;
+    internal TuningScreen TuningScr => _tuningScr ??= new TuningScreen(this);
 }

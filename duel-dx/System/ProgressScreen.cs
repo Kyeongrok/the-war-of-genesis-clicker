@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 도구 > 진행 상태 보기 — 지금 챕터의 장소가 어떤 깃발 조건으로 열리는지, 그 깃발이 지금 몇인지 한눈에 본다(사용자 요청).
 /// </summary>
@@ -9,7 +11,7 @@ namespace DuelDx;
 /// 장소 조건은 (깃발, 값, 연산자) 세 워드이고 연산자는 0 <c>==</c> · 1 <c>!=</c> · 2 <c>&lt;</c> · 3 <c>&lt;=</c> · 4 <c>&gt;</c> · 5 <c>&gt;=</c>
 /// (<see cref="FlagAllows"/>). 깃발 칸 옆 [−]·[+] 로 값을 바꿀 수 있다 — 스크립트 버그로 진행이 막혔을 때 스스로 푸는 용도(원본에 없음).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class ProgressScreen(GameWindow host)
 {
     internal bool _progressOpen;
     internal int _progressScroll;
@@ -41,20 +43,20 @@ internal sealed unsafe partial class GameWindow
     {
         _progressButtons.Clear();
         if (!_progressOpen) return;
-        int w = Math.Min(760, ViewWidth - 40), h = ViewHeight - 40;
-        int x0 = _camX + (ViewWidth - w) / 2, y0 = _camY + 20;
-        FillRect(x0, y0, w, h, 0xF0101428);
-        StrokeRect(x0, y0, w, h, 0xFF6070A0);
+        int w = Math.Min(760, host.ViewWidth - 40), h = host.ViewHeight - 40;
+        int x0 = host._camX + (host.ViewWidth - w) / 2, y0 = host._camY + 20;
+        host.FillRect(x0, y0, w, h, 0xF0101428);
+        host.StrokeRect(x0, y0, w, h, 0xFF6070A0);
 
-        var chp = Mos._mosesChp;
-        string title = chp is null ? "진행 상태 — 챕터 밖" : $"진행 상태 — Chp {chp.Id:D4} {_db?.T((ushort)chp.TitleText)}";
-        DrawText(title, x0 + 12, y0 + 8, 0xFFFFE070, 13);
-        DrawText("휠: 굴리기 · [−][+]: 깃발 바꾸기 · Esc: 닫기", x0 + w - 300, y0 + 10, 0xFF9098B0, 11);
+        var chp = host.Mos._mosesChp;
+        string title = chp is null ? "진행 상태 — 챕터 밖" : $"진행 상태 — Chp {chp.Id:D4} {host._db?.T((ushort)chp.TitleText)}";
+        host.DrawText(title, x0 + 12, y0 + 8, 0xFFFFE070, 13);
+        host.DrawText("휠: 굴리기 · [−][+]: 깃발 바꾸기 · Esc: 닫기", x0 + w - 300, y0 + 10, 0xFF9098B0, 11);
         if (chp is null) return;
 
         // 줄 목록을 만든 뒤 굴린 만큼 잘라 그린다.
         var rows = new List<Action<int>>();
-        rows.Add(y => DrawText("장소 (행성별)", x0 + 12, y, 0xFF9FC0FF, 12));
+        rows.Add(y => host.DrawText("장소 (행성별)", x0 + 12, y, 0xFF9FC0FF, 12));
         // 행성마다 머리 줄(항성계 › 행성, 행성·항성계 조건) 뒤에 그 행성의 장소를 늘어놓는다 — 행성이 잠기면 그 장소도 항행에 안 나온다.
         var grouped = chp.Planets.Select(pl => (Planet: pl, Places: chp.Places.Where(pp => pl.Places.Contains(pp.No)).ToList()))
                                  .Where(g => g.Places.Count > 0).ToList();
@@ -65,19 +67,19 @@ internal sealed unsafe partial class GameWindow
             var system = chp.Systems.FirstOrDefault(sy => sy.Planets.Contains(pl.No));
             rows.Add(y =>
             {
-                bool open = FlagsAllow(pl.Conditions) && (system is null || FlagsAllow(system.Conditions));
-                var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < _flags.Length)
-                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {_flags[c.Variable]})").ToList();
-                string where = $"{(system is null ? "" : _db?.T((ushort)system.NameText) + " › ")}{_db?.T((ushort)pl.NameText)}";
-                DrawText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
+                bool open = host.FlagsAllow(pl.Conditions) && (system is null || host.FlagsAllow(system.Conditions));
+                var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < host._flags.Length)
+                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host._flags[c.Variable]})").ToList();
+                string where = $"{(system is null ? "" : host._db?.T((ushort)system.NameText) + " › ")}{host._db?.T((ushort)pl.NameText)}";
+                host.DrawText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
                 if (!open || conds.Count > 0)
-                    DrawText((open ? "" : "행성 잠김 · ") + string.Join(", ", conds), x0 + 330, y, open ? 0xFF9098B0 : 0xFFE07070, 12);
+                    host.DrawText((open ? "" : "행성 잠김 · ") + string.Join(", ", conds), x0 + 330, y, open ? 0xFF9098B0 : 0xFFE07070, 12);
             });
             foreach (var place in places) rows.Add(PlaceRow(place));
         }
         if (loose.Count > 0)
         {
-            rows.Add(y => DrawText("■ 행성 밖(자동 발생 따위)", x0 + 16, y, 0xFFB0C8E0, 12));
+            rows.Add(y => host.DrawText("■ 행성 밖(자동 발생 따위)", x0 + 16, y, 0xFFB0C8E0, 12));
             foreach (var place in loose) rows.Add(PlaceRow(place));
         }
 
@@ -86,8 +88,8 @@ internal sealed unsafe partial class GameWindow
             var p = place;
             return y =>
             {
-                bool used = Mos._placesUsed.Contains((chp.Id, p.No)) || Mos._autoPlacesDone.Contains((chp.Id, p.No));
-                bool open = PlaceOpen(p);
+                bool used = host.Mos._placesUsed.Contains((chp.Id, p.No)) || host.Mos._autoPlacesDone.Contains((chp.Id, p.No));
+                bool open = host.PlaceOpen(p);
                 string kind = p.Kind switch
                 {
                     ChapterFile.PlaceKind.Shop => "상점",
@@ -95,18 +97,18 @@ internal sealed unsafe partial class GameWindow
                     _ => $"전투 {p.Value:D4}",
                 };
                 var (state, color) = (used ? "다녀옴" : open ? "열림" : "잠김", used ? 0xFF8088A0u : open ? 0xFF70E070u : 0xFFE07070u);
-                var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < _flags.Length)
-                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {_flags[c.Variable]})").ToList();
-                string name = _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {p.No}";
-                DrawText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
-                DrawText(name, x0 + 56, y, White, 12);
-                DrawText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 200, y, 0xFFB0B8C8, 12);
-                DrawText(state, x0 + 300, y, color, 12);
-                DrawText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 350, y, color, 12);
+                var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < host._flags.Length)
+                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host._flags[c.Variable]})").ToList();
+                string name = host._db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {p.No}";
+                host.DrawText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
+                host.DrawText(name, x0 + 56, y, White, 12);
+                host.DrawText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 200, y, 0xFFB0B8C8, 12);
+                host.DrawText(state, x0 + 300, y, color, 12);
+                host.DrawText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 350, y, color, 12);
             };
         }
         rows.Add(_ => { });
-        rows.Add(y => DrawText("깃발 (이 챕터가 보거나 바꾸는 것)", x0 + 12, y, 0xFF9FC0FF, 12));
+        rows.Add(y => host.DrawText("깃발 (이 챕터가 보거나 바꾸는 것)", x0 + 12, y, 0xFF9FC0FF, 12));
         var flags = ChapterFlags(chp).ToList();
         int perRow = Math.Max(2, (w - 24) / 170);             // 한 칸 = 「깃발 NNN = NNN」 + [−][+]
         int colW = (w - 24) / perRow;
@@ -118,10 +120,10 @@ internal sealed unsafe partial class GameWindow
                 for (int k = 0; k < chunk.Count; k++)
                 {
                     int f = chunk[k], cx = x0 + 16 + k * colW;
-                    DrawText($"깃발 {f} = {_flags[f]}", cx, y, _flags[f] != 0 ? White : 0xFF9098B0, 12);
+                    host.DrawText($"깃발 {f} = {host._flags[f]}", cx, y, host._flags[f] != 0 ? White : 0xFF9098B0, 12);
                     int bx = cx + 100;
-                    DrawText("[−]", bx, y, 0xFFFFC080, 12);
-                    DrawText("[+]", bx + 26, y, 0xFFFFC080, 12);
+                    host.DrawText("[−]", bx, y, 0xFFFFC080, 12);
+                    host.DrawText("[+]", bx + 26, y, 0xFFFFC080, 12);
                     _progressButtons.Add((bx, y, 22, ProgressRowH, f, -1));
                     _progressButtons.Add((bx + 26, y, 22, ProgressRowH, f, +1));
                 }
@@ -141,8 +143,8 @@ internal sealed unsafe partial class GameWindow
         foreach (var (x, y, w, h, flag, delta) in _progressButtons)
             if (bx >= x && bx < x + w && by >= y && by < y + h)
             {
-                _flags[flag] = (byte)Math.Clamp(_flags[flag] + delta, 0, 255);
-                Toast($"깃발 {flag} = {_flags[flag]}");
+                host._flags[flag] = (byte)Math.Clamp(host._flags[flag] + delta, 0, 255);
+                host.Toast($"깃발 {flag} = {host._flags[flag]}");
                 return true;
             }
         return true;

@@ -209,7 +209,7 @@ internal sealed unsafe partial class MosesScene
     /// <summary>손잡이 자리(막대 위에서부터)와 높이.</summary>
     internal (int Y, int H) MailThumb(int count)
     {
-        int thumbH = host.UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
+        int thumbH = host.UiFor(EpisodesScreen.EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
         int track = MailBarH - 2 * MailArrowH - thumbH;
         int span = Math.Max(1, count - MailRows);
         return (MailArrowH + track * Math.Clamp(_mailTop, 0, span) / span, thumbH);
@@ -264,10 +264,10 @@ internal sealed unsafe partial class MosesScene
 
         if (mails.Count > MailRows)
         {
-            host.DrawUi(EpisodeObs, 61, 0, ox + MailBarX, oy + MailBarY, UiBlend.Alpha);
-            host.DrawUi(EpisodeObs, 63, 0, ox + MailBarX, oy + MailBarY + MailBarH - MailArrowH, UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 61, 0, ox + MailBarX, oy + MailBarY, UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 63, 0, ox + MailBarX, oy + MailBarY + MailBarH - MailArrowH, UiBlend.Alpha);
             var (thumbY, _) = MailThumb(mails.Count);
-            host.DrawUi(EpisodeObs, 65, 0, ox + MailBarX, oy + MailBarY + thumbY, UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 65, 0, ox + MailBarX, oy + MailBarY + thumbY, UiBlend.Alpha);
         }
 
         // Exit 글자는 배경 그림(Bgr 0094)에 있다 — 알약 Obs 287 은 마우스 올림에만.

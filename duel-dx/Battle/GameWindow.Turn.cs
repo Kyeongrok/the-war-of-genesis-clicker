@@ -163,7 +163,7 @@ internal sealed unsafe partial class GameWindow
         if (_outcome.Length > 0)
         {
             // 조용한 결과(행동 10·6·11[1])는 클릭을 기다리지 않고 제때 넘어간다(원본 120틱).
-            if (_outcomeQuiet && _lastTime >= _outcomeLeaveAt && !Mos._mosesOpen && !FieldOpen && !_episodesOpen) LeaveFinishedBattle();
+            if (_outcomeQuiet && _lastTime >= _outcomeLeaveAt && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) LeaveFinishedBattle();
             return;
         }
         if (_deployOpen) { StepDeploy(); return; }     // 캐릭터 배치 중에는 틱·차례·이벤트가 멈춘다(원본 상태 2)
@@ -175,7 +175,7 @@ internal sealed unsafe partial class GameWindow
         if (_autoSaveFor >= 0)
         {
             if (_autoSaveFor != _turn) _autoSaveFor = -1;          // 그새 차례가 넘어갔다 — 원본도 깃발을 저장 없이 지운다
-            else if (IsPlayerTurn && !_units[_turn].IsBusy) { _autoSaveFor = -1; AutoSave(); }
+            else if (IsPlayerTurn && !_units[_turn].IsBusy) { _autoSaveFor = -1; SlotsScr.AutoSave(); }
         }
         // DUELDX_WIN=1 이면 시작하자마자 이긴 것으로 친다 — 전투 이어짐·진행 깃발·모세스 전환을 화면 밖에서 시험할 때 쓴다.
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "1")
@@ -1330,7 +1330,7 @@ internal sealed unsafe partial class GameWindow
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
-        var (amount, result, crit) = _db.Resolve(_rng, CombatData(a)!, a.Tp, AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+        var (amount, result, crit) = _db.Resolve(_rng, CombatData(a)!, a.Tp, TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
 
         if (result == 1)
         {

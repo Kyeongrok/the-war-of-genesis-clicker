@@ -189,7 +189,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
         // 모드는 펼침 메뉴가 아니라 누르면 곧바로 창이 뜬다 — 네 항목(동맹 AI·상자 내용물·소울 가득·소울 기여도)은 그 창 안에(사용자 요청).
-        Win32.AppendMenuW(bar, Win32.MF_STRING, MenuTuning, "모드(&M)");
+        Win32.AppendMenuW(bar, Win32.MF_STRING, TuningScreen.MenuTuning, "모드(&M)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
@@ -230,13 +230,13 @@ internal sealed unsafe partial class GameWindow
         if ((uint)index >= _replayItems.Count) return;
         var (chapter, place) = _replayItems[index];
         if (!Mos._placesUsed.Remove((chapter, place))) return;
-        _chapterDone = false;
+        EpisodesScr._chapterDone = false;
         string name = Mos._mosesChp?.PlaceOf(place) is { } p && _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {place}";
         Toast($"「{name}」 을(를) 다시 열었습니다 — 항행에서 다시 고를 수 있습니다");
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, TuningScr._soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
 
     /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
     internal bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
@@ -252,7 +252,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
     internal bool TrySkipEnemyAction()
     {
-        if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return false;
+        if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return false;
         if (IsPlayerTurn || _routine == null || _outcome.Length > 0 || EventsBusy || LevelUpOpen || SystemOpen || _deployOpen) return false;
         _skippingAction = true;
         _skipFrom = _lastTime;
@@ -309,10 +309,10 @@ internal sealed unsafe partial class GameWindow
     internal void OnMenuCommand(int id)
     {
         if (OnDifficultyMenu(id)) return;
-        if (id == MenuTuning) { _tuningOpen = true; _tuningListOpen = false; return; }
+        if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }
         switch (id)
         {
-            case MenuChapters: _chaptersOpen = true; _chaptersHover = -1; break;
+            case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
             case MenuClearEnemies: ClearEnemiesForTest(); break;
             case >= MenuReplayBase and < MenuReplayBase + 500:
                 ReopenPlace(id - MenuReplayBase);
@@ -351,7 +351,7 @@ internal sealed unsafe partial class GameWindow
                 Toast(_talkClickFills ? "대사: 첫 클릭은 글을 채우고, 다음 클릭에 닫습니다" : "대사: 클릭하면 곧바로 닫습니다(원본)");
                 SaveSettings();
                 break;
-            case MenuProgress: ToggleProgress(); break;
+            case MenuProgress: ProgressScr.ToggleProgress(); break;
             case MenuReloadSkills:
                 ReloadSkills();
                 break;

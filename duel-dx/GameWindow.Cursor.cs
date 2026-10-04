@@ -145,7 +145,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void UpdateOutcomeBanner()
     {
-        if (_outcome.Length == 0 || _outcomeQuiet || Mos._mosesOpen || FieldOpen || _episodesOpen) return;
+        if (_outcome.Length == 0 || _outcomeQuiet || Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen) return;
         bool win = _outcome.StartsWith('승');
         if (_outcomeMusicFor != _outcomeAt)
         {

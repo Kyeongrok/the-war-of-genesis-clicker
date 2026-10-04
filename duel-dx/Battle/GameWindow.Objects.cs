@@ -918,7 +918,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void DrawChestList()
     {
-        if (!_showChestContents || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen || _db is not { } db) return;
+        if (!_showChestContents || !_battleLoaded || Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen || _db is not { } db) return;
         var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
         var lines = new List<(string Text, uint Color)>
         {

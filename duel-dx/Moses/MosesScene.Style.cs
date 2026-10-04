@@ -318,7 +318,7 @@ internal sealed unsafe partial class MosesScene
         SetStyleData(c with { JobId = jobId, Exp = host._keepJobExp ? c.Exp : 0 });
         _stylePick = StyleCurrentCell();
         host.Play(SoundStyleDone);
-        host._notice = (host._db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", host._lastTime + 60 / TicksPerSecond);
+        host.SlotsScr._notice = (host._db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", host._lastTime + 60 / TicksPerSecond);
     }
 
     internal void DrawMosesStyle(int ox, int oy, int tick)

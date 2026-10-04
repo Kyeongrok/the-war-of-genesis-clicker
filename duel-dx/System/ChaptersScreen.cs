@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 챕터 고르기 화면(menu-4) — 게임에 있는 챕터를 모두 늘어놓고 고르면 그 챕터의 모세스 화면을 연다.
 /// </summary>
@@ -12,7 +14,7 @@ namespace DuelDx;
 /// 파일 끝이 안 맞는 챕터(0002·0009·0024·0037)는 배치가 다른 것이라 건너뛴다.
 /// 행성 구체 그림(Obs 0606~0635)은 챕터마다 1MB 가까이 되어 <b>0010 챕터 것만</b> 넣었다 — 나머지 챕터는 구체 없이 장소 칸만 나온다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class ChaptersScreen(GameWindow host)
 {
     internal const int ChaptersW = 900, ChaptersRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
 
@@ -31,7 +33,7 @@ internal sealed unsafe partial class GameWindow
             {
                 if (!int.TryParse(Path.GetFileNameWithoutExtension(path), out int id)) continue;
                 if (ChapterFile.Parse(id, File.ReadAllBytes(path)) is not { } chp) continue;
-                list.Add((id, Mos.Text(chp.TitleText), chp));
+                list.Add((id, host.Mos.Text(chp.TitleText), chp));
             }
         // 제목 TXR 2284~2313 이 이야기 순서다. 그 밖(외전·시험용)은 뒤로.
         int Rank((int Id, string Title, ChapterFile Chp) c) => c.Chp.StoryRank;
@@ -42,7 +44,7 @@ internal sealed unsafe partial class GameWindow
     {
         int rows = (Chapters().Count + ChaptersCols - 1) / ChaptersCols;
         int h = ChaptersTop + rows * ChaptersRowH + 30;
-        return (_camX + (ViewWidth - ChaptersW) / 2, _camY + (ViewHeight - h) / 2, h);
+        return (host._camX + (host.ViewWidth - ChaptersW) / 2, host._camY + (host.ViewHeight - h) / 2, h);
     }
 
     internal int ChapterAt(int bx, int by)
@@ -61,8 +63,8 @@ internal sealed unsafe partial class GameWindow
         int index = ChapterAt(bx, by);
         if (index < 0) { _chaptersOpen = false; return true; }
         _chaptersOpen = false;
-        Play(66);
-        Mos.OpenMoses(Chapters()[index].Chp);
+        host.Play(66);
+        host.Mos.OpenMoses(Chapters()[index].Chp);
         return true;
     }
 
@@ -78,22 +80,22 @@ internal sealed unsafe partial class GameWindow
         var list = Chapters();
         int rows = (list.Count + ChaptersCols - 1) / ChaptersCols, colW = (ChaptersW - 24) / ChaptersCols;
 
-        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xC0000000);
-        FillRect(x, y, ChaptersW, h, PanelBg);
-        StrokeRect(x, y, ChaptersW, h, BoxLine);
-        DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
-        DrawText("고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다.", x + 150, y + 18, DimGray);
+        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xC0000000);
+        host.FillRect(x, y, ChaptersW, h, PanelBg);
+        host.StrokeRect(x, y, ChaptersW, h, BoxLine);
+        host.DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
+        host.DrawText("고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다.", x + 150, y + 18, DimGray);
 
         for (int i = 0; i < list.Count; i++)
         {
             var (id, title, chp) = list[i];
             int rx = x + 12 + i / rows * colW, ry = y + ChaptersTop + i % rows * ChaptersRowH;
-            if (i == _chaptersHover) FillRect(rx, ry - 2, colW - 8, ChaptersRowH, 0x4060A0FF);
-            DrawText($"Chp {id:D4}", rx, ry, DimGray);
+            if (i == _chaptersHover) host.FillRect(rx, ry - 2, colW - 8, ChaptersRowH, 0x4060A0FF);
+            host.DrawText($"Chp {id:D4}", rx, ry, DimGray);
             // 제목 칸이 아닌 챕터(0001 등)는 엉뚱한 긴 글이 들어 있어 칸 너비만큼만 보인다.
             string label = title.Length > 0 ? title : "(제목 없음)";
-            DrawText(label.Length > 18 ? label[..18] + "…" : label, rx + 70, ry, White);
-            DrawText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
+            host.DrawText(label.Length > 18 ? label[..18] + "…" : label, rx + 70, ry, White);
+            host.DrawText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
         }
     }
 }

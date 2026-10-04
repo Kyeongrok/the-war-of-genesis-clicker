@@ -76,7 +76,7 @@ internal sealed unsafe partial class GameWindow
         Rule(x, y + 170);
         // ATK·ACR·RDP 는 원본 게터(0x1007ab20·ab90·abf0)처럼 상태이상·군단 보정·부하=대장 DEX/최대 TP 를 얹은 값 — Status 와 같은 헬퍼(감사4 S1).
         var (shown, acr, rdp, _) = ShownStats(db, unit, c);
-        Row(db.T(156), AtkWithSoul(db, shown, BasicAttackSoul(unit.Soul), compact: true, weaponPercent: unit.Status(29)), y + 180);
+        Row(db.T(156), AtkWithSoul(db, shown, TuningScr.BasicAttackSoul(unit.Soul), compact: true, weaponPercent: unit.Status(29)), y + 180);
         Row(db.T(157), acr.ToString(), y + 196);
         Row(db.T(158), rdp.ToString(), y + 212);
 

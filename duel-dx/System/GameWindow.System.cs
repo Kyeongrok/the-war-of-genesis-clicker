@@ -48,7 +48,7 @@ internal sealed unsafe partial class GameWindow
     /// (뒤에 남은 옛 전투의 MISSION·RESTART 는 뜻이 없다) SAVE 는 꺼 둔다(<see cref="SaveBlockedReason"/>).
     /// </remarks>
     internal (SystemItem Item, int Motion, string Label)[] MenuItems =>
-        Mos._mosesOpen || _episodesOpen || FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+        Mos._mosesOpen || EpisodesScr._episodesOpen || FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
 
     /// <summary>
     /// 전투 시스템 메뉴를 열어도 되나 — 원본은 <b>플레이어 조종 유닛 차례의 상태 22</b>(<c>0x1006acc0</c>, 입력 깃발 <c>+0x4d17</c>
@@ -69,7 +69,7 @@ internal sealed unsafe partial class GameWindow
     internal string? SaveBlockedReason =>
         FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
-        : !Mos._mosesOpen && !_episodesOpen && !_titleOpen && !_recordsOpen && _battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
+        : !Mos._mosesOpen && !EpisodesScr._episodesOpen && !TitleScr._titleOpen && !RecordsScr._recordsOpen && _battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
 
     internal bool _systemMenu;
@@ -83,14 +83,14 @@ internal sealed unsafe partial class GameWindow
         _confirm = null;
     }
 
-    internal bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsOpen;
+    internal bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsScr.SlotsOpen;
 
     internal (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
         // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 640×480 틀의 <b>(100,100)</b> 에
         // 제목줄부터 선다 — 제목(창 y−22)이 y 100 에 오게 둔다(감사 F16). 전투 링 메뉴는 전처럼 가운데.
-        if (_episodesOpen || Mos._mosesOpen)
+        if (EpisodesScr._episodesOpen || Mos._mosesOpen)
         {
             var (ox, oy) = Mos.MosesOrigin();
             return (ox + 100, oy + 100 + 22, h);
@@ -109,9 +109,9 @@ internal sealed unsafe partial class GameWindow
             case SystemItem.Save:
                 // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
                 if (SaveBlockedReason is { } why) { Toast(why); _systemMenuReturn = false; _systemMenu = true; break; }
-                OpenSlots(0);
+                SlotsScr.OpenSlots(0);
                 break;
-            case SystemItem.Load: OpenSlots(1); break;
+            case SystemItem.Load: SlotsScr.OpenSlots(1); break;
             case SystemItem.Restart:
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
                 break;
@@ -131,21 +131,21 @@ internal sealed unsafe partial class GameWindow
     internal void BackToTitle()
     {
         _systemMenu = _missionWindow = _volumeWindow = false;
-        _slotsMode = -1;
+        SlotsScr._slotsMode = -1;
         Fld.CloseField();
         Mos._mosesOpen = false;
         Mos._mosesPage = -1;
-        _episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
+        EpisodesScr._episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
         _battleLoaded = false;
         ResizeBoard(TitleBoardCols, TitleBoardRows);
-        OpenTitle();
+        TitleScr.OpenTitle();
     }
 
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
     internal bool OnSystemClick(int bx, int by)
     {
         if (_confirm is not null && OnConfirmClick()) return true;
-        if (OnSlotsClick(bx, by)) return true;
+        if (SlotsScr.OnSlotsClick(bx, by)) return true;
         return OnMenuClick(bx, by);
 
         bool OnConfirmClick()
@@ -154,7 +154,7 @@ internal sealed unsafe partial class GameWindow
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; bool slots = SlotsOpen; confirm.Value.Yes(); if (!slots || !SlotsOpen) _systemMenuReturn = false; return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; bool slots = SlotsScr.SlotsOpen; confirm.Value.Yes(); if (!slots || !SlotsScr.SlotsOpen) _systemMenuReturn = false; return true; }
                 if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; ReturnToSystemMenu(); return true; }
             }
             return true;
@@ -168,9 +168,9 @@ internal sealed unsafe partial class GameWindow
     internal void ReturnToSystemMenu()
     {
         // 슬롯 창 위의 확인창이 닫혔을 뿐이면 슬롯 창이 그대로 남는다 — 메뉴는 슬롯 창이 닫힐 때 돌아온다(ba-20 G3).
-        if (!_systemMenuReturn || SlotsOpen) return;
+        if (!_systemMenuReturn || SlotsScr.SlotsOpen) return;
         _systemMenuReturn = false;
-        if (!_titleOpen && !_recordsOpen) _systemMenu = true;
+        if (!TitleScr._titleOpen && !RecordsScr._recordsOpen) _systemMenu = true;
     }
 
     internal bool OnMenuClick(int bx, int by)
@@ -195,7 +195,7 @@ internal sealed unsafe partial class GameWindow
     internal bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; ReturnToSystemMenu(); return true; }
-        if (SlotsOpen) { _slotsMode = -1; ReturnToSystemMenu(); return true; }
+        if (SlotsScr.SlotsOpen) { SlotsScr._slotsMode = -1; ReturnToSystemMenu(); return true; }
         if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; ReturnToSystemMenu(); return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
         return false;
@@ -203,8 +203,8 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawSystem()
     {
-        DrawSlots();
-        DrawNotice();
+        SlotsScr.DrawSlots();
+        SlotsScr.DrawNotice();
         if (_systemMenu) DrawSystemMenu();
         if (_missionWindow) DrawMissionWindow();
         if (_volumeWindow) DrawVolumeWindow();
@@ -358,7 +358,7 @@ internal sealed unsafe partial class GameWindow
     /// 다른 전투를 건다 — 그 <c>Btl</c> 자료를 읽어 맵·인물·배경음악을 갈아 끼운다(전투 이벤트 행동 10 「다음 전투」도 이 길로 온다).
     /// </summary>
     /// <summary>지금이 챕터 장면인가 — 모세스 주 화면·필드·연대표는 모두 한 챕터 안이다.</summary>
-    internal bool InChapterScene => Mos._mosesOpen || _episodesOpen || FieldOpen;
+    internal bool InChapterScene => Mos._mosesOpen || EpisodesScr._episodesOpen || FieldOpen;
 
     /// <param name="rememberParty">
     /// 지금 판의 아군을 파티에 담고 시작할지 — 불러오기는 <b>false</b> 다. 불러오기는 세이브로 파티를 먼저 되살리는데,
@@ -389,9 +389,9 @@ internal sealed unsafe partial class GameWindow
         if (rememberParty) RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
         _battleLoaded = true;
         _resumeTurn = -1;         // 새 판 — 불러오기는 판을 세운 뒤 다시 정한다
-        _titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
-        _recordsOpen = false;
-        _episodesOpen = false;
+        TitleScr._titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
+        RecordsScr._recordsOpen = false;
+        EpisodesScr._episodesOpen = false;
         _scene = scene;
         _units = BuildUnits(scene);
         LoadEvents(scene.Id);
@@ -663,13 +663,13 @@ internal sealed unsafe partial class GameWindow
         foreach (var (index, legion) in state.Legions ?? [])
             if (int.TryParse(index, out int chrCode)) Mos._unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
 
-        _chapterDone = state.ChapterDone;
+        EpisodesScr._chapterDone = state.ChapterDone;
         Mos._mosesAltVoice = state.MosesAltVoice;
         Mos._mosesAltVoiceLoaded = state.MosesAltVoice && state.InMoses;   // 전투 세이브면 OpenMoses 를 안 거친다 — 다음 챕터로 새지 않게
-        _partyNo = state.PartyNo;
+        EpisodesScr._partyNo = state.PartyNo;
         // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
         // 지금 인원을 은행으로 치워 버린다.
-        if (state.InMoses && state.Chapter > 0 && Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) _partyNo = owner.Party;
+        if (state.InMoses && state.Chapter > 0 && EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) EpisodesScr._partyNo = owner.Party;
         Mos._members.Clear();
         foreach (int chr in state.Members ?? []) Mos._members.Add(chr);
 
@@ -711,12 +711,12 @@ internal sealed unsafe partial class GameWindow
         foreach (var (number, value) in state.ChapterVars ?? [])
             if (int.TryParse(number, out int slot) && (uint)slot < Fld._chapterVars.Length) Fld._chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
         Mos._planetVisits.Clear();
-        _episodesPicked.Clear();
-        if (state.EpisodesPicked is { } picked) foreach (int no in picked) _episodesPicked.Add(no);
+        EpisodesScr._episodesPicked.Clear();
+        if (state.EpisodesPicked is { } picked) foreach (int no in picked) EpisodesScr._episodesPicked.Add(no);
         else
             // 표시를 안 적던 옛 세이브 — 챕터 사건이 한 번이라도 돈 에피소드와 지금 챕터의 에피소드를 고른 것으로 본다.
-            foreach (var ep in Episodes())
-                if (Fld._chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) _episodesPicked.Add(ep.No);
+            foreach (var ep in EpisodesScr.Episodes())
+                if (Fld._chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) EpisodesScr._episodesPicked.Add(ep.No);
         foreach (string pair in state.PlanetVisits ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) Mos._planetVisits.Add((pc, pn));
         Mos._placesUsed.Clear();
@@ -774,7 +774,7 @@ internal sealed unsafe partial class GameWindow
                     if (a.Args.Length < 2 || a.Args[1] <= 0) continue;
                     // 인자0 은 <b>파티 번호</b>다 — 지금 파티 것만 센다. 전에는 파티를 안 가려서, 베라모드 파티(1)로 불러오면
                     // 챕터 10·11 이 파티 0 에 넣은 살라딘·죠안·크리스티앙까지 끼어들었다(사용자 보고, Chp 0019 전직 화면).
-                    if (a.Args[0] != _partyNo) continue;
+                    if (a.Args[0] != EpisodesScr._partyNo) continue;
                     if (a.Code == 801) Mos._members.Add(a.Args[1]);
                     else if (a.Code == 802) Mos._members.Remove(a.Args[1]);
                 }
@@ -816,7 +816,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
     internal bool SaveBattleTo(string path)
     {
-        bool battleSave = !InChapterScene && !_titleOpen && !_recordsOpen && _battleLoaded;
+        bool battleSave = !InChapterScene && !TitleScr._titleOpen && !RecordsScr._recordsOpen && _battleLoaded;
         try
         {
             var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), _tick, _turn,
@@ -835,9 +835,9 @@ internal sealed unsafe partial class GameWindow
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
                 // 샤이닝 스타 챕터인데 「코어헌터」로 보였다(사용자 보고).
                 // 연대표에서 저장하면 원본처럼 갈래 7 「[NN:연대표]」 + 이름 TXR 2557(빈 글, 0x10106420) — 앞 챕터 이름이 뜨던 것(사용자 보고).
-                _episodesOpen ? EpisodesSceneText
+                EpisodesScr._episodesOpen ? EpisodesSceneText
                 : InChapterScene && Mos._mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId,
-                _episodesOpen ? 7 : InChapterScene && Mos._mosesChp != null ? 4 : 1, PlayMs,
+                EpisodesScr._episodesOpen ? 7 : InChapterScene && Mos._mosesChp != null ? 4 : 1, PlayMs,
                 Mos._shopMoney, Mos._unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
                 Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
                           .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
@@ -856,7 +856,7 @@ internal sealed unsafe partial class GameWindow
                 [.. _eventTimer], [.. _eventTimerRun], _eventNextBattle, _eventNextField,
                 // 필드·연대표에서 저장해도 챕터로 돌아가게 적는다 — 그때 전투 번호로 돌아가면 엉뚱한 옛 전투가 열린다.
                 InChapterScene && Mos._mosesChp != null, InChapterScene ? Mos._mosesChp?.Id ?? 0 : 0,
-                _chapterDone, _partyNo, [.. Mos._members],
+                EpisodesScr._chapterDone, EpisodesScr._partyNo, [.. Mos._members],
                 // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
                 // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
                 [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
@@ -866,14 +866,14 @@ internal sealed unsafe partial class GameWindow
                 // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
                 // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
                 Mos._mosesChp?.Id ?? 0,
-                [.. _episodesPicked],
+                [.. EpisodesScr._episodesPicked],
                 // 물체(0x100e80f0)·찾은 사람 20010/20011(0x101b6994/0x101b6996)·이 틱에 남은 물체 차례도 싣는다(ba-15 Q5).
                 [.. Objects.Select((o, i) => new SaveObject(i, o.Record.No, o.Hp, o.Team, _opened.Contains(o), o.Charge, o.Charged))],
                 _eventFoundA is { } fa ? Array.IndexOf(_units, fa) : -1,
                 _eventFoundB is { } fb ? Array.IndexOf(_units, fb) : -1,
                 _objectsDue,
                 // 항행 시작(911) — 원본 챕터 레코드 +0x190/+0x192(0x1004e2e3/0x1004e2f4). 장면 7(연대표) 저장에는 레코드가 없다(감사 R2).
-                NavStart: !_episodesOpen && Mos._navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null,
+                NavStart: !EpisodesScr._episodesOpen && Mos._navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null,
                 // 전투 전 스냅숏·카메라·이벤트 갈래 깃발은 전투 판에서 저장할 때만(챕터·연대표 세이브는 전투가 없다).
                 Entry: battleSave && _entryRoster != null && _restartInventory != null
                     ? new SaveEntry(_restartInventory.ToDictionary(p => p.Key.ToString(), p => p.Value), _restartMoney,
@@ -920,7 +920,7 @@ internal sealed unsafe partial class GameWindow
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
         // 모세스·필드·연대표가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
-        bool fromMoses = Mos._mosesOpen || FieldOpen || _episodesOpen;
+        bool fromMoses = Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen;
         // 판을 세우기 <b>전에</b> 파티·동료를 되살린다 — 아군을 미리 안 세운 전투는 BuildUnits 가 배치 칸에
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
@@ -931,7 +931,7 @@ internal sealed unsafe partial class GameWindow
         if (state.SceneKind == 7)
         {
             _playBase = state.PlayMs - _realTime * 1000;
-            _titleOpen = false;
+            TitleScr._titleOpen = false;
             Fld.CloseField();
             Mos._mosesOpen = false;
             Mos._mosesPage = -1;
@@ -941,7 +941,7 @@ internal sealed unsafe partial class GameWindow
             if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
             _battleLoaded = false;           // 뒤에 남은 전투판은 버린다 — 다음 전투 세이브를 부르면 판을 새로 세운다
             StopMusic();
-            OpenEpisodes();
+            EpisodesScr.OpenEpisodes();
             _restoreVersion = SaveVersion;
             Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
@@ -1170,14 +1170,14 @@ internal sealed unsafe partial class GameWindow
         // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.
         if (state.InMoses)
         {
-            _titleOpen = false;
+            TitleScr._titleOpen = false;
             StopMusic();
             var loadedChp = state.Chapter > 0 ? MosesScene.LoadChapterFile(state.Chapter) : null;
             // 장소 조건을 안 거르던 판의 세이브(파티 칸이 없다) — 열린 전투·필드 장소가 하나도 없으면 챕터를 다 돈 것으로 본다.
             // 그때는 장소를 순서 없이 겪을 수 있어 깃발이 원본 순서와 어긋나, 지금 규칙으로는 상점만 남아 갇힌다.
             if (state.Party == null && loadedChp is { } oc
                 && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !Mos._placesUsed.Contains((oc.Id, p.No)) && FlagsAllow(p.Conditions)))
-                _chapterDone = true;
+                EpisodesScr._chapterDone = true;
             Mos.OpenMoses(loadedChp);
             // OpenMoses(챕터) 가 항행 시작을 파일 값으로 지우므로 그 뒤에 세이브 값으로 덮는다 — 원본도 −1 복원이 파일 값 읽기(0x100f58af)
             // 뒤에 +0x2e40/+0x2e42 를 덮는다(0x100f5994/0x100f59ab, 감사 R2).
@@ -1188,12 +1188,12 @@ internal sealed unsafe partial class GameWindow
         }
         // 타이틀·모세스·필드에서 불러왔으면 그 화면을 내리고 전투 음악으로 바꾼다 — 모세스에서 전투 세이브를 부르면
         // 모세스 음악이 그대로 흐르던 문제(사용자 보고).
-        if (_titleOpen || fromMoses)
+        if (TitleScr._titleOpen || fromMoses)
         {
-            _titleOpen = false;
+            TitleScr._titleOpen = false;
             Fld.CloseField();
             Mos._mosesOpen = false;
-            _episodesOpen = false;
+            EpisodesScr._episodesOpen = false;
             StopMusic();
             StartBattleMusic();
         }

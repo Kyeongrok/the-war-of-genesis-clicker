@@ -27,7 +27,7 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawHud()
     {
-        if (Mos._mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
+        if (Mos._mosesOpen || ChaptersScr._chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
         if (EventsBusy || _deployOpen) return;
 

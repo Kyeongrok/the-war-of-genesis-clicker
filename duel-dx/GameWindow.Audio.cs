@@ -517,7 +517,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void StepWalkSounds()
     {
-        if (FieldOpen || Mos._mosesOpen || _titleOpen || _episodesOpen || _recordsOpen || _units is not { Length: > 0 } units) return;
+        if (FieldOpen || Mos._mosesOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen || RecordsScr._recordsOpen || _units is not { Length: > 0 } units) return;
         if (_walkTicks.Count > units.Length * 2) _walkTicks.Clear();   // 다른 전투의 인물은 버린다
         foreach (var u in units)
         {
