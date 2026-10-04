@@ -11,10 +11,10 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int GravityFieldAbility = 110;
-    private const int GravityObs = 219, GravitySoundObs = 1414;
+    internal const int GravityFieldAbility = 110;
+    internal const int GravityObs = 219, GravitySoundObs = 1414;
 
-    private IEnumerable<bool> GravityFieldRoutine(UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> GravityFieldRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         double t0 = _lastTime;
         FxSound(GravitySoundObs, 0, t0);

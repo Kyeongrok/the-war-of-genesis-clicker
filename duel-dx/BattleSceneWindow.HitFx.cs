@@ -16,21 +16,21 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>맞음 동작 — 동작 2(모션 6·7·8), 15틱.</summary>
-    private const int HitAction = 2, HitActionTicks = 15;
+    internal const int HitAction = 2, HitActionTicks = 15;
 
     /// <summary>불꽃 이펙트 Obs 와 유닛 기준점에서의 높이(픽셀).</summary>
-    private const int HitEffectObs = 73, HitEffectLift = 18;
+    internal const int HitEffectObs = 73, HitEffectLift = 18;
 
     /// <summary>쓰러질 때도 같은 동작 2 를 21틱 한다(명령 0x2717).</summary>
-    private const int DeathActionTicks = 21;
+    internal const int DeathActionTicks = 21;
 
-    private readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effects = [];
+    internal readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effects = [];
 
     /// <summary>치명타가 난 틱에 화면 전체를 한 번 물들인다(<c>0x1002e8f0(9,16,1,0)</c>).</summary>
-    private double _critFlashAt = -1;
+    internal double _critFlashAt = -1;
 
     /// <summary>맞은 쪽 반응 — 동작 2 와 불꽃 이펙트(피해가 있을 때만).</summary>
-    private void PlayHitReaction(UnitState target, bool damaged)
+    internal void PlayHitReaction(UnitState target, bool damaged)
     {
         // 맞음 동작은 그 유닛 모션(6·7·8)의 길이만큼 한 번 돈다 — 15틱이 아닌 모션이 119개다(ba-21 T7). 전에는 늘 15틱으로 잘랐다.
         int ticks = _sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
@@ -40,10 +40,10 @@ internal sealed unsafe partial class BattleSceneWindow
         _effects.Add((HitEffectObs, _rng.Next(3), _lastTime, x, y - HitEffectLift));
     }
 
-    private void PlayCritFlash() => _critFlashAt = _lastTime;
+    internal void PlayCritFlash() => _critFlashAt = _lastTime;
 
     /// <summary>동작을 정해진 틱 수만큼 재생한다(모션 길이 대신).</summary>
-    private void PlayActionFor(UnitState u, int action, int ticks)
+    internal void PlayActionFor(UnitState u, int action, int ticks)
     {
         u.PlayAction(action, ticks / TicksPerSecond);
         ScheduleActionSounds(u, action);
@@ -60,7 +60,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </param>
     /// <param name="fade">몸 그림과 같이 사라졌다 나타나게(<see cref="UnitState.Fade"/>) — 몸만 사라지고 무기가 남으면 안 된다.</param>
     /// <param name="loop">몸 모션이 되풀이하는가(서기·걷기) — 되풀이하면 자식 키도 한 바퀴마다 다시 터진다.</param>
-    private void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1, bool loop = true)
+    internal void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1, bool loop = true)
     {
         if (clip == null || fade <= 0) return;
         // 되풀이하는 몸 모션에서는 틱을 한 바퀴로 접는다 — 원본도 모션이 처음으로 돌아가면 키를 다시 읽는다.
@@ -82,27 +82,27 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>시전자에서 대상으로 날아가는 이펙트 — (Obs, 모션, 시작, 출발 x·y, 도착 x·y).</summary>
     /// <remarks>Ticks 가 0 보다 크면 그 틱 동안 옮기며 모션을 되풀이한다(초상 컷인처럼 한 장짜리 모션). 0 이면 모션 길이 동안 한 번.</remarks>
-    private readonly List<(int Obs, int Motion, double Start, int FromX, int FromY, int ToX, int ToY, int Ticks)> _flyingEffects = [];
+    internal readonly List<(int Obs, int Motion, double Start, int FromX, int FromY, int ToX, int ToY, int Ticks)> _flyingEffects = [];
 
     /// <summary>날아가는 이펙트를 모션 길이 동안 출발에서 도착으로 옮기며 그린다.</summary>
     /// <summary>
     /// 빠르기가 정해진 직선탄(이동기 0x100c3490, 틱 0x10037b50) — 틱당 <c>Speed</c> px 로 To 를 향해 가고, 틱마다 빠르기에 배율을 곱하거나(방식 1)
     /// 더한다(방식 0). 최소·최대 빠르기로 자른다. 닿으면 사라진다. 전에는 「모션 길이 동안 등속」 한 가지뿐이었다(ba-21 fx F2).
     /// </summary>
-    private readonly List<(int Obs, int Motion, double Start, double FromX, double FromY, double ToX, double ToY,
+    internal readonly List<(int Obs, int Motion, double Start, double FromX, double FromY, double ToX, double ToY,
                            double Speed, double Scale, int Mode, double Min, double Max, bool Mirror)> _shots = [];
 
     /// <summary>좌우를 뒤집어 그릴 이펙트(_effects 의 줄) — 시전자가 오른쪽을 볼 때 따위(0x100e56c0, ba-21 fx F10).</summary>
-    private readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effectMirrors = [];
+    internal readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effectMirrors = [];
 
     /// <summary>
     /// 고리(0x100cd310)·포물선(0x100cb550) 이동기 — 고리: 가운데 둘레를 반지름 R0 → R1, 처음 각 A0 에서 각속도 W 로 Ticks 틱 돈다.
     /// 포물선: From → To 를 Ticks 틱에 가며 가운데가 솟는다. 길 식은 인자에서 짠 것(가설, ba-21 fx F2).
     /// </summary>
-    private readonly List<(int Obs, int Motion, double Start, int Kind, double X0, double Y0, double X1, double Y1,
+    internal readonly List<(int Obs, int Motion, double Start, int Kind, double X0, double Y0, double X1, double Y1,
                            int Ticks, double R0, double R1, double A0, double W, bool Mirror)> _movers = [];
 
-    private void DrawMovers()
+    internal void DrawMovers()
     {
         _movers.RemoveAll(m =>
         {
@@ -123,7 +123,7 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
-    private void DrawShots()
+    internal void DrawShots()
     {
         DrawMovers();
         _shots.RemoveAll(s =>
@@ -151,7 +151,7 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
-    private void DrawFlyingEffects()
+    internal void DrawFlyingEffects()
     {
         DrawShots();
         _flyingEffects.RemoveAll(f =>
@@ -168,7 +168,7 @@ internal sealed unsafe partial class BattleSceneWindow
         });
     }
 
-    private void DrawEffects()
+    internal void DrawEffects()
     {
         DrawFlyingEffects();
         DrawSwords();                                       // 나인 크루세이더의 나는 칼
@@ -183,7 +183,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>이펙트 한 줄을 그린다 — 다 끝났으면 true(지운다).</summary>
-    private bool DrawEffectOnce((int Obs, int Motion, double Start, int X, int Y) e, bool mirror)
+    internal bool DrawEffectOnce((int Obs, int Motion, double Start, int X, int Y) e, bool mirror)
     {
         if (_lastTime < e.Start) return false;             // 아직 기다리는 이펙트(지연)
         int tick = (int)((_lastTime - e.Start) * TicksPerSecond);
@@ -199,7 +199,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>치명타 물들이기 — 방식 9(픽셀 절반)에 가깝게 한 프레임만 화면을 어둡게 번쩍인다.</summary>
-    private void DrawCritFlash()
+    internal void DrawCritFlash()
     {
         if (_critFlashAt < 0 || _lastTime - _critFlashAt > 1.0 / TicksPerSecond) return;
         for (int i = 0; i < _fb.Length; i++)
@@ -215,25 +215,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 숫자 색 — 원본 COLORREF 그대로 순색: 피해 0x0000ff = (255,0,0) · 회복 0x00ffff = (255,255,0) · Miss 0x64ff64(<c>0x100d2580</c>, 감사 3 H3).
     /// 전에는 피해 (255,48,48)·회복 (255,255,96) 으로 조금 바랬다.
     /// </summary>
-    private const uint DamageColor = 0xFFFF0000, HealColor2 = 0xFFFFFF00, MissColor = 0xFF64FF64;
+    internal const uint DamageColor = 0xFFFF0000, HealColor2 = 0xFFFFFF00, MissColor = 0xFF64FF64;
 
     /// <summary>
     /// 떠오르는 숫자·글자 — 피해는 빨강 "HP 91", 회복은 노랑(안 떠오르고 옛 HP 에서 새 HP 로 세어 올라감),
     /// Miss 는 연두. 떠오름은 틱마다 z += 40/나이, 20틱에 사라진다(화면 픽셀 = z×12/20).
     /// 세어 올라가는 회복 숫자는 <b>목표 HP 에 닿는 그 틱에</b> 사라진다(<c>0x100d2950</c> — 차이/10(최소 1)씩이라 보통 10~11틱).
     /// </summary>
-    private void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
+    internal void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
     {
         var (x, y) = UnitFoot(u);
         _numbers.Add((text, color, x, y, _lastTime, rise, count));
     }
 
     /// <summary>판의 그 자리에 숫자를 띄운다 — 물체가 맞을 때는 물체 자리에 뜬다(0x100e77e0, ba-20 O P2).</summary>
-    private void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, _lastTime, true, null));
+    internal void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, _lastTime, true, null));
 
-    private readonly List<(string Text, uint Color, int X, int Y, double Start, bool Rise, (int From, int To)? Count)> _numbers = [];
+    internal readonly List<(string Text, uint Color, int X, int Y, double Start, bool Rise, (int From, int To)? Count)> _numbers = [];
 
-    private void DrawNumbers()
+    internal void DrawNumbers()
     {
         _numbers.RemoveAll(n =>
         {

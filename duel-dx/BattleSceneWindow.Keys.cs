@@ -31,9 +31,9 @@ internal sealed class KeyBindings
         (KeyAction.Gauges, "체력바 켜기·끄기", 'H'),
     ];
 
-    private readonly Dictionary<KeyAction, int> _keys = [];
+    internal readonly Dictionary<KeyAction, int> _keys = [];
 
-    private static string FilePath => UserDataFolder.File("keys.json");
+    internal static string FilePath => UserDataFolder.File("keys.json");
 
     public KeyBindings() => ResetDefaults();
 
@@ -97,52 +97,52 @@ internal sealed class KeyBindings
 /// <summary>상단 메뉴(설정 > 단축키 설정 …)와 단축키 설정 창.</summary>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private readonly KeyBindings _keys = KeyBindings.Load();
-    private bool _keysOpen;
-    private int _keysCapture = -1;
+    internal readonly KeyBindings _keys = KeyBindings.Load();
+    internal bool _keysOpen;
+    internal int _keysCapture = -1;
 
-    private const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
-    private const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101;
+    internal const int MenuKeys = 1001, MenuGrid = 1002, MenuGauges = 1003, MenuExit = 1004, MenuChapters = 1005;
+    internal const int MenuAllyAi = 1006, MenuHints = 1007, MenuLevelUpWindow = 1009, MenuKeepJobExp = 1100, MenuStatusBar = 1101;
 
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
-    private const int MenuTalkPauseBase = 1130;
+    internal const int MenuTalkPauseBase = 1130;
 
-    private const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106, MenuTalkClickFills = 1108;
+    internal const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106, MenuTalkClickFills = 1108;
 
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
-    private static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
+    internal static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
     /// <summary>도구 > 적 정리 — 시험용: 적을 다 쓰러뜨리고 경험치를 내가 움직이는 동료끼리 나눈다.</summary>
-    private const int MenuClearEnemies = 1008;
+    internal const int MenuClearEnemies = 1008;
 
     /// <summary>개발 &gt; 어빌리티 반영 — 편집기에서 고친 스킬 파일을 게임을 끄지 않고 다시 읽는다.</summary>
-    private const int MenuReloadSkills = 1107;
+    internal const int MenuReloadSkills = 1107;
 
     /// <summary>「게임 속도」 줄 번호 — 1110 + <see cref="SpeedChoices"/> 순번.</summary>
-    private const int MenuSpeedBase = 1110;
+    internal const int MenuSpeedBase = 1110;
 
-    private static readonly int[] SpeedChoices = [100, 150, 200];
+    internal static readonly int[] SpeedChoices = [100, 150, 200];
 
     /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 줄 번호 — 1200 + 목록 순번.</summary>
-    private const int MenuReplayBase = 1200;
+    internal const int MenuReplayBase = 1200;
 
     /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 — 펼칠 때마다 지금 챕터에서 다녀온 장소로 다시 채운다.</summary>
-    private static IntPtr _replayMenu;
+    internal static IntPtr _replayMenu;
 
     /// <summary>하위 메뉴에 지금 올라 있는 장소들(줄 순번 차례).</summary>
-    private readonly List<(int Chapter, int Place)> _replayItems = [];
+    internal readonly List<(int Chapter, int Place)> _replayItems = [];
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
-    private const int MenuZoomAuto = 1010;
-    private static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
+    internal const int MenuZoomAuto = 1010;
+    internal static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
-    private const int MenuResBase = 1020;
-    private static readonly (int W, int H)[] ResChoices =
+    internal const int MenuResBase = 1020;
+    internal static readonly (int W, int H)[] ResChoices =
         [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160)];
 
     /// <summary>동맹(편 3)을 AI 가 움직이나 — 끄면 내가 직접 움직인다(설정 > 모드).</summary>
-    private bool _allyAi = UserSettings.Current.AllyAi;
+    internal bool _allyAi = UserSettings.Current.AllyAi;
 
     /// <summary>창 위 메뉴 막대 — 설정(단축키 설정·격자·체력바·끝내기).</summary>
-    private static IntPtr CreateMenuBar()
+    internal static IntPtr CreateMenuBar()
     {
         IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu(), game = Win32.CreatePopupMenu();
         Win32.AppendMenuW(game, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
@@ -207,7 +207,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 「다녀온 장소 다시 열기」를 펼칠 때 — 지금 챕터에서 다녀온 장소(전투·필드)를 줄로 올린다.
     /// 이야기 사슬이 끊겨(예: 전멸 승리가 전투 137 의 필드 55 행을 건너뛰던 버그) 다시 해야 할 때 쓴다(사용자 요청).
     /// </summary>
-    private void RebuildReplayMenu()
+    internal void RebuildReplayMenu()
     {
         while (Win32.GetMenuItemCount(_replayMenu) > 0) Win32.DeleteMenu(_replayMenu, 0, Win32.MF_BYPOSITION);
         _replayItems.Clear();
@@ -225,7 +225,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>다녀온 장소의 표시를 지워 항행에서 다시 고를 수 있게 한다 — 진행 깃발은 건드리지 않는다.</summary>
-    private void ReopenPlace(int index)
+    internal void ReopenPlace(int index)
     {
         if ((uint)index >= _replayItems.Count) return;
         var (chapter, place) = _replayItems[index];
@@ -236,21 +236,21 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    private void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, _soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
 
     /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
-    private bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
+    internal bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
 
     /// <summary>지금 AI 행동을 건너뛰는 중인가 — 그 유닛의 차례가 끝날 때까지 한 틀에 여러 번 갱신한다. 그동안 효과음은 안 낸다.</summary>
-    private bool _skippingAction;
+    internal bool _skippingAction;
 
     /// <summary>건너뛰기를 시작한 때(게임 초) — 그 뒤에 뜬 숫자는 건너뛰기가 끝난 때로 다시 맞춰 결과가 보이게 한다.</summary>
-    private double _skipFrom;
+    internal double _skipFrom;
 
-    private const int MenuSkipEnemy = 1109;
+    internal const int MenuSkipEnemy = 1109;
 
     /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
-    private bool TrySkipEnemyAction()
+    internal bool TrySkipEnemyAction()
     {
         if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return false;
         if (IsPlayerTurn || _routine == null || _outcome.Length > 0 || EventsBusy || LevelUpOpen || SystemOpen || _deployOpen) return false;
@@ -260,7 +260,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>건너뛰는 중이면 갱신 한 번 뒤에 부른다 — 그 행동이 끝났거나 사람이 봐야 할 것(대사·사건·결과·레벨업·내 차례)이 생기면 멈춘다.</summary>
-    private void StepSkipEnemyAction()
+    internal void StepSkipEnemyAction()
     {
         if (!_skippingAction) return;
         if (_routine != null && !IsPlayerTurn && _outcome.Length == 0 && !EventsBusy && !LevelUpOpen && _lastTime - _skipFrom < 60) return;
@@ -277,36 +277,36 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>대사 첫 클릭은 글 채우기 — 설정 > 대사 첫 클릭은 글 채우기. 끄면(기본) 원본처럼 첫 클릭에 곧바로 닫는다(감사 3 T1).</summary>
-    private bool _talkClickFills = UserSettings.Current.TalkFillFirst;
+    internal bool _talkClickFills = UserSettings.Current.TalkFillFirst;
 
     /// <summary>전투를 시작할 때 내 편 SOUL 을 가득 채우나 — 모드 > 전투 시작 시 소울 가득(원본에 없는 편의 기능, 기본 끔).</summary>
-    private bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;
+    internal bool _fullSoulAtStart = UserSettings.Current.FullSoulAtStart;
 
     /// <summary>지금 전투의 상자에 든 것을 왼쪽 위에 보이나 — 모드 > 상자 내용물 보기(원본에 없는 도움 기능, 기본 끔).</summary>
-    private bool _showChestContents = UserSettings.Current.ShowChestContents;
+    internal bool _showChestContents = UserSettings.Current.ShowChestContents;
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
-    private bool _showStatusBar = UserSettings.Current.ShowStatusBar;
+    internal bool _showStatusBar = UserSettings.Current.ShowStatusBar;
 
     /// <summary>대사와 대사 사이의 멈춤(초) — 설정 > 대사 사이 멈춤. 음수면 원본대로 스크립트 값.</summary>
-    private double _talkPauseSeconds = UserSettings.Current.TalkPauseSeconds;
+    internal double _talkPauseSeconds = UserSettings.Current.TalkPauseSeconds;
 
     /// <summary>화면 왼쪽 아래 장면 번호를 보이나 — 설정 > 장면 번호 보이기.</summary>
-    private bool _showSceneTag = UserSettings.Current.ShowSceneTag;
+    internal bool _showSceneTag = UserSettings.Current.ShowSceneTag;
 
     /// <summary>그 값에 해당하는 메뉴 줄 — 목록에 없는 값(settings.json 을 손으로 고친 것)이면 −1(아무 줄도 체크 안 함).</summary>
-    private static int TalkPauseIndex(double seconds) =>
+    internal static int TalkPauseIndex(double seconds) =>
         Array.FindIndex(TalkPauseChoices, c => c < 0 ? seconds < 0 : Math.Abs(c - seconds) < 1e-6);
 
-    private static string TalkPauseLabel(double seconds) => seconds < 0 ? "원본대로(보통 1초)" : $"{seconds:0.0#}초";
+    internal static string TalkPauseLabel(double seconds) => seconds < 0 ? "원본대로(보통 1초)" : $"{seconds:0.0#}초";
 
     /// <summary>게임 속도 %(100 = 원본). 게임 시계가 실제 시간의 이만큼 흐른다.</summary>
-    private int _gameSpeed = UserSettings.Current.GameSpeed is 100 or 150 or 200 ? UserSettings.Current.GameSpeed : 100;
+    internal int _gameSpeed = UserSettings.Current.GameSpeed is 100 or 150 or 200 ? UserSettings.Current.GameSpeed : 100;
 
     /// <summary>전직할 때 EXP 를 남길지 — 설정 > 전직할 때 EXP 유지. 원본은 0 으로 비운다.</summary>
-    private bool _keepJobExp = UserSettings.Current.KeepExpOnJobChange;
+    internal bool _keepJobExp = UserSettings.Current.KeepExpOnJobChange;
 
-    private void OnMenuCommand(int id)
+    internal void OnMenuCommand(int id)
     {
         if (OnDifficultyMenu(id)) return;
         if (id == MenuTuning) { _tuningOpen = true; _tuningListOpen = false; return; }
@@ -424,15 +424,15 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 단축키 설정 창 ───────────────────────────────────────────────────────
 
-    private const int KeysW = 420, KeysRowH = 26, KeysTop = 40;
+    internal const int KeysW = 420, KeysRowH = 26, KeysTop = 40;
 
-    private (int X, int Y, int H) KeysPanel()
+    internal (int X, int Y, int H) KeysPanel()
     {
         int h = KeysTop + KeyBindings.All.Length * KeysRowH + 56;
         return (_camX + (ViewWidth - KeysW) / 2, _camY + GridTop + (ViewHeight - GridTop - h) / 2, h);
     }
 
-    private void OnKeysKey(int key)
+    internal void OnKeysKey(int key)
     {
         if (_keysCapture < 0)
         {
@@ -447,7 +447,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _keysCapture = -1;
     }
 
-    private bool OnKeysClick(int bx, int by)
+    internal bool OnKeysClick(int bx, int by)
     {
         if (!_keysOpen) return false;
         var (x, y, h) = KeysPanel();
@@ -463,7 +463,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void DrawKeysPanel()
+    internal void DrawKeysPanel()
     {
         if (!_keysOpen) return;
         var (x, y, h) = KeysPanel();
@@ -498,7 +498,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 개발 &gt; 어빌리티 반영 — 스킬 파일과 군단 덮어쓰기(assets/data/legions)를 다시 읽는다. 비용·범위·위력 등은 다음에 쓰는 기술부터,
     /// 군단 구성(부하·진형·보정)은 다음 전투부터 새 값이다.
     /// </summary>
-    private void ReloadSkills()
+    internal void ReloadSkills()
     {
         if (_db is not { } db) { Toast("게임 자료가 아직 없습니다"); return; }
         int n = db.ReloadSkills();

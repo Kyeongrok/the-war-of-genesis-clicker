@@ -7,14 +7,14 @@ namespace DuelDx;
 /// </summary>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private GameDatabase? _db;
-    private readonly Dictionary<int, SpriteFrame> _faces = [];
+    internal GameDatabase? _db;
+    internal readonly Dictionary<int, SpriteFrame> _faces = [];
 
     /// <summary>
     /// 초상 Obs 에서 <b>60×60 얼굴 장</b>을 고른다 — 죠안·살라딘은 첫 장이 얼굴이지만 제이슨(Obs 0433)은 앞 네 장이
     /// 392×480 전신 그림의 네 조각이고 다섯째가 얼굴이다. 60×60 이 없으면 첫 장(가설: 원본 Status 초상은 60×60).
     /// </summary>
-    private static ObsFrame? DecodeFaceFrame(string path)
+    internal static ObsFrame? DecodeFaceFrame(string path)
     {
         try
         {
@@ -24,24 +24,24 @@ internal sealed unsafe partial class BattleSceneWindow
         catch (Exception ex) when (ex is IOException or InvalidDataException) { return null; }
     }
 
-    private int _statusUnit = -1;
-    private string _toast = "";
-    private double _toastUntil;
+    internal int _statusUnit = -1;
+    internal string _toast = "";
+    internal double _toastUntil;
 
-    private void Toast(string text)
+    internal void Toast(string text)
     {
         _toast = text;
         _toastUntil = _lastTime + 2.5;
     }
 
     /// <summary>조작 안내 글 — 설정 > 안내 글 켜기·끄기로 숨길 수 있다(사용자 요청). 결과 알림(Toast)은 늘 보인다.</summary>
-    private void Hint(string text) { if (_showHints) Toast(text); }
+    internal void Hint(string text) { if (_showHints) Toast(text); }
 
-    private bool _showHints = UserSettings.Current.ShowHints;
+    internal bool _showHints = UserSettings.Current.ShowHints;
 
-    private string UnitName(int index) => _names.GetValueOrDefault(_units[index].ChrCode, "");
+    internal string UnitName(int index) => _names.GetValueOrDefault(_units[index].ChrCode, "");
 
-    private int UnitAtBoard(int bx, int by)
+    internal int UnitAtBoard(int bx, int by)
     {
         if (by < GridTop) return -1;
         int col = bx / TileW, row = RowAt(bx, by);
@@ -54,7 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 인물 그림은 두 칸쯤 높아 몸통을 누르면 윗칸이 잡혀, 적 정보 창 대신 차례인 아군의 링이 열렸다(사용자 보고).
     /// 왼쪽 클릭은 인물 뒤 칸으로 걷기도 하므로 발밑 칸(<see cref="UnitAtBoard"/>)만 본다.
     /// </summary>
-    private int UnitAtPoint(int bx, int by)
+    internal int UnitAtPoint(int bx, int by)
     {
         int onTile = UnitAtBoard(bx, by);
         if (onTile >= 0) return onTile;
@@ -76,7 +76,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 왼쪽 클릭·칼 커서용 — 발밑 칸의 인물, 없으면 그림을 누른 <b>적</b>. 적 몸통을 눌러도 칠 수 있게 한다(사용자 보고: 네리사 차례).
     /// 아군 그림은 안 본다 — 아군 뒤 칸을 눌러 걸어가는 것을 막지 않으려고.
     /// </summary>
-    private int UnitOrFoeAt(int bx, int by)
+    internal int UnitOrFoeAt(int bx, int by)
     {
         int onTile = UnitAtBoard(bx, by);
         if (onTile >= 0) return onTile;
@@ -86,7 +86,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── Status 화면 그리기 도구 (화면은 BattleSceneWindow.Status.cs) ──────────
 
-    private void Header(int x, int y, int w, string text)
+    internal void Header(int x, int y, int w, string text)
     {
         FillRect(x, y, w, 20, HeadBg);
         StrokeRect(x, y, w, 20, 0xFF7FA6E8);
@@ -94,38 +94,38 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawText(text, x + (w - tw) / 2, y + 2, White);
     }
 
-    private void Box(int x, int y, int w, int h)
+    internal void Box(int x, int y, int w, int h)
     {
         FillRect(x, y, w, h, BoxBg);
         StrokeRect(x, y, w, h, BoxLine);
     }
 
-    private void Stat(int x, int y, int w, string label, string value)
+    internal void Stat(int x, int y, int w, string label, string value)
     {
         DrawText(label, x + 8, y, White);
         RightText(value, x + w - 8, y, White);
     }
 
-    private void StatBar(int x, int y, int w, string label, int value, int max)
+    internal void StatBar(int x, int y, int w, string label, int value, int max)
     {
         Stat(x, y, w, label, $"{value} / {max}");
         FillRect(x + 8, y + 22, w - 16, 3, Bar);
         if (max > 0) FillRect(x + 8, y + 22, (w - 16) * Math.Clamp(value, 0, max) / max, 3, Red);
     }
 
-    private void AbilityRow(int x, int y, int w, string name, string cost, bool affordable = true)
+    internal void AbilityRow(int x, int y, int w, string name, string cost, bool affordable = true)
     {
         DrawText(name, x + 10, y, White);
         if (cost.Length > 0) RightText(cost, x + w - 10, y, affordable ? Red : 0xFF804848);
     }
 
-    private void RightText(string text, int right, int y, uint color, float size = 13f)
+    internal void RightText(string text, int right, int y, uint color, float size = 13f)
     {
         var (_, w, _) = GetText(text, color, size);
         DrawText(text, right - w, y, color, size);
     }
 
-    private void BlitClipped(SpriteFrame f, int x, int y, int w, int h)
+    internal void BlitClipped(SpriteFrame f, int x, int y, int w, int h)
     {
         int sx = Math.Max(0, (f.W - w) / 2), sy = Math.Max(0, (f.H - h) / 2);
         for (int yy = 0; yy < Math.Min(h, f.H); yy++)
@@ -136,7 +136,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
     }
 
-    private void DrawToast()
+    internal void DrawToast()
     {
         if (_toast.Length == 0 || _lastTime > _toastUntil) return;
         var (_, w, h) = GetText(_toast, White);
@@ -149,7 +149,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 지금 장면의 번호 — 화면 왼쪽 아래 작은 글(「Fld 0365 · 사건 3 · 줄 12」, 「Btl 0137 · 턴 4」, 「Chp 0011」).
     /// 원본에는 없다 — 어느 장면 이야기인지 서로 짚기 쉽게(사용자 요청). 설정 > 장면 번호 보이기.
     /// </summary>
-    private void DrawSceneTag()
+    internal void DrawSceneTag()
     {
         if (!_showSceneTag || _titleOpen || _recordsOpen) return;
         string tag;
@@ -168,7 +168,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 원 ───────────────────────────────────────────────────────────────────
 
-    private void FillCircle(int cx, int cy, int r, uint color)
+    internal void FillCircle(int cx, int cy, int r, uint color)
     {
         for (int y = -r; y <= r; y++)
         {
@@ -177,7 +177,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void StrokeCircle(int cx, int cy, int r, uint color, int thickness)
+    internal void StrokeCircle(int cx, int cy, int r, uint color, int thickness)
     {
         int outer = r * r, inner = (r - thickness) * (r - thickness);
         for (int y = -r; y <= r; y++)

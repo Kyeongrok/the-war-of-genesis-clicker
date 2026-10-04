@@ -18,17 +18,17 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int ItemRowW = 182, ItemRowH = 22, ItemRows = 8, ItemMenuW = 206;
-    private const int ItemIconObs = 326, ItemRowObs = 471, ItemRowMotion = 4;
+    internal const int ItemRowW = 182, ItemRowH = 22, ItemRows = 8, ItemMenuW = 206;
+    internal const int ItemIconObs = 326, ItemRowObs = 471, ItemRowMotion = 4;
 
-    private bool _itemMenu;
-    private int _itemTop;
+    internal bool _itemMenu;
+    internal int _itemTop;
 
     /// <summary>대상을 고르는 중인 아이템 — 쓰면 개수가 하나 준다. 0 이면 아이템이 아니다.</summary>
-    private int _targetItem;
+    internal int _targetItem;
 
     /// <summary>가방에서 전투에 쓸 수 있는 것만 — (아이템, 개수).</summary>
-    private List<(ItemData Item, int Count)> ItemRowsList()
+    internal List<(ItemData Item, int Count)> ItemRowsList()
     {
         if (_db is not { } db) return [];
         var list = new List<(ItemData Item, int Count)>();
@@ -40,7 +40,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return list;
     }
 
-    private (int X, int Y, int H) ItemMenuRect()
+    internal (int X, int Y, int H) ItemMenuRect()
     {
         var rows = ItemRowsList();
         int shown = Math.Clamp(rows.Count, 1, ItemRows);
@@ -52,7 +52,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>목록이 열려 있으면 클릭을 처리하고 true. 밖을 누르면 닫는다.</summary>
-    private bool OnItemMenuClick(int bx, int by)
+    internal bool OnItemMenuClick(int bx, int by)
     {
         if (!_itemMenu) return false;
         _itemMenu = false;
@@ -87,7 +87,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>대상을 확정했을 때 — 개수를 하나 줄인다(0 이면 목록에서 사라진다).</summary>
-    private void ConsumeTargetItem()
+    internal void ConsumeTargetItem()
     {
         if (_targetItem == 0) return;
         if (_inventory.TryGetValue(_targetItem, out int count))
@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _targetItem = 0;
     }
 
-    private void DrawItemMenu()
+    internal void DrawItemMenu()
     {
         if (!_itemMenu || _turn < 0 || _db is not { } db) return;
         var rows = ItemRowsList();

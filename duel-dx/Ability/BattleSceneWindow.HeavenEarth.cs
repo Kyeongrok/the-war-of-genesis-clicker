@@ -24,37 +24,37 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int HeavenEarthWork = 1591;
-    private const int CrackObs = 1014, DebrisObs = 251, RuptureObs = 1211, BlastObs = 111, HeavenEarthSoundObs = 1438;
+    internal const int HeavenEarthWork = 1591;
+    internal const int CrackObs = 1014, DebrisObs = 251, RuptureObs = 1211, BlastObs = 111, HeavenEarthSoundObs = 1438;
 
     /// <summary>시각을 정해 둔 효과 하나 — 끝이 null 이면 모션 한 번.</summary>
-    private sealed record TimedFx(int Obs, int Motion, double Start, int X, int Y, double? End, bool Mirror);
+    internal sealed record TimedFx(int Obs, int Motion, double Start, int X, int Y, double? End, bool Mirror);
 
-    private readonly List<TimedFx> _timedFx = [];
+    internal readonly List<TimedFx> _timedFx = [];
 
     /// <summary>튕겨 오르는 파편 — 월드 좌표(x·y 화면 픽셀, z 높이)와 속도.</summary>
-    private sealed class Debris
+    internal sealed class Debris
     {
         public int Obs, Motion;
         public double Start, X, Y, Z, Vx, Vy, Vz, Bounce;
         public int Age;
     }
 
-    private readonly List<Debris> _debris = [];
-    private double _debrisLastStep;
+    internal readonly List<Debris> _debris = [];
+    internal double _debrisLastStep;
 
     /// <summary>화면 흔들림 — (끝나는 때, 세기, 세로인가). 원본 <c>0x100c6f70</c>(가로)·<c>0x100c7120</c>(세로) 는 틀마다 ±세기로 번갈아 민다.</summary>
-    private readonly List<(double Start, double End, int Strength, bool Vertical)> _shakes = [];
+    internal readonly List<(double Start, double End, int Strength, bool Vertical)> _shakes = [];
 
-    private double Ticks(double n) => n / TicksPerSecond;
+    internal double Ticks(double n) => n / TicksPerSecond;
 
     /// <summary>칼 꽂기 모션 — 48 꽂기 · 49 꽂은 채(반복 1000) · 50 뽑기. 방향과 상관없이 이 번호 그대로 튼다.</summary>
-    private const int StabMotion = 48;
+    internal const int StabMotion = 48;
 
     /// <summary>
     /// 인물에게 모션 번호를 바로 튼다(<c>0x100e53c0</c>)고 그 모션의 소리 키를 예약한다. 한 번 도는 길이(초)를 돌려준다 — 그 모션이 없으면 0.
     /// </summary>
-    private double PlayRawMotion(UnitState u, int motion, bool loop, double holdSeconds = 1000)
+    internal double PlayRawMotion(UnitState u, int motion, bool loop, double holdSeconds = 1000)
     {
         var found = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.RawClip(motion) : null;
         if (Trace)
@@ -68,12 +68,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 모션 한 번의 길이(초) — 자식까지는 안 본다.</summary>
-    private double OnceSeconds(int obs, int motion) => Math.Max(1, UiFor(obs)?.MotionLength(motion) ?? 1) / TicksPerSecond;
+    internal double OnceSeconds(int obs, int motion) => Math.Max(1, UiFor(obs)?.MotionLength(motion) ?? 1) / TicksPerSecond;
 
-    private void AddTimedFx(int obs, int motion, double start, (double X, double Y) at, double? lifeTicks, bool mirror) =>
+    internal void AddTimedFx(int obs, int motion, double start, (double X, double Y) at, double? lifeTicks, bool mirror) =>
         _timedFx.Add(new TimedFx(obs, motion, start, (int)at.X, (int)at.Y, lifeTicks is { } life ? start + Ticks(life) : null, mirror));
 
-    private void HeavenEarthSound(int motion, double at)
+    internal void HeavenEarthSound(int motion, double at)
     {
         if (_effectTables.GetValueOrDefault(HeavenEarthSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + Ticks(tick), sound));
@@ -82,7 +82,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 천지 파열무 핸들러 — 연출을 시각표로 깔고, 대상마다 폭발하는 때에 피해를 준다(<paramref name="hit"/>). 다 끝날 때까지 돈다.
     /// </summary>
-    private IEnumerable<bool> HeavenEarthRoutine(UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> HeavenEarthRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         // ── 단계 0 — 칼을 땅에 꽂는다(모션 48 한 번, 0x100b4410). 다 꽂으면 꽂은 자세(49)를 붙든 채 땅이 터진다(fg-19).
         for (double end = _lastTime + PlayRawMotion(user, StabMotion, loop: false); _lastTime < end;) yield return true;
@@ -179,7 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>파편 물리 한 틱씩(<c>0x10038fa0</c>) — 수명 200틱.</summary>
-    private void StepDebris()
+    internal void StepDebris()
     {
         int ticks = (int)((_lastTime - _debrisLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
@@ -200,7 +200,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>시각표 효과·파편을 그린다 — DrawEffects 가 부른다.</summary>
-    private void DrawHeavenEarthFx()
+    internal void DrawHeavenEarthFx()
     {
         StepDebris();
         _timedFx.RemoveAll(f => f.End is { } end ? _lastTime >= end : _lastTime >= f.Start + OnceSeconds(f.Obs, f.Motion));
@@ -218,7 +218,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>지금 흔들림 — 틀마다 ±세기로 번갈아(가로·세로 따로).</summary>
-    private (int X, int Y) ShakeOffset()
+    internal (int X, int Y) ShakeOffset()
     {
         _shakes.RemoveAll(s => _lastTime >= s.End);
         int x = 0, y = 0, sign = (int)(_lastTime * TicksPerSecond) % 2 == 0 ? 1 : -1;

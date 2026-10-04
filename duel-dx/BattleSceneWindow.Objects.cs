@@ -11,14 +11,14 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private IReadOnlyList<DemoObject> Objects => _scene.Objects ?? [];
+    internal IReadOnlyList<DemoObject> Objects => _scene.Objects ?? [];
 
     /// <summary>
     /// 그 칸의 물체 — 없으면 null. 원본 물체 격자 <c>+0x74</c>(<c>0x100d93e0</c>)처럼 <b>Obt 발자국 전체</b>(비트 0x10 아닌 칸)가 제 칸이고,
     /// <b>열린 문·연 상자도 돌려준다</b>(열린 문은 도장은 빠져도 격자에 남는다, 감사3 R1). 부서진 물체·터진 폭탄 상자만 뺀다.
     /// 예전에는 그림 폭(.obj 16 ≥ 36 이면 두 칸)으로 짐작하고 연 물체를 뺐다 — 1×2 바리케이트·3×1 문(Obj 71)이 틀렸다.
     /// </summary>
-    private DemoObject? ObjectAt(int col, int row)
+    internal DemoObject? ObjectAt(int col, int row)
     {
         EnsureStamp();
         if ((uint)col >= (uint)_stampCols || (uint)row >= (uint)_stampRows) return null;
@@ -28,15 +28,15 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>판에서 사라진 물체 — 부서졌거나(<c>+0x101</c>) 터진 폭탄 상자.</summary>
-    private bool ObjectGone(DemoObject o) => !o.Alive || (o.Data.Kind == 8 && _opened.Contains(o));
+    internal bool ObjectGone(DemoObject o) => !o.Alive || (o.Data.Kind == 8 && _opened.Contains(o));
 
     /// <summary>
     /// Obt 가 없을 때의 짐작 폭 — 그림 보정 가로(.obj 16)가 36 이상이면 두 칸(예전 규칙). 저장소에 Obt 가 없는 물체만 쓴다.
     /// </summary>
-    private static int ObjectWidth(DemoObject o) => o.Data.DrawW >= 36 ? 2 : 1;
+    internal static int ObjectWidth(DemoObject o) => o.Data.DrawW >= 36 ? 2 : 1;
 
     /// <summary>물체 발자국 칸들(판 좌표) — Obt 격자에서 비트 0x10 이 아닌 칸. Obt 가 없으면 그림 폭으로 짐작한 가로 칸들.</summary>
-    private static IEnumerable<(int Col, int Row, int Raw, ushort Flags)> FootprintCells(DemoObject o)
+    internal static IEnumerable<(int Col, int Row, int Raw, ushort Flags)> FootprintCells(DemoObject o)
     {
         if (o.Footprint is not { } fp)
         {
@@ -58,19 +58,19 @@ internal sealed unsafe partial class BattleSceneWindow
     // LoadBtl 0x10062b11(+0x78/+0x88)·0x10062b78(+0x80) 이 0x10028620 으로 찍고, 부서짐(0x100e7be9)·문 여닫기(0x100e7c70·0x100e7cc5)가
     // 판에 0x3f1 을 보내면 0x100ead80 이 지형으로 되돌린 뒤(0x100d91e0) 물체마다 다시 찍는다(0x100e6620: 사라진 것 +0x101 과 열린 문 1·4 는 건너뜀).
     // 상자(2)는 열어도(0x100e7ce0, 0x3f1 을 안 보낸다) 계속 찍힌다.
-    private ObtMapImage? _stampMap;
-    private IReadOnlyList<DemoObject>? _stampObjects;
-    private int _stampKey, _stampCols, _stampRows;
-    private double _stampTime = double.NaN;
-    private bool _stampDirty = true;
-    private int[] _walkH = [], _aimH = [], _objGrid = [];
-    private ushort[] _cellFlags = [];
+    internal ObtMapImage? _stampMap;
+    internal IReadOnlyList<DemoObject>? _stampObjects;
+    internal int _stampKey, _stampCols, _stampRows;
+    internal double _stampTime = double.NaN;
+    internal bool _stampDirty = true;
+    internal int[] _walkH = [], _aimH = [], _objGrid = [];
+    internal ushort[] _cellFlags = [];
 
     /// <summary>물체 상태가 바뀌었다(부서짐·여닫기) — 원본이 판에 0x3f1 을 보내는 자리. 다음 조회 때 판을 다시 찍는다.</summary>
-    private void RestampObjects() => _stampDirty = true;
+    internal void RestampObjects() => _stampDirty = true;
 
     /// <summary>도장 판이 지금 판·물체 상태와 맞는지 보고, 아니면 다시 찍는다. 물체 상태 서명은 틀마다 한 번만 잰다(세이브 되살리기도 잡힌다).</summary>
-    private void EnsureStamp()
+    internal void EnsureStamp()
     {
         if (_map is not { } map) { _stampCols = _stampRows = 0; return; }
         var objects = Objects;
@@ -83,7 +83,7 @@ internal sealed unsafe partial class BattleSceneWindow
         RebuildStamp(map, objects);
     }
 
-    private int StampKey(IReadOnlyList<DemoObject> objects)
+    internal int StampKey(IReadOnlyList<DemoObject> objects)
     {
         var hash = new HashCode();
         foreach (var o in objects) hash.Add((o.Alive ? 1 : 0) | (_opened.Contains(o) ? 2 : 0));
@@ -91,7 +91,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>지형에서 새로 시작해 살아 있고(종류 1·4 면) 닫혀 있는 물체를 차례로 찍는다(<c>0x100ead80</c> → <c>0x100e6620</c> → <c>0x10028620</c>).</summary>
-    private void RebuildStamp(ObtMapImage map, IReadOnlyList<DemoObject> objects)
+    internal void RebuildStamp(ObtMapImage map, IReadOnlyList<DemoObject> objects)
     {
         int cols = map.Cols, rows = map.Rows, n = cols * rows;
         if (_walkH.Length != n) { _walkH = new int[n]; _aimH = new int[n]; _cellFlags = new ushort[n]; _objGrid = new int[n]; }
@@ -138,51 +138,51 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>걷기 높이(<c>+0x78</c>, 모든 물체 포함) — 걷기 높이차·걸음 비용·ZOC·시야가 쓴다. 판 밖은 0.</summary>
-    private int WalkHeightAt(int col, int row)
+    internal int WalkHeightAt(int col, int row)
     {
         EnsureStamp();
         return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _walkH[row * _stampCols + col] : 0;
     }
 
     /// <summary>겨눔 높이(<c>+0x80</c>, 종류 0·3·4·5 물체만) — 거리 자·같은 높이·모드 7·화면 창이 쓴다. 판 밖은 0.</summary>
-    private int AimHeightAt(int col, int row)
+    internal int AimHeightAt(int col, int row)
     {
         EnsureStamp();
         return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _aimH[row * _stampCols + col] : 0;
     }
 
     /// <summary>물체까지 찍은 칸 플래그(<c>+0x88</c>) — &amp;9 걷기 금지 · &amp;8 사거리 제외. 판 밖은 0x8.</summary>
-    private ushort CellFlagsAt(int col, int row)
+    internal ushort CellFlagsAt(int col, int row)
     {
         EnsureStamp();
         return (uint)col < (uint)_stampCols && (uint)row < (uint)_stampRows ? _cellFlags[row * _stampCols + col] : (ushort)0x8;
     }
 
     /// <summary>문이 열린 때 — 그때부터 여는 모션(1)을 한 번 돌고 열린 모션(2)에 머문다.</summary>
-    private readonly Dictionary<DemoObject, double> _openedAt = [];
+    internal readonly Dictionary<DemoObject, double> _openedAt = [];
 
     /// <summary>
     /// 그 칸이 물체 때문에 설 수 없는 칸인가 — 문과 스위치문뿐이다(<c>0x100746b0</c>). 닫힌 문은 도장 플래그로 이미 벽이고,
     /// 이것이 실제로 거르는 것은 <b>열린 문</b>이다 — 지나갈 수는 있어도 멈춰 설 수는 없다(감사3 R1).
     /// </summary>
-    private bool ObjectBlocks(int col, int row) => ObjectAt(col, row) is { Data.BlocksStanding: true };
+    internal bool ObjectBlocks(int col, int row) => ObjectAt(col, row) is { Data.BlocksStanding: true };
 
     /// <summary>
     /// 물체가 그 인물에게 적인가 — 편 행렬(편 3·4 만 한편)로 가른다(0x1006fde0). 중립(−1) 물체는 바리케이트(7)만 누구나 부술 수 있고
     /// 포탑·힐 크리스탈(9·10)은 손을 댄 쪽 편이 되기 전엔 적이 아니다. 전에는 편 4 기준 이분법이라 편 3 동맹을 안 쐈다(fg-22).
     /// </summary>
-    private static bool ObjectHostile(DemoObject obj, UnitState u) =>
+    internal static bool ObjectHostile(DemoObject obj, UnitState u) =>
         obj.Team < 0 ? obj.Data.Kind is not (9 or 10) : obj.Team != u.Side && !(obj.Team >= 3 && u.Side >= 3);
 
     // ── 물체 레벨 성장(감사4 K2) ────────────────────────────────────────────────────────────
     // 원본 0x100e73f0: 레벨 = Btl 레코드 w6 + 파티 레벨(LoadBtl 0x10062ab2 · Map 물체 0x10062fd3·0x1006331c), 1 미만이면 1.
     // Lev.dat 메모리 레코드(+6 LP% · +0xa PSY%, 유닛 성장 0x1007a8e0 과 같은 표)로 최대·현재 HP += HP×LP%/100, ATK += ATK×PSY%/100 을 한 번.
     // DemoObject 는 파일값만 들고 있어 성장값은 이 사전에 따로 둔다 — 판(물체 목록)이 바뀌면 다시 셈한다.
-    private readonly Dictionary<DemoObject, (int Level, int MaxHp, int Attack)> _objGrowth = [];
-    private IReadOnlyList<DemoObject>? _objGrowthFor;
+    internal readonly Dictionary<DemoObject, (int Level, int MaxHp, int Attack)> _objGrowth = [];
+    internal IReadOnlyList<DemoObject>? _objGrowthFor;
 
     /// <summary>판의 물체들에 파티 레벨 성장을 먹인다 — 판마다 한 번. 현재 HP 가 파일값 그대로인 물체만 새 최대로 채운다(세이브에서 되살린 HP 는 그대로).</summary>
-    private void EnsureObjectGrowth()
+    internal void EnsureObjectGrowth()
     {
         var objects = Objects;
         if (ReferenceEquals(objects, _objGrowthFor) || !_battleLoaded || _units.Length == 0) return;
@@ -209,16 +209,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>성장을 먹인 물체 레벨(<c>0x100e73f0</c>).</summary>
-    private int ObjLevel(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Level : 1; }
+    internal int ObjLevel(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Level : 1; }
 
     /// <summary>성장을 먹인 물체 공격력 — 포탑·함정·폭탄 상자가 쓴다.</summary>
-    private int ObjAttack(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Attack : o.Data.Attack; }
+    internal int ObjAttack(DemoObject o) { EnsureObjectGrowth(); return _objGrowth.TryGetValue(o, out var g) ? g.Attack : o.Data.Attack; }
 
     /// <summary>
     /// 물체를 부순 인물에게 처치 경험치(메시지 1016)를 준다 — 물체 레벨로 셈한다(<c>0x100e79fc~</c>). SOUL +10 과 따로다.
     /// 군단 부하가 부수면 대장이 받고(<c>0x10079b14</c>), 사람이 명령하는 유닛만 받는다(<c>0x100742e0</c>).
     /// </summary>
-    private void GainObjectKillExp(UnitState breaker, DemoObject obj)
+    internal void GainObjectKillExp(UnitState breaker, DemoObject obj)
     {
         var killer = breaker.LeaderIndex >= 0 && breaker.LeaderIndex < _units.Length ? _units[breaker.LeaderIndex] : breaker;
         if (_db == null || killer.Data is not { } k || !killer.PlayerControlled) return;
@@ -232,10 +232,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 물체가 차례를 받을 수 있는 자리인가 — 칸이 맵 경계 상자(<c>맵+0x390..+0x396</c>) 안이어야 한다(<c>0x100e7130</c>, 감사4 K10).
     /// 리메이크는 이벤트로 경계를 줄이는 길을 아직 안 들고 있어 판 전체를 경계로 본다.
     /// </summary>
-    private bool ObjectInBounds(DemoObject o) => (uint)o.Col < (uint)Cols && (uint)o.Row < (uint)Rows;
+    internal bool ObjectInBounds(DemoObject o) => (uint)o.Col < (uint)Cols && (uint)o.Row < (uint)Rows;
 
     /// <summary>물체에 피해를 준다 — 부서지면 폭발·SOUL +10·든 것 떨구기(0x100e7ba0~). 어빌리티 범위 피해도 여기로 온다.</summary>
-    private void DamageObject(UnitState user, DemoObject obj, int damage)
+    internal void DamageObject(UnitState user, DemoObject obj, int damage)
     {
         if (_db is null || damage <= 0 || !obj.Alive) return;
         EnsureObjectGrowth();                            // HP 가 레벨 성장을 먹은 뒤에 깎는다(0x100e73f0)
@@ -256,10 +256,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 물체를 만지는 work <b>386</b> — 상하좌우 한 칸, <b>TP 80</b>. 원본은 명령 0x2714 가 이 work 으로 물체에 손을 댄다.
     /// </summary>
-    private const int ObjectTouchTp = 80;
+    internal const int ObjectTouchTp = 80;
 
     /// <summary>부서진(모션 4)·터진(폭탄 상자 모션 8) 물체가 마지막 모션을 한 번 도는 동안 — (때, 모션).</summary>
-    private readonly Dictionary<DemoObject, (double At, int Motion)> _brokenAt = [];
+    internal readonly Dictionary<DemoObject, (double At, int Motion)> _brokenAt = [];
 
     /// <summary>
     /// 차례인 인물이 그 물체에 손을 대러 가는 길 — 못 닿으면 null, 이미 옆이면 빈 길.
@@ -272,7 +272,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 곧 TP 가 모자라도 CTP 만큼은 끌어 쓴다(사용자 보고).
     /// 옆 칸 가운데 가장 싼 곳으로 가고, 지금 선 자리가 이미 닿는 자리면 걷지 않는다.
     /// </remarks>
-    private List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
+    internal List<(int Col, int Row)>? FindTouchPath(UnitState user, DemoObject obj, MoveRange? known = null, bool needTp = false)
     {
         // 만질 수 있는 종류는 종류 표 0x1016f438 의 [중립, 아군, 적] 바이트가 1 인 것(work 386):
         //   1 문 · 2 상자 · 6 스위치 · 8 폭탄 상자 = 누구나, 9 포탑 = 중립일 때만(만지면 편 가져오기 0x100e6184 → 0x2717, 감사4 K1),
@@ -308,12 +308,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>걸어가서 열 물체 — 인물이 옆 칸에 멈추면 <see cref="ResolvePendingTouch"/> 가 연다(원본 명령 0x2714 가 걷고 나서 work 386 을 쓴다).</summary>
-    private DemoObject? _pendingTouch;
+    internal DemoObject? _pendingTouch;
 
     /// <summary>
     /// 물체 칸을 눌렀을 때 — 닿을 수 있으면 옆까지 걸어가서 연다(이미 옆이면 바로). 처리했으면 true.
     /// </summary>
-    private bool TryTouchObject(int col, int row)
+    internal bool TryTouchObject(int col, int row)
     {
         if (!IsPlayerTurn || _units[_turn].IsBusy) return false;
         if (ObjectAt(col, row) is not { } obj || FindTouchPath(_units[_turn], obj) == null) return false;
@@ -329,7 +329,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>걸어간 인물이 멈췄으면 기다리던 물체를 연다 — 매 틀 부른다. 차례가 바뀌었거나 못 닿게 됐으면 그만둔다.</summary>
-    private void ResolvePendingTouch()
+    internal void ResolvePendingTouch()
     {
         if (_pendingTouch is not { } obj) return;
         if (!IsPlayerTurn) { _pendingTouch = null; return; }
@@ -341,7 +341,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 상자를 연다 — 아이템이 들었으면 가방에, 아니면 돈을 지갑에 넣고 물체를 치운다(<c>0x100e7ce0</c>).
     /// </summary>
-    private bool TouchObject(DemoObject obj)
+    internal bool TouchObject(DemoObject obj)
     {
         if (obj.Data.Kind == 10) return TouchHealCrystal(obj);
         var user = _units[_turn];
@@ -393,7 +393,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 화면 밖 시험용 — 차례인 인물을 가장 가까운 상자 옆으로 세우고 그 상자를 연다(T 키, <c>DUELDX_TOUCH=1</c>).
     /// 상자까지 걸어가는 데 여러 칸이 걸려 클릭으로는 확인하기 번거롭다.
     /// </summary>
-    private bool TouchNearestObjectForTest()
+    internal bool TouchNearestObjectForTest()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_TOUCH") is not { Length: > 0 }) return false;
         // 시험은 차례를 안 기다린다 — 첫 아군으로 친다.
@@ -432,7 +432,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 꺼지고 다시 찬다(명령 0x271a → <c>0x100e80a0</c> → 0x2719 <c>0x100e8070</c>). 덜 찼으면 아무 일도 없다.
     /// 예전에는 만질 수 없는 종류로 쳐서 크리스탈 옆에서 눌러도 아무것도 안 됐다(사용자 보고: Btl 0147 (3,24)).
     /// </summary>
-    private bool TouchHealCrystal(DemoObject obj)
+    internal bool TouchHealCrystal(DemoObject obj)
     {
         var user = _units[_turn];
         string name = _db?.T((ushort)obj.Data.NameId) ?? "";
@@ -484,7 +484,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 한도에 닿으면 차례를 받아(<c>0x100e71f0</c>) 켜진다(명령 0x2718 → <c>0x100e8040</c>, 모션 9).
     /// 원본이 이 충전을 부르는 주기(가상 함수 칸)는 못 찾아 전투 틱마다로 둔다(가설).
     /// </summary>
-    private static void ChargeHealCrystal(DemoObject obj)
+    internal static void ChargeHealCrystal(DemoObject obj)
     {
         int full = Math.Max(1, obj.Data.TurnEvery);
         obj.Charge = Math.Min(full, obj.Charge + 1);
@@ -495,7 +495,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 물체를 친다 — 물체에는 RDP 가 없어 <b>공격력이 그대로 피해</b>가 되고(<c>0x100e79ac</c>), 명중·치명·흔들기도 없다.
     /// HP 가 0 이하면 부서지면서 친 인물에게 소울 10 과 경험치를 준다(<c>0x1006ab70</c>).
     /// </summary>
-    private bool TryBreakObject(int col, int row, bool force = false)
+    internal bool TryBreakObject(int col, int row, bool force = false)
     {
         if (!force && (!IsPlayerTurn || _units[_turn].IsBusy)) return false;
         if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
@@ -516,7 +516,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 부술 수 있는 적 물체(기총포탑 따위)를 적처럼 친다 — 사거리 밖이면 기본공격 자리까지 걸어가서 친다.
     /// 전에는 이미 사거리 안에 서 있을 때만 클릭이 먹고, 링 「공격」 겨누기는 유닛만 봐서 Btl 0081 의 기총포탑을 못 쳤다(사용자 보고).
     /// </summary>
-    private bool TryAttackObject(int col, int row)
+    internal bool TryAttackObject(int col, int row)
     {
         if (!IsPlayerTurn || _units[_turn].IsBusy || _routine != null) return false;
         if (ObjectAt(col, row) is not { Data.Breakable: true } obj) return false;
@@ -543,7 +543,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private IEnumerator<bool> WalkThenBreak(UnitState user, List<(int Col, int Row)> path, int col, int row)
+    internal IEnumerator<bool> WalkThenBreak(UnitState user, List<(int Col, int Row)> path, int col, int row)
     {
         foreach (var cell in path) user.Path.Enqueue(cell);
         while (user.IsBusy) yield return true;
@@ -563,7 +563,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 칸이 없거나 차 있으면 가방으로. 받는 사람은 부서진·열린 물체 칸의 인물이다 — 없으면 연 사람.
     /// 전에는 늘 가방에만 넣었다(감사3 I2). 가방은 파티별이 아니라 지금 가방 하나다(파티가 갈린 챕터는 원본과 다를 수 있다).
     /// </remarks>
-    private void GiveObjectSpoils(DemoObject obj, UnitState? opener = null)
+    internal void GiveObjectSpoils(DemoObject obj, UnitState? opener = null)
     {
         if (obj.Record.ItemId > 0)
         {
@@ -584,7 +584,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 상자에서 얻은 것을 알리는 창 — 원본은 레벨업 창과 같은 메시지 창(0x10034540, 120틱, 제목 「Item 획득」/「GP 획득」)이 떠 있는 동안
     /// 전투 상태 기계가 선다(0x10066206, ba-21 battle-flow 1). 받는 이가 판 위의 사람 조종 편일 때만 띄운다(0x1006e9a0) — 그 밖에는 전처럼 알림 글.
     /// </summary>
-    private void ShowSpoilMessage(UnitState? taker, string title, string body)
+    internal void ShowSpoilMessage(UnitState? taker, string title, string body)
     {
         int index = taker == null ? -1 : Array.IndexOf(_units, taker);
         if (index < 0 || !taker!.OnField || !taker.PlayerControlled || AutoPlay || LevelUpOpen) { Toast(body); return; }
@@ -595,7 +595,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>얻은 장비를 그 인물의 맞는 빈 칸에 바로 낀다(<c>0x10032d70</c> → <c>+0x15c[칸]</c>). 꼈으면 true.</summary>
-    private bool TryEquipSpoil(UnitState? taker, int itemId)
+    internal bool TryEquipSpoil(UnitState? taker, int itemId)
     {
         // 파티에 든 인물만(0x1007b030 ≠ −1) — 동맹 손님·군단 부하·적은 가방으로.
         if (taker is not { Alive: true, Data: { } c } || taker.LeaderIndex >= 0 || !taker.IsAlly
@@ -623,7 +623,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 폭탄 상자(종류 8)가 터진다 — 제 <c>ATK</c> 로 <b>반경 안의 모두</b>를 친다(적아 안 가린다).
     /// </summary>
-    private void Explode(DemoObject obj)
+    internal void Explode(DemoObject obj)
     {
         ObjectSounds(obj, 8, _lastTime);
         _brokenAt[obj] = (_lastTime, 8);   // 폭탄 상자는 모션 8(Obs 460 = 35틱)을 한 번 돈다(0x100e7e90)
@@ -651,7 +651,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 물체의 차례 — 물체는 TP 게이지를 안 쓰고 <b><c>전투틱 % wtp == 0</c></b> 인 틱에만 움직인다(<c>0x100e71f0</c>).
     /// 종류 3·9·10 만 차례를 받고, 그중 9·10 은 편이 중립(−1)이면 영영 안 움직인다.
     /// </summary>
-    private void StepObjects()
+    internal void StepObjects()
     {
         EnsureObjectGrowth();
         foreach (var obj in Objects)
@@ -665,7 +665,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>이번 틱에 차례가 온 물체인가 — 힐 크리스탈은 여기서 충전만 하고 거짓을 돌려준다.</summary>
-    private bool ObjectDue(DemoObject obj)
+    internal bool ObjectDue(DemoObject obj)
     {
         // 0x100e7130: 사라지지 않았고 칸이 맵 경계 상자 안이고 종류 표 +0xc(차례)가 선 것만(감사4 K10).
         if (!obj.Alive || _opened.Contains(obj) || !obj.Data.Acts || !ObjectInBounds(obj)) return false;
@@ -675,7 +675,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 물체가 이번 차례에 쏠 상대가 있나(대략 — 사거리 안, 흩뿌리는 포탑은 4칸 안에 적대 유닛).</summary>
-    private bool ObjectHasTarget(DemoObject obj)
+    internal bool ObjectHasTarget(DemoObject obj)
     {
         if (obj.Data.Attack <= 0) return false;
         var work = Work(obj.Data.WorkId);
@@ -688,7 +688,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>흩뿌리는 포탑의 후보 칸(제 칸과 네 이웃) 가운데 그 유닛이 반경 3(높이 차 절반 포함) 안에 드는 칸이 있나 — ObjectBarrage 와 같은 잣대.</summary>
-    private bool BarrageReaches(DemoObject obj, UnitState u)
+    internal bool BarrageReaches(DemoObject obj, UnitState u)
     {
         foreach (var (c, r) in new[] { (obj.Col, obj.Row), (obj.Col, obj.Row - 1), (obj.Col + 1, obj.Row), (obj.Col, obj.Row + 1), (obj.Col - 1, obj.Row) })
             if (Math.Abs(u.Col - c) + Math.Abs(u.Row - r) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c, r)) / 2 <= 3) return true;
@@ -699,7 +699,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 물체 모션의 소리 키를 그 틱에 물체 자리에서 낸다 — 원본 물체는 유닛·이펙트와 같은 0x100e5410 으로 제 Obs 모션 소리를 낸다(ba-21 sound D1).
     /// 부서짐 모션 4 · 폭탄 상자 8 → Snd 92, 포탑·함정의 14~16 등. 전에는 물체 모션의 소리를 전혀 안 읽었다.
     /// </summary>
-    private void ObjectSounds(DemoObject obj, int motion, double at)
+    internal void ObjectSounds(DemoObject obj, int motion, double at)
     {
         if (UiFor(obj.Data.SpriteId)?.Clip(motion) is not { } clip) return;
         float x = obj.Col * TileW + TileW / 2;
@@ -707,14 +707,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>쏘는 동작(모션 14 → 15 → 16)을 도는 물체와 시작한 때 — DrawObjects 가 그린다.</summary>
-    private readonly Dictionary<DemoObject, double> _objActing = [];
+    internal readonly Dictionary<DemoObject, double> _objActing = [];
 
     /// <summary>
     /// 물체 차례(상태 16, 0x1006a4c0) — 물체 하나씩: 상대가 있으면 카메라를 물체로 보내고 설 때까지 기다린 뒤(0x1006e570 · 0x1006e850)
     /// 쏘는 모션 14 → 15 → 16 을 돌며 실행한다(0x100e7510). 상대가 없는 물체는 카메라 없이 건너뛴다(ba-20 O P1).
     /// 전에는 한 틀에 전부 숫자만 떴다.
     /// </summary>
-    private IEnumerator<bool> ObjectTurns()
+    internal IEnumerator<bool> ObjectTurns()
     {
         EnsureObjectGrowth();
         foreach (var obj in Objects.ToList())
@@ -745,7 +745,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 포탑·힐 크리스탈이 한 번 움직인다 — 사거리 안의 상대를 친다.
     /// 피해는 <c>(1000 − 대상 RDP) × 물체 공격력 / 1000</c> 이고 PSY·무기·치명타가 없다(<c>0x1007b8f4</c>).
     /// </summary>
-    private void ObjectActs(DemoObject obj)
+    internal void ObjectActs(DemoObject obj)
     {
         if (_db is null || obj.Data.Attack <= 0) return;
         int attack = ObjAttack(obj);                     // 레벨 성장을 먹은 ATK(0x100e73f0)
@@ -793,7 +793,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 사격 소리 423 을 낸다. 모션 14→15→16 과 전투를 멈추고 기다리는 것은 아직 없다(가설 — 1526 의 그림·타수는 확인 못 함).
     /// Btl 0298 해적선의 초록 불빛 원판이 이것이다(사용자 보고 「작동을 안 한다」).
     /// </summary>
-    private void ObjectBarrage(DemoObject obj, WorkData work, bool ally)
+    internal void ObjectBarrage(DemoObject obj, WorkData work, bool ally)
     {
         if (_db is null) return;
         int Dist(UnitState u, (int Col, int Row) c) => Math.Abs(u.Col - c.Col) + Math.Abs(u.Row - c.Row) + Math.Abs(HeightAt(u.Col, u.Row) - HeightAt(c.Col, c.Row)) / 2;
@@ -857,9 +857,9 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>나중에 맞는 타격들(포탑 사격) — (때, 대상, 피해).</summary>
-    private readonly List<(double At, UnitState Unit, int Damage)> _delayedHits = [];
+    internal readonly List<(double At, UnitState Unit, int Damage)> _delayedHits = [];
 
-    private void StepDelayedHits()
+    internal void StepDelayedHits()
     {
         if (_delayedHits.Count == 0 || _db is null) return;
         for (int i = _delayedHits.Count - 1; i >= 0; i--)
@@ -877,7 +877,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>이미 연 물체(원본 <c>+0x164</c>) — 열린 문은 도장이 빠지고, 상자는 열린 그림으로 남아 계속 길을 막는다. 터진 폭탄 상자만 사라진다.</summary>
-    private readonly HashSet<DemoObject> _opened = [];
+    internal readonly HashSet<DemoObject> _opened = [];
 
     /// <summary>
     /// 전투 이벤트 행동 <b>907</b> — 번호로 물체를 찾아 <b>여닫는다</b>(원본 <c>0x10055a50</c>).
@@ -890,7 +890,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 쓰는 곳은 Btl 0109 한 곳뿐 — 둘째 턴에 카메라를 (7,18) 로 옮기고 그 옆 문을 연다.
     /// 문 그림(Obs 1224)은 한 장뿐이라 열리면 <b>사라진다</b> — 데모가 손으로 연 문과 똑같이 다룬다.
     /// </remarks>
-    private void ToggleObject(int no, bool open)
+    internal void ToggleObject(int no, bool open)
     {
         if (Objects.FirstOrDefault(o => o.Record.No == no) is not { } obj) return;
         if (open == _opened.Contains(obj)) return;               // 이미 그 꼴이면 원본도 아무것도 안 한다
@@ -899,13 +899,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>문이 닫힌 때 — 그때부터 닫는 모션(3)을 한 번 돌고 닫힌 모션(0)으로 선다(<c>0x100e7c00</c>: 모션 3 → 0, <c>+0x164 = 0</c>).</summary>
-    private readonly Dictionary<DemoObject, double> _closedAt = [];
+    internal readonly Dictionary<DemoObject, double> _closedAt = [];
 
     /// <summary>중립 포탑을 깨운 때 — 깨우기 모션 9 를 한 번 돈다(명령 0x2717 <c>0x100e7ff0</c>).</summary>
-    private readonly Dictionary<DemoObject, double> _wokenAt = [];
+    internal readonly Dictionary<DemoObject, double> _wokenAt = [];
 
     /// <summary>문·스위치를 열거나 닫는다 — 모션 시각을 적고 판을 다시 찍는다(0x100e7c70·0x100e7cc5 → 0x3f1).</summary>
-    private void SetObjectOpen(DemoObject obj, bool open)
+    internal void SetObjectOpen(DemoObject obj, bool open)
     {
         if (open) { _opened.Add(obj); _openedAt[obj] = _lastTime; _closedAt.Remove(obj); }
         else { _opened.Remove(obj); _openedAt.Remove(obj); _closedAt[obj] = _lastTime; }
@@ -916,7 +916,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 모드 &gt; 상자 내용물 보기 — 지금 전투의 상자(종류 2)·폭탄 상자(8)와 든 것을 화면 왼쪽 위에 적는다. 연 것은 흐리게.
     /// 원본에 없는 도움 기능이다(사용자 요청). 든 것 = 아이템(.btl 물체 +0x144)이 있으면 아이템, 없으면 GP(+0x146).
     /// </summary>
-    private void DrawChestList()
+    internal void DrawChestList()
     {
         if (!_showChestContents || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen || _db is not { } db) return;
         var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
@@ -939,7 +939,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>
-    private void DrawObjects()
+    internal void DrawObjects()
     {
         EnsureObjectGrowth();                            // 판을 세운 첫 틀에 레벨 성장을 먹인다(0x100e73f0)
         // 겨누는 동안(원본 전투 상태 0xa·0xb) 종류 표 +8(만질 수 있음: 1·2·6·8·10)·+0x10(HP 있음: 7·9·10)이 선 종류는

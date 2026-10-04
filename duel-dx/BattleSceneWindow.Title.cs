@@ -21,30 +21,30 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int TitleBackground = 46, TitleGlowObs = 370, TitleSparkObs = 374;
-    private const int TitleBgm = 21, TitleFirstBattle = 45;
+    internal const int TitleBackground = 46, TitleGlowObs = 370, TitleSparkObs = 374;
+    internal const int TitleBgm = 21, TitleFirstBattle = 45;
 
     /// <summary>단추 셋 — 자리(왼위)와 하는 일.</summary>
-    private static readonly (int X, int Y, string Name)[] TitleButtons =
+    internal static readonly (int X, int Y, string Name)[] TitleButtons =
         [(235, 394, "NEW GAME"), (235, 418, "CONTINUE"), (235, 450, "EXIT")];
 
-    private const int TitleButtonW = 170, TitleButtonH = 14;
+    internal const int TitleButtonW = 170, TitleButtonH = 14;
 
-    private bool _titleOpen;
-    private int _titleHover = -1;
-    private double _titleOpenedAt;
+    internal bool _titleOpen;
+    internal int _titleHover = -1;
+    internal double _titleOpenedAt;
     /// <summary>타이틀 곡을 건 때 — 3340틱 뒤 다시 건다(기록 화면을 다녀와도 안 바뀐다).</summary>
-    private double _titleMusicAt;
+    internal double _titleMusicAt;
 
     /// <summary>게임을 켜면 타이틀부터 — <c>DUELDX_TITLE=0</c> 이면 건너뛰고 바로 전투로 간다.</summary>
-    private void OpenTitleIfAsked()
+    internal void OpenTitleIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") == "1") { OpenEpisodesIfAsked(); return; }
         if (Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0") return;
         OpenTitle();
     }
 
-    private void OpenTitle()
+    internal void OpenTitle()
     {
         _titleOpen = true;
         _titleHover = -1;
@@ -69,7 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
         FadeMusic(84, 15);
     }
 
-    private int TitleButtonAt(int bx, int by)
+    internal int TitleButtonAt(int bx, int by)
     {
         var (ox, oy) = Mos.MosesOrigin();
         for (int i = 0; i < TitleButtons.Length; i++)
@@ -81,7 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>타이틀이 떠 있으면 클릭을 처리하고 true. 원본처럼 <b>누르는 순간</b> 움직인다.</summary>
-    private bool OnTitleClick(int bx, int by)
+    internal bool OnTitleClick(int bx, int by)
     {
         if (!_titleOpen) return false;
         // CONTINUE 로 연 슬롯 창이 떠 있으면 그 창이 먼저 클릭을 받는다.
@@ -94,7 +94,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 타이틀 키 — Esc 는 CONTINUE 가 연 슬롯 창을 닫고, <b>Enter 는 초점 단추 NEW GAME 을 누른다</b>
     /// (NEW GAME 이 만들어질 때 <c>vt+0x40</c> 으로 초점을 받는다, 감사 F13). 전에는 Esc 말고는 무시했다.
     /// </summary>
-    private bool OnTitleKey(int key)
+    internal bool OnTitleKey(int key)
     {
         if (!_titleOpen) return false;
         if (key == Win32.VK_ESCAPE) CloseSystemWindow();
@@ -102,14 +102,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void PressTitleButton(int button)
+    internal void PressTitleButton(int button)
     {
         if (button is < 0 or > 2) return;         // 단추 밖을 누른 것
         // 16틀 검게 + 음악 100 → 10% 뒤에 넘어간다(0x10105420). CONTINUE 는 곡이 이어진다. EXIT 도 페이드 뒤 끝난다.
         LeaveScene(() => RunTitleButton(button), keepMusic: button == 1);
     }
 
-    private void RunTitleButton(int button)
+    internal void RunTitleButton(int button)
     {
         switch (button)
         {
@@ -152,12 +152,12 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void UpdateTitleHover(int bx, int by)
+    internal void UpdateTitleHover(int bx, int by)
     {
         if (_titleOpen) _titleHover = TitleButtonAt(bx, by);
     }
 
-    private void DrawTitle()
+    internal void DrawTitle()
     {
         if (!_titleOpen) return;
         // 원본 타이틀 틱(0x10105920)은 3340틱(약 111초)을 넘으면 오프닝 필드(Fld 0022·0413 — Mov)로 갔다가 돌아온다(ba-20 T2).

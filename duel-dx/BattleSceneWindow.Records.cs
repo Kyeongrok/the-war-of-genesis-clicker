@@ -17,14 +17,14 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int RecordsBackground = 131, RecordsExitObs = 287;
-    private static readonly (int X, int Y, int W, int H) RecordsExit = (246, 441, 148, 27);
+    internal const int RecordsBackground = 131, RecordsExitObs = 287;
+    internal static readonly (int X, int Y, int W, int H) RecordsExit = (246, 441, 148, 27);
 
-    private bool _recordsOpen;
-    private bool _recordsExitHover;
+    internal bool _recordsOpen;
+    internal bool _recordsExitHover;
 
     /// <summary>타이틀 CONTINUE — 불러오기 전용 화면으로 간다.</summary>
-    private void OpenRecords()
+    internal void OpenRecords()
     {
         _recordsOpen = true;
         _titleOpen = false;
@@ -34,7 +34,7 @@ internal sealed unsafe partial class BattleSceneWindow
         OpenSlots(1);                                  // 불러오기 목록(같은 창을 그대로 쓴다)
     }
 
-    private void CloseRecords() =>
+    internal void CloseRecords() =>
         // 기록 화면도 16틀 검게 나간다(0x10104e60) — 음악은 이어진다.
         LeaveScene(() =>
         {
@@ -44,7 +44,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }, keepMusic: true);
 
     /// <summary>이 화면이 떠 있으면 클릭을 처리하고 true.</summary>
-    private bool OnRecordsClick(int bx, int by)
+    internal bool OnRecordsClick(int bx, int by)
     {
         if (!_recordsOpen) return false;
         var (ox, oy) = Mos.MosesOrigin();
@@ -54,7 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void UpdateRecordsHover(int bx, int by)
+    internal void UpdateRecordsHover(int bx, int by)
     {
         if (!_recordsOpen) return;
         var (ox, oy) = Mos.MosesOrigin();
@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _recordsExitHover = bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh;
     }
 
-    private void DrawRecords()
+    internal void DrawRecords()
     {
         if (!_recordsOpen) return;
         var (ox, oy) = Mos.MosesOrigin();

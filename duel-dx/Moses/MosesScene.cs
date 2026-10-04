@@ -5,6 +5,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 전투가 끝나면 나오는 모세스 단말 화면(mo-1) — 주 화면·항행·파티 페이지와 ESC 시스템 메뉴.
 /// </summary>
@@ -28,14 +30,8 @@ namespace DuelDx;
 /// 아이콘 여섯은 주 화면·항행·메일·통신·파티 페이지에 늘 떠 있는 「도크」다(상점·전직·용병관리만 숨김, <c>0x100f968f</c>·<c>0x100fad23</c>·<c>0x100fb216</c>).
 /// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 BattleSceneWindow.Moses*.cs 로 나눠 두었다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene(BattleSceneWindow host)
 {
-    /// <summary>MosesScene — 처음 쓸 때 만든다(장면마다 따로 선 클래스).</summary>
-    private MosesScene? _mosScene;
-    internal MosesScene Mos => _mosScene ??= new MosesScene(this);
-
-    internal sealed unsafe partial class MosesScene(BattleSceneWindow host)
-    {
     internal const int MosesW = 640, MosesH = 480;
     internal const int MosesObs = 291, MosesFrameObs = 246, MosesBackObs = 248;
     internal const int MosesCellObs = 643, MosesCellIconObs = 498, MosesMarkObs = 163;
@@ -1102,6 +1098,5 @@ internal sealed unsafe partial class BattleSceneWindow
             host.DrawText(line, tx, ty, White);
             ty += Math.Max(host.GetText(line, White).H, 16);
         }
-    }
     }
 }

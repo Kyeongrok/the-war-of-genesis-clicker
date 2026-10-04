@@ -15,24 +15,24 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int MenuTuning = 1150;
+    internal const int MenuTuning = 1150;
 
     /// <summary>고를 수 있는 기여도(%) — 첫째가 원본.</summary>
-    private static readonly int[] SoulWeightChoices = [100, 75, 50, 25, 0];
+    internal static readonly int[] SoulWeightChoices = [100, 75, 50, 25, 0];
 
-    private int _soulWeight = SoulWeightChoices.Contains(UserSettings.Current.SoulWeight) ? UserSettings.Current.SoulWeight : 100;
+    internal int _soulWeight = SoulWeightChoices.Contains(UserSettings.Current.SoulWeight) ? UserSettings.Current.SoulWeight : 100;
 
-    private bool _tuningOpen;
+    internal bool _tuningOpen;
 
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
-    private bool _tuningListOpen;
+    internal bool _tuningListOpen;
 
-    private const int TuningW = 600, TuningH = 398, TuningBoxX = 300, TuningBoxY = 176, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 398, TuningBoxX = 300, TuningBoxY = 176, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>체크 줄 넷 — 창 위에서부터 y 44 · 76 · 108 · 140. 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
-    private const int TuningCheckY = 44, TuningCheckH = 32;
+    internal const int TuningCheckY = 44, TuningCheckH = 32;
 
-    private (string Label, string Note, int Command, bool On)[] TuningChecks() =>
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks() =>
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, _allyAi),
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, _showChestContents),
@@ -40,19 +40,19 @@ internal sealed unsafe partial class BattleSceneWindow
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, _skipEnemyAction),
     ];
 
-    private static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };
+    internal static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };
 
     /// <summary>일반 공격을 셀 때 쓰는 SOUL — 시작값에서 벌어진 몫만 기여도만큼.</summary>
-    private int BasicAttackSoul(int soul) =>
+    internal int BasicAttackSoul(int soul) =>
         _db is not { } db || _soulWeight == 100 ? soul : Math.Max(0, db.SoulStart + (soul - db.SoulStart) * _soulWeight / 100);
 
     /// <summary>그 work 로 칠 때 쓰는 SOUL — 어빌리티에 안 딸린 work(일반 공격·몬스터 기본기)만 기여도를 건다.</summary>
-    private int AttackSoul(WorkData w, int soul) => w.AbilityId == 0 ? BasicAttackSoul(soul) : soul;
+    internal int AttackSoul(WorkData w, int soul) => w.AbilityId == 0 ? BasicAttackSoul(soul) : soul;
 
-    private (int X, int Y) TuningOrigin() => (_camX + (ViewWidth - TuningW) / 2, _camY + (ViewHeight - TuningH) / 2);
+    internal (int X, int Y) TuningOrigin() => (_camX + (ViewWidth - TuningW) / 2, _camY + (ViewHeight - TuningH) / 2);
 
     /// <summary>조정 창이 열려 있으면 클릭을 먹는다.</summary>
-    private bool OnTuningClick(int bx, int by)
+    internal bool OnTuningClick(int bx, int by)
     {
         if (!_tuningOpen) return false;
         var (x, y) = TuningOrigin();
@@ -77,13 +77,13 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void OnTuningKey(int key)
+    internal void OnTuningKey(int key)
     {
         if (key != Win32.VK_ESCAPE) return;
         if (_tuningListOpen) _tuningListOpen = false; else _tuningOpen = false;
     }
 
-    private void DrawTuning()
+    internal void DrawTuning()
     {
         if (!_tuningOpen || _db is not { } db) return;
         var (x, y) = TuningOrigin();
@@ -141,5 +141,5 @@ internal sealed unsafe partial class BattleSceneWindow
             }
     }
 
-    private bool MouseInBoard(int x, int y, int w, int h) => _mouse.X >= x && _mouse.X < x + w && _mouse.Y >= y && _mouse.Y < y + h;
+    internal bool MouseInBoard(int x, int y, int w, int h) => _mouse.X >= x && _mouse.X < x + w && _mouse.Y >= y && _mouse.Y < y + h;
 }

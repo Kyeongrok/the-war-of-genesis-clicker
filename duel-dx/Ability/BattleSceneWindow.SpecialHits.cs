@@ -7,13 +7,13 @@ namespace DuelDx;
 /// </summary>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int SonicBladeAbility = 20, CrazyShotAbility = 126, HellLaserAbility = 172;
+    internal const int SonicBladeAbility = 20, CrazyShotAbility = 126, HellLaserAbility = 172;
 
-    private const int ThunderStormAbility = 75;
+    internal const int ThunderStormAbility = 75;
 
-    private bool HasSpecialHit(WorkData w) => w.AbilityId is SonicBladeAbility or CrazyShotAbility or ThunderStormAbility;
+    internal bool HasSpecialHit(WorkData w) => w.AbilityId is SonicBladeAbility or CrazyShotAbility or ThunderStormAbility;
 
-    private IEnumerable<bool> SpecialHitRoutine(UnitState a, WorkData w, WorkData hitWork, int col, int row, List<UnitState> dying)
+    internal IEnumerable<bool> SpecialHitRoutine(UnitState a, WorkData w, WorkData hitWork, int col, int row, List<UnitState> dying)
     {
         if (w.AbilityId == SonicBladeAbility)
         {

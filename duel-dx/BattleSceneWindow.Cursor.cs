@@ -15,16 +15,16 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int CursorArrow = 44, CursorHand = 48, CursorAttack = 45, CursorSupport = 49;
+    internal const int CursorArrow = 44, CursorHand = 48, CursorAttack = 45, CursorSupport = 49;
 
     /// <summary>물체(상자·문)를 만질 수 있는 칸의 커서 — 주먹(<c>Obs 0050</c>).</summary>
-    private const int CursorTouch = 50;
-    private const int BannerObs = 491, BannerWin = 0, BannerLose = 10;
+    internal const int CursorTouch = 50;
+    internal const int BannerObs = 491, BannerWin = 0, BannerLose = 10;
 
-    private (int X, int Y) _mouse = (-1, -1);
+    internal (int X, int Y) _mouse = (-1, -1);
 
     /// <summary>지금 마우스 자리에 맞는 커서 그림.</summary>
-    private int CursorFor(int bx, int by)
+    internal int CursorFor(int bx, int by)
     {
         if (_keysOpen || SystemOpen || _statusUnit >= 0 || _abilityMenu || _ringUnit >= 0) return CursorHand;
         if (_targetWork >= 0 && Work(_targetWork) is { } w)
@@ -57,12 +57,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 스왑체인을 거치느라 2~3프레임 늦으며, 판을 키운 화면(모세스 640×480)에서는 배율만큼 칸칸이 뛰었다.
     /// 컷마다 배율로 키운 커서를 한 번 만들어 두고, 컷 기준점을 핫스팟으로 삼는다.
     /// </summary>
-    private readonly Dictionary<(SpriteFrame Frame, double Zoom), IntPtr> _hwCursors = [];
-    private static readonly IntPtr ArrowCursor = Win32.LoadCursorW(IntPtr.Zero, Win32.IDC_ARROW);
-    private IntPtr _hwCursor = ArrowCursor;
+    internal readonly Dictionary<(SpriteFrame Frame, double Zoom), IntPtr> _hwCursors = [];
+    internal static readonly IntPtr ArrowCursor = Win32.LoadCursorW(IntPtr.Zero, Win32.IDC_ARROW);
+    internal IntPtr _hwCursor = ArrowCursor;
 
     /// <summary>프레임마다 — 지금 커서 컷(모양·애니)이 바뀌었으면 윈도 커서를 갈아 건다.</summary>
-    private void UpdateCursor()
+    internal void UpdateCursor()
     {
         var (bx, by) = _mouse;
         int obs = bx < 0 || by < 0 ? CursorArrow : CursorFor(bx, by);
@@ -74,14 +74,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>마우스가 이 창의 판(클라이언트) 위에 있나 — 메뉴·테두리·다른 창 위의 커서는 건드리지 않는다.</summary>
-    private bool CursorOverClient()
+    internal bool CursorOverClient()
     {
         if (!Win32.GetCursorPos(out var p) || Win32.WindowFromPoint(p) != _hwnd) return false;
         Win32.ScreenToClient(_hwnd, ref p);
         return Win32.GetClientRect(_hwnd, out var rc) && p.X >= 0 && p.Y >= 0 && p.X < rc.Right && p.Y < rc.Bottom;
     }
 
-    private IntPtr HardwareCursor(SpriteFrame f)
+    internal IntPtr HardwareCursor(SpriteFrame f)
     {
         if (_hwCursors.TryGetValue((f, _zoom), out var cached)) return cached;
         int w = Math.Max(1, (int)Math.Round(f.W * _zoom)), h = Math.Max(1, (int)Math.Round(f.H * _zoom));
@@ -116,26 +116,26 @@ internal sealed unsafe partial class BattleSceneWindow
         return cursor;
     }
 
-    private void DestroyCursors()
+    internal void DestroyCursors()
     {
         foreach (var cursor in _hwCursors.Values) Win32.DestroyCursor(cursor);
         _hwCursors.Clear();
     }
 
     /// <summary>배너가 뜨기까지 — 어둡게 한 뒤 16틱(0x1006afa0 하위 0 → 1). 입력도 그 뒤부터 받는다(하위 2).</summary>
-    private const int OutcomeBannerDelayTicks = 16, OutcomeAutoTicks = 120;
+    internal const int OutcomeBannerDelayTicks = 16, OutcomeAutoTicks = 120;
 
     /// <summary>결과 음악 길이(초) — 모르면 −1. 배경 실이 쓴다.</summary>
-    private float _outcomeMusicSeconds = -1;
-    private double _outcomeMusicFor = -1;
+    internal float _outcomeMusicSeconds = -1;
+    internal double _outcomeMusicFor = -1;
 
     /// <summary>
     /// 배너가 입력을 받을 때가 됐나 — 결과와 상관없이 어둡게 한 뒤 16틱부터(하위 2, 0x1006b1f9). 조용한 결과도 같다(감사4 C9).
     /// </summary>
-    private bool OutcomeInputReady => (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
+    internal bool OutcomeInputReady => (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
 
     /// <summary>승패 음악을 건 결과(그 결과의 <c>_outcomeAt</c>) — 배너가 뜰 때 한 번만 건다.</summary>
-    private double _outcomeMusicPlayedFor = -1;
+    internal double _outcomeMusicPlayedFor = -1;
 
     /// <summary>
     /// 배너 결과의 저절로 넘김(0x1006afa0). 승패 음악(3392/55)은 판정 순간이 아니라 <b>어둡게 끝난 16틀째, 배너와 함께</b> 건다
@@ -143,7 +143,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 카운터는 음악을 기다리는 동안에도 오르므로 배너 뒤 <b>max(음악 길이, 121틱)</b>(사운드 B2·감사4 C8). 예전엔 음악 + 120틱.
     /// 클릭·키로 넘기기는 그대로 둔다(사용자 요청).
     /// </summary>
-    private void UpdateOutcomeBanner()
+    internal void UpdateOutcomeBanner()
     {
         if (_outcome.Length == 0 || _outcomeQuiet || Mos._mosesOpen || FieldOpen || _episodesOpen) return;
         bool win = _outcome.StartsWith('승');
@@ -170,7 +170,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 전투 끝 — 화면을 어둡게 하고 16틱 뒤 (320,220) 에 任務終了 / Game Over 를 띄운다. 어둡게 하기는 <b>결과와 상관없이</b>
     /// 한다(상태 24 하위 0 0x1006b00e, 감사4 C9) — 배너·음악이 없는 조용한 결과(다음 전투·필드·호위 실패)도 어두워진다.
     /// </summary>
-    private void DrawOutcomeBanner()
+    internal void DrawOutcomeBanner()
     {
         if (_outcome.Length == 0) return;
         bool win = _outcome.StartsWith('승');

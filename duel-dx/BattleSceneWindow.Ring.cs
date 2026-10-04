@@ -20,9 +20,9 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private enum RingCommand { Attack, Ability, Item, System, Status, Rest }
+    internal enum RingCommand { Attack, Ability, Item, System, Status, Rest }
 
-    private static readonly (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] RingItems =
+    internal static readonly (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] RingItems =
     [
         (RingCommand.Attack, 92, 1, "ATTACK"),
         (RingCommand.Ability, 87, 0, "ABILITY"),
@@ -32,24 +32,24 @@ internal sealed unsafe partial class BattleSceneWindow
         (RingCommand.Rest, 91, 2, "REST"),
     ];
 
-    private enum RingPhase { Opening, Reopening, Idle, Picking, Cancelling }
+    internal enum RingPhase { Opening, Reopening, Idle, Picking, Cancelling }
 
-    private const int RingRadius = 66, RingLift = 40, RingEdge = 89, RingHitRadius = 18;
-    private const int SoundHover = 65, SoundOpen = 67, SoundPick = 68, SoundCancel = 69;
+    internal const int RingRadius = 66, RingLift = 40, RingEdge = 89, RingHitRadius = 18;
+    internal const int SoundHover = 65, SoundOpen = 67, SoundPick = 68, SoundCancel = 69;
 
-    private int _ringUnit = -1;
-    private int _ringHover = -1;
-    private RingPhase _ringPhase;
-    private double _ringPhaseStart, _ringOpenedAt, _ringHoverAt;
-    private int _ringPicked = -1;
+    internal int _ringUnit = -1;
+    internal int _ringHover = -1;
+    internal RingPhase _ringPhase;
+    internal double _ringPhaseStart, _ringOpenedAt, _ringHoverAt;
+    internal int _ringPicked = -1;
 
-    private readonly Dictionary<int, UiSprite?> _ui = [];
+    internal readonly Dictionary<int, UiSprite?> _ui = [];
 
     /// <summary>아직 안 푼 그림 파일 자리 — 처음 쓸 때 푼다(이펙트가 많아 시작할 때 다 풀면 몇 초 걸린다).</summary>
-    private readonly Dictionary<int, string> _uiPaths = [];
+    internal readonly Dictionary<int, string> _uiPaths = [];
 
     /// <summary>링 그림(assets/ui)·소리(assets/sounds)를 읽는다. 없으면 글자 링으로 그린다.</summary>
-    private void LoadRingAssets()
+    internal void LoadRingAssets()
     {
         try
         {
@@ -69,7 +69,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그림을 (처음 쓸 때 풀어) 돌려준다.</summary>
-    private UiSprite? UiFor(int id)
+    internal UiSprite? UiFor(int id)
     {
         // 자료는 배경 스레드(LoadScene)가 읽으면서도 이 캐시를 채우고, 그리기 스레드도 처음 쓰는 그림을 여기서 푼다 —
         // 잠그지 않으면 Dictionary 가 깨진다(「Operations that change non-concurrent collections…」로 죽었다).
@@ -84,19 +84,19 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void PlaySound(int id) => Play(id);
+    internal void PlaySound(int id) => Play(id);
 
-    private int RingTick(double since) => (int)((_lastTime - since) * TicksPerSecond);
+    internal int RingTick(double since) => (int)((_lastTime - since) * TicksPerSecond);
 
     /// <summary>링 중심 — 유닛 자리에서 40픽셀 위, 판 가장자리에서 89픽셀 안쪽.</summary>
-    private (int X, int Y) RingCenter(UnitState unit)
+    internal (int X, int Y) RingCenter(UnitState unit)
     {
         var (fx, fy) = UnitFoot(unit);
         return (Math.Clamp(fx, _camX + RingEdge, _camX + ViewWidth - RingEdge), Math.Clamp(fy - RingLift, _camY + GridTop + RingEdge, _camY + ViewHeight - RingEdge));
     }
 
     /// <summary>지금 단계·틱에서 i 번 항목의 중심(링 중심 기준).</summary>
-    private (int X, int Y) RingItemOffset(int i)
+    internal (int X, int Y) RingItemOffset(int i)
     {
         double baseAngle = 2 * Math.PI * (6 - i) / 6 - Math.PI / 2;
         int n = RingTick(_ringPhaseStart) + 1;
@@ -112,7 +112,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return ((int)(Math.Cos(a) * r), (int)(Math.Sin(a) * r));
     }
 
-    private int RingItemAt(int bx, int by)
+    internal int RingItemAt(int bx, int by)
     {
         if (_ringUnit < 0 || _ringPhase != RingPhase.Idle) return -1;
         var (cx, cy) = RingCenter(_units[_ringUnit]);
@@ -125,7 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return -1;
     }
 
-    private void OnRingMouseMove(int bx, int by)
+    internal void OnRingMouseMove(int bx, int by)
     {
         int hover = RingItemAt(bx, by);
         if (hover == _ringHover) return;
@@ -134,7 +134,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (hover >= 0) PlaySound(SoundHover);
     }
 
-    private bool RingItemEnabled(RingCommand command, int ringUnit)
+    internal bool RingItemEnabled(RingCommand command, int ringUnit)
     {
         var unit = _units[ringUnit];
         if (command is RingCommand.Status or RingCommand.System) return true;
@@ -152,7 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow
         };
     }
 
-    private void OpenRing(int unit, bool reopen = false)
+    internal void OpenRing(int unit, bool reopen = false)
     {
         _ringUnit = unit;
         _ringPhase = reopen ? RingPhase.Reopening : RingPhase.Opening;
@@ -163,7 +163,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>링을 취소 움직임으로 닫는다(이미 닫히는 중이면 그대로).</summary>
-    private void CancelRing()
+    internal void CancelRing()
     {
         if (_ringUnit < 0 || _ringPhase is RingPhase.Picking or RingPhase.Cancelling) return;
         _ringPhase = RingPhase.Cancelling;
@@ -173,7 +173,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>링 단계를 넘긴다 — 열기가 끝나면 대기, 고름이 끝나면 명령 실행, 취소가 끝나면 없앤다.</summary>
-    private void UpdateRing()
+    internal void UpdateRing()
     {
         if (_ringUnit < 0) return;
         int n = RingTick(_ringPhaseStart) + 1;
@@ -195,7 +195,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>우클릭: 열린 창·링을 닫거나, 목록·대상 고르기를 취소한다(걸음은 안 물림). 취소할 것이 없고 인물 위면 링을 연다.</summary>
-    private void OnRightClick(int bx, int by)
+    internal void OnRightClick(int bx, int by)
     {
         if (_afterFadeOut != null) return;       // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         // 결과 배너는 우클릭으로도 넘긴다(0x1006b1fd~ — Esc · Space · 좌클릭 · 우클릭, ba-21 battle-flow 3).
@@ -248,7 +248,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>링 키: 고른 인물의 링을 열거나 닫는다. 고른 인물이 없으면 알려 준다.</summary>
-    private void ToggleRingForSelected()
+    internal void ToggleRingForSelected()
     {
         if (_ringUnit >= 0) { CancelRing(); return; }
         if ((uint)_selected >= _units.Length) { Hint("먼저 인물을 고르세요 (클릭·Tab)"); return; }
@@ -256,7 +256,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>링이 열려 있으면 클릭을 처리하고 true. 항목이면 고름 움직임 뒤 실행, 링 밖이면 취소.</summary>
-    private bool OnRingClick(int bx, int by)
+    internal bool OnRingClick(int bx, int by)
     {
         if (_ringUnit < 0) return false;
         if (_ringPhase != RingPhase.Idle) return true;
@@ -266,7 +266,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void PickRingItem(int item)
+    internal void PickRingItem(int item)
     {
         var (command, _, _, hover) = RingItems[item];
         if (!RingItemEnabled(command, _ringUnit))
@@ -281,7 +281,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>단축키로 링 명령을 바로 실행한다 — 링이 열려 있으면 고름 움직임을 거친다.</summary>
-    private void RingShortcut(RingCommand command)
+    internal void RingShortcut(RingCommand command)
     {
         int item = Array.FindIndex(RingItems, r => r.Command == command);
         if (_ringUnit >= 0)
@@ -294,7 +294,7 @@ internal sealed unsafe partial class BattleSceneWindow
         RunRingCommand(_turn, command);
     }
 
-    private void RunRingCommand(int unit, RingCommand command)
+    internal void RunRingCommand(int unit, RingCommand command)
     {
         switch (command)
         {
@@ -317,7 +317,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void DrawRing()
+    internal void DrawRing()
     {
         if (_ringUnit < 0) return;
         var (cx, cy) = RingCenter(_units[_ringUnit]);
@@ -351,25 +351,25 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>오른쪽 단추를 누르고 있는 동안 보이는 링 항목 설명 — 떼면 지운다(WM_RBUTTONUP).</summary>
-    private string? _ringHelp;
+    internal string? _ringHelp;
 
     /// <summary>그림 섞기. <c>Dim</c> 은 그림 색을 15/31 로 어둡게 찍는다 — 꺼진 목록 줄(원본 물들이기 방식 2 · 세기 16, 분석-캐릭터 st-5).</summary>
     /// <summary>
     /// 그림 섞기. Dodge·Screen 은 모션 섞기 키 10·12 — 원본 색표(<c>0x1000b7c0</c>, 5비트 채널 a=바탕·b=그림):
     /// 10 = <c>min(31, a·32 / (32−b))</c>(닷지 — 검은 그림은 바탕 그대로), 12 = <c>max + (31−max)·min/31</c>(스크린).
     /// </summary>
-    private enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen }
+    internal enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen }
 
     /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
-    private static UiBlend BlendOf(int key) => key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
+    internal static UiBlend BlendOf(int key) => key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
 
     /// <summary>
     /// 섞기 키 1~7 의 비침 — 원본 색표(<c>0x1000b7c0</c>)는 k 에서 <c>(4k·그림 + (31−4k)·바탕)/31</c>, 8 은 그림 그대로다.
     /// 그 밖의 키는 1(불투명). 분석-필드 「Fld 0354 돌문」.
     /// </summary>
-    private static double BlendFade(int key) => key is >= 1 and <= 7 ? 4 * key / 31.0 : 1;
+    internal static double BlendFade(int key) => key is >= 1 and <= 7 ? 4 * key / 31.0 : 1;
 
-    private static uint DodgeColor(uint d, uint c)
+    internal static uint DodgeColor(uint d, uint c)
     {
         uint Ch(int shift)
         {
@@ -379,7 +379,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
     }
 
-    private static uint ScreenColor(uint d, uint c)
+    internal static uint ScreenColor(uint d, uint c)
     {
         uint Ch(int shift)
         {
@@ -390,13 +390,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그림을 이 네모 안으로만 그린다 — 필드처럼 640×480 틀 밖으로 새면 안 되는 화면이 쓴다.</summary>
-    private (int Left, int Top, int Width, int Height)? _uiClip;
+    internal (int Left, int Top, int Width, int Height)? _uiClip;
 
     /// <summary>UI Obs 한 장을 모션표 틱에 맞춰 (x, y) 에 그린다(컷의 X·Y 가 기준점에서 왼쪽 위까지 거리). 그렸으면 true.</summary>
     /// <param name="fade">
     /// 0~1 의 밝기 — 필드 인물이 서서히 사라지고 나타날 때(행동 210·211) 쓴다. 1 이면 그대로 그린다.
     /// </param>
-    private bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1, bool mirror = false)
+    internal bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1, bool mirror = false)
     {
         var clip = _uiClip;
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop, mirror) is not { } f) return false;
@@ -460,13 +460,13 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private static uint AddColor(uint d, uint c, int weight)
+    internal static uint AddColor(uint d, uint c, int weight)
     {
         uint Ch(int shift) => (uint)Math.Min(255, (int)(d >> shift & 0xFF) + (int)(c >> shift & 0xFF) * weight / 256);
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
     }
 
-    private static uint ScaleColor(uint d, int num, int den)
+    internal static uint ScaleColor(uint d, int num, int den)
     {
         uint Ch(int shift) => (uint)((int)(d >> shift & 0xFF) * num / den);
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
@@ -476,9 +476,9 @@ internal sealed unsafe partial class BattleSceneWindow
 /// <summary>UI 용 Obs 하나 — 벌·컷 그림과 모션표.</summary>
 internal sealed class UiSprite
 {
-    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
-    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
-    private readonly ObsMotionTable? _table;
+    internal readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
+    internal readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
+    internal readonly ObsMotionTable? _table;
 
     public UiSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
     {
@@ -490,7 +490,7 @@ internal sealed class UiSprite
                 _frames[(motion.Id, frame.SlotId)] = SpriteFrame.From(frame);
     }
 
-    private MotionKey? KeyAt(int motion, int tick, bool loop)
+    internal MotionKey? KeyAt(int motion, int tick, bool loop)
     {
         if (_table?.Clips.GetValueOrDefault(motion) is { } clip)
         {

@@ -11,18 +11,18 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private bool _progressOpen;
-    private int _progressScroll;
+    internal bool _progressOpen;
+    internal int _progressScroll;
 
     /// <summary>이번 틀에 그린 [−]·[+] 단추 — (네모, 깃발, 더할 값).</summary>
-    private readonly List<(int X, int Y, int W, int H, int Flag, int Delta)> _progressButtons = [];
+    internal readonly List<(int X, int Y, int W, int H, int Flag, int Delta)> _progressButtons = [];
 
-    private const int ProgressRowH = 16;
+    internal const int ProgressRowH = 16;
 
-    private static string OpText(int op) => op switch { 0 => "==", 1 => "!=", 2 => "<", 3 => "<=", 4 => ">", _ => ">=" };
+    internal static string OpText(int op) => op switch { 0 => "==", 1 => "!=", 2 => "<", 3 => "<=", 4 => ">", _ => ">=" };
 
     /// <summary>그 챕터가 보거나 바꾸는 깃발 — 장소 조건, 챕터 사건 조건(101), 챕터 사건이 세우는 깃발(102·103).</summary>
-    private static SortedSet<int> ChapterFlags(ChapterFile chp)
+    internal static SortedSet<int> ChapterFlags(ChapterFile chp)
     {
         var set = new SortedSet<int>();
         foreach (var place in chp.Places)
@@ -37,7 +37,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return set;
     }
 
-    private void DrawProgress()
+    internal void DrawProgress()
     {
         _progressButtons.Clear();
         if (!_progressOpen) return;
@@ -135,7 +135,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>진행 상태 창이 떠 있으면 클릭을 먹는다 — [−]·[+] 는 그 깃발을 바꾼다.</summary>
-    private bool OnProgressClick(int bx, int by)
+    internal bool OnProgressClick(int bx, int by)
     {
         if (!_progressOpen) return false;
         foreach (var (x, y, w, h, flag, delta) in _progressButtons)
@@ -148,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void ToggleProgress()
+    internal void ToggleProgress()
     {
         _progressOpen = !_progressOpen;
         _progressScroll = 0;

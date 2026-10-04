@@ -13,13 +13,13 @@
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int FrameObs = 970, FrameTitleH = 30;
+    internal const int FrameObs = 970, FrameTitleH = 30;
     // 바탕 그림은 스프라이트 효과 <b>6</b> 으로 섞인다 — 섞기 표(0x1000b7c0)가 (7·바탕 + 24·그림)/31 이라 알파가 24/31 이다.
     // 예전에 쓰던 16/31 은 「못 쓰는 항목」 표시(방식 2·세기 16)의 값이었지 창 바탕의 것이 아니었다.
-    private const int FrameBlend = 24, FrameBlendMax = 31;
+    internal const int FrameBlend = 24, FrameBlendMax = 31;
 
     /// <summary>원본 창 틀을 그린다. (x, y) 는 <b>본문</b> 왼위 — 제목줄은 그 위 30픽셀을 더 쓴다.</summary>
-    private void DrawGameFrame(int x, int y, int w, int h, string? title = null)
+    internal void DrawGameFrame(int x, int y, int w, int h, string? title = null)
     {
         bool titled = title != null;
         int top = titled ? y - FrameTitleH : y, full = titled ? h + FrameTitleH : h;
@@ -42,7 +42,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>바탕 — Obs 0970 모션 7 의 2×184 그라데이션을 창 크기로 늘려 반투명하게 덮는다.</summary>
-    private void DrawFrameBackground(int x, int y, int w, int h)
+    internal void DrawFrameBackground(int x, int y, int w, int h)
     {
         if (w <= 0 || h <= 0) return;
         if (UiFor(FrameObs)?.FrameAt(7, 0) is not { } f || f.W == 0 || f.H == 0)
@@ -67,7 +67,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그림 한 장을 칸 크기에 맞춰 줄여 그린다(가장 가까운 픽셀).</summary>
-    private void BlitScaled(SpriteFrame frame, int x, int y, int w, int h)
+    internal void BlitScaled(SpriteFrame frame, int x, int y, int w, int h)
     {
         if (frame.W == 0 || frame.H == 0 || w <= 0 || h <= 0) return;
         double scale = Math.Min((double)w / frame.W, (double)h / frame.H);
@@ -89,7 +89,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>글을 읽는 창 밑은 먼저 어둡게 깐다 — 반투명 바탕만으로는 배경 그림이 비쳐 글이 안 읽힌다.</summary>
-    private void DarkenRect(int x, int y, int w, int h, int num = 8, int den = 31)
+    internal void DarkenRect(int x, int y, int w, int h, int num = 8, int den = 31)
     {
         for (int yy = y; yy < y + h; yy++)
         {
@@ -104,7 +104,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>바탕과 그림을 세기만큼 섞는다(원본 섞기 방식 2).</summary>
-    private static uint MixColor(uint dst, uint src, int strength, int max)
+    internal static uint MixColor(uint dst, uint src, int strength, int max)
     {
         uint Ch(int shift) => (uint)(((int)(dst >> shift & 0xFF) * (max - strength) + (int)(src >> shift & 0xFF) * strength) / max);
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);

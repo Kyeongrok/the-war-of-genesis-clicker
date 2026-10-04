@@ -22,10 +22,10 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>진행 깃발 2000칸. 새 게임이면 모두 0 이다.</summary>
-    private readonly byte[] _flags = new byte[2000];
+    internal readonly byte[] _flags = new byte[2000];
 
     /// <summary>조건 하나를 견준다 — 깃발 번호가 0 이하면 조건이 없는 것으로 친다.</summary>
-    private bool FlagAllows(int variable, int value, int op)
+    internal bool FlagAllows(int variable, int value, int op)
     {
         if (variable <= 0 || variable >= _flags.Length) return true;
         int now = _flags[variable];
@@ -42,7 +42,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>레코드에 붙은 조건이 모두 통하나.</summary>
-    private bool FlagsAllow(IReadOnlyList<(int Variable, int Value, int Operator)> conditions) =>
+    internal bool FlagsAllow(IReadOnlyList<(int Variable, int Value, int Operator)> conditions) =>
         conditions.All(c => FlagAllows(c.Variable, c.Value, c.Operator));
 
     /// <summary>그 장소가 항행 목록에 나오나 — 원본대로 조건이 통해야 한다(<c>0x100fdaf0</c>).</summary>
@@ -50,7 +50,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 예전엔 「한 번도 세워진 적 없는 깃발은 모른다」로 보고 다 보여 줬다 — 필드 프롤로그가 없어 첫 깃발을 못 세우던 때의 임시 규칙.
     /// 지금은 프롤로그·챕터 스크립트·전투 이벤트가 깃발을 세우니 조건대로 거른다(2026-09-23). 코어헌터는 훈련장(깃발 13)부터 하나씩 열린다.
     /// </remarks>
-    private bool PlaceOpen(ChapterFile.Place place) => FlagsAllow(place.Conditions);
+    internal bool PlaceOpen(ChapterFile.Place place) => FlagsAllow(place.Conditions);
 
     /// <summary>
     /// 그 전투의 이벤트가 세우는 깃발을 적용한다 — 이긴 뒤 다음 화면이 달라지게.
@@ -59,7 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본은 이벤트 조건이 맞을 때만 그 행동을 돌리지만, 데모는 <b>이긴 전투의 깃발 대입만</b> 훑어 적용한다.
     /// 행동 <c>102</c> 가 진행 깃발 대입(인자 0 = 번호, 인자 1 = 값)이다.
     /// </remarks>
-    private void ApplyBattleFlags(int battleId)
+    internal void ApplyBattleFlags(int battleId)
     {
         try
         {

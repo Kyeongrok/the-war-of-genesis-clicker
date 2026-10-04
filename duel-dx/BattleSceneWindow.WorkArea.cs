@@ -23,17 +23,17 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>두 칸 사이 거리(4분의 1칸) — 평지 기준.</summary>
-    private static int CellDistance(int fromCol, int fromRow, int col, int row) =>
+    internal static int CellDistance(int fromCol, int fromRow, int col, int row) =>
         4 * (Math.Abs(col - fromCol) + Math.Abs(row - fromRow));
 
     /// <summary>
     /// 거리 자·같은 높이·모드 7·화면 창이 쓰는 칸 높이 — 원본 <c>+0x80</c>(지형 + 종류 0·3·4·5 물체 도장, <c>0x100daca0</c>·<c>0x100db787</c>, 감사3 R9).
     /// 걷기·ZOC·시야는 모든 물체를 찍은 <see cref="WalkHeightAt"/>(<c>+0x78</c>)를 쓴다.
     /// </summary>
-    private int HeightAt(int col, int row) => AimHeightAt(col, row);
+    internal int HeightAt(int col, int row) => AimHeightAt(col, row);
 
     /// <summary>높이까지 넣은 거리 — 차등을 넣은 값과 안 넣은 값 둘 다 돌려준다(최대는 앞, 최소는 뒤로 잰다).</summary>
-    private (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded)
+    internal (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded)
     {
         int d = CellDistance(fromCol, fromRow, col, row);
         if (!useHeight) return (d, d);
@@ -50,7 +50,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 높이는 모든 물체를 찍은 <c>+0x78</c>(<see cref="WalkHeightAt"/>) — 석상·크리스탈·닫힌 문이 시야를 막는다.
     /// 전에는 시전자 → 대상, 0 쪽 자름 보간, <c>&gt;</c> 부등호, 지형 높이만 써서 무작위 판의 31% 가 원본과 달랐다.
     /// </summary>
-    private bool HasSight(int fromCol, int fromRow, int col, int row)
+    internal bool HasSight(int fromCol, int fromRow, int col, int row)
     {
         if (_map is null) return true;
         int x0 = col, y0 = row, x1 = fromCol, y1 = fromRow;          // 대상 → 시전자
@@ -83,7 +83,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 work 의 사거리 최대(4분의 1칸) — 종류 2·4 는 낀 무기의 사거리를 쓴다.</summary>
-    private int RangeMaxOf(WorkData w, UnitState? user)
+    internal int RangeMaxOf(WorkData w, UnitState? user)
     {
         int weapon = 0;
         if (w.RangeKind is 2 or 4 && user?.Data is { } c && c.Items.Length > 0
@@ -97,7 +97,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모양 <paramref name="shape"/> 가 그 칸을 덮나(거리는 이미 최소·최대로 걸렀다고 보고 모양만 본다).</summary>
-    private static bool ShapeCovers(int shape, int dx, int dy, Facing facing)
+    internal static bool ShapeCovers(int shape, int dx, int dy, Facing facing)
     {
         // 바라보는 쪽을 앞(axis)으로, 그 직각을 옆(side)으로 돌려 놓는다.
         (int axis, int side) = facing switch
@@ -127,16 +127,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>방향을 쓰는 모양인가 — 사거리를 그릴 때는 네 방향을 합쳐야 한다.</summary>
-    private static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9 or 10;
+    internal static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9 or 10;
 
     /// <summary>
     /// 그 모양이 <b>앞으로 간 거리만</b> 재는가 — 3·5·6·7·9 가 그렇다(<c>0x100dafe0</c>·<c>0x100db310</c>).
     /// 옆으로 벌어진 만큼은 거리에 안 들어가므로, 맨해튼으로 자르면 바깥 줄이 통째로 잘려 나간다.
     /// </summary>
-    private static bool ShapeUsesAxisDistance(int shape) => shape is 3 or 5 or 6 or 7 or 9;
+    internal static bool ShapeUsesAxisDistance(int shape) => shape is 3 or 5 or 6 or 7 or 9;
 
     /// <summary>바라보는 쪽으로 몇 칸 갔나(뒤쪽은 음수).</summary>
-    private static int AxisOf(int dx, int dy, Facing facing) => facing switch
+    internal static int AxisOf(int dx, int dy, Facing facing) => facing switch
     {
         Facing.Up => -dy,
         Facing.Down => dy,
@@ -145,7 +145,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>모양과 거리를 함께 본다 — 모양마다 <b>거리 자가 다르기</b> 때문에 따로 볼 수 없다.</summary>
-    private static bool ShapeReaches(int shape, int dx, int dy, Facing facing,
+    internal static bool ShapeReaches(int shape, int dx, int dy, Facing facing,
                                      int minQuarters, int maxQuarters, int graded, int plain)
     {
         if (!ShapeCovers(shape, dx, dy, facing)) return false;
@@ -160,7 +160,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// (fromCol, fromRow) 에서 work 로 (col, row) 칸을 겨눌 수 있나 — 사거리 모양·최소·최대와 지형 &amp; 0x8 만 본다.
     /// </summary>
-    private bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row, UnitState? user = null)
+    internal bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row, UnitState? user = null)
     {
         if ((uint)col >= Cols || (uint)row >= Rows) return false;
         if (_map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
@@ -185,7 +185,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>효과 범위 칸들 — 겨눈 칸(자기 자리에 쓰는 work 면 시전자 칸)을 가운데로, 시전자 → 겨눈 칸 방향으로.</summary>
-    private List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
+    internal List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
     {
         if (w.SelfCentred) (col, row) = (user.Col, user.Row);
         var cells = new List<(int, int)>();
@@ -223,7 +223,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 칸의 인물이 이 대상 방식에 맞나 — 1 적, 4 아군, 5 아무 유닛, 3·6 아무 칸(유닛이면 맞음).</summary>
-    private static bool ModeAccepts(int mode, UnitState user, UnitState target) => mode switch
+    internal static bool ModeAccepts(int mode, UnitState user, UnitState target) => mode switch
     {
         1 => SeesAsFoe(user, target),
         4 => !user.HasStatus(4) && !Hostile(user, target),
@@ -232,10 +232,10 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => false,
     };
 
-    private const int CureAbility = 11, SoulBlastAbility = 28, SacrificeAbility = 13, ExplosionAbility = 22, BlackHoleAbility = 115;
+    internal const int CureAbility = 11, SoulBlastAbility = 28, SacrificeAbility = 13, ExplosionAbility = 22, BlackHoleAbility = 115;
 
     /// <summary>겨눈 칸에서 실제로 맞는 인물들 — 효과 범위 칸 안에서 효과 대상 방식(<c>+0x1e</c>)으로 거른다.</summary>
-    private List<int> WorkTargets(WorkData w, UnitState user, int col, int row)
+    internal List<int> WorkTargets(WorkData w, UnitState user, int col, int row)
     {
         var cells = EffectCells(w, user, col, row);
         int mode = w.AreaMode != 0 ? w.AreaMode : w.TargetMode;
@@ -253,7 +253,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>실제로 판정이 나는 칸 — 자료 범위(<see cref="AreaCells"/>)에 핸들러가 박아 둔 예외를 얹는다. 겨눔 미리보기도 이것을 쓴다.</summary>
-    private HashSet<(int Col, int Row)> EffectCells(WorkData w, UnitState user, int col, int row)
+    internal HashSet<(int Col, int Row)> EffectCells(WorkData w, UnitState user, int col, int row)
     {
         // 큐어(11) — 자료 범위는 레벨 따라 0→3 이지만 핸들러 0x10081830 은 겨눈 유닛 하나에게만 보낸다(0x10081b3c, ba-20 D4).
         if (w.AbilityId == CureAbility) return [(col, row)];
@@ -286,7 +286,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그 칸에 내려설 수 있나(<c>0x100d99a0</c>) — 판 안, 플래그 &amp;9 없음, 다른 유닛 없음, <b>적 옆 칸(ZOC)이 아님</b>, 물체 없음.
     /// 돌진·이스케이프의 겨눔과 하이 텔레포트의 착지가 쓴다.
     /// </summary>
-    private bool CanLandOn(int col, int row, UnitState user)
+    internal bool CanLandOn(int col, int row, UnitState user)
     {
         if ((uint)col >= Cols || (uint)row >= Rows) return false;
         if (_map is not { } map || col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0) return false;
@@ -299,7 +299,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>겨눌 수 있는 칸인가 — 대상 방식이 유닛을 고르는 것이면 그 칸에 맞는 유닛이 있어야 한다.</summary>
-    private bool CanAimAt(WorkData w, UnitState user, int col, int row)
+    internal bool CanAimAt(WorkData w, UnitState user, int col, int row)
     {
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
         if (w.TargetMode is 3 or 6 or 0 or 2) return true;

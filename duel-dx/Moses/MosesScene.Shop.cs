@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 모세스 상점 페이지(mo-1, 페이지 3·4) — 아이템 상점과 VT(무기) 상점.
 /// </summary>
@@ -18,10 +20,8 @@ namespace DuelDx;
 /// 데모에는 파티 소지금이 없어 <b>5000GP 로 시작</b>한다(데모 나름, 저장 파일에 함께 담는다).
 /// 목록 스크롤은 원본 스크롤 막대 대신 목록 오른쪽의 작은 화살표(Obs 0071 모션 2·4)로 대신했다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int ShopRowH = 21, ShopRows = 4, ShopIconObs = 326, ShopRowObs = 1291;
     internal const int ShopButtonObs = 283, ShopExitObs = 287, ShopArrowObs = 71;
     internal const int SoundShopFail = 574, SoundShopDone = 575, SoundShopLeave = 576;
@@ -305,6 +305,5 @@ internal sealed record MosesShopFile(int NameText, int Kind, int OwnerObs, int O
         int rate = H(10) is > 0 and < 1000 ? H(10) : 100;
         return new MosesShopFile(H(2), H(4), H(6), H(8), rate,
                                  [.. Enumerable.Range(0, 15).Select(i => (int)H(12 + 2 * i)).Where(v => v > 0)]);
-    }
     }
 }

@@ -16,18 +16,18 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>work 에 붙는 영상 하나 — 영상 번호, 준비 동작에서 띄우나(아니면 치는 순간), 대상에 붙나, 왼쪽 위까지의 거리.</summary>
-    private readonly record struct MovieFx(int Movie, bool Prelude, bool OnTarget, int Dx, int Dy);
+    internal readonly record struct MovieFx(int Movie, bool Prelude, bool OnTarget, int Dx, int Dy);
 
     /// <summary>재생 중인 영상 — (번호, 시작 시각, 왼쪽 위 x, y).</summary>
-    private readonly List<(int Movie, double Start, int X, int Y)> _movies = [];
+    internal readonly List<(int Movie, double Start, int X, int Y)> _movies = [];
 
     /// <summary>풀어 둔 영상 컷(번호 → 컷들). 처음 쓸 때 읽는다. 없으면 빈 배열.</summary>
-    private readonly Dictionary<int, SpriteFrame[]> _movieFrames = [];
+    internal readonly Dictionary<int, SpriteFrame[]> _movieFrames = [];
 
     /// <summary>영상 초당 컷 — 0034·0061 은 15, 나머지는 30(PyAV 로 잰 값).</summary>
-    private static double MovieFps(int movie) => movie is 34 or 61 ? 15 : 30;
+    internal static double MovieFps(int movie) => movie is 34 or 61 ? 15 : 30;
 
-    private SpriteFrame[] MovieFrames(int movie)
+    internal SpriteFrame[] MovieFrames(int movie)
     {
         if (_movieFrames.TryGetValue(movie, out var cached)) return cached;
         var frames = new List<SpriteFrame>();
@@ -53,7 +53,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 work 의 영상을 띄운다 — <paramref name="prelude"/> 면 준비 동작(시전 시작)의 것, 아니면 치는 순간의 것.</summary>
-    private void SpawnWorkMovies(WorkData w, UnitState user, int col, int row, bool prelude)
+    internal void SpawnWorkMovies(WorkData w, UnitState user, int col, int row, bool prelude)
     {
         if (!WorkMovies.TryGetValue(w.Id, out var list)) return;
         foreach (var m in list)
@@ -69,18 +69,18 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <c>0x100cfbd0(…, 80, …, 속도)</c> 로 셋을 반지름 80 까지 속도 1.5 · 0.833 · 0.167(틱당)로 퍼뜨린다. 색·굵기는 자료에 없어
     /// 옅은 청백 더하기 테두리로 그린다(가설). 판 칸이 40×32 라 세로는 0.8 배로 눌린 타원이다.
     /// </summary>
-    private readonly List<(double Start, int X, int Y, double Speed)> _ripples = [];
+    internal readonly List<(double Start, int X, int Y, double Speed)> _ripples = [];
 
-    private const int RippleRadius = 80;
-    private static readonly double[] RippleSpeeds = [1.5, 0.833, 0.167];
+    internal const int RippleRadius = 80;
+    internal static readonly double[] RippleSpeeds = [1.5, 0.833, 0.167];
 
-    private void SpawnRipples(WorkData w, int col, int row)
+    internal void SpawnRipples(WorkData w, int col, int row)
     {
         if (w.AbilityId != 54) return;
         foreach (double speed in RippleSpeeds) _ripples.Add((_lastTime, col * TileW + TileW / 2, CellCenterY(col, row), speed));
     }
 
-    private void DrawRipples()
+    internal void DrawRipples()
     {
         _ripples.RemoveAll(r =>
         {
@@ -106,7 +106,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>영상 컷을 더하기로 얹는다 — 검은 바탕은 +0 이라 안 보인다. 끝난 영상은 지운다.</summary>
-    private void DrawMovies()
+    internal void DrawMovies()
     {
         _movies.RemoveAll(m =>
         {

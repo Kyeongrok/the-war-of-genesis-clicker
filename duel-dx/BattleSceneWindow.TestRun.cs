@@ -14,28 +14,28 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>시험 전용: 한 프레임에 Update 를 몇 번 — 변수가 없으면 1(평소대로).</summary>
-    private static readonly int TestRunSteps =
+    internal static readonly int TestRunSteps =
         int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TESTRUN"), out int n) && n > 0 ? Math.Min(n, 64) : 1;
 
     /// <summary>시험 전용 훅이 켜졌나.</summary>
-    private static readonly bool TestRun = Environment.GetEnvironmentVariable("DUELDX_TESTRUN") is { Length: > 0 };
+    internal static readonly bool TestRun = Environment.GetEnvironmentVariable("DUELDX_TESTRUN") is { Length: > 0 };
 
     /// <summary>시험 전용: 전투 사건을 곧바로 건너뛸지.</summary>
-    private static readonly bool TestSkip = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "1";
+    internal static readonly bool TestSkip = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "1";
 
-    private double _testRunStatAt;
+    internal double _testRunStatAt;
 
     /// <summary>시험 전용: 대사를 눌러 넘길지(DUELDX_TESTSKIP=2)와 다음에 누를 때.</summary>
-    private static readonly bool TestClick = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "2";
-    private double _testClickAt;
+    internal static readonly bool TestClick = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "2";
+    internal double _testClickAt;
 
     /// <summary>
     /// 시험 전용: <c>DUELDX_CLICKS=x,y@초;x,y@초…</c> — 그 때(실제 초) <b>보이는 화면 좌표</b>(스냅숏 그림의 좌표)를 왼쪽 클릭한다.
     /// 창 클라이언트 좌표는 배율·여백 때문에 스냅숏과 달라 PostMessage 클릭이 빗나갔다 — 여기서는 화면 좌표를 클라이언트 좌표로 바꿔 넣는다.
     /// </summary>
-    private List<(double At, int X, int Y)>? _testClicks;
+    internal List<(double At, int X, int Y)>? _testClicks;
 
-    private void TestClicksTick()
+    internal void TestClicksTick()
     {
         if (_testClicks == null)
         {
@@ -58,7 +58,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>시험 전용: 갱신 한 번 뒤 — 사건 건너뛰기, 몇 초마다 상태 줄.</summary>
-    private void TestRunTick()
+    internal void TestRunTick()
     {
         TestClicksTick();
         if (!TestRun) return;
@@ -81,7 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>시험 전용: 결과·행선지 줄 — 켜졌을 때만 적는다.</summary>
-    private static void TestRunTrace(string line)
+    internal static void TestRunTrace(string line)
     {
         if (!TestRun) return;
         try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), "testrun " + line + Environment.NewLine); }

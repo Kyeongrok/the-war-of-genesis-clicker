@@ -25,40 +25,40 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int EpisodeBackground = 113, EpisodeObs = 979, EpisodeBgm = 3391;
-    private const int EpisodeRows = 6, EpisodeCellW = 240, EpisodeCellH = 46;
+    internal const int EpisodeBackground = 113, EpisodeObs = 979, EpisodeBgm = 3391;
+    internal const int EpisodeRows = 6, EpisodeCellW = 240, EpisodeCellH = 46;
 
     /// <summary>연대표 한 줄 — 에피소드 번호와 그 챕터·파티, 잠금 깃발 넷(−1 = 조건 없음).</summary>
-    private sealed record EpisodeEntry(int No, int Chapter, int Party, int[] Locks);
+    internal sealed record EpisodeEntry(int No, int Chapter, int Party, int[] Locks);
 
     /// <summary>
     /// 그 줄이 열렸나 — 잠금 깃발 넷이 <b>모두</b> −1 이거나 진행 깃발이 0 이 아니어야 한다(<c>0x10106f50</c> → <c>0x10106f20</c>, AND).
     /// 새 게임이면 깃발이 다 0 이라 조건 없는 0번(코어헌터)·1번(홍련의 예언)만 열리고, 코어헌터의 챕터 스크립트가 깃발 14 를 세우면
     /// 2번(샤이닝 스타)이 열린다.
     /// </summary>
-    private bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < _flags.Length && _flags[f] != 0));
+    internal bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < _flags.Length && _flags[f] != 0));
 
     /// <summary>
     /// 이미 고른 에피소드(번호) — 원본 <c>0x101b68a0[i]</c>. <b>고르는 순간</b> 1 이 되고(<c>0x10106722</c>·<c>0x1010689e</c>), NEW GAME 만 지운다(<c>0x1004d870</c>).
     /// 고른 줄은 이름판을 약 절반 밝기(색마다 ×15/31, <c>0x1000c650</c> 섞기 2·세기 16)로 그리고 눌러도 아무 일이 없다(<c>0x10043ab0</c>: <c>+0x44</c> 면 되돌아감).
     /// 세이브에 실린다. 분석-UI 「8. 이미 고른 에피소드 줄은 어떻게 그리나」.
     /// </summary>
-    private readonly HashSet<int> _episodesPicked = [];
+    internal readonly HashSet<int> _episodesPicked = [];
 
     /// <summary>
     /// 챕터가 끝났다는 표시 — 필드 행동 11 이 세우고(원본 챕터 상태 <c>+0x10</c>, <c>0x1004e6c0</c>), 모세스에 들어올 때 이것이 서 있으면
     /// 항행 대신 연대표로 간다(<c>0x100f5b07</c>). 연대표에서 에피소드를 고르면 내린다. 세이브에 실린다.
     /// </summary>
-    private bool _chapterDone;
+    internal bool _chapterDone;
 
     /// <summary>지금 파티 번호(0 살라딘 · 1 베라모드 · 2 크리스티앙, Episode.dat 칸 8). 다른 파티의 에피소드로 가면 인물 상태를 새로 꾸린다.</summary>
-    private int _partyNo;
+    internal int _partyNo;
 
-    private bool _episodesOpen;
-    private List<EpisodeEntry>? _episodes;
-    private int _episodePick = -1;
+    internal bool _episodesOpen;
+    internal List<EpisodeEntry>? _episodes;
+    internal int _episodePick = -1;
 
-    private List<EpisodeEntry> Episodes()
+    internal List<EpisodeEntry> Episodes()
     {
         if (_episodes != null) return _episodes;
         var list = new List<EpisodeEntry>();
@@ -90,25 +90,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 목록의 맨 윗줄(스크롤) — 원본 목록 창 <c>0x100482e0(…, 2열, 6행, 240, 46, …, 스크롤 갈래 3)</c> 은 6행이 넘으면 스크롤 막대
     /// (id 0x2718)로 넘긴다. 전에는 이것이 없어 7번째 줄(에피소드 12 우주의 슈미터)부터 그리지도 누르지도 못해 본편 후반이 막혔다(감사 F1).
     /// </summary>
-    private int _episodeTop;
+    internal int _episodeTop;
 
     /// <summary>스크롤 막대 — 화면 (567,174), 높이 286. 위 화살표·아래 화살표는 <c>Obs 0979</c> 장 2·3(19×45), 손잡이는 장 0·1(분석-UI 2.5).</summary>
-    private const int EpisodeBarX = 567, EpisodeBarY = 174, EpisodeBarH = 286, EpisodeArrowW = 19, EpisodeArrowH = 45;
+    internal const int EpisodeBarX = 567, EpisodeBarY = 174, EpisodeBarH = 286, EpisodeArrowW = 19, EpisodeArrowH = 45;
 
     /// <summary>
     /// 목록 줄 수 — 원본 <c>0x10106fe0</c> 은 <b>열리는 가장 큰 번호 + 1</b> 만큼 칸을 넣는다(<c>0x1010716e</c>~<c>0x10107290</c>).
     /// 2열이니 줄 수는 그 절반(올림).
     /// </summary>
-    private int EpisodeRowCount()
+    internal int EpisodeRowCount()
     {
         int visible = Episodes().Where(EpisodeOpen).Select(e => e.No + 1).DefaultIfEmpty(0).Max();
         return (visible + 1) / 2;
     }
 
-    private void ScrollEpisodes(int delta) =>
+    internal void ScrollEpisodes(int delta) =>
         _episodeTop = Math.Clamp(_episodeTop + delta, 0, Math.Max(0, EpisodeRowCount() - EpisodeRows));
 
-    private void OpenEpisodes()
+    internal void OpenEpisodes()
     {
         _episodesOpen = true;
         _titleOpen = false;
@@ -126,7 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// DUELDX_EPISODES=1 이면 곧장 연대표를 연다(화면 밖 시험용). DUELDX_FLAGS 로 깃발을 세워 뒤 에피소드를 열고,
     /// DUELDX_EPISODETOP=&lt;줄&gt; 이면 그만큼 내려 둔다.
     /// </summary>
-    private void OpenEpisodesIfAsked()
+    internal void OpenEpisodesIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") != "1") return;
         foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -140,12 +140,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 에피소드 줄이 놓이는 칸(왼위) — 스크롤한 만큼 올린다.</summary>
-    private (int X, int Y) EpisodeCell(int no) => (80 + EpisodeCellW * (no % 2), 179 + EpisodeCellH * (no / 2 - _episodeTop));
+    internal (int X, int Y) EpisodeCell(int no) => (80 + EpisodeCellW * (no % 2), 179 + EpisodeCellH * (no / 2 - _episodeTop));
 
     /// <summary>그 줄이 지금 보이는 6행 안에 있나.</summary>
-    private bool EpisodeRowShown(int no) => no / 2 >= _episodeTop && no / 2 < _episodeTop + EpisodeRows;
+    internal bool EpisodeRowShown(int no) => no / 2 >= _episodeTop && no / 2 < _episodeTop + EpisodeRows;
 
-    private int EpisodeAt(int bx, int by)
+    internal int EpisodeAt(int bx, int by)
     {
         var (ox, oy) = Mos.MosesOrigin();
         var list = Episodes();
@@ -163,7 +163,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 스크롤 막대 누름 — 위·아래 화살표는 한 줄, 손잡이 위·아래 빈 곳은 한 쪽(6줄)씩(흔한 목록 막대 동작, 원본 갈래 3 의 세부는 가설).
     /// 손잡이 끌기와 마우스 휠은 넣지 않았다(원본 확인 안 함). 막대를 눌렀으면 true.
     /// </summary>
-    private bool OnEpisodeBarClick(int bx, int by)
+    internal bool OnEpisodeBarClick(int bx, int by)
     {
         int rows = EpisodeRowCount();
         if (rows <= EpisodeRows) return false;
@@ -184,7 +184,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>손잡이 자리(막대 윗변 기준 y)와 높이 — 화살표 둘 사이 길에서 맨 윗줄 비율만큼 내려 놓는다.</summary>
-    private (int Y, int H) EpisodeThumb(int rows)
+    internal (int Y, int H) EpisodeThumb(int rows)
     {
         int thumbH = UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
         int track = EpisodeBarH - 2 * EpisodeArrowH - thumbH;
@@ -193,7 +193,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>연대표가 떠 있으면 클릭을 처리하고 true. 원본처럼 <b>두 번 눌러야</b> 그 에피소드로 간다.</summary>
-    private bool OnEpisodesClick(int bx, int by)
+    internal bool OnEpisodesClick(int bx, int by)
     {
         if (!_episodesOpen) return false;
         if (SystemOpen) return OnSystemClick(bx, by);
@@ -220,7 +220,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void DrawEpisodes()
+    internal void DrawEpisodes()
     {
         if (!_episodesOpen) return;
         var (ox, oy) = Mos.MosesOrigin();

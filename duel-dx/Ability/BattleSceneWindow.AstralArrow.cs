@@ -17,14 +17,14 @@
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int AstralArrowAbility = 87;
-    private const int BowObs = 183, ArrowObs = 839, ArrowBlastObs = 705, ArrowSoundObs = 1375;
+    internal const int AstralArrowAbility = 87;
+    internal const int BowObs = 183, ArrowObs = 839, ArrowBlastObs = 705, ArrowSoundObs = 1375;
 
     /// <summary>아스트럴 애로우 레벨 1~10 의 work — 뽑은 표 대신 손으로 그린다.</summary>
-    private static readonly HashSet<int> AstralArrowWorks = [448, 1147, 1146, 1145, 1144, 1143, 1142, 1141, 1140, 1139];
+    internal static readonly HashSet<int> AstralArrowWorks = [448, 1147, 1146, 1145, 1144, 1143, 1142, 1141, 1140, 1139];
 
     /// <summary>날아가는 화살 하나 — 곧게 목표로, 틱마다 빨라진다. 닿으면 <see cref="OnArrive"/>.</summary>
-    private sealed class Arrow
+    internal sealed class Arrow
     {
         /// <summary>그릴 Obs — 화살(839)이 기본, 메테오의 운석은 200.</summary>
         public int Obs = ArrowObs;
@@ -35,10 +35,10 @@ internal sealed unsafe partial class BattleSceneWindow
         public Action? OnArrive;
     }
 
-    private readonly List<Arrow> _arrows = [];
-    private double _arrowLastStep;
+    internal readonly List<Arrow> _arrows = [];
+    internal double _arrowLastStep;
 
-    private IEnumerable<bool> AstralArrowRoutine(UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> AstralArrowRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         double t0 = _lastTime;
         var (ux, uy) = UnitFoot(user);
@@ -91,7 +91,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>화살을 틱 단위로 민다 — 출발 전이면 기다리고, 닿으면 없앤다.</summary>
-    private void StepArrows()
+    internal void StepArrows()
     {
         int ticks = (int)((_lastTime - _arrowLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
@@ -111,7 +111,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _arrows.RemoveAll(a => a.Done);
     }
 
-    private void DrawArrows()
+    internal void DrawArrows()
     {
         foreach (var a in _arrows.Where(a => _lastTime >= a.Start && !a.Done))
             DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));

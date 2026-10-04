@@ -13,7 +13,7 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private sealed class Blink
+    internal sealed class Blink
     {
         public (int Col, int Row) Dest, From;
         public double Start;
@@ -21,15 +21,15 @@ internal sealed unsafe partial class BattleSceneWindow
         public int Dir;      // 0 위 · 1 옆 · 2 아래 — 모션 57+Dir / 60+Dir
     }
 
-    private readonly Dictionary<UnitState, Blink> _blinks = [];
+    internal readonly Dictionary<UnitState, Blink> _blinks = [];
 
     /// <summary>순간이동 잔상 — 주인, 모션, 좌우, 뜨는 시각, 발 자리, 짙기, 수명 틱.</summary>
-    private readonly List<(UnitState Owner, int Motion, bool Mirror, double Start, int X, int Y, double Fade, int Life)> _blinkGhosts = [];
+    internal readonly List<(UnitState Owner, int Motion, bool Mirror, double Start, int X, int Y, double Fade, int Life)> _blinkGhosts = [];
 
-    private const int BlinkFadeTicks = 16, BlinkHiddenTicks = 15, BlinkGhostLife = 10;
+    internal const int BlinkFadeTicks = 16, BlinkHiddenTicks = 15, BlinkGhostLife = 10;
 
     /// <summary>걸을 길이 걸린 유닛이 순간이동꾼이면 걷기 대신 순간이동을 시작한다. 시작했으면 true.</summary>
-    private bool TryBeginBlink(UnitState unit)
+    internal bool TryBeginBlink(UnitState unit)
     {
         if (unit.Data is not { MoveKind: 1 } || unit.Path.Count == 0 || unit.IsMoving) return false;
         var dest = unit.Path.Last();
@@ -47,14 +47,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 모션이 없는 그림(엠블라 Obs 577)은 서기 그대로 둔 채 바쁨만 건다.</summary>
-    private void PlayBlinkMotion(UnitState unit, int motion, int ticks)
+    internal void PlayBlinkMotion(UnitState unit, int motion, int ticks)
     {
         bool has = _sprites.TryGetValue(unit.ChrCode, out var sprite) && sprite.MotionTicks(motion) > 0;
         if (has) unit.PlayMotion(motion, ticks / TicksPerSecond, loop: false);
         else unit.PlayAction(0, ticks / TicksPerSecond);
     }
 
-    private void SpawnBlinkGhosts(UnitState unit, int motion, bool arriving)
+    internal void SpawnBlinkGhosts(UnitState unit, int motion, bool arriving)
     {
         if (!_sprites.TryGetValue(unit.ChrCode, out var sprite) || sprite.MotionTicks(motion) <= 0) return;
         var (fx, fy) = UnitFoot(unit);
@@ -68,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void StepBlinks()
+    internal void StepBlinks()
     {
         if (_blinks.Count == 0) return;
         foreach (var (unit, b) in _blinks.ToArray())
@@ -105,7 +105,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void DrawBlinkGhosts()
+    internal void DrawBlinkGhosts()
     {
         DrawLegionGhosts();
         for (int i = _blinkGhosts.Count - 1; i >= 0; i--)

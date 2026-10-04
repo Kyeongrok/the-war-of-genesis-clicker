@@ -14,22 +14,22 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>움직이는 유닛 잔상 — 제 그림의 한 모션을 From → To 로 옮기며 그린다. 때는 게임 초.</summary>
-    private sealed record LegionGhost(UnitState Owner, int Motion, bool Mirror, double Start, double X0, double Y0, double X1, double Y1,
+    internal sealed record LegionGhost(UnitState Owner, int Motion, bool Mirror, double Start, double X0, double Y0, double X1, double Y1,
                                       int MoveTicks, bool Arc, int Life, double Fade0, double Fade1);
 
-    private readonly List<LegionGhost> _legionGhosts = [];
+    internal readonly List<LegionGhost> _legionGhosts = [];
 
     /// <summary>정해 둔 때에 유닛을 숨기거나(0) 다시 보인다(1).</summary>
-    private readonly List<(double At, UnitState Unit, double Fade)> _legionFades = [];
+    internal readonly List<(double At, UnitState Unit, double Fade)> _legionFades = [];
 
     /// <summary>월드 세로 40px = 화면 세로 32px(칸 40×32).</summary>
-    private const double LegionYScale = (double)TileH / TileW;
+    internal const double LegionYScale = (double)TileH / TileW;
 
-    private static bool IsLegionSkill(int work) => work is 392 or (>= 1659 and <= 1666);
+    internal static bool IsLegionSkill(int work) => work is 392 or (>= 1659 and <= 1666);
 
     /// <summary>군단기를 쓰는 순간 — 부하 잔상과 숨김·보임을 시각표에 건다(줄을 붙들지 않는다).</summary>
     /// <returns>판정까지 기다릴 초 — 원본은 피해가 끝 무렵(다시 보이기 50틱쯤 앞)에 한 번 들어간다. 연출이 없으면 0.</returns>
-    private double StartLegionStage(UnitState leader, WorkData w, int col, int row, IReadOnlyList<int> targets)
+    internal double StartLegionStage(UnitState leader, WorkData w, int col, int row, IReadOnlyList<int> targets)
     {
         if (!IsLegionSkill(w.Id)) return 0;
         int leaderIndex = Array.IndexOf(_units, leader);
@@ -240,12 +240,12 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>숨김·보임 시각표 — 갱신 틀마다(그리기와 따로 돌아야 화면 밖에서도 멈추지 않는다).</summary>
     /// <summary>군단기 연출이 다 끝나는 때 — 행동 루틴이 그때까지 기다린다(숨은 유닛이 남은 채 다음 차례가 시작되지 않게).</summary>
-    private double _legionStageEnd;
+    internal double _legionStageEnd;
 
     /// <summary>정해 둔 때에 할 일(소리·이펙트·카메라) — 숨김·보임 시각표와 같이 돈다.</summary>
-    private readonly List<(double At, Action Do)> _legionLater = [];
+    internal readonly List<(double At, Action Do)> _legionLater = [];
 
-    private void StepLegionFades()
+    internal void StepLegionFades()
     {
         for (int i = 0; i < _legionLater.Count; i++)
         {
@@ -264,7 +264,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>군단기 잔상을 그리고, 숨김·보임 시각표를 돌린다 — 그리기 틀마다.</summary>
-    private void DrawLegionGhosts()
+    internal void DrawLegionGhosts()
     {
         for (int i = _legionGhosts.Count - 1; i >= 0; i--)
         {

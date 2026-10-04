@@ -8,17 +8,17 @@ namespace DuelDx;
 /// </summary>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private bool _abilityMenu;
-    private int _abilityHover = -1;
+    internal bool _abilityMenu;
+    internal int _abilityHover = -1;
 
     /// <summary>목록 창은 여덟 줄이다(분석-스킬 ba-12 · ba-20 G12) — 더 많으면 휠로 굴린다. 맨 위에 보이는 줄.</summary>
-    private const int AbilityMenuRows = 8;
-    private int _abilityTop;
+    internal const int AbilityMenuRows = 8;
+    internal int _abilityTop;
 
-    private int AbilityTopFor(int count) => _abilityTop = Math.Clamp(_abilityTop, 0, Math.Max(0, count - AbilityMenuRows));
+    internal int AbilityTopFor(int count) => _abilityTop = Math.Clamp(_abilityTop, 0, Math.Max(0, count - AbilityMenuRows));
 
     /// <summary>휠 — 목록이 여덟 줄을 넘으면 굴린다.</summary>
-    private void ScrollAbilityMenu(int rows)
+    internal void ScrollAbilityMenu(int rows)
     {
         _abilityTop += rows;
         AbilityTopFor(MenuRows().Count);
@@ -26,13 +26,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>줄 단축키 — 앞에서부터 1·2·3·4·Q·W·E·R, 여덟 줄이 넘으면 단축키가 없다.</summary>
-    private static readonly int[] AbilityHotkeys = ['1', '2', '3', '4', 'Q', 'W', 'E', 'R'];
+    internal static readonly int[] AbilityHotkeys = ['1', '2', '3', '4', 'Q', 'W', 'E', 'R'];
 
-    private static string HotkeyLabel(int index) =>
+    internal static string HotkeyLabel(int index) =>
         index < AbilityHotkeys.Length ? ((char)AbilityHotkeys[index]).ToString() : "";
 
     /// <summary>목록이 열려 있을 때 키를 처리한다 — 단축키면 그 줄을 고른다.</summary>
-    private bool OnAbilityMenuKey(int key)
+    internal bool OnAbilityMenuKey(int key)
     {
         if (!_abilityMenu || _turn < 0) return false;
         int index = Array.IndexOf(AbilityHotkeys, key);
@@ -47,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return handled;
     }
 
-    private void UpdateAbilityHover(int bx, int by)
+    internal void UpdateAbilityHover(int bx, int by)
     {
         if (!_abilityMenu || _turn < 0) { _abilityHover = -1; return; }
         var rows = MenuRows();
@@ -58,12 +58,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
     // 원본 목록(분석-스킬 ba-12): 창 바깥 304, 줄 280×24 여덟 줄, 이름 x=46 · TP x=210 · SOUL x=240(오른쪽 맞춤).
     // 원본에 없는 「소모」(실제로 깎이는 SOUL) 칸을 SOUL 오른쪽에 더해 창을 40 넓혔다(사용자 요청).
-    private const int MenuW = 344, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 320, MenuRowX = 12;
+    internal const int MenuW = 344, MenuRowH = 24, MenuHeadH = 26, MenuRowW = 320, MenuRowX = 12;
 
     /// <summary>어빌리티 목록 줄 아이콘 — 분석-스킬 ba-12: Obs 0488 의 17×17 그림 24장(기준점 가운데).</summary>
-    private const int AbilityIconObs = 488;
+    internal const int AbilityIconObs = 488;
 
-    private List<(string Name, WorkData Work, bool Enabled, string Reason)> MenuRows()
+    internal List<(string Name, WorkData Work, bool Enabled, string Reason)> MenuRows()
     {
         var rows = new List<(string, WorkData, bool, string)>();
         if (_turn < 0 || _db == null || _units[_turn].Data is not { } c) return rows;
@@ -105,12 +105,12 @@ internal sealed unsafe partial class BattleSceneWindow
         return rows;
     }
 
-    private string AbilityName(WorkData w) =>
+    internal string AbilityName(WorkData w) =>
         _db != null && _db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{_db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
 
     /// <summary>그 어빌리티가 지금 자리에서 겨눌 수 있는 적 — HP 가 낮은 순.</summary>
     /// <summary>어빌리티 사거리 안의 적 — <b>가까운 순, 같으면 HP 낮은 순</b>(단축키 자동 조준의 우선순위).</summary>
-    private List<int> AbilityTargets(WorkData w)
+    internal List<int> AbilityTargets(WorkData w)
     {
         var user = _units[_turn];
         // 아군을 겨누는 기술(힐 따위, 대상 방식 4)은 <b>자기까지 포함한 아군</b> 가운데 HP 비율이 가장 낮은 쪽부터 —
@@ -128,16 +128,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>어빌리티를 고른 단축키 — 같은 키를 한 번 더 누르면 겨눈 대상에게 바로 쓴다.</summary>
-    private int _targetHotkey = -1;
+    internal int _targetHotkey = -1;
 
     /// <summary>칸을 고르는 어빌리티(범위 공격 따위)가 저절로 겨눈 칸 — 사거리 안 가장 가까운(같으면 약한) 적이 선 칸.</summary>
-    private (int Col, int Row)? _aimCell;
+    internal (int Col, int Row)? _aimCell;
 
     /// <summary>
     /// 단축키로 고른 어빌리티에 대상을 저절로 붙인다. 적 하나를 겨누는 것은 공격 커서로, 칸을 고르는 것은 적이 선 칸으로.
     /// 우선순위는 가까운 적, 그다음 약한 적이다.
     /// </summary>
-    private void AutoAimAbility(WorkData w, string name)
+    internal void AutoAimAbility(WorkData w, string name)
     {
         var user = _units[_turn];
         var targets = AbilityTargets(w).Where(i => CanAimAt(w, user, _units[i].Col, _units[i].Row)).ToList();
@@ -155,7 +155,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>같은 단축키를 한 번 더 누르거나 Enter — 저절로 겨눈 대상에게 쓴다. 처리했으면 true.</summary>
-    private bool UseAimedAbility()
+    internal bool UseAimedAbility()
     {
         if (_targetWork < 0 || _targetIsBasicAttack || !IsPlayerTurn) return false;
         if (_attackCursor >= 0) { AttackCursorTarget(); return true; }
@@ -163,7 +163,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return false;
     }
 
-    private (int X, int Y) MenuOrigin(int rowCount)
+    internal (int X, int Y) MenuOrigin(int rowCount)
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
         var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (_camX + ViewWidth / 2, _camY + ViewHeight / 2);
@@ -173,7 +173,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>목록이 열려 있으면 클릭을 처리하고 true — 왼쪽 클릭은 바로 고르고, 목록 밖을 누르면 닫는다. 설명은 오른쪽 단추를 누르고 있는 동안 보인다.</summary>
-    private bool OnAbilityMenuClick(int bx, int by)
+    internal bool OnAbilityMenuClick(int bx, int by)
     {
         if (!_abilityMenu) return false;
         if (!IsPlayerTurn) { _abilityMenu = false; return true; }
@@ -187,10 +187,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>오른쪽 단추를 누른 채 있는 줄(설명이 보이는 줄) — 없으면 −1. 단추를 떼면(WM_RBUTTONUP) −1 로 돌아간다.</summary>
-    private int _abilityPressed = -1;
+    internal int _abilityPressed = -1;
 
     /// <summary>목록 줄 위에서 오른쪽 단추를 누르면 — 누르고 있는 동안 그 어빌리티의 설명이 보인다(사용자 요청). 처리했으면 true.</summary>
-    private bool OnAbilityMenuRightDown(int bx, int by)
+    internal bool OnAbilityMenuRightDown(int bx, int by)
     {
         if (!_abilityMenu) return false;
         var rows = MenuRows();
@@ -202,7 +202,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>목록의 한 줄을 고른다 — 못 쓰는 줄이면 까닭만 알리고 창은 그대로 둔다.</summary>
-    private void SelectAbilityRow((string Name, WorkData Work, bool Enabled, string Reason) row)
+    internal void SelectAbilityRow((string Name, WorkData Work, bool Enabled, string Reason) row)
     {
         var (name, w, enabled, reason) = row;
         if (!enabled) { Toast($"{name}: {reason}"); return; }
@@ -230,7 +230,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 칸을 고르는 어빌리티(메테오처럼 대상 방식이 한 명이 아닌 것)를 겨누는 동안 마우스 아래 칸이 사거리 안이면 그 칸을 겨눈 것으로 —
     /// 원본은 커서가 움직일 때 그 칸의 효과 범위(층 0 주황)를 다시 깐다(<c>0x1006d581</c>). 전에는 저절로 겨눈 칸만 있어 범위가 안 따라왔다.
     /// </summary>
-    private void UpdateAimHover(int bx, int by)
+    internal void UpdateAimHover(int bx, int by)
     {
         if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || _abilityMenu || Work(_targetWork) is not { } w) return;
         if (by < GridTop) return;
@@ -252,7 +252,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _attackCursor = -1;
     }
 
-    private void DrawAbilityMenu()
+    internal void DrawAbilityMenu()
     {
         if (!_abilityMenu || _turn < 0 || _db == null) return;
         var rows = MenuRows();

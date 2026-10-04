@@ -19,27 +19,27 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>다이나믹 크래쉬(어빌리티 96) Lv1~20.</summary>
-    private static readonly HashSet<int> DynamicCrashWorks = [470, .. Enumerable.Range(745, 9), .. Enumerable.Range(784, 10)];
+    internal static readonly HashSet<int> DynamicCrashWorks = [470, .. Enumerable.Range(745, 9), .. Enumerable.Range(784, 10)];
 
     /// <summary>리인카네이션(어빌리티 59) Lv1~10.</summary>
-    private static readonly HashSet<int> ReincarnationWorks = [419, .. Enumerable.Range(1264, 9)];
+    internal static readonly HashSet<int> ReincarnationWorks = [419, .. Enumerable.Range(1264, 9)];
 
     /// <summary>워핑(어빌리티 117) Lv1~10.</summary>
-    private static readonly HashSet<int> WarpingWorks = [422, .. Enumerable.Range(1301, 9)];
+    internal static readonly HashSet<int> WarpingWorks = [422, .. Enumerable.Range(1301, 9)];
 
     /// <summary>돌진기 — 혼(어빌리티 5) Lv1~20 · 비연참(19) Lv1~10 · 오메가 스윙(122).</summary>
-    private static readonly HashSet<int> DashWorks = [8, .. Enumerable.Range(259, 19), .. Enumerable.Range(341, 10), 517];
+    internal static readonly HashSet<int> DashWorks = [8, .. Enumerable.Range(259, 19), .. Enumerable.Range(341, 10), 517];
 
     /// <summary>카운터 미사일(어빌리티 78) Lv1~20 — Lv11 이상은 두 번 쏜다(<c>0x100a9ed6</c>).</summary>
-    private static readonly HashSet<int> CounterMissileWorks = [439, .. Enumerable.Range(1035, 19)];
+    internal static readonly HashSet<int> CounterMissileWorks = [439, .. Enumerable.Range(1035, 19)];
 
-    private const int MusinWork = 1530, SunBlastWork = 1585;
+    internal const int MusinWork = 1530, SunBlastWork = 1585;
 
     /// <summary>사이킥 크로스(어빌리티 84) Lv1~10 — 「\」 획 뒤 5틱마다 「/」 획이 겹쳐 <b>가운데 칸은 두 번</b> 맞는다(0x100ab290, ba-14 H4).</summary>
-    private static readonly HashSet<int> PsychicCrossWorks = [1111, .. Enumerable.Range(1112, 9)];
+    internal static readonly HashSet<int> PsychicCrossWorks = [1111, .. Enumerable.Range(1112, 9)];
 
     /// <summary>첫 타 뒤에 더 치는 간격(틱) — 없으면 빈 목록.</summary>
-    private int[] ExtraHitGaps(WorkData w) => w.Id switch
+    internal int[] ExtraHitGaps(WorkData w) => w.Id switch
     {
         MusinWork => [40, 40],
         SunBlastWork => [30, 15, 25],
@@ -48,7 +48,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>한 칸 = 월드 40. 이동기 빠르기 30, 틱마다 ×0.9, 5 아래로는 안 준다(<c>0x100c25c0(5)</c>).</summary>
-    private static List<double> SlideSteps(int cells, double speed = 30, double factor = 0.9, double floor = 5)
+    internal static List<double> SlideSteps(int cells, double speed = 30, double factor = 0.9, double floor = 5)
     {
         var steps = new List<double>();
         for (double pos = 0, total = Math.Max(1, cells) * WorldPerCell; pos < total;)
@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>여러 인물을 한꺼번에 미끄러뜨린다 — 각자 제 칸까지, 틱마다 한 걸음.</summary>
     /// <param name="begun">이미 <see cref="UnitState.BeginSlide"/> 로 칸을 옮겨 둔 경우(리인카네이션 — 처리 차례대로 등록표를 바꾼다).</param>
-    private IEnumerable<bool> SlideAll(List<(UnitState Unit, int Col, int Row, List<double> Steps)> moves, bool begun = false)
+    internal IEnumerable<bool> SlideAll(List<(UnitState Unit, int Col, int Row, List<double> Steps)> moves, bool begun = false)
     {
         if (!begun) foreach (var (u, col, row, _) in moves) u.BeginSlide(col, row);
         double start = _lastTime;
@@ -89,7 +89,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <item>효과 범위 밖·시전자·물체는 밀리지도 맞지도 않는다.</item>
     /// </list>
     /// </remarks>
-    private IEnumerable<bool> RadialPushRoutine(UnitState user, WorkData w, int col, int row, List<int> targets, List<UnitState> dying)
+    internal IEnumerable<bool> RadialPushRoutine(UnitState user, WorkData w, int col, int row, List<int> targets, List<UnitState> dying)
     {
         _ = targets;   // 원본은 WorkTargets(적만) 가 아니라 범위 안 모든 유닛을 모은다(방식 5).
         var cells = AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
@@ -140,7 +140,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>워핑 — 대상을 시전자→대상 쪽으로 13±2 칸 밖의 설 수 있는 칸에 떨어뜨린다. 없으면 10칸부터 한 칸씩 당겨 찾는다.</summary>
-    private IEnumerable<bool> ThrowRoutine(UnitState user, UnitState t)
+    internal IEnumerable<bool> ThrowRoutine(UnitState user, UnitState t)
     {
         var (dc, dr) = FacingToward(user.Col, user.Row, t.Col, t.Row) switch
         {
@@ -186,7 +186,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 돌진 — 시전자가 겨눈 빈 칸까지 한 줄로 미끄러지며, 지나는 칸에 선 적을 지날 때마다 때린다. 도착한 칸이 새 자리다.
     /// </summary>
-    private IEnumerable<bool> DashRoutine(UnitState a, WorkData w, int col, int row, List<UnitState> dying)
+    internal IEnumerable<bool> DashRoutine(UnitState a, WorkData w, int col, int row, List<UnitState> dying)
     {
         // 원본 이동기 0x100ca9a0(ba-14 H1): 시전자가 <b>보는 쪽</b>으로 틱마다 한 칸씩 곧장 간다. 겨눈 칸이 축에서 벗어나면 보는 축의 거리만 쓴다.
         // 지형·물체에만 막히고 유닛은 안 막는다. 혼은 지난 칸만, 비연참·오메가 스윙은 지난 칸의 3칸 폭 띠를 친다(한 유닛에 한 번).

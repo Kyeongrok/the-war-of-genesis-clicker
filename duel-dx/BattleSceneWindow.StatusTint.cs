@@ -24,14 +24,14 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>상태이상 물들이기 세기 — 원본이 다섯 갈래 모두 곧이곧대로 넣는 값.</summary>
-    private const int StatusTintAlpha = 30;
+    internal const int StatusTintAlpha = 30;
 
     /// <summary>채널 하나를 옮기는 5비트 색표(<c>표[c5] → v5</c>).</summary>
-    private static byte[] TintTable(Func<int, int> f) => [.. Enumerable.Range(0, 32).Select(c => (byte)f(c))];
+    internal static byte[] TintTable(Func<int, int> f) => [.. Enumerable.Range(0, 32).Select(c => (byte)f(c))];
 
-    private static readonly byte[] TintIdentity = TintTable(c => c);
-    private static readonly byte[] TintToBlack = TintTable(c => c * (31 - StatusTintAlpha) / 31);
-    private static readonly byte[] TintCurve = TintTable(c =>
+    internal static readonly byte[] TintIdentity = TintTable(c => c);
+    internal static readonly byte[] TintToBlack = TintTable(c => c * (31 - StatusTintAlpha) / 31);
+    internal static readonly byte[] TintCurve = TintTable(c =>
     {
         int s = (31 - c) / 4 + 3;
         int v = (31 - StatusTintAlpha * s / 5) * c / 31;
@@ -39,7 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
     });
 
     /// <summary>그 인물에게 걸 색표 셋(빨강·초록·파랑). 물들일 것이 없으면 null.</summary>
-    private static (byte[] R, byte[] G, byte[] B)? StatusTintOf(UnitState u)
+    internal static (byte[] R, byte[] G, byte[] B)? StatusTintOf(UnitState u)
     {
         if (u.HasStatus(6)) return (TintCurve, TintCurve, TintIdentity);      // 빙결 — 파랗게 씻긴다
         if (u.HasStatus(5)) return null;                                      // 마비 — 색표를 안 쓴다
@@ -50,7 +50,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>8비트 색 한 점을 5비트 색표로 옮긴다.</summary>
-    private static uint ApplyStatusTint(uint c, (byte[] R, byte[] G, byte[] B) t)
+    internal static uint ApplyStatusTint(uint c, (byte[] R, byte[] G, byte[] B) t)
     {
         static uint Map(uint channel, byte[] table)
         {

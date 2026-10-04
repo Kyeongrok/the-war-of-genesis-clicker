@@ -20,22 +20,22 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <param name="Fly">시전자에서 대상으로 날아가는 이펙트(생성자 <c>0x100c3340</c>·<c>0x100c5940</c>) — 모션 길이 동안 옮긴다.</param>
     /// <param name="Life">수명(틱, <c>0x100c2530</c>) — 0 이면 모션 한 번, 아니면 그동안 모션을 되풀이한다(힐 297:1 120틱 따위, ba-15 R2).</param>
     /// <param name="Facing">그 방향을 볼 때만 뜬다 — 원본 방향 번호 0 위 · 1 왼 · 2 아래 · 3 오른(−1 = 늘). 핸들러의 방향 가지(ba-20 X).</param>
-    private readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false, int Life = 0, int Facing = -1);
+    internal readonly record struct AbilityEffect(int Obs, int Motion, bool OnTarget, int Lift, int Delay = 0, int Count = 1, bool Fly = false, int Life = 0, int Facing = -1);
 
     /// <summary>
     /// 카운터 블레이드의 이펙트 — 둘 다 시전자 자리(원본은 895 를 네 번 겹쳐 띄운다).
     /// </summary>
     /// <remarks>표(<see cref="AbilityMotions"/>)가 이것을 쓰므로 <b>표보다 먼저</b> 선언해야 한다 — 정적 초기화는 적은 차례대로 돈다.</remarks>
-    private static readonly AbilityEffect[] CounterBlade = [new(1365, 0, false, 0)];   // 칼날 895 는 SpawnCounterBlades 가 다섯 칸에 띄운다
+    internal static readonly AbilityEffect[] CounterBlade = [new(1365, 0, false, 0)];   // 칼날 895 는 SpawnCounterBlades 가 다섯 칸에 띄운다
 
     /// <summary>카운터 블레이드 work(390 · 997~1015).</summary>
-    private static readonly HashSet<int> CounterBladeWorks = [390, .. Enumerable.Range(997, 19)];
+    internal static readonly HashSet<int> CounterBladeWorks = [390, .. Enumerable.Range(997, 19)];
 
     /// <summary>
     /// 카운터 블레이드 0x100a8df0 — 칼날 895:0 다섯을 시전자 <b>앞 두 칸 줄</b>의 가로 −2~+2 칸에 0·4·8·12·16틱 늦춰 띄운다(fg-22).
     /// 전에는 시전자 자리에 하나만 띄웠다.
     /// </summary>
-    private void SpawnCounterBlades(UnitState user)
+    internal void SpawnCounterBlades(UnitState user)
     {
         var (fx, fy) = user.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
         // 옆 방향 — 왼쪽을 볼 때도 위 → 아래 차례로 뜬다(0x100a9027~0x100a90ec, ba-20 P10). 전에는 왼쪽만 아래 → 위였다.
@@ -49,7 +49,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>work 번호 → (동작 차례, 때리는 순간에 띄울 이펙트).</summary>
-    private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
+    internal static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> AbilityMotions = new()
     {
         // 죠안
         // 힐·큐어 — 이펙트(높이·지연·수명)는 뽑은 표가 원본대로 채운다(ba-15: 297 이 z+70 = 42px, 312 는 소리 껍데기).
@@ -104,16 +104,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
 
     /// <summary>하이 텔레포트 레벨 1~20 의 work(어빌리티 37).</summary>
-    private static readonly HashSet<int> TeleportWorks = [397, 584, 583, 582, 581, 580, 579, 578, 577, 576, 575, 593, 592, 591, 590, 589, 588, 587, 586, 585];
+    internal static readonly HashSet<int> TeleportWorks = [397, 584, 583, 582, 581, 580, 579, 578, 577, 576, 575, 593, 592, 591, 590, 589, 588, 587, 586, 585];
 
     /// <summary>그라비티 필드 레벨 1~10 의 work(어빌리티 110).</summary>
-    private static readonly HashSet<int> GravityFieldWorks = [484, 950, 949, 948, 947, 946, 945, 944, 943, 942];
+    internal static readonly HashSet<int> GravityFieldWorks = [484, 950, 949, 948, 947, 946, 945, 944, 943, 942];
 
     /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
-    private static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork, HeavenEarthWork];
+    internal static readonly HashSet<int> HandOnlyWorks = [NineCrusaderWork, HeavenEarthWork];
 
     /// <summary>순간이동하는 work(이스케이프) — 쓰고 나면 겨눈 빈 칸으로 옮긴다.</summary>
-    private const int EscapeWork = 1583;
+    internal const int EscapeWork = 1583;
 
     /// <summary>
     /// 그 work 의 대본 — <b>손으로 맞춘 표</b>가 먼저고, 없으면 도구가 뽑은 <see cref="WorkScripts"/> 다.
@@ -122,14 +122,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 손 표는 자리·높이까지 맞춰 둔 서른 남짓이고, 뽑은 표는 1540개다. 둘 다 없으면 예전처럼 기본공격 동작을 빌린다.
     /// </remarks>
     /// <summary>그림 컷 없이 소리 키만 든 Obs — 시전 소리(1338)·기술별 소리 껍데기(분석-스킬 fx-189).</summary>
-    private static readonly HashSet<int> SoundShellObs = [1338, 1332, 1324, 311, 312, 379, 487, 1320, 1479, 1483];
+    internal static readonly HashSet<int> SoundShellObs = [1338, 1332, 1324, 311, 312, 379, 487, 1320, 1479, 1483];
 
     /// <summary>
     /// work 의 동작 차례와 이펙트 — 동작 차례·이펙트 자리는 손 표가 이기고, 도구 표(원본 핸들러에서 뽑은 것)의 이펙트는 <b>늘 뒤에 합친다</b>.
     /// 예전 도구가 파생 생성자로 만드는 이펙트를 놓쳐(분석-스킬 fx-189) 손 표에는 그림 하나(크래쉬 봄 1380)나 소리 껍데기만 적힌 줄이 많았다 —
     /// 손 표가 있다고 도구 표를 무시하면 폭탄·착탄 같은 그림이 영영 안 나온다. 같은 (Obs, 모션)은 손 표 것 하나만 둔다.
     /// </summary>
-    private static (int[] Actions, AbilityEffect[] Effects)? ScriptFor(int work)
+    internal static (int[] Actions, AbilityEffect[] Effects)? ScriptFor(int work)
     {
         // 하이 텔레포트 — 떠나는 자리의 빛만. 나타나는 빛(381:1)은 새 칸에서 TeleportRoutine 이 띄운다.
         // 엘레맨탈 파이어·서몬 몬스터 — 효과는 BattleSceneWindow.Acrost.cs 가 대상마다 깐다(준비의 시전 영상만 남긴다).
@@ -156,7 +156,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 대본이 있으면 그 동작 차례 — <b>비어 있어도</b> 그대로다. 원본이 시전자에게 아무 동작도 안 거는 기술(이스케이프·회피·아이템 1599~1622)이
     /// 칼을 휘두르면 안 된다(fg-20). 대본이 아예 없을 때만 기본공격 동작을 빌린다.
     /// </summary>
-    private static int[] ActionsFor(WorkData w) =>
+    internal static int[] ActionsFor(WorkData w) =>
         ScriptFor(w.Id) is { } m ? m.Actions
         : BasicWorkActions.GetValueOrDefault(w.Id) ?? StrikeActions;
 
@@ -164,20 +164,20 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 동작 칸에 적힌 <b>모션 번호</b> — 1000+m 은 모션 m 을 한 번, 2000+m 은 붙든다(원본 PlayMotion <c>0x100e53c0</c> + 되풀이 1000).
     /// 폭·메테오스트라이크 30→31→32, 다크 스크림 48→49→50, 헬 카이트 90 따위(tools/re/work_fx_table.py).
     /// </summary>
-    private const int RawOnce = 1000, RawHold = 2000;
+    internal const int RawOnce = 1000, RawHold = 2000;
 
     /// <summary>3000+동작 — 원본 SetAction 되풀이 1000 이상으로 <b>붙드는 동작</b>(혼·비연참·오메가 스윙의 돌진 자세 따위).</summary>
-    private const int ActHold = 3000;
+    internal const int ActHold = 3000;
 
     /// <summary>붙드는 모션의 최대 길이(초) — 치는 칸에서는 이펙트가 끝나면(길어도 3초) 다음 칸이 덮는다.</summary>
-    private const double HoldSeconds = 4;
+    internal const double HoldSeconds = 4;
 
     /// <summary>필살기 앞머리가 이미 한 준비 동작(사슬 앞의 6·15) 수.</summary>
-    private static int PreludeSteps(int[] actions) =>
+    internal static int PreludeSteps(int[] actions) =>
         actions is [6, 15, ..] ? 2 : actions is [6, ..] ? 1 : 0;
 
     /// <summary>사슬 한 칸을 튼다 — 동작이면 그 동작, 모션 번호면 그 모션. 붙드는 모션은 <paramref name="holdSeconds"/> 동안 붙든다.</summary>
-    private void PlayChainStep(UnitState a, int code, double holdSeconds)
+    internal void PlayChainStep(UnitState a, int code, double holdSeconds)
     {
         if (code >= ActHold)
         {
@@ -196,9 +196,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 없으면 기본공격은 가운데(베기), 어빌리티는 마지막 동작이다(분석-모션 ba-10).
     /// </summary>
     /// <summary>타격 판정이 드는 동작 — 8·9(베기·찌르기), 13·14(연속), 26·27.</summary>
-    private static bool IsStrikeAction(int action) => action is 8 or 9 or 13 or 14 or 26 or 27;
+    internal static bool IsStrikeAction(int action) => action is 8 or 9 or 13 or 14 or 26 or 27;
 
-    private static int HitStepFor(WorkData w, int steps)
+    internal static int HitStepFor(WorkData w, int steps)
     {
         int[] actions = ActionsFor(w);
         // 붙드는 모션(칼 꽂은 채·손 든 채)이 있으면 그동안 이펙트가 터진다 — 거기서 친다.
@@ -210,7 +210,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>초능력공격(work 1479) 의 번개 구슬 — 체질이 없는(0) 인물만 이것을 쏜다.</summary>
-    private const int PsychicBolt = 209;
+    internal const int PsychicBolt = 209;
 
     /// <summary>
     /// 초능력공격 핸들러 <c>0x10094590</c>: 유닛 <c>+0x122</c>(= 체질) 가 0 이면 번개 구슬 Obs 209 를 날리고(<c>0x100c3340</c>),
@@ -218,7 +218,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 1 파랑(483·482) · 2 주황(479·478) · 3 빨강(475·472) · 4 보라(477·476) · 5 초록(481·480) · 그 밖 빨강(475·475).
     /// btl 0132 블랙스피어스(chr 318, 체질 4)가 번개 대신 붉은 빛을 쏘던 까닭(사용자 제보).
     /// </summary>
-    private static (int Big, int Small)? PsychicOrbs(UnitState user) => user.Data?.Body switch
+    internal static (int Big, int Small)? PsychicOrbs(UnitState user) => user.Data?.Body switch
     {
         null or 0 => null,
         1 => (483, 482),
@@ -231,16 +231,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
     /// <summary>지금 행동이 띄운 이펙트 가운데 가장 늦은 것의 시작 때(게임 초).</summary>
-    private double _fxLatestStart;
+    internal double _fxLatestStart;
 
     /// <summary>지금 행동의 판정 대상(유닛 하나를 겨눈 AI·사건이면 그 하나) — 대상별 이펙트가 판정과 같은 목록을 쓴다. null 이면 범위 안 전원.</summary>
-    private List<int>? _fxTargets;
+    internal List<int>? _fxTargets;
 
     /// <summary>방금 띄운 직선탄 가운데 가장 늦게 닿는 때(게임 초) — 0 이면 탄 없음.</summary>
-    private double _fxArriveAt;
+    internal double _fxArriveAt;
 
     /// <summary>직선탄이 그 거리를 가는 데 걸리는 틱 — <see cref="DrawShots"/> 와 같은 셈(상한 600).</summary>
-    private static int ShotTicks(double distance, double speed, double scale, int mode, double min, double max)
+    internal static int ShotTicks(double distance, double speed, double scale, int mode, double min, double max)
     {
         speed = Math.Max(1, speed);
         double gone = 0;
@@ -257,14 +257,15 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>방금 띄운 대상별 이펙트의 엇갈림 틱(확실한 것) — 판정도 이 간격으로 든다. 0 이면 한꺼번에.</summary>
-    private int _fxStagger;
+    internal int _fxStagger;
 
-    private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
+    internal void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
         SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
+        StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, _lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
@@ -408,5 +409,5 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 핸들러가 음악을 40 % 로 줄였다가 되돌리는 work — 1467(헬 카이트 계열)·1521~1524·1528·1588~1590
     /// (<c>0x100c7710(40, 20)</c> 호출 22곳을 핸들러에 맞춘 것, 감사4 B4).
     /// </summary>
-    private static readonly HashSet<int> DuckWorks = [1467, 1521, 1522, 1523, 1524, 1528, 1588, 1589, 1590];
+    internal static readonly HashSet<int> DuckWorks = [1467, 1521, 1522, 1523, 1524, 1528, 1588, 1589, 1590];
 }

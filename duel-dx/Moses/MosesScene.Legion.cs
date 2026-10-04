@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 모세스 용병관리(MERCENARY) 페이지(mo-1, 페이지 6) — 파티원에게 군단을 붙이고 뗀다.
 /// </summary>
@@ -18,10 +20,8 @@ namespace DuelDx;
 /// 이 데모에는 파티 명부가 없어 <c>For.dat</c> 의 군단을 모두 올린다. 부하 그림(대장 밑 여섯)은 그 인물들의 Obs 가
 /// assets 에 없어 칸과 이름만 그린다 — 원본은 <c>CChr+0x0C</c> 모션 2 로 부하를 세운다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int LegionBackground = 39, LegionRowObs = 1291, LegionRowIconMotion = 5;
     internal const int LegionRows = 5, LegionRowW = 117, LegionRowH = 23;
     internal const int SoundLegionSet = 584;
@@ -290,6 +290,5 @@ internal sealed unsafe partial class BattleSceneWindow
         string label = name.Length > 5 ? name[..5] : name;
         var (_, w, h) = host.GetText(label, color, 10);
         host.DrawText(label, x - w / 2, y - h / 2, color, 10);
-    }
     }
 }

@@ -30,14 +30,14 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkFillFirst = true,
                                     bool SkipEnemyAction = true)
 {
-    private static string FilePath => UserDataFolder.File("settings.json");
+    internal static string FilePath => UserDataFolder.File("settings.json");
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    internal static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     /// <summary>켤 때 한 번 읽는다 — 파일이 없거나 깨졌으면 기본값.</summary>
     public static UserSettings Current { get; private set; } = Load();
 
-    private static UserSettings Load()
+    internal static UserSettings Load()
     {
         try
         {

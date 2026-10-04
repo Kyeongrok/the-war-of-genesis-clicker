@@ -20,16 +20,16 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int SystemObs = 894;
-    private const int SystemW = 214, SystemRowH = 37, SystemRowW = 190, SystemPad = 12;
-    private const int SoundSaved = 579;
+    internal const int SystemObs = 894;
+    internal const int SystemW = 214, SystemRowH = 37, SystemRowW = 190, SystemPad = 12;
+    internal const int SoundSaved = 579;
     /// <summary>목록 줄 바탕 그림 — 분석-시스템메뉴·분석-모션 「Obs 파일 갈래」.</summary>
-    private const int ListRowObs = 471;
+    internal const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
-    private enum SystemItem { Mission, Restart, Load, Save, Volume, Exit }
+    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Exit }
 
-    private static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
+    internal static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
     [
         (SystemItem.Mission, 11, "MISSION"),
         (SystemItem.Restart, 3, "RESTART"),
@@ -47,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 필드(장면 3 <c>0x100eb9e0</c>)에는 원본에 시스템 메뉴가 아예 없다(감사5 S3). 데모는 편의로 메뉴를 열어 주되 모세스와 같은 넷만 두고
     /// (뒤에 남은 옛 전투의 MISSION·RESTART 는 뜻이 없다) SAVE 는 꺼 둔다(<see cref="SaveBlockedReason"/>).
     /// </remarks>
-    private (SystemItem Item, int Motion, string Label)[] MenuItems =>
+    internal (SystemItem Item, int Motion, string Label)[] MenuItems =>
         Mos._mosesOpen || _episodesOpen || FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
 
     /// <summary>
@@ -55,37 +55,37 @@ internal sealed unsafe partial class BattleSceneWindow
     /// → 메뉴 <c>0x100e3700</c> → 상태 25, <c>0x1006ae3b~0x1006ae8f</c>)나 그 유닛의 링(<c>0x10068cb2</c>·<c>0x100e1e6c</c>)에서만 연다.
     /// AI 차례·행동 연출·이벤트(<c>0x10066197</c>)·배치(상태 2)·레벨업·결과 중에는 같은 키가 취소/무시일 뿐이다(감사5 S1·S8).
     /// </summary>
-    private bool CanOpenBattleMenu =>
+    internal bool CanOpenBattleMenu =>
         IsPlayerTurn && !_units[_turn].IsBusy && !EventsBusy && !_deployOpen && _levelUpUnit < 0 && _levelUpQueue.Count == 0
         && _delayedHits.Count == 0 && !SceneFading;
 
     /// <summary>모세스 위에서 챕터 사건이 도는 중인가 — 원본 챕터 장면 Esc 는 <c>[0x101bffac]</c>(도는 사건 수)가 0 일 때만 메뉴를 연다(<c>0x100f78ec~0x100f7922</c>).</summary>
-    private bool ChapterEventRunning => Mos._mosesOpen && (Fld._fieldEvent >= 0 || _talk != null || Fld._fieldChoices != null);
+    internal bool ChapterEventRunning => Mos._mosesOpen && (Fld._fieldEvent >= 0 || _talk != null || Fld._fieldChoices != null);
 
     /// <summary>
     /// 지금 SAVE 를 못 하는 까닭 — 할 수 있으면 null. 필드(원본에 저장 없음, 감사5 S3)·모세스 챕터 사건 도중(S4)·
     /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
     /// </summary>
-    private string? SaveBlockedReason =>
+    internal string? SaveBlockedReason =>
         FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
         : !Mos._mosesOpen && !_episodesOpen && !_titleOpen && !_recordsOpen && _battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
 
-    private bool _systemMenu;
-    private bool _missionWindow, _volumeWindow;
-    private (string Title, string Text, Action Yes)? _confirm;
+    internal bool _systemMenu;
+    internal bool _missionWindow, _volumeWindow;
+    internal (string Title, string Text, Action Yes)? _confirm;
 
-    private void OpenSystemMenu()
+    internal void OpenSystemMenu()
     {
         _systemMenu = true;
         _missionWindow = _volumeWindow = false;
         _confirm = null;
     }
 
-    private bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsOpen;
+    internal bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsOpen;
 
-    private (int X, int Y, int H) SystemMenuRect()
+    internal (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
         // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 640×480 틀의 <b>(100,100)</b> 에
@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return (_camX + (ViewWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
-    private void RunSystemItem(SystemItem item)
+    internal void RunSystemItem(SystemItem item)
     {
         // MISSION·SAVE·LOAD 는 메뉴를 숨기기만 하고, 그 창이 닫히면 메뉴가 다시 보인다(0x100e39f0 → vt+0xcc). fg-22.
         _systemMenuReturn = item is SystemItem.Mission or SystemItem.Volume or SystemItem.Save or SystemItem.Load or SystemItem.Restart or SystemItem.Exit;   // 확인창 「아니오」도 메뉴로(0x100e3ce9)
@@ -128,7 +128,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 게임을 진짜로 끝내는 곳은 <b>타이틀의 EXIT</b> 뿐이다. 나가면서 전투·필드·모세스 창을 다 닫고,
     /// 다시 CONTINUE 로 들어올 때 전투를 새로 읽도록 <see cref="_battleLoaded"/> 를 내린다.
     /// </remarks>
-    private void BackToTitle()
+    internal void BackToTitle()
     {
         _systemMenu = _missionWindow = _volumeWindow = false;
         _slotsMode = -1;
@@ -142,7 +142,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
-    private bool OnSystemClick(int bx, int by)
+    internal bool OnSystemClick(int bx, int by)
     {
         if (_confirm is not null && OnConfirmClick()) return true;
         if (OnSlotsClick(bx, by)) return true;
@@ -162,10 +162,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>하위 창(MISSION·SAVE·LOAD)이 닫히면 시스템 메뉴를 다시 보일지.</summary>
-    private bool _systemMenuReturn;
+    internal bool _systemMenuReturn;
 
     /// <summary>하위 창이 닫혔다 — 메뉴에서 열었으면 메뉴로 돌아간다.</summary>
-    private void ReturnToSystemMenu()
+    internal void ReturnToSystemMenu()
     {
         // 슬롯 창 위의 확인창이 닫혔을 뿐이면 슬롯 창이 그대로 남는다 — 메뉴는 슬롯 창이 닫힐 때 돌아온다(ba-20 G3).
         if (!_systemMenuReturn || SlotsOpen) return;
@@ -173,7 +173,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!_titleOpen && !_recordsOpen) _systemMenu = true;
     }
 
-    private bool OnMenuClick(int bx, int by)
+    internal bool OnMenuClick(int bx, int by)
     {
         if (_missionWindow || _volumeWindow)
         {
@@ -192,7 +192,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>Esc — 열린 창을 하나씩 닫는다. 닫았으면 true.</summary>
-    private bool CloseSystemWindow()
+    internal bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; ReturnToSystemMenu(); return true; }
         if (SlotsOpen) { _slotsMode = -1; ReturnToSystemMenu(); return true; }
@@ -201,7 +201,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return false;
     }
 
-    private void DrawSystem()
+    internal void DrawSystem()
     {
         DrawSlots();
         DrawNotice();
@@ -211,7 +211,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_confirm != null) DrawConfirm();
     }
 
-    private void DrawSystemMenu()
+    internal void DrawSystemMenu()
     {
         var (x, y, h) = SystemMenuRect();
         // 모든 창은 원본 틀(Obs 0970 — 바탕 모션 7, 귀퉁이 0~3, 제목줄 4, 바깥 1px 흰 선)이다(ba-20 G13). 전에는 단색 네모였다.
@@ -238,7 +238,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>
-    private void DrawMissionWindow()
+    internal void DrawMissionWindow()
     {
         int w = 400, h = 180, x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
         DrawGameFrame(x, y + 26, w, h - 26, _scene.Title);
@@ -256,16 +256,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 음량 창 ──────────────────────────────────────────────────────────────
 
-    private int _bgmVolume = Math.Clamp(UserSettings.Current.BgmVolume, 5, 100), _seVolume = Math.Clamp(UserSettings.Current.SeVolume, 5, 100);
+    internal int _bgmVolume = Math.Clamp(UserSettings.Current.BgmVolume, 5, 100), _seVolume = Math.Clamp(UserSettings.Current.SeVolume, 5, 100);
 
     /// <summary>「배경음악」 체크 상자(원본 0x2728, (78,120)) — 끄면 음악을 멈추고 켜면 지금 곡을 다시 튼다.</summary>
-    private bool _bgmOn = UserSettings.Current.BgmOn;
+    internal bool _bgmOn = UserSettings.Current.BgmOn;
 
-    private const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
+    internal const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
 
-    private (int X, int Y) VolumeOrigin() => (_camX + (ViewWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
+    internal (int X, int Y) VolumeOrigin() => (_camX + (ViewWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
 
-    private void OnVolumeClick(int bx, int by)
+    internal void OnVolumeClick(int bx, int by)
     {
         var (x, y) = VolumeOrigin();
         foreach (var (rowY, setter) in new (int, Action<int>)[] { (40, v => _bgmVolume = v), (90, v => _seVolume = v) })
@@ -295,13 +295,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 음량 막대를 믹서에 넣는다 — B.G.M 은 믹서 전체 크기라 <b>모든 곡·페이드·줄이기</b>에 곱해진다(감사4 V1).
     /// S.E 는 음성의 선형 크기이고, Snd 효과음은 <see cref="SndGain"/> 이 막대 1점당 −0.5 dB 로 셈한다(V3). 시작 때도 한 번 부른다(V2).
     /// </summary>
-    private void ApplyVolumes()
+    internal void ApplyVolumes()
     {
         _mixer.MusicVolume = _bgmVolume / 100f;
         _effectGain = _seVolume / 100f;
     }
 
-    private void DrawVolumeWindow()
+    internal void DrawVolumeWindow()
     {
         var (x, y) = VolumeOrigin();
         DrawGameFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
@@ -328,7 +328,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 확인 창 ──────────────────────────────────────────────────────────────
 
-    private (int X, int Y, int W, int H) ConfirmRect()
+    internal (int X, int Y, int W, int H) ConfirmRect()
     {
         // 높이는 본문 줄 수에 맞춘다 — 고정 120 이면 세 줄짜리 전직 확인(「…사라집니다 / 전직할까요?」)의 끝 줄이 단추에 가렸다.
         int textH = _confirm is { } cf ? GetText(cf.Text, White).Item3 : 16;
@@ -336,7 +336,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return (_camX + (ViewWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
     }
 
-    private void DrawConfirm()
+    internal void DrawConfirm()
     {
         if (_confirm is not { } confirm) return;
         var (x, y, w, h) = ConfirmRect();
@@ -358,7 +358,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 다른 전투를 건다 — 그 <c>Btl</c> 자료를 읽어 맵·인물·배경음악을 갈아 끼운다(전투 이벤트 행동 10 「다음 전투」도 이 길로 온다).
     /// </summary>
     /// <summary>지금이 챕터 장면인가 — 모세스 주 화면·필드·연대표는 모두 한 챕터 안이다.</summary>
-    private bool InChapterScene => Mos._mosesOpen || _episodesOpen || FieldOpen;
+    internal bool InChapterScene => Mos._mosesOpen || _episodesOpen || FieldOpen;
 
     /// <param name="rememberParty">
     /// 지금 판의 아군을 파티에 담고 시작할지 — 불러오기는 <b>false</b> 다. 불러오기는 세이브로 파티를 먼저 되살리는데,
@@ -366,9 +366,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그 전투에 안 선 파티원의 레벨·장착 어빌리티·어빌리티 레벨이 처음 값으로 돌아갔다(사용자 보고).
     /// </param>
     /// <summary>전투에 들어올 때의 진행 깃발 — RESTART 가 되돌린다.</summary>
-    private byte[]? _entryFlags;
+    internal byte[]? _entryFlags;
 
-    private bool StartBattle(int id, bool rememberParty = true)
+    internal bool StartBattle(int id, bool rememberParty = true)
     {
         if (DemoScene.Load(id, _db) is not { } scene)
         {
@@ -416,22 +416,22 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전투에 들어올 때의 가방·GP — RESTART 가 되돌린다.</summary>
-    private List<KeyValuePair<int, int>>? _restartInventory;
-    private int _restartMoney;
+    internal List<KeyValuePair<int, int>>? _restartInventory;
+    internal int _restartMoney;
 
     /// <summary>
     /// 전투에 들어올 때의 명부(Chr → 인물)·군단 배속·가진 군단 — RESTART 가 되돌린다. 전투 세이브에도 실려서 불러온 뒤 RESTART 도
     /// 전투 전 파티로 시작한다(원본 RESTART 결과 7 은 소멸자 되돌리기 <c>0x10064920</c> 를 건너뛰고 전역 본문 = 전투 전 파티로 다시 연다, 감사5 S5).
     /// </summary>
-    private Dictionary<int, CharacterData>? _entryRoster;
-    private Dictionary<int, int>? _entryLegions;
-    private List<int>? _entryOwnedLegions;
+    internal Dictionary<int, CharacterData>? _entryRoster;
+    internal Dictionary<int, int>? _entryLegions;
+    internal List<int>? _entryOwnedLegions;
 
     /// <summary>인물 자료 복사 — 배열 칸(아이템·장착·어빌리티)까지 새로 떠서 전투 중 고친 것이 스냅숏에 번지지 않게.</summary>
-    private static CharacterData CopyChar(CharacterData c) =>
+    internal static CharacterData CopyChar(CharacterData c) =>
         c with { Items = [.. c.Items], Passives = [.. c.Passives], Abilities = [.. c.Abilities] };
 
-    private void RestartBattle()
+    internal void RestartBattle()
     {
         foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
         // 물체도 처음으로 — 전에는 RESTART 뒤에도 부순 물체는 부서진 채, 연 상자는 열린 채였다(가방은 전투 전으로 돌아가 상자 아이템이 사라졌다).
@@ -502,6 +502,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _blinkGhosts.Clear();
         _legionGhosts.Clear();
         _legionFades.Clear();
+        _unitFx.Clear();
         _legionLater.Clear();
         _legionStageEnd = 0;
         _stageDraws.Clear();
@@ -526,13 +527,13 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 저장 · 불러오기 ──────────────────────────────────────────────────────
 
-    private sealed record SaveAbility(int Id, int Level);
+    internal sealed record SaveAbility(int Id, int Level);
 
     /// <param name="Char">
     /// 인물 레코드의 나머지 — 직업(전직·세부 체질)·체질·그림·이름·칭호·WEAPON 띠와 레벨업으로 오른 능력치.
     /// 예전 세이브에는 없어서 불러오면 .chr 처음 값으로 돌아갔다 — 공격형으로 바꾼 체질이 일반형으로, 오른 LP·TP 가 처음 값으로(사용자 보고).
     /// </param>
-    private sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
+    internal sealed record SaveUnit(int ChrCode, int Col, int Row, int Facing, int Hp, int Tp, int Soul,
                                    bool Alive, bool HasTurn, int Level, int CumExp, int Exp,
                                    ushort[] Items, ushort[] Passives, SaveAbility[] Abilities,
                                    byte[]? StatusId = null, short[]? StatusValue = null, int Side = -1, SaveChar? Char = null,
@@ -556,14 +557,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 물체 하나의 세이브 칸 — 원본 물체 기록 <c>0x100e80f0</c>(편 <c>+0x78</c>, 부서짐/열림 <c>+0x101</c>, HP <c>+0x13c~</c>, 충전 <c>+0x15c</c>·다 참 <c>+0x160</c>).
     /// 안 적으면 불러올 때 판을 새로 세워 부순 물체·연 상자가 되살아나 상자를 또 열 수 있었다(ba-15 Q5 #1).
     /// </summary>
-    private sealed record SaveObject(int Index, int No, int Hp, int Team, bool Opened, int Charge, bool Charged);
+    internal sealed record SaveObject(int Index, int No, int Hp, int Team, bool Opened, int Charge, bool Charged);
 
     /// <summary>인물 레코드에서 세이브가 따로 적는 칸들(<see cref="SaveUnit.Char"/>).</summary>
-    private sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
+    internal sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
                                    ushort BasicWorkId, uint Lp, ushort Psy, ushort Tp, ushort TpDivisor, ushort Ctp, ushort Dep, ushort Dex,
                                    byte WeaponBand, byte WeaponType);
 
-    private static SaveChar? SaveCharOf(CharacterData? c) => c == null ? null
+    internal static SaveChar? SaveCharOf(CharacterData? c) => c == null ? null
         : new SaveChar(c.NameId, c.Name2Id, c.SpriteId, c.FaceId, c.TitleId, c.Body, c.JobId, c.BasicWorkId,
                        c.Lp, c.Psy, c.Tp, c.TpDivisor, c.Ctp, c.Dep, c.Dex, c.WeaponBand, c.WeaponType);
 
@@ -571,7 +572,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 세이브의 인물 칸을 바탕 자료 위에 되살린다. <paramref name="regrow"/> 면 인물 레코드가 안 적힌 옛 세이브에서
     /// 레벨업으로 오른 능력치를 <b>쌓인 경험치로 다시 키운다</b>(직업은 옛 세이브에 없어 못 되살린다).
     /// </summary>
-    private CharacterData Restored(CharacterData baseData, SaveUnit s, bool regrow)
+    internal CharacterData Restored(CharacterData baseData, SaveUnit s, bool regrow)
     {
         var c = baseData with
         {
@@ -606,7 +607,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 진행 깃발 — 「어느 장소가 열렸나」를 정하는 값이라 <b>저장에 반드시 들어가야 한다</b>(원본도 2000바이트를 통째로 적는다, <c>0x1004d9de</c>).
     /// 0 이 아닌 칸만 (번호 → 값) 으로 적는다.
     /// </param>
-    private sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
+    internal sealed record SaveState(int Version, string SavedAt, int Tick, int Turn, SaveUnit[] Units, Dictionary<string, int> Inventory,
                                     int SceneText = 0, int SceneKind = 1, long PlayMs = 0,
                                     int Money = 0, Dictionary<string, int>? Legions = null, int Battle = 0,
                                     Dictionary<string, int>? Flags = null,
@@ -632,15 +633,15 @@ internal sealed unsafe partial class BattleSceneWindow
     // EventCheckDue = 아직 안 본 이벤트 갈래 깃발(감사5 S6).
 
     /// <summary>전투 전 스냅숏(<see cref="SaveState.Entry"/>).</summary>
-    private sealed record SaveEntry(Dictionary<string, int> Inventory, int Money, SaveUnit[] Roster,
+    internal sealed record SaveEntry(Dictionary<string, int> Inventory, int Money, SaveUnit[] Roster,
                                     Dictionary<string, int>? Legions = null, int[]? OwnedLegions = null,
                                     Dictionary<string, int>? Flags = null);   // 전투 전 진행 깃발(0 이 아닌 것만) — 불러온 뒤 RESTART 의 기준
 
-    private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
+    internal const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
 
     /// <summary>지금 불러오는 세이브의 형식 — <see cref="Restored"/> 가 옛 형식의 능력치를 다시 셀지 정한다.</summary>
-    private int _restoreVersion = SaveVersion;
+    internal int _restoreVersion = SaveVersion;
 
     /// <summary>
     /// 판을 세우기 전에 되살려야 하는 것 — <b>파티·동료·깃발·군단·돈</b>.
@@ -651,7 +652,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 둘 다 비어 기본 파티가 서고, 저장 당시 전투에 있던 인물(크리스티앙)이 빠진다.
     /// 전투에 <b>서 있던</b> 아군은 <c>state.Party</c> 가 아니라 <c>state.Units</c> 에 적히므로 거기서도 파티를 채운다.
     /// </remarks>
-    private void RestorePartyBeforeBoard(SaveState state)
+    internal void RestorePartyBeforeBoard(SaveState state)
     {
         _inventory.Clear();
         foreach (var (id, count) in state.Inventory)
@@ -745,7 +746,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 다른 파티 사람이 지금 파티에 끼어 있으면 제 파티(은행)로 돌려보낸다 — 위 버그로 적힌 세이브를 고친다.
     /// 끼어 있던 동안 더 자랐을 수 있으니 누적 경험치가 큰 쪽 자료를 명부에 남긴다.
     /// </summary>
-    private void ReturnStrayMembers()
+    internal void ReturnStrayMembers()
     {
         foreach (var (no, bank) in _partyBank)
             foreach (int chr in bank.Members.Where(Mos._members.Contains).ToList())
@@ -757,7 +758,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>돌린 챕터 사건의 801(동료 넣기)·802(빼기)로 동료 목록을 다시 만든다 — 사건 −1 표시(옛 세이브)는 그 챕터 사건 전부로 본다.</summary>
-    private void RebuildMembersFromChapters()
+    internal void RebuildMembersFromChapters()
     {
         Mos._members.Clear();
         // 사건 차례대로 801 이 넣고 802 가 뺀다 — 챕터 스크립트의 조건(깃발)을 채워 돈 사건만 본다.
@@ -785,7 +786,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 세이브가 가리키는 챕터 — 적혀 있으면 그것, 모세스 세이브면 그 챕터. 챕터를 안 적던 옛 전투 세이브는
     /// <b>마지막으로 다녀온 장소의 챕터</b>로 본다(장소는 다녀온 차례대로 적힌다). 모르면 0.
     /// </summary>
-    private static int SavedChapter(SaveState state)
+    internal static int SavedChapter(SaveState state)
     {
         if (state.CurrentChapter > 0) return state.CurrentChapter;
         if (state.InMoses && state.Chapter > 0) return state.Chapter;
@@ -795,25 +796,25 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>읽을 수 있는 가장 오래된 저장 형식 — 빠진 칸은 기본값으로 채운다(형식이 바뀌어도 옛 저장을 버리지 않는다).</summary>
-    private const int OldestSaveVersion = 2;
+    internal const int OldestSaveVersion = 2;
 
     /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
-    private double _playBase;
+    internal double _playBase;
 
-    private long PlayMs => (long)(_realTime * 1000 + _playBase);   // 실제 시간 — 게임 속도를 올려도 플레이 시간은 제대로 흐른다
+    internal long PlayMs => (long)(_realTime * 1000 + _playBase);   // 실제 시간 — 게임 속도를 올려도 플레이 시간은 제대로 흐른다
 
     /// <summary>연대표 장면의 이름 TXR — 원본 상수 2557(빈 글, 장면 7 vt+0x1c <c>0x10106420</c>).</summary>
-    private const int EpisodesSceneText = 2557;
+    internal const int EpisodesSceneText = 2557;
 
-    private static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
+    internal static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
 
     /// <summary>판 밖 인물 한 명의 세이브 칸(자리·HP 없음) — 명부·전투 전 스냅숏에 쓴다.</summary>
-    private static SaveUnit PartyUnit(int chr, CharacterData c) =>
+    internal static SaveUnit PartyUnit(int chr, CharacterData c) =>
         new(chr, 0, 0, 0, 0, 0, 0, true, false, c.Level, c.CumExp, c.Exp, c.Items, c.Passives,
             [.. c.Abilities.Select(a => new SaveAbility(a.Ability, a.Level))], Char: SaveCharOf(c));
 
     /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
-    private bool SaveBattleTo(string path)
+    internal bool SaveBattleTo(string path)
     {
         bool battleSave = !InChapterScene && !_titleOpen && !_recordsOpen && _battleLoaded;
         try
@@ -896,7 +897,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 파일에서 전투판을 되살린다. 되살렸으면 true.</summary>
-    private bool LoadBattleFrom(string path)
+    internal bool LoadBattleFrom(string path)
     {
         SaveState? state;
         try
@@ -1000,6 +1001,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _blinkGhosts.Clear();
         _legionGhosts.Clear();
         _legionFades.Clear();
+        _unitFx.Clear();
         _legionLater.Clear();
         _legionStageEnd = 0;
         _stageDraws.Clear();
@@ -1204,11 +1206,11 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>불러온 세이브의 카메라 스크롤(없으면 null) · 아직 안 놓았나 — 되살린 차례가 시작될 때(StartTurn) 놓는다.</summary>
-    private (int X, int Y)? _loadCamera;
-    private bool _loadCameraPending;
+    internal (int X, int Y)? _loadCamera;
+    internal bool _loadCameraPending;
 
     /// <summary>스크롤을 그 자리로 바로(보간·명령 없이) — 원본 불러오기 <c>0x1006f3a0</c> 이 +0x3cae/+0x3cb0 을 그대로 넣는 것.</summary>
-    private void ApplySavedCamera((int X, int Y) cam)
+    internal void ApplySavedCamera((int X, int Y) cam)
     {
         _camGoal = null;
         _camPosX = _camTargetX = Math.Clamp(cam.X, 0, CamMaxX);
@@ -1221,7 +1223,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 세이브의 물체 칸을 판에 되살린다(원본 <c>0x100e80f0</c> 의 짝) — HP·편·열림/부서짐·충전.
     /// 물체 칸이 없는 옛 세이브는 판을 세운 그대로 둔다. 같은 번호(배치 +0x140)끼리 짝짓고, 안 맞으면 자리 순번으로 본다.
     /// </summary>
-    private void RestoreObjects(SaveState state)
+    internal void RestoreObjects(SaveState state)
     {
         if (state.Objects is not { } saved) return;
         var objects = Objects;

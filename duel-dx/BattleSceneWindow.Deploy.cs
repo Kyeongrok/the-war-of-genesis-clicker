@@ -18,46 +18,46 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>배치 단계가 열려 있나 — 열려 있는 동안 전투(틱·차례·이벤트)는 멈춘다.</summary>
-    private bool _deployOpen;
+    internal bool _deployOpen;
 
     /// <summary>배치칸(칸, 방향) — 전투 자료 순서.</summary>
-    private IReadOnlyList<(int Col, int Row, Facing Facing)> _deploySpots = [];
+    internal IReadOnlyList<(int Col, int Row, Facing Facing)> _deploySpots = [];
 
     /// <summary>BuildUnits 가 배치칸이 모자라 맵 밖에 만들어 둔 파티원 — 배치 단계를 안 열면 지운다.</summary>
-    private readonly HashSet<UnitState> _deployBench = [];
+    internal readonly HashSet<UnitState> _deployBench = [];
 
     /// <summary>세이브를 불러오느라 판을 세우는 중 — 벤치를 지우지 않고 남겨 둔다.</summary>
-    private bool _keepBenchForLoad;
+    internal bool _keepBenchForLoad;
 
     /// <summary>명단에서 고른 사람(다음에 누르는 초록 칸에 선다).</summary>
-    private UnitState? _deployPick;
+    internal UnitState? _deployPick;
 
-    private const uint DeployLayer = 0x14C83C;          // 층 13 초록 (20,200,60)
-    private const int DeployW = 220, DeployRowH = 24, DeployTop = 34;
+    internal const uint DeployLayer = 0x14C83C;          // 층 13 초록 (20,200,60)
+    internal const int DeployW = 220, DeployRowH = 24, DeployTop = 34;
 
     /// <summary>명단 — 내가 움직이는 사람(편 4) 가운데 군단 부하가 아닌 이. Btl 에 박힌 사람(고정)이 앞.</summary>
-    private List<UnitState> DeployRoster() =>
+    internal List<UnitState> DeployRoster() =>
         [.. _units.Where(u => u.PlayerControlled && u.LeaderIndex < 0 && u.Alive).OrderBy(u => DeployMovable(u) ? 1 : 0)];
 
     /// <summary>옮길 수 있는 사람 — BuildUnits 가 배치칸이나 맵 밖에 세운 파티원. Btl 레코드로 선 사람은 「Entry」 고정.</summary>
-    private bool DeployMovable(UnitState u) => _deployMovable.Contains(u);
+    internal bool DeployMovable(UnitState u) => _deployMovable.Contains(u);
 
-    private readonly HashSet<UnitState> _deployMovable = [];
+    internal readonly HashSet<UnitState> _deployMovable = [];
 
     /// <summary>「군단사용」을 끈 대장(명단 +0x30 = 0) — 부하를 맵 밖에 두었다가 배치종료 때 지운다.</summary>
-    private readonly HashSet<UnitState> _deployNoLegion = [];
+    internal readonly HashSet<UnitState> _deployNoLegion = [];
 
     /// <summary>이 전투가 군단을 허용하나(머리 워드 7) — 「군단사용」 단추가 켜지는 조건(<c>0x100e257c</c>).</summary>
-    private bool _deployLegionsAllowed;
+    internal bool _deployLegionsAllowed;
 
     /// <summary>「군단사용」을 켜고 끌 수 있는 사람 — 옮길 수 있고 배치 단계가 부하를 만들어 둔 대장.</summary>
-    private bool DeployHasLegion(UnitState u) =>
+    internal bool DeployHasLegion(UnitState u) =>
         DeployMovable(u) && Array.IndexOf(_units, u) is var li and >= 0 && _units.Any(f => f.LeaderIndex == li);
 
     /// <summary>
     /// 「군단사용」 단추(0x4b8) — 고른 사람의 명단 <c>+0x30</c> 을 뒤집는다. 켜면 부하를 진형대로 다시 세우고(0x100673dd~), 끄면 맵 밖으로 뺀다.
     /// </summary>
-    private void ToggleDeployLegion()
+    internal void ToggleDeployLegion()
     {
         if (!_deployLegionsAllowed) { Toast("이 전투에서는 군단을 쓸 수 없습니다"); return; }
         if (_deployPick is not { } u) { Toast("군단을 켜고 끌 사람을 명단에서 고르세요"); return; }
@@ -76,7 +76,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>군단을 끈 대장의 부하를 맵 밖(0,0)으로 — 배치 단계 동안만 남겨 둔다.</summary>
-    private void HideDeployFollowers(UnitState leader)
+    internal void HideDeployFollowers(UnitState leader)
     {
         int li = Array.IndexOf(_units, leader);
         if (li < 0) return;
@@ -90,7 +90,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>새 전투를 열 때 — 배치칸이 있으면 배치 단계를 연다, 아니면 맵 밖에 둔 여분을 지운다.</summary>
-    private void BeginDeployOrDrop(DemoScene scene, bool fresh)
+    internal void BeginDeployOrDrop(DemoScene scene, bool fresh)
     {
         _deployOpen = false;
         _deployPick = null;
@@ -111,24 +111,24 @@ internal sealed unsafe partial class BattleSceneWindow
         Hint("캐릭터 배치 — 명단에서 고르고 초록 칸을 누르세요 (자동배치 · 배치종료, Enter: 배치종료)");
     }
 
-    private bool _deployCamPending;
+    internal bool _deployCamPending;
 
     /// <summary>
     /// 배치 단계의 한 틀 — 원본 상태 2 에는 카메라 명령이 없다(감사4 C5): 첫 화면은 Btl 머리 워드 2·3 자리 그대로이고
     /// 가장자리 스크롤로만 옮긴다. 예전에는 배치칸 평균으로 옮겼다.
     /// </summary>
-    private void StepDeploy() => _deployCamPending = false;
+    internal void StepDeploy() => _deployCamPending = false;
 
-    private UnitState? UnitOnCell(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
+    internal UnitState? UnitOnCell(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 
-    private int SpotIndex(int col, int row)
+    internal int SpotIndex(int col, int row)
     {
         for (int i = 0; i < _deploySpots.Count; i++) if (_deploySpots[i].Col == col && _deploySpots[i].Row == row) return i;
         return -1;
     }
 
     /// <summary>그 사람을 배치칸 i 에 세운다 — 방향은 칸 레코드 방향. RESTART 도 이 자리로 돌아오게 시작 자리도 옮긴다.</summary>
-    private void PlaceOnSpot(UnitState u, int i)
+    internal void PlaceOnSpot(UnitState u, int i)
     {
         var (col, row, facing) = _deploySpots[i];
         u.ResetTo(col, row);
@@ -140,7 +140,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_deployNoLegion.Contains(u)) HideDeployFollowers(u); else PlaceLegionAround(u);
     }
 
-    private void Unplace(UnitState u)
+    internal void Unplace(UnitState u)
     {
         u.OnField = false;
         u.ResetTo(0, 0);
@@ -149,7 +149,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>자동배치 — 안 놓인 사람 중 명단 첫 사람을 칸 순서 첫 빈 칸에(원본 상태 1).</summary>
-    private void AutoDeploy()
+    internal void AutoDeploy()
     {
         foreach (var u in DeployRoster().Where(u => DeployMovable(u) && !u.OnField))
         {
@@ -161,7 +161,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>배치종료 — 안 놓인 사람은 지우고 전투를 시작한다.</summary>
-    private void FinishDeploy()
+    internal void FinishDeploy()
     {
         if (!DeployRoster().Any(u => u.OnField)) { Toast("한 명 이상 세워야 합니다"); return; }
         // 「군단사용」을 끈 대장 — 이 전투의 군단(+0x4ea)은 0 이고 부하는 없다(원본은 켜진 사람만 부하를 만든다, 0x100673dd~).
@@ -178,10 +178,10 @@ internal sealed unsafe partial class BattleSceneWindow
         Hint("");
     }
 
-    private (int X, int Y) DeployPanel() => (_camX + ViewWidth - DeployW - 12, _camY + GridTop + 12);
+    internal (int X, int Y) DeployPanel() => (_camX + ViewWidth - DeployW - 12, _camY + GridTop + 12);
 
     /// <summary>배치 단계의 클릭 — 명단·단추·초록 칸. 배치 중에는 다른 클릭을 받지 않는다.</summary>
-    private bool OnDeployClick(int bx, int by)
+    internal bool OnDeployClick(int bx, int by)
     {
         if (!_deployOpen) return false;
         var roster = DeployRoster();
@@ -219,7 +219,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private bool OnDeployKey(int key)
+    internal bool OnDeployKey(int key)
     {
         if (!_deployOpen) return false;
         if (key == Win32.VK_RETURN) FinishDeploy();
@@ -227,7 +227,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void DrawDeployCells()
+    internal void DrawDeployCells()
     {
         // 행동 906 의 초록 사각형 — 같은 층 13 그림(200틱).
         if (_highlightRect is var (x1, y1, x2, y2) && _lastTime < _highlightUntil)
@@ -237,7 +237,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (col, row, _) in _deploySpots) PaintCell(col, row, DeployLayer);
     }
 
-    private void DrawDeployPanel()
+    internal void DrawDeployPanel()
     {
         if (!_deployOpen || _db is not { } db) return;
         var roster = DeployRoster();

@@ -14,14 +14,14 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int ChaptersW = 900, ChaptersRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
+    internal const int ChaptersW = 900, ChaptersRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
 
-    private bool _chaptersOpen;
-    private List<(int Id, string Title, ChapterFile Chp)>? _chapters;
-    private int _chaptersHover = -1;
+    internal bool _chaptersOpen;
+    internal List<(int Id, string Title, ChapterFile Chp)>? _chapters;
+    internal int _chaptersHover = -1;
 
     /// <summary>assets/moses/chp 를 모두 읽어 이야기 순서(제목 TXR)로 늘어놓는다.</summary>
-    private List<(int Id, string Title, ChapterFile Chp)> Chapters()
+    internal List<(int Id, string Title, ChapterFile Chp)> Chapters()
     {
         if (_chapters != null) return _chapters;
         var list = new List<(int, string, ChapterFile)>();
@@ -38,14 +38,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return _chapters = [.. list.OrderBy(Rank).ThenBy(c => c.Item1)];
     }
 
-    private (int X, int Y, int H) ChaptersPanel()
+    internal (int X, int Y, int H) ChaptersPanel()
     {
         int rows = (Chapters().Count + ChaptersCols - 1) / ChaptersCols;
         int h = ChaptersTop + rows * ChaptersRowH + 30;
         return (_camX + (ViewWidth - ChaptersW) / 2, _camY + (ViewHeight - h) / 2, h);
     }
 
-    private int ChapterAt(int bx, int by)
+    internal int ChapterAt(int bx, int by)
     {
         var (x, y, _) = ChaptersPanel();
         int rows = (Chapters().Count + ChaptersCols - 1) / ChaptersCols, colW = (ChaptersW - 24) / ChaptersCols;
@@ -55,7 +55,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return index < Chapters().Count ? index : -1;
     }
 
-    private bool OnChaptersClick(int bx, int by)
+    internal bool OnChaptersClick(int bx, int by)
     {
         if (!_chaptersOpen) return false;
         int index = ChapterAt(bx, by);
@@ -66,12 +66,12 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void UpdateChaptersHover(int bx, int by)
+    internal void UpdateChaptersHover(int bx, int by)
     {
         if (_chaptersOpen) _chaptersHover = ChapterAt(bx, by);
     }
 
-    private void DrawChapters()
+    internal void DrawChapters()
     {
         if (!_chaptersOpen) return;
         var (x, y, h) = ChaptersPanel();

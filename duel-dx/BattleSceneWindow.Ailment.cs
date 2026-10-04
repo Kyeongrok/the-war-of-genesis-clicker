@@ -21,7 +21,7 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>상태이상 칸 그림 — <c>Obs 0489</c>(전투가 미리 읽어 두는 공용 그림 스물넷 중 하나).</summary>
-    private const int AilmentIconObs = 489;
+    internal const int AilmentIconObs = 489;
 
     /// <summary>
     /// 그 유닛의 <paramref name="slot"/> 번째 상태이상 칸에 그릴 <c>Obs 0489</c> 모션.
@@ -30,7 +30,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본은 칸마다 <c>Sta.dat[번호]</c> 의 아이콘 번호를 그대로 모션으로 쓰고, <b>0 이면 「EMPTY」 판(모션 0)</b>이 나온다
     /// (분석-전투 「상태이상 칸 3개」, 창 228). 「없음」인 44·45·46 도 자료에서 아이콘이 0 이라 저절로 빈 칸이 된다.
     /// </remarks>
-    private int AilmentIconMotion(UnitState u, int slot)
+    internal int AilmentIconMotion(UnitState u, int slot)
     {
         int id = (uint)slot < 3 ? u.StatusId[slot] : 0;
         return id != 0 && _db?.Statuses.GetValueOrDefault(id) is { } sta ? sta.Icon : 0;
@@ -41,7 +41,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본 문구는 「TP 소모량이 %d 변화」라 −30 이 붙으면 줄어드는지 늘어나는지 알기 어려웠다(사용자 보고: 리미트 크래쉬).
     /// 13 은 피해 ×(100+값), 14 는 받는 피해 ×(100−값) 이라 둘 다 값이 양수면 좋아진다. 38 은 %가 아니라 틱마다 TP 에 더하는 값이다.
     /// </summary>
-    private static string? ChangeText(int id, int value)
+    internal static string? ChangeText(int id, int value)
     {
         if (value == 0) return null;
         string Pct(string what) => $"{what} {Math.Abs(value)}% {(value < 0 ? "감소" : "증가")}";
@@ -61,7 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>번호 → 짧은 이름(분석-전투 6절 표). 여기 없는 번호는 칸에 번호만 보인다.</summary>
-    private static readonly Dictionary<int, string> AilmentNames = new()
+    internal static readonly Dictionary<int, string> AilmentNames = new()
     {
         [1] = "DEX 저하", [2] = "화염", [3] = "중독", [4] = "버서커", [5] = "마비", [6] = "빙결",
         [7] = "피해 감소", [8] = "자동 회복", [9] = "소울 습득", [10] = "피격 가속", [11] = "경험치 증가",
@@ -73,7 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>슬롯이 아니라 전투 보정으로 들어가는 번호들.</summary>
-    private static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 34 or 37 or 48;
+    internal static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 34 or 37 or 48;
 
     /// <summary>
     /// 상태이상까지 얹은 능력치 — 판정·이동 범위·능력치 표시는 모두 이것을 써야 한다.
@@ -83,7 +83,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <b>40(DEP −1, <c>0x1007af85</c>)</b> 을 뺀다. 둘 다 0 밑으로는 안 내려간다. 최대 HP·TP·SOUL(33·37·48)은
     /// <see cref="RefreshUnitStats"/> 가 이미 반영한다.
     /// </remarks>
-    private static CharacterData? EffectiveData(UnitState u)
+    internal static CharacterData? EffectiveData(UnitState u)
     {
         if (u.Data is not { } c) return null;
         int dex = c.Dex + u.BonusDex - (u.HasStatus(1) ? 1 : 0);
@@ -103,19 +103,19 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 그 인물 눈에 상대가 적으로 보이나 — <b>4(버서커)</b> 가 걸려 있으면 <b>자기 말고 모두</b>가 적이다(<c>0x1006fde0</c>).
     /// </summary>
     /// <remarks>판정은 <b>움직이는 쪽</b> 기준이다. 버서커가 걸린 인물만 편을 못 가리고, 남들이 그 인물을 보는 눈은 그대로다.</remarks>
-    private static bool SeesAsFoe(UnitState viewer, UnitState other) =>
+    internal static bool SeesAsFoe(UnitState viewer, UnitState other) =>
         viewer != other && (viewer.HasStatus(4) || Hostile(viewer, other));
 
     /// <summary>
     /// 두 편이 적인가 — 원본 세력 행렬(<c>0x1006b76f</c>)은 편 3·4 만 한편이고 <b>편 0·1·2 는 서로도 적</b>이다(fg-21 ⑭).
     /// 전에는 「편 ≥ 3 이냐」 하나로 갈라 적 세력끼리 안 싸웠다(Btl 0136 칼리오페 vs 로브 같은 3자전).
     /// </summary>
-    private static bool Hostile(UnitState a, UnitState b) => a.Side != b.Side && !(a.IsAlly && b.IsAlly);
+    internal static bool Hostile(UnitState a, UnitState b) => a.Side != b.Side && !(a.IsAlly && b.IsAlly);
 
     /// <summary>레벨이 같거나 낮으면 안 걸리는 번호들(종류 0·2 일 때).</summary>
-    private static bool NeedsLevelEdge(int id) => id is 5 or 6 or 12 or 19 or 22 or 23 or 24;
+    internal static bool NeedsLevelEdge(int id) => id is 5 or 6 or 12 or 19 or 22 or 23 or 24;
 
-    private readonly Random _ailmentRandom = new();
+    internal readonly Random _ailmentRandom = new();
 
     /// <summary>
     /// work 의 상태이상을 대상에게 건다. 기본공격이면 <b>무기 아이템의 효과</b>를 건다.
@@ -124,7 +124,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 거는 함수(<c>0x1007bcc0</c>)는 들어오자마자 <b>명중을 제 손으로 한 번 더 굴린다</b> — 부르는 곳이 한 군데뿐이라
     /// 피해형(종류 0)은 <b>두 번째</b> 굴림이고, 회복·보조(1·2·3)에는 이것이 <b>유일한</b> 굴림이다.
     /// </remarks>
-    private bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
+    internal bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
         // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
         if (w.Kind <= 3 && _db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
@@ -161,7 +161,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private static void AddStatBonus(UnitState u, int id, int value)
+    internal static void AddStatBonus(UnitState u, int id, int value)
     {
         switch (id)
         {
@@ -178,7 +178,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>칸 셋에 넣기 — 같은 번호면 센 쪽, 빈 칸, 아니면 이번에 안 쓴 칸 중 아무 데나.</summary>
-    private void PutAilment(UnitState u, byte id, short value, List<int> used, UnitState? source = null)
+    internal void PutAilment(UnitState u, byte id, short value, List<int> used, UnitState? source = null)
     {
         // 마비·빙결·붙잡힘(5·6·25)이 걸리면 걷던 걸음을 그 자리에서 멈춘다(0x1007c480 이 이동을 막는다).
         if (id is 5 or 6 or 25)
@@ -214,7 +214,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 전에는 시간 틱마다 들어가 오버 드라이브(17, 최대 HP 10%)가 차례 하나 사이에 여러 번 깎였다(사용자 보고). 설명도 「매턴마다」다.
     /// 마비·빙결(5·6)이 풀리는 3% 굴림은 깃발 앞으로 옮겼다(<see cref="ReleaseFreeze"/>, ba-15 Q4).
     /// </param>
-    private void TickAilments(IReadOnlySet<UnitState> turnStarts)
+    internal void TickAilments(IReadOnlySet<UnitState> turnStarts)
     {
         if (_db is not { } db) return;
         foreach (var u in _units)
@@ -251,31 +251,31 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>SOUL 을 채운다 — 19(소울이 차지 않음)가 걸려 있으면 하나도 안 들어간다(<c>0x10071d45</c>).</summary>
-    private static void AddSoul(UnitState u, int amount)
+    internal static void AddSoul(UnitState u, int amount)
     {
         if (amount <= 0 || u.HasStatus(19)) return;
         u.Soul = Math.Min(u.MaxSoul, u.Soul + amount);
     }
 
     /// <summary>work 이 무는 SOUL — 18(소울 소모량 %)만큼 늘거나 준다(<c>0x100724c4</c>).</summary>
-    private int SoulCostFor(UnitState u, CharacterData c, int workId) =>
+    internal int SoulCostFor(UnitState u, CharacterData c, int workId) =>
         u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
 
     /// <summary>work 을 쓰려면 있어야 하는 SOUL — 비용과 같은 보정을 받는다.</summary>
-    private int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
+    internal int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
         u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
 
     /// <summary><c>cost += cost × 값 / 100</c>(0x100726a1) — 곱한 몫만 0 쪽으로 버린다. <c>cost × (100+값) / 100</c> 은 값이 음수일 때 1 작게 나왔다(fg-22).</summary>
-    private static int PercentAdjust(int cost, int percent) => Math.Max(0, cost + cost * percent / 100);
+    internal static int PercentAdjust(int cost, int percent) => Math.Max(0, cost + cost * percent / 100);
 
     /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
-    private int TpCostFor(UnitState u, CharacterData c, int workId) =>
+    internal int TpCostFor(UnitState u, CharacterData c, int workId) =>
         PercentAdjust(_db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
 
     /// <summary>
     /// 상태이상이 거는 사망 조건 — 22 SOUL 이 값 아래 · 23 TP 가 값 아래 · 24 SOUL 이 가득(<c>0x1007c689</c>~).
     /// </summary>
-    private static bool DiesByStatus(UnitState u) =>
+    internal static bool DiesByStatus(UnitState u) =>
         (u.HasStatus(22) && u.Status(22) > u.Soul)
         || (u.HasStatus(23) && u.Status(23) > u.Tp)
         || (u.HasStatus(24) && u.Soul >= u.MaxSoul);
@@ -284,13 +284,13 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 8(자동 회복) — HP 가 값(최대 HP 한도)보다 적으면 그 값까지 채운다(<c>0x10067dd1</c>).
     /// 원본은 차례 시작이 아니라 <b>행동 하나가 끝날 때마다</b> 상태 20(<c>0x10067d70</c> 갈래 0)이 모든 유닛을 훑는다(ba-20 C1).
     /// </summary>
-    private void AutoHealAll()
+    internal void AutoHealAll()
     {
         foreach (var u in _units)
             if (u.Alive && u.OnField) AutoHeal(u);
     }
 
-    private void AutoHeal(UnitState u)
+    internal void AutoHeal(UnitState u)
     {
         if (!u.HasStatus(8) || u.Hp <= 0) return;
         int upTo = Math.Min(u.Status(8), u.MaxHp);
@@ -301,10 +301,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>).</summary>
-    private static bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6);
+    internal static bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6);
 
     /// <summary>쓰러질 때 — 47(전투불능 방지)이 있으면 한 번 살아나고 그 칸이 지워진다.</summary>
-    private bool SurvivesFatal(UnitState u)
+    internal bool SurvivesFatal(UnitState u)
     {
         for (int i = 0; i < 3; i++)
             if (u.StatusId[i] == 47)
@@ -321,7 +321,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 상태이상으로 쓰러진 인물의 처치 경험치 — 그 상태이상을 건 인물들(살아 있고 편이 다른 쪽, 겹치면 한 번)이 똑같이 나눈다.
     /// 원본은 피해를 준 순간에만 경험치를 줘서(메시지 1016) 커스 따위로 쓰러지면 아무도 못 받았다.
     /// </summary>
-    private void GainAilmentKillExp(UnitState victim)
+    internal void GainAilmentKillExp(UnitState victim)
     {
         var sources = victim.StatusSource.OfType<UnitState>().Distinct()
                             .Where(s => s.Alive && s.IsAlly != victim.IsAlly).ToList();
@@ -330,7 +330,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>상태이상이 매 틱 깎아 쓰러뜨린 인물 — 동작 없이 바로 눕힌다.</summary>
-    private void KillUnit(UnitState u)
+    internal void KillUnit(UnitState u)
     {
         MarkDead(u);
         Play(SoundDeath);
@@ -342,7 +342,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 207(<c>0x1004e845</c>)·909(<c>0x10055cb1</c>) 어디서 죽든 승계한다 — 전에는 기술 죽음에서만 해서 틱·반사·706·포탑·폭발로 쓰러진 대장의
     /// 부하가 영영 안 움직였다(감사5 L-B).
     /// </summary>
-    private void MarkDead(UnitState u)
+    internal void MarkDead(UnitState u)
     {
         if (!u.Alive) return;
         u.Alive = false;
@@ -351,7 +351,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>피해 보정 — 때리는 쪽 13(공격력), 맞는 쪽 14(방어력)·7(피해 감소).</summary>
-    private static int AilmentDamage(UnitState attacker, UnitState target, int amount)
+    internal static int AilmentDamage(UnitState attacker, UnitState target, int amount)
     {
         // 곱하는 차례가 결과를 바꾼다(정수 나눗셈) — 원본은 7 → 13 → 14 순이다(0x1007b880 · 0x1007b8b3 · 0x1007b8e2).
         // 꼴은 dmg += trunc(±값 × dmg / 100) — 곱한 몫만 0 쪽으로 버린다(음수 쪽에서 dmg×(100−값)/100 보다 1 크다, ba-15).
@@ -362,7 +362,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>41(반사) — 받은 피해의 값% 를 때린 쪽에 돌려준다.</summary>
-    private void Counterattack(UnitState attacker, UnitState target, int amount)
+    internal void Counterattack(UnitState attacker, UnitState target, int amount)
     {
         int percent = target.Status(41);
         if (percent <= 0 || amount <= 0 || !attacker.Alive) return;
@@ -381,7 +381,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>칸에 보이는 상태이상 이름들(빈 칸은 제외).</summary>
-    private List<string> AilmentLabels(UnitState u)
+    internal List<string> AilmentLabels(UnitState u)
     {
         var list = new List<string>();
         for (int i = 0; i < 3; i++)
