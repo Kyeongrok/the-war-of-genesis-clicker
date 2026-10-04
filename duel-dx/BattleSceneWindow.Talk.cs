@@ -73,6 +73,10 @@ internal sealed unsafe partial class BattleSceneWindow
         /// <summary>전투 유닛 자리(없으면 −1) · 필드 말하는 이(<c>10000+열쇠</c>, 머리 위 자리를 찾는다).</summary>
         public int Speaker = -1, FieldSpeaker;
         public string Name = "", Text = "";
+        /// <summary>609 카드의 둘째 줄(발신지 TXR — 「페르소 영자 연구소」「T&amp;T 속보」).</summary>
+        public string Location = "";
+        /// <summary>609 — 모세스 메일 뷰어와 같은 카드 창(0x1003c870).</summary>
+        public bool IsCard => Kind == 609;
         /// <summary>초상화 표정(모션 2×값+11) — 600 만 쓴다.</summary>
         public int Pose;
         /// <summary>초상화·얼굴의 Chr 번호(말하는 이가 전투 유닛이 아닐 때).</summary>
@@ -128,6 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 Kind = v.Box ? (RunningFieldCode(609) ? 609 : RunningFieldCode(603) ? 603 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
                 FaceCode = _talkFace, FieldSpeaker = _fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
+                Location = v.Box && RunningFieldCode(609) ? _talkLocation : "",
             });
         }
     }
@@ -536,6 +541,14 @@ internal sealed unsafe partial class BattleSceneWindow
             width = 594;
             w.MaxLines = 1;
         }
+        else if (w.IsCard)
+        {
+            // 609 카드 — 본문 칸 (w−15)×(h−70): 폭 298, 열 줄.
+            w.Portrait = false;
+            w.TextLeft = 15;
+            width = 292;
+            w.MaxLines = 10;
+        }
         else if (w.IsBox)
         {
             // 상자 글은 (창x+12) 부터 창x+606 까지. 반신 초상이 없고 작은 얼굴이 있으면 얼굴 오른쪽(창x+104)부터.
@@ -629,6 +642,35 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, UiBlend.Alpha);
             DrawTalkLines(w, bandX + w.TextLeft, bandY + 10);
             if (ready) DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, UiBlend.Alpha);
+            return;
+        }
+        if (w.IsCard)
+        {
+            // 609(0x100efb30 → 0x1003c870(164,120,313,239, …)) — 모세스 메일 뷰어와 같은 창: 틀 Obs 0226(바탕 모션 2·3 비침 24/31, 테두리 0·1),
+            // 얼굴 60×60 @ (+4,+8), 「이름」(+73,+12) / 인물 이름 오른끝 +303, 발신지 (+73,+54) / 「LOCATION」 오른끝 +303, 본문 (+15,+76) 열 줄.
+            // 전에는 600 상자에 발신지를 말하는 이 이름 자리에 넣어 그렸다(ba-21 field Y3).
+            int cx = sx + (framed ? 164 : (screenW - 313) / 2), cy = sy + (framed ? 120 : (screenH - 239) / 2);
+            const uint tag = 0xFFF2DB6F, value = 0xFFDAE6FC;
+            if (UiFor(226) != null)
+            {
+                DrawUi(226, 2, 0, cx, cy, UiBlend.Alpha, fade: 24 / 31.0 * open);
+                DrawUi(226, 3, 0, cx, cy, UiBlend.Alpha, fade: 24 / 31.0 * open);
+                DrawUi(226, 0, 0, cx, cy, UiBlend.Alpha, fade: open);
+                DrawUi(226, 1, 0, cx, cy, UiBlend.Alpha, fade: open);
+            }
+            else
+            {
+                DarkenRect(cx - 1, cy - 1, 315, 241);
+                StrokeRect(cx, cy, 313, 239, White);
+            }
+            if (!full) return;
+            if (face != null) BlitScaled(face, cx + 4, cy + 8, 60, 60);
+            DrawText("이름", cx + 73, cy + 12, tag, 12);
+            RightText(w.Name, cx + 303, cy + 12, value, 12);
+            DrawText(w.Location, cx + 73, cy + 54, value, 12);
+            RightText("LOCATION", cx + 303, cy + 54, tag, 12);
+            DrawTalkLines(w, cx + w.TextLeft, cy + 76);
+            if (ready) DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, UiBlend.Alpha);
             return;
         }
         if (w.IsBox)

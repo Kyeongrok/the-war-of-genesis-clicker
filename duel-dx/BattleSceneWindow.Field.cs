@@ -1167,9 +1167,9 @@ internal sealed unsafe partial class BattleSceneWindow
             case 609:                                        // [인물, 이름 TXR, 챕터 Tlc 글, ?] 이름과 글을 <b>다른 표</b>에서 꺼내는 대사(0x100efb30)
                 // 원본은 0x1004a3f0(TXR)으로 이름을, 0x1004a650(Tlk\NNNN.Tlc = EvtText)으로 글을 읽어
                 // 0x160바이트 창을 [0x101bfe34] 에 만든다 — 600~603 의 대사창([0x101bfe30])과 다른 자리이고 틀은 (164,120)~(313,239).
-                // 데모는 창 생김새까지는 안 옮기고 <b>보통 대사창</b>으로 띄운다(가설) — 이름이 인물 이름이 아닌 것만 지킨다.
+                // 인자1 은 이름이 아니라 <b>발신지</b> TXR 이다 — 이름은 인물 것이고 발신지는 카드의 둘째 줄(「LOCATION」)에 뜬다(ba-21 field Y3).
+                _talkLocation = _db?.T((ushort)A(1)) ?? "";
                 ShowFieldTalk(box: true, A(0), 0,
-                              nameOverride: _db?.T((ushort)A(1)) ?? "",
                               textOverride: TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
@@ -1482,6 +1482,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     /// <param name="nameOverride">말하는 이 자리에 넣을 이름 — 행동 609 는 인물 이름이 아니라 <b>인자1 의 TXR 이름</b>을 쓴다.</param>
     /// <param name="textOverride">글 — 행동 609 는 필드 <c>Tlf</c> 가 아니라 <b>그 챕터의 <c>Tlc</c></b> 에서 꺼낸다.</param>
+    /// <summary>609 가 넘기는 발신지 글 — 창을 만들 때 카드의 둘째 줄로 들어간다.</summary>
+    private string _talkLocation = "";
+
     private void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0, int voice = 0)
     {
         if (_talkSkip) return;
@@ -1497,7 +1500,7 @@ internal sealed unsafe partial class BattleSceneWindow
             LoadFieldFace(c);
             _talkFace = c.Code;
         }
-        else if (_field == null && speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)
+        else if (speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)   // 필드의 609 도 Chr 번호로 부른다(Fld 0184·0206·0360)
         {
             // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
             name = _db.T(cc.NameId);
