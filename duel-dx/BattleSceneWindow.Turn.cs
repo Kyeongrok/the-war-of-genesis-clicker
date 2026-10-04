@@ -816,6 +816,10 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── work 쓰기 (fg-5 공격 · fg-6 어빌리티) ───────────────────────────────
 
+    /// <summary>핸들러가 판정까지 대상을 붙드는 work — 브레인 스톰 · 블라인드 · 안티 밸런싱 · 미라클 · 아이템 1609·1610·1612~1617(ba-21 T3).</summary>
+    private static readonly HashSet<int> HeldTargetWorks =
+        [400, 603, 604, 605, 606, 607, 608, 609, 610, 611, 481, 935, 936, 937, 938, 482, 934, 939, 940, 941, 490, 1609, 1610, 1612, 1613, 1614, 1615, 1616, 1617];
+
     /// <summary>
     /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 <b>치는 순간</b>에 대상마다 판정,
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
@@ -1043,7 +1047,23 @@ internal sealed unsafe partial class BattleSceneWindow
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
             if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
                 && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) && (handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id)))
-                for (double end = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond; _lastTime < end;) yield return true;
+            {
+                double hitAt = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond;
+                // 핸들러가 대상을 붙드는 기술(브레인 스톰·블라인드·안티 밸런싱·미라클·아이템 1609~1617) — 판정까지 맞음 자세(미라클은 시전 자세로 아래를 봄)로
+                // 붙들었다가 판정 바로 앞에 서기로 되돌린다(0x10095ab0 · 0x100a19ed · 0x100a1dbf · 0x1009b958 · 0x100b76f5, ba-21 T3).
+                var held = new List<UnitState>();
+                if (HeldTargetWorks.Contains(w.Id) && hitAt > _lastTime)
+                    foreach (int ti in targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
+                    {
+                        var t = _units[ti];
+                        if (!t.Alive || t.Hp <= 0 || t == a) continue;
+                        if (w.Id == 490) t.Facing = Facing.Down;
+                        t.PlayAction(w.Id == 490 ? 6 : HitAction, hitAt - _lastTime);
+                        held.Add(t);
+                    }
+                while (_lastTime < hitAt) yield return true;
+                foreach (var t in held) t.PlayAction(ObsMotionTable.ActionStand, 0);
+            }
             // 소닉 블레이드·크레이지 샷 — 핸들러가 자료 범위와 다르게 친다(ba-20 E1·E2).
             if (step == hitStep && HasSpecialHit(w))
             {
