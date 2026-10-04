@@ -891,7 +891,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
         bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
-        bool effectsDone = false, followersDone = false;
+        bool effectsDone = false, followersDone = false, objectsDone = false;
+        // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설). 행동마다 한 번.
+        void HitObjects(WorkData by)
+        {
+            if (objectsDone || !w.IsDamage || w.AbilityId == BlackHoleAbility || a.Data is not { } od) return;
+            objectsDone = true;
+            foreach (var (oc, or) in EffectCells(w, a, col, row))
+                if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
+                    DamageObject(a, obj, host._db!.Atk(od, a.Soul, by.Power));
+        }
         double effectsAt = host._lastTime;               // 이펙트를 띄운 때 — 핸들러 판정 틱의 기준(단계 0)
         double fxSpan = 0;                          // 그 이펙트들이 다 끝나기까지의 틱
         _followerStrikes.Clear();
@@ -1161,11 +1170,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                         for (double end = Math.Min(reach, effectsAt + 300 / TicksPerSecond); host._lastTime < end;) yield return true;
                     ApplyWork(a, hitWork, host._units[targets[k]], dying);
                 }
-                // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
-                if (hit == 0 && w.IsDamage && w.AbilityId != BlackHoleAbility && a.Data is { } od)
-                    foreach (var (oc, or) in EffectCells(w, a, col, row))
-                        if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
-                            DamageObject(a, obj, host._db!.Atk(od, a.Soul, hitWork.Power));
+                HitObjects(hitWork);
                 // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
                 // 합류는 대장 work +0x41 만 본다(0x1006a110 → 0x1005fa90, FollowersAttack 첫머리). 패스는 대장 work 의 <b>효과 대상 +0x1e</b> 로 가른다
                 // (0x1005fb6d~0x1005fbca): 4 → 아군 패스, 5 → 겨눈 유닛이 적이 아니면 아군 패스, 그 밖 → 적 패스. 종류(피해·보조)는 안 본다.
@@ -1233,6 +1238,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
+        // 전용 연출 갈래(혼·메테오·소닉 블레이드 …)는 위의 보통 타격을 안 지난다 — 그 기술로 겨눈 물체가 안 맞았다(사용자 보고: Btl 0133 해골 방어물).
+        HitObjects(w);
         // 늦게 뜨는 이펙트(단계·사슬 지연)가 시작할 때까지는 행동이 안 끝난다 — 상한 200틱.
         for (double cap = host._lastTime + 200 / TicksPerSecond; host._lastTime < _fxLatestStart && host._lastTime < cap;) yield return true;
         _fxLatestStart = 0;

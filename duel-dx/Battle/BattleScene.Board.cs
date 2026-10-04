@@ -114,21 +114,34 @@ internal sealed unsafe partial class BattleScene
     internal static readonly double SaveHookAt =
         double.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVEAT"), out double at) && at > 0 ? at : 3;
 
-    /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).</summary>
+    /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).
+    /// <c>DUELDX_AIM=&lt;work&gt;:&lt;열&gt;,&lt;줄&gt;[:&lt;열&gt;,&lt;줄&gt;]</c> 면 그 칸을 겨눈다(둘째 칸이 있으면 먼저 그 칸에 세운다) — 맵 물체 겨누기 시험.</summary>
     internal bool _aimHookDone;
 
     internal void ApplyAimHook()
     {
-        if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
+        string[] aim = Environment.GetEnvironmentVariable("DUELDX_AIM")?.Split(':') ?? [];
+        if (_aimHookDone || aim.Length == 0 || !int.TryParse(aim[0], out int id)) return;
         if (!IsPlayerTurn || _routine != null || host.Tlk._talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
         _aimHookDone = true;
         var u = host._units[_turn];
         // DUELDX_AIMSHOW=1 이면 누르지 않고 어빌리티 목록에서 고른 것처럼만 한다 — 범위를 먼저 보이는 기술을 시험할 때.
         if (Environment.GetEnvironmentVariable("DUELDX_AIMSHOW") == "1") { SelectAbilityRow((host._db?.Abilities.GetValueOrDefault(w.AbilityId) is { } ab ? host._db.T(ab.NameId) : "", w, true, "")); return; }
         (_targetWork, _targetIsBasicAttack) = (w.Id, false);
-        u.Hp = Math.Max(1, u.Hp / 2);
         int before = u.Hp;
-        bool took = OnTargetClick(u.Col, u.Row);
+        bool took;
+        if (aim.Length >= 2 && aim[1].Split(',') is [var ac, var ar] && int.TryParse(ac, out int aimCol) && int.TryParse(ar, out int aimRow))
+        {
+            if (aim.Length >= 3 && aim[2].Split(',') is [var sc, var sr] && int.TryParse(sc, out int standCol) && int.TryParse(sr, out int standRow))
+                u.ResetTo(standCol, standRow, keepFacing: true);
+            took = OnTargetClick(aimCol, aimRow);
+        }
+        else
+        {
+            u.Hp = Math.Max(1, u.Hp / 2);
+            before = u.Hp;
+            took = OnTargetClick(u.Col, u.Row);
+        }
         if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {_routine != null} toast '{host._toast}' hp {before}" + Environment.NewLine);
