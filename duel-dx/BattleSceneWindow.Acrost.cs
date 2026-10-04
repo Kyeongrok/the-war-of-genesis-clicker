@@ -48,7 +48,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>효과 모션에 박힌 소리를 그때 낸다 — 효과 폴더 밖(moses/obs)의 소리 껍데기도 찾는다.</summary>
     private void FxSound(int obs, int motion, double at)
     {
-        if (UiFor(obs)?.Clip(motion) is not { } clip) return;
+        // 소리 껍데기 Obs(311·312·1320·1338·1401 — 그림 없이 소리 키만)는 그림으로 못 읽는다 — 이펙트 표를 먼저 본다(AbilityFx 와 같은 차례).
+        if ((_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) ?? UiFor(obs)?.Clip(motion)) is not { } clip) return;
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + tick / TicksPerSecond, sound));
     }
 

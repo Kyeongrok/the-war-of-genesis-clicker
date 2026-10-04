@@ -697,7 +697,7 @@ internal sealed unsafe partial class BattleSceneWindow
                             var arriving = u;
                             double t0 = _lastTime;
                             u.Fade = 0;
-                            Play(694);
+                            _pendingSounds.Add((_lastTime, 694, UnitFoot(u).X));
                             _legionLater.Add((t0 + 56 / TicksPerSecond, () => Play(90)));
                             _legionLater.Add((t0 + 166 / TicksPerSecond, () =>
                             {

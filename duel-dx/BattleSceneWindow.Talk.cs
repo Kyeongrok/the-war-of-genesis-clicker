@@ -701,7 +701,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (w.BlinkTick == int.MaxValue || now - w.BlinkTick > 60) w.BlinkTick = now;   // 창이 처음 그려질 때부터 센다
                 if (w.BlinkAt >= 0 && now - w.BlinkAt >= blink) w.BlinkAt = -1;
                 for (; w.BlinkTick < now; w.BlinkTick++)
-                    if (w.BlinkAt < 0 && _rng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
+                    if (w.BlinkAt < 0 && _drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
                 if (w.BlinkAt >= 0 && now >= w.BlinkAt)
                     DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
             }

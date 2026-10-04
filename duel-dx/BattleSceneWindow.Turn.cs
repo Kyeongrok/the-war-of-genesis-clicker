@@ -34,6 +34,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>지금 도는 루틴이 물체 차례(ObjectTurns)인가 — 끝날 때 자동 회복을 돌리지 않는다.</summary>
     private bool _objectRoutine;
     private readonly Random _rng = new();
+
+    /// <summary>그리기에서만 쓰는 난수(깜빡임·줄 찢김) — 판정 난수 <see cref="_rng"/> 를 그리기 틀 수가 흔들지 않게 따로 둔다.</summary>
+    private readonly Random _drawRng = new();
     private readonly List<(string Text, float Size, int X, int Y, double Start, uint Color)> _popups = [];
 
     /// <summary>대상을 고르는 중인 work 번호(기본공격 포함). 고르는 중이 아니면 −1.</summary>
@@ -485,7 +488,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (u.Data == null || _voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
         if (hurt.Any(id => _mixer.IsPlaying(HurtVoiceTag + id))) return;
-        int id = hurt[(_tick & 1) % hurt.Length];   // 전투 프레임 카운터로 고른다(0x10071e83 → 0x100eaac0, ba-21 sound D8) — 전에는 인물마다 늘 같은 쪽이었다
+        int id = hurt[((int)(_lastTime * TicksPerSecond) & 1) % hurt.Length];   // 전투 프레임 카운터로 고른다(0x10071e83 → 0x100eaac0, ba-21 sound D8) — 전에는 인물마다 늘 같은 쪽이었다
         Play(id, HurtVoiceTag + id, SoundScreenX(UnitFoot(u).X));   // 비명은 그 유닛 화면 자리에서(0x10079c68~0x10079c9a, ba-20 Q S-3)
     }
 
@@ -1051,18 +1054,22 @@ internal sealed unsafe partial class BattleSceneWindow
                 double hitAt = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond;
                 // 핸들러가 대상을 붙드는 기술(브레인 스톰·블라인드·안티 밸런싱·미라클·아이템 1609~1617) — 판정까지 맞음 자세(미라클은 시전 자세로 아래를 봄)로
                 // 붙들었다가 판정 바로 앞에 서기로 되돌린다(0x10095ab0 · 0x100a19ed · 0x100a1dbf · 0x1009b958 · 0x100b76f5, ba-21 T3).
-                var held = new List<UnitState>();
+                var held = new List<(UnitState Unit, Facing Was)>();
                 if (HeldTargetWorks.Contains(w.Id) && hitAt > _lastTime)
                     foreach (int ti in targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
                     {
                         var t = _units[ti];
                         if (!t.Alive || t.Hp <= 0 || t == a) continue;
+                        held.Add((t, t.Facing));
                         if (w.Id == 490) t.Facing = Facing.Down;
                         t.PlayAction(w.Id == 490 ? 6 : HitAction, hitAt - _lastTime);
-                        held.Add(t);
                     }
                 while (_lastTime < hitAt) yield return true;
-                foreach (var t in held) t.PlayAction(ObsMotionTable.ActionStand, 0);
+                foreach (var (t, was) in held)
+                {
+                    t.Facing = was;                                   // 미라클이 돌려 둔 방향은 되돌린다
+                    if (t.Alive && t.Hp > 0) t.PlayAction(ObsMotionTable.ActionStand, 0);
+                }
             }
             // 소닉 블레이드·크레이지 샷 — 핸들러가 자료 범위와 다르게 친다(ba-20 E1·E2).
             if (step == hitStep && HasSpecialHit(w))

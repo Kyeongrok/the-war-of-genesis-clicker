@@ -859,7 +859,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
         if (_mosesAltVoice)
         {
-            int tearY = _rng.Next(MosesH - 10);
+            // 틀(1/30초)마다 한 번 굴린다 — 그리기 틀이 더 잦아도 같은 줄이다.
+            int tearY = new Random((int)(_lastTime * TicksPerSecond) * 7919).Next(MosesH - 10);
             for (int ty = tearY; ty <= tearY + 1; ty++)
                 Array.Copy(_fb, (oy + ty) * BoardWidth + ox + 10, _fb, (oy + ty) * BoardWidth + ox, MosesW - 10);
         }

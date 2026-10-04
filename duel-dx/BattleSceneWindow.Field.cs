@@ -1082,7 +1082,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 전환 물체 +0x58 이 설 때까지 슬롯 — 줄은 안 막는다(909→205 7곳은 원본에서 디졸브와 함께). 카메라는 안 건드린다(D8).
                 // 908(0x1002c980)은 60틱 고정에 가림이 a2, 907(0x1002c6b0)은 a4 틱에 가림 a5 다(가림 표 0x100f2b6c, ba-20 N7) — 909 자리로 읽으면
                 // Fld 0355 의 908[0,209,4] 가 4틱 디졸브 + 가림 0 이 됐다.
-                if (a.Code == 908) { BeginFieldWipe(909, 0, 60, A(0) == 0, A(1), A(2)); break; }
+                if (a.Code == 908) { BeginFieldWipe(908, 0, 60, A(0) == 0, A(1), A(2)); break; }   // 줄 번짐(0x1002c9f0, ba-21 field Y6)
                 if (a.Code == 907 && A(4) > 0) { BeginFieldWipe(909, 0, A(4), A(0) == 0, A(1), A(5)); break; }
                 if (A(0) == 0 && A(1) <= 0) { if (A(2) > 0) HoldSlotTicks(A(2)); break; }
                 if (A(2) > 0) BeginFieldWipe(909, 0, A(2), A(0) == 0, A(1), A(3));
@@ -1944,9 +1944,37 @@ internal sealed unsafe partial class BattleSceneWindow
             case 901: DrawSlideWipe(ox, oy, wipe, tick); break;
             case 903: DrawCombWipe(ox, oy, wipe, tick); break;
             case 909: DrawDissolveWipe(ox, oy, wipe, tick); break;
+            case 908: DrawLineWipe(ox, oy, wipe, tick); break;
             default: DrawStreakWipe(ox, oy, wipe, tick); break;
         }
         return true;
+    }
+
+    /// <summary>
+    /// 908 줄 번짐(<c>0x1002c9f0</c>, 60틱) — 새 그림이 줄 단위로 켜진다: 0~30틱은 짝수 줄이 0·120·240·360·480 에서 2줄/틱으로 번지고,
+    /// 30~60틱은 홀수 줄이 그 옆(1·119·121·239·241·359·361·479)에서 번진다. 안 켜진 줄에는 옛 화면이 보인다(가설). Fld 0355 한 번.
+    /// </summary>
+    private void DrawLineWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        var under = wipe.Base ?? wipe.Over;
+        var lit = new bool[MosesH];
+        void On(int y) { if ((uint)y < MosesH) lit[y] = true; }
+        for (int t = 0; t <= Math.Min(tick, 30); t++)
+        {
+            On(2 * t); On(480 - 2 * t);
+            foreach (int c in new[] { 120, 240, 360 }) { On(c + 2 * t); On(c - 2 * t); }
+        }
+        for (int u = 0; u <= Math.Min(tick, 60) - 30; u++)
+        {
+            On(1 + 2 * u); On(479 - 2 * u);
+            foreach (int c in new[] { 120, 240, 360 }) { On(c - 1 - 2 * u); On(c + 1 + 2 * u); }
+        }
+        for (int y = 0; y < MosesH; y++)
+        {
+            int row = (oy + y) * BoardWidth + ox;
+            if (oy + y < 0 || row + MosesW > _fb.Length || ox < 0) continue;
+            Array.Copy(lit[y] ? wipe.Over : under, y * MosesW, _fb, row, MosesW);
+        }
     }
 
     /// <summary>
