@@ -152,6 +152,23 @@ internal sealed unsafe partial class BattleScene
         });
     }
 
+    /// <summary>틱마다 자리·모션이 미리 정해진 그림 하나(라이트닝 샤벨의 칼) — 틀을 다 쓰면 사라진다.</summary>
+    internal readonly List<(int Obs, double Start, (int X, int Y, int Motion, bool Mirror)[] Frames)> _scripted = [];
+
+    internal void DrawScripted()
+    {
+        _scripted.RemoveAll(s =>
+        {
+            if (host._lastTime < s.Start) return false;
+            int tick = (int)((host._lastTime - s.Start) * TicksPerSecond);
+            if (tick >= s.Frames.Length || host.UiFor(s.Obs) == null) return true;
+            var f = s.Frames[tick];
+            int key = host.UiFor(s.Obs)?.BlendAt(f.Motion, tick) ?? 0;
+            host.DrawUi(s.Obs, f.Motion, tick, f.X, f.Y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key), mirror: f.Mirror);
+            return false;
+        });
+    }
+
     /// <summary>고리 이동기의 꼬리 — 틱마다 한 점(미리 셈한 화면 자리)에 그림을 남긴다(0x100cd3d0, 수명 = 모션 길이 − 1).</summary>
     internal readonly List<(int Obs, int Motion, double Start, (int X, int Y)[] Points, bool Mirror)> _ringTrails = [];
 
@@ -203,6 +220,7 @@ internal sealed unsafe partial class BattleScene
         DrawFallers();
         DrawRingTrails();
         DrawChasers();
+        DrawScripted();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;

@@ -261,6 +261,86 @@ internal sealed unsafe partial class BattleScene
     /// <summary>방금 띄운 대상별 이펙트의 엇갈림 틱(확실한 것) — 판정도 이 간격으로 든다. 0 이면 한꺼번에.</summary>
     internal int _fxStagger;
 
+    /// <summary>
+    /// 라이트닝 샤벨의 칼(0x100ce030) — 한 다리마다: 다음 점 쪽으로 16방향 모션(4m+8)을 틱마다 한 칸 돌리고(그 틱마다 잔상 211:모션+2, 첫 틱에 384:2),
+    /// 짝수 점(대상)으로는 10틱 뜸 들인 뒤 80 × 0.9(바닥 40)로 날고 뒤따르는 탄 넷(70·60·50·40, 13~16틱 늦게), 닿으면 384:3 을 남기고
+    /// 30 × 0.65(바닥 5)로 120 을 지나친다. 마지막에는 칼이 사라지고 211:10 이 29틱에 시전자 위(높이 200)로 돌아간다 + 384:4.
+    /// 자리는 월드 단위로 세고 화면에는 y × 0.8 − z × 0.6. 칼에 붙는 384 는 생긴 자리에 세운다(원본은 칼을 따라간다). 판정 때는 안 바꿨다.
+    /// </summary>
+    internal void SpawnSabreBlade(double start, int userX, int userY, List<(int X, int Y)> targets)
+    {
+        double Wy(int screenY) => screenY / 0.8;
+        var points = new List<(double X, double Y, double Z)>();
+        (double X, double Y) origin = (userX, Wy(userY) - 500);
+        foreach (var (tx, ty) in targets)
+        {
+            double px = tx, py = Wy(ty), dx = px - origin.X, dy = py - origin.Y, far = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
+            points.Add((px, py, 0));
+            origin = (px + dx / far * 120, py + dy / far * 120);
+            points.Add((origin.X, origin.Y, 0));
+        }
+        points[^1] = points[^1];
+        points.Add((userX, Wy(userY), 200));
+        var frames = new List<(int X, int Y, int Motion, bool Mirror)>();
+        double x = userX, y = Wy(userY) - 600, z = 0;
+        int cur = 0, tick = 0;
+        bool first = true;
+        (int X, int Y) Screen() => ((int)x, (int)(y * 0.8 - z * 0.6));
+        int Pose() => 4 * Math.Max(1, cur > 9 ? 18 - cur : cur) + 8;
+        double At(int t) => start + t / TicksPerSecond;
+        void Hold(bool ghost)
+        {
+            var (sx, sy) = Screen();
+            frames.Add((sx, sy, Pose(), cur > 9));
+            if (ghost) _movers.Add((211, Pose() + 2, At(tick + 1), 7, sx, sy, 0, 0, 5, 0, 0, 0, 0, cur > 9));
+            tick++;
+        }
+        for (int idx = 0; idx < points.Count && tick < 600; idx++)
+        {
+            var (px, py, pz) = points[idx];
+            bool last = idx == points.Count - 1;
+            double bearing = Math.Atan2(px - x, (y * 0.8 - z * 0.6) - (py * 0.8 - pz * 0.6));
+            int want = Math.Min(9, 1 + (int)((Math.Abs(bearing) + Math.PI / 16) / (Math.PI / 8)));
+            if (bearing > 0 && want > 1) want = 18 - want;
+            if (last) want = 0;
+            while (cur != want)
+            {
+                cur += Math.Sign(want - cur);
+                if (first) { var (fx, fy) = Screen(); _effects.Add((384, 2, At(tick), fx, fy)); first = false; }
+                Hold(ghost: true);
+            }
+            var (bx, by) = Screen();
+            if (idx % 2 == 0)
+            {
+                _effects.Add((384, 1, At(tick + 10), bx, by));
+                first = true;
+                if (last)
+                {
+                    _movers.Add((211, 10, At(tick), 5, bx, by, (int)px, (int)(py * 0.8 - pz * 0.6), 29, 0, 0, 0, 0, false));
+                    _effects.Add((384, 4, At(tick), bx, by));
+                    tick += 29;
+                    break;
+                }
+                for (int k = 0; k < 4; k++)
+                    _shots.Add((211, Pose() + Math.Min(3, k + 1), At(tick + 13 + k), bx, by, px, py * 0.8, 70 - 10 * k, 0, 0, 30, 100, cur > 9));
+                Hold(ghost: true);
+                for (int wait = 1; wait < 10; wait++) Hold(ghost: false);
+            }
+            else _effects.Add((384, 3, At(tick), bx, by));
+            double speed = idx % 2 == 0 ? 80 : 30, scale = idx % 2 == 0 ? 0.9 : 0.65, floor = idx % 2 == 0 ? 40 : 5;
+            for (int guard = 0; guard < 200; guard++)
+            {
+                double dx = px - x, dy = py - y, far = Math.Sqrt(dx * dx + dy * dy);
+                if (far <= speed) { (x, y) = (px, py); Hold(ghost: false); break; }
+                (x, y) = (x + dx / far * speed, y + dy / far * speed);
+                speed = Math.Max(floor, speed * scale);
+                Hold(ghost: false);
+            }
+        }
+        _scripted.Add((211, start, [.. frames]));
+        _fxLatestStart = Math.Max(_fxLatestStart, At(Math.Min(tick, 190)));
+    }
+
     internal void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         host.Mov.SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
@@ -308,6 +388,8 @@ internal sealed unsafe partial class BattleScene
             foreach (var extra in rowsFor)
             {
                 (x, y) = (baseX, baseY);
+                // 라이트닝 샤벨 — 같은 열쇠(211:1, 지연 61)의 줄이 둘이다: 솟는 앞머리(직선탄, 높이 200 줄)와 칼(그 밖, 땅 줄). 제 짝만 쓴다.
+                if (e.Obs == 211 && e.Motion == 1 && rowsFor.Any(r => r is { Move: 9 }) && (extra is { Move: 9 }) != (e.Lift == 0)) continue;
                 bool mirrored = extra is { Mirror: 2 } || (extra is { Mirror: 1 } && user.Facing == Facing.Right);
                 bool vectorShot = extra is { Move: 1 } v && (v.To == 2 || (v.From == v.To && (v.Dx != 0 || v.Dy != 0)));
                 if (extra is { } ex && !vectorShot) (x, y) = (x + ex.Dx, y + ex.Dy);
@@ -384,6 +466,13 @@ internal sealed unsafe partial class BattleScene
                                      _fxRandom.NextDouble() * 2 * Math.PI, 8.0 / 30, mirrored));
                     }
                     continue;
+                }
+                // 라이트닝 샤벨 211:1(클래스 0x100cdf40, 틱 0x100ce030) — 칼이 위에서 와 대상마다 꿰뚫고 120 지나쳤다가 다음 대상으로 돈다.
+                if (extra is { Move: 9 } && e.Obs == 211 && e.Motion == 1)
+                {
+                    var pierced = (_fxTargets ?? WorkTargets(w, user, col, row)).Select(i => UnitFoot(host._units[i])).Take(10).ToList();
+                    // 칼은 앞머리(위로 솟는 211:1 — 빠르기 100 뒤 40, 약 14틱)가 끝난 뒤에 선다.
+                    if (pierced.Count > 0) { SpawnSabreBlade(start + 14 / TicksPerSecond, userX, userY, pierced); continue; }
                 }
                 // 리인카네이션 279:4(0x100c4810 → 틱 0x100380f0): 안 보이는 앞잡이가 시전자 둘레 아홉 점을 틱당 3 으로 돌고, 이 그림이 틱당 2 로 그 뒤를 쫓는다.
                 if (extra is { Move: 9 } && !e.Fly && e.Obs == 279 && e.Motion == 4)

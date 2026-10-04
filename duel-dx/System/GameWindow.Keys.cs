@@ -272,7 +272,7 @@ internal sealed unsafe partial class GameWindow
         Btl._effects.RemoveAll(e => e.Start < _lastTime);
         Btl._effectMirrors.RemoveAll(e => e.Start < _lastTime);
         Btl._shots.Clear();
-        Btl._movers.Clear(); Btl._fallers.Clear(); Btl._ringTrails.Clear(); Btl._chasers.Clear();
+        Btl._movers.Clear(); Btl._fallers.Clear(); Btl._ringTrails.Clear(); Btl._chasers.Clear(); Btl._scripted.Clear();
         Btl._flyingEffects.Clear();
     }
 
