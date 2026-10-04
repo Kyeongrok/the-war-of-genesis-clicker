@@ -243,7 +243,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 string path = VoicePack.BgmPath(id);
                 // 곡 파일이 없으면 조용하다(Btl 0014 의 머리 곡 5 — 원본은 무음) — 전에는 앞 곡이 계속 났다(ba-21 sound D10).
                 if (!File.Exists(path)) { if (request == Volatile.Read(ref _musicRequest)) _mixer.StopMusic(); return; }
-                var pcm = BinkAudio.Open(path).Decode();
+                // 이미 풀어 둔 곡(승패 곡 3392·55 는 결과가 설 때 길이를 재느라 푼다)은 다시 풀지 않는다 — 1~2초 무음이 없다(ba-21 sound D7).
+                var pcm = CachedClip(id) ?? BinkAudio.Open(path).Decode();
                 if (request != Volatile.Read(ref _musicRequest)) return;
                 // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다(B.G.M 설정은 믹서가 곱한다).
                 _mixer.PlayMusic(pcm, loop, _musicAudible ?? _musicGain);
