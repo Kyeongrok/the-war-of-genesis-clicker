@@ -21,7 +21,7 @@
                     x:Name="JobViewerMenuItem"
                     AutomationProperties.AutomationId="JobViewerMenuItem"
                     Click="JobViewerMenuItem_Click"
-                    Header="직업(_J)" />
+                    Header="체질(_J)" />
                 <MenuItem
                     x:Name="BattleListMenuItem"
                     AutomationProperties.AutomationId="BattleListMenuItem"
