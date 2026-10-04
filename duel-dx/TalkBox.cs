@@ -842,19 +842,21 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     {
         if (s <= 0.01 || host.UiFor(obs) is not { } sprite || sprite.FrameAt(motion, 0) is not { } f) return;
         int left = tx + (int)Math.Floor((x + f.X - ax) * s), top = ty + (int)Math.Floor((y + f.Y - ay) * s);
-        int dw = Math.Max(1, (int)(f.W * s)), dh = Math.Max(1, (int)(f.H * s));
+        // 너비·높이는 「다음 조각이 시작하는 자리」까지로 잡는다 — 조각마다 따로 반올림하면 나란한 조각(대사 상자의 왼쪽·가운데·오른쪽)이
+        // 한 픽셀 겹쳐, 반투명 바탕이 두 번 섞인 어두운 세로줄 둘이 접히는 동안 보였다(사용자 보고).
+        int dw = Math.Max(1, tx + (int)Math.Floor((x + f.X + f.W - ax) * s) - left), dh = Math.Max(1, ty + (int)Math.Floor((y + f.Y + f.H - ay) * s) - top);
         int k = Math.Clamp((int)(fade * 256), 0, 256);
         var clip = host._uiClip;
         for (int yy = 0; yy < dh; yy++)
         {
             int py = top + yy;
             if ((uint)py >= host.BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
-            int srcY = Math.Min(f.H - 1, (int)(yy / s));
+            int srcY = Math.Min(f.H - 1, yy * f.H / dh);
             for (int xx = 0; xx < dw; xx++)
             {
                 int px = left + xx;
                 if ((uint)px >= host.BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
-                uint c = f.Px[srcY * f.W + Math.Min(f.W - 1, (int)(xx / s))];
+                uint c = f.Px[srcY * f.W + Math.Min(f.W - 1, xx * f.W / dw)];
                 if ((c & 0xFF000000) == 0) continue;
                 int i = py * host.BoardWidth + px;
                 if (k < 256)
