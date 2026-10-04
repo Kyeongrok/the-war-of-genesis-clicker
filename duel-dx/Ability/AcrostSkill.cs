@@ -76,7 +76,7 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
             foreach (var b in balls.Where(b => b.Done && struck.Add(b)))
             {
                 hit(b.Target);
-                if (Trace)
+                if (BattleScene.Trace)
                     System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                         $"elemental fire: target {b.Target} hit at {host._lastTime - balls[0].Start:0.00}s (orbit {b.OrbitTicks} ticks, {host.HeavenEarthAb._timedFx.Count(f => f.Obs == FireTrailObs)} trail puffs alive)" + Environment.NewLine);
             }
@@ -127,7 +127,7 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
     internal void DrawFireBalls()
     {
         foreach (var b in _fireBalls)
-            host.DrawUi(FireBallObs, 0, b.Tick, (int)b.X, (int)b.Y, UiBlend.Add);
+            host.DrawUi(FireBallObs, 0, b.Tick, (int)b.X, (int)b.Y, GameWindow.UiBlend.Add);
     }
 
     internal IEnumerable<bool> SummonMonsterRoutine(UnitState user, List<int> targets, Action<int> hit)

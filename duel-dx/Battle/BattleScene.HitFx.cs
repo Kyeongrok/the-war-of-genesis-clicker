@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 맞는 효과(fg-10) — 맞은 쪽 몸짓·흰 번쩍임·떨림, 불꽃 이펙트, 숫자·Miss 글자, 치명타 화면 물들이기.
 /// </summary>
@@ -13,7 +15,7 @@ namespace DuelDx;
 /// 빗나감은 연두색 "Miss" 글자만, 회복은 노란 숫자만(반응·소리 없음), 치명타는 화면 전체를 한 틱 물들인다.
 /// 맞는 타격음은 따로 없다 — 비명(Dmg.dat)과 때리는 쪽 모션 소리뿐이다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>맞음 동작 — 동작 2(모션 6·7·8), 15틱.</summary>
     internal const int HitAction = 2, HitActionTicks = 15;
@@ -33,20 +35,20 @@ internal sealed unsafe partial class GameWindow
     internal void PlayHitReaction(UnitState target, bool damaged)
     {
         // 맞음 동작은 그 유닛 모션(6·7·8)의 길이만큼 한 번 돈다 — 15틱이 아닌 모션이 119개다(ba-21 T7). 전에는 늘 15틱으로 잘랐다.
-        int ticks = _sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
+        int ticks = host._sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
         PlayActionFor(target, HitAction, ticks > 0 ? ticks : HitActionTicks);
         if (!damaged) return;
-        var (x, y) = UnitFoot(target);
-        _effects.Add((HitEffectObs, _rng.Next(3), _lastTime, x, y - HitEffectLift));
+        var (x, y) = host.UnitFoot(target);
+        _effects.Add((HitEffectObs, host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
     }
 
-    internal void PlayCritFlash() => _critFlashAt = _lastTime;
+    internal void PlayCritFlash() => _critFlashAt = host._lastTime;
 
     /// <summary>동작을 정해진 틱 수만큼 재생한다(모션 길이 대신).</summary>
     internal void PlayActionFor(UnitState u, int action, int ticks)
     {
         u.PlayAction(action, ticks / TicksPerSecond);
-        ScheduleActionSounds(u, action);
+        host.ScheduleActionSounds(u, action);
     }
 
     /// <summary>
@@ -71,12 +73,12 @@ internal sealed unsafe partial class GameWindow
             // 자식은 <b>제 모션이 끝나면 사라진다</b> — 원본은 키마다 개체를 만들고 그 모션이 다 돌면 지운다(0x100e5410 case 2).
             // 안 지우면 앞선 키가 그대로 남아, 크리스티앙의 총 넣기(동작 24)에서 든 총과 <b>머리 위에 뜬 총</b>이 함께 보였다(사용자 보고).
             // 몸과 같이 도는 무기 층(제이슨 Obs 0426·Obs 0060)은 모션 길이가 몸과 같아 한 바퀴 내내 남는다.
-            int life = UiFor(obs)?.MotionLength(motion) ?? 0;
+            int life = host.UiFor(obs)?.MotionLength(motion) ?? 0;
             if (life > 0 && cycle - start >= life) continue;
-            var blend = BlendOf(UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
+            var blend = BlendOf(host.UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
             bool flip = mirror && flag == 0;
-            DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
+            host.DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
         }
     }
 
@@ -106,9 +108,9 @@ internal sealed unsafe partial class GameWindow
     {
         _movers.RemoveAll(m =>
         {
-            if (_lastTime < m.Start) return false;
-            double ticks = (_lastTime - m.Start) * TicksPerSecond;
-            if (ticks >= m.Ticks || UiFor(m.Obs) == null) return true;
+            if (host._lastTime < m.Start) return false;
+            double ticks = (host._lastTime - m.Start) * TicksPerSecond;
+            if (ticks >= m.Ticks || host.UiFor(m.Obs) == null) return true;
             double k = ticks / Math.Max(1, m.Ticks), x, y;
             if (m.Kind == 4)
             {
@@ -116,8 +118,8 @@ internal sealed unsafe partial class GameWindow
                 (x, y) = (m.X0 + r * Math.Cos(angle), m.Y0 + r * Math.Sin(angle) * TileH / TileW);
             }
             else (x, y) = (m.X0 + (m.X1 - m.X0) * k, m.Y0 + (m.Y1 - m.Y0) * k - 60 * 4 * k * (1 - k));
-            int key = UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
-            DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+            int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
+            host.DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
                    loop: true, fade: BlendFade(key), mirror: m.Mirror);
             return false;
         });
@@ -128,10 +130,10 @@ internal sealed unsafe partial class GameWindow
         DrawMovers();
         _shots.RemoveAll(s =>
         {
-            if (_lastTime < s.Start) return false;
-            int tick = (int)((_lastTime - s.Start) * TicksPerSecond);
+            if (host._lastTime < s.Start) return false;
+            int tick = (int)((host._lastTime - s.Start) * TicksPerSecond);
             double dx = s.ToX - s.FromX, dy = s.ToY - s.FromY, total = Math.Sqrt(dx * dx + dy * dy);
-            if (total < 1 || UiFor(s.Obs) == null) return true;
+            if (total < 1 || host.UiFor(s.Obs) == null) return true;
             // 그 틱까지 간 거리를 처음부터 다시 센다(틱 수가 작아 싸다).
             double speed = Math.Max(1, s.Speed), gone = 0;
             for (int t = 0; t < tick && gone < total; t++)
@@ -144,8 +146,8 @@ internal sealed unsafe partial class GameWindow
             }
             if (gone >= total || tick > 600) return true;
             double k = gone / total;
-            int key = UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
-            DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
+            int key = host.UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
+            host.DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
                    key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key), mirror: s.Mirror);
             return false;
         });
@@ -156,13 +158,13 @@ internal sealed unsafe partial class GameWindow
         DrawShots();
         _flyingEffects.RemoveAll(f =>
         {
-            if (_lastTime < f.Start) return false;
-            int tick = (int)((_lastTime - f.Start) * TicksPerSecond);
-            if (UiFor(f.Obs) is not { } sprite) return true;
+            if (host._lastTime < f.Start) return false;
+            int tick = (int)((host._lastTime - f.Start) * TicksPerSecond);
+            if (host.UiFor(f.Obs) is not { } sprite) return true;
             int length = f.Ticks > 0 ? f.Ticks : Math.Max(1, sprite.MotionLength(f.Motion));
             if (tick >= length) return true;
             double t = (double)tick / length;
-            DrawUi(f.Obs, f.Motion, tick, (int)(f.FromX + (f.ToX - f.FromX) * t), (int)(f.FromY + (f.ToY - f.FromY) * t),
+            host.DrawUi(f.Obs, f.Motion, tick, (int)(f.FromX + (f.ToX - f.FromX) * t), (int)(f.FromY + (f.ToY - f.FromY) * t),
                    f.Ticks > 0 ? UiBlend.Alpha : UiBlend.Add, loop: f.Ticks > 0);
             return false;
         });
@@ -171,11 +173,11 @@ internal sealed unsafe partial class GameWindow
     internal void DrawEffects()
     {
         DrawFlyingEffects();
-        NineCrusaderAb.DrawSwords();                                       // 나인 크루세이더의 나는 칼
-        FinisherPreludeAb.DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
-        HeavenEarthAb.DrawHeavenEarthFx();                                // 천지 파열무의 X 자 불길·파편(시각표 효과 — 서몬 몬스터도 쓴다)
-        AcrostAb.DrawFireBalls();                                    // 엘레맨탈 파이어의 도는 불덩이
-        AstralArrowAb.DrawArrows();                                       // 아스트럴 애로우의 오르내리는 화살
+        host.NineCrusaderAb.DrawSwords();                                       // 나인 크루세이더의 나는 칼
+        host.FinisherPreludeAb.DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
+        host.HeavenEarthAb.DrawHeavenEarthFx();                                // 천지 파열무의 X 자 불길·파편(시각표 효과 — 서몬 몬스터도 쓴다)
+        host.AcrostAb.DrawFireBalls();                                    // 엘레맨탈 파이어의 도는 불덩이
+        host.AstralArrowAb.DrawArrows();                                       // 아스트럴 애로우의 오르내리는 화살
         // 지우는 것은 모션이 <b>다 끝났을 때</b>다 — 첫 컷이 몇 틱 뒤에 시작하는 이펙트(크래쉬 봄의 폭탄, 메테오 착탄 170:1)는
         // 첫 틀에 그릴 컷이 없어 예전에는 뜨기도 전에 지워졌다. 그림이 아예 없는 Obs(소리 껍데기)는 바로 지운다.
         _effects.RemoveAll(e => DrawEffectOnce(e, mirror: false));
@@ -185,27 +187,27 @@ internal sealed unsafe partial class GameWindow
     /// <summary>이펙트 한 줄을 그린다 — 다 끝났으면 true(지운다).</summary>
     internal bool DrawEffectOnce((int Obs, int Motion, double Start, int X, int Y) e, bool mirror)
     {
-        if (_lastTime < e.Start) return false;             // 아직 기다리는 이펙트(지연)
-        int tick = (int)((_lastTime - e.Start) * TicksPerSecond);
+        if (host._lastTime < e.Start) return false;             // 아직 기다리는 이펙트(지연)
+        int tick = (int)((host._lastTime - e.Start) * TicksPerSecond);
         // 자식 키만으로 된 모션(필살기 금빛 띠 344:18·19 — 제 컷 없이 자식 여섯)도 있다 — 원본 애니메이터처럼 자식을 함께 그린다(0x100e5410).
-        var clip = UiFor(e.Obs)?.Clip(e.Motion);
+        var clip = host.UiFor(e.Obs)?.Clip(e.Motion);
         if (clip is { Children.Count: > 0 }) DrawUnitLayers(clip, tick, e.X, e.Y, mirror: mirror, loop: false);
         // 섞기 방식은 모션의 종류 3 키를 따른다(ba-21 fx F14): 1~8 은 그 단계의 반투명(칼날 171 · 바위 251:6 · 422:1), 10 은 닷지(450:0),
         // 그 밖(17 가산 · 키 없음 · 19 — 식을 못 푼 것)은 전처럼 가산. 전에는 전부 가산이라 반투명 이펙트가 하얗게 탔다.
-        int key = UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;
+        int key = host.UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;
         var blend = key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add;
-        if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key), mirror: mirror)) return false;
-        return UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
+        if (host.DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key), mirror: mirror)) return false;
+        return host.UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
     }
 
     /// <summary>치명타 물들이기 — 방식 9(픽셀 절반)에 가깝게 한 프레임만 화면을 어둡게 번쩍인다.</summary>
     internal void DrawCritFlash()
     {
-        if (_critFlashAt < 0 || _lastTime - _critFlashAt > 1.0 / TicksPerSecond) return;
-        for (int i = 0; i < _fb.Length; i++)
+        if (_critFlashAt < 0 || host._lastTime - _critFlashAt > 1.0 / TicksPerSecond) return;
+        for (int i = 0; i < host._fb.Length; i++)
         {
-            uint c = _fb[i];
-            _fb[i] = 0xFF000000 | ((c >> 16 & 0xFF) / 2 + 90) << 16 | ((c >> 8 & 0xFF) / 2 + 90) << 8 | ((c & 0xFF) / 2 + 90);
+            uint c = host._fb[i];
+            host._fb[i] = 0xFF000000 | ((c >> 16 & 0xFF) / 2 + 90) << 16 | ((c >> 8 & 0xFF) / 2 + 90) << 8 | ((c & 0xFF) / 2 + 90);
         }
     }
 
@@ -224,12 +226,12 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
     {
-        var (x, y) = UnitFoot(u);
-        _numbers.Add((text, color, x, y, _lastTime, rise, count));
+        var (x, y) = host.UnitFoot(u);
+        _numbers.Add((text, color, x, y, host._lastTime, rise, count));
     }
 
     /// <summary>판의 그 자리에 숫자를 띄운다 — 물체가 맞을 때는 물체 자리에 뜬다(0x100e77e0, ba-20 O P2).</summary>
-    internal void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, _lastTime, true, null));
+    internal void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, host._lastTime, true, null));
 
     internal readonly List<(string Text, uint Color, int X, int Y, double Start, bool Rise, (int From, int To)? Count)> _numbers = [];
 
@@ -237,7 +239,7 @@ internal sealed unsafe partial class GameWindow
     {
         _numbers.RemoveAll(n =>
         {
-            double age = (_lastTime - n.Start) * TicksPerSecond;
+            double age = (host._lastTime - n.Start) * TicksPerSecond;
             if (age > 20) return true;
             // 세어 올라가는 숫자 — 목표에 닿는 틱에 지운다(전에는 닿은 뒤로도 20틱까지 남았다, 감사 3 H3).
             if (n.Count is not { } c) return false;
@@ -246,7 +248,7 @@ internal sealed unsafe partial class GameWindow
         });
         foreach (var (text, color, x, y, start, rise, count) in _numbers)
         {
-            int tick = (int)((_lastTime - start) * TicksPerSecond);
+            int tick = (int)((host._lastTime - start) * TicksPerSecond);
             int lift = 24;
             if (rise)
             {
@@ -262,13 +264,13 @@ internal sealed unsafe partial class GameWindow
                 int value = c.From + Math.Sign(c.To - c.From) * Math.Min(Math.Abs(c.To - c.From), step * tick);
                 shown = $"{text} {value}";
             }
-            var (_, w, _) = GetText(shown, color, 16);
+            var (_, w, _) = host.GetText(shown, color, 16);
             // 피해 숫자는 유닛 기준 x −30 에서 왼쪽 맞춤(0x100d22e0(−30, 0, 40, …)) — Miss·회복은 전처럼 가운데.
             int left = color == DamageColor ? x - 30 : x - w / 2;
             // 검정 1픽셀 테두리 뒤에 제 색
             foreach (var (ox, oy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-                DrawText(shown, left + ox, y - lift + oy, 0xFF000000, 16);
-            DrawText(shown, left, y - lift, color, 16);
+                host.DrawText(shown, left + ox, y - lift + oy, 0xFF000000, 16);
+            host.DrawText(shown, left, y - lift, color, 16);
         }
     }
 }

@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 레벨업(fg-9) — 쓰러뜨리면 경험치가 들어오고, 그 행동이 끝난 뒤 그 자리에서 레벨업 창이 뜬다.
 /// </summary>
@@ -12,7 +14,7 @@ namespace DuelDx;
 /// 배경음악 40% 로 줄었다가 창이 닫히면 되돌아온다. 180틱(6초) 뒤 저절로 닫히고 아무 키·클릭으로도 닫힌다.
 /// 여러 명이면 한 명씩 잇따라 뜬다. 창을 띄우기 전에 카메라를 그 유닛 가운데로 보내고 멈출 때까지 기다린다(0x1006823e).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>레벨업 창이 저절로 닫히기까지 — 원본은 180틱이지만 사용자 요청으로 2초.</summary>
     internal const double LevelUpSeconds = 2.0;
@@ -32,9 +34,9 @@ internal sealed unsafe partial class GameWindow
     internal void GainKillExp(UnitState killer, UnitState victim, int share = 1)
     {
         // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
-        if (_db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
+        if (host._db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
         // 11(경험치 증가)은 자르기 <b>앞</b>에 더한다(0x10072285~) — 그래서 한 번에 상한(Num 17)을 넘지 않는다.
-        int exp = Math.Max(1, _db.ExpForKill(k, v.Level, killer.Status(11)) / share);
+        int exp = Math.Max(1, host._db.ExpForKill(k, v.Level, killer.Status(11)) / share);
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
     }
@@ -45,26 +47,26 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void ClearEnemiesForTest()
     {
-        if (_db == null || !_battleLoaded || Mos._mosesOpen || FieldOpen || _outcome.Length > 0) { Toast("전투 중에만 쓸 수 있습니다"); return; }
-        var receivers = _units.Where(u => u.Alive && u.OnField && IsMine(u) && u.Data != null).ToList();
-        var victims = _units.Where(u => u.Alive && u.OnField && !u.IsAlly).ToList();
-        if (victims.Count == 0) { Toast("쓰러뜨릴 적이 없습니다"); return; }
+        if (host._db == null || !host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen || _outcome.Length > 0) { host.Toast("전투 중에만 쓸 수 있습니다"); return; }
+        var receivers = host._units.Where(u => u.Alive && u.OnField && IsMine(u) && u.Data != null).ToList();
+        var victims = host._units.Where(u => u.Alive && u.OnField && !u.IsAlly).ToList();
+        if (victims.Count == 0) { host.Toast("쓰러뜨릴 적이 없습니다"); return; }
         var gained = new Dictionary<UnitState, int>();
         foreach (var v in victims)
         {
             if (v.Data is { } vd)
                 foreach (var r in receivers)
                 {
-                    int exp = Math.Max(1, _db.ExpForKill(r.Data!, vd.Level) / receivers.Count);
+                    int exp = Math.Max(1, host._db.ExpForKill(r.Data!, vd.Level) / receivers.Count);
                     r.Data = r.Data! with { Exp = r.Data!.Exp + exp, CumExp = r.Data!.CumExp + exp };
                     gained[r] = gained.GetValueOrDefault(r) + exp;
                 }
             v.Alive = false;
         }
         foreach (var (r, exp) in gained) Popup(r, $"EXP +{exp}", 0xFF90D0FF, 15);
-        Play(SoundDeath);
+        host.Play(SoundDeath);
         QueueLevelUps();
-        Toast($"적 {victims.Count}명 정리 — 경험치를 {receivers.Count}명이 나눴습니다");
+        host.Toast($"적 {victims.Count}명 정리 — 경험치를 {receivers.Count}명이 나눴습니다");
         // 레벨업 창이 먼저, 전멸 판정은 그 뒤(상태 21 → 4, ba-15 Q7).
         if (_levelUpQueue.Count == 0) CheckOutcome();
         else _outcomeAfterLevelUp = true;
@@ -76,8 +78,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void QueueLevelUps()
     {
-        for (int i = 0; i < _units.Length; i++)
-            if (_units[i] is { IsAlly: true, Alive: true, OnField: true, Data: { } c } && c.CumExp / 100 > c.Level && !_levelUpQueue.Contains(i))
+        for (int i = 0; i < host._units.Length; i++)
+            if (host._units[i] is { IsAlly: true, Alive: true, OnField: true, Data: { } c } && c.CumExp / 100 > c.Level && !_levelUpQueue.Contains(i))
                 _levelUpQueue.Enqueue(i);
     }
 
@@ -92,7 +94,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (LevelUpOpen)
         {
-            if (_lastTime < _levelUpUntil) return true;
+            if (host._lastTime < _levelUpUntil) return true;
             CloseLevelUp();
             // 줄에 남은 사람은 같은 틀에 곧바로 띄운다 — 사이에 한 틀이라도 차례가 돌면 틱이 흘러 미뤄 둔 전멸 판정을 앞지른다.
         }
@@ -103,26 +105,26 @@ internal sealed unsafe partial class GameWindow
         while (_levelUpQueue.Count > 0)
         {
             int index = _levelUpQueue.Peek();
-            var unit = _units[index];
-            if (_db == null || !unit.Alive || unit.Data is not { } c || c.CumExp / 100 <= c.Level) { _levelUpQueue.Dequeue(); _levelUpCamSent = false; continue; }
+            var unit = host._units[index];
+            if (host._db == null || !unit.Alive || unit.Data is not { } c || c.CumExp / 100 <= c.Level) { _levelUpQueue.Dequeue(); _levelUpCamSent = false; continue; }
             // 21 레벨업(0x1006823e) — 그 유닛을 가운데로 보내고 멈춘 뒤에 올리고 창을 띄운다(감사4 C17). 창을 숨겨 둔 사람은 안 기다린다.
             if (_showLevelUp && !_levelUpCamSent) { _levelUpCamSent = true; CenterOnUnit(unit); return true; }
             if (_showLevelUp && CameraBusy) return true;
             _levelUpQueue.Dequeue();
             _levelUpCamSent = false;
 
-            unit.Data = _db.LevelUp(c, out var gains);
-            RefreshUnitStats(unit);
-            if (!_showLevelUp) { Play(SoundLevelUp); continue; }
+            unit.Data = host._db.LevelUp(c, out var gains);
+            host.RefreshUnitStats(unit);
+            if (!_showLevelUp) { host.Play(SoundLevelUp); continue; }
 
             _levelUpUnit = index;
-            _levelUpUntil = _lastTime + LevelUpSeconds;
-            _levelUpTitle = _db.T(1090) is { Length: > 0 } t ? t : "Level Up";
-            _levelUpBody = $"{UnitName(index)}의 레벨이 {unit.Data.Level}이 되었습니다.\n"
+            _levelUpUntil = host._lastTime + LevelUpSeconds;
+            _levelUpTitle = host._db.T(1090) is { Length: > 0 } t ? t : "Level Up";
+            _levelUpBody = $"{host.UnitName(index)}의 레벨이 {unit.Data.Level}이 되었습니다.\n"
                          + string.Join("\n", gains.Select(g => $"{g.Stat}가 {g.Amount} 상승하였습니다."));
-            _selected = index;
-            Play(SoundLevelUp);
-            _mixer.SetMusicGain(DuckedMusicGain);
+            host._selected = index;
+            host.Play(SoundLevelUp);
+            host._mixer.SetMusicGain(DuckedMusicGain);
             return true;
         }
         if (_outcomeAfterLevelUp)
@@ -140,11 +142,11 @@ internal sealed unsafe partial class GameWindow
     /// <summary>DUELDX_LEVELUP=1 이면 시작하자마자 레벨업 창을 띄운다(화면 밖 시험용).</summary>
     internal void OpenLevelUpIfAsked()
     {
-        if (Environment.GetEnvironmentVariable("DUELDX_LEVELUP") != "1" || _db == null) return;
-        _levelUpUnit = Array.FindIndex(_units, u => u.IsAlly);
-        _levelUpUntil = _lastTime + 3600;
-        _levelUpTitle = _db.T(1090) is { Length: > 0 } t ? t : "Level Up";
-        _levelUpBody = $"{UnitName(_levelUpUnit)}의 레벨이 {_units[_levelUpUnit].Data?.Level + 1}이 되었습니다.\n"
+        if (Environment.GetEnvironmentVariable("DUELDX_LEVELUP") != "1" || host._db == null) return;
+        _levelUpUnit = Array.FindIndex(host._units, u => u.IsAlly);
+        _levelUpUntil = host._lastTime + 3600;
+        _levelUpTitle = host._db.T(1090) is { Length: > 0 } t ? t : "Level Up";
+        _levelUpBody = $"{host.UnitName(_levelUpUnit)}의 레벨이 {host._units[_levelUpUnit].Data?.Level + 1}이 되었습니다.\n"
                      + "HP가 30 상승하였습니다.\nATK가 4 상승하였습니다.";
     }
 
@@ -152,7 +154,7 @@ internal sealed unsafe partial class GameWindow
     {
         _levelUpUnit = -1;
         _eventCheckDue |= 1 << 1;                // 갈래 1 = 레벨업 끝(0x10068270)
-        if (_levelUpQueue.Count == 0) _mixer.SetMusicGain(MusicGain);
+        if (_levelUpQueue.Count == 0) host._mixer.SetMusicGain(MusicGain);
     }
 
     /// <summary>
@@ -170,27 +172,27 @@ internal sealed unsafe partial class GameWindow
         string[] lines = _levelUpBody.Split('\n');
         // 줄 내림 16(굴림 9pt + 4) — 메시지 창 0x10034540.
         int lineH = 16, bodyH = lines.Length * lineH;
-        var (_, titleW, _) = GetText(_levelUpTitle, White, 15);
-        int bodyW = lines.Max(l => GetText(l, White).W);
+        var (_, titleW, _) = host.GetText(_levelUpTitle, White, 15);
+        int bodyW = lines.Max(l => host.GetText(l, White).W);
         int innerW = Math.Max(titleW + 100, bodyW);
         int w = innerW + 40, h = bodyH + 80;
-        int x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2 + FrameTitleH / 2;
+        int x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2 + FrameTitleH / 2;
 
-        DrawGameFrame(x, y, w, h, _levelUpTitle);
+        host.DrawGameFrame(x, y, w, h, _levelUpTitle);
         // 본문은 덩어리째 가운데, 줄마다 <b>왼쪽 맞춤</b>·흰색(0x10034540 — 첫 줄도 흰색).
         int left = x + 20 + (innerW - bodyW) / 2;
         for (int i = 0; i < lines.Length; i++)
-            DrawText(lines[i], left, y + 20 + i * lineH, White);
+            host.DrawText(lines[i], left, y + 20 + i * lineH, White);
 
         // O.K 단추 — 원본 그림(76×22)은 기준점이 한가운데라 칸 가운데에 찍는다. 글자는 그림에 들어 있다.
         int bx = x + w / 2 - 38, by = y + h - 40;
         // 단추 그림은 <b>두 장</b>이다 — 평소(31)와 골라짐(32). 원본도 마우스가 얹히면 밝은 쪽으로 바꿔 그린다.
-        bool over = _mouse.X >= bx && _mouse.X < bx + 76 && _mouse.Y >= by && _mouse.Y < by + 23;
-        if (DrawUi(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
-        FillRect(bx, by, 76, 23, HeadBg);
-        StrokeRect(bx, by, 76, 23, BoxLine);
-        var (_, ow, _) = GetText("O.K", White);
-        DrawText("O.K", bx + (76 - ow) / 2, by + 4, White);
+        bool over = host._mouse.X >= bx && host._mouse.X < bx + 76 && host._mouse.Y >= by && host._mouse.Y < by + 23;
+        if (host.DrawUi(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
+        host.FillRect(bx, by, 76, 23, HeadBg);
+        host.StrokeRect(bx, by, 76, 23, BoxLine);
+        var (_, ow, _) = host.GetText("O.K", White);
+        host.DrawText("O.K", bx + (76 - ow) / 2, by + 4, White);
     }
 
     /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림).</summary>

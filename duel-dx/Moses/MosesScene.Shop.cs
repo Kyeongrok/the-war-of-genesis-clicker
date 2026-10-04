@@ -126,7 +126,7 @@ internal sealed unsafe partial class MosesScene
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
             bool over = mx >= 70 * i + 48 && mx < 70 * i + 48 + 64 && my >= 330 && my < 460;
-            host.DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, GameWindow.UiBlend.Alpha);
             if (PartyData(party[_shopCompareTop + i]) is not { } pc) continue;
             host.Fld.LoadFieldFace(pc);
             if (host._faces.TryGetValue(pc.Code, out var face)) host.BlitScaled(face, cx + 2, cy + 20, 60, 60);
@@ -144,8 +144,8 @@ internal sealed unsafe partial class MosesScene
         }
         if (party.Count >= 6)
         {
-            host.DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha);
-            host.DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha);
+            host.DrawUi(302, 0, 0, ox + 20, oy + 370, GameWindow.UiBlend.Alpha);
+            host.DrawUi(302, 1, 0, ox + 400, oy + 370, GameWindow.UiBlend.Alpha);
         }
     }
 
@@ -230,7 +230,7 @@ internal sealed unsafe partial class MosesScene
     {
         if (_shop is not { } shop) return;
 
-        host.DrawUi(shop.OwnerObs, 0, tick, ox + 52, oy + 101, UiBlend.Alpha);   // 점주
+        host.DrawUi(shop.OwnerObs, 0, tick, ox + 52, oy + 101, GameWindow.UiBlend.Alpha);   // 점주
         int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
         bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
 
@@ -246,9 +246,9 @@ internal sealed unsafe partial class MosesScene
                 int rx = ox + lx, ry = oy + ly + r * ShopRowH;
                 // 줄 틀 Obs 1291 모션 1(230×28)은 <b>마우스가 올라간 줄에만</b> 덧그리는 강조다(0x10043810 으로 달아 둔 덧그림,
                 // 세이브 슬롯의 Obs 0471 모션 20 과 같은 짜임). 줄마다 그리면 28픽셀짜리 틀이 21픽셀 줄을 넘어 겹쳐 어지럽다.
-                if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) host.DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, UiBlend.Alpha);
+                if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) host.DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, GameWindow.UiBlend.Alpha);
                 if (host._db?.Items.GetValueOrDefault(itemId) is not { } item) continue;
-                host.DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, UiBlend.Alpha);
+                host.DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, GameWindow.UiBlend.Alpha);
                 // 줄 글(0x100f8900~ · 0x100f8f10~, ba-20 S 5): 재고 줄의 수 = 담은 수(처음 X 00), 소지품 줄의 수 = 보유 − 팔려고 담은 수,
                 // 매입·매각 목록은 「이름(X nn)」이고 값이 없다. 값 글은 노랑. 가격 0 인 소지품은 「판매 불가」로 꺼진다(0x1003fdc0).
                 bool unsellable = i == ListBag && ShopSellPrice(itemId) <= 0;
@@ -265,8 +265,8 @@ internal sealed unsafe partial class MosesScene
             // 줄이 넘치면 오른쪽에 위·아래 화살표
             if (items.Count > ShopRows)
             {
-                host.DrawUi(ShopArrowObs, 2, tick, ox + lx + lw, oy + ly, UiBlend.Alpha);
-                host.DrawUi(ShopArrowObs, 4, tick, ox + lx + lw, oy + ly + ShopRows * ShopRowH - 16, UiBlend.Alpha);
+                host.DrawUi(ShopArrowObs, 2, tick, ox + lx + lw, oy + ly, GameWindow.UiBlend.Alpha);
+                host.DrawUi(ShopArrowObs, 4, tick, ox + lx + lw, oy + ly + ShopRows * ShopRowH - 16, GameWindow.UiBlend.Alpha);
             }
         }
 
@@ -289,9 +289,9 @@ internal sealed unsafe partial class MosesScene
         DrawShopCompare(ox, oy, tick);
 
         // Reset·Set·Ok 글자는 배경 그림(Bgr 0040)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림.
-        if (Over(418, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
-        if (Over(522, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, UiBlend.Alpha);
-        if (Over(455, 430, 163, 27)) host.DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+        if (Over(418, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, GameWindow.UiBlend.Alpha);
+        if (Over(522, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, GameWindow.UiBlend.Alpha);
+        if (Over(455, 430, 163, 27)) host.DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
     }
 }
 

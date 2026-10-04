@@ -13,7 +13,7 @@ internal sealed unsafe partial class GameWindow
     /// 그림 컷이 없는 Obs(소리 껍데기)는 빠져 있다.
     /// 높이(Lift)는 월드 z × 0.6, 지연·수명은 0x100c24d0·0x100c2530 에서 읽었다(ba-15). 자식 키는 넣지 않는다 — 부모가 그린다.
     /// </remarks>
-    private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> WorkScripts = new()
+    internal static readonly Dictionary<int, (int[] Actions, BattleScene.AbilityEffect[] Effects)> WorkScripts = new()
     {
         [1] = ([5, 8, 24], []),
         [3] = ([6, 15], [new(1338, 1, false, 0), new(1329, 0, false, 0), new(396, 4, false, 24, 1, 1, false, 0), new(8, 3, false, 0), new(8, 0, false, 0, 46, 1, false, 0), new(8, 4, false, 60, 46, 1, false, 0), new(1329, 1, false, 0, 1, 1, false, 0)]),
@@ -1576,7 +1576,7 @@ internal sealed unsafe partial class GameWindow
     };
 
     /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>
-    private static readonly Dictionary<int, MovieFx[]> WorkMovies = new()
+    internal static readonly Dictionary<int, MovieFx[]> WorkMovies = new()
     {
         [3] = [new(41, true, false, -128, -240)],
         [14] = [new(41, true, false, -128, -240)],
@@ -2802,7 +2802,7 @@ internal sealed unsafe partial class GameWindow
     };
 
     /// <summary>work 번호 → 몸 복제(분신) — (모션, 대상 몸인가). 모션 −1 은 그 유닛의 지금 모션. 분석-스킬 fx-189 「파」.</summary>
-    private static readonly Dictionary<int, BodyFx[]> WorkBodies = new()
+    internal static readonly Dictionary<int, BattleScene.BodyFx[]> WorkBodies = new()
     {
         [3] = [new(-1, false)],
         [8] = [new(-1, false), new(-1, false), new(-1, false), new(-1, false), new(-1, false), new(-1, false), new(-1, false)],

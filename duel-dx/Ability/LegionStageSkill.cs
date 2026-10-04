@@ -35,8 +35,8 @@ internal sealed unsafe class LegionStageSkill(GameWindow host)
     {
         if (!IsLegionSkill(w.Id)) return 0;
         int leaderIndex = Array.IndexOf(host._units, leader);
-        var followers = host.FollowersOf(leaderIndex).Where(f => f.OnField && f.Hp > 0).OrderBy(f => f.FormationSlot).ToList();
-        if (Trace)
+        var followers = host.Btl.FollowersOf(leaderIndex).Where(f => f.OnField && f.Hp > 0).OrderBy(f => f.FormationSlot).ToList();
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"legion stage work {w.Id} leader {leader.ChrCode} followers {followers.Count}" + Environment.NewLine);
         if (followers.Count == 0) return 0;
@@ -44,7 +44,7 @@ internal sealed unsafe class LegionStageSkill(GameWindow host)
         int fadesBefore = _legionFades.Count;
         var (lx, ly) = host.UnitFoot(leader);
         var aim = (X: col * TileW + TileW / 2, Y: host.CellCenterY(col, row));
-        int reach = Math.Max(1, host.RangeMaxOf(w, leader) / 4);
+        int reach = Math.Max(1, host.Btl.RangeMaxOf(w, leader) / 4);
 
         double At(int tick) => t0 + tick / TicksPerSecond;
         (int Motion, bool Mirror) Pose(UnitState u, int action, Facing facing) =>

@@ -162,7 +162,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.TalkFillFirst ? Win32.MF_CHECKED : 0u), MenuTalkClickFills, "대사 첫 클릭은 글 채우기(&F)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
-        AppendDifficultyMenu(settings);
+        BattleScene.AppendDifficultyMenu(settings);
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
         IntPtr res = Win32.CreatePopupMenu();
@@ -236,7 +236,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, _showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, _difficulty, TuningScr._soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
 
     /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
     internal bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
@@ -253,7 +253,7 @@ internal sealed unsafe partial class GameWindow
     internal bool TrySkipEnemyAction()
     {
         if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return false;
-        if (IsPlayerTurn || _routine == null || _outcome.Length > 0 || EventsBusy || LevelUpOpen || SystemOpen || _deployOpen) return false;
+        if (Btl.IsPlayerTurn || Btl._routine == null || Btl._outcome.Length > 0 || Btl.EventsBusy || Btl.LevelUpOpen || SystemOpen || Btl._deployOpen) return false;
         _skippingAction = true;
         _skipFrom = _lastTime;
         return true;
@@ -263,17 +263,17 @@ internal sealed unsafe partial class GameWindow
     internal void StepSkipEnemyAction()
     {
         if (!_skippingAction) return;
-        if (_routine != null && !IsPlayerTurn && _outcome.Length == 0 && !EventsBusy && !LevelUpOpen && _lastTime - _skipFrom < 60) return;
+        if (Btl._routine != null && !Btl.IsPlayerTurn && Btl._outcome.Length == 0 && !Btl.EventsBusy && !Btl.LevelUpOpen && _lastTime - _skipFrom < 60) return;
         _skippingAction = false;
         // 건너뛰는 동안 뜬 숫자를 지금으로 다시 맞춘다 — 결과(피해·회복·Miss)는 보인다.
-        for (int i = 0; i < _numbers.Count; i++)
-            if (_numbers[i].Start >= _skipFrom) _numbers[i] = _numbers[i] with { Start = _lastTime };
+        for (int i = 0; i < Btl._numbers.Count; i++)
+            if (Btl._numbers[i].Start >= _skipFrom) Btl._numbers[i] = Btl._numbers[i] with { Start = _lastTime };
         // 지나간 이펙트는 지운다(때가 지나 한 틀 번쩍이고 사라지지 않게).
-        _effects.RemoveAll(e => e.Start < _lastTime);
-        _effectMirrors.RemoveAll(e => e.Start < _lastTime);
-        _shots.Clear();
-        _movers.Clear();
-        _flyingEffects.Clear();
+        Btl._effects.RemoveAll(e => e.Start < _lastTime);
+        Btl._effectMirrors.RemoveAll(e => e.Start < _lastTime);
+        Btl._shots.Clear();
+        Btl._movers.Clear();
+        Btl._flyingEffects.Clear();
     }
 
     /// <summary>대사 첫 클릭은 글 채우기 — 설정 > 대사 첫 클릭은 글 채우기. 끄면(기본) 원본처럼 첫 클릭에 곧바로 닫는다(감사 3 T1).</summary>
@@ -308,12 +308,12 @@ internal sealed unsafe partial class GameWindow
 
     internal void OnMenuCommand(int id)
     {
-        if (OnDifficultyMenu(id)) return;
+        if (Btl.OnDifficultyMenu(id)) return;
         if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }
         switch (id)
         {
             case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
-            case MenuClearEnemies: ClearEnemiesForTest(); break;
+            case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
             case >= MenuReplayBase and < MenuReplayBase + 500:
                 ReopenPlace(id - MenuReplayBase);
                 break;
@@ -332,10 +332,10 @@ internal sealed unsafe partial class GameWindow
                 SaveSettings();
                 break;
             case MenuLevelUpWindow:
-                _showLevelUp = !_showLevelUp;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuLevelUpWindow, Win32.MF_BYCOMMAND | (_showLevelUp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
-                if (!_showLevelUp && LevelUpOpen) CloseLevelUp();
-                Toast(_showLevelUp ? "레벨업 창을 보입니다" : "레벨업 창을 숨깁니다 — 레벨은 그대로 오릅니다");
+                Btl._showLevelUp = !Btl._showLevelUp;
+                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuLevelUpWindow, Win32.MF_BYCOMMAND | (Btl._showLevelUp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                if (!Btl._showLevelUp && Btl.LevelUpOpen) Btl.CloseLevelUp();
+                Toast(Btl._showLevelUp ? "레벨업 창을 보입니다" : "레벨업 창을 숨깁니다 — 레벨은 그대로 오릅니다");
                 SaveSettings();
                 break;
             case >= MenuTalkPauseBase and < MenuTalkPauseBase + 6:

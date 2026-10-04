@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 난이도(설정 > 난이도) — 원본에 없는 기능이다. 보통이 원본 그대로이고, 어려움부터 적의 최대 HP·주는 피해에 배율을 걸고
 /// 적 AI 가 기술과 대상을 더 잘 고른다.
@@ -12,7 +14,7 @@ namespace DuelDx;
 /// 그래서 챕터 6 쯤이면 같은 레벨의 일반병사가 살라딘을 쓰러뜨리는 데 120타가 넘게 걸려 전투가 지루했다(사용자 보고).
 /// 적 HP 만 올리면 오래 때리기만 해서 더 지루하므로, 적이 주는 피해를 더 크게 올린다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal const int MenuDifficultyBase = 1140;
 
@@ -49,13 +51,13 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal int SmartValue(UnitState user, WorkData w, List<int> targets)
     {
-        if (_db is not { } db || user.Data is not { } a) return 0;
+        if (host._db is not { } db || user.Data is not { } a) return 0;
         long total = 0;
         foreach (int i in targets)
         {
-            var t = _units[i];
+            var t = host._units[i];
             if (t.Data is not { } d || t.MaxHp <= 0) continue;
-            int dmg = (db.N(3) - db.Rdp(d, t.Hp, t.MaxHp)) * db.Atk(a, TuningScr.AttackSoul(w, user.Soul), w.Power) / Math.Max(1, db.N(3));
+            int dmg = (db.N(3) - db.Rdp(d, t.Hp, t.MaxHp)) * db.Atk(a, host.TuningScr.AttackSoul(w, user.Soul), w.Power) / Math.Max(1, db.N(3));
             dmg = ScaleDamage(user, t, Math.Max(0, dmg));
             int hit = Math.Clamp(db.HitChance(a, user.Tp, d, t.Tp, w, t.Stance), 0, 100);
             long value = (long)Math.Min(dmg, t.Hp) * 1000 / t.MaxHp * hit / 100;
@@ -72,14 +74,14 @@ internal sealed unsafe partial class GameWindow
     internal (WorkData Work, (int Stand, int Col, int Row, int Score) Use)? SmartPick(int index, MoveRange range)
     {
         (WorkData, (int, int, int, int))? best = null;
-        foreach (var w in AiWorks(_units[index]))
+        foreach (var w in AiWorks(host._units[index]))
         {
-            if (!w.IsDamage || BestUse(index, w, ComputeRange(_units[index], w.Id) ?? range) is not { } use) continue;   // 이동 예산은 그 기술 기준(ba-20 J N13)
+            if (!w.IsDamage || BestUse(index, w, ComputeRange(host._units[index], w.Id) ?? range) is not { } use) continue;   // 이동 예산은 그 기술 기준(ba-20 J N13)
             if (best is not { } b || use.Score > b.Item2.Item4) best = (w, use);
         }
         if (Trace && best is var (bw, bu))
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"smart ai {_units[index].ChrCode}: work {bw.Id} → ({bu.Item2},{bu.Item3}) 점수 {bu.Item4}" + Environment.NewLine);
+                $"smart ai {host._units[index].ChrCode}: work {bw.Id} → ({bu.Item2},{bu.Item3}) 점수 {bu.Item4}" + Environment.NewLine);
         return best;
     }
 
@@ -101,10 +103,10 @@ internal sealed unsafe partial class GameWindow
         if (id < MenuDifficultyBase || id >= MenuDifficultyBase + DifficultyChoices.Length) return false;
         _difficulty = id - MenuDifficultyBase;
         for (int i = 0; i < DifficultyChoices.Length; i++)
-            Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuDifficultyBase + i), Win32.MF_BYCOMMAND | (i == _difficulty ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+            Win32.CheckMenuItem(Win32.GetMenu(host._hwnd), (uint)(MenuDifficultyBase + i), Win32.MF_BYCOMMAND | (i == _difficulty ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
         // 피해 배율과 AI 는 바로, 최대 HP 는 다음 전투부터 바뀐다(싸우는 도중에 적 HP 가 튀지 않게).
-        Toast($"난이도: {DifficultyChoices[_difficulty].Name} — 적 최대 HP 는 다음 전투부터 바뀝니다");
-        SaveSettings();
+        host.Toast($"난이도: {DifficultyChoices[_difficulty].Name} — 적 최대 HP 는 다음 전투부터 바뀝니다");
+        host.SaveSettings();
         return true;
     }
 }

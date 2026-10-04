@@ -181,11 +181,11 @@ internal sealed unsafe partial class GameWindow
     internal int TalkSpeaker(int value)
     {
         // 20010·20011 은 조건 300·301 이 방금 찾아 낸 두 사람이다(0x1004eba5) — 대사 49줄이 이걸 쓴다.
-        if (value == 20010) return _eventFoundA is null ? -1 : Array.IndexOf(_units, _eventFoundA);
-        if (value == 20011) return _eventFoundB is null ? -1 : Array.IndexOf(_units, _eventFoundB);
+        if (value == 20010) return Btl._eventFoundA is null ? -1 : Array.IndexOf(_units, Btl._eventFoundA);
+        if (value == 20011) return Btl._eventFoundB is null ? -1 : Array.IndexOf(_units, Btl._eventFoundB);
         // 20001~20009 는 그 편의 첫 유닛이 말한다(원본 — 전에는 −1 로 가운데에 띄웠다).
         if (value >= 20000 && value < 20010)
-            return EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(_units, first) : -1;
+            return Btl.EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(_units, first) : -1;
         if (value >= 20000) return -1;
         // 10000+N 은 배열 자리가 아니라 <b>Btl 레코드 번호</b>다 — 빈 칸을 걸러 낸 뒤의 자리와 다르다.
         if (value >= 10000) return Array.FindIndex(_units, u => u.LeaderIndex < 0 && u.Record == value - 10000);
@@ -355,13 +355,13 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal bool SkipScene()
     {
-        bool battleScene = _runningEvent >= 0, fieldScene = FieldOpen && Fld._fieldEvent >= 0;
+        bool battleScene = Btl._runningEvent >= 0, fieldScene = FieldOpen && Fld._fieldEvent >= 0;
         if (!battleScene && !fieldScene) return false;
         SkipTalk();
         if (battleScene)
         {
-            _eventWaitUntil = 0;
-            StepEvent();
+            Btl._eventWaitUntil = 0;
+            Btl.StepEvent();
         }
         if (fieldScene)
         {
@@ -387,8 +387,8 @@ internal sealed unsafe partial class GameWindow
             if (Fld._fieldWaitChannel >= 0) { StopChannelSound(Fld._fieldWaitChannel); Fld._fieldWaitChannel = -1; skipped = true; }
             if (Fld._field != null && Fld.FieldBusy()) { Fld.FinishFieldAnimations(); skipped = true; }
         }
-        if (_runningEvent >= 0 && _eventWaitUntil > _lastTime) { _eventWaitUntil = 0; skipped = true; }
-        if (Trace)
+        if (Btl._runningEvent >= 0 && Btl._eventWaitUntil > _lastTime) { Btl._eventWaitUntil = 0; skipped = true; }
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"click-skip {skipped} t {_lastTime:F2} ev {Fld._fieldEvent} pc {Fld._fieldPc} wait {Fld._fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
         return skipped;
@@ -443,7 +443,7 @@ internal sealed unsafe partial class GameWindow
             }
             Volatile.Write(ref w.VoiceLoaded, play ? 1 : -1);
             // 배경 실에서 올 수 있다 — 기록은 주 실이 옮겨 적는다(PlayTalkVoice 와 같다).
-            if (Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
+            if (BattleScene.Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
         });
     }
 
@@ -638,10 +638,10 @@ internal sealed unsafe partial class GameWindow
         {
             // 603 띠 — 틀 Obs 0225(바탕 모션 3·4·5 비침 24/31, 테두리 0·1·2)를 창 (10,0) 에, 글 한 줄(자리 (12,10)은 가설).
             int bandX = sx + 10, bandY = sy;
-            for (int m = 3; m <= 5; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, UiBlend.Alpha, fade: 24 / 31.0);
-            for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha);
             DrawTalkLines(w, bandX + w.TextLeft, bandY + 10);
-            if (ready) DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, UiBlend.Alpha);
+            if (ready) DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, GameWindow.UiBlend.Alpha);
             return;
         }
         if (w.IsCard)
@@ -653,10 +653,10 @@ internal sealed unsafe partial class GameWindow
             const uint tag = 0xFFF2DB6F, value = 0xFFDAE6FC;
             if (UiFor(226) != null)
             {
-                DrawUi(226, 2, 0, cx, cy, UiBlend.Alpha, fade: 24 / 31.0 * open);
-                DrawUi(226, 3, 0, cx, cy, UiBlend.Alpha, fade: 24 / 31.0 * open);
-                DrawUi(226, 0, 0, cx, cy, UiBlend.Alpha, fade: open);
-                DrawUi(226, 1, 0, cx, cy, UiBlend.Alpha, fade: open);
+                DrawUi(226, 2, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
+                DrawUi(226, 3, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
+                DrawUi(226, 0, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
+                DrawUi(226, 1, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
             }
             else
             {
@@ -670,7 +670,7 @@ internal sealed unsafe partial class GameWindow
             DrawText(w.Location, cx + 73, cy + 54, value, 12);
             RightText("LOCATION", cx + 303, cy + 54, tag, 12);
             DrawTalkLines(w, cx + w.TextLeft, cy + 76);
-            if (ready) DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, UiBlend.Alpha);
+            if (ready) DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, GameWindow.UiBlend.Alpha);
             return;
         }
         if (w.IsBox)
@@ -693,7 +693,7 @@ internal sealed unsafe partial class GameWindow
             int pose = 2 * Math.Max(0, w.Pose) + 11;
             // 초상 모션은 키가 있으면 된다 — 한 장짜리 정지 초상(퉁 파오 Obs 0786 모션 11: 길이 0, 키 1)도 있다.
             // 예전에는 길이 > 0 만 봐서 정지 초상인 인물은 작은 얼굴로 떨어졌다(사용자 보고: Fld 0094).
-            bool portrait = w.Portrait && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, UiBlend.Alpha);
+            bool portrait = w.Portrait && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha);
             // 눈 깜빡임(0x1003c55b): 깜빡이는 중이 아니면 틱마다 1/45 확률로 모션 (표정+1)을 한 번 겹친다 — 전에는 3초마다 규칙적으로 깜빡였다(ba-21 field Y5).
             if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink)
             {
@@ -701,12 +701,12 @@ internal sealed unsafe partial class GameWindow
                 if (w.BlinkTick == int.MaxValue || now - w.BlinkTick > 60) w.BlinkTick = now;   // 창이 처음 그려질 때부터 센다
                 if (w.BlinkAt >= 0 && now - w.BlinkAt >= blink) w.BlinkAt = -1;
                 for (; w.BlinkTick < now; w.BlinkTick++)
-                    if (w.BlinkAt < 0 && _drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
+                    if (w.BlinkAt < 0 && Btl._drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
                 if (w.BlinkAt >= 0 && now >= w.BlinkAt)
-                    DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, UiBlend.Alpha, loop: false);
+                    DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha, loop: false);
             }
-            for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha, fade: 20 / 31.0);
-            for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha, fade: 20 / 31.0);
+            for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha);
             // 이름 — 탭(틀 x 0~124, y 창y−25~창y) 가운데. 윗변을 창y−16 에 두었더니 글자가 탭 아래 선에 걸쳤다(사용자 보고).
             var (_, nw, nh) = GetText(w.Name, White, 12);
             DrawText(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
@@ -714,7 +714,7 @@ internal sealed unsafe partial class GameWindow
             if (!w.NoPortrait && !w.Portrait && face != null && w.TextLeft > 12) BlitScaled(face, x + 12, y + 8, 84, 84);
             // 글은 4줄 — 넘치면 한 줄씩 올린다(0x100290f0).
             DrawTalkLines(w, x + w.TextLeft, y + 10);
-            if (ready) DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, UiBlend.Alpha);
+            if (ready) DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, GameWindow.UiBlend.Alpha);
             return;
         }
 
@@ -763,8 +763,8 @@ internal sealed unsafe partial class GameWindow
         }
 
         // 틀 Obs 0221(602 는 0222/0223)을 창 (−60, −20) 에 — 바탕(모션 1)은 효과 5(602 는 6), 테두리(모션 0)는 불투명. 이름은 탭 가운데 (창x−11, 창y−15).
-        DrawUi(w.FrameObs, 1, 0, ax, ay, UiBlend.Alpha, fade: w.FrameFade);
-        DrawUi(w.FrameObs, 0, 0, ax, ay, UiBlend.Alpha);
+        DrawUi(w.FrameObs, 1, 0, ax, ay, GameWindow.UiBlend.Alpha, fade: w.FrameFade);
+        DrawUi(w.FrameObs, 0, 0, ax, ay, GameWindow.UiBlend.Alpha);
         var (_, bnw, _) = GetText(w.Name, White, 12);
         DrawText(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
         if (faceFrame != null)
@@ -781,7 +781,7 @@ internal sealed unsafe partial class GameWindow
         }
         // 글은 (창x+12, 창y+10) 부터, 폭 153 · 세 줄 · 줄 내림 16(굴림 9pt). 넘치면 한 줄씩 올린다.
         DrawTalkLines(w, bx + 12, by + 10);
-        if (ready) DrawUi(TalkNextObs, 0, tick, bx + 174, by + 60, UiBlend.Alpha);
+        if (ready) DrawUi(TalkNextObs, 0, tick, bx + 174, by + 60, GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>필드 말하는 이의 발 자리(판 낱칸) — 창마다 제 말하는 이.</summary>

@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 전투 이벤트 스크립트 — 「언제 이기고 지는지」를 정하는 것은 적을 다 잡는 것만이 아니다.
 /// </summary>
@@ -20,7 +22,7 @@ namespace DuelDx;
 /// 조건 <b>301</b>(한쪽이 다른 쪽을 지목)은 그 칸(<c>유닛+0xfc</c>)이 무엇을 담는지 아직 몰라 <b>300(맞닿음)</b> 으로 대신한다 —
 /// 쓰임새가 「아군과 적이 처음 붙는 순간의 대사」라 결과가 거의 같다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal IReadOnlyList<BattleEvent> _events = [];
     internal int[] _eventFired = [];
@@ -60,7 +62,7 @@ internal sealed unsafe partial class GameWindow
         _pendingExits.Clear();
         _eventRoutine = null;
         _eventRoutineFree = _eventCamPending = false;
-        _talkSkip = false;
+        host._talkSkip = false;
         _turnNo = 0;
         _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
@@ -100,20 +102,20 @@ internal sealed unsafe partial class GameWindow
     {
         if (u.Data is { MoveKind: 1 }) return (BlinkFadeTicks + 2 * BlinkHiddenTicks + 18 + 1) / TicksPerSecond;
         int ticks = 0;
-        foreach (var (c, r) in walk) { ticks += StepTicksBetween(fromCol, fromRow, c, r); (fromCol, fromRow) = (c, r); }
+        foreach (var (c, r) in walk) { ticks += host.StepTicksBetween(fromCol, fromRow, c, r); (fromCol, fromRow) = (c, r); }
         return ticks / TicksPerSecond;
     }
 
     /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
     internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
     {
-        if (!_units.Any(x => x != who && x.Alive && x.OnField && x.Col == col && x.Row == row)) return (col, row);
+        if (!host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == col && x.Row == row)) return (col, row);
         for (int radius = 1; radius <= 6; radius++)
             for (int dy = -radius; dy <= radius; dy++)
                 foreach (int dx in new[] { -(radius - Math.Abs(dy)), radius - Math.Abs(dy) }.Distinct())
                 {
                     int c = col + dx, r = row + dy;
-                    if ((uint)c < Cols && (uint)r < Rows && !_units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r) && CanStand(c, r, who)) return (c, r);
+                    if ((uint)c < host.Cols && (uint)r < host.Rows && !host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r) && CanStand(c, r, who)) return (c, r);
                 }
         return (col, row);
     }
@@ -127,8 +129,8 @@ internal sealed unsafe partial class GameWindow
         if (u.Hp <= 0) u.Hp = 1;   // HP 0 으로 물러난 보스가 판 밖에서 죽은 것으로 처리되지 않게
         u.OnField = false;
         if (!withFollowers) return;
-        int leader = Array.IndexOf(_units, u);
-        foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
+        int leader = Array.IndexOf(host._units, u);
+        foreach (var follower in host._units.Where(f => f.LeaderIndex == leader)) follower.OnField = false;
     }
 
     /// <summary>걸어 나가던 유닛이 다 걸었으면(또는 전투 결과가 났으면) 판에서 뺀다 — 매 틀 부른다.</summary>
@@ -139,13 +141,13 @@ internal sealed unsafe partial class GameWindow
         bool hold = _outcome.Length == 0 && (_routine != null || LevelUpOpen);
         if (_exitOutcomeDue && !hold) { _exitOutcomeDue = false; CheckOutcome(); }
         if (_pendingExits.Count == 0) return;
-        var done = _pendingExits.Where(x => !(_lastTime < x.At && _outcome.Length == 0 && x.Unit.Alive && x.Unit.IsBusy)).ToList();
+        var done = _pendingExits.Where(x => !(host._lastTime < x.At && _outcome.Length == 0 && x.Unit.Alive && x.Unit.IsBusy)).ToList();
         if (done.Count == 0) return;
         _pendingExits.RemoveAll(done.Contains);   // 먼저 지운다 — CheckOutcome 이 사건을 돌려 이 목록을 바꿀 수 있다
         bool left = false;
         foreach (var (u, _, col, row, withFollowers) in done)
         {
-            if (!u.Alive || Array.IndexOf(_units, u) < 0) continue;
+            if (!u.Alive || Array.IndexOf(host._units, u) < 0) continue;
             LeaveField(u, col, row, withFollowers);
             left = true;
         }
@@ -168,7 +170,7 @@ internal sealed unsafe partial class GameWindow
     internal volatile float _eventSoundSeconds;
 
     /// <summary>이벤트가 돌거나 대사가 떠 있으면 전투를 멈춘다.</summary>
-    internal bool EventsBusy => _runningEvent >= 0 || _talk != null;
+    internal bool EventsBusy => _runningEvent >= 0 || host._talk != null;
 
     /// <summary>조건이 다 맞는 이벤트를 하나 켠다. 결과가 정해지면 더 보지 않는다.</summary>
     /// <summary>
@@ -194,7 +196,7 @@ internal sealed unsafe partial class GameWindow
         // 우리는 전멸이면 승리로 끝내므로, 그때 스크립트의 나가는 길(행동 6 필드·10 전투)을 대신 탄다 — 안 그러면 뒤 필드를 건너뛴다.
         // Btl 0084 「벨로스」는 아군이 (6~11, 0~2) 에 들어가야 Fld 0222(챕터 끝)로 가는데, 적을 다 잡으면 그냥 모세스로 돌아가 챕터 22 가 안 끝났다(사용자 보고).
         // 아군 전멸(401 [4])이 조건인 나가는 길은 패배 쪽이라 뺀다.
-        if (_scene.EngineJudgesWipe) return;
+        if (host._scene.EngineJudgesWipe) return;
         for (int i = 0; i < _events.Count; i++)
         {
             var e = _events[i];
@@ -256,32 +258,32 @@ internal sealed unsafe partial class GameWindow
             if (_eventRoutine != null)
             {
                 // 사건이 건 기술(207·909) — 한 틀에 한 번만 돌린다(StepEvent 는 한 틀에 여러 번 불릴 수 있다).
-                if (_eventRoutineStepAt != _lastTime)
+                if (_eventRoutineStepAt != host._lastTime)
                 {
-                    _eventRoutineStepAt = _lastTime;
+                    _eventRoutineStepAt = host._lastTime;
                     if (!_eventRoutine.MoveNext())
                     {
                         _eventRoutine = null;
                         _eventRoutineFree = false;
                         _eventCheckDue |= (1 << 2) | (1 << 1);          // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
-                        if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+                        if (_outcome.Length > 0) { _runningEvent = -1; host._talkSkip = false; return; }
                     }
                 }
                 // 뒤에 행동 1 이 없으면 줄을 안 붙든다(슬롯만 잡는다, 0x10056fb0) — Btl 0145 사건 4 는 필살기 도중 말풍선이 뜬다(ba-20 V2 b).
                 if (_eventRoutine != null && !_eventRoutineFree) return;
             }
-            if (_talk == null) _talkNoWait = false;
-            if (_talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
-            if (_eventSoundSeconds > 0) { _eventWaitUntil = _lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
-            if (_eventSoundLoading && !_talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
-            if (_eventWaitUntil > _lastTime && !_talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
-            if (_runningEvent >= _events.Count) { _runningEvent = -1; _talkSkip = false; return; }   // 판이 바뀌었다
+            if (host._talk == null) _talkNoWait = false;
+            if (host._talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
+            if (_eventSoundSeconds > 0) { _eventWaitUntil = host._lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
+            if (_eventSoundLoading && !host._talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
+            if (_eventWaitUntil > host._lastTime && !host._talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
+            if (_runningEvent >= _events.Count) { _runningEvent = -1; host._talkSkip = false; return; }   // 판이 바뀌었다
             var e = _events[_runningEvent];
             // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
             if (_eventPc >= e.Actions.Count)
             {
                 if (_eventRoutine != null) { _eventRoutineFree = false; return; }   // 돌던 기술이 끝나야 사건도 끝난다
-                _runningEvent = -1; _talkSkip = false; return;
+                _runningEvent = -1; host._talkSkip = false; return;
             }
 
             var a = e.Actions[_eventPc++];
@@ -295,38 +297,38 @@ internal sealed unsafe partial class GameWindow
                     // 원본 진행기(0x10056fb0)는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 행동 1 없이 이어진
                     // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
                     _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
-                    if (_talk != null) { _eventPc--; return; }
+                    if (host._talk != null) { _eventPc--; return; }
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술도
-                    if (_eventCamPending && CameraBusy && !_talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
+                    if (_eventCamPending && CameraBusy && !host._talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
                     _eventCamPending = false;
-                    if (_eventMoveUntil > _lastTime) _eventWaitUntil = _eventMoveUntil;            // 걷기·동작도
+                    if (_eventMoveUntil > host._lastTime) _eventWaitUntil = _eventMoveUntil;            // 걷기·동작도
                     break;
                 case 2:
-                    _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
+                    _eventWaitUntil = host._lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
                     break;
                 case 3:                                                 // 중단
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술은 끝까지
-                    _runningEvent = -1; _talkSkip = false; return;
-                case 400 or 402 or 906 when !_talkSkip && !waitNext:
+                    _runningEvent = -1; host._talkSkip = false; return;
+                case 400 or 402 or 906 when !host._talkSkip && !waitNext:
                     // 뒤에 1 이 없는 카메라 줄(400 → 2 27곳 · 400 → 200 3곳 · 906 → 2 4곳)은 스크롤을 걸어만 두고 다음 줄과 같이 간다.
                     EventCameraWaits(a);
                     _eventCamLine = (-1, -1);
                     _eventCamPending = true;
                     RunEventAction(a);
                     break;
-                case 400 or 402 or 600 or 601 or 906 when !_talkSkip && EventCameraWaits(a):
+                case 400 or 402 or 600 or 601 or 906 when !host._talkSkip && EventCameraWaits(a):
                     _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
                     return;
                 case 600:
-                    ShowTalk(box: true, a);
-                    if (_talk == null) break;                           // 건너뛰는 중이면 안 뜬다
+                    host.ShowTalk(box: true, a);
+                    if (host._talk == null) break;                           // 건너뛰는 중이면 안 뜬다
                     if (TalkRidesOn(e)) { _talkNoWait = true; break; }
                     _talkNoWait = false;
                     return;
                 case 601:
-                    ShowTalk(box: false, a);
-                    if (_talk == null) break;
+                    host.ShowTalk(box: false, a);
+                    if (host._talk == null) break;
                     // 「601 → 2[틱]」 꼴(행동 1 없이)은 클릭을 안 기다린다 — 말풍선이 뜬 채 틱만 세고 다음 줄로 간다(진행기 0x10056fb0 은 1 만 기다린다,
                     // ba-20 V2: 11곳/7전투, 대표 Btl 0145 사건 4 — 필살기 도중 말풍선). 말풍선은 다음 601 이 덮거나 120틱 뒤 저절로 닫힌다.
                     // 1 없이 다른 행동이 이어지는 22곳(601 → 200 0335 · 601 → 214 0161 · 601 → 202 0139·0288 · 600 → 212 0278·0296 …)도 같다(V2 c).
@@ -340,8 +342,8 @@ internal sealed unsafe partial class GameWindow
                 default:
                     bool hadRoutine = _eventRoutine != null;
                     RunEventAction(a);
-                    if (_outcome.Length > 0) { _eventRoutine = null; _eventRoutineFree = false; _runningEvent = -1; _talkSkip = false; return; }
-                    if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !_talkSkip;
+                    if (_outcome.Length > 0) { _eventRoutine = null; _eventRoutineFree = false; _runningEvent = -1; host._talkSkip = false; return; }
+                    if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !host._talkSkip;
                     break;
             }
         }
@@ -388,7 +390,7 @@ internal sealed unsafe partial class GameWindow
             _eventCamLine = (-1, -1);
             return false;
         }
-        UnitState? LeaderOf(UnitState u) => u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length ? _units[u.LeaderIndex] : u;
+        UnitState? LeaderOf(UnitState u) => u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length ? host._units[u.LeaderIndex] : u;
         switch (a.Code)
         {
             case 400:
@@ -403,8 +405,8 @@ internal sealed unsafe partial class GameWindow
             }
             case 600 or 601:
             {
-                int speaker = TalkSpeaker(A(0));
-                if ((uint)speaker >= _units.Length || _units[speaker] is not { Alive: true, OnField: true } s) return false;
+                int speaker = host.TalkSpeaker(A(0));
+                if ((uint)speaker >= host._units.Length || host._units[speaker] is not { Alive: true, OnField: true } s) return false;
                 CenterOnUnit(LeaderOf(s)!);
                 break;
             }
@@ -477,10 +479,10 @@ internal sealed unsafe partial class GameWindow
 
     internal (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
     {
-        0 => (Math.Clamp(col, 0, Cols - 1), 0),
-        1 => (0, Math.Clamp(row, 0, Rows - 1)),
-        2 => (Math.Clamp(col, 0, Cols - 1), Rows - 1),
-        _ => (Cols - 1, Math.Clamp(row, 0, Rows - 1)),
+        0 => (Math.Clamp(col, 0, host.Cols - 1), 0),
+        1 => (0, Math.Clamp(row, 0, host.Rows - 1)),
+        2 => (Math.Clamp(col, 0, host.Cols - 1), host.Rows - 1),
+        _ => (host.Cols - 1, Math.Clamp(row, 0, host.Rows - 1)),
     };
 
     /// <summary>
@@ -492,11 +494,11 @@ internal sealed unsafe partial class GameWindow
         if (value is >= 20000 and <= 20009)
             return (value - 20000) % 2 == 0
                 ? []
-                : [.. _units.Where(x => x.Side == EventSideOrder[(value - 20000) / 2])];
+                : [.. host._units.Where(x => x.Side == EventSideOrder[(value - 20000) / 2])];
         if (value == 20010) return _eventFoundA is null ? [] : [_eventFoundA];
         if (value == 20011) return _eventFoundB is null ? [] : [_eventFoundB];
-        if (value >= 10000) return [.. _units.Where(x => x.Record == value - 10000)];
-        return value > 0 ? [.. _units.Where(x => x.ChrCode == value)] : [];
+        if (value >= 10000) return [.. host._units.Where(x => x.Record == value - 10000)];
+        return value > 0 ? [.. host._units.Where(x => x.ChrCode == value)] : [];
     }
 
     /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
@@ -509,11 +511,11 @@ internal sealed unsafe partial class GameWindow
             wholeSide = (value - 20000) % 2 == 0;      // 짝수 = 「그 편 전부/아무도」, 홀수 = 「누군가」
             if (k >= EventSideOrder.Length) return [];
             int side = EventSideOrder[k];
-            return [.. _units.Where(u => u.Side == side)];
+            return [.. host._units.Where(u => u.Side == side)];
         }
         // 10000+N 은 Btl 레코드 번호다(빈 칸을 걸러 낸 뒤의 배열 자리가 아니다).
-        if (value >= 10000) return [.. _units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000)];
-        return value > 0 ? [.. _units.Where(u => u.ChrCode == value)] : [];
+        if (value >= 10000) return [.. host._units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000)];
+        return value > 0 ? [.. host._units.Where(u => u.ChrCode == value)] : [];
     }
 
     internal bool EventCondition(ScriptCommand c)
@@ -530,7 +532,7 @@ internal sealed unsafe partial class GameWindow
             }
             case 3: return Compare(_tick, A(1), A(0));                          // 시간 틱 비교(0x1004f272 — [+0x4cf0] 는 빈 틱마다 오른다)
             case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
-            case 101: return Compare(A(0) >= 0 && A(0) < _flags.Length ? _flags[A(0)] : 0, A(1), A(2));
+            case 101: return Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2));
             case 102:                                                           // <b>장비</b>를 가졌나(0x1004f2f0) — 상태이상이 아니다. 자료 사용 0회.
             {
                 var list = EventTargets(A(0), out _);
@@ -571,7 +573,7 @@ internal sealed unsafe partial class GameWindow
                 // 전장에 선 사람만 센다 — 아직 안 나온 증원((0,0) 대기)까지 세면, 「전멸하면 증원을 부르는」 사건이 영영 안 터진다.
                 // Btl 0151 은 사건 2(편 0 전멸 → 강화아델룬 둘 증원)가 안 터져 적을 다 쓰러뜨려도 전투가 안 끝났다(사용자 보고).
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
-                return side >= 0 && !_units.Any(u => u.Alive && u.OnField && u.Side == side);
+                return side >= 0 && !host._units.Any(u => u.Alive && u.OnField && u.Side == side);
             }
             case 402:                                                           // 사각형 안에 있나
             {
@@ -588,7 +590,7 @@ internal sealed unsafe partial class GameWindow
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
                 int x1 = Math.Min(A(3), A(5)), x2 = Math.Max(A(3), A(5));
                 int y1 = Math.Min(A(4), A(6)), y2 = Math.Max(A(4), A(6));
-                int n = side < 0 ? 0 : _units.Count(u => u.OnField && u.Side == side              // 쓰러진 인물도 센다(ba-14 E2)
+                int n = side < 0 ? 0 : host._units.Count(u => u.OnField && u.Side == side              // 쓰러진 인물도 센다(ba-14 E2)
                                                           && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 return Compare(n, A(1), A(2));
             }
@@ -673,15 +675,15 @@ internal sealed unsafe partial class GameWindow
                     if (a.Code == 200 && EdgeCell(A(4), A(2), A(3)) is var (ec, er) && (ec, er) != (landCol, landRow))
                     {
                         u.WarpTo(ec, er);
-                        var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(landRow * Cols + landCol) ? PathWithin(wr, ec, er, landRow * Cols + landCol) : null;
+                        var walk = ComputeRange(u, tp: 1 << 20) is { } wr && wr.CanReach(landRow * host.Cols + landCol) ? PathWithin(wr, ec, er, landRow * host.Cols + landCol) : null;
                         if (walk is { Count: > 0 }) { foreach (var step in walk) u.Path.Enqueue(step); longest = Math.Max(longest, WalkSeconds(u, ec, er, walk)); }
                         else u.WarpTo(landCol, landRow);
                         u.OriginCol = landCol; u.OriginRow = landRow;
                     }
                     // 변 밖에서 곧게 걸어 들어온다 — 혼자면 140px, 군단 대장이면 100px 밖에서 틱당 8px(0x10051659 · 0x10050fb2, ba-21 B1).
                     // 전에는 맵 안 가장자리 칸에 곧바로 나타났다. 건너뛰는 중이면 곧바로 선다.
-                    bool hasFollowers = FollowersOf(Array.IndexOf(_units, u)).Count > 0;
-                    if (a.Code == 200 && !_talkSkip)
+                    bool hasFollowers = FollowersOf(Array.IndexOf(host._units, u)).Count > 0;
+                    if (a.Code == 200 && !host._talkSkip)
                     {
                         BeginEdgeEntry(u, A(4), hasFollowers ? 100 : 140);
                         entryTicks = Math.Max(entryTicks, hasFollowers ? 100 / 8.0 : 140 / 8.0);
@@ -691,32 +693,32 @@ internal sealed unsafe partial class GameWindow
                         // 하이 텔레포트(work 585)로 나타난다(0x10052bf0 · 0x1008c8a0, ba-21 B7·B8): 맵 밖에서 준비(소리 694, 56틱) → 사라짐(소리 90, 80틱)
                         // → 30틱 뒤 카메라가 새 자리로 → 나타남 381:1 + 210:3(소리 91) → 50틱에 걸쳐 또렷해진다. 전에는 곧바로 서 있었다.
                         // 건너뛰는 중이면 곧바로 선다.
-                        if (_talkSkip) { u.Fade = 1; }
+                        if (host._talkSkip) { u.Fade = 1; }
                         else
                         {
                             var arriving = u;
-                            double t0 = _lastTime;
+                            double t0 = host._lastTime;
                             u.Fade = 0;
-                            _pendingSounds.Add((_lastTime, 694, UnitFoot(u).X));
-                            LegionStageAb._legionLater.Add((t0 + 56 / TicksPerSecond, () => Play(90)));
-                            LegionStageAb._legionLater.Add((t0 + 166 / TicksPerSecond, () =>
+                            host._pendingSounds.Add((host._lastTime, 694, host.UnitFoot(u).X));
+                            host.LegionStageAb._legionLater.Add((t0 + 56 / TicksPerSecond, () => host.Play(90)));
+                            host.LegionStageAb._legionLater.Add((t0 + 166 / TicksPerSecond, () =>
                             {
                                 if (!arriving.Alive || !arriving.OnField) return;
                                 CenterOnUnit(arriving);
-                                var (wx, wy) = UnitFoot(arriving);
-                                _effects.Add((381, 1, _lastTime, wx, wy));
-                                _effects.Add((210, 3, _lastTime, wx, wy));
-                                _pendingSounds.Add((_lastTime, 91, wx));
+                                var (wx, wy) = host.UnitFoot(arriving);
+                                _effects.Add((381, 1, host._lastTime, wx, wy));
+                                _effects.Add((210, 3, host._lastTime, wx, wy));
+                                host._pendingSounds.Add((host._lastTime, 91, wx));
                             }));
                             for (int k = 1; k <= 10; k++)
                             {
                                 double fade = k / 10.0;
-                                LegionStageAb._legionFades.Add((t0 + (166 + 5 * k) / TicksPerSecond, u, fade));
+                                host.LegionStageAb._legionFades.Add((t0 + (166 + 5 * k) / TicksPerSecond, u, fade));
                             }
                             longest = Math.Max(longest, 216 / TicksPerSecond);
                         }
                     }
-                    int leader = Array.IndexOf(_units, u);
+                    int leader = Array.IndexOf(host._units, u);
                     foreach (var (follower, col, row) in FormationPlan(u, A(2), A(3)))
                     {
                         follower.OnField = true;
@@ -724,17 +726,17 @@ internal sealed unsafe partial class GameWindow
                         follower.Facing = u.Facing;
                         _followerTarget[follower] = (col, row);
                         // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2).
-                        if (a.Code == 200 && !_talkSkip)
+                        if (a.Code == 200 && !host._talkSkip)
                         {
                             int px = 140 + 40 * (entered++ / 2);
                             BeginEdgeEntry(follower, A(4), px);
                             entryTicks = Math.Max(entryTicks, px / 8.0 + StepTicks * 3);   // 들어온 뒤 진형 자리로 몇 걸음
                         }
                     }
-                    if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
+                    if (host._units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
                 longest += entryTicks / TicksPerSecond;   // 변 밖에서 들어오는 시간(가장 긴 유닛)
-                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);   // 줄은 안 붙든다 — 뒤따르는 행동 1 이 기다린다(ba-20 V2)
+                _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + longest);   // 줄은 안 붙든다 — 뒤따르는 행동 1 이 기다린다(ba-20 V2)
                 break;
             }
             case 201:                                    // 퇴장 — 그 칸까지 갔다가 화면 밖으로. 인자1 이 1 이면 부대째(원본 — 전에는 늘 부하까지 데려갔다)
@@ -744,15 +746,15 @@ internal sealed unsafe partial class GameWindow
                     // 원본(0x100519c0)은 그 칸까지 걸어간 뒤 맵 밖으로 나가 사라진다(ba-20 V4). 걸을 길이 있고 멀쩡히 서 있는 유닛만 걸려 보낸다 —
                     // HP 0 으로 물러나는 보스·건너뛰는 중·판 밖 유닛은 전처럼 곧바로 뺀다.
                     if (_pendingExits.RemoveAll(x => x.Unit == u) > 0) u.Path.Clear();   // 같은 유닛에 201 이 또 오면 앞 길을 버린다
-                    var exitRange = u.OnField && u.Hp > 0 && !_talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
+                    var exitRange = u.OnField && u.Hp > 0 && !host._talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
                     int exitGoal = exitRange != null ? NearestReachableTo(u, exitRange, A(2), A(3)) : -1;
                     var exitWalk = exitRange != null && exitGoal >= 0 ? PathWithin(exitRange, u.Col, u.Row, exitGoal) : null;
                     if (exitWalk is { Count: > 0 })
                     {
                         foreach (var step in exitWalk) u.Path.Enqueue(step);
                         double seconds = WalkSeconds(u, u.Col, u.Row, exitWalk);
-                        _pendingExits.Add((u, _lastTime + seconds, A(2), A(3), A(1) == 1));
-                        _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + seconds);
+                        _pendingExits.Add((u, host._lastTime + seconds, A(2), A(3), A(1) == 1));
+                        _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + seconds);
                         continue;
                     }
                     LeaveField(u, A(2), A(3), A(1) == 1);
@@ -771,14 +773,14 @@ internal sealed unsafe partial class GameWindow
                     {
                         foreach (var step in walk) u.Path.Enqueue(step);
                         longest = Math.Max(longest, WalkSeconds(u, u.Col, u.Row, walk));
-                        u.OriginCol = goal % Cols; u.OriginRow = goal / Cols;
+                        u.OriginCol = goal % host.Cols; u.OriginRow = goal / host.Cols;
                     }
                     // 길이 없으면 제자리에 둔다 — 전에는 못 가는 칸에도 순간이동시키고 상태까지 초기화했다. 이미 그 칸이면 할 일이 없다.
                     else if (wr == null) u.ResetTo(A(2), A(3), keepFacing: true);
                     // 인자1 이 1 이면 부대째 — 부하는 진형으로 따라온다.
-                    if (A(1) == 1 && _units.Any(f => f.LeaderIndex == Array.IndexOf(_units, u))) AssignFormationTargets(Array.IndexOf(_units, u));
+                    if (A(1) == 1 && host._units.Any(f => f.LeaderIndex == Array.IndexOf(host._units, u))) AssignFormationTargets(Array.IndexOf(host._units, u));
                 }
-                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);
+                _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + longest);
                 break;
             }
             case 208:                                    // 동작 재생 — 인자2 는 <b>모션 번호</b>라 3 으로 나눠야 동작이 된다(0x100530a1)
@@ -788,13 +790,13 @@ internal sealed unsafe partial class GameWindow
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.OnField) continue;
-                    double seconds = _sprites.TryGetValue(u.ChrCode, out var sp) ? sp.MotionTicks(A(2)) / TicksPerSecond : 0;
+                    double seconds = host._sprites.TryGetValue(u.ChrCode, out var sp) ? sp.MotionTicks(A(2)) / TicksPerSecond : 0;
                     if (seconds <= 0) seconds = 0.6;
                     int repeat = Math.Clamp((int)A(4), 1, 4);
                     u.PlayAction(A(2) / 3, seconds * repeat);
                     longest = Math.Max(longest, seconds * repeat);
                 }
-                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);   // 슬롯만 — 「208 → 2」 23곳에서 모션만큼 더 길었다(ba-20 V2 b)
+                _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + longest);   // 슬롯만 — 「208 → 2」 23곳에서 모션만큼 더 길었다(ba-20 V2 b)
                 break;
             }
             case 212:                                    // 바라보는 쪽 — 인자1 이 곧 방향(0 위·1 왼·2 아래·3 오른, 0x10053170 SetAction(0, 인자1, 10000))
@@ -809,7 +811,7 @@ internal sealed unsafe partial class GameWindow
                     u.Hp -= cut;
                     if (cut > 0 && u.OnField) ShowNumber(u, cut.ToString(), DamageColor);
                     if (u.Hp > 0) continue;
-                    if ((uint)_turn < _units.Length && _units[_turn] == u) u.Hp = 1;
+                    if ((uint)_turn < host._units.Length && host._units[_turn] == u) u.Hp = 1;
                     else KillUnit(u);
                 }
                 break;
@@ -820,7 +822,7 @@ internal sealed unsafe partial class GameWindow
                     int before = u.Hp;
                     u.Hp = Math.Min(u.MaxHp, u.Hp + (u.MaxHp - u.Hp) * A(2) / 100);
                     // 회복 숫자(0x100551e0, ba-20 V9) — 옛 HP 에서 새 HP 로 세어 올라간다.
-                    if (u.Hp > before && u.OnField && _db != null) ShowNumber(u, _db.T(159), HealColor2, rise: false, count: (before, u.Hp));
+                    if (u.Hp > before && u.OnField && host._db != null) ShowNumber(u, host._db.T(159), HealColor2, rise: false, count: (before, u.Hp));
                 }
                 break;
             case 207:                                    // 보스 필살기 — 인자2 가 `.att` work 번호(0x10052400)
@@ -833,12 +835,12 @@ internal sealed unsafe partial class GameWindow
                             $"207: 시전자 {A(0)} 없음(살아 판 위) 또는 work {A(2)} 없음 — 안 쏜다" + Environment.NewLine);
                     break;
                 }
-                int casterIndex = Array.IndexOf(_units, caster);
+                int casterIndex = Array.IndexOf(host._units, caster);
                 // 겨눌 곳은 <b>제자리 사거리 안</b>에서 AI 칸 점수(+0x3e 기준, 거리 가중)로 고른다(0x1005d860). 못 찾으면 안 쏜다 — fg-21 ⑮.
                 (int Col, int Row, int Score)? aim = null;
-                int reach = Math.Max(1, RangeMaxOf(boss, caster) / 4) + 1, num74 = _db?.N(74) ?? 4;
-                for (int ay = Math.Max(0, caster.Row - reach); ay <= Math.Min(Rows - 1, caster.Row + reach); ay++)
-                    for (int ax = Math.Max(0, caster.Col - reach); ax <= Math.Min(Cols - 1, caster.Col + reach); ax++)
+                int reach = Math.Max(1, RangeMaxOf(boss, caster) / 4) + 1, num74 = host._db?.N(74) ?? 4;
+                for (int ay = Math.Max(0, caster.Row - reach); ay <= Math.Min(host.Rows - 1, caster.Row + reach); ay++)
+                    for (int ax = Math.Max(0, caster.Col - reach); ax <= Math.Min(host.Cols - 1, caster.Col + reach); ax++)
                     {
                         if (!InWorkRange(boss, caster.Col, caster.Row, ax, ay, caster)) continue;
                         var targets = WorkTargets(boss, caster, ax, ay);
@@ -854,7 +856,7 @@ internal sealed unsafe partial class GameWindow
                     break;
                 }
                 var aimedUnit = LiveUnitAt(mark.Col, mark.Row);
-                int markIndex = boss.TargetMode is 1 or 4 or 5 && aimedUnit != null ? Array.IndexOf(_units, aimedUnit) : -1;
+                int markIndex = boss.TargetMode is 1 or 4 or 5 && aimedUnit != null ? Array.IndexOf(host._units, aimedUnit) : -1;
                 // 사건 안에서 끝까지 돌린다(B1) — 공짜 필살기(0x10052651 → 0x10075ff0 인자5 = 1 → +0xa4, B2), 지금 차례 유닛은 HP 1 로 버틴다(0x1004e757, B3).
                 _eventRoutine = EventWorkRoutine(caster, UseWorkRoutine(casterIndex, boss, markIndex, mark.Col, mark.Row, [], eventFinisher: true));
                 break;
@@ -866,13 +868,13 @@ internal sealed unsafe partial class GameWindow
                 {
                     u.Side = A(2);
                     if (A(1) != 1) continue;
-                    int leader = Array.IndexOf(_units, u);
-                    foreach (var follower in _units.Where(f => f.LeaderIndex == leader)) follower.Side = A(2);
+                    int leader = Array.IndexOf(host._units, u);
+                    foreach (var follower in host._units.Where(f => f.LeaderIndex == leader)) follower.Side = A(2);
                 }
                 break;
             case 909:                                    // 베라모드 폭주(0x10055b10) — 파티에 따라 Chr 223(베라모드)·37 을 찾아
             {                                            // work 1582(어빌리티 160 「폭주」, 모션 48)를 쓰게 하고 화면을 물들인다.
-                var caster = _units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
+                var caster = host._units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode is 223 or 37);
                 if (caster is null || Work(1582) is not { } burst) break;
                 // 교대가 끝나야 다음 줄 — 0231 의 207 [Chr 37]·706 [37] 이 새로 선 37 을 찾는다(B4).
                 _eventRoutine = BerserkSwapRoutine(caster, burst);
@@ -880,50 +882,50 @@ internal sealed unsafe partial class GameWindow
             }
             case 907:                                    // 물체 여닫기(0x10055a50) — 인자0 배치 번호, 인자1 0 닫기 · 그 밖 열기
                 ToggleObject(A(0), A(1) != 0);
-                _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + 0.5);       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
+                _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + 0.5);       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
                 break;
             case 906:                                    // 카메라를 사각형 가운데로(0x10055810) — 인자는 바이트 넷 (x1, y1, x2, y2)
             {
                 // 카메라는 StepEvent 가 먼저 옮기고 멈출 때까지 이 줄을 붙든다(EventCameraWaits) — 강조는 스크롤이 끝난 틀에 켠다(단계 1).
                 // 건너뛰는 중이면 카메라 없이 바로 온다.
-                if (_talkSkip) CenterOnCell((A(0) + A(2) + 1) / 2, (A(1) + A(3) + 1) / 2);
+                if (host._talkSkip) CenterOnCell((A(0) + A(2) + 1) / 2, (A(1) + A(3) + 1) / 2);
                 // 사각형 안 칸을 층 13 초록(배치 칸과 같은 그림)으로 200틱 동안 칠한다(ba-14 E6) — 「여기로 가라」 표시.
                 _highlightRect = (Math.Min(A(0), A(2)), Math.Min(A(1), A(3)), Math.Max(A(0), A(2)), Math.Max(A(1), A(3)));
-                _highlightUntil = _lastTime + 200 / TicksPerSecond;
+                _highlightUntil = host._lastTime + 200 / TicksPerSecond;
                 break;
             }
             case 900:                                    // 타이머 켜기·끄기 — 켤 때 세기를 0 으로(0x10055700)
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;
             case 713:                                    // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x10055480 → 0x1004df50, 필드 713 과 같은 함수)
-                if (A(0) > 0) { Mos._ownedLegions.Add(A(0)); Mos._legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
+                if (A(0) > 0) { host.Mos._ownedLegions.Add(A(0)); host.Mos._legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
-                if (_talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
-                PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
+                if (host._talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
+                host.PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
                 break;
             case 400:                                    // 카메라 칸 가운데로 · 402 유닛 가운데로 — StepEvent 가 EventCameraWaits 로 옮기고 기다린다.
-                if (_talkSkip) { _camGoal = null; CenterOnCell(A(0), A(1)); }   // 건너뛰는 중에도 카메라는 보내 둔다(기다리지만 않는다) —
+                if (host._talkSkip) { _camGoal = null; CenterOnCell(A(0), A(1)); }   // 건너뛰는 중에도 카메라는 보내 둔다(기다리지만 않는다) —
                 break;                                   // 전에는 건너뛴 뒤 화면이 증원·보스를 안 비췄다(ba-20 V13)
             case 402:
-                if (_talkSkip && EventTargets(A(0), out _).FirstOrDefault() is { Alive: true, OnField: true } seen)
-                    CenterOnUnit(seen.LeaderIndex >= 0 && seen.LeaderIndex < _units.Length ? _units[seen.LeaderIndex] : seen);
+                if (host._talkSkip && EventTargets(A(0), out _).FirstOrDefault() is { Alive: true, OnField: true } seen)
+                    CenterOnUnit(seen.LeaderIndex >= 0 && seen.LeaderIndex < host._units.Length ? host._units[seen.LeaderIndex] : seen);
                 break;
             case 512:                                    // BGM 바꾸기
-                StopMusic();
-                if (A(0) > 1 && A(0) != 0xffff) PlayMusicFile(A(0), loop: true);
+                host.StopMusic();
+                if (A(0) > 1 && A(0) != 0xffff) host.PlayMusicFile(A(0), loop: true);
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;
             case 102:
-                if (A(0) > 0 && A(0) < _flags.Length) _flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host._flags.Length) host._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
             case 103:
                 // [깃발, 연산자, 값] — 0 더하기 · 1 빼기 · 2 곱하기 · 3 나누기(0x10050de0: 연산자 = 워드 +2, 값 = 바이트 +4).
                 // 전에는 인자 1(연산자)을 값으로 더해서, 프레야 평원·던젼(Btl 0240·0239)의 「깃발 110 += 1」이 0 을 더해
                 // 북 평원(Btl 0238, 깃발 110 == 2)이 영영 안 열렸다(사용자 보고, Chp 0064). 필드판과 달리 두 번 더하는 흠은 없다.
-                if (A(0) > 0 && A(0) < _flags.Length)
-                    _flags[A(0)] = FieldScene.FieldArith(_flags[A(0)], A(1), A(2));
+                if (A(0) > 0 && A(0) < host._flags.Length)
+                    host._flags[A(0)] = FieldScene.FieldArith(host._flags[A(0)], A(1), A(2));
                 break;
         }
     }
@@ -935,25 +937,25 @@ internal sealed unsafe partial class GameWindow
     internal IEnumerator<bool> BerserkSwapRoutine(UnitState caster, WorkData burst)
     {
         // 909 도 공짜다 — 0x10055c3a 가 0x10075ff0(0x62e, x, y, 1, 1, 1, …) 로 +0xa0 = +0xa4 = 1(감사5 B2 보충).
-        var use = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, [], eventFinisher: true);
+        var use = UseWorkRoutine(Array.IndexOf(host._units, caster), burst, -1, caster.Col, caster.Row, [], eventFinisher: true);
         while (use.MoveNext()) yield return true;
-        if (caster.ChrCode != 223 || _db?.Character(37) is not { } c) yield break;
+        if (caster.ChrCode != 223 || host._db?.Character(37) is not { } c) yield break;
         int col = caster.Col, row = caster.Row;
         MarkDead(caster);                        // 교대도 승계를 부른다(0x10055cb1 → 0x100716c0)
         caster.OnField = false;
         var born = new UnitState(new DemoUnit(37, col, row, 3, 0, caster.Facing)) { Data = c with { CumExp = c.Level * 100 } };
-        born.MaxHp = born.Hp = ScaleMaxHp(born, Math.Max(1, _db.MaxHp(born.Data!)));
-        born.MaxTp = _db.MaxTp(born.Data!);
+        born.MaxHp = born.Hp = ScaleMaxHp(born, Math.Max(1, host._db.MaxHp(born.Data!)));
+        born.MaxTp = host._db.MaxTp(born.Data!);
         born.Tp = 0;
-        born.Stp = Math.Max(0, _db.Stp(born.Data!));
-        born.MaxSoul = _db.MaxSoul(born.Data!);
+        born.Stp = Math.Max(0, host._db.Stp(born.Data!));
+        born.MaxSoul = host._db.MaxSoul(born.Data!);
         born.Soul = Math.Min(born.MaxSoul, caster.Soul);
         born.Awake = true;
-        _units = [.. _units, born];
-        LoadRosterSprites();
+        host._units = [.. host._units, born];
+        host.LoadRosterSprites();
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"909: 223 → 37 편 3 at ({col},{row}), 그림 {(_sprites.ContainsKey(37) ? "있음" : "없음")}" + Environment.NewLine);
+                $"909: 223 → 37 편 3 at ({col},{row}), 그림 {(host._sprites.ContainsKey(37) ? "있음" : "없음")}" + Environment.NewLine);
     }
 
     /// <summary>
@@ -972,7 +974,7 @@ internal sealed unsafe partial class GameWindow
         }
         Log("시작");
         while (use.MoveNext()) yield return true;
-        for (double end = _lastTime + 5; _lastTime < end && _units.Any(u => u.Alive && u.OnField && u.IsBusy);) yield return true;
+        for (double end = host._lastTime + 5; host._lastTime < end && host._units.Any(u => u.Alive && u.OnField && u.IsBusy);) yield return true;
         Log("끝");
     }
 }

@@ -226,7 +226,7 @@ lines = [
     '',
     'namespace DuelDx;',
     '',
-    'internal sealed unsafe partial class BattleSceneWindow',
+    'internal sealed unsafe partial class GameWindow',
     '{',
     '    /// <summary>',
     '    /// work 번호 → (동작 차례, 이펙트) — <b>도구가 뽑은</b> 표. 손으로 맞춘 <see cref="AbilityMotions"/> 가 우선한다.',
@@ -236,7 +236,7 @@ lines = [
     '    /// 그림 컷이 없는 Obs(소리 껍데기)는 빠져 있다.',
     '    /// 높이(Lift)는 월드 z × 0.6, 지연·수명은 0x100c24d0·0x100c2530 에서 읽었다(ba-15). 자식 키는 넣지 않는다 — 부모가 그린다.',
     '    /// </remarks>',
-    '    private static readonly Dictionary<int, (int[] Actions, AbilityEffect[] Effects)> WorkScripts = new()',
+    '    internal static readonly Dictionary<int, (int[] Actions, BattleScene.AbilityEffect[] Effects)> WorkScripts = new()',
     '    {',
 ]
 for wid, (acts, effs) in rows.items():
@@ -247,14 +247,14 @@ for wid, (acts, effs) in rows.items():
     lines.append('        [%d] = ([%s], [%s]),' % (wid, a, e))
 lines += ['    };', '',
           '    /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>',
-          '    private static readonly Dictionary<int, MovieFx[]> WorkMovies = new()',
+          '    internal static readonly Dictionary<int, MovieFx[]> WorkMovies = new()',
           '    {']
 for wid, ms in movies.items():
     lines.append('        [%d] = [%s],' % (wid, ', '.join('new(%d, %s, %s, %d, %d)' % (n, 'true' if p else 'false', 'true' if t else 'false', dx, dy)
                                                for n, p, t, dx, dy in ms)))
 lines += ['    };', '',
           '    /// <summary>work 번호 → 몸 복제(분신) — (모션, 대상 몸인가). 모션 −1 은 그 유닛의 지금 모션. 분석-스킬 fx-189 「파」.</summary>',
-          '    private static readonly Dictionary<int, BodyFx[]> WorkBodies = new()',
+          '    internal static readonly Dictionary<int, BattleScene.BodyFx[]> WorkBodies = new()',
           '    {']
 for wid, bs in bodies.items():
     lines.append('        [%d] = [%s],' % (wid, ', '.join('new(%d, %s)' % (m, 'true' if t else 'false') for m, t in bs)))

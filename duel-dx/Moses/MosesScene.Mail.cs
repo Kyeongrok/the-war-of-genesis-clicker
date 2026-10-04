@@ -250,7 +250,7 @@ internal sealed unsafe partial class MosesScene
             if (index >= mails.Count) break;
             var mail = mails[index];
             int rx = ox + MailListX, ry = oy + MailListY + r * MailRowH;
-            if (index == hover) host.DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, UiBlend.Alpha);
+            if (index == hover) host.DrawUi(MailRowObs, 0, tick, rx + 13, ry - 2, GameWindow.UiBlend.Alpha);
             // 줄 글 = 0x10040600(글, 가로 1(가운데), 0, 세로 1(가운데), 0, 글꼴, 0xFFFF, …) — 가운데 정렬 노랑.
             // 글꼴은 읽음 표시가 0 이면 2(굴림 9 굵게), 아니면 기본 글꼴 — 뷰어를 여는 순간 그 줄은 기본 글꼴로 바뀐다(0x10100129~0x10100166).
             // 데모 글꼴은 늘 굵어서, 안 읽은 줄은 한 픽셀 옆에 한 번 더 찍어 더 굵게 한다(감사5 L1).
@@ -264,15 +264,15 @@ internal sealed unsafe partial class MosesScene
 
         if (mails.Count > MailRows)
         {
-            host.DrawUi(EpisodesScreen.EpisodeObs, 61, 0, ox + MailBarX, oy + MailBarY, UiBlend.Alpha);
-            host.DrawUi(EpisodesScreen.EpisodeObs, 63, 0, ox + MailBarX, oy + MailBarY + MailBarH - MailArrowH, UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 61, 0, ox + MailBarX, oy + MailBarY, GameWindow.UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 63, 0, ox + MailBarX, oy + MailBarY + MailBarH - MailArrowH, GameWindow.UiBlend.Alpha);
             var (thumbY, _) = MailThumb(mails.Count);
-            host.DrawUi(EpisodesScreen.EpisodeObs, 65, 0, ox + MailBarX, oy + MailBarY + thumbY, UiBlend.Alpha);
+            host.DrawUi(EpisodesScreen.EpisodeObs, 65, 0, ox + MailBarX, oy + MailBarY + thumbY, GameWindow.UiBlend.Alpha);
         }
 
         // Exit 글자는 배경 그림(Bgr 0094)에 있다 — 알약 Obs 287 은 마우스 올림에만.
         if (host._mouse.X - ox >= 455 && host._mouse.X - ox < 633 && host._mouse.Y - oy >= 430 && host._mouse.Y - oy < 457)
-            host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+            host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
 
         if (_mailOpen >= 0 && _mailOpen < mails.Count) DrawMailView(ox, oy, mails[_mailOpen]);
     }
@@ -287,10 +287,10 @@ internal sealed unsafe partial class MosesScene
         const uint tag = 0xFFF2DB6F, value = 0xFFDAE6FC;
         if (host.UiFor(226) != null)
         {
-            host.DrawUi(226, 2, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
-            host.DrawUi(226, 3, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
-            host.DrawUi(226, 0, 0, x, y, UiBlend.Alpha);
-            host.DrawUi(226, 1, 0, x, y, UiBlend.Alpha);
+            host.DrawUi(226, 2, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            host.DrawUi(226, 3, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            host.DrawUi(226, 0, 0, x, y, GameWindow.UiBlend.Alpha);
+            host.DrawUi(226, 1, 0, x, y, GameWindow.UiBlend.Alpha);
         }
         else
         {
@@ -313,7 +313,7 @@ internal sealed unsafe partial class MosesScene
         int ty = y + 76;
         for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
             host.DrawText(lines[i], x + 15, ty, White, 12);
-        if (_mailViewTop + rows < lines.Count) host.DrawUi(TalkNextObs, 0, (int)(host._lastTime * TicksPerSecond), x + 300, y + 232, UiBlend.Alpha);
+        if (_mailViewTop + rows < lines.Count) host.DrawUi(TalkNextObs, 0, (int)(host._lastTime * TicksPerSecond), x + 300, y + 232, GameWindow.UiBlend.Alpha);
         if (_mailViewTop > 0) host.DrawText("▲", x + 296, y + 76, tag, 11);
     }
 

@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// AI 가 차례에 하는 일(ba-11) — 적군과 동맹 AI(제이슨)가 같은 규칙으로 움직인다.
 /// </summary>
@@ -21,7 +23,7 @@ namespace DuelDx;
 /// 칸 점수 <c>0x1005d070</c> = 값 × Num[74] × 10 / (4 + |Δx| + |Δy|), 값의 기준은 work <c>+0x3e</c>.
 /// 상태이상·아이템·편대는 아직 없고, 이동 방식은 0(가장 센 적 쪽)만 넣었다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>C 정수 나눗셈(0 으로 나누면 0).</summary>
     internal static int CDiv(int a, int b) => b == 0 ? 0 : a / b;
@@ -37,9 +39,9 @@ internal sealed unsafe partial class GameWindow
     /// </remarks>
     internal List<UnitState> MoveGoals(UnitState u, List<UnitState> enemies)
     {
-        if (_db is not { } db) return [];
+        if (host._db is not { } db) return [];
         int Reach(UnitState t) => 4 + Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row);
-        var friends = _units.Where(t => t.Alive && t != u && !SeesAsFoe(u, t)).ToList();
+        var friends = host._units.Where(t => t.Alive && t != u && !SeesAsFoe(u, t)).ToList();
 
         return u.AiMove switch
         {
@@ -60,7 +62,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal List<UnitState> FarSortLikeOriginal(UnitState u, List<UnitState> enemies)
     {
-        var list = enemies.OrderBy(t => Array.IndexOf(_units, t)).Take(100).ToList();
+        var list = enemies.OrderBy(t => Array.IndexOf(host._units, t)).Take(100).ToList();
         int mz = HeightAt(u.Col, u.Row);
         for (int pass = list.Count - 1; pass >= 1; pass--)
             for (int j = 0; j < pass; j++)
@@ -100,7 +102,7 @@ internal sealed unsafe partial class GameWindow
 
         int Nearest(Func<UnitState, bool> pick)
         {
-            var found = _units.Where(pick).Select(WakeDistance).ToList();
+            var found = host._units.Where(pick).Select(WakeDistance).ToList();
             return found.Count == 0 ? 1000 : found.Min();
         }
     }
@@ -108,7 +110,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>세력 점수 — AI 가 "이 인물이 얼마나 센가" 를 재는 값.</summary>
     internal int Power(UnitState u)
     {
-        if (_db is not { } db || u.Data is not { } c) return 0;
+        if (host._db is not { } db || u.Data is not { } c) return 0;
         int v = db.Acr(c, u.Tp) * db.Rdp(c, u.Hp, u.MaxHp) * db.Atk(c, u.Soul);
         v = CDiv(CDiv(CDiv(v, db.N(61)), db.N(63)), db.N(64));
         return CDiv(u.Hp + u.MaxHp, db.N(62)) * v;
@@ -120,8 +122,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal int Influence(int col, int row, UnitState viewer, bool foes)
     {
-        int num65 = _db?.N(65) ?? 6, sum = 0;
-        foreach (var u in _units)
+        int num65 = host._db?.N(65) ?? 6, sum = 0;
+        foreach (var u in host._units)
         {
             if (!u.Alive || !u.OnField || u == viewer || Hostile(viewer, u) != foes) continue;
             int d = Math.Abs(u.Col - col) + Math.Abs(u.Row - row);
@@ -136,7 +138,7 @@ internal sealed unsafe partial class GameWindow
         int enemies = Influence(col, row, u, foes: true);
         // 지도에는 제 번짐이 한 번 들어 있다(0x1005b5e0(t, 0) — 기준 16·17 0x1005c976, 이동 방식 1·5 0x100612b0, ba-20 J N4).
         int friends = Influence(col, row, u, foes: false)
-                      + CDiv(Power(u) * (_db?.N(65) ?? 6), Math.Abs(u.Col - col) + Math.Abs(u.Row - row) + (_db?.N(65) ?? 6));
+                      + CDiv(Power(u) * (host._db?.N(65) ?? 6), Math.Abs(u.Col - col) + Math.Abs(u.Row - row) + (host._db?.N(65) ?? 6));
         return friends == 0 ? enemies : (double)enemies / friends;
     }
 
@@ -165,15 +167,15 @@ internal sealed unsafe partial class GameWindow
         int best = wantMax ? int.MinValue : int.MaxValue;
         foreach (int i in targets)
         {
-            var t = _units[i];
+            var t = host._units[i];
             int v = criterion switch
             {
                 0 => t.Hp,
                 1 => t.Soul,
-                2 => _db is { } db && t.Data is { } c ? db.Atk(c, t.Soul) : 0,
+                2 => host._db is { } db && t.Data is { } c ? db.Atk(c, t.Soul) : 0,
                 3 => t.Tp,
-                4 => _db is { } db2 && t.Data is { } c2 ? db2.Rdp(c2, t.Hp, t.MaxHp) : 0,
-                5 => _db is { } db3 && t.Data is { } c3 ? db3.Acr(c3, t.Tp) : 0,
+                4 => host._db is { } db2 && t.Data is { } c2 ? db2.Rdp(c2, t.Hp, t.MaxHp) : 0,
+                5 => host._db is { } db3 && t.Data is { } c3 ? db3.Acr(c3, t.Tp) : 0,
                 6 => t.MaxHp - t.Hp,
                 7 => Power(t),
                 // 위험도는 <b>대상 자신의 시점</b>으로 잰다(0x1005c976) — 쓰는 쪽 시점으로 재면
@@ -193,13 +195,13 @@ internal sealed unsafe partial class GameWindow
         // 블랙홀은 화면 HP 가 위력보다 적은 유닛만 쓰러뜨린다 — 쓰러질 적이 쓰러질 제 편(시전자 포함)보다 많을 때만 쓴다(데모 판단, 원본 AI 는 대상 수만 본다).
         if (w.AbilityId == BlackHoleAbility)
         {
-            var doomed = targets.Select(i => _units[i]).Where(t => t.Hp < w.Power).ToList();
+            var doomed = targets.Select(i => host._units[i]).Where(t => t.Hp < w.Power).ToList();
             return doomed.Count(t => Hostile(user, t)) > doomed.Count(t => !Hostile(user, t));
         }
         if (w.IsHeal)
         {
-            int lost = targets.Sum(i => _units[i].MaxHp == 0 ? 0 : (_units[i].MaxHp - _units[i].Hp) * 100 / _units[i].MaxHp);
-            return lost > (_db?.N(79) ?? 30) * need;
+            int lost = targets.Sum(i => host._units[i].MaxHp == 0 ? 0 : (host._units[i].MaxHp - host._units[i].Hp) * 100 / host._units[i].MaxHp);
+            return lost > (host._db?.N(79) ?? 30) * need;
         }
         // 종류 3(보조·상태이상)은 <b>이득이 있는 대상만</b> 센다(0x1005c480·0x1005c6c7) — 대상이 가진 상태 3칸의 점수 합 A 와
         // work 가 거는 상태 3칸의 점수 합 B 를 견줘, 적(+0x3c=1)이면 A>B, 아군(+0x3c=4)이면 A<B 인 대상만. 그 밖의 +0x3c 는 아무도 안 센다(ba-14 A2).
@@ -210,7 +212,7 @@ internal sealed unsafe partial class GameWindow
             int count = 0;
             foreach (int i in targets)
             {
-                var t = _units[i];
+                var t = host._units[i];
                 int a = 0;
                 for (int k = 0; k < 3; k++) a += AilmentScore(t.StatusId[k], t.StatusValue[k]);
                 if (w.AiTargetSide == 1 ? a > b : w.AiTargetSide == 4 && a < b) count++;
@@ -241,8 +243,8 @@ internal sealed unsafe partial class GameWindow
     internal (int Stand, int Col, int Row, int Score)? BestUse(int unitIndex, WorkData w, MoveRange range, bool approach = false,
                                                               (int Col, int Row)? anchor = null, HashSet<int>? taken = null)
     {
-        var user = _units[unitIndex];
-        int num74 = _db?.N(74) ?? 4;
+        var user = host._units[unitIndex];
+        int num74 = host._db?.N(74) ?? 4;
         // 효과 모양이 0 인 work(이스케이프·혼 등 387개)는 칠할 칸이 없어 대상 0 → 값 0 → AI 가 절대 안 고른다(0x100704f0 → 0x1005d4d7, ba-14 A5).
         if (w.AreaShape == 0) return null;
 
@@ -250,7 +252,7 @@ internal sealed unsafe partial class GameWindow
         // 닿는 다른 적이 있어도 기술을 통째로 버렸다(fg-21 ⑮). 대상 방식 6(방향기)은 제자리 네 이웃 칸만 본다.
         var stands = new List<int>();
         var candidates = new HashSet<(int Col, int Row)>();
-        int here = user.Row * Cols + user.Col;
+        int here = user.Row * host.Cols + user.Col;
         // 제자리 기술(사거리 대상 0·2)은 <b>지금 칸에서만</b> 쓴다(0x1005d269 → 0x1005d725) — 걸어가서 쓰지 않는다(ba-20 J N1).
         // 접근 (B) 단계만 「최대 TP 로 닿을 칸」을 찾느라 이동을 허용한다.
         if (w.SelfCentred && !approach)
@@ -262,7 +264,7 @@ internal sealed unsafe partial class GameWindow
         {
             stands.Add(here);
             foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
-                if ((uint)(user.Col + dx) < Cols && (uint)(user.Row + dy) < Rows) candidates.Add((user.Col + dx, user.Row + dy));
+                if ((uint)(user.Col + dx) < host.Cols && (uint)(user.Row + dy) < host.Rows) candidates.Add((user.Col + dx, user.Row + dy));
         }
         else
         {
@@ -277,9 +279,9 @@ internal sealed unsafe partial class GameWindow
             {
                 if (!range.CanReach(stand) || (stayPut && stand != here)) continue;
                 stands.Add(stand);
-                int sc = stand % Cols, sr = stand / Cols;
-                for (int ay = Math.Max(0, sr - reach); ay <= Math.Min(Rows - 1, sr + reach); ay++)
-                    for (int ax = Math.Max(0, sc - reach); ax <= Math.Min(Cols - 1, sc + reach); ax++)
+                int sc = stand % host.Cols, sr = stand / host.Cols;
+                for (int ay = Math.Max(0, sr - reach); ay <= Math.Min(host.Rows - 1, sr + reach); ay++)
+                    for (int ax = Math.Max(0, sc - reach); ax <= Math.Min(host.Cols - 1, sc + reach); ax++)
                         if (!candidates.Contains((ax, ay)) && InWorkRange(w, sc, sr, ax, ay, user)) candidates.Add((ax, ay));
             }
         }
@@ -316,7 +318,7 @@ internal sealed unsafe partial class GameWindow
         int bestStand = -1, bestDist = int.MaxValue;
         foreach (int stand in stands)
         {
-            int sc = stand % Cols, sr = stand / Cols;
+            int sc = stand % host.Cols, sr = stand / host.Cols;
             if (taken != null && stand != here && taken.Contains(stand)) continue;
             if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
             if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 } && AiObjectAt(w, user, pick.Col, pick.Row) == null) continue;
@@ -359,19 +361,19 @@ internal sealed unsafe partial class GameWindow
     /// </remarks>
     internal int[]? CostMapFrom(UnitState u, int col, int row)
     {
-        if (_map is not { } map || _db is not { } db || u.Data is not { } c) return null;
-        bool InBounds(int x, int y) => (uint)x < Cols && (uint)y < Rows && x < map.Cols && y < map.Rows;
+        if (host._map is not { } map || host._db is not { } db || u.Data is not { } c) return null;
+        bool InBounds(int x, int y) => (uint)x < host.Cols && (uint)y < host.Rows && x < map.Cols && y < map.Rows;
         if (!InBounds(col, row)) return null;
         int dex = Math.Max(1, db.Dex(CombatData(u) ?? c)), num5 = db.N(5);
-        var costs = new int[Cols * Rows];
+        var costs = new int[host.Cols * host.Rows];
         Array.Fill(costs, int.MaxValue);
-        costs[row * Cols + col] = 0;
+        costs[row * host.Cols + col] = 0;
         var queue = new PriorityQueue<(int Col, int Row), int>();
         queue.Enqueue((col, row), 0);
         (int Dx, int Dy)[] dirs = [(0, -1), (1, 0), (0, 1), (-1, 0)];
         while (queue.TryDequeue(out var cell, out int cost))
         {
-            if (cost > costs[cell.Row * Cols + cell.Col]) continue;
+            if (cost > costs[cell.Row * host.Cols + cell.Col]) continue;
             int h = WalkHeightAt(cell.Col, cell.Row);
             foreach (var (dx, dy) in dirs)
             {
@@ -380,8 +382,8 @@ internal sealed unsafe partial class GameWindow
                 int nh = WalkHeightAt(nx, ny);
                 if (Math.Abs(nh - h) > 2) continue;
                 int next = cost + num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(nh - h) / dex) / 2;
-                if (next >= costs[ny * Cols + nx]) continue;
-                costs[ny * Cols + nx] = next;
+                if (next >= costs[ny * host.Cols + nx]) continue;
+                costs[ny * host.Cols + nx] = next;
                 queue.Enqueue((nx, ny), next);
             }
         }
@@ -418,7 +420,7 @@ internal sealed unsafe partial class GameWindow
     internal List<WorkData> AiWorks(UnitState u, bool ignoreCost = false)
     {
         var list = new List<WorkData>();
-        if (_db is not { } db || u.Data is not { } c) return list;
+        if (host._db is not { } db || u.Data is not { } c) return list;
         foreach (var (abilityId, level) in c.Abilities)
         {
             if (!db.Abilities.TryGetValue(abilityId, out var ab) || ab.Category is not (1 or 2 or 4)) continue;
@@ -431,10 +433,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓴다.</summary>
     internal IEnumerable<bool> AiUseWork(int index, WorkData w, (int Stand, int Col, int Row, int Score) use, MoveRange range)
     {
-        var u = _units[index];
+        var u = host._units[index];
         var path = PathWithin(range, u.Col, u.Row, use.Stand) ?? [];
         var aimed = LiveUnitAt(use.Col, use.Row);
-        int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(_units, aimed) : -1;
+        int targetIndex = w.TargetMode is 1 or 4 or 5 && aimed != null ? Array.IndexOf(host._units, aimed) : -1;
         var routine = UseWorkRoutine(index, w, targetIndex, use.Col, use.Row, path);
         while (routine.MoveNext()) yield return true;
     }
@@ -446,8 +448,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal IEnumerator<bool> AiRoutine(int index)
     {
-        var u = _units[index];
-        for (double end = _lastTime + 0.4; _lastTime < end;) yield return true;
+        var u = host._units[index];
+        for (double end = host._lastTime + 0.4; host._lastTime < end;) yield return true;
         for (int think = 0; think < 8; think++)
         {
             bool acted = false;
@@ -455,10 +457,10 @@ internal sealed unsafe partial class GameWindow
             if (!acted || _turn != index || _outcome.Length > 0 || !u.Alive || !u.OnField) break;
             CommitMove(u);                                   // 걸은 비용을 빼야 남은 TP 로 다시 생각할 수 있다
             if (u.Tp <= 0) break;
-            for (double end = _lastTime + 0.3; _lastTime < end;) yield return true;
+            for (double end = host._lastTime + 0.3; host._lastTime < end;) yield return true;
             // 다시 생각하기 전에 판의 모든 유닛이 설 때까지 — 상태 15 갈래 1 이 0x1006e320(모든 유닛 +0x80 == 0)을 기다린 뒤 GETNEXT(0x1006a241).
             // 이동만 한 군단 대장의 부하가 진형 자리로 다 걸어간 뒤에 다음 공격을 해야 부하가 모두 낀다(감사5 L-A). 멈춤 대비 5초 상한.
-            for (double end = _lastTime + 5; _lastTime < end && _units.Any(x => x.Alive && x.OnField && x.IsBusy);) yield return true;
+            for (double end = host._lastTime + 5; host._lastTime < end && host._units.Any(x => x.Alive && x.OnField && x.IsBusy);) yield return true;
         }
         if (_turn == index && _outcome.Length == 0 && u.Alive && u.OnField) Rest(index);
     }
@@ -466,8 +468,8 @@ internal sealed unsafe partial class GameWindow
     /// <summary>한 번 생각하기 — 분석-전투 ba-11 의 여섯 단계. 기술을 쓰거나 걸었으면 <paramref name="report"/>(true).</summary>
     internal IEnumerable<bool> AiThink(int index, Action<bool> report)
     {
-        var u = _units[index];
-        if (_db is not { } db || ComputeRange(u) is not { } range) yield break;
+        var u = host._units[index];
+        if (host._db is not { } db || ComputeRange(u) is not { } range) yield break;
 
         // 1단계 깨어남 — 조건을 못 채우면 그 자리에서 쉰다(0x1005baa8). 깬 그 차례에 바로 움직인다.
         if (!u.Awake)
@@ -484,7 +486,7 @@ internal sealed unsafe partial class GameWindow
 
         int hpPercent = u.MaxHp == 0 ? 100 : u.Hp * 100 / u.MaxHp;
         // 버서커(4)가 걸린 인물에게는 자기 말고 모두가 적이다.
-        var enemies = _units.Where(t => t.Alive && t.OnField && SeesAsFoe(u, t)).ToList();
+        var enemies = host._units.Where(t => t.Alive && t.OnField && SeesAsFoe(u, t)).ToList();
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
 
         // 2단계 도망(0x1005b4e0) — 피가 적고 적이 가까우면 물러난다. 위험도 0.70 이하인 칸 중 <b>지금 자리에서 맨해튼으로 가장 가까운 칸</b>,
@@ -493,7 +495,7 @@ internal sealed unsafe partial class GameWindow
         {
             var heal = FollowersOf(index).Count == 0 ? AiWorks(u).FirstOrDefault(x => x.IsHeal) : null;
             var fleeRange = heal != null ? ComputeRange(u, heal.Id) ?? range : range;
-            int here = u.Row * Cols + u.Col, safest = here;
+            int here = u.Row * host.Cols + u.Col, safest = here;
             if (FleeDanger(u, u.Col, u.Row) > SafeDanger)
             {
                 int bestDist = int.MaxValue;
@@ -502,10 +504,10 @@ internal sealed unsafe partial class GameWindow
                 for (int i = 0; i < fleeRange.Cost.Length; i++)
                 {
                     if (!fleeRange.CanReach(i)) continue;
-                    double danger = FleeDanger(u, i % Cols, i / Cols);
+                    double danger = FleeDanger(u, i % host.Cols, i / host.Cols);
                     if (danger < bestDanger) { bestDanger = danger; leastDangerous = i; }
                     if (danger > SafeDanger) continue;
-                    int d = Math.Abs(i % Cols - u.Col) + Math.Abs(i / Cols - u.Row);
+                    int d = Math.Abs(i % host.Cols - u.Col) + Math.Abs(i / host.Cols - u.Row);
                     if (d < bestDist) { bestDist = d; safest = i; }
                 }
                 if (bestDist == int.MaxValue) safest = leastDangerous;
@@ -584,7 +586,7 @@ internal sealed unsafe partial class GameWindow
             }
             break;                                       // 제자리가 최선이면 쉰다
         }
-        for (double end = _lastTime + 0.2; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 0.2; host._lastTime < end;) yield return true;
     }
 
     internal IEnumerable<bool> WalkTo(UnitState u, MoveRange range, int cell)

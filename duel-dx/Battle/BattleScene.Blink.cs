@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 이동 종류 1(<c>.chr</c> 파일 17 == 1) — 걷지 않고 순간이동한다(이동 핸들러 <c>0x10076680</c> 갈래, ba-20 P4).
 /// </summary>
@@ -11,7 +13,7 @@ namespace DuelDx;
 /// 숨김·카메라를 도착 칸으로 → 15틱 뒤 칸을 옮기고 15틱 더 숨김 → 동작 20(모션 60·61·62) + 잔상 12개(늦춤 (5−i)×2) + 다시 짙어짐.
 /// 카메라가 설 때까지 기다리는 단계 2 는 줄였다(곧바로 15틱 기다림).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal sealed class Blink
     {
@@ -40,7 +42,7 @@ internal sealed unsafe partial class GameWindow
         unit.Facing = FacingToward(unit.Col, unit.Row, dest.Col, dest.Row);
         _ = first;
         int dir = unit.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
-        _blinks[unit] = new Blink { Dest = dest, From = (unit.Col, unit.Row), Start = _lastTime, Stage = 0, Dir = dir };
+        _blinks[unit] = new Blink { Dest = dest, From = (unit.Col, unit.Row), Start = host._lastTime, Stage = 0, Dir = dir };
         PlayBlinkMotion(unit, 57 + dir, BlinkFadeTicks + 2 * BlinkHiddenTicks);
         SpawnBlinkGhosts(unit, 57 + dir, arriving: false);
         return true;
@@ -49,19 +51,19 @@ internal sealed unsafe partial class GameWindow
     /// <summary>그 모션이 없는 그림(엠블라 Obs 577)은 서기 그대로 둔 채 바쁨만 건다.</summary>
     internal void PlayBlinkMotion(UnitState unit, int motion, int ticks)
     {
-        bool has = _sprites.TryGetValue(unit.ChrCode, out var sprite) && sprite.MotionTicks(motion) > 0;
+        bool has = host._sprites.TryGetValue(unit.ChrCode, out var sprite) && sprite.MotionTicks(motion) > 0;
         if (has) unit.PlayMotion(motion, ticks / TicksPerSecond, loop: false);
         else unit.PlayAction(0, ticks / TicksPerSecond);
     }
 
     internal void SpawnBlinkGhosts(UnitState unit, int motion, bool arriving)
     {
-        if (!_sprites.TryGetValue(unit.ChrCode, out var sprite) || sprite.MotionTicks(motion) <= 0) return;
-        var (fx, fy) = UnitFoot(unit);
+        if (!host._sprites.TryGetValue(unit.ChrCode, out var sprite) || sprite.MotionTicks(motion) <= 0) return;
+        var (fx, fy) = host.UnitFoot(unit);
         bool mirror = unit.Facing == Facing.Right;
         for (int i = 1; i <= 3; i++)
         {
-            double start = _lastTime + (arriving ? (5 - i) * 2 : 2 * i) / TicksPerSecond;
+            double start = host._lastTime + (arriving ? (5 - i) * 2 : 2 * i) / TicksPerSecond;
             double fade = (6 - i) * 4 / 31.0;   // 섞기 단계 6−i
             foreach (var (dx, dy) in new[] { (20 * i, 0), (-20 * i, 0), (0, 16 * i), (0, -16 * i) })   // 월드 20px = 화면 세로 16px
                 _blinkGhosts.Add((unit, motion, mirror, start, fx + dx, fy + dy, fade, BlinkGhostLife));
@@ -73,7 +75,7 @@ internal sealed unsafe partial class GameWindow
         if (_blinks.Count == 0) return;
         foreach (var (unit, b) in _blinks.ToArray())
         {
-            double t = (_lastTime - b.Start) * TicksPerSecond;
+            double t = (host._lastTime - b.Start) * TicksPerSecond;
             // 죽었거나, 그 사이 사건이 자리를 옮겼으면(200·201·ResetTo) 순간이동을 그만둔다 — 옛 도착 칸으로 되돌리지 않게.
             if (!unit.Alive || (b.Stage < 2 && (unit.Col, unit.Row) != b.From)) { unit.Fade = 1; _blinks.Remove(unit); continue; }
             switch (b.Stage)
@@ -107,15 +109,15 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawBlinkGhosts()
     {
-        LegionStageAb.DrawLegionGhosts();
+        host.LegionStageAb.DrawLegionGhosts();
         for (int i = _blinkGhosts.Count - 1; i >= 0; i--)
         {
             var g = _blinkGhosts[i];
-            if (_lastTime < g.Start) continue;
-            int tick = (int)((_lastTime - g.Start) * TicksPerSecond);
-            if (tick >= g.Life || !_sprites.TryGetValue(g.Owner.ChrCode, out var sprite)
+            if (host._lastTime < g.Start) continue;
+            int tick = (int)((host._lastTime - g.Start) * TicksPerSecond);
+            if (tick >= g.Life || !host._sprites.TryGetValue(g.Owner.ChrCode, out var sprite)
                 || sprite.FrameOfMotion(g.Motion, tick, g.Mirror) is not { } frame) { _blinkGhosts.RemoveAt(i); continue; }
-            BlitMasked(frame.Px, frame.W, frame.H, g.X + frame.X, g.Y + frame.Y, fade: g.Fade);
+            host.BlitMasked(frame.Px, frame.W, frame.H, g.X + frame.X, g.Y + frame.Y, fade: g.Fade);
         }
     }
 }

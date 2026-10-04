@@ -166,13 +166,13 @@ internal sealed unsafe partial class MosesScene
         for (int i = 0; i < party.Count && i < 5; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
-            host.DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, GameWindow.UiBlend.Alpha);
             if (PartyData(party[i]) is { } pc)
             {
                 host.Fld.LoadFieldFace(pc);
                 if (host._faces.TryGetValue(pc.Code, out var face)) host.BlitScaled(face, cx + 2, cy + 20, 60, 60);
             }
-            if (_unitLegion.ContainsKey(LegionKey(party[i]))) host.DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
+            if (_unitLegion.ContainsKey(LegionKey(party[i]))) host.DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, GameWindow.UiBlend.Alpha);
         }
 
         int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
@@ -184,7 +184,7 @@ internal sealed unsafe partial class MosesScene
             int rx = ox + 445, ry = oy + 70 + r * LegionRowH;
             // 줄 틀 Obs 1291 모션 5(138×28)는 0x10043810 으로 단 덧그림 — 마우스가 올라간 줄에만(0x100fae6b).
             if (mx >= 445 && mx < 445 + LegionRowW && my >= 70 + r * LegionRowH && my < 70 + (r + 1) * LegionRowH)
-                host.DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, UiBlend.Alpha);
+                host.DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, GameWindow.UiBlend.Alpha);
             host.DrawText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
         }
 
@@ -194,9 +194,9 @@ internal sealed unsafe partial class MosesScene
 
         // 해제(Reset)·배속(Set)·Ok 글자는 배경 그림(Bgr 0039)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림(상점과 같다).
         bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
-        if (Over(70, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
-        if (Over(160, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
-        if (Over(456, 430, 178, 27)) host.DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, UiBlend.Alpha);
+        if (Over(70, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, GameWindow.UiBlend.Alpha);
+        if (Over(160, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, GameWindow.UiBlend.Alpha);
+        if (Over(456, 430, 178, 27)) host.DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>고른 군단 — 진형 칸에 대장·부하를 놓고 오른쪽에 이름·설명·진형을 적는다.</summary>

@@ -1,5 +1,7 @@
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 상태이상에 걸린 인물을 물들이는 색 — 빙결은 파랗게, 중독은 청록, 버서커·화염은 붉게(<c>0x10071be2</c>~<c>0x10071c6d</c>).
 /// </summary>
@@ -21,7 +23,7 @@ namespace DuelDx;
 /// 화상은 원본 갈래(방식 15)가 초록만 곡선에 넣지만, 파랑이 그대로면 주황이 아니라 자홍이 된다 — 사용자가 기억하는 주황에 맞춰 파랑도 죽인다(가설).
 /// 마비(5)는 색표가 아니라 딴 합성 함수(<c>ds:0x101737d8</c>)를 타는 번쩍임이라 여기서는 아무것도 안 바꾼다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>상태이상 물들이기 세기 — 원본이 다섯 갈래 모두 곧이곧대로 넣는 값.</summary>
     internal const int StatusTintAlpha = 30;

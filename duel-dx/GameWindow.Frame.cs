@@ -30,15 +30,15 @@ internal sealed unsafe partial class GameWindow
         if (titled)
         {
             for (int xx = x; xx < x + w; xx++) SetPixel(xx, y - 1, White);      // 제목줄 밑 가로선
-            DrawUi(FrameObs, 4, 0, x, y - 18, UiBlend.Alpha);                   // 제목줄 왼쪽 막대
+            DrawUi(FrameObs, 4, 0, x, y - 18, GameWindow.UiBlend.Alpha);                   // 제목줄 왼쪽 막대
             var (_, tw, th) = GetText(title!, White, 15);
             DrawText(title!, x + (w - tw) / 2, top + (FrameTitleH - th) / 2, White, 15);
         }
 
-        DrawUi(FrameObs, 0, 0, x, top, UiBlend.Alpha);
-        DrawUi(FrameObs, 1, 0, x + w - 1, top, UiBlend.Alpha);
-        DrawUi(FrameObs, 2, 0, x, y + h - 1, UiBlend.Alpha);
-        DrawUi(FrameObs, 3, 0, x + w - 1, y + h - 1, UiBlend.Alpha);
+        DrawUi(FrameObs, 0, 0, x, top, GameWindow.UiBlend.Alpha);
+        DrawUi(FrameObs, 1, 0, x + w - 1, top, GameWindow.UiBlend.Alpha);
+        DrawUi(FrameObs, 2, 0, x, y + h - 1, GameWindow.UiBlend.Alpha);
+        DrawUi(FrameObs, 3, 0, x + w - 1, y + h - 1, GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>바탕 — Obs 0970 모션 7 의 2×184 그라데이션을 창 크기로 늘려 반투명하게 덮는다.</summary>
@@ -98,7 +98,7 @@ internal sealed unsafe partial class GameWindow
             {
                 if ((uint)xx >= BoardWidth) continue;
                 int i = yy * BoardWidth + xx;
-                _fb[i] = ScaleColor(_fb[i], num, den);
+                _fb[i] = GameWindow.ScaleColor(_fb[i], num, den);
             }
         }
     }

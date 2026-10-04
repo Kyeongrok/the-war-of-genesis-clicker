@@ -77,7 +77,7 @@ internal sealed unsafe class RecordsScreen(GameWindow host)
                     host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         var (ex, ey, _, _) = RecordsExit;
-        if (_recordsExitHover) host.DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, UiBlend.Add);
+        if (_recordsExitHover) host.DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, GameWindow.UiBlend.Add);
 
         host.DrawSystem();
         host.DrawToast();

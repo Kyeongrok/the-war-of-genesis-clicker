@@ -116,6 +116,6 @@ internal sealed unsafe class AstralArrowSkill(GameWindow host)
     internal void DrawArrows()
     {
         foreach (var a in _arrows.Where(a => host._lastTime >= a.Start && !a.Done))
-            host.DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(host.UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));
+            host.DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, GameWindow.BlendOf(host.UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));
     }
 }

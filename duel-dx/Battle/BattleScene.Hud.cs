@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 전투 화면에 늘 떠 있는 작은 창(fa-10) — 전장 이름·소지금·고른 인물의 TP·SOUL·커서 자리.
 /// </summary>
@@ -18,7 +20,7 @@ namespace DuelDx;
 /// 소지금은 모세스 상점과 같은 지갑을 보여 준다(데모는 5000GP 로 시작).
 /// 자리는 원본과 같은 "오른쪽 위에서 10픽셀" 로 잡되, 판이 640 보다 넓어 판 오른쪽에 붙인다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal const int HudW = 140, HudH = 60, HudObs = 894, HudPositionMotion = 12;
     internal const uint HudYellow = 0xFFFFFF00;
@@ -27,33 +29,33 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawHud()
     {
-        if (Mos._mosesOpen || ChaptersScr._chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
+        if (host.Mos._mosesOpen || host.ChaptersScr._chaptersOpen || _outcome.Length > 0 || host._map is not { } map) return;
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
         if (EventsBusy || _deployOpen) return;
 
-        int x = _camX + ViewWidth - HudW - 10, y = _camY + GridTop + 10;
-        DrawGameFrame(x, y, HudW, HudH);
+        int x = host._camX + host.ViewWidth - HudW - 10, y = host._camY + GridTop + 10;
+        host.DrawGameFrame(x, y, HudW, HudH);
 
         // 원본 글꼴은 9~11픽셀이다 — 우리 기본 13픽셀이면 창 밖으로 나간다.
         const float size = 11f;
         void Center(string s, int cx, int cy, uint color)
         {
-            var (_, w, _) = GetText(s, color, size);
-            DrawText(s, x + cx - w / 2, y + cy, color, size);
+            var (_, w, _) = host.GetText(s, color, size);
+            host.DrawText(s, x + cx - w / 2, y + cy, color, size);
         }
         void Right(string s, int rx, int ry)
         {
-            var (_, w, _) = GetText(s, White, size);
-            DrawText(s, x + rx - w, y + ry, White, size);
+            var (_, w, _) = host.GetText(s, White, size);
+            host.DrawText(s, x + rx - w, y + ry, White, size);
         }
 
-        Center(_scene.Title, 70, 3, HudYellow);
-        DrawUi(HudObs, HudPositionMotion, (int)(_lastTime * TicksPerSecond), x + 8, y + 30, UiBlend.Alpha);
+        Center(host._scene.Title, 70, 3, HudYellow);
+        host.DrawUi(HudObs, HudPositionMotion, (int)(host._lastTime * TicksPerSecond), x + 8, y + 30, UiBlend.Alpha);
 
         // 커서가 놓인 칸과 그 높이 — 판 밖(칸 −1)이면 원본은 숫자를 지운다(0x100e4250).
-        int col = _mouse.X >= 0 ? _mouse.X / TileW : -1;
-        int row = RowAt(_mouse.X, _mouse.Y);
-        if ((uint)col < Cols && (uint)row < Rows)
+        int col = host._mouse.X >= 0 ? host._mouse.X / TileW : -1;
+        int row = host.RowAt(host._mouse.X, host._mouse.Y);
+        if ((uint)col < host.Cols && (uint)row < host.Rows)
         {
             Center($"{map.HeightAt(col, row)}", 40, 24, White);
             Center($"{col}", 64, 38, White);
@@ -61,9 +63,9 @@ internal sealed unsafe partial class GameWindow
         }
 
         // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
-        Right($"{Mos._shopMoney}GP", 134, 20);
+        Right($"{host.Mos._shopMoney}GP", 134, 20);
         // Tp·Soul 은 고른 유닛이 아니라 <b>지금 차례인 유닛</b>([CBattle+0x4ce8])의 것이다(0x100e3f60, ba-20 G16) — AI 차례에도 그 유닛 값이 보인다.
-        if (_turn >= 0 && _turn < _units.Length && _units[_turn] is { Alive: true } unit)
+        if (_turn >= 0 && _turn < host._units.Length && host._units[_turn] is { Alive: true } unit)
         {
             Right($"Tp:{unit.Tp}", 134, 32);
             Right($"Soul:{unit.Soul}", 134, 44);

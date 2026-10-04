@@ -26,25 +26,25 @@ internal sealed unsafe partial class GameWindow
     /// <summary>지금 마우스 자리에 맞는 커서 그림.</summary>
     internal int CursorFor(int bx, int by)
     {
-        if (_keysOpen || SystemOpen || _statusUnit >= 0 || _abilityMenu || _ringUnit >= 0) return CursorHand;
-        if (_targetWork >= 0 && Work(_targetWork) is { } w)
+        if (_keysOpen || SystemOpen || _statusUnit >= 0 || Btl._abilityMenu || Btl._ringUnit >= 0) return CursorHand;
+        if (Btl._targetWork >= 0 && Btl.Work(Btl._targetWork) is { } w)
         {
             // 사거리 안이고 그 work 의 대상 방식에 맞는 칸에서만 칼·지팡이가 된다 — 아무 유닛 위나 아니다.
             int col = bx / TileW, row = RowAt(bx, by);
-            if (by < GridTop || row < 0 || _turn < 0 || !CanAimAt(w, _units[_turn], col, row)) return CursorArrow;
+            if (by < GridTop || row < 0 || Btl._turn < 0 || !Btl.CanAimAt(w, _units[Btl._turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
         // 걸어가서 손댈 수 있는 물체(상자·문)면 주먹 커서 — 원본 「닿을 수 있는 오브젝트 칸」(층 1, 0x1006d0f0 갈래 4).
-        if (IsPlayerTurn && by >= GridTop && ObjectAt(bx / TileW, RowAt(bx, by)) is { } near
-            && FindTouchPath(_units[_turn], near) != null) return CursorTouch;
+        if (Btl.IsPlayerTurn && by >= GridTop && Btl.ObjectAt(bx / TileW, RowAt(bx, by)) is { } near
+            && Btl.FindTouchPath(_units[Btl._turn], near) != null) return CursorTouch;
 
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
-        if (IsPlayerTurn && by >= GridTop && UnitOrFoeAt(bx, by) is var hit and >= 0 && _units[hit] is var who)
+        if (Btl.IsPlayerTurn && by >= GridTop && UnitOrFoeAt(bx, by) is var hit and >= 0 && _units[hit] is var who)
         {
-            if (!who.IsAlly && FindAttackPath(_turn, Array.IndexOf(_units, who)) != null) return CursorAttack;
+            if (!who.IsAlly && Btl.FindAttackPath(Btl._turn, Array.IndexOf(_units, who)) != null) return CursorAttack;
             if (who.IsAlly) return CursorHand;
         }
-        if (_rangeUnit >= 0 && _range is { } range && by >= GridTop)
+        if (Btl._rangeUnit >= 0 && Btl._range is { } range && by >= GridTop)
         {
             int row = RowAt(bx, by);
             if (row >= 0 && range.CanReach(row * Cols + bx / TileW)) return CursorHand;
@@ -132,7 +132,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>
     /// 배너가 입력을 받을 때가 됐나 — 결과와 상관없이 어둡게 한 뒤 16틱부터(하위 2, 0x1006b1f9). 조용한 결과도 같다(감사4 C9).
     /// </summary>
-    internal bool OutcomeInputReady => (_lastTime - _outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
+    internal bool OutcomeInputReady => (_lastTime - Btl._outcomeAt) * TicksPerSecond >= OutcomeBannerDelayTicks;
 
     /// <summary>승패 음악을 건 결과(그 결과의 <c>_outcomeAt</c>) — 배너가 뜰 때 한 번만 건다.</summary>
     internal double _outcomeMusicPlayedFor = -1;
@@ -145,20 +145,20 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void UpdateOutcomeBanner()
     {
-        if (_outcome.Length == 0 || _outcomeQuiet || Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen) return;
-        bool win = _outcome.StartsWith('승');
-        if (_outcomeMusicFor != _outcomeAt)
+        if (Btl._outcome.Length == 0 || Btl._outcomeQuiet || Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen) return;
+        bool win = Btl._outcome.StartsWith('승');
+        if (_outcomeMusicFor != Btl._outcomeAt)
         {
-            _outcomeMusicFor = _outcomeAt;
+            _outcomeMusicFor = Btl._outcomeAt;
             _outcomeMusicSeconds = -1;
             if (Muted || !_bgmOn) _outcomeMusicSeconds = 0;
             else LoadClip(win ? 3392 : 55, pcm => Volatile.Write(ref _outcomeMusicSeconds, pcm == null ? 0 : ClipSeconds(pcm)));
         }
-        double since = (_lastTime - _outcomeAt) * TicksPerSecond;
+        double since = (_lastTime - Btl._outcomeAt) * TicksPerSecond;
         if (since < OutcomeBannerDelayTicks) return;
-        if (_outcomeMusicPlayedFor != _outcomeAt)
+        if (_outcomeMusicPlayedFor != Btl._outcomeAt)
         {
-            _outcomeMusicPlayedFor = _outcomeAt;
+            _outcomeMusicPlayedFor = Btl._outcomeAt;
             PlayOutcomeMusic(win);
         }
         float music = Volatile.Read(ref _outcomeMusicSeconds);
@@ -172,8 +172,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void DrawOutcomeBanner()
     {
-        if (_outcome.Length == 0) return;
-        bool win = _outcome.StartsWith('승');
+        if (Btl._outcome.Length == 0) return;
+        bool win = Btl._outcome.StartsWith('승');
 
         // 화면 전체를 물들이기 방식 2·세기 16 으로(0x1002e8d0(2, 16)) — 채널마다 (23·c + 8·16)/31(5비트) ≈ 74% 밝기 + 검정이 조금 뜬다.
         for (int y = _camY; y < _camY + ViewHeight; y++)
@@ -184,18 +184,18 @@ internal sealed unsafe partial class GameWindow
                 uint Dim(int shift) => (uint)((int)(c >> shift & 0xFF) * 23 / 31 + 34);
                 _fb[i] = 0xFF000000 | Dim(16) << 16 | Dim(8) << 8 | Dim(0);
             }
-        if (_outcomeQuiet || (_lastTime - _outcomeAt) * TicksPerSecond < OutcomeBannerDelayTicks) return;
+        if (Btl._outcomeQuiet || (_lastTime - Btl._outcomeAt) * TicksPerSecond < OutcomeBannerDelayTicks) return;
 
         // 배너는 모션 0·1·2(승리) / 10·11·12(패배) 세 조각을 겹쳐 그린다 — 각 모션은 컷 하나(길이 0)다.
         // 기준점은 640×480 의 (320, 220) — 가운데보다 20픽셀 위.
         int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2 - 20;
         bool drawn = false;
         for (int i = 0; i < 3; i++)
-            drawn |= DrawUi(BannerObs, (win ? BannerWin : BannerLose) + i, 0, cx, cy, UiBlend.Alpha);
+            drawn |= DrawUi(BannerObs, (win ? BannerWin : BannerLose) + i, 0, cx, cy, GameWindow.UiBlend.Alpha);
         if (drawn) return;
 
         // 배너 그림이 없으면 글자로
-        var (_, w, h) = GetText(_outcome, 0xFFFFE070, 32);
-        DrawText(_outcome, cx - w / 2, cy - h / 2, 0xFFFFE070, 32);
+        var (_, w, h) = GetText(Btl._outcome, 0xFFFFE070, 32);
+        DrawText(Btl._outcome, cx - w / 2, cy - h / 2, 0xFFFFE070, 32);
     }
 }

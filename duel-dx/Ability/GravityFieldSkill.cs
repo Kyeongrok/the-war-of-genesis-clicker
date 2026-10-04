@@ -21,7 +21,7 @@ internal sealed unsafe class GravityFieldSkill(GameWindow host)
         double t0 = host._lastTime;
         host.AcrostAb.FxSound(GravitySoundObs, 0, t0);
         int n = targets.Count;
-        if (Trace)
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"gravity field: caster {user.ChrCode}({user.Col},{user.Row}) targets " +
                 string.Join(", ", targets.Select(t => $"{host._units[t].ChrCode}({host._units[t].Col},{host._units[t].Row}){(host._units[t].IsAlly ? " 아군" : "")}")) + Environment.NewLine);
