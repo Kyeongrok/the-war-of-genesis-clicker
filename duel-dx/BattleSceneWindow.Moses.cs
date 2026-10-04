@@ -310,8 +310,17 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>
+    /// <summary>
+    /// 행동 910 이 켜는 깃발([챕터+0x2ec4]) — 모세스 안내 음성 11개가 +25 번(562 → 587 … 576 → 601)으로 바뀌고 화면 줄이 찢긴다.
+    /// 새 챕터를 열면 꺼진다(0x100fe038). 세이브에는 아직 안 싣는다(원본은 진행 세이브에 싣는다).
+    /// </summary>
+    private bool _mosesAltVoice;
+
+    private static readonly HashSet<int> MosesAltSounds = [562, 564, 565, 566, 569, 570, 571, 572, 574, 575, 576];
+
     private void OpenMoses(ChapterFile? chapter = null)
     {
+        if (chapter != null) _mosesAltVoice = false;
         _mosesOpen = true;
         _mosesHover = -1;
         _mosesPage = -1;
@@ -841,6 +850,13 @@ internal sealed unsafe partial class BattleSceneWindow
         DrawTalk();
         DrawFieldChoices();
         _uiClip = null;
+        // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
+        if (_mosesAltVoice)
+        {
+            int tearY = _rng.Next(MosesH - 10);
+            for (int ty = tearY; ty <= tearY + 1; ty++)
+                Array.Copy(_fb, (oy + ty) * BoardWidth + ox + 10, _fb, (oy + ty) * BoardWidth + ox, MosesW - 10);
+        }
         ApplyScreenWave(ox, oy, tick);   // 409 물결 — 챕터 화면에서도(0x100f667b, Chp 0059, audit3 R3)
         DrawSystem();
         DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
