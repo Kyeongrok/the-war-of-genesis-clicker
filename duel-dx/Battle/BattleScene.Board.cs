@@ -117,6 +117,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).
     /// <c>DUELDX_AIM=&lt;work&gt;:&lt;열&gt;,&lt;줄&gt;[:&lt;열&gt;,&lt;줄&gt;]</c> 면 그 칸을 겨눈다(둘째 칸이 있으면 먼저 그 칸에 세운다) — 맵 물체 겨누기 시험.</summary>
     internal bool _aimHookDone;
+    internal bool _itemHookDone;
 
     internal void ApplyAimHook()
     {
@@ -175,6 +176,14 @@ internal sealed unsafe partial class BattleScene
     {
         ApplyAimHook();
         ApplyClickHook();
+        // DUELDX_ITEMMENU=<줄> 이면 플레이어 차례에 아이템 창을 열고 마우스를 그 줄 위에 둔다(화면 밖 시험용 — 줄 강조).
+        if (!_itemHookDone && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_ITEMMENU"), out int itemRow) && IsPlayerTurn && _routine == null && host.Tlk._talk == null)
+        {
+            _itemHookDone = true;
+            _itemMenu = true;
+            var (ix, iy, _) = ItemMenuRect();
+            host._mouse = (ix + 60, iy + 12 + itemRow * ItemRowH + 8);
+        }
         if (_turnNo >= 1) OpenUnitInfoIfAsked();
         if (WorkHook == null || _workHookDone || _routine != null || host._units.Length == 0) return;
         if (host.Tlk._talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
