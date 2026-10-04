@@ -680,7 +680,7 @@ internal sealed unsafe partial class BattleSceneWindow
                         var (wx, wy) = UnitFoot(u);
                         _effects.Add((381, 1, _lastTime, wx, wy));
                         _effects.Add((210, 3, _lastTime, wx, wy));
-                        PlayEventVoice(694);
+                        Play(91);                           // 나타나는 소리는 Snd 91 이다(0x1008cd84 뒤 381:1, ba-21 B8) — 전에는 음성 694 를 틀려 했다
                         longest = Math.Max(longest, 80 / TicksPerSecond);
                     }
                     int leader = Array.IndexOf(_units, u);

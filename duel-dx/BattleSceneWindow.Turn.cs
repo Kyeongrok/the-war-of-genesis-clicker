@@ -1339,6 +1339,8 @@ internal sealed unsafe partial class BattleSceneWindow
         ApplyAilments(a, t, w);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
+        // 쓰러뜨린 타에는 불꽃(Obs 73)이 한 장 더 뜬다 — 모션 0(0x10079b84) + 무작위 한 장(0x10079c0a), ba-21 T6.
+        if (w.IsDamage) { var (kx, ky) = UnitFoot(t); _effects.Add((HitEffectObs, 0, _lastTime, kx, ky - HitEffectLift)); }
         // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).
         // SOUL 은 때린 사람이, 경험치는 군단 부하가 쓰러뜨렸으면 <b>대장</b>이 받는다(0x10079b14).
         // 처치 보상(1016)은 받는 유닛에게 SOUL +Num30 과 EXP 를 같이 준다(0x1007214f) — 부하가 쓰러뜨리면 둘 다 대장 몫(ba-20 K4).
