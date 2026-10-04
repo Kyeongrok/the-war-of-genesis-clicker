@@ -36,13 +36,17 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     internal (string Title, double Until)? _notice;
 
     internal bool SlotsOpen => _slotsMode >= 0;
-    internal int SlotRows => _slotsMode == 1 ? AutoSlot + 1 : SaveSlots;
+    /// <summary>자동 저장 칸 수 — 20 = 이번 차례 시작, 21 · 22 = 그 앞 두 번의 차례 시작(실수를 되돌리려고 부를 때 쓴다).</summary>
+    internal const int AutoSlots = 3;
+
+    internal int SlotRows => _slotsMode == 1 ? SaveSlots + AutoSlots : SaveSlots;
 
     /// <summary>
     /// 목록 줄 → 슬롯 번호. 원본은 자동 저장(20)을 Load 목록 <b>맨 끝(21번째)</b>에 표시 없이 두는데, 열 줄씩만 보이고
     /// 화살표로 한 줄씩만 내려가서 사실상 안 보였다(사용자 보고). 데모는 Load 목록 <b>맨 위</b>에 「자동 저장」으로 둔다.
     /// </summary>
-    internal int SlotOfRow(int row) => _slotsMode == 1 ? (row == 0 ? AutoSlot : row - 1) : row;
+    /// <remarks>다시 <b>맨 아래</b>에 둔다(사용자 요청) — 20 · 21 · 22 차례로, 「자동 저장」 표시를 달아서.</remarks>
+    internal int SlotOfRow(int row) => row;
 
     /// <summary>슬롯 목록을 줄 단위로 굴린다 — 화살표·마우스 휠.</summary>
     internal void ScrollSlots(int rows) => _slotsTop = Math.Clamp(_slotsTop + rows, 0, Math.Max(0, SlotRows - SlotsVisible));
@@ -156,7 +160,20 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     }
 
     /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
-    internal void AutoSave() => host.Sys.SaveBattleTo(SlotPath(AutoSlot));
+    /// <summary>
+    /// 자동 저장 — 원본은 내 인물의 차례가 시작될 때마다 슬롯 20 하나에 덮어쓴다(0x1006acc0). 그러면 실수한 바로 다음 차례에 이미 덮여
+    /// 되돌릴 수가 없어서(사용자 보고), 덮어쓰기 전에 앞의 것을 21 · 22 로 한 칸씩 물린다 — 세 차례 전까지 남는다.
+    /// </summary>
+    internal void AutoSave()
+    {
+        try
+        {
+            for (int k = AutoSlot + AutoSlots - 1; k > AutoSlot; k--)
+                if (File.Exists(SlotPath(k - 1))) File.Copy(SlotPath(k - 1), SlotPath(k), overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 물리기에 실패해도 이번 저장은 한다 */ }
+        host.Sys.SaveBattleTo(SlotPath(AutoSlot));
+    }
 
     /// <summary>누르고 있는 스크롤 화살표(−1 위 · +1 아래 · 0 없음) · 누른 때 · 누른 뒤 센 틀 수.</summary>
     internal int _slotArrow;
@@ -217,7 +234,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
             if (head == null)
             {
                 string none = host._db?.T(0) is { Length: > 0 } t ? t : "없음";
-                if (slot == AutoSlot) none = $"자동 저장 — {none}";
+                if (slot >= AutoSlot) none = $"자동 저장{(slot > AutoSlot ? $" {slot - AutoSlot}차례 전" : "")} — {none}";
                 var (_, nw, nh) = host.GetText(none, White);
                 host.DrawText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
                 continue;
@@ -225,7 +242,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
 
             string title = host._db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
             var (_, tw, _) = host.GetText(title, White);
-            string label = slot == AutoSlot ? "[자동 저장]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
+            string label = slot == AutoSlot ? "[자동 저장]" : slot > AutoSlot ? $"[자동 {slot - AutoSlot}차례 전]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
             // 줄 높이는 표시 글로 잰다 — 연대표 세이브는 이름이 빈 글(TXR 2557)이라 이름으로 재면 높이 0 이 되어 그 줄만 아래로 처졌다.
             var (_, lw, th) = host.GetText(label, SlotLabelColor);
             // 이름은 가운데지만, 표시 글(특히 「[자동 저장]」)과 겹치면 그 뒤로 민다.
