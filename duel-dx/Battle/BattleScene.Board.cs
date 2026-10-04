@@ -123,6 +123,20 @@ internal sealed unsafe partial class BattleScene
     internal void ApplyAimHook()
     {
         string[] aim = Environment.GetEnvironmentVariable("DUELDX_AIM")?.Split(':') ?? [];
+        // DUELDX_AIM=basic:ally — 링 「공격」으로 가장 가까운 아군을 겨눈다(버서커 시험).
+        if (!_aimHookDone && aim is ["basic", "ally"] && IsPlayerTurn && _routine == null && host.Tlk._talk == null && _runningEvent < 0
+            && host._units[_turn] is { Data: { } bd } bu && Work(bd.BasicWorkId) is { } bw)
+        {
+            _aimHookDone = true;
+            var mate = host._units.Where(x => x != bu && x.Alive && x.OnField && x.IsAlly).OrderBy(x => Math.Abs(x.Col - bu.Col) + Math.Abs(x.Row - bu.Row)).FirstOrDefault();
+            (_targetWork, _targetIsBasicAttack) = (bw.Id, true);
+            int hpBefore = mate?.Hp ?? -1;
+            bool tookBasic = mate != null && OnTargetClick(mate.Col, mate.Row);
+            if (BattleScene.Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"aim hook basic: {bu.ChrCode}({bu.Col},{bu.Row}) berserk {bu.HasStatus(4)} → ally {mate?.ChrCode}({mate?.Col},{mate?.Row}) hp {hpBefore} took {tookBasic} routine {_routine != null} hint '{host._toast}'" + Environment.NewLine);
+            return;
+        }
         if (_aimHookDone || aim.Length == 0 || !int.TryParse(aim[0], out int id)) return;
         if (!IsPlayerTurn || _routine != null || host.Tlk._talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
         _aimHookDone = true;
