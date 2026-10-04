@@ -921,6 +921,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 host.ScheduleAbilitySounds(w);
                 _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
                 _fxStagger = 0;
+                _fxHitAt.Clear();
                 _fxArriveAt = 0;
                 SpawnAbilityEffects(w, a, col, row);
                 _fxTargets = null;
@@ -1118,6 +1119,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                     if (k > 0 && !a.Alive) break;
                     if (k > 0 && stagger > 0)
                         for (double end = host._lastTime + stagger / TicksPerSecond; host._lastTime < end;) yield return true;
+                    // 이펙트가 그 대상에 닿는 때가 정해진 기술(라이트닝 샤벨)은 그때까지 기다린다 — 시작에서 300틱을 안 넘게.
+                    if (_fxHitAt.TryGetValue(host._units[targets[k]], out double reach))
+                        for (double end = Math.Min(reach, effectsAt + 300 / TicksPerSecond); host._lastTime < end;) yield return true;
                     ApplyWork(a, hitWork, host._units[targets[k]], dying);
                 }
                 // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
