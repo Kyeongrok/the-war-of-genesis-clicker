@@ -33,10 +33,10 @@ public partial class CharacterStatsView : UserControl
     public sealed record Row(int Code, int FaceId, string Name, string Title, string Body, string Family, string Job, int Level,
                              int Hp, string Soul, int Tp, int Atk, int Acr, int Rdp, uint Lp, int Ctp, int Stp,
                              int Psy, int Dep, int Dex, string Weapon, IReadOnlyList<string> EquipmentItems,
-                             IReadOnlyList<string> AbilityItems, bool IsPlaceholder)
+                             IReadOnlyList<string> AbilityItems, bool IsPlaceholder, string Category = "")
     {
-        /// <summary>목록 둘째 줄 — 칭호 · 직업.</summary>
-        public string Subtitle => string.Join(" · ", new[] { Title, Job }.Where(t => t.Length > 0));
+        /// <summary>목록 둘째 줄 — 분류 · 칭호 · 직업.</summary>
+        public string Subtitle => string.Join(" · ", new[] { Category, Title, Job }.Where(t => t.Length > 0));
 
         /// <summary>상세 머리 밑 한 줄 — 칭호 · 체질 · 계열 · 직업.</summary>
         public string Profile => string.Join(" · ", new[] { Title, Body, Family, Job }.Where(t => t.Length > 0));
@@ -68,6 +68,11 @@ public partial class CharacterStatsView : UserControl
             if (db.Character(code) is not { } c) continue;
             rows.Add(MakeRow(db, c));
         }
+        var categories = Classify(db, rows);
+        for (int i = 0; i < rows.Count; i++) rows[i] = rows[i] with { Category = categories.GetValueOrDefault(rows[i].Code, OtherCategory) };
+        CategoryBox.ItemsSource = new[] { AllCategories }.Concat(CategoryNames).Concat([OtherCategory])
+            .Select(n => n == AllCategories ? n : $"{n} ({rows.Count(r => r.Category == n && !r.IsPlaceholder)})").ToList();
+        CategoryBox.SelectedIndex = 0;
         List.ItemsSource = rows;
         _view = CollectionViewSource.GetDefaultView(rows);
         _view.Filter = Accept;
@@ -151,10 +156,60 @@ public partial class CharacterStatsView : UserControl
                        c.Lp, c.Ctp, db.Stp(c), db.Psy(c), c.Dep, db.Dex(c), weaponText.Length > 0 ? weaponText : "없음", equipment, abilities, placeholder);
     }
 
+    private const string AllCategories = "전체", OtherCategory = "그 밖";
+
+    /// <summary>분류 이름 — 사용자 요청(아군 주인공 · 적군 주인공 · 부대 리더 · 부대원).</summary>
+    private static readonly string[] CategoryNames = ["아군 주인공", "적군 주인공", "부대 리더", "부대원"];
+
+    /// <summary>
+    /// 인물을 넷으로 가른다 — 자료에 「분류」 칸이 없어 쓰임새로 미룬다(어림):
+    /// 아군 주인공 = 파티 레벨 성장을 안 받는 명단(<c>Dat/0002.nch</c> — 플레이어 인물과 손님),
+    /// 부대원 = 어느 군단(<c>For.dat</c>)의 부하 자리에 있는 인물,
+    /// 적군 주인공 = 전투에 적 편으로 서고, 초상화가 있고, 이름이 그 인물 하나뿐인(일반병처럼 여럿이 같은 이름을 쓰지 않는) 인물,
+    /// 부대 리더 = 군단의 리더 칸에 적혔거나 전투에서 군단을 이끌고 서는 인물. 위에서부터 먼저 맞는 것으로 정한다.
+    /// </summary>
+    private static Dictionary<int, string> Classify(GameDatabase db, List<Row> rows)
+    {
+        var result = new Dictionary<int, string>();
+        try
+        {
+            var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
+            var members = new HashSet<int>();
+            var leaders = new HashSet<int>();
+            foreach (var legion in LegionBook.LoadAll(files).Values)
+            {
+                foreach (ushort m in legion.Members) members.Add(m);
+                if (legion.Leader > 0) leaders.Add(legion.Leader);
+            }
+            var enemies = new HashSet<int>();
+            foreach (string name in files.List("Btl", ".btl").Keys)
+                if (int.TryParse(Path.GetFileNameWithoutExtension(name), out int btl) && BattleFile.Parse(btl, files.Read("Btl", name)) is { } battle)
+                    foreach (var u in battle.Units.Where(u => u.ChrCode > 0))
+                    {
+                        if (u.Squad > 0) leaders.Add(u.ChrCode);
+                        if (u.Side is not (3 or 4)) enemies.Add(u.ChrCode);
+                    }
+            var nameCount = rows.Where(r => !r.IsPlaceholder).GroupBy(r => r.Name).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var r in rows)
+            {
+                if (r.IsPlaceholder) continue;
+                result[r.Code] = db.LevelExempt.Contains(r.Code) ? CategoryNames[0]
+                               : members.Contains(r.Code) ? CategoryNames[3]
+                               : enemies.Contains(r.Code) && r.FaceId > 0 && nameCount.GetValueOrDefault(r.Name) == 1 ? CategoryNames[1]
+                               : leaders.Contains(r.Code) ? CategoryNames[2]
+                               : OtherCategory;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException) { }
+        return result;
+    }
+
     private bool Accept(object o)
     {
         if (o is not Row r) return false;
         if (HideEmptyToggle.IsChecked == true && r.IsPlaceholder) return false;
+        // 분류 — 고른 이름(뒤의 「(개수)」는 뗀다)과 같아야 한다.
+        if (CategoryBox.SelectedItem is string chosen && chosen != AllCategories && !chosen.StartsWith(r.Category + " (", StringComparison.Ordinal)) return false;
         string q = FilterBox.Text.Trim();
         return q.Length == 0 || r.Name.Contains(q) || r.Title.Contains(q) || r.Job.Contains(q) || r.Family.Contains(q)
                || r.Code.ToString("D4").Contains(q);
