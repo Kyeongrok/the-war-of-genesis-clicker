@@ -118,6 +118,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </remarks>
     private (double Start, int CoverTicks, int UncoverTicks, uint Color, bool Back)? _fieldFade;
 
+    /// <summary>900 이 시작될 때 찍은 장면 사진과 그때 DrawFieldScene 이 돌려준 「이어 그릴 층」 — 덮는 동안 가림 아래는 이 사진이다.</summary>
+    private uint[]? _fieldFadeShot;
+    private int _fieldFadeShotStart, _shotStart;
+
     /// <summary>덮기가 가리는 층 수(900 의 a4) — 8 이면 인물·물체까지 다 가린다.</summary>
     private int _fieldFadeCover = 8;
 
@@ -343,6 +347,7 @@ internal sealed unsafe partial class BattleSceneWindow
             _fieldChoices = null;
             _fieldPictures.Clear();
             _fieldFade = null;
+            _fieldFadeShot = null;
             _fieldWipe = null;
             // 층 안 차례(감사5 D3): 로더는 물체 전부(0x100ec8f5) → 인물 전부(0x100eca0d) 순으로 만들고, 생성자가 부모 창 <b>머리에 끼우므로</b>
             // (0x10001560 → 0x10001650(…,1)) 나중에 만든 것이 먼저(아래) 그려진다 — 한 층 = [마지막 인물 … 첫 인물, 마지막 물체 … 첫 물체].
@@ -1128,6 +1133,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 uint color900 = A(1) switch { 0 => 0xFFFFFFFF, 2 => 0xFFFF0000, _ => 0xFF000000 };
                 _fieldFade = (_lastTime, Math.Max(0, (int)A(2)), Math.Max(0, (int)A(3)), color900, A(0) != 0);
                 _fieldFadeCover = cover900;
+                // 가림 아래 장면은 <b>지금 이 순간</b>의 사진으로 굳는다(0x100f21e0 → 0x10022490, ba-21 field Y1 = D11) — 스크립트가 여기에 기대어
+                // 「덮기 시작 → 곧바로 순간이동·카메라 점프」를 쓴다(22곳/18필드, Fld 0012 첫 프롤로그). 전에는 산 화면 위 덮개라 어두워지는 틀에 장면이 튀었다.
+                _fieldFadeShot = RenderFieldShot(cover900);
+                _fieldFadeShotStart = _shotStart;
                 // 눈금이 63 에 닿을 때(a2 + a3 틱)까지 슬롯이 산다(전환 물체 +0x58, 0x100f26ee) — 줄은 안 막고 뒤따르는 1 이 기다린다.
                 // Fld 0012 사건 4 의 900[1,1,0,45,8] → 517[100,60] → 1 → 2[30] → 600 은 밝아지기와 음악 페이드가 <b>함께</b> 돌고,
                 // 둘 다 끝난 뒤 1초 쉬고 첫 대사가 뜬다(전에는 걷어내기를 안 기다려 밝아지는 도중에 대사가 떴다).
@@ -1655,8 +1664,15 @@ internal sealed unsafe partial class BattleSceneWindow
         else if (_fieldFade is not null)
         {
             // 덮기(900)가 가리는 층은 a4 까지다 — 그 위 층은 덮개보다 나중에 그려 안 가려진다.
-            // 원본은 시작 때 찍은 사진을 섞지만(감사5 D11) 여기서는 산 화면 위에 덮개를 얹는다.
-            int start = DrawFieldScene(ox, oy, _fieldFadeCover);
+            // 시작 때 찍은 사진을 깔고 덮개를 얹는다(D11) — 사진이 없으면(불러온 직후 따위) 산 화면.
+            int start;
+            if (_fieldFadeShot is { } shot900)
+            {
+                for (int y = 0; y < MosesH; y++)
+                    Array.Copy(shot900, y * MosesW, _fb, (oy + y) * BoardWidth + ox, MosesW);
+                start = _fieldFadeShotStart;
+            }
+            else start = DrawFieldScene(ox, oy, _fieldFadeCover);
             DrawFieldFade(ox, oy);
             DrawFieldLayers(ox, oy, Math.Max(_fieldFadeCover, start), 9);
         }
@@ -1857,6 +1873,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         cover = Math.Clamp(cover, 0, 8);
         _fieldFade = null;                                   // 전환 물체는 하나뿐이다([0x101c0014])
+        _fieldFadeShot = null;
         uint[] under, over;
         if (toPicture)
         {
@@ -1903,7 +1920,7 @@ internal sealed unsafe partial class BattleSceneWindow
         var clip = _uiClip;
         FillRect(ox, oy, MosesW, MosesH, 0xFF000000);
         _uiClip = (ox, oy, MosesW, MosesH);
-        DrawFieldScene(ox, oy, cover);
+        _shotStart = DrawFieldScene(ox, oy, cover);
         _uiClip = clip;
         var shot = CaptureFieldScreen();
         for (int y = 0; y < MosesH; y++)
@@ -2028,7 +2045,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void StepFieldFade()
     {
-        if (_fieldFade is not { } fade) return;
+        if (_fieldFade is not { } fade) { _fieldFadeShot = null; return; }
         int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
         if (FieldFadeLevel(tick, fade.CoverTicks, fade.UncoverTicks) < 63) return;
         _fieldFade = null;
@@ -2042,7 +2059,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>덮기·걷기 — 세기 = 눈금 &lt; 32 이면 눈금, 이상이면 a0 ≠ 0 일 때 63 − 눈금(걷기), a0 = 0 이면 31(덮인 채)(<c>0x1002a0e0</c>).</summary>
     private void DrawFieldFade(int ox, int oy)
     {
-        if (_fieldFade is not { } fade) return;
+        if (_fieldFade is not { } fade) { _fieldFadeShot = null; return; }
         int tick = (int)((_lastTime - fade.Start) * TicksPerSecond);
         int level = FieldFadeLevel(tick, fade.CoverTicks, fade.UncoverTicks);
         int power = level < 32 ? level : fade.Back ? 63 - level : 31;
