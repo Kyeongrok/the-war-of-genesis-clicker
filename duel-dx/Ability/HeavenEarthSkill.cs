@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 천지 파열무(어빌리티 163, work 1591) — 시전자를 지나는 X 자 두 대각선으로 땅이 터지고 갈라진 뒤, 범위 안 대상마다 폭발한다.
 /// </summary>
@@ -22,7 +24,7 @@ namespace DuelDx;
 /// <para>효과 시간 규칙은 <see cref="FinisherPrelude"/> 와 같다 — <c>0x100c2530</c> 수명(0 = 모션 한 번) · <c>0x100c24d0</c> 시작 지연 ·
 /// <c>0x100c2640(e, 0, n)</c> e 가 끝나고 (n 틱 더 기다려) 시작. 떠 있는 대상(<c>+0x129</c>)은 데모에 없어 늘 땅의 것을 쓴다.</para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class HeavenEarthSkill(GameWindow host)
 {
     internal const int HeavenEarthWork = 1591;
     internal const int CrackObs = 1014, DebrisObs = 251, RuptureObs = 1211, BlastObs = 111, HeavenEarthSoundObs = 1438;
@@ -56,27 +58,27 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal double PlayRawMotion(UnitState u, int motion, bool loop, double holdSeconds = 1000)
     {
-        var found = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.RawClip(motion) : null;
+        var found = host._sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.RawClip(motion) : null;
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"{_lastTime:F2} chr {u.ChrCode} motion {motion}{(loop ? " hold" : "")} keys {found?.Keys.Count ?? 0}" + Environment.NewLine);
+                $"{host._lastTime:F2} chr {u.ChrCode} motion {motion}{(loop ? " hold" : "")} keys {found?.Keys.Count ?? 0}" + Environment.NewLine);
         if (sprite == null || found is not { Keys.Count: > 0 } clip) return 0;
         double seconds = sprite.MotionTicks(motion) / TicksPerSecond;
         u.PlayMotion(motion, loop ? holdSeconds : seconds, loop);
-        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+        foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((host._lastTime + tick / TicksPerSecond, sound));
         return seconds;
     }
 
     /// <summary>그 모션 한 번의 길이(초) — 자식까지는 안 본다.</summary>
-    internal double OnceSeconds(int obs, int motion) => Math.Max(1, UiFor(obs)?.MotionLength(motion) ?? 1) / TicksPerSecond;
+    internal double OnceSeconds(int obs, int motion) => Math.Max(1, host.UiFor(obs)?.MotionLength(motion) ?? 1) / TicksPerSecond;
 
     internal void AddTimedFx(int obs, int motion, double start, (double X, double Y) at, double? lifeTicks, bool mirror) =>
         _timedFx.Add(new TimedFx(obs, motion, start, (int)at.X, (int)at.Y, lifeTicks is { } life ? start + Ticks(life) : null, mirror));
 
     internal void HeavenEarthSound(int motion, double at)
     {
-        if (_effectTables.GetValueOrDefault(HeavenEarthSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
-        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + Ticks(tick), sound));
+        if (host._effectTables.GetValueOrDefault(HeavenEarthSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
+        foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((at + Ticks(tick), sound));
     }
 
     /// <summary>
@@ -85,16 +87,16 @@ internal sealed unsafe partial class GameWindow
     internal IEnumerable<bool> HeavenEarthRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         // ── 단계 0 — 칼을 땅에 꽂는다(모션 48 한 번, 0x100b4410). 다 꽂으면 꽂은 자세(49)를 붙든 채 땅이 터진다(fg-19).
-        for (double end = _lastTime + PlayRawMotion(user, StabMotion, loop: false); _lastTime < end;) yield return true;
+        for (double end = host._lastTime + PlayRawMotion(user, StabMotion, loop: false); host._lastTime < end;) yield return true;
         PlayRawMotion(user, StabMotion + 1, loop: true);
 
-        var (ux, uy) = UnitFoot(user);
+        var (ux, uy) = host.UnitFoot(user);
         (double, double) Diagonal(int d, bool first) => (ux + d, uy + (first ? d : -d) * 0.8);
         int V(int k) => (k + 7) % 3;
-        int Burst(int v) => 7 - v == 5 ? 5 - _rng.Next(2) : 7 - v;
+        int Burst(int v) => 7 - v == 5 ? 5 - host._rng.Next(2) : 7 - v;
 
         // ── 단계 1 ──
-        double s1 = _lastTime;
+        double s1 = host._lastTime;
         _shakes.Add((s1, s1 + Ticks(40), 3, true));
         HeavenEarthSound(0, s1);
         _debrisLastStep = s1;
@@ -109,36 +111,36 @@ internal sealed unsafe partial class GameWindow
                 for (int n = 0; n < 2; n++)
                     _debris.Add(new Debris
                     {
-                        Obs = DebrisObs, Motion = _rng.Next(3), Start = start, X = at.Item1, Y = at.Item2,
-                        Vx = _rng.Next(10) - 5, Vy = _rng.Next(10) - 5, Vz = _rng.Next(60) + 20, Bounce = 0.3,
+                        Obs = DebrisObs, Motion = host._rng.Next(3), Start = start, X = at.Item1, Y = at.Item2,
+                        Vx = host._rng.Next(10) - 5, Vy = host._rng.Next(10) - 5, Vz = host._rng.Next(60) + 20, Bounce = 0.3,
                     });
             }
-        for (double end = s1 + Ticks(60); _lastTime < end;) { StepDebris(); yield return true; }
+        for (double end = s1 + Ticks(60); host._lastTime < end;) { StepDebris(); yield return true; }
 
         // ── 단계 2 ──
-        double s2 = _lastTime;
+        double s2 = host._lastTime;
         HeavenEarthSound(3, s2);
         _shakes.Add((s2, s2 + Ticks(20), 5, false));
         foreach (bool first in new[] { true, false })
         {
             for (int k = -7; k <= 7; k++)
-                if (_rng.Next(3) != 0) AddTimedFx(CrackObs, V(k), s2, Diagonal(40 * k, first), null, first);
+                if (host._rng.Next(3) != 0) AddTimedFx(CrackObs, V(k), s2, Diagonal(40 * k, first), null, first);
             for (int k = -5; k <= 5; k++)
                 AddTimedFx(RuptureObs, 0, s2 + Ticks(20 + Math.Abs(k)), Diagonal(50 * k, first), null, false);
         }
         _shakes.Add((s2 + Ticks(21), s2 + Ticks(45), 8, false));
         HeavenEarthSound(1, s2 + Ticks(20));
-        for (double end = s2 + Ticks(30); _lastTime < end;) { StepDebris(); yield return true; }
+        for (double end = s2 + Ticks(30); host._lastTime < end;) { StepDebris(); yield return true; }
 
         // ── 단계 3 ──
-        double s3 = _lastTime;
+        double s3 = host._lastTime;
         int count = targets.Count, t = 5 * count;
         _shakes.Add((s3, s3 + Ticks(5 * count + 30), 4, false));
         var blasts = new List<(double At, int Target)>();
         for (int j = 0; j < count; j++)
         {
-            var target = _units[targets[j]];
-            var (tx, ty) = UnitFoot(target);
+            var target = host._units[targets[j]];
+            var (tx, ty) = host.UnitFoot(target);
             double at = s3 + Ticks(5 * j);
             AddTimedFx(BlastObs, 0, at, (tx, ty), null, false);
             HeavenEarthSound(6, at);
@@ -156,7 +158,7 @@ internal sealed unsafe partial class GameWindow
                 AddTimedFx(CrackObs, 19 - 2 * v, b, at, null, first);
                 double c = b + OnceSeconds(CrackObs, 19 - 2 * v) + Ticks(30);
                 AddTimedFx(CrackObs, burst, c, at, null, first);
-                if (_rng.Next(2) != 0) AddTimedFx(CrackObs, v, c, at, null, first);
+                if (host._rng.Next(2) != 0) AddTimedFx(CrackObs, v, c, at, null, first);
             }
         _shakes.Add((s3 + Ticks(t + 68), s3 + Ticks(t + 68 + 35), 5, false));
         HeavenEarthSound(7, s3 + Ticks(t + 60));
@@ -164,24 +166,24 @@ internal sealed unsafe partial class GameWindow
         // 폭발하는 때마다 그 대상에게 피해를 준다.
         foreach (var (at, target) in blasts)
         {
-            while (_lastTime < at) { StepDebris(); yield return true; }
+            while (host._lastTime < at) { StepDebris(); yield return true; }
             hit(target);
         }
         double finish = s3 + Ticks(t + 68 + 35);
-        while (_lastTime < finish || _debris.Count > 0 && _lastTime < finish + 3) { StepDebris(); yield return true; }
+        while (host._lastTime < finish || _debris.Count > 0 && host._lastTime < finish + 3) { StepDebris(); yield return true; }
         // 칼을 뽑는다(모션 50) — 그 모션이 없는 인물이면 붙든 자세를 풀기만 한다.
         double pull = PlayRawMotion(user, StabMotion + 2, loop: false);
         if (pull <= 0) user.PlayAction(ObsMotionTable.ActionStand, 0);
-        for (double end = _lastTime + pull; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + pull; host._lastTime < end;) yield return true;
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                               $"heaven-earth: targets {count}, fx {_timedFx.Count}, debris {_debris.Count}, took {_lastTime - s1:0.0}s" + Environment.NewLine);
+                               $"heaven-earth: targets {count}, fx {_timedFx.Count}, debris {_debris.Count}, took {host._lastTime - s1:0.0}s" + Environment.NewLine);
     }
 
     /// <summary>파편 물리 한 틱씩(<c>0x10038fa0</c>) — 수명 200틱.</summary>
     internal void StepDebris()
     {
-        int ticks = (int)((_lastTime - _debrisLastStep) * TicksPerSecond);
+        int ticks = (int)((host._lastTime - _debrisLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
         _debrisLastStep += ticks / TicksPerSecond;
         for (int n = 0; n < ticks; n++)
@@ -203,28 +205,28 @@ internal sealed unsafe partial class GameWindow
     internal void DrawHeavenEarthFx()
     {
         StepDebris();
-        _timedFx.RemoveAll(f => f.End is { } end ? _lastTime >= end : _lastTime >= f.Start + OnceSeconds(f.Obs, f.Motion));
+        _timedFx.RemoveAll(f => f.End is { } end ? host._lastTime >= end : host._lastTime >= f.Start + OnceSeconds(f.Obs, f.Motion));
         foreach (var f in _timedFx)
         {
-            if (_lastTime < f.Start) continue;
-            int tick = (int)((_lastTime - f.Start) * TicksPerSecond);
-            var clip = UiFor(f.Obs)?.Clip(f.Motion);
-            if (clip is { Children.Count: > 0 }) DrawUnitLayers(clip, tick, f.X, f.Y, f.Mirror, loop: f.End != null);
-            DrawUi(f.Obs, f.Motion, tick, f.X, f.Y, UiBlend.Add, loop: f.End != null, mirror: f.Mirror);
+            if (host._lastTime < f.Start) continue;
+            int tick = (int)((host._lastTime - f.Start) * TicksPerSecond);
+            var clip = host.UiFor(f.Obs)?.Clip(f.Motion);
+            if (clip is { Children.Count: > 0 }) host.DrawUnitLayers(clip, tick, f.X, f.Y, f.Mirror, loop: f.End != null);
+            host.DrawUi(f.Obs, f.Motion, tick, f.X, f.Y, UiBlend.Add, loop: f.End != null, mirror: f.Mirror);
         }
         foreach (var d in _debris)
-            if (_lastTime >= d.Start)
-                DrawUi(d.Obs, d.Motion, d.Age, (int)d.X, (int)(d.Y - d.Z * 0.6), UiBlend.Alpha);
+            if (host._lastTime >= d.Start)
+                host.DrawUi(d.Obs, d.Motion, d.Age, (int)d.X, (int)(d.Y - d.Z * 0.6), UiBlend.Alpha);
     }
 
     /// <summary>지금 흔들림 — 틀마다 ±세기로 번갈아(가로·세로 따로).</summary>
     internal (int X, int Y) ShakeOffset()
     {
-        _shakes.RemoveAll(s => _lastTime >= s.End);
-        int x = 0, y = 0, sign = (int)(_lastTime * TicksPerSecond) % 2 == 0 ? 1 : -1;
+        _shakes.RemoveAll(s => host._lastTime >= s.End);
+        int x = 0, y = 0, sign = (int)(host._lastTime * TicksPerSecond) % 2 == 0 ? 1 : -1;
         foreach (var s in _shakes)
         {
-            if (_lastTime < s.Start) continue;
+            if (host._lastTime < s.Start) continue;
             if (s.Vertical) y = Math.Max(y, s.Strength); else x = Math.Max(x, s.Strength);
         }
         return (x * sign, y * sign);

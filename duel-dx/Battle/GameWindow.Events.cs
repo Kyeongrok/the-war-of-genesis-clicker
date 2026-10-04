@@ -698,8 +698,8 @@ internal sealed unsafe partial class GameWindow
                             double t0 = _lastTime;
                             u.Fade = 0;
                             _pendingSounds.Add((_lastTime, 694, UnitFoot(u).X));
-                            _legionLater.Add((t0 + 56 / TicksPerSecond, () => Play(90)));
-                            _legionLater.Add((t0 + 166 / TicksPerSecond, () =>
+                            LegionStageAb._legionLater.Add((t0 + 56 / TicksPerSecond, () => Play(90)));
+                            LegionStageAb._legionLater.Add((t0 + 166 / TicksPerSecond, () =>
                             {
                                 if (!arriving.Alive || !arriving.OnField) return;
                                 CenterOnUnit(arriving);
@@ -711,7 +711,7 @@ internal sealed unsafe partial class GameWindow
                             for (int k = 1; k <= 10; k++)
                             {
                                 double fade = k / 10.0;
-                                _legionFades.Add((t0 + (166 + 5 * k) / TicksPerSecond, u, fade));
+                                LegionStageAb._legionFades.Add((t0 + (166 + 5 * k) / TicksPerSecond, u, fade));
                             }
                             longest = Math.Max(longest, 216 / TicksPerSecond);
                         }

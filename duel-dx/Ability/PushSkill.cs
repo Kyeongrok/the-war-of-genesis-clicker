@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 인물을 옮기는 기술들(fg-21 ⑧·⑨)과 여러 번 치는 기술(⑩) — 원본 핸들러가 이동기(<c>0x100ca7f0</c>·<c>0x100cb4a0</c>)로 유닛을 미끄러뜨리거나
 /// 피해 메시지를 여러 번 보내는 것을 옮겼다(분석-원본차이 스킬핸들러A 1·8·9, B 2·7).
@@ -16,7 +18,7 @@ namespace DuelDx;
 /// <item><b>무신멸뢰옥</b> 3타(틱 150·190·230), <b>선 블래스트</b> 4타(틱 15·30·15·25 간격), <b>카운터 미사일</b> Lv11 이상은 60틱 뒤 두 번째 일제 사격.</item>
 /// </list>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class PushSkill(GameWindow host)
 {
     /// <summary>다이나믹 크래쉬(어빌리티 96) Lv1~20.</summary>
     internal static readonly HashSet<int> DynamicCrashWorks = [470, .. Enumerable.Range(745, 9), .. Enumerable.Range(784, 10)];
@@ -51,7 +53,7 @@ internal sealed unsafe partial class GameWindow
     internal static List<double> SlideSteps(int cells, double speed = 30, double factor = 0.9, double floor = 5)
     {
         var steps = new List<double>();
-        for (double pos = 0, total = Math.Max(1, cells) * WorldPerCell; pos < total;)
+        for (double pos = 0, total = Math.Max(1, cells) * KnockbackSkill.WorldPerCell; pos < total;)
         {
             pos = Math.Min(total, pos + speed);
             speed = Math.Max(floor, speed * factor);
@@ -65,9 +67,9 @@ internal sealed unsafe partial class GameWindow
     internal IEnumerable<bool> SlideAll(List<(UnitState Unit, int Col, int Row, List<double> Steps)> moves, bool begun = false)
     {
         if (!begun) foreach (var (u, col, row, _) in moves) u.BeginSlide(col, row);
-        double start = _lastTime;
+        double start = host._lastTime;
         int longest = moves.Max(m => m.Steps.Count);
-        for (int k; (k = (int)((_lastTime - start) * TicksPerSecond)) < longest;)
+        for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < longest;)
         {
             foreach (var (u, _, _, steps) in moves) u.SetSlide(steps[Math.Min(k, steps.Count - 1)]);
             yield return true;
@@ -92,13 +94,13 @@ internal sealed unsafe partial class GameWindow
     internal IEnumerable<bool> RadialPushRoutine(UnitState user, WorkData w, int col, int row, List<int> targets, List<UnitState> dying)
     {
         _ = targets;   // 원본은 WorkTargets(적만) 가 아니라 범위 안 모든 유닛을 모은다(방식 5).
-        var cells = AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
+        var cells = host.AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
         var area = cells.ToHashSet();
         // 먼저 모아 둔다(0x100df5c0 이 버퍼에 모은 뒤 고리를 돈다) — 밀려난 유닛이 다시 잡히지 않게.
-        var order = cells.Select(c => LiveUnitAt(c.Col, c.Row)).OfType<UnitState>()
+        var order = cells.Select(c => host.LiveUnitAt(c.Col, c.Row)).OfType<UnitState>()
                          .Where(t => t != user && !dying.Contains(t)).Distinct().ToList();
         // 되돌아올 때 설 수 있는 칸 0x100d9a20 — 지형 &9 · 다른 유닛 등록 · 물체 없음(자기 칸은 늘 참).
-        bool Stand(int c, int r, UnitState t) => CanStand(c, r, t) && ObjectAt(c, r) is not { Alive: true, Data.BlocksStanding: true };
+        bool Stand(int c, int r, UnitState t) => host.CanStand(c, r, t) && host.ObjectAt(c, r) is not { Alive: true, Data.BlocksStanding: true };
 
         bool stuckFlag = false;   // 0x1008de68 — 고리 밖에서 한 번만 0
         var starts = new List<(int Col, int Row)>();
@@ -122,21 +124,21 @@ internal sealed unsafe partial class GameWindow
             if (moved == 0) continue;
             t.Facing = FacingToward(nc, nr, user.Col, user.Row);
             t.PlayAction(HitAction, 1000);
-            var (fx, fy) = UnitFoot(t);
-            _effects.Add((BiTrailObs, 0, _lastTime, fx, fy));
+            var (fx, fy) = host.UnitFoot(t);
+            host._effects.Add((KnockbackSkill.BiTrailObs, 0, host._lastTime, fx, fy));
             t.BeginSlide(nc, nr);   // 곧바로 새 칸에 등록 — 뒤에 처리되는 유닛은 이 칸에 막히고, 비운 출발 칸에는 설 수 있다
             moves.Add((t, nc, nr, SlideSteps(moved)));
         }
         // 슬롯 0 — 출발 칸에 지금 선 유닛(제자리에 막힌 유닛, 또는 남의 출발 칸으로 되돌아온 유닛).
-        var slot0 = starts.Select(s => LiveUnitAt(s.Col, s.Row)).OfType<UnitState>().ToList();
+        var slot0 = starts.Select(s => host.LiveUnitAt(s.Col, s.Row)).OfType<UnitState>().ToList();
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"radial push work {w.Id}: {string.Join(", ", moves.Select(m => $"{m.Item1.ChrCode}→({m.Item2},{m.Item3})"))} " +
                 $"슬롯0 [{string.Join(",", slot0.Select(u => u.ChrCode))}] 슬롯1 [{string.Join(",", slot1.Select(u => u.ChrCode))}]" + Environment.NewLine);
-        foreach (var v in slot0) if (v.Alive && !dying.Contains(v)) ApplyWork(user, w, v, dying);
+        foreach (var v in slot0) if (v.Alive && !dying.Contains(v)) host.ApplyWork(user, w, v, dying);
         if (moves.Count > 0) foreach (bool _ in SlideAll(moves, begun: true)) yield return true;
         foreach (var (t, _, _, _) in moves) t.PlayAction(ObsMotionTable.ActionStand, 0);
-        foreach (var t in slot1) if (t.Alive && !dying.Contains(t)) ApplyWork(user, w, t, dying);
+        foreach (var t in slot1) if (t.Alive && !dying.Contains(t)) host.ApplyWork(user, w, t, dying);
     }
 
     /// <summary>워핑 — 대상을 시전자→대상 쪽으로 13±2 칸 밖의 설 수 있는 칸에 떨어뜨린다. 없으면 10칸부터 한 칸씩 당겨 찾는다.</summary>
@@ -149,34 +151,34 @@ internal sealed unsafe partial class GameWindow
         (int Col, int Row)? landing = null;
         for (int n = 0; n < 100 && landing == null; n++)
         {
-            int c = t.Col + dc * 13 + _rng.Next(-2, 3), r = t.Row + dr * 13 + _rng.Next(-2, 3);
-            if (dc == 0) c = t.Col + _rng.Next(-2, 3); else r = t.Row + _rng.Next(-2, 3);
-            if (CanStand(c, r, t)) landing = (c, r);
+            int c = t.Col + dc * 13 + host._rng.Next(-2, 3), r = t.Row + dr * 13 + host._rng.Next(-2, 3);
+            if (dc == 0) c = t.Col + host._rng.Next(-2, 3); else r = t.Row + host._rng.Next(-2, 3);
+            if (host.CanStand(c, r, t)) landing = (c, r);
         }
         for (int d = 10; d >= 1 && landing == null; d--)
-            if (CanStand(t.Col + dc * d, t.Row + dr * d, t)) landing = (t.Col + dc * d, t.Row + dr * d);
+            if (host.CanStand(t.Col + dc * d, t.Row + dr * d, t)) landing = (t.Col + dc * d, t.Row + dr * d);
         if (landing is not var (lc, lr)) yield break;
 
         const double Tick = 1 / TicksPerSecond;
-        var (fx, fy) = UnitFoot(t);
-        _effects.Add((587, 4, _lastTime, fx, fy));
-        for (double start = _lastTime, end = start + 12 * Tick; _lastTime < end;)
+        var (fx, fy) = host.UnitFoot(t);
+        host._effects.Add((587, 4, host._lastTime, fx, fy));
+        for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
         {
-            t.Fade = Math.Max(0, 1 - (_lastTime - start) / (12 * Tick));
+            t.Fade = Math.Max(0, 1 - (host._lastTime - start) / (12 * Tick));
             yield return true;
         }
         t.Fade = 0;
         // 날아가는 동안 — 거리에 맞춰 잠깐(칸당 1틱).
-        for (double end = _lastTime + (Math.Abs(lc - t.Col) + Math.Abs(lr - t.Row)) * Tick; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + (Math.Abs(lc - t.Col) + Math.Abs(lr - t.Row)) * Tick; host._lastTime < end;) yield return true;
         t.WarpTo(lc, lr);
         t.OriginCol = lc;
         t.OriginRow = lr;
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"warping: {user.ChrCode} → {t.ChrCode} 를 ({lc},{lr}) 로" + Environment.NewLine);
-        for (double start = _lastTime, end = start + 12 * Tick; _lastTime < end;)
+        for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
         {
-            t.Fade = Math.Min(1, (_lastTime - start) / (12 * Tick));
+            t.Fade = Math.Min(1, (host._lastTime - start) / (12 * Tick));
             yield return true;
         }
         t.Fade = 1;
@@ -196,12 +198,12 @@ internal sealed unsafe partial class GameWindow
         for (int k = 1; k <= dist; k++)
         {
             int c = a.Col + dc * k, r = a.Row + dr * k;
-            if ((uint)c >= Cols || (uint)r >= Rows || _map is not { } map || c >= map.Cols || r >= map.Rows || (CellFlagsAt(c, r) & 0x9) != 0) break;
-            if (ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
+            if ((uint)c >= host.Cols || (uint)r >= host.Rows || host._map is not { } map || c >= map.Cols || r >= map.Rows || (host.CellFlagsAt(c, r) & 0x9) != 0) break;
+            if (host.ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
             cells.Add((c, r));
         }
         // 마지막 칸에 누가 서 있으면 그 앞에서 멈춘다(겹쳐 서지 않게 — 가설).
-        while (cells.Count > 0 && LiveUnitAt(cells[^1].Col, cells[^1].Row) is { } blocker && blocker != a) cells.RemoveAt(cells.Count - 1);
+        while (cells.Count > 0 && host.LiveUnitAt(cells[^1].Col, cells[^1].Row) is { } blocker && blocker != a) cells.RemoveAt(cells.Count - 1);
         if (cells.Count == 0) yield break;
         var (endCol, endRow) = cells[^1];
         bool band = w.Id != 8 && !(w.Id >= 259 && w.Id <= 277);   // 혼만 한 줄, 나머지(비연참·오메가 스윙)는 3칸 폭
@@ -209,29 +211,29 @@ internal sealed unsafe partial class GameWindow
                                                                   : t.Row == c.Row && Math.Abs(t.Col - c.Col) <= (band ? 1 : 0);
 
         // 혼·비연참은 한 칸(40px)/틱, 오메가 스윙은 15px/틱.
-        double perTick = w.Id == 517 ? 15.0 / WorldPerCell : 1;
+        double perTick = w.Id == 517 ? 15.0 / KnockbackSkill.WorldPerCell : 1;
         var steps = new List<double>();
         for (double pos = 0; pos < cells.Count;) { pos = Math.Min(cells.Count, pos + perTick); steps.Add(pos / cells.Count); }
         a.BeginSlide(endCol, endRow);
         a.OriginCol = endCol;
         a.OriginRow = endRow;
         var struck = new HashSet<UnitState>();
-        double start = _lastTime;
-        for (int k; (k = (int)((_lastTime - start) * TicksPerSecond)) < steps.Count;)
+        double start = host._lastTime;
+        for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < steps.Count;)
         {
             double p = steps[k];
             a.SetSlide(p);
             // 지난 칸까지의 적을 친다.
             int passed = Math.Min(cells.Count, (int)Math.Floor(p * cells.Count + 0.5));
             for (int i = 0; i < passed; i++)
-                foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && InBand(t, cells[i]) && SeesAsFoe(a, t)))
-                    if (struck.Add(t)) ApplyWork(a, w, t, dying);
+                foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, cells[i]) && SeesAsFoe(a, t)))
+                    if (struck.Add(t)) host.ApplyWork(a, w, t, dying);
             yield return true;
         }
         a.SetSlide(1);
         foreach (var c in cells)
-            foreach (var t in _units.Where(t => t.Alive && t.OnField && t != a && InBand(t, c) && SeesAsFoe(a, t)))
-                if (struck.Add(t)) ApplyWork(a, w, t, dying);
+            foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, c) && SeesAsFoe(a, t)))
+                if (struck.Add(t)) host.ApplyWork(a, w, t, dying);
         col = endCol; row = endRow;
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),

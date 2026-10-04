@@ -2,6 +2,8 @@ using System.IO;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 나인 크루세이더(어빌리티 139, work 1491) — 칼 한 자루가 날아다니며 대상들을 차례로 꿰뚫는 필살기.
 /// </summary>
@@ -22,7 +24,7 @@ namespace DuelDx;
 /// <para>칼 그림은 Obs 585(칼끝 빛)와 그 자식 키 586(칼날)이 모션마다 한 컷이다. 원본의 불꽃(<c>0x100cc600</c>)은 그림 자료가 없는 입자라
 /// 여기서는 치는 이펙트 1401 로 갈음한다(가설). 피해는 대상마다 처음 꿰뚫릴 때 한 번 준다.</para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class NineCrusaderSkill(GameWindow host)
 {
     internal const int NineCrusaderWork = 1491;
     internal const int SwordObs = 585, SwordSoundObs = 1428, SwordSparkObs = 1401;
@@ -80,12 +82,12 @@ internal sealed unsafe partial class GameWindow
         if (targets.Count == 0) return [];
         if (targets.Count == 1) return [targets[0], targets[0], targets[0]];
         int n = targets.Count == 2 ? 5 : 9;
-        return [.. Enumerable.Range(0, n).Select(_ => targets[_rng.Next(targets.Count)])];
+        return [.. Enumerable.Range(0, n).Select(_ => targets[host._rng.Next(targets.Count)])];
     }
 
     internal SwordFlight StartNineCrusader(UnitState user, List<int> targets)
     {
-        var (ux, uy) = UnitFoot(user);
+        var (ux, uy) = host.UnitFoot(user);
         var order = NineCrusaderOrder(targets);
         // 길 — 대상, 그 대상을 (앞 점에서 본 방향으로) 120 지나친 점, … 그리고 시전자 머리 위(z+200 → 화면 120px). 월드 y 는 화면 0.8배.
         var points = new List<(double X, double Y)>();
@@ -93,7 +95,7 @@ internal sealed unsafe partial class GameWindow
         (double X, double Y) from = (ux + 11, uy + 400);          // 앞 점 — 처음은 떠난 칼이 닿은 자리(y+500)
         foreach (int ti in order)
         {
-            var (tx, ty) = UnitFoot(_units[ti]);
+            var (tx, ty) = host.UnitFoot(host._units[ti]);
             double dx = tx - from.X, dy = ty - from.Y, d = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
             (double X, double Y) past = (tx + dx / d * 120, ty + dy / d * 120 * 0.8);
             points.Add((tx, ty)); pointTarget.Add(ti);
@@ -107,7 +109,7 @@ internal sealed unsafe partial class GameWindow
             Rise = new SwordMover((ux + 11, uy), [(ux + 11, uy + 400)], 10, 1.1),
             Main = new SwordMover((ux, uy + 480), points, 100, 0.9) { Min = 10, Max = 80 },   // 0x1009cff0·0x1009cff9
             PointTarget = [.. pointTarget],
-            LastStep = _lastTime,
+            LastStep = host._lastTime,
             // 처음부터 첫 대상을 본다 — 한 칸씩 돌리며 들어오면 빠르기 100 으로 첫 대상과 그 지나친 점을 돌기도 전에 지나쳐 첫 찌르기가 빠졌다(가설).
             Dir = SwordDirTo(points[0].X - ux, points[0].Y - (uy + 480)),
         };
@@ -133,14 +135,14 @@ internal sealed unsafe partial class GameWindow
     /// <summary>1428 소리 껍데기의 그 모션 소리를 지금 낸다.</summary>
     internal void SwordSound(int motion)
     {
-        if (_effectTables.GetValueOrDefault(SwordSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
-        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+        if (host._effectTables.GetValueOrDefault(SwordSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
+        foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((host._lastTime + tick / TicksPerSecond, sound));
     }
 
     /// <summary>지난 틀 이후 흐른 틱만큼 칼을 민다 — 기술 코루틴이 매 틀 부른다.</summary>
     internal void StepSword(SwordFlight f)
     {
-        int ticks = (int)((_lastTime - f.LastStep) * TicksPerSecond);
+        int ticks = (int)((host._lastTime - f.LastStep) * TicksPerSecond);
         if (ticks <= 0) return;
         f.LastStep += ticks / TicksPerSecond;
         for (int k = 0; k < ticks && !f.Done; k++) StepSwordTick(f);
@@ -185,13 +187,13 @@ internal sealed unsafe partial class GameWindow
             m.Speed = 40; m.Factor = 0.65; m.Min = 5;                             // 0x100cedf2~0x100cee11
             int pierced = f.PointTarget[next - 1];
             if (pierced >= 0) f.Pierced.Enqueue(pierced);
-            _effects.Add((SwordSparkObs, 0, _lastTime, (int)m.X, (int)m.Y - 30));
+            host._effects.Add((SwordSparkObs, 0, host._lastTime, (int)m.X, (int)m.Y - 30));
             SwordSound(3);
         }
         if (next == m.Points.Count - 1)
         {
             // 마지막 — 칼이 시전자 곁으로 돌아온다.
-            var (ux, uy) = UnitFoot(f.User);
+            var (ux, uy) = host.UnitFoot(f.User);
             f.Return = ((m.X, m.Y), (ux + 11, uy), f.Tick);
             SwordSound(4);
         }
@@ -214,11 +216,11 @@ internal sealed unsafe partial class GameWindow
             else (x, y) = (f.Main.X, f.Main.Y);
             var (motion, mirror) = SwordMotion(dir);
             DrawSwordLayer(SwordObs, motion, (int)x, (int)y, mirror);
-            foreach (var (_, obs, childMotion, dx, dy, _, flag) in UiFor(SwordObs)?.Clip(motion)?.Children ?? [])
+            foreach (var (_, obs, childMotion, dx, dy, _, flag) in host.UiFor(SwordObs)?.Clip(motion)?.Children ?? [])
                 DrawSwordLayer(obs, childMotion, (int)x + (mirror && flag == 0 ? -dx : dx), (int)y + dy, mirror && flag == 0);
         }
     }
 
     internal void DrawSwordLayer(int obs, int motion, int x, int y, bool mirror) =>
-        DrawUi(obs, motion, 0, x, y, BlendOf(UiFor(obs)?.BlendAt(motion, 0) ?? 0), mirror: mirror);
+        host.DrawUi(obs, motion, 0, x, y, BlendOf(host.UiFor(obs)?.BlendAt(motion, 0) ?? 0), mirror: mirror);
 }

@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 아크로스트의 마법 둘 — 엘레맨탈 파이어(어빌리티 29)·서몬 몬스터(어빌리티 60). 둘 다 자기 중심 범위기로, 원본 핸들러가 <b>대상마다</b> 연출을 따로 깐다.
 /// 뽑은 표(AbilityScripts.g.cs)는 그 효과들을 대상 한 자리에 한 번씩만 띄워 불덩이·몬스터가 제대로 안 보였다(사용자 보고).
@@ -16,7 +18,7 @@ namespace DuelDx;
 /// 0 위(y−80) 919:2 · 2 아래(y+80) 919:0 · 1 왼쪽(x−80, 뒤집음) 919:1 · 3 오른쪽(x+80) 919:1. 몬스터 모션이 끝나면 피해(<c>0x100c29b0</c>)와 함께
 /// 시전자에게 919:5/3/4(자식 920:2/0/1). 소리 1356:0 은 j 틱 뒤. 몬스터의 잔상(<c>0x100c64b0</c> + <c>0x100c6600</c>)은 아직 안 그린다.</para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class AcrostSkill(GameWindow host)
 {
     internal const int ElementalFireAbility = 29, SummonMonsterAbility = 60;
     internal const int FireBallObs = 637, FireTrailObs = 321, FireBlastObs = 252, FireSoundObs = 1331;
@@ -49,24 +51,24 @@ internal sealed unsafe partial class GameWindow
     internal void FxSound(int obs, int motion, double at)
     {
         // 소리 껍데기 Obs(311·312·1320·1338·1401 — 그림 없이 소리 키만)는 그림으로 못 읽는다 — 이펙트 표를 먼저 본다(AbilityFx 와 같은 차례).
-        if ((_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) ?? UiFor(obs)?.Clip(motion)) is not { } clip) return;
-        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + tick / TicksPerSecond, sound));
+        if ((host._effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) ?? host.UiFor(obs)?.Clip(motion)) is not { } clip) return;
+        foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((at + tick / TicksPerSecond, sound));
     }
 
     internal IEnumerable<bool> ElementalFireRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         int n = targets.Count;
         if (n == 0) yield break;
-        _fireLastStep = _lastTime;
+        _fireLastStep = host._lastTime;
         var balls = new List<FireBall>();
         for (int j = 0; j < n; j++)
         {
-            var ball = new FireBall { Start = _lastTime, Angle = 2 * Math.PI * j / n, OrbitTicks = FireOrbitTicks + FireOrbitStep * j, Target = targets[j] };
+            var ball = new FireBall { Start = host._lastTime, Angle = 2 * Math.PI * j / n, OrbitTicks = FireOrbitTicks + FireOrbitStep * j, Target = targets[j] };
             balls.Add(ball);
-            FxSound(FireSoundObs, 0, _lastTime + (double)FireOrbitTicks * j / n / TicksPerSecond);
+            FxSound(FireSoundObs, 0, host._lastTime + (double)FireOrbitTicks * j / n / TicksPerSecond);
         }
         _fireBalls.AddRange(balls);
-        var (ux, uy) = UnitFoot(user);
+        var (ux, uy) = host.UnitFoot(user);
         var struck = new HashSet<FireBall>();
         while (balls.Any(b => !b.Done))
         {
@@ -76,18 +78,18 @@ internal sealed unsafe partial class GameWindow
                 hit(b.Target);
                 if (Trace)
                     System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                        $"elemental fire: target {b.Target} hit at {_lastTime - balls[0].Start:0.00}s (orbit {b.OrbitTicks} ticks, {_timedFx.Count(f => f.Obs == FireTrailObs)} trail puffs alive)" + Environment.NewLine);
+                        $"elemental fire: target {b.Target} hit at {host._lastTime - balls[0].Start:0.00}s (orbit {b.OrbitTicks} ticks, {host.HeavenEarthAb._timedFx.Count(f => f.Obs == FireTrailObs)} trail puffs alive)" + Environment.NewLine);
             }
             yield return true;
         }
         // 마지막 폭발(252:1)이 끝날 때까지
-        for (double end = _lastTime + 1.0; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 1.0; host._lastTime < end;) yield return true;
     }
 
     /// <summary>불덩이를 틱 단위로 민다 — 돌기(틱당 10°) → 대상으로 날기 → 터짐.</summary>
     internal void StepFireBalls(int cx, int cy)
     {
-        int ticks = (int)((_lastTime - _fireLastStep) * TicksPerSecond);
+        int ticks = (int)((host._lastTime - _fireLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
         _fireLastStep += ticks / TicksPerSecond;
         for (int k = 0; k < ticks; k++)
@@ -101,17 +103,17 @@ internal sealed unsafe partial class GameWindow
                     b.Y = cy + Math.Sin(b.Angle) * 80 * 0.8 - 120 * 0.6;         // 반지름 80(월드), 머리 위 120
                     // 꼬리 — 갱신 0x100c55f0: 4틱마다(+0x132) 321 의 모션 5(+0x130, 10틱 불똥)를 그 자리에 한 번, 3틱 뒤에 띄운다.
                     // 예전에는 모션 0(254×219 큰 섬광)을 5틱마다 깔아 화면이 깜빡였다(사용자 보고).
-                    if (b.Tick % 4 == 0) _timedFx.Add(new TimedFx(FireTrailObs, 5, _fireLastStep + 3 / TicksPerSecond, (int)b.X, (int)b.Y, null, false));
+                    if (b.Tick % 4 == 0) host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(FireTrailObs, 5, _fireLastStep + 3 / TicksPerSecond, (int)b.X, (int)b.Y, null, false));
                     if (b.Tick >= b.OrbitTicks) { b.Diving = true; FxSound(FireSoundObs, 1, _fireLastStep); }
                     continue;
                 }
-                var (tx, ty) = UnitFoot(_units[b.Target]);
+                var (tx, ty) = host.UnitFoot(host._units[b.Target]);
                 double dx = tx - b.X, dy = ty - b.Y, dist = Math.Sqrt(dx * dx + dy * dy);
                 if (dist <= b.Speed)
                 {
                     b.Done = true;
-                    _timedFx.Add(new TimedFx(FireBlastObs, 0, _fireLastStep, tx, ty, null, false));
-                    _timedFx.Add(new TimedFx(FireBlastObs, 1, _fireLastStep + OnceSeconds(FireBlastObs, 0), tx, ty + 36, null, false));
+                    host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(FireBlastObs, 0, _fireLastStep, tx, ty, null, false));
+                    host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(FireBlastObs, 1, _fireLastStep + host.HeavenEarthAb.OnceSeconds(FireBlastObs, 0), tx, ty + 36, null, false));
                     FxSound(FireSoundObs, 0, _fireLastStep);
                     continue;
                 }
@@ -125,38 +127,38 @@ internal sealed unsafe partial class GameWindow
     internal void DrawFireBalls()
     {
         foreach (var b in _fireBalls)
-            DrawUi(FireBallObs, 0, b.Tick, (int)b.X, (int)b.Y, UiBlend.Add);
+            host.DrawUi(FireBallObs, 0, b.Tick, (int)b.X, (int)b.Y, UiBlend.Add);
     }
 
     internal IEnumerable<bool> SummonMonsterRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
-        double t0 = _lastTime;
-        var (ux, uy) = UnitFoot(user);
+        double t0 = host._lastTime;
+        var (ux, uy) = host.UnitFoot(user);
         var hits = new List<(double At, int Target)>();
         double finish = t0;
         for (int j = 0; j < targets.Count; j++)
         {
-            var (tx, ty) = UnitFoot(_units[targets[j]]);
+            var (tx, ty) = host.UnitFoot(host._units[targets[j]]);
             // 원본 갈래(rand%4) — (몬스터 모션, 시전자 쪽 모션, 치우침, 뒤집기)
-            var (motion, casterMotion, ox, oy, mirror) = _rng.Next(4) switch
+            var (motion, casterMotion, ox, oy, mirror) = host._rng.Next(4) switch
             {
                 0 => (2, 5, 0, -80 * 0.8, false),
                 2 => (0, 3, 0, 80 * 0.8, false),
                 1 => (1, 4, -80, 0.0, true),
                 _ => (1, 4, 80, 0.0, false),
             };
-            double start = t0 + (j + 10) / TicksPerSecond, end = start + OnceSeconds(MonsterObs, motion);
-            _timedFx.Add(new TimedFx(MonsterObs, motion, start, (int)(tx + ox), (int)(ty + oy), null, mirror));
-            _timedFx.Add(new TimedFx(MonsterObs, casterMotion, end, ux, uy, null, false));
+            double start = t0 + (j + 10) / TicksPerSecond, end = start + host.HeavenEarthAb.OnceSeconds(MonsterObs, motion);
+            host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(MonsterObs, motion, start, (int)(tx + ox), (int)(ty + oy), null, mirror));
+            host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(MonsterObs, casterMotion, end, ux, uy, null, false));
             FxSound(MonsterSoundObs, 0, t0 + j / TicksPerSecond);
             hits.Add((end, targets[j]));
-            finish = Math.Max(finish, end + OnceSeconds(MonsterObs, casterMotion));
+            finish = Math.Max(finish, end + host.HeavenEarthAb.OnceSeconds(MonsterObs, casterMotion));
         }
         foreach (var (at, target) in hits.OrderBy(h => h.At))
         {
-            while (_lastTime < at) yield return true;
+            while (host._lastTime < at) yield return true;
             hit(target);
         }
-        while (_lastTime < finish) yield return true;
+        while (host._lastTime < finish) yield return true;
     }
 }

@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 하이 텔레포트(어빌리티 37, work 397·575~593) — 고른 칸 둘레 어딘가로 순간이동한다.
 /// </summary>
@@ -19,7 +21,7 @@ namespace DuelDx;
 /// </list>
 /// 자료로는 위력 0 의 「피해」 기술(범위 방식 3)이라, 예전에는 반지름 10 안의 모두에게 0 피해·Miss 를 내고 제자리에 있었다(사용자 보고).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class TeleportSkill(GameWindow host)
 {
     internal const int HighTeleportAbility = 37;
 
@@ -28,13 +30,13 @@ internal sealed unsafe partial class GameWindow
     /// <summary>범위 안에서 설 수 있는 빈 칸을 원본처럼 무작위로 뽑는다 — 없으면 null.</summary>
     internal (int Col, int Row)? TeleportLanding(WorkData w, UnitState user, int col, int row)
     {
-        var cells = AreaCells(w, user, col, row);
+        var cells = host.AreaCells(w, user, col, row);
         if (cells.Count == 0) return null;
         for (int tries = 0; tries < 500; tries++)
         {
-            var (c, r) = cells[_rng.Next(cells.Count)];
+            var (c, r) = cells[host._rng.Next(cells.Count)];
             if ((c, r) == (user.Col, user.Row)) return (c, r);
-            if (!CanLandOn(c, r, user)) continue;         // 적 옆 칸(ZOC)·물체 칸에는 안 떨어진다(0x100d99a0)
+            if (!host.CanLandOn(c, r, user)) continue;         // 적 옆 칸(ZOC)·물체 칸에는 안 떨어진다(0x100d99a0)
             return (c, r);
         }
         return null;
@@ -48,28 +50,28 @@ internal sealed unsafe partial class GameWindow
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"teleport work {w.Id}: from ({user.Col},{user.Row}) aim ({col},{row}) radius {w.AreaArg} → {landing?.ToString() ?? "제자리"}" + Environment.NewLine);
-        for (double start = _lastTime, end = start + 80 * Tick; _lastTime < end;)
+        for (double start = host._lastTime, end = start + 80 * Tick; host._lastTime < end;)
         {
-            user.Fade = Math.Max(0, 1 - (_lastTime - start) / (80 * Tick));
+            user.Fade = Math.Max(0, 1 - (host._lastTime - start) / (80 * Tick));
             yield return true;
         }
         user.Fade = 0;
-        for (double end = _lastTime + 30 * Tick; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 30 * Tick; host._lastTime < end;) yield return true;
         if (landing is var (lc, lr) && (lc, lr) != (user.Col, user.Row))
         {
             user.WarpTo(lc, lr);
             user.OriginCol = lc;
             user.OriginRow = lr;
         }
-        var (x, y) = UnitFoot(user);
-        _effects.Add((381, 1, _lastTime, x, y));
-        _effects.Add((210, 3, _lastTime, x, y));
-        if (_effectTables.GetValueOrDefault(381)?.Clips.GetValueOrDefault(1) is { } appear)
-            foreach (var (t, sound) in appear.Sounds) _pendingSounds.Add((_lastTime + t / TicksPerSecond, sound));
-        for (double end = _lastTime + 50 * Tick; _lastTime < end;) yield return true;
-        for (double start = _lastTime, end = start + 80 * Tick; _lastTime < end;)
+        var (x, y) = host.UnitFoot(user);
+        host._effects.Add((381, 1, host._lastTime, x, y));
+        host._effects.Add((210, 3, host._lastTime, x, y));
+        if (host._effectTables.GetValueOrDefault(381)?.Clips.GetValueOrDefault(1) is { } appear)
+            foreach (var (t, sound) in appear.Sounds) host._pendingSounds.Add((host._lastTime + t / TicksPerSecond, sound));
+        for (double end = host._lastTime + 50 * Tick; host._lastTime < end;) yield return true;
+        for (double start = host._lastTime, end = start + 80 * Tick; host._lastTime < end;)
         {
-            user.Fade = Math.Min(1, (_lastTime - start) / (80 * Tick));
+            user.Fade = Math.Min(1, (host._lastTime - start) / (80 * Tick));
             yield return true;
         }
         user.Fade = 1;
@@ -89,13 +91,13 @@ internal sealed unsafe partial class GameWindow
                 {
                     if (Math.Abs(dx) + Math.Abs(dy) != d) continue;
                     int c = caster.Col + dx, r = caster.Row + dy;
-                    if (c < 0 || r < 0 || c >= Cols || r >= Rows) continue;
-                    if (_map is { } map && (c >= map.Cols || r >= map.Rows || (CellFlagsAt(c, r) & 0x9) != 0)) continue;
-                    if (LiveUnitAt(c, r) is { } other && other != target) continue;
-                    if (ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
+                    if (c < 0 || r < 0 || c >= host.Cols || r >= host.Rows) continue;
+                    if (host._map is { } map && (c >= map.Cols || r >= map.Rows || (host.CellFlagsAt(c, r) & 0x9) != 0)) continue;
+                    if (host.LiveUnitAt(c, r) is { } other && other != target) continue;
+                    if (host.ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
                     ring.Add((c, r));
                 }
-            if (ring.Count > 0) return ring[_rng.Next(ring.Count)];
+            if (ring.Count > 0) return ring[host._rng.Next(ring.Count)];
         }
         return null;
     }
@@ -104,24 +106,24 @@ internal sealed unsafe partial class GameWindow
     internal IEnumerable<bool> RecallRoutine(UnitState caster, UnitState target)
     {
         const double Tick = 1 / TicksPerSecond;
-        if (target == caster || RecallLanding(caster, target) is not var (lc, lr)) { Toast("불러올 자리가 없습니다"); yield break; }
+        if (target == caster || RecallLanding(caster, target) is not var (lc, lr)) { host.Toast("불러올 자리가 없습니다"); yield break; }
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"recall: {target.ChrCode} ({target.Col},{target.Row}) → ({lc},{lr}) beside {caster.ChrCode} ({caster.Col},{caster.Row})" + Environment.NewLine);
-        for (double start = _lastTime, end = start + 40 * Tick; _lastTime < end;)
+        for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {
-            target.Fade = Math.Max(0, 1 - (_lastTime - start) / (40 * Tick));
+            target.Fade = Math.Max(0, 1 - (host._lastTime - start) / (40 * Tick));
             yield return true;
         }
         target.WarpTo(lc, lr);
         target.OriginCol = lc;
         target.OriginRow = lr;
         target.Facing = caster.Facing;
-        var (x, y) = UnitFoot(target);
-        _effects.Add((210, 3, _lastTime, x, y));
-        for (double start = _lastTime, end = start + 40 * Tick; _lastTime < end;)
+        var (x, y) = host.UnitFoot(target);
+        host._effects.Add((210, 3, host._lastTime, x, y));
+        for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {
-            target.Fade = Math.Min(1, (_lastTime - start) / (40 * Tick));
+            target.Fade = Math.Min(1, (host._lastTime - start) / (40 * Tick));
             yield return true;
         }
         target.Fade = 1;

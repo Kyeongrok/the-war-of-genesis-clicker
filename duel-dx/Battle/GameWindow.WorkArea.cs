@@ -242,7 +242,7 @@ internal sealed unsafe partial class GameWindow
         // 폭(6)·인페르노(159)·템페스트(186) — 효과 대상은 3(아무 칸)이지만 핸들러가 0x1006fde0 으로 적만 거른다
         // (0x10083760 · 0x100b220d · 0x100bddd6, ba-20 D3). 전에는 아군과 시전자 자신도 맞았다. 소울 블레스트의 관통탄도 적만(슬롯 2 의 +0x1e = 1).
         if (w.AbilityId is 6 or 159 or 186 or SoulBlastAbility) mode = 1;
-        if (w.AbilityId == HellLaserAbility) mode = 1;
+        if (w.AbilityId == SpecialHitsSkill.HellLaserAbility) mode = 1;
         var hit = Enumerable.Range(0, _units.Length)
             .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]));
         // 대상 상한 — 모으는 함수(0x100df5c0 · 0x10070bb0)는 위 행부터, 행 안에서는 왼쪽부터 훑다가 상한에서 멈춘다(ba-20 E8).
@@ -273,7 +273,7 @@ internal sealed unsafe partial class GameWindow
         }
         // 헬 레이져(172) — 타격 이펙트 Obs 1050 다섯이 시전자 <b>앞 5칸</b> 줄의 옆 −2..+2 칸에 놓이고 그 칸 하나씩만 친다
         // (0x100b39a0 · 0x100b3c6d~, ba-20 E3). 자료 범위(2칸 앞 줄)와 다르다 — 화면 확인은 못 했다(코드로만 확정).
-        if (w.AbilityId == HellLaserAbility)
+        if (w.AbilityId == SpecialHitsSkill.HellLaserAbility)
         {
             var facing = (col, row) == (user.Col, user.Row) ? user.Facing : FacingToward(user.Col, user.Row, col, row);
             var (fx, fy) = facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };

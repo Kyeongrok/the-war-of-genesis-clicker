@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 필살기 공통 앞머리 — 준비 동작 <c>+0x3f</c> = 7 인 기술(나인 크루세이더·천지파열무·다크 스크림 …)이 핸들러 앞에 도는 연출(<c>0x1007e330</c>).
 /// </summary>
@@ -19,7 +21,7 @@ namespace DuelDx;
 /// 효과 시간 규칙: <c>0x100c24d0(n)</c> 시작 지연 · <c>0x100c2530(n)</c> 수명(0 = 모션 한 번) · <c>0x100c2640(e)</c> e 가 끝나면 시작 ·
 /// <c>0x100c25c0</c>/<c>0x100c25e0</c> 이동 빠르기 아래·위 한계. 원본 좌표는 640×480 화면 기준이라 지금 보기 크기로 늘린다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
 {
     internal const int PreludeDotObs = 343, PreludeBandObs = 344;
 
@@ -48,50 +50,50 @@ internal sealed unsafe partial class GameWindow
     /// 빛 알갱이 띠(150~330)와 금빛 띠(130·340)의 간격이 원본 픽셀 그대로여야 빈틈 없는 띠가 된다.
     /// </remarks>
     internal (double X, double Y) PreludeScreen(double sx, double sy) =>
-        (_camX + sx * ViewWidth / 640.0, _camY + ViewHeight / 2.0 + (sy - 240));
+        (host._camX + sx * host.ViewWidth / 640.0, host._camY + host.ViewHeight / 2.0 + (sy - 240));
 
     /// <summary>앞머리를 돌린다 — 기술 코루틴이 핸들러(동작 사슬) 앞에서 끝까지 기다린다.</summary>
     internal IEnumerable<bool> FinisherPrelude(WorkData w, UnitState user)
     {
         const double Tick = 1 / TicksPerSecond;
-        PlayAction(user, 6);
+        host.PlayAction(user, 6);
         PreludeSound(1338, 1);                                   // 시전 소리(0x1007e42c)
         // 단계 1 — Mov 0042 은 SpawnWorkMovies(prelude) 가 이미 띄웠다. 영상(51장, 30fps)이 끝날 만큼 기다린다.
-        for (double end = _lastTime + 51 * Tick; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 51 * Tick; host._lastTime < end;) yield return true;
 
         // 단계 2
-        PlayAction(user, 15);
-        var (ux, uy) = UnitFoot(user);
-        foreach (int m in new[] { 0, 1, 2 }) { _effects.Add((487, m, _lastTime, ux, uy)); PreludeSound(487, m); }
+        host.PlayAction(user, 15);
+        var (ux, uy) = host.UnitFoot(user);
+        foreach (int m in new[] { 0, 1, 2 }) { host._effects.Add((487, m, host._lastTime, ux, uy)); PreludeSound(487, m); }
         SpawnPreludeDots(ux, uy);
-        for (double end = _lastTime + 10 * Tick; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 10 * Tick; host._lastTime < end;) yield return true;
 
         // 단계 3
         SpawnPreludeCutIns(user);
         foreach (var (motion, sy) in new[] { (18, 130), (19, 340) })
         {
             var (bx, by) = PreludeScreen(0, sy);
-            _effects.Add((PreludeBandObs, motion, _lastTime + 10 * Tick, (int)bx, (int)by));
+            host._effects.Add((PreludeBandObs, motion, host._lastTime + 10 * Tick, (int)bx, (int)by));
         }
-        for (double end = _lastTime + 60 * Tick; _lastTime < end;) yield return true;
+        for (double end = host._lastTime + 60 * Tick; host._lastTime < end;) yield return true;
     }
 
     internal void SpawnPreludeDots(int casterX, int casterY)
     {
         // 칸은 원본처럼 20px 간격 — 보기가 640 보다 넓으면 칸 수를 늘려 폭을 채운다(원본 32칸).
-        int columns = Math.Max(32, (ViewWidth + 19) / 20);
+        int columns = Math.Max(32, (host.ViewWidth + 19) / 20);
         for (int r = 0; r < 180; r += 20)
             for (int k = 0; k < columns; k++)
             {
-                double x = _camX + ViewWidth - 20 * k, y = PreludeScreen(0, 150 + r).Y;
-                double fx = _camX - 20;
-                double fy = y + (_rng.Next(2) == 0 ? -1 : 1) * _rng.Next(300) * 0.8;
+                double x = host._camX + host.ViewWidth - 20 * k, y = PreludeScreen(0, 150 + r).Y;
+                double fx = host._camX - 20;
+                double fy = y + (host._rng.Next(2) == 0 ? -1 : 1) * host._rng.Next(300) * 0.8;
                 double dist = Math.Sqrt((x - fx) * (x - fx) + (y - fy) * (y - fy));
                 int fly = Math.Max(1, (int)Math.Ceiling(dist / 90));
-                double start = _lastTime + (k / 2 + _rng.Next(5)) / TicksPerSecond;
+                double start = host._lastTime + (k / 2 + host._rng.Next(5)) / TicksPerSecond;
                 // 흩어질 쪽 — 시전자에서 x·y 따로 ±(2~7)×256(월드) 떨어진 점. 빠르기 30.
-                double tx = casterX + (_rng.Next(2) == 0 ? -1 : 1) * (_rng.Next(6) + 2) * 256.0;
-                double ty = casterY + (_rng.Next(2) == 0 ? -1 : 1) * (_rng.Next(6) + 2) * 256.0 * 0.8;
+                double tx = casterX + (host._rng.Next(2) == 0 ? -1 : 1) * (host._rng.Next(6) + 2) * 256.0;
+                double ty = casterY + (host._rng.Next(2) == 0 ? -1 : 1) * (host._rng.Next(6) + 2) * 256.0 * 0.8;
                 double d = Math.Max(1, Math.Sqrt((tx - x) * (tx - x) + (ty - y) * (ty - y)));
                 _preludeDots.Add(new PreludeDot(start, fx, fy, x, y, fly, (tx - x) / d * 30, (ty - y) / d * 30));
             }
@@ -99,8 +101,8 @@ internal sealed unsafe partial class GameWindow
 
     internal void SpawnPreludeCutIns(UnitState user)
     {
-        if (user.Data is not { FaceId: > 0 } c || UiFor(c.FaceId) == null) return;
-        double s = ViewWidth / 640.0;
+        if (user.Data is not { FaceId: > 0 } c || host.UiFor(c.FaceId) == null) return;
+        double s = host.ViewWidth / 640.0;
         FxFlight Flight(int motion, double fromSx, double toSx, double sy, double speed, double factor, bool multiply, int life, int delay) =>
             new()
             {
@@ -113,7 +115,7 @@ internal sealed unsafe partial class GameWindow
         a.Next = Flight(2, 139, -300, 150, 40, 1.3, true, -1, 0);
         var b = Flight(1, 1, 639, 480, 80, 0.9 * s, false, 30, 0);
         b.Next = Flight(1, 639, 940, 480, 40, 1.3 * s, false, -1, 0);
-        _fxLastStep = _lastTime;
+        _fxLastStep = host._lastTime;
         _fxFlights.Add(a);
         _fxFlights.Add(b);
     }
@@ -122,10 +124,10 @@ internal sealed unsafe partial class GameWindow
     internal void DrawFinisherFx()
     {
         // 빛 알갱이
-        _preludeDots.RemoveAll(d => (_lastTime - d.Start) * TicksPerSecond >= d.FlyTicks + 36);
+        _preludeDots.RemoveAll(d => (host._lastTime - d.Start) * TicksPerSecond >= d.FlyTicks + 36);
         foreach (var d in _preludeDots)
         {
-            int t = (int)((_lastTime - d.Start) * TicksPerSecond);
+            int t = (int)((host._lastTime - d.Start) * TicksPerSecond);
             if (t < 0) continue;
             if (t < d.FlyTicks)
             {
@@ -141,7 +143,7 @@ internal sealed unsafe partial class GameWindow
         }
 
         // 초상 컷인 — 흐른 틱만큼 민다.
-        int ticks = (int)((_lastTime - _fxLastStep) * TicksPerSecond);
+        int ticks = (int)((host._lastTime - _fxLastStep) * TicksPerSecond);
         if (ticks > 0)
         {
             _fxLastStep += ticks / TicksPerSecond;
@@ -156,7 +158,7 @@ internal sealed unsafe partial class GameWindow
                 }
         }
         foreach (var f in _fxFlights)
-            if (f.Delay <= 0) DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, UiBlend.Alpha);
+            if (f.Delay <= 0) host.DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, UiBlend.Alpha);
     }
 
     internal static void StepFxFlight(FxFlight f)
@@ -176,15 +178,15 @@ internal sealed unsafe partial class GameWindow
     /// <summary>효과 모션에 박힌 소리를 지금부터 예약한다 — 487·1338 은 소리만 든 껍데기다.</summary>
     internal void PreludeSound(int obs, int motion)
     {
-        if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
-        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
+        if (host._effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
+        foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((host._lastTime + tick / TicksPerSecond, sound));
     }
 
     /// <summary>343 빛 네모 — 모션의 밝기 단계(1~8, 없으면 8)만큼 더한다.</summary>
     internal void DrawPreludeDot(int motion, int tick, double x, double y)
     {
-        int level = UiFor(PreludeDotObs)?.BlendAt(motion, tick) ?? 0;
+        int level = host.UiFor(PreludeDotObs)?.BlendAt(motion, tick) ?? 0;
         if (level is <= 0 or > 8) level = 8;
-        DrawUi(PreludeDotObs, motion, tick, (int)x, (int)y, UiBlend.Add, loop: false, fade: level / 8.0);
+        host.DrawUi(PreludeDotObs, motion, tick, (int)x, (int)y, UiBlend.Add, loop: false, fade: level / 8.0);
     }
 }

@@ -1,5 +1,7 @@
 ﻿namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 아스트럴 애로우(어빌리티 87) — 핸들러 <c>0x100a5ac0</c> 가 세 단계로 도는 연출을 옮겼다. 뽑은 표(AbilityScripts.g.cs)는 활·화살·폭발을
 /// 시각 없이 한꺼번에 한 자리에 띄워, 무엇이 지나갔는지 안 보였다(사용자 보고).
@@ -15,7 +17,7 @@
 /// </list>
 /// 월드 → 화면은 다른 연출과 같다: 세로 ×0.8, 높이 ×0.6 위로.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class AstralArrowSkill(GameWindow host)
 {
     internal const int AstralArrowAbility = 87;
     internal const int BowObs = 183, ArrowObs = 839, ArrowBlastObs = 705, ArrowSoundObs = 1375;
@@ -40,60 +42,60 @@ internal sealed unsafe partial class GameWindow
 
     internal IEnumerable<bool> AstralArrowRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
-        double t0 = _lastTime;
-        var (ux, uy) = UnitFoot(user);
+        double t0 = host._lastTime;
+        var (ux, uy) = host.UnitFoot(user);
         int bowY = (int)(uy - 150 * 0.6);
 
         // 1. 활
-        FxSound(ArrowSoundObs, 0, t0);
-        double t1 = t0 + OnceSeconds(BowObs, 0), t2 = t1 + Ticks(70);
-        _timedFx.Add(new TimedFx(BowObs, 0, t0, ux, bowY, null, false));
-        _timedFx.Add(new TimedFx(BowObs, 1, t1, ux, bowY, t2, false));
-        _timedFx.Add(new TimedFx(BowObs, 2, t2, ux, bowY, null, false));
-        double t3 = t2 + OnceSeconds(BowObs, 2);
+        host.AcrostAb.FxSound(ArrowSoundObs, 0, t0);
+        double t1 = t0 + host.HeavenEarthAb.OnceSeconds(BowObs, 0), t2 = t1 + host.HeavenEarthAb.Ticks(70);
+        host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(BowObs, 0, t0, ux, bowY, null, false));
+        host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(BowObs, 1, t1, ux, bowY, t2, false));
+        host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(BowObs, 2, t2, ux, bowY, null, false));
+        double t3 = t2 + host.HeavenEarthAb.OnceSeconds(BowObs, 2);
 
         // 2. 쏘아 올리기 — 50발
-        FxSound(ArrowSoundObs, 0, t3 + Ticks(10));
+        host.AcrostAb.FxSound(ArrowSoundObs, 0, t3 + host.HeavenEarthAb.Ticks(10));
         for (int k = 0; k < 50; k++)
             _arrows.Add(new Arrow
             {
-                Motion = 1, Start = t3 + Ticks(_rng.Next(60)), X = ux, Y = uy - 170 * 0.6,
-                ToX = ux + _rng.Next(20) - 10, ToY = uy - 500 * 0.6, Speed = 20, Factor = 1.2, Max = 100,
+                Motion = 1, Start = t3 + host.HeavenEarthAb.Ticks(host._rng.Next(60)), X = ux, Y = uy - 170 * 0.6,
+                ToX = ux + host._rng.Next(20) - 10, ToY = uy - 500 * 0.6, Speed = 20, Factor = 1.2, Max = 100,
             });
 
         // 3. 쏟아지기 — 80틱 뒤. 대상마다 한 발(닿으면 피해), 그다음 장식 50발.
-        double t4 = t3 + Ticks(80);
+        double t4 = t3 + host.HeavenEarthAb.Ticks(80);
         var pending = new HashSet<int>(targets);
         void Fall(double tx, double ty, int? target)
         {
-            double start = t4 + Ticks(_rng.Next(100));
-            FxSound(ArrowSoundObs, 2, start);
+            double start = t4 + host.HeavenEarthAb.Ticks(host._rng.Next(100));
+            host.AcrostAb.FxSound(ArrowSoundObs, 2, start);
             _arrows.Add(new Arrow
             {
-                Motion = 44, Start = start, X = tx, Y = _camY - 100, ToX = tx, ToY = ty - 60 * 0.6, Speed = 40, Factor = 1.1, Max = 100,
+                Motion = 44, Start = start, X = tx, Y = host._camY - 100, ToX = tx, ToY = ty - 60 * 0.6, Speed = 40, Factor = 1.1, Max = 100,
                 OnArrive = () =>
                 {
-                    _timedFx.Add(new TimedFx(ArrowBlastObs, 0, _arrowLastStep, (int)tx, (int)ty, null, false));
+                    host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(ArrowBlastObs, 0, _arrowLastStep, (int)tx, (int)ty, null, false));
                     if (target is { } t) { hit(t); pending.Remove(t); }
                 },
             });
         }
-        foreach (int t in targets) { var (tx, ty) = UnitFoot(_units[t]); Fall(tx, ty, t); }
-        for (int k = 0; k < 50; k++) Fall(ux + _rng.Next(600) - 300, uy + (_rng.Next(440) - 200) * 0.8, null);
+        foreach (int t in targets) { var (tx, ty) = host.UnitFoot(host._units[t]); Fall(tx, ty, t); }
+        for (int k = 0; k < 50; k++) Fall(ux + host._rng.Next(600) - 300, uy + (host._rng.Next(440) - 200) * 0.8, null);
 
-        _arrowLastStep = _lastTime;
+        _arrowLastStep = host._lastTime;
         while (_arrows.Count > 0 || pending.Count > 0)
         {
             StepArrows();
             yield return true;
         }
-        for (double end = _lastTime + OnceSeconds(ArrowBlastObs, 0); _lastTime < end;) yield return true;
+        for (double end = host._lastTime + host.HeavenEarthAb.OnceSeconds(ArrowBlastObs, 0); host._lastTime < end;) yield return true;
     }
 
     /// <summary>화살을 틱 단위로 민다 — 출발 전이면 기다리고, 닿으면 없앤다.</summary>
     internal void StepArrows()
     {
-        int ticks = (int)((_lastTime - _arrowLastStep) * TicksPerSecond);
+        int ticks = (int)((host._lastTime - _arrowLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
         for (int k = 0; k < ticks; k++)
         {
@@ -113,7 +115,7 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawArrows()
     {
-        foreach (var a in _arrows.Where(a => _lastTime >= a.Start && !a.Done))
-            DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));
+        foreach (var a in _arrows.Where(a => host._lastTime >= a.Start && !a.Done))
+            host.DrawUi(a.Obs, a.Motion, a.Tick, (int)a.X, (int)a.Y, BlendOf(host.UiFor(a.Obs)?.BlendAt(a.Motion, a.Tick) ?? 0));
     }
 }

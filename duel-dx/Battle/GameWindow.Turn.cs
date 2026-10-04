@@ -864,7 +864,7 @@ internal sealed unsafe partial class GameWindow
         bool finisher = w.Prepare == 7;
         // 준비 2·3·5·6 — 시전 소리 1338:1(694)은 시전 시작 +2틱(0x1007def0 단계 1). 핸들러는 동작 15 가 끝난 뒤에 돈다(ba-15 R6).
         if (w.Prepare is 2 or 3 or 5 or 6) _pendingSounds.AddRange((_effectTables.GetValueOrDefault(1338)?.Clips.GetValueOrDefault(1)?.Sounds ?? []).Select(s => (_lastTime + (2 + s.Item1) / TicksPerSecond, s.Item2)));
-        if (finisher) foreach (bool _ in FinisherPrelude(w, a)) yield return true;
+        if (finisher) foreach (bool _ in FinisherPreludeAb.FinisherPrelude(w, a)) yield return true;
         // 필살기는 앞머리가 준비 동작(사슬 앞의 6·15)을 이미 했다 — <b>그 둘만</b> 건너뛴다. 전에는 타격 아닌 동작을 모두 건너뛰어
         // 오메가 스윙·더블 브레이크·이데아 캐논 따위가 마지막 동작 하나만 했다(fg-20).
         int preludeSteps = finisher ? PreludeSteps(actions) : 0;
@@ -927,7 +927,7 @@ internal sealed unsafe partial class GameWindow
                 _fxTargets = null;
                 // 판정을 기다릴 상한 — 이 work 의 이펙트가 다 끝나는 때(지연 + 수명 또는 모션 길이). 길이를 모르는 단계가 낀 표 값이 이펙트보다 길어 빈 대기가 되지 않게.
                 fxSpan = (ScriptFor(w.Id)?.Effects ?? []).Select(fx => fx.Delay + (fx.Life > 0 ? fx.Life : EffectTicks(fx.Obs, fx.Motion))).DefaultIfEmpty(0).Max();
-                SpawnWorkShakes(w);
+                StagingAb.SpawnWorkShakes(w);
                 effectsAt = _lastTime;
                 // 카메라 따라가기(0x100eac00, ba-21 fx F7) — 힐·큐어·배리어류 189개는 겨눈 대상을, 34개는 시전자를 따라간다. 탄을 따라가는 60개는 아직.
                 if (WorkCameraFollow.Target.Contains(w.Id) && !WorkCameraFollow.Shot.Contains(w.Id)
@@ -937,26 +937,26 @@ internal sealed unsafe partial class GameWindow
                 // 탄을 따라가는 60개 — 탄이 가는 쪽(겨눈 칸)으로 카메라를 보낸다(탄 자체를 따라가지는 않는다 — 근사).
                 else if (WorkCameraFollow.Shot.Contains(w.Id) && _fxArriveAt > 0 && (uint)col < Cols && (uint)row < Rows) CenterOnCell(col, row);
                 // 군단기면 부하 잔상(ba-21 C) — 피해는 그 연출의 끝 무렵에 들어간다.
-                for (double end = _lastTime + StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
+                for (double end = _lastTime + LegionStageAb.StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
                 effectsDone = true;
             }
             // 혼·비연참·오메가 스윙 — 겨눈 빈 칸까지 돌진하며 지나는 칸의 적을 때린다(fg-21 ⑨). 돌진 자세(붙듦)는 이미 틀었다.
-            if (DashWorks.Contains(w.Id))
+            if (PushSkill.DashWorks.Contains(w.Id))
             {
-                foreach (bool _ in DashRoutine(a, w, col, row, dying)) yield return true;
+                foreach (bool _ in PushAb.DashRoutine(a, w, col, row, dying)) yield return true;
                 holding = false;
                 continue;
             }
             // 하이 텔레포트 — 피해 없이 고른 칸 둘레로 순간이동한다(범위는 빗나가는 정도).
-            if (IsTeleportWork(w))
+            if (TeleportSkill.IsTeleportWork(w))
             {
-                foreach (bool _ in TeleportRoutine(w, a, col, row)) yield return true;
+                foreach (bool _ in TeleportAb.TeleportRoutine(w, a, col, row)) yield return true;
                 while (a.IsBusy) yield return true;
                 continue;
             }
             // 아크로스트의 엘레맨탈 파이어(불덩이가 돌다 대상마다 날아가 터짐)·서몬 몬스터(대상마다 몬스터가 나타나 침) — 피해는 대상마다 그때 한 번.
             // 편집기에서 대상 방식을 「아무 칸」(메테오처럼)으로 바꿔도 같은 연출 — 불덩이는 시전자 위에서 돌고 고른 범위의 대상에게 날아간다.
-            if (w.AbilityId is ElementalFireAbility or SummonMonsterAbility)
+            if (w.AbilityId is AcrostSkill.ElementalFireAbility or AcrostSkill.SummonMonsterAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
@@ -965,7 +965,7 @@ internal sealed unsafe partial class GameWindow
                     System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                         $"acrost work {w.Id}: caster {a.ChrCode}({a.Col},{a.Row}) targets " +
                         string.Join(", ", targets.Select(t => $"{_units[t].ChrCode}({_units[t].Col},{_units[t].Row}){(_units[t].IsAlly ? " 아군" : "")}")) + Environment.NewLine);
-                var routine = w.AbilityId == ElementalFireAbility ? ElementalFireRoutine(a, targets, Hit) : SummonMonsterRoutine(a, targets, Hit);
+                var routine = w.AbilityId == AcrostSkill.ElementalFireAbility ? AcrostAb.ElementalFireRoutine(a, targets, Hit) : AcrostAb.SummonMonsterRoutine(a, targets, Hit);
                 foreach (bool _ in routine) yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
@@ -977,53 +977,53 @@ internal sealed unsafe partial class GameWindow
             }
             // 그라비티 필드 — 대상마다 중력장(219:0)이 차례로 깔리고, 끝날 때 효과가 든다.
             // 아스트럴 애로우 — 활을 당겨 화살을 쏘아 올리고, 대상마다 화살이 쏟아진다. 피해는 화살이 닿을 때 대상마다 한 번.
-            if (w.AbilityId == AstralArrowAbility)
+            if (w.AbilityId == AstralArrowSkill.AstralArrowAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
-                foreach (bool _ in AstralArrowRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                foreach (bool _ in AstralArrowAb.AstralArrowRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
                     yield return true;
                 while (a.IsBusy) yield return true;
                 continue;
             }
             // 리콜 — 고른 아군을 시전자 옆으로 불러온다(피해·회복 없음).
-            if (w.AbilityId == RecallAbility)
+            if (w.AbilityId == TeleportSkill.RecallAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var who = targets.Select(i => _units[i]).FirstOrDefault(u => u != a && u.IsAlly == a.IsAlly);
                 if (who != null)
                 {
-                    foreach (bool _ in RecallRoutine(a, who)) yield return true;
+                    foreach (bool _ in TeleportAb.RecallRoutine(a, who)) yield return true;
                     MarkBuffed(a, who, w);
                 }
                 while (a.IsBusy) yield return true;
                 continue;
             }
             // 메테오 — 운석 한 발이 범위 안 한 칸에 떨어지고, 닿으면 범위 안 대상마다 피해가 한 번.
-            if (w.AbilityId == MeteorAbility)
+            if (w.AbilityId == MeteorSkill.MeteorAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
-                foreach (bool _ in MeteorRoutine(w, a, col, row, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                foreach (bool _ in MeteorAb.MeteorRoutine(w, a, col, row, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
                     yield return true;
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            if (w.AbilityId == GravityFieldAbility)
+            if (w.AbilityId == GravityFieldSkill.GravityFieldAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
-                foreach (bool _ in GravityFieldRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                foreach (bool _ in GravityFieldAb.GravityFieldRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
                     yield return true;
                 while (a.IsBusy) yield return true;
                 continue;
             }
             // 천지 파열무 — X 자로 땅이 터진 뒤 대상마다 폭발한다. 피해는 그 폭발 때 대상마다 한 번.
-            if (w.Id == HeavenEarthWork && targetIndex < 0)
+            if (w.Id == HeavenEarthSkill.HeavenEarthWork && targetIndex < 0)
             {
                 var targets = WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
-                foreach (bool _ in HeavenEarthRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
+                foreach (bool _ in HeavenEarthAb.HeavenEarthRoutine(a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying); }))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
@@ -1034,23 +1034,23 @@ internal sealed unsafe partial class GameWindow
                 continue;
             }
             // 나인 크루세이더 — 칼이 날아다니며 차례로 꿰뚫는다. 피해는 대상마다 처음 꿰뚫릴 때 준다.
-            if (w.Id == NineCrusaderWork && targetIndex < 0)
+            if (w.Id == NineCrusaderSkill.NineCrusaderWork && targetIndex < 0)
             {
                 var targets = WorkTargets(w, a, col, row);
                 // 원본 0x1009cb50 — 모션 48(칼을 들어 올림) 뒤 칼이 나는 동안 49 를 붙들고, 다 날면 51(fg-20).
-                for (double end = _lastTime + PlayRawMotion(a, 48, loop: false); _lastTime < end;) yield return true;
-                PlayRawMotion(a, 49, loop: true, holdSeconds: 30);
-                var flight = StartNineCrusader(a, targets);
+                for (double end = _lastTime + HeavenEarthAb.PlayRawMotion(a, 48, loop: false); _lastTime < end;) yield return true;
+                HeavenEarthAb.PlayRawMotion(a, 49, loop: true, holdSeconds: 30);
+                var flight = NineCrusaderAb.StartNineCrusader(a, targets);
                 var struck = new HashSet<int>();
                 while (!flight.Done)
                 {
-                    StepSword(flight);
+                    NineCrusaderAb.StepSword(flight);
                     while (flight.Pierced.TryDequeue(out int ti))
                         if (struck.Add(ti)) ApplyWork(a, hitWork, _units[ti], dying);
                     yield return true;
                 }
                 foreach (int ti in targets.Where(struck.Add)) ApplyWork(a, hitWork, _units[ti], dying);   // 칼이 못 닿은 대상(없어야 한다)
-                double release = PlayRawMotion(a, 51, loop: false);
+                double release = HeavenEarthAb.PlayRawMotion(a, 51, loop: false);
                 if (release <= 0) a.PlayAction(ObsMotionTable.ActionStand, 0);
                 if (!followersDone && targets.Count > 0)
                 {
@@ -1061,11 +1061,11 @@ internal sealed unsafe partial class GameWindow
                 continue;
             }
             double stagedFrom = _lastTime;
-            if (step == hitStep) foreach (bool _ in StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
+            if (step == hitStep) foreach (bool _ in StagingAb.StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
             // 핸들러가 판정(1001)을 보내는 틱까지 기다린다(ba-21 T1) — 원본은 이펙트가 다 나온 뒤에 숫자·맞음 동작이 뜬다(힐 114틱, 프레셔 49틱 …).
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
-            if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
+            if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !LegionStageSkill.IsLegionSkill(w.Id) && !SpecialHitsAb.HasSpecialHit(w)
                 && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (WorkFxExtra.ArriveHitWorks.Contains(w.Id) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);
@@ -1092,9 +1092,9 @@ internal sealed unsafe partial class GameWindow
                 }
             }
             // 소닉 블레이드·크레이지 샷 — 핸들러가 자료 범위와 다르게 친다(ba-20 E1·E2).
-            if (step == hitStep && HasSpecialHit(w))
+            if (step == hitStep && SpecialHitsAb.HasSpecialHit(w))
             {
-                foreach (bool _ in SpecialHitRoutine(a, w, hitWork, col, row, dying)) yield return true;
+                foreach (bool _ in SpecialHitsAb.SpecialHitRoutine(a, w, hitWork, col, row, dying)) yield return true;
                 if (!followersDone && w.FollowersAct)
                 {
                     FollowersAttack(userIndex, LiveUnitAt(col, row) ?? a, dying, allyPass: false, leaderWork: w, walk: false);
@@ -1106,7 +1106,7 @@ internal sealed unsafe partial class GameWindow
                 continue;
             }
             // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
-            for (int hit = 0; hit < (ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
+            for (int hit = 0; hit < (PushSkill.ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
             {
                 if (hit > 0)
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
@@ -1146,39 +1146,39 @@ internal sealed unsafe partial class GameWindow
                 if (targets.Count == 0 || !_units[targets[0]].Alive) break;
             }
             // 사이킥 크로스 — 두 획이 겹치는 가운데 칸의 대상은 5틱 뒤 한 번 더 맞는다(ba-14 H4).
-            if (PsychicCrossWorks.Contains(w.Id))
+            if (PushSkill.PsychicCrossWorks.Contains(w.Id))
             {
                 for (double end = _lastTime + 5 / TicksPerSecond; _lastTime < end;) yield return true;
                 if (LiveUnitAt(col, row) is { } centre && centre != a && !dying.Contains(centre) && SeesAsFoe(a, centre)) ApplyWork(a, hitWork, centre, dying);
             }
             // 여러 번 치는 기술 — 무신멸뢰옥 3타·선 블래스트 4타·카운터 미사일 Lv11↑ 2회(fg-21 ⑩). 간격은 원본 핸들러 틱.
-            foreach (int gap in ExtraHitGaps(w))
+            foreach (int gap in PushAb.ExtraHitGaps(w))
             {
                 for (double end = _lastTime + gap / TicksPerSecond; _lastTime < end;) yield return true;
-                if (w.Id == SunBlastWork) _shakes.Add((_lastTime, _lastTime + 6 / TicksPerSecond, 6, false));
+                if (w.Id == PushSkill.SunBlastWork) HeavenEarthAb._shakes.Add((_lastTime, _lastTime + 6 / TicksPerSecond, 6, false));
                 if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{_lastTime:F2} extra hit work {w.Id} after {gap} ticks" + Environment.NewLine);
                 foreach (int ti in (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)))
                     if (_units[ti].Alive && !dying.Contains(_units[ti])) ApplyWork(a, hitWork, _units[ti], dying);
             }
             // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 그 타로 쓰러질 인물도 밀린 칸에서 쓰러진다
             // (비 단계 2 0x10080111~0x1008035c 는 겨눈 유닛을 조건 없이 민다 · 다이나믹 크래쉬는 밀고 나서 판정, ba-21 T5). 전에는 쓰러질 인물은 안 밀었다.
-            if (BiWorks.Contains(w.Id) || DynamicCrashWorks.Contains(w.Id))
+            if (KnockbackSkill.BiWorks.Contains(w.Id) || PushSkill.DynamicCrashWorks.Contains(w.Id))
             {
                 var knocked = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
                               .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a);
                 if (knocked != null)
-                    foreach (bool _ in KnockbackRoutine(a, w, knocked, soulDrain: DynamicCrashWorks.Contains(w.Id) ? 10 : 0)) yield return true;
-                else if (BiWorks.Contains(w.Id)) PlayAction(a, DrawnAction(a, 24));
+                    foreach (bool _ in KnockbackAb.KnockbackRoutine(a, w, knocked, soulDrain: PushSkill.DynamicCrashWorks.Contains(w.Id) ? 10 : 0)) yield return true;
+                else if (KnockbackSkill.BiWorks.Contains(w.Id)) PlayAction(a, DrawnAction(a, 24));
             }
             // 리인카네이션 — 범위 안 적을 시전자 반대쪽으로 범위 밖까지 밀어낸다(fg-21 ⑧).
-            if (ReincarnationWorks.Contains(w.Id))
-                foreach (bool _ in RadialPushRoutine(a, w, col, row, WorkTargets(w, a, col, row), dying)) yield return true;
+            if (PushSkill.ReincarnationWorks.Contains(w.Id))
+                foreach (bool _ in PushAb.RadialPushRoutine(a, w, col, row, WorkTargets(w, a, col, row), dying)) yield return true;
             // 워핑 — 대상을 멀리 날려 보낸다(fg-21 ⑧).
-            if (WarpingWorks.Contains(w.Id))
+            if (PushSkill.WarpingWorks.Contains(w.Id))
             {
                 var thrown = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
                              .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a && !dying.Contains(u));
-                if (thrown != null) foreach (bool _ in ThrowRoutine(a, thrown)) yield return true;
+                if (thrown != null) foreach (bool _ in PushAb.ThrowRoutine(a, thrown)) yield return true;
             }
             if (holding)
             {
@@ -1197,7 +1197,7 @@ internal sealed unsafe partial class GameWindow
         for (double cap = _lastTime + 200 / TicksPerSecond; _lastTime < _fxLatestStart && _lastTime < cap;) yield return true;
         _fxLatestStart = 0;
         // 군단기 연출이 끝나 모두 다시 보일 때까지 기다린다 — 부하의 걸어가 치기도 그 뒤에.
-        while (_lastTime < _legionStageEnd) yield return true;
+        while (_lastTime < LegionStageAb._legionStageEnd) yield return true;
         // 사거리 밖이던 부하는 먼저 걸어간 뒤 친다(원본 0x1005f1c0: 명령1 이동 → 명령2 기술).
         if (_followerStrikes.Count > 0)
         {
