@@ -26,6 +26,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>BuildUnits 가 배치칸이 모자라 맵 밖에 만들어 둔 파티원 — 배치 단계를 안 열면 지운다.</summary>
     private readonly HashSet<UnitState> _deployBench = [];
 
+    /// <summary>세이브를 불러오느라 판을 세우는 중 — 벤치를 지우지 않고 남겨 둔다.</summary>
+    private bool _keepBenchForLoad;
+
     /// <summary>명단에서 고른 사람(다음에 누르는 초록 칸에 선다).</summary>
     private UnitState? _deployPick;
 
@@ -97,6 +100,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     && Environment.GetEnvironmentVariable("DUELDX_NODEPLOY") != "1" && _deployMovable.Count > 0;
         if (!open)
         {
+            if (_keepBenchForLoad) return;      // 불러오기 — 세이브에 적힌 인물을 보고 LoadBattleFrom 이 추린다
             if (_deployBench.Count > 0) DropUnits(_deployBench.Contains);   // 맵 밖 여분의 부하도 함께, 대장 번호는 다시 맞춘다
             _deployBench.Clear();
             return;
