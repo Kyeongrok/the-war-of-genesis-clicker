@@ -957,6 +957,15 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // 항행에서 떠난 자리를 되살린다 — 전투가 끝나 모세스로 돌아갈 때 그 행성·성계에 선다(LeaveFinishedBattleNow 가 「다녀온 항행」일 때만 되돌린다).
         if (state.NavAt is [var atChapter, var atStep, var atPlanet, var atSystem] && host.Mos._mosesChp?.Id == atChapter)
             (host.Mos._mosesNavVisited, host.Mos._mosesStep, host.Mos._mosesPlanet, host.Mos._mosesSystem) = (true, atStep, atPlanet, atSystem);
+        // 자리를 안 적은 옛 세이브(전투 중 저장·자동 저장) — 그 전투를 여는 장소가 딸린 행성·성계를 챕터 자료에서 찾아 선다. 이어지는 전투(Btl 0135 → 0136)는 장소에 없으므로
+        // 번호가 바로 앞(셋 안쪽)인 전투 장소로 본다(가설 — 이어지는 전투는 번호가 잇달아 있다). 필드를 거친 전투는 못 찾는다.
+        else if (state.NavAt == null && !state.InMoses && host.Mos._mosesChp is { } chp
+                 && chp.Places.Where(p => p.Kind == ChapterFile.PlaceKind.Battle && p.Target <= battle && battle - p.Target <= 3).MaxBy(p => p.Target) is { } from
+                 && chp.Planets.FirstOrDefault(p => p.Places.Contains(from.No)) is { } on)
+            (host.Mos._mosesNavVisited, host.Mos._mosesStep, host.Mos._mosesPlanet, host.Mos._mosesSystem) =
+                (true, 2, on.No, chp.Systems.FirstOrDefault(s => s.Planets.Contains(on.No))?.No ?? host.Mos._mosesSystem);
+        // 시험 전용: 되살린 항행 자리와 그 챕터의 전투 장소들(DUELDX_TESTRUN 일 때만).
+        TestRunTrace($"load nav chp {host.Mos._mosesChp?.Id} navAt {(state.NavAt == null ? "-" : string.Join(',', state.NavAt))} → visited {host.Mos._mosesNavVisited} step {host.Mos._mosesStep} planet {host.Mos._mosesPlanet} system {host.Mos._mosesSystem}; battle places {string.Join(' ', host.Mos._mosesChp?.Places.Where(p => p.Kind == ChapterFile.PlaceKind.Battle).Select(p => $"{p.No}:{p.Target}") ?? [])}");
         if (!host._battleLoaded || battle != host._scene.Id || fromMoses)
         {
             // 판을 새로 세울 때 맵 밖 여분(벤치)을 바로 지우지 않는다 — 저장할 때 벤치에서 꺼내 세운 인물이 사라지고, 뺀 인물이 새 몸으로 서고,
