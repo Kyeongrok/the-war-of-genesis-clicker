@@ -707,7 +707,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         {
             if (!ab.WorkByLevel.TryGetValue(lv, out int wid) || host.Btl.Work(wid) is not { } w) return "";
             var bits = new List<string>();
-            if (WorkEffect(w) is { Length: > 0 } effect) bits.Add(effect);
+            if (WorkEffect(w, user) is { Length: > 0 } effect) bits.Add(effect);
             if (user?.Data is { } c)
             {
                 int need = host.Btl.SoulNeedFor(user, c, wid), spend = host.Btl.SoulCostFor(user, c, wid);
@@ -826,11 +826,17 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     }
 
     /// <summary>work 하나의 효과 — 위력(피해·회복)과 보정 셋을 한 줄로.</summary>
-    internal string WorkEffect(WorkData w)
+    /// <remarks>
+    /// <paramref name="user"/> 가 있으면 위력 옆에 <b>그 인물이 지금 낼 피해</b>를 괄호로 붙인다(사용자 요청 — 위력 숫자만으로는 감이 안 온다):
+    /// 공격력 식 <c>0x1007aa90</c> 에 그 work 위력·지금 SOUL 을 넣은 값으로, 상대 방어(RDP)·명중·치명·±10% 흔들림을 넣기 전이다. 회복은 최대 HP 로 셈한 양.
+    /// </remarks>
+    internal string WorkEffect(WorkData w, UnitState? user = null)
     {
         var bits = new List<string>();
         if (w.AbilityId == BattleScene.EncourageAbility) bits.Add($"아군 SOUL +{w.Power}");
         else if (w.IsHeal && w.Power > 0) bits.Add($"최대 HP의 {w.Power}% 회복");
+        else if (w.IsDamage && user?.Data is { } c && host._db is { } db && w.AbilityId != BattleScene.BlackHoleAbility)
+            bits.Add($"{(w.Power != 0 ? $"위력 {w.Power} " : "")}(지금 피해 약 {db.Atk(c, user.Soul, w.Power)} — 상대 방어 전)");
         else if (w.IsDamage && w.Power > 0) bits.Add($"위력 {w.Power}");
         foreach (var (stat, value) in w.Bonuses)
         {

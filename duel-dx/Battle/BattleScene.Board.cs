@@ -118,6 +118,7 @@ internal sealed unsafe partial class BattleScene
     /// <c>DUELDX_AIM=&lt;work&gt;:&lt;열&gt;,&lt;줄&gt;[:&lt;열&gt;,&lt;줄&gt;]</c> 면 그 칸을 겨눈다(둘째 칸이 있으면 먼저 그 칸에 세운다) — 맵 물체 겨누기 시험.</summary>
     internal bool _aimHookDone;
     internal bool _itemHookDone;
+    internal bool _tipHookDone;
     internal bool _aimCheckDone;
 
     internal void ApplyAimHook()
@@ -202,6 +203,16 @@ internal sealed unsafe partial class BattleScene
                     $"aim check: {cu.ChrCode}({cu.Col},{cu.Row}) work {cwk.Id} tm {cwk.TargetMode} canAim {CanAimAt(cwk, cu, cu.Col, cu.Row)} inRange {InWorkRange(cwk, cu.Col, cu.Row, cu.Col, cu.Row, cu)} "
                     + $"flags {CellFlagsAt(cu.Col, cu.Row):x} afford {CanAfford(cu, cwk)} tp {cu.Tp} ctp {cu.Ctp} cost {(cu.Data is { } cd ? TpCostFor(cu, cd, cwk.Id) : -1)} soul {cu.Soul} need {(cu.Data is { } cd2 ? SoulNeedFor(cu, cd2, cwk.Id) : -1)} "
                     + $"h {HeightAt(cu.Col, cu.Row)} statuses {string.Join(',', cu.StatusId)}" + Environment.NewLine);
+        }
+        // DUELDX_ABILITYTIP=<줄> 이면 플레이어 차례에 어빌리티 목록을 열고 그 줄의 설명 창을 띄운다(화면 밖 시험용 — 설명 문구).
+        if (!_tipHookDone && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_ABILITYTIP"), out int tipRow) && IsPlayerTurn && _routine == null && host.Tlk._talk == null)
+        {
+            _tipHookDone = true;
+            _abilityMenu = true;
+            _abilityTop = 0;
+            _abilityPressed = tipRow;
+            var (tx, ty) = UnitFoot(host._units[_turn]);
+            host._mouse = (tx + 20, ty - 120);
         }
         // DUELDX_ITEMMENU=<줄> 이면 플레이어 차례에 아이템 창을 열고 마우스를 그 줄 위에 둔다(화면 밖 시험용 — 줄 강조).
         if (!_itemHookDone && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_ITEMMENU"), out int itemRow) && IsPlayerTurn && _routine == null && host.Tlk._talk == null)
