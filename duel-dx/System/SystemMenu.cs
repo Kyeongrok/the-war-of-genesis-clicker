@@ -729,8 +729,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host._party.Clear();
         // 전투에 서 있던 아군도 명부에 넣는다 — 이것이 없으면 배치 칸 고르기가 그 인물을 못 본다.
         // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
+        // 군단 부하는 명부에 넣지 않는다 — 부하의 적힌 레벨은 절반 값이라, 명부에 들어가면 다음 전투가 그것을 「이어받은 인물」로 보고
+        // 파티 레벨로 안 키운 채 다시 절반으로 깎았다(불러올 때마다 9 → 4 → 2 로 줄었다 — 사용자 보고: 대장 21 에 용병 3~4).
         foreach (var s in state.Units)
-            if (s.Side == 4 && host._db?.Character(s.ChrCode) is { } bc)
+            if (s.Side == 4 && (s.LeaderIndex ?? -1) < 0 && host._db?.Character(s.ChrCode) is { } bc)
                 host._party[s.ChrCode] = Restored(bc, s, regrow: true);
         // 전투 밖 인물 — 이제는 명부 전체(어느 파티에 있든, 파티에서 빠졌든)가 여기 실린다. 옛 세이브는 지금 파티 사람만 적혀 있다.
         foreach (var s in state.Party ?? [])
@@ -1055,7 +1057,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             u.Detached = s.Detached ?? false;
             if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
-            if (u.Data is { } c) u.Data = Restored(c, s, regrow: false);
+            // 부하의 적힌 레벨은 판을 세울 때 새로 셈한 값(파티 레벨의 절반)을 둔다 — 줄어든 값이 적힌 세이브도 불러오면 바로잡힌다.
+            if (u.Data is { } c) u.Data = (s.LeaderIndex ?? -1) >= 0 ? Restored(c, s, regrow: false) with { Level = c.Level, CumExp = c.CumExp } : Restored(c, s, regrow: false);
             u.ClearStatus();
             // 모세스에서 적은 세이브는 끝난 전투의 상태이상을 들고 있을 수 있다(고치기 전 판) — 되살리지 않는다.
             for (int k = 0; k < 3 && !state.InMoses; k++)

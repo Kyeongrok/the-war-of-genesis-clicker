@@ -94,6 +94,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 적 레벨의 기준이 되는 파티 레벨은 <b>유닛을 채우기 전에</b> 한 번 셈한다 —
         // 채우는 도중에 세면 아직 안 채워진 아군 때문에 순서에 따라 값이 흔들린다.
         int partyLevel = PartyLevel();
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"party level {partyLevel} — members [{string.Join(",", host.Mos._members.Select(m => $"{m}:{host._party.GetValueOrDefault(m)?.Level}"))}] followers {host._units.Count(u => u.LeaderIndex >= 0)}" + Environment.NewLine);
         foreach (var unit in host._units)
         {
             if (host._db.Character(unit.ChrCode) is not { } c) continue;
@@ -102,14 +105,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             int startCum = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CUMEXP"), out int v) ? v : c.Level * 100;
             // 앞 전투에서 얻은 레벨·경험치·장비는 다음 전투로 이어진다(_party 가 들고 있다).
             // DUELDX_CUMEXP 를 주면 레벨도 그 값에 맞춘다 — 쌓인 경험치와 레벨은 늘 짝이 맞아야 한다(레벨 = 쌓인 경험치 ÷ 100).
-            unit.Data = host._party.TryGetValue(unit.ChrCode, out var carried) ? carried
+            // 부하는 명부(_party)에 같은 Chr 가 있어도(옛 세이브가 넣어 둔 절반 레벨 기록) 늘 제 레코드에서 새로 키운다.
+            bool follower = unit.LeaderIndex >= 0;
+            unit.Data = !follower && host._party.TryGetValue(unit.ChrCode, out var carried) ? carried
                       : unit.IsAlly ? c with { Exp = StatusScreen.DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100),
                                                // DUELDX_JOB=<직업> 이면 아군 직업을 바꾼다 — 전직 화면(2단계·3단계 단추)을 시험할 때 쓴다.
                                                JobId = ushort.TryParse(Environment.GetEnvironmentVariable("DUELDX_JOB"), out ushort job) ? job : c.JobId }
                       : c with { CumExp = c.Level * 100 };
             // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물은 <b>편과 상관없이</b>(0x100633ff — 편 3 손님 제이슨도 자란다).
             // 파티 객체에서 온 인물(_party)은 제 레벨을 그대로 쓴다.
-            if (!unit.IsAlly || !host._party.ContainsKey(unit.ChrCode)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
+            if (!unit.IsAlly || follower || !host._party.ContainsKey(unit.ChrCode)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
             // 군단 부하는 능력치는 제 레벨 줄로 키우되 <b>적히는 레벨은 절반</b>이다(0x1007a916~0x1007a948 — max(1, L/2), EXP 는 그 ×100).
             // 처치 EXP(레벨 차)·상태이상 레벨 조건·정보 창이 이 값을 읽는다(ba-20 M1). 전에는 부하를 잡으면 EXP 가 과했다.
             if (unit.LeaderIndex >= 0 && unit.Data is { } fd)
