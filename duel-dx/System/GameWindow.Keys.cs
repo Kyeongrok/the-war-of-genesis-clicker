@@ -183,17 +183,13 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(bar, Win32.MF_STRING, TuningScreen.MenuTuning, "모드(&M)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
-        Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
         _replayMenu = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
-        IntPtr dev = Win32.CreatePopupMenu();
-        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuReloadSkills, "어빌리티 반영(&A)");
-        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
-        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuEditor, "편집기 열기(&E)… (없으면 받는다)");
-        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
+        // 개발도 모드처럼 누르면 곧바로 창이 뜬다 — 어빌리티 반영 · 챕터 고르기 · 편집기 열기와 폴더들은 그 창 안에(사용자 요청, DevScreen).
+        Win32.AppendMenuW(bar, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)");
         return bar;
     }
 
@@ -306,6 +302,7 @@ internal sealed unsafe partial class GameWindow
     internal void OnMenuCommand(int id)
     {
         if (Btl.OnDifficultyMenu(id)) return;
+        if (id == DevScreen.MenuDev) { DevScr._open = !DevScr._open; return; }
         if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }
         switch (id)
         {
