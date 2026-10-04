@@ -345,6 +345,23 @@ internal sealed unsafe partial class BattleScene
                     _fxLatestStart = Math.Max(_fxLatestStart, start);
                     continue;
                 }
+                // 떨굼(생성자 0x100c5c50 + 0x100c5d40(vx, vy, vz, 튕김)) — 조각 50개가 높이 MaxSpeed 에서 제 빠르기로 튀어 나가 중력 5.0 으로 떨어지고 땅에서 튄다.
+                // 오버 드라이브 8:4 · 카운터 미사일 7:2 · 크래쉬 봄 251:0. 전에는 한 장이 제자리에 섰다. 표의 Lift 는 높이 × 0.6 과 같은 값이라 여기서는 안 쓴다.
+                if (extra is { Move: 3, ScalePermille: > 0 } fall && !e.Fly)
+                {
+                    int len = host.EffectTicks(e.Obs, e.Motion);
+                    bool bomb = fall.Speed < 0;      // 크래쉬 봄 — 수명 = 모션 × 3, 조각마다 0~49틱 늦게(0x100c24d0)
+                    for (int n = 0; n < 50; n++)
+                        _fallers.Add((e.Obs, e.Motion, start + (bomb ? _fxRandom.Next(50) : 0) / TicksPerSecond,
+                                      x + (fall.From > 0 ? _fxRandom.Next(fall.From) - fall.From / 2 : 0),
+                                      (fall.MaxSpeed > 0 ? y : y - e.Lift) + (fall.To > 0 ? (_fxRandom.Next(fall.To) - fall.To / 2) * 0.8 : 0),
+                                      fall.MaxSpeed,
+                                      fall.Mode > 0 ? _fxRandom.Next(fall.Mode) - fall.Mode / 2 : 0,
+                                      fall.Mode > 0 ? _fxRandom.Next(fall.Mode) - fall.Mode / 2 : 0,
+                                      fall.Speed / 1000.0 + (fall.MinSpeed > 0 ? _fxRandom.Next(fall.MinSpeed) : 0),
+                                      fall.ScalePermille / 1000.0, bomb ? len * 3 : Math.Max(1, len - 1), mirrored));
+                    continue;
+                }
                 if (extra is { Move: 5, Speed: > 0 } arc && (userX != targetX || userY != targetY))
                 {
                     _movers.Add((e.Obs, e.Motion, start, 5, userX, userY - e.Lift, targetX, targetY - e.Lift, arc.Speed, 0, 0, 0, 0, mirrored));

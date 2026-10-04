@@ -23,7 +23,15 @@
            `빠르기 < 최소(+0x3c)` 면 최소, `빠르기 > 최대(+0x40)` 면 최대(0x10037cf3~0x10037d37). 최소 `0x100c25c0` · 최대 `0x100c25e0`.
            등속(더하기 0.0)은 Mode 1 · ScalePermille 1000 으로 적는다. 더하기 방식(Mode 0)이면 ScalePermille = 틱마다 더하는 px × 1000.
   Move 2   떠오름 `0x100c5c10(?, ?, 높이, 빠르기 double, …)` — MaxSpeed = 높이(월드 z, 음수 = 내려옴) · ScalePermille = 빠르기 × 1000.
-  Move 3   떨굼 `0x100c5d40(Obs, 모션, x, y, z, 맵, 중력 double)` — ScalePermille = 중력 × 1000.
+  Move 3   떨굼(튀는 조각) — 생성자 `0x100c5c50(Obs, 모션, x, y, z, 맵, 주인, work)` 가 이동기(`0x10038ee0`, 0x90 바이트)를 +0x78 에 달고,
+           설정 `0x100c5d40(vx double, vy double, vz double, 튕김 double)` → `0x10038f40` 이 속도와 튕김 계수를 넣는다(중력 인자는 없다 —
+           틱 `0x10038fa0` 의 상수 5.0). 틱: `x += vx/2; y += vy/2; 새vz = vz − 5; z += (vz + 새vz)/4; z ≤ 0 이면 z = −z, vz = −새vz × 튕김`,
+           `|vz| < 5` 일 때 z 가 땅 높이(`0x100dfc00`) ± 5 안이거나 땅 아래·맵 밖(`0x100dfb70`)이면 끝.
+           세 double 을 `fild`/`fstp` 로 스택에 적는 곳은 실행기가 못 읽어(생성자 인자가 남아 보인다) 생성~설정 사이 코드를 따로 읽는다(`drop_read`):
+           `call 0x100083d0(rand); cdq; mov ecx, N; idiv ecx; add/sub …, C` = `rand % N + C`, 차례는 (vx, vy, vz) — 두 곳(0x10082310 · 0x100a9b60) 손으로 확인.
+           ScalePermille = 튕김 × 1000 · MaxSpeed = 시작 높이(생성자 z 의 `나.z+N` 의 N, 월드 z) · Speed = 처음 vz × 1000(무작위면 가장 작은 값) ·
+           MinSpeed = vz 무작위 폭 N · Mode = 수평 속도 무작위 폭 N(vx, vy = rand % N − N/2) · From · To = 시작 자리 x · y 무작위 폭(생성자 x, y 가
+           `나.x + rand % N + C` 꼴 — 가운데 C + N/2 가 0 이 아니면 Dx·Dy 에).
   Move 4   고리 `0x100cd310(가운데, 처음 반지름, 끝 반지름, 처음 각 double(×π), 각속도 double, 틱)` — Speed = 처음 반지름 · MaxSpeed = 끝 반지름 ·
            MinSpeed = 처음 각 × 1000 · ScalePermille = 각속도 × 1000 · Mode = 틱.
   Move 5   포물선 `0x100cb550(도착 xy, 도착 z, 틱)` — Speed = 틱.
@@ -58,6 +66,8 @@ RISE, DROP, RING, ARC = 0x100c5c10, 0x100c5d40, 0x100cd310, 0x100cb550
 OTHER = {0x100c57d0, 0x100c59d0, 0x100c5550, 0x100d1970, 0x100c3b80, 0x100c4670, 0x100c4810, 0x100d1070, 0x100c3c90}
 COLLECT_UNITS, COLLECT_CELLS = 0x100df5c0, 0x100defb0
 ARRIVE_SLOT = 0x100c29b0                                    # 판정 = 이 이펙트가 사라질 때
+RAND = 0x100083d0                                           # 셈을 하나 올리고 CRT rand 로 뛴다
+AXIS = {0x3e: 'x', 0x40: 'y', 0x42: 'z'}                    # 유닛·이펙트의 월드 자리 낱말
 MOVE_NAME = {1: '직선탄', 2: '떠오름', 3: '떨굼', 4: '고리', 5: '포물선', 9: '그 밖'}
 UNKNOWN = 3
 
@@ -277,8 +287,86 @@ class Loops:
         return 0, False
 
 
+# ---------------------------------------------------------------- 떨굼 — 속도 · 시작 자리 (코드를 따로 읽는다)
+def rands(seq):
+    """줄들 안의 `rand % N + C (+ 나의 자리 낱말)` 들 — [(N, C, 축 또는 None)] 나온 차례대로."""
+    out = []
+    for n, i in enumerate(seq):
+        if i.mnemonic != 'call' or i.operands[0].type != X86_OP_IMM or i.operands[0].imm != RAND:
+            continue
+        mod, c, axis, regs, divided = None, 0, None, {'edx'}, False
+        for j in seq[n + 1:]:
+            ops = j.operands
+            if j.mnemonic == 'call':
+                break
+            if j.mnemonic == 'idiv':
+                divided = True
+                continue
+            r0 = emu.SUB.get(j.reg_name(ops[0].reg), (None,))[0] if ops and ops[0].type == X86_OP_REG else None
+            if not divided:
+                if j.mnemonic == 'mov' and r0 == 'ecx' and ops[1].type == X86_OP_IMM:
+                    mod = ops[1].imm
+                continue
+            if j.mnemonic == 'mov' and r0 and r0 != 'esp' and ops[1].type == X86_OP_REG:
+                if emu.SUB.get(j.reg_name(ops[1].reg), (None,))[0] in regs:
+                    regs.add(r0)                             # 나머지를 다른 레지스터로 옮겨 셈한다
+                else:
+                    regs.discard(r0)
+            elif j.mnemonic in ('add', 'sub') and r0 in regs and len(ops) == 2:
+                if ops[1].type == X86_OP_IMM:
+                    c += s32(ops[1].imm & 0xffffffff) * (1 if j.mnemonic == 'add' else -1)
+                elif ops[1].type == X86_OP_MEM and j.mnemonic == 'add' and j.reg_name(ops[1].mem.base) == 'esi':
+                    axis = AXIS.get(ops[1].mem.disp)
+        if mod and divided:
+            out.append((mod, c, axis))
+    return out
+
+
+def drop_read(site, ev, cva, a, note):
+    """(처음 vz × 1000, vz 폭, 수평 폭, 시작 x 폭, 시작 y 폭, 가운데 dx, 가운데 dy(월드)) — 못 읽은 것은 0 + 메모."""
+    loops, fstart = site if site else (None, None)
+    seq = loops.insns(fstart) if loops else []
+    at = {i.address: n for n, i in enumerate(seq)}
+    if ev['va'] not in at or cva not in at:
+        note.append('떨굼 속도 못 읽음')
+        return 0, 0, 0, 0, 0, 0, 0
+    n0, n1 = at[ev['va']], at[cva]
+    span = seq[n0 + 1:n1]
+    written = sum(1 for i in span if i.mnemonic == 'fstp' and i.operands[0].type == X86_OP_MEM
+                  and i.reg_name(i.operands[0].mem.base) == 'esp')
+    vz = vzn = hn = 0
+    rs = rands(span)
+    if written == 0 and not rs:
+        v = [dbl(a[k], a[k + 1]) for k in (0, 2, 4)]         # 상수 여덟 낱말을 그대로 민 꼴 — 실행기가 읽은 값이 맞다
+        if None in v or max(abs(x) for x in v) > 1000:
+            note.append('떨굼 속도 못 읽음')
+        else:
+            vz = int(round(v[2] * 1000))
+            if v[0] or v[1]:
+                note.append('떨굼 수평 속도 (%g, %g) 은 못 실음' % (v[0], v[1]))
+    elif written == 3 and len(rs) == 3 and all(r[2] is None for r in rs):
+        (xn, xc, _), (yn, yc, _), (vzn, zc, _) = rs
+        vz = zc * 1000
+        if xn == yn and xc == yc == -(xn // 2):
+            hn = xn
+        else:
+            note.append('떨굼 수평 속도 rand%%%d%+d · rand%%%d%+d 은 못 실음' % (xn, xc, yn, yc))
+    else:
+        note.append('떨굼 속도 못 읽음')
+    # 시작 자리 — new 와 생성자 사이의 rand
+    new = next((n for n in range(n0 - 1, max(n0 - 60, -1), -1) if seq[n].mnemonic == 'call'
+                and seq[n].operands[0].type == X86_OP_IMM and seq[n].operands[0].imm == emu.NEW), None)
+    sx = sy = cx = cy = 0
+    for mod, c, axis in (rands(seq[new + 1:n0 + 1]) if new is not None else []):
+        if axis == 'x':
+            sx, cx = mod, c + mod // 2
+        elif axis == 'y':
+            sy, cy = mod, c + mod // 2
+    return vz, vzn, hn, sx, sy, cx, cy
+
+
 # ---------------------------------------------------------------- 한 이펙트의 덧정보
-def extra_of(ev, d, on_target, per, stats):
+def extra_of(ev, d, on_target, per, stats, site=None):
     """(Mirror 깃발, Dx, Dy, PerTarget, Stagger, Sure, Move, Speed, Scale, Mode, Min, Max, From, To, 메모) — Mirror 깃발은 그 방향에서 뒤집는가."""
     calls = ev.get('calls', [])
     flip = False
@@ -295,7 +383,7 @@ def extra_of(ev, d, on_target, per, stats):
         else:
             stats['치우침 — 표 자리와 기준이 달라 뺌'] += 1
     move = speed = scale = mode = lo = hi = frm = to = 0
-    for t, _, a in calls:
+    for t, cva, a in calls:
         if t == LINE and move == 0:
             move = 1
             speed = a[2] if isinstance(a[2], int) and 0 < a[2] < 2000 else 0
@@ -323,6 +411,17 @@ def extra_of(ev, d, on_target, per, stats):
             move = 3
             k = dbl(a[6], a[7])
             scale = int(round(k * 1000)) if k is not None and 0 < k < 100 else 0
+            speed, lo, mode, sx, sy, cx, cy = drop_read(site, ev, cva, a, note)
+            if pz is not None and abs(pz[1]) < 5000:
+                hi = pz[1]                                   # 시작 높이 — 기준 유닛의 z 위로
+            else:
+                note.append('떨굼 시작 높이 못 읽음(코드가 셈한 자리)')
+            if sx or sy:
+                if on_target:
+                    note.append('떨굼 시작 자리 폭 (%d, %d) 은 시전자 기준이라 못 실음' % (sx, sy))
+                else:
+                    frm, to = sx, sy
+                    dx, dy = dx + cx, dy + screen_dy(cy)
         elif t == RING and move == 0:
             move = 4
             speed = a[1] if isinstance(a[1], int) and a[1] < 5000 else 0
@@ -464,7 +563,7 @@ def build(game, cs):
                     hit = [k for k in hit if effs[k][3] == lift] or hit
                     hit = [k for k in hit if effs[k][6] == fly] or hit
                 k = hit[0]
-                x = extra_of(ev, d, effs[k][2], per, stats)
+                x = extra_of(ev, d, effs[k][2], per, stats, (loops, fstart))
                 if x[6] == 1 and any(t == ARRIVE_SLOT for t, _, _ in ev.get('calls', [])):
                     arrive.add(w)
                 if x[6] and any(t == ARRIVE_SLOT for t, _, _ in ev.get('calls', [])):
@@ -547,7 +646,13 @@ def write(path, out, res, names, arrive):
          '    /// <param name="PerTarget">대상 유닛마다 하나씩 · Stagger = 대상 사이 틱(모르면 0) · StaggerSure</param>',
          '    /// <param name="Move">0 없음 · 1 직선탄 · 2 떠오름 · 3 떨굼 · 4 고리 · 5 포물선 · 9 그 밖</param>',
          '    /// <param name="Speed">틱당 px(직선탄) · ScalePermille 틱마다 곱(1000 = 등속) · Mode 0 더하기/1 곱하기 · MinSpeed/MaxSpeed(0 = 없음).',
-         '    /// 떠오름: MaxSpeed = 높이, ScalePermille = 빠르기 × 1000. 떨굼: ScalePermille = 중력 × 1000.',
+         '    /// 떠오름: MaxSpeed = 높이, ScalePermille = 빠르기 × 1000.',
+         '    /// 떨굼(튀는 조각, 값은 모두 월드 단위 — 화면은 x 그대로 · y × 0.8 · z × 0.6): ScalePermille = 튕김 계수 × 1000(중력은 원본 상수라 칸이 없다),',
+         '    /// MaxSpeed = 시작 높이 z(기준 자리 위로 — 표의 Lift 가 이미 이 값 × 0.6 이니 두 번 더하지 않는다), Speed = 처음 vz × 1000(위가 +, 무작위면 가장 작은 값),',
+         '    /// MinSpeed = vz 무작위 폭 N(vz = Speed/1000 + rand % N, 0 = 고정), Mode = 수평 속도 무작위 폭 N(vx, vy = rand % N − N/2, 0 = 없음),',
+         '    /// From · To = 시작 자리 x · y 무작위 폭 N(자리 = 기준 + rand % N − N/2, 0 = 없음 — 떨굼에서는 From/To 가 아래 뜻이 아니다).',
+         '    /// 틱(0x10038fa0): x += vx/2, y += vy/2, 새vz = vz − 5, z += (vz + 새vz)/4, z ≤ 0(월드 0)이면 z = −z · vz = −새vz × 튕김.',
+         '    /// |vz| &lt; 5 일 때 z 가 땅 높이 ± 5 안이거나 땅 아래·맵 밖이면 끝, 수명이 차도 끝(0x100c2360).',
          '    /// 고리: Speed = 처음 반지름, MaxSpeed = 끝 반지름, MinSpeed = 처음 각(π 의 천분율), ScalePermille = 각속도 × 1000, Mode = 틱. 포물선: Speed = 걸리는 틱.</param>',
          '    /// <param name="From">0 시전자 · 1 대상/겨눈 칸 · 2 고정 치우침(To 에만 — 도착 = 출발 + (Dx, Dy)) · 3 못 읽음(표의 자리를 쓴다) ; To 도 같은 뜻</param>',
          '    public readonly record struct Row(int Obs, int Motion, int Delay, int Facing, int Mirror, int Dx, int Dy,',
