@@ -89,12 +89,12 @@ internal sealed unsafe partial class BattleScene
                 return;
             }
         }
-        // 파(어빌리티 11, 핸들러 0x10082990) — 시전자 몸의 복제 탄 여덟이 3틱 간격으로 여덟 방향으로 날아간다(빠르기 20, 틱마다 × 0.85, 바닥 10,
+        // 파(어빌리티 2, 핸들러 0x10082990) — 시전자 몸의 복제 탄 여덟이 3틱 간격으로 여덟 방향으로 날아간다(빠르기 20, 틱마다 × 0.85, 바닥 10,
         // 거리 D = (범위 − 2) × 40 — 대각선은 D/2 씩). 탄마다 2·4·6틱 전 자리에 꼬리 복제 셋. 그리기 칸 4. 전에는 분신 열한 개가 대상 쪽으로 늘어섰다.
-        if (w.AbilityId == 11)
+        if (w.AbilityId == 2)       // 파 = 어빌리티 2(work 11 · 202~220). 11 은 큐어다 — 처음에 번호를 잘못 넣어 큐어에 탄이 붙었었다
         {
             var (px, py) = host.Btl.UnitFoot(user);
-            double reach = Math.Max(0, w.AreaMaxQuarters / 4 - 2) * 40;
+            double reach = Math.Max(0, w.AreaMaxQuarters - 2) * 40;      // 메모리의 +0x1a(파일값 × 4) − 2 — 파일값 1 이면 80
             (double Dx, double Dy, int Shot, int Tail, bool Mirror)[] ways =
             [
                 (reach, 0, 34, 37, true), (0, reach, 35, 38, false), (-reach, 0, 34, 37, false), (0, -reach, 33, 36, false),
