@@ -107,6 +107,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawBlinkGhosts()
     {
+        DrawLegionGhosts();
         for (int i = _blinkGhosts.Count - 1; i >= 0; i--)
         {
             var g = _blinkGhosts[i];

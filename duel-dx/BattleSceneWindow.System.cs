@@ -495,6 +495,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _objActing.Clear();
         _objectRoutine = false;
         _blinkGhosts.Clear();
+        _legionGhosts.Clear();
+        _legionFades.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
         _flyingEffects.Clear();
@@ -943,6 +945,8 @@ internal sealed unsafe partial class BattleSceneWindow
         _objActing.Clear();
         _objectRoutine = false;
         _blinkGhosts.Clear();
+        _legionGhosts.Clear();
+        _legionFades.Clear();
         _stageDraws.Clear();
         _planetZoomAt = -1;
         _flyingEffects.Clear();

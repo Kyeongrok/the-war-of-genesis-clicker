@@ -1147,6 +1147,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
         StepBlinks();
+        StepLegionFades();
         StepPendingExits();
         foreach (var unit in _units)
         {
