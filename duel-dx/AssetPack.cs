@@ -26,7 +26,8 @@ internal static class AssetPack
     /// <summary>화면에 보일 진행 글 — 받을 것이 없거나 다 받았으면 빈 글.</summary>
     public static string Status { get; private set; } = "";
 
-    private sealed record Entry(string Name, string Asset, long Size, string Sha256);
+    /// <param name="Release">그 파일이 올라가 있는 릴리즈 — 릴리즈 하나에 파일 1,000개까지라 넘치는 것은 <c>assets-pack-2</c> 에 있다(빈 글이면 첫 릴리즈).</param>
+    private sealed record Entry(string Name, string Asset, long Size, string Sha256, string Release = "");
 
     private static readonly object Gate = new();
     private static List<Entry> _todo = [];
@@ -177,7 +178,9 @@ internal static class AssetPack
 
                 string to = LocalPath(next), part = to + ".part";
                 Directory.CreateDirectory(Path.GetDirectoryName(to)!);
-                using (var response = await http.GetAsync(BaseUrl + next.Asset, HttpCompletionOption.ResponseHeadersRead))
+                string from1 = next.Release.Length > 0 && next.Release.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-')
+                    ? BaseUrl.Replace("/assets-pack-1/", $"/{next.Release}/") : BaseUrl;
+                using (var response = await http.GetAsync(from1 + next.Asset, HttpCompletionOption.ResponseHeadersRead))
                 {
                     response.EnsureSuccessStatusCode();
                     await using var from = await response.Content.ReadAsStreamAsync();
@@ -225,7 +228,8 @@ internal static class AssetPack
             using var doc = JsonDocument.Parse(json);
             return [.. doc.RootElement.GetProperty("files").EnumerateArray().Select(p => new Entry(
                 p.GetProperty("name").GetString() ?? "", p.GetProperty("asset").GetString() ?? "",
-                p.GetProperty("size").GetInt64(), p.GetProperty("sha256").GetString() ?? ""))];
+                p.GetProperty("size").GetInt64(), p.GetProperty("sha256").GetString() ?? "",
+                p.TryGetProperty("release", out var release) ? release.GetString() ?? "" : ""))];
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return null; }
     }

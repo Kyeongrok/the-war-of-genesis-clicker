@@ -254,6 +254,14 @@
                     <Button
                         Margin="0,0,6,0"
                         Padding="8,2"
+                        AutomationProperties.AutomationId="SkillEditTryInGame"
+                        Click="TryInGame_Click"
+                        Content="게임에서 실험 ▶"
+                        DockPanel.Dock="Right"
+                        ToolTip="고친 것을 저장하고 게임을 실험판으로 띄운다 — 작은 맵에 아군 하나(죠안)와 적 부대 넷. 아군은 이 어빌리티를 고른 레벨(레벨별 표에서 고른 줄, 없으면 1)로 갖고 SOUL·TP 가 가득하며 내 차례마다 SOUL 이 다시 찬다." />
+                    <Button
+                        Margin="0,0,6,0"
+                        Padding="8,2"
                         AutomationProperties.AutomationId="SkillEditDeleteLevel"
                         Click="DeleteLevel_Click"
                         Content="고른 레벨 지우기"
