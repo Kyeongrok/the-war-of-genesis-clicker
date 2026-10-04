@@ -30,6 +30,34 @@ internal sealed unsafe partial class BattleScene
     {
         if (w.Id == StagingSkill.DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
+        // 원본 복제 클래스 셋(ba-21 fx F12 뒤 분석) — 「그 순간 모습」(−1) 줄의 꼴로 가른다.
+        if (list.All(b => b.Motion < 0))
+        {
+            var body = list[0].OnTarget && target != null ? target : user;
+            if (list.Length == 1 && list[0].OnTarget)
+            {
+                // 늘어나는 복제(0x100c6a10 + 0x100c6b20) — 포스 필드·배리어·실드류: 20틱 동안 가로 1 + 0.055k · 세로 1 + 0.015k (k = min(t, 19 − t)),
+                // 가로는 가운데 · 세로는 발 기준으로 부풀었다 돌아온다. 표가 다른 자리(카운터 필드 120틱 …)도 같은 꼴로 본다(가설).
+                _bodyShapes.Add((body, 1, host._lastTime, 0, null));
+                return;
+            }
+            if (list.Length == 2 && list.All(b => b.OnTarget))
+            {
+                // 떨리는 복제(0x100c6d70 + 0x100c6e20) — 마인드 어택: 복제 둘이 ±5 로, 나이 % 4 가 0·2 면 제자리 · 1 이면 −치우침 · 3 이면 +치우침, 40틱.
+                // 쇼크는 ±6 · 50틱인데 여기서는 같은 값으로 둔다.
+                _bodyShapes.Add((body, 2, host._lastTime, 5, null));
+                _bodyShapes.Add((body, 2, host._lastTime, -5, null));
+                return;
+            }
+            if (list.Length >= 3 && list.All(b => !b.OnTarget))
+            {
+                // 꼬리 복제(0x100c61c0 + 0x100c5fe0) — 혼: 복제 일곱이 시전자의 2·4·…·14틱 전 자리에 선다(돌진을 따라 늘어섰다가 멈추면 겹쳐 사라진다).
+                // 비연참(21개 — 세 줄)은 옆 줄의 치우침을 못 읽어 한 줄로 겹쳐 둔다.
+                var history = new List<(int X, int Y)>();
+                for (int i = 0; i < Math.Min(7, list.Length); i++) _bodyShapes.Add((body, 3, host._lastTime, 2 * (i + 1), history));
+                return;
+            }
+        }
         var (ux, uy) = host.Btl.UnitFoot(user);
         var (tx, ty) = target != null ? host.Btl.UnitFoot(target) : (col * TileW + TileW / 2, host.CellCenterY(col, row));
         for (int i = 0; i < list.Length; i++)
@@ -50,9 +78,59 @@ internal sealed unsafe partial class BattleScene
         }
     }
 
+    /// <summary>
+    /// 꼴이 있는 복제 — 1 늘어남(20틱) · 2 떨림(Param = 치우침, 40틱) · 3 꼬리(Param = 몇 틱 전 자리, History = 주인이 지나온 자리).
+    /// 그리는 밝기는 다른 분신과 같은 값으로 둔다(원본의 그리기 방식 3·4 가 무엇인지는 못 읽음).
+    /// </summary>
+    internal readonly List<(UnitState Owner, int Kind, double Start, int Param, List<(int X, int Y)>? History)> _bodyShapes = [];
+
+    internal void DrawBodyShapes()
+    {
+        for (int i = _bodyShapes.Count - 1; i >= 0; i--)
+        {
+            var c = _bodyShapes[i];
+            int tick = (int)((host._lastTime - c.Start) * TicksPerSecond);
+            if (!c.Owner.OnField || !host._sprites.TryGetValue(c.Owner.ChrCode, out var sprite) || sprite.FrameFor(c.Owner) is not { } frame || tick > 300)
+            { _bodyShapes.RemoveAt(i); continue; }
+            var (fx, fy) = host.Btl.UnitFoot(c.Owner);
+            switch (c.Kind)
+            {
+                case 1:
+                {
+                    if (tick >= 20) { _bodyShapes.RemoveAt(i); continue; }
+                    int k = Math.Min(tick, 19 - tick);
+                    int w = Math.Max(1, (int)(frame.W * (1 + 0.055 * k))), h = Math.Max(1, (int)(frame.H * (1 + 0.015 * k)));
+                    var px = new uint[w * h];
+                    for (int y = 0; y < h; y++)
+                        for (int x = 0; x < w; x++)
+                            px[y * w + x] = frame.Px[Math.Min(frame.H - 1, y * frame.H / h) * frame.W + Math.Min(frame.W - 1, x * frame.W / w)];
+                    host.BlitMasked(px, w, h, fx + frame.X - (w - frame.W) / 2, fy + frame.Y - (h - frame.H), fade: CloneFade);
+                    break;
+                }
+                case 2:
+                {
+                    if (tick >= 40) { _bodyShapes.RemoveAt(i); continue; }
+                    int shift = (tick % 4) switch { 1 => -c.Param, 3 => c.Param, _ => 0 };
+                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: CloneFade);
+                    break;
+                }
+                default:
+                {
+                    var history = c.History!;
+                    while (history.Count <= tick) history.Add((fx, fy));
+                    var (hx, hy) = history[Math.Max(0, tick - c.Param)];
+                    if (tick > c.Param && (hx, hy) == (fx, fy)) { _bodyShapes.RemoveAt(i); continue; }
+                    host.BlitMasked(frame.Px, frame.W, frame.H, hx + frame.X, hy + frame.Y, fade: CloneFade);
+                    break;
+                }
+            }
+        }
+    }
+
     /// <summary>분신을 반투명으로 그린다 — 인물 위에(인물 다음에) 그린다. 끝난 것은 지운다.</summary>
     internal void DrawBodyClones()
     {
+        DrawBodyShapes();
         for (int i = _bodyClones.Count - 1; i >= 0; i--)
         {
             var c = _bodyClones[i];
