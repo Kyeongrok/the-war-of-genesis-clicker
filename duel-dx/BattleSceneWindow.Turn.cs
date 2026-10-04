@@ -485,7 +485,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (u.Data == null || _voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
         if (hurt.Any(id => _mixer.IsPlaying(HurtVoiceTag + id))) return;
-        int id = hurt[(Array.IndexOf(_units, u) & 1) % hurt.Length];
+        int id = hurt[(_tick & 1) % hurt.Length];   // 전투 프레임 카운터로 고른다(0x10071e83 → 0x100eaac0, ba-21 sound D8) — 전에는 인물마다 늘 같은 쪽이었다
         Play(id, HurtVoiceTag + id, SoundScreenX(UnitFoot(u).X));   // 비명은 그 유닛 화면 자리에서(0x10079c68~0x10079c9a, ba-20 Q S-3)
     }
 

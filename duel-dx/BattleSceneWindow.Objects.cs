@@ -245,6 +245,7 @@ internal sealed unsafe partial class BattleSceneWindow
         ShowNumberAt(obj.Col * TileW + TileW / 2, CellCenterY(obj.Col, obj.Row), damage.ToString(), DamageColor);   // 숫자는 물체 자리에
         if (obj.Hp > 0) return;
         RestampObjects();                                 // 부서지면 판을 다시 찍는다(0x100e7be9 → 0x3f1)
+        ObjectSounds(obj, 4, _lastTime);
         _brokenAt[obj] = (_lastTime, 4);                  // 제 그림의 모션 4 를 한 번 돌고 사라진다 — 0x3f1 은 그림 번호가 아니라 판 다시 찍기 메시지다(ba-20 O P4)
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
@@ -610,6 +611,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void Explode(DemoObject obj)
     {
+        ObjectSounds(obj, 8, _lastTime);
         _brokenAt[obj] = (_lastTime, 8);   // 폭탄 상자는 모션 8(Obs 460 = 35틱)을 한 번 돈다(0x100e7e90)
         if (_db is null) return;
 
@@ -679,6 +681,17 @@ internal sealed unsafe partial class BattleSceneWindow
         return false;
     }
 
+    /// <summary>
+    /// 물체 모션의 소리 키를 그 틱에 물체 자리에서 낸다 — 원본 물체는 유닛·이펙트와 같은 0x100e5410 으로 제 Obs 모션 소리를 낸다(ba-21 sound D1).
+    /// 부서짐 모션 4 · 폭탄 상자 8 → Snd 92, 포탑·함정의 14~16 등. 전에는 물체 모션의 소리를 전혀 안 읽었다.
+    /// </summary>
+    private void ObjectSounds(DemoObject obj, int motion, double at)
+    {
+        if (UiFor(obj.Data.SpriteId)?.Clip(motion) is not { } clip) return;
+        float x = obj.Col * TileW + TileW / 2;
+        foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + tick / TicksPerSecond, sound, x));
+    }
+
     /// <summary>쏘는 동작(모션 14 → 15 → 16)을 도는 물체와 시작한 때 — DrawObjects 가 그린다.</summary>
     private readonly Dictionary<DemoObject, double> _objActing = [];
 
@@ -699,6 +712,10 @@ internal sealed unsafe partial class BattleSceneWindow
             var sprite = UiFor(obj.Data.SpriteId);
             int wind = sprite?.MotionLength(14) ?? 0, fire = sprite?.MotionLength(15) ?? 0, rest = sprite?.MotionLength(16) ?? 0;
             if (wind + fire + rest > 0) _objActing[obj] = _lastTime;
+            // 쏘는 소리는 물체 제 모션의 소리 키다(기총포탑 14 → 405 · 15 → 423 · 16 → 404, 포탑 424/425 …) — 전에는 흩뿌리는 포탑에만 423 을 박아 냈다.
+            ObjectSounds(obj, 14, _lastTime);
+            ObjectSounds(obj, 15, _lastTime + wind / TicksPerSecond);
+            ObjectSounds(obj, 16, _lastTime + (wind + fire) / TicksPerSecond);
             for (double end = _lastTime + wind / TicksPerSecond; _lastTime < end;) yield return true;
             if (Trace)
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
@@ -787,7 +804,6 @@ internal sealed unsafe partial class BattleSceneWindow
         if (work.Id == 1526)
         {
             var all = _units.Where(u => u.Alive && u.OnField && u.Data is not null && Dist(u, best.Cell) <= 3).ToList();
-            Play(423);
             foreach (var u in all)
             {
                 int dmg = One(u);
@@ -802,7 +818,6 @@ internal sealed unsafe partial class BattleSceneWindow
         // 투사체 1발(0x100ea040~0x100ea307, 감사4 K4). 투사체 그림은 아직 없어 날아가는 틈만 늦춤으로 둔다(가설: 10~40틱).
         if (work.Id == 1527)
         {
-            Play(423);
             foreach (var u in best.Hits)
             {
                 int one = One(u);
@@ -812,7 +827,6 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         // 기총포탑 1525 — 고른 칸 둘레의 적대 유닛마다 4타(0x100e9400).
-        Play(423);
         for (int k = 0; k < 24; k++)
         {
             int dc = _rng.Next(-3, 4), dr = _rng.Next(-3 + Math.Abs(dc), 4 - Math.Abs(dc));
