@@ -781,6 +781,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (key == Win32.VK_ESCAPE && Tlk.SkipScene()) return;
         if (Tlk.OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Tlk.SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
+        if (DevScr._open) { DevScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
@@ -910,6 +911,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
+        if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
@@ -1170,8 +1172,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (!Mos._mosesOpen) Sys.DrawSystem();
         Btl.DrawDeployPanel();
         DrawKeysPanel();
-        TuningScr.DrawTuning();
-        CharEditScr.Draw();
         Btl.DrawLevelUp();
         PerfMark("창");
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
@@ -1186,6 +1186,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DrawSceneFade();                       // 전투 시작·끝 16틀 페이드(감사4 C6·C7)
         DrawSceneTag();
         ProgressScr.DrawProgress();
+        // 메뉴 막대에서 여는 창들(모드 · 캐릭터 에디터 · 개발)은 어느 화면 위에서든 맨 위에 — 전에는 전투 판 차례에 그려 타이틀·연대표·모세스 그림에
+        // 가려 안 보였다(사용자 보고: 타이틀에서 캐릭터 에디터를 눌러도 반응이 없음).
+        TuningScr.DrawTuning();
+        CharEditScr.Draw();
+        DevScr.Draw();
     }
 
     internal void DrawBackground()

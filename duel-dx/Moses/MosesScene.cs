@@ -879,7 +879,6 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         host.Sys.DrawSystem();
         host.StatusScr.DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
         if (host._statusUnit >= 0) host.Sys.DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에
-        host.TuningScr.DrawTuning();
         host.DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
         // 페이지 전환 — 원본 색표(분석-모세스 2절)대로: 보통은 효과 4 크로스페이드, 항행 → 주 화면·행성 고르기는 검정 페이드(방식 2),
