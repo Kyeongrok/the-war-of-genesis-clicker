@@ -55,18 +55,9 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>work 번호 → 그 어빌리티를 쓸 때 (때리는 순간부터 몇 틱 뒤, Snd 번호). 분석-사운드 표에서 옮겼다.</summary>
     // 시전 소리 694 는 UseWorkRoutine 이 준비 2·3·5·6 에 시작 +2틱으로 낸다 — 여기에도 있으면 두 번 난다(ba-20 Q S-1).
-    private static readonly (int Work, (int Tick, int Sound)[] Sounds)[] AbilityEffectSounds =
-    [
-        (58, [(1, 85)]),      // 힐
-        (87, [(1, 695)]),     // 큐어
-        (59, [(1, 662), (1, 675)]),   // 격려
-        (467, [(1, 123)]),    // 블레이드 미사일
-        (469, [(1, 18), (1, 19)]),    // 메테오
-        (735, [(1, 738)]),    // 크래쉬 봄
-        (1583, [(1, 657)]),             // 이스케이프
-        (10, [(1, 86)]),                // 비
-        (1479, [(23, 770)]),            // 현혹령 기본공격 — 이펙트 Obs 1401 은 그림 없이 소리 770 만 23틱에 낸다(work_script 1479)
-    ];
+    // 손으로 적은 표는 비웠다(ba-21 sound D3) — 아홉 줄 모두 같은 번호가 스크립트 이펙트의 소리 키에 있어(312:0 85 · 312:1 695 · 1324:1 662 …)
+    // 이펙트가 제 틱·제 자리에서 낸다. 표가 있으면 가운데에서 한 번 더(크래쉬 봄 738 은 5틱 이르게) 났다.
+    private static readonly (int Work, (int Tick, int Sound)[] Sounds)[] AbilityEffectSounds = [];
 
     /// <summary>어빌리티 번호 → 효과음(레벨이 달라도 같은 소리로 본다).</summary>
     private readonly Dictionary<int, (int Tick, int Sound)[]> _abilitySounds = [];
@@ -247,7 +238,8 @@ internal sealed unsafe partial class BattleSceneWindow
             try
             {
                 string path = VoicePack.BgmPath(id);
-                if (!File.Exists(path)) return;
+                // 곡 파일이 없으면 조용하다(Btl 0014 의 머리 곡 5 — 원본은 무음) — 전에는 앞 곡이 계속 났다(ba-21 sound D10).
+                if (!File.Exists(path)) { if (request == Volatile.Read(ref _musicRequest)) _mixer.StopMusic(); return; }
                 var pcm = BinkAudio.Open(path).Decode();
                 if (request != Volatile.Read(ref _musicRequest)) return;
                 // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다(B.G.M 설정은 믹서가 곱한다).

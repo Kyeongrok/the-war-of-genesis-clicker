@@ -286,10 +286,15 @@ internal sealed unsafe partial class BattleSceneWindow
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
             // 썬더 스톰의 217:0 은 시작(A) 목록 소리 114 를 이펙트가 도는 동안 되풀이한다(0x100d2aa0, 감사4 S3).
             if (!e.Fly) QueueEffectLoopSound(e.Obs, e.Motion, start, e.Life > 0 ? e.Life : EffectTicks(e.Obs, e.Motion), x);
-            if (!ownSounds || _effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) is not { } clip) continue;
+            // 이펙트 Obs 가 assets/effects 밖(moses/obs · characters)에 있어도 소리 키를 읽는다 — 락킹 필드 584:5 → 639 따위가 빠졌다(ba-21 sound D4).
+            if (!ownSounds || (_effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) ?? UiFor(e.Obs)?.Clip(e.Motion)) is not { } clip) continue;
             // 좌우 소리(감사4 S1) — 이펙트가 뜨는 자리 x. 날아가는 것은 떠나는 자리.
             float sx = e.Fly ? userX : x;
             foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((start + tick / TicksPerSecond, sound, sx));
+            // 자식 이펙트의 소리도 따라간다 — 포스 필드 444:6 > 443:0 → 634 @t15(ba-21 sound D5).
+            foreach (var (childStart, obs, motion, _, _, _, _) in clip.Children)
+                if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is { } child)
+                    foreach (var (tick, sound) in child.Sounds) _pendingSounds.Add((start + (childStart + tick) / TicksPerSecond, sound, sx));
         }
     }
 

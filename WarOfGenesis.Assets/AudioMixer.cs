@@ -13,7 +13,7 @@ namespace WarOfGenesis.Assets;
 /// </remarks>
 public sealed class AudioMixer : IDisposable
 {
-    private const int Rate = 44100, BufferFrames = Rate / 25, QueuedBuffers = 3;
+    private const int Rate = 44100, BufferFrames = Rate / 25, QueuedBuffers = 2;   // 줄 선 버퍼 2개(80ms) — 3개일 때 효과음이 80~130ms 늦었다(ba-21 sound D2)
     private const uint WhdrDone = 1;
 
     /// <summary>
