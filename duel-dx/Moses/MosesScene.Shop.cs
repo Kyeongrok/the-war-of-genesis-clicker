@@ -79,14 +79,14 @@ internal sealed unsafe partial class MosesScene
     {
         ListStock => [.. (_shop?.Items ?? []).Select(i => (i, 1))],
         ListBuy => [.. _shopBuy.GroupBy(i => i).Select(g => (g.Key, g.Count()))],
-        ListBag => [.. host._inventory.Where(p => p.Value > 0).Select(p => (p.Key, p.Value))],
+        ListBag => [.. host.StatusScr._inventory.Where(p => p.Value > 0).Select(p => (p.Key, p.Value))],
         _ => [.. _shopSell.GroupBy(i => i).Select(g => (g.Key, g.Count()))],
     };
 
     /// <summary>상점 페이지에서 마우스가 놓인 목록을 휠로 굴린다(편의 — 원본은 화살표만, ba-20 G22). 받았으면 true.</summary>
     internal bool OnMosesShopWheel(int notches)
     {
-        if (!_mosesOpen || _mosesPage != 3 || host.SystemOpen) return false;
+        if (!_mosesOpen || _mosesPage != 3 || host.Sys.SystemOpen) return false;
         int list = ShopRowAt(host._mouse.X, host._mouse.Y).List;
         if (list < 0) return false;
         _shopTop[list] = Math.Clamp(_shopTop[list] - notches, 0, Math.Max(0, ShopListItems(list).Count - ShopRows));
@@ -218,9 +218,9 @@ internal sealed unsafe partial class MosesScene
             return;                              // 목록은 그대로 둔다(0x101001f6 — 알림과 소리만, ba-15)
         }
         _shopMoney = ShopBalance();
-        foreach (int id in _shopBuy) host._inventory[id] = host._inventory.GetValueOrDefault(id) + 1;
+        foreach (int id in _shopBuy) host.StatusScr._inventory[id] = host.StatusScr._inventory.GetValueOrDefault(id) + 1;
         foreach (int id in _shopSell)
-            if (host._inventory.TryGetValue(id, out int n)) host._inventory[id] = Math.Max(0, n - 1);
+            if (host.StatusScr._inventory.TryGetValue(id, out int n)) host.StatusScr._inventory[id] = Math.Max(0, n - 1);
         _shopBuy.Clear();
         _shopSell.Clear();
         host.Play(SoundShopDone);
@@ -283,7 +283,7 @@ internal sealed unsafe partial class MosesScene
             host.DrawText(label, ox + 30, ly, White, 11);
             string value = $"{lines[i].Value}GP";
             var (_, vw, _) = host.GetText(value, White, 11);
-            host.DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? Red : White, 11);
+            host.DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? StatusScreen.Red : White, 11);
         }
 
         DrawShopCompare(ox, oy, tick);

@@ -81,8 +81,8 @@ internal sealed unsafe class ChaptersScreen(GameWindow host)
         int rows = (list.Count + ChaptersCols - 1) / ChaptersCols, colW = (ChaptersW - 24) / ChaptersCols;
 
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xC0000000);
-        host.FillRect(x, y, ChaptersW, h, PanelBg);
-        host.StrokeRect(x, y, ChaptersW, h, BoxLine);
+        host.FillRect(x, y, ChaptersW, h, StatusScreen.PanelBg);
+        host.StrokeRect(x, y, ChaptersW, h, StatusScreen.BoxLine);
         host.DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
         host.DrawText("고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다.", x + 150, y + 18, DimGray);
 

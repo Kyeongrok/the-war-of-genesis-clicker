@@ -96,8 +96,8 @@ internal sealed unsafe partial class MosesScene
     internal bool MailArrives(MosesMail mail)
     {
         if (mail.CondVar is -1 or 0xffff) return true;
-        if ((uint)mail.CondVar >= host._flags.Length) return false;
-        int now = host._flags[mail.CondVar];
+        if ((uint)mail.CondVar >= host.FlagSt._flags.Length) return false;
+        int now = host.FlagSt._flags[mail.CondVar];
         return mail.CondOp switch
         {
             0 => now == mail.CondValue,
@@ -228,7 +228,7 @@ internal sealed unsafe partial class MosesScene
     /// <summary>메일 페이지가 떠 있고 뷰어가 닫혀 있으면 휠로 목록을 굴린다 — WndProc 의 WM_MOUSEWHEEL 이 부른다. 받았으면 true.</summary>
     internal bool OnMosesMailWheel(int notches)
     {
-        if (!_mosesOpen || _mosesPage != 1 || host.SystemOpen) return false;
+        if (!_mosesOpen || _mosesPage != 1 || host.Sys.SystemOpen) return false;
         if (_mailOpen >= 0) { _mailViewTop = Math.Max(0, _mailViewTop - notches); return true; }   // 뷰어가 열려 있으면 본문을 굴린다
         ScrollMail(-notches);
         return true;
@@ -313,7 +313,7 @@ internal sealed unsafe partial class MosesScene
         int ty = y + 76;
         for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
             host.DrawText(lines[i], x + 15, ty, White, 12);
-        if (_mailViewTop + rows < lines.Count) host.DrawUi(TalkNextObs, 0, (int)(host._lastTime * TicksPerSecond), x + 300, y + 232, GameWindow.UiBlend.Alpha);
+        if (_mailViewTop + rows < lines.Count) host.DrawUi(TalkBox.TalkNextObs, 0, (int)(host._lastTime * TicksPerSecond), x + 300, y + 232, GameWindow.UiBlend.Alpha);
         if (_mailViewTop > 0) host.DrawText("▲", x + 296, y + 76, tag, 11);
     }
 
@@ -327,7 +327,7 @@ internal sealed unsafe partial class MosesScene
     internal List<string> WrapText(string text, int width, float size)
     {
         var lines = new List<string>();
-        foreach (string paragraph in TalkLines(text.Replace("\r", "")).SelectMany(p => p.Split('\n')).Select(p => p.Trim()))
+        foreach (string paragraph in TalkBox.TalkLines(text.Replace("\r", "")).SelectMany(p => p.Split('\n')).Select(p => p.Trim()))
         {
             var line = new StringBuilder();
             foreach (char ch in paragraph)

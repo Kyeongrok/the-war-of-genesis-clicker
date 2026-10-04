@@ -41,7 +41,7 @@ internal sealed unsafe class RecordsScreen(GameWindow host)
         host.LeaveScene(() =>
         {
             _recordsOpen = false;
-            host.CloseSystemWindow();
+            host.Sys.CloseSystemWindow();
             host.TitleScr.OpenTitle();                               // OpenTitle 이 같은 곡을 다시 걸지 않게 본다
         }, keepMusic: true);
 
@@ -52,7 +52,7 @@ internal sealed unsafe class RecordsScreen(GameWindow host)
         var (ox, oy) = host.Mos.MosesOrigin();
         var (ex, ey, ew, eh) = RecordsExit;
         if (bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh) { CloseRecords(); return true; }
-        if (host.SystemOpen) return host.OnSystemClick(bx, by);
+        if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
         return true;
     }
 
@@ -79,7 +79,7 @@ internal sealed unsafe class RecordsScreen(GameWindow host)
         var (ex, ey, _, _) = RecordsExit;
         if (_recordsExitHover) host.DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, GameWindow.UiBlend.Add);
 
-        host.DrawSystem();
+        host.Sys.DrawSystem();
         host.DrawToast();
     }
 }

@@ -47,7 +47,7 @@ internal sealed unsafe partial class GameWindow
         if (w <= 0 || h <= 0) return;
         if (UiFor(FrameObs)?.FrameAt(7, 0) is not { } f || f.W == 0 || f.H == 0)
         {
-            FillRect(x, y, w, h, PanelBg);   // 그림이 없으면 예전 바탕색으로
+            FillRect(x, y, w, h, StatusScreen.PanelBg);   // 그림이 없으면 예전 바탕색으로
             return;
         }
         for (int yy = 0; yy < h; yy++)

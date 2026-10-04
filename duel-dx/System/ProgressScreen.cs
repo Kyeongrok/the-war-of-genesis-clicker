@@ -67,9 +67,9 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
             var system = chp.Systems.FirstOrDefault(sy => sy.Planets.Contains(pl.No));
             rows.Add(y =>
             {
-                bool open = host.FlagsAllow(pl.Conditions) && (system is null || host.FlagsAllow(system.Conditions));
-                var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < host._flags.Length)
-                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host._flags[c.Variable]})").ToList();
+                bool open = host.FlagSt.FlagsAllow(pl.Conditions) && (system is null || host.FlagSt.FlagsAllow(system.Conditions));
+                var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < host.FlagSt._flags.Length)
+                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host.FlagSt._flags[c.Variable]})").ToList();
                 string where = $"{(system is null ? "" : host._db?.T((ushort)system.NameText) + " › ")}{host._db?.T((ushort)pl.NameText)}";
                 host.DrawText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
                 if (!open || conds.Count > 0)
@@ -89,7 +89,7 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
             return y =>
             {
                 bool used = host.Mos._placesUsed.Contains((chp.Id, p.No)) || host.Mos._autoPlacesDone.Contains((chp.Id, p.No));
-                bool open = host.PlaceOpen(p);
+                bool open = host.FlagSt.PlaceOpen(p);
                 string kind = p.Kind switch
                 {
                     ChapterFile.PlaceKind.Shop => "상점",
@@ -97,8 +97,8 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
                     _ => $"전투 {p.Value:D4}",
                 };
                 var (state, color) = (used ? "다녀옴" : open ? "열림" : "잠김", used ? 0xFF8088A0u : open ? 0xFF70E070u : 0xFFE07070u);
-                var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < host._flags.Length)
-                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host._flags[c.Variable]})").ToList();
+                var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < host.FlagSt._flags.Length)
+                    .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host.FlagSt._flags[c.Variable]})").ToList();
                 string name = host._db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {p.No}";
                 host.DrawText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
                 host.DrawText(name, x0 + 56, y, White, 12);
@@ -120,7 +120,7 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
                 for (int k = 0; k < chunk.Count; k++)
                 {
                     int f = chunk[k], cx = x0 + 16 + k * colW;
-                    host.DrawText($"깃발 {f} = {host._flags[f]}", cx, y, host._flags[f] != 0 ? White : 0xFF9098B0, 12);
+                    host.DrawText($"깃발 {f} = {host.FlagSt._flags[f]}", cx, y, host.FlagSt._flags[f] != 0 ? White : 0xFF9098B0, 12);
                     int bx = cx + 100;
                     host.DrawText("[−]", bx, y, 0xFFFFC080, 12);
                     host.DrawText("[+]", bx + 26, y, 0xFFFFC080, 12);
@@ -143,8 +143,8 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
         foreach (var (x, y, w, h, flag, delta) in _progressButtons)
             if (bx >= x && bx < x + w && by >= y && by < y + h)
             {
-                host._flags[flag] = (byte)Math.Clamp(host._flags[flag] + delta, 0, 255);
-                host.Toast($"깃발 {flag} = {host._flags[flag]}");
+                host.FlagSt._flags[flag] = (byte)Math.Clamp(host.FlagSt._flags[flag] + delta, 0, 255);
+                host.Toast($"깃발 {flag} = {host.FlagSt._flags[flag]}");
                 return true;
             }
         return true;

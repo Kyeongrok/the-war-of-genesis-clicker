@@ -530,7 +530,7 @@ internal sealed unsafe partial class BattleScene
         u.FormationSlot = -1;
         u.Detached = true;
         if (u.Side == 4) { u.Side = 3; u.Awake = true; }
-        host.RefreshUnitStats(u);
+        host.StatusScr.RefreshUnitStats(u);
     }
 
     /// <summary>대장이 쓰러지면 — 첫 부하가 새 대장이 되고 세력이 0.6배가 된다.</summary>
@@ -549,7 +549,7 @@ internal sealed unsafe partial class BattleScene
         newLeader.LegionPowerPercent = host._units[leaderIndex].LegionPowerPercent * 6 / 10;
         // 다시 붙는 부하(0x10072ef0(새대장, 부하, 0))는 TP 를 새 대장 것으로 덮는다(감사5 L-C). AI 꼬리는 처음부터 대장 레코드 복사라 같다.
         foreach (var follower in followers.Skip(1)) { follower.LeaderIndex = newIndex; follower.Tp = newLeader.Tp; }
-        host.RefreshUnitStats(newLeader);
+        host.StatusScr.RefreshUnitStats(newLeader);
     }
 
     /// <summary>

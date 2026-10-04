@@ -245,9 +245,9 @@ internal sealed unsafe partial class BattleScene
         var roster = DeployRoster();
         var (x, y) = DeployPanel();
         int h = DeployTop + roster.Count * DeployRowH + 108;
-        host.FillRect(x, y, DeployW, h, PanelBg);
-        host.StrokeRect(x, y, DeployW, h, BoxLine);
-        host.FillRect(x, y, DeployW, 26, HeadBg);
+        host.FillRect(x, y, DeployW, h, StatusScreen.PanelBg);
+        host.StrokeRect(x, y, DeployW, h, StatusScreen.BoxLine);
+        host.FillRect(x, y, DeployW, 26, StatusScreen.HeadBg);
         int placed = roster.Count(u => u.OnField);
         host.DrawText($"캐릭터 배치  {placed}/{_deploySpots.Count + roster.Count(u => !DeployMovable(u))}", x + 10, y + 4, White);
         for (int i = 0; i < roster.Count; i++)
@@ -269,17 +269,17 @@ internal sealed unsafe partial class BattleScene
             host.DrawText(tag, x + DeployW - 12 - tw, ry + 2, !DeployMovable(u) ? 0xFFFFE070 : colour);
         }
         int by = y + DeployTop + roster.Count * DeployRowH + 8;
-        host.FillRect(x + 8, by, DeployW / 2 - 12, 26, HeadBg);
+        host.FillRect(x + 8, by, DeployW / 2 - 12, 26, StatusScreen.HeadBg);
         host.DrawText("배치취소", x + 28, by + 4, White);
-        host.FillRect(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, HeadBg);
+        host.FillRect(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, StatusScreen.HeadBg);
         host.DrawText("자동배치", x + DeployW / 2 + 24, by + 4, White);
         // 「군단사용」 — 고른 사람의 군단 켬/끔. 워드 7 이 꺼진 전투면 흐리게(0x100e257c).
-        host.FillRect(x + 8, by + 32, DeployW - 16, 26, HeadBg);
+        host.FillRect(x + 8, by + 32, DeployW - 16, 26, StatusScreen.HeadBg);
         string legionLabel = _deployPick is { } lp && DeployHasLegion(lp) ? (_deployNoLegion.Contains(lp) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
         var (_, lw, _) = host.GetText(legionLabel, White);
         host.DrawText(legionLabel, x + (DeployW - lw) / 2, by + 36, _deployLegionsAllowed ? White : 0xFF707070);
         host.FillRect(x + 8, by + 64, DeployW - 16, 28, 0xFF2A6A3A);
-        host.StrokeRect(x + 8, by + 64, DeployW - 16, 28, BoxLine);
+        host.StrokeRect(x + 8, by + 64, DeployW - 16, 28, StatusScreen.BoxLine);
         var (_, fw, _) = host.GetText("배치종료 (Enter)", White);
         host.DrawText("배치종료 (Enter)", x + (DeployW - fw) / 2, by + 69, White);
 

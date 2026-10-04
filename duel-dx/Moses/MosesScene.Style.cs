@@ -140,7 +140,7 @@ internal sealed unsafe partial class MosesScene
         // STATUS — 고른 인물의 스테이터스 창(장비·장착 어빌리티·어빌리티 올리기)을 모세스 위에 연다.
         if (x >= 455 && x < 523 && y >= 390 && y < 417)
         {
-            host.OpenStatusFor(_styleUnit);      // 전투에 안 선 파티원도 임시 유닛으로 연다
+            host.StatusScr.OpenStatusFor(_styleUnit);      // 전투에 안 선 파티원도 임시 유닛으로 연다
             host.Play(MosesClickSound);
             return true;
         }
@@ -169,7 +169,7 @@ internal sealed unsafe partial class MosesScene
             string ftext = fc is { Exp: > 0 } && !host._keepJobExp
                 ? $"{host._db?.T(fc.NameId)}의 경험치가 {fc.Exp} 남았습니다.\n전직하면 {fc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
                 : host._db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
-            host._confirm = (ftitle, ftext, () => ChangeJob(target));
+            host.Sys._confirm = (ftitle, ftext, () => ChangeJob(target));
             return true;
         }
 
@@ -185,7 +185,7 @@ internal sealed unsafe partial class MosesScene
             string ttext = tc is { Exp: > 0 } && !host._keepJobExp
                 ? $"{host._db?.T(tc.NameId)}의 경험치가 {tc.Exp} 남았습니다.\n전직하면 {tc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
                 : host._db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
-            host._confirm = (ttitle, ttext, () => ChangeJob(target));
+            host.Sys._confirm = (ttitle, ttext, () => ChangeJob(target));
             return true;
         }
 
@@ -204,7 +204,7 @@ internal sealed unsafe partial class MosesScene
             string text = c.Exp == 0 || host._keepJobExp
                 ? host._db?.T(930) is { Length: > 0 } b2 ? b2 : "전직하시겠습니까?"
                 : $"{host._db?.T(c.NameId)}의 경험치가 {c.Exp} 남았습니다.\n전직하면 {c.Exp} 의 경험치는 사라집니다.\n전직할까요?";
-            host._confirm = (title, text, () => ChangeJob(pick));
+            host.Sys._confirm = (title, text, () => ChangeJob(pick));
             return true;
         }
         return true;
@@ -415,7 +415,7 @@ internal sealed unsafe partial class MosesScene
         if (mx >= 455 && mx < 633 && my >= 430 && my < 457) host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
 
         // 어빌리티 줄을 오른쪽 단추로 누르고 있는 동안의 설명 — 맨 위에 그린다.
-        if (_styleTip is { } tip) host.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, MosesW, MosesH);
+        if (_styleTip is { } tip) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, MosesW, MosesH);
     }
 
     /// <summary>전직 화면 어빌리티 미리보기 줄을 오른쪽 단추로 누르고 있는 동안 띄우는 설명(떼면 사라진다).</summary>
@@ -435,7 +435,7 @@ internal sealed unsafe partial class MosesScene
         var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
         if (row >= Math.Min(6, previewList.Count) || !db.Abilities.TryGetValue(previewList[row], out var ab)) return false;
         string desc = db.AbilityDescription(ab);
-        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.AbilityEffectText(ab, c.AbilityLevel(ab.Id));
+        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.StatusScr.AbilityEffectText(ab, c.AbilityLevel(ab.Id));
         return true;
     }
 }

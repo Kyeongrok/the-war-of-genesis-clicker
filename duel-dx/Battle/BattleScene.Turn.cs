@@ -103,7 +103,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 앞 전투에서 얻은 레벨·경험치·장비는 다음 전투로 이어진다(_party 가 들고 있다).
             // DUELDX_CUMEXP 를 주면 레벨도 그 값에 맞춘다 — 쌓인 경험치와 레벨은 늘 짝이 맞아야 한다(레벨 = 쌓인 경험치 ÷ 100).
             unit.Data = host._party.TryGetValue(unit.ChrCode, out var carried) ? carried
-                      : unit.IsAlly ? c with { Exp = DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100),
+                      : unit.IsAlly ? c with { Exp = StatusScreen.DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100),
                                                // DUELDX_JOB=<직업> 이면 아군 직업을 바꾼다 — 전직 화면(2단계·3단계 단추)을 시험할 때 쓴다.
                                                JobId = ushort.TryParse(Environment.GetEnvironmentVariable("DUELDX_JOB"), out ushort job) ? job : c.JobId }
                       : c with { CumExp = c.Level * 100 };
@@ -150,9 +150,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 군단 부하는 LP 게터가 늘 대장 세력 × For.dat 보정을 더한다(0x1007ac70) — 위에서는 보정 없이 셌으므로 다시 세고 가득 채운다.
         // 전에는 레벨업·대장 교체 때만 붙어 가이아 버그즈 부하(LP +20)가 보정 없이 시작했다.
         foreach (var unit in host._units)
-            if (unit.LeaderIndex >= 0 && unit.Data != null) { host.RefreshUnitStats(unit); unit.Hp = unit.MaxHp; }
+            if (unit.LeaderIndex >= 0 && unit.Data != null) { host.StatusScr.RefreshUnitStats(unit); unit.Hp = unit.MaxHp; }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
-        if (host.Fld._chapterFired.Count == 0) host.FillDemoInventory();
+        if (host.Fld._chapterFired.Count == 0) host.StatusScr.FillDemoInventory();
     }
 
     internal void UpdateTurn()
@@ -443,10 +443,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         // 불러온 판의 카메라(감사5 S7) — 시작 카메라·페이드인 뒤, 되살린 차례가 서는 이 자리에서 놓는다. 카메라가 없는 옛 세이브는
         // 되살린 내 유닛을 한 번 가운데로(AI 차례는 아래 CameraThen 이 옮긴다).
-        if (host._loadCameraPending)
+        if (host.Sys._loadCameraPending)
         {
-            host._loadCameraPending = false;
-            if (host._loadCamera is { } cam) host.ApplySavedCamera(cam);
+            host.Sys._loadCameraPending = false;
+            if (host.Sys._loadCamera is { } cam) host.Sys.ApplySavedCamera(cam);
             else if (resume && IsMine(host._units[index])) CenterOnUnit(host._units[index]);
         }
         CancelTargeting();
@@ -858,7 +858,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         double effectsAt = host._lastTime;               // 이펙트를 띄운 때 — 핸들러 판정 틱의 기준(단계 0)
         double fxSpan = 0;                          // 그 이펙트들이 다 끝나기까지의 틱
         _followerStrikes.Clear();
-        host.SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
+        host.Mov.SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
         // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
         bool finisher = w.Prepare == 7;
         // 준비 2·3·5·6 — 시전 소리 1338:1(694)은 시전 시작 +2틱(0x1007def0 단계 1). 핸들러는 동작 15 가 끝난 뒤에 돈다(ba-15 R6).

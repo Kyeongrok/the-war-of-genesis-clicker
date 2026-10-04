@@ -184,13 +184,13 @@ internal sealed unsafe partial class BattleScene
         // 결과 배너는 우클릭으로도 넘긴다(0x1006b1fd~ — Esc · Space · 좌클릭 · 우클릭, ba-21 battle-flow 3).
         if (_outcome.Length > 0 && !host.Mos._mosesOpen && !host.FieldOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen) { if (host.OutcomeInputReady) host.LeaveFinishedBattle(); return; }
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
-        if (host.OnTalkInput(skipAll: true)) return;
+        if (host.Tlk.OnTalkInput(skipAll: true)) return;
         if (_deployOpen) { _deployPick = null; return; }   // 배치 중 우클릭 = 고른 사람 놓기
         // 창은 모달이다(0x1003fc80) — 레벨업·알림·결과 배너·시스템 창이 떠 있으면 우클릭이 뒤의 유닛 정보 창·링을 열지 않는다(ba-20 G2).
         if (!host.Mos._mosesOpen && !host.FieldOpen)
         {
             if (LevelUpOpen || host.SlotsScr._notice != null || _outcome.Length > 0) return;
-            if (host.SystemOpen) { host.CloseSystemWindow(); return; }
+            if (host.Sys.SystemOpen) { host.Sys.CloseSystemWindow(); return; }
             if (_itemMenu) { CancelStep(undoMove: false); return; }
         }
         // 모세스 항성계 옮기기(100틱 대기)·페이드가 도는 동안은 입력을 안 받는다(ba-20 G4).
@@ -199,14 +199,14 @@ internal sealed unsafe partial class BattleScene
         // 다른 행성을 고를 수 있다. Esc 와 같은 길을 탄다.
         if (host.Mos._mosesOpen)
         {
-            if (host._statusUnit >= 0) { if (!host.OnStatusRightClick(bx, by)) host._statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명
+            if (host._statusUnit >= 0) { if (!host.StatusScr.OnStatusRightClick(bx, by)) host._statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명
             if (host.Mos.OnMosesStyleRightDown(bx, by)) return;   // 전직 화면 어빌리티 줄 = 누르고 있는 동안 설명
-            if (host.CloseSystemWindow()) return;
+            if (host.Sys.CloseSystemWindow()) return;
             if (host.Mos._mosesPage != -1) host.Mos.MosesGoBack();
             return;
         }
         if (OnAbilityMenuRightDown(bx, by)) return;   // 어빌리티 목록 줄 = 누르고 있는 동안 설명
-        if (host._statusUnit >= 0) { if (!host.OnStatusRightClick(bx, by)) host._statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명, 빈 곳 = 닫기
+        if (host._statusUnit >= 0) { if (!host.StatusScr.OnStatusRightClick(bx, by)) host._statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명, 빈 곳 = 닫기
         if (_ringUnit >= 0)
         {
             // 항목 위에서 오른쪽 단추를 누르고 있는 동안 설명(TXR 1375~1380, 0x1003fc80 모달 · 떼면 0x10042ac0) — 항목 밖 우클릭만 링 취소(0x100e1540). ba-14 U1.
@@ -291,7 +291,7 @@ internal sealed unsafe partial class BattleScene
                 _abilityMenu = true;
                 _abilityTop = 0;
                 break;
-            case RingCommand.System: host.OpenSystemMenu(); break;
+            case RingCommand.System: host.Sys.OpenSystemMenu(); break;
             case RingCommand.Item:
                 CommitMoveForAction();
                 _itemMenu = true;
@@ -330,7 +330,7 @@ internal sealed unsafe partial class BattleScene
             if (hover && !host.DrawUi(452, labelMotion, RingTick(_ringHoverAt), x - 23, y + 7, UiBlend.Alpha))
                 host.DrawText(hoverName, x - 23, y + 12, White, 15);
         }
-        if (_ringHelp is { Length: > 0 } help) host.DrawDescriptionTip(help, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+        if (_ringHelp is { Length: > 0 } help) host.StatusScr.DrawDescriptionTip(help, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 
     /// <summary>오른쪽 단추를 누르고 있는 동안 보이는 링 항목 설명 — 떼면 지운다(WM_RBUTTONUP).</summary>

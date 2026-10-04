@@ -81,12 +81,12 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     }
 
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
-    internal SaveState? SlotHead(int slot)
+    internal SystemMenu.SaveState? SlotHead(int slot)
     {
         try
         {
             string path = SlotPath(slot);
-            return File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<SaveState>(File.ReadAllText(path), SaveJson) : null;
+            return File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<SystemMenu.SaveState>(File.ReadAllText(path), SystemMenu.SaveJson) : null;
         }
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException) { return null; }
     }
@@ -106,7 +106,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         if (!SlotsOpen) return false;
         var (x, y) = SlotsOrigin();
 
-        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; host.ReturnToSystemMenu(); return true; }   // 닫기 X
+        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; host.Sys.ReturnToSystemMenu(); return true; }   // 닫기 X
 
         // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다). 누르고 있으면 되풀이한다(UpdateSlotArrows).
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
@@ -125,13 +125,13 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         var head = SlotHead(slot);
         if (_slotsMode == 0)
         {
-            if (head != null) host._confirm = ("Save", "이미 저장된 파일이 있습니다.\n덮어쓰시겠습니까?", () => SaveSlot(slot));
+            if (head != null) host.Sys._confirm = ("Save", "이미 저장된 파일이 있습니다.\n덮어쓰시겠습니까?", () => SaveSlot(slot));
             else SaveSlot(slot);
         }
         else
         {
             if (head == null) return true;                                    // 빈 줄은 꺼져 있다
-            host._confirm = ("Load", "저장하지 않은 데이타는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
+            host.Sys._confirm = ("Load", "저장하지 않은 데이타는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
         }
         return true;
     }
@@ -141,9 +141,9 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         // 저장한 뒤에도 슬롯 창은 열린 채다 — 이어서 다른 칸에 저장할 수 있다(원본 vt[0x40] 다시 보이기, fg-22).
         // 실패 알림은 원본 문구(0x100372ae·0x10037693, 120틱): 빈 칸이면 「Error」, 덮어쓰기면 「Save」 머리에 「저장되지 않았습니다.」
         // 저장할 수 없는 때(필드·챕터 사건 도중·내 차례 조종 상태가 아님)는 막는다 — 메뉴가 SAVE 를 꺼 두지만 한 번 더(감사5 S1 방어·S3·S4).
-        if (host.SaveBlockedReason is { } why) { _notice = (why, host._lastTime + 40 / TicksPerSecond); return; }
-        if (!host.SaveBattleTo(SlotPath(slot))) { _notice = ($"{(SlotHead(slot) != null ? "Save" : "Error")} — 저장되지 않았습니다.", host._lastTime + 120 / TicksPerSecond); return; }
-        host.Play(SoundSaved);
+        if (host.Sys.SaveBlockedReason is { } why) { _notice = (why, host._lastTime + 40 / TicksPerSecond); return; }
+        if (!host.Sys.SaveBattleTo(SlotPath(slot))) { _notice = ($"{(SlotHead(slot) != null ? "Save" : "Error")} — 저장되지 않았습니다.", host._lastTime + 120 / TicksPerSecond); return; }
+        host.Play(SystemMenu.SoundSaved);
         // 원본은 120틱(4초)인데 너무 오래 떠 있다는 요청으로 40틱(약 1.3초)만 띄운다. 클릭하면 바로 닫힌다.
         _notice = ("저장되었습니다.", host._lastTime + 40 / TicksPerSecond);
     }
@@ -152,11 +152,11 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     {
         _slotsMode = -1;
         // 깨진 파일 문구(0x1003730e, 120틱).
-        if (!host.LoadBattleFrom(SlotPath(slot))) _notice = ("세이브 파일에 오류가 생겼거나 허가없이 변경되었습니다.\n로드할 수 없습니다.", host._lastTime + 120 / TicksPerSecond);
+        if (!host.Sys.LoadBattleFrom(SlotPath(slot))) _notice = ("세이브 파일에 오류가 생겼거나 허가없이 변경되었습니다.\n로드할 수 없습니다.", host._lastTime + 120 / TicksPerSecond);
     }
 
     /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
-    internal void AutoSave() => host.SaveBattleTo(SlotPath(AutoSlot));
+    internal void AutoSave() => host.Sys.SaveBattleTo(SlotPath(AutoSlot));
 
     /// <summary>누르고 있는 스크롤 화살표(−1 위 · +1 아래 · 0 없음) · 누른 때 · 누른 뒤 센 틀 수.</summary>
     internal int _slotArrow;
@@ -250,7 +250,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         int track = SlotsH - 32, span = Math.Max(1, SlotRows - SlotsVisible);
         int handleH = Math.Max(16, track * SlotsVisible / SlotRows);
         int hy = y + 16 + (track - handleH) * _slotsTop / span;
-        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, BoxLine);
+        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, StatusScreen.BoxLine);
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>

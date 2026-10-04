@@ -4,6 +4,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 링 커맨드 "시스템" 메뉴(menu-1)와 저장·불러오기(menu-2)·끝내기(menu-3).
 /// </summary>
@@ -18,7 +20,7 @@ namespace DuelDx;
 /// EXIT GAME 은 바탕화면이 아니라 <b>타이틀 화면</b>으로 나간다 — 게임을 진짜 끝내는 곳은 타이틀의 EXIT 뿐이다.
 /// </para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class SystemMenu(GameWindow host)
 {
     internal const int SystemObs = 894;
     internal const int SystemW = 214, SystemRowH = 37, SystemRowW = 190, SystemPad = 12;
@@ -48,7 +50,7 @@ internal sealed unsafe partial class GameWindow
     /// (뒤에 남은 옛 전투의 MISSION·RESTART 는 뜻이 없다) SAVE 는 꺼 둔다(<see cref="SaveBlockedReason"/>).
     /// </remarks>
     internal (SystemItem Item, int Motion, string Label)[] MenuItems =>
-        Mos._mosesOpen || EpisodesScr._episodesOpen || FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+        host.Mos._mosesOpen || host.EpisodesScr._episodesOpen || host.FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
 
     /// <summary>
     /// 전투 시스템 메뉴를 열어도 되나 — 원본은 <b>플레이어 조종 유닛 차례의 상태 22</b>(<c>0x1006acc0</c>, 입력 깃발 <c>+0x4d17</c>
@@ -56,20 +58,20 @@ internal sealed unsafe partial class GameWindow
     /// AI 차례·행동 연출·이벤트(<c>0x10066197</c>)·배치(상태 2)·레벨업·결과 중에는 같은 키가 취소/무시일 뿐이다(감사5 S1·S8).
     /// </summary>
     internal bool CanOpenBattleMenu =>
-        Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy && !Btl.EventsBusy && !Btl._deployOpen && Btl._levelUpUnit < 0 && Btl._levelUpQueue.Count == 0
-        && Btl._delayedHits.Count == 0 && !SceneFading;
+        host.Btl.IsPlayerTurn && !host._units[host.Btl._turn].IsBusy && !host.Btl.EventsBusy && !host.Btl._deployOpen && host.Btl._levelUpUnit < 0 && host.Btl._levelUpQueue.Count == 0
+        && host.Btl._delayedHits.Count == 0 && !host.SceneFading;
 
     /// <summary>모세스 위에서 챕터 사건이 도는 중인가 — 원본 챕터 장면 Esc 는 <c>[0x101bffac]</c>(도는 사건 수)가 0 일 때만 메뉴를 연다(<c>0x100f78ec~0x100f7922</c>).</summary>
-    internal bool ChapterEventRunning => Mos._mosesOpen && (Fld._fieldEvent >= 0 || _talk != null || Fld._fieldChoices != null);
+    internal bool ChapterEventRunning => host.Mos._mosesOpen && (host.Fld._fieldEvent >= 0 || host.Tlk._talk != null || host.Fld._fieldChoices != null);
 
     /// <summary>
     /// 지금 SAVE 를 못 하는 까닭 — 할 수 있으면 null. 필드(원본에 저장 없음, 감사5 S3)·모세스 챕터 사건 도중(S4)·
     /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
     /// </summary>
     internal string? SaveBlockedReason =>
-        FieldOpen ? "필드에서는 저장할 수 없습니다"
+        host.FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
-        : !Mos._mosesOpen && !EpisodesScr._episodesOpen && !TitleScr._titleOpen && !RecordsScr._recordsOpen && _battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
+        : !host.Mos._mosesOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
 
     internal bool _systemMenu;
@@ -83,19 +85,19 @@ internal sealed unsafe partial class GameWindow
         _confirm = null;
     }
 
-    internal bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || SlotsScr.SlotsOpen;
+    internal bool SystemOpen => _systemMenu || _missionWindow || _volumeWindow || _confirm != null || host.SlotsScr.SlotsOpen;
 
     internal (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
         // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 640×480 틀의 <b>(100,100)</b> 에
         // 제목줄부터 선다 — 제목(창 y−22)이 y 100 에 오게 둔다(감사 F16). 전투 링 메뉴는 전처럼 가운데.
-        if (EpisodesScr._episodesOpen || Mos._mosesOpen)
+        if (host.EpisodesScr._episodesOpen || host.Mos._mosesOpen)
         {
-            var (ox, oy) = Mos.MosesOrigin();
+            var (ox, oy) = host.Mos.MosesOrigin();
             return (ox + 100, oy + 100 + 22, h);
         }
-        return (_camX + (ViewWidth - SystemW) / 2, _camY + (ViewHeight - h) / 2, h);
+        return (host._camX + (host.ViewWidth - SystemW) / 2, host._camY + (host.ViewHeight - h) / 2, h);
     }
 
     internal void RunSystemItem(SystemItem item)
@@ -108,15 +110,15 @@ internal sealed unsafe partial class GameWindow
             case SystemItem.Volume: _volumeWindow = true; break;
             case SystemItem.Save:
                 // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
-                if (SaveBlockedReason is { } why) { Toast(why); _systemMenuReturn = false; _systemMenu = true; break; }
-                SlotsScr.OpenSlots(0);
+                if (SaveBlockedReason is { } why) { host.Toast(why); _systemMenuReturn = false; _systemMenu = true; break; }
+                host.SlotsScr.OpenSlots(0);
                 break;
-            case SystemItem.Load: SlotsScr.OpenSlots(1); break;
+            case SystemItem.Load: host.SlotsScr.OpenSlots(1); break;
             case SystemItem.Restart:
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
                 break;
             case SystemItem.Exit:
-                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
+                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => host.LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
                 break;
         }
     }
@@ -131,21 +133,21 @@ internal sealed unsafe partial class GameWindow
     internal void BackToTitle()
     {
         _systemMenu = _missionWindow = _volumeWindow = false;
-        SlotsScr._slotsMode = -1;
-        Fld.CloseField();
-        Mos._mosesOpen = false;
-        Mos._mosesPage = -1;
-        EpisodesScr._episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
-        _battleLoaded = false;
-        ResizeBoard(TitleBoardCols, TitleBoardRows);
-        TitleScr.OpenTitle();
+        host.SlotsScr._slotsMode = -1;
+        host.Fld.CloseField();
+        host.Mos._mosesOpen = false;
+        host.Mos._mosesPage = -1;
+        host.EpisodesScr._episodesOpen = false;          // 연대표에서 EXIT GAME — 연대표 장면을 끝낸다(0x10106530, 감사 F3)
+        host._battleLoaded = false;
+        host.ResizeBoard(TitleBoardCols, TitleBoardRows);
+        host.TitleScr.OpenTitle();
     }
 
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>
     internal bool OnSystemClick(int bx, int by)
     {
         if (_confirm is not null && OnConfirmClick()) return true;
-        if (SlotsScr.OnSlotsClick(bx, by)) return true;
+        if (host.SlotsScr.OnSlotsClick(bx, by)) return true;
         return OnMenuClick(bx, by);
 
         bool OnConfirmClick()
@@ -154,7 +156,7 @@ internal sealed unsafe partial class GameWindow
             var (cx, cy, cw, ch) = ConfirmRect();
             if (by >= cy + ch - 34 && by < cy + ch - 8)
             {
-                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; bool slots = SlotsScr.SlotsOpen; confirm.Value.Yes(); if (!slots || !SlotsScr.SlotsOpen) _systemMenuReturn = false; return true; }
+                if (bx >= cx + cw / 2 - 86 && bx < cx + cw / 2 - 10) { _confirm = null; bool slots = host.SlotsScr.SlotsOpen; confirm.Value.Yes(); if (!slots || !host.SlotsScr.SlotsOpen) _systemMenuReturn = false; return true; }
                 if (bx >= cx + cw / 2 + 10 && bx < cx + cw / 2 + 86) { _confirm = null; ReturnToSystemMenu(); return true; }
             }
             return true;
@@ -168,9 +170,9 @@ internal sealed unsafe partial class GameWindow
     internal void ReturnToSystemMenu()
     {
         // 슬롯 창 위의 확인창이 닫혔을 뿐이면 슬롯 창이 그대로 남는다 — 메뉴는 슬롯 창이 닫힐 때 돌아온다(ba-20 G3).
-        if (!_systemMenuReturn || SlotsScr.SlotsOpen) return;
+        if (!_systemMenuReturn || host.SlotsScr.SlotsOpen) return;
         _systemMenuReturn = false;
-        if (!TitleScr._titleOpen && !RecordsScr._recordsOpen) _systemMenu = true;
+        if (!host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen) _systemMenu = true;
     }
 
     internal bool OnMenuClick(int bx, int by)
@@ -195,7 +197,7 @@ internal sealed unsafe partial class GameWindow
     internal bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; ReturnToSystemMenu(); return true; }
-        if (SlotsScr.SlotsOpen) { SlotsScr._slotsMode = -1; ReturnToSystemMenu(); return true; }
+        if (host.SlotsScr.SlotsOpen) { host.SlotsScr._slotsMode = -1; ReturnToSystemMenu(); return true; }
         if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; ReturnToSystemMenu(); return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
         return false;
@@ -203,8 +205,8 @@ internal sealed unsafe partial class GameWindow
 
     internal void DrawSystem()
     {
-        SlotsScr.DrawSlots();
-        SlotsScr.DrawNotice();
+        host.SlotsScr.DrawSlots();
+        host.SlotsScr.DrawNotice();
         if (_systemMenu) DrawSystemMenu();
         if (_missionWindow) DrawMissionWindow();
         if (_volumeWindow) DrawVolumeWindow();
@@ -215,7 +217,7 @@ internal sealed unsafe partial class GameWindow
     {
         var (x, y, h) = SystemMenuRect();
         // 모든 창은 원본 틀(Obs 0970 — 바탕 모션 7, 귀퉁이 0~3, 제목줄 4, 바깥 1px 흰 선)이다(ba-20 G13). 전에는 단색 네모였다.
-        DrawGameFrame(x, y, SystemW, h, "System Menu");
+        host.DrawGameFrame(x, y, SystemW, h, "System Menu");
 
         var items = MenuItems;
         for (int i = 0; i < items.Length; i++)
@@ -224,33 +226,33 @@ internal sealed unsafe partial class GameWindow
             int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
             // 평소 칸은 바탕 + 테두리(원본 갈래 0 단추 0x100432e0). Obs 0471 모션 7(190×37 파란 빛)은 <b>보조 그림</b>(단추 +0x10c)이라
             // 마우스가 올라간 줄에만 덧그린다 — 전에는 모든 줄에 그려 전부 올림 상태로 보였다.
-            FillRect(rx, ry, SystemRowW, SystemRowH - 3, BoxBg);
-            StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, BoxLine);
+            host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxBg);
+            host.StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxLine);
             bool disabled = item == SystemItem.Save && SaveBlockedReason != null;
-            bool hover = !disabled && _mouse.X >= rx && _mouse.X < rx + SystemRowW && _mouse.Y >= ry && _mouse.Y < ry + SystemRowH - 3;
-            if (hover) DrawUi(ListRowObs, 7, 0, rx, ry, GameWindow.UiBlend.Alpha, loop: false);
+            bool hover = !disabled && host._mouse.X >= rx && host._mouse.X < rx + SystemRowW && host._mouse.Y >= ry && host._mouse.Y < ry + SystemRowH - 3;
+            if (hover) host.DrawUi(ListRowObs, 7, 0, rx, ry, GameWindow.UiBlend.Alpha, loop: false);
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            if (!DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false))
-                DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
+            if (!host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false))
+                host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
-            if (disabled) FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
+            if (disabled) host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
         }
     }
 
     /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>
     internal void DrawMissionWindow()
     {
-        int w = 400, h = 180, x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
-        DrawGameFrame(x, y + 26, w, h - 26, _scene.Title);
+        int w = 400, h = 180, x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2;
+        host.DrawGameFrame(x, y + 26, w, h - 26, host._scene.Title);
         // 원본 0x100e3d60(400×180): 깃발 Obs 0894 모션 9 @ (20,20), 「승리 조건」 @ (50,20) 노랑, 조건 글 @ (50,50) 흰,
         // 해골 모션 10 @ (20,100), 「패배 조건」 @ (50,100) 노랑, 글 @ (50,130) 흰(ba-21 battle-flow 4). 전에는 라벨이 하늘색·붉은색이고 글이 같은 줄이었다.
         int by = y + 26;
-        DrawUi(BattleScene.HudObs, 9, 0, x + 20, by + 20, GameWindow.UiBlend.Alpha, loop: false);
-        DrawText("승리 조건", x + 50, by + 14, BattleScene.HudYellow);
-        DrawText(_db?.T(_scene.WinTextId) ?? "", x + 50, by + 44, White);
-        DrawUi(BattleScene.HudObs, 10, 0, x + 20, by + 100, GameWindow.UiBlend.Alpha, loop: false);
-        DrawText("패배 조건", x + 50, by + 94, BattleScene.HudYellow);
-        DrawText(_db?.T(_scene.LoseTextId) ?? "", x + 50, by + 124, White);
+        host.DrawUi(BattleScene.HudObs, 9, 0, x + 20, by + 20, GameWindow.UiBlend.Alpha, loop: false);
+        host.DrawText("승리 조건", x + 50, by + 14, BattleScene.HudYellow);
+        host.DrawText(host._db?.T(host._scene.WinTextId) ?? "", x + 50, by + 44, White);
+        host.DrawUi(BattleScene.HudObs, 10, 0, x + 20, by + 100, GameWindow.UiBlend.Alpha, loop: false);
+        host.DrawText("패배 조건", x + 50, by + 94, BattleScene.HudYellow);
+        host.DrawText(host._db?.T(host._scene.LoseTextId) ?? "", x + 50, by + 124, White);
 
     }
 
@@ -263,7 +265,7 @@ internal sealed unsafe partial class GameWindow
 
     internal const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
 
-    internal (int X, int Y) VolumeOrigin() => (_camX + (ViewWidth - VolumeW) / 2, _camY + (ViewHeight - VolumeH) / 2);
+    internal (int X, int Y) VolumeOrigin() => (host._camX + (host.ViewWidth - VolumeW) / 2, host._camY + (host.ViewHeight - VolumeH) / 2);
 
     internal void OnVolumeClick(int bx, int by)
     {
@@ -275,16 +277,16 @@ internal sealed unsafe partial class GameWindow
             if (cell < 0 || cell >= VolumeCells) continue;
             setter(5 * cell + 5);   // 원본 값 = 5n+5 (5~100)
             ApplyVolumes();
-            SaveSettings();
+            host.SaveSettings();
             return;
         }
         // 「배경음악」 체크 상자 — (78,120) 언저리.
         if (bx >= x + 70 && bx < x + 200 && by >= y + 116 && by < y + 134)
         {
             _bgmOn = !_bgmOn;
-            if (!_bgmOn) _mixer.StopMusic();   // 곡 번호는 남긴다 — 켜면 되살린다
-            else if (_musicId > 0) PlayMusicFile(_musicId, loop: true);
-            SaveSettings();
+            if (!_bgmOn) host._mixer.StopMusic();   // 곡 번호는 남긴다 — 켜면 되살린다
+            else if (host._musicId > 0) host.PlayMusicFile(host._musicId, loop: true);
+            host.SaveSettings();
             return;
         }
         // 닫으면 메뉴로 돌아간다 — 다른 하위 창과 같다(0x100e39f0 → vt+0xcc, ba-20 G22). 전에는 메뉴까지 닫혔다.
@@ -297,33 +299,33 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void ApplyVolumes()
     {
-        _mixer.MusicVolume = _bgmVolume / 100f;
-        _effectGain = _seVolume / 100f;
+        host._mixer.MusicVolume = _bgmVolume / 100f;
+        host._effectGain = _seVolume / 100f;
     }
 
     internal void DrawVolumeWindow()
     {
         var (x, y) = VolumeOrigin();
-        DrawGameFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
+        host.DrawGameFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
 
         foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume) })
         {
-            DrawText(label, x + 20, y + rowY - 18, White);
+            host.DrawText(label, x + 20, y + rowY - 18, White);
             for (int i = 0; i < VolumeCells; i++)
             {
                 int cx = x + 20 + i * 9;
                 bool on = 5 * i + 5 <= value;
-                FillRect(cx, y + rowY, 8, 13, on ? 0xFF6AA8FF : 0xFF203050);
-                StrokeRect(cx, y + rowY, 8, 13, BoxLine);
+                host.FillRect(cx, y + rowY, 8, 13, on ? 0xFF6AA8FF : 0xFF203050);
+                host.StrokeRect(cx, y + rowY, 8, 13, StatusScreen.BoxLine);
             }
-            RightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
+            host.RightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
         }
         // 「배경음악」 체크 상자(Obs 806 모션 1/2 자리) — 그림 대신 네모.
-        StrokeRect(x + 78, y + 118, 14, 14, White);
-        if (_bgmOn) FillRect(x + 81, y + 121, 8, 8, White);
-        DrawText("배경음악", x + 98, y + 117, White);
-        DrawText("X", x + VolumeW - 18, y + 5, White, 15);
-        DrawText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
+        host.StrokeRect(x + 78, y + 118, 14, 14, White);
+        if (_bgmOn) host.FillRect(x + 81, y + 121, 8, 8, White);
+        host.DrawText("배경음악", x + 98, y + 117, White);
+        host.DrawText("X", x + VolumeW - 18, y + 5, White, 15);
+        host.DrawText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
     }
 
     // ── 확인 창 ──────────────────────────────────────────────────────────────
@@ -331,25 +333,25 @@ internal sealed unsafe partial class GameWindow
     internal (int X, int Y, int W, int H) ConfirmRect()
     {
         // 높이는 본문 줄 수에 맞춘다 — 고정 120 이면 세 줄짜리 전직 확인(「…사라집니다 / 전직할까요?」)의 끝 줄이 단추에 가렸다.
-        int textH = _confirm is { } cf ? GetText(cf.Text, White).Item3 : 16;
+        int textH = _confirm is { } cf ? host.GetText(cf.Text, White).Item3 : 16;
         int w = 340, h = Math.Max(120, 48 + textH + 14 + 34);
-        return (_camX + (ViewWidth - w) / 2, _camY + (ViewHeight - h) / 2, w, h);
+        return (host._camX + (host.ViewWidth - w) / 2, host._camY + (host.ViewHeight - h) / 2, w, h);
     }
 
     internal void DrawConfirm()
     {
         if (_confirm is not { } confirm) return;
         var (x, y, w, h) = ConfirmRect();
-        DrawGameFrame(x, y + 26, w, h - 26, confirm.Title);
-        var (_, tw, _) = GetText(confirm.Text, White);
-        DrawText(confirm.Text, x + (w - tw) / 2, y + 48, White);
+        host.DrawGameFrame(x, y + 26, w, h - 26, confirm.Title);
+        var (_, tw, _) = host.GetText(confirm.Text, White);
+        host.DrawText(confirm.Text, x + (w - tw) / 2, y + 48, White);
 
         foreach (var (bx, label) in new (int, string)[] { (x + w / 2 - 86, "예"), (x + w / 2 + 10, "아니오") })
         {
-            FillRect(bx, y + h - 34, 76, 26, HeadBg);
-            StrokeRect(bx, y + h - 34, 76, 26, BoxLine);
-            var (_, lw, _) = GetText(label, White);
-            DrawText(label, bx + (76 - lw) / 2, y + h - 30, White);
+            host.FillRect(bx, y + h - 34, 76, 26, StatusScreen.HeadBg);
+            host.StrokeRect(bx, y + h - 34, 76, 26, StatusScreen.BoxLine);
+            var (_, lw, _) = host.GetText(label, White);
+            host.DrawText(label, bx + (76 - lw) / 2, y + h - 30, White);
         }
     }
 
@@ -358,7 +360,7 @@ internal sealed unsafe partial class GameWindow
     /// 다른 전투를 건다 — 그 <c>Btl</c> 자료를 읽어 맵·인물·배경음악을 갈아 끼운다(전투 이벤트 행동 10 「다음 전투」도 이 길로 온다).
     /// </summary>
     /// <summary>지금이 챕터 장면인가 — 모세스 주 화면·필드·연대표는 모두 한 챕터 안이다.</summary>
-    internal bool InChapterScene => Mos._mosesOpen || EpisodesScr._episodesOpen || FieldOpen;
+    internal bool InChapterScene => host.Mos._mosesOpen || host.EpisodesScr._episodesOpen || host.FieldOpen;
 
     /// <param name="rememberParty">
     /// 지금 판의 아군을 파티에 담고 시작할지 — 불러오기는 <b>false</b> 다. 불러오기는 세이브로 파티를 먼저 되살리는데,
@@ -370,48 +372,48 @@ internal sealed unsafe partial class GameWindow
 
     internal bool StartBattle(int id, bool rememberParty = true)
     {
-        if (DemoScene.Load(id, _db) is not { } scene)
+        if (DemoScene.Load(id, host._db) is not { } scene)
         {
-            Toast($"전투 {id:D4} 자료가 assets 에 없습니다");
+            host.Toast($"전투 {id:D4} 자료가 assets 에 없습니다");
             return false;
         }
         try
         {
-            _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), scene.MapFile));
-            ResizeBoard(_map.Cols, _map.Rows);
+            host._map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), scene.MapFile));
+            host.ResizeBoard(host._map.Cols, host._map.Rows);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
-            Toast($"전투 {id:D4} 맵을 못 읽었습니다: {ex.Message}");
+            host.Toast($"전투 {id:D4} 맵을 못 읽었습니다: {ex.Message}");
             return false;
         }
 
-        if (rememberParty) Btl.RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
-        _battleLoaded = true;
-        Btl._resumeTurn = -1;         // 새 판 — 불러오기는 판을 세운 뒤 다시 정한다
-        TitleScr._titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
-        RecordsScr._recordsOpen = false;
-        EpisodesScr._episodesOpen = false;
-        _scene = scene;
-        _units = Btl.BuildUnits(scene);
-        Btl.LoadEvents(scene.Id);
-        LoadRosterSprites();
-        Mos._mosesOpen = false;
-        _statusUnit = -1;
-        Btl._infoUnit = -1;
-        Btl._ringUnit = -1;
+        if (rememberParty) host.Btl.RememberParty();          // 앞 전투에서 오른 레벨·경험치를 들고 간다
+        host._battleLoaded = true;
+        host.Btl._resumeTurn = -1;         // 새 판 — 불러오기는 판을 세운 뒤 다시 정한다
+        host.TitleScr._titleOpen = false;       // 타이틀·기록 화면에서 왔으면 이제 전투가 앞이다
+        host.RecordsScr._recordsOpen = false;
+        host.EpisodesScr._episodesOpen = false;
+        host._scene = scene;
+        host._units = host.Btl.BuildUnits(scene);
+        host.Btl.LoadEvents(scene.Id);
+        host.LoadRosterSprites();
+        host.Mos._mosesOpen = false;
+        host._statusUnit = -1;
+        host.Btl._infoUnit = -1;
+        host.Btl._ringUnit = -1;
         // RESTART 가 되돌릴 가방·GP(원본은 전투 전 파티 상태로 되돌린다) — fg-21 ⑰.
-        _restartInventory = [.. _inventory];
-        _entryFlags = (byte[])_flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)           // 들어온 차례 그대로(감사3 I4)
-        _restartMoney = Mos._shopMoney;
+        _restartInventory = [.. host.StatusScr._inventory];
+        _entryFlags = (byte[])host.FlagSt._flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)           // 들어온 차례 그대로(감사3 I4)
+        _restartMoney = host.Mos._shopMoney;
         // 전투 전 명부·군단도 — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티다(전투 안 값은 판 부분의 복사본, 감사5 S5).
-        _entryRoster = _party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
-        _entryLegions = new Dictionary<int, int>(Mos._unitLegion);
-        _entryOwnedLegions = [.. Mos._ownedLegions];
+        _entryRoster = host._party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
+        _entryLegions = new Dictionary<int, int>(host.Mos._unitLegion);
+        _entryOwnedLegions = [.. host.Mos._ownedLegions];
         RestartBattle();
         // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
-        Btl.BeginDeployOrDrop(scene, fresh: rememberParty);
-        Toast($"{scene.Title} — 전투 Btl {scene.Id:D4}");
+        host.Btl.BeginDeployOrDrop(scene, fresh: rememberParty);
+        host.Toast($"{scene.Title} — 전투 Btl {scene.Id:D4}");
         return true;
     }
 
@@ -433,96 +435,96 @@ internal sealed unsafe partial class GameWindow
 
     internal void RestartBattle()
     {
-        foreach (var unit in _units) unit.ResetTo(unit.StartCol, unit.StartRow);
+        foreach (var unit in host._units) unit.ResetTo(unit.StartCol, unit.StartRow);
         // 물체도 처음으로 — 전에는 RESTART 뒤에도 부순 물체는 부서진 채, 연 상자는 열린 채였다(가방은 전투 전으로 돌아가 상자 아이템이 사라졌다).
-        foreach (var obj in Btl.Objects)
+        foreach (var obj in host.Btl.Objects)
             (obj.Hp, obj.Team, obj.Charge, obj.Charged) = (obj.Data.MaxHp, obj.Record.Team, 0, false);
-        Btl._opened.Clear();
-        Btl._openedAt.Clear();
-        Btl._closedAt.Clear();
-        Btl._wokenAt.Clear();
-        Btl._objGrowth.Clear();
-        Btl._objGrowthFor = null;
-        Btl.RestampObjects();
+        host.Btl._opened.Clear();
+        host.Btl._openedAt.Clear();
+        host.Btl._closedAt.Clear();
+        host.Btl._wokenAt.Clear();
+        host.Btl._objGrowth.Clear();
+        host.Btl._objGrowthFor = null;
+        host.Btl.RestampObjects();
         // 사건 발동 횟수·전투 변수·타이머도 처음으로 — 안 그러면 시작 사건(최대 발동 1)이 RESTART 뒤에 다시 안 터진다.
-        Btl.LoadEvents(_scene.Id);
+        host.Btl.LoadEvents(host._scene.Id);
         // 진행 깃발도 전투 전으로 — 원본은 깃발 사본(CBattle+0xa4)에 쓰고 RESTART(결과 7)면 되돌려 적지 않는다.
         // 전에는 시작 사건이 「깃발 += 1」인 Btl 0239·0240(깃발 110)·0179·0180(깃발 208)이 RESTART 마다 한 번씩 더 올랐다.
-        if (_entryFlags is { } entryFlags) Array.Copy(entryFlags, _flags, Math.Min(entryFlags.Length, _flags.Length));
+        if (_entryFlags is { } entryFlags) Array.Copy(entryFlags, host.FlagSt._flags, Math.Min(entryFlags.Length, host.FlagSt._flags.Length));
         // 전투 중에 쓰거나 얻은 아이템·GP 는 전투 전으로(원본 RESTART 는 파티를 통째로 되돌린다).
         if (_restartInventory != null)
         {
-            _inventory.Clear();
-            foreach (var (id, n) in _restartInventory) _inventory[id] = n;
-            Mos._shopMoney = _restartMoney;
+            host.StatusScr._inventory.Clear();
+            foreach (var (id, n) in _restartInventory) host.StatusScr._inventory[id] = n;
+            host.Mos._shopMoney = _restartMoney;
         }
         // 명부·군단도 전투 전으로 — 이것이 없으면 불러온 뒤 RESTART 가 그 전투에서 얻은 EXP·레벨·상자 아이템을 들고 다시 시작했다(감사5 S5).
         if (_entryRoster != null)
-            foreach (var (chr, c) in _entryRoster) _party[chr] = CopyChar(c);
+            foreach (var (chr, c) in _entryRoster) host._party[chr] = CopyChar(c);
         if (_entryLegions != null)
         {
-            Mos._unitLegion.Clear();
-            foreach (var (chr, legion) in _entryLegions) Mos._unitLegion[chr] = legion;
+            host.Mos._unitLegion.Clear();
+            foreach (var (chr, legion) in _entryLegions) host.Mos._unitLegion[chr] = legion;
         }
         if (_entryOwnedLegions != null)
         {
-            Mos._ownedLegions.Clear();
-            foreach (int id in _entryOwnedLegions) Mos._ownedLegions.Add(id);
+            host.Mos._ownedLegions.Clear();
+            foreach (int id in _entryOwnedLegions) host.Mos._ownedLegions.Add(id);
         }
         // 가방은 챕터 스크립트가 채운 것이 옳다 — 그것이 있으면 비우지도, 데모 아이템으로 덮지도 않는다.
-        if (Fld._chapterFired.Count == 0)
+        if (host.Fld._chapterFired.Count == 0)
         {
-            _inventory.Clear();
-            Btl.InitBattle();
-            FillDemoInventory();
+            host.StatusScr._inventory.Clear();
+            host.Btl.InitBattle();
+            host.StatusScr.FillDemoInventory();
         }
-        else Btl.InitBattle();
+        else host.Btl.InitBattle();
         // 원본은 전투를 만들 때 이 값을 <b>1</b> 로 놓는다(0x100644d4) — 0 이면 표시가 늘 하나씩 작다.
-        Btl._tick = 1;
-        Btl._turn = -1;
-        _selected = -1;
-        Btl._outcome = "";
-        Btl._eventCheckDue = 0xF;
-        Btl._objectsDue = false;
-        Btl._outcomeAfterLevelUp = false;
-        Btl._routine = null;
-        Btl._levelUpQueue.Clear();
-        Btl._levelUpUnit = -1;
-        Btl._numbers.Clear();
-        Btl._effects.Clear();
-        Btl._delayedHits.Clear();
-        _movies.Clear();
-        Btl._bodyClones.Clear();
-        Btl._blinks.Clear();
-        Btl._pendingExits.Clear();
-        Btl._exitOutcomeDue = false;
-        Btl._brokenAt.Clear();
-        Btl._objActing.Clear();
-        Btl._objectRoutine = false;
-        Btl._blinkGhosts.Clear();
-        LegionStageAb._legionGhosts.Clear();
-        LegionStageAb._legionFades.Clear();
-        UnitFxAb._unitFx.Clear();
-        LegionStageAb._legionLater.Clear();
-        LegionStageAb._legionStageEnd = 0;
-        StagingAb._stageDraws.Clear();
-        Mos._planetZoomAt = -1;
-        Btl._flyingEffects.Clear();
-        Btl._shots.Clear();
-        Btl._movers.Clear();
-        Btl._fxLatestStart = 0;
-        Btl._effectMirrors.Clear();
-        NineCrusaderAb._swords.Clear();
-        FinisherPreludeAb._preludeDots.Clear();
-        FinisherPreludeAb._fxFlights.Clear();
-        HeavenEarthAb._timedFx.Clear();
-        HeavenEarthAb._debris.Clear();
-        HeavenEarthAb._shakes.Clear();
-        AcrostAb._fireBalls.Clear();
-        _ripples.Clear();
-        Btl._nextTickAt = 0;
-        Btl.CancelTargeting();
-        StartBattleMusic();
+        host.Btl._tick = 1;
+        host.Btl._turn = -1;
+        host._selected = -1;
+        host.Btl._outcome = "";
+        host.Btl._eventCheckDue = 0xF;
+        host.Btl._objectsDue = false;
+        host.Btl._outcomeAfterLevelUp = false;
+        host.Btl._routine = null;
+        host.Btl._levelUpQueue.Clear();
+        host.Btl._levelUpUnit = -1;
+        host.Btl._numbers.Clear();
+        host.Btl._effects.Clear();
+        host.Btl._delayedHits.Clear();
+        host.Mov._movies.Clear();
+        host.Btl._bodyClones.Clear();
+        host.Btl._blinks.Clear();
+        host.Btl._pendingExits.Clear();
+        host.Btl._exitOutcomeDue = false;
+        host.Btl._brokenAt.Clear();
+        host.Btl._objActing.Clear();
+        host.Btl._objectRoutine = false;
+        host.Btl._blinkGhosts.Clear();
+        host.LegionStageAb._legionGhosts.Clear();
+        host.LegionStageAb._legionFades.Clear();
+        host.UnitFxAb._unitFx.Clear();
+        host.LegionStageAb._legionLater.Clear();
+        host.LegionStageAb._legionStageEnd = 0;
+        host.StagingAb._stageDraws.Clear();
+        host.Mos._planetZoomAt = -1;
+        host.Btl._flyingEffects.Clear();
+        host.Btl._shots.Clear();
+        host.Btl._movers.Clear();
+        host.Btl._fxLatestStart = 0;
+        host.Btl._effectMirrors.Clear();
+        host.NineCrusaderAb._swords.Clear();
+        host.FinisherPreludeAb._preludeDots.Clear();
+        host.FinisherPreludeAb._fxFlights.Clear();
+        host.HeavenEarthAb._timedFx.Clear();
+        host.HeavenEarthAb._debris.Clear();
+        host.HeavenEarthAb._shakes.Clear();
+        host.AcrostAb._fireBalls.Clear();
+        host.Mov._ripples.Clear();
+        host.Btl._nextTickAt = 0;
+        host.Btl.CancelTargeting();
+        host.StartBattleMusic();
     }
 
     // ── 저장 · 불러오기 ──────────────────────────────────────────────────────
@@ -592,11 +594,11 @@ internal sealed unsafe partial class GameWindow
             };
             if (trustStats) c = c with { Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, Ctp = k.Ctp, Dep = k.Dep, Dex = k.Dex };
         }
-        if (regrow && (s.Char == null || !trustStats) && _db?.Character(c.Code) is { } b)
+        if (regrow && (s.Char == null || !trustStats) && host._db?.Character(c.Code) is { } b)
         {
             // .chr 처음 능력치에서 쌓인 경험치만큼 원본 식(기본값 기준, 레벨마다 같은 양)으로 다시 키운다.
             // 스크립트 702 가 바꾼 능력치는 여기서 되살리지 못한다(드물다).
-            c = _db.LevelUp(c with { Lp = b.Lp, Psy = b.Psy, Tp = b.Tp, Ctp = b.Ctp, Dep = b.Dep, Dex = b.Dex, Level = b.Level }, out _)
+            c = host._db.LevelUp(c with { Lp = b.Lp, Psy = b.Psy, Tp = b.Tp, Ctp = b.Ctp, Dep = b.Dep, Dex = b.Dex, Level = b.Level }, out _)
                 with { CumExp = s.CumExp };
         }
         return c with { Level = (ushort)s.Level };
@@ -618,7 +620,7 @@ internal sealed unsafe partial class GameWindow
                                     int EventNextBattle = 0, int EventNextField = 0,
                                     bool InMoses = false, int Chapter = 0,
                                     bool ChapterDone = false, int PartyNo = 0, int[]? Members = null,
-                                    SaveUnit[]? Party = null, int[]? OwnedLegions = null, SaveParty[]? Bank = null,
+                                    SaveUnit[]? Party = null, int[]? OwnedLegions = null, PartyStore.SaveParty[]? Bank = null,
                                     int[]? Mailbox = null, int[]? MailRead = null, string[]? PlanetVisits = null,
                                     Dictionary<string, int>? ChapterVars = null, int CurrentChapter = 0,
                                     int[]? EpisodesPicked = null,
@@ -654,92 +656,92 @@ internal sealed unsafe partial class GameWindow
     /// </remarks>
     internal void RestorePartyBeforeBoard(SaveState state)
     {
-        _inventory.Clear();
+        host.StatusScr._inventory.Clear();
         foreach (var (id, count) in state.Inventory)
-            if (int.TryParse(id, out int itemId)) _inventory[itemId] = count;
+            if (int.TryParse(id, out int itemId)) host.StatusScr._inventory[itemId] = count;
 
-        Mos._shopMoney = state.Money;
-        Mos._unitLegion.Clear();
+        host.Mos._shopMoney = state.Money;
+        host.Mos._unitLegion.Clear();
         foreach (var (index, legion) in state.Legions ?? [])
-            if (int.TryParse(index, out int chrCode)) Mos._unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
+            if (int.TryParse(index, out int chrCode)) host.Mos._unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
 
-        EpisodesScr._chapterDone = state.ChapterDone;
-        Mos._mosesAltVoice = state.MosesAltVoice;
-        Mos._mosesAltVoiceLoaded = state.MosesAltVoice && state.InMoses;   // 전투 세이브면 OpenMoses 를 안 거친다 — 다음 챕터로 새지 않게
-        EpisodesScr._partyNo = state.PartyNo;
+        host.EpisodesScr._chapterDone = state.ChapterDone;
+        host.Mos._mosesAltVoice = state.MosesAltVoice;
+        host.Mos._mosesAltVoiceLoaded = state.MosesAltVoice && state.InMoses;   // 전투 세이브면 OpenMoses 를 안 거친다 — 다음 챕터로 새지 않게
+        host.EpisodesScr._partyNo = state.PartyNo;
         // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
         // 지금 인원을 은행으로 치워 버린다.
-        if (state.InMoses && state.Chapter > 0 && EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) EpisodesScr._partyNo = owner.Party;
-        Mos._members.Clear();
-        foreach (int chr in state.Members ?? []) Mos._members.Add(chr);
+        if (state.InMoses && state.Chapter > 0 && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == state.Chapter) is { } owner) host.EpisodesScr._partyNo = owner.Party;
+        host.Mos._members.Clear();
+        foreach (int chr in state.Members ?? []) host.Mos._members.Add(chr);
 
         // 진행 깃발 — 어느 장소가 열렸는지가 여기 담긴다.
-        Array.Clear(_flags);
+        Array.Clear(host.FlagSt._flags);
         foreach (var (number, value) in state.Flags ?? [])
-            if (int.TryParse(number, out int flag) && (uint)flag < _flags.Length) _flags[flag] = (byte)Math.Clamp(value, 0, 255);
+            if (int.TryParse(number, out int flag) && (uint)flag < host.FlagSt._flags.Length) host.FlagSt._flags[flag] = (byte)Math.Clamp(value, 0, 255);
 
-        Mos._autoPlacesDone.Clear();
+        host.Mos._autoPlacesDone.Clear();
         foreach (string pair in state.DonePlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
-                Mos._autoPlacesDone.Add((chapter, place));
-        Fld._chapterFired.Clear();
+                host.Mos._autoPlacesDone.Add((chapter, place));
+        host.Fld._chapterFired.Clear();
         foreach (string triple in state.DoneEvents ?? [])
             if (triple.Split(':') is [var c, var e, var n] && int.TryParse(c, out int chp)
                 && int.TryParse(e, out int ev) && int.TryParse(n, out int count))
-                Fld._chapterFired[(chp, ev)] = count;
+                host.Fld._chapterFired[(chp, ev)] = count;
         // 사건별 횟수가 없던 옛 세이브는 「그 챕터는 다 돌았다」로만 안다 — 사건 −1 에 표시를 남긴다.
         if (state.DoneEvents == null)
-            foreach (int chapter in state.DoneChapters ?? []) Fld._chapterFired[(chapter, -1)] = 1;
+            foreach (int chapter in state.DoneChapters ?? []) host.Fld._chapterFired[(chapter, -1)] = 1;
         // 동료 목록이 없는 옛 세이브 — 이미 돌린 챕터 스크립트의 801/802 로 되살린다(크리스티앙이 빠지고 전투의 제이슨·스턴이
         // 동료로 보이던 문제). 필드 스크립트의 801 은 어느 사건이 돌았는지 안 남아 못 되살린다.
         // 목록이 비어 있어도(고치기 전 판이 빈 목록을 적은 세이브) 되살리고, 적힌 목록과 합친다.
-        var saved = Mos._members.ToList();
+        var saved = host.Mos._members.ToList();
         RebuildMembersFromChapters();
-        foreach (int chr in saved) Mos._members.Add(chr);
-        Mos._ownedLegions.Clear();
-        foreach (int id in state.OwnedLegions ?? []) Mos._ownedLegions.Add(id);
-        Mos._legionsKnown = state.OwnedLegions != null;
-        RestoreBank(state.Bank);
-        Mos._mailbox.Clear();
-        foreach (int id in state.Mailbox ?? []) Mos._mailbox.Add(id);
-        Mos._mailRead.Clear();
-        foreach (int id in state.MailRead ?? []) Mos._mailRead.Add(id);
+        foreach (int chr in saved) host.Mos._members.Add(chr);
+        host.Mos._ownedLegions.Clear();
+        foreach (int id in state.OwnedLegions ?? []) host.Mos._ownedLegions.Add(id);
+        host.Mos._legionsKnown = state.OwnedLegions != null;
+        host.PartySt.RestoreBank(state.Bank);
+        host.Mos._mailbox.Clear();
+        foreach (int id in state.Mailbox ?? []) host.Mos._mailbox.Add(id);
+        host.Mos._mailRead.Clear();
+        foreach (int id in state.MailRead ?? []) host.Mos._mailRead.Add(id);
         if (state.Version < 9)
-            Mos.PruneLegacyMailbox(Fld._chapterFired.Keys.Select(k => k.Chapter).Concat(state.DoneChapters ?? [])
+            host.Mos.PruneLegacyMailbox(host.Fld._chapterFired.Keys.Select(k => k.Chapter).Concat(state.DoneChapters ?? [])
                                 .Append(state.CurrentChapter).Append(state.Chapter).Where(c => c > 0));
-        Array.Clear(Fld._chapterVars);
+        Array.Clear(host.Fld._chapterVars);
         foreach (var (number, value) in state.ChapterVars ?? [])
-            if (int.TryParse(number, out int slot) && (uint)slot < Fld._chapterVars.Length) Fld._chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
-        Mos._planetVisits.Clear();
-        EpisodesScr._episodesPicked.Clear();
-        if (state.EpisodesPicked is { } picked) foreach (int no in picked) EpisodesScr._episodesPicked.Add(no);
+            if (int.TryParse(number, out int slot) && (uint)slot < host.Fld._chapterVars.Length) host.Fld._chapterVars[slot] = (byte)Math.Clamp(value, 0, 255);
+        host.Mos._planetVisits.Clear();
+        host.EpisodesScr._episodesPicked.Clear();
+        if (state.EpisodesPicked is { } picked) foreach (int no in picked) host.EpisodesScr._episodesPicked.Add(no);
         else
             // 표시를 안 적던 옛 세이브 — 챕터 사건이 한 번이라도 돈 에피소드와 지금 챕터의 에피소드를 고른 것으로 본다.
-            foreach (var ep in EpisodesScr.Episodes())
-                if (Fld._chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) EpisodesScr._episodesPicked.Add(ep.No);
+            foreach (var ep in host.EpisodesScr.Episodes())
+                if (host.Fld._chapterFired.Keys.Any(k => k.Chapter == ep.Chapter) || ep.Chapter == state.CurrentChapter) host.EpisodesScr._episodesPicked.Add(ep.No);
         foreach (string pair in state.PlanetVisits ?? [])
-            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) Mos._planetVisits.Add((pc, pn));
-        Mos._placesUsed.Clear();
+            if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int pc) && int.TryParse(b, out int pn)) host.Mos._planetVisits.Add((pc, pn));
+        host.Mos._placesUsed.Clear();
         foreach (string pair in state.UsedPlaces ?? [])
             if (pair.Split(':') is [var a, var b] && int.TryParse(a, out int chapter) && int.TryParse(b, out int place))
-                Mos._placesUsed.Add((chapter, place));
+                host.Mos._placesUsed.Add((chapter, place));
         // 인물 명부(원본 0x101b6884 — 파티와 무관한 전 인물)를 세이브 값으로 새로 채운다. 전에 하던 판의 인물이 남지 않게 비우고 시작한다.
-        _party.Clear();
+        host._party.Clear();
         // 전투에 서 있던 아군도 명부에 넣는다 — 이것이 없으면 배치 칸 고르기가 그 인물을 못 본다.
         // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
         foreach (var s in state.Units)
-            if (s.Side == 4 && _db?.Character(s.ChrCode) is { } bc)
-                _party[s.ChrCode] = Restored(bc, s, regrow: true);
+            if (s.Side == 4 && host._db?.Character(s.ChrCode) is { } bc)
+                host._party[s.ChrCode] = Restored(bc, s, regrow: true);
         // 전투 밖 인물 — 이제는 명부 전체(어느 파티에 있든, 파티에서 빠졌든)가 여기 실린다. 옛 세이브는 지금 파티 사람만 적혀 있다.
         foreach (var s in state.Party ?? [])
-            if (_db?.Character(s.ChrCode) is { } pc)
-                _party[s.ChrCode] = Restored(pc, s, regrow: true);
+            if (host._db?.Character(s.ChrCode) is { } pc)
+                host._party[s.ChrCode] = Restored(pc, s, regrow: true);
         ReturnStrayMembers();                // 다른 파티 사람은 제 파티로(파티를 안 가리던 옛 판의 세이브)
-        MergeLegacyBankCopies();             // 파티마다 인물 사본을 들던 옛 세이브(은행 Units)를 명부 하나로 합친다
-        foreach (int chr in Mos._members)
-            if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } fresh) _party[chr] = fresh;
+        host.PartySt.MergeLegacyBankCopies();             // 파티마다 인물 사본을 들던 옛 세이브(은행 Units)를 명부 하나로 합친다
+        foreach (int chr in host.Mos._members)
+            if (!host._party.ContainsKey(chr) && host._db?.Character(chr) is { } fresh) host._party[chr] = fresh;
         // 항행 시작(911) — 옛 세이브는 없다(null). 모세스 세이브는 OpenMoses(챕터) 가 지우므로 거기서 한 번 더 넣는다(감사 R2).
-        Mos._navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
+        host.Mos._navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
     }
 
     /// <summary>
@@ -748,21 +750,21 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void ReturnStrayMembers()
     {
-        foreach (var (no, bank) in _partyBank)
-            foreach (int chr in bank.Members.Where(Mos._members.Contains).ToList())
+        foreach (var (no, bank) in host.PartySt._partyBank)
+            foreach (int chr in bank.Members.Where(host.Mos._members.Contains).ToList())
             {
-                Mos._members.Remove(chr);
-                if (bank.Party.Remove(chr, out var there) && (!_party.TryGetValue(chr, out var here) || there.CumExp > here.CumExp))
-                    _party[chr] = there;
+                host.Mos._members.Remove(chr);
+                if (bank.Party.Remove(chr, out var there) && (!host._party.TryGetValue(chr, out var here) || there.CumExp > here.CumExp))
+                    host._party[chr] = there;
             }
     }
 
     /// <summary>돌린 챕터 사건의 801(동료 넣기)·802(빼기)로 동료 목록을 다시 만든다 — 사건 −1 표시(옛 세이브)는 그 챕터 사건 전부로 본다.</summary>
     internal void RebuildMembersFromChapters()
     {
-        Mos._members.Clear();
+        host.Mos._members.Clear();
         // 사건 차례대로 801 이 넣고 802 가 뺀다 — 챕터 스크립트의 조건(깃발)을 채워 돈 사건만 본다.
-        foreach (var group in Fld._chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
+        foreach (var group in host.Fld._chapterFired.Where(f => f.Value > 0).GroupBy(f => f.Key.Chapter))
         {
             if (MosesScene.LoadChapterFile(group.Key) is not { } chp) continue;
             bool whole = group.Any(f => f.Key.Event == -1);
@@ -774,9 +776,9 @@ internal sealed unsafe partial class GameWindow
                     if (a.Args.Length < 2 || a.Args[1] <= 0) continue;
                     // 인자0 은 <b>파티 번호</b>다 — 지금 파티 것만 센다. 전에는 파티를 안 가려서, 베라모드 파티(1)로 불러오면
                     // 챕터 10·11 이 파티 0 에 넣은 살라딘·죠안·크리스티앙까지 끼어들었다(사용자 보고, Chp 0019 전직 화면).
-                    if (a.Args[0] != EpisodesScr._partyNo) continue;
-                    if (a.Code == 801) Mos._members.Add(a.Args[1]);
-                    else if (a.Code == 802) Mos._members.Remove(a.Args[1]);
+                    if (a.Args[0] != host.EpisodesScr._partyNo) continue;
+                    if (a.Code == 801) host.Mos._members.Add(a.Args[1]);
+                    else if (a.Code == 802) host.Mos._members.Remove(a.Args[1]);
                 }
             }
         }
@@ -801,7 +803,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>불러온 판을 이어 세는 논 시간 바탕(밀리초).</summary>
     internal double _playBase;
 
-    internal long PlayMs => (long)(_realTime * 1000 + _playBase);   // 실제 시간 — 게임 속도를 올려도 플레이 시간은 제대로 흐른다
+    internal long PlayMs => (long)(host._realTime * 1000 + _playBase);   // 실제 시간 — 게임 속도를 올려도 플레이 시간은 제대로 흐른다
 
     /// <summary>연대표 장면의 이름 TXR — 원본 상수 2557(빈 글, 장면 7 vt+0x1c <c>0x10106420</c>).</summary>
     internal const int EpisodesSceneText = 2557;
@@ -816,64 +818,64 @@ internal sealed unsafe partial class GameWindow
     /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
     internal bool SaveBattleTo(string path)
     {
-        bool battleSave = !InChapterScene && !TitleScr._titleOpen && !RecordsScr._recordsOpen && _battleLoaded;
+        bool battleSave = !InChapterScene && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded;
         try
         {
-            var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Btl._tick, Btl._turn,
-                [.. _units.Select(u => new SaveUnit(u.ChrCode, u.Col, u.Row, (int)u.Facing, u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn,
+            var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), host.Btl._tick, host.Btl._turn,
+                [.. host._units.Select(u => new SaveUnit(u.ChrCode, u.Col, u.Row, (int)u.Facing, u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn,
                     u.Data?.Level ?? 0, u.Data?.CumExp ?? 0, u.Data?.Exp ?? 0,
                     u.Data?.Items ?? [], u.Data?.Passives ?? [],
                     [.. (u.Data?.Abilities ?? []).Select(a => new SaveAbility(a.Ability, a.Level))],
                     [.. u.StatusId], [.. u.StatusValue], u.Side, SaveCharOf(u.Data), u.OnField,   // 편도 적는다 — 이벤트 708 로 넘어온 사람이 불러오면 적으로 돌아가지 않게
                     [u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp], u.Stance, u.Awake,
-                    u.LastHitBy is { } hitter ? Array.IndexOf(_units, hitter) : -1,
+                    u.LastHitBy is { } hitter ? Array.IndexOf(host._units, hitter) : -1,
                     u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow, u.Detached ? true : null,
-                    u.StartCol, u.StartRow, [.. u.StatusSource.Select(src => src is { } by ? Array.IndexOf(_units, by) : -1)],
+                    u.StartCol, u.StartRow, [.. u.StatusSource.Select(src => src is { } by ? Array.IndexOf(host._units, by) : -1)],
                     (int)u.StartFacing))],
-                _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
+                host.StatusScr._inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
                 // 샤이닝 스타 챕터인데 「코어헌터」로 보였다(사용자 보고).
                 // 연대표에서 저장하면 원본처럼 갈래 7 「[NN:연대표]」 + 이름 TXR 2557(빈 글, 0x10106420) — 앞 챕터 이름이 뜨던 것(사용자 보고).
-                EpisodesScr._episodesOpen ? EpisodesSceneText
-                : InChapterScene && Mos._mosesChp is { } savedChp ? savedChp.TitleText : _scene.TitleTextId,
-                EpisodesScr._episodesOpen ? 7 : InChapterScene && Mos._mosesChp != null ? 4 : 1, PlayMs,
-                Mos._shopMoney, Mos._unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), _scene.Id,
-                Enumerable.Range(0, _flags.Length).Where(i => _flags[i] != 0)
-                          .ToDictionary(i => i.ToString(), i => (int)_flags[i]),
+                host.EpisodesScr._episodesOpen ? EpisodesSceneText
+                : InChapterScene && host.Mos._mosesChp is { } savedChp ? savedChp.TitleText : host._scene.TitleTextId,
+                host.EpisodesScr._episodesOpen ? 7 : InChapterScene && host.Mos._mosesChp != null ? 4 : 1, PlayMs,
+                host.Mos._shopMoney, host.Mos._unitLegion.ToDictionary(p => p.Key.ToString(), p => p.Value), host._scene.Id,
+                Enumerable.Range(0, host.FlagSt._flags.Length).Where(i => host.FlagSt._flags[i] != 0)
+                          .ToDictionary(i => i.ToString(), i => (int)host.FlagSt._flags[i]),
                 // 이미 겪은 자동 발생 장소와 이미 돌린 챕터 사건 — 안 적으면 불러올 때마다 프롤로그가 되풀이되고
                 // 챕터 사건이 동료·돈을 두 번 준다. 다녀온 장소도 적어야 목록에 되살아나지 않는다.
-                [.. Mos._autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
-                [.. Fld._chapterFired.Keys.Select(k => k.Chapter).Distinct()],
-                [.. Fld._chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
-                [.. Mos._placesUsed.Select(p => $"{p.Chapter}:{p.Place}")],
+                [.. host.Mos._autoPlacesDone.Select(p => $"{p.Chapter}:{p.Place}")],
+                [.. host.Fld._chapterFired.Keys.Select(k => k.Chapter).Distinct()],
+                [.. host.Fld._chapterFired.Select(p => $"{p.Key.Chapter}:{p.Key.Event}:{p.Value}")],
+                [.. host.Mos._placesUsed.Select(p => $"{p.Chapter}:{p.Place}")],
                 // 전투 이벤트 상태 — 안 적으면 불러올 때마다 시작 대사(조건 0·1)가 다시 뜨고 타이머·국소 변수가 처음으로 돌아간다.
                 // 원본도 전투판을 통째로 저장하고 불러오면 저장했던 차례로 돌아온다(분석-시스템메뉴 2.4b) — 사건 횟수도 같이 싣는다.
                 // 차례 도중이면 불러올 때 그 차례를 이어 받으며 턴 수가 하나 오르니 미리 뺀다(타이머는 이어 받을 때 안 센다).
-                [.. Btl._eventFired], Btl._turn >= 0 ? Btl._turnNo - 1 : Btl._turnNo,
-                Enumerable.Range(0, Btl._battleVars.Length).Where(i => Btl._battleVars[i] != 0)
-                          .ToDictionary(i => i.ToString(), i => (int)Btl._battleVars[i]),
-                [.. Btl._eventTimer], [.. Btl._eventTimerRun], Btl._eventNextBattle, Btl._eventNextField,
+                [.. host.Btl._eventFired], host.Btl._turn >= 0 ? host.Btl._turnNo - 1 : host.Btl._turnNo,
+                Enumerable.Range(0, host.Btl._battleVars.Length).Where(i => host.Btl._battleVars[i] != 0)
+                          .ToDictionary(i => i.ToString(), i => (int)host.Btl._battleVars[i]),
+                [.. host.Btl._eventTimer], [.. host.Btl._eventTimerRun], host.Btl._eventNextBattle, host.Btl._eventNextField,
                 // 필드·연대표에서 저장해도 챕터로 돌아가게 적는다 — 그때 전투 번호로 돌아가면 엉뚱한 옛 전투가 열린다.
-                InChapterScene && Mos._mosesChp != null, InChapterScene ? Mos._mosesChp?.Id ?? 0 : 0,
-                EpisodesScr._chapterDone, EpisodesScr._partyNo, [.. Mos._members],
+                InChapterScene && host.Mos._mosesChp != null, InChapterScene ? host.Mos._mosesChp?.Id ?? 0 : 0,
+                host.EpisodesScr._chapterDone, host.EpisodesScr._partyNo, [.. host.Mos._members],
                 // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
                 // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
-                [.. _party.Where(p => !_units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
-                [.. Mos._ownedLegions], SaveBank(),
-                [.. Mos._mailbox], [.. Mos._mailRead], [.. Mos._planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
-                Enumerable.Range(0, Fld._chapterVars.Length).Where(i => Fld._chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)Fld._chapterVars[i]),
+                [.. host._party.Where(p => !host._units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
+                [.. host.Mos._ownedLegions], host.PartySt.SaveBank(),
+                [.. host.Mos._mailbox], [.. host.Mos._mailRead], [.. host.Mos._planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
+                Enumerable.Range(0, host.Fld._chapterVars.Length).Where(i => host.Fld._chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)host.Fld._chapterVars[i]),
                 // 전투·필드 한가운데서 저장해도 <b>지금 챕터</b>를 적는다 — 안 적으면 불러온 전투가 끝난 뒤 모세스가 기본 챕터(10)로 돌아가
                 // 샤이닝 스타(11)에서 필라이프 항성계로 못 갔다(사용자 보고, Btl 0136).
-                Mos._mosesChp?.Id ?? 0,
-                [.. EpisodesScr._episodesPicked],
+                host.Mos._mosesChp?.Id ?? 0,
+                [.. host.EpisodesScr._episodesPicked],
                 // 물체(0x100e80f0)·찾은 사람 20010/20011(0x101b6994/0x101b6996)·이 틱에 남은 물체 차례도 싣는다(ba-15 Q5).
-                [.. Btl.Objects.Select((o, i) => new SaveObject(i, o.Record.No, o.Hp, o.Team, Btl._opened.Contains(o), o.Charge, o.Charged))],
-                Btl._eventFoundA is { } fa ? Array.IndexOf(_units, fa) : -1,
-                Btl._eventFoundB is { } fb ? Array.IndexOf(_units, fb) : -1,
-                Btl._objectsDue,
+                [.. host.Btl.Objects.Select((o, i) => new SaveObject(i, o.Record.No, o.Hp, o.Team, host.Btl._opened.Contains(o), o.Charge, o.Charged))],
+                host.Btl._eventFoundA is { } fa ? Array.IndexOf(host._units, fa) : -1,
+                host.Btl._eventFoundB is { } fb ? Array.IndexOf(host._units, fb) : -1,
+                host.Btl._objectsDue,
                 // 항행 시작(911) — 원본 챕터 레코드 +0x190/+0x192(0x1004e2e3/0x1004e2f4). 장면 7(연대표) 저장에는 레코드가 없다(감사 R2).
-                NavStart: !EpisodesScr._episodesOpen && Mos._navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null,
+                NavStart: !host.EpisodesScr._episodesOpen && host.Mos._navStart is { } nav ? [nav.Chapter, nav.Step, nav.Number] : null,
                 // 전투 전 스냅숏·카메라·이벤트 갈래 깃발은 전투 판에서 저장할 때만(챕터·연대표 세이브는 전투가 없다).
                 Entry: battleSave && _entryRoster != null && _restartInventory != null
                     ? new SaveEntry(_restartInventory.ToDictionary(p => p.Key.ToString(), p => p.Value), _restartMoney,
@@ -881,9 +883,9 @@ internal sealed unsafe partial class GameWindow
                                     _entryLegions?.ToDictionary(p => p.Key.ToString(), p => p.Value), _entryOwnedLegions?.ToArray(),
                                     _entryFlags?.Select((v, i) => (v, i)).Where(x => x.v != 0).ToDictionary(x => x.i.ToString(), x => (int)x.v))
                     : null,
-                Camera: battleSave ? [_camX, _camY] : null,
-                EventCheckDue: battleSave ? Btl._eventCheckDue : null,
-                MosesAltVoice: Mos._mosesAltVoice);
+                Camera: battleSave ? [host._camX, host._camY] : null,
+                EventCheckDue: battleSave ? host.Btl._eventCheckDue : null,
+                MosesAltVoice: host.Mos._mosesAltVoice);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -891,7 +893,7 @@ internal sealed unsafe partial class GameWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Toast($"저장하지 못했습니다: {ex.Message}");
+            host.Toast($"저장하지 못했습니다: {ex.Message}");
             return false;
         }
     }
@@ -902,25 +904,25 @@ internal sealed unsafe partial class GameWindow
         SaveState? state;
         try
         {
-            if (!File.Exists(path)) { Toast("저장한 전투가 없습니다"); return false; }
+            if (!File.Exists(path)) { host.Toast("저장한 전투가 없습니다"); return false; }
             state = JsonSerializer.Deserialize<SaveState>(File.ReadAllText(path), SaveJson);
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
-            Toast($"불러오지 못했습니다: {ex.Message}");
+            host.Toast($"불러오지 못했습니다: {ex.Message}");
             return false;
         }
         // 연대표(장면 7) 세이브는 전투판이 비어 있어도 된다 — 새 게임 직후에는 아직 전투가 없다.
         if (state is not { } || state.Version is < OldestSaveVersion or > SaveVersion || (state.Units.Length == 0 && state.SceneKind != 7))
         {
-            Toast("저장 파일을 읽을 수 없습니다");
+            host.Toast("저장 파일을 읽을 수 없습니다");
             return false;
         }
         // 다른 전투에서 저장한 것이면 그 전투를 먼저 연다(옛 저장은 전투 번호가 없어 첫 전투로 본다).
         int battle = state.Battle > 0 ? state.Battle : DemoScene.Fallback.Id;
         // 타이틀에서 왔으면 아직 아무 전투도 안 읽었다 — 번호가 같아 보여도 반드시 한 번은 열어야 한다.
         // 모세스·필드·연대표가 떠 있으면 판이 640×480 틀이라 같은 전투라도 다시 연다(전투판 크기로 되돌리기).
-        bool fromMoses = Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen;
+        bool fromMoses = host.Mos._mosesOpen || host.FieldOpen || host.EpisodesScr._episodesOpen;
         // 판을 세우기 <b>전에</b> 파티·동료를 되살린다 — 아군을 미리 안 세운 전투는 BuildUnits 가 배치 칸에
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
@@ -930,105 +932,105 @@ internal sealed unsafe partial class GameWindow
         // 전에는 InMoses 만 보아서 새 게임 직후면 옛 전투(state.Battle)가, 앞 판을 했으면 그 챕터 모세스가 열렸다(감사 F6).
         if (state.SceneKind == 7)
         {
-            _playBase = state.PlayMs - _realTime * 1000;
-            TitleScr._titleOpen = false;
-            Fld.CloseField();
-            Mos._mosesOpen = false;
-            Mos._mosesPage = -1;
-            Mos._mosesChp = null;                // 챕터 상태 없음 — 연대표에서 에피소드를 고르면 새로 정한다
-            Mos._navStart = null;
-            Btl._outcome = "";
-            if (Cols != TitleBoardCols || Rows != TitleBoardRows) ResizeBoard(TitleBoardCols, TitleBoardRows);
-            _battleLoaded = false;           // 뒤에 남은 전투판은 버린다 — 다음 전투 세이브를 부르면 판을 새로 세운다
-            StopMusic();
-            EpisodesScr.OpenEpisodes();
+            _playBase = state.PlayMs - host._realTime * 1000;
+            host.TitleScr._titleOpen = false;
+            host.Fld.CloseField();
+            host.Mos._mosesOpen = false;
+            host.Mos._mosesPage = -1;
+            host.Mos._mosesChp = null;                // 챕터 상태 없음 — 연대표에서 에피소드를 고르면 새로 정한다
+            host.Mos._navStart = null;
+            host.Btl._outcome = "";
+            if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) host.ResizeBoard(TitleBoardCols, TitleBoardRows);
+            host._battleLoaded = false;           // 뒤에 남은 전투판은 버린다 — 다음 전투 세이브를 부르면 판을 새로 세운다
+            host.StopMusic();
+            host.EpisodesScr.OpenEpisodes();
             _restoreVersion = SaveVersion;
-            Toast($"불러왔습니다 — {state.SavedAt}");
+            host.Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
         }
         // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
-        if (SavedChapter(state) is > 0 and var chapterId && MosesScene.LoadChapterFile(chapterId) is { } savedChp) Mos._mosesChp = savedChp;
-        if (!_battleLoaded || battle != _scene.Id || fromMoses)
+        if (SavedChapter(state) is > 0 and var chapterId && MosesScene.LoadChapterFile(chapterId) is { } savedChp) host.Mos._mosesChp = savedChp;
+        if (!host._battleLoaded || battle != host._scene.Id || fromMoses)
         {
             // 판을 새로 세울 때 맵 밖 여분(벤치)을 바로 지우지 않는다 — 저장할 때 벤치에서 꺼내 세운 인물이 사라지고, 뺀 인물이 새 몸으로 서고,
             // 「군단사용」을 끈 대장의 부하가 되살아났다(ba-21 outer-rules 2.1). 세이브에 적힌 인물만 남기고 나머지 배치 인물을 뺀다.
             bool byRecord = !state.InMoses && state.Units.Length > 0;
-            Btl._keepBenchForLoad = byRecord;
+            host.Btl._keepBenchForLoad = byRecord;
             bool started;
             try { started = StartBattle(battle, rememberParty: false); }
-            finally { Btl._keepBenchForLoad = false; }
+            finally { host.Btl._keepBenchForLoad = false; }
             if (!started) return false;
             if (byRecord)
             {
                 var saved = state.Units.GroupBy(r => r.ChrCode).ToDictionary(g => g.Key, g => g.Count());
                 var keep = new HashSet<UnitState>();
-                var movable = Btl._deployMovable.ToHashSet();
+                var movable = host.Btl._deployMovable.ToHashSet();
                 // 같은 Chr 는 세이브에 적힌 수만큼만 남긴다 — 먼저 대장·홑 유닛, 그다음 부하는 <b>대장이 남는 것만</b>(빠질 대장의 부하가 자리를 먼저 먹으면
                 // 벤치에서 꺼낸 대장의 부하가 지워졌다).
-                foreach (var u in _units.Where(u => u.LeaderIndex < 0))
+                foreach (var u in host._units.Where(u => u.LeaderIndex < 0))
                     if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
-                foreach (var u in _units.Where(u => u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length))
+                foreach (var u in host._units.Where(u => u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length))
                 {
-                    var leader = _units[u.LeaderIndex];
+                    var leader = host._units[u.LeaderIndex];
                     if (movable.Contains(leader) && !keep.Contains(leader)) continue;
                     if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
                 }
                 // 배치로 세운 사람과 그 부하 가운데 세이브에 없는 것만 지운다 — Btl 에 박힌 유닛은 건드리지 않는다(부하는 DropUnits 가 대장을 따라 뺀다).
-                Btl.DropUnits(u => !keep.Contains(u) && movable.Contains(u));
-                Btl.DropUnits(u => !keep.Contains(u) && u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length && movable.Contains(_units[u.LeaderIndex]));
-                Btl._deployBench.Clear();
+                host.Btl.DropUnits(u => !keep.Contains(u) && movable.Contains(u));
+                host.Btl.DropUnits(u => !keep.Contains(u) && u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length && movable.Contains(host._units[u.LeaderIndex]));
+                host.Btl._deployBench.Clear();
             }
         }
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
-        Btl._routine = null;
-        Btl._outcomeAfterLevelUp = false;
-        Btl.CancelTargeting();
-        Btl._ringUnit = -1;
-        _statusUnit = -1;
-        Btl._levelUpQueue.Clear();
-        Btl._levelUpUnit = -1;
-        Btl._numbers.Clear();
-        Btl._effects.Clear();
-        _movies.Clear();
-        Btl._bodyClones.Clear();
-        Btl._blinks.Clear();
-        Btl._pendingExits.Clear();
-        Btl._exitOutcomeDue = false;
-        Btl._brokenAt.Clear();
-        Btl._objActing.Clear();
-        Btl._objectRoutine = false;
-        Btl._blinkGhosts.Clear();
-        LegionStageAb._legionGhosts.Clear();
-        LegionStageAb._legionFades.Clear();
-        UnitFxAb._unitFx.Clear();
-        LegionStageAb._legionLater.Clear();
-        LegionStageAb._legionStageEnd = 0;
-        StagingAb._stageDraws.Clear();
-        Mos._planetZoomAt = -1;
-        Btl._flyingEffects.Clear();
-        Btl._shots.Clear();
-        Btl._movers.Clear();
-        Btl._fxLatestStart = 0;
-        Btl._effectMirrors.Clear();
-        NineCrusaderAb._swords.Clear();
-        FinisherPreludeAb._preludeDots.Clear();
-        FinisherPreludeAb._fxFlights.Clear();
-        HeavenEarthAb._timedFx.Clear();
-        HeavenEarthAb._debris.Clear();
-        HeavenEarthAb._shakes.Clear();
-        AcrostAb._fireBalls.Clear();
-        _ripples.Clear();
-        _heldMoveKeys.Clear();
+        host.Btl._routine = null;
+        host.Btl._outcomeAfterLevelUp = false;
+        host.Btl.CancelTargeting();
+        host.Btl._ringUnit = -1;
+        host._statusUnit = -1;
+        host.Btl._levelUpQueue.Clear();
+        host.Btl._levelUpUnit = -1;
+        host.Btl._numbers.Clear();
+        host.Btl._effects.Clear();
+        host.Mov._movies.Clear();
+        host.Btl._bodyClones.Clear();
+        host.Btl._blinks.Clear();
+        host.Btl._pendingExits.Clear();
+        host.Btl._exitOutcomeDue = false;
+        host.Btl._brokenAt.Clear();
+        host.Btl._objActing.Clear();
+        host.Btl._objectRoutine = false;
+        host.Btl._blinkGhosts.Clear();
+        host.LegionStageAb._legionGhosts.Clear();
+        host.LegionStageAb._legionFades.Clear();
+        host.UnitFxAb._unitFx.Clear();
+        host.LegionStageAb._legionLater.Clear();
+        host.LegionStageAb._legionStageEnd = 0;
+        host.StagingAb._stageDraws.Clear();
+        host.Mos._planetZoomAt = -1;
+        host.Btl._flyingEffects.Clear();
+        host.Btl._shots.Clear();
+        host.Btl._movers.Clear();
+        host.Btl._fxLatestStart = 0;
+        host.Btl._effectMirrors.Clear();
+        host.NineCrusaderAb._swords.Clear();
+        host.FinisherPreludeAb._preludeDots.Clear();
+        host.FinisherPreludeAb._fxFlights.Clear();
+        host.HeavenEarthAb._timedFx.Clear();
+        host.HeavenEarthAb._debris.Clear();
+        host.HeavenEarthAb._shakes.Clear();
+        host.AcrostAb._fireBalls.Clear();
+        host.Mov._ripples.Clear();
+        host._heldMoveKeys.Clear();
 
         var pool = state.Units.ToList();
         // 세이브 자리 번호 → 지금 판 자리 번호 — 마지막 때린 자·군단 대장·찾은 사람은 자리 번호로 적혀 있다.
         var indexMap = new Dictionary<int, int>();
         int Mapped(int saved) => indexMap.TryGetValue(saved, out int now) ? now : -1;
         var restored = new List<(UnitState Unit, SaveUnit Save)>();
-        for (int i = 0; i < _units.Length; i++)
+        for (int i = 0; i < host._units.Length; i++)
         {
-            var u = _units[i];
+            var u = host._units[i];
             // 같은 자리의 기록을 먼저 보고, 안 맞으면 같은 Chr 번호의 기록을 찾아 쓴다. 「같은 자리」는 세이브 배열의 i 번째다 —
             // 전에는 쓴 기록을 빼 가며 줄어든 목록의 i 번째를 봐서, 같은 Chr 가 여럿인 판(Btl 0298 해적 셋)에서 둘째·셋째가 뒤바뀌었다.
             var s = i < state.Units.Length && state.Units[i].ChrCode == u.ChrCode && pool.Any(r => ReferenceEquals(r, state.Units[i]))
@@ -1068,9 +1070,9 @@ internal sealed unsafe partial class GameWindow
         // 자리 번호로 적힌 것들은 모두 짝지은 뒤에 — 마지막 때린 자(+0xfc, 조건 301)와 군단 물려받기(+0x4ea~, Legion.cs PromoteFollower).
         foreach (var (u, s) in restored)
         {
-            u.LastHitBy = Mapped(s.LastHitBy) is >= 0 and var hit ? _units[hit] : null;
+            u.LastHitBy = Mapped(s.LastHitBy) is >= 0 and var hit ? host._units[hit] : null;
             for (int k = 0; k < u.StatusSource.Length; k++)
-                u.StatusSource[k] = s.StatusBy is { } by && k < by.Length && Mapped(by[k]) is >= 0 and var src ? _units[src] : null;
+                u.StatusSource[k] = s.StatusBy is { } by && k < by.Length && Mapped(by[k]) is >= 0 and var src ? host._units[src] : null;
             if (s.StartCol is { } startCol && s.StartRow is { } startRow) (u.StartCol, u.StartRow) = (startCol, startRow);
             if (s.StartFacing is { } startFacing) u.StartFacing = (Facing)startFacing;
             if (s.LeaderIndex is { } leader) u.LeaderIndex = leader < 0 ? -1 : Mapped(leader);
@@ -1082,10 +1084,10 @@ internal sealed unsafe partial class GameWindow
         foreach (var (u, s) in restored)
         {
             (u.Hp, u.Tp, u.Soul) = (s.Hp, s.Tp, s.Soul);
-            RefreshUnitStats(u);
+            host.StatusScr.RefreshUnitStats(u);
         }
-        Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? _units[foundA] : null;
-        Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? _units[foundB] : null;
+        host.Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? host._units[foundA] : null;
+        host.Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? host._units[foundB] : null;
         RestoreObjects(state);
 
         // 전투 전 스냅숏(감사5 S5) — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티이고 전투 안 값은 판 부분(유닛)에 따로 있다.
@@ -1095,7 +1097,7 @@ internal sealed unsafe partial class GameWindow
             _restartInventory = [.. entry.Inventory.Where(p => int.TryParse(p.Key, out _)).Select(p => KeyValuePair.Create(int.Parse(p.Key), p.Value))];
             // 전투 전 깃발 — 적혀 있으면 그것이 RESTART 기준이다. 전에는 불러온 시점 깃발을 기준으로 삼아, 전투 중 오른 깃발
             // (Btl 0239·0240·0179·0180 의 110·208)이 「저장 → 불러오기 → RESTART」 에서 한 번 더 올랐다(ba-21 outer-rules 2.2). 옛 세이브는 전처럼.
-            _entryFlags = (byte[])_flags.Clone();
+            _entryFlags = (byte[])host.FlagSt._flags.Clone();
             if (entry.Flags is { } entryFlagsSaved)
             {
                 Array.Clear(_entryFlags);
@@ -1105,9 +1107,9 @@ internal sealed unsafe partial class GameWindow
             _restartMoney = entry.Money;
             _entryRoster = [];
             foreach (var s in entry.Roster)
-                if (_db?.Character(s.ChrCode) is { } bc) _entryRoster[s.ChrCode] = Restored(bc, s, regrow: true);
+                if (host._db?.Character(s.ChrCode) is { } bc) _entryRoster[s.ChrCode] = Restored(bc, s, regrow: true);
             // 명부 = 전투 전 값(스냅숏에 없는 사람 — 전투 중에 합류한 사람 — 은 판 값 그대로).
-            foreach (var (chr, c) in _entryRoster) _party[chr] = CopyChar(c);
+            foreach (var (chr, c) in _entryRoster) host._party[chr] = CopyChar(c);
             _entryLegions = entry.Legions?.Where(p => int.TryParse(p.Key, out _)).ToDictionary(p => int.Parse(p.Key), p => p.Value);
             _entryOwnedLegions = entry.OwnedLegions?.ToList();
         }
@@ -1115,93 +1117,93 @@ internal sealed unsafe partial class GameWindow
         {
             // 스냅숏이 없는 옛 세이브 — 예전처럼 전투에 선 아군의 되살린 값을 명부에 담고, RESTART 는 저장 시점 가방·GP 로 한다
             // (같은 전투에서 불러오면 앞 세션의 기준이 남던 것도 막는다).
-            Btl.RememberParty();
-            _restartInventory = [.. _inventory];
-        _entryFlags = (byte[])_flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)
-            _restartMoney = Mos._shopMoney;
+            host.Btl.RememberParty();
+            _restartInventory = [.. host.StatusScr._inventory];
+        _entryFlags = (byte[])host.FlagSt._flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)
+            _restartMoney = host.Mos._shopMoney;
             _entryRoster = null;
             _entryLegions = null;
             _entryOwnedLegions = null;
         }
 
         // 전투 이벤트 상태를 되살린다 — 이미 터진 사건은 다시 안 터진다.
-        if (state.EventFired is { } fired && fired.Length == Btl._eventFired.Length)
+        if (state.EventFired is { } fired && fired.Length == host.Btl._eventFired.Length)
         {
-            Array.Copy(fired, Btl._eventFired, fired.Length);
-            Btl._turnNo = state.TurnNo;
+            Array.Copy(fired, host.Btl._eventFired, fired.Length);
+            host.Btl._turnNo = state.TurnNo;
         }
         else
         {
             // 사건 횟수가 없던 옛 세이브(또는 이벤트 수가 달라진 전투) — 시작 방아쇠(조건 0·1)만 있는 사건은
             // 이미 본 것으로 치고, 턴 수도 인트로(턴 2)를 지난 값으로 둔다.
-            for (int i = 0; i < Btl._events.Count; i++)
-                if (Btl._events[i].MaxFire > 0 && Btl._events[i].Conditions.Count > 0
-                    && Btl._events[i].Conditions.All(c => c.Code is 0 or 1))
-                    Btl._eventFired[i] = Btl._events[i].MaxFire;
-            Btl._turnNo = Math.Max(state.TurnNo, 3);
+            for (int i = 0; i < host.Btl._events.Count; i++)
+                if (host.Btl._events[i].MaxFire > 0 && host.Btl._events[i].Conditions.Count > 0
+                    && host.Btl._events[i].Conditions.All(c => c.Code is 0 or 1))
+                    host.Btl._eventFired[i] = host.Btl._events[i].MaxFire;
+            host.Btl._turnNo = Math.Max(state.TurnNo, 3);
         }
-        Array.Clear(Btl._battleVars);
+        Array.Clear(host.Btl._battleVars);
         foreach (var (number, value) in state.BattleVars ?? [])
-            if (int.TryParse(number, out int slot) && (uint)slot < Btl._battleVars.Length) Btl._battleVars[slot] = (byte)Math.Clamp(value, 0, 255);
-        Array.Clear(Btl._eventTimer);
-        Array.Clear(Btl._eventTimerRun);
-        for (int i = 0; i < Btl._eventTimer.Length; i++)
+            if (int.TryParse(number, out int slot) && (uint)slot < host.Btl._battleVars.Length) host.Btl._battleVars[slot] = (byte)Math.Clamp(value, 0, 255);
+        Array.Clear(host.Btl._eventTimer);
+        Array.Clear(host.Btl._eventTimerRun);
+        for (int i = 0; i < host.Btl._eventTimer.Length; i++)
         {
-            if (state.EventTimer is { } timer && i < timer.Length) Btl._eventTimer[i] = timer[i];
-            if (state.EventTimerRun is { } run && i < run.Length) Btl._eventTimerRun[i] = run[i];
+            if (state.EventTimer is { } timer && i < timer.Length) host.Btl._eventTimer[i] = timer[i];
+            if (state.EventTimerRun is { } run && i < run.Length) host.Btl._eventTimerRun[i] = run[i];
         }
-        Btl._eventNextBattle = state.EventNextBattle;
-        Btl._eventNextField = state.EventNextField;
+        host.Btl._eventNextBattle = state.EventNextBattle;
+        host.Btl._eventNextField = state.EventNextField;
 
-        Btl._tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
-        Btl._objectsDue = state.ObjectsDue;           // 그 틱의 물체 차례가 아직 안 돌았으면 이어서 돈다(Q6)
-        Btl._turn = -1;
-        Btl._outcome = "";
-        _selected = state.Turn >= 0 && state.Turn < _units.Length ? state.Turn : -1;
-        Btl._resumeTurn = _selected;            // 저장했던 인물의 차례로 곧장 돌아간다(UpdateTurn)
-        Btl._nextTickAt = 0;
-        _playBase = state.PlayMs - _realTime * 1000;
+        host.Btl._tick = Math.Max(1, state.Tick);          // 옛 세이브는 0 에서 세던 것이라 하나 올려 받는다
+        host.Btl._objectsDue = state.ObjectsDue;           // 그 틱의 물체 차례가 아직 안 돌았으면 이어서 돈다(Q6)
+        host.Btl._turn = -1;
+        host.Btl._outcome = "";
+        host._selected = state.Turn >= 0 && state.Turn < host._units.Length ? state.Turn : -1;
+        host.Btl._resumeTurn = host._selected;            // 저장했던 인물의 차례로 곧장 돌아간다(UpdateTurn)
+        host.Btl._nextTickAt = 0;
+        _playBase = state.PlayMs - host._realTime * 1000;
         // 아직 안 본 이벤트 갈래 깃발(감사5 S6) — 옛 세이브는 지금 값(판을 새로 세웠으면 0xF) 그대로.
-        if (state.EventCheckDue is { } due) Btl._eventCheckDue = due;
+        if (state.EventCheckDue is { } due) host.Btl._eventCheckDue = due;
         // 카메라 스크롤(원본 +0x3cae/+0x3cb0, 감사5 S7) — 판을 새로 세웠으면 시작 카메라·페이드인이 먼저 서므로 되살린 차례가 시작될 때 놓는다.
         _loadCamera = state.Camera is [var camX, var camY, ..] ? (camX, camY) : null;
         _loadCameraPending = !state.InMoses;
-        if (_loadCameraPending && !_battleIntroPending && _loadCamera is { } cam) { ApplySavedCamera(cam); _loadCameraPending = false; }
+        if (_loadCameraPending && !host._battleIntroPending && _loadCamera is { } cam) { ApplySavedCamera(cam); _loadCameraPending = false; }
         // 모세스에서 저장한 것이면 모세스로 돌아간다 — 챕터 BGM 은 OpenMoses 가 튼다.
         if (state.InMoses)
         {
-            TitleScr._titleOpen = false;
-            StopMusic();
+            host.TitleScr._titleOpen = false;
+            host.StopMusic();
             var loadedChp = state.Chapter > 0 ? MosesScene.LoadChapterFile(state.Chapter) : null;
             // 장소 조건을 안 거르던 판의 세이브(파티 칸이 없다) — 열린 전투·필드 장소가 하나도 없으면 챕터를 다 돈 것으로 본다.
             // 그때는 장소를 순서 없이 겪을 수 있어 깃발이 원본 순서와 어긋나, 지금 규칙으로는 상점만 남아 갇힌다.
             if (state.Party == null && loadedChp is { } oc
-                && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !Mos._placesUsed.Contains((oc.Id, p.No)) && FlagsAllow(p.Conditions)))
-                EpisodesScr._chapterDone = true;
-            Mos.OpenMoses(loadedChp);
+                && !oc.Places.Any(p => p.Value < 20000 && p.Auto == 0 && !host.Mos._placesUsed.Contains((oc.Id, p.No)) && host.FlagSt.FlagsAllow(p.Conditions)))
+                host.EpisodesScr._chapterDone = true;
+            host.Mos.OpenMoses(loadedChp);
             // OpenMoses(챕터) 가 항행 시작을 파일 값으로 지우므로 그 뒤에 세이브 값으로 덮는다 — 원본도 −1 복원이 파일 값 읽기(0x100f58af)
             // 뒤에 +0x2e40/+0x2e42 를 덮는다(0x100f5994/0x100f59ab, 감사 R2).
-            Mos._navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
+            host.Mos._navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
             _restoreVersion = SaveVersion;
-            Toast($"불러왔습니다 — {state.SavedAt}");
+            host.Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
         }
         // 타이틀·모세스·필드에서 불러왔으면 그 화면을 내리고 전투 음악으로 바꾼다 — 모세스에서 전투 세이브를 부르면
         // 모세스 음악이 그대로 흐르던 문제(사용자 보고).
-        if (TitleScr._titleOpen || fromMoses)
+        if (host.TitleScr._titleOpen || fromMoses)
         {
-            TitleScr._titleOpen = false;
-            Fld.CloseField();
-            Mos._mosesOpen = false;
-            EpisodesScr._episodesOpen = false;
-            StopMusic();
-            StartBattleMusic();
+            host.TitleScr._titleOpen = false;
+            host.Fld.CloseField();
+            host.Mos._mosesOpen = false;
+            host.EpisodesScr._episodesOpen = false;
+            host.StopMusic();
+            host.StartBattleMusic();
         }
         // 세이브의 인물 기록(701 로 바뀐 그림 +0xc 따위)은 판을 세운 <b>뒤에</b> 덮여서, 판을 세울 때 읽은 그림과 어긋날 수 있다 —
         // 바뀐 인물만 다시 읽는다(건슬라이서 살라딘, Btl 0150).
-        LoadRosterSprites();
+        host.LoadRosterSprites();
         _restoreVersion = SaveVersion;
-        Toast($"불러왔습니다 — {state.SavedAt}");
+        host.Toast($"불러왔습니다 — {state.SavedAt}");
         return true;
     }
 
@@ -1212,11 +1214,11 @@ internal sealed unsafe partial class GameWindow
     /// <summary>스크롤을 그 자리로 바로(보간·명령 없이) — 원본 불러오기 <c>0x1006f3a0</c> 이 +0x3cae/+0x3cb0 을 그대로 넣는 것.</summary>
     internal void ApplySavedCamera((int X, int Y) cam)
     {
-        Btl._camGoal = null;
-        Btl._camPosX = Btl._camTargetX = Math.Clamp(cam.X, 0, Btl.CamMaxX);
-        Btl._camPos = Btl._camTarget = Math.Clamp(cam.Y, 0, CamMax);
-        _camX = (int)Btl._camPosX;
-        _camY = (int)Btl._camPos;
+        host.Btl._camGoal = null;
+        host.Btl._camPosX = host.Btl._camTargetX = Math.Clamp(cam.X, 0, host.Btl.CamMaxX);
+        host.Btl._camPos = host.Btl._camTarget = Math.Clamp(cam.Y, 0, host.CamMax);
+        host._camX = (int)host.Btl._camPosX;
+        host._camY = (int)host.Btl._camPos;
     }
 
     /// <summary>
@@ -1226,7 +1228,7 @@ internal sealed unsafe partial class GameWindow
     internal void RestoreObjects(SaveState state)
     {
         if (state.Objects is not { } saved) return;
-        var objects = Btl.Objects;
+        var objects = host.Btl.Objects;
         for (int i = 0; i < objects.Count; i++)
         {
             var o = objects[i];
@@ -1235,10 +1237,10 @@ internal sealed unsafe partial class GameWindow
             (o.Hp, o.Team, o.Charge, o.Charged) = (s.Hp, s.Team, s.Charge, s.Charged);
             if (s.Opened)
             {
-                Btl._opened.Add(o);
-                Btl._openedAt[o] = _lastTime - 1000;     // 여는 모션은 이미 끝났다 — 문은 곧장 열린 모션 2 로 선다
+                host.Btl._opened.Add(o);
+                host.Btl._openedAt[o] = host._lastTime - 1000;     // 여는 모션은 이미 끝났다 — 문은 곧장 열린 모션 2 로 선다
             }
-            else { Btl._opened.Remove(o); Btl._openedAt.Remove(o); }
+            else { host.Btl._opened.Remove(o); host.Btl._openedAt.Remove(o); }
         }
     }
 }

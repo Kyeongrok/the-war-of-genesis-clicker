@@ -1576,7 +1576,7 @@ internal sealed unsafe partial class GameWindow
     };
 
     /// <summary>work 번호 → 시전 영상(Mov) — (영상, 준비 동작에서 띄우나, 대상에 붙나, dx, dy). 분석-스킬 fx-189 「Bink 영상」.</summary>
-    internal static readonly Dictionary<int, MovieFx[]> WorkMovies = new()
+    internal static readonly Dictionary<int, MoviePlayer.MovieFx[]> WorkMovies = new()
     {
         [3] = [new(41, true, false, -128, -240)],
         [14] = [new(41, true, false, -128, -240)],

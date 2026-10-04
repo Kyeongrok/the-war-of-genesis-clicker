@@ -51,7 +51,7 @@ internal sealed unsafe partial class GameWindow
     /// Snd 효과음 크기 — 원본은 DirectSound <c>SetVolume(SE×5000/100 − 5000)</c>(1/100 dB, <c>0x10028bc0~0x10028c0e</c>)라
     /// <b>막대 1점당 −0.5 dB</b>(SE 50 = −25 dB)다(감사4 V3). 음성은 선형 <see cref="_effectGain"/> 그대로.
     /// </summary>
-    internal float SndGain => _seVolume >= 100 ? 1f : (float)Math.Pow(10, (_seVolume - 100) / 40.0);
+    internal float SndGain => Sys._seVolume >= 100 ? 1f : (float)Math.Pow(10, (Sys._seVolume - 100) / 40.0);
 
     /// <summary>work 번호 → 그 어빌리티를 쓸 때 (때리는 순간부터 몇 틱 뒤, Snd 번호). 분석-사운드 표에서 옮겼다.</summary>
     // 시전 소리 694 는 UseWorkRoutine 이 준비 2·3·5·6 에 시작 +2틱으로 낸다 — 여기에도 있으면 두 번 난다(ba-20 Q S-1).
@@ -99,7 +99,7 @@ internal sealed unsafe partial class GameWindow
         }
 
         // 저장된 B.G.M·S.E 크기를 시작 때 바로 넣는다 — 전에는 막대를 눌러야만 먹어 재시작하면 무시됐다(감사4 V2).
-        ApplyVolumes();
+        Sys.ApplyVolumes();
 
         // 타이틀에서 시작하면 아직 아무 전투도 안 열렸다 — 그때 전투 음악을 걸면 타이틀 음악을 튼 뒤에야
         // 풀리기가 끝나 타이틀 위로 전투 음악이 덮어씌워진다.
@@ -231,7 +231,7 @@ internal sealed unsafe partial class GameWindow
         _musicPaused = false;
         _musicDuckRestoreAt = null;
         _chapterEventMusic = false;
-        if (Muted || !_bgmOn) return;
+        if (Muted || !Sys._bgmOn) return;
         // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
         _musicFade = null;
         _musicGain = gain ?? MusicGain;
@@ -251,7 +251,7 @@ internal sealed unsafe partial class GameWindow
                 // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다(B.G.M 설정은 믹서가 곱한다).
                 _mixer.PlayMusic(pcm, loop, _musicAudible ?? _musicGain);
                 if (_musicPaused) _mixer.PauseMusic();          // 푸는 동안 517 이 0 에 닿았다 — 멈춘 채로 둔다
-                if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {_bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");
+                if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {Sys._bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
         });
@@ -627,7 +627,7 @@ internal sealed unsafe partial class GameWindow
         _musicAudible = null;
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"music fade {_musicGain * 100:0}% → {to * 100:0}% / {ticks}틱{(_musicPaused ? " (멈춤에서)" : "")} × BGM {_bgmVolume}% at {_lastTime:0.00}" + Environment.NewLine);
+                $"music fade {_musicGain * 100:0}% → {to * 100:0}% / {ticks}틱{(_musicPaused ? " (멈춤에서)" : "")} × BGM {Sys._bgmVolume}% at {_lastTime:0.00}" + Environment.NewLine);
         if (ticks <= 0)
         {
             _musicFade = null;

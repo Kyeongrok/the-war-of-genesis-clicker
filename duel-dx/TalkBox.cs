@@ -4,6 +4,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 대사창 — 전투 이벤트 행동 <c>600</c>(아래 대사 상자)·<c>601</c>(말풍선), 필드·챕터 스크립트 <c>600</c>·<c>601</c>·<c>602</c>(통신 말풍선)·<c>603</c>·<c>609</c>.
 /// </summary>
@@ -32,7 +34,7 @@ namespace DuelDx;
 /// 넘기기는 <b>클릭·아무 키</b>(키는 사용자 요청 — 원본은 왼쪽 클릭만), 우클릭·Esc 는 장면 통째 건너뛰기(사용자 요청).
 /// 대사가 도는 동안은 <b>전투가 통째로 멈춘다</b>(<c>0x10066197</c>) — 틱도 차례도 안 흐른다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class TalkBox(GameWindow host)
 {
     /// <summary>대사창 그림 — 말풍선 틀 Obs 0221 · 아래 상자 틀 Obs 0224 · 「다음」 ▼ Obs 0071(분석-UI 「대사창 모양 (talk-ui)」).</summary>
     internal const int TalkBalloonObs = 221, TalkBoxObs = 224, TalkNextObs = 71, TalkCloseSound = 95;
@@ -123,7 +125,7 @@ internal sealed unsafe partial class GameWindow
             if (value is not { } v)
             {
                 _talks.Clear();
-                StopTalkVoice();
+                host.StopTalkVoice();
                 return;
             }
             // ShowFieldTalk 는 음성을 먼저 틀어 두었다 — 그 표지를 들고 「음성 끝남」을 본다.
@@ -131,8 +133,8 @@ internal sealed unsafe partial class GameWindow
             OpenTalkWindow(new TalkWindow
             {
                 Kind = v.Box ? (RunningFieldCode(609) ? 609 : RunningFieldCode(603) ? 603 : 600) : 601, Speaker = v.Speaker, Name = v.Name, Text = v.Text, Pose = v.Face,
-                FaceCode = _talkFace, FieldSpeaker = Fld._fieldTalkOf, ExternalVoiceTag = _talkVoiceTag,
-                Location = v.Box && RunningFieldCode(609) ? Fld._talkLocation : "",
+                FaceCode = _talkFace, FieldSpeaker = host.Fld._fieldTalkOf, ExternalVoiceTag = host._talkVoiceTag,
+                Location = v.Box && RunningFieldCode(609) ? host.Fld._talkLocation : "",
             });
         }
     }
@@ -147,9 +149,9 @@ internal sealed unsafe partial class GameWindow
 
     internal bool RunningFieldCode(int code)
     {
-        var events = Fld._field?.Events ?? (Mos._mosesOpen ? Mos._mosesChp?.Events : null);
-        return events != null && (uint)Fld._fieldEvent < (uint)events.Count && Fld._fieldPc > 0 && Fld._fieldPc <= events[Fld._fieldEvent].Actions.Count
-               && events[Fld._fieldEvent].Actions[Fld._fieldPc - 1].Code == code;
+        var events = host.Fld._field?.Events ?? (host.Mos._mosesOpen ? host.Mos._mosesChp?.Events : null);
+        return events != null && (uint)host.Fld._fieldEvent < (uint)events.Count && host.Fld._fieldPc > 0 && host.Fld._fieldPc <= events[host.Fld._fieldEvent].Actions.Count
+               && events[host.Fld._fieldEvent].Actions[host.Fld._fieldPc - 1].Code == code;
     }
 
     /// <summary>맨 나중 창의 글이 다 나왔나 — 넣는 쪽(필드의 false)은 무시한다.</summary>
@@ -181,16 +183,16 @@ internal sealed unsafe partial class GameWindow
     internal int TalkSpeaker(int value)
     {
         // 20010·20011 은 조건 300·301 이 방금 찾아 낸 두 사람이다(0x1004eba5) — 대사 49줄이 이걸 쓴다.
-        if (value == 20010) return Btl._eventFoundA is null ? -1 : Array.IndexOf(_units, Btl._eventFoundA);
-        if (value == 20011) return Btl._eventFoundB is null ? -1 : Array.IndexOf(_units, Btl._eventFoundB);
+        if (value == 20010) return host.Btl._eventFoundA is null ? -1 : Array.IndexOf(host._units, host.Btl._eventFoundA);
+        if (value == 20011) return host.Btl._eventFoundB is null ? -1 : Array.IndexOf(host._units, host.Btl._eventFoundB);
         // 20001~20009 는 그 편의 첫 유닛이 말한다(원본 — 전에는 −1 로 가운데에 띄웠다).
         if (value >= 20000 && value < 20010)
-            return Btl.EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(_units, first) : -1;
+            return host.Btl.EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(host._units, first) : -1;
         if (value >= 20000) return -1;
         // 10000+N 은 배열 자리가 아니라 <b>Btl 레코드 번호</b>다 — 빈 칸을 걸러 낸 뒤의 자리와 다르다.
-        if (value >= 10000) return Array.FindIndex(_units, u => u.LeaderIndex < 0 && u.Record == value - 10000);
+        if (value >= 10000) return Array.FindIndex(host._units, u => u.LeaderIndex < 0 && u.Record == value - 10000);
         if (value <= 0) return -1;
-        return Array.FindIndex(_units, u => u.ChrCode == value);
+        return Array.FindIndex(host._units, u => u.ChrCode == value);
     }
 
     /// <summary>전투 대사 한 줄을 띄운다(행동 600·601).</summary>
@@ -199,16 +201,16 @@ internal sealed unsafe partial class GameWindow
         if (_talkSkip) return;
 
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
-        string text = TalkTableFor(_scene.Id)?[A(2)] ?? "";
+        string text = TalkTableFor(host._scene.Id)?[A(2)] ?? "";
         int speaker = TalkSpeaker(A(0));
-        string name = speaker >= 0 && _units[speaker].Data is { } c ? _db?.T(c.NameId) ?? "" : "";
+        string name = speaker >= 0 && host._units[speaker].Data is { } c ? host._db?.T(c.NameId) ?? "" : "";
         int faceCode = 0;
         // 말하는 이가 판에 없으면(0x1004ebd0, ba-20 V6): Chr 번호(1~9999)는 명부에서 이름·얼굴을 달아 가운데 창으로, 말하는 이 0 은 그 줄을 건너뛴다.
         if (speaker < 0 && A(0) == 0) return;
-        if (speaker < 0 && A(0) > 0 && A(0) < 10000 && _db?.Character(A(0)) is { } absent)
+        if (speaker < 0 && A(0) > 0 && A(0) < 10000 && host._db?.Character(A(0)) is { } absent)
         {
-            name = _db.T(absent.NameId);
-            Fld.LoadFieldFace(absent);
+            name = host._db.T(absent.NameId);
+            host.Fld.LoadFieldFace(absent);
             faceCode = absent.Code;
         }
         // 대사 상자(600)만 음성 칸이 있다 — 전투 말풍선(601)은 a17 = −1(0x10053c46).
@@ -233,7 +235,7 @@ internal sealed unsafe partial class GameWindow
             return;
         }
         int speaker = A(0);
-        var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = Fld.FieldText(A(1)), Voice = A(2) };
+        var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = host.Fld.FieldText(A(1)), Voice = A(2) };
         if (a.Code == 600) { w.Pose = A(3); w.NoPortrait = A(6) != 0; }
         if (a.Code == 602)
         {
@@ -242,32 +244,32 @@ internal sealed unsafe partial class GameWindow
             w.Tint = true;
             w.Glitch = A(4) != 0;                    // 값 크기는 안 쓴다 — 0 이냐 아니냐만(0x1003bcae)
         }
-        Fld._fieldTalkOf = speaker;
-        if (Fld._field is { } field && speaker >= 10000
+        host.Fld._fieldTalkOf = speaker;
+        if (host.Fld._field is { } field && speaker >= 10000
             && field.People.FirstOrDefault(p => p.Key == speaker - 10000) is { } person
-            && _db?.Character(person.ChrCode) is { } c)
+            && host._db?.Character(person.ChrCode) is { } c)
         {
-            w.Name = _db.T(c.NameId);
-            Fld.LoadFieldFace(c);
+            w.Name = host._db.T(c.NameId);
+            host.Fld.LoadFieldFace(c);
             w.FaceCode = c.Code;
         }
         // 필드의 600·602 도 말하는 이가 Chr 번호(10000 미만)일 수 있다 — 임시 CChr 를 .chr 에서 읽어 이름·얼굴을 쓴다(0x100eefb3·0x100ef63b, ba-20 N1).
-        else if (speaker > 0 && speaker < 10000 && _db?.Character(speaker) is { } cc)
+        else if (speaker > 0 && speaker < 10000 && host._db?.Character(speaker) is { } cc)
         {
             // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
-            w.Name = _db.T(cc.NameId);
-            Fld.LoadFieldFace(cc);
+            w.Name = host._db.T(cc.NameId);
+            host.Fld.LoadFieldFace(cc);
             w.FaceCode = cc.Code;
         }
         _talkFace = w.FaceCode;
         OpenTalkWindow(w);
-        Fld.HoldSlot(() => _talks.Contains(w), talk: true);
+        host.Fld.HoldSlot(() => _talks.Contains(w), talk: true);
     }
 
     /// <summary>창을 제 칸에 연다 — 칸에 있던 옛 창은 곧바로 지운다(접힘 없이).</summary>
     internal void OpenTalkWindow(TalkWindow w)
     {
-        w.OpenedAt = _lastTime;
+        w.OpenedAt = host._lastTime;
         if (w.Kind == 601)
         {
             // 0x100ef2a5: 칸0 이 있고 칸1 이 비었으면 칸1, 아니면 칸0 을 지우고 칸0.
@@ -288,7 +290,7 @@ internal sealed unsafe partial class GameWindow
     internal void RemoveTalkWindow(TalkWindow w)
     {
         _talks.Remove(w);
-        if (w.VoiceTag != 0 && w.VoiceTag == _talkVoiceTag) StopTalkVoice();
+        if (w.VoiceTag != 0 && w.VoiceTag == host._talkVoiceTag) host.StopTalkVoice();
     }
 
     /// <summary>닫기 시작 — 효과음 95 를 (320,240)에 틀고 접는다(0x1003bc10 → 0x1003bc45). 다 접히면 <see cref="UpdateTalk"/> 가 지운다.</summary>
@@ -296,10 +298,10 @@ internal sealed unsafe partial class GameWindow
     {
         if (w.ClosingAt >= 0) return;
         FillTalk(w);
-        w.ClosingAt = _lastTime;
-        if (w.VoiceTag != 0 && w.VoiceTag == _talkVoiceTag) StopTalkVoice();
-        if (w.ExternalVoiceTag != 0 && w.ExternalVoiceTag == _talkVoiceTag) StopTalkVoice();
-        Play(TalkCloseSound);
+        w.ClosingAt = host._lastTime;
+        if (w.VoiceTag != 0 && w.VoiceTag == host._talkVoiceTag) host.StopTalkVoice();
+        if (w.ExternalVoiceTag != 0 && w.ExternalVoiceTag == host._talkVoiceTag) host.StopTalkVoice();
+        host.Play(TalkCloseSound);
     }
 
     /// <summary>대사를 모두 곧바로 닫는다 — 장면 건너뛰기.</summary>
@@ -307,8 +309,8 @@ internal sealed unsafe partial class GameWindow
     {
         if (_talks.Count == 0) return;
         _talks.Clear();
-        StopTalkVoice();
-        Play(TalkCloseSound);
+        host.StopTalkVoice();
+        host.Play(TalkCloseSound);
     }
 
     /// <summary>
@@ -325,7 +327,7 @@ internal sealed unsafe partial class GameWindow
         if (_talks.Count == 0) return false;
         if (skipAll) { SkipTalk(); return true; }
         if (_talks.LastOrDefault(t => t.ClosingAt < 0) is not { } w) return true;   // 접히는 중이면 입력만 먹는다
-        if (_talkClickFills && !w.AllRevealed) { FillTalk(w); return true; }
+        if (host._talkClickFills && !w.AllRevealed) { FillTalk(w); return true; }
         BeginCloseTalk(w);
         return true;
     }
@@ -345,7 +347,7 @@ internal sealed unsafe partial class GameWindow
     {
         _talkSkip = true;
         CloseTalk();
-        Toast("장면을 건너뜁니다");
+        host.Toast("장면을 건너뜁니다");
     }
 
     /// <summary>
@@ -355,18 +357,18 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal bool SkipScene()
     {
-        bool battleScene = Btl._runningEvent >= 0, fieldScene = FieldOpen && Fld._fieldEvent >= 0;
+        bool battleScene = host.Btl._runningEvent >= 0, fieldScene = host.FieldOpen && host.Fld._fieldEvent >= 0;
         if (!battleScene && !fieldScene) return false;
         SkipTalk();
         if (battleScene)
         {
-            Btl._eventWaitUntil = 0;
-            Btl.StepEvent();
+            host.Btl._eventWaitUntil = 0;
+            host.Btl.StepEvent();
         }
         if (fieldScene)
         {
-            Fld._fieldWaitUntil = 0;
-            Fld.FinishFieldAnimations();
+            host.Fld._fieldWaitUntil = 0;
+            host.Fld.FinishFieldAnimations();
         }
         return true;
     }
@@ -380,17 +382,17 @@ internal sealed unsafe partial class GameWindow
     {
         if (_talk != null) return false;
         bool skipped = false;
-        bool fieldScene = (Fld._field != null || (Mos._mosesOpen && Mos._mosesChp != null)) && Fld._fieldEvent >= 0 && Fld._fieldChoices == null;
+        bool fieldScene = (host.Fld._field != null || (host.Mos._mosesOpen && host.Mos._mosesChp != null)) && host.Fld._fieldEvent >= 0 && host.Fld._fieldChoices == null;
         if (fieldScene)
         {
-            if (Fld._fieldWaitUntil > _lastTime) { Fld._fieldWaitUntil = 0; skipped = true; }
-            if (Fld._fieldWaitChannel >= 0) { StopChannelSound(Fld._fieldWaitChannel); Fld._fieldWaitChannel = -1; skipped = true; }
-            if (Fld._field != null && Fld.FieldBusy()) { Fld.FinishFieldAnimations(); skipped = true; }
+            if (host.Fld._fieldWaitUntil > host._lastTime) { host.Fld._fieldWaitUntil = 0; skipped = true; }
+            if (host.Fld._fieldWaitChannel >= 0) { host.StopChannelSound(host.Fld._fieldWaitChannel); host.Fld._fieldWaitChannel = -1; skipped = true; }
+            if (host.Fld._field != null && host.Fld.FieldBusy()) { host.Fld.FinishFieldAnimations(); skipped = true; }
         }
-        if (Btl._runningEvent >= 0 && Btl._eventWaitUntil > _lastTime) { Btl._eventWaitUntil = 0; skipped = true; }
+        if (host.Btl._runningEvent >= 0 && host.Btl._eventWaitUntil > host._lastTime) { host.Btl._eventWaitUntil = 0; skipped = true; }
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                               $"click-skip {skipped} t {_lastTime:F2} ev {Fld._fieldEvent} pc {Fld._fieldPc} wait {Fld._fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
+                               $"click-skip {skipped} t {host._lastTime:F2} ev {host.Fld._fieldEvent} pc {host.Fld._fieldPc} wait {host.Fld._fieldWaitUntil:F2} talk {_talk != null}" + Environment.NewLine);
         return skipped;
     }
 
@@ -405,18 +407,18 @@ internal sealed unsafe partial class GameWindow
             var w = _talks[i];
             if (w.ClosingAt >= 0)
             {
-                if ((_lastTime - w.ClosingAt) * TicksPerSecond >= w.OpenTicks) RemoveTalkWindow(w);
+                if ((host._lastTime - w.ClosingAt) * TicksPerSecond >= w.OpenTicks) RemoveTalkWindow(w);
                 continue;
             }
-            double t = (_lastTime - w.OpenedAt) * TicksPerSecond - w.OpenTicks;
+            double t = (host._lastTime - w.OpenedAt) * TicksPerSecond - w.OpenTicks;
             if (t < 0) continue;                                  // 펴지는 중 — 글도 음성도 아직
             EnsureTalkLayout(w);
             if (w.Voice > 0 && !w.VoiceStarted) { w.VoiceStarted = true; StartTalkWindowVoice(w); }
             AdvanceTalk(w, (int)t);
             if (w.AllRevealed && !TalkVoicePlaying(w))
             {
-                if (w.DoneAt < 0) w.DoneAt = _lastTime;
-                if ((_lastTime - w.DoneAt) * TicksPerSecond > TalkAutoTicks) BeginCloseTalk(w);
+                if (w.DoneAt < 0) w.DoneAt = host._lastTime;
+                if ((host._lastTime - w.DoneAt) * TicksPerSecond > TalkAutoTicks) BeginCloseTalk(w);
             }
         }
     }
@@ -424,26 +426,26 @@ internal sealed unsafe partial class GameWindow
     /// <summary>창의 음성을 튼다 — 원본 창마다 음성 객체(<c>+0x144</c>)가 있지만 데모는 대사 음성 한 줄만 울린다.</summary>
     internal void StartTalkWindowVoice(TalkWindow w)
     {
-        StopTalkVoice();
+        host.StopTalkVoice();
         if (Muted) { w.VoiceLoaded = -1; return; }
-        int tag = _talkVoiceTag = ++_soundTag;
+        int tag = host._talkVoiceTag = ++host._soundTag;
         // 말하는 이의 화면 x 로 좌우를 가른다(≤192 왼쪽 · ≥448 오른쪽, 감사4 S2). 판 좌표 → 640 틀 x.
-        float speakerX = w.Speaker >= 0 && w.Speaker < _units.Length
-            ? (float)((UnitFoot(_units[w.Speaker]).X - _camX) * 640.0 / Math.Max(1, ViewWidth)) : float.NaN;
+        float speakerX = w.Speaker >= 0 && w.Speaker < host._units.Length
+            ? (float)((host.UnitFoot(host._units[w.Speaker]).X - host._camX) * 640.0 / Math.Max(1, host.ViewWidth)) : float.NaN;
         var (panL, panR) = VoicePan(speakerX);
         w.VoiceTag = tag;
         int id = w.Voice;
-        LoadClip(id, pcm =>
+        host.LoadClip(id, pcm =>
         {
-            bool play = pcm != null && tag == Volatile.Read(ref _talkVoiceTag);
+            bool play = pcm != null && tag == Volatile.Read(ref host._talkVoiceTag);
             if (play)
             {
                 w.VoiceSeconds = ClipSeconds(pcm!);
-                _mixer.PlayEffect(pcm!, _effectGain, tag, left: panL, right: panR);
+                host._mixer.PlayEffect(pcm!, host._effectGain, tag, left: panL, right: panR);
             }
             Volatile.Write(ref w.VoiceLoaded, play ? 1 : -1);
             // 배경 실에서 올 수 있다 — 기록은 주 실이 옮겨 적는다(PlayTalkVoice 와 같다).
-            if (BattleScene.Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
+            if (BattleScene.Trace) host._backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
         });
     }
 
@@ -451,12 +453,12 @@ internal sealed unsafe partial class GameWindow
     internal bool TalkVoicePlaying(TalkWindow w)
     {
         if (w.ExternalVoiceTag != 0)
-            return w.ExternalVoiceTag == _talkVoiceTag && _mixer.IsPlaying(w.ExternalVoiceTag);
+            return w.ExternalVoiceTag == host._talkVoiceTag && host._mixer.IsPlaying(w.ExternalVoiceTag);
         if (w.Voice <= 0 || !w.VoiceStarted) return false;
         return Volatile.Read(ref w.VoiceLoaded) switch
         {
             0 => true,
-            1 => _mixer.IsPlaying(w.VoiceTag),
+            1 => host._mixer.IsPlaying(w.VoiceTag),
             _ => false,
         };
     }
@@ -469,8 +471,8 @@ internal sealed unsafe partial class GameWindow
         if (loaded == 0) return;                                  // 음성을 푸는 동안은 글도 기다린다
         if (loaded == 1 && w.VoiceSeconds > 0)
         {
-            if (w.VoiceStartAt < 0) w.VoiceStartAt = _lastTime;
-            double frac = _mixer.IsPlaying(w.VoiceTag) ? (_lastTime - w.VoiceStartAt) / w.VoiceSeconds : 1;
+            if (w.VoiceStartAt < 0) w.VoiceStartAt = host._lastTime;
+            double frac = host._mixer.IsPlaying(w.VoiceTag) ? (host._lastTime - w.VoiceStartAt) / w.VoiceSeconds : 1;
             RevealTalkTo(w, (int)(w.Clean.Length * Math.Clamp(frac, 0, 1)));
             return;
         }
@@ -554,8 +556,8 @@ internal sealed unsafe partial class GameWindow
             // 상자 글은 (창x+12) 부터 창x+606 까지. 반신 초상이 없고 작은 얼굴이 있으면 얼굴 오른쪽(창x+104)부터.
             int portraitObs = TalkPortraitObs(w);
             int pose = 2 * Math.Max(0, w.Pose) + 11;
-            w.Portrait = !w.NoPortrait && portraitObs > 0 && UiFor(portraitObs)?.Clip(pose) is { Keys.Count: > 0 };
-            w.TextLeft = !w.NoPortrait && !w.Portrait && _faces.ContainsKey(TalkFaceCode(w)) ? 104 : 12;
+            w.Portrait = !w.NoPortrait && portraitObs > 0 && host.UiFor(portraitObs)?.Clip(pose) is { Keys.Count: > 0 };
+            w.TextLeft = !w.NoPortrait && !w.Portrait && host._faces.ContainsKey(TalkFaceCode(w)) ? 104 : 12;
             width = 606 - w.TextLeft;
             w.MaxLines = 4;
         }
@@ -574,7 +576,7 @@ internal sealed unsafe partial class GameWindow
             while (start < para.Length)
             {
                 int take = 1;
-                while (start + take < para.Length && GetText(para.Substring(start, take + 1), White, 12).W <= width) take++;
+                while (start + take < para.Length && host.GetText(para.Substring(start, take + 1), White, 12).W <= width) take++;
                 lines.Add((pos + start, take));
                 for (int j = 0; j < take; j++) charLine[pos + start + j] = lines.Count - 1;
                 start += take;
@@ -587,13 +589,13 @@ internal sealed unsafe partial class GameWindow
         w.CharLine = charLine;
     }
 
-    internal int TalkFaceCode(TalkWindow w) => w.Speaker >= 0 && _units[w.Speaker].Data is { } sc ? sc.Code : w.FaceCode;
+    internal int TalkFaceCode(TalkWindow w) => w.Speaker >= 0 && host._units[w.Speaker].Data is { } sc ? sc.Code : w.FaceCode;
 
     internal int TalkPortraitObs(TalkWindow w) =>
-        w.Speaker >= 0 ? _units[w.Speaker].Data?.FaceId ?? 0 : _db?.Character(w.FaceCode)?.FaceId ?? 0;
+        w.Speaker >= 0 ? host._units[w.Speaker].Data?.FaceId ?? 0 : host._db?.Character(w.FaceCode)?.FaceId ?? 0;
 
     /// <summary>한 줄 내려가는 만큼 — 글자 높이 + 4픽셀(<c>0x1002993c</c>).</summary>
-    internal int TalkLineStep(float size) => GetText("가", White, size).H + 4;
+    internal int TalkLineStep(float size) => host.GetText("가", White, size).H + 4;
 
     internal void DrawTalk()
     {
@@ -613,35 +615,35 @@ internal sealed unsafe partial class GameWindow
             var (start, len) = lines[li];
             int shown = Math.Clamp(w.Revealed - start, 0, len);
             if (shown == 0) continue;
-            DrawText(w.Clean.Substring(start, shown), left, top + i * TalkLinePx - w.ScrollPx, White, 12);
+            host.DrawText(w.Clean.Substring(start, shown), left, top + i * TalkLinePx - w.ScrollPx, White, 12);
         }
     }
 
     internal void DrawTalkWindow(TalkWindow w)
     {
         EnsureTalkLayout(w);
-        int tick = (int)((_lastTime - w.OpenedAt) * TicksPerSecond);
+        int tick = (int)((host._lastTime - w.OpenedAt) * TicksPerSecond);
         double open = w.ClosingAt >= 0
-            ? 1 - (_lastTime - w.ClosingAt) * TicksPerSecond / w.OpenTicks
-            : (_lastTime - w.OpenedAt) * TicksPerSecond / w.OpenTicks;
+            ? 1 - (host._lastTime - w.ClosingAt) * TicksPerSecond / w.OpenTicks
+            : (host._lastTime - w.OpenedAt) * TicksPerSecond / w.OpenTicks;
         open = Math.Clamp(open, 0, 1);
         bool full = w.ClosingAt < 0 && open >= 1;
         bool ready = w.AllRevealed && !TalkVoicePlaying(w);
         // 원본 대사창은 640×480 화면 기준이다 — 필드·모세스는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
         // 모세스 대화도 창 아래 끝이 아니라 모세스 틀 아래 끝에 맞춘다 — 창이 틀보다 길면 상자 아래가 틀 밖으로 잘렸다(사용자 보고: Chp 0049).
-        bool framed = FieldOpen || Mos._mosesOpen;
-        var (sx, sy) = framed ? Mos.MosesOrigin() : (_camX, _camY);
-        int screenW = framed ? MosesScene.MosesW : ViewWidth, screenH = framed ? MosesScene.MosesH : ViewHeight;
-        _faces.TryGetValue(TalkFaceCode(w), out var face);
+        bool framed = host.FieldOpen || host.Mos._mosesOpen;
+        var (sx, sy) = framed ? host.Mos.MosesOrigin() : (host._camX, host._camY);
+        int screenW = framed ? MosesScene.MosesW : host.ViewWidth, screenH = framed ? MosesScene.MosesH : host.ViewHeight;
+        host._faces.TryGetValue(TalkFaceCode(w), out var face);
 
         if (w.IsBand)
         {
             // 603 띠 — 틀 Obs 0225(바탕 모션 3·4·5 비침 24/31, 테두리 0·1·2)를 창 (10,0) 에, 글 한 줄(자리 (12,10)은 가설).
             int bandX = sx + 10, bandY = sy;
-            for (int m = 3; m <= 5; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
-            for (int m = 0; m <= 2; m++) DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBandObs, m, 0, bandX, bandY, GameWindow.UiBlend.Alpha);
             DrawTalkLines(w, bandX + w.TextLeft, bandY + 10);
-            if (ready) DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, GameWindow.UiBlend.Alpha);
+            if (ready) host.DrawUi(TalkNextObs, 0, tick, bandX + 605, bandY + 26, GameWindow.UiBlend.Alpha);
             return;
         }
         if (w.IsCard)
@@ -651,26 +653,26 @@ internal sealed unsafe partial class GameWindow
             // 전에는 600 상자에 발신지를 말하는 이 이름 자리에 넣어 그렸다(ba-21 field Y3).
             int cx = sx + (framed ? 164 : (screenW - 313) / 2), cy = sy + (framed ? 120 : (screenH - 239) / 2);
             const uint tag = 0xFFF2DB6F, value = 0xFFDAE6FC;
-            if (UiFor(226) != null)
+            if (host.UiFor(226) != null)
             {
-                DrawUi(226, 2, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
-                DrawUi(226, 3, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
-                DrawUi(226, 0, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
-                DrawUi(226, 1, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
+                host.DrawUi(226, 2, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
+                host.DrawUi(226, 3, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: 24 / 31.0 * open);
+                host.DrawUi(226, 0, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
+                host.DrawUi(226, 1, 0, cx, cy, GameWindow.UiBlend.Alpha, fade: open);
             }
             else
             {
-                DarkenRect(cx - 1, cy - 1, 315, 241);
-                StrokeRect(cx, cy, 313, 239, White);
+                host.DarkenRect(cx - 1, cy - 1, 315, 241);
+                host.StrokeRect(cx, cy, 313, 239, White);
             }
             if (!full) return;
-            if (face != null) BlitScaled(face, cx + 4, cy + 8, 60, 60);
-            DrawText("이름", cx + 73, cy + 12, tag, 12);
-            RightText(w.Name, cx + 303, cy + 12, value, 12);
-            DrawText(w.Location, cx + 73, cy + 54, value, 12);
-            RightText("LOCATION", cx + 303, cy + 54, tag, 12);
+            if (face != null) host.BlitScaled(face, cx + 4, cy + 8, 60, 60);
+            host.DrawText("이름", cx + 73, cy + 12, tag, 12);
+            host.RightText(w.Name, cx + 303, cy + 12, value, 12);
+            host.DrawText(w.Location, cx + 73, cy + 54, value, 12);
+            host.RightText("LOCATION", cx + 303, cy + 54, tag, 12);
             DrawTalkLines(w, cx + w.TextLeft, cy + 76);
-            if (ready) DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, GameWindow.UiBlend.Alpha);
+            if (ready) host.DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, GameWindow.UiBlend.Alpha);
             return;
         }
         if (w.IsBox)
@@ -693,28 +695,28 @@ internal sealed unsafe partial class GameWindow
             int pose = 2 * Math.Max(0, w.Pose) + 11;
             // 초상 모션은 키가 있으면 된다 — 한 장짜리 정지 초상(퉁 파오 Obs 0786 모션 11: 길이 0, 키 1)도 있다.
             // 예전에는 길이 > 0 만 봐서 정지 초상인 인물은 작은 얼굴로 떨어졌다(사용자 보고: Fld 0094).
-            bool portrait = w.Portrait && DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha);
+            bool portrait = w.Portrait && host.DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha);
             // 눈 깜빡임(0x1003c55b): 깜빡이는 중이 아니면 틱마다 1/45 확률로 모션 (표정+1)을 한 번 겹친다 — 전에는 3초마다 규칙적으로 깜빡였다(ba-21 field Y5).
-            if (portrait && UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink)
+            if (portrait && host.UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink)
             {
-                int now = (int)(_lastTime * TicksPerSecond);
+                int now = (int)(host._lastTime * TicksPerSecond);
                 if (w.BlinkTick == int.MaxValue || now - w.BlinkTick > 60) w.BlinkTick = now;   // 창이 처음 그려질 때부터 센다
                 if (w.BlinkAt >= 0 && now - w.BlinkAt >= blink) w.BlinkAt = -1;
                 for (; w.BlinkTick < now; w.BlinkTick++)
-                    if (w.BlinkAt < 0 && Btl._drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
+                    if (w.BlinkAt < 0 && host.Btl._drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
                 if (w.BlinkAt >= 0 && now >= w.BlinkAt)
-                    DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha, loop: false);
+                    host.DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha, loop: false);
             }
-            for (int m = 3; m <= 5; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha, fade: 20 / 31.0);
-            for (int m = 0; m <= 2; m++) DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha, fade: 20 / 31.0);
+            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha);
             // 이름 — 탭(틀 x 0~124, y 창y−25~창y) 가운데. 윗변을 창y−16 에 두었더니 글자가 탭 아래 선에 걸쳤다(사용자 보고).
-            var (_, nw, nh) = GetText(w.Name, White, 12);
-            DrawText(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
+            var (_, nw, nh) = host.GetText(w.Name, White, 12);
+            host.DrawText(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
             // 원본 상자에는 작은 얼굴이 없다(큰 반신 초상화를 상자 뒤에 세운다). 초상 모션이 없는 얼굴이면 데모는 글 왼쪽에 둔다.
-            if (!w.NoPortrait && !w.Portrait && face != null && w.TextLeft > 12) BlitScaled(face, x + 12, y + 8, 84, 84);
+            if (!w.NoPortrait && !w.Portrait && face != null && w.TextLeft > 12) host.BlitScaled(face, x + 12, y + 8, 84, 84);
             // 글은 4줄 — 넘치면 한 줄씩 올린다(0x100290f0).
             DrawTalkLines(w, x + w.TextLeft, y + 10);
-            if (ready) DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, GameWindow.UiBlend.Alpha);
+            if (ready) host.DrawUi(TalkNextObs, 0, tick, x + 605, y + 92, GameWindow.UiBlend.Alpha);
             return;
         }
 
@@ -727,19 +729,19 @@ internal sealed unsafe partial class GameWindow
             (bx, by) = (head.X - sx + 30, Math.Max(head.Y - sy - 180, 50) - 20);
             (tailX, tailY) = (head.X - sx, head.Y - sy - 80);
         }
-        else if (w.Speaker >= 0 && _units[w.Speaker].Alive)
+        else if (w.Speaker >= 0 && host._units[w.Speaker].Alive)
         {
-            var (fx, fy) = UnitFoot(_units[w.Speaker]);
+            var (fx, fy) = host.UnitFoot(host._units[w.Speaker]);
             (bx, by) = (fx - sx + 30, Math.Max(fy - sy - 200, 50) - 20);
             (tailX, tailY) = (fx - sx, fy - sy - 100);
         }
         else
         {
-            (bx, by) = FieldOpen ? (350, 100) : (120, 120);
+            (bx, by) = host.FieldOpen ? (350, 100) : (120, 120);
             (tailX, tailY) = (bx - 30, by + 120);
         }
         // 화면 안으로(0x1003b6ac~) — 오른쪽 끝, 얼굴 자리, 아래 끝, 왼쪽·위.
-        SpriteFrame? faceFrame = face ?? (w.Kind == 602 ? UiFor(TalkRadioFaceFallbackObs)?.FrameAt(0, 0) : null);
+        SpriteFrame? faceFrame = face ?? (w.Kind == 602 ? host.UiFor(TalkRadioFaceFallbackObs)?.FrameAt(0, 0) : null);
         if (bx + 200 >= screenW) bx = screenW - 200;
         if (faceFrame != null && bx - 60 < 5) bx = 65;
         if (by + 60 >= screenH) by = screenH - 60;
@@ -763,10 +765,10 @@ internal sealed unsafe partial class GameWindow
         }
 
         // 틀 Obs 0221(602 는 0222/0223)을 창 (−60, −20) 에 — 바탕(모션 1)은 효과 5(602 는 6), 테두리(모션 0)는 불투명. 이름은 탭 가운데 (창x−11, 창y−15).
-        DrawUi(w.FrameObs, 1, 0, ax, ay, GameWindow.UiBlend.Alpha, fade: w.FrameFade);
-        DrawUi(w.FrameObs, 0, 0, ax, ay, GameWindow.UiBlend.Alpha);
-        var (_, bnw, _) = GetText(w.Name, White, 12);
-        DrawText(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
+        host.DrawUi(w.FrameObs, 1, 0, ax, ay, GameWindow.UiBlend.Alpha, fade: w.FrameFade);
+        host.DrawUi(w.FrameObs, 0, 0, ax, ay, GameWindow.UiBlend.Alpha);
+        var (_, bnw, _) = host.GetText(w.Name, White, 12);
+        host.DrawText(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
         if (faceFrame != null)
         {
             DrawTalkFace(faceFrame, bx - 57, by, 60, w.Tint);
@@ -781,15 +783,15 @@ internal sealed unsafe partial class GameWindow
         }
         // 글은 (창x+12, 창y+10) 부터, 폭 153 · 세 줄 · 줄 내림 16(굴림 9pt). 넘치면 한 줄씩 올린다.
         DrawTalkLines(w, bx + 12, by + 10);
-        if (ready) DrawUi(TalkNextObs, 0, tick, bx + 174, by + 60, GameWindow.UiBlend.Alpha);
+        if (ready) host.DrawUi(TalkNextObs, 0, tick, bx + 174, by + 60, GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>필드 말하는 이의 발 자리(판 낱칸) — 창마다 제 말하는 이.</summary>
     internal (int X, int Y)? TalkHead(TalkWindow w)
     {
-        if (!FieldOpen || w.FieldSpeaker == 0 || Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
-        var (ox, oy) = Mos.MosesOrigin();
-        return (ox + (int)who.X - Fld._fieldCam.X, oy + (int)who.Y - Fld._fieldCam.Y);
+        if (!host.FieldOpen || w.FieldSpeaker == 0 || host.Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        return (ox + (int)who.X - host.Fld._fieldCam.X, oy + (int)who.Y - host.Fld._fieldCam.Y);
     }
 
     /// <summary>
@@ -804,16 +806,16 @@ internal sealed unsafe partial class GameWindow
         int dw = Math.Max(1, (int)(f.W * scale)), dh = Math.Max(1, (int)(f.H * scale));
         int left = x + (size - dw) / 2, top = y + (size - dh) / 2;
         int k = Math.Clamp((int)(fade * 256), 0, 256);
-        var clip = _uiClip;
+        var clip = host._uiClip;
         for (int yy = fromRow * size / 60; yy < dh; yy++)
         {
             int py = top + yy;
-            if ((uint)py >= BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
+            if ((uint)py >= host.BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
             int srcY = yy * f.H / dh;
             for (int xx = 0; xx < dw; xx++)
             {
                 int px = left + xx;
-                if ((uint)px >= BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
+                if ((uint)px >= host.BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
                 uint c = f.Px[srcY * f.W + xx * f.W / dw];
                 if ((c & 0xFF000000) == 0) continue;
                 if (tint)
@@ -821,14 +823,14 @@ internal sealed unsafe partial class GameWindow
                     uint Lit(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 32 / 12);
                     c = Lit(16) << 16 | Lit(8) << 8 | Lit(0);
                 }
-                int i = py * BoardWidth + px;
+                int i = py * host.BoardWidth + px;
                 if (k < 256)
                 {
-                    uint d = _fb[i];
+                    uint d = host._fb[i];
                     uint Mix(int shift) => (uint)(((int)(c >> shift & 0xFF) * k + (int)(d >> shift & 0xFF) * (256 - k)) / 256);
                     c = Mix(16) << 16 | Mix(8) << 8 | Mix(0);
                 }
-                _fb[i] = c | 0xFF000000;
+                host._fb[i] = c | 0xFF000000;
             }
         }
     }
@@ -838,30 +840,30 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void DrawUiScaled(int obs, int motion, int x, int y, double s, int ax, int ay, int tx, int ty, double fade)
     {
-        if (s <= 0.01 || UiFor(obs) is not { } sprite || sprite.FrameAt(motion, 0) is not { } f) return;
+        if (s <= 0.01 || host.UiFor(obs) is not { } sprite || sprite.FrameAt(motion, 0) is not { } f) return;
         int left = tx + (int)Math.Floor((x + f.X - ax) * s), top = ty + (int)Math.Floor((y + f.Y - ay) * s);
         int dw = Math.Max(1, (int)(f.W * s)), dh = Math.Max(1, (int)(f.H * s));
         int k = Math.Clamp((int)(fade * 256), 0, 256);
-        var clip = _uiClip;
+        var clip = host._uiClip;
         for (int yy = 0; yy < dh; yy++)
         {
             int py = top + yy;
-            if ((uint)py >= BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
+            if ((uint)py >= host.BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
             int srcY = Math.Min(f.H - 1, (int)(yy / s));
             for (int xx = 0; xx < dw; xx++)
             {
                 int px = left + xx;
-                if ((uint)px >= BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
+                if ((uint)px >= host.BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
                 uint c = f.Px[srcY * f.W + Math.Min(f.W - 1, (int)(xx / s))];
                 if ((c & 0xFF000000) == 0) continue;
-                int i = py * BoardWidth + px;
+                int i = py * host.BoardWidth + px;
                 if (k < 256)
                 {
-                    uint d = _fb[i];
+                    uint d = host._fb[i];
                     uint Mix(int shift) => (uint)(((int)(c >> shift & 0xFF) * k + (int)(d >> shift & 0xFF) * (256 - k)) / 256);
                     c = Mix(16) << 16 | Mix(8) << 8 | Mix(0);
                 }
-                _fb[i] = c | 0xFF000000;
+                host._fb[i] = c | 0xFF000000;
             }
         }
     }

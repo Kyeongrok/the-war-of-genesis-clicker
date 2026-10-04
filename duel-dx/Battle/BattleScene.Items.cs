@@ -37,7 +37,7 @@ internal sealed unsafe partial class BattleScene
         // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
         // 전에는 work 이 있는 것만 보였다(원본차이-전투규칙 25).
         // 줄 차례는 가방에 <b>들어온 차례</b>(i = 0 … +0x108 을 그대로 훑는다) — 전에는 번호 차례로 늘어놓았다(감사3 I4).
-        foreach (var (id, count) in host._inventory)
+        foreach (var (id, count) in host.StatusScr._inventory)
             if (count > 0 && db.Items.GetValueOrDefault(id) is { Type: 7 } item) list.Add((item, count));
         return list;
     }
@@ -92,10 +92,10 @@ internal sealed unsafe partial class BattleScene
     internal void ConsumeTargetItem()
     {
         if (_targetItem == 0) return;
-        if (host._inventory.TryGetValue(_targetItem, out int count))
+        if (host.StatusScr._inventory.TryGetValue(_targetItem, out int count))
         {
-            if (count <= 1) host._inventory.Remove(_targetItem);
-            else host._inventory[_targetItem] = count - 1;
+            if (count <= 1) host.StatusScr._inventory.Remove(_targetItem);
+            else host.StatusScr._inventory[_targetItem] = count - 1;
         }
         _targetItem = 0;
     }

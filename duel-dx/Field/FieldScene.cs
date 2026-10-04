@@ -366,7 +366,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             _fieldCam = ClampFieldCam(field.CameraX, field.CameraY);   // 필드 시작도 [0, 폭−640]×[0, 높이−480] 로(0x100ec6c3~, 감사5 D2)
             _fieldCamMove = null;
             host.Mos._mosesOpen = false;
-            host._talk = null;
+            host.Tlk._talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
             host.Mos.ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
             host.StopMusic();
@@ -391,7 +391,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         _fieldTalk = null;
         _sideEvents.Clear();
         _fieldSlots.Clear();
-        host._talk = null;
+        host.Tlk._talk = null;
         _fieldChoices = null;
         // 필드가 걸어 둔 소리 채널은 필드와 함께 끝난다 — 안 끄면 다음 화면까지 울리고 504 가 헛기다린다.
         _fieldWaitChannel = -1;
@@ -488,12 +488,12 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         if (_field != null) StepFieldActors();
         host.StepChannelFades();                                           // 행동 506 이 걸어 둔 채널 음량 바꾸기
         if (_field != null) StepSideEvents(events);                    // 대사 없는 곁 사건(문 여닫기 따위)은 따로 나란히 돈다
-        if (_fieldChoices != null) host._talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
+        if (_fieldChoices != null) host.Tlk._talkSkip = false;                 // 고르기는 사람이 해야 한다 — 건너뛰기를 여기서 멈춘다
         // 고르기가 떠 있으면 기다린다. 대사창(600·601)은 <b>줄을 안 막는다</b> — 원본은 창을 슬롯으로 띄우고 다음 줄로 가며,
         // 창이 닫히기를 기다리는 것은 뒤따르는 행동 1 이다(0x100f488a, 자료의 600→1 이 2980/3073). 600 에 이어 208·900·517 이
         // 대사와 함께 시작해야 한다(Fld 600→(1 아님) 93곳).
         if (_fieldChoices != null) return;
-        if (host._talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
+        if (host.Tlk._talkSkip) { _fieldWaitUntil = 0; if (_field != null) FinishFieldAnimations(); }   // 건너뛰는 중 — 기다림 없이 끝난 자리로
         if (_fieldWaitUntil > host._lastTime) return;
         // 걷기(202·203)·자리 옮기기(205·206)도 줄을 안 막는다 — 핸들러(0x100f0be0)는 슬롯만 붙들고 끝나면 0x100f3490 으로 풀 뿐,
         // 사건 pc 는 진행기가 곧장 올린다(0x100f0dfd 는 슬롯을 풀지 말지의 갈래다). 여럿이 <b>함께 걷고</b>, 뒤따르는 1 이 다 걷기를 기다린다.
@@ -501,7 +501,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         // 행동 504 가 걸어 둔 「소리가 끝날 때까지」 — 건너뛰는 중이면 그 소리를 끊고 지나간다.
         if (_fieldWaitChannel >= 0)
         {
-            if (host._talkSkip) host.StopChannelSound(_fieldWaitChannel);
+            if (host.Tlk._talkSkip) host.StopChannelSound(_fieldWaitChannel);
             else if (host.ChannelBusy(_fieldWaitChannel)) return;
             _fieldWaitChannel = -1;
         }
@@ -522,14 +522,14 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 if (chapter != null) _chapterFired[(chapter.Id, index)] = fired + 1; else _fieldFired[index]++;
                 _fieldEvent = index;
                 _fieldPc = 0;
-                host._talkSkip = false;
+                host.Tlk._talkSkip = false;
                 break;
             }
             if (_fieldEvent < 0)
             {
                 // 필드는 더 돌 이벤트가 없으면 나간다 — 곁에서 도는 사건이 남아 있으면 그것이 끝나기(또는 조건이 바뀌기)를 기다린다.
                 // 마지막 대사가 행동 1 없이 끝났으면 그 창이 닫힐 때까지는 남는다(원본은 아예 안 나간다 — 데모 안전장치).
-                if (_field != null && _sideEvents.Count == 0 && host._talk == null) LeaveField();
+                if (_field != null && _sideEvents.Count == 0 && host.Tlk._talk == null) LeaveField();
                 return;
             }
         }
@@ -542,7 +542,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             {
                 // 부른 데가 있으면 그 자리로 돌아가고, 없으면 이 사건이 끝난 것이다.
                 if (_fieldReturn.Count > 0) (_fieldEvent, _fieldPc) = _fieldReturn.Pop();
-                else { _fieldEvent = -1; host._talkSkip = false; }
+                else { _fieldEvent = -1; host.Tlk._talkSkip = false; }
                 continue;
             }
             // 고르기(604)를 낸 뒤에는 뒤따르는 605 들을 <b>먼저 다 읽어</b> 항목을 채우고, 그다음에 사람을 기다린다.
@@ -595,7 +595,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             bool done = false;
             while (!done)
             {
-                if (host._talkSkip) waitUntil = 0;
+                if (host.Tlk._talkSkip) waitUntil = 0;
                 if (waitUntil > host._lastTime) break;
                 if (pc >= acts.Count) { done = true; break; }
                 var a = acts[pc];
@@ -603,7 +603,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 switch (a.Code)
                 {
                     case 1:                                    // <b>이 곁 사건이 띄운</b> 슬롯(걷기·모션·물체 모션)이 끝나기를(0x100f488a)
-                        if (host._talkSkip) _fieldSlots.RemoveAll(s => s.Owner == ev);
+                        if (host.Tlk._talkSkip) _fieldSlots.RemoveAll(s => s.Owner == ev);
                         if (SlotsBusy(ev, out _)) goto hold;
                         pc++;
                         break;
@@ -649,9 +649,9 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         {
             0 => true,                                                          // 언제나
             100 => BattleScene.Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
-            101 => BattleScene.Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2)),
+            101 => BattleScene.Compare(A(0) >= 0 && A(0) < host.FlagSt._flags.Length ? host.FlagSt._flags[A(0)] : 0, A(1), A(2)),
             // [파티, 아이템] 가졌나(0x100edb40) — 가방이나 <b>지금 파티원</b>의 장비. 명부가 하나로 합쳐졌으니 파티 밖 인물은 빼야 한다.
-            102 => host._inventory.ContainsKey(A(1)) || host._party.Where(p => host.Mos._members.Count == 0 || host.Mos._members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
+            102 => host.StatusScr._inventory.ContainsKey(A(1)) || host._party.Where(p => host.Mos._members.Count == 0 || host.Mos._members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
             503 => host.Mos.MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
             505 => host.Mos._mosesChp is { } chp505 && host.Mos._planetVisits.Remove((chp505.Id, A(0))),   // [행성] 방문 표시 — 한 번 참, 지운다(0x100edcd0)
             // 평가기(0x100f34f0)가 모르는 조건 번호는 <b>참</b>으로 흘린다(갈래 없음 → eax = 사건 포인터 ≠ 0). 샤이닝 스타 사건 5 의 504 가 그렇다.
@@ -781,7 +781,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             {
                 // <b>이 사건이 띄운</b> 슬롯(대사창·걷기·모션·카메라·전환·900·517…)이 다 끝나기를 기다린다 — 원본은 [사건+0x20] == 0 까지(0x100f488a).
                 // 전에는 화면 전체의 움직임(FieldBusy)을 기다려, Fld 0065 사건 7 의 대사마다 곁 사건 4 의 보초가 한 구간 걷기를 마칠 때까지 멈췄다.
-                if (host._talkSkip) { FinishFieldAnimations(); _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner); }   // 건너뛰는 중이면 끝자리로 보내고 지나간다
+                if (host.Tlk._talkSkip) { FinishFieldAnimations(); _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner); }   // 건너뛰는 중이면 끝자리로 보내고 지나간다
                 if (!SlotsBusy(_fieldOwner, out bool talkOpen)) { _fieldHoldSince = 0; break; }
                 if (talkOpen)
                 {
@@ -809,14 +809,14 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 return false;
             }
             case 2:
-                if (host._talkSkip) break;   // 건너뛰는 중이면 기다림(행동 2)은 그냥 지나간다(0x100f4844, ba-20 N6)
+                if (host.Tlk._talkSkip) break;   // 건너뛰는 중이면 기다림(행동 2)은 그냥 지나간다(0x100f4844, ba-20 N6)
                 // 대사 사이의 멈춤은 설정한 초만큼만(음수면 스크립트 값 그대로 — 원본).
                 _fieldWaitUntil = host._lastTime + (host._talkPauseSeconds >= 0 && IsPauseBetweenLines()
                                                    ? Math.Min(host._talkPauseSeconds, A(0) / TicksPerSecond)
                                                    : A(0) / TicksPerSecond);
                 break;
             case 504:                                        // [채널] 그 채널의 소리가 끝날 때까지(진행기 0x100f489b 가 직접 본다)
-                if (host._talkSkip) { host.StopChannelSound(A(0)); break; }
+                if (host.Tlk._talkSkip) { host.StopChannelSound(A(0)); break; }
                 _fieldWaitChannel = A(0);
                 return false;
             case 3:
@@ -825,7 +825,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 // 다음 사건이 끝날 때 엉뚱한 부모 자리로 돌아갔다.
                 _fieldSlots.RemoveAll(s => s.Owner == _fieldOwner);
                 if (_fieldReturn.Count > 0) (_fieldEvent, _fieldPc) = _fieldReturn.Pop();
-                else { _fieldEvent = -1; host._talkSkip = false; }
+                else { _fieldEvent = -1; host.Tlk._talkSkip = false; }
                 break;
 
             case 6:                                          // 다른 필드로
@@ -840,7 +840,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 return false;
             case 10:                                         // 전투
                 CloseField();
-                if (!host.StartBattle(A(0))) host.Mos.OpenMoses();
+                if (!host.Sys.StartBattle(A(0))) host.Mos.OpenMoses();
                 return false;
             case 12: CloseField(); host.TitleScr.OpenTitle(); return false;
             default: RunChapterAction(a); break;              // 70x·80x(동료·돈·아이템·군단…)는 챕터와 같은 처리
@@ -850,17 +850,17 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 ScriptVars[A(0) & 0xFF] = unchecked((byte)FieldArithRaw(ScriptVars[A(0) & 0xFF], A(1), A(2)));
                 break;
             case 102:
-                if (A(0) > 0 && A(0) < host._flags.Length) host._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length) host.FlagSt._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
             case 103:
                 // 원본은 네 갈래가 모두 마지막으로 떨어져 <b>연산자 번호를 한 번 더 더한다</b>(0x100f30ef) — 그 흠까지 그대로 옮긴다.
-                if (A(0) > 0 && A(0) < host._flags.Length)
-                    host._flags[A(0)] = (byte)Math.Clamp(FieldArith(host._flags[A(0)], A(1), A(2)) + A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length)
+                    host.FlagSt._flags[A(0)] = (byte)Math.Clamp(FieldArith(host.FlagSt._flags[A(0)], A(1), A(2)) + A(1), 0, 255);
                 break;
 
             case 600:
             case 601:
-            case 602: host.FieldTalkCommand(a); break;            // 인자 2 = 음성, 3 = 600 표정 / 602 틀(Obs 222+값), 4 = 602 지직거림 — 창 칸은 Talk.cs(감사 3 T6·T7)
+            case 602: host.Tlk.FieldTalkCommand(a); break;            // 인자 2 = 음성, 3 = 600 표정 / 602 틀(Obs 222+값), 4 = 602 지직거림 — 창 칸은 Talk.cs(감사 3 T6·T7)
             case 603: ShowFieldTalk(true, 0, A(0), voice: A(1)); break;      // 말하는 이 없는 글(챕터 스크립트에 38번, 가설) — 인자 1 = 음성
             case 300:                                        // 물체를 그 자리로 즉시
             {
@@ -1148,7 +1148,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             case 512:                                        // BGM 바꾸기 — 새 곡은 <b>옛 곡의 지금 크기</b>로 시작한다(0x100eed8a, 옛 곡이 없으면 0)
                 // 512 358곳 중 346곳이 바로 뒤 517 로 키운다 — 0(또는 줄여 둔 크기)에서 서서히 커지는 연출이다.
                 // 대사 건너뛰기 중([0x101bffb0] ≠ 0)이면 원본은 통째로 무시한다(0x100eed6d~0x100eed74, 감사4 M4).
-                if (host._talkSkip) break;
+                if (host.Tlk._talkSkip) break;
                 host.PlayMusicInherit(A(0));
                 // 챕터 사건이 건 곡은 챕터 창이 80 % 까지 틱마다 1 % 올린다(0x100f80c9, 감사4 M1).
                 if (_field is null && host.Mos._mosesOpen) host.MarkChapterEventMusic();
@@ -1179,16 +1179,16 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 host.RewindMusic();
                 break;
             case 500:                                        // 소리 한 번 내고 끝날 때까지 슬롯(0x100ee7b0) — 인자1 은 매달 인물. 뒤따르는 1 이 기다린다
-                if (host._talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)
+                if (host.Tlk._talkSkip) break;                        // 건너뛰는 중이면 원본도 소리를 안 낸다([0x101bffb0] 검사)
                 host.PlayChannelSound(FieldVoiceChannel, A(0), loop: false, FieldSoundX(A(1)));
                 HoldSlot(() => host.ChannelBusy(FieldVoiceChannel));
                 break;
             case 501:                                        // [소리, 채널, 인물, 되풀이] 채널에 걸고 기다리지 않는다(0x100ee960)
-                if (host._talkSkip) break;
+                if (host.Tlk._talkSkip) break;
                 host.PlayChannelSound(A(1), A(0), loop: A(3) != 0, FieldSoundX(A(2)));
                 break;
             case 506:                                        // [채널, 음량, 틱] 채널 음량을 서서히 바꾼다(0x100eeb80) — 517 의 채널판
-                if (host._talkSkip) break;                        // 건너뛰는 중이면 원본도 건너뛴다([0x101bffb0] 검사)
+                if (host.Tlk._talkSkip) break;                        // 건너뛰는 중이면 원본도 건너뛴다([0x101bffb0] 검사)
                 host.FadeChannelSound(A(0), A(1), A(2));
                 HoldSlotTicks(Math.Max(1, (int)A(2)));       // 그 틱만큼 슬롯이 산다 — 줄은 안 막고 뒤따르는 1 이 기다린다(자료 둘 다 뒤가 1)
                 break;
@@ -1197,7 +1197,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 if (_fieldWaitChannel == A(0)) _fieldWaitChannel = -1;
                 break;
             case 1000:                                       // 건너뛰기 끝(0x100f2c20 — [0x101bffb0] = 0)
-                host._talkSkip = false;                           // 여기서부터는 기다림을 다시 지킨다
+                host.Tlk._talkSkip = false;                           // 여기서부터는 기다림을 다시 지킨다
                 break;
             case 604: BeginFieldChoice(A(0), A(1), A(2)); break;
             case 605: _fieldChoices?.Add(FieldText(A(0))); break;
@@ -1256,14 +1256,14 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         switch (a.Code)
         {
             case 102:
-                if (A(0) > 0 && A(0) < host._flags.Length) host._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length) host.FlagSt._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
             case 103:
-                if (A(0) > 0 && A(0) < host._flags.Length)
-                    host._flags[A(0)] = (byte)Math.Clamp(FieldArith(host._flags[A(0)], A(1), A(2)) + A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length)
+                    host.FlagSt._flags[A(0)] = (byte)Math.Clamp(FieldArith(host.FlagSt._flags[A(0)], A(1), A(2)) + A(1), 0, 255);
                 break;
-            case 703: host.AddItem(A(0), A(1), Math.Max(1, (int)A(2))); break;   // [파티, 아이템, 개수]
-            case 705: host.AddMoney(A(0), A(1)); break;                           // [파티, 돈] — 파티 객체 +0x10c
+            case 703: host.PartySt.AddItem(A(0), A(1), Math.Max(1, (int)A(2))); break;   // [파티, 아이템, 개수]
+            case 705: host.PartySt.AddMoney(A(0), A(1)); break;                           // [파티, 돈] — 파티 객체 +0x10c
             case 701:                                            // 인물 레코드 칸 고치기 [Chr, 칸, 값] (0x100efdf0)
                 // 칸: 0 그림 Obs(+0xc) · 1 초상화(+0xe) · 2 이름 TXR(+6) · 3 +0xa · 4 +0x10 · 5 체질(+0x12) · 6 직업(+0x16) ·
                 // 9~15 장비 칸 0~6(+0x4c~) · 16 WEAPON 띠(+0x48). Chp 0011 은 살라딘·죠안의 그림을 347·338 로, 살라딘 띠를 49 로 놓는다.
@@ -1320,11 +1320,11 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
                 if (A(0) > 0) { host.Mos._ownedLegions.Add(A(0)); host.Mos._legionsKnown = true; }
                 break;
-            case 801: host.AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
-            case 802: host.RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]
-            case 803: host.MergeParties(A(0), A(1)); break;           // 파티 합치기 [A, B] (0x100f0940, 가설)
+            case 801: host.PartySt.AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
+            case 802: host.PartySt.RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]
+            case 803: host.PartySt.MergeParties(A(0), A(1)); break;           // 파티 합치기 [A, B] (0x100f0940, 가설)
             case 804:                                            // 인물 옮기기 [Chr, 파티A → 파티B] (0x100f0ad0: 0x1004de10 빼고 0x1004ddd0 넣기)
-                if (A(0) > 0) host.AddMember(A(2), A(0), host.RemoveMember(A(1), A(0)));
+                if (A(0) > 0) host.PartySt.AddMember(A(2), A(0), host.PartySt.RemoveMember(A(1), A(0)));
                 break;
         }
     }
@@ -1489,7 +1489,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
 
     internal void ShowFieldTalk(bool box, int speaker, int textId, string? nameOverride = null, string? textOverride = null, int pose = 0, int voice = 0)
     {
-        if (host._talkSkip) return;
+        if (host.Tlk._talkSkip) return;
         // 말하는 이 자리로 좌우를 가른다(0x1003ba76 꼬리점 → 0x100f5350, 감사4 S2). 필드 대사 상자는 꼬리를 말하는 이에게 댄다 — 그 x.
         host.PlayTalkVoice(voice, FieldSoundX(speaker));
         string name = "";
@@ -1500,22 +1500,22 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         {
             name = host._db.T(c.NameId);
             LoadFieldFace(c);
-            host._talkFace = c.Code;
+            host.Tlk._talkFace = c.Code;
         }
         else if (speaker > 0 && speaker < 10000 && host._db?.Character(speaker) is { } cc)   // 필드의 609 도 Chr 번호로 부른다(Fld 0184·0206·0360)
         {
             // 챕터 스크립트의 600 [Chr, 글] — 말하는 이가 Chr 번호다(필드는 10000+열쇠).
             name = host._db.T(cc.NameId);
             LoadFieldFace(cc);
-            host._talkFace = cc.Code;
+            host.Tlk._talkFace = cc.Code;
         }
-        else host._talkFace = 0;
-        host._talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), pose, host._lastTime);
-        host._talkFilled = false;
+        else host.Tlk._talkFace = 0;
+        host.Tlk._talk = (box, -1, nameOverride ?? name, textOverride ?? FieldText(textId), pose, host._lastTime);
+        host.Tlk._talkFilled = false;
         // 대사창도 슬롯이다 — 창이 닫힐 때(+0x108 == 4)까지 살고, 뒤따르는 행동 1 이 그것을 기다린다(0x100eeef0).
         // 새 창이 이 창을 바꿔 치면(원본도 새 600 은 있던 창을 지운다) 이 슬롯은 풀린다.
         int serial = ++_fieldTalkSerial;
-        HoldSlot(() => host._talk != null && _fieldTalkSerial == serial, talk: true);
+        HoldSlot(() => host.Tlk._talk != null && _fieldTalkSerial == serial, talk: true);
     }
 
     /// <summary>필드 대사창을 띄운 차례 — 대사창 슬롯이 「내 창이 아직 떠 있나」를 가린다.</summary>
@@ -1588,8 +1588,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         for (int i = 0; i < choices.Count; i++)
         {
             var (x, y) = FieldChoiceBand(i, choices.Count);
-            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
-            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBox.TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBox.TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha);
             host.DrawText(choices[i], x + 12, y + 10, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
         }
     }
@@ -1684,7 +1684,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         }
         else DrawFieldScene(ox, oy, 9);
 
-        host.DrawTalk();
+        host.Tlk.DrawTalk();
         DrawFieldChoices();
         host._uiClip = null;
         ApplyScreenWave(ox, oy, (int)(host._lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)
@@ -1791,7 +1791,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     /// <summary>물체 모션(과 그 자식 그림)에 박힌 소리를 틱에 맞춰 예약한다 — 인물 동작의 <see cref="ScheduleActionSounds"/> 와 같은 꼴.</summary>
     internal void SchedulePropSounds(FieldProp prop)
     {
-        if (host._talkSkip || host.UiFor(prop.Obs)?.Clip(prop.Motion) is not { } clip) return;
+        if (host.Tlk._talkSkip || host.UiFor(prop.Obs)?.Clip(prop.Motion) is not { } clip) return;
         float x = FieldScreenAt(prop.Layer, prop.X, prop.Y).X;   // 좌우 소리(감사4 S1) — 640 틀 안 x
         foreach (var (start, sound) in clip.Sounds) host._pendingSounds.Add((host._lastTime + start / TicksPerSecond, sound, x));
         foreach (var (start, obs, motion, _, _, _, _) in clip.Children)

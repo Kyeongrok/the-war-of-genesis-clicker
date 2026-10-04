@@ -236,7 +236,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, _bgmVolume, _seVolume, _bgmOn, _talkClickFills, _skipEnemyAction));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction));
 
     /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
     internal bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
@@ -253,7 +253,7 @@ internal sealed unsafe partial class GameWindow
     internal bool TrySkipEnemyAction()
     {
         if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return false;
-        if (Btl.IsPlayerTurn || Btl._routine == null || Btl._outcome.Length > 0 || Btl.EventsBusy || Btl.LevelUpOpen || SystemOpen || Btl._deployOpen) return false;
+        if (Btl.IsPlayerTurn || Btl._routine == null || Btl._outcome.Length > 0 || Btl.EventsBusy || Btl.LevelUpOpen || Sys.SystemOpen || Btl._deployOpen) return false;
         _skippingAction = true;
         _skipFrom = _lastTime;
         return true;
@@ -467,9 +467,9 @@ internal sealed unsafe partial class GameWindow
     {
         if (!_keysOpen) return;
         var (x, y, h) = KeysPanel();
-        FillRect(x, y, KeysW, h, PanelBg);
-        StrokeRect(x, y, KeysW, h, BoxLine);
-        FillRect(x, y, KeysW, 28, HeadBg);
+        FillRect(x, y, KeysW, h, StatusScreen.PanelBg);
+        StrokeRect(x, y, KeysW, h, StatusScreen.BoxLine);
+        FillRect(x, y, KeysW, 28, StatusScreen.HeadBg);
         DrawText("단축키 설정 — 줄을 누르고 새 키를 누르세요 (Esc: 그만)", x + 10, y + 6, White);
 
         for (int i = 0; i < KeyBindings.All.Length; i++)
@@ -481,15 +481,15 @@ internal sealed unsafe partial class GameWindow
             DrawText(label, x + 16, ry + 3, White);
             string key = capturing ? "키를 누르세요…" : KeyBindings.KeyName(_keys[action]);
             if (action is KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight && !capturing) key += "  (방향키도)";
-            FillRect(x + 220, ry, 184, KeysRowH - 6, BoxBg);
-            StrokeRect(x + 220, ry, 184, KeysRowH - 6, BoxLine);
+            FillRect(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxBg);
+            StrokeRect(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxLine);
             DrawText(key, x + 228, ry + 3, capturing ? 0xFFFFE070 : White);
         }
 
         int by = y + h - 40;
-        FillRect(x + 16, by, 120, 28, HeadBg);
+        FillRect(x + 16, by, 120, 28, StatusScreen.HeadBg);
         DrawText("기본값으로", x + 42, by + 6, White);
-        FillRect(x + KeysW - 116, by, 100, 28, HeadBg);
+        FillRect(x + KeysW - 116, by, 100, 28, StatusScreen.HeadBg);
         DrawText("닫기", x + KeysW - 80, by + 6, White);
         DrawText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
     }
