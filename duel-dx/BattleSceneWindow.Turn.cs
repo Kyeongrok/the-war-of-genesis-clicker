@@ -846,6 +846,7 @@ internal sealed unsafe partial class BattleSceneWindow
         int hitStep = HitStepFor(w, actions.Length);
         bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
         bool effectsDone = false, followersDone = false;
+        double effectsAt = _lastTime;               // 이펙트를 띄운 때 — 핸들러 판정 틱의 기준(단계 0)
         _followerStrikes.Clear();
         SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
         // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
@@ -910,6 +911,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 ScheduleAbilitySounds(w);
                 SpawnAbilityEffects(w, a, col, row);
                 SpawnWorkShakes(w);
+                effectsAt = _lastTime;
                 // 군단기면 부하 잔상(ba-21 C) — 피해는 그 연출의 끝 무렵에 들어간다.
                 for (double end = _lastTime + StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
                 effectsDone = true;
@@ -1034,7 +1036,14 @@ internal sealed unsafe partial class BattleSceneWindow
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            double stagedFrom = _lastTime;
             if (step == hitStep) foreach (bool _ in StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
+            // 핸들러가 판정(1001)을 보내는 틱까지 기다린다(ba-21 T1) — 원본은 이펙트가 다 나온 뒤에 숫자·맞음 동작이 뜬다(힐 114틱, 프레셔 49틱 …).
+            // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
+            // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
+            if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
+                && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) && (handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id)))
+                for (double end = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond; _lastTime < end;) yield return true;
             // 소닉 블레이드·크레이지 샷 — 핸들러가 자료 범위와 다르게 친다(ba-20 E1·E2).
             if (step == hitStep && HasSpecialHit(w))
             {
