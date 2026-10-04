@@ -379,7 +379,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         }
         try
         {
-            host._map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), scene.MapFile));
+            host._map = ObtMap.Load(AssetPack.MapPath(scene.MapFile));
             host.ResizeBoard(host._map.Cols, host._map.Rows);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)

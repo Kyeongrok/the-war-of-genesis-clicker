@@ -327,7 +327,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             && (_party.GetValueOrDefault(pchr) ?? _db?.Character(pchr)) is { } record)
             _party[pchr] = record with { SpriteId = pobs };
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
-        _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
+        _map = ObtMap.Load(AssetPack.MapPath(_scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
         _units = Btl.BuildUnits(_scene);
         // 첫 판(시험 훅 포함)은 배치 단계 없이 — 새로 거는 전투(StartBattle)만 연다. DUELDX_DEPLOY=1 이면 첫 판에서도 연다(화면 밖 시험용).

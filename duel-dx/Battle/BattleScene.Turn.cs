@@ -1446,6 +1446,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal bool UseSelfCentredWork(WorkData w)
     {
         if (!w.SelfCentred) return false;
+        // 적만 맞는 제자리 범위기(피드백 — 범위 방식 +0x1e = 1)는 범위 안에 적이 없으면 안 쓴다(사용자 요청). 원본이 막는지는 확인하지 않았다 —
+        // 헛쓰면 SOUL·TP 만 잃어서 막아 둔다. 내가 고를 때만 — AI 는 대상이 있을 때만 고른다.
+        if (w.AreaMode == 1 && WorkTargets(w, host._units[_turn], host._units[_turn].Col, host._units[_turn].Row).Count == 0)
+        {
+            host.Toast("범위 안에 적이 없습니다");
+            return true;
+        }
         ConsumeTargetItem();          // 겨누지 않는 아이템(라이징스톰·블리자드캡슐)도 쓰면 하나 준다(0x100698af) — CancelTargeting 앞이어야 한다
         CancelTargeting();
         _routine = UseWorkRoutine(_turn, w, -1, host._units[_turn].Col, host._units[_turn].Row, []);
