@@ -688,11 +688,33 @@ internal sealed unsafe partial class BattleSceneWindow
                     }
                     if (a.Code == 214)
                     {
-                        var (wx, wy) = UnitFoot(u);
-                        _effects.Add((381, 1, _lastTime, wx, wy));
-                        _effects.Add((210, 3, _lastTime, wx, wy));
-                        Play(91);                           // 나타나는 소리는 Snd 91 이다(0x1008cd84 뒤 381:1, ba-21 B8) — 전에는 음성 694 를 틀려 했다
-                        longest = Math.Max(longest, 80 / TicksPerSecond);
+                        // 하이 텔레포트(work 585)로 나타난다(0x10052bf0 · 0x1008c8a0, ba-21 B7·B8): 맵 밖에서 준비(소리 694, 56틱) → 사라짐(소리 90, 80틱)
+                        // → 30틱 뒤 카메라가 새 자리로 → 나타남 381:1 + 210:3(소리 91) → 50틱에 걸쳐 또렷해진다. 전에는 곧바로 서 있었다.
+                        // 건너뛰는 중이면 곧바로 선다.
+                        if (_talkSkip) { u.Fade = 1; }
+                        else
+                        {
+                            var arriving = u;
+                            double t0 = _lastTime;
+                            u.Fade = 0;
+                            Play(694);
+                            _legionLater.Add((t0 + 56 / TicksPerSecond, () => Play(90)));
+                            _legionLater.Add((t0 + 166 / TicksPerSecond, () =>
+                            {
+                                if (!arriving.Alive || !arriving.OnField) return;
+                                CenterOnUnit(arriving);
+                                var (wx, wy) = UnitFoot(arriving);
+                                _effects.Add((381, 1, _lastTime, wx, wy));
+                                _effects.Add((210, 3, _lastTime, wx, wy));
+                                _pendingSounds.Add((_lastTime, 91, wx));
+                            }));
+                            for (int k = 1; k <= 10; k++)
+                            {
+                                double fade = k / 10.0;
+                                _legionFades.Add((t0 + (166 + 5 * k) / TicksPerSecond, u, fade));
+                            }
+                            longest = Math.Max(longest, 216 / TicksPerSecond);
+                        }
                     }
                     int leader = Array.IndexOf(_units, u);
                     foreach (var (follower, col, row) in FormationPlan(u, A(2), A(3)))
