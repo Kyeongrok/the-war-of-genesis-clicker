@@ -34,7 +34,10 @@ internal static class AssetPack
     private static bool _running, _ready;
 
     /// <summary>받을 목록에 아직 남아 있나 — 목록을 못 읽은 동안에는 모른다(false).</summary>
-    private static bool Pending(string name) { lock (Gate) return _todo.Any(e => e.Name == name); }
+    private static bool Pending(string name) { lock (Gate) return _current == name || _todo.Any(e => e.Name == name); }
+
+    /// <summary>지금 받고 있는 파일 — 목록에서는 이미 뺐지만 아직 다 안 온 것.</summary>
+    private static string _current = "";
 
     /// <summary>그 파일의 자리 — 게임에 실린 것(<c>assets/…</c>)이 먼저고, 없으면 받은 폴더. 둘 다 없으면 받은 폴더 쪽 경로(없는 파일)를 돌려주고 먼저 받게 당긴다.</summary>
     public static string PathOf(string kind, string file)
@@ -67,7 +70,7 @@ internal static class AssetPack
             if (File.Exists(path)) return true;
             lock (Gate) if (!_running) return File.Exists(path);
             // 목록에 없는 이름(대사 음성 번호 따위)은 기다려도 안 온다.
-            if (_ready && !Pending($"{kind}/{file}") && !File.Exists(path + ".part")) return File.Exists(path);
+            if (_ready && !Pending($"{kind}/{file}")) return File.Exists(path);
             Thread.Sleep(100);
         }
         return File.Exists(path);
@@ -140,6 +143,7 @@ internal static class AssetPack
                     next ??= _todo.FirstOrDefault();
                     if (next == null) break;
                     _todo.Remove(next);
+                    _current = next.Name;
                 }
                 if (Have(next) || next.Name.Contains("..") || Path.IsPathRooted(next.Name) || next.Asset != Path.GetFileName(next.Asset)) continue;
 
@@ -166,8 +170,9 @@ internal static class AssetPack
                 bool good;
                 await using (var check = File.OpenRead(part))
                     good = Convert.ToHexString(await SHA256.HashDataAsync(check)).Equals(next.Sha256, StringComparison.OrdinalIgnoreCase);
-                if (!good) { File.Delete(part); continue; }
+                if (!good) { File.Delete(part); lock (Gate) _current = ""; continue; }
                 File.Move(part, to, overwrite: true);
+                lock (Gate) _current = "";
             }
             Status = "";
         }
@@ -179,7 +184,7 @@ internal static class AssetPack
         }
         finally
         {
-            lock (Gate) { _running = false; _ready = false; }
+            lock (Gate) { _running = false; _ready = false; _current = ""; }
         }
     }
 
