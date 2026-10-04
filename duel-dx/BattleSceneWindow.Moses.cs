@@ -316,11 +316,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private bool _mosesAltVoice;
 
+    /// <summary>방금 불러온 세이브의 910 깃발 — 뒤따르는 OpenMoses(챕터) 가 한 번 쓰고 지운다.</summary>
+    private bool _mosesAltVoiceLoaded;
+
     private static readonly HashSet<int> MosesAltSounds = [562, 564, 565, 566, 569, 570, 571, 572, 574, 575, 576];
 
     private void OpenMoses(ChapterFile? chapter = null)
     {
-        if (chapter != null) _mosesAltVoice = false;
+        // 새 챕터를 열면 꺼진다 — 다만 불러오기가 챕터를 다시 여는 길이면 세이브에 적힌 값으로.
+        if (_mosesAltVoiceLoaded) _mosesAltVoice = true;
+        else if (chapter != null) _mosesAltVoice = false;
+        _mosesAltVoiceLoaded = false;
         _mosesOpen = true;
         _mosesHover = -1;
         _mosesPage = -1;
