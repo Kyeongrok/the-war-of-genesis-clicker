@@ -206,7 +206,7 @@ internal sealed unsafe partial class BattleScene
             if (o.Hp == o.Data.MaxHp) o.Hp = maxHp;
             if (Trace && (o.Data.Breakable || attack > 0))
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                    $"obj growth: no {o.Record.No} at ({o.Col},{o.Row}) obj {o.Data.Id} kind {o.Data.Kind} lv {level} hp {o.Data.MaxHp}→{maxHp} atk {o.Data.Attack}→{attack}" + Environment.NewLine);
+                    $"obj growth: no {o.Record.No} at ({o.Col},{o.Row}) obj {o.Data.Id} kind {o.Data.Kind} team {o.Team} breakable {o.Data.Breakable} lv {level} hp {o.Data.MaxHp}→{maxHp} atk {o.Data.Attack}→{attack}" + Environment.NewLine);
         }
     }
 
