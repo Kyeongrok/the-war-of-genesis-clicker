@@ -378,7 +378,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {
             // 자료가 빠진 필드는 조용히 넘어가되, DUELDX_TRACE=1 이면 무엇이 빠졌는지 남긴다.
-            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"OpenField {id} failed: {ex.GetType().Name}: {ex.Message}" + Environment.NewLine);
+            if (BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"OpenField {id} failed: {ex.GetType().Name}: {ex.Message}" + Environment.NewLine);
             return false;
         }
     }
@@ -648,8 +648,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         return c.Code switch
         {
             0 => true,                                                          // 언제나
-            100 => Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
-            101 => Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2)),
+            100 => BattleScene.Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
+            101 => BattleScene.Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2)),
             // [파티, 아이템] 가졌나(0x100edb40) — 가방이나 <b>지금 파티원</b>의 장비. 명부가 하나로 합쳐졌으니 파티 밖 인물은 빼야 한다.
             102 => host._inventory.ContainsKey(A(1)) || host._party.Where(p => host.Mos._members.Count == 0 || host.Mos._members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
             503 => host.Mos.MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
@@ -751,7 +751,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         // 행동 1 이 같은 줄에서 틀마다 다시 읽히는 것은 처음 한 번만 적는다(대사창을 기다리는 동안 줄이 쌓이지 않게).
         bool traceRepeat = a.Code == 1 && _traceLastLine == (_fieldOwner, _fieldPc);
         _traceLastLine = (_fieldOwner, _fieldPc);
-        if (Trace && !traceRepeat)
+        if (BattleScene.Trace && !traceRepeat)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"fld {(_field?.Id ?? host.Mos._mosesChp?.Id ?? 0)} "
                                + (_fieldOwner == _fieldEvent ? $"ev {_fieldEvent} pc {_fieldPc - 1}" : $"side ev {_fieldOwner}")
@@ -795,7 +795,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 else if (host._lastTime - _fieldHoldSince > FieldHoldSeconds)
                 {
                     // 여기 걸렸다는 것은 데모가 못 끝내는 연출이 있다는 뜻이다 — 화면 밖 감사에서 찾으려고 남긴다.
-                    if (Trace)
+                    if (BattleScene.Trace)
                         File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                            $"HOLD fld {(_field?.Id ?? host.Mos._mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}"
                                            + $" (slots {_fieldSlots.Count(s => s.Owner == _fieldOwner)}, wipe {_fieldWipe != null}, cam {_fieldCamMove != null},"
@@ -1307,15 +1307,15 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                     {
                         // 성장은 직업 성장률 합으로 기본값에서 다시 센다(0x10031a50, ba-21 outer-rules 1) — 전에는 적·손님용 Lev.dat 식을 써서
                         // 합류 인물의 PSY 가 30~45%, DEX 가 20~50% 낮았다(Chr 237 Lv40: PSY 460 ↔ 297). 장비·어빌리티·직업·체질은 c 그대로다.
-                        var grown = db805.SetLevel(c, host.RosterLevel() + A(1));
+                        var grown = db805.SetLevel(c, host.Btl.RosterLevel() + A(1));
                         // 원본은 남은 EXP(어빌리티를 배우는 데 쓰는 것)를 안 건드린다. 그러면 Lv60 으로 합류한 유진이 누적 6000 을 번 셈인데
                         // 배울 EXP 는 0 이라 스킬이 다 낮다(사용자 보고) — 레벨 맞추기로 늘어난 누적 EXP 만큼 남은 EXP 도 준다(원본과 다르다).
                         int gained = Math.Max(0, grown.CumExp - Math.Max(c.CumExp, c.Level * 100));
                         return grown with { Exp = c.Exp + gained };
                     });
-                if (Trace)
+                if (BattleScene.Trace)
                     File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                        $"805: Chr {A(0)} → Lv {host._party.GetValueOrDefault(A(0))?.Level} EXP {host._party.GetValueOrDefault(A(0))?.Exp} (파티 {host.RosterLevel()} + {A(1)})" + Environment.NewLine);
+                        $"805: Chr {A(0)} → Lv {host._party.GetValueOrDefault(A(0))?.Level} EXP {host._party.GetValueOrDefault(A(0))?.Exp} (파티 {host.Btl.RosterLevel()} + {A(1)})" + Environment.NewLine);
                 break;
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
                 if (A(0) > 0) { host.Mos._ownedLegions.Add(A(0)); host.Mos._legionsKnown = true; }
@@ -1588,8 +1588,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         for (int i = 0; i < choices.Count; i++)
         {
             var (x, y) = FieldChoiceBand(i, choices.Count);
-            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBandObs, m, 0, x, y, UiBlend.Alpha, fade: 24 / 31.0);
-            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBandObs, m, 0, x, y, UiBlend.Alpha);
+            for (int m = 3; m <= 5; m++) host.DrawUi(TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
+            for (int m = 0; m <= 2; m++) host.DrawUi(TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha);
             host.DrawText(choices[i], x + 12, y + 10, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
         }
     }
@@ -1856,10 +1856,10 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         // 보통으로 그리면 검은 원판이 된다(마에라드 프롤로그 Fld 0036).
         int key = host.UiFor(prop.Obs)?.BlendAt(prop.Motion, tick) ?? 0;
         // 조명(Obs 0876)은 10 닷지·12 스크린(Fld 0058), 1~7 은 반투명 — 돌문(Obs 1233, Fld 0354)이 8→1 로 옅어지며 열린다.
-        host.DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, BlendOf(key), loop: !prop.Hold, fade: BlendFade(key));
+        host.DrawUi(prop.Obs, prop.Motion, tick, ox + px, oy + py, GameWindow.BlendOf(key), loop: !prop.Hold, fade: GameWindow.BlendFade(key));
         // 모션에 붙은 자식 그림(키 종류 2) — 문이 열릴 때 번지는 빛(Obs 529 모션 3 → Obs 535, Fld 0037) 같은 것이 여기 있다.
         // 전에는 물체는 자식을 안 그려서 문이 소리 없이 열린 그림으로만 바뀌었다(사용자 보고). 자식은 모션을 건 때부터 한 번 돈다.
-        host.DrawUnitLayers(host.UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
+        host.Btl.DrawUnitLayers(host.UiFor(prop.Obs)?.Clip(prop.Motion), tick, ox + px, oy + py, prop.Mirror, loop: false);
     }
 
     internal void DrawFieldActor(int ox, int oy, FieldActor actor)
@@ -1870,7 +1870,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         if (actor.Hold && host.UiFor(pc.SpriteId)?.MotionLength(actor.Motion) is > 0 and var holdLength)
             actorTick = Math.Min(actorTick, holdLength - 1);   // 한 바퀴 돈 뒤 마지막 장에 멈춘다
         // 몸 모션이 더하기(17)면 그대로 — 전장의 몸 그림과 같은 규칙.
-        var actorBlend = host.UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? UiBlend.Add : UiBlend.Alpha;
+        var actorBlend = host.UiFor(pc.SpriteId)?.BlendAt(actor.Motion, actorTick) == 17 ? GameWindow.UiBlend.Add : GameWindow.UiBlend.Alpha;
         // 좌우반전(걷기 방향 3 · 208 인자 3 · 212)을 넘겨야 한다 — 빠져 있어 오른쪽으로 걷는 인물이 왼쪽을 보고 뒷걸음질 쳤다(사용자 보고: Fld 0076).
         host.DrawUi(pc.SpriteId, actor.Motion, actorTick, ox + px, oy + py, actorBlend, loop: true, fade: actor.Alpha, mirror: actor.Mirror);
     }

@@ -81,7 +81,7 @@ internal sealed unsafe partial class MosesScene
     internal int TalkMotion(ChapterFile.Person person)
     {
         if (_talkMotion.TryGetValue(person.No, out int motion)) return motion;
-        return _talkMotion[person.No] = host._ailmentRandom.Next(12);
+        return _talkMotion[person.No] = host.Btl._ailmentRandom.Next(12);
     }
 
     /// <summary>그 인물의 대사 번호들 — 워드 8·9·10 중 −1 이 아닌 것.</summary>
@@ -102,9 +102,9 @@ internal sealed unsafe partial class MosesScene
         var key = (_mosesChp?.Id ?? 0, person.No);
         if (!_talkPath.TryGetValue(key, out var path) || path.A >= marks.Count || path.B >= marks.Count)
         {
-            int a = host._ailmentRandom.Next(marks.Count), b = host._ailmentRandom.Next(marks.Count - 1);
+            int a = host.Btl._ailmentRandom.Next(marks.Count), b = host.Btl._ailmentRandom.Next(marks.Count - 1);
             if (b >= a) b++;                                              // 서로 다른 두 곳
-            _talkPath[key] = path = (a, b, host._ailmentRandom.Next(TalkWalkFrames));
+            _talkPath[key] = path = (a, b, host.Btl._ailmentRandom.Next(TalkWalkFrames));
         }
         var from = marks[path.A];
         var to = marks[path.B];
@@ -173,7 +173,7 @@ internal sealed unsafe partial class MosesScene
     {
         // 지금 성계의 성도 점(행성 성도 그림, 예 Chp 10 = Obs 0547 모션 6~14)을 켜 둔다 — 사람은 그 사이를 걷는다(0x100fc30c~0x100fc345, 감사5 N9).
         foreach (var mark in TalkMarks())
-            host.DrawUi(mark.Obs, mark.Motion, 0, ox + mark.X, oy + mark.Y, UiBlend.Alpha);
+            host.DrawUi(mark.Obs, mark.Motion, 0, ox + mark.X, oy + mark.Y, GameWindow.UiBlend.Alpha);
 
         var people = TalkPeople();
         if (people.Count == 0)
@@ -185,7 +185,7 @@ internal sealed unsafe partial class MosesScene
         for (int i = 0; i < people.Count && i < 8; i++)
         {
             var (px, py) = TalkSpot(people[i]);
-            host.DrawUi(TalkObs, TalkMotion(people[i]), tick, ox + px, oy + py, UiBlend.Alpha);
+            host.DrawUi(TalkObs, TalkMotion(people[i]), tick, ox + px, oy + py, GameWindow.UiBlend.Alpha);
             string name = host._db?.Character(people[i].ChrCode) is { } c ? host._db.T(c.NameId) : "";
             if (name.Length == 0) continue;
             var (_, nw, _) = host.GetText(name, White, 11);
@@ -222,7 +222,7 @@ internal sealed unsafe partial class MosesScene
         // 초상화 — 그 인물의 얼굴 그림이 assets 에 없으면 원본처럼 Obs 0229 로
         if (host._db?.Character(person.ChrCode) is { } c && host._faces.TryGetValue(c.Code, out var face))
             host.BlitScaled(face, x + 4, y + 4, 48, 52);
-        else host.DrawUi(TalkFaceFallbackObs, 0, tick, x + 28, y + 30, UiBlend.Alpha);
+        else host.DrawUi(TalkFaceFallbackObs, 0, tick, x + 28, y + 30, GameWindow.UiBlend.Alpha);
 
         int ty = y + 8;
         foreach (string text in WrapText(line, TalkBubbleW - 64, 11f))

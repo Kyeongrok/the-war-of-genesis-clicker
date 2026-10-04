@@ -156,7 +156,7 @@ internal sealed unsafe partial class GameWindow
         if (EpisodesScr._episodesOpen) tag = "연대표";
         else if (Fld._field != null) tag = $"Fld {Fld._field.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc);
         else if (Mos._mosesOpen) tag = Mos._mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc) : "모세스";
-        else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {_turnNo}" + (_runningEvent >= 0 ? $" · 사건 {_runningEvent}" : "");
+        else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {Btl._turnNo}" + (Btl._runningEvent >= 0 ? $" · 사건 {Btl._runningEvent}" : "");
         else return;
         var (_, w, h) = GetText(tag, White, 11f);
         int x = _camX + 4, y = _camY + ViewHeight - h - 4;

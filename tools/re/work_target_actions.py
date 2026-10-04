@@ -96,7 +96,7 @@ def main():
         '',
         'namespace DuelDx;',
         '',
-        'internal sealed unsafe partial class BattleSceneWindow',
+        'internal sealed unsafe partial class GameWindow',
         '{',
         '    /// <summary>',
         '    /// work 번호 → 대상에게 거는 동작 (틱, 동작, 붙듦) — 시전자 사슬(<see cref="WorkScripts"/> 의 Actions)과 따로다.',
@@ -107,7 +107,7 @@ def main():
         '    /// Action 은 동작 번호(SetAction 기준 ÷ 3, 모션 = 동작 × 3 + 방향), 원시 모션이면 1000 + 모션.',
         '    /// Hold 는 반복 1000 이상 — 다음 동작이 올 때까지 붙든다(맞음 자세 2 를 붙들었다가 서기 0 으로 되돌리는 꼴).',
         '    /// </remarks>',
-        '    private static readonly Dictionary<int, (int Tick, int Action, bool Hold)[]> WorkTargetActions = new()',
+        '    internal static readonly Dictionary<int, (int Tick, int Action, bool Hold)[]> WorkTargetActions = new()',
         '    {',
     ]
     n = 0

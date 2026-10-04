@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 전투에 나오는 군단(부대) — 대장 한 명 + 부하 최대 여섯이 한 덩어리로 움직인다(분석-군단 gd-1).
 /// </summary>
@@ -16,7 +18,7 @@ namespace DuelDx;
 /// <item>대장이 쓰러지면 첫 부하가 새 대장이 되고 세력이 0.6배가 된다(데모는 편은 그대로 둔다).</item>
 /// </list>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>대장 세력 기본값 — 원본은 <c>CChr+0x148[군단]</c> 이 모두 1000 으로 시작한다.</summary>
     internal const int LegionPower = 1000;
@@ -24,7 +26,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>전투에 세울 인물들 — 군단이 붙은 대장 뒤에 부하를 끼워 넣는다.</summary>
     internal UnitState[] BuildUnits(DemoScene scene)
     {
-        var legions = Mos.Legions();
+        var legions = host.Mos.Legions();
         var list = new List<UnitState>();
         _deployMovable.Clear();
         _deployBench.Clear();
@@ -36,7 +38,7 @@ internal sealed unsafe partial class GameWindow
             // (LoadBtl 0x100634f9~0x10063503). 값 0·2 이상은 Btl 값 그대로(0x1006350c), 워드 7 이 꺼져 있으면 1 도 그대로(For[1] 「default」 = 부하 없음).
             // 전에는 편 4 면 워드 7·값과 상관없이 배속 군단으로 덮어써, 군단 금지 전투에도 부하가 나오고 이야기 전투의 편대(0292 마리아 → 5)가 바뀌었다(감사3 L4).
             var record = rosterRecord.Legion == 1 && scene.LegionsAllowed
-                ? rosterRecord with { Legion = Mos._unitLegion.GetValueOrDefault(rosterRecord.ChrCode) } : rosterRecord;
+                ? rosterRecord with { Legion = host.Mos._unitLegion.GetValueOrDefault(rosterRecord.ChrCode) } : rosterRecord;
             // 군단 편집기가 리더를 바꿔 두었으면(legions/*.json 의 leader) 전투 자료의 적·동맹 대장을 그 인물로 세운다(ed-1).
             if (record.Side != 4 && record.Legion > 1 && legions.GetValueOrDefault(record.Legion) is { Leader: > 0 } withLeader)
                 record = record with { ChrCode = withLeader.Leader };
@@ -54,8 +56,8 @@ internal sealed unsafe partial class GameWindow
         {
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
-            var party = Mos._members.Count > 0 ? Mos._members.Where(_party.ContainsKey).ToList()
-                      : _party.Keys.Count > 0 ? _party.Keys.ToList()
+            var party = host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
+                      : host._party.Keys.Count > 0 ? host._party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
             party = [.. party.Where(chr => !list.Any(u => u.ChrCode == chr))];
             var free = spots.Where(sp => !list.Any(u => u.Col == sp.Col && u.Row == sp.Row)).ToList();
@@ -63,7 +65,7 @@ internal sealed unsafe partial class GameWindow
             // (0x100673dd~0x10067717, 분석-전투 ba-6). 전에는 늘 군단 0 이라 모세스에서 배속해도 대부분의 전투에서 부하가 안 나왔다(감사3 L4).
             // 여기서는 기본값(켜짐)으로 만들고, 배치 창의 「군단사용」 단추가 끄면 배치종료 때 부하를 지운다(Deploy.cs). 부하는 파티원들 뒤에 붙인다 — 맵 밖 여분을 지울 때 DropUnits 가 번호를 다시 맞춘다.
             var placedFollowers = new List<UnitState>();
-            int LegionOf(int chr) => scene.LegionsAllowed ? Mos._unitLegion.GetValueOrDefault(chr) : 0;
+            int LegionOf(int chr) => scene.LegionsAllowed ? host.Mos._unitLegion.GetValueOrDefault(chr) : 0;
             for (int i = 0; i < free.Count && i < party.Count; i++)
             {
                 var rec = new DemoUnit(party[i], free[i].Col, free[i].Row, 4, LegionOf(party[i]), free[i].Facing);
@@ -118,12 +120,12 @@ internal sealed unsafe partial class GameWindow
     internal (int Col, int Row) FormationSpot(int leaderCol, int leaderRow, Facing facing, (int Dx, int Dy) cell, HashSet<(int, int)> taken)
     {
         var (dx, dy) = RotateFormation(cell, facing);
-        int col = Math.Clamp(leaderCol + dx, 0, Cols - 1), row = Math.Clamp(leaderRow + dy, 0, Rows - 1);
+        int col = Math.Clamp(leaderCol + dx, 0, host.Cols - 1), row = Math.Clamp(leaderRow + dy, 0, host.Rows - 1);
         for (int r = 1; r <= 3 && taken.Contains((col, row)); r++)
             for (int ny = -r; ny <= r && taken.Contains((col, row)); ny++)
                 for (int nx = -r; nx <= r && taken.Contains((col, row)); nx++)
                 {
-                    int cx = Math.Clamp(leaderCol + nx, 0, Cols - 1), cy = Math.Clamp(leaderRow + ny, 0, Rows - 1);
+                    int cx = Math.Clamp(leaderCol + nx, 0, host.Cols - 1), cy = Math.Clamp(leaderRow + ny, 0, host.Rows - 1);
                     if (!taken.Contains((cx, cy))) (col, row) = (cx, cy);
                 }
         return (col, row);
@@ -135,10 +137,10 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void PlaceLegionAround(UnitState leader)
     {
-        int li = Array.IndexOf(_units, leader);
-        if (li < 0 || Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return;
+        int li = Array.IndexOf(host._units, leader);
+        if (li < 0 || host.Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return;
         var cells = LegionData.FormationCells[Math.Clamp((int)legion.Formation, 0, 5)];
-        var taken = new HashSet<(int, int)>(_units.Where(u => u.Alive && u.OnField && u.LeaderIndex != li).Select(u => (u.Col, u.Row)));
+        var taken = new HashSet<(int, int)>(host._units.Where(u => u.Alive && u.OnField && u.LeaderIndex != li).Select(u => (u.Col, u.Row)));
         foreach (var f in FollowersOf(li).OrderBy(f => f.FormationSlot))
         {
             _followerTarget.Remove(f);
@@ -158,13 +160,13 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void DropUnits(Func<UnitState, bool> drop)
     {
-        var old = _units;
+        var old = host._units;
         bool Gone(UnitState u) => drop(u) || (u.LeaderIndex >= 0 && u.LeaderIndex < old.Length && drop(old[u.LeaderIndex]));
         var leaders = old.Select(u => u.LeaderIndex >= 0 && u.LeaderIndex < old.Length ? old[u.LeaderIndex] : null).ToArray();
         var kept = old.Where((u, i) => !Gone(u)).ToArray();
         foreach (var u in kept)
             if (leaders[Array.IndexOf(old, u)] is { } leader) u.LeaderIndex = Array.IndexOf(kept, leader);
-        _units = kept;
+        host._units = kept;
         _formationAt.Clear();
     }
 
@@ -204,7 +206,7 @@ internal sealed unsafe partial class GameWindow
 
     /// <summary>그 인물의 부하들(살아 있는 것만).</summary>
     internal List<UnitState> FollowersOf(int leaderIndex) =>
-        [.. _units.Where(u => u.Alive && u.LeaderIndex == leaderIndex)];
+        [.. host._units.Where(u => u.Alive && u.LeaderIndex == leaderIndex)];
 
     /// <summary>
     /// 대장이 (<paramref name="destCol"/>, <paramref name="destRow"/>) 로 간 뒤 부하들이 설 칸을 <b>한꺼번에</b> 정한다.
@@ -221,7 +223,7 @@ internal sealed unsafe partial class GameWindow
     /// </remarks>
     internal List<(UnitState Follower, int Col, int Row)> FormationPlan(UnitState leader, int destCol, int destRow)
     {
-        var followers = FollowersOf(Array.IndexOf(_units, leader));
+        var followers = FollowersOf(Array.IndexOf(host._units, leader));
         var plan = new List<(UnitState, int, int)>();
         if (followers.Count == 0) return plan;
 
@@ -233,8 +235,8 @@ internal sealed unsafe partial class GameWindow
         foreach (var follower in followers)
         {
             // 바라는 칸 = 대장을 따라 그대로 평행 이동한 자리.
-            int wantCol = Math.Clamp(destCol + follower.Col - leader.Col, 0, Cols - 1);
-            int wantRow = Math.Clamp(destRow + follower.Row - leader.Row, 0, Rows - 1);
+            int wantCol = Math.Clamp(destCol + follower.Col - leader.Col, 0, host.Cols - 1);
+            int wantRow = Math.Clamp(destRow + follower.Row - leader.Row, 0, host.Rows - 1);
 
             int best = -1, bestScore = int.MaxValue;
             for (int i = 0; i < FormationRing.Length; i++)
@@ -246,8 +248,8 @@ internal sealed unsafe partial class GameWindow
             }
             if (best < 0) { plan.Add((follower, follower.Col, follower.Row)); continue; }
             usedRing[best] = true;
-            int ringCol = Math.Clamp(destCol + FormationRing[best].Dx, 0, Cols - 1);
-            int ringRow = Math.Clamp(destRow + FormationRing[best].Dy, 0, Rows - 1);
+            int ringCol = Math.Clamp(destCol + FormationRing[best].Dx, 0, host.Cols - 1);
+            int ringRow = Math.Clamp(destRow + FormationRing[best].Dy, 0, host.Rows - 1);
 
             var (col, row) = StandingCellFor(follower, destCol, destRow, ringCol, ringRow, taken);
             taken.Add((col, row));
@@ -260,7 +262,7 @@ internal sealed unsafe partial class GameWindow
     internal (int Col, int Row) StandingCellFor(UnitState follower, int destCol, int destRow,
                                                int ringCol, int ringRow, HashSet<(int, int)> taken)
     {
-        int destHeight = _map?.HeightAt(destCol, destRow) ?? 0;
+        int destHeight = host._map?.HeightAt(destCol, destRow) ?? 0;
         int best = int.MaxValue;
         (int Col, int Row) pick = (ringCol, ringRow);
         for (int row = follower.Row - 20; row <= follower.Row + 20; row++)
@@ -268,7 +270,7 @@ internal sealed unsafe partial class GameWindow
             {
                 if (col == destCol && row == destRow) continue;          // 대장 자리는 비켜 준다
                 if (taken.Contains((col, row)) || !CanStand(col, row, follower)) continue;
-                int height = Math.Abs((_map?.HeightAt(col, row) ?? 0) - destHeight);
+                int height = Math.Abs((host._map?.HeightAt(col, row) ?? 0) - destHeight);
                 int score = 11 * Math.Abs(height + Math.Abs(col - destCol) + Math.Abs(row - destRow) - 2)
                           + 10 * (Math.Abs(col - ringCol) + Math.Abs(row - ringRow));
                 if (score < best) (best, pick) = (score, (col, row));
@@ -278,8 +280,8 @@ internal sealed unsafe partial class GameWindow
 
     internal bool CanStand(int col, int row, UnitState who)
     {
-        if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is { } map && (col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0)) return false;   // 물체를 찍은 칸 기준(ba-16)
+        if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
+        if (host._map is { } map && (col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0)) return false;   // 물체를 찍은 칸 기준(ba-16)
         return LiveUnitAt(col, row) is not { } other || other == who;
     }
 
@@ -288,7 +290,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void AssignFormationTargets(int leaderIndex)
     {
-        var leader = _units[leaderIndex];
+        var leader = host._units[leaderIndex];
         foreach (var (follower, col, row) in FormationPlan(leader, leader.Col, leader.Row))
             _followerTarget[follower] = (col, row);
     }
@@ -305,7 +307,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) return;
         if (ComputeRange(follower) is not { } range) return;
-        int goal = target.Row * Cols + target.Col;
+        int goal = target.Row * host.Cols + target.Col;
         if (!range.CanReach(goal))
         {
             // 한 번에 못 닿으면 닿을 수 있는 칸 가운데 목표에 가장 가까운 빈 칸까지라도 간다 — 전에는 아예 안 움직여,
@@ -314,7 +316,7 @@ internal sealed unsafe partial class GameWindow
             for (int i = 0; i < range.Cost.Length; i++)
             {
                 if (!range.CanReach(i)) continue;
-                int c = i % Cols, r = i / Cols;
+                int c = i % host.Cols, r = i / host.Cols;
                 if (!CanStand(c, r, follower)) continue;
                 int dist = Math.Abs(c - target.Col) + Math.Abs(r - target.Row);
                 if (dist < bestDist) (best, bestDist) = (i, dist);
@@ -324,7 +326,7 @@ internal sealed unsafe partial class GameWindow
         }
         foreach (var step in range.PathTo(goal)) follower.Path.Enqueue(step);
         PayFollowerWalk(follower, range, goal);
-        PlayWalkSound(follower);
+        host.PlayWalkSound(follower);
     }
 
     /// <summary>
@@ -336,8 +338,8 @@ internal sealed unsafe partial class GameWindow
     {
         if (!range.CanReach(goal)) return;
         follower.Tp -= range.Cost[goal];
-        follower.OriginCol = goal % Cols;
-        follower.OriginRow = goal / Cols;
+        follower.OriginCol = goal % host.Cols;
+        follower.OriginRow = goal / host.Cols;
     }
 
     /// <summary>대장이 방금 확정한 자리 기준으로 부하 목표를 다시 잡고, 바로 한 걸음씩 걷게 한다.</summary>
@@ -356,9 +358,9 @@ internal sealed unsafe partial class GameWindow
     /// </remarks>
     internal void SyncFollowers()
     {
-        for (int i = 0; i < _units.Length; i++)
+        for (int i = 0; i < host._units.Length; i++)
         {
-            var leader = _units[i];
+            var leader = host._units[i];
             if (!leader.Alive || leader.LeaderIndex >= 0 || leader.LegionId == 0 || leader.IsBusy) continue;
             if (i == _skillLeader) continue;          // 이동 + 기술 중인 대장 — 진형을 안 짓는다(UseWorkRoutine)
             // 아직 전장 밖(증원 전)인 대장의 부하는 전장 밖 (0,0) 에 그대로 둔다 — 진형을 짜면 (0,0) 둘레 칸으로 걸어 나와
@@ -374,14 +376,14 @@ internal sealed unsafe partial class GameWindow
         // 방금 목표를 받았든, 예전에 예산이 모자라 못 따라갔든 — 목표 자리에 아직 못 간 부하는 계속 다시 시도한다.
         // 이게 없으면 대장이 한 번 크게 움직여 부하가 한 걸음에 못 따라잡은 뒤 대장이 그 자리에 눌러앉을 경우,
         // 그 부하는 대장이 다시 움직일 때까지(=영영) 원래 자리에 남아 플레이어가 닿을 수 없는 낙오자가 된다.
-        foreach (var follower in _units)
+        foreach (var follower in host._units)
         {
             if (!follower.Alive || follower.IsBusy || follower.LeaderIndex < 0 || !follower.OnField) continue;
             // 기술을 쓰는 대장의 부하는 다시 걷기 시작하지 않는다 — 걷기 시작하면 FollowersAttack 이 그 부하를 못 쓴다(감사5 L-A).
             if (follower.LeaderIndex == _skillLeader) continue;
             if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) continue;
-            if (_nextFollowerRetry.TryGetValue(follower, out var next) && _lastTime < next) continue;
-            _nextFollowerRetry[follower] = _lastTime + 0.5;
+            if (_nextFollowerRetry.TryGetValue(follower, out var next) && host._lastTime < next) continue;
+            _nextFollowerRetry[follower] = host._lastTime + 0.5;
             TryAdvanceFollower(follower);
         }
     }
@@ -402,13 +404,13 @@ internal sealed unsafe partial class GameWindow
     /// <summary>제 칸 하나만 갈 수 있는 이동 범위 — 자리를 옮기지 않는 겨냥(아군 패스·제자리 기술 합류)에 쓴다.</summary>
     internal MoveRange StandOnly(UnitState u)
     {
-        int n = Cols * Rows;
+        int n = host.Cols * host.Rows;
         var cost = new int[n];
         var prev = new int[n];
         Array.Fill(cost, int.MaxValue);
         Array.Fill(prev, -1);
-        cost[u.Row * Cols + u.Col] = 0;
-        return new MoveRange(cost, prev, new bool[n]) { Width = Cols };
+        cost[u.Row * host.Cols + u.Col] = 0;
+        return new MoveRange(cost, prev, new bool[n]) { Width = host.Cols };
     }
 
     /// <summary>
@@ -425,11 +427,11 @@ internal sealed unsafe partial class GameWindow
         // 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
         if (work.Id != c.BasicWorkId)
         {
-            if (work.Prepare is 2 or 3 or 5 or 6) _pendingSounds.Add((_lastTime, 694, UnitFoot(follower).X));   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
-            ScheduleAbilitySounds(work);
+            if (work.Prepare is 2 or 3 or 5 or 6) host._pendingSounds.Add((host._lastTime, 694, host.UnitFoot(follower).X));   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
+            host.ScheduleAbilitySounds(work);
             SpawnAbilityEffects(work, follower, col, row);
         }
-        foreach (int ti in struck) ApplyWork(follower, work, _units[ti], dying);
+        foreach (int ti in struck) ApplyWork(follower, work, host._units[ti], dying);
         PayWorkCost(follower, work);
         return true;
     }
@@ -442,13 +444,13 @@ internal sealed unsafe partial class GameWindow
     /// <param name="walk">대장 대상 쪽으로 걸어가 치기를 해도 되나 — 겨눈 대상이 없는 제자리 기술(방식 2)이면 <paramref name="target"/> 은 대장 자신이라 걷지 않는다.</param>
     internal void FollowersAttack(int leaderIndex, UnitState target, List<UnitState> dying, bool allyPass = false, WorkData? leaderWork = null, bool walk = true)
     {
-        if (_db is null) return;
+        if (host._db is null) return;
         // 대장이 쓴 기술의 +0x41 이 0 이면 부하는 안 따라 친다(0x1005fd00) — 피해 work 469개가 그렇다(fg-21 ⑯).
         if (leaderWork is { FollowersAct: false }) return;
         // 잡힌 칸 — 이번에 부하가 고른 설 칸과, 지금 걷고 있는 유닛(다른 군단 부하 포함)의 도착 칸. 아직 출발 칸에 서 있어 LiveUnitAt 에 안 잡힌다.
         var approached = new HashSet<int>();
-        foreach (var walker in _units)
-            if (walker.Alive && walker.Path.Count > 0) { var (lc, lr) = walker.Path.Last(); approached.Add(lr * Cols + lc); }
+        foreach (var walker in host._units)
+            if (walker.Alive && walker.Path.Count > 0) { var (lc, lr) = walker.Path.Last(); approached.Add(lr * host.Cols + lc); }
         foreach (var follower in FollowersOf(leaderIndex))
         {
             // 걷는 부하는 UseWorkRoutine 첫머리(WaitFollowersStopped)가 이미 세웠다 — 여기서 바쁜 건 동작 중인 부하뿐.
@@ -457,7 +459,7 @@ internal sealed unsafe partial class GameWindow
             // 점수 = 값 × Num74 × 10 / (Num74 + |칸 − 대장이 겨눈 칸|), 값은 0x1005c510(최소 대상·종류 3 이득·회복 문턱, WorthUsing).
             // 전에는 제자리 사거리 안의 유닛 칸만 먼저 보고, 없을 때만 대장 대상이 닿는 가장 싼 칸으로 걸어가 대장 대상을 쳤다.
             // 아군 패스(0x1005e820 → 0x10075420)와 걷지 않는 호출은 설 칸이 제 칸 하나다.
-            int fi = Array.IndexOf(_units, follower), here = follower.Row * Cols + follower.Col;
+            int fi = Array.IndexOf(host._units, follower), here = follower.Row * host.Cols + follower.Col;
             bool planned = false;
             foreach (var work in FollowerWorks(c, allyPass))
             {
@@ -470,8 +472,8 @@ internal sealed unsafe partial class GameWindow
                 if (use.Stand == here) { FollowerStrike(follower, work, use.Col, use.Row, dying); break; }
                 foreach (var step in range.PathTo(use.Stand)) follower.Path.Enqueue(step);
                 PayFollowerWalk(follower, range, use.Stand);
-                PlayWalkSound(follower);
-                _followerTarget[follower] = (use.Stand % Cols, use.Stand / Cols);
+                host.PlayWalkSound(follower);
+                _followerTarget[follower] = (use.Stand % host.Cols, use.Stand / host.Cols);
                 _followerStrikes.Add((follower, work, use.Col, use.Row));   // 다 걸어간 뒤 친다(명령1 이동 → 명령2 기술, 0x1005f1c0)
                 approached.Add(use.Stand);
                 break;
@@ -486,18 +488,18 @@ internal sealed unsafe partial class GameWindow
             var toAim = CostMapFrom(follower, target.Col, target.Row);
             if (toAim is null) continue;
             int go = -1, goCost = int.MaxValue, goOwn = int.MaxValue;
-            for (int idx = 0; idx < Cols * Rows; idx++)
+            for (int idx = 0; idx < host.Cols * host.Rows; idx++)
             {
                 if (!near.CanReach(idx) || toAim[idx] == int.MaxValue || approached.Contains(idx)) continue;
-                if (LiveUnitAt(idx % Cols, idx / Cols) is { } other && other != follower) continue;
+                if (LiveUnitAt(idx % host.Cols, idx / host.Cols) is { } other && other != follower) continue;
                 if (toAim[idx] < goCost || toAim[idx] == goCost && near.Cost[idx] < goOwn) (go, goCost, goOwn) = (idx, toAim[idx], near.Cost[idx]);
             }
             if (go < 0 || near.Cost[go] <= 0) continue;
             approached.Add(go);                    // 뒤 부하가 같은 칸을 고르지 않게(0x1005ff9a)
             foreach (var step in near.PathTo(go)) follower.Path.Enqueue(step);
             PayFollowerWalk(follower, near, go);
-            PlayWalkSound(follower);
-            _followerTarget[follower] = (go % Cols, go / Cols);
+            host.PlayWalkSound(follower);
+            _followerTarget[follower] = (go % host.Cols, go / host.Cols);
         }
     }
 
@@ -508,7 +510,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal IEnumerable<WorkData> FollowerWorks(CharacterData c, bool allyPass = false)
     {
-        if (_db is not { } db) yield break;
+        if (host._db is not { } db) yield break;
         foreach (var (abilityId, level) in c.Abilities)
             if (abilityId < 200 && level > 0 && db.Abilities.TryGetValue(abilityId, out var ab) && ab.Category is 1 or 2 or 4
                 && ab.TryWorkAt(level, out int wid) && Work(wid) is { } w && w.AreaMode == (allyPass ? 4 : 1))
@@ -528,7 +530,7 @@ internal sealed unsafe partial class GameWindow
         u.FormationSlot = -1;
         u.Detached = true;
         if (u.Side == 4) { u.Side = 3; u.Awake = true; }
-        RefreshUnitStats(u);
+        host.RefreshUnitStats(u);
     }
 
     /// <summary>대장이 쓰러지면 — 첫 부하가 새 대장이 되고 세력이 0.6배가 된다.</summary>
@@ -537,17 +539,17 @@ internal sealed unsafe partial class GameWindow
         var followers = FollowersOf(leaderIndex);
         if (followers.Count == 0) return;
         // 플레이어 군단의 대장이 죽으면 떨어져 나온 부하들은 <b>편 3(동맹 AI)</b>이 된다(0x100716c0) — 더는 명령할 수 없다.
-        if (_units[leaderIndex].Side == 4)
+        if (host._units[leaderIndex].Side == 4)
             foreach (var f in followers) { f.Side = 3; f.Awake = true; }
         var newLeader = followers[0];
-        int newIndex = Array.IndexOf(_units, newLeader);
+        int newIndex = Array.IndexOf(host._units, newLeader);
         newLeader.LeaderIndex = -1;
         newLeader.FormationSlot = -1;
-        newLeader.LegionId = _units[leaderIndex].LegionId;
-        newLeader.LegionPowerPercent = _units[leaderIndex].LegionPowerPercent * 6 / 10;
+        newLeader.LegionId = host._units[leaderIndex].LegionId;
+        newLeader.LegionPowerPercent = host._units[leaderIndex].LegionPowerPercent * 6 / 10;
         // 다시 붙는 부하(0x10072ef0(새대장, 부하, 0))는 TP 를 새 대장 것으로 덮는다(감사5 L-C). AI 꼬리는 처음부터 대장 레코드 복사라 같다.
         foreach (var follower in followers.Skip(1)) { follower.LeaderIndex = newIndex; follower.Tp = newLeader.Tp; }
-        RefreshUnitStats(newLeader);
+        host.RefreshUnitStats(newLeader);
     }
 
     /// <summary>
@@ -556,7 +558,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal IEnumerable<bool> WaitFollowersStopped(int leaderIndex)
     {
-        for (double end = _lastTime + 5; _lastTime < end && FollowersOf(leaderIndex).Any(f => f.OnField && f.IsBusy);) yield return true;
+        for (double end = host._lastTime + 5; host._lastTime < end && FollowersOf(leaderIndex).Any(f => f.OnField && f.IsBusy);) yield return true;
     }
 
     /// <summary>
@@ -564,7 +566,7 @@ internal sealed unsafe partial class GameWindow
     /// 부하(<c>+0x4f0</c>)면 <c>+0x508</c> 사슬을 따라 <b>대장 유닛에서</b> 값을 읽는다(감사3 L2).
     /// </summary>
     internal UnitState StatOwner(UnitState u) =>
-        u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length ? _units[u.LeaderIndex] : u;
+        u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length ? host._units[u.LeaderIndex] : u;
 
     /// <summary>
     /// 판정·이동 비용에 쓰는 능력치 — <see cref="EffectiveData"/> 에 부하면 DEX 만 <b>대장의</b> DEX(대장 CChr DEX + 장비 + 상태 30 − 상태 1)로 바꾼다
@@ -573,7 +575,7 @@ internal sealed unsafe partial class GameWindow
     internal CharacterData? CombatData(UnitState u)
     {
         var own = EffectiveData(u);
-        if (own is null || _db is not { } db) return own;
+        if (own is null || host._db is not { } db) return own;
         // 군단 부하 보정 PSY·DEP(For +0x18·+0x1c × 세력 / 100) — 판정도 이것으로 셈한다(0x1007ade0·0x1007af20, 감사4 S1).
         var (_, lPsy, lDep) = LegionBonusFor(u);
         if (lPsy != 0 || lDep != 0)
@@ -590,7 +592,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void RestFollowers(int leaderIndex)
     {
-        if (_db is not { } db || _units[leaderIndex].LeaderIndex >= 0) return;
+        if (host._db is not { } db || host._units[leaderIndex].LeaderIndex >= 0) return;
         foreach (var f in FollowersOf(leaderIndex))
         {
             if (f.Tp > 0 && f.MaxTp > 0 && !f.HasStatus(26))
@@ -605,7 +607,7 @@ internal sealed unsafe partial class GameWindow
             }
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                    $"follower rest: chr {f.ChrCode} (leader {_units[leaderIndex].ChrCode}) TP {f.Tp}/{f.MaxTp} → 0, HP {f.Hp}/{f.MaxHp}" + Environment.NewLine);
+                    $"follower rest: chr {f.ChrCode} (leader {host._units[leaderIndex].ChrCode}) TP {f.Tp}/{f.MaxTp} → 0, HP {f.Hp}/{f.MaxHp}" + Environment.NewLine);
             if (f.Tp > 0) f.Tp = 0;   // 빚(음수 TP)은 그대로 남는다(ba-20 K1)
         }
     }
@@ -613,9 +615,9 @@ internal sealed unsafe partial class GameWindow
     /// <summary>부하가 대장에게서 받는 능력치 보정 — 세력 × For 보정 / 100(분석-군단 1절).</summary>
     internal (int Lp, int Psy, int Dep) LegionBonusFor(UnitState unit)
     {
-        if (unit.LeaderIndex < 0 || (uint)unit.LeaderIndex >= _units.Length) return (0, 0, 0);
-        var leader = _units[unit.LeaderIndex];
-        if (Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return (0, 0, 0);
+        if (unit.LeaderIndex < 0 || (uint)unit.LeaderIndex >= host._units.Length) return (0, 0, 0);
+        var leader = host._units[unit.LeaderIndex];
+        if (host.Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return (0, 0, 0);
         int power = leader.LegionPowerPercent;
         return (legion.LpBonus * power / 100, legion.PsyBonus * power / 100, legion.DepBonus * power / 100);
     }

@@ -248,7 +248,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
             // 세로는 기준점이 −58 이라 줄 자리에 58 을 더해 찍는다.
             int cx = ox + 320, cy = oy + 186 + EpisodeCellH * row + 58;
             bool picked = _episodesPicked.Contains(entry.No);
-            if (!host.DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? UiBlend.Dim : UiBlend.Alpha))
+            if (!host.DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? GameWindow.UiBlend.Dim : GameWindow.UiBlend.Alpha))
                 host.DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
             // 고른 표시 [ ] — 원본은 줄마다 0x10043810(x, 65, Obs 0979, 모션 0) 이고 x 는 짝수 237(0x101071de)·홀수 315(0x10107213).
             // 모션 0 = 장 4(163×29, 자리 (−241,−59)) → 화면 (76 또는 394, 185 + 46×줄). 줄 +0x58 이 설 때만 그린다(0x10043040).
@@ -256,7 +256,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
             if (i == _episodePick && !picked)
             {
                 var (x, y) = EpisodeCell(entry.No);
-                host.DrawUi(EpisodeObs, 0, tick, ox + x + (entry.No % 2 == 0 ? 237 : 315), oy + y + 65, UiBlend.Alpha);
+                host.DrawUi(EpisodeObs, 0, tick, ox + x + (entry.No % 2 == 0 ? 237 : 315), oy + y + 65, GameWindow.UiBlend.Alpha);
             }
         }
 
@@ -264,10 +264,10 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
         int rows = EpisodeRowCount();
         if (rows > EpisodeRows)
         {
-            host.DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, UiBlend.Alpha);
-            host.DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, GameWindow.UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, GameWindow.UiBlend.Alpha);
             var (thumbY, _) = EpisodeThumb(rows);
-            host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, GameWindow.UiBlend.Alpha);
         }
 
         host.DrawSystem();

@@ -14,7 +14,7 @@ internal sealed unsafe partial class GameWindow
     /// Action 은 동작 번호(SetAction 기준 ÷ 3, 모션 = 동작 × 3 + 방향), 원시 모션이면 1000 + 모션.
     /// Hold 는 반복 1000 이상 — 다음 동작이 올 때까지 붙든다(맞음 자세 2 를 붙들었다가 서기 0 으로 되돌리는 꼴).
     /// </remarks>
-    private static readonly Dictionary<int, (int Tick, int Action, bool Hold)[]> WorkTargetActions = new()
+    internal static readonly Dictionary<int, (int Tick, int Action, bool Hold)[]> WorkTargetActions = new()
     {
         [10] = [(0, 2, true), (0, 0, false)],   // 비 Lv1 · 핸들러 0x1007fed0 · 단계 2 @0x1008026e · 단계 3 @0x100803bc · 1001 없음 — 단계 3 기준 · 틱 가설
         [221] = [(0, 2, true), (0, 0, false)],   // 비 Lv11 · 핸들러 0x1007fed0 · 단계 2 @0x1008026e · 단계 3 @0x100803bc · 1001 없음 — 단계 3 기준 · 틱 가설

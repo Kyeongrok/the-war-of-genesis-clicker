@@ -98,7 +98,7 @@ internal sealed unsafe partial class GameWindow
                     int x = r.X + (int)Math.Round(Math.Cos(a) * rr), y = r.Y + (int)Math.Round(Math.Sin(a) * rr * 0.8);
                     if ((uint)x >= BoardWidth || (uint)y >= BoardHeight) continue;
                     int at = y * BoardWidth + x;
-                    _fb[at] = AddColor(_fb[at], color, k);
+                    _fb[at] = GameWindow.AddColor(_fb[at], color, k);
                 }
             }
             return false;
@@ -125,7 +125,7 @@ internal sealed unsafe partial class GameWindow
                     uint c = f.Px[y * f.W + x];
                     if ((c & 0xFFFFFF) == 0) continue;
                     int at = dy * BoardWidth + dx;
-                    _fb[at] = AddColor(_fb[at], c, 256);
+                    _fb[at] = GameWindow.AddColor(_fb[at], c, 256);
                 }
             }
             return false;

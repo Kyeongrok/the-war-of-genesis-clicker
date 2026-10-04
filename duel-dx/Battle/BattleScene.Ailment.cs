@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 상태이상 — 거는 규칙, 매 틱 피해, 행동 제약(분석-전투 「6. 상태이상」).
 /// </summary>
@@ -18,7 +20,7 @@ namespace DuelDx;
 /// 매 틱 피해(상태 16 → <c>0x1007a360</c>): 2·3·17 은 <c>값% × 최대 HP</c>(Num36 밑으로는 안 내려감), 16 은 TP(바닥 Num37), 15 는 SOUL(바닥 Num38).
 /// 이름은 원본 <c>Dat/Sta.dat</c> 의 설명 TXR 이지만, 우리는 분석 노트의 뜻 표를 그대로 짧게 적어 쓴다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>상태이상 칸 그림 — <c>Obs 0489</c>(전투가 미리 읽어 두는 공용 그림 스물넷 중 하나).</summary>
     internal const int AilmentIconObs = 489;
@@ -33,7 +35,7 @@ internal sealed unsafe partial class GameWindow
     internal int AilmentIconMotion(UnitState u, int slot)
     {
         int id = (uint)slot < 3 ? u.StatusId[slot] : 0;
-        return id != 0 && _db?.Statuses.GetValueOrDefault(id) is { } sta ? sta.Icon : 0;
+        return id != 0 && host._db?.Statuses.GetValueOrDefault(id) is { } sta ? sta.Icon : 0;
     }
 
     /// <summary>
@@ -127,7 +129,7 @@ internal sealed unsafe partial class GameWindow
     internal bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
         // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
-        if (w.Kind <= 3 && _db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
+        if (w.Kind <= 3 && host._db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
             && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
 
         // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
@@ -135,7 +137,7 @@ internal sealed unsafe partial class GameWindow
         (int Id, int Value)[] effects;
         if (attacker.Data is { } ac && w.Id == ac.BasicWorkId)
         {
-            if (ac.Items[0] == 0 || _db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return true;
+            if (ac.Items[0] == 0 || host._db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return true;
             effects = [.. (weapon.AttackEffects ?? []).Select(e => ((int)e.Status, (int)e.Value))];
         }
         else effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
@@ -156,7 +158,7 @@ internal sealed unsafe partial class GameWindow
             }
             PutAilment(target, (byte)id, (short)value, used, attacker);
         }
-        RefreshUnitStats(target);
+        host.RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
         return true;
     }
@@ -216,8 +218,8 @@ internal sealed unsafe partial class GameWindow
     /// </param>
     internal void TickAilments(IReadOnlySet<UnitState> turnStarts)
     {
-        if (_db is not { } db) return;
-        foreach (var u in _units)
+        if (host._db is not { } db) return;
+        foreach (var u in host._units)
         {
             if (!u.Alive || !turnStarts.Contains(u)) continue;
 
@@ -259,18 +261,18 @@ internal sealed unsafe partial class GameWindow
 
     /// <summary>work 이 무는 SOUL — 18(소울 소모량 %)만큼 늘거나 준다(<c>0x100724c4</c>).</summary>
     internal int SoulCostFor(UnitState u, CharacterData c, int workId) =>
-        u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
+        u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
 
     /// <summary>work 을 쓰려면 있어야 하는 SOUL — 비용과 같은 보정을 받는다.</summary>
     internal int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
-        u.Data is { JobId: 37 } ? 0 : PercentAdjust(_db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
+        u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
 
     /// <summary><c>cost += cost × 값 / 100</c>(0x100726a1) — 곱한 몫만 0 쪽으로 버린다. <c>cost × (100+값) / 100</c> 은 값이 음수일 때 1 작게 나왔다(fg-22).</summary>
     internal static int PercentAdjust(int cost, int percent) => Math.Max(0, cost + cost * percent / 100);
 
     /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
     internal int TpCostFor(UnitState u, CharacterData c, int workId) =>
-        PercentAdjust(_db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
+        PercentAdjust(host._db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
 
     /// <summary>
     /// 상태이상이 거는 사망 조건 — 22 SOUL 이 값 아래 · 23 TP 가 값 아래 · 24 SOUL 이 가득(<c>0x1007c689</c>~).
@@ -286,7 +288,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void AutoHealAll()
     {
-        foreach (var u in _units)
+        foreach (var u in host._units)
             if (u.Alive && u.OnField) AutoHeal(u);
     }
 
@@ -297,7 +299,7 @@ internal sealed unsafe partial class GameWindow
         if (u.Hp >= upTo) return;
         int before = u.Hp;
         u.Hp = upTo;
-        ShowNumber(u, _db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
+        ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
     }
 
     /// <summary>차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>).</summary>
@@ -333,7 +335,7 @@ internal sealed unsafe partial class GameWindow
     internal void KillUnit(UnitState u)
     {
         MarkDead(u);
-        Play(SoundDeath);
+        host.Play(SoundDeath);
         CheckOutcome();
     }
 
@@ -346,7 +348,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (!u.Alive) return;
         u.Alive = false;
-        int index = Array.IndexOf(_units, u);
+        int index = Array.IndexOf(host._units, u);
         if (index >= 0) PromoteFollower(index);
     }
 
@@ -371,10 +373,10 @@ internal sealed unsafe partial class GameWindow
         int back = amount * percent / 100;
         if (back <= 0) return;
         attacker.Hp = Math.Max(0, attacker.Hp - back);
-        ShowNumber(attacker, $"{_db?.T(159)} {back}", DamageColor);
+        ShowNumber(attacker, $"{host._db?.T(159)} {back}", DamageColor);
         if (attacker.Hp > 0) return;
         // 반사로 쓰러뜨리면 반사한 쪽(부하면 대장)이 처치 보상을 받는다(메시지 1016).
-        var winner = target.LeaderIndex >= 0 && target.LeaderIndex < _units.Length ? _units[target.LeaderIndex] : target;
+        var winner = target.LeaderIndex >= 0 && target.LeaderIndex < host._units.Length ? host._units[target.LeaderIndex] : target;
         AddSoul(winner, 10);
         GainKillExp(winner, attacker);
         if (!SurvivesFatal(attacker)) KillUnit(attacker);

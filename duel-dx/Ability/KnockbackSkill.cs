@@ -30,7 +30,7 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
     internal const int WorldPerCell = 40;
 
     /// <summary>시전자 쪽 동작만 — 맞음(2)·서기(0)는 맞은 인물의 것이다. 24 는 다 밀려난 뒤 넉백 루틴이 튼다.</summary>
-    internal static readonly (int[] Actions, AbilityEffect[] Effects) BiScript =
+    internal static readonly (int[] Actions, BattleScene.AbilityEffect[] Effects) BiScript =
         ([5, 7, 12], [new(379, 0, false, 0), new(43, 0, false, 42, 0, 1, true)]);
 
     /// <summary>
@@ -48,8 +48,8 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
         int distance = dc != 0 ? Math.Abs(target.Col - user.Col) : Math.Abs(target.Row - user.Row);
         int push = pushCells >= 0 ? pushCells : Math.Max(0, w.RangeMax - distance);
         int col = target.Col, row = target.Row, moved = 0;
-        while (moved < push && host.CanStand(col + dc, row + dr, target)) { col += dc; row += dr; moved++; }
-        if (Trace)
+        while (moved < push && host.Btl.CanStand(col + dc, row + dr, target)) { col += dc; row += dr; moved++; }
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"knockback work {w.Id}: {user.ChrCode}({user.Col},{user.Row}) {user.Facing} → {target.ChrCode}({target.Col},{target.Row}) 거리 {distance} 밀 칸 {push} → {moved}칸 ({col},{row})" + Environment.NewLine);
 
@@ -66,9 +66,9 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
             }
 
             target.Facing = Opposite(user.Facing);
-            target.PlayAction(HitAction, steps.Count / TicksPerSecond + 0.05);
+            target.PlayAction(BattleScene.HitAction, steps.Count / TicksPerSecond + 0.05);
             var (tx, ty) = host.UnitFoot(target);
-            host._effects.Add((BiTrailObs, 0, host._lastTime, tx, ty));
+            host.Btl._effects.Add((BiTrailObs, 0, host._lastTime, tx, ty));
             target.BeginSlide(col, row);
             double start = host._lastTime;
             for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < steps.Count;)
@@ -84,9 +84,9 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
         {
             int drain = Math.Min(soulDrain, target.Soul);
             target.Soul -= drain;
-            host.ShowNumber(target, $"{db.T(41)} -{drain}", MissColor);
+            host.Btl.ShowNumber(target, $"{db.T(41)} -{drain}", BattleScene.MissColor);
         }
-        if (BiWorks.Contains(w.Id)) host.PlayAction(user, host.DrawnAction(user, 24));
+        if (BiWorks.Contains(w.Id)) host.Btl.PlayAction(user, host.Btl.DrawnAction(user, 24));
     }
 
     internal static Facing Opposite(Facing f) => f switch

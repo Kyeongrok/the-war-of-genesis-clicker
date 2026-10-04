@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 어빌리티마다 다른 동작·이펙트(ba-10) — 지금까지는 무엇을 쓰든 기본공격 동작을 빌려 썼다.
 /// </summary>
@@ -12,7 +14,7 @@ namespace DuelDx;
 /// 원본은 어빌리티 레벨·방향에 따라 가지가 갈리는데(연의 연속 베기 횟수, 블레이드 미사일의 방향별 이펙트),
 /// 여기서는 한 가지만 쓴다 — 그만큼 단순하다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>이펙트 하나 — 어느 Obs 의 어느 모션을, 대상 자리(또는 내 자리)에서 몇 픽셀 위에 띄우나.</summary>
     /// <param name="Delay">띄우기까지 기다리는 틱(원본 <c>0x100c2530</c>) — 메테오 착탄 따위.</param>
@@ -43,8 +45,8 @@ internal sealed unsafe partial class GameWindow
         for (int k = -2; k <= 2; k++)
         {
             int col = user.Col + fx * 2 + sx * k, row = user.Row + fy * 2 + sy * k;
-            if ((uint)col >= Cols || (uint)row >= Rows) continue;
-            _effects.Add((895, 0, _lastTime + (k + 2) * 4 / TicksPerSecond, col * TileW + TileW / 2, CellCenterY(col, row)));
+            if ((uint)col >= host.Cols || (uint)row >= host.Rows) continue;
+            _effects.Add((895, 0, host._lastTime + (k + 2) * 4 / TicksPerSecond, col * TileW + TileW / 2, host.CellCenterY(col, row)));
         }
     }
 
@@ -183,11 +185,11 @@ internal sealed unsafe partial class GameWindow
         {
             // 붙드는 동작 — 그 방향의 모션을 되풀이로 튼다(없는 인물이면 그냥 동작).
             int action = DrawnAction(a, code - ActHold);
-            if (_sprites.TryGetValue(a.ChrCode, out var sprite) && sprite.Clip(action, a.Facing) is { } clip)
-                HeavenEarthAb.PlayRawMotion(a, clip.Id, loop: true, holdSeconds);
+            if (host._sprites.TryGetValue(a.ChrCode, out var sprite) && sprite.Clip(action, a.Facing) is { } clip)
+                host.HeavenEarthAb.PlayRawMotion(a, clip.Id, loop: true, holdSeconds);
             else PlayAction(a, action);
         }
-        else if (code >= RawOnce) HeavenEarthAb.PlayRawMotion(a, code % RawOnce, loop: code >= RawHold, holdSeconds);
+        else if (code >= RawOnce) host.HeavenEarthAb.PlayRawMotion(a, code % RawOnce, loop: code >= RawHold, holdSeconds);
         else PlayAction(a, DrawnAction(a, code));
     }
 
@@ -261,25 +263,25 @@ internal sealed unsafe partial class GameWindow
 
     internal void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
-        SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
-        SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
-        SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
+        host.SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
+        host.SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
+        SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
-        UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
+        host.UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
-        _fxLatestStart = Math.Max(_fxLatestStart, _lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
+        _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
         if (DuckWorks.Contains(w.Id))
         {
             // 줄여 둘 동안 — 가장 늦게 끝나는 이펙트까지(지연 + 수명 또는 모션 길이). 대본이 없으면 40틱.
-            double ticks = (script?.Effects ?? []).Select(e => e.Delay + (e.Life > 0 ? e.Life : EffectTicks(e.Obs, e.Motion))).DefaultIfEmpty(0).Max();
-            DuckMusicForWork(ticks / TicksPerSecond);
+            double ticks = (script?.Effects ?? []).Select(e => e.Delay + (e.Life > 0 ? e.Life : host.EffectTicks(e.Obs, e.Motion))).DefaultIfEmpty(0).Max();
+            host.DuckMusicForWork(ticks / TicksPerSecond);
         }
         if (script is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
-        bool ownSounds = !_abilitySounds.ContainsKey(w.AbilityId);
-        var (userX, userY) = UnitFoot(user);
-        int targetX = col * TileW + TileW / 2, targetY = CellCenterY(col, row);
+        bool ownSounds = !host._abilitySounds.ContainsKey(w.AbilityId);
+        var (userX, userY) = host.UnitFoot(user);
+        int targetX = col * TileW + TileW / 2, targetY = host.CellCenterY(col, row);
         foreach (var e in m.Effects)
         {
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
@@ -290,7 +292,7 @@ internal sealed unsafe partial class GameWindow
             if (PushSkill.CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
-            double start = _lastTime + e.Delay / TicksPerSecond;
+            double start = host._lastTime + e.Delay / TicksPerSecond;
             // 줄별 덧정보(WorkFxExtra.g.cs, ba-21 fx 「덧정보 표 생성 기록」) — 좌우 뒤집기 · 기준 자리에서의 치우침 · 대상마다 하나씩(엇갈림) · 직선탄의 빠르기.
             int userDir = user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 };
             // 같은 열쇠의 Row 가 여럿이면 원본은 그 수만큼 따로(자리·뒤집기가 다르게) 띄운다 — Row 마다 하나씩. 방향마다 값이 다른 줄은 시전자 방향 것만.
@@ -354,9 +356,9 @@ internal sealed unsafe partial class GameWindow
                 {
                     for (int i = 0; i < eachTargets.Count; i++)
                     {
-                        var (tx, ty) = UnitFoot(_units[eachTargets[i]]);
+                        var (tx, ty) = host.UnitFoot(host._units[eachTargets[i]]);
                         double at = start + i * each.Stagger / TicksPerSecond;
-                        if (e.Life > 0) HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
+                        if (e.Life > 0) host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
                         else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
                     }
                     if (each.StaggerSure) _fxStagger = Math.Max(_fxStagger, each.Stagger);
@@ -379,11 +381,11 @@ internal sealed unsafe partial class GameWindow
                         if (e.Life > 0)
                         {
                             // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
-                            HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                            host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
                             continue;
                         }
                         // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
-                        int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
+                        int jx = k == 0 ? 0 : host._rng.Next(-20, 21), jy = k == 0 ? 0 : host._rng.Next(-10, 11);
                         (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy));
                     }
             }
@@ -392,16 +394,16 @@ internal sealed unsafe partial class GameWindow
             // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
             // 썬더 스톰의 217:0 은 시작(A) 목록 소리 114 를 이펙트가 도는 동안 되풀이한다(0x100d2aa0, 감사4 S3).
-            if (!e.Fly) QueueEffectLoopSound(e.Obs, e.Motion, start, e.Life > 0 ? e.Life : EffectTicks(e.Obs, e.Motion), x);
+            if (!e.Fly) host.QueueEffectLoopSound(e.Obs, e.Motion, start, e.Life > 0 ? e.Life : host.EffectTicks(e.Obs, e.Motion), x);
             // 이펙트 Obs 가 assets/effects 밖(moses/obs · characters)에 있어도 소리 키를 읽는다 — 락킹 필드 584:5 → 639 따위가 빠졌다(ba-21 sound D4).
-            if (!ownSounds || (_effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) ?? UiFor(e.Obs)?.Clip(e.Motion)) is not { } clip) continue;
+            if (!ownSounds || (host._effectTables.GetValueOrDefault(e.Obs)?.Clips.GetValueOrDefault(e.Motion) ?? host.UiFor(e.Obs)?.Clip(e.Motion)) is not { } clip) continue;
             // 좌우 소리(감사4 S1) — 이펙트가 뜨는 자리 x. 날아가는 것은 떠나는 자리.
             float sx = e.Fly ? userX : x;
-            foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((start + tick / TicksPerSecond, sound, sx));
+            foreach (var (tick, sound) in clip.Sounds) host._pendingSounds.Add((start + tick / TicksPerSecond, sound, sx));
             // 자식 이펙트의 소리도 따라간다 — 포스 필드 444:6 > 443:0 → 634 @t15(ba-21 sound D5).
             foreach (var (childStart, obs, motion, _, _, _, _) in clip.Children)
-                if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is { } child)
-                    foreach (var (tick, sound) in child.Sounds) _pendingSounds.Add((start + (childStart + tick) / TicksPerSecond, sound, sx));
+                if (host._effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is { } child)
+                    foreach (var (tick, sound) in child.Sounds) host._pendingSounds.Add((start + (childStart + tick) / TicksPerSecond, sound, sx));
         }
     }
 

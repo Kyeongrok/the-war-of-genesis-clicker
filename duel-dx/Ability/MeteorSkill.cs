@@ -30,7 +30,7 @@ internal sealed unsafe class MeteorSkill(GameWindow host)
     internal IEnumerable<bool> MeteorRoutine(WorkData w, UnitState user, int col, int row, List<int> targets, Action<int> hit)
     {
         double t0 = host._lastTime;
-        var cells = host.AreaCells(w, user, col, row);
+        var cells = host.Btl.AreaCells(w, user, col, row);
         var (cc, cr) = cells.Count > 0 ? cells[host._rng.Next(cells.Count)] : (col, row);
         int tx = cc * TileW + TileW / 2, ty = host.CellCenterY(cc, cr);
 
@@ -63,7 +63,7 @@ internal sealed unsafe class MeteorSkill(GameWindow host)
             },
         });
 
-        if (Trace)
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"meteor work {w.Id}: cell ({cc},{cr}) at ({tx},{ty}) start +{(start - t0) * TicksPerSecond:F0}틱, 대상 {targets.Count}" + Environment.NewLine);
         host.AstralArrowAb._arrowLastStep = host._lastTime;

@@ -29,8 +29,8 @@ internal sealed unsafe class UnitFxSkill(GameWindow host)
         WorkUnitFx.Table.TryGetValue(w.Id, out var own);
         WorkUnitFx.Others.TryGetValue(w.Id, out var others);
         if (own == null && others == null) return;
-        var aimed = host.LiveUnitAt(col, row);
-        var inArea = (host._fxTargets ?? host.WorkTargets(w, user, col, row)).Select(i => host._units[i]).ToList();
+        var aimed = host.Btl.LiveUnitAt(col, row);
+        var inArea = (host.Btl._fxTargets ?? host.Btl.WorkTargets(w, user, col, row)).Select(i => host._units[i]).ToList();
         void Add(UnitState u, WorkUnitFx.Ev[] events)
         {
             if (events.Length == 0 || !u.OnField) return;

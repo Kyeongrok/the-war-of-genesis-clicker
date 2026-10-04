@@ -76,4 +76,7 @@ internal sealed unsafe partial class GameWindow
 
     internal TuningScreen? _tuningScr;
     internal TuningScreen TuningScr => _tuningScr ??= new TuningScreen(this);
+
+    internal BattleScene? _btl;
+    internal BattleScene Btl => _btl ??= new BattleScene(this);
 }

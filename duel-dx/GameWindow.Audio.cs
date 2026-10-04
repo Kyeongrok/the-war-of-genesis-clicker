@@ -124,7 +124,7 @@ internal sealed unsafe partial class GameWindow
         if (!float.IsNaN(screenX) && (screenX < 0 || screenX > 640)) gain *= 0.18f;
         bool played = !Muted && loaded && _mixer.PlayEffect(pcm!, gain, tag, loop, left, right, slotted: true);
         // DUELDX_TRACE 면 무슨 소리를 틀었는지(파일이 있었는지·크기·좌우) 적는다 — 음소거한 화면 밖 시험에서도 재생 여부를 본다.
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"sound {sound} {(!loaded ? "파일 없음" : Muted || played ? "재생" : "칸 참(버림)")} gain {gain:0.000} L {left:0.00} R {right:0.00}"
                 + $"{(float.IsNaN(screenX) ? "" : $" x {screenX:0}")}{(loop ? " loop" : "")} at {_lastTime:0.00}" + Environment.NewLine);
@@ -251,7 +251,7 @@ internal sealed unsafe partial class GameWindow
                 // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다(B.G.M 설정은 믹서가 곱한다).
                 _mixer.PlayMusic(pcm, loop, _musicAudible ?? _musicGain);
                 if (_musicPaused) _mixer.PauseMusic();          // 푸는 동안 517 이 0 에 닿았다 — 멈춘 채로 둔다
-                if (Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {_bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");
+                if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {_bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
         });
@@ -273,12 +273,12 @@ internal sealed unsafe partial class GameWindow
     {
         if (id <= 0) return;
         if (CachedClip(id) is { } have) { StartEventVoice(have); return; }
-        _eventSoundLoading = true;
+        Btl._eventSoundLoading = true;
         LoadClip(id, pcm =>
         {
             if (pcm != null) StartEventVoice(pcm);
-            else _eventSoundSeconds = 0.1f;              // 소리가 없으면 곧바로 다음 줄로
-            _eventSoundLoading = false;
+            else Btl._eventSoundSeconds = 0.1f;              // 소리가 없으면 곧바로 다음 줄로
+            Btl._eventSoundLoading = false;
         });
     }
 
@@ -301,7 +301,7 @@ internal sealed unsafe partial class GameWindow
             if (!Muted && pcm != null && tag == Volatile.Read(ref _talkVoiceTag)) _mixer.PlayEffect(pcm, _effectGain, tag, left: left, right: right);
             // 이 부름은 배경 실에서 온다 — 기록 파일에 바로 쓰면 주 실의 기록(필드 스크립트 줄)과 부딪쳐 IOException 으로 죽는다.
             // 대사가 줄을 안 막게 된 뒤로 대사 바로 다음 줄을 같은 틀에 적어 자주 부딪쳤다. 주 실(UpdateSounds)이 대신 적는다.
-            if (Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} gain {_effectGain:0.00} L {left:0.00} R {right:0.00}");
+            if (BattleScene.Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} gain {_effectGain:0.00} L {left:0.00} R {right:0.00}");
         });
     }
 
@@ -375,7 +375,7 @@ internal sealed unsafe partial class GameWindow
                 _soundChannels[channel] = (loop ? 0 : _lastTime + ClipSeconds(pcm), tag);
             }
             if (!Muted && pcm != null) _mixer.PlayEffect(pcm, _effectGain, tag, loop, left, right);
-            if (Trace) _backgroundTrace.Enqueue($"channel {channel} sound {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} L {left:0.00} R {right:0.00}{(loop ? " loop" : "")}");
+            if (BattleScene.Trace) _backgroundTrace.Enqueue($"channel {channel} sound {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} L {left:0.00} R {right:0.00}{(loop ? " loop" : "")}");
         });
     }
 
@@ -457,7 +457,7 @@ internal sealed unsafe partial class GameWindow
     internal void StartEventVoice(PcmSound pcm)
     {
         if (!Muted) _mixer.PlayEffect(pcm, _effectGain);
-        _eventSoundSeconds = ClipSeconds(pcm);
+        Btl._eventSoundSeconds = ClipSeconds(pcm);
     }
 
     /// <summary>마지막으로 건 곡의 번호표 — 풀리는 데 1~2초 걸리는 사이 다른 곡이 걸리면 먼저 것은 버린다.</summary>
@@ -577,7 +577,7 @@ internal sealed unsafe partial class GameWindow
             if (l.Tag != 0 && l.End <= _lastTime)
             {
                 _mixer.EndLoop(l.Tag);                          // 되풀이만 끄고 이번 바퀴는 끝까지 울린다
-                if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"sound {l.Sound} loop end at {_lastTime:0.00}" + Environment.NewLine);
+                if (BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"sound {l.Sound} loop end at {_lastTime:0.00}" + Environment.NewLine);
                 _loopSounds.RemoveAt(i);
             }
         }
@@ -606,7 +606,7 @@ internal sealed unsafe partial class GameWindow
     /// 줄이는 페이드(20틱)가 다 돈 뒤부터 보고, 차례가 안 끝나도 가장 늦은 이펙트 끝 + 10초면 되돌린다(막힘 대비).
     /// </summary>
     internal bool DuckRestoreDue(double restoreAt) =>
-        _lastTime >= restoreAt + 10 || (_routine == null && _lastTime >= _musicDuckStart + 20 / TicksPerSecond);
+        _lastTime >= restoreAt + 10 || (Btl._routine == null && _lastTime >= _musicDuckStart + 20 / TicksPerSecond);
 
     /// <summary>배경음악 크기가 옮겨 가는 중 — (시작 크기, 목표 크기, 걸리는 틱, 시작한 때). 필드 행동 517.</summary>
     internal (float From, float To, int Ticks, double Start)? _musicFade;
@@ -625,7 +625,7 @@ internal sealed unsafe partial class GameWindow
         float to = Math.Clamp(percent, 0, 100) / 100f * MusicGain;
         // 필드 머리 곡(논리 0, 들리기는 100 %)은 첫 517 이 0 에서 올린다 — 첫 틀에 소리가 뚝 떨어졌다 커진다(감사4 M3).
         _musicAudible = null;
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"music fade {_musicGain * 100:0}% → {to * 100:0}% / {ticks}틱{(_musicPaused ? " (멈춤에서)" : "")} × BGM {_bgmVolume}% at {_lastTime:0.00}" + Environment.NewLine);
         if (ticks <= 0)
@@ -647,12 +647,12 @@ internal sealed unsafe partial class GameWindow
         _musicGain = gain;
         if (gain <= 0)
         {
-            if (!_musicPaused && Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"music pause at {_lastTime:0.00}" + Environment.NewLine);
+            if (!_musicPaused && BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"music pause at {_lastTime:0.00}" + Environment.NewLine);
             _musicPaused = true;
             _mixer.PauseMusic();
             return;
         }
-        if (_musicPaused && Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"music resume at {_lastTime:0.00}" + Environment.NewLine);
+        if (_musicPaused && BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"music resume at {_lastTime:0.00}" + Environment.NewLine);
         _mixer.SetMusicGain(gain);
         ResumeMusic();
     }
@@ -725,6 +725,6 @@ internal sealed unsafe partial class GameWindow
     {
         if (u.Data == null) return;
         var call = _voices.GetValueOrDefault(u.Data.VoiceSet).Call;
-        if (call is { Length: > 0 }) Play(call[_tick & 3], 1000 + Array.IndexOf(_units, u));
+        if (call is { Length: > 0 }) Play(call[Btl._tick & 3], 1000 + Array.IndexOf(_units, u));
     }
 }

@@ -62,13 +62,13 @@ internal sealed unsafe partial class GameWindow
     {
         TestClicksTick();
         if (!TestRun) return;
-        if (TestSkip && _battleLoaded && !FieldOpen && !Mos._mosesOpen && !TitleScr._titleOpen && _outcome.Length == 0)
+        if (TestSkip && _battleLoaded && !FieldOpen && !Mos._mosesOpen && !TitleScr._titleOpen && Btl._outcome.Length == 0)
         {
-            if (_runningEvent >= 0 && !_talkSkip) SkipScene();
+            if (Btl._runningEvent >= 0 && !_talkSkip) SkipScene();
             else if (_talks.Count > 0) OnTalkInput(skipAll: true);
         }
         // DUELDX_TESTSKIP=2 — 건너뛰지 않고 대사만 0.5초마다 한 번씩 눌러 넘긴다(건너뛰지 않는 사건 진행 길을 시험하려고).
-        if (TestClick && _talks.Count > 0 && _lastTime >= _testClickAt && _outcome.Length == 0)
+        if (TestClick && _talks.Count > 0 && _lastTime >= _testClickAt && Btl._outcome.Length == 0)
         {
             _testClickAt = _lastTime + 0.5;
             OnTalkInput();
@@ -77,7 +77,7 @@ internal sealed unsafe partial class GameWindow
         _testRunStatAt = _lastTime + 10;
         string scene = TitleScr._titleOpen ? "title" : Mos._mosesOpen ? "moses" : FieldOpen ? "field" : _battleLoaded ? $"btl {_scene.Id}" : "none";
         string alive = string.Join(" ", _units.Where(u => u.Alive && u.OnField).GroupBy(u => u.Side).OrderBy(g => g.Key).Select(g => $"s{g.Key}={g.Count()}"));
-        TestRunTrace($"stat t {_lastTime:F1} scene {scene} turnNo {_turnNo} tick {_tick} turn {_turn} ev {_runningEvent} talk {_talks.Count} outcome '{_outcome}' alive {alive}");
+        TestRunTrace($"stat t {_lastTime:F1} scene {scene} turnNo {Btl._turnNo} tick {Btl._tick} turn {Btl._turn} ev {Btl._runningEvent} talk {_talks.Count} outcome '{Btl._outcome}' alive {alive}");
     }
 
     /// <summary>시험 전용: 결과·행선지 줄 — 켜졌을 때만 적는다.</summary>

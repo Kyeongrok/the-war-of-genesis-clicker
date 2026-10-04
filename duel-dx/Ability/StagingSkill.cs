@@ -95,7 +95,7 @@ internal sealed unsafe class StagingSkill(GameWindow host)
             yield break;
         }
         if (!IsBalancingWork(w.Id) && !IsWeaponCrashWork(w.Id) && !IsBlackHoleWork(w.Id)) yield break;
-        var targets = (targetIndex >= 0 ? [targetIndex] : host.WorkTargets(w, a, col, row)).Select(i => host._units[i]).ToList();
+        var targets = (targetIndex >= 0 ? [targetIndex] : host.Btl.WorkTargets(w, a, col, row)).Select(i => host._units[i]).ToList();
         double start = host._lastTime;
         int Tick() => (int)((host._lastTime - start) * TicksPerSecond);
 
@@ -129,7 +129,7 @@ internal sealed unsafe class StagingSkill(GameWindow host)
                 var frame = host._sprites[u.ChrCode].FrameFor(u);
                 var (fx, fy) = host.UnitFoot(u);
                 if (frame == null) continue;
-                host.PlayActionFor(u, HitAction, 60);
+                host.Btl.PlayActionFor(u, BattleScene.HitAction, 60);
                 _stageDraws.Add(() =>
                 {
                     int n = (int)((host._lastTime - start) * TicksPerSecond);

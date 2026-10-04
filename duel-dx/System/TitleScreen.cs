@@ -181,14 +181,14 @@ internal sealed unsafe class TitleScreen(GameWindow host)
 
         // 아래쪽 반짝임 다섯 벌 — 시차 0·10·20·30·40틱
         for (int i = 0; i < 5; i++)
-            host.DrawUi(TitleSparkObs, 0, tick + i * 10, ox + 80 + i * 120, oy + 440, UiBlend.Add);
+            host.DrawUi(TitleSparkObs, 0, tick + i * 10, ox + 80 + i * 120, oy + 440, GameWindow.UiBlend.Add);
 
         // 마우스를 올린 단추에만 빛(가산) — 단추 왼위 (0,0) 그대로(0x10044320(0, 0, 370, 0, …) → 단추 +0x140/+0x142 = (0,0), 장 자리 (0,0)).
         // 전에는 2픽셀 올려 그렸다(감사 F14, 장 자리 값은 분석-UI 기록에 기댄 가설).
         if (_titleHover >= 0)
         {
             var (x, y, _) = TitleButtons[_titleHover];
-            host.DrawUi(TitleGlowObs, 0, (int)((host._lastTime - _titleOpenedAt) * TicksPerSecond), ox + x, oy + y, UiBlend.Add);
+            host.DrawUi(TitleGlowObs, 0, (int)((host._lastTime - _titleOpenedAt) * TicksPerSecond), ox + x, oy + y, GameWindow.UiBlend.Add);
         }
 
         // 오른쪽 위 판 번호 — Num.dat[0] × 0.001

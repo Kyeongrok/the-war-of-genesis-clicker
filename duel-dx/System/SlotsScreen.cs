@@ -200,7 +200,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
 
         // 「Select your record」 화면에서는 배경 글씨가 제목 노릇을 해서 제목줄 글자를 안 그린다.
         host.DrawGameFrame(x, y, SlotsW, SlotsH, host.RecordsScr._recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
-        if (!host.DrawUi(FrameObs, 5, 0, x + 296, y - 24, UiBlend.Alpha))
+        if (!host.DrawUi(FrameObs, 5, 0, x + 296, y - 24, GameWindow.UiBlend.Alpha))
             host.StrokeRect(x + 296, y - 24, 18, 18, White);
 
         for (int i = 0; i < SlotsVisible; i++)
@@ -211,7 +211,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
             var head = SlotHead(slot);
             bool dim = _slotsMode == 1 && head == null;
 
-            if (slot == _slotsHover && !dim && !host.DrawUi(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry, UiBlend.Alpha))
+            if (slot == _slotsHover && !dim && !host.DrawUi(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry, GameWindow.UiBlend.Alpha))
                 host.FillRect(rx, ry, SlotRowW, SlotRowH, 0x4060A0FF);
 
             if (head == null)
@@ -244,13 +244,13 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     /// <summary>스크롤 막대 — 위·아래 화살표와 손잡이(움직이는 길 232).</summary>
     internal void DrawSlotScrollbar(int x, int y, int tick)
     {
-        if (!host.DrawUi(SlotScrollObs, 2, tick, x, y, UiBlend.Alpha)) host.StrokeRect(x, y, 16, 16, White);
-        if (!host.DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, UiBlend.Alpha)) host.StrokeRect(x, y + SlotsH - 16, 16, 16, White);
+        if (!host.DrawUi(SlotScrollObs, 2, tick, x, y, GameWindow.UiBlend.Alpha)) host.StrokeRect(x, y, 16, 16, White);
+        if (!host.DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, GameWindow.UiBlend.Alpha)) host.StrokeRect(x, y + SlotsH - 16, 16, 16, White);
 
         int track = SlotsH - 32, span = Math.Max(1, SlotRows - SlotsVisible);
         int handleH = Math.Max(16, track * SlotsVisible / SlotRows);
         int hy = y + 16 + (track - handleH) * _slotsTop / span;
-        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, BoxLine);
+        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, BoxLine);
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>

@@ -2,6 +2,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 전투 중 아이템 쓰기(링 ITEM, 하위 메뉴 모드 2) — 목록 창과 쓰기.
 /// </summary>
@@ -16,7 +18,7 @@ namespace DuelDx;
 /// 회복 캡슐은 몸짓 없이 이펙트 <c>Obs 0297</c>·<c>Obs 0312</c> 와 <c>Snd 85</c> 로 나타난다(회복량 = 최대 HP × work 위력 / 100).
 /// </para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal const int ItemRowW = 182, ItemRowH = 22, ItemRows = 8, ItemMenuW = 206;
     internal const int ItemIconObs = 326, ItemRowObs = 471, ItemRowMotion = 4;
@@ -30,12 +32,12 @@ internal sealed unsafe partial class GameWindow
     /// <summary>가방에서 전투에 쓸 수 있는 것만 — (아이템, 개수).</summary>
     internal List<(ItemData Item, int Count)> ItemRowsList()
     {
-        if (_db is not { } db) return [];
+        if (host._db is not { } db) return [];
         var list = new List<(ItemData Item, int Count)>();
         // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
         // 전에는 work 이 있는 것만 보였다(원본차이-전투규칙 25).
         // 줄 차례는 가방에 <b>들어온 차례</b>(i = 0 … +0x108 을 그대로 훑는다) — 전에는 번호 차례로 늘어놓았다(감사3 I4).
-        foreach (var (id, count) in _inventory)
+        foreach (var (id, count) in host._inventory)
             if (count > 0 && db.Items.GetValueOrDefault(id) is { Type: 7 } item) list.Add((item, count));
         return list;
     }
@@ -45,9 +47,9 @@ internal sealed unsafe partial class GameWindow
         var rows = ItemRowsList();
         int shown = Math.Clamp(rows.Count, 1, ItemRows);
         int h = shown * ItemRowH + 24;
-        var (cx, cy) = RingCenter(_units[Math.Max(_turn, 0)]);
-        int x = Math.Clamp(cx - ItemMenuW / 2, _camX + 8, _camX + ViewWidth - ItemMenuW - 8);
-        int y = Math.Clamp(cy - h / 2, _camY + GridTop + 28, _camY + ViewHeight - h - 8);
+        var (cx, cy) = RingCenter(host._units[Math.Max(_turn, 0)]);
+        int x = Math.Clamp(cx - ItemMenuW / 2, host._camX + 8, host._camX + host.ViewWidth - ItemMenuW - 8);
+        int y = Math.Clamp(cy - h / 2, host._camY + GridTop + 28, host._camY + host.ViewHeight - h - 8);
         return (x, y, h);
     }
 
@@ -68,7 +70,7 @@ internal sealed unsafe partial class GameWindow
         }
 
         var (item, _) = rows[index];
-        if (Work(item.UseWork) is not { } w) { _itemMenu = true; Toast($"{_db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }
+        if (Work(item.UseWork) is not { } w) { _itemMenu = true; host.Toast($"{host._db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
         _targetItem = item.Id;
@@ -77,12 +79,12 @@ internal sealed unsafe partial class GameWindow
         // 확정은 OnTargetClick 의 제자리 기술 갈래가 받는다(UseSelfCentredWork 가 그때 하나 뺀다).
         if (w.SelfCentred)
         {
-            var self = _units[_turn];
+            var self = host._units[_turn];
             _aimCell = (self.Col, self.Row);
-            Hint($"{_db?.T(item.NameId)} — 주황 칸이 효과 범위입니다 (범위 안 클릭·Enter: 쓰기, 우클릭·Esc 취소)");
+            host.Hint($"{host._db?.T(item.NameId)} — 주황 칸이 효과 범위입니다 (범위 안 클릭·Enter: 쓰기, 우클릭·Esc 취소)");
             return true;
         }
-        Hint($"{_db?.T(item.NameId)} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
+        host.Hint($"{host._db?.T(item.NameId)} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
         return true;
     }
 
@@ -90,28 +92,28 @@ internal sealed unsafe partial class GameWindow
     internal void ConsumeTargetItem()
     {
         if (_targetItem == 0) return;
-        if (_inventory.TryGetValue(_targetItem, out int count))
+        if (host._inventory.TryGetValue(_targetItem, out int count))
         {
-            if (count <= 1) _inventory.Remove(_targetItem);
-            else _inventory[_targetItem] = count - 1;
+            if (count <= 1) host._inventory.Remove(_targetItem);
+            else host._inventory[_targetItem] = count - 1;
         }
         _targetItem = 0;
     }
 
     internal void DrawItemMenu()
     {
-        if (!_itemMenu || _turn < 0 || _db is not { } db) return;
+        if (!_itemMenu || _turn < 0 || host._db is not { } db) return;
         var rows = ItemRowsList();
         var (x, y, h) = ItemMenuRect();
 
-        DarkenRect(x - 1, y - 21, ItemMenuW + 2, h + 22);
-        DrawGameFrame(x, y, ItemMenuW, h, db.T(4) is { Length: > 0 } t ? t : "ITEM");
+        host.DarkenRect(x - 1, y - 21, ItemMenuW + 2, h + 22);
+        host.DrawGameFrame(x, y, ItemMenuW, h, db.T(4) is { Length: > 0 } t ? t : "ITEM");
 
         if (rows.Count == 0)
         {
             string none = db.T(0) is { Length: > 0 } n ? n : "없음";
-            var (_, nw, _) = GetText(none, DimGray);
-            DrawText(none, x + (ItemMenuW - nw) / 2, y + 16, DimGray);
+            var (_, nw, _) = host.GetText(none, DimGray);
+            host.DrawText(none, x + (ItemMenuW - nw) / 2, y + 16, DimGray);
             return;
         }
 
@@ -121,15 +123,15 @@ internal sealed unsafe partial class GameWindow
             if (index >= rows.Count) break;
             var (item, count) = rows[index];
             int rx = x + 12, ry = y + 12 + r * ItemRowH;
-            DrawUi(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, UiBlend.Alpha, loop: false);
-            DrawUi(ItemIconObs, item.PictureMotion, 0, rx + 8, ry + 2, UiBlend.Alpha, loop: false);
+            host.DrawUi(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, UiBlend.Alpha, loop: false);
+            host.DrawUi(ItemIconObs, item.PictureMotion, 0, rx + 8, ry + 2, UiBlend.Alpha, loop: false);
 
             string name = db.T(item.NameId);
-            var (_, nw, _) = GetText(name, White, 12);
-            DrawText(name, rx + ItemRowW - 46 - nw, ry + 4, White, 12);
+            var (_, nw, _) = host.GetText(name, White, 12);
+            host.DrawText(name, rx + ItemRowW - 46 - nw, ry + 4, White, 12);
             string amount = $"(x{count})";
-            var (_, aw, _) = GetText(amount, White, 12);
-            DrawText(amount, rx + ItemRowW - 6 - aw, ry + 4, White, 12);
+            var (_, aw, _) = host.GetText(amount, White, 12);
+            host.DrawText(amount, rx + ItemRowW - 6 - aw, ry + 4, White, 12);
         }
     }
 }

@@ -59,7 +59,7 @@ internal sealed unsafe class HeavenEarthSkill(GameWindow host)
     internal double PlayRawMotion(UnitState u, int motion, bool loop, double holdSeconds = 1000)
     {
         var found = host._sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.RawClip(motion) : null;
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"{host._lastTime:F2} chr {u.ChrCode} motion {motion}{(loop ? " hold" : "")} keys {found?.Keys.Count ?? 0}" + Environment.NewLine);
         if (sprite == null || found is not { Keys.Count: > 0 } clip) return 0;
@@ -175,7 +175,7 @@ internal sealed unsafe class HeavenEarthSkill(GameWindow host)
         double pull = PlayRawMotion(user, StabMotion + 2, loop: false);
         if (pull <= 0) user.PlayAction(ObsMotionTable.ActionStand, 0);
         for (double end = host._lastTime + pull; host._lastTime < end;) yield return true;
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"heaven-earth: targets {count}, fx {_timedFx.Count}, debris {_debris.Count}, took {host._lastTime - s1:0.0}s" + Environment.NewLine);
     }
@@ -211,12 +211,12 @@ internal sealed unsafe class HeavenEarthSkill(GameWindow host)
             if (host._lastTime < f.Start) continue;
             int tick = (int)((host._lastTime - f.Start) * TicksPerSecond);
             var clip = host.UiFor(f.Obs)?.Clip(f.Motion);
-            if (clip is { Children.Count: > 0 }) host.DrawUnitLayers(clip, tick, f.X, f.Y, f.Mirror, loop: f.End != null);
-            host.DrawUi(f.Obs, f.Motion, tick, f.X, f.Y, UiBlend.Add, loop: f.End != null, mirror: f.Mirror);
+            if (clip is { Children.Count: > 0 }) host.Btl.DrawUnitLayers(clip, tick, f.X, f.Y, f.Mirror, loop: f.End != null);
+            host.DrawUi(f.Obs, f.Motion, tick, f.X, f.Y, GameWindow.UiBlend.Add, loop: f.End != null, mirror: f.Mirror);
         }
         foreach (var d in _debris)
             if (host._lastTime >= d.Start)
-                host.DrawUi(d.Obs, d.Motion, d.Age, (int)d.X, (int)(d.Y - d.Z * 0.6), UiBlend.Alpha);
+                host.DrawUi(d.Obs, d.Motion, d.Age, (int)d.X, (int)(d.Y - d.Z * 0.6), GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>지금 흔들림 — 틀마다 ±세기로 번갈아(가로·세로 따로).</summary>

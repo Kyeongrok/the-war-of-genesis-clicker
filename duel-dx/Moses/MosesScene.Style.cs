@@ -102,8 +102,8 @@ internal sealed unsafe partial class MosesScene
     internal void DrawStylePartyArrows(int ox, int oy)
     {
         if (StyleParty().Count < 6) return;
-        if (!host.DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha)) host.DrawText("◀", ox + 20, oy + 385, White, 18);
-        if (!host.DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha)) host.DrawText("▶", ox + 400, oy + 385, White, 18);
+        if (!host.DrawUi(302, 0, 0, ox + 20, oy + 370, GameWindow.UiBlend.Alpha)) host.DrawText("◀", ox + 20, oy + 385, White, 18);
+        if (!host.DrawUi(302, 1, 0, ox + 400, oy + 370, GameWindow.UiBlend.Alpha)) host.DrawText("▶", ox + 400, oy + 385, White, 18);
     }
 
     internal List<int> StyleParty()
@@ -284,7 +284,7 @@ internal sealed unsafe partial class MosesScene
     internal void DrawCentredIcon(int obs, int motion, int tick, int x, int y, int w, int h)
     {
         if (host.UiFor(obs)?.FrameAt(motion, 0, loop: true) is not { } f) return;
-        host.DrawUi(obs, motion, tick, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
+        host.DrawUi(obs, motion, tick, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, GameWindow.UiBlend.Alpha);
     }
 
     /// <summary>처음 계열(0~4) — 그 인물 .chr 직업이 든 Dep 의 계열. 못 찾으면 지금 계열.</summary>
@@ -328,7 +328,7 @@ internal sealed unsafe partial class MosesScene
         for (int i = 0; i < party.Count && i < 5; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
-            host.DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, GameWindow.UiBlend.Alpha);
             // 초상화는 단추보다 커서 칸(60×60)에 맞춰 줄여 그린다 — 원본은 같은 크기라 그대로 얹는다.
             // 초상화는 단추(64×130, 왼위 기준) 안 +(32,50) 을 가운데로 — 60×60 이니 왼위는 +(2,20). 전에는 30픽셀 왼쪽에 찍혀 틀과 어긋났다.
             if (PartyData(party[i]) is { } pc)
@@ -371,7 +371,7 @@ internal sealed unsafe partial class MosesScene
         for (int i = 0; i < styleJobs.Count && i < StyleBodyCells.Length; i++)
         {
             var (cx, cy) = StyleBodyCells[i];
-            host.DrawUi(StyleBodyObs, 0, tick, ox + cx, oy + cy, UiBlend.Alpha);
+            host.DrawUi(StyleBodyObs, 0, tick, ox + cx, oy + cy, GameWindow.UiBlend.Alpha);
             string label = db.T((ushort)(878 + i));
             var (_, lw, lh) = host.GetText(label, White, 12);
             uint colour = styleJobs[i] == c.JobId ? 0xFF00FF00 : i == _stylePick ? 0xFF00FFFF : 0xFFB4B4B4;
@@ -384,10 +384,10 @@ internal sealed unsafe partial class MosesScene
         {
             var cell = StyleTierCells[slot];
             bool over = mx >= cell.X && mx < cell.X + cell.W && my >= cell.Y && my < cell.Y + cell.H;
-            host.DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + cell.X, oy + cell.Y, UiBlend.Alpha);   // 계열 단추처럼 칸 자리에
+            host.DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + cell.X, oy + cell.Y, GameWindow.UiBlend.Alpha);   // 계열 단추처럼 칸 자리에
             int family = StyleData() is { } oc ? StyleOriginFamily(oc) : 0;
-            host.DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
-            host.DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
+            host.DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, GameWindow.UiBlend.Alpha);
+            host.DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, GameWindow.UiBlend.Alpha);
         }
 
         // 계열 단추 넷 — 1단계·레벨 30 일 때만 나온다(못 가는 동안은 아예 없다).
@@ -399,20 +399,20 @@ internal sealed unsafe partial class MosesScene
             // 짝수 모션이 가만히 있는 판, 홀수 모션이 마우스를 올렸을 때 빛나는 판이다.
             var (fx, fy, fw, fh) = StyleFamilyCells[i];
             bool over = mx >= fx && mx < fx + fw && my >= fy && my < fy + fh;
-            host.DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, UiBlend.Alpha);
+            host.DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, GameWindow.UiBlend.Alpha);
             DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], tick, ox + fx, oy + fy, fw, fh);
         }
 
         // STATUS 단추 — 원본에는 없는 데모 단추. 형 단추와 같은 알약(Obs 283)에 글자를 얹는다.
         {
             int bx0 = ox + 455, by0 = oy + 390;
-            if (!host.DrawUi(StyleBodyObs, 0, tick, bx0, by0, UiBlend.Alpha)) host.StrokeRect(bx0, by0, 68, 28, White);
+            if (!host.DrawUi(StyleBodyObs, 0, tick, bx0, by0, GameWindow.UiBlend.Alpha)) host.StrokeRect(bx0, by0, 68, 28, White);
             var (_, sw, sh) = host.GetText("STATUS", White, 12);
             host.DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
         }
 
         // Ok 글자는 배경 그림(Bgr 0042)에 있다 — 알약 Obs 287 은 마우스 올림에만.
-        if (mx >= 455 && mx < 633 && my >= 430 && my < 457) host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+        if (mx >= 455 && mx < 633 && my >= 430 && my < 457) host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
 
         // 어빌리티 줄을 오른쪽 단추로 누르고 있는 동안의 설명 — 맨 위에 그린다.
         if (_styleTip is { } tip) host.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, MosesW, MosesH);

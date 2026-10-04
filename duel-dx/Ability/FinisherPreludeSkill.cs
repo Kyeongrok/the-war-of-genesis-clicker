@@ -56,15 +56,15 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
     internal IEnumerable<bool> FinisherPrelude(WorkData w, UnitState user)
     {
         const double Tick = 1 / TicksPerSecond;
-        host.PlayAction(user, 6);
+        host.Btl.PlayAction(user, 6);
         PreludeSound(1338, 1);                                   // 시전 소리(0x1007e42c)
         // 단계 1 — Mov 0042 은 SpawnWorkMovies(prelude) 가 이미 띄웠다. 영상(51장, 30fps)이 끝날 만큼 기다린다.
         for (double end = host._lastTime + 51 * Tick; host._lastTime < end;) yield return true;
 
         // 단계 2
-        host.PlayAction(user, 15);
+        host.Btl.PlayAction(user, 15);
         var (ux, uy) = host.UnitFoot(user);
-        foreach (int m in new[] { 0, 1, 2 }) { host._effects.Add((487, m, host._lastTime, ux, uy)); PreludeSound(487, m); }
+        foreach (int m in new[] { 0, 1, 2 }) { host.Btl._effects.Add((487, m, host._lastTime, ux, uy)); PreludeSound(487, m); }
         SpawnPreludeDots(ux, uy);
         for (double end = host._lastTime + 10 * Tick; host._lastTime < end;) yield return true;
 
@@ -73,7 +73,7 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
         foreach (var (motion, sy) in new[] { (18, 130), (19, 340) })
         {
             var (bx, by) = PreludeScreen(0, sy);
-            host._effects.Add((PreludeBandObs, motion, host._lastTime + 10 * Tick, (int)bx, (int)by));
+            host.Btl._effects.Add((PreludeBandObs, motion, host._lastTime + 10 * Tick, (int)bx, (int)by));
         }
         for (double end = host._lastTime + 60 * Tick; host._lastTime < end;) yield return true;
     }
@@ -158,7 +158,7 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
                 }
         }
         foreach (var f in _fxFlights)
-            if (f.Delay <= 0) host.DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, UiBlend.Alpha);
+            if (f.Delay <= 0) host.DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, GameWindow.UiBlend.Alpha);
     }
 
     internal static void StepFxFlight(FxFlight f)
@@ -187,6 +187,6 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
     {
         int level = host.UiFor(PreludeDotObs)?.BlendAt(motion, tick) ?? 0;
         if (level is <= 0 or > 8) level = 8;
-        host.DrawUi(PreludeDotObs, motion, tick, (int)x, (int)y, UiBlend.Add, loop: false, fade: level / 8.0);
+        host.DrawUi(PreludeDotObs, motion, tick, (int)x, (int)y, GameWindow.UiBlend.Add, loop: false, fade: level / 8.0);
     }
 }

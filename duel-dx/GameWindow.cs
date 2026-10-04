@@ -84,7 +84,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             || (uint)fromCol >= map.Cols || (uint)fromRow >= map.Rows) return StepTicks;
         int diff = Math.Abs(map.HeightAt(toCol, toRow) - map.HeightAt(fromCol, fromRow));
         if (diff == 0) return StepTicks;
-        int flags = CellFlagsAt(toCol, toRow);
+        int flags = Btl.CellFlagsAt(toCol, toRow);
         if ((flags & 0x40) != 0 || (diff >= 2 && (flags & 0x20) != 0)) return 10;
         return diff == 1 ? 6 : 8;
     }
@@ -228,7 +228,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 if (wanted > 0 && Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changed && File.Exists(changed))
                 {
                     obsPath = changed;
-                    if (Trace)
+                    if (BattleScene.Trace)
                         File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"sprite {chrCode}: record picture {wanted} → {obsPath}" + Environment.NewLine);
                 }
                 _spriteCodes[chrCode] = wanted;
@@ -321,10 +321,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
         _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
-        _units = BuildUnits(_scene);
+        _units = Btl.BuildUnits(_scene);
         // 첫 판(시험 훅 포함)은 배치 단계 없이 — 새로 거는 전투(StartBattle)만 연다. DUELDX_DEPLOY=1 이면 첫 판에서도 연다(화면 밖 시험용).
-        BeginDeployOrDrop(_scene, fresh: Environment.GetEnvironmentVariable("DUELDX_DEPLOY") == "1");
-        LoadEvents(_scene.Id);
+        Btl.BeginDeployOrDrop(_scene, fresh: Environment.GetEnvironmentVariable("DUELDX_DEPLOY") == "1");
+        Btl.LoadEvents(_scene.Id);
     }
 
     /// <summary>나머지(그림·소리)는 배경 스레드에서 읽는다 — 창은 먼저 뜬다.</summary>
@@ -333,8 +333,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         try
         {
             LoadRosterSprites();
-            InitBattle();
-            LoadRingAssets();
+            Btl.InitBattle();
+            Btl.LoadRingAssets();
             LoadAudio();
             // 타이틀·모세스·필드를 여는 훅은 판(_fb·_map)을 갈아 끼우므로 <b>주 스레드</b>에서 돌린다(Update) — 여기서 부르면
             // 그리는 중에 판이 바뀌어 DrawBackground 가 간헐적으로 죽었다.
@@ -393,8 +393,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         double zoom = FitZoom();
         if (!force && Math.Abs(zoom - _zoom) < 1e-9) return;
         _zoom = zoom;
-        _camTarget = Math.Clamp(_camTarget, 0, CamMax);
-        _camTargetX = Math.Clamp(_camTargetX, 0, CamMaxX);
+        Btl._camTarget = Math.Clamp(Btl._camTarget, 0, CamMax);
+        Btl._camTargetX = Math.Clamp(Btl._camTargetX, 0, Btl.CamMaxX);
         if (_hwnd != IntPtr.Zero) RebuildView();
     }
 
@@ -412,7 +412,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _zoom = FitZoom();
         if (_fb.Length != BoardWidth * BoardHeight) _fb = new uint[BoardWidth * BoardHeight];
         // 세로 자리·명령까지 지운다 — 예전엔 가로만 지워 새 전투가 앞 전투의 세로 자리에서 미끄러져 왔다(감사4 C5).
-        ResetCamera();
+        Btl.ResetCamera();
         // 전투 맵이면 다음 전투 틀에 시작 카메라(Btl 워드 2·3)와 16틀 페이드인을 건다(0x10061ad0, 감사4 C6).
         _battleIntroPending = BoardIsMap;
         // 판을 갈았으면 장면이 바뀐 것 — 남은 페이드는 버린다(메뉴로 불러오기·타이틀로 가면 끝나지 않은 페이드가 남아 입력을 막았다).
@@ -652,22 +652,22 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when SlotsScr.SlotsOpen:
                 SlotsScr.ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when _itemMenu:
+            case Win32.WM_MOUSEWHEEL when Btl._itemMenu:
                 // 아이템 목록은 8줄 창이다(0x100d3830) — 휠로 굴린다. 전에는 9종째부터 고를 수 없었다(ba-20 G1).
-                _itemTop = Math.Clamp(_itemTop - (short)(((long)wParam >> 16) & 0xFFFF) / 120, 0, Math.Max(0, ItemRowsList().Count - ItemRows));
+                Btl._itemTop = Math.Clamp(Btl._itemTop - (short)(((long)wParam >> 16) & 0xFFFF) / 120, 0, Math.Max(0, Btl.ItemRowsList().Count - BattleScene.ItemRows));
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when _abilityMenu && !SystemOpen:
-                ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
+            case Win32.WM_MOUSEWHEEL when Btl._abilityMenu && !SystemOpen:
+                Btl.ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when SystemOpen || LevelUpOpen || _abilityMenu || Mos._mosesOpen:
+            case Win32.WM_MOUSEWHEEL when SystemOpen || Btl.LevelUpOpen || Btl._abilityMenu || Mos._mosesOpen:
                 return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:
                 // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
-                if (((long)wParam & 0x0004) != 0) ScrollCameraX(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
-                else ScrollCamera(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileH * 2);
+                if (((long)wParam & 0x0004) != 0) Btl.ScrollCameraX(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
+                else Btl.ScrollCamera(-(short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileH * 2);
                 return IntPtr.Zero;
             case 0x020E:   // WM_MOUSEHWHEEL — 가로 휠
-                ScrollCameraX((short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
+                Btl.ScrollCameraX((short)(((long)wParam >> 16) & 0xFFFF) / 120.0 * TileW * 2);
                 return IntPtr.Zero;
             case Win32.WM_APP_SNAPSHOT:
                 SaveSnapshot();
@@ -685,28 +685,28 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONUP:
-                CloseUnitInfo();
-                _abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
+                Btl.CloseUnitInfo();
+                Btl._abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
                 _statusTip = null;         // 스테이터스 설명도(0x10042c00)
                 Mos._styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
-                _ringHelp = null;          // 링 항목 설명도
+                Btl._ringHelp = null;          // 링 항목 설명도
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
-                _mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
+                Btl._mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
                 Mos.UpdateMosesHover(bx, by);
                 ChaptersScr.UpdateChaptersHover(bx, by);
                 SlotsScr.UpdateSlotsHover(bx, by);
-                UpdateAbilityHover(bx, by);
-                UpdateAimHover(bx, by);
+                Btl.UpdateAbilityHover(bx, by);
+                Btl.UpdateAimHover(bx, by);
                 TitleScr.UpdateTitleHover(bx, by);
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
-                if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
-                else OnRingMouseMove(bx, by);
+                if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
+                else Btl.OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
             }
         }
@@ -718,7 +718,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void OnKeyDown(int key)
     {
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
-        if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
+        if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !Mos._mosesOpen && !FieldOpen && !TitleScr._titleOpen && !EpisodesScr._episodesOpen && !RecordsScr._recordsOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
@@ -728,7 +728,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
-        if (_deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { OnDeployKey(key); return; }
+        if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (ChaptersScr._chaptersOpen) { if (key == Win32.VK_ESCAPE) ChaptersScr._chaptersOpen = false; return; }
         // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
@@ -740,11 +740,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
             OpenSystemMenu();   // 연대표 Esc 에는 소리가 없다(0x10106e50, ba-20 T6)
             return;
         }
-        if (OnAbilityMenuKey(key)) return;
-        if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (Btl.OnAbilityMenuKey(key)) return;
+        if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (Mos._mosesOpen)
         {
@@ -770,46 +770,46 @@ internal sealed unsafe partial class GameWindow : IDisposable
             // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6). 전투에서는 내 유닛 조종 상태(원본 상태 22)일 때만 —
             // AI 차례·행동·이벤트·배치·레벨업·결과 중에는 취소로만 쓰인다(감사5 S1·S8). 필드는 편의로 열되 SAVE 는 꺼져 있다(S3).
             if (_statusUnit >= 0) _statusUnit = -1;
-            else if (_ringUnit >= 0) CancelRing();
-            else if (!CancelStep(undoMove: true) && (FieldOpen || CanOpenBattleMenu)) OpenSystemMenu();
+            else if (Btl._ringUnit >= 0) Btl.CancelRing();
+            else if (!Btl.CancelStep(undoMove: true) && (FieldOpen || CanOpenBattleMenu)) OpenSystemMenu();
             return;
         }
-        if (key == Win32.VK_RETURN && _ringUnit >= 0 && _ringPhase == RingPhase.Idle && _ringHover >= 0) { PickRingItem(_ringHover); return; }
+        if (key == Win32.VK_RETURN && Btl._ringUnit >= 0 && Btl._ringPhase == BattleScene.RingPhase.Idle && Btl._ringHover >= 0) { Btl.PickRingItem(Btl._ringHover); return; }
         if (_statusUnit >= 0) return;
 
         // 대상 고르는 중: Enter·공격 키 = 커서의 적 치기, 다음 인물 키(Tab) = 다른 적
         // 기본공격뿐 아니라 적 하나를 겨누는 어빌리티도 같게 다룬다.
-        if (_targetWork >= 0 && _attackCursor >= 0 && _ringUnit < 0)
+        if (Btl._targetWork >= 0 && Btl._attackCursor >= 0 && Btl._ringUnit < 0)
         {
-            if (key == Win32.VK_RETURN || _keys.ActionFor(key) == KeyAction.Attack) { AttackCursorTarget(); return; }
-            if (_keys.ActionFor(key) == KeyAction.NextUnit) { CycleAttackCursor(); return; }
+            if (key == Win32.VK_RETURN || _keys.ActionFor(key) == KeyAction.Attack) { Btl.AttackCursorTarget(); return; }
+            if (_keys.ActionFor(key) == KeyAction.NextUnit) { Btl.CycleAttackCursor(); return; }
         }
         // 어빌리티를 고른 단축키를 한 번 더(또는 Enter) — 저절로 겨눈 대상에게 바로 쓴다.
-        if (_targetWork >= 0 && !_targetIsBasicAttack && _ringUnit < 0
-            && (key == _targetHotkey || key == Win32.VK_RETURN) && UseAimedAbility()) return;
+        if (Btl._targetWork >= 0 && !Btl._targetIsBasicAttack && Btl._ringUnit < 0
+            && (key == Btl._targetHotkey || key == Win32.VK_RETURN) && Btl.UseAimedAbility()) return;
 
         // 어빌리티 목록을 안 열고도 1~4 를 누르면 그 줄의 어빌리티를 바로 고른다(Q·W·E·R 은 다른 단축키와 겹쳐 뺀다).
-        if (key is >= '1' and <= '4' && IsPlayerTurn && !_abilityMenu && _targetWork < 0 && _ringUnit < 0 && !_units[_turn].IsBusy)
+        if (key is >= '1' and <= '4' && Btl.IsPlayerTurn && !Btl._abilityMenu && Btl._targetWork < 0 && Btl._ringUnit < 0 && !_units[Btl._turn].IsBusy)
         {
-            RingShortcut(RingCommand.Ability);
-            if (_abilityMenu && OnAbilityMenuKey(key)) return;
+            Btl.RingShortcut(BattleScene.RingCommand.Ability);
+            if (Btl._abilityMenu && Btl.OnAbilityMenuKey(key)) return;
         }
 
         switch (MoveActionFor(key) ?? _keys.ActionFor(key))
         {
             case KeyAction.Grid: _showGrid = !_showGrid; SaveSettings(); break;
             case KeyAction.Gauges: _showGauges = !_showGauges; SaveSettings(); break;
-            case KeyAction.Ring: ToggleRingForSelected(); break;
-            case KeyAction.Attack: RingShortcut(RingCommand.Attack); break;
-            case KeyAction.Ability: RingShortcut(RingCommand.Ability); break;
-            case KeyAction.Rest: RingShortcut(RingCommand.Rest); break;
+            case KeyAction.Ring: Btl.ToggleRingForSelected(); break;
+            case KeyAction.Attack: Btl.RingShortcut(BattleScene.RingCommand.Attack); break;
+            case KeyAction.Ability: Btl.RingShortcut(BattleScene.RingCommand.Ability); break;
+            case KeyAction.Rest: Btl.RingShortcut(BattleScene.RingCommand.Rest); break;
             case KeyAction.Status:
-                if (_ringUnit >= 0) RingShortcut(RingCommand.Status);
+                if (Btl._ringUnit >= 0) Btl.RingShortcut(BattleScene.RingCommand.Status);
                 else if ((uint)_selected < _units.Length) _statusUnit = _selected;
                 break;
-            case KeyAction.Item: RingShortcut(RingCommand.Item); break;
+            case KeyAction.Item: Btl.RingShortcut(BattleScene.RingCommand.Item); break;
             case KeyAction.System:
-                if (_ringUnit >= 0) RingShortcut(RingCommand.System);
+                if (Btl._ringUnit >= 0) Btl.RingShortcut(BattleScene.RingCommand.System);
                 else if (FieldOpen || CanOpenBattleMenu) OpenSystemMenu();   // Esc 와 같은 문(감사5 S1·S8)
                 break;
             case KeyAction.NextUnit:
@@ -820,7 +820,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 }
                 break;
             case KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight:
-                if (_ringUnit >= 0 || _abilityMenu || _targetWork >= 0) break;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
+                if (Btl._ringUnit >= 0 || Btl._abilityMenu || Btl._targetWork >= 0) break;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
                 _heldMoveKeys.Remove(key);
                 _heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
                 StepByKey(key);
@@ -855,9 +855,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _fadeOutStart = _lastTime;
         _afterFadeOut = null;
         _fadeOutKeepMusic = false;
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"{_lastTime:F2} battle fade-out ({(_lastTime - _outcomeAt) * TicksPerSecond:F0} ticks after outcome '{_outcome}')" + Environment.NewLine);
+                $"{_lastTime:F2} battle fade-out ({(_lastTime - Btl._outcomeAt) * TicksPerSecond:F0} ticks after outcome '{Btl._outcome}')" + Environment.NewLine);
     }
 
     /// <summary>페이드아웃이 끝난 뒤 — 결과대로 다음 장면을 연다.</summary>
@@ -865,20 +865,20 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
         // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
-        bool won = _outcome.StartsWith('승');
-        int nextField = _eventNextField;
+        bool won = Btl._outcome.StartsWith('승');
+        int nextField = Btl._eventNextField;
         // 시험 전용: 결과와 행선지를 남긴다(DUELDX_TESTRUN 일 때만).
-        TestRunTrace($"leave btl {_scene.Id} won {won} outcome '{_outcome}' nextBattle {_eventNextBattle} nextField {nextField} sceneNext {_scene.NextBattle} episodes {EpisodesScr.Episodes().Count} turnNo {_turnNo} t {_lastTime:F1}");
-        _outcome = "";
-        _outcomeQuiet = false;
-        _eventNextField = 0;
+        TestRunTrace($"leave btl {_scene.Id} won {won} outcome '{Btl._outcome}' nextBattle {Btl._eventNextBattle} nextField {nextField} sceneNext {_scene.NextBattle} episodes {EpisodesScr.Episodes().Count} turnNo {Btl._turnNo} t {_lastTime:F1}");
+        Btl._outcome = "";
+        Btl._outcomeQuiet = false;
+        Btl._eventNextField = 0;
         // 상태이상은 그 전투에서만 간다 — 판에 남은 유닛에 붙어 있으면 모세스 스테이터스 창에 그대로 보였다(사용자 보고).
         foreach (var u in _units) u.ClearStatus();
         // 진행 깃발은 <b>실제로 돈</b> 행동 102 만 세운다(RunEventAction) — 이긴 뒤 파일의 102 를 모두 적용하던 것은 안 터진 갈래의 깃발까지 세웠다(fg-21 ⑬).
         // 이어지는 전투는 이벤트 행동 10 이 정한 것뿐이다. Btl 자료의 첫 행동 10 은 챕터 자료가 없는 데모 흐름에서만 쓴다 —
         // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
-        int next = _eventNextBattle > 0 ? _eventNextBattle : EpisodesScr.Episodes().Count == 0 ? _scene.NextBattle : 0;
-        _eventNextBattle = 0;
+        int next = Btl._eventNextBattle > 0 ? Btl._eventNextBattle : EpisodesScr.Episodes().Count == 0 ? _scene.NextBattle : 0;
+        Btl._eventNextBattle = 0;
         if (won && next > 0 && StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
         if (won && nextField > 0 && Fld.OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
@@ -905,16 +905,16 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ProgressScr._progressOpen) { var (px, py) = BoardPoint(clientX, clientY); ProgressScr.OnProgressClick(px, py); return; }
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !Mos._mosesOpen && !FieldOpen && !TitleScr._titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
-        if (LevelUpOpen) { CloseLevelUp(); return; }
+        if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
         if (TrySkipEnemyAction()) return;      // 적이 행동하는 동안의 클릭 = 그 행동 건너뛰기(모드)
         if (SlotsScr._notice != null) { SlotsScr._notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
-        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
-        if (OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
+        if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
         if (Fld.OnFieldClick(bx, by)) return;
         if (RecordsScr.OnRecordsClick(bx, by)) return;
         if (EpisodesScr.OnEpisodesClick(bx, by)) return;
@@ -923,8 +923,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by)) return;
-        if (OnItemMenuClick(bx, by)) return;
-        if (OnRingClick(bx, by) || OnAbilityMenuClick(bx, by)) return;
+        if (Btl.OnItemMenuClick(bx, by)) return;
+        if (Btl.OnRingClick(bx, by) || Btl.OnAbilityMenuClick(bx, by)) return;
 
         if (by < GridTop) return;
         int col = bx / TileW, row = RowAt(bx, by);
@@ -932,18 +932,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int index = UnitOrFoeAt(bx, by);
         if (index >= 0) (col, row) = (_units[index].Col, _units[index].Row);
         if (row < 0) return;
-        if (OnTargetClick(col, row)) return;
+        if (Btl.OnTargetClick(col, row)) return;
 
         if (index >= 0)
         {
             // 적군은 고를 수 없다(fa-9) — 대신 내 차례면 클릭만으로 바로 공격한다(fa-12).
             if (_units[index].IsAlly) _selected = index;
-            else if (IsPlayerTurn && !_units[_turn].IsBusy) QuickAttack(index);
+            else if (Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy) Btl.QuickAttack(index);
             return;
         }
-        if (TryTouchObject(col, row) || TryAttackObject(col, row)) return;
-        if (_selected == _turn && TryWalkTo(col, row)) return;
-        _selected = _turn;
+        if (Btl.TryTouchObject(col, row) || Btl.TryAttackObject(col, row)) return;
+        if (_selected == Btl._turn && Btl.TryWalkTo(col, row)) return;
+        _selected = Btl._turn;
     }
 
     /// <summary>
@@ -951,19 +951,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// </summary>
     internal void TryStep(Facing facing, int dx, int dy)
     {
-        if (!IsPlayerTurn) return;
-        _selected = _turn;
-        var unit = _units[_turn];
+        if (!Btl.IsPlayerTurn) return;
+        _selected = Btl._turn;
+        var unit = _units[Btl._turn];
         if (unit.IsBusy) return;
 
         unit.Facing = facing;
         int col = unit.Col + dx, row = unit.Row + dy;
-        if ((uint)col >= Cols || (uint)row >= Rows || ComputeRange(unit) is not { } range) return;
+        if ((uint)col >= Cols || (uint)row >= Rows || Btl.ComputeRange(unit) is not { } range) return;
         int index = row * Cols + col;
         if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
 
         unit.BeginStep(col, row, StepTicksBetween(unit.Col, unit.Row, col, row));
-        FollowUnit(_turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
+        Btl.FollowUnit(Btl._turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
     }
 
     /// <summary>누르고 있는 이동 키(누른 순서). 키보드 반복 대신 이걸로 한 칸이 끝나는 즉시 다음 칸을 잇는다.</summary>
@@ -1001,18 +1001,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void ApplyAimHook()
     {
         if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
-        if (!IsPlayerTurn || _routine != null || _talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
+        if (!Btl.IsPlayerTurn || Btl._routine != null || _talk != null || Btl._runningEvent >= 0 || Btl.Work(id) is not { } w) return;
         _aimHookDone = true;
-        var u = _units[_turn];
+        var u = _units[Btl._turn];
         // DUELDX_AIMSHOW=1 이면 누르지 않고 어빌리티 목록에서 고른 것처럼만 한다 — 범위를 먼저 보이는 기술을 시험할 때.
-        if (Environment.GetEnvironmentVariable("DUELDX_AIMSHOW") == "1") { SelectAbilityRow((_db?.Abilities.GetValueOrDefault(w.AbilityId) is { } ab ? _db.T(ab.NameId) : "", w, true, "")); return; }
-        (_targetWork, _targetIsBasicAttack) = (w.Id, false);
+        if (Environment.GetEnvironmentVariable("DUELDX_AIMSHOW") == "1") { Btl.SelectAbilityRow((_db?.Abilities.GetValueOrDefault(w.AbilityId) is { } ab ? _db.T(ab.NameId) : "", w, true, "")); return; }
+        (Btl._targetWork, Btl._targetIsBasicAttack) = (w.Id, false);
         u.Hp = Math.Max(1, u.Hp / 2);
         int before = u.Hp;
-        bool took = OnTargetClick(u.Col, u.Row);
-        if (Trace)
+        bool took = Btl.OnTargetClick(u.Col, u.Row);
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {_routine != null} toast '{_toast}' hp {before}" + Environment.NewLine);
+                $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {Btl._routine != null} toast '{_toast}' hp {before}" + Environment.NewLine);
     }
 
     /// <summary>DUELDX_CLICKCELL=&lt;열&gt;,&lt;줄&gt; 면 플레이어 차례에 그 칸 한가운데를 한 번 누른다(화면 밖 시험용 — 클릭 이동).</summary>
@@ -1022,31 +1022,31 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         if (_clickHookDone || Environment.GetEnvironmentVariable("DUELDX_CLICKCELL")?.Split(',') is not [var cs, var rs]
             || !int.TryParse(cs, out int col) || !int.TryParse(rs, out int row)) return;
-        if (!IsPlayerTurn || _routine != null || _talk != null || _units[_turn].IsBusy) return;
+        if (!Btl.IsPlayerTurn || Btl._routine != null || _talk != null || _units[Btl._turn].IsBusy) return;
         _clickHookDone = true;
-        var u = _units[_turn];
+        var u = _units[Btl._turn];
         // DUELDX_CLICKFROM=<열>,<줄> 이면 누르기 전에 차례인 인물을 그 칸에 세운다 — 걸어가서 치는 거리를 시험할 때.
         if (Environment.GetEnvironmentVariable("DUELDX_CLICKFROM")?.Split(',') is [var fc, var fr] && int.TryParse(fc, out int fromCol) && int.TryParse(fr, out int fromRow))
             u.ResetTo(fromCol, fromRow, keepFacing: true);
         int bx = col * TileW + TileW / 2, by = CellTop(col, row) + TileH / 2;
-        var range = ComputeRange(u);
-        string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {RowAt(bx, by)} unitAt {UnitAtBoard(bx, by)} object {ObjectAt(col, RowAt(bx, by))?.Data.Id} "
-                   + $"turn {u.ChrCode}({u.Col},{u.Row}) reach {range?.CanReach(row * Cols + col)} path {(range is { } r ? PathWithin(r, u.Col, u.Row, row * Cols + col)?.Count : null)}";
+        var range = Btl.ComputeRange(u);
+        string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {RowAt(bx, by)} unitAt {UnitAtBoard(bx, by)} object {Btl.ObjectAt(col, RowAt(bx, by))?.Data.Id} "
+                   + $"turn {u.ChrCode}({u.Col},{u.Row}) reach {range?.CanReach(row * Cols + col)} path {(range is { } r ? Btl.PathWithin(r, u.Col, u.Row, row * Cols + col)?.Count : null)}";
         OnClick((int)((bx - _camX) * _zoom + ViewOffsetX), (int)((by - _camY) * _zoom + ViewOffsetY));
         why += $" → queued {u.Path.Count} toast '{_toast}'";
-        if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);
+        if (BattleScene.Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);
     }
 
     internal void ApplyWorkHook()
     {
         ApplyAimHook();
         ApplyClickHook();
-        if (_turnNo >= 1) OpenUnitInfoIfAsked();
-        if (WorkHook == null || _workHookDone || _routine != null || _units.Length == 0) return;
-        if (_talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
-        if (_turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
+        if (Btl._turnNo >= 1) Btl.OpenUnitInfoIfAsked();
+        if (WorkHook == null || _workHookDone || Btl._routine != null || _units.Length == 0) return;
+        if (_talk != null || Btl._outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
+        if (Btl._turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
         var parts = WorkHook.Split(':');
-        if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
+        if (!int.TryParse(parts[0], out int id) || Btl.Work(id) is not { } w) return;
         // DUELDX_WORKBY=<Chr> 면 그 인물이 쓴다(없으면 첫 아군).
         int by = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_WORKBY"), out int chrBy) ? chrBy : 0;
         int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly && (by == 0 || u.ChrCode == by));
@@ -1071,16 +1071,16 @@ internal sealed unsafe partial class GameWindow : IDisposable
             ? Array.IndexOf(_units, _units.Where(u => u.Alive && u.OnField && u.IsAlly && u != a).OrderByDescending(u => Math.Abs(u.Col - a.Col) + Math.Abs(u.Row - a.Row)).FirstOrDefault())
             : Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
         // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
-        if (w.SelfCentred) { _routine = UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
+        if (w.SelfCentred) { Btl._routine = Btl.UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
         // 빈 칸을 겨누는 기술(방식 7 — 혼·오메가 스윙)은 그 적 너머의 빈 칸을 겨눈다(돌진 시험).
         if (w.TargetMode == 7 && target >= 0)
         {
             var t = _units[target];
             int tc = t.Col + Math.Sign(t.Col - a.Col), tr = t.Row + Math.Sign(t.Row - a.Row);
-            _routine = UseWorkRoutine(caster, w, -1, tc, tr, []);
+            Btl._routine = Btl.UseWorkRoutine(caster, w, -1, tc, tr, []);
             return;
         }
-        _routine = UseWorkRoutine(caster, w, target,
+        Btl._routine = Btl.UseWorkRoutine(caster, w, target,
                                   target >= 0 ? _units[target].Col : a.Col,
                                   target >= 0 ? _units[target].Row : a.Row, []);
     }
@@ -1094,7 +1094,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             if (u.ChrCode != chr || !u.Alive) continue;
             if (parts.Length > 2) u.Facing = parts[2] switch { "R" => Facing.Right, "U" => Facing.Up, "D" => Facing.Down, _ => Facing.Left };
-            if (u.Action < 0) PlayAction(u, action);
+            if (u.Action < 0) Btl.PlayAction(u, action);
         }
     }
 
@@ -1109,7 +1109,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             TitleScr.OpenTitleIfAsked();
             Mos.OpenMosesIfAsked();
             Fld.OpenFieldIfAsked();
-            OpenLevelUpIfAsked();
+            Btl.OpenLevelUpIfAsked();
             SlotsScr.OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
@@ -1157,44 +1157,44 @@ internal sealed unsafe partial class GameWindow : IDisposable
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
-        if (_heldMoveKeys.Count > 0 && _ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !_abilityMenu && _targetWork < 0 && IsPlayerTurn && !_units[_turn].IsBusy)
+        if (_heldMoveKeys.Count > 0 && Btl._ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !Btl._abilityMenu && Btl._targetWork < 0 && Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy)
             StepByKey(_heldMoveKeys[^1]);
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
-        StepBlinks();
+        Btl.StepBlinks();
         LegionStageAb.StepLegionFades();
         UnitFxAb.StepUnitFx();
-        StepPendingExits();
+        Btl.StepPendingExits();
         foreach (var unit in _units)
         {
             // 증원(행동 200)이 맵 변 밖에서 곧게 걸어 들어오는 중 — 한 틱에 8px(0x10050eb0 단계 1). 다 들어온 뒤에 길을 걷는다.
             if (unit.Entering) { unit.StepEntry(8 * TicksPerSecond * dt); continue; }
-            if (_blinks.ContainsKey(unit) || TryBeginBlink(unit)) continue;   // 이동 종류 1 은 걷지 않고 순간이동한다(ba-20 P4)
+            if (Btl._blinks.ContainsKey(unit) || Btl.TryBeginBlink(unit)) continue;   // 이동 종류 1 은 걷지 않고 순간이동한다(ba-20 P4)
             if (unit.IsMoving || !unit.Path.TryDequeue(out var cell)) continue;
             unit.Facing = cell.Col > unit.Col ? Facing.Right : cell.Col < unit.Col ? Facing.Left : cell.Row > unit.Row ? Facing.Down : Facing.Up;
             unit.BeginStep(cell.Col, cell.Row, StepTicksBetween(unit.Col, unit.Row, cell.Col, cell.Row));
             // 걷기(명령 0x2710)는 칸 경계마다 걷는 인물 따라가기를 건다(0x10076ef8 → 0x100eac40(8), 감사4 C2).
             // 군단 부하는 대장만 따라간다(0x2711 은 대장일 때만, 0x10077786).
-            if (unit.LeaderIndex < 0 && unit.OnField) FollowUnit(Array.IndexOf(_units, unit));
+            if (unit.LeaderIndex < 0 && unit.OnField) Btl.FollowUnit(Array.IndexOf(_units, unit));
         }
 
         foreach (var unit in _units) unit.SettleIfStopped();
-        ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
-        SyncFollowers();
+        Btl.ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
+        Btl.SyncFollowers();
         StepSceneFade();                        // 새 판이면 시작 카메라·페이드인, 끝났으면 페이드아웃 뒤 다음 장면
         if (Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
-        UpdateCamera(dt);
+        Btl.UpdateCamera(dt);
         ApplyPoseHook();
         if (_fadeInStart < 0) ApplyWorkHook();
         SyncVirtualStatus();
         UpdateSounds();
-        UpdateRing();
+        Btl.UpdateRing();
         UpdateTalk();
         // 페이드인 동안은 틱·이벤트가 멈춘다(원본은 페이드를 다 한 뒤에 루프로 들어간다, 0x10061ad0).
         if (_fadeInStart >= 0) return;
-        StepEvent();
-        UpdateTurn();
-        RefreshMoveRange();
+        Btl.StepEvent();
+        Btl.UpdateTurn();
+        Btl.RefreshMoveRange();
         UpdateOutcomeBanner();                  // 배너는 음악이 끝나고(최소 121틱) 저절로 넘어간다(0x1006afa0)
     }
 
@@ -1235,7 +1235,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         double ticks = Math.Clamp((_lastTime - _mapTintClock) * TicksPerSecond, 0, 4);
         _mapTintClock = _lastTime;
         if (!_battleLoaded || Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) { _mapTint = _mapTintTarget = -1; return; }
-        if (_routine == null && _eventRoutine == null) _mapTintTarget = -1;   // 행동이 끊겨도(불러오기·전투 끝) 남지 않게
+        if (Btl._routine == null && Btl._eventRoutine == null) _mapTintTarget = -1;   // 행동이 끊겨도(불러오기·전투 끝) 남지 않게
         if (_mapTint < _mapTintTarget) _mapTint = Math.Min(_mapTintTarget, Math.Max(_mapTint, -1) + ticks);
         else if (_mapTint > _mapTintTarget) _mapTint = Math.Max(_mapTintTarget, _mapTint - ticks);
         if (_mapTint <= -1) return;
@@ -1256,38 +1256,38 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Array.Fill(_fb, BgColor);
         DrawBackground();
         DrawMapTint();
-        DrawMoveRange();
-        DrawDeployCells();
-        DrawWorkRange();
+        Btl.DrawMoveRange();
+        Btl.DrawDeployCells();
+        Btl.DrawWorkRange();
         if (_showGrid) DrawGridLines();
-        DrawObjects();
+        Btl.DrawObjects();
         DrawUnits();
-        DrawBodyClones();
-        DrawBlinkGhosts();
+        Btl.DrawBodyClones();
+        Btl.DrawBlinkGhosts();
         StagingAb.DrawStageFx();
-        DrawEffects();
+        Btl.DrawEffects();
         DrawMovies();
         DrawRipples();
-        if (_showGauges) DrawGauges();
-        DrawPopups();
-        DrawNumbers();
-        DrawCritFlash();
+        if (_showGauges) Btl.DrawGauges();
+        Btl.DrawPopups();
+        Btl.DrawNumbers();
+        Btl.DrawCritFlash();
         DrawStatus();
-        DrawHud();
-        DrawChestList();
-        DrawRing();
-        DrawAbilityMenu();
-        DrawItemMenu();
+        Btl.DrawHud();
+        Btl.DrawChestList();
+        Btl.DrawRing();
+        Btl.DrawAbilityMenu();
+        Btl.DrawItemMenu();
         DrawStatusScreen();
         DrawTalk();
         DrawToast();
         DrawOutcomeBanner();
-        DrawUnitInfo();
+        Btl.DrawUnitInfo();
         if (!Mos._mosesOpen) DrawSystem();
-        DrawDeployPanel();
+        Btl.DrawDeployPanel();
         DrawKeysPanel();
         TuningScr.DrawTuning();
-        DrawLevelUp();
+        Btl.DrawLevelUp();
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         Mos.DrawMoses();
         double perfB = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
@@ -1353,13 +1353,13 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 // 몸 그림도 모션표의 섞기 키(종류 3)를 따른다 — 17 이면 더하기. 장교(Obs 0165·0863)는 걸을 때 몸이 빛 공으로 바뀌는데,
                 // 불투명으로 찍어 공 둘레의 검은 부분이 원판처럼 남았다(사용자 보고, Btl 0256). 딸린 층·필드 소품은 이미 이렇게 그린다.
                 bool additive = clip?.BlendAt(tick) == 17;
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, StatusTintOf(unit), unit.Fade, additive);
+                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade, additive);
                 headY = footY + frame.Y;
-                DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
+                Btl.DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }
             // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
-            bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
-            if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY);
+            bool acting = i == Btl._turn && !(Btl.IsPlayerTurn && !unit.IsBusy);
+            if (unit.HasTurn && !acting && Btl._outcome.Length == 0) DrawTurnMarker(unit, footX, headY);
         }
     }
 
@@ -1376,7 +1376,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
         bool human = unit.PlayerControlled || (unit.IsAlly && !_allyAi);
         int motion = (human ? 0 : 2) + (unit.LeaderIndex >= 0 ? 1 : 0);
-        if (DrawUi(TurnMarkerObs, motion, (int)(_lastTime * TicksPerSecond), x, headY, UiBlend.Alpha)) return;
+        if (DrawUi(TurnMarkerObs, motion, (int)(_lastTime * TicksPerSecond), x, headY, GameWindow.UiBlend.Alpha)) return;
         const int W = 13, H = 9, Gap = 4;
         uint alpha = (uint)(150 + 105 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 2 * 1.5)));
         uint fill = alpha << 24 | 0xE0D8FF, edge = alpha << 24 | 0x6050A0;
@@ -1416,7 +1416,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DrawText($"{_scene.Title} — Btl {_scene.Id:D4}   아군 {allies}  적군 {enemies}   {KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물  {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자  {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바",
                  _camX + 4, _camY + 4, White);
         if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 20, 0xFFD05050);
-        else DrawText(TurnLine(), _camX + 4, _camY + 20, 0xFFFFE8A0);
+        else DrawText(Btl.TurnLine(), _camX + 4, _camY + 20, 0xFFFFE8A0);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
@@ -1488,12 +1488,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
                     uint Ch(int shift) => (uint)Math.Clamp((n * (int)(c >> shift & 0xFF) + (31 - n) * level) / 31, 0, 255);
                     c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
                 }
-                if (status is { } st) c = ApplyStatusTint(c, st);
+                if (status is { } st) c = BattleScene.ApplyStatusTint(c, st);
                 if (additive)
                 {
                     // 더하기 합성 — 검정은 +0 이라 안 보인다. 흐려지는 중(fade)이면 덜 더한다.
                     int at = dy * BoardWidth + dx;
-                    _fb[at] = AddColor(_fb[at], c, k);
+                    _fb[at] = GameWindow.AddColor(_fb[at], c, k);
                     continue;
                 }
                 if (k < 256)

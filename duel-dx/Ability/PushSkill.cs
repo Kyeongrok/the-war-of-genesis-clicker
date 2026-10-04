@@ -94,13 +94,13 @@ internal sealed unsafe class PushSkill(GameWindow host)
     internal IEnumerable<bool> RadialPushRoutine(UnitState user, WorkData w, int col, int row, List<int> targets, List<UnitState> dying)
     {
         _ = targets;   // 원본은 WorkTargets(적만) 가 아니라 범위 안 모든 유닛을 모은다(방식 5).
-        var cells = host.AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
+        var cells = host.Btl.AreaCells(w, user, col, row).Distinct().OrderBy(c => c.Row).ThenBy(c => c.Col).ToList();
         var area = cells.ToHashSet();
         // 먼저 모아 둔다(0x100df5c0 이 버퍼에 모은 뒤 고리를 돈다) — 밀려난 유닛이 다시 잡히지 않게.
-        var order = cells.Select(c => host.LiveUnitAt(c.Col, c.Row)).OfType<UnitState>()
+        var order = cells.Select(c => host.Btl.LiveUnitAt(c.Col, c.Row)).OfType<UnitState>()
                          .Where(t => t != user && !dying.Contains(t)).Distinct().ToList();
         // 되돌아올 때 설 수 있는 칸 0x100d9a20 — 지형 &9 · 다른 유닛 등록 · 물체 없음(자기 칸은 늘 참).
-        bool Stand(int c, int r, UnitState t) => host.CanStand(c, r, t) && host.ObjectAt(c, r) is not { Alive: true, Data.BlocksStanding: true };
+        bool Stand(int c, int r, UnitState t) => host.Btl.CanStand(c, r, t) && host.Btl.ObjectAt(c, r) is not { Alive: true, Data.BlocksStanding: true };
 
         bool stuckFlag = false;   // 0x1008de68 — 고리 밖에서 한 번만 0
         var starts = new List<(int Col, int Row)>();
@@ -122,29 +122,29 @@ internal sealed unsafe class PushSkill(GameWindow host)
             if (stuckFlag) slot1.Add(t);
             int moved = Math.Max(Math.Abs(nc - c), Math.Abs(nr - r));
             if (moved == 0) continue;
-            t.Facing = FacingToward(nc, nr, user.Col, user.Row);
-            t.PlayAction(HitAction, 1000);
+            t.Facing = BattleScene.FacingToward(nc, nr, user.Col, user.Row);
+            t.PlayAction(BattleScene.HitAction, 1000);
             var (fx, fy) = host.UnitFoot(t);
-            host._effects.Add((KnockbackSkill.BiTrailObs, 0, host._lastTime, fx, fy));
+            host.Btl._effects.Add((KnockbackSkill.BiTrailObs, 0, host._lastTime, fx, fy));
             t.BeginSlide(nc, nr);   // 곧바로 새 칸에 등록 — 뒤에 처리되는 유닛은 이 칸에 막히고, 비운 출발 칸에는 설 수 있다
             moves.Add((t, nc, nr, SlideSteps(moved)));
         }
         // 슬롯 0 — 출발 칸에 지금 선 유닛(제자리에 막힌 유닛, 또는 남의 출발 칸으로 되돌아온 유닛).
-        var slot0 = starts.Select(s => host.LiveUnitAt(s.Col, s.Row)).OfType<UnitState>().ToList();
-        if (Trace)
+        var slot0 = starts.Select(s => host.Btl.LiveUnitAt(s.Col, s.Row)).OfType<UnitState>().ToList();
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"radial push work {w.Id}: {string.Join(", ", moves.Select(m => $"{m.Item1.ChrCode}→({m.Item2},{m.Item3})"))} " +
                 $"슬롯0 [{string.Join(",", slot0.Select(u => u.ChrCode))}] 슬롯1 [{string.Join(",", slot1.Select(u => u.ChrCode))}]" + Environment.NewLine);
-        foreach (var v in slot0) if (v.Alive && !dying.Contains(v)) host.ApplyWork(user, w, v, dying);
+        foreach (var v in slot0) if (v.Alive && !dying.Contains(v)) host.Btl.ApplyWork(user, w, v, dying);
         if (moves.Count > 0) foreach (bool _ in SlideAll(moves, begun: true)) yield return true;
         foreach (var (t, _, _, _) in moves) t.PlayAction(ObsMotionTable.ActionStand, 0);
-        foreach (var t in slot1) if (t.Alive && !dying.Contains(t)) host.ApplyWork(user, w, t, dying);
+        foreach (var t in slot1) if (t.Alive && !dying.Contains(t)) host.Btl.ApplyWork(user, w, t, dying);
     }
 
     /// <summary>워핑 — 대상을 시전자→대상 쪽으로 13±2 칸 밖의 설 수 있는 칸에 떨어뜨린다. 없으면 10칸부터 한 칸씩 당겨 찾는다.</summary>
     internal IEnumerable<bool> ThrowRoutine(UnitState user, UnitState t)
     {
-        var (dc, dr) = FacingToward(user.Col, user.Row, t.Col, t.Row) switch
+        var (dc, dr) = BattleScene.FacingToward(user.Col, user.Row, t.Col, t.Row) switch
         {
             Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0),
         };
@@ -153,15 +153,15 @@ internal sealed unsafe class PushSkill(GameWindow host)
         {
             int c = t.Col + dc * 13 + host._rng.Next(-2, 3), r = t.Row + dr * 13 + host._rng.Next(-2, 3);
             if (dc == 0) c = t.Col + host._rng.Next(-2, 3); else r = t.Row + host._rng.Next(-2, 3);
-            if (host.CanStand(c, r, t)) landing = (c, r);
+            if (host.Btl.CanStand(c, r, t)) landing = (c, r);
         }
         for (int d = 10; d >= 1 && landing == null; d--)
-            if (host.CanStand(t.Col + dc * d, t.Row + dr * d, t)) landing = (t.Col + dc * d, t.Row + dr * d);
+            if (host.Btl.CanStand(t.Col + dc * d, t.Row + dr * d, t)) landing = (t.Col + dc * d, t.Row + dr * d);
         if (landing is not var (lc, lr)) yield break;
 
         const double Tick = 1 / TicksPerSecond;
         var (fx, fy) = host.UnitFoot(t);
-        host._effects.Add((587, 4, host._lastTime, fx, fy));
+        host.Btl._effects.Add((587, 4, host._lastTime, fx, fy));
         for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
         {
             t.Fade = Math.Max(0, 1 - (host._lastTime - start) / (12 * Tick));
@@ -173,7 +173,7 @@ internal sealed unsafe class PushSkill(GameWindow host)
         t.WarpTo(lc, lr);
         t.OriginCol = lc;
         t.OriginRow = lr;
-        if (Trace)
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"warping: {user.ChrCode} → {t.ChrCode} 를 ({lc},{lr}) 로" + Environment.NewLine);
         for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
@@ -182,7 +182,7 @@ internal sealed unsafe class PushSkill(GameWindow host)
             yield return true;
         }
         t.Fade = 1;
-        t.PlayAction(HitAction, 15 * Tick);
+        t.PlayAction(BattleScene.HitAction, 15 * Tick);
     }
 
     /// <summary>
@@ -198,12 +198,12 @@ internal sealed unsafe class PushSkill(GameWindow host)
         for (int k = 1; k <= dist; k++)
         {
             int c = a.Col + dc * k, r = a.Row + dr * k;
-            if ((uint)c >= host.Cols || (uint)r >= host.Rows || host._map is not { } map || c >= map.Cols || r >= map.Rows || (host.CellFlagsAt(c, r) & 0x9) != 0) break;
-            if (host.ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
+            if ((uint)c >= host.Cols || (uint)r >= host.Rows || host._map is not { } map || c >= map.Cols || r >= map.Rows || (host.Btl.CellFlagsAt(c, r) & 0x9) != 0) break;
+            if (host.Btl.ObjectAt(c, r) is { Alive: true, Data.BlocksStanding: true }) break;
             cells.Add((c, r));
         }
         // 마지막 칸에 누가 서 있으면 그 앞에서 멈춘다(겹쳐 서지 않게 — 가설).
-        while (cells.Count > 0 && host.LiveUnitAt(cells[^1].Col, cells[^1].Row) is { } blocker && blocker != a) cells.RemoveAt(cells.Count - 1);
+        while (cells.Count > 0 && host.Btl.LiveUnitAt(cells[^1].Col, cells[^1].Row) is { } blocker && blocker != a) cells.RemoveAt(cells.Count - 1);
         if (cells.Count == 0) yield break;
         var (endCol, endRow) = cells[^1];
         bool band = w.Id != 8 && !(w.Id >= 259 && w.Id <= 277);   // 혼만 한 줄, 나머지(비연참·오메가 스윙)는 3칸 폭
@@ -226,16 +226,16 @@ internal sealed unsafe class PushSkill(GameWindow host)
             // 지난 칸까지의 적을 친다.
             int passed = Math.Min(cells.Count, (int)Math.Floor(p * cells.Count + 0.5));
             for (int i = 0; i < passed; i++)
-                foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, cells[i]) && SeesAsFoe(a, t)))
-                    if (struck.Add(t)) host.ApplyWork(a, w, t, dying);
+                foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, cells[i]) && BattleScene.SeesAsFoe(a, t)))
+                    if (struck.Add(t)) host.Btl.ApplyWork(a, w, t, dying);
             yield return true;
         }
         a.SetSlide(1);
         foreach (var c in cells)
-            foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, c) && SeesAsFoe(a, t)))
-                if (struck.Add(t)) host.ApplyWork(a, w, t, dying);
+            foreach (var t in host._units.Where(t => t.Alive && t.OnField && t != a && InBand(t, c) && BattleScene.SeesAsFoe(a, t)))
+                if (struck.Add(t)) host.Btl.ApplyWork(a, w, t, dying);
         col = endCol; row = endRow;
-        if (Trace)
+        if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"dash work {w.Id}: {a.ChrCode} → ({col},{row}) {cells.Count}칸, 맞은 {struck.Count}명" + Environment.NewLine);
     }

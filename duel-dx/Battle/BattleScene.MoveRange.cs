@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 고른 인물의 <b>이동 가능 영역</b>(파랑)과 그 자리들에서 기본공격이 닿는 칸(빨강)을 바닥에 깐다.
 /// </summary>
@@ -19,7 +21,7 @@ namespace DuelDx;
 /// 공격·어빌리티·휴식을 할 때 시작 자리에서 지금 자리까지의 걸음 비용을 한 번에 뺀다(<see cref="CommitMove"/>).
 /// 물체는 판에 찍은 플래그·높이로 막는다(<see cref="CellFlagsAt"/>·<see cref="WalkHeightAt"/>, 감사3 R1). 날기는 자료에 쓰는 인물이 없어 빠져 있다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>
     /// 칸에 <b>더하는</b> 색 — 원본은 층 색에 칸 밝기(평지 74)를 곱해 <b>가산</b>으로 얹는다(섞기 방식 17, `0x1000e150`).
@@ -62,20 +64,20 @@ internal sealed unsafe partial class GameWindow
     /// <summary>고른 인물이 서 있으면 영역을 (필요할 때만) 다시 셈한다. 고른 인물이 없거나 움직이는 중이면 지운다.</summary>
     internal void RefreshMoveRange()
     {
-        if ((uint)_selected >= _units.Length || !_units[_selected].Alive || _units[_selected].IsBusy || _routine != null)
+        if ((uint)host._selected >= host._units.Length || !host._units[host._selected].Alive || host._units[host._selected].IsBusy || _routine != null)
         {
             _rangeUnit = -1;
             return;
         }
-        var unit = _units[_selected];
+        var unit = host._units[host._selected];
         var (oc, or) = RangeOrigin(unit);
-        if (_selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp
-            && _range is { } cached && cached.Cost.Length == Cols * Rows) return;   // 판 크기가 바뀌었으면 다시 셈한다
+        if (host._selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp
+            && _range is { } cached && cached.Cost.Length == host.Cols * host.Rows) return;   // 판 크기가 바뀌었으면 다시 셈한다
 
         _range = ComputeRange(unit);
         if (_range == null) { _rangeUnit = -1; return; }
-        if (_selected != _rangeUnit || oc != _rangeCol || or != _rangeRow) _rangeStart = _lastTime;
-        _rangeUnit = _selected;
+        if (host._selected != _rangeUnit || oc != _rangeCol || or != _rangeRow) _rangeStart = host._lastTime;
+        _rangeUnit = host._selected;
         _rangeCol = oc;
         _rangeRow = or;
         _rangeTp = unit.Tp;
@@ -83,11 +85,11 @@ internal sealed unsafe partial class GameWindow
 
     /// <summary>이동 영역을 셀 출발 칸 — 차례인 인물은 차례 시작 자리, 나머지는 지금 자리.</summary>
     internal (int Col, int Row) RangeOrigin(UnitState unit) =>
-        _turn >= 0 && _units[_turn] == unit ? (unit.OriginCol, unit.OriginRow) : (unit.Col, unit.Row);
+        _turn >= 0 && host._units[_turn] == unit ? (unit.OriginCol, unit.OriginRow) : (unit.Col, unit.Row);
 
     // 전장에 있는 사람만 — 퇴장(사건 201)한 사람은 살아 있는 채 좌표가 남아, 그 칸을 누르면 보이지 않는 사람을 골라 걷지 못했다
     // (사용자 보고: Btl 0150 (21,22) 는 WASD 로는 가는데 클릭으로는 안 감).
-    internal UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
+    internal UnitState? LiveUnitAt(int col, int row) => host._units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 
     /// <summary>인물의 지금 자리·TP 로 이동 영역을 셈한다. 지도·게임 표가 없으면 null.</summary>
     /// <param name="workId">예산에서 뺄 기술(0 이면 플레이어가 고른 기술·기본공격) — AI 는 기술마다 예산이 다르다(0x1005d070).</param>
@@ -95,9 +97,9 @@ internal sealed unsafe partial class GameWindow
     /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
     internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null)
     {
-        if (_map is not { } map || _db is not { } db || unit.Data is not { } c) return null;
+        if (host._map is not { } map || host._db is not { } db || unit.Data is not { } c) return null;
 
-        int n = Cols * Rows;
+        int n = host.Cols * host.Rows;
         var costs = new int[n];
         var prev = new int[n];
         var red = new bool[n];
@@ -120,11 +122,11 @@ internal sealed unsafe partial class GameWindow
         // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).
         int H(int col, int row) => WalkHeightAt(col, row);
         ushort F(int col, int row) => CellFlagsAt(col, row);
-        bool InBounds(int col, int row) => (uint)col < Cols && (uint)row < Rows && col < map.Cols && row < map.Rows;
+        bool InBounds(int col, int row) => (uint)col < host.Cols && (uint)row < host.Rows && col < map.Cols && row < map.Rows;
 
         var (originCol, originRow) = origin ?? RangeOrigin(unit);
 
-        int unitIndex = Array.IndexOf(_units, unit);
+        int unitIndex = Array.IndexOf(host._units, unit);
         // 제 군단 부하는 대장을 막지 않는다 — 대장이 움직이면 부하도 진형대로 따라오기 때문이다(분석-군단).
         // 원본 0x100d9a20(0x100d9b17~0x100d9b2e)은 자기 말고 모든 유닛이 막고, 부하·대장이 서로 지나가는 것은 진형 다시 세우기
         // (0x100da220·0x100da390, 이동 명령 0x2711 중일 때)뿐이다(감사3 R3). 그래도 사용자 요청(fg-15)으로 리메이크는 대장이 제 부하를
@@ -161,34 +163,34 @@ internal sealed unsafe partial class GameWindow
 
         var queue = new PriorityQueue<(int Col, int Row), int>();
         if (!InBounds(originCol, originRow)) return null;   // 판 밖에 선 인물(맵이 더 큰 전투)은 이동 영역이 없다
-        int start = originRow * Cols + originCol;
+        int start = originRow * host.Cols + originCol;
         costs[start] = 0;
         queue.Enqueue((originCol, originRow), 0);
         (int Dx, int Dy)[] dirs = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
         while (queue.TryDequeue(out var cell, out int cost))
         {
-            if (cost > costs[cell.Row * Cols + cell.Col]) continue;
+            if (cost > costs[cell.Row * host.Cols + cell.Col]) continue;
             foreach (var (dx, dy) in dirs)
             {
                 int nx = cell.Col + dx, ny = cell.Row + dy;
                 if (!Enterable(nx, ny) || Math.Abs(H(cell.Col, cell.Row) - H(nx, ny)) > 2) continue;
                 int step = num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) / dex) / 2;
                 int next = cost + step;
-                if (next > budget || next >= costs[ny * Cols + nx]) continue;
-                costs[ny * Cols + nx] = next;
-                prev[ny * Cols + nx] = cell.Row * Cols + cell.Col;
+                if (next > budget || next >= costs[ny * host.Cols + nx]) continue;
+                costs[ny * host.Cols + nx] = next;
+                prev[ny * host.Cols + nx] = cell.Row * host.Cols + cell.Col;
                 queue.Enqueue((nx, ny), next);
             }
         }
 
         // 문·스위치문 칸에는 <b>설 수</b> 없다(0x100746b0) — 닫힌 문은 도장 플래그로 이미 벽이고, 열린 문은 지나가기만 한다.
         for (int i = 0; i < n; i++)
-            if (costs[i] != int.MaxValue && ObjectBlocks(i % Cols, i / Cols)) costs[i] = int.MaxValue;
+            if (costs[i] != int.MaxValue && ObjectBlocks(i % host.Cols, i / host.Cols)) costs[i] = int.MaxValue;
 
         // 다른 인물이 선 칸은 파랑에서 뺀다.
         for (int i = 0; i < n; i++)
-            if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % Cols, i / Cols) is { } other && other != unit) costs[i] = int.MaxValue;
+            if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % host.Cols, i / host.Cols) is { } other && other != unit) costs[i] = int.MaxValue;
 
         // 붉은 칸 — 갈 수 있는 칸마다 <b>그 인물의 기본공격 모양</b>을 칠한다(0x100749b0).
         // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.
@@ -200,18 +202,18 @@ internal sealed unsafe partial class GameWindow
             for (int i = 0; i < n; i++)
             {
                 if (costs[i] == int.MaxValue || costs[i] > narrow) continue;   // 빨강은 좁은 예산 안에서만
-                int col = i % Cols, row = i / Cols;
+                int col = i % host.Cols, row = i / host.Cols;
                 for (int ay = row - reach; ay <= row + reach; ay++)
                     for (int ax = col - reach; ax <= col + reach; ax++)
                     {
                         if (!InBounds(ax, ay)) continue;
-                        int j = ay * Cols + ax;
+                        int j = ay * host.Cols + ax;
                         if (costs[j] != int.MaxValue || red[j]) continue;
                         if (InWorkRange(basic, col, row, ax, ay, unit)) red[j] = true;
                     }
             }
         }
-        return new MoveRange(costs, prev, red) { Width = Cols };
+        return new MoveRange(costs, prev, red) { Width = host.Cols };
     }
 
     /// <summary>
@@ -219,7 +221,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
     {
-        int n = Cols * Rows, from = fromRow * Cols + fromCol;
+        int n = host.Cols * host.Rows, from = fromRow * host.Cols + fromCol;
         if (from == target) return [];
         var prev = new int[n];
         Array.Fill(prev, -2);
@@ -228,16 +230,16 @@ internal sealed unsafe partial class GameWindow
         queue.Enqueue(from);
         while (queue.TryDequeue(out int i))
         {
-            int col = i % Cols, row = i / Cols;
+            int col = i % host.Cols, row = i / host.Cols;
             foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
             {
-                int nx = col + dx, ny = row + dy, j = ny * Cols + nx;
-                if ((uint)nx >= Cols || (uint)ny >= Rows || prev[j] != -2 || !range.CanReach(j)) continue;
+                int nx = col + dx, ny = row + dy, j = ny * host.Cols + nx;
+                if ((uint)nx >= host.Cols || (uint)ny >= host.Rows || prev[j] != -2 || !range.CanReach(j)) continue;
                 prev[j] = i;
                 if (j == target)
                 {
                     var path = new List<(int Col, int Row)>();
-                    for (int k = j; k != from; k = prev[k]) path.Add((k % Cols, k / Cols));
+                    for (int k = j; k != from; k = prev[k]) path.Add((k % host.Cols, k / host.Cols));
                     path.Reverse();
                     return path;
                 }
@@ -262,24 +264,24 @@ internal sealed unsafe partial class GameWindow
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
         // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.
-        if (range.Cost.Length != Cols * Rows || range.Red.Length != Cols * Rows) { _range = null; _rangeUnit = -1; return; }
+        if (range.Cost.Length != host.Cols * host.Rows || range.Red.Length != host.Cols * host.Rows) { _range = null; _rangeUnit = -1; return; }
         // 어빌리티 대상을 고르는 중(원본 상태 11)에는 이동 영역(파랑)·공격 사거리(빨강)를 걷고 그 기술의 사거리·효과 범위만 깐다 —
         // 겹쳐 칠하면 사거리 칸이 묻혀 안 보였다(사용자 보고). 기본공격 겨냥은 예전처럼 둔다.
         if (_targetWork >= 0 && !_targetIsBasicAttack) return;
-        int radius = WaveRadius((int)((_lastTime - _rangeStart) * TicksPerSecond));
+        int radius = WaveRadius((int)((host._lastTime - _rangeStart) * TicksPerSecond));
         // 차례인 인물의 영역이면 걸어가 손댈 수 있는 물체 칸도 칠한다(원본 상태 10 이 층 1 을 함께 만든다, 0x1006961c).
         var touchable = new HashSet<int>();
         if (_rangeUnit == _turn && IsPlayerTurn)
             foreach (var obj in Objects)
-                if (FindTouchPath(_units[_turn], obj, range) != null)
+                if (FindTouchPath(host._units[_turn], obj, range) != null)
                     foreach (var (fc, fr, _, _) in FootprintCells(obj))   // 발자국 칸 모두(여러 칸짜리 문)
-                        if ((uint)fc < Cols && (uint)fr < Rows && ObjectAt(fc, fr) == obj) touchable.Add(fr * Cols + fc);
+                        if ((uint)fc < host.Cols && (uint)fr < host.Rows && ObjectAt(fc, fr) == obj) touchable.Add(fr * host.Cols + fc);
 
-        for (int row = 0; row < Rows; row++)
-            for (int col = 0; col < Cols; col++)
+        for (int row = 0; row < host.Rows; row++)
+            for (int col = 0; col < host.Cols; col++)
             {
                 if (Math.Abs(col - _rangeCol) + Math.Abs(row - _rangeRow) > radius) continue;
-                int i = row * Cols + col;
+                int i = row * host.Cols + col;
                 // 대상을 딱히 고르는 중이 아니어도 사거리 빨강은 늘 파랑과 함께 뜬다 — 사용자가 원본에서
                 // 직접 본 그대로다("aiming일 때만 빨강"으로 좁혔던 이전 판단은 상태 번호를 오독한 것으로 보인다:
                 // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
@@ -296,8 +298,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal int CellBrightness(int col, int row)
     {
-        if (!BoardIsMap || _map!.SlopeAt(col, row) is 0 or > 3) return 74;
-        int nw = _map.CornerAt(col, row, 1), ne = _map.CornerAt(col, row, 2), sw = _map.CornerAt(col, row, 3);
+        if (!host.BoardIsMap || host._map!.SlopeAt(col, row) is 0 or > 3) return 74;
+        int nw = host._map.CornerAt(col, row, 1), ne = host._map.CornerAt(col, row, 2), sw = host._map.CornerAt(col, row, 3);
         int a = (short)(-40 * (ne - nw)), b = (short)(-40 * (sw - nw));
         int len = (int)Math.Sqrt((double)a * a + (double)b * b + 2560000.0);
         int v = (15 * b * 128 + 4096000) / 40 / Math.Max(1, len);
@@ -318,22 +320,22 @@ internal sealed unsafe partial class GameWindow
         int bright = CellBrightness(col, row);
         uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
         int x0 = col * TileW, x1 = x0 + TileW;
-        int baseTop = GridTop + BoardPad + row * TileH, baseBottom = baseTop + TileH;
-        if (!BoardIsMap || _map!.SlopeAt(col, row) == 0)
+        int baseTop = GridTop + host.BoardPad + row * TileH, baseBottom = baseTop + TileH;
+        if (!host.BoardIsMap || host._map!.SlopeAt(col, row) == 0)
         {
-            int y = CellTop(col, row);
+            int y = host.CellTop(col, row);
             AddRect(x0, y, TileW, TileH, tint);
-            StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
+            host.StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
             return;
         }
-        int yNw = baseTop - CornerPx(_map.CornerAt(col, row, 1)), yNe = baseTop - CornerPx(_map.CornerAt(col, row, 2));
-        int ySw = baseBottom - CornerPx(_map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(_map.CornerAt(col, row, 0));
+        int yNw = baseTop - CornerPx(host._map.CornerAt(col, row, 1)), yNe = baseTop - CornerPx(host._map.CornerAt(col, row, 2));
+        int ySw = baseBottom - CornerPx(host._map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(host._map.CornerAt(col, row, 0));
         AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint);
         uint line = 0xFF000000 | tint;
-        Mos.DrawSegment(x0, yNw, x1, yNe, line);
-        Mos.DrawSegment(x0, ySw, x1, ySe, line);
-        Mos.DrawSegment(x0, yNw, x0, ySw, line);
-        Mos.DrawSegment(x1, yNe, x1, ySe, line);
+        host.Mos.DrawSegment(x0, yNw, x1, yNe, line);
+        host.Mos.DrawSegment(x0, ySw, x1, ySe, line);
+        host.Mos.DrawSegment(x0, yNw, x0, ySw, line);
+        host.Mos.DrawSegment(x1, yNe, x1, ySe, line);
     }
 
     /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.</summary>
@@ -354,13 +356,13 @@ internal sealed unsafe partial class GameWindow
         uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
         for (int yy = y; yy < y + h; yy++)
         {
-            if ((uint)yy >= BoardHeight) continue;
+            if ((uint)yy >= host.BoardHeight) continue;
             for (int xx = x; xx < x + w; xx++)
             {
-                if ((uint)xx >= BoardWidth) continue;
-                int i = yy * BoardWidth + xx;
-                uint c = _fb[i];
-                _fb[i] = c & 0xFF000000
+                if ((uint)xx >= host.BoardWidth) continue;
+                int i = yy * host.BoardWidth + xx;
+                uint c = host._fb[i];
+                host._fb[i] = c & 0xFF000000
                        | Math.Min(255, (c >> 16 & 0xFF) + tr) << 16
                        | Math.Min(255, (c >> 8 & 0xFF) + tg) << 8
                        | Math.Min(255, (c & 0xFF) + tb);

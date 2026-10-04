@@ -220,7 +220,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     internal void ResetMosesSlide(int delayTicks)
     {
         _mosesSlideAt = host._lastTime + delayTicks / TicksPerSecond;
-        _mosesSlideSeed = host._ailmentRandom.Next();
+        _mosesSlideSeed = host.Btl._ailmentRandom.Next();
     }
 
     /// <summary>
@@ -249,18 +249,18 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         var saved = host._uiClip;
         host._uiClip = (ox, oy, MosesW, MosesH);
         for (int i = 0; i < 24; i++)
-            host.DrawUi(SlideTrailObs, 0, i / 2 + 12, x + i - 24, y, UiBlend.Add, loop: false);
+            host.DrawUi(SlideTrailObs, 0, i / 2 + 12, x + i - 24, y, GameWindow.UiBlend.Add, loop: false);
         host._uiClip = saved;
     }
 
     /// <summary>단추 그림 — 와이프 n/10 만큼 위에서부터 보인다. 다 나왔으면 그대로 그린다.</summary>
     internal void DrawButtonUi(int obs, int motion, int tick, int x, int y, int wipe)
     {
-        if (wipe >= 10) { host.DrawUi(obs, motion, tick, x, y, UiBlend.Alpha); return; }
+        if (wipe >= 10) { host.DrawUi(obs, motion, tick, x, y, GameWindow.UiBlend.Alpha); return; }
         if (wipe <= 0 || host.UiFor(obs)?.FrameAt(motion, tick) is not { } f) return;
         var saved = host._uiClip;
         host._uiClip = (x + f.X, y + f.Y, f.W, f.H * wipe / 10);
-        host.DrawUi(obs, motion, tick, x, y, UiBlend.Alpha);
+        host.DrawUi(obs, motion, tick, x, y, GameWindow.UiBlend.Alpha);
         host._uiClip = saved;
     }
 
@@ -339,7 +339,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         _mosesSystemSwitch = null;
         // 도크 아이콘은 장면을 만들 때(전투·필드에서 돌아올 때마다) 한 번 미끄러져 들어온다 — 화면이 밝아지는 15틱 뒤부터(0x100fe4e4).
         _mosesSceneAt = host._lastTime + MosesFadeTicks / TicksPerSecond;
-        _mosesSceneSeed = host._ailmentRandom.Next();
+        _mosesSceneSeed = host.Btl._ailmentRandom.Next();
         if (chapter != null) { _mosesChp = chapter; _navStart = null; _mosesNavVisited = false; host.Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
         if (_mosesChp is { } owner && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) host.SwitchParty(ep.Party);
@@ -809,12 +809,12 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         // (행성 +0x4e~+0x54 = Chp 꼬리 워드 4~7, 0x10102210 · ba-20 S 2). 틱 19 부터는 도는 구체.
         if (_mosesChp?.PlanetOf(_mosesPlanet) is { } zoomPlanet)
         {
-            if (t >= 4 && t < 19) host.DrawUi(zoomPlanet.GlobeObs, 0, t - 4, ox + 320, oy + 220, UiBlend.Alpha, loop: false);
-            else if (t >= 19 && t < 43) host.DrawUi(zoomPlanet.GlobeObs, zoomPlanet.GlobeMotion, (int)(host._lastTime * TicksPerSecond), ox + 320, oy + 220, UiBlend.Alpha);
-            if (t >= 40) host.DrawUi(zoomPlanet.GlobeObs, 2, Math.Min(t - 40, 20), ox + 320, oy + 350, UiBlend.Alpha, loop: false);
+            if (t >= 4 && t < 19) host.DrawUi(zoomPlanet.GlobeObs, 0, t - 4, ox + 320, oy + 220, GameWindow.UiBlend.Alpha, loop: false);
+            else if (t >= 19 && t < 43) host.DrawUi(zoomPlanet.GlobeObs, zoomPlanet.GlobeMotion, (int)(host._lastTime * TicksPerSecond), ox + 320, oy + 220, GameWindow.UiBlend.Alpha);
+            if (t >= 40) host.DrawUi(zoomPlanet.GlobeObs, 2, Math.Min(t - 40, 20), ox + 320, oy + 350, GameWindow.UiBlend.Alpha, loop: false);
         }
         foreach (var (motion, from) in new[] { (0, 0), (1, 0), (2, 7), (3, 12) })
-            if (t >= from) host.DrawUi(561, motion, t - from, ox + 320, oy + 220, UiBlend.Add, loop: false);
+            if (t >= from) host.DrawUi(561, motion, t - from, ox + 320, oy + 220, GameWindow.UiBlend.Add, loop: false);
     }
 
     internal void DrawMoses()
@@ -833,7 +833,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             host._mouse = (ox + click.X, oy + click.Y);
             UpdateMosesHover(host._mouse.X, host._mouse.Y);
             OnMosesClick(host._mouse.X, host._mouse.Y);
-            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"moses click ({click.X},{click.Y}) → page {_mosesPage} step {_mosesStep} system {_mosesSystem}" + Environment.NewLine);
+            if (BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"moses click ({click.X},{click.Y}) → page {_mosesPage} step {_mosesStep} system {_mosesSystem}" + Environment.NewLine);
         }
         int tick = (int)(host._lastTime * TicksPerSecond);
 
@@ -912,7 +912,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                         blue += (255 - blue) * (uint)alpha / 31;
                         host._fb[i] = c & 0xFFFFFF00 | blue;
                     }
-                    else host._fb[i] = ScaleColor(c, 31 - alpha, 31);
+                    else host._fb[i] = GameWindow.ScaleColor(c, 31 - alpha, 31);
                 }
             _mosesFade--;
         }
@@ -921,7 +921,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
 
     internal void DrawMosesDesktop(int ox, int oy, int tick)
     {
-        host.DrawUi(MosesObs, 1, tick, ox + 10, oy + 10, UiBlend.Alpha);   // 로고
+        host.DrawUi(MosesObs, 1, tick, ox + 10, oy + 10, GameWindow.UiBlend.Alpha);   // 로고
         DrawMosesDock(ox, oy, tick);
     }
 
@@ -937,7 +937,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             var icon = MosesIcons[i];
             int x = ox + icon.X, y = oy + icon.Y;
             foreach (var (dx, motion) in new[] { (-8, 0), (2, 1), (26, 2) })
-                host.DrawUi(MosesFrameObs, motion, 0, x + dx, y, UiBlend.Alpha);
+                host.DrawUi(MosesFrameObs, motion, 0, x + dx, y, GameWindow.UiBlend.Alpha);
             var (sx, wipe) = DockSlide(1000 + i, icon.X);
             if (sx > icon.X) { DrawSlideTrail(ox, oy, ox + sx + 14, y + 19); continue; }
             DrawButtonUi(MosesObs, icon.Motion, HoverTick(i == _mosesDockHover, _mosesDockHoverAt), x + 14, y + 19, wipe);
@@ -1009,9 +1009,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             {
                 var p = planets[i];
                 int ptick = HoverTick(i == _mosesHover, _mosesHoverAt);
-                host.DrawUi(p.MapObs, p.MapMotion, ptick, ox + p.X, oy + p.Y, UiBlend.Alpha);
+                host.DrawUi(p.MapObs, p.MapMotion, ptick, ox + p.X, oy + p.Y, GameWindow.UiBlend.Alpha);
                 int h = host.UiFor(p.MapObs)?.FrameAt(p.MapMotion, 0)?.H ?? 40;
-                host.DrawUi(MosesMarkObs, 3, ptick, ox + p.X, oy + p.Y - 10 - h / 2, UiBlend.Alpha);
+                host.DrawUi(MosesMarkObs, 3, ptick, ox + p.X, oy + p.Y - 10 - h / 2, GameWindow.UiBlend.Alpha);
             }
             DrawMosesBack(ox, oy, tick);
             // 다른 항성계 단추 — 조건을 통과한 다른 성계 앞의 둘, Obs 0680 모션 0 (30,40) · 1 (630,40),
@@ -1038,7 +1038,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         // 행성 구체 — 항행 단계 2 에서 화면 가운데 조금 위. 그 위에 레이더 `+0x2f14`(초록 격자 구 + 장소 조각)를 돌린다.
         if (_mosesPage == 0 && _mosesStep == 2 && _mosesChp is { } chp && chp.PlanetOf(_mosesPlanet) is { } planet)
         {
-            host.DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, UiBlend.Alpha);
+            host.DrawUi(planet.GlobeObs, planet.GlobeMotion, tick, ox + 320, oy + 220, GameWindow.UiBlend.Alpha);
             DrawMosesRadar(ox, oy, since, MosesPlacePatches(chp, planet), _mosesHover);
         }
         // 장소·파티 칸도 단추 클래스 — 오른쪽 밖에서 꼬리를 끌고 들어와 10틱 세로 와이프로 나타나고, 올린 칸만 움직인다(감사5 B2·B3).
@@ -1053,8 +1053,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             if (wipe < 10) continue;
             if (i == _mosesHover)
                 foreach (var (dx, motion) in new[] { (0, 0), (10, 1), (168, 2) })
-                    host.DrawUi(MosesFrameObs, motion, ctick, x + dx, y, UiBlend.Alpha);
-            host.DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, UiBlend.Alpha);
+                    host.DrawUi(MosesFrameObs, motion, ctick, x + dx, y, GameWindow.UiBlend.Alpha);
+            host.DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, GameWindow.UiBlend.Alpha);
             if (name.Length > 0)
             {
                 var (_, w, h) = host.GetText(name, White);

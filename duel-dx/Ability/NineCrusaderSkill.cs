@@ -114,7 +114,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
             Dir = SwordDirTo(points[0].X - ux, points[0].Y - (uy + 480)),
         };
         _swords.Add(flight);
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"nine crusader: targets {targets.Count}, order [{string.Join(",", order)}], points {points.Count}" + Environment.NewLine);
         return flight;
@@ -171,7 +171,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
             return;
         }
         f.Settled = next;
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"sword tick {f.Tick}: point {next}/{m.Points.Count} at ({m.X:0},{m.Y:0}) dir {f.Dir}" + Environment.NewLine);
         if (next % 2 == 0)
@@ -187,7 +187,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
             m.Speed = 40; m.Factor = 0.65; m.Min = 5;                             // 0x100cedf2~0x100cee11
             int pierced = f.PointTarget[next - 1];
             if (pierced >= 0) f.Pierced.Enqueue(pierced);
-            host._effects.Add((SwordSparkObs, 0, host._lastTime, (int)m.X, (int)m.Y - 30));
+            host.Btl._effects.Add((SwordSparkObs, 0, host._lastTime, (int)m.X, (int)m.Y - 30));
             SwordSound(3);
         }
         if (next == m.Points.Count - 1)
@@ -222,5 +222,5 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
     }
 
     internal void DrawSwordLayer(int obs, int motion, int x, int y, bool mirror) =>
-        host.DrawUi(obs, motion, 0, x, y, BlendOf(host.UiFor(obs)?.BlendAt(motion, 0) ?? 0), mirror: mirror);
+        host.DrawUi(obs, motion, 0, x, y, GameWindow.BlendOf(host.UiFor(obs)?.BlendAt(motion, 0) ?? 0), mirror: mirror);
 }

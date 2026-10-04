@@ -30,13 +30,13 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
     /// <summary>범위 안에서 설 수 있는 빈 칸을 원본처럼 무작위로 뽑는다 — 없으면 null.</summary>
     internal (int Col, int Row)? TeleportLanding(WorkData w, UnitState user, int col, int row)
     {
-        var cells = host.AreaCells(w, user, col, row);
+        var cells = host.Btl.AreaCells(w, user, col, row);
         if (cells.Count == 0) return null;
         for (int tries = 0; tries < 500; tries++)
         {
             var (c, r) = cells[host._rng.Next(cells.Count)];
             if ((c, r) == (user.Col, user.Row)) return (c, r);
-            if (!host.CanLandOn(c, r, user)) continue;         // 적 옆 칸(ZOC)·물체 칸에는 안 떨어진다(0x100d99a0)
+            if (!host.Btl.CanLandOn(c, r, user)) continue;         // 적 옆 칸(ZOC)·물체 칸에는 안 떨어진다(0x100d99a0)
             return (c, r);
         }
         return null;
@@ -47,7 +47,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
     {
         const double Tick = 1 / TicksPerSecond;
         var landing = TeleportLanding(w, user, col, row);
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"teleport work {w.Id}: from ({user.Col},{user.Row}) aim ({col},{row}) radius {w.AreaArg} → {landing?.ToString() ?? "제자리"}" + Environment.NewLine);
         for (double start = host._lastTime, end = start + 80 * Tick; host._lastTime < end;)
@@ -64,8 +64,8 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
             user.OriginRow = lr;
         }
         var (x, y) = host.UnitFoot(user);
-        host._effects.Add((381, 1, host._lastTime, x, y));
-        host._effects.Add((210, 3, host._lastTime, x, y));
+        host.Btl._effects.Add((381, 1, host._lastTime, x, y));
+        host.Btl._effects.Add((210, 3, host._lastTime, x, y));
         if (host._effectTables.GetValueOrDefault(381)?.Clips.GetValueOrDefault(1) is { } appear)
             foreach (var (t, sound) in appear.Sounds) host._pendingSounds.Add((host._lastTime + t / TicksPerSecond, sound));
         for (double end = host._lastTime + 50 * Tick; host._lastTime < end;) yield return true;
@@ -92,9 +92,9 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
                     if (Math.Abs(dx) + Math.Abs(dy) != d) continue;
                     int c = caster.Col + dx, r = caster.Row + dy;
                     if (c < 0 || r < 0 || c >= host.Cols || r >= host.Rows) continue;
-                    if (host._map is { } map && (c >= map.Cols || r >= map.Rows || (host.CellFlagsAt(c, r) & 0x9) != 0)) continue;
-                    if (host.LiveUnitAt(c, r) is { } other && other != target) continue;
-                    if (host.ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
+                    if (host._map is { } map && (c >= map.Cols || r >= map.Rows || (host.Btl.CellFlagsAt(c, r) & 0x9) != 0)) continue;
+                    if (host.Btl.LiveUnitAt(c, r) is { } other && other != target) continue;
+                    if (host.Btl.ObjectAt(c, r) is { Data.BlocksStanding: true }) continue;
                     ring.Add((c, r));
                 }
             if (ring.Count > 0) return ring[host._rng.Next(ring.Count)];
@@ -107,7 +107,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
     {
         const double Tick = 1 / TicksPerSecond;
         if (target == caster || RecallLanding(caster, target) is not var (lc, lr)) { host.Toast("불러올 자리가 없습니다"); yield break; }
-        if (Trace)
+        if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"recall: {target.ChrCode} ({target.Col},{target.Row}) → ({lc},{lr}) beside {caster.ChrCode} ({caster.Col},{caster.Row})" + Environment.NewLine);
         for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
@@ -120,7 +120,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         target.OriginRow = lr;
         target.Facing = caster.Facing;
         var (x, y) = host.UnitFoot(target);
-        host._effects.Add((210, 3, host._lastTime, x, y));
+        host.Btl._effects.Add((210, 3, host._lastTime, x, y));
         for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
         {
             target.Fade = Math.Min(1, (host._lastTime - start) / (40 * Tick));

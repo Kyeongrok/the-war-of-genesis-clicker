@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// work 의 사거리 칸과 효과 범위 칸 — 모양 아홉 개(분석-전투 "어빌리티 범위·자세·상태이상").
 /// </summary>
@@ -20,7 +22,7 @@ namespace DuelDx;
 /// 사거리 종류 2·4 는 <b>무기 사거리</b>(Itm 파일 16 ×4)를 최대로 쓴다. 오브젝트(대상 8)는 아직 없다.
 /// </para>
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     /// <summary>두 칸 사이 거리(4분의 1칸) — 평지 기준.</summary>
     internal static int CellDistance(int fromCol, int fromRow, int col, int row) =>
@@ -52,7 +54,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal bool HasSight(int fromCol, int fromRow, int col, int row)
     {
-        if (_map is null) return true;
+        if (host._map is null) return true;
         int x0 = col, y0 = row, x1 = fromCol, y1 = fromRow;          // 대상 → 시전자
         int adx = Math.Abs(x1 - x0), ady = Math.Abs(y1 - y0);
         if (adx == 0 && ady == 0) return true;
@@ -87,7 +89,7 @@ internal sealed unsafe partial class GameWindow
     {
         int weapon = 0;
         if (w.RangeKind is 2 or 4 && user?.Data is { } c && c.Items.Length > 0
-            && _db?.Items.GetValueOrDefault(c.Items[0]) is { } item) weapon = item.Range * 4;
+            && host._db?.Items.GetValueOrDefault(c.Items[0]) is { } item) weapon = item.Range * 4;
         return w.RangeKind switch
         {
             2 => weapon,
@@ -162,8 +164,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row, UnitState? user = null)
     {
-        if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
+        if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
+        if (host._map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
 
         int dx = col - fromCol, dy = row - fromRow;
         if (w.SelfCentred || w.RangeShape == 0) return dx == 0 && dy == 0;
@@ -194,13 +196,13 @@ internal sealed unsafe partial class GameWindow
         var facing = col == user.Col && row == user.Row ? user.Facing : FacingToward(user.Col, user.Row, col, row);
         // 옆으로 벌어지는 폭(모양 6·7 의 ±1·±2)은 크기와 상관없다 — 창을 그만큼 넓게 잡는다.
         // 모양 4(화면 전체)는 최대를 아예 안 보므로 판 전체를 훑는다(0x100de010).
-        int reach = w.AreaShape == 4 ? Math.Max(Cols, Rows) : Math.Max(1, w.AreaMaxQuarters / 4) + 2;
+        int reach = w.AreaShape == 4 ? Math.Max(host.Cols, host.Rows) : Math.Max(1, w.AreaMaxQuarters / 4) + 2;
         for (int dy = -reach; dy <= reach; dy++)
             for (int dx = -reach; dx <= reach; dx++)
             {
                 int cx = col + dx, cy = row + dy;
-                if ((uint)cx >= Cols || (uint)cy >= Rows) continue;
-                if (_map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0) continue;
+                if ((uint)cx >= host.Cols || (uint)cy >= host.Rows) continue;
+                if (host._map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0) continue;
                 if (w.SameHeightArea != 0 && HeightAt(cx, cy) != HeightAt(col, row)) continue;
                 var (graded, plain) = WorkDistance(col, row, cx, cy, w.HeightArea != 0, graded: false);
                 if (w.AreaShape == 4)
@@ -243,12 +245,12 @@ internal sealed unsafe partial class GameWindow
         // (0x10083760 · 0x100b220d · 0x100bddd6, ba-20 D3). 전에는 아군과 시전자 자신도 맞았다. 소울 블레스트의 관통탄도 적만(슬롯 2 의 +0x1e = 1).
         if (w.AbilityId is 6 or 159 or 186 or SoulBlastAbility) mode = 1;
         if (w.AbilityId == SpecialHitsSkill.HellLaserAbility) mode = 1;
-        var hit = Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && _units[i].OnField && cells.Contains((_units[i].Col, _units[i].Row)) && ModeAccepts(mode, user, _units[i]));
+        var hit = Enumerable.Range(0, host._units.Length)
+            .Where(i => host._units[i].Alive && host._units[i].OnField && cells.Contains((host._units[i].Col, host._units[i].Row)) && ModeAccepts(mode, user, host._units[i]));
         // 대상 상한 — 모으는 함수(0x100df5c0 · 0x10070bb0)는 위 행부터, 행 안에서는 왼쪽부터 훑다가 상한에서 멈춘다(ba-20 E8).
         // 블레이드 샤워 16명(0x100844aa), 카운터 스피어·진 풍아열공참·빅 뱅 20명.
         int cap = w.AbilityId switch { 112 => 16, 77 or 127 or 166 => 20, _ => int.MaxValue };
-        if (cap != int.MaxValue) hit = hit.OrderBy(i => _units[i].Row).ThenBy(i => _units[i].Col).Take(cap);
+        if (cap != int.MaxValue) hit = hit.OrderBy(i => host._units[i].Row).ThenBy(i => host._units[i].Col).Take(cap);
         return [.. hit];
     }
 
@@ -288,8 +290,8 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal bool CanLandOn(int col, int row, UnitState user)
     {
-        if ((uint)col >= Cols || (uint)row >= Rows) return false;
-        if (_map is not { } map || col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0) return false;
+        if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
+        if (host._map is not { } map || col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0) return false;
         if (LiveUnitAt(col, row) is { } other && other != user) return false;
         if (ObjectAt(col, row) is { Alive: true }) return false;
         // ZOC 높이는 걷기 높이 +0x78(0x100d9b47 → 0x10073de0, 감사3 R9).

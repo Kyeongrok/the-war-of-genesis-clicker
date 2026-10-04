@@ -2,11 +2,13 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 링 커맨드 "어빌" 을 누르면 뜨는 어빌리티 목록 — 익힌 어빌리티마다 지금 레벨 work 의 TP·SOUL 비용을 보이고,
 /// 고르면 노란 사거리 칸에서 대상을 고르게 한다(<see cref="OnTargetClick"/>).
 /// </summary>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class BattleScene
 {
     internal bool _abilityMenu;
     internal int _abilityHover = -1;
@@ -22,7 +24,7 @@ internal sealed unsafe partial class GameWindow
     {
         _abilityTop += rows;
         AbilityTopFor(MenuRows().Count);
-        UpdateAbilityHover(_mouse.X, _mouse.Y);
+        UpdateAbilityHover(host._mouse.X, host._mouse.Y);
     }
 
     /// <summary>줄 단축키 — 앞에서부터 1·2·3·4·Q·W·E·R, 여덟 줄이 넘으면 단축키가 없다.</summary>
@@ -39,7 +41,7 @@ internal sealed unsafe partial class GameWindow
         if (index < 0) return false;
         var rows = MenuRows();
         if (index >= rows.Count) return true;
-        if (_abilityTop != 0) { _abilityTop = 0; UpdateAbilityHover(_mouse.X, _mouse.Y); }   // 단축키는 늘 앞 여덟 줄이다
+        if (_abilityTop != 0) { _abilityTop = 0; UpdateAbilityHover(host._mouse.X, host._mouse.Y); }   // 단축키는 늘 앞 여덟 줄이다
         var (ox, oy) = MenuOrigin(rows.Count);
         _targetHotkey = key;                       // 같은 키를 한 번 더 누르면 겨눈 대상에게 쓴다
         bool handled = OnAbilityMenuClick(ox + MenuRowX + 10, oy + MenuHeadH + index * MenuRowH + 4);
@@ -66,11 +68,11 @@ internal sealed unsafe partial class GameWindow
     internal List<(string Name, WorkData Work, bool Enabled, string Reason)> MenuRows()
     {
         var rows = new List<(string, WorkData, bool, string)>();
-        if (_turn < 0 || _db == null || _units[_turn].Data is not { } c) return rows;
-        var u = _units[_turn];
+        if (_turn < 0 || host._db == null || host._units[_turn].Data is not { } c) return rows;
+        var u = host._units[_turn];
         foreach (var (abilityId, level) in c.Abilities.OrderBy(a => a.Ability))
         {
-            if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.TryWorkAt(level, out int wid) || Work(wid) is not { } w) continue;
+            if (!host._db.Abilities.TryGetValue(abilityId, out var ab) || !ab.TryWorkAt(level, out int wid) || Work(wid) is not { } w) continue;
             // 전투 목록(0x10032760)은 분류 1(전투)·4 만 보여 준다(분석-스킬) — 비전투 수련(0, 발키리의 혼 따위)·군단기(2)·
             // 장착형 패시브(3, PSY증가 따위)는 안 나온다.
             if (ab.Category is not (1 or 4)) continue;
@@ -79,52 +81,52 @@ internal sealed unsafe partial class GameWindow
                 : c.JobId == 37 ? ""
                 : u.Tp + u.Ctp < TpCostFor(u, c, wid) ? "TP 부족"
                 : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족"
-                : u.Hp <= _db.WorkHpCost(c, wid) ? "HP 부족" : "";
-            rows.Add(($"{_db.T(ab.NameId)} Lv{level}", w, reason.Length == 0, reason));
+                : u.Hp <= host._db.WorkHpCost(c, wid) ? "HP 부족" : "";
+            rows.Add(($"{host._db.T(ab.NameId)} Lv{level}", w, reason.Length == 0, reason));
         }
         // 군단기 — 배속된 군단(CChr+0x1c)의 기술 다섯 칸 가운데 필요 세력을 채우고 대장 조건(0 이거나 나)이 맞는 것(0x10032760 뒷부분, 분석-군단 4.4).
         // 부하 검사(0x100d58c2~0x100d5912)는 <b>이 전투의 군단(+0x4ea)이 있을 때만</b> 한다 — 대장 표시(+0x4ef) && For[+0x4ea] 부하 칸 수 == 살아 있는 부하 수.
         // 이 전투에 군단 없이 선 인물(워드 7 꺼짐 && 파일 15 == 0, 「군단사용」 끔)은 검사를 건너뛰어 TP·SOUL 만 보고 혼자서도 쓴다.
         // 전에는 <b>배속 군단</b>의 칸 수와 비교해 군단 없이 서면 늘 「부하가 모자람」이었다(감사3 L5). 레벨은 늘 1.
-        if (Mos._unitLegion.TryGetValue(u.ChrCode, out int legionId) && Mos.Legions().ContainsKey(legionId))
+        if (host.Mos._unitLegion.TryGetValue(u.ChrCode, out int legionId) && host.Mos.Legions().ContainsKey(legionId))
         {
             int alive = FollowersOf(_turn).Count;
             bool membersMissing = u.LegionId != 0
-                && (alive == 0 || Mos.Legions().GetValueOrDefault(u.LegionId) is not { } battleLegion || battleLegion.Members.Count(m => m != 0) != alive);
-            var legion = Mos.Legions()[legionId];
+                && (alive == 0 || host.Mos.Legions().GetValueOrDefault(u.LegionId) is not { } battleLegion || battleLegion.Members.Count(m => m != 0) != alive);
+            var legion = host.Mos.Legions()[legionId];
             foreach (var (abilityId, power, leader) in legion.Skills)
             {
                 if (abilityId == 0 || power > 1000 || (leader != 0 && leader != u.ChrCode)) continue;
-                if (!_db.Abilities.TryGetValue(abilityId, out var ab) || !ab.WorkByLevel.TryGetValue(1, out int wid) || Work(wid) is not { } w) continue;
+                if (!host._db.Abilities.TryGetValue(abilityId, out var ab) || !ab.WorkByLevel.TryGetValue(1, out int wid) || Work(wid) is not { } w) continue;
                 string reason = membersMissing ? "부하가 모자람"
                     : u.Tp + u.Ctp < TpCostFor(u, c, wid) ? "TP 부족"
                     : u.Soul < SoulNeedFor(u, c, wid) ? "SOUL 부족" : "";
-                rows.Add(($"{_db.T(ab.NameId)}", w, reason.Length == 0, reason));
+                rows.Add(($"{host._db.T(ab.NameId)}", w, reason.Length == 0, reason));
             }
         }
         return rows;
     }
 
     internal string AbilityName(WorkData w) =>
-        _db != null && _db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{_db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
+        host._db != null && host._db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{host._db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
 
     /// <summary>그 어빌리티가 지금 자리에서 겨눌 수 있는 적 — HP 가 낮은 순.</summary>
     /// <summary>어빌리티 사거리 안의 적 — <b>가까운 순, 같으면 HP 낮은 순</b>(단축키 자동 조준의 우선순위).</summary>
     internal List<int> AbilityTargets(WorkData w)
     {
-        var user = _units[_turn];
+        var user = host._units[_turn];
         // 아군을 겨누는 기술(힐 따위, 대상 방식 4)은 <b>자기까지 포함한 아군</b> 가운데 HP 비율이 가장 낮은 쪽부터 —
         // 전에는 적만 찾아 힐을 단축키로 고르면 아무도 안 겨눠, 한 번 더 눌러도 자기에게 못 썼다(사용자 보고).
         if (w.TargetMode == 4)
-            return [.. Enumerable.Range(0, _units.Length)
-                .Where(i => _units[i].Alive && _units[i].OnField && ModeAccepts(4, user, _units[i])
-                            && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
-                .OrderBy(i => _units[i].Hp * 1000L / Math.Max(1, _units[i].MaxHp)).ThenBy(i => i != _turn).ThenBy(i => i)];
-        return [.. Enumerable.Range(0, _units.Length)
-            .Where(i => _units[i].Alive && _units[i].OnField && SeesAsFoe(user, _units[i])
-                        && InWorkRange(w, user.Col, user.Row, _units[i].Col, _units[i].Row, user))
-            .OrderBy(i => Math.Abs(_units[i].Col - user.Col) + Math.Abs(_units[i].Row - user.Row))
-            .ThenBy(i => _units[i].Hp).ThenBy(i => i)];
+            return [.. Enumerable.Range(0, host._units.Length)
+                .Where(i => host._units[i].Alive && host._units[i].OnField && ModeAccepts(4, user, host._units[i])
+                            && InWorkRange(w, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user))
+                .OrderBy(i => host._units[i].Hp * 1000L / Math.Max(1, host._units[i].MaxHp)).ThenBy(i => i != _turn).ThenBy(i => i)];
+        return [.. Enumerable.Range(0, host._units.Length)
+            .Where(i => host._units[i].Alive && host._units[i].OnField && SeesAsFoe(user, host._units[i])
+                        && InWorkRange(w, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user))
+            .OrderBy(i => Math.Abs(host._units[i].Col - user.Col) + Math.Abs(host._units[i].Row - user.Row))
+            .ThenBy(i => host._units[i].Hp).ThenBy(i => i)];
     }
 
     /// <summary>어빌리티를 고른 단축키 — 같은 키를 한 번 더 누르면 겨눈 대상에게 바로 쓴다.</summary>
@@ -139,19 +141,19 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void AutoAimAbility(WorkData w, string name)
     {
-        var user = _units[_turn];
-        var targets = AbilityTargets(w).Where(i => CanAimAt(w, user, _units[i].Col, _units[i].Row)).ToList();
+        var user = host._units[_turn];
+        var targets = AbilityTargets(w).Where(i => CanAimAt(w, user, host._units[i].Col, host._units[i].Row)).ToList();
         if (targets.Count == 0) return;
         string again = _targetHotkey >= 0 ? $"{(char)_targetHotkey} 한 번 더·" : "";
         if (w.TargetMode == 1)
         {
             _attackCursor = targets[0];
-            Hint($"{name} — {UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
+            host.Hint($"{name} — {host.UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
             return;
         }
-        var t = _units[targets[0]];
+        var t = host._units[targets[0]];
         _aimCell = (t.Col, t.Row);
-        Hint($"{name} — {UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
+        host.Hint($"{name} — {host.UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
     }
 
     /// <summary>같은 단축키를 한 번 더 누르거나 Enter — 저절로 겨눈 대상에게 쓴다. 처리했으면 true.</summary>
@@ -166,10 +168,10 @@ internal sealed unsafe partial class GameWindow
     internal (int X, int Y) MenuOrigin(int rowCount)
     {
         // 차례가 끝난 뒤에도 창이 남아 있을 수 있어 차례가 없으면 판 가운데로 잡는다.
-        var (fx, fy) = _turn >= 0 && _turn < _units.Length ? UnitFoot(_units[_turn]) : (_camX + ViewWidth / 2, _camY + ViewHeight / 2);
+        var (fx, fy) = _turn >= 0 && _turn < host._units.Length ? host.UnitFoot(host._units[_turn]) : (host._camX + host.ViewWidth / 2, host._camY + host.ViewHeight / 2);
         int h = MenuHeadH + Math.Clamp(rowCount, 1, AbilityMenuRows) * MenuRowH + 8;
-        int x = fx + TileW < _camX + ViewWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
-        return (Math.Clamp(x, _camX + 8, _camX + ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, _camY + GridTop + 8, _camY + ViewHeight - h - 8));
+        int x = fx + TileW < host._camX + host.ViewWidth - MenuW - 8 ? fx + TileW : fx - TileW - MenuW;
+        return (Math.Clamp(x, host._camX + 8, host._camX + host.ViewWidth - MenuW - 8), Math.Clamp(fy - h / 2, host._camY + GridTop + 8, host._camY + host.ViewHeight - h - 8));
     }
 
     /// <summary>목록이 열려 있으면 클릭을 처리하고 true — 왼쪽 클릭은 바로 고르고, 목록 밖을 누르면 닫는다. 설명은 오른쪽 단추를 누르고 있는 동안 보인다.</summary>
@@ -205,25 +207,25 @@ internal sealed unsafe partial class GameWindow
     internal void SelectAbilityRow((string Name, WorkData Work, bool Enabled, string Reason) row)
     {
         var (name, w, enabled, reason) = row;
-        if (!enabled) { Toast($"{name}: {reason}"); return; }
+        if (!enabled) { host.Toast($"{name}: {reason}"); return; }
         _abilityMenu = false;
         _targetWork = w.Id;
         _targetIsBasicAttack = false;
         // 자기 자리에 쓰되 효과 범위가 있는 기술(카운터 필드 따위)은 바로 쓰지 않고 범위를 먼저 보인다 — 한 번 더 누르면 쓴다(사용자 요청).
         if (w.SelfCentred && w.AreaShape != 0)
         {
-            var self = _units[_turn];
+            var self = host._units[_turn];
             _aimCell = (self.Col, self.Row);
             string again = _targetHotkey >= 0 ? $"{(char)_targetHotkey}·" : "";
-            Hint($"{name} — 주황 칸이 효과 범위입니다 (범위 안 클릭·{again}Enter: 쓰기, 우클릭·Esc 취소)");
+            host.Hint($"{name} — 주황 칸이 효과 범위입니다 (범위 안 클릭·{again}Enter: 쓰기, 우클릭·Esc 취소)");
             return;
         }
-        if (UseSelfCentredWork(w)) { Toast(name); return; }
+        if (UseSelfCentredWork(w)) { host.Toast(name); return; }
 
         // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
         AutoAimAbility(w, name);
         if (_attackCursor >= 0 || _aimCell != null) return;
-        Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
+        host.Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
     }
 
     /// <summary>
@@ -238,42 +240,42 @@ internal sealed unsafe partial class GameWindow
         // 처음 고른 적에 붙은 채 다른 적 위로 옮겨도 범위가 안 나왔다(사용자 보고: 오버플로우). 몸통을 가리켜도 그 적으로 친다.
         if (w.TargetMode == 1)
         {
-            int foe = UnitOrFoeAt(bx, by);
-            if (foe >= 0 && SeesAsFoe(_units[_turn], _units[foe]) && CanAimAt(w, _units[_turn], _units[foe].Col, _units[foe].Row))
+            int foe = host.UnitOrFoeAt(bx, by);
+            if (foe >= 0 && SeesAsFoe(host._units[_turn], host._units[foe]) && CanAimAt(w, host._units[_turn], host._units[foe].Col, host._units[foe].Row))
             {
                 _attackCursor = foe;
                 _aimCell = null;
             }
             return;
         }
-        int col = bx / TileW, row = RowAt(bx, by);
-        if (row < 0 || !CanAimAt(w, _units[_turn], col, row)) return;
+        int col = bx / TileW, row = host.RowAt(bx, by);
+        if (row < 0 || !CanAimAt(w, host._units[_turn], col, row)) return;
         _aimCell = (col, row);
         _attackCursor = -1;
     }
 
     internal void DrawAbilityMenu()
     {
-        if (!_abilityMenu || _turn < 0 || _db == null) return;
+        if (!_abilityMenu || _turn < 0 || host._db == null) return;
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
         int h = MenuHeadH + Math.Clamp(rows.Count, 1, AbilityMenuRows) * MenuRowH + 8;
         int top = AbilityTopFor(rows.Count);
 
         // 창은 게임 안 모든 창과 같은 원본 틀(분석-시스템메뉴 「메시지 창 틀」)
-        DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
-        DrawGameFrame(ox, oy, MenuW, h, $"{_db.T(3)} — {UnitName(_turn)}");
+        host.DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
+        host.DrawGameFrame(ox, oy, MenuW, h, $"{host._db.T(3)} — {host.UnitName(_turn)}");
         // 머리 글자는 아래 숫자 칸의 오른끝에 하나씩 맞춘다 — 한 덩이로 창 오른끝에 붙였더니 단축키 칸까지 밀려 한 칸씩 어긋났다(사용자 보고).
         // 두 칸 오른끝이 30픽셀밖에 안 떨어져 그대로 맞추면 「TPSOUL」로 붙는다 — TP 는 조금 왼쪽, SOUL 은 조금 오른쪽으로 띄운다.
-        RightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
-        RightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
-        RightText("소모", ox + MenuRowX + 286, oy + 3, White, 12);
+        host.RightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
+        host.RightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
+        host.RightText("소모", ox + MenuRowX + 286, oy + 3, White, 12);
 
-        if (rows.Count == 0) DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
-        var c = _units[_turn].Data!;
+        if (rows.Count == 0) host.DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
+        var c = host._units[_turn].Data!;
         // 여덟 줄을 넘으면 휠로 굴린다 — 전에는 창이 화면 아래로 넘쳐 아랫줄을 고를 수 없었다(ba-20 G12).
-        if (top > 0) DrawText("▲", ox + MenuW - 14, oy + MenuHeadH + 2, 0xFFFFFF80, 10);
-        if (top + AbilityMenuRows < rows.Count) DrawText("▼", ox + MenuW - 14, oy + h - 22, 0xFFFFFF80, 10);
+        if (top > 0) host.DrawText("▲", ox + MenuW - 14, oy + MenuHeadH + 2, 0xFFFFFF80, 10);
+        if (top + AbilityMenuRows < rows.Count) host.DrawText("▼", ox + MenuW - 14, oy + h - 22, 0xFFFFFF80, 10);
         for (int i = top; i < rows.Count && i < top + AbilityMenuRows; i++)
         {
             var (name, w, enabled, reason) = rows[i];
@@ -281,29 +283,29 @@ internal sealed unsafe partial class GameWindow
             uint color = enabled ? White : DimGray;
             int rx = ox + MenuRowX;
             // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
-            if (i == _abilityHover) DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
+            if (i == _abilityHover) host.DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
             // 단축키 글자는 아이콘과 겹치지 않게 줄 오른쪽 끝에
             string hotkey = HotkeyLabel(i);
-            if (hotkey.Length > 0) DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
+            if (hotkey.Length > 0) host.DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
-            if (_db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
+            if (host._db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {
-                DrawUi(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2, UiBlend.Alpha);
-                DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2, UiBlend.Alpha);
+                host.DrawUi(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2, UiBlend.Alpha);
+                host.DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2, UiBlend.Alpha);
             }
-            DrawText(name, rx + 46, y + 4, color, 12);
+            host.DrawText(name, rx + 46, y + 4, color, 12);
             // 못 쓰는 줄은 흐린 글자로만 알린다 — 「TP 부족」 같은 까닭 글은 이름과 겹치고 어차피 안다(사용자 요청). 누르면 알림으로 까닭을 준다.
             // 18·20(소울·TP 소모량 변화)까지 얹은 값을 보여 준다 — 실제로 물리는 값과 같아야 한다.
-            RightText($"{TpCostFor(_units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
+            host.RightText($"{TpCostFor(host._units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
             // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
-            RightText($"{SoulNeedFor(_units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
+            host.RightText($"{SoulNeedFor(host._units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
             // 쓰면 실제로 깎이는 SOUL(소모량) — 필요 SOUL 과 다를 수 있다(18 소울 소모량 % 보정까지 얹은 값).
-            RightText($"{SoulCostFor(_units[_turn], c, w.Id)}", rx + 280, y + 4, color, 12);
+            host.RightText($"{SoulCostFor(host._units[_turn], c, w.Id)}", rx + 280, y + 4, color, 12);
         }
 
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
-            && _db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && _db.AbilityDescription(pressed) is { Length: > 0 } desc)
-            DrawDescriptionTip(desc + AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, _units[_turn]), _mouse.X, _mouse.Y, _camX, _camY, ViewWidth, ViewHeight);
+            && host._db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && host._db.AbilityDescription(pressed) is { Length: > 0 } desc)
+            host.DrawDescriptionTip(desc + host.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 }
