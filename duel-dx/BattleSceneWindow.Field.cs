@@ -1158,8 +1158,9 @@ internal sealed unsafe partial class BattleSceneWindow
                 FadeMusic(A(0), A(1));
                 HoldSlotTicks(A(1));
                 break;
-            case 910:                                        // [v] 챕터 주 화면 가운데 구체를 Obs 562 ↔ 587 로(Chp 0045·0050) —
-                break;                                       // 데모 모세스 주 화면은 그 구체를 안 그려 할 일이 없다
+            case 910:                                        // [v] 모세스 안내 음성을 +25 번 것으로 갈아 끼우고 화면 줄이 찢긴다(0x100f2bb0, Chp 0045·0050)
+                _mosesAltVoice = A(0) != 0;                  // 562 ↔ 587 은 구체 그림이 아니라 소리 번호였다(0x10028850 = 소리 재생, ba-21 field Y5)
+                break;
             case 911:                                        // [단계, 번호] 항행 시작 단계·번호(챕터 +0x2e40/+0x2e42, 0x100f6c60) — a ≥ 1 일 때만
                 if (A(0) >= 1 && _mosesChp is { } navChp) _navStart = (navChp.Id, A(0), A(1));
                 break;
