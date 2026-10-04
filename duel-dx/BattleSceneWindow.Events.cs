@@ -22,31 +22,31 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private IReadOnlyList<BattleEvent> _events = [];
-    private int[] _eventFired = [];
+    internal IReadOnlyList<BattleEvent> _events = [];
+    internal int[] _eventFired = [];
 
     /// <summary>턴 수 — 이벤트 조건 1·3 이 보는 값. 새 차례가 올 때마다 오른다(<c>0x10067d36</c>).</summary>
-    private int _turnNo;
+    internal int _turnNo;
 
     /// <summary>전투 국소 변수 — 행동 100·101 이 고치고 조건 100 이 읽는다(<c>0x101b69a0</c>).</summary>
-    private readonly byte[] _battleVars = new byte[256];
+    internal readonly byte[] _battleVars = new byte[256];
 
     /// <summary>
     /// 이벤트 타이머 열 칸 — 행동 <c>900</c> 이 켜고 <b>턴이 하나 지날 때마다</b> 센다(<c>0x1004e9e0</c>).
     /// 조건 <c>2</c> 가 그 세기를 견준다. <c>Btl 0170</c> 이 「적을 다 잡은 뒤 20턴·40턴」에 쓴다.
     /// </summary>
-    private readonly int[] _eventTimer = new int[10];
+    internal readonly int[] _eventTimer = new int[10];
 
-    private readonly bool[] _eventTimerRun = new bool[10];
+    internal readonly bool[] _eventTimerRun = new bool[10];
 
     /// <summary>이벤트가 정한 다음 전투 — 0 이면 <c>Btl</c> 자료의 값(또는 모세스)으로 간다.</summary>
-    private int _eventNextBattle;
+    internal int _eventNextBattle;
 
     /// <summary>이벤트 행동 6 이 정한 다음 필드 — 0 이면 모세스로 간다.</summary>
-    private int _eventNextField;
+    internal int _eventNextField;
 
     /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
-    private void LoadEvents(int battleId)
+    internal void LoadEvents(int battleId)
     {
         _events = [];
         _eventFired = [];
@@ -81,13 +81,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>지금 돌고 있는 이벤트 — 없으면 −1. 도는 동안 전투가 통째로 멈춘다(<c>0x10066197</c>).</summary>
-    private int _runningEvent = -1;
-    private int _eventPc;
-    private double _eventWaitUntil;
+    internal int _runningEvent = -1;
+    internal int _eventPc;
+    internal double _eventWaitUntil;
     /// <summary>방금 띄운 말풍선(601)을 안 기다리고 다음 줄로 가는 중 — 뒤따르는 줄이 2(틱 기다리기)일 때.</summary>
-    private bool _talkNoWait;
+    internal bool _talkNoWait;
     /// <summary>사건이 건 걸음들이 다 끝나는 때 — 행동 1 이 이때까지 기다린다.</summary>
-    private double _eventMoveUntil;
+    internal double _eventMoveUntil;
 
     /// <summary>
     /// 사건 줄이 건 기술(207 보스 필살기 · 909 폭주) — 끝날 때까지 사건이 <b>그 줄에 머문다</b>. 원본 207(<c>0x10052400</c>)은 단계 0 기술 →
@@ -96,7 +96,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 뒤에 결과(11)·필드(6) 줄이 있으면 아예 안 나갔다(감사5 B1·B4). <see cref="StepEvent"/> 가 틀마다 한 번 돌린다.
     /// </summary>
     /// <summary>사건이 건 걸음이 끝나는 데 드는 시간 — 높이 차 칸은 6·8·10틱, 순간이동꾼(이동 종류 1)은 길이와 상관없이 64틱.</summary>
-    private double WalkSeconds(UnitState u, int fromCol, int fromRow, IReadOnlyList<(int Col, int Row)> walk)
+    internal double WalkSeconds(UnitState u, int fromCol, int fromRow, IReadOnlyList<(int Col, int Row)> walk)
     {
         if (u.Data is { MoveKind: 1 }) return (BlinkFadeTicks + 2 * BlinkHiddenTicks + 18 + 1) / TicksPerSecond;
         int ticks = 0;
@@ -105,7 +105,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
-    private (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
+    internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
     {
         if (!_units.Any(x => x != who && x.Alive && x.OnField && x.Col == col && x.Row == row)) return (col, row);
         for (int radius = 1; radius <= 6; radius++)
@@ -119,9 +119,9 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>행동 201 로 걸어 나가는 중인 유닛 — 다 걸으면 판에서 뺀다.</summary>
-    private readonly List<(UnitState Unit, double At, int Col, int Row, bool WithFollowers)> _pendingExits = [];
+    internal readonly List<(UnitState Unit, double At, int Col, int Row, bool WithFollowers)> _pendingExits = [];
 
-    private void LeaveField(UnitState u, int col, int row, bool withFollowers)
+    internal void LeaveField(UnitState u, int col, int row, bool withFollowers)
     {
         u.ResetTo(col, row);
         if (u.Hp <= 0) u.Hp = 1;   // HP 0 으로 물러난 보스가 판 밖에서 죽은 것으로 처리되지 않게
@@ -132,7 +132,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>걸어 나가던 유닛이 다 걸었으면(또는 전투 결과가 났으면) 판에서 뺀다 — 매 틀 부른다.</summary>
-    private void StepPendingExits()
+    internal void StepPendingExits()
     {
         // 승패 판정만 행동(쓰러지는 동작)·레벨업 창 뒤로 미룬다 — 그 도중에 승패가 서면 루틴이 멈춰 쓰러짐·레벨업이 건너뛰어진다.
         // 판에서 빼는 것은 미루지 않는다(다 걸어 나간 유닛이 같은 AI 차례에 또 치거나 맞지 않게).
@@ -156,19 +156,19 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>걸어 나간 유닛 때문에 승패를 다시 봐야 한다 — 루틴·레벨업 창이 끝나면 본다.</summary>
-    private bool _exitOutcomeDue;
+    internal bool _exitOutcomeDue;
 
-    private IEnumerator<bool>? _eventRoutine;
-    private double _eventRoutineStepAt = -1;
+    internal IEnumerator<bool>? _eventRoutine;
+    internal double _eventRoutineStepAt = -1;
 
     /// <summary>행동 500 이 튼 소리를 푸는 중인가 — 다 풀릴 때까지 이벤트를 멈춘다(원본은 소리 개체의 +0x58 이 0 이 될 때까지 기다린다).</summary>
-    private volatile bool _eventSoundLoading;
+    internal volatile bool _eventSoundLoading;
 
     /// <summary>다 푼 소리의 길이(초) — 배경 실이 채우고 <see cref="StepEvent"/> 가 기다림으로 바꾼다. 0 이면 없음.</summary>
-    private volatile float _eventSoundSeconds;
+    internal volatile float _eventSoundSeconds;
 
     /// <summary>이벤트가 돌거나 대사가 떠 있으면 전투를 멈춘다.</summary>
-    private bool EventsBusy => _runningEvent >= 0 || _talk != null;
+    internal bool EventsBusy => _runningEvent >= 0 || _talk != null;
 
     /// <summary>조건이 다 맞는 이벤트를 하나 켠다. 결과가 정해지면 더 보지 않는다.</summary>
     /// <summary>
@@ -176,7 +176,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 맞으면 그 행선지를 쓴다. 그 사건이 턴 수를 기다리는 동안 전멸 승리가 먼저 전투를 끝내 이야기 사슬이 끊겼다 —
     /// 샤이닝 스타 <c>Btl 0137</c> 사건 5(턴 &gt; 5 · 열쇠 10006 없음 → <c>Fld 0055</c> → 행동 11 챕터 끝)를 건너뛰어 챕터가 안 끝났다(사용자 보고).
     /// </summary>
-    private void ScriptedDestinationOnWipe()
+    internal void ScriptedDestinationOnWipe()
     {
         for (int i = 0; i < _events.Count; i++)
         {
@@ -216,9 +216,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 이벤트를 볼 때(비트) — 원본 <c>CheckEvents(갈래)</c> 는 세 자리에서만 돈다: 1 레벨업 끝(0x10068270) · 2 행동 끝(0x100680a3) · 3 새 틱(0x10067d5c).
     /// 사건의 갈래(레코드 +0xe, <see cref="BattleEvent.Word2"/>)가 0 이면 셋 다, 아니면 그때만. 전에는 프레임마다 봤다(fg-22).
     /// </summary>
-    private int _eventCheckDue = 0xF;
+    internal int _eventCheckDue = 0xF;
 
-    private void RunEvents()
+    internal void RunEvents()
     {
         if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy || _eventCheckDue == 0) return;
         for (int i = 0; i < _events.Count; i++)
@@ -249,7 +249,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <b>2</b> 는 틱 기다리기, <b>3</b> 은 중단이다. 나머지는 넣고 바로 다음 줄로 간다.
     /// 대사 줄 사이에 낀 <c>1</c> 이 「눌러서 넘길 때까지 멈춤」을 만든다.
     /// </remarks>
-    private void StepEvent()
+    internal void StepEvent()
     {
         while (_runningEvent >= 0)
         {
@@ -351,7 +351,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 방금 띄운 대사가 클릭을 안 기다리고 다음 줄과 같이 가나 — 바로 뒤가 행동 1 이 아닐 때. 다만 뒤가 또 대사(창이 하나라 겹쳐 못 띄운다)거나
     /// 전투 결과(6·10·11 — 원본은 말풍선이 뜨자마자 전투가 끝난다, 0262 한 곳)거나 사건의 끝이면 읽을 수 있게 기다린다(일부러 둔 차이).
     /// </summary>
-    private bool TalkRidesOn(BattleEvent e)
+    internal bool TalkRidesOn(BattleEvent e)
     {
         // 곧바로 끝나는 줄(변수·깃발 100~103 따위)은 건너뛰며 본다 — 「601 → 102 → 11」(Btl 0285 사건 8)도 결과 앞이다.
         for (int pc = _eventPc; pc < e.Actions.Count; pc++)
@@ -364,13 +364,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>사건이 건 기술(207·909)이 줄을 안 붙들고 도는 중인가 — 뒤에 행동 1 이 없을 때.</summary>
-    private bool _eventRoutineFree;
+    internal bool _eventRoutineFree;
 
     /// <summary>줄을 안 붙들고 보내 둔 카메라가 있나 — 다음 행동 1 이 설 때까지 기다린다.</summary>
-    private bool _eventCamPending;
+    internal bool _eventCamPending;
 
     /// <summary>카메라 명령을 건 이벤트 줄 — (사건, 줄 번호). 같은 줄에 다시 오면 명령은 안 걸고 멈췄는지만 본다.</summary>
-    private (int Event, int Pc) _eventCamLine = (-1, -1);
+    internal (int Event, int Pc) _eventCamLine = (-1, -1);
 
     /// <summary>
     /// 이벤트 줄의 카메라 — 처음 오면 명령을 걸고, 카메라가 서기 전까지 true(그 줄에 머문다). 설 일이 없으면 false.
@@ -378,7 +378,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 죽었거나 없으면 곧바로 다음 줄 · 600·601(0x100537d0·0x10053b62): 말하는 이(부하면 대장) 가운데 뒤 창 ·
     /// 906(0x10055810): 단계 0 카메라 → 스크롤이 끝난 뒤 단계 1 강조(감사4 C15·C16).
     /// </summary>
-    private bool EventCameraWaits(ScriptCommand a)
+    internal bool EventCameraWaits(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         var line = (_runningEvent, _eventPc);   // _eventPc 는 이미 다음 줄을 가리킨다 — 이 줄마다 하나
@@ -421,7 +421,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private static bool Compare(int a, int op, int b) => op switch
+    internal static bool Compare(int a, int op, int b) => op switch
     {
         0 => a == b,
         1 => a != b,
@@ -432,7 +432,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>원본 방향 번호(0 위·1 왼·2 아래·3 오른) 그대로 바라보는 쪽.</summary>
-    private static Facing DirectionFacing(int direction) => (direction & 3) switch
+    internal static Facing DirectionFacing(int direction) => (direction & 3) switch
     {
         0 => Facing.Up,
         1 => Facing.Left,
@@ -441,7 +441,7 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>들어오는 쪽(0 위·1 왼·2 아래·3 오른)을 <b>바라보는 쪽</b>으로 — 들어온 쪽의 반대를 본다.</summary>
-    private static Facing EdgeFacing(int edge) => (edge & 3) switch
+    internal static Facing EdgeFacing(int edge) => (edge & 3) switch
     {
         0 => Facing.Down,
         1 => Facing.Right,
@@ -450,21 +450,21 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>편 번호를 이벤트가 쓰는 차례(4·3·0·1·2)에서 꺼낸다.</summary>
-    private static readonly int[] EventSideOrder = [4, 3, 0, 1, 2];
+    internal static readonly int[] EventSideOrder = [4, 3, 0, 1, 2];
 
     /// <summary>조건 300·301 이 찾아 낸 두 사람 — 대사가 <c>20010</c>·<c>20011</c> 로 이들을 가리킨다.</summary>
-    private UnitState? _eventFoundA, _eventFoundB;
+    internal UnitState? _eventFoundA, _eventFoundB;
 
     /// <summary>조건 200·203·204·402 가 찾은 사람도 20010 이 된다(0x101b699c 에 적는 조건들) — 20011 은 그대로.</summary>
-    private void RememberFound(UnitState? found) { if (found != null) _eventFoundA = found; }
+    internal void RememberFound(UnitState? found) { if (found != null) _eventFoundA = found; }
 
     /// <summary>행동 906 이 초록으로 칠하는 사각형과 그 끝나는 때.</summary>
-    private (int X1, int Y1, int X2, int Y2)? _highlightRect;
-    private double _highlightUntil;
+    internal (int X1, int Y1, int X2, int Y2)? _highlightRect;
+    internal double _highlightUntil;
 
     /// <summary>행동 200 의 들어오는 변(0 위·1 왼·2 아래·3 오른) 가장자리 칸 — 목표 칸과 같은 열/줄.</summary>
     /// <summary>그 유닛을 변(0 위·1 왼·2 아래·3 오른) 밖 <paramref name="px"/> 픽셀에서 걸어 들어오게 한다.</summary>
-    private static void BeginEdgeEntry(UnitState u, int edge, double px)
+    internal static void BeginEdgeEntry(UnitState u, int edge, double px)
     {
         switch (edge & 3)
         {
@@ -475,7 +475,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
+    internal (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
     {
         0 => (Math.Clamp(col, 0, Cols - 1), 0),
         1 => (0, Math.Clamp(row, 0, Rows - 1)),
@@ -487,7 +487,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 조건 300·301 이 쓰는 대상 고르기 — <b>죽은 사람도 든다</b>(걸러내기 갈래가 0 이라 NULL 검사뿐)이고,
     /// 편 코드는 <b>홀수만</b> 받는다(짝수는 늘 거짓, <c>0x1005022c</c>).
     /// </summary>
-    private List<UnitState> EventFighters(int value)
+    internal List<UnitState> EventFighters(int value)
     {
         if (value is >= 20000 and <= 20009)
             return (value - 20000) % 2 == 0
@@ -500,7 +500,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
-    private List<UnitState> EventTargets(int value, out bool wholeSide)
+    internal List<UnitState> EventTargets(int value, out bool wholeSide)
     {
         wholeSide = false;
         if (value >= 20000)
@@ -516,7 +516,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return value > 0 ? [.. _units.Where(u => u.ChrCode == value)] : [];
     }
 
-    private bool EventCondition(ScriptCommand c)
+    internal bool EventCondition(ScriptCommand c)
     {
         short A(int i) => i < c.Args.Length ? c.Args[i] : (short)0;
         switch (c.Code)
@@ -633,7 +633,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void RunEventAction(ScriptCommand a)
+    internal void RunEventAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         if (Trace && a.Code is 6 or 11 or 207 or 706 or 707 or 708 or 909)
@@ -932,7 +932,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 행동 909 — 폭주(work 1582) 뒤 베라모드(Chr 223)를 지우고 <b>같은 칸에 Chr 37 을 편 3(동맹 AI)으로</b> 새로 세운다
     /// (0x10055cb1~0x10055d37). 전에는 기술만 썼다(fg-21 ⑫). 이미 37 이면 기술만.
     /// </summary>
-    private IEnumerator<bool> BerserkSwapRoutine(UnitState caster, WorkData burst)
+    internal IEnumerator<bool> BerserkSwapRoutine(UnitState caster, WorkData burst)
     {
         // 909 도 공짜다 — 0x10055c3a 가 0x10075ff0(0x62e, x, y, 1, 1, 1, …) 로 +0xa0 = +0xa4 = 1(감사5 B2 보충).
         var use = UseWorkRoutine(Array.IndexOf(_units, caster), burst, -1, caster.Col, caster.Row, [], eventFinisher: true);
@@ -961,7 +961,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 돌던 <c>_routine</c> 은 건드리지 않는다 — 사건 조건은 루틴 도중에도 보므로(301 「가 나를 때렸다」는 적의 공격 루틴 한가운데서 참이 된다)
     /// 예전처럼 덮어쓰면 AI 루틴 끝의 <c>Rest</c> 가 안 불려 차례가 영영 안 넘어갔다(Btl 0143 사건 6). 사건이 끝나면 그대로 이어 돈다.
     /// </summary>
-    private IEnumerator<bool> EventWorkRoutine(UnitState caster, IEnumerator<bool> use)
+    internal IEnumerator<bool> EventWorkRoutine(UnitState caster, IEnumerator<bool> use)
     {
         if (!caster.Alive || !caster.OnField) yield break;
         void Log(string what)

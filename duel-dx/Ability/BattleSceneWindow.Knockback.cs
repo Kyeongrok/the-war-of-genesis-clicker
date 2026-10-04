@@ -20,21 +20,21 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>비 레벨 1~20 의 work.</summary>
-    private static readonly HashSet<int> BiWorks = [10, .. Enumerable.Range(221, 19)];
+    internal static readonly HashSet<int> BiWorks = [10, .. Enumerable.Range(221, 19)];
 
-    private const int BiTrailObs = 109;
+    internal const int BiTrailObs = 109;
 
     /// <summary>원본에서 한 칸 = 월드 40.</summary>
-    private const int WorldPerCell = 40;
+    internal const int WorldPerCell = 40;
 
     /// <summary>시전자 쪽 동작만 — 맞음(2)·서기(0)는 맞은 인물의 것이다. 24 는 다 밀려난 뒤 넉백 루틴이 튼다.</summary>
-    private static readonly (int[] Actions, AbilityEffect[] Effects) BiScript =
+    internal static readonly (int[] Actions, AbilityEffect[] Effects) BiScript =
         ([5, 7, 12], [new(379, 0, false, 0), new(43, 0, false, 42, 0, 1, true)]);
 
     /// <summary>
     /// 밀어내기 — <paramref name="target"/> 을 시전자가 보는 쪽으로 사거리 끝까지(막히면 거기까지) 밀고, 시전자는 동작 24 로 돌아온다.
     /// </summary>
-    private IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0, int pushCells = -1)
+    internal IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0, int pushCells = -1)
     {
         var (dc, dr) = user.Facing switch
         {
@@ -87,7 +87,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (BiWorks.Contains(w.Id)) PlayAction(user, DrawnAction(user, 24));
     }
 
-    private static Facing Opposite(Facing f) => f switch
+    internal static Facing Opposite(Facing f) => f switch
     {
         Facing.Up => Facing.Down,
         Facing.Down => Facing.Up,

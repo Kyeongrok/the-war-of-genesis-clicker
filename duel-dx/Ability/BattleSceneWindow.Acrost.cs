@@ -18,42 +18,42 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int ElementalFireAbility = 29, SummonMonsterAbility = 60;
-    private const int FireBallObs = 637, FireTrailObs = 321, FireBlastObs = 252, FireSoundObs = 1331;
-    private const int MonsterObs = 919, MonsterSoundObs = 1356;
+    internal const int ElementalFireAbility = 29, SummonMonsterAbility = 60;
+    internal const int FireBallObs = 637, FireTrailObs = 321, FireBlastObs = 252, FireSoundObs = 1331;
+    internal const int MonsterObs = 919, MonsterSoundObs = 1356;
 
     /// <summary>
     /// 불덩이가 도는 틱 — 원본은 150+10j 틱(5초 남짓)인데 너무 길다고 해서 <b>1/3</b>(50+3j)로 줄였다(사용자 요청). 원본으로 되돌리려면 150·10.
     /// </summary>
-    private const int FireOrbitTicks = 50, FireOrbitStep = 3;
+    internal const int FireOrbitTicks = 50, FireOrbitStep = 3;
 
     /// <summary>엘레맨탈 파이어 레벨 1~20 · 서몬 몬스터 레벨 1~20 의 work — 뽑은 표 대신 손으로 그린다.</summary>
-    private static readonly HashSet<int> AcrostWorks =
+    internal static readonly HashSet<int> AcrostWorks =
     [
         389, 1206, 1205, 1204, 1203, 1202, 1201, 1200, 1199, 1198, 1197, 1196, 1195, 1194, 1193, 1192, 1191, 1190, 1189, 1188,
         420, 1291, 1290, 1289, 1288, 1287, 1286, 1285, 1284, 1283, 1282, 1281, 1280, 1279, 1278, 1277, 1276, 1275, 1274, 1273,
     ];
 
     /// <summary>도는 불덩이 하나.</summary>
-    private sealed class FireBall
+    internal sealed class FireBall
     {
         public double Start, Angle, X, Y, Speed = 5;
         public int OrbitTicks, Tick, Target;
         public bool Diving, Done;
     }
 
-    private readonly List<FireBall> _fireBalls = [];
-    private double _fireLastStep;
+    internal readonly List<FireBall> _fireBalls = [];
+    internal double _fireLastStep;
 
     /// <summary>효과 모션에 박힌 소리를 그때 낸다 — 효과 폴더 밖(moses/obs)의 소리 껍데기도 찾는다.</summary>
-    private void FxSound(int obs, int motion, double at)
+    internal void FxSound(int obs, int motion, double at)
     {
         // 소리 껍데기 Obs(311·312·1320·1338·1401 — 그림 없이 소리 키만)는 그림으로 못 읽는다 — 이펙트 표를 먼저 본다(AbilityFx 와 같은 차례).
         if ((_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) ?? UiFor(obs)?.Clip(motion)) is not { } clip) return;
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((at + tick / TicksPerSecond, sound));
     }
 
-    private IEnumerable<bool> ElementalFireRoutine(UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> ElementalFireRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         int n = targets.Count;
         if (n == 0) yield break;
@@ -85,7 +85,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>불덩이를 틱 단위로 민다 — 돌기(틱당 10°) → 대상으로 날기 → 터짐.</summary>
-    private void StepFireBalls(int cx, int cy)
+    internal void StepFireBalls(int cx, int cy)
     {
         int ticks = (int)((_lastTime - _fireLastStep) * TicksPerSecond);
         if (ticks <= 0) return;
@@ -122,13 +122,13 @@ internal sealed unsafe partial class BattleSceneWindow
         _fireBalls.RemoveAll(b => b.Done);
     }
 
-    private void DrawFireBalls()
+    internal void DrawFireBalls()
     {
         foreach (var b in _fireBalls)
             DrawUi(FireBallObs, 0, b.Tick, (int)b.X, (int)b.Y, UiBlend.Add);
     }
 
-    private IEnumerable<bool> SummonMonsterRoutine(UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> SummonMonsterRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         double t0 = _lastTime;
         var (ux, uy) = UnitFoot(user);

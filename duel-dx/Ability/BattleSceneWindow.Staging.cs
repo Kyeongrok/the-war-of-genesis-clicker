@@ -9,22 +9,22 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>하드 밸런싱 0x100b7d20(426 · 1376~1394) / 소프트 밸런싱 0x100b8110(427 · 1357~1375) — 59~78 은 격려였다(ba-21 fx 표 재생성 기록 11).</summary>
-    private static bool IsBalancingWork(int id) => id is 426 or 427 || id is >= 1376 and <= 1394 || id is >= 1357 and <= 1375;
+    internal static bool IsBalancingWork(int id) => id is 426 or 427 || id is >= 1376 and <= 1394 || id is >= 1357 and <= 1375;
 
     /// <summary>웹폰 크래쉬 0x100a20a0(442 · 1503~1506).</summary>
-    private static bool IsWeaponCrashWork(int id) => id == 442 || id is >= 1503 and <= 1506;
+    internal static bool IsWeaponCrashWork(int id) => id == 442 || id is >= 1503 and <= 1506;
 
     /// <summary>블랙홀 0x1008d200(489 · 978~986).</summary>
-    private static bool IsBlackHoleWork(int id) => id == 489 || id is >= 978 and <= 986;
+    internal static bool IsBlackHoleWork(int id) => id == 489 || id is >= 978 and <= 986;
 
     /// <summary>더블 브레이크 0x100825e0(work 393).</summary>
-    private const int DoubleBreakWork = 393;
+    internal const int DoubleBreakWork = 393;
 
     /// <summary>
     /// 핸들러가 거는 화면 흔들림(생성자 0x100c6f70 가로 · 0x100c7120 세로, 세기 0x100cda20, 길이 0x100c2530 — 직접 호출 23곳 전수, ba-20 O P8).
     /// 세기·길이는 원본 값이고, 시작은 이펙트가 뜨는 때부터 차례로 잇는다(단계별 시작 틱은 못 뽑았다 — 가설).
     /// </summary>
-    private void SpawnWorkShakes(WorkData w)
+    internal void SpawnWorkShakes(WorkData w)
     {
         (int Strength, int Ticks, bool Vertical, int Delay)[] shakes = w.Id switch
         {
@@ -52,16 +52,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그리는 동안 틀마다 불리는 연출 — false 를 돌려주면 끝난 것이다.</summary>
-    private readonly List<Func<bool>> _stageDraws = [];
+    internal readonly List<Func<bool>> _stageDraws = [];
 
-    private void DrawStageFx()
+    internal void DrawStageFx()
     {
         for (int i = _stageDraws.Count - 1; i >= 0; i--)
             if (!_stageDraws[i]()) _stageDraws.RemoveAt(i);
     }
 
     /// <summary>치는 단계에서 판정 바로 앞에 도는 연출. 연출이 없는 기술은 곧장 끝난다.</summary>
-    private IEnumerable<bool> StageBeforeHit(WorkData w, UnitState a, int targetIndex, int col, int row)
+    internal IEnumerable<bool> StageBeforeHit(WorkData w, UnitState a, int targetIndex, int col, int row)
     {
         if (w.Id == DoubleBreakWork)
         {
@@ -185,7 +185,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>컷을 가로로만 늘여 그린다 — 가로는 컷 가운데 기준, 세로는 그대로.</summary>
-    private void BlitStretched(SpriteFrame frame, int footX, int footY, double scale, double fade)
+    internal void BlitStretched(SpriteFrame frame, int footX, int footY, double scale, double fade)
     {
         int w = Math.Max(1, (int)(frame.W * scale));
         var px = new uint[w * frame.H];

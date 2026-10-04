@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 모세스 전직(STYLE CHANGE) 페이지(mo-1, 페이지 7) — 파티원의 체질을 바꾼다.
 /// </summary>
@@ -31,10 +33,8 @@ namespace DuelDx;
 /// 3단계 단추 둘(레벨 60 + 필요 어빌리티, 「처음 계열」의 3단계)은 화면 자리를 아직 몰라 안 만들었다.
 /// 파티는 이 전투의 아군 셋이다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int StyleBackground = 42, StylePortraitObs = 302, StyleBodyObs = 283, StyleFamilyObs = 329;
     /// <summary>3단계 단추 안의 계열 아이콘(Obs 1334, 5장)과 「M.G」 표시(Obs 1426, 2장) — 분석-모세스 8절 「3단계 단추 둘」.</summary>
     internal const int StyleIconObs = 1334, StyleMarkObs = 1426;
@@ -437,6 +437,5 @@ internal sealed unsafe partial class BattleSceneWindow
         string desc = db.AbilityDescription(ab);
         _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.AbilityEffectText(ab, c.AbilityLevel(ab.Id));
         return true;
-    }
     }
 }

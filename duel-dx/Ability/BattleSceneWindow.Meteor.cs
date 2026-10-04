@@ -18,14 +18,14 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int MeteorAbility = 95;
-    private const int MeteorObs = 200, MeteorSoundObs = 311;
+    internal const int MeteorAbility = 95;
+    internal const int MeteorObs = 200, MeteorSoundObs = 311;
 
     /// <summary>메테오 레벨마다의 work — Lv1 469 · Lv2~10 744→736 · Lv11~20 783→774. 핸들러는 모두 같다.</summary>
-    private static readonly HashSet<int> MeteorWorks =
+    internal static readonly HashSet<int> MeteorWorks =
         [469, .. Enumerable.Range(736, 9), .. Enumerable.Range(774, 10)];
 
-    private IEnumerable<bool> MeteorRoutine(WorkData w, UnitState user, int col, int row, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> MeteorRoutine(WorkData w, UnitState user, int col, int row, List<int> targets, Action<int> hit)
     {
         double t0 = _lastTime;
         var cells = AreaCells(w, user, col, row);

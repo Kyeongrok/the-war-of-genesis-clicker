@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 모세스 통신(MESSAGE) 페이지(mo-1, 페이지 2) — 성도 위를 걸어 다니는 사람들과 이야기한다.
 /// </summary>
@@ -15,10 +17,8 @@ namespace DuelDx;
 /// 그림 모션은 파일에 없다 — 원본은 인물마다 <c>rand()%12</c> 를 한 번 뽑아 둔다.
 /// Chp 0010(코어헌터)에는 인물이 없어 이 페이지가 비어 있다 — 챕터 고르기로 0011 같은 챕터를 열면 보인다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int TalkObs = 1330, TalkFaceFallbackObs = 229;
     internal const int TalkWalkFrames = 3600, TalkBubbleW = 174, TalkBubbleH = 60;
 
@@ -231,6 +231,5 @@ internal sealed unsafe partial class BattleSceneWindow
             host.DrawText(text, x + 58, ty, White, 11);
             ty += 14;
         }
-    }
     }
 }

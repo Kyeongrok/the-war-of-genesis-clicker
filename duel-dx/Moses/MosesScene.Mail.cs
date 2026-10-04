@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 모세스 메일 페이지(mo-1, 페이지 1) — 편지함과 편지 보기.
 /// </summary>
@@ -16,10 +18,8 @@ namespace DuelDx;
 /// 우편함은 메일 페이지에 들어갈 때 <see cref="DeliverMail"/> 가 <b>지금 챕터 Chp 의 메일 표</b>에 든 편지 가운데 조건(깃발)을 채운 것을
 /// 넣어 채운다(원본 <c>0x100fc6e0</c>, 분석-모세스 「메일 배달과 진행 연동 (mo-mail)」). 목록은 최근 편지가 맨 위다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int MailListX = 151, MailListY = 70, MailRowW = 427, MailRowH = 19, MailRows = 17;
     internal const int MailViewX = 164, MailViewY = 120, MailViewW = 313, MailViewH = 239;
     internal const int MailRowObs = 1291;
@@ -378,6 +378,5 @@ internal sealed record MosesMail(int Id, int Sender, ushort OriginText, ushort B
         }
         catch (ArgumentException) { /* 배치가 안 맞으면 읽은 데까지 */ }
         return list;
-    }
     }
 }

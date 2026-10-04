@@ -1,5 +1,7 @@
 namespace DuelDx;
 
+using static DuelDx.BattleSceneWindow;
+
 /// <summary>
 /// 항행 단계 2(장소 고르기)의 레이더 — 행성 구체 위를 도는 초록 격자 구와 장소 조각(분석-모세스 6절 「레이더가 그리는 것」, 클래스 <c>0x10103880</c>).
 /// </summary>
@@ -9,10 +11,8 @@ namespace DuelDx;
 /// 앞면 선만 깊이에 따라 밝은 초록으로 긋고, 후보 장소는 장소 레코드의 경도칸(<c>+0x08</c>)·위도칸(<c>+0x0a</c>) 격자 한 칸을
 /// 노란 조각으로, 마우스가 올라간 장소는 빨간 조각으로 숨쉬듯(약 67틱 주기) 채운다. 구체 그림 위에 그리는 차례는 가설이다.
 /// </remarks>
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class MosesScene
 {
-    internal sealed unsafe partial class MosesScene
-    {
     internal const int RadarCenterX = 320 << 10, RadarCenterY = 220 << 10;
     internal const double RadarRadius = 74.0;
     internal const int RadarTiltX = 30, RadarTiltZ = 160;
@@ -145,6 +145,5 @@ internal sealed unsafe partial class BattleSceneWindow
             }
             for (int x = left; x <= right; x++) host.SetPixel(x, y, colour);
         }
-    }
     }
 }

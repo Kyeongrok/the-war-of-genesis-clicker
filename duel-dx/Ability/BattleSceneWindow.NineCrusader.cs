@@ -24,11 +24,11 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int NineCrusaderWork = 1491;
-    private const int SwordObs = 585, SwordSoundObs = 1428, SwordSparkObs = 1401;
+    internal const int NineCrusaderWork = 1491;
+    internal const int SwordObs = 585, SwordSoundObs = 1428, SwordSparkObs = 1401;
 
     /// <summary>원본 이동기(<c>0x10037e50</c>) — 점들을 차례로 따라가며 빠르기에 곱수를 곱한다.</summary>
-    private sealed class SwordMover((double X, double Y) start, IReadOnlyList<(double X, double Y)> points, double speed, double factor)
+    internal sealed class SwordMover((double X, double Y) start, IReadOnlyList<(double X, double Y)> points, double speed, double factor)
     {
         public double X = start.X, Y = start.Y;
         public int Index;
@@ -53,7 +53,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>날고 있는 나인 크루세이더 칼.</summary>
-    private sealed class SwordFlight
+    internal sealed class SwordFlight
     {
         public required UnitState User;
         /// <summary>떠나는 칼 — 다 빠지면 나는 칼이 시작한다.</summary>
@@ -72,10 +72,10 @@ internal sealed unsafe partial class BattleSceneWindow
         public bool Done;
     }
 
-    private readonly List<SwordFlight> _swords = [];
+    internal readonly List<SwordFlight> _swords = [];
 
     /// <summary>원본처럼 찌를 차례를 뽑는다 — 대상 1명 3번, 2명 5번, 3명 이상 9번.</summary>
-    private List<int> NineCrusaderOrder(List<int> targets)
+    internal List<int> NineCrusaderOrder(List<int> targets)
     {
         if (targets.Count == 0) return [];
         if (targets.Count == 1) return [targets[0], targets[0], targets[0]];
@@ -83,7 +83,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return [.. Enumerable.Range(0, n).Select(_ => targets[_rng.Next(targets.Count)])];
     }
 
-    private SwordFlight StartNineCrusader(UnitState user, List<int> targets)
+    internal SwordFlight StartNineCrusader(UnitState user, List<int> targets)
     {
         var (ux, uy) = UnitFoot(user);
         var order = NineCrusaderOrder(targets);
@@ -119,7 +119,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>원본 방향 칸 — <c>atan2(dx, dy)</c> 의 크기를 22.5° 아홉 칸으로(1 아래 … 9 위), 오른쪽으로 가면 18 − 칸.</summary>
-    private static int SwordDirTo(double dx, double dy)
+    internal static int SwordDirTo(double dx, double dy)
     {
         double angle = Math.Atan2(dx, dy), a = Math.Abs(angle) * 180 / Math.PI;
         int band = a < 11.25 ? 1 : a < 33.75 ? 2 : a < 56.25 ? 3 : a < 78.75 ? 4 : a < 101.25 ? 5 : a < 123.75 ? 6 : a < 146.25 ? 7 : a < 168.75 ? 8 : 9;
@@ -127,18 +127,18 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>방향 칸 → (모션, 뒤집기). 9 넘는 칸(오른쪽)은 그대로, 나머지(왼쪽)는 뒤집는다.</summary>
-    private static (int Motion, bool Mirror) SwordMotion(int dir) =>
+    internal static (int Motion, bool Mirror) SwordMotion(int dir) =>
         dir > 9 ? ((18 - dir) * 4 + 8, false) : (Math.Max(dir, 1) * 4 + 8, true);
 
     /// <summary>1428 소리 껍데기의 그 모션 소리를 지금 낸다.</summary>
-    private void SwordSound(int motion)
+    internal void SwordSound(int motion)
     {
         if (_effectTables.GetValueOrDefault(SwordSoundObs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
     }
 
     /// <summary>지난 틀 이후 흐른 틱만큼 칼을 민다 — 기술 코루틴이 매 틀 부른다.</summary>
-    private void StepSword(SwordFlight f)
+    internal void StepSword(SwordFlight f)
     {
         int ticks = (int)((_lastTime - f.LastStep) * TicksPerSecond);
         if (ticks <= 0) return;
@@ -146,7 +146,7 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int k = 0; k < ticks && !f.Done; k++) StepSwordTick(f);
     }
 
-    private void StepSwordTick(SwordFlight f)
+    internal void StepSwordTick(SwordFlight f)
     {
         f.Tick++;
         if (f.Return is { } back)
@@ -198,7 +198,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>칼을 그린다 — 585(칼끝 빛)와 자식 586(칼날)을 같은 모션으로.</summary>
-    private void DrawSwords()
+    internal void DrawSwords()
     {
         _swords.RemoveAll(f => f.Done);
         foreach (var f in _swords)
@@ -219,6 +219,6 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void DrawSwordLayer(int obs, int motion, int x, int y, bool mirror) =>
+    internal void DrawSwordLayer(int obs, int motion, int x, int y, bool mirror) =>
         DrawUi(obs, motion, 0, x, y, BlendOf(UiFor(obs)?.BlendAt(motion, 0) ?? 0), mirror: mirror);
 }

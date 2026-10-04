@@ -15,21 +15,21 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>레벨업 창이 저절로 닫히기까지 — 원본은 180틱이지만 사용자 요청으로 2초.</summary>
-    private const double LevelUpSeconds = 2.0;
-    private const float DuckedMusicGain = 0.4f;
+    internal const double LevelUpSeconds = 2.0;
+    internal const float DuckedMusicGain = 0.4f;
 
-    private readonly Queue<int> _levelUpQueue = new();
-    private int _levelUpUnit = -1;
-    private double _levelUpUntil;
-    private string _levelUpTitle = "", _levelUpBody = "";
+    internal readonly Queue<int> _levelUpQueue = new();
+    internal int _levelUpUnit = -1;
+    internal double _levelUpUntil;
+    internal string _levelUpTitle = "", _levelUpBody = "";
 
-    private bool LevelUpOpen => _levelUpUnit >= 0;
+    internal bool LevelUpOpen => _levelUpUnit >= 0;
 
     /// <summary>줄 머리 유닛에게 카메라 명령을 걸었나 — 멈추면 창을 띄운다.</summary>
-    private bool _levelUpCamSent;
+    internal bool _levelUpCamSent;
 
     /// <summary>쓰러뜨린 쪽에 경험치를 준다(메시지 1016). 여럿이 나누면 <paramref name="share"/> 로 나눈 몫(1 이상).</summary>
-    private void GainKillExp(UnitState killer, UnitState victim, int share = 1)
+    internal void GainKillExp(UnitState killer, UnitState victim, int share = 1)
     {
         // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
         if (_db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
@@ -43,7 +43,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 도구 > 적 정리(시험용) — 판에 선 적을 모두 쓰러뜨리고, 적마다의 처치 경험치를 <b>내가 움직이는 동료</b>(AI 가 움직이는 동맹 NPC 는 뺌)끼리
     /// 똑같이 나눈다. 죽음은 조건대로 사건을 부르고(바루스가 죽어야 끝나는 전투 따위) 승패 판정도 그대로 돈다.
     /// </summary>
-    private void ClearEnemiesForTest()
+    internal void ClearEnemiesForTest()
     {
         if (_db == null || !_battleLoaded || Mos._mosesOpen || FieldOpen || _outcome.Length > 0) { Toast("전투 중에만 쓸 수 있습니다"); return; }
         var receivers = _units.Where(u => u.Alive && u.OnField && IsMine(u) && u.Data != null).ToList();
@@ -74,7 +74,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 행동이 끝난 뒤 — 레벨이 오른 아군을 줄 세운다(원본 상태 21 부속 0, <c>0x100681ef~0x1006820b</c>).
     /// 원본은 <c>0x1006e940(u,2)</c>(살아 있음·판 안)인 유닛만 본다 — 쓰러진 인물은 죽은 채 레벨업하지 않는다(ba-15 Q7).
     /// </summary>
-    private void QueueLevelUps()
+    internal void QueueLevelUps()
     {
         for (int i = 0; i < _units.Length; i++)
             if (_units[i] is { IsAlly: true, Alive: true, OnField: true, Data: { } c } && c.CumExp / 100 > c.Level && !_levelUpQueue.Contains(i))
@@ -85,10 +85,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 레벨업 줄이 빌 때까지 미뤄 둔 전멸 판정 — 원본은 상태 21(레벨업) 뒤 상태 4 에서 전멸을 본다(<c>0x1006ed10</c>).
     /// 마지막 처치의 레벨업 창이 결과 배너에 가려 다음 전투로 밀리지 않게 한다(ba-15 Q7).
     /// </summary>
-    private bool _outcomeAfterLevelUp;
+    internal bool _outcomeAfterLevelUp;
 
     /// <summary>창을 띄울 차례면 띄우고, 시간이 다 되면 닫는다. 창이 떠 있는 동안 true.</summary>
-    private bool UpdateLevelUp()
+    internal bool UpdateLevelUp()
     {
         if (LevelUpOpen)
         {
@@ -135,10 +135,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>레벨업 창을 띄울지 — 설정 > 레벨업 창 보이기. 꺼도 레벨은 그대로 오른다(사용자 요청).</summary>
-    private bool _showLevelUp = UserSettings.Current.ShowLevelUp;
+    internal bool _showLevelUp = UserSettings.Current.ShowLevelUp;
 
     /// <summary>DUELDX_LEVELUP=1 이면 시작하자마자 레벨업 창을 띄운다(화면 밖 시험용).</summary>
-    private void OpenLevelUpIfAsked()
+    internal void OpenLevelUpIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_LEVELUP") != "1" || _db == null) return;
         _levelUpUnit = Array.FindIndex(_units, u => u.IsAlly);
@@ -148,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
                      + "HP가 30 상승하였습니다.\nATK가 4 상승하였습니다.";
     }
 
-    private void CloseLevelUp()
+    internal void CloseLevelUp()
     {
         _levelUpUnit = -1;
         _eventCheckDue |= 1 << 1;                // 갈래 1 = 레벨업 끝(0x10068270)
@@ -164,7 +164,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// O.K 단추는 <c>(창폭/2 − 38, 창높이 − 40)</c> 에 76×23 — 원본 그림 Obs 0471 모션 31(기준점이 한가운데).
     /// 틀·제목줄은 <see cref="DrawGameFrame"/> 가 그린다.
     /// </remarks>
-    private void DrawLevelUp()
+    internal void DrawLevelUp()
     {
         if (!LevelUpOpen) return;
         string[] lines = _levelUpBody.Split('\n');
@@ -194,5 +194,5 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림).</summary>
-    private const int OkButtonObs = 471, OkButtonMotion = 31, OkButtonMotionOver = 32;
+    internal const int OkButtonObs = 471, OkButtonMotion = 31, OkButtonMotionOver = 32;
 }

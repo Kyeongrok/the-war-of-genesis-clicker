@@ -23,33 +23,33 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int SlotsW = 320, SlotsH = 264, SlotRowH = 24, SlotRowW = 280, SlotPad = 12;
-    private const int SlotsVisible = 10, SaveSlots = 20, AutoSlot = 20;
-    private const int SlotScrollObs = 71, SlotHighlightObs = 471, SlotHighlightMotion = 20;
-    private const uint SlotLabelColor = 0xFFFFFF64, SlotTimeColor = 0xFF64FF64;
+    internal const int SlotsW = 320, SlotsH = 264, SlotRowH = 24, SlotRowW = 280, SlotPad = 12;
+    internal const int SlotsVisible = 10, SaveSlots = 20, AutoSlot = 20;
+    internal const int SlotScrollObs = 71, SlotHighlightObs = 471, SlotHighlightMotion = 20;
+    internal const uint SlotLabelColor = 0xFFFFFF64, SlotTimeColor = 0xFF64FF64;
 
     /// <summary>−1 닫힘 · 0 Save · 1 Load.</summary>
-    private int _slotsMode = -1;
-    private int _slotsTop, _slotsHover = -1;
-    private (string Title, double Until)? _notice;
+    internal int _slotsMode = -1;
+    internal int _slotsTop, _slotsHover = -1;
+    internal (string Title, double Until)? _notice;
 
-    private bool SlotsOpen => _slotsMode >= 0;
-    private int SlotRows => _slotsMode == 1 ? AutoSlot + 1 : SaveSlots;
+    internal bool SlotsOpen => _slotsMode >= 0;
+    internal int SlotRows => _slotsMode == 1 ? AutoSlot + 1 : SaveSlots;
 
     /// <summary>
     /// 목록 줄 → 슬롯 번호. 원본은 자동 저장(20)을 Load 목록 <b>맨 끝(21번째)</b>에 표시 없이 두는데, 열 줄씩만 보이고
     /// 화살표로 한 줄씩만 내려가서 사실상 안 보였다(사용자 보고). 데모는 Load 목록 <b>맨 위</b>에 「자동 저장」으로 둔다.
     /// </summary>
-    private int SlotOfRow(int row) => _slotsMode == 1 ? (row == 0 ? AutoSlot : row - 1) : row;
+    internal int SlotOfRow(int row) => _slotsMode == 1 ? (row == 0 ? AutoSlot : row - 1) : row;
 
     /// <summary>슬롯 목록을 줄 단위로 굴린다 — 화살표·마우스 휠.</summary>
-    private void ScrollSlots(int rows) => _slotsTop = Math.Clamp(_slotsTop + rows, 0, Math.Max(0, SlotRows - SlotsVisible));
+    internal void ScrollSlots(int rows) => _slotsTop = Math.Clamp(_slotsTop + rows, 0, Math.Max(0, SlotRows - SlotsVisible));
 
-    private static string SlotPath(int slot) =>
+    internal static string SlotPath(int slot) =>
         UserDataFolder.File($"battle-save-{slot:D2}.json");
 
     /// <summary>DUELDX_SLOTS=load|save 면 시작하자마자 그 슬롯 목록을 연다(화면 밖 시험용).</summary>
-    private void OpenSlotsIfAsked()
+    internal void OpenSlotsIfAsked()
     {
         switch (Environment.GetEnvironmentVariable("DUELDX_SLOTS"))
         {
@@ -58,7 +58,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void OpenSlots(int mode)
+    internal void OpenSlots(int mode)
     {
         _slotsMode = mode;
         _slotsTop = 0;
@@ -68,7 +68,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 슬롯 창 자리 — 보통은 화면 가운데지만, 「Select your record」 화면에서는 원본대로 <b>(160, 148)</b> 이다.
     /// </summary>
-    private (int X, int Y) SlotsOrigin()
+    internal (int X, int Y) SlotsOrigin()
     {
         if (_recordsOpen)
         {
@@ -79,7 +79,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
-    private SaveState? SlotHead(int slot)
+    internal SaveState? SlotHead(int slot)
     {
         try
         {
@@ -89,7 +89,7 @@ internal sealed unsafe partial class BattleSceneWindow
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException) { return null; }
     }
 
-    private int SlotAt(int bx, int by)
+    internal int SlotAt(int bx, int by)
     {
         var (x, y) = SlotsOrigin();
         int row = (by - y - SlotPad) / SlotRowH;
@@ -99,7 +99,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>슬롯 화면이 떠 있으면 클릭을 처리하고 true.</summary>
-    private bool OnSlotsClick(int bx, int by)
+    internal bool OnSlotsClick(int bx, int by)
     {
         if (!SlotsOpen) return false;
         var (x, y) = SlotsOrigin();
@@ -134,7 +134,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void SaveSlot(int slot)
+    internal void SaveSlot(int slot)
     {
         // 저장한 뒤에도 슬롯 창은 열린 채다 — 이어서 다른 칸에 저장할 수 있다(원본 vt[0x40] 다시 보이기, fg-22).
         // 실패 알림은 원본 문구(0x100372ae·0x10037693, 120틱): 빈 칸이면 「Error」, 덮어쓰기면 「Save」 머리에 「저장되지 않았습니다.」
@@ -146,7 +146,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _notice = ("저장되었습니다.", _lastTime + 40 / TicksPerSecond);
     }
 
-    private void LoadSlot(int slot)
+    internal void LoadSlot(int slot)
     {
         _slotsMode = -1;
         // 깨진 파일 문구(0x1003730e, 120틱).
@@ -154,15 +154,15 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
-    private void AutoSave() => SaveBattleTo(SlotPath(AutoSlot));
+    internal void AutoSave() => SaveBattleTo(SlotPath(AutoSlot));
 
     /// <summary>누르고 있는 스크롤 화살표(−1 위 · +1 아래 · 0 없음) · 누른 때 · 누른 뒤 센 틀 수.</summary>
-    private int _slotArrow;
-    private double _slotArrowAt;
-    private int _slotArrowTicks;
+    internal int _slotArrow;
+    internal double _slotArrowAt;
+    internal int _slotArrowTicks;
 
     /// <summary>그 점이 스크롤 막대의 위(−1)·아래(+1) 화살표인가 — 아니면 0.</summary>
-    private int SlotArrowAt(int bx, int by)
+    internal int SlotArrowAt(int bx, int by)
     {
         var (x, y) = SlotsOrigin();
         if (bx < x + 304 || bx >= x + 320 || by < y || by >= y + SlotsH) return 0;
@@ -174,7 +174,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 틀마다 <c>0x10044b00</c> 이 <c>[+0x13c]++</c> 해서 <b>10 을 넘으면 틀마다</b> 0x2724(<c>0x10044b0e cmp eax,0xa</c>), 떼면 0(감사5 S9).
     /// 데모는 틀을 틱(초당 30)으로 세고, 메시지 하나를 한 줄로 본다(가설). 단추를 떼거나 화살표 밖으로 나가면 멈춘다.
     /// </summary>
-    private void UpdateSlotArrows()
+    internal void UpdateSlotArrows()
     {
         if (_slotArrow == 0) return;
         if (!SlotsOpen || (Native.Win32.GetKeyState(0x01) & 0x8000) == 0 || SlotArrowAt(_mouse.X, _mouse.Y) != _slotArrow) { _slotArrow = 0; return; }
@@ -185,12 +185,12 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_slotArrowTicks < held) _slotArrowTicks = held;
     }
 
-    private void UpdateSlotsHover(int bx, int by)
+    internal void UpdateSlotsHover(int bx, int by)
     {
         if (SlotsOpen) _slotsHover = SlotAt(bx, by);
     }
 
-    private void DrawSlots()
+    internal void DrawSlots()
     {
         if (!SlotsOpen) return;
         var (x, y) = SlotsOrigin();
@@ -240,7 +240,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>스크롤 막대 — 위·아래 화살표와 손잡이(움직이는 길 232).</summary>
-    private void DrawSlotScrollbar(int x, int y, int tick)
+    internal void DrawSlotScrollbar(int x, int y, int tick)
     {
         if (!DrawUi(SlotScrollObs, 2, tick, x, y, UiBlend.Alpha)) StrokeRect(x, y, 16, 16, White);
         if (!DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, UiBlend.Alpha)) StrokeRect(x, y + SlotsH - 16, 16, 16, White);
@@ -252,7 +252,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>
-    private void DrawNotice()
+    internal void DrawNotice()
     {
         if (_notice is not { } notice) return;
         if (_lastTime >= notice.Until) { _notice = null; return; }

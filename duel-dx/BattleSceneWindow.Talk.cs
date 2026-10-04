@@ -35,28 +35,28 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>대사창 그림 — 말풍선 틀 Obs 0221 · 아래 상자 틀 Obs 0224 · 「다음」 ▼ Obs 0071(분석-UI 「대사창 모양 (talk-ui)」).</summary>
-    private const int TalkBalloonObs = 221, TalkBoxObs = 224, TalkNextObs = 71, TalkCloseSound = 95;
+    internal const int TalkBalloonObs = 221, TalkBoxObs = 224, TalkNextObs = 71, TalkCloseSound = 95;
 
     /// <summary>
     /// 602 틀 — Obs <c>222 + 인자3</c>(<c>0x100ef7eb</c>·<c>0x100ef80f</c>): 0222 파랑 넓은 탭 · 0223 초록. 바탕(모션 1)은 효과 6 = 알파 24/31.
     /// 얼굴 Obs 가 없으면 0xe5 = <c>Obs 0229</c>(<c>0x100ef85e</c>).
     /// </summary>
-    private const int TalkRadioObs = 222, TalkRadioFaceFallbackObs = 229;
+    internal const int TalkRadioObs = 222, TalkRadioFaceFallbackObs = 229;
 
     /// <summary>저절로 넘김 — 조건이 선 뒤 카운터가 118 을 넘는 틱(<c>0x1003b9be</c>).</summary>
-    private const int TalkAutoTicks = 118;
+    internal const int TalkAutoTicks = 118;
 
     /// <summary>글 한 걸음(한 글자)의 틱 수 — <c>[+0x21c] % 3</c>(<c>0x10029070</c>).</summary>
-    private const int TalkStepTicks = 3;
+    internal const int TalkStepTicks = 3;
 
     /// <summary>한 줄 올리기 — 줄 높이 + 4 = 16걸음 동안 1픽셀씩(<c>0x10029197</c>~<c>0x100291c8</c>).</summary>
-    private const int TalkScrollSteps = 16, TalkLinePx = 16;
+    internal const int TalkScrollSteps = 16, TalkLinePx = 16;
 
     /// <summary>대사 상자에 그릴 초상화의 Chr 번호 — 필드처럼 말하는 이가 전투 유닛이 아닐 때 쓴다.</summary>
-    private int _talkFace;
+    internal int _talkFace;
 
     /// <summary>떠 있는 대사창 하나(원본 창 객체 <c>0x1003b130</c>/<c>0x1003c0d0</c> 한 개).</summary>
-    private sealed class TalkWindow
+    internal sealed class TalkWindow
     {
         /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선 · 609 제 칸의 상자(<c>[0x101bfe34]</c>).</summary>
         public int Kind;
@@ -109,13 +109,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>떠 있는 대사창 — 나중에 연 것이 뒤. 접히는 중인 창도 다 접힐 때까지 남는다.</summary>
-    private readonly List<TalkWindow> _talks = [];
+    internal readonly List<TalkWindow> _talks = [];
 
     /// <summary>
     /// 맨 나중에 연 대사창 한 줄(없으면 null) — 필드·카메라·이벤트가 「대사가 떠 있나」를 본다.
     /// 넣으면 그 대사로 창을 연다(행동 603·609 의 <see cref="ShowFieldTalk"/>), null 이면 창을 모두 곧바로 지운다.
     /// </summary>
-    private (bool Box, int Speaker, string Name, string Text, int Face, double Start)? _talk
+    internal (bool Box, int Speaker, string Name, string Text, int Face, double Start)? _talk
     {
         get => _talks.Count == 0 ? null : (_talks[^1].IsBox, _talks[^1].Speaker, _talks[^1].Name, _talks[^1].Text, _talks[^1].Pose, _talks[^1].OpenedAt);
         set
@@ -141,11 +141,11 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 지금 필드·챕터 주 사건이 막 읽은 줄이 609 인가 — 609 는 <see cref="ShowFieldTalk"/> 를 거쳐 <see cref="_talk"/> 로 오므로 여기서 칸을 가린다.
     /// 609 는 곁 사건에선 안 돈다(<c>MainOnly</c>).
     /// </summary>
-    private const int TalkBandObs = 225;
+    internal const int TalkBandObs = 225;
 
-    private bool RunningField609() => RunningFieldCode(609);
+    internal bool RunningField609() => RunningFieldCode(609);
 
-    private bool RunningFieldCode(int code)
+    internal bool RunningFieldCode(int code)
     {
         var events = Fld._field?.Events ?? (Mos._mosesOpen ? Mos._mosesChp?.Events : null);
         return events != null && (uint)Fld._fieldEvent < (uint)events.Count && Fld._fieldPc > 0 && Fld._fieldPc <= events[Fld._fieldEvent].Actions.Count
@@ -153,17 +153,17 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>맨 나중 창의 글이 다 나왔나 — 넣는 쪽(필드의 false)은 무시한다.</summary>
-    private bool _talkFilled
+    internal bool _talkFilled
     {
         get => _talks.Count > 0 && _talks[^1].AllRevealed;
         set { if (value && _talks.Count > 0) FillTalk(_talks[^1]); }
     }
 
-    private TalkTable? _battleTalk;
-    private int _battleTalkId = -1;
+    internal TalkTable? _battleTalk;
+    internal int _battleTalkId = -1;
 
     /// <summary>그 전투의 대사 표를 읽어 둔다.</summary>
-    private TalkTable? TalkTableFor(int battleId)
+    internal TalkTable? TalkTableFor(int battleId)
     {
         if (_battleTalkId == battleId) return _battleTalk;
         _battleTalkId = battleId;
@@ -178,7 +178,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>말하는 이를 찾는다 — 없으면 −1(화면 가운데에 띄운다).</summary>
-    private int TalkSpeaker(int value)
+    internal int TalkSpeaker(int value)
     {
         // 20010·20011 은 조건 300·301 이 방금 찾아 낸 두 사람이다(0x1004eba5) — 대사 49줄이 이걸 쓴다.
         if (value == 20010) return _eventFoundA is null ? -1 : Array.IndexOf(_units, _eventFoundA);
@@ -194,7 +194,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전투 대사 한 줄을 띄운다(행동 600·601).</summary>
-    private void ShowTalk(bool box, ScriptCommand a)
+    internal void ShowTalk(bool box, ScriptCommand a)
     {
         if (_talkSkip) return;
 
@@ -223,7 +223,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 얼굴을 물들이기 방식 10·세기 20 으로 새로 만들고(<c>0x100ef85e</c>~<c>0x100ef963</c>), 인자4 가 0 이 아니면 얼굴 지직거림(<c>0x100ef984</c>).
     /// 창은 저마다 슬롯이다 — 다 접힐 때(<c>+0x108 == 4</c>)까지 살고 뒤따르는 행동 1 이 기다린다(<c>0x100ef4f0</c>·<c>0x100ef991</c>).
     /// </remarks>
-    private void FieldTalkCommand(ScriptCommand a)
+    internal void FieldTalkCommand(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
         if (_talkSkip)
@@ -265,7 +265,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>창을 제 칸에 연다 — 칸에 있던 옛 창은 곧바로 지운다(접힘 없이).</summary>
-    private void OpenTalkWindow(TalkWindow w)
+    internal void OpenTalkWindow(TalkWindow w)
     {
         w.OpenedAt = _lastTime;
         if (w.Kind == 601)
@@ -285,14 +285,14 @@ internal sealed unsafe partial class BattleSceneWindow
         _talks.Add(w);
     }
 
-    private void RemoveTalkWindow(TalkWindow w)
+    internal void RemoveTalkWindow(TalkWindow w)
     {
         _talks.Remove(w);
         if (w.VoiceTag != 0 && w.VoiceTag == _talkVoiceTag) StopTalkVoice();
     }
 
     /// <summary>닫기 시작 — 효과음 95 를 (320,240)에 틀고 접는다(0x1003bc10 → 0x1003bc45). 다 접히면 <see cref="UpdateTalk"/> 가 지운다.</summary>
-    private void BeginCloseTalk(TalkWindow w)
+    internal void BeginCloseTalk(TalkWindow w)
     {
         if (w.ClosingAt >= 0) return;
         FillTalk(w);
@@ -303,7 +303,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>대사를 모두 곧바로 닫는다 — 장면 건너뛰기.</summary>
-    private void CloseTalk()
+    internal void CloseTalk()
     {
         if (_talks.Count == 0) return;
         _talks.Clear();
@@ -320,7 +320,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 설정 &gt; 「대사 첫 클릭은 글 채우기」(<see cref="UserSettings.TalkFillFirst"/>)를 켜면 예전처럼 첫 번째는 채우고 두 번째에 닫는다.
     /// 키 넘김(원본은 왼쪽 클릭만)·우클릭/Esc 장면 건너뛰기는 사용자 요청으로 남긴다 — 키도 클릭과 같은 규칙을 따른다.
     /// </remarks>
-    private bool OnTalkInput(bool skipAll = false)
+    internal bool OnTalkInput(bool skipAll = false)
     {
         if (_talks.Count == 0) return false;
         if (skipAll) { SkipTalk(); return true; }
@@ -339,9 +339,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 필드 스크립트의 <b>행동 1000</b> 도 이것을 끈다 — 원본의 건너뛰기 깃발 <c>[0x101bffb0]</c> 을 0 으로 돌리는 줄이라,
     /// 프롤로그를 건너뛰어도 1000 을 만나면 거기서부터 다시 제 속도로 흐른다(분석-필드 「행동 전수 대조」).
     /// </remarks>
-    private bool _talkSkip;
+    internal bool _talkSkip;
 
-    private void SkipTalk()
+    internal void SkipTalk()
     {
         _talkSkip = true;
         CloseTalk();
@@ -353,7 +353,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 대사는 안 띄우고, 기다림은 없는 셈 치고, 걷기·밝기·카메라·전환은 끝난 자리로 보낸다.
     /// 고르기(604)는 사람이 골라야 하니 거기서 멈춘다. 건너뛸 장면이 없으면 false.
     /// </summary>
-    private bool SkipScene()
+    internal bool SkipScene()
     {
         bool battleScene = _runningEvent >= 0, fieldScene = FieldOpen && Fld._fieldEvent >= 0;
         if (!battleScene && !fieldScene) return false;
@@ -376,7 +376,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 한 그림(컷씬)을 몇 초씩 띄워 두는 틱 기다리기(행동 2), 음성이 끝나기를 기다리는 504, 걷기·페이드·카메라를 기다리는 행동 1 을
     /// 그 자리에서 끝내고 다음 줄로 간다. 장면 나머지는 그대로 돈다(통째로 넘기기는 Esc). 원본에는 없다 — 사용자 요청.
     /// </summary>
-    private bool SkipCurrentWait()
+    internal bool SkipCurrentWait()
     {
         if (_talk != null) return false;
         bool skipped = false;
@@ -397,7 +397,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 창마다 한 틀 — 펴짐·접힘, 다 펴지면 음성 시작, 글 흘리기·줄 올리기, 글·음성이 다 끝난 뒤 120번째 틱에 저절로 닫기(0x1003b980).
     /// </summary>
-    private void UpdateTalk()
+    internal void UpdateTalk()
     {
         for (int i = _talks.Count - 1; i >= 0; i--)
         {
@@ -422,7 +422,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>창의 음성을 튼다 — 원본 창마다 음성 객체(<c>+0x144</c>)가 있지만 데모는 대사 음성 한 줄만 울린다.</summary>
-    private void StartTalkWindowVoice(TalkWindow w)
+    internal void StartTalkWindowVoice(TalkWindow w)
     {
         StopTalkVoice();
         if (Muted) { w.VoiceLoaded = -1; return; }
@@ -448,7 +448,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>음성이 아직 도나(푸는 중 포함) — 저절로 넘김과 ▼ 는 음성이 끝나야 선다(0x1003b99e·0x1003bb82).</summary>
-    private bool TalkVoicePlaying(TalkWindow w)
+    internal bool TalkVoicePlaying(TalkWindow w)
     {
         if (w.ExternalVoiceTag != 0)
             return w.ExternalVoiceTag == _talkVoiceTag && _mixer.IsPlaying(w.ExternalVoiceTag);
@@ -462,7 +462,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>글을 흘린다 — 음성이 있으면 재생 위치에, 없으면 3틱 한 걸음에 맞춘다.</summary>
-    private void AdvanceTalk(TalkWindow w, int textTick)
+    internal void AdvanceTalk(TalkWindow w, int textTick)
     {
         if (w.AllRevealed) return;
         int loaded = w.Voice > 0 && w.VoiceStarted ? Volatile.Read(ref w.VoiceLoaded) : -1;
@@ -479,11 +479,11 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>다음 글자가 칸 아래로 넘치나 — 넘치면 한 줄 올리기부터(0x10029782 상태 3).</summary>
-    private static bool TalkNeedsScroll(TalkWindow w) =>
+    internal static bool TalkNeedsScroll(TalkWindow w) =>
         w.Revealed < w.Clean.Length && w.CharLine[w.Revealed] >= w.TopLine + w.MaxLines;
 
     /// <summary>글 한 걸음 — 올리는 중이면 1픽셀, 아니면 한 글자.</summary>
-    private static void TalkStep(TalkWindow w)
+    internal static void TalkStep(TalkWindow w)
     {
         w.Steps++;
         if (w.ScrollPx > 0 || TalkNeedsScroll(w))
@@ -495,7 +495,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>음성에 맞춰 한꺼번에 — 줄 올리기는 그 자리에서 끝낸다.</summary>
-    private static void RevealTalkTo(TalkWindow w, int count)
+    internal static void RevealTalkTo(TalkWindow w, int count)
     {
         count = Math.Min(count, w.Clean.Length);
         while (w.Revealed < count)
@@ -506,7 +506,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>글을 다 채운다 — 마지막 칸만큼의 줄을 보인다.</summary>
-    private void FillTalk(TalkWindow w)
+    internal void FillTalk(TalkWindow w)
     {
         EnsureTalkLayout(w);
         w.Revealed = w.Clean.Length;
@@ -520,16 +520,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// (<c>$m1</c> 이 글자로 찍혔다 — Fld 0006). 강제 줄바꿈 <c>$n $N $p $P</c> 는 한 걸음 먹는 줄바꿈으로.
     /// <c>$p</c> 는 원본에선 쪽 넘김(상태 3)인데 데모는 줄바꿈으로 둔다.
     /// </summary>
-    private static readonly Regex TalkFontCode = new(@"\$[cCfFsStTwWmMvVdD].", RegexOptions.Compiled);
+    internal static readonly Regex TalkFontCode = new(@"\$[cCfFsStTwWmMvVdD].", RegexOptions.Compiled);
 
-    private static string CleanTalkText(string text) =>
+    internal static string CleanTalkText(string text) =>
         TalkFontCode.Replace(text, "").Replace("$n", "\n").Replace("$N", "\n").Replace("$p", "\n").Replace("$P", "\n");
 
     /// <summary>글을 강제 줄바꿈으로 나눈 줄들(모세스 편지가 쓴다).</summary>
-    private static string[] TalkLines(string text) => CleanTalkText(text).Split('\n');
+    internal static string[] TalkLines(string text) => CleanTalkText(text).Split('\n');
 
     /// <summary>글을 칸 폭에 맞춰 글자 단위로 접어 둔다 — 창마다 한 번.</summary>
-    private void EnsureTalkLayout(TalkWindow w)
+    internal void EnsureTalkLayout(TalkWindow w)
     {
         if (w.Lines != null) return;
         w.Clean = CleanTalkText(w.Text);
@@ -587,21 +587,21 @@ internal sealed unsafe partial class BattleSceneWindow
         w.CharLine = charLine;
     }
 
-    private int TalkFaceCode(TalkWindow w) => w.Speaker >= 0 && _units[w.Speaker].Data is { } sc ? sc.Code : w.FaceCode;
+    internal int TalkFaceCode(TalkWindow w) => w.Speaker >= 0 && _units[w.Speaker].Data is { } sc ? sc.Code : w.FaceCode;
 
-    private int TalkPortraitObs(TalkWindow w) =>
+    internal int TalkPortraitObs(TalkWindow w) =>
         w.Speaker >= 0 ? _units[w.Speaker].Data?.FaceId ?? 0 : _db?.Character(w.FaceCode)?.FaceId ?? 0;
 
     /// <summary>한 줄 내려가는 만큼 — 글자 높이 + 4픽셀(<c>0x1002993c</c>).</summary>
-    private int TalkLineStep(float size) => GetText("가", White, size).H + 4;
+    internal int TalkLineStep(float size) => GetText("가", White, size).H + 4;
 
-    private void DrawTalk()
+    internal void DrawTalk()
     {
         foreach (var w in _talks.ToArray()) DrawTalkWindow(w);
     }
 
     /// <summary>보이는 줄을 (left, top) 부터 16픽셀 간격으로 — 올리는 중이면 그만큼 위로.</summary>
-    private void DrawTalkLines(TalkWindow w, int left, int top)
+    internal void DrawTalkLines(TalkWindow w, int left, int top)
     {
         if (w.Lines is not { } lines) return;
         for (int i = 0; i < w.MaxLines; i++)
@@ -617,7 +617,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private void DrawTalkWindow(TalkWindow w)
+    internal void DrawTalkWindow(TalkWindow w)
     {
         EnsureTalkLayout(w);
         int tick = (int)((_lastTime - w.OpenedAt) * TicksPerSecond);
@@ -785,7 +785,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>필드 말하는 이의 발 자리(판 낱칸) — 창마다 제 말하는 이.</summary>
-    private (int X, int Y)? TalkHead(TalkWindow w)
+    internal (int X, int Y)? TalkHead(TalkWindow w)
     {
         if (!FieldOpen || w.FieldSpeaker == 0 || Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
         var (ox, oy) = Mos.MosesOrigin();
@@ -797,7 +797,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 채널마다 <c>min(31, c·32/(32−20))</c>(<c>0x1000b7c0</c> 색표 <c>0x1019a018</c>) — 거의 하얗게 밝힌다.
     /// <paramref name="fromRow"/> 는 60줄 얼굴 기준 그 줄부터 아래만(지직거림).
     /// </summary>
-    private void DrawTalkFace(SpriteFrame f, int x, int y, int size, bool tint, int fromRow = 0, double fade = 1)
+    internal void DrawTalkFace(SpriteFrame f, int x, int y, int size, bool tint, int fromRow = 0, double fade = 1)
     {
         if (f.W == 0 || f.H == 0 || size <= 0) return;
         double scale = Math.Min((double)size / f.W, (double)size / f.H);
@@ -836,7 +836,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// UI Obs 한 장을 배율 <paramref name="s"/> 로 — 원래 자리 P 는 <c>(tx,ty) + (P − (ax,ay))·s</c> 로 옮겨 그린다(대사창 펴짐·접힘).
     /// </summary>
-    private void DrawUiScaled(int obs, int motion, int x, int y, double s, int ax, int ay, int tx, int ty, double fade)
+    internal void DrawUiScaled(int obs, int motion, int x, int y, double s, int ax, int ay, int tx, int ty, double fade)
     {
         if (s <= 0.01 || UiFor(obs) is not { } sprite || sprite.FrameAt(motion, 0) is not { } f) return;
         int left = tx + (int)Math.Floor((x + f.X - ax) * s), top = ty + (int)Math.Floor((y + f.Y - ay) * s);

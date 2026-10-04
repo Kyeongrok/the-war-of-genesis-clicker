@@ -11,18 +11,18 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>보이는 영역의 맨 윗줄(판 픽셀).</summary>
-    private int _camY;
-    private double _camPos, _camTarget;
+    internal int _camY;
+    internal double _camPos, _camTarget;
 
     /// <summary>보이는 영역의 맨 왼쪽(판 픽셀) — 640 보다 넓은 맵에서만 0 이 아니다.</summary>
-    private int _camX;
-    private double _camPosX, _camTargetX;
+    internal int _camX;
+    internal double _camPosX, _camTargetX;
 
     /// <summary>카메라가 오른쪽으로 갈 수 있는 끝 — 맵 그림 너비까지.</summary>
-    private int CamMaxX => Math.Max(0, Math.Min(BoardWidth, BoardIsMap ? Math.Max(ViewWidth, _map!.Width) : BoardWidth) - ViewWidth);
-    private void ScrollCamera(double delta) => _camTarget = Math.Clamp(_camTarget + delta, 0, CamMax);
+    internal int CamMaxX => Math.Max(0, Math.Min(BoardWidth, BoardIsMap ? Math.Max(ViewWidth, _map!.Width) : BoardWidth) - ViewWidth);
+    internal void ScrollCamera(double delta) => _camTarget = Math.Clamp(_camTarget + delta, 0, CamMax);
 
-    private void ScrollCameraX(double delta) => _camTargetX = Math.Clamp(_camTargetX + delta, 0, CamMaxX);
+    internal void ScrollCameraX(double delta) => _camTargetX = Math.Clamp(_camTargetX + delta, 0, CamMaxX);
 
     // ── 카메라 명령 (원본 CBattle +0x3ccc 큐의 축소판, 감사4 C1·C19) ─────────────────────────────
     // 원본은 「이 월드 점을 화면 한가운데에」 명령을 큐 머리에 덮어쓰고(0x1006e570), 틀마다 0x1006dcb0 이
@@ -31,16 +31,16 @@ internal sealed unsafe partial class BattleSceneWindow
     // 상태·이벤트는 큐가 빌 때까지(0x1006e850) 다음 단계로 안 간다 — 그래서 행동·대사·창은 카메라가 선 뒤에 나온다.
 
     /// <summary>지금 카메라 명령 — 가운데에 둘 판 픽셀(X, Y), 속도(0 = 자동), 따라갈 유닛 번호(−1 = 점 명령).</summary>
-    private (double X, double Y, int Speed, int Follow)? _camGoal;
+    internal (double X, double Y, int Speed, int Follow)? _camGoal;
 
     /// <summary>카메라가 점 명령을 수행 중인가 — 기다리는 조건(0x1006e850). 따라가기는 저절로 안 끝나므로 기다림에서 뺀다.</summary>
-    private bool CameraBusy => _camGoal is { Follow: < 0 };
+    internal bool CameraBusy => _camGoal is { Follow: < 0 };
 
     /// <summary>틱 단위로 움직이려고 모아 두는 틱 조각.</summary>
-    private double _camTickAcc;
+    internal double _camTickAcc;
 
     /// <summary>판 픽셀 (x, y) 를 화면 가운데로(0x1006e570 — 머리 칸을 덮어쓴다, 쌓지 않음).</summary>
-    private void CenterOn(double x, double y, int speed = 0)
+    internal void CenterOn(double x, double y, int speed = 0)
     {
         _camGoal = (x, y, speed, -1);
         if (Trace)
@@ -48,7 +48,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>칸 가운데를 화면 가운데로 — 칸은 판 안으로 자른다.</summary>
-    private void CenterOnCell(int col, int row)
+    internal void CenterOnCell(int col, int row)
     {
         col = Math.Clamp(col, 0, Cols - 1);
         row = Math.Clamp(row, 0, Rows - 1);
@@ -56,14 +56,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>유닛 발 자리를 한 번 가운데로(0x100eabe0 — 종류 0, 따라가기 아님).</summary>
-    private void CenterOnUnit(UnitState u)
+    internal void CenterOnUnit(UnitState u)
     {
         var (fx, fy) = UnitFoot(u);
         CenterOn(fx, fy);
     }
 
     /// <summary>걷는 유닛 따라가기(0x100eac40(8) — 틱당 최대 8px). 도착하면 <see cref="UpdateCamera"/> 가 풀어 준다(0x100eac60).</summary>
-    private void FollowUnit(int index, int speed = 8)
+    internal void FollowUnit(int index, int speed = 8)
     {
         if ((uint)index < _units.Length) _camGoal = (0, 0, speed, index);
     }
@@ -72,39 +72,39 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 점 명령을 걸고 멈출 때까지 기다리는 루틴 조각 — 원본 상태 하위 0 의 「가운데 → 0x1006e850 == 0 까지 머묾」.
     /// 막히는 일이 없게 3초에서 끊는다.
     /// </summary>
-    private IEnumerable<bool> CenterAndWait(double x, double y)
+    internal IEnumerable<bool> CenterAndWait(double x, double y)
     {
         CenterOn(x, y);
         for (double end = _lastTime + 3; CameraBusy && _lastTime < end;) yield return true;
     }
 
-    private IEnumerable<bool> CenterUnitAndWait(UnitState u)
+    internal IEnumerable<bool> CenterUnitAndWait(UnitState u)
     {
         var (fx, fy) = UnitFoot(u);
         return CenterAndWait(fx, fy);
     }
 
     /// <summary>AI 차례(상태 8 → 14 CHRWORK 0x10069df0) — 그 인물을 가운데로 보내고 멈춘 뒤에 명령을 실행한다(감사4 C4).</summary>
-    private IEnumerator<bool> CameraThen(UnitState u, IEnumerator<bool> inner)
+    internal IEnumerator<bool> CameraThen(UnitState u, IEnumerator<bool> inner)
     {
         foreach (bool b in CenterUnitAndWait(u)) yield return b;
         while (inner.MoveNext()) yield return inner.Current;
     }
 
     /// <summary>링(상태 9)·대상 고르기(10·11·12)에 들어설 때 행동 인물을 가운데로 — 지난 틀에 본 값.</summary>
-    private int _camSeenRing = -1;
-    private bool _camSeenAim;
+    internal int _camSeenRing = -1;
+    internal bool _camSeenAim;
 
     /// <summary>
     /// 플레이어가 움직일 수 있는 상태인가 — 원본 가장자리 스크롤(0x1006d910)은 상태 2(배치)·3·7·10·11·12·22 에서만 부른다(감사4 C10).
     /// AI 차례·행동·이벤트·결과 중에는 안 민다.
     /// </summary>
-    private bool EdgeScrollAllowed =>
+    internal bool EdgeScrollAllowed =>
         !Mos._mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && _ringUnit < 0 && !_abilityMenu && _statusUnit < 0 && !SystemOpen
         && !SceneFading && !EventsBusy && _outcome.Length == 0 && !LevelUpOpen
         && (_deployOpen || (IsPlayerTurn && !_units[_turn].IsBusy));
 
-    private void UpdateCamera(double dt)
+    internal void UpdateCamera(double dt)
     {
         // 링이 열릴 때(상태 9 0x1006904c)·대상 고르기를 시작할 때(10·11·12) 행동 인물을 가운데로. 차례 시작(상태 22)은 안 옮긴다(감사4 C3).
         if (_ringUnit != _camSeenRing)
@@ -146,7 +146,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>카메라 명령 한 틱(0x1006dcb0).</summary>
-    private void StepCameraGoal()
+    internal void StepCameraGoal()
     {
         if (_camGoal is not { } g) return;
         double gx = g.X, gy = g.Y;
@@ -179,7 +179,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 가장자리 스크롤 한 틱 — 원본 0x1006d910 은 틱마다 가로 20·세로 16px 을 <b>바로</b> 더한다(초당 600/480px, 감사4 C11).
     /// 원본은 끝 픽셀에서만 밀지만 창 모드라 24px 띠는 그대로 둔다(의도). 방향키는 걷기 그대로(사용자 결정).
     /// </summary>
-    private void StepEdgeScroll()
+    internal void StepEdgeScroll()
     {
         if (!EdgeScrollAllowed) return;
         const int edge = 24;
@@ -195,12 +195,12 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>마우스의 보이는 영역 안 자리(판 픽셀, 카메라 뺀 것) — WM_MOUSEMOVE 가 적는다.</summary>
-    private (int X, int Y) _mouseView = (-1, -1);
+    internal (int X, int Y) _mouseView = (-1, -1);
 
     /// <summary>
     /// 새 판의 카메라를 지운다 — 앞 전투의 세로 자리·명령이 남지 않게(감사4 C5: 예전엔 가로만 지웠다).
     /// </summary>
-    private void ResetCamera()
+    internal void ResetCamera()
     {
         _camGoal = null;
         _camTickAcc = 0;
@@ -213,7 +213,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 시작 카메라 — Btl 머리 워드 2·3 칸을 가운데에 두고 맵 그림 안으로 자른다, 보간 없이 바로(0x10063e44~0x10063f5x, 감사4 C5).
     /// </summary>
-    private void PlaceStartCamera()
+    internal void PlaceStartCamera()
     {
         ResetCamera();
         if (_scene.StartCol < 0 || _scene.StartRow < 0 || !BoardIsMap) return;
@@ -227,29 +227,29 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── 전투 시작·끝 페이드 (감사4 C6·C7, 사운드 B3) ─────────────────────────────────────────
 
     /// <summary>판을 새 전투 맵으로 잡았다 — 다음 전투 틀에 시작 카메라와 페이드인을 건다.</summary>
-    private bool _battleIntroPending;
+    internal bool _battleIntroPending;
 
     /// <summary>페이드인·아웃이 시작된 때(게임 초). −1 이면 안 하는 중.</summary>
-    private double _fadeInStart = -1, _fadeOutStart = -1;
+    internal double _fadeInStart = -1, _fadeOutStart = -1;
 
     /// <summary>페이드인이 끝나면 전투 음악을 걸어야 하나(페이드 앞에 멈춰 둔 것).</summary>
-    private bool _fadeInMusicHeld;
+    internal bool _fadeInMusicHeld;
 
-    private const int SceneFadeTicks = 16;
+    internal const int SceneFadeTicks = 16;
 
-    private bool SceneFading => _fadeInStart >= 0 || _fadeOutStart >= 0;
+    internal bool SceneFading => _fadeInStart >= 0 || _fadeOutStart >= 0;
 
     /// <summary>페이드아웃이 끝나면 할 일 — 없으면 전투 결과대로 다음 장면(<see cref="LeaveFinishedBattleNow"/>).</summary>
-    private Action? _afterFadeOut;
+    internal Action? _afterFadeOut;
 
     /// <summary>나가는 동안 음악을 안 건드리나 — 타이틀 ↔ 기록 화면은 곡이 이어진다(0x101056b9 · 0x101050e1).</summary>
-    private bool _fadeOutKeepMusic;
+    internal bool _fadeOutKeepMusic;
 
     /// <summary>
     /// 장면을 떠난다 — 16틀 동안 화면을 검게, 음악을 100 → 10% 로 줄인 뒤 <paramref name="next"/> 를 한다. 타이틀(0x10105420)·연대표(0x101060d0)·
     /// 기록(0x10104e60) 화면이 모두 이렇게 나간다(ba-21 outer #1). 전에는 뚝 바뀌었다. 이미 나가는 중이면 아무것도 안 한다.
     /// </summary>
-    private void LeaveScene(Action next, bool keepMusic = false)
+    internal void LeaveScene(Action next, bool keepMusic = false)
     {
         if (_fadeOutStart >= 0) return;
         _afterFadeOut = next;
@@ -259,7 +259,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>새 장면이 섰다 — 검정에서 밝아진다(타이틀·연대표·기록은 15틀, 세기 31 − 2i).</summary>
-    private void EnterSceneFade()
+    internal void EnterSceneFade()
     {
         _fadeOutStart = -1;
         _afterFadeOut = null;
@@ -272,7 +272,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// BGM(워드 8)을 100% 로 건다 — 판을 세울 때 이미 건 음악은 멈춰 두었다가 페이드 끝에 다시 건다.
     /// 페이드아웃이 끝나면 음악을 끄고 다음 장면으로.
     /// </summary>
-    private void StepSceneFade()
+    internal void StepSceneFade()
     {
         if (_battleIntroPending)
         {
@@ -291,7 +291,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>페이드 시계 — 전투가 아닌 화면(타이틀·연대표·기록·모세스)에서도 돈다.</summary>
-    private void StepSceneFadeClock()
+    internal void StepSceneFadeClock()
     {
         if (_fadeInStart >= 0 && (_lastTime - _fadeInStart) * TicksPerSecond >= SceneFadeTicks)
         {
@@ -324,7 +324,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>페이드 중 판 밝기(0~31) — 페이드인 2·틱, 페이드아웃 31 − 2·틱. 페이드가 없으면 31.</summary>
-    private int SceneFadeLevel()
+    internal int SceneFadeLevel()
     {
         if (_fadeInStart >= 0) return Math.Clamp(2 * (int)((_lastTime - _fadeInStart) * TicksPerSecond), 0, 31);
         if (_fadeOutStart >= 0) return Math.Clamp(31 - 2 * (int)((_lastTime - _fadeOutStart) * TicksPerSecond), 0, 31);
@@ -332,7 +332,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>보이는 판을 페이드 밝기로 어둡게 — c·k/31(방식 2).</summary>
-    private void DrawSceneFade()
+    internal void DrawSceneFade()
     {
         // 필드는 제 화면 전환(900)이 있다. 타이틀·연대표·기록·모세스 위에도 덮는다(Compose 맨 끝).
         if (!SceneFading || (FieldOpen && _afterFadeOut == null)) return;
@@ -349,7 +349,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>지금 보이는 영역을 <c>%TEMP%\dueldx_snapshot.png</c> 로 저장한다 — 창을 화면에 띄우지 않고 확인하는 테스트용.</summary>
-    private void SaveSnapshot()
+    internal void SaveSnapshot()
     {
         using var bmp = new Bitmap(ViewWidth, ViewHeight, PixelFormat.Format32bppArgb);
         var data = bmp.LockBits(new Rectangle(0, 0, ViewWidth, ViewHeight), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);

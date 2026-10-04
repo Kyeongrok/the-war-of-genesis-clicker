@@ -14,17 +14,17 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>work 에 붙는 몸 복제 하나 — 복제할 모션(−1 이면 그때 모습), 대상 몸인가.</summary>
-    private readonly record struct BodyFx(int Motion, bool OnTarget);
+    internal readonly record struct BodyFx(int Motion, bool OnTarget);
 
     /// <summary>
     /// 떠 있는 분신 — 주인, 모션(−1 잔상), 시작 시각, 자리(발), 좌우, 잔상이면 뜬 순간의 컷.
     /// </summary>
-    private readonly List<(UnitState Owner, int Motion, double Start, int X, int Y, bool Mirror, SpriteFrame? Snapshot)> _bodyClones = [];
+    internal readonly List<(UnitState Owner, int Motion, double Start, int X, int Y, bool Mirror, SpriteFrame? Snapshot)> _bodyClones = [];
 
-    private const int AfterimageTicks = 10, AfterimageStagger = 2;
-    private const double CloneFade = 0.55;
+    internal const int AfterimageTicks = 10, AfterimageStagger = 2;
+    internal const double CloneFade = 0.55;
 
-    private void SpawnBodyClones(WorkData w, UnitState user, UnitState? target, int col, int row)
+    internal void SpawnBodyClones(WorkData w, UnitState user, UnitState? target, int col, int row)
     {
         if (w.Id == DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
@@ -49,7 +49,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>분신을 반투명으로 그린다 — 인물 위에(인물 다음에) 그린다. 끝난 것은 지운다.</summary>
-    private void DrawBodyClones()
+    internal void DrawBodyClones()
     {
         for (int i = _bodyClones.Count - 1; i >= 0; i--)
         {

@@ -23,37 +23,37 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow
 {
     /// <summary>지금 차례인 인물 번호. 차례를 기다리는 중이면 −1.</summary>
-    private int _turn = -1;
+    internal int _turn = -1;
     /// <summary>전투가 흐른 틱 — 원본은 전투를 만들 때 <b>1</b> 로 놓는다(<c>0x100644d4</c>).</summary>
-    private int _tick = 1;
-    private IEnumerator<bool>? _routine;
-    private string _outcome = "";
-    private double _outcomeAt;
-    private double _nextTickAt;
+    internal int _tick = 1;
+    internal IEnumerator<bool>? _routine;
+    internal string _outcome = "";
+    internal double _outcomeAt;
+    internal double _nextTickAt;
 
     /// <summary>지금 도는 루틴이 물체 차례(ObjectTurns)인가 — 끝날 때 자동 회복을 돌리지 않는다.</summary>
-    private bool _objectRoutine;
-    private readonly Random _rng = new();
+    internal bool _objectRoutine;
+    internal readonly Random _rng = new();
 
     /// <summary>그리기에서만 쓰는 난수(깜빡임·줄 찢김) — 판정 난수 <see cref="_rng"/> 를 그리기 틀 수가 흔들지 않게 따로 둔다.</summary>
-    private readonly Random _drawRng = new();
-    private readonly List<(string Text, float Size, int X, int Y, double Start, uint Color)> _popups = [];
+    internal readonly Random _drawRng = new();
+    internal readonly List<(string Text, float Size, int X, int Y, double Start, uint Color)> _popups = [];
 
     /// <summary>대상을 고르는 중인 work 번호(기본공격 포함). 고르는 중이 아니면 −1.</summary>
-    private int _targetWork = -1;
-    private bool _targetIsBasicAttack;
+    internal int _targetWork = -1;
+    internal bool _targetIsBasicAttack;
 
     /// <summary>공격 대상 커서 — 공격을 열면 칠 수 있는 적 중 HP 가 가장 낮은 적. 없으면 −1.</summary>
-    private int _attackCursor = -1;
+    internal int _attackCursor = -1;
 
     /// <summary>기본공격 work 1 의 동작 — 준비 5 → 베기 8 → 복귀 24(분석-모션 <c>0x1007f0a0</c>). 판정은 베기 끝에 들어간다.</summary>
-    private static readonly int[] StrikeActions = [5, 8, 24];
+    internal static readonly int[] StrikeActions = [5, 8, 24];
 
     /// <summary>
     /// 기본공격 work 마다 도는 동작이 다르다(분석-모션 「인물별 동작 구간표는 없다」).
     /// 288명은 work 1 로 베고, 48명은 387(때리는 동작이 없다), 47명은 1479, 48명은 6·1584 로 <b>쏜다</b>(동작 9).
     /// </summary>
-    private static readonly Dictionary<int, int[]> BasicWorkActions = new()
+    internal static readonly Dictionary<int, int[]> BasicWorkActions = new()
     {
         [1] = [5, 8, 24],
         [387] = [5, 7],
@@ -61,35 +61,35 @@ internal sealed unsafe partial class BattleSceneWindow
         [6] = [9],
         [1584] = [9],
     };
-    private const int StrikeHitStep = 1;
+    internal const int StrikeHitStep = 1;
 
     /// <summary>자세를 세우는 work — 516 방어(맞을 때 한 번 더 깎임), 515 회피(상대 명중 −DEX/5).</summary>
-    private const int StanceDefendWork = 516, StanceEvadeWork = 515;
-    private const double TickDelaySeconds = 0.2;   // 행동 끝 → 다음 GETNEXT 까지 상태 20·18·19·21·4 를 지나 약 6걸음(ba-20 W)
+    internal const int StanceDefendWork = 516, StanceEvadeWork = 515;
+    internal const double TickDelaySeconds = 0.2;   // 행동 끝 → 다음 GETNEXT 까지 상태 20·18·19·21·4 를 지나 약 6걸음(ba-20 W)
 
     /// <summary>그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.</summary>
-    private bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !_allyAi));
+    internal bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !_allyAi));
 
     /// <summary>DUELDX_AUTOPLAY=1 이면 내 부대도 AI 가 움직인다 — 화면 밖 시험에서 전투를 저절로 돌리려고.</summary>
-    private static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
+    internal static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
 
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
-    private static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
+    internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
 
-    private bool IsPlayerTurn => _turn >= 0 && IsMine(_units[_turn]) && _routine == null && _outcome.Length == 0;
+    internal bool IsPlayerTurn => _turn >= 0 && IsMine(_units[_turn]) && _routine == null && _outcome.Length == 0;
 
     /// <summary>전투를 넘어 이어지는 파티 상태 — Chr 번호 → 그 인물의 레벨·경험치·장비·어빌리티.</summary>
-    private readonly Dictionary<int, CharacterData> _party = [];
+    internal readonly Dictionary<int, CharacterData> _party = [];
 
     /// <summary>지금 판의 아군 상태를 파티에 담아 둔다(다음 전투로 이어진다).</summary>
-    private void RememberParty()
+    internal void RememberParty()
     {
         foreach (var unit in _units)
             if (unit.IsAlly && unit.LeaderIndex < 0 && !unit.Detached && !unit.WasFollower && unit.Data is { } c) _party[unit.ChrCode] = c;   // 군단 부하는 파티원이 아니다
     }
 
     /// <summary>게임 표를 다 읽은 뒤 인물마다 전투 수치를 채운다.</summary>
-    private void InitBattle()
+    internal void InitBattle()
     {
         if (_db == null) return;
         // 적 레벨의 기준이 되는 파티 레벨은 <b>유닛을 채우기 전에</b> 한 번 셈한다 —
@@ -156,7 +156,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (Fld._chapterFired.Count == 0) FillDemoInventory();
     }
 
-    private void UpdateTurn()
+    internal void UpdateTurn()
     {
         if (_loading || _db == null) return;
         StepDelayedHits();                       // 포탑 사격처럼 나중에 맞는 타격
@@ -261,7 +261,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 아군 레벨 상위 셋의 평균 — 원본이 적 레벨을 맞추는 기준(분석-전투 「Lev.dat 성장」).
     /// </summary>
-    private int PartyLevel()
+    internal int PartyLevel()
     {
         // 원본은 플레이어 <b>부대원 명부</b>의 상위 셋이다(0x1004e070) — 명부가 있으면 그것으로(편 3 손님은 안 센다).
         if (Mos._members.Count > 0)
@@ -283,7 +283,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 지금 파티 부대원 레벨 상위 셋의 평균(<c>0x1004e070</c>) — 전투 밖(챕터·필드 스크립트)에서 쓴다.
     /// <see cref="PartyLevel"/> 은 전장의 아군을 세므로, 모세스에서 돌면 지난 전투의 판이나 빈 판을 센다.
     /// </summary>
-    private int RosterLevel()
+    internal int RosterLevel()
     {
         var levels = Mos._members.Select(chr => (int)((_units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr))?.Level ?? 0))
                              .Where(v => v > 0).OrderByDescending(v => v).Take(3).ToList();
@@ -298,7 +298,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 스크립트 805(레벨 맞추기, <c>0x10031a50</c>)는 면제 명단을 안 본다 — 면제 명단은 전투 유닛을 만들 때(<c>0x1007a8e0</c>)만 쓴다.
     /// 805 가 겨누는 인물은 <b>모두</b> 면제 명단에 있는 합류 인물이라, 명단을 보면 805 가 한 번도 안 먹어 리엔·유진이 Lv1 로 합류했다(사용자 보고).
     /// </param>
-    private CharacterData GrowToPartyLevel(CharacterData c, int offset, int partyLevel, bool ignoreExempt = false)
+    internal CharacterData GrowToPartyLevel(CharacterData c, int offset, int partyLevel, bool ignoreExempt = false)
     {
         if (_db is null || (!ignoreExempt && _db.LevelExempt.Contains(c.Code))) return c;
         var rows = _db.LevelGrowth;
@@ -321,9 +321,9 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>이번 틱에 물체 깃발이 섰나(0x1006dab0) — 유닛 차례가 다 끝나면 <see cref="StepObjects"/> 가 돈다(Q6).</summary>
-    private bool _objectsDue;
+    internal bool _objectsDue;
 
-    private void AdvanceTick()
+    internal void AdvanceTick()
     {
         _tick++;
         var turnStarts = new HashSet<UnitState>();
@@ -362,13 +362,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>매 턴 피해를 받을 차례인 유닛 — 카메라가 그 유닛에게 선 뒤 하나씩 든다.</summary>
-    private readonly Queue<UnitState> _ailmentTickQueue = new();
+    internal readonly Queue<UnitState> _ailmentTickQueue = new();
 
     /// <summary>줄 머리 유닛에게 카메라 명령을 걸었나 · 줄이 다 빠지면 쓰러짐을 봐야 하나.</summary>
-    private bool _ailmentCamSent, _ailmentSweepDue;
+    internal bool _ailmentCamSent, _ailmentSweepDue;
 
     /// <summary>매 턴 피해 줄을 한 걸음 — 처리 중이면 true(그동안 틱·차례는 멈춘다).</summary>
-    private bool StepAilmentTicks()
+    internal bool StepAilmentTicks()
     {
         while (_ailmentTickQueue.Count > 0)
         {
@@ -392,7 +392,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 틱 처리(<c>vt+0xb0</c> = <c>0x10071f10</c>) 끝의 풀림 굴림 — <b>상태 6 먼저, 그다음 5</b>를 각각 <c>rand()%100 &lt; 3</c> 이면 지운다
     /// (<c>0x10071f19~0x10071f70</c>, <c>0x1007c470</c>). TP 회복 뒤, 차례 깃발 앞이라 풀린 그 틱에 TP 가 가득이면 곧바로 깃발이 선다.
     /// </summary>
-    private void ReleaseFreeze(UnitState u)
+    internal void ReleaseFreeze(UnitState u)
     {
         foreach (int id in (ReadOnlySpan<int>)[6, 5])
         {
@@ -403,7 +403,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>틱·물체 차례 뒤 — HP 0 이나 22·23·24(SOUL·TP 가 조건에 닿으면, 0x1007c689~)로 쓰러진 인물을 치우고 승패를 본다.</summary>
-    private void SweepTickDeaths()
+    internal void SweepTickDeaths()
     {
         foreach (var u in _units.Where(u => u.Alive && u.OnField && (u.Hp <= 0 || DiesByStatus(u))))   // 판 밖(201 로 물러난 HP 0 보스)은 안 죽는다
             if (!SurvivesFatal(u))
@@ -417,16 +417,16 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>차례 시작 — 그 인물을 고른다(fg-8). 적이면 AI 를 돌린다(fg-7).</summary>
     /// <summary>불러온 뒤 이어 받을 차례 — 저장할 때 차례였던 인물. 없으면 −1.</summary>
-    private int _resumeTurn = -1;
+    internal int _resumeTurn = -1;
 
     /// <summary>자동 저장을 걸어 둔 내 차례(원본 깃발 +0x4cd8) — 이벤트 검사 뒤 UpdateTurn 이 적는다. 없으면 −1(감사5 S6).</summary>
-    private int _autoSaveFor = -1;
+    internal int _autoSaveFor = -1;
 
     /// <param name="resume">
     /// 불러온 판의 차례를 이어 받는 것 — 턴 수만 맞추고(저장 때 하나 빼 둔 것), 이벤트 타이머·자동 회복은 이미 그 차례에 돌았으니 다시 안 돌린다.
     /// 원본도 판을 읽으면 차례 시작 처리 없이 상태 22 로 선다(0x100619c0).
     /// </param>
-    private void StartTurn(int index, bool resume = false)
+    internal void StartTurn(int index, bool resume = false)
     {
         _turn = index;
         _selected = index;
@@ -480,14 +480,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>맞는 목소리의 재생 표지 바탕 — 표지 = 바탕 + 소리 번호. 「그 소리가 어디서든 울리는 중인가」를 번호로 본다.</summary>
-    private const int HurtVoiceTag = 30000;
+    internal const int HurtVoiceTag = 30000;
 
     /// <summary>
     /// 맞았을 때 나는 목소리(<c>0x10079c0f</c>, 맞음 종류 2 · 피해 &gt; 0) — Dmg.dat 묶음의 맞는 소리 둘 가운데 <b>어느 것도</b> 울리는 중이 아닐 때만
     /// (<c>0x10028810</c> = 번호로 32칸 전역 슬롯 검사, 누가 낸 것이든) 유닛 <c>+0x4c &amp; 1</c> 로 고른 하나를 낸다.
     /// <c>+0x4c</c> 의 뜻은 못 가렸다(가설) — 유닛마다 늘 같은 쪽이 나게 자리 번호의 홀짝으로 대신한다. 전에는 유닛별 표지로만 막고 난수로 골랐다.
     /// </summary>
-    private void PlayHurtCry(UnitState u)
+    internal void PlayHurtCry(UnitState u)
     {
         if (u.Data == null || _voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
         if (hurt.Any(id => _mixer.IsPlaying(HurtVoiceTag + id))) return;
@@ -500,14 +500,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <b>TP 가 최대일 때만</b>(<c>0x1007aef0 == 0x1007aeb0</c>) <c>call[frame &amp; 3]</c> 을 낸다. 플레이어 쪽은 <b>원래 칸에 있을 때만</b>
     /// (<c>+0x4b8/+0x4ba == +0x44/+0x46</c>) — 차례를 막 받은 지금은 늘 원래 칸이다. 전에는 내 편만, 조건 없이 냈다(ba-15 목소리).
     /// </summary>
-    private void PlayTurnCall(UnitState u)
+    internal void PlayTurnCall(UnitState u)
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         if (_voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
             Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(_units, u), SoundScreenX(UnitFoot(u).X));   // 유닛 자리에서(0x1006866b)
     }
 
-    private void EndTurn()
+    internal void EndTurn()
     {
         _eventCheckDue |= 1 << 2;                // 갈래 2 = 행동 끝(0x100680a3)
         if (_turn >= 0) _units[_turn].HasTurn = false;
@@ -519,10 +519,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>공격·어빌리티를 열 때 걸음 비용을 빼기 전 값 — 취소하면 되돌린다.</summary>
-    private (int Tp, int OriginCol, int OriginRow)? _commitUndo;
+    internal (int Tp, int OriginCol, int OriginRow)? _commitUndo;
 
     /// <summary>공격 대상 고르기·어빌리티 목록을 닫는다. <paramref name="refund"/> 면 열 때 뺀 걸음 비용을 돌려준다.</summary>
-    private void CancelTargeting(bool refund = false)
+    internal void CancelTargeting(bool refund = false)
     {
         if (refund && _commitUndo is { } undo && _turn >= 0)
         {
@@ -540,7 +540,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>공격·어빌리티를 열 때: 지금까지 걸은 비용을 한 번에 뺀다(취소하면 되돌림).</summary>
-    private void CommitMoveForAction()
+    internal void CommitMoveForAction()
     {
         var u = _units[_turn];
         _commitUndo = (u.Tp, u.OriginCol, u.OriginRow);
@@ -548,7 +548,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>Esc 로 걸은 것을 물린다 — 차례 시작 자리로 되돌린다. 물렸으면 true.</summary>
-    private bool UndoMove()
+    internal bool UndoMove()
     {
         if (!IsPlayerTurn) return false;
         var u = _units[_turn];
@@ -561,7 +561,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 취소 — 목록·대상 고르기면 비용을 돌려주고 링을 다시 연다. <paramref name="undoMove"/> 면(Esc) 그다음 걸음도 물린다.
     /// 우클릭은 걸음을 물리지 않는다. 취소한 것이 있으면 true.
     /// </summary>
-    private bool CancelStep(bool undoMove)
+    internal bool CancelStep(bool undoMove)
     {
         // 아이템 목록도 우클릭·Esc 로 닫힌다(목록 창 0x100d3830 — 우클릭 = 취소, ba-20 G1). 전에는 Esc 가 시스템 메뉴를 열었다.
         if (_itemMenu) { _itemMenu = false; CancelTargeting(refund: true); if (IsPlayerTurn) OpenRing(_turn, reopen: true); return true; }
@@ -570,7 +570,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>차례 시작 자리에서 지금 자리까지 걸은 비용을 TP 에서 한 번에 빼고, 시작 자리를 지금 자리로 옮긴다.</summary>
-    private void CommitMove(UnitState u)
+    internal void CommitMove(UnitState u)
     {
         if (ComputeRange(u) is { } range && range.CanReach(u.Row * Cols + u.Col)) u.Tp -= range.Cost[u.Row * Cols + u.Col];
         u.OriginCol = u.Col;
@@ -578,7 +578,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>휴식 <c>0x1007a790</c>: (최대 HP − 현재 HP) × 남은 TP / 최대 TP × Num[35]% 를 채우고 남은 TP 를 버린다.</summary>
-    private void Rest(int index)
+    internal void Rest(int index)
     {
         var u = _units[index];
         CommitMove(u);
@@ -609,7 +609,7 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── 걷기 ─────────────────────────────────────────────────────────────────
 
     /// <summary>차례인 아군을 클릭한 파란 칸까지 걷게 한다. TP 는 행동할 때 한 번에 뺀다.</summary>
-    private bool TryWalkTo(int col, int row)
+    internal bool TryWalkTo(int col, int row)
     {
         var u = _units[_turn >= 0 ? _turn : 0];
         if (!IsPlayerTurn || u.IsBusy || ComputeRange(u) is not { } range) return false;
@@ -621,15 +621,15 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── work 사거리·효과 범위 ────────────────────────────────────────────────
 
     /// <summary>버프·약화 경험치 — 보조·회복 스킬이 든 대상 한 명마다 시전자가 받는 EXP(원본에 없는 규칙, 사용자 요청).</summary>
-    private const int BuffExpPerAlly = 5;
+    internal const int BuffExpPerAlly = 5;
 
     /// <summary>이번 기술로 보조·회복이 든 대상(시전자 자신 포함) — 기술이 끝날 때 <see cref="GainBuffExp"/> 가 센다.</summary>
-    private readonly HashSet<UnitState> _buffedAllies = [];
+    internal readonly HashSet<UnitState> _buffedAllies = [];
 
     /// <summary>
     /// 보조(종류 2·3)가 든 대상은 편을 가리지 않고(아군 버프·적 약화 모두), 회복(1·5)은 같은 편에게 든 것만 센다. 아이템(어빌리티 0)은 뺀다.
     /// </summary>
-    private void MarkBuffed(UnitState a, UnitState t, WorkData w)
+    internal void MarkBuffed(UnitState a, UnitState t, WorkData w)
     {
         if (w.AbilityId == 0 || w.IsDamage) return;
         if (w.IsHeal && t.IsAlly != a.IsAlly) return;
@@ -637,7 +637,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>든 대상 한 명마다 <see cref="BuffExpPerAlly"/> 씩 — 내 편(경험치를 쌓는 쪽)만 받는다.</summary>
-    private void GainBuffExp(UnitState a)
+    internal void GainBuffExp(UnitState a)
     {
         int n = _buffedAllies.Count;
         _buffedAllies.Clear();
@@ -652,20 +652,20 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>격려 — 아군 하나의 SOUL 을 위력만큼 올린다.</summary>
-    private const int EncourageAbility = 10;
+    internal const int EncourageAbility = 10;
 
     /// <summary>쇼크 — 대상 SOUL 을 위력만큼 깎는다(0x100ae140).</summary>
-    private const int ShockAbility = 39;
+    internal const int ShockAbility = 39;
 
-    private WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
+    internal WorkData? Work(int id) => _db != null && _db.Works.TryGetValue(id, out var w) ? w : null;
 
     /// <summary>work 를 쓸 수 있나 — TP + CTP 가 TP 비용 이상, SOUL 이 비용 이상.</summary>
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     /// <summary>핸들러 첫 단계에서 대상 칸으로 카메라를 보내는 어빌리티(0x100eab80 을 부르는 28개 핸들러 — ba17-camera C14 · ba-20 O P7).</summary>
-    private static readonly HashSet<int> TargetCameraAbilities =
+    internal static readonly HashSet<int> TargetCameraAbilities =
         [31, 37, 39, 40, 42, 43, 50, 55, 56, 72, 79, 81, 88, 93, 97, 107, 108, 116, 126, 141, 142, 166, 169, 171, 186, 191, 192];
 
-    private bool CanAfford(UnitState u, WorkData w) =>
+    internal bool CanAfford(UnitState u, WorkData w) =>
         u.Data != null && _db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
         && (u.Data.JobId == 37 || u.Hp >= _db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
 
@@ -673,7 +673,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
     /// 길은 지금 자리에서 그 칸까지다.
     /// </summary>
-    private (List<(int Col, int Row)> Path, int Cost)? FindAttackPath(int attackerIndex, int targetIndex)
+    internal (List<(int Col, int Row)> Path, int Cost)? FindAttackPath(int attackerIndex, int targetIndex)
     {
         var a = _units[attackerIndex];
         var t = _units[targetIndex];
@@ -701,7 +701,7 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
 
     /// <summary>적을 클릭하면 링을 안 거치고 바로 친다(fa-12) — 걸음 비용도 그때 함께 뺀다.</summary>
-    private void QuickAttack(int targetIndex)
+    internal void QuickAttack(int targetIndex)
     {
         if (_units[_turn].Data is not { } c || Work(c.BasicWorkId) is not { } w) return;
         if (FindAttackPath(_turn, targetIndex) is not { } plan)
@@ -715,7 +715,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>링 공격: 기본공격 대상 고르기(걸어가서 친다).</summary>
-    private void BeginAttackTargeting()
+    internal void BeginAttackTargeting()
     {
         if (_units[_turn].Data is not { } c) return;
         _commitUndo = null;   // 기본공격은 걸음을 미리 굳히지 않는다(ba-20 M2)
@@ -738,7 +738,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 차례인 인물이 지금 칠 수 있는 적 — <b>걸어갈 비용이 적은(가까운) 순</b>, 같으면 HP 낮은 순.
     /// 약한 적부터 노리면 멀리 걸어가 TP 를 헛되이 쓰기 일쑤라 가까운 적을 먼저 세운다.
     /// </summary>
-    private List<int> AttackableEnemies() =>
+    internal List<int> AttackableEnemies() =>
         [.. Enumerable.Range(0, _units.Length)
             .Where(i => _units[i].Alive && SeesAsFoe(_units[_turn], _units[i]))
             .Select(i => (Index: i, Plan: FindAttackPath(_turn, i)))
@@ -748,7 +748,7 @@ internal sealed unsafe partial class BattleSceneWindow
             .Select(t => t.Index)];
 
     /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다 — 어빌리티를 겨누는 중이면 그 어빌리티 사거리로 센다.</summary>
-    private void CycleAttackCursor()
+    internal void CycleAttackCursor()
     {
         var targets = !_targetIsBasicAttack && _targetWork >= 0 && Work(_targetWork) is { } aw
             ? AbilityTargets(aw) : AttackableEnemies();
@@ -757,7 +757,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>커서의 적을 친다.</summary>
-    private void AttackCursorTarget()
+    internal void AttackCursorTarget()
     {
         if (_attackCursor < 0 || !IsPlayerTurn) return;
         var (col, row) = (_units[_attackCursor].Col, _units[_attackCursor].Row);
@@ -765,7 +765,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>대상 고르는 중의 클릭. 처리했으면 true.</summary>
-    private bool OnTargetClick(int col, int row)
+    internal bool OnTargetClick(int col, int row)
     {
         if (_targetWork < 0) return false;
         if (!IsPlayerTurn || Work(_targetWork) is not { } w) { CancelTargeting(); return true; }
@@ -823,14 +823,14 @@ internal sealed unsafe partial class BattleSceneWindow
     // ── work 쓰기 (fg-5 공격 · fg-6 어빌리티) ───────────────────────────────
 
     /// <summary>핸들러가 판정까지 대상을 붙드는 work — 브레인 스톰 · 블라인드 · 안티 밸런싱 · 미라클 · 아이템 1609·1610·1612~1617(ba-21 T3).</summary>
-    private static readonly HashSet<int> HeldTargetWorks =
+    internal static readonly HashSet<int> HeldTargetWorks =
         [400, 603, 604, 605, 606, 607, 608, 609, 610, 611, 481, 935, 936, 937, 938, 482, 934, 939, 940, 941, 490, 1609, 1610, 1612, 1613, 1614, 1615, 1616, 1617];
 
     /// <summary>
     /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 <b>치는 순간</b>에 대상마다 판정,
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
     /// </summary>
-    private IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
+    internal IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
                                              List<(int Col, int Row)> path, bool eventFinisher = false)
     {
         var a = _units[userIndex];
@@ -1309,7 +1309,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// work 끝처리 <c>0x10076380</c> — TP → SOUL → HP 차례로 비용을 빼고 행동 뒤 SOUL 을 올린다. 체질마다 SOUL·TP·HP 로 나뉘는 비율이 다르다.
     /// 군단 부하도 같은 끝처리를 지난다(<c>0x10071e20</c> 은 부하면 차례 끝 검사만 건너뜀, 감사3 L1).
     /// </summary>
-    private void PayWorkCost(UnitState a, WorkData w, bool free = false)
+    internal void PayWorkCost(UnitState a, WorkData w, bool free = false)
     {
         if (a.Data is not { } cost || _db is not { } db2) return;
         // +0xa4 ≠ 0(사건 207·909)이면 TP·SOUL·HP 비용을 통째로 건너뛰고(0x10076384 jne 0x10076586) SOUL 증가만 한다(감사5 B2).
@@ -1325,7 +1325,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (hp > 0 && cost.JobId != 37 && a.Hp > 0) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
     }
 
-    private void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
+    internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (_db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
@@ -1424,13 +1424,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>10(피격 가속) — 맞으면(빗나가도) TP 가 값% × STP 만큼 앞당겨진다(0x10079f59: 값 × 최대TP ÷ 제수 ÷ 100). 전에는 값% × 제수였다.</summary>
-    private void RushTp(UnitState t)
+    internal void RushTp(UnitState t)
     {
         if (t.Status(10) is var rush and > 0) t.Tp = Math.Min(t.MaxTp, t.Tp + rush * t.Stp / 100);
     }
 
     /// <summary>자기 자리에 쓰는 work(모드 0·2)면 겨냥 없이 바로 쓴다.</summary>
-    private bool UseSelfCentredWork(WorkData w)
+    internal bool UseSelfCentredWork(WorkData w)
     {
         if (!w.SelfCentred) return false;
         ConsumeTargetItem();          // 겨누지 않는 아이템(라이징스톰·블리자드캡슐)도 쓰면 하나 준다(0x100698af) — CancelTargeting 앞이어야 한다
@@ -1439,14 +1439,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private static Facing FacingToward(int fromCol, int fromRow, int toCol, int toRow)
+    internal static Facing FacingToward(int fromCol, int fromRow, int toCol, int toRow)
     {
         int dx = toCol - fromCol, dy = toRow - fromRow;
         if (Math.Abs(dx) >= Math.Abs(dy)) return dx >= 0 ? Facing.Right : Facing.Left;
         return dy >= 0 ? Facing.Down : Facing.Up;
     }
 
-    private void CheckOutcome()
+    internal void CheckOutcome()
     {
         if (_outcome.Length > 0) return;
         // 먼저 이벤트 스크립트 — 「몇 턴 버티기」·「누구를 지키기」처럼 전멸 말고 다른 조건으로 끝나는 전투가 있다.
@@ -1493,10 +1493,10 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private double _softlockSince = -1;
+    internal double _softlockSince = -1;
 
     /// <summary>아직 덜 터진 사건 가운데 틱·타이머 조건(2·3)으로 전투를 끝내는(행동 6·10·11) 것이 남았나.</summary>
-    private bool PendingTimedEnd()
+    internal bool PendingTimedEnd()
     {
         var events = _events;
         for (int i = 0; i < events.Count; i++)
@@ -1509,16 +1509,16 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>배너·음악 없이 끝나는 결과(행동 10·6 의 결과 5·6, 행동 11[1] 의 결과 2) — 원본 상태 24 는 결과 1·4 만 그린다(0x1006afa0).</summary>
-    private bool _outcomeQuiet;
+    internal bool _outcomeQuiet;
 
     /// <summary>조용한 결과가 저절로 넘어가는 때(초).</summary>
-    private double _outcomeLeaveAt;
+    internal double _outcomeLeaveAt;
 
     /// <summary>
     /// 이벤트 행동 11·10·6 이 적는 결과. <paramref name="quiet"/> 면 배너 없이 넘어간다 — 상태 24 는 결과와 상관없이 어둡게(하위 0) →
     /// 16틱 → 하위 2 에서 입력 또는 틱 &gt; 120 이라 <b>16 + 121 = 137틱</b>(감사4 C9). 배너 결과의 음악은 배너와 함께 건다(사운드 B1).
     /// </summary>
-    private void SetEventOutcome(bool win, bool quiet = false)
+    internal void SetEventOutcome(bool win, bool quiet = false)
     {
         if (_outcome.Length > 0) return;
         _outcome = win ? "승리" : "패배";
@@ -1531,7 +1531,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     // ── 표시 ─────────────────────────────────────────────────────────────────
 
-    private const uint HealColor = 0xFF60E060;
+    internal const uint HealColor = 0xFF60E060;
 
     /// <summary>
     /// 그 동작에서 판정이 나는 시각들(초, 동작 시작 기준) — 모션의 타격 키(종류 6) 간격을 그대로 쓰되
@@ -1539,7 +1539,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 다만 <b>원거리</b>(사거리 1칸 넘음)는 모션의 타격 키 그 틱에 낸다 — 총은 쏘는 컷에 타격 키가 있어서, 0.05초로 당기면
     /// 크리스티앙처럼 피해 숫자가 총을 쏘기 전에 떴다(사용자 보고).
     /// </summary>
-    private List<double> HitTimesFor(UnitState u, int action, bool ranged = false)
+    internal List<double> HitTimesFor(UnitState u, int action, bool ranged = false)
     {
         const double first = 0.05;
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { Hits.Count: > 0 } clip)
@@ -1554,7 +1554,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원거리 기본공격(work 6)은 동작 9 를 부르는데, 팡테온가드(그림 1111)는 9 가 비어 있고 사격(소리 8·총구 불꽃 108)이 7 에 있어
     /// 공격 이펙트가 안 나왔다(사용자 보고: Btl 0154).
     /// </summary>
-    private int DrawnAction(UnitState u, int action)
+    internal int DrawnAction(UnitState u, int action)
     {
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite)) return action;
         bool Empty(int a) => sprite.Clip(a, u.Facing) is not { Keys.Count: > 0 };   // 키가 하나도 없는 동작(정지 한 장짜리는 둔다)
@@ -1564,7 +1564,7 @@ internal sealed unsafe partial class BattleSceneWindow
         return action;
     }
 
-    private void PlayAction(UnitState u, int action)
+    internal void PlayAction(UnitState u, int action)
     {
         double seconds = _sprites.TryGetValue(u.ChrCode, out var sprite) ? sprite.ActionSeconds(action, u.Facing) : 0;
         if (Trace)
@@ -1577,13 +1577,13 @@ internal sealed unsafe partial class BattleSceneWindow
         ScheduleActionSounds(u, action);
     }
 
-    private void Popup(UnitState u, string text, uint color, float size = 18)
+    internal void Popup(UnitState u, string text, uint color, float size = 18)
     {
         var (x, y) = UnitFoot(u);
         _popups.Add((text, size, x, y - 70, _lastTime, color));
     }
 
-    private void DrawPopups()
+    internal void DrawPopups()
     {
         _popups.RemoveAll(p => _lastTime - p.Start > 1.2);
         foreach (var (text, size, x, y, start, color) in _popups)
@@ -1596,7 +1596,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>인물 발밑의 HP(초록·빨강)·TP(노랑) 막대.</summary>
-    private void DrawGauges()
+    internal void DrawGauges()
     {
         foreach (var u in _units)
         {
@@ -1619,10 +1619,10 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private const float GaugeLevelFont = 7f;
+    internal const float GaugeLevelFont = 7f;
 
     /// <summary>어빌리티 대상 고르는 중이면 사거리 칸(노랑)을 깐다.</summary>
-    private void DrawWorkRange()
+    internal void DrawWorkRange()
     {
         if (_targetWork >= 0 && _targetIsBasicAttack && _attackCursor >= 0)
         {
@@ -1658,7 +1658,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private string TurnLine()
+    internal string TurnLine()
     {
         if (_turn < 0) return $"틱 {_tick} — 차례를 기다리는 중";
         var u = _units[_turn];

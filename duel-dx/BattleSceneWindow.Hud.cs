@@ -20,12 +20,12 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int HudW = 140, HudH = 60, HudObs = 894, HudPositionMotion = 12;
-    private const uint HudYellow = 0xFFFFFF00;
+    internal const int HudW = 140, HudH = 60, HudObs = 894, HudPositionMotion = 12;
+    internal const uint HudYellow = 0xFFFFFF00;
 
     // 소지금은 모세스 상점이 쓰는 그 값이다(원본은 파티 레코드 +0x10c 의 GP).
 
-    private void DrawHud()
+    internal void DrawHud()
     {
         if (Mos._mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.

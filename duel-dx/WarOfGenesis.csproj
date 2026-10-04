@@ -50,6 +50,7 @@
       <Folder Include="Battle\" />
       <Folder Include="Field\" />
       <Folder Include="Moses\" />
+      <Folder Include="System\" />
     </ItemGroup>
 
 </Project>

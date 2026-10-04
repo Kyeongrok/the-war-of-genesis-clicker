@@ -25,16 +25,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 칸에 <b>더하는</b> 색 — 원본은 층 색에 칸 밝기(평지 74)를 곱해 <b>가산</b>으로 얹는다(섞기 방식 17, `0x1000e150`).
     /// 알파 섞기가 아니라 <b>밝히기만</b> 한다.
     /// </summary>
-    private const uint MoveTint = 0x1C1C49, RangeTint = 0x491C0B;
+    internal const uint MoveTint = 0x1C1C49, RangeTint = 0x491C0B;
 
     /// <summary>층 색 원값 — 이동 층 2 (100,100,255) · 사거리 층 12 (255,100,40) · 효과 범위 층 0 (255,170,40). 화면에는 × 칸밝기/256 을 더한다.</summary>
-    private const uint MoveLayer = 0x6464FF, RangeLayer = 0xFF6428, SplashLayer = 0xFFAA28;
+    internal const uint MoveLayer = 0x6464FF, RangeLayer = 0xFF6428, SplashLayer = 0xFFAA28;
     /// <summary>닿을 수 있는 오브젝트 칸(층 1) — 노랑 (255,255,20). 겹치면 이동 칸보다 먼저 칠한다(분석-UI 「칸 깃발」).</summary>
-    private const uint ObjectLayer = 0xFFFF14;
-    private const double RangeWaveCellsPerSecond = 30;
+    internal const uint ObjectLayer = 0xFFFF14;
+    internal const double RangeWaveCellsPerSecond = 30;
 
     /// <summary>한 인물의 이동 영역 — 칸마다 드는 TP(못 가면 <see cref="int.MaxValue"/>), 되짚을 앞 칸, 빨간 칸.</summary>
-    private sealed class MoveRange(int[] cost, int[] prev, bool[] red)
+    internal sealed class MoveRange(int[] cost, int[] prev, bool[] red)
     {
         public int[] Cost { get; } = cost;
         public int[] Prev { get; } = prev;
@@ -55,12 +55,12 @@ internal sealed unsafe partial class BattleSceneWindow
         }
     }
 
-    private MoveRange? _range;
-    private int _rangeUnit = -1, _rangeCol = -1, _rangeRow = -1, _rangeTp = -1;
-    private double _rangeStart;
+    internal MoveRange? _range;
+    internal int _rangeUnit = -1, _rangeCol = -1, _rangeRow = -1, _rangeTp = -1;
+    internal double _rangeStart;
 
     /// <summary>고른 인물이 서 있으면 영역을 (필요할 때만) 다시 셈한다. 고른 인물이 없거나 움직이는 중이면 지운다.</summary>
-    private void RefreshMoveRange()
+    internal void RefreshMoveRange()
     {
         if ((uint)_selected >= _units.Length || !_units[_selected].Alive || _units[_selected].IsBusy || _routine != null)
         {
@@ -82,18 +82,18 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>이동 영역을 셀 출발 칸 — 차례인 인물은 차례 시작 자리, 나머지는 지금 자리.</summary>
-    private (int Col, int Row) RangeOrigin(UnitState unit) =>
+    internal (int Col, int Row) RangeOrigin(UnitState unit) =>
         _turn >= 0 && _units[_turn] == unit ? (unit.OriginCol, unit.OriginRow) : (unit.Col, unit.Row);
 
     // 전장에 있는 사람만 — 퇴장(사건 201)한 사람은 살아 있는 채 좌표가 남아, 그 칸을 누르면 보이지 않는 사람을 골라 걷지 못했다
     // (사용자 보고: Btl 0150 (21,22) 는 WASD 로는 가는데 클릭으로는 안 감).
-    private UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
+    internal UnitState? LiveUnitAt(int col, int row) => _units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
 
     /// <summary>인물의 지금 자리·TP 로 이동 영역을 셈한다. 지도·게임 표가 없으면 null.</summary>
     /// <param name="workId">예산에서 뺄 기술(0 이면 플레이어가 고른 기술·기본공격) — AI 는 기술마다 예산이 다르다(0x1005d070).</param>
     /// <param name="tp">지금 TP 대신 쓸 값(접근 단계는 최대 TP 로 잰다) — null 이면 지금 TP.</param>
     /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
-    private MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null)
+    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null)
     {
         if (_map is not { } map || _db is not { } db || unit.Data is not { } c) return null;
 
@@ -217,7 +217,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
     /// </summary>
-    private List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
+    internal List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
     {
         int n = Cols * Rows, from = fromRow * Cols + fromCol;
         if (from == target) return [];
@@ -251,14 +251,14 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 깔리는 물결의 반경 — 원본은 매 틀 <c>r += max(1, r×2/3)</c> 이라 0·1·2·3·5·8·13·21·35… 로 불어난다.
     /// 여덟 틀(0.27초)이면 웬만한 판은 다 덮는다.
     /// </summary>
-    private static int WaveRadius(int frames)
+    internal static int WaveRadius(int frames)
     {
         int r = 0;
         for (int i = 0; i < frames && r < 64; i++) r += Math.Max(1, r * 2 / 3);
         return r;
     }
 
-    private void DrawMoveRange()
+    internal void DrawMoveRange()
     {
         if (_rangeUnit < 0 || _range is not { } range) return;
         // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.
@@ -294,7 +294,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 비탈은 북서 모서리에서 북동·남서로의 기울기 벡터 (−40·Δ동, −40·Δ남, 1600) 로 빛을 셈한다:
     /// <c>((1920·b + 4096000) / 40) / |(a, b, 1600)|</c> 를 80 에서 자르고 10 을 더한다(a = −40·(북동−북서), b = −40·(남서−북서), 16비트로 접힘).
     /// </summary>
-    private int CellBrightness(int col, int row)
+    internal int CellBrightness(int col, int row)
     {
         if (!BoardIsMap || _map!.SlopeAt(col, row) is 0 or > 3) return 74;
         int nw = _map.CornerAt(col, row, 1), ne = _map.CornerAt(col, row, 2), sw = _map.CornerAt(col, row, 3);
@@ -305,7 +305,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>모서리 높이(원 단위) → 화면 픽셀: 원본은 <c>높이 × 12 / 20</c>(0x100d7bf3, 0 쪽으로 자름).</summary>
-    private static int CornerPx(int raw) => raw * 12 / 20;
+    internal static int CornerPx(int raw) => raw * 12 / 20;
 
     /// <summary>
     /// 칸 하나를 층 색으로 칠한다 — 원본처럼 ① 층색 × 칸밝기/256 을 <b>더해서</b> 채우고 ② 같은 색 불투명으로 테두리(41×33, 이웃과 선을 나눠 쓴다).
@@ -313,7 +313,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본은 비탈 모양 3 을 「윗변 북서·아랫변 남서 높이의 네모」로, 1·2 는 선·삼각형 조각으로 그리는데(0x100d7ba3·0x100d7dcf·0x100d820e)
     /// 조각 표까지는 못 옮겨 네 꼭짓점 사각형으로 근사한다(가설).
     /// </summary>
-    private void PaintCell(int col, int row, uint layer)
+    internal void PaintCell(int col, int row, uint layer)
     {
         int bright = CellBrightness(col, row);
         uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
@@ -337,7 +337,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.</summary>
-    private void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint)
+    internal void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint)
     {
         int w = Math.Max(1, x1 - x0);
         for (int x = x0; x < x1; x++)
@@ -349,7 +349,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>네모 안을 색을 <b>더해서</b> 밝힌다(255 에서 멈춘다).</summary>
-    private void AddRect(int x, int y, int w, int h, uint tint)
+    internal void AddRect(int x, int y, int w, int h, uint tint)
     {
         uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
         for (int yy = y; yy < y + h; yy++)

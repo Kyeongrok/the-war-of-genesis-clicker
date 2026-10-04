@@ -21,12 +21,12 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int HighTeleportAbility = 37;
+    internal const int HighTeleportAbility = 37;
 
-    private static bool IsTeleportWork(WorkData w) => w.AbilityId == HighTeleportAbility;
+    internal static bool IsTeleportWork(WorkData w) => w.AbilityId == HighTeleportAbility;
 
     /// <summary>범위 안에서 설 수 있는 빈 칸을 원본처럼 무작위로 뽑는다 — 없으면 null.</summary>
-    private (int Col, int Row)? TeleportLanding(WorkData w, UnitState user, int col, int row)
+    internal (int Col, int Row)? TeleportLanding(WorkData w, UnitState user, int col, int row)
     {
         var cells = AreaCells(w, user, col, row);
         if (cells.Count == 0) return null;
@@ -41,7 +41,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>순간이동 연출 — 사라지고(80틱) · 30틱 · 새 칸에 나타나는 빛 · 50틱 · 되살아남(80틱).</summary>
-    private IEnumerable<bool> TeleportRoutine(WorkData w, UnitState user, int col, int row)
+    internal IEnumerable<bool> TeleportRoutine(WorkData w, UnitState user, int col, int row)
     {
         const double Tick = 1 / TicksPerSecond;
         var landing = TeleportLanding(w, user, col, row);
@@ -76,10 +76,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>리콜(어빌리티 61) — 「아군 한명을 자신의 주위로 소환한다」. 전에는 종류 1(회복)로만 돌아 아무도 오지 않았다(사용자 보고).</summary>
-    private const int RecallAbility = 61;
+    internal const int RecallAbility = 61;
 
     /// <summary>시전자 둘레에서 설 수 있는 가장 가까운 빈 칸 — 한 칸 둘레부터 넓혀 간다. 없으면 null.</summary>
-    private (int Col, int Row)? RecallLanding(UnitState caster, UnitState target)
+    internal (int Col, int Row)? RecallLanding(UnitState caster, UnitState target)
     {
         for (int d = 1; d <= 4; d++)
         {
@@ -101,7 +101,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>리콜 연출 — 대상이 사라지고(40틱) 시전자 옆에 빛(210:3)과 함께 나타난다(40틱).</summary>
-    private IEnumerable<bool> RecallRoutine(UnitState caster, UnitState target)
+    internal IEnumerable<bool> RecallRoutine(UnitState caster, UnitState target)
     {
         const double Tick = 1 / TicksPerSecond;
         if (target == caster || RecallLanding(caster, target) is not var (lc, lr)) { Toast("불러올 자리가 없습니다"); yield break; }

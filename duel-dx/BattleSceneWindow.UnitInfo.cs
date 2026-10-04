@@ -12,15 +12,15 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int InfoW = 140, InfoH = 268;
+    internal const int InfoW = 140, InfoH = 268;
 
-    private int _infoUnit = -1;
-    private (int X, int Y) _infoAt;
+    internal int _infoUnit = -1;
+    internal (int X, int Y) _infoAt;
 
-    private bool InfoOpen => _infoUnit >= 0;
+    internal bool InfoOpen => _infoUnit >= 0;
 
     /// <summary>인물 위에서 오른쪽 단추를 누르면 정보 창을 띄운다. 띄웠으면 true.</summary>
-    private bool OpenUnitInfo(int bx, int by)
+    internal bool OpenUnitInfo(int bx, int by)
     {
         int index = UnitAtPoint(bx, by);
         if (index < 0) return false;
@@ -29,10 +29,10 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void CloseUnitInfo() => _infoUnit = -1;
+    internal void CloseUnitInfo() => _infoUnit = -1;
 
     /// <summary>DUELDX_INFO=1 이면 첫 아군의 정보 창을 띄워 둔다(화면 밖 시험용 — 오른쪽 단추를 누르고 있는 것처럼).</summary>
-    private void OpenUnitInfoIfAsked()
+    internal void OpenUnitInfoIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_INFO") != "1" || InfoOpen || _units.Length == 0) return;
         int ally = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly);
@@ -41,7 +41,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _infoAt = (_camX + 300, _camY + 80);
     }
 
-    private void DrawUnitInfo()
+    internal void DrawUnitInfo()
     {
         if (!InfoOpen || _db is not { } db || _units[_infoUnit] is not { Data: { } c } unit) return;
         var (x, y) = _infoAt;

@@ -21,15 +21,15 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int PreludeDotObs = 343, PreludeBandObs = 344;
+    internal const int PreludeDotObs = 343, PreludeBandObs = 344;
 
     /// <summary>빛 알갱이 하나 — 날아오기(343:1) · 머물기(343:0, 30틱) · 흩어지기(343:3, 6틱).</summary>
-    private sealed record PreludeDot(double Start, double FromX, double FromY, double X, double Y, int FlyTicks, double Vx, double Vy);
+    internal sealed record PreludeDot(double Start, double FromX, double FromY, double X, double Y, int FlyTicks, double Vx, double Vy);
 
-    private readonly List<PreludeDot> _preludeDots = [];
+    internal readonly List<PreludeDot> _preludeDots = [];
 
     /// <summary>원본 이동기를 따르는 효과 하나(초상 컷인) — 빠르기에 곱수(또는 더하기)를 주고 아래·위 한계로 자른다.</summary>
-    private sealed class FxFlight
+    internal sealed class FxFlight
     {
         public int Obs, Motion;
         public double X, Y, Tx, Ty, Speed, Factor, Min = 1, Max = 100;
@@ -39,19 +39,19 @@ internal sealed unsafe partial class BattleSceneWindow
         public FxFlight? Next;
     }
 
-    private readonly List<FxFlight> _fxFlights = [];
-    private double _fxLastStep;
+    internal readonly List<FxFlight> _fxFlights = [];
+    internal double _fxLastStep;
 
     /// <summary>원본 화면(640×480) 좌표를 지금 판 좌표로 — 카메라 자리를 더하고 보기 크기로 늘린다.</summary>
     /// <remarks>
     /// 가로는 보기 폭에 맞춰 늘리고(초상이 화면 끝에서 끝으로 지나간다), 세로는 늘리지 않고 화면 가운데(원본 240)를 기준으로 둔다 —
     /// 빛 알갱이 띠(150~330)와 금빛 띠(130·340)의 간격이 원본 픽셀 그대로여야 빈틈 없는 띠가 된다.
     /// </remarks>
-    private (double X, double Y) PreludeScreen(double sx, double sy) =>
+    internal (double X, double Y) PreludeScreen(double sx, double sy) =>
         (_camX + sx * ViewWidth / 640.0, _camY + ViewHeight / 2.0 + (sy - 240));
 
     /// <summary>앞머리를 돌린다 — 기술 코루틴이 핸들러(동작 사슬) 앞에서 끝까지 기다린다.</summary>
-    private IEnumerable<bool> FinisherPrelude(WorkData w, UnitState user)
+    internal IEnumerable<bool> FinisherPrelude(WorkData w, UnitState user)
     {
         const double Tick = 1 / TicksPerSecond;
         PlayAction(user, 6);
@@ -76,7 +76,7 @@ internal sealed unsafe partial class BattleSceneWindow
         for (double end = _lastTime + 60 * Tick; _lastTime < end;) yield return true;
     }
 
-    private void SpawnPreludeDots(int casterX, int casterY)
+    internal void SpawnPreludeDots(int casterX, int casterY)
     {
         // 칸은 원본처럼 20px 간격 — 보기가 640 보다 넓으면 칸 수를 늘려 폭을 채운다(원본 32칸).
         int columns = Math.Max(32, (ViewWidth + 19) / 20);
@@ -97,7 +97,7 @@ internal sealed unsafe partial class BattleSceneWindow
             }
     }
 
-    private void SpawnPreludeCutIns(UnitState user)
+    internal void SpawnPreludeCutIns(UnitState user)
     {
         if (user.Data is not { FaceId: > 0 } c || UiFor(c.FaceId) == null) return;
         double s = ViewWidth / 640.0;
@@ -119,7 +119,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>앞머리 효과를 그린다(판 좌표) — DrawEffects 가 부른다.</summary>
-    private void DrawFinisherFx()
+    internal void DrawFinisherFx()
     {
         // 빛 알갱이
         _preludeDots.RemoveAll(d => (_lastTime - d.Start) * TicksPerSecond >= d.FlyTicks + 36);
@@ -159,7 +159,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (f.Delay <= 0) DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, UiBlend.Alpha);
     }
 
-    private static void StepFxFlight(FxFlight f)
+    internal static void StepFxFlight(FxFlight f)
     {
         if (f.Delay > 0) { f.Delay--; return; }
         f.Age++;
@@ -174,14 +174,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>효과 모션에 박힌 소리를 지금부터 예약한다 — 487·1338 은 소리만 든 껍데기다.</summary>
-    private void PreludeSound(int obs, int motion)
+    internal void PreludeSound(int obs, int motion)
     {
         if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is not { } clip) return;
         foreach (var (tick, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + tick / TicksPerSecond, sound));
     }
 
     /// <summary>343 빛 네모 — 모션의 밝기 단계(1~8, 없으면 8)만큼 더한다.</summary>
-    private void DrawPreludeDot(int motion, int tick, double x, double y)
+    internal void DrawPreludeDot(int motion, int tick, double x, double y)
     {
         int level = UiFor(PreludeDotObs)?.BlendAt(motion, tick) ?? 0;
         if (level is <= 0 or > 8) level = 8;

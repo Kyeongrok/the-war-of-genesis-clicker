@@ -27,7 +27,7 @@ namespace DuelDx;
 internal sealed unsafe partial class BattleSceneWindow : IDisposable
 {
     /// <summary>지금 벌이는 전투 — 자료에서 읽는다(<see cref="DemoScene"/>). 못 읽으면 예전 상수 그대로.</summary>
-    private DemoScene _scene = DemoScene.Fallback;
+    internal DemoScene _scene = DemoScene.Fallback;
 
     /// <summary>한 칸 걸어가는 데 드는 시간(초).</summary>
     public const double StepSeconds = StepTicks / TicksPerSecond;
@@ -45,40 +45,40 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// </summary>
     public const double TicksPerSecond = 30;
 
-    private const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
+    internal const int TileW = ObtMap.CellWidth, TileH = ObtMap.CellHeight;
     // 판 크기는 <b>전투마다 맵을 따라</b> 바뀐다(0153 = 32×34, 0156 레이토스 = 37×71 …).
     // 맵을 바꿀 때 ResizeBoard 가 화면 버퍼·텍스처·창 크기를 다시 잡는다.
-    private int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
-    private const int GridTop = 40;
-    private int BoardWidth => Cols * TileW;
-    private int BoardHeight => GridTop + BoardPad + Rows * TileH;
+    internal int Cols = BattleDemoScene.Cols, Rows = BattleDemoScene.Rows;
+    internal const int GridTop = 40;
+    internal int BoardWidth => Cols * TileW;
+    internal int BoardHeight => GridTop + BoardPad + Rows * TileH;
 
     // ── 칸 높이(고도) → 화면 (분석-전투 「자리 갱신 0x100ea910」: 화면 y = 월드 y×32/40 − 월드 z×12/20, 유닛 z = 칸 높이×20) ──
 
     /// <summary>칸 높이 한 층이 화면에서 위로 올라가는 픽셀 — 12.</summary>
-    private const int HeightStep = 12;
+    internal const int HeightStep = 12;
 
     /// <summary>지금 판이 맵 크기 그대로인가(타이틀·모세스 틀이면 아니다 — 그때는 높이·여백을 안 쓴다).</summary>
-    private bool BoardIsMap => _map is { } m && m.Cols == Cols && m.Rows == Rows;
+    internal bool BoardIsMap => _map is { } m && m.Cols == Cols && m.Rows == Rows;
 
     /// <summary>
     /// 맵 그림이 0줄보다 위로 나온 만큼(높은 칸이 위로 올라가 그려진 부분) 판 위에 덧대는 여백.
     /// 그림 원점이 −264 인 맵(Obt 0031)은 맨 윗줄이 22층 높이라 그만큼 위에 그려져 있다.
     /// </summary>
-    private int BoardPad => BoardIsMap ? Math.Max(0, -_map!.OriginY) : 0;
+    internal int BoardPad => BoardIsMap ? Math.Max(0, -_map!.OriginY) : 0;
 
-    private int HeightPx(int col, int row) => BoardIsMap ? HeightStep * _map!.HeightAt(col, row) : 0;
+    internal int HeightPx(int col, int row) => BoardIsMap ? HeightStep * _map!.HeightAt(col, row) : 0;
 
     /// <summary>칸의 화면 윗줄 — 높이만큼 위로 올라간다.</summary>
-    private int CellTop(int col, int row) => GridTop + BoardPad + row * TileH - HeightPx(col, row);
+    internal int CellTop(int col, int row) => GridTop + BoardPad + row * TileH - HeightPx(col, row);
 
-    private int CellCenterY(int col, int row) => CellTop(col, row) + TileH / 2;
+    internal int CellCenterY(int col, int row) => CellTop(col, row) + TileH / 2;
 
     /// <summary>
     /// 한 칸을 걷는 틱 — 평지 5, 한 층 차 6, 두 층 차 8, 비탈(다음 칸 깃발 0x40)·뛰어넘기(두 층 차 + 0x20)는 10
     /// (걷기 0x10073920 의 높이 갈래 0x10073b54~0x10073d57, ba-20 P5). 틱별 깡충 뛰는 z 곡선은 따르지 않고 고르게 넘는다.
     /// </summary>
-    private int StepTicksBetween(int fromCol, int fromRow, int toCol, int toRow)
+    internal int StepTicksBetween(int fromCol, int fromRow, int toCol, int toRow)
     {
         if (!BoardIsMap || _map is not { } map || (uint)toCol >= map.Cols || (uint)toRow >= map.Rows
             || (uint)fromCol >= map.Cols || (uint)fromRow >= map.Rows) return StepTicks;
@@ -90,7 +90,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>칸 사이를 걷는 인물의 높이 — 네 이웃 칸을 거리로 섞어 층 사이를 매끄럽게 넘는다.</summary>
-    private double HeightPxAt(double x, double y)
+    internal double HeightPxAt(double x, double y)
     {
         int x0 = (int)Math.Floor(x), y0 = (int)Math.Floor(y);
         double fx = x - x0, fy = y - y0;
@@ -99,7 +99,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>판 픽셀 (bx, by) 가 놓인 칸의 줄 — 높이 때문에 겹치면 아래 줄(나중에 그린 쪽)이 이긴다. 없으면 −1.</summary>
-    private int RowAt(int bx, int by)
+    internal int RowAt(int bx, int by)
     {
         int col = bx / TileW;
         if ((uint)col >= Cols) return -1;
@@ -112,96 +112,96 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>맵 그림의 아랫끝(판 픽셀) — 카메라는 원본처럼 그림 밖으로 안 내려간다(맵 `+0x398~+0x39e` 로 자름).</summary>
-    private int PictureBottom => BoardIsMap ? GridTop + BoardPad + _map!.OriginY + _map.Height : BoardHeight;
+    internal int PictureBottom => BoardIsMap ? GridTop + BoardPad + _map!.OriginY + _map.Height : BoardHeight;
 
     /// <summary>카메라가 내려갈 수 있는 끝.</summary>
-    private int CamMax => Math.Max(0, Math.Min(BoardHeight, PictureBottom) - ViewHeight);
+    internal int CamMax => Math.Max(0, Math.Min(BoardHeight, PictureBottom) - ViewHeight);
 
     /// <summary>
     /// 창에 보이는 판 높이 — 판 전체의 70%, 다만 원본 화면 높이(480 + 머리줄)까지만. 나머지는 <see cref="_camY"/> 로 위아래로 스크롤한다.
     /// 세로로 긴 맵(Obt 0156 은 2272 픽셀)도 원본처럼 줌아웃하지 않고 스크롤한다.
     /// </summary>
-    private int ViewHeight => Math.Min(BoardHeight * 7 / 10, Math.Max(240, (int)Math.Round(_resH / _zoom)));
+    internal int ViewHeight => Math.Min(BoardHeight * 7 / 10, Math.Max(240, (int)Math.Round(_resH / _zoom)));
 
     /// <summary>설정 > 해상도 — <b>창 크기</b>(화면 픽셀). 원본은 640×480. 보이는 판은 이것을 배율로 나눈 만큼이다.</summary>
-    private int _viewW = UserSettings.Current.ViewW, _viewH = UserSettings.Current.ViewH;
+    internal int _viewW = UserSettings.Current.ViewW, _viewH = UserSettings.Current.ViewH;
 
     /// <summary>모니터에 들어가게 깎은 해상도(<see cref="FitZoom"/> 가 채운다) — 창 너비·(머리줄 뺀) 창 높이.</summary>
-    private int _resW = UserSettings.Current.ViewW, _resH = UserSettings.Current.ViewH;
+    internal int _resW = UserSettings.Current.ViewW, _resH = UserSettings.Current.ViewH;
 
     /// <summary>
     /// 창에 보이는 판 너비 — 원본 화면 너비 640 까지만. 더 넓은 맵(Btl 0131 같은 1480 픽셀)은 원본처럼 <b>줌아웃하지 않고</b>
     /// <see cref="_camX"/> 로 좌우 스크롤한다(차례인 인물을 따라간다).
     /// </summary>
-    private int ViewWidth => Math.Min(BoardWidth, Math.Max(320, (int)Math.Round(_resW / _zoom)));
+    internal int ViewWidth => Math.Min(BoardWidth, Math.Max(320, (int)Math.Round(_resW / _zoom)));
 
     /// <summary>창 안에서 판 그림이 놓이는 자리(화면 픽셀) — 판이 창보다 작으면 가운데에 두고 둘레는 검게 남긴다.</summary>
-    private int ViewOffsetX => Math.Max(0, (_resW - (int)(ViewWidth * _zoom)) / 2);
-    private int ViewOffsetY => Math.Max(0, (_resH - (int)(ViewHeight * _zoom)) / 2);
+    internal int ViewOffsetX => Math.Max(0, (_resW - (int)(ViewWidth * _zoom)) / 2);
+    internal int ViewOffsetY => Math.Max(0, (_resH - (int)(ViewHeight * _zoom)) / 2);
 
     /// <summary>화면 픽셀 → 판 픽셀(카메라 더한 것).</summary>
-    private (int X, int Y) BoardPoint(int clientX, int clientY) =>
+    internal (int X, int Y) BoardPoint(int clientX, int clientY) =>
         ((int)Math.Floor((clientX - ViewOffsetX) / _zoom) + _camX, (int)Math.Floor((clientY - ViewOffsetY) / _zoom) + _camY);
     /// <summary>배율의 위아래 한계. 자동은 판이 창보다 작을 때(모세스·타이틀 640×480)만 창을 채우도록 키운다.</summary>
-    private const double MinZoom = 0.5, MaxZoomChosen = 4;
+    internal const double MinZoom = 0.5, MaxZoomChosen = 4;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀 — <see cref="FitZoom"/> 가 정한다.</summary>
-    private double _zoom;
+    internal double _zoom;
 
-    private const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
+    internal const string GameRoot = @"C:\Users\Administrator\Downloads\gen3pt2";
 
-    private const uint BgColor = 0xFF14100C;
-    private const uint GridLine = 0x40FFFFFF;
-    private const uint White = 0xFFF2EAD6;
-    private const uint DimGray = 0xFFA09888;
+    internal const uint BgColor = 0xFF14100C;
+    internal const uint GridLine = 0x40FFFFFF;
+    internal const uint White = 0xFFF2EAD6;
+    internal const uint DimGray = 0xFFA09888;
 
-    private ObtMapImage? _map;
-    private Dictionary<int, UnitSprite> _sprites = [];
+    internal ObtMapImage? _map;
+    internal Dictionary<int, UnitSprite> _sprites = [];
 
     /// <summary>인물마다 읽어 둔 그림이 어느 레코드 그림(+0xc) 값으로 읽은 것인가 — 바뀌면 다시 읽는다.</summary>
-    private readonly Dictionary<int, int> _spriteCodes = [];
-    private UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];   // 자료를 읽으면 BuildUnits 로 다시 만든다
-    private int _selected = -1;
-    private readonly Dictionary<int, string> _names = [];
-    private string _loadError = "";
-    private volatile bool _loading = true;
-    private bool _showGrid = UserSettings.Current.ShowGrid;
+    internal readonly Dictionary<int, int> _spriteCodes = [];
+    internal UnitState[] _units = [.. DemoScene.Fallback.Roster.Select(u => new UnitState(u))];   // 자료를 읽으면 BuildUnits 로 다시 만든다
+    internal int _selected = -1;
+    internal readonly Dictionary<int, string> _names = [];
+    internal string _loadError = "";
+    internal volatile bool _loading = true;
+    internal bool _showGrid = UserSettings.Current.ShowGrid;
     /// <summary>발밑 HP·TP 막대 — 원본에는 없어서 기본은 끔(H 키).</summary>
-    private bool _showGauges = UserSettings.Current.ShowGauges;
+    internal bool _showGauges = UserSettings.Current.ShowGauges;
 
-    private uint[] _fb = [];
-    private readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
+    internal uint[] _fb = [];
+    internal readonly Dictionary<string, (uint[] Px, int W, int H)> _textCache = [];
 
-    private bool _running;
-    private double _lastTime;
+    internal bool _running;
+    internal double _lastTime;
 
-    private IntPtr _hwnd;
-    private static readonly bool Offscreen = Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1";
-    private static readonly Win32.WndProc StaticWndProcDelegate = StaticWndProcTrampoline;
-    private static BattleSceneWindow? _active;
-    private static ushort _classAtom;
-    private const string ClassName = "BattleSceneDx";
+    internal IntPtr _hwnd;
+    internal static readonly bool Offscreen = Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1";
+    internal static readonly Win32.WndProc StaticWndProcDelegate = StaticWndProcTrampoline;
+    internal static BattleSceneWindow? _active;
+    internal static ushort _classAtom;
+    internal const string ClassName = "BattleSceneDx";
 
-    private ID3D11Device _device = null!;
-    private ID3D11DeviceContext _ctx = null!;
-    private IDXGISwapChain1 _swapChain = null!;
+    internal ID3D11Device _device = null!;
+    internal ID3D11DeviceContext _ctx = null!;
+    internal IDXGISwapChain1 _swapChain = null!;
 
     /// <summary>
     /// 스왑체인이 새 프레임을 받을 수 있게 되면 신호가 오는 핸들 — 이걸 기다린 <b>다음에</b> 입력을 읽고 그린다.
     /// 기본값(최대 3프레임 미리 쌓기)이면 CPU 가 노는 동안(합성은 2~5ms) 프레임이 줄을 서서 입력이 늦게 보였다.
     /// 줄은 1프레임 — 입력에서 화면까지 가장 짧다(화면 밖 시험에서는 2프레임보다 vsync 를 조금 더 놓쳤다).
     /// </summary>
-    private IntPtr _frameWait;
-    private ID3D11RenderTargetView _backBufferRtv = null!;
-    private ID3D11Texture2D _boardTex = null!;
-    private ID3D11ShaderResourceView _boardSrv = null!;
-    private ID3D11VertexShader _vs = null!;
-    private ID3D11PixelShader _ps = null!;
+    internal IntPtr _frameWait;
+    internal ID3D11RenderTargetView _backBufferRtv = null!;
+    internal ID3D11Texture2D _boardTex = null!;
+    internal ID3D11ShaderResourceView _boardSrv = null!;
+    internal ID3D11VertexShader _vs = null!;
+    internal ID3D11PixelShader _ps = null!;
 
     // ── 게임 자료 읽기 ───────────────────────────────────────────────────────
 
     /// <summary>지금 전투에 나오는 인물들의 그림과 초상을 (없는 것만) 읽는다.</summary>
-    private void LoadRosterSprites()
+    internal void LoadRosterSprites()
     {
         string assetsRoot = FindRepoAssetsRoot();
         var manifests = CollectExportedManifests(assetsRoot);
@@ -269,10 +269,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 타이틀·연대표·모세스가 쓰는 판 크기 — 그 화면들은 <b>640×480 틀</b>만 있으면 된다.
     /// </summary>
     /// <remarks>보이는 높이가 판의 <b>70%</b> 라, 480픽셀을 다 보이려면 줄 수를 그만큼 넉넉히 잡아야 한다.</remarks>
-    private const int TitleBoardCols = MosesScene.MosesW / ObtMap.CellWidth;
-    private const int TitleBoardRows = MosesScene.MosesH * 10 / 7 / ObtMap.CellHeight + 1;
+    internal const int TitleBoardCols = MosesScene.MosesW / ObtMap.CellWidth;
+    internal const int TitleBoardRows = MosesScene.MosesH * 10 / 7 / ObtMap.CellHeight + 1;
 
-    private void LoadBoard()
+    internal void LoadBoard()
     {
         try
         {
@@ -297,7 +297,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>
     /// 켜자마자 전투를 읽어야 하나 — <b>화면 밖 시험</b>에서 타이틀을 건너뛸 때뿐이다.
     /// </summary>
-    private static bool WantsBattleAtStart(out int id)
+    internal static bool WantsBattleAtStart(out int id)
     {
         id = 0;
         bool skipTitle = Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0";
@@ -310,10 +310,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>
     /// 전투 자료를 한 번이라도 읽었나 — 타이틀에서 시작하면 <b>고르기 전까지 아무 전투도 안 읽는다</b>.
     /// </summary>
-    private bool _battleLoaded;
+    internal bool _battleLoaded;
 
     /// <summary>그 전투의 자료·맵을 읽고 판을 그 크기로 잡는다.</summary>
-    private void LoadBattleBoard(int id)
+    internal void LoadBattleBoard(int id)
     {
         // DUELDX_LEGION=<Chr>:<군단> 이면 그 인물에게 군단을 배속하고 시작한다(화면 밖 시험용 — 부하·군단기).
         if (Environment.GetEnvironmentVariable("DUELDX_LEGION")?.Split(':') is [var lc, var ll] && int.TryParse(lc, out int lchr) && int.TryParse(ll, out int lid))
@@ -328,7 +328,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>나머지(그림·소리)는 배경 스레드에서 읽는다 — 창은 먼저 뜬다.</summary>
-    private void LoadScene()
+    internal void LoadScene()
     {
         try
         {
@@ -352,7 +352,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>창을 작업 영역 가운데(가로)·맨 위(세로)에 놓는다 — 아래가 잘리지 않게(an-ui-2).</summary>
-    private static int WindowLeft(int windowWidth)
+    internal static int WindowLeft(int windowWidth)
     {
         var work = new Win32.Rect();
         if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 0;
@@ -365,7 +365,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 배율 「자동」은 판 내용(모세스 640×480, 맵은 판의 70%)이 창을 채우는 가장 큰 배율(0.05 단위, 최대 4배, 최소 1배).
     /// 해상도가 모니터 작업 영역보다 크면 들어가는 데까지만(<see cref="_resW"/>·<see cref="_resH"/>).
     /// </summary>
-    private double FitZoom()
+    internal double FitZoom()
     {
         var work = new Win32.Rect();
         if (Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0))
@@ -385,10 +385,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>설정 > 해상도 — 고른 배율 %(0 = 자동). 켤 때 읽고 바꾸면 저장한다.</summary>
-    private int _zoomPercent = UserSettings.Current.ZoomPercent;
+    internal int _zoomPercent = UserSettings.Current.ZoomPercent;
 
     /// <summary>배율·해상도를 바꿨을 때 — 판은 그대로 두고 셰이더·텍스처·창만 다시 만든다.</summary>
-    private void ApplyZoom(bool force = false)
+    internal void ApplyZoom(bool force = false)
     {
         double zoom = FitZoom();
         if (!force && Math.Abs(zoom - _zoom) < 1e-9) return;
@@ -402,7 +402,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 새 맵에 맞춰 판·화면 버퍼·텍스처·창 크기를 다시 잡는다(전투마다 맵 크기가 다르다).
     /// 창을 아직 안 만들었으면 크기만 정해 두고, 만들었으면 텍스처와 창까지 다시 만든다.
     /// </summary>
-    private void ResizeBoard(int cols, int rows)
+    internal void ResizeBoard(int cols, int rows)
     {
         cols = Math.Max(1, cols);
         rows = Math.Max(1, rows);
@@ -425,7 +425,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>보이는 판 크기·배율에 맞춰 셰이더·텍스처·창·스왑체인을 다시 만든다.</summary>
-    private void RebuildView()
+    internal void RebuildView()
     {
         // 배율과 판 자리는 픽셀 셰이더에 박혀 있다 — 달라졌으면 셰이더부터 다시 빌드한다.
         if (Math.Abs(_shaderZoom - _zoom) > 1e-9 || _shaderOffset != (ViewOffsetX, ViewOffsetY)) CompileShaders();
@@ -460,7 +460,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary><c>assets/characters/</c> 밑의 인물들을 전부 훑어 Chr 코드별로 모은다.</summary>
-    private static Dictionary<int, ExportedCharacter> CollectExportedManifests(string assetsRoot)
+    internal static Dictionary<int, ExportedCharacter> CollectExportedManifests(string assetsRoot)
     {
         var result = new Dictionary<int, ExportedCharacter>();
         if (assetsRoot.Length == 0 || !Directory.Exists(assetsRoot)) return result;
@@ -473,14 +473,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         return result;
     }
 
-    private static string FindRepoAssetsRoot()
+    internal static string FindRepoAssetsRoot()
     {
         try { return AssetsFolder.Find("characters"); }
         catch (DirectoryNotFoundException) { return ""; }
     }
 
     /// <summary>내보낸 것이 없을 때의 마지막 수단 — 실제 게임 폴더에서 읽는다.</summary>
-    private static (string Name, string ObsPath) LoadFromGameFolder(int chrCode)
+    internal static (string Name, string ObsPath) LoadFromGameFolder(int chrCode)
     {
         string chrFolder = Path.Combine(GameRoot, "Chr");
         string obsFolder = Path.Combine(GameRoot, "Obs");
@@ -559,13 +559,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>지난 프레임의 실제 시각(초) — 게임 시계(<c>_lastTime</c>)는 여기서 흐른 만큼 × 게임 속도로 나아간다.</summary>
-    private double _realTime;
+    internal double _realTime;
 
     /// <summary>
     /// 창 제목에 찍는 버전 — 릴리즈 빌드는 태그(v0.10.0 따위). 손으로 빌드한 것은 git 마지막 태그와 그 뒤 커밋 수(v0.10.0+2),
     /// git 이 없어 못 셌으면 「개발판」.
     /// </summary>
-    private static string AppVersion
+    internal static string AppVersion
     {
         get
         {
@@ -581,7 +581,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    private static void RegisterClassOnce()
+    internal static void RegisterClassOnce()
     {
         if (_classAtom != 0) return;
         var wc = new Win32.WndClassEx
@@ -598,11 +598,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _classAtom = Win32.RegisterClassExW(ref wc);
     }
 
-    private static IntPtr StaticWndProcTrampoline(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam) =>
+    internal static IntPtr StaticWndProcTrampoline(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam) =>
         _active != null ? _active.WndProc(hWnd, msg, wParam, lParam)
                         : Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
 
-    private void CreateNativeWindow()
+    internal void CreateNativeWindow()
     {
         if (_fb.Length == 0) ResizeBoard(Cols, Rows);   // 창 크기를 정하기 전에 판 버퍼부터
         _zoom = FitZoom();
@@ -620,7 +620,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("창을 만들지 못했습니다.");
     }
 
-    private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    internal IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         switch (msg)
         {
@@ -715,7 +715,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── 입력 · 이동 ──────────────────────────────────────────────────────────
 
-    private void OnKeyDown(int key)
+    internal void OnKeyDown(int key)
     {
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
@@ -829,7 +829,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>걷기 키 — 방향키는 늘, 그 밖은 단축키 표에서.</summary>
-    private KeyAction? MoveActionFor(int key) => key switch
+    internal KeyAction? MoveActionFor(int key) => key switch
     {
         Win32.VK_UP => KeyAction.MoveUp,
         Win32.VK_DOWN => KeyAction.MoveDown,
@@ -846,7 +846,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 전투가 끝나고 배너가 떠 있을 때 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
     /// 없거나 졌으면 모세스 화면으로 간다(mo-1). 키든 클릭이든 한 번이면 넘어간다(원본도 배너를 눌러 건너뛴다, 분석-전투).
     /// </summary>
-    private void LeaveFinishedBattle()
+    internal void LeaveFinishedBattle()
     {
         // 원본은 상태 24 가 끝나면 루프를 빠져나와 16틀 동안 화면을 검게, 음악을 100→10% 로 줄인 뒤 장면을 지운다
         // (0x10061d91~0x10061ea9, 감사4 C7·사운드 B3). 이미 페이드 중이면 그대로 둔다 — 끝나면 StepSceneFade 가 넘긴다.
@@ -861,7 +861,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>페이드아웃이 끝난 뒤 — 결과대로 다음 장면을 연다.</summary>
-    private void LeaveFinishedBattleNow()
+    internal void LeaveFinishedBattleNow()
     {
         // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
         // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
@@ -900,7 +900,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    private void OnClick(int clientX, int clientY)
+    internal void OnClick(int clientX, int clientY)
     {
         if (_progressOpen) { var (px, py) = BoardPoint(clientX, clientY); OnProgressClick(px, py); return; }
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
@@ -949,7 +949,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>
     /// 차례인 아군을 그쪽으로 돌려세우고, 이동 영역(파랑) 안이면 한 칸 걷게 한다(TP 는 행동할 때 한 번에 뺀다). 움직이는 중이면 무시한다.
     /// </summary>
-    private void TryStep(Facing facing, int dx, int dy)
+    internal void TryStep(Facing facing, int dx, int dy)
     {
         if (!IsPlayerTurn) return;
         _selected = _turn;
@@ -967,9 +967,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>누르고 있는 이동 키(누른 순서). 키보드 반복 대신 이걸로 한 칸이 끝나는 즉시 다음 칸을 잇는다.</summary>
-    private readonly List<int> _heldMoveKeys = [];
+    internal readonly List<int> _heldMoveKeys = [];
 
-    private void StepByKey(int key)
+    internal void StepByKey(int key)
     {
         switch (MoveActionFor(key))
         {
@@ -981,24 +981,24 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>DUELDX_POSE=&lt;Chr&gt;:&lt;동작&gt;:&lt;L|R|U|D&gt; 면 그 인물이 그 동작을 그 방향으로 되풀이한다(화면 밖 그림 시험용 — 무기 층·이펙트 자리를 본다).</summary>
-    private static readonly string? PoseHook = Environment.GetEnvironmentVariable("DUELDX_POSE");
+    internal static readonly string? PoseHook = Environment.GetEnvironmentVariable("DUELDX_POSE");
 
     /// <summary>DUELDX_WORK=&lt;work 번호&gt;[:near] 면 첫 아군이 그 기술을 한 번 쓴다(화면 밖 이펙트 시험용 — 모션·이펙트 자리를 본다). near 면 적 셋을 곁으로 옮긴다.</summary>
-    private static readonly string? WorkHook = Environment.GetEnvironmentVariable("DUELDX_WORK");
+    internal static readonly string? WorkHook = Environment.GetEnvironmentVariable("DUELDX_WORK");
 
-    private bool _workHookDone;
+    internal bool _workHookDone;
 
     /// <summary>DUELDX_SAVE=&lt;칸&gt; 이 걸어 둔 저장 — 한 번만 한다(화면 밖 시험용).</summary>
-    private int? _saveSlotPending;
+    internal int? _saveSlotPending;
 
     /// <summary>DUELDX_SAVEAT=&lt;초&gt; 면 그때 저장한다(기본 3초) — 전투가 이어진 뒤를 저장해 보려고.</summary>
-    private static readonly double SaveHookAt =
+    internal static readonly double SaveHookAt =
         double.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVEAT"), out double at) && at > 0 ? at : 3;
 
     /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).</summary>
-    private bool _aimHookDone;
+    internal bool _aimHookDone;
 
-    private void ApplyAimHook()
+    internal void ApplyAimHook()
     {
         if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
         if (!IsPlayerTurn || _routine != null || _talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
@@ -1016,9 +1016,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>DUELDX_CLICKCELL=&lt;열&gt;,&lt;줄&gt; 면 플레이어 차례에 그 칸 한가운데를 한 번 누른다(화면 밖 시험용 — 클릭 이동).</summary>
-    private bool _clickHookDone;
+    internal bool _clickHookDone;
 
-    private void ApplyClickHook()
+    internal void ApplyClickHook()
     {
         if (_clickHookDone || Environment.GetEnvironmentVariable("DUELDX_CLICKCELL")?.Split(',') is not [var cs, var rs]
             || !int.TryParse(cs, out int col) || !int.TryParse(rs, out int row)) return;
@@ -1037,7 +1037,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);
     }
 
-    private void ApplyWorkHook()
+    internal void ApplyWorkHook()
     {
         ApplyAimHook();
         ApplyClickHook();
@@ -1085,7 +1085,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                                   target >= 0 ? _units[target].Row : a.Row, []);
     }
 
-    private void ApplyPoseHook()
+    internal void ApplyPoseHook()
     {
         if (PoseHook == null || _units.Length == 0) return;
         var parts = PoseHook.Split(':');
@@ -1099,9 +1099,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>배경 읽기가 끝난 뒤 주 스레드에서 한 번 돌릴 시험 훅(DUELDX_TITLE·MOSES·FIELD·LEVELUP).</summary>
-    private volatile bool _openHooksPending;
+    internal volatile bool _openHooksPending;
 
-    private void Update(double dt)
+    internal void Update(double dt)
     {
         if (_openHooksPending)
         {
@@ -1163,6 +1163,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
         StepBlinks();
         StepLegionFades();
+        StepUnitFx();
         StepPendingExits();
         foreach (var unit in _units)
         {
@@ -1200,13 +1201,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     // ── 프레임 합성 ──────────────────────────────────────────────────────────
 
     /// <summary>DUELDX_PERF=1 이면 초마다 fps 와 합성·올리기·그리기 ms 를 <c>%TEMP%\dueldx_perf.log</c> 에 적는다(성능 확인용).</summary>
-    private static readonly bool PerfLog = Environment.GetEnvironmentVariable("DUELDX_PERF") == "1";
-    private readonly Stopwatch _perf = new();
-    private double _pc, _pu, _pd; private int _pn; private double _pStart;
+    internal static readonly bool PerfLog = Environment.GetEnvironmentVariable("DUELDX_PERF") == "1";
+    internal readonly Stopwatch _perf = new();
+    internal double _pc, _pu, _pd; private int _pn; private double _pStart;
     /// <summary>성능 기록용 — 한 틀의 합성 가운데 전투 판 · 모세스 · 필드 그리기에 든 ms 누적.</summary>
-    private double _pBattle, _pMoses, _pField;
+    internal double _pBattle, _pMoses, _pField;
 
-    private void Render()
+    internal void Render()
     {
         if (!PerfLog) { Compose(); Upload(); Draw(); return; }
         _perf.Restart(); Compose(); double c = _perf.Elapsed.TotalMilliseconds;
@@ -1226,10 +1227,10 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 기술을 쓰는 동안 맵이 물든다(ba-20 P2) — 상태 14 CHRWORK 가 work <c>+0x3a</c>(1 → 방식 2)·<c>+0x3b</c>(세기)로 <c>0x1002e8d0</c> 을 부르고
     /// 행동이 끝나면 <c>0x1002e920</c>(목표 −1). 지금 세기는 틱마다 한 칸씩 목표로 간다(<c>0x1006408a</c>). 맵 그리기만 이 값을 본다(유닛·이펙트는 그대로 — 가설).
     /// </summary>
-    private double _mapTint = -1, _mapTintClock;
-    private int _mapTintTarget = -1;
+    internal double _mapTint = -1, _mapTintClock;
+    internal int _mapTintTarget = -1;
 
-    private void DrawMapTint()
+    internal void DrawMapTint()
     {
         double ticks = Math.Clamp((_lastTime - _mapTintClock) * TicksPerSecond, 0, 4);
         _mapTintClock = _lastTime;
@@ -1250,7 +1251,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             }
     }
 
-    private void Compose()
+    internal void Compose()
     {
         Array.Fill(_fb, BgColor);
         DrawBackground();
@@ -1301,7 +1302,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawProgress();
     }
 
-    private void DrawBackground()
+    internal void DrawBackground()
     {
         // 판이 맵 크기가 아니면(모세스·타이틀 틀로 바꾼 뒤, 또는 배경 스레드가 맵을 갈아 끼우는 중) 그리지 않는다 —
         // 판 버퍼 길이와 맵 너비가 어긋나 AsSpan 이 밖으로 나가 죽었다(간헐).
@@ -1319,7 +1320,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    private void DrawGridLines()
+    internal void DrawGridLines()
     {
         // 칸마다 제 높이 자리에 네모를 친다 — 층이 다른 칸은 격자도 어긋나 절벽이 보인다.
         for (int row = 0; row < Rows; row++)
@@ -1327,7 +1328,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 StrokeRect(col * TileW, CellTop(col, row), TileW + 1, TileH + 1, GridLine);
     }
 
-    private void DrawUnits()
+    internal void DrawUnits()
     {
         var sprites = _sprites;
         // 그림을 읽는 스레드가 <b>인물 배열을 통째로 갈아 끼운다</b>(그림 없는 인물을 빼면서) —
@@ -1363,14 +1364,14 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>차례 표시 그림 — Obs 0163(0x100d1de0 → 0x100e5310(Obs 0xa3, 모션)).</summary>
-    private const int TurnMarkerObs = 163;
+    internal const int TurnMarkerObs = 163;
 
     /// <summary>
     /// TP 가 찬 유닛 머리 위의 역삼각형(0x1006da40 → 0x10074320 이 붙이는 표시 객체). 모션 = (AI 편 ? 2 : 0) + (군단 부하 ? 1 : 0):
     /// 0 사람 편 연보라 · 1 사람 편 부하(작은 것) · 2 AI 편 주황 · 3 AI 편 부하. 모션마다 15틱에 4픽셀 까딱인다.
     /// 그림이 없으면 예전처럼 코드로 연보라 삼각형을 그린다.
     /// </summary>
-    private void DrawTurnMarker(UnitState unit, int x, int headY)
+    internal void DrawTurnMarker(UnitState unit, int x, int headY)
     {
         // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
         bool human = unit.PlayerControlled || (unit.IsAlly && !_allyAi);
@@ -1389,11 +1390,11 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
-    private (int X, int Y) UnitFoot(UnitState unit) =>
+    internal (int X, int Y) UnitFoot(UnitState unit) =>
         ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX,
          GridTop + BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY);
 
-    private void DrawStatus()
+    internal void DrawStatus()
     {
         // 설정 > 상단 상태 줄 보이기(기본 끔) — 꺼 두어도 자료를 못 읽었다는 경고는 보인다.
         if (!_showStatusBar)
@@ -1420,7 +1421,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
 
-    private (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f)
+    internal (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f)
     {
         string key = text + ":" + argb + ":" + size;
         if (_textCache.TryGetValue(key, out var cached)) return cached;
@@ -1432,7 +1433,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         return made;
     }
 
-    private void DrawText(string text, int x, int y, uint argb, float size = 13f)
+    internal void DrawText(string text, int x, int y, uint argb, float size = 13f)
     {
         if (text.Length == 0) return;
         var (px, w, h) = GetText(text, argb, size);
@@ -1441,7 +1442,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── 그림 원소 ────────────────────────────────────────────────────────────
 
-    private void SetPixel(int x, int y, uint color)
+    internal void SetPixel(int x, int y, uint color)
     {
         if ((uint)x >= BoardWidth || (uint)y >= BoardHeight) return;
         uint a = color >> 24;
@@ -1451,7 +1452,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _fb[idx] = a == 0xFF ? color : Blend(_fb[idx], color, a);
     }
 
-    private static uint Blend(uint bg, uint fg, uint a)
+    internal static uint Blend(uint bg, uint fg, uint a)
     {
         uint br = (byte)(((bg >> 16 & 0xFF) * (255 - a) + (fg >> 16 & 0xFF) * a) / 255);
         uint bgc = (byte)(((bg >> 8 & 0xFF) * (255 - a) + (fg >> 8 & 0xFF) * a) / 255);
@@ -1464,7 +1465,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 방식 3 은 n = 19 로 맞을 때의 흰 번쩍임이다(분석-전투 "맞는 효과").
     /// </summary>
     /// <param name="fade">0~1 의 밝기 — 이스케이프처럼 인물이 사라졌다 나타날 때 쓴다(<see cref="UnitState.Fade"/>). 1 이면 그대로 그린다.</param>
-    private void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
+    internal void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
                             (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1, bool additive = false)
     {
         if (fade <= 0) return;
@@ -1506,7 +1507,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    private void FillRect(int x, int y, int w, int h, uint color)
+    internal void FillRect(int x, int y, int w, int h, uint color)
     {
         // 네모를 판 안으로 자르고, 불투명이면 줄 단위로 채운다 — 픽셀마다 SetPixel 을 부르던 때는 화면 가득 한 번에 30ms 가 들어
         // 필드(틀마다 화면 전체를 검게 지운다)가 15~20fps 로 끊겼다(사용자 보고: Fld 0017).
@@ -1526,7 +1527,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         }
     }
 
-    private void StrokeRect(int x, int y, int w, int h, uint color)
+    internal void StrokeRect(int x, int y, int w, int h, uint color)
     {
         for (int xx = x; xx < x + w; xx++) { SetPixel(xx, y, color); SetPixel(xx, y + h - 1, color); }
         for (int yy = y; yy < y + h; yy++) { SetPixel(x, yy, color); SetPixel(x + w - 1, yy, color); }
@@ -1534,7 +1535,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     // ── D3D11 / DXGI ─────────────────────────────────────────────────────────
 
-    private void CreateDevice()
+    internal void CreateDevice()
     {
         var flags = DeviceCreationFlags.BgraSupport;
         var levels = new[] { FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0 };
@@ -1563,7 +1564,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// <summary>
     /// 화면을 그리는 셰이더 — <b>배율이 픽셀 셰이더에 박혀 있어</b>, 판 크기가 바뀌어 배율이 달라지면 다시 빌드해야 한다.
     /// </summary>
-    private void CompileShaders()
+    internal void CompileShaders()
     {
         string shader = $$"""
             Texture2D<float4> Board : register(t0);
@@ -1593,12 +1594,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     }
 
     /// <summary>지금 셰이더에 박혀 있는 판 자리 — <see cref="ViewOffsetX"/>·<see cref="ViewOffsetY"/> 와 달라지면 다시 빌드한다.</summary>
-    private (int X, int Y) _shaderOffset;
+    internal (int X, int Y) _shaderOffset;
 
     /// <summary>지금 셰이더에 박혀 있는 배율 — <see cref="_zoom"/> 과 달라지면 다시 빌드한다.</summary>
-    private double _shaderZoom;
+    internal double _shaderZoom;
 
-    private void CreateSwapChain()
+    internal void CreateSwapChain()
     {
         int w = _resW, h = _resH;
         using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
@@ -1626,7 +1627,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _backBufferRtv = _device.CreateRenderTargetView(back);
     }
 
-    private void Upload()
+    internal void Upload()
     {
         var map = _ctx.Map(_boardTex, 0, MapMode.WriteDiscard);
         try
@@ -1640,7 +1641,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         finally { _ctx.Unmap(_boardTex, 0); }
     }
 
-    private void Draw()
+    internal void Draw()
     {
         int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
@@ -1696,10 +1697,10 @@ internal sealed record SpriteFrame(uint[] Px, int W, int H, int X, int Y)
 /// <summary>인물 하나의 컷 전부와 걷기 표. 오른쪽 컷은 처음 쓸 때 뒤집어 둔다.</summary>
 internal sealed class UnitSprite
 {
-    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
-    private readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
-    private readonly SpriteFrame _first;
-    private readonly ObsMotionTable? _table;
+    internal readonly Dictionary<(int Sub, int Slot), SpriteFrame> _frames = [];
+    internal readonly Dictionary<(int Sub, int Slot), SpriteFrame> _mirrored = [];
+    internal readonly SpriteFrame _first;
+    internal readonly ObsMotionTable? _table;
 
     public UnitSprite(IReadOnlyList<ObsMotion> motions, ObsMotionTable? table)
     {
@@ -1722,7 +1723,7 @@ internal sealed class UnitSprite
     }
 
     /// <summary>지금 모션 — 모션 번호를 바로 튼 중이면(<see cref="UnitState.Motion"/>) 그것, 아니면 동작·방향으로 찾은 것.</summary>
-    private ObsMotionClip? ClipOf(UnitState unit) =>
+    internal ObsMotionClip? ClipOf(UnitState unit) =>
         unit.Motion >= 0 && _table?.Clips.GetValueOrDefault(unit.Motion) is { Keys.Count: > 0 } raw
             ? raw
             : _table?.Resolve(ActionOf(unit), ObsMotionTable.DirectionOf(unit.Facing));
@@ -1731,7 +1732,7 @@ internal sealed class UnitSprite
     /// 지금 재생할 동작 — 걷는 중이면 걷기(1), 아니면 서기(0). 다만 <b>걷기 그림이 한 컷뿐인 인물</b>(카르마타처럼
     /// 자료에 걷는 그림이 없는 쪽)은 걷는 동안에도 서기 모션을 돌려 미끄러지듯 굳어 보이지 않게 한다.
     /// </summary>
-    private int ActionOf(UnitState unit)
+    internal int ActionOf(UnitState unit)
     {
         if (unit.Action >= 0) return unit.Action;
         if (!unit.IsMoving && !unit.Entering) return ObsMotionTable.ActionStand;
@@ -1860,8 +1861,8 @@ internal sealed class UnitState(DemoUnit unit)
     public int Row { get; private set; } = unit.Row;
     public Facing Facing { get; set; } = unit.Facing;
 
-    private int _fromCol = unit.Col, _fromRow = unit.Row;
-    private double _progress = 1;
+    internal int _fromCol = unit.Col, _fromRow = unit.Row;
+    internal double _progress = 1;
 
     public bool IsMoving => _progress < 1;
 
@@ -1969,7 +1970,7 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>한 번 재생 중인 동작(공격 등). −1 이면 서기/걷기를 알아서 고른다.</summary>
     public int Action { get; private set; } = -1;
 
-    private double _actionLeft;
+    internal double _actionLeft;
 
     /// <summary>걷거나, 걸을 길이 남았거나, 동작을 재생하는 중.</summary>
     public bool IsBusy => IsMoving || Path.Count > 0 || Action >= 0 || Entering;
@@ -2025,20 +2026,20 @@ internal sealed class UnitState(DemoUnit unit)
     public double AnimTime { get; private set; }
 
     // 인물마다 서기 숨쉬기가 한꺼번에 맞춰 움직이지 않게 시작 위치를 조금씩 흩뜨린다.
-    private readonly double _idleOffset = (unit.Col * 7 + unit.Row * 13) % 10 / 10.0;
+    internal readonly double _idleOffset = (unit.Col * 7 + unit.Row * 13) % 10 / 10.0;
 
     /// <summary>그릴 자리(칸 단위, 소수) — 걷는 중이면 두 칸 사이.</summary>
     public double X => _fromCol + (Col - _fromCol) * _progress;
     public double Y => _fromRow + (Row - _fromRow) * _progress;
 
     /// <summary>방금 한 칸을 다 걸었는데 아직 다음 칸이 정해지지 않았다 — 이번 프레임 안에 이어 걸으면 걷기 컷을 잇는다.</summary>
-    private bool _justArrived;
+    internal bool _justArrived;
 
     /// <summary>이번 칸에서 남은 틱(한 칸 = <see cref="BattleSceneWindow.StepTicks"/>) — 이어 걸을 때 다음 칸에 넘겨 속도가 들쭉날쭉하지 않게 한다.</summary>
-    private double _carry;
+    internal double _carry;
 
     /// <summary>이번 칸을 걷기 시작한 뒤 흐른 틱 — 자리는 <b>다 채운 틱</b>만큼만 나아간다(틱마다 같은 픽셀).</summary>
-    private double _stepTicks;
+    internal double _stepTicks;
 
     /// <summary>걷기 없이 바로 그 칸에 세운다(걸음 물리기).</summary>
     public void WarpTo(int col, int row)
@@ -2052,7 +2053,7 @@ internal sealed class UnitState(DemoUnit unit)
     }
 
     /// <summary>밀려나는 중 — 걷기와 달리 두 칸 사이 자리를 코드가 준다(<see cref="SetSlide"/>).</summary>
-    private bool _sliding;
+    internal bool _sliding;
 
     /// <summary>걷지 않고 그 칸으로 밀려나기 시작한다(비의 넉백) — 자리는 <see cref="SetSlide"/> 로 민다.</summary>
     public void BeginSlide(int col, int row)
@@ -2076,7 +2077,7 @@ internal sealed class UnitState(DemoUnit unit)
     }
 
     /// <summary>이번 칸을 걷는 데 드는 틱 — 평지 5, 높이가 다르면 6·8·10(<see cref="BattleSceneWindow.StepTicksBetween"/>).</summary>
-    private int _stepLength = BattleSceneWindow.StepTicks;
+    internal int _stepLength = BattleSceneWindow.StepTicks;
 
     public void BeginStep(int col, int row, int ticks = BattleSceneWindow.StepTicks)
     {
