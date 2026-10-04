@@ -1284,7 +1284,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             }
             case 704:                                            // 어빌리티 배우기 [Chr, 어빌리티] — 없거나 0 이면 레벨 1 로(0x100f06d0, CChr+0x7a)
-                UpdateCharacter(A(0), c => c.Abilities.Any(ab => ab.Ability == A(1) && ab.Level > 0) ? c
+                // 레벨이 1~254 일 때만 「이미 배움」이다 — 0xff 는 안 배운 칸이라 레벨 1 로 덮는다(0x100f074e, ba-21 outer-rules).
+                UpdateCharacter(A(0), c => c.Abilities.Any(ab => ab.Ability == A(1) && ab.Level is > 0 and < 0xff) ? c
                     : c with { Abilities = [.. c.Abilities.Where(ab => ab.Ability != A(1)), ((ushort)A(1), (ushort)1)] });
                 break;
             case 805:                                            // 레벨 맞추기 [Chr, Δ] — 파티 레벨(상위 셋 평균, 0x1004e070) + Δ 로(0x100f0b40 → 0x10031a50)

@@ -618,7 +618,8 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>전투 전 스냅숏(<see cref="SaveState.Entry"/>).</summary>
     private sealed record SaveEntry(Dictionary<string, int> Inventory, int Money, SaveUnit[] Roster,
-                                    Dictionary<string, int>? Legions = null, int[]? OwnedLegions = null);
+                                    Dictionary<string, int>? Legions = null, int[]? OwnedLegions = null,
+                                    Dictionary<string, int>? Flags = null);   // 전투 전 진행 깃발(0 이 아닌 것만) — 불러온 뒤 RESTART 의 기준
 
     private const int SaveVersion = 10;  // 9: 메일을 챕터 메일 표로 배달한다 — 8 이하는 불러올 때 우편함을 걷어 낸다
                                          // 10: 레벨업 성장을 원본대로(기본값 기준) — 9 이하는 불러올 때 아군 능력치를 다시 셈한다
@@ -857,7 +858,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 Entry: battleSave && _entryRoster != null && _restartInventory != null
                     ? new SaveEntry(_restartInventory.ToDictionary(p => p.Key.ToString(), p => p.Value), _restartMoney,
                                     [.. _entryRoster.Select(p => PartyUnit(p.Key, p.Value))],
-                                    _entryLegions?.ToDictionary(p => p.Key.ToString(), p => p.Value), _entryOwnedLegions?.ToArray())
+                                    _entryLegions?.ToDictionary(p => p.Key.ToString(), p => p.Value), _entryOwnedLegions?.ToArray(),
+                                    _entryFlags?.Select((v, i) => (v, i)).Where(x => x.v != 0).ToDictionary(x => x.i.ToString(), x => (int)x.v))
                     : null,
                 Camera: battleSave ? [_camX, _camY] : null,
                 EventCheckDue: battleSave ? _eventCheckDue : null);
@@ -1052,7 +1054,15 @@ internal sealed unsafe partial class BattleSceneWindow
         if (!state.InMoses && state.Entry is { } entry)
         {
             _restartInventory = [.. entry.Inventory.Where(p => int.TryParse(p.Key, out _)).Select(p => KeyValuePair.Create(int.Parse(p.Key), p.Value))];
-            _entryFlags = (byte[])_flags.Clone();   // 세이브에는 전투 전 깃발이 없다 — 불러온 시점 깃발을 기준으로 삼는다
+            // 전투 전 깃발 — 적혀 있으면 그것이 RESTART 기준이다. 전에는 불러온 시점 깃발을 기준으로 삼아, 전투 중 오른 깃발
+            // (Btl 0239·0240·0179·0180 의 110·208)이 「저장 → 불러오기 → RESTART」 에서 한 번 더 올랐다(ba-21 outer-rules 2.2). 옛 세이브는 전처럼.
+            _entryFlags = (byte[])_flags.Clone();
+            if (entry.Flags is { } entryFlagsSaved)
+            {
+                Array.Clear(_entryFlags);
+                foreach (var (number, value) in entryFlagsSaved)
+                    if (int.TryParse(number, out int flag) && (uint)flag < _entryFlags.Length) _entryFlags[flag] = (byte)Math.Clamp(value, 0, 255);
+            }
             _restartMoney = entry.Money;
             _entryRoster = [];
             foreach (var s in entry.Roster)
