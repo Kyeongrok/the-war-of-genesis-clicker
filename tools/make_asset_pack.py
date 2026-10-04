@@ -7,6 +7,7 @@
   * <내보낼 폴더>에 파일을 납작한 이름(`bgm_0019.bgm`, `maps_0153.obt`)으로 복사하고 `pack.json`(이름 · 크기 · sha256, 차례대로)을 쓴다
     — 이것들을 GitHub 릴리즈 `assets-pack-1`(prerelease)에 올린다:
         gh release create assets-pack-1 --prerelease --latest=false --title "자산 꾸러미 1 (음악 · 전투 맵)" --notes "게임이 켜질 때 받는 파일" <폴더>/*
+    릴리즈 하나에 파일 1,000개까지다 — 넘치는 것은 `assets-pack-2` 에 올리고 pack.json 의 그 줄에 `"release": "assets-pack-2"` 를 적는다(지금은 손으로).
   * `duel-dx/AssetPack.props` 를 다시 쓴다 — 두 csproj 가 이 목록의 파일을 설치 꾸러미에서 뺀다.
 
 차례 파일은 챕터 → 전투 → 맵·음악을 따라가 만든 것이다(타이틀 0021 · 연대표 3391 음악과 2MB 보다 작은 음원은 설치판에 남긴다).
@@ -32,7 +33,7 @@ def main():
     for name in names:
         src = os.path.join(ROOT, 'assets', *name.split('/'))
         # 릴리즈 파일 이름은 ASCII 만 — 인물 폴더의 한글 이름은 뺀다(characters/0221_죠안/0338.obs → characters_0221__0338.obs).
-        asset = ''.join(ch for ch in name.replace('/', '_') if ord(ch) < 128)
+        asset = ''.join(ch for ch in name.replace('/', '_') if ch.isascii() and (ch.isalnum() or ch in '._-'))      # 빈칸도 뺀다 — GitHub 이 이름을 바꿔 버린다
         assert asset not in seen, asset
         seen.add(asset)
         data = open(src, 'rb').read()
