@@ -506,6 +506,15 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 장소 값 ≥ 20000 은 페이지 3 + 0x100fb1f0(0, n) 뿐 — 소리·효과가 없다(0x100feff3, 감사5 P2).
         if (value >= 20000) { OpenMosesShop(0, value - 20000, quiet: true); return; }
+        // 전투·필드로 들어갈 때 모세스는 16틀 검게 나간다(0x100f6208, ba-21 outer #2) — 자료가 있을 때만(없으면 그 자리에서 알린다).
+        string file = value >= 10000 ? Path.Combine(AssetsFolder.Find("data"), "Fld", $"{value - 10000:D4}.fld")
+                                     : Path.Combine(AssetsFolder.Find("data"), "Btl", $"{value:D4}.btl");
+        if (File.Exists(file)) { LeaveScene(() => MosesEnterPlaceNow(value, no)); return; }
+        MosesEnterPlaceNow(value, no);
+    }
+
+    private void MosesEnterPlaceNow(int value, int no)
+    {
         if (value >= 10000)
         {
             if (OpenField(value - 10000)) { UsePlace(no); return; }

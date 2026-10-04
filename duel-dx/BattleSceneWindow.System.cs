@@ -116,7 +116,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
                 break;
             case SystemItem.Exit:
-                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", BackToTitle);
+                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
                 break;
         }
     }

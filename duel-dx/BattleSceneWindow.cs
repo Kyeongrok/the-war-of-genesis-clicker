@@ -1132,12 +1132,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             SyncVirtualStatus();
             UpdateTalk();
             UpdateField();
+            if (_afterFadeOut != null) StepSceneFadeClock();   // 필드에서 EXIT GAME 으로 나가는 페이드
             return;
         }
 
         // 시스템 메뉴·슬롯·확인·음량·MISSION 창이 떠 있는 동안 전투는 선다 — 원본 상태 25(CTRL_SYS, 0x1006b290) 하위 1 은 아무것도 안 해
         // 틱·AI·이벤트·걷기가 멈춘다. 전에는 뒤에서 계속 돌아 AI 차례·행동 도중이 저장됐다(감사5 S1).
-        if (SystemOpen) { UpdateSounds(); return; }
+        if (SystemOpen) { UpdateSounds(); if (_afterFadeOut != null) StepSceneFadeClock(); return; }
 
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
