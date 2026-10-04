@@ -43,6 +43,15 @@
   From/To  0 시전자 · 1 대상/겨눈 칸 · 2 「출발 자리 + (Dx, Dy)」(To 에만 — 이때 Dx·Dy 는 출발 치우침이 아니라 도착까지의 화면 벡터, 높이 차 × 0.6 포함) ·
            3 못 읽음(코드가 셈한 자리 — 재생기는 표의 자리를 쓴다).
 
+떼 표 `duel-dx/Ability/WorkFxSwarm.g.cs`(`--swarm`) — 떠오름·고리 Row 의 생성이 되돌이 고리 안에 있을 때 그 고리가 뿌리는 낱알의 값(`swarm_read`):
+  Count      생성을 감싸는 가장 안쪽 고리의 횟수 — `mov reg, N … dec reg; jne` · `mov [esp+X], N … dec; mov [esp+X]; jne` · `inc reg; cmp reg, N; jl`.
+  XWidth·YWidth  new ~ 생성자 사이의 `rand % N + 자리 낱말(+0x3e x · +0x40 y) + C` 의 N (가운데 C + N/2 가 0 이 아니면 Sure = false).
+  DelayRandom·DelayStep  지연 `0x100c24d0` 인자가 `rand % N` 이면 N, `lea reg, [i+i]`·`[i*N]` 이면 2·N.
+  고리 인자   생성자 ~ 설정 사이에 민 낱말을 차례로 세어(`push imm` · `sub esp, 8` 은 모르는 double) 16개가 되면 A8~A15 를 읽는다 —
+             dz0 (A8,A9) · 각속도 배율 k2 (A10,A11) · 방식2 A12 · dz 배율 k (A13,A14) · 방식 A15. 처음 각이 `fild 차례; fmul 상수` 면 AngleStep = 상수.
+  StartZ     생성자 z 의 치우침. 실행기가 못 읽으면 `mov r16, [유닛+0x42]; add r16, N; push` 를 읽는다(`static_z`), z 가 `rand % N + C` 면 가운데 값.
+  못 읽은 것이 하나라도 있으면 Sure = false. 고리 밖(Count 1)이고 값이 모두 0 인 줄, 고리 횟수를 못 읽은 줄은 안 싣는다.
+
 같은 열쇠의 Row 가 여럿이면 그 표 줄이 원본에서는 그 수만큼(자리·뒤집기가 다르게) 따로 뜬다는 뜻이다(브레인 브레이크 337:0 ×2).
 전용 연출 work(`work_fx_timing.keep`)은 뺀다. 근거: 옵시디안 분석/원본차이/ba21-fx-playback.md 「덧정보 표 생성 기록」
 """
@@ -319,8 +328,8 @@ def rands(seq):
             elif j.mnemonic in ('add', 'sub') and r0 in regs and len(ops) == 2:
                 if ops[1].type == X86_OP_IMM:
                     c += s32(ops[1].imm & 0xffffffff) * (1 if j.mnemonic == 'add' else -1)
-                elif ops[1].type == X86_OP_MEM and j.mnemonic == 'add' and j.reg_name(ops[1].mem.base) == 'esi':
-                    axis = AXIS.get(ops[1].mem.disp)
+                elif ops[1].type == X86_OP_MEM and j.mnemonic == 'add' and ops[1].mem.base and not ops[1].mem.index:
+                    axis = AXIS.get(ops[1].mem.disp, '?')       # 유닛(나 · 대상)의 자리 낱말
                 elif ops[1].type == X86_OP_REG:
                     axis = '?'                               # 레지스터 값을 더하고 뺀다 — 상수가 아니다
         if mod and divided:
@@ -371,6 +380,158 @@ def drop_read(site, ev, cva, a, note):
     return vz, vzn, hn, sx, sy, cx, cy
 
 
+SWARM = {}                                                  # 생성 주소 → 떼 값 (extra_of 가 채운다)
+
+
+def loop_count(loops, fstart, va):
+    """va 를 감싸는 가장 안쪽 고리의 횟수 — (N, 확실). 고리 밖이면 (1, True), 못 읽으면 (0, False)."""
+    lp = loops.loops_of(fstart, va)
+    if not lp:
+        return 1, True
+    head, tail = lp[0]
+    seq = loops.insns(fstart)
+    at = {i.address: n for n, i in enumerate(seq)}
+    if head not in at or tail not in at:
+        return 0, False
+    nh, nt = at[head], at[tail]
+    before = seq[max(0, nh - 14):nh]
+    for i in reversed(seq[max(nh, nt - 6):nt]):
+        ops = i.operands
+        if i.mnemonic == 'cmp' and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM and seq[nt].mnemonic in ('jl', 'jb'):
+            return ops[1].imm, True                          # inc reg; cmp reg, N; jl — 0 부터
+        if i.mnemonic == 'dec' and ops[0].type == X86_OP_REG:
+            r = emu.SUB.get(i.reg_name(ops[0].reg), (None,))[0]
+            n = at[i.address]
+            nxt = seq[n + 1]
+            if (nxt.mnemonic == 'mov' and nxt.operands[0].type == X86_OP_MEM and nxt.operands[1].type == X86_OP_REG
+                    and emu.SUB.get(nxt.reg_name(nxt.operands[1].reg), (None,))[0] == r
+                    and nxt.reg_name(nxt.operands[0].mem.base) == 'esp'):
+                disp = nxt.operands[0].mem.disp              # 셈이 스택에 있다
+                for j in reversed(before):
+                    o = j.operands
+                    if (j.mnemonic == 'mov' and o[0].type == X86_OP_MEM and o[1].type == X86_OP_IMM
+                            and j.reg_name(o[0].mem.base) == 'esp' and o[0].mem.disp == disp and o[0].size == 4):
+                        return o[1].imm, True
+                return 0, False
+            for j in reversed(before):
+                o = j.operands
+                if (j.mnemonic == 'mov' and o[0].type == X86_OP_REG and o[1].type == X86_OP_IMM
+                        and emu.SUB.get(j.reg_name(o[0].reg), (None,))[0] == r):
+                    return o[1].imm, True
+            return 0, False
+    return 0, False
+
+
+def static_z(seq):
+    """`mov r16, [유닛+0x42]; (add r16, N); push r` 의 N — 레지스터를 더하면 None."""
+    r, off = None, 0
+    for i in seq:
+        ops = i.operands
+        if (i.mnemonic == 'mov' and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM
+                and ops[1].mem.disp == 0x42 and ops[1].size == 2 and ops[1].mem.base):
+            r, off = emu.SUB.get(i.reg_name(ops[0].reg), (None,))[0], 0
+        elif r and ops and ops[0].type == X86_OP_REG and emu.SUB.get(i.reg_name(ops[0].reg), (None,))[0] == r:
+            if i.mnemonic == 'push':
+                return off
+            if i.mnemonic in ('add', 'sub') and ops[1].type == X86_OP_IMM:
+                off += s32(ops[1].imm & 0xffffffff) * (1 if i.mnemonic == 'add' else -1)
+            else:
+                return None
+    return None
+
+
+def swarm_read(site, ev, cva, a, move):
+    """떼 값 (Count, XWidth, YWidth, DelayRandom, DelayStep, AngleStep‰, W2‰, W2Multiply, Dz0‰, DzK‰, DzMultiply, StartZ, Sure)."""
+    loops, fstart = site
+    seq = loops.insns(fstart)
+    at = {i.address: n for n, i in enumerate(seq)}
+    if ev['va'] not in at or cva not in at:
+        return None
+    n0, n1 = at[ev['va']], at[cva]
+    count, sure = loop_count(loops, fstart, ev['va'])
+    # 시작 자리
+    new = next((n for n in range(n0 - 1, max(n0 - 60, -1), -1) if seq[n].mnemonic == 'call'
+                and seq[n].operands[0].type == X86_OP_IMM and seq[n].operands[0].imm == emu.NEW), None)
+    xw = yw = 0
+    zrand = None
+    for mod, c, axis in (rands(seq[new + 1:n0 + 1]) if new is not None else []):
+        if axis == 'x':
+            xw = mod
+        elif axis == 'y':
+            yw = mod
+        elif axis == 'z':
+            zrand = c + mod // 2                             # 높이도 무작위 — 가운데만 싣는다(칸이 없다)
+            continue
+        else:
+            sure = False
+            continue
+        if c + mod // 2:
+            sure = False
+    # 지연
+    dr = ds = 0
+    for t, dva, _ in ev.get('calls', []):
+        if t != emu.DELAY or dva not in at:
+            continue
+        nd = at[dva]
+        for k in range(nd - 1, max(nd - 9, -1), -1):
+            i = seq[k]
+            if i.mnemonic == 'call':
+                break
+            if i.mnemonic == 'idiv':
+                m = next((j.operands[1].imm for j in reversed(seq[max(0, k - 4):k]) if j.mnemonic == 'mov'
+                          and j.operands[0].type == X86_OP_REG and j.operands[1].type == X86_OP_IMM), None)
+                if m:
+                    dr = m
+                else:
+                    sure = False
+                break
+            if i.mnemonic == 'lea':
+                m = i.operands[1].mem
+                if m.index and m.base == m.index and m.scale == 1 and m.disp == 0:
+                    ds = 2
+                elif m.index and not m.base and m.disp == 0:
+                    ds = m.scale
+                else:
+                    sure = False
+                break
+        break
+    ang = w2 = dz0 = dzk = 0
+    w2m = dzm = False
+    if move == 4:
+        slots, ok = [], True
+        for i in seq[n0 + 1:n1]:
+            ops = i.operands
+            if i.mnemonic == 'push':
+                slots.append(ops[0].imm & 0xffffffff if ops[0].type == X86_OP_IMM else None)
+            elif i.mnemonic == 'sub' and ops[0].type == X86_OP_REG and i.reg_name(ops[0].reg) == 'esp' and ops[1].imm == 8:
+                slots += [None, None]
+            elif i.mnemonic == 'call':
+                ok = False
+            elif i.mnemonic == 'fmul' and ops and ops[0].type == X86_OP_MEM and not ops[0].mem.base and not ops[0].mem.index:
+                ang = int(round(struct.unpack_from('<d', loops.e.d, ops[0].mem.disp - BASE)[0] * 1000))
+        arg = slots[::-1]
+        if ok and len(arg) == 16:
+            v = [dbl(arg[8], arg[9]), dbl(arg[10], arg[11]), dbl(arg[13], arg[14])]
+            if None in v or arg[12] is None or arg[15] is None or max(abs(x) for x in v) > 1000:
+                sure = False
+            else:
+                dz0, w2, dzk = (int(round(x * 1000)) for x in v)
+                w2m, dzm = bool(arg[12]), bool(arg[15])
+            if arg[3] is None and not ang:
+                sure = False                                 # 처음 각을 셈하는데 걸음을 못 읽었다
+        else:
+            sure = False
+    pz = pos(ev['z'], 'z')
+    z = pz[1] if pz else None
+    if zrand is not None:
+        z, sure = zrand, False
+    elif z is None and new is not None:
+        z = static_z(seq[new + 1:n0])                        # 고리 안의 유닛(목록에서 꺼낸 것) 기준 — 실행기는 못 읽는다
+    if z is None:
+        z, sure = 0, False
+    return (count, xw, yw, dr, ds, ang, w2, w2m, dz0, dzk, dzm, z, sure)
+
+
 def rise_read(site, ev, cva, note):
     """떠오름의 높이 T 가 `rand % N + C` 일 때 (가운데 C + N/2, 폭 N). 미는 차례는 (처음 쪽, T, H, W) — rand 셋 가운데 첫째가 T 다."""
     loops, fstart = site if site else (None, None)
@@ -402,6 +563,7 @@ def extra_of(ev, d, on_target, per, stats, site=None):
         else:
             stats['치우침 — 표 자리와 기준이 달라 뺌'] += 1
     move = speed = scale = mode = lo = hi = frm = to = 0
+    setup = None
     for t, cva, a in calls:
         if t == LINE and move == 0:
             move = 1
@@ -423,6 +585,7 @@ def extra_of(ev, d, on_target, per, stats, site=None):
             frm, to, dx, dy = ends(ev, a[0], a[1], base, px, py, pz, dx, dy, on_target, note)
         elif t == RISE and move == 0:
             move = 2
+            setup = (cva, a)
             k = dbl(a[3], a[4])
             hi = s32(a[2]) if isinstance(a[2], int) and abs(s32(a[2])) < 2000 else 0
             if not isinstance(a[2], int):
@@ -445,6 +608,7 @@ def extra_of(ev, d, on_target, per, stats, site=None):
                     dx, dy = dx + cx, dy + screen_dy(cy)
         elif t == RING and move == 0:
             move = 4
+            setup = (cva, a)
             speed = a[1] if isinstance(a[1], int) and a[1] < 5000 else 0
             hi = a[2] if isinstance(a[2], int) and a[2] < 5000 else 0
             ang, vel = dbl(a[3], a[4]), dbl(a[5], a[6])
@@ -458,6 +622,10 @@ def extra_of(ev, d, on_target, per, stats, site=None):
             lo = a[0] if move == 1 else lo
         elif t == MAXSPEED and isinstance(a[0], int):
             hi = a[0] if move == 1 else hi
+    if setup and site:
+        sw = swarm_read(site, ev, setup[0], setup[1], move)
+        if sw:
+            SWARM[ev['va']] = sw
     pt, stag, sure = per
     return (flip, dx, dy, pt, stag, sure, move, speed, scale, mode, lo, hi, frm, to, note)
 
@@ -701,6 +869,62 @@ def write(path, out, res, names, arrive):
         f.write('\n'.join(L))
 
 
+def swarm_rows(out):
+    """work → [(Obs, 모션, Delay, 떼 값…)] — 고리 밖이고 값이 모두 0 인 것은 뺀다."""
+    res = collections.OrderedDict()
+    for w, rows in out.items():
+        got = []
+        for k, b, _, va in rows:
+            sw = SWARM.get(va)
+            if b[6] not in (2, 4) or sw is None:
+                continue
+            if sw[0] == 0 or (sw[0] == 1 and not any(sw[1:11])):
+                continue                                     # 횟수를 못 읽은 고리는 싣지 않는다
+            r = (k[0], k[1], k[2]) + sw
+            if r not in got:
+                got.append(r)
+        if got:
+            res[w] = got
+    return res
+
+
+def write_swarm(path, sw, res, names):
+    L = ['// <auto-generated> tools/re/work_fx_extra2.py 가 만든다 — 손으로 고치지 않는다.',
+         'namespace DuelDx;',
+         '',
+         '/// <summary>떠오름·고리 이펙트(WorkFxExtra 의 Move 2 · 4)를 원본이 되돌이 고리로 뿌릴 때 낱알마다의 값 — WorkFxExtra.Row 와 (Obs, 모션, Delay) 로 맞춘다.</summary>',
+         '/// <remarks>',
+         '/// 원본 핸들러는 이 줄들을 한 장이 아니라 고리 안에서 Count 번 만든다(생성자 0x100c5b20 떠오름 · 0x100cd270 고리).',
+         '/// 낱알 i (0 부터)의 시작 자리 = 기준 + (rand % XWidth − XWidth/2, rand % YWidth − YWidth/2) — 월드 단위(화면 y 는 × 0.8), 폭 0 = 안 흩어짐.',
+         '/// 지연 = 표의 Delay + rand % DelayRandom + i × DelayStep 틱(0x100c24d0).',
+         '/// 고리(0x100cd310 의 뒤쪽 인자, 점 만들기 0x10039410 · 틱 0x10039330): 처음 각 = i × AngleStepPermille/1000 (π 단위),',
+         '/// 틱마다 각속도 W = W2Multiply ? W × W2Permille/1000 : W + W2Permille/1000 을 먼저 바꾼 뒤 각 += W (W 의 처음 값은 WorkFxExtra 의 ScalePermille),',
+         '/// 높이 빠르기 dz = DzMultiply ? dz × DzKPermille/1000 : dz + DzKPermille/1000 을 먼저 바꾼 뒤 z += dz (dz 의 처음 값 Dz0Permille/1000, 월드 z — 화면은 × 0.6).',
+         '/// StartZ = 생성자 z 의 치우침(월드) — 이펙트 표의 Lift 가 이미 이 값 × 0.6 이니 두 번 더하지 않는다.',
+         '/// 떠오름 낱알의 좌우 흔들림(반폭 rand % 3 + 1 · 마디 높이 rand % 20 + 25 · 처음 쪽 rand &amp; 1)은 본 곳이 모두 같아 칸이 없다.',
+         '/// Sure = false 는 못 읽은 값(0 으로 둠)이 있다는 뜻이다(시작 높이가 레지스터 값이거나 무작위 — 무작위면 StartZ 는 가운데 값). 고리 횟수를 못 읽은 줄은 안 실었다.',
+         '/// 줄 끝 주석: 이름 · 핸들러 주소.',
+         '/// </remarks>',
+         'internal static class WorkFxSwarm',
+         '{',
+         '    public readonly record struct Row(int Obs, int Motion, int Delay, int Count, int XWidth, int YWidth, int DelayRandom, int DelayStep,',
+         '                                      int AngleStepPermille, int W2Permille, bool W2Multiply, int Dz0Permille, int DzKPermille, bool DzMultiply,',
+         '                                      int StartZ, bool Sure);',
+         '',
+         '    public static readonly Dictionary<int, Row[]> Table = new()',
+         '    {']
+
+    def one(r):
+        return 'new(%s)' % ', '.join(('true' if v else 'false') if isinstance(v, bool) else '%d' % v for v in r)
+
+    for w, rows in sw.items():
+        nm = ' '.join((names.get(w) or '').split())
+        L.append('        [%d] = [%s],   // %s · 0x%x' % (w, ', '.join(one(r) for r in rows), nm, res[w]['handler']))
+    L += ['    };', '}', '']
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(L))
+
+
 def summarize(out, table, stats, arrive, cellloop):
     c, wk = collections.Counter(), collections.defaultdict(set)
 
@@ -755,6 +979,7 @@ def main():
     ap.add_argument('game')
     ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs'))
     ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxExtra.g.cs'))
+    ap.add_argument('--swarm', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxSwarm.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 쓰고 통계만')
     ap.add_argument('--report', help='줄마다 (work, 이름, 핸들러, 줄, 메모, 생성 주소) 를 TSV 로')
     a = ap.parse_args()
@@ -783,9 +1008,14 @@ def main():
                 for k, b, note, va in rows:
                     f.write('%d\t%s\t0x%x\t%s\t%s\t0x%x\n' % (w, ' '.join((names.get(w) or '').split()), res[w]['handler'],
                                                               fmt(k, b), '; '.join(note), va))
+    sw = swarm_rows(out)
+    print('떼 표: work %d개 · 줄 %d개 · 불확실 %d줄' % (len(sw), sum(len(v) for v in sw.values()),
+                                              sum(1 for v in sw.values() for r in v if not r[-1])))
     if not a.dry:
         write(a.out, out, res, names, arrive)
         print('%s 를 적었다' % os.path.relpath(a.out, os.path.join(HERE, '..', '..')))
+        write_swarm(a.swarm, sw, res, names)
+        print('%s 를 적었다' % os.path.relpath(a.swarm, os.path.join(HERE, '..', '..')))
 
 
 if __name__ == '__main__':

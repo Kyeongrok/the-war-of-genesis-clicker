@@ -334,16 +334,41 @@ internal sealed unsafe partial class BattleScene
                 // 그 밖 이동기(ba-21 fx F2, 원본 식 확인) — 전에는 제자리에 한 장으로 섰다. 그 밖(9)은 아직 제자리.
                 // 떠오름(0x100c5c10 → 틱 0x10038da0): 높이 z 만 바뀐다 — T(= MaxSpeed, 음수면 내려옴, MinSpeed 가 있으면 그 너비로 흔들린 값)만큼
                 // 틱당 빠르기(ScalePermille/1000)로. 화면에서는 높이 × 12/20(0x100ea910). 좌우 1~3px 흔들림(타원 윤곽 길)은 안 넣었다.
+                // 조각 떼(WorkFxSwarm) — 원본 핸들러는 이 이펙트를 고리 안에서 수십 개 만든다: 자리는 기준 ± 너비/2, 조각마다 늦게.
+                var swarm = extra is { } keyed && WorkFxSwarm.Table.TryGetValue(w.Id, out var swarmRows)
+                    ? swarmRows.FirstOrDefault(r => r.Obs == e.Obs && r.Motion == e.Motion && r.Delay == keyed.Delay) : default;
+                int pieces = Math.Max(1, swarm.Count);
                 if (extra is { Move: 2, ScalePermille: > 0 } rise && rise.MaxSpeed != 0 && !e.Fly)
                 {
-                    int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
-                    _shots.Add((e.Obs, e.Motion, start, x, y - e.Lift, x, y - e.Lift - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
+                    for (int n = 0; n < pieces; n++)
+                    {
+                        int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
+                        int px = x + (swarm.XWidth > 0 ? _fxRandom.Next(swarm.XWidth) - swarm.XWidth / 2 : 0);
+                        int py = y - e.Lift + (swarm.YWidth > 0 ? (int)((_fxRandom.Next(swarm.YWidth) - swarm.YWidth / 2) * 0.8) : 0);
+                        double at = start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep) / TicksPerSecond;
+                        _shots.Add((e.Obs, e.Motion, at, px, py, px, py - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
+                    }
                     continue;
                 }
                 if (extra is { Move: 4, Mode: > 0 } ring && !e.Fly)
                 {
-                    _movers.Add((e.Obs, e.Motion, start, 4, x, y - e.Lift, 0, 0, ring.Mode, ring.Speed, ring.MaxSpeed,
-                                 ring.MinSpeed / 1000.0 * Math.PI, ring.ScalePermille / 1000.0 * Math.PI, mirrored));   // 각·각속도는 π 단위(0x10039410)
+                    // 점은 틱마다 하나를 미리 셈한다(0x10039410) — 각·각속도는 π 단위, 각속도와 높이 빠르기는 틱마다 바뀔 수 있다(오버플로우·리미트플로우).
+                    for (int n = 0; n < pieces; n++)
+                    {
+                        double a = ring.MinSpeed / 1000.0 + n * swarm.AngleStepPermille / 1000.0, turn = ring.ScalePermille / 1000.0;
+                        double dz = swarm.Dz0Permille / 1000.0, z = 0;
+                        var points = new (int X, int Y)[ring.Mode];
+                        for (int t = 0; t < ring.Mode; t++)
+                        {
+                            double r = Math.Truncate(ring.Speed + t * (double)(ring.MaxSpeed - ring.Speed) / ring.Mode);
+                            dz = swarm.DzMultiply ? dz * swarm.DzKPermille / 1000.0 : dz + swarm.DzKPermille / 1000.0;
+                            z += dz;
+                            points[t] = ((int)(x + r * Math.Cos(a * Math.PI)), (int)(y - e.Lift + r * Math.Sin(a * Math.PI) * TileH / TileW - z * 0.6));
+                            turn = swarm.W2Multiply ? turn * swarm.W2Permille / 1000.0 : turn + swarm.W2Permille / 1000.0;
+                            a += turn;
+                        }
+                        _ringTrails.Add((e.Obs, e.Motion, start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep) / TicksPerSecond, points, mirrored));
+                    }
                     _fxLatestStart = Math.Max(_fxLatestStart, start);
                     continue;
                 }
