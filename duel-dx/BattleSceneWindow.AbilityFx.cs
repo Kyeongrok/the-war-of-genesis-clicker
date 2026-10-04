@@ -233,6 +233,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>지금 행동이 띄운 이펙트 가운데 가장 늦은 것의 시작 때(게임 초).</summary>
     private double _fxLatestStart;
 
+    /// <summary>지금 행동의 판정 대상(유닛 하나를 겨눈 AI·사건이면 그 하나) — 대상별 이펙트가 판정과 같은 목록을 쓴다. null 이면 범위 안 전원.</summary>
+    private List<int>? _fxTargets;
+
+    /// <summary>방금 띄운 대상별 이펙트의 엇갈림 틱(확실한 것) — 판정도 이 간격으로 든다. 0 이면 한꺼번에.</summary>
+    private int _fxStagger;
+
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
@@ -266,76 +272,77 @@ internal sealed unsafe partial class BattleSceneWindow
             double start = _lastTime + e.Delay / TicksPerSecond;
             // 줄별 덧정보(WorkFxExtra.g.cs, ba-21 fx 「덧정보 표 생성 기록」) — 좌우 뒤집기 · 기준 자리에서의 치우침 · 대상마다 하나씩(엇갈림) · 직선탄의 빠르기.
             int userDir = user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 };
-            WorkFxExtra.Row? extra = null;
+            // 같은 열쇠의 Row 가 여럿이면 원본은 그 수만큼 따로(자리·뒤집기가 다르게) 띄운다 — Row 마다 하나씩. 방향마다 값이 다른 줄은 시전자 방향 것만.
+            var rowsFor = new List<WorkFxExtra.Row?>();
             if (WorkFxExtra.Table.TryGetValue(w.Id, out var extras))
             {
-                foreach (var r in extras)
-                    if (r.Obs == e.Obs && r.Motion == e.Motion && r.Delay == e.Delay && (r.Facing == e.Facing || r.Facing == userDir))
-                    {
-                        extra = r;
-                        if (r.Facing == userDir) break;      // 방향마다 값이 다른 줄은 시전자 방향 것을 쓴다
-                    }
+                var same = extras.Where(r => r.Obs == e.Obs && r.Motion == e.Motion && r.Delay == e.Delay).ToList();
+                var facing = same.Where(r => r.Facing == userDir && r.Facing != e.Facing).ToList();
+                foreach (var r in facing.Count > 0 ? facing : same.Where(r => r.Facing == e.Facing)) rowsFor.Add(r);
             }
-            bool mirrored = extra is { Mirror: 2 } || (extra is { Mirror: 1 } && user.Facing == Facing.Right);
-            if (extra is { } ex && !(ex.Move == 1 && ex.To == 2)) (x, y) = (x + ex.Dx, y + ex.Dy);
-            // 직선탄(0x100c3490) — 출발·도착을 읽은 것, 또는 표가 「날기」로 적은 줄: 틱당 빠르기와 가속·감속으로 난다. 전에는 모션 길이 동안 등속이었다.
-            if (extra is { Move: 1, Speed: > 0 } shot && (e.Fly || shot.From != 3) && !(e.Obs == PsychicBolt && PsychicOrbs(user) != null))
+            if (rowsFor.Count == 0) rowsFor.Add(null);
+            var (baseX, baseY) = (x, y);
+            foreach (var extra in rowsFor)
             {
-                (double X, double Y) from = shot.From == 1 ? (targetX, targetY - e.Lift) : (userX, userY - e.Lift);
-                (double X, double Y) to = shot.To switch
+                (x, y) = (baseX, baseY);
+                bool mirrored = extra is { Mirror: 2 } || (extra is { Mirror: 1 } && user.Facing == Facing.Right);
+                bool vectorShot = extra is { Move: 1 } v && (v.To == 2 || (v.From == v.To && (v.Dx != 0 || v.Dy != 0)));
+                if (extra is { } ex && !vectorShot) (x, y) = (x + ex.Dx, y + ex.Dy);
+                // 직선탄(0x100c3490) — 틱당 빠르기와 가속·감속으로 난다(전에는 모션 길이 동안 등속). 도착을 아는 것만: 벡터(출발 + (Dx,Dy)) ·
+                // 시전자 ↔ 대상 · 표가 「날기」로 적은 줄(시전자 → 대상). 도착을 못 읽은 제자리 줄은 전처럼 제자리에 띄운다.
+                if (extra is { Move: 1, Speed: > 0 } shot && !(e.Obs == PsychicBolt && PsychicOrbs(user) != null)
+                    && (vectorShot || (shot.From != shot.To && shot.To is 0 or 1 && shot.From is 0 or 1) || e.Fly))
                 {
-                    0 => (userX, userY - e.Lift),
-                    2 => (from.X + shot.Dx, from.Y + shot.Dy),
-                    _ => shot.From == 1 ? (userX, userY - e.Lift) : (targetX, targetY - e.Lift),
-                };
-                _shots.Add((e.Obs, e.Motion, start, from.X, from.Y, to.X, to.Y, shot.Speed, shot.Mode == 1 ? shot.ScalePermille / 1000.0 : shot.ScalePermille / 1000.0,
-                            shot.Mode, shot.MinSpeed, shot.MaxSpeed, mirrored));
-                goto sounds;
-            }
-            // 대상마다 하나씩(0x1009f9c5 헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …) — 겨눈 칸 한 곳이 아니라 범위 안 유닛마다, 엇갈림 틱만큼 늦게.
-            if (extra is { PerTarget: true } each && !e.Fly && WorkTargets(w, user, col, row) is { Count: > 0 } eachTargets)
-            {
-                for (int i = 0; i < eachTargets.Count; i++)
-                {
-                    var (tx, ty) = UnitFoot(_units[eachTargets[i]]);
-                    double at = start + i * each.Stagger / TicksPerSecond;
-                    if (e.Life > 0) AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
-                    else
+                    (double X, double Y) from = shot.From == 1 ? (targetX, targetY - e.Lift) : (userX, userY - e.Lift);
+                    (double X, double Y) to = vectorShot ? (from.X + shot.Dx, from.Y + shot.Dy)
+                                            : shot.From == 1 ? (userX, userY - e.Lift) : (targetX, targetY - e.Lift);
+                    if (Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y) >= 1)
                     {
-                        var item = (e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift);
-                        _effects.Add(item);
-                        if (mirrored) _effectMirrors.Add(item);
-                    }
-                }
-                _fxLatestStart = Math.Max(_fxLatestStart, start + (eachTargets.Count - 1) * each.Stagger / TicksPerSecond);
-                goto sounds;
-            }
-            if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
-                for (int k = 0; k < 2; k++)
-                {
-                    // 체질이 있으면 빛 구슬 둘이 꼬리(작은 구슬)를 달고 날아간다 — 둘째는 조금 늦게(가설: 원본은 출발점을 15 앞으로 둔다).
-                    double at = start + k * 3 / TicksPerSecond;
-                    _flyingEffects.Add((big, 2, at, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
-                    _flyingEffects.Add((small, 2, at + 2 / TicksPerSecond, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
-                }
-            else if (e.Fly)
-                _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
-            else
-                for (int k = 0; k < Math.Max(1, e.Count); k++)
-                {
-                    if (e.Life > 0)
-                    {
-                        // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
-                        AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                        _shots.Add((e.Obs, e.Motion, start, from.X, from.Y, to.X, to.Y, shot.Speed, shot.ScalePermille / 1000.0,
+                                    shot.Mode, shot.MinSpeed, shot.MaxSpeed, mirrored));
                         continue;
                     }
-                    // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
-                    int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
-                    var one = (e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy);
-                    _effects.Add(one);
-                    if (mirrored) _effectMirrors.Add(one);
                 }
-            sounds:
+                // 대상마다 하나씩(0x1009f9c5 헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …) — 겨눈 칸 한 곳이 아니라 판정 대상마다, 엇갈림 틱만큼 늦게.
+                if (extra is { PerTarget: true } each && !e.Fly && (_fxTargets ?? WorkTargets(w, user, col, row)) is { Count: > 0 } eachTargets)
+                {
+                    for (int i = 0; i < eachTargets.Count; i++)
+                    {
+                        var (tx, ty) = UnitFoot(_units[eachTargets[i]]);
+                        double at = start + i * each.Stagger / TicksPerSecond;
+                        if (e.Life > 0) AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
+                        else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
+                    }
+                    if (each.StaggerSure) _fxStagger = Math.Max(_fxStagger, each.Stagger);
+                    _fxLatestStart = Math.Max(_fxLatestStart, start + (eachTargets.Count - 1) * each.Stagger / TicksPerSecond);
+                    continue;
+                }
+                if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
+                    for (int k = 0; k < 2; k++)
+                    {
+                        // 체질이 있으면 빛 구슬 둘이 꼬리(작은 구슬)를 달고 날아간다 — 둘째는 조금 늦게(가설: 원본은 출발점을 15 앞으로 둔다).
+                        double at = start + k * 3 / TicksPerSecond;
+                        _flyingEffects.Add((big, 2, at, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                        _flyingEffects.Add((small, 2, at + 2 / TicksPerSecond, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                    }
+                else if (e.Fly)
+                    _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                else
+                    for (int k = 0; k < Math.Max(1, e.Count); k++)
+                    {
+                        if (e.Life > 0)
+                        {
+                            // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
+                            AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                            continue;
+                        }
+                        // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
+                        int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
+                        (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy));
+                    }
+            }
+            (x, y) = (baseX, baseY);
+
             // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
             // 썬더 스톰의 217:0 은 시작(A) 목록 소리 114 를 이펙트가 도는 동안 되풀이한다(0x100d2aa0, 감사4 S3).

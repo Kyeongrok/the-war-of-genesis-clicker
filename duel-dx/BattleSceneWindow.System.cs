@@ -503,6 +503,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _planetZoomAt = -1;
         _flyingEffects.Clear();
         _shots.Clear();
+        _fxLatestStart = 0;
         _effectMirrors.Clear();
         _swords.Clear();
         _preludeDots.Clear();
@@ -999,6 +1000,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _planetZoomAt = -1;
         _flyingEffects.Clear();
         _shots.Clear();
+        _fxLatestStart = 0;
         _effectMirrors.Clear();
         _swords.Clear();
         _preludeDots.Clear();
