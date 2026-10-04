@@ -36,7 +36,8 @@ internal sealed unsafe partial class BattleSceneWindow
             2 => now < value,
             3 => now <= value,
             4 => now > value,
-            _ => now >= value,
+            5 => now >= value,
+            _ => false,                 // 연산자 6 이상은 늘 거짓이다(0x100fda48, ba-21 outer-rules N2)
         };
     }
 
