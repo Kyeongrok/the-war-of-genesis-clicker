@@ -164,6 +164,8 @@ internal sealed unsafe partial class BattleScene
         var range = ComputeRange(u);
         string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {host.RowAt(bx, by)} unitAt {host.UnitAtBoard(bx, by)} object {ObjectAt(col, host.RowAt(bx, by))?.Data.Id} "
                    + $"turn {u.ChrCode}({u.Col},{u.Row}) reach {range?.CanReach(row * host.Cols + col)} path {(range is { } r ? PathWithin(r, u.Col, u.Row, row * host.Cols + col)?.Count : null)}";
+        // 그 칸과 살아 있는 적들 칸의 커서(45 = 칼) · 걸어가 칠 길이 있나 — 커서와 클릭 판정이 어긋나는지 본다.
+        why += $" cursor {host.CursorFor(bx, by)} foes [{string.Join(' ', host._units.Where(f => f.Alive && f.OnField && !f.IsAlly).Select(f => $"{f.Col},{f.Row}:{host.CursorFor(f.Col * TileW + TileW / 2, host.CellTop(f.Col, f.Row) + TileH / 2)}{(FindAttackPath(_turn, Array.IndexOf(host._units, f)) != null ? "+" : "-")}{(range?.Red[f.Row * host.Cols + f.Col] == true ? "R" : "")}"))}]";
         host.OnClick((int)((bx - host._camX) * host._zoom + host.ViewOffsetX), (int)((by - host._camY) * host._zoom + host.ViewOffsetY));
         why += $" → queued {u.Path.Count} toast '{host._toast}'";
         if (BattleScene.Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);

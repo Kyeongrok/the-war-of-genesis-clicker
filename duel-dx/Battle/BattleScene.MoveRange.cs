@@ -243,7 +243,10 @@ internal sealed unsafe partial class BattleScene
             foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
             {
                 int nx = col + dx, ny = row + dy, j = ny * host.Cols + nx;
-                if ((uint)nx >= host.Cols || (uint)ny >= host.Rows || prev[j] != -2 || !range.CanReach(j)) continue;
+                if ((uint)nx >= host.Cols || (uint)ny >= host.Rows || prev[j] != -2) continue;
+                // 설 수는 없어도 지나갈 수 있는 칸(지나가도 되는 아군이 선 칸·열린 문 — 영역을 셀 때 밟고 지나간 칸이라 Prev 가 있다)은 길에 넣는다.
+                // 전에는 그런 칸을 길에서 빼서, 아군 너머의 파란 칸으로 못 걷고 그 칸에서만 닿는 적은 빨간 칸인데도 못 쳤다(사용자 보고: Btl 0298 크리스티앙).
+                if (!range.CanReach(j) && !(j != target && range.Prev[j] >= 0)) continue;
                 prev[j] = i;
                 if (j == target)
                 {

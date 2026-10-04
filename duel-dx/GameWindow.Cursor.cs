@@ -34,6 +34,9 @@ internal sealed unsafe partial class GameWindow
             if (by < GridTop || row < 0 || Btl._turn < 0 || !Btl.CanAimAt(w, _units[Btl._turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }
+        // 칠 수 있는 적 물체(포탑·방어 시설)면 칼 커서 — 클릭하면 걸어가 친다(TryAttackObject).
+        if (Btl.IsPlayerTurn && by >= GridTop && Btl._turn >= 0 && Btl.ObjectAt(bx / TileW, RowAt(bx, by)) is { Data.Breakable: true, Alive: true } foe
+            && BattleScene.ObjectHostile(foe, _units[Btl._turn]) && !Btl._opened.Contains(foe)) return CursorAttack;
         // 걸어가서 손댈 수 있는 물체(상자·문)면 주먹 커서 — 원본 「닿을 수 있는 오브젝트 칸」(층 1, 0x1006d0f0 갈래 4).
         if (Btl.IsPlayerTurn && by >= GridTop && Btl.ObjectAt(bx / TileW, RowAt(bx, by)) is { } near
             && Btl.FindTouchPath(_units[Btl._turn], near) != null) return CursorTouch;
