@@ -518,10 +518,17 @@ public sealed class GameDatabase
                     || System.Text.Json.Nodes.JsonNode.Parse(System.Text.Encoding.UTF8.GetString(b)) is not System.Text.Json.Nodes.JsonObject o
                     || o["code"]?.GetValue<int>() is not int code) continue;
                 int? face = o["faceId"]?.GetValue<int>(), sprite = o["spriteId"]?.GetValue<int>();
+                // "abilities": [{ "id": 3, "level": 2 }, …] — 적으면 그 인물의 어빌리티 목록을 <b>통째로</b> 이것으로 바꾼다(편집기 캐릭터 스탯 > 어빌리티 편집).
+                (ushort Ability, ushort Level)[]? abilities = o["abilities"] is System.Text.Json.Nodes.JsonArray list
+                    ? [.. list.OfType<System.Text.Json.Nodes.JsonObject>()
+                              .Select(a => ((ushort)(a["id"]?.GetValue<int>() ?? 0), (ushort)Math.Max(1, a["level"]?.GetValue<int>() ?? 1)))
+                              .Where(a => a.Item1 != 0)]
+                    : null;
                 edits[code] = c => c with
                 {
                     FaceId = face is int f ? (ushort)f : c.FaceId,
                     SpriteId = sprite is int s ? (ushort)s : c.SpriteId,
+                    Abilities = abilities ?? c.Abilities,
                 };
             }
             catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException) { }

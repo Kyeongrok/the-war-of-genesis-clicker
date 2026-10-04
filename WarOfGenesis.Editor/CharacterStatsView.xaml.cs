@@ -58,8 +58,99 @@ public partial class CharacterStatsView : UserControl
     public CharacterStatsView() => InitializeComponent();
 
     /// <summary>목록을 채운다 — 원본 게임 폴더가 아니라 우리 게임이 쓰는 <c>assets/data</c> 자료로(사용자 요청).</summary>
+    private GameDatabase? _db;
+
+    /// <summary>
+    /// 고른 인물의 어빌리티 목록을 고친다 — 줄마다 어빌리티와 레벨, 「추가」·「삭제」, 「저장」을 누르면 <c>assets/data/chr-edits/NNNN.json</c> 의
+    /// <c>abilities</c> 에 적는다(그 파일의 다른 칸은 그대로). 저장 뒤 목록을 다시 읽어 보인다.
+    /// </summary>
+    private void EditAbilities_Click(object sender, RoutedEventArgs e)
+    {
+        if (_db is not { } db || List.SelectedItem is not Row row || db.Character(row.Code) is not { } c) return;
+        var choices = db.Abilities.Values.OrderBy(a => a.Id).Select(a => $"{a.Id} {db.T(a.NameId)}").ToList();
+        var dialog = new Window
+        {
+            Title = $"어빌리티 편집 — {row.Code:D4} {row.Name}", Width = 420, Height = 520, Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        var rows = new StackPanel();
+        void AddLine(int ability, int level)
+        {
+            var line = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var remove = new Button { Content = "삭제", Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(6, 0, 0, 0) };
+            DockPanel.SetDock(remove, Dock.Right);
+            var levelBox = new TextBox { Text = level.ToString(), Width = 44, Margin = new Thickness(6, 0, 0, 0), ToolTip = "레벨" };
+            DockPanel.SetDock(levelBox, Dock.Right);
+            var box = new ComboBox { IsEditable = true, IsTextSearchEnabled = true, ItemsSource = choices, Text = choices.FirstOrDefault(t => t.StartsWith(ability + " ", StringComparison.Ordinal)) ?? "" };
+            remove.Click += (_, _) => rows.Children.Remove(line);
+            line.Children.Add(remove);
+            line.Children.Add(levelBox);
+            line.Children.Add(box);
+            rows.Children.Add(line);
+        }
+        foreach (var (ability, level) in c.Abilities.Where(a => a.Ability != 0)) AddLine(ability, level);
+        var add = new Button { Content = "추가", Padding = new Thickness(12, 2, 12, 2), Margin = new Thickness(0, 6, 6, 0) };
+        add.Click += (_, _) => AddLine(0, 1);
+        var save = new Button { Content = "저장", Padding = new Thickness(12, 2, 12, 2), Margin = new Thickness(0, 6, 6, 0), IsDefault = true };
+        var reset = new Button { Content = "원본으로", Padding = new Thickness(12, 2, 12, 2), Margin = new Thickness(0, 6, 0, 0), ToolTip = "덮어쓴 어빌리티 목록을 지우고 .chr 의 것으로 되돌린다" };
+        static int Leading(string text)
+        {
+            int end = 0;
+            while (end < text.Length && char.IsDigit(text[end])) end++;
+            return end > 0 && int.TryParse(text[..end], out int v) ? v : 0;
+        }
+        void Write(System.Text.Json.Nodes.JsonArray? abilities)
+        {
+            string folder = Path.Combine(AssetsFolder.Find("data"), GameDatabase.CharacterEditFolder);
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, $"{row.Code:D4}.json");
+            var node = File.Exists(path) && System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path)) is System.Text.Json.Nodes.JsonObject known
+                ? known : new System.Text.Json.Nodes.JsonObject { ["code"] = row.Code, ["name"] = row.Name };
+            node.Remove("abilities");
+            if (abilities != null) node["abilities"] = abilities;
+            // 덮어쓸 것이 하나도 안 남으면(code·name 뿐) 파일을 지운다.
+            if (abilities == null && node.All(kv => kv.Key is "code" or "name")) { if (File.Exists(path)) File.Delete(path); }
+            else File.WriteAllText(path, node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+            dialog.DialogResult = true;
+        }
+        save.Click += (_, _) =>
+        {
+            var list = new System.Text.Json.Nodes.JsonArray();
+            foreach (DockPanel line in rows.Children.OfType<DockPanel>())
+            {
+                int id = Leading(line.Children.OfType<ComboBox>().First().Text.Trim());
+                if (id == 0 || !db.Abilities.ContainsKey(id)) continue;
+                int level = int.TryParse(line.Children.OfType<TextBox>().First().Text.Trim(), out int lv) ? Math.Clamp(lv, 1, 99) : 1;
+                list.Add(new System.Text.Json.Nodes.JsonObject { ["id"] = id, ["level"] = level, ["name"] = db.T(db.Abilities[id].NameId) });
+            }
+            Write(list);
+        };
+        reset.Click += (_, _) => Write(null);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(add);
+        buttons.Children.Add(save);
+        buttons.Children.Add(reset);
+        var panel = new DockPanel { Margin = new Thickness(10) };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        var note = new TextBlock { Text = "원본 .chr 은 그대로 두고 assets/data/chr-edits 에 적는다. 새로 여는 전투부터 반영된다.", Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
+        DockPanel.SetDock(note, Dock.Top);
+        panel.Children.Add(note);
+        panel.Children.Add(buttons);
+        panel.Children.Add(new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        dialog.Content = panel;
+        if (dialog.ShowDialog() != true) return;
+        // 덮어쓰기는 자료 개체가 한 번 읽어 들고 있으므로 새로 읽는다.
+        int code = row.Code;
+        int category = CategoryBox.SelectedIndex;
+        Load(GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))), Enumerable.Range(0, 1000));
+        if (category >= 0 && category < CategoryBox.Items.Count) CategoryBox.SelectedIndex = category;
+        List.SelectedItem = List.Items.Cast<Row>().FirstOrDefault(r => r.Code == code);
+        if (List.SelectedItem != null) List.ScrollIntoView(List.SelectedItem);
+    }
+
     public void Load(GameDatabase db, IEnumerable<int> codes)
     {
+        _db = db;
         _portraits.Clear();
 
         var rows = new List<Row>();

@@ -149,6 +149,14 @@
                     </ItemsControl>
 
                     <TextBlock Style="{StaticResource Section}" Text="어빌리티 (레벨 · 다음 레벨 EXP)" />
+                    <Button
+                        Margin="0,0,0,4"
+                        Padding="10,2"
+                        HorizontalAlignment="Left"
+                        AutomationProperties.AutomationId="StatsEditAbilities"
+                        Click="EditAbilities_Click"
+                        Content="어빌리티 편집…"
+                        ToolTip="이 인물이 처음부터 가진 어빌리티를 고친다 — assets/data/chr-edits/NNNN.json 에 적히고 원본 .chr 은 그대로 둔다. 새로 여는 전투부터 반영된다(이미 파티에 든 인물·세이브는 제 기록을 쓴다)." />
                     <ItemsControl ItemsSource="{Binding AbilityItems}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
