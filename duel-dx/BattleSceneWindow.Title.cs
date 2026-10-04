@@ -102,9 +102,12 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void PressTitleButton(int button) =>
+    private void PressTitleButton(int button)
+    {
+        if (button is < 0 or > 2) return;         // 단추 밖을 누른 것
         // 16틀 검게 + 음악 100 → 10% 뒤에 넘어간다(0x10105420). CONTINUE 는 곡이 이어진다. EXIT 도 페이드 뒤 끝난다.
         LeaveScene(() => RunTitleButton(button), keepMusic: button == 1);
+    }
 
     private void RunTitleButton(int button)
     {

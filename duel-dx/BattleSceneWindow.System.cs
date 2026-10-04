@@ -497,6 +497,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _blinkGhosts.Clear();
         _legionGhosts.Clear();
         _legionFades.Clear();
+        _legionStageEnd = 0;
         _stageDraws.Clear();
         _planetZoomAt = -1;
         _flyingEffects.Clear();
@@ -947,6 +948,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _blinkGhosts.Clear();
         _legionGhosts.Clear();
         _legionFades.Clear();
+        _legionStageEnd = 0;
         _stageDraws.Clear();
         _planetZoomAt = -1;
         _flyingEffects.Clear();
@@ -987,6 +989,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 자세(+0x4d4)도 되살린다 — 전에는 0 으로 덮어 방어·회피 자세로 차례를 넘긴 인물이 불러오면 자세를 잃었다(ba-15 Q5 #4).
             (u.Hp, u.Tp, u.Soul, u.Alive, u.HasTurn, u.Stance) = (s.Hp, s.Tp, s.Soul, s.Alive, s.HasTurn, s.Stance);
             u.Fade = 1;   // 쓰러짐·순간이동 페이드 도중에 불러와도 흐린 채 남지 않게
+            u.BeginEntry(0, 0);   // 걸어 들어오던 중이었어도 선 자리에
             if (s.Side >= 0) u.Side = s.Side;
             u.Detached = s.Detached ?? false;
             if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)

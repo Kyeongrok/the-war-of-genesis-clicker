@@ -1136,6 +1136,8 @@ internal sealed unsafe partial class BattleSceneWindow
             while (a.IsBusy) yield return true;   // 남은 동작을 마저 재생한다
         }
 
+        // 군단기 연출이 끝나 모두 다시 보일 때까지 기다린다 — 부하의 걸어가 치기도 그 뒤에.
+        while (_lastTime < _legionStageEnd) yield return true;
         // 사거리 밖이던 부하는 먼저 걸어간 뒤 친다(원본 0x1005f1c0: 명령1 이동 → 명령2 기술).
         if (_followerStrikes.Count > 0)
         {

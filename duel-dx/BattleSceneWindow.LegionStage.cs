@@ -39,6 +39,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 $"legion stage work {w.Id} leader {leader.ChrCode} followers {followers.Count}" + Environment.NewLine);
         if (followers.Count == 0) return 0;
         double t0 = _lastTime;
+        int fadesBefore = _legionFades.Count;
         var (lx, ly) = UnitFoot(leader);
         var aim = (X: col * TileW + TileW / 2, Y: CellCenterY(col, row));
         int reach = Math.Max(1, RangeMaxOf(w, leader) / 4);
@@ -74,8 +75,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     Hide(all[i], 0);
                     Ghost(all[i], Run, Toward(Foot(all[i]), spots[i]), 0, Foot(all[i]), spots[i], 20, 20);
                 }
-                int n = Math.Max(1, targets.Count);
-                for (int k = 0; k < targets.Count; k++)
+                int n = Math.Clamp(targets.Count, 1, 6);   // 대상이 많아도 여섯 번까지만 가로지른다(대기가 끝없이 길어지지 않게)
+                for (int k = 0; k < n && k < targets.Count; k++)
                 {
                     var m = all[k % all.Count];
                     var (tx, ty) = UnitFoot(_units[targets[k]]);
@@ -232,18 +233,22 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             }
         }
-        double last = _legionFades.Count > 0 ? _legionFades.Max(f => f.At) : t0;
+        double last = _legionFades.Count > fadesBefore ? _legionFades.Skip(fadesBefore).Max(f => f.At) : t0;
+        _legionStageEnd = Math.Max(_legionStageEnd, last);
         return Math.Max(0, last - t0 - 50 / TicksPerSecond);
     }
 
     /// <summary>숨김·보임 시각표 — 갱신 틀마다(그리기와 따로 돌아야 화면 밖에서도 멈추지 않는다).</summary>
+    /// <summary>군단기 연출이 다 끝나는 때 — 행동 루틴이 그때까지 기다린다(숨은 유닛이 남은 채 다음 차례가 시작되지 않게).</summary>
+    private double _legionStageEnd;
+
     private void StepLegionFades()
     {
         for (int i = _legionFades.Count - 1; i >= 0; i--)
         {
             var (at, unit, fade) = _legionFades[i];
             if (_lastTime < at) continue;
-            if (unit.Alive) unit.Fade = fade;
+            if (unit.Alive || fade >= 1) unit.Fade = fade;   // 다시 보이기는 쓰러진 유닛에도 건다
             _legionFades.RemoveAt(i);
         }
     }

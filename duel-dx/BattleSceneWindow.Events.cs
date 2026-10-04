@@ -305,7 +305,9 @@ internal sealed unsafe partial class BattleSceneWindow
                     _eventWaitUntil = _lastTime + ((a.Args.Length > 0 ? a.Args[0] : 0)
                                                  | ((a.Args.Length > 1 ? a.Args[1] : 0) << 16)) / TicksPerSecond;
                     break;
-                case 3: _runningEvent = -1; _talkSkip = false; return;  // 중단
+                case 3:                                                 // 중단
+                    if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술은 끝까지
+                    _runningEvent = -1; _talkSkip = false; return;
                 case 400 or 402 or 906 when !_talkSkip && !waitNext:
                     // 뒤에 1 이 없는 카메라 줄(400 → 2 27곳 · 400 → 200 3곳 · 906 → 2 4곳)은 스크롤을 걸어만 두고 다음 줄과 같이 간다.
                     EventCameraWaits(a);
@@ -338,7 +340,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 default:
                     bool hadRoutine = _eventRoutine != null;
                     RunEventAction(a);
-                    if (_outcome.Length > 0) { _runningEvent = -1; _talkSkip = false; return; }
+                    if (_outcome.Length > 0) { _eventRoutine = null; _eventRoutineFree = false; _runningEvent = -1; _talkSkip = false; return; }
                     if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !_talkSkip;
                     break;
             }
@@ -349,8 +351,17 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 방금 띄운 대사가 클릭을 안 기다리고 다음 줄과 같이 가나 — 바로 뒤가 행동 1 이 아닐 때. 다만 뒤가 또 대사(창이 하나라 겹쳐 못 띄운다)거나
     /// 전투 결과(6·10·11 — 원본은 말풍선이 뜨자마자 전투가 끝난다, 0262 한 곳)거나 사건의 끝이면 읽을 수 있게 기다린다(일부러 둔 차이).
     /// </summary>
-    private bool TalkRidesOn(BattleEvent e) =>
-        _eventPc < e.Actions.Count && e.Actions[_eventPc].Code is not (1 or 3 or 6 or 10 or 11 or 600 or 601);
+    private bool TalkRidesOn(BattleEvent e)
+    {
+        // 곧바로 끝나는 줄(변수·깃발 100~103 따위)은 건너뛰며 본다 — 「601 → 102 → 11」(Btl 0285 사건 8)도 결과 앞이다.
+        for (int pc = _eventPc; pc < e.Actions.Count; pc++)
+        {
+            int code = e.Actions[pc].Code;
+            if (code is >= 100 and <= 103) continue;
+            return code is not (1 or 3 or 6 or 10 or 11 or 600 or 601);
+        }
+        return false;
+    }
 
     /// <summary>사건이 건 기술(207·909)이 줄을 안 붙들고 도는 중인가 — 뒤에 행동 1 이 없을 때.</summary>
     private bool _eventRoutineFree;
@@ -647,7 +658,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 // 200 은 인자4 의 변(0 위·1 왼·2 아래·3 오른) 바깥 100px 에서 8px/틱으로 곧장 들어와 맵 안에 들어서면 걷는다(ba-14 E7).
                 // 부하는 대장 옆으로 엇갈려 선 뒤 진형으로 따라온다(0x10050f16~). 여기서는 변의 가장자리 칸에서 걸어 들어오게 한다.
-                double longest = 0.4;
+                double longest = 0.4, entryTicks = 0;
                 int entered = 0;
                 foreach (var u in EventTargets(A(0), out _))
                 {
@@ -673,7 +684,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     if (a.Code == 200 && !_talkSkip)
                     {
                         BeginEdgeEntry(u, A(4), hasFollowers ? 100 : 140);
-                        longest += (hasFollowers ? 100 : 140) / 8.0 / TicksPerSecond;
+                        entryTicks = Math.Max(entryTicks, hasFollowers ? 100 / 8.0 : 140 / 8.0);
                     }
                     if (a.Code == 214)
                     {
@@ -691,10 +702,16 @@ internal sealed unsafe partial class BattleSceneWindow
                         follower.Facing = u.Facing;
                         _followerTarget[follower] = (col, row);
                         // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2).
-                        if (a.Code == 200 && !_talkSkip) BeginEdgeEntry(follower, A(4), 140 + 40 * (entered++ / 2));
+                        if (a.Code == 200 && !_talkSkip)
+                        {
+                            int px = 140 + 40 * (entered++ / 2);
+                            BeginEdgeEntry(follower, A(4), px);
+                            entryTicks = Math.Max(entryTicks, px / 8.0 + StepTicks * 3);   // 들어온 뒤 진형 자리로 몇 걸음
+                        }
                     }
                     if (_units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
                 }
+                longest += entryTicks / TicksPerSecond;   // 변 밖에서 들어오는 시간(가장 긴 유닛)
                 _eventMoveUntil = Math.Max(_eventMoveUntil, _lastTime + longest);   // 줄은 안 붙든다 — 뒤따르는 행동 1 이 기다린다(ba-20 V2)
                 break;
             }
