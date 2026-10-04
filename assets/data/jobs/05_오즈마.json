@@ -4,7 +4,7 @@
   "forms": [
     {
       "form": "일반형",
-      "abilities": [31, 94, 158],
+      "abilities": [94, 158],
       "stage1": { "job": 50, "needLevel": 1, "growth": [0, 0, 0, 0, 0, 0, 4, 1, 0, 6, 1, 1], "names": [0, 0, 0, 0, 0, 410], "description": 1348 },
       "stage2": { "job": 55, "needLevel": 30, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 4, 1, 1], "names": [0, 415, 420, 425, 430, 0], "description": 1348 }
     },
@@ -28,7 +28,7 @@
     },
     {
       "form": "보조형",
-      "abilities": [112, 9, 144],
+      "abilities": [9, 144],
       "stage1": { "job": 54, "needLevel": 12, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 4, 2, 1], "names": [0, 0, 0, 0, 0, 414], "description": 1352 },
       "stage2": { "job": 59, "needLevel": 42, "growth": [0, 0, 0, 0, 0, 0, 3, 2, 0, 3, 2, 1], "names": [0, 419, 424, 429, 434, 0], "description": 1352 }
     }
