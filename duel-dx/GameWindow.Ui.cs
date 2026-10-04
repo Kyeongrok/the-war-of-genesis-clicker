@@ -134,9 +134,16 @@ internal sealed unsafe partial class GameWindow
         return true;
     }
 
+    /// <summary>
+    /// 더하기 합성에 넣을 채널 값 — 아주 어두운 값(≤ 0x18)은 0 으로, 0x30 부터는 그대로, 그 사이는 곧게 잇는다.
+    /// 빛 이펙트 그림은 가장자리가 완전한 검정이 아니라 어두운 갈색(0x0C · 0x1C)으로 끝나는 것이 많아(이데아 캐논 Obs 0987),
+    /// 그대로 더하면 그림 네모가 통째로 밝게 떴다 — 여러 장이 겹치면 더 뚜렷하다(사용자 보고). 원본 화면과 견줘 정한 값은 아니다.
+    /// </summary>
+    internal static readonly byte[] AddFloor = [.. Enumerable.Range(0, 256).Select(v => (byte)(v <= 0x18 ? 0 : v < 0x30 ? (v - 0x18) * 2 : v))];
+
     internal static uint AddColor(uint d, uint c, int weight)
     {
-        uint Ch(int shift) => (uint)Math.Min(255, (int)(d >> shift & 0xFF) + (int)(c >> shift & 0xFF) * weight / 256);
+        uint Ch(int shift) => (uint)Math.Min(255, (int)(d >> shift & 0xFF) + AddFloor[c >> shift & 0xFF] * weight / 256);
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
     }
 

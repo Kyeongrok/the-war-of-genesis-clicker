@@ -49,6 +49,12 @@
                         AutomationProperties.AutomationId="StatsFilterBox"
                         TextChanged="FilterBox_TextChanged"
                         ToolTip="이름·칭호·직업·계열·번호로 찾기" />
+                    <ComboBox
+                        x:Name="CategoryBox"
+                        Margin="0,4,0,0"
+                        AutomationProperties.AutomationId="StatsCategoryBox"
+                        SelectionChanged="FilterBox_TextChanged"
+                        ToolTip="분류로 거르기 — 아군 주인공(파티 레벨 성장 면제 명단) · 적군 주인공(적으로 서는 이름 있는 인물) · 부대 리더 · 부대원(군단 부하). 쓰임새로 어림한 분류다." />
                     <DockPanel Margin="0,4,0,0">
                         <TextBlock
                             x:Name="StatusText"
