@@ -227,7 +227,7 @@ internal sealed unsafe partial class MosesScene
             if (i >= 5) break;
             host.DrawText(line, ox + 450, oy + 268 + i * 15, White, 11);
         }
-        for (int xx = ox + 450; xx < ox + 620; xx++) host.SetPixel(xx, oy + 360, BoxLine);
+        for (int xx = ox + 450; xx < ox + 620; xx++) host.SetPixel(xx, oy + 360, StatusScreen.BoxLine);
         host.DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
         // 부하 칸 도움말(0x100f7b50, ba-20 S 6) — 마우스가 얹힌 진형 칸(dx = ⌊(mx−130)/40⌋, dy = ⌊(my−170)/32⌋, |dx|+|dy| ≤ 2, 대장 칸 제외)에
         // 부하가 있으면 화면 (296,75) 에 틀 없이 흰 글: 이름·소속·직업 / LP·PSY·DEP·DEX / [어빌리티] 최대 다섯 줄. 딱지는 TXR 827~834.
@@ -285,7 +285,7 @@ internal sealed unsafe partial class MosesScene
     internal void DrawLegionCell(int ox, int oy, int dx, int dy, string name, uint color)
     {
         int x = ox + 40 * dx + 150, y = oy + 32 * dy + 186;
-        host.StrokeRect(x - 18, y - 14, 36, 28, BoxLine);
+        host.StrokeRect(x - 18, y - 14, 36, 28, StatusScreen.BoxLine);
         // 칸이 40픽셀이라 이름이 길면 잘라 넣는다(원본은 이 자리에 부하 그림을 세운다).
         string label = name.Length > 5 ? name[..5] : name;
         var (_, w, h) = host.GetText(label, color, 10);

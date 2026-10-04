@@ -283,7 +283,7 @@ internal sealed unsafe partial class BattleScene
             uint color = enabled ? White : DimGray;
             int rx = ox + MenuRowX;
             // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
-            if (i == _abilityHover) host.DrawUi(ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
+            if (i == _abilityHover) host.DrawUi(SystemMenu.ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
             // 단축키 글자는 아이콘과 겹치지 않게 줄 오른쪽 끝에
             string hotkey = HotkeyLabel(i);
             if (hotkey.Length > 0) host.DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
@@ -306,6 +306,6 @@ internal sealed unsafe partial class BattleScene
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
             && host._db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && host._db.AbilityDescription(pressed) is { Length: > 0 } desc)
-            host.DrawDescriptionTip(desc + host.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+            host.StatusScr.DrawDescriptionTip(desc + host.StatusScr.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 }

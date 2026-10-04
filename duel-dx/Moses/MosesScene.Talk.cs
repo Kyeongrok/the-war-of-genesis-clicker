@@ -56,7 +56,7 @@ internal sealed unsafe partial class MosesScene
             var person = chp.People.FirstOrDefault(p => p.No == no) ?? (no < chp.People.Count ? chp.People[no] : null);
             if (person == null || people.Contains(person)) continue;
             int variable = person.Words.Count > 13 ? person.Words[11] : 0;
-            if (variable > 0 && !host.FlagsAllow([(variable, person.Words[12], person.Words[13])])) continue;
+            if (variable > 0 && !host.FlagSt.FlagsAllow([(variable, person.Words[12], person.Words[13])])) continue;
             people.Add(person);
             if (people.Count == 8) break;
         }
@@ -161,7 +161,7 @@ internal sealed unsafe partial class MosesScene
         var people = TalkPeople();
         if (_talkPick < 0 || _talkPick >= people.Count) return "";
         var words = TalkWords(people[_talkPick]);
-        return TalkTableFor() is { } table && words.Count > 0 ? CleanTalkText(table[words[_talkShowSlot % words.Count]]) : "";
+        return TalkTableFor() is { } table && words.Count > 0 ? TalkBox.CleanTalkText(table[words[_talkShowSlot % words.Count]]) : "";
     }
 
     /// <summary>글자는 10틱 펴진 뒤 3틱에 하나씩 나온다 — 지금까지 나온 글자 수.</summary>
@@ -210,7 +210,7 @@ internal sealed unsafe partial class MosesScene
         string line = TalkTableFor() is { } table && words.Count > 0
             ? table[words[_talkShowSlot % words.Count]] : "";
         var (px, py) = _talkBubbleSpot;
-        line = CleanTalkText(line);              // 제어 글($n·$c1)을 지운 글로 자른다 — 전에는 걸친 동안 「$」 가 찍혔다
+        line = TalkBox.CleanTalkText(line);              // 제어 글($n·$c1)을 지운 글로 자른다 — 전에는 걸친 동안 「$」 가 찍혔다
         int shown = TalkBubbleShown();
         if (shown < line.Length) line = line[..shown];
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);

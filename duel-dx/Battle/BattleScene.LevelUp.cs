@@ -114,7 +114,7 @@ internal sealed unsafe partial class BattleScene
             _levelUpCamSent = false;
 
             unit.Data = host._db.LevelUp(c, out var gains);
-            host.RefreshUnitStats(unit);
+            host.StatusScr.RefreshUnitStats(unit);
             if (!_showLevelUp) { host.Play(SoundLevelUp); continue; }
 
             _levelUpUnit = index;
@@ -189,8 +189,8 @@ internal sealed unsafe partial class BattleScene
         // 단추 그림은 <b>두 장</b>이다 — 평소(31)와 골라짐(32). 원본도 마우스가 얹히면 밝은 쪽으로 바꿔 그린다.
         bool over = host._mouse.X >= bx && host._mouse.X < bx + 76 && host._mouse.Y >= by && host._mouse.Y < by + 23;
         if (host.DrawUi(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
-        host.FillRect(bx, by, 76, 23, HeadBg);
-        host.StrokeRect(bx, by, 76, 23, BoxLine);
+        host.FillRect(bx, by, 76, 23, StatusScreen.HeadBg);
+        host.StrokeRect(bx, by, 76, 23, StatusScreen.BoxLine);
         var (_, ow, _) = host.GetText("O.K", White);
         host.DrawText("O.K", bx + (76 - ow) / 2, by + 4, White);
     }

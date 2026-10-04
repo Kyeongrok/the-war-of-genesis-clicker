@@ -643,7 +643,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when ProgressScr._progressOpen:
                 ProgressScr._progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when _statusUnit >= 0 && ScrollStatusLists(-(short)(((long)wParam >> 16) & 0xFFFF) / 120):
+            case Win32.WM_MOUSEWHEEL when _statusUnit >= 0 && StatusScr.ScrollStatusLists(-(short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 스테이터스 창의 어빌리티 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when Mos.OnMosesMailWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 모세스 메일 목록 위면 그 목록을 굴린다
@@ -656,10 +656,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 // 아이템 목록은 8줄 창이다(0x100d3830) — 휠로 굴린다. 전에는 9종째부터 고를 수 없었다(ba-20 G1).
                 Btl._itemTop = Math.Clamp(Btl._itemTop - (short)(((long)wParam >> 16) & 0xFFFF) / 120, 0, Math.Max(0, Btl.ItemRowsList().Count - BattleScene.ItemRows));
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when Btl._abilityMenu && !SystemOpen:
+            case Win32.WM_MOUSEWHEEL when Btl._abilityMenu && !Sys.SystemOpen:
                 Btl.ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when SystemOpen || Btl.LevelUpOpen || Btl._abilityMenu || Mos._mosesOpen:
+            case Win32.WM_MOUSEWHEEL when Sys.SystemOpen || Btl.LevelUpOpen || Btl._abilityMenu || Mos._mosesOpen:
                 return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:
                 // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
@@ -687,7 +687,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_RBUTTONUP:
                 Btl.CloseUnitInfo();
                 Btl._abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
-                _statusTip = null;         // 스테이터스 설명도(0x10042c00)
+                StatusScr._statusTip = null;         // 스테이터스 설명도(0x10042c00)
                 Mos._styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
                 Btl._ringHelp = null;          // 링 항목 설명도
                 return IntPtr.Zero;
@@ -724,9 +724,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
         if (ProgressScr._progressOpen) { if (key == Win32.VK_ESCAPE) ProgressScr.ToggleProgress(); return; }
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
-        if (key == Win32.VK_ESCAPE && SkipScene()) return;
-        if (OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
-        if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
+        if (key == Win32.VK_ESCAPE && Tlk.SkipScene()) return;
+        if (Tlk.OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
+        if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Tlk.SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
@@ -736,8 +736,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 연대표에서도 전투 키는 안 먹고 Esc 로 시스템 메뉴만 연다.
         if (EpisodesScr._episodesOpen)
         {
-            if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
-            OpenSystemMenu();   // 연대표 Esc 에는 소리가 없다(0x10106e50, ba-20 T6)
+            if (key != Win32.VK_ESCAPE || Sys.CloseSystemWindow()) return;
+            Sys.OpenSystemMenu();   // 연대표 Esc 에는 소리가 없다(0x10106e50, ba-20 T6)
             return;
         }
         if (Btl.OnAbilityMenuKey(key)) return;
@@ -755,23 +755,23 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Mos.MosesTurnSystem(key == Win32.VK_LEFT ? -1 : 1);
                 return;
             }
-            if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
+            if (key != Win32.VK_ESCAPE || Sys.CloseSystemWindow()) return;
             if (Mos._mosesPage is not (-1 or 0)) { Mos.MosesGoBack(); return; }   // 주 화면·항행에서는 Esc 가 시스템 메뉴다(분석-모세스 13절)
-            if (ChapterEventRunning) return;                              // 챕터 사건이 도는 동안은 메뉴가 안 열린다(0x100f78ec, ba-20 T7)
+            if (Sys.ChapterEventRunning) return;                              // 챕터 사건이 도는 동안은 메뉴가 안 열린다(0x100f78ec, ba-20 T7)
             Play(578);
-            OpenSystemMenu();
+            Sys.OpenSystemMenu();
             return;
         }
-        if (key == Win32.VK_ESCAPE && CloseSystemWindow()) return;
+        if (key == Win32.VK_ESCAPE && Sys.CloseSystemWindow()) return;
         // 전투에서 메뉴·창이 떠 있는 동안은 다른 키도 안 받는다 — 전투가 상태 25 에 서 있다(0x1006b290 하위 1, 감사5 S1).
-        if (SystemOpen && !FieldOpen) return;
+        if (Sys.SystemOpen && !FieldOpen) return;
         if (key == Win32.VK_ESCAPE)
         {
             // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6). 전투에서는 내 유닛 조종 상태(원본 상태 22)일 때만 —
             // AI 차례·행동·이벤트·배치·레벨업·결과 중에는 취소로만 쓰인다(감사5 S1·S8). 필드는 편의로 열되 SAVE 는 꺼져 있다(S3).
             if (_statusUnit >= 0) _statusUnit = -1;
             else if (Btl._ringUnit >= 0) Btl.CancelRing();
-            else if (!Btl.CancelStep(undoMove: true) && (FieldOpen || CanOpenBattleMenu)) OpenSystemMenu();
+            else if (!Btl.CancelStep(undoMove: true) && (FieldOpen || Sys.CanOpenBattleMenu)) Sys.OpenSystemMenu();
             return;
         }
         if (key == Win32.VK_RETURN && Btl._ringUnit >= 0 && Btl._ringPhase == BattleScene.RingPhase.Idle && Btl._ringHover >= 0) { Btl.PickRingItem(Btl._ringHover); return; }
@@ -810,7 +810,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case KeyAction.Item: Btl.RingShortcut(BattleScene.RingCommand.Item); break;
             case KeyAction.System:
                 if (Btl._ringUnit >= 0) Btl.RingShortcut(BattleScene.RingCommand.System);
-                else if (FieldOpen || CanOpenBattleMenu) OpenSystemMenu();   // Esc 와 같은 문(감사5 S1·S8)
+                else if (FieldOpen || Sys.CanOpenBattleMenu) Sys.OpenSystemMenu();   // Esc 와 같은 문(감사5 S1·S8)
                 break;
             case KeyAction.NextUnit:
                 for (int i = 1; i <= _units.Length; i++)
@@ -879,7 +879,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
         int next = Btl._eventNextBattle > 0 ? Btl._eventNextBattle : EpisodesScr.Episodes().Count == 0 ? _scene.NextBattle : 0;
         Btl._eventNextBattle = 0;
-        if (won && next > 0 && StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
+        if (won && next > 0 && Sys.StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
         if (won && nextField > 0 && Fld.OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
@@ -910,8 +910,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (SlotsScr._notice != null) { SlotsScr._notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
-        if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
-        if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
+        if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
+        if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
@@ -922,7 +922,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ChaptersScr.OnChaptersClick(bx, by)) return;
         if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
-        if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by)) return;
+        if (OnKeysClick(bx, by) || Sys.OnSystemClick(bx, by) || StatusScr.OnStatusClick(bx, by)) return;
         if (Btl.OnItemMenuClick(bx, by)) return;
         if (Btl.OnRingClick(bx, by) || Btl.OnAbilityMenuClick(bx, by)) return;
 
@@ -1001,7 +1001,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void ApplyAimHook()
     {
         if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
-        if (!Btl.IsPlayerTurn || Btl._routine != null || _talk != null || Btl._runningEvent >= 0 || Btl.Work(id) is not { } w) return;
+        if (!Btl.IsPlayerTurn || Btl._routine != null || Tlk._talk != null || Btl._runningEvent >= 0 || Btl.Work(id) is not { } w) return;
         _aimHookDone = true;
         var u = _units[Btl._turn];
         // DUELDX_AIMSHOW=1 이면 누르지 않고 어빌리티 목록에서 고른 것처럼만 한다 — 범위를 먼저 보이는 기술을 시험할 때.
@@ -1022,7 +1022,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         if (_clickHookDone || Environment.GetEnvironmentVariable("DUELDX_CLICKCELL")?.Split(',') is not [var cs, var rs]
             || !int.TryParse(cs, out int col) || !int.TryParse(rs, out int row)) return;
-        if (!Btl.IsPlayerTurn || Btl._routine != null || _talk != null || _units[Btl._turn].IsBusy) return;
+        if (!Btl.IsPlayerTurn || Btl._routine != null || Tlk._talk != null || _units[Btl._turn].IsBusy) return;
         _clickHookDone = true;
         var u = _units[Btl._turn];
         // DUELDX_CLICKFROM=<열>,<줄> 이면 누르기 전에 차례인 인물을 그 칸에 세운다 — 걸어가서 치는 거리를 시험할 때.
@@ -1043,7 +1043,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         ApplyClickHook();
         if (Btl._turnNo >= 1) Btl.OpenUnitInfoIfAsked();
         if (WorkHook == null || _workHookDone || Btl._routine != null || _units.Length == 0) return;
-        if (_talk != null || Btl._outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
+        if (Tlk._talk != null || Btl._outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
         if (Btl._turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
         var parts = WorkHook.Split(':');
         if (!int.TryParse(parts[0], out int id) || Btl.Work(id) is not { } w) return;
@@ -1114,17 +1114,17 @@ internal sealed unsafe partial class GameWindow : IDisposable
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
-            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && LoadBattleFrom(SlotsScreen.SlotPath(slot)) && Mos._mosesOpen
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && Sys.LoadBattleFrom(SlotsScreen.SlotPath(slot)) && Mos._mosesOpen
                 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
             {
                 if (page == 7) Mos.OpenMosesStyle(); else if (page == 6) Mos.OpenMosesLegion();
                 else if (page == 1) { Mos.MosesGoPage(1); Mos._mosesPage = 1; }   // 메일 — 배달까지 돈다
             }
-            OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
+            StatusScr.OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
         }
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
         // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
-        if (_saveSlotPending is { } pending && _lastTime > SaveHookAt) { _saveSlotPending = null; SaveBattleTo(SlotsScreen.SlotPath(pending)); }
+        if (_saveSlotPending is { } pending && _lastTime > SaveHookAt) { _saveSlotPending = null; Sys.SaveBattleTo(SlotsScreen.SlotPath(pending)); }
         SlotsScr.UpdateSlotArrows();                     // 슬롯 스크롤 화살표 누르고 있기(감사5 S9) — 타이틀·기록 화면에서도 돈다
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
@@ -1132,9 +1132,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             UpdateSounds();
             // 모세스 전직 화면의 STATUS 로 고친 어빌리티·장비를 파티 자료에 적는다 — 전에는 여기서 돌아가 버려 한 번도 안 적혔다(사용자 보고: 유진 LP증가).
-            SyncVirtualStatus();
+            StatusScr.SyncVirtualStatus();
             // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
-            if (Mos._mosesOpen && !EpisodesScr._chapterDone) { UpdateTalk(); Fld.UpdateField(); }
+            if (Mos._mosesOpen && !EpisodesScr._chapterDone) { Tlk.UpdateTalk(); Fld.UpdateField(); }
             StepSceneFadeClock();               // 타이틀·연대표·기록 화면의 들고 나는 페이드
             return;
         }
@@ -1143,8 +1143,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (FieldOpen)
         {
             UpdateSounds();
-            SyncVirtualStatus();
-            UpdateTalk();
+            StatusScr.SyncVirtualStatus();
+            Tlk.UpdateTalk();
             Fld.UpdateField();
             if (_afterFadeOut != null) StepSceneFadeClock();   // 필드에서 EXIT GAME 으로 나가는 페이드
             return;
@@ -1152,7 +1152,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         // 시스템 메뉴·슬롯·확인·음량·MISSION 창이 떠 있는 동안 전투는 선다 — 원본 상태 25(CTRL_SYS, 0x1006b290) 하위 1 은 아무것도 안 해
         // 틱·AI·이벤트·걷기가 멈춘다. 전에는 뒤에서 계속 돌아 AI 차례·행동 도중이 저장됐다(감사5 S1).
-        if (SystemOpen) { UpdateSounds(); if (_afterFadeOut != null) StepSceneFadeClock(); return; }
+        if (Sys.SystemOpen) { UpdateSounds(); if (_afterFadeOut != null) StepSceneFadeClock(); return; }
 
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
@@ -1186,10 +1186,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.UpdateCamera(dt);
         ApplyPoseHook();
         if (_fadeInStart < 0) ApplyWorkHook();
-        SyncVirtualStatus();
+        StatusScr.SyncVirtualStatus();
         UpdateSounds();
         Btl.UpdateRing();
-        UpdateTalk();
+        Tlk.UpdateTalk();
         // 페이드인 동안은 틱·이벤트가 멈춘다(원본은 페이드를 다 한 뒤에 루프로 들어간다, 0x10061ad0).
         if (_fadeInStart >= 0) return;
         Btl.StepEvent();
@@ -1266,8 +1266,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawBlinkGhosts();
         StagingAb.DrawStageFx();
         Btl.DrawEffects();
-        DrawMovies();
-        DrawRipples();
+        Mov.DrawMovies();
+        Mov.DrawRipples();
         if (_showGauges) Btl.DrawGauges();
         Btl.DrawPopups();
         Btl.DrawNumbers();
@@ -1278,12 +1278,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawRing();
         Btl.DrawAbilityMenu();
         Btl.DrawItemMenu();
-        DrawStatusScreen();
-        DrawTalk();
+        StatusScr.DrawStatusScreen();
+        Tlk.DrawTalk();
         DrawToast();
         DrawOutcomeBanner();
         Btl.DrawUnitInfo();
-        if (!Mos._mosesOpen) DrawSystem();
+        if (!Mos._mosesOpen) Sys.DrawSystem();
         Btl.DrawDeployPanel();
         DrawKeysPanel();
         TuningScr.DrawTuning();

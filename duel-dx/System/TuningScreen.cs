@@ -90,9 +90,9 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         if (!_tuningOpen || host._db is not { } db) return;
         var (x, y) = TuningOrigin();
         host.FillRect(x - 4, y - 4, TuningW + 8, TuningH + 8, 0x80000000);
-        host.FillRect(x, y, TuningW, TuningH, PanelBg);
-        host.StrokeRect(x, y, TuningW, TuningH, BoxLine);
-        host.FillRect(x, y, TuningW, 28, HeadBg);
+        host.FillRect(x, y, TuningW, TuningH, StatusScreen.PanelBg);
+        host.StrokeRect(x, y, TuningW, TuningH, StatusScreen.BoxLine);
+        host.FillRect(x, y, TuningW, 28, StatusScreen.HeadBg);
         host.DrawText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
 
         var checks = TuningChecks();
@@ -100,8 +100,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         {
             int cy = y + TuningCheckY + i * TuningCheckH;
             if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.FillRect(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
-            host.FillRect(x + 18, cy + 6, 16, 16, BoxBg);
-            host.StrokeRect(x + 18, cy + 6, 16, 16, BoxLine);
+            host.FillRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
+            host.StrokeRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
             if (checks[i].On) host.DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
             host.DrawText(checks[i].Label, x + 44, cy + 6, White);
             host.DrawText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
@@ -109,8 +109,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
 
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         host.DrawText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
-        host.FillRect(boxX, boxY, TuningBoxW, TuningRowH - 2, BoxBg);
-        host.StrokeRect(boxX, boxY, TuningBoxW, TuningRowH - 2, BoxLine);
+        host.FillRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
+        host.StrokeRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxLine);
         host.DrawText(SoulWeightLabel(_soulWeight), boxX + 8, boxY + 4, White);
         host.DrawText("▼", boxX + TuningBoxW - 18, boxY + 4, DimGray);
 
@@ -127,7 +127,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         for (int i = 0; i < lines.Length; i++) host.DrawText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
         int by = y + TuningH - 40;
-        host.FillRect(x + TuningW - 116, by, 100, 28, HeadBg);
+        host.FillRect(x + TuningW - 116, by, 100, 28, StatusScreen.HeadBg);
         host.DrawText("닫기", x + TuningW - 80, by + 6, White);
         host.DrawText("Esc: 닫기", x + 16, by + 7, DimGray);
 
@@ -137,8 +137,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             {
                 int ry = boxY + TuningRowH * (i + 1);
                 bool here = MouseInBoard(boxX, ry, TuningBoxW, TuningRowH);
-                host.FillRect(boxX, ry, TuningBoxW, TuningRowH, here ? 0xFF2A4A8A : PanelBg);
-                host.StrokeRect(boxX, ry, TuningBoxW, TuningRowH, BoxLine);
+                host.FillRect(boxX, ry, TuningBoxW, TuningRowH, here ? 0xFF2A4A8A : StatusScreen.PanelBg);
+                host.StrokeRect(boxX, ry, TuningBoxW, TuningRowH, StatusScreen.BoxLine);
                 host.DrawText(SoulWeightLabel(SoulWeightChoices[i]), boxX + 8, ry + 4, SoulWeightChoices[i] == _soulWeight ? 0xFF00FFFF : White);
             }
     }

@@ -79,4 +79,22 @@ internal sealed unsafe partial class GameWindow
 
     internal BattleScene? _btl;
     internal BattleScene Btl => _btl ??= new BattleScene(this);
+
+    internal StatusScreen? _statusScr;
+    internal StatusScreen StatusScr => _statusScr ??= new StatusScreen(this);
+
+    internal TalkBox? _tlk;
+    internal TalkBox Tlk => _tlk ??= new TalkBox(this);
+
+    internal MoviePlayer? _mov;
+    internal MoviePlayer Mov => _mov ??= new MoviePlayer(this);
+
+    internal SystemMenu? _sys;
+    internal SystemMenu Sys => _sys ??= new SystemMenu(this);
+
+    internal PartyStore? _partySt;
+    internal PartyStore PartySt => _partySt ??= new PartyStore(this);
+
+    internal FlagStore? _flagSt;
+    internal FlagStore FlagSt => _flagSt ??= new FlagStore(this);
 }

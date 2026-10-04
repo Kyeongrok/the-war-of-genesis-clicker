@@ -571,7 +571,7 @@ internal sealed unsafe partial class BattleScene
         {
             var taker = LiveUnitAt(obj.Col, obj.Row) ?? opener;
             if (!TryEquipSpoil(taker, obj.Record.ItemId))
-                host._inventory[obj.Record.ItemId] = host._inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
+                host.StatusScr._inventory[obj.Record.ItemId] = host.StatusScr._inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
             string itemName = host._db?.Items.GetValueOrDefault(obj.Record.ItemId) is { } item ? host._db.T(item.NameId) : "";
             ShowSpoilMessage(taker, "Item 획득", $"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
         }
@@ -611,7 +611,7 @@ internal sealed unsafe partial class BattleScene
             items[slot] = (ushort)itemId;
             taker.Data = c with { Items = items };
             int oldHp = taker.Hp, oldMax = taker.MaxHp;   // 화면 HP 는 새 갑옷 배율로 같은 비율(ba-20 C3, Status.cs SetEquipment)
-            host.RefreshUnitStats(taker);
+            host.StatusScr.RefreshUnitStats(taker);
             if (oldMax > 0 && taker.MaxHp != oldMax) taker.Hp = Math.Clamp((int)((long)oldHp * taker.MaxHp / oldMax), oldHp > 0 ? 1 : 0, taker.MaxHp);
             if (host._party.ContainsKey(taker.ChrCode)) host._party[taker.ChrCode] = taker.Data;
             if (Trace)

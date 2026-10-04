@@ -26,7 +26,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>지금 마우스 자리에 맞는 커서 그림.</summary>
     internal int CursorFor(int bx, int by)
     {
-        if (_keysOpen || SystemOpen || _statusUnit >= 0 || Btl._abilityMenu || Btl._ringUnit >= 0) return CursorHand;
+        if (_keysOpen || Sys.SystemOpen || _statusUnit >= 0 || Btl._abilityMenu || Btl._ringUnit >= 0) return CursorHand;
         if (Btl._targetWork >= 0 && Btl.Work(Btl._targetWork) is { } w)
         {
             // 사거리 안이고 그 work 의 대상 방식에 맞는 칸에서만 칼·지팡이가 된다 — 아무 유닛 위나 아니다.
@@ -151,7 +151,7 @@ internal sealed unsafe partial class GameWindow
         {
             _outcomeMusicFor = Btl._outcomeAt;
             _outcomeMusicSeconds = -1;
-            if (Muted || !_bgmOn) _outcomeMusicSeconds = 0;
+            if (Muted || !Sys._bgmOn) _outcomeMusicSeconds = 0;
             else LoadClip(win ? 3392 : 55, pcm => Volatile.Write(ref _outcomeMusicSeconds, pcm == null ? 0 : ClipSeconds(pcm)));
         }
         double since = (_lastTime - Btl._outcomeAt) * TicksPerSecond;

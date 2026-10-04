@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleScene
         _pendingExits.Clear();
         _eventRoutine = null;
         _eventRoutineFree = _eventCamPending = false;
-        host._talkSkip = false;
+        host.Tlk._talkSkip = false;
         _turnNo = 0;
         _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
@@ -170,7 +170,7 @@ internal sealed unsafe partial class BattleScene
     internal volatile float _eventSoundSeconds;
 
     /// <summary>이벤트가 돌거나 대사가 떠 있으면 전투를 멈춘다.</summary>
-    internal bool EventsBusy => _runningEvent >= 0 || host._talk != null;
+    internal bool EventsBusy => _runningEvent >= 0 || host.Tlk._talk != null;
 
     /// <summary>조건이 다 맞는 이벤트를 하나 켠다. 결과가 정해지면 더 보지 않는다.</summary>
     /// <summary>
@@ -266,24 +266,24 @@ internal sealed unsafe partial class BattleScene
                         _eventRoutine = null;
                         _eventRoutineFree = false;
                         _eventCheckDue |= (1 << 2) | (1 << 1);          // 행동 끝 갈래 — 사건이 끝난 뒤 다시 본다
-                        if (_outcome.Length > 0) { _runningEvent = -1; host._talkSkip = false; return; }
+                        if (_outcome.Length > 0) { _runningEvent = -1; host.Tlk._talkSkip = false; return; }
                     }
                 }
                 // 뒤에 행동 1 이 없으면 줄을 안 붙든다(슬롯만 잡는다, 0x10056fb0) — Btl 0145 사건 4 는 필살기 도중 말풍선이 뜬다(ba-20 V2 b).
                 if (_eventRoutine != null && !_eventRoutineFree) return;
             }
-            if (host._talk == null) _talkNoWait = false;
-            if (host._talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
+            if (host.Tlk._talk == null) _talkNoWait = false;
+            if (host.Tlk._talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
             if (_eventSoundSeconds > 0) { _eventWaitUntil = host._lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
-            if (_eventSoundLoading && !host._talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
-            if (_eventWaitUntil > host._lastTime && !host._talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
-            if (_runningEvent >= _events.Count) { _runningEvent = -1; host._talkSkip = false; return; }   // 판이 바뀌었다
+            if (_eventSoundLoading && !host.Tlk._talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
+            if (_eventWaitUntil > host._lastTime && !host.Tlk._talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
+            if (_runningEvent >= _events.Count) { _runningEvent = -1; host.Tlk._talkSkip = false; return; }   // 판이 바뀌었다
             var e = _events[_runningEvent];
             // 그 이벤트가 끝나면 건너뛰기도 끝난다 — 다음 장면 대사는 다시 보인다.
             if (_eventPc >= e.Actions.Count)
             {
                 if (_eventRoutine != null) { _eventRoutineFree = false; return; }   // 돌던 기술이 끝나야 사건도 끝난다
-                _runningEvent = -1; host._talkSkip = false; return;
+                _runningEvent = -1; host.Tlk._talkSkip = false; return;
             }
 
             var a = e.Actions[_eventPc++];
@@ -297,9 +297,9 @@ internal sealed unsafe partial class BattleScene
                     // 원본 진행기(0x10056fb0)는 0·1·2·3 만 직접 다루고 나머지는 슬롯에 넣은 채 다음 줄로 간다 — 행동 1 없이 이어진
                     // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
                     _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
-                    if (host._talk != null) { _eventPc--; return; }
+                    if (host.Tlk._talk != null) { _eventPc--; return; }
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술도
-                    if (_eventCamPending && CameraBusy && !host._talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
+                    if (_eventCamPending && CameraBusy && !host.Tlk._talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
                     _eventCamPending = false;
                     if (_eventMoveUntil > host._lastTime) _eventWaitUntil = _eventMoveUntil;            // 걷기·동작도
                     break;
@@ -309,26 +309,26 @@ internal sealed unsafe partial class BattleScene
                     break;
                 case 3:                                                 // 중단
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술은 끝까지
-                    _runningEvent = -1; host._talkSkip = false; return;
-                case 400 or 402 or 906 when !host._talkSkip && !waitNext:
+                    _runningEvent = -1; host.Tlk._talkSkip = false; return;
+                case 400 or 402 or 906 when !host.Tlk._talkSkip && !waitNext:
                     // 뒤에 1 이 없는 카메라 줄(400 → 2 27곳 · 400 → 200 3곳 · 906 → 2 4곳)은 스크롤을 걸어만 두고 다음 줄과 같이 간다.
                     EventCameraWaits(a);
                     _eventCamLine = (-1, -1);
                     _eventCamPending = true;
                     RunEventAction(a);
                     break;
-                case 400 or 402 or 600 or 601 or 906 when !host._talkSkip && EventCameraWaits(a):
+                case 400 or 402 or 600 or 601 or 906 when !host.Tlk._talkSkip && EventCameraWaits(a):
                     _eventPc--;                                         // 카메라가 설 때까지 이 줄에 머문다(0x1006e850 · 0x100ead10)
                     return;
                 case 600:
-                    host.ShowTalk(box: true, a);
-                    if (host._talk == null) break;                           // 건너뛰는 중이면 안 뜬다
+                    host.Tlk.ShowTalk(box: true, a);
+                    if (host.Tlk._talk == null) break;                           // 건너뛰는 중이면 안 뜬다
                     if (TalkRidesOn(e)) { _talkNoWait = true; break; }
                     _talkNoWait = false;
                     return;
                 case 601:
-                    host.ShowTalk(box: false, a);
-                    if (host._talk == null) break;
+                    host.Tlk.ShowTalk(box: false, a);
+                    if (host.Tlk._talk == null) break;
                     // 「601 → 2[틱]」 꼴(행동 1 없이)은 클릭을 안 기다린다 — 말풍선이 뜬 채 틱만 세고 다음 줄로 간다(진행기 0x10056fb0 은 1 만 기다린다,
                     // ba-20 V2: 11곳/7전투, 대표 Btl 0145 사건 4 — 필살기 도중 말풍선). 말풍선은 다음 601 이 덮거나 120틱 뒤 저절로 닫힌다.
                     // 1 없이 다른 행동이 이어지는 22곳(601 → 200 0335 · 601 → 214 0161 · 601 → 202 0139·0288 · 600 → 212 0278·0296 …)도 같다(V2 c).
@@ -342,8 +342,8 @@ internal sealed unsafe partial class BattleScene
                 default:
                     bool hadRoutine = _eventRoutine != null;
                     RunEventAction(a);
-                    if (_outcome.Length > 0) { _eventRoutine = null; _eventRoutineFree = false; _runningEvent = -1; host._talkSkip = false; return; }
-                    if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !host._talkSkip;
+                    if (_outcome.Length > 0) { _eventRoutine = null; _eventRoutineFree = false; _runningEvent = -1; host.Tlk._talkSkip = false; return; }
+                    if (!hadRoutine && _eventRoutine != null) _eventRoutineFree = !waitNext && !host.Tlk._talkSkip;
                     break;
             }
         }
@@ -405,7 +405,7 @@ internal sealed unsafe partial class BattleScene
             }
             case 600 or 601:
             {
-                int speaker = host.TalkSpeaker(A(0));
+                int speaker = host.Tlk.TalkSpeaker(A(0));
                 if ((uint)speaker >= host._units.Length || host._units[speaker] is not { Alive: true, OnField: true } s) return false;
                 CenterOnUnit(LeaderOf(s)!);
                 break;
@@ -532,7 +532,7 @@ internal sealed unsafe partial class BattleScene
             }
             case 3: return Compare(_tick, A(1), A(0));                          // 시간 틱 비교(0x1004f272 — [+0x4cf0] 는 빈 틱마다 오른다)
             case 100: return Compare(_battleVars[A(0) & 0xFF], A(1), A(2));     // 전투 국소 변수
-            case 101: return Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2));
+            case 101: return Compare(A(0) >= 0 && A(0) < host.FlagSt._flags.Length ? host.FlagSt._flags[A(0)] : 0, A(1), A(2));
             case 102:                                                           // <b>장비</b>를 가졌나(0x1004f2f0) — 상태이상이 아니다. 자료 사용 0회.
             {
                 var list = EventTargets(A(0), out _);
@@ -683,7 +683,7 @@ internal sealed unsafe partial class BattleScene
                     // 변 밖에서 곧게 걸어 들어온다 — 혼자면 140px, 군단 대장이면 100px 밖에서 틱당 8px(0x10051659 · 0x10050fb2, ba-21 B1).
                     // 전에는 맵 안 가장자리 칸에 곧바로 나타났다. 건너뛰는 중이면 곧바로 선다.
                     bool hasFollowers = FollowersOf(Array.IndexOf(host._units, u)).Count > 0;
-                    if (a.Code == 200 && !host._talkSkip)
+                    if (a.Code == 200 && !host.Tlk._talkSkip)
                     {
                         BeginEdgeEntry(u, A(4), hasFollowers ? 100 : 140);
                         entryTicks = Math.Max(entryTicks, hasFollowers ? 100 / 8.0 : 140 / 8.0);
@@ -693,7 +693,7 @@ internal sealed unsafe partial class BattleScene
                         // 하이 텔레포트(work 585)로 나타난다(0x10052bf0 · 0x1008c8a0, ba-21 B7·B8): 맵 밖에서 준비(소리 694, 56틱) → 사라짐(소리 90, 80틱)
                         // → 30틱 뒤 카메라가 새 자리로 → 나타남 381:1 + 210:3(소리 91) → 50틱에 걸쳐 또렷해진다. 전에는 곧바로 서 있었다.
                         // 건너뛰는 중이면 곧바로 선다.
-                        if (host._talkSkip) { u.Fade = 1; }
+                        if (host.Tlk._talkSkip) { u.Fade = 1; }
                         else
                         {
                             var arriving = u;
@@ -726,7 +726,7 @@ internal sealed unsafe partial class BattleScene
                         follower.Facing = u.Facing;
                         _followerTarget[follower] = (col, row);
                         // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2).
-                        if (a.Code == 200 && !host._talkSkip)
+                        if (a.Code == 200 && !host.Tlk._talkSkip)
                         {
                             int px = 140 + 40 * (entered++ / 2);
                             BeginEdgeEntry(follower, A(4), px);
@@ -746,7 +746,7 @@ internal sealed unsafe partial class BattleScene
                     // 원본(0x100519c0)은 그 칸까지 걸어간 뒤 맵 밖으로 나가 사라진다(ba-20 V4). 걸을 길이 있고 멀쩡히 서 있는 유닛만 걸려 보낸다 —
                     // HP 0 으로 물러나는 보스·건너뛰는 중·판 밖 유닛은 전처럼 곧바로 뺀다.
                     if (_pendingExits.RemoveAll(x => x.Unit == u) > 0) u.Path.Clear();   // 같은 유닛에 201 이 또 오면 앞 길을 버린다
-                    var exitRange = u.OnField && u.Hp > 0 && !host._talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
+                    var exitRange = u.OnField && u.Hp > 0 && !host.Tlk._talkSkip ? ComputeRange(u, tp: 1 << 20) : null;
                     int exitGoal = exitRange != null ? NearestReachableTo(u, exitRange, A(2), A(3)) : -1;
                     var exitWalk = exitRange != null && exitGoal >= 0 ? PathWithin(exitRange, u.Col, u.Row, exitGoal) : null;
                     if (exitWalk is { Count: > 0 })
@@ -888,7 +888,7 @@ internal sealed unsafe partial class BattleScene
             {
                 // 카메라는 StepEvent 가 먼저 옮기고 멈출 때까지 이 줄을 붙든다(EventCameraWaits) — 강조는 스크롤이 끝난 틀에 켠다(단계 1).
                 // 건너뛰는 중이면 카메라 없이 바로 온다.
-                if (host._talkSkip) CenterOnCell((A(0) + A(2) + 1) / 2, (A(1) + A(3) + 1) / 2);
+                if (host.Tlk._talkSkip) CenterOnCell((A(0) + A(2) + 1) / 2, (A(1) + A(3) + 1) / 2);
                 // 사각형 안 칸을 층 13 초록(배치 칸과 같은 그림)으로 200틱 동안 칠한다(ba-14 E6) — 「여기로 가라」 표시.
                 _highlightRect = (Math.Min(A(0), A(2)), Math.Min(A(1), A(3)), Math.Max(A(0), A(2)), Math.Max(A(1), A(3)));
                 _highlightUntil = host._lastTime + 200 / TicksPerSecond;
@@ -901,14 +901,14 @@ internal sealed unsafe partial class BattleScene
                 if (A(0) > 0) { host.Mos._ownedLegions.Add(A(0)); host.Mos._legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
-                if (host._talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
+                if (host.Tlk._talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
                 host.PlayEventVoice(A(0));                    // 인자1 은 말하는 이 — 원본은 그 인물에 소리를 매단다(좌우 소리는 안 넣었다)
                 break;
             case 400:                                    // 카메라 칸 가운데로 · 402 유닛 가운데로 — StepEvent 가 EventCameraWaits 로 옮기고 기다린다.
-                if (host._talkSkip) { _camGoal = null; CenterOnCell(A(0), A(1)); }   // 건너뛰는 중에도 카메라는 보내 둔다(기다리지만 않는다) —
+                if (host.Tlk._talkSkip) { _camGoal = null; CenterOnCell(A(0), A(1)); }   // 건너뛰는 중에도 카메라는 보내 둔다(기다리지만 않는다) —
                 break;                                   // 전에는 건너뛴 뒤 화면이 증원·보스를 안 비췄다(ba-20 V13)
             case 402:
-                if (host._talkSkip && EventTargets(A(0), out _).FirstOrDefault() is { Alive: true, OnField: true } seen)
+                if (host.Tlk._talkSkip && EventTargets(A(0), out _).FirstOrDefault() is { Alive: true, OnField: true } seen)
                     CenterOnUnit(seen.LeaderIndex >= 0 && seen.LeaderIndex < host._units.Length ? host._units[seen.LeaderIndex] : seen);
                 break;
             case 512:                                    // BGM 바꾸기
@@ -918,14 +918,14 @@ internal sealed unsafe partial class BattleScene
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;
             case 102:
-                if (A(0) > 0 && A(0) < host._flags.Length) host._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length) host.FlagSt._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
             case 103:
                 // [깃발, 연산자, 값] — 0 더하기 · 1 빼기 · 2 곱하기 · 3 나누기(0x10050de0: 연산자 = 워드 +2, 값 = 바이트 +4).
                 // 전에는 인자 1(연산자)을 값으로 더해서, 프레야 평원·던젼(Btl 0240·0239)의 「깃발 110 += 1」이 0 을 더해
                 // 북 평원(Btl 0238, 깃발 110 == 2)이 영영 안 열렸다(사용자 보고, Chp 0064). 필드판과 달리 두 번 더하는 흠은 없다.
-                if (A(0) > 0 && A(0) < host._flags.Length)
-                    host._flags[A(0)] = FieldScene.FieldArith(host._flags[A(0)], A(1), A(2));
+                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length)
+                    host.FlagSt._flags[A(0)] = FieldScene.FieldArith(host.FlagSt._flags[A(0)], A(1), A(2));
                 break;
         }
     }

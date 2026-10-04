@@ -38,7 +38,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
     /// 새 게임이면 깃발이 다 0 이라 조건 없는 0번(코어헌터)·1번(홍련의 예언)만 열리고, 코어헌터의 챕터 스크립트가 깃발 14 를 세우면
     /// 2번(샤이닝 스타)이 열린다.
     /// </summary>
-    internal bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < host._flags.Length && host._flags[f] != 0));
+    internal bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < host.FlagSt._flags.Length && host.FlagSt._flags[f] != 0));
 
     /// <summary>
     /// 이미 고른 에피소드(번호) — 원본 <c>0x101b68a0[i]</c>. <b>고르는 순간</b> 1 이 되고(<c>0x10106722</c>·<c>0x1010689e</c>), NEW GAME 만 지운다(<c>0x1004d870</c>).
@@ -132,10 +132,10 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
     {
         if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") != "1") return;
         foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
-            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host._flags.Length)
-                host._flags[flag] = (byte)val;
+            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host.FlagSt._flags.Length)
+                host.FlagSt._flags[flag] = (byte)val;
         if (Environment.GetEnvironmentVariable("DUELDX_FLAGS") == "all")
-            foreach (var e in Episodes()) foreach (int f in e.Locks) if ((uint)f < host._flags.Length) host._flags[f] = 1;
+            foreach (var e in Episodes()) foreach (int f in e.Locks) if ((uint)f < host.FlagSt._flags.Length) host.FlagSt._flags[f] = 1;
         if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) { host.ResizeBoard(TitleBoardCols, TitleBoardRows); host._battleLoaded = false; }
         OpenEpisodes();
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_EPISODETOP"), out int top)) ScrollEpisodes(top);
@@ -198,7 +198,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
     internal bool OnEpisodesClick(int bx, int by)
     {
         if (!_episodesOpen) return false;
-        if (host.SystemOpen) return host.OnSystemClick(bx, by);
+        if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
         if (OnEpisodeBarClick(bx, by)) return true;
 
         int index = EpisodeAt(bx, by);
@@ -213,7 +213,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
         Array.Clear(host.Fld._chapterVars);
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
         // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인원은 챕터 스크립트(801)가 넣는다 — 인물 자료는 명부 하나라 다른 파티에서 겪은 것이 그대로다.
-        host.SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
+        host.PartySt.SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
         // 연대표도 16틀 검게 나간 뒤 챕터(모세스)가 선다(0x101060d0). 그동안은 연대표가 그대로 보인다.
@@ -270,7 +270,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
             host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, GameWindow.UiBlend.Alpha);
         }
 
-        host.DrawSystem();
+        host.Sys.DrawSystem();
         host.DrawToast();
     }
 }

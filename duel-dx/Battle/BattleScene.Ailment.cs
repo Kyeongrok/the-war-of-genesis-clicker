@@ -158,7 +158,7 @@ internal sealed unsafe partial class BattleScene
             }
             PutAilment(target, (byte)id, (short)value, used, attacker);
         }
-        host.RefreshUnitStats(target);
+        host.StatusScr.RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
         return true;
     }
@@ -390,7 +390,7 @@ internal sealed unsafe partial class BattleScene
         {
             int id = u.StatusId[i];
             if (id is 0 or 44 or 45 or 46) continue;
-            string name = AilmentNames.TryGetValue(id, out var n) ? n : StatBonusNames.GetValueOrDefault(id, $"상태 {id}");
+            string name = AilmentNames.TryGetValue(id, out var n) ? n : StatusScreen.StatBonusNames.GetValueOrDefault(id, $"상태 {id}");
             list.Add(ChangeText(id, u.StatusValue[i]) ?? (u.StatusValue[i] != 0 ? $"{name} {u.StatusValue[i]}" : name));
         }
         return list;

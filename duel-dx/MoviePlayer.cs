@@ -4,6 +4,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 기술 영상 — 시전 불기둥(<c>Mov 0041</c>·<c>0042</c>)·리 바이블(<c>0034</c>)·어스퀘이크(<c>0040</c>)·강림의 밤(<c>0061</c>).
 /// </summary>
@@ -13,7 +15,7 @@ namespace DuelDx;
 /// 영상 왼쪽 위이고, 섞기 0x11 은 더하기로 본다(가설 — 영상 바탕이 검정이라 더하기면 바탕이 사라진다).
 /// 영상은 Bink 라 게임에서 바로 못 읽어 <c>assets/effects/mov/NNNN/NNN.png</c> 로 풀어 둔다(<c>tools/re/mov_frames.py</c> 와 같은 PyAV 풀이).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class MoviePlayer(GameWindow host)
 {
     /// <summary>work 에 붙는 영상 하나 — 영상 번호, 준비 동작에서 띄우나(아니면 치는 순간), 대상에 붙나, 왼쪽 위까지의 거리.</summary>
     internal readonly record struct MovieFx(int Movie, bool Prelude, bool OnTarget, int Dx, int Dy);
@@ -59,8 +61,8 @@ internal sealed unsafe partial class GameWindow
         foreach (var m in list)
         {
             if (m.Prelude != prelude) continue;
-            var (x, y) = m.OnTarget ? (col * TileW + TileW / 2, CellCenterY(col, row)) : UnitFoot(user);
-            _movies.Add((m.Movie, _lastTime, x + m.Dx, y + m.Dy));
+            var (x, y) = m.OnTarget ? (col * TileW + TileW / 2, host.CellCenterY(col, row)) : host.UnitFoot(user);
+            _movies.Add((m.Movie, host._lastTime, x + m.Dx, y + m.Dy));
         }
     }
 
@@ -77,14 +79,14 @@ internal sealed unsafe partial class GameWindow
     internal void SpawnRipples(WorkData w, int col, int row)
     {
         if (w.AbilityId != 54) return;
-        foreach (double speed in RippleSpeeds) _ripples.Add((_lastTime, col * TileW + TileW / 2, CellCenterY(col, row), speed));
+        foreach (double speed in RippleSpeeds) _ripples.Add((host._lastTime, col * TileW + TileW / 2, host.CellCenterY(col, row), speed));
     }
 
     internal void DrawRipples()
     {
         _ripples.RemoveAll(r =>
         {
-            double radius = (_lastTime - r.Start) * TicksPerSecond * r.Speed;
+            double radius = (host._lastTime - r.Start) * TicksPerSecond * r.Speed;
             if (radius >= RippleRadius) return true;
             int k = (int)(256 * (1 - radius / RippleRadius));
             const uint color = 0xFF3C6490;
@@ -96,9 +98,9 @@ internal sealed unsafe partial class GameWindow
                 {
                     double a = 2 * Math.PI * s / steps;
                     int x = r.X + (int)Math.Round(Math.Cos(a) * rr), y = r.Y + (int)Math.Round(Math.Sin(a) * rr * 0.8);
-                    if ((uint)x >= BoardWidth || (uint)y >= BoardHeight) continue;
-                    int at = y * BoardWidth + x;
-                    _fb[at] = GameWindow.AddColor(_fb[at], color, k);
+                    if ((uint)x >= host.BoardWidth || (uint)y >= host.BoardHeight) continue;
+                    int at = y * host.BoardWidth + x;
+                    host._fb[at] = GameWindow.AddColor(host._fb[at], color, k);
                 }
             }
             return false;
@@ -111,21 +113,21 @@ internal sealed unsafe partial class GameWindow
         _movies.RemoveAll(m =>
         {
             var frames = MovieFrames(m.Movie);
-            int index = (int)((_lastTime - m.Start) * MovieFps(m.Movie));
+            int index = (int)((host._lastTime - m.Start) * MovieFps(m.Movie));
             if (index >= frames.Length) return true;
             var f = frames[index];
             for (int y = 0; y < f.H; y++)
             {
                 int dy = m.Y + y;
-                if ((uint)dy >= BoardHeight) continue;
+                if ((uint)dy >= host.BoardHeight) continue;
                 for (int x = 0; x < f.W; x++)
                 {
                     int dx = m.X + x;
-                    if ((uint)dx >= BoardWidth) continue;
+                    if ((uint)dx >= host.BoardWidth) continue;
                     uint c = f.Px[y * f.W + x];
                     if ((c & 0xFFFFFF) == 0) continue;
-                    int at = dy * BoardWidth + dx;
-                    _fb[at] = GameWindow.AddColor(_fb[at], c, 256);
+                    int at = dy * host.BoardWidth + dx;
+                    host._fb[at] = GameWindow.AddColor(host._fb[at], c, 256);
                 }
             }
             return false;

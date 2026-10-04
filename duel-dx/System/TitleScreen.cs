@@ -87,7 +87,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     {
         if (!_titleOpen) return false;
         // CONTINUE 로 연 슬롯 창이 떠 있으면 그 창이 먼저 클릭을 받는다.
-        if (host.SystemOpen) return host.OnSystemClick(bx, by);
+        if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
         PressTitleButton(TitleButtonAt(bx, by));
         return true;
     }
@@ -99,8 +99,8 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     internal bool OnTitleKey(int key)
     {
         if (!_titleOpen) return false;
-        if (key == Win32.VK_ESCAPE) host.CloseSystemWindow();
-        else if (key == Win32.VK_RETURN && !host.SystemOpen) PressTitleButton(0);
+        if (key == Win32.VK_ESCAPE) host.Sys.CloseSystemWindow();
+        else if (key == Win32.VK_RETURN && !host.Sys.SystemOpen) PressTitleButton(0);
         return true;
     }
 
@@ -120,10 +120,10 @@ internal sealed unsafe class TitleScreen(GameWindow host)
                 host.Mos._members.Clear();
                 host.Mos._ownedLegions.Clear();
                 host.Mos._legionsKnown = true;
-                host._partyBank.Clear();
+                host.PartySt._partyBank.Clear();
                 // 파티의 가방·GP·군단 배속과 「이미 겪은」 표시(자동 장소·챕터 사건 횟수·다녀온 장소)도 비운다 — 안 비우면 같은 실행에서
                 // 두 번째 새 게임이 프롤로그·동료 합류·3000GP 를 건너뛰고 지난 판의 가방을 들고 시작한다(원본 0x1004d870 은 파티를 새로 만든다).
-                host._inventory.Clear();
+                host.StatusScr._inventory.Clear();
                 host.Mos._shopMoney = 0;
                 host.Mos._unitLegion.Clear();
                 host.Mos._placesUsed.Clear();
@@ -132,18 +132,18 @@ internal sealed unsafe class TitleScreen(GameWindow host)
                 host.Mos._mailbox.Clear();
                 host.Mos._mailRead.Clear();
                 host.Mos._planetVisits.Clear();
-                Array.Clear(host._flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
+                Array.Clear(host.FlagSt._flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
                 host.EpisodesScr._chapterDone = false;
                 host.EpisodesScr._episodesPicked.Clear();              // 고른 에피소드 표시도 NEW GAME 만 지운다(0x1004d870)
                 host.EpisodesScr._partyNo = 0;
                 // 플레이 시간 0([0x101737a4] = 0)·챕터 상태(0x101b6898 — 지금 챕터·스크립트 변수·항행 시작) 버림(0x1004d870, 감사 F10).
                 // 지금 챕터가 남으면 연대표 세이브를 부를 때 앞 판 챕터가 열렸다(F6).
-                host._playBase = -host._realTime * 1000;
+                host.Sys._playBase = -host._realTime * 1000;
                 host.Mos._mosesChp = null;
                 host.Mos._navStart = null;
                 Array.Clear(host.Fld._chapterVars);
                 if (host.EpisodesScr.Episodes().Count > 0) host.EpisodesScr.OpenEpisodes();
-                else { _titleOpen = false; if (!host.StartBattle(TitleFirstBattle)) OpenTitle(); }
+                else { _titleOpen = false; if (!host.Sys.StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;
             case 1:                                   // CONTINUE — 「Select your record」 화면(장면 9)
                 host.RecordsScr.OpenRecords();
@@ -164,7 +164,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (!_titleOpen) return;
         // 원본 타이틀 틱(0x10105920)은 3340틱(약 111초)을 넘으면 오프닝 필드(Fld 0022·0413 — Mov)로 갔다가 돌아온다(ba-20 T2).
         // 오프닝 영상은 없으니 곡만 처음부터 다시 건다 — 전에는 곡이 한 번 끝나면 계속 조용했다.
-        if (_titleOpen && !host.SystemOpen && (host._lastTime - _titleMusicAt) * TicksPerSecond > 3340)
+        if (_titleOpen && !host.Sys.SystemOpen && (host._lastTime - _titleMusicAt) * TicksPerSecond > 3340)
         {
             _titleMusicAt = host._lastTime;
             host.StopMusic();
@@ -197,7 +197,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         // 대사 음성을 뒤에서 받는 동안 진행을 왼쪽 위에 보인다(VoicePack).
         if (VoicePack.Status is { Length: > 0 } voices) host.DrawText(voices, ox + 8, oy + 10, White, 12);
 
-        host.DrawSystem();     // CONTINUE 가 연 슬롯 창
+        host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();
     }
 }

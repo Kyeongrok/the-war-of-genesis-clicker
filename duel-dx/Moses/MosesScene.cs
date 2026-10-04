@@ -129,8 +129,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     /// <summary>깃발 비교 <c>0x100fda40(flags[변수], 값, 연산자)</c> — 0 == · 1 != · 2 &lt; · 3 &lt;= · 4 &gt; · 5 &gt;=, 6 이상은 거짓. 깃발 0 도 진짜 깃발이다.</summary>
     internal bool MosesFlagTest(int variable, int value, int op)
     {
-        if ((uint)variable >= host._flags.Length) return false;
-        int now = host._flags[variable];
+        if ((uint)variable >= host.FlagSt._flags.Length) return false;
+        int now = host.FlagSt._flags[variable];
         return op switch { 0 => now == value, 1 => now != value, 2 => now < value, 3 => now <= value, 4 => now > value, 5 => now >= value, _ => false };
     }
 
@@ -275,8 +275,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         if (Environment.GetEnvironmentVariable("DUELDX_MOSES") != "1") return;
         // DUELDX_FLAGS=5=1,7=2 면 진행 깃발을 미리 세운다(화면 밖 시험용 — 깃발로 잠긴 챕터 사건·장소를 본다).
         foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
-            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host._flags.Length)
-                host._flags[flag] = (byte)val;
+            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host.FlagSt._flags.Length)
+                host.FlagSt._flags[flag] = (byte)val;
         // DUELDX_CHAPTER=<Chp 번호> 면 그 챕터로 연다(화면 밖 시험용) — 없으면 첫 전투의 챕터.
         OpenMoses(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int chapterId) ? LoadChapterFile(chapterId) : null);
         // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
@@ -342,7 +342,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         _mosesSceneSeed = host.Btl._ailmentRandom.Next();
         if (chapter != null) { _mosesChp = chapter; _navStart = null; _mosesNavVisited = false; host.Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
-        if (_mosesChp is { } owner && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) host.SwitchParty(ep.Party);
+        if (_mosesChp is { } owner && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) host.PartySt.SwitchParty(ep.Party);
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
         // 다음 에피소드는 진행 깃발(Episode.dat 잠금 깃발 넷)이 다 서 있어야 열린다. 표시는 에피소드를 고를 때 내린다.
         // (전에 있던 「상점 뺀 장소를 다 쓰면 챕터 끝」 데모 규칙은 뺐다 — 아벨리안(Chp 21)·계시(Chp 52)의 끝 대사와 함정(Chp 47) 본편을
@@ -396,10 +396,10 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             // 조건을 통과한 것만 「겪음」으로 표시한다 — 원본 0x100fdd40 은 실제로 들어갈 때만 +0x14=1 을 세운다(ba15-moses N1).
             // 전에는 조건 검사 전에 표시해 조건이 뒤늦게 열리는 자동 장소가 영영 안 떴다. 위 타이틀 규칙도 이 표시를 「들어가 봄」으로 센다.
             if (!place.IsAuto || _autoPlacesDone.Contains((chp.Id, place.No))) continue;
-            if (!host.FlagsAllow(place.Conditions)) continue;
+            if (!host.FlagSt.FlagsAllow(place.Conditions)) continue;
             _autoPlacesDone.Add((chp.Id, place.No));
             if (place.Value >= 10000 && place.Value < 20000 && host.Fld.OpenField(place.Value - 10000)) return true;
-            if (place.Value > 0 && place.Value < 10000 && host.StartBattle(place.Value)) return true;
+            if (place.Value > 0 && place.Value < 10000 && host.Sys.StartBattle(place.Value)) return true;
         }
         return false;
     }
@@ -481,7 +481,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     /// <summary>항행 단계 2 후보 장소들의 레이더 자리(경도칸, 위도칸) — <see cref="MosesCellList"/> 와 같은 차례.</summary>
     internal List<(int Lon, int Lat)> MosesPlacePatches(ChapterFile chp, ChapterFile.Planet planet) =>
         [.. planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
-                         .Where(p => p.Auto == 0 && !PlaceUsed(p) && host.PlaceOpen(p))
+                         .Where(p => p.Auto == 0 && !PlaceUsed(p) && host.FlagSt.PlaceOpen(p))
                          .Take(MosesCells.Length).Select(p => (p.Lon, p.Lat))];
 
     internal List<(int X, int Y, string Name, int Icon, Action Click)> MosesCellList()
@@ -491,7 +491,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         {
             // 자동 발생 장소는 목록에 없고, 진행 깃발 조건이 안 맞는 장소도 아직 안 열린 것이다(0x100fdaf0).
             foreach (var place in planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
-                                               .Where(p => p.Auto == 0 && !PlaceUsed(p) && host.PlaceOpen(p)))
+                                               .Where(p => p.Auto == 0 && !PlaceUsed(p) && host.FlagSt.PlaceOpen(p)))
             {
                 int i = list.Count;
                 if (i >= MosesCells.Length) break;
@@ -538,7 +538,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             host.Toast($"필드 {value - 10000} 자료가 assets 에 없습니다");
             return;
         }
-        if (!host.StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
+        if (!host.Sys.StartBattle(value)) return;                  // 자료가 없으면 모세스에 그대로 남는다
         UsePlace(no);
         host.StopMusic();
         host.StartBattleMusic();
@@ -713,8 +713,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     internal bool OnMosesClick(int bx, int by)
     {
         if (!_mosesOpen) return false;
-        if (host.SystemOpen) return host.OnSystemClick(bx, by);
-        if (host._statusUnit >= 0) return host.OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
+        if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
+        if (host._statusUnit >= 0) return host.StatusScr.OnStatusClick(bx, by);     // 전직 페이지의 STATUS 로 연 스테이터스 창이 먼저 받는다
         if (_mosesFade > 0 || _mosesSystemSwitch != null || PlanetZooming) return true;
         if (OnMosesShopClick(bx, by)) return true;
         // 편지 뷰어·통신 말풍선은 모달이라 떠 있으면 누름은 닫기만 한다 — 도크보다 먼저.
@@ -855,7 +855,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         DrawMosesTooltip();
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
         host._uiClip = (ox, oy, MosesW, MosesH);
-        host.DrawTalk();
+        host.Tlk.DrawTalk();
         host.Fld.DrawFieldChoices();
         host._uiClip = null;
         // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
@@ -867,9 +867,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 Array.Copy(host._fb, (oy + ty) * host.BoardWidth + ox + 10, host._fb, (oy + ty) * host.BoardWidth + ox, MosesW - 10);
         }
         host.Fld.ApplyScreenWave(ox, oy, tick);   // 409 물결 — 챕터 화면에서도(0x100f667b, Chp 0059, audit3 R3)
-        host.DrawSystem();
-        host.DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
-        if (host._statusUnit >= 0) host.DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에
+        host.Sys.DrawSystem();
+        host.StatusScr.DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
+        if (host._statusUnit >= 0) host.Sys.DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에
         host.TuningScr.DrawTuning();
         host.DrawToast();   // 알림은 모세스 화면 위에 — Compose 의 DrawToast 는 이 화면에 가린다
 
@@ -1092,7 +1092,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         var (ox, oy) = MosesOrigin();
         int tx = Math.Min(host._mouse.X + 16, ox + MosesW - w - 6), ty = Math.Min(host._mouse.Y + 16, oy + MosesH - h - 4);
         host.FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xD00A1428);
-        host.StrokeRect(tx - 4, ty - 2, w + 8, h + 4, BoxLine);
+        host.StrokeRect(tx - 4, ty - 2, w + 8, h + 4, StatusScreen.BoxLine);
         foreach (string line in lines)
         {
             host.DrawText(line, tx, ty, White);

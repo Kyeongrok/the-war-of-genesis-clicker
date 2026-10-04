@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 진행 깃발 — 「그 장소가 언제 열리는지」를 정하는 바이트 배열 2000칸(전역 <c>0x101b6050</c>).
 /// </summary>
@@ -19,7 +21,7 @@ namespace DuelDx;
 /// </para>
 /// 예: 코어헌터 훈련장은 <c>깃발[13] == 1</c> 이어야 열리고, Btl 0045 를 이기면 그 이벤트가 <c>깃발[1] = 1</c> 을 세운다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe partial class FlagStore(GameWindow host)
 {
     /// <summary>진행 깃발 2000칸. 새 게임이면 모두 0 이다.</summary>
     internal readonly byte[] _flags = new byte[2000];

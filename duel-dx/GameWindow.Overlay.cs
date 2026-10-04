@@ -88,7 +88,7 @@ internal sealed unsafe partial class GameWindow
 
     internal void Header(int x, int y, int w, string text)
     {
-        FillRect(x, y, w, 20, HeadBg);
+        FillRect(x, y, w, 20, StatusScreen.HeadBg);
         StrokeRect(x, y, w, 20, 0xFF7FA6E8);
         var (_, tw, _) = GetText(text, White);
         DrawText(text, x + (w - tw) / 2, y + 2, White);
@@ -96,8 +96,8 @@ internal sealed unsafe partial class GameWindow
 
     internal void Box(int x, int y, int w, int h)
     {
-        FillRect(x, y, w, h, BoxBg);
-        StrokeRect(x, y, w, h, BoxLine);
+        FillRect(x, y, w, h, StatusScreen.BoxBg);
+        StrokeRect(x, y, w, h, StatusScreen.BoxLine);
     }
 
     internal void Stat(int x, int y, int w, string label, string value)
@@ -109,14 +109,14 @@ internal sealed unsafe partial class GameWindow
     internal void StatBar(int x, int y, int w, string label, int value, int max)
     {
         Stat(x, y, w, label, $"{value} / {max}");
-        FillRect(x + 8, y + 22, w - 16, 3, Bar);
-        if (max > 0) FillRect(x + 8, y + 22, (w - 16) * Math.Clamp(value, 0, max) / max, 3, Red);
+        FillRect(x + 8, y + 22, w - 16, 3, StatusScreen.Bar);
+        if (max > 0) FillRect(x + 8, y + 22, (w - 16) * Math.Clamp(value, 0, max) / max, 3, StatusScreen.Red);
     }
 
     internal void AbilityRow(int x, int y, int w, string name, string cost, bool affordable = true)
     {
         DrawText(name, x + 10, y, White);
-        if (cost.Length > 0) RightText(cost, x + w - 10, y, affordable ? Red : 0xFF804848);
+        if (cost.Length > 0) RightText(cost, x + w - 10, y, affordable ? StatusScreen.Red : 0xFF804848);
     }
 
     internal void RightText(string text, int right, int y, uint color, float size = 13f)
