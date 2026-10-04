@@ -165,7 +165,10 @@ internal sealed unsafe partial class BattleScene
     internal bool InWorkRange(WorkData w, int fromCol, int fromRow, int col, int row, UnitState? user = null)
     {
         if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
-        if (host._map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
+        // 부술 수 있는 물체(애시드 풀·럭키가이·바리케이트 따위)가 선 칸은 피해 기술로 겨눌 수 있다(사용자 요청) — 물체가 찍은 벽 깃발 때문에
+        // 전에는 사거리 밖으로 쳐졌다. 기본공격은 따로 길이 있어 됐다.
+        bool objectTarget = w.IsDamage && ObjectAt(col, row) is { Data.Breakable: true, Alive: true } aimed && !_opened.Contains(aimed);
+        if (!objectTarget && host._map is not null && (CellFlagsAt(col, row) & 0x8) != 0) return false;
 
         int dx = col - fromCol, dy = row - fromRow;
         if (w.SelfCentred || w.RangeShape == 0) return dx == 0 && dy == 0;
@@ -202,7 +205,8 @@ internal sealed unsafe partial class BattleScene
             {
                 int cx = col + dx, cy = row + dy;
                 if ((uint)cx >= host.Cols || (uint)cy >= host.Rows) continue;
-                if (host._map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0) continue;
+                if (host._map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0
+                    && !(w.IsDamage && ObjectAt(cx, cy) is { Data.Breakable: true, Alive: true })) continue;      // 부술 수 있는 물체 칸은 범위에 든다
                 if (w.SameHeightArea != 0 && HeightAt(cx, cy) != HeightAt(col, row)) continue;
                 var (graded, plain) = WorkDistance(col, row, cx, cy, w.HeightArea != 0, graded: false);
                 if (w.AreaShape == 4)

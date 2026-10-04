@@ -440,8 +440,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     {
         try
         {
-            string path = Path.Combine(AssetsFolder.Find("moses"), "bgr", $"{id:D4}.bgr");
-            if (!File.Exists(path)) return null;
+            if (AssetPack.Fetch("moses/bgr", $"{id:D4}.bgr") is not { } path) return null;
             using var bitmap = new System.Drawing.Bitmap(path);
             int w = bitmap.Width, h = bitmap.Height;
             var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly,
@@ -1473,8 +1472,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         if (host._faces.ContainsKey(c.Code) || c.FaceId == 0) return;
         try
         {
-            string path = Path.Combine(AssetsFolder.Find("moses"), "obs", $"{c.FaceId:D4}.obs");
-            if (File.Exists(path) && DecodeFaceFrame(path) is { } face) host._faces[c.Code] = SpriteFrame.From(face);
+            if (AssetPack.Fetch("moses/obs", $"{c.FaceId:D4}.obs") is { } path && DecodeFaceFrame(path) is { } face) host._faces[c.Code] = SpriteFrame.From(face);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException) { }
     }

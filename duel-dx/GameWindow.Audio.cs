@@ -22,6 +22,9 @@ internal sealed unsafe partial class GameWindow
     /// <summary>믹서 — B.G.M 설정은 켤 때부터 곱한다(감사4 V1·V2).</summary>
     internal readonly AudioMixer _mixer = new() { MusicVolume = Math.Clamp(UserSettings.Current.BgmVolume, 5, 100) / 100f };
     internal readonly Dictionary<int, PcmSound> _sfx = [];
+
+    /// <summary>지금 받고 있는 효과음(번호) — 같은 것을 두 번 걸지 않게.</summary>
+    internal readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _sfxFetching = new();
     internal readonly Dictionary<int, ObsMotionTable?> _effectTables = [];
     internal readonly SoundQueue _pendingSounds = [];
     internal readonly Dictionary<int, (int[] Hurt, int[] Call)> _voices = [];
@@ -70,7 +73,13 @@ internal sealed unsafe partial class GameWindow
             string folder = AssetsFolder.Find("sounds");
             foreach (string path in Directory.EnumerateFiles(folder, "*.wav"))
                 if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
-                    _sfx[id] = WaveSound.Parse(File.ReadAllBytes(path));
+                    lock (_sfx) _sfx[id] = WaveSound.Parse(File.ReadAllBytes(path));
+            // 받아 둔 효과음(AssetPack)도 읽는다.
+            string packed = Path.Combine(AssetPack.Folder, "sounds");
+            if (Directory.Exists(packed))
+                foreach (string path in Directory.EnumerateFiles(packed, "*.wav"))
+                    if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int id))
+                        lock (_sfx) _sfx.TryAdd(id, WaveSound.Parse(File.ReadAllBytes(path)));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException) { }
 
@@ -116,12 +125,31 @@ internal sealed unsafe partial class GameWindow
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
         if (Mos._mosesAltVoice && Mos._mosesOpen && MosesScene.MosesAltSounds.Contains(sound)) sound += 25;   // 910 이 갈아 끼운 모세스 안내 음성
-        bool loaded = _sfx.TryGetValue(sound, out var pcm);
+        PcmSound? pcm;
+        bool loaded;
+        lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
+        if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } assetLog)
+            try { File.AppendAllText(assetLog, $"sounds/{sound:D4}.wav" + Environment.NewLine); } catch (IOException) { }
+        // 설치판은 큰 효과음을 따로 받는다(AssetPack) — 없으면 뒤에서 받아 두고 이번에는 조용히 넘어간다(다음부터 난다).
+        if (!loaded && !Muted && AssetPack.MayCome("sounds", $"{sound:D4}.wav") && _sfxFetching.TryAdd(sound, true))
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    if (AssetPack.Fetch("sounds", $"{sound:D4}.wav", 60) is { } got)
+                    {
+                        var parsed = WaveSound.Parse(File.ReadAllBytes(got));
+                        lock (_sfx) _sfx[sound] = parsed;
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+                finally { _sfxFetching.TryRemove(sound, out _); }
+            });
         var (left, right) = SndPan(screenX);
         float gain = SndGain;
         // 화면 밖에서 난 소리는 작게 들린다 — 원본(0x10028c18~0x10028cef)은 화면 밖이면 −(d² % 5000)/100 dB(평균 약 −15 dB, 거리에 단조가 아님)다.
         // 리메이크는 화면 너비가 달라 그 식을 그대로 못 쓰니 평균값으로 줄인다(근사 — ba-21 sound D6). 전에는 화면 밖 소리도 제 크기였다.
-        if (!float.IsNaN(screenX) && (screenX < 0 || screenX > 640)) gain *= 0.18f;
+        // → 사용자 요청으로 뺐다: 행동하는 인물이 화면 가장자리·밖에 있으면 제 공격 소리·목소리가 멀리서 나는 것처럼 작아졌다. 크기는 늘 제 크기로 둔다.
         bool played = !Muted && loaded && _mixer.PlayEffect(pcm!, gain, tag, loop, left, right, slotted: true);
         // DUELDX_TRACE 면 무슨 소리를 틀었는지(파일이 있었는지·크기·좌우) 적는다 — 음소거한 화면 밖 시험에서도 재생 여부를 본다.
         if (BattleScene.Trace)
@@ -139,7 +167,8 @@ internal sealed unsafe partial class GameWindow
     {
         if (float.IsNaN(screenX)) return (1f, 1f);
         float pan = (Math.Clamp(screenX, 0, 640) - 320) * 7;
-        float cut = (float)Math.Pow(10, -Math.Abs(pan) / 2000.0);
+        // 반대쪽은 절반(−6 dB)까지만 줄인다 — 원본대로(가장자리 −22 dB)면 한쪽에서만 작게 들려 「멀어진」 것처럼 들린다(사용자 요청).
+        float cut = Math.Max(0.5f, (float)Math.Pow(10, -Math.Abs(pan) / 2000.0));
         return pan < 0 ? (1f, cut) : (cut, 1f);
     }
 

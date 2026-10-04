@@ -31,7 +31,34 @@ internal static class AssetPack
     private static readonly object Gate = new();
     private static List<Entry> _todo = [];
     private static readonly List<string> _wanted = [];
-    private static bool _running, _ready;
+    private static bool _running, _ready, _done;
+    private static DateTime _failedAt = DateTime.MinValue;
+
+    private static bool Disabled =>
+        Environment.GetEnvironmentVariable("DUELDX_PACK") is var flag && (flag == "0" || (flag != "1" && Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1"));
+
+    /// <summary>그 파일이 앞으로 올 수 있나 — 받기를 껐거나, 다 받았거나, 목록에 없으면 false(부르는 쪽이 「없는 그림」으로 기억해도 된다).</summary>
+    public static bool MayCome(string kind, string file)
+    {
+        if (Disabled) return false;
+        lock (Gate) return !_done && (!_ready || _current == $"{kind}/{file}" || _todo.Any(e => e.Name == $"{kind}/{file}"));
+    }
+
+    /// <summary>
+    /// 그 파일을 쓸 수 있는 자리로 돌려준다 — 실린 것이 있으면 그것, 없으면 받을 때까지(최대 <paramref name="seconds"/>초) 기다렸다가 받은 것. 끝내 없으면 null.
+    /// 모세스 화면 그림(<c>moses/obs</c> · <c>moses/bgr</c>)처럼 처음 쓸 때 받아 오는 것들이 쓴다. DUELDX_ASSETLOG=파일 이면 찾은 이름을 적는다(무엇을 실을지 가리려고).
+    /// </summary>
+    public static string? Fetch(string kind, string file, int seconds = 15)
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log)
+            try { lock (Gate) File.AppendAllText(log, $"{kind}/{file}" + Environment.NewLine); } catch (IOException) { }
+        string shipped = Path.Combine(AssetsFolder.Find(kind), file);
+        if (File.Exists(shipped)) return shipped;
+        string got = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file);
+        if (File.Exists(got)) return got;
+        if (!MayCome(kind, file)) return null;
+        return EnsureNow(kind, file, seconds) && File.Exists(got) ? got : null;
+    }
 
     /// <summary>받을 목록에 아직 남아 있나 — 목록을 못 읽은 동안에는 모른다(false).</summary>
     private static bool Pending(string name) { lock (Gate) return _current == name || _todo.Any(e => e.Name == name); }
@@ -44,7 +71,7 @@ internal static class AssetPack
     {
         string shipped = Path.Combine(AssetsFolder.Find(kind), file);
         if (File.Exists(shipped)) return shipped;
-        string got = Path.Combine(Folder, kind, file);
+        string got = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file);
         if (!File.Exists(got)) Want($"{kind}/{file}");
         return got;
     }
@@ -90,7 +117,8 @@ internal static class AssetPack
         if (flag != "1" && Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1") return;
         lock (Gate)
         {
-            if (_running) return;
+            // 다 받았거나, 방금(30초 안) 실패했으면 다시 걸지 않는다 — 그림을 찾을 때마다 불리므로.
+            if (_running || _done || DateTime.UtcNow - _failedAt < TimeSpan.FromSeconds(30)) return;
             _running = true;
         }
         _ = Task.Run(RunAsync);
@@ -101,7 +129,7 @@ internal static class AssetPack
     /// <summary>이미 있나 — 게임에 실렸거나, 받은 것의 크기가 목록과 같다.</summary>
     private static bool Have(Entry e)
     {
-        int slash = e.Name.IndexOf('/');
+        int slash = e.Name.LastIndexOf('/');
         if (slash > 0 && File.Exists(Path.Combine(AssetsFolder.Find(e.Name[..slash]), e.Name[(slash + 1)..]))) return true;
         var info = new FileInfo(LocalPath(e));
         return info.Exists && info.Length == e.Size;
@@ -175,9 +203,11 @@ internal static class AssetPack
                 lock (Gate) _current = "";
             }
             Status = "";
+            lock (Gate) _done = true;
         }
         catch (Exception ex)
         {
+            lock (Gate) _failedAt = DateTime.UtcNow;
             // 인터넷 없음·디스크 꽉 참·GitHub 막힘 — 조용히 넘어가고, 다음에 찾을 때(또는 다음에 켤 때) 다시 받는다.
             System.Diagnostics.Debug.WriteLine($"[Pack] {ex.GetType().Name}: {ex.Message}");
             Status = "";
