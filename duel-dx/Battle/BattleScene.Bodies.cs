@@ -30,32 +30,62 @@ internal sealed unsafe partial class BattleScene
     {
         if (w.Id == StagingSkill.DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
-        // 원본 복제 클래스 셋(ba-21 fx F12 뒤 분석) — 「그 순간 모습」(−1) 줄의 꼴로 가른다.
+        // 원본 복제 클래스(ba-21 fx F12 뒤 분석, 17:20 재확인) — 「그 순간 모습」(−1) 줄을 기술로 가른다.
         if (list.All(b => b.Motion < 0))
         {
             var body = list[0].OnTarget && target != null ? target : user;
-            if (list.Length == 1 && list[0].OnTarget)
+            double now = host._lastTime;
+            if (list.Length == 1 && list[0].OnTarget && !StagingSkill.IsWeaponCrashWork(w.Id) && !StagingSkill.IsBalancingWork(w.Id))
             {
-                // 늘어나는 복제(0x100c6a10 + 0x100c6b20) — 포스 필드·배리어·실드류: 20틱 동안 가로 1 + 0.055k · 세로 1 + 0.015k (k = min(t, 19 − t)),
-                // 가로는 가운데 · 세로는 발 기준으로 부풀었다 돌아온다. 표가 다른 자리(카운터 필드 120틱 …)도 같은 꼴로 본다(가설).
-                _bodyShapes.Add((body, 1, host._lastTime, 0, null));
+                // 늘어나는 복제(0x100c6a10 + 0x100c6b20, 그리기 칸 4) — 포스 필드·배리어·실드류 9자리: 20틱, 가로 1 + 0.055k · 세로 1 + 0.015k
+                // (k = min(t, 19 − t), 캐노피만 0.05 · 0.01). 카운터 실드·카운터 필드는 120틱 가로만(40틱 주기 1 → 1.57, 1.4 → 0.83) — 여기서는 20틱 꼴로 둔다.
+                _bodyShapes.Add((body, 1, now, 0, null, 0, 0, 4 / 9.0, null));
                 return;
             }
-            if (list.Length == 2 && list.All(b => b.OnTarget))
+            if (list.Length == 2 && list.All(b => b.OnTarget) && (w.Id == 396 || w.Id is >= 556 and <= 574 || w.Id == 399 || w.Id is >= 594 and <= 602))
             {
-                // 떨리는 복제(0x100c6d70 + 0x100c6e20) — 마인드 어택: 복제 둘이 ±5 로, 나이 % 4 가 0·2 면 제자리 · 1 이면 −치우침 · 3 이면 +치우침, 40틱.
-                // 쇼크(0x100ae41c — 조각 떼 표에 482:3 × 80 이 있는 work)는 ±6 · 50틱.
-                int sway = WorkFxSwarm.Table.TryGetValue(w.Id, out var swarm) && swarm.Any(r => r.Obs == 482 && r.Count == 80) ? 6 : 5;
-                _bodyShapes.Add((body, 2, host._lastTime, sway, null));
-                _bodyShapes.Add((body, 2, host._lastTime, -sway, null));
+                // 떨리는 복제(0x100c6d70 + 0x100c6e20, 그리기 칸 3 · 본체 5) — 마인드 어택 ±5 · 40틱, 쇼크 ±6 · 50틱.
+                int sway = w.Id == 399 || w.Id is >= 594 and <= 602 ? 6 : 5;
+                _bodyShapes.Add((body, 2, now, sway, null, 0, 0, 3 / 9.0, null));
+                _bodyShapes.Add((body, 2, now, -sway, null, 0, 0, 3 / 9.0, null));
                 return;
             }
-            if (list.Length >= 3 && list.All(b => !b.OnTarget))
+            if (list.Length == 1 && !list[0].OnTarget && (w.Id == 3 || w.Id is >= 21 and <= 39))
             {
-                // 꼬리 복제(0x100c61c0 + 0x100c5fe0) — 혼: 복제 일곱이 시전자의 2·4·…·14틱 전 자리에 선다(돌진을 따라 늘어섰다가 멈추면 겹쳐 사라진다).
-                // 비연참(21개 — 세 줄)은 옆 줄의 치우침을 못 읽어 한 줄로 겹쳐 둔다.
-                var history = new List<(int X, int Y)>();
-                for (int i = 0; i < Math.Min(7, list.Length); i++) _bodyShapes.Add((body, 3, host._lastTime, 2 * (i + 1), history));
+                // 크기 복제(0x100c64b0 + 0x100c6600(20, 0.97, 0.97), 그리기 칸 3) — 오버 드라이브: 10틱 뒤에 1.84배로 떠서 틱마다 × 0.97, 10틱(1.36배에서 사라짐).
+                _bodyShapes.Add((user, 5, now + 10 / TicksPerSecond, 0, null, 0, 0, 3 / 9.0, null));
+                return;
+            }
+            if (list.Length == 7 && list.All(b => !b.OnTarget))
+            {
+                // 꼬리 복제(0x100c61c0 + 0x100c5fe0) — 혼: 일곱 개가 시전자의 2·4·…·14틱 전 자리에 선다.
+                var history = new List<(int X, int Y, SpriteFrame? Frame, bool Busy)>();
+                for (int n = 1; n <= 7; n++) _bodyShapes.Add((user, 3, now, 2 * n, history, 0, 0, CloneFade, null));
+                return;
+            }
+            if (w.Id is >= 341 and <= 350)
+            {
+                // 비연참(0x10080430) — 꼬리 21개: 세 줄 × (2·4·…·14틱 전). 옆 두 줄은 가는 쪽 뒤로 40 · 옆으로 ±40(방향 표 0x100813f4, 화면 y 는 × 0.8).
+                var history = new List<(int X, int Y, SpriteFrame? Frame, bool Busy)>();
+                var (b1, b2) = user.Facing switch
+                {
+                    Facing.Up => ((40, 32), (-40, 32)),
+                    Facing.Left => ((40, 32), (40, -32)),
+                    Facing.Down => ((40, -32), (-40, -32)),
+                    _ => ((-40, 32), (-40, -32)),
+                };
+                foreach (var (dx, dy) in new[] { (0, 0), b1, b2 })
+                    for (int n = 1; n <= 7; n++) _bodyShapes.Add((user, 3, now, 2 * n, history, dx, dy, CloneFade, null));
+                return;
+            }
+            if (list.Length == 9 && list.All(b => !b.OnTarget))
+            {
+                // 연(0x1007f860) — 휘두를 때마다 복제 셋이 그 몸짓을 6 · 9 · 12틱 늦게 되풀이한다(자리 y+1·+2·+3, 그리기 칸 4 · 3 · 2).
+                // 여기서는 시전자의 6 · 9 · 12틱 전 모습을 그 자리에 겹쳐 그린다 — 시전자가 설 때까지.
+                var history = new List<(int X, int Y, SpriteFrame? Frame, bool Busy)>();
+                _bodyShapes.Add((user, 4, now, 6, history, 0, 1, 4 / 9.0, null));
+                _bodyShapes.Add((user, 4, now, 9, history, 0, 2, 3 / 9.0, null));
+                _bodyShapes.Add((user, 4, now, 12, history, 0, 3, 2 / 9.0, null));
                 return;
             }
         }
@@ -80,51 +110,75 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
-    /// 꼴이 있는 복제 — 1 늘어남(20틱) · 2 떨림(Param = 치우침, 40틱) · 3 꼬리(Param = 몇 틱 전 자리, History = 주인이 지나온 자리).
-    /// 그리는 밝기는 다른 분신과 같은 값으로 둔다(원본의 그리기 방식 3·4 가 무엇인지는 못 읽음).
+    /// 꼴이 있는 복제 — 1 늘어남(20틱) · 2 떨림(Param = 치우침) · 3 꼬리(Param 틱 전 자리 + (Dx, Dy)) · 4 메아리(Param 틱 전 모습을 제자리에) ·
+    /// 5 크기(1.84배에서 틱마다 × 0.97, 10틱). History 는 주인이 틱마다 지나온 자리·모습(같은 묶음이 함께 쓴다). Fade 는 그리기 칸(+0x13) ÷ 9.
     /// </summary>
-    internal readonly List<(UnitState Owner, int Kind, double Start, int Param, List<(int X, int Y)>? History)> _bodyShapes = [];
+    internal readonly List<(UnitState Owner, int Kind, double Start, int Param, List<(int X, int Y, SpriteFrame? Frame, bool Busy)>? History,
+                           int Dx, int Dy, double Fade, SpriteFrame? Snapshot)> _bodyShapes = [];
 
     internal void DrawBodyShapes()
     {
         for (int i = _bodyShapes.Count - 1; i >= 0; i--)
         {
             var c = _bodyShapes[i];
+            if (host._lastTime < c.Start) continue;
             int tick = (int)((host._lastTime - c.Start) * TicksPerSecond);
-            if (!c.Owner.OnField || !host._sprites.TryGetValue(c.Owner.ChrCode, out var sprite) || sprite.FrameFor(c.Owner) is not { } frame || tick > 300)
+            if (!c.Owner.OnField || !host._sprites.TryGetValue(c.Owner.ChrCode, out var sprite) || sprite.FrameFor(c.Owner) is not { } frame || tick > 400)
             { if (c.Kind == 2) c.Owner.Fade = 1; _bodyShapes.RemoveAt(i); continue; }
             var (fx, fy) = host.Btl.UnitFoot(c.Owner);
+            void Stretched(SpriteFrame f, double sx, double sy)
+            {
+                int w = Math.Max(1, (int)(f.W * sx)), h = Math.Max(1, (int)(f.H * sy));
+                var px = new uint[w * h];
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        px[y * w + x] = f.Px[Math.Min(f.H - 1, y * f.H / h) * f.W + Math.Min(f.W - 1, x * f.W / w)];
+                // 가로는 가운데, 세로는 그림 아랫변을 붙든다(0x100c6bf0 · 0x100c6740).
+                host.BlitMasked(px, w, h, fx + f.X - (w - f.W) / 2, fy + f.Y - (h - f.H), fade: c.Fade);
+            }
             switch (c.Kind)
             {
                 case 1:
                 {
                     if (tick >= 20) { _bodyShapes.RemoveAt(i); continue; }
                     int k = Math.Min(tick, 19 - tick);
-                    int w = Math.Max(1, (int)(frame.W * (1 + 0.055 * k))), h = Math.Max(1, (int)(frame.H * (1 + 0.015 * k)));
-                    var px = new uint[w * h];
-                    for (int y = 0; y < h; y++)
-                        for (int x = 0; x < w; x++)
-                            px[y * w + x] = frame.Px[Math.Min(frame.H - 1, y * frame.H / h) * frame.W + Math.Min(frame.W - 1, x * frame.W / w)];
-                    host.BlitMasked(px, w, h, fx + frame.X - (w - frame.W) / 2, fy + frame.Y - (h - frame.H), fade: 4 / 9.0);   // 그리기 칸 +0x13 = 4(밝기 0~9 와 같은 칸)
+                    Stretched(frame, 1 + 0.055 * k, 1 + 0.015 * k);
                     break;
                 }
                 case 2:
                 {
-                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40)) { c.Owner.Fade = 1; _bodyShapes.RemoveAt(i); continue; }
+                    int life = Math.Abs(c.Param) == 6 ? 50 : 40;
+                    if (tick >= life) { c.Owner.Fade = 1; _bodyShapes.RemoveAt(i); continue; }
                     int shift = (tick % 4) switch { 1 => -c.Param, 3 => c.Param, _ => 0 };
-                    // 복제는 +0x13 = 3, 그동안 본체는 5(끝나면 0 = 또렷) — 밝기 칸(0~9, WorkUnitFx 와 같은 칸)으로 읽어 3/9 · 5/9 로 그린다(가설).
-                    c.Owner.Fade = 5 / 9.0;
-                    if (tick >= (Math.Abs(c.Param) == 6 ? 50 : 40) - 1) c.Owner.Fade = 1;
-                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: 3 / 9.0);
+                    c.Owner.Fade = tick >= life - 1 ? 1 : 5 / 9.0;      // 떨리는 동안 본체는 그리기 칸 5
+                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + shift, fy + frame.Y, fade: c.Fade);
+                    break;
+                }
+                case 5:
+                {
+                    if (tick >= 10) { _bodyShapes.RemoveAt(i); continue; }
+                    if (c.Snapshot == null) { c = c with { Snapshot = frame }; _bodyShapes[i] = c; }
+                    double scale = Math.Pow(0.97, tick + 1 - 20);
+                    Stretched(c.Snapshot!, scale, scale);
                     break;
                 }
                 default:
                 {
                     var history = c.History!;
-                    while (history.Count <= tick) history.Add((fx, fy));
-                    var (hx, hy) = history[Math.Max(0, tick - c.Param)];
-                    if (tick > c.Param && (hx, hy) == (fx, fy)) { _bodyShapes.RemoveAt(i); continue; }
-                    host.BlitMasked(frame.Px, frame.W, frame.H, hx + frame.X, hy + frame.Y, fade: CloneFade);
+                    while (history.Count <= tick) history.Add((fx, fy, frame, c.Owner.IsBusy));
+                    var past = history[Math.Max(0, tick - c.Param)];
+                    if (c.Kind == 3)
+                    {
+                        // 꼬리 — 주인을 따라잡고 주인이 서 있으면 사라진다.
+                        if (tick > c.Param && (past.X, past.Y) == (fx, fy)) { _bodyShapes.RemoveAt(i); continue; }
+                        host.BlitMasked(frame.Px, frame.W, frame.H, past.X + c.Dx + frame.X, past.Y + c.Dy + frame.Y, fade: c.Fade);
+                    }
+                    else
+                    {
+                        // 메아리 — 그때의 모습이 서 있는 모습이 되면(주인이 다 휘두른 뒤 Param 틱) 사라진다.
+                        if (tick > c.Param && !past.Busy) { _bodyShapes.RemoveAt(i); continue; }
+                        if (tick >= c.Param && past.Frame is { } old) host.BlitMasked(old.Px, old.W, old.H, past.X + old.X, past.Y + c.Dy + old.Y, fade: c.Fade);
+                    }
                     break;
                 }
             }
