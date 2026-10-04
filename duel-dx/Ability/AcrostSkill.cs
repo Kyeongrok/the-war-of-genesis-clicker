@@ -16,13 +16,36 @@ using static DuelDx.GameWindow;
 /// 원 궤도의 빠르기는 곡선 이동기(<c>0x100384c0</c>) 안쪽이라 못 풀었다 — 인자의 10.0 을 틱당 10° 로 읽었다(가설).</para>
 /// <para><b>서몬 몬스터</b> — 핸들러 <c>0x100af1e0</c>, 대상 j 마다 난수 넷 중 하나로 몬스터가 대상의 한쪽에 나타나 친다(j+10 틱 뒤):
 /// 0 위(y−80) 919:2 · 2 아래(y+80) 919:0 · 1 왼쪽(x−80, 뒤집음) 919:1 · 3 오른쪽(x+80) 919:1. 몬스터 모션이 끝나면 피해(<c>0x100c29b0</c>)와 함께
-/// 시전자에게 919:5/3/4(자식 920:2/0/1). 소리 1356:0 은 j 틱 뒤. 몬스터의 잔상(<c>0x100c64b0</c> + <c>0x100c6600</c>)은 아직 안 그린다.</para>
+/// 시전자에게 919:5/3/4(자식 920:2/0/1). 소리 1356:0 은 j 틱 뒤. 몬스터의 크기 복제는 <see cref="DrawSummonGrow"/>.</para>
 /// </remarks>
 internal sealed unsafe class AcrostSkill(GameWindow host)
 {
     internal const int ElementalFireAbility = 29, SummonMonsterAbility = 60;
     internal const int FireBallObs = 637, FireTrailObs = 321, FireBlastObs = 252, FireSoundObs = 1331;
     internal const int MonsterObs = 919, MonsterSoundObs = 1356;
+
+    /// <summary>
+    /// 몬스터가 나타나기 앞 10틱의 크기 복제(<c>0x100c64b0</c> + <c>0x100c6600(10, 1.1, 0.9)</c>, 그리기 칸 3 — 0x100af376 등 네 자리):
+    /// 가로 1.1^−10(0.39배) · 세로 0.9^−10(2.87배)에서 떠 틱마다 × 1.1 · × 0.9 로 제 크기가 된다. 가로 가운데 · 아랫변 기준.
+    /// </summary>
+    internal readonly List<(int Motion, double Start, int X, int Y, bool Mirror)> _summonGrow = [];
+
+    internal void DrawSummonGrow()
+    {
+        _summonGrow.RemoveAll(g => host._lastTime >= g.Start + 10 / TicksPerSecond);
+        foreach (var g in _summonGrow)
+        {
+            if (host._lastTime < g.Start || host.UiFor(MonsterObs)?.FrameAt(g.Motion, 0, false, g.Mirror) is not { } f) continue;
+            int left = 10 - (int)((host._lastTime - g.Start) * TicksPerSecond);
+            double sx = Math.Pow(1.1, -left), sy = Math.Pow(0.9, -left);
+            int w = Math.Max(1, (int)(f.W * sx)), h = Math.Max(1, (int)(f.H * sy));
+            var px = new uint[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    px[y * w + x] = f.Px[Math.Min(f.H - 1, y * f.H / h) * f.W + Math.Min(f.W - 1, x * f.W / w)];
+            host.BlitMasked(px, w, h, g.X + f.X - (w - f.W) / 2, g.Y + f.Y - (h - f.H), fade: 3 / 9.0, additive: true);
+        }
+    }
 
     /// <summary>
     /// 불덩이가 도는 틱 — 원본은 150+10j 틱(5초 남짓)인데 너무 길다고 해서 <b>1/3</b>(50+3j)로 줄였다(사용자 요청). 원본으로 되돌리려면 150·10.
@@ -149,6 +172,7 @@ internal sealed unsafe class AcrostSkill(GameWindow host)
             };
             double start = t0 + (j + 10) / TicksPerSecond, end = start + host.HeavenEarthAb.OnceSeconds(MonsterObs, motion);
             host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(MonsterObs, motion, start, (int)(tx + ox), (int)(ty + oy), null, mirror));
+            _summonGrow.Add((motion, t0 + j / TicksPerSecond, (int)(tx + ox), (int)(ty + oy), mirror));
             host.HeavenEarthAb._timedFx.Add(new HeavenEarthSkill.TimedFx(MonsterObs, casterMotion, end, ux, uy, null, false));
             FxSound(MonsterSoundObs, 0, t0 + j / TicksPerSecond);
             hits.Add((end, targets[j]));
