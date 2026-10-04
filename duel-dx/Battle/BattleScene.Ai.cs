@@ -191,7 +191,11 @@ internal sealed unsafe partial class BattleScene
     internal bool WorthUsing(UnitState user, WorkData w, List<int> targets)
     {
         int need = w.MinTargets + 1;
-        if (w.AbilityId == CureAbility) need = 1;   // 큐어는 한 명에게만 간다(WorkTargets) — 최소 대상 수를 못 채워 영영 안 쓰는 일이 없게
+        // 큐어는 한 명에게만 간다(WorkTargets) — <b>제 편이고 해로운 상태가 걸린</b> 대상일 때만 쓴다. 큐어의 대상 방식은 5(아무 유닛)라
+        // 전에는 적에게도(상태가 없는 상대에게도) 썼다(사용자 보고: Btl 0136 의 이반). 원본 AI 가 어떻게 거르는지는 확인하지 않았다(상식대로).
+        if (w.AbilityId == CureAbility)
+            return targets.Any(i => host._units[i] is var t && !Hostile(user, t)
+                                    && Enumerable.Range(0, 3).Any(k => AilmentScore(t.StatusId[k], t.StatusValue[k]) < 0));
         // 블랙홀은 화면 HP 가 위력보다 적은 유닛만 쓰러뜨린다 — 쓰러질 적이 쓰러질 제 편(시전자 포함)보다 많을 때만 쓴다(데모 판단, 원본 AI 는 대상 수만 본다).
         if (w.AbilityId == BlackHoleAbility)
         {

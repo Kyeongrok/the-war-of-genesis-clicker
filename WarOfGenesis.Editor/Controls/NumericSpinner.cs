@@ -97,10 +97,9 @@ public class NumericSpinner : Control
         }
     }
 
+    /// <summary>휠로는 값을 안 바꾼다 — 표를 굴리다가 값이 바뀌어 헷갈렸다(사용자 요청). 휠은 그대로 흘려 보내 표가 굴러가게 둔다.</summary>
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        StepBy(e.Delta > 0 ? +Step : -Step);
-        e.Handled = true;
     }
 
     private void CommitText()
