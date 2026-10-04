@@ -910,6 +910,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 ScheduleAbilitySounds(w);
                 SpawnAbilityEffects(w, a, col, row);
                 SpawnWorkShakes(w);
+                // 군단기면 부하 잔상(ba-21 C) — 피해는 그 연출의 끝 무렵에 들어간다.
+                for (double end = _lastTime + StartLegionStage(a, w, col, row, WorkTargets(w, a, col, row)); _lastTime < end;) yield return true;
                 effectsDone = true;
             }
             // 혼·비연참·오메가 스윙 — 겨눈 빈 칸까지 돌진하며 지나는 칸의 적을 때린다(fg-21 ⑨). 돌진 자세(붙듦)는 이미 틀었다.
