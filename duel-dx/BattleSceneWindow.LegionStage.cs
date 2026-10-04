@@ -242,8 +242,18 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>군단기 연출이 다 끝나는 때 — 행동 루틴이 그때까지 기다린다(숨은 유닛이 남은 채 다음 차례가 시작되지 않게).</summary>
     private double _legionStageEnd;
 
+    /// <summary>정해 둔 때에 할 일(소리·이펙트·카메라) — 숨김·보임 시각표와 같이 돈다.</summary>
+    private readonly List<(double At, Action Do)> _legionLater = [];
+
     private void StepLegionFades()
     {
+        for (int i = 0; i < _legionLater.Count; i++)
+        {
+            if (_lastTime < _legionLater[i].At) continue;
+            var todo = _legionLater[i].Do;
+            _legionLater.RemoveAt(i--);
+            todo();
+        }
         for (int i = _legionFades.Count - 1; i >= 0; i--)
         {
             var (at, unit, fade) = _legionFades[i];
