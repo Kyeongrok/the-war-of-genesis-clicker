@@ -1124,11 +1124,12 @@ internal sealed unsafe partial class BattleSceneWindow
                 foreach (int ti in (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)))
                     if (_units[ti].Alive && !dying.Contains(_units[ti])) ApplyWork(a, hitWork, _units[ti], dying);
             }
-            // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 쓰러질 인물은 밀지 않는다.
+            // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 그 타로 쓰러질 인물도 밀린 칸에서 쓰러진다
+            // (비 단계 2 0x10080111~0x1008035c 는 겨눈 유닛을 조건 없이 민다 · 다이나믹 크래쉬는 밀고 나서 판정, ba-21 T5). 전에는 쓰러질 인물은 안 밀었다.
             if (BiWorks.Contains(w.Id) || DynamicCrashWorks.Contains(w.Id))
             {
                 var knocked = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
-                              .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a && !dying.Contains(u));
+                              .Select(i => _units[i]).FirstOrDefault(u => u.Alive && u != a);
                 if (knocked != null)
                     foreach (bool _ in KnockbackRoutine(a, w, knocked, soulDrain: DynamicCrashWorks.Contains(w.Id) ? 10 : 0)) yield return true;
                 else if (BiWorks.Contains(w.Id)) PlayAction(a, DrawnAction(a, 24));
