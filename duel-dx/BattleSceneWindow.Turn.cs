@@ -854,6 +854,7 @@ internal sealed unsafe partial class BattleSceneWindow
         bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
         bool effectsDone = false, followersDone = false;
         double effectsAt = _lastTime;               // 이펙트를 띄운 때 — 핸들러 판정 틱의 기준(단계 0)
+        double fxSpan = 0;                          // 그 이펙트들이 다 끝나기까지의 틱
         _followerStrikes.Clear();
         SpawnWorkMovies(w, a, col, row, prelude: true);     // 준비 동작의 시전 영상(불기둥 Mov 0041·0042) — 시전이 시작할 때
         // 필살기(준비 7)는 공통 앞머리(빛 알갱이·초상 컷인·금빛 띠, 0x1007e330)를 다 돈 뒤에 핸들러로 간다.
@@ -916,7 +917,12 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!effectsDone)
             {
                 ScheduleAbilitySounds(w);
+                _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
+                _fxStagger = 0;
                 SpawnAbilityEffects(w, a, col, row);
+                _fxTargets = null;
+                // 판정을 기다릴 상한 — 이 work 의 이펙트가 다 끝나는 때(지연 + 수명 또는 모션 길이). 길이를 모르는 단계가 낀 표 값이 이펙트보다 길어 빈 대기가 되지 않게.
+                fxSpan = (ScriptFor(w.Id)?.Effects ?? []).Select(fx => fx.Delay + (fx.Life > 0 ? fx.Life : EffectTicks(fx.Obs, fx.Motion))).DefaultIfEmpty(0).Max();
                 SpawnWorkShakes(w);
                 effectsAt = _lastTime;
                 // 카메라 따라가기(0x100eac00, ba-21 fx F7) — 힐·큐어·배리어류 189개는 겨눈 대상을, 34개는 시전자를 따라간다. 탄을 따라가는 60개는 아직.
@@ -1056,7 +1062,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (step == hitStep && _lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !IsLegionSkill(w.Id) && !HasSpecialHit(w)
                 && WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
-                double hitAt = effectsAt + Math.Min(handlerHit.Ticks, 240) / TicksPerSecond;
+                bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);
+                double hitAt = effectsAt + Math.Min(Math.Min(handlerHit.Ticks, 240), sureHit ? 240 : Math.Max(10, fxSpan)) / TicksPerSecond;
                 // 핸들러가 대상을 붙드는 기술(브레인 스톰·블라인드·안티 밸런싱·미라클·아이템 1609~1617) — 판정까지 맞음 자세(미라클은 시전 자세로 아래를 봄)로
                 // 붙들었다가 판정 바로 앞에 서기로 되돌린다(0x10095ab0 · 0x100a19ed · 0x100a1dbf · 0x1009b958 · 0x100b76f5, ba-21 T3).
                 var held = new List<(UnitState Unit, Facing Was)>();
@@ -1096,7 +1103,16 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (hit > 0)
                     for (double end = _lastTime + (hitTimes[hit] - hitTimes[hit - 1]); _lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
-                foreach (int ti in targets) ApplyWork(a, hitWork, _units[ti], dying);
+                // 대상마다 이펙트가 엇갈려 뜨는 기술(헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …)은 판정도 그 간격으로 하나씩 든다(ba-21 fx F6).
+                // 간격은 이펙트가 실제로 엇갈려 뜬 값(_fxStagger)이고, 다 합쳐 150틱을 안 넘는다. 반사로 시전자가 쓰러지면 거기서 멈춘다.
+                int stagger = hitTimes.Count == 1 && targets.Count > 1 ? Math.Min(_fxStagger, 150 / (targets.Count - 1)) : 0;
+                for (int k = 0; k < targets.Count; k++)
+                {
+                    if (k > 0 && !a.Alive) break;
+                    if (k > 0 && stagger > 0)
+                        for (double end = _lastTime + stagger / TicksPerSecond; _lastTime < end;) yield return true;
+                    ApplyWork(a, hitWork, _units[targets[k]], dying);
+                }
                 // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
                 if (hit == 0 && w.IsDamage && w.AbilityId != BlackHoleAbility && a.Data is { } od)
                     foreach (var (oc, or) in EffectCells(w, a, col, row))
