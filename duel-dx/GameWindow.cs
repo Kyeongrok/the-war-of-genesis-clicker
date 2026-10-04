@@ -103,12 +103,17 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         int col = bx / TileW;
         if ((uint)col >= Cols) return -1;
+        // 높이가 다른 칸들의 윗면이 같은 자리에 겹칠 수 있다 — 앞(아래) 칸부터 보되, 벽 칸(플래그 &9 — 못 들어가는 칸)은 뒤에 설 수 있는 칸이
+        // 겹쳐 있으면 양보한다. 전에는 높은 벽 칸이 그 뒤 바닥 칸의 클릭을 가로챘다(Btl 0298 의 (21,12) 가 줄 16 으로 잡힘).
+        int wall = -1;
         for (int row = Rows - 1; row >= 0; row--)
         {
             int top = CellTop(col, row);
-            if (by >= top && by < top + TileH) return row;
+            if (by < top || by >= top + TileH) continue;
+            if (!_battleLoaded || _map is null || (Btl.CellFlagsAt(col, row) & 0x9) == 0 || Btl.ObjectAt(col, row) != null) return row;   // 물체가 선 칸은 벽이 아니다
+            if (wall < 0) wall = row;
         }
-        return -1;
+        return wall;
     }
 
     /// <summary>맵 그림의 아랫끝(판 픽셀) — 카메라는 원본처럼 그림 밖으로 안 내려간다(맵 `+0x398~+0x39e` 로 자름).</summary>
