@@ -352,8 +352,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
     }
 
     /// <summary>
-    /// 어빌리티 실험판(편집기의 「게임에서 실험」) — <c>DUELDX_ARENA=어빌리티:레벨[:Chr]</c> 이면 첫 전투의 맵에 아군 하나(기본 죠안 221)와
-    /// 적 부대 넷(가이아 리더 193 + 군단 7 가이아 버그즈)만 세우고, 그 아군에게 그 어빌리티를 그 레벨로 쥐여 준다(SOUL·TP 가득, 차례마다 다시 채움).
+    /// 어빌리티 실험판(편집기의 「게임에서 실험」) — <c>DUELDX_ARENA=어빌리티:레벨[:Chr]</c> 이면 여는 전투(<c>DUELDX_BATTLE</c>, 편집기는 106)에
+    /// 아군은 하나(기본 죠안 221)만 세우고 적은 그 전투 그대로 둔다. 그 아군은 <b>그 어빌리티 하나만</b> 그 레벨로 갖는다(SOUL·TP 가득, 차례마다 다시 채움). 사건은 안 돈다.
     /// </summary>
     internal static (int Ability, int Level, int Chr)? Arena { get; } =
         Environment.GetEnvironmentVariable("DUELDX_ARENA")?.Split(':') is { Length: >= 2 } parts
@@ -362,12 +362,14 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal static DemoScene ArenaScene(DemoScene scene, int chr)
     {
-        // 자리는 그 전투의 것을 빌린다 — 아군은 첫 아군 자리, 적 대장 넷은 아군에서 가까운 적 자리 넷(설 수 있는 칸이 보장된다).
-        var ally = scene.Roster.FirstOrDefault(u => u.Side == 4) ?? scene.Roster[0];
-        var spots = scene.Roster.Where(u => !u.IsAlly).OrderBy(u => Math.Abs(u.Col - ally.Col) + Math.Abs(u.Row - ally.Row))
-                         .Select(u => (u.Col, u.Row)).Distinct().Take(4).ToList();
-        var roster = new List<DemoUnit> { new(chr, ally.Col, ally.Row, 4, 0, Facing.Right) };
-        roster.AddRange(spots.Select(s => new DemoUnit(193, s.Col, s.Row, 0, 7, Facing.Left) { WakeCondition = 0 }));
+        // 그 전투(편집기는 Btl 0106 을 연다 — 사용자 요청)의 적은 그대로 두고, 아군은 다 빼고 실험할 인물 하나만 세운다 —
+        // 자리는 첫 아군 자리, 아군이 없는 전투면 첫 배치 칸.
+        var enemies = scene.Roster.Where(u => !u.IsAlly).ToList();
+        var (col, row) = scene.Roster.FirstOrDefault(u => u.Side == 4) is { } ally ? (ally.Col, ally.Row)
+                       : scene.Placement is { Count: > 0 } spots ? (spots[0].Col, spots[0].Row)
+                       : (Math.Max(0, scene.StartCol), Math.Max(0, scene.StartRow));
+        var roster = new List<DemoUnit> { new(chr, col, row, 4, 0, Facing.Right) };
+        roster.AddRange(enemies);
         return scene with { Title = "어빌리티 실험", Roster = [.. roster], NextBattle = 0, Placement = null, LegionsAllowed = false };
     }
 
