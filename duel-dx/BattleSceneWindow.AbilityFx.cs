@@ -72,7 +72,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 비 — BiScript(BattleSceneWindow.Knockback.cs). 레벨마다 work 가 따로라(10 · 221~239) 거기서 모두 잡는다.
         [59] = ([6, 15], [new(1332, 0, false, 0), new(1324, 1, false, 0)]),     // 격려
         // 제이슨
-        [467] = ([6, 15], [new(386, 0, false, 0), new(171, 9, true, 30, 0, 1, false, 0, 0)]),       // 블레이드 미사일
+        [467] = ([6, 15], []),       // 블레이드 미사일 — 이펙트는 도구 표의 것(41틱 뒤 386:0 …)을 쓴다. 손으로 적은 줄이 지연 0 으로 그것을 덮었다
         [735] = ([6, 15], [new(1380, 0, false, 0)]),                            // 크래쉬 봄
         // 나인 크루세이더 — 앞머리는 FinisherPrelude, 칼은 BattleSceneWindow.NineCrusader.cs 가 한다.
         // 도구 표의 344 모션 열한 개를 대상 한 자리에 겹쳐 띄우던 것은 뺀다(HandOnlyWorks).
@@ -230,6 +230,9 @@ internal sealed unsafe partial class BattleSceneWindow
     };
 
     /// <summary>때리는 순간에 그 어빌리티의 이펙트를 띄운다.</summary>
+    /// <summary>지금 행동이 띄운 이펙트 가운데 가장 늦은 것의 시작 때(게임 초).</summary>
+    private double _fxLatestStart;
+
     private void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
@@ -237,6 +240,8 @@ internal sealed unsafe partial class BattleSceneWindow
         SpawnBodyClones(w, user, _units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         var script = ScriptFor(w.Id);
+        // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
+        _fxLatestStart = Math.Max(_fxLatestStart, _lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
         if (DuckWorks.Contains(w.Id))
         {
             // 줄여 둘 동안 — 가장 늦게 끝나는 이펙트까지(지연 + 수명 또는 모션 길이). 대본이 없으면 40틱.

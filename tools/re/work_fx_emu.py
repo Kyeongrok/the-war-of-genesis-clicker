@@ -14,6 +14,8 @@
   · 단계 전이는 0x100e82e0(단계+1, 틱 0)과 [+0x94] 쓰기로 따라간다. 못 봤으면 다음 번호에 새 호출 자리가 있을 때만 잇는다.
   · 틱 비교 상수(cmp [+0x96], N)를 모아 그 앞뒤 값으로 다시 돌려, 한 단계 안의 차례를 틱 순으로 세운다.
   · 이펙트 생성자가 돌려준 객체('fx#n')를 따라가 지연·수명·뿌리개 설정이 어느 이펙트의 것인지 가린다.
+  · 사슬(0x100c2640·0x100c2680·0x100c2600)은 그 이펙트 기록의 'chain' = [끝/시작, 앞 것의 주소, 앞 것의 길, 자리복사, 지연],
+    수명×n(0x100c2570)은 'loops', 카메라 따라가기/놓기(0x100eac00·0x100eac60)는 사건 'cam'·'camoff' 로 남긴다(ba-21 F4·F9·F7).
 한계: 이펙트 객체의 콜백은 안 따라간다. 고리는 한 바퀴뿐이라 고리마다 달라지는 지연은 첫 값만 나온다.
 근거·결과: 옵시디안 분석/원본차이/ba20-fxtable.md
 """
@@ -39,6 +41,10 @@ MAP_GLOBAL, WT_GLOBAL = 0x101be2dc, 0x101b6868
 HITSLOTS = {0x100c2950, 0x100c29b0, 0x100c28f0, 0x100c2a10, 0x100c2860}
 MSG = 0x10001f40
 NEW = 0x10134570
+# 사슬(ba-21 F4) — (앞 이펙트, 자리복사, 지연): 앞 것이 끝나면('end') / 시작하면('start') 제 지연이 돈다
+CHAIN = {0x100c2640: 'end', 0x100c2680: 'end', 0x100c2600: 'start'}
+LIFELOOPS = 0x100c2570     # (n) 수명 = 모션 길이 × n (ba-21 F9)
+CAMFOLLOW, CAMFREE = 0x100eac00, 0x100eac60    # 카메라가 this 를 따라간다(속도, 우선) / 놓는다 (ba-21 F7)
 
 R32 = ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']
 SUB = {}
@@ -544,6 +550,17 @@ class Emu:
             s.reg['eax'] = None
             s.reg['ecx'] = s.reg['edx'] = None
             return
+        # 덧기록(흐름은 안 바꾼다) — 사슬·수명×n 은 그 이펙트 기록에, 카메라 따라가기는 사건으로 (work_fx_timing.py 가 읽는다)
+        tfx = ctx['fxs'][int(this[3:])] if isinstance(this, str) and this.startswith('fx#') else None
+        if tgt in CHAIN and tfx is not None and 'chain' not in tfx:
+            prev = ctx['fxs'][int(a[0][3:])] if isinstance(a[0], str) and a[0].startswith('fx#') else None
+            tfx['chain'] = [CHAIN[tgt], prev['va'] if prev else None, str(prev['path']) if prev else None, a[1], a[2]]
+        elif tgt == LIFELOOPS and tfx is not None and 'loops' not in tfx:
+            tfx['loops'] = a[0] if isinstance(a[0], int) else '?'
+        elif tgt in (CAMFOLLOW, CAMFREE):
+            who = 'fx' if tfx is not None else this if this in ('나', '나.대상') else None
+            ev.append(dict(cur, k='cam' if tgt == CAMFOLLOW else 'camoff', who=who, speed=a[0], prio=a[1],
+                           fx=[tfx['va'], tfx.get('obs'), tfx.get('motion'), tfx['ctor'], tfx['kind']] if tfx is not None else None))
         if tgt == SETACT:
             ev.append(dict(cur, k='act', base=a[0], dir=a[1], rep=a[2], this=this))
         elif tgt in (SETMOT, SETMOT2):
