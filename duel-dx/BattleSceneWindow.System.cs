@@ -613,7 +613,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     int[]? EpisodesPicked = null,
                                     SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false,
                                     int[]? NavStart = null,
-                                    SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null);
+                                    SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null,
+                                    bool MosesAltVoice = false);   // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
 
     // 꼬리 셋(없으면 옛 세이브라 예전처럼):
     // Entry = 전투 들어가기 직전 가방·GP·명부·군단 — 원본 전투 세이브의 전역 본문(판 부분과 따로, 분석-시스템메뉴 2.3/2.4b). RESTART 기준(감사5 S5).
@@ -652,6 +653,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
 
         _chapterDone = state.ChapterDone;
+        _mosesAltVoice = _mosesAltVoiceLoaded = state.MosesAltVoice;
         _partyNo = state.PartyNo;
         // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
         // 지금 인원을 은행으로 치워 버린다.
@@ -867,7 +869,8 @@ internal sealed unsafe partial class BattleSceneWindow
                                     _entryFlags?.Select((v, i) => (v, i)).Where(x => x.v != 0).ToDictionary(x => x.i.ToString(), x => (int)x.v))
                     : null,
                 Camera: battleSave ? [_camX, _camY] : null,
-                EventCheckDue: battleSave ? _eventCheckDue : null);
+                EventCheckDue: battleSave ? _eventCheckDue : null,
+                MosesAltVoice: _mosesAltVoice);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
