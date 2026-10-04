@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 모세스 메일 페이지(mo-1, 페이지 1) — 편지함과 편지 보기.
@@ -217,7 +217,7 @@ internal sealed unsafe partial class MosesScene
 
     /// <summary>
     /// 편지 목록을 <paramref name="delta"/> 줄 굴린다 — 막대 화살표·빈 곳이 부른다.
-    /// 마우스 휠은 WndProc(BattleSceneWindow.cs)가 메일 페이지에서 <c>ScrollMail(-휠/120)</c> 으로 보내야 한다.
+    /// 마우스 휠은 WndProc(GameWindow.cs)가 메일 페이지에서 <c>ScrollMail(-휠/120)</c> 으로 보내야 한다.
     /// </summary>
     internal void ScrollMail(int delta)
     {

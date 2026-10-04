@@ -3,7 +3,7 @@
 
 namespace DuelDx;
 
-internal sealed unsafe partial class BattleSceneWindow
+internal sealed unsafe partial class GameWindow
 {
     /// <summary>
     /// work 번호 → (동작 차례, 이펙트) — <b>도구가 뽑은</b> 표. 손으로 맞춘 <see cref="AbilityMotions"/> 가 우선한다.

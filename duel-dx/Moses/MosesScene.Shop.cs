@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 모세스 상점 페이지(mo-1, 페이지 3·4) — 아이템 상점과 VT(무기) 상점.

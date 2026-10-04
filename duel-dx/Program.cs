@@ -25,7 +25,7 @@ internal static class Program
 
         try
         {
-            using var window = new BattleSceneWindow();
+            using var window = new GameWindow();
             window.Run();
         }
         catch (Exception ex)

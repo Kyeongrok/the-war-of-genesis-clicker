@@ -5,7 +5,7 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 전투가 끝나면 나오는 모세스 단말 화면(mo-1) — 주 화면·항행·파티 페이지와 ESC 시스템 메뉴.
@@ -28,9 +28,9 @@ using static DuelDx.BattleSceneWindow;
 /// 메일·상점·파티·전직·용병관리·뒤로 대부분은 <b>효과 4 = 15틱 알파 크로스페이드</b>(<c>0x1002cc60</c>, 검정을 안 거친다),
 /// 항행 → 주 화면과 행성 고르기는 검은 페이드(효과 2·3), <b>항행 진입(효과 1)만 30틱에 걸쳐 파랑 채널을 씻어 낸다</b>.
 /// 아이콘 여섯은 주 화면·항행·메일·통신·파티 페이지에 늘 떠 있는 「도크」다(상점·전직·용병관리만 숨김, <c>0x100f968f</c>·<c>0x100fad23</c>·<c>0x100fb216</c>).
-/// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 BattleSceneWindow.Moses*.cs 로 나눠 두었다.
+/// 640×480 화면을 우리 판 가운데에 1배로 놓는다. 페이지마다 그리는 코드는 GameWindow.Moses*.cs 로 나눠 두었다.
 /// </remarks>
-internal sealed unsafe partial class MosesScene(BattleSceneWindow host)
+internal sealed unsafe partial class MosesScene(GameWindow host)
 {
     internal const int MosesW = 640, MosesH = 480;
     internal const int MosesObs = 291, MosesFrameObs = 246, MosesBackObs = 248;

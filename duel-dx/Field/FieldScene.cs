@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
-using static DuelDx.BattleSceneWindow;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 필드 화면(장면 3) — 챕터가 「저절로 들어가는 장소」로 쓰는 연출 장면.
@@ -19,7 +19,7 @@ using static DuelDx.BattleSceneWindow;
 /// 데모는 <b>연출을 뺀 최소판</b>이다: 배경 한 장과 대사·고르기만 그리고, 인물·물체·카메라·화면 전환(202·208·302·400번대·900)은 넘긴다.
 /// 진행에 필요한 조건 <c>0·100·101</c> 과 행동 <c>0·1·2·3·6·7·10·11·12·100·101·102·103·600·601·604·605</c> 는 모두 돈다.
 /// </remarks>
-internal sealed unsafe partial class FieldScene(BattleSceneWindow host)
+internal sealed unsafe partial class FieldScene(GameWindow host)
 {
     internal FieldFile? _field;
     internal TalkTable? _fieldTalk;
