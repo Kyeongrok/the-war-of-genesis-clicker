@@ -15,6 +15,9 @@ public static class AssetsFolder
 {
     public static string Find(string subFolder)
     {
+        // WAROFGENESIS_ASSETS=<assets 폴더> 면 그것을 쓴다 — 따로 받은 편집기(게임 폴더 밖에 풀린다)를 게임이 띄울 때 제 assets 자리를 알려 준다.
+        if (Environment.GetEnvironmentVariable("WAROFGENESIS_ASSETS") is { Length: > 0 } given && Directory.Exists(Path.Combine(given, "characters")))
+            return Path.Combine(given, subFolder);
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
         {
