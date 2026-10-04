@@ -331,17 +331,19 @@ internal sealed unsafe partial class BattleScene
                         continue;
                     }
                 }
-                // 그 밖 이동기 — 떠오름(높이 MaxSpeed, 틱당 ScalePermille/1000 px 위로) · 고리 · 포물선(Speed 틱). 길 식은 인자에서 짠 가설이다.
-                // 전에는 제자리에 한 장으로 섰다. 떨굼(중력)과 그 밖(9)은 아직 제자리.
-                if (extra is { Move: 2, MaxSpeed: > 0, ScalePermille: > 0 } rise && !e.Fly)
+                // 그 밖 이동기(ba-21 fx F2, 원본 식 확인) — 전에는 제자리에 한 장으로 섰다. 그 밖(9)은 아직 제자리.
+                // 떠오름(0x100c5c10 → 틱 0x10038da0): 높이 z 만 바뀐다 — T(= MaxSpeed, 음수면 내려옴, MinSpeed 가 있으면 그 너비로 흔들린 값)만큼
+                // 틱당 빠르기(ScalePermille/1000)로. 화면에서는 높이 × 12/20(0x100ea910). 좌우 1~3px 흔들림(타원 윤곽 길)은 안 넣었다.
+                if (extra is { Move: 2, ScalePermille: > 0 } rise && rise.MaxSpeed != 0 && !e.Fly)
                 {
-                    _shots.Add((e.Obs, e.Motion, start, x, y - e.Lift, x, y - e.Lift - rise.MaxSpeed, rise.ScalePermille / 1000.0, 1, 1, 0, 0, mirrored));
+                    int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
+                    _shots.Add((e.Obs, e.Motion, start, x, y - e.Lift, x, y - e.Lift - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
                     continue;
                 }
                 if (extra is { Move: 4, Mode: > 0 } ring && !e.Fly)
                 {
                     _movers.Add((e.Obs, e.Motion, start, 4, x, y - e.Lift, 0, 0, ring.Mode, ring.Speed, ring.MaxSpeed,
-                                 ring.MinSpeed / 1000.0 * Math.PI, ring.ScalePermille / 1000.0, mirrored));
+                                 ring.MinSpeed / 1000.0 * Math.PI, ring.ScalePermille / 1000.0 * Math.PI, mirrored));   // 각·각속도는 π 단위(0x10039410)
                     _fxLatestStart = Math.Max(_fxLatestStart, start);
                     continue;
                 }
