@@ -363,7 +363,24 @@ internal sealed unsafe partial class BattleScene
         int tick = (int)((host._lastTime - e.Start) * TicksPerSecond);
         // 자식 키만으로 된 모션(필살기 금빛 띠 344:18·19 — 제 컷 없이 자식 여섯)도 있다 — 원본 애니메이터처럼 자식을 함께 그린다(0x100e5410).
         var clip = host.UiFor(e.Obs)?.Clip(e.Motion);
-        if (clip is { Children.Count: > 0 }) DrawUnitLayers(clip, tick, e.X, e.Y, mirror: mirror, loop: false);
+        // 이펙트의 시간줄 자식은 <b>제 모션 길이만큼만</b> 산다(0x100d2d00 — 길이 0 이면 한 틱) — 금빛 띠는 여섯 장이 한 틱에 하나씩 번갈아 뜨는 것이다.
+        // 전에는 길이 0 인 자식을 안 지워 여섯 장이 쌓여 더해져 흰 네모가 됐다(사용자 보고: 이데아 캐논). 자식의 자식(띠의 가운데·오른쪽 조각)도 그린다.
+        if (clip is { Children.Count: > 0 })
+            foreach (var (start, obs, motion, dx, dy, _, _) in clip.Children)
+            {
+                if (start > tick || host.UiFor(obs) is not { } childSprite) continue;
+                int age = tick - start;
+                if (age >= Math.Max(1, childSprite.MotionLength(motion))) continue;
+                void Layer(int layerObs, int layerMotion, int lx, int ly)
+                {
+                    int layerKey = host.UiFor(layerObs)?.BlendAt(layerMotion, age) ?? 0;
+                    host.DrawUi(layerObs, layerMotion, age, lx, ly, layerKey is (>= 1 and <= 8) or 10 or 12 ? BlendOf(layerKey) : layerKey == 17 ? UiBlend.Add : UiBlend.Alpha,
+                                loop: false, fade: BlendFade(layerKey), mirror: mirror);
+                }
+                Layer(obs, motion, e.X + dx, e.Y + dy);
+                foreach (var (nestedStart, nestedObs, nestedMotion, ndx, ndy, _, _) in childSprite.Clip(motion)?.Children ?? [])
+                    if (nestedStart <= age) Layer(nestedObs, nestedMotion, e.X + dx + ndx, e.Y + dy + ndy);
+            }
         // 섞기 방식은 모션의 종류 3 키를 따른다(ba-21 fx F14): 1~8 은 그 단계의 반투명(칼날 171 · 바위 251:6 · 422:1), 10 은 닷지(450:0),
         // 그 밖(17 가산 · 키 없음 · 19 — 식을 못 푼 것)은 전처럼 가산. 전에는 전부 가산이라 반투명 이펙트가 하얗게 탔다.
         int key = host.UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;

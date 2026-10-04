@@ -73,7 +73,9 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
         foreach (var (motion, sy) in new[] { (18, 130), (19, 340) })
         {
             var (bx, by) = PreludeScreen(0, sy);
-            host.Btl._effects.Add((PreludeBandObs, motion, host._lastTime + 10 * Tick, (int)bx, (int)by));
+            // 띠 그림은 640 너비(조각 셋)다 — 화면이 더 넓으면 옆에 이어 붙인다.
+            for (int ox = 0; ox < host.ViewWidth; ox += 640)
+                host.Btl._effects.Add((PreludeBandObs, motion, host._lastTime + 10 * Tick, (int)bx + ox, (int)by));
         }
         for (double end = host._lastTime + 60 * Tick; host._lastTime < end;) yield return true;
     }
