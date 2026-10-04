@@ -118,7 +118,11 @@ internal sealed unsafe partial class BattleSceneWindow
             // 자식 키만으로 된 모션(필살기 금빛 띠 344:18·19 — 제 컷 없이 자식 여섯)도 있다 — 원본 애니메이터처럼 자식을 함께 그린다(0x100e5410).
             var clip = UiFor(e.Obs)?.Clip(e.Motion);
             if (clip is { Children.Count: > 0 }) DrawUnitLayers(clip, tick, e.X, e.Y, mirror: false, loop: false);
-            if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, UiBlend.Add, loop: false)) return false;
+            // 섞기 방식은 모션의 종류 3 키를 따른다(ba-21 fx F14): 1~8 은 그 단계의 반투명(칼날 171 · 바위 251:6 · 422:1), 10 은 닷지(450:0),
+            // 그 밖(17 가산 · 키 없음 · 19 — 식을 못 푼 것)은 전처럼 가산. 전에는 전부 가산이라 반투명 이펙트가 하얗게 탔다.
+            int key = UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;
+            var blend = key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add;
+            if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key))) return false;
             return UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
         });
     }
