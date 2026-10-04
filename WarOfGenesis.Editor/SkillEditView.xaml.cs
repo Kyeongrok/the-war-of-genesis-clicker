@@ -531,6 +531,7 @@ public partial class SkillEditView : UserControl
             var start = new System.Diagnostics.ProcessStartInfo(exe) { WorkingDirectory = System.IO.Path.GetDirectoryName(exe)!, UseShellExecute = false };
             start.Environment["DUELDX_ARENA"] = $"{row.Ability}:{level}";
             start.Environment["DUELDX_TITLE"] = "0";
+            start.Environment["DUELDX_BATTLE"] = "106";      // 실험은 Btl 0106 에서(사용자 요청)
             System.Diagnostics.Process.Start(start);
             StatusText.Text = $"{row.Name} Lv{level} 실험판을 띄웠습니다 — 값을 고친 뒤 다시 누르면 새 값으로 다시 뜹니다.";
         }

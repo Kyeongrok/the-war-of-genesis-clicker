@@ -167,9 +167,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (GameWindow.Arena is not { } arena) return;
         foreach (var u in host._units.Where(u => u.Side == 4 && u.LeaderIndex < 0 && u.Data != null))
         {
-            var kept = u.Data!.Abilities.Where(a => a.Ability != arena.Ability && a.Ability != 0).ToList();
-            kept.Insert(0, ((ushort)arena.Ability, (ushort)arena.Level));
-            u.Data = u.Data with { Abilities = [.. kept] };
+            // 실험할 어빌리티 하나만 — 다른 것은 뺀다(사용자 요청).
+            u.Data = u.Data! with { Abilities = [((ushort)arena.Ability, (ushort)arena.Level)] };
             u.Soul = u.MaxSoul;
             u.Tp = u.MaxTp;
         }
