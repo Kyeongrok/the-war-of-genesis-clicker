@@ -77,7 +77,7 @@ internal sealed unsafe partial class GameWindow
         _testRunStatAt = _lastTime + 10;
         string scene = TitleScr._titleOpen ? "title" : Mos._mosesOpen ? "moses" : FieldOpen ? "field" : _battleLoaded ? $"btl {_scene.Id}" : "none";
         string alive = string.Join(" ", _units.Where(u => u.Alive && u.OnField).GroupBy(u => u.Side).OrderBy(g => g.Key).Select(g => $"s{g.Key}={g.Count()}"));
-        TestRunTrace($"stat t {_lastTime:F1} scene {scene} turnNo {Btl._turnNo} tick {Btl._tick} turn {Btl._turn} ev {Btl._runningEvent} talk {Tlk._talks.Count} outcome '{Btl._outcome}' alive {alive}");
+        TestRunTrace($"stat t {_lastTime:F1} scene {scene} turnNo {Btl._turnNo} tick {Btl._tick} turn {Btl._turn} ev {Btl._runningEvent} talk {Tlk._talks.Count} outcome '{Btl._outcome}' routine {(Btl._routine != null ? 1 : 0)} alive {alive}");
     }
 
     /// <summary>시험 전용: 결과·행선지 줄 — 켜졌을 때만 적는다.</summary>

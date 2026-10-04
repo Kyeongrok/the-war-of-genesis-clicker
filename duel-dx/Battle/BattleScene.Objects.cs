@@ -206,7 +206,7 @@ internal sealed unsafe partial class BattleScene
             if (o.Hp == o.Data.MaxHp) o.Hp = maxHp;
             if (Trace && (o.Data.Breakable || attack > 0))
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                    $"obj growth: no {o.Record.No} obj {o.Data.Id} kind {o.Data.Kind} lv {level} hp {o.Data.MaxHp}→{maxHp} atk {o.Data.Attack}→{attack}" + Environment.NewLine);
+                    $"obj growth: no {o.Record.No} at ({o.Col},{o.Row}) obj {o.Data.Id} kind {o.Data.Kind} lv {level} hp {o.Data.MaxHp}→{maxHp} atk {o.Data.Attack}→{attack}" + Environment.NewLine);
         }
     }
 
@@ -241,6 +241,7 @@ internal sealed unsafe partial class BattleScene
     {
         if (host._db is null || damage <= 0 || !obj.Alive) return;
         EnsureObjectGrowth();                            // HP 가 레벨 성장을 먹은 뒤에 깎는다(0x100e73f0)
+        if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"obj damage: no {obj.Record.No} at ({obj.Col},{obj.Row}) by {user.ChrCode} atk {damage} hp {obj.Hp}" + Environment.NewLine);
         // 물체 쪽 1001 처리(0x100e77e0 → 0x100e72f0)는 명중·RDP·치명 없이 공격자 ATK ±10% 만 뺀다(ba-14 O1).
         damage = damage * (90 + host._rng.Next(21)) / 100;
         obj.Hp -= damage;
