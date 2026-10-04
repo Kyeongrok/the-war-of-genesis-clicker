@@ -199,6 +199,7 @@ internal sealed unsafe partial class GameWindow
         IntPtr dev = Win32.CreatePopupMenu();
         Win32.AppendMenuW(dev, Win32.MF_STRING, MenuReloadSkills, "어빌리티 반영(&A)");
         Win32.AppendMenuW(dev, Win32.MF_STRING, MenuChapters, "챕터 고르기(&C)...");
+        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuEditor, "편집기 열기(&E)… (없으면 받는다)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
         return bar;
     }
@@ -248,6 +249,9 @@ internal sealed unsafe partial class GameWindow
     internal double _skipFrom;
 
     internal const int MenuSkipEnemy = 1109;
+
+    /// <summary>개발 > 편집기 열기 — 설치판에는 편집기가 없다. 처음 누르면 받아서 연다(<see cref="EditorLauncher"/>).</summary>
+    internal const int MenuEditor = 1110;
 
     /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
     internal bool TrySkipEnemyAction()
@@ -359,6 +363,9 @@ internal sealed unsafe partial class GameWindow
                 _skipEnemyAction = !_skipEnemyAction;
                 Toast(_skipEnemyAction ? "적이 행동할 때 클릭하면 모션을 건너뜁니다" : "적 행동을 건너뛰지 않습니다");
                 SaveSettings();
+                break;
+            case MenuEditor:
+                EditorLauncher.Open(Toast);
                 break;
             case MenuFullSoul:
                 _fullSoulAtStart = !_fullSoulAtStart;

@@ -64,12 +64,20 @@ jobs:
         shell: pwsh
         run: |
           $v = "${{ steps.version.outputs.version }}"
-          foreach ($proj in 'duel-dx/WarOfGenesis.csproj', 'WarOfGenesis.Editor/WarOfGenesis.Editor.csproj') {
-            dotnet publish $proj -c Release -r win-x64 --self-contained true -o pack `
-              -p:DebugType=none `
-              -p:Version=$v -p:AssemblyVersion=$v -p:FileVersion=$v -p:InformationalVersion=$v
-            if ($LASTEXITCODE -ne 0) { throw "$proj publish(설치판) 실패" }
-          }
+          # 설치판에는 게임만 넣는다 — 편집기는 따로 받는다(게임의 개발 > 편집기 열기, duel-dx/EditorLauncher.cs).
+          dotnet publish duel-dx/WarOfGenesis.csproj -c Release -r win-x64 --self-contained true -o pack `
+            -p:DebugType=none `
+            -p:Version=$v -p:AssemblyVersion=$v -p:FileVersion=$v -p:InformationalVersion=$v
+          if ($LASTEXITCODE -ne 0) { throw "게임 publish(설치판) 실패" }
+          # 편집기 꾸러미 — assets 없이(게임 것을 쓴다) 폴더째 묶는다. 이름은 늘 같게(게임이 releases/latest/download/WarOfGenesis.Editor.zip 을 받는다).
+          dotnet publish WarOfGenesis.Editor/WarOfGenesis.Editor.csproj -c Release -r win-x64 --self-contained true -o editorpack `
+            -p:DebugType=none -p:EditorWithoutAssets=true `
+            -p:Version=$v -p:AssemblyVersion=$v -p:FileVersion=$v -p:InformationalVersion=$v
+          if ($LASTEXITCODE -ne 0) { throw "편집기 publish(꾸러미) 실패" }
+          if (-not (Test-Path editorpack/WarOfGenesis.Editor.exe)) { throw "editorpack 에 WarOfGenesis.Editor.exe 가 없습니다" }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path editorpack/* -DestinationPath dist/WarOfGenesis.Editor.zip -Force
+          Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Install vpk
         if: startsWith(github.ref, 'refs/tags/v')
@@ -121,7 +129,7 @@ jobs:
             gh release create $tag --title $tag --generate-notes
           }
           # 업로드가 GitHub 쪽 500·504 로 가끔 끊긴다 — 파일마다 몇 번 다시 시도한다.
-          foreach ($file in "publish/WarOfGenesis.exe", "publish/WarOfGenesis.Editor.exe", "dist/WarOfGenesis-v${{ steps.version.outputs.version }}.zip") {
+          foreach ($file in "publish/WarOfGenesis.exe", "publish/WarOfGenesis.Editor.exe", "dist/WarOfGenesis-v${{ steps.version.outputs.version }}.zip", "dist/WarOfGenesis.Editor.zip") {
             for ($try = 1; $try -le 4; $try++) {
               gh release upload $tag $file --clobber
               if ($LASTEXITCODE -eq 0) { break }

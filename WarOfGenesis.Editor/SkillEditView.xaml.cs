@@ -510,9 +510,11 @@ public partial class SkillEditView : UserControl
                    ?? LevelGrid.SelectedItem as DataRowView;
         int level = view != null && int.TryParse(Convert.ToString(view.Row["level"]), out int chosen) ? chosen : 1;
         SaveDirty();
-        string? exe = null;
+        // 게임이 편집기를 띄웠으면 제 자리를 알려 준다(WAROFGENESIS_GAME).
+        string? exe = Environment.GetEnvironmentVariable("WAROFGENESIS_GAME") is { Length: > 0 } given && System.IO.File.Exists(given) ? given : null;
         string beside = System.IO.Path.Combine(AppContext.BaseDirectory, "WarOfGenesis.exe");
-        if (System.IO.File.Exists(beside)) exe = beside;
+        if (exe != null) { }
+        else if (System.IO.File.Exists(beside)) exe = beside;
         else
             for (var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory); dir != null && exe == null; dir = dir.Parent)
             {

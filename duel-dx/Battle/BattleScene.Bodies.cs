@@ -89,6 +89,21 @@ internal sealed unsafe partial class BattleScene
                 return;
             }
         }
+        // 파(어빌리티 11, 핸들러 0x10082990) — 시전자 몸의 복제 탄 여덟이 3틱 간격으로 여덟 방향으로 날아간다(빠르기 20, 틱마다 × 0.85, 바닥 10,
+        // 거리 D = (범위 − 2) × 40 — 대각선은 D/2 씩). 탄마다 2·4·6틱 전 자리에 꼬리 복제 셋. 그리기 칸 4. 전에는 분신 열한 개가 대상 쪽으로 늘어섰다.
+        if (w.AbilityId == 11)
+        {
+            var (px, py) = host.Btl.UnitFoot(user);
+            double reach = Math.Max(0, w.AreaMaxQuarters / 4 - 2) * 40;
+            (double Dx, double Dy, int Shot, int Tail, bool Mirror)[] ways =
+            [
+                (reach, 0, 34, 37, true), (0, reach, 35, 38, false), (-reach, 0, 34, 37, false), (0, -reach, 33, 36, false),
+                (reach / 2, -reach / 2, 37, 37, true), (reach / 2, reach / 2, 37, 37, true), (-reach / 2, reach / 2, 37, 37, false), (-reach / 2, -reach / 2, 37, 37, false),
+            ];
+            for (int i = 0; i < ways.Length; i++)
+                _bodyShots.Add((user, ways[i].Shot, ways[i].Tail, host._lastTime + 3 * i / TicksPerSecond, px, py, px + ways[i].Dx, py + ways[i].Dy * 0.8, ways[i].Mirror));
+            return;
+        }
         var (ux, uy) = host.Btl.UnitFoot(user);
         var (tx, ty) = target != null ? host.Btl.UnitFoot(target) : (col * TileW + TileW / 2, host.CellCenterY(col, row));
         for (int i = 0; i < list.Length; i++)
@@ -185,10 +200,45 @@ internal sealed unsafe partial class BattleScene
         }
     }
 
+    /// <summary>파의 복제 탄 — 주인 몸의 모션 Shot 이 From 에서 To 로 날고(20 × 0.85, 바닥 10), 꼬리 셋(모션 Tail)이 2·4·6틱 전 자리를 따른다.</summary>
+    internal readonly List<(UnitState Owner, int Shot, int Tail, double Start, double FromX, double FromY, double ToX, double ToY, bool Mirror)> _bodyShots = [];
+
+    internal void DrawBodyShots()
+    {
+        _bodyShots.RemoveAll(s =>
+        {
+            if (host._lastTime < s.Start) return false;
+            if (!host._sprites.TryGetValue(s.Owner.ChrCode, out var sprite)) return true;
+            int tick = (int)((host._lastTime - s.Start) * TicksPerSecond);
+            double dx = s.ToX - s.FromX, dy = s.ToY - s.FromY, total = Math.Sqrt(dx * dx + dy * dy);
+            (double X, double Y) At(int t)
+            {
+                double gone = 0, speed = 20;
+                for (int k = 0; k < t && gone < total; k++) { gone += speed; speed = Math.Max(10, speed * 0.85); }
+                double f = total <= 0 ? 1 : Math.Min(1, gone / total);
+                return (s.FromX + dx * f, s.FromY + dy * f);
+            }
+            int life = Math.Max(1, sprite.MotionTicks(s.Shot) - 1);
+            var here = At(tick);
+            if (here == (s.ToX, s.ToY) && tick >= life) return true;      // 닿았고 모션도 끝났다
+            if (tick > 200) return true;
+            foreach (int back in new[] { 6, 4, 2 })
+                if (tick >= back && sprite.FrameOfMotion(s.Tail, tick - back, s.Mirror) is { } tail)
+                {
+                    var (bx, by) = At(tick - back);
+                    host.BlitMasked(tail.Px, tail.W, tail.H, (int)bx + tail.X, (int)by + tail.Y, fade: 4 / 9.0);
+                }
+            if (sprite.FrameOfMotion(s.Shot, tick, s.Mirror) is { } frame)
+                host.BlitMasked(frame.Px, frame.W, frame.H, (int)here.X + frame.X, (int)here.Y + frame.Y, fade: 4 / 9.0);
+            return false;
+        });
+    }
+
     /// <summary>분신을 반투명으로 그린다 — 인물 위에(인물 다음에) 그린다. 끝난 것은 지운다.</summary>
     internal void DrawBodyClones()
     {
         DrawBodyShapes();
+        DrawBodyShots();
         for (int i = _bodyClones.Count - 1; i >= 0; i--)
         {
             var c = _bodyClones[i];
