@@ -162,7 +162,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (_outcome.Length > 0)
         {
             // 조용한 결과(행동 10·6·11[1])는 클릭을 기다리지 않고 제때 넘어간다(원본 120틱).
-            if (_outcomeQuiet && host._lastTime >= _outcomeLeaveAt && !host.Mos._mosesOpen && !host.FieldOpen && !host.EpisodesScr._episodesOpen) host.LeaveFinishedBattle();
+            if (_outcomeQuiet && host._lastTime >= _outcomeLeaveAt && !host.Mos._mosesOpen && !host.FieldOpen && !host.EpisodesScr._episodesOpen) host.Btl.LeaveFinishedBattle();
             return;
         }
         if (_deployOpen) { StepDeploy(); return; }     // 캐릭터 배치 중에는 틱·차례·이벤트가 멈춘다(원본 상태 2)
@@ -450,7 +450,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             else if (resume && IsMine(host._units[index])) CenterOnUnit(host._units[index]);
         }
         CancelTargeting();
-        host._heldMoveKeys.Clear();
+        host.Btl._heldMoveKeys.Clear();
         // 편 4 만 내가 움직인다. 편 3(동맹 AI)과 적은 같은 AI 로 스스로 움직인다(ba-6·ba-11).
         // 버서커(상태 4)라도 조종권은 그대로다 — 원본은 편 판정(0x1006fde0)에서 「모두가 적」이 될 뿐, +0x78·+0x4e9·+0x4ec 를 안 건드리고
         // WAITNEXT 도 +0x78==4 만 본다(ba-14 A4 확정). 전에는 사용자 보고를 근거로 AI 에게 넘겼다.
@@ -491,7 +491,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (u.Data == null || host._voices.GetValueOrDefault(u.Data.VoiceSet).Hurt is not { Length: > 0 } hurt) return;
         if (hurt.Any(id => host._mixer.IsPlaying(HurtVoiceTag + id))) return;
         int id = hurt[((int)(host._lastTime * TicksPerSecond) & 1) % hurt.Length];   // 전투 프레임 카운터로 고른다(0x10071e83 → 0x100eaac0, ba-21 sound D8) — 전에는 인물마다 늘 같은 쪽이었다
-        host.Play(id, HurtVoiceTag + id, host.SoundScreenX(host.UnitFoot(u).X));   // 비명은 그 유닛 화면 자리에서(0x10079c68~0x10079c9a, ba-20 Q S-3)
+        host.Play(id, HurtVoiceTag + id, host.SoundScreenX(host.Btl.UnitFoot(u).X));   // 비명은 그 유닛 화면 자리에서(0x10079c68~0x10079c9a, ba-20 Q S-3)
     }
 
     /// <summary>
@@ -503,7 +503,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         if (host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
-            host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u), host.SoundScreenX(host.UnitFoot(u).X));   // 유닛 자리에서(0x1006866b)
+            host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u), host.SoundScreenX(host.Btl.UnitFoot(u).X));   // 유닛 자리에서(0x1006866b)
     }
 
     internal void EndTurn()
@@ -1412,7 +1412,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
         // 쓰러뜨린 타에는 불꽃(Obs 73)이 한 장 더 뜬다 — 모션 0(0x10079b84) + 무작위 한 장(0x10079c0a), ba-21 T6.
-        if (w.IsDamage) { var (kx, ky) = host.UnitFoot(t); _effects.Add((HitEffectObs, 0, host._lastTime, kx, ky - HitEffectLift)); }
+        if (w.IsDamage) { var (kx, ky) = host.Btl.UnitFoot(t); _effects.Add((HitEffectObs, 0, host._lastTime, kx, ky - HitEffectLift)); }
         // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).
         // SOUL 은 때린 사람이, 경험치는 군단 부하가 쓰러뜨렸으면 <b>대장</b>이 받는다(0x10079b14).
         // 처치 보상(1016)은 받는 유닛에게 SOUL +Num30 과 EXP 를 같이 준다(0x1007214f) — 부하가 쓰러뜨리면 둘 다 대장 몫(ba-20 K4).
@@ -1578,7 +1578,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     internal void Popup(UnitState u, string text, uint color, float size = 18)
     {
-        var (x, y) = host.UnitFoot(u);
+        var (x, y) = host.Btl.UnitFoot(u);
         _popups.Add((text, size, x, y - 70, host._lastTime, color));
     }
 
@@ -1600,7 +1600,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         foreach (var u in host._units)
         {
             if (!u.Alive || !u.OnField || u.MaxHp <= 0) continue;   // 판 밖(증원 전·퇴장) 유닛의 막대가 빈 칸에 뜨지 않게(ba-20 G22)
-            var (fx, fy) = host.UnitFoot(u);
+            var (fx, fy) = host.Btl.UnitFoot(u);
             int w = TileW - 8, x = fx - w / 2, y = fy + TileH / 2 - 7;
             host.FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
             host.FillRect(x, y, w * u.Hp / u.MaxHp, 3, u.IsAlly ? 0xFF50D060 : 0xFFE05050);

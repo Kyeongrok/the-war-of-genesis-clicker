@@ -43,7 +43,7 @@ internal sealed unsafe class AstralArrowSkill(GameWindow host)
     internal IEnumerable<bool> AstralArrowRoutine(UnitState user, List<int> targets, Action<int> hit)
     {
         double t0 = host._lastTime;
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         int bowY = (int)(uy - 150 * 0.6);
 
         // 1. 활
@@ -80,7 +80,7 @@ internal sealed unsafe class AstralArrowSkill(GameWindow host)
                 },
             });
         }
-        foreach (int t in targets) { var (tx, ty) = host.UnitFoot(host._units[t]); Fall(tx, ty, t); }
+        foreach (int t in targets) { var (tx, ty) = host.Btl.UnitFoot(host._units[t]); Fall(tx, ty, t); }
         for (int k = 0; k < 50; k++) Fall(ux + host._rng.Next(600) - 300, uy + (host._rng.Next(440) - 200) * 0.8, null);
 
         _arrowLastStep = host._lastTime;

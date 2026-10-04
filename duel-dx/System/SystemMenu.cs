@@ -1021,7 +1021,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.HeavenEarthAb._shakes.Clear();
         host.AcrostAb._fireBalls.Clear();
         host.Mov._ripples.Clear();
-        host._heldMoveKeys.Clear();
+        host.Btl._heldMoveKeys.Clear();
 
         var pool = state.Units.ToList();
         // 세이브 자리 번호 → 지금 판 자리 번호 — 마지막 때린 자·군단 대장·찾은 사람은 자리 번호로 적혀 있다.

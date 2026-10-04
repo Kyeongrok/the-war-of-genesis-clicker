@@ -58,7 +58,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>유닛 발 자리를 한 번 가운데로(0x100eabe0 — 종류 0, 따라가기 아님).</summary>
     internal void CenterOnUnit(UnitState u)
     {
-        var (fx, fy) = host.UnitFoot(u);
+        var (fx, fy) = host.Btl.UnitFoot(u);
         CenterOn(fx, fy);
     }
 
@@ -80,7 +80,7 @@ internal sealed unsafe partial class BattleScene
 
     internal IEnumerable<bool> CenterUnitAndWait(UnitState u)
     {
-        var (fx, fy) = host.UnitFoot(u);
+        var (fx, fy) = host.Btl.UnitFoot(u);
         return CenterAndWait(fx, fy);
     }
 
@@ -156,7 +156,7 @@ internal sealed unsafe partial class BattleScene
             var u = host._units[g.Follow];
             // 걷기가 끝나면 따라가기를 뺀다(0x10077085 → 0x100eac60) — 카메라는 그 자리에 선다.
             if (!u.IsMoving && u.Path.Count == 0) { _camGoal = null; return; }
-            (int fx, int fy) = host.UnitFoot(u);
+            (int fx, int fy) = host.Btl.UnitFoot(u);
             (gx, gy) = (fx, fy);
         }
         double tx = Math.Clamp(gx - host.ViewWidth / 2.0, 0, CamMaxX), ty = Math.Clamp(gy - host.ViewHeight / 2.0, 0, host.CamMax);

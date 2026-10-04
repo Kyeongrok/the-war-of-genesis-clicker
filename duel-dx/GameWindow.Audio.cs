@@ -485,7 +485,7 @@ internal sealed unsafe partial class GameWindow
     internal void ScheduleActionSounds(UnitState u, int action)
     {
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { } clip) return;
-        float x = UnitFoot(u).X;                          // 좌우 소리(감사4 S1) — 그 인물의 발 자리
+        float x = Btl.UnitFoot(u).X;                          // 좌우 소리(감사4 S1) — 그 인물의 발 자리
         foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound, x));
         foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
         {
@@ -529,7 +529,7 @@ internal sealed unsafe partial class GameWindow
             if (!u.Alive || !u.OnField || !u.IsMoving || u.Action >= 0 || u.Motion >= 0 || clip is not { Sounds.Count: > 0 }) continue;
             int length = Math.Max(clip.Length, clip.Keys.Count > 0 ? clip.Keys[^1].Start + clip.Keys[^1].Length : 0);
             if (length <= 0 || tick == prev) continue;
-            float x = UnitFoot(u).X;
+            float x = Btl.UnitFoot(u).X;
             foreach (var (start, sound) in clip.Sounds)
             {
                 // prev < start + k·length ≤ tick 인 k 가 있나 — 한 틀에 여러 바퀴를 건너도 한 번만 낸다.

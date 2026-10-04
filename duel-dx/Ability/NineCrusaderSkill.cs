@@ -87,7 +87,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
 
     internal SwordFlight StartNineCrusader(UnitState user, List<int> targets)
     {
-        var (ux, uy) = host.UnitFoot(user);
+        var (ux, uy) = host.Btl.UnitFoot(user);
         var order = NineCrusaderOrder(targets);
         // 길 — 대상, 그 대상을 (앞 점에서 본 방향으로) 120 지나친 점, … 그리고 시전자 머리 위(z+200 → 화면 120px). 월드 y 는 화면 0.8배.
         var points = new List<(double X, double Y)>();
@@ -95,7 +95,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
         (double X, double Y) from = (ux + 11, uy + 400);          // 앞 점 — 처음은 떠난 칼이 닿은 자리(y+500)
         foreach (int ti in order)
         {
-            var (tx, ty) = host.UnitFoot(host._units[ti]);
+            var (tx, ty) = host.Btl.UnitFoot(host._units[ti]);
             double dx = tx - from.X, dy = ty - from.Y, d = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
             (double X, double Y) past = (tx + dx / d * 120, ty + dy / d * 120 * 0.8);
             points.Add((tx, ty)); pointTarget.Add(ti);
@@ -193,7 +193,7 @@ internal sealed unsafe class NineCrusaderSkill(GameWindow host)
         if (next == m.Points.Count - 1)
         {
             // 마지막 — 칼이 시전자 곁으로 돌아온다.
-            var (ux, uy) = host.UnitFoot(f.User);
+            var (ux, uy) = host.Btl.UnitFoot(f.User);
             f.Return = ((m.X, m.Y), (ux + 11, uy), f.Tick);
             SwordSound(4);
         }

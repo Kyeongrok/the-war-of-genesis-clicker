@@ -38,7 +38,7 @@ internal sealed unsafe partial class BattleScene
         int ticks = host._sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
         PlayActionFor(target, HitAction, ticks > 0 ? ticks : HitActionTicks);
         if (!damaged) return;
-        var (x, y) = host.UnitFoot(target);
+        var (x, y) = host.Btl.UnitFoot(target);
         _effects.Add((HitEffectObs, host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
     }
 
@@ -226,7 +226,7 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     internal void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
     {
-        var (x, y) = host.UnitFoot(u);
+        var (x, y) = host.Btl.UnitFoot(u);
         _numbers.Add((text, color, x, y, host._lastTime, rise, count));
     }
 

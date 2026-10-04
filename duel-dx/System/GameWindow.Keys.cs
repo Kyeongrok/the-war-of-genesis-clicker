@@ -388,7 +388,7 @@ internal sealed unsafe partial class GameWindow
                 Toast(_keepJobExp ? "전직해도 EXP 를 남깁니다" : "전직하면 EXP 가 0 이 됩니다(원본대로)");
                 SaveSettings();
                 break;
-            case MenuKeys: _keysOpen = true; _keysCapture = -1; _heldMoveKeys.Clear(); break;
+            case MenuKeys: _keysOpen = true; _keysCapture = -1; Btl._heldMoveKeys.Clear(); break;
             case MenuGrid: _showGrid = !_showGrid; SaveSettings(); break;
             case MenuGauges: _showGauges = !_showGauges; SaveSettings(); break;
             case >= MenuSpeedBase and < MenuSpeedBase + 3:

@@ -124,7 +124,7 @@ internal sealed unsafe class PushSkill(GameWindow host)
             if (moved == 0) continue;
             t.Facing = BattleScene.FacingToward(nc, nr, user.Col, user.Row);
             t.PlayAction(BattleScene.HitAction, 1000);
-            var (fx, fy) = host.UnitFoot(t);
+            var (fx, fy) = host.Btl.UnitFoot(t);
             host.Btl._effects.Add((KnockbackSkill.BiTrailObs, 0, host._lastTime, fx, fy));
             t.BeginSlide(nc, nr);   // 곧바로 새 칸에 등록 — 뒤에 처리되는 유닛은 이 칸에 막히고, 비운 출발 칸에는 설 수 있다
             moves.Add((t, nc, nr, SlideSteps(moved)));
@@ -160,7 +160,7 @@ internal sealed unsafe class PushSkill(GameWindow host)
         if (landing is not var (lc, lr)) yield break;
 
         const double Tick = 1 / TicksPerSecond;
-        var (fx, fy) = host.UnitFoot(t);
+        var (fx, fy) = host.Btl.UnitFoot(t);
         host.Btl._effects.Add((587, 4, host._lastTime, fx, fy));
         for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
         {

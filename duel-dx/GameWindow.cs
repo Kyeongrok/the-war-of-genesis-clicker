@@ -638,7 +638,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);
                 return IntPtr.Zero;
             case Win32.WM_KEYUP:
-                _heldMoveKeys.Remove((int)wParam);
+                Btl._heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when ProgressScr._progressOpen:
                 ProgressScr._progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
@@ -679,7 +679,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 OnMenuCommand((int)((long)wParam & 0xFFFF));
                 return IntPtr.Zero;
             case Win32.WM_KILLFOCUS:
-                _heldMoveKeys.Clear();
+                Btl._heldMoveKeys.Clear();
                 return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
             case Win32.WM_LBUTTONDOWN:
                 OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
@@ -744,7 +744,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) Btl.LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (Mos._mosesOpen)
         {
@@ -821,9 +821,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 break;
             case KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight:
                 if (Btl._ringUnit >= 0 || Btl._abilityMenu || Btl._targetWork >= 0) break;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
-                _heldMoveKeys.Remove(key);
-                _heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
-                StepByKey(key);
+                Btl._heldMoveKeys.Remove(key);
+                Btl._heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
+                Btl.StepByKey(key);
                 break;
         }
     }
@@ -842,64 +842,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// 클릭: 공격 고르는 중이면 그 적을 친다. 인물이면 그 인물을 고르고(수치·영역 보기),
     /// 차례인 아군의 파란 칸이면 거기까지 걷는다. 빈 칸이면 차례인 인물로 선택을 되돌린다.
     /// </summary>
-    /// <summary>
-    /// 전투가 끝나고 배너가 떠 있을 때 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
-    /// 없거나 졌으면 모세스 화면으로 간다(mo-1). 키든 클릭이든 한 번이면 넘어간다(원본도 배너를 눌러 건너뛴다, 분석-전투).
-    /// </summary>
-    internal void LeaveFinishedBattle()
-    {
-        // 원본은 상태 24 가 끝나면 루프를 빠져나와 16틀 동안 화면을 검게, 음악을 100→10% 로 줄인 뒤 장면을 지운다
-        // (0x10061d91~0x10061ea9, 감사4 C7·사운드 B3). 이미 페이드 중이면 그대로 둔다 — 끝나면 StepSceneFade 가 넘긴다.
-        if (_fadeOutStart >= 0) return;
-        _fadeInStart = -1;
-        _fadeOutStart = _lastTime;
-        _afterFadeOut = null;
-        _fadeOutKeepMusic = false;
-        if (BattleScene.Trace)
-            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"{_lastTime:F2} battle fade-out ({(_lastTime - Btl._outcomeAt) * TicksPerSecond:F0} ticks after outcome '{Btl._outcome}')" + Environment.NewLine);
-    }
-
-    /// <summary>페이드아웃이 끝난 뒤 — 결과대로 다음 장면을 연다.</summary>
-    internal void LeaveFinishedBattleNow()
-    {
-        // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
-        // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
-        bool won = Btl._outcome.StartsWith('승');
-        int nextField = Btl._eventNextField;
-        // 시험 전용: 결과와 행선지를 남긴다(DUELDX_TESTRUN 일 때만).
-        TestRunTrace($"leave btl {_scene.Id} won {won} outcome '{Btl._outcome}' nextBattle {Btl._eventNextBattle} nextField {nextField} sceneNext {_scene.NextBattle} episodes {EpisodesScr.Episodes().Count} turnNo {Btl._turnNo} t {_lastTime:F1}");
-        Btl._outcome = "";
-        Btl._outcomeQuiet = false;
-        Btl._eventNextField = 0;
-        // 상태이상은 그 전투에서만 간다 — 판에 남은 유닛에 붙어 있으면 모세스 스테이터스 창에 그대로 보였다(사용자 보고).
-        foreach (var u in _units) u.ClearStatus();
-        // 진행 깃발은 <b>실제로 돈</b> 행동 102 만 세운다(RunEventAction) — 이긴 뒤 파일의 102 를 모두 적용하던 것은 안 터진 갈래의 깃발까지 세웠다(fg-21 ⑬).
-        // 이어지는 전투는 이벤트 행동 10 이 정한 것뿐이다. Btl 자료의 첫 행동 10 은 챕터 자료가 없는 데모 흐름에서만 쓴다 —
-        // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
-        int next = Btl._eventNextBattle > 0 ? Btl._eventNextBattle : EpisodesScr.Episodes().Count == 0 ? _scene.NextBattle : 0;
-        Btl._eventNextBattle = 0;
-        if (won && next > 0 && Sys.StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
-        // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
-        if (won && nextField > 0 && Fld.OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
-        // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
-        if (!won && EpisodesScr.Episodes().Count > 0) { TestRunTrace("dest title"); TitleScr.OpenTitle(); return; }   // 시험 전용 줄
-        TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
-        var navBefore = (Chapter: Mos._mosesChp?.Id ?? -1, Step: Mos._mosesStep, Planet: Mos._mosesPlanet, System: Mos._mosesSystem, Visited: Mos._mosesNavVisited, Start: Mos._navStart);
-        Mos.OpenMoses();
-        // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
-        if (won && Mos._mosesOpen && Mos._mosesChp != null)
-        {
-            Mos.MosesGoPage(0);
-            // 떠날 때의 단계·행성·성계 그대로 돌아온다(0x100fcf00(저장 단계), ba-20 G6) — 전에는 늘 챕터 시작 행성·단계로 돌아갔다.
-            if (navBefore.Visited && navBefore.Chapter == Mos._mosesChp.Id && Equals(navBefore.Start, Mos._navStart))   // 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다
-            {
-                (Mos._mosesStep, Mos._mosesPlanet, Mos._mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
-                Mos.ShowMosesBackground(Mos.MosesSystem()?.Background ?? 70);
-            }
-        }
-    }
-
     internal void OnClick(int clientX, int clientY)
     {
         if (ProgressScr._progressOpen) { var (px, py) = BoardPoint(clientX, clientY); ProgressScr.OnProgressClick(px, py); return; }
@@ -909,7 +851,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (TrySkipEnemyAction()) return;      // 적이 행동하는 동안의 클릭 = 그 행동 건너뛰기(모드)
         if (SlotsScr._notice != null) { SlotsScr._notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
-        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) Btl.LeaveFinishedBattle(); return; }
         if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
@@ -946,158 +888,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _selected = Btl._turn;
     }
 
-    /// <summary>
-    /// 차례인 아군을 그쪽으로 돌려세우고, 이동 영역(파랑) 안이면 한 칸 걷게 한다(TP 는 행동할 때 한 번에 뺀다). 움직이는 중이면 무시한다.
-    /// </summary>
-    internal void TryStep(Facing facing, int dx, int dy)
-    {
-        if (!Btl.IsPlayerTurn) return;
-        _selected = Btl._turn;
-        var unit = _units[Btl._turn];
-        if (unit.IsBusy) return;
-
-        unit.Facing = facing;
-        int col = unit.Col + dx, row = unit.Row + dy;
-        if ((uint)col >= Cols || (uint)row >= Rows || Btl.ComputeRange(unit) is not { } range) return;
-        int index = row * Cols + col;
-        if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
-
-        unit.BeginStep(col, row, StepTicksBetween(unit.Col, unit.Row, col, row));
-        Btl.FollowUnit(Btl._turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
-    }
-
-    /// <summary>누르고 있는 이동 키(누른 순서). 키보드 반복 대신 이걸로 한 칸이 끝나는 즉시 다음 칸을 잇는다.</summary>
-    internal readonly List<int> _heldMoveKeys = [];
-
-    internal void StepByKey(int key)
-    {
-        switch (MoveActionFor(key))
-        {
-            case KeyAction.MoveUp: TryStep(Facing.Up, 0, -1); break;
-            case KeyAction.MoveDown: TryStep(Facing.Down, 0, 1); break;
-            case KeyAction.MoveLeft: TryStep(Facing.Left, -1, 0); break;
-            case KeyAction.MoveRight: TryStep(Facing.Right, 1, 0); break;
-        }
-    }
-
-    /// <summary>DUELDX_POSE=&lt;Chr&gt;:&lt;동작&gt;:&lt;L|R|U|D&gt; 면 그 인물이 그 동작을 그 방향으로 되풀이한다(화면 밖 그림 시험용 — 무기 층·이펙트 자리를 본다).</summary>
-    internal static readonly string? PoseHook = Environment.GetEnvironmentVariable("DUELDX_POSE");
-
-    /// <summary>DUELDX_WORK=&lt;work 번호&gt;[:near] 면 첫 아군이 그 기술을 한 번 쓴다(화면 밖 이펙트 시험용 — 모션·이펙트 자리를 본다). near 면 적 셋을 곁으로 옮긴다.</summary>
-    internal static readonly string? WorkHook = Environment.GetEnvironmentVariable("DUELDX_WORK");
-
-    internal bool _workHookDone;
-
-    /// <summary>DUELDX_SAVE=&lt;칸&gt; 이 걸어 둔 저장 — 한 번만 한다(화면 밖 시험용).</summary>
-    internal int? _saveSlotPending;
-
-    /// <summary>DUELDX_SAVEAT=&lt;초&gt; 면 그때 저장한다(기본 3초) — 전투가 이어진 뒤를 저장해 보려고.</summary>
-    internal static readonly double SaveHookAt =
-        double.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVEAT"), out double at) && at > 0 ? at : 3;
-
-    /// <summary>DUELDX_AIM=&lt;work&gt; 면 플레이어 차례의 인물이 그 work 을 <b>제 칸에</b> 겨눠 누른 것처럼 한다(화면 밖 시험용 — 자기에게 쓰기).</summary>
-    internal bool _aimHookDone;
-
-    internal void ApplyAimHook()
-    {
-        if (_aimHookDone || !int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIM"), out int id)) return;
-        if (!Btl.IsPlayerTurn || Btl._routine != null || Tlk._talk != null || Btl._runningEvent >= 0 || Btl.Work(id) is not { } w) return;
-        _aimHookDone = true;
-        var u = _units[Btl._turn];
-        // DUELDX_AIMSHOW=1 이면 누르지 않고 어빌리티 목록에서 고른 것처럼만 한다 — 범위를 먼저 보이는 기술을 시험할 때.
-        if (Environment.GetEnvironmentVariable("DUELDX_AIMSHOW") == "1") { Btl.SelectAbilityRow((_db?.Abilities.GetValueOrDefault(w.AbilityId) is { } ab ? _db.T(ab.NameId) : "", w, true, "")); return; }
-        (Btl._targetWork, Btl._targetIsBasicAttack) = (w.Id, false);
-        u.Hp = Math.Max(1, u.Hp / 2);
-        int before = u.Hp;
-        bool took = Btl.OnTargetClick(u.Col, u.Row);
-        if (BattleScene.Trace)
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"aim hook: {u.ChrCode}({u.Col},{u.Row}) work {w.Id} tm {w.TargetMode} am {w.AreaMode} took {took} routine {Btl._routine != null} toast '{_toast}' hp {before}" + Environment.NewLine);
-    }
-
-    /// <summary>DUELDX_CLICKCELL=&lt;열&gt;,&lt;줄&gt; 면 플레이어 차례에 그 칸 한가운데를 한 번 누른다(화면 밖 시험용 — 클릭 이동).</summary>
-    internal bool _clickHookDone;
-
-    internal void ApplyClickHook()
-    {
-        if (_clickHookDone || Environment.GetEnvironmentVariable("DUELDX_CLICKCELL")?.Split(',') is not [var cs, var rs]
-            || !int.TryParse(cs, out int col) || !int.TryParse(rs, out int row)) return;
-        if (!Btl.IsPlayerTurn || Btl._routine != null || Tlk._talk != null || _units[Btl._turn].IsBusy) return;
-        _clickHookDone = true;
-        var u = _units[Btl._turn];
-        // DUELDX_CLICKFROM=<열>,<줄> 이면 누르기 전에 차례인 인물을 그 칸에 세운다 — 걸어가서 치는 거리를 시험할 때.
-        if (Environment.GetEnvironmentVariable("DUELDX_CLICKFROM")?.Split(',') is [var fc, var fr] && int.TryParse(fc, out int fromCol) && int.TryParse(fr, out int fromRow))
-            u.ResetTo(fromCol, fromRow, keepFacing: true);
-        int bx = col * TileW + TileW / 2, by = CellTop(col, row) + TileH / 2;
-        var range = Btl.ComputeRange(u);
-        string why = $"click cell ({col},{row}) board ({bx},{by}) → RowAt {RowAt(bx, by)} unitAt {UnitAtBoard(bx, by)} object {Btl.ObjectAt(col, RowAt(bx, by))?.Data.Id} "
-                   + $"turn {u.ChrCode}({u.Col},{u.Row}) reach {range?.CanReach(row * Cols + col)} path {(range is { } r ? Btl.PathWithin(r, u.Col, u.Row, row * Cols + col)?.Count : null)}";
-        OnClick((int)((bx - _camX) * _zoom + ViewOffsetX), (int)((by - _camY) * _zoom + ViewOffsetY));
-        why += $" → queued {u.Path.Count} toast '{_toast}'";
-        if (BattleScene.Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), why + Environment.NewLine);
-    }
-
-    internal void ApplyWorkHook()
-    {
-        ApplyAimHook();
-        ApplyClickHook();
-        if (Btl._turnNo >= 1) Btl.OpenUnitInfoIfAsked();
-        if (WorkHook == null || _workHookDone || Btl._routine != null || _units.Length == 0) return;
-        if (Tlk._talk != null || Btl._outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
-        if (Btl._turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
-        var parts = WorkHook.Split(':');
-        if (!int.TryParse(parts[0], out int id) || Btl.Work(id) is not { } w) return;
-        // DUELDX_WORKBY=<Chr> 면 그 인물이 쓴다(없으면 첫 아군).
-        int by = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_WORKBY"), out int chrBy) ? chrBy : 0;
-        int caster = Array.FindIndex(_units, u => u.Alive && u.OnField && u.IsAlly && (by == 0 || u.ChrCode == by));
-        if (caster < 0) return;
-        _workHookDone = true;
-        var a = _units[caster];
-        // 「<work>:near」 면 적 셋을 시전자 곁 칸으로 옮겨 둔다 — 자기 중심 범위기(나인 크루세이더)를 시험할 때 대상이 있게.
-        if (parts.Length > 1 && parts[1] == "near")
-        {
-            (int C, int R)[] spots = [(a.Col + 2, a.Row), (a.Col, a.Row + 2), (a.Col + 1, a.Row - 2)];
-            int k = 0;
-            foreach (var enemy in _units.Where(u => u.Alive && u.OnField && !u.IsAlly))
-            {
-                if (k >= spots.Length) break;
-                var (c, r) = spots[k++];
-                if (c < 0 || r < 0 || c >= Cols || r >= Rows) continue;
-                enemy.WarpTo(c, r);
-            }
-        }
-        // 「<work>:ally」 면 시전자 말고 가장 먼 아군을 대상으로 — 리콜처럼 아군에게 쓰는 기술을 시험할 때.
-        int target = parts.Length > 1 && parts[1] == "ally"
-            ? Array.IndexOf(_units, _units.Where(u => u.Alive && u.OnField && u.IsAlly && u != a).OrderByDescending(u => Math.Abs(u.Col - a.Col) + Math.Abs(u.Row - a.Row)).FirstOrDefault())
-            : Array.FindIndex(_units, u => u.Alive && u.OnField && !u.IsAlly);
-        // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
-        if (w.SelfCentred) { Btl._routine = Btl.UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
-        // 빈 칸을 겨누는 기술(방식 7 — 혼·오메가 스윙)은 그 적 너머의 빈 칸을 겨눈다(돌진 시험).
-        if (w.TargetMode == 7 && target >= 0)
-        {
-            var t = _units[target];
-            int tc = t.Col + Math.Sign(t.Col - a.Col), tr = t.Row + Math.Sign(t.Row - a.Row);
-            Btl._routine = Btl.UseWorkRoutine(caster, w, -1, tc, tr, []);
-            return;
-        }
-        Btl._routine = Btl.UseWorkRoutine(caster, w, target,
-                                  target >= 0 ? _units[target].Col : a.Col,
-                                  target >= 0 ? _units[target].Row : a.Row, []);
-    }
-
-    internal void ApplyPoseHook()
-    {
-        if (PoseHook == null || _units.Length == 0) return;
-        var parts = PoseHook.Split(':');
-        if (parts.Length < 2 || !int.TryParse(parts[0], out int chr) || !int.TryParse(parts[1], out int action)) return;
-        foreach (var u in _units)
-        {
-            if (u.ChrCode != chr || !u.Alive) continue;
-            if (parts.Length > 2) u.Facing = parts[2] switch { "R" => Facing.Right, "U" => Facing.Up, "D" => Facing.Down, _ => Facing.Left };
-            if (u.Action < 0) Btl.PlayAction(u, action);
-        }
-    }
-
     /// <summary>배경 읽기가 끝난 뒤 주 스레드에서 한 번 돌릴 시험 훅(DUELDX_TITLE·MOSES·FIELD·LEVELUP).</summary>
     internal volatile bool _openHooksPending;
 
@@ -1112,7 +902,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             Btl.OpenLevelUpIfAsked();
             SlotsScr.OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
-            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) Btl._saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && Sys.LoadBattleFrom(SlotsScreen.SlotPath(slot)) && Mos._mosesOpen
                 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
@@ -1124,7 +914,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         }
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
         // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
-        if (_saveSlotPending is { } pending && _lastTime > SaveHookAt) { _saveSlotPending = null; Sys.SaveBattleTo(SlotsScreen.SlotPath(pending)); }
+        if (Btl._saveSlotPending is { } pending && _lastTime > BattleScene.SaveHookAt) { Btl._saveSlotPending = null; Sys.SaveBattleTo(SlotsScreen.SlotPath(pending)); }
         SlotsScr.UpdateSlotArrows();                     // 슬롯 스크롤 화살표 누르고 있기(감사5 S9) — 타이틀·기록 화면에서도 돈다
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
@@ -1157,8 +947,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
-        if (_heldMoveKeys.Count > 0 && Btl._ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !Btl._abilityMenu && Btl._targetWork < 0 && Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy)
-            StepByKey(_heldMoveKeys[^1]);
+        if (Btl._heldMoveKeys.Count > 0 && Btl._ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !Btl._abilityMenu && Btl._targetWork < 0 && Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy)
+            Btl.StepByKey(Btl._heldMoveKeys[^1]);
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
         Btl.StepBlinks();
@@ -1184,8 +974,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         StepSceneFade();                        // 새 판이면 시작 카메라·페이드인, 끝났으면 페이드아웃 뒤 다음 장면
         if (Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
         Btl.UpdateCamera(dt);
-        ApplyPoseHook();
-        if (_fadeInStart < 0) ApplyWorkHook();
+        Btl.ApplyPoseHook();
+        if (_fadeInStart < 0) Btl.ApplyWorkHook();
         StatusScr.SyncVirtualStatus();
         UpdateSounds();
         Btl.UpdateRing();
@@ -1259,9 +1049,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawMoveRange();
         Btl.DrawDeployCells();
         Btl.DrawWorkRange();
-        if (_showGrid) DrawGridLines();
+        if (_showGrid) Btl.DrawGridLines();
         Btl.DrawObjects();
-        DrawUnits();
+        Btl.DrawUnits();
         Btl.DrawBodyClones();
         Btl.DrawBlinkGhosts();
         StagingAb.DrawStageFx();
@@ -1319,80 +1109,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
             src.CopyTo(_fb.AsSpan((GridTop + by) * BoardWidth, w));
         }
     }
-
-    internal void DrawGridLines()
-    {
-        // 칸마다 제 높이 자리에 네모를 친다 — 층이 다른 칸은 격자도 어긋나 절벽이 보인다.
-        for (int row = 0; row < Rows; row++)
-            for (int col = 0; col < Cols; col++)
-                StrokeRect(col * TileW, CellTop(col, row), TileW + 1, TileH + 1, GridLine);
-    }
-
-    internal void DrawUnits()
-    {
-        var sprites = _sprites;
-        // 그림을 읽는 스레드가 <b>인물 배열을 통째로 갈아 끼운다</b>(그림 없는 인물을 빼면서) —
-        // 그리는 동안 길이가 줄면 칸을 벗어난다. 한 벌을 붙잡아 놓고 그린다.
-        var units = _units;
-
-        // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
-        foreach (int i in Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y))
-        {
-            var unit = units[i];
-            if (!unit.Alive || !unit.OnField) continue;
-            var (footX, footY) = UnitFoot(unit);
-            int headY = footY - TileH;
-
-            if (sprites.TryGetValue(unit.ChrCode, out var sprite))
-            {
-                var frame = sprite.FrameFor(unit);
-                // 맞을 때의 흰 번쩍임(물들이기 키)과 1픽셀 떨림(자리 키)은 모션 자료에 들어 있다(분석-전투 fg-10).
-                var (clip, tick) = sprite.CurrentClip(unit);
-                var tint = clip?.TintAt(tick);
-                var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
-                // 몸 그림도 모션표의 섞기 키(종류 3)를 따른다 — 17 이면 더하기. 장교(Obs 0165·0863)는 걸을 때 몸이 빛 공으로 바뀌는데,
-                // 불투명으로 찍어 공 둘레의 검은 부분이 원판처럼 남았다(사용자 보고, Btl 0256). 딸린 층·필드 소품은 이미 이렇게 그린다.
-                bool additive = clip?.BlendAt(tick) == 17;
-                BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade, additive);
-                headY = footY + frame.Y;
-                Btl.DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
-            }
-            // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
-            bool acting = i == Btl._turn && !(Btl.IsPlayerTurn && !unit.IsBusy);
-            if (unit.HasTurn && !acting && Btl._outcome.Length == 0) DrawTurnMarker(unit, footX, headY);
-        }
-    }
-
-    /// <summary>차례 표시 그림 — Obs 0163(0x100d1de0 → 0x100e5310(Obs 0xa3, 모션)).</summary>
-    internal const int TurnMarkerObs = 163;
-
-    /// <summary>
-    /// TP 가 찬 유닛 머리 위의 역삼각형(0x1006da40 → 0x10074320 이 붙이는 표시 객체). 모션 = (AI 편 ? 2 : 0) + (군단 부하 ? 1 : 0):
-    /// 0 사람 편 연보라 · 1 사람 편 부하(작은 것) · 2 AI 편 주황 · 3 AI 편 부하. 모션마다 15틱에 4픽셀 까딱인다.
-    /// 그림이 없으면 예전처럼 코드로 연보라 삼각형을 그린다.
-    /// </summary>
-    internal void DrawTurnMarker(UnitState unit, int x, int headY)
-    {
-        // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
-        bool human = unit.PlayerControlled || (unit.IsAlly && !_allyAi);
-        int motion = (human ? 0 : 2) + (unit.LeaderIndex >= 0 ? 1 : 0);
-        if (DrawUi(TurnMarkerObs, motion, (int)(_lastTime * TicksPerSecond), x, headY, GameWindow.UiBlend.Alpha)) return;
-        const int W = 13, H = 9, Gap = 4;
-        uint alpha = (uint)(150 + 105 * (0.5 + 0.5 * Math.Sin(_lastTime * Math.PI * 2 * 1.5)));
-        uint fill = alpha << 24 | 0xE0D8FF, edge = alpha << 24 | 0x6050A0;
-        int top = headY - Gap - H;
-        for (int row = 0; row < H; row++)
-        {
-            int half = (W / 2) * (H - 1 - row) / (H - 1);
-            for (int dx = -half; dx <= half; dx++)
-                SetPixel(x + dx, top + row, dx == -half || dx == half || row == 0 ? edge : fill);
-        }
-    }
-
-    /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
-    internal (int X, int Y) UnitFoot(UnitState unit) =>
-        ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX,
-         GridTop + BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY);
 
     internal void DrawStatus()
     {

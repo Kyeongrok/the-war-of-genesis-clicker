@@ -101,7 +101,7 @@ internal sealed unsafe partial class GameWindow
                 _mixer.SetMusicGain(_musicGain);
             }
             _fadeOutKeepMusic = false;
-            var next = _afterFadeOut ?? LeaveFinishedBattleNow;
+            var next = _afterFadeOut ?? Btl.LeaveFinishedBattleNow;
             _afterFadeOut = null;
             next();
         }

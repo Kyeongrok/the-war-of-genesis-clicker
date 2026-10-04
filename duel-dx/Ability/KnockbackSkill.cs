@@ -67,7 +67,7 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
 
             target.Facing = Opposite(user.Facing);
             target.PlayAction(BattleScene.HitAction, steps.Count / TicksPerSecond + 0.05);
-            var (tx, ty) = host.UnitFoot(target);
+            var (tx, ty) = host.Btl.UnitFoot(target);
             host.Btl._effects.Add((BiTrailObs, 0, host._lastTime, tx, ty));
             target.BeginSlide(col, row);
             double start = host._lastTime;

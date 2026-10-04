@@ -30,8 +30,8 @@ internal sealed unsafe partial class BattleScene
     {
         if (w.Id == StagingSkill.DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
-        var (ux, uy) = host.UnitFoot(user);
-        var (tx, ty) = target != null ? host.UnitFoot(target) : (col * TileW + TileW / 2, host.CellCenterY(col, row));
+        var (ux, uy) = host.Btl.UnitFoot(user);
+        var (tx, ty) = target != null ? host.Btl.UnitFoot(target) : (col * TileW + TileW / 2, host.CellCenterY(col, row));
         for (int i = 0; i < list.Length; i++)
         {
             var b = list[i];
@@ -45,7 +45,7 @@ internal sealed unsafe partial class BattleScene
             }
             // 분신 — 시전자에서 대상 쪽으로 고르게 늘어선다(대상 몸 복제면 대상 자리).
             double t = (i + 1.0) / (list.Length + 1);
-            var (x, y) = owner == user && target != user ? ((int)(ux + (tx - ux) * t), (int)(uy + (ty - uy) * t)) : host.UnitFoot(owner);
+            var (x, y) = owner == user && target != user ? ((int)(ux + (tx - ux) * t), (int)(uy + (ty - uy) * t)) : host.Btl.UnitFoot(owner);
             _bodyClones.Add((owner, b.Motion, start, x, y, owner.Facing == Facing.Right, null));
         }
     }
@@ -66,7 +66,7 @@ internal sealed unsafe partial class BattleScene
                 if (tick >= AfterimageTicks) { _bodyClones.RemoveAt(i); continue; }
                 if (c.Snapshot == null)
                 {
-                    var (fx, fy) = host.UnitFoot(c.Owner);
+                    var (fx, fy) = host.Btl.UnitFoot(c.Owner);
                     c = c with { X = fx, Y = fy, Snapshot = sprite.FrameFor(c.Owner) };
                     _bodyClones[i] = c;
                 }

@@ -73,7 +73,7 @@ internal sealed unsafe class StagingSkill(GameWindow host)
             if (!host._sprites.TryGetValue(a.ChrCode, out var sprite) || sprite.MotionTicks(75) <= 0) yield break;
             int n = Math.Max(1, w.AreaMaxQuarters / 4);
             var (dx, dy) = a.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
-            var (ox, oy) = host.UnitFoot(a);
+            var (ox, oy) = host.Btl.UnitFoot(a);
             double lead = dx != 0 ? 50 : 40, total = 40.0 * n;
             bool mirror = a.Facing == Facing.Right;
             var outward = new List<double>();
@@ -127,7 +127,7 @@ internal sealed unsafe class StagingSkill(GameWindow host)
             foreach (var u in targets.Where(u => u.Alive && host._sprites.ContainsKey(u.ChrCode)))
             {
                 var frame = host._sprites[u.ChrCode].FrameFor(u);
-                var (fx, fy) = host.UnitFoot(u);
+                var (fx, fy) = host.Btl.UnitFoot(u);
                 if (frame == null) continue;
                 host.Btl.PlayActionFor(u, BattleScene.HitAction, 60);
                 _stageDraws.Add(() =>
@@ -149,13 +149,13 @@ internal sealed unsafe class StagingSkill(GameWindow host)
         // 100틱 동안 시전자 둘레를 약 2.3바퀴 돌며 빨려 든다(길 표 0x10039410). 잔상 넷이 5·10·15·20틱 늦게 따라온다.
         // 틱 200 에 판정, 본체는 35틱에 걸쳐 돌아온다(0x1008d55e~0x1008d8fa).
         while (Tick() < 50) yield return true;
-        var (cx, cy) = host.UnitFoot(a);
+        var (cx, cy) = host.Btl.UnitFoot(a);
         double swirlAt = host._lastTime;
         var pulled = targets.Where(u => u != a && u.Alive && host._sprites.ContainsKey(u.ChrCode)).ToList();
         foreach (var u in pulled)
         {
             var frame = host._sprites[u.ChrCode].FrameFor(u);
-            var (ux, uy) = host.UnitFoot(u);
+            var (ux, uy) = host.Btl.UnitFoot(u);
             if (frame == null) continue;
             // 길 100점: 반지름 r0 → 10, 각속도 0.015 에서 틱마다 ×1.02(각도 단위 π). 화면 y 는 ×0.8.
             double wx = ux - cx, wy = (uy - cy) / 0.8, r0 = Math.Sqrt(wx * wx + wy * wy), angle = Math.Atan2(wy, wx) / Math.PI, speed = 0.015, r = r0;

@@ -280,7 +280,7 @@ internal sealed unsafe partial class BattleScene
         if (script is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !host._abilitySounds.ContainsKey(w.AbilityId);
-        var (userX, userY) = host.UnitFoot(user);
+        var (userX, userY) = host.Btl.UnitFoot(user);
         int targetX = col * TileW + TileW / 2, targetY = host.CellCenterY(col, row);
         foreach (var e in m.Effects)
         {
@@ -356,7 +356,7 @@ internal sealed unsafe partial class BattleScene
                 {
                     for (int i = 0; i < eachTargets.Count; i++)
                     {
-                        var (tx, ty) = host.UnitFoot(host._units[eachTargets[i]]);
+                        var (tx, ty) = host.Btl.UnitFoot(host._units[eachTargets[i]]);
                         double at = start + i * each.Stagger / TicksPerSecond;
                         if (e.Life > 0) host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
                         else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
