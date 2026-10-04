@@ -158,6 +158,21 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (unit.LeaderIndex >= 0 && unit.Data != null) { host.StatusScr.RefreshUnitStats(unit); unit.Hp = unit.MaxHp; }
         // 챕터 스크립트가 가방을 채웠으면 데모용 아이템은 안 넣는다 — 자료가 준 것이 옳다.
         if (host.Fld._chapterFired.Count == 0) host.StatusScr.FillDemoInventory();
+        GrantArenaAbility();
+    }
+
+    /// <summary>실험판(DUELDX_ARENA) — 내 인물에게 실험할 어빌리티를 그 레벨로 쥐여 주고 SOUL·TP 를 채운다.</summary>
+    internal void GrantArenaAbility()
+    {
+        if (GameWindow.Arena is not { } arena) return;
+        foreach (var u in host._units.Where(u => u.Side == 4 && u.LeaderIndex < 0 && u.Data != null))
+        {
+            var kept = u.Data!.Abilities.Where(a => a.Ability != arena.Ability && a.Ability != 0).ToList();
+            kept.Insert(0, ((ushort)arena.Ability, (ushort)arena.Level));
+            u.Data = u.Data with { Abilities = [.. kept] };
+            u.Soul = u.MaxSoul;
+            u.Tp = u.MaxTp;
+        }
     }
 
     internal void UpdateTurn()
@@ -462,6 +477,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 「누구 차례」 알림은 안 띄운다(사용자 요청) — 머리줄에 이미 나오고, 무엇보다 <b>같은 알림 칸</b>이라
         // 상자에서 얻은 것 같은 결과 알림을 곧바로 덮어써 못 읽게 했다. 차례는 부르는 목소리로 알린다 — AI·동맹 차례도(상태 8).
         PlayTurnCall(host._units[index]);
+        // 실험판 — 내 차례마다 SOUL 을 다시 채운다(되풀이해 써 볼 수 있게).
+        if (GameWindow.Arena != null && IsMine(host._units[index])) host._units[index].Soul = host._units[index].MaxSoul;
         if (IsMine(host._units[index]))
         {
             // 자동 저장(슬롯 20) — 원본은 전투 시작·새 차례마다 깃발(+0x4cd8)을 세우고, 플레이어가 유닛을 고르는

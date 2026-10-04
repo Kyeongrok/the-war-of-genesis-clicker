@@ -497,6 +497,49 @@ public partial class SkillEditView : UserControl
     /// 쓸 work 이 없어 기술이 사라지고, 다음 레벨 EXP 도 0 이 된다. work 번호는 그대로 둔다(연출·AI·전투 스크립트가 work 로 가리킨다).
     /// 최대 레벨(.abi +4)은 저장할 때 줄 수에 맞춰 줄인다.
     /// </summary>
+    /// <summary>
+    /// 「게임에서 실험」 — 고친 것을 저장한 뒤 게임(<c>WarOfGenesis.exe</c>)을 <c>DUELDX_ARENA=어빌리티:레벨</c> 로 띄운다(게임 쪽 <c>GameWindow.ArenaScene</c>).
+    /// 게임 실행 파일은 편집기 곁(설치판·배포판)에서 찾고, 없으면 저장소의 <c>duel-dx/bin</c> 아래에서 가장 최근에 빌드한 것을 쓴다.
+    /// </summary>
+    private void TryInGame_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row || row.Ability <= 0) { StatusText.Text = "어빌리티에 묶인 스킬을 고르세요."; return; }
+        LevelGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        var view = LevelGrid.CurrentCell.Item as DataRowView
+                   ?? LevelGrid.SelectedCells.Select(c => c.Item).OfType<DataRowView>().FirstOrDefault()
+                   ?? LevelGrid.SelectedItem as DataRowView;
+        int level = view != null && int.TryParse(Convert.ToString(view.Row["level"]), out int chosen) ? chosen : 1;
+        SaveDirty();
+        string? exe = null;
+        string beside = System.IO.Path.Combine(AppContext.BaseDirectory, "WarOfGenesis.exe");
+        if (System.IO.File.Exists(beside)) exe = beside;
+        else
+            for (var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory); dir != null && exe == null; dir = dir.Parent)
+            {
+                string bin = System.IO.Path.Combine(dir.FullName, "duel-dx", "bin");
+                if (!System.IO.Directory.Exists(bin)) continue;
+                // 시험용으로 빌드한 폴더(sweeptest 따위)가 아니라 평소 돌리는 Debug·Release 것을 쓴다.
+                exe = new[] { "Debug", "Release" }
+                    .Select(c => System.IO.Path.Combine(bin, c))
+                    .Where(System.IO.Directory.Exists)
+                    .SelectMany(c => System.IO.Directory.EnumerateFiles(c, "WarOfGenesis.exe", System.IO.SearchOption.AllDirectories))
+                    .OrderByDescending(System.IO.File.GetLastWriteTimeUtc).FirstOrDefault();
+            }
+        if (exe == null) { StatusText.Text = "게임 실행 파일(WarOfGenesis.exe)을 못 찾았습니다 — 게임을 한 번 빌드하세요."; return; }
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { WorkingDirectory = System.IO.Path.GetDirectoryName(exe)!, UseShellExecute = false };
+            start.Environment["DUELDX_ARENA"] = $"{row.Ability}:{level}";
+            start.Environment["DUELDX_TITLE"] = "0";
+            System.Diagnostics.Process.Start(start);
+            StatusText.Text = $"{row.Name} Lv{level} 실험판을 띄웠습니다 — 값을 고친 뒤 다시 누르면 새 값으로 다시 뜹니다.";
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or System.IO.IOException)
+        {
+            StatusText.Text = $"게임을 못 띄웠습니다: {ex.Message}";
+        }
+    }
+
     private void DeleteLevel_Click(object sender, RoutedEventArgs e)
     {
         if (Current is not { } row) return;

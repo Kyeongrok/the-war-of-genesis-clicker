@@ -342,12 +342,33 @@ internal sealed unsafe partial class GameWindow : IDisposable
             && (_party.GetValueOrDefault(pchr) ?? _db?.Character(pchr)) is { } record)
             _party[pchr] = record with { SpriteId = pobs };
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
+        if (Arena is { } arena) _scene = ArenaScene(_scene, arena.Chr);
         _map = ObtMap.Load(AssetPack.MapPath(_scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
         _units = Btl.BuildUnits(_scene);
         // 첫 판(시험 훅 포함)은 배치 단계 없이 — 새로 거는 전투(StartBattle)만 연다. DUELDX_DEPLOY=1 이면 첫 판에서도 연다(화면 밖 시험용).
         Btl.BeginDeployOrDrop(_scene, fresh: Environment.GetEnvironmentVariable("DUELDX_DEPLOY") == "1");
-        Btl.LoadEvents(_scene.Id);
+        if (Arena == null) Btl.LoadEvents(_scene.Id);      // 실험판은 그 전투의 사건(대사·증원·승패 조건)을 안 돌린다
+    }
+
+    /// <summary>
+    /// 어빌리티 실험판(편집기의 「게임에서 실험」) — <c>DUELDX_ARENA=어빌리티:레벨[:Chr]</c> 이면 첫 전투의 맵에 아군 하나(기본 죠안 221)와
+    /// 적 부대 넷(가이아 리더 193 + 군단 7 가이아 버그즈)만 세우고, 그 아군에게 그 어빌리티를 그 레벨로 쥐여 준다(SOUL·TP 가득, 차례마다 다시 채움).
+    /// </summary>
+    internal static (int Ability, int Level, int Chr)? Arena { get; } =
+        Environment.GetEnvironmentVariable("DUELDX_ARENA")?.Split(':') is { Length: >= 2 } parts
+        && int.TryParse(parts[0], out int arenaAbility) && int.TryParse(parts[1], out int arenaLevel)
+            ? (arenaAbility, Math.Max(1, arenaLevel), parts.Length > 2 && int.TryParse(parts[2], out int arenaChr) ? arenaChr : 221) : null;
+
+    internal static DemoScene ArenaScene(DemoScene scene, int chr)
+    {
+        // 자리는 그 전투의 것을 빌린다 — 아군은 첫 아군 자리, 적 대장 넷은 아군에서 가까운 적 자리 넷(설 수 있는 칸이 보장된다).
+        var ally = scene.Roster.FirstOrDefault(u => u.Side == 4) ?? scene.Roster[0];
+        var spots = scene.Roster.Where(u => !u.IsAlly).OrderBy(u => Math.Abs(u.Col - ally.Col) + Math.Abs(u.Row - ally.Row))
+                         .Select(u => (u.Col, u.Row)).Distinct().Take(4).ToList();
+        var roster = new List<DemoUnit> { new(chr, ally.Col, ally.Row, 4, 0, Facing.Right) };
+        roster.AddRange(spots.Select(s => new DemoUnit(193, s.Col, s.Row, 0, 7, Facing.Left) { WakeCondition = 0 }));
+        return scene with { Title = "어빌리티 실험", Roster = [.. roster], NextBattle = 0, Placement = null, LegionsAllowed = false };
     }
 
     /// <summary>나머지(그림·소리)는 배경 스레드에서 읽는다 — 창은 먼저 뜬다.</summary>
