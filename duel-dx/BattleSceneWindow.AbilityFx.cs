@@ -236,6 +236,26 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>지금 행동의 판정 대상(유닛 하나를 겨눈 AI·사건이면 그 하나) — 대상별 이펙트가 판정과 같은 목록을 쓴다. null 이면 범위 안 전원.</summary>
     private List<int>? _fxTargets;
 
+    /// <summary>방금 띄운 직선탄 가운데 가장 늦게 닿는 때(게임 초) — 0 이면 탄 없음.</summary>
+    private double _fxArriveAt;
+
+    /// <summary>직선탄이 그 거리를 가는 데 걸리는 틱 — <see cref="DrawShots"/> 와 같은 셈(상한 600).</summary>
+    private static int ShotTicks(double distance, double speed, double scale, int mode, double min, double max)
+    {
+        speed = Math.Max(1, speed);
+        double gone = 0;
+        int ticks = 0;
+        for (; ticks < 600 && gone < distance; ticks++)
+        {
+            gone += speed;
+            speed = mode == 1 ? speed * scale : speed + scale;
+            if (min > 0) speed = Math.Max(min, speed);
+            if (max > 0) speed = Math.Min(max, speed);
+            speed = Math.Max(0.5, speed);
+        }
+        return ticks;
+    }
+
     /// <summary>방금 띄운 대상별 이펙트의 엇갈림 틱(확실한 것) — 판정도 이 간격으로 든다. 0 이면 한꺼번에.</summary>
     private int _fxStagger;
 
@@ -300,6 +320,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     {
                         _shots.Add((e.Obs, e.Motion, start, from.X, from.Y, to.X, to.Y, shot.Speed, shot.ScalePermille / 1000.0,
                                     shot.Mode, shot.MinSpeed, shot.MaxSpeed, mirrored));
+                        // 닿는 때 — 「탄이 사라질 때 판정」 work(WorkFxExtra.ArriveHitWorks)의 판정 시각이고, 행동도 그때까지는 안 끝난다.
+                        double arrive = start + ShotTicks(Math.Sqrt((to.X - from.X) * (to.X - from.X) + (to.Y - from.Y) * (to.Y - from.Y)),
+                                                          shot.Speed, shot.ScalePermille / 1000.0, shot.Mode, shot.MinSpeed, shot.MaxSpeed) / TicksPerSecond;
+                        _fxArriveAt = Math.Max(_fxArriveAt, arrive);
+                        _fxLatestStart = Math.Max(_fxLatestStart, arrive);
                         continue;
                     }
                 }
