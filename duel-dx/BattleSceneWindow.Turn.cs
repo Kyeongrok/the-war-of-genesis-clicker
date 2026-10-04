@@ -163,7 +163,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_outcome.Length > 0)
         {
             // 조용한 결과(행동 10·6·11[1])는 클릭을 기다리지 않고 제때 넘어간다(원본 120틱).
-            if (_outcomeQuiet && _lastTime >= _outcomeLeaveAt && !_mosesOpen && !FieldOpen && !_episodesOpen) LeaveFinishedBattle();
+            if (_outcomeQuiet && _lastTime >= _outcomeLeaveAt && !Mos._mosesOpen && !FieldOpen && !_episodesOpen) LeaveFinishedBattle();
             return;
         }
         if (_deployOpen) { StepDeploy(); return; }     // 캐릭터 배치 중에는 틱·차례·이벤트가 멈춘다(원본 상태 2)
@@ -264,9 +264,9 @@ internal sealed unsafe partial class BattleSceneWindow
     private int PartyLevel()
     {
         // 원본은 플레이어 <b>부대원 명부</b>의 상위 셋이다(0x1004e070) — 명부가 있으면 그것으로(편 3 손님은 안 센다).
-        if (_members.Count > 0)
+        if (Mos._members.Count > 0)
         {
-            var roster = _members.Select(chr => (int)(_party.GetValueOrDefault(chr)?.Level ?? _db?.Character(chr)?.Level ?? 0))
+            var roster = Mos._members.Select(chr => (int)(_party.GetValueOrDefault(chr)?.Level ?? _db?.Character(chr)?.Level ?? 0))
                                  .Where(v => v > 0).OrderByDescending(v => v).Take(3).ToList();
             if (roster.Count > 0) return roster.Sum() / roster.Count;
         }
@@ -285,7 +285,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private int RosterLevel()
     {
-        var levels = _members.Select(chr => (int)((_units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr))?.Level ?? 0))
+        var levels = Mos._members.Select(chr => (int)((_units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr))?.Level ?? 0))
                              .Where(v => v > 0).OrderByDescending(v => v).Take(3).ToList();
         return levels.Count == 0 ? PartyLevel() : levels.Sum() / levels.Count;
     }

@@ -33,42 +33,44 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int StyleBackground = 42, StylePortraitObs = 302, StyleBodyObs = 283, StyleFamilyObs = 329;
+    internal sealed unsafe partial class MosesScene
+    {
+    internal const int StyleBackground = 42, StylePortraitObs = 302, StyleBodyObs = 283, StyleFamilyObs = 329;
     /// <summary>3단계 단추 안의 계열 아이콘(Obs 1334, 5장)과 「M.G」 표시(Obs 1426, 2장) — 분석-모세스 8절 「3단계 단추 둘」.</summary>
-    private const int StyleIconObs = 1334, StyleMarkObs = 1426;
+    internal const int StyleIconObs = 1334, StyleMarkObs = 1426;
 
     /// <summary>3단계 단추 둘 — id 91 (107,70) 71×78 · id 92 (184,70) 70×78. 1차 계열 단추의 두 번째·세 번째 부채꼴 자리다(0x100fa1f5·0x100fa33a).</summary>
-    private static readonly (int X, int Y, int W, int H, int IconX, int IconY, int MarkX, int MarkY)[] StyleTierCells =
+    internal static readonly (int X, int Y, int W, int H, int IconX, int IconY, int MarkX, int MarkY)[] StyleTierCells =
         [(107, 70, 71, 78, 38, 31, 38, 26), (184, 70, 70, 78, 30, 31, 30, 26)];
 
     /// <summary>계열 아이콘 Obs 1334 의 모션 — 0 PSYCLON · 1 FORCETRAL · 2 OZMA · 3 TAKIRION · 4 ARKLOST 를 계열 차례(사이클론·타키리온·포스트럴·아크로스트·오즈마)로.</summary>
-    private static readonly int[] StyleIconMotion = [0, 3, 1, 4, 2];
-    private const int SoundStyleDone = 582;
+    internal static readonly int[] StyleIconMotion = [0, 3, 1, 4, 2];
+    internal const int SoundStyleDone = 582;
 
     /// <summary>체질 단추 다섯 자리(분석-모세스 8절) — 글자는 TXR 878~882.</summary>
-    private static readonly (int X, int Y)[] StyleBodyCells = [(36, 200), (73, 244), (146, 280), (220, 244), (257, 200)];
+    internal static readonly (int X, int Y)[] StyleBodyCells = [(36, 200), (73, 244), (146, 280), (220, 244), (257, 200)];
 
     /// <summary>직업 계열 단추 네 자리(1차) — (x, y, 너비, 높이).</summary>
-    private static readonly (int X, int Y, int W, int H)[] StyleFamilyCells =
+    internal static readonly (int X, int Y, int W, int H)[] StyleFamilyCells =
         [(70, 107, 79, 71), (107, 70, 71, 78), (184, 70, 70, 78), (213, 107, 78, 71)];
 
     /// <summary>전직 화면에서 고른 인물의 <b>Chr 번호</b> — 전투 판의 자리 번호가 아니다. 파티원은 전투에 안 서 있어도 여기 나온다.</summary>
-    private int _styleUnit;
+    internal int _styleUnit;
 
     /// <summary>고른 인물의 자료 — 전투 판에 서 있으면 그 유닛의 것(살아 있는 값), 아니면 파티가 들고 있는 것.</summary>
-    private CharacterData? StyleData() => _units.FirstOrDefault(u => u.ChrCode == _styleUnit)?.Data ?? _party.GetValueOrDefault(_styleUnit);
+    internal CharacterData? StyleData() => host._units.FirstOrDefault(u => u.ChrCode == _styleUnit)?.Data ?? host._party.GetValueOrDefault(_styleUnit);
 
     /// <summary>고른 인물의 자료를 바꾼다 — 파티와 (있으면) 전투 판의 유닛 둘 다.</summary>
-    private void SetStyleData(CharacterData c)
+    internal void SetStyleData(CharacterData c)
     {
-        _party[_styleUnit] = c;
-        foreach (var u in _units) if (u.ChrCode == _styleUnit) u.Data = c;
+        host._party[_styleUnit] = c;
+        foreach (var u in host._units) if (u.ChrCode == _styleUnit) u.Data = c;
     }
 
-    private CharacterData? PartyData(int chr) => _units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? _party.GetValueOrDefault(chr);
+    internal CharacterData? PartyData(int chr) => host._units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? host._party.GetValueOrDefault(chr);
 
     /// <summary>미리보기 중인 형 칸(원본 <c>+0x2de0</c>) — 같은 칸을 다시 눌러야 확인창이 뜬다.</summary>
-    private int _stylePick = -1;
+    internal int _stylePick = -1;
 
     /// <summary>
     /// 전직 단추에 서는 인물 — 스크립트 801 로 들어온 <b>동료(주인공들)</b>만. 전투 자료가 내 편에 끼워 준 코어헌터 용병 따위는 빼야 한다(사용자 지적).
@@ -76,10 +78,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 옛 세이브(동료 목록이 없음)면 예전처럼 내 편 전부.
     /// </summary>
     /// <summary>전직·용병관리 인물 단추의 첫 칸 — 파티가 다섯을 넘으면 ◀ ▶ 로 넘긴다(원본 화살표, fg-21 ⑰).</summary>
-    private int _stylePartyTop;
+    internal int _stylePartyTop;
 
     /// <summary>지금 보이는 다섯 명.</summary>
-    private List<int> StylePartyPage()
+    internal List<int> StylePartyPage()
     {
         var party = StyleParty();
         _stylePartyTop = Math.Clamp(_stylePartyTop, 0, Math.Max(0, party.Count - 5));
@@ -88,47 +90,47 @@ internal sealed unsafe partial class BattleSceneWindow
 
     /// <summary>◀ ▶ 를 눌렀나 — 왼쪽 가장자리(x&lt;28)·다섯째 단추 오른쪽(x 398~426), y 320~400.</summary>
     /// <summary>화살표는 인원이 여섯 이상일 때만, Obs 302 모션 0(왼)·1(오른)이 (20,370)·(400,370)에, 판정 20×50, 한 명씩 넘긴다(ba-14 U10).</summary>
-    private bool OnStylePartyArrow(int x, int y)
+    internal bool OnStylePartyArrow(int x, int y)
     {
         int count = StyleParty().Count;
         if (count < 6 || y < 370 || y >= 420) return false;
-        if (x >= 20 && x < 40 && _stylePartyTop > 0) { _stylePartyTop--; Play(MosesClickSound); return true; }
-        if (x >= 400 && x < 420 && _stylePartyTop + 5 < count) { _stylePartyTop++; Play(MosesClickSound); return true; }
+        if (x >= 20 && x < 40 && _stylePartyTop > 0) { _stylePartyTop--; host.Play(MosesClickSound); return true; }
+        if (x >= 400 && x < 420 && _stylePartyTop + 5 < count) { _stylePartyTop++; host.Play(MosesClickSound); return true; }
         return false;
     }
 
-    private void DrawStylePartyArrows(int ox, int oy)
+    internal void DrawStylePartyArrows(int ox, int oy)
     {
         if (StyleParty().Count < 6) return;
-        if (!DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha)) DrawText("◀", ox + 20, oy + 385, White, 18);
-        if (!DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha)) DrawText("▶", ox + 400, oy + 385, White, 18);
+        if (!host.DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha)) host.DrawText("◀", ox + 20, oy + 385, White, 18);
+        if (!host.DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha)) host.DrawText("▶", ox + 400, oy + 385, White, 18);
     }
 
-    private List<int> StyleParty()
+    internal List<int> StyleParty()
     {
         // 원본 파티 객체의 인원(801 로 들어온 동료) 차례 — 레이토스 길드처럼 주인공이 안 서는 전투 뒤에도 파티가 그대로 보여야 한다(사용자 지적).
-        if (_members.Count > 0) return [.. _members.Where(c => _party.ContainsKey(c) || _units.Any(u => u.ChrCode == c))];
+        if (_members.Count > 0) return [.. _members.Where(c => host._party.ContainsKey(c) || host._units.Any(u => u.ChrCode == c))];
         // 동료 목록을 못 만든 옛 세이브 — 내가 움직이는 내 부대(편 4)만. 편 3 동맹 NPC(제이슨)는 뺀다.
-        return [.. _units.Where(u => u.PlayerControlled).Select(u => u.ChrCode).Distinct()];
+        return [.. host._units.Where(u => u.PlayerControlled).Select(u => u.ChrCode).Distinct()];
     }
 
     /// <summary>스크립트 801 로 들어온 동료의 Chr 번호(802 로 빠진다) — 원본 파티 객체의 인원 목록. 세이브에 실린다.</summary>
-    private readonly HashSet<int> _members = [];
+    internal readonly HashSet<int> _members = [];
 
-    private void OpenMosesStyle()
+    internal void OpenMosesStyle()
     {
         _mosesPage = 7;
-        _mosesPageAt = _lastTime;
+        _mosesPageAt = host._lastTime;
         StartFade();
         _mosesHover = -1;
         _styleUnit = StyleParty().FirstOrDefault();
         _stylePick = StyleCurrentCell();
-        Play(581);
+        host.Play(581);
         ShowMosesBackground(StyleBackground);
     }
 
     /// <summary>전직 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
-    private bool OnMosesStyleClick(int bx, int by)
+    internal bool OnMosesStyleClick(int bx, int by)
     {
         if (_mosesPage != 7) return false;
         var (ox, oy) = MosesOrigin();
@@ -138,8 +140,8 @@ internal sealed unsafe partial class BattleSceneWindow
         // STATUS — 고른 인물의 스테이터스 창(장비·장착 어빌리티·어빌리티 올리기)을 모세스 위에 연다.
         if (x >= 455 && x < 523 && y >= 390 && y < 417)
         {
-            OpenStatusFor(_styleUnit);      // 전투에 안 선 파티원도 임시 유닛으로 연다
-            Play(MosesClickSound);
+            host.OpenStatusFor(_styleUnit);      // 전투에 안 선 파티원도 임시 유닛으로 연다
+            host.Play(MosesClickSound);
             return true;
         }
 
@@ -150,7 +152,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 _styleUnit = party[i];
                 _stylePick = StyleCurrentCell();
-                Play(MosesClickSound);
+                host.Play(MosesClickSound);
                 return true;
             }
 
@@ -161,13 +163,13 @@ internal sealed unsafe partial class BattleSceneWindow
             var (fx, fy, fw, fh) = StyleFamilyCells[i];
             if (x < fx || x >= fx + fw || y < fy || y >= fy + fh) continue;
             ushort target = families[i].Job;
-            string ftitle = _db?.T(932) is { Length: > 0 } ft ? ft : "전직";
+            string ftitle = host._db?.T(932) is { Length: > 0 } ft ? ft : "전직";
             // 계열 단추도 남은 EXP 가 있으면 931 본문이다(0x10100c76, ba-15).
             var fc = PartyData(_styleUnit);
-            string ftext = fc is { Exp: > 0 } && !_keepJobExp
-                ? $"{_db?.T(fc.NameId)}의 경험치가 {fc.Exp} 남았습니다.\n전직하면 {fc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
-                : _db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
-            _confirm = (ftitle, ftext, () => ChangeJob(target));
+            string ftext = fc is { Exp: > 0 } && !host._keepJobExp
+                ? $"{host._db?.T(fc.NameId)}의 경험치가 {fc.Exp} 남았습니다.\n전직하면 {fc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
+                : host._db?.T(930) is { Length: > 0 } fb ? fb : "전직하시겠습니까?";
+            host._confirm = (ftitle, ftext, () => ChangeJob(target));
             return true;
         }
 
@@ -178,12 +180,12 @@ internal sealed unsafe partial class BattleSceneWindow
             var cell = StyleTierCells[tiers[i].Slot];
             if (x < cell.X || x >= cell.X + cell.W || y < cell.Y || y >= cell.Y + cell.H) continue;
             ushort target = tiers[i].Job;
-            string ttitle = _db?.T(932) is { Length: > 0 } tt ? tt : "전직";
+            string ttitle = host._db?.T(932) is { Length: > 0 } tt ? tt : "전직";
             var tc = PartyData(_styleUnit);          // 3단계도 같다(0x10100d49)
-            string ttext = tc is { Exp: > 0 } && !_keepJobExp
-                ? $"{_db?.T(tc.NameId)}의 경험치가 {tc.Exp} 남았습니다.\n전직하면 {tc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
-                : _db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
-            _confirm = (ttitle, ttext, () => ChangeJob(target));
+            string ttext = tc is { Exp: > 0 } && !host._keepJobExp
+                ? $"{host._db?.T(tc.NameId)}의 경험치가 {tc.Exp} 남았습니다.\n전직하면 {tc.Exp} 의 경험치는 사라집니다.\n전직할까요?"
+                : host._db?.T(930) is { Length: > 0 } tb ? tb : "전직하시겠습니까?";
+            host._confirm = (ttitle, ttext, () => ChangeJob(target));
             return true;
         }
 
@@ -195,14 +197,14 @@ internal sealed unsafe partial class BattleSceneWindow
             // 만들어지지 않은 단추와 지금 직업 칸은 아무 일도 안 한다.
             if (i >= jobs.Count || StyleData() is not { } c || c.JobId == jobs[i]) return true;
             // 첫 클릭은 미리보기만, 같은 칸을 다시 눌러야 확인창이 뜬다(0x10100afa).
-            if (_stylePick != i) { _stylePick = i; Play(MosesClickSound); return true; }
+            if (_stylePick != i) { _stylePick = i; host.Play(MosesClickSound); return true; }
             ushort pick = jobs[i];
-            string title = _db?.T(932) is { Length: > 0 } t ? t : "전직";
+            string title = host._db?.T(932) is { Length: > 0 } t ? t : "전직";
             // 남은 EXP 가 있으면 「사라집니다」 본문(931), 없으면 930. 설정으로 EXP 를 남기면 사라질 것이 없으니 930.
-            string text = c.Exp == 0 || _keepJobExp
-                ? _db?.T(930) is { Length: > 0 } b2 ? b2 : "전직하시겠습니까?"
-                : $"{_db?.T(c.NameId)}의 경험치가 {c.Exp} 남았습니다.\n전직하면 {c.Exp} 의 경험치는 사라집니다.\n전직할까요?";
-            _confirm = (title, text, () => ChangeJob(pick));
+            string text = c.Exp == 0 || host._keepJobExp
+                ? host._db?.T(930) is { Length: > 0 } b2 ? b2 : "전직하시겠습니까?"
+                : $"{host._db?.T(c.NameId)}의 경험치가 {c.Exp} 남았습니다.\n전직하면 {c.Exp} 의 경험치는 사라집니다.\n전직할까요?";
+            host._confirm = (title, text, () => ChangeJob(pick));
             return true;
         }
         return true;
@@ -212,9 +214,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 고른 인물이 <b>지금 고를 수 있는</b> 형들 — 칸 다섯(일반·공격·방어·고속·보조)의 차례 그대로,
     /// <b>레벨이 닿는 데까지만</b>. 3단계 직업이면 빈 목록이다.
     /// </summary>
-    private List<ushort> StyleJobs()
+    internal List<ushort> StyleJobs()
     {
-        if (_db is not { } db || StyleData() is not { } c) return [];
+        if (host._db is not { } db || StyleData() is not { } c) return [];
         if (db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) is not { } dep) return [];
         if ((dep.Id - 1) % 3 + 1 == 3) return [];          // 3단계는 더 갈 곳이 없다(0x100fa43a)
         int count = 0;
@@ -224,11 +226,11 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>고른 인물의 계열 레코드 — 직업 번호를 품은 <c>Dep</c>.</summary>
-    private DepData? StyleDep() =>
-        _db is { } db && StyleData() is { } c ? db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) : null;
+    internal DepData? StyleDep() =>
+        host._db is { } db && StyleData() is { } c ? db.Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId)) : null;
 
     /// <summary>계열 안 단계 — 1·2·3. <c>Dep</c> 번호 셋이 한 계열이다.</summary>
-    private static int StyleTier(DepData dep) => (dep.Id - 1) % 3 + 1;
+    internal static int StyleTier(DepData dep) => (dep.Id - 1) % 3 + 1;
 
     /// <summary>
     /// 지금 고를 수 있는 <b>다른 계열</b>들 — 제 계열을 뺀 넷, 저마다 그 계열 <b>2단계 일반형</b> 하나로 간다.
@@ -237,9 +239,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <b>1단계이고 레벨 30 이상</b>일 때만 만든다(<c>0x100f9cd8</c>) — 2단계에서는 단추를 부수고 다시 안 만들어,
     /// <b>계열 갈아타기는 평생 한 번</b>이다. 제 계열은 목록에서 빠지므로 <b>제 계열의 2단계로는 갈 수 없다</b>(<c>0x10101434</c>).
     /// </remarks>
-    private List<(int Family, ushort Job)> StyleFamilies()
+    internal List<(int Family, ushort Job)> StyleFamilies()
     {
-        if (_db is not { } db || StyleData() is not { } c) return [];
+        if (host._db is not { } db || StyleData() is not { } c) return [];
         if (StyleDep() is not { } dep || StyleTier(dep) != 1 || c.Level < 30) return [];
         int mine = (dep.Id - 1) / 3;
         var list = new List<(int, ushort)>();
@@ -258,9 +260,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 계열은 <b>처음 계열</b>(<c>CChr+0x3a0</c> — 로드 때 .chr 직업의 Dep 을 한 번 베낀 값)이다. 2단계는 늘 다른 계열이라 지금 계열로 보면
     /// 죠안(메텔 → 오즈클론)이 엘샤루핌·가프리스 대신 엉뚱한 3단계를 찾았다(분석-체질 「전직과 배운 어빌리티」).
     /// </summary>
-    private List<(int Slot, ushort Job)> StyleTierJobs()
+    internal List<(int Slot, ushort Job)> StyleTierJobs()
     {
-        if (_db is not { } db || StyleData() is not { } c) return [];
+        if (host._db is not { } db || StyleData() is not { } c) return [];
         if (StyleDep() is not { } dep || StyleTier(dep) != 2 || c.Level < 60) return [];
         int family = StyleOriginFamily(c);
         if (db.Deps.FirstOrDefault(d => d.Id == 3 * family + 3) is not { } third) return [];
@@ -279,30 +281,30 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 움직이는 그림을 네모 가운데에 돌린다 — 계열 단추 위의 계열 아이콘(Obs 1334, 모션마다 59틱). 자리는 첫 장으로 한 번 맞춰
     /// 장마다 크기가 달라도 흔들리지 않게 한다. 예전에는 첫 장만 찍어 원본과 달리 멈춰 있었다(사용자 보고).
     /// </summary>
-    private void DrawCentredIcon(int obs, int motion, int tick, int x, int y, int w, int h)
+    internal void DrawCentredIcon(int obs, int motion, int tick, int x, int y, int w, int h)
     {
-        if (UiFor(obs)?.FrameAt(motion, 0, loop: true) is not { } f) return;
-        DrawUi(obs, motion, tick, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
+        if (host.UiFor(obs)?.FrameAt(motion, 0, loop: true) is not { } f) return;
+        host.DrawUi(obs, motion, tick, x + (w - f.W) / 2 - f.X, y + (h - f.H) / 2 - f.Y, UiBlend.Alpha);
     }
 
     /// <summary>처음 계열(0~4) — 그 인물 .chr 직업이 든 Dep 의 계열. 못 찾으면 지금 계열.</summary>
-    private int StyleOriginFamily(CharacterData c)
+    internal int StyleOriginFamily(CharacterData c)
     {
-        if (_db is { } db && db.Character(c.Code) is { } baseChr
+        if (host._db is { } db && db.Character(c.Code) is { } baseChr
             && db.Deps.FirstOrDefault(d => d.Jobs.Contains(baseChr.JobId)) is { } origin)
             return (origin.Id - 1) / 3;
         return StyleDep() is { } d ? (d.Id - 1) / 3 : 0;
     }
 
     /// <summary>미리보기 중인 직업 — 형 칸을 골랐으면 그 직업, 아니면 지금 직업(원본 0x100fa4e0 이 채우는 목록의 주인).</summary>
-    private ushort StylePreviewJob()
+    internal ushort StylePreviewJob()
     {
         var jobs = StyleJobs();
         return StyleData() is { } c && _stylePick >= 0 && _stylePick < jobs.Count ? jobs[_stylePick] : StyleData()?.JobId ?? 0;
     }
 
     /// <summary>지금 직업이 앉아 있는 칸 번호 — 없으면 −1.</summary>
-    private int StyleCurrentCell()
+    internal int StyleCurrentCell()
     {
         if (StyleData() is not { } c) return -1;
         var jobs = StyleJobs();
@@ -310,38 +312,38 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로). 설정 「전직할 때 EXP 유지」면 EXP 도 남긴다.</summary>
-    private void ChangeJob(ushort jobId)
+    internal void ChangeJob(ushort jobId)
     {
         if (StyleData() is not { } c) return;
-        SetStyleData(c with { JobId = jobId, Exp = _keepJobExp ? c.Exp : 0 });
+        SetStyleData(c with { JobId = jobId, Exp = host._keepJobExp ? c.Exp : 0 });
         _stylePick = StyleCurrentCell();
-        Play(SoundStyleDone);
-        _notice = (_db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", _lastTime + 60 / TicksPerSecond);
+        host.Play(SoundStyleDone);
+        host._notice = (host._db?.T(934) is { Length: > 0 } t ? t : "전직되었습니다.", host._lastTime + 60 / TicksPerSecond);
     }
 
-    private void DrawMosesStyle(int ox, int oy, int tick)
+    internal void DrawMosesStyle(int ox, int oy, int tick)
     {
         var party = StylePartyPage();
         DrawStylePartyArrows(ox, oy);
         for (int i = 0; i < party.Count && i < 5; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
-            DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(StylePortraitObs, party[i] == _styleUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             // 초상화는 단추보다 커서 칸(60×60)에 맞춰 줄여 그린다 — 원본은 같은 크기라 그대로 얹는다.
             // 초상화는 단추(64×130, 왼위 기준) 안 +(32,50) 을 가운데로 — 60×60 이니 왼위는 +(2,20). 전에는 30픽셀 왼쪽에 찍혀 틀과 어긋났다.
             if (PartyData(party[i]) is { } pc)
             {
-                Fld.LoadFieldFace(pc);      // 전투에 안 선 동료는 얼굴을 아직 안 읽었을 수 있다
-                if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+                host.Fld.LoadFieldFace(pc);      // 전투에 안 선 동료는 얼굴을 아직 안 읽었을 수 있다
+                if (host._faces.TryGetValue(pc.Code, out var face)) host.BlitScaled(face, cx + 2, cy + 20, 60, 60);
             }
         }
 
-        if (StyleData() is not { } c || _db is not { } db) return;
+        if (StyleData() is not { } c || host._db is not { } db) return;
 
         // 능력치 패널(0x10034030: 이름 · 직업 · 체질 · LEVEL(TXR 160) · EXP(161) · LP(34) · TP(38)) — 원본 자리 (100,100) 140×164 는
         // 형 단추 다섯과 겹쳐 글이 안 읽히므로, 데모는 오른쪽 어빌리티 목록 아래 빈 칸(395,232)에 둔다.
-        DarkenRect(ox + 387, oy + 224, 180, 126);
-        DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
+        host.DarkenRect(ox + 387, oy + 224, 180, 126);
+        host.DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
         string[] stats =
         [
             $"{db.JobName(c)} · {db.BodyName(c.Body)}",
@@ -350,42 +352,42 @@ internal sealed unsafe partial class BattleSceneWindow
             $"{db.T(34)} {c.Lp}",
             $"{db.T(38)} {c.Tp}",
         ];
-        for (int i = 0; i < stats.Length; i++) DrawText(stats[i], ox + 405, oy + 240 + i * 18, White, 12);
+        for (int i = 0; i < stats.Length; i++) host.DrawText(stats[i], ox + 405, oy + 240 + i * 18, White, 12);
 
         // 어빌리티 미리보기 (395,70) 164×20 여섯 줄 — 원본(0x100fa4e0)은 <b>미리보기 중인 직업</b>의 Job.dat 어빌리티 11칸을 이름만 나열한다.
         // 형 칸을 누르면 그 직업 것으로 바뀐다.
-        DarkenRect(ox + 391, oy + 66, 172, 128);
+        host.DarkenRect(ox + 391, oy + 66, 172, 128);
         var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
         for (int i = 0; i < Math.Min(6, previewList.Count); i++)
         {
             if (!db.Abilities.TryGetValue(previewList[i], out var ab)) continue;
             string mark = c.HasAbility(previewList[i]) ? $" Lv{c.AbilityLevel(previewList[i])}" : "";
-            DrawText($"{db.T(ab.NameId)}{mark}", ox + 397, oy + 74 + i * 20, c.HasAbility(previewList[i]) ? White : 0xFFB4B4B4, 12);
+            host.DrawText($"{db.T(ab.NameId)}{mark}", ox + 397, oy + 74 + i * 20, c.HasAbility(previewList[i]) ? White : 0xFFB4B4B4, 12);
         }
-        if (previewList.Count > 6) DrawText($"… 외 {previewList.Count - 6}", ox + 397, oy + 74 + 6 * 20 - 6, 0xFFB4B4B4, 11);
+        if (previewList.Count > 6) host.DrawText($"… 외 {previewList.Count - 6}", ox + 397, oy + 74 + 6 * 20 - 6, 0xFFB4B4B4, 11);
 
         // 형 단추 — 레벨이 닿는 칸까지만 만든다(못 고르는 칸은 흐려지는 것이 아니라 아예 없다).
         var styleJobs = StyleJobs();
         for (int i = 0; i < styleJobs.Count && i < StyleBodyCells.Length; i++)
         {
             var (cx, cy) = StyleBodyCells[i];
-            DrawUi(StyleBodyObs, 0, tick, ox + cx, oy + cy, UiBlend.Alpha);
+            host.DrawUi(StyleBodyObs, 0, tick, ox + cx, oy + cy, UiBlend.Alpha);
             string label = db.T((ushort)(878 + i));
-            var (_, lw, lh) = GetText(label, White, 12);
+            var (_, lw, lh) = host.GetText(label, White, 12);
             uint colour = styleJobs[i] == c.JobId ? 0xFF00FF00 : i == _stylePick ? 0xFF00FFFF : 0xFFB4B4B4;
-            DrawText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
+            host.DrawText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
         }
 
         // 3단계 단추 둘 — 2단계·레벨 60·필수 어빌리티가 있을 때만. 조각은 계열 단추처럼 제 자리를 들고 있어 (320,240)에 찍는다.
-        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
         foreach (var (slot, tierJob) in StyleTierJobs())
         {
             var cell = StyleTierCells[slot];
             bool over = mx >= cell.X && mx < cell.X + cell.W && my >= cell.Y && my < cell.Y + cell.H;
-            DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + cell.X, oy + cell.Y, UiBlend.Alpha);   // 계열 단추처럼 칸 자리에
+            host.DrawUi(StyleFamilyObs, 2 + 2 * slot + (over ? 1 : 0), tick, ox + cell.X, oy + cell.Y, UiBlend.Alpha);   // 계열 단추처럼 칸 자리에
             int family = StyleData() is { } oc ? StyleOriginFamily(oc) : 0;
-            DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
-            DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
+            host.DrawUi(StyleIconObs, StyleIconMotion[Math.Clamp(family, 0, 4)], tick, ox + cell.X + cell.IconX, oy + cell.Y + cell.IconY, UiBlend.Alpha);
+            host.DrawUi(StyleMarkObs, slot, tick, ox + cell.X + cell.MarkX, oy + cell.Y + cell.MarkY, UiBlend.Alpha);
         }
 
         // 계열 단추 넷 — 1단계·레벨 30 일 때만 나온다(못 가는 동안은 아예 없다).
@@ -397,35 +399,35 @@ internal sealed unsafe partial class BattleSceneWindow
             // 짝수 모션이 가만히 있는 판, 홀수 모션이 마우스를 올렸을 때 빛나는 판이다.
             var (fx, fy, fw, fh) = StyleFamilyCells[i];
             bool over = mx >= fx && mx < fx + fw && my >= fy && my < fy + fh;
-            DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, UiBlend.Alpha);
+            host.DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, UiBlend.Alpha);
             DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], tick, ox + fx, oy + fy, fw, fh);
         }
 
         // STATUS 단추 — 원본에는 없는 데모 단추. 형 단추와 같은 알약(Obs 283)에 글자를 얹는다.
         {
             int bx0 = ox + 455, by0 = oy + 390;
-            if (!DrawUi(StyleBodyObs, 0, tick, bx0, by0, UiBlend.Alpha)) StrokeRect(bx0, by0, 68, 28, White);
-            var (_, sw, sh) = GetText("STATUS", White, 12);
-            DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
+            if (!host.DrawUi(StyleBodyObs, 0, tick, bx0, by0, UiBlend.Alpha)) host.StrokeRect(bx0, by0, 68, 28, White);
+            var (_, sw, sh) = host.GetText("STATUS", White, 12);
+            host.DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
         }
 
         // Ok 글자는 배경 그림(Bgr 0042)에 있다 — 알약 Obs 287 은 마우스 올림에만.
-        if (mx >= 455 && mx < 633 && my >= 430 && my < 457) DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+        if (mx >= 455 && mx < 633 && my >= 430 && my < 457) host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
 
         // 어빌리티 줄을 오른쪽 단추로 누르고 있는 동안의 설명 — 맨 위에 그린다.
-        if (_styleTip is { } tip) DrawDescriptionTip(tip, _mouse.X, _mouse.Y, ox, oy, MosesW, MosesH);
+        if (_styleTip is { } tip) host.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, MosesW, MosesH);
     }
 
     /// <summary>전직 화면 어빌리티 미리보기 줄을 오른쪽 단추로 누르고 있는 동안 띄우는 설명(떼면 사라진다).</summary>
-    private string? _styleTip;
+    internal string? _styleTip;
 
     /// <summary>
     /// 전직 화면에서 오른쪽 단추 누름 — 어빌리티 미리보기 줄(395,70 부터 20 간격 여섯 줄) 위면 그 어빌리티 설명을 띄우고 true(사용자 요청).
     /// 줄 밖이면 false 라서 모세스의 우클릭 = 뒤로 가기가 그대로 돈다. 설명은 Status 창과 같은 글(설명 + 레벨별 효과)이다.
     /// </summary>
-    private bool OnMosesStyleRightDown(int bx, int by)
+    internal bool OnMosesStyleRightDown(int bx, int by)
     {
-        if (_mosesPage != 7 || _db is not { } db || StyleData() is not { } c) return false;
+        if (_mosesPage != 7 || host._db is not { } db || StyleData() is not { } c) return false;
         var (ox, oy) = MosesOrigin();
         int x = bx - ox, y = by - oy;
         if (x < 391 || x >= 563 || y < 70) return false;
@@ -433,7 +435,8 @@ internal sealed unsafe partial class BattleSceneWindow
         var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
         if (row >= Math.Min(6, previewList.Count) || !db.Abilities.TryGetValue(previewList[row], out var ab)) return false;
         string desc = db.AbilityDescription(ab);
-        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + AbilityEffectText(ab, c.AbilityLevel(ab.Id));
+        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.AbilityEffectText(ab, c.AbilityLevel(ab.Id));
         return true;
+    }
     }
 }

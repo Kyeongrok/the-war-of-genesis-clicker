@@ -330,10 +330,10 @@ internal sealed unsafe partial class BattleSceneWindow
         int ySw = baseBottom - CornerPx(_map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(_map.CornerAt(col, row, 0));
         AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint);
         uint line = 0xFF000000 | tint;
-        DrawSegment(x0, yNw, x1, yNe, line);
-        DrawSegment(x0, ySw, x1, ySe, line);
-        DrawSegment(x0, yNw, x0, ySw, line);
-        DrawSegment(x1, yNe, x1, ySe, line);
+        Mos.DrawSegment(x0, yNw, x1, yNe, line);
+        Mos.DrawSegment(x0, ySw, x1, ySe, line);
+        Mos.DrawSegment(x0, yNw, x0, ySw, line);
+        Mos.DrawSegment(x1, yNe, x1, ySe, line);
     }
 
     /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.</summary>

@@ -115,7 +115,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _recordsOpen = false;
         _episodePick = -1;
         _episodeTop = 0;
-        ShowMosesBackground(EpisodeBackground);
+        Mos.ShowMosesBackground(EpisodeBackground);
         EnterSceneFade();
         StopMusic();
         PlayMusicFile(EpisodeBgm, loop: true, gain: 0);   // 0 → 84%, 15틀(ba-21 outer #3)
@@ -147,7 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private int EpisodeAt(int bx, int by)
     {
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)
         {
@@ -167,7 +167,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         int rows = EpisodeRowCount();
         if (rows <= EpisodeRows) return false;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         int x = bx - ox - EpisodeBarX, y = by - oy - EpisodeBarY;
         // 화살표 그림은 장 자리만큼 비껴 찍히므로 누름 칸도 그림 칸으로 본다(그림이 없으면 19×45).
         bool Hit(int motion, int top) => UiFor(EpisodeObs)?.FrameAt(motion, 0) is { W: > 0 } f
@@ -216,21 +216,21 @@ internal sealed unsafe partial class BattleSceneWindow
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
         // 연대표도 16틀 검게 나간 뒤 챕터(모세스)가 선다(0x101060d0). 그동안은 연대표가 그대로 보인다.
         _episodesOpen = true;
-        LeaveScene(() => { _episodesOpen = false; OpenMoses(chapter); });
+        LeaveScene(() => { _episodesOpen = false; Mos.OpenMoses(chapter); });
         return true;
     }
 
     private void DrawEpisodes()
     {
         if (!_episodesOpen) return;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         int tick = (int)(_lastTime * TicksPerSecond);
 
         FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (_mosesBg is { } bg)
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+        if (Mos._mosesBg is { } bg)
+            for (int y = 0; y < MosesScene.MosesH; y++)
+                for (int x = 0; x < MosesScene.MosesW; x++)
+                    SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)

@@ -148,7 +148,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 파티 자료는 전투가 끝날 때만 유닛에서 옮겨 적기 때문이다. 그래서 유진의 LP증가를 Lv10 까지 올려도 필드에 나갔다 오거나
         // 다음 전투를 시작하면 되돌아갔다(사용자 보고). 전투 밖에서는 열려 있는 동안 파티 자료에도 곧바로 적는다.
         // 편은 안 본다 — 세이브에서 불러온 파티원 유닛은 편이 −1 이라 IsAlly 로 거르면 빠졌다. 파티에 있는 인물이면 된다.
-        if ((_mosesOpen || FieldOpen) && _statusUnit >= 0 && _statusUnit != VirtualStatus && _statusUnit < _units.Length
+        if ((Mos._mosesOpen || FieldOpen) && _statusUnit >= 0 && _statusUnit != VirtualStatus && _statusUnit < _units.Length
             && _units[_statusUnit] is { Data: { } live } su && _party.ContainsKey(su.ChrCode) && !ReferenceEquals(_party[su.ChrCode], live))
         {
             _party[su.ChrCode] = live;
@@ -436,7 +436,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private uint[]? StatusBackground()
     {
-        if (!_statusBgTried) { _statusBgTried = true; _statusBg = ReadBackground(StatusBgr); }
+        if (!_statusBgTried) { _statusBgTried = true; _statusBg = Mos.ReadBackground(StatusBgr); }
         return _statusBg;
     }
 
@@ -480,7 +480,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 전투가 끝난 뒤 모세스에서 열면 결과 글이 남아 있어도 고칠 수 있어야 한다.
         // 원본은 Status 를 링(차례인 유닛)에서만 열고, 파티 밖 인물은 아이템 교환이 막힌다 — 전투에서는 <b>차례인 내 유닛</b>만,
         // 모세스에서는 파티원만 고칠 수 있다(fg-21 ⑰). 편 3 동맹은 보기만.
-        bool editable = _mosesOpen ? unit.IsAlly && (_members.Count == 0 || _members.Contains(unit.ChrCode))
+        bool editable = Mos._mosesOpen ? unit.IsAlly && (Mos._members.Count == 0 || Mos._members.Contains(unit.ChrCode))
                                    : unit.PlayerControlled && _outcome.Length == 0 && _turn >= 0 && _units[_turn] == unit;
 
         // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
@@ -566,7 +566,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 군단기 — 배속 군단(CChr+0x1c)의 기술 다섯 칸(For +0x1e, 6바이트씩) 가운데 필요 세력·대장 조건이 맞는 것을 목록 끝에(0x100326bd~0x1003274c).
         // 레벨 게터 0x10032a30 은 분류 2 면 늘 1, 다음 레벨(0x10032450)은 최대 레벨 1 을 넘어 −1 → 숫자 없는 꺼진 줄 「이름 Lv1」, 설명만 된다(감사4 S6).
         // 조건은 전투 어빌리티 메뉴(MenuRows)와 같다.
-        if (_unitLegion.TryGetValue(unit.ChrCode, out int statusLegion) && Legions().GetValueOrDefault(statusLegion) is { } myLegion)
+        if (Mos._unitLegion.TryGetValue(unit.ChrCode, out int statusLegion) && Mos.Legions().GetValueOrDefault(statusLegion) is { } myLegion)
             foreach (var (abilityId, power, leader) in myLegion.Skills)
             {
                 if (abilityId == 0 || power > 1000 || (leader != 0 && leader != unit.ChrCode)) continue;

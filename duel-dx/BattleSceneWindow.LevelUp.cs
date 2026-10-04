@@ -45,7 +45,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void ClearEnemiesForTest()
     {
-        if (_db == null || !_battleLoaded || _mosesOpen || FieldOpen || _outcome.Length > 0) { Toast("전투 중에만 쓸 수 있습니다"); return; }
+        if (_db == null || !_battleLoaded || Mos._mosesOpen || FieldOpen || _outcome.Length > 0) { Toast("전투 중에만 쓸 수 있습니다"); return; }
         var receivers = _units.Where(u => u.Alive && u.OnField && IsMine(u) && u.Data != null).ToList();
         var victims = _units.Where(u => u.Alive && u.OnField && !u.IsAlly).ToList();
         if (victims.Count == 0) { Toast("쓰러뜨릴 적이 없습니다"); return; }

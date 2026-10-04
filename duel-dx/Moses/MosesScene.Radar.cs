@@ -11,14 +11,16 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int RadarCenterX = 320 << 10, RadarCenterY = 220 << 10;
-    private const double RadarRadius = 74.0;
-    private const int RadarTiltX = 30, RadarTiltZ = 160;
+    internal sealed unsafe partial class MosesScene
+    {
+    internal const int RadarCenterX = 320 << 10, RadarCenterY = 220 << 10;
+    internal const double RadarRadius = 74.0;
+    internal const int RadarTiltX = 30, RadarTiltZ = 160;
 
-    private static readonly int[] RadarSin = new int[360], RadarCos = new int[360];
-    private static readonly (int X, int D, int Y)[] RadarLattice = new (int, int, int)[110];
+    internal static readonly int[] RadarSin = new int[360], RadarCos = new int[360];
+    internal static readonly (int X, int D, int Y)[] RadarLattice = new (int, int, int)[110];
 
-    static BattleSceneWindow()
+    static MosesScene()
     {
         // 0x10103bf0 — sin·cos 표(×1024, +0.5 뒤 0 쪽으로 자름)와 격자점 110개(경도칸×11 + 위도칸).
         for (int i = 0; i < 360; i++)
@@ -42,7 +44,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>0x101039e0 — 세 각(도)으로 격자점을 돌린 것. 식은 원본 그대로(&gt;&gt; 는 버림 시프트).</summary>
-    private static (int X, int D, int Y)[] RadarRotate(int a1, int a2, int a3)
+    internal static (int X, int D, int Y)[] RadarRotate(int a1, int a2, int a3)
     {
         int s1 = RadarSin[((a1 % 360) + 360) % 360], c1 = RadarCos[((a1 % 360) + 360) % 360];
         int s2 = RadarSin[((a2 % 360) + 360) % 360], c2 = RadarCos[((a2 % 360) + 360) % 360];
@@ -65,7 +67,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>0x10103d10 — 두 끝 깊이의 평균을 반지름 74 에 대한 백분율로 바꿔 127 을 더한 값. 128 미만이면 뒷면이라 안 그린다.</summary>
-    private static int? RadarShade(int dSum)
+    internal static int? RadarShade(int dSum)
     {
         int v = (dSum >> 11) * 100;
         v = v >= 0 ? v / 74 : -((-v) / 74);
@@ -74,7 +76,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>레이더를 (ox, oy) 모세스 틀 안에 그린다 — places = 후보 장소의 (경도칸, 위도칸) 후보 순서, hover = 마우스 아래 칸 번호.</summary>
-    private void DrawMosesRadar(int ox, int oy, int tick, IReadOnlyList<(int Lon, int Lat)> places, int hover)
+    internal void DrawMosesRadar(int ox, int oy, int tick, IReadOnlyList<(int Lon, int Lat)> places, int hover)
     {
         var pts = RadarRotate(RadarTiltX, RadarTiltZ, 3 * (tick % 120));
         int Px(int v) => v >> 10;
@@ -109,14 +111,14 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>브레젠험 선 — 원본은 <c>0x1000dfe0</c> 로 긋는다.</summary>
-    private void DrawSegment(int x0, int y0, int x1, int y1, uint colour)
+    internal void DrawSegment(int x0, int y0, int x1, int y1, uint colour)
     {
         int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
         int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
         int err = dx + dy;
         for (int guard = 0; guard < 4096; guard++)
         {
-            SetPixel(x0, y0, colour);
+            host.SetPixel(x0, y0, colour);
             if (x0 == x1 && y0 == y1) break;
             int e2 = 2 * err;
             if (e2 >= dy) { err += dy; x0 += sx; }
@@ -125,7 +127,7 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>볼록 네모 조각을 가로줄로 채운다 — 원본은 다각형 객체(<c>0x1000a760</c>)를 만들어 <c>0x1000aee0</c> 로 채운다.</summary>
-    private void FillQuad((int X, int Y)[] quad, uint colour)
+    internal void FillQuad((int X, int Y)[] quad, uint colour)
     {
         int minY = quad.Min(p => p.Y), maxY = quad.Max(p => p.Y);
         for (int y = minY; y <= maxY; y++)
@@ -141,7 +143,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 left = Math.Min(left, x);
                 right = Math.Max(right, x);
             }
-            for (int x = left; x <= right; x++) SetPixel(x, y, colour);
+            for (int x = left; x <= right; x++) host.SetPixel(x, y, colour);
         }
+    }
     }
 }

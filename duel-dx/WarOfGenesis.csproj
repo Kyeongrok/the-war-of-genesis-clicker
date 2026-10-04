@@ -46,6 +46,7 @@
         <Content Include="..\assets\**\*" LinkBase="assets" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
+      <Folder Include="Ability\" />
       <Folder Include="Battle\" />
       <Folder Include="Field\" />
       <Folder Include="Moses\" />

@@ -211,9 +211,9 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         while (Win32.GetMenuItemCount(_replayMenu) > 0) Win32.DeleteMenu(_replayMenu, 0, Win32.MF_BYPOSITION);
         _replayItems.Clear();
-        if (_mosesChp is { } chp)
+        if (Mos._mosesChp is { } chp)
             foreach (var place in chp.Places)
-                if (_placesUsed.Contains((chp.Id, place.No)) && _replayItems.Count < 500)
+                if (Mos._placesUsed.Contains((chp.Id, place.No)) && _replayItems.Count < 500)
                 {
                     string kind = place.Value >= 20000 ? "상점" : place.Value >= 10000 ? $"필드 {place.Value - 10000:D4}" : $"전투 {place.Value:D4}";
                     string name = _db?.T((ushort)place.NameText) is { Length: > 0 } n ? n : $"장소 {place.No}";
@@ -221,7 +221,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     _replayItems.Add((chp.Id, place.No));
                 }
         if (_replayItems.Count == 0)
-            Win32.AppendMenuW(_replayMenu, Win32.MF_STRING | Win32.MF_GRAYED, 0, _mosesChp == null ? "(챕터 안이 아닙니다)" : "(이 챕터에서 다녀온 장소가 없습니다)");
+            Win32.AppendMenuW(_replayMenu, Win32.MF_STRING | Win32.MF_GRAYED, 0, Mos._mosesChp == null ? "(챕터 안이 아닙니다)" : "(이 챕터에서 다녀온 장소가 없습니다)");
     }
 
     /// <summary>다녀온 장소의 표시를 지워 항행에서 다시 고를 수 있게 한다 — 진행 깃발은 건드리지 않는다.</summary>
@@ -229,9 +229,9 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if ((uint)index >= _replayItems.Count) return;
         var (chapter, place) = _replayItems[index];
-        if (!_placesUsed.Remove((chapter, place))) return;
+        if (!Mos._placesUsed.Remove((chapter, place))) return;
         _chapterDone = false;
-        string name = _mosesChp?.PlaceOf(place) is { } p && _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {place}";
+        string name = Mos._mosesChp?.PlaceOf(place) is { } p && _db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {place}";
         Toast($"「{name}」 을(를) 다시 열었습니다 — 항행에서 다시 고를 수 있습니다");
     }
 
@@ -252,7 +252,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
     private bool TrySkipEnemyAction()
     {
-        if (!_skipEnemyAction || _skippingAction || !_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return false;
+        if (!_skipEnemyAction || _skippingAction || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return false;
         if (IsPlayerTurn || _routine == null || _outcome.Length > 0 || EventsBusy || LevelUpOpen || SystemOpen || _deployOpen) return false;
         _skippingAction = true;
         _skipFrom = _lastTime;
@@ -502,7 +502,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_db is not { } db) { Toast("게임 자료가 아직 없습니다"); return; }
         int n = db.ReloadSkills();
-        _legions = null;
+        Mos._legions = null;
         Toast(n > 0 ? $"어빌리티 {n}개·체질·군단을 다시 읽었습니다" : "스킬 파일(assets/data/skills)이 없어 군단만 다시 읽었습니다");
     }
 }

@@ -86,12 +86,12 @@ internal sealed unsafe partial class BattleSceneWindow
         // 부하 검사(0x100d58c2~0x100d5912)는 <b>이 전투의 군단(+0x4ea)이 있을 때만</b> 한다 — 대장 표시(+0x4ef) && For[+0x4ea] 부하 칸 수 == 살아 있는 부하 수.
         // 이 전투에 군단 없이 선 인물(워드 7 꺼짐 && 파일 15 == 0, 「군단사용」 끔)은 검사를 건너뛰어 TP·SOUL 만 보고 혼자서도 쓴다.
         // 전에는 <b>배속 군단</b>의 칸 수와 비교해 군단 없이 서면 늘 「부하가 모자람」이었다(감사3 L5). 레벨은 늘 1.
-        if (_unitLegion.TryGetValue(u.ChrCode, out int legionId) && Legions().ContainsKey(legionId))
+        if (Mos._unitLegion.TryGetValue(u.ChrCode, out int legionId) && Mos.Legions().ContainsKey(legionId))
         {
             int alive = FollowersOf(_turn).Count;
             bool membersMissing = u.LegionId != 0
-                && (alive == 0 || Legions().GetValueOrDefault(u.LegionId) is not { } battleLegion || battleLegion.Members.Count(m => m != 0) != alive);
-            var legion = Legions()[legionId];
+                && (alive == 0 || Mos.Legions().GetValueOrDefault(u.LegionId) is not { } battleLegion || battleLegion.Members.Count(m => m != 0) != alive);
+            var legion = Mos.Legions()[legionId];
             foreach (var (abilityId, power, leader) in legion.Skills)
             {
                 if (abilityId == 0 || power > 1000 || (leader != 0 && leader != u.ChrCode)) continue;

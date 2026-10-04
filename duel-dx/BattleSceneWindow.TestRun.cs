@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         TestClicksTick();
         if (!TestRun) return;
-        if (TestSkip && _battleLoaded && !FieldOpen && !_mosesOpen && !_titleOpen && _outcome.Length == 0)
+        if (TestSkip && _battleLoaded && !FieldOpen && !Mos._mosesOpen && !_titleOpen && _outcome.Length == 0)
         {
             if (_runningEvent >= 0 && !_talkSkip) SkipScene();
             else if (_talks.Count > 0) OnTalkInput(skipAll: true);
@@ -75,7 +75,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (_lastTime < _testRunStatAt) return;
         _testRunStatAt = _lastTime + 10;
-        string scene = _titleOpen ? "title" : _mosesOpen ? "moses" : FieldOpen ? "field" : _battleLoaded ? $"btl {_scene.Id}" : "none";
+        string scene = _titleOpen ? "title" : Mos._mosesOpen ? "moses" : FieldOpen ? "field" : _battleLoaded ? $"btl {_scene.Id}" : "none";
         string alive = string.Join(" ", _units.Where(u => u.Alive && u.OnField).GroupBy(u => u.Side).OrderBy(g => g.Key).Select(g => $"s{g.Key}={g.Count()}"));
         TestRunTrace($"stat t {_lastTime:F1} scene {scene} turnNo {_turnNo} tick {_tick} turn {_turn} ev {_runningEvent} talk {_talks.Count} outcome '{_outcome}' alive {alive}");
     }

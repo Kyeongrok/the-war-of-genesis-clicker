@@ -49,7 +49,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _titleOpen = true;
         _titleHover = -1;
         _titleOpenedAt = _lastTime;
-        _mosesOpen = false;
+        Mos._mosesOpen = false;
         // 연대표·기록 화면도 내린다 — 원본 0x10106530(EXIT GAME, 0x452)은 연대표 장면을 끝내고 장면 6 을 세운다.
         // 안 내리면 연대표가 타이틀 위에 그대로 그려지고 클릭도 먼저 먹었다(감사 F3).
         _episodesOpen = false;
@@ -57,7 +57,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _episodePick = -1;
         // 게임오버(LeaveFinishedBattle)에서 오면 판이 아직 전투 맵 크기다 — 원본은 장면이 새로 선다(감사 F15, 모세스와 같은 까닭).
         if (Cols != TitleBoardCols || Rows != TitleBoardRows) { ResizeBoard(TitleBoardCols, TitleBoardRows); _battleLoaded = false; }
-        ShowMosesBackground(TitleBackground);
+        Mos.ShowMosesBackground(TitleBackground);
         EnterSceneFade();
         // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
         if (_musicId == TitleBgm) return;
@@ -71,7 +71,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private int TitleButtonAt(int bx, int by)
     {
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         for (int i = 0; i < TitleButtons.Length; i++)
         {
             var (x, y, _) = TitleButtons[i];
@@ -115,21 +115,21 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             case 0:                                   // NEW GAME — 원본처럼 연대표(장면 7)로 간다
                 _party.Clear();
-                _members.Clear();
-                _ownedLegions.Clear();
-                _legionsKnown = true;
+                Mos._members.Clear();
+                Mos._ownedLegions.Clear();
+                Mos._legionsKnown = true;
                 _partyBank.Clear();
                 // 파티의 가방·GP·군단 배속과 「이미 겪은」 표시(자동 장소·챕터 사건 횟수·다녀온 장소)도 비운다 — 안 비우면 같은 실행에서
                 // 두 번째 새 게임이 프롤로그·동료 합류·3000GP 를 건너뛰고 지난 판의 가방을 들고 시작한다(원본 0x1004d870 은 파티를 새로 만든다).
                 _inventory.Clear();
-                _shopMoney = 0;
-                _unitLegion.Clear();
-                _placesUsed.Clear();
-                _autoPlacesDone.Clear();
+                Mos._shopMoney = 0;
+                Mos._unitLegion.Clear();
+                Mos._placesUsed.Clear();
+                Mos._autoPlacesDone.Clear();
                 Fld._chapterFired.Clear();
-                _mailbox.Clear();
-                _mailRead.Clear();
-                _planetVisits.Clear();
+                Mos._mailbox.Clear();
+                Mos._mailRead.Clear();
+                Mos._planetVisits.Clear();
                 Array.Clear(_flags);                  // 새 게임 — 진행 깃발을 비운다(0x1004d870). 그래야 연대표에 0·1번만 열린다.
                 _chapterDone = false;
                 _episodesPicked.Clear();              // 고른 에피소드 표시도 NEW GAME 만 지운다(0x1004d870)
@@ -137,8 +137,8 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 플레이 시간 0([0x101737a4] = 0)·챕터 상태(0x101b6898 — 지금 챕터·스크립트 변수·항행 시작) 버림(0x1004d870, 감사 F10).
                 // 지금 챕터가 남으면 연대표 세이브를 부를 때 앞 판 챕터가 열렸다(F6).
                 _playBase = -_realTime * 1000;
-                _mosesChp = null;
-                _navStart = null;
+                Mos._mosesChp = null;
+                Mos._navStart = null;
                 Array.Clear(Fld._chapterVars);
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
@@ -168,14 +168,14 @@ internal sealed unsafe partial class BattleSceneWindow
             StopMusic();
             PlayMusicFile(TitleBgm, loop: false);
         }
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         int tick = (int)(_lastTime * TicksPerSecond);
 
         FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (_mosesBg is { } bg)
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+        if (Mos._mosesBg is { } bg)
+            for (int y = 0; y < MosesScene.MosesH; y++)
+                for (int x = 0; x < MosesScene.MosesW; x++)
+                    SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         // 아래쪽 반짝임 다섯 벌 — 시차 0·10·20·30·40틱
         for (int i = 0; i < 5; i++)

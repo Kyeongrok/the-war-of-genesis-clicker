@@ -20,30 +20,32 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int ShopRowH = 21, ShopRows = 4, ShopIconObs = 326, ShopRowObs = 1291;
-    private const int ShopButtonObs = 283, ShopExitObs = 287, ShopArrowObs = 71;
-    private const int SoundShopFail = 574, SoundShopDone = 575, SoundShopLeave = 576;
+    internal sealed unsafe partial class MosesScene
+    {
+    internal const int ShopRowH = 21, ShopRows = 4, ShopIconObs = 326, ShopRowObs = 1291;
+    internal const int ShopButtonObs = 283, ShopExitObs = 287, ShopArrowObs = 71;
+    internal const int SoundShopFail = 574, SoundShopDone = 575, SoundShopLeave = 576;
 
     /// <summary>목록 넷 — 자리와 너비(분석-모세스 12절).</summary>
-    private static readonly (int X, int Y, int W)[] ShopLists =
+    internal static readonly (int X, int Y, int W)[] ShopLists =
         [(151, 71, 217), (422, 71, 158), (151, 191, 217), (422, 191, 158)];
 
-    private const int ListStock = 0, ListBuy = 1, ListBag = 2, ListSell = 3;
+    internal const int ListStock = 0, ListBuy = 1, ListBag = 2, ListSell = 3;
 
-    private MosesShopFile? _shop;
-    private readonly List<int> _shopBuy = [], _shopSell = [];
-    private readonly int[] _shopTop = new int[4];
-    private int _shopMoney = 5000;
+    internal MosesShopFile? _shop;
+    internal readonly List<int> _shopBuy = [], _shopSell = [];
+    internal readonly int[] _shopTop = new int[4];
+    internal int _shopMoney = 5000;
 
     /// <summary>상점 페이지를 연다 — 번호가 없으면 챕터의 기본 상점(아이템 0 · VT 1).</summary>
     /// <param name="quiet">장소(값 ≥ 20000)로 열 때 — 원본은 페이지 3 + <c>0x100fb1f0(0, n)</c> 뿐, 소리·효과가 없다(<c>0x100feff3</c>, 감사5 P2).</param>
-    private void OpenMosesShop(int kind, int shopNo = -1, bool quiet = false)
+    internal void OpenMosesShop(int kind, int shopNo = -1, bool quiet = false)
     {
         int no = shopNo >= 0 ? shopNo : kind == 1 ? _mosesChp?.VtShop ?? 3 : _mosesChp?.ItemShop ?? 4;
         string path = Path.Combine(AssetsFolder.Find("moses"), "shp", $"{no:D4}.shp");
         if (!File.Exists(path) || MosesShopFile.Parse(File.ReadAllBytes(path)) is not { } shop)
         {
-            Toast($"상점 {no} 자료가 없습니다");
+            host.Toast($"상점 {no} 자료가 없습니다");
             return;
         }
         _shop = shop;
@@ -53,45 +55,45 @@ internal sealed unsafe partial class BattleSceneWindow
         _shopCompareItem = 0;
         _shopCompareTop = 0;
         _mosesPage = kind == 1 ? 4 : 3;
-        _mosesPageAt = _lastTime;
+        _mosesPageAt = host._lastTime;
         _mosesHover = -1;
         if (quiet) { _mosesFade = 0; ResetMosesSlide(0); }
         else
         {
             StartFade();
-            Play(572);
+            host.Play(572);
         }
         ShowMosesBackground(40);
     }
 
-    private int ShopPrice(int itemId) => _db?.Items.GetValueOrDefault(itemId) is { } item && _shop != null
+    internal int ShopPrice(int itemId) => host._db?.Items.GetValueOrDefault(itemId) is { } item && _shop != null
         ? (int)(item.Price * _shop.Rate / 100) : 0;
 
-    private int ShopSellPrice(int itemId) => ShopPrice(itemId) / 2;
+    internal int ShopSellPrice(int itemId) => ShopPrice(itemId) / 2;
 
     /// <summary>결산 = 지금 돈 − 매입 + 매각.</summary>
-    private int ShopBalance() => _shopMoney - _shopBuy.Sum(ShopPrice) + _shopSell.Sum(ShopSellPrice);
+    internal int ShopBalance() => _shopMoney - _shopBuy.Sum(ShopPrice) + _shopSell.Sum(ShopSellPrice);
 
     /// <summary>목록 넷의 지금 내용 — (아이템 번호, 개수).</summary>
-    private List<(int Item, int Count)> ShopListItems(int list) => list switch
+    internal List<(int Item, int Count)> ShopListItems(int list) => list switch
     {
         ListStock => [.. (_shop?.Items ?? []).Select(i => (i, 1))],
         ListBuy => [.. _shopBuy.GroupBy(i => i).Select(g => (g.Key, g.Count()))],
-        ListBag => [.. _inventory.Where(p => p.Value > 0).Select(p => (p.Key, p.Value))],
+        ListBag => [.. host._inventory.Where(p => p.Value > 0).Select(p => (p.Key, p.Value))],
         _ => [.. _shopSell.GroupBy(i => i).Select(g => (g.Key, g.Count()))],
     };
 
     /// <summary>상점 페이지에서 마우스가 놓인 목록을 휠로 굴린다(편의 — 원본은 화살표만, ba-20 G22). 받았으면 true.</summary>
-    private bool OnMosesShopWheel(int notches)
+    internal bool OnMosesShopWheel(int notches)
     {
-        if (!_mosesOpen || _mosesPage != 3 || SystemOpen) return false;
-        int list = ShopRowAt(_mouse.X, _mouse.Y).List;
+        if (!_mosesOpen || _mosesPage != 3 || host.SystemOpen) return false;
+        int list = ShopRowAt(host._mouse.X, host._mouse.Y).List;
         if (list < 0) return false;
         _shopTop[list] = Math.Clamp(_shopTop[list] - notches, 0, Math.Max(0, ShopListItems(list).Count - ShopRows));
         return true;
     }
 
-    private (int List, int Row) ShopRowAt(int bx, int by)
+    internal (int List, int Row) ShopRowAt(int bx, int by)
     {
         var (ox, oy) = MosesOrigin();
         for (int i = 0; i < ShopLists.Length; i++)
@@ -109,25 +111,25 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 재고 줄을 눌러 <b>담을 때만</b> 비교 글이 바뀐다(0x100ff660 → 0x10103640): 무기는 무기 종류가 같은 인물만 지금 무기와, 갑옷(종류 2)은 지금 갑옷과.
     /// 여섯 명이 넘으면 ←/→ (Obs 302 모션 0/1 @ (20,370)/(400,370), 20×50)로 한 명씩 넘긴다.
     /// </summary>
-    private int _shopCompareItem, _shopCompareTop;
+    internal int _shopCompareItem, _shopCompareTop;
 
-    private bool ShopCompares => _shop is { Kind: 2 };
+    internal bool ShopCompares => _shop is { Kind: 2 };
 
-    private void DrawShopCompare(int ox, int oy, int tick)
+    internal void DrawShopCompare(int ox, int oy, int tick)
     {
-        if (!ShopCompares || _db is not { } db) return;
+        if (!ShopCompares || host._db is not { } db) return;
         var party = StyleParty();
         _shopCompareTop = Math.Clamp(_shopCompareTop, 0, Math.Max(0, party.Count - 5));
-        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
         var item = _shopCompareItem != 0 ? db.Items.GetValueOrDefault(_shopCompareItem) : null;
         for (int i = 0; i < 5 && _shopCompareTop + i < party.Count; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
             bool over = mx >= 70 * i + 48 && mx < 70 * i + 48 + 64 && my >= 330 && my < 460;
-            DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, UiBlend.Alpha);
             if (PartyData(party[_shopCompareTop + i]) is not { } pc) continue;
-            Fld.LoadFieldFace(pc);
-            if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+            host.Fld.LoadFieldFace(pc);
+            if (host._faces.TryGetValue(pc.Code, out var face)) host.BlitScaled(face, cx + 2, cy + 20, 60, 60);
             if (item == null) continue;
             // 종류 0·1·8~17 = 무기(인물의 무기 종류와 같을 때만), 2 = 갑옷, 그 밖은 글 없음(표 0x10103758).
             int slot = item.Type is 0 or 1 or (>= 8 and <= 17) ? (db.WeaponTypeOf(pc) == item.Type ? 0 : -1) : item.Type == 2 ? 1 : -1;
@@ -136,30 +138,30 @@ internal sealed unsafe partial class BattleSceneWindow
             string[] lines = [$"Atk = {item.Attack - (worn?.Attack ?? 0),3:+0;-0;+0}", $"Dep = {item.Defense - (worn?.Defense ?? 0),3:+0;-0;+0}"];
             for (int l = 0; l < lines.Length; l++)
             {
-                var (_, tw, _) = GetText(lines[l], 0xFFFFFF00, 11);
-                DrawText(lines[l], cx + 32 - tw / 2, cy + 65 + 35 - 12 + l * 13, 0xFFFFFF00, 11);
+                var (_, tw, _) = host.GetText(lines[l], 0xFFFFFF00, 11);
+                host.DrawText(lines[l], cx + 32 - tw / 2, cy + 65 + 35 - 12 + l * 13, 0xFFFFFF00, 11);
             }
         }
         if (party.Count >= 6)
         {
-            DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha);
-            DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha);
+            host.DrawUi(302, 0, 0, ox + 20, oy + 370, UiBlend.Alpha);
+            host.DrawUi(302, 1, 0, ox + 400, oy + 370, UiBlend.Alpha);
         }
     }
 
-    private bool OnShopCompareClick(int x, int y)
+    internal bool OnShopCompareClick(int x, int y)
     {
         if (!ShopCompares) return false;
         int count = StyleParty().Count;
         if (count >= 6 && y >= 370 && y < 420)
         {
-            if (x >= 20 && x < 40) { if (_shopCompareTop > 0) { _shopCompareTop--; Play(66); } return true; }
-            if (x >= 400 && x < 420) { if (_shopCompareTop < count - 5) { _shopCompareTop++; Play(66); } return true; }
+            if (x >= 20 && x < 40) { if (_shopCompareTop > 0) { _shopCompareTop--; host.Play(66); } return true; }
+            if (x >= 400 && x < 420) { if (_shopCompareTop < count - 5) { _shopCompareTop++; host.Play(66); } return true; }
         }
         return false;
     }
 
-    private bool OnMosesShopClick(int bx, int by)
+    internal bool OnMosesShopClick(int bx, int by)
     {
         if (_mosesPage is not (3 or 4) || _shop == null) return false;
         var (ox, oy) = MosesOrigin();
@@ -206,30 +208,30 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>결제 — 결산이 음수면 안 되고, 되면 가방과 소지금을 고친다.</summary>
-    private void ShopSettle()
+    internal void ShopSettle()
     {
         if (_shopBuy.Count == 0 && _shopSell.Count == 0) return;
         if (ShopBalance() < 0)
         {
-            Play(SoundShopFail);
-            _notice = (_db?.T(1318) is { Length: > 0 } t ? t : "돈이 모자랍니다.", _lastTime + 150 / TicksPerSecond);
+            host.Play(SoundShopFail);
+            host._notice = (host._db?.T(1318) is { Length: > 0 } t ? t : "돈이 모자랍니다.", host._lastTime + 150 / TicksPerSecond);
             return;                              // 목록은 그대로 둔다(0x101001f6 — 알림과 소리만, ba-15)
         }
         _shopMoney = ShopBalance();
-        foreach (int id in _shopBuy) _inventory[id] = _inventory.GetValueOrDefault(id) + 1;
+        foreach (int id in _shopBuy) host._inventory[id] = host._inventory.GetValueOrDefault(id) + 1;
         foreach (int id in _shopSell)
-            if (_inventory.TryGetValue(id, out int n)) _inventory[id] = Math.Max(0, n - 1);
+            if (host._inventory.TryGetValue(id, out int n)) host._inventory[id] = Math.Max(0, n - 1);
         _shopBuy.Clear();
         _shopSell.Clear();
-        Play(SoundShopDone);
+        host.Play(SoundShopDone);
     }
 
-    private void DrawMosesShop(int ox, int oy, int tick)
+    internal void DrawMosesShop(int ox, int oy, int tick)
     {
         if (_shop is not { } shop) return;
 
-        DrawUi(shop.OwnerObs, 0, tick, ox + 52, oy + 101, UiBlend.Alpha);   // 점주
-        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        host.DrawUi(shop.OwnerObs, 0, tick, ox + 52, oy + 101, UiBlend.Alpha);   // 점주
+        int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
         bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
 
         for (int i = 0; i < ShopLists.Length; i++)
@@ -244,27 +246,27 @@ internal sealed unsafe partial class BattleSceneWindow
                 int rx = ox + lx, ry = oy + ly + r * ShopRowH;
                 // 줄 틀 Obs 1291 모션 1(230×28)은 <b>마우스가 올라간 줄에만</b> 덧그리는 강조다(0x10043810 으로 달아 둔 덧그림,
                 // 세이브 슬롯의 Obs 0471 모션 20 과 같은 짜임). 줄마다 그리면 28픽셀짜리 틀이 21픽셀 줄을 넘어 겹쳐 어지럽다.
-                if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, UiBlend.Alpha);
-                if (_db?.Items.GetValueOrDefault(itemId) is not { } item) continue;
-                DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, UiBlend.Alpha);
+                if (Over(lx, ly + r * ShopRowH, lw, ShopRowH)) host.DrawUi(ShopRowObs, 1, tick, rx - 8, ry - 5, UiBlend.Alpha);
+                if (host._db?.Items.GetValueOrDefault(itemId) is not { } item) continue;
+                host.DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, UiBlend.Alpha);
                 // 줄 글(0x100f8900~ · 0x100f8f10~, ba-20 S 5): 재고 줄의 수 = 담은 수(처음 X 00), 소지품 줄의 수 = 보유 − 팔려고 담은 수,
                 // 매입·매각 목록은 「이름(X nn)」이고 값이 없다. 값 글은 노랑. 가격 0 인 소지품은 「판매 불가」로 꺼진다(0x1003fdc0).
                 bool unsellable = i == ListBag && ShopSellPrice(itemId) <= 0;
                 int shown = i == ListStock ? _shopBuy.Count(b => b == itemId) : i == ListBag ? count - _shopSell.Count(b => b == itemId) : count;
-                string label = i is ListBuy or ListSell ? $"{_db.T(item.NameId)}(X {shown:D2})" : _db.T(item.NameId);
-                DrawText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
+                string label = i is ListBuy or ListSell ? $"{host._db.T(item.NameId)}(X {shown:D2})" : host._db.T(item.NameId);
+                host.DrawText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
                 if (i is ListStock or ListBag)
                 {
                     string value = unsellable ? "판매 불가" : $"{(i == ListBag ? ShopSellPrice(itemId) : ShopPrice(itemId))} X {shown:D2}";
-                    var (_, vw, _) = GetText(value, White, 11);
-                    DrawText(value, rx + lw - 5 - vw, ry + 4, unsellable ? DimGray : 0xFFFFFF00, 11);
+                    var (_, vw, _) = host.GetText(value, White, 11);
+                    host.DrawText(value, rx + lw - 5 - vw, ry + 4, unsellable ? DimGray : 0xFFFFFF00, 11);
                 }
             }
             // 줄이 넘치면 오른쪽에 위·아래 화살표
             if (items.Count > ShopRows)
             {
-                DrawUi(ShopArrowObs, 2, tick, ox + lx + lw, oy + ly, UiBlend.Alpha);
-                DrawUi(ShopArrowObs, 4, tick, ox + lx + lw, oy + ly + ShopRows * ShopRowH - 16, UiBlend.Alpha);
+                host.DrawUi(ShopArrowObs, 2, tick, ox + lx + lw, oy + ly, UiBlend.Alpha);
+                host.DrawUi(ShopArrowObs, 4, tick, ox + lx + lw, oy + ly + ShopRows * ShopRowH - 16, UiBlend.Alpha);
             }
         }
 
@@ -275,21 +277,21 @@ internal sealed unsafe partial class BattleSceneWindow
         };
         for (int i = 0; i < lines.Length; i++)
         {
-            string label = _db?.T(lines[i].Text) is { Length: > 0 } t ? t : "";
+            string label = host._db?.T(lines[i].Text) is { Length: > 0 } t ? t : "";
             // 배경 그림의 「Account」 칸 안(왼쪽 아래)에 넣는다 — 이름은 왼쪽, 값은 오른쪽 맞춤
             int ly = oy + 200 + i * 20;
-            DrawText(label, ox + 30, ly, White, 11);
+            host.DrawText(label, ox + 30, ly, White, 11);
             string value = $"{lines[i].Value}GP";
-            var (_, vw, _) = GetText(value, White, 11);
-            DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? Red : White, 11);
+            var (_, vw, _) = host.GetText(value, White, 11);
+            host.DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? Red : White, 11);
         }
 
         DrawShopCompare(ox, oy, tick);
 
         // Reset·Set·Ok 글자는 배경 그림(Bgr 0040)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림.
-        if (Over(418, 294, 68, 27)) DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
-        if (Over(522, 294, 68, 27)) DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, UiBlend.Alpha);
-        if (Over(455, 430, 163, 27)) DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
+        if (Over(418, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, UiBlend.Alpha);
+        if (Over(522, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, UiBlend.Alpha);
+        if (Over(455, 430, 163, 27)) host.DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, UiBlend.Alpha);
     }
 }
 
@@ -303,5 +305,6 @@ internal sealed record MosesShopFile(int NameText, int Kind, int OwnerObs, int O
         int rate = H(10) is > 0 and < 1000 ? H(10) : 100;
         return new MosesShopFile(H(2), H(4), H(6), H(8), rate,
                                  [.. Enumerable.Range(0, 15).Select(i => (int)H(12 + 2 * i)).Where(v => v > 0)]);
+    }
     }
 }

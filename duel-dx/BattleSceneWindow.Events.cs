@@ -896,7 +896,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if ((uint)A(0) < 10) { _eventTimerRun[A(0)] = A(1) != 0; _eventTimer[A(0)] = 0; }
                 break;
             case 713:                                    // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x10055480 → 0x1004df50, 필드 713 과 같은 함수)
-                if (A(0) > 0) { _ownedLegions.Add(A(0)); _legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
+                if (A(0) > 0) { Mos._ownedLegions.Add(A(0)); Mos._legionsKnown = true; }   // 전에는 아이템으로 잘못 넣었다
                 break;
             case 500:                                    // 소리 한 번 내고 <b>끝날 때까지 기다린다</b>(0x10053ec0)
                 if (_talkSkip) break;                    // 건너뛰는 중에는 안 튼다 — 전에는 건너뛴 대사의 목소리가 뒤늦게 겹쳐 나왔다(ba-20 V13)
