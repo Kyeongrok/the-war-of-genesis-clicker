@@ -199,14 +199,14 @@ internal sealed unsafe partial class GameWindow
     {
         if (_afterFadeOut != null) return;       // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         // 결과 배너는 우클릭으로도 넘긴다(0x1006b1fd~ — Esc · Space · 좌클릭 · 우클릭, ba-21 battle-flow 3).
-        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !_episodesOpen && !_titleOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen && !TitleScr._titleOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
         if (OnTalkInput(skipAll: true)) return;
         if (_deployOpen) { _deployPick = null; return; }   // 배치 중 우클릭 = 고른 사람 놓기
         // 창은 모달이다(0x1003fc80) — 레벨업·알림·결과 배너·시스템 창이 떠 있으면 우클릭이 뒤의 유닛 정보 창·링을 열지 않는다(ba-20 G2).
         if (!Mos._mosesOpen && !FieldOpen)
         {
-            if (LevelUpOpen || _notice != null || _outcome.Length > 0) return;
+            if (LevelUpOpen || SlotsScr._notice != null || _outcome.Length > 0) return;
             if (SystemOpen) { CloseSystemWindow(); return; }
             if (_itemMenu) { CancelStep(undoMove: false); return; }
         }

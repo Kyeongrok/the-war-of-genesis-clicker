@@ -47,7 +47,7 @@ internal sealed unsafe partial class GameWindow
         if (chr <= 0) return;
         if (data != null) _party[chr] = data;
         else if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } c) _party[chr] = c;
-        if (party == _partyNo) Mos._members.Add(chr);
+        if (party == EpisodesScr._partyNo) Mos._members.Add(chr);
         else BankFor(party).Members.Add(chr);
     }
 
@@ -59,7 +59,7 @@ internal sealed unsafe partial class GameWindow
     {
         var data = _units.FirstOrDefault(u => u.ChrCode == chr && u.IsAlly)?.Data ?? _party.GetValueOrDefault(chr);
         if (data != null && chr > 0) _party[chr] = data;
-        if (party == _partyNo) Mos._members.Remove(chr);
+        if (party == EpisodesScr._partyNo) Mos._members.Remove(chr);
         else BankFor(party).Members.Remove(chr);
         return data;
     }
@@ -81,14 +81,14 @@ internal sealed unsafe partial class GameWindow
 
     internal void AddMoney(int party, int amount)
     {
-        if (party == _partyNo) Mos._shopMoney += amount;
+        if (party == EpisodesScr._partyNo) Mos._shopMoney += amount;
         else BankFor(party).Money += amount;
     }
 
     internal void AddItem(int party, int item, int count)
     {
         if (item <= 0) return;
-        if (party == _partyNo) _inventory[item] = _inventory.GetValueOrDefault(item) + count;
+        if (party == EpisodesScr._partyNo) _inventory[item] = _inventory.GetValueOrDefault(item) + count;
         else BankFor(party).Inventory[item] = BankFor(party).Inventory.GetValueOrDefault(item) + count;
     }
 
@@ -97,10 +97,10 @@ internal sealed unsafe partial class GameWindow
     {
         if (into == from) return;
         // B 를 은행 꼴로 꺼낸다
-        PartyState src = from == _partyNo ? TakeCurrentAsState() : BankFor(from);
+        PartyState src = from == EpisodesScr._partyNo ? TakeCurrentAsState() : BankFor(from);
         foreach (int chr in src.Members) AddMember(into, chr);   // 인원 번호만 옮긴다 — 자료는 명부에 그대로 있다
         // 우편함도 옮긴다 — B 의 편지를 A 에 붙이고, B 에서 읽은 것은 A 에서도 읽음(0x1004dd60(id, 읽음), 분석-모세스 mo-mail).
-        var (box, read) = into == _partyNo ? (Mos._mailbox, Mos._mailRead) : (BankFor(into).Mailbox, BankFor(into).MailRead);
+        var (box, read) = into == EpisodesScr._partyNo ? (Mos._mailbox, Mos._mailRead) : (BankFor(into).Mailbox, BankFor(into).MailRead);
         foreach (int mail in src.Mailbox)
         {
             if (!box.Contains(mail) && box.Count < MosesScene.MailboxLimit) box.Add(mail);
@@ -109,8 +109,8 @@ internal sealed unsafe partial class GameWindow
         AddMoney(into, src.Money);
         foreach (var (item, n) in src.Inventory) AddItem(into, item, n);
         foreach (int legion in src.Legions)
-            if (into == _partyNo) Mos._ownedLegions.Add(legion); else BankFor(into).Legions.Add(legion);
-        if (from == _partyNo) LoadState(new PartyState());
+            if (into == EpisodesScr._partyNo) Mos._ownedLegions.Add(legion); else BankFor(into).Legions.Add(legion);
+        if (from == EpisodesScr._partyNo) LoadState(new PartyState());
         else _partyBank.Remove(from);
     }
 
@@ -150,11 +150,11 @@ internal sealed unsafe partial class GameWindow
     /// <summary>연대표에서 다른 파티의 에피소드로 갈 때 — 지금 파티를 은행에 넣고 그 파티를 꺼낸다(원본 <c>[0x101b6894] = 파티</c>).</summary>
     internal void SwitchParty(int to)
     {
-        if (to == _partyNo) return;
-        _partyBank[_partyNo] = TakeCurrentAsState();
+        if (to == EpisodesScr._partyNo) return;
+        _partyBank[EpisodesScr._partyNo] = TakeCurrentAsState();
         LoadState(_partyBank.TryGetValue(to, out var next) ? next : new PartyState());
         _partyBank.Remove(to);
-        _partyNo = to;
+        EpisodesScr._partyNo = to;
     }
 
     /// <summary>세이브에 실리는 다른 파티 하나.</summary>

@@ -3,6 +3,8 @@ using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 연대표 화면(an-ui-4, 장면 7) — 타이틀에서 NEW GAME 을 누르면 나오는 에피소드 고르기.
 /// </summary>
@@ -23,7 +25,7 @@ namespace DuelDx;
 /// 새 게임이면 깃발이 모두 0 이라 <b>0번 「코어헌터」(Chp 0010)와 1번 「홍련의 예언」(Chp 0019)</b> 둘을 고를 수 있다.
 /// 고르면 원본은 모세스(장면 4)를 그 챕터로 연다 — 이 데모도 같다.
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class EpisodesScreen(GameWindow host)
 {
     internal const int EpisodeBackground = 113, EpisodeObs = 979, EpisodeBgm = 3391;
     internal const int EpisodeRows = 6, EpisodeCellW = 240, EpisodeCellH = 46;
@@ -36,7 +38,7 @@ internal sealed unsafe partial class GameWindow
     /// 새 게임이면 깃발이 다 0 이라 조건 없는 0번(코어헌터)·1번(홍련의 예언)만 열리고, 코어헌터의 챕터 스크립트가 깃발 14 를 세우면
     /// 2번(샤이닝 스타)이 열린다.
     /// </summary>
-    internal bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < _flags.Length && _flags[f] != 0));
+    internal bool EpisodeOpen(EpisodeEntry e) => e.Locks.All(f => f < 0 || (f < host._flags.Length && host._flags[f] != 0));
 
     /// <summary>
     /// 이미 고른 에피소드(번호) — 원본 <c>0x101b68a0[i]</c>. <b>고르는 순간</b> 1 이 되고(<c>0x10106722</c>·<c>0x1010689e</c>), NEW GAME 만 지운다(<c>0x1004d870</c>).
@@ -111,15 +113,15 @@ internal sealed unsafe partial class GameWindow
     internal void OpenEpisodes()
     {
         _episodesOpen = true;
-        _titleOpen = false;
-        _recordsOpen = false;
+        host.TitleScr._titleOpen = false;
+        host.RecordsScr._recordsOpen = false;
         _episodePick = -1;
         _episodeTop = 0;
-        Mos.ShowMosesBackground(EpisodeBackground);
-        EnterSceneFade();
-        StopMusic();
-        PlayMusicFile(EpisodeBgm, loop: true, gain: 0);   // 0 → 84%, 15틀(ba-21 outer #3)
-        FadeMusic(84, 15);
+        host.Mos.ShowMosesBackground(EpisodeBackground);
+        host.EnterSceneFade();
+        host.StopMusic();
+        host.PlayMusicFile(EpisodeBgm, loop: true, gain: 0);   // 0 → 84%, 15틀(ba-21 outer #3)
+        host.FadeMusic(84, 15);
     }
 
     /// <summary>
@@ -130,11 +132,11 @@ internal sealed unsafe partial class GameWindow
     {
         if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") != "1") return;
         foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
-            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < _flags.Length)
-                _flags[flag] = (byte)val;
+            if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host._flags.Length)
+                host._flags[flag] = (byte)val;
         if (Environment.GetEnvironmentVariable("DUELDX_FLAGS") == "all")
-            foreach (var e in Episodes()) foreach (int f in e.Locks) if ((uint)f < _flags.Length) _flags[f] = 1;
-        if (Cols != TitleBoardCols || Rows != TitleBoardRows) { ResizeBoard(TitleBoardCols, TitleBoardRows); _battleLoaded = false; }
+            foreach (var e in Episodes()) foreach (int f in e.Locks) if ((uint)f < host._flags.Length) host._flags[f] = 1;
+        if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) { host.ResizeBoard(TitleBoardCols, TitleBoardRows); host._battleLoaded = false; }
         OpenEpisodes();
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_EPISODETOP"), out int top)) ScrollEpisodes(top);
     }
@@ -147,7 +149,7 @@ internal sealed unsafe partial class GameWindow
 
     internal int EpisodeAt(int bx, int by)
     {
-        var (ox, oy) = Mos.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)
         {
@@ -167,10 +169,10 @@ internal sealed unsafe partial class GameWindow
     {
         int rows = EpisodeRowCount();
         if (rows <= EpisodeRows) return false;
-        var (ox, oy) = Mos.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         int x = bx - ox - EpisodeBarX, y = by - oy - EpisodeBarY;
         // 화살표 그림은 장 자리만큼 비껴 찍히므로 누름 칸도 그림 칸으로 본다(그림이 없으면 19×45).
-        bool Hit(int motion, int top) => UiFor(EpisodeObs)?.FrameAt(motion, 0) is { W: > 0 } f
+        bool Hit(int motion, int top) => host.UiFor(EpisodeObs)?.FrameAt(motion, 0) is { W: > 0 } f
             ? x >= f.X && x < f.X + f.W && y >= top + f.Y && y < top + f.Y + f.H
             : x >= 0 && x < EpisodeArrowW && y >= top && y < top + EpisodeArrowH;
         if (Hit(61, 0)) { ScrollEpisodes(-1); return true; }
@@ -178,7 +180,7 @@ internal sealed unsafe partial class GameWindow
         if (x < 0 || x >= EpisodeArrowW || y < 0 || y >= EpisodeBarH) return false;
         // 길(화살표 사이)을 누르면 손잡이 그림 가운데보다 위면 한 쪽 위로, 아래면 한 쪽 아래로.
         var (thumbY, thumbH) = EpisodeThumb(rows);
-        int thumbMid = thumbY + (UiFor(EpisodeObs)?.FrameAt(65, 0)?.Y ?? 0) + thumbH / 2;
+        int thumbMid = thumbY + (host.UiFor(EpisodeObs)?.FrameAt(65, 0)?.Y ?? 0) + thumbH / 2;
         ScrollEpisodes(y < thumbMid ? -EpisodeRows : EpisodeRows);
         return true;
     }
@@ -186,7 +188,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>손잡이 자리(막대 윗변 기준 y)와 높이 — 화살표 둘 사이 길에서 맨 윗줄 비율만큼 내려 놓는다.</summary>
     internal (int Y, int H) EpisodeThumb(int rows)
     {
-        int thumbH = UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
+        int thumbH = host.UiFor(EpisodeObs)?.FrameAt(65, 0) is { H: > 0 } f ? f.H : 20;
         int track = EpisodeBarH - 2 * EpisodeArrowH - thumbH;
         int span = Math.Max(1, rows - EpisodeRows);
         return (EpisodeArrowH + track * Math.Clamp(_episodeTop, 0, span) / span, thumbH);
@@ -196,7 +198,7 @@ internal sealed unsafe partial class GameWindow
     internal bool OnEpisodesClick(int bx, int by)
     {
         if (!_episodesOpen) return false;
-        if (SystemOpen) return OnSystemClick(bx, by);
+        if (host.SystemOpen) return host.OnSystemClick(bx, by);
         if (OnEpisodeBarClick(bx, by)) return true;
 
         int index = EpisodeAt(bx, by);
@@ -208,29 +210,29 @@ internal sealed unsafe partial class GameWindow
         _episodesOpen = false;
         _chapterDone = false;
         // 연대표가 에피소드를 고르면 챕터 상태를 버린다(0x101066a0~) — 새 챕터의 스크립트 변수(0x101bfeac)는 0 에서 시작한다(감사 F10).
-        Array.Clear(Fld._chapterVars);
+        Array.Clear(host.Fld._chapterVars);
         // 원본은 명부(인물 상태)를 그대로 두고 파티 번호만 바꾼다([0x101b6894] = 파티) — 같은 파티로 이어지면 레벨·장비가 남고,
         // 다른 파티(살라딘 ↔ 베라모드)로 가면 그쪽 인원은 챕터 스크립트(801)가 넣는다 — 인물 자료는 명부 하나라 다른 파티에서 겪은 것이 그대로다.
-        SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
+        host.SwitchParty(entry.Party);           // 다른 파티면 지금 파티(인원·돈·가방·군단·우편)를 은행에 넣고 그 파티를 꺼낸다
         string path = Path.Combine(AssetsFolder.Find("moses"), "chp", $"{entry.Chapter:D4}.chp");
         var chapter = File.Exists(path) ? ChapterFile.Parse(entry.Chapter, File.ReadAllBytes(path)) : null;
         // 연대표도 16틀 검게 나간 뒤 챕터(모세스)가 선다(0x101060d0). 그동안은 연대표가 그대로 보인다.
         _episodesOpen = true;
-        LeaveScene(() => { _episodesOpen = false; Mos.OpenMoses(chapter); });
+        host.LeaveScene(() => { _episodesOpen = false; host.Mos.OpenMoses(chapter); });
         return true;
     }
 
     internal void DrawEpisodes()
     {
         if (!_episodesOpen) return;
-        var (ox, oy) = Mos.MosesOrigin();
-        int tick = (int)(_lastTime * TicksPerSecond);
+        var (ox, oy) = host.Mos.MosesOrigin();
+        int tick = (int)(host._lastTime * TicksPerSecond);
 
-        FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (Mos._mosesBg is { } bg)
+        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
+        if (host.Mos._mosesBg is { } bg)
             for (int y = 0; y < MosesScene.MosesH; y++)
                 for (int x = 0; x < MosesScene.MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
+                    host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         var list = Episodes();
         for (int i = 0; i < list.Count; i++)
@@ -246,15 +248,15 @@ internal sealed unsafe partial class GameWindow
             // 세로는 기준점이 −58 이라 줄 자리에 58 을 더해 찍는다.
             int cx = ox + 320, cy = oy + 186 + EpisodeCellH * row + 58;
             bool picked = _episodesPicked.Contains(entry.No);
-            if (!DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? UiBlend.Dim : UiBlend.Alpha))
-                DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
+            if (!host.DrawUi(EpisodeObs, motion, tick, cx, cy, picked ? UiBlend.Dim : UiBlend.Alpha))
+                host.DrawText($"Episode {entry.No} — Chp {entry.Chapter:D4}", cx - 80, cy, White, 12);
             // 고른 표시 [ ] — 원본은 줄마다 0x10043810(x, 65, Obs 0979, 모션 0) 이고 x 는 짝수 237(0x101071de)·홀수 315(0x10107213).
             // 모션 0 = 장 4(163×29, 자리 (−241,−59)) → 화면 (76 또는 394, 185 + 46×줄). 줄 +0x58 이 설 때만 그린다(0x10043040).
             // (전에는 스크롤 화살표 그림인 모션 62·64 를 이름판 양옆에 찍었다 — 감사 F4.)
             if (i == _episodePick && !picked)
             {
                 var (x, y) = EpisodeCell(entry.No);
-                DrawUi(EpisodeObs, 0, tick, ox + x + (entry.No % 2 == 0 ? 237 : 315), oy + y + 65, UiBlend.Alpha);
+                host.DrawUi(EpisodeObs, 0, tick, ox + x + (entry.No % 2 == 0 ? 237 : 315), oy + y + 65, UiBlend.Alpha);
             }
         }
 
@@ -262,13 +264,13 @@ internal sealed unsafe partial class GameWindow
         int rows = EpisodeRowCount();
         if (rows > EpisodeRows)
         {
-            DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, UiBlend.Alpha);
-            DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, UiBlend.Alpha);
             var (thumbY, _) = EpisodeThumb(rows);
-            DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, UiBlend.Alpha);
         }
 
-        DrawSystem();
-        DrawToast();
+        host.DrawSystem();
+        host.DrawToast();
     }
 }

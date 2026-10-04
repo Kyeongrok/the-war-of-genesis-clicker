@@ -151,9 +151,9 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void DrawSceneTag()
     {
-        if (!_showSceneTag || _titleOpen || _recordsOpen) return;
+        if (!_showSceneTag || TitleScr._titleOpen || RecordsScr._recordsOpen) return;
         string tag;
-        if (_episodesOpen) tag = "연대표";
+        if (EpisodesScr._episodesOpen) tag = "연대표";
         else if (Fld._field != null) tag = $"Fld {Fld._field.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc);
         else if (Mos._mosesOpen) tag = Mos._mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc) : "모세스";
         else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {_turnNo}" + (_runningEvent >= 0 ? $" · 사건 {_runningEvent}" : "");

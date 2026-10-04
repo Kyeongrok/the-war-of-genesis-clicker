@@ -2,6 +2,8 @@
 
 namespace DuelDx;
 
+using static DuelDx.GameWindow;
+
 /// <summary>
 /// 저장·불러오기 슬롯 화면(an-menu-1) — 시스템 메뉴 SAVE·LOAD 를 누르면 뜨는 목록.
 /// </summary>
@@ -21,7 +23,7 @@ namespace DuelDx;
 /// 자동 저장(슬롯 20)은 원본대로 <b>내가 조종하는 인물의 차례가 시작될 때마다</b> 적는다 — DLL 안에서 저장을 부르는 곳은
 /// 손 저장 둘과 이것 하나뿐이고, 모세스·필드·챕터 전환·전투 끝에는 자동 저장이 없다(분석-시스템메뉴 2.4·2.4b).
 /// </remarks>
-internal sealed unsafe partial class GameWindow
+internal sealed unsafe class SlotsScreen(GameWindow host)
 {
     internal const int SlotsW = 320, SlotsH = 264, SlotRowH = 24, SlotRowW = 280, SlotPad = 12;
     internal const int SlotsVisible = 10, SaveSlots = 20, AutoSlot = 20;
@@ -70,12 +72,12 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal (int X, int Y) SlotsOrigin()
     {
-        if (_recordsOpen)
+        if (host.RecordsScr._recordsOpen)
         {
-            var (ox, oy) = Mos.MosesOrigin();
+            var (ox, oy) = host.Mos.MosesOrigin();
             return (ox + 160, oy + 148);
         }
-        return (_camX + (ViewWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
+        return (host._camX + (host.ViewWidth - SlotsW) / 2, host._camY + (host.ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
     }
 
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
@@ -104,7 +106,7 @@ internal sealed unsafe partial class GameWindow
         if (!SlotsOpen) return false;
         var (x, y) = SlotsOrigin();
 
-        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; ReturnToSystemMenu(); return true; }   // 닫기 X
+        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; host.ReturnToSystemMenu(); return true; }   // 닫기 X
 
         // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다). 누르고 있으면 되풀이한다(UpdateSlotArrows).
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
@@ -113,7 +115,7 @@ internal sealed unsafe partial class GameWindow
             if (arrow != 0)
             {
                 ScrollSlots(arrow);
-                (_slotArrow, _slotArrowAt, _slotArrowTicks) = (arrow, _lastTime, 0);
+                (_slotArrow, _slotArrowAt, _slotArrowTicks) = (arrow, host._lastTime, 0);
             }
             return true;
         }
@@ -123,13 +125,13 @@ internal sealed unsafe partial class GameWindow
         var head = SlotHead(slot);
         if (_slotsMode == 0)
         {
-            if (head != null) _confirm = ("Save", "이미 저장된 파일이 있습니다.\n덮어쓰시겠습니까?", () => SaveSlot(slot));
+            if (head != null) host._confirm = ("Save", "이미 저장된 파일이 있습니다.\n덮어쓰시겠습니까?", () => SaveSlot(slot));
             else SaveSlot(slot);
         }
         else
         {
             if (head == null) return true;                                    // 빈 줄은 꺼져 있다
-            _confirm = ("Load", "저장하지 않은 데이타는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
+            host._confirm = ("Load", "저장하지 않은 데이타는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
         }
         return true;
     }
@@ -139,22 +141,22 @@ internal sealed unsafe partial class GameWindow
         // 저장한 뒤에도 슬롯 창은 열린 채다 — 이어서 다른 칸에 저장할 수 있다(원본 vt[0x40] 다시 보이기, fg-22).
         // 실패 알림은 원본 문구(0x100372ae·0x10037693, 120틱): 빈 칸이면 「Error」, 덮어쓰기면 「Save」 머리에 「저장되지 않았습니다.」
         // 저장할 수 없는 때(필드·챕터 사건 도중·내 차례 조종 상태가 아님)는 막는다 — 메뉴가 SAVE 를 꺼 두지만 한 번 더(감사5 S1 방어·S3·S4).
-        if (SaveBlockedReason is { } why) { _notice = (why, _lastTime + 40 / TicksPerSecond); return; }
-        if (!SaveBattleTo(SlotPath(slot))) { _notice = ($"{(SlotHead(slot) != null ? "Save" : "Error")} — 저장되지 않았습니다.", _lastTime + 120 / TicksPerSecond); return; }
-        Play(SoundSaved);
+        if (host.SaveBlockedReason is { } why) { _notice = (why, host._lastTime + 40 / TicksPerSecond); return; }
+        if (!host.SaveBattleTo(SlotPath(slot))) { _notice = ($"{(SlotHead(slot) != null ? "Save" : "Error")} — 저장되지 않았습니다.", host._lastTime + 120 / TicksPerSecond); return; }
+        host.Play(SoundSaved);
         // 원본은 120틱(4초)인데 너무 오래 떠 있다는 요청으로 40틱(약 1.3초)만 띄운다. 클릭하면 바로 닫힌다.
-        _notice = ("저장되었습니다.", _lastTime + 40 / TicksPerSecond);
+        _notice = ("저장되었습니다.", host._lastTime + 40 / TicksPerSecond);
     }
 
     internal void LoadSlot(int slot)
     {
         _slotsMode = -1;
         // 깨진 파일 문구(0x1003730e, 120틱).
-        if (!LoadBattleFrom(SlotPath(slot))) _notice = ("세이브 파일에 오류가 생겼거나 허가없이 변경되었습니다.\n로드할 수 없습니다.", _lastTime + 120 / TicksPerSecond);
+        if (!host.LoadBattleFrom(SlotPath(slot))) _notice = ("세이브 파일에 오류가 생겼거나 허가없이 변경되었습니다.\n로드할 수 없습니다.", host._lastTime + 120 / TicksPerSecond);
     }
 
     /// <summary>자동 저장 슬롯(Load 목록 21번째 줄) — 내 차례가 시작될 때마다 적는다(원본 상태 22, 분석-시스템메뉴 2.4).</summary>
-    internal void AutoSave() => SaveBattleTo(SlotPath(AutoSlot));
+    internal void AutoSave() => host.SaveBattleTo(SlotPath(AutoSlot));
 
     /// <summary>누르고 있는 스크롤 화살표(−1 위 · +1 아래 · 0 없음) · 누른 때 · 누른 뒤 센 틀 수.</summary>
     internal int _slotArrow;
@@ -177,8 +179,8 @@ internal sealed unsafe partial class GameWindow
     internal void UpdateSlotArrows()
     {
         if (_slotArrow == 0) return;
-        if (!SlotsOpen || (Native.Win32.GetKeyState(0x01) & 0x8000) == 0 || SlotArrowAt(_mouse.X, _mouse.Y) != _slotArrow) { _slotArrow = 0; return; }
-        int held = (int)((_lastTime - _slotArrowAt) * TicksPerSecond);
+        if (!SlotsOpen || (Native.Win32.GetKeyState(0x01) & 0x8000) == 0 || SlotArrowAt(host._mouse.X, host._mouse.Y) != _slotArrow) { _slotArrow = 0; return; }
+        int held = (int)((host._lastTime - _slotArrowAt) * TicksPerSecond);
         // 누른 틀의 셈이 1 이고 틀마다 하나씩 오른다 — 셈 1 + t 가 10 을 넘는 틀(t ≥ 10)부터 틀마다 한 줄. 늦은 틀은 몇 줄 몰아서(최대 6).
         for (int guard = 0; _slotArrowTicks < held && guard < 6; guard++)
             if (1 + ++_slotArrowTicks > 10) ScrollSlots(_slotArrow);
@@ -194,12 +196,12 @@ internal sealed unsafe partial class GameWindow
     {
         if (!SlotsOpen) return;
         var (x, y) = SlotsOrigin();
-        int tick = (int)(_lastTime * TicksPerSecond);
+        int tick = (int)(host._lastTime * TicksPerSecond);
 
         // 「Select your record」 화면에서는 배경 글씨가 제목 노릇을 해서 제목줄 글자를 안 그린다.
-        DrawGameFrame(x, y, SlotsW, SlotsH, _recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
-        if (!DrawUi(FrameObs, 5, 0, x + 296, y - 24, UiBlend.Alpha))
-            StrokeRect(x + 296, y - 24, 18, 18, White);
+        host.DrawGameFrame(x, y, SlotsW, SlotsH, host.RecordsScr._recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
+        if (!host.DrawUi(FrameObs, 5, 0, x + 296, y - 24, UiBlend.Alpha))
+            host.StrokeRect(x + 296, y - 24, 18, 18, White);
 
         for (int i = 0; i < SlotsVisible; i++)
         {
@@ -209,31 +211,31 @@ internal sealed unsafe partial class GameWindow
             var head = SlotHead(slot);
             bool dim = _slotsMode == 1 && head == null;
 
-            if (slot == _slotsHover && !dim && !DrawUi(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry, UiBlend.Alpha))
-                FillRect(rx, ry, SlotRowW, SlotRowH, 0x4060A0FF);
+            if (slot == _slotsHover && !dim && !host.DrawUi(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry, UiBlend.Alpha))
+                host.FillRect(rx, ry, SlotRowW, SlotRowH, 0x4060A0FF);
 
             if (head == null)
             {
-                string none = _db?.T(0) is { Length: > 0 } t ? t : "없음";
+                string none = host._db?.T(0) is { Length: > 0 } t ? t : "없음";
                 if (slot == AutoSlot) none = $"자동 저장 — {none}";
-                var (_, nw, nh) = GetText(none, White);
-                DrawText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
+                var (_, nw, nh) = host.GetText(none, White);
+                host.DrawText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
                 continue;
             }
 
-            string title = _db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
-            var (_, tw, _) = GetText(title, White);
+            string title = host._db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
+            var (_, tw, _) = host.GetText(title, White);
             string label = slot == AutoSlot ? "[자동 저장]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
             // 줄 높이는 표시 글로 잰다 — 연대표 세이브는 이름이 빈 글(TXR 2557)이라 이름으로 재면 높이 0 이 되어 그 줄만 아래로 처졌다.
-            var (_, lw, th) = GetText(label, SlotLabelColor);
+            var (_, lw, th) = host.GetText(label, SlotLabelColor);
             // 이름은 가운데지만, 표시 글(특히 「[자동 저장]」)과 겹치면 그 뒤로 민다.
-            DrawText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
-            DrawText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
+            host.DrawText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
+            host.DrawText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
 
             long ms = head.PlayMs;
             string time = $"{ms / 3600000,3}:{ms % 3600000 / 60000:D2}:{ms % 60000 / 1000:D2}";
-            var (_, pw, _) = GetText(time, White);
-            DrawText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, SlotTimeColor);
+            var (_, pw, _) = host.GetText(time, White);
+            host.DrawText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, SlotTimeColor);
         }
 
         DrawSlotScrollbar(x + 304, y, tick);
@@ -242,24 +244,24 @@ internal sealed unsafe partial class GameWindow
     /// <summary>스크롤 막대 — 위·아래 화살표와 손잡이(움직이는 길 232).</summary>
     internal void DrawSlotScrollbar(int x, int y, int tick)
     {
-        if (!DrawUi(SlotScrollObs, 2, tick, x, y, UiBlend.Alpha)) StrokeRect(x, y, 16, 16, White);
-        if (!DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, UiBlend.Alpha)) StrokeRect(x, y + SlotsH - 16, 16, 16, White);
+        if (!host.DrawUi(SlotScrollObs, 2, tick, x, y, UiBlend.Alpha)) host.StrokeRect(x, y, 16, 16, White);
+        if (!host.DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, UiBlend.Alpha)) host.StrokeRect(x, y + SlotsH - 16, 16, 16, White);
 
         int track = SlotsH - 32, span = Math.Max(1, SlotRows - SlotsVisible);
         int handleH = Math.Max(16, track * SlotsVisible / SlotRows);
         int hy = y + 16 + (track - handleH) * _slotsTop / span;
-        if (!DrawUi(SlotScrollObs, 6, tick, x, hy, UiBlend.Alpha)) FillRect(x + 2, hy, 12, handleH, BoxLine);
+        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, BoxLine);
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>
     internal void DrawNotice()
     {
         if (_notice is not { } notice) return;
-        if (_lastTime >= notice.Until) { _notice = null; return; }
-        var (_, tw, th) = GetText(notice.Title, White);
+        if (host._lastTime >= notice.Until) { _notice = null; return; }
+        var (_, tw, th) = host.GetText(notice.Title, White);
         int w = tw + 60, h = th + 40;
-        int x = _camX + (ViewWidth - w) / 2, y = _camY + (ViewHeight - h) / 2;
-        DrawGameFrame(x, y, w, h);
-        DrawText(notice.Title, x + (w - tw) / 2, y + (h - th) / 2, White);
+        int x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2;
+        host.DrawGameFrame(x, y, w, h);
+        host.DrawText(notice.Title, x + (w - tw) / 2, y + (h - th) / 2, White);
     }
 }

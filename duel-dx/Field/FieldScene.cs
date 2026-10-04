@@ -835,14 +835,14 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             case 7: LeaveField(); return false;              // 필드 끝 — 챕터가 있으니 모세스로(0x100f2d90)
             case 11:                                         // 필드 끝 + <b>챕터 끝</b>(0x100f2eb0 → 0x1004e6c0 이 챕터 상태 +0x10 = 1)
                 // 모세스는 이 표시를 보고 항행 대신 연대표(장면 7)로 간다 — 분석-모세스 「챕터가 끝나는 조건」.
-                host._chapterDone = true;
+                host.EpisodesScr._chapterDone = true;
                 LeaveField();
                 return false;
             case 10:                                         // 전투
                 CloseField();
                 if (!host.StartBattle(A(0))) host.Mos.OpenMoses();
                 return false;
-            case 12: CloseField(); host.OpenTitle(); return false;
+            case 12: CloseField(); host.TitleScr.OpenTitle(); return false;
             default: RunChapterAction(a); break;              // 70x·80x(동료·돈·아이템·군단…)는 챕터와 같은 처리
 
             case 100: ScriptVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;

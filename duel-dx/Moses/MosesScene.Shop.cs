@@ -214,7 +214,7 @@ internal sealed unsafe partial class MosesScene
         if (ShopBalance() < 0)
         {
             host.Play(SoundShopFail);
-            host._notice = (host._db?.T(1318) is { Length: > 0 } t ? t : "돈이 모자랍니다.", host._lastTime + 150 / TicksPerSecond);
+            host.SlotsScr._notice = (host._db?.T(1318) is { Length: > 0 } t ? t : "돈이 모자랍니다.", host._lastTime + 150 / TicksPerSecond);
             return;                              // 목록은 그대로 둔다(0x101001f6 — 알림과 소리만, ba-15)
         }
         _shopMoney = ShopBalance();
