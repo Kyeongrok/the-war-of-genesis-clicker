@@ -264,6 +264,52 @@ internal sealed unsafe partial class BattleSceneWindow
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = _lastTime + e.Delay / TicksPerSecond;
+            // 줄별 덧정보(WorkFxExtra.g.cs, ba-21 fx 「덧정보 표 생성 기록」) — 좌우 뒤집기 · 기준 자리에서의 치우침 · 대상마다 하나씩(엇갈림) · 직선탄의 빠르기.
+            int userDir = user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 };
+            WorkFxExtra.Row? extra = null;
+            if (WorkFxExtra.Table.TryGetValue(w.Id, out var extras))
+            {
+                foreach (var r in extras)
+                    if (r.Obs == e.Obs && r.Motion == e.Motion && r.Delay == e.Delay && (r.Facing == e.Facing || r.Facing == userDir))
+                    {
+                        extra = r;
+                        if (r.Facing == userDir) break;      // 방향마다 값이 다른 줄은 시전자 방향 것을 쓴다
+                    }
+            }
+            bool mirrored = extra is { Mirror: 2 } || (extra is { Mirror: 1 } && user.Facing == Facing.Right);
+            if (extra is { } ex && !(ex.Move == 1 && ex.To == 2)) (x, y) = (x + ex.Dx, y + ex.Dy);
+            // 직선탄(0x100c3490) — 출발·도착을 읽은 것, 또는 표가 「날기」로 적은 줄: 틱당 빠르기와 가속·감속으로 난다. 전에는 모션 길이 동안 등속이었다.
+            if (extra is { Move: 1, Speed: > 0 } shot && (e.Fly || shot.From != 3) && !(e.Obs == PsychicBolt && PsychicOrbs(user) != null))
+            {
+                (double X, double Y) from = shot.From == 1 ? (targetX, targetY - e.Lift) : (userX, userY - e.Lift);
+                (double X, double Y) to = shot.To switch
+                {
+                    0 => (userX, userY - e.Lift),
+                    2 => (from.X + shot.Dx, from.Y + shot.Dy),
+                    _ => shot.From == 1 ? (userX, userY - e.Lift) : (targetX, targetY - e.Lift),
+                };
+                _shots.Add((e.Obs, e.Motion, start, from.X, from.Y, to.X, to.Y, shot.Speed, shot.Mode == 1 ? shot.ScalePermille / 1000.0 : shot.ScalePermille / 1000.0,
+                            shot.Mode, shot.MinSpeed, shot.MaxSpeed, mirrored));
+                goto sounds;
+            }
+            // 대상마다 하나씩(0x1009f9c5 헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …) — 겨눈 칸 한 곳이 아니라 범위 안 유닛마다, 엇갈림 틱만큼 늦게.
+            if (extra is { PerTarget: true } each && !e.Fly && WorkTargets(w, user, col, row) is { Count: > 0 } eachTargets)
+            {
+                for (int i = 0; i < eachTargets.Count; i++)
+                {
+                    var (tx, ty) = UnitFoot(_units[eachTargets[i]]);
+                    double at = start + i * each.Stagger / TicksPerSecond;
+                    if (e.Life > 0) AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
+                    else
+                    {
+                        var item = (e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift);
+                        _effects.Add(item);
+                        if (mirrored) _effectMirrors.Add(item);
+                    }
+                }
+                _fxLatestStart = Math.Max(_fxLatestStart, start + (eachTargets.Count - 1) * each.Stagger / TicksPerSecond);
+                goto sounds;
+            }
             if (e.Fly && e.Obs == PsychicBolt && PsychicOrbs(user) is var (big, small))
                 for (int k = 0; k < 2; k++)
                 {
@@ -285,8 +331,11 @@ internal sealed unsafe partial class BattleSceneWindow
                     }
                     // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).
                     int jx = k == 0 ? 0 : _rng.Next(-20, 21), jy = k == 0 ? 0 : _rng.Next(-10, 11);
-                    _effects.Add((e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy));
+                    var one = (e.Obs, e.Motion, start + k / TicksPerSecond, x + jx, y - e.Lift + jy);
+                    _effects.Add(one);
+                    if (mirrored) _effectMirrors.Add(one);
                 }
+            sounds:
             // 이펙트 모션에 박힌 소리 키를 그 틱에 맞춰 예약한다 — 동작 소리(ScheduleActionSounds)와 같은 꼴이다.
             // 이것이 없으면 새로 붙인 기술 이펙트가 그림만 나오고 소리가 안 났다.
             // 썬더 스톰의 217:0 은 시작(A) 목록 소리 114 를 이펙트가 도는 동안 되풀이한다(0x100d2aa0, 감사4 S3).

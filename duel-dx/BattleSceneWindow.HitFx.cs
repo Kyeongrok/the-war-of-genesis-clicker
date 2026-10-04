@@ -85,8 +85,46 @@ internal sealed unsafe partial class BattleSceneWindow
     private readonly List<(int Obs, int Motion, double Start, int FromX, int FromY, int ToX, int ToY, int Ticks)> _flyingEffects = [];
 
     /// <summary>날아가는 이펙트를 모션 길이 동안 출발에서 도착으로 옮기며 그린다.</summary>
+    /// <summary>
+    /// 빠르기가 정해진 직선탄(이동기 0x100c3490, 틱 0x10037b50) — 틱당 <c>Speed</c> px 로 To 를 향해 가고, 틱마다 빠르기에 배율을 곱하거나(방식 1)
+    /// 더한다(방식 0). 최소·최대 빠르기로 자른다. 닿으면 사라진다. 전에는 「모션 길이 동안 등속」 한 가지뿐이었다(ba-21 fx F2).
+    /// </summary>
+    private readonly List<(int Obs, int Motion, double Start, double FromX, double FromY, double ToX, double ToY,
+                           double Speed, double Scale, int Mode, double Min, double Max, bool Mirror)> _shots = [];
+
+    /// <summary>좌우를 뒤집어 그릴 이펙트(_effects 의 줄) — 시전자가 오른쪽을 볼 때 따위(0x100e56c0, ba-21 fx F10).</summary>
+    private readonly HashSet<(int Obs, int Motion, double Start, int X, int Y)> _effectMirrors = [];
+
+    private void DrawShots()
+    {
+        _shots.RemoveAll(s =>
+        {
+            if (_lastTime < s.Start) return false;
+            int tick = (int)((_lastTime - s.Start) * TicksPerSecond);
+            double dx = s.ToX - s.FromX, dy = s.ToY - s.FromY, total = Math.Sqrt(dx * dx + dy * dy);
+            if (total < 1 || UiFor(s.Obs) == null) return true;
+            // 그 틱까지 간 거리를 처음부터 다시 센다(틱 수가 작아 싸다).
+            double speed = Math.Max(1, s.Speed), gone = 0;
+            for (int t = 0; t < tick && gone < total; t++)
+            {
+                gone += speed;
+                speed = s.Mode == 1 ? speed * s.Scale : speed + s.Scale;
+                if (s.Min > 0) speed = Math.Max(s.Min, speed);
+                if (s.Max > 0) speed = Math.Min(s.Max, speed);
+                speed = Math.Max(0.5, speed);
+            }
+            if (gone >= total || tick > 600) return true;
+            double k = gone / total;
+            int key = UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
+            DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
+                   key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key), mirror: s.Mirror);
+            return false;
+        });
+    }
+
     private void DrawFlyingEffects()
     {
+        DrawShots();
         _flyingEffects.RemoveAll(f =>
         {
             if (_lastTime < f.Start) return false;
@@ -122,7 +160,8 @@ internal sealed unsafe partial class BattleSceneWindow
             // 그 밖(17 가산 · 키 없음 · 19 — 식을 못 푼 것)은 전처럼 가산. 전에는 전부 가산이라 반투명 이펙트가 하얗게 탔다.
             int key = UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;
             var blend = key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add;
-            if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key))) return false;
+            if (DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key), mirror: _effectMirrors.Contains(e))) return false;
+            _effectMirrors.Remove(e);
             return UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
         });
     }
