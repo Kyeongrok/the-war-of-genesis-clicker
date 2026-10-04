@@ -79,7 +79,7 @@ def target_actions(r):
 
 def main():
     game = sys.argv[1]
-    out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityTargetActions.g.cs')
+    out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityTargetActions.g.cs')
     res, e = emu.analyze_all(game)
     abis = ws.load_abis(e.g, e.works)
     text = {}

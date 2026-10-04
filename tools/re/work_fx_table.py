@@ -34,7 +34,7 @@ from obs_ui_dump import load_motions                        # noqa: E402
 import work_fx_extra as wx                                  # noqa: E402
 
 GAME = sys.argv[1]
-OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityScripts.g.cs')
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs')
 
 game = ws.Game(GAME)
 dll = ws.Analyzer(os.path.join(GAME, 'G3PartII.dll'))

@@ -1,6 +1,6 @@
-"""`duel-dx/AbilityScripts.g.cs` 의 이펙트 표(WorkScripts)를 원본 핸들러의 단계 순 실행 결과로 <b>바로잡는다</b> (ba-20 X).
+"""`duel-dx/Ability/AbilityScripts.g.cs` 의 이펙트 표(WorkScripts)를 원본 핸들러의 단계 순 실행 결과로 <b>바로잡는다</b> (ba-20 X).
 
-    python tools/re/work_fx_patch.py "<게임 폴더>" [--dry] [--report 바뀐것.tsv] [--cs duel-dx/AbilityScripts.g.cs]
+    python tools/re/work_fx_patch.py "<게임 폴더>" [--dry] [--report 바뀐것.tsv] [--cs duel-dx/Ability/AbilityScripts.g.cs]
 
 차례: ① `work_fx_table.py` 로 표를 뽑는다(동작 차례·영상·몸 복제 포함) → ② 이 도구로 이펙트 칸을 고친다
       → ③ `work_fx_timing.py` 로 뜨는 때(Delay = 단계 시작 틱 + 사슬 + 제 지연)·수명×n 을 넣는다(ba-21 F4·F5·F8·F9).
@@ -167,7 +167,7 @@ def new_line(obs, mo, o, facing=-1):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('game')
-    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityScripts.g.cs'))
+    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 고치고 바뀔 것만 센다')
     ap.add_argument('--report', help='바뀐 것을 TSV 로 (work, 종류, Obs, 모션, 전, 후, 근거 주소)')
     a = ap.parse_args()

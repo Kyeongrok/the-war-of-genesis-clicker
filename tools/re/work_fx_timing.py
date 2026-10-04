@@ -1,5 +1,5 @@
-"""`duel-dx/AbilityScripts.g.cs` 의 이펙트 줄에 <b>뜨는 때</b>(Delay)와 수명(Life)을 원본 핸들러 차례대로 넣는다 (ba-21 F4·F5·F8·F9),
-그리고 카메라 따라가기 work 집합 `duel-dx/WorkCameraFollow.g.cs` 를 만든다 (ba-21 F7).
+"""`duel-dx/Ability/AbilityScripts.g.cs` 의 이펙트 줄에 <b>뜨는 때</b>(Delay)와 수명(Life)을 원본 핸들러 차례대로 넣는다 (ba-21 F4·F5·F8·F9),
+그리고 카메라 따라가기 work 집합 `duel-dx/Ability/WorkCameraFollow.g.cs` 를 만든다 (ba-21 F7).
 
     python tools/re/work_fx_timing.py "<게임 폴더>" [--dry] [--report 바뀐것.tsv] [--cs …/AbilityScripts.g.cs] [--camera …/WorkCameraFollow.g.cs]
 
@@ -348,8 +348,8 @@ def write_camera(path, sets, notes, names):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('game')
-    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityScripts.g.cs'))
-    ap.add_argument('--camera', default=os.path.join(HERE, '..', '..', 'duel-dx', 'WorkCameraFollow.g.cs'))
+    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs'))
+    ap.add_argument('--camera', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkCameraFollow.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 고치고 바뀔 것만 센다')
     ap.add_argument('--report', help='바뀐 것을 TSV 로 (work, 종류, Obs, 모션, 전, 후, 근거 주소)')
     ap.add_argument('--cache', help='기호 실행 결과를 여기 두고 다시 쓴다(도구를 고치며 되풀이 돌릴 때)')

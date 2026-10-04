@@ -1,4 +1,4 @@
-"""이펙트 표(`duel-dx/AbilityScripts.g.cs`)의 줄마다 붙는 <b>덧정보</b> 표 `duel-dx/WorkFxExtra.g.cs` 를 만든다 (ba-21 F1·F2·F6·F10·F11).
+"""이펙트 표(`duel-dx/Ability/AbilityScripts.g.cs`)의 줄마다 붙는 <b>덧정보</b> 표 `duel-dx/Ability/WorkFxExtra.g.cs` 를 만든다 (ba-21 F1·F2·F6·F10·F11).
 
     python tools/re/work_fx_extra2.py "<게임 폴더>" [--dry] [--report 줄.tsv] [--cs …/AbilityScripts.g.cs] [--out …/WorkFxExtra.g.cs]
 
@@ -625,8 +625,8 @@ def summarize(out, table, stats, arrive, cellloop):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('game')
-    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'AbilityScripts.g.cs'))
-    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'WorkFxExtra.g.cs'))
+    ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs'))
+    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxExtra.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 쓰고 통계만')
     ap.add_argument('--report', help='줄마다 (work, 이름, 핸들러, 줄, 메모, 생성 주소) 를 TSV 로')
     a = ap.parse_args()

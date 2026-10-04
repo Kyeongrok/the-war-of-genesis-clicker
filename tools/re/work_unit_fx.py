@@ -1,4 +1,4 @@
-"""work 핸들러가 <b>유닛 자체</b>에 거는 숨김·밝기 사건 표 `duel-dx/WorkUnitFx.g.cs` 를 만든다 (ba-21 F13).
+"""work 핸들러가 <b>유닛 자체</b>에 거는 숨김·밝기 사건 표 `duel-dx/Ability/WorkUnitFx.g.cs` 를 만든다 (ba-21 F13).
 
     python tools/re/work_unit_fx.py "<게임 폴더>" [--dry] [--report 사건.tsv] [--out …/WorkUnitFx.g.cs] [--cache 실행결과.pkl]
 
@@ -451,7 +451,7 @@ def summarize(out, res, names, stats, kept, noend, differ):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('game')
-    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'WorkUnitFx.g.cs'))
+    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkUnitFx.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 쓰고 통계만')
     ap.add_argument('--report', help='사건마다 (work, 이름, 핸들러, 줄, 메모) 를 TSV 로')
     ap.add_argument('--cache', help='기호 실행 결과를 여기 두고 다시 쓴다(도구를 고치며 되풀이 돌릴 때)')
