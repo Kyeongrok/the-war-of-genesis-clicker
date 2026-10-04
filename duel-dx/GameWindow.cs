@@ -322,6 +322,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // DUELDX_LEGION=<Chr>:<군단> 이면 그 인물에게 군단을 배속하고 시작한다(화면 밖 시험용 — 부하·군단기).
         if (Environment.GetEnvironmentVariable("DUELDX_LEGION")?.Split(':') is [var lc, var ll] && int.TryParse(lc, out int lchr) && int.TryParse(ll, out int lid))
             Mos._unitLegion[lchr] = lid;
+        // DUELDX_PARTYSPRITE=<Chr>:<Obs> 면 그 인물의 명부 그림을 바꿔 두고 시작한다(화면 밖 시험용 — 챕터가 701 로 복장을 바꾼 뒤의 전투 시작).
+        if (Environment.GetEnvironmentVariable("DUELDX_PARTYSPRITE")?.Split(':') is [var pc, var po] && int.TryParse(pc, out int pchr) && ushort.TryParse(po, out ushort pobs)
+            && (_party.GetValueOrDefault(pchr) ?? _db?.Character(pchr)) is { } record)
+            _party[pchr] = record with { SpriteId = pobs };
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
         _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
