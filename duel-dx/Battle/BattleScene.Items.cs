@@ -124,7 +124,7 @@ internal sealed unsafe partial class BattleScene
             var (item, count) = rows[index];
             int rx = x + 12, ry = y + 12 + r * ItemRowH;
             // 줄 바탕(밝은 띠)은 마우스를 올린 줄에만 — 전에는 모든 줄에 그려 다 올린 것처럼 보였다(사용자 보고). 어빌리티 목록과 같은 꼴
-            // (원본 줄 그리기 0x100d3830 의 올림 조건은 다시 읽지 않았다 — 가설).
+            // — 원본도 그렇다: 줄에 0x10043810(−4, 0, Obs 0471, 모션 4)로 단 덧그림(0x100d393c · 0x100d3b3e)이고, 그것은 줄 +0x58(마우스 올림)일 때만 그려진다(0x10043040).
             bool over = host._mouse.X >= rx - 4 && host._mouse.X < rx - 4 + ItemRowW + 8 && host._mouse.Y >= ry && host._mouse.Y < ry + ItemRowH;
             if (over) host.DrawUi(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, UiBlend.Alpha, loop: false);
             host.DrawUi(ItemIconObs, item.PictureMotion, 0, rx + 8, ry + 2, UiBlend.Alpha, loop: false);
