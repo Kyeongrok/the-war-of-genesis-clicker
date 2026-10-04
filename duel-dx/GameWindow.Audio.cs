@@ -243,6 +243,8 @@ internal sealed unsafe partial class GameWindow
             try
             {
                 string path = VoicePack.BgmPath(id);
+                // 아직 못 받은 곡이면 받아질 때까지 잠깐 기다린다(뒤 스레드라 화면은 안 멈춘다) — 그새 다른 곡을 걸었으면 아래에서 버려진다.
+                if (!File.Exists(path) && AssetPack.EnsureNow("bgm", $"{id:D4}.bgm", 90)) path = VoicePack.BgmPath(id);
                 // 곡 파일이 없으면 조용하다(Btl 0014 의 머리 곡 5 — 원본은 무음) — 전에는 앞 곡이 계속 났다(ba-21 sound D10).
                 if (!File.Exists(path)) { if (request == Volatile.Read(ref _musicRequest)) _mixer.StopMusic(); return; }
                 // 이미 풀어 둔 곡(승패 곡 3392·55 는 결과가 설 때 길이를 재느라 푼다)은 다시 풀지 않는다 — 1~2초 무음이 없다(ba-21 sound D7).

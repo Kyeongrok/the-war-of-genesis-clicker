@@ -98,7 +98,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             if (BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) is not { } obt) return null;
 
             string mapFile = $"{obt:D4}.obt";
-            if (!File.Exists(Path.Combine(AssetsFolder.Find("maps"), mapFile))) return null;
+            if (!File.Exists(AssetPack.MapPath(mapFile))) return null;      // 설치판은 맵을 따로 받는다 — 없으면 받을 때까지 기다린다
 
             var roster = battle.Units
                 .Where(u => u.ChrCode > 0)
@@ -126,10 +126,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             // 판에 놓인 물체 — <c>Obj</c> 파일이 없는 것은 그리지도 못하니 뺀다.
             // 맵이 놓는 물체(문·장식)도 같이 세운다 — Btl 것과 번호가 겹치지 않게 100 을 더해 온다.
             // 물체마다 제 Obt 발자국도 읽는다 — 원본 LoadBtl 이 판에 찍는 것(0x10062b11, 감사3 R1).
-            string mapsFolder = AssetsFolder.Find("maps");
             ObtFootprint? FootprintOf(int obtId)
             {
-                string path = Path.Combine(mapsFolder, $"{obtId:D4}.obt");
+                string path = AssetPack.MapPath($"{obtId:D4}.obt");
                 return File.Exists(path) ? ObtMap.ReadFootprint(File.ReadAllBytes(path)) : null;
             }
             var objects = battle.Objects.Concat(BattleFile.ObjectsOfMap(files.Read("Map", $"{battle.MapId:D4}.map")))

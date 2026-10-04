@@ -16,6 +16,7 @@
         <RootNamespace>DuelDx</RootNamespace>
     </PropertyGroup>
 
+    <Import Project="AssetPack.props" />
     <ItemGroup>
         <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
         <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
@@ -43,7 +44,9 @@
     <!-- 배포용 exe 에 저장소의 assets 폴더(캐릭터·배경)를 함께 싣는다. 단일 exe 로 publish 할 때
          IncludeAllContentForSelfExtract 로 exe 안에 묶여 실행 시 풀린다(AssetsFolder 가 찾는다). -->
     <ItemGroup>
-        <Content Include="..\assets\**\*" LinkBase="assets" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+        <!-- 큰 음악과 전투 맵(AssetPack.props 의 목록)은 싣지 않는다 — 게임이 켜질 때 릴리즈 assets-pack-1 에서 받는다
+             (duel-dx/AssetPack.cs · tools/make_asset_pack.py, 사용자 요청: 설치판이 651MB 였다). -->
+        <Content Include="..\assets\**\*" Exclude="@(PackedAsset)" LinkBase="assets" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
       <Folder Include="Ability\" />

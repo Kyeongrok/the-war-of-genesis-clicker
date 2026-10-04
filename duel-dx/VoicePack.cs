@@ -36,7 +36,10 @@ internal static class VoicePack
         string shipped = Path.Combine(AssetsFolder.Find("bgm"), $"{id:D4}.bgm");
         if (File.Exists(shipped)) return shipped;
         string voice = Path.Combine(Folder, $"{id:D4}.bgm");
-        return File.Exists(voice) ? voice : shipped;
+        if (File.Exists(voice)) return voice;
+        // 음악은 따로 받는 꾸러미에 있다(AssetPack) — 받았으면 그것, 아직이면 먼저 받게 당겨 둔다.
+        string packed = AssetPack.PathOf("bgm", $"{id:D4}.bgm");
+        return File.Exists(packed) ? packed : shipped;
     }
 
     public static void EnsureInBackground()
