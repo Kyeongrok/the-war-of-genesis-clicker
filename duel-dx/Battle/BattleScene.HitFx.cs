@@ -98,8 +98,9 @@ internal sealed unsafe partial class BattleScene
     internal readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effectMirrors = [];
 
     /// <summary>
-    /// 고리(0x100cd310)·포물선(0x100cb550) 이동기 — 고리: 가운데 둘레를 반지름 R0 → R1, 처음 각 A0 에서 각속도 W 로 Ticks 틱 돈다.
-    /// 포물선: From → To 를 Ticks 틱에 가며 가운데가 솟는다. 길 식은 인자에서 짠 것(가설, ba-21 fx F2).
+    /// 고리(0x100cd310)·포물선(0x100cb550) 이동기 — 고리: 가운데 둘레를 반지름 R0 → R1, 처음 각 A0 에서 각속도 W 로 Ticks 틱 돈다
+    /// (점은 틱마다 하나 — 0x10039410). 고리 이펙트 자체는 안 보이고 <b>틱마다 그 자리에 그림을 하나씩 남긴다</b>(0x100cd3d0 — 수명 = 모션 길이 − 1),
+    /// 그래서 보이는 것은 도는 꼬리다. 포물선: 이름과 달리 From → To 를 Ticks 틱에 <b>곧게</b> 간다(0x10037ac0 — 솟는 항이 없다).
     /// </summary>
     internal readonly List<(int Obs, int Motion, double Start, int Kind, double X0, double Y0, double X1, double Y1,
                            int Ticks, double R0, double R1, double A0, double W, bool Mirror)> _movers = [];
@@ -146,14 +147,22 @@ internal sealed unsafe partial class BattleScene
         {
             if (host._lastTime < m.Start) return false;
             double ticks = (host._lastTime - m.Start) * TicksPerSecond;
-            if (ticks >= m.Ticks || host.UiFor(m.Obs) == null) return true;
-            double k = ticks / Math.Max(1, m.Ticks), x, y;
+            if (host.UiFor(m.Obs) == null) return true;
             if (m.Kind == 4)
             {
-                double r = m.R0 + (m.R1 - m.R0) * k, angle = m.A0 + m.W * ticks;
-                (x, y) = (m.X0 + r * Math.Cos(angle), m.Y0 + r * Math.Sin(angle) * TileH / TileW);
+                int len = Math.Max(1, host.EffectTicks(m.Obs, m.Motion) - 1), now = (int)ticks;
+                if (now >= m.Ticks + len) return true;
+                for (int i = Math.Max(0, now - len + 1); i <= now && i < m.Ticks; i++)
+                {
+                    double r = Math.Truncate(m.R0 + i * (m.R1 - m.R0) / m.Ticks), angle = m.A0 + m.W * i;
+                    int age = now - i, trailKey = host.UiFor(m.Obs)?.BlendAt(m.Motion, age) ?? 0;
+                    host.DrawUi(m.Obs, m.Motion, age, (int)(m.X0 + r * Math.Cos(angle)), (int)(m.Y0 + r * Math.Sin(angle) * TileH / TileW),
+                                trailKey is (>= 1 and <= 8) or 10 or 12 ? BlendOf(trailKey) : UiBlend.Add, loop: false, fade: BlendFade(trailKey), mirror: m.Mirror);
+                }
+                return false;
             }
-            else (x, y) = (m.X0 + (m.X1 - m.X0) * k, m.Y0 + (m.Y1 - m.Y0) * k - 60 * 4 * k * (1 - k));
+            if (ticks >= m.Ticks) return true;
+            double k = ticks / Math.Max(1, m.Ticks), x = m.X0 + (m.X1 - m.X0) * k, y = m.Y0 + (m.Y1 - m.Y0) * k;
             int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
             host.DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
                    loop: true, fade: BlendFade(key), mirror: m.Mirror);

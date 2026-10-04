@@ -22,7 +22,11 @@
            3차원 거리 ≤ 빠르기면 도착 자리로, 아니면 방향 × 빠르기만큼 옮긴 뒤 `빠르기 = 방식 ? 빠르기 × 배율 : 빠르기 + 배율`,
            `빠르기 < 최소(+0x3c)` 면 최소, `빠르기 > 최대(+0x40)` 면 최대(0x10037cf3~0x10037d37). 최소 `0x100c25c0` · 최대 `0x100c25e0`.
            등속(더하기 0.0)은 Mode 1 · ScalePermille 1000 으로 적는다. 더하기 방식(Mode 0)이면 ScalePermille = 틱마다 더하는 px × 1000.
-  Move 2   떠오름 `0x100c5c10(?, ?, 높이, 빠르기 double, …)` — MaxSpeed = 높이(월드 z, 음수 = 내려옴) · ScalePermille = 빠르기 × 1000.
+  Move 2   떠오름 `0x100c5c10(반폭 W, 마디 높이 H, 높이 T, 빠르기 double, 배율 double, 방식, 처음 쪽)` → `0x10038b70` — MaxSpeed = T(월드 z, 음수 = 내려옴) ·
+           ScalePermille = 빠르기 × 1000. 길: 네모 (x ± W, z ~ z + H) 에 든 타원 둘레의 점 목록(`0x100095e0`·`0x10008e10`)을 반씩 좌우로 번갈아 타며
+           (마디마다 z 가 H + 1 씩) 틱(`0x10038da0`)마다 「빠르기」 점씩 나아간다 — x 와 z 만 바뀐다. `|z − 처음 z| ≥ |T|` 면 끝.
+           본 곳은 모두 W = rand % 3 + 1 · H = rand % 20 + 25 · 처음 쪽 = rand & 1 · 배율 0.0(더하기) — 곧 좌우 1~3 흔들리며 거의 곧게 오른다.
+           T 가 `rand % N + C` 인 곳(상수가 아니라 실행기가 못 읽는다)은 코드를 따로 읽어 MaxSpeed = C + N/2 · MinSpeed = N (`rise_read`).
   Move 3   떨굼(튀는 조각) — 생성자 `0x100c5c50(Obs, 모션, x, y, z, 맵, 주인, work)` 가 이동기(`0x10038ee0`, 0x90 바이트)를 +0x78 에 달고,
            설정 `0x100c5d40(vx double, vy double, vz double, 튕김 double)` → `0x10038f40` 이 속도와 튕김 계수를 넣는다(중력 인자는 없다 —
            틱 `0x10038fa0` 의 상수 5.0). 틱: `x += vx/2; y += vy/2; 새vz = vz − 5; z += (vz + 새vz)/4; z ≤ 0 이면 z = −z, vz = −새vz × 튕김`,
@@ -317,6 +321,8 @@ def rands(seq):
                     c += s32(ops[1].imm & 0xffffffff) * (1 if j.mnemonic == 'add' else -1)
                 elif ops[1].type == X86_OP_MEM and j.mnemonic == 'add' and j.reg_name(ops[1].mem.base) == 'esi':
                     axis = AXIS.get(ops[1].mem.disp)
+                elif ops[1].type == X86_OP_REG:
+                    axis = '?'                               # 레지스터 값을 더하고 뺀다 — 상수가 아니다
         if mod and divided:
             out.append((mod, c, axis))
     return out
@@ -365,6 +371,19 @@ def drop_read(site, ev, cva, a, note):
     return vz, vzn, hn, sx, sy, cx, cy
 
 
+def rise_read(site, ev, cva, note):
+    """떠오름의 높이 T 가 `rand % N + C` 일 때 (가운데 C + N/2, 폭 N). 미는 차례는 (처음 쪽, T, H, W) — rand 셋 가운데 첫째가 T 다."""
+    loops, fstart = site if site else (None, None)
+    seq = loops.insns(fstart) if loops else []
+    at = {i.address: n for n, i in enumerate(seq)}
+    if ev['va'] in at and cva in at:
+        rs = rands(seq[at[ev['va']] + 1:at[cva]])
+        if len(rs) == 3 and rs[0][2] is None and abs(rs[0][1]) < 2000:
+            return rs[0][1] + rs[0][0] // 2, rs[0][0]
+    note.append('떠오름 높이 못 읽음')
+    return 0, 0
+
+
 # ---------------------------------------------------------------- 한 이펙트의 덧정보
 def extra_of(ev, d, on_target, per, stats, site=None):
     """(Mirror 깃발, Dx, Dy, PerTarget, Stagger, Sure, Move, Speed, Scale, Mode, Min, Max, From, To, 메모) — Mirror 깃발은 그 방향에서 뒤집는가."""
@@ -406,6 +425,8 @@ def extra_of(ev, d, on_target, per, stats, site=None):
             move = 2
             k = dbl(a[3], a[4])
             hi = s32(a[2]) if isinstance(a[2], int) and abs(s32(a[2])) < 2000 else 0
+            if not isinstance(a[2], int):
+                hi, lo = rise_read(site, ev, cva, note)
             scale = int(round(k * 1000)) if k is not None and 0 < k < 100 else 0
         elif t == DROP and move == 0:
             move = 3
@@ -646,7 +667,9 @@ def write(path, out, res, names, arrive):
          '    /// <param name="PerTarget">대상 유닛마다 하나씩 · Stagger = 대상 사이 틱(모르면 0) · StaggerSure</param>',
          '    /// <param name="Move">0 없음 · 1 직선탄 · 2 떠오름 · 3 떨굼 · 4 고리 · 5 포물선 · 9 그 밖</param>',
          '    /// <param name="Speed">틱당 px(직선탄) · ScalePermille 틱마다 곱(1000 = 등속) · Mode 0 더하기/1 곱하기 · MinSpeed/MaxSpeed(0 = 없음).',
-         '    /// 떠오름: MaxSpeed = 높이, ScalePermille = 빠르기 × 1000.',
+         '    /// 떠오름: MaxSpeed = 높이 T(월드 z — 화면은 × 0.6, 음수 = 내려옴), ScalePermille = 빠르기 × 1000(틱마다 길 위의 점 수 ≈ 월드 px),',
+         '    /// MinSpeed = T 무작위 폭 N(T = MaxSpeed − N/2 + rand % N, 0 = 고정). 길(0x10038da0): 반폭 rand % 3 + 1 · 마디 높이 rand % 20 + 25 의 반타원을',
+         '    /// 좌우로 번갈아 타며 오른다(x 와 z 만 바뀐다), |z − 처음 z| ≥ |T| 면 끝.',
          '    /// 떨굼(튀는 조각, 값은 모두 월드 단위 — 화면은 x 그대로 · y × 0.8 · z × 0.6): ScalePermille = 튕김 계수 × 1000(중력은 원본 상수라 칸이 없다),',
          '    /// MaxSpeed = 시작 높이 z(기준 자리 위로 — 표의 Lift 가 이미 이 값 × 0.6 이니 두 번 더하지 않는다), Speed = 처음 vz × 1000(위가 +, 무작위면 가장 작은 값),',
          '    /// MinSpeed = vz 무작위 폭 N(vz = Speed/1000 + rand % N, 0 = 고정), Mode = 수평 속도 무작위 폭 N(vx, vy = rand % N − N/2, 0 = 없음),',
