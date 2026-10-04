@@ -46,7 +46,7 @@ internal sealed unsafe partial class BattleSceneWindow
         FillRect(x0, y0, w, h, 0xF0101428);
         StrokeRect(x0, y0, w, h, 0xFF6070A0);
 
-        var chp = _mosesChp;
+        var chp = Mos._mosesChp;
         string title = chp is null ? "진행 상태 — 챕터 밖" : $"진행 상태 — Chp {chp.Id:D4} {_db?.T((ushort)chp.TitleText)}";
         DrawText(title, x0 + 12, y0 + 8, 0xFFFFE070, 13);
         DrawText("휠: 굴리기 · [−][+]: 깃발 바꾸기 · Esc: 닫기", x0 + w - 300, y0 + 10, 0xFF9098B0, 11);
@@ -86,7 +86,7 @@ internal sealed unsafe partial class BattleSceneWindow
             var p = place;
             return y =>
             {
-                bool used = _placesUsed.Contains((chp.Id, p.No)) || _autoPlacesDone.Contains((chp.Id, p.No));
+                bool used = Mos._placesUsed.Contains((chp.Id, p.No)) || Mos._autoPlacesDone.Contains((chp.Id, p.No));
                 bool open = PlaceOpen(p);
                 string kind = p.Kind switch
                 {

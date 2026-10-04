@@ -269,8 +269,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     /// 타이틀·연대표·모세스가 쓰는 판 크기 — 그 화면들은 <b>640×480 틀</b>만 있으면 된다.
     /// </summary>
     /// <remarks>보이는 높이가 판의 <b>70%</b> 라, 480픽셀을 다 보이려면 줄 수를 그만큼 넉넉히 잡아야 한다.</remarks>
-    private const int TitleBoardCols = MosesW / ObtMap.CellWidth;
-    private const int TitleBoardRows = MosesH * 10 / 7 / ObtMap.CellHeight + 1;
+    private const int TitleBoardCols = MosesScene.MosesW / ObtMap.CellWidth;
+    private const int TitleBoardRows = MosesScene.MosesH * 10 / 7 / ObtMap.CellHeight + 1;
 
     private void LoadBoard()
     {
@@ -317,7 +317,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         // DUELDX_LEGION=<Chr>:<군단> 이면 그 인물에게 군단을 배속하고 시작한다(화면 밖 시험용 — 부하·군단기).
         if (Environment.GetEnvironmentVariable("DUELDX_LEGION")?.Split(':') is [var lc, var ll] && int.TryParse(lc, out int lchr) && int.TryParse(ll, out int lid))
-            _unitLegion[lchr] = lid;
+            Mos._unitLegion[lchr] = lid;
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
         _map = ObtMap.Load(Path.Combine(AssetsFolder.Find("maps"), _scene.MapFile));
         ResizeBoard(_map.Cols, _map.Rows);
@@ -379,7 +379,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_zoomPercent > 0) return Math.Clamp(_zoomPercent / 100.0, MinZoom, MaxZoomChosen);
 
         int contentW = Math.Min(BoardWidth, _resW);
-        int contentH = Math.Min(BoardIsMap ? BoardHeight * 7 / 10 : GridTop + MosesH, _resH);
+        int contentH = Math.Min(BoardIsMap ? BoardHeight * 7 / 10 : GridTop + MosesScene.MosesH, _resH);
         double fill = Math.Floor(Math.Min(_resW / (double)contentW, _resH / (double)contentH) * 20) / 20;
         return Math.Clamp(fill, 1, MaxZoomChosen);
     }
@@ -645,9 +645,9 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when _statusUnit >= 0 && ScrollStatusLists(-(short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 스테이터스 창의 어빌리티 목록 위면 그 목록을 굴린다
-            case Win32.WM_MOUSEWHEEL when OnMosesMailWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
+            case Win32.WM_MOUSEWHEEL when Mos.OnMosesMailWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 모세스 메일 목록 위면 그 목록을 굴린다
-            case Win32.WM_MOUSEWHEEL when OnMosesShopWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
+            case Win32.WM_MOUSEWHEEL when Mos.OnMosesShopWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120):
                 return IntPtr.Zero;                                          // 모세스 상점 목록 위면 그 목록을 굴린다
             case Win32.WM_MOUSEWHEEL when SlotsOpen:
                 ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
@@ -659,7 +659,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when _abilityMenu && !SystemOpen:
                 ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
                 return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when SystemOpen || LevelUpOpen || _abilityMenu || _mosesOpen:
+            case Win32.WM_MOUSEWHEEL when SystemOpen || LevelUpOpen || _abilityMenu || Mos._mosesOpen:
                 return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:
                 // Shift+휠은 좌우로(넓은 맵), 그냥 휠은 위아래로.
@@ -688,7 +688,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 CloseUnitInfo();
                 _abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
                 _statusTip = null;         // 스테이터스 설명도(0x10042c00)
-                _styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
+                Mos._styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
                 _ringHelp = null;          // 링 항목 설명도
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
@@ -697,7 +697,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
                 _mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
-                UpdateMosesHover(bx, by);
+                Mos.UpdateMosesHover(bx, by);
                 UpdateChaptersHover(bx, by);
                 UpdateSlotsHover(bx, by);
                 UpdateAbilityHover(bx, by);
@@ -720,7 +720,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
-        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && !_recordsOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
+        if (SceneFading && !Mos._mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && !_recordsOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
         // 대사는 아무 키로나 한 줄씩 넘기고, <b>Esc 면 그 장면을 통째로</b> 건너뛴다 — 대사뿐 아니라 기다림·걷기·전환까지.
         if (_progressOpen) { if (key == Win32.VK_ESCAPE) ToggleProgress(); return; }
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
@@ -744,19 +744,19 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (LevelUpOpen) { CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
-        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
-        if (_mosesOpen)
+        if (Mos._mosesOpen)
         {
             if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) _statusUnit = -1; return; }   // 스테이터스 창은 Esc 로 닫는다
             // 성도에서는 ←·→ 로도 항성계를 옮긴다(좌우 단추와 같은 일).
-            if (_mosesPage == 0 && _mosesStep == 1 && key is Win32.VK_LEFT or Win32.VK_RIGHT)
+            if (Mos._mosesPage == 0 && Mos._mosesStep == 1 && key is Win32.VK_LEFT or Win32.VK_RIGHT)
             {
-                MosesTurnSystem(key == Win32.VK_LEFT ? -1 : 1);
+                Mos.MosesTurnSystem(key == Win32.VK_LEFT ? -1 : 1);
                 return;
             }
             if (key != Win32.VK_ESCAPE || CloseSystemWindow()) return;
-            if (_mosesPage is not (-1 or 0)) { MosesGoBack(); return; }   // 주 화면·항행에서는 Esc 가 시스템 메뉴다(분석-모세스 13절)
+            if (Mos._mosesPage is not (-1 or 0)) { Mos.MosesGoBack(); return; }   // 주 화면·항행에서는 Esc 가 시스템 메뉴다(분석-모세스 13절)
             if (ChapterEventRunning) return;                              // 챕터 사건이 도는 동안은 메뉴가 안 열린다(0x100f78ec, ba-20 T7)
             Play(578);
             OpenSystemMenu();
@@ -885,17 +885,17 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
         if (!won && Episodes().Count > 0) { TestRunTrace("dest title"); OpenTitle(); return; }   // 시험 전용 줄
         TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
-        var navBefore = (Chapter: _mosesChp?.Id ?? -1, Step: _mosesStep, Planet: _mosesPlanet, System: _mosesSystem, Visited: _mosesNavVisited, Start: _navStart);
-        OpenMoses();
+        var navBefore = (Chapter: Mos._mosesChp?.Id ?? -1, Step: Mos._mosesStep, Planet: Mos._mosesPlanet, System: Mos._mosesSystem, Visited: Mos._mosesNavVisited, Start: Mos._navStart);
+        Mos.OpenMoses();
         // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
-        if (won && _mosesOpen && _mosesChp != null)
+        if (won && Mos._mosesOpen && Mos._mosesChp != null)
         {
-            MosesGoPage(0);
+            Mos.MosesGoPage(0);
             // 떠날 때의 단계·행성·성계 그대로 돌아온다(0x100fcf00(저장 단계), ba-20 G6) — 전에는 늘 챕터 시작 행성·단계로 돌아갔다.
-            if (navBefore.Visited && navBefore.Chapter == _mosesChp.Id && Equals(navBefore.Start, _navStart))   // 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다
+            if (navBefore.Visited && navBefore.Chapter == Mos._mosesChp.Id && Equals(navBefore.Start, Mos._navStart))   // 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다
             {
-                (_mosesStep, _mosesPlanet, _mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
-                ShowMosesBackground(MosesSystem()?.Background ?? 70);
+                (Mos._mosesStep, Mos._mosesPlanet, Mos._mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
+                Mos.ShowMosesBackground(Mos.MosesSystem()?.Background ?? 70);
             }
         }
     }
@@ -904,12 +904,12 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         if (_progressOpen) { var (px, py) = BoardPoint(clientX, clientY); OnProgressClick(px, py); return; }
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
-        if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
+        if (SceneFading && !Mos._mosesOpen && !FieldOpen && !_titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
         if (LevelUpOpen) { CloseLevelUp(); return; }
         if (TrySkipEnemyAction()) return;      // 적이 행동하는 동안의 클릭 = 그 행동 건너뛰기(모드)
         if (_notice != null) { _notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
-        if (_outcome.Length > 0 && !_mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
+        if (_outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !_episodesOpen) { if (OutcomeInputReady) LeaveFinishedBattle(); return; }
         if (OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         var (bx, by) = BoardPoint(clientX, clientY);
@@ -920,7 +920,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
         if (OnChaptersClick(bx, by)) return;
-        if (OnMosesClick(bx, by)) return;
+        if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
         if (OnKeysClick(bx, by) || OnSystemClick(bx, by) || OnStatusClick(bx, by)) return;
         if (OnItemMenuClick(bx, by)) return;
@@ -1107,18 +1107,18 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         {
             _openHooksPending = false;
             OpenTitleIfAsked();
-            OpenMosesIfAsked();
+            Mos.OpenMosesIfAsked();
             Fld.OpenFieldIfAsked();
             OpenLevelUpIfAsked();
             OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) _saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
-            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && LoadBattleFrom(SlotPath(slot)) && _mosesOpen
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOAD"), out int slot) && LoadBattleFrom(SlotPath(slot)) && Mos._mosesOpen
                 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page))
             {
-                if (page == 7) OpenMosesStyle(); else if (page == 6) OpenMosesLegion();
-                else if (page == 1) { MosesGoPage(1); _mosesPage = 1; }   // 메일 — 배달까지 돈다
+                if (page == 7) Mos.OpenMosesStyle(); else if (page == 6) Mos.OpenMosesLegion();
+                else if (page == 1) { Mos.MosesGoPage(1); Mos._mosesPage = 1; }   // 메일 — 배달까지 돈다
             }
             OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
         }
@@ -1128,13 +1128,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         UpdateSlotArrows();                     // 슬롯 스크롤 화살표 누르고 있기(감사5 S9) — 타이틀·기록 화면에서도 돈다
         // 타이틀·연대표·모세스 화면에서는 전투가 뒤에서 돌면 안 된다 — 차례도 이벤트도 멈추고 화면만 그린다.
         // (모세스를 빼 두었더니 뒤에서 턴이 흘러 전투 대사가 떠 버렸고, 그 대사가 화면 클릭을 다 먹었다.)
-        if (_titleOpen || _episodesOpen || _mosesOpen || _recordsOpen)
+        if (_titleOpen || _episodesOpen || Mos._mosesOpen || _recordsOpen)
         {
             UpdateSounds();
             // 모세스 전직 화면의 STATUS 로 고친 어빌리티·장비를 파티 자료에 적는다 — 전에는 여기서 돌아가 버려 한 번도 안 적혔다(사용자 보고: 유진 LP증가).
             SyncVirtualStatus();
             // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
-            if (_mosesOpen && !_chapterDone) { UpdateTalk(); Fld.UpdateField(); }
+            if (Mos._mosesOpen && !_chapterDone) { UpdateTalk(); Fld.UpdateField(); }
             StepSceneFadeClock();               // 타이틀·연대표·기록 화면의 들고 나는 페이드
             return;
         }
@@ -1181,7 +1181,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
         SyncFollowers();
         StepSceneFade();                        // 새 판이면 시작 카메라·페이드인, 끝났으면 페이드아웃 뒤 다음 장면
-        if (_mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
+        if (Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
         UpdateCamera(dt);
         ApplyPoseHook();
         if (_fadeInStart < 0) ApplyWorkHook();
@@ -1233,7 +1233,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
     {
         double ticks = Math.Clamp((_lastTime - _mapTintClock) * TicksPerSecond, 0, 4);
         _mapTintClock = _lastTime;
-        if (!_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen) { _mapTint = _mapTintTarget = -1; return; }
+        if (!_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen) { _mapTint = _mapTintTarget = -1; return; }
         if (_routine == null && _eventRoutine == null) _mapTintTarget = -1;   // 행동이 끊겨도(불러오기·전투 끝) 남지 않게
         if (_mapTint < _mapTintTarget) _mapTint = Math.Min(_mapTintTarget, Math.Max(_mapTint, -1) + ticks);
         else if (_mapTint > _mapTintTarget) _mapTint = Math.Max(_mapTintTarget, _mapTint - ticks);
@@ -1282,13 +1282,13 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         DrawToast();
         DrawOutcomeBanner();
         DrawUnitInfo();
-        if (!_mosesOpen) DrawSystem();
+        if (!Mos._mosesOpen) DrawSystem();
         DrawDeployPanel();
         DrawKeysPanel();
         DrawTuning();
         DrawLevelUp();
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
-        DrawMoses();
+        Mos.DrawMoses();
         double perfB = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         _fldScene?.DrawField();
         if (PerfLog) { _pBattle += perfA; _pMoses += perfB - perfA; _pField += _perf.Elapsed.TotalMilliseconds - perfB; }

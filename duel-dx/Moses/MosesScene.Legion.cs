@@ -20,33 +20,35 @@ namespace DuelDx;
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
-    private const int LegionBackground = 39, LegionRowObs = 1291, LegionRowIconMotion = 5;
-    private const int LegionRows = 5, LegionRowW = 117, LegionRowH = 23;
-    private const int SoundLegionSet = 584;
+    internal sealed unsafe partial class MosesScene
+    {
+    internal const int LegionBackground = 39, LegionRowObs = 1291, LegionRowIconMotion = 5;
+    internal const int LegionRows = 5, LegionRowW = 117, LegionRowH = 23;
+    internal const int SoundLegionSet = 584;
 
-    private Dictionary<int, LegionData>? _legions;
-    private int _legionUnit, _legionTop, _legionPick = -1;
+    internal Dictionary<int, LegionData>? _legions;
+    internal int _legionUnit, _legionTop, _legionPick = -1;
 
     /// <summary>인물마다 붙인 군단 번호(원본 <c>CChr+0x1c</c>) — <b>Chr 번호</b>로 기억한다(전투마다 명부가 다시 만들어지므로 자리 번호로는 못 잇는다).</summary>
-    private readonly Dictionary<int, int> _unitLegion = [];
+    internal readonly Dictionary<int, int> _unitLegion = [];
 
     /// <summary>파티 목록(<see cref="StyleParty"/>)은 Chr 번호라 그대로 열쇠다.</summary>
-    private static int LegionKey(int chr) => chr;
+    internal static int LegionKey(int chr) => chr;
 
-    private Dictionary<int, LegionData> Legions() =>
+    internal Dictionary<int, LegionData> Legions() =>
         // 원본 For.dat 위에 편집기가 고친 군단(assets/data/legions/*.json)을 얹는다.
-        _legions ??= _db is { } db ? LegionBook.LoadAll(db.Files) : [];
+        _legions ??= host._db is { } db ? LegionBook.LoadAll(db.Files) : [];
 
-    private void OpenMosesLegion()
+    internal void OpenMosesLegion()
     {
         _mosesPage = 6;
-        _mosesPageAt = _lastTime;
+        _mosesPageAt = host._lastTime;
         StartFade();
         _mosesHover = -1;
         _legionUnit = StyleParty().FirstOrDefault();
         _legionTop = 0;
         _legionPick = -1;
-        Play(583);
+        host.Play(583);
         ShowMosesBackground(LegionBackground);
     }
 
@@ -57,7 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// 원본 파티 군단 목록은 <b>(군단, 개수)</b>다(<c>0x1004df50</c>: 같은 군단을 또 얻으면 개수 +1) — 31 스트라이커즈(Chp 0016·0061)·74 해커(Chp 0049·Btl 0305)는
     /// 두 번 얻으므로 두 인물에게 하나씩 붙일 수 있다. 남은 개수 = 얻은 개수 − 이 파티의 다른 인물이 붙인 수(감사3 L8). 전에는 개수가 없어 한 명만 붙였다.
     /// </remarks>
-    private List<LegionData> LegionList()
+    internal List<LegionData> LegionList()
     {
         // 이 파티 동료만 센다 — 다른 파티 인물의 배속은 그 파티 목록에서 빠진 것이다(파티 객체마다 +0x910 목록).
         bool InParty(int chr) => _members.Count == 0 || _members.Contains(chr);
@@ -66,13 +68,13 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>파티가 얻은 군단 번호와 개수(스크립트 713). 세이브에 실린다 — 개수만큼 번호를 되풀이해 적는다(옛 세이브는 모두 1개).</summary>
-    private readonly LegionCounts _ownedLegions = new();
+    internal readonly LegionCounts _ownedLegions = new();
 
     /// <summary>
     /// 파티 군단 목록 — 원본 파티 객체 <c>+0x910</c> (군단, 개수) 최대 32가지(<c>0x1004df50</c>). 새 군단이 33가지째면 버린다.
     /// 훑으면 번호를 개수만큼 되풀이해 낸다(세이브·파티 합치기가 그대로 옮기게).
     /// </summary>
-    private sealed class LegionCounts : IEnumerable<int>
+    internal sealed class LegionCounts : IEnumerable<int>
     {
         private const int MaxKinds = 32;
         private readonly Dictionary<int, int> _count = [];
@@ -100,10 +102,10 @@ internal sealed unsafe partial class BattleSceneWindow
     }
 
     /// <summary>얻은 군단을 세고 있나 — 새 게임과 그 뒤 세이브는 참(얻은 것만 보인다), 그 전 세이브는 거짓(전부 보인다).</summary>
-    private bool _legionsKnown;
+    internal bool _legionsKnown;
 
     /// <summary>용병관리 페이지가 열려 있으면 클릭을 처리하고 true.</summary>
-    private bool OnMosesLegionClick(int bx, int by)
+    internal bool OnMosesLegionClick(int bx, int by)
     {
         if (_mosesPage != 6) return false;
         var (ox, oy) = MosesOrigin();
@@ -123,7 +125,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 _unitLegion[LegionKey(_legionUnit)] = list[_legionPick].Id;
                 _legionPick = -1;                // 목록이 바뀌었다(배속한 군단은 빠진다)
-                Play(SoundLegionSet);
+                host.Play(SoundLegionSet);
             }
             return true;
         }
@@ -134,7 +136,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (x >= 70 * i + 48 - 32 && x < 70 * i + 48 + 32 && y >= 330 - 10 && y < 330 + 70)
             {
                 _legionUnit = party[i];
-                Play(MosesClickSound);
+                host.Play(MosesClickSound);
                 return true;
             }
 
@@ -153,9 +155,9 @@ internal sealed unsafe partial class BattleSceneWindow
         return true;
     }
 
-    private void DrawMosesLegion(int ox, int oy, int tick)
+    internal void DrawMosesLegion(int ox, int oy, int tick)
     {
-        if (_db is not { } db) return;
+        if (host._db is not { } db) return;
         var list = LegionList();
         var party = StylePartyPage();
         DrawStylePartyArrows(ox, oy);
@@ -164,16 +166,16 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < party.Count && i < 5; i++)
         {
             int cx = ox + 70 * i + 48, cy = oy + 330;
-            DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
+            host.DrawUi(StylePortraitObs, party[i] == _legionUnit ? i + 15 : i + 4, tick, cx, cy, UiBlend.Alpha);
             if (PartyData(party[i]) is { } pc)
             {
-                Fld.LoadFieldFace(pc);
-                if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
+                host.Fld.LoadFieldFace(pc);
+                if (host._faces.TryGetValue(pc.Code, out var face)) host.BlitScaled(face, cx + 2, cy + 20, 60, 60);
             }
-            if (_unitLegion.ContainsKey(LegionKey(party[i]))) DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
+            if (_unitLegion.ContainsKey(LegionKey(party[i]))) host.DrawUi(StylePortraitObs, 14, tick, cx + 20, cy + 84, UiBlend.Alpha);
         }
 
-        int mx = _mouse.X - ox, my = _mouse.Y - oy;
+        int mx = host._mouse.X - ox, my = host._mouse.Y - oy;
         // 군단 목록
         for (int r = 0; r < LegionRows; r++)
         {
@@ -182,8 +184,8 @@ internal sealed unsafe partial class BattleSceneWindow
             int rx = ox + 445, ry = oy + 70 + r * LegionRowH;
             // 줄 틀 Obs 1291 모션 5(138×28)는 0x10043810 으로 단 덧그림 — 마우스가 올라간 줄에만(0x100fae6b).
             if (mx >= 445 && mx < 445 + LegionRowW && my >= 70 + r * LegionRowH && my < 70 + (r + 1) * LegionRowH)
-                DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, UiBlend.Alpha);
-            DrawText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
+                host.DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, UiBlend.Alpha);
+            host.DrawText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
         }
 
         var shown = _legionPick >= 0 && _legionPick < list.Count ? list[_legionPick]
@@ -192,18 +194,18 @@ internal sealed unsafe partial class BattleSceneWindow
 
         // 해제(Reset)·배속(Set)·Ok 글자는 배경 그림(Bgr 0039)에 있다 — 알약 Obs 283·287 은 마우스가 올라갔을 때만 덧그리는 보조 그림(상점과 같다).
         bool Over(int x, int y, int w, int h) => mx >= x && mx < x + w && my >= y && my < y + h;
-        if (Over(70, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
-        if (Over(160, 293, 68, 28)) DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
-        if (Over(456, 430, 178, 27)) DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, UiBlend.Alpha);
+        if (Over(70, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 70, oy + 293, UiBlend.Alpha);
+        if (Over(160, 293, 68, 28)) host.DrawUi(StyleBodyObs, 0, tick, ox + 160, oy + 293, UiBlend.Alpha);
+        if (Over(456, 430, 178, 27)) host.DrawUi(MosesExitObs, 0, tick, ox + 456, oy + 430, UiBlend.Alpha);
     }
 
     /// <summary>고른 군단 — 진형 칸에 대장·부하를 놓고 오른쪽에 이름·설명·진형을 적는다.</summary>
-    private void DrawLegionDetail(int ox, int oy, GameDatabase db, LegionData legion)
+    internal void DrawLegionDetail(int ox, int oy, GameDatabase db, LegionData legion)
     {
         // 진형 칸 — 가운데(0,0)가 대장, 나머지는 진형표대로
         // 원본은 이 자리에 전투 유닛 그림(모션 2 = 앞모습 서기)을 세운다 — 대장 @ (150,186), 부하 @ (40dx+150, 32dy+186),
         // 아래 칸이 앞에 오게(0x1010072c~0x10100abf, ba-20 G9). 그림이 assets 에 없는 인물만 예전처럼 네모+이름.
-        DarkenRect(ox + 60, oy + 100, 260, 190, 12);
+        host.DarkenRect(ox + 60, oy + 100, 260, 190, 12);
         var cells = new List<(int Dx, int Dy, int Chr, string Name, uint Color)> { (0, 0, _legionUnit, db.T(PartyData(_legionUnit)?.NameId ?? 0), 0xFFFFE070) };
         for (int i = 0; i < legion.Members.Length && i < LegionData.FormationCells[legion.Formation].Length; i++)
         {
@@ -214,22 +216,22 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var (dx, dy, chr, name, color) in cells.OrderBy(c => c.Dy))
         {
             if (PreviewSprite(chr)?.FrameOfMotion(2, 0, false) is { } frame)
-                BlitMasked(frame.Px, frame.W, frame.H, ox + 40 * dx + 150 + frame.X, oy + 32 * dy + 186 + frame.Y);
+                host.BlitMasked(frame.Px, frame.W, frame.H, ox + 40 * dx + 150 + frame.X, oy + 32 * dy + 186 + frame.Y);
             else DrawLegionCell(ox, oy, dx, dy, name, color);
         }
 
-        DarkenRect(ox + 440, oy + 225, 190, 165, 12);
-        DrawText(db.T(legion.NameId), ox + 450, oy + 233, 0xFFFFE070, 13);
+        host.DarkenRect(ox + 440, oy + 225, 190, 165, 12);
+        host.DrawText(db.T(legion.NameId), ox + 450, oy + 233, 0xFFFFE070, 13);
         foreach (var (line, i) in WrapText(db.T(legion.DescriptionId), 180, 11f).Select((l, i) => (l, i)))
         {
             if (i >= 5) break;
-            DrawText(line, ox + 450, oy + 268 + i * 15, White, 11);
+            host.DrawText(line, ox + 450, oy + 268 + i * 15, White, 11);
         }
-        for (int xx = ox + 450; xx < ox + 620; xx++) SetPixel(xx, oy + 360, BoxLine);
-        DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
+        for (int xx = ox + 450; xx < ox + 620; xx++) host.SetPixel(xx, oy + 360, BoxLine);
+        host.DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
         // 부하 칸 도움말(0x100f7b50, ba-20 S 6) — 마우스가 얹힌 진형 칸(dx = ⌊(mx−130)/40⌋, dy = ⌊(my−170)/32⌋, |dx|+|dy| ≤ 2, 대장 칸 제외)에
         // 부하가 있으면 화면 (296,75) 에 틀 없이 흰 글: 이름·소속·직업 / LP·PSY·DEP·DEX / [어빌리티] 최대 다섯 줄. 딱지는 TXR 827~834.
-        int hx = (int)Math.Floor((_mouse.X - ox - 130) / 40.0), hy = (int)Math.Floor((_mouse.Y - oy - 170) / 32.0);
+        int hx = (int)Math.Floor((host._mouse.X - ox - 130) / 40.0), hy = (int)Math.Floor((host._mouse.Y - oy - 170) / 32.0);
         if (Math.Abs(hx) + Math.Abs(hy) > 2 || (hx, hy) == (0, 0)) return;
         var formation = LegionData.FormationCells[legion.Formation];
         for (int i = 0; i < legion.Members.Length && i < formation.Length; i++)
@@ -251,18 +253,18 @@ internal sealed unsafe partial class BattleSceneWindow
             };
             foreach (var (ability, level) in m.Abilities.Where(a => a.Ability > 0).Take(5))
                 if (db.Abilities.TryGetValue(ability, out var ab)) lines.Add($"{db.T(ab.NameId)} Lv {level}");
-            for (int l = 0; l < lines.Count; l++) DrawText(lines[l], ox + 296, oy + 75 + l * 14, White, 11);
+            for (int l = 0; l < lines.Count; l++) host.DrawText(lines[l], ox + 296, oy + 75 + l * 14, White, 11);
             return;
         }
     }
 
-    private readonly Dictionary<int, UnitSprite?> _previewSprites = [];
-    private Dictionary<int, (string Name, ushort SpriteCode)>? _previewManifests;
+    internal readonly Dictionary<int, UnitSprite?> _previewSprites = [];
+    internal Dictionary<int, (string Name, ushort SpriteCode)>? _previewManifests;
 
     /// <summary>모세스 화면에서 세워 보이는 인물 그림 — 전투에 이미 읽은 것을 쓰고, 없으면 assets/characters 에서 처음 쓸 때 읽는다. 없으면 null.</summary>
-    private UnitSprite? PreviewSprite(int chr)
+    internal UnitSprite? PreviewSprite(int chr)
     {
-        if (_sprites.TryGetValue(chr, out var loaded)) return loaded;
+        if (host._sprites.TryGetValue(chr, out var loaded)) return loaded;
         if (_previewSprites.TryGetValue(chr, out var cached)) return cached;
         UnitSprite? sprite = null;
         try
@@ -280,13 +282,14 @@ internal sealed unsafe partial class BattleSceneWindow
         return _previewSprites[chr] = sprite;
     }
 
-    private void DrawLegionCell(int ox, int oy, int dx, int dy, string name, uint color)
+    internal void DrawLegionCell(int ox, int oy, int dx, int dy, string name, uint color)
     {
         int x = ox + 40 * dx + 150, y = oy + 32 * dy + 186;
-        StrokeRect(x - 18, y - 14, 36, 28, BoxLine);
+        host.StrokeRect(x - 18, y - 14, 36, 28, BoxLine);
         // 칸이 40픽셀이라 이름이 길면 잘라 넣는다(원본은 이 자리에 부하 그림을 세운다).
         string label = name.Length > 5 ? name[..5] : name;
-        var (_, w, h) = GetText(label, color, 10);
-        DrawText(label, x - w / 2, y - h / 2, color, 10);
+        var (_, w, h) = host.GetText(label, color, 10);
+        host.DrawText(label, x - w / 2, y - h / 2, color, 10);
+    }
     }
 }

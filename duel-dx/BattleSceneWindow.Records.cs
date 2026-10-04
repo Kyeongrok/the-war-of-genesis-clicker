@@ -29,7 +29,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _recordsOpen = true;
         _titleOpen = false;
         _recordsExitHover = false;
-        ShowMosesBackground(RecordsBackground);
+        Mos.ShowMosesBackground(RecordsBackground);
         EnterSceneFade();
         OpenSlots(1);                                  // 불러오기 목록(같은 창을 그대로 쓴다)
     }
@@ -47,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private bool OnRecordsClick(int bx, int by)
     {
         if (!_recordsOpen) return false;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         var (ex, ey, ew, eh) = RecordsExit;
         if (bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh) { CloseRecords(); return true; }
         if (SystemOpen) return OnSystemClick(bx, by);
@@ -57,7 +57,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void UpdateRecordsHover(int bx, int by)
     {
         if (!_recordsOpen) return;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         var (ex, ey, ew, eh) = RecordsExit;
         _recordsExitHover = bx >= ox + ex && bx < ox + ex + ew && by >= oy + ey && by < oy + ey + eh;
     }
@@ -65,14 +65,14 @@ internal sealed unsafe partial class BattleSceneWindow
     private void DrawRecords()
     {
         if (!_recordsOpen) return;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         int tick = (int)(_lastTime * TicksPerSecond);
 
         FillRect(_camX, _camY, ViewWidth, ViewHeight, 0xFF000000);
-        if (_mosesBg is { } bg)
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+        if (Mos._mosesBg is { } bg)
+            for (int y = 0; y < MosesScene.MosesH; y++)
+                for (int x = 0; x < MosesScene.MosesW; x++)
+                    SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
 
         var (ex, ey, _, _) = RecordsExit;
         if (_recordsExitHover) DrawUi(RecordsExitObs, 0, tick, ox + ex, oy + ey, UiBlend.Add);

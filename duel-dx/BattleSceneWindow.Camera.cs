@@ -100,7 +100,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// AI 차례·행동·이벤트·결과 중에는 안 민다.
     /// </summary>
     private bool EdgeScrollAllowed =>
-        !_mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && _ringUnit < 0 && !_abilityMenu && _statusUnit < 0 && !SystemOpen
+        !Mos._mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && _ringUnit < 0 && !_abilityMenu && _statusUnit < 0 && !SystemOpen
         && !SceneFading && !EventsBusy && _outcome.Length == 0 && !LevelUpOpen
         && (_deployOpen || (IsPlayerTurn && !_units[_turn].IsBusy));
 

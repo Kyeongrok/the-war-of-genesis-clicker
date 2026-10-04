@@ -27,7 +27,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void DrawHud()
     {
-        if (_mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
+        if (Mos._mosesOpen || _chaptersOpen || _outcome.Length > 0 || _map is not { } map) return;
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
         if (EventsBusy || _deployOpen) return;
 
@@ -61,7 +61,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
 
         // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
-        Right($"{_shopMoney}GP", 134, 20);
+        Right($"{Mos._shopMoney}GP", 134, 20);
         // Tp·Soul 은 고른 유닛이 아니라 <b>지금 차례인 유닛</b>([CBattle+0x4ce8])의 것이다(0x100e3f60, ba-20 G16) — AI 차례에도 그 유닛 값이 보인다.
         if (_turn >= 0 && _turn < _units.Length && _units[_turn] is { Alive: true } unit)
         {

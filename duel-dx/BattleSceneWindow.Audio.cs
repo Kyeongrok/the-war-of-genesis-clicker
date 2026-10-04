@@ -115,7 +115,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false)
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
-        if (_mosesAltVoice && _mosesOpen && MosesAltSounds.Contains(sound)) sound += 25;   // 910 이 갈아 끼운 모세스 안내 음성
+        if (Mos._mosesAltVoice && Mos._mosesOpen && MosesScene.MosesAltSounds.Contains(sound)) sound += 25;   // 910 이 갈아 끼운 모세스 안내 음성
         bool loaded = _sfx.TryGetValue(sound, out var pcm);
         var (left, right) = SndPan(screenX);
         float gain = SndGain;
@@ -161,7 +161,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private float SoundScreenX(float x)
     {
-        if (float.IsNaN(x) || FieldOpen || _mosesOpen) return x;
+        if (float.IsNaN(x) || FieldOpen || Mos._mosesOpen) return x;
         return (x - _camX) * 640f / Math.Max(1, ViewWidth);
     }
 
@@ -517,7 +517,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void StepWalkSounds()
     {
-        if (FieldOpen || _mosesOpen || _titleOpen || _episodesOpen || _recordsOpen || _units is not { Length: > 0 } units) return;
+        if (FieldOpen || Mos._mosesOpen || _titleOpen || _episodesOpen || _recordsOpen || _units is not { Length: > 0 } units) return;
         if (_walkTicks.Count > units.Length * 2) _walkTicks.Clear();   // 다른 전투의 인물은 버린다
         foreach (var u in units)
         {
@@ -675,7 +675,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_musicFade is not { } fade)
         {
             // 챕터 창(0x100f8040)은 사건 실행기의 곡을 넘겨받아 80 % 미만이면 틀마다 +1 %.
-            if (!_chapterEventMusic || !_mosesOpen || _musicId == 0) return;
+            if (!_chapterEventMusic || !Mos._mosesOpen || _musicId == 0) return;
             int ticks = (int)((_lastTime - _chapterRiseAt) * TicksPerSecond);
             if (ticks <= 0) return;
             _chapterRiseAt += ticks / TicksPerSecond;

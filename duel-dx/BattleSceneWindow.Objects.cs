@@ -575,7 +575,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         else if (obj.Record.Gold > 0)
         {
-            _shopMoney += obj.Record.Gold;
+            Mos._shopMoney += obj.Record.Gold;
             ShowSpoilMessage(LiveUnitAt(obj.Col, obj.Row) ?? opener, "GP 획득", $"{obj.Record.Gold}GP를 획득하였습니다.");
         }
     }
@@ -599,7 +599,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         // 파티에 든 인물만(0x1007b030 ≠ −1) — 동맹 손님·군단 부하·적은 가방으로.
         if (taker is not { Alive: true, Data: { } c } || taker.LeaderIndex >= 0 || !taker.IsAlly
-            || !(_members.Contains(taker.ChrCode) || _party.ContainsKey(taker.ChrCode)) || _db is not { } db
+            || !(Mos._members.Contains(taker.ChrCode) || _party.ContainsKey(taker.ChrCode)) || _db is not { } db
             || !db.Items.TryGetValue(itemId, out var item)) return false;
         for (int slot = 0; slot < Math.Min(6, c.Items.Length); slot++)
         {
@@ -918,7 +918,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private void DrawChestList()
     {
-        if (!_showChestContents || !_battleLoaded || _mosesOpen || FieldOpen || _titleOpen || _episodesOpen || _db is not { } db) return;
+        if (!_showChestContents || !_battleLoaded || Mos._mosesOpen || FieldOpen || _titleOpen || _episodesOpen || _db is not { } db) return;
         var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
         var lines = new List<(string Text, uint Color)>
         {

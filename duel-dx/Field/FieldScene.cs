@@ -317,7 +317,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (n[0] == 903)
         {
             int bands = Math.Max(1, n[3]);
-            BeginFieldWipe(903, bands, MosesW / bands + bands, n[1] == 0, n[2]);
+            BeginFieldWipe(903, bands, MosesScene.MosesW / bands + bands, n[1] == 0, n[2]);
         }
         else if (n[0] == 901)
             BeginFieldWipe(901, n[3], Math.Max(1, n.Length > 4 ? n[4] : 60), n[1] == 0, n[2]);
@@ -372,10 +372,10 @@ internal sealed unsafe partial class BattleSceneWindow
             LoadFieldBackdrop(field, bytes);
             _fieldCam = ClampFieldCam(field.CameraX, field.CameraY);   // 필드 시작도 [0, 폭−640]×[0, 높이−480] 로(0x100ec6c3~, 감사5 D2)
             _fieldCamMove = null;
-            host._mosesOpen = false;
+            host.Mos._mosesOpen = false;
             host._talk = null;
             // 필드 배경은 640×480 보다 넓다 — 머리가 정한 첫 화면 자리부터 보여 준다.
-            host.ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
+            host.Mos.ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
             host.StopMusic();
             // 머리 곡은 논리 크기 0 으로 건다(0x100ec3fb~0x100ec449: 0x10025320(0) → 곧 재개) — 들리기는 100 %(×B.G.M)지만
             // 첫 517 은 0 에서 올린다(뚝 끊겼다 커짐), 첫 512 는 0 을 물려받는다(감사4 M3).
@@ -475,8 +475,8 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal (int X, int Y) ClampFieldCam(double x, double y)
     {
-        int maxX = _fieldBg is { } bg ? Math.Max(0, bg.W - MosesW) : int.MaxValue;
-        int maxY = _fieldBg is { } bg2 ? Math.Max(0, bg2.H - MosesH) : int.MaxValue;
+        int maxX = _fieldBg is { } bg ? Math.Max(0, bg.W - MosesScene.MosesW) : int.MaxValue;
+        int maxY = _fieldBg is { } bg2 ? Math.Max(0, bg2.H - MosesScene.MosesH) : int.MaxValue;
         return ((int)Math.Clamp(x, 0, maxX), (int)Math.Clamp(y, 0, maxY));
     }
 
@@ -489,7 +489,7 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void UpdateField()
     {
         // 필드가 없으면 모세스에 떠 있는 챕터의 스크립트 — 원본 챕터 장면도 같은 실행기로 대사·고르기·동료 넣기를 돈다.
-        var chapter = _field == null && host._mosesOpen ? host._mosesChp : null;
+        var chapter = _field == null && host.Mos._mosesOpen ? host.Mos._mosesChp : null;
         var events = _field?.Events ?? chapter?.Events;
         if (events == null) return;
         if (_field != null) StepFieldActors();
@@ -642,7 +642,7 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void LeaveField()
     {
         CloseField();
-        host.OpenMoses();
+        host.Mos.OpenMoses();
     }
 
     /// <summary>DUELDX_ALLEVENTS=1 이면 챕터 사건의 조건을 모두 참으로 본다(화면 밖 시험용 — 대사·고르기가 든 사건을 전부 돌려 본다).</summary>
@@ -658,9 +658,9 @@ internal sealed unsafe partial class BattleSceneWindow
             100 => Compare(ScriptVars[A(0) & 0xFF], A(1), A(2)),                // 필드 변수(챕터 스크립트면 챕터 변수)
             101 => Compare(A(0) >= 0 && A(0) < host._flags.Length ? host._flags[A(0)] : 0, A(1), A(2)),
             // [파티, 아이템] 가졌나(0x100edb40) — 가방이나 <b>지금 파티원</b>의 장비. 명부가 하나로 합쳐졌으니 파티 밖 인물은 빼야 한다.
-            102 => host._inventory.ContainsKey(A(1)) || host._party.Where(p => host._members.Count == 0 || host._members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
-            503 => host.MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
-            505 => host._mosesChp is { } chp505 && host._planetVisits.Remove((chp505.Id, A(0))),   // [행성] 방문 표시 — 한 번 참, 지운다(0x100edcd0)
+            102 => host._inventory.ContainsKey(A(1)) || host._party.Where(p => host.Mos._members.Count == 0 || host.Mos._members.Contains(p.Key)).Any(p => p.Value.Items.Contains((ushort)A(1))),
+            503 => host.Mos.MailTriggerRead(A(0)),                                        // [메일 방아쇠] 그 편지를 읽었나(0x100edc40)
+            505 => host.Mos._mosesChp is { } chp505 && host.Mos._planetVisits.Remove((chp505.Id, A(0))),   // [행성] 방문 표시 — 한 번 참, 지운다(0x100edcd0)
             // 평가기(0x100f34f0)가 모르는 조건 번호는 <b>참</b>으로 흘린다(갈래 없음 → eax = 사건 포인터 ≠ 0). 샤이닝 스타 사건 5 의 504 가 그렇다.
             _ => true,
         };
@@ -737,7 +737,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal bool IsPauseBetweenLines()
     {
-        var events = _field?.Events ?? (host._mosesOpen ? host._mosesChp?.Events : null);
+        var events = _field?.Events ?? (host.Mos._mosesOpen ? host.Mos._mosesChp?.Events : null);
         if (events == null || (uint)_fieldEvent >= events.Count) return false;
         var acts = events[_fieldEvent].Actions;
         int at = _fieldPc - 1;                                 // 방금 읽은 행동 2
@@ -760,7 +760,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _traceLastLine = (_fieldOwner, _fieldPc);
         if (Trace && !traceRepeat)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                               $"fld {(_field?.Id ?? host._mosesChp?.Id ?? 0)} "
+                               $"fld {(_field?.Id ?? host.Mos._mosesChp?.Id ?? 0)} "
                                + (_fieldOwner == _fieldEvent ? $"ev {_fieldEvent} pc {_fieldPc - 1}" : $"side ev {_fieldOwner}")
                                + $" t {host._lastTime:F2}: {a.Code} [{string.Join(", ", a.Args)}]" + Environment.NewLine);
         switch (a.Code)
@@ -770,7 +770,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 다른 이벤트 부르기 — 목록(이벤트 0) <b>밖에 있는 사건</b>들이 이렇게만 불린다.
                 // 부르는 자리를 쌓아 두고 갈아탔다가, 그 사건이 끝나면 돌아온다. 조건·최대 발동은 부를 때 본다.
                 int index = A(0);
-                var chapter0 = _field == null && host._mosesOpen ? host._mosesChp : null;
+                var chapter0 = _field == null && host.Mos._mosesOpen ? host.Mos._mosesChp : null;
                 var events0 = _field?.Events ?? chapter0?.Events;
                 if (events0 == null || (uint)index >= events0.Count || index == 0) break;
                 var target = events0[index];
@@ -804,7 +804,7 @@ internal sealed unsafe partial class BattleSceneWindow
                     // 여기 걸렸다는 것은 데모가 못 끝내는 연출이 있다는 뜻이다 — 화면 밖 감사에서 찾으려고 남긴다.
                     if (Trace)
                         File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                                           $"HOLD fld {(_field?.Id ?? host._mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}"
+                                           $"HOLD fld {(_field?.Id ?? host.Mos._mosesChp?.Id ?? 0)} ev {_fieldEvent} pc {_fieldPc - 1}"
                                            + $" (slots {_fieldSlots.Count(s => s.Owner == _fieldOwner)}, wipe {_fieldWipe != null}, cam {_fieldCamMove != null},"
                                            + $" walk {_fieldActors.Count(w => w.Walk != null)}, fade {_fieldActors.Count(w => w.Fade != null)},"
                                            + $" prop {_fieldProps.Count(pr => pr.Move != null)})" + Environment.NewLine);
@@ -847,7 +847,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 return false;
             case 10:                                         // 전투
                 CloseField();
-                if (!host.StartBattle(A(0))) host.OpenMoses();
+                if (!host.StartBattle(A(0))) host.Mos.OpenMoses();
                 return false;
             case 12: CloseField(); host.OpenTitle(); return false;
             default: RunChapterAction(a); break;              // 70x·80x(동료·돈·아이템·군단…)는 챕터와 같은 처리
@@ -1051,7 +1051,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (FieldActorOf(A(0)) is not { } target) break;
                 int camTicks = Math.Max(1, (int)A(1));
                 // 목표를 먼저 배경 안으로 자르고 보간한다(0x100ee431~0x100ee493, 감사5 D2).
-                var (goalX, goalY) = ClampFieldCam(target.X - MosesW / 2.0, target.Y - MosesH / 2.0);
+                var (goalX, goalY) = ClampFieldCam(target.X - MosesScene.MosesW / 2.0, target.Y - MosesScene.MosesH / 2.0);
                 _fieldCamMove = (_fieldCam.X, _fieldCam.Y, goalX, goalY, camTicks, host._lastTime);
                 HoldCameraSlot();
                 break;
@@ -1062,7 +1062,7 @@ internal sealed unsafe partial class BattleSceneWindow
             case 903:                                        // 빗살 지우기 — a2 는 틀 수가 아니라 <b>세로 띠 수</b>다
             {
                 int bands = Math.Max(1, (int)A(2));
-                BeginFieldWipe(903, bands, MosesW / bands + bands, A(0) == 0, A(1), A(3));
+                BeginFieldWipe(903, bands, MosesScene.MosesW / bands + bands, A(0) == 0, A(1), A(3));
                 break;
             }
             case 904:                                        // 줄 늘여 쓸기 — a2 방향(0 아래→위, 1 위→아래, 2 오른→왼, 3 왼→오른)
@@ -1070,7 +1070,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 break;
             case 404:                                        // [Bgr, 가림] 그림 띄우기 — 남은 그림 = Bgr a0, 가림 = a1(0x100f2180, 감사5 D6)
                 // 즉시 그 그림 + 층 a1~7. 카메라는 그대로(감사5 D8). 전에는 무동작이라 Fld 0038 사건 18 의 컷(206 → 97)이 안 바뀌었다.
-                if (host.ReadBackground(A(0)) is { } picture404)
+                if (host.Mos.ReadBackground(A(0)) is { } picture404)
                 {
                     _fieldPicture = picture404;
                     _fieldPictureCover = Math.Clamp((int)A(1), 0, 8);
@@ -1097,7 +1097,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (A(2) > 0) BeginFieldWipe(909, 0, A(2), A(0) == 0, A(1), A(3));
                 else if (A(0) == 0)
                 {
-                    if (host.ReadBackground(A(1)) is { } picture909)
+                    if (host.Mos.ReadBackground(A(1)) is { } picture909)
                     {
                         _fieldPicture = picture909;
                         _fieldPictureCover = Math.Clamp((int)A(3), 0, 8);
@@ -1119,7 +1119,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _fieldGray = A(0) != 0;
                 break;
             case 409:                                        // 화면 물결 [0/1] — [[0x101bfe1c]+0x294] = a0(0x100ee710). 필드·챕터 둘 다(audit3 R3)
-                _screenWaveOwner = A(0) != 0 ? (object?)_field ?? host._mosesChp : null;
+                _screenWaveOwner = A(0) != 0 ? (object?)_field ?? host.Mos._mosesChp : null;
                 break;
             case 900:
             {
@@ -1131,7 +1131,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 {
                     _fieldPicture = null;
                     _fieldPictureCover = 0;
-                    if (A(5) > 0 && host.ReadBackground(A(5)) is { } picture900)
+                    if (A(5) > 0 && host.Mos.ReadBackground(A(5)) is { } picture900)
                     {
                         _fieldPicture = picture900;
                         _fieldPictureCover = cover900;
@@ -1158,7 +1158,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 if (host._talkSkip) break;
                 host.PlayMusicInherit(A(0));
                 // 챕터 사건이 건 곡은 챕터 창이 80 % 까지 틱마다 1 % 올린다(0x100f80c9, 감사4 M1).
-                if (_field is null && host._mosesOpen) host.MarkChapterEventMusic();
+                if (_field is null && host.Mos._mosesOpen) host.MarkChapterEventMusic();
                 break;
             case 515:                                        // 멈춘 배경음악 잇기(0x100eee50 → 0x10025480, 감사4 M5) — Fld 360 사건 1
                 host.ResumeMusic();
@@ -1168,10 +1168,10 @@ internal sealed unsafe partial class BattleSceneWindow
                 HoldSlotTicks(A(1));
                 break;
             case 910:                                        // [v] 모세스 안내 음성을 +25 번 것으로 갈아 끼우고 화면 줄이 찢긴다(0x100f2bb0, Chp 0045·0050)
-                host._mosesAltVoice = A(0) != 0;                  // 562 ↔ 587 은 구체 그림이 아니라 소리 번호였다(0x10028850 = 소리 재생, ba-21 field Y5)
+                host.Mos._mosesAltVoice = A(0) != 0;                  // 562 ↔ 587 은 구체 그림이 아니라 소리 번호였다(0x10028850 = 소리 재생, ba-21 field Y5)
                 break;
             case 911:                                        // [단계, 번호] 항행 시작 단계·번호(챕터 +0x2e40/+0x2e42, 0x100f6c60) — a ≥ 1 일 때만
-                if (A(0) >= 1 && host._mosesChp is { } navChp) host._navStart = (navChp.Id, A(0), A(1));
+                if (A(0) >= 1 && host.Mos._mosesChp is { } navChp) host.Mos._navStart = (navChp.Id, A(0), A(1));
                 break;
             case 609:                                        // [인물, 이름 TXR, 챕터 Tlc 글, ?] 이름과 글을 <b>다른 표</b>에서 꺼내는 대사(0x100efb30)
                 // 원본은 0x1004a3f0(TXR)으로 이름을, 0x1004a650(Tlk\NNNN.Tlc = EvtText)으로 글을 읽어
@@ -1179,7 +1179,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 인자1 은 이름이 아니라 <b>발신지</b> TXR 이다 — 이름은 인물 것이고 발신지는 카드의 둘째 줄(「LOCATION」)에 뜬다(ba-21 field Y3).
                 _talkLocation = host._db?.T((ushort)A(1)) ?? "";
                 ShowFieldTalk(box: true, A(0), 0,
-                              textOverride: host.TalkTableFor()?[A(2)] ?? "", voice: A(3));
+                              textOverride: host.Mos.TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
                 // 되감아 멈출 뿐 개체와 크기(%)는 남는다 — 뒤따르는 512 가 그 크기로 바로 튼다(감사4 M2).
@@ -1325,7 +1325,7 @@ internal sealed unsafe partial class BattleSceneWindow
                         $"805: Chr {A(0)} → Lv {host._party.GetValueOrDefault(A(0))?.Level} EXP {host._party.GetValueOrDefault(A(0))?.Exp} (파티 {host.RosterLevel()} + {A(1)})" + Environment.NewLine);
                 break;
             case 713:                                            // 군단 얻기 [군단] — 파티 군단 목록에 넣는다(0x100f0810 → 0x1004df50)
-                if (A(0) > 0) { host._ownedLegions.Add(A(0)); host._legionsKnown = true; }
+                if (A(0) > 0) { host.Mos._ownedLegions.Add(A(0)); host.Mos._legionsKnown = true; }
                 break;
             case 801: host.AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
             case 802: host.RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]
@@ -1363,7 +1363,7 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void MoveFieldCamera(int x, int y)
     {
         _fieldCam = ClampFieldCam(x, y);                     // 배경 안으로(감사5 D2)
-        if (_field is { } field && _fieldBg is null) host.ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
+        if (_field is { } field && _fieldBg is null) host.Mos.ShowMosesBackground(field.Background, _fieldCam.X, _fieldCam.Y);
     }
 
     /// <summary>대상 지정 값(<c>10000+열쇠</c>)이 가리키는 물체.</summary>
@@ -1466,7 +1466,7 @@ internal sealed unsafe partial class BattleSceneWindow
         _ => value != 0 ? now / value : now,
     };
 
-    internal string FieldText(int id) => (_field != null ? _fieldTalk : host.TalkTableFor())?[id] ?? "";
+    internal string FieldText(int id) => (_field != null ? _fieldTalk : host.Mos.TalkTableFor())?[id] ?? "";
 
     /// <summary>스크립트 변수 — 필드가 떠 있으면 그 필드의 것(필드마다 비운다), 아니면 챕터 것(원본 챕터 상태 <c>+0x88</c>, 세이브에 실린다).</summary>
     internal byte[] ScriptVars => _field != null ? _fieldVars : _chapterVars;
@@ -1535,7 +1535,7 @@ internal sealed unsafe partial class BattleSceneWindow
     internal (int X, int Y)? FieldTalkHead()
     {
         if (!FieldOpen || FieldActorOf(_fieldTalkOf) is not { Visible: true } who) return null;
-        var (ox, oy) = host.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         return (ox + (int)who.X - _fieldCam.X, oy + (int)who.Y - _fieldCam.Y);
     }
 
@@ -1573,7 +1573,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal (int X, int Y) FieldChoiceBand(int k, int rows)
     {
-        var (fx, fy) = host.MosesOrigin();
+        var (fx, fy) = host.Mos.MosesOrigin();
         return (fx + 10, fy + 230 - 25 * (rows - 1) + 50 * k);
     }
 
@@ -1635,19 +1635,19 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal void ApplyScreenWave(int ox, int oy, int tick)
     {
-        if (_screenWaveOwner is null || !ReferenceEquals(_screenWaveOwner, _field is not null ? _field : host._mosesChp)) return;
-        var line = new uint[MosesW];
+        if (_screenWaveOwner is null || !ReferenceEquals(_screenWaveOwner, _field is not null ? _field : host.Mos._mosesChp)) return;
+        var line = new uint[MosesScene.MosesW];
         int idx = (int)((long)tick * 4 % 360);
         if (idx < 0) idx += 360;
-        for (int y = MosesH - 1; y >= 0; y--, idx = (idx + 1) % 360)   // 0x101bf844(줄 479) 부터 줄 0 까지
+        for (int y = MosesScene.MosesH - 1; y >= 0; y--, idx = (idx + 1) % 360)   // 0x101bf844(줄 479) 부터 줄 0 까지
         {
             int s = WaveSin[idx] >> 6;                   // 산술 시프트 — 음수는 −∞ 쪽
             int fy = oy + y;
-            if (s == 0 || ox < 0 || ox + MosesW > host.BoardWidth || fy < 0 || (fy + 1) * host.BoardWidth > host._fb.Length) continue;
+            if (s == 0 || ox < 0 || ox + MosesScene.MosesW > host.BoardWidth || fy < 0 || (fy + 1) * host.BoardWidth > host._fb.Length) continue;
             int row = fy * host.BoardWidth + ox;
-            Array.Copy(host._fb, row, line, 0, MosesW);
-            if (s > 0) Array.Copy(line, 0, host._fb, row + s, MosesW - s);    // 오른쪽으로 — 왼쪽 s 픽셀은 그대로
-            else Array.Copy(line, -s, host._fb, row, MosesW + s);             // 왼쪽으로 — 오른쪽 |s| 픽셀은 그대로
+            Array.Copy(host._fb, row, line, 0, MosesScene.MosesW);
+            if (s > 0) Array.Copy(line, 0, host._fb, row + s, MosesScene.MosesW - s);    // 오른쪽으로 — 왼쪽 s 픽셀은 그대로
+            else Array.Copy(line, -s, host._fb, row, MosesScene.MosesW + s);             // 왼쪽으로 — 오른쪽 |s| 픽셀은 그대로
         }
     }
 
@@ -1660,11 +1660,11 @@ internal sealed unsafe partial class BattleSceneWindow
 
     internal void DrawFieldBody()
     {
-        var (ox, oy) = host.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
 
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         // 필드 화면은 640×480 틀 안이 전부다 — 물체·인물이 그 밖으로 새지 않게 자른다.
-        host._uiClip = (ox, oy, MosesW, MosesH);
+        host._uiClip = (ox, oy, MosesScene.MosesW, MosesScene.MosesH);
 
         // 원본 매 틀 그리기 0x100ebe20 의 차례(감사5 D4·D12):
         //  전환 물체가 있으면 그것 → 층 (가림)~7 을 산 채로(0x100ebe66~0x100ebea1),
@@ -1681,8 +1681,8 @@ internal sealed unsafe partial class BattleSceneWindow
             int start;
             if (_fieldFadeShot is { } shot900)
             {
-                for (int y = 0; y < MosesH; y++)
-                    Array.Copy(shot900, y * MosesW, host._fb, (oy + y) * host.BoardWidth + ox, MosesW);
+                for (int y = 0; y < MosesScene.MosesH; y++)
+                    Array.Copy(shot900, y * MosesScene.MosesW, host._fb, (oy + y) * host.BoardWidth + ox, MosesScene.MosesW);
                 start = _fieldFadeShotStart;
             }
             else start = DrawFieldScene(ox, oy, _fieldFadeCover);
@@ -1709,9 +1709,9 @@ internal sealed unsafe partial class BattleSceneWindow
         if (_fieldPicture is { } picture)
         {
             // 남은 그림은 화면 (0,0)에 따로 그린다 — 필드 카메라는 안 건드린다(감사5 D8).
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    host.SetPixel(ox + x, oy + y, picture[y * MosesW + x] | 0xFF000000);
+            for (int y = 0; y < MosesScene.MosesH; y++)
+                for (int x = 0; x < MosesScene.MosesW; x++)
+                    host.SetPixel(ox + x, oy + y, picture[y * MosesScene.MosesW + x] | 0xFF000000);
             start = _fieldPictureCover;
         }
         else DrawFieldBackdrop(ox, oy);
@@ -1738,10 +1738,10 @@ internal sealed unsafe partial class BattleSceneWindow
         var (cx, cy) = _fieldCam;
         if (_fieldBg is not { } bg)
         {
-            if (host._mosesBg is { } crop)                        // 배경을 통째로 못 읽었으면 예전처럼 잘라 둔 것을
-                for (int y = 0; y < MosesH; y++)
-                    for (int x = 0; x < MosesW; x++)
-                        host.SetPixel(ox + x, oy + y, crop[y * MosesW + x] | 0xFF000000);
+            if (host.Mos._mosesBg is { } crop)                        // 배경을 통째로 못 읽었으면 예전처럼 잘라 둔 것을
+                for (int y = 0; y < MosesScene.MosesH; y++)
+                    for (int x = 0; x < MosesScene.MosesW; x++)
+                        host.SetPixel(ox + x, oy + y, crop[y * MosesScene.MosesW + x] | 0xFF000000);
             return;
         }
         // 배경은 노란 색 키만 뚫리고, 그 구멍으로 조각이 보인다(조각은 앞 번호가 위). 화면 픽셀을 한 번만 돌며 배경이 키인 곳에서만
@@ -1754,16 +1754,16 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = 0; i < pieces; i++)
         {
             var p = _fieldPieces[i];
-            shiftXs[i] = (bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0) - p.Vx * flow;
-            shiftYs[i] = (bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0) - p.Vy * flow;
+            shiftXs[i] = (bg.W > MosesScene.MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesScene.MosesW) : 0) - p.Vx * flow;
+            shiftYs[i] = (bg.H > MosesScene.MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesScene.MosesH) : 0) - p.Vy * flow;
         }
-        for (int y = 0; y < MosesH; y++)
+        for (int y = 0; y < MosesScene.MosesH; y++)
         {
             int fy = oy + y;
             if ((uint)fy >= host.BoardHeight) continue;
             bool inBg = y + cy >= 0 && y + cy < bg.H;
             int row = (y + cy) * bg.W + cx;
-            for (int x = 0; x < MosesW; x++)
+            for (int x = 0; x < MosesScene.MosesW; x++)
             {
                 int fx = ox + x;
                 if ((uint)fx >= host.BoardWidth) continue;
@@ -1903,7 +1903,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (toPicture)
         {
             under = RenderFieldShot(cover);                  // 지금 장면(남은 그림이 있으면 그 그림)
-            var picture = host.ReadBackground(background);
+            var picture = host.Mos.ReadBackground(background);
             over = picture ?? under;
             // 그림으로 갔으면 전환이 끝난 뒤에도 그 그림이 남는다 — 남은 그림 + 가림.
             if (picture != null)
@@ -1914,7 +1914,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         else
         {
-            var picture = host.ReadBackground(background) ?? _fieldPicture;
+            var picture = host.Mos.ReadBackground(background) ?? _fieldPicture;
             _fieldPicture = null;
             _fieldPictureCover = 0;
             over = RenderFieldShot(cover);                   // 되살린 필드 화면
@@ -1927,10 +1927,10 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>지금 필드 화면(640×480)을 그대로 찍는다.</summary>
     internal uint[] CaptureFieldScreen()
     {
-        var (ox, oy) = host.MosesOrigin();
-        var shot = new uint[MosesW * MosesH];
-        for (int y = 0; y < MosesH; y++)
-            Array.Copy(host._fb, (oy + y) * host.BoardWidth + ox, shot, y * MosesW, MosesW);
+        var (ox, oy) = host.Mos.MosesOrigin();
+        var shot = new uint[MosesScene.MosesW * MosesScene.MosesH];
+        for (int y = 0; y < MosesScene.MosesH; y++)
+            Array.Copy(host._fb, (oy + y) * host.BoardWidth + ox, shot, y * MosesScene.MosesW, MosesScene.MosesW);
         return shot;
     }
 
@@ -1940,16 +1940,16 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal uint[] RenderFieldShot(int cover)
     {
-        var (ox, oy) = host.MosesOrigin();
+        var (ox, oy) = host.Mos.MosesOrigin();
         var saved = CaptureFieldScreen();
         var clip = host._uiClip;
-        host.FillRect(ox, oy, MosesW, MosesH, 0xFF000000);
-        host._uiClip = (ox, oy, MosesW, MosesH);
+        host.FillRect(ox, oy, MosesScene.MosesW, MosesScene.MosesH, 0xFF000000);
+        host._uiClip = (ox, oy, MosesScene.MosesW, MosesScene.MosesH);
         _shotStart = DrawFieldScene(ox, oy, cover);
         host._uiClip = clip;
         var shot = CaptureFieldScreen();
-        for (int y = 0; y < MosesH; y++)
-            Array.Copy(saved, y * MosesW, host._fb, (oy + y) * host.BoardWidth + ox, MosesW);
+        for (int y = 0; y < MosesScene.MosesH; y++)
+            Array.Copy(saved, y * MosesScene.MosesW, host._fb, (oy + y) * host.BoardWidth + ox, MosesScene.MosesW);
         return shot;
     }
 
@@ -1978,8 +1978,8 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void DrawLineWipe(int ox, int oy, FieldWipe wipe, int tick)
     {
         var under = wipe.Base ?? wipe.Over;
-        var lit = new bool[MosesH];
-        void On(int y) { if ((uint)y < MosesH) lit[y] = true; }
+        var lit = new bool[MosesScene.MosesH];
+        void On(int y) { if ((uint)y < MosesScene.MosesH) lit[y] = true; }
         for (int t = 0; t <= Math.Min(tick, 30); t++)
         {
             On(2 * t); On(480 - 2 * t);
@@ -1990,11 +1990,11 @@ internal sealed unsafe partial class BattleSceneWindow
             On(1 + 2 * u); On(479 - 2 * u);
             foreach (int c in new[] { 120, 240, 360 }) { On(c - 1 - 2 * u); On(c + 1 + 2 * u); }
         }
-        for (int y = 0; y < MosesH; y++)
+        for (int y = 0; y < MosesScene.MosesH; y++)
         {
             int row = (oy + y) * host.BoardWidth + ox;
-            if (oy + y < 0 || row + MosesW > host._fb.Length || ox < 0) continue;
-            Array.Copy(lit[y] ? wipe.Over : under, y * MosesW, host._fb, row, MosesW);
+            if (oy + y < 0 || row + MosesScene.MosesW > host._fb.Length || ox < 0) continue;
+            Array.Copy(lit[y] ? wipe.Over : under, y * MosesScene.MosesW, host._fb, row, MosesScene.MosesW);
         }
     }
 
@@ -2007,13 +2007,13 @@ internal sealed unsafe partial class BattleSceneWindow
         int k = Math.Min(8, tick * 8 / Math.Max(1, wipe.Ticks) + 1);
         uint a = k >= 8 ? 256u : (uint)(4 * k * 256 / 31);
         var under = wipe.Base ?? wipe.Over;
-        for (int y = 0; y < MosesH; y++)
+        for (int y = 0; y < MosesScene.MosesH; y++)
         {
             int row = (oy + y) * host.BoardWidth + ox;
-            if (oy + y < 0 || row + MosesW > host._fb.Length || ox < 0) continue;
-            for (int x = 0; x < MosesW; x++)
+            if (oy + y < 0 || row + MosesScene.MosesW > host._fb.Length || ox < 0) continue;
+            for (int x = 0; x < MosesScene.MosesW; x++)
             {
-                uint b = under[y * MosesW + x], o = wipe.Over[y * MosesW + x];
+                uint b = under[y * MosesScene.MosesW + x], o = wipe.Over[y * MosesScene.MosesW + x];
                 uint Mix(int s) => ((b >> s & 0xFF) * (256 - a) + (o >> s & 0xFF) * a) >> 8;
                 host._fb[row + x] = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
             }
@@ -2026,12 +2026,12 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     internal void DrawSlideWipe(int ox, int oy, FieldWipe wipe, int tick)
     {
-        int edge = (MosesW + wipe.Way) * tick / Math.Max(1, wipe.Ticks);
-        for (int y = 0; y < MosesH; y++)
-            for (int x = 0; x < MosesW; x++)
+        int edge = (MosesScene.MosesW + wipe.Way) * tick / Math.Max(1, wipe.Ticks);
+        for (int y = 0; y < MosesScene.MosesH; y++)
+            for (int x = 0; x < MosesScene.MosesW; x++)
             {
                 uint[] from = x < edge ? wipe.Over : wipe.Base ?? wipe.Over;
-                host.SetPixel(ox + x, oy + y, from[y * MosesW + x] | 0xFF000000);
+                host.SetPixel(ox + x, oy + y, from[y * MosesScene.MosesW + x] | 0xFF000000);
             }
     }
 
@@ -2042,14 +2042,14 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void DrawCombWipe(int ox, int oy, FieldWipe wipe, int tick)
     {
         int bands = Math.Max(1, wipe.Way);
-        int width = MosesW / bands;
-        for (int y = 0; y < MosesH; y++)
-            for (int x = 0; x < MosesW; x++)
+        int width = MosesScene.MosesW / bands;
+        for (int y = 0; y < MosesScene.MosesH; y++)
+            for (int x = 0; x < MosesScene.MosesW; x++)
             {
                 int band = Math.Min(bands - 1, x / width);
                 int shown = Math.Clamp(tick - band, 0, width);
                 uint[] from = x - band * width < shown ? wipe.Over : wipe.Base ?? wipe.Over;
-                host.SetPixel(ox + x, oy + y, from[y * MosesW + x] | 0xFF000000);
+                host.SetPixel(ox + x, oy + y, from[y * MosesScene.MosesW + x] | 0xFF000000);
             }
     }
 
@@ -2060,23 +2060,23 @@ internal sealed unsafe partial class BattleSceneWindow
     internal void DrawStreakWipe(int ox, int oy, FieldWipe wipe, int tick)
     {
         bool sideways = wipe.Way is 2 or 3;
-        int span = sideways ? MosesW : MosesH;
+        int span = sideways ? MosesScene.MosesW : MosesScene.MosesH;
         int pos = Math.Clamp(span * tick / Math.Max(1, wipe.Ticks), 0, span);
         if (pos <= 0) return;
 
-        for (int y = 0; y < MosesH; y++)
-            for (int x = 0; x < MosesW; x++)
+        for (int y = 0; y < MosesScene.MosesH; y++)
+            for (int x = 0; x < MosesScene.MosesW; x++)
             {
                 // 드러난 띠는 제자리 그대로, 나머지는 경계 줄을 그대로 되풀이한다.
                 int sx = x, sy = y;
                 switch (wipe.Way)
                 {
-                    case 0: sy = Math.Max(y, MosesH - pos); break;   // 아래에서 위로
+                    case 0: sy = Math.Max(y, MosesScene.MosesH - pos); break;   // 아래에서 위로
                     case 1: sy = Math.Min(y, pos - 1); break;        // 위에서 아래로
-                    case 2: sx = Math.Max(x, MosesW - pos); break;   // 오른쪽에서 왼쪽으로
+                    case 2: sx = Math.Max(x, MosesScene.MosesW - pos); break;   // 오른쪽에서 왼쪽으로
                     default: sx = Math.Min(x, pos - 1); break;       // 왼쪽에서 오른쪽으로
                 }
-                host.SetPixel(ox + x, oy + y, wipe.Over[sy * MosesW + sx] | 0xFF000000);
+                host.SetPixel(ox + x, oy + y, wipe.Over[sy * MosesScene.MosesW + sx] | 0xFF000000);
             }
     }
 
@@ -2103,7 +2103,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (FieldFadeLevel(tick, fade.CoverTicks, fade.UncoverTicks) < 63) return;
         _fieldFade = null;
         if (fade.Back) return;
-        var solid = new uint[MosesW * MosesH];
+        var solid = new uint[MosesScene.MosesW * MosesScene.MosesH];
         Array.Fill(solid, fade.Color);
         _fieldPicture = solid;
         _fieldPictureCover = _fieldFadeCover;
@@ -2119,8 +2119,8 @@ internal sealed unsafe partial class BattleSceneWindow
         if (power <= 0) return;
 
         uint color = fade.Color;
-        for (int y = oy; y < oy + MosesH; y++)
-            for (int x = ox; x < ox + MosesW; x++)
+        for (int y = oy; y < oy + MosesScene.MosesH; y++)
+            for (int x = ox; x < ox + MosesScene.MosesW; x++)
             {
                 uint c = host._fb[y * host.BoardWidth + x];
                 uint Ch(int shift)

@@ -24,7 +24,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>전투에 세울 인물들 — 군단이 붙은 대장 뒤에 부하를 끼워 넣는다.</summary>
     private UnitState[] BuildUnits(DemoScene scene)
     {
-        var legions = Legions();
+        var legions = Mos.Legions();
         var list = new List<UnitState>();
         _deployMovable.Clear();
         _deployBench.Clear();
@@ -36,7 +36,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // (LoadBtl 0x100634f9~0x10063503). 값 0·2 이상은 Btl 값 그대로(0x1006350c), 워드 7 이 꺼져 있으면 1 도 그대로(For[1] 「default」 = 부하 없음).
             // 전에는 편 4 면 워드 7·값과 상관없이 배속 군단으로 덮어써, 군단 금지 전투에도 부하가 나오고 이야기 전투의 편대(0292 마리아 → 5)가 바뀌었다(감사3 L4).
             var record = rosterRecord.Legion == 1 && scene.LegionsAllowed
-                ? rosterRecord with { Legion = _unitLegion.GetValueOrDefault(rosterRecord.ChrCode) } : rosterRecord;
+                ? rosterRecord with { Legion = Mos._unitLegion.GetValueOrDefault(rosterRecord.ChrCode) } : rosterRecord;
             // 군단 편집기가 리더를 바꿔 두었으면(legions/*.json 의 leader) 전투 자료의 적·동맹 대장을 그 인물로 세운다(ed-1).
             if (record.Side != 4 && record.Legion > 1 && legions.GetValueOrDefault(record.Legion) is { Leader: > 0 } withLeader)
                 record = record with { ChrCode = withLeader.Leader };
@@ -54,7 +54,7 @@ internal sealed unsafe partial class BattleSceneWindow
         {
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
-            var party = _members.Count > 0 ? _members.Where(_party.ContainsKey).ToList()
+            var party = Mos._members.Count > 0 ? Mos._members.Where(_party.ContainsKey).ToList()
                       : _party.Keys.Count > 0 ? _party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
             party = [.. party.Where(chr => !list.Any(u => u.ChrCode == chr))];
@@ -63,7 +63,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // (0x100673dd~0x10067717, 분석-전투 ba-6). 전에는 늘 군단 0 이라 모세스에서 배속해도 대부분의 전투에서 부하가 안 나왔다(감사3 L4).
             // 여기서는 기본값(켜짐)으로 만들고, 배치 창의 「군단사용」 단추가 끄면 배치종료 때 부하를 지운다(Deploy.cs). 부하는 파티원들 뒤에 붙인다 — 맵 밖 여분을 지울 때 DropUnits 가 번호를 다시 맞춘다.
             var placedFollowers = new List<UnitState>();
-            int LegionOf(int chr) => scene.LegionsAllowed ? _unitLegion.GetValueOrDefault(chr) : 0;
+            int LegionOf(int chr) => scene.LegionsAllowed ? Mos._unitLegion.GetValueOrDefault(chr) : 0;
             for (int i = 0; i < free.Count && i < party.Count; i++)
             {
                 var rec = new DemoUnit(party[i], free[i].Col, free[i].Row, 4, LegionOf(party[i]), free[i].Facing);
@@ -136,7 +136,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private void PlaceLegionAround(UnitState leader)
     {
         int li = Array.IndexOf(_units, leader);
-        if (li < 0 || Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return;
+        if (li < 0 || Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return;
         var cells = LegionData.FormationCells[Math.Clamp((int)legion.Formation, 0, 5)];
         var taken = new HashSet<(int, int)>(_units.Where(u => u.Alive && u.OnField && u.LeaderIndex != li).Select(u => (u.Col, u.Row)));
         foreach (var f in FollowersOf(li).OrderBy(f => f.FormationSlot))
@@ -615,7 +615,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (unit.LeaderIndex < 0 || (uint)unit.LeaderIndex >= _units.Length) return (0, 0, 0);
         var leader = _units[unit.LeaderIndex];
-        if (Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return (0, 0, 0);
+        if (Mos.Legions().GetValueOrDefault(leader.LegionId) is not { } legion) return (0, 0, 0);
         int power = leader.LegionPowerPercent;
         return (legion.LpBonus * power / 100, legion.PsyBonus * power / 100, legion.DepBonus * power / 100);
     }

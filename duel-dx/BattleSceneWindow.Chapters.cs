@@ -31,7 +31,7 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 if (!int.TryParse(Path.GetFileNameWithoutExtension(path), out int id)) continue;
                 if (ChapterFile.Parse(id, File.ReadAllBytes(path)) is not { } chp) continue;
-                list.Add((id, Text(chp.TitleText), chp));
+                list.Add((id, Mos.Text(chp.TitleText), chp));
             }
         // 제목 TXR 2284~2313 이 이야기 순서다. 그 밖(외전·시험용)은 뒤로.
         int Rank((int Id, string Title, ChapterFile Chp) c) => c.Chp.StoryRank;
@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (index < 0) { _chaptersOpen = false; return true; }
         _chaptersOpen = false;
         Play(66);
-        OpenMoses(Chapters()[index].Chp);
+        Mos.OpenMoses(Chapters()[index].Chp);
         return true;
     }
 

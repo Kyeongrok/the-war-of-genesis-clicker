@@ -72,7 +72,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_recordsOpen)
         {
-            var (ox, oy) = MosesOrigin();
+            var (ox, oy) = Mos.MosesOrigin();
             return (ox + 160, oy + 148);
         }
         return (_camX + (ViewWidth - SlotsW) / 2, _camY + (ViewHeight - SlotsH) / 2 + FrameTitleH / 2);

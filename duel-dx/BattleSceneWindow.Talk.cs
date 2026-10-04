@@ -147,7 +147,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private bool RunningFieldCode(int code)
     {
-        var events = Fld._field?.Events ?? (_mosesOpen ? _mosesChp?.Events : null);
+        var events = Fld._field?.Events ?? (Mos._mosesOpen ? Mos._mosesChp?.Events : null);
         return events != null && (uint)Fld._fieldEvent < (uint)events.Count && Fld._fieldPc > 0 && Fld._fieldPc <= events[Fld._fieldEvent].Actions.Count
                && events[Fld._fieldEvent].Actions[Fld._fieldPc - 1].Code == code;
     }
@@ -380,7 +380,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (_talk != null) return false;
         bool skipped = false;
-        bool fieldScene = (Fld._field != null || (_mosesOpen && _mosesChp != null)) && Fld._fieldEvent >= 0 && Fld._fieldChoices == null;
+        bool fieldScene = (Fld._field != null || (Mos._mosesOpen && Mos._mosesChp != null)) && Fld._fieldEvent >= 0 && Fld._fieldChoices == null;
         if (fieldScene)
         {
             if (Fld._fieldWaitUntil > _lastTime) { Fld._fieldWaitUntil = 0; skipped = true; }
@@ -629,9 +629,9 @@ internal sealed unsafe partial class BattleSceneWindow
         bool ready = w.AllRevealed && !TalkVoicePlaying(w);
         // 원본 대사창은 640×480 화면 기준이다 — 필드·모세스는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
         // 모세스 대화도 창 아래 끝이 아니라 모세스 틀 아래 끝에 맞춘다 — 창이 틀보다 길면 상자 아래가 틀 밖으로 잘렸다(사용자 보고: Chp 0049).
-        bool framed = FieldOpen || _mosesOpen;
-        var (sx, sy) = framed ? MosesOrigin() : (_camX, _camY);
-        int screenW = framed ? MosesW : ViewWidth, screenH = framed ? MosesH : ViewHeight;
+        bool framed = FieldOpen || Mos._mosesOpen;
+        var (sx, sy) = framed ? Mos.MosesOrigin() : (_camX, _camY);
+        int screenW = framed ? MosesScene.MosesW : ViewWidth, screenH = framed ? MosesScene.MosesH : ViewHeight;
         _faces.TryGetValue(TalkFaceCode(w), out var face);
 
         if (w.IsBand)
@@ -788,7 +788,7 @@ internal sealed unsafe partial class BattleSceneWindow
     private (int X, int Y)? TalkHead(TalkWindow w)
     {
         if (!FieldOpen || w.FieldSpeaker == 0 || Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
-        var (ox, oy) = MosesOrigin();
+        var (ox, oy) = Mos.MosesOrigin();
         return (ox + (int)who.X - Fld._fieldCam.X, oy + (int)who.Y - Fld._fieldCam.Y);
     }
 

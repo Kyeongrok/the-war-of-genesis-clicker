@@ -47,7 +47,7 @@ internal sealed unsafe partial class BattleSceneWindow
         if (chr <= 0) return;
         if (data != null) _party[chr] = data;
         else if (!_party.ContainsKey(chr) && _db?.Character(chr) is { } c) _party[chr] = c;
-        if (party == _partyNo) _members.Add(chr);
+        if (party == _partyNo) Mos._members.Add(chr);
         else BankFor(party).Members.Add(chr);
     }
 
@@ -59,7 +59,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         var data = _units.FirstOrDefault(u => u.ChrCode == chr && u.IsAlly)?.Data ?? _party.GetValueOrDefault(chr);
         if (data != null && chr > 0) _party[chr] = data;
-        if (party == _partyNo) _members.Remove(chr);
+        if (party == _partyNo) Mos._members.Remove(chr);
         else BankFor(party).Members.Remove(chr);
         return data;
     }
@@ -73,7 +73,7 @@ internal sealed unsafe partial class BattleSceneWindow
         foreach (var bank in _partyBank.Values)
         {
             foreach (var (chr, data) in bank.Party)
-                if (!_party.ContainsKey(chr) || (bank.Members.Contains(chr) && !_members.Contains(chr)))
+                if (!_party.ContainsKey(chr) || (bank.Members.Contains(chr) && !Mos._members.Contains(chr)))
                     _party[chr] = data;
             bank.Party.Clear();
         }
@@ -81,7 +81,7 @@ internal sealed unsafe partial class BattleSceneWindow
 
     private void AddMoney(int party, int amount)
     {
-        if (party == _partyNo) _shopMoney += amount;
+        if (party == _partyNo) Mos._shopMoney += amount;
         else BankFor(party).Money += amount;
     }
 
@@ -100,16 +100,16 @@ internal sealed unsafe partial class BattleSceneWindow
         PartyState src = from == _partyNo ? TakeCurrentAsState() : BankFor(from);
         foreach (int chr in src.Members) AddMember(into, chr);   // 인원 번호만 옮긴다 — 자료는 명부에 그대로 있다
         // 우편함도 옮긴다 — B 의 편지를 A 에 붙이고, B 에서 읽은 것은 A 에서도 읽음(0x1004dd60(id, 읽음), 분석-모세스 mo-mail).
-        var (box, read) = into == _partyNo ? (_mailbox, _mailRead) : (BankFor(into).Mailbox, BankFor(into).MailRead);
+        var (box, read) = into == _partyNo ? (Mos._mailbox, Mos._mailRead) : (BankFor(into).Mailbox, BankFor(into).MailRead);
         foreach (int mail in src.Mailbox)
         {
-            if (!box.Contains(mail) && box.Count < MailboxLimit) box.Add(mail);
+            if (!box.Contains(mail) && box.Count < MosesScene.MailboxLimit) box.Add(mail);
             if (src.MailRead.Contains(mail)) read.Add(mail);
         }
         AddMoney(into, src.Money);
         foreach (var (item, n) in src.Inventory) AddItem(into, item, n);
         foreach (int legion in src.Legions)
-            if (into == _partyNo) _ownedLegions.Add(legion); else BankFor(into).Legions.Add(legion);
+            if (into == _partyNo) Mos._ownedLegions.Add(legion); else BankFor(into).Legions.Add(legion);
         if (from == _partyNo) LoadState(new PartyState());
         else _partyBank.Remove(from);
     }
@@ -120,31 +120,31 @@ internal sealed unsafe partial class BattleSceneWindow
     /// </summary>
     private PartyState TakeCurrentAsState()
     {
-        var s = new PartyState { Money = _shopMoney };
+        var s = new PartyState { Money = Mos._shopMoney };
         foreach (int chr in _party.Keys.ToList())
             if (_units.FirstOrDefault(u => u.ChrCode == chr && u.IsAlly)?.Data is { } live) _party[chr] = live;
-        foreach (int m in _members) s.Members.Add(m);
-        foreach (int l in _ownedLegions) s.Legions.Add(l);
+        foreach (int m in Mos._members) s.Members.Add(m);
+        foreach (int l in Mos._ownedLegions) s.Legions.Add(l);
         foreach (var (item, n) in _inventory) s.Inventory[item] = n;
-        s.Mailbox.AddRange(_mailbox);
-        foreach (int id in _mailRead) s.MailRead.Add(id);
+        s.Mailbox.AddRange(Mos._mailbox);
+        foreach (int id in Mos._mailRead) s.MailRead.Add(id);
         return s;
     }
 
     /// <summary>은행의 파티를 지금 파티로 꺼낸다 — 명부(<c>_party</c>)는 건드리지 않는다(원본은 <c>[0x101b6894] = 파티</c> 만 바꾼다).</summary>
     private void LoadState(PartyState s)
     {
-        _members.Clear();
-        foreach (int m in s.Members) _members.Add(m);
-        _ownedLegions.Clear();
-        foreach (int l in s.Legions) _ownedLegions.Add(l);
+        Mos._members.Clear();
+        foreach (int m in s.Members) Mos._members.Add(m);
+        Mos._ownedLegions.Clear();
+        foreach (int l in s.Legions) Mos._ownedLegions.Add(l);
         _inventory.Clear();
         foreach (var (item, n) in s.Inventory) _inventory[item] = n;
-        _shopMoney = s.Money;
-        _mailbox.Clear();
-        _mailbox.AddRange(s.Mailbox);
-        _mailRead.Clear();
-        foreach (int id in s.MailRead) _mailRead.Add(id);
+        Mos._shopMoney = s.Money;
+        Mos._mailbox.Clear();
+        Mos._mailbox.AddRange(s.Mailbox);
+        Mos._mailRead.Clear();
+        foreach (int id in s.MailRead) Mos._mailRead.Add(id);
     }
 
     /// <summary>연대표에서 다른 파티의 에피소드로 갈 때 — 지금 파티를 은행에 넣고 그 파티를 꺼낸다(원본 <c>[0x101b6894] = 파티</c>).</summary>
