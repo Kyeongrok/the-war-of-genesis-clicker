@@ -141,7 +141,7 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>
     /// 배경 뒤 조각 그림(파일의 B 덩이, 감사5 D1) — 세계 자리 (X1,Y1) 에 W×H 네모로, 내용은 그림 한 장(<c>Px</c>, PicW×PicH)을 감아 두른다.
     /// </summary>
-    private readonly List<(int X1, int Y1, int W, int H, uint[] Px, int PicW, int PicH)> _fieldPieces = [];
+    private readonly List<(int X1, int Y1, int W, int H, uint[] Px, int PicW, int PicH, int Vx, int Vy)> _fieldPieces = [];
 
     /// <summary>407·408 로 숨긴 층 창(0~8) — 층 창 <c>+0x5c</c> 하나의 보이기다(<c>0x100ee690</c>/<c>0x100ee6d0</c>, 감사5 D16).</summary>
     private readonly bool[] _fieldLayerHidden = new bool[9];
@@ -423,7 +423,8 @@ internal sealed unsafe partial class BattleSceneWindow
             short W(int k) => BitConverter.ToInt16(bytes, at + 4 + 16 * i + 2 * k);
             int x1 = W(4), y1 = W(5), w = W(6) - x1, h = W(7) - y1;
             if (w <= 0 || h <= 0 || LoadFieldBgr(W(1)) is not { } pic) continue;   // Fld 0198·0207 의 조각 10 은 0×0
-            _fieldPieces.Add((x1, y1, w, h, pic.Px, pic.W, pic.H));
+            // 워드 2·3 = 틱당 흐름(0x100ed655 · 0x100eb324) — 함선 창밖 우주가 1px/틱 왼쪽으로 흐른다(22필드, ba-21 field Y2). 전에는 멈춰 있었다.
+            _fieldPieces.Add((x1, y1, w, h, pic.Px, pic.W, pic.H, W(2), W(3)));
         }
     }
 
@@ -1717,8 +1718,9 @@ internal sealed unsafe partial class BattleSceneWindow
         for (int i = _fieldPieces.Count - 1; i >= 0; i--)
         {
             var p = _fieldPieces[i];
-            int shiftX = bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0;
-            int shiftY = bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0;
+            int flow = (int)(_lastTime * TicksPerSecond);
+            int shiftX = (bg.W > MosesW ? (p.PicW - p.W) * cx / (bg.W - MosesW) : 0) - p.Vx * flow;
+            int shiftY = (bg.H > MosesH ? (p.PicH - p.H) * cy / (bg.H - MosesH) : 0) - p.Vy * flow;
             for (int y = 0; y < p.H; y++)
             {
                 int sy = p.Y1 + y - cy;
