@@ -99,4 +99,7 @@ internal sealed unsafe partial class GameWindow
 
     internal FlagStore? _flagSt;
     internal FlagStore FlagSt => _flagSt ?? LazyInitializer.EnsureInitialized(ref _flagSt, () => new FlagStore(this));
+
+    internal CharEditScreen? _charEditScr;
+    internal CharEditScreen CharEditScr => _charEditScr ?? LazyInitializer.EnsureInitialized(ref _charEditScr, () => new CharEditScreen(this));
 }
