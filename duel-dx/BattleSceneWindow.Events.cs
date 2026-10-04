@@ -923,7 +923,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 // 전에는 인자 1(연산자)을 값으로 더해서, 프레야 평원·던젼(Btl 0240·0239)의 「깃발 110 += 1」이 0 을 더해
                 // 북 평원(Btl 0238, 깃발 110 == 2)이 영영 안 열렸다(사용자 보고, Chp 0064). 필드판과 달리 두 번 더하는 흠은 없다.
                 if (A(0) > 0 && A(0) < _flags.Length)
-                    _flags[A(0)] = FieldArith(_flags[A(0)], A(1), A(2));
+                    _flags[A(0)] = FieldScene.FieldArith(_flags[A(0)], A(1), A(2));
                 break;
         }
     }

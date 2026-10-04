@@ -331,7 +331,7 @@ internal sealed unsafe partial class BattleSceneWindow
             // 초상화는 단추(64×130, 왼위 기준) 안 +(32,50) 을 가운데로 — 60×60 이니 왼위는 +(2,20). 전에는 30픽셀 왼쪽에 찍혀 틀과 어긋났다.
             if (PartyData(party[i]) is { } pc)
             {
-                LoadFieldFace(pc);      // 전투에 안 선 동료는 얼굴을 아직 안 읽었을 수 있다
+                Fld.LoadFieldFace(pc);      // 전투에 안 선 동료는 얼굴을 아직 안 읽었을 수 있다
                 if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
             }
         }

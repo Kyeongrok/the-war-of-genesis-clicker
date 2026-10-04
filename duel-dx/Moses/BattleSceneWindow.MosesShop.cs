@@ -126,7 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
             bool over = mx >= 70 * i + 48 && mx < 70 * i + 48 + 64 && my >= 330 && my < 460;
             DrawUi(302, over ? i + 9 : i + 4, tick, cx, cy, UiBlend.Alpha);
             if (PartyData(party[_shopCompareTop + i]) is not { } pc) continue;
-            LoadFieldFace(pc);
+            Fld.LoadFieldFace(pc);
             if (_faces.TryGetValue(pc.Code, out var face)) BlitScaled(face, cx + 2, cy + 20, 60, 60);
             if (item == null) continue;
             // 종류 0·1·8~17 = 무기(인물의 무기 종류와 같을 때만), 2 = 갑옷, 그 밖은 글 없음(표 0x10103758).

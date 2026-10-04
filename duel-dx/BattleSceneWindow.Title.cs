@@ -126,7 +126,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _unitLegion.Clear();
                 _placesUsed.Clear();
                 _autoPlacesDone.Clear();
-                _chapterFired.Clear();
+                Fld._chapterFired.Clear();
                 _mailbox.Clear();
                 _mailRead.Clear();
                 _planetVisits.Clear();
@@ -139,7 +139,7 @@ internal sealed unsafe partial class BattleSceneWindow
                 _playBase = -_realTime * 1000;
                 _mosesChp = null;
                 _navStart = null;
-                Array.Clear(_chapterVars);
+                Array.Clear(Fld._chapterVars);
                 if (Episodes().Count > 0) OpenEpisodes();
                 else { _titleOpen = false; if (!StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;

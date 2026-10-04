@@ -297,7 +297,7 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         if (_db?.Character(mail.Sender) is { } sender)
         {
-            LoadFieldFace(sender);
+            Fld.LoadFieldFace(sender);
             if (_faces.TryGetValue(sender.Code, out var face)) BlitScaled(face, x + 4, y + 8, 60, 60);
         }
         DrawText("이름", x + 73, y + 12, tag, 12);

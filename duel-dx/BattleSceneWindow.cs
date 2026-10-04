@@ -704,7 +704,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
                 UpdateAimHover(bx, by);
                 UpdateTitleHover(bx, by);
                 UpdateRecordsHover(bx, by);
-                UpdateFieldHover(bx, by);
+                Fld.UpdateFieldHover(bx, by);
                 if (msg == Win32.WM_RBUTTONDOWN) OnRightClick(bx, by);
                 else OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -717,7 +717,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
-        if (key == 'W' && FieldOpen && RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
+        if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !_mosesOpen && !FieldOpen && !_titleOpen && !_episodesOpen && !_recordsOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다(0x10061ad0·0x10061d91)
@@ -881,7 +881,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         _eventNextBattle = 0;
         if (won && next > 0 && StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
-        if (won && nextField > 0 && OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
+        if (won && nextField > 0 && Fld.OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄
         // 패배(결과 4·2)는 타이틀로 간다(0x10061d04) — 이어 하려면 세이브를 불러온다. 챕터 자료가 없는 데모 흐름만 모세스로.
         if (!won && Episodes().Count > 0) { TestRunTrace("dest title"); OpenTitle(); return; }   // 시험 전용 줄
         TestRunTrace($"dest moses (next {next} field {nextField})");   // 시험 전용 줄
@@ -915,7 +915,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         var (bx, by) = BoardPoint(clientX, clientY);
         if (OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
-        if (OnFieldClick(bx, by)) return;
+        if (Fld.OnFieldClick(bx, by)) return;
         if (OnRecordsClick(bx, by)) return;
         if (OnEpisodesClick(bx, by)) return;
         if (OnTitleClick(bx, by)) return;
@@ -1108,7 +1108,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             _openHooksPending = false;
             OpenTitleIfAsked();
             OpenMosesIfAsked();
-            OpenFieldIfAsked();
+            Fld.OpenFieldIfAsked();
             OpenLevelUpIfAsked();
             OpenSlotsIfAsked();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
@@ -1134,7 +1134,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             // 모세스 전직 화면의 STATUS 로 고친 어빌리티·장비를 파티 자료에 적는다 — 전에는 여기서 돌아가 버려 한 번도 안 적혔다(사용자 보고: 유진 LP증가).
             SyncVirtualStatus();
             // 모세스가 떠 있는 동안 챕터 스크립트(대사·고르기가 든 사건)를 필드와 같은 실행기로 돌린다(원본 챕터 장면도 같은 실행기).
-            if (_mosesOpen && !_chapterDone) { UpdateTalk(); UpdateField(); }
+            if (_mosesOpen && !_chapterDone) { UpdateTalk(); Fld.UpdateField(); }
             StepSceneFadeClock();               // 타이틀·연대표·기록 화면의 들고 나는 페이드
             return;
         }
@@ -1145,7 +1145,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
             UpdateSounds();
             SyncVirtualStatus();
             UpdateTalk();
-            UpdateField();
+            Fld.UpdateField();
             if (_afterFadeOut != null) StepSceneFadeClock();   // 필드에서 EXIT GAME 으로 나가는 페이드
             return;
         }
@@ -1290,7 +1290,7 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
         DrawMoses();
         double perfB = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
-        DrawField();
+        _fldScene?.DrawField();
         if (PerfLog) { _pBattle += perfA; _pMoses += perfB - perfA; _pField += _perf.Elapsed.TotalMilliseconds - perfB; }
         DrawRecords();
         DrawTitle();

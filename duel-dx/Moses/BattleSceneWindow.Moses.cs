@@ -279,7 +279,7 @@ internal sealed unsafe partial class BattleSceneWindow
         OpenMoses(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int chapterId) ? LoadChapterFile(chapterId) : null);
         // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
         if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_MOSESPAGE"), out int page)) return;
-        if (FieldOpen) LeaveField();
+        if (FieldOpen) Fld.LeaveField();
         switch (page)
         {
             case 7: OpenMosesStyle(); break;
@@ -365,13 +365,13 @@ internal sealed unsafe partial class BattleSceneWindow
             return;
         }
         LoadMosesChapter();
-        _fieldEvent = -1;                                    // 필드에서 돌던 실행기 자리를 비운다 — 챕터 스크립트가 처음부터 고른다
-        _fieldPc = 0;
-        _fieldReturn.Clear();
-        _fieldWaitUntil = 0;
-        _fieldChoices = null;
+        Fld._fieldEvent = -1;                                    // 필드에서 돌던 실행기 자리를 비운다 — 챕터 스크립트가 처음부터 고른다
+        Fld._fieldPc = 0;
+        Fld._fieldReturn.Clear();
+        Fld._fieldWaitUntil = 0;
+        Fld._fieldChoices = null;
         // 동료·돈·아이템·깃발은 챕터 스크립트가 준다(대사 든 사건은 실행기가). 스크립트가 곧장 전투·필드로 떠나면(Chp 0057 사건 1 의 10[110]) 여기서 끝.
-        if (_mosesChp is { } chp && RunChapterScript(chp)) return;
+        if (_mosesChp is { } chp && Fld.RunChapterScript(chp)) return;
         if (EnterAutoPlace()) return;                       // 저절로 일어나는 장소(프롤로그 따위)가 먼저다
         ShowMosesBackground(_mosesChp?.Background ?? 52);
         StopMusic();
@@ -396,7 +396,7 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!place.IsAuto || _autoPlacesDone.Contains((chp.Id, place.No))) continue;
             if (!FlagsAllow(place.Conditions)) continue;
             _autoPlacesDone.Add((chp.Id, place.No));
-            if (place.Value >= 10000 && place.Value < 20000 && OpenField(place.Value - 10000)) return true;
+            if (place.Value >= 10000 && place.Value < 20000 && Fld.OpenField(place.Value - 10000)) return true;
             if (place.Value > 0 && place.Value < 10000 && StartBattle(place.Value)) return true;
         }
         return false;
@@ -532,7 +532,7 @@ internal sealed unsafe partial class BattleSceneWindow
     {
         if (value >= 10000)
         {
-            if (OpenField(value - 10000)) { UsePlace(no); return; }
+            if (Fld.OpenField(value - 10000)) { UsePlace(no); return; }
             Toast($"필드 {value - 10000} 자료가 assets 에 없습니다");
             return;
         }
@@ -854,7 +854,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
         _uiClip = (ox, oy, MosesW, MosesH);
         DrawTalk();
-        DrawFieldChoices();
+        Fld.DrawFieldChoices();
         _uiClip = null;
         // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
         if (_mosesAltVoice)
@@ -864,7 +864,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int ty = tearY; ty <= tearY + 1; ty++)
                 Array.Copy(_fb, (oy + ty) * BoardWidth + ox + 10, _fb, (oy + ty) * BoardWidth + ox, MosesW - 10);
         }
-        ApplyScreenWave(ox, oy, tick);   // 409 물결 — 챕터 화면에서도(0x100f667b, Chp 0059, audit3 R3)
+        Fld.ApplyScreenWave(ox, oy, tick);   // 409 물결 — 챕터 화면에서도(0x100f667b, Chp 0059, audit3 R3)
         DrawSystem();
         DrawStatusScreen();   // 전직 페이지의 STATUS — 스테이터스 창도 모세스 위에 그린다
         if (_statusUnit >= 0) DrawConfirm();   // 스테이터스가 띄운 확인창(어빌리티 지우기)은 그 창 위에
