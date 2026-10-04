@@ -1058,16 +1058,17 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int x0 = Math.Max(0, _camX), x1 = Math.Min(BoardWidth, _camX + ViewWidth), width = BoardWidth;
         int y0 = Math.Max(0, _camY), y1 = Math.Min(BoardHeight, _camY + ViewHeight);
         if (x1 <= x0) return;
-        var lut = _mapTintLut;
-        for (int y = y0; y < y1; y++)
-        {
-            var line = _fb.AsSpan(y * width + x0, x1 - x0);
-            for (int i = 0; i < line.Length; i++)
+        fixed (uint* fb = _fb)
+        fixed (byte* lut = _mapTintLut)
+            for (int y = y0; y < y1; y++)
             {
-                uint c = line[i];
-                line[i] = 0xFF000000 | (uint)lut[(int)(c >> 16 & 0xFF)] << 16 | (uint)lut[(int)(c >> 8 & 0xFF)] << 8 | lut[(int)(c & 0xFF)];
+                uint* px = fb + y * width + x0, end = px + (x1 - x0);
+                for (; px < end; px++)
+                {
+                    uint c = *px;
+                    *px = 0xFF000000 | (uint)lut[c >> 16 & 0xFF] << 16 | (uint)lut[c >> 8 & 0xFF] << 8 | lut[c & 0xFF];
+                }
             }
-        }
     }
 
     internal void Compose()
