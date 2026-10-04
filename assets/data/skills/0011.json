@@ -29,7 +29,7 @@
     "power": 0,
     "accuracy": 100,
     "critical": 0,
-    "hpFactor": 150,
+    "hpFactor": 60,
     "exp": 100,
     "soul": 70,
     "soulSpend": 1,

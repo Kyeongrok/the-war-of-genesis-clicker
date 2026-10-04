@@ -1,6 +1,7 @@
 {
   "ability": 95,
   "name": "메테오",
+  "maxLevel": 10,
   "att": 5,
   "common": {
     "rangeShape": 1,
@@ -47,25 +48,15 @@
     "b61": 0
   },
   "levels": [
-    { "work": 469, "level": 1, "rangeMax": 5, "areaMax": 3, "power": 30 },
-    { "work": 744, "level": 2, "rangeMax": 5, "areaMax": 3, "power": 36 },
-    { "work": 743, "level": 3, "rangeMax": 5, "areaMax": 3, "power": 42 },
-    { "work": 742, "level": 4, "rangeMax": 6, "areaMax": 4, "power": 50 },
-    { "work": 741, "level": 5, "rangeMax": 6, "areaMax": 4, "power": 56 },
-    { "work": 740, "level": 6, "rangeMax": 6, "areaMax": 4, "power": 62 },
-    { "work": 739, "level": 7, "rangeMax": 7, "areaMax": 4, "power": 70 },
-    { "work": 738, "level": 8, "rangeMax": 7, "areaMax": 5, "power": 76 },
-    { "work": 737, "level": 9, "rangeMax": 7, "areaMax": 5, "power": 82 },
-    { "work": 736, "level": 10, "rangeMax": 7, "areaMax": 5, "power": 90 },
-    { "work": 783, "level": 11, "rangeMax": 7, "areaMax": 5, "power": 108 },
-    { "work": 782, "level": 12, "rangeMax": 7, "areaMax": 5, "power": 116 },
-    { "work": 781, "level": 13, "rangeMax": 7, "areaMax": 5, "power": 124 },
-    { "work": 780, "level": 14, "rangeMax": 7, "areaMax": 5, "power": 132 },
-    { "work": 779, "level": 15, "rangeMax": 7, "areaMax": 5, "power": 140 },
-    { "work": 778, "level": 16, "rangeMax": 7, "areaMax": 5, "power": 148 },
-    { "work": 777, "level": 17, "rangeMax": 7, "areaMax": 5, "power": 156 },
-    { "work": 776, "level": 18, "rangeMax": 7, "areaMax": 5, "power": 162 },
-    { "work": 775, "level": 19, "rangeMax": 7, "areaMax": 5, "power": 168 },
-    { "work": 774, "level": 20, "rangeMax": 7, "areaMax": 5, "power": 180 }
+    { "work": 469, "level": 1, "rangeMax": 5, "areaMax": 2, "power": 30 },
+    { "work": 744, "level": 2, "rangeMax": 5, "areaMax": 2, "power": 36 },
+    { "work": 743, "level": 3, "rangeMax": 5, "areaMax": 2, "power": 42 },
+    { "work": 742, "level": 4, "rangeMax": 6, "areaMax": 2, "power": 50 },
+    { "work": 741, "level": 5, "rangeMax": 6, "areaMax": 2, "power": 56 },
+    { "work": 740, "level": 6, "rangeMax": 6, "areaMax": 2, "power": 62 },
+    { "work": 739, "level": 7, "rangeMax": 7, "areaMax": 2, "power": 70 },
+    { "work": 738, "level": 8, "rangeMax": 7, "areaMax": 3, "power": 76 },
+    { "work": 737, "level": 9, "rangeMax": 7, "areaMax": 3, "power": 82 },
+    { "work": 736, "level": 10, "rangeMax": 7, "areaMax": 3, "power": 90 }
   ]
 }
