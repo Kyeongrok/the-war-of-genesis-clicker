@@ -202,6 +202,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             CheckOutcome();
             return;
         }
+        // DUELDX_WIN=2 면 승리 조건을 안 보고 곧장 이긴 것으로 나간다 — 이벤트로만 이기는 판(전멸이 승리가 아닌 판)에서 모세스 복귀를 시험할 때.
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "2" && host._battleLoaded && !host.Mos._mosesOpen)
+        {
+            _outcome = "승리";
+            LeaveFinishedBattleNow();
+            return;
+        }
         if (UpdateLevelUp()) return;   // 레벨업 창이 떠 있는 동안은 차례가 멈춘다
 
         if (_routine != null)
