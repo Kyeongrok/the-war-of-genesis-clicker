@@ -184,6 +184,31 @@ internal sealed unsafe partial class BattleScene
         });
     }
 
+    /// <summary>
+    /// 격려의 윤곽 알갱이 — Start 에 (X, Y)에 떠서 Hold 틱 뒤부터 80틱 동안 (Cx, Cy)로 나선을 그리며 모인다(반지름 곧게 0 으로, 틱당 0.03π).
+    /// 자리는 화면 픽셀, 나선은 월드에서 원(화면 y × 0.8).
+    /// </summary>
+    internal readonly List<(int Obs, int Motion, double Start, int Hold, int X, int Y, int Cx, int Cy)> _cheer = [];
+
+    internal void DrawCheer()
+    {
+        _cheer.RemoveAll(p =>
+        {
+            if (host._lastTime < p.Start) return false;
+            int tick = (int)((host._lastTime - p.Start) * TicksPerSecond), k = tick - p.Hold;
+            if (k >= 80 || host.UiFor(p.Obs) == null) return true;
+            double x = p.X, y = p.Y;
+            if (k > 0)
+            {
+                double dx = p.X - p.Cx, dy = (p.Y - p.Cy) / 0.8, far = Math.Sqrt(dx * dx + dy * dy) * (1 - k / 80.0), angle = Math.Atan2(dy, dx) + 0.03 * Math.PI * k;
+                (x, y) = (p.Cx + far * Math.Cos(angle), p.Cy + far * Math.Sin(angle) * 0.8);
+            }
+            int key = host.UiFor(p.Obs)?.BlendAt(p.Motion, tick) ?? 0;
+            host.DrawUi(p.Obs, p.Motion, tick, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key));
+            return false;
+        });
+    }
+
     /// <summary>틱마다 자리·모션이 미리 정해진 그림 하나(라이트닝 샤벨의 칼) — 틀을 다 쓰면 사라진다.</summary>
     internal readonly List<(int Obs, double Start, (int X, int Y, int Motion, bool Mirror)[] Frames)> _scripted = [];
 
@@ -254,6 +279,7 @@ internal sealed unsafe partial class BattleScene
         DrawChasers();
         DrawScripted();
         DrawPieces();
+        DrawCheer();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;

@@ -497,6 +497,7 @@ internal sealed unsafe partial class BattleScene
         bool ownSounds = !host._abilitySounds.ContainsKey(w.AbilityId);
         var (userX, userY) = host.Btl.UnitFoot(user);
         int targetX = col * TileW + TileW / 2, targetY = host.CellCenterY(col, row);
+        int cheerDelay = 0;      // 격려 — 윤곽 알갱이가 다 뜬 뒤에야 떠오르는 알갱이가 나온다
         foreach (var e in m.Effects)
         {
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
@@ -562,7 +563,7 @@ internal sealed unsafe partial class BattleScene
                         int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
                         int px = x + (swarm.XWidth > 0 ? _fxRandom.Next(swarm.XWidth) - swarm.XWidth / 2 : 0);
                         int py = y - e.Lift + (swarm.YWidth > 0 ? (int)((_fxRandom.Next(swarm.YWidth) - swarm.YWidth / 2) * 0.8) : 0);
-                        double at = start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep) / TicksPerSecond;
+                        double at = start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep + cheerDelay) / TicksPerSecond;
                         _shots.Add((e.Obs, e.Motion, at, px, py, px, py - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
                     }
                     continue;
@@ -610,6 +611,28 @@ internal sealed unsafe partial class BattleScene
                     // 칼은 앞머리(위로 솟는 211:1 — 빠르기 100 뒤 40, 약 14틱)가 끝난 뒤에 선다.
                     if (pierced.Count > 0) { SpawnSabreBlade(start + 14 / TicksPerSecond, userX, userY, pierced, piercedUnits); continue; }
                 }
+                // 격려 670:1(0x10091670): 시전자 지금 컷의 <b>윤곽</b> 점마다 알갱이 하나(0x1000cbb0 — 가로·세로 줄의 가장자리만, 보통 200~300개).
+                // 알갱이 i 는 i/4 틱에 윤곽 위에 뜨고(위에서 아래로, 틱당 넷), (개수/4 + i/4) 틱까지 제자리에 있다가 80틱 동안 대상 쪽으로 나선을 그리며
+                // 모인다(반지름 = 거리 → 0, 각속도 0.03π — 0x100c59d0). 효과는 마지막 알갱이가 닿을 때 든다. 떠오르는 478:3 은 개수/4 + 70 틱 늦게.
+                if (extra is { Move: 9 } && e.Obs == 670 && e.Motion == 1 && host._sprites.TryGetValue(user.ChrCode, out var cheerSprite)
+                    && cheerSprite.FrameFor(user) is { } cheerFrame)
+                {
+                    var outline = new List<(int X, int Y)>();
+                    bool Solid(int px, int py) => (uint)px < cheerFrame.W && (uint)py < cheerFrame.H && (cheerFrame.Px[py * cheerFrame.W + px] & 0xFF000000) != 0;
+                    for (int py = 0; py < cheerFrame.H; py++)
+                        for (int px = 0; px < cheerFrame.W; px++)
+                            if (Solid(px, py) && (!Solid(px - 1, py) || !Solid(px + 1, py) || !Solid(px, py - 1) || !Solid(px, py + 1)))
+                                outline.Add((cheerFrame.X + px, cheerFrame.Y + py));
+                    int count = outline.Count, hold = count >> 2;
+                    for (int i = 0; i < count; i++)
+                        _cheer.Add((e.Obs, e.Motion, start + (i >> 2) / TicksPerSecond, hold, userX + outline[i].X, userY + outline[i].Y,
+                                    targetX, targetY + outline[count - 1 - i].Y));
+                    cheerDelay = hold + 70;
+                    double last = start + ((count >> 2) + hold + 80) / TicksPerSecond;
+                    _fxLatestStart = Math.Max(_fxLatestStart, start + hold / TicksPerSecond);
+                    foreach (int ti in _fxTargets ?? WorkTargets(w, user, col, row)) _fxHitAt[host._units[ti]] = last;
+                    continue;
+                }
                 // 리인카네이션 279:4(0x100c4810 → 틱 0x100380f0): 안 보이는 앞잡이가 시전자 둘레 아홉 점을 틱당 3 으로 돌고, 이 그림이 틱당 2 로 그 뒤를 쫓는다.
                 if (extra is { Move: 9 } && !e.Fly && e.Obs == 279 && e.Motion == 4)
                 {
@@ -645,6 +668,8 @@ internal sealed unsafe partial class BattleScene
                     for (int k = 0; k < 4; k++)
                         _shots.Add((211, 4 * pose + 8 + k, dashAt + (recoilTicks + 2 * k) / TicksPerSecond, backX, backY, endX, endY, 40, 1.1, 1, 0, 100, flip));
                     _fxLatestStart = Math.Max(_fxLatestStart, dashAt + recoilTicks / TicksPerSecond);
+                    // 판정은 빛덩이가 쏜 뒤 39틱(핸들러 0x1009fa00 단계 1 — 빛덩이가 죽으면 +0x96 = 1, 40 이 되면 범위 안 모두에게 0x3e9). 내달림이 어디 있든 같다.
+                    foreach (int ti in _fxTargets ?? WorkTargets(w, user, col, row)) _fxHitAt[host._units[ti]] = dashAt + 39 / TicksPerSecond;
                     continue;
                 }
                 // 소울 블레스트 793:4(0x100d1970 → 틱 0x100d19e0): 시전자 → 겨눈 칸을 틱당 10 으로 곧게 가는 머리가 틱마다 그림을 남긴다 —
