@@ -757,11 +757,12 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         string aim = w.SelfCentred || w.RangeShape == 0 || selfOnly ? "자기 자리에서"
                    : rMin == 0 ? $"사거리 {rMax}칸 안{(canSelf ? "(자기 포함)" : "")}"
                    : rMin == rMax ? $"사거리 {rMax}칸" : $"사거리 {rMin}~{rMax}칸";
+        // 가운데를 빼면 마름모 칸 수도 하나 적다(전에는 41칸이라 적고 「가운데 빼고」라 했다).
         string centre = w.AreaMin > 0 ? ", 가운데 빼고" : "";
         string shape = w.AreaShape switch
         {
             0 => "한 명",
-            1 => n == 0 ? "한 명" : $"둘레 {n}칸 마름모({2 * n * (n + 1) + (w.AreaMin > 0 ? 0 : 1)}칸{centre})"   // 가운데를 빼면 칸 수도 하나 적다(전에는 41칸이라 적고 「가운데 빼고」라 했다),
+            1 => n == 0 ? "한 명" : $"둘레 {n}칸 마름모({2 * n * (n + 1) + (w.AreaMin > 0 ? 0 : 1)}칸{centre})",
             2 => $"십자 {n}칸",
             3 => $"앞 부채꼴 {n}칸",
             4 => "화면 안 전체",
