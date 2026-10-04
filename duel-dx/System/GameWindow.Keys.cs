@@ -192,6 +192,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuClearEnemies, "적 정리(&K)");
+        Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
         _replayMenu = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
@@ -251,7 +252,7 @@ internal sealed unsafe partial class GameWindow
     internal const int MenuSkipEnemy = 1109;
 
     /// <summary>개발 > 편집기 열기 — 설치판에는 편집기가 없다. 처음 누르면 받아서 연다(<see cref="EditorLauncher"/>).</summary>
-    internal const int MenuEditor = 1110;
+    internal const int MenuEditor = 1161;
 
     /// <summary>AI 행동 도중의 클릭 — 건너뛰기를 건다. 걸었으면 true.</summary>
     internal bool TrySkipEnemyAction()
@@ -318,6 +319,7 @@ internal sealed unsafe partial class GameWindow
         {
             case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
             case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
+            case CharEditScreen.MenuCharEdit: CharEditScr._open = !CharEditScr._open; break;
             case >= MenuReplayBase and < MenuReplayBase + 500:
                 ReopenPlace(id - MenuReplayBase);
                 break;
