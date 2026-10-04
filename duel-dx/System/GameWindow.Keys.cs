@@ -149,16 +149,10 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
         Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
         Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGrid, "격자 켜기·끄기(&G)");
-        Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGauges, "체력바 켜기·끄기(&H)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowHints ? Win32.MF_CHECKED : 0u), MenuHints, "조작 안내 글 보이기(&T)");
-        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowLevelUp ? Win32.MF_CHECKED : 0u), MenuLevelUpWindow, "레벨업 창 보이기(&L)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.KeepExpOnJobChange ? Win32.MF_CHECKED : 0u), MenuKeepJobExp, "전직할 때 EXP 유지(&E)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowStatusBar ? Win32.MF_CHECKED : 0u), MenuStatusBar, "상단 상태 줄 보이기(&B)");
-        IntPtr pause = Win32.CreatePopupMenu();
-        for (int i = 0; i < TalkPauseChoices.Length; i++)
-            Win32.AppendMenuW(pause, Win32.MF_STRING | (TalkPauseIndex(UserSettings.Current.TalkPauseSeconds) == i ? Win32.MF_CHECKED : 0u), (nuint)(MenuTalkPauseBase + i),
-                              TalkPauseLabel(TalkPauseChoices[i]));
-        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)pause, "대사 사이 멈춤(&W)");
+        // 「대사 사이 멈춤」과 「체력바 켜기·끄기」는 모드 창으로 옮겼다(스토리 탭 · 일반 탭, 사용자 요청).
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.TalkFillFirst ? Win32.MF_CHECKED : 0u), MenuTalkClickFills, "대사 첫 클릭은 글 채우기(&F)");
         Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
         BattleScene.AppendDifficultyMenu(settings);

@@ -30,12 +30,12 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 424, TuningBoxX = 300, TuningBoxY = 202, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 400, TuningBoxX = 300, TuningBoxY = 142, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 스토리(대사 진행). 제목줄 바로 아래 한 줄(사용자 요청).</summary>
-    internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, 1) : 0;
+    internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, 2) : 0;
     internal const int TabY = 30, TabH = 24, TabW = 96;
-    internal static readonly string[] TabNames = ["일반", "스토리"];
+    internal static readonly string[] TabNames = ["일반", "스토리", "편의성"];
 
     /// <summary>스토리 탭 — 「대사 사이 멈춤」 고르기 단추들의 자리(창 기준).</summary>
     internal const int PauseY = 100, PauseW = 90, PauseH = 26, PauseGap = 4, StoryCheckY = 150;
@@ -43,12 +43,17 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>체크 줄 넷 — 창 위에서부터 y 70 · 102 · 134 · 166(탭 줄 아래). 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
     internal const int TuningCheckY = 70, TuningCheckH = 32;
 
-    internal (string Label, string Note, int Command, bool On)[] TuningChecks() =>
+    /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == 2 ?
+    [
+        ("체력바 보이기", "유닛 머리 위의 HP·TP 막대", MenuGauges, host._showGauges),
+        ("레벨업 창 보이기", "레벨이 오를 때 능력치 창을 띄운다", MenuLevelUpWindow, host.Btl._showLevelUp),
+        ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
+        ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
+    ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
-        ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, host._fullSoulAtStart),
-        ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
     ];
 
     internal static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };
@@ -84,6 +89,15 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 if (bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
             }
             if (bx >= x + 12 && bx < x + TuningW - 12 && by >= y + StoryCheckY && by < y + StoryCheckY + TuningCheckH) host.OnMenuCommand(MenuTalkClickFills);
+            return true;
+        }
+        if (_tuningTab == 2)
+        {
+            // 편의성 탭 — 체크 줄뿐이다.
+            _tuningListOpen = false;
+            var rows = TuningChecks();
+            int at = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
+            if (at >= 0 && at < rows.Length && bx >= x + 12 && bx < x + TuningW - 12) host.OnMenuCommand(rows[at].Command);
             return true;
         }
         if (_tuningListOpen)
@@ -126,7 +140,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             bool on = t == _tuningTab;
             host.FillRect(tx, y + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
             host.StrokeRect(tx, y + TabY, TabW, TabH, StatusScreen.BoxLine);
-            host.DrawText(TabNames[t], tx + (t == 0 ? 34 : 28), y + TabY + 4, on ? 0xFF00FFFF : White);
+            host.DrawText(TabNames[t], tx + (TabW - host.GetText(TabNames[t], White).W) / 2, y + TabY + 4, on ? 0xFF00FFFF : White);
         }
         host.FillRect(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
         if (_tuningTab == 1) { DrawStoryTab(x, y); DrawTuningFoot(x, y); return; }
@@ -143,6 +157,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.DrawText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
         }
 
+        if (_tuningTab == 2) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         host.DrawText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
         host.FillRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
@@ -205,7 +220,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         if (host._talkClickFills) host.DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
         host.DrawText("대사 첫 클릭은 글 채우기", x + 44, cy + 6, White);
         host.DrawText("끄면 원본처럼 첫 클릭에 바로 넘어간다", x + TuningBoxX, cy + 7, DimGray, 12);
-        host.DrawText("설정 메뉴의 같은 항목과 이어져 있다.", x + 16, cy + 48, DimGray, 12);
+        host.DrawText("「대사 첫 클릭은 글 채우기」는 설정 메뉴에도 있다(같은 값).", x + 16, cy + 48, DimGray, 12);
     }
 
     internal bool MouseInBoard(int x, int y, int w, int h) => host._mouse.X >= x && host._mouse.X < x + w && host._mouse.Y >= y && host._mouse.Y < y + h;
