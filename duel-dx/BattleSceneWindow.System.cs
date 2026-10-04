@@ -925,7 +925,29 @@ internal sealed unsafe partial class BattleSceneWindow
         }
         // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
         if (SavedChapter(state) is > 0 and var chapterId && LoadChapterFile(chapterId) is { } savedChp) _mosesChp = savedChp;
-        if ((!_battleLoaded || battle != _scene.Id || fromMoses) && !StartBattle(battle, rememberParty: false)) return false;
+        if (!_battleLoaded || battle != _scene.Id || fromMoses)
+        {
+            // 판을 새로 세울 때 맵 밖 여분(벤치)을 바로 지우지 않는다 — 저장할 때 벤치에서 꺼내 세운 인물이 사라지고, 뺀 인물이 새 몸으로 서고,
+            // 「군단사용」을 끈 대장의 부하가 되살아났다(ba-21 outer-rules 2.1). 세이브에 적힌 인물만 남기고 나머지 배치 인물을 뺀다.
+            bool byRecord = !state.InMoses && state.Units.Length > 0;
+            _keepBenchForLoad = byRecord;
+            bool started;
+            try { started = StartBattle(battle, rememberParty: false); }
+            finally { _keepBenchForLoad = false; }
+            if (!started) return false;
+            if (byRecord)
+            {
+                var saved = state.Units.GroupBy(r => r.ChrCode).ToDictionary(g => g.Key, g => g.Count());
+                var keep = new HashSet<UnitState>();
+                foreach (var u in _units)                      // 같은 Chr 는 세이브에 적힌 수만큼만 남긴다
+                    if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
+                var movable = _deployMovable.ToHashSet();
+                // 배치로 세운 사람과 그 부하 가운데 세이브에 없는 것만 지운다 — Btl 에 박힌 유닛은 건드리지 않는다(부하는 DropUnits 가 대장을 따라 뺀다).
+                DropUnits(u => !keep.Contains(u) && movable.Contains(u));
+                DropUnits(u => !keep.Contains(u) && u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length && movable.Contains(_units[u.LeaderIndex]));
+                _deployBench.Clear();
+            }
+        }
         // 인물 수가 달라도(부대가 생기는 등 판이 바뀌었을 수 있다) 같은 Chr 끼리 짝지어 되살린다.
 
         _routine = null;
