@@ -267,6 +267,77 @@ internal sealed unsafe partial class BattleScene
     /// 30 × 0.65(바닥 5)로 120 을 지나친다. 마지막에는 칼이 사라지고 211:10 이 29틱에 시전자 위(높이 200)로 돌아간다 + 384:4.
     /// 자리는 월드 단위로 세고 화면에는 y × 0.8 − z × 0.6. 칼에 붙는 384 는 생긴 자리에 세운다(원본은 칼을 따라간다). 판정 때는 안 바꿨다.
     /// </summary>
+    /// <summary>
+    /// 뿌리개(ba-21 fx F3, 표 <see cref="WorkFxSpray"/>) — 안 보이는 개체가 조각을 만든다. 전에는 16개까지를 ±20·±10 px 에 한 틱씩 어긋나게 세웠다(가설).
+    /// 2: 가운데에서 상자(±RangeX·Y·Z) 안 아무 데로 · 5: 그 반대(상자에서 가운데로) · 3: 조각 i 가 각 2i/개수 π 로 반지름 10 → RangeX ·
+    /// 6: 아무 각·반지름에서 가운데로(조각마다 0~29틱 늦게) · 8: 36개가 방향 모션으로 퍼짐 · 4: 기둥(P0+1 틱마다 높이 60 씩 위에 하나) ·
+    /// 1: 떠오르는 나선(반지름 RangeX, 틱당 P0/1000 점 · 높이 P1/1000)을 타며 틱마다 그림을 남김(따라 뜨는 알갱이 셋은 안 넣음, 시작 각은 가설).
+    /// 7 은 길을 못 읽어 전처럼 둔다. 조각 탄의 P0 = 빠르기, P1 = 틱마다 바뀜(양수 × P1/1000, 음수 + |P1|/1000). 수명 = 모션 길이 − 1.
+    /// </summary>
+    internal bool SpawnSpray(WorkData w, AbilityEffect e, double start, int x, int y)
+    {
+        if (!WorkFxSpray.Table.TryGetValue(w.Id, out var rows)) return false;
+        bool any = false;
+        foreach (var r in rows)
+        {
+            if (r.Obs != e.Obs || r.Delay != e.Delay || (r.Kind != 8 && r.Motion != e.Motion) || r.Kind == 7) continue;
+            double scale = r.P1 > 0 ? r.P1 / 1000.0 : -r.P1 / 1000.0;
+            int mode = r.P1 > 0 ? 1 : 0;
+            double at = start + 1 / TicksPerSecond;
+            void Shot(int motion, double fromX, double fromY, double toX, double toY, double when, bool mirror) =>
+                _pieces.Add((e.Obs, motion, when, fromX, fromY, toX, toY, Math.Max(1, r.P0), scale, mode, Math.Max(1, host.EffectTicks(e.Obs, motion) - 1), mirror));
+            int Spread(int range) => range > 0 ? _fxRandom.Next(2 * range) - range : 0;
+            switch (r.Kind)
+            {
+                case 2 or 5:
+                    for (int n = 0; n < r.Count; n++)
+                    {
+                        double px = x + Spread(r.RangeX), py = y + Spread(r.RangeY) * 0.8 - Spread(r.RangeZ) * 0.6;
+                        if (r.Kind == 2) Shot(e.Motion, x, y, px, py, at, false); else Shot(e.Motion, px, py, x, y, at, false);
+                    }
+                    break;
+                case 3:
+                    for (int n = 0; n < r.Count; n++)
+                    {
+                        double a = n * 2.0 / r.Count * Math.PI;
+                        Shot(e.Motion, x + 10 * Math.Cos(a), y + 10 * Math.Sin(a) * 0.8, x + r.RangeX * Math.Cos(a), y + r.RangeX * Math.Sin(a) * 0.8, at, false);
+                    }
+                    break;
+                case 6:
+                    for (int n = 0; n < r.Count; n++)
+                    {
+                        double a = _fxRandom.Next(400) * 0.005 * Math.PI, far = _fxRandom.Next(Math.Max(1, r.RangeX));
+                        Shot(e.Motion, x + far * Math.Cos(a), y + far * Math.Sin(a) * 0.8, x, y, start + _fxRandom.Next(30) / TicksPerSecond, false);
+                    }
+                    break;
+                case 8:
+                    for (int n = 0; n < 36; n++)
+                    {
+                        double a = (n - 9) / 18.0 * Math.PI;
+                        Shot(n <= 17 ? n : 36 - n, x + 10 * Math.Cos(a), y + 10 * Math.Sin(a) * 0.8, x + r.RangeX * Math.Cos(a), y + r.RangeX * Math.Sin(a) * 0.8, at, n < 18);
+                    }
+                    break;
+                case 4:
+                    for (int n = 0; n < r.Count; n++)
+                        _effects.Add((e.Obs, e.Motion, start + n * (r.P0 + 1) / TicksPerSecond, x, y - (int)(r.RangeZ * n * 0.6)));
+                    break;
+                case 1:
+                {
+                    int ticks = Math.Min(e.Life > 0 ? e.Life : r.Life, 150);
+                    var points = new (int X, int Y)[Math.Max(1, ticks)];
+                    double turn = r.P0 / 1000.0 / Math.Max(1, r.RangeX);
+                    for (int t = 0; t < points.Length; t++)
+                        points[t] = ((int)(x + r.RangeX * Math.Cos(turn * t)), (int)(y + r.RangeX * Math.Sin(turn * t) * 0.8 - r.P1 / 1000.0 * t * 0.6));
+                    _ringTrails.Add((e.Obs, e.Motion, start, points, false));
+                    break;
+                }
+                default: continue;
+            }
+            any = true;
+        }
+        return any;
+    }
+
     /// <summary>이펙트가 대상에 닿는 때(게임 초) — 있으면 그 대상의 판정은 그때 든다(라이트닝 샤벨: 칼이 그 칸에 닿을 때, 0x100704f0 → 0x3e9).</summary>
     internal readonly Dictionary<UnitState, double> _fxHitAt = [];
 
@@ -581,6 +652,7 @@ internal sealed unsafe partial class BattleScene
                     }
                 else if (e.Fly)
                     _flyingEffects.Add((e.Obs, e.Motion, start, userX, userY - e.Lift, targetX, targetY - e.Lift, 0));
+                else if (SpawnSpray(w, e, start, x, y - e.Lift)) { }
                 else
                     for (int k = 0; k < Math.Max(1, e.Count); k++)
                     {

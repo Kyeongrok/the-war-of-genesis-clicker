@@ -52,6 +52,19 @@
   StartZ     생성자 z 의 치우침. 실행기가 못 읽으면 `mov r16, [유닛+0x42]; add r16, N; push` 를 읽는다(`static_z`), z 가 `rand % N + C` 면 가운데 값.
   못 읽은 것이 하나라도 있으면 Sure = false. 고리 밖(Count 1)이고 값이 모두 0 인 줄, 고리 횟수를 못 읽은 줄은 안 싣는다.
 
+뿌리개 표 `duel-dx/Ability/WorkFxSpray.g.cs`(`--spray`) — 그림 없는 바탕(`0x100c1ef0`) 위의 뿌리개 8종. 설정 호출의 인자(16개까지 적어 둔다)를 읽는다(`spray_of`).
+생성자 ~ 설정 사이에 `fstp [esp…]` 가 있으면(실행기가 못 읽는 double) Sure = false. 줄은 이펙트 표의 (Obs, 모션, Delay) 로 맞춘다 — 모션이 방향 번호인 8번은 Obs 로만.
+  1 `0x100cb8a0` + `0x100cb980(Obs, 모션, 가운데 xy, 반지름, 처음 자리 double, 빠르기 double, dz double, 틱, 배율 double, 방식, 방향)` — 뿌리개가 돌며 오르는 이동기
+    (`0x10038940`, 리미트 크래쉬와 같은 것)를 타고, 틱(`0x100cba00`)마다 제자리에 (Obs, 모션) 한 장 + 떠오름 낱알 셋(둘째 Obs·모션 = +0x130/+0x132, 처음 높이까지 내려감).
+  2 `0x100cc600` + `0x100cc680(Obs, 모션, 개수, x, y, z, rx, ry, rz, 빠르기, 배율 double, 방식)` — 한꺼번에: 가운데에서 상자 ±(rx, ry, rz) 안의 무작위 점으로 직선탄.
+  3 `0x100cc810` + `0x100cc890(Obs, 모션, 개수, x, y, z, R, 빠르기, 배율 double, 방식)` — 한꺼번에: i 번째가 각 i × 2/개수(π)로 반지름 10 → R 직선탄.
+  4 `0x100cd490` + `0x100cd510(Obs, 모션, 개수, 간격)` — 틱(`0x100cd560`): (간격 + 1)틱마다 한 장, n 번째는 z + 60n. 개수만큼 내면 끝.
+  5 `0x100cc200` + `0x100cc280(…2 와 같음…)` — 한꺼번에: 상자 ±(rx, ry, rz) 의 무작위 점에서 가운데로 직선탄(2 의 거꾸로).
+  6 `0x100cc3f0` + `0x100cc470(Obs, 모션, 개수, x, y, z, R, 빠르기, 배율 double, 방식)` — 각 rand % 400 × 0.005(π) · 반지름 rand % R 의 점에서 가운데로, 지연 rand % 30.
+  7 `0x100cbd20` + `0x100cbe00(Obs, 모션, …13개 → 이동기 0x10038650)` — 틱(`0x100cbee0`)은 1 과 같다(낱알이 땅 높이까지). 이동기 길은 못 읽었다 → Sure = false.
+  8 `0x100ccee0` + `0x100ccf60(Obs, x, y, z, R, 빠르기, 배율 double, 방식)` — 늘 36장: i 번째가 각 (i − 9)/18(π)로 반지름 10 → R, 모션 = 방향 번호(18부터는 뒤집음).
+  2·3·5·8 의 낱알은 지연 −1 로 만들어져 뿌리개 나이 1 에 한꺼번에 풀린다(`0x100cc7d0` → `0x100c24f0(0)`), 수명 = 모션 길이 − 1, 닿으면 사라진다.
+
 같은 열쇠의 Row 가 여럿이면 그 표 줄이 원본에서는 그 수만큼(자리·뒤집기가 다르게) 따로 뜬다는 뜻이다(브레인 브레이크 337:0 ×2).
 전용 연출 work(`work_fx_timing.keep`)은 뺀다. 근거: 옵시디안 분석/원본차이/ba21-fx-playback.md 「덧정보 표 생성 기록」
 """
@@ -135,7 +148,7 @@ class XEmu(emu.Emu):
             tgt, this, sp = ops[0].imm, s.reg['ecx'], s.reg['esp']
             if isinstance(this, str) and this.startswith('fx#'):
                 a = []
-                for k in range(10):
+                for k in range(16):
                     v = s.mem.get(sp[1] + 4 * k)
                     if isinstance(v, str) and v.startswith('fx#'):
                         f = ctx['fxs'][int(v[3:])]
@@ -532,6 +545,65 @@ def swarm_read(site, ev, cva, a, move):
     return (count, xw, yw, dr, ds, ang, w2, w2m, dz0, dzk, dzm, z, sure)
 
 
+SPRAY_KIND = {0x100cb980: 1, 0x100cc680: 2, 0x100cc890: 3, 0x100cd510: 4, 0x100cc280: 5, 0x100cc470: 6, 0x100cbe00: 7, 0x100ccf60: 8}
+
+
+def spray_of(site, ev):
+    """뿌리개 값 (Kind, Count, PerTick, RangeX, RangeY, RangeZ, Life, P0, P1, Sure) 또는 None."""
+    call = next(((t, cva, a) for t, cva, a in ev.get('calls', []) if t in SPRAY_KIND), None)
+    if call is None:
+        return None
+    t, cva, a = call
+    kind = SPRAY_KIND[t]
+    loops, fstart = site
+    seq = loops.insns(fstart)
+    at = {i.address: n for n, i in enumerate(seq)}
+    sure = ev['va'] in at and cva in at
+    if sure:
+        sure = not any(i.mnemonic == 'fstp' and i.operands[0].type == X86_OP_MEM and i.reg_name(i.operands[0].mem.base) == 'esp'
+                       for i in seq[at[ev['va']] + 1:at[cva]])
+    bad = []
+
+    def num(v, hi=5000):
+        if isinstance(v, int) and abs(s32(v)) <= hi:
+            return s32(v)
+        bad.append(1)
+        return 0
+
+    def rate(lo, hi_, mode):
+        """배율 — 곱하기면 × 1000, 더하기면 −(× 1000) (0 = 등속)."""
+        k = dbl(lo, hi_)
+        if k is None or not isinstance(mode, int) or abs(k) > 100:
+            bad.append(1)
+            return 0
+        v = int(round(k * 1000))
+        return v if mode else -v
+
+    count = per = rx = ry = rz = life = p0 = p1 = 0
+    if kind in (2, 5):
+        count, rx, ry, rz, p0 = num(a[2]), num(a[6]), num(a[7]), num(a[8]), num(a[9])
+        p1 = rate(a[10], a[11], a[12])
+    elif kind in (3, 6):
+        count, rx, p0 = num(a[2]), num(a[6]), num(a[7])
+        p1 = rate(a[8], a[9], a[10])
+    elif kind == 4:
+        count, per, rz, p0 = num(a[2]), 1, 60, num(a[3])
+    elif kind == 8:
+        count, rx, p0 = 36, num(a[4]), num(a[5])
+        p1 = rate(a[6], a[7], a[8])
+    elif kind == 1:
+        per, rx, life = 4, num(a[3]), num(a[10])
+        v, dz = dbl(a[6], a[7]), dbl(a[8], a[9])
+        if v is None or dz is None or abs(v) > 1000 or abs(dz) > 1000:
+            bad.append(1)
+        else:
+            p0, p1 = int(round(v * 1000)), int(round(dz * 1000))
+    else:
+        per = 4
+        bad.append(1)
+    return (kind, count, per, rx, ry, rz, life, p0, p1, bool(sure and not bad))
+
+
 def rise_read(site, ev, cva, note):
     """떠오름의 높이 T 가 `rand % N + C` 일 때 (가운데 C + N/2, 폭 N). 미는 차례는 (처음 쪽, T, H, W) — rand 셋 가운데 첫째가 T 다."""
     loops, fstart = site if site else (None, None)
@@ -684,6 +756,7 @@ def build(game, cs):
         return mlens[(obs, mo)]
 
     stats = collections.Counter()
+    sprays = build.sprays = collections.OrderedDict()        # work → [(Obs, 모션, Delay, 뿌리개 값…)]
     out = collections.OrderedDict()                          # work → [(열쇠, 덧정보, 메모, 주소)]
     arrive = set()
     cellloop = set()
@@ -711,6 +784,21 @@ def build(game, cs):
                     continue
                 if ev['k'] != 'fx':
                     continue
+                if ev.get('kind') == 'emit' and isinstance(ev['obs'], int):
+                    spath = ast.literal_eval(ev['path']) if isinstance(ev['path'], str) else ev['path']
+                    sp = spray_of((loops, spath[-1] if spath and isinstance(spath[-1], int) else r['handler']), ev)
+                    if sp:
+                        mo = ev['motion'] & 0xffff if isinstance(ev['motion'], int) else None
+                        cand = [y for y in effs if y[0] == ev['obs'] & 0xffff and (mo is None or y[1] == mo) and y[8] in (-1, d)]
+                        at_ = [y for y in cand if y[4] == tm.span(n)[0]]
+                        if not at_ and len({y[4] for y in cand}) == 1:
+                            at_ = cand
+                        if at_:
+                            row = (at_[0][0], at_[0][1], at_[0][4]) + sp
+                            if row not in sprays.setdefault(w, []):
+                                sprays[w].append(row)
+                        else:
+                            stats['뿌리개 — 표 줄과 못 맞춤'] += 1
                 # 고리 — 그림이 아닌 이펙트(몸 복제 따위)도 사슬의 앞 것이 될 수 있어 먼저 셈해 둔다
                 path = ast.literal_eval(ev['path']) if isinstance(ev['path'], str) else ev['path']
                 fstart = path[-1] if path and isinstance(path[-1], int) else r['handler']
@@ -925,6 +1013,48 @@ def write_swarm(path, sw, res, names):
         f.write('\n'.join(L))
 
 
+def write_spray(path, sp, res, names):
+    L = ['// <auto-generated> tools/re/work_fx_extra2.py 가 만든다 — 손으로 고치지 않는다.',
+         'namespace DuelDx;',
+         '',
+         '/// <summary>뿌리개 이펙트(그림 없는 개체가 낱알을 뿌린다)의 값 — 이펙트 표(AbilityScripts.g.cs)의 줄과 (Obs, 모션, Delay) 로 맞춘다.</summary>',
+         '/// <remarks>',
+         '/// 단위는 모두 월드(화면 x 그대로 · y × 0.8 − z × 0.6). 낱알은 그 줄의 (Obs, 모션)이고 수명은 Life(0 = 모션 길이 − 1).',
+         '/// Kind (생성자 + 설정 주소):',
+         '/// 1 0x100cb8a0 + 0x100cb980 — 뿌리개가 반지름 RangeX 의 원을 돌며(틱당 P0/1000 점) 틱마다 P1/1000 씩 오른다(이동기 0x10038940).',
+         '///   Life = 이동기가 도는 틱 수 — 뿌리개 이펙트의 수명(이펙트 표의 Life, 핸들러가 0x100c2530 으로 준다)이 먼저 끝나면 거기서 끝난다.',
+         '///   틱마다 제자리에 한 장 + 떠오름 낱알 셋(PerTick 4, 낱알은 둘째 Obs 로 처음 높이까지 내려간다 — 둘째 Obs 는 표에 없다). Count 0 = 끝날 때까지.',
+         '/// 2 0x100cc600 + 0x100cc680 — Count 장을 한꺼번에: 가운데에서 상자 ±(RangeX, RangeY, RangeZ) 안의 무작위 점(rand % 2R − R)으로 직선탄.',
+         '/// 3 0x100cc810 + 0x100cc890 — Count 장을 한꺼번에: i 번째가 각 i × 2/Count (π 단위)로 반지름 10 에서 RangeX 까지 직선탄.',
+         '/// 4 0x100cd490 + 0x100cd510 — (P0 + 1)틱마다 한 장, n 번째는 z + RangeZ × n (기둥). Count 장을 내면 끝.',
+         '/// 5 0x100cc200 + 0x100cc280 — 2 의 거꾸로: 상자 ±(RangeX, RangeY, RangeZ) 의 무작위 점에서 가운데로 직선탄.',
+         '/// 6 0x100cc3f0 + 0x100cc470 — 각 rand % 400 × 0.005(π 단위) · 반지름 rand % RangeX 의 점에서 가운데로 직선탄, 낱알마다 지연 rand % 30.',
+         '/// 7 0x100cbd20 + 0x100cbe00 — 1 과 같은 틱(낱알은 땅 높이까지 내려간다)이지만 이동기(0x10038650)의 길을 못 읽었다 — Sure = false.',
+         '/// 8 0x100ccee0 + 0x100ccf60 — 늘 36장: i 번째가 각 (i − 9)/18 (π 단위)로 반지름 10 에서 RangeX 까지, 모션 = 방향 번호(i, 18 부터는 36 − i 를 뒤집어).',
+         '/// 2·3·5·6·8 의 P0 = 직선탄 빠르기(틱당 px), P1 = 틱마다 빠르기 바꿈: 양수 = × P1/1000, 음수 = + |P1|/1000, 0 = 등속. 닿으면 사라진다.',
+         '/// 2·3·5·8 의 낱알은 뿌리개가 뜬 다음 틱에 한꺼번에 떠난다(PerTick 0). 가운데 = 그 줄의 자리(표의 OnTarget · Lift).',
+         '/// Sure = false: 못 읽은 값이 있다(0 으로 둠).',
+         '/// 줄 끝 주석: 이름 · 핸들러 주소.',
+         '/// </remarks>',
+         'internal static class WorkFxSpray',
+         '{',
+         '    public readonly record struct Row(int Obs, int Motion, int Delay, int Kind, int Count, int PerTick, int RangeX, int RangeY, int RangeZ,',
+         '                                      int Life, int P0, int P1, bool Sure);',
+         '',
+         '    public static readonly Dictionary<int, Row[]> Table = new()',
+         '    {']
+
+    def one(r):
+        return 'new(%s)' % ', '.join(('true' if v else 'false') if isinstance(v, bool) else '%d' % v for v in r)
+
+    for w, rows in sp.items():
+        nm = ' '.join((names.get(w) or '').split())
+        L.append('        [%d] = [%s],   // %s · 0x%x' % (w, ', '.join(one(r) for r in rows), nm, res[w]['handler']))
+    L += ['    };', '}', '']
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(L))
+
+
 def summarize(out, table, stats, arrive, cellloop):
     c, wk = collections.Counter(), collections.defaultdict(set)
 
@@ -980,6 +1110,7 @@ def main():
     ap.add_argument('--cs', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'AbilityScripts.g.cs'))
     ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxExtra.g.cs'))
     ap.add_argument('--swarm', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxSwarm.g.cs'))
+    ap.add_argument('--spray', default=os.path.join(HERE, '..', '..', 'duel-dx', 'Ability', 'WorkFxSpray.g.cs'))
     ap.add_argument('--dry', action='store_true', help='파일을 안 쓰고 통계만')
     ap.add_argument('--report', help='줄마다 (work, 이름, 핸들러, 줄, 메모, 생성 주소) 를 TSV 로')
     a = ap.parse_args()
@@ -1015,6 +1146,9 @@ def main():
         write(a.out, out, res, names, arrive)
         print('%s 를 적었다' % os.path.relpath(a.out, os.path.join(HERE, '..', '..')))
         write_swarm(a.swarm, sw, res, names)
+        write_spray(a.spray, build.sprays, res, names)
+        print('%s 를 적었다 (work %d개 · 줄 %d개)' % (os.path.relpath(a.spray, os.path.join(HERE, '..', '..')), len(build.sprays),
+                                              sum(len(v) for v in build.sprays.values())))
         print('%s 를 적었다' % os.path.relpath(a.swarm, os.path.join(HERE, '..', '..')))
 
 

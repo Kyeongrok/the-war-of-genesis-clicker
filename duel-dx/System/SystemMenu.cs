@@ -511,7 +511,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Mos._planetZoomAt = -1;
         host.Btl._flyingEffects.Clear();
         host.Btl._shots.Clear();
-        host.Btl._movers.Clear(); host.Btl._fallers.Clear(); host.Btl._ringTrails.Clear(); host.Btl._chasers.Clear(); host.Btl._scripted.Clear();
+        host.Btl._movers.Clear(); host.Btl._fallers.Clear(); host.Btl._ringTrails.Clear(); host.Btl._chasers.Clear(); host.Btl._scripted.Clear(); host.Btl._pieces.Clear();
         host.Btl._fxLatestStart = 0;
         host.Btl._effectMirrors.Clear();
         host.NineCrusaderAb._swords.Clear();
@@ -1010,7 +1010,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Mos._planetZoomAt = -1;
         host.Btl._flyingEffects.Clear();
         host.Btl._shots.Clear();
-        host.Btl._movers.Clear(); host.Btl._fallers.Clear(); host.Btl._ringTrails.Clear(); host.Btl._chasers.Clear(); host.Btl._scripted.Clear();
+        host.Btl._movers.Clear(); host.Btl._fallers.Clear(); host.Btl._ringTrails.Clear(); host.Btl._chasers.Clear(); host.Btl._scripted.Clear(); host.Btl._pieces.Clear();
         host.Btl._fxLatestStart = 0;
         host.Btl._effectMirrors.Clear();
         host.NineCrusaderAb._swords.Clear();

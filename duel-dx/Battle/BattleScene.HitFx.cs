@@ -152,6 +152,33 @@ internal sealed unsafe partial class BattleScene
         });
     }
 
+    /// <summary>뿌리개의 조각 탄(0x100c3340 + 0x100c3490) — 직선으로 가며 빠르기가 틱마다 바뀐다. 닿거나 수명(모션 길이 − 1)이 다하면 사라진다.</summary>
+    internal readonly List<(int Obs, int Motion, double Start, double FromX, double FromY, double ToX, double ToY,
+                           double Speed, double Scale, int Mode, int Life, bool Mirror)> _pieces = [];
+
+    internal void DrawPieces()
+    {
+        _pieces.RemoveAll(s =>
+        {
+            if (host._lastTime < s.Start) return false;
+            int tick = (int)((host._lastTime - s.Start) * TicksPerSecond);
+            double dx = s.ToX - s.FromX, dy = s.ToY - s.FromY, total = Math.Sqrt(dx * dx + dy * dy);
+            if (tick >= s.Life || host.UiFor(s.Obs) == null) return true;
+            double speed = s.Speed, gone = 0;
+            for (int t = 0; t < tick && gone < total; t++)
+            {
+                gone += speed;
+                speed = Math.Clamp(s.Mode == 1 ? speed * s.Scale : speed + s.Scale, 1, 40);      // 이동기 기본 한도(1~40)
+            }
+            if (gone >= total && total > 0) return true;
+            double k = total > 0 ? gone / total : 0;
+            int key = host.UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
+            host.DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
+                        key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: false, fade: BlendFade(key), mirror: s.Mirror);
+            return false;
+        });
+    }
+
     /// <summary>틱마다 자리·모션이 미리 정해진 그림 하나(라이트닝 샤벨의 칼) — 틀을 다 쓰면 사라진다.</summary>
     internal readonly List<(int Obs, double Start, (int X, int Y, int Motion, bool Mirror)[] Frames)> _scripted = [];
 
@@ -221,6 +248,7 @@ internal sealed unsafe partial class BattleScene
         DrawRingTrails();
         DrawChasers();
         DrawScripted();
+        DrawPieces();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;
