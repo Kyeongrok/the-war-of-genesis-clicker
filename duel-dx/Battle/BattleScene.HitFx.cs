@@ -62,6 +62,8 @@ internal sealed unsafe partial class BattleScene
     /// </param>
     /// <param name="fade">몸 그림과 같이 사라졌다 나타나게(<see cref="UnitState.Fade"/>) — 몸만 사라지고 무기가 남으면 안 된다.</param>
     /// <param name="loop">몸 모션이 되풀이하는가(서기·걷기) — 되풀이하면 자식 키도 한 바퀴마다 다시 터진다.</param>
+    internal readonly HashSet<int> _missingLayers = [];
+
     internal void DrawUnitLayers(ObsMotionClip? clip, int tick, int footX, int footY, bool mirror, double fade = 1, bool loop = true)
     {
         if (clip == null || fade <= 0) return;
@@ -73,6 +75,9 @@ internal sealed unsafe partial class BattleScene
             // 자식은 <b>제 모션이 끝나면 사라진다</b> — 원본은 키마다 개체를 만들고 그 모션이 다 돌면 지운다(0x100e5410 case 2).
             // 안 지우면 앞선 키가 그대로 남아, 크리스티앙의 총 넣기(동작 24)에서 든 총과 <b>머리 위에 뜬 총</b>이 함께 보였다(사용자 보고).
             // 몸과 같이 도는 무기 층(제이슨 Obs 0426·Obs 0060)은 모션 길이가 몸과 같아 한 바퀴 내내 남는다.
+            // DUELDX_TRACE 면 못 읽은 자식 그림(무기 층 따위)을 한 번씩 적는다 — 「무기를 안 들고 친다」 같은 증상을 가르려고.
+            if (Trace && host.UiFor(obs) == null && _missingLayers.Add(obs))
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"layer obs {obs} motion {motion}: 그림 없음" + Environment.NewLine);
             int life = host.UiFor(obs)?.MotionLength(motion) ?? 0;
             if (life > 0 && cycle - start >= life) continue;
             var blend = BlendOf(host.UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
