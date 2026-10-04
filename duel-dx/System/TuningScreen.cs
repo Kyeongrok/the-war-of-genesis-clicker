@@ -24,15 +24,24 @@ internal sealed unsafe class TuningScreen(GameWindow host)
 
     internal int _soulWeight = SoulWeightChoices.Contains(UserSettings.Current.SoulWeight) ? UserSettings.Current.SoulWeight : 100;
 
-    internal bool _tuningOpen;
+    /// <summary>DUELDX_TUNING=&lt;탭&gt; 이면 모드 창을 그 탭으로 열어 둔 채 시작한다(화면 밖 시험용).</summary>
+    internal bool _tuningOpen = Environment.GetEnvironmentVariable("DUELDX_TUNING") != null;
 
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 398, TuningBoxX = 300, TuningBoxY = 176, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 424, TuningBoxX = 300, TuningBoxY = 202, TuningBoxW = 180, TuningRowH = 24;
 
-    /// <summary>체크 줄 넷 — 창 위에서부터 y 44 · 76 · 108 · 140. 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
-    internal const int TuningCheckY = 44, TuningCheckH = 32;
+    /// <summary>탭 — 0 일반(전투 규칙) · 1 스토리(대사 진행). 제목줄 바로 아래 한 줄(사용자 요청).</summary>
+    internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, 1) : 0;
+    internal const int TabY = 30, TabH = 24, TabW = 96;
+    internal static readonly string[] TabNames = ["일반", "스토리"];
+
+    /// <summary>스토리 탭 — 「대사 사이 멈춤」 고르기 단추들의 자리(창 기준).</summary>
+    internal const int PauseY = 100, PauseW = 90, PauseH = 26, PauseGap = 4, StoryCheckY = 150;
+
+    /// <summary>체크 줄 넷 — 창 위에서부터 y 70 · 102 · 134 · 166(탭 줄 아래). 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
+    internal const int TuningCheckY = 70, TuningCheckH = 32;
 
     internal (string Label, string Note, int Command, bool On)[] TuningChecks() =>
     [
@@ -59,6 +68,24 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         if (!_tuningOpen) return false;
         var (x, y) = TuningOrigin();
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
+        // 닫기 단추와 탭은 어느 탭에서나.
+        if (!_tuningListOpen)
+        {
+            if (bx >= x + TuningW - 116 && bx < x + TuningW - 16 && by >= y + TuningH - 40 && by < y + TuningH - 12) { _tuningOpen = false; return true; }
+            for (int t = 0; t < TabNames.Length; t++)
+                if (bx >= x + 12 + t * (TabW + 4) && bx < x + 12 + t * (TabW + 4) + TabW && by >= y + TabY && by < y + TabY + TabH) { _tuningTab = t; return true; }
+        }
+        if (_tuningTab == 1)
+        {
+            _tuningListOpen = false;
+            for (int i = 0; i < TalkPauseChoices.Length; i++)
+            {
+                int px = x + 16 + i * (PauseW + PauseGap);
+                if (bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
+            }
+            if (bx >= x + 12 && bx < x + TuningW - 12 && by >= y + StoryCheckY && by < y + StoryCheckY + TuningCheckH) host.OnMenuCommand(MenuTalkClickFills);
+            return true;
+        }
         if (_tuningListOpen)
         {
             int row = (by - boxY - TuningRowH) / TuningRowH;
@@ -75,7 +102,6 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         var checks = TuningChecks();
         int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
         if (line >= 0 && line < checks.Length && bx >= x + 12 && bx < x + TuningW - 12) { host.OnMenuCommand(checks[line].Command); return true; }
-        if (bx >= x + TuningW - 116 && bx < x + TuningW - 16 && by >= y + TuningH - 40 && by < y + TuningH - 12) _tuningOpen = false;
         return true;
     }
 
@@ -94,6 +120,16 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         host.StrokeRect(x, y, TuningW, TuningH, StatusScreen.BoxLine);
         host.FillRect(x, y, TuningW, 28, StatusScreen.HeadBg);
         host.DrawText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
+        for (int t = 0; t < TabNames.Length; t++)
+        {
+            int tx = x + 12 + t * (TabW + 4);
+            bool on = t == _tuningTab;
+            host.FillRect(tx, y + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
+            host.StrokeRect(tx, y + TabY, TabW, TabH, StatusScreen.BoxLine);
+            host.DrawText(TabNames[t], tx + (t == 0 ? 34 : 28), y + TabY + 4, on ? 0xFF00FFFF : White);
+        }
+        host.FillRect(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
+        if (_tuningTab == 1) { DrawStoryTab(x, y); DrawTuningFoot(x, y); return; }
 
         var checks = TuningChecks();
         for (int i = 0; i < checks.Length; i++)
@@ -126,10 +162,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ];
         for (int i = 0; i < lines.Length; i++) host.DrawText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
-        int by = y + TuningH - 40;
-        host.FillRect(x + TuningW - 116, by, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + TuningW - 80, by + 6, White);
-        host.DrawText("Esc: 닫기", x + 16, by + 7, DimGray);
+        DrawTuningFoot(x, y);
 
         // 펼친 목록은 맨 위에
         if (_tuningListOpen)
@@ -141,6 +174,38 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 host.StrokeRect(boxX, ry, TuningBoxW, TuningRowH, StatusScreen.BoxLine);
                 host.DrawText(SoulWeightLabel(SoulWeightChoices[i]), boxX + 8, ry + 4, SoulWeightChoices[i] == _soulWeight ? 0xFF00FFFF : White);
             }
+    }
+
+    internal void DrawTuningFoot(int x, int y)
+    {
+        int by = y + TuningH - 40;
+        host.FillRect(x + TuningW - 116, by, 100, 28, StatusScreen.HeadBg);
+        host.DrawText("닫기", x + TuningW - 80, by + 6, White);
+        host.DrawText("Esc: 닫기", x + 16, by + 7, DimGray);
+    }
+
+    /// <summary>스토리 탭 — 대사 사이 멈춤(설정 메뉴와 같은 값)과 대사 첫 클릭 방식.</summary>
+    internal void DrawStoryTab(int x, int y)
+    {
+        host.DrawText("대사 사이 멈춤", x + 16, y + PauseY - 28, White);
+        host.DrawText("대사가 끝난 뒤 다음 대사가 뜨기까지 배경만 보이는 틈", x + 130, y + PauseY - 27, DimGray, 12);
+        int chosen = TalkPauseIndex(host._talkPauseSeconds);
+        for (int i = 0; i < TalkPauseChoices.Length; i++)
+        {
+            int px = x + 16 + i * (PauseW + PauseGap);
+            bool on = i == chosen, here = MouseInBoard(px, y + PauseY, PauseW, PauseH);
+            host.FillRect(px, y + PauseY, PauseW, PauseH, on ? 0xFF2A4A8A : here ? 0x402A4A8A : StatusScreen.BoxBg);
+            host.StrokeRect(px, y + PauseY, PauseW, PauseH, StatusScreen.BoxLine);
+            host.DrawText(TalkPauseChoices[i] < 0 ? "원본(1초)" : TalkPauseLabel(TalkPauseChoices[i]), px + 8, y + PauseY + 5, on ? 0xFF00FFFF : White, 12);
+        }
+        int cy = y + StoryCheckY;
+        if (MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.FillRect(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
+        host.FillRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
+        host.StrokeRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
+        if (host._talkClickFills) host.DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
+        host.DrawText("대사 첫 클릭은 글 채우기", x + 44, cy + 6, White);
+        host.DrawText("끄면 원본처럼 첫 클릭에 바로 넘어간다", x + TuningBoxX, cy + 7, DimGray, 12);
+        host.DrawText("설정 메뉴의 같은 항목과 이어져 있다.", x + 16, cy + 48, DimGray, 12);
     }
 
     internal bool MouseInBoard(int x, int y, int w, int h) => host._mouse.X >= x && host._mouse.X < x + w && host._mouse.Y >= y && host._mouse.Y < y + h;
