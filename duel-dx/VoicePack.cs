@@ -68,6 +68,7 @@ internal static class VoicePack
             long total = todo.Sum(p => p.Size), got = 0;
             foreach (var part in todo)
             {
+                if (part.Name != Path.GetFileName(part.Name)) continue;     // 목록의 이름은 파일 이름만
                 string zip = Path.Combine(Folder, part.Name + ".part");
                 using (var response = await http.GetAsync(BaseUrl + part.Name, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -75,8 +76,12 @@ internal static class VoicePack
                     await using var from = await response.Content.ReadAsStreamAsync();
                     await using var to = File.Create(zip);
                     var buffer = new byte[1 << 16];
-                    for (int n; (n = await from.ReadAsync(buffer)) > 0;)
+                    while (true)
                     {
+                        // 본문이 멈추면 60초 뒤 그만둔다 — 전체 시간 제한은 머리글까지만 걸린다.
+                        using var stall = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                        int n = await from.ReadAsync(buffer, stall.Token);
+                        if (n <= 0) break;
                         await to.WriteAsync(buffer.AsMemory(0, n));
                         got += n;
                         Status = $"대사 음성 받는 중 {got * 100 / Math.Max(1, total)}% ({got >> 20}/{total >> 20}MB)";
@@ -97,7 +102,10 @@ internal static class VoicePack
                         // 이름만 쓴다 — 덩이 안의 경로가 폴더 밖을 가리켜도 음성 폴더 안에만 푼다.
                         string name = Path.GetFileName(entry.FullName);
                         if (name.Length == 0 || !name.EndsWith(".bgm", StringComparison.OrdinalIgnoreCase)) continue;
-                        entry.ExtractToFile(Path.Combine(Folder, name), overwrite: true);
+                        // 잘린 파일이 음성으로 읽히지 않게 임시 이름으로 푼 뒤 옮긴다.
+                        string to = Path.Combine(Folder, name);
+                        entry.ExtractToFile(to + ".tmp", overwrite: true);
+                        File.Move(to + ".tmp", to, overwrite: true);
                     }
                 File.Delete(zip);
                 File.WriteAllText(Marker(part), part.Sha256);

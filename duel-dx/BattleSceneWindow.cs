@@ -418,6 +418,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         // 판을 갈았으면 장면이 바뀐 것 — 남은 페이드는 버린다(메뉴로 불러오기·타이틀로 가면 끝나지 않은 페이드가 남아 입력을 막았다).
         if (_fadeOutStart >= 0) _mixer.SetMusicGain(_musicGain);   // 줄이던 음악 크기도 되돌린다
         _fadeInStart = _fadeOutStart = -1;
+        _afterFadeOut = null;                    // 떠나던 중에 판이 다른 길로 갈렸다 — 묵은 「다음 장면」이 남지 않게
+        _fadeOutKeepMusic = false;
         if (same || _hwnd == IntPtr.Zero) return;
         RebuildView();
     }
@@ -843,6 +845,8 @@ internal sealed unsafe partial class BattleSceneWindow : IDisposable
         if (_fadeOutStart >= 0) return;
         _fadeInStart = -1;
         _fadeOutStart = _lastTime;
+        _afterFadeOut = null;
+        _fadeOutKeepMusic = false;
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"{_lastTime:F2} battle fade-out ({(_lastTime - _outcomeAt) * TicksPerSecond:F0} ticks after outcome '{_outcome}')" + Environment.NewLine);
