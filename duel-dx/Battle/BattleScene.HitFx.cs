@@ -104,8 +104,44 @@ internal sealed unsafe partial class BattleScene
     internal readonly List<(int Obs, int Motion, double Start, int Kind, double X0, double Y0, double X1, double Y1,
                            int Ticks, double R0, double R1, double A0, double W, bool Mirror)> _movers = [];
 
+    /// <summary>
+    /// 떨굼 이동기(틱 0x10038fa0)의 조각 — 틱마다 x += vx/2 · y += vy/2, vz′ = vz − 5, z += (vz + vz′)/4, z ≤ 0 이면 z = −z · vz = −vz′ × 튕김.
+    /// 느려지고(|vz| &lt; 5) 땅에서 5 안이면 끝난다. 화면 y = y × 32/40 − z × 12/20(0x100ea910). 땅 높이는 시작 칸 기준 0 으로 본다(원본은 절대 높이 0 에서 튄다).
+    /// </summary>
+    internal readonly List<(int Obs, int Motion, double Start, double X, double Y, double Z, double Vx, double Vy, double Vz,
+                           double Bounce, int Life, bool Mirror)> _fallers = [];
+
+    /// <summary>연출 전용 난수 — 전투 판정의 난수 차례를 안 건드린다.</summary>
+    internal readonly Random _fxRandom = new();
+
+    internal void DrawFallers()
+    {
+        _fallers.RemoveAll(f =>
+        {
+            if (host._lastTime < f.Start) return false;
+            int ticks = (int)((host._lastTime - f.Start) * TicksPerSecond);
+            if (ticks >= f.Life || host.UiFor(f.Obs) == null) return true;
+            double x = f.X, y = f.Y, z = f.Z, vz = f.Vz;
+            for (int t = 0; t < ticks; t++)
+            {
+                x += f.Vx * 0.5;
+                y += f.Vy * 0.5 * 0.8;
+                double next = vz - 5.0;
+                z += (vz + next) * 0.25;
+                vz = next;
+                if (z <= 0) { z = -z; vz = -next * f.Bounce; }
+                if (vz > -5 && vz < 5 && z < 5) return true;
+            }
+            int key = host.UiFor(f.Obs)?.BlendAt(f.Motion, ticks) ?? 0;
+            host.DrawUi(f.Obs, f.Motion, ticks, (int)x, (int)(y - z * 0.6), key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+                        loop: true, fade: BlendFade(key), mirror: f.Mirror);
+            return false;
+        });
+    }
+
     internal void DrawMovers()
     {
+        DrawFallers();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;
