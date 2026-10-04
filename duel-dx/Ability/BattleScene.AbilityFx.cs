@@ -372,6 +372,34 @@ internal sealed unsafe partial class BattleScene
                     _fxLatestStart = Math.Max(_fxLatestStart, start);
                     continue;
                 }
+                // 그 밖(9) 가운데 식을 읽은 둘 — 표에 인자 자리가 없어 여기 적는다(ba-21 fx F2 뒤 분석).
+                // 리미트 크래쉬 · 리미트 캐스트 476:3 · 8:1(0x100c57d0 → 틱 0x100389a0): 조각 50개가 대상 둘레 반지름 30 원을 틱당 8점씩 돌며
+                // 틱당 2.0~2.9 씩 떠오른다(모두 약 100 높이, 조각마다 0~79틱 늦게). 원 한 바퀴의 점 수(≈ 둘레 188)는 가설.
+                if (extra is { Move: 9 } && !e.Fly && ((e.Obs == 476 && e.Motion == 3) || (e.Obs == 8 && e.Motion == 1)))
+                {
+                    for (int n = 0; n < 50; n++)
+                    {
+                        double dz = 2.0 + 0.1 * _fxRandom.Next(10);
+                        _movers.Add((e.Obs, e.Motion, start + _fxRandom.Next(80) / TicksPerSecond, 6, x, y - e.Lift, 0, 0, (int)(100 / dz), 30, dz,
+                                     _fxRandom.NextDouble() * 2 * Math.PI, 8.0 / 30, mirrored));
+                    }
+                    continue;
+                }
+                // 소울 블레스트 793:4(0x100d1970 → 틱 0x100d19e0): 시전자 → 겨눈 칸을 틱당 10 으로 곧게 가는 머리가 틱마다 그림을 남긴다 —
+                // 남기는 자리는 가는 길에서 옆으로 15 × sin(n × π/6) 만큼 물결친다. 머리 자체는 안 보인다(가설).
+                if (extra is { Move: 9 } && !e.Fly && e.Obs == 793 && e.Motion == 4 && (userX != targetX || userY != targetY))
+                {
+                    double dx = targetX - userX, dy = targetY - userY, far = Math.Sqrt(dx * dx + dy * dy);
+                    var points = new (int X, int Y)[Math.Max(1, (int)(far / 10))];
+                    for (int n = 0; n < points.Length; n++)
+                    {
+                        double side = 15 * Math.Sin(n * Math.PI / 6);
+                        points[n] = ((int)(userX + dx / far * 10 * n - dy / far * side), (int)(userY - e.Lift + dy / far * 10 * n + dx / far * side * TileH / TileW));
+                    }
+                    _ringTrails.Add((e.Obs, e.Motion, start, points, mirrored));
+                    _fxLatestStart = Math.Max(_fxLatestStart, start);   // 판정은 「닿을 때」 자리가 아니다(0x100c28f0)
+                    continue;
+                }
                 // 떨굼(생성자 0x100c5c50 + 0x100c5d40(vx, vy, vz, 튕김)) — 조각 50개가 높이 MaxSpeed 에서 제 빠르기로 튀어 나가 중력 5.0 으로 떨어지고 땅에서 튄다.
                 // 오버 드라이브 8:4 · 카운터 미사일 7:2 · 크래쉬 봄 251:0. 전에는 한 장이 제자리에 섰다. 표의 Lift 는 높이 × 0.6 과 같은 값이라 여기서는 안 쓴다.
                 if (extra is { Move: 3, ScalePermille: > 0 } fall && !e.Fly)

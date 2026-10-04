@@ -172,6 +172,8 @@ internal sealed unsafe partial class BattleScene
             if (host.UiFor(m.Obs) == null) return true;
             if (ticks >= m.Ticks) return true;
             double k = ticks / Math.Max(1, m.Ticks), x = m.X0 + (m.X1 - m.X0) * k, y = m.Y0 + (m.Y1 - m.Y0) * k;
+            if (m.Kind == 6)        // 떠오르는 나선 — 반지름 R0 원을 각속도 W 로 돌며 틱당 R1 씩 뜬다(높이 × 0.6)
+                (x, y) = (m.X0 + m.R0 * Math.Cos(m.A0 + m.W * (int)ticks), m.Y0 + m.R0 * Math.Sin(m.A0 + m.W * (int)ticks) * TileH / TileW - m.R1 * (int)ticks * 0.6);
             int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
             host.DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
                    loop: true, fade: BlendFade(key), mirror: m.Mirror);
