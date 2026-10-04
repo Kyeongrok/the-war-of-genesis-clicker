@@ -9,7 +9,7 @@ namespace DuelDx;
 /// 원본 핸들러는 부하(대부분 대장도)를 숨기고(<c>0x100eadb0(10000)</c>) <b>그 유닛의 Obs 로 만든 잔상</b>을 뛰게·날게·돌진하게 한 뒤
 /// 끝에 다시 보인다(<c>0x100eadb0(0)</c>). 실제 칸은 안 옮긴다. 전에는 대장 쪽 이펙트(Obs 1483 등)만 나오고 부하는 가만히 서 있었다.
 /// 뛰는 자리·틱은 노트 C-1 표대로 넣었고, <b>다시 보이는 때</b>는 표에서 단계 틱을 다 못 푼 군단기(1659·1661·1663)에서 가설이다.
-/// 1660(대상 둘레에 나타나 침)·1665(화면 네 점의 그림)는 아직 안 넣었다.
+/// 1660·1665 의 틱은 표의 단계 틱을 이어 붙인 것이다(다시 보이는 때는 가설).
 /// </remarks>
 internal sealed unsafe partial class BattleSceneWindow
 {
@@ -107,6 +107,43 @@ internal sealed unsafe partial class BattleSceneWindow
                     Ghost(f, Run, Toward(p, Foot(f)), 160, p, Foot(f), 40, 40, arc: true);
                     Show(f, 200);
                 }
+                break;
+            }
+            case 1660:                              // 회색의 잔영(0x100bde70) — 넷이 흐려져 사라졌다가 +35틱 대상 둘레 ±80px 에 나타나 +49틱에 친다
+            {
+                (int X, int Y)[] around = [(80, 0), (-80, 0), (0, 80), (0, -80)];
+                Facing[] look = [Facing.Left, Facing.Right, Facing.Up, Facing.Down];
+                for (int i = 0; i < Math.Min(4, all.Count); i++)
+                {
+                    var u = all[i];
+                    (double X, double Y) p = (aim.X + around[i].X, aim.Y + around[i].Y * LegionYScale);
+                    Hide(u, 0);
+                    Ghost(u, 0, u.Facing, 0, Foot(u), Foot(u), 1, 50, fade0: 1, fade1: 0);
+                    Ghost(u, 0, look[i], 35, p, p, 1, 49, fade0: 0.1, fade1: 1);
+                    Ghost(u, 27, look[i], 84, p, p, 1, 35);                 // 모션 81~83 = 동작 27
+                    Ghost(u, 0, u.Facing, 119, Foot(u), Foot(u), 1, 44, fade0: 0.1, fade1: 1);
+                    Show(u, 163);
+                }
+                break;
+            }
+            case 1665:                              // 레드 크로스(0x100c0880) — 넷의 그림만 화면 네 점에 뜬다(유닛은 안 숨긴다): 모션 30 → 31(150틱) → 32 → 2(40틱 흐려짐)
+            {
+                (int X, int Y)[] points = [(-120, -80), (120, -80), (-120, 80), (120, 80)];
+                int cx = _camX + ViewWidth / 2, cy = _camY + ViewHeight / 2;
+                for (int i = 0; i < Math.Min(4, all.Count); i++)
+                {
+                    var u = all[i];
+                    if (!_sprites.TryGetValue(u.ChrCode, out var sp) || sp.MotionTicks(31) <= 0) continue;
+                    (double X, double Y) p = (cx + points[i].X, cy + points[i].Y);
+                    int delay = _rng.Next(60), rise = Math.Max(1, sp.MotionTicks(30)), fall = Math.Max(1, sp.MotionTicks(32));
+                    void Raw(int motion, int at, int life, double f0 = 1, double f1 = 1) =>
+                        _legionGhosts.Add(new LegionGhost(u, motion, false, At(at), p.X, p.Y, p.X, p.Y, 1, false, life, f0, f1));
+                    Raw(30, delay, rise);
+                    Raw(31, delay + rise, 150);
+                    Raw(32, delay + rise + 150, fall);
+                    Raw(2, delay + rise + 150 + fall, 40, 1, 0);
+                }
+                _legionFades.Add((At(300), leader, 1));   // 판정 대기의 기준(피해는 끝 무렵) — 대장은 그대로 보인다
                 break;
             }
             case 1661:                              // 강림의 밤(0x100be5a0) — 넷이 20틱 뛰어 대장 둘레 십자(±D)로, 시전 자세 250틱, 20틱 돌아옴
