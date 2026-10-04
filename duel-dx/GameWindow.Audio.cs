@@ -131,7 +131,7 @@ internal sealed unsafe partial class GameWindow
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } assetLog)
             try { File.AppendAllText(assetLog, $"sounds/{sound:D4}.wav" + Environment.NewLine); } catch (IOException) { }
         // 설치판은 큰 효과음을 따로 받는다(AssetPack) — 없으면 뒤에서 받아 두고 이번에는 조용히 넘어간다(다음부터 난다).
-        if (!loaded && !Muted && AssetPack.MayCome("sounds", $"{sound:D4}.wav") && _sfxFetching.TryAdd(sound, true))
+        if (!loaded && AssetPack.MayCome("sounds", $"{sound:D4}.wav") && _sfxFetching.TryAdd(sound, true))
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
