@@ -118,6 +118,7 @@ internal sealed unsafe partial class BattleScene
     /// <c>DUELDX_AIM=&lt;work&gt;:&lt;열&gt;,&lt;줄&gt;[:&lt;열&gt;,&lt;줄&gt;]</c> 면 그 칸을 겨눈다(둘째 칸이 있으면 먼저 그 칸에 세운다) — 맵 물체 겨누기 시험.</summary>
     internal bool _aimHookDone;
     internal bool _itemHookDone;
+    internal bool _aimCheckDone;
 
     internal void ApplyAimHook()
     {
@@ -176,6 +177,18 @@ internal sealed unsafe partial class BattleScene
     {
         ApplyAimHook();
         ApplyClickHook();
+        // DUELDX_AIMCHECK=<work>:<Chr> 면 그 인물이 그 work 을 제 칸에 겨눌 수 있는지만 추적에 적는다(쓰지는 않는다 — 차례가 아닌 인물도 본다).
+        if (!_aimCheckDone && _turnNo >= 1 && Environment.GetEnvironmentVariable("DUELDX_AIMCHECK")?.Split(':') is [var cw, var cc]
+            && int.TryParse(cw, out int checkWork) && int.TryParse(cc, out int checkChr) && Work(checkWork) is { } cwk
+            && host._units.FirstOrDefault(x => x.ChrCode == checkChr && x.Alive && x.OnField) is { } cu)
+        {
+            _aimCheckDone = true;
+            if (BattleScene.Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"aim check: {cu.ChrCode}({cu.Col},{cu.Row}) work {cwk.Id} tm {cwk.TargetMode} canAim {CanAimAt(cwk, cu, cu.Col, cu.Row)} inRange {InWorkRange(cwk, cu.Col, cu.Row, cu.Col, cu.Row, cu)} "
+                    + $"flags {CellFlagsAt(cu.Col, cu.Row):x} afford {CanAfford(cu, cwk)} tp {cu.Tp} ctp {cu.Ctp} cost {(cu.Data is { } cd ? TpCostFor(cu, cd, cwk.Id) : -1)} soul {cu.Soul} need {(cu.Data is { } cd2 ? SoulNeedFor(cu, cd2, cwk.Id) : -1)} "
+                    + $"h {HeightAt(cu.Col, cu.Row)} statuses {string.Join(',', cu.StatusId)}" + Environment.NewLine);
+        }
         // DUELDX_ITEMMENU=<줄> 이면 플레이어 차례에 아이템 창을 열고 마우스를 그 줄 위에 둔다(화면 밖 시험용 — 줄 강조).
         if (!_itemHookDone && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_ITEMMENU"), out int itemRow) && IsPlayerTurn && _routine == null && host.Tlk._talk == null)
         {
