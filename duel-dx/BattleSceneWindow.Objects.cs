@@ -571,13 +571,27 @@ internal sealed unsafe partial class BattleSceneWindow
             if (!TryEquipSpoil(taker, obj.Record.ItemId))
                 _inventory[obj.Record.ItemId] = _inventory.GetValueOrDefault(obj.Record.ItemId) + 1;
             string itemName = _db?.Items.GetValueOrDefault(obj.Record.ItemId) is { } item ? _db.T(item.NameId) : "";
-            Toast($"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
+            ShowSpoilMessage(taker, "Item 획득", $"{(itemName.Length > 0 ? itemName : $"아이템 {obj.Record.ItemId}")} 1개를 획득하였습니다.");
         }
         else if (obj.Record.Gold > 0)
         {
             _shopMoney += obj.Record.Gold;
-            Toast($"{obj.Record.Gold}GP 를 획득하였습니다.");
+            ShowSpoilMessage(LiveUnitAt(obj.Col, obj.Row) ?? opener, "GP 획득", $"{obj.Record.Gold}GP를 획득하였습니다.");
         }
+    }
+
+    /// <summary>
+    /// 상자에서 얻은 것을 알리는 창 — 원본은 레벨업 창과 같은 메시지 창(0x10034540, 120틱, 제목 「Item 획득」/「GP 획득」)이 떠 있는 동안
+    /// 전투 상태 기계가 선다(0x10066206, ba-21 battle-flow 1). 받는 이가 판 위의 사람 조종 편일 때만 띄운다(0x1006e9a0) — 그 밖에는 전처럼 알림 글.
+    /// </summary>
+    private void ShowSpoilMessage(UnitState? taker, string title, string body)
+    {
+        int index = taker == null ? -1 : Array.IndexOf(_units, taker);
+        if (index < 0 || !taker!.OnField || !taker.PlayerControlled || AutoPlay || LevelUpOpen) { Toast(body); return; }
+        _levelUpUnit = index;
+        _levelUpUntil = _lastTime + 120 / TicksPerSecond;
+        _levelUpTitle = title;
+        _levelUpBody = body;
     }
 
     /// <summary>얻은 장비를 그 인물의 맞는 빈 칸에 바로 낀다(<c>0x10032d70</c> → <c>+0x15c[칸]</c>). 꼈으면 true.</summary>

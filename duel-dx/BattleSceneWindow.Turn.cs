@@ -466,6 +466,9 @@ internal sealed unsafe partial class BattleSceneWindow
             // 원본 순서는 틱++ → … → 갈래 3 이벤트 검사 → 상태 16 → 상태 22 첫 진입에서 SaveGame(20) 이라, 그 틱 이벤트를 다 본 뒤에 적힌다.
             // 여기서 곧장 적으면 이벤트 검사(다음 틀 RunEvents)보다 앞서므로 깃발만 세우고 UpdateTurn 이 이벤트 뒤에 적는다(감사5 S6).
             _autoSaveFor = index;
+            // 내 차례가 오면 카메라가 그 인물을 가운데로 보낸다(사용자 요청 — 원본 상태 22 는 안 옮긴다). 판 끝이면 갈 수 있는 데까지만 간다.
+            // 불러온 직후 세이브의 카메라를 되살린 차례는 그대로 둔다.
+            if (!resume) CenterOnUnit(_units[index]);
         }
         else
         {
