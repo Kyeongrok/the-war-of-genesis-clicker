@@ -38,8 +38,9 @@ internal sealed unsafe partial class BattleScene
             if (list.Length == 1 && list[0].OnTarget && !StagingSkill.IsWeaponCrashWork(w.Id) && !StagingSkill.IsBalancingWork(w.Id))
             {
                 // 늘어나는 복제(0x100c6a10 + 0x100c6b20, 그리기 칸 4) — 포스 필드·배리어·실드류 9자리: 20틱, 가로 1 + 0.055k · 세로 1 + 0.015k
-                // (k = min(t, 19 − t), 캐노피만 0.05 · 0.01). 카운터 실드·카운터 필드는 120틱 가로만(40틱 주기 1 → 1.57, 1.4 → 0.83) — 여기서는 20틱 꼴로 둔다.
-                _bodyShapes.Add((body, 1, now, 0, null, 0, 0, 4 / 9.0, null));
+                // (k = min(t, 19 − t), 캐노피만 0.05 · 0.01). 카운터 실드(98, 0x10098253 · 0x100986ca)·카운터 필드(113, 0x100a1eec · 0x100a221d)는
+                // 120틱 가로만 — 표 120칸이 40틱 주기 셋: 앞 20틱 1 + 0.03k, 뒤 20틱 1.4 − 0.03k(세로 표는 없음 = 1). Param = 틱 수.
+                _bodyShapes.Add((body, 1, now, w.AbilityId is 98 or 113 ? 120 : 20, null, 0, 0, 4 / 9.0, null));
                 return;
             }
             if (list.Length == 2 && list.All(b => b.OnTarget) && (w.Id == 396 || w.Id is >= 556 and <= 574 || w.Id == 399 || w.Id is >= 594 and <= 602))
@@ -125,7 +126,7 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
-    /// 꼴이 있는 복제 — 1 늘어남(20틱) · 2 떨림(Param = 치우침) · 3 꼬리(Param 틱 전 자리 + (Dx, Dy)) · 4 메아리(Param 틱 전 모습을 제자리에) ·
+    /// 꼴이 있는 복제 — 1 늘어남(Param = 틱 수, 20 또는 120) · 2 떨림(Param = 치우침) · 3 꼬리(Param 틱 전 자리 + (Dx, Dy)) · 4 메아리(Param 틱 전 모습을 제자리에) ·
     /// 5 크기(1.84배에서 틱마다 × 0.97, 10틱). History 는 주인이 틱마다 지나온 자리·모습(같은 묶음이 함께 쓴다). Fade 는 그리기 칸(+0x13) ÷ 9.
     /// </summary>
     internal readonly List<(UnitState Owner, int Kind, double Start, int Param, List<(int X, int Y, SpriteFrame? Frame, bool Busy)>? History,
@@ -155,7 +156,13 @@ internal sealed unsafe partial class BattleScene
             {
                 case 1:
                 {
-                    if (tick >= 20) { _bodyShapes.RemoveAt(i); continue; }
+                    if (tick >= c.Param) { _bodyShapes.RemoveAt(i); continue; }
+                    if (c.Param == 120)
+                    {
+                        int at = tick % 40;
+                        Stretched(frame, at < 20 ? 1 + 0.03 * at : 1.4 - 0.03 * (at - 20), 1);
+                        break;
+                    }
                     int k = Math.Min(tick, 19 - tick);
                     Stretched(frame, 1 + 0.055 * k, 1 + 0.015 * k);
                     break;
