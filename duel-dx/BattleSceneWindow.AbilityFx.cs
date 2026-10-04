@@ -328,6 +328,26 @@ internal sealed unsafe partial class BattleSceneWindow
                         continue;
                     }
                 }
+                // 그 밖 이동기 — 떠오름(높이 MaxSpeed, 틱당 ScalePermille/1000 px 위로) · 고리 · 포물선(Speed 틱). 길 식은 인자에서 짠 가설이다.
+                // 전에는 제자리에 한 장으로 섰다. 떨굼(중력)과 그 밖(9)은 아직 제자리.
+                if (extra is { Move: 2, MaxSpeed: > 0, ScalePermille: > 0 } rise && !e.Fly)
+                {
+                    _shots.Add((e.Obs, e.Motion, start, x, y - e.Lift, x, y - e.Lift - rise.MaxSpeed, rise.ScalePermille / 1000.0, 1, 1, 0, 0, mirrored));
+                    continue;
+                }
+                if (extra is { Move: 4, Mode: > 0 } ring && !e.Fly)
+                {
+                    _movers.Add((e.Obs, e.Motion, start, 4, x, y - e.Lift, 0, 0, ring.Mode, ring.Speed, ring.MaxSpeed,
+                                 ring.MinSpeed / 1000.0 * Math.PI, ring.ScalePermille / 1000.0, mirrored));
+                    _fxLatestStart = Math.Max(_fxLatestStart, start);
+                    continue;
+                }
+                if (extra is { Move: 5, Speed: > 0 } arc && (userX != targetX || userY != targetY))
+                {
+                    _movers.Add((e.Obs, e.Motion, start, 5, userX, userY - e.Lift, targetX, targetY - e.Lift, arc.Speed, 0, 0, 0, 0, mirrored));
+                    _fxArriveAt = Math.Max(_fxArriveAt, start + arc.Speed / TicksPerSecond);
+                    continue;
+                }
                 // 대상마다 하나씩(0x1009f9c5 헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …) — 겨눈 칸 한 곳이 아니라 판정 대상마다, 엇갈림 틱만큼 늦게.
                 if (extra is { PerTarget: true } each && !e.Fly && (_fxTargets ?? WorkTargets(w, user, col, row)) is { Count: > 0 } eachTargets)
                 {
