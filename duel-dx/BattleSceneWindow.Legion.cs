@@ -425,7 +425,7 @@ internal sealed unsafe partial class BattleSceneWindow
         // 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
         if (work.Id != c.BasicWorkId)
         {
-            if (work.Prepare is 2 or 3 or 5 or 6) Play(694);   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
+            if (work.Prepare is 2 or 3 or 5 or 6) _pendingSounds.Add((_lastTime, 694, UnitFoot(follower).X));   // 시전 소리 — 대장은 UseWorkRoutine 이 낸다
             ScheduleAbilitySounds(work);
             SpawnAbilityEffects(work, follower, col, row);
         }

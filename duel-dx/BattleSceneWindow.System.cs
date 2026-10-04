@@ -530,7 +530,7 @@ internal sealed unsafe partial class BattleSceneWindow
                                    bool? OnField = null, int[]? Bonus = null, int Stance = 0, bool? Awake = null, int LastHitBy = -1,
                                    int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null,
                                    int? OriginCol = null, int? OriginRow = null, bool? Detached = null,
-                                   int? StartCol = null, int? StartRow = null, int[]? StatusBy = null);
+                                   int? StartCol = null, int? StartRow = null, int[]? StatusBy = null, int? StartFacing = null);
 
     // StartCol·StartRow = 배치 단계가 옮긴 처음 자리(불러온 뒤 RESTART 가 Btl 기본 줄로 돌아가지 않게), StatusBy = 상태를 건 유닛의 자리 번호
     // (매 턴 피해로 쓰러뜨렸을 때 EXP 를 받을 사람 — 불러오면 사라졌다). ba-21 outer-rules 7.
@@ -654,7 +654,8 @@ internal sealed unsafe partial class BattleSceneWindow
             if (int.TryParse(index, out int chrCode)) _unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
 
         _chapterDone = state.ChapterDone;
-        _mosesAltVoice = _mosesAltVoiceLoaded = state.MosesAltVoice;
+        _mosesAltVoice = state.MosesAltVoice;
+        _mosesAltVoiceLoaded = state.MosesAltVoice && state.InMoses;   // 전투 세이브면 OpenMoses 를 안 거친다 — 다음 챕터로 새지 않게
         _partyNo = state.PartyNo;
         // 파티 번호가 없던 옛 세이브 — 모세스에서 저장한 챕터의 주인 파티(Episode.dat 칸 8)로 맞춘다. 안 맞추면 OpenMoses 의 파티 바꾸기가
         // 지금 인원을 은행으로 치워 버린다.
@@ -817,7 +818,8 @@ internal sealed unsafe partial class BattleSceneWindow
                     [u.BonusDex, u.BonusPsy, u.BonusDep, u.BonusMaxTp, u.BonusMaxSoul, u.BonusMaxHp], u.Stance, u.Awake,
                     u.LastHitBy is { } hitter ? Array.IndexOf(_units, hitter) : -1,
                     u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow, u.Detached ? true : null,
-                    u.StartCol, u.StartRow, [.. u.StatusSource.Select(src => src is { } by ? Array.IndexOf(_units, by) : -1)]))],
+                    u.StartCol, u.StartRow, [.. u.StatusSource.Select(src => src is { } by ? Array.IndexOf(_units, by) : -1)],
+                    (int)u.StartFacing))],
                 _inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -950,9 +952,17 @@ internal sealed unsafe partial class BattleSceneWindow
             {
                 var saved = state.Units.GroupBy(r => r.ChrCode).ToDictionary(g => g.Key, g => g.Count());
                 var keep = new HashSet<UnitState>();
-                foreach (var u in _units)                      // 같은 Chr 는 세이브에 적힌 수만큼만 남긴다
-                    if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
                 var movable = _deployMovable.ToHashSet();
+                // 같은 Chr 는 세이브에 적힌 수만큼만 남긴다 — 먼저 대장·홑 유닛, 그다음 부하는 <b>대장이 남는 것만</b>(빠질 대장의 부하가 자리를 먼저 먹으면
+                // 벤치에서 꺼낸 대장의 부하가 지워졌다).
+                foreach (var u in _units.Where(u => u.LeaderIndex < 0))
+                    if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
+                foreach (var u in _units.Where(u => u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length))
+                {
+                    var leader = _units[u.LeaderIndex];
+                    if (movable.Contains(leader) && !keep.Contains(leader)) continue;
+                    if (saved.TryGetValue(u.ChrCode, out int n) && n > 0) { keep.Add(u); saved[u.ChrCode] = n - 1; }
+                }
                 // 배치로 세운 사람과 그 부하 가운데 세이브에 없는 것만 지운다 — Btl 에 박힌 유닛은 건드리지 않는다(부하는 DropUnits 가 대장을 따라 뺀다).
                 DropUnits(u => !keep.Contains(u) && movable.Contains(u));
                 DropUnits(u => !keep.Contains(u) && u.LeaderIndex >= 0 && u.LeaderIndex < _units.Length && movable.Contains(_units[u.LeaderIndex]));
@@ -1047,6 +1057,7 @@ internal sealed unsafe partial class BattleSceneWindow
             for (int k = 0; k < u.StatusSource.Length; k++)
                 u.StatusSource[k] = s.StatusBy is { } by && k < by.Length && Mapped(by[k]) is >= 0 and var src ? _units[src] : null;
             if (s.StartCol is { } startCol && s.StartRow is { } startRow) (u.StartCol, u.StartRow) = (startCol, startRow);
+            if (s.StartFacing is { } startFacing) u.StartFacing = (Facing)startFacing;
             if (s.LeaderIndex is { } leader) u.LeaderIndex = leader < 0 ? -1 : Mapped(leader);
             if (s.FormationSlot is { } slot) u.FormationSlot = slot;
             if (s.LegionId is { } legion) u.LegionId = legion;
