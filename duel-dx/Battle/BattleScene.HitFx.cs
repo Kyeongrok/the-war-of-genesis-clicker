@@ -115,6 +115,27 @@ internal sealed unsafe partial class BattleScene
     /// <summary>연출 전용 난수 — 전투 판정의 난수 차례를 안 건드린다.</summary>
     internal readonly Random _fxRandom = new();
 
+    /// <summary>고리 이동기의 꼬리 — 틱마다 한 점(미리 셈한 화면 자리)에 그림을 남긴다(0x100cd3d0, 수명 = 모션 길이 − 1).</summary>
+    internal readonly List<(int Obs, int Motion, double Start, (int X, int Y)[] Points, bool Mirror)> _ringTrails = [];
+
+    internal void DrawRingTrails()
+    {
+        _ringTrails.RemoveAll(m =>
+        {
+            if (host._lastTime < m.Start) return false;
+            if (host.UiFor(m.Obs) == null) return true;
+            int len = Math.Max(1, host.EffectTicks(m.Obs, m.Motion) - 1), now = (int)((host._lastTime - m.Start) * TicksPerSecond);
+            if (now >= m.Points.Length + len) return true;
+            for (int i = Math.Max(0, now - len + 1); i <= now && i < m.Points.Length; i++)
+            {
+                int age = now - i, key = host.UiFor(m.Obs)?.BlendAt(m.Motion, age) ?? 0;
+                host.DrawUi(m.Obs, m.Motion, age, m.Points[i].X, m.Points[i].Y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+                            loop: false, fade: BlendFade(key), mirror: m.Mirror);
+            }
+            return false;
+        });
+    }
+
     internal void DrawFallers()
     {
         _fallers.RemoveAll(f =>
@@ -143,24 +164,12 @@ internal sealed unsafe partial class BattleScene
     internal void DrawMovers()
     {
         DrawFallers();
+        DrawRingTrails();
         _movers.RemoveAll(m =>
         {
             if (host._lastTime < m.Start) return false;
             double ticks = (host._lastTime - m.Start) * TicksPerSecond;
             if (host.UiFor(m.Obs) == null) return true;
-            if (m.Kind == 4)
-            {
-                int len = Math.Max(1, host.EffectTicks(m.Obs, m.Motion) - 1), now = (int)ticks;
-                if (now >= m.Ticks + len) return true;
-                for (int i = Math.Max(0, now - len + 1); i <= now && i < m.Ticks; i++)
-                {
-                    double r = Math.Truncate(m.R0 + i * (m.R1 - m.R0) / m.Ticks), angle = m.A0 + m.W * i;
-                    int age = now - i, trailKey = host.UiFor(m.Obs)?.BlendAt(m.Motion, age) ?? 0;
-                    host.DrawUi(m.Obs, m.Motion, age, (int)(m.X0 + r * Math.Cos(angle)), (int)(m.Y0 + r * Math.Sin(angle) * TileH / TileW),
-                                trailKey is (>= 1 and <= 8) or 10 or 12 ? BlendOf(trailKey) : UiBlend.Add, loop: false, fade: BlendFade(trailKey), mirror: m.Mirror);
-                }
-                return false;
-            }
             if (ticks >= m.Ticks) return true;
             double k = ticks / Math.Max(1, m.Ticks), x = m.X0 + (m.X1 - m.X0) * k, y = m.Y0 + (m.Y1 - m.Y0) * k;
             int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
