@@ -813,7 +813,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 if (!TryAttackObject(col, row)) host.Hint("칠 수 없는 물체입니다");
                 return true;
             }
-            if (target < 0 || host._units[target].IsAlly || FindAttackPath(_turn, target) is not { } plan)
+            // 칠 수 있는 상대는 편 판정으로 가른다 — 버서커(4)면 아군도 친다(0x1006fde0). 전에는 편(IsAlly)만 봐서 버서커여도 아군을 못 쳤다.
+            if (target < 0 || !SeesAsFoe(user, host._units[target]) || FindAttackPath(_turn, target) is not { } plan)
             {
                 host.Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");
                 return true;
@@ -847,7 +848,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             && EffectCells(w, user, col, row).Any(c => ObjectAt(c.Item1, c.Item2) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user) && !_opened.Contains(obj));
         if (needsUnit && !hitsObject && WorkTargets(w, user, col, row).Count == 0)
         {
-            host.Toast("그 칸에는 대상이 없습니다");
+            // 버서커(4)가 걸리면 편 판정(0x1006fde0)이 자기 자신까지 적으로 돌려줘 아군 대상 기술(힐 따위)은 자신에게도 못 쓴다 — 이유를 알려 준다
+            // (사용자 질문: Btl 0141 죠안이 자신에게 힐을 못 씀). 큐어(대상 방식 5)는 된다.
+            host.Toast(w.TargetMode == 4 && user.HasStatus(4) ? "버서커 상태에서는 아군 대상 기술을 쓸 수 없습니다(자신 포함) — 큐어로 풀 수 있습니다" : "그 칸에는 대상이 없습니다");
             return true;
         }
         ConsumeTargetItem();          // 아이템이면 이때 개수가 하나 준다
