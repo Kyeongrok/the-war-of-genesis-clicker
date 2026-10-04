@@ -665,6 +665,35 @@ public sealed class GameDatabase
         };
     }
 
+    /// <summary>
+    /// 레벨 맞추기(스크립트 805, <c>0x10031a50</c>) — Lev.dat 이 아니라 <b>계열 1·2·3단계 Dep 의 직업 성장률 합</b>으로 기본값에서 다시 센다:
+    /// Lv&lt;30 은 1단계 평균 × 레벨, &lt;60 은 1단계 30레벨 + 2단계 (레벨−30), 그 뒤는 3단계 (레벨−60)(1·2단계는 직업 다섯이라 /5, 3단계는 둘이라 /2).
+    /// TP 는 <c>CTP −= ΔTP</c> 뒤 CTP 가 100 밑이면 그만큼 되돌린다. 레벨·누적 EXP 를 쓰고 남은 EXP 는 안 건드린다(ba-21 outer-rules 1절).
+    /// </summary>
+    public CharacterData SetLevel(CharacterData c, int level)
+    {
+        var dep = Deps.FirstOrDefault(d => d.Jobs.Contains(c.JobId));
+        if (dep == null || level <= 0) return c;                     // CChr+0x14 == 0
+        var b = Character(c.Code) ?? c;                              // 기본값(+0x20~+0x2a)
+        int family = (dep.Id - 1) / 3;
+        int S(int tier, int k) => Deps.FirstOrDefault(d => d.Id == 3 * family + tier)?.Jobs
+            .Sum(j => Jobs.TryGetValue(j, out var job) && job.Growth.Length > k ? job.Growth[k] : 0) ?? 0;
+        int D(int k, int v) =>
+            level < 30 ? S(1, k) * level * v / 5 / 100
+          : level < 60 ? S(1, k) * v * 30 / 5 / 100 + S(2, k) * (level - 30) * v / 5 / 100
+                       : S(1, k) * v * 30 / 5 / 100 + S(2, k) * v * 30 / 5 / 100 + S(3, k) * (level - 60) * v / 2 / 100;
+        // 성장 색인 6 LP · 7 TP · 9 PSY · 10 DEP · 11 DEX(LevelUp 과 같다)
+        int dTp = D(7, b.Tp), tp = b.Tp + dTp, ctp = c.Ctp - dTp;
+        if (ctp < 100) { tp += ctp - 100; ctp = 100; }
+        return c with
+        {
+            Level = (ushort)level, CumExp = level * 100,
+            Lp = (uint)(b.Lp + D(6, (int)b.Lp)), Psy = (ushort)(b.Psy + D(9, b.Psy)),
+            Dep = (ushort)(b.Dep + D(10, b.Dep)), Dex = (ushort)(b.Dex + D(11, b.Dex)),
+            Tp = (ushort)Math.Max(1, tp), Ctp = (ushort)ctp,
+        };
+    }
+
     /// <summary>DEP = 파일 DEP + 장비·패시브 보너스(0x20).</summary>
     public int Dep(CharacterData c) => c.Dep + EquipBonus(c, 0x20);
 
