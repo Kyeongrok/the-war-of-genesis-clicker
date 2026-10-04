@@ -32,7 +32,9 @@ internal sealed unsafe partial class BattleSceneWindow
     /// <summary>맞은 쪽 반응 — 동작 2 와 불꽃 이펙트(피해가 있을 때만).</summary>
     private void PlayHitReaction(UnitState target, bool damaged)
     {
-        PlayActionFor(target, HitAction, HitActionTicks);
+        // 맞음 동작은 그 유닛 모션(6·7·8)의 길이만큼 한 번 돈다 — 15틱이 아닌 모션이 119개다(ba-21 T7). 전에는 늘 15틱으로 잘랐다.
+        int ticks = _sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
+        PlayActionFor(target, HitAction, ticks > 0 ? ticks : HitActionTicks);
         if (!damaged) return;
         var (x, y) = UnitFoot(target);
         _effects.Add((HitEffectObs, _rng.Next(3), _lastTime, x, y - HitEffectLift));
