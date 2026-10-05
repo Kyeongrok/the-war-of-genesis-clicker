@@ -52,12 +52,35 @@ internal static class ReleaseNotes
         return string.Join("\n\n", shown.Select(s => $"v{s.Version}\n{s.Body}"));
     }
 
+    /// <summary>exe 옆에 놓이는 명단 파일(저장소 뿌리의 <c>contributor.md</c>).</summary>
+    public const string ContributorFile = "contributor.md";
+
     /// <summary>
-    /// 그 글에 적힌 도와주신 분들 — 줄 끝의 <c>(기여자: 아이디님)</c> 을 모은다(여럿이면 쉼표로). 적힌 차례대로, 같은 분은 한 번만.
+    /// 도와주신 분들 — <c>contributor.md</c> 에 쌓아 적은 명단을 통째로 낸다(판과 무관, 사용자 요청 menu-12).
+    /// 한 줄에 한 분(앞의 「- 」는 뗀다). 제목(#) 줄 · 빈 줄 · 안내(&lt;!-- --&gt;)는 건너뛴다. 없거나 못 읽으면 빈 목록.
     /// </summary>
-    public static List<string> Contributors(string notes) =>
-        [.. System.Text.RegularExpressions.Regex.Matches(notes, @"\(기여자:\s*([^)]+)\)")
-              .SelectMany(m => m.Groups[1].Value.Split(',')).Select(n => n.Trim()).Where(n => n.Length > 0).Distinct()];
+    public static List<string> Contributors()
+    {
+        string text;
+        try
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, ContributorFile);
+            text = File.Exists(path) ? File.ReadAllText(path) : "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
+
+        var names = new List<string>();
+        bool comment = false;
+        foreach (string raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.StartsWith("<!--")) comment = true;
+            if (comment) { if (line.EndsWith("-->")) comment = false; continue; }
+            line = line.TrimStart('-', '*', ' ').Trim();
+            if (line.Length > 0 && !line.StartsWith('#') && !names.Contains(line)) names.Add(line);
+        }
+        return names;
+    }
 
     /// <summary>판 번호를 세 자리로 맞춘다 — 어셈블리 판은 넷째 자리(0)가 붙어 온다.</summary>
     public static Version Trim(Version v) => new(v.Major, Math.Max(0, v.Minor), Math.Max(0, v.Build));
@@ -97,7 +120,7 @@ internal static class ReleaseNotes
 
 /// <summary>
 /// 릴리즈 노트 창 — 켤 때 한 번 <see cref="OpenIfUpdated"/> 가 띄울지 정한다. 닫기 단추 · Esc · Enter 로 닫는다.
-/// 글 아래에 「도움을 주신 분들」 칸이 있다 — 보여 주는 대목들에 적힌 기여자(<see cref="ReleaseNotes.Contributors"/>)를 모아 낸다(사용자 요청 menu-11).
+/// 글 아래에 「도움을 주신 분들」 칸이 있다 — <c>contributor.md</c> 의 명단(<see cref="ReleaseNotes.Contributors"/>)을 늘, 조금 작은 글씨로 낸다(사용자 요청 menu-11 · menu-12).
 /// </summary>
 internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
 {
@@ -106,7 +129,7 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
     /// <summary>띄울 글 — 비었으면 닫힌 것.</summary>
     internal string _text = "";
     internal int _top;
-    private List<string>? _lines;
+    private List<string>? _lines, _thanks;
 
     internal bool Open => _text.Length > 0;
 
@@ -139,7 +162,7 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 못 읽거나 못 적으면 이번에는 안 띄운다 */ }
     }
 
-    internal void Show(string notes) => (_text, _top, _lines) = (notes, 0, null);
+    internal void Show(string notes) => (_text, _top, _lines, _thanks) = (notes, 0, null, null);
 
     internal void Close() => (_text, _lines) = ("", null);
 
@@ -183,16 +206,14 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
             host.DrawText(line, x + 20, y + 40 + i * LineH, head ? 0xFFFFE070 : White, head ? 14 : 12);
         }
 
-        // 도움을 주신 분들 — 두 줄까지.
+        // 도움을 주신 분들 — 쌓아 온 명단을 작은 글씨로 세 줄까지.
         int ty = y + H - 50 - ThanksH;
         host.FillRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxBg);
         host.StrokeRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxLine);
-        host.DrawText("도움을 주신 분들", x + 20, ty + 5, 0xFFFFE070, 12);
-        var thanks = ReleaseNotes.Contributors(_text);
-        if (thanks.Count == 0) host.DrawText("이번 업데이트에는 적힌 분이 없습니다.", x + 20, ty + 24, DimGray, 12);
-        else
-            foreach (var (line, i) in host.Mos.WrapText(string.Join(" · ", thanks), W - 40, 12f).Take(2).Select((l, i) => (l, i)))
-                host.DrawText(line, x + 20, ty + 24 + i * 17, White, 12);
+        host.DrawText("도움을 주신 분들", x + 20, ty + 4, 0xFFFFE070, 11);
+        _thanks ??= ReleaseNotes.Contributors() is { Count: > 0 } names ? [.. host.Mos.WrapText(string.Join(" · ", names), W - 40, 10f).Take(3)] : [];
+        if (_thanks.Count == 0) host.DrawText("아직 적힌 분이 없습니다.", x + 20, ty + 21, DimGray, 10);
+        for (int i = 0; i < _thanks.Count; i++) host.DrawText(_thanks[i], x + 20, ty + 21 + i * 13, White, 10);
 
         int fy = y + H - 40;
         host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);

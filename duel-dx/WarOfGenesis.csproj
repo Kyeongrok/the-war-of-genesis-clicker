@@ -51,6 +51,8 @@
     <ItemGroup>
         <!-- 업데이트한 뒤 처음 켤 때 띄우는 릴리즈 노트(System/ReleaseNotesScreen.cs). -->
         <Content Include="..\릴리즈노트.md" Link="릴리즈노트.md" CopyToOutputDirectory="PreserveNewest" />
+        <!-- 릴리즈 노트 창 아래 「도움을 주신 분들」 칸의 명단. -->
+        <Content Include="..\contributor.md" Link="contributor.md" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
       <Folder Include="Ability\" />
