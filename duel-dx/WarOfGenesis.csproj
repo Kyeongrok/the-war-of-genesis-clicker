@@ -53,6 +53,8 @@
         <Content Include="..\릴리즈노트.md" Link="릴리즈노트.md" CopyToOutputDirectory="PreserveNewest" />
         <!-- 릴리즈 노트 창 아래 「도움을 주신 분들」 칸의 명단. -->
         <Content Include="..\contributor.md" Link="contributor.md" CopyToOutputDirectory="PreserveNewest" />
+        <!-- 전투 통계를 받는 곳의 주소(System/BattleStats.cs) — 비어 있으면 안 보낸다. -->
+        <Content Include="..\stats-url.txt" Link="stats-url.txt" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
       <Folder Include="Ability\" />

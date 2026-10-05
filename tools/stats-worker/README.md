@@ -13,7 +13,7 @@ npx wrangler d1 execute war-of-genesis-stats --remote --file=schema.sql
 npx wrangler deploy                          # https://war-of-genesis-stats.<계정>.workers.dev 주소가 찍힌다
 ```
 
-찍힌 주소를 `duel-dx/System/BattleStats.cs` 의 `UploadUrl` 에 넣어야 게임이 보내기 시작한다(비어 있으면 안 보낸다).
+찍힌 주소를 저장소 뿌리의 `stats-url.txt` 에 한 줄로 적어야 게임이 보내기 시작한다(비어 있으면 안 보낸다).
 
 ## 보기
 
