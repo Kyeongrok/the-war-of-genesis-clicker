@@ -1202,6 +1202,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             // OpenMoses(챕터) 가 항행 시작을 파일 값으로 지우므로 그 뒤에 세이브 값으로 덮는다 — 원본도 −1 복원이 파일 값 읽기(0x100f58af)
             // 뒤에 +0x2e40/+0x2e42 를 덮는다(0x100f5994/0x100f59ab, 감사 R2).
             host.Mos._navStart = state.NavStart is [var navChp, var navStep, var navNo] ? (navChp, navStep, navNo) : null;
+            // OpenMoses 가 항행 페이지로 열면서 파일 값으로 자리를 놓았다 — 세이브 값으로 다시 놓는다.
+            if (host.Mos._mosesOpen && host.Mos._mosesPage == 0)
+            {
+                host.Mos.ResetNavToStart();
+                host.Mos.ShowMosesBackground(host.Mos.MosesSystem()?.Background ?? 70);
+            }
             _restoreVersion = SaveVersion;
             host.Toast($"불러왔습니다 — {state.SavedAt}");
             return true;
