@@ -772,14 +772,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (faceFrame != null)
         {
             DrawTalkFace(faceFrame, bx - 57, by, 60, w.Tint);
-            if (w.Glitch)
-            {
-                // 지직거림(0x1003bcfb~0x1003bda4) — 매 틱 줄 r = rand%59 부터 아래를 가로로 rand%59+1 어긋나게 한 번 더.
-                // 원본 효과 0x44 의 합성은 모른다(가설) — 반쯤 비치게 겹친다.
-                var rng = new Random(HashCode.Combine(tick, w.OpenedAt));
-                int row = rng.Next(59), shift = rng.Next(59) + 1;
-                DrawTalkFace(faceFrame, bx - 57 + shift, by, 60, w.Tint, row, 0.5);
-            }
+            // 지직거림 — 매 틱 무작위 한 줄만 좌우로 늘여 다시 그린다(DrawTalkFaceGlitchRow).
+            if (w.Glitch) DrawTalkFaceGlitchRow(faceFrame, bx - 57, by, 60, w.Tint, new Random(HashCode.Combine(tick, w.OpenedAt)).Next(59));
         }
         // 글은 (창x+12, 창y+10) 부터, 폭 153 · 세 줄 · 줄 내림 16(굴림 9pt). 넘치면 한 줄씩 올린다.
         DrawTalkLines(w, bx + 12, by + 10);
@@ -797,41 +791,52 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// <summary>
     /// 얼굴을 size×size 칸에(비율 유지) — <paramref name="tint"/> 면 602 물들이기 방식 10·세기 20:
     /// 채널마다 <c>min(31, c·32/(32−20))</c>(<c>0x1000b7c0</c> 색표 <c>0x1019a018</c>) — 거의 하얗게 밝힌다.
-    /// <paramref name="fromRow"/> 는 60줄 얼굴 기준 그 줄부터 아래만(지직거림).
     /// </summary>
-    internal void DrawTalkFace(SpriteFrame f, int x, int y, int size, bool tint, int fromRow = 0, double fade = 1)
+    internal void DrawTalkFace(SpriteFrame f, int x, int y, int size, bool tint)
     {
         if (f.W == 0 || f.H == 0 || size <= 0) return;
         double scale = Math.Min((double)size / f.W, (double)size / f.H);
         int dw = Math.Max(1, (int)(f.W * scale)), dh = Math.Max(1, (int)(f.H * scale));
         int left = x + (size - dw) / 2, top = y + (size - dh) / 2;
-        int k = Math.Clamp((int)(fade * 256), 0, 256);
+        for (int yy = 0; yy < dh; yy++)
+            DrawTalkFaceRow(f, top + yy, yy * f.H / dh, left, dw, left, dw, tint);
+    }
+
+    /// <summary>
+    /// 602 얼굴의 지직거림(<c>0x1003bcfb</c>~<c>0x1003bda4</c>) — 얼굴의 <b>한 줄</b>(줄 <paramref name="row"/>, 60줄 기준)을 좌우로 늘여 다시 그린다.
+    /// </summary>
+    /// <remarks>
+    /// 원본은 매 틱 <c>r = rand()%59</c> 로 원본 네모를 <c>(0, r, 60, r+1)</c> — 높이 1 — 로 잡고(<c>0x1003bd30 mov [rc.bottom], r+1</c>),
+    /// 그릴 자리를 <c>{x−4, y+r, 너비 0x44(68), 높이 1, 각도 0}</c>(<c>0x1000b750</c> 이 채우는 다섯 칸 — <c>0x1000c650</c> 이 셋째·넷째를
+    /// 그림 크기와 견줘 늘여 그린다)로 주고, 얼굴 칸 <c>(x, y, x+60, y+60)</c> 으로 잘라 그린다. 곧 60 px 한 줄을 가운데 맞춰 68 px 로 늘인 것 —
+    /// 좌우 4 px 씩은 칸 밖이라 안 보인다. 전에는 「줄 r 부터 아래 전부를 1~59 px 옆으로」로 잘못 읽어 얼굴 아래쪽이 크게 튀었다(사용자 보고).
+    /// </remarks>
+    internal void DrawTalkFaceGlitchRow(SpriteFrame f, int x, int y, int size, bool tint, int row)
+    {
+        if (f.W == 0 || f.H == 0 || size <= 0) return;
+        double scale = Math.Min((double)size / f.W, (double)size / f.H);
+        int dw = Math.Max(1, (int)(f.W * scale)), dh = Math.Max(1, (int)(f.H * scale));
+        int left = x + (size - dw) / 2, top = y + (size - dh) / 2;
+        int yy = row * dh / 60, grow = 4 * dw / 60;
+        if (yy < dh) DrawTalkFaceRow(f, top + yy, yy * f.H / dh, left - grow, dw + 2 * grow, left, dw, tint);
+    }
+
+    /// <summary>얼굴의 그림 줄 <paramref name="srcY"/> 를 화면 줄 <paramref name="py"/> 의 (<paramref name="from"/>, 너비 <paramref name="width"/>)에 늘여 그리되 (<paramref name="clipLeft"/>, <paramref name="clipW"/>) 안만.</summary>
+    private void DrawTalkFaceRow(SpriteFrame f, int py, int srcY, int from, int width, int clipLeft, int clipW, bool tint)
+    {
         var clip = host._uiClip;
-        for (int yy = fromRow * size / 60; yy < dh; yy++)
+        if ((uint)py >= host.BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) return;
+        for (int px = clipLeft; px < clipLeft + clipW; px++)
         {
-            int py = top + yy;
-            if ((uint)py >= host.BoardHeight || clip is { } c1 && (py < c1.Top || py >= c1.Top + c1.Height)) continue;
-            int srcY = yy * f.H / dh;
-            for (int xx = 0; xx < dw; xx++)
+            if ((uint)px >= host.BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
+            uint c = f.Px[srcY * f.W + (px - from) * f.W / width];
+            if ((c & 0xFF000000) == 0) continue;
+            if (tint)
             {
-                int px = left + xx;
-                if ((uint)px >= host.BoardWidth || clip is { } c2 && (px < c2.Left || px >= c2.Left + c2.Width)) continue;
-                uint c = f.Px[srcY * f.W + xx * f.W / dw];
-                if ((c & 0xFF000000) == 0) continue;
-                if (tint)
-                {
-                    uint Lit(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 32 / 12);
-                    c = Lit(16) << 16 | Lit(8) << 8 | Lit(0);
-                }
-                int i = py * host.BoardWidth + px;
-                if (k < 256)
-                {
-                    uint d = host._fb[i];
-                    uint Mix(int shift) => (uint)(((int)(c >> shift & 0xFF) * k + (int)(d >> shift & 0xFF) * (256 - k)) / 256);
-                    c = Mix(16) << 16 | Mix(8) << 8 | Mix(0);
-                }
-                host._fb[i] = c | 0xFF000000;
+                uint Lit(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 32 / 12);
+                c = Lit(16) << 16 | Lit(8) << 8 | Lit(0);
             }
+            host._fb[py * host.BoardWidth + px] = c | 0xFF000000;
         }
     }
 
