@@ -333,7 +333,7 @@ public partial class SkillEditView : UserControl
         row.Dirty = DiskJson(row) == json ? "" : "●";
         if (SkillGrid.SelectedItem != row) { SkillGrid.SelectedItem = row; SkillGrid.ScrollIntoView(row); }
         else Fill();
-        SkillGrid.Items.Refresh();
+        RefreshGrid(SkillGrid);
         UpdateStatus();
         StatusText.Text = $"{row.Name} 을(를) 한 걸음 되돌렸습니다 (남은 되돌리기 {_undo.Count}).";
     }
@@ -365,7 +365,7 @@ public partial class SkillEditView : UserControl
         }
         _lastJson[row] = now;
         row.Dirty = "●";
-        SkillGrid.Items.Refresh();
+        RefreshGrid(SkillGrid);
         UpdateStatus();
     }
 
@@ -412,6 +412,17 @@ public partial class SkillEditView : UserControl
         MarkDirty(row);
     }
 
+    /// <summary>
+    /// 표를 다시 그린다 — 다만 <b>칸을 고치는 중이면 건너뛴다</b>. 값을 확정하고 곧바로 다음 칸을 고치기 시작하면(소울 비용을 잇달아 고칠 때)
+    /// 미뤄 둔 새로 고침이 그 편집 도중에 돌아 「AddNew 또는 EditItem 트랜잭션 중에는 Refresh 를 쓸 수 없습니다」로 편집기가 죽었다(사용자 보고).
+    /// 건너뛴 새로 고침은 그 편집이 확정될 때 다시 돈다.
+    /// </summary>
+    private static void RefreshGrid(DataGrid grid)
+    {
+        if (grid.Items is System.ComponentModel.IEditableCollectionView { IsEditingItem: true } or System.ComponentModel.IEditableCollectionView { IsAddingNew: true }) return;
+        grid.Items.Refresh();
+    }
+
     private void CommonGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
     {
         if (_filling || e.EditAction != DataGridEditAction.Commit || Current is not { } row) return;
@@ -420,7 +431,7 @@ public partial class SkillEditView : UserControl
             if (CommonGrid.ItemsSource is not List<CommonRow> list) return;
             foreach (var c in list) row.Skill.Common[c.Field] = c.Value;
             MarkDirty(row);
-            CommonGrid.Items.Refresh();         // 드롭다운으로 고른 이름(「3 아무 칸」)을 칸에 다시 보인다
+            RefreshGrid(CommonGrid);         // 드롭다운으로 고른 이름(「3 아무 칸」)을 칸에 다시 보인다
         });
     }
 
@@ -607,7 +618,7 @@ public partial class SkillEditView : UserControl
                 File.WriteAllText(r.Path, SkillBook.ToJson(r.Skill), new UTF8Encoding(false));
                 r.Dirty = "";
             }
-            SkillGrid.Items.Refresh();
+            RefreshGrid(SkillGrid);
             StatusText.Text = $"스킬 {string.Join(", ", dirty.Select(r => r.Name))} 을(를) 저장했습니다 — 게임을 다시 켜면 반영됩니다.";
             return true;
         }
@@ -626,7 +637,7 @@ public partial class SkillEditView : UserControl
         row.Skill = skill;
         row.Dirty = "";
         Remember(row);
-        SkillGrid.Items.Refresh();
+        RefreshGrid(SkillGrid);
         Fill();
         UpdateStatus();
     }
