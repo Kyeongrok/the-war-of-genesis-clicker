@@ -344,15 +344,23 @@ internal sealed unsafe partial class MosesScene
         // 형 단추 다섯과 겹쳐 글이 안 읽히므로, 데모는 오른쪽 어빌리티 목록 아래 빈 칸(395,232)에 둔다.
         host.DarkenRect(ox + 387, oy + 224, 180, 126);
         host.DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
-        string[] stats =
-        [
-            $"{db.JobName(c)} · {db.BodyName(c.Body)}",
-            $"{db.T(160)} {c.Level}",
-            $"{db.T(161)} {c.Exp}",
-            $"{db.T(34)} {c.Lp}",
-            $"{db.T(38)} {c.Tp}",
-        ];
-        for (int i = 0; i < stats.Length; i++) host.DrawText(stats[i], ox + 405, oy + 240 + i * 18, White, 12);
+        // 이 칸은 원본의 LEVEL · EXP · LP · TP 대신 <b>레벨이 한 번 오를 때 오르는 수치</b>를 보인다(사용자 요청 mo-10) — 형(일반·공격·고속 …)마다
+        // 직업 성장률이 달라서, 형 칸을 누르면 그 형의 값으로 바뀐다. 식은 LevelUp 과 같다: 성장률% × 기본값(.chr 처음 값) / 100.
+        // 지금 형보다 많이 오르면 초록, 적게 오르면 빨강.
+        ushort previewJob = StylePreviewJob();
+        var grown = db.Character(c.Code) ?? c;
+        var nextJob = db.Jobs.GetValueOrDefault(previewJob);
+        var nowJob = db.Jobs.GetValueOrDefault(c.JobId);
+        int Grow(JobData? job, int index, int baseValue) => job is { Growth.Length: >= 12 } ? job.Growth[index] * baseValue / 100 : 0;
+        host.DrawText($"{db.JobName(c with { JobId = previewJob })} · {db.BodyName(c.Body)}", ox + 405, oy + 240, White, 12);
+        host.DrawText("레벨업 한 번에 오르는 수치", ox + 405, oy + 258, 0xFFB4B4B4, 11);
+        (string Name, int Index, int Base)[] growth = [(db.T(34), 6, (int)grown.Lp), ("PSY", 9, grown.Psy), (db.T(38), 7, grown.Tp), ("DEP", 10, grown.Dep), ("DEX", 11, grown.Dex)];
+        for (int i = 0; i < growth.Length; i++)
+        {
+            int next = Grow(nextJob, growth[i].Index, growth[i].Base), now = Grow(nowJob, growth[i].Index, growth[i].Base);
+            uint colour = next > now ? 0xFF00FF00 : next < now ? 0xFFFF6060 : White;
+            host.DrawText($"{growth[i].Name} +{next}", ox + 405 + i % 2 * 78, oy + 276 + i / 2 * 18, colour, 12);
+        }
 
         // 어빌리티 미리보기 (395,70) 164×20 여섯 줄 — 원본(0x100fa4e0)은 <b>미리보기 중인 직업</b>의 Job.dat 어빌리티 11칸을 이름만 나열한다.
         // 형 칸을 누르면 그 직업 것으로 바뀐다.
