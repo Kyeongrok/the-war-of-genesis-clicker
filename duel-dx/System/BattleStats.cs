@@ -17,10 +17,26 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class BattleStats(GameWindow host)
 {
+    /// <summary>받는 곳의 주소를 적어 두는 파일 — 저장소 뿌리에 있고 exe 옆에 실린다.</summary>
+    internal const string UrlFile = "stats-url.txt";
+
     /// <summary>
-    /// 통계를 받는 곳(Cloudflare Worker — <c>tools/stats-worker</c> 를 올리면 찍히는 주소). <b>비어 있으면 아무것도 안 보낸다.</b>
+    /// 통계를 받는 곳(Cloudflare Worker — <c>tools/stats-worker</c> 를 올리면 찍히는 주소). <see cref="UrlFile"/> 의 첫 줄(<c>#</c> 줄 · 빈 줄 빼고)이다.
+    /// <b>비어 있거나 https 주소가 아니면 아무것도 안 보낸다.</b>
     /// </summary>
-    internal const string UploadUrl = "";
+    internal static readonly string UploadUrl = ReadUrl();
+
+    private static string ReadUrl()
+    {
+        try
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, UrlFile);
+            if (!File.Exists(path)) return "";
+            string url = File.ReadLines(path).Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0 && !l.StartsWith('#')) ?? "";
+            return url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? url : "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return ""; }
+    }
 
     /// <summary>한 줄의 셈 — 인물 × 어빌리티(레벨마다 따로).</summary>
     internal sealed class Row
