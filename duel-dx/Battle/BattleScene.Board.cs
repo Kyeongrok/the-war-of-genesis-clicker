@@ -31,6 +31,7 @@ internal sealed unsafe partial class BattleScene
         // 결과와 행선지는 <b>한 번만</b> 쓴다 — 전에는 남아 있어서, 연대표(모세스가 아님)에서 에피소드를 누르면
         // 그 클릭이 다시 「배너 넘기기」가 되어 Btl 0137 의 끝 필드 55 가 또 열렸다(사용자 보고).
         bool won = _outcome.StartsWith('승');
+        host.Stats.Finish(won);
         int nextField = _eventNextField;
         // 시험 전용: 결과와 행선지를 남긴다(DUELDX_TESTRUN 일 때만).
         TestRunTrace($"leave btl {host._scene.Id} won {won} outcome '{_outcome}' nextBattle {_eventNextBattle} nextField {nextField} sceneNext {host._scene.NextBattle} episodes {host.EpisodesScr.Episodes().Count} turnNo {_turnNo} t {host._lastTime:F1}");

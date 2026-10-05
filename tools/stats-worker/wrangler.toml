@@ -1,0 +1,9 @@
+name = "dueldx-stats"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# `wrangler d1 create dueldx-stats` 가 찍어 주는 database_id 를 아래에 넣는다.
+[[d1_databases]]
+binding = "DB"
+database_name = "dueldx-stats"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

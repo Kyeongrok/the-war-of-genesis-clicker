@@ -873,6 +873,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                                              List<(int Col, int Row)> path, bool eventFinisher = false)
     {
         var a = host._units[userIndex];
+        host.Stats.BeginCast(a, w);
         // 이동 + 기술이면 진형을 다시 세우지 않는다 — 원본은 계산만 하고 결과를 안 읽는다(0x1005fa90·0x1005fd00, 분석-군단).
         // 진형은 「이동만」·「이동+휴식」(0x1005f670·0x1005f870)에서만 다시 선다. 전에는 기술 앞에서 늘 다시 세웠다.
         _skillLeader = userIndex;
@@ -1294,6 +1295,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         if (w.Id is StanceDefendWork or StanceEvadeWork) a.Stance = w.Id == StanceDefendWork ? 1 : 2;
         GainBuffExp(a);
+        if (!eventFinisher) host.Stats.Cast(a, w);   // 통계 — 사건이 시킨 기술은 내가 쓴 것이 아니다
         PayWorkCost(a, w, free: eventFinisher);   // 사건 207·909 는 +0xa4 = 1 — 비용 없이 SOUL 증가만(0x1007638c, 감사5 B2)
         // 기술 뒤 대장 자리를 「진형을 짠 자리」로 적어 둔다 — SyncFollowers 가 이 자리로 진형을 다시 세우지 않게.
         _formationAt[userIndex] = (a.Col, a.Row);
@@ -1386,6 +1388,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             int before = t.Hp;
             t.Hp = Math.Min(t.MaxHp, t.Hp + amount);
+            host.Stats.Heal(a, w, t.Hp - before);
             // 회복은 떠오르지 않고 옛 HP 에서 새 HP 로 세어 올라간다(노랑).
             ShowNumber(t, host._db.T(159), HealColor2, rise: false, count: (before, t.Hp));
             ApplyAilments(a, t, w);
@@ -1452,6 +1455,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"foe hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
+        host.Stats.Hit(a, w, Math.Min(amount, t.Hp));   // 통계에는 실제로 깎인 만큼만
         t.Hp = Math.Max(0, t.Hp - amount);
         RushTp(t);
         ShowNumber(t, $"{host._db.T(159)} {amount}", DamageColor);
@@ -1462,6 +1466,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         ApplyAilments(a, t, w);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
+        host.Stats.Kill(a, w);
         // 쓰러뜨린 타에는 불꽃(Obs 73)이 한 장 더 뜬다 — 모션 0(0x10079b84) + 무작위 한 장(0x10079c0a), ba-21 T6.
         if (w.IsDamage) { var (kx, ky) = host.Btl.UnitFoot(t); _effects.Add((HitEffectObs, 0, host._lastTime, kx, ky - HitEffectLift)); }
         // 처치(메시지 1016)는 HP 가 0 이 된 순간 공격자에게 간다 — 47(전투불능 방지)로 살아나도 보상은 받는다(0x10079ab8).

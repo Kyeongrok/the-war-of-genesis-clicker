@@ -484,6 +484,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._turn = -1;
         host._selected = -1;
         host.Btl._outcome = "";
+        host.Stats.Reset();
         host.Btl._eventCheckDue = 0xF;
         host.Btl._objectsDue = false;
         host.Btl._outcomeAfterLevelUp = false;
