@@ -703,6 +703,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when SlotsScr.SlotsOpen:
                 SlotsScr.ScrollSlots(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 슬롯 목록이 떠 있으면 휠은 목록을 굴린다
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when NotesScr.Open:
+                NotesScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when CharEditScr._open:
                 CharEditScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
@@ -781,6 +784,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (key == Win32.VK_ESCAPE && Tlk.SkipScene()) return;
         if (Tlk.OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Tlk.SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
+        if (NotesScr.Open) { NotesScr.OnKey(key); return; }
         if (DevScr._open) { DevScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
@@ -903,6 +907,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ProgressScr._progressOpen) { var (px, py) = BoardPoint(clientX, clientY); ProgressScr.OnProgressClick(px, py); return; }
         var (bx, by) = BoardPoint(clientX, clientY);
         // 메뉴 막대에서 여는 창들은 맨 위에 그리므로 클릭도 먼저 받는다 — 전에는 적이 움직이는 동안 창 위를 눌러도 「적 행동 건너뛰기」가 먼저 먹었다.
+        if (NotesScr.OnClick(bx, by)) return;          // 릴리즈 노트(업데이트 뒤 처음 켰을 때)
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
@@ -960,6 +965,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             Fld.OpenFieldIfAsked();
             Btl.OpenLevelUpIfAsked();
             SlotsScr.OpenSlotsIfAsked();
+            NotesScr.OpenIfUpdated();
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) Btl._saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.
@@ -1192,6 +1198,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TuningScr.DrawTuning();
         CharEditScr.Draw();
         DevScr.Draw();
+        NotesScr.Draw();
     }
 
     internal void DrawBackground()
