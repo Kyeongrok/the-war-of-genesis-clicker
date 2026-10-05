@@ -229,10 +229,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
     internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt));
 
-    /// <summary>통계를 보내도 되는지 마지막으로 물은 때(UTC, ISO 꼴) — 비었으면 아직 안 물었다(<see cref="StatsConsentScreen"/>).</summary>
+    /// <summary>통계 알림이나 켜기 권유를 마지막으로 띄운 때(UTC, ISO 꼴) — 비었으면 아직 안 띄웠다(<see cref="StatsConsentScreen"/>).</summary>
     internal string _statsAskedAt = UserSettings.Current.StatsAskedAt;
 
-    /// <summary>전투가 끝날 때 어빌리티 통계를 익명으로 보내나 — 모드 > 편의성(기본 끔, <see cref="BattleStats"/>).</summary>
+    /// <summary>전투가 끝날 때 어빌리티 통계를 익명으로 보내나 — 모드 > 편의성(기본 켬, <see cref="BattleStats"/>).</summary>
     internal bool _sendStats = UserSettings.Current.SendStats;
 
     internal const int MenuSendStats = 1164;
