@@ -918,6 +918,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
+        if (Btl.OnChestListClick(bx, by)) return;      // 상자 목록의 접기 단추
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !Mos._mosesOpen && !FieldOpen && !TitleScr._titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
         if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }

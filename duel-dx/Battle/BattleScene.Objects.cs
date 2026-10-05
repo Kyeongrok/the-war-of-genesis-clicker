@@ -919,15 +919,30 @@ internal sealed unsafe partial class BattleScene
     /// 모드 &gt; 상자 내용물 보기 — 지금 전투의 상자(종류 2)·폭탄 상자(8)와 든 것을 화면 왼쪽 위에 적는다. 연 것은 흐리게.
     /// 원본에 없는 도움 기능이다(사용자 요청). 든 것 = 아이템(.btl 물체 +0x144)이 있으면 아이템, 없으면 GP(+0x146).
     /// </summary>
+    /// <summary>상자 목록을 접어 두었나 — 머리 줄만 남긴다. 켤 때마다 펼친 채로 시작한다.</summary>
+    internal bool _chestListFolded;
+
+    /// <summary>상자 목록의 접기 단추 자리(판 좌표) — 목록이 안 떠 있으면 null.</summary>
+    internal (int X, int Y, int W, int H)? _chestFoldButton;
+
+    /// <summary>접기 단추를 눌렀으면 접거나 펴고 true.</summary>
+    internal bool OnChestListClick(int bx, int by)
+    {
+        if (_chestFoldButton is not var (fx, fy, fw, fh) || bx < fx || bx >= fx + fw || by < fy || by >= fy + fh) return false;
+        _chestListFolded = !_chestListFolded;
+        return true;
+    }
+
     internal void DrawChestList()
     {
+        _chestFoldButton = null;
         if (!host._showChestContents || !host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen || host.TitleScr._titleOpen || host.EpisodesScr._episodesOpen || host._db is not { } db) return;
         var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
         var lines = new List<(string Text, uint Color)>
         {
             (chests.Count == 0 ? "상자 없음" : $"상자 {chests.Count(o => !_opened.Contains(o))}/{chests.Count}", 0xFFFFE070),
         };
-        foreach (var o in chests)
+        foreach (var o in _chestListFolded ? [] : chests)
         {
             string what = o.Data.Kind == 8 ? $"폭탄 (공격 {ObjAttack(o)}, 반경 {o.Data.Radius})"
                 : o.Record.ItemId > 0 ? (db.Items.GetValueOrDefault(o.Record.ItemId) is { } item ? db.T(item.NameId) : $"아이템 {o.Record.ItemId}")
@@ -936,9 +951,17 @@ internal sealed unsafe partial class BattleScene
             lines.Add(($"({o.Col},{o.Row}) {what}{(opened ? " — 열었음" : "")}", opened ? 0xFF808080 : White));
         }
         int x = host._camX + 8, y = host._camY + (host._showStatusBar ? GridTop + 4 : 8);
-        int w = lines.Max(l => host.GetText(l.Text, l.Color, 12).W) + 12, lineH = 17;
+        // 오른쪽 위에 접기 단추(− 접기 · + 펴기) 자리를 남긴다.
+        int w = Math.Max(lines.Max(l => host.GetText(l.Text, l.Color, 12).W) + 12, host.GetText(lines[0].Text, lines[0].Color, 12).W + 40), lineH = 17;
         host.FillRect(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
         for (int i = 0; i < lines.Count; i++) host.DrawText(lines[i].Text, x + 2, y + i * lineH, lines[i].Color, 12);
+        var fold = (X: x - 4 + w - 19, Y: y - 1, W: 16, H: 15);
+        _chestFoldButton = fold;
+        bool over = host._mouse.X >= fold.X && host._mouse.X < fold.X + fold.W && host._mouse.Y >= fold.Y && host._mouse.Y < fold.Y + fold.H;
+        host.FillRect(fold.X, fold.Y, fold.W, fold.H, over ? 0xFF2A4A8A : 0xFF303030);
+        host.StrokeRect(fold.X, fold.Y, fold.W, fold.H, 0xFF909090);
+        host.FillRect(fold.X + 4, fold.Y + 7, 8, 1, White);
+        if (_chestListFolded) host.FillRect(fold.X + 7, fold.Y + 4, 1, 8, White);
     }
 
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>

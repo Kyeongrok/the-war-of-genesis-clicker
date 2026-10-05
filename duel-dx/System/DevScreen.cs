@@ -13,7 +13,7 @@ using static DuelDx.GameWindow;
 internal sealed unsafe class DevScreen(GameWindow host)
 {
     internal const int MenuDev = 1162;
-    internal const int W = 600, H = 400, RowY = 40, RowH = 32, ButtonW = 150, FolderY = 186, FolderH = 42, OpenW = 80;
+    internal const int W = 600, H = 440, RowY = 40, RowH = 32, ButtonW = 150, FolderY = 218, FolderH = 42, OpenW = 80;
 
     /// <summary>DUELDX_DEV 가 있으면 열어 둔 채 시작한다(화면 밖 시험용).</summary>
     internal bool _open = Environment.GetEnvironmentVariable("DUELDX_DEV") != null;
@@ -25,6 +25,7 @@ internal sealed unsafe class DevScreen(GameWindow host)
         ("챕터 고르기…", "챕터를 골라 그 자리에서 연다", MenuChapters, true),
         ("편집기 열기…", "없으면 받아서 연다(약 60MB)", MenuEditor, false),
         ("적 정리", "지금 전투의 적을 모두 쓰러뜨린다(시험용)", MenuClearEnemies, true),
+        (host._planetMarks ? "행성 표시: 켬" : "행성 표시: 끔", "항행에서 전투·필드 장소가 있는 행성의 표시에 테두리", MenuPlanetMarks, false),
     ];
 
     /// <summary>폴더 줄 — 이름, 자리, 덧붙일 말.</summary>

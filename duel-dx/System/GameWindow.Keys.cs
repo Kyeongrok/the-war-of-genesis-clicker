@@ -226,7 +226,12 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks));
+
+    /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 개발 > 행성 표시(기본 켬, 원본에 없다).</summary>
+    internal bool _planetMarks = UserSettings.Current.PlanetMarks;
+
+    internal const int MenuPlanetMarks = 1165;
 
     /// <summary>통계 알림이나 켜기 권유를 마지막으로 띄운 때(UTC, ISO 꼴) — 비었으면 아직 안 띄웠다(<see cref="StatsConsentScreen"/>).</summary>
     internal string _statsAskedAt = UserSettings.Current.StatsAskedAt;
@@ -318,6 +323,10 @@ internal sealed unsafe partial class GameWindow
             case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
             case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
             case StatsScreen.MenuStats: StatsScr._open = !StatsScr._open; break;
+            case MenuPlanetMarks:
+                _planetMarks = !_planetMarks;
+                SaveSettings();
+                break;
             case MenuSendStats:
                 (_sendStats, _statsAskedAt) = (!_sendStats, DateTime.UtcNow.ToString("o"));   // 여기서 고른 때부터 다시 센다
                 Toast(_sendStats ? "전투가 끝나면 어빌리티 통계를 익명으로 보냅니다" : "전투 통계를 보내지 않습니다");
