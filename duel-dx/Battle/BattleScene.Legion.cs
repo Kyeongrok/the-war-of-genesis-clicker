@@ -423,7 +423,9 @@ internal sealed unsafe partial class BattleScene
         var struck = WorkTargets(work, follower, col, row);
         if (struck.Count == 0) return false;
         follower.Facing = FacingToward(follower.Col, follower.Row, col, row);
-        PlayAction(follower, 8);   // 동작 8 = 치는 순간(분석-모션)
+        // 치는 동작 — 보통은 8(베기), 쏘는 기본공격(work 6 · 1584)은 대장처럼 9 다. 전에는 늘 8 이라 총 든 부하(글로리가드)가 칼 휘두르는 몸짓으로 쐈다.
+        int strike = BasicWorkActions.GetValueOrDefault(work.Id)?.LastOrDefault(IsStrikeAction) is > 0 and var basicStrike ? basicStrike : 8;
+        PlayAction(follower, DrawnAction(follower, strike));
         // 기본공격이 아니면 이펙트·소리를 같이 띄운다(ba-20 Q5). 동작 사슬은 아직 8 하나.
         if (work.Id != c.BasicWorkId)
         {
