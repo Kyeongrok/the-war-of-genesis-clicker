@@ -227,10 +227,10 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAsked));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt));
 
-    /// <summary>통계를 보내도 되는지 이미 물었나 — 처음 한 번만 묻는다(<see cref="StatsConsentScreen"/>).</summary>
-    internal bool _statsAsked = UserSettings.Current.StatsAsked;
+    /// <summary>통계를 보내도 되는지 마지막으로 물은 때(UTC, ISO 꼴) — 비었으면 아직 안 물었다(<see cref="StatsConsentScreen"/>).</summary>
+    internal string _statsAskedAt = UserSettings.Current.StatsAskedAt;
 
     /// <summary>전투가 끝날 때 어빌리티 통계를 익명으로 보내나 — 모드 > 편의성(기본 끔, <see cref="BattleStats"/>).</summary>
     internal bool _sendStats = UserSettings.Current.SendStats;
@@ -320,7 +320,7 @@ internal sealed unsafe partial class GameWindow
             case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
             case StatsScreen.MenuStats: StatsScr._open = !StatsScr._open; break;
             case MenuSendStats:
-                (_sendStats, _statsAsked) = (!_sendStats, true);   // 여기서 스스로 골랐으면 다시 묻지 않는다
+                (_sendStats, _statsAskedAt) = (!_sendStats, DateTime.UtcNow.ToString("o"));   // 여기서 고른 때부터 다시 센다
                 Toast(_sendStats ? "전투가 끝나면 어빌리티 통계를 익명으로 보냅니다" : "전투 통계를 보내지 않습니다");
                 SaveSettings();
                 break;
