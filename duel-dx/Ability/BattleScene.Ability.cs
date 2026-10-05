@@ -306,6 +306,6 @@ internal sealed unsafe partial class BattleScene
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
             && host._db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && host._db.AbilityDescription(pressed) is { Length: > 0 } desc)
-            host.StatusScr.DrawDescriptionTip(desc + host.StatusScr.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+            host.StatusScr.DrawDescriptionTip(desc + host.StatusScr.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]) + host.StatusScr.UltimateStyleText(pressed, host._units[_turn].Data), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 }

@@ -1047,13 +1047,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 host.DrawUi(p.MapObs, p.MapMotion, ptick, ox + p.X, oy + p.Y, GameWindow.UiBlend.Alpha);
                 int h = host.UiFor(p.MapObs)?.FrameAt(p.MapMotion, 0)?.H ?? 40;
                 host.DrawUi(MosesMarkObs, 3, ptick, ox + p.X, oy + p.Y - 10 - h / 2, GameWindow.UiBlend.Alpha);
-                // 개발 > 행성 표시 — 전투·필드 장소가 열려 있는 행성은 표시에 노란 테두리를 두른다(사용자 요청 mo-8, 원본에 없다).
+                // 모드 > 편의성 「행성에 할 일 표시」 — 전투·필드 장소가 열려 있는 행성은 표시 위에 노란 점을 찍는다(사용자 요청 mo-8, 원본에 없다).
                 if (host._planetMarks && PlanetHasMission(p) && host.UiFor(MosesMarkObs)?.FrameAt(3, 0) is { } mark)
-                {
-                    int mx = ox + p.X + mark.X - 4, my = oy + p.Y - 10 - h / 2 + mark.Y - 4;
-                    host.StrokeRect(mx, my, mark.W + 8, mark.H + 8, 0xFFFFE040);
-                    host.StrokeRect(mx - 1, my - 1, mark.W + 10, mark.H + 10, 0xFFFFE040);
-                }
+                    host.FillCircle(ox + p.X + mark.X + mark.W / 2, oy + p.Y - 10 - h / 2 + mark.Y - 5, 2, 0xFFFFE040);   // 테두리는 너무 티가 나서 표시 위의 작은 점으로(사용자 요청)
             }
             DrawMosesBack(ox, oy, tick);
             // 다른 항성계 단추 — 조건을 통과한 다른 성계 앞의 둘, Obs 0680 모션 0 (30,40) · 1 (630,40),
