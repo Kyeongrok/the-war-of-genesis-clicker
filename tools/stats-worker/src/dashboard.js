@@ -44,7 +44,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 <body>
 <main>
   <h1>창세기전3 파트2 — 전투 통계</h1>
-  <div class="sub">익명으로 모은 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
+  <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
     <label>버전 <select id="version"><option value="">전체</option></select></label>
     <span id="error"></span>
