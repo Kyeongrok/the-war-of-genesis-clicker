@@ -1,3 +1,4 @@
+-- 이미 만든 DB 에 seconds 칸을 더할 때: ALTER TABLE battles ADD COLUMN seconds INTEGER;
 -- 전투 통계 D1 표 — wrangler d1 execute war-of-genesis-stats --remote --file=schema.sql
 CREATE TABLE IF NOT EXISTS battles (
   report      TEXT PRIMARY KEY,   -- 게임이 판마다 만든 번호(다시 보내도 한 번만 들어가게)
@@ -8,6 +9,7 @@ CREATE TABLE IF NOT EXISTS battles (
   difficulty  INTEGER NOT NULL,
   outcome     TEXT NOT NULL,      -- win · lose · quit
   turns       INTEGER NOT NULL,
+  seconds     INTEGER,            -- 걸린 시간(초, 실제 시계) — 이 칸이 생기기 전 판은 NULL
   flags       TEXT NOT NULL       -- 수치를 흔드는 것들(JSON: 캐릭터 에디터를 썼나, 소울 기여도 …)
 );
 

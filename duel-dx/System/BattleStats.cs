@@ -81,11 +81,15 @@ internal sealed class BattleStats(GameWindow host)
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
+    /// <summary>이 판을 연 때(실제 시계, 초) — 걸린 시간을 잰다. 전투 도중에 세이브를 불러오면 불러온 때부터다.</summary>
+    private double _startedAt;
+
     /// <summary>전투를 새로 열 때 — 그 판의 셈을 비운다.</summary>
     internal void Reset()
     {
         _battle.Clear();
         _cast = default;
+        _startedAt = host._realTime;
     }
 
     /// <summary>
@@ -206,6 +210,7 @@ internal sealed class BattleStats(GameWindow host)
             difficulty = host.Btl._difficulty,
             outcome = won ? "win" : "lose",
             turns = host.Btl._turnNo,
+            seconds = (int)Math.Clamp(host._realTime - _startedAt, 0, 86400),
             flags = new { charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart },
             skills = _battle.Select(p => new
             {
