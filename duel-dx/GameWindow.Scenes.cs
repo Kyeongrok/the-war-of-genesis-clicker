@@ -112,6 +112,8 @@ internal sealed unsafe partial class GameWindow
     internal StatsScreen StatsScr => _statsScr ?? LazyInitializer.EnsureInitialized(ref _statsScr, () => new StatsScreen(this));
     internal StatsConsentScreen? _consentScr;
     internal StatsConsentScreen ConsentScr => _consentScr ?? LazyInitializer.EnsureInitialized(ref _consentScr, () => new StatsConsentScreen(this));
+    internal GamePad? _pad;
+    internal GamePad Pad => _pad ?? LazyInitializer.EnsureInitialized(ref _pad, () => new GamePad(this));
     internal ReleaseNotesScreen? _notesScr;
     internal ReleaseNotesScreen NotesScr => _notesScr ?? LazyInitializer.EnsureInitialized(ref _notesScr, () => new ReleaseNotesScreen(this));
 }
