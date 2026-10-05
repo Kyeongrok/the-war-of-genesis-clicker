@@ -5,18 +5,26 @@ namespace DuelDx;
 using static DuelDx.GameWindow;
 
 /// <summary>
-/// 「익명 통계를 보내도 될까요?」 — 전투 통계(<see cref="BattleStats"/>)를 보내도 되는지 <b>처음 한 번</b> 묻는 창(사용자 요청 menu-14).
+/// 「익명 통계를 보내도 될까요?」 — 전투 통계(<see cref="BattleStats"/>)를 보내도 되는지 게임을 켤 때 묻는 창(사용자 요청 menu-14).
 /// </summary>
 /// <remarks>
-/// 보낼 수 있는 판(받는 곳 주소가 있는 릴리즈 판)에서 아직 안 물었을 때만 켤 때 뜬다. 고르면 설정에 「물었음」과 답을 적고 다시 안 묻는다 —
-/// 답은 모드 &gt; 편의성 「익명 전투 통계 보내기」에서 언제든 바꾼다. 릴리즈 노트 창이 떠 있으면 그것이 닫힌 뒤에 보인다.
-/// DUELDX_CONSENT=1 이면 조건 없이 띄운다(화면 밖 시험용).
+/// 보낼 수 있는 판(받는 곳 주소가 있는 릴리즈 판)에서 통계 보내기가 꺼져 있을 때 켤 때 뜬다. 동의하면 바로 켜고 다시 안 묻는다.
+/// 동의하지 않으면 <see cref="AskAgainDays"/> 일 뒤에 다시 묻는다(마지막으로 물은 때를 설정에 적는다). 답은 모드 &gt; 편의성
+/// 「익명 전투 통계 보내기」에서 언제든 바꾼다. 릴리즈 노트 창이 떠 있으면 그것이 닫힌 뒤에 보인다.
+/// DUELDX_CONSENT=1 이면 조건 없이, DUELDX_CONSENT=due 면 판 조건만 빼고(날짜는 보고) 띄운다(화면 밖 시험용).
 /// </remarks>
 internal sealed unsafe class StatsConsentScreen(GameWindow host)
 {
     internal const int W = 500, H = 250, ButtonW = 130, ButtonH = 30;
 
+    /// <summary>동의하지 않은 사람에게 다시 묻는 간격(일).</summary>
+    internal const int AskAgainDays = 7;
+
     internal bool _pending;
+
+    /// <summary>지금 물을 때인가 — 켜져 있으면 안 묻고, 꺼져 있으면 한 번도 안 물었거나 마지막으로 물은 지 이레가 지났을 때.</summary>
+    internal static bool Due(bool sending, string askedAt, DateTime now) =>
+        !sending && (!DateTime.TryParse(askedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out var asked) || now - asked >= TimeSpan.FromDays(AskAgainDays));
 
     internal bool Open => _pending && !host.NotesScr.Open;
 
@@ -33,16 +41,16 @@ internal sealed unsafe class StatsConsentScreen(GameWindow host)
 
     internal void OpenIfNeeded()
     {
-        bool forced = Environment.GetEnvironmentVariable("DUELDX_CONSENT") == "1";
-        _pending = forced || (!host._statsAsked && host.Stats.CanUploadBuild);
+        string? hook = Environment.GetEnvironmentVariable("DUELDX_CONSENT");
+        _pending = hook == "1" || ((hook == "due" || host.Stats.CanUploadBuild) && Due(host._sendStats, host._statsAskedAt, DateTime.UtcNow));
     }
 
     internal void Answer(bool send)
     {
         _pending = false;
-        (host._statsAsked, host._sendStats) = (true, send);
+        (host._statsAskedAt, host._sendStats) = (DateTime.UtcNow.ToString("o"), send);
         host.SaveSettings();
-        host.Toast(send ? "고맙습니다 — 전투가 끝나면 통계를 익명으로 보냅니다" : "통계를 보내지 않습니다 — 모드 > 편의성에서 바꿀 수 있습니다");
+        host.Toast(send ? "고맙습니다 — 전투가 끝나면 통계를 익명으로 보냅니다" : "통계를 보내지 않습니다 — 모드 > 편의성에서 켤 수 있습니다");
     }
 
     internal (int X, int Y) Origin() => (host._camX + (host.ViewWidth - W) / 2, host._camY + (host.ViewHeight - H) / 2);
