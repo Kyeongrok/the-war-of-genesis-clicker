@@ -184,6 +184,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
+        Win32.AppendMenuW(tools, Win32.MF_STRING, StatsScreen.MenuStats, "전투 통계(&S)...");
         _replayMenu = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
@@ -226,7 +227,12 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats));
+
+    /// <summary>전투가 끝날 때 어빌리티 통계를 익명으로 보내나 — 모드 > 편의성(기본 끔, <see cref="BattleStats"/>).</summary>
+    internal bool _sendStats = UserSettings.Current.SendStats;
+
+    internal const int MenuSendStats = 1164;
 
     /// <summary>모드 > 적 행동 건너뛰기 — AI 가 행동하는 동안 클릭하면 모션을 건너뛰고 결과만 보인다(사용자 요청, 기본 켬).</summary>
     internal bool _skipEnemyAction = UserSettings.Current.SkipEnemyAction;
@@ -309,6 +315,12 @@ internal sealed unsafe partial class GameWindow
             case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
             case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
             case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
+            case StatsScreen.MenuStats: StatsScr._open = !StatsScr._open; break;
+            case MenuSendStats:
+                _sendStats = !_sendStats;
+                Toast(_sendStats ? "전투가 끝나면 어빌리티 통계를 익명으로 보냅니다" : "전투 통계를 보내지 않습니다");
+                SaveSettings();
+                break;
             case >= MenuReplayBase and < MenuReplayBase + 500:
                 ReopenPlace(id - MenuReplayBase);
                 break;

@@ -78,6 +78,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     /// <summary>바꾼 기록을 명부와 판 위의 그 인물에 넣고 최대치를 다시 센다.</summary>
     internal void Apply(int chr, CharacterData changed)
     {
+        host.Stats._charEdited = true;
         if (host._party.ContainsKey(chr) || host.Mos._members.Contains(chr)) host._party[chr] = changed;
         foreach (var u in host._units.Where(u => u.ChrCode == chr && u.Side == 4 && u.LeaderIndex < 0))
         {

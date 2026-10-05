@@ -52,6 +52,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
         ("전직할 때 EXP 유지", "전직해도 쌓인 EXP 를 지우지 않는다", MenuKeepJobExp, host._keepJobExp),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
+        ("익명 전투 통계 보내기", "어느 어빌리티를 얼마나 썼는지만 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
