@@ -1,6 +1,7 @@
 {
   "ability": 77,
   "name": "카운터 스피어",
+  "maxLevel": 10,
   "att": 4,
   "common": {
     "rangeShape": 2,
@@ -46,25 +47,15 @@
     "b61": 0
   },
   "levels": [
-    { "work": 438, "level": 1, "areaMax": 5, "power": 20, "exp": 50, "tp": 140 },
-    { "work": 1034, "level": 2, "areaMax": 5, "power": 25, "exp": 50, "tp": 145 },
-    { "work": 1033, "level": 3, "areaMax": 5, "power": 30, "exp": 50, "tp": 150 },
-    { "work": 1032, "level": 4, "areaMax": 5, "power": 35, "exp": 50, "tp": 155 },
-    { "work": 1031, "level": 5, "areaMax": 5, "power": 40, "exp": 50, "tp": 160 },
-    { "work": 1030, "level": 6, "areaMax": 5, "power": 45, "exp": 50, "tp": 165 },
-    { "work": 1029, "level": 7, "areaMax": 5, "power": 50, "exp": 50, "tp": 170 },
-    { "work": 1028, "level": 8, "areaMax": 5, "power": 55, "exp": 50, "tp": 175 },
-    { "work": 1027, "level": 9, "areaMax": 5, "power": 50, "exp": 50, "tp": 180 },
-    { "work": 1026, "level": 10, "areaMax": 5, "power": 55, "exp": 50, "tp": 185 },
-    { "work": 1025, "level": 11, "areaMax": 6, "power": 60, "exp": 100, "tp": 190 },
-    { "work": 1024, "level": 12, "areaMax": 6, "power": 65, "exp": 100, "tp": 195 },
-    { "work": 1023, "level": 13, "areaMax": 6, "power": 70, "exp": 100, "tp": 200 },
-    { "work": 1022, "level": 14, "areaMax": 6, "power": 75, "exp": 100, "tp": 200 },
-    { "work": 1021, "level": 15, "areaMax": 6, "power": 80, "exp": 100, "tp": 200 },
-    { "work": 1020, "level": 16, "areaMax": 6, "power": 85, "exp": 100, "tp": 200 },
-    { "work": 1019, "level": 17, "areaMax": 6, "power": 90, "exp": 100, "tp": 200 },
-    { "work": 1018, "level": 18, "areaMax": 6, "power": 95, "exp": 100, "tp": 200 },
-    { "work": 1017, "level": 19, "areaMax": 6, "power": 100, "exp": 100, "tp": 200 },
-    { "work": 1016, "level": 20, "areaMax": 6, "power": 110, "exp": 100, "tp": 200 }
+    { "work": 438, "level": 1, "areaMax": 5, "power": 30, "exp": 50, "tp": 140 },
+    { "work": 1034, "level": 2, "areaMax": 5, "power": 40, "exp": 50, "tp": 145 },
+    { "work": 1033, "level": 3, "areaMax": 5, "power": 50, "exp": 50, "tp": 150 },
+    { "work": 1032, "level": 4, "areaMax": 5, "power": 60, "exp": 50, "tp": 155 },
+    { "work": 1031, "level": 5, "areaMax": 5, "power": 70, "exp": 50, "tp": 160 },
+    { "work": 1030, "level": 6, "areaMax": 5, "power": 80, "exp": 100, "tp": 165 },
+    { "work": 1029, "level": 7, "areaMax": 5, "power": 90, "exp": 100, "tp": 170 },
+    { "work": 1028, "level": 8, "areaMax": 5, "power": 100, "exp": 100, "tp": 175 },
+    { "work": 1027, "level": 9, "areaMax": 5, "power": 110, "exp": 100, "tp": 180 },
+    { "work": 1026, "level": 10, "areaMax": 5, "power": 120, "exp": 100, "tp": 185 }
   ]
 }
