@@ -22,6 +22,8 @@ internal sealed unsafe partial class GameWindow
     internal AstralArrowSkill? _astralArrowAb;
     internal AstralArrowSkill AstralArrowAb => _astralArrowAb ?? LazyInitializer.EnsureInitialized(ref _astralArrowAb, () => new AstralArrowSkill(this));
 
+    internal BladeMissileSkill? _bladeMissileAb;
+    internal BladeMissileSkill BladeMissileAb => _bladeMissileAb ?? LazyInitializer.EnsureInitialized(ref _bladeMissileAb, () => new BladeMissileSkill(this));
     internal GravityFieldSkill? _gravityFieldAb;
     internal GravityFieldSkill GravityFieldAb => _gravityFieldAb ?? LazyInitializer.EnsureInitialized(ref _gravityFieldAb, () => new GravityFieldSkill(this));
 

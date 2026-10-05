@@ -138,6 +138,8 @@ internal sealed unsafe partial class BattleScene
         if (AcrostSkill.AcrostWorks.Contains(work)) return ([6, 15], []);
         // 그라비티 필드 — 중력장은 GameWindow.GravityField.cs 가 대상마다 깐다.
         if (GravityFieldWorks.Contains(work)) return ([6, 15], []);
+        // 블레이드 미사일 — 칼은 BladeMissileSkill 이 자리·시각대로 깐다. 표에서는 소리 껍데기(시전 1338 · 386:0)만 남긴다.
+        if (BladeMissileSkill.Works.Contains(work)) return ([6, 15], [new(1338, 1, false, 0), new(BladeMissileSkill.BladeSoundObs, 0, false, 0, BladeMissileSkill.AppearDelay)]);
         // 아스트럴 애로우 — 활·화살·폭발은 GameWindow.AstralArrow.cs 가 시각대로 깐다.
         if (AstralArrowSkill.AstralArrowWorks.Contains(work)) return ([6], []);
         // 메테오 — 운석·착탄·폭발은 GameWindow.Meteor.cs 가 시각대로 깐다.
@@ -483,6 +485,7 @@ internal sealed unsafe partial class BattleScene
         SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         host.UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
+        if (BladeMissileSkill.Works.Contains(w.Id)) host.BladeMissileAb.Spawn(w, user);   // 블레이드 미사일의 칼들
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
