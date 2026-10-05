@@ -901,6 +901,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void OnClick(int clientX, int clientY)
     {
         if (ProgressScr._progressOpen) { var (px, py) = BoardPoint(clientX, clientY); ProgressScr.OnProgressClick(px, py); return; }
+        var (bx, by) = BoardPoint(clientX, clientY);
+        // 메뉴 막대에서 여는 창들은 맨 위에 그리므로 클릭도 먼저 받는다 — 전에는 적이 움직이는 동안 창 위를 눌러도 「적 행동 건너뛰기」가 먼저 먹었다.
+        if (DevScr.OnClick(bx, by)) return;            // 개발 창
+        if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
+        if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !Mos._mosesOpen && !FieldOpen && !TitleScr._titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
         if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
@@ -910,10 +915,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) Btl.LeaveFinishedBattle(); return; }
         if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
-        var (bx, by) = BoardPoint(clientX, clientY);
-        if (DevScr.OnClick(bx, by)) return;            // 개발 창
-        if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
-        if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
         if (Fld.OnFieldClick(bx, by)) return;
         if (RecordsScr.OnRecordsClick(bx, by)) return;

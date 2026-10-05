@@ -308,7 +308,7 @@ internal sealed unsafe partial class GameWindow
         {
             case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
             case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
-            case CharEditScreen.MenuCharEdit: CharEditScr._open = !CharEditScr._open; break;
+            case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
             case >= MenuReplayBase and < MenuReplayBase + 500:
                 ReopenPlace(id - MenuReplayBase);
                 break;
