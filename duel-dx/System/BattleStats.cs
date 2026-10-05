@@ -175,8 +175,14 @@ internal sealed class BattleStats(GameWindow host)
     }
 
     /// <summary>보내도 되나 — 받는 곳이 있고, 사용자가 켰고, 릴리즈 판이고, 시험 실행이 아닐 때만.</summary>
-    internal bool CanUpload =>
-        UploadUrl.Length > 0 && host._sendStats && !GameWindow.Offscreen && !GameWindow.TestRun && GameWindow.AppVersion.StartsWith('v');
+    internal bool CanUpload => host._sendStats && CanUploadBuild;
+
+    /// <summary>
+    /// 이 판이 보낼 수 있는 판인가(사용자의 답과 무관) — 받는 곳 주소가 있고, 태그로 낸 릴리즈 판이고(손으로 빌드한 판은 「v0.22.0+3」처럼 + 가 붙는다),
+    /// 시험 실행이 아닐 때.
+    /// </summary>
+    internal bool CanUploadBuild =>
+        UploadUrl.Length > 0 && !GameWindow.Offscreen && !GameWindow.TestRun && GameWindow.AppVersion.StartsWith('v') && !GameWindow.AppVersion.Contains('+');
 
     /// <summary>설치마다 하나인 무작위 번호 — 누구인지는 모르고 같은 설치인지만 안다.</summary>
     private static string InstallId()
