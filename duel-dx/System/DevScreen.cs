@@ -39,7 +39,7 @@ internal sealed unsafe class DevScreen(GameWindow host)
             ("받는 에셋", AssetPack.Folder, PackNote()),
             ("세이브·설정", UserDataFolder.Path, ""),
             ("실린 에셋", assets, ""),
-            ("받은 편집기", editor, Directory.Exists(editor) ? "" : "아직 안 받음"),
+            ("편집기", editor, Directory.Exists(editor) ? "" : "아직 안 받음"),
         ];
     }
 

@@ -16,7 +16,13 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed unsafe class ChaptersScreen(GameWindow host)
 {
-    internal const int ChaptersW = 900, ChaptersRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
+    internal const int ChaptersMaxW = 900, ChaptersMaxRowH = 22, ChaptersTop = 52, ChaptersCols = 2;
+
+    /// <summary>
+    /// 창 너비와 줄 높이 — 화면에 맞춘다. 타이틀·모세스 화면(640×480)에서는 900 너비가 좌우로 잘렸다(사용자 보고 menu-15).
+    /// </summary>
+    internal int ChaptersW => Math.Min(ChaptersMaxW, host.ViewWidth - 16);
+    internal int ChaptersRowH => Math.Clamp((host.ViewHeight - 16 - ChaptersTop - 30) / Math.Max(1, (Chapters().Count + ChaptersCols - 1) / ChaptersCols), 14, ChaptersMaxRowH);
 
     internal bool _chaptersOpen;
     internal List<(int Id, string Title, ChapterFile Chp)>? _chapters;
@@ -84,7 +90,10 @@ internal sealed unsafe class ChaptersScreen(GameWindow host)
         host.FillRect(x, y, ChaptersW, h, StatusScreen.PanelBg);
         host.StrokeRect(x, y, ChaptersW, h, StatusScreen.BoxLine);
         host.DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
-        host.DrawText("고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다.", x + 150, y + 18, DimGray);
+        host.DrawText(ChaptersW >= 700 ? "고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다." : "고르면 그 챕터가 열립니다 · Esc: 닫기", x + 150, y + 18, DimGray);
+        // 좁은 화면에서는 「행성 · 장소」 칸을 빼고 제목에 자리를 준다.
+        bool counts = colW >= 380;
+        int titleW = colW - 70 - (counts ? 140 : 12);
 
         for (int i = 0; i < list.Count; i++)
         {
@@ -94,8 +103,10 @@ internal sealed unsafe class ChaptersScreen(GameWindow host)
             host.DrawText($"Chp {id:D4}", rx, ry, DimGray);
             // 제목 칸이 아닌 챕터(0001 등)는 엉뚱한 긴 글이 들어 있어 칸 너비만큼만 보인다.
             string label = title.Length > 0 ? title : "(제목 없음)";
-            host.DrawText(label.Length > 18 ? label[..18] + "…" : label, rx + 70, ry, White);
-            host.DrawText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
+            if (label.Length > 18) label = label[..18] + "…";
+            while (label.Length > 2 && host.GetText(label, White).W > titleW) label = label[..^2] + "…";
+            host.DrawText(label, rx + 70, ry, White);
+            if (counts) host.DrawText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
         }
     }
 }

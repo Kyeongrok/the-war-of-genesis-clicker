@@ -46,13 +46,14 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
     internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == 2 ?
     [
+        ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
         ("체력바 보이기", "유닛 머리 위의 HP·TP 막대", MenuGauges, host._showGauges),
         ("레벨업 창 보이기", "레벨이 오를 때 능력치 창을 띄운다", MenuLevelUpWindow, host.Btl._showLevelUp),
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
         ("전직할 때 EXP 유지", "전직해도 쌓인 EXP 를 지우지 않는다", MenuKeepJobExp, host._keepJobExp),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
-        ("익명 전투 통계 보내기", "어느 어빌리티를 얼마나 썼는지만 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
+        ("익명 전투 통계 보내기", "쓴 어빌리티와 피해만 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
