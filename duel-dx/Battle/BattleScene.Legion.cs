@@ -432,7 +432,6 @@ internal sealed unsafe partial class BattleScene
             SpawnAbilityEffects(work, follower, col, row);
         }
         foreach (int ti in struck) ApplyWork(follower, work, host._units[ti], dying);
-        host.Stats.Cast(follower, work);   // 통계 — 부하가 친 것은 대장 몫으로 센다
         PayWorkCost(follower, work);
         return true;
     }
