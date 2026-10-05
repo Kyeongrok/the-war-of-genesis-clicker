@@ -58,6 +58,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),
                     new("장면 번호 보이기", "", Toggle: () => host.OnMenuCommand(MenuSceneTag), On: host._showSceneTag, Note: "왼쪽 아래 Fld · Btl · Chp 번호"),
+                    new("화면 비율 초기화", "", Press: () => host.OnMenuCommand(MenuResetView), Note: "해상도 · 배율을 처음 값으로"),
                 ];
             }
             case 1:

@@ -135,6 +135,8 @@ internal sealed unsafe partial class GameWindow
     internal static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     internal const int MenuResBase = 1020;
+    /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
+    internal const int MenuResetView = 1167;
     internal static readonly (int W, int H)[] ResChoices =
         [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160)];
 
@@ -159,6 +161,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
         // 개발도 모드처럼 누르면 곧바로 창이 뜬다 — 어빌리티 반영 · 챕터 고르기 · 편집기 열기와 폴더들은 그 창 안에(사용자 요청, DevScreen).
         Win32.AppendMenuW(bar, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)");
+        Win32.AppendMenuW(bar, Win32.MF_STRING, MenuResetView, "화면 비율 초기화(&V)");
         return bar;
     }
 
@@ -406,6 +409,15 @@ internal sealed unsafe partial class GameWindow
                 SaveSettings();
                 ApplyZoom();
                 Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");
+                break;
+            }
+            case MenuResetView:
+            {
+                var first = new UserSettings();
+                (_viewW, _viewH, _zoomPercent) = (first.ViewW, first.ViewH, first.ZoomPercent);
+                SaveSettings();
+                ApplyZoom(force: true);
+                Toast($"화면을 처음 값으로 되돌렸습니다 — 해상도 {_viewW}×{_viewH} · 배율 자동");
                 break;
             }
             case MenuExit: _running = false; break;
