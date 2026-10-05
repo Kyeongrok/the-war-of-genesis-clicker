@@ -52,6 +52,13 @@ internal static class ReleaseNotes
         return string.Join("\n\n", shown.Select(s => $"v{s.Version}\n{s.Body}"));
     }
 
+    /// <summary>
+    /// 그 글에 적힌 도와주신 분들 — 줄 끝의 <c>(기여자: 아이디님)</c> 을 모은다(여럿이면 쉼표로). 적힌 차례대로, 같은 분은 한 번만.
+    /// </summary>
+    public static List<string> Contributors(string notes) =>
+        [.. System.Text.RegularExpressions.Regex.Matches(notes, @"\(기여자:\s*([^)]+)\)")
+              .SelectMany(m => m.Groups[1].Value.Split(',')).Select(n => n.Trim()).Where(n => n.Length > 0).Distinct()];
+
     /// <summary>판 번호를 세 자리로 맞춘다 — 어셈블리 판은 넷째 자리(0)가 붙어 온다.</summary>
     public static Version Trim(Version v) => new(v.Major, Math.Max(0, v.Minor), Math.Max(0, v.Build));
 
@@ -88,10 +95,13 @@ internal static class ReleaseNotes
     }
 }
 
-/// <summary>릴리즈 노트 창 — 켤 때 한 번 <see cref="OpenIfUpdated"/> 가 띄울지 정한다. 닫기 단추 · Esc · Enter 로 닫는다.</summary>
+/// <summary>
+/// 릴리즈 노트 창 — 켤 때 한 번 <see cref="OpenIfUpdated"/> 가 띄울지 정한다. 닫기 단추 · Esc · Enter 로 닫는다.
+/// 글 아래에 「도움을 주신 분들」 칸이 있다 — 보여 주는 대목들에 적힌 기여자(<see cref="ReleaseNotes.Contributors"/>)를 모아 낸다(사용자 요청 menu-11).
+/// </summary>
 internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
 {
-    internal const int W = 560, H = 400, LineH = 18, Rows = (H - 28 - 12 - 50) / LineH;
+    internal const int W = 560, H = 400, LineH = 18, ThanksH = 62, Rows = (H - 28 - 12 - 50 - ThanksH - 8) / LineH;
 
     /// <summary>띄울 글 — 비었으면 닫힌 것.</summary>
     internal string _text = "";
@@ -172,6 +182,17 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
             bool head = line.Length > 1 && line[0] == 'v' && char.IsDigit(line[1]);
             host.DrawText(line, x + 20, y + 40 + i * LineH, head ? 0xFFFFE070 : White, head ? 14 : 12);
         }
+
+        // 도움을 주신 분들 — 두 줄까지.
+        int ty = y + H - 50 - ThanksH;
+        host.FillRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxBg);
+        host.StrokeRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxLine);
+        host.DrawText("도움을 주신 분들", x + 20, ty + 5, 0xFFFFE070, 12);
+        var thanks = ReleaseNotes.Contributors(_text);
+        if (thanks.Count == 0) host.DrawText("이번 업데이트에는 적힌 분이 없습니다.", x + 20, ty + 24, DimGray, 12);
+        else
+            foreach (var (line, i) in host.Mos.WrapText(string.Join(" · ", thanks), W - 40, 12f).Take(2).Select((l, i) => (l, i)))
+                host.DrawText(line, x + 20, ty + 24 + i * 17, White, 12);
 
         int fy = y + H - 40;
         host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
