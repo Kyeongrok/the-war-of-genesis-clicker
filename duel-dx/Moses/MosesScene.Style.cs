@@ -443,7 +443,7 @@ internal sealed unsafe partial class MosesScene
         var previewList = db.Jobs.GetValueOrDefault(StylePreviewJob())?.AbilityList.Where(a => a != 0).ToList() ?? [];
         if (row >= Math.Min(6, previewList.Count) || !db.Abilities.TryGetValue(previewList[row], out var ab)) return false;
         string desc = db.AbilityDescription(ab);
-        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.StatusScr.AbilityEffectText(ab, c.AbilityLevel(ab.Id));
+        _styleTip = (desc.Length > 0 ? desc : db.T(ab.NameId)) + host.StatusScr.AbilityEffectText(ab, c.AbilityLevel(ab.Id)) + host.StatusScr.UltimateStyleText(ab, c);
         return true;
     }
 }

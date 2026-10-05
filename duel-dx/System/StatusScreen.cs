@@ -685,7 +685,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
 
     internal void ShowAbilityTip(AbilityData ab, int level)
     {
-        if (host._db?.AbilityDescription(ab) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level, StatusUnit()));
+        if (host._db?.AbilityDescription(ab) is { Length: > 0 } desc) ShowStatusTip(desc + AbilityEffectText(ab, level, StatusUnit()) + UltimateStyleText(ab, StatusUnit()?.Data));
     }
 
     /// <summary>능력치 보정 번호(패시브·버프) — 슬롯이 아니라 능력치에 바로 더해지는 것(0x10032af0).</summary>
@@ -701,6 +701,26 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// <remarks>
     /// <paramref name="user"/> 가 있으면 그 인물의 <b>SOUL 필요·소모</b>도 붙인다 — 체질 비용(hpFactor)이 체질마다 달라 같은 기술도 사람마다 다르다(사용자 요청).
     /// </remarks>
+    /// <summary>
+    /// 이 어빌리티가 3단계(궁극) 체질의 <b>전직 조건</b>이면 그 체질 이름과 거기서 배우는 어빌리티(패시브 = 장착 어빌리티는 빼고)를 설명 끝에 붙인다(사용자 요청 mo-9).
+    /// 인물이 있으면 그 인물이 갈 수 있는 3단계(처음 계열의 Dep 3f+3)만 — 무엇을 배워야 하는지가 인물마다 다르다.
+    /// </summary>
+    internal string UltimateStyleText(AbilityData ab, CharacterData? c)
+    {
+        if (host._db is not { } db) return "";
+        var reach = c != null && db.Deps.FirstOrDefault(d => d.Id == 3 * host.Mos.StyleOriginFamily(c) + 3) is { } third ? third.Jobs : null;
+        var text = new System.Text.StringBuilder();
+        foreach (var job in db.Jobs.Values.Where(j => j.NeedAbility == ab.Id && (reach == null || reach.Contains((ushort)j.Id))).OrderBy(j => j.Id))
+        {
+            string name = c != null && c.Body < 6 ? db.T(job.NamesByBody[c.Body]) : job.NamesByBody.Select(db.T).FirstOrDefault(n => n.Length > 0) ?? "";
+            var learns = job.AbilityList.Where(a => a != 0 && db.Abilities.TryGetValue(a, out var learn) && learn.Category != 3)
+                                        .Select(a => db.T(db.Abilities[a].NameId)).Where(n => n.Length > 0).Distinct().ToList();
+            text.Append($"\n\n궁극 체질 「{(name.Length > 0 ? name : $"직업 {job.Id}")}」 전직 조건");
+            if (learns.Count > 0) text.Append($"\n그 체질의 어빌리티: {string.Join(" · ", learns)}");
+        }
+        return text.ToString();
+    }
+
     internal string AbilityEffectText(AbilityData ab, int level, UnitState? user = null)
     {
         string Line(int lv)

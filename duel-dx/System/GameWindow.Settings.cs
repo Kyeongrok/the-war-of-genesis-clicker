@@ -22,7 +22,7 @@ namespace DuelDx;
 /// <param name="SkipEnemyAction">적(과 AI 가 움직이는 편)이 행동하는 동안 클릭하면 그 행동의 모션·이펙트를 건너뛰고 결과만 보인다(사용자 요청 — 원본에 없다).</param>
 /// <param name="SendStats">전투가 끝날 때 어빌리티 통계(쓴 횟수 · 피해)를 익명으로 보낼지 — 기본 켬, 모드 &gt; 편의성에서 끈다(BattleStats.cs).</param>
 /// <param name="StatsAskedAt">통계 알림이나 켜기 권유를 마지막으로 띄운 때(UTC) — 꺼 두었으면 이레 뒤에 다시 권한다(StatsConsentScreen.cs).</param>
-/// <param name="PlanetMarks">항행에서 전투·필드 장소가 있는 행성의 표시에 테두리를 두를지 — 개발 창에서 끈다(기본 켬).</param>
+/// <param name="PlanetMarks">항행에서 전투·필드 장소가 있는 행성의 표시에 테두리를 두를지 — 모드 &gt; 편의성에서 끈다(기본 켬).</param>
 /// <param name="TalkFillFirst">대사 첫 클릭·키가 흐르는 글을 <b>채우기만</b> 하고 두 번째에 닫을지. 원본(<c>0x1003bfe0</c>)은 첫 클릭에 곧바로 닫는다 —
 /// 기본 끔(원본대로), 켜면 예전 데모 동작(감사 3 T1).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
