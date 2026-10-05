@@ -398,6 +398,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         // 0 → 6 → … → 84 % 로 올린 뒤 84 % 에 머문다(0x100f5f04~0x100f5f58, 감사4 M1). 전에는 100 % 로 바로 켰다.
         host.PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true, gain: 0);
         host.FadeMusic(84, MosesFadeTicks);
+        // 주 화면에는 볼 것이 없어 늘 NAVIGATION 부터 눌러야 했다 — 열 때 항행 페이지를 누른 채로 연다(사용자 요청 mo-7, 원본은 주 화면에서 선다).
+        if (_mosesChp != null) MosesGoPage(0, quiet: true);
     }
 
     /// <summary>아직 안 겪었고 조건이 열린 「자동 발생」 장소가 있으면 거기로 들어간다(<c>0x100fdd40</c>).</summary>
@@ -570,29 +572,34 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         if (no >= 0 && _mosesChp is { } chp) _placesUsed.Add((chp.Id, no));
     }
 
-    internal void MosesGoPage(int page)
+    /// <summary>항행 자리(단계·행성·항성계)를 챕터가 정한 시작 값으로 놓는다 — 스크립트 911 이나 세이브가 정한 값(<c>_navStart</c>)이 있으면 그것.</summary>
+    internal void ResetNavToStart()
+    {
+        // 챕터가 정한 시작 단계에서 연다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
+        // 원본은 챕터 +0x2e40/+0x2e42(시작 단계·번호)를 쓰고(0x100fcf00), 머리 값(0x100f6c80)을 스크립트 행동 911 이 덮는다.
+        var (startStep, startNo) = _navStart is { } nav && nav.Chapter == _mosesChp?.Id
+            ? (nav.Step, nav.Number)
+            : (_mosesChp?.StartStep ?? 1, _mosesChp?.StartNumber ?? 0);
+        _mosesStep = Math.Max(1, startStep);
+        _mosesPlanet = _mosesStep == 2 ? startNo : 0;
+        // 단계 1 은 번호가 <b>항성계</b> 번호다 — 항성계 표에서 그 번호의 칸을 찾는다(0x100fa830). 없으면 첫 항성계.
+        _mosesSystem = _mosesStep == 2 ? MosesSystemOfPlanet(_mosesPlanet)
+                                       : _mosesChp?.Systems.FirstOrDefault(sy => sy.No == startNo)?.No
+                                         ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
+    }
+
+    /// <param name="quiet">항행 진입 소리(564)를 안 낸다 — 모세스를 열 때 저절로 항행으로 들어가는 경우(챕터 안내 음성 562 와 겹친다).</param>
+    internal void MosesGoPage(int page, bool quiet = false)
     {
         switch (page)
         {
             case 0:
                 // NAVIGATION — 항행 진입(명령 0, 0x100feb58~0x100feba0)은 큐 2 → −12 → 1 + Snd 564 뿐이다.
                 // 566(큐 20566)은 항성계 옮기기 끝에만 난다(0x100ff5d7, 감사5 N8) — MosesSwitchSystem.
-                host.Play(564);
+                if (!quiet) host.Play(564);
                 _mosesNavVisited = true;
-            {
-                // 챕터가 정한 시작 단계에서 연다 — Chp 0010 은 2(장소 고르기)라 행성 고르기를 지나간다.
-                // 원본은 챕터 +0x2e40/+0x2e42(시작 단계·번호)를 쓰고(0x100fcf00), 머리 값(0x100f6c80)을 스크립트 행동 911 이 덮는다.
-                var (startStep, startNo) = _navStart is { } nav && nav.Chapter == _mosesChp?.Id
-                    ? (nav.Step, nav.Number)
-                    : (_mosesChp?.StartStep ?? 1, _mosesChp?.StartNumber ?? 0);
-                _mosesStep = Math.Max(1, startStep);
-                _mosesPlanet = _mosesStep == 2 ? startNo : 0;
-                // 단계 1 은 번호가 <b>항성계</b> 번호다 — 항성계 표에서 그 번호의 칸을 찾는다(0x100fa830). 없으면 첫 항성계.
-                _mosesSystem = _mosesStep == 2 ? MosesSystemOfPlanet(_mosesPlanet)
-                                               : _mosesChp?.Systems.FirstOrDefault(sy => sy.No == startNo)?.No
-                                                 ?? _mosesChp?.Systems.FirstOrDefault()?.No ?? 0;
+                ResetNavToStart();
                 break;
-            }
             case 1:                                                    // MAIL — 새 편지가 왔으면 나는 소리(0x100fc6e0)
                 if (DeliverMail() > 0) host.Play(571);
                 _mailTop = 0;                                          // 목록 창은 들어갈 때마다 새로 만든다(0x100fc84e)

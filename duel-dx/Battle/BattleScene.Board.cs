@@ -56,7 +56,7 @@ internal sealed unsafe partial class BattleScene
         // 이기고 돌아오면 원본은 주 화면이 아니라 <b>항행 페이지</b>로 바로 간다(fg-21 ⑰). 챕터가 끝나 연대표로 갔으면 그대로.
         if (won && host.Mos._mosesOpen && host.Mos._mosesChp != null)
         {
-            host.Mos.MosesGoPage(0);
+            if (host.Mos._mosesPage != 0) host.Mos.MosesGoPage(0);   // OpenMoses 가 이미 항행으로 열었으면 다시 들어가지 않는다
             // 떠날 때의 단계·행성·성계 그대로 돌아온다(0x100fcf00(저장 단계), ba-20 G6) — 전에는 늘 챕터 시작 행성·단계로 돌아갔다.
             if (navBefore.Visited && navBefore.Chapter == host.Mos._mosesChp.Id && Equals(navBefore.Start, host.Mos._navStart))   // 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다
             {
