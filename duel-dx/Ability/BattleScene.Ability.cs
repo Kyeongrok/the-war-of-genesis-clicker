@@ -33,10 +33,32 @@ internal sealed unsafe partial class BattleScene
     internal static string HotkeyLabel(int index) =>
         index < AbilityHotkeys.Length ? ((char)AbilityHotkeys[index]).ToString() : "";
 
-    /// <summary>목록이 열려 있을 때 키를 처리한다 — 단축키면 그 줄을 고른다.</summary>
+    /// <summary>
+    /// 목록이 열려 있을 때 키를 처리한다 — 단축키면 그 줄을 고른다. 위·아래 화살표는 강조 줄을 옮기고 Enter 가 그 줄을 고른다
+    /// (패드의 십자키·스틱과 확인 단추가 이 키들로 온다 — 사용자 요청: 패드로 어빌리티를 고를 길이 없었다).
+    /// </summary>
     internal bool OnAbilityMenuKey(int key)
     {
         if (!_abilityMenu || _turn < 0) return false;
+        if (key is Native.Win32.VK_UP or Native.Win32.VK_DOWN)
+        {
+            int count = MenuRows().Count;
+            if (count == 0) return true;
+            // 강조가 없으면 아래는 첫 줄, 위는 끝 줄부터. 끝에서 더 가면 반대쪽으로 돈다.
+            _abilityHover = _abilityHover < 0 ? (key == Native.Win32.VK_DOWN ? 0 : count - 1)
+                                              : ((_abilityHover + (key == Native.Win32.VK_DOWN ? 1 : -1)) % count + count) % count;
+            if (_abilityHover < _abilityTop) _abilityTop = _abilityHover;
+            if (_abilityHover >= _abilityTop + AbilityMenuRows) _abilityTop = _abilityHover - AbilityMenuRows + 1;
+            AbilityTopFor(count);
+            return true;
+        }
+        if (key == Native.Win32.VK_RETURN)
+        {
+            var list = MenuRows();
+            if (_abilityHover < 0 && list.Count > 0) { _abilityHover = 0; return true; }   // 강조가 없으면 먼저 첫 줄을 짚는다
+            if (_abilityHover >= 0 && _abilityHover < list.Count) SelectAbilityRow(list[_abilityHover]);
+            return true;
+        }
         int index = Array.IndexOf(AbilityHotkeys, key);
         if (index < 0) return false;
         var rows = MenuRows();

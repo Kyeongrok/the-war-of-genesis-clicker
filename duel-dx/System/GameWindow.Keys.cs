@@ -145,42 +145,11 @@ internal sealed unsafe partial class GameWindow
     internal static IntPtr CreateMenuBar()
     {
         // 「게임」 메뉴는 없앴다 — 하나뿐이던 「챕터 고르기」는 개발 메뉴 아래로(사용자 요청).
-        IntPtr bar = Win32.CreateMenu(), settings = Win32.CreatePopupMenu();
-        Win32.AppendMenuW(settings, Win32.MF_STRING, MenuKeys, "단축키 설정(&K)...");
-        Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
-        Win32.AppendMenuW(settings, Win32.MF_STRING, MenuGrid, "격자 켜기·끄기(&G)");
-        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowStatusBar ? Win32.MF_CHECKED : 0u), MenuStatusBar, "상단 상태 줄 보이기(&B)");
-        // 「대사 사이 멈춤」 · 「체력바 켜기·끄기」 · 「조작 안내 글 보이기」는 모드 창으로 옮겼다(스토리 탭 · 편의성 탭, 사용자 요청).
-        Win32.AppendMenuW(settings, Win32.MF_STRING | (UserSettings.Current.ShowSceneTag ? Win32.MF_CHECKED : 0u), MenuSceneTag, "장면 번호 보이기(&N)");
-        BattleScene.AppendDifficultyMenu(settings);
-        Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
-        // 배율 — 자동이면 판이 창보다 작을 때 창을 채운다. 창 크기는 아래 「해상도」가 정한다.
-        IntPtr res = Win32.CreatePopupMenu();
-        for (int i = 0; i < ResChoices.Length; i++)
-        {
-            var (w, h) = ResChoices[i];
-            bool chosen = UserSettings.Current.ViewW == w && UserSettings.Current.ViewH == h;
-            Win32.AppendMenuW(res, Win32.MF_STRING | (chosen ? Win32.MF_CHECKED : 0u), (nuint)(MenuResBase + i), i == 0 ? $"{w}×{h} (원본)" : $"{w}×{h}");
-        }
-        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)res, "해상도(&R)");
-        IntPtr zoom = Win32.CreatePopupMenu();
-        for (int i = 0; i < ZoomChoices.Length; i++)
-        {
-            bool chosen = UserSettings.Current.ZoomPercent == ZoomChoices[i];
-            string label = ZoomChoices[i] == 0 ? "자동(화면에 맞춤)(&A)" : $"{ZoomChoices[i]}%";
-            Win32.AppendMenuW(zoom, Win32.MF_STRING | (chosen ? Win32.MF_CHECKED : 0u), (nuint)(MenuZoomAuto + i), label);
-        }
-        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)zoom, "배율(&Z)");
-        IntPtr speed = Win32.CreatePopupMenu();
-        for (int i = 0; i < SpeedChoices.Length; i++)
-            Win32.AppendMenuW(speed, Win32.MF_STRING | (UserSettings.Current.GameSpeed == SpeedChoices[i] ? Win32.MF_CHECKED : 0u), (nuint)(MenuSpeedBase + i),
-                              SpeedChoices[i] == 100 ? "보통(원본)(&1)" : $"{SpeedChoices[i] / 100.0:0.#}배(&{i + 1})");
-        Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)speed, "게임 속도(&P)");
-        Win32.AppendMenuW(settings, Win32.MF_SEPARATOR, 0, null);
-        Win32.AppendMenuW(settings, Win32.MF_STRING, MenuExit, "끝내기(&X)");
+        // 설정도 모드처럼 누르면 곧바로 창이 뜬다 — 해상도 · 배율 · 난이도 · 게임 속도 · 단축키 · 패드 · 끝내기는 그 창 안에(사용자 요청, SettingsScreen).
+        IntPtr bar = Win32.CreateMenu();
         // 모드는 펼침 메뉴가 아니라 누르면 곧바로 창이 뜬다 — 네 항목(동맹 AI·상자 내용물·소울 가득·소울 기여도)은 그 창 안에(사용자 요청).
         Win32.AppendMenuW(bar, Win32.MF_STRING, TuningScreen.MenuTuning, "모드(&M)");
-        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)settings, "설정(&S)");
+        Win32.AppendMenuW(bar, Win32.MF_STRING, SettingsScreen.MenuSettings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
         Win32.AppendMenuW(tools, Win32.MF_STRING, StatsScreen.MenuStats, "전투 통계(&S)...");
@@ -316,6 +285,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (Btl.OnDifficultyMenu(id)) return;
         if (id == DevScreen.MenuDev) { DevScr._open = !DevScr._open; return; }
+        if (id == SettingsScreen.MenuSettings) { if (SettingsScr._open) SettingsScr.Close(); else SettingsScr.Open(); return; }
         if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }
         switch (id)
         {
