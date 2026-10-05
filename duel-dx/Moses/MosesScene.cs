@@ -243,8 +243,22 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     internal (int X, int Wipe) PageSlide(int key, int targetX) =>
         MosesSlide(key, targetX, (host._lastTime - _mosesSlideAt) * TicksPerSecond, _mosesSlideSeed);
 
+    /// <summary>도크 아이콘이 들어오는 빠르기 — 원본의 두 배(사용자 요청 mo-6: 챕터를 열 때마다 기다리는 것이 길다).</summary>
+    internal const int DockSlideSpeed = 2;
+
     internal (int X, int Wipe) DockSlide(int key, int targetX) =>
-        MosesSlide(key, targetX, (host._lastTime - _mosesSceneAt) * TicksPerSecond, _mosesSceneSeed);
+        MosesSlide(key, targetX, (host._lastTime - _mosesSceneAt) * TicksPerSecond * DockSlideSpeed, _mosesSceneSeed);
+
+    /// <summary>도크 아이콘이 아직 들어오는 중인가 — 하나라도 다 안 나왔으면.</summary>
+    internal bool DockSliding => MosesDockShown && Enumerable.Range(0, MosesIcons.Length).Any(i => DockSlide(1000 + i, MosesIcons[i].X).Wipe < 10);
+
+    /// <summary>도크 아이콘이 들어오는 중이면 곧바로 다 들어온 것으로 한다(클릭으로 건너뛰기, mo-6). 건너뛰었으면 true.</summary>
+    internal bool SkipDockSlide()
+    {
+        if (!DockSliding) return false;
+        _mosesSceneAt = host._lastTime - 60;
+        return true;
+    }
 
     /// <summary>들어오는 단추의 꼬리 — Obs 0006 24개를 (x+i−24) 에, 제각기 i/2+12 장(<c>0x1010444a</c>). 모세스 네모 밖으로는 안 그린다.</summary>
     internal void DrawSlideTrail(int ox, int oy, int x, int y)
@@ -725,6 +739,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             return true;
         }
         if (_mosesFade > 0 || _mosesSystemSwitch != null || PlanetZooming) return true;
+        if (SkipDockSlide()) return true;   // 아이콘이 들어오는 동안의 클릭은 그 연출을 건너뛴다
         if (OnMosesShopClick(bx, by)) return true;
         // 편지 뷰어·통신 말풍선은 모달이라 떠 있으면 누름은 닫기만 한다 — 도크보다 먼저.
         if (_mosesPage == 1 && _mailOpen >= 0 && OnMosesMailClick(bx, by)) return true;
