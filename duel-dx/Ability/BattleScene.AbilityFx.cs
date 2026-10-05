@@ -109,6 +109,9 @@ internal sealed unsafe partial class BattleScene
     internal static readonly HashSet<int> TeleportWorks = [397, 584, 583, 582, 581, 580, 579, 578, 577, 576, 575, 593, 592, 591, 590, 589, 588, 587, 586, 585];
 
     /// <summary>그라비티 필드 레벨 1~10 의 work(어빌리티 110).</summary>
+    /// <summary>아스트럴 파이어의 솟는 불꽃 Obs.</summary>
+    internal const int AstralFireObs = 839;
+
     internal static readonly HashSet<int> GravityFieldWorks = [484, 950, 949, 948, 947, 946, 945, 944, 943, 942];
 
     /// <summary>손 표만 쓰는 work — 도구 표의 이펙트가 틀려 합치면 안 되는 것.</summary>
@@ -532,6 +535,22 @@ internal sealed unsafe partial class BattleScene
                 bool mirrored = extra is { Mirror: 2 } || (extra is { Mirror: 1 } && user.Facing == Facing.Right);
                 bool vectorShot = extra is { Move: 1 } v && (v.To == 2 || (v.From == v.To && (v.Dx != 0 || v.Dy != 0)));
                 if (extra is { } ex && !vectorShot) (x, y) = (x + ex.Dx, y + ex.Dy);
+                // 아스트럴 파이어 839:12(핸들러 0x100aab90 단계 1 — 60틱 뒤): 불꽃 50개가 <b>대상의 발밑</b>(x ± 15)에서 곧장 위로 260(화면 156) 솟는다 —
+                // 빠르기 20 에 틱마다 × 1.1, 최대 100(0x100c3490(도착, 20, 1.1, 1) · 0x100c25e0(100)), 하나마다 0~99틱 늦게(0x100c24d0(rand % 100)).
+                // 표는 출발·도착을 못 읽어(From/To 3) 시전자에서 대상으로 한 개가 날아갔다(사용자 보고: 효과가 안 나온다).
+                if (e.Obs == AstralFireObs && e.Motion == 12 && extra is { Move: 1 })
+                {
+                    // 원본은 대상 유닛 하나(+0x8c)에 건다 — 여기서는 판정 대상마다 하나씩, 대상이 없으면 겨눈 칸에.
+                    var feet = (_fxTargets ?? WorkTargets(w, user, col, row)).Select(i => UnitFoot(host._units[i])).DefaultIfEmpty((targetX, targetY)).ToList();
+                    foreach (var (footX, footY) in feet)
+                        for (int n = 0; n < 50; n++)
+                        {
+                            double fx = footX + _fxRandom.Next(30) - 15;
+                            _shots.Add((e.Obs, e.Motion, host._lastTime + (60 + _fxRandom.Next(100)) / TicksPerSecond, fx, footY, fx, footY - 260 * 0.6, 20, 1.1, 1, 0, 100, false));
+                        }
+                    _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + 60 / TicksPerSecond);
+                    continue;
+                }
                 // 직선탄(0x100c3490) — 틱당 빠르기와 가속·감속으로 난다(전에는 모션 길이 동안 등속). 도착을 아는 것만: 벡터(출발 + (Dx,Dy)) ·
                 // 시전자 ↔ 대상 · 표가 「날기」로 적은 줄(시전자 → 대상). 도착을 못 읽은 제자리 줄은 전처럼 제자리에 띄운다.
                 if (extra is { Move: 1, Speed: > 0 } shot && !(e.Obs == PsychicBolt && PsychicOrbs(user) != null)
