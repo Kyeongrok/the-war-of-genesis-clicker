@@ -6,4 +6,4 @@ compatibility_date = "2026-10-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "war-of-genesis-stats"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "6652a8b9-c5af-4c32-a0e9-3c4c86a175f3"
