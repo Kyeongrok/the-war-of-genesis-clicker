@@ -84,6 +84,18 @@ internal sealed unsafe partial class BattleScene
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
             bool flip = mirror && flag == 0;
             host.DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
+            // 무기 층이 다시 부르는 자식(총구의 광선 Obs 0118 · 불꽃 · 검기 따위)도 그린다 — 원본 애니메이터는 자식의 자식까지 만든다(0x100e5410).
+            // 전에는 한 겹만 그려 글로리가드의 사격(동작 9)에 광선이 안 나왔다(사용자 보고: Btl 0146). 자식도 제 모션이 끝나면 사라진다.
+            int age = cycle - start;
+            foreach (var (nestedStart, nestedObs, nestedMotion, ndx, ndy, _, nestedFlag) in host.UiFor(obs)?.Clip(motion)?.Children ?? [])
+            {
+                if (nestedStart > age || host.UiFor(nestedObs) is not { } nested) continue;
+                int nestedAge = age - nestedStart, nestedLife = nested.MotionLength(nestedMotion);
+                if (nestedLife > 0 && nestedAge >= nestedLife) continue;
+                bool nestedFlip = mirror && nestedFlag == 0;
+                host.DrawUi(nestedObs, nestedMotion, nestedAge, footX + (flip ? -dx : dx) + (nestedFlip ? -ndx : ndx), footY + dy + ndy,
+                            BlendOf(nested.BlendAt(nestedMotion, nestedAge)), loop: false, mirror: nestedFlip, fade: fade);
+            }
         }
     }
 
