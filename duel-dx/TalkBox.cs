@@ -792,6 +792,12 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// 얼굴을 size×size 칸에(비율 유지) — <paramref name="tint"/> 면 602 물들이기 방식 10·세기 20:
     /// 채널마다 <c>min(31, c·32/(32−20))</c>(<c>0x1000b7c0</c> 색표 <c>0x1019a018</c>) — 거의 하얗게 밝힌다.
     /// </summary>
+    /// <summary>
+    /// 602 통신 얼굴을 밝히는 세기 — 채널 × 32 / (32 − 세기). 원본은 <b>20</b>(× 2.67, 얼굴이 거의 하얗게 날아간다)인데,
+    /// 너무 밝다는 요청으로 10(× 1.45)으로 낮췄다(사용자 요청 fa-26 — 원본과 다르다).
+    /// </summary>
+    internal const int RadioTintStrength = 10;
+
     internal void DrawTalkFace(SpriteFrame f, int x, int y, int size, bool tint)
     {
         if (f.W == 0 || f.H == 0 || size <= 0) return;
@@ -833,7 +839,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             if ((c & 0xFF000000) == 0) continue;
             if (tint)
             {
-                uint Lit(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 32 / 12);
+                uint Lit(int shift) => (uint)Math.Min(255, (int)(c >> shift & 0xFF) * 32 / (32 - RadioTintStrength));
                 c = Lit(16) << 16 | Lit(8) << 8 | Lit(0);
             }
             host._fb[py * host.BoardWidth + px] = c | 0xFF000000;
