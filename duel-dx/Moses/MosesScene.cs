@@ -103,6 +103,11 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             : [.. chp.Planets.Where(p => sys.Planets.Contains(p.No))];
     }
 
+    /// <summary>그 행성에 지금 고를 수 있는 전투·필드 장소가 있나 — 상점뿐이면 아니다. 장소 목록(<see cref="MosesCellList"/>)과 같은 조건.</summary>
+    internal bool PlanetHasMission(ChapterFile.Planet planet) =>
+        _mosesChp is { } chp && planet.Places.Select(chp.PlaceOf).OfType<ChapterFile.Place>()
+                                      .Any(p => p.Auto == 0 && !PlaceUsed(p) && host.FlagSt.PlaceOpen(p) && p.Kind != ChapterFile.PlaceKind.Shop);
+
     internal (int Chapter, int System) _systemPlanetsOf = (-1, -1);
     internal IReadOnlyList<ChapterFile.Planet> _systemPlanets = [];
 
@@ -1042,6 +1047,13 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 host.DrawUi(p.MapObs, p.MapMotion, ptick, ox + p.X, oy + p.Y, GameWindow.UiBlend.Alpha);
                 int h = host.UiFor(p.MapObs)?.FrameAt(p.MapMotion, 0)?.H ?? 40;
                 host.DrawUi(MosesMarkObs, 3, ptick, ox + p.X, oy + p.Y - 10 - h / 2, GameWindow.UiBlend.Alpha);
+                // 개발 > 행성 표시 — 전투·필드 장소가 열려 있는 행성은 표시에 노란 테두리를 두른다(사용자 요청 mo-8, 원본에 없다).
+                if (host._planetMarks && PlanetHasMission(p) && host.UiFor(MosesMarkObs)?.FrameAt(3, 0) is { } mark)
+                {
+                    int mx = ox + p.X + mark.X - 4, my = oy + p.Y - 10 - h / 2 + mark.Y - 4;
+                    host.StrokeRect(mx, my, mark.W + 8, mark.H + 8, 0xFFFFE040);
+                    host.StrokeRect(mx - 1, my - 1, mark.W + 10, mark.H + 10, 0xFFFFE040);
+                }
             }
             DrawMosesBack(ox, oy, tick);
             // 다른 항성계 단추 — 조건을 통과한 다른 성계 앞의 둘, Obs 0680 모션 0 (30,40) · 1 (630,40),
