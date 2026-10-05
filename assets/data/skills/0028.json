@@ -29,7 +29,7 @@
     "bonus3Value": 0,
     "accuracy": 85,
     "critical": 15,
-    "hpFactor": 200,
+    "hpFactor": 50,
     "soul": 70,
     "soulSpend": 1,
     "b50": 0,

@@ -1,6 +1,7 @@
 {
   "ability": 84,
   "name": "사이킥 크로스",
+  "maxLevel": 8,
   "att": 4,
   "common": {
     "rangeShape": 1,
@@ -47,15 +48,13 @@
     "b61": 0
   },
   "levels": [
-    { "work": 1111, "level": 1, "rangeMax": 4, "areaMax": 6, "bonus1Value": -10 },
-    { "work": 1120, "level": 2, "rangeMax": 4, "areaMax": 6, "bonus1Value": -12 },
-    { "work": 1119, "level": 3, "rangeMax": 4, "areaMax": 6, "bonus1Value": -15 },
-    { "work": 1118, "level": 4, "rangeMax": 4, "areaMax": 8, "bonus1Value": -17 },
-    { "work": 1117, "level": 5, "rangeMax": 4, "areaMax": 8, "bonus1Value": -20 },
-    { "work": 1116, "level": 6, "rangeMax": 5, "areaMax": 8, "bonus1Value": -22 },
-    { "work": 1115, "level": 7, "rangeMax": 5, "areaMax": 10, "bonus1Value": -25 },
-    { "work": 1114, "level": 8, "rangeMax": 5, "areaMax": 10, "bonus1Value": -27 },
-    { "work": 1113, "level": 9, "rangeMax": 5, "areaMax": 10, "bonus1Value": -30 },
-    { "work": 1112, "level": 10, "rangeMax": 5, "areaMax": 12, "bonus1Value": -40 }
+    { "work": 1111, "level": 1, "rangeMax": 4, "areaMax": 6, "bonus1Value": -20 },
+    { "work": 1120, "level": 2, "rangeMax": 4, "areaMax": 6, "bonus1Value": -25 },
+    { "work": 1119, "level": 3, "rangeMax": 4, "areaMax": 6, "bonus1Value": -35 },
+    { "work": 1118, "level": 4, "rangeMax": 4, "areaMax": 8, "bonus1Value": -40 },
+    { "work": 1117, "level": 5, "rangeMax": 4, "areaMax": 8, "bonus1Value": -45 },
+    { "work": 1116, "level": 6, "rangeMax": 5, "areaMax": 8, "bonus1Value": -50 },
+    { "work": 1115, "level": 7, "rangeMax": 5, "areaMax": 10, "bonus1Value": -55 },
+    { "work": 1114, "level": 8, "rangeMax": 5, "areaMax": 10, "bonus1Value": -60 }
   ]
 }
