@@ -128,6 +128,7 @@ internal sealed unsafe partial class BattleScene
     /// </remarks>
     internal bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
     {
+        _ailmentLanded = false;
         // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
         if (w.Kind <= 3 && host._db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
             && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
@@ -160,8 +161,12 @@ internal sealed unsafe partial class BattleScene
         }
         host.StatusScr.RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
+        _ailmentLanded = effects.Any(e => e.Id != 0);
         return true;
     }
+
+    /// <summary>방금 <see cref="ApplyAilments"/> 가 효과(상태이상·능력치 보정)를 하나라도 걸었나 — 피해 기술의 약화 경험치를 셀 때 본다.</summary>
+    internal bool _ailmentLanded;
 
     internal static void AddStatBonus(UnitState u, int id, int value)
     {
