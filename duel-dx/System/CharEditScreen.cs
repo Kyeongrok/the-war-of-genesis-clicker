@@ -9,7 +9,7 @@ using static DuelDx.GameWindow;
 /// 도구 &gt; 캐릭터 에디터 — 인물마다 레벨(누적 경험치)과 장비 칸의 아이템, 파티의 소지금을 게임 안에서 바꾼다(사용자 요청, 원본에 없는 시험용 도구).
 /// </summary>
 /// <remarks>
-/// 대상은 명부(<c>_party</c> — 전투를 넘어 이어지는 인물 기록)와 지금 판에 선 내 인물이다. 레벨은 <see cref="GameDatabase.SetLevel"/>(스크립트 805 와 같은 식)로
+/// 대상은 지금 파티의 동료(전직 화면에 서는 인물)다 — 자료는 판에 서 있으면 그 유닛의 것, 아니면 명부(<c>_party</c>)의 것. 레벨은 <see cref="GameDatabase.SetLevel"/>(스크립트 805 와 같은 식)로
 /// 능력치까지 다시 세고 누적 경험치를 레벨 × 100 으로 맞춘다. 장비는 칸마다 아이템 번호를 앞뒤로 넘긴다(0 = 비움). 바꾸면 명부와 판 위의 유닛에 바로 든다.
 /// 고칠 인물이 없으면(타이틀처럼 아직 아무것도 안 불러온 때) 세이브 파일 목록부터 보인다 — 고르면 그 세이브를 불러온 뒤 고친다(사용자 요청 menu-8).
 /// 맨 위 줄은 파티 것: 소지금 올리고 내리기와 「나야트레이 등장」(Chr 563 을 801 처럼 지금 파티에 넣는다).
@@ -64,9 +64,11 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
 
     internal static readonly (int Dx, int Delta, string Text)[] MoneySteps = [(170, -10000, "−1만"), (228, 1000, "+1천"), (286, 10000, "+1만"), (344, 100000, "+10만")];
 
-    /// <summary>고칠 수 있는 인물 — 명부와 판 위의 내 인물(대장만), Chr 번호 차례.</summary>
-    internal List<int> People() =>
-        [.. host._party.Keys.Concat(host._units.Where(u => u.Side == 4 && u.LeaderIndex < 0 && u.Data != null).Select(u => u.ChrCode)).Distinct().OrderBy(c => c)];
+    /// <summary>
+    /// 고칠 수 있는 인물 — 전직 화면에 서는 인물과 같다(<see cref="MosesScene.StyleParty"/>: 스크립트 801 로 들어온 동료, 그 차례대로).
+    /// 전에는 명부 전체에 판 위의 내 편을 더해서 동맹 NPC(제이슨)나 파티를 떠난 인물까지 나왔다(사용자 요청 menu-10).
+    /// </summary>
+    internal List<int> People() => host.Mos.StyleParty();
 
     internal CharacterData? DataOf(int chr) =>
         host._units.FirstOrDefault(u => u.ChrCode == chr && u.Side == 4 && u.LeaderIndex < 0)?.Data ?? host._party.GetValueOrDefault(chr);
