@@ -1,4 +1,4 @@
--- 전투 통계 D1 표 — wrangler d1 execute dueldx-stats --remote --file=schema.sql
+-- 전투 통계 D1 표 — wrangler d1 execute war-of-genesis-stats --remote --file=schema.sql
 CREATE TABLE IF NOT EXISTS battles (
   report      TEXT PRIMARY KEY,   -- 게임이 판마다 만든 번호(다시 보내도 한 번만 들어가게)
   received_at TEXT NOT NULL,
