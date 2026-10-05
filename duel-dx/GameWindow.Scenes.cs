@@ -104,4 +104,6 @@ internal sealed unsafe partial class GameWindow
     internal DevScreen DevScr => _devScr ?? LazyInitializer.EnsureInitialized(ref _devScr, () => new DevScreen(this));
     internal CharEditScreen? _charEditScr;
     internal CharEditScreen CharEditScr => _charEditScr ?? LazyInitializer.EnsureInitialized(ref _charEditScr, () => new CharEditScreen(this));
+    internal ReleaseNotesScreen? _notesScr;
+    internal ReleaseNotesScreen NotesScr => _notesScr ?? LazyInitializer.EnsureInitialized(ref _notesScr, () => new ReleaseNotesScreen(this));
 }
