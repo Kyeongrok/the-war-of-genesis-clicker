@@ -135,7 +135,8 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         else
         {
             if (head == null) return true;                                    // 빈 줄은 꺼져 있다
-            host.Sys._confirm = ("Load", "저장하지 않은 데이타는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
+            // 원본 문구는 「데이타」지만 맞춤법대로 「데이터」로 적는다(사용자 요청 menu-13).
+            host.Sys._confirm = ("Load", "저장하지 않은 데이터는 없어집니다.\n로드하시겠습니까?", () => LoadSlot(slot));
         }
         return true;
     }
