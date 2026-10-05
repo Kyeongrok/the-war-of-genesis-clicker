@@ -660,6 +660,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>
     /// 보조(종류 2·3)가 든 대상은 편을 가리지 않고(아군 버프·적 약화 모두), 회복(1·5)은 같은 편에게 든 것만 센다. 아이템(어빌리티 0)은 뺀다.
+    /// 피해 기술(종류 0)이 적에게 상태이상을 함께 건 경우는 <see cref="ApplyWork"/> 가 따로 넣는다.
     /// </summary>
     internal void MarkBuffed(UnitState a, UnitState t, WorkData w)
     {
@@ -1467,6 +1468,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);
         ApplyAilments(a, t, w);
+        // 피해 기술이 적에게 상태이상·약화를 함께 걸었으면(엘레맨탈 파이어의 점화 따위) 그 적도 보조 경험치 대상으로 센다(사용자 요청 — 원본에 없다).
+        if (_ailmentLanded && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);
         Counterattack(a, t, amount);
         if (t.Hp > 0) return;
         host.Stats.Kill(a, w);
