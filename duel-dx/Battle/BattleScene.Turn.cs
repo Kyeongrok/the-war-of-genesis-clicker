@@ -869,6 +869,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// (필요하면 걸어가서) work 하나를 쓴다: 걸은 비용을 한 번에 빼고, 겨눈 쪽으로 돌고, 동작 5 → 8 → 24 를 재생하며 <b>치는 순간</b>에 대상마다 판정,
     /// 쓰러진 인물은 동작 6 뒤 판에서 뺀다. TP·SOUL 비용과 SOUL 증가를 적용한다.
     /// </summary>
+    /// <summary>탄이 닿을 때 맞는 work 인가 — 도구가 뽑은 목록에, 손으로 연출을 깐 블레이드 미사일을 더한다.</summary>
+    internal static bool ArriveHit(WorkData w) => WorkFxExtra.ArriveHitWorks.Contains(w.Id) || BladeMissileSkill.Works.Contains(w.Id);
+
     internal IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
                                              List<(int Col, int Row)> path, bool eventFinisher = false)
     {
@@ -1116,7 +1119,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
             if (step == hitStep && host._lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !LegionStageSkill.IsLegionSkill(w.Id) && !host.SpecialHitsAb.HasSpecialHit(w)
-                && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (WorkFxExtra.ArriveHitWorks.Contains(w.Id) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
+                && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (ArriveHit(w) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);
                 double hitAt = effectsAt + Math.Min(Math.Min(handlerHit.Ticks, 240), sureHit ? 240 : Math.Max(10, fxSpan)) / TicksPerSecond;
@@ -1133,7 +1136,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                         t.PlayAction(w.Id == 490 ? 6 : HitAction, hitAt - host._lastTime);
                     }
                 // 「탄이 사라질 때 판정」 work(카운터 미사일 · 블레이드 샤워 …, 41개)은 탄이 닿는 때에 맞는다(ba-21 fx 덧정보 표 생성 기록).
-                if (WorkFxExtra.ArriveHitWorks.Contains(w.Id) && _fxArriveAt > 0) hitAt = Math.Min(_fxArriveAt, effectsAt + 300 / TicksPerSecond);
+                if (ArriveHit(w) && _fxArriveAt > 0) hitAt = Math.Min(_fxArriveAt, effectsAt + 300 / TicksPerSecond);
                 while (host._lastTime < hitAt) yield return true;
                 foreach (var (t, was) in held)
                 {
