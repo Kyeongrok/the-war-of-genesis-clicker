@@ -11,7 +11,7 @@ namespace DuelDx;
 /// <remarks>
 /// 세는 곳은 셋이다: 기술을 한 번 쓸 때(<see cref="Cast"/> — <c>UseWorkRoutine</c> 의 비용 치르는 자리),
 /// 맞힐 때마다(<see cref="Hit"/> · <see cref="Heal"/> — <c>ApplyWork</c>), 쓰러뜨릴 때(<see cref="Kill"/>).
-/// <b>내가 움직이는 편(편 4)</b>의 것만 세고, 군단 부하가 한 것은 대장 몫으로 친다. 전투가 끝나면(<see cref="Finish"/>)
+/// <b>내가 움직이는 편(편 4)의 대장</b>이 한 것만 센다 — 군단 부하가 한 것은 안 센다. 전투가 끝나면(<see cref="Finish"/>)
 /// 그 판의 것을 누적 파일(<c>stats.json</c>)에 더하고, 「통계 보내기」를 켰으면 요약 한 덩이를 받는 곳(<c>tools/stats-worker</c>)으로 보낸다.
 /// 전투 도중에 세이브를 불러오면 그 판의 셈은 처음부터 다시 한다(세이브에 안 싣는다).
 /// </remarks>
@@ -88,12 +88,11 @@ internal sealed class BattleStats(GameWindow host)
         _cast = default;
     }
 
-    /// <summary>셈을 받을 인물 — 내가 움직이는 편만. 군단 부하면 대장.</summary>
-    private UnitState? Owner(UnitState a)
-    {
-        var owner = a.LeaderIndex >= 0 && a.LeaderIndex < host._units.Length ? host._units[a.LeaderIndex] : a;
-        return owner.PlayerControlled ? owner : null;
-    }
+    /// <summary>
+    /// 셈을 받을 인물 — 내가 움직이는 편의 <b>대장(주인공)</b>만. 군단 부하(<c>LeaderIndex ≥ 0</c>)가 한 것은 세지 않는다 —
+    /// 전에는 대장 몫으로 넣어 부하가 칠 때마다 대장의 일반 공격 「사용」이 늘었다(사용 639 에 명중 455, 사용자 지적).
+    /// </summary>
+    private static UnitState? Owner(UnitState a) => a.LeaderIndex < 0 && a.PlayerControlled ? a : null;
 
     private Row? RowFor(UnitState a, WorkData w)
     {
