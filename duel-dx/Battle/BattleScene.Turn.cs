@@ -900,10 +900,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         int hitStep = HitStepFor(w, actions.Length);
         bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
         bool effectsDone = false, followersDone = false, objectsDone = false;
-        // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설). 행동마다 한 번.
-        void HitObjects(WorkData by)
+        // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
+        // 유닛과 같이 <b>타마다</b> 맞는다 — 전에는 행동마다 한 번이라 「연」처럼 여러 번 치는 기술도 물체에는 한 타만 들었다(사용자 보고: Btl 0301 해골).
+        // <paramref name="onlyIfNone"/> 은 보통 타격을 안 지난 갈래(전용 연출)가 끝에서 한 번 부를 때 — 이미 맞았으면 또 치지 않는다.
+        void HitObjects(WorkData by, bool onlyIfNone = false)
         {
-            if (objectsDone || !w.IsDamage || w.AbilityId == BlackHoleAbility || a.Data is not { } od) return;
+            if ((onlyIfNone && objectsDone) || !w.IsDamage || w.AbilityId == BlackHoleAbility || a.Data is not { } od) return;
             objectsDone = true;
             foreach (var (oc, or) in EffectCells(w, a, col, row))
                 if (ObjectAt(oc, or) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, a) && !_opened.Contains(obj))
@@ -1247,7 +1249,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
 
         // 전용 연출 갈래(혼·메테오·소닉 블레이드 …)는 위의 보통 타격을 안 지난다 — 그 기술로 겨눈 물체가 안 맞았다(사용자 보고: Btl 0133 해골 방어물).
-        HitObjects(w);
+        HitObjects(w, onlyIfNone: true);
         // 늦게 뜨는 이펙트(단계·사슬 지연)가 시작할 때까지는 행동이 안 끝난다 — 상한 200틱.
         for (double cap = host._lastTime + 200 / TicksPerSecond; host._lastTime < _fxLatestStart && host._lastTime < cap;) yield return true;
         _fxLatestStart = 0;
