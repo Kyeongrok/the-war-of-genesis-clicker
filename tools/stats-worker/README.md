@@ -8,9 +8,9 @@
 ```
 cd tools/stats-worker
 npx wrangler login
-npx wrangler d1 create dueldx-stats          # 찍히는 database_id 를 wrangler.toml 에 넣는다
-npx wrangler d1 execute dueldx-stats --remote --file=schema.sql
-npx wrangler deploy                          # https://dueldx-stats.<계정>.workers.dev 주소가 찍힌다
+npx wrangler d1 create war-of-genesis-stats          # 찍히는 database_id 를 wrangler.toml 에 넣는다
+npx wrangler d1 execute war-of-genesis-stats --remote --file=schema.sql
+npx wrangler deploy                          # https://war-of-genesis-stats.<계정>.workers.dev 주소가 찍힌다
 ```
 
 찍힌 주소를 `duel-dx/System/BattleStats.cs` 의 `UploadUrl` 에 넣어야 게임이 보내기 시작한다(비어 있으면 안 보낸다).
@@ -21,7 +21,7 @@ npx wrangler deploy                          # https://dueldx-stats.<계정>.wor
 - 마음대로 묻기:
 
 ```
-npx wrangler d1 execute dueldx-stats --remote --command "SELECT ability, SUM(uses) u, SUM(damage) d FROM skill_stats GROUP BY ability ORDER BY d DESC LIMIT 20"
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT ability, SUM(uses) u, SUM(damage) d FROM skill_stats GROUP BY ability ORDER BY d DESC LIMIT 20"
 ```
 
 캐릭터 에디터를 쓴 판은 `battles.flags` 에 표시가 있다 — 빼고 보려면 `battles` 와 묶어 `flags NOT LIKE '%"charEdit":true%'`.
