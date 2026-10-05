@@ -790,6 +790,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Tlk.SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
         if (NotesScr.Open) { NotesScr.OnKey(key); return; }
         if (ConsentScr.Open) { ConsentScr.OnKey(key); return; }
+        if (SettingsScr._open) { SettingsScr.OnKey(key); return; }
         if (DevScr._open) { DevScr.OnKey(key); return; }
         if (StatsScr._open) { StatsScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
@@ -915,6 +916,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 메뉴 막대에서 여는 창들은 맨 위에 그리므로 클릭도 먼저 받는다 — 전에는 적이 움직이는 동안 창 위를 눌러도 「적 행동 건너뛰기」가 먼저 먹었다.
         if (NotesScr.OnClick(bx, by)) return;          // 릴리즈 노트(업데이트 뒤 처음 켰을 때)
         if (ConsentScr.OnClick(bx, by)) return;        // 「익명 통계를 보내도 될까요?」(처음 한 번)
+        if (SettingsScr.OnClick(bx, by)) return;       // 설정 창
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
@@ -1209,6 +1211,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TuningScr.DrawTuning();
         CharEditScr.Draw();
         StatsScr.Draw();
+        SettingsScr.Draw();
         DevScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
