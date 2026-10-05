@@ -484,6 +484,13 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         // 모세스에서는 파티원만 고칠 수 있다(fg-21 ⑰). 편 3 동맹은 보기만.
         bool editable = host.Mos._mosesOpen ? unit.IsAlly && (host.Mos._members.Count == 0 || host.Mos._members.Contains(unit.ChrCode))
                                    : unit.PlayerControlled && host.Btl._outcome.Length == 0 && host.Btl._turn >= 0 && host._units[host.Btl._turn] == unit;
+        // 못 고치는 인물의 줄을 누르면 왜 안 되는지 알린다 — 전에는 아무 반응이 없어 클릭이 안 먹는 것처럼 보였다(사용자 보고).
+        string locked = editable ? ""
+            : host.Mos._mosesOpen ? "지금 파티의 인물이 아니라 고칠 수 없습니다"
+            : !unit.PlayerControlled ? "내가 움직이는 인물이 아니라 고칠 수 없습니다"
+            : host.Btl._outcome.Length > 0 ? "전투가 끝나 고칠 수 없습니다"
+            : "전투 중에는 지금 차례인 인물만 어빌리티를 올리거나 장비를 바꿀 수 있습니다";
+        void Locked(int x, int y, int w, int h) { if (!editable) AddHit(x, y, w, h, () => host.Toast(locked)); }
 
         // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
         // 초상 번호가 0 이면 원본은 Obs 0229(0xe5)를 찍는다(볼트 st-5 「초상」, 감사4 S11). 그것도 없으면 필드 얼굴.
@@ -545,6 +552,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             else RowText(db.T(0), rx, ry, RowH, open ? StatusWhite : StatusDim, left: 46);
             int slot = i;
             if (editable && open) AddHit(rx, ry, SideW, RowH, () => ChoosePassive(unit, slot));
+            Locked(rx, ry, SideW, RowH);
         }
 
         // ── 장비 여섯 줄(0x100d3330) — WEAPON 띠 가운데 (296,288), 줄 그림 (8,2), 이름 오른쪽 맞춤 −16 ──
@@ -560,6 +568,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
                 _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowStatusTip(desc)));
             int slot = i;
             if (editable) AddHit(rx, ry, SideW, RowH, () => ChooseEquipment(unit, slot));
+            Locked(rx, ry, SideW, RowH);
         }
 
         // ── 획득한 어빌리티(0x10035290) — 번호 차례, 여섯 줄씩 ──
@@ -599,6 +608,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             }
             // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기(꺼진 줄도 — 사용자 요청 기능). 꺼진 줄의 그냥 클릭은 아무 일 없다(S9).
             if (editable) AddHit(rx, ry, AbilityW, RowH, () => { if (ShiftHeld) LowerAbility(unit, ab); else if (!off) ConfirmAbility(unit, ab, learn: false); });
+            Locked(rx, ry, AbilityW, RowH);
         }
         DrawScrollBar(ox + ScrollX, oy + LearnedScrollY, LearnedScrollH, _learnedTop, learned.Count, LearnedRows, top => _learnedTop = top);
 
@@ -623,6 +633,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             else DrawAbilityRow(ab, AbilityLabel(ab, 1), cost, off, rx, ry, AbilityW, LearnableRowH, 18);
             _statusRightHits.Add((rx, ry, AbilityW, LearnableRowH, () => ShowAbilityTip(ab, 0)));
             if (editable && !off) AddHit(rx, ry, AbilityW, LearnableRowH, () => ConfirmAbility(unit, ab, learn: true));
+            Locked(rx, ry, AbilityW, LearnableRowH);
         }
         DrawScrollBar(ox + ScrollX, oy + LearnableScrollY, LearnableScrollH, _learnableTop, learnable.Count, LearnableRows, top => _learnableTop = top);
 
