@@ -582,6 +582,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Win32.TranslateMessage(ref msg);
                 Win32.DispatchMessageW(ref msg);
             }
+            Pad.Poll();   // 게임 패드 — 누른 단추를 키 누름으로 넘긴다
             if (!_running) break;
 
             // 게임 시계 — 실제로 흐른 시간 × 게임 속도. 모션·걷기·이펙트·소리 예약이 모두 이 시계를 보므로 함께 빨라진다.
