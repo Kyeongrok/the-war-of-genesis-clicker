@@ -31,6 +31,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   th { color: var(--dim); font-weight: 600; }
   th.sort { cursor: pointer; }
   th.sort.on { color: var(--gold); }
+  tr.chapter td { background: var(--bg); font-weight: 600; border-top: 2px solid var(--line); }
+  td.indent { padding-left: 22px; }
   td.bar { width: 28%; padding-right: 0; }
   td.bar i { display: block; height: 10px; background: var(--bar); border-radius: 3px; min-width: 1px; }
   .dim { color: var(--dim); }
@@ -45,7 +47,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="sub">익명으로 모은 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
     <label>버전 <select id="version"><option value="">전체</option></select></label>
-    <button id="noedit" class="on">캐릭터 에디터 쓴 판 빼기</button>
     <span id="error"></span>
   </div>
   <div class="tiles" id="tiles"></div>
@@ -57,9 +58,11 @@ export const DASHBOARD_HTML = `<!doctype html>
 <script>
 const $ = (id) => document.getElementById(id);
 const n = (v) => Number(v || 0).toLocaleString('ko-KR');
+// 걸린 시간 — 초 합계와 잰 판 수로 평균을 내 「분:초」로. 잰 판이 없으면(옛 판 게임이 보낸 것) −.
+const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum / count); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 let data = null, sortKey = 'uses', pickedChar = null;
-const state = { version: '', noedit: true };
+const state = { version: '' };
 
 const abilityName = (r) => r.ability > 0 ? (data.names.abilities[r.ability] || '어빌리티 ' + r.ability) : r.work === 0 ? '일반 공격' : '아이템·기타 (work ' + r.work + ')';
 const charName = (id) => data.names.characters[id] || '인물 ' + id;
@@ -81,7 +84,7 @@ function abilityTable(el, rows, sortable) {
 
 function render() {
   const t = data.total;
-  $('tiles').innerHTML = [[t.battles, '전투'], [t.installs, '설치'], [t.battles ? Math.round(100 * t.wins / t.battles) + '%' : '-', '승률'], [t.battles ? Math.round(t.turns / t.battles) : '-', '평균 턴']]
+  $('tiles').innerHTML = [[t.battles, '전투'], [t.installs, '설치'], [t.battles ? Math.round(100 * t.wins / t.battles) + '%' : '-', '승률'], [t.battles ? Math.round(t.turns / t.battles) : '-', '평균 턴'], [clock(t.secSum, t.secN), '평균 시간']]
     .map(([v, label]) => '<div class="tile"><b>' + (typeof v === 'number' ? n(v) : v) + '</b><span>' + label + '</span></div>').join('');
 
   abilityTable($('abilities'), data.abilities, true);
@@ -92,9 +95,25 @@ function render() {
   $('chartabs').querySelectorAll('button').forEach((b) => b.onclick = () => { pickedChar = Number(b.dataset.id); render(); });
   abilityTable($('chars'), data.chars.filter((r) => r.chr === pickedChar), false);
 
-  $('battles').innerHTML = '<tr><th class="name">전투</th><th>판 수</th><th>승</th><th>패</th><th>승률</th><th>평균 턴</th></tr>'
-    + data.battles.map((b) => '<tr><td class="name">Btl ' + String(b.battle).padStart(4, '0') + '</td><td>' + n(b.n) + '</td><td class="good">' + n(b.wins) + '</td><td class="bad">' + n(b.n - b.wins) + '</td><td>'
-        + Math.round(100 * b.wins / b.n) + '%</td><td>' + Math.round(b.turns) + '</td></tr>').join('');
+  // 전투는 챕터로 묶는다 — 챕터는 이야기 순서, 그 안의 전투는 번호 순. 챕터 줄에는 그 챕터의 합계.
+  const cells = (g) => '<td>' + n(g.n) + '</td><td class="good">' + n(g.wins) + '</td><td class="bad">' + n(g.n - g.wins) + '</td><td>'
+    + Math.round(100 * g.wins / g.n) + '%</td><td>' + Math.round(g.turnSum / g.n) + '</td><td>' + clock(g.secSum, g.secN) + '</td>';
+  const groups = new Map();
+  for (const b of data.battles) {
+    const [chapter, name] = data.names.battles[b.battle] || ['', ''];
+    const key = chapter || '챕터 밖 · 모르는 전투';
+    if (!groups.has(key)) groups.set(key, { n: 0, wins: 0, turnSum: 0, secSum: 0, secN: 0, rows: [] });
+    const g = groups.get(key);
+    g.n += b.n; g.wins += b.wins; g.turnSum += b.turns * b.n; g.secSum += b.secSum; g.secN += b.secN;
+    g.rows.push({ ...b, name, turnSum: b.turns * b.n });
+  }
+  const order = (key) => { const i = data.names.chapters.indexOf(key); return i < 0 ? 9999 : i; };
+  $('battles').innerHTML = '<tr><th class="name">챕터 · 전투</th><th>판 수</th><th>승</th><th>패</th><th>승률</th><th>평균 턴</th><th>평균 시간</th></tr>'
+    + ([...groups.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([key, g]) =>
+        '<tr class="chapter"><td class="name">' + esc(key) + '</td>' + cells(g) + '</tr>'
+        + g.rows.sort((a, b) => a.battle - b.battle).map((b) => '<tr><td class="name indent"><span class="dim">Btl ' + String(b.battle).padStart(4, '0') + '</span> '
+            + esc(b.name || '') + '</td>' + cells(b) + '</tr>').join('')).join('')
+      || '<tr><td colspan="7" class="dim name">아직 자료가 없습니다.</td></tr>');
 
   $('days').innerHTML = '<tr><th class="name">날짜</th><th class="name">버전</th><th>전투</th><th>설치</th></tr>'
     + data.days.map((d) => '<tr><td class="name">' + esc(d.day) + '</td><td class="name">' + esc(d.version) + '</td><td>' + n(d.battles) + '</td><td>' + n(d.installs) + '</td></tr>').join('');
@@ -103,7 +122,7 @@ function render() {
 async function load() {
   $('error').textContent = '';
   try {
-    const q = new URLSearchParams({ version: state.version, noedit: state.noedit ? '1' : '0' });
+    const q = new URLSearchParams({ version: state.version });
     const res = await fetch('/v1/dashboard?' + q);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     data = await res.json();
@@ -114,7 +133,6 @@ async function load() {
   } catch (e) { $('error').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 $('version').onchange = (e) => { state.version = e.target.value; load(); };
-$('noedit').onclick = (e) => { state.noedit = !state.noedit; e.target.classList.toggle('on', state.noedit); load(); };
 load();
 </script>
 </body>
