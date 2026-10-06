@@ -161,6 +161,8 @@ internal sealed unsafe partial class MosesScene
         return false;
     }
 
+    internal static bool CtrlHeld => (Native.Win32.GetKeyState(0x11) & 0x8000) != 0;
+
     internal bool OnMosesShopClick(int bx, int by)
     {
         if (_mosesPage is not (3 or 4) || _shop == null) return false;
@@ -186,23 +188,33 @@ internal sealed unsafe partial class MosesScene
         var items = ShopListItems(list);
         if (row < 0 || row >= items.Count) return true;
         int itemId = items[row].Item;
-        switch (list)
-        {
-            // 사려고 담기 — 한 칸 99개(0x100ff63e), 합계 5천만 GP(0x100ff677)까지.
-            // 99 는 <b>담은 수</b>만 센다(보유 수는 안 더한다, ba-20 G8).
-            case ListStock when _shopBuy.Count(i => i == itemId) < 99
-                                && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000:
-                _shopBuy.Add(itemId);
-                _shopCompareItem = itemId;   // 비교 글은 담을 때만 바뀐다(0x100ff660)
-                break;
-            case ListBuy: _shopBuy.Remove(itemId); break;                       // 담은 것 빼기
-            // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
-            // 매각 합계도 5천만 GP 까지다(0x100ff66d~0x100ff691).
-            case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count
-                              && _shopSell.Sum(ShopSellPrice) + ShopSellPrice(itemId) <= 50_000_000: _shopSell.Add(itemId); break;
-            case ListSell: _shopSell.Remove(itemId); break;
-        }
+        // 여러 개 한 번에(사용자 요청, 원본은 한 번에 하나) — Shift+클릭 10개, Ctrl+클릭 전부. 한도에 걸리면 거기서 멈춘다.
+        int times = CtrlHeld ? 99 : StatusScreen.ShiftHeld ? 10 : 1;
+        for (int n = 0; n < times && MoveOne(); n++) { }
         return true;
+
+        bool MoveOne()
+        {
+            switch (list)
+            {
+                // 사려고 담기 — 한 칸 99개(0x100ff63e), 합계 5천만 GP(0x100ff677)까지.
+                // 99 는 <b>담은 수</b>만 센다(보유 수는 안 더한다, ba-20 G8).
+                case ListStock when _shopBuy.Count(i => i == itemId) < 99
+                                    && _shopBuy.Sum(ShopPrice) + ShopPrice(itemId) <= 50_000_000:
+                    _shopBuy.Add(itemId);
+                    _shopCompareItem = itemId;   // 비교 글은 담을 때만 바뀐다(0x100ff660)
+                    return true;
+                case ListBuy: return _shopBuy.Remove(itemId);                       // 담은 것 빼기
+                // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
+                // 매각 합계도 5천만 GP 까지다(0x100ff66d~0x100ff691).
+                case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count
+                                  && _shopSell.Sum(ShopSellPrice) + ShopSellPrice(itemId) <= 50_000_000:
+                    _shopSell.Add(itemId);
+                    return true;
+                case ListSell: return _shopSell.Remove(itemId);
+                default: return false;
+            }
+        }
 
         bool Hit(int rx, int ry, int rw, int rh) => x >= rx && x < rx + rw && y >= ry && y < ry + rh;
     }
@@ -292,6 +304,27 @@ internal sealed unsafe partial class MosesScene
         if (Over(418, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 418, oy + 294, GameWindow.UiBlend.Alpha);
         if (Over(522, 294, 68, 27)) host.DrawUi(ShopButtonObs, 0, tick, ox + 522, oy + 294, GameWindow.UiBlend.Alpha);
         if (Over(455, 430, 163, 27)) host.DrawUi(ShopExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
+
+        // 아이템 줄을 오른쪽 단추로 누르고 있는 동안의 설명 — 맨 위에 그린다.
+        if (_shopTip is { } tip) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, MosesW, MosesH);
+    }
+
+    /// <summary>상점 목록의 아이템 줄을 오른쪽 단추로 누르고 있는 동안 띄우는 설명(떼면 사라진다).</summary>
+    internal string? _shopTip;
+
+    /// <summary>
+    /// 상점에서 오른쪽 단추 누름 — 목록 넷 어디든 아이템 줄 위면 그 아이템 설명을 띄우고 true(사용자 요청).
+    /// 줄 밖이면 false 라서 모세스의 우클릭 = 뒤로 가기가 그대로 돈다.
+    /// </summary>
+    internal bool OnMosesShopRightDown(int bx, int by)
+    {
+        if (_mosesPage is not (3 or 4) || _shop == null || host._db is not { } db) return false;
+        var (list, row) = ShopRowAt(bx, by);
+        if (list < 0) return false;
+        var items = ShopListItems(list);
+        if (row < 0 || row >= items.Count || !db.Items.TryGetValue(items[row].Item, out var item)) return false;
+        _shopTip = host.StatusScr.ItemTipText(item);
+        return true;
     }
 }
 
