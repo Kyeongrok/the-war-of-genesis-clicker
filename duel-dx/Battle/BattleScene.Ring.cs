@@ -201,6 +201,7 @@ internal sealed unsafe partial class BattleScene
         {
             if (host._statusUnit >= 0) { if (!host.StatusScr.OnStatusRightClick(bx, by)) host._statusUnit = -1; return; }   // 줄 위 = 누르고 있는 동안 설명
             if (host.Mos.OnMosesStyleRightDown(bx, by)) return;   // 전직 화면 어빌리티 줄 = 누르고 있는 동안 설명
+            if (host.Mos.OnMosesShopRightDown(bx, by)) return;    // 상점 아이템 줄 = 누르고 있는 동안 설명
             if (host.Sys.CloseSystemWindow()) return;
             if (host.Mos._mosesPage != -1) host.Mos.MosesGoBack();
             return;

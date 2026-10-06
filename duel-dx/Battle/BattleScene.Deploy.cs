@@ -15,7 +15,7 @@ using static DuelDx.GameWindow;
 /// 데모는 처음부터 자동배치한 채로 연다(그대로 배치종료만 눌러도 된다).
 /// 「군단사용」(단추 0x4b8, 명단 레코드 <c>+0x30</c>) — 고른 사람의 군단을 켜고 끈다. 기본 = 머리 워드 7 켜짐 && 배속 군단 있음,
 /// 워드 7 이 꺼진 전투에선 단추가 안 먹는다(<c>0x100e257c</c>). 끈 사람은 부하 없이 서고, 배치종료 때 부하를 지운다.
-/// 불러온 판·RESTART·화면 밖 자동 진행(DUELDX_AUTOPLAY)에는 이 단계가 없다.
+/// 불러온 판·화면 밖 자동 진행(DUELDX_AUTOPLAY)에는 이 단계가 없다. RESTART 는 원본과 달리 이 단계부터 다시 한다(사용자 요청).
 /// </remarks>
 internal sealed unsafe partial class BattleScene
 {

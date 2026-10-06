@@ -115,7 +115,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 break;
             case SystemItem.Load: host.SlotsScr.OpenSlots(1); break;
             case SystemItem.Restart:
-                _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartBattle);
+                _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartFromDeploy);
                 break;
             case SystemItem.Exit:
                 _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => host.LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
@@ -432,6 +432,22 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// <summary>인물 자료 복사 — 배열 칸(아이템·장착·어빌리티)까지 새로 떠서 전투 중 고친 것이 스냅숏에 번지지 않게.</summary>
     internal static CharacterData CopyChar(CharacterData c) =>
         c with { Items = [.. c.Items], Passives = [.. c.Passives], Abilities = [.. c.Abilities] };
+
+    /// <summary>
+    /// 시스템 메뉴의 RESTART — 판을 되돌린 뒤 <b>캐릭터 배치부터</b> 다시 한다(사용자 요청: 군단사용·자리를 다시 고르고 싶다).
+    /// 배치종료가 안 세운 파티원과 끈 군단의 부하를 지워 버리므로, 전투 전 명부·군단으로 유닛을 새로 만든다. 배치칸이 없는 전투는 전처럼 바로 시작한다.
+    /// </summary>
+    internal void RestartFromDeploy()
+    {
+        RestartBattle();                                   // 명부·군단·가방·깃발을 전투 전으로 — 유닛을 새로 만들 바탕
+        host._units = host.Btl.BuildUnits(host._scene);
+        host.LoadRosterSprites();
+        host._statusUnit = -1;
+        host.Btl._infoUnit = -1;
+        host.Btl._ringUnit = -1;
+        RestartBattle();
+        host.Btl.BeginDeployOrDrop(host._scene, fresh: true);
+    }
 
     internal void RestartBattle()
     {

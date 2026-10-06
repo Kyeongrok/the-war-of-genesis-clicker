@@ -870,15 +870,46 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             bits.Add($"{(w.Power != 0 ? $"위력 {w.Power} " : "")}(지금 피해 약 {db.Atk(c, user.Soul, w.Power)} — 상대 방어 전)");
         else if (w.IsDamage && w.Power > 0) bits.Add($"위력 {w.Power}");
         foreach (var (stat, value) in w.Bonuses)
-        {
-            if (stat is 0 or 44 or 45 or 46) continue;          // 44~46 은 원본의 「없음」 칸
-            if (StatBonusNames.TryGetValue(stat, out var statName)) { bits.Add($"{statName} {value:+#;-#;0}"); continue; }
-            if (BattleScene.ChangeText(stat, value) is { } change) { bits.Add(change); continue; }
-            string desc = host._db?.Statuses.GetValueOrDefault(stat) is { } st ? host._db.T(st.DescriptionId) : "";
-            if (desc.Contains("%d")) bits.Add(FormatPrintf(desc, value).TrimEnd('.', ' '));
-            else bits.Add(value != 0 ? $"{BattleScene.AilmentNames.GetValueOrDefault(stat, $"효과 {stat}")} {value}" : BattleScene.AilmentNames.GetValueOrDefault(stat, $"효과 {stat}"));
-        }
+            if (BonusText(stat, value) is { } bonus) bits.Add(bonus);
         return string.Join(" · ", bits);
+    }
+
+    /// <summary>(번호, 값) 보정 하나를 글로 — 능력치면 「PSY +10」, 상태이상이면 그 설명글. 빈 칸이면 null. work 와 아이템이 같이 쓴다.</summary>
+    internal string? BonusText(int stat, int value)
+    {
+        if (stat is 0 or 44 or 45 or 46) return null;           // 44~46 은 원본의 「없음」 칸
+        if (StatBonusNames.TryGetValue(stat, out var statName)) return $"{statName} {value:+#;-#;0}";
+        if (BattleScene.ChangeText(stat, value) is { } change) return change;
+        string desc = host._db?.Statuses.GetValueOrDefault(stat) is { } st ? host._db.T(st.DescriptionId) : "";
+        if (desc.Contains("%d")) return FormatPrintf(desc, value).TrimEnd('.', ' ');
+        string name = BattleScene.AilmentNames.GetValueOrDefault(stat, $"효과 {stat}");
+        return value != 0 ? $"{name} {value}" : name;
+    }
+
+    /// <summary>
+    /// 아이템 설명 — 원본 설명글(Itm <c>+0x34</c> TXR) 아래에 자료로 만든 수치를 붙인다(사용자 요청: 상점에 설명이 없다).
+    /// 장비는 공격·방어와 장비 보정·기본공격이 거는 상태이상, 소모품은 쓰는 work 의 대상과 효과.
+    /// </summary>
+    internal string ItemTipText(ItemData item)
+    {
+        if (host._db is not { } db) return "";
+        string desc = db.T(item.DescriptionId);
+        var parts = new List<string>();
+        var stats = new List<string>();
+        if (item.Attack > 0) stats.Add($"공격 {item.Attack}");
+        if (item.Defense > 0) stats.Add($"방어 {item.Defense}");
+        foreach (var (stat, value) in item.Bonuses)
+            if (BonusText(stat, value) is { } bonus) stats.Add(bonus);
+        if (stats.Count > 0) parts.Add(string.Join(" · ", stats));
+        var onHit = (item.AttackEffects ?? []).Select(e => BonusText(e.Status, e.Value)).OfType<string>().ToList();
+        if (onHit.Count > 0) parts.Add($"기본공격에: {string.Join(" · ", onHit)}");
+        if (item.IsConsumable && host.Btl.Work(item.UseWork) is { } w)
+        {
+            parts.Add(TargetText(w));
+            if (WorkEffect(w) is { Length: > 0 } effect) parts.Add(effect);
+        }
+        string head = desc.Length > 0 ? desc : db.T(item.NameId);
+        return parts.Count == 0 ? head : head + "$n$n" + string.Join("$n", parts);
     }
 
     internal void ShowStatusTip(string text) => _statusTip = (text, host._mouse.X, host._mouse.Y);

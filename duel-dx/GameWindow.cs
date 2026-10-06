@@ -750,6 +750,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Btl._abilityPressed = -1;      // 어빌리티 설명은 오른쪽 단추를 떼면 사라진다
                 StatusScr._statusTip = null;         // 스테이터스 설명도(0x10042c00)
                 Mos._styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
+                Mos._shopTip = null;           // 상점 아이템 설명도
                 Btl._ringHelp = null;          // 링 항목 설명도
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
