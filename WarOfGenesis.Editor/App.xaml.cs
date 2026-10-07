@@ -16,6 +16,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += OnUnhandled;
+        // 따로 받은 편집기에는 원본 게임의 자료가 없다 — 원본 게임 폴더를 이미 알면 거기서 차려 둔다(모르면 첫 화면에서 폴더를 열 때).
+        try { if (WarOfGenesis.Assets.OriginalAssets.NeedsGame && WarOfGenesis.Assets.OriginalGame.Root is { } root) WarOfGenesis.Assets.OriginalAssets.Prepare(root); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 못 차려도 편집기는 뜬다 — 자료를 읽는 곳에서 알린다 */ }
         base.OnStartup(e);
     }
 

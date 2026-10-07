@@ -98,7 +98,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             if (BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) is not { } obt) return null;
 
             string mapFile = $"{obt:D4}.obt";
-            if (!File.Exists(AssetPack.MapPath(mapFile))) return null;      // 설치판은 맵을 따로 받는다 — 없으면 받을 때까지 기다린다
+            if (!File.Exists(AssetPack.MapPath(mapFile))) return null;
 
             var roster = battle.Units
                 .Where(u => u.ChrCode > 0)

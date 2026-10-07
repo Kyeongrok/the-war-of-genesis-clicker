@@ -36,7 +36,8 @@ internal sealed unsafe class DevScreen(GameWindow host)
         string editor = Path.Combine(UserDataFolder.Path, "editor");
         return
         [
-            ("받는 에셋", AssetPack.Folder, PackNote()),
+            ("원본 게임", OriginalGame.Root ?? "", ""),
+            ("꺼낸 에셋", AssetPack.Folder, PackNote()),
             ("세이브·설정", UserDataFolder.Path, ""),
             ("실린 에셋", assets, ""),
             ("편집기", editor, Directory.Exists(editor) ? "" : "아직 안 받음"),
@@ -53,10 +54,9 @@ internal sealed unsafe class DevScreen(GameWindow host)
         try
         {
             var files = Directory.Exists(AssetPack.Folder) ? new DirectoryInfo(AssetPack.Folder).GetFiles("*", SearchOption.AllDirectories) : [];
-            text = files.Length == 0 ? "받은 파일 없음" : $"파일 {files.Length}개 · {files.Sum(f => f.Length) / 1048576.0:0}MB";
+            text = files.Length == 0 ? "꺼낸 파일 없음" : $"파일 {files.Length}개 · {files.Sum(f => f.Length) / 1048576.0:0}MB";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { text = "폴더를 못 읽음"; }
-        if (AssetPack.Status.Length > 0) text += $" · {AssetPack.Status}";
         _packNote = (host._lastTime, text);
         return text;
     }

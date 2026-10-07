@@ -120,9 +120,11 @@ public partial class MainWindow : Window
             _gameRoot = root;
             _database = null;
             SaveGameRoot(root);
+            // 실린 assets 에 원본 자료가 없으면(따로 받은 편집기) 이 폴더에서 차린다 — 저장소에서 돌릴 때는 아무 일도 없다.
+            if (OriginalAssets.NeedsGame) OriginalAssets.Prepare(root);
             StatusText.Text = $"열었습니다 — 인물 레코드 {_allChrRecords.Count}개. 캐릭터 > 캐릭터 스탯 목록을 우클릭하면 모션 매핑 보기·내보내기.";
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             StatusText.Text = $"여는 중 문제가 생겼습니다: {ex.Message}";
         }

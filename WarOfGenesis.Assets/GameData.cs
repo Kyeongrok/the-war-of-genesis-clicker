@@ -22,6 +22,10 @@ public sealed class GameFiles
     /// <summary>파일 앞 <paramref name="count"/> 바이트까지만 읽는다(머리만 볼 때 — 목록을 채울 때 쓴다).</summary>
     public byte[]? ReadHead(string folder, string name, int count) => ReadCore(folder, name, count);
 
+    /// <summary>낱장으로 놓여 있으면 그 자리 — 묶음(<c>.pak</c>) 안에만 있거나 없으면 null.</summary>
+    public string? LoosePath(string folder, string name) =>
+        Path.Combine(_root, folder, name) is var loose && File.Exists(loose) ? loose : null;
+
     /// <summary>폴더에 든 파일 이름과 크기 — 낱장과 <c>.idx</c> 색인을 합친 것(같은 이름이면 낱장 크기).</summary>
     public IReadOnlyDictionary<string, long> List(string folder, string extension)
     {

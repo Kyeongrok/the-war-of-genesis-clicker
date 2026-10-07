@@ -194,9 +194,6 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         // 오른쪽 위 판 번호 — Num.dat[0] × 0.001
         string version = $"Ver {(host._db?.N(0) ?? 1005) * 0.001:0.000}";
         host.DrawText(version, ox + 560, oy + 10, White, 12);
-        // 대사 음성을 뒤에서 받는 동안 진행을 왼쪽 위에 보인다(VoicePack).
-        if (AssetPack.Status is { Length: > 0 } pack) host.DrawText(pack, ox + 8, oy + 10, White, 12);
-        if (VoicePack.Status is { Length: > 0 } voices) host.DrawText(voices, ox + 8, oy + (AssetPack.Status.Length > 0 ? 26 : 10), White, 12);
 
         host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();

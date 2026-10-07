@@ -22,12 +22,12 @@ internal sealed unsafe partial class GameWindow
             // 아직 그림 목록을 못 읽었으면(자료 읽기 전) 기억해 두지 않는다 — 나중에 다시 묻는다.
             if (!_uiPaths.TryGetValue(id, out string? path))
             {
-                // 설치판은 모세스 화면 그림을 처음 쓸 때 받아 온다(AssetPack) — 올 수 없는 것이면 「없는 그림」으로 기억한다.
+                // 모세스 화면 그림은 처음 쓸 때 원본 게임 폴더에서 가져온다(AssetPack) — 없으면 「없는 그림」으로 기억한다.
                 if (_uiPaths.Count == 0) return null;
                 path = AssetPack.Fetch("moses/obs", $"{id:D4}.obs");
                 if (path == null)
                 {
-                    if (!AssetPack.MayCome("moses/obs", $"{id:D4}.obs")) _ui[id] = null;
+                    _ui[id] = null;
                     return null;
                 }
                 _uiPaths[id] = path;
