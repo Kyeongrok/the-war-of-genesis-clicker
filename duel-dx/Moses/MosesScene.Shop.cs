@@ -292,10 +292,11 @@ internal sealed unsafe partial class MosesScene
             string label = host._db?.T(lines[i].Text) is { Length: > 0 } t ? t : "";
             // 배경 그림의 「Account」 칸 안(왼쪽 아래)에 넣는다 — 이름은 왼쪽, 값은 오른쪽 맞춤
             int ly = oy + 200 + i * 20;
-            host.DrawText(label, ox + 30, ly, White, 11);
-            string value = $"{lines[i].Value}GP";
+            // 원본 서식은 "%s : %6d" — 딱지 뒤에 쌍점, 값은 여섯 칸 오른쪽 맞춤, 「GP」 없이 늘 흰색이다(0x100fbeb2 · 0x100fbf26 · 0x100fbf9a · 0x100fc022, ba-20 moses 5절).
+            host.DrawText(label + " :", ox + 30, ly, White, 11);
+            string value = $"{lines[i].Value}";
             var (_, vw, _) = host.GetText(value, White, 11);
-            host.DrawText(value, ox + 132 - vw, ly, lines[i].Value < 0 ? StatusScreen.Red : White, 11);
+            host.DrawText(value, ox + 132 - vw, ly, White, 11);
         }
 
         DrawShopCompare(ox, oy, tick);
