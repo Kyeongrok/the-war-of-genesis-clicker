@@ -253,7 +253,7 @@ internal sealed unsafe partial class BattleScene
         user.Soul = Math.Min(user.MaxSoul, user.Soul + 10);
         GainObjectKillExp(user, obj);                     // 1016 + 물체 레벨(0x100e79fc~, 감사4 K3)
         host.Toast($"{host._db.T((ushort)obj.Data.NameId)} 이(가) 부서졌습니다.");
-        GiveObjectSpoils(obj, user);
+        // 부서진 물체는 든 것을 주지 않는다 — 아이템·GP 는 상자를 열 때만 나온다(0x100e7d56 · 0x100e7d6f). 상자는 피해로 부서지지 않는다(Breakable 은 7·9·10 뿐, 사용자 확인).
     }
 
     /// <summary>
