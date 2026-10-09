@@ -69,7 +69,7 @@ internal sealed unsafe partial class MoviePlayer(GameWindow host)
     /// <summary>
     /// 익스퍼트 웨이브(어빌리티 54)의 파문 — 그림 자료가 없는 코드 이펙트(<c>0x100cfae0</c> ×3). 핸들러 <c>0x1008a880</c> 이
     /// <c>0x100cfbd0(…, 80, …, 속도)</c> 로 셋을 반지름 80 까지 속도 1.5 · 0.833 · 0.167(틱당)로 퍼뜨린다. 색·굵기는 자료에 없어
-    /// 옅은 청백 더하기 테두리로 그린다(가설). 판 칸이 40×32 라 세로는 0.8 배로 눌린 타원이다.
+    /// 밝은 청백 더하기 띠(굵기 10픽셀, 안쪽은 엷게)로 그린다(가설). 판 칸이 40×32 라 세로는 0.8 배로 눌린 타원이다.
     /// </summary>
     internal readonly List<(double Start, int X, int Y, double Speed)> _ripples = [];
 
@@ -82,25 +82,33 @@ internal sealed unsafe partial class MoviePlayer(GameWindow host)
         foreach (double speed in RippleSpeeds) _ripples.Add((host._lastTime, col * TileW + TileW / 2, host.CellCenterY(col, row), speed));
     }
 
+    /// <summary>파문 띠의 반 굵기(픽셀)와 색 — 원본 자료에 없어 정한 값이다. 전에는 옅은 3픽셀 줄이라 거의 안 보였다(사용자 보고 fg-28).</summary>
+    internal const double RippleHalfWidth = 5;
+    internal const uint RippleColor = 0xFF78B8FF;
+
     internal void DrawRipples()
     {
         _ripples.RemoveAll(r =>
         {
             double radius = (host._lastTime - r.Start) * TicksPerSecond * r.Speed;
             if (radius >= RippleRadius) return true;
-            int k = (int)(256 * (1 - radius / RippleRadius));
-            const uint color = 0xFF3C6490;
-            int steps = Math.Max(24, (int)(radius * 6));
-            for (int ring = 0; ring < 3; ring++)                       // 굵기 3픽셀
+            // 퍼질수록 옅어지되 끝 무렵까지는 또렷하게(제곱으로 꺼진다). 띠는 가운데가 가장 밝고 가장자리로 부드럽게 꺼지며, 안쪽은 엷게 물든다.
+            double fade = 1 - radius / RippleRadius * (radius / RippleRadius);
+            int reach = (int)(radius + RippleHalfWidth) + 1;
+            for (int dy = -(int)(reach * 0.8) - 1; dy <= (int)(reach * 0.8) + 1; dy++)
             {
-                double rr = radius + ring;
-                for (int s = 0; s < steps; s++)
+                int y = r.Y + dy;
+                if ((uint)y >= host.BoardHeight) continue;
+                for (int dx = -reach; dx <= reach; dx++)
                 {
-                    double a = 2 * Math.PI * s / steps;
-                    int x = r.X + (int)Math.Round(Math.Cos(a) * rr), y = r.Y + (int)Math.Round(Math.Sin(a) * rr * 0.8);
-                    if ((uint)x >= host.BoardWidth || (uint)y >= host.BoardHeight) continue;
+                    int x = r.X + dx;
+                    if ((uint)x >= host.BoardWidth) continue;
+                    double d = Math.Sqrt(dx * dx + dy / 0.8 * (dy / 0.8));          // 세로 0.8 배로 눌린 타원
+                    double band = Math.Max(0, 1 - Math.Abs(d - radius) / RippleHalfWidth), inside = d < radius ? 0.12 : 0;
+                    int k = (int)(256 * fade * Math.Max(band, inside));
+                    if (k <= 0) continue;
                     int at = y * host.BoardWidth + x;
-                    host._fb[at] = GameWindow.AddColor(host._fb[at], color, k);
+                    host._fb[at] = GameWindow.AddColor(host._fb[at], RippleColor, k);
                 }
             }
             return false;
