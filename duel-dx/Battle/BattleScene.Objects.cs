@@ -832,13 +832,22 @@ internal sealed unsafe partial class BattleScene
         }
 
         // 럭키가이 1527 — 고른 칸의 효과 범위(층 0, +0x1a = 3)를 0x100df5c0 로 모아 0x1006fde0 이 적대라 보는 유닛마다
-        // 투사체 1발(0x100ea040~0x100ea307, 감사4 K4). 투사체 그림은 아직 없어 날아가는 틈만 늦춤으로 둔다(가설: 10~40틱).
+        // 투사체 1발(0x100ea040~0x100ea307, 감사4 K4) — 탄 Obs 158 모션 3 이 틱당 40px 로 날아가(0x100c3b30 · 0x100c3490(40)) 닿을 때 판정(슬롯 0x100c29b0)하고,
+        // 닿은 자리에 Obs 111 모션 0 과 Obs 1431 모션 1 이 뜬다(0x100ea1c3 · 0x100ea2cb). 꼬리 109:4 와 파편 253:0(0x100cc890)은 안 넣었다.
+        // 전에는 그림 없이 10~40틱 뒤 피해만 들어갔다(ba-22).
         if (work.Id == 1527)
         {
+            int fromX = obj.Col * TileW + TileW / 2, fromY = host.CellCenterY(obj.Col, obj.Row);
             foreach (var u in best.Hits)
             {
                 int one = One(u);
-                if (one > 0) _delayedHits.Add((host._lastTime + (10 + host._rng.Next(31)) / TicksPerSecond, u, one));
+                var (tx, ty) = host.Btl.UnitFoot(u);
+                double flight = Math.Max(1, Math.Ceiling(Math.Sqrt((tx - fromX) * (double)(tx - fromX) + (ty - fromY) * (double)(ty - fromY)) / 40));
+                double land = host._lastTime + flight / TicksPerSecond;
+                _shots.Add((158, 3, host._lastTime, fromX, fromY, tx, ty, 40, 0, 0, 40, 40, tx > fromX));
+                _effects.Add((111, 0, land, tx, ty));
+                _effects.Add((1431, 1, land, tx, ty));
+                if (one > 0) _delayedHits.Add((land, u, one));
             }
             return;
         }
