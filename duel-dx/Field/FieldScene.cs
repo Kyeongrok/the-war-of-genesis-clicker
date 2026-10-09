@@ -886,14 +886,19 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 {
                     if (FieldPropOf(A(0)) is { } prop)
                     {
+                        // 같은 모션이 아직 도는 중이면 처음으로 되감지 않는다(애니메이터 0x10027090, ba-20 field N8). 전에는 늘 처음부터 다시 돌았다.
+                        bool running = prop.Motion == A(1) && (!prop.Hold || prop.PlayUntil > host._lastTime);
                         prop.Motion = A(1);
                         prop.Mirror = A(5) != 0;
-                        prop.Start = host._lastTime;
                         prop.Hold = A(2) != 1;               // a2 ≠ 1 은 모션 끝에서 멈춤(0x100f1f78, 감사5 D15)
-                        prop.PlayUntil = host._lastTime + (host.UiFor(prop.Obs)?.MotionLength(prop.Motion) ?? 0) / TicksPerSecond;
+                        if (!running)
+                        {
+                            prop.Start = host._lastTime;
+                            prop.PlayUntil = host._lastTime + (host.UiFor(prop.Obs)?.MotionLength(prop.Motion) ?? 0) / TicksPerSecond;
+                        }
                         // 인자 2 가 1 이면 슬롯이 곧장 풀리고, 아니면 모션 끝(+0x68)까지 산다(0x100f1d90) — 뒤따르는 행동 1 이 이것을 기다린다.
                         if (A(2) != 1) HoldSlot(() => prop.PlayUntil > host._lastTime && _fieldProps.Contains(prop));
-                        SchedulePropSounds(prop);   // 문 여닫는 소리(Obs 529 모션 1·2 → 157·158) 같은 모션 소리
+                        if (!running) SchedulePropSounds(prop);   // 문 여닫는 소리(Obs 529 모션 1·2 → 157·158) 같은 모션 소리
                     }
                 }
                 else if (A(0) > 0)
@@ -1533,7 +1538,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     /// <summary>말하는 이가 필드 인물이면 그 머리 위 자리(판 낱칸)를 알려 준다.</summary>
     internal (int X, int Y)? FieldTalkHead()
     {
-        if (!FieldOpen || FieldActorOf(_fieldTalkOf) is not { Visible: true } who) return null;
+        if (!FieldOpen || FieldActorOf(_fieldTalkOf) is not { } who) return null;   // 감춘 인물이어도 그 자리를 쓴다(0x100ef693)
         var (ox, oy) = host.Mos.MosesOrigin();
         return (ox + (int)who.X - _fieldCam.X, oy + (int)who.Y - _fieldCam.Y);
     }

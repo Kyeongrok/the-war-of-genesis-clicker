@@ -783,7 +783,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// <summary>필드 말하는 이의 발 자리(판 낱칸) — 창마다 제 말하는 이.</summary>
     internal (int X, int Y)? TalkHead(TalkWindow w)
     {
-        if (!host.FieldOpen || w.FieldSpeaker == 0 || host.Fld.FieldActorOf(w.FieldSpeaker) is not { Visible: true } who) return null;
+        if (!host.FieldOpen || w.FieldSpeaker == 0 || host.Fld.FieldActorOf(w.FieldSpeaker) is not { } who) return null;   // 감춘 인물이어도 그 자리를 쓴다(0x100ef693, ba-20 field N8)
         var (ox, oy) = host.Mos.MosesOrigin();
         return (ox + (int)who.X - host.Fld._fieldCam.X, oy + (int)who.Y - host.Fld._fieldCam.Y);
     }
