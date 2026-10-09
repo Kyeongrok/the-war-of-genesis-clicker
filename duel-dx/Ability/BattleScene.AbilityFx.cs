@@ -484,6 +484,7 @@ internal sealed unsafe partial class BattleScene
     internal void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         host.Mov.SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
+        host.Cut.Start(w);                                               // 전체 화면 컷신(헬 카이트·진무 천지파열 …) — 도는 동안 전투가 선다
         host.Mov.SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);

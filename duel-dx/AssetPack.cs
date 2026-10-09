@@ -49,6 +49,21 @@ internal static class AssetPack
     /// <summary>전투 맵 파일 자리 — 받는 길이면 받을 때까지(최대 2분) 기다린다. 맵이 없으면 전투를 못 연다.</summary>
     public static string MapPath(string file) => Fetch("maps", file, 120) ?? Path.Combine(AssetsFolder.Find("maps"), file);
 
+    /// <summary>
+    /// 원본 게임 폴더에서 만들 수 없는 우리 파일(기술 컷신 영상 <c>effects/cut</c>) — 있으면 그 자리, 없으면 뒤에서 받게 걸어 두고 null.
+    /// 원본 폴더로 도는 판도 이것은 릴리즈에서 받는다(<see cref="AssetDownload.FetchExtra"/>). 기다리지 않는다.
+    /// </summary>
+    public static string? FetchExtra(string kind, string file)
+    {
+        try
+        {
+            string here = Path.Combine(AssetsFolder.Find(kind), file);
+            if (File.Exists(here)) return here;
+        }
+        catch (DirectoryNotFoundException) { return null; }
+        return AssetDownload.FetchExtra(kind, file);
+    }
+
     /// <summary>연대표의 그 줄(0~14)에 들어갔다 — 받는 길이면 그 줄 + <see cref="AssetDownload.Ahead"/> 까지 미리 받는다.</summary>
     public static void Reach(int row) => AssetDownload.Reach(row);
 }

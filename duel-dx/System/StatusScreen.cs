@@ -250,7 +250,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         {
             if (count <= 0 || !db.Items.TryGetValue(id, out var item) || !db.FitsSlot(c, item, slot)) continue;
             fitting++;
-            string desc = db.T(item.DescriptionId);
+            string desc = ItemTipText(item);          // 상점과 같은 설명 — 원본 글 아래에 공격 · 방어 · 보정 수치(사용자 요청 st)
             rows.Add(new(db.T(item.NameId), $"(x{count})", true, () => SetEquipment(u, slot, (ushort)id),
                 Icon: (x, y, _) => host.DrawUi(ItemPictureObs, item.PictureMotion, 0, x + 8, y + 2, GameWindow.UiBlend.Alpha, loop: false),
                 Tip: desc.Length > 0 ? () => ShowStatusTip(desc) : null));
@@ -564,7 +564,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             var it = c.Items[i] != 0 && db.Items.TryGetValue(c.Items[i], out var found) ? found : null;
             if (it != null) host.DrawUi(ItemPictureObs, it.PictureMotion, 0, rx + 8, ry + 2, GameWindow.UiBlend.Alpha, loop: false);
             RowText(it != null ? db.T(it.NameId) : db.T(0), rx, ry, RowH, StatusWhite, right: SideW - 16);
-            if (it != null && db.T(it.DescriptionId) is { Length: > 0 } desc)
+            if (it != null && ItemTipText(it) is { Length: > 0 } desc)
                 _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowStatusTip(desc)));
             int slot = i;
             if (editable) AddHit(rx, ry, SideW, RowH, () => ChooseEquipment(unit, slot));

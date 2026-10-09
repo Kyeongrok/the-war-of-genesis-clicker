@@ -15,7 +15,7 @@
 import os
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
-OWN = ('.json', '.ico', '.png', '.bak', '.txt')
+OWN = ('.json', '.ico', '.png', '.bak', '.txt', '.wgm')     # .wgm — 풀어 둔 기술 컷신(tools/make_cutscenes.py), 릴리즈에서 받는다
 
 
 def main():

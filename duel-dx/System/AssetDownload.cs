@@ -31,6 +31,9 @@ internal static class AssetDownload
     /// <summary>들어가 본 줄에서 몇 줄 앞까지 미리 받나.</summary>
     public const int Ahead = 3;
 
+    /// <summary>이 장 번호부터는 미리 받지 않는다 — 게임이 찾을 때만 받는 것(기술 컷신 영상, <see cref="FetchExtra"/>).</summary>
+    public const int OnDemandTier = 90;
+
     private static string Folder => OriginalAssets.LocalFolder;
     private static string PartsFolder => Path.Combine(Folder, ".parts");
     private static readonly string ChoicePath = UserDataFolder.File("assetsource.txt");
@@ -90,22 +93,7 @@ internal static class AssetDownload
         OriginalAssets.LayOutShipped(shipped);
         Directory.CreateDirectory(PartsFolder);
 
-        // 목록 — 새 것을 받아 보고, 못 받으면 전에 받아 둔 것으로 간다.
-        string manifestPath = Path.Combine(PartsFolder, ManifestName);
-        string? json = null;
-        try
-        {
-            // 인터넷이 먹통이면 오래 붙잡지 않는다 — 받아 둔 목록이 있으면 그것으로 바로 켠다.
-            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            json = Http.GetStringAsync($"{BaseUrl}{BaseRelease}/{ManifestName}", patience.Token).GetAwaiter().GetResult();
-            File.WriteAllText(manifestPath, json);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
-        {
-            if (!File.Exists(manifestPath)) throw new HttpRequestException("자료 목록을 받지 못했습니다 — 인터넷 연결을 확인해 주세요.", ex);
-            json = File.ReadAllText(manifestPath);
-        }
-        using var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(Manifest().GetAwaiter().GetResult());
         var bases = Parts(doc.RootElement, "base");
         var todo = bases.Where(p => !Done(p)).ToList();
         long total = todo.Sum(p => p.Size), got = 0;
@@ -134,6 +122,72 @@ internal static class AssetDownload
         AssetsFolder.Use(Folder);
         Active = true;
         _ = Task.Run(RunAsync);
+    }
+
+    /// <summary>목록(<c>pack.json</c>) — 새 것을 받아 보고, 못 받으면 전에 받아 둔 것으로 간다. 둘 다 없으면 <see cref="HttpRequestException"/>.</summary>
+    private static async Task<string> Manifest()
+    {
+        Directory.CreateDirectory(PartsFolder);
+        string manifestPath = Path.Combine(PartsFolder, ManifestName);
+        try
+        {
+            // 인터넷이 먹통이면 오래 붙잡지 않는다 — 받아 둔 목록이 있으면 그것으로 바로 간다.
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            string json = await Http.GetStringAsync($"{BaseUrl}{BaseRelease}/{ManifestName}", patience.Token);
+            File.WriteAllText(manifestPath, json);
+            return json;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            if (!File.Exists(manifestPath)) throw new HttpRequestException("자료 목록을 받지 못했습니다 — 인터넷 연결을 확인해 주세요.", ex);
+            return File.ReadAllText(manifestPath);
+        }
+    }
+
+    private static int _extrasStarted;
+
+    /// <summary>
+    /// 원본 게임 폴더에서 만들 수 없는 파일(기술 컷신 영상) — 있으면 그 자리, 없으면 뒤에서 받게 걸어 두고 null(기다리지 않는다).
+    /// 원본 폴더로 도는 판도 이것만은 받는다. 저장소에서 돌릴 때(개발)와 화면 밖 시험(<c>DUELDX_PACK=1</c> 이나 <c>DUELDX_PACKURL</c> 이 없으면)에서는 받지 않는다.
+    /// </summary>
+    public static string? FetchExtra(string kind, string file)
+    {
+        if (Active) return Fetch(kind, file, 0);
+        string path = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file), name = $"{kind}/{file}";
+        if (File.Exists(path)) return path;
+        if (!OriginalAssets.NeedsGame) return null;
+        if (Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1" && Environment.GetEnvironmentVariable("DUELDX_PACK") != "1"
+            && Environment.GetEnvironmentVariable("DUELDX_PACKURL") is not { Length: > 0 }) return null;
+        lock (Gate)
+        {
+            _wanted.Remove(name);
+            _wanted.Add(name);
+        }
+        if (Interlocked.Exchange(ref _extrasStarted, 1) == 0) _ = Task.Run(RunExtrasAsync);
+        return null;
+    }
+
+    /// <summary>원본 폴더로 도는 판의 받기 — 목록에서 「찾을 때만 받는 것」만 걸어 두고 같은 고리를 돌린다(찾은 것만 받는다).</summary>
+    private static async Task RunExtrasAsync()
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(await Manifest());
+            lock (Gate)
+                foreach (var e in Entries(doc.RootElement))
+                {
+                    if (e.Tier < OnDemandTier || e.Name.Contains("..") || Path.IsPathRooted(e.Name) || e.Asset != Path.GetFileName(e.Asset) || Have(e)) continue;
+                    _pending.Add(e);
+                    _byName[e.Name] = e;
+                }
+            await RunAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or KeyNotFoundException or UnauthorizedAccessException)
+        {
+            // 목록을 못 받았다 — 다음에 찾을 때 다시 해 본다.
+            System.Diagnostics.Debug.WriteLine($"[Pack] {ex.GetType().Name}: {ex.Message}");
+            Volatile.Write(ref _extrasStarted, 0);
+        }
     }
 
     /// <summary>연대표의 그 줄(0~14)에 들어갔다 — 뒤에서 받는 범위가 그 줄 + <see cref="Ahead"/> 까지로 넓어진다.</summary>

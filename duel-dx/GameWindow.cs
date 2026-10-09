@@ -575,6 +575,14 @@ internal sealed unsafe partial class GameWindow : IDisposable
             // 게임 시계 — 실제로 흐른 시간 × 게임 속도. 모션·걷기·이펙트·소리 예약이 모두 이 시계를 보므로 함께 빨라진다.
             double real = clock.Elapsed.TotalSeconds, dt = Math.Min(real - _realTime, 0.1) * _gameSpeed / 100.0;
             _realTime = real;
+            // 기술 컷신이 도는 동안은 게임 시계를 세운다 — 영상이 끝나면 멈춘 자리에서 이어 간다(CutscenePlayer).
+            if (Cut.Playing)
+            {
+                Cut.Update(real);
+                UpdateCursor();
+                Render();
+                continue;
+            }
             // 시험 전용: DUELDX_TESTRUN=N 이면 한 프레임에 N 번 갱신한다(기본 1 — 평소대로, GameWindow.TestRun.cs).
             for (int step = 0; step < TestRunSteps && _running; step++)
             {
@@ -592,6 +600,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 StepSkipEnemyAction();
             }
 
+            Cut.PrefetchForBattle();   // 컷신 기술을 가진 인물이 있으면 영상을 미리 받아 둔다
             UpdateCursor();
             Render();
         }
@@ -766,6 +775,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal void OnKeyDown(int key)
     {
+        if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
@@ -899,6 +909,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// </summary>
     internal void OnClick(int clientX, int clientY)
     {
+        if (Cut.Playing) { Cut.Skip(); return; }
         if (ProgressScr._progressOpen) { var (px, py) = BoardPoint(clientX, clientY); ProgressScr.OnProgressClick(px, py); return; }
         var (bx, by) = BoardPoint(clientX, clientY);
         // 메뉴 막대에서 여는 창들은 맨 위에 그리므로 클릭도 먼저 받는다 — 전에는 적이 움직이는 동안 창 위를 눌러도 「적 행동 건너뛰기」가 먼저 먹었다.
@@ -1203,6 +1214,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DevScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
+        Cut.Draw();                            // 기술 컷신은 모든 것 위에
     }
 
     internal void DrawBackground()

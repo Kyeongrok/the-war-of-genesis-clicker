@@ -30,7 +30,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 400, TuningBoxX = 300, TuningBoxY = 142, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 432, TuningBoxX = 300, TuningBoxY = 142, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 스토리(대사 진행). 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, 2) : 0;
@@ -52,6 +52,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("행성에 할 일 표시", "전투·이야기 장소가 있는 행성에 노란 점", MenuPlanetMarks, host._planetMarks),
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
+        ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(처음 한 번 받는다)", MenuSkillMovies, host._skillMovies),
         ("전직할 때 EXP 유지", "전직해도 쌓인 EXP 를 지우지 않는다", MenuKeepJobExp, host._keepJobExp),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
         ("익명 전투 통계 보내기", "쓴 어빌리티와 피해만 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),

@@ -9,6 +9,7 @@
     이것이 있어야 게임이 켜지므로 처음 한 번 진행 창을 띄우고 받는다.
   * 낱장(`files`) — 음악 · 전투 맵 · 인물 그림 · 모세스 그림 · 큰 효과음(`tools/asset_pack_order.txt`). 파일 하나씩 올려 두고 뒤에서 받는다.
     게임이 아직 없는 파일을 찾으면 그것부터 받는다.
+    끝에 기술 컷신 영상(`effects/cut/NNNN.wgm`, `tools/make_cutscenes.py`)이 붙는다 — 장 90, 게임이 찾을 때만 받는다.
   * 대사 음성(`voices-tNN.zip`) — 원본 `BGM` 폴더의 음성. 장마다 한 덩이(`--game` 을 줘야 만든다).
 
 낱장과 음성에는 **장**(`tier`)이 붙는다 — 연대표(`EPS/Episode.dat`)의 줄 번호(0~14, 한 줄에 Episode 4 · Episode 5 한 챕터씩)다.
@@ -31,6 +32,7 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
 ASSETS = os.path.join(ROOT, 'assets')
 DATA = os.path.join(ASSETS, 'data')
 UNUSED = 99
+ON_DEMAND = 90        # 게임의 AssetDownload.OnDemandTier — 이 장부터는 미리 받지 않는다
 PER_RELEASE = 900
 ZIP_LIMIT = 48 << 20
 
@@ -274,8 +276,11 @@ def main():
 
     # 낱장 — 장 차례, 같은 장 안에서는 받는 차례 파일의 차례.
     files, seen = [], set()
-    for i, (name, tier) in enumerate(sorted(tiers.items(), key=lambda kv: (kv[1] % UNUSED, kv[1] == UNUSED))):
-        tier %= UNUSED
+    order = [(name, tier % UNUSED) for name, tier in sorted(tiers.items(), key=lambda kv: (kv[1] % UNUSED, kv[1] == UNUSED))]
+    # 기술 컷신 영상(tools/make_cutscenes.py 가 만든 것) — 미리 받지 않고 게임이 찾을 때만 받는다. 원본 게임 폴더로 도는 판도 이것은 받는다.
+    cut = os.path.join(ASSETS, 'effects', 'cut')
+    order += [('effects/cut/' + f, ON_DEMAND) for f in sorted(os.listdir(cut) if os.path.isdir(cut) else []) if f.endswith('.wgm')]
+    for i, (name, tier) in enumerate(order):
         # 릴리즈 파일 이름은 ASCII 만 — 인물 폴더의 한글 이름은 뺀다(characters/0221_죠안/0338.obs → characters_0221__0338.obs).
         asset = ''.join(ch for ch in name.replace('/', '_') if ch.isascii() and (ch.isalnum() or ch in '._-'))
         assert asset not in seen, asset

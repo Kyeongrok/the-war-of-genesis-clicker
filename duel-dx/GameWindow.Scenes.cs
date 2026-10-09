@@ -90,6 +90,8 @@ internal sealed unsafe partial class GameWindow
     internal TalkBox? _tlk;
     internal TalkBox Tlk => _tlk ?? LazyInitializer.EnsureInitialized(ref _tlk, () => new TalkBox(this));
 
+    internal CutscenePlayer? _cut;
+    internal CutscenePlayer Cut => _cut ?? LazyInitializer.EnsureInitialized(ref _cut, () => new CutscenePlayer(this));
     internal MoviePlayer? _mov;
     internal MoviePlayer Mov => _mov ?? LazyInitializer.EnsureInitialized(ref _mov, () => new MoviePlayer(this));
 
