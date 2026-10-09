@@ -1011,7 +1011,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 if (a.Code == 211) who.Visible = true;        // 나타날 때는 먼저 보이게 해 두고 밝기를 올린다
                 if (A(1) <= 0) { who.Alpha = to; who.Visible = to > 0; who.Fade = null; break; }
                 double fadeStart = host._lastTime;
-                who.Fade = (who.Alpha, to, A(1), fadeStart);
+                // 211 은 지금 밝기와 상관없이 섞기 1단계(1/8)부터 올라온다 — 보이는 인물에 걸면 한 번 옅어졌다 돌아온다(0x100f1888: ⌊7t/a1⌋ + 1, ba-20 field N8).
+                who.Fade = (a.Code == 211 ? 1 / 8.0 : who.Alpha, to, A(1), fadeStart);
                 HoldSlot(() => who.Fade is { } now && now.Start == fadeStart && _fieldActors.Contains(who));
                 break;
             }

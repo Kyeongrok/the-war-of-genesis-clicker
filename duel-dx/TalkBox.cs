@@ -580,6 +580,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
                 lines.Add((pos + start, take));
                 for (int j = 0; j < take; j++) charLine[pos + start + j] = lines.Count - 1;
                 start += take;
+                // 접어서 넘긴 줄의 첫머리 빈칸은 건너뛴다(0x1002981e~0x1002982b, ba-20 field N8) — 전에는 다음 줄이 한 칸 들어가 시작했다.
+                while (start < para.Length && para[start] == ' ') { charLine[pos + start] = lines.Count - 1; start++; }
             }
             int end = pos + para.Length;
             if (end < charLine.Length) charLine[end] = lines.Count - 1;   // 줄바꿈 글자는 그 줄 끝 걸음
