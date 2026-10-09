@@ -234,7 +234,12 @@ internal sealed unsafe partial class BattleScene
             {
                 int damage = u.MaxHp * u.Status(2) / 100 + u.MaxHp * u.Status(3) / 100 + u.MaxHp * u.Status(17) / 100;
                 int floor = db.N(36);
-                int hp = Math.Max(Math.Min(u.Hp, floor), u.Hp - damage);
+                // 바닥(Num36)은 <b>내부 HP</b>(갑옷 몫을 뺀 값)와 견준다 — 내부 HP − 피해가 바닥 밑이면 피해 = 내부 HP − 바닥이고,
+                // 그 피해가 갑옷 배율로 줄어 내부에서 빠지므로 화면으로는 그 피해만큼 준다(0x1007a380~0x1007a4ea, ba-20 K9).
+                // 전에는 화면 HP 로만 셈해 갑옷이 두꺼울수록 원본보다 많이 깎였다(갑옷 100 · HP 200 · 피해 150 → 원본 110, 전 50).
+                int armor = u.Data is { } data ? db.ArmorRate(data) : 0, n6 = db.N(6);
+                int inner = armor != 0 && n6 != 0 ? u.Hp * n6 / (armor + n6) : u.Hp;
+                int hp = inner > floor ? u.Hp - Math.Min(damage, inner - floor) : u.Hp;
                 if (hp < u.Hp)
                 {
                     ShowNumber(u, $"{db.T(159)} {u.Hp - hp}", 0xFFFF6060);
