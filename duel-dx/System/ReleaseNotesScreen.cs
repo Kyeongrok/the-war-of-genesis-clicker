@@ -120,7 +120,7 @@ internal static class ReleaseNotes
 
 /// <summary>
 /// 릴리즈 노트 창 — 켤 때 한 번 <see cref="OpenIfUpdated"/> 가 띄울지 정한다. 닫기 단추 · Esc · Enter 로 닫는다.
-/// 글 아래에 「도움을 주신 분들」 칸이 있다 — <c>contributor.md</c> 의 명단(<see cref="ReleaseNotes.Contributors"/>)을 늘, 조금 작은 글씨로 낸다(사용자 요청 menu-11 · menu-12).
+/// 글 아래에 「지금까지 도움을 주신 분들」 칸이 있다 — <c>contributor.md</c> 의 명단(<see cref="ReleaseNotes.Contributors"/>)을 늘, 조금 작은 글씨로 낸다(사용자 요청 menu-11 · menu-12).
 /// </summary>
 internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
 {
@@ -210,7 +210,7 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
         int ty = y + H - 50 - ThanksH;
         host.FillRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxBg);
         host.StrokeRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxLine);
-        host.DrawText("도움을 주신 분들", x + 20, ty + 4, 0xFFFFE070, 11);
+        host.DrawText("지금까지 도움을 주신 분들", x + 20, ty + 4, 0xFFFFE070, 11);
         _thanks ??= ReleaseNotes.Contributors() is { Count: > 0 } names ? [.. host.Mos.WrapText(string.Join(" · ", names), W - 40, 10f).Take(3)] : [];
         if (_thanks.Count == 0) host.DrawText("아직 적힌 분이 없습니다.", x + 20, ty + 21, DimGray, 10);
         for (int i = 0; i < _thanks.Count; i++) host.DrawText(_thanks[i], x + 20, ty + 21 + i * 13, White, 10);
