@@ -52,6 +52,11 @@
                     AutomationProperties.AutomationId="LegionEditMenuItem"
                     Click="LegionEditMenuItem_Click"
                     Header="군단 편집(_L)" />
+                <MenuItem
+                    x:Name="ItemEditMenuItem"
+                    AutomationProperties.AutomationId="ItemEditMenuItem"
+                    Click="ItemEditMenuItem_Click"
+                    Header="아이템 편집(_I)" />
             </MenuItem>
             <MenuItem Header="어빌리티(_B)">
                 <MenuItem

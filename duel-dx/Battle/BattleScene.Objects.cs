@@ -224,7 +224,7 @@ internal sealed unsafe partial class BattleScene
     {
         var killer = breaker.LeaderIndex >= 0 && breaker.LeaderIndex < host._units.Length ? host._units[breaker.LeaderIndex] : breaker;
         if (host._db == null || killer.Data is not { } k || !killer.PlayerControlled) return;
-        int exp = Math.Max(1, host._db.ExpForKill(k, ObjLevel(obj), killer.Status(11)));
+        int exp = Math.Max(1, host._db.ExpForKill(k, ObjLevel(obj), killer.Status(11) + host._db.EquipBonus(k, ItemBook.ExpStat)));
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
         QueueLevelUps();

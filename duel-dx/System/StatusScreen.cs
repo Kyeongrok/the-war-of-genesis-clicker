@@ -878,6 +878,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     internal string? BonusText(int stat, int value)
     {
         if (stat is 0 or 44 or 45 or 46) return null;           // 44~46 은 원본의 「없음」 칸
+        if (stat == ItemBook.ExpStat) return $"얻는 경험치 {value:+#;-#;0}%";
         if (StatBonusNames.TryGetValue(stat, out var statName)) return $"{statName} {value:+#;-#;0}";
         if (BattleScene.ChangeText(stat, value) is { } change) return change;
         string desc = host._db?.Statuses.GetValueOrDefault(stat) is { } st ? host._db.T(st.DescriptionId) : "";

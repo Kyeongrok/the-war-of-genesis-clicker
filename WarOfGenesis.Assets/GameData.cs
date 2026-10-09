@@ -360,22 +360,8 @@ public sealed class GameDatabase
             deps.Add(new DepData(U16(d, o), U16(d, o + 2), d[o + 4],
                 [.. Enumerable.Range(0, 7).Select(k => U16(d, o + 5 + 4 * k)).Where(v => v != 0)]));
 
-        var items = new Dictionary<int, ItemData>();
-        d = Need("Dat", "itm.dat");
-        for (int i = 0, n = U16(d, 2), o = 6; i < n; i++, o += 48)
-        {
-            // 장비 보정 셋 — 파일 18/22/26 이 능력치 번호, 20/24/28 이 값(부호 있는 수).
-            var bonuses = Enumerable.Range(0, 3)
-                .Select(k => (Stat: U16(d, o + 18 + 4 * k), Value: (short)U16(d, o + 20 + 4 * k)))
-                .Where(p => p.Stat != 0).ToArray();
-            // 기본공격이 거는 상태이상 셋 — 파일 30/34/38 이 번호(엔진은 낮은 바이트만 쓴다), 32/36/40 이 값.
-            var attackEffects = Enumerable.Range(0, 3)
-                .Select(k => (Status: d[o + 30 + 4 * k], Value: (short)U16(d, o + 32 + 4 * k)))
-                .Where(p => p.Status != 0).ToArray();
-            items[U16(d, o)] = new ItemData(U16(d, o), U16(d, o + 2), BitConverter.ToUInt32(d, o + 4), d[o + 8],
-                                            U16(d, o + 11), U16(d, o + 13), bonuses, U16(d, o + 9),
-                                            U16(d, o + 42), U16(d, o + 46), U16(d, o + 16), attackEffects);
-        }
+        // 아이템 — 원본 Itm.dat 에 편집기가 고친 것(assets/data/items/*.json)을 얹는다.
+        var items = ItemBook.LoadAll(files);
 
         // work — 저장소 assets/data/skills(어빌리티마다 공통 정의 + 레벨별 칸, SkillBook)가 있으면 거기서, 없으면(게임 폴더) .att 에서.
         var works = new Dictionary<int, WorkData>();

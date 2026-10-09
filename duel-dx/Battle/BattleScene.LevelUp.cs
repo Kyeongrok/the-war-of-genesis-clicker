@@ -36,7 +36,8 @@ internal sealed unsafe partial class BattleScene
         // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
         if (host._db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
         // 11(경험치 증가)은 자르기 <b>앞</b>에 더한다(0x10072285~) — 그래서 한 번에 상한(Num 17)을 넘지 않는다.
-        int exp = Math.Max(1, host._db.ExpForKill(k, v.Level, killer.Status(11)) / share);
+        // 반지류의 장비 보정 42(경험치 %)도 같은 자리에 더한다 — 원본은 이 번호를 안 읽어 반지가 헛것이었다(ItemBook.ExpStat, 사용자 요청 ed-2).
+        int exp = Math.Max(1, host._db.ExpForKill(k, v.Level, killer.Status(11) + host._db.EquipBonus(k, ItemBook.ExpStat)) / share);
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
     }

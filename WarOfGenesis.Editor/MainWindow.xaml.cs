@@ -251,6 +251,15 @@ public partial class MainWindow : Window
     // ── 군단 편집 ──────────────────────────────────────────────────────────
 
     /// <summary>군단(For.dat) — 부하·진형·보정·군단기. 저장소 assets/data 를 읽고 고친 것은 assets/data/legions 에 적는다.</summary>
+    private void ItemEditMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { new ItemEditWindow { Owner = this }.Show(); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+        {
+            StatusText.Text = $"assets/data 를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     private void LegionEditMenuItem_Click(object sender, RoutedEventArgs e)
     {
         try { new LegionEditWindow { Owner = this }.Show(); }

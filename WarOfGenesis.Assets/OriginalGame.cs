@@ -57,7 +57,7 @@ public static class OriginalGame
     }
 
     /// <summary>우리 폴더에서만 나는 자료 — 원본 게임 폴더에는 없다.</summary>
-    private static readonly string[] OwnDataFolders = ["jobs", "skills", "chr-edits"];
+    private static readonly string[] OwnDataFolders = ["jobs", "skills", "chr-edits", "legions", "items"];
 
     /// <summary>
     /// <c>assets</c> 안의 자리(<c>moses/obs/0018.obs</c> 꼴)가 원본 게임 폴더의 어느 파일인가 — 우리 것(JSON 따위)이면 null.
