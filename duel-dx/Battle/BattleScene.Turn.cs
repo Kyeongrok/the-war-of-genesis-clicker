@@ -1457,9 +1457,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             return;
         }
 
-        if (Trace && IsFoeSide(a) && !IsFoeSide(t))
+        if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"foe hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
+                $"{(IsFoeSide(a) && !IsFoeSide(t) ? "foe" : "ally")} hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         host.Stats.Hit(a, w, Math.Min(amount, t.Hp));   // 통계에는 실제로 깎인 만큼만
         t.Hp = Math.Max(0, t.Hp - amount);
