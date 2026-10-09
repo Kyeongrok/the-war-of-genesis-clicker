@@ -916,6 +916,8 @@ internal sealed unsafe partial class BattleScene
                     CenterOnUnit(seen.LeaderIndex >= 0 && seen.LeaderIndex < host._units.Length ? host._units[seen.LeaderIndex] : seen);
                 break;
             case 512:                                    // BGM 바꾸기
+                // 인자 0 이 0 이면 지금 곡을 그대로 두고, 지금 도는 곡과 같은 번호여도 다시 걸지 않는다(0x10054369~0x1005438c) — 전에는 늘 끊고 처음부터 틀었다.
+                if (A(0) == 0 || (A(0) == host._musicId && host._musicId > 1)) break;
                 host.StopMusic();
                 _eventBgm = A(0);                          // 판의 곡 번호(CBattle+0x3c64) — 전투 세이브에 실린다
                 if (A(0) > 1 && A(0) != 0xffff) host.PlayMusicFile(A(0), loop: true);
