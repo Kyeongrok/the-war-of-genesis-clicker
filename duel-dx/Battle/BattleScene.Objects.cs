@@ -485,7 +485,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>
     /// 힐 크리스탈 충전 — 편이 있으면 한 번에 1 씩 차고 한도(.obj 차례 간격, Obj 59 는 15)에서 멈춘다(<c>0x100e65f0</c>).
     /// 한도에 닿으면 차례를 받아(<c>0x100e71f0</c>) 켜진다(명령 0x2718 → <c>0x100e8040</c>, 모션 9).
-    /// 원본이 이 충전을 부르는 주기(가상 함수 칸)는 못 찾아 전투 틱마다로 둔다(가설).
+    /// 부르는 주기는 <b>전투 틱마다</b>다 — 가상 함수 칸 +0xb0 을 판 전체에 돌리는 <c>0x100eaad0</c> 을 GETNEXT 의 틱 넘기기(<c>0x10067d47</c>)만 부른다(ba-22 확인).
     /// </summary>
     internal static void ChargeHealCrystal(DemoObject obj)
     {
