@@ -30,6 +30,19 @@ internal sealed unsafe partial class BattleScene
     {
         if (w.Id == StagingSkill.DoubleBreakWork) return;   // 분신 A·B 는 StageBeforeHit 가 날린다(Staging.cs)
         if (!WorkBodies.TryGetValue(w.Id, out var list)) return;
+        // 무신멸뢰옥(어빌리티 151, 핸들러 0x100b1150 단계 0) — 몸 복제 둘이 시전자 자리에 선다(그리기 칸 17). 전에는 분신 둘이 대상 쪽으로 늘어섰다.
+        // ① 모션 48: 100틱 뒤부터 틱마다 × 1.03 으로 20틱(1.8배) — 0x100c6590(20, 1.03, 1.03) · 지연(+0x154) 100, 수명 = 모션 48 길이 − 1(0x100c2530(0)).
+        // ② 모션 49: ①이 끝나면 뜬다(0x100c2640) — 1.8배(0.9709^−20)로 90틱 있다가 틱마다 × 0.9709 로 20틱에 제 크기(0x100c6600), 수명 = 모션 49 길이 × 15.
+        // 복제의 나이(+0x68)는 시작 지연(+0x6c)이 0 일 때만 오르고(0x100e5680), 크기 지연(+0x154)은 그 뒤 틱마다 준다(0x100c66b3) — ba-22.
+        if (w.AbilityId == 151 && host._sprites.TryGetValue(user.ChrCode, out var musin) && musin.MotionTicks(48) > 1)
+        {
+            int life = musin.MotionTicks(48) - 1;
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"musin clones: motion 48 {musin.MotionTicks(48)} 49 {musin.MotionTicks(49)}" + Environment.NewLine);
+            _bodyShapes.Add((user, 7, host._lastTime, 48, null, 0, life, 4 / 9.0, null));
+            if (musin.MotionTicks(49) > 0)
+                _bodyShapes.Add((user, 8, host._lastTime + life / TicksPerSecond, 49, null, 0, 110, 4 / 9.0, null));   // 수명 900틱은 핸들러가 끝나며 잘린다 — 여기서는 다 줄어든 틱(90 + 20)에 지운다(가설)
+            return;
+        }
         // 원본 복제 클래스(ba-21 fx F12 뒤 분석, 17:20 재확인) — 「그 순간 모습」(−1) 줄을 기술로 가른다.
         if (list.All(b => b.Motion < 0))
         {
@@ -184,6 +197,15 @@ internal sealed unsafe partial class BattleScene
                     if (c.Snapshot == null) { c = c with { Snapshot = frame }; _bodyShapes[i] = c; }
                     double scale = Math.Pow(0.97, tick + 1 - 20);
                     Stretched(c.Snapshot!, scale, scale);
+                    break;
+                }
+                case 7:
+                case 8:
+                {
+                    // 무신멸뢰옥의 몸 복제 — Param = 모션, Dy = 수명 틱. 7 은 100틱 뒤 20틱 동안 커지고, 8 은 1.8배로 떠서 90틱 뒤 20틱 동안 줄어든다.
+                    if (tick >= c.Dy || sprite.FrameOfMotion(c.Param, tick, c.Owner.Facing == Facing.Right) is not { } pose) { _bodyShapes.RemoveAt(i); continue; }
+                    double grown = c.Kind == 7 ? Math.Pow(1.03, Math.Clamp(tick - 100 + 1, 0, 20)) : Math.Pow(0.9709, Math.Clamp(tick - 90 + 1, 0, 20) - 20);
+                    Stretched(pose, grown, grown);
                     break;
                 }
                 case 6:
