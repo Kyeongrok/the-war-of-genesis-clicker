@@ -107,7 +107,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // DUELDX_CUMEXP 를 주면 레벨도 그 값에 맞춘다 — 쌓인 경험치와 레벨은 늘 짝이 맞아야 한다(레벨 = 쌓인 경험치 ÷ 100).
             // 부하는 명부(_party)에 같은 Chr 가 있어도(옛 세이브가 넣어 둔 절반 레벨 기록) 늘 제 레코드에서 새로 키운다.
             bool follower = unit.LeaderIndex >= 0;
-            unit.Data = !follower && host._party.TryGetValue(unit.ChrCode, out var carried) ? carried
+            // 명부의 자료를 이어받는 것은 <b>내 편과 주역(면제 명단)</b>뿐이다 — 원본의 명부(0x101b6884)에는 주역 25명만 있고, 거기 없는 유닛은
+            // 늘 .chr 처음 값에서 만들어 파티 레벨로 키운다(0x10072770 ③ → 0x1007a8e0). 이 게임의 명부(_party)에는 스테이터스를 열어 본 인물 따위도
+            // 끼어드는데, 적이 그 기록(이미 키운 능력치)을 이어받고 또 자라 두 번 불어났다 — Btl 0145 데미안이 LP 4500 → 11520 → 26726,
+            // PSY 260 → 644 → 1384 로 서서 천지 파열무 두 방에 끝났다(사용자 보고 fg-29). 겉모습(701 이 바꾸는 칸)만 이어받는다.
+            host._party.TryGetValue(unit.ChrCode, out var carried);
+            if (carried != null && (follower || !(unit.IsAlly || host._db.LevelExempt.Contains(unit.ChrCode))))
+            {
+                if (!follower) c = c with { SpriteId = carried.SpriteId, FaceId = carried.FaceId, NameId = carried.NameId, Name2Id = carried.Name2Id, TitleId = carried.TitleId };
+                carried = null;
+            }
+            unit.Data = carried != null ? carried
                       : unit.IsAlly ? c with { Exp = StatusScreen.DemoExp, CumExp = startCum, Level = (ushort)Math.Max(c.Level, startCum / 100),
                                                // DUELDX_JOB=<직업> 이면 아군 직업을 바꾼다 — 전직 화면(2단계·3단계 단추)을 시험할 때 쓴다.
                                                JobId = ushort.TryParse(Environment.GetEnvironmentVariable("DUELDX_JOB"), out ushort job) ? job : c.JobId }
@@ -331,6 +341,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         int level = Math.Max(1, offset + partyLevel);
         var g = rows[Math.Min(level, rows.Count) - 1];
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"grow chr {c.Code}: Lv {level} (파티 {partyLevel} + 보정 {offset}) LP {c.Lp} +{g.Lp}% PSY {c.Psy} +{g.Psy}%" + Environment.NewLine);
         int Grow(int v, int percent) => v + v * percent / 100;
 
         return c with

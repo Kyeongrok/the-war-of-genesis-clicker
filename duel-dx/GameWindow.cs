@@ -988,6 +988,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 else if (page == 1) { Mos.MosesGoPage(1); Mos._mosesPage = 1; }   // 메일 — 배달까지 돈다
             }
             StatusScr.OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
+            // DUELDX_LOADFIELD=<필드> 면 세이브를 불러온 뒤 그 필드를 연다(화면 밖 시험용 — 그 파티로 필드가 여는 전투를 처음부터 만든다).
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOADFIELD"), out int loadField) && loadField > 0) Fld.OpenField(loadField);
         }
         // 시험용 저장은 모세스·타이틀에서도 되어야 한다 — 아래 이른 되돌아감보다 먼저 한다.
         // 화면이 다 서고 나서 저장한다 — 첫 틀에 하면 모세스가 아직 안 열려 전투로 적힌다.
