@@ -305,7 +305,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         int level = learn ? 0 : c.AbilityLevel(ab.Id);
         int cost = host._db!.AbilityExpCost(ab, level);   // 배우기는 0 → Lv1 work
         if (!learn && cost == 0) { host.Toast("최대 레벨입니다"); return; }
-        if (cost > c.Exp) { host.Toast($"EXP 가 모자랍니다 (필요 {cost}, 있음 {c.Exp})"); return; }
+        if (c.JobId != 37 && cost > c.Exp) { host.Toast($"EXP 가 모자랍니다 (필요 {cost}, 있음 {c.Exp})"); return; }
         ApplyAbility(u, ab, learn, cost);
     }
 

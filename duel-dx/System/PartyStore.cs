@@ -94,7 +94,7 @@ internal sealed unsafe partial class PartyStore(GameWindow host)
         else BankFor(party).Inventory[item] = BankFor(party).Inventory.GetValueOrDefault(item) + count;
     }
 
-    /// <summary>803 [A, B] — 파티 B 의 인원·돈·아이템·군단을 A 에 합친다(가설: <c>0x100f0940</c> 이 부르는 함수들로 본 것).</summary>
+    /// <summary>803 — 파티 <paramref name="from"/> 의 인원·돈·아이템·군단·우편을 <paramref name="into"/> 에 더한다(<c>0x100f0940</c>). 준 쪽은 그대로 남는다.</summary>
     internal void MergeParties(int into, int from)
     {
         if (into == from) return;
@@ -112,8 +112,7 @@ internal sealed unsafe partial class PartyStore(GameWindow host)
         foreach (var (item, n) in src.Inventory) AddItem(into, item, n);
         foreach (int legion in src.Legions)
             if (into == host.EpisodesScr._partyNo) host.Mos._ownedLegions.Add(legion); else BankFor(into).Legions.Add(legion);
-        if (from == host.EpisodesScr._partyNo) LoadState(new PartyState());
-        else _partyBank.Remove(from);
+        // 원본은 준 쪽을 비우지 않는다 — 인원·가방·군단·우편·GP 를 받는 쪽에 <b>더하기만</b> 한다(0x1004ddd0 · 0x1004de60 · 0x1004df50 · 0x1004dd60 · +0x10c).
     }
 
     /// <summary>

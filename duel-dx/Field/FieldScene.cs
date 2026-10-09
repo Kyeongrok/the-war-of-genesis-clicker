@@ -1335,7 +1335,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 break;
             case 801: host.PartySt.AddMember(A(0), A(1)); break;              // 동료 넣기 [파티, Chr] — 다음 전투부터 파티에 든다
             case 802: host.PartySt.RemoveMember(A(0), A(1)); break;           // 동료 빼기 [파티, Chr]
-            case 803: host.PartySt.MergeParties(A(0), A(1)); break;           // 파티 합치기 [A, B] (0x100f0940, 가설)
+            case 803: host.PartySt.MergeParties(A(1), A(0)); break;           // 파티 더하기 [A, B] — A 의 것을 B 에 더하고 A 는 그대로 남는다(0x100f0940, ba-21 outer-rules 9 · 자료 0회)
             case 804:                                            // 인물 옮기기 [Chr, 파티A → 파티B] (0x100f0ad0: 0x1004de10 빼고 0x1004ddd0 넣기)
                 if (A(0) > 0) host.PartySt.AddMember(A(2), A(0), host.PartySt.RemoveMember(A(1), A(0)));
                 break;
