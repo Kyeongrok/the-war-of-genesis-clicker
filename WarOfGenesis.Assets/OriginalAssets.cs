@@ -46,24 +46,11 @@ public static class OriginalAssets
         if (IsComplete(shipped)) return 0;
         OriginalGame.Use(gameRoot);
         var files = OriginalGame.Files!;
-        Directory.CreateDirectory(LocalFolder);
 
-        // 실린 우리 파일 — 판이 바뀌었을 때만 다시 옮긴다(편집기로 고친 것이 켤 때마다 되돌아가지 않게).
-        string stampPath = Path.Combine(LocalFolder, StampName);
-        string stamp = $"{Assembly.GetEntryAssembly()?.GetName().Version}|{shipped}|{File.GetLastWriteTimeUtc(Path.Combine(shipped, ManifestName)).Ticks}";
-        if (!File.Exists(stampPath) || File.ReadAllText(stampPath) != stamp)
-        {
-            foreach (string from in Directory.EnumerateFiles(shipped, "*", SearchOption.AllDirectories))
-            {
-                string to = Path.Combine(LocalFolder, Path.GetRelativePath(shipped, from));
-                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
-                File.Copy(from, to, overwrite: true);
-            }
-            // 우리가 고친 원본 파일은 새 판의 고침으로 다시 꺼낸다.
+        // 우리가 고친 원본 파일은 새 판의 고침으로 다시 꺼낸다.
+        if (LayOutShipped(shipped))
             foreach (string patched in Patches(LocalFolder).Keys)
                 if (Path.Combine(LocalFolder, patched.Replace('/', Path.DirectorySeparatorChar)) is var old && File.Exists(old)) File.Delete(old);
-            File.WriteAllText(stampPath, stamp);
-        }
 
         string manifest = Path.Combine(LocalFolder, ManifestName);
         string[] wanted = File.Exists(manifest) ? [.. File.ReadLines(manifest).Select(l => l.Trim()).Where(l => l.Length > 0 && l[0] != '#')] : [];
@@ -79,6 +66,26 @@ public static class OriginalAssets
         progress?.Invoke(wanted.Length, wanted.Length);
         AssetsFolder.Use(LocalFolder);
         return missing;
+    }
+
+    /// <summary>
+    /// 실린 우리 파일(JSON · 꺼낼 목록 · 아이콘)을 <see cref="LocalFolder"/> 로 옮긴다 — 판이 바뀌었을 때만(편집기로 고친 것이 켤 때마다 되돌아가지 않게).
+    /// </summary>
+    /// <returns>이번에 옮겼으면 true.</returns>
+    public static bool LayOutShipped(string shipped)
+    {
+        Directory.CreateDirectory(LocalFolder);
+        string stampPath = Path.Combine(LocalFolder, StampName);
+        string stamp = $"{Assembly.GetEntryAssembly()?.GetName().Version}|{shipped}|{File.GetLastWriteTimeUtc(Path.Combine(shipped, ManifestName)).Ticks}";
+        if (File.Exists(stampPath) && File.ReadAllText(stampPath) == stamp) return false;
+        foreach (string from in Directory.EnumerateFiles(shipped, "*", SearchOption.AllDirectories))
+        {
+            string to = Path.Combine(LocalFolder, Path.GetRelativePath(shipped, from));
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Copy(from, to, overwrite: true);
+        }
+        File.WriteAllText(stampPath, stamp);
+        return true;
     }
 
     /// <summary>

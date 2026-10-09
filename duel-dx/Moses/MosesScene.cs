@@ -364,7 +364,11 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         _mosesSceneSeed = host.Btl._ailmentRandom.Next();
         if (chapter != null) { _mosesChp = chapter; _navStart = null; _mosesNavVisited = false; host.Play(562); }   // 챕터 들어오기 안내 음성(3초, 분석-모세스 14절) · 항행 시작은 파일 값부터(0x100f6c80)
         // 챕터마다 주인 파티가 있다(Episode.dat 칸 8) — 연대표를 거치지 않고 열어도(챕터 고르기·시험 훅) 그 파티로 바꾼다.
-        if (_mosesChp is { } owner && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep) host.PartySt.SwitchParty(ep.Party);
+        if (_mosesChp is { } owner && host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == owner.Id) is { } ep)
+        {
+            host.PartySt.SwitchParty(ep.Party);
+            AssetPack.Reach(ep.No / 2);      // 자료를 받아 쓰는 판 — 이 줄에서 세 줄 앞까지 미리 받는다(menu-22)
+        }
         // 챕터가 끝났으면(필드 행동 11) 항행 화면 대신 연대표로 — 원본 0x100f5b07: 챕터 상태 +0x10 이 서 있으면 장면 7.
         // 다음 에피소드는 진행 깃발(Episode.dat 잠금 깃발 넷)이 다 서 있어야 열린다. 표시는 에피소드를 고를 때 내린다.
         // (전에 있던 「상점 뺀 장소를 다 쓰면 챕터 끝」 데모 규칙은 뺐다 — 아벨리안(Chp 21)·계시(Chp 52)의 끝 대사와 함정(Chp 47) 본편을

@@ -130,20 +130,21 @@ internal sealed unsafe partial class GameWindow
         lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } assetLog)
             try { File.AppendAllText(assetLog, $"sounds/{sound:D4}.wav" + Environment.NewLine); } catch (IOException) { }
-        // 큰 효과음은 미리 차려 두지 않는다(AssetPack) — 없으면 뒤에서 원본 게임 폴더에서 꺼내 두고 이번에는 조용히 넘어간다(다음부터 난다).
-        // 한 번 찾아 본 번호는 다시 찾지 않는다(없는 번호를 틀 때마다 뒤지지 않게).
+        // 큰 효과음은 미리 차려 두지 않는다(AssetPack) — 없으면 뒤에서 가져와 두고 이번에는 조용히 넘어간다(다음부터 난다).
+        // 한 번 찾아 본 번호는 다시 찾지 않는다(없는 번호를 틀 때마다 뒤지지 않게) — 아직 받는 중인 것만 다음에 다시 찾는다.
         if (!loaded && _sfxFetching.TryAdd(sound, true))
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    if (AssetPack.Fetch("sounds", $"{sound:D4}.wav") is { } got)
+                    if (AssetPack.Fetch("sounds", $"{sound:D4}.wav", 60) is { } got)
                     {
                         var parsed = WaveSound.Parse(File.ReadAllBytes(got));
                         lock (_sfx) _sfx[sound] = parsed;
                     }
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+                finally { if (AssetPack.MayCome("sounds", $"{sound:D4}.wav")) _sfxFetching.TryRemove(sound, out _); }
             });
         var (left, right) = SndPan(screenX);
         float gain = SndGain;
@@ -272,6 +273,8 @@ internal sealed unsafe partial class GameWindow
             try
             {
                 string path = VoicePack.BgmPath(id);
+                // 아직 못 받은 곡이면 받아질 때까지 잠깐 기다린다(뒤 스레드라 화면은 안 멈춘다) — 그새 다른 곡을 걸었으면 아래에서 버려진다.
+                if (!File.Exists(path) && AssetPack.EnsureNow("bgm", $"{id:D4}.bgm", 90)) path = VoicePack.BgmPath(id);
                 // 곡 파일이 없으면 조용하다(Btl 0014 의 머리 곡 5 — 원본은 무음) — 전에는 앞 곡이 계속 났다(ba-21 sound D10).
                 if (!File.Exists(path)) { if (request == Volatile.Read(ref _musicRequest)) _mixer.StopMusic(); return; }
                 // 이미 풀어 둔 곡(승패 곡 3392·55 는 결과가 설 때 길이를 재느라 푼다)은 다시 풀지 않는다 — 1~2초 무음이 없다(ba-21 sound D7).

@@ -970,7 +970,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             return true;
         }
         // 지금 챕터를 되살린다 — 전투가 끝나면 OpenMoses 가 이 챕터로 돌아간다. 모세스 세이브는 아래에서 OpenMoses 가 다시 정한다.
-        if (SavedChapter(state) is > 0 and var chapterId && MosesScene.LoadChapterFile(chapterId) is { } savedChp) host.Mos._mosesChp = savedChp;
+        if (SavedChapter(state) is > 0 and var chapterId && MosesScene.LoadChapterFile(chapterId) is { } savedChp)
+        {
+            host.Mos._mosesChp = savedChp;
+            // 자료를 받아 쓰는 판 — 불러온 챕터의 줄에서 세 줄 앞까지 미리 받는다(menu-22).
+            if (host.EpisodesScr.Episodes().FirstOrDefault(e => e.Chapter == chapterId) is { } savedEp) AssetPack.Reach(savedEp.No / 2);
+        }
         // 항행에서 떠난 자리를 되살린다 — 전투가 끝나 모세스로 돌아갈 때 그 행성·성계에 선다(LeaveFinishedBattleNow 가 「다녀온 항행」일 때만 되돌린다).
         if (state.NavAt is [var atChapter, var atStep, var atPlanet, var atSystem] && host.Mos._mosesChp?.Id == atChapter)
             (host.Mos._mosesNavVisited, host.Mos._mosesStep, host.Mos._mosesPlanet, host.Mos._mosesSystem) = (true, atStep, atPlanet, atSystem);

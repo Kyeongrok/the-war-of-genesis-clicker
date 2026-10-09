@@ -1,7 +1,7 @@
 namespace DuelDx;
 
 /// <summary>
-/// 음악과 필드·챕터 대사 음성(<c>Bgm\NNNN.bgm</c>) — 사용자의 원본 게임 폴더에서 그대로 읽는다(<see cref="AssetPack"/>).
+/// 음악과 필드·챕터 대사 음성(<c>Bgm\NNNN.bgm</c>) — 사용자의 원본 게임 폴더에서 그대로 읽거나 받아 둔 것을 읽는다(<see cref="AssetPack"/>).
 /// </summary>
 internal static class VoicePack
 {
