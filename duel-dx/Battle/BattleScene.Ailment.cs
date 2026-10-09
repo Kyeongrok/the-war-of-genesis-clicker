@@ -300,10 +300,14 @@ internal sealed unsafe partial class BattleScene
     internal void AutoHeal(UnitState u)
     {
         if (!u.HasStatus(8) || u.Hp <= 0) return;
-        int upTo = Math.Min(u.Status(8), u.MaxHp);
+        int value = u.Status(8), upTo = Math.Min(value, u.MaxHp);
         if (u.Hp >= upTo) return;
+        // 채우는 값 — 갑옷이 있으면 내부 HP = 값 × N6 / (갑옷 + N6) <b>+ 5</b> 라 화면으로는 값보다 조금 높다(0x10067ee7~0x10067f63, ba-20 C4).
+        // 발동 문턱(위)은 값 그대로다.
+        if (host._db is { } db && u.Data is { } c && db.ArmorRate(c) is var armor && armor != 0 && db.N(6) is var n6 && n6 != 0)
+            upTo = Math.Min((value * n6 / (armor + n6) + 5) * (armor + n6) / n6, u.MaxHp);
         int before = u.Hp;
-        u.Hp = upTo;
+        u.Hp = Math.Max(upTo, before);
         ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
     }
 
