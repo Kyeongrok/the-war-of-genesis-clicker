@@ -1086,7 +1086,13 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 // 908(0x1002c980)은 60틱 고정에 가림이 a2, 907(0x1002c6b0)은 a4 틱에 가림 a5 다(가림 표 0x100f2b6c, ba-20 N7) — 909 자리로 읽으면
                 // Fld 0355 의 908[0,209,4] 가 4틱 디졸브 + 가림 0 이 됐다.
                 if (a.Code == 908) { BeginFieldWipe(908, 0, 60, A(0) == 0, A(1), A(2)); break; }   // 줄 번짐(0x1002c9f0, ba-21 field Y6)
-                if (a.Code == 907 && A(4) > 0) { BeginFieldWipe(909, 0, A(4), A(0) == 0, A(1), A(5)); break; }
+                // 907 조각 모이기(0x1002c730) — 열 a2 × 행 a3 칸, a4 틱. 전에는 디졸브로 갈음했다(ba-21 field Y6, Fld 0312 한 번).
+                if (a.Code == 907 && A(4) > 0)
+                {
+                    if (A(2) > 0 && A(3) > 0) BeginFieldWipe(907, A(2) * 1000 + A(3), A(4), A(0) == 0, A(1), A(5));
+                    else BeginFieldWipe(909, 0, A(4), A(0) == 0, A(1), A(5));
+                    break;
+                }
                 if (A(0) == 0 && A(1) <= 0) { if (A(2) > 0) HoldSlotTicks(A(2)); break; }
                 if (A(2) > 0) BeginFieldWipe(909, 0, A(2), A(0) == 0, A(1), A(3));
                 else if (A(0) == 0)
@@ -1959,9 +1965,43 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             case 903: DrawCombWipe(ox, oy, wipe, tick); break;
             case 909: DrawDissolveWipe(ox, oy, wipe, tick); break;
             case 908: DrawLineWipe(ox, oy, wipe, tick); break;
+            case 907: DrawGatherWipe(ox, oy, wipe, tick); break;
             default: DrawStreakWipe(ox, oy, wipe, tick); break;
         }
         return true;
+    }
+
+    /// <summary>
+    /// 907 조각 모이기(<c>0x1002c730</c>) — 옛 화면 위에 새 그림을 열 × 행 칸으로 쪼개, 가운데에서 벌어지고 칸마다 사방 r/10 px 커진 채 시작해 제자리로 모인다.
+    /// r = 남은 틱, 칸 (i, j) 의 치우침 = ((열/2 − i)·r)/2 · ((행/2 − j)·r)/2(0 쪽으로 자름). Way = 열 × 1000 + 행.
+    /// </summary>
+    internal void DrawGatherWipe(int ox, int oy, FieldWipe wipe, int tick)
+    {
+        const int W = MosesScene.MosesW, H = MosesScene.MosesH;
+        var under = wipe.Base ?? wipe.Over;
+        for (int y = 0; y < H; y++)
+        {
+            int row = (oy + y) * host.BoardWidth + ox;
+            if (oy + y < 0 || row + W > host._fb.Length || ox < 0) continue;
+            Array.Copy(under, y * W, host._fb, row, W);
+        }
+        int cols = Math.Max(1, wipe.Way / 1000), rows = Math.Max(1, wipe.Way % 1000), r = wipe.Ticks - tick, g = r / 10;
+        for (int j = 0; j < rows; j++)
+            for (int i = 0; i < cols; i++)
+            {
+                int sx0 = i * W / cols, sx1 = (i + 1) * W / cols, sy0 = j * H / rows, sy1 = (j + 1) * H / rows;
+                int dx = (cols / 2 - i) * r / 2, dy = (rows / 2 - j) * r / 2;
+                int x0 = sx0 - dx - g, x1 = sx1 - dx + g, y0 = sy0 - dy - g, y1 = sy1 - dy + g;
+                if (x1 <= 0 || y1 <= 0 || x0 >= W || y0 >= H || x1 <= x0 || y1 <= y0 || sx1 <= sx0 || sy1 <= sy0) continue;
+                for (int y = Math.Max(0, y0); y < Math.Min(H, y1); y++)
+                {
+                    int row = (oy + y) * host.BoardWidth + ox;
+                    if (oy + y < 0 || row + W > host._fb.Length || ox < 0) continue;
+                    int sy = sy0 + (y - y0) * (sy1 - sy0) / (y1 - y0);
+                    for (int x = Math.Max(0, x0); x < Math.Min(W, x1); x++)
+                        host._fb[row + x] = wipe.Over[sy * W + sx0 + (x - x0) * (sx1 - sx0) / (x1 - x0)];
+                }
+            }
     }
 
     /// <summary>
