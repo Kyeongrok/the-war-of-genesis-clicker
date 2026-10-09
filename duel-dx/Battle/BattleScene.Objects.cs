@@ -845,6 +845,7 @@ internal sealed unsafe partial class BattleScene
                 double flight = Math.Max(1, Math.Ceiling(Math.Sqrt((tx - fromX) * (double)(tx - fromX) + (ty - fromY) * (double)(ty - fromY)) / 40));
                 double land = host._lastTime + flight / TicksPerSecond;
                 _shots.Add((158, 3, host._lastTime, fromX, fromY, tx, ty, 40, 0, 0, 40, 40, tx > fromX));
+                if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"lucky shell: obj ({obj.Col},{obj.Row}) → chr {u.ChrCode} flight {flight} t {host._lastTime:F2}" + Environment.NewLine);
                 _effects.Add((111, 0, land, tx, ty));
                 _effects.Add((1431, 1, land, tx, ty));
                 if (one > 0) _delayedHits.Add((land, u, one));
