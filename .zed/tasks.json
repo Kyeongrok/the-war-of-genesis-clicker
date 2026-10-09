@@ -1,0 +1,16 @@
+[
+  {
+    "label": "게임 실행 (duel-dx)",
+    "command": "dotnet run --project duel-dx/WarOfGenesis.csproj",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "편집기 실행 (WarOfGenesis.Editor)",
+    "command": "dotnet run --project WarOfGenesis.Editor",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]
