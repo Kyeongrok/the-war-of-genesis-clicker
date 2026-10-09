@@ -181,17 +181,38 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     internal void StepEdgeScroll()
     {
-        if (!EdgeScrollAllowed) return;
-        const int edge = 24;
-        // 마우스는 화면(보이는 영역) 자리로 본다 — 판 자리로 보면 카메라가 한 번 밀린 뒤 마우스가 띠 밖으로 나간 셈이 되어 멈췄다.
-        var (mx, my) = _mouseView;
-        if (host._mouse.X < 0 || mx < 0 || mx >= host.ViewWidth || my < 0 || my >= host.ViewHeight) return;
-        double ddx = mx < edge ? -20 : mx >= host.ViewWidth - edge ? 20 : 0;
-        double ddy = my < GridTop + edge && my >= GridTop ? -16 : my >= host.ViewHeight - edge ? 16 : 0;
+        var (ddx, ddy) = EdgePush();
         if (ddx == 0 && ddy == 0) return;
+        var (mx, my) = _mouseView;
         _camPosX = _camTargetX = Math.Clamp(_camPosX + ddx, 0, CamMaxX);
         _camPos = _camTarget = Math.Clamp(_camPos + ddy, 0, host.CamMax);
         host._mouse = (mx + (int)Math.Round(_camPosX), my + (int)Math.Round(_camPos));   // 마우스 밑의 판 자리도 따라 옮긴다
+    }
+
+    /// <summary>마우스가 가장자리 띠에 있어 맵을 미는 쪽(가로 ±20 · 세로 ±16, 안 밀면 0) — 스크롤과 화살표 커서가 같이 쓴다.</summary>
+    internal (double X, double Y) EdgePush()
+    {
+        if (!EdgeScrollAllowed) return (0, 0);
+        const int edge = 24;
+        // 마우스는 화면(보이는 영역) 자리로 본다 — 판 자리로 보면 카메라가 한 번 밀린 뒤 마우스가 띠 밖으로 나간 셈이 되어 멈췄다.
+        var (mx, my) = _mouseView;
+        if (host._mouse.X < 0 || mx < 0 || mx >= host.ViewWidth || my < 0 || my >= host.ViewHeight) return (0, 0);
+        double ddx = mx < edge ? -20 : mx >= host.ViewWidth - edge ? 20 : 0;
+        double ddy = my < GridTop + edge && my >= GridTop ? -16 : my >= host.ViewHeight - edge ? 16 : 0;
+        return (ddx, ddy);
+    }
+
+    /// <summary>
+    /// 가장자리에 닿은 마우스의 화살표 커서 — Obs 0052 모션 0~7(↑ ↗ → ↘ ↓ ↙ ← ↖, 0x1006d6a0). 링이 떠 있으면 안 바꾼다. 안 밀면 −1.
+    /// </summary>
+    internal int EdgeArrowMotion()
+    {
+        if (_ringUnit >= 0) return -1;
+        var (x, y) = EdgePush();
+        return (Math.Sign(x), Math.Sign(y)) switch
+        {
+            (0, -1) => 0, (1, -1) => 1, (1, 0) => 2, (1, 1) => 3, (0, 1) => 4, (-1, 1) => 5, (-1, 0) => 6, (-1, -1) => 7, _ => -1,
+        };
     }
 
     /// <summary>마우스의 보이는 영역 안 자리(판 픽셀, 카메라 뺀 것) — WM_MOUSEMOVE 가 적는다.</summary>
