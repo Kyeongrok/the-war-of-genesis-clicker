@@ -48,10 +48,14 @@ internal sealed unsafe partial class BattleScene
     internal int _eventNextField;
 
     /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
+    /// <summary>행동 512 가 바꾼 곡 번호 — 안 바꿨으면 null(전투 머리 곡).</summary>
+    internal int? _eventBgm;
+
     internal void LoadEvents(int battleId)
     {
         _events = [];
         _eventFired = [];
+        _eventBgm = null;
         // 돌던 사건 자리를 반드시 비운다 — 안 비우면 앞 전투의 번호가 남아, 사건이 더 적은 전투를 읽었을 때
         // StepEvent 의 _events[_runningEvent] 가 목록 밖을 짚어 죽는다(사용자 보고 crash).
         _runningEvent = -1;
@@ -913,6 +917,7 @@ internal sealed unsafe partial class BattleScene
                 break;
             case 512:                                    // BGM 바꾸기
                 host.StopMusic();
+                _eventBgm = A(0);                          // 판의 곡 번호(CBattle+0x3c64) — 전투 세이브에 실린다
                 if (A(0) > 1 && A(0) != 0xffff) host.PlayMusicFile(A(0), loop: true);
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;

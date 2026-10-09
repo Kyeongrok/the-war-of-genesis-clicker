@@ -644,7 +644,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     SaveObject[]? Objects = null, int FoundA = -1, int FoundB = -1, bool ObjectsDue = false,
                                     int[]? NavStart = null, int[]? NavAt = null,
                                     SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null,
-                                    bool MosesAltVoice = false);   // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
+                                    bool MosesAltVoice = false,    // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
+                                    int? Bgm = null);              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
     // 꼬리 셋(없으면 옛 세이브라 예전처럼):
     // Entry = 전투 들어가기 직전 가방·GP·명부·군단 — 원본 전투 세이브의 전역 본문(판 부분과 따로, 분석-시스템메뉴 2.3/2.4b). RESTART 기준(감사5 S5).
@@ -906,7 +907,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                     : null,
                 Camera: battleSave ? [host._camX, host._camY] : null,
                 EventCheckDue: battleSave ? host.Btl._eventCheckDue : null,
-                MosesAltVoice: host.Mos._mosesAltVoice);
+                MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -1246,6 +1247,13 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         }
         // 세이브의 인물 기록(701 로 바뀐 그림 +0xc 따위)은 판을 세운 <b>뒤에</b> 덮여서, 판을 세울 때 읽은 그림과 어긋날 수 있다 —
         // 바뀐 인물만 다시 읽는다(건슬라이서 살라딘, Btl 0150).
+        // 사건이 곡을 바꾼 뒤 저장한 판이면 그 곡으로 — 원본은 판에 실린 곡 번호로 음악을 건다(0x10061bf0 이 +0x3c64 를 읽는다). 전에는 전투 기본 곡으로 돌아갔다.
+        host.Btl._eventBgm = state.Bgm;
+        if (state.Bgm is { } song && !state.InMoses && song != host._musicId)
+        {
+            host.StopMusic();
+            if (song > 1 && song != 0xffff) host.PlayMusicFile(song, loop: true);
+        }
         host.LoadRosterSprites();
         _restoreVersion = SaveVersion;
         host.Toast($"불러왔습니다 — {state.SavedAt}");
