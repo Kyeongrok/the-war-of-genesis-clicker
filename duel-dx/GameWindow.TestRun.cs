@@ -57,6 +57,8 @@ internal sealed unsafe partial class GameWindow
         }
     }
 
+    readonly HashSet<(UnitState, UnitState)> _testOverlaps = [];
+
     /// <summary>시험 전용: 갱신 한 번 뒤 — 사건 건너뛰기, 몇 초마다 상태 줄.</summary>
     internal void TestRunTick()
     {
@@ -72,6 +74,18 @@ internal sealed unsafe partial class GameWindow
         {
             _testClickAt = _lastTime + 0.5;
             Tlk.OnTalkInput();
+        }
+        // 두 유닛이 한 칸에 멈춰 서 있으면 적는다(ba-22 — 걸어오는 칸을 다른 유닛이 고르던 겹침). 쌍마다 한 번.
+        if (_battleLoaded && !FieldOpen && Btl._outcome.Length == 0 && Btl._runningEvent < 0)
+        {
+            var seen = new Dictionary<int, UnitState>();
+            foreach (var u in _units)
+            {
+                if (!u.Alive || !u.OnField || u.IsBusy) continue;
+                int at = u.Row * Cols + u.Col;
+                if (seen.TryGetValue(at, out var first)) { if (_testOverlaps.Add((first, u))) TestRunTrace($"overlap ({u.Col},{u.Row}) chr {first.ChrCode} chr {u.ChrCode} turnNo {Btl._turnNo}"); }
+                else seen[at] = u;
+            }
         }
         if (_lastTime < _testRunStatAt) return;
         _testRunStatAt = _lastTime + 10;

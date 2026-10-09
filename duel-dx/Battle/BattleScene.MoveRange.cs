@@ -201,6 +201,22 @@ internal sealed unsafe partial class BattleScene
         for (int i = 0; i < n; i++)
             if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % host.Cols, i / host.Cols) is { } other && other != unit) costs[i] = int.MaxValue;
 
+        // 걸어오는 중인 다른 인물의 <b>도착 칸</b>도 뺀다 — 아직 출발 쪽 칸에 서 있어 위에서 안 잡힌다. 대장을 따라 걷는 부하가
+        // 다 서기 전에 다음 유닛이 그 칸을 골라 둘이 한 칸에 겹쳐 섰다(사용자 보고: 적이 한 칸에 겹친다, ba-22).
+        foreach (var walker in host._units)
+        {
+            if (walker == unit || !walker.Alive || !walker.OnField || walker.Path.Count == 0) continue;
+            var (lc, lr) = walker.Path.Last();
+            int at = lr * host.Cols + lc;
+            if ((uint)at < (uint)n && at != start) costs[at] = int.MaxValue;
+        }
+        // 순간이동꾼(이동 종류 1)은 길을 비우고 도착 칸을 따로 들고 있다 — 칸을 옮기기 전(단계 0·1) 31틱 동안 같은 구멍이 있었다.
+        foreach (var (blinker, b) in _blinks)
+        {
+            int at = b.Dest.Row * host.Cols + b.Dest.Col;
+            if (blinker != unit && b.Stage < 2 && (uint)at < (uint)n && at != start) costs[at] = int.MaxValue;
+        }
+
         // 붉은 칸 — 갈 수 있는 칸마다 <b>그 인물의 기본공격 모양</b>을 칠한다(0x100749b0).
         // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.
         if (redAllowed && Work(c.BasicWorkId) is { } basic)
