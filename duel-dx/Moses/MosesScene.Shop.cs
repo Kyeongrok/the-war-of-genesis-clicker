@@ -71,6 +71,9 @@ internal sealed unsafe partial class MosesScene
 
     internal int ShopSellPrice(int itemId) => ShopPrice(itemId) / 2;
 
+    /// <summary>팔 수 있나 — <b>기본가(Itm +8)</b>가 0 보다 클 때다(0x100f893f · 0x100f89e0). 매각가가 0 이 되는 싼 아이템도 0 GP 로 팔린다(ba-21 outer-rules 12).</summary>
+    internal bool ShopSellable(int itemId) => host._db?.Items.GetValueOrDefault(itemId) is { Price: > 0 };
+
     /// <summary>결산 = 지금 돈 − 매입 + 매각.</summary>
     internal int ShopBalance() => _shopMoney - _shopBuy.Sum(ShopPrice) + _shopSell.Sum(ShopSellPrice);
 
@@ -207,7 +210,7 @@ internal sealed unsafe partial class MosesScene
                 case ListBuy: return _shopBuy.Remove(itemId);                       // 담은 것 빼기
                 // 가격 0 인 아이템은 팔 수 없다(줄이 꺼진다, 0x100f89e0).
                 // 매각 합계도 5천만 GP 까지다(0x100ff66d~0x100ff691).
-                case ListBag when ShopSellPrice(itemId) > 0 && _shopSell.Count(i => i == itemId) < items[row].Count
+                case ListBag when ShopSellable(itemId) && _shopSell.Count(i => i == itemId) < items[row].Count
                                   && _shopSell.Sum(ShopSellPrice) + ShopSellPrice(itemId) <= 50_000_000:
                     _shopSell.Add(itemId);
                     return true;
@@ -263,7 +266,7 @@ internal sealed unsafe partial class MosesScene
                 host.DrawUi(ShopIconObs, item.PictureMotion, tick, rx - 1, ry, GameWindow.UiBlend.Alpha);
                 // 줄 글(0x100f8900~ · 0x100f8f10~, ba-20 S 5): 재고 줄의 수 = 담은 수(처음 X 00), 소지품 줄의 수 = 보유 − 팔려고 담은 수,
                 // 매입·매각 목록은 「이름(X nn)」이고 값이 없다. 값 글은 노랑. 가격 0 인 소지품은 「판매 불가」로 꺼진다(0x1003fdc0).
-                bool unsellable = i == ListBag && ShopSellPrice(itemId) <= 0;
+                bool unsellable = i == ListBag && !ShopSellable(itemId);
                 int shown = i == ListStock ? _shopBuy.Count(b => b == itemId) : i == ListBag ? count - _shopSell.Count(b => b == itemId) : count;
                 string label = i is ListBuy or ListSell ? $"{host._db.T(item.NameId)}(X {shown:D2})" : host._db.T(item.NameId);
                 host.DrawText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
