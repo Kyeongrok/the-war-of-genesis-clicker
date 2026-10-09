@@ -112,7 +112,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 끼어드는데, 적이 그 기록(이미 키운 능력치)을 이어받고 또 자라 두 번 불어났다 — Btl 0145 데미안이 LP 4500 → 11520 → 26726,
             // PSY 260 → 644 → 1384 로 서서 천지 파열무 두 방에 끝났다(사용자 보고 fg-29). 겉모습(701 이 바꾸는 칸)만 이어받는다.
             host._party.TryGetValue(unit.ChrCode, out var carried);
-            if (carried != null && (follower || !(unit.IsAlly || host._db.LevelExempt.Contains(unit.ChrCode))))
+            // 내 편이라도 <b>부대원이 아닌 손님</b>(편 3 동맹 따위)은 이어받지 않는다 — 전투가 끝날 때 RememberParty 가 판의 아군을 모두 적어 두는데,
+            // 손님이 그 기록을 이어받으면 처음 나온 전투의 레벨에 머문다. 원본은 명부 밖 유닛을 전투마다 지금 파티 레벨로 새로 키운다(ba-22).
+            bool mine = unit.IsAlly && (host.Mos._members.Contains(unit.ChrCode) || host.Mos._members.Count == 0);
+            if (carried != null && (follower || !(mine || host._db.LevelExempt.Contains(unit.ChrCode))))
             {
                 if (!follower) c = c with { SpriteId = carried.SpriteId, FaceId = carried.FaceId, NameId = carried.NameId, Name2Id = carried.Name2Id, TitleId = carried.TitleId };
                 carried = null;
@@ -124,7 +127,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                       : c with { CumExp = c.Level * 100 };
             // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물은 <b>편과 상관없이</b>(0x100633ff — 편 3 손님 제이슨도 자란다).
             // 파티 객체에서 온 인물(_party)은 제 레벨을 그대로 쓴다.
-            if (!unit.IsAlly || follower || !host._party.ContainsKey(unit.ChrCode)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
+            if (!unit.IsAlly || follower || carried == null) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
             // 군단 부하는 능력치는 제 레벨 줄로 키우되 <b>적히는 레벨은 절반</b>이다(0x1007a916~0x1007a948 — max(1, L/2), EXP 는 그 ×100).
             // 처치 EXP(레벨 차)·상태이상 레벨 조건·정보 창이 이 값을 읽는다(ba-20 M1). 전에는 부하를 잡으면 EXP 가 과했다.
             if (unit.LeaderIndex >= 0 && unit.Data is { } fd)
