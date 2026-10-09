@@ -434,6 +434,21 @@ internal sealed unsafe partial class BattleScene
         return list;
     }
 
+    /// <summary>
+    /// 도망칠 때 쓸 회복기(<c>0x1007b470</c>, ba-20 AI N6) — 배운 어빌리티를 <b>번호 오름차순</b>으로 훑어 분류 1·4 이고 종류가 <b>1(회복)</b>이며
+    /// SOUL·HP 가 되고 <b>TP 비용 ≤ 지금 TP</b>(CTP 는 안 더한다)인 첫 work. 전에는 .chr 칸 순서로 종류 1·5 를, TP + CTP 로 봤다.
+    /// </summary>
+    internal WorkData? FleeHeal(UnitState u)
+    {
+        if (host._db is not { } db || u.Data is not { } c) return null;
+        foreach (var (abilityId, level) in c.Abilities.OrderBy(a => a.Item1))
+        {
+            if (!db.Abilities.TryGetValue(abilityId, out var ab) || ab.Category is not (1 or 4)) continue;
+            if (ab.TryWorkAt(level, out int wid) && Work(wid) is { Kind: 1 } w && CanAfford(u, w) && TpCostFor(u, c, w.Id) <= u.Tp) return w;
+        }
+        return null;
+    }
+
     /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓴다.</summary>
     internal IEnumerable<bool> AiUseWork(int index, WorkData w, (int Stand, int Col, int Row, int Score) use, MoveRange range)
     {
@@ -497,7 +512,7 @@ internal sealed unsafe partial class BattleScene
         // 없으면 위험도가 가장 작은 칸. 지금 칸이 이미 0.70 이하면 안 움직인다. 부대장이 아니고 회복기가 있으면 물러난 자리에서 회복기를 쓴다.
         if (hpPercent < db.N(66) && nearest < db.N(90))
         {
-            var heal = FollowersOf(index).Count == 0 ? AiWorks(u).FirstOrDefault(x => x.IsHeal) : null;
+            var heal = FollowersOf(index).Count == 0 ? FleeHeal(u) : null;
             var fleeRange = heal != null ? ComputeRange(u, heal.Id) ?? range : range;
             int here = u.Row * host.Cols + u.Col, safest = here;
             if (FleeDanger(u, u.Col, u.Row) > SafeDanger)
