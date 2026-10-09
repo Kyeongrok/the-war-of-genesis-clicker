@@ -1309,7 +1309,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         host._mapTintTarget = -1;   // 행동이 끝나면 맵 물들이기를 푼다(0x1002e920)
         // 희생(13)·익스플로젼(22) — 아군을 회복시킨 뒤 시전자 HP 를 0 으로 쓴다(0x10090d62 · 0x100915f9, ba-20 D1).
-        // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)이 되살리는지는 가설.
+        // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)은 되살린다 — 되살림은 쓰러짐 처리 상태기(0x10067fe2~0x10068152)가 HP ≤ 0 인 유닛 모두에게 까닭을 가리지 않고 한다(ba-22 확인).
         if (w.AbilityId is SacrificeAbility or ExplosionAbility && a.Alive && !dying.Contains(a))
         {
             a.Hp = 0;
