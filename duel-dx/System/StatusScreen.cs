@@ -903,7 +903,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             if (BonusText(stat, value) is { } bonus) stats.Add(bonus);
         if (stats.Count > 0) parts.Add(string.Join(" · ", stats));
         var onHit = (item.AttackEffects ?? []).Select(e => BonusText(e.Status, e.Value)).OfType<string>().ToList();
-        if (onHit.Count > 0) parts.Add($"기본공격에: {string.Join(" · ", onHit)}");
+        if (onHit.Count > 0) parts.Add($"기본공격 치명타에: {string.Join(" · ", onHit)}");   // 무기 효과는 치명타일 때만 걸린다(0x1007bd62)
         if (item.IsConsumable && host.Btl.Work(item.UseWork) is { } w)
         {
             parts.Add(TargetText(w));

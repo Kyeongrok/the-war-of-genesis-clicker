@@ -126,27 +126,31 @@ internal sealed unsafe partial class BattleScene
     /// 거는 함수(<c>0x1007bcc0</c>)는 들어오자마자 <b>명중을 제 손으로 한 번 더 굴린다</b> — 부르는 곳이 한 군데뿐이라
     /// 피해형(종류 0)은 <b>두 번째</b> 굴림이고, 회복·보조(1·2·3)에는 이것이 <b>유일한</b> 굴림이다.
     /// </remarks>
-    internal bool ApplyAilments(UnitState attacker, UnitState target, WorkData w)
+    /// <param name="crit">판정이 치명타였나 — 무기 효과는 그때만 걸린다.</param>
+    internal bool ApplyAilments(UnitState attacker, UnitState target, WorkData w, bool crit = false)
     {
         _ailmentLanded = false;
         // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
         if (w.Kind <= 3 && host._db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
             && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
 
-        // 기본공격(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다.
-        // 무기가 없으면 아무것도 안 건다(0x1007bda4). 지금 판 자료에는 이 칸이 든 아이템이 하나도 없다.
+        // <b>치명타인 기본공격</b>(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다
+        // (0x1007bcc0 의 둘째 인자 = 판정의 치명 깃발, 0x1007bd62~0x1007be4b). 무기가 없으면 아무것도 안 건다(0x1007bda4).
+        // 치명이 아니면 work 자체의 상태 칸으로 간다(0x1007be53 — 기본공격은 비어 있다). 전에는 치명과 상관없이 늘 무기 효과를 걸어,
+        // 아이템 편집기로 무기에 효과를 넣으면 원본보다 훨씬 자주 걸렸다(ba-20 K7). 원본 자료에는 이 칸이 든 아이템이 없다.
         (int Id, int Value)[] effects;
-        if (attacker.Data is { } ac && w.Id == ac.BasicWorkId)
+        if (crit && attacker.Data is { } ac && w.Id == ac.BasicWorkId)
         {
             if (ac.Items[0] == 0 || host._db?.Items.GetValueOrDefault(ac.Items[0]) is not { } weapon) return true;
             effects = [.. (weapon.AttackEffects ?? []).Select(e => ((int)e.Status, (int)e.Value))];
         }
         else effects = [.. w.Bonuses.Select(b => ((int)b.Stat, (int)b.Value))];
-        if (effects.Length == 0) return true;
         // 레벨 조건(표 0x1007be84)은 그 효과 하나만 빼는 것이 아니다 — 종류 0·2 이고 공격자 레벨이 대상 이하인데
         // 세 효과 중 하나라도 5·6·12·19·22·23·24 이면 <b>work 전체가 실패</b>하고 회피 반응이 나온다(0x1007bcc0).
+        // 이 검사는 무기 효과가 아니라 늘 <b>work 의 상태 칸</b>으로 본다(0x1007bd11~0x1007bd5a).
         if (w.Kind is 0 or 2 && (attacker.Data?.Level ?? 0) <= (target.Data?.Level ?? 0)
-            && effects.Any(e => NeedsLevelEdge(e.Id))) return false;
+            && w.Bonuses.Any(e => NeedsLevelEdge(e.Stat))) return false;
+        if (effects.Length == 0) return true;
 
         var used = new List<int>();
         foreach (var (id, value) in effects)

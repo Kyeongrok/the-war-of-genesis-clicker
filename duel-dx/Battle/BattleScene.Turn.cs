@@ -1485,7 +1485,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (crit) PlayCritFlash();
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);
-        ApplyAilments(a, t, w);
+        ApplyAilments(a, t, w, crit);
         // 피해 기술이 적에게 상태이상·약화를 함께 걸었으면(엘레맨탈 파이어의 점화 따위) 그 적도 보조 경험치 대상으로 센다(사용자 요청 — 원본에 없다).
         if (_ailmentLanded && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);
         Counterattack(a, t, amount);
