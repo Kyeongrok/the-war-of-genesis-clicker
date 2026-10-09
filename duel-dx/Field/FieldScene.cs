@@ -1072,7 +1072,9 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 _fieldPicture = null;
                 _fieldPictureCover = 0;
                 break;
-            case 902: break;                                 // 동영상(<c>Mov\%04d.mov</c>) — 게임 쪽 영상만 405MB 라 데모는 안 묶는다
+            case 902:                                        // 동영상(<c>Mov\%04d.mov</c>, 0x100f2c40) — 풀어 둔 영상(effects/cut)이 있으면 튼다. 없으면 전처럼 지나간다
+                if (!host.Tlk._talkSkip) host.Cut.StartMovie(A(0));   // 장면 건너뛰기 중에는 안 튼다. 도는 동안 게임 시계가 서서 스크립트도 기다린다(ba-22)
+                break;
             case 905:                                        // 뜻이 아직 가설인 전환들 — 자료에 한 번씩뿐이다.
             case 907:                                        // 인자 자리(a0 방향 · a1 그림)는 다 같으니 <b>겹쳐 디졸브로 갈음</b>한다.
             case 908:                                        // 걸리는 틀은 909 자리(a2)로 읽는다 — 제 자리는 저마다 다르다.

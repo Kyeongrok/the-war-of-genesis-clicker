@@ -82,6 +82,17 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
         foreach (int m in movies) _queue.Enqueue(m);
     }
 
+    /// <summary>
+    /// 이야기 영상 하나를 건다 — 필드 스크립트 행동 902(<c>0x100f2c40</c>: <c>Mov\%04d.mov</c> 를 필드 위에 틀고, 도는 동안 필드 장면은 안 그린다).
+    /// 기술 영상 설정과 상관없이 튼다. 파일이 아직 없으면 false(뒤에서 받아 둔다) — 그때는 전처럼 영상 없이 지나간다.
+    /// </summary>
+    internal bool StartMovie(int movie)
+    {
+        if (AssetPack.FetchExtra(Kind, FileName(movie)) == null) return false;
+        _queue.Enqueue(movie);
+        return true;
+    }
+
     /// <summary>전투에 선 인물들이 가진 컷신 기술의 영상을 미리 받아 둔다(뒤에서, 기다리지 않는다).</summary>
     internal void Prefetch(IEnumerable<CharacterData> characters)
     {
