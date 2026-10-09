@@ -82,6 +82,10 @@ public partial class SkillEditView : UserControl
         IconSideBox.ItemsSource = IconSideChoices;
         IconAreaBox.ItemsSource = IconAreaChoices;
         IconKindBox.ItemsSource = IconKindChoices;
+        // 채우기에 고를 칸 — 수로 적는 칸만(고를 거리가 정해진 칸은 사이를 채울 뜻이 없다). 자주 고치는 칸을 앞에 둔다.
+        string[] first = ["power", "tp", "soul", "exp", "accuracy", "critical", "hpFactor", "bonus1Value", "bonus2Value", "bonus3Value", "rangeMax", "areaMax"];
+        var numeric = SkillBook.Fields.Where(f => f.Enum == null && f.Name != "att").Select(f => f.Name).ToList();
+        FillFieldBox.ItemsSource = first.Where(numeric.Contains).Concat(numeric.Where(n => !first.Contains(n))).ToList();
         FilterBox.Text = LoadFilter();   // 지난번 찾기 글 — 목록이 채워지면 이 글로 거른다
         Loaded += (_, _) => { if (_folder.Length == 0) Load(); };
         PreviewKeyDown += OnPreviewKeyDownForUndo;   // 창에 다시 붙어도 한 번만 읽는다
@@ -265,6 +269,167 @@ public partial class SkillEditView : UserControl
         };
         LevelGrid.ItemsSource = table.DefaultView;
         _filling = false;
+        UpdateFillBoxes();
+        UpdateRangePreview();
+    }
+
+    // ── 레벨 채우기 ─────────────────────────────────────────────────────────
+
+    /// <summary>칸의 지금 값 — 그 레벨에 따로 적힌 값이 있으면 그것, 없으면 공통 값.</summary>
+    private static int ValueAt(SkillFile skill, int levelIndex, string field) =>
+        (uint)levelIndex < (uint)skill.Levels.Count && skill.Levels[levelIndex].Fields.TryGetValue(field, out int v) ? v : skill.Common.GetValueOrDefault(field);
+
+    /// <summary>채우기 칸의 첫·끝 값을 고른 칸의 지금 값(첫 레벨 · 끝 레벨)으로 채워 둔다.</summary>
+    private void UpdateFillBoxes()
+    {
+        if (Current is not { } row || FillFieldBox.SelectedItem is not string field) return;
+        FillStartBox.Text = ValueAt(row.Skill, 0, field).ToString();
+        FillEndBox.Text = ValueAt(row.Skill, row.Skill.Levels.Count - 1, field).ToString();
+    }
+
+    private void FillField_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateFillBoxes();
+
+    /// <summary>
+    /// 첫 레벨 값에서 끝 레벨 값까지 고르게 채운다(사용자 요청 ed-sk-9) — 레벨마다 하나씩 넣지 않아도 된다.
+    /// 공통 칸이면 레벨별 칸으로 내려서 넣는다. 「단위」 가 5 면 값을 5 의 배수로 맞춘다. 한 번이 되돌리기 한 걸음이다.
+    /// </summary>
+    private void FillApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } row) { StatusText.Text = "스킬을 고르세요."; return; }
+        if (FillFieldBox.SelectedItem is not string field) { StatusText.Text = "채울 칸을 고르세요."; return; }
+        if (!int.TryParse(FillStartBox.Text.Trim(), out int start) || !int.TryParse(FillEndBox.Text.Trim(), out int end))
+        { StatusText.Text = "첫 레벨 값과 끝 레벨 값을 수로 넣으세요."; return; }
+        int unit = int.TryParse(FillUnitBox.Text.Trim(), out int u) && u > 0 ? u : 1;
+        var info = SkillBook.Fields.First(f => f.Name == field);
+        long max = (1L << (8 * info.Size)) - 1, low = info.Signed ? -(max + 1) / 2 : 0, high = info.Signed ? max / 2 : max;
+        if (start < low || start > high || end < low || end > high) { StatusText.Text = $"「{field}」 에는 {low}~{high} 만 넣을 수 있습니다."; return; }
+        LevelGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        int n = row.Skill.Levels.Count;
+        for (int i = 0; i < n; i++)
+        {
+            double exact = n == 1 ? start : start + (end - start) * (double)i / (n - 1);
+            int value = (int)Math.Clamp(Math.Round(exact / unit, MidpointRounding.AwayFromZero) * unit, low, high);
+            // 양 끝은 넣은 값 그대로 — 단위에 안 맞아도 사용자가 적은 값이 우선이다.
+            row.Skill.Levels[i].Fields[field] = i == 0 ? start : i == n - 1 ? end : value;
+        }
+        row.Skill.Common.Remove(field);
+        MarkDirty(row);
+        Fill();
+        StatusText.Text = $"{row.Name}: 「{field}」 를 Lv1 {start} → Lv{n} {end} 로 채웠습니다 (Ctrl+Z 로 되돌림, 저장해야 반영).";
+    }
+
+    // ── 범위 미리보기 ────────────────────────────────────────────────────────
+
+    private const int PreviewRadius = 10, PreviewCell = 11;
+
+    /// <summary>미리보기에서 겨눈 칸(시전자 기준) — 사거리 안의 칸을 누르면 옮긴다. 사거리가 바뀌어 밖이 되면 다시 고른다.</summary>
+    private (int Dx, int Dy) _previewAim = (0, -1);
+
+    /// <summary>레벨별 표에서 고른 줄(없으면 첫 레벨) — 미리보기가 그 레벨의 값으로 그린다.</summary>
+    private int PreviewLevelIndex(SkillRow row)
+    {
+        var view = LevelGrid.CurrentCell.Item as DataRowView ?? LevelGrid.SelectedCells.Select(c => c.Item).OfType<DataRowView>().FirstOrDefault();
+        int index = view != null && view.Row["level"] is int level ? row.Skill.Levels.FindIndex(l => l.Level == level) : 0;
+        return Math.Max(0, index);
+    }
+
+    /// <summary>
+    /// 사거리(파랑)와 겨눈 칸의 효과 범위(빨강)를 평지 격자에 그린다 — 게임과 같은 모양 표(<see cref="WorkShape"/>)를 쓴다.
+    /// 높이·시야·지형은 뺀 그림이다. 시전자는 가운데, 위를 본다.
+    /// </summary>
+    private void UpdateRangePreview()
+    {
+        RangeCanvas.Children.Clear();
+        if (Current is not { } row || row.Skill.Levels.Count == 0) { RangeCaption.Text = ""; return; }
+        int li = PreviewLevelIndex(row);
+        int V(string field) => ValueAt(row.Skill, li, field);
+        int rangeShape = V("rangeShape"), rangeMin = V("rangeMin"), rangeMax = V("rangeMax"), rangeKind = V("rangeKind"), mode = V("targetMode");
+        int areaShape = V("areaShape"), areaMin = V("areaMin"), areaMax = V("areaMax");
+        bool self = mode is 0 or 2 || rangeShape == 0;
+        // 무기 사거리를 쓰는 기술(종류 2·4)은 무기 사거리를 1칸으로 보고 그린다.
+        const int weapon = 1;
+        int maxCells = rangeKind switch { 2 => weapon, 4 => weapon + rangeMax, _ => rangeMax };
+        int minQ = rangeMin == 0 ? 0 : rangeMin * 4 - 3, maxQ = maxCells * 4;
+
+        bool InRange(int dx, int dy)
+        {
+            if (self) return dx == 0 && dy == 0;
+            int d = 4 * (Math.Abs(dx) + Math.Abs(dy));
+            if (!WorkShape.UsesFacing(rangeShape)) return WorkShape.Reaches(rangeShape, dx, dy, 3, minQ, maxQ, d, d);
+            for (int way = 0; way < 4; way++)
+                if (WorkShape.Reaches(rangeShape, dx, dy, way, minQ, maxQ, d, d)) return true;
+            return false;
+        }
+
+        if (self) _previewAim = (0, 0);
+        else if (Math.Abs(_previewAim.Dx) > PreviewRadius || Math.Abs(_previewAim.Dy) > PreviewRadius || !InRange(_previewAim.Dx, _previewAim.Dy))
+        {
+            // 위쪽으로 가장 먼 칸부터, 없으면 사거리 안 아무 칸.
+            (int, int)? pick = null;
+            for (int k = PreviewRadius; k >= 0 && pick == null; k--) if (InRange(0, -k)) pick = (0, -k);
+            for (int dy = -PreviewRadius; dy <= PreviewRadius && pick == null; dy++)
+                for (int dx = -PreviewRadius; dx <= PreviewRadius && pick == null; dx++) if (InRange(dx, dy)) pick = (dx, dy);
+            _previewAim = pick ?? (0, 0);
+        }
+        var (ax, ay) = _previewAim;
+        // 시전자 → 겨눈 칸 쪽을 본다(게임의 FacingToward 와 같은 규칙). 제자리면 위.
+        int facing = ax == 0 && ay == 0 ? 0 : Math.Abs(ax) >= Math.Abs(ay) ? (ax >= 0 ? 3 : 2) : (ay >= 0 ? 1 : 0);
+        int areaMinQ = areaMin * (4 * areaMin - 3), areaMaxQ = areaMax * 4;
+
+        bool InArea(int dx, int dy)        // 겨눈 칸 기준
+        {
+            if (areaShape == 0) return dx == 0 && dy == 0;
+            int d = 4 * (Math.Abs(dx) + Math.Abs(dy));
+            if (areaShape == 4) return d >= areaMinQ && Math.Abs(dx) <= 8;        // 화면 전체 — 가로 8칸까지(세로는 화면 높이)
+            if (dx == 0 && dy == 0) return WorkShape.Covers(areaShape, 0, 0, facing) && 0 >= areaMinQ;
+            return WorkShape.Reaches(areaShape, dx, dy, facing, areaMinQ, areaMaxQ, d, d);
+        }
+
+        var rangeBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x2E, 0x5F, 0xB8));
+        var areaBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC8, 0x3C, 0x3C));
+        var bothBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB0, 0x4C, 0xC0));
+        var emptyBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1C, 0x24, 0x36));
+        int rangeCount = 0, areaCount = 0;
+        for (int dy = -PreviewRadius; dy <= PreviewRadius; dy++)
+            for (int dx = -PreviewRadius; dx <= PreviewRadius; dx++)
+            {
+                bool r = InRange(dx, dy), a = InArea(dx - ax, dy - ay);
+                if (r) rangeCount++;
+                if (a) areaCount++;
+                var cell = new System.Windows.Shapes.Rectangle
+                {
+                    Width = PreviewCell - 1, Height = PreviewCell - 1,
+                    Fill = r && a ? bothBrush : a ? areaBrush : r ? rangeBrush : emptyBrush,
+                };
+                Canvas.SetLeft(cell, (dx + PreviewRadius) * PreviewCell);
+                Canvas.SetTop(cell, (dy + PreviewRadius) * PreviewCell);
+                RangeCanvas.Children.Add(cell);
+            }
+        // 시전자(초록 점)와 겨눈 칸(흰 테두리).
+        var caster = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = System.Windows.Media.Brushes.LimeGreen };
+        Canvas.SetLeft(caster, PreviewRadius * PreviewCell + 1.5);
+        Canvas.SetTop(caster, PreviewRadius * PreviewCell + 1.5);
+        RangeCanvas.Children.Add(caster);
+        var aim = new System.Windows.Shapes.Rectangle { Width = PreviewCell - 1, Height = PreviewCell - 1, Stroke = System.Windows.Media.Brushes.White, StrokeThickness = 1.5 };
+        Canvas.SetLeft(aim, (ax + PreviewRadius) * PreviewCell);
+        Canvas.SetTop(aim, (ay + PreviewRadius) * PreviewCell);
+        RangeCanvas.Children.Add(aim);
+
+        string lv = row.Skill.Levels.Count > 1 ? $"Lv{row.Skill.Levels[li].Level} · " : "";
+        string note = rangeKind is 2 or 4 ? " 무기 사거리를 쓰는 기술이라 무기 1칸으로 보고 그렸다." : "";
+        RangeCaption.Text = $"{lv}사거리 {rangeCount}칸(파랑) · 효과 범위 {areaCount}칸(빨강) · 초록 점 = 시전자, 흰 테두리 = 겨눈 칸. "
+                            + (self ? "제자리에 쓰는 기술." : "파란 칸을 누르면 겨눈 칸을 옮긴다.") + " 평지 기준(높이·시야 제외)." + note;
+    }
+
+    private void RangeCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var at = e.GetPosition(RangeCanvas);
+        int dx = (int)(at.X / PreviewCell) - PreviewRadius, dy = (int)(at.Y / PreviewCell) - PreviewRadius;
+        if (Math.Abs(dx) > PreviewRadius || Math.Abs(dy) > PreviewRadius) return;
+        var before = _previewAim;
+        _previewAim = (dx, dy);
+        UpdateRangePreview();              // 사거리 밖을 눌렀으면 미리보기가 다시 고른다
+        if (_previewAim != (dx, dy)) { _previewAim = before; UpdateRangePreview(); }
     }
 
     /// <summary>
@@ -367,6 +532,7 @@ public partial class SkillEditView : UserControl
         row.Dirty = "●";
         RefreshGrid(SkillGrid);
         UpdateStatus();
+        if (row == Current) UpdateRangePreview();
     }
 
     /// <summary>레벨별 표 — 고를 거리가 있는 칸(대상 방식 등이 레벨마다 다를 때)은 드롭다운 열로 바꾼다.</summary>
@@ -501,6 +667,7 @@ public partial class SkillEditView : UserControl
         string list = refs.Count == 0 ? "어빌리티 레벨 말고는 쓰는 곳 없음"
             : string.Join(" · ", refs.Take(Shown)) + (refs.Count > Shown ? $" 외 {refs.Count - Shown}곳" : "");
         WorkRefs.Text = $"Lv{level} = work {work} — {list}";
+        if (!_filling) UpdateRangePreview();     // 고른 레벨의 값으로 다시 그린다
     }
 
     /// <summary>

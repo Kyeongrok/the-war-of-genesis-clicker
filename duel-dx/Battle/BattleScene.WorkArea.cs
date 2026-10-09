@@ -99,34 +99,7 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>모양 <paramref name="shape"/> 가 그 칸을 덮나(거리는 이미 최소·최대로 걸렀다고 보고 모양만 본다).</summary>
-    internal static bool ShapeCovers(int shape, int dx, int dy, Facing facing)
-    {
-        // 바라보는 쪽을 앞(axis)으로, 그 직각을 옆(side)으로 돌려 놓는다.
-        (int axis, int side) = facing switch
-        {
-            Facing.Up => (-dy, dx),
-            Facing.Down => (dy, dx),
-            Facing.Left => (-dx, dy),
-            _ => (dx, dy),
-        };
-        int a = Math.Abs(side);
-        return shape switch
-        {
-            1 => true,                                  // 마름모(거리만)
-            2 => dx == 0 || dy == 0,                    // 십자
-            3 => axis >= 0 && a <= axis / 3,            // 부채꼴 — 원점 줄도 덮는다
-            4 => true,                                  // 화면 전체
-            5 => axis >= 0 && side == 0,                // 직선
-            6 => axis >= 0 && a <= 1,                   // 폭 3 줄(시전자 줄도 덮는다 — work_area.py 그림)
-            7 => axis >= 0 && a <= 2,                   // 폭 5 줄
-            8 => Math.Abs(dx) == Math.Abs(dy),          // 대각선 X
-            9 => axis >= 1 && a <= axis - 1,            // 45° 삼각형 — 앞으로 한 칸 간 뒤부터 벌어진다
-            // 10 = ^ 호(데모 추가, 원본 표는 9 까지) — 겨눈 칸 기준 한 칸 더 앞과 양옆. 파(gm-skil-14)가 옆 칸을 겨누면 시전자 기준
-            // 12시(두 칸 앞)·11시·1시(대각선)가 된다. 겨눈 칸 자체는 안 든다.
-            10 => axis == 1 && side == 0 || axis == 0 && a == 1,
-            _ => dx == 0 && dy == 0,
-        };
-    }
+    internal static bool ShapeCovers(int shape, int dx, int dy, Facing facing) => WorkShape.Covers(shape, dx, dy, (int)facing);   // 표는 편집기 미리보기와 같이 쓴다(WarOfGenesis.Assets.WorkShape)
 
     /// <summary>방향을 쓰는 모양인가 — 사거리를 그릴 때는 네 방향을 합쳐야 한다.</summary>
     internal static bool ShapeUsesFacing(int shape) => shape is 3 or 5 or 6 or 7 or 9 or 10;
@@ -148,16 +121,8 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>모양과 거리를 함께 본다 — 모양마다 <b>거리 자가 다르기</b> 때문에 따로 볼 수 없다.</summary>
     internal static bool ShapeReaches(int shape, int dx, int dy, Facing facing,
-                                     int minQuarters, int maxQuarters, int graded, int plain)
-    {
-        if (!ShapeCovers(shape, dx, dy, facing)) return false;
-        if (!ShapeUsesAxisDistance(shape)) return plain >= minQuarters && graded <= maxQuarters;
-        // 축 거리에도 <b>높이항은 그대로 붙는다</b>(0x100db2bf~) — 맨해튼 자와 같은 식이다.
-        // 맨해튼 몫만 축 거리로 바꾸고, 높이 몫은 이미 잰 값에서 가져온다.
-        int axis = 4 * AxisOf(dx, dy, facing);
-        int flat = 4 * (Math.Abs(dx) + Math.Abs(dy));
-        return axis + (plain - flat) >= minQuarters && axis + (graded - flat) <= maxQuarters;
-    }
+                                     int minQuarters, int maxQuarters, int graded, int plain) =>
+        WorkShape.Reaches(shape, dx, dy, (int)facing, minQuarters, maxQuarters, graded, plain);
 
     /// <summary>
     /// (fromCol, fromRow) 에서 work 로 (col, row) 칸을 겨눌 수 있나 — 사거리 모양·최소·최대와 지형 &amp; 0x8 만 본다.

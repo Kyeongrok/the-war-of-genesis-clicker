@@ -189,7 +189,7 @@
                 <DataGrid
                     x:Name="CommonGrid"
                     Grid.Row="1"
-                    Margin="2,26,2,2"
+                    Margin="2,26,250,2"
                     AutoGenerateColumns="False"
                     AutomationProperties.AutomationId="SkillEditCommon"
                     CanUserAddRows="False"
@@ -238,6 +238,35 @@
                             IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
+                <!--  범위 미리보기 — 사거리(파랑)와 겨눈 칸의 효과 범위(빨강)를 격자로 보인다. 값을 고치면 바로 바뀐다(사용자 요청 ed-sk-9)  -->
+                <Border
+                    Grid.Row="1"
+                    Width="244"
+                    Margin="2,26,2,2"
+                    HorizontalAlignment="Right"
+                    Background="#1B2333"
+                    BorderBrush="#8090A8"
+                    BorderThickness="1">
+                    <DockPanel>
+                        <TextBlock
+                            x:Name="RangeCaption"
+                            Margin="4,3"
+                            AutomationProperties.AutomationId="SkillEditRangeCaption"
+                            DockPanel.Dock="Bottom"
+                            FontSize="11"
+                            Foreground="#C8D4E8"
+                            TextWrapping="Wrap" />
+                        <Viewbox Stretch="Uniform">
+                            <Canvas
+                                x:Name="RangeCanvas"
+                                Width="231"
+                                Height="231"
+                                AutomationProperties.AutomationId="SkillEditRangeCanvas"
+                                Background="#101624"
+                                MouseLeftButtonDown="RangeCanvas_MouseLeftButtonDown" />
+                        </Viewbox>
+                    </DockPanel>
+                </Border>
                 <GridSplitter
                     Grid.Row="2"
                     Height="6"
@@ -272,6 +301,42 @@
                         FontWeight="Bold"
                         Text="레벨별 — 레벨마다 다른 칸만 (열 머리를 눌러 고른 뒤 올린다)" />
                 </DockPanel>
+                <!--  레벨별 값 채우기 — 첫 레벨 값과 끝 레벨 값만 넣으면 사이를 고르게 채운다(사용자 요청 ed-sk-9)  -->
+                <StackPanel
+                    Margin="0,0,0,4"
+                    DockPanel.Dock="Top"
+                    Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Text="레벨 채우기  칸 " />
+                    <ComboBox
+                        x:Name="FillFieldBox"
+                        Width="130"
+                        AutomationProperties.AutomationId="SkillEditFillField"
+                        SelectionChanged="FillField_SelectionChanged" />
+                    <TextBlock Margin="8,0,2,0" VerticalAlignment="Center" Text="첫 레벨" />
+                    <TextBox
+                        x:Name="FillStartBox"
+                        Width="60"
+                        AutomationProperties.AutomationId="SkillEditFillStart" />
+                    <TextBlock Margin="8,0,2,0" VerticalAlignment="Center" Text="끝 레벨" />
+                    <TextBox
+                        x:Name="FillEndBox"
+                        Width="60"
+                        AutomationProperties.AutomationId="SkillEditFillEnd" />
+                    <TextBlock Margin="8,0,2,0" VerticalAlignment="Center" Text="단위" />
+                    <TextBox
+                        x:Name="FillUnitBox"
+                        Width="40"
+                        AutomationProperties.AutomationId="SkillEditFillUnit"
+                        Text="1"
+                        ToolTip="이 수의 배수로 맞춘다 — 5 면 5·10·15 …" />
+                    <Button
+                        Margin="8,0,0,0"
+                        Padding="8,2"
+                        AutomationProperties.AutomationId="SkillEditFillApply"
+                        Click="FillApply_Click"
+                        Content="사이를 채우기"
+                        ToolTip="첫 레벨 값에서 끝 레벨 값까지 고르게 늘려(또는 줄여) 모든 레벨에 넣는다. 공통 칸이면 레벨별 칸으로 내린다." />
+                </StackPanel>
                 <!--  고른 레벨 work 을 쓰는 곳 — 전투 이벤트 필살기(행동 207)·기본공격 인물. work 번호로 가리키므로 레벨을 지우거나 옮길 때 본다  -->
                 <TextBlock
                     x:Name="WorkRefs"
