@@ -267,7 +267,7 @@ internal sealed unsafe partial class BattleScene
         else if (w.TargetMode == 6)
         {
             stands.Add(here);
-            foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) })
+            foreach (var (dx, dy) in new[] { (0, -1), (-1, 0), (0, 1), (1, 0) })   // 위·왼·아래·오른 — 동점이면 먼저 나온 쪽(분기표 0x1005d844, ba-20 AI N10)
                 if ((uint)(user.Col + dx) < host.Cols && (uint)(user.Row + dy) < host.Rows) candidates.Add((user.Col + dx, user.Row + dy));
         }
         else
@@ -506,7 +506,8 @@ internal sealed unsafe partial class BattleScene
         int hpPercent = u.MaxHp == 0 ? 100 : u.Hp * 100 / u.MaxHp;
         // 버서커(4)가 걸린 인물에게는 자기 말고 모두가 적이다.
         var enemies = host._units.Where(t => t.Alive && t.OnField && SeesAsFoe(u, t)).ToList();
-        int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row));
+        // 가까운 적 거리에는 높이 차의 절반도 든다(0x1007b0f0: |Δx| + |Δy| + |Δ높이|/2, ba-20 AI N7).
+        int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row) + Math.Abs(HeightAt(t.Col, t.Row) - HeightAt(u.Col, u.Row)) / 2);
 
         // 2단계 도망(0x1005b4e0) — 피가 적고 적이 가까우면 물러난다. 위험도 0.70 이하인 칸 중 <b>지금 자리에서 맨해튼으로 가장 가까운 칸</b>,
         // 없으면 위험도가 가장 작은 칸. 지금 칸이 이미 0.70 이하면 안 움직인다. 부대장이 아니고 회복기가 있으면 물러난 자리에서 회복기를 쓴다.
