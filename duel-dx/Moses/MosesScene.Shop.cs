@@ -193,7 +193,8 @@ internal sealed unsafe partial class MosesScene
         int itemId = items[row].Item;
         // 여러 개 한 번에(사용자 요청, 원본은 한 번에 하나) — Shift+클릭 10개, Ctrl+클릭 전부. 한도에 걸리면 거기서 멈춘다.
         int times = CtrlHeld ? 99 : StatusScreen.ShiftHeld ? 10 : 1;
-        for (int n = 0; n < times && MoveOne(); n++) { }
+        // Ctrl 로 살 때는 지금 돈(판 것 포함)으로 살 수 있는 데까지만 담는다(피드백 mo-11 — 전에는 돈과 상관없이 99개).
+        for (int n = 0; n < times && (!CtrlHeld || list != ListStock || ShopBalance() >= ShopPrice(itemId)) && MoveOne(); n++) { }
         return true;
 
         bool MoveOne()

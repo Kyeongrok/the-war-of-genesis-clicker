@@ -117,6 +117,9 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         {
             case 0:                                   // NEW GAME — 원본처럼 연대표(장면 7)로 간다
                 host._party.Clear();
+                // 앞 판의 전투 유닛도 버린다 — 남겨 두면 첫 전투의 RememberParty 가 그 자료(장비·레벨)를 새 명부에 도로 적어,
+                // 살라딘·죠안이 지난 세이브의 장비를 차고 시작했다(피드백 menu-26).
+                foreach (var old in host._units) old.Data = null;
                 host.Mos._members.Clear();
                 host.Mos._ownedLegions.Clear();
                 host.Mos._legionsKnown = true;

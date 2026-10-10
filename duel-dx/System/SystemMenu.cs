@@ -506,6 +506,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._outcomeAfterLevelUp = false;
         host.Btl._routine = null;
         host.Btl._levelUpQueue.Clear();
+        host.Btl._formationAt.Clear(); host.Btl._followerTarget.Clear(); host.Btl._nextFollowerRetry.Clear();   // 앞 판의 진형 기록(fg-31)
         host.Btl._levelUpUnit = -1;
         host.Btl._numbers.Clear();
         host.Btl._effects.Clear();
@@ -1028,6 +1029,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._ringUnit = -1;
         host._statusUnit = -1;
         host.Btl._levelUpQueue.Clear();
+        host.Btl._formationAt.Clear(); host.Btl._followerTarget.Clear(); host.Btl._nextFollowerRetry.Clear();   // 앞 판의 진형 기록(fg-31)
         host.Btl._levelUpUnit = -1;
         host.Btl._numbers.Clear();
         host.Btl._effects.Clear();

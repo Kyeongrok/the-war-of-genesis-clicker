@@ -368,8 +368,12 @@ internal sealed unsafe partial class BattleScene
             if (!leader.OnField) continue;
             if (FollowersOf(i).Any(f => f.IsBusy)) continue;   // 아직 걷는 중이면 새 목표를 주지 않는다
             // 대장이 같은 칸에 그대로 서 있으면 진형을 다시 셈하지 않는다 — 칸을 넓게 훑어 값이 비싸다.
-            if (_formationAt.TryGetValue(i, out var last) && last == (leader.Col, leader.Row)) continue;
+            bool seen = _formationAt.TryGetValue(i, out var last);
+            if (seen && last == (leader.Col, leader.Row)) continue;
             _formationAt[i] = (leader.Col, leader.Row);
+            // 처음 본 대장(전투 시작 · 불러온 직후 · 증원)은 자리만 적어 둔다 — 원본은 대장이 걸었을 때만 진형을 다시 세운다.
+            // 전에는 여기서 바로 다시 세워, 시작하자마자 온 군단이 배치 대열을 깨고 한 칸씩 움직였다(피드백 fg-31 a).
+            if (!seen) continue;
             ReformFollowers(i);
         }
 
@@ -382,6 +386,14 @@ internal sealed unsafe partial class BattleScene
             // 기술을 쓰는 대장의 부하는 다시 걷기 시작하지 않는다 — 걷기 시작하면 FollowersAttack 이 그 부하를 못 쓴다(감사5 L-A).
             if (follower.LeaderIndex == _skillLeader) continue;
             if (!_followerTarget.TryGetValue(follower, out var target) || (follower.Col, follower.Row) == target) continue;
+            // 대장 곁(거리 4 안)에 이미 와 있으면 낙오가 아니다 — 목표를 버린다. 전에는 끝까지 그 칸을 노려서, 옆에서 누가 비켜
+            // 칸이 날 때마다 부하들이 저절로 한 칸씩 움직였다(피드백 fg-31 b·c).
+            if ((uint)follower.LeaderIndex < host._units.Length && host._units[follower.LeaderIndex] is var boss
+                && Math.Abs(follower.Col - boss.Col) + Math.Abs(follower.Row - boss.Row) <= 4)
+            {
+                _followerTarget.Remove(follower);
+                continue;
+            }
             if (_nextFollowerRetry.TryGetValue(follower, out var next) && host._lastTime < next) continue;
             _nextFollowerRetry[follower] = host._lastTime + 0.5;
             TryAdvanceFollower(follower);
