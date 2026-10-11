@@ -191,7 +191,7 @@ internal sealed partial class GamePad
         void Add(int x, int y, int w, int h) => list.Add((ox + x, oy + y, w, h));
         void PartyFaces(int count)
         {
-            for (int i = 0; i < count && i < 5; i++) Add(70 * i + 16, 320, 64, 80);
+            for (int i = 0; i < count && i < 5; i++) Add(70 * i + 48, 330, 64, 130);
             if (mos.StyleParty().Count >= 6) { Add(20, 370, 20, 50); Add(400, 370, 20, 50); }
         }
         void Scroll(int x, int y, int h) { Add(x, y, 16, h / 2); Add(x, y + h / 2, 16, h - h / 2); }
@@ -281,7 +281,7 @@ internal sealed partial class GamePad
                 break;
         }
         if (mos.MosesDockShown)
-            foreach (var icon in MosesScene.MosesIcons) Add(icon.X, icon.Y, 46, 33);
+            foreach (var icon in MosesScene.MosesIcons) Add(icon.X + MosesScene.DockHitDx, icon.Y, MosesScene.DockHitW, MosesScene.DockHitH);
     }
 
     /// <summary>
@@ -292,8 +292,11 @@ internal sealed partial class GamePad
     {
         var targets = Targets();
         var first = targets.Count == 0 ? default : targets[0];
-        if (first == _lastFirst) return;   // 같은 창이다 — 목록을 굴려 줄 수만 달라진 것도 첫 자리는 그대로다
+        // 모세스는 페이지가 달라도 첫 칸 자리가 같을 수 있다(장소 목록 ↔ PARTY 의 전직 · 용병관리) — 페이지 · 단계도 함께 본다(사용자 보고 mo-18).
+        int page = host.Mos._mosesOpen ? host.Mos._mosesPage * 8 + host.Mos._mosesStep : -1;
+        if (first == _lastFirst && page == _lastPage) return;   // 같은 창이다 — 목록을 굴려 줄 수만 달라진 것도 첫 자리는 그대로다
         _lastFirst = first;
+        _lastPage = page;
         if (targets.Count == 0) return;
         // 성도에서는 첫 행성이 아니라 <b>전투 · 필드 장소가 있는 행성</b>부터(사용자 요청 mo-15) — 상점뿐인 행성은 뒤로 미룬다.
         int pick = PreferredPlanet();
@@ -313,6 +316,9 @@ internal sealed partial class GamePad
 
     /// <summary>지난 틀의 첫 자리 — 달라지면 다른 창(또는 다른 페이지)이 뜬 것이다.</summary>
     private (int X, int Y, int W, int H) _lastFirst;
+
+    /// <summary>지난 틀의 모세스 페이지 · 단계(모세스가 아니면 −1).</summary>
+    private int _lastPage = -1;
 
     /// <summary>
     /// 성도(행성 고르기)에서 LB · RB — 커서를 이전 · 다음 행성으로(끝에서 반대쪽으로 돈다). 행성 위가 아니면 장소가 있는 첫 행성으로. 성도가 아니면 false.
@@ -387,8 +393,20 @@ internal sealed partial class GamePad
     }
 
     /// <summary>커서가 선 자리 — 없으면 −1.</summary>
-    private static int At(List<(int X, int Y, int W, int H)> targets, int mx, int my) =>
-        targets.FindIndex(t => mx >= t.X && mx < t.X + t.W && my >= t.Y && my < t.Y + t.H);
+    private static int At(List<(int X, int Y, int W, int H)> targets, int mx, int my)
+    {
+        // 칸이 겹치면(전직 화면의 부채꼴 계열 단추) 가운데가 더 가까운 칸이다 — 앞 칸이 먼저 받으면 겹친 칸으로는 못 넘어간다(mo-20).
+        int best = -1;
+        long bestFar = long.MaxValue;
+        for (int i = 0; i < targets.Count; i++)
+        {
+            var t = targets[i];
+            if (mx < t.X || mx >= t.X + t.W || my < t.Y || my >= t.Y + t.H) continue;
+            long ax = mx - (t.X + t.W / 2), ay = my - (t.Y + t.H / 2), far = ax * ax + ay * ay;
+            if (far < bestFar) { bestFar = far; best = i; }
+        }
+        return best;
+    }
 
     /// <summary>
     /// 커서를 그 쪽의 다음 자리로 옮긴다 — 커서가 어느 자리에도 없으면 가장 가까운 자리로. 그 쪽에 자리가 없으면 그대로 둔다.

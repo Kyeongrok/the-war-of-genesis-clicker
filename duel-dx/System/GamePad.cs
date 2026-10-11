@@ -84,7 +84,16 @@ internal sealed partial class GamePad(GameWindow host)
     internal bool _guideOpen;
 
     /// <summary>마우스로만 되는 창에서 어빌리티 단추를 누르고 있는지 — Shift 를 누른 것으로 친다(레벨 내리기 · 상점 10개씩).</summary>
+    /// <summary>마우스 커서를 숨기나 — 패드 단추 · 스틱을 쓰면 켜지고, 마우스를 손으로 움직이면 꺼진다(GameWindow 의 틀 고리가 끈다).</summary>
+    internal bool HideMouse;
+
     internal static bool ShiftHeld;
+
+    /// <summary>
+    /// 창 조작 중에 휴식 단추(기본 Y)를 누르고 있나 — 모세스의 올림 설명(행성 · 도크 아이콘)은 패드에서는 이 동안만 보인다(사용자 요청 mo-22).
+    /// 패드 커서는 늘 어느 자리 위에 서 있어서, 마우스처럼 올리기만 해도 띄우면 설명이 화면을 내내 가렸다.
+    /// </summary>
+    internal static bool TipHeld;
 
     /// <summary>마우스로만 되는 창이 떠 있는지 — 이때는 왼쪽 스틱도 커서를 움직이고 단추가 마우스 단추 노릇을 한다.</summary>
     internal bool PointerMode => host._statusUnit >= 0 || host.Mos._mosesOpen || host.Sys.SystemOpen || host.SettingsScr._open
@@ -246,14 +255,18 @@ internal sealed partial class GamePad(GameWindow host)
         // 뗀 방향은 안내 창이 떠 있어도 걷기에서 뺀다 — 안 그러면 누른 채로 남는다.
         foreach (var (button, key) in Directions)
             if ((released & button) != 0) host.Btl._heldMoveKeys.Remove(key);
-        if (_rightDown && (released & _map[PadAction.Ring]) != 0) { _rightDown = false; PostMouse(Win32.WM_RBUTTONUP); }
+        if (_rightDown && released != 0 && (now & (_map[PadAction.Ring] | _map[PadAction.Attack])) == 0) { _rightDown = false; PostMouse(Win32.WM_RBUTTONUP); }
         ShiftHeld = pointer && (now & _map[PadAction.Ability]) != 0;
+        TipHeld = pointer && (now & _map[PadAction.Rest]) != 0;
 
         double dt = Math.Clamp(host._realTime - _lastPoll, 0, 0.1);
         _lastPoll = host._realTime;
         bool cursorMoved = !pointer && host._battleLoaded && (now & _map[PadAction.Ability]) != 0 ? ScrollMap(rx, ry, dt) : MoveCursor(rx, ry, dt);
         if (Active && !pointer) PointAtChest();   // 상자 옆에 서면 커서를 상자로(fa-35)
         if (pressed != 0 || cursorMoved) Active = true;
+        // 오른쪽 스틱으로 커서를 직접 끄는 동안은 커서가 보여야 한다 — 단추 · 십자키를 누르면 다시 숨는다.
+        if (cursorMoved) HideMouse = false;
+        else if (pressed != 0) HideMouse = true;
         if (Active && pointer && !_guideOpen) AutoFocus();   // 창 · 페이지가 바뀌면 첫 항목에 커서를 올린다
         if (!pointer) RingByStick(lx, ly, now);
         // 타이밍 크리티컬이 단추를 기다리는 중 — 어빌리티 · 공격 단추(기본 LT · RT) 어느 쪽이든 그리로 가고 다른 일은 안 한다.
@@ -338,6 +351,15 @@ internal sealed partial class GamePad(GameWindow host)
             if ((pressed & _map[action]) == 0 || action == PadAction.Help) continue;
             // 필드에서는 메뉴 단추가 안 먹는다(사용자 요청 menu-39) — 원본 필드에는 시스템 메뉴가 없고, 대사를 넘기다 잘못 눌러 메뉴가 뜨곤 했다.
             if (action == PadAction.System && host.FieldOpen && !host.Sys.SystemOpen) continue;
+            // 모세스에서는 메뉴 단추가 어느 페이지에서든 시스템 메뉴를 바로 열고 닫는다(사용자 보고 menu-51) — Esc 로 넘기면 페이지(메일 · 파티 · 상점)에서는
+            // 「뒤로」가 되어 메뉴가 안 열렸다. 다른 창(Status · 설정 · 모드)이 떠 있으면 전처럼 그 창의 Esc 다.
+            if (action == PadAction.System && host.Mos._mosesOpen && host._statusUnit < 0 && !host.SettingsScr._open && !host.TuningScr._tuningOpen
+                && !host.TimedEditScr._open && !host.EpisodesScr._episodesOpen)
+            {
+                if (host.Sys.SystemOpen) host.Sys.CloseSystemWindow();
+                else if (!host.Sys.ChapterEventRunning) { host.Play(578); host.Sys.OpenSystemMenu(); }
+                continue;
+            }
             if (action is PadAction.PrevUnit or PadAction.NextUnit && !pointer && !host.Btl._abilityMenu && host.Btl._targetWork < 0 && host._battleLoaded)
             {
                 // 차례를 기다리는(▼) 다른 인물에게 차례를 넘긴다 — 넘기면 그 인물이 부르는 목소리가 난다(fa-39 · fa-46). ▼ 없는 인물은 안 고른다.
@@ -385,6 +407,9 @@ internal sealed partial class GamePad(GameWindow host)
                 // 성도에서는 LT · RT 가 이전 · 다음 항성계 — 바로 가지 않고 물어본다(사용자 요청 mo-13 · mo-14).
                 if (action is PadAction.Ability or PadAction.Attack && host.Mos.AskTurnSystem(action == PadAction.Ability ? -1 : 1)) continue;
                 if (action == PadAction.Ability) continue;
+                if (action == PadAction.Rest) continue;   // 누르고 있는 동안 올림 설명(TipHeld) — 키로는 안 넘긴다
+                // 공격 단추(기본 RT)도 누르고 있는 동안 설명 보기 — 커맨드 단추(X)와 같다(사용자 요청 st-11).
+                if (action == PadAction.Attack) { _rightDown = true; PostMouse(Win32.WM_RBUTTONDOWN); continue; }
             }
             // 겨누는 중에는 LB · RB 가 이전 · 다음 적(사용자 요청 fa-32).
             if (host.Btl._targetWork >= 0 && host.Btl._attackCursor >= 0 && action is PadAction.PrevUnit or PadAction.NextUnit) { host.Btl.CycleAttackCursor(action == PadAction.PrevUnit ? -1 : 1); continue; }
@@ -519,7 +544,8 @@ internal sealed partial class GamePad(GameWindow host)
                 ("오른쪽 스틱", "커서 자유롭게 움직이기"),
                 (Name(PadAction.Confirm), "누르기 (장비 바꾸기 · 어빌리티 배우기 · 고르기)"),
                 ($"{Name(PadAction.Ability)} 누른 채 {Name(PadAction.Confirm)}", "어빌리티 레벨 내리기 · 상점 10개씩"),
-                (Name(PadAction.Ring), "누르고 있는 동안 설명 보기"),
+                ($"{Name(PadAction.Attack)} / {Name(PadAction.Ring)}", "누르고 있는 동안 설명 보기"),
+                (Name(PadAction.Rest), "누르고 있는 동안 행성 · 아이콘 설명 보기 (모세스)"),
                 ($"{Name(PadAction.PrevUnit)} · {Name(PadAction.NextUnit)}", "목록 위 · 아래로 굴리기 (성도에서는 이전 · 다음 행성)"),
                 ($"{Name(PadAction.Ability)} · {Name(PadAction.Attack)}", "성도에서 이전 · 다음 항성계 (물어봅니다)"),
                 (Name(PadAction.Cancel), "닫기 · 뒤로"),

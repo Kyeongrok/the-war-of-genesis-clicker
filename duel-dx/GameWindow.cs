@@ -148,7 +148,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal (int X, int Y) BoardPoint(int clientX, int clientY) =>
         ((int)Math.Floor((clientX - ViewOffsetX) / _zoom) + _camX, (int)Math.Floor((clientY - ViewOffsetY) / _zoom) + _camY);
     /// <summary>배율의 위아래 한계. 자동은 판이 창보다 작을 때(모세스·타이틀 640×480)만 창을 채우도록 키운다.</summary>
-    internal const double MinZoom = 0.5, MaxZoomChosen = 4;
+    internal const double MinZoom = 0.5, MaxZoomChosen = 8;
 
     /// <summary>화면 픽셀 ÷ 판 픽셀 — <see cref="FitZoom"/> 가 정한다.</summary>
     internal double _zoom;
@@ -411,7 +411,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>
     /// 배율을 정한다 — 설정 > 해상도가 <b>창 크기 그대로</b>, 설정 > 배율이 <b>확대 그대로</b>다(사용자 요청: 「해상도는 창 크기, 배율은 정직하게」).
     /// 보이는 판 = 창 ÷ 배율. 판이 그보다 작으면(모세스·타이틀 640×480) 창 가운데에 두고 둘레를 검게 남긴다.
-    /// 배율 「자동」은 판 내용(모세스 640×480, 맵은 판의 70%)이 창을 채우는 가장 큰 배율(0.05 단위, 최대 4배, 최소 1배).
+    /// 배율 「자동」은 원본 화면 한 장(640×480 — 그보다 작은 맵은 그 맵)이 창을 채우는 가장 큰 배율(0.05 단위, 최대 8배, 최소 1배).
     /// 해상도가 모니터 작업 영역보다 크면 들어가는 데까지만(<see cref="_resW"/>·<see cref="_resH"/>).
     /// </summary>
     /// <summary>지금 전체화면으로 그리나 — 화면 밖 시험에서는 늘 창이다.</summary>
@@ -444,16 +444,23 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         // 고른 배율이 창에 비해 너무 크면 원본 화면 한 장(640×480 + 머리줄)이 다 보이는 데까지만 키운다 — 안 그러면 보이는 판이 창들보다 작아져
         // 설정 창조차 화면 밖으로 잘려 되돌릴 수가 없었다(사용자 보고 menu-43: 모니터보다 큰 해상도에 400%).
-        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, MaxUsableZoom), MinZoom, MaxZoomChosen);
+        // 전투 맵에서는 따로 고른 전투 배율이 먼저다(사용자 요청 menu-52) — −1 이면 위의 배율을 그대로 따른다.
+        int chosen = BoardIsMap && _battleZoomPercent > 0 ? _battleZoomPercent : _zoomPercent;
+        if (chosen > 0) return Math.Clamp(Math.Min(chosen / 100.0, MaxUsableZoom), MinZoom, MaxZoomChosen);
 
-        int contentW = Math.Min(BoardWidth, _resW);
-        int contentH = Math.Min(BoardIsMap ? BoardHeight * 7 / 10 : GridTop + MosesScene.MosesH, _resH);
+        // 맵도 원본 화면 한 장(640×480)만큼을 창에 채운다 — 전에는 「창에 들어가는 만큼의 맵」을 내용으로 봐서, 창보다 큰 맵은 배율이 1 이 되어
+        // 큰 창에서 맵이 넓게 · 작게 보였다(사용자 보고 menu-48). 모세스 · 타이틀과 같은 크기로 보인다. 640 보다 좁은 맵은 그 맵이 창을 채운다.
+        int contentW = Math.Min(Math.Min(BoardWidth, MosesScene.MosesW), _resW);
+        int contentH = Math.Min(BoardIsMap ? Math.Min(BoardHeight * 7 / 10, GridTop + MosesScene.MosesH) : GridTop + MosesScene.MosesH, _resH);
         double fill = Math.Floor(Math.Min(_resW / (double)contentW, _resH / (double)contentH) * 20) / 20;
         return Math.Clamp(fill, 1, MaxZoomChosen);
     }
 
     /// <summary>설정 > 해상도 — 고른 배율 %(0 = 자동). 켤 때 읽고 바꾸면 저장한다.</summary>
     internal int _zoomPercent = UserSettings.Current.ZoomPercent;
+
+    /// <summary>설정 > 화면 > 전투 배율 — 전투 맵에서만 쓰는 배율 %. −1 이면 배율과 같게(기본).</summary>
+    internal int _battleZoomPercent = UserSettings.Current.BattleZoomPercent;
 
     /// <summary>배율·해상도를 바꿨을 때 — 판은 그대로 두고 셰이더·텍스처·창만 다시 만든다.</summary>
     internal void ApplyZoom(bool force = false)
@@ -604,7 +611,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Win32.TranslateMessage(ref msg);
                 Win32.DispatchMessageW(ref msg);
             }
+            // 패드를 잡으면 마우스 커서를 숨기고, 마우스를 손으로 움직이면 다시 보인다(사용자 요청 menu-53). 패드가 커서를 옮긴 것(SetCursorPos)은
+            // 손으로 움직인 것이 아니므로, 패드를 읽은 뒤의 자리를 기억해 두고 다음 틀에 그 자리에서 벗어났는지로 가린다.
+            if (Pad.HideMouse && Win32.GetCursorPos(out var cursorNow) && (cursorNow.X != _padCursor.X || cursorNow.Y != _padCursor.Y)) Pad.HideMouse = false;
             Pad.Poll();   // 게임 패드 — 누른 단추를 키 누름으로 넘긴다
+            if (Win32.GetCursorPos(out var cursorAfter)) _padCursor = cursorAfter;
             if (!_running) break;
 
             // 게임 시계 — 실제로 흐른 시간 × 게임 속도. 모션·걷기·이펙트·소리 예약이 모두 이 시계를 보므로 함께 빨라진다.
@@ -867,7 +878,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Mos._mosesOpen)
         {
             if (Mos.OnStatusKey(key, _keys.ActionFor(key) == KeyAction.Status)) return;   // Status 키로 열고 닫는다(st-10)
-            if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) _statusUnit = -1; return; }   // 스테이터스 창은 Esc 로 닫는다
+            if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) StatusScr.EscapeStatus(); return; }   // 스테이터스 창은 Esc 로 닫는다
             // 성도에서는 ←·→ 로도 항성계를 옮긴다(좌우 단추와 같은 일).
             if (Mos._mosesPage == 0 && Mos._mosesStep == 1 && key is Win32.VK_LEFT or Win32.VK_RIGHT)
             {
@@ -888,7 +899,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6). 전투에서는 내 유닛 조종 상태(원본 상태 22)일 때만 —
             // AI 차례·행동·이벤트·배치·레벨업·결과 중에는 취소로만 쓰인다(감사5 S1·S8). 필드는 편의로 열되 SAVE 는 꺼져 있다(S3).
-            if (_statusUnit >= 0) _statusUnit = -1;
+            if (_statusUnit >= 0) StatusScr.EscapeStatus();
             // 패드 취소 단추는 링을 닫으면서 걸음도 함께 물린다 — 다음 누름이 곧바로 어빌리티 목록이 되게(사용자 요청 fa-51).
             else if (Btl._ringUnit >= 0) { Btl.CancelRing(); if (_padCancel) Btl.UndoMove(); }
             else if (Btl.CancelStep(undoMove: true)) { }
@@ -1168,6 +1179,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// 전체화면에서는 메뉴 막대를 숨겨 두었다가 마우스가 화면 맨 위에 닿으면 보이고, 막대 아래로 내려가면 다시 숨긴다(사용자 요청 menu-46).
     /// 보이는 동안은 그림이 메뉴 높이만큼 눌려 보인다 — 잠깐이라 그대로 둔다.
     /// </summary>
+    /// <summary>패드를 읽은 직후의 마우스 커서 자리(화면 좌표) — 다음 틀에 달라져 있으면 손으로 마우스를 움직인 것이다.</summary>
+    internal Win32.Point _padCursor;
+
     internal void UpdateFullscreenMenu()
     {
         if (!FullscreenNow || _menuBar == IntPtr.Zero || !Win32.GetCursorPos(out var at)) return;

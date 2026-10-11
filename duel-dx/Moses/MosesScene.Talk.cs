@@ -222,7 +222,8 @@ internal sealed unsafe partial class MosesScene
         // 초상화 — 그 인물의 얼굴 그림이 assets 에 없으면 원본처럼 Obs 0229 로
         if (host._db?.Character(person.ChrCode) is { } c && host._faces.TryGetValue(c.Code, out var face))
             host.BlitScaled(face, x + 4, y + 4, 48, 52);
-        else host.DrawUi(TalkFaceFallbackObs, 0, tick, x + 28, y + 30, GameWindow.UiBlend.Alpha);
+        // 없는 얼굴 그림(UNKNOWN · NO DATA)은 60×60 쯤이라 제 크기로 찍으면 창 틀을 위아래로 덮는다 — 얼굴 칸에 맞춰 줄여 그린다(사용자 보고 mo-21).
+        else if (host.UiFor(TalkFaceFallbackObs)?.FrameAt(0, tick) is { W: > 0 } none) host.BlitScaled(none, x + 4, y + 4, 48, 52);
 
         int ty = y + 8;
         foreach (string text in WrapText(line, TalkBubbleW - 64, 11f))

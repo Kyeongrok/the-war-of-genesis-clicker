@@ -143,9 +143,21 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         OpenStatusFor(chr);
     }
 
+    /// <summary>
+    /// Esc(패드 B) — 고르기 목록(장비 · 장착 어빌리티)이 떠 있으면 그것만 닫고, 아니면 Status 창을 닫는다. 전에는 창만 닫히고 목록은 남아
+    /// 다시 열면 목록이 그대로 떠 있었다(사용자 보고 st-13).
+    /// </summary>
+    internal void EscapeStatus()
+    {
+        if (_popup != null) { _popup = null; return; }
+        host._statusUnit = -1;
+        _statusTip = null;
+    }
+
     /// <summary>임시 유닛으로 연 창이 닫혔으면 바뀐 자료(어빌리티 레벨·장비)를 파티에 되돌려 적는다 — 매 틀 부른다.</summary>
     internal void SyncVirtualStatus()
     {
+        if (host._statusUnit < 0) _popup = null;   // 어느 길로 닫혔든(Status 키 · 빈 곳 누름) 고르기 목록은 창과 함께 닫힌다(st-13)
         // 전투 밖(모세스·필드)에서 여는 스테이터스가 <b>지난 전투에 남은 유닛</b>이면 그 유닛 자료만 바뀌고 파티 자료(_party)에는 안 적혔다 —
         // 파티 자료는 전투가 끝날 때만 유닛에서 옮겨 적기 때문이다. 그래서 유진의 LP증가를 Lv10 까지 올려도 필드에 나갔다 오거나
         // 다음 전투를 시작하면 되돌아갔다(사용자 보고). 전투 밖에서는 열려 있는 동안 파티 자료에도 곧바로 적는다.
@@ -673,6 +685,8 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         int max = Math.Max(0, count - rows);
         int thumbY = y + 16 + (max == 0 ? 0 : (h - 48) * top / max);
         host.DrawUi(ScrollObs, 6, 0, x, thumbY, GameWindow.UiBlend.Alpha, loop: false);
+        // 굴릴 것이 없는 목록의 막대는 누르는 자리로 안 친다 — 패드 커서가 빈 목록의 막대에 들어가 헤맬 일이 없다(사용자 보고 st-12).
+        if (max == 0) return;
         AddHit(x, y, 16, 16, () => setTop(Math.Max(0, top - 1)));
         AddHit(x, y + h - 16, 16, 16, () => setTop(Math.Min(max, top + 1)));
         AddHit(x, y + 16, 16, thumbY - y - 16, () => setTop(Math.Max(0, top - rows)));
@@ -921,16 +935,39 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// </summary>
     internal void DrawDescriptionTip(string text, int mx, int my, int areaX, int areaY, int areaW, int areaH)
     {
-        var lines = text.Replace("$N", "$n").Replace("$p", "$n").Replace("$P", "$n").Split("$n");
+        // 네모는 보이는 화면 안으로 좁힌다 — 창(Status)이 화면보다 크면 설명 창이 화면 밖으로 잘렸다(사용자 보고 st-11).
+        int right = Math.Min(areaX + areaW, host._camX + host.ViewWidth), bottom = Math.Min(areaY + areaH, host._camY + host.ViewHeight);
+        areaX = Math.Max(areaX, host._camX);
+        areaY = Math.Max(areaY, host._camY);
+        areaW = right - areaX;
+        areaH = bottom - areaY;
+        // 네모보다 긴 줄은 낱말 사이에서 접는다 — 원본 글은 640 화면에 맞춰 줄을 바꿔 두었지만, 뒤에 붙이는 효과 · 범위 글은 한 줄이 길다.
+        int maxLine = Math.Max(120, areaW - 2 - 56);
+        var lines = new List<string>();
+        foreach (string whole in text.Replace("$N", "$n").Replace("$p", "$n").Replace("$P", "$n").Split("$n"))
+        {
+            string rest = whole;
+            while (host.GetText(rest, StatusWhite, StatusFont).W > maxLine)
+            {
+                // 들어가는 가장 긴 앞부분 — 빈칸에서 끊고, 빈칸이 없으면 글자에서 끊는다.
+                int cut = rest.Length - 1;
+                while (cut > 1 && host.GetText(rest[..cut], StatusWhite, StatusFont).W > maxLine) cut--;
+                int space = rest.LastIndexOf(' ', cut - 1, cut);
+                if (space > 0) cut = space;
+                lines.Add(rest[..cut].TrimEnd());
+                rest = rest[cut..].TrimStart();
+            }
+            lines.Add(rest);
+        }
         int tw = 0;
         const int lh = 16;
         foreach (string line in lines) tw = Math.Max(tw, host.GetText(line, StatusWhite, StatusFont).W);
-        int th = lh * lines.Length;
+        int th = lh * lines.Count;
         int w = tw + 56, h = th + 56;
         int x = Math.Clamp(mx + 16, areaX + 1, Math.Max(areaX + 1, areaX + areaW - 1 - w));
         int y = Math.Clamp(my + 16, areaY + 1, Math.Max(areaY + 1, areaY + areaH - 1 - h));
         host.DrawGameFrame(x, y, w, h);
-        for (int i = 0; i < lines.Length; i++)
+        for (int i = 0; i < lines.Count; i++)
         {
             var (_, lw, _) = host.GetText(lines[i], StatusWhite, StatusFont);
             host.DrawText(lines[i], x + (w - lw) / 2, y + (h - th) / 2 + i * lh, StatusWhite, StatusFont);
@@ -946,7 +983,11 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
 
     internal static bool ShiftHeld => (Native.Win32.GetKeyState(0x10) & 0x8000) != 0 || GamePad.ShiftHeld;
 
-    internal void AddHit(int x, int y, int w, int h, Action click) => _statusHits.Add((x, y, w, h, click));
+    /// <summary>
+    /// 누르는 자리를 더한다 — 넓이가 없는 칸(손잡이가 끝에 붙었을 때 막대의 빈 곳)은 안 넣는다. 넣으면 패드 커서가 그 「가운데」(실은 손잡이 위,
+    /// 어느 칸도 아닌 곳)로 가서, 다음 방향을 눌러도 가장 가까운 자리가 다시 거기라 못 빠져나왔다(사용자 보고 st-12).
+    /// </summary>
+    internal void AddHit(int x, int y, int w, int h, Action click) { if (w > 0 && h > 0) _statusHits.Add((x, y, w, h, click)); }
 
     /// <summary>
     /// 장비·장착 어빌리티 고르기 목록 — 게임 공통 틀(제목줄 있음, 0x101b5fec + 장식 2), 1열 · 보이는 줄 <see cref="_popupRows"/> · 오른쪽 스크롤 막대.

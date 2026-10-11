@@ -92,12 +92,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal (int X, int Y, int H) SystemMenuRect()
     {
         int h = SystemPad * 2 + MenuItems.Length * SystemRowH;
-        // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 640×480 틀의 <b>(100,100)</b> 에
-        // 제목줄부터 선다 — 제목(창 y−22)이 y 100 에 오게 둔다(감사 F16). 전투 링 메뉴는 전처럼 가운데.
+        // 연대표·모세스의 System Menu(0x10102ba0 → 0x10046410(…, 0x44c, 창, 100, 100, "System Menu", …))는 원본에서 640×480 틀의 (100,100) 에
+        // 섰다(감사 F16) — 왼쪽 위로 치우쳐 보여 틀 가운데로 옮겼다(사용자 요청 menu-47). 제목줄(창 y−22)까지 넣어 가운데를 잡는다.
         if (host.EpisodesScr._episodesOpen || host.Mos._mosesOpen)
         {
             var (ox, oy) = host.Mos.MosesOrigin();
-            return (ox + 100, oy + 100 + 22, h);
+            return (ox + (MosesScene.MosesW - SystemW) / 2, oy + (MosesScene.MosesH - h - 22) / 2 + 22, h);
         }
         return (host._camX + (host.ViewWidth - SystemW) / 2, host._camY + (host.ViewHeight - h) / 2, h);
     }

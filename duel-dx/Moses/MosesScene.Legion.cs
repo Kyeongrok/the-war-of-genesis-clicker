@@ -133,7 +133,9 @@ internal sealed unsafe partial class MosesScene
         if (OnStylePartyArrow(x, y)) return true;
         var party = StylePartyPage();
         for (int i = 0; i < party.Count && i < 5; i++)
-            if (x >= 70 * i + 48 - 32 && x < 70 * i + 48 + 32 && y >= 330 - 10 && y < 330 + 70)
+            // 초상화 단추는 (70i+48, 330) 이 왼위인 64×130 칸이다 — 전에는 그 점을 가운데로 보고 32 왼쪽 · 10 위를 받아, 단추 오른쪽 절반을 누르면
+            // 옆 사람이 골라지고 패드 테두리도 어긋나 있었다(사용자 보고 mo-19).
+            if (x >= 70 * i + 48 && x < 70 * i + 48 + 64 && y >= 330 && y < 330 + 130)
             {
                 _legionUnit = party[i];
                 host.Play(MosesClickSound);

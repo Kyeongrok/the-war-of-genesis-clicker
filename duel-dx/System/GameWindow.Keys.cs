@@ -132,7 +132,11 @@ internal sealed unsafe partial class GameWindow
     internal readonly List<(int Chapter, int Place)> _replayItems = [];
     /// <summary>설정 > 해상도 — 자동, 100·150·200·300·400 %.</summary>
     internal const int MenuZoomAuto = 1010;
-    internal static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400];
+    internal static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400, 500, 600, 800];
+
+    /// <summary>전투 배율 고르기(사용자 요청 menu-52) — 첫 칸 −1 은 「배율과 같게」, 나머지는 %.</summary>
+    internal const int MenuBattleZoom = 1180;
+    internal static readonly int[] BattleZoomChoices = [-1, 100, 150, 200, 300, 400, 500, 600, 800];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     internal const int MenuResBase = 1020;
     /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
@@ -202,7 +206,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -441,7 +445,7 @@ internal sealed unsafe partial class GameWindow
                 Toast($"해상도: {_viewW}×{_viewH}");
                 break;
             }
-            case >= MenuZoomAuto and < MenuZoomAuto + 6:
+            case >= MenuZoomAuto and < MenuZoomAuto + 9:   // ZoomChoices 아홉 — 해상도 차례(MenuResBase 1020) 앞까지
             {
                 _zoomPercent = ZoomChoices[id - MenuZoomAuto];
                 for (int i = 0; i < ZoomChoices.Length; i++)
@@ -451,9 +455,18 @@ internal sealed unsafe partial class GameWindow
                 Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");
                 break;
             }
+            case >= MenuBattleZoom and < MenuBattleZoom + 9:
+            {
+                _battleZoomPercent = BattleZoomChoices[id - MenuBattleZoom];
+                SaveSettings();
+                ApplyZoom();
+                Toast(_battleZoomPercent < 0 ? "전투 배율: 배율과 같게" : $"전투 배율: {_battleZoomPercent}%");
+                break;
+            }
             case MenuResetView:
             {
                 var first = new UserSettings();
+                _battleZoomPercent = first.BattleZoomPercent;
                 (_viewW, _viewH, _zoomPercent) = (first.ViewW, first.ViewH, first.ZoomPercent);
                 SaveSettings();
                 ApplyZoom(force: true);

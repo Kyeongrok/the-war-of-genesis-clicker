@@ -54,6 +54,24 @@ internal sealed unsafe partial class MosesScene
     internal static readonly (int X, int Y, int W, int H)[] StyleFamilyCells =
         [(70, 107, 79, 71), (107, 70, 71, 78), (184, 70, 70, 78), (213, 107, 78, 71)];
 
+    /// <summary>
+    /// 그 자리의 계열 단추 차례(없으면 −1) — 부채꼴 조각들이라 네모 칸이 서로 겹친다(타키리온 · 포스트럴은 서로의 가운데까지 덮는다).
+    /// 겹친 데서는 <b>가운데가 더 가까운 칸</b>이 받는다 — 전에는 앞 칸이 먼저 받아 포스트럴 가운데를 눌러도 타키리온이 골라졌고,
+    /// 패드 커서도 포스트럴로 못 넘어갔다(사용자 보고 mo-20).
+    /// </summary>
+    internal static int StyleFamilyAt(int x, int y, int count)
+    {
+        int best = -1, bestFar = int.MaxValue;
+        for (int i = 0; i < count && i < StyleFamilyCells.Length; i++)
+        {
+            var (fx, fy, fw, fh) = StyleFamilyCells[i];
+            if (x < fx || x >= fx + fw || y < fy || y >= fy + fh) continue;
+            int ax = x - (fx + fw / 2), ay = y - (fy + fh / 2), far = ax * ax + ay * ay;
+            if (far < bestFar) { bestFar = far; best = i; }
+        }
+        return best;
+    }
+
     /// <summary>전직 화면에서 고른 인물의 <b>Chr 번호</b> — 전투 판의 자리 번호가 아니다. 파티원은 전투에 안 서 있어도 여기 나온다.</summary>
     internal int _styleUnit;
 
@@ -177,7 +195,9 @@ internal sealed unsafe partial class MosesScene
         if (OnStylePartyArrow(x, y)) return true;
         var party = StylePartyPage();
         for (int i = 0; i < party.Count && i < 5; i++)
-            if (x >= 70 * i + 48 - 32 && x < 70 * i + 48 + 32 && y >= 330 - 10 && y < 330 + 70)
+            // 초상화 단추는 (70i+48, 330) 이 왼위인 64×130 칸이다 — 전에는 그 점을 가운데로 보고 32 왼쪽 · 10 위를 받아, 단추 오른쪽 절반을 누르면
+            // 옆 사람이 골라지고 패드 테두리도 어긋나 있었다(사용자 보고 mo-19).
+            if (x >= 70 * i + 48 && x < 70 * i + 48 + 64 && y >= 330 && y < 330 + 130)
             {
                 _styleUnit = party[i];
                 _stylePick = StyleCurrentCell();
@@ -187,11 +207,9 @@ internal sealed unsafe partial class MosesScene
 
         // 계열 단추 넷 — 한 번 누르면 바로 확인창(0x10100c4e).
         var families = StyleFamilies();
-        for (int i = 0; i < families.Count && i < StyleFamilyCells.Length; i++)
+        if (StyleFamilyAt(x, y, families.Count) is >= 0 and var family)
         {
-            var (fx, fy, fw, fh) = StyleFamilyCells[i];
-            if (x < fx || x >= fx + fw || y < fy || y >= fy + fh) continue;
-            ushort target = families[i].Job;
+            ushort target = families[family].Job;
             string ftitle = host._db?.T(932) is { Length: > 0 } ft ? ft : "전직";
             // 계열 단추도 남은 EXP 가 있으면 931 본문이다(0x10100c76, ba-15).
             var fc = PartyData(_styleUnit);
@@ -429,13 +447,14 @@ internal sealed unsafe partial class MosesScene
 
         // 계열 단추 넷 — 1단계·레벨 30 일 때만 나온다(못 가는 동안은 아예 없다).
         var familyCells = StyleFamilies();
+        int familyOver = StyleFamilyAt(mx, my, familyCells.Count);
         for (int i = 0; i < familyCells.Count && i < StyleFamilyCells.Length; i++)
         {
             // Obs 329 의 조각은 제 자리값이 (0,0)이고 크기가 누르는 칸과 같다(77×71 · 71×78 · 70×78 · 78×71) — <b>칸 자리에</b> 찍는다.
             // 예전에는 조각이 제 자리를 든다고 보고 화면 가운데(320,240)에 넷을 겹쳐 찍어, 30레벨이 넘어도 계열 단추가 안 보였다(사용자 보고).
             // 짝수 모션이 가만히 있는 판, 홀수 모션이 마우스를 올렸을 때 빛나는 판이다.
             var (fx, fy, fw, fh) = StyleFamilyCells[i];
-            bool over = mx >= fx && mx < fx + fw && my >= fy && my < fy + fh;
+            bool over = i == familyOver;
             host.DrawUi(StyleFamilyObs, 2 * i + (over ? 1 : 0), tick, ox + fx, oy + fy, GameWindow.UiBlend.Alpha);
             DrawCentredIcon(StyleIconObs, StyleIconMotion[Math.Clamp(familyCells[i].Family, 0, 4)], tick, ox + fx, oy + fy, fw, fh);
         }

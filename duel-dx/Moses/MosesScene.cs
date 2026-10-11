@@ -43,6 +43,12 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     internal const int MosesChapter = 10;
 
     /// <summary>주 화면 아이콘 — 칸 왼위 자리와 Obs 0291 모션, 설명 TXR, 누르면 가는 페이지.</summary>
+    /// <summary>
+    /// 도크 아이콘이 눌리는 칸 — 아이콘 자리 (X, Y) 에서 본 왼쪽 끝과 너비 · 높이. 그림(양옆 초승달 + 글자)이 X−8 … X+36 에 그려져서 그대로 맞춘다.
+    /// 전에는 X … X+46 이라 그림 왼쪽 8 은 안 눌리고 오른쪽 빈 데 10 이 눌렸고, 패드 테두리도 오른쪽으로 치우쳐 보였다(사용자 보고 mo-17).
+    /// </summary>
+    internal const int DockHitDx = -8, DockHitW = 44, DockHitH = 35;
+
     internal static readonly (int X, int Y, int Motion, ushort Text, string Name, int Page)[] MosesIcons =
     [
         (50, 400, 4, 485, "NAVIGATION", 0),
@@ -742,8 +748,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         for (int i = 0; i < MosesIcons.Length; i++)
         {
             var icon = MosesIcons[i];
-            int x = ox + icon.X, y = oy + icon.Y;
-            if (bx >= x && bx < x + 46 && by >= y && by < y + 33 && DockSlide(1000 + i, icon.X).Wipe >= 10) return i;
+            int x = ox + icon.X + DockHitDx, y = oy + icon.Y;
+            if (bx >= x && bx < x + DockHitW && by >= y && by < y + DockHitH && DockSlide(1000 + i, icon.X).Wipe >= 10) return i;
         }
         return -1;
     }
@@ -1130,8 +1136,15 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             DrawButtonUi(MosesCellObs, 0, ctick, x, y, wipe);
             if (wipe < 10) continue;
             if (i == _mosesHover)
-                foreach (var (dx, motion) in new[] { (0, 0), (10, 1), (168, 2) })
-                    host.DrawUi(MosesFrameObs, motion, ctick, x + dx, y, GameWindow.UiBlend.Alpha);
+            {
+                // 올린 칸의 어두운 바탕 — 도크 아이콘 틀과 같은 세 조각(왼 끝 · 가운데 · 오른 끝)이다. 가운데 조각은 도크 폭(24)짜리라 한 번만 찍으면
+                // 아이콘 뒤에만 네모로 남아 어색했다(사용자 보고 mo-23) — 칸 폭(10 … 168)을 채우게 이어 찍는다.
+                host.DrawUi(MosesFrameObs, 0, ctick, x, y, GameWindow.UiBlend.Alpha);
+                int midW = Math.Max(1, host.UiFor(MosesFrameObs)?.FrameAt(1, ctick)?.W ?? 24);
+                for (int dx = 10; dx < 168; dx += midW)
+                    host.DrawUi(MosesFrameObs, 1, ctick, x + Math.Min(dx, 168 - midW), y, GameWindow.UiBlend.Alpha);
+                host.DrawUi(MosesFrameObs, 2, ctick, x + 168, y, GameWindow.UiBlend.Alpha);
+            }
             host.DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, GameWindow.UiBlend.Alpha);
             if (name.Length > 0)
             {
@@ -1150,6 +1163,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     internal void DrawMosesTooltip()
     {
         if (_mosesFade > 0 || _mosesSystemSwitch != null) return;
+        if (host.Pad.Active && host.Pad.Connected && !GamePad.TipHeld) return;   // 패드로는 휴식 단추(기본 Y)를 누르고 있는 동안만(mo-22)
         List<string> lines;
         if (MosesDockShown && _mosesDockHover >= 0)
         {

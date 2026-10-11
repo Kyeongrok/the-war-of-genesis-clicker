@@ -56,6 +56,11 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 // 자동(0)에서 더 내리는 것도 없다 — 끝에서 돌지 않는다.
                 int zoomTop = Array.FindIndex(ZoomChoices, z => z / 100.0 > host.MaxUsableZoom + 1e-6);
                 if (zoomTop < 0) zoomTop = ZoomChoices.Length - 1;
+                // 전투 배율 — 첫 칸이 「배율과 같게」(기본), 그 뒤는 배율과 같은 값들이고 같은 데서 ▶ 가 멈춘다(사용자 요청 menu-52).
+                int battleZoom = Math.Max(0, Array.IndexOf(BattleZoomChoices, host._battleZoomPercent));
+                int battleTop = Array.FindIndex(BattleZoomChoices, z => z / 100.0 > host.MaxUsableZoom + 1e-6);
+                if (battleTop < 0) battleTop = BattleZoomChoices.Length - 1;
+                double battleReal = Math.Min(host._battleZoomPercent / 100.0, host.MaxUsableZoom);
                 return
                 [
                     new("해상도", res == 0 ? $"{host._viewW}×{host._viewH} (원본)" : $"{host._viewW}×{host._viewH}",
@@ -64,7 +69,10 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     new("배율", host._zoomPercent == 0 ? "자동(화면에 맞춤)"
                               : host._zoom < host._zoomPercent / 100.0 - 1e-6 ? $"{host._zoomPercent}% (창에 맞춰 {host._zoom * 100:0}%)" : $"{host._zoomPercent}%",
                         Step: d => host.OnMenuCommand(MenuZoomAuto + Math.Clamp(zoom + d, 0, zoomTop)), NoPrev: zoom == 0, NoNext: zoom >= zoomTop),
-                    new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11) · 설정은 Esc 메뉴의 SETTING"),
+                    new("전투 배율", host._battleZoomPercent < 0 ? "배율과 같게"
+                              : battleReal < host._battleZoomPercent / 100.0 - 1e-6 ? $"{host._battleZoomPercent}% (창에 맞춰 {battleReal * 100:0}%)" : $"{host._battleZoomPercent}%",
+                        Step: d => host.OnMenuCommand(MenuBattleZoom + Math.Clamp(battleZoom + d, 0, battleTop)), NoPrev: battleZoom == 0, NoNext: battleZoom >= battleTop),
+                    new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11)"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),
                     new("장면 번호 보이기", "", Toggle: () => host.OnMenuCommand(MenuSceneTag), On: host._showSceneTag, Note: "왼쪽 아래 Fld · Btl · Chp 번호"),

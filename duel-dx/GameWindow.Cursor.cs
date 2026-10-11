@@ -72,7 +72,9 @@ internal sealed unsafe partial class GameWindow
         int tick = (int)(_lastTime * TicksPerSecond);
         // 맵을 미는 가장자리에서는 그 방향의 화살표(Obs 0052 모션 0~7, 0x1006d6a0 — 감사4 C13). 전에는 커서가 그대로였다.
         int arrow = _battleLoaded && !FieldOpen && !Mos._mosesOpen && !TitleScr._titleOpen ? Btl.EdgeArrowMotion() : -1;
-        IntPtr want = arrow >= 0 && UiFor(52)?.FrameAt(arrow, tick) is { } af ? HardwareCursor(af)
+        // 패드를 잡고 있으면 커서를 숨긴다 — 선 자리는 패드 테두리(창)와 칸 커서(전투)가 보여 준다(menu-53).
+        IntPtr want = Pad.HideMouse && Pad.Connected ? IntPtr.Zero
+                    : arrow >= 0 && UiFor(52)?.FrameAt(arrow, tick) is { } af ? HardwareCursor(af)
                     : UiFor(obs)?.FrameAt(0, tick) is { } f ? HardwareCursor(f) : ArrowCursor;
         if (want == _hwCursor) return;
         _hwCursor = want;
