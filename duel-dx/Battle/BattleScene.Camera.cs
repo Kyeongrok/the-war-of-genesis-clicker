@@ -43,6 +43,7 @@ internal sealed unsafe partial class BattleScene
     internal void CenterOn(double x, double y, int speed = 0)
     {
         _camGoal = (x, y, speed, -1);
+        _edgeBlocked = true;
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"{host._lastTime:F2} camera centre ({x:F0},{y:F0}) from ({_camPosX:F0},{_camPos:F0})" + Environment.NewLine);
     }
@@ -55,6 +56,20 @@ internal sealed unsafe partial class BattleScene
         CenterOn(col * TileW + TileW / 2, host.CellCenterY(col, row));
     }
 
+    /// <summary>
+    /// 판 픽셀 (x, y) 를 <b>곧바로</b> 화면 가운데에 둔다(미끄러지지 않는다) — 바로 뒤에 마우스 커서를 그 자리에 놓아야 할 때 쓴다
+    /// (패드 배치: 칸을 고르러 들어갈 때). 미끄러지는 동안 커서를 놓으면 카메라가 마저 가면서 커서 밑의 칸이 달라진다.
+    /// </summary>
+    internal void CenterNow(double x, double y)
+    {
+        _camGoal = null;
+        _edgeBlocked = true;
+        _camPosX = _camTargetX = Math.Clamp(x - host.ViewWidth / 2.0, 0, CamMaxX);
+        _camPos = _camTarget = Math.Clamp(y - host.ViewHeight / 2.0, 0, host.CamMax);
+        host._camX = (int)Math.Round(_camPosX);
+        host._camY = (int)Math.Round(_camPos);
+    }
+
     /// <summary>유닛 발 자리를 한 번 가운데로(0x100eabe0 — 종류 0, 따라가기 아님).</summary>
     internal void CenterOnUnit(UnitState u)
     {
@@ -65,7 +80,24 @@ internal sealed unsafe partial class BattleScene
     /// <summary>걷는 유닛 따라가기(0x100eac40(8) — 틱당 최대 8px). 도착하면 <see cref="UpdateCamera"/> 가 풀어 준다(0x100eac60).</summary>
     internal void FollowUnit(int index, int speed = 8)
     {
-        if ((uint)index < host._units.Length) _camGoal = (0, 0, speed, index);
+        if ((uint)index < host._units.Length) { _camGoal = (0, 0, speed, index); _edgeBlocked = true; }
+    }
+
+    /// <summary>
+    /// 카메라 명령이 걸린 뒤 마우스가 움직일 때까지 가장자리 스크롤을 쉰다 — 커서가 가장자리 띠에 놓인 채(패드로 하면 흔하다)면
+    /// 틱마다 16~20px 씩 되밀어 「차례 인물을 가운데로」가 끝내 못 닿았다(사용자 보고 fa-53). 마우스를 움직이면 다시 민다.
+    /// </summary>
+    internal bool _edgeBlocked;
+
+    /// <summary>내 차례가 막 온 인물을 화면에 보여야 하나 — 명령이 다른 것에 덮였어도 안 보이면 다시 가운데로 보낸다(<see cref="UpdateCamera"/>).</summary>
+    internal bool _showTurnUnit;
+
+    /// <summary>그 유닛이 보이는 영역 안(가장자리 한 칸 안쪽)에 서 있나.</summary>
+    internal bool UnitInView(UnitState u)
+    {
+        var (fx, fy) = host.Btl.UnitFoot(u);
+        return fx >= host._camX + TileW && fx < host._camX + host.ViewWidth - TileW
+            && fy >= host._camY + GridTop + 2 * TileH && fy < host._camY + host.ViewHeight - TileH / 2;
     }
 
     /// <summary>
@@ -115,6 +147,16 @@ internal sealed unsafe partial class BattleScene
         bool aiming = _targetWork >= 0 || _abilityMenu;
         if (aiming && !_camSeenAim && (uint)_turn < host._units.Length) CenterOnUnit(host._units[_turn]);
         _camSeenAim = aiming;
+        // 차례가 온 내 인물이 화면 밖이면 가운데로 — 카메라가 쉬고 있을 때만 본다. 보이면 그만둔다.
+        if (_showTurnUnit && _camGoal == null)
+        {
+            if (!IsPlayerTurn) _showTurnUnit = false;
+            else if (!host._units[_turn].IsBusy)
+            {
+                if (UnitInView(host._units[_turn])) _showTurnUnit = false;
+                else CenterOnUnit(host._units[_turn]);
+            }
+        }
 
         // 틱마다(초당 30) 한 번씩 — 원본 이동은 틀 단위다.
         _camTickAcc += dt * TicksPerSecond;
@@ -192,7 +234,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>마우스가 가장자리 띠에 있어 맵을 미는 쪽(가로 ±20 · 세로 ±16, 안 밀면 0) — 스크롤과 화살표 커서가 같이 쓴다.</summary>
     internal (double X, double Y) EdgePush()
     {
-        if (!EdgeScrollAllowed) return (0, 0);
+        if (!EdgeScrollAllowed || _edgeBlocked) return (0, 0);
         const int edge = 24;
         // 마우스는 화면(보이는 영역) 자리로 본다 — 판 자리로 보면 카메라가 한 번 밀린 뒤 마우스가 띠 밖으로 나간 셈이 되어 멈췄다.
         var (mx, my) = _mouseView;
@@ -227,6 +269,7 @@ internal sealed unsafe partial class BattleScene
         _camTickAcc = 0;
         _camSeenRing = -1;
         _camSeenAim = false;
+        _edgeBlocked = _showTurnUnit = false;
         host._camX = host._camY = 0;
         _camPos = _camTarget = _camPosX = _camTargetX = 0;
     }

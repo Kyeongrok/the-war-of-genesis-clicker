@@ -20,15 +20,21 @@ using static DuelDx.GameWindow;
 /// </list>
 /// NEW GAME 은 원본에서 연대표(장면 7)를 거쳐 <c>Chp 0010</c>「코어헌터」 → 첫 전투 <c>Btl 0045</c> 로 간다 —
 /// 이 데모는 연대표가 없어 곧바로 첫 전투를 연다. CONTINUE 는 불러오기 슬롯(21칸), EXIT 는 정말로 창을 닫는다.
+/// <para>
+/// 리메이크는 NEW GAME 아래에 <b>LOAD GAME</b> 을 넣어 네 줄이다(사용자 요청 menu-30, 원본에 없다) — LOAD GAME 이 원본 CONTINUE 가 하던
+/// 불러오기 목록이고, CONTINUE 는 <b>가장 나중에 적은 세이브</b>를 바로 부른다. 글자가 배경 그림에 들어 있어 그림을 고쳐 쓴다(<see cref="AddLoadGameRow"/>).
+/// </para>
 /// </remarks>
 internal sealed unsafe class TitleScreen(GameWindow host)
 {
     internal const int TitleBackground = 46, TitleGlowObs = 370, TitleSparkObs = 374;
     internal const int TitleBgm = 21, TitleFirstBattle = 45;
 
-    /// <summary>단추 셋 — 자리(왼위)와 하는 일.</summary>
+    /// <summary>단추 넷 — 자리(왼위)와 하는 일. 원본 셋(394 · 418 · 450)에 LOAD GAME 을 끼우느라 아래 둘을 20픽셀 간격으로 다시 놓았다.</summary>
     internal static readonly (int X, int Y, string Name)[] TitleButtons =
-        [(235, 394, "NEW GAME"), (235, 418, "CONTINUE"), (235, 450, "EXIT")];
+        [(235, 394, "NEW GAME"), (235, 414, "LOAD GAME"), (235, 434, "CONTINUE"), (235, 454, "EXIT")];
+
+    internal const int ButtonLoad = 1, ButtonContinue = 2, ButtonExit = 3;
 
     internal const int TitleButtonW = 170, TitleButtonH = 14;
 
@@ -59,7 +65,9 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         host.EpisodesScr._episodePick = -1;
         // 게임오버(LeaveFinishedBattle)에서 오면 판이 아직 전투 맵 크기다 — 원본은 장면이 새로 선다(감사 F15, 모세스와 같은 까닭).
         if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) { host.ResizeBoard(TitleBoardCols, TitleBoardRows); host._battleLoaded = false; }
+        bool fresh = host.Mos._mosesBgId != TitleBackground;
         host.Mos.ShowMosesBackground(TitleBackground);
+        if (fresh && host.Mos._mosesBgId == TitleBackground && host.Mos._mosesBg is { Length: MosesScene.MosesW * MosesScene.MosesH } loaded) AddLoadGameRow(loaded);
         host.EnterSceneFade();
         // 타이틀 곡이 이미 돌고 있으면(불러오기 화면에서 돌아옴) 다시 걸지 않는다 — 원본 [0x101a99e4] 검사.
         if (host._musicId == TitleBgm) return;
@@ -70,6 +78,99 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         host.PlayMusicFile(TitleBgm, loop: false, gain: 0);
         host.FadeMusic(84, 15);
     }
+
+    /// <summary>
+    /// 배경 그림의 메뉴 글자를 네 줄로 고친다 — CONTINUE 를 16, EXIT 를 4픽셀 내리고 그 사이에 LOAD GAME 을 만든다.
+    /// 글자는 「둘레 바탕보다 밝은 만큼」으로 떠서(바탕은 글자 왼쪽·오른쪽 12픽셀의 줄 평균을 이은 값) 새 자리에 더한다.
+    /// LOAD GAME 의 O · A · GAME 은 그림의 글자를 그대로 옮기고, 그림에 없는 L · D 만 같은 굵기의 점 그림으로 그린다.
+    /// </summary>
+    internal static void AddLoadGameRow(uint[] bg)
+    {
+        const int W = MosesScene.MosesW, Margin = 12;
+        var src = (uint[])bg.Clone();
+
+        // 그 네모의 글자(바탕보다 밝은 만큼, 0xRRGGBB)를 뜬다. erase 면 글자 자리를 바탕으로 메운다.
+        uint[] Lift(int x0, int y0, int x1, int y1, bool erase)
+        {
+            var lifted = new uint[(x1 - x0) * (y1 - y0)];
+            Span<int> left = stackalloc int[3], right = stackalloc int[3];
+            for (int y = y0; y < y1; y++)
+            {
+                left.Clear(); right.Clear();
+                for (int i = 0; i < Margin; i++)
+                    for (int c = 0; c < 3; c++)
+                    {
+                        left[c] += (int)(src[y * W + x0 - Margin + i] >> (16 - 8 * c) & 0xFF);
+                        right[c] += (int)(src[y * W + x1 + i] >> (16 - 8 * c) & 0xFF);
+                    }
+                for (int x = x0; x < x1; x++)
+                {
+                    uint p = src[y * W + x], delta = 0, flat = 0xFF000000;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        int shift = 16 - 8 * c;
+                        int ground = (left[c] + (right[c] - left[c]) * (x - x0) / (x1 - x0)) / Margin;
+                        delta |= (uint)Math.Max(0, (int)(p >> shift & 0xFF) - ground) << shift;
+                        flat |= (uint)ground << shift;
+                    }
+                    lifted[(y - y0) * (x1 - x0) + (x - x0)] = delta;
+                    if (erase && Math.Max(delta >> 16, Math.Max(delta >> 8 & 0xFF, delta & 0xFF)) > 10) bg[y * W + x] = flat;
+                }
+            }
+            return lifted;
+        }
+
+        void Add(int x, int y, uint delta)
+        {
+            uint d = bg[y * W + x];
+            uint Ch(int shift) => Math.Min(255, (d >> shift & 0xFF) + (delta >> shift & 0xFF));
+            bg[y * W + x] = 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+        }
+
+        // 뜬 글자의 열 [from, to) 를 (x, y) 에 더한다.
+        void Put(uint[] lifted, int w, int x, int y, int from = 0, int to = int.MaxValue)
+        {
+            to = Math.Min(to, w);
+            for (int row = 0; row < lifted.Length / w; row++)
+                for (int col = from; col < to; col++) Add(x + col - from, y + row, lifted[row * w + col]);
+        }
+
+        // 점 그림 글자 — # 은 글자 몸, 그 오른쪽·아래로 번지는 옅은 빛(그림의 글자가 그렇다).
+        void Stamp(string[] rows, int x, int y)
+        {
+            bool Core(int cx, int cy) => cy >= 0 && cy < rows.Length && cx >= 0 && cx < rows[cy].Length && rows[cy][cx] == '#';
+            for (int cy = 0; cy < rows.Length + 2; cy++)
+                for (int cx = 0; cx < rows[0].Length + 2; cx++)
+                {
+                    if (Core(cx, cy)) Add(x + cx, y + cy, 0x807E86);
+                    else if (Core(cx - 1, cy) || Core(cx, cy - 1) || Core(cx - 1, cy - 1) || Core(cx - 2, cy - 2)) Add(x + cx, y + cy, 0x26262C);
+                }
+        }
+
+        var cont = Lift(276, 416, 364, 436, erase: true);    // CONTINUE
+        var exit = Lift(300, 449, 344, 469, erase: true);    // EXIT
+        var game = Lift(319, 392, 368, 412, erase: false);   // NEW GAME 의 GAME — 제자리에 둔다
+        Put(cont, 88, 276, 432);
+        Put(exit, 44, 300, 453);
+
+        Stamp(GlyphL, 266, 415);
+        Put(cont, 88, 276, 412, 14, 28);                     // O
+        Put(game, 49, 291, 412, 14, 25);                     // A
+        Stamp(GlyphD, 303, 415);
+        Put(game, 49, 323, 412);                             // GAME
+    }
+
+    private static readonly string[] GlyphL =
+    [
+        "##.......", "##.......", "##.......", "##.......", "##.......", "##.......", "##.......", "##.......", "##.......", "##.......",
+        "###......", ".########", "..#######",
+    ];
+
+    private static readonly string[] GlyphD =
+    [
+        "#######.....", "#########...", "##.....###..", "##......###.", "##.......##.", "##.......###", "##.......###", "##.......###",
+        "##.......##.", "##......###.", "##.....###..", "#########...", "#######.....",
+    ];
 
     internal int TitleButtonAt(int bx, int by)
     {
@@ -100,15 +201,25 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     {
         if (!_titleOpen) return false;
         if (key == Win32.VK_ESCAPE) host.Sys.CloseSystemWindow();
-        else if (key == Win32.VK_RETURN && !host.Sys.SystemOpen) PressTitleButton(0);
+        else if (host.Sys.SystemOpen) { }
+        // 위·아래 이동 키(기본 W · S, 방향키)로 단추를 옮기고 Enter · Space 로 누른다(사용자 요청 menu-33) — 짚은 단추가 없으면 NEW GAME.
+        else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
+        {
+            bool up = key == Win32.VK_UP || host.MoveActionFor(key) == KeyAction.MoveUp;
+            int n = TitleButtons.Length;
+            _titleHover = _titleHover < 0 ? (up ? n - 1 : 0) : (_titleHover + (up ? n - 1 : 1)) % n;
+        }
+        else if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressTitleButton(Math.Max(0, _titleHover));
         return true;
     }
 
     internal void PressTitleButton(int button)
     {
-        if (button is < 0 or > 2) return;         // 단추 밖을 누른 것
-        // 16틀 검게 + 음악 100 → 10% 뒤에 넘어간다(0x10105420). CONTINUE 는 곡이 이어진다. EXIT 도 페이드 뒤 끝난다.
-        host.LeaveScene(() => RunTitleButton(button), keepMusic: button == 1);
+        if (button < 0 || button >= TitleButtons.Length) return;   // 단추 밖을 누른 것
+        // CONTINUE — 부를 세이브가 없으면 화면을 떠나지 않는다.
+        if (button == ButtonContinue && host.SlotsScr.LatestSlot() < 0) { host.Toast("저장된 기록이 없습니다"); return; }
+        // 16틀 검게 + 음악 100 → 10% 뒤에 넘어간다(0x10105420). 불러오기 화면으로 갈 때는 곡이 이어진다. EXIT 도 페이드 뒤 끝난다.
+        host.LeaveScene(() => RunTitleButton(button), keepMusic: button == ButtonLoad);
     }
 
     internal void RunTitleButton(int button)
@@ -148,10 +259,15 @@ internal sealed unsafe class TitleScreen(GameWindow host)
                 if (host.EpisodesScr.Episodes().Count > 0) host.EpisodesScr.OpenEpisodes();
                 else { _titleOpen = false; if (!host.Sys.StartBattle(TitleFirstBattle)) OpenTitle(); }
                 break;
-            case 1:                                   // CONTINUE — 「Select your record」 화면(장면 9)
+            case ButtonLoad:                          // LOAD GAME — 「Select your record」 화면(장면 9, 원본의 CONTINUE)
                 host.RecordsScr.OpenRecords();
                 break;
-            case 2:                                   // EXIT — 원본도 여기서만 진짜로 끝난다
+            case ButtonContinue:                      // CONTINUE — 가장 나중에 적은 세이브(자동 저장 포함)를 바로 부른다
+                if (host.SlotsScr.LatestSlot() is var latest and >= 0 && host.Sys.LoadBattleFrom(SlotsScreen.SlotPath(latest))) break;
+                OpenTitle();                          // 못 불렀으면 타이틀로 돌아와 알린다(깨진 파일 문구 — SlotsScreen.LoadSlot 과 같다)
+                host.SlotsScr._notice = ("세이브 파일에 오류가 생겼거나 허가없이 변경되었습니다.\n로드할 수 없습니다.", host._lastTime + 120 / TicksPerSecond);
+                break;
+            case ButtonExit:                          // EXIT — 원본도 여기서만 진짜로 끝난다
                 host._running = false;
                 break;
         }

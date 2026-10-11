@@ -34,6 +34,110 @@ internal sealed unsafe partial class BattleScene
     /// <summary>명단에서 고른 사람(다음에 누르는 초록 칸에 선다).</summary>
     internal UnitState? _deployPick;
 
+    /// <summary>
+    /// 패드로 짚고 있는 자리(fa-43) — 십자키 위 · 아래로 옮기고 A 로 고른다. 명단 줄 다음에 단추 넷(배치취소 · 자동배치 · 군단사용 · 배치종료)이
+    /// 이어진다(fa-55) — 명단 끝에서 더 내려가면 단추로 간다.
+    /// </summary>
+    internal int _deployFocus;
+
+    /// <summary>명단 아래 단추 수 — 배치취소 · 자동배치 · 군단사용 · 배치종료.</summary>
+    internal const int DeployButtons = 4;
+
+    /// <summary>마지막으로 짚은 명단 줄 — 단추를 짚고 있을 때 「배치취소」 · 「군단사용」이 누구 것인지.</summary>
+    internal int _deployLastRow;
+
+    /// <summary>패드가 가리키는 명단 줄 — 단추를 짚고 있으면 마지막으로 짚은 줄.</summary>
+    internal int DeployRowFocus(int rosterCount) => Math.Clamp(_deployFocus < rosterCount ? _deployFocus : _deployLastRow, 0, Math.Max(0, rosterCount - 1));
+
+    /// <summary>패드로 인물을 고른 뒤 <b>세울 칸을 고르는 중</b>인지 — 십자키가 초록 칸 사이를 옮기고 A 가 세운다, B 는 명단으로.</summary>
+    internal bool _deployCellMode;
+
+    /// <summary>패드 — 명단 줄을 위 · 아래로. 끝에서 반대쪽으로 돈다.</summary>
+    internal void DeployFocusMove(int step)
+    {
+        var roster = DeployRoster();
+        int count = roster.Count + DeployButtons;
+        _deployFocus = ((_deployFocus + step) % count + count) % count;
+        if (_deployFocus >= roster.Count) return;
+        _deployLastRow = _deployFocus;
+        // 짚은 인물이 판에 서 있으면 카메라가 그 인물을 잡는다(사용자 요청 fa-54) — 명단만 봐서는 어디 선 누구인지 알 수 없었다.
+        if (roster[_deployFocus] is { OnField: true } shown) CenterOnUnit(shown);
+    }
+
+    /// <summary>
+    /// 패드 A — 명단에서 짚은 인물을 골라 칸 고르기로 들어간다. 커서를 둘 칸(이미 서 있으면 그 칸, 아니면 첫 빈 초록 칸)을 돌려준다.
+    /// 고정(Entry) 인물이면 알리고 null.
+    /// </summary>
+    internal (int Col, int Row)? DeployPadPick()
+    {
+        var roster = DeployRoster();
+        // 단추를 짚고 있으면 그 단추를 누른다.
+        if (_deployFocus >= roster.Count)
+        {
+            switch (_deployFocus - roster.Count)
+            {
+                case 0: DeployPadUnplace(); break;
+                case 1: AutoDeploy(); break;
+                case 2: DeployPadLegion(); break;
+                default: FinishDeploy(); break;
+            }
+            return null;
+        }
+        if (roster.Count == 0) return null;
+        var u = roster[_deployFocus];
+        if (!DeployMovable(u)) { host.Toast($"{host.UnitName(Array.IndexOf(host._units, u))} — 이 전투에 고정된 인물(Entry)입니다"); return null; }
+        _deployPick = u;
+        _deployCellMode = true;
+        (int Col, int Row)? cell = u.OnField ? (u.Col, u.Row) : null;
+        if (cell == null)
+            foreach (var (col, row, _) in _deploySpots) if (UnitOnCell(col, row) == null) { cell = (col, row); break; }
+        cell ??= _deploySpots.Count > 0 ? (_deploySpots[0].Col, _deploySpots[0].Row) : null;
+        // 커서를 둘 칸을 곧바로 화면 가운데에 — 부른 쪽이 바로 뒤에 커서를 그 칸에 놓는다(fa-54).
+        if (cell is { } at) CenterNow(at.Col * TileW + TileW / 2, host.CellCenterY(at.Col, at.Row));
+        return cell;
+    }
+
+    /// <summary>패드 B — 칸 고르기를 그만두고 명단으로.</summary>
+    internal void DeployPadCancel() { _deployPick = null; _deployCellMode = false; }
+
+    /// <summary>패드 X — 짚은 인물을 판에서 뺀다.</summary>
+    internal void DeployPadUnplace()
+    {
+        var roster = DeployRoster();
+        if (roster.Count == 0) return;
+        var u = roster[DeployRowFocus(roster.Count)];
+        if (!DeployMovable(u) || !u.OnField) { host.Toast("판에 선 인물을 짚고 누르세요"); return; }
+        Unplace(u);
+        if (_deployPick == u) DeployPadCancel();
+    }
+
+    /// <summary>패드 LB — 짚은 인물의 「군단사용」을 켜고 끈다. 고른 인물은 그대로 둔다.</summary>
+    internal void DeployPadLegion()
+    {
+        var roster = DeployRoster();
+        if (roster.Count == 0) return;
+        var was = _deployPick;
+        _deployPick = roster[DeployRowFocus(roster.Count)];
+        ToggleDeployLegion();
+        _deployPick = was;
+    }
+
+    /// <summary>칸에 세운 뒤(패드) — 칸 고르기를 끝내고 다음 미배치 인물을 짚는다. 다 세웠으면 「배치종료」 쪽을 알린다.</summary>
+    internal void DeployPadPlaced()
+    {
+        if (!_deployCellMode) return;
+        _deployCellMode = false;
+        var roster = DeployRoster();
+        int next = roster.FindIndex(u => DeployMovable(u) && !u.OnField);
+        if (next >= 0) _deployFocus = _deployLastRow = next;
+        else
+        {
+            // 다 세웠으면 「배치종료」 단추를 짚어 둔다 — 확인만 누르면 시작한다(fa-55).
+            _deployFocus = roster.Count + DeployButtons - 1;
+            host.Hint($"모두 세웠습니다 — {host.Pad.Name(PadAction.Confirm)}: 배치종료");
+        }
+    }
+
     internal const uint DeployLayer = 0x14C83C;          // 층 13 초록 (20,200,60)
     internal const int DeployW = 220, DeployRowH = 24, DeployTop = 34;
 
@@ -109,6 +213,7 @@ internal sealed unsafe partial class BattleScene
         }
         _deploySpots = scene.Placement!;
         _deployOpen = true;
+        _deployFocus = _deployLastRow = 0;
         _deployCamPending = true;   // 판을 연 뒤의 처음 자리 잡기가 덮어쓰므로 첫 프레임에 옮긴다(StepDeploy)
         host.Hint("캐릭터 배치 — 명단에서 고르고 초록 칸을 누르세요 (자동배치 · 배치종료, Enter: 배치종료)");
     }
@@ -216,7 +321,7 @@ internal sealed unsafe partial class BattleScene
         int spot = cellRow < 0 ? -1 : SpotIndex(col, cellRow);
         var occupant = host.UnitOrFoeAt(bx, by) is var hit and >= 0 ? host._units[hit] : cellRow >= 0 ? UnitOnCell(col, cellRow) : null;
         if (occupant != null && DeployMovable(occupant)) { _deployPick = _deployPick == occupant ? null : occupant; return true; }
-        if (spot >= 0 && occupant == null && _deployPick is { } pick) { PlaceOnSpot(pick, spot); _deployPick = null; return true; }
+        if (spot >= 0 && occupant == null && _deployPick is { } pick) { PlaceOnSpot(pick, spot); _deployPick = null; DeployPadPlaced(); return true; }
         if (spot < 0 && _deployPick != null) host.Toast("초록 칸에만 세울 수 있습니다");
         return true;
     }
@@ -239,55 +344,96 @@ internal sealed unsafe partial class BattleScene
         foreach (var (col, row, _) in _deploySpots) PaintCell(col, row, DeployLayer);
     }
 
+    /// <summary>배치된 · 미배치 · 고정의 색 — 한눈에 갈리게(사용자 요청 fa-43: 「배치」·「대기」 글만으로는 안 보인다).</summary>
+    private const uint PlacedColor = 0xFF70E090, UnplacedColor = 0xFFFFA060, FixedColor = 0xFFB4B4B4;
+
     internal void DrawDeployPanel()
     {
         if (!_deployOpen || host._db is not { } db) return;
         var roster = DeployRoster();
         var (x, y) = DeployPanel();
-        int h = DeployTop + roster.Count * DeployRowH + 108;
+        bool pad = host.Pad.Active && host.Pad.Connected;
+        int h = DeployTop + roster.Count * DeployRowH + 108 + (pad ? 18 : 0);
         host.FillRect(x, y, DeployW, h, StatusScreen.PanelBg);
         host.StrokeRect(x, y, DeployW, h, StatusScreen.BoxLine);
         host.FillRect(x, y, DeployW, 26, StatusScreen.HeadBg);
-        int placed = roster.Count(u => u.OnField);
-        host.DrawText($"캐릭터 배치  {placed}/{_deploySpots.Count + roster.Count(u => !DeployMovable(u))}", x + 10, y + 4, White);
+        int movable = roster.Count(DeployMovable), placed = roster.Count(u => DeployMovable(u) && u.OnField);
+        host.DrawText("캐릭터 배치", x + 10, y + 4, White);
+        string count = $"{placed}/{movable}";
+        var (_, cw, _) = host.GetText(count, White);
+        host.DrawText(count, x + DeployW - 12 - cw, y + 4, placed == movable ? PlacedColor : UnplacedColor);
+
         for (int i = 0; i < roster.Count; i++)
         {
             var u = roster[i];
             int ry = y + DeployTop + i * DeployRowH;
+            bool fixedHere = !DeployMovable(u);
             if (u == _deployPick) host.FillRect(x + 4, ry - 2, DeployW - 8, DeployRowH - 2, 0xFF2A4A8A);
+            // 패드가 짚은 줄 — 커서 테와 같은 색의 둥근 테(칸 고르기 중에는 고른 인물 줄에 그대로).
+            if (pad && i == _deployFocus && !_deployCellMode) host.Pad.StrokeFocus(x + 4, ry - 2, DeployW - 8, DeployRowH - 2);
             string name = u.Data is { } c ? db.T(c.NameId) : $"Chr {u.ChrCode}";
-            uint colour = !DeployMovable(u) ? 0xFFB4B4B4 : u.OnField ? White : 0xFF909090;
-            host.DrawText(name, x + 12, ry + 2, colour);
-            // 군단을 거느리고 서는 사람은 이름 뒤에 표시 — 「군단사용」을 끄면 사라진다.
+            uint colour = fixedHere ? FixedColor : u.OnField ? White : UnplacedColor;
+            // 줄 머리의 점 — 찬 점은 판에 섰다, 빈 점은 아직이다. 고정은 점 없이 이름만.
+            if (!fixedHere)
+            {
+                if (u.OnField) host.FillCircle(x + 14, ry + 9, 3, PlacedColor);
+                else host.StrokeCircle(x + 14, ry + 9, 3, UnplacedColor, 1);
+            }
+            host.DrawText(name, x + 24, ry + 2, colour);
             if (DeployHasLegion(u) && !_deployNoLegion.Contains(u))
             {
                 var (_, nw, _) = host.GetText(name, colour);
-                host.DrawText("군단", x + 16 + nw, ry + 3, 0xFF80D0FF, 11);
+                host.DrawText("군단", x + 28 + nw, ry + 3, 0xFF80D0FF, 11);
             }
-            string tag = !DeployMovable(u) ? "Entry" : u.OnField ? "배치" : "대기";
-            var (_, tw, _) = host.GetText(tag, colour);
-            host.DrawText(tag, x + DeployW - 12 - tw, ry + 2, !DeployMovable(u) ? 0xFFFFE070 : colour);
+            string tag = fixedHere ? "고정" : u.OnField ? "배치됨" : "미배치";
+            uint tagColor = fixedHere ? 0xFFFFE070 : u.OnField ? PlacedColor : UnplacedColor;
+            var (_, tw, _) = host.GetText(tag, tagColor);
+            host.DrawText(tag, x + DeployW - 12 - tw, ry + 2, tagColor);
         }
+
         int by = y + DeployTop + roster.Count * DeployRowH + 8;
-        host.FillRect(x + 8, by, DeployW / 2 - 12, 26, StatusScreen.HeadBg);
-        host.DrawText("배치취소", x + 28, by + 4, White);
-        host.FillRect(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, StatusScreen.HeadBg);
-        host.DrawText("자동배치", x + DeployW / 2 + 24, by + 4, White);
-        // 「군단사용」 — 고른 사람의 군단 켬/끔. 워드 7 이 꺼진 전투면 흐리게(0x100e257c).
-        host.FillRect(x + 8, by + 32, DeployW - 16, 26, StatusScreen.HeadBg);
-        string legionLabel = _deployPick is { } lp && DeployHasLegion(lp) ? (_deployNoLegion.Contains(lp) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
-        var (_, lw, _) = host.GetText(legionLabel, White);
-        host.DrawText(legionLabel, x + (DeployW - lw) / 2, by + 36, _deployLegionsAllowed ? White : 0xFF707070);
-        host.FillRect(x + 8, by + 64, DeployW - 16, 28, 0xFF2A6A3A);
-        host.StrokeRect(x + 8, by + 64, DeployW - 16, 28, StatusScreen.BoxLine);
-        var (_, fw, _) = host.GetText("배치종료 (Enter)", White);
-        host.DrawText("배치종료 (Enter)", x + (DeployW - fw) / 2, by + 69, White);
+        if (pad)
+        {
+            // 지금 할 일 한 줄 — 명단에서는 고르기, 칸 고르기에서는 세우기.
+            string step = _deployCellMode ? $"십자키로 초록 칸 → {host.Pad.Name(PadAction.Confirm)} 세우기 · {host.Pad.Name(PadAction.Cancel)} 돌아가기"
+                                          : $"십자키 위 · 아래로 인물 · 단추 → {host.Pad.Name(PadAction.Confirm)}";
+            host.DrawText(step, x + 10, by - 2, 0xFFD0E8D0, 11);
+            by += 18;
+        }
+        string Key(PadAction a) => pad ? $" {host.Pad.Name(a)}" : "";
+        Button(x + 8, by, DeployW / 2 - 12, 26, "배치취소" + Key(PadAction.Ring), StatusScreen.HeadBg, White);
+        Button(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, "자동배치" + Key(PadAction.Rest), StatusScreen.HeadBg, White);
+        // 「군단사용」 — 짚은(또는 고른) 사람의 군단 켬/끔. 워드 7 이 꺼진 전투면 흐리게(0x100e257c).
+        var who = _deployPick ?? (pad && roster.Count > 0 ? roster[DeployRowFocus(roster.Count)] : null);
+        string legionLabel = who != null && DeployHasLegion(who) ? (_deployNoLegion.Contains(who) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
+        Button(x + 8, by + 32, DeployW - 16, 26, legionLabel + Key(PadAction.PrevUnit), StatusScreen.HeadBg, _deployLegionsAllowed ? White : 0xFF707070);
+        Button(x + 8, by + 64, DeployW - 16, 28, pad ? "배치종료" + Key(PadAction.System) : "배치종료 (Enter)", 0xFF2A6A3A, White, border: true);
+        // 패드가 단추를 짚고 있으면 그 단추에 테.
+        if (pad && !_deployCellMode && _deployFocus >= roster.Count)
+        {
+            var (fx0, fy0, fw, fh) = (_deployFocus - roster.Count) switch
+            {
+                0 => (x + 8, by, DeployW / 2 - 12, 26),
+                1 => (x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26),
+                2 => (x + 8, by + 32, DeployW - 16, 26),
+                _ => (x + 8, by + 64, DeployW - 16, 28),
+            };
+            host.Pad.StrokeFocus(fx0, fy0, fw, fh);
+        }
 
         // 고른 사람은 발밑에 표시
         if (_deployPick is { OnField: true } pick)
         {
             var (fx, fy) = host.Btl.UnitFoot(pick);
-            host.StrokeRect(fx - TileW / 2, fy - TileH / 2, TileW, TileH, 0xFFFFE070);
+            host.StrokeRect(fx - TileW / 2, fy - TileH / 2, TileW, TileH, GamePad.FocusColor);
+        }
+
+        void Button(int bx, int by2, int bw, int bh, string text, uint bg, uint fg, bool border = false)
+        {
+            host.FillRect(bx, by2, bw, bh, bg);
+            if (border) host.StrokeRect(bx, by2, bw, bh, StatusScreen.BoxLine);
+            var (_, tw, th) = host.GetText(text, fg);
+            host.DrawText(text, bx + (bw - tw) / 2, by2 + (bh - th) / 2, fg);
         }
     }
 }

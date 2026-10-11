@@ -29,7 +29,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
-    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Exit }
+    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Mods, Exit }
 
     internal static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
     [
@@ -38,6 +38,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         (SystemItem.Load, 1, "LOAD"),
         (SystemItem.Save, 0, "SAVE"),
         (SystemItem.Volume, 2, "VOLUME"),
+        (SystemItem.Mods, -1, "MODE"),          // 원본에 없는 줄(사용자 요청 menu-34) — 모드 창을 연다. 글자 그림은 다른 줄에서 따와 만든다(DrawModeLabel)
         (SystemItem.Exit, 4, "EXIT GAME"),
     ];
 
@@ -108,6 +109,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             case SystemItem.Mission: _missionWindow = true; break;
             case SystemItem.Volume: _volumeWindow = true; break;
+            case SystemItem.Mods:
+                _systemMenuReturn = false;
+                (host.TuningScr._tuningOpen, host.TuningScr._tuningListOpen) = (true, false);
+                break;
             case SystemItem.Save:
                 // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
                 if (SaveBlockedReason is { } why) { host.Toast(why); _systemMenuReturn = false; _systemMenu = true; break; }
@@ -197,6 +202,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal bool CloseSystemWindow()
     {
         if (_confirm != null) { _confirm = null; ReturnToSystemMenu(); return true; }
+        // 타이틀 LOAD GAME 의 기록 화면에서는 목록만 닫지 않고 타이틀로 돌아간다 — 목록만 닫히면 빈 화면에 남아 다음 조작이 끊겼다(사용자 보고 menu-32).
+        if (host.SlotsScr.SlotsOpen && host.RecordsScr._recordsOpen) { host.RecordsScr.CloseRecords(); return true; }
         if (host.SlotsScr.SlotsOpen) { host.SlotsScr._slotsMode = -1; ReturnToSystemMenu(); return true; }
         if (_missionWindow || _volumeWindow) { _missionWindow = _volumeWindow = false; ReturnToSystemMenu(); return true; }
         if (_systemMenu) { _systemMenu = false; return true; }
@@ -232,11 +239,42 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             bool hover = !disabled && host._mouse.X >= rx && host._mouse.X < rx + SystemRowW && host._mouse.Y >= ry && host._mouse.Y < ry + SystemRowH - 3;
             if (hover) host.DrawUi(ListRowObs, 7, 0, rx, ry, GameWindow.UiBlend.Alpha, loop: false);
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            if (!host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false))
+            if (!(motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
                 host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
             if (disabled) host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
         }
+    }
+
+    /// <summary>「MODE」 줄 그림 — 처음 그릴 때 한 번 만든다(너비 81 · 높이 22, 기준점은 (2, 3)).</summary>
+    private uint[]? _modeLabel;
+    private const int ModeLabelW = 81, ModeLabelH = 22;
+
+    /// <summary>
+    /// 「MODE」 줄을 다른 줄과 같은 글씨로 그린다 — Obs 0894 에 그 그림이 없어 있는 그림에서 따온다:
+    /// 아이콘은 S.E 줄(모션 6)의 반짝이, 글자 M · O · E 는 VOLUME(모션 2), D 는 LOAD(모션 1)에서. 그림 크기가 다르면(다른 판 자료) false — 글자로 그린다.
+    /// </summary>
+    private bool DrawModeLabel(int x, int y)
+    {
+        if (_modeLabel == null)
+        {
+            if (host.UiFor(SystemObs) is not { } obs || obs.FrameAt(2, 0) is not { W: 98, H: 22 } volume
+                || obs.FrameAt(1, 0) is not { W: 76, H: 17 } load || obs.FrameAt(6, 0) is not { W: 53, H: 20 } se) return false;
+            var canvas = new uint[ModeLabelW * ModeLabelH];
+            void Copy(uint[] px, int w, int fromX, int fromY, int cols, int rows, int toX, int toY)
+            {
+                for (int r = 0; r < rows; r++)
+                    for (int c = 0; c < cols; c++) canvas[(toY + r) * ModeLabelW + toX + c] = px[(fromY + r) * w + fromX + c];
+            }
+            Copy(se.Px, se.W, 0, 0, 20, 20, 0, 1);              // 아이콘
+            Copy(volume.Px, volume.W, 75, 5, 13, 12, 34, 5);    // M
+            Copy(volume.Px, volume.W, 44, 5, 11, 12, 48, 5);    // O
+            Copy(load.Px, load.W, 65, 2, 11, 12, 60, 5);        // D
+            Copy(volume.Px, volume.W, 89, 5, 9, 12, 72, 5);     // E
+            _modeLabel = canvas;
+        }
+        host.BlitMasked(_modeLabel, ModeLabelW, ModeLabelH, x - 2, y - 3);
+        return true;
     }
 
     /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>

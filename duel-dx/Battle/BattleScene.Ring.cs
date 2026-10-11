@@ -145,6 +145,16 @@ internal sealed unsafe partial class BattleScene
         PlaySound(SoundOpen);
     }
 
+    /// <summary>차례인 내 인물이 걸어갈 칸(파랑)도, 기본공격이 닿는 적(빨강 안)도 없는가 — 쉬는 것 말고 할 일이 마땅찮은 때.</summary>
+    internal bool OnlyRestLeft(int index)
+    {
+        if (!IsPlayerTurn || index != _turn || host._units[index] is not { IsBusy: false } u || ComputeRange(u) is not { } range) return false;
+        int here = u.Row * host.Cols + u.Col;
+        for (int i = 0; i < range.Cost.Length; i++)
+            if (i != here && range.CanReach(i)) return false;
+        return !host._units.Any(t => t.Alive && t.OnField && SeesAsFoe(u, t) && range.Red[t.Row * host.Cols + t.Col]);
+    }
+
     /// <summary>링을 취소 움직임으로 닫는다(이미 닫히는 중이면 그대로).</summary>
     internal void CancelRing()
     {
@@ -165,6 +175,12 @@ internal sealed unsafe partial class BattleScene
             case RingPhase.Opening when n > 10:
             case RingPhase.Reopening when n > 8:
                 _ringPhase = RingPhase.Idle;
+                // 걸을 칸도 칠 적도 없으면 REST 를 미리 짚어 둔다(사용자 요청 cmd-4, 원본에 없다) — 확인만 누르면 쉰다. 패드면 커서도 그리로 간다(GamePad.RingByStick).
+                if (_ringHover < 0 && OnlyRestLeft(_ringUnit))
+                {
+                    _ringHover = Array.FindIndex(RingItems, r => r.Command == RingCommand.Rest);
+                    _ringHoverAt = host._lastTime;
+                }
                 break;
             case RingPhase.Picking when n > 8:
                 int unit = _ringUnit, item = _ringPicked;

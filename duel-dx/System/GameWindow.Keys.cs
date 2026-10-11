@@ -160,7 +160,11 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)tools, "도구(&T)");
         // 개발도 모드처럼 누르면 곧바로 창이 뜬다 — 어빌리티 반영 · 챕터 고르기 · 편집기 열기와 폴더들은 그 창 안에(사용자 요청, DevScreen).
-        Win32.AppendMenuW(bar, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)");
+        // 개발 — 개발 창과 타이밍 어택 수정 창(사용자 요청 fg-32).
+        IntPtr dev = Win32.CreatePopupMenu();
+        Win32.AppendMenuW(dev, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)...");
+        Win32.AppendMenuW(dev, Win32.MF_STRING, TimedHitEditScreen.MenuTimedEdit, "타이밍 어택 수정(&T)...");
+        Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
         Win32.AppendMenuW(bar, Win32.MF_STRING, MenuResetView, "화면 비율 초기화(&V)");
         return bar;
     }
@@ -198,7 +202,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -228,6 +232,11 @@ internal sealed unsafe partial class GameWindow
     internal bool _skillMovies = UserSettings.Current.SkillMovies;
 
     internal const int MenuSkillMovies = 1170;
+
+    /// <summary>모드 > 실험 > 타이밍 공격 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
+    internal bool _timedHit = UserSettings.Current.TimedHit;
+
+    internal const int MenuTimedHit = 1172;
 
     /// <summary>개발 > 편집기 열기 — 설치판에는 편집기가 없다. 처음 누르면 받아서 연다(<see cref="EditorLauncher"/>).</summary>
     internal const int MenuEditor = 1161;
@@ -293,6 +302,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (Btl.OnDifficultyMenu(id)) return;
         if (id == DevScreen.MenuDev) { DevScr._open = !DevScr._open; return; }
+        if (id == TimedHitEditScreen.MenuTimedEdit) { TimedEditScr._open = !TimedEditScr._open; return; }
         if (id == SettingsScreen.MenuSettings) { if (SettingsScr._open) SettingsScr.Close(); else SettingsScr.Open(); return; }
         if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }
         switch (id)
@@ -309,6 +319,11 @@ internal sealed unsafe partial class GameWindow
                 _skillMovies = !_skillMovies;
                 Toast(_skillMovies ? "영상이 있는 기술을 쓰면 영상이 나옵니다(클릭 · Esc 로 넘김)" : "기술 영상을 보지 않습니다");
                 if (_skillMovies) Cut.Prefetch(_units.Select(u => u.Data).OfType<WarOfGenesis.Assets.CharacterData>());
+                SaveSettings();
+                break;
+            case MenuTimedHit:
+                _timedHit = !_timedHit;
+                Toast(_timedHit ? "기본공격 앞에 띠가 뜹니다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬" : "타이밍 공격을 껐습니다");
                 SaveSettings();
                 break;
             case MenuSendStats:

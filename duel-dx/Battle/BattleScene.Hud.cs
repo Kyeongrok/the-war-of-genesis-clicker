@@ -33,7 +33,8 @@ internal sealed unsafe partial class BattleScene
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
         if (EventsBusy || _deployOpen) return;
 
-        int x = host._camX + host.ViewWidth - HudW - 10, y = host._camY + GridTop + 10;
+        // 세로는 왼쪽 위 상자 목록(DrawChestList 의 y − 3)과 윗선을 맞춘다(사용자 요청 fa-34) — 전에는 GridTop + 10 이라 조금 처져 보였다.
+        int x = host._camX + host.ViewWidth - HudW - 10, y = host._camY + (host._showStatusBar ? GridTop + 1 : 5);
         host.DrawGameFrame(x, y, HudW, HudH);
 
         // 원본 글꼴은 9~11픽셀이다 — 우리 기본 13픽셀이면 창 밖으로 나간다.
@@ -70,5 +71,26 @@ internal sealed unsafe partial class BattleScene
             Right($"Tp:{unit.Tp}", 134, 32);
             Right($"Soul:{unit.Soul}", 134, 44);
         }
+
+        // 겨누는 중인 어빌리티·아이템 이름 — 창 바로 아래 같은 폭의 칸에(사용자 요청 fa-48, 원본에 없다).
+        // 목록이 닫힌 뒤에는 잠깐 뜨는 안내 줄 말고는 무엇을 골랐는지 알 길이 없었다.
+        if (AimingName() is { } aiming)
+        {
+            const int nameH = 22;
+            int ny = y + HudH + 2;
+            host.DrawGameFrame(x, ny, HudW, nameH);
+            var (_, w, _) = host.GetText(aiming, HudYellow, size);
+            host.DrawText(aiming, x + Math.Max(4, (HudW - w) / 2), ny + 4, HudYellow, size);
+        }
+    }
+
+    /// <summary>대상을 고르는 중인 어빌리티(아이템이면 아이템) 이름 — 기본 공격이거나 고르는 중이 아니면 null.</summary>
+    internal string? AimingName()
+    {
+        if (_targetWork < 0 || _targetIsBasicAttack || _abilityMenu || !IsPlayerTurn || host._db is not { } db || Work(_targetWork) is not { } w) return null;
+        if (_targetItem != 0) return db.Items.GetValueOrDefault(_targetItem) is { } item ? db.T(item.NameId) : null;
+        if (!db.Abilities.TryGetValue(w.AbilityId, out var ab)) return null;
+        // 군단기(분류 2)는 목록에서도 레벨 없이 보인다.
+        return ab.Category == 2 ? db.T(ab.NameId) : $"{db.T(ab.NameId)} Lv{w.Level}";
     }
 }

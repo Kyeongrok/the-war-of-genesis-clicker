@@ -467,6 +467,30 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 불러온 판의 차례를 이어 받는 것 — 턴 수만 맞추고(저장 때 하나 빼 둔 것), 이벤트 타이머·자동 회복은 이미 그 차례에 돌았으니 다시 안 돌린다.
     /// 원본도 판을 읽으면 차례 시작 처리 없이 상태 22 로 선다(0x100619c0).
     /// </param>
+    /// <summary>차례를 기다리는(머리 위 ▼) 내 인물들 — 자리 번호 차례.</summary>
+    internal List<int> ReadyUnits() =>
+        [.. Enumerable.Range(0, host._units.Length).Where(i => host._units[i] is { Alive: true, OnField: true, HasTurn: true, LeaderIndex: < 0 } u && IsMine(u) && CanTakeTurn(u))];
+
+    /// <summary>
+    /// 패드 LB · RB — 차례를 기다리는 다른 내 인물(▼)에게 <b>지금 차례를 넘긴다</b>(사용자 요청 fa-46, 원본에 없다). 지금 인물이 아직 아무것도
+    /// 안 했을 때(원래 칸 · 바쁘지 않음)만 — 지금 인물의 차례는 남아 있어 다시 돌아온다. 넘길 인물이 없으면 알리고 false.
+    /// </summary>
+    internal bool CycleReadyUnit(int step)
+    {
+        var ready = ReadyUnits();
+        if (!IsPlayerTurn) { host.Toast("내 차례가 아닙니다"); return false; }
+        int at = ready.IndexOf(_turn);
+        var others = ready.Where(i => i != _turn).ToList();
+        if (others.Count == 0) { host.Toast("차례를 기다리는 다른 인물이 없습니다"); return false; }
+        var cur = host._units[_turn];
+        if (cur.IsBusy || cur.Col != cur.OriginCol || cur.Row != cur.OriginRow) { host.Toast("움직인 뒤에는 차례를 넘길 수 없습니다"); return false; }
+        int next = at < 0 ? others[0] : ready[((at + step) % ready.Count + ready.Count) % ready.Count];
+        if (next == _turn) next = others[0];
+        CancelStep(undoMove: true);   // 링 · 겨눔을 풀고
+        StartTurn(next);              // 그 인물의 차례로 — 부르는 목소리도 여기서
+        return true;
+    }
+
     internal void StartTurn(int index, bool resume = false)
     {
         _turn = index;
@@ -512,6 +536,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 내 차례가 오면 카메라가 그 인물을 가운데로 보낸다(사용자 요청 — 원본 상태 22 는 안 옮긴다). 판 끝이면 갈 수 있는 데까지만 간다.
             // 불러온 직후 세이브의 카메라를 되살린 차례는 그대로 둔다.
             if (!resume) CenterOnUnit(host._units[index]);
+            _showTurnUnit = true;   // 명령이 덮이거나 못 닿아 화면 밖에 남으면 다시 보낸다(fa-53)
         }
         else
         {
@@ -553,6 +578,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 부르는 순간에 카메라가 아직 그 인물에게 안 가 있으면 화면 밖 소리로 쳐져 −15 dB 까지 더 줄었다.
             host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u));
         }
+    }
+
+    /// <summary>패드 LB · RB 로 인물을 골랐을 때 부르는 목소리 — <see cref="PlayTurnCall"/> 과 같은 소리지만 TP · 자리 조건 없이 늘 낸다(fa-39).</summary>
+    internal void PlaySelectCall(UnitState u)
+    {
+        if (u.Data == null || host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is not { Length: > 0 } call) return;
+        host.Play(call[(_tick & 3) % call.Length], 1000 + Array.IndexOf(host._units, u));
     }
 
     internal void EndTurn()
@@ -797,12 +829,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             .Select(t => t.Index)];
 
     /// <summary>공격 커서를 다음(HP 순) 적으로 옮긴다 — 어빌리티를 겨누는 중이면 그 어빌리티 사거리로 센다.</summary>
-    internal void CycleAttackCursor()
+    /// <param name="step">+1 다음 적, −1 이전 적(패드 LB).</param>
+    internal void CycleAttackCursor(int step = 1)
     {
         var targets = !_targetIsBasicAttack && _targetWork >= 0 && Work(_targetWork) is { } aw
             ? AbilityTargets(aw) : AttackableEnemies();
         if (targets.Count == 0) return;
-        _attackCursor = targets[(targets.IndexOf(_attackCursor) + 1) % targets.Count];
+        _attackCursor = targets[((targets.IndexOf(_attackCursor) + step) % targets.Count + targets.Count) % targets.Count];
     }
 
     /// <summary>커서의 적을 친다.</summary>
@@ -904,6 +937,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         foreach (bool _ in WaitFollowersStopped(userIndex)) yield return true;   // 걷던 부하가 다 선 뒤(감사5 L-A)
         CommitMove(a);
         _buffedAllies.Clear();
+        _timedCritBy = null;
 
         if (targetIndex >= 0) (col, row) = (host._units[targetIndex].Col, host._units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
@@ -911,10 +945,41 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
         if (w.TintMode == 1) host._mapTintTarget = w.TintLevel;   // 기술을 쓰는 동안 맵이 물든다(0x10069efa, ba-20 P2)
 
+        // 타이밍 크리티컬(모드 > 실험) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
+        if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
+        {
+            foreach (bool _ in host.TimedHitFx.Prompt(a, target: targetIndex >= 0 ? host._units[targetIndex] : null)) yield return true;
+            if (host.TimedHitFx.Hits > 0) _timedCritBy = a;
+        }
+
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
-        bool chained = ScriptFor(w.Id) is { Actions.Length: > 0 };
+        bool timedChain = false;   // 타이밍 공격이 타격 동작을 여럿 이어 붙였나 — 그러면 「연」처럼 타격 동작마다 친다
+        if (_timedCritBy == a)
+        {
+            // 박자 둘을 다 맞췄으면 치는 동작을 「연」의 여러 번 치는 동작(13 — 타격 키 둘 · 14 — 셋)으로 바꿔 보통 피해로 여러 번 친다(사용자 요청).
+            // 횟수는 2 에서 시작해 연속 성공마다 하나씩 는다 — 13 · 14 를 이어 붙여 맞춘다(「연」이 레벨마다 그러듯), 하나 남으면 원래 동작 한 번.
+            // 그 동작이 없는 인물(총 따위)은 한 번 치고 피해를 횟수만큼 곱한다. 하나만 맞췄으면 한 번 치되 크리티컬이다(배율 0 = 크리티컬로 표시).
+            bool both = host.TimedHitFx.Hits >= 2;
+            int want = both ? host.TimedHitFx.AttackCount : 1;
+            bool twice = both && hitStep < actions.Length && actions[hitStep] is 8 or 9 && HitTimesFor(a, 13).Count >= 2;
+            if (twice)
+            {
+                bool triple = HitTimesFor(a, 14).Count >= 3;
+                var chain = new List<int>();
+                for (int left = want; left > 0;)
+                {
+                    if (triple && (left == 3 || left >= 5)) { chain.Add(14); left -= 3; }
+                    else if (left >= 2) { chain.Add(13); left -= 2; }
+                    else { chain.Add(actions[hitStep]); left--; }
+                }
+                actions = [.. actions[..hitStep], .. chain, .. actions[(hitStep + 1)..]];
+                timedChain = chain.Count > 1;
+            }
+            _timedPercent = !both ? 0 : twice ? 100 : Math.Max(100, host.TimedHitFx.Cfg.DamagePercent) * want / 2;
+        }
+        bool chained = timedChain || ScriptFor(w.Id) is { Actions.Length: > 0 };
         bool effectsDone = false, followersDone = false, objectsDone = false;
         // 범위 안의 적 물체(포탑·바리케이트)도 맞는다(0x100d9510 은 물체를 먼저 돌려준다) — 피해량은 기본공격과 같은 식(가설).
         // 유닛과 같이 <b>타마다</b> 맞는다 — 전에는 행동마다 한 번이라 「연」처럼 여러 번 치는 기술도 물체에는 한 타만 들었다(사용자 보고: Btl 0301 해골).
@@ -1368,6 +1433,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 행동 끝 상태 21(0x100681a0) — 처치가 없어도 <b>매 행동마다</b> 레벨업을 보고, 그다음 갈래 1 검사(0x10068270)를 한다.
         // 전멸 판정(상태 4, 0x1006ed10)은 그 뒤라 마지막 적을 쓰러뜨린 사람의 레벨업 창도 전투가 끝나기 전에 뜬다(ba-15 Q7).
         // 전에는 CheckOutcome 이 먼저 결과를 세워 UpdateTurn 이 레벨업 창 앞에서 돌아가 버렸다.
+        _timedCritBy = null;
         AutoHealAll();   // 상태 20 갈래 0(0x10067d70) — 행동이 끝날 때마다 8(자동 회복)을 전원에게(ba-20 C1)
         QueueLevelUps();
         _eventCheckDue |= 1 << 1;
@@ -1399,12 +1465,30 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (hp > 0 && cost.JobId != 37 && a.Hp > 0) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
     }
 
+    /// <summary>타이밍 크리티컬을 맞춘 인물 — 그 행동이 끝날 때까지 그 인물의 타격은 반드시 맞고 크리티컬이다(<see cref="TimedHit"/>).</summary>
+    internal UnitState? _timedCritBy;
+
+    /// <summary>그 타격의 피해 배율(%) — 두 번 치는 동작으로 바꿨으면 100(두 번 맞아 2배), 한 번 치면 200. 0 은 「크리티컬로」(박자 하나만 맞춤).</summary>
+    internal int _timedPercent = 200;
+
     internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (host._db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
         var (amount, result, crit) = host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+        bool timed = a == _timedCritBy && w.IsDamage;
+        if (timed)
+        {
+            // 빗나갔으면 맞을 때까지 다시 굴리고, 그래도 안 맞으면(명중률 0) 굴림 없이 바탕 피해로 맞힌다. 한 번만 치는 경우에는 피해를 2배로 —
+            // 굴림이 크리티컬이었으면 그 배율(Num 23)을 걷어 내고 건다(겹치지 않는다). 두 번 치는 동작이면 타격마다 굴린 그대로다.
+            for (int tries = 0; result == 3 && tries < 200; tries++)
+                (amount, result, crit) = host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+            if (result == 3)
+                (amount, result, crit) = ((host._db.N(3) - host._db.Rdp(CombatData(t)!, t.Hp, t.MaxHp)) * host._db.Atk(CombatData(a)!, host.TuningScr.AttackSoul(w, a.Soul), w.Power) / Math.Max(1, host._db.N(3)), 2, false);
+            if (result == 2 && _timedPercent == 0) { if (!crit) (amount, crit) = (amount * host._db.N(23) / 100, true); }
+            else if (result == 2 && _timedPercent != 100) (amount, crit) = ((crit ? amount * 100 / Math.Max(1, host._db.N(23)) : amount) * _timedPercent / 100, true);
+        }
 
         if (result == 1)
         {
@@ -1464,6 +1548,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
+        if (timed && amount <= 0) amount = 1;   // 타이밍 크리티컬은 「Miss」로 떨어지지 않는다
         if (result == 3 || amount <= 0)
         {
             ShowNumber(t, host._db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);

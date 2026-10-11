@@ -67,6 +67,35 @@ internal sealed unsafe partial class MosesScene
         foreach (var u in host._units) if (u.ChrCode == _styleUnit) u.Data = c;
     }
 
+    /// <summary>
+    /// 모세스에서 Status 키(패드는 그 동작에 묶인 단추) — 어느 페이지에서든 고른 인물의 스테이터스 창을 열고 닫는다. 열려 있는 동안 ←·→ 는
+    /// 파티의 앞·뒤 인물로 넘긴다(사용자 요청 st-10, 원본에 없다 — 전에는 전직 화면의 STATUS 단추를 눌러야만 열렸다). 처리했으면 true.
+    /// </summary>
+    internal bool OnStatusKey(int key, bool statusKey)
+    {
+        var party = StyleParty();
+        if (party.Count == 0) return false;
+        if (host._statusUnit >= 0)
+        {
+            if (statusKey) { host._statusUnit = -1; host.StatusScr._statusTip = null; return true; }
+            if (key is not (Native.Win32.VK_LEFT or Native.Win32.VK_RIGHT)) return false;
+            if (host.Pad.Active && !GamePad.ShiftHeld) return false;   // 패드의 십자키는 창 안 단추 사이를 옮긴다 — 어빌리티 단추를 누른 채일 때만 인물을 넘긴다
+            int at = Math.Max(0, party.IndexOf(_styleUnit));
+            _styleUnit = party[(at + (key == Native.Win32.VK_RIGHT ? 1 : party.Count - 1)) % party.Count];
+            host._statusUnit = -1;
+            host.StatusScr.SyncVirtualStatus();   // 보던 인물의 바뀐 것을 먼저 파티에 적는다
+            host.StatusScr._statusTip = null;
+            host.StatusScr.OpenStatusFor(_styleUnit);
+            host.Play(MosesClickSound);
+            return true;
+        }
+        if (!statusKey || host.Sys.SystemOpen || host.Sys.ChapterEventRunning) return false;
+        if (!party.Contains(_styleUnit)) _styleUnit = party[0];
+        host.StatusScr.OpenStatusFor(_styleUnit);
+        host.Play(MosesClickSound);
+        return true;
+    }
+
     internal CharacterData? PartyData(int chr) => host._units.FirstOrDefault(u => u.ChrCode == chr)?.Data ?? host._party.GetValueOrDefault(chr);
 
     /// <summary>미리보기 중인 형 칸(원본 <c>+0x2de0</c>) — 같은 칸을 다시 눌러야 확인창이 뜬다.</summary>

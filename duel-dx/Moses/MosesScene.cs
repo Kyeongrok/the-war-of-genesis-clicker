@@ -149,6 +149,22 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     }
 
     /// <summary>←·→ 키 — 왼쪽 단추(첫째)·오른쪽 단추(둘째, 없으면 첫째) 성계로. 조건은 단추와 같게 지킨다.</summary>
+    /// <summary>
+    /// 패드 LT · RT — 성도(행성 고르기)에서 이전 · 다음 항성계로 가기 전에 <b>확인창</b>을 띄운다(사용자 요청 mo-13 · mo-14 — 단추 하나로 바로 옮겨 가면
+    /// 100틱짜리 워프 연출이 실수로 나간다). 성도가 아니거나 옮길 항성계가 없으면 false.
+    /// </summary>
+    internal bool AskTurnSystem(int step)
+    {
+        if (!_mosesOpen || _mosesPage != 0 || _mosesStep != 1 || host.Sys.SystemOpen || _mosesSystemSwitch != null || _mosesFade > 0 || PlanetZooming) return false;
+        var others = MosesOtherSystems();
+        if (others.Count == 0) return false;
+        var target = others[step < 0 || others.Count == 1 ? 0 : 1];
+        string name = Text(target.NameText) is { Length: > 0 } n ? n : $"항성계 {target.No}";
+        host.Play(MosesClickSound);
+        host.Sys._confirm = ("Navigation", $"{name} 항성계로 이동할까요?", () => MosesSwitchSystem(target.No));
+        return true;
+    }
+
     internal void MosesTurnSystem(int step)
     {
         if (_mosesSystemSwitch != null) return;
@@ -256,6 +272,26 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
 
     /// <summary>도크 아이콘이 아직 들어오는 중인가 — 하나라도 다 안 나왔으면.</summary>
     internal bool DockSliding => MosesDockShown && Enumerable.Range(0, MosesIcons.Length).Any(i => DockSlide(1000 + i, MosesIcons[i].X).Wipe < 10);
+
+    /// <summary>
+    /// 화면 요소가 아직 나오는 중인가 — 페이드 · 항성계 옮기기 · 행성 줌, 들어오는 도크 아이콘, 미끄러져 들어오는 페이지 칸 · 뒤로 단추 · 성도 좌우 단추.
+    /// 패드 커서 테는 이것이 끝난 뒤에 그린다 — 아직 안 그려진 자리에 테만 먼저 떠 어색했다(사용자 보고 mo-16).
+    /// </summary>
+    internal bool UiSettling
+    {
+        get
+        {
+            if (_mosesFade > 0 || _mosesSystemSwitch != null || PlanetZooming || DockSliding) return true;
+            if (_mosesPage == -1) return false;
+            if (PageSlide(100, 46).Wipe < 10) return true;
+            if (_mosesPage == 0 && _mosesStep == 1)
+                return Enumerable.Range(0, MosesSystemButtons.Length).Any(i => PageSlide(127 + i, MosesSystemButtons[i].X).Wipe < 10);
+            var cells = MosesCellList();
+            for (int i = 0; i < cells.Count; i++)
+                if (PageSlide(10 + i, cells[i].X).Wipe < 10) return true;
+            return false;
+        }
+    }
 
     /// <summary>도크 아이콘이 들어오는 중이면 곧바로 다 들어온 것으로 한다(클릭으로 건너뛰기, mo-6). 건너뛰었으면 true.</summary>
     internal bool SkipDockSlide()

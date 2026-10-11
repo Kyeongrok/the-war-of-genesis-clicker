@@ -84,6 +84,25 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         return (host._camX + (host.ViewWidth - SlotsW) / 2, host._camY + (host.ViewHeight - SlotsH) / 2 + FrameTitleH / 2);
     }
 
+    /// <summary>가장 나중에 적은 세이브의 슬롯(손 저장 0~19 · 자동 저장 20~22) — 하나도 없으면 −1. 타이틀 CONTINUE 가 쓴다(menu-30).</summary>
+    internal int LatestSlot()
+    {
+        int best = -1;
+        var bestAt = DateTime.MinValue;
+        for (int slot = 0; slot < SaveSlots + AutoSlots; slot++)
+        {
+            try
+            {
+                string path = SlotPath(slot);
+                if (!File.Exists(path)) continue;
+                var at = File.GetLastWriteTimeUtc(path);
+                if (at > bestAt) (best, bestAt) = (slot, at);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 못 읽는 칸은 건너뛴다 */ }
+        }
+        return best;
+    }
+
     /// <summary>그 슬롯에 적힌 머리 — 없으면 null.</summary>
     internal SystemMenu.SaveState? SlotHead(int slot)
     {
@@ -110,7 +129,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         if (!SlotsOpen) return false;
         var (x, y) = SlotsOrigin();
 
-        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { _slotsMode = -1; host.Sys.ReturnToSystemMenu(); return true; }   // 닫기 X
+        if (bx >= x + 296 && bx < x + 314 && by >= y - 24 && by < y - 6) { host.Sys.CloseSystemWindow(); return true; }   // 닫기 X — 기록 화면이면 타이틀로
 
         // 스크롤 막대 — 위·아래 화살표만 다룬다(손잡이 끌기는 없다). 누르고 있으면 되풀이한다(UpdateSlotArrows).
         if (bx >= x + 304 && bx < x + 320 && by >= y && by < y + SlotsH)
@@ -266,9 +285,12 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         if (!host.DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, GameWindow.UiBlend.Alpha)) host.StrokeRect(x, y + SlotsH - 16, 16, 16, White);
 
         int track = SlotsH - 32, span = Math.Max(1, SlotRows - SlotsVisible);
-        int handleH = Math.Max(16, track * SlotsVisible / SlotRows);
+        // 손잡이 자리는 <b>그리는 그림의 높이</b>로 잰다 — 전에는 길 × 보이는 줄/전체 줄(≈100)로 쳐서, 그림(그보다 훨씬 짧다)이 맨 아래까지
+        // 못 내려가고 길 가운데쯤에서 멎었다(사용자 보고 menu-28). 그림이 없을 때만 그 값으로 네모를 그린다.
+        int fallbackH = Math.Max(16, track * SlotsVisible / SlotRows);
+        int handleH = host.UiFor(SlotScrollObs)?.FrameAt(6, tick) is { H: > 0 } frame ? frame.H : fallbackH;
         int hy = y + 16 + (track - handleH) * _slotsTop / span;
-        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, handleH, StatusScreen.BoxLine);
+        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, fallbackH, StatusScreen.BoxLine);
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>

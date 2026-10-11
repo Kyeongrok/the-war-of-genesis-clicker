@@ -944,7 +944,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         return at < 0 ? format : format[..at] + value + format[(at + 2)..];
     }
 
-    internal static bool ShiftHeld => (Native.Win32.GetKeyState(0x10) & 0x8000) != 0;
+    internal static bool ShiftHeld => (Native.Win32.GetKeyState(0x10) & 0x8000) != 0 || GamePad.ShiftHeld;
 
     internal void AddHit(int x, int y, int w, int h, Action click) => _statusHits.Add((x, y, w, h, click));
 

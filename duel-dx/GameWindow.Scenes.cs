@@ -116,6 +116,10 @@ internal sealed unsafe partial class GameWindow
     internal StatsConsentScreen ConsentScr => _consentScr ?? LazyInitializer.EnsureInitialized(ref _consentScr, () => new StatsConsentScreen(this));
     internal SettingsScreen? _settingsScr;
     internal SettingsScreen SettingsScr => _settingsScr ?? LazyInitializer.EnsureInitialized(ref _settingsScr, () => new SettingsScreen(this));
+    internal TimedHit? _timedHitFx;
+    internal TimedHit TimedHitFx => _timedHitFx ?? LazyInitializer.EnsureInitialized(ref _timedHitFx, () => new TimedHit(this));
+    internal TimedHitEditScreen? _timedEditScr;
+    internal TimedHitEditScreen TimedEditScr => _timedEditScr ?? LazyInitializer.EnsureInitialized(ref _timedEditScr, () => new TimedHitEditScreen(this));
     internal GamePad? _pad;
     internal GamePad Pad => _pad ?? LazyInitializer.EnsureInitialized(ref _pad, () => new GamePad(this));
     internal ReleaseNotesScreen? _notesScr;

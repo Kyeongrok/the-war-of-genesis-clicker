@@ -33,9 +33,9 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal const int TuningW = 600, TuningH = 432, TuningBoxX = 300, TuningBoxY = 142, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 스토리(대사 진행). 제목줄 바로 아래 한 줄(사용자 요청).</summary>
-    internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, 2) : 0;
+    internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
     internal const int TabY = 30, TabH = 24, TabW = 96;
-    internal static readonly string[] TabNames = ["일반", "스토리", "편의성"];
+    internal static readonly string[] TabNames = ["일반", "스토리", "편의성", "실험"];
 
     /// <summary>스토리 탭 — 「대사 사이 멈춤」 고르기 단추들의 자리(창 기준).</summary>
     internal const int PauseY = 100, PauseW = 90, PauseH = 26, PauseGap = 4, StoryCheckY = 150;
@@ -44,7 +44,11 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal const int TuningCheckY = 70, TuningCheckH = 32;
 
     /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
-    internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == 2 ?
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == 3 ?
+    [
+        // 실험 탭 — 아직 다듬는 중인 것(사용자 요청 fg-32). 기본은 모두 끔.
+        ("타이밍 공격", "기본공격 앞에 띠가 뜬다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬", MenuTimedHit, host._timedHit),
+    ] : _tuningTab == 2 ?
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
         ("체력바 보이기", "유닛 머리 위의 HP·TP 막대", MenuGauges, host._showGauges),
@@ -96,9 +100,9 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             }
             return true;
         }
-        if (_tuningTab == 2)
+        if (_tuningTab >= 2)
         {
-            // 편의성 탭 — 체크 줄뿐이다.
+            // 편의성 · 실험 탭 — 체크 줄뿐이다.
             _tuningListOpen = false;
             var rows = TuningChecks();
             int at = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
@@ -162,7 +166,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.DrawText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
         }
 
-        if (_tuningTab == 2) { DrawTuningFoot(x, y); return; }
+        if (_tuningTab >= 2) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         host.DrawText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
         host.FillRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);

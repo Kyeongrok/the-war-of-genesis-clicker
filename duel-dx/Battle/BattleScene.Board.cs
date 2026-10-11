@@ -80,7 +80,23 @@ internal sealed unsafe partial class BattleScene
         int col = unit.Col + dx, row = unit.Row + dy;
         if ((uint)col >= host.Cols || (uint)row >= host.Rows || ComputeRange(unit) is not { } range) return;
         int index = row * host.Cols + col;
-        if (!range.CanReach(index)) return;   // 이동 영역(차례 시작 자리 기준) 밖
+        if (!range.CanReach(index))
+        {
+            // 설 수는 없어도 지나갈 수 있는 칸(같은 편이 선 칸·열린 문 — 영역을 셀 때 밟고 지나가 Prev 가 남는다)이 막고 있으면
+            // 그 너머 첫 파란 칸까지 곧게 지나간다(사용자 요청 fa-49) — 클릭으로는 되는데 방향키·패드로는 한 칸도 못 나갔다.
+            var through = new List<(int Col, int Row)>();
+            for (int c = col, r = row, fromC = unit.Col, fromR = unit.Row; ; fromC = c, fromR = r, c += dx, r += dy)
+            {
+                if ((uint)c >= host.Cols || (uint)r >= host.Rows || Math.Abs(WalkHeightAt(c, r) - WalkHeightAt(fromC, fromR)) > 2) return;
+                through.Add((c, r));
+                int at = r * host.Cols + c;
+                if (range.CanReach(at)) break;
+                if (range.Prev[at] < 0) return;   // 벽·적·이동 영역 밖
+            }
+            foreach (var cell in through) unit.Path.Enqueue(cell);
+            FollowUnit(_turn);
+            return;
+        }
 
         unit.BeginStep(col, row, host.StepTicksBetween(unit.Col, unit.Row, col, row));
         FollowUnit(_turn);                    // 걷는 동안 따라가기(0x100eac40(8), 감사4 C2)
@@ -319,27 +335,46 @@ internal sealed unsafe partial class BattleScene
             }
             // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
             bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
-            if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY);
+            if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
         }
     }
 
     /// <summary>차례 표시 그림 — Obs 0163(0x100d1de0 → 0x100e5310(Obs 0xa3, 모션)).</summary>
     internal const int TurnMarkerObs = 163;
 
+    /// <summary>고른 인물의 차례 표시 색(금색).</summary>
+    static readonly (uint R, uint G, uint B) SelectedMarker = (0xFF, 0xE0, 0x40);
+
     /// <summary>
     /// TP 가 찬 유닛 머리 위의 역삼각형(0x1006da40 → 0x10074320 이 붙이는 표시 객체). 모션 = (AI 편 ? 2 : 0) + (군단 부하 ? 1 : 0):
     /// 0 사람 편 연보라 · 1 사람 편 부하(작은 것) · 2 AI 편 주황 · 3 AI 편 부하. 모션마다 15틱에 4픽셀 까딱인다.
     /// 그림이 없으면 예전처럼 코드로 연보라 삼각형을 그린다.
+    /// 지금 고른 인물(<paramref name="selected"/>)은 금색으로 물들인다 — 원본에는 없는 구분이다(사용자 요청: 차례가 여럿이면 누가 골라졌는지 안 보였다).
     /// </summary>
-    internal void DrawTurnMarker(UnitState unit, int x, int headY)
+    internal void DrawTurnMarker(UnitState unit, int x, int headY, bool selected = false)
     {
         // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
         bool human = unit.PlayerControlled || (unit.IsAlly && !host._allyAi);
         int motion = (human ? 0 : 2) + (unit.LeaderIndex >= 0 ? 1 : 0);
-        if (host.DrawUi(TurnMarkerObs, motion, (int)(host._lastTime * TicksPerSecond), x, headY, GameWindow.UiBlend.Alpha)) return;
+        int tick = (int)(host._lastTime * TicksPerSecond);
+        if (selected && host.UiFor(TurnMarkerObs)?.FrameAt(motion, tick, true, false) is { } f)
+        {
+            // 그림의 밝기(가장 밝은 채널)는 살리고 색만 바꾼다 — 어두운 테두리는 그대로 어둡게 남는다.
+            for (int yy = 0; yy < f.H; yy++)
+                for (int xx = 0; xx < f.W; xx++)
+                {
+                    uint c = f.Px[yy * f.W + xx];
+                    if ((c & 0xFF000000) == 0) continue;
+                    uint lum = Math.Max(c >> 16 & 0xFF, Math.Max(c >> 8 & 0xFF, c & 0xFF));
+                    host.SetPixel(x + f.X + xx, headY + f.Y + yy,
+                        0xFF000000 | SelectedMarker.R * lum / 255 << 16 | SelectedMarker.G * lum / 255 << 8 | SelectedMarker.B * lum / 255);
+                }
+            return;
+        }
+        if (host.DrawUi(TurnMarkerObs, motion, tick, x, headY, GameWindow.UiBlend.Alpha)) return;
         const int W = 13, H = 9, Gap = 4;
         uint alpha = (uint)(150 + 105 * (0.5 + 0.5 * Math.Sin(host._lastTime * Math.PI * 2 * 1.5)));
-        uint fill = alpha << 24 | 0xE0D8FF, edge = alpha << 24 | 0x6050A0;
+        uint fill = alpha << 24 | (selected ? 0xFFE040u : 0xE0D8FF), edge = alpha << 24 | (selected ? 0x806010u : 0x6050A0);
         int top = headY - Gap - H;
         for (int row = 0; row < H; row++)
         {

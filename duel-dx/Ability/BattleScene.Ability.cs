@@ -169,12 +169,12 @@ internal sealed unsafe partial class BattleScene
         if (w.TargetMode == 1)
         {
             _attackCursor = targets[0];
-            host.Hint($"{name} — {host.UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, Tab: 다른 적, 우클릭·Esc 취소)");
+            host.Hint($"{name} — {host.UnitName(_attackCursor)} 을(를) 노립니다 ({again}Enter: 쓰기, 방향키·Tab: 다른 적, 우클릭·Esc 취소)");
             return;
         }
         var t = host._units[targets[0]];
         _aimCell = (t.Col, t.Row);
-        host.Hint($"{name} — {host.UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 다른 칸 클릭, 우클릭·Esc 취소)");
+        host.Hint($"{name} — {host.UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 방향키·클릭: 다른 칸, 우클릭·Esc 취소)");
     }
 
     /// <summary>같은 단축키를 한 번 더 누르거나 Enter — 저절로 겨눈 대상에게 쓴다. 처리했으면 true.</summary>
@@ -246,7 +246,7 @@ internal sealed unsafe partial class BattleScene
         // 사거리 안의 적을 저절로 겨눈다 — 가까운 적, 그다음 약한 적. 적 하나짜리는 커서로, 칸 고르기는 그 적의 칸으로.
         AutoAimAbility(w, name);
         if (_attackCursor >= 0 || _aimCell != null) return;
-        host.Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (우클릭·Esc 취소)");
+        host.Hint($"{name} — 노란 칸 안의 대상을 클릭하세요 (방향키로 겨누고 Enter, 우클릭·Esc 취소)");
     }
 
     /// <summary>
@@ -273,6 +273,50 @@ internal sealed unsafe partial class BattleScene
         if (row < 0 || !CanAimAt(w, host._units[_turn], col, row)) return;
         _aimCell = (col, row);
         _attackCursor = -1;
+    }
+
+    /// <summary>방향을 누르고 있을 때 겨눈 자리를 다음에 한 번 더 옮길 때(<see cref="GameWindow._realTime"/>).</summary>
+    internal double _aimRepeatAt;
+
+    /// <summary>
+    /// 어빌리티를 겨누는 동안 방향키(패드는 십자키·왼쪽 스틱)로 겨눈 자리를 옮긴다 — 패드로는 저절로 겨눈 칸 말고 고를 길이 없었다
+    /// (사용자 요청 fa-27, 원본에 없다). 칸을 고르는 기술은 그 쪽으로 가장 가까운 겨눌 수 있는 칸으로, 적 하나를 겨누는 기술은
+    /// 그 쪽에 있는 가장 가까운 대상으로 간다. 그 쪽에 없으면 그대로 둔다. 겨누는 중이면 true.
+    /// </summary>
+    internal bool MoveAim(int key)
+    {
+        if (_targetWork < 0 || _turn < 0 || _abilityMenu || !IsPlayerTurn || Work(_targetWork) is not { } w) return false;
+        var (dx, dy) = key switch
+        {
+            Native.Win32.VK_LEFT => (-1, 0), Native.Win32.VK_RIGHT => (1, 0), Native.Win32.VK_UP => (0, -1), Native.Win32.VK_DOWN => (0, 1), _ => (0, 0),
+        };
+        if (dx == 0 && dy == 0) return false;
+        var user = host._units[_turn];
+        // 기본공격 대상 고르기도 같다 — 고른 적을 기준으로 그 쪽의 칠 수 있는 적으로 옮긴다(사용자 요청 fa-52). 전에는 Tab · LB · RB 로 차례대로만 돌았다.
+        if (_targetIsBasicAttack || (!w.SelfCentred && w.TargetMode == 1))
+        {
+            // 지금 겨눈 적에서 그 쪽으로 가장 가까운 대상 — 쪽으로 간 칸 수가 옆으로 벗어난 칸 수보다 큰 것을 먼저 보고,
+            // 그런 대상이 없으면 그 쪽으로 한 칸이라도 간 대상 가운데 옆으로 덜 벗어난 것으로 간다.
+            var from = _attackCursor >= 0 ? host._units[_attackCursor] : user;
+            int best = -1, bestFar = int.MaxValue;
+            foreach (int i in _targetIsBasicAttack ? AttackableEnemies() : AbilityTargets(w))
+            {
+                var t = host._units[i];
+                if (i == _attackCursor || (!_targetIsBasicAttack && !CanAimAt(w, user, t.Col, t.Row))) continue;
+                int along = (t.Col - from.Col) * dx + (t.Row - from.Row) * dy, aside = Math.Abs((t.Col - from.Col) * dy) + Math.Abs((t.Row - from.Row) * dx);
+                if (along <= 0) continue;
+                int far = aside > along ? 1000 + aside * 3 + along : along + aside;
+                if (far < bestFar) (best, bestFar) = (i, far);
+            }
+            if (best >= 0) { _attackCursor = best; _aimCell = null; }
+            return true;
+        }
+        if (w.SelfCentred) return true;   // 자기 자리에 쓰는 기술은 옮길 데가 없다
+        var (col, row) = _aimCell ?? (_attackCursor >= 0 ? (host._units[_attackCursor].Col, host._units[_attackCursor].Row) : (user.Col, user.Row));
+        // 못 겨누는 칸(사거리 밖 한가운데 · 대상이 있어야 하는 기술의 빈 칸)은 건너뛴다.
+        for (int c = col + dx, r = row + dy; c >= 0 && c < host.Cols && r >= 0 && r < host.Rows; c += dx, r += dy)
+            if (CanAimAt(w, user, c, r)) { _aimCell = (c, r); _attackCursor = -1; break; }
+        return true;
     }
 
     internal void DrawAbilityMenu()
@@ -306,8 +350,14 @@ internal sealed unsafe partial class BattleScene
             // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
             if (i == _abilityHover) host.DrawUi(SystemMenu.ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
             // 단축키 글자는 아이콘과 겹치지 않게 줄 오른쪽 끝에
-            string hotkey = HotkeyLabel(i);
-            if (hotkey.Length > 0) host.DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
+            // 패드를 잡고 있으면 단축키 열에 키 대신 「LT+A」 꼴의 패드 조합을 적는다(사용자 요청 fa-37).
+            string hotkey = host.Pad.Active ? host.Pad.AbilityChordLabel(i) : HotkeyLabel(i);
+            if (hotkey.Length == 1) host.DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
+            else if (hotkey.Length > 1)
+            {
+                var (_, hw, _) = host.GetText(hotkey, DimGray, 9);
+                host.DrawText(hotkey, rx + MenuRowW - 2 - hw, y + 7, i == _abilityHover ? White : DimGray, 9);
+            }
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
             if (host._db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {

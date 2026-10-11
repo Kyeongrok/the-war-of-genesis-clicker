@@ -683,6 +683,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 break;
             case Win32.WM_KEYDOWN:
                 // 키 반복(lParam 30번 비트)은 무시한다 — 누르고 있는 동안은 Update 가 알아서 이어 걷는다.
+                Pad.Active = false;   // 키보드를 잡았다
                 if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);
                 return IntPtr.Zero;
             case Win32.WM_KEYUP:
@@ -754,6 +755,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             {
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
+                if (Btl._mouseView != (bx - _camX, by - _camY)) Btl._edgeBlocked = false;   // 마우스가 정말 움직였으면 가장자리 스크롤을 다시 받는다
                 Btl._mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
                 Mos.UpdateMosesHover(bx, by);
                 ChaptersScr.UpdateChaptersHover(bx, by);
@@ -773,9 +775,22 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     // ── 입력 · 이동 ──────────────────────────────────────────────────────────
 
+    /// <summary>겨눈 자리 옮기기 — 방향을 누르고 있을 때 처음 기다리는 시간과 그 뒤 되풀이 간격(초).</summary>
+    private const double AimRepeatDelay = 0.3, AimRepeatEvery = 0.1;
+
+    /// <summary>걷기 키가 가리키는 쪽의 화살표 키 — 걷기에 다른 키를 묶어 두었어도 겨눈 자리는 같은 쪽으로 옮긴다. 걷기 키가 아니면 0.</summary>
+    private int ArrowOf(int key) => (MoveActionFor(key) ?? _keys.ActionFor(key)) switch
+    {
+        KeyAction.MoveUp => Win32.VK_UP, KeyAction.MoveDown => Win32.VK_DOWN, KeyAction.MoveLeft => Win32.VK_LEFT, KeyAction.MoveRight => Win32.VK_RIGHT, _ => 0,
+    };
+
+    /// <summary>지금 넘어온 Esc 가 패드 취소 단추인지 — <see cref="GamePad.Poll"/> 이 그 누름 동안만 켠다.</summary>
+    internal bool _padCancel;
+
     internal void OnKeyDown(int key)
     {
         if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
+        if (TimedHitFx.Running) { TimedHitFx.PressKey(key); return; }   // 타이밍 크리티컬 — 공격 키만 받는다
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
@@ -789,6 +804,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (NotesScr.Open) { NotesScr.OnKey(key); return; }
         if (ConsentScr.Open) { ConsentScr.OnKey(key); return; }
         if (SettingsScr._open) { SettingsScr.OnKey(key); return; }
+        if (TimedEditScr._open) { TimedEditScr.OnKey(key); return; }
         if (DevScr._open) { DevScr.OnKey(key); return; }
         if (StatsScr._open) { StatsScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
@@ -806,6 +822,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             return;
         }
         if (Btl.OnAbilityMenuKey(key)) return;
+        if (key is Win32.VK_RETURN or Win32.VK_SPACE && TrySkipEnemyAction()) return;   // 적이 행동하는 동안의 Enter(패드 확인) = 그 행동 건너뛰기(모드) — 전에는 클릭만 됐다
         if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
         // 전투가 끝나고 배너가 떠 있으면 아무 키나 누르면 — 이기고 이어지는 전투가 있으면 그 전투로(이벤트 행동 10),
         // 없거나 졌으면 모세스 화면으로 간다(mo-1).
@@ -813,6 +830,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 모세스 화면에서는 Esc 가 페이지를 닫고, 주 화면이면 모세스 시스템 메뉴를 연다(분석-모세스 13절).
         if (Mos._mosesOpen)
         {
+            if (Mos.OnStatusKey(key, _keys.ActionFor(key) == KeyAction.Status)) return;   // Status 키로 열고 닫는다(st-10)
             if (_statusUnit >= 0) { if (key == Win32.VK_ESCAPE) _statusUnit = -1; return; }   // 스테이터스 창은 Esc 로 닫는다
             // 성도에서는 ←·→ 로도 항성계를 옮긴다(좌우 단추와 같은 일).
             if (Mos._mosesPage == 0 && Mos._mosesStep == 1 && key is Win32.VK_LEFT or Win32.VK_RIGHT)
@@ -835,12 +853,16 @@ internal sealed unsafe partial class GameWindow : IDisposable
             // 취소할 것이 있으면 취소하고, 없으면 시스템 메뉴를 연다(menu-6). 전투에서는 내 유닛 조종 상태(원본 상태 22)일 때만 —
             // AI 차례·행동·이벤트·배치·레벨업·결과 중에는 취소로만 쓰인다(감사5 S1·S8). 필드는 편의로 열되 SAVE 는 꺼져 있다(S3).
             if (_statusUnit >= 0) _statusUnit = -1;
-            else if (Btl._ringUnit >= 0) Btl.CancelRing();
-            else if (!Btl.CancelStep(undoMove: true) && (FieldOpen || Sys.CanOpenBattleMenu)) Sys.OpenSystemMenu();
+            // 패드 취소 단추는 링을 닫으면서 걸음도 함께 물린다 — 다음 누름이 곧바로 어빌리티 목록이 되게(사용자 요청 fa-51).
+            else if (Btl._ringUnit >= 0) { Btl.CancelRing(); if (_padCancel) Btl.UndoMove(); }
+            else if (Btl.CancelStep(undoMove: true)) { }
+            // 패드 취소 단추는 전투에서 취소할 것이 없으면 메뉴 대신 어빌리티 목록을 연다 — 메뉴는 메뉴 단추가 따로 있다(사용자 요청 fa-50).
+            else if (_padCancel && !FieldOpen && Btl.IsPlayerTurn) Btl.RingShortcut(BattleScene.RingCommand.Ability);
+            else if (FieldOpen || Sys.CanOpenBattleMenu) Sys.OpenSystemMenu();
             return;
         }
         if (key == Win32.VK_RETURN && Btl._ringUnit >= 0 && Btl._ringPhase == BattleScene.RingPhase.Idle && Btl._ringHover >= 0) { Btl.PickRingItem(Btl._ringHover); return; }
-        if (_statusUnit >= 0) return;
+        if (_statusUnit >= 0) { if (_keys.ActionFor(key) == KeyAction.Status) _statusUnit = -1; return; }   // Status 키를 한 번 더 누르면 닫힌다
 
         // 대상 고르는 중: Enter·공격 키 = 커서의 적 치기, 다음 인물 키(Tab) = 다른 적
         // 기본공격뿐 아니라 적 하나를 겨누는 어빌리티도 같게 다룬다.
@@ -877,19 +899,31 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 if (Btl._ringUnit >= 0) Btl.RingShortcut(BattleScene.RingCommand.System);
                 else if (FieldOpen || Sys.CanOpenBattleMenu) Sys.OpenSystemMenu();   // Esc 와 같은 문(감사5 S1·S8)
                 break;
-            case KeyAction.NextUnit:
-                for (int i = 1; i <= _units.Length; i++)
-                {
-                    int next = (Math.Max(_selected, 0) + i) % _units.Length;
-                    if (_units[next].Alive && _units[next].IsAlly) { _selected = next; break; }
-                }
-                break;
+            case KeyAction.NextUnit: CycleSelected(1); break;
             case KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight:
+                // 어빌리티를 겨누는 중이면 걷는 대신 겨눈 자리를 옮긴다 — 누르고 있으면 Update 가 이어서 옮긴다(fa-27).
+                if (Btl._ringUnit < 0 && Btl.MoveAim(ArrowOf(key)))
+                {
+                    Btl._heldMoveKeys.Remove(key);
+                    Btl._heldMoveKeys.Add(key);
+                    Btl._aimRepeatAt = _realTime + AimRepeatDelay;
+                    break;
+                }
                 if (Btl._ringUnit >= 0 || Btl._abilityMenu || Btl._targetWork >= 0) break;   // 링·목록이 열려 있거나 대상을 고르는 중이면 걷지 않는다
                 Btl._heldMoveKeys.Remove(key);
                 Btl._heldMoveKeys.Add(key);   // 마지막에 누른 키가 맨 뒤 — 그 방향을 따른다
                 Btl.StepByKey(key);
                 break;
+        }
+    }
+
+    /// <summary>고른 인물을 살아 있는 다음(+1) · 이전(−1, 패드 LB) 아군으로 넘긴다 — 군단 부하(LeaderIndex ≥ 0)는 건너뛴다(사용자 요청 fa-40).</summary>
+    internal void CycleSelected(int step)
+    {
+        for (int i = 1; i <= _units.Length; i++)
+        {
+            int next = ((Math.Max(_selected, 0) + i * step) % _units.Length + _units.Length) % _units.Length;
+            if (_units[next].Alive && _units[next].IsAlly && _units[next].LeaderIndex < 0) { _selected = next; break; }
         }
     }
 
@@ -916,6 +950,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (NotesScr.OnClick(bx, by)) return;          // 릴리즈 노트(업데이트 뒤 처음 켰을 때)
         if (ConsentScr.OnClick(bx, by)) return;        // 「익명 통계를 보내도 될까요?」(처음 한 번)
         if (SettingsScr.OnClick(bx, by)) return;       // 설정 창
+        if (TimedEditScr.OnClick(bx, by)) return;      // 개발 > 타이밍 어택 수정 창
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
@@ -1028,6 +1063,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
         if (Btl._heldMoveKeys.Count > 0 && Btl._ringUnit < 0 && _statusUnit < 0 && !_keysOpen && !Btl._abilityMenu && Btl._targetWork < 0 && Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy)
             Btl.StepByKey(Btl._heldMoveKeys[^1]);
+
+        // 겨누는 중에 방향을 누르고 있으면 겨눈 자리를 이어서 옮긴다(fa-27).
+        if (Btl._heldMoveKeys.Count > 0 && Btl._targetWork >= 0 && Btl._ringUnit < 0 && _statusUnit < 0 && !_keysOpen && _realTime >= Btl._aimRepeatAt
+            && Btl.MoveAim(ArrowOf(Btl._heldMoveKeys[^1])))
+            Btl._aimRepeatAt = _realTime + AimRepeatEvery;
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
         Btl.StepBlinks();
@@ -1177,6 +1217,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_showGauges) Btl.DrawGauges();
         Btl.DrawPopups();
         Btl.DrawNumbers();
+        TimedHitFx.Draw();
         Btl.DrawCritFlash();
         DrawStatus();
         PerfMark("숫자");
@@ -1214,8 +1255,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
         StatsScr.Draw();
         SettingsScr.Draw();
         DevScr.Draw();
+        TimedEditScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
+        Pad.DrawFocus();                       // 패드 커서가 선 자리의 테와 조작 안내 — 창들 위에
+        Pad.DrawGuide();
         Cut.Draw();                            // 기술 컷신은 모든 것 위에
     }
 

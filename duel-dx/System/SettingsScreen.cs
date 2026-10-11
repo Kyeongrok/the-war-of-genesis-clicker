@@ -15,7 +15,7 @@ using static DuelDx.GameWindow;
 internal sealed unsafe class SettingsScreen(GameWindow host)
 {
     internal const int MenuSettings = 1166;
-    internal const int W = 620, H = 440, SideW = 130, SideRowH = 34, RowH = 34, PadRowH = 28;
+    internal const int W = 620, H = 440, SideW = 130, SideRowH = 34, RowH = 34, PadRowH = 26;   // 패드 동작이 열둘이라 28 이면 「기본값으로」 단추에 닿는다
 
     /// <summary>DUELDX_SETTINGS=&lt;갈래&gt; 면 그 갈래로 열어 둔 채 시작한다(화면 밖 시험용).</summary>
     internal bool _open = Environment.GetEnvironmentVariable("DUELDX_SETTINGS") != null;
@@ -213,7 +213,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
             host.DrawText(label, px, ry + 3, White);
             host.FillRect(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxBg);
             host.StrokeRect(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxLine);
-            host.DrawText(capturing ? "패드 단추를 누르세요… (Esc: 그만)" : GamePad.ButtonName(pad.ButtonOf(action)), px + 228, ry + 3, capturing ? 0xFFFFE070 : White, 12);
+            host.DrawText(capturing ? "패드 단추를 누르세요… (Esc: 그만)" : GamePad.ButtonLabel(pad.ButtonOf(action)), px + 228, ry + 3, capturing ? 0xFFFFE070 : White, 12);
         }
         host.DrawText("이동은 십자키 · 왼쪽 스틱(고정). 이미 쓰는 단추를 고르면 두 동작의 단추가 맞바뀝니다.", px, top + 26 + GamePad.All.Length * PadRowH + 4, DimGray, 11);
         Button(px, y + H - 40, 120, 28, "기본값으로");

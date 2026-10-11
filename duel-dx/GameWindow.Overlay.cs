@@ -35,7 +35,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>조작 안내 글 — 설정 > 안내 글 켜기·끄기로 숨길 수 있다(사용자 요청). 결과 알림(Toast)은 늘 보인다.</summary>
-    internal void Hint(string text) { if (_showHints) Toast(text); }
+    internal void Hint(string text) { if (_showHints) Toast(Pad.Words(text)); }
 
     internal bool _showHints = UserSettings.Current.ShowHints;
 
