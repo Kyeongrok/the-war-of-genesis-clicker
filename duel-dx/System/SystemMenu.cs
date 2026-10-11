@@ -29,7 +29,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
-    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Mods, Exit }
+    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Mods, Settings, Exit }
 
     internal static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
     [
@@ -39,6 +39,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         (SystemItem.Save, 0, "SAVE"),
         (SystemItem.Volume, 2, "VOLUME"),
         (SystemItem.Mods, -1, "MODE"),          // 원본에 없는 줄(사용자 요청 menu-34) — 모드 창을 연다. 글자 그림은 다른 줄에서 따와 만든다(DrawModeLabel)
+        (SystemItem.Settings, -2, "SETTING"),   // 원본에 없는 줄(사용자 요청 menu-41) — 설정 창을 연다. 전체화면에서는 메뉴 막대가 없어 여기가 설정으로 가는 길이다
         (SystemItem.Exit, 4, "EXIT GAME"),
     ];
 
@@ -112,6 +113,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             case SystemItem.Mods:
                 _systemMenuReturn = false;
                 (host.TuningScr._tuningOpen, host.TuningScr._tuningListOpen) = (true, false);
+                break;
+            case SystemItem.Settings:
+                _systemMenuReturn = false;
+                host.SettingsScr.Open();
                 break;
             case SystemItem.Save:
                 // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
@@ -239,7 +244,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             bool hover = !disabled && host._mouse.X >= rx && host._mouse.X < rx + SystemRowW && host._mouse.Y >= ry && host._mouse.Y < ry + SystemRowH - 3;
             if (hover) host.DrawUi(ListRowObs, 7, 0, rx, ry, GameWindow.UiBlend.Alpha, loop: false);
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            if (!(motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
+            if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
                 host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
             if (disabled) host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
@@ -274,6 +279,53 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             _modeLabel = canvas;
         }
         host.BlitMasked(_modeLabel, ModeLabelW, ModeLabelH, x - 2, y - 3);
+        return true;
+    }
+
+    private uint[]? _settingLabel;
+    private const int SettingLabelW = 107;
+
+    /// <summary>톱니 아이콘 — 다른 줄의 아이콘과 같은 색으로 찍는다(그림에 톱니가 없어 점 그림으로 그렸다).</summary>
+    private static readonly string[] GearIcon =
+    [
+        ".....###.....", "..#..###..#..", ".###.###.###.", "..#########..", "...##...##...", "####.....####", "####.....####",
+        "####.....####", "...##...##...", "..#########..", ".###.###.###.", "..#..###..#..", ".....###.....",
+    ];
+
+    /// <summary>
+    /// 「SETTING」 줄 — 「MODE」와 같은 꼴로 만든다: 글자 S 는 SAVE(모션 0), E 는 VOLUME(2), T 는 RESTART(3), I · N 은 MISSION(11), G 는 EXIT GAME(4)에서 따오고,
+    /// 아이콘은 톱니를 점으로 그린다. 그림 크기가 다르면 false — 글자로 그린다.
+    /// </summary>
+    private bool DrawSettingLabel(int x, int y)
+    {
+        if (_settingLabel == null)
+        {
+            if (host.UiFor(SystemObs) is not { } obs || obs.FrameAt(0, 0) is not { W: 75, H: 17 } save || obs.FrameAt(2, 0) is not { W: 98, H: 22 } volume
+                || obs.FrameAt(3, 0) is not { W: 108, H: 18 } restart || obs.FrameAt(11, 0) is not { W: 93, H: 23 } mission
+                || obs.FrameAt(4, 0) is not { W: 120, H: 19 } exit) return false;
+            var canvas = new uint[SettingLabelW * ModeLabelH];
+            void Copy(uint[] px, int w, int fromX, int fromY, int cols, int rows, int toX, int toY)
+            {
+                for (int r = 0; r < rows; r++)
+                    for (int c = 0; c < cols; c++) canvas[(toY + r) * SettingLabelW + toX + c] = px[(fromY + r) * w + fromX + c];
+            }
+            // 아이콘 색은 SAVE 줄 아이콘의 밝은 점에서 가져온다.
+            uint ink = 0xFF80F0C0;
+            for (int i = 0; i < 17 * save.W && i < save.Px.Length; i++)
+                if (i % save.W < 17 && (save.Px[i] & 0xFF000000) != 0 && (save.Px[i] >> 8 & 0xFF) > 150) { ink = save.Px[i] | 0xFF000000; break; }
+            for (int r = 0; r < GearIcon.Length; r++)
+                for (int c = 0; c < GearIcon[r].Length; c++)
+                    if (GearIcon[r][c] == '#') canvas[(5 + r) * SettingLabelW + 3 + c] = ink;
+            Copy(save.Px, save.W, 33, 2, 10, 12, 34, 5);          // S
+            Copy(volume.Px, volume.W, 89, 5, 9, 12, 46, 5);       // E
+            Copy(restart.Px, restart.W, 63, 4, 10, 12, 57, 5);    // T
+            Copy(restart.Px, restart.W, 63, 4, 10, 12, 69, 5);    // T
+            Copy(mission.Px, mission.W, 44, 8, 2, 12, 81, 5);     // I
+            Copy(mission.Px, mission.W, 83, 8, 10, 12, 85, 5);    // N
+            Copy(exit.Px, exit.W, 73, 4, 10, 12, 97, 5);          // G
+            _settingLabel = canvas;
+        }
+        host.BlitMasked(_settingLabel, SettingLabelW, ModeLabelH, x - 2, y - 3);
         return true;
     }
 

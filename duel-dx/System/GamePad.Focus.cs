@@ -154,6 +154,25 @@ internal sealed partial class GamePad
             for (int k = 0; k < choices.Count; k++) { var (x, y) = host.Fld.FieldChoiceBand(k, choices.Count); list.Add((x, y, 620, 32)); }
             return list;
         }
+        // 연대표 — 고를 수 있는(열려 있고 아직 안 고른, 지금 보이는) 에피소드 칸들과 스크롤 화살표 둘(사용자 보고 menu-40: 패드가 안 먹었다).
+        var episodes = host.EpisodesScr;
+        if (episodes._episodesOpen)
+        {
+            var (ox, oy) = host.Mos.MosesOrigin();
+            foreach (var e in episodes.Episodes())
+            {
+                if (!episodes.EpisodeOpen(e) || episodes._episodesPicked.Contains(e.No) || !episodes.EpisodeRowShown(e.No)) continue;
+                var (x, y) = episodes.EpisodeCell(e.No);
+                list.Add((ox + x, oy + y, EpisodesScreen.EpisodeCellW, EpisodesScreen.EpisodeCellH));
+            }
+            if (episodes.EpisodeRowCount() > EpisodesScreen.EpisodeRows)
+            {
+                list.Add((ox + EpisodesScreen.EpisodeBarX, oy + EpisodesScreen.EpisodeBarY, EpisodesScreen.EpisodeArrowW, EpisodesScreen.EpisodeArrowH));
+                list.Add((ox + EpisodesScreen.EpisodeBarX, oy + EpisodesScreen.EpisodeBarY + EpisodesScreen.EpisodeBarH - EpisodesScreen.EpisodeArrowH,
+                          EpisodesScreen.EpisodeArrowW, EpisodesScreen.EpisodeArrowH));
+            }
+            return list;
+        }
         if (host.TitleScr._titleOpen)
         {
             var (ox, oy) = host.Mos.MosesOrigin();

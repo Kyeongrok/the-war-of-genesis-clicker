@@ -239,8 +239,8 @@ internal sealed unsafe partial class GameWindow
     internal const int MenuTimedHit = 1172;
 
     /// <summary>
-    /// 설정 > 화면 > 전체화면 — 테두리 없는 창으로 주 모니터를 가득 덮는다(사용자 요청 menu-38, 기본 끔). 메뉴 막대는 남겨 둔다 —
-    /// 설정 · 모드로 가는 길이 거기뿐이다. F11 로도 켜고 끈다.
+    /// 설정 > 화면 > 전체화면 — 테두리 없는 창으로 주 모니터를 가득 덮는다(사용자 요청 menu-38, 기본 끔). 메뉴 막대도 숨긴다(menu-42) —
+    /// 설정 · 모드는 시스템 메뉴의 SETTING · MODE 로 간다. F11 로도 켜고 끈다.
     /// </summary>
     internal bool _fullscreen = UserSettings.Current.Fullscreen;
 
@@ -333,7 +333,7 @@ internal sealed unsafe partial class GameWindow
                 _fullscreen = !_fullscreen;
                 SaveSettings();
                 ApplyZoom(force: true);      // 창 꼴과 크기를 새로 잡는다
-                Toast(_fullscreen ? "전체화면 — F11 이나 설정 > 화면에서 끕니다" : "창 화면으로 돌아왔습니다");
+                Toast(_fullscreen ? "전체화면 — F11 이나 시스템 메뉴 > SETTING 에서 끕니다" : "창 화면으로 돌아왔습니다");
                 break;
             case MenuTimedHit:
                 _timedHit = !_timedHit;
@@ -351,7 +351,7 @@ internal sealed unsafe partial class GameWindow
             case MenuAllyAi:
                 // 동맹(편 3)의 제어권을 AI 에 줄지 — 켜면 AI 가, 끄면 내가 움직인다.
                 _allyAi = !_allyAi;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuAllyAi, Win32.MF_BYCOMMAND | (_allyAi ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuAllyAi, Win32.MF_BYCOMMAND | (_allyAi ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_allyAi ? "동맹은 AI 가 움직입니다" : "동맹도 내가 움직입니다");
                 SaveSettings();
                 break;
@@ -363,7 +363,7 @@ internal sealed unsafe partial class GameWindow
                 break;
             case MenuLevelUpWindow:
                 Btl._showLevelUp = !Btl._showLevelUp;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuLevelUpWindow, Win32.MF_BYCOMMAND | (Btl._showLevelUp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuLevelUpWindow, Win32.MF_BYCOMMAND | (Btl._showLevelUp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 if (!Btl._showLevelUp && Btl.LevelUpOpen) Btl.CloseLevelUp();
                 Toast(Btl._showLevelUp ? "레벨업 창을 보입니다" : "레벨업 창을 숨깁니다 — 레벨은 그대로 오릅니다");
                 SaveSettings();
@@ -371,13 +371,13 @@ internal sealed unsafe partial class GameWindow
             case >= MenuTalkPauseBase and < MenuTalkPauseBase + 6:
                 _talkPauseSeconds = TalkPauseChoices[id - MenuTalkPauseBase];
                 for (int i = 0; i < TalkPauseChoices.Length; i++)
-                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuTalkPauseBase + i), Win32.MF_BYCOMMAND | (i == id - MenuTalkPauseBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                    Win32.CheckMenuItem(_menuBar, (uint)(MenuTalkPauseBase + i), Win32.MF_BYCOMMAND | (i == id - MenuTalkPauseBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast($"대사 사이 멈춤: {TalkPauseLabel(_talkPauseSeconds)}");
                 SaveSettings();
                 break;
             case MenuTalkClickFills:
                 _talkClickFills = !_talkClickFills;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuTalkClickFills, Win32.MF_BYCOMMAND | (_talkClickFills ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuTalkClickFills, Win32.MF_BYCOMMAND | (_talkClickFills ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_talkClickFills ? "대사: 첫 클릭은 글을 채우고, 다음 클릭에 닫습니다" : "대사: 클릭하면 곧바로 닫습니다(원본)");
                 SaveSettings();
                 break;
@@ -395,29 +395,29 @@ internal sealed unsafe partial class GameWindow
                 break;
             case MenuFullSoul:
                 _fullSoulAtStart = !_fullSoulAtStart;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuFullSoul, Win32.MF_BYCOMMAND | (_fullSoulAtStart ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuFullSoul, Win32.MF_BYCOMMAND | (_fullSoulAtStart ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_fullSoulAtStart ? "다음 전투부터 내 편 소울을 가득 채워 시작합니다" : "전투를 원본대로 시작 소울로 시작합니다");
                 SaveSettings();
                 break;
             case MenuChestContents:
                 _showChestContents = !_showChestContents;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuChestContents, Win32.MF_BYCOMMAND | (_showChestContents ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuChestContents, Win32.MF_BYCOMMAND | (_showChestContents ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_showChestContents ? "상자 내용물을 왼쪽 위에 보입니다" : "상자 내용물을 숨깁니다");
                 SaveSettings();
                 break;
             case MenuSceneTag:
                 _showSceneTag = !_showSceneTag;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuSceneTag, Win32.MF_BYCOMMAND | (_showSceneTag ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuSceneTag, Win32.MF_BYCOMMAND | (_showSceneTag ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 break;
             case MenuStatusBar:
                 _showStatusBar = !_showStatusBar;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuStatusBar, Win32.MF_BYCOMMAND | (_showStatusBar ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuStatusBar, Win32.MF_BYCOMMAND | (_showStatusBar ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 break;
             case MenuKeepJobExp:
                 _keepJobExp = !_keepJobExp;
-                Win32.CheckMenuItem(Win32.GetMenu(_hwnd), MenuKeepJobExp, Win32.MF_BYCOMMAND | (_keepJobExp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Win32.CheckMenuItem(_menuBar, MenuKeepJobExp, Win32.MF_BYCOMMAND | (_keepJobExp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_keepJobExp ? "전직해도 EXP 를 남깁니다" : "전직하면 EXP 가 0 이 됩니다(원본대로)");
                 SaveSettings();
                 break;
@@ -427,7 +427,7 @@ internal sealed unsafe partial class GameWindow
             case >= MenuSpeedBase and < MenuSpeedBase + 3:
                 _gameSpeed = SpeedChoices[id - MenuSpeedBase];
                 for (int i = 0; i < SpeedChoices.Length; i++)
-                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuSpeedBase + i), Win32.MF_BYCOMMAND | (i == id - MenuSpeedBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                    Win32.CheckMenuItem(_menuBar, (uint)(MenuSpeedBase + i), Win32.MF_BYCOMMAND | (i == id - MenuSpeedBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 Toast(_gameSpeed == 100 ? "게임 속도: 보통(원본)" : $"게임 속도: {_gameSpeed / 100.0:0.#}배");
                 break;
@@ -435,7 +435,7 @@ internal sealed unsafe partial class GameWindow
             {
                 (_viewW, _viewH) = ResChoices[id - MenuResBase];
                 for (int i = 0; i < ResChoices.Length; i++)
-                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuResBase + i), Win32.MF_BYCOMMAND | (i == id - MenuResBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                    Win32.CheckMenuItem(_menuBar, (uint)(MenuResBase + i), Win32.MF_BYCOMMAND | (i == id - MenuResBase ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 ApplyZoom(force: true);      // 보이는 영역이 바뀌면 텍스처·창을 새로 잡는다
                 Toast($"해상도: {_viewW}×{_viewH}");
@@ -445,7 +445,7 @@ internal sealed unsafe partial class GameWindow
             {
                 _zoomPercent = ZoomChoices[id - MenuZoomAuto];
                 for (int i = 0; i < ZoomChoices.Length; i++)
-                    Win32.CheckMenuItem(Win32.GetMenu(_hwnd), (uint)(MenuZoomAuto + i), Win32.MF_BYCOMMAND | (i == id - MenuZoomAuto ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                    Win32.CheckMenuItem(_menuBar, (uint)(MenuZoomAuto + i), Win32.MF_BYCOMMAND | (i == id - MenuZoomAuto ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 SaveSettings();
                 ApplyZoom();
                 Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");

@@ -89,7 +89,7 @@ internal sealed partial class GamePad(GameWindow host)
     /// <summary>마우스로만 되는 창이 떠 있는지 — 이때는 왼쪽 스틱도 커서를 움직이고 단추가 마우스 단추 노릇을 한다.</summary>
     internal bool PointerMode => host._statusUnit >= 0 || host.Mos._mosesOpen || host.Sys.SystemOpen || host.SettingsScr._open
                                  || host.TitleScr._titleOpen || host.Fld._fieldChoices is { Count: > 0 } || host.Btl._itemMenu
-                                 || host.TuningScr._tuningOpen || host.TimedEditScr._open;
+                                 || host.TuningScr._tuningOpen || host.TimedEditScr._open || host.EpisodesScr._episodesOpen;
 
     private const double CursorSpeed = 900;   // 스틱을 끝까지 밀었을 때 커서가 1초에 가는 화면 점
     private double _lastPoll, _cursorX, _cursorY;
@@ -336,6 +336,8 @@ internal sealed partial class GamePad(GameWindow host)
         foreach (var (action, _, _) in All)
         {
             if ((pressed & _map[action]) == 0 || action == PadAction.Help) continue;
+            // 필드에서는 메뉴 단추가 안 먹는다(사용자 요청 menu-39) — 원본 필드에는 시스템 메뉴가 없고, 대사를 넘기다 잘못 눌러 메뉴가 뜨곤 했다.
+            if (action == PadAction.System && host.FieldOpen && !host.Sys.SystemOpen) continue;
             if (action is PadAction.PrevUnit or PadAction.NextUnit && !pointer && !host.Btl._abilityMenu && host.Btl._targetWork < 0 && host._battleLoaded)
             {
                 // 차례를 기다리는(▼) 다른 인물에게 차례를 넘긴다 — 넘기면 그 인물이 부르는 목소리가 난다(fa-39 · fa-46). ▼ 없는 인물은 안 고른다.
@@ -361,6 +363,12 @@ internal sealed partial class GamePad(GameWindow host)
                             var tab = tabTargets[host.TuningScr._tuningTab];
                             MoveCursorTo(tab.X + tab.W / 2, tab.Y + tab.H / 2);
                         }
+                        continue;
+                    }
+                    // 연대표에서는 LB · RB 가 목록을 한 줄씩 올리고 내린다(마우스 휠이 없는 화면이다).
+                    if (host.EpisodesScr._episodesOpen && !host.Sys.SystemOpen && !host.SettingsScr._open)
+                    {
+                        host.EpisodesScr.ScrollEpisodes(action == PadAction.PrevUnit ? -1 : 1);
                         continue;
                     }
                     // 성도(행성 고르기)에서는 LB · RB 가 이전 · 다음 행성(사용자 요청 mo-14). 타이틀에서는 단추 옮기기(fa-31).
@@ -497,6 +505,12 @@ internal sealed partial class GamePad(GameWindow host)
             [
                 ("십자키 · 왼쪽 스틱", "줄 옮기기 (테두리)"), ($"{Name(PadAction.PrevUnit)} · {Name(PadAction.NextUnit)}", "줄 옮기기"),
                 (Name(PadAction.Confirm), "고르기"), (Name(PadAction.Cancel), "취소 · 닫기"),
+            ]);
+        if (host.EpisodesScr._episodesOpen && !host.Sys.SystemOpen && !host.SettingsScr._open && !host.TuningScr._tuningOpen)
+            return ("연대표",
+            [
+                ("십자키 · 왼쪽 스틱", "에피소드 옮기기"), (Name(PadAction.Confirm), "고르기 (두 번)"),
+                ($"{Name(PadAction.PrevUnit)} · {Name(PadAction.NextUnit)}", "목록 굴리기"), (Name(PadAction.Cancel), "메뉴"),
             ]);
         if (PointerMode)
             return ("창 조작 (Status · 모세스 · 메뉴 · 설정)",

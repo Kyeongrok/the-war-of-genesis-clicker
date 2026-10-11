@@ -55,7 +55,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                         Step: d => host.OnMenuCommand(MenuResBase + Cycle(res, d, ResChoices.Length))),
                     new("배율", host._zoomPercent == 0 ? "자동(화면에 맞춤)" : $"{host._zoomPercent}%",
                         Step: d => host.OnMenuCommand(MenuZoomAuto + Cycle(zoom, d, ZoomChoices.Length))),
-                    new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11)"),
+                    new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11) · 설정은 Esc 메뉴의 SETTING"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),
                     new("장면 번호 보이기", "", Toggle: () => host.OnMenuCommand(MenuSceneTag), On: host._showSceneTag, Note: "왼쪽 아래 Fld · Btl · Chp 번호"),

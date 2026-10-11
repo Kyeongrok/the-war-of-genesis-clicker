@@ -417,14 +417,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>지금 전체화면으로 그리나 — 화면 밖 시험에서는 늘 창이다.</summary>
     internal bool FullscreenNow => _fullscreen && !Offscreen;
 
+    /// <summary>
+    /// 메뉴 막대의 손잡이 — 전체화면에서는 창에서 떼어 두므로(사용자 요청 menu-42) <c>GetMenu(창)</c> 대신 이것으로 체크 표시를 고친다.
+    /// </summary>
+    internal IntPtr _menuBar;
+
     internal double FitZoom()
     {
         var work = new Win32.Rect();
         if (FullscreenNow)
         {
-            // 전체화면 — 주 모니터 전체에서 메뉴 막대 한 줄을 뺀 만큼이 그릴 자리다.
+            // 전체화면 — 주 모니터 전체가 그릴 자리다(메뉴 막대도 없다).
             _resW = Math.Max(320, Win32.GetSystemMetrics(Win32.SM_CXSCREEN));
-            _resH = Math.Max(240, Win32.GetSystemMetrics(Win32.SM_CYSCREEN) - Win32.GetSystemMetrics(Win32.SM_CYMENU));
+            _resH = Math.Max(240, Win32.GetSystemMetrics(Win32.SM_CYSCREEN));
         }
         else if (Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0))
         {
@@ -509,7 +514,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int pixelW = _resW, pixelH = _resH;
         if (FullscreenNow)
         {
-            // 전체화면 — 테두리 · 제목줄 없는 창을 주 모니터 왼쪽 위에 모니터 크기로 놓는다(메뉴 막대는 남는다).
+            // 전체화면 — 테두리 · 제목줄 · 메뉴 막대 없는 창을 주 모니터 왼쪽 위에 모니터 크기로 놓는다.
+            // 설정 · 모드는 시스템 메뉴(SETTING · MODE)로 간다.
+            Win32.SetMenu(_hwnd, IntPtr.Zero);
             Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_POPUP | Win32.WS_VISIBLE);
             Win32.SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, Win32.GetSystemMetrics(Win32.SM_CXSCREEN), Win32.GetSystemMetrics(Win32.SM_CYSCREEN),
                                Win32.SWP_NOZORDER | Win32.SWP_FRAMECHANGED);
@@ -518,7 +525,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
             Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
-            // 전체화면에서 돌아올 때를 위해 창 꼴도 되돌린다(이미 그 꼴이면 달라지는 것이 없다).
+            // 전체화면에서 돌아올 때를 위해 창 꼴과 메뉴 막대도 되돌린다(이미 그 꼴이면 달라지는 것이 없다).
+            if (Win32.GetMenu(_hwnd) == IntPtr.Zero && _menuBar != IntPtr.Zero) Win32.SetMenu(_hwnd, _menuBar);
             Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE);
             Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
                                rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
@@ -680,7 +688,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
         Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
-        IntPtr menu = CreateMenuBar();
+        IntPtr menu = _menuBar = CreateMenuBar();
 
         _active = this;
         _hwnd = Win32.CreateWindowExW(0, ClassName, $"창세기전3 파트2 — WarOfGenesis {AppVersion}",

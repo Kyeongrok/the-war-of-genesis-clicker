@@ -103,7 +103,7 @@ internal sealed unsafe partial class BattleScene
         if (id < MenuDifficultyBase || id >= MenuDifficultyBase + DifficultyChoices.Length) return false;
         _difficulty = id - MenuDifficultyBase;
         for (int i = 0; i < DifficultyChoices.Length; i++)
-            Win32.CheckMenuItem(Win32.GetMenu(host._hwnd), (uint)(MenuDifficultyBase + i), Win32.MF_BYCOMMAND | (i == _difficulty ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+            Win32.CheckMenuItem(host._menuBar, (uint)(MenuDifficultyBase + i), Win32.MF_BYCOMMAND | (i == _difficulty ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
         // 피해 배율과 AI 는 바로, 최대 HP 는 다음 전투부터 바뀐다(싸우는 도중에 적 HP 가 튀지 않게).
         host.Toast($"난이도: {DifficultyChoices[_difficulty].Name} — 적 최대 HP 는 다음 전투부터 바뀝니다");
         host.SaveSettings();
