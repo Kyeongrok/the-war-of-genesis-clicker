@@ -300,9 +300,17 @@ internal sealed class TimedHit(GameWindow host)
     internal const int AboveBar = 56, BelowBar = 46;
 
     /// <param name="preview">수정 창의 미리 보기를 그릴 차례인가 — 전투 그리기는 인물 것만, 수정 창은 미리 보기만 그린다.</param>
+    // 수정 창의 미리 보기는 그 창과 같은 층(새 UI 면 창 해상도 층)에 그린다 — 판에 그리면 창 밑에 깔린다. 전투의 띠는 늘 판에 그린다.
+    private bool _onUi;
+    private void Fill(int x, int y, int w, int h, uint color) { if (_onUi) host.UiFill(x, y, w, h, color); else host.FillRect(x, y, w, h, color); }
+    private void Stroke(int x, int y, int w, int h, uint color) { if (_onUi) host.UiStroke(x, y, w, h, color); else host.StrokeRect(x, y, w, h, color); }
+    private void Text(string text, int x, int y, uint color, float size = 13f) { if (_onUi) host.UiText(text, x, y, color, size); else host.DrawText(text, x, y, color, size); }
+    private (uint[] Px, int W, int H) Measure(string text, uint color, float size = 13f) => _onUi ? host.UiGetText(text, color, size) : host.GetText(text, color, size);
+
     internal void Draw(bool preview = false)
     {
         if (preview ? _anchor == null : _unit == null) return;
+        _onUi = preview;
         int BarW = Math.Clamp(Cfg.BarWidth, 60, 600);
         const int BarH = 12, Cap = 24;
         double seconds = _seconds;
@@ -319,13 +327,13 @@ internal sealed class TimedHit(GameWindow host)
 
         // 바탕 — 안내 글 · 단추 · 띠를 한 판에.
         string guide = _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬";
-        var (_, gw, gh) = host.GetText(guide, 0xFFFFFFFF, 11f);
+        var (_, gw, gh) = Measure(guide, 0xFFFFFFFF, 11f);
         int top = y - Cap - 8 - gh - 4;
-        host.FillRect(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
-        host.DrawText(guide, cx - gw / 2, top, 0xFFFFFFFF, 11f);
+        Fill(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
+        Text(guide, cx - gw / 2, top, 0xFFFFFFFF, 11f);
 
         // 띠와 박자 칸 — 맞춘 칸은 초록, 놓친 칸은 붉게, 달리는 표시는 흰 줄. 칸 위에 그 박자에 누를 단추.
-        host.FillRect(x, y, BarW, BarH, 0xFF303848);
+        Fill(x, y, BarW, BarH, 0xFF303848);
         bool pad = host.Pad.Active;
         string space = _beat.Length <= 2 ? "Space" : "Sp";
         for (int i = 0; i < _beat.Length; i++)
@@ -333,26 +341,26 @@ internal sealed class TimedHit(GameWindow host)
             int zx = x + (int)(BarW * (_beats[i].At - _beats[i].Half) / seconds), zw = Math.Max(2, (int)(BarW * 2 * _beats[i].Half / seconds));
             int z0 = Math.Clamp(zx, x, x + BarW), z1 = Math.Clamp(zx + zw, x, x + BarW);
             bool done = _beat[i] == 1, missed = _beat[i] == 2;
-            host.FillRect(z0, y, z1 - z0, BarH, done ? 0xFF60FF60 : missed ? 0xFF804030 : 0xFFFFD040);
+            Fill(z0, y, z1 - z0, BarH, done ? 0xFF60FF60 : missed ? 0xFF804030 : 0xFFFFD040);
             string label = pad ? GamePad.ButtonLabel(host.Pad.ButtonOf(ButtonOfBeat(i) == 0 ? PadAction.Ability : PadAction.Attack)) : space;
-            var (_, tw, th) = host.GetText(label, 0xFFFFFFFF, 13f);
+            var (_, tw, th) = Measure(label, 0xFFFFFFFF, 13f);
             int bw = Math.Max(Cap, tw + 10), bx = zx + zw / 2 - bw / 2, by = y - Cap - 5;
-            host.FillRect(bx, by, bw, Cap, done ? 0xFF60D060 : missed ? 0xFF907060 : 0xFFE3B824);
-            host.StrokeRect(bx, by, bw, Cap, 0xFFFFFFFF);
-            host.DrawText(label, bx + (bw - tw) / 2, by + (Cap - th) / 2, 0xFF201800, 13f);
+            Fill(bx, by, bw, Cap, done ? 0xFF60D060 : missed ? 0xFF907060 : 0xFFE3B824);
+            Stroke(bx, by, bw, Cap, 0xFFFFFFFF);
+            Text(label, bx + (bw - tw) / 2, by + (Cap - th) / 2, 0xFF201800, 13f);
         }
-        host.FillRect(x + (int)(BarW * at) - 1, y - 4, 3, BarH + 8, 0xFFFFFFFF);
+        Fill(x + (int)(BarW * at) - 1, y - 4, 3, BarH + 8, 0xFFFFFFFF);
 
         // 결과 — 눌린 것이 바로 보이게 크게.
         if (_result is { } hit)
         {
             string word = !hit ? "놓침" : Hits == 1 ? "크리티컬!" : (AllHit ? "성공! " : "") + $"{Hits}번 공격";
             uint color = hit ? 0xFFFFE040 : 0xFFFF7060;
-            var (_, ww, wh) = host.GetText(word, color, 18f);
+            var (_, ww, wh) = Measure(word, color, 18f);
             int wy = y + BarH + 10;
-            host.FillRect(cx - ww / 2 - 8, wy - 3, ww + 16, wh + 6, hit ? 0xE0204010 : 0xE0401810);
-            host.StrokeRect(cx - ww / 2 - 8, wy - 3, ww + 16, wh + 6, color);
-            host.DrawText(word, cx - ww / 2, wy, color, 18f);
+            Fill(cx - ww / 2 - 8, wy - 3, ww + 16, wh + 6, hit ? 0xE0204010 : 0xE0401810);
+            Stroke(cx - ww / 2 - 8, wy - 3, ww + 16, wh + 6, color);
+            Text(word, cx - ww / 2, wy, color, 18f);
         }
     }
 }

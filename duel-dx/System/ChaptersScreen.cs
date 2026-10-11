@@ -86,11 +86,11 @@ internal sealed unsafe class ChaptersScreen(GameWindow host)
         var list = Chapters();
         int rows = (list.Count + ChaptersCols - 1) / ChaptersCols, colW = (ChaptersW - 24) / ChaptersCols;
 
-        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xC0000000);
-        host.FillRect(x, y, ChaptersW, h, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, ChaptersW, h, StatusScreen.BoxLine);
-        host.DrawText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
-        host.DrawText(ChaptersW >= 700 ? "고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다." : "고르면 그 챕터가 열립니다 · Esc: 닫기", x + 150, y + 18, DimGray);
+        host.UiFill(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xC0000000);
+        host.UiFill(x, y, ChaptersW, h, StatusScreen.PanelBg);
+        host.UiStroke(x, y, ChaptersW, h, StatusScreen.BoxLine);
+        host.UiText("챕터 고르기", x + 12, y + 14, 0xFFFFE8A0, 17);
+        host.UiText(ChaptersW >= 700 ? "고르면 그 챕터의 모세스 항행 화면이 열립니다. Esc 로 닫습니다." : "고르면 그 챕터가 열립니다 · Esc: 닫기", x + 150, y + 18, DimGray);
         // 좁은 화면에서는 「행성 · 장소」 칸을 빼고 제목에 자리를 준다.
         bool counts = colW >= 380;
         int titleW = colW - 70 - (counts ? 140 : 12);
@@ -99,14 +99,14 @@ internal sealed unsafe class ChaptersScreen(GameWindow host)
         {
             var (id, title, chp) = list[i];
             int rx = x + 12 + i / rows * colW, ry = y + ChaptersTop + i % rows * ChaptersRowH;
-            if (i == _chaptersHover) host.FillRect(rx, ry - 2, colW - 8, ChaptersRowH, 0x4060A0FF);
-            host.DrawText($"Chp {id:D4}", rx, ry, DimGray);
+            if (i == _chaptersHover) host.UiFill(rx, ry - 2, colW - 8, ChaptersRowH, 0x4060A0FF);
+            host.UiText($"Chp {id:D4}", rx, ry, DimGray);
             // 제목 칸이 아닌 챕터(0001 등)는 엉뚱한 긴 글이 들어 있어 칸 너비만큼만 보인다.
             string label = title.Length > 0 ? title : "(제목 없음)";
             if (label.Length > 18) label = label[..18] + "…";
-            while (label.Length > 2 && host.GetText(label, White).W > titleW) label = label[..^2] + "…";
-            host.DrawText(label, rx + 70, ry, White);
-            if (counts) host.DrawText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
+            while (label.Length > 2 && host.UiGetText(label, White).W > titleW) label = label[..^2] + "…";
+            host.UiText(label, rx + 70, ry, White);
+            if (counts) host.UiText($"행성 {chp.Planets.Count} · 장소 {chp.Places.Count}", rx + colW - 130, ry, DimGray);
         }
     }
 }

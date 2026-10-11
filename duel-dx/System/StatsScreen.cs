@@ -71,48 +71,48 @@ internal sealed unsafe class StatsScreen(GameWindow host)
     {
         if (!_open) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText("전투 통계 — 내 인물이 쓴 어빌리티", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+        host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+        host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+        host.UiText("전투 통계 — 내 인물이 쓴 어빌리티", x + 10, y + 6, White);
 
         string[] tabs = ["이번 전투", "누적"];
         for (int tab = 0; tab < 2; tab++)
         {
             bool on = (tab == 1) == _total;
-            host.FillRect(x + 16 + tab * 104, y + 38, 100, 24, on ? 0xFF2A4A8A : StatusScreen.BoxBg);
-            host.StrokeRect(x + 16 + tab * 104, y + 38, 100, 24, StatusScreen.BoxLine);
-            host.DrawText(tabs[tab], x + 16 + tab * 104 + (100 - host.GetText(tabs[tab], White, 12).W) / 2, y + 42, White, 12);
+            host.UiFill(x + 16 + tab * 104, y + 38, 100, 24, on ? 0xFF2A4A8A : StatusScreen.BoxBg);
+            host.UiStroke(x + 16 + tab * 104, y + 38, 100, 24, StatusScreen.BoxLine);
+            host.UiText(tabs[tab], x + 16 + tab * 104 + (100 - host.UiGetText(tabs[tab], White, 12).W) / 2, y + 42, White, 12);
         }
         if (_total)
         {
             var (battles, wins, _) = host.Stats.Total();
-            host.DrawText($"끝낸 전투 {battles}판 · 승리 {wins}판", x + 236, y + 43, DimGray, 12);
+            host.UiText($"끝낸 전투 {battles}판 · 승리 {wins}판", x + 236, y + 43, DimGray, 12);
         }
 
-        host.DrawText("어빌리티", x + 20, y + 74, DimGray, 12);
+        host.UiText("어빌리티", x + 20, y + 74, DimGray, 12);
         for (int i = 0; i < Columns.Length; i++)
-            host.DrawText(Columns[i].Label + (SortOfColumn[i] == _sort ? " ▼" : ""), x + Columns[i].X, y + 74, SortOfColumn[i] == _sort ? 0xFFFFE070 : DimGray, 12);
-        host.FillRect(x + 12, y + ListY - 4, W - 24, 1, StatusScreen.BoxLine);
+            host.UiText(Columns[i].Label + (SortOfColumn[i] == _sort ? " ▼" : ""), x + Columns[i].X, y + 74, SortOfColumn[i] == _sort ? 0xFFFFE070 : DimGray, 12);
+        host.UiFill(x + 12, y + ListY - 4, W - 24, 1, StatusScreen.BoxLine);
 
         var lines = Lines();
         _top = Math.Clamp(_top, 0, Math.Max(0, lines.Count - Rows));
         if (lines.Count == 0)
-            host.DrawText(_total ? "아직 끝낸 전투가 없습니다." : "이번 전투에서 아직 쓴 것이 없습니다.", x + 20, y + ListY + 4, DimGray, 12);
+            host.UiText(_total ? "아직 끝낸 전투가 없습니다." : "이번 전투에서 아직 쓴 것이 없습니다.", x + 20, y + ListY + 4, DimGray, 12);
         for (int i = 0; i < Rows && _top + i < lines.Count; i++)
         {
             var (name, sum) = lines[_top + i];
             int ry = y + ListY + i * RowH;
-            host.DrawText($"{_top + i + 1}", x + 20, ry, DimGray, 12);
-            host.DrawText(name, x + 46, ry, White, 12);
+            host.UiText($"{_top + i + 1}", x + 20, ry, DimGray, 12);
+            host.UiText(name, x + 46, ry, White, 12);
             string[] cells = [$"{sum.Uses}", $"{sum.Hits}", $"{sum.Damage}", $"{sum.Kills}", $"{sum.Heal}"];
-            for (int c = 0; c < cells.Length; c++) host.DrawText(cells[c], x + Columns[c].X, ry, SortOfColumn[c] == _sort ? 0xFFFFE070 : White, 12);
+            for (int c = 0; c < cells.Length; c++) host.UiText(cells[c], x + Columns[c].X, ry, SortOfColumn[c] == _sort ? 0xFFFFE070 : White, 12);
         }
 
         int fy = y + H - 40;
-        host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + W - 80, fy + 6, White);
-        host.DrawText("Esc: 닫기 · 표 머리: 줄 세우기 · 휠: 목록", x + 16, fy + 7, DimGray);
+        host.UiFill(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
+        host.UiText("닫기", x + W - 80, fy + 6, White);
+        host.UiText("Esc: 닫기 · 표 머리: 줄 세우기 · 휠: 목록", x + 16, fy + 7, DimGray);
     }
 }

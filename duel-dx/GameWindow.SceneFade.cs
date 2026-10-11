@@ -135,6 +135,20 @@ internal sealed unsafe partial class GameWindow
     /// <summary>지금 보이는 영역을 <c>%TEMP%\dueldx_snapshot.png</c> 로 저장한다 — 창을 화면에 띄우지 않고 확인하는 테스트용.</summary>
     internal void SaveSnapshot()
     {
+        // 새 UI 층에 그린 것이 있으면 화면에 보이는 그대로(판을 배율만큼 늘리고 층을 겹친 창 크기 그림)를 저장한다.
+        if (Hi.Used)
+        {
+            var (shot, sw, sh) = Hi.Composite();
+            using var big = new Bitmap(sw, sh, PixelFormat.Format32bppArgb);
+            var locked = big.LockBits(new Rectangle(0, 0, sw, sh), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                for (int y = 0; y < sh; y++) shot.AsSpan(y * sw, sw).CopyTo(new Span<uint>((void*)(locked.Scan0 + y * locked.Stride), sw));
+            }
+            finally { big.UnlockBits(locked); }
+            big.Save(Path.Combine(Path.GetTempPath(), "dueldx_snapshot.png"), ImageFormat.Png);
+            return;
+        }
         using var bmp = new Bitmap(ViewWidth, ViewHeight, PixelFormat.Format32bppArgb);
         var data = bmp.LockBits(new Rectangle(0, 0, ViewWidth, ViewHeight), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
         try

@@ -48,6 +48,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         // 실험 탭 — 아직 다듬는 중인 것(사용자 요청 fg-32). 기본은 모두 끔.
         ("타이밍 어택", "박자에 맞춰 Space(패드 LT → RT)", MenuTimedHit, host._timedHit),
+        ("새 UI (또렷한 글자)", "설정 창을 화면 해상도로 그린다 · 끄면 이전 UI", MenuHiResUi, host._hiResUi),
     ] : _tuningTab == 2 ?
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
@@ -138,41 +139,41 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     {
         if (!_tuningOpen || host._db is not { } db) return;
         var (x, y) = TuningOrigin();
-        host.FillRect(x - 4, y - 4, TuningW + 8, TuningH + 8, 0x80000000);
-        host.FillRect(x, y, TuningW, TuningH, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, TuningW, TuningH, StatusScreen.BoxLine);
-        host.FillRect(x, y, TuningW, 28, StatusScreen.HeadBg);
-        host.DrawText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, TuningW + 8, TuningH + 8, 0x80000000);
+        host.UiFill(x, y, TuningW, TuningH, StatusScreen.PanelBg);
+        host.UiStroke(x, y, TuningW, TuningH, StatusScreen.BoxLine);
+        host.UiFill(x, y, TuningW, 28, StatusScreen.HeadBg);
+        host.UiText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
         for (int t = 0; t < TabNames.Length; t++)
         {
             int tx = x + 12 + t * (TabW + 4);
             bool on = t == _tuningTab;
-            host.FillRect(tx, y + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
-            host.StrokeRect(tx, y + TabY, TabW, TabH, StatusScreen.BoxLine);
-            host.DrawText(TabNames[t], tx + (TabW - host.GetText(TabNames[t], White).W) / 2, y + TabY + 4, on ? 0xFF00FFFF : White);
+            host.UiFill(tx, y + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
+            host.UiStroke(tx, y + TabY, TabW, TabH, StatusScreen.BoxLine);
+            host.UiText(TabNames[t], tx + (TabW - host.UiGetText(TabNames[t], White).W) / 2, y + TabY + 4, on ? 0xFF00FFFF : White);
         }
-        host.FillRect(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
+        host.UiFill(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
         if (_tuningTab == 1) { DrawStoryTab(x, y); DrawTuningFoot(x, y); return; }
 
         var checks = TuningChecks();
         for (int i = 0; i < checks.Length; i++)
         {
             int cy = y + TuningCheckY + i * TuningCheckH;
-            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.FillRect(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
-            host.FillRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
-            host.StrokeRect(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
-            if (checks[i].On) host.DrawText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
-            host.DrawText(checks[i].Label, x + 44, cy + 6, White);
-            host.DrawText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
+            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.UiFill(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
+            host.UiFill(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
+            host.UiStroke(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
+            if (checks[i].On) host.UiText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
+            host.UiText(checks[i].Label, x + 44, cy + 6, White);
+            host.UiText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
         }
 
         if (_tuningTab >= 2) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
-        host.DrawText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
-        host.FillRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
-        host.StrokeRect(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxLine);
-        host.DrawText(SoulWeightLabel(_soulWeight), boxX + 8, boxY + 4, White);
-        host.DrawText("▼", boxX + TuningBoxW - 18, boxY + 4, DimGray);
+        host.UiText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
+        host.UiFill(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
+        host.UiStroke(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxLine);
+        host.UiText(SoulWeightLabel(_soulWeight), boxX + 8, boxY + 4, White);
+        host.UiText("▼", boxX + TuningBoxW - 18, boxY + 4, DimGray);
 
         // 설명 — 지금 값으로 SOUL 0·40·150 일 때 일반 공격 배율이 어떻게 되는지.
         double Factor(int soul) => db.N(85) == 0 ? 0 : (double)(BasicAttackSoul(soul) + db.N(2)) * db.N(42) / db.N(85);
@@ -184,7 +185,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             $"                         SOUL 150: ×{Original(150):0.0} → ×{Factor(150):0.0}",
             "어빌리티는 원본대로라 SOUL 을 모아 쓰는 쪽이 나아진다. 적의 일반 공격에도 걸린다.",
         ];
-        for (int i = 0; i < lines.Length; i++) host.DrawText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
+        for (int i = 0; i < lines.Length; i++) host.UiText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
         DrawTuningFoot(x, y);
 
@@ -194,33 +195,33 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             {
                 int ry = boxY + TuningRowH * (i + 1);
                 bool here = MouseInBoard(boxX, ry, TuningBoxW, TuningRowH);
-                host.FillRect(boxX, ry, TuningBoxW, TuningRowH, here ? 0xFF2A4A8A : StatusScreen.PanelBg);
-                host.StrokeRect(boxX, ry, TuningBoxW, TuningRowH, StatusScreen.BoxLine);
-                host.DrawText(SoulWeightLabel(SoulWeightChoices[i]), boxX + 8, ry + 4, SoulWeightChoices[i] == _soulWeight ? 0xFF00FFFF : White);
+                host.UiFill(boxX, ry, TuningBoxW, TuningRowH, here ? 0xFF2A4A8A : StatusScreen.PanelBg);
+                host.UiStroke(boxX, ry, TuningBoxW, TuningRowH, StatusScreen.BoxLine);
+                host.UiText(SoulWeightLabel(SoulWeightChoices[i]), boxX + 8, ry + 4, SoulWeightChoices[i] == _soulWeight ? 0xFF00FFFF : White);
             }
     }
 
     internal void DrawTuningFoot(int x, int y)
     {
         int by = y + TuningH - 40;
-        host.FillRect(x + TuningW - 116, by, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + TuningW - 80, by + 6, White);
-        host.DrawText("Esc: 닫기", x + 16, by + 7, DimGray);
+        host.UiFill(x + TuningW - 116, by, 100, 28, StatusScreen.HeadBg);
+        host.UiText("닫기", x + TuningW - 80, by + 6, White);
+        host.UiText("Esc: 닫기", x + 16, by + 7, DimGray);
     }
 
     /// <summary>스토리 탭 — 대사 사이 멈춤(설정 메뉴와 같은 값)과 대사 첫 클릭 방식.</summary>
     internal void DrawStoryTab(int x, int y)
     {
-        host.DrawText("대사 사이 멈춤", x + 16, y + PauseY - 28, White);
-        host.DrawText("대사가 끝난 뒤 다음 대사가 뜨기까지 배경만 보이는 틈", x + 130, y + PauseY - 27, DimGray, 12);
+        host.UiText("대사 사이 멈춤", x + 16, y + PauseY - 28, White);
+        host.UiText("대사가 끝난 뒤 다음 대사가 뜨기까지 배경만 보이는 틈", x + 130, y + PauseY - 27, DimGray, 12);
         int chosen = TalkPauseIndex(host._talkPauseSeconds);
         for (int i = 0; i < TalkPauseChoices.Length; i++)
         {
             int px = x + 16 + i * (PauseW + PauseGap);
             bool on = i == chosen, here = MouseInBoard(px, y + PauseY, PauseW, PauseH);
-            host.FillRect(px, y + PauseY, PauseW, PauseH, on ? 0xFF2A4A8A : here ? 0x402A4A8A : StatusScreen.BoxBg);
-            host.StrokeRect(px, y + PauseY, PauseW, PauseH, StatusScreen.BoxLine);
-            host.DrawText(TalkPauseChoices[i] < 0 ? "원본(1초)" : TalkPauseLabel(TalkPauseChoices[i]), px + 8, y + PauseY + 5, on ? 0xFF00FFFF : White, 12);
+            host.UiFill(px, y + PauseY, PauseW, PauseH, on ? 0xFF2A4A8A : here ? 0x402A4A8A : StatusScreen.BoxBg);
+            host.UiStroke(px, y + PauseY, PauseW, PauseH, StatusScreen.BoxLine);
+            host.UiText(TalkPauseChoices[i] < 0 ? "원본(1초)" : TalkPauseLabel(TalkPauseChoices[i]), px + 8, y + PauseY + 5, on ? 0xFF00FFFF : White, 12);
         }
     }
 

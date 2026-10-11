@@ -119,6 +119,10 @@ internal sealed unsafe partial class GameWindow
     internal TimedHit? _timedHitFx;
     internal TimedHit TimedHitFx => _timedHitFx ?? LazyInitializer.EnsureInitialized(ref _timedHitFx, () => new TimedHit(this));
     internal TimedHitEditScreen? _timedEditScr;
+    private HiCanvas? _hi;
+    /// <summary>창 해상도로 그리는 덧그림 층 — 새 UI 가 여기에 그린다.</summary>
+    internal HiCanvas Hi => _hi ?? LazyInitializer.EnsureInitialized(ref _hi, () => new HiCanvas(this));
+
     internal TimedHitEditScreen TimedEditScr => _timedEditScr ?? LazyInitializer.EnsureInitialized(ref _timedEditScr, () => new TimedHitEditScreen(this));
     internal GamePad? _pad;
     internal GamePad Pad => _pad ?? LazyInitializer.EnsureInitialized(ref _pad, () => new GamePad(this));

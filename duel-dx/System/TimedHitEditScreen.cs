@@ -100,29 +100,29 @@ internal sealed class TimedHitEditScreen(GameWindow host)
         {
             _hot.Add((bx, by, bw, bh, act));
             if (!draw) return;
-            host.FillRect(bx, by, bw, bh, MouseIn(bx, by, bw, bh) ? 0xFF2A4A8A : back != 0 ? back : StatusScreen.BoxBg);
-            host.StrokeRect(bx, by, bw, bh, StatusScreen.BoxLine);
-            var (_, tw, th) = host.GetText(label, ink);
-            host.DrawText(label, bx + (bw - tw) / 2, by + (bh - th) / 2, ink);
+            host.UiFill(bx, by, bw, bh, MouseIn(bx, by, bw, bh) ? 0xFF2A4A8A : back != 0 ? back : StatusScreen.BoxBg);
+            host.UiStroke(bx, by, bw, bh, StatusScreen.BoxLine);
+            var (_, tw, th) = host.UiGetText(label, ink);
+            host.UiText(label, bx + (bw - tw) / 2, by + (bh - th) / 2, ink);
         }
         void Value(int vx, int vy, int vw, string text, double fill = -1)
         {
             if (!draw) return;
-            host.FillRect(vx, vy, vw, RowH - 6, 0xFF101828);
-            host.DrawText(text, vx + (vw - host.GetText(text, White).W) / 2, vy + 3, 0xFFFFE070);
+            host.UiFill(vx, vy, vw, RowH - 6, 0xFF101828);
+            host.UiText(text, vx + (vw - host.UiGetText(text, White).W) / 2, vy + 3, 0xFFFFE070);
             // 값 아래의 가는 막대 — 범위 안에서 어디쯤인지.
-            if (fill >= 0) host.FillRect(vx, vy + RowH - 9, (int)(vw * Math.Clamp(fill, 0, 1)), 3, 0xFF60C8FF);
+            if (fill >= 0) host.UiFill(vx, vy + RowH - 9, (int)(vw * Math.Clamp(fill, 0, 1)), 3, 0xFF60C8FF);
         }
 
         if (draw)
         {
-            host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-            host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-            host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-            host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-            host.DrawText("타이밍 어택 수정 — 고치면 바로 적용 · timedhit.json 에 저장", x + 10, y + 6, White);
+            host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+            host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+            host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+            host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+            host.UiText("타이밍 어택 수정 — 고치면 바로 적용 · timedhit.json 에 저장", x + 10, y + 6, White);
             DrawRuler(x + 16, y + RulerY, W - 32);
-            host.DrawText("패턴", x + 16, y + PatternY + 3, 0xFFD0E8D0, 12);
+            host.UiText("패턴", x + 16, y + PatternY + 3, 0xFFD0E8D0, 12);
         }
 
         // ── 패턴 줄: 등록해 둔 것들 · 새로 · 지우기 ───────────────────────────────
@@ -148,15 +148,15 @@ internal sealed class TimedHitEditScreen(GameWindow host)
 
         // ── 왼쪽: 박자 목록 ─────────────────────────────────────────────────────
         int lx = x + 16, top = y + RowsY;
-        if (draw) host.DrawText($"박자 {beats.Count}개 = 최대 {beats.Count}대 — 때(칸 가운데) · 길이(칸 너비)", lx, top - 20, 0xFFD0E8D0, 12);
+        if (draw) host.UiText($"박자 {beats.Count}개 = 최대 {beats.Count}대 — 때(칸 가운데) · 길이(칸 너비)", lx, top - 20, 0xFFD0E8D0, 12);
         for (int i = 0; i < beats.Count; i++)
         {
             var beat = beats[i];
             int ry = top + i * RowH;
             if (draw)
             {
-                host.FillRect(lx, ry + 4, 6, RowH - 14, BeatColor(i));
-                host.DrawText($"{i + 1} {BeatButton(i)}", lx + 12, ry + 3, White);
+                host.UiFill(lx, ry + 4, 6, RowH - 14, BeatColor(i));
+                host.UiText($"{i + 1} {BeatButton(i)}", lx + 12, ry + 3, White);
             }
             void MoveAt(double d) => beat.At = Round2(Math.Clamp(beat.At + d, 0.05, 6));
             void Widen(double d) => beat.Half = Round2(Math.Clamp(beat.Half + d, 0.01, 1));
@@ -165,7 +165,7 @@ internal sealed class TimedHitEditScreen(GameWindow host)
             Value(lx + 116, ry, 62, $"{beat.At:0.00}초");
             Button(lx + 182, ry, Btn, RowH - 6, "+", () => MoveAt(0.01));
             Button(lx + 212, ry, Btn, RowH - 6, "++", () => MoveAt(0.05));
-            if (draw) host.DrawText("길이", lx + 248, ry + 4, DimGray, 12);
+            if (draw) host.UiText("길이", lx + 248, ry + 4, DimGray, 12);
             Button(lx + 280, ry, Btn, RowH - 6, "−", () => Widen(-0.01));
             Value(lx + 310, ry, 62, $"{beat.Half * 2:0.00}초");
             Button(lx + 376, ry, Btn, RowH - 6, "+", () => Widen(0.01));
@@ -183,7 +183,7 @@ internal sealed class TimedHitEditScreen(GameWindow host)
 
         // ── 오른쪽: 띠 · 판정 ────────────────────────────────────────────────────
         int rx = x + 476;
-        if (draw) host.DrawText("띠 · 판정", rx, top - 20, 0xFFD0E8D0, 12);
+        if (draw) host.UiText("띠 · 판정", rx, top - 20, 0xFFD0E8D0, 12);
         (string Label, Func<double> Get, Action<double> Set, double Step, double Big, double Min, double Max, string Format)[] rows =
         [
             ("띠 길이", () => Cfg.Seconds, v => Cfg.Seconds = v, 0.01, 0.1, 0.3, 8, "0.00초"),
@@ -196,7 +196,7 @@ internal sealed class TimedHitEditScreen(GameWindow host)
         {
             var row = rows[i];
             int ry = top + i * RowH;
-            if (draw) host.DrawText(row.Label, rx, ry + 3, White);
+            if (draw) host.UiText(row.Label, rx, ry + 3, White);
             void Step(double d) => row.Set(Round2(Math.Clamp(row.Get() + d, row.Min, row.Max)));
             Button(rx + 88, ry, Btn, RowH - 6, "−−", () => Step(-row.Big));
             Button(rx + 118, ry, Btn, RowH - 6, "−", () => Step(-row.Step));
@@ -211,15 +211,15 @@ internal sealed class TimedHitEditScreen(GameWindow host)
             int count = Cfg.Patterns.Count;
             if (draw)
             {
-                host.FillRect(rx, ry - 4, 284, 1, StatusScreen.BoxLine);
-                host.DrawText("성공하면 다음", rx, ry + 3, White);
+                host.UiFill(rx, ry - 4, 284, 1, StatusScreen.BoxLine);
+                host.UiText("성공하면 다음", rx, ry + 3, White);
             }
             // −1(그대로) · 0 … count−1 을 돈다.
             void Turn(int d) => current.Next = ((current.Next + 1 + d) % (count + 1) + count + 1) % (count + 1) - 1;
             Button(rx + 118, ry, Btn, RowH - 6, "◀", () => Turn(-1));
             Value(rx + 148, ry, 76, current.Next < 0 || current.Next == Cfg.Selected ? "그대로" : $"{current.Next + 1}번 패턴");
             if (draw && current.Next >= 0 && current.Next != Cfg.Selected && Cfg.Patterns[current.Next].Next == Cfg.Selected)
-                host.DrawText("(서로 번갈아 나옵니다)", rx, ry + RowH - 2, DimGray, 11);
+                host.UiText("(서로 번갈아 나옵니다)", rx, ry + RowH - 2, DimGray, 11);
             Button(rx + 228, ry, Btn, RowH - 6, "▶", () => Turn(1));
         }
 
@@ -227,13 +227,13 @@ internal sealed class TimedHitEditScreen(GameWindow host)
         if (draw)
         {
             int py = y + PreviewY;
-            host.FillRect(x + 12, py, W - 24, TimedHit.AboveBar + 12 + TimedHit.BelowBar, 0xFF0C1420);
+            host.UiFill(x + 12, py, W - 24, TimedHit.AboveBar + 12 + TimedHit.BelowBar, 0xFF0C1420);
             if (host.TimedHitFx.Running) host.TimedHitFx.Draw(preview: true);
             else
             {
-                host.DrawText("「미리 보기」(Enter · Space)로 띠를 돌려 본다 — 도는 동안 Space(박자마다) · 패드 LT · RT(번갈아)로 눌러 본다", x + 24, py + 30, DimGray, 12);
-                host.DrawText("맞춘 박자만큼 때린다(박자 하나 = 한 대, 여섯 대까지) — 하나만 맞추면 크리티컬, 하나도 못 맞추면 보통 공격", x + 24, py + 54, DimGray, 12);
-                host.DrawText($"전투는 ★{Cfg.Start + 1}번 패턴에서 시작 — 다 맞추면 그 적에게는 「성공하면 다음」의 패턴이 나온다(인물 · 적마다 따로, 틀리면 ★{Cfg.Start + 1}번으로)", x + 24, py + 78, DimGray, 12);
+                host.UiText("「미리 보기」(Enter · Space)로 띠를 돌려 본다 — 도는 동안 Space(박자마다) · 패드 LT · RT(번갈아)로 눌러 본다", x + 24, py + 30, DimGray, 12);
+                host.UiText("맞춘 박자만큼 때린다(박자 하나 = 한 대, 여섯 대까지) — 하나만 맞추면 크리티컬, 하나도 못 맞추면 보통 공격", x + 24, py + 54, DimGray, 12);
+                host.UiText($"전투는 ★{Cfg.Start + 1}번 패턴에서 시작 — 다 맞추면 그 적에게는 「성공하면 다음」의 패턴이 나온다(인물 · 적마다 따로, 틀리면 ★{Cfg.Start + 1}번으로)", x + 24, py + 78, DimGray, 12);
             }
         }
 
@@ -262,37 +262,37 @@ internal sealed class TimedHitEditScreen(GameWindow host)
         double end = Math.Max(2.0, Math.Ceiling(Math.Max(Cfg.Seconds, beats.Max(b => b.At + b.Half)) * 2) / 2 + 0.5);
         int At(double seconds) => x + (int)(w * Math.Clamp(seconds, 0, end) / end);
 
-        host.FillRect(x, y, w, RulerH, 0xFF0C1420);
-        host.StrokeRect(x, y, w, RulerH, StatusScreen.BoxLine);
-        host.FillRect(x, y + 2, At(Cfg.Seconds) - x, RulerH - 4, 0xFF36466A);          // 띠 길이
+        host.UiFill(x, y, w, RulerH, 0xFF0C1420);
+        host.UiStroke(x, y, w, RulerH, StatusScreen.BoxLine);
+        host.UiFill(x, y + 2, At(Cfg.Seconds) - x, RulerH - 4, 0xFF36466A);          // 띠 길이
         for (int i = 0; i < beats.Count; i++)
         {
             var b = beats[i];
             uint color = BeatColor(i);
             int g0 = At(b.At - b.Half - Cfg.Grace), g1 = At(b.At + b.Half + Cfg.Grace), z0 = At(b.At - b.Half), z1 = At(b.At + b.Half);
-            host.FillRect(g0, y + 5, g1 - g0, RulerH - 10, 0x60000000 | (color & 0xFFFFFF));   // 판정 여유까지
-            host.FillRect(z0, y + 3, Math.Max(2, z1 - z0), RulerH - 6, color);                  // 그리는 칸
+            host.UiFill(g0, y + 5, g1 - g0, RulerH - 10, 0x60000000 | (color & 0xFFFFFF));   // 판정 여유까지
+            host.UiFill(z0, y + 3, Math.Max(2, z1 - z0), RulerH - 6, color);                  // 그리는 칸
             string n = $"{i + 1}";
-            var (_, tw, th) = host.GetText(n, White, 12);
-            host.DrawText(n, (z0 + z1) / 2 - tw / 2, y + (RulerH - th) / 2, 0xFF201800, 12);
+            var (_, tw, th) = host.UiGetText(n, White, 12);
+            host.UiText(n, (z0 + z1) / 2 - tw / 2, y + (RulerH - th) / 2, 0xFF201800, 12);
         }
         // 띠 끝 표시와 눈금
-        host.FillRect(At(Cfg.Seconds) - 1, y - 3, 2, RulerH + 6, White);
+        host.UiFill(At(Cfg.Seconds) - 1, y - 3, 2, RulerH + 6, White);
         for (double t = 0; t <= end + 1e-6; t += 0.5)
         {
             int tx = At(t);
-            host.FillRect(Math.Min(tx, x + w - 1), y + RulerH, 1, 4, DimGray);
+            host.UiFill(Math.Min(tx, x + w - 1), y + RulerH, 1, 4, DimGray);
             string label = $"{t:0.0}";
-            host.DrawText(label, Math.Clamp(tx - host.GetText(label, DimGray, 11).W / 2, x, x + w - 20), y + RulerH + 5, DimGray, 11);
+            host.UiText(label, Math.Clamp(tx - host.UiGetText(label, DimGray, 11).W / 2, x, x + w - 20), y + RulerH + 5, DimGray, 11);
         }
         string length = $"띠 {Cfg.Seconds:0.00}초";
-        host.DrawText(length, Math.Min(At(Cfg.Seconds) + 6, x + w - host.GetText(length, White, 11).W - 4), y - 14, White, 11);
+        host.UiText(length, Math.Min(At(Cfg.Seconds) + 6, x + w - host.UiGetText(length, White, 11).W - 4), y - 14, White, 11);
 
         // 겹침 · 띠 밖 경고
         string warn = "";
         for (int i = 0; i + 1 < beats.Count && warn.Length == 0; i++)
             if (beats[i].At + beats[i].Half + Cfg.Grace > beats[i + 1].At - beats[i + 1].Half - Cfg.Grace) warn = $"박자 {i + 1} · {i + 2} 의 판정 구간이 겹칩니다";
         if (warn.Length == 0 && beats[^1].At + beats[^1].Half > Cfg.Seconds) warn = "마지막 칸이 띠 밖으로 나갑니다";
-        if (warn.Length > 0) host.DrawText(warn, x, y - 14, 0xFFFF7060, 11);
+        if (warn.Length > 0) host.UiText(warn, x, y - 14, 0xFFFF7060, 11);
     }
 }

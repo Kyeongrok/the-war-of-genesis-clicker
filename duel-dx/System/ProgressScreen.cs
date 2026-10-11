@@ -45,18 +45,18 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
         if (!_progressOpen) return;
         int w = Math.Min(760, host.ViewWidth - 40), h = host.ViewHeight - 40;
         int x0 = host._camX + (host.ViewWidth - w) / 2, y0 = host._camY + 20;
-        host.FillRect(x0, y0, w, h, 0xF0101428);
-        host.StrokeRect(x0, y0, w, h, 0xFF6070A0);
+        host.UiFill(x0, y0, w, h, 0xF0101428);
+        host.UiStroke(x0, y0, w, h, 0xFF6070A0);
 
         var chp = host.Mos._mosesChp;
         string title = chp is null ? "진행 상태 — 챕터 밖" : $"진행 상태 — Chp {chp.Id:D4} {host._db?.T((ushort)chp.TitleText)}";
-        host.DrawText(title, x0 + 12, y0 + 8, 0xFFFFE070, 13);
-        host.DrawText("휠: 굴리기 · [−][+]: 깃발 바꾸기 · Esc: 닫기", x0 + w - 300, y0 + 10, 0xFF9098B0, 11);
+        host.UiText(title, x0 + 12, y0 + 8, 0xFFFFE070, 13);
+        host.UiText("휠: 굴리기 · [−][+]: 깃발 바꾸기 · Esc: 닫기", x0 + w - 300, y0 + 10, 0xFF9098B0, 11);
         if (chp is null) return;
 
         // 줄 목록을 만든 뒤 굴린 만큼 잘라 그린다.
         var rows = new List<Action<int>>();
-        rows.Add(y => host.DrawText("장소 (행성별)", x0 + 12, y, 0xFF9FC0FF, 12));
+        rows.Add(y => host.UiText("장소 (행성별)", x0 + 12, y, 0xFF9FC0FF, 12));
         // 행성마다 머리 줄(항성계 › 행성, 행성·항성계 조건) 뒤에 그 행성의 장소를 늘어놓는다 — 행성이 잠기면 그 장소도 항행에 안 나온다.
         var grouped = chp.Planets.Select(pl => (Planet: pl, Places: chp.Places.Where(pp => pl.Places.Contains(pp.No)).ToList()))
                                  .Where(g => g.Places.Count > 0).ToList();
@@ -71,15 +71,15 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
                 var conds = pl.Conditions.Concat(system?.Conditions ?? []).Where(c => c.Variable > 0 && c.Variable < host.FlagSt._flags.Length)
                     .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host.FlagSt._flags[c.Variable]})").ToList();
                 string where = $"{(system is null ? "" : host._db?.T((ushort)system.NameText) + " › ")}{host._db?.T((ushort)pl.NameText)}";
-                host.DrawText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
+                host.UiText("■ " + where, x0 + 16, y, open ? 0xFFB0C8E0 : 0xFFE07070, 12);
                 if (!open || conds.Count > 0)
-                    host.DrawText((open ? "" : "행성 잠김 · ") + string.Join(", ", conds), x0 + 330, y, open ? 0xFF9098B0 : 0xFFE07070, 12);
+                    host.UiText((open ? "" : "행성 잠김 · ") + string.Join(", ", conds), x0 + 330, y, open ? 0xFF9098B0 : 0xFFE07070, 12);
             });
             foreach (var place in places) rows.Add(PlaceRow(place));
         }
         if (loose.Count > 0)
         {
-            rows.Add(y => host.DrawText("■ 행성 밖(자동 발생 따위)", x0 + 16, y, 0xFFB0C8E0, 12));
+            rows.Add(y => host.UiText("■ 행성 밖(자동 발생 따위)", x0 + 16, y, 0xFFB0C8E0, 12));
             foreach (var place in loose) rows.Add(PlaceRow(place));
         }
 
@@ -100,15 +100,15 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
                 var conds = p.Conditions.Where(c => c.Variable > 0 && c.Variable < host.FlagSt._flags.Length)
                     .Select(c => $"깃발 {c.Variable} {OpText(c.Operator)} {c.Value} (지금 {host.FlagSt._flags[c.Variable]})").ToList();
                 string name = host._db?.T((ushort)p.NameText) is { Length: > 0 } n ? n : $"장소 {p.No}";
-                host.DrawText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
-                host.DrawText(name, x0 + 56, y, White, 12);
-                host.DrawText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 200, y, 0xFFB0B8C8, 12);
-                host.DrawText(state, x0 + 300, y, color, 12);
-                host.DrawText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 350, y, color, 12);
+                host.UiText($"{p.No,3}", x0 + 24, y, 0xFF9098B0, 12);
+                host.UiText(name, x0 + 56, y, White, 12);
+                host.UiText(kind + (p.IsAuto ? " · 자동" : ""), x0 + 200, y, 0xFFB0B8C8, 12);
+                host.UiText(state, x0 + 300, y, color, 12);
+                host.UiText(conds.Count == 0 ? "조건 없음" : string.Join(", ", conds), x0 + 350, y, color, 12);
             };
         }
         rows.Add(_ => { });
-        rows.Add(y => host.DrawText("깃발 (이 챕터가 보거나 바꾸는 것)", x0 + 12, y, 0xFF9FC0FF, 12));
+        rows.Add(y => host.UiText("깃발 (이 챕터가 보거나 바꾸는 것)", x0 + 12, y, 0xFF9FC0FF, 12));
         var flags = ChapterFlags(chp).ToList();
         int perRow = Math.Max(2, (w - 24) / 170);             // 한 칸 = 「깃발 NNN = NNN」 + [−][+]
         int colW = (w - 24) / perRow;
@@ -120,10 +120,10 @@ internal sealed unsafe class ProgressScreen(GameWindow host)
                 for (int k = 0; k < chunk.Count; k++)
                 {
                     int f = chunk[k], cx = x0 + 16 + k * colW;
-                    host.DrawText($"깃발 {f} = {host.FlagSt._flags[f]}", cx, y, host.FlagSt._flags[f] != 0 ? White : 0xFF9098B0, 12);
+                    host.UiText($"깃발 {f} = {host.FlagSt._flags[f]}", cx, y, host.FlagSt._flags[f] != 0 ? White : 0xFF9098B0, 12);
                     int bx = cx + 100;
-                    host.DrawText("[−]", bx, y, 0xFFFFC080, 12);
-                    host.DrawText("[+]", bx + 26, y, 0xFFFFC080, 12);
+                    host.UiText("[−]", bx, y, 0xFFFFC080, 12);
+                    host.UiText("[+]", bx + 26, y, 0xFFFFC080, 12);
                     _progressButtons.Add((bx, y, 22, ProgressRowH, f, -1));
                     _progressButtons.Add((bx + 26, y, 22, ProgressRowH, f, +1));
                 }

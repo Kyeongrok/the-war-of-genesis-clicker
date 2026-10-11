@@ -191,11 +191,11 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
     {
         if (!Open) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText("릴리즈 노트 — 이번 업데이트로 바뀐 것", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+        host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+        host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+        host.UiText("릴리즈 노트 — 이번 업데이트로 바뀐 것", x + 10, y + 6, White);
 
         var lines = Lines();
         for (int i = 0; i < Rows && _top + i < lines.Count; i++)
@@ -203,21 +203,21 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
             string line = lines[_top + i];
             // 판 번호 줄(「v0.21.0」)은 머리 글로 띄운다.
             bool head = line.Length > 1 && line[0] == 'v' && char.IsDigit(line[1]);
-            host.DrawText(line, x + 20, y + 40 + i * LineH, head ? 0xFFFFE070 : White, head ? 14 : 12);
+            host.UiText(line, x + 20, y + 40 + i * LineH, head ? 0xFFFFE070 : White, head ? 14 : 12);
         }
 
         // 도움을 주신 분들 — 쌓아 온 명단을 작은 글씨로 세 줄까지.
         int ty = y + H - 50 - ThanksH;
-        host.FillRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxBg);
-        host.StrokeRect(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxLine);
-        host.DrawText("지금까지 도움을 주신 분들", x + 20, ty + 4, 0xFFFFE070, 11);
+        host.UiFill(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxBg);
+        host.UiStroke(x + 12, ty, W - 24, ThanksH, StatusScreen.BoxLine);
+        host.UiText("지금까지 도움을 주신 분들", x + 20, ty + 4, 0xFFFFE070, 11);
         _thanks ??= ReleaseNotes.Contributors() is { Count: > 0 } names ? [.. host.Mos.WrapText(string.Join(" · ", names), W - 40, 10f).Take(3)] : [];
-        if (_thanks.Count == 0) host.DrawText("아직 적힌 분이 없습니다.", x + 20, ty + 21, DimGray, 10);
-        for (int i = 0; i < _thanks.Count; i++) host.DrawText(_thanks[i], x + 20, ty + 21 + i * 13, White, 10);
+        if (_thanks.Count == 0) host.UiText("아직 적힌 분이 없습니다.", x + 20, ty + 21, DimGray, 10);
+        for (int i = 0; i < _thanks.Count; i++) host.UiText(_thanks[i], x + 20, ty + 21 + i * 13, White, 10);
 
         int fy = y + H - 40;
-        host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + W - 80, fy + 6, White);
-        host.DrawText(lines.Count > Rows ? "Esc · Enter: 닫기 · 휠: 더 보기" : "Esc · Enter: 닫기", x + 16, fy + 7, DimGray);
+        host.UiFill(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
+        host.UiText("닫기", x + W - 80, fy + 6, White);
+        host.UiText(lines.Count > Rows ? "Esc · Enter: 닫기 · 휠: 더 보기" : "Esc · Enter: 닫기", x + 16, fy + 7, DimGray);
     }
 }

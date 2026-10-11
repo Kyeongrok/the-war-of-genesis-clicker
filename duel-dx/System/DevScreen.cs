@@ -109,51 +109,51 @@ internal sealed unsafe class DevScreen(GameWindow host)
     {
         if (!_open) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText("개발 — 만들 때 쓰는 것", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+        host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+        host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+        host.UiText("개발 — 만들 때 쓰는 것", x + 10, y + 6, White);
 
         var buttons = Buttons();
         for (int i = 0; i < buttons.Length; i++)
         {
             int ry = y + RowY + i * RowH;
             bool here = MouseIn(x + 16, ry, ButtonW, RowH - 8);
-            host.FillRect(x + 16, ry, ButtonW, RowH - 8, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
-            host.StrokeRect(x + 16, ry, ButtonW, RowH - 8, StatusScreen.BoxLine);
-            host.DrawText(buttons[i].Label, x + 16 + (ButtonW - host.GetText(buttons[i].Label, White).W) / 2, ry + 4, White);
-            host.DrawText(buttons[i].Note, x + 16 + ButtonW + 14, ry + 6, DimGray, 12);
+            host.UiFill(x + 16, ry, ButtonW, RowH - 8, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
+            host.UiStroke(x + 16, ry, ButtonW, RowH - 8, StatusScreen.BoxLine);
+            host.UiText(buttons[i].Label, x + 16 + (ButtonW - host.UiGetText(buttons[i].Label, White).W) / 2, ry + 4, White);
+            host.UiText(buttons[i].Note, x + 16 + ButtonW + 14, ry + 6, DimGray, 12);
         }
 
-        host.FillRect(x + 12, y + FolderY - 12, W - 24, 1, StatusScreen.BoxLine);
+        host.UiFill(x + 12, y + FolderY - 12, W - 24, 1, StatusScreen.BoxLine);
         var folders = Folders();
         for (int i = 0; i < folders.Length; i++)
         {
             int ry = y + FolderY + i * FolderH;
-            host.DrawText(folders[i].Label, x + 16, ry + 4, White);
-            if (folders[i].Note.Length > 0) host.DrawText(folders[i].Note, x + 110, ry + 5, 0xFFFFE070, 12);
-            host.DrawText(Shorten(folders[i].Path.Length > 0 ? folders[i].Path : "(못 찾음)", W - 32), x + 16, ry + 24, DimGray, 12);
+            host.UiText(folders[i].Label, x + 16, ry + 4, White);
+            if (folders[i].Note.Length > 0) host.UiText(folders[i].Note, x + 110, ry + 5, 0xFFFFE070, 12);
+            host.UiText(Shorten(folders[i].Path.Length > 0 ? folders[i].Path : "(못 찾음)", W - 32), x + 16, ry + 24, DimGray, 12);
             bool here = MouseIn(x + W - 16 - OpenW, ry, OpenW, 24);
-            host.FillRect(x + W - 16 - OpenW, ry, OpenW, 24, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
-            host.StrokeRect(x + W - 16 - OpenW, ry, OpenW, 24, StatusScreen.BoxLine);
-            host.DrawText("폴더 열기", x + W - 16 - OpenW + (OpenW - host.GetText("폴더 열기", White, 12).W) / 2, ry + 5, White, 12);
+            host.UiFill(x + W - 16 - OpenW, ry, OpenW, 24, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
+            host.UiStroke(x + W - 16 - OpenW, ry, OpenW, 24, StatusScreen.BoxLine);
+            host.UiText("폴더 열기", x + W - 16 - OpenW + (OpenW - host.UiGetText("폴더 열기", White, 12).W) / 2, ry + 5, White, 12);
         }
 
         int fy = y + H - 40;
-        host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + W - 80, fy + 6, White);
-        host.DrawText("Esc: 닫기", x + 16, fy + 7, DimGray);
+        host.UiFill(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
+        host.UiText("닫기", x + W - 80, fy + 6, White);
+        host.UiText("Esc: 닫기", x + 16, fy + 7, DimGray);
     }
 
     /// <summary>긴 경로는 가운데를 줄여 창 너비에 맞춘다.</summary>
     internal string Shorten(string path, int width)
     {
-        if (host.GetText(path, White, 12).W <= width) return path;
+        if (host.UiGetText(path, White, 12).W <= width) return path;
         for (int keep = path.Length - 4; keep > 12; keep -= 2)
         {
             string cut = path[..(keep / 2)] + "…" + path[^(keep / 2)..];
-            if (host.GetText(cut, White, 12).W <= width) return cut;
+            if (host.UiGetText(cut, White, 12).W <= width) return cut;
         }
         return path[..12] + "…";
     }

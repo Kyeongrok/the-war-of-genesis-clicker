@@ -60,6 +60,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 int battleZoom = Math.Max(0, Array.IndexOf(BattleZoomChoices, host._battleZoomPercent));
                 int battleTop = Array.FindIndex(BattleZoomChoices, z => z / 100.0 > host.MaxUsableZoom + 1e-6);
                 if (battleTop < 0) battleTop = BattleZoomChoices.Length - 1;
+                int bubble = Math.Max(0, Array.IndexOf(BubbleScaleChoices, host._bubbleScalePercent));
                 double battleReal = Math.Min(host._battleZoomPercent / 100.0, host.MaxUsableZoom);
                 return
                 [
@@ -72,6 +73,9 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     new("전투 배율", host._battleZoomPercent < 0 ? "배율과 같게"
                               : battleReal < host._battleZoomPercent / 100.0 - 1e-6 ? $"{host._battleZoomPercent}% (창에 맞춰 {battleReal * 100:0}%)" : $"{host._battleZoomPercent}%",
                         Step: d => host.OnMenuCommand(MenuBattleZoom + Math.Clamp(battleZoom + d, 0, battleTop)), NoPrev: battleZoom == 0, NoNext: battleZoom >= battleTop),
+                    new("전투 말풍선 크기", host._bubbleScalePercent == 100 ? "100% (원본)" : $"{host._bubbleScalePercent}%",
+                        Step: d => host.OnMenuCommand(MenuBubbleScale + Math.Clamp(bubble + d, 0, BubbleScaleChoices.Length - 1)),
+                        NoPrev: bubble == 0, NoNext: bubble >= BubbleScaleChoices.Length - 1),
                     new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11)"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),
@@ -146,33 +150,46 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
         else Close();
     }
 
+    // 그리기는 여기를 거친다 — 새 UI(모드 > 실험 > 새 UI, 기본 켬)면 창 해상도 층(HiCanvas)에, 끄면 전처럼 판에 그린다(사용자 요청 menu-55).
+    // 자리 · 크기는 어느 쪽이든 판 좌표라 누르는 칸은 그대로다.
+    private bool Hi => host._hiResUi;
+    private void Fill(int x, int y, int w, int h, uint color) { if (Hi) host.Hi.FillRect(x, y, w, h, color); else host.FillRect(x, y, w, h, color); }
+    private void Stroke(int x, int y, int w, int h, uint color) { if (Hi) host.Hi.StrokeRect(x, y, w, h, color); else host.StrokeRect(x, y, w, h, color); }
+    private void Text(string text, int x, int y, uint color, float size = 13f) { if (Hi) host.Hi.DrawText(text, x, y, color, size); else host.DrawText(text, x, y, color, size); }
+    private (int W, int H) Measure(string text, uint color, float size = 13f)
+    {
+        if (Hi) return host.Hi.Measure(text, color, size);
+        var (_, w, h) = host.GetText(text, color, size);
+        return (w, h);
+    }
+
     private void Button(int x, int y, int w, int h, string text)
     {
-        host.FillRect(x, y, w, h, Over(x, y, w, h) ? 0xFF2A4A8A : StatusScreen.BoxBg);
-        host.StrokeRect(x, y, w, h, StatusScreen.BoxLine);
-        var (_, tw, th) = host.GetText(text, White, 12);
-        host.DrawText(text, x + (w - tw) / 2, y + (h - th) / 2, White, 12);
+        Fill(x, y, w, h, Over(x, y, w, h) ? 0xFF2A4A8A : StatusScreen.BoxBg);
+        Stroke(x, y, w, h, StatusScreen.BoxLine);
+        var (tw, th) = Measure(text, White, 12);
+        Text(text, x + (w - tw) / 2, y + (h - th) / 2, White, 12);
     }
 
     internal void Draw()
     {
         if (!_open) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText("설정", x + 10, y + 6, White);
+        Fill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        Fill(x, y, W, H, StatusScreen.PanelBg);
+        Stroke(x, y, W, H, StatusScreen.BoxLine);
+        Fill(x, y, W, 28, StatusScreen.HeadBg);
+        Text("설정", x + 10, y + 6, White);
 
         for (int i = 0; i < Pages.Length; i++)
         {
             int ry = y + 40 + i * SideRowH;
             bool on = i == _page;
-            host.FillRect(x + 12, ry, SideW, SideRowH - 4, on ? 0xFF2A4A8A : Over(x + 12, ry, SideW, SideRowH - 4) ? 0xFF1C2F5A : StatusScreen.BoxBg);
-            host.StrokeRect(x + 12, ry, SideW, SideRowH - 4, StatusScreen.BoxLine);
-            host.DrawText(Pages[i], x + 24, ry + 7, on ? 0xFF00FFFF : White);
+            Fill(x + 12, ry, SideW, SideRowH - 4, on ? 0xFF2A4A8A : Over(x + 12, ry, SideW, SideRowH - 4) ? 0xFF1C2F5A : StatusScreen.BoxBg);
+            Stroke(x + 12, ry, SideW, SideRowH - 4, StatusScreen.BoxLine);
+            Text(Pages[i], x + 24, ry + 7, on ? 0xFF00FFFF : White);
         }
-        host.FillRect(x + SideW + 20, y + 40, 1, H - 90, StatusScreen.BoxLine);
+        Fill(x + SideW + 20, y + 40, 1, H - 90, StatusScreen.BoxLine);
 
         int px = x + SideW + 30, top = y + 44;
         if (_page == 3) DrawPad(px, top, y);
@@ -185,43 +202,43 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 var row = rows[i];
                 if (row.Step != null)
                 {
-                    host.DrawText(row.Label, px, ry + 4, White);
+                    Text(row.Label, px, ry + 4, White);
                     Button(px + 170, ry, 24, 24, "◀");
-                    host.FillRect(px + 194, ry, 184, 24, StatusScreen.BoxBg);
-                    host.StrokeRect(px + 194, ry, 184, 24, StatusScreen.BoxLine);
-                    host.DrawText(row.Value, px + 194 + (184 - host.GetText(row.Value, White, 12).W) / 2, ry + 5, White, 12);
+                    Fill(px + 194, ry, 184, 24, StatusScreen.BoxBg);
+                    Stroke(px + 194, ry, 184, 24, StatusScreen.BoxLine);
+                    Text(row.Value, px + 194 + (184 - Measure(row.Value, White, 12).W) / 2, ry + 5, White, 12);
                     Button(px + 378, ry, 24, 24, "▶");
                     // 꺼진 화살표는 어둡게 덮는다.
-                    if (row.NoPrev) host.FillRect(px + 170, ry, 24, 24, 0xB0101828);
-                    if (row.NoNext) host.FillRect(px + 378, ry, 24, 24, 0xB0101828);
-                    if (row.Note.Length > 0) host.DrawText(row.Note, px + 170, ry + 25, DimGray, 10);
+                    if (row.NoPrev) Fill(px + 170, ry, 24, 24, 0xB0101828);
+                    if (row.NoNext) Fill(px + 378, ry, 24, 24, 0xB0101828);
+                    if (row.Note.Length > 0) Text(row.Note, px + 170, ry + 25, DimGray, 10);
                 }
                 else if (row.Toggle != null)
                 {
-                    host.StrokeRect(px, ry + 3, 16, 16, StatusScreen.BoxLine);
-                    if (row.On) host.FillRect(px + 3, ry + 6, 10, 10, 0xFF00D8FF);
-                    host.DrawText(row.Label, px + 26, ry + 3, White);
-                    if (row.Note.Length > 0) host.DrawText(row.Note, px + 200, ry + 5, DimGray, 12);
+                    Stroke(px, ry + 3, 16, 16, StatusScreen.BoxLine);
+                    if (row.On) Fill(px + 3, ry + 6, 10, 10, 0xFF00D8FF);
+                    Text(row.Label, px + 26, ry + 3, White);
+                    if (row.Note.Length > 0) Text(row.Note, px + 200, ry + 5, DimGray, 12);
                 }
                 else
                 {
                     Button(px, ry, 200, 26, row.Label);
-                    if (row.Note.Length > 0) host.DrawText(row.Note, px + 214, ry + 6, DimGray, 12);
+                    if (row.Note.Length > 0) Text(row.Note, px + 214, ry + 6, DimGray, 12);
                 }
             }
         }
 
         int fy = y + H - 40;
-        host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + W - 80, fy + 6, White);
-        if (_page != 3) host.DrawText("Esc: 닫기", x + 16, fy + 7, DimGray);
+        Fill(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
+        Text("닫기", x + W - 80, fy + 6, White);
+        if (_page != 3) Text("Esc: 닫기", x + 16, fy + 7, DimGray);
     }
 
     /// <summary>패드 갈래 — 동작마다 묶인 단추. 줄을 누르면 다음에 누르는 패드 단추가 그 동작에 묶인다.</summary>
     private void DrawPad(int px, int top, int y)
     {
         var pad = host.Pad;
-        host.DrawText(pad.Connected ? "패드 연결됨 — 줄을 누르고 패드 단추를 누르세요" : "패드가 연결되어 있지 않습니다 (연결하면 바로 잡힙니다)",
+        Text(pad.Connected ? "패드 연결됨 — 줄을 누르고 패드 단추를 누르세요" : "패드가 연결되어 있지 않습니다 (연결하면 바로 잡힙니다)",
                       px, top, pad.Connected ? 0xFF90E0A0 : 0xFFFFB070, 12);
         int rowW = W - SideW - 46;
         for (int i = 0; i < GamePad.All.Length; i++)
@@ -229,14 +246,14 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
             var (action, label, _) = GamePad.All[i];
             int ry = top + 26 + i * PadRowH;
             bool capturing = pad._capture == action;
-            if (capturing) host.FillRect(px - 4, ry - 2, rowW + 8, PadRowH - 2, 0xFF2A4A8A);
-            else if (Over(px, ry, rowW, PadRowH - 4)) host.FillRect(px - 4, ry - 2, rowW + 8, PadRowH - 2, 0xFF1C2F5A);
-            host.DrawText(label, px, ry + 3, White);
-            host.FillRect(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxBg);
-            host.StrokeRect(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxLine);
-            host.DrawText(capturing ? "패드 단추를 누르세요… (Esc: 그만)" : GamePad.ButtonLabel(pad.ButtonOf(action)), px + 228, ry + 3, capturing ? 0xFFFFE070 : White, 12);
+            if (capturing) Fill(px - 4, ry - 2, rowW + 8, PadRowH - 2, 0xFF2A4A8A);
+            else if (Over(px, ry, rowW, PadRowH - 4)) Fill(px - 4, ry - 2, rowW + 8, PadRowH - 2, 0xFF1C2F5A);
+            Text(label, px, ry + 3, White);
+            Fill(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxBg);
+            Stroke(px + 220, ry, rowW - 220, PadRowH - 6, StatusScreen.BoxLine);
+            Text(capturing ? "패드 단추를 누르세요… (Esc: 그만)" : GamePad.ButtonLabel(pad.ButtonOf(action)), px + 228, ry + 3, capturing ? 0xFFFFE070 : White, 12);
         }
-        host.DrawText("이동은 십자키 · 왼쪽 스틱(고정). 이미 쓰는 단추를 고르면 두 동작의 단추가 맞바뀝니다.", px, top + 26 + GamePad.All.Length * PadRowH + 4, DimGray, 11);
+        Text("이동은 십자키 · 왼쪽 스틱(고정). 이미 쓰는 단추를 고르면 두 동작의 단추가 맞바뀝니다.", px, top + 26 + GamePad.All.Length * PadRowH + 4, DimGray, 11);
         Button(px, y + H - 40, 120, 28, "기본값으로");
     }
 }

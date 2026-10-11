@@ -137,6 +137,14 @@ internal sealed unsafe partial class GameWindow
     /// <summary>전투 배율 고르기(사용자 요청 menu-52) — 첫 칸 −1 은 「배율과 같게」, 나머지는 %.</summary>
     internal const int MenuBattleZoom = 1180;
     internal static readonly int[] BattleZoomChoices = [-1, 100, 150, 200, 300, 400, 500, 600, 800];
+
+    /// <summary>전투 말풍선 크기 고르기(사용자 요청 menu-54).</summary>
+    internal const int MenuBubbleScale = 1190;
+
+    /// <summary>모드 > 실험 > 새 UI — 창을 화면 해상도로 그려 큰 배율에서도 글자가 또렷하다(지금은 설정 창). 끄면 이전 UI(사용자 요청 menu-55).</summary>
+    internal bool _hiResUi = UserSettings.Current.HiResUi;
+    internal const int MenuHiResUi = 1196;
+    internal static readonly int[] BubbleScaleChoices = [100, 125, 150, 175, 200];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     internal const int MenuResBase = 1020;
     /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
@@ -206,7 +214,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -339,6 +347,11 @@ internal sealed unsafe partial class GameWindow
                 ApplyZoom(force: true);      // 창 꼴과 크기를 새로 잡는다
                 Toast(_fullscreen ? "전체화면 — F11 이나 시스템 메뉴 > SETTING 에서 끕니다" : "창 화면으로 돌아왔습니다");
                 break;
+            case MenuHiResUi:
+                _hiResUi = !_hiResUi;
+                Toast(_hiResUi ? "새 UI — 설정 창을 화면 해상도로 그립니다" : "이전 UI 로 그립니다");
+                SaveSettings();
+                break;
             case MenuTimedHit:
                 _timedHit = !_timedHit;
                 Toast(_timedHit ? "기본공격 앞에 띠가 뜹니다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬" : "타이밍 어택을 껐습니다");
@@ -455,6 +468,10 @@ internal sealed unsafe partial class GameWindow
                 Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");
                 break;
             }
+            case >= MenuBubbleScale and < MenuBubbleScale + 5:
+                _bubbleScalePercent = BubbleScaleChoices[id - MenuBubbleScale];
+                SaveSettings();
+                break;
             case >= MenuBattleZoom and < MenuBattleZoom + 9:
             {
                 _battleZoomPercent = BattleZoomChoices[id - MenuBattleZoom];
@@ -522,31 +539,31 @@ internal sealed unsafe partial class GameWindow
     {
         if (!_keysOpen) return;
         var (x, y, h) = KeysPanel();
-        FillRect(x, y, KeysW, h, StatusScreen.PanelBg);
-        StrokeRect(x, y, KeysW, h, StatusScreen.BoxLine);
-        FillRect(x, y, KeysW, 28, StatusScreen.HeadBg);
-        DrawText("단축키 설정 — 줄을 누르고 새 키를 누르세요 (Esc: 그만)", x + 10, y + 6, White);
+        UiFill(x, y, KeysW, h, StatusScreen.PanelBg);
+        UiStroke(x, y, KeysW, h, StatusScreen.BoxLine);
+        UiFill(x, y, KeysW, 28, StatusScreen.HeadBg);
+        UiText("단축키 설정 — 줄을 누르고 새 키를 누르세요 (Esc: 그만)", x + 10, y + 6, White);
 
         for (int i = 0; i < KeyBindings.All.Length; i++)
         {
             var (action, label, _) = KeyBindings.All[i];
             int ry = y + KeysTop + i * KeysRowH;
             bool capturing = i == _keysCapture;
-            if (capturing) FillRect(x + 4, ry - 2, KeysW - 8, KeysRowH - 2, 0xFF2A4A8A);
-            DrawText(label, x + 16, ry + 3, White);
+            if (capturing) UiFill(x + 4, ry - 2, KeysW - 8, KeysRowH - 2, 0xFF2A4A8A);
+            UiText(label, x + 16, ry + 3, White);
             string key = capturing ? "키를 누르세요…" : KeyBindings.KeyName(_keys[action]);
             if (action is KeyAction.MoveUp or KeyAction.MoveDown or KeyAction.MoveLeft or KeyAction.MoveRight && !capturing) key += "  (방향키도)";
-            FillRect(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxBg);
-            StrokeRect(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxLine);
-            DrawText(key, x + 228, ry + 3, capturing ? 0xFFFFE070 : White);
+            UiFill(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxBg);
+            UiStroke(x + 220, ry, 184, KeysRowH - 6, StatusScreen.BoxLine);
+            UiText(key, x + 228, ry + 3, capturing ? 0xFFFFE070 : White);
         }
 
         int by = y + h - 40;
-        FillRect(x + 16, by, 120, 28, StatusScreen.HeadBg);
-        DrawText("기본값으로", x + 42, by + 6, White);
-        FillRect(x + KeysW - 116, by, 100, 28, StatusScreen.HeadBg);
-        DrawText("닫기", x + KeysW - 80, by + 6, White);
-        DrawText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
+        UiFill(x + 16, by, 120, 28, StatusScreen.HeadBg);
+        UiText("기본값으로", x + 42, by + 6, White);
+        UiFill(x + KeysW - 116, by, 100, 28, StatusScreen.HeadBg);
+        UiText("닫기", x + KeysW - 80, by + 6, White);
+        UiText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
     }
 
     /// <summary>

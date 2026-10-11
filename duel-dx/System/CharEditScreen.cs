@@ -172,17 +172,17 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal void Button(int bx, int by, int w, string text)
     {
         bool here = In(host._mouse.X, host._mouse.Y, bx, by, w, 22);
-        host.FillRect(bx, by, w, 22, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
-        host.StrokeRect(bx, by, w, 22, StatusScreen.BoxLine);
-        var (_, tw, _) = host.GetText(text, White, 12);
-        host.DrawText(text, bx + (w - tw) / 2, by + 3, White, 12);
+        host.UiFill(bx, by, w, 22, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
+        host.UiStroke(bx, by, w, 22, StatusScreen.BoxLine);
+        var (_, tw, _) = host.UiGetText(text, White, 12);
+        host.UiText(text, bx + (w - tw) / 2, by + 3, White, 12);
     }
 
     /// <summary>세이브 고르기 쪽 — 파일이 있는 칸만 줄로 올린다. 누르면 불러온다.</summary>
     internal void DrawSaves(int x, int y, bool hasPeople)
     {
         var saves = Saves();
-        host.DrawText(saves.Count == 0 ? "세이브 파일이 없습니다 — 새 게임을 시작해 전투나 챕터에 들어간 뒤에 여세요."
+        host.UiText(saves.Count == 0 ? "세이브 파일이 없습니다 — 새 게임을 시작해 전투나 챕터에 들어간 뒤에 여세요."
                       : hasPeople ? "불러올 세이브 파일을 고르세요 — 지금 게임의 저장하지 않은 것은 없어집니다."
                       : "먼저 고칠 세이브 파일을 고르세요 — 불러온 뒤 인물과 소지금을 고칩니다.", x + 16, y + 38, DimGray, 12);
         _saveTop = Math.Clamp(_saveTop, 0, Math.Max(0, saves.Count - SaveRows));
@@ -190,14 +190,14 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         {
             var (slot, head) = saves[_saveTop + i];
             int ry = y + 62 + i * SaveRowH;
-            if (In(host._mouse.X, host._mouse.Y, x + 12, ry, W - 24, SaveRowH)) host.FillRect(x + 12, ry, W - 24, SaveRowH - 2, 0xFF2A4A8A);
+            if (In(host._mouse.X, host._mouse.Y, x + 12, ry, W - 24, SaveRowH)) host.UiFill(x + 12, ry, W - 24, SaveRowH - 2, 0xFF2A4A8A);
             string label = slot == SlotsScreen.AutoSlot ? "[자동 저장]" : slot > SlotsScreen.AutoSlot ? $"[자동 {slot - SlotsScreen.AutoSlot}차례 전]"
                            : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
-            host.DrawText(label, x + 18, ry + 4, SlotsScreen.SlotLabelColor, 12);
-            host.DrawText(host._db?.T((ushort)head.SceneText) ?? "", x + 130, ry + 4, White, 12);
-            host.DrawText($"{head.Money}GP", x + 330, ry + 4, DimGray, 12);
-            var (_, sw, _) = host.GetText(head.SavedAt, White, 12);
-            host.DrawText(head.SavedAt, x + W - 18 - sw, ry + 4, SlotsScreen.SlotTimeColor, 12);
+            host.UiText(label, x + 18, ry + 4, SlotsScreen.SlotLabelColor, 12);
+            host.UiText(host._db?.T((ushort)head.SceneText) ?? "", x + 130, ry + 4, White, 12);
+            host.UiText($"{head.Money}GP", x + 330, ry + 4, DimGray, 12);
+            var (_, sw, _) = host.UiGetText(head.SavedAt, White, 12);
+            host.UiText(head.SavedAt, x + W - 18 - sw, ry + 4, SlotsScreen.SlotTimeColor, 12);
         }
     }
 
@@ -205,31 +205,31 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     {
         if (!_open || host._db is not { } db) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText("캐릭터 에디터 — 레벨·장비·소지금 바꾸기(시험용)", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+        host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+        host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+        host.UiText("캐릭터 에디터 — 레벨·장비·소지금 바꾸기(시험용)", x + 10, y + 6, White);
 
         var people = People();
         bool picking = _pickSave || NoGame(people);
         int fy = y + H - 40;
-        host.FillRect(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
-        host.DrawText("닫기", x + W - 80, fy + 6, White);
+        host.UiFill(x + W - 116, fy, 100, 28, StatusScreen.HeadBg);
+        host.UiText("닫기", x + W - 80, fy + 6, White);
         if (!NoGame(people))
         {
             string text = picking ? "돌아가기" : "세이브 고르기";
-            host.FillRect(x + W - 246, fy, 120, 28, StatusScreen.HeadBg);
-            host.DrawText(text, x + W - 246 + (120 - host.GetText(text, White).W) / 2, fy + 6, White);
+            host.UiFill(x + W - 246, fy, 120, 28, StatusScreen.HeadBg);
+            host.UiText(text, x + W - 246 + (120 - host.UiGetText(text, White).W) / 2, fy + 6, White);
         }
-        host.DrawText("Esc: 닫기 · 휠: 목록", x + 16, fy + 7, DimGray);
+        host.UiText("Esc: 닫기 · 휠: 목록", x + 16, fy + 7, DimGray);
         if (picking) { DrawSaves(x, y, !NoGame(people)); return; }
 
         // 파티 줄 — 소지금 · 나야트레이
-        host.DrawText($"소지금 {host.Mos._shopMoney}GP", x + 16, y + 39, White);
+        host.UiText($"소지금 {host.Mos._shopMoney}GP", x + 16, y + 39, White);
         foreach (var (dx, _, text) in MoneySteps) Button(x + dx, y + 36, 54, text);
         Button(x + W - 16 - 150, y + 36, 150, host.Mos._members.Contains(NayatreiChr) ? "나야트레이 (파티에 있음)" : "나야트레이 등장");
-        host.FillRect(x + 12, y + 36 + 28, W - 24, 1, StatusScreen.BoxLine);
+        host.UiFill(x + 12, y + 36 + 28, W - 24, 1, StatusScreen.BoxLine);
         y += PartyH;
 
         _chosen = Math.Clamp(_chosen, 0, Math.Max(0, people.Count - 1));
@@ -237,29 +237,29 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         {
             int chr = people[_top + i], ry = y + 40 + i * RowH;
             bool on = _top + i == _chosen;
-            if (on) host.FillRect(x + 12, ry, ListW, RowH - 2, 0xFF2A4A8A);
+            if (on) host.UiFill(x + 12, ry, ListW, RowH - 2, 0xFF2A4A8A);
             var d = DataOf(chr);
-            host.DrawText($"{(d != null ? db.T(d.NameId) : chr.ToString())}  Lv{d?.Level}", x + 18, ry + 2, on ? 0xFF00FFFF : White, 12);
+            host.UiText($"{(d != null ? db.T(d.NameId) : chr.ToString())}  Lv{d?.Level}", x + 18, ry + 2, on ? 0xFF00FFFF : White, 12);
         }
-        host.FillRect(x + 12 + ListW + 8, y + 40, 1, ListRows * RowH, StatusScreen.BoxLine);
+        host.UiFill(x + 12 + ListW + 8, y + 40, 1, ListRows * RowH, StatusScreen.BoxLine);
 
         if (DataOf(people[_chosen]) is { } c)
         {
             int px = x + ListW + 30;
-            host.DrawText($"{db.T(c.NameId)}  (Chr {c.Code})", px, y + 44, White);
-            host.DrawText($"레벨 {c.Level}  ·  누적 EXP {c.CumExp}", px, y + 78, White);
+            host.UiText($"{db.T(c.NameId)}  (Chr {c.Code})", px, y + 44, White);
+            host.UiText($"레벨 {c.Level}  ·  누적 EXP {c.CumExp}", px, y + 78, White);
             Button(px + 170, y + 76, 40, "−10"); Button(px + 214, y + 76, 40, "−1"); Button(px + 258, y + 76, 40, "+1"); Button(px + 302, y + 76, 40, "+10");
-            host.DrawText("장비 (칸마다 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
+            host.UiText("장비 (칸마다 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
             for (int slot = 0; slot < c.Items.Length; slot++)
             {
                 int iy = y + 140 + slot * 30;
                 int id = c.Items[slot];
                 string name = id == 0 ? "(비움)" : db.Items.TryGetValue(id, out var item) ? db.T(item.NameId) : $"아이템 {id}";
-                host.DrawText($"{slot + 1}", px, iy + 3, DimGray, 12);
-                host.DrawText($"{name}{(id != 0 ? $"  #{id}" : "")}", px + 18, iy + 3, White, 12);
+                host.UiText($"{slot + 1}", px, iy + 3, DimGray, 12);
+                host.UiText($"{name}{(id != 0 ? $"  #{id}" : "")}", px + 18, iy + 3, White, 12);
                 Button(px + 250, iy, 30, "◀◀"); Button(px + 284, iy, 30, "◀"); Button(px + 318, iy, 30, "▶"); Button(px + 352, iy, 30, "▶▶");
             }
-            host.DrawText("바꾸면 바로 든다 — 레벨은 능력치까지 다시 센다.", px, y + H - PartyH - 66, DimGray, 12);
+            host.UiText("바꾸면 바로 든다 — 레벨은 능력치까지 다시 센다.", px, y + H - PartyH - 66, DimGray, 12);
         }
     }
 }

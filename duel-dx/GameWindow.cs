@@ -462,6 +462,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>설정 > 화면 > 전투 배율 — 전투 맵에서만 쓰는 배율 %. −1 이면 배율과 같게(기본).</summary>
     internal int _battleZoomPercent = UserSettings.Current.BattleZoomPercent;
 
+    /// <summary>설정 > 화면 > 전투 말풍선 크기 % — 전투 중 인물 머리 위 말풍선(601 · 602)의 틀 · 얼굴 · 글을 함께 키운다. 100 이 원본.</summary>
+    internal int _bubbleScalePercent = Array.IndexOf(BubbleScaleChoices, UserSettings.Current.BubbleScalePercent) >= 0 ? UserSettings.Current.BubbleScalePercent : 100;
+
     /// <summary>배율·해상도를 바꿨을 때 — 판은 그대로 두고 셰이더·텍스처·창만 다시 만든다.</summary>
     internal void ApplyZoom(bool force = false)
     {
@@ -775,6 +778,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_APP_SNAPSHOT:
                 SaveSnapshot();
+                _gpuShotAsked = Environment.GetEnvironmentVariable("DUELDX_GPUSHOT") == "1";
                 return IntPtr.Zero;
             case Win32.WM_INITMENUPOPUP when wParam == _replayMenu:
                 RebuildReplayMenu();
@@ -1256,6 +1260,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void Compose()
     {
         if (PerfLog) _pMark = _perf.Elapsed.TotalMilliseconds;
+        Hi.Begin();
         Array.Fill(_fb, BgColor);
         DrawBackground();
         PerfMark("바탕");
@@ -1321,6 +1326,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TimedEditScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
+        if (Hi.Used) DrawToast(onLayer: true);   // 새 UI 창 위로 알림을 한 번 더
         Pad.DrawFocus();                       // 패드 커서가 선 자리의 테와 조작 안내 — 창들 위에
         Pad.DrawGuide();
         Cut.Draw();                            // 기술 컷신은 모든 것 위에
@@ -1602,7 +1608,43 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _ctx.PSSetShader(_ps);
         _ctx.PSSetShaderResources(0, [_boardSrv]);
         _ctx.Draw(3, 0);
+        Hi.Present();   // 새 UI 층(창 해상도)을 판 그림 위에
+        if (_gpuShotAsked) { _gpuShotAsked = false; SaveGpuShot(); }
         _swapChain.Present(1, PresentFlags.None);
+    }
+
+    /// <summary>스냅샷을 청했을 때 DUELDX_GPUSHOT=1 이면 다음 틀의 백버퍼도 뜬다(화면 밖 시험용 — 판 위에 새 UI 층이 실제로 겹쳐 나오는지 본다).</summary>
+    internal bool _gpuShotAsked;
+
+    /// <summary>화면에 내기 직전의 백버퍼를 <c>%TEMP%\dueldx_gpu.png</c> 로 저장한다.</summary>
+    internal void SaveGpuShot()
+    {
+        using var back = _swapChain.GetBuffer<ID3D11Texture2D>(0);
+        var desc = back.Description;
+        desc.Usage = ResourceUsage.Staging;
+        desc.BindFlags = BindFlags.None;
+        desc.CPUAccessFlags = CpuAccessFlags.Read;
+        using var copy = _device.CreateTexture2D(desc);
+        _ctx.CopyResource(copy, back);
+        var map = _ctx.Map(copy, 0, MapMode.Read);
+        try
+        {
+            int w = (int)desc.Width, h = (int)desc.Height;
+            using var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    var dst = new Span<uint>((void*)(data.Scan0 + y * data.Stride), w);
+                    new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), w).CopyTo(dst);
+                    for (int x = 0; x < w; x++) dst[x] |= 0xFF000000;
+                }
+            }
+            finally { bmp.UnlockBits(data); }
+            bmp.Save(Path.Combine(Path.GetTempPath(), "dueldx_gpu.png"), ImageFormat.Png);
+        }
+        finally { _ctx.Unmap(copy, 0); }
     }
 
     public void Dispose()
@@ -1613,6 +1655,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _backBufferRtv?.Dispose();
         if (_frameWait != IntPtr.Zero) { Win32.CloseHandle(_frameWait); _frameWait = IntPtr.Zero; }
         _swapChain?.Dispose();
+        _hi?.Dispose();
         _boardSrv?.Dispose();
         _boardTex?.Dispose();
         _ps?.Dispose();

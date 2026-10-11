@@ -62,6 +62,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     {
         /// <summary>600 상자 · 601 말풍선 · 602 통신 말풍선 · 609 제 칸의 상자(<c>[0x101bfe34]</c>).</summary>
         public int Kind;
+        /// <summary>말풍선을 키워 그리는 곱 — 전투 말풍선만 설정 > 화면 > 전투 말풍선 크기를 따른다(사용자 요청 menu-54). 줄을 나눌 때 정해 둔다.</summary>
+        public double Scale = 1;
         /// <summary>눈 깜빡임 — 시작한 틱(−1 이면 안 깜빡이는 중)과 확률을 굴린 마지막 틱.</summary>
         public int BlinkAt = -1, BlinkTick = int.MaxValue;
         /// <summary>아래 상자 꼴인가 — 600 과 609(609 틀 (164,120)~(313,239) 은 아직 안 옮겨 600 상자로 그린다).</summary>
@@ -563,9 +565,12 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         }
         else
         {
-            width = 153;
+            // 전투 말풍선은 고른 크기만큼 틀 · 얼굴 · 글을 함께 키운다 — 글 칸도 같은 곱으로 넓어져 한 줄에 드는 글자 수는 거의 그대로다.
+            w.Scale = host.FieldOpen || host.Mos._mosesOpen ? 1 : host._bubbleScalePercent / 100.0;
+            width = (int)(153 * w.Scale);
             w.MaxLines = 3;
         }
+        float fontSize = (float)(12 * w.Scale);
         var lines = new List<(int Start, int Len)>();
         var charLine = new int[w.Clean.Length];
         int pos = 0;
@@ -576,7 +581,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             while (start < para.Length)
             {
                 int take = 1;
-                while (start + take < para.Length && host.GetText(para.Substring(start, take + 1), White, 12).W <= width) take++;
+                while (start + take < para.Length && host.GetText(para.Substring(start, take + 1), White, fontSize).W <= width) take++;
                 lines.Add((pos + start, take));
                 for (int j = 0; j < take; j++) charLine[pos + start + j] = lines.Count - 1;
                 start += take;
@@ -617,7 +622,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             var (start, len) = lines[li];
             int shown = Math.Clamp(w.Revealed - start, 0, len);
             if (shown == 0) continue;
-            host.DrawText(w.Clean.Substring(start, shown), left, top + i * TalkLinePx - w.ScrollPx, White, 12);
+            host.DrawText(w.Clean.Substring(start, shown), left, top + (int)((i * TalkLinePx - w.ScrollPx) * w.Scale), White, (float)(12 * w.Scale));
         }
     }
 
@@ -744,25 +749,46 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         }
         // 화면 안으로(0x1003b6ac~) — 오른쪽 끝, 얼굴 자리, 아래 끝, 왼쪽·위.
         SpriteFrame? faceFrame = face ?? (w.Kind == 602 ? host.UiFor(TalkRadioFaceFallbackObs)?.FrameAt(0, 0) : null);
-        if (bx + 200 >= screenW) bx = screenW - 200;
-        if (faceFrame != null && bx - 60 < 5) bx = 65;
-        if (by + 60 >= screenH) by = screenH - 60;
+        // 키운 말풍선(S 곱)은 창 왼위 (bx, by) 를 그대로 두고 오른쪽 · 아래로, 얼굴 · 이름표는 왼쪽 · 위로 그만큼 더 나간다.
+        double S = w.Scale;
+        int Sc(double v) => (int)Math.Round(v * S);
+        if (bx + Sc(200) >= screenW) bx = screenW - Sc(200);
+        if (faceFrame != null && bx - Sc(60) < 5) bx = 5 + Sc(60);
+        if (by + Sc(60) >= screenH) by = screenH - Sc(60);
         bx = Math.Max(bx, 0);
-        by = Math.Max(by, 30);
+        by = Math.Max(by, Sc(20) + 10);
         bx += sx;
         by += sy;
         tailX += sx;
         tailY += sy;
 
-        int ax = bx - 60, ay = by - 20;
+        int ax = bx - 60, ay = by - 20;            // 틀 그림의 제 자리(곱 1)
+        int fx0 = bx - Sc(60), fy0 = by - Sc(20);   // 키운 틀의 왼위
         if (!full)
         {
             // 10틱 동안 꼬리점에서 창 자리로 틀 243×88·얼굴 60×60 이 커지며 날아오고, 닫힐 땐 거꾸로(0x1003bdc0).
-            int tx = tailX + (int)((ax - tailX) * open), ty = tailY + (int)((ay - tailY) * open);
-            DrawUiScaled(w.FrameObs, 1, ax, ay, open, ax, ay, tx, ty, w.FrameFade);
-            DrawUiScaled(w.FrameObs, 0, ax, ay, open, ax, ay, tx, ty, 1);
-            int size = (int)(60 * open);
-            if (faceFrame != null && size > 0) DrawTalkFace(faceFrame, tx + (int)(3 * open), ty + (int)(20 * open), size, w.Tint);
+            int tx = tailX + (int)((fx0 - tailX) * open), ty = tailY + (int)((fy0 - tailY) * open);
+            DrawUiScaled(w.FrameObs, 1, ax, ay, open * S, ax, ay, tx, ty, w.FrameFade);
+            DrawUiScaled(w.FrameObs, 0, ax, ay, open * S, ax, ay, tx, ty, 1);
+            int size = (int)(60 * open * S);
+            if (faceFrame != null && size > 0) DrawTalkFace(faceFrame, tx + (int)(3 * open * S), ty + (int)(20 * open * S), size, w.Tint);
+            return;
+        }
+        if (S != 1)
+        {
+            // 키운 말풍선 — 틀을 곱만큼 늘여 그리고 이름 · 얼굴 · 글도 같은 곱의 자리와 크기로.
+            float big = (float)(12 * S);
+            DrawUiScaled(w.FrameObs, 1, ax, ay, S, ax, ay, fx0, fy0, w.FrameFade);
+            DrawUiScaled(w.FrameObs, 0, ax, ay, S, ax, ay, fx0, fy0, 1);
+            var (_, snw, _) = host.GetText(w.Name, White, big);
+            host.DrawText(w.Name, bx - Sc(11) - snw / 2, by - Sc(15), White, big);
+            if (faceFrame != null)
+            {
+                DrawTalkFace(faceFrame, bx - Sc(57), by, Sc(60), w.Tint);
+                if (w.Glitch) DrawTalkFaceGlitchRow(faceFrame, bx - Sc(57), by, Sc(60), w.Tint, new Random(HashCode.Combine(tick, w.OpenedAt)).Next(59));
+            }
+            DrawTalkLines(w, bx + Sc(12), by + Sc(10));
+            if (ready) host.DrawUi(TalkNextObs, 0, tick, bx + Sc(174), by + Sc(60), GameWindow.UiBlend.Alpha);
             return;
         }
 

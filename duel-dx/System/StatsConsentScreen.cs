@@ -113,24 +113,24 @@ internal sealed unsafe class StatsConsentScreen(GameWindow host)
     {
         if (!Open) return;
         var (x, y) = Origin();
-        host.FillRect(x - 4, y - 4, W + 8, H + 8, 0x80000000);
-        host.FillRect(x, y, W, H, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, W, H, StatusScreen.BoxLine);
-        host.FillRect(x, y, W, 28, StatusScreen.HeadBg);
-        host.DrawText(_mode == 2 ? "전투 통계 보내기" : "전투 통계 알림", x + 10, y + 6, White);
+        host.UiFill(x - 4, y - 4, W + 8, H + 8, 0x80000000);
+        host.UiFill(x, y, W, H, StatusScreen.PanelBg);
+        host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
+        host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
+        host.UiText(_mode == 2 ? "전투 통계 보내기" : "전투 통계 알림", x + 10, y + 6, White);
 
         var lines = Lines();
         for (int i = 0; i < lines.Length; i++)
-            host.DrawText(lines[i], x + 20, y + 42 + i * 18, i == lines.Length - 1 ? 0xFFFFE070 : White, 12);
+            host.UiText(lines[i], x + 20, y + 42 + i * 18, i == lines.Length - 1 ? 0xFFFFE070 : White, 12);
 
         var buttons = Buttons();
         for (int i = 0; i < buttons.Length; i++)
         {
             var (bx, by) = ButtonAt(i, buttons.Length);
             bool here = In(host._mouse.X, host._mouse.Y, bx, by, ButtonW, ButtonH);
-            host.FillRect(bx, by, ButtonW, ButtonH, here ? 0xFF2A4A8A : StatusScreen.HeadBg);
-            host.StrokeRect(bx, by, ButtonW, ButtonH, StatusScreen.BoxLine);
-            host.DrawText(buttons[i].Label, bx + (ButtonW - host.GetText(buttons[i].Label, White, 12).W) / 2, by + 7, White, 12);
+            host.UiFill(bx, by, ButtonW, ButtonH, here ? 0xFF2A4A8A : StatusScreen.HeadBg);
+            host.UiStroke(bx, by, ButtonW, ButtonH, StatusScreen.BoxLine);
+            host.UiText(buttons[i].Label, bx + (ButtonW - host.UiGetText(buttons[i].Label, White, 12).W) / 2, by + 7, White, 12);
         }
     }
 }

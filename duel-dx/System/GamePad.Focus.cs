@@ -509,6 +509,13 @@ internal sealed partial class GamePad
         int cur = At(targets, host._mouse.X, host._mouse.Y);
         if (cur < 0) return;
         var (x, y, w, h) = targets[cur];
+        // 새 UI 로 그린 창(설정 · 모드 …)이 떠 있으면 테도 그 층에 그린다 — 판에 그리면 창 밑에 깔린다.
+        if (host._hiResUi && host.Hi.Used)
+        {
+            host.Hi.StrokeRect(x - 2, y - 2, w + 4, h + 4, FocusColor);
+            host.Hi.StrokeRect(x - 3, y - 3, w + 6, h + 6, 0x80000000 | (FocusColor & 0xFFFFFF));
+            return;
+        }
         StrokeFocus(x, y, w, h);
     }
 

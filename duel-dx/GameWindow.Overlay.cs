@@ -138,13 +138,40 @@ internal sealed unsafe partial class GameWindow
             }
     }
 
-    internal void DrawToast()
+    /// <param name="onLayer">새 UI 층에 한 번 더 그리나 — 층에 그린 창이 떠 있으면 판에 그린 알림은 그 밑에 깔린다.</param>
+    internal void DrawToast(bool onLayer = false)
     {
         if (_toast.Length == 0 || _lastTime > _toastUntil) return;
+        if (onLayer)
+        {
+            var (lw, lh) = Hi.Measure(_toast, White);
+            int lx = _camX + (ViewWidth - lw) / 2, ly = _camY + ViewHeight - lh - 24;
+            Hi.FillRect(lx - 10, ly - 6, lw + 20, lh + 12, 0xD0101828);
+            Hi.DrawText(_toast, lx, ly, White);
+            return;
+        }
         var (_, w, h) = GetText(_toast, White);
         int x = _camX + (ViewWidth - w) / 2, y = _camY + ViewHeight - h - 24;
         FillRect(x - 10, y - 6, w + 20, h + 12, 0xD0101828);
         DrawText(_toast, x, y, White);
+    }
+
+    // ── 새 UI 로 가는 그리기(사용자 요청 menu-55 · menu-56) ─────────────────────
+    // 네모 · 테 · 글만으로 된 창(설정 · 모드 · 단축키 · 개발 창들 · 안내 창)은 이 넷으로 그린다 — 「새 UI」가 켜져 있으면 창 해상도 층(HiCanvas)에,
+    // 꺼져 있으면 전처럼 판에. 자리 · 크기는 어느 쪽이든 판 좌표다. 원본 그림(Obs)을 쓰는 창은 아직 판에 그린다.
+
+    internal void UiFill(int x, int y, int w, int h, uint color) { if (_hiResUi) Hi.FillRect(x, y, w, h, color); else FillRect(x, y, w, h, color); }
+
+    internal void UiStroke(int x, int y, int w, int h, uint color) { if (_hiResUi) Hi.StrokeRect(x, y, w, h, color); else StrokeRect(x, y, w, h, color); }
+
+    internal void UiText(string text, int x, int y, uint argb, float size = 13f) { if (_hiResUi) Hi.DrawText(text, x, y, argb, size); else DrawText(text, x, y, argb, size); }
+
+    /// <summary>글의 크기(판 좌표) — <see cref="GetText"/> 와 같은 꼴로 돌려주되 새 UI 에서는 픽셀이 비어 있다(크기만 쓴다).</summary>
+    internal (uint[] Px, int W, int H) UiGetText(string text, uint argb, float size = 13f)
+    {
+        if (!_hiResUi) return GetText(text, argb, size);
+        var (w, h) = Hi.Measure(text, argb, size);
+        return ([], w, h);
     }
 
     /// <summary>
