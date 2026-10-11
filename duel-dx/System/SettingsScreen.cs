@@ -37,7 +37,10 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
     }
 
     /// <summary>줄 하나 — 고르기(◀ 값 ▶)면 <see cref="Step"/>, 켜고 끄기면 <see cref="Toggle"/>, 단추면 <see cref="Press"/>.</summary>
-    internal sealed record Row(string Label, string Value, Action<int>? Step = null, Action? Toggle = null, bool On = false, Action? Press = null, string Note = "");
+    /// <param name="NoPrev">◀ 가 꺼져 있나 — 더 내릴 값이 없다.</param>
+    /// <param name="NoNext">▶ 가 꺼져 있나 — 더 올릴 값이 없다(배율: 창에 들어가는 데까지 이미 키웠다).</param>
+    internal sealed record Row(string Label, string Value, Action<int>? Step = null, Action? Toggle = null, bool On = false, Action? Press = null, string Note = "",
+                               bool NoPrev = false, bool NoNext = false);
 
     private static int Cycle(int index, int delta, int count) => ((index + delta) % count + count) % count;
 
@@ -49,6 +52,10 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
             {
                 int res = Math.Max(0, Array.FindIndex(ResChoices, r => r.W == host._viewW && r.H == host._viewH));
                 int zoom = Math.Max(0, Array.IndexOf(ZoomChoices, host._zoomPercent));
+                // 배율은 「창에 들어가는 가장 큰 배율」을 처음 넘는 값까지만 고른다 — 그 위는 골라도 똑같이 줄여 쓰므로 ▶ 를 끈다(사용자 요청 menu-44).
+                // 자동(0)에서 더 내리는 것도 없다 — 끝에서 돌지 않는다.
+                int zoomTop = Array.FindIndex(ZoomChoices, z => z / 100.0 > host.MaxUsableZoom + 1e-6);
+                if (zoomTop < 0) zoomTop = ZoomChoices.Length - 1;
                 return
                 [
                     new("해상도", res == 0 ? $"{host._viewW}×{host._viewH} (원본)" : $"{host._viewW}×{host._viewH}",
@@ -56,7 +63,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     // 고른 배율이 창에 비해 커서 줄여 쓰는 중이면 실제 배율을 함께 적는다.
                     new("배율", host._zoomPercent == 0 ? "자동(화면에 맞춤)"
                               : host._zoom < host._zoomPercent / 100.0 - 1e-6 ? $"{host._zoomPercent}% (창에 맞춰 {host._zoom * 100:0}%)" : $"{host._zoomPercent}%",
-                        Step: d => host.OnMenuCommand(MenuZoomAuto + Cycle(zoom, d, ZoomChoices.Length))),
+                        Step: d => host.OnMenuCommand(MenuZoomAuto + Math.Clamp(zoom + d, 0, zoomTop)), NoPrev: zoom == 0, NoNext: zoom >= zoomTop),
                     new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11) · 설정은 Esc 메뉴의 SETTING"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),
@@ -115,8 +122,8 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
             var row = rows[i];
             if (row.Step != null)
             {
-                if (In(bx, by, px + 170, ry, 24, 24)) { row.Step(-1); return true; }
-                if (In(bx, by, px + 170 + 24 + 184, ry, 24, 24)) { row.Step(1); return true; }
+                if (In(bx, by, px + 170, ry, 24, 24)) { if (!row.NoPrev) row.Step(-1); return true; }
+                if (In(bx, by, px + 170 + 24 + 184, ry, 24, 24)) { if (!row.NoNext) row.Step(1); return true; }
             }
             else if (row.Toggle != null && In(bx, by, px, ry, 200, 24)) { row.Toggle(); return true; }
             else if (row.Press != null && In(bx, by, px, ry, 200, 26)) { row.Press(); return true; }
@@ -176,6 +183,9 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     host.StrokeRect(px + 194, ry, 184, 24, StatusScreen.BoxLine);
                     host.DrawText(row.Value, px + 194 + (184 - host.GetText(row.Value, White, 12).W) / 2, ry + 5, White, 12);
                     Button(px + 378, ry, 24, 24, "▶");
+                    // 꺼진 화살표는 어둡게 덮는다.
+                    if (row.NoPrev) host.FillRect(px + 170, ry, 24, 24, 0xB0101828);
+                    if (row.NoNext) host.FillRect(px + 378, ry, 24, 24, 0xB0101828);
                     if (row.Note.Length > 0) host.DrawText(row.Note, px + 170, ry + 25, DimGray, 10);
                 }
                 else if (row.Toggle != null)

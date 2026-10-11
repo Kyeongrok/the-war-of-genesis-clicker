@@ -310,9 +310,10 @@ internal sealed unsafe class TitleScreen(GameWindow host)
             host.DrawUi(TitleGlowObs, 0, (int)((host._lastTime - _titleOpenedAt) * TicksPerSecond), ox + x, oy + y, GameWindow.UiBlend.Add);
         }
 
-        // 오른쪽 위 판 번호 — Num.dat[0] × 0.001
-        string version = $"Ver {(host._db?.N(0) ?? 1005) * 0.001:0.000}";
-        host.DrawText(version, ox + 560, oy + 10, White, 12);
+        // 오른쪽 위 판 번호 — 원본은 Num.dat[0] × 0.001(「Ver 1.005」)인데, 이 게임의 배포 판 번호를 적는다(사용자 요청 menu-45).
+        // 길이가 달라지므로 오른쪽 끝(x 630)에 맞춘다. 손으로 빌드한 판은 「0.0.0-dev」 꼴이 그대로 보인다.
+        string version = $"Ver {GameWindow.AppVersion.TrimStart('v')}";
+        host.DrawText(version, ox + 630 - host.GetText(version, White, 12).W, oy + 10, White, 12);
         // 자료를 뒤에서 받는 동안 진행을 왼쪽 위에 보인다(AssetDownload).
         if (AssetPack.Status is { Length: > 0 } pack) host.DrawText(pack, ox + 8, oy + 10, White, 12);
 
