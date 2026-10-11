@@ -97,8 +97,14 @@ internal sealed unsafe partial class BattleScene
         return cell;
     }
 
-    /// <summary>패드 B — 칸 고르기를 그만두고 명단으로.</summary>
-    internal void DeployPadCancel() { _deployPick = null; _deployCellMode = false; }
+    /// <summary>패드 B — 칸 고르기 중이면 그만두고 명단으로, 명단에서는 「배치종료」 단추로 간다(사용자 요청 fa-58 — 끝내는 길이 한 번에 닿게).</summary>
+    internal void DeployPadCancel()
+    {
+        bool inCells = _deployCellMode;
+        _deployPick = null;
+        _deployCellMode = false;
+        if (!inCells) _deployFocus = DeployRoster().Count + DeployButtons - 1;
+    }
 
     /// <summary>패드 X — 짚은 인물을 판에서 뺀다.</summary>
     internal void DeployPadUnplace()
@@ -108,7 +114,7 @@ internal sealed unsafe partial class BattleScene
         var u = roster[DeployRowFocus(roster.Count)];
         if (!DeployMovable(u) || !u.OnField) { host.Toast("판에 선 인물을 짚고 누르세요"); return; }
         Unplace(u);
-        if (_deployPick == u) DeployPadCancel();
+        if (_deployPick == u) { _deployPick = null; _deployCellMode = false; }
     }
 
     /// <summary>패드 LB — 짚은 인물의 「군단사용」을 켜고 끈다. 고른 인물은 그대로 둔다.</summary>
@@ -401,12 +407,16 @@ internal sealed unsafe partial class BattleScene
             by += 18;
         }
         string Key(PadAction a) => pad ? $" {host.Pad.Name(a)}" : "";
-        Button(x + 8, by, DeployW / 2 - 12, 26, "배치취소" + Key(PadAction.Ring), StatusScreen.HeadBg, White);
-        Button(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, "자동배치" + Key(PadAction.Rest), StatusScreen.HeadBg, White);
-        // 「군단사용」 — 짚은(또는 고른) 사람의 군단 켬/끔. 워드 7 이 꺼진 전투면 흐리게(0x100e257c).
+        // 「배치취소」 · 「군단사용」은 짚은(또는 고른) 사람에게 쓸 수 있을 때만 밝다 — 판에 선 옮길 수 있는 인물이면 뺄 수 있고,
+        // 군단을 가진 인물이면 켜고 끌 수 있다(사용자 요청 fa-58). 아니면 흐리게. 워드 7 이 꺼진 전투면 군단사용은 늘 흐리다(0x100e257c).
         var who = _deployPick ?? (pad && roster.Count > 0 ? roster[DeployRowFocus(roster.Count)] : null);
+        bool canUnplace = who != null && DeployMovable(who) && who.OnField;
+        bool canLegion = _deployLegionsAllowed && who != null && DeployHasLegion(who);
+        const uint OffBg = 0xFF182238, OffInk = 0xFF707070;
+        Button(x + 8, by, DeployW / 2 - 12, 26, "배치취소" + Key(PadAction.Ring), canUnplace ? StatusScreen.HeadBg : OffBg, canUnplace ? White : OffInk);
+        Button(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, "자동배치" + Key(PadAction.Rest), StatusScreen.HeadBg, White);
         string legionLabel = who != null && DeployHasLegion(who) ? (_deployNoLegion.Contains(who) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
-        Button(x + 8, by + 32, DeployW - 16, 26, legionLabel + Key(PadAction.PrevUnit), StatusScreen.HeadBg, _deployLegionsAllowed ? White : 0xFF707070);
+        Button(x + 8, by + 32, DeployW - 16, 26, legionLabel + Key(PadAction.PrevUnit), canLegion ? StatusScreen.HeadBg : OffBg, canLegion ? White : OffInk);
         Button(x + 8, by + 64, DeployW - 16, 28, pad ? "배치종료" + Key(PadAction.System) : "배치종료 (Enter)", 0xFF2A6A3A, White, border: true);
         // 패드가 단추를 짚고 있으면 그 단추에 테.
         if (pad && !_deployCellMode && _deployFocus >= roster.Count)

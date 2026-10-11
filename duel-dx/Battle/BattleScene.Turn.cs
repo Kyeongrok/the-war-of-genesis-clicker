@@ -961,8 +961,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 박자 둘을 다 맞췄으면 치는 동작을 「연」의 여러 번 치는 동작(13 — 타격 키 둘 · 14 — 셋)으로 바꿔 보통 피해로 여러 번 친다(사용자 요청).
             // 횟수는 2 에서 시작해 연속 성공마다 하나씩 는다 — 13 · 14 를 이어 붙여 맞춘다(「연」이 레벨마다 그러듯), 하나 남으면 원래 동작 한 번.
             // 그 동작이 없는 인물(총 따위)은 한 번 치고 피해를 횟수만큼 곱한다. 하나만 맞췄으면 한 번 치되 크리티컬이다(배율 0 = 크리티컬로 표시).
-            bool both = host.TimedHitFx.Hits >= 2;
-            int want = both ? host.TimedHitFx.AttackCount : 1;
+            int want = host.TimedHitFx.AttackCount;   // 맞춘 박자 수 — 하나면 한 번을 크리티컬로
+            bool both = want >= 2;
             bool twice = both && hitStep < actions.Length && actions[hitStep] is 8 or 9 && HitTimesFor(a, 13).Count >= 2;
             if (twice)
             {

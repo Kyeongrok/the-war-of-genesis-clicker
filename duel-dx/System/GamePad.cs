@@ -260,7 +260,7 @@ internal sealed partial class GamePad(GameWindow host)
         // 그 누름을 떼도 어빌리티 목록 · 공격은 안 나간다.
         if (host.TimedHitFx.Running)
         {
-            if ((pressed & lt) != 0) host.TimedHitFx.Press(0);   // 차례대로 — 어빌리티 단추가 먼저, 공격 단추가 다음
+            if ((pressed & lt) != 0) host.TimedHitFx.Press(0);   // 박자마다 어빌리티 단추 · 공격 단추가 번갈아 온다
             if ((pressed & rt) != 0) host.TimedHitFx.Press(1);
             if ((pressed & (lt | rt)) != 0) _chordUsed = true;
             else if ((released & (lt | rt)) != 0 && (now & (lt | rt)) == 0) _chordUsed = false;
@@ -546,9 +546,12 @@ internal sealed partial class GamePad(GameWindow host)
         if (!_guideOpen)
         {
             // 한 줄 — 전투의 긴 목록은 자주 쓰는 것만 추린다. 단추는 그림(<see cref="DrawKeys"/>)으로, 하는 일은 글로.
-            // 전투 줄에서는 링 커맨드 단추를 뺀다 — 취소 단추로도 링이 열려 줄만 길어진다(사용자 요청 fa-57). 안내 창에는 그대로 있다.
-            var shown = lines.Count > 6 ? lines.Skip(3).Where(l => title != "전투" || l.Button != Name(PadAction.Ring)).Take(4).ToList() : lines;
-            shown = [.. shown, (Name(PadAction.Help), "조작 안내")];
+            // 전투 줄은 짧은 말로 따로 적는다(사용자 요청 fa-57 · fa-59) — 확인 · 취소 · 커맨드 · 조작. 풀어 쓴 설명은 안내 창에 있다.
+            var shown = title == "전투"
+                ? [(Name(PadAction.Confirm), "확인"), (Name(PadAction.Cancel), "취소"), (Name(PadAction.Ring), "커맨드")]
+                : lines.Count > 6 ? lines.Skip(3).Take(4).ToList() : lines;
+            // 조작 안내 단추는 짧게 — 「L 스틱 누름」은 「L」, 「R 스틱 누름」은 「R」.
+            shown = [.. shown, (Name(PadAction.Help).Replace(" 스틱 누름", ""), "조작")];
             int total = shown.Sum(l => DrawKeys(l.Button, 0, 0, CapSmall, measure: true) + 4 + host.GetText(l.Does, 0xFFFFFFFF, 11f).W + 14) - 14;
             int sx = host._camX + host.ViewWidth - total - 10, sy = host._camY + host.ViewHeight - CapSmall - 6;
             host.FillRect(sx - 6, sy - 3, total + 12, CapSmall + 6, 0xA0000000);

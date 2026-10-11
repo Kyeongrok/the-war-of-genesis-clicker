@@ -414,10 +414,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// 배율 「자동」은 판 내용(모세스 640×480, 맵은 판의 70%)이 창을 채우는 가장 큰 배율(0.05 단위, 최대 4배, 최소 1배).
     /// 해상도가 모니터 작업 영역보다 크면 들어가는 데까지만(<see cref="_resW"/>·<see cref="_resH"/>).
     /// </summary>
+    /// <summary>지금 전체화면으로 그리나 — 화면 밖 시험에서는 늘 창이다.</summary>
+    internal bool FullscreenNow => _fullscreen && !Offscreen;
+
     internal double FitZoom()
     {
         var work = new Win32.Rect();
-        if (Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0))
+        if (FullscreenNow)
+        {
+            // 전체화면 — 주 모니터 전체에서 메뉴 막대 한 줄을 뺀 만큼이 그릴 자리다.
+            _resW = Math.Max(320, Win32.GetSystemMetrics(Win32.SM_CXSCREEN));
+            _resH = Math.Max(240, Win32.GetSystemMetrics(Win32.SM_CYSCREEN) - Win32.GetSystemMetrics(Win32.SM_CYMENU));
+        }
+        else if (Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0))
         {
             // 제목 표시줄·메뉴·테두리 몫을 조금 남긴다.
             _resW = Math.Max(320, Math.Min(_viewW, work.Width - 32));
@@ -498,10 +507,22 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         // 창과 스왑체인은 해상도 그대로 — 판 그림은 그 안 가운데에 놓인다(Draw 의 뷰포트).
         int pixelW = _resW, pixelH = _resH;
-        var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
-        Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
-        Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
-                           rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (FullscreenNow)
+        {
+            // 전체화면 — 테두리 · 제목줄 없는 창을 주 모니터 왼쪽 위에 모니터 크기로 놓는다(메뉴 막대는 남는다).
+            Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_POPUP | Win32.WS_VISIBLE);
+            Win32.SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, Win32.GetSystemMetrics(Win32.SM_CXSCREEN), Win32.GetSystemMetrics(Win32.SM_CYSCREEN),
+                               Win32.SWP_NOZORDER | Win32.SWP_FRAMECHANGED);
+        }
+        else
+        {
+            var rect = new Win32.Rect { Left = 0, Top = 0, Right = pixelW, Bottom = pixelH };
+            Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
+            // 전체화면에서 돌아올 때를 위해 창 꼴도 되돌린다(이미 그 꼴이면 달라지는 것이 없다).
+            Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE);
+            Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
+                               rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+        }
         _backBufferRtv?.Dispose();
         _swapChain.ResizeBuffers(2, (uint)pixelW, (uint)pixelH, Format.B8G8R8A8_UNorm, SwapChainFlags.FrameLatencyWaitableObject);
         using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
@@ -553,6 +574,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // DUELDX_OFFSCREEN=1 이면 화면 밖에 포커스를 뺏지 않고 띄운다 — 자동 테스트가 사용자 화면을 건드리지 않게(WM_APP_SNAPSHOT 으로 확인).
         Win32.ShowWindow(_hwnd, Offscreen ? 4 : 5);
         Win32.UpdateWindow(_hwnd);
+        if (FullscreenNow) RebuildView();   // 지난번에 전체화면으로 두었으면 창 꼴을 그렇게 바꾼다
 
         System.Threading.Tasks.Task.Run(LoadScene);
 
@@ -790,6 +812,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void OnKeyDown(int key)
     {
         if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
+        if (key == Win32.VK_F11) { OnMenuCommand(MenuFullscreen); return; }   // 전체화면 켜고 끄기 — 어느 화면에서나
         if (TimedHitFx.Running) { TimedHitFx.PressKey(key); return; }   // 타이밍 크리티컬 — 공격 키만 받는다
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;

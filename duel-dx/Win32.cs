@@ -89,7 +89,17 @@ internal static unsafe class Win32
     [DllImport("user32.dll")]
     public static extern uint CheckMenuItem(IntPtr menu, uint id, uint check);
 
-    public const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+    public const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010, SWP_FRAMECHANGED = 0x0020;
+
+    // 전체화면(테두리 없는 창) — 창 꼴을 바꾸고 모니터 크기를 잰다.
+    public const int GWL_STYLE = -16, WS_POPUP = unchecked((int)0x80000000);
+    public const int SM_CXSCREEN = 0, SM_CYSCREEN = 1, SM_CYMENU = 15;
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    public static extern IntPtr SetWindowLongPtrW(IntPtr hWnd, int index, IntPtr value);
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
@@ -100,7 +110,7 @@ internal static unsafe class Win32
     public const uint PM_REMOVE = 0x0001;
 
     public const int VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
-    public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B;
+    public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B, VK_F11 = 0x7A;
     public const int VK_TAB = 0x09;
 
     public const int IDC_ARROW = 32512;

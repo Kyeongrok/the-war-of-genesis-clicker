@@ -202,7 +202,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -237,6 +237,14 @@ internal sealed unsafe partial class GameWindow
     internal bool _timedHit = UserSettings.Current.TimedHit;
 
     internal const int MenuTimedHit = 1172;
+
+    /// <summary>
+    /// 설정 > 화면 > 전체화면 — 테두리 없는 창으로 주 모니터를 가득 덮는다(사용자 요청 menu-38, 기본 끔). 메뉴 막대는 남겨 둔다 —
+    /// 설정 · 모드로 가는 길이 거기뿐이다. F11 로도 켜고 끈다.
+    /// </summary>
+    internal bool _fullscreen = UserSettings.Current.Fullscreen;
+
+    internal const int MenuFullscreen = 1174;
 
     /// <summary>개발 > 편집기 열기 — 설치판에는 편집기가 없다. 처음 누르면 받아서 연다(<see cref="EditorLauncher"/>).</summary>
     internal const int MenuEditor = 1161;
@@ -320,6 +328,12 @@ internal sealed unsafe partial class GameWindow
                 Toast(_skillMovies ? "영상이 있는 기술을 쓰면 영상이 나옵니다(클릭 · Esc 로 넘김)" : "기술 영상을 보지 않습니다");
                 if (_skillMovies) Cut.Prefetch(_units.Select(u => u.Data).OfType<WarOfGenesis.Assets.CharacterData>());
                 SaveSettings();
+                break;
+            case MenuFullscreen:
+                _fullscreen = !_fullscreen;
+                SaveSettings();
+                ApplyZoom(force: true);      // 창 꼴과 크기를 새로 잡는다
+                Toast(_fullscreen ? "전체화면 — F11 이나 설정 > 화면에서 끕니다" : "창 화면으로 돌아왔습니다");
                 break;
             case MenuTimedHit:
                 _timedHit = !_timedHit;
