@@ -1164,8 +1164,21 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _pMark = now;
     }
 
+    /// <summary>
+    /// 전체화면에서는 메뉴 막대를 숨겨 두었다가 마우스가 화면 맨 위에 닿으면 보이고, 막대 아래로 내려가면 다시 숨긴다(사용자 요청 menu-46).
+    /// 보이는 동안은 그림이 메뉴 높이만큼 눌려 보인다 — 잠깐이라 그대로 둔다.
+    /// </summary>
+    internal void UpdateFullscreenMenu()
+    {
+        if (!FullscreenNow || _menuBar == IntPtr.Zero || !Win32.GetCursorPos(out var at)) return;
+        bool shown = Win32.GetMenu(_hwnd) != IntPtr.Zero;
+        if (!shown && at.Y <= 0 && at.X >= 0 && at.X < Win32.GetSystemMetrics(Win32.SM_CXSCREEN)) Win32.SetMenu(_hwnd, _menuBar);
+        else if (shown && at.Y > Win32.GetSystemMetrics(Win32.SM_CYMENU) + 24) Win32.SetMenu(_hwnd, IntPtr.Zero);
+    }
+
     internal void Render()
     {
+        UpdateFullscreenMenu();
         if (!PerfLog) { Compose(); Upload(); Draw(); return; }
         _perf.Restart(); Compose(); double c = _perf.Elapsed.TotalMilliseconds;
         Upload(); double u = _perf.Elapsed.TotalMilliseconds;

@@ -568,7 +568,9 @@ internal sealed partial class GamePad(GameWindow host)
             shown = [.. shown, (Name(PadAction.Help).Replace(" 스틱 누름", ""), "조작")];
             int total = shown.Sum(l => DrawKeys(l.Button, 0, 0, CapSmall, measure: true) + 4 + host.GetText(l.Does, 0xFFFFFFFF, 11f).W + 14) - 14;
             int sx = host._camX + host.ViewWidth - total - 10, sy = host._camY + host.ViewHeight - CapSmall - 6;
-            host.FillRect(sx - 6, sy - 3, total + 12, CapSmall + 6, 0xA0000000);
+            // 필드에서는 그림 아래의 검은 띠에 딱 붙여 그림을 안 가리게 한다(사용자 요청 fa-61) — 바탕 네모도 안 깐다(이미 검다).
+            if (host.FieldOpen) sy = host._camY + host.ViewHeight - CapSmall - 2;
+            else host.FillRect(sx - 6, sy - 3, total + 12, CapSmall + 6, 0xA0000000);
             foreach (var (button, does) in shown)
             {
                 sx += DrawKeys(button, sx, sy, CapSmall) + 4;
