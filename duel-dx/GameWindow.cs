@@ -422,6 +422,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// </summary>
     internal IntPtr _menuBar;
 
+    /// <summary>지금 창 크기에서 쓸 수 있는 가장 큰 배율 — 원본 화면 한 장(640 × (480 + 머리줄))이 창에 다 들어가는 배율.</summary>
+    internal double MaxUsableZoom => Math.Max(MinZoom, Math.Min(_resW / (double)MosesScene.MosesW, _resH / (double)(GridTop + MosesScene.MosesH)));
+
     internal double FitZoom()
     {
         var work = new Win32.Rect();
@@ -439,7 +442,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         }
         else { _resW = _viewW; _resH = _viewH; }
 
-        if (_zoomPercent > 0) return Math.Clamp(_zoomPercent / 100.0, MinZoom, MaxZoomChosen);
+        // 고른 배율이 창에 비해 너무 크면 원본 화면 한 장(640×480 + 머리줄)이 다 보이는 데까지만 키운다 — 안 그러면 보이는 판이 창들보다 작아져
+        // 설정 창조차 화면 밖으로 잘려 되돌릴 수가 없었다(사용자 보고 menu-43: 모니터보다 큰 해상도에 400%).
+        if (_zoomPercent > 0) return Math.Clamp(Math.Min(_zoomPercent / 100.0, MaxUsableZoom), MinZoom, MaxZoomChosen);
 
         int contentW = Math.Min(BoardWidth, _resW);
         int contentH = Math.Min(BoardIsMap ? BoardHeight * 7 / 10 : GridTop + MosesScene.MosesH, _resH);

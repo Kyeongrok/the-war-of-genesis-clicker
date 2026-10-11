@@ -53,7 +53,9 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 [
                     new("해상도", res == 0 ? $"{host._viewW}×{host._viewH} (원본)" : $"{host._viewW}×{host._viewH}",
                         Step: d => host.OnMenuCommand(MenuResBase + Cycle(res, d, ResChoices.Length))),
-                    new("배율", host._zoomPercent == 0 ? "자동(화면에 맞춤)" : $"{host._zoomPercent}%",
+                    // 고른 배율이 창에 비해 커서 줄여 쓰는 중이면 실제 배율을 함께 적는다.
+                    new("배율", host._zoomPercent == 0 ? "자동(화면에 맞춤)"
+                              : host._zoom < host._zoomPercent / 100.0 - 1e-6 ? $"{host._zoomPercent}% (창에 맞춰 {host._zoom * 100:0}%)" : $"{host._zoomPercent}%",
                         Step: d => host.OnMenuCommand(MenuZoomAuto + Cycle(zoom, d, ZoomChoices.Length))),
                     new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11) · 설정은 Esc 메뉴의 SETTING"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),

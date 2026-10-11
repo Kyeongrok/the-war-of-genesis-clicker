@@ -358,6 +358,11 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     internal void PaintCell(int col, int row, uint layer)
     {
+        // 화면에 안 보이는 칸은 안 칠한다 — 판 전체가 한 장의 그림이라 전에는 카메라 밖 칸까지 틀마다 다 칠했다. 넓은 맵에서 TP 가 많은
+        // 인물의 차례면 이동 · 사거리 칸이 수천이라 한 틀에 12ms 를 먹어 내 차례만 되면 느려졌다(사용자 보고 fa-60). 비탈로 솟는 몫만큼 위아래로 넉넉히 본다.
+        if (col * TileW > host._camX + host.ViewWidth || (col + 1) * TileW < host._camX) return;
+        int cellTop = host.CellTop(col, row);
+        if (cellTop > host._camY + host.ViewHeight + 2 * TileH || cellTop + TileH < host._camY - 2 * TileH) return;
         int bright = CellBrightness(col, row);
         uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
         int x0 = col * TileW, x1 = x0 + TileW;
@@ -395,18 +400,21 @@ internal sealed unsafe partial class BattleScene
     internal void AddRect(int x, int y, int w, int h, uint tint)
     {
         uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
-        for (int yy = y; yy < y + h; yy++)
+        // 네모를 판 안으로 먼저 자르고 판 크기 · 버퍼를 한 번만 읽는다 — 전에는 픽셀마다 경계와 판 너비를 다시 셈했다(이동 영역이 떠 있는 내내 드는 값이다, fa-60).
+        int bw = host.BoardWidth, bh = host.BoardHeight;
+        int x0 = Math.Max(0, x), x1 = Math.Min(bw, x + w), y0 = Math.Max(0, y), y1 = Math.Min(bh, y + h);
+        if (x0 >= x1 || y0 >= y1) return;
+        var fb = host._fb;
+        for (int yy = y0; yy < y1; yy++)
         {
-            if ((uint)yy >= host.BoardHeight) continue;
-            for (int xx = x; xx < x + w; xx++)
+            int i = yy * bw + x0;
+            for (int n = x1 - x0; n > 0; n--, i++)
             {
-                if ((uint)xx >= host.BoardWidth) continue;
-                int i = yy * host.BoardWidth + xx;
-                uint c = host._fb[i];
-                host._fb[i] = c & 0xFF000000
-                       | Math.Min(255, (c >> 16 & 0xFF) + tr) << 16
-                       | Math.Min(255, (c >> 8 & 0xFF) + tg) << 8
-                       | Math.Min(255, (c & 0xFF) + tb);
+                uint c = fb[i];
+                fb[i] = c & 0xFF000000
+                      | Math.Min(255, (c >> 16 & 0xFF) + tr) << 16
+                      | Math.Min(255, (c >> 8 & 0xFF) + tg) << 8
+                      | Math.Min(255, (c & 0xFF) + tb);
             }
         }
     }
