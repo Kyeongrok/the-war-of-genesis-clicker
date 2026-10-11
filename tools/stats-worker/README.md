@@ -29,6 +29,17 @@ npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT ability,
 
 캐릭터 에디터를 쓴 판은 `battles.flags` 에 표시가 있다 — 빼고 보려면 `battles` 와 묶어 `flags NOT LIKE '%"charEdit":true%'`.
 
+`flags` 에는 조작 방식과 타이밍 공격도 실린다(v0.31.1 부터 — 그 전 판은 이 칸이 없다):
+`pad` · `keys` = 그 판에서 내 인물이 기술을 쓴 횟수(패드로 / 키보드 · 마우스로), `timedHit` = 타이밍 공격을 켰나,
+`timed` = [띠가 뜬 횟수, 박자 둘 다 맞춤, 하나만 맞춤].
+
+```
+# 패드로 한 판 · 키보드로 한 판 · 타이밍 공격을 켠 판 (버전별)
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT version, COUNT(*) battles, SUM(json_extract(flags,'$.pad') > json_extract(flags,'$.keys')) pad_battles, SUM(json_extract(flags,'$.keys') >= json_extract(flags,'$.pad')) key_battles, SUM(json_extract(flags,'$.timedHit')) timed_on, SUM(json_extract(flags,'$.timed[0]')) bars, SUM(json_extract(flags,'$.timed[1]')) both, SUM(json_extract(flags,'$.timed[2]')) one FROM battles WHERE json_extract(flags,'$.pad') IS NOT NULL GROUP BY version"
+# 패드를 한 번이라도 쓴 설치 수
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT COUNT(DISTINCT install) FROM battles WHERE json_extract(flags,'$.pad') > 0"
+```
+
 ## 적히는 것
 
 `battles`(판 하나에 한 줄: 전투 번호 · 판 번호 · 난이도 · 승패 · 턴 수 · 설치 번호)와 `skill_stats`(인물 × 어빌리티마다 한 줄).

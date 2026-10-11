@@ -349,6 +349,20 @@ internal sealed partial class GamePad(GameWindow host)
                 if (action == PadAction.Ring) { _rightDown = true; PostMouse(Win32.WM_RBUTTONDOWN); continue; }
                 if (action is PadAction.PrevUnit or PadAction.NextUnit)
                 {
+                    // 모드 창에서는 LB · RB 가 이전 · 다음 탭(사용자 요청 menu-35) — 끝에서 반대쪽으로 돈다.
+                    if (host.TuningScr._tuningOpen && !host.TimedEditScr._open)
+                    {
+                        int tabs = TuningScreen.TabNames.Length;
+                        host.TuningScr._tuningTab = (host.TuningScr._tuningTab + (action == PadAction.PrevUnit ? tabs - 1 : 1)) % tabs;
+                        host.TuningScr._tuningListOpen = false;
+                        // 커서도 새 탭의 단추 위로 — 자리 목록의 앞쪽이 탭들이다.
+                        if (Targets() is var tabTargets && host.TuningScr._tuningTab < tabTargets.Count)
+                        {
+                            var tab = tabTargets[host.TuningScr._tuningTab];
+                            MoveCursorTo(tab.X + tab.W / 2, tab.Y + tab.H / 2);
+                        }
+                        continue;
+                    }
                     // 성도(행성 고르기)에서는 LB · RB 가 이전 · 다음 행성(사용자 요청 mo-14). 타이틀에서는 단추 옮기기(fa-31).
                     if (CycleStarMap(action == PadAction.PrevUnit ? -1 : 1)) continue;
                     // 시스템 메뉴(와 그 확인창)에서도 LB · RB 가 고르는 칸을 위 · 아래로 옮긴다(사용자 요청 menu-31) — 슬롯 목록은 전처럼 굴린다.
@@ -532,7 +546,8 @@ internal sealed partial class GamePad(GameWindow host)
         if (!_guideOpen)
         {
             // 한 줄 — 전투의 긴 목록은 자주 쓰는 것만 추린다. 단추는 그림(<see cref="DrawKeys"/>)으로, 하는 일은 글로.
-            var shown = lines.Count > 6 ? lines.Skip(3).Take(4).ToList() : lines;
+            // 전투 줄에서는 링 커맨드 단추를 뺀다 — 취소 단추로도 링이 열려 줄만 길어진다(사용자 요청 fa-57). 안내 창에는 그대로 있다.
+            var shown = lines.Count > 6 ? lines.Skip(3).Where(l => title != "전투" || l.Button != Name(PadAction.Ring)).Take(4).ToList() : lines;
             shown = [.. shown, (Name(PadAction.Help), "조작 안내")];
             int total = shown.Sum(l => DrawKeys(l.Button, 0, 0, CapSmall, measure: true) + 4 + host.GetText(l.Does, 0xFFFFFFFF, 11f).W + 14) - 14;
             int sx = host._camX + host.ViewWidth - total - 10, sy = host._camY + host.ViewHeight - CapSmall - 6;

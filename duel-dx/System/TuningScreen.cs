@@ -47,7 +47,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == 3 ?
     [
         // 실험 탭 — 아직 다듬는 중인 것(사용자 요청 fg-32). 기본은 모두 끔.
-        ("타이밍 공격", "기본공격 앞에 띠가 뜬다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬", MenuTimedHit, host._timedHit),
+        ("타이밍 어택", "박자에 맞춰 Space(패드 LT → RT)", MenuTimedHit, host._timedHit),
     ] : _tuningTab == 2 ?
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
@@ -59,7 +59,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(처음 한 번 받는다)", MenuSkillMovies, host._skillMovies),
         ("전직할 때 EXP 유지", "전직해도 쌓인 EXP 를 지우지 않는다", MenuKeepJobExp, host._keepJobExp),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
-        ("익명 전투 통계 보내기", "쓴 어빌리티와 피해만 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
+        ("익명 전투 통계 보내기", "쓴 어빌리티 · 피해 · 조작 방식 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),

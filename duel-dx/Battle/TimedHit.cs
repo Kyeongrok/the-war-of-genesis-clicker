@@ -6,7 +6,7 @@ namespace DuelDx;
 using static DuelDx.GameWindow;
 
 /// <summary>
-/// 타이밍 공격의 수치 — 개발 &gt; 타이밍 어택 수정 창(<see cref="TimedHitEditScreen"/>)에서 고치며 맞춘다. <c>%APPDATA%\DuelDx\timedhit.json</c> 에 남는다.
+/// 타이밍 어택의 수치 — 개발 &gt; 타이밍 어택 수정 창(<see cref="TimedHitEditScreen"/>)에서 고치며 맞춘다. <c>%APPDATA%\DuelDx\timedhit.json</c> 에 남는다.
 /// </summary>
 internal sealed class TimedHitConfig
 {
@@ -50,7 +50,7 @@ internal sealed class TimedHitConfig
 }
 
 /// <summary>
-/// 타이밍 공격(모드 &gt; 실험, 사용자 요청 fg-32 — 원본에 없다). 내가 움직이는 인물이 기본공격을 하기 바로 앞에 띠가 뜨고,
+/// 타이밍 어택(모드 &gt; 실험, 사용자 요청 fg-32 — 원본에 없다). 내가 움직이는 인물이 기본공격을 하기 바로 앞에 띠가 뜨고,
 /// 띠 위를 달리는 표시가 <b>두 박자 칸</b>을 지날 때마다 단추를 하나씩 누른다 — <b>둘 다 맞추면 두 번 치고</b>(합쳐 피해 2배),
 /// <b>하나만 맞추면 크리티컬</b>이다. 어느 쪽이든 빗나가지 않는다. 하나도 못 맞추면 보통 판정 그대로다(벌은 없다).
 /// 패드는 어빌리티 단추 → 공격 단추(기본 LT → RT), 키보드는 Space 두 번(사용자 요청 — E 로 공격을 건 뒤 Space · Space).
@@ -135,6 +135,7 @@ internal sealed class TimedHit(GameWindow host)
             int before = _streaks.TryGetValue(a, out var kept) && target != null && kept.Target == target && target.Alive && target.Hp > 0 ? kept.Count : 0;
             Streak = Hits == BeatCount ? before + 1 : 0;
             _streaks[a] = (target, Streak);
+            host.Stats.Timed(Hits);
         }
         _result = Hits > 0;
         _resultAt = host._realTime;

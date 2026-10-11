@@ -5,7 +5,7 @@ namespace DuelDx;
 using static DuelDx.GameWindow;
 
 /// <summary>
-/// 타이밍 어택 수정 창 — 메뉴 막대 개발 &gt; 타이밍 어택 수정. 타이밍 공격(<see cref="TimedHit"/>)의 수치를 게임 안에서 고치며 맞춘다(사용자 요청 fg-32).
+/// 타이밍 어택 수정 창 — 메뉴 막대 개발 &gt; 타이밍 어택 수정. 타이밍 어택(<see cref="TimedHit"/>)의 수치를 게임 안에서 고치며 맞춘다(사용자 요청 fg-32).
 /// 줄마다 값과 − − / − / + / + + 단추, 아래에 「미리 보기」(띠를 이 창 안에서 한 번 돌려 본다 — Space · LT · RT 로 눌러 볼 수 있다).
 /// 고치면 바로 적용되고 <c>timedhit.json</c> 에 남는다.
 /// </summary>
@@ -48,7 +48,7 @@ internal sealed class TimedHitEditScreen(GameWindow host)
     /// <summary>아래 단추 — 미리 보기 · 기본값 · 켜고 끄기 · 닫기.</summary>
     internal (int X, int W, string Label)[] FootButtons(int x) =>
     [
-        (x + 16, 110, "미리 보기"), (x + 134, 90, "기본값"), (x + 232, 190, host._timedHit ? "타이밍 공격: 켜짐" : "타이밍 공격: 꺼짐"), (x + W - 116, 100, "닫기"),
+        (x + 16, 110, "미리 보기"), (x + 134, 90, "기본값"), (x + 232, 190, host._timedHit ? "타이밍 어택: 켜짐" : "타이밍 어택: 꺼짐"), (x + W - 116, 100, "닫기"),
     ];
 
     /// <summary>패드 커서가 건너뛸 자리(<see cref="GamePad.Targets"/>).</summary>
@@ -87,7 +87,7 @@ internal sealed class TimedHitEditScreen(GameWindow host)
             switch (i)
             {
                 case 0: StartPreview(); break;
-                case 1: host.TimedHitFx.Cfg = new TimedHitConfig(); Cfg.Save(); host.Toast("타이밍 공격 수치를 기본값으로 되돌렸습니다"); break;
+                case 1: host.TimedHitFx.Cfg = new TimedHitConfig(); Cfg.Save(); host.Toast("타이밍 어택 수치를 기본값으로 되돌렸습니다"); break;
                 case 2: host.OnMenuCommand(MenuTimedHit); break;
                 case 3: _open = false; break;
             }

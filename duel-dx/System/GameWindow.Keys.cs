@@ -233,7 +233,7 @@ internal sealed unsafe partial class GameWindow
 
     internal const int MenuSkillMovies = 1170;
 
-    /// <summary>모드 > 실험 > 타이밍 공격 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
+    /// <summary>모드 > 실험 > 타이밍 어택 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
     internal bool _timedHit = UserSettings.Current.TimedHit;
 
     internal const int MenuTimedHit = 1172;
@@ -323,7 +323,7 @@ internal sealed unsafe partial class GameWindow
                 break;
             case MenuTimedHit:
                 _timedHit = !_timedHit;
-                Toast(_timedHit ? "기본공격 앞에 띠가 뜹니다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬" : "타이밍 공격을 껐습니다");
+                Toast(_timedHit ? "기본공격 앞에 띠가 뜹니다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬" : "타이밍 어택을 껐습니다");
                 SaveSettings();
                 break;
             case MenuSendStats:

@@ -84,12 +84,30 @@ internal sealed class BattleStats(GameWindow host)
     /// <summary>이 판을 연 때(실제 시계, 초) — 걸린 시간을 잰다. 전투 도중에 세이브를 불러오면 불러온 때부터다.</summary>
     private double _startedAt;
 
+    /// <summary>
+    /// 이 판에서 내 인물이 기술(기본공격 포함)을 쓴 횟수를 조작 방식으로 가른 것 — 패드를 잡고 있을 때와 키보드 · 마우스일 때(사용자 요청).
+    /// 패드로 하는 사람이 얼마나 되는지 보려는 것이다.
+    /// </summary>
+    private int _padActs, _keyActs;
+
+    /// <summary>이 판의 타이밍 어택(모드 &gt; 실험) — 띠가 뜬 횟수, 박자 둘을 다 맞춘 횟수, 하나만 맞춘 횟수.</summary>
+    private int _timedShown, _timedBoth, _timedOne;
+
+    /// <summary>타이밍 어택의 띠가 한 번 끝났다 — <paramref name="hits"/> 는 맞춘 박자 수.</summary>
+    internal void Timed(int hits)
+    {
+        _timedShown++;
+        if (hits >= 2) _timedBoth++;
+        else if (hits == 1) _timedOne++;
+    }
+
     /// <summary>전투를 새로 열 때 — 그 판의 셈을 비운다.</summary>
     internal void Reset()
     {
         _battle.Clear();
         _cast = default;
         _startedAt = host._realTime;
+        _padActs = _keyActs = _timedShown = _timedBoth = _timedOne = 0;
     }
 
     /// <summary>
@@ -114,7 +132,9 @@ internal sealed class BattleStats(GameWindow host)
     /// <summary>기술을 한 번 썼다(비용을 치른 자리에서 한 번).</summary>
     internal void Cast(UnitState a, WorkData w)
     {
-        if (RowFor(a, w) is { } row) row.Uses++;
+        if (RowFor(a, w) is not { } row) return;
+        row.Uses++;
+        if (host.Pad.Active) _padActs++; else _keyActs++;
     }
 
     /// <summary>한 대 맞혔다 — <paramref name="dealt"/> 는 실제로 깎인 HP.</summary>
@@ -211,7 +231,12 @@ internal sealed class BattleStats(GameWindow host)
             outcome = won ? "win" : "lose",
             turns = host.Btl._turnNo,
             seconds = (int)Math.Clamp(host._realTime - _startedAt, 0, 86400),
-            flags = new { charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart },
+            // pad · keys = 내 인물이 기술을 쓴 횟수(패드로 / 키보드 · 마우스로), timedHit = 타이밍 어택을 켰나, timed = [띠가 뜬 횟수, 둘 다 맞춤, 하나만 맞춤]
+            flags = new
+            {
+                charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart,
+                pad = _padActs, keys = _keyActs, timedHit = host._timedHit, timed = new[] { _timedShown, _timedBoth, _timedOne },
+            },
             skills = _battle.Select(p => new
             {
                 chr = p.Key.Chr, ability = p.Key.Ability, work = p.Key.Work, level = p.Key.Level,

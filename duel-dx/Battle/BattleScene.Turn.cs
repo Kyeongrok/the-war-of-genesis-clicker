@@ -955,7 +955,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
-        bool timedChain = false;   // 타이밍 공격이 타격 동작을 여럿 이어 붙였나 — 그러면 「연」처럼 타격 동작마다 친다
+        bool timedChain = false;   // 타이밍 어택이 타격 동작을 여럿 이어 붙였나 — 그러면 「연」처럼 타격 동작마다 친다
         if (_timedCritBy == a)
         {
             // 박자 둘을 다 맞췄으면 치는 동작을 「연」의 여러 번 치는 동작(13 — 타격 키 둘 · 14 — 셋)으로 바꿔 보통 피해로 여러 번 친다(사용자 요청).
