@@ -495,11 +495,37 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
                     bool white = (c >> 16 & 0xFF) > 150 && (c >> 8 & 0xFF) > 150 && (c & 0xFF) > 150;
                     if (white || Sum(c) < Sum(fill) - 36) clean[yy * StatusW + xx] = fill;   // 흰 글 · 그보다 어두운 테
                 }
+        // 왼쪽 위 「STATUS」 로고(빛나는 하늘색 점 글씨) — 화살표와 오른쪽 장식 선은 두고 글자만 지운다. 그 줄의 바탕(화살표 왼쪽 열)보다 밝은 점과 그 둘레를 메운다.
+        static int Glow(uint c) => (int)((c >> 8 & 0xFF) + (c & 0xFF));
+        for (int yy = LogoY; yy < LogoY + LogoH; yy++)
+        {
+            uint fill = bg[yy * StatusW + 6];
+            for (int xx = LogoX; xx < LogoX + LogoW; xx++)
+            {
+                bool lit = false;
+                for (int dy = -1; dy <= 1 && !lit; dy++)
+                    for (int dx = -2; dx <= 2 && !lit; dx++) lit = Glow(bg[(yy + dy) * StatusW + xx + dx]) > Glow(fill) + 40;
+                if (lit) clean[yy * StatusW + xx] = fill;
+            }
+        }
         return clean;
     }
 
+    private const int LogoX = 22, LogoY = 7, LogoW = 96, LogoH = 24;
+
     private void DrawLabels(int ox, int oy)
     {
+        // 로고 — 글자를 띄워 쓴다(원본 로고의 자간). 뒤에 푸른 번짐 한 겹.
+        const string logo = "STATUS";
+        for (int i = 0; i < logo.Length; i++)
+        {
+            string ch = logo[i].ToString();
+            var (cw, chh) = host.Hi.Measure(ch, White, 17f);
+            int cx = ox + LogoX + 8 + i * 16 - cw / 2, cy = oy + LogoY + (LogoH - chh) / 2;
+            host.Hi.DrawText(ch, cx + 1, cy + 1, 0xA01848C0, 17f);
+            host.Hi.DrawText(ch, cx, cy, 0xFF48D8FF, 17f);
+        }
+
         foreach (var (x, y, w, text) in Heads)
         {
             var (tw, th) = host.Hi.Measure(text, HeadInk, 13f);

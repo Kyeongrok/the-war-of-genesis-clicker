@@ -1107,6 +1107,10 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     /// 창틀 Obs 0246 세 조각은 <b>여섯 칸 모두 늘 보이고 멈춰 있다</b>(<c>0x100fe2dd</c>~<c>0x100fe3f6</c>, vt+0xc0(−1), 감사5 B4).
     /// 아이콘은 단추 클래스라 오른쪽에서 미끄러져 들어오고(B3), 마우스를 올린 것만 움직인다(B2).
     /// </summary>
+    /// <summary>도크 아이콘 그림에서 이름 글씨가 시작하는 줄(아이콘 칸 위끝 기준) · 새 UI 의 이름 글 색.</summary>
+    private const int DockLabelY = 27;
+    private const uint DockLabelInk = 0xFF30E8FF;
+
     internal void DrawMosesDock(int ox, int oy, int tick)
     {
         for (int i = 0; i < MosesIcons.Length; i++)
@@ -1117,7 +1121,17 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 host.DrawUi(MosesFrameObs, motion, 0, x + dx, y, GameWindow.UiBlend.Alpha);
             var (sx, wipe) = DockSlide(1000 + i, icon.X);
             if (sx > icon.X) { DrawSlideTrail(ox, oy, ox + sx + 14, y + 19); continue; }
-            DrawButtonUi(MosesObs, icon.Motion, HoverTick(i == _mosesDockHover, _mosesDockHoverAt), x + 14, y + 19, wipe);
+            if (_layerText && wipe >= 10)
+            {
+                // 새 UI — 아이콘 그림 아래쪽의 이름(점 글씨)은 잘라 내고 그 자리에 글로 쓴다(menu-57).
+                var saved = host._uiClip;
+                host._uiClip = (x - 20, y - 12, 70, 12 + DockLabelY);
+                host.DrawUi(MosesObs, icon.Motion, HoverTick(i == _mosesDockHover, _mosesDockHoverAt), x + 14, y + 19, GameWindow.UiBlend.Alpha);
+                host._uiClip = saved;
+                var (lw, _) = host.Hi.Measure(icon.Name, DockLabelInk, 7f);
+                host.Hi.DrawText(icon.Name, x + 15 - lw / 2, y + DockLabelY - 1, DockLabelInk, 7f);
+            }
+            else DrawButtonUi(MosesObs, icon.Motion, HoverTick(i == _mosesDockHover, _mosesDockHoverAt), x + 14, y + 19, wipe);
             // 새 편지가 있으면 MAIL 아이콘 오른쪽 위에 빨간 점 — 다 읽으면 사라진다(사용자 요청).
             if (icon.Page == 1 && wipe >= 10 && HasNewMail())
             {
