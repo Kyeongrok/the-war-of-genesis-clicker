@@ -1701,6 +1701,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         host._uiClip = null;
         ApplyScreenWave(ox, oy, (int)(host._lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)
         host.DrawToast();
+        host.DrawVoiceNotice(ox + MosesScene.MosesW - 12, oy + 10);
     }
 
     /// <summary>

@@ -23,6 +23,12 @@ internal static class AssetPack
     /// <summary>화면에 보일 받기 진행 글 — 받는 중이 아니면 빈 글.</summary>
     public static string Status => AssetDownload.Status;
 
+    /// <summary>대사 음성이 아직 덜 와서 목소리가 안 날 때 보일 글 — 그럴 일이 없으면 빈 글.</summary>
+    public static string VoiceStatus => AssetDownload.VoiceStatus;
+
+    /// <summary>목소리 없는 대사가 떴다 — 받는 길이면 대사 음성을 남은 자료보다 먼저 받는다.</summary>
+    public static void WantVoices() => AssetDownload.WantVoices();
+
     private static readonly object LogGate = new();
 
     /// <summary>그 파일이 앞으로 올 수 있나 — 받는 길이고 아직 못 받았을 때만(부르는 쪽이 「없는 그림」으로 기억하면 안 된다).</summary>

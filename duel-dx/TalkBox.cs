@@ -446,6 +446,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
                 host._mixer.PlayEffect(pcm!, host._effectGain, tag, left: panL, right: panR);
             }
             Volatile.Write(ref w.VoiceLoaded, play ? 1 : -1);
+            if (pcm == null && id > 0) host.NoteVoiceMissing();
             // 배경 실에서 올 수 있다 — 기록은 주 실이 옮겨 적는다(PlayTalkVoice 와 같다).
             if (BattleScene.Trace) host._backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")}");
         });

@@ -61,6 +61,35 @@ internal static class AssetDownload
     /// <summary>화면에 보일 진행 글 — 받을 것이 없으면 빈 글.</summary>
     public static string Status { get; private set; } = "";
 
+    /// <summary>
+    /// 대사 음성이 아직 덜 와서 목소리가 안 날 때 화면에 보일 글 — 받는 길이 아니거나 들어가 본 줄까지의 음성을 다 받았으면 빈 글.
+    /// 숫자는 들어가 본 줄까지의 음성 덩이를 이번 판에 받은 만큼이다.
+    /// </summary>
+    public static string VoiceStatus
+    {
+        get
+        {
+            lock (Gate)
+            {
+                // 앞 줄(Ahead)의 음성은 미리 받는 것이라 지금 대사와는 상관없다.
+                long left = _voices.Where(p => p.Tier <= _reached).Sum(p => p.Size);
+                if (!Active || left == 0) return "";
+                if (DateTime.UtcNow < _retryAt) return "대사 음성을 받지 못하고 있습니다 — 인터넷 연결을 확인해 주세요";
+                long got = _voiceDone + Math.Min(Interlocked.Read(ref _voiceNow), left), all = _voiceDone + left;
+                return $"대사 음성을 받는 중이라 목소리가 안 납니다 — {got * 100 / all}% ({got >> 20}/{all >> 20}MB)";
+            }
+        }
+    }
+
+    /// <summary>
+    /// 목소리 없는 대사가 떴다 — 들어가 본 줄까지의 음성 덩이를 남은 낱장보다 먼저 받는다(지금 있는 줄의 것부터).
+    /// 게임이 찾은 낱장(맵 · 음악)은 여전히 그보다 먼저다.
+    /// </summary>
+    public static void WantVoices()
+    {
+        lock (Gate) _voicesWanted = true;
+    }
+
     private sealed record Part(string Asset, long Size, string Sha256, int Tier);
     private sealed record Entry(string Name, string Asset, long Size, string Sha256, int Tier, string Release);
 
@@ -72,6 +101,11 @@ internal static class AssetDownload
     private static readonly List<Part> _voices = [];
     private static readonly List<string> _wanted = [];
     private static int _reached;
+    /// <summary>지금 있는 줄 — 음성을 당겨 받을 때 이 줄의 덩이부터.</summary>
+    private static int _current;
+    private static bool _voicesWanted;
+    /// <summary>이번 판에 다 받은 음성 덩이(들어가 본 줄까지)의 바이트와, 지금 받는 음성 덩이의 받은 바이트.</summary>
+    private static long _voiceDone, _voiceNow;
     private static DateTime _retryAt = DateTime.MinValue;
 
     private static HttpClient CreateClient()
@@ -196,6 +230,7 @@ internal static class AssetDownload
         if (!Active) return;
         lock (Gate)
         {
+            _current = row;
             if (row <= _reached) return;
             _reached = row;
         }
@@ -265,8 +300,11 @@ internal static class AssetDownload
                 // 게임이 찾은 것이 있으면 그것부터(가장 최근에 찾은 것 먼저), 없으면 범위 안의 것을 차례대로.
                 for (int i = _wanted.Count - 1; i >= 0 && file == null; i--)
                     if (!_byName.TryGetValue(_wanted[i], out file)) _wanted.RemoveAt(i);
-                file ??= _pending.FirstOrDefault(e => e.Tier <= limit);
-                if (file == null) voices = _voices.FirstOrDefault(p => p.Tier <= limit);
+                // 목소리 없는 대사가 떴으면 들어가 본 줄까지의 음성을 남은 낱장보다 먼저 — 지금 줄, 그 앞줄들, 나머지 차례로.
+                if (file == null && _voicesWanted)
+                    voices = _voices.Where(p => p.Tier <= _reached).OrderBy(p => p.Tier <= _current ? _current - p.Tier : 100 + p.Tier).FirstOrDefault();
+                if (voices == null) file ??= _pending.FirstOrDefault(e => e.Tier <= limit);
+                if (file == null) voices ??= _voices.FirstOrDefault(p => p.Tier <= limit);
                 left = _pending.Where(e => e.Tier <= limit).Sum(e => e.Size) + _voices.Where(p => p.Tier <= limit).Sum(p => p.Size);
             }
             if (file == null && voices == null)
@@ -283,17 +321,24 @@ internal static class AssetDownload
                 {
                     got = before + n;
                     Status = $"자료 받는 중 {got * 100 / Math.Max(1, all)}% ({got >> 20}/{all >> 20}MB)";
+                    if (file == null) Interlocked.Exchange(ref _voiceNow, n);
                 }
                 if (file != null) await GetFile(file, Show);
                 else await GetPart(BaseRelease, voices!, "bgm", Show);
                 lock (Gate)
                 {
                     if (file != null) Forget(file);
-                    else _voices.Remove(voices!);
+                    else
+                    {
+                        _voices.Remove(voices!);
+                        if (voices!.Tier <= _reached) _voiceDone += voices.Size;
+                        Interlocked.Exchange(ref _voiceNow, 0);
+                    }
                 }
             }
             catch (InvalidDataException)
             {
+                Interlocked.Exchange(ref _voiceNow, 0);
                 // 깨진 파일 — 이번 판에는 다시 받지 않는다(다음에 켤 때 다시 본다).
                 lock (Gate)
                 {
@@ -306,6 +351,7 @@ internal static class AssetDownload
                 // 인터넷 없음·디스크 꽉 참·GitHub 막힘 — 조용히 쉬었다가 다시 한다. 쉬는 동안 찾는 파일은 「없음」으로 바로 돌려준다.
                 System.Diagnostics.Debug.WriteLine($"[Pack] {ex.GetType().Name}: {ex.Message}");
                 Status = "";
+                Interlocked.Exchange(ref _voiceNow, 0);
                 lock (Gate) { _retryAt = DateTime.UtcNow.AddSeconds(30); _wanted.Clear(); }
                 await Task.Delay(TimeSpan.FromSeconds(30));
             }
