@@ -590,14 +590,22 @@ internal sealed unsafe partial class BattleScene
                 int pieces = Math.Max(1, swarm.Count);
                 if (extra is { Move: 2, ScalePermille: > 0 } rise && rise.MaxSpeed != 0 && !e.Fly)
                 {
-                    for (int n = 0; n < pieces; n++)
+                    // 대상마다 뿌리는 줄(아스트럴 필드 0x10097d12 — 유닛마다 50개, 15틱씩 늦게)은 대상의 발에서. 전에는 시전자 발에서 한 번만 떴다.
+                    var bases = new List<(int X, int Y, int Late)> { (x, y, 0) };
+                    if (rise.PerTarget && (_fxTargets ?? WorkTargets(w, user, col, row)) is { Count: > 0 } riseTargets)
                     {
-                        int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
-                        int px = x + (swarm.XWidth > 0 ? _fxRandom.Next(swarm.XWidth) - swarm.XWidth / 2 : 0);
-                        int py = y - e.Lift + (swarm.YWidth > 0 ? (int)((_fxRandom.Next(swarm.YWidth) - swarm.YWidth / 2) * 0.8) : 0);
-                        double at = start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep + cheerDelay) / TicksPerSecond;
-                        _shots.Add((e.Obs, e.Motion, at, px, py, px, py - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
+                        bases = [.. riseTargets.Select((ti, i) => (UnitFoot(host._units[ti]).X + rise.Dx, UnitFoot(host._units[ti]).Y + rise.Dy, i * rise.Stagger))];
+                        if (rise.StaggerSure) _fxStagger = Math.Max(_fxStagger, rise.Stagger);
                     }
+                    foreach (var (bx, by, late) in bases)
+                        for (int n = 0; n < pieces; n++)
+                        {
+                            int height = rise.MaxSpeed + (rise.MinSpeed > 0 ? _fxRandom.Next(rise.MinSpeed) - rise.MinSpeed / 2 : 0);
+                            int px = bx + (swarm.XWidth > 0 ? _fxRandom.Next(swarm.XWidth) - swarm.XWidth / 2 : 0);
+                            int py = by - e.Lift + (swarm.YWidth > 0 ? (int)((_fxRandom.Next(swarm.YWidth) - swarm.YWidth / 2) * 0.8) : 0);
+                            double at = start + ((swarm.DelayRandom > 0 ? _fxRandom.Next(swarm.DelayRandom) : 0) + n * swarm.DelayStep + cheerDelay + late) / TicksPerSecond;
+                            _shots.Add((e.Obs, e.Motion, at, px, py, px, py - (int)(height * 0.6), rise.ScalePermille / 1000.0 * 0.6, 1, 1, 0, 0, mirrored));
+                        }
                     continue;
                 }
                 if (extra is { Move: 4, Mode: > 0 } ring && !e.Fly)
@@ -749,6 +757,8 @@ internal sealed unsafe partial class BattleScene
                     {
                         var (tx, ty) = host.Btl.UnitFoot(host._units[eachTargets[i]]);
                         double at = start + i * each.Stagger / TicksPerSecond;
+                        // 뿌리개 줄이면 대상마다 뿌리개를 돌린다(와이드 힐 0x100a57da — 힐과 같은 나선 둘). 전에는 제자리 그림 한 장이 떴다.
+                        if (SpawnSpray(w, e, at, tx + each.Dx, ty + each.Dy - e.Lift)) continue;
                         if (e.Life > 0) host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, mirrored);
                         else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
                     }

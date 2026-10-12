@@ -44,6 +44,14 @@ internal sealed unsafe partial class BattleScene
 
     internal void PlayCritFlash() => _critFlashAt = host._lastTime;
 
+    /// <summary>
+    /// 화면 물들이기(<c>0x1002e8f0(방식, 세기, 틱, 1)</c>) — 치명타(방식 9)와 같은 함수다. 방식 1~7 은 <c>(k·점 + (31 − k)·세기) / 31</c>,
+    /// k = 27 · 23 · 19 · 15 · 11 · 7 · 3. 선 블래스트가 타마다 쓴다(1타 방식 6, 그 뒤 방식 3 — 세기 16).
+    /// </summary>
+    internal (double At, int Mode, int Level, int Ticks) _tintFlash = (-1, 0, 0, 0);
+
+    internal void PlayTintFlash(int mode, int level, int ticks) => _tintFlash = (host._lastTime, mode, level, ticks);
+
     /// <summary>동작을 정해진 틱 수만큼 재생한다(모션 길이 대신).</summary>
     internal void PlayActionFor(UnitState u, int action, int ticks)
     {
@@ -405,6 +413,15 @@ internal sealed unsafe partial class BattleScene
     /// <summary>치명타 물들이기 — 방식 9(픽셀 절반)에 가깝게 한 프레임만 화면을 어둡게 번쩍인다.</summary>
     internal void DrawCritFlash()
     {
+        if (_tintFlash.At >= 0 && host._lastTime - _tintFlash.At <= _tintFlash.Ticks / TicksPerSecond && _tintFlash.Mode is >= 1 and <= 7)
+        {
+            uint k = (uint)(31 - 4 * _tintFlash.Mode), add = (31 - k) * (uint)(_tintFlash.Level * 255 / 31);
+            for (int i = 0; i < host._fb.Length; i++)
+            {
+                uint c = host._fb[i];
+                host._fb[i] = 0xFF000000 | ((c >> 16 & 0xFF) * k + add) / 31 << 16 | ((c >> 8 & 0xFF) * k + add) / 31 << 8 | ((c & 0xFF) * k + add) / 31;
+            }
+        }
         if (_critFlashAt < 0 || host._lastTime - _critFlashAt > 1.0 / TicksPerSecond) return;
         for (int i = 0; i < host._fb.Length; i++)
         {

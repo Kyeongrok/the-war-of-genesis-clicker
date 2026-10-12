@@ -24,7 +24,7 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed unsafe class ForcetrulSkill(GameWindow host)
 {
-    internal const int Spear = 77, AstralFire = 79, Buster = 80, Cross = 84, Blade = 88, Bomb = 89, Final = 90;
+    internal const int Spear = 77, AstralFire = 79, Buster = 80, Cross = 84, Blade = 88, Bomb = 89, Final = 90, Field = 91, CrazyShot = 126, SunBlast = 168;
 
     /// <summary>아스트럴 파이어 — 몸이 내려와 닿은 뒤 대상이 다시 보이고 판정이 드는 틱(200 + 300/20 + 알림 3).</summary>
     internal const int AstralFireLand = 218;
@@ -39,6 +39,8 @@ internal sealed unsafe class ForcetrulSkill(GameWindow host)
         Buster => e.Obs is 264 or 179,
         Blade => e.Obs is 264 or 206,
         Final => e.Obs is 264 or 179 or 309,
+        CrazyShot => e.Obs == 330,
+        SunBlast => e.Obs == 292 || (e.Obs == 1440 && e.Motion == 1),
         _ => false,
     };
 
@@ -68,6 +70,9 @@ internal sealed unsafe class ForcetrulSkill(GameWindow host)
             case Buster: SpawnBuster(w, user, col, row); break;
             case Blade: SpawnBlade(w, user, col, row); break;
             case Final: SpawnFinal(w, user, col, row); break;
+            case Field: SpawnField(w, user, col, row); break;
+            case CrazyShot: SpawnBulletMarks(w, user); break;
+            case SunBlast: SunBlastBurst(w, user, first: true); break;
         }
     }
 
@@ -138,6 +143,58 @@ internal sealed unsafe class ForcetrulSkill(GameWindow host)
             btl._fxHitAt[t] = At(AstralFireLand);
         }
         btl._fxLatestStart = Math.Max(btl._fxLatestStart, At(AstralFireLand));
+    }
+
+    /// <summary>
+    /// 아스트럴 필드 <c>0x10097ba0</c> — 유닛 i 마다 15i 틱 늦게: 떠오름 476:3 50개 · 444:11(70틱 뒤)은 표가 깔고,
+    /// 444:11 이 끝나면(130틱 뒤) 그 유닛의 몸이 20틱 늘어났다 돌아오며 그 끝(150틱 뒤)에 효과가 든다.
+    /// </summary>
+    private void SpawnField(WorkData w, UnitState user, int col, int row)
+    {
+        var btl = host.Btl;
+        var targets = Targets(w, user, col, row);
+        for (int i = 0; i < targets.Count; i++)
+        {
+            btl._bodyShapes.Add((targets[i], 1, At(15 * i + 130), 20, null, 0, 0, 4 / 9.0, null));
+            btl._fxHitAt[targets[i]] = At(15 * i + 150);
+        }
+        if (targets.Count > 0) btl._fxLatestStart = Math.Max(btl._fxLatestStart, At(15 * (targets.Count - 1) + 150));
+    }
+
+    /// <summary>
+    /// 크레이지 샷 <c>0x10093ce0</c> — 총알 자국 330:0~2 예순 장이 시전자 앞 삼각형(깊이 1~범위 칸, 옆으로는 그 깊이 미만)에 54~143틱 사이 흩어져 박힌다.
+    /// 판정 자리와는 따로 뽑는다. 전에는 겨눈 칸과 시전자 발에 한 장씩 떴다.
+    /// </summary>
+    private void SpawnBulletMarks(WorkData w, UnitState user)
+    {
+        var btl = host.Btl;
+        var (ux, uy) = btl.UnitFoot(user);
+        var (dx, dy) = Ahead(user.Facing);
+        int reach = Math.Max(1, (int)w.AreaArg);
+        for (int n = 0; n < 60; n++)
+        {
+            int depth = btl._fxRandom.Next(reach) + 1, side = btl._fxRandom.Next(depth) * (btl._fxRandom.Next(2) == 0 ? -1 : 1);
+            double wx = dx * 40 * depth + (dx == 0 ? 40 * side : 0), wy = dy * 40 * depth + (dx == 0 ? 0 : 40 * side);
+            Fx(w, 330, btl._fxRandom.Next(3), btl._fxRandom.Next(90) + 54, ux + wx, uy + wy * 0.8);
+        }
+    }
+
+    /// <summary>
+    /// 선 블래스트 <c>0x100b5ec0</c> 의 한 타 — 빛 조각 292 서른여섯이 시전자 위(높이 200)에서 반지름 600 의 고리로 퍼지고(빠르기 100, 틱마다 × 0.94),
+    /// 1440:1 이 시전자에게 뜨고, 화면이 물든다(1타 방식 6 · 한 틱, 그 뒤 방식 3 · 두 틱 — 세기 16). 흔들림은 없다.
+    /// </summary>
+    internal void SunBlastBurst(WorkData w, UnitState user, bool first)
+    {
+        var btl = host.Btl;
+        var (ux, uy) = btl.UnitFoot(user);
+        double cy = uy - 200 * 0.6;
+        for (int i = 0; i < 36; i++)
+        {
+            double a = i / 18.0 * Math.PI, cos = Math.Cos(a), sin = Math.Sin(a) * 0.8;
+            btl._shots.Add((292, i <= 18 ? i : 36 - i, host._lastTime, ux + 10 * cos, cy + 10 * sin, ux + 600 * cos, cy + 600 * sin, 100, 0.94, 1, 1, 0, i <= 17));
+        }
+        Fx(w, 1440, 1, 0, ux, uy);
+        if (first) btl.PlayTintFlash(6, 16, 1); else btl.PlayTintFlash(3, 16, 2);
     }
 
     /// <summary>보는 쪽으로 화면 끝까지 깔리는 타일 수(원본 <c>(화면 자리 − 60) / 30</c> — 여기서는 지금 보이는 판의 끝까지).</summary>

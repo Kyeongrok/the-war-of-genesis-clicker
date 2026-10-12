@@ -1291,7 +1291,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             foreach (int gap in host.PushAb.ExtraHitGaps(w))
             {
                 for (double end = host._lastTime + gap / TicksPerSecond; host._lastTime < end;) yield return true;
-                if (w.Id == PushSkill.SunBlastWork) host.HeavenEarthAb._shakes.Add((host._lastTime, host._lastTime + 6 / TicksPerSecond, 6, false));
+                if (w.Id == PushSkill.SunBlastWork) host.ForcetrulAb.SunBlastBurst(w, a, first: false);   // 타마다 빛 고리 + 화면 물들이기(흔들림은 원본에 없다)
                 if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{host._lastTime:F2} extra hit work {w.Id} after {gap} ticks" + Environment.NewLine);
                 foreach (int ti in (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row)))
                     if (host._units[ti].Alive && !dying.Contains(host._units[ti])) ApplyWork(a, hitWork, host._units[ti], dying);
