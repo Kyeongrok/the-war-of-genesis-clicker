@@ -1162,6 +1162,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         else if (wipe >= 10) MText("BACK", ox + 46, oy + 248, White);
     }
 
+    /// <summary>올린 장소 · 파티 칸의 테두리가 한 번 밝아졌다 어두워지는 시간(초) — 느긋하게(mo-24).</summary>
+    private const double HoverPulseSeconds = 1.6;
+
     internal void DrawMosesPage(int ox, int oy, int tick)
     {
         if (_mosesPage is 3 or 4)
@@ -1242,20 +1245,27 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             var (sx, wipe) = PageSlide(10 + i, cx);
             if (sx > cx) { DrawSlideTrail(ox, oy, ox + sx, oy + cy + 13); continue; }
             int x = ox + cx, y = oy + cy;
-            int ctick = HoverTick(i == _mosesHover, _mosesHoverAt);
-            DrawButtonUi(MosesCellObs, 0, ctick, x, y, wipe);
-            if (wipe < 10) continue;
-            if (i == _mosesHover)
+            // 올린 칸 — 원본은 어두운 바탕 조각(Obs 0246)이 세 장을 돌며 칸 전체가 어두움 → 밝음으로 번쩍인다. 너무 심해서(사용자 요청 mo-24, 원본과 다르다)
+            // 바탕은 어두운 첫 장에 멈춰 두고, 테두리만 천천히(한 번에 HoverPulseSeconds) 밝아졌다 어두워지게 한다.
+            bool lit = wipe >= 10 && i == _mosesHover;
+            if (lit)
             {
-                // 올린 칸의 어두운 바탕 — 도크 아이콘 틀과 같은 세 조각(왼 끝 · 가운데 · 오른 끝)이다. 가운데 조각은 도크 폭(24)짜리라 한 번만 찍으면
-                // 아이콘 뒤에만 네모로 남아 어색했다(사용자 보고 mo-23) — 칸 폭(10 … 168)을 채우게 이어 찍는다.
-                host.DrawUi(MosesFrameObs, 0, ctick, x, y, GameWindow.UiBlend.Alpha);
-                int midW = Math.Max(1, host.UiFor(MosesFrameObs)?.FrameAt(1, ctick)?.W ?? 24);
+                // 바탕은 도크 아이콘 틀과 같은 세 조각(왼 끝 · 가운데 · 오른 끝)이다. 가운데 조각은 도크 폭(24)짜리라 한 번만 찍으면
+                // 아이콘 뒤에만 네모로 남아 어색했다(사용자 보고 mo-23) — 칸 폭(10 … 168)을 채우게 이어 찍는다. 테두리보다 먼저 깔아 테두리를 안 가린다.
+                host.DrawUi(MosesFrameObs, 0, 0, x, y, GameWindow.UiBlend.Alpha);
+                int midW = Math.Max(1, host.UiFor(MosesFrameObs)?.FrameAt(1, 0)?.W ?? 24);
                 for (int dx = 10; dx < 168; dx += midW)
-                    host.DrawUi(MosesFrameObs, 1, ctick, x + Math.Min(dx, 168 - midW), y, GameWindow.UiBlend.Alpha);
-                host.DrawUi(MosesFrameObs, 2, ctick, x + 168, y, GameWindow.UiBlend.Alpha);
+                    host.DrawUi(MosesFrameObs, 1, 0, x + Math.Min(dx, 168 - midW), y, GameWindow.UiBlend.Alpha);
+                host.DrawUi(MosesFrameObs, 2, 0, x + 168, y, GameWindow.UiBlend.Alpha);
             }
-            host.DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, GameWindow.UiBlend.Alpha);
+            DrawButtonUi(MosesCellObs, 0, 0, x, y, wipe);
+            if (wipe < 10) continue;
+            if (lit)
+            {
+                double glow = 0.5 - 0.5 * Math.Cos((host._lastTime - _mosesHoverAt) * 2 * Math.PI / HoverPulseSeconds);
+                host.DrawUi(MosesCellObs, 0, 0, x, y, GameWindow.UiBlend.Add, fade: glow * 0.8);
+            }
+            host.DrawUi(MosesCellIconObs, icon, 0, x + 20, y + 14, GameWindow.UiBlend.Alpha);
             if (name.Length > 0)
             {
                 var (_, w, h) = MGetText(name, White);
