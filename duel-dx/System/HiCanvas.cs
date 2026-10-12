@@ -31,6 +31,7 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     private int _texW, _texH;
 
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _text = [];
+    private int[] _xmap = [];
 
     /// <summary>틀을 시작할 때 — 지난 틀에 그린 것을 지운다.</summary>
     internal void Begin()
@@ -89,15 +90,25 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         int x0 = Sx(x), y0 = Sy(y), pw = Sx(x + (dw > 0 ? dw : w)) - x0, ph = Sy(y + (dh > 0 ? dh : h)) - y0;
         if (pw <= 0 || ph <= 0) return;
         int px0 = Math.Max(0, x0), px1 = Math.Min(_w, x0 + pw);
+        if (px0 >= px1) return;
+        // 창의 점마다 나눗셈을 하지 않게 가로 자리표를 한 번 만들고, 같은 그림 줄에서 나오는 창 줄은 앞줄을 베낀다 —
+        // 화면 가득한 배경(Status)을 점마다 셈하면 2560×1440 에서 한 틀에 몇 ms 가 더 든다.
+        if (_xmap.Length < px1 - px0) _xmap = new int[px1 - px0];
+        var xmap = _xmap.AsSpan(0, px1 - px0);
+        for (int i = 0; i < xmap.Length; i++) xmap[i] = (px0 + i - x0) * w / pw;
+        int lastRow = -1, lastAt = 0;
         for (int py = Math.Max(0, y0); py < Math.Min(_h, y0 + ph); py++)
         {
-            int row = (py - y0) * h / ph * stride, at = py * _w;
-            for (int px = px0; px < px1; px++)
+            int row = (py - y0) * h / ph * stride, at = py * _w + px0;
+            var line = _px.AsSpan(at, xmap.Length);
+            if (opaque && row == lastRow) { _px.AsSpan(lastAt, xmap.Length).CopyTo(line); continue; }
+            for (int i = 0; i < xmap.Length; i++)
             {
-                uint c = src[row + (px - x0) * w / pw];
+                uint c = src[row + xmap[i]];
                 if (!opaque && (c & 0xFF000000) == 0) continue;
-                _px[at + px] = dim ? GameWindow.ScaleColor(c, 15, 31) : c | 0xFF000000;
+                line[i] = dim ? GameWindow.ScaleColor(c, 15, 31) : c | 0xFF000000;
             }
+            (lastRow, lastAt) = (row, at);
         }
     }
 
