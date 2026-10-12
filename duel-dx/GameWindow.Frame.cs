@@ -77,12 +77,20 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>UI Obs 한 장 — 새 UI 에서는 층에, 아니면 판에(<see cref="DrawUi"/>). 그렸으면 true.</summary>
-    internal bool UiSprite(int obs, int motion, int tick, int x, int y, bool loop = true)
+    /// <param name="dim">꺼진 줄의 그림 — 15/31 로 어둡게.</param>
+    internal bool UiSprite(int obs, int motion, int tick, int x, int y, bool loop = true, bool dim = false)
     {
-        if (!_hiResUi) return DrawUi(obs, motion, tick, x, y, UiBlend.Alpha, loop);
+        if (!_hiResUi) return DrawUi(obs, motion, tick, x, y, dim ? UiBlend.Dim : UiBlend.Alpha, loop);
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
-        Hi.DrawImage(f.Px, f.W, f.W, f.H, x + f.X, y + f.Y);
+        Hi.DrawImage(f.Px, f.W, f.W, f.H, x + f.X, y + f.Y, dim: dim);
         return true;
+    }
+
+    /// <summary>창 밑을 어둡게 — 새 UI 에서는 같은 세기의 검은 막을 층에 깐다(<see cref="DarkenRect"/>).</summary>
+    internal void UiDarken(int x, int y, int w, int h, int num = 8, int den = 31)
+    {
+        if (_hiResUi) Hi.FillRect(x, y, w, h, (uint)(255 * (den - num) / den) << 24);
+        else DarkenRect(x, y, w, h, num, den);
     }
 
     internal void UiRightText(string text, int right, int y, uint color, float size = 13f)

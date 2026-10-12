@@ -79,20 +79,24 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     /// 층에 그린 창 위에 놓이게 하려는 것이다. 투명이 아닌 점은 불투명으로 덮는다(판의 <c>DrawUi</c> 와 같다).
     /// </summary>
     /// <param name="stride">그림 한 줄의 점 수 — <paramref name="w"/> 가 그보다 작으면 왼쪽 일부만 찍는다.</param>
-    internal void DrawImage(uint[] src, int stride, int w, int h, int x, int y)
+    /// <param name="dw">찍을 크기(판 좌표) — 0 이면 그림 크기 그대로.</param>
+    /// <param name="opaque">투명한 점도 덮는다(배경 그림).</param>
+    /// <param name="dim">15/31 로 어둡게(꺼진 줄의 아이콘 — 판의 <c>UiBlend.Dim</c>).</param>
+    internal void DrawImage(uint[] src, int stride, int w, int h, int x, int y, int dw = 0, int dh = 0, bool opaque = false, bool dim = false)
     {
         if (w <= 0 || h <= 0) return;
         Ensure();
-        int x0 = Sx(x), y0 = Sy(y), dw = Sx(x + w) - x0, dh = Sy(y + h) - y0;
-        if (dw <= 0 || dh <= 0) return;
-        int px0 = Math.Max(0, x0), px1 = Math.Min(_w, x0 + dw);
-        for (int py = Math.Max(0, y0); py < Math.Min(_h, y0 + dh); py++)
+        int x0 = Sx(x), y0 = Sy(y), pw = Sx(x + (dw > 0 ? dw : w)) - x0, ph = Sy(y + (dh > 0 ? dh : h)) - y0;
+        if (pw <= 0 || ph <= 0) return;
+        int px0 = Math.Max(0, x0), px1 = Math.Min(_w, x0 + pw);
+        for (int py = Math.Max(0, y0); py < Math.Min(_h, y0 + ph); py++)
         {
-            int row = (py - y0) * h / dh * stride, at = py * _w;
+            int row = (py - y0) * h / ph * stride, at = py * _w;
             for (int px = px0; px < px1; px++)
             {
-                uint c = src[row + (px - x0) * w / dw];
-                if ((c & 0xFF000000) != 0) _px[at + px] = c | 0xFF000000;
+                uint c = src[row + (px - x0) * w / pw];
+                if (!opaque && (c & 0xFF000000) == 0) continue;
+                _px[at + px] = dim ? GameWindow.ScaleColor(c, 15, 31) : c | 0xFF000000;
             }
         }
     }
@@ -111,6 +115,25 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
             uint a = column[i], b = column[j];
             uint Ch(int shift) => (uint)(((int)(a >> shift & 0xFF) * (256 - k) + (int)(b >> shift & 0xFF) * k) / 256);
             FillPx(x0, py, x1, py + 1, alpha << 24 | Ch(16) << 16 | Ch(8) << 8 | Ch(0));
+        }
+    }
+
+    /// <summary>모서리가 둥근 네모 — 가장자리를 창 픽셀에서 부드럽게 깎는다(판에서는 원을 점으로 찍어 계단이 졌다).</summary>
+    internal void FillRound(int x, int y, int w, int h, int r, uint color)
+    {
+        Ensure();
+        int x0 = Sx(x), y0 = Sy(y), x1 = Sx(x + w), y1 = Sy(y + h);
+        double rad = Math.Min(r * Zoom, Math.Min(x1 - x0, y1 - y0) / 2.0), cx = (x0 + x1) / 2.0, cy = (y0 + y1) / 2.0, hx = (x1 - x0) / 2.0 - rad, hy = (y1 - y0) / 2.0 - rad;
+        uint alpha = color >> 24;
+        for (int py = Math.Max(0, y0); py < Math.Min(_h, y1); py++)
+        {
+            double dy = Math.Max(0, Math.Abs(py + 0.5 - cy) - hy);
+            for (int px = Math.Max(0, x0); px < Math.Min(_w, x1); px++)
+            {
+                double dx = Math.Max(0, Math.Abs(px + 0.5 - cx) - hx);
+                double cover = Math.Clamp(rad + 0.5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
+                if (cover > 0) Over(ref _px[py * _w + px], (uint)(alpha * cover) << 24 | color & 0xFFFFFF);
+            }
         }
     }
 

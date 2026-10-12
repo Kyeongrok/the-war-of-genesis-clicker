@@ -264,7 +264,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             fitting++;
             string desc = ItemTipText(item);          // 상점과 같은 설명 — 원본 글 아래에 공격 · 방어 · 보정 수치(사용자 요청 st)
             rows.Add(new(db.T(item.NameId), $"(x{count})", true, () => SetEquipment(u, slot, (ushort)id),
-                Icon: (x, y, _) => host.DrawUi(ItemPictureObs, item.PictureMotion, 0, x + 8, y + 2, GameWindow.UiBlend.Alpha, loop: false),
+                Icon: (x, y, _) => host.UiSprite(ItemPictureObs, item.PictureMotion, 0, x + 8, y + 2, loop: false),
                 Tip: desc.Length > 0 ? () => ShowStatusTip(desc) : null));
         }
         // 맞는 아이템이 하나도 없으면 꺼진 TXR 0 「없음」 줄 하나(0x100d3c8e~0x100d3cf9).
@@ -460,9 +460,9 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     internal void RowText(string text, int x, int y, int h, uint color, int left = -1, int right = -1)
     {
         if (text.Length == 0) return;
-        var (_, tw, th) = host.GetText(text, color, StatusFont);
+        var (_, tw, th) = host.UiGetText(text, color, StatusFont);
         int tx = right >= 0 ? x + right - tw : x + Math.Max(0, left);
-        host.DrawText(text, tx, y + (h - th) / 2, color, StatusFont);
+        host.UiText(text, tx, y + (h - th) / 2, color, StatusFont);
     }
 
     internal void DrawStatusScreen()
@@ -473,22 +473,25 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         var (ox, oy) = StatusOrigin();
 
         // 원본 Status 는 화면 전체를 쓰는 창이다 — 둘레는 검게, 가운데 640×480 에 배경 한 장(0x100e09f0).
-        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        if (StatusBackground() is { } bg)
+        host.UiFill(host._camX - 8, host._camY - 8, host.ViewWidth + 16, host.ViewHeight + 16, 0xFF000000);   // 넉넉히 — 배율이 정수가 아니면 창 끝에 판이 한 줄 비친다
+        // 새 UI(menu-57)는 창을 통째로 창 해상도 층에 그린다 — 배경 · 아이콘 그림은 그대로고 글이 또렷해진다.
+        var bg = StatusBackground();
+        if (bg != null && host._hiResUi) host.Hi.DrawImage(bg, StatusW, StatusW, StatusH, ox, oy, opaque: true);
+        else if (bg != null)
             for (int y = 0; y < StatusH; y++)
                 for (int x = 0; x < StatusW; x++)
                     host.SetPixel(ox + x, oy + y, bg[y * StatusW + x] | 0xFF000000);
         else
         {
-            host.DrawGameFrame(ox, oy + FrameTitleH, StatusW, StatusH - FrameTitleH, "STATUS");
-            host.DrawText("assets/moses/bgr/0058.bgr 이 없어 틀만 그렸습니다", ox + 20, oy + 40, DimGray);
+            host.UiFrame(ox, oy + FrameTitleH, StatusW, StatusH - FrameTitleH, "STATUS");
+            host.UiText("assets/moses/bgr/0058.bgr 이 없어 틀만 그렸습니다", ox + 20, oy + 40, DimGray);
         }
-        host.DrawUi(RowObs, 28, 0, ox + CloseX + CloseW / 2, oy + CloseY + CloseH / 2, GameWindow.UiBlend.Alpha);
+        host.UiSprite(RowObs, 28, 0, ox + CloseX + CloseW / 2, oy + CloseY + CloseH / 2);
 
         var unit = StatusUnit();
         if (host._db is not { } db || unit.Data is not { } c)
         {
-            host.DrawText("이 인물의 게임 자료(assets/data)를 못 읽었습니다.", ox + 20, oy + 60, Red);
+            host.UiText("이 인물의 게임 자료(assets/data)를 못 읽었습니다.", ox + 20, oy + 60, Red);
             return;
         }
         // 전투가 끝난 뒤 모세스에서 열면 결과 글이 남아 있어도 고칠 수 있어야 한다.
@@ -506,8 +509,11 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
 
         // ── 능력치 칸(0x100d4740) — 줄 k 의 세로 가운데 81 + 15k, 값은 오른끝 181. 초상은 .chr 10 의 Obs 모션 0 을 (62,103) 에 ──
         // 초상 번호가 0 이면 원본은 Obs 0229(0xe5)를 찍는다(볼트 st-5 「초상」, 감사4 S11). 그것도 없으면 필드 얼굴.
-        if (!host.DrawUi(c.FaceId != 0 ? c.FaceId : 229, 0, 0, ox + 62, oy + 103, GameWindow.UiBlend.Alpha, loop: false) && host._faces.TryGetValue(unit.ChrCode, out var face))
-            host.BlitClipped(face, ox + 30, oy + 72, 64, 64);
+        if (!host.UiSprite(c.FaceId != 0 ? c.FaceId : 229, 0, 0, ox + 62, oy + 103, loop: false) && host._faces.TryGetValue(unit.ChrCode, out var face))
+        {
+            if (host._hiResUi) host.Hi.DrawImage(face.Px, face.W, face.W, face.H, ox + 30 + (64 - face.W) / 2, oy + 72 + (64 - face.H) / 2);
+            else host.BlitClipped(face, ox + 30, oy + 72, 64, 64);
+        }
         void StatLine(int k, string value) => RowText(value, ox, oy + 81 + 15 * k - 8, 16, StatusWhite, right: StatRight);
         string[] names = [db.T(c.NameId), db.T(c.TitleId), db.FamilyName(c), db.JobName(c)];
         for (int k = 0; k < names.Length; k++) StatLine(k, names[k]);
@@ -539,7 +545,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         for (int i = 0; i < 3; i++)
         {
             int cx = ox + 242 + 53 * i, cy = oy + 81;
-            host.DrawUi(BattleScene.AilmentIconObs, host.Btl.AilmentIconMotion(unit, i), 0, cx, cy, GameWindow.UiBlend.Alpha, loop: false);
+            host.UiSprite(BattleScene.AilmentIconObs, host.Btl.AilmentIconMotion(unit, i), 0, cx, cy, loop: false);
             int id = unit.StatusId[i];
             if (id != 0 && db.Statuses.GetValueOrDefault(id) is { } sta && db.T(sta.DescriptionId) is { Length: > 0 } fmt)
             {
@@ -554,7 +560,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         {
             int rx = ox + SideX, ry = oy + PassiveY + PassiveStep * i;
             bool open = i < slots;
-            if (editable && open && _popup == null && MouseIn(rx, ry, SideW, RowH)) host.DrawUi(RowObs, 1, 0, rx - 4, ry, GameWindow.UiBlend.Alpha);
+            if (editable && open && _popup == null && MouseIn(rx, ry, SideW, RowH)) host.UiSprite(RowObs, 1, 0, rx - 4, ry);
             ushort id = c.Passives[i];
             if (id != 0 && open && db.Abilities.TryGetValue(id, out var pab))
             {
@@ -568,13 +574,13 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         }
 
         // ── 장비 여섯 줄(0x100d3330) — WEAPON 띠 가운데 (296,288), 줄 그림 (8,2), 이름 오른쪽 맞춤 −16 ──
-        host.DrawUi(ItemPictureObs, c.WeaponBand == 0 ? 62 : c.WeaponBand, 0, ox + 296, oy + 288, GameWindow.UiBlend.Alpha, loop: false);
+        host.UiSprite(ItemPictureObs, c.WeaponBand == 0 ? 62 : c.WeaponBand, 0, ox + 296, oy + 288, loop: false);
         for (int i = 0; i < 6; i++)
         {
             int rx = ox + SideX, ry = oy + EquipY + EquipStep * i;
-            if (editable && _popup == null && MouseIn(rx, ry, SideW, RowH)) host.DrawUi(RowObs, 1, 0, rx - 4, ry, GameWindow.UiBlend.Alpha);
+            if (editable && _popup == null && MouseIn(rx, ry, SideW, RowH)) host.UiSprite(RowObs, 1, 0, rx - 4, ry);
             var it = c.Items[i] != 0 && db.Items.TryGetValue(c.Items[i], out var found) ? found : null;
-            if (it != null) host.DrawUi(ItemPictureObs, it.PictureMotion, 0, rx + 8, ry + 2, GameWindow.UiBlend.Alpha, loop: false);
+            if (it != null) host.UiSprite(ItemPictureObs, it.PictureMotion, 0, rx + 8, ry + 2, loop: false);
             RowText(it != null ? db.T(it.NameId) : db.T(0), rx, ry, RowH, StatusWhite, right: SideW - 16);
             if (it != null && ItemTipText(it) is { Length: > 0 } desc)
                 _statusRightHits.Add((rx, ry, SideW, RowH, () => ShowStatusTip(desc)));
@@ -604,7 +610,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             int cost = legionRow ? 0 : db.AbilityExpCost(ab, level);             // 다음 레벨로 올리는 EXP — 최대 레벨이면 0(숫자 없음)
             // 꺼진 줄(비용 > EXP·최대 레벨·군단기)은 0x1003fdc0 으로 꺼져 강조·클릭이 없다(0x10035412, 감사4 S9).
             bool off = cost == 0 || cost > c.Exp;
-            if (editable && !off && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) host.DrawUi(RowObs, 4, 0, rx, ry, GameWindow.UiBlend.Alpha);
+            if (editable && !off && _popup == null && MouseIn(rx, ry, AbilityW, RowH)) host.UiSprite(RowObs, 4, 0, rx, ry);
             DrawAbilityRow(ab, AbilityLabel(ab, level), cost, off, rx, ry, AbilityW, RowH, 11);
             _statusRightHits.Add((rx, ry, AbilityW, RowH, () => ShowAbilityTip(ab, level)));
             if (legionRow) continue;                                            // 군단기는 설명만
@@ -613,9 +619,9 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             // Lv1 에서 누르면 지울지 묻는다(st-6).
             if (editable && level >= 1 && _popup == null && host.Sys._confirm == null && MouseIn(rx, ry, AbilityW, RowH))
             {
-                int costW = cost > 0 ? host.GetText(cost.ToString(), CostRed, StatusFont).W : 0;
+                int costW = cost > 0 ? host.UiGetText(cost.ToString(), CostRed, StatusFont).W : 0;
                 int ax = rx + AbilityW - 10 - costW - 20, ay = ry + (RowH - 16) / 2;
-                host.DrawUi(ScrollObs, MouseIn(ax, ay, 16, 16) ? 5 : 4, 0, ax, ay, GameWindow.UiBlend.Alpha, loop: false);
+                host.UiSprite(ScrollObs, MouseIn(ax, ay, 16, 16) ? 5 : 4, 0, ax, ay, loop: false);
                 AddHit(ax, ay, 16, 16, () => LowerAbility(unit, ab));      // 줄 클릭보다 먼저 받는다(먼저 넣은 것이 이긴다)
             }
             // 누르면 올리기. Shift 를 누른 채 누르면 한 레벨 내리기(꺼진 줄도 — 사용자 요청 기능). 꺼진 줄의 그냥 클릭은 아무 일 없다(S9).
@@ -668,9 +674,8 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// <summary>어빌리티 아이콘 둘 — 종류 (14, cy) · 대상 (34, cy), 꺼진 줄은 어둡게.</summary>
     internal void DrawAbilityIcons(AbilityData ab, int x, int cy, bool off)
     {
-        var blend = off ? GameWindow.UiBlend.Dim : GameWindow.UiBlend.Alpha;
-        if (ab.IconKindMotion >= 0) host.DrawUi(BattleScene.AbilityIconObs, ab.IconKindMotion, 0, x + 14, cy, blend, loop: false);
-        if (ab.IconTargetMotion >= 0) host.DrawUi(BattleScene.AbilityIconObs, ab.IconTargetMotion, 0, x + 34, cy, blend, loop: false);
+        if (ab.IconKindMotion >= 0) host.UiSprite(BattleScene.AbilityIconObs, ab.IconKindMotion, 0, x + 14, cy, loop: false, dim: off);
+        if (ab.IconTargetMotion >= 0) host.UiSprite(BattleScene.AbilityIconObs, ab.IconTargetMotion, 0, x + 34, cy, loop: false, dim: off);
     }
 
     /// <summary>
@@ -679,12 +684,12 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// </summary>
     internal void DrawScrollBar(int x, int y, int h, int top, int count, int rows, Action<int> setTop)
     {
-        host.FillRect(x, y, 16, h, ScrollTrack);
-        host.DrawUi(ScrollObs, 2, 0, x, y, GameWindow.UiBlend.Alpha, loop: false);
-        host.DrawUi(ScrollObs, 4, 0, x, y + h - 16, GameWindow.UiBlend.Alpha, loop: false);
+        host.UiFill(x, y, 16, h, ScrollTrack);
+        host.UiSprite(ScrollObs, 2, 0, x, y, loop: false);
+        host.UiSprite(ScrollObs, 4, 0, x, y + h - 16, loop: false);
         int max = Math.Max(0, count - rows);
         int thumbY = y + 16 + (max == 0 ? 0 : (h - 48) * top / max);
-        host.DrawUi(ScrollObs, 6, 0, x, thumbY, GameWindow.UiBlend.Alpha, loop: false);
+        host.UiSprite(ScrollObs, 6, 0, x, thumbY, loop: false);
         // 굴릴 것이 없는 목록의 막대는 누르는 자리로 안 친다 — 패드 커서가 빈 목록의 막대에 들어가 헤맬 일이 없다(사용자 보고 st-12).
         if (max == 0) return;
         AddHit(x, y, 16, 16, () => setTop(Math.Max(0, top - 1)));
@@ -697,6 +702,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     internal void DrawUiStretched(int obs, int motion, int x, int y, int w, int h)
     {
         if (host.UiFor(obs)?.FrameAt(motion, 0, loop: false) is not { W: > 0, H: > 0 } f) return;
+        if (host._hiResUi) { host.Hi.DrawImage(f.Px, f.W, f.W, f.H, x, y, w, h); return; }
         for (int yy = 0; yy < h; yy++)
         {
             int sy = yy * f.H / h;
@@ -947,11 +953,11 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         foreach (string whole in text.Replace("$N", "$n").Replace("$p", "$n").Replace("$P", "$n").Split("$n"))
         {
             string rest = whole;
-            while (host.GetText(rest, StatusWhite, StatusFont).W > maxLine)
+            while (host.UiGetText(rest, StatusWhite, StatusFont).W > maxLine)
             {
                 // 들어가는 가장 긴 앞부분 — 빈칸에서 끊고, 빈칸이 없으면 글자에서 끊는다.
                 int cut = rest.Length - 1;
-                while (cut > 1 && host.GetText(rest[..cut], StatusWhite, StatusFont).W > maxLine) cut--;
+                while (cut > 1 && host.UiGetText(rest[..cut], StatusWhite, StatusFont).W > maxLine) cut--;
                 int space = rest.LastIndexOf(' ', cut - 1, cut);
                 if (space > 0) cut = space;
                 lines.Add(rest[..cut].TrimEnd());
@@ -961,16 +967,16 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         }
         int tw = 0;
         const int lh = 16;
-        foreach (string line in lines) tw = Math.Max(tw, host.GetText(line, StatusWhite, StatusFont).W);
+        foreach (string line in lines) tw = Math.Max(tw, host.UiGetText(line, StatusWhite, StatusFont).W);
         int th = lh * lines.Count;
         int w = tw + 56, h = th + 56;
         int x = Math.Clamp(mx + 16, areaX + 1, Math.Max(areaX + 1, areaX + areaW - 1 - w));
         int y = Math.Clamp(my + 16, areaY + 1, Math.Max(areaY + 1, areaY + areaH - 1 - h));
-        host.DrawGameFrame(x, y, w, h);
+        host.UiFrame(x, y, w, h);
         for (int i = 0; i < lines.Count; i++)
         {
-            var (_, lw, _) = host.GetText(lines[i], StatusWhite, StatusFont);
-            host.DrawText(lines[i], x + (w - lw) / 2, y + (h - th) / 2 + i * lh, StatusWhite, StatusFont);
+            var (_, lw, _) = host.UiGetText(lines[i], StatusWhite, StatusFont);
+            host.UiText(lines[i], x + (w - lw) / 2, y + (h - th) / 2 + i * lh, StatusWhite, StatusFont);
         }
     }
 
@@ -998,8 +1004,8 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         _popupHits.Clear();
         if (_popup == null) return;
         var (px, py, h) = PopupRect();
-        host.DarkenRect(px - 1, py - 1, _popupW + 2, h + 2, 8);
-        host.DrawGameFrame(px, py + FrameTitleH, _popupW, h - FrameTitleH, _popupTitle);
+        host.UiDarken(px - 1, py - 1, _popupW + 2, h + 2, 8);
+        host.UiFrame(px, py + FrameTitleH, _popupW, h - FrameTitleH, _popupTitle);
         _popupTop = Math.Clamp(_popupTop, 0, Math.Max(0, _popup.Count - _popupRows));
         int lx = px + PopupListX, lw = _popupW - 2 * PopupListX - PopupScrollW, top = py + 30;
         int hover = _statusTip == null ? PopupRowAt(host._mouse.X, host._mouse.Y) : -1;
@@ -1015,9 +1021,9 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         // 닫기 단추 — 제목줄 오른쪽 끝(사용자 요청). 마우스를 올리면 밝아진다.
         int cx = px + _popupW - PopupCloseW - 6, cy = py + 5;
         bool overClose = host._mouse.X >= cx && host._mouse.X < cx + PopupCloseW && host._mouse.Y >= cy && host._mouse.Y < cy + PopupCloseW;
-        host.FillRect(cx, cy, PopupCloseW, PopupCloseW, overClose ? 0xFF2A4A8A : BoxBg);
-        host.StrokeRect(cx, cy, PopupCloseW, PopupCloseW, BoxLine);
-        host.DrawText("✕", cx + 4, cy + 1, White, 12);
+        host.UiFill(cx, cy, PopupCloseW, PopupCloseW, overClose ? 0xFF2A4A8A : BoxBg);
+        host.UiStroke(cx, cy, PopupCloseW, PopupCloseW, BoxLine);
+        host.UiText("✕", cx + 4, cy + 1, White, 12);
         // 스크롤 막대(0x10044e10) — 굴릴 것이 없으면(줄 수 ≤ 보이는 줄 수) 그리지 않는다(사용자 요청 — 원본은 늘 켜고 만든다).
         // 클릭 칸은 고르기 창 몫으로 따로 모은다.
         if (_popup.Count <= _popupRows) return;

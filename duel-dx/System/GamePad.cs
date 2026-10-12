@@ -592,16 +592,17 @@ internal sealed partial class GamePad(GameWindow host)
                 : lines.Count > 6 ? lines.Skip(3).Take(4).ToList() : lines;
             // 조작 안내 단추는 짧게 — 「L 스틱 누름」은 「L」, 「R 스틱 누름」은 「R」.
             shown = [.. shown, (Name(PadAction.Help).Replace(" 스틱 누름", ""), "조작")];
-            int total = shown.Sum(l => DrawKeys(l.Button, 0, 0, CapSmall, measure: true) + 4 + host.GetText(l.Does, 0xFFFFFFFF, 11f).W + 14) - 14;
+            int total = shown.Sum(l => DrawKeys(l.Button, 0, 0, CapSmall, measure: true) + 4 + TextSize(l.Does, 0xFFFFFFFF, 11f).W + 14) - 14;
             int sx = host._camX + host.ViewWidth - total - 10, sy = host._camY + host.ViewHeight - CapSmall - 6;
             // 필드에서는 그림 아래의 검은 띠에 딱 붙여 그림을 안 가리게 한다(사용자 요청 fa-61) — 바탕 네모도 안 깐다(이미 검다).
             if (host.FieldOpen) sy = host._camY + host.ViewHeight - CapSmall - 2;
+            else if (OnLayer) host.Hi.FillRect(sx - 6, sy - 3, total + 12, CapSmall + 6, 0xA0000000);
             else host.FillRect(sx - 6, sy - 3, total + 12, CapSmall + 6, 0xA0000000);
             foreach (var (button, does) in shown)
             {
                 sx += DrawKeys(button, sx, sy, CapSmall) + 4;
-                host.DrawText(does, sx, sy + (CapSmall - host.GetText(does, 0xFFFFFFFF, 11f).H) / 2, 0xFFD0E8D0, 11f);
-                sx += host.GetText(does, 0xFFFFFFFF, 11f).W + 14;
+                Text(does, sx, sy + (CapSmall - TextSize(does, 0xFFFFFFFF, 11f).H) / 2, 0xFFD0E8D0, 11f);
+                sx += TextSize(does, 0xFFFFFFFF, 11f).W + 14;
             }
             return;
         }
@@ -609,17 +610,35 @@ internal sealed partial class GamePad(GameWindow host)
         const int RowH = 26;
         lines.Add((Name(PadAction.Help), "이 안내 다시 보기"));
         int keyW = lines.Max(l => DrawKeys(l.Button, 0, 0, CapLarge, measure: true)) + 16;
-        int w = Math.Max(520, keyW + 16 + lines.Max(l => host.GetText(l.Does, 0xFFFFFFFF, 12).W) + 32), h = 44 + lines.Count * RowH + 30;
+        int w = Math.Max(520, keyW + 16 + lines.Max(l => TextSize(l.Does, 0xFFFFFFFF, 12).W) + 32), h = 44 + lines.Count * RowH + 30;
         int x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2;
         FillRound(x, y, w, h, 10, 0xF0101828);
-        host.DrawText($"패드 조작 — {title}", x + 16, y + 12, FocusColor, 14);
+        Text($"패드 조작 — {title}", x + 16, y + 12, FocusColor, 14);
         for (int i = 0; i < lines.Count; i++)
         {
             int ry = y + 44 + i * RowH;
             DrawKeys(lines[i].Button, x + 16, ry, CapLarge);
-            host.DrawText(lines[i].Does, x + 16 + keyW, ry + (CapLarge - host.GetText(lines[i].Does, 0xFFFFFFFF, 12).H) / 2, 0xFFFFFFFF, 12);
+            Text(lines[i].Does, x + 16 + keyW, ry + (CapLarge - TextSize(lines[i].Does, 0xFFFFFFFF, 12).H) / 2, 0xFFFFFFFF, 12);
         }
-        host.DrawText("아무 단추나 누르면 닫힙니다 · 단추 배치는 설정 > 패드", x + 16, y + h - 24, 0xFF9098A8, 11);
+        Text("아무 단추나 누르면 닫힙니다 · 단추 배치는 설정 > 패드", x + 16, y + h - 24, 0xFF9098A8, 11);
+    }
+
+    /// <summary>
+    /// 새 UI 층에 그린 창(Status · 시스템 메뉴 · 설정 …)이 떠 있으면 안내도 그 층에 그린다 — 판에 그리면 창 밑에 깔린다(menu-57).
+    /// 층에 그린 것이 없는 틀(전투 · 필드)에서는 전처럼 판에 그려, 안내 한 줄 때문에 층을 올리지 않는다.
+    /// </summary>
+    private bool OnLayer => host._hiResUi && host.Hi.Used;
+
+    private (int W, int H) TextSize(string text, uint color, float size)
+    {
+        if (OnLayer) return host.Hi.Measure(text, color, size);
+        var (_, w, h) = host.GetText(text, color, size);
+        return (w, h);
+    }
+
+    private void Text(string text, int x, int y, uint color, float size)
+    {
+        if (OnLayer) host.Hi.DrawText(text, x, y, color, size); else host.DrawText(text, x, y, color, size);
     }
 
     // ── 단추 그림 ─────────────────────────────────────────────────────────────
@@ -665,8 +684,8 @@ internal sealed partial class GamePad(GameWindow host)
 
         int Joiner(string mark)
         {
-            var (_, jw, jh) = host.GetText(mark, 0xFF9098A8, size);
-            if (!measure) host.DrawText(mark, at + 3, y + (h - jh) / 2, 0xFF9098A8, size);
+            var (jw, jh) = TextSize(mark, 0xFF9098A8, size);
+            if (!measure) Text(mark, at + 3, y + (h - jh) / 2, 0xFF9098A8, size);
             return jw + 6;
         }
     }
@@ -674,14 +693,14 @@ internal sealed partial class GamePad(GameWindow host)
     /// <summary>둥근 단추 하나 — 글자 너비에 맞춘 알약 꼴(한 글자면 동그라미에 가깝다). 너비를 돌려준다.</summary>
     private int DrawCap(string key, int x, int y, int h, float size, bool measure)
     {
-        var (_, tw, th) = host.GetText(key, CapText(key), size);
+        var (tw, th) = TextSize(key, CapText(key), size);
         int w = Math.Max(h, tw + 10);
         if (measure) return w;
         uint fill = CapColor(key);
         FillRound(x, y + 1, w, h - 1, (h - 1) / 2, 0x80000000);                 // 그림자 — 한 점 아래
         FillRound(x, y, w, h - 1, (h - 1) / 2, fill);
         FillRound(x + 1, y + 1, w - 2, (h - 1) / 2, (h - 1) / 4, Lighten(fill)); // 윗면 빛
-        host.DrawText(key, x + (w - tw) / 2, y + (h - 1 - th) / 2, CapText(key), size);
+        Text(key, x + (w - tw) / 2, y + (h - 1 - th) / 2, CapText(key), size);
         return w;
     }
 
@@ -691,6 +710,7 @@ internal sealed partial class GamePad(GameWindow host)
     /// <summary>모서리가 둥근 네모 — 가운데 네모 둘과 모서리 원 넷.</summary>
     private void FillRound(int x, int y, int w, int h, int r, uint color)
     {
+        if (OnLayer) { host.Hi.FillRound(x, y, w, h, r, color); return; }
         r = Math.Min(r, Math.Min(w, h) / 2);
         host.FillRect(x + r, y, w - 2 * r, h, color);
         host.FillRect(x, y + r, w, h - 2 * r, color);
