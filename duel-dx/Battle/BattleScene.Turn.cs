@@ -746,6 +746,24 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal static readonly HashSet<int> TargetCameraAbilities =
         [31, 37, 39, 40, 42, 43, 50, 55, 56, 72, 79, 81, 88, 93, 97, 107, 108, 116, 126, 141, 142, 166, 169, 171, 186, 191, 192];
 
+    /// <summary>
+    /// 카메라를 겨눈 칸이 아니라 <b>시전자 앞쪽 지점</b>으로 보내는 어빌리티(gm-skil-20) — 가로로 볼 때 Side, 세로로 볼 때 Deep 만큼(화면 픽셀).
+    /// 아스트럴 블레이드 0x100ab844(300 · 200, 카메라가 멈춘 뒤 시작) · 크레이지 샷 0x10093d42(120) · 이데아 캐논 0x100b679a(240 · 160) — 뒤 둘은 안 기다린다.
+    /// </summary>
+    internal static (int Side, int Deep, bool Wait)? ForwardCamera(int ability) => ability switch
+    {
+        88 => (300, 200, true),
+        126 => (120, 120, false),
+        171 => (240, 160, false),
+        _ => null,
+    };
+
+    internal (double X, double Y) AheadPoint(UnitState a, int side, int deep)
+    {
+        var (x, y) = UnitFoot(a);
+        return a.Facing switch { Facing.Up => (x, y - deep), Facing.Down => (x, y + deep), Facing.Left => (x - side, y), _ => (x + side, y) };
+    }
+
     internal bool CanAfford(UnitState u, WorkData w) =>
         u.Data != null && host._db != null && u.Tp + u.Ctp >= TpCostFor(u, u.Data, w.Id) && u.Soul >= SoulNeedFor(u, u.Data, w.Id)
         && (u.Data.JobId == 37 || u.Hp >= host._db.WorkHpCost(u.Data, w.Id));   // HP 비용도 본다(0x100726e0) — 직업 37 은 면제
@@ -1006,6 +1024,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         int preludeSteps = finisher ? PreludeSteps(actions) : 0;
         bool holding = false;                               // 붙드는 모션(2000+m)을 치는 칸에서 틀었나
         bool targetCentred = false;                         // 대상 칸 가운데 맞추기를 했나(치는 단계 첫 한 번)
+        if (ForwardCamera(w.AbilityId) is { Wait: false } glide && a.Data?.BasicWorkId != w.Id)
+        {
+            // 핸들러 단계 0 이 동작을 틀면서 카메라를 앞쪽으로 보내고 기다리지 않는다(이데아 캐논은 동작 17 과 함께).
+            var (gx, gy) = AheadPoint(a, glide.Side, glide.Deep);
+            CenterOn(gx, gy);
+            targetCentred = true;
+        }
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
@@ -1026,7 +1051,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             {
                 targetCentred = true;
                 // 대상 칸으로 카메라를 보내는 핸들러(0x100eab80 호출)는 28개뿐이다 — 나머지 기술은 카메라가 시전자에 머문다(ba-20 O P7).
-                if (TargetCameraAbilities.Contains(w.AbilityId) && a.Data?.BasicWorkId != w.Id && (uint)col < host.Cols && (uint)row < host.Rows)
+                if (ForwardCamera(w.AbilityId) is { Wait: true } ahead && a.Data?.BasicWorkId != w.Id)
+                {
+                    var (hx, hy) = AheadPoint(a, ahead.Side, ahead.Deep);
+                    foreach (bool _ in CenterAndWait(hx, hy)) yield return true;
+                }
+                else if (TargetCameraAbilities.Contains(w.AbilityId) && a.Data?.BasicWorkId != w.Id && (uint)col < host.Cols && (uint)row < host.Rows)
                     foreach (bool _ in CenterAndWait(col * TileW + TileW / 2, host.CellCenterY(col, row))) yield return true;
             }
             // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,

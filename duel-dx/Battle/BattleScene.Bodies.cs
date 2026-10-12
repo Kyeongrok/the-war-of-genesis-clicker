@@ -54,7 +54,7 @@ internal sealed unsafe partial class BattleScene
                 // (k = min(t, 19 − t), 캐노피만 0.05 · 0.01). 카운터 실드(98, 0x10098253 · 0x100986ca)·카운터 필드(113, 0x100a1eec · 0x100a221d)는
                 // 120틱 가로만 — 표 120칸이 40틱 주기 셋: 앞 20틱 1 + 0.03k, 뒤 20틱 1.4 − 0.03k(세로 표는 없음 = 1). Param = 틱 수.
                 // 실드류(20틱)는 그 기술의 444 이펙트가 끝나 판정이 드는 틱에 복제가 생긴다(아스트럴 실드 0x10097a7b — 약 131틱). 전에는 시전하자마자 늘어났다.
-                bool counter = w.AbilityId is 98 or 113;
+                bool counter = w.AbilityId is 98 or 108;      // 카운터 실드 · 안티 밸런싱(0x100a1eec) — 0틱부터 120틱 가로만. 카운터 필드(113)는 OzmaSkill 이 대상마다 건다
                 double from = !counter && WorkHitTicks.Table.TryGetValue(w.Id, out var shieldHit) ? now + shieldHit.Ticks / TicksPerSecond : now;
                 _bodyShapes.Add((body, 1, from, counter ? 120 : 20, null, w.AbilityId == 85 ? 1 : 0, 0, 4 / 9.0, null));
                 return;

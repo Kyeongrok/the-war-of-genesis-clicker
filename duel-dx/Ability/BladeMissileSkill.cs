@@ -41,8 +41,8 @@ internal sealed unsafe class BladeMissileSkill(GameWindow host)
         {
             Facing.Up => (0, -1, 9, 0, false),
             Facing.Down => (0, 1, 17, 8, false),
-            Facing.Left => (-1, 0, 13, 4, false),
-            _ => (1, 0, 13, 4, true),
+            Facing.Left => (-1, 0, 13, 4, true),      // 뒤집는 쪽은 왼쪽이다(0x10085eda face(3)) — 171:4 는 그대로가 오른쪽을 향한다
+            _ => (1, 0, 13, 4, false),
         };
         int rows = w.AreaShape == 6 ? 2 : 3, far = 40 * w.AreaArg + 40;
         double appearTicks = Math.Max(1, host.UiFor(BladeObs)?.MotionLength(appear) ?? 1);
@@ -54,7 +54,7 @@ internal sealed unsafe class BladeMissileSkill(GameWindow host)
                 double wx = -dy * 40.0 * side, wy = dx * 40.0 * side;
                 (double X, double Y) from = (ux + wx + dx * 90, uy + (wy + dy * 90) * 0.8 - 50 * 0.6);
                 (double X, double Y) to = (ux + wx + dx * far, uy + (wy + dy * far) * 0.8 - 100 * 0.6);
-                double at = host._lastTime + (AppearDelay + i) / TicksPerSecond, hover = at + appearTicks / TicksPerSecond, fly = hover + 20 / TicksPerSecond;
+                double at = host._lastTime + (AppearDelay + (user.Facing == Facing.Up ? i : 4 * i)) / TicksPerSecond, hover = at + appearTicks / TicksPerSecond, fly = hover + 20 / TicksPerSecond;
                 (mirror ? btl._effectMirrors : btl._effects).Add((BladeObs, appear, at, (int)from.X, (int)from.Y));
                 host.HeavenEarthAb.AddTimedFx(BladeObs, blade, hover, from, 20, mirror);
                 btl._shots.Add((BladeObs, blade, fly, from.X, from.Y, to.X, to.Y, 80, 1, 1, 0, 80, mirror));

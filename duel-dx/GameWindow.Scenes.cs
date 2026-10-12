@@ -34,6 +34,8 @@ internal sealed unsafe partial class GameWindow
     internal ForcetrulSkill ForcetrulAb => _forcetrulAb ?? LazyInitializer.EnsureInitialized(ref _forcetrulAb, () => new ForcetrulSkill(this));
     internal CycloneSkill? _cycloneAb;
     internal CycloneSkill CycloneAb => _cycloneAb ?? LazyInitializer.EnsureInitialized(ref _cycloneAb, () => new CycloneSkill(this));
+    internal OzmaSkill? _ozmaAb;
+    internal OzmaSkill OzmaAb => _ozmaAb ?? LazyInitializer.EnsureInitialized(ref _ozmaAb, () => new OzmaSkill(this));
     internal IdeaCannonSkill? _ideaCannonAb;
     internal IdeaCannonSkill IdeaCannonAb => _ideaCannonAb ?? LazyInitializer.EnsureInitialized(ref _ideaCannonAb, () => new IdeaCannonSkill(this));
     internal GravityFieldSkill? _gravityFieldAb;
