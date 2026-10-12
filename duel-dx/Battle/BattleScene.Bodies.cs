@@ -111,12 +111,12 @@ internal sealed unsafe partial class BattleScene
         if (w.AbilityId == 2)       // 파 = 어빌리티 2(work 11 · 202~220). 11 은 큐어다 — 처음에 번호를 잘못 넣어 큐어에 탄이 붙었었다
         {
             var (px, py) = host.Btl.UnitFoot(user);
-            double reach = Math.Max(0, w.AreaMaxQuarters - 2) * 40;      // 메모리의 +0x1a(파일값 × 4) − 2 — 파일값 1 이면 80
+            double reach = Math.Max(1, w.AreaArg - 2) * 40;      // (범위 칸 수 − 2) × 40 — 핸들러가 메모리 값(파일값 × 4)을 sar 2 로 되돌린 뒤 2 를 뺀다(0x10082aae). 전에는 × 4 한 값에서 빼 일곱 배 멀리 날았다
             (double Dx, double Dy, int Shot, int Tail, bool Mirror)[] ways =
             [
                 // 만드는 차례(0x10082af4~0x10083040)와 꼬리 모션 표(0x10083558): 오른쪽 34/37 · 대각 · 대각 · 왼쪽 34/38 · 대각 · 대각 · 아래 35/37 · 위 33/36.
-                // 왼쪽 탄의 꼬리가 38, 아래 탄의 꼬리가 37 인 것은 원본 표 그대로다. 대각 넷의 차례는 가설.
-                (reach, 0, 34, 37, true), (reach / 2, -reach / 2, 37, 37, true), (reach / 2, reach / 2, 37, 37, true), (-reach, 0, 34, 38, false),
+                // 왼쪽 탄의 꼬리가 38, 아래 탄의 꼬리가 37 인 것은 원본 표 그대로다. 대각은 아래쪽이 먼저다(0x10082b39~0x10083085).
+                (reach, 0, 34, 37, true), (reach / 2, reach / 2, 37, 37, true), (reach / 2, -reach / 2, 37, 37, true), (-reach, 0, 34, 38, false),
                 (-reach / 2, reach / 2, 37, 37, false), (-reach / 2, -reach / 2, 37, 37, false), (0, reach, 35, 37, false), (0, -reach, 33, 36, false),
             ];
             for (int i = 0; i < ways.Length; i++)

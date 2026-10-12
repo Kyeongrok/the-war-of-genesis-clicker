@@ -27,13 +27,22 @@ internal sealed unsafe class SpecialHitsSkill(GameWindow host)
             var (fx, fy) = a.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
             var (sx, sy) = (fy, fx);
             var found = new List<(UnitState Unit, int K)>();
+            var (ax, ay) = host.Btl.UnitFoot(a);
             foreach (int lane in new[] { 0, 1, -1 })
+            {
+                int stop = reach;
                 for (int k = 0; k <= reach; k++)
                 {
                     if (host.Btl.LiveUnitAt(a.Col + lane * sx + k * fx, a.Row + lane * sy + k * fy) is not { } t || t == a || !BattleScene.SeesAsFoe(a, t)) continue;
                     if (found.All(f => f.Unit != t)) found.Add((t, k));
+                    stop = k;
                     break;
                 }
+                // 검기 43:0 — 줄마다 하나가 틱당 20 으로 날아가 처음 만난 적에서 사라진다(0x1008b018~). 전에는 시전자 발에 제자리 한 장이 떴다.
+                double fromX = ax + lane * sx * 40, fromY = ay + lane * sy * 40 * 0.8;
+                if (stop > 0)
+                    host.Btl._shots.Add((43, 0, host._lastTime, fromX, fromY, fromX + fx * 40 * stop, fromY + fy * 40 * stop * 0.8, 20, 1, 1, 0, 0, a.Facing == Facing.Right));
+            }
             double start = host._lastTime;
             foreach (var (t, k) in found.OrderBy(f => f.K))
             {

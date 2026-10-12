@@ -492,6 +492,7 @@ internal sealed unsafe partial class BattleScene
         if (BladeMissileSkill.Works.Contains(w.Id)) host.BladeMissileAb.Spawn(w, user);   // 블레이드 미사일의 칼들
         host.ForcetrulAb.Spawn(w, user, col, row);                                        // 포스트럴 — 핸들러가 자리를 셈하는 이펙트(카운터 봄 · 사이킥 크로스 · 검기 …)
         if (w.AbilityId == IdeaCannonSkill.Ability) host.IdeaCannonAb.Spawn(w, user, col, row);
+        host.CycloneAb.Spawn(w, user, col, row);                                          // 사이클론 — 폭 · 메테오스트라이크 · 포스 리젼 · 희생 · 익스플로젼
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
@@ -507,18 +508,20 @@ internal sealed unsafe partial class BattleScene
         var (userX, userY) = host.Btl.UnitFoot(user);
         int targetX = col * TileW + TileW / 2, targetY = host.CellCenterY(col, row);
         int cheerDelay = 0;      // 격려 — 윤곽 알갱이가 다 뜬 뒤에야 떠오르는 알갱이가 나온다
-        foreach (var e in m.Effects)
+        foreach (var raw in m.Effects)
         {
+            var e = CycloneSkill.Adjust(w, raw);
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
             if (w.Prepare == 7 && e.Obs is 1338 or 487 or FinisherPreludeSkill.PreludeDotObs or FinisherPreludeSkill.PreludeBandObs) continue;
             // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
             if (PushSkill.CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
+            if (CycloneSkill.Owns(w, e)) continue;
             if (ForcetrulSkill.Owns(w, e) || (w.AbilityId == IdeaCannonSkill.Ability && e.Obs == IdeaCannonSkill.BeamObs)) continue;   // 전용 루틴이 깐다
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
-            double start = host._lastTime + e.Delay / TicksPerSecond;
+            double start = host._lastTime + (e.Delay + CycloneSkill.Late(w, e)) / TicksPerSecond;
             // 줄별 덧정보(WorkFxExtra.g.cs, ba-21 fx 「덧정보 표 생성 기록」) — 좌우 뒤집기 · 기준 자리에서의 치우침 · 대상마다 하나씩(엇갈림) · 직선탄의 빠르기.
             int userDir = user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 };
             // 같은 열쇠의 Row 가 여럿이면 원본은 그 수만큼 따로(자리·뒤집기가 다르게) 띄운다 — Row 마다 하나씩. 방향마다 값이 다른 줄은 시전자 방향 것만.
