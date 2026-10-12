@@ -454,6 +454,62 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         return _statusBg;
     }
 
+    // ── 새 UI 의 머리글(menu-57) ─────────────────────────────────────────────
+    // 배경 그림(0058.bgr)에는 칸 제목과 능력치 이름이 점 글씨로 박혀 있어 늘리면 깍두기가 된다 — 새 UI 는 그 글씨를 그림에서 지우고 같은 자리에 창 해상도로 다시 쓴다.
+
+    private uint[]? _statusBgClean;
+
+    /// <summary>칸 제목 띠 — 자리(왼쪽 · 위 · 너비)와 글. 띠 높이는 <see cref="HeadH"/>.</summary>
+    private static readonly (int X, int Y, int W, string Text)[] Heads =
+    [
+        (20, 40, 172, "능력치"), (210, 40, 172, "상태이상"), (210, 120, 172, "장착 어빌리티"), (210, 250, 172, "장비, 아이템"),
+        (400, 40, 222, "획득한 어빌리티"), (400, 250, 222, "획득할 수 있는 어빌리티"),
+    ];
+    private const int HeadH = 22;
+
+    /// <summary>능력치 이름 — 줄 번호(세로 가운데 81 + 15k, 값과 같은 줄)와 글.</summary>
+    private static readonly (int Row, string Text)[] StatNames =
+    [
+        (5, "LEVEL"), (6, "EXP"), (8, "HP"), (10, "SOUL"), (12, "TP"), (15, "ATK"), (16, "ACR"), (17, "RDP"),
+        (19, "LP"), (20, "CTP"), (21, "STP"), (22, "PSY"), (23, "DEP"), (24, "DEX"),
+    ];
+    private const int StatNameX = 31, StatNameW = 44;
+    private const uint HeadInk = 0xFFC8FFE8, HeadShade = 0xC0081830;
+
+    /// <summary>
+    /// 배경 그림에서 점 글씨를 지운 사본 — 제목 띠는 가로로 고른 그림이라 띠 왼쪽 끝의 한 점을 그 줄에 펴 바르고,
+    /// 능력치 이름(흰 글 + 검은 테)은 흰 점과 바탕보다 어두운 점만 같은 줄 오른쪽(글이 없는 바탕)의 점으로 메운다 — 자리를 통째로 덮으면 바탕의 비스듬한 빛 때문에 네모 자국이 남는다.
+    /// </summary>
+    private static uint[] WithoutLabels(uint[] bg)
+    {
+        var clean = (uint[])bg.Clone();
+        foreach (var (x, y, w, _) in Heads)
+            for (int yy = y + 2; yy < y + HeadH - 2; yy++)
+                for (int xx = x + 10; xx < x + w - 10; xx++) clean[yy * StatusW + xx] = bg[yy * StatusW + x + 6];
+        foreach (var (row, _) in StatNames)
+            for (int yy = 81 + 15 * row - 9; yy < 81 + 15 * row + 9; yy++)
+                for (int xx = StatNameX - 3; xx < StatNameX + StatNameW; xx++)
+                {
+                    uint c = bg[yy * StatusW + xx], fill = bg[yy * StatusW + xx + StatNameW + 3];
+                    static int Sum(uint v) => (int)((v >> 16 & 0xFF) + (v >> 8 & 0xFF) + (v & 0xFF));
+                    bool white = (c >> 16 & 0xFF) > 150 && (c >> 8 & 0xFF) > 150 && (c & 0xFF) > 150;
+                    if (white || Sum(c) < Sum(fill) - 36) clean[yy * StatusW + xx] = fill;   // 흰 글 · 그보다 어두운 테
+                }
+        return clean;
+    }
+
+    private void DrawLabels(int ox, int oy)
+    {
+        foreach (var (x, y, w, text) in Heads)
+        {
+            var (tw, th) = host.Hi.Measure(text, HeadInk, 13f);
+            int tx = ox + x + (w - tw) / 2, ty = oy + y + (HeadH - th) / 2;
+            host.Hi.DrawText(text, tx + 1, ty + 1, HeadShade, 13f);
+            host.Hi.DrawText(text, tx, ty, HeadInk, 13f);
+        }
+        foreach (var (row, text) in StatNames) RowText(text, ox, oy + 81 + 15 * row - 8, 16, StatusWhite, left: StatNameX);
+    }
+
     internal bool MouseIn(int x, int y, int w, int h) => host._mouse.X >= x && host._mouse.X < x + w && host._mouse.Y >= y && host._mouse.Y < y + h;
 
     /// <summary>줄 상자 안에 글을 세로 가운데로 찍는다 — 가로는 왼쪽 여백(<paramref name="left"/>) 또는 오른끝(<paramref name="right"/>).</summary>
@@ -476,7 +532,11 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         host.UiFill(host._camX - 8, host._camY - 8, host.ViewWidth + 16, host.ViewHeight + 16, 0xFF000000);   // 넉넉히 — 배율이 정수가 아니면 창 끝에 판이 한 줄 비친다
         // 새 UI(menu-57)는 창을 통째로 창 해상도 층에 그린다 — 배경 · 아이콘 그림은 그대로고 글이 또렷해진다.
         var bg = StatusBackground();
-        if (bg != null && host._hiResUi) host.Hi.DrawImage(bg, StatusW, StatusW, StatusH, ox, oy, opaque: true);
+        if (bg != null && host._hiResUi)
+        {
+            host.Hi.DrawImage(_statusBgClean ??= WithoutLabels(bg), StatusW, StatusW, StatusH, ox, oy, opaque: true);
+            DrawLabels(ox, oy);
+        }
         else if (bg != null)
             for (int y = 0; y < StatusH; y++)
                 for (int x = 0; x < StatusW; x++)
