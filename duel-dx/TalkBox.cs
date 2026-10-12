@@ -605,9 +605,29 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// <summary>한 줄 내려가는 만큼 — 글자 높이 + 4픽셀(<c>0x1002993c</c>).</summary>
     internal int TalkLineStep(float size) => host.GetText("가", White, size).H + 4;
 
-    internal void DrawTalk()
+    /// <param name="layer">
+    /// 글(이름 · 대사)을 새 UI 층에 창 해상도로 쓴다(menu-57) — 틀 · 얼굴 그림은 판에 그대로 둔다. 층은 늘 판 위라, 대사 창 위로 판에 덧그리는 것이 있는
+    /// 화면(모세스의 찢김 · 페이지 전환, 물결이 이는 필드)과 다른 화면에 덮인 전투 판에서는 부르는 쪽이 끈다.
+    /// </param>
+    internal void DrawTalk(bool layer = false)
     {
+        _layerText = layer && host._hiResUi;
         foreach (var w in _talks.ToArray()) DrawTalkWindow(w);
+        _layerText = false;
+    }
+
+    private bool _layerText;
+
+    private void Txt(string text, int x, int y, uint color, float size)
+    {
+        if (_layerText) host.Hi.DrawText(text, x, y, color, size); else host.DrawText(text, x, y, color, size);
+    }
+
+    private (int W, int H) TxtSize(string text, uint color, float size)
+    {
+        if (_layerText) return host.Hi.Measure(text, color, size);
+        var (_, w, h) = host.GetText(text, color, size);
+        return (w, h);
     }
 
     /// <summary>보이는 줄을 (left, top) 부터 16픽셀 간격으로 — 올리는 중이면 그만큼 위로.</summary>
@@ -623,7 +643,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             var (start, len) = lines[li];
             int shown = Math.Clamp(w.Revealed - start, 0, len);
             if (shown == 0) continue;
-            host.DrawText(w.Clean.Substring(start, shown), left, top + (int)((i * TalkLinePx - w.ScrollPx) * w.Scale), White, (float)(12 * w.Scale));
+            Txt(w.Clean.Substring(start, shown), left, top + (int)((i * TalkLinePx - w.ScrollPx) * w.Scale), White, (float)(12 * w.Scale));
         }
     }
 
@@ -675,10 +695,10 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             }
             if (!full) return;
             if (face != null) host.BlitScaled(face, cx + 4, cy + 8, 60, 60);
-            host.DrawText("이름", cx + 73, cy + 12, tag, 12);
-            host.RightText(w.Name, cx + 303, cy + 12, value, 12);
-            host.DrawText(w.Location, cx + 73, cy + 54, value, 12);
-            host.RightText("LOCATION", cx + 303, cy + 54, tag, 12);
+            Txt("이름", cx + 73, cy + 12, tag, 12);
+            Txt(w.Name, cx + 303 - TxtSize(w.Name, value, 12).W, cy + 12, value, 12);
+            Txt(w.Location, cx + 73, cy + 54, value, 12);
+            Txt("LOCATION", cx + 303 - TxtSize("LOCATION", tag, 12).W, cy + 54, tag, 12);
             DrawTalkLines(w, cx + w.TextLeft, cy + 76);
             if (ready) host.DrawUi(TalkNextObs, 0, tick, cx + 300, cy + 232, GameWindow.UiBlend.Alpha);
             return;
@@ -718,8 +738,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             for (int m = 3; m <= 5; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha, fade: 20 / 31.0);
             for (int m = 0; m <= 2; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha);
             // 이름 — 탭(틀 x 0~124, y 창y−25~창y) 가운데. 윗변을 창y−16 에 두었더니 글자가 탭 아래 선에 걸쳤다(사용자 보고).
-            var (_, nw, nh) = host.GetText(w.Name, White, 12);
-            host.DrawText(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
+            var (nw, nh) = TxtSize(w.Name, White, 12);
+            Txt(w.Name, x + 61 - nw / 2, y - 25 + (25 - nh) / 2, White, 12);
             // 원본 상자에는 작은 얼굴이 없다(큰 반신 초상화를 상자 뒤에 세운다). 초상 모션이 없는 얼굴이면 데모는 글 왼쪽에 둔다.
             if (!w.NoPortrait && !w.Portrait && face != null && w.TextLeft > 12) host.BlitScaled(face, x + 12, y + 8, 84, 84);
             // 글은 4줄 — 넘치면 한 줄씩 올린다(0x100290f0).
@@ -781,8 +801,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             float big = (float)(12 * S);
             DrawUiScaled(w.FrameObs, 1, ax, ay, S, ax, ay, fx0, fy0, w.FrameFade);
             DrawUiScaled(w.FrameObs, 0, ax, ay, S, ax, ay, fx0, fy0, 1);
-            var (_, snw, _) = host.GetText(w.Name, White, big);
-            host.DrawText(w.Name, bx - Sc(11) - snw / 2, by - Sc(15), White, big);
+            int snw = TxtSize(w.Name, White, big).W;
+            Txt(w.Name, bx - Sc(11) - snw / 2, by - Sc(15), White, big);
             if (faceFrame != null)
             {
                 DrawTalkFace(faceFrame, bx - Sc(57), by, Sc(60), w.Tint);
@@ -796,8 +816,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         // 틀 Obs 0221(602 는 0222/0223)을 창 (−60, −20) 에 — 바탕(모션 1)은 효과 5(602 는 6), 테두리(모션 0)는 불투명. 이름은 탭 가운데 (창x−11, 창y−15).
         host.DrawUi(w.FrameObs, 1, 0, ax, ay, GameWindow.UiBlend.Alpha, fade: w.FrameFade);
         host.DrawUi(w.FrameObs, 0, 0, ax, ay, GameWindow.UiBlend.Alpha);
-        var (_, bnw, _) = host.GetText(w.Name, White, 12);
-        host.DrawText(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
+        int bnw = TxtSize(w.Name, White, 12).W;
+        Txt(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
         if (faceFrame != null)
         {
             DrawTalkFace(faceFrame, bx - 57, by, 60, w.Tint);

@@ -1295,7 +1295,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawAbilityMenu();
         Btl.DrawItemMenu();
         StatusScr.DrawStatusScreen();
-        Tlk.DrawTalk();
+        Tlk.DrawTalk(layer: !BattleCovered);
         DrawToast();
         DrawVoiceNotice(_camX + ViewWidth - 12, _camY + 10);
         DrawOutcomeBanner();
