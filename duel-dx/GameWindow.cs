@@ -1261,7 +1261,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         if (PerfLog) _pMark = _perf.Elapsed.TotalMilliseconds;
         Hi.Begin();
-        Array.Fill(_fb, BgColor);
+        // 판은 맵 전체 크기지만 화면에 나가는 것은 카메라가 비추는 네모뿐이다 — 그 네모만 지우고 맵도 그만큼만 깐다. 전에는 틀마다 판 전체를 지우고
+        // 맵 전체를 베껴, 넓은 맵에서는 보이지도 않는 곳에 한 틀 5ms 를 썼다(사용자 요청 menu-58).
+        {
+            int vx0 = Math.Clamp(_camX, 0, BoardWidth), vx1 = Math.Clamp(_camX + ViewWidth, 0, BoardWidth);
+            for (int y = Math.Max(0, _camY); y < Math.Min(BoardHeight, _camY + ViewHeight) && vx0 < vx1; y++) _fb.AsSpan(y * BoardWidth + vx0, vx1 - vx0).Fill(BgColor);
+        }
         DrawBackground();
         PerfMark("바탕");
         DrawMapTint();
@@ -1341,14 +1346,16 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_map is not { } map || !BoardIsMap) return;
 
         int boardH = BoardPad + Rows * TileH;
-        for (int y = 0; y < map.Height; y++)
+        // 카메라가 비추는 줄 · 칸만 베낀다(Compose 가 지운 네모와 같다).
+        int w = Math.Min(map.Width, BoardWidth), x0 = Math.Clamp(_camX, 0, w), x1 = Math.Clamp(_camX + ViewWidth, 0, w);
+        if (x0 >= x1) return;
+        int first = Math.Max(0, _camY - GridTop - map.OriginY - BoardPad), last = Math.Min(map.Height, _camY + ViewHeight - GridTop - map.OriginY - BoardPad);
+        for (int y = first; y < last; y++)
         {
             int by = y + map.OriginY + BoardPad;
-            if ((uint)by >= boardH) continue;
-
-            int w = Math.Min(map.Width, BoardWidth);
-            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(map.Bgra.AsSpan(y * map.Width * 4, w * 4));
-            src.CopyTo(_fb.AsSpan((GridTop + by) * BoardWidth, w));
+            if ((uint)by >= boardH || GridTop + by >= BoardHeight) continue;
+            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(map.Bgra.AsSpan((y * map.Width + x0) * 4, (x1 - x0) * 4));
+            src.CopyTo(_fb.AsSpan((GridTop + by) * BoardWidth + x0, x1 - x0));
         }
     }
 
@@ -1488,8 +1495,15 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal void StrokeRect(int x, int y, int w, int h, uint color)
     {
-        for (int xx = x; xx < x + w; xx++) { SetPixel(xx, y, color); SetPixel(xx, y + h - 1, color); }
-        for (int yy = y; yy < y + h; yy++) { SetPixel(x, yy, color); SetPixel(x + w - 1, yy, color); }
+        // 네 변을 줄 단위로 채운다 — 점마다 SetPixel 을 부르던 때는 격자를 켠 전투에서 이 함수가 한 틀의 대부분을 먹었다(menu-58).
+        if (w <= 0 || h <= 0) return;
+        FillRect(x, y, w, 1, color);
+        if (h > 1) FillRect(x, y + h - 1, w, 1, color);
+        if (h > 2)
+        {
+            FillRect(x, y + 1, 1, h - 2, color);
+            if (w > 1) FillRect(x + w - 1, y + 1, 1, h - 2, color);
+        }
     }
 
     // ── D3D11 / DXGI ─────────────────────────────────────────────────────────

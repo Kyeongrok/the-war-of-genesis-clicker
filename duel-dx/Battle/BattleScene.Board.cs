@@ -299,9 +299,15 @@ internal sealed unsafe partial class BattleScene
     internal void DrawGridLines()
     {
         // 칸마다 제 높이 자리에 네모를 친다 — 층이 다른 칸은 격자도 어긋나 절벽이 보인다.
+        // 화면에 보이는 칸만 — 전에는 맵의 모든 칸에 네모를 쳐서 넓은 맵에서 격자를 켜면 한 틀에 몇 ms 가 들었다(menu-58).
+        int c0 = Math.Max(0, host._camX / TileW - 1), c1 = Math.Min(host.Cols, (host._camX + host.ViewWidth) / TileW + 2);
         for (int row = 0; row < host.Rows; row++)
-            for (int col = 0; col < host.Cols; col++)
-                host.StrokeRect(col * TileW, host.CellTop(col, row), TileW + 1, TileH + 1, GridLine);
+            for (int col = c0; col < c1; col++)
+            {
+                int top = host.CellTop(col, row);
+                if (top > host._camY + host.ViewHeight || top + TileH + 1 < host._camY) continue;
+                host.StrokeRect(col * TileW, top, TileW + 1, TileH + 1, GridLine);
+            }
     }
 
     internal void DrawUnits()
