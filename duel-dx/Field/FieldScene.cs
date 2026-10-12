@@ -1696,7 +1696,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         }
         else DrawFieldScene(ox, oy, 9);
 
-        host.Tlk.DrawTalk(layer: _screenWaveOwner is null);   // 물결(409)이 일 때는 글도 판에 — 층의 글은 일렁이지 않는다
+        host.Tlk.DrawTalk(layer: _screenWaveOwner is null && _fieldChoices is not { Count: > 0 });   // 물결(409)이 일거나 고르기 띠가 대사 위에 뜰 때는 글도 판에
         DrawFieldChoices();
         host._uiClip = null;
         ApplyScreenWave(ox, oy, (int)(host._lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)

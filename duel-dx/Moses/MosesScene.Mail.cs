@@ -244,6 +244,9 @@ internal sealed unsafe partial class MosesScene
         // 줄 틀(Obs 1291 모션 0)은 목록 덧그림(0x10043810)이라 <b>마우스가 올라간 줄에만</b> 그린다 — 상점 목록·세이브 슬롯 강조와 같다.
         // 예전에는 모든 줄에 그려 목록이 줄무늬 표처럼 보였다(사용자 보고).
         int hover = _mailOpen < 0 ? MailRowAt(host._mouse.X, host._mouse.Y) : -1;
+        // 편지 보기 창(판에 그리는 틀)이 떠 있으면 그 밑의 목록 글은 판에 쓴다 — 층에 쓰면 창 위로 비친다.
+        bool layer = _layerText;
+        if (_mailOpen >= 0) _layerText = false;
         for (int r = 0; r < MailRows; r++)
         {
             int index = _mailTop + r;
@@ -256,10 +259,10 @@ internal sealed unsafe partial class MosesScene
             // 데모 글꼴은 늘 굵어서, 안 읽은 줄은 한 픽셀 옆에 한 번 더 찍어 더 굵게 한다(감사5 L1).
             bool read = _mailRead.Contains(mail.Id) || index == _mailOpen;
             string line = $"{SenderName(mail.Sender)} : {host._db?.T(mail.OriginText)}";
-            var (_, w, h) = host.GetText(line, MailLineColor, 12);
+            var (_, w, h) = MGetText(line, MailLineColor, 12);
             int tx = rx + (MailRowW - w) / 2, ty = ry + (MailRowH - h) / 2;
-            host.DrawText(line, tx, ty, MailLineColor, 12);
-            if (!read) host.DrawText(line, tx + 1, ty, MailLineColor, 12);
+            MText(line, tx, ty, MailLineColor, 12);
+            if (!read) MText(line, tx + 1, ty, MailLineColor, 12);
         }
 
         if (mails.Count > MailRows)
@@ -274,6 +277,7 @@ internal sealed unsafe partial class MosesScene
         if (host._mouse.X - ox >= 455 && host._mouse.X - ox < 633 && host._mouse.Y - oy >= 430 && host._mouse.Y - oy < 457)
             host.DrawUi(MosesExitObs, 0, tick, ox + 455, oy + 430, GameWindow.UiBlend.Alpha);
 
+        _layerText = layer;
         if (_mailOpen >= 0 && _mailOpen < mails.Count) DrawMailView(ox, oy, mails[_mailOpen]);
     }
 
@@ -302,19 +306,19 @@ internal sealed unsafe partial class MosesScene
             host.Fld.LoadFieldFace(sender);
             if (host._faces.TryGetValue(sender.Code, out var face)) host.BlitScaled(face, x + 4, y + 8, 60, 60);
         }
-        host.DrawText("이름", x + 73, y + 12, tag, 12);
-        host.RightText(SenderName(mail.Sender), x + 303, y + 12, value, 12);
-        host.DrawText(host._db?.T(mail.OriginText) ?? "", x + 73, y + 54, value, 12);
-        host.RightText("LOCATION", x + 303, y + 54, tag, 12);
+        MText("이름", x + 73, y + 12, tag, 12);
+        MRight(SenderName(mail.Sender), x + 303, y + 12, value, 12);
+        MText(host._db?.T(mail.OriginText) ?? "", x + 73, y + 54, value, 12);
+        MRight("LOCATION", x + 303, y + 54, tag, 12);
 
         var lines = WrapText(mail.Body, 298 - 6, 12f);
         const int rows = 10;
         _mailViewTop = Math.Clamp(_mailViewTop, 0, Math.Max(0, lines.Count - rows));
         int ty = y + 76;
         for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
-            host.DrawText(lines[i], x + 15, ty, White, 12);
+            MText(lines[i], x + 15, ty, White, 12);
         if (_mailViewTop + rows < lines.Count) host.DrawUi(TalkBox.TalkNextObs, 0, (int)(host._lastTime * TicksPerSecond), x + 300, y + 232, GameWindow.UiBlend.Alpha);
-        if (_mailViewTop > 0) host.DrawText("▲", x + 296, y + 76, tag, 11);
+        if (_mailViewTop > 0) MText("▲", x + 296, y + 76, tag, 11);
     }
 
     /// <summary>편지 뷰어에서 맨 위에 보이는 줄 — 휠로 굴린다.</summary>
@@ -333,7 +337,7 @@ internal sealed unsafe partial class MosesScene
             foreach (char ch in paragraph)
             {
                 line.Append(ch);
-                if (host.GetText(line.ToString(), White, size).W <= width) continue;
+                if (MGetText(line.ToString(), White, size).W <= width) continue;
                 line.Length--;
                 lines.Add(line.ToString());
                 line.Clear().Append(ch);

@@ -919,6 +919,14 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         }
         int tick = (int)(host._lastTime * TicksPerSecond);
 
+        // 새 UI(menu-57) — 모세스는 그림(배경 · 단추 · 아이콘)을 판에 그대로 두고 글만 창 해상도 층에 쓴다. 층은 늘 판 위라, 판의 점을 다시 만지는 효과
+        // (페이지 전환 섞기 · 910 찢김 · 409 물결 · 행성 줌)가 도는 틀과 다른 화면이 모세스를 덮은 틀에는 글도 판에 쓴다. 대사 창이 떠 있으면 그 밑에
+        // 깔릴 페이지 글은 판에, 대사 글은 층에 쓴다.
+        bool calm = host._hiResUi && _mosesFade == 0 && _mosesSystemSwitch == null && !_mosesAltVoice && !PlanetZooming && host.Fld._screenWaveOwner is null
+                    && !host.FieldOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && !host.EpisodesScr._episodesOpen && !host.ChaptersScr._chaptersOpen;
+        bool choosing = host.Fld._fieldChoices is { Count: > 0 };
+        _layerText = calm && !choosing && host.Tlk._talks.Count == 0;
+
         // 화면 밖은 검게, 가운데에 640×480 단말 화면
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
@@ -937,7 +945,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         DrawMosesTooltip();
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
         host._uiClip = (ox, oy, MosesW, MosesH);
-        host.Tlk.DrawTalk();
+        host.Tlk.DrawTalk(layer: calm && !choosing);
         host.Fld.DrawFieldChoices();
         host._uiClip = null;
         // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
@@ -998,7 +1006,27 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             _mosesFade--;
         }
         StepMosesSystemSwitch();
+        _layerText = false;
     }
+
+    // ── 새 UI 로 가는 글(menu-57) — DrawMoses 가 틀마다 정한 대로 층 또는 판에 ──
+
+    private bool _layerText;
+
+    internal void MText(string text, int x, int y, uint argb, float size = 13f)
+    {
+        if (_layerText) host.Hi.DrawText(text, x, y, argb, size); else host.DrawText(text, x, y, argb, size);
+    }
+
+    /// <summary>글의 크기 — 층에 쓸 때는 픽셀이 비어 있다(크기만 쓴다).</summary>
+    internal (uint[] Px, int W, int H) MGetText(string text, uint argb, float size = 13f)
+    {
+        if (!_layerText) return host.GetText(text, argb, size);
+        var (w, h) = host.Hi.Measure(text, argb, size);
+        return ([], w, h);
+    }
+
+    internal void MRight(string text, int right, int y, uint argb, float size = 13f) => MText(text, right - MGetText(text, argb, size).W, y, argb, size);
 
     internal void DrawMosesDesktop(int ox, int oy, int tick)
     {
@@ -1049,7 +1077,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         var r = (X: ox + 46, Y: oy + 244);
         bool hovered = host._mouse.X >= r.X && host._mouse.X < r.X + 25 && host._mouse.Y >= r.Y && host._mouse.Y < r.Y + 26;
         if (host.UiFor(MosesBackObs) != null) DrawButtonUi(MosesBackObs, 0, HoverTick(1000, hovered), r.X, r.Y, wipe);
-        else if (wipe >= 10) host.DrawText("BACK", ox + 46, oy + 248, White);
+        else if (wipe >= 10) MText("BACK", ox + 46, oy + 248, White);
     }
 
     internal void DrawMosesPage(int ox, int oy, int tick)
@@ -1110,8 +1138,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 bool hovered = host._mouse.X >= r.X && host._mouse.X < r.X + r.W && host._mouse.Y >= r.Y && host._mouse.Y < r.Y + r.H;
                 DrawButtonUi(MosesSystemObs, i, HoverTick(1100 + i, hovered), ox + bx0, oy + by0, wipe);
                 if (wipe < 10 || Text(others[i].NameText) is not { Length: > 0 } sysName) continue;
-                var (_, sw, sh) = host.GetText(sysName, White);
-                host.DrawText(sysName, i == 0 ? ox + bx0 + 20 : ox + bx0 - 20 - sw, oy + by0 - sh / 2, White);
+                var (_, sw, sh) = MGetText(sysName, White);
+                MText(sysName, i == 0 ? ox + bx0 + 20 : ox + bx0 - 20 - sw, oy + by0 - sh / 2, White);
             }
             return;
         }
@@ -1148,8 +1176,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
             host.DrawUi(MosesCellIconObs, icon, ctick, x + 20, y + 14, GameWindow.UiBlend.Alpha);
             if (name.Length > 0)
             {
-                var (_, w, h) = host.GetText(name, White);
-                host.DrawText(name, x + 178 - 15 - w, y + (27 - h) / 2 + 2, White);   // 오른쪽 정렬 x−15
+                var (_, w, h) = MGetText(name, White);
+                MText(name, x + 178 - 15 - w, y + (27 - h) / 2 + 2, White);   // 오른쪽 정렬 x−15
             }
         }
 
@@ -1177,18 +1205,22 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         int w = 0, h = 0;
         foreach (string line in lines)
         {
-            var (_, lw, lh) = host.GetText(line, White);
+            var (_, lw, lh) = MGetText(line, White);
             w = Math.Max(w, lw);
             h += Math.Max(lh, 16);
         }
         var (ox, oy) = MosesOrigin();
         int tx = Math.Min(host._mouse.X + 16, ox + MosesW - w - 6), ty = Math.Min(host._mouse.Y + 16, oy + MosesH - h - 4);
-        host.FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xD00A1428);
-        host.StrokeRect(tx - 4, ty - 2, w + 8, h + 4, StatusScreen.BoxLine);
+        if (_layerText) { host.Hi.FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xF00A1428); host.Hi.StrokeRect(tx - 4, ty - 2, w + 8, h + 4, StatusScreen.BoxLine); }
+        else
+        {
+            host.FillRect(tx - 4, ty - 2, w + 8, h + 4, 0xD00A1428);
+            host.StrokeRect(tx - 4, ty - 2, w + 8, h + 4, StatusScreen.BoxLine);
+        }
         foreach (string line in lines)
         {
-            host.DrawText(line, tx, ty, White);
-            ty += Math.Max(host.GetText(line, White).H, 16);
+            MText(line, tx, ty, White);
+            ty += Math.Max(MGetText(line, White).H, 16);
         }
     }
 }

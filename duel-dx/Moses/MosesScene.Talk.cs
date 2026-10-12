@@ -178,20 +178,24 @@ internal sealed unsafe partial class MosesScene
         var people = TalkPeople();
         if (people.Count == 0)
         {
-            var (_, w, h) = host.GetText("이 챕터에는 통신할 사람이 없습니다", White, 15);
-            host.DrawText("이 챕터에는 통신할 사람이 없습니다", ox + (MosesW - w) / 2, oy + (MosesH - h) / 2, White, 15);
+            var (_, w, h) = MGetText("이 챕터에는 통신할 사람이 없습니다", White, 15);
+            MText("이 챕터에는 통신할 사람이 없습니다", ox + (MosesW - w) / 2, oy + (MosesH - h) / 2, White, 15);
         }
 
+        // 말풍선(판에 그리는 틀)이 떠 있으면 그 밑에 깔릴 이름표는 판에 쓴다 — 층에 쓰면 말풍선 위로 비친다.
+        bool layer = _layerText;
+        if (_talkPick >= 0 && _talkPick < people.Count) _layerText = false;
         for (int i = 0; i < people.Count && i < 8; i++)
         {
             var (px, py) = TalkSpot(people[i]);
             host.DrawUi(TalkObs, TalkMotion(people[i]), tick, ox + px, oy + py, GameWindow.UiBlend.Alpha);
             string name = host._db?.Character(people[i].ChrCode) is { } c ? host._db.T(c.NameId) : "";
             if (name.Length == 0) continue;
-            var (_, nw, _) = host.GetText(name, White, 11);
-            host.DrawText(name, ox + px - nw / 2, oy + py + 8, White, 11);   // 이름표는 늘 흰색(0x10040600)
+            var (_, nw, _) = MGetText(name, White, 11);
+            MText(name, ox + px - nw / 2, oy + py + 8, White, 11);   // 이름표는 늘 흰색(0x10040600)
         }
 
+        _layerText = layer;
         if (_talkPick >= 0 && _talkPick < people.Count)
         {
             // 글이 다 나오고 120틱이 지나면 저절로 닫힌다(0x1003b9be) — 닫힐 때 Snd 95.
@@ -229,7 +233,7 @@ internal sealed unsafe partial class MosesScene
         foreach (string text in WrapText(line, TalkBubbleW - 64, 11f))
         {
             if (ty > y + TalkBubbleH - 14) break;
-            host.DrawText(text, x + 58, ty, White, 11);
+            MText(text, x + 58, ty, White, 11);
             ty += 14;
         }
     }

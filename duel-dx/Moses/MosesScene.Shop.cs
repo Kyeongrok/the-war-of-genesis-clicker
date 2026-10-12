@@ -141,8 +141,8 @@ internal sealed unsafe partial class MosesScene
             string[] lines = [$"Atk = {item.Attack - (worn?.Attack ?? 0),3:+0;-0;+0}", $"Dep = {item.Defense - (worn?.Defense ?? 0),3:+0;-0;+0}"];
             for (int l = 0; l < lines.Length; l++)
             {
-                var (_, tw, _) = host.GetText(lines[l], 0xFFFFFF00, 11);
-                host.DrawText(lines[l], cx + 32 - tw / 2, cy + 65 + 35 - 12 + l * 13, 0xFFFFFF00, 11);
+                var (_, tw, _) = MGetText(lines[l], 0xFFFFFF00, 11);
+                MText(lines[l], cx + 32 - tw / 2, cy + 65 + 35 - 12 + l * 13, 0xFFFFFF00, 11);
             }
         }
         if (party.Count >= 6)
@@ -270,12 +270,12 @@ internal sealed unsafe partial class MosesScene
                 bool unsellable = i == ListBag && !ShopSellable(itemId);
                 int shown = i == ListStock ? _shopBuy.Count(b => b == itemId) : i == ListBag ? count - _shopSell.Count(b => b == itemId) : count;
                 string label = i is ListBuy or ListSell ? $"{host._db.T(item.NameId)}(X {shown:D2})" : host._db.T(item.NameId);
-                host.DrawText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
+                MText(label, rx + 20, ry + 4, unsellable ? DimGray : White, 11);
                 if (i is ListStock or ListBag)
                 {
                     string value = unsellable ? "판매 불가" : $"{(i == ListBag ? ShopSellPrice(itemId) : ShopPrice(itemId))} X {shown:D2}";
-                    var (_, vw, _) = host.GetText(value, White, 11);
-                    host.DrawText(value, rx + lw - 5 - vw, ry + 4, unsellable ? DimGray : 0xFFFFFF00, 11);
+                    var (_, vw, _) = MGetText(value, White, 11);
+                    MText(value, rx + lw - 5 - vw, ry + 4, unsellable ? DimGray : 0xFFFFFF00, 11);
                 }
             }
             // 줄이 넘치면 오른쪽에 위·아래 화살표
@@ -297,10 +297,10 @@ internal sealed unsafe partial class MosesScene
             // 배경 그림의 「Account」 칸 안(왼쪽 아래)에 넣는다 — 이름은 왼쪽, 값은 오른쪽 맞춤
             int ly = oy + 200 + i * 20;
             // 원본 서식은 "%s : %6d" — 딱지 뒤에 쌍점, 값은 여섯 칸 오른쪽 맞춤, 「GP」 없이 늘 흰색이다(0x100fbeb2 · 0x100fbf26 · 0x100fbf9a · 0x100fc022, ba-20 moses 5절).
-            host.DrawText(label + " :", ox + 30, ly, White, 11);
+            MText(label + " :", ox + 30, ly, White, 11);
             string value = $"{lines[i].Value}";
-            var (_, vw, _) = host.GetText(value, White, 11);
-            host.DrawText(value, ox + 132 - vw, ly, White, 11);
+            var (_, vw, _) = MGetText(value, White, 11);
+            MText(value, ox + 132 - vw, ly, White, 11);
         }
 
         DrawShopCompare(ox, oy, tick);

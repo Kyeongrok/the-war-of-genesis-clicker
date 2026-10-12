@@ -187,7 +187,7 @@ internal sealed unsafe partial class MosesScene
             // 줄 틀 Obs 1291 모션 5(138×28)는 0x10043810 으로 단 덧그림 — 마우스가 올라간 줄에만(0x100fae6b).
             if (mx >= 445 && mx < 445 + LegionRowW && my >= 70 + r * LegionRowH && my < 70 + (r + 1) * LegionRowH)
                 host.DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, GameWindow.UiBlend.Alpha);
-            host.DrawText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
+            MText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
         }
 
         var shown = _legionPick >= 0 && _legionPick < list.Count ? list[_legionPick]
@@ -223,14 +223,14 @@ internal sealed unsafe partial class MosesScene
         }
 
         host.DarkenRect(ox + 440, oy + 225, 190, 165, 12);
-        host.DrawText(db.T(legion.NameId), ox + 450, oy + 233, 0xFFFFE070, 13);
+        MText(db.T(legion.NameId), ox + 450, oy + 233, 0xFFFFE070, 13);
         foreach (var (line, i) in WrapText(db.T(legion.DescriptionId), 180, 11f).Select((l, i) => (l, i)))
         {
             if (i >= 5) break;
-            host.DrawText(line, ox + 450, oy + 268 + i * 15, White, 11);
+            MText(line, ox + 450, oy + 268 + i * 15, White, 11);
         }
         for (int xx = ox + 450; xx < ox + 620; xx++) host.SetPixel(xx, oy + 360, StatusScreen.BoxLine);
-        host.DrawText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
+        MText($"진형 : {db.T(legion.FormationNameId)}", ox + 450, oy + 372, White, 12);
         // 부하 칸 도움말(0x100f7b50, ba-20 S 6) — 마우스가 얹힌 진형 칸(dx = ⌊(mx−130)/40⌋, dy = ⌊(my−170)/32⌋, |dx|+|dy| ≤ 2, 대장 칸 제외)에
         // 부하가 있으면 화면 (296,75) 에 틀 없이 흰 글: 이름·소속·직업 / LP·PSY·DEP·DEX / [어빌리티] 최대 다섯 줄. 딱지는 TXR 827~834.
         int hx = (int)Math.Floor((host._mouse.X - ox - 130) / 40.0), hy = (int)Math.Floor((host._mouse.Y - oy - 170) / 32.0);
@@ -255,7 +255,7 @@ internal sealed unsafe partial class MosesScene
             };
             foreach (var (ability, level) in m.Abilities.Where(a => a.Ability > 0).Take(5))
                 if (db.Abilities.TryGetValue(ability, out var ab)) lines.Add($"{db.T(ab.NameId)} Lv {level}");
-            for (int l = 0; l < lines.Count; l++) host.DrawText(lines[l], ox + 296, oy + 75 + l * 14, White, 11);
+            for (int l = 0; l < lines.Count; l++) MText(lines[l], ox + 296, oy + 75 + l * 14, White, 11);
             return;
         }
     }
@@ -290,7 +290,7 @@ internal sealed unsafe partial class MosesScene
         host.StrokeRect(x - 18, y - 14, 36, 28, StatusScreen.BoxLine);
         // 칸이 40픽셀이라 이름이 길면 잘라 넣는다(원본은 이 자리에 부하 그림을 세운다).
         string label = name.Length > 5 ? name[..5] : name;
-        var (_, w, h) = host.GetText(label, color, 10);
-        host.DrawText(label, x - w / 2, y - h / 2, color, 10);
+        var (_, w, h) = MGetText(label, color, 10);
+        MText(label, x - w / 2, y - h / 2, color, 10);
     }
 }

@@ -149,8 +149,8 @@ internal sealed unsafe partial class MosesScene
     internal void DrawStylePartyArrows(int ox, int oy)
     {
         if (StyleParty().Count < 6) return;
-        if (!host.DrawUi(302, 0, 0, ox + 20, oy + 370, GameWindow.UiBlend.Alpha)) host.DrawText("◀", ox + 20, oy + 385, White, 18);
-        if (!host.DrawUi(302, 1, 0, ox + 400, oy + 370, GameWindow.UiBlend.Alpha)) host.DrawText("▶", ox + 400, oy + 385, White, 18);
+        if (!host.DrawUi(302, 0, 0, ox + 20, oy + 370, GameWindow.UiBlend.Alpha)) MText("◀", ox + 20, oy + 385, White, 18);
+        if (!host.DrawUi(302, 1, 0, ox + 400, oy + 370, GameWindow.UiBlend.Alpha)) MText("▶", ox + 400, oy + 385, White, 18);
     }
 
     internal List<int> StyleParty()
@@ -390,7 +390,7 @@ internal sealed unsafe partial class MosesScene
         // 능력치 패널(0x10034030: 이름 · 직업 · 체질 · LEVEL(TXR 160) · EXP(161) · LP(34) · TP(38)) — 원본 자리 (100,100) 140×164 는
         // 형 단추 다섯과 겹쳐 글이 안 읽히므로, 데모는 오른쪽 어빌리티 목록 아래 빈 칸(395,232)에 둔다.
         host.DarkenRect(ox + 387, oy + 224, 180, 126);
-        host.DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
+        if (_layerText) host.UiFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId)); else host.DrawGameFrame(ox + 395, oy + 232, 164, 110, db.T(c.NameId));
         // 이 칸은 원본의 LEVEL · EXP · LP · TP 대신 <b>레벨이 한 번 오를 때 오르는 수치</b>를 보인다(사용자 요청 mo-10) — 형(일반·공격·고속 …)마다
         // 직업 성장률이 달라서, 형 칸을 누르면 그 형의 값으로 바뀐다. 식은 LevelUp 과 같다: 성장률% × 기본값(.chr 처음 값) / 100.
         // 지금 형보다 많이 오르면 초록, 적게 오르면 빨강.
@@ -399,14 +399,14 @@ internal sealed unsafe partial class MosesScene
         var nextJob = db.Jobs.GetValueOrDefault(previewJob);
         var nowJob = db.Jobs.GetValueOrDefault(c.JobId);
         int Grow(JobData? job, int index, int baseValue) => job is { Growth.Length: >= 12 } ? job.Growth[index] * baseValue / 100 : 0;
-        host.DrawText($"{db.JobName(c with { JobId = previewJob })} · {db.BodyName(c.Body)}", ox + 405, oy + 240, White, 12);
-        host.DrawText("레벨업 한 번에 오르는 수치", ox + 405, oy + 258, 0xFFB4B4B4, 11);
+        MText($"{db.JobName(c with { JobId = previewJob })} · {db.BodyName(c.Body)}", ox + 405, oy + 240, White, 12);
+        MText("레벨업 한 번에 오르는 수치", ox + 405, oy + 258, 0xFFB4B4B4, 11);
         (string Name, int Index, int Base)[] growth = [(db.T(34), 6, (int)grown.Lp), ("PSY", 9, grown.Psy), (db.T(38), 7, grown.Tp), ("DEP", 10, grown.Dep), ("DEX", 11, grown.Dex)];
         for (int i = 0; i < growth.Length; i++)
         {
             int next = Grow(nextJob, growth[i].Index, growth[i].Base), now = Grow(nowJob, growth[i].Index, growth[i].Base);
             uint colour = next > now ? 0xFF00FF00 : next < now ? 0xFFFF6060 : White;
-            host.DrawText($"{growth[i].Name} +{next}", ox + 405 + i % 2 * 78, oy + 276 + i / 2 * 18, colour, 12);
+            MText($"{growth[i].Name} +{next}", ox + 405 + i % 2 * 78, oy + 276 + i / 2 * 18, colour, 12);
         }
 
         // 어빌리티 미리보기 (395,70) 164×20 여섯 줄 — 원본(0x100fa4e0)은 <b>미리보기 중인 직업</b>의 Job.dat 어빌리티 11칸을 이름만 나열한다.
@@ -417,9 +417,9 @@ internal sealed unsafe partial class MosesScene
         {
             if (!db.Abilities.TryGetValue(previewList[i], out var ab)) continue;
             string mark = c.HasAbility(previewList[i]) ? $" Lv{c.AbilityLevel(previewList[i])}" : "";
-            host.DrawText($"{db.T(ab.NameId)}{mark}", ox + 397, oy + 74 + i * 20, c.HasAbility(previewList[i]) ? White : 0xFFB4B4B4, 12);
+            MText($"{db.T(ab.NameId)}{mark}", ox + 397, oy + 74 + i * 20, c.HasAbility(previewList[i]) ? White : 0xFFB4B4B4, 12);
         }
-        if (previewList.Count > 6) host.DrawText($"… 외 {previewList.Count - 6}", ox + 397, oy + 74 + 6 * 20 - 6, 0xFFB4B4B4, 11);
+        if (previewList.Count > 6) MText($"… 외 {previewList.Count - 6}", ox + 397, oy + 74 + 6 * 20 - 6, 0xFFB4B4B4, 11);
 
         // 형 단추 — 레벨이 닿는 칸까지만 만든다(못 고르는 칸은 흐려지는 것이 아니라 아예 없다).
         var styleJobs = StyleJobs();
@@ -428,9 +428,9 @@ internal sealed unsafe partial class MosesScene
             var (cx, cy) = StyleBodyCells[i];
             host.DrawUi(StyleBodyObs, 0, tick, ox + cx, oy + cy, GameWindow.UiBlend.Alpha);
             string label = db.T((ushort)(878 + i));
-            var (_, lw, lh) = host.GetText(label, White, 12);
+            var (_, lw, lh) = MGetText(label, White, 12);
             uint colour = styleJobs[i] == c.JobId ? 0xFF00FF00 : i == _stylePick ? 0xFF00FFFF : 0xFFB4B4B4;
-            host.DrawText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
+            MText(label, ox + cx + (68 - lw) / 2, oy + cy + (28 - lh) / 2, colour, 12);
         }
 
         // 3단계 단추 둘 — 2단계·레벨 60·필수 어빌리티가 있을 때만. 조각은 계열 단추처럼 제 자리를 들고 있어 (320,240)에 찍는다.
@@ -463,8 +463,8 @@ internal sealed unsafe partial class MosesScene
         {
             int bx0 = ox + 455, by0 = oy + 390;
             if (!host.DrawUi(StyleBodyObs, 0, tick, bx0, by0, GameWindow.UiBlend.Alpha)) host.StrokeRect(bx0, by0, 68, 28, White);
-            var (_, sw, sh) = host.GetText("STATUS", White, 12);
-            host.DrawText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
+            var (_, sw, sh) = MGetText("STATUS", White, 12);
+            MText("STATUS", bx0 + (68 - sw) / 2, by0 + (28 - sh) / 2, White, 12);
         }
 
         // Ok 글자는 배경 그림(Bgr 0042)에 있다 — 알약 Obs 287 은 마우스 올림에만.
