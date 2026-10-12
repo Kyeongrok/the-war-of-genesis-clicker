@@ -122,6 +122,7 @@ internal sealed unsafe partial class GameWindow
         if (!SceneFading || (FieldOpen && _afterFadeOut == null)) return;
         int k = SceneFadeLevel();
         if (k >= 31) return;
+        Hi.Dim(k, 31);   // 새 UI 층에 이미 그린 창(전투 HUD …)도 함께 어두워진다 — 뒤에 그리는 메뉴 막대 창들은 그대로다
         for (int y = _camY; y < _camY + ViewHeight && y < BoardHeight; y++)
             for (int x = _camX; x < _camX + ViewWidth && x < BoardWidth; x++)
             {

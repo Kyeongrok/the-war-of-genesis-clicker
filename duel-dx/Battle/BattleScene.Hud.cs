@@ -32,26 +32,27 @@ internal sealed unsafe partial class BattleScene
         if (host.Mos._mosesOpen || host.ChaptersScr._chaptersOpen || _outcome.Length > 0 || host._map is not { } map) return;
         // 원본 그리기(0x100e4600)는 이벤트 스크립트가 도는 동안(0x10056f90)·배치(상태 1·2)·끝맺음(24) 에 창을 통째로 숨긴다.
         if (EventsBusy || _deployOpen) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
 
         // 세로는 왼쪽 위 상자 목록(DrawChestList 의 y − 3)과 윗선을 맞춘다(사용자 요청 fa-34) — 전에는 GridTop + 10 이라 조금 처져 보였다.
         int x = host._camX + host.ViewWidth - HudW - 10, y = host._camY + (host._showStatusBar ? GridTop + 1 : 5);
-        host.DrawGameFrame(x, y, HudW, HudH);
+        host.UiFrame(x, y, HudW, HudH);
 
         // 원본 글꼴은 9~11픽셀이다 — 우리 기본 13픽셀이면 창 밖으로 나간다.
         const float size = 11f;
         void Center(string s, int cx, int cy, uint color)
         {
-            var (_, w, _) = host.GetText(s, color, size);
-            host.DrawText(s, x + cx - w / 2, y + cy, color, size);
+            var (_, w, _) = host.UiGetText(s, color, size);
+            host.UiText(s, x + cx - w / 2, y + cy, color, size);
         }
         void Right(string s, int rx, int ry)
         {
-            var (_, w, _) = host.GetText(s, White, size);
-            host.DrawText(s, x + rx - w, y + ry, White, size);
+            var (_, w, _) = host.UiGetText(s, White, size);
+            host.UiText(s, x + rx - w, y + ry, White, size);
         }
 
         Center(host._scene.Title, 70, 3, HudYellow);
-        host.DrawUi(HudObs, HudPositionMotion, (int)(host._lastTime * TicksPerSecond), x + 8, y + 30, UiBlend.Alpha);
+        host.UiSprite(HudObs, HudPositionMotion, (int)(host._lastTime * TicksPerSecond), x + 8, y + 30);
 
         // 커서가 놓인 칸과 그 높이 — 판 밖(칸 −1)이면 원본은 숫자를 지운다(0x100e4250).
         int col = host._mouse.X >= 0 ? host._mouse.X / TileW : -1;
@@ -78,9 +79,9 @@ internal sealed unsafe partial class BattleScene
         {
             const int nameH = 22;
             int ny = y + HudH + 2;
-            host.DrawGameFrame(x, ny, HudW, nameH);
-            var (_, w, _) = host.GetText(aiming, HudYellow, size);
-            host.DrawText(aiming, x + Math.Max(4, (HudW - w) / 2), ny + 4, HudYellow, size);
+            host.UiFrame(x, ny, HudW, nameH);
+            var (_, w, _) = host.UiGetText(aiming, HudYellow, size);
+            host.UiText(aiming, x + Math.Max(4, (HudW - w) / 2), ny + 4, HudYellow, size);
         }
     }
 

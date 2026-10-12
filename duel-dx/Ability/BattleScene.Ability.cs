@@ -322,25 +322,26 @@ internal sealed unsafe partial class BattleScene
     internal void DrawAbilityMenu()
     {
         if (!_abilityMenu || _turn < 0 || host._db == null) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         var rows = MenuRows();
         var (ox, oy) = MenuOrigin(rows.Count);
         int h = MenuHeadH + Math.Clamp(rows.Count, 1, AbilityMenuRows) * MenuRowH + 8;
         int top = AbilityTopFor(rows.Count);
 
         // 창은 게임 안 모든 창과 같은 원본 틀(분석-시스템메뉴 「메시지 창 틀」)
-        host.DarkenRect(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
-        host.DrawGameFrame(ox, oy, MenuW, h, $"{host._db.T(3)} — {host.UnitName(_turn)}");
+        host.UiDarken(ox - 1, oy - FrameTitleH - 1, MenuW + 2, h + FrameTitleH + 2, 8);
+        host.UiFrame(ox, oy, MenuW, h, $"{host._db.T(3)} — {host.UnitName(_turn)}");
         // 머리 글자는 아래 숫자 칸의 오른끝에 하나씩 맞춘다 — 한 덩이로 창 오른끝에 붙였더니 단축키 칸까지 밀려 한 칸씩 어긋났다(사용자 보고).
         // 두 칸 오른끝이 30픽셀밖에 안 떨어져 그대로 맞추면 「TPSOUL」로 붙는다 — TP 는 조금 왼쪽, SOUL 은 조금 오른쪽으로 띄운다.
-        host.RightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
-        host.RightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
-        host.RightText("소모", ox + MenuRowX + 286, oy + 3, White, 12);
+        host.UiRightText("TP", ox + MenuRowX + 204, oy + 3, White, 12);
+        host.UiRightText("SOUL", ox + MenuRowX + 248, oy + 3, White, 12);
+        host.UiRightText("소모", ox + MenuRowX + 286, oy + 3, White, 12);
 
-        if (rows.Count == 0) host.DrawText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
+        if (rows.Count == 0) host.UiText("익힌 어빌리티가 없습니다", ox + 10, oy + MenuHeadH + 4, DimGray);
         var c = host._units[_turn].Data!;
         // 여덟 줄을 넘으면 휠로 굴린다 — 전에는 창이 화면 아래로 넘쳐 아랫줄을 고를 수 없었다(ba-20 G12).
-        if (top > 0) host.DrawText("▲", ox + MenuW - 14, oy + MenuHeadH + 2, 0xFFFFFF80, 10);
-        if (top + AbilityMenuRows < rows.Count) host.DrawText("▼", ox + MenuW - 14, oy + h - 22, 0xFFFFFF80, 10);
+        if (top > 0) host.UiText("▲", ox + MenuW - 14, oy + MenuHeadH + 2, 0xFFFFFF80, 10);
+        if (top + AbilityMenuRows < rows.Count) host.UiText("▼", ox + MenuW - 14, oy + h - 22, 0xFFFFFF80, 10);
         for (int i = top; i < rows.Count && i < top + AbilityMenuRows; i++)
         {
             var (name, w, enabled, reason) = rows[i];
@@ -348,30 +349,30 @@ internal sealed unsafe partial class BattleScene
             uint color = enabled ? White : DimGray;
             int rx = ox + MenuRowX;
             // 줄 바탕(Obs 0471 모션 20)은 마우스를 올린 줄에만 — 원본도 올린 줄 하나만 덧그린다.
-            if (i == _abilityHover) host.DrawUi(SystemMenu.ListRowObs, 20, 0, rx, y, UiBlend.Alpha, loop: false);
+            if (i == _abilityHover) host.UiSprite(SystemMenu.ListRowObs, 20, 0, rx, y, loop: false);
             // 단축키 글자는 아이콘과 겹치지 않게 줄 오른쪽 끝에
             // 패드를 잡고 있으면 단축키 열에 키 대신 「LT+A」 꼴의 패드 조합을 적는다(사용자 요청 fa-37).
             string hotkey = host.Pad.Active ? host.Pad.AbilityChordLabel(i) : HotkeyLabel(i);
-            if (hotkey.Length == 1) host.DrawText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
+            if (hotkey.Length == 1) host.UiText(hotkey, rx + MenuRowW - 18, y + 4, i == _abilityHover ? White : DimGray, 12);
             else if (hotkey.Length > 1)
             {
-                var (_, hw, _) = host.GetText(hotkey, DimGray, 9);
-                host.DrawText(hotkey, rx + MenuRowW - 2 - hw, y + 7, i == _abilityHover ? White : DimGray, 9);
+                var (_, hw, _) = host.UiGetText(hotkey, DimGray, 9);
+                host.UiText(hotkey, rx + MenuRowW - 2 - hw, y + 7, i == _abilityHover ? White : DimGray, 9);
             }
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
             if (host._db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {
-                host.DrawUi(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2, UiBlend.Alpha);
-                host.DrawUi(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2, UiBlend.Alpha);
+                host.UiSprite(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2);
+                host.UiSprite(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2);
             }
-            host.DrawText(name, rx + 46, y + 4, color, 12);
+            host.UiText(name, rx + 46, y + 4, color, 12);
             // 못 쓰는 줄은 흐린 글자로만 알린다 — 「TP 부족」 같은 까닭 글은 이름과 겹치고 어차피 안다(사용자 요청). 누르면 알림으로 까닭을 준다.
             // 18·20(소울·TP 소모량 변화)까지 얹은 값을 보여 준다 — 실제로 물리는 값과 같아야 한다.
-            host.RightText($"{TpCostFor(host._units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
+            host.UiRightText($"{TpCostFor(host._units[_turn], c, w.Id)}", rx + 210, y + 4, color, 12);
             // 체질마다 실제로 깎이는 SOUL 이 다르다(분석-전투 ba-4) — 필요한 값을 보여 준다.
-            host.RightText($"{SoulNeedFor(host._units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
+            host.UiRightText($"{SoulNeedFor(host._units[_turn], c, w.Id)}", rx + 240, y + 4, color, 12);
             // 쓰면 실제로 깎이는 SOUL(소모량) — 필요 SOUL 과 다를 수 있다(18 소울 소모량 % 보정까지 얹은 값).
-            host.RightText($"{SoulCostFor(host._units[_turn], c, w.Id)}", rx + 280, y + 4, color, 12);
+            host.UiRightText($"{SoulCostFor(host._units[_turn], c, w.Id)}", rx + 280, y + 4, color, 12);
         }
 
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.

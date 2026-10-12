@@ -103,17 +103,18 @@ internal sealed unsafe partial class BattleScene
     internal void DrawItemMenu()
     {
         if (!_itemMenu || _turn < 0 || host._db is not { } db) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         var rows = ItemRowsList();
         var (x, y, h) = ItemMenuRect();
 
-        host.DarkenRect(x - 1, y - 21, ItemMenuW + 2, h + 22);
-        host.DrawGameFrame(x, y, ItemMenuW, h, db.T(4) is { Length: > 0 } t ? t : "ITEM");
+        host.UiDarken(x - 1, y - 21, ItemMenuW + 2, h + 22);
+        host.UiFrame(x, y, ItemMenuW, h, db.T(4) is { Length: > 0 } t ? t : "ITEM");
 
         if (rows.Count == 0)
         {
             string none = db.T(0) is { Length: > 0 } n ? n : "없음";
-            var (_, nw, _) = host.GetText(none, DimGray);
-            host.DrawText(none, x + (ItemMenuW - nw) / 2, y + 16, DimGray);
+            var (_, nw, _) = host.UiGetText(none, DimGray);
+            host.UiText(none, x + (ItemMenuW - nw) / 2, y + 16, DimGray);
             return;
         }
 
@@ -126,15 +127,15 @@ internal sealed unsafe partial class BattleScene
             // 줄 바탕(밝은 띠)은 마우스를 올린 줄에만 — 전에는 모든 줄에 그려 다 올린 것처럼 보였다(사용자 보고). 어빌리티 목록과 같은 꼴
             // — 원본도 그렇다: 줄에 0x10043810(−4, 0, Obs 0471, 모션 4)로 단 덧그림(0x100d393c · 0x100d3b3e)이고, 그것은 줄 +0x58(마우스 올림)일 때만 그려진다(0x10043040).
             bool over = host._mouse.X >= rx - 4 && host._mouse.X < rx - 4 + ItemRowW + 8 && host._mouse.Y >= ry && host._mouse.Y < ry + ItemRowH;
-            if (over) host.DrawUi(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, UiBlend.Alpha, loop: false);
-            host.DrawUi(ItemIconObs, item.PictureMotion, 0, rx + 8, ry + 2, UiBlend.Alpha, loop: false);
+            if (over) host.UiSprite(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, loop: false);
+            host.UiSprite(ItemIconObs, item.PictureMotion, 0, rx + 8, ry + 2, loop: false);
 
             string name = db.T(item.NameId);
-            var (_, nw, _) = host.GetText(name, White, 12);
-            host.DrawText(name, rx + ItemRowW - 46 - nw, ry + 4, White, 12);
+            var (_, nw, _) = host.UiGetText(name, White, 12);
+            host.UiText(name, rx + ItemRowW - 46 - nw, ry + 4, White, 12);
             string amount = $"(x{count})";
-            var (_, aw, _) = host.GetText(amount, White, 12);
-            host.DrawText(amount, rx + ItemRowW - 6 - aw, ry + 4, White, 12);
+            var (_, aw, _) = host.UiGetText(amount, White, 12);
+            host.UiText(amount, rx + ItemRowW - 6 - aw, ry + 4, White, 12);
         }
     }
 }

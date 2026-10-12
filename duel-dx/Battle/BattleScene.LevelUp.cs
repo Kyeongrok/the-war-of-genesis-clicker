@@ -170,30 +170,31 @@ internal sealed unsafe partial class BattleScene
     internal void DrawLevelUp()
     {
         if (!LevelUpOpen) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         string[] lines = _levelUpBody.Split('\n');
         // 줄 내림 16(굴림 9pt + 4) — 메시지 창 0x10034540.
         int lineH = 16, bodyH = lines.Length * lineH;
-        var (_, titleW, _) = host.GetText(_levelUpTitle, White, 15);
-        int bodyW = lines.Max(l => host.GetText(l, White).W);
+        var (_, titleW, _) = host.UiGetText(_levelUpTitle, White, 15);
+        int bodyW = lines.Max(l => host.UiGetText(l, White).W);
         int innerW = Math.Max(titleW + 100, bodyW);
         int w = innerW + 40, h = bodyH + 80;
         int x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2 + FrameTitleH / 2;
 
-        host.DrawGameFrame(x, y, w, h, _levelUpTitle);
+        host.UiFrame(x, y, w, h, _levelUpTitle);
         // 본문은 덩어리째 가운데, 줄마다 <b>왼쪽 맞춤</b>·흰색(0x10034540 — 첫 줄도 흰색).
         int left = x + 20 + (innerW - bodyW) / 2;
         for (int i = 0; i < lines.Length; i++)
-            host.DrawText(lines[i], left, y + 20 + i * lineH, White);
+            host.UiText(lines[i], left, y + 20 + i * lineH, White);
 
         // O.K 단추 — 원본 그림(76×22)은 기준점이 한가운데라 칸 가운데에 찍는다. 글자는 그림에 들어 있다.
         int bx = x + w / 2 - 38, by = y + h - 40;
         // 단추 그림은 <b>두 장</b>이다 — 평소(31)와 골라짐(32). 원본도 마우스가 얹히면 밝은 쪽으로 바꿔 그린다.
         bool over = host._mouse.X >= bx && host._mouse.X < bx + 76 && host._mouse.Y >= by && host._mouse.Y < by + 23;
-        if (host.DrawUi(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, UiBlend.Alpha, loop: false)) return;
-        host.FillRect(bx, by, 76, 23, StatusScreen.HeadBg);
-        host.StrokeRect(bx, by, 76, 23, StatusScreen.BoxLine);
-        var (_, ow, _) = host.GetText("O.K", White);
-        host.DrawText("O.K", bx + (76 - ow) / 2, by + 4, White);
+        if (host.UiSprite(OkButtonObs, over ? OkButtonMotionOver : OkButtonMotion, 0, bx + 38, by + 11, loop: false)) return;
+        host.UiFill(bx, by, 76, 23, StatusScreen.HeadBg);
+        host.UiStroke(bx, by, 76, 23, StatusScreen.BoxLine);
+        var (_, ow, _) = host.UiGetText("O.K", White);
+        host.UiText("O.K", bx + (76 - ow) / 2, by + 4, White);
     }
 
     /// <summary>원본 O.K 단추 그림 — Obs 0471 모션 31(평소)·32(눌림).</summary>

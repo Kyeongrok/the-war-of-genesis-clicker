@@ -40,6 +40,17 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         Used = false;
     }
 
+    /// <summary>지금까지 그린 것을 num/den 으로 어둡게 — 장면 페이드가 판과 함께 층도 어둡게 할 때. 덮는 세기(알파)는 그대로 둔다.</summary>
+    internal void Dim(int num, int den)
+    {
+        if (!Used) return;
+        for (int i = 0; i < _px.Length; i++)
+        {
+            uint c = _px[i];
+            if (c >> 24 != 0) _px[i] = c & 0xFF000000 | GameWindow.ScaleColor(c, num, den) & 0xFFFFFF;
+        }
+    }
+
     private void Ensure()
     {
         if (_w != host._resW || _h != host._resH)

@@ -1330,6 +1330,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Hi.Used) DrawToast(onLayer: true);   // 새 UI 창 위로 알림을 한 번 더
         Pad.DrawFocus();                       // 패드 커서가 선 자리의 테와 조작 안내 — 창들 위에
         Pad.DrawGuide();
+        if (Cut.Showing) Hi.Begin();           // 컷신은 판에 그린다 — 층에 그린 창(HUD · 안내)이 그 위에 남지 않게 비운다
         Cut.Draw();                            // 기술 컷신은 모든 것 위에
     }
 

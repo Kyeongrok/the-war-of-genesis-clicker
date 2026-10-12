@@ -209,6 +209,9 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     }
 
     /// <summary>보이는 화면을 검게 덮고 영상 컷을 비율대로 맞춰 그린다 — 맨 위에 그린다.</summary>
+    /// <summary>이번 틀에 영상 컷을 그리나(<see cref="Draw"/> 와 같은 조건).</summary>
+    internal bool Showing => _clip is { } clip && _frame.Length == clip.Width * clip.Height;
+
     internal void Draw()
     {
         if (_clip is not { } clip || _frame.Length != clip.Width * clip.Height) return;

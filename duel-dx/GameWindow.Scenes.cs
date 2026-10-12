@@ -12,6 +12,12 @@ internal sealed unsafe partial class GameWindow
     /// <summary>필드가 열려 있나 — 장면 개체를 만들지 않고 본다(틀마다 여러 번 불린다).</summary>
     internal bool FieldOpen => _fldScene is { FieldOpen: true };
 
+    /// <summary>
+    /// 전투 판이 다른 화면(모세스 · 필드 · 타이틀 · 기록 · 연대표 · 챕터 고르기)에 덮여 있나 — 새 UI 층에 그리는 전투 창(HUD · 정보 창 · 목록)은 이때 안 그린다.
+    /// 판에 그릴 때는 뒤에 그리는 그 화면이 덮어 줬지만, 층은 늘 판 위라 비쳐 나온다(menu-57).
+    /// </summary>
+    internal bool BattleCovered => Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || RecordsScr._recordsOpen || EpisodesScr._episodesOpen || ChaptersScr._chaptersOpen;
+
     /// <summary>MosesScene — 처음 쓸 때 만든다(장면마다 따로 선 클래스).</summary>
     internal MosesScene? _mosScene;
     internal MosesScene Mos => _mosScene ?? LazyInitializer.EnsureInitialized(ref _mosScene, () => new MosesScene(this));

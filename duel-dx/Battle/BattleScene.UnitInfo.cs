@@ -46,6 +46,7 @@ internal sealed unsafe partial class BattleScene
     internal void DrawUnitInfo()
     {
         if (!InfoOpen || host._db is not { } db || host._units[_infoUnit] is not { Data: { } c } unit) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         var (x, y) = _infoAt;
 
         // 걸린 상태이상·버프를 아이콘 아래에 글로 — 누르고 있는 동안 무엇이 걸렸는지 바로 보이게(원본에 없는 덧붙임, 사용자 요청).
@@ -58,8 +59,8 @@ internal sealed unsafe partial class BattleScene
         y = Math.Min(y, host._camY + host.ViewHeight - h);
 
         // 원본 창 틀 — 제목줄에 이름(분석-시스템메뉴 「메시지 창 틀」)
-        host.DarkenRect(x - 1, y - FrameTitleH - 1, InfoW + 2, h + FrameTitleH + 2, 8);
-        host.DrawGameFrame(x, y, InfoW, h, db.T(c.NameId));
+        host.UiDarken(x - 1, y - FrameTitleH - 1, InfoW + 2, h + FrameTitleH + 2, 8);
+        host.UiFrame(x, y, InfoW, h, db.T(c.NameId));
 
         // 글자는 모두 흰색이다(0x10041450 색 −1, 분석-전투 「정보 창」) — 전에는 칭호·계열이 회색이었다(ba-20 G17).
         Centre(db.T(c.TitleId), x, y + 20, White);
@@ -83,31 +84,31 @@ internal sealed unsafe partial class BattleScene
         Row(db.T(158), rdp.ToString(), y + 212);
 
         // 상태이상 칸 셋 — 원본처럼 Obs 0489 아이콘 한 장씩, 빈 칸은 모션 0(「EMPTY」 판)이다(분석-전투 창 228).
-        host.FillRect(x + 6, y + 228, InfoW - 12, 34, StatusScreen.BoxBg);
-        host.StrokeRect(x + 6, y + 228, InfoW - 12, 34, StatusScreen.BoxLine);
+        host.UiFill(x + 6, y + 228, InfoW - 12, 34, StatusScreen.BoxBg);
+        host.UiStroke(x + 6, y + 228, InfoW - 12, 34, StatusScreen.BoxLine);
         // 아이콘 기준점은 그림 <b>가운데</b>다(스테이터스 창도 가운데 자리로 찍는다) — 왼쪽 위 자리로 찍어 칸 밖으로 반쯤 삐져나왔다(사용자 보고).
         // 원본 상태이상 칸(0x100d53c0, 정보 창에선 (0,228,140,40)): s = (폭 − 40)/3, 가운데 x = 10 + s/2 + (s + 10)·i, y = (높이 − 20)/2 + 10
         // → 본문 (26 + 43i, 248)(0x100d5437~0x100d54dd, 감사4 I4).
         for (int i = 0; i < 3; i++)
-            host.DrawUi(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 26 + 43 * i, y + 248, UiBlend.Alpha, loop: false);
+            host.UiSprite(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 26 + 43 * i, y + 248, loop: false);
         for (int i = 0; i < effects.Count; i++)
-            host.DrawText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
+            host.UiText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
 
         void Centre(string text, int left, int top, uint color)
         {
-            var (_, w, _) = host.GetText(text, color);
-            host.DrawText(text, left + (InfoW - w) / 2, top, color);
+            var (_, w, _) = host.UiGetText(text, color);
+            host.UiText(text, left + (InfoW - w) / 2, top, color);
         }
 
         void Row(string label, string value, int top)
         {
             // 값이 길어 이름 위로 넘치면(HP 2034/3658(+320) 같은 네 자리 + 보정) 보정 괄호를 뗀다 — 전에는 「HP」 글자 위에 겹쳐 찍혔다(사용자 화면).
-            int room = 130 - 10 - host.GetText(label, White).W - 4;
-            if (host.GetText(value, White).W > room && value.IndexOf('(') is > 0 and var cut) value = value[..cut];
-            host.DrawText(label, x + 10, top, White);
-            host.RightText(value, x + 130, top, White);
+            int room = 130 - 10 - host.UiGetText(label, White).W - 4;
+            if (host.UiGetText(value, White).W > room && value.IndexOf('(') is > 0 and var cut) value = value[..cut];
+            host.UiText(label, x + 10, top, White);
+            host.UiRightText(value, x + 130, top, White);
         }
 
-        void Rule(int left, int top) => host.FillRect(left + 10, top, InfoW - 20, 1, StatusScreen.BoxLine);
+        void Rule(int left, int top) => host.UiFill(left + 10, top, InfoW - 20, 1, StatusScreen.BoxLine);
     }
 }
