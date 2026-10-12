@@ -930,9 +930,24 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         // 화면 밖은 검게, 가운데에 640×480 단말 화면
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_mosesBg is { } bg)
+        {
+            // 새 UI — 배경 그림에 박힌 제목 · 칸 이름 · 단추 글씨를 지운 사본을 깔고, 그 자리에 글로 다시 쓴다(아래 BgLabels).
+            var labels = _layerText ? BgLabels.GetValueOrDefault(_mosesBgId) : null;
+            if (labels != null)
+            {
+                if (_cleanBgId != _mosesBgId || _cleanBgOf != bg) (_cleanBg, _cleanBgId, _cleanBgOf) = (WithoutBgLabels(bg, labels), _mosesBgId, bg);
+                bg = _cleanBg!;
+            }
             for (int y = 0; y < MosesH; y++)
                 for (int x = 0; x < MosesW; x++)
                     host.SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+            if (labels != null)
+                foreach (var l in labels)
+                {
+                    var (lw, lh) = host.Hi.Measure(l.Text, White, l.Size);
+                    host.Hi.DrawText(l.Text, ox + (l.Centre ? l.X + (l.W - lw) / 2 : l.X + 1), oy + l.Y + (l.H - lh) / 2, White, l.Size);
+                }
+        }
 
         if (_mosesPage == -1) DrawMosesDesktop(ox, oy, tick);
         else
@@ -1007,6 +1022,54 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         }
         StepMosesSystemSwitch();
         _layerText = false;
+    }
+
+    // ── 배경 그림의 글씨(menu-57) ───────────────────────────────────────────
+    // 모세스 페이지 배경(상점 40 · 용병 39 · 전직 42 · 메일 94)에는 제목 · 칸 이름 · 단추 글씨가 흰 장식 글씨로 박혀 있다. 새 UI 는 그 글씨를 그림 사본에서
+    // 지우고 같은 자리에 창 해상도 글로 쓴다 — 글꼴은 원본 장식체가 아니라 게임의 다른 글과 같은 것이다.
+
+    /// <summary>글씨 한 곳 — 글씨가 든 네모(640×480 좌표), 새로 쓸 글, 크기, 가운데 맞춤인가, 지울 때 그 줄의 바탕색을 따올 열.</summary>
+    private readonly record struct BgLabel(int X, int Y, int W, int H, string Text, float Size, bool Centre, int Src);
+
+    private static BgLabel Title(string text) => new(228, 21, 184, 26, text, 16f, true, 193);
+    private static BgLabel Tab(int x, int y, int w, string text) => new(x, y, w, 18, text, 12f, false, x - 1);
+    private static BgLabel Pill(int x, int y, int w, string text) => new(x, y, w, 22, text, 14f, true, x - 1);
+
+    private static readonly Dictionary<int, BgLabel[]> BgLabels = new()
+    {
+        [40] = [Title("SHOP"), Tab(162, 55, 40, "Buy"), Tab(432, 55, 62, "Buy List"), Tab(36, 175, 62, "Account"), Tab(162, 175, 36, "Sell"), Tab(432, 175, 64, "Sell List"),
+                Pill(430, 296, 48, "RESET"), Pill(540, 296, 34, "SET"), Pill(512, 433, 42, "OK")],
+        [39] = [Title("MERCENARY"), Pill(81, 296, 48, "RESET"), Pill(177, 296, 35, "SET"), Pill(514, 433, 42, "OK")],
+        [42] = [Title("STYLE CHANGE"), Pill(512, 433, 42, "OK")],
+        [MosesMailBackground] = [Title("MAIL BOX"), Tab(172, 55, 76, "Mail List"), Pill(506, 433, 52, "EXIT")],
+    };
+
+    private uint[]? _cleanBg, _cleanBgOf;
+    private int _cleanBgId = -1;
+
+    /// <summary>
+    /// 배경에서 글씨를 지운 사본 — 글씨 네모 안에서 그 줄의 바탕(네모 왼쪽 열 <c>Src</c> 의 점)보다 뚜렷이 밝은 점(흰 글씨와 그 번짐)을 바탕 점으로 메운다.
+    /// 글씨 아닌 점은 그대로 두므로 바탕의 무늬가 남는다.
+    /// </summary>
+    private static uint[] WithoutBgLabels(uint[] bg, BgLabel[] labels)
+    {
+        var clean = (uint[])bg.Clone();
+        static int Light(uint c) => (int)((c >> 16 & 0xFF) + (c >> 8 & 0xFF));   // 빨강 + 초록 — 파란 바탕은 낮고 흰 글씨는 높다
+        foreach (var l in labels)
+            for (int y = l.Y; y < l.Y + l.H; y++)
+            {
+                uint fill = bg[y * MosesW + l.Src];
+                for (int x = l.X; x < l.X + l.W; x++)
+                {
+                    // 글씨 점이거나 글씨 점에 붙은 점(번짐)이면 메운다.
+                    bool ink = false;
+                    for (int dy = -1; dy <= 1 && !ink; dy++)
+                        for (int dx = -1; dx <= 1 && !ink; dx++)
+                            ink = Light(bg[(y + dy) * MosesW + x + dx]) > Light(fill) + 60;
+                    if (ink) clean[y * MosesW + x] = fill;
+                }
+            }
+        return clean;
     }
 
     // ── 새 UI 로 가는 글(menu-57) — DrawMoses 가 틀마다 정한 대로 층 또는 판에 ──
