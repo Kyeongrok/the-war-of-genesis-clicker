@@ -775,7 +775,7 @@ def build(game, cs):
         effs = table[w]
         got = collections.OrderedDict()                      # 표 줄(번호) → {방향: [덧정보]}
         for d in (1, 0, 2, 3):
-            evs = r['main'][d]['events']
+            evs = wt.with_ticks(tool.e, r['handler'], w, d, st, r['main'][d]['events'])   # 표의 Delay 와 같은 시계(단계 안 틱 포함)
             tm = wt.Timer(evs, st, mlen)
             first, last_collect, stag_of = {}, None, {}
             for n, ev in enumerate(evs):

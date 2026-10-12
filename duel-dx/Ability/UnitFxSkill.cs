@@ -29,6 +29,8 @@ internal sealed unsafe class UnitFxSkill(GameWindow host)
         WorkUnitFx.Table.TryGetValue(w.Id, out var own);
         WorkUnitFx.Others.TryGetValue(w.Id, out var others);
         if (own == null && others == null) return;
+        // 아스트럴 파이어 — 대상은 솟았던 몸이 내려와 닿은 뒤에야 다시 보인다(0x100ab23e). 표의 61 은 그 기다림을 못 센 값이다.
+        if (w.AbilityId == ForcetrulSkill.AstralFire && own != null) own = [.. own.Select(e => e.Kind == 1 ? e with { Tick = ForcetrulSkill.AstralFireLand } : e)];
         var aimed = host.Btl.LiveUnitAt(col, row);
         var inArea = (host.Btl._fxTargets ?? host.Btl.WorkTargets(w, user, col, row)).Select(i => host._units[i]).ToList();
         void Add(UnitState u, WorkUnitFx.Ev[] events)

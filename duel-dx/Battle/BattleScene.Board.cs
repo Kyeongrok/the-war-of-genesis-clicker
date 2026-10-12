@@ -252,9 +252,14 @@ internal sealed unsafe partial class BattleScene
         _workHookDone = true;
         var a = host._units[caster];
         // 「<work>:near」 면 적 셋을 시전자 곁 칸으로 옮겨 둔다 — 자기 중심 범위기(나인 크루세이더)를 시험할 때 대상이 있게.
+        // 「<work>:near:mid:<L|R|U|D>」 — 시전자를 맵 가운데로 옮기고 첫 적을 그 방향 두 칸 앞에 둔다(방향 가지를 시험할 때).
+        if (parts.Length > 2 && parts[2] == "mid") a.WarpTo(host.Cols / 2, host.Rows / 2);
+        var (hx, hy) = parts.Length > 3 ? parts[3] switch { "L" => (-1, 0), "U" => (0, -1), "D" => (0, 1), _ => (1, 0) } : (1, 0);
         if (parts.Length > 1 && parts[1] == "near")
         {
-            (int C, int R)[] spots = [(a.Col + 2, a.Row), (a.Col, a.Row + 2), (a.Col + 1, a.Row - 2)];
+            (int C, int R)[] spots = parts.Length > 3
+                ? [(a.Col + 2 * hx, a.Row + 2 * hy), (a.Col + 3 * hx + hy, a.Row + 3 * hy + hx), (a.Col + 4 * hx - hy, a.Row + 4 * hy - hx)]
+                : [(a.Col + 2, a.Row), (a.Col, a.Row + 2), (a.Col + 1, a.Row - 2)];
             int k = 0;
             foreach (var enemy in host._units.Where(u => u.Alive && u.OnField && !u.IsAlly))
             {

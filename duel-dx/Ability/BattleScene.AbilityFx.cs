@@ -490,6 +490,8 @@ internal sealed unsafe partial class BattleScene
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         host.UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
         if (BladeMissileSkill.Works.Contains(w.Id)) host.BladeMissileAb.Spawn(w, user);   // 블레이드 미사일의 칼들
+        host.ForcetrulAb.Spawn(w, user, col, row);                                        // 포스트럴 — 핸들러가 자리를 셈하는 이펙트(카운터 봄 · 사이킥 크로스 · 검기 …)
+        if (w.AbilityId == IdeaCannonSkill.Ability) host.IdeaCannonAb.Spawn(w, user, col, row);
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
@@ -513,6 +515,7 @@ internal sealed unsafe partial class BattleScene
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
             if (PushSkill.CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
+            if (ForcetrulSkill.Owns(w, e) || (w.AbilityId == IdeaCannonSkill.Ability && e.Obs == IdeaCannonSkill.BeamObs)) continue;   // 전용 루틴이 깐다
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
             double start = host._lastTime + e.Delay / TicksPerSecond;
@@ -547,7 +550,13 @@ internal sealed unsafe partial class BattleScene
                         for (int n = 0; n < 50; n++)
                         {
                             double fx = footX + _fxRandom.Next(30) - 15;
-                            _shots.Add((e.Obs, e.Motion, host._lastTime + (60 + _fxRandom.Next(100)) / TicksPerSecond, fx, footY, fx, footY - 260 * 0.6, 20, 1.1, 1, 0, 100, false));
+                            double flameAt = host._lastTime + (60 + _fxRandom.Next(100)) / TicksPerSecond;
+                            _shots.Add((e.Obs, e.Motion, flameAt, fx, footY, fx, footY - 260 * 0.6, 20, 1.1, 1, 0, 100, false));
+                            if (n % 2 == 0) continue;
+                            // 홀수 번째 불꽃이 꼭대기에 닿아 사라지면(약 11틱) 그 자리 위(높이 300)에 705:1, 대상 위(높이 260)에 1368:3 이 뜬다(0x100ab160 · 0x100ab1d2).
+                            double burstAt = flameAt + 11 / TicksPerSecond;
+                            _effects.Add((705, 1, burstAt, (int)fx, footY - 180));
+                            _effects.Add((1368, 3, burstAt, footX, footY - 156));
                         }
                     _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + 60 / TicksPerSecond);
                     continue;
@@ -740,7 +749,7 @@ internal sealed unsafe partial class BattleScene
                     {
                         var (tx, ty) = host.Btl.UnitFoot(host._units[eachTargets[i]]);
                         double at = start + i * each.Stagger / TicksPerSecond;
-                        if (e.Life > 0) host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, false);
+                        if (e.Life > 0) host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, at, (tx + each.Dx, ty + each.Dy - e.Lift), e.Life, mirrored);
                         else (mirrored ? _effectMirrors : _effects).Add((e.Obs, e.Motion, at, tx + each.Dx, ty + each.Dy - e.Lift));
                     }
                     if (each.StaggerSure) _fxStagger = Math.Max(_fxStagger, each.Stagger);
@@ -764,7 +773,7 @@ internal sealed unsafe partial class BattleScene
                         if (e.Life > 0)
                         {
                             // 수명이 있으면 그동안 되풀이해 그린다(시각표 효과 — 끝나는 때가 정해진다).
-                            host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, false);
+                            host.HeavenEarthAb.AddTimedFx(e.Obs, e.Motion, start + k / TicksPerSecond, (x, y - e.Lift), e.Life, mirrored);   // 수명이 있는 줄도 뒤집는다 — 오른쪽을 보고 쏜 검기(264:11)가 안 뒤집혀 몸에서 떨어져 떴다
                             continue;
                         }
                         // 뿌리개는 대상 둘레에 흩뿌리고 한 틱씩 어긋나게 띄운다(원본은 코드가 난수로 셈한다 — 가설).

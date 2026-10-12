@@ -53,7 +53,10 @@ internal sealed unsafe partial class BattleScene
                 // 늘어나는 복제(0x100c6a10 + 0x100c6b20, 그리기 칸 4) — 포스 필드·배리어·실드류 9자리: 20틱, 가로 1 + 0.055k · 세로 1 + 0.015k
                 // (k = min(t, 19 − t), 캐노피만 0.05 · 0.01). 카운터 실드(98, 0x10098253 · 0x100986ca)·카운터 필드(113, 0x100a1eec · 0x100a221d)는
                 // 120틱 가로만 — 표 120칸이 40틱 주기 셋: 앞 20틱 1 + 0.03k, 뒤 20틱 1.4 − 0.03k(세로 표는 없음 = 1). Param = 틱 수.
-                _bodyShapes.Add((body, 1, now, w.AbilityId is 98 or 113 ? 120 : 20, null, 0, 0, 4 / 9.0, null));
+                // 실드류(20틱)는 그 기술의 444 이펙트가 끝나 판정이 드는 틱에 복제가 생긴다(아스트럴 실드 0x10097a7b — 약 131틱). 전에는 시전하자마자 늘어났다.
+                bool counter = w.AbilityId is 98 or 113;
+                double from = !counter && WorkHitTicks.Table.TryGetValue(w.Id, out var shieldHit) ? now + shieldHit.Ticks / TicksPerSecond : now;
+                _bodyShapes.Add((body, 1, from, counter ? 120 : 20, null, w.AbilityId == 85 ? 1 : 0, 0, 4 / 9.0, null));
                 return;
             }
             if (list.Length == 2 && list.All(b => b.OnTarget) && (w.Id == 396 || w.Id is >= 556 and <= 574 || w.Id == 399 || w.Id is >= 594 and <= 602))
@@ -179,7 +182,8 @@ internal sealed unsafe partial class BattleScene
                         break;
                     }
                     int k = Math.Min(tick, 19 - tick);
-                    Stretched(frame, 1 + 0.055 * k, 1 + 0.015 * k);
+                    if (c.Dx == 1) Stretched(frame, 1 + 0.05 * k, 1 + 0.01 * k);      // 캐노피(0x10098820)
+                    else Stretched(frame, 1 + 0.055 * k, 1 + 0.015 * k);
                     break;
                 }
                 case 2:
@@ -206,6 +210,21 @@ internal sealed unsafe partial class BattleScene
                     if (tick >= c.Dy || sprite.FrameOfMotion(c.Param, tick, c.Owner.Facing == Facing.Right) is not { } pose) { _bodyShapes.RemoveAt(i); continue; }
                     double grown = c.Kind == 7 ? Math.Pow(1.03, Math.Clamp(tick - 100 + 1, 0, 20)) : Math.Pow(0.9709, Math.Clamp(tick - 90 + 1, 0, 20) - 20);
                     Stretched(pose, grown, grown);
+                    break;
+                }
+                case 9:
+                {
+                    // 아스트럴 파이어(0x100aab90) — 맞는 자세의 몸이 높이 300 까지 솟고(30 에서 틱마다 × 0.96) 200틱까지 떠 있다가 틱당 20 으로 내려온다.
+                    // 둘 다 직선탄 클래스(0x100c3340)에 대상의 Obs 를 넣은 것이고, 불빛 587:4 가 그 몸에 붙어 다닌다.
+                    if (tick >= 216) { _bodyShapes.RemoveAt(i); continue; }
+                    double z = 0, rise = 30;
+                    for (int t = 0; t < Math.Min(tick, 200) && z < 300; t++) { z = Math.Min(300, z + rise); rise *= 0.96; }
+                    if (tick > 200) z = Math.Max(0, 300 - 20 * (tick - 200));
+                    int lift = (int)(z * 0.6);
+                    var pose = sprite.Clip(HitAction, c.Owner.Facing) is { } hitClip
+                        ? sprite.FrameOfMotion(hitClip.Id, 0, c.Owner.Facing == Facing.Right) ?? frame : frame;
+                    host.BlitMasked(pose.Px, pose.W, pose.H, fx + pose.X, fy + pose.Y - lift);
+                    host.DrawUi(587, 4, tick, fx, fy - lift, UiBlend.Add, loop: true);
                     break;
                 }
                 case 6:

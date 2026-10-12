@@ -111,6 +111,37 @@ def at_of(starts, ev):
     return now + n
 
 
+def first_fx_ticks(e, h, wid, stages, d):
+    """{(단계, 생성 주소): 그 이펙트 생성에 처음 닿는 단계 안 틱} — `Tool.stage` 와 같은 틱들(0·1·비교 상수 ±1)로 다시 돌린다.
+    `analyze_all` 의 사건은 틱 세는 단계(`inc [나+0x96]`) 안의 `cmp 틱, N / jb` 뒤에서 만든 것도 틱이 비어 온다 —
+    그래서 「N 틱 뒤에 만드는」 이펙트(카운터 스피어 10 · 사이킥 크로스 55 · 아스트럴 파이어 60 · 실드류 70)가 단계 시작에 떴다."""
+    out = {}
+    for st in stages:
+        try:
+            c = e.run(h, wid, st, None, d)
+            for t in sorted({0, 1} | {t for x in c['tickc'] for t in (x - 1, x, x + 1) if 0 <= t < 5000}):
+                for ev in e.run(h, wid, st, t, d)['events']:
+                    if ev['k'] == 'fx':
+                        out.setdefault((st, ev['va']), t)
+        except Exception:
+            pass
+    return out
+
+
+def with_ticks(e, h, wid, d, st, evs, memo=None):
+    """틱 세는 단계에서 틱이 빈 이펙트 사건에 처음 닿는 틱을 채운 사건 목록(1 이하면 그대로 단계 시작)."""
+    key = (wid, d)
+    if memo is None or key not in memo:
+        ft = first_fx_ticks(e, h, wid, sorted(st), d)
+        if memo is not None:
+            memo[key] = ft
+    else:
+        ft = memo[key]
+    return [dict(ev, tick=ft[(ev['stage'], ev['va'])])
+            if ev['k'] == 'fx' and not isinstance(ev['tick'], int) and st.get(ev['stage'], (0, 0, False))[2]
+            and ft.get((ev['stage'], ev['va']), 0) > 1 else ev for ev in evs]
+
+
 def is_pic(ev):
     return ev['k'] == 'fx' and ev['kind'] in ('obs', 'emit') and isinstance(ev['obs'], int) and isinstance(ev['motion'], int)
 
@@ -168,7 +199,7 @@ class Timer:
         return wp.rng(ev.get('life'), MAXLIFE)
 
 
-def retime(rows, res, works, starts_of, mlen, log):
+def retime(rows, res, works, starts_of, mlen, log, ticks_of=None):
     """rows = {work: [동작 글, [이펙트 줄]]} 를 그 자리에서 고친다. log 에 (work, 종류, Obs, 모션, 전, 후, 주소)."""
     stats, later = collections.Counter(), set()
     for w in sorted(rows):
@@ -185,6 +216,8 @@ def retime(rows, res, works, starts_of, mlen, log):
         gen, unknown = {}, set()                             # (Obs, 모션) → {방향: [(때, 수명, 높이, 주소, 날기)]}
         for d in (1, 0, 2, 3):
             evs = r['main'][d]['events']
+            if ticks_of is not None:
+                evs = ticks_of(r['handler'], w, d, st, evs)
             tm = Timer(evs, st, mlen)
             first = {}                                       # (Obs, 모션) → 그것을 처음 만드는 단계
             for n, ev in enumerate(evs):
@@ -397,7 +430,12 @@ def main():
     before = {w: [list(x) for x in rows[w][1]] for w in rows}
 
     log = []
-    stats = retime(rows, res, works, starts_of, mlen, log)
+    fticks = {}
+
+    def ticks_of(h, wid, d, st, evs):
+        return with_ticks(tool.e, h, wid, d, st, evs, fticks)
+
+    stats = retime(rows, res, works, starts_of, mlen, log, ticks_of)
     sets, notes = camera_sets(res, works, starts_of, names)
     if a.cache and not os.path.exists(a.cache):
         pickle.dump((res, starts, mlens, names), open(a.cache, 'wb'))
