@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.InteropServices;
 using DuelDx.Native;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
@@ -13,52 +14,56 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 자리와 크기는 <b>판 좌표</b>(옛 UI 와 같은 수)로 받는다 — 그리는 쪽은 배치를 그대로 두고 그릴 곳만 바꾸면 되고, 마우스 · 패드의 누르는 칸도 그대로 맞는다.
-/// 픽셀은 알파를 미리 곱한 값으로 쌓는다(겹쳐 그려도 섞임이 맞는다). 그 틀에 아무것도 안 그렸으면 올리지도 겹치지도 않는다.
+/// 그리기는 그 자리에서 하지 않고 <b>명령으로 적어 두었다가</b> 화면에 낼 때 GPU 가 사각형으로 그린다 — 글 · 그림은 한 번 올린 텍스처를 다시 쓴다.
+/// 전에는 CPU 가 틀마다 창 크기 그림을 지우고 합성해 통째로 올렸는데, 창이 클수록 느렸다(사용자 보고 menu-57). 화면 밖 시험의 스냅샷만
+/// 같은 명령을 CPU 로 다시 그려 만든다(<see cref="Composite"/>).
 /// </remarks>
 internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
 {
-    private uint[] _px = [];
+    private enum Kind : byte { Fill, Text, Image, Gradient, Round }
+
+    /// <summary>그리기 명령 하나 — 자리는 창 픽셀. <c>Data</c> 는 글 · 그림의 점들 또는 그라데이션 색 줄.</summary>
+    private struct Cmd
+    {
+        public Kind Kind;
+        public int X0, Y0, X1, Y1;
+        public uint Color;
+        public uint[]? Data;
+        public int Stride, W, H;        // 그림: 한 줄 점 수 · 쓰는 너비 · 높이 / 글: W · H
+        public bool Opaque, Dim;
+        public int Radius16;            // 둥근 네모: 반지름 × 16(창 픽셀)
+        public float Tint;              // 장면 페이드가 곱한 밝기
+    }
+
+    private readonly List<Cmd> _cmds = [];
     private int _w, _h;
-    private bool _dirty;
 
     /// <summary>이번 틀에 이 층에 그린 것이 있나.</summary>
     internal bool Used { get; private set; }
 
-    private ID3D11Texture2D? _tex;
-    private ID3D11ShaderResourceView? _srv;
-    private ID3D11PixelShader? _ps;
-    private ID3D11BlendState? _blend;
-    private int _texW, _texH;
-
     private readonly Dictionary<string, (uint[] Px, int W, int H)> _text = [];
-    private int[] _xmap = [];
 
-    /// <summary>틀을 시작할 때 — 지난 틀에 그린 것을 지운다.</summary>
+    /// <summary>틀을 시작할 때 — 지난 틀에 적은 명령을 지운다.</summary>
     internal void Begin()
     {
-        if (_dirty) { Array.Clear(_px); _dirty = false; }
+        _cmds.Clear();
         Used = false;
     }
 
     /// <summary>지금까지 그린 것을 num/den 으로 어둡게 — 장면 페이드가 판과 함께 층도 어둡게 할 때. 덮는 세기(알파)는 그대로 둔다.</summary>
     internal void Dim(int num, int den)
     {
-        if (!Used) return;
-        for (int i = 0; i < _px.Length; i++)
-        {
-            uint c = _px[i];
-            if (c >> 24 != 0) _px[i] = c & 0xFF000000 | GameWindow.ScaleColor(c, num, den) & 0xFFFFFF;
-        }
+        var span = CollectionsMarshal.AsSpan(_cmds);
+        for (int i = 0; i < span.Length; i++) span[i].Tint *= (float)num / den;
     }
 
-    private void Ensure()
+    private void Add(Cmd cmd)
     {
-        if (_w != host._resW || _h != host._resH)
-        {
-            (_w, _h) = (host._resW, host._resH);
-            _px = new uint[Math.Max(1, _w * _h)];
-        }
-        Used = _dirty = true;
+        (_w, _h) = (host._resW, host._resH);
+        if (cmd.X1 <= cmd.X0 || cmd.Y1 <= cmd.Y0 || cmd.X0 >= _w || cmd.Y0 >= _h || cmd.X1 <= 0 || cmd.Y1 <= 0) return;
+        cmd.Tint = 1;
+        _cmds.Add(cmd);
+        Used = true;
     }
 
     private double Zoom => host._zoom;
@@ -70,15 +75,15 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     /// <summary>선 굵기(창 픽셀) — 판의 한 점만큼.</summary>
     private int Line => Math.Max(1, (int)Math.Round(Zoom));
 
-    internal void FillRect(int x, int y, int w, int h, uint color)
+    internal void FillRect(int x, int y, int w, int h, uint color) => FillPx(Sx(x), Sy(y), Sx(x + w), Sy(y + h), color);
+
+    private void FillPx(int x0, int y0, int x1, int y1, uint color)
     {
-        Ensure();
-        FillPx(Sx(x), Sy(y), Sx(x + w), Sy(y + h), color);
+        if (color >> 24 != 0) Add(new Cmd { Kind = Kind.Fill, X0 = x0, Y0 = y0, X1 = x1, Y1 = y1, Color = color });
     }
 
     internal void StrokeRect(int x, int y, int w, int h, uint color)
     {
-        Ensure();
         int x0 = Sx(x), y0 = Sy(y), x1 = Sx(x + w), y1 = Sy(y + h), t = Line;
         FillPx(x0, y0, x1, y0 + t, color);
         FillPx(x0, y1 - t, x1, y1, color);
@@ -94,69 +99,31 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     /// <param name="dw">찍을 크기(판 좌표) — 0 이면 그림 크기 그대로.</param>
     /// <param name="opaque">투명한 점도 덮는다(배경 그림).</param>
     /// <param name="dim">15/31 로 어둡게(꺼진 줄의 아이콘 — 판의 <c>UiBlend.Dim</c>).</param>
+    /// <remarks>점들(<paramref name="src"/>)은 한 번 올린 뒤 다시 쓰므로, 같은 배열의 내용을 틀마다 바꾸는 그림에는 쓰지 않는다.</remarks>
     internal void DrawImage(uint[] src, int stride, int w, int h, int x, int y, int dw = 0, int dh = 0, bool opaque = false, bool dim = false)
     {
-        if (w <= 0 || h <= 0) return;
-        Ensure();
-        int x0 = Sx(x), y0 = Sy(y), pw = Sx(x + (dw > 0 ? dw : w)) - x0, ph = Sy(y + (dh > 0 ? dh : h)) - y0;
-        if (pw <= 0 || ph <= 0) return;
-        int px0 = Math.Max(0, x0), px1 = Math.Min(_w, x0 + pw);
-        if (px0 >= px1) return;
-        // 창의 점마다 나눗셈을 하지 않게 가로 자리표를 한 번 만들고, 같은 그림 줄에서 나오는 창 줄은 앞줄을 베낀다 —
-        // 화면 가득한 배경(Status)을 점마다 셈하면 2560×1440 에서 한 틀에 몇 ms 가 더 든다.
-        if (_xmap.Length < px1 - px0) _xmap = new int[px1 - px0];
-        var xmap = _xmap.AsSpan(0, px1 - px0);
-        for (int i = 0; i < xmap.Length; i++) xmap[i] = (px0 + i - x0) * w / pw;
-        int lastRow = -1, lastAt = 0;
-        for (int py = Math.Max(0, y0); py < Math.Min(_h, y0 + ph); py++)
+        if (w <= 0 || h <= 0 || stride <= 0 || src.Length < stride * h) return;
+        int x0 = Sx(x), y0 = Sy(y);
+        Add(new Cmd
         {
-            int row = (py - y0) * h / ph * stride, at = py * _w + px0;
-            var line = _px.AsSpan(at, xmap.Length);
-            if (opaque && row == lastRow) { _px.AsSpan(lastAt, xmap.Length).CopyTo(line); continue; }
-            for (int i = 0; i < xmap.Length; i++)
-            {
-                uint c = src[row + xmap[i]];
-                if (!opaque && (c & 0xFF000000) == 0) continue;
-                line[i] = dim ? GameWindow.ScaleColor(c, 15, 31) : c | 0xFF000000;
-            }
-            (lastRow, lastAt) = (row, at);
-        }
+            Kind = Kind.Image, X0 = x0, Y0 = y0, X1 = Sx(x + (dw > 0 ? dw : w)), Y1 = Sy(y + (dh > 0 ? dh : h)),
+            Data = src, Stride = stride, W = w, H = h, Opaque = opaque, Dim = dim, Color = 0xFFFFFFFF,
+        });
     }
 
     /// <summary>위에서 아래로 색이 바뀌는 네모 — <paramref name="column"/> 의 색들을 높이에 맞춰 늘리고 사이를 부드럽게 잇는다. 알파(0~255)로 반투명하게 덮는다.</summary>
     internal void FillGradient(int x, int y, int w, int h, uint[] column, uint alpha)
     {
-        if (column.Length == 0) return;
-        Ensure();
-        int x0 = Sx(x), y0 = Sy(y), x1 = Sx(x + w), y1 = Sy(y + h), dh = y1 - y0;
-        for (int py = y0; py < y1; py++)
-        {
-            double at = (py - y0 + 0.5) * column.Length / dh - 0.5;
-            int i = Math.Clamp((int)Math.Floor(at), 0, column.Length - 1), j = Math.Min(column.Length - 1, i + 1);
-            int k = Math.Clamp((int)((at - i) * 256), 0, 256);
-            uint a = column[i], b = column[j];
-            uint Ch(int shift) => (uint)(((int)(a >> shift & 0xFF) * (256 - k) + (int)(b >> shift & 0xFF) * k) / 256);
-            FillPx(x0, py, x1, py + 1, alpha << 24 | Ch(16) << 16 | Ch(8) << 8 | Ch(0));
-        }
+        if (column.Length == 0 || alpha == 0) return;
+        Add(new Cmd { Kind = Kind.Gradient, X0 = Sx(x), Y0 = Sy(y), X1 = Sx(x + w), Y1 = Sy(y + h), Data = column, Color = alpha << 24 | 0xFFFFFF });
     }
 
     /// <summary>모서리가 둥근 네모 — 가장자리를 창 픽셀에서 부드럽게 깎는다(판에서는 원을 점으로 찍어 계단이 졌다).</summary>
     internal void FillRound(int x, int y, int w, int h, int r, uint color)
     {
-        Ensure();
         int x0 = Sx(x), y0 = Sy(y), x1 = Sx(x + w), y1 = Sy(y + h);
-        double rad = Math.Min(r * Zoom, Math.Min(x1 - x0, y1 - y0) / 2.0), cx = (x0 + x1) / 2.0, cy = (y0 + y1) / 2.0, hx = (x1 - x0) / 2.0 - rad, hy = (y1 - y0) / 2.0 - rad;
-        uint alpha = color >> 24;
-        for (int py = Math.Max(0, y0); py < Math.Min(_h, y1); py++)
-        {
-            double dy = Math.Max(0, Math.Abs(py + 0.5 - cy) - hy);
-            for (int px = Math.Max(0, x0); px < Math.Min(_w, x1); px++)
-            {
-                double dx = Math.Max(0, Math.Abs(px + 0.5 - cx) - hx);
-                double cover = Math.Clamp(rad + 0.5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
-                if (cover > 0) Over(ref _px[py * _w + px], (uint)(alpha * cover) << 24 | color & 0xFFFFFF);
-            }
-        }
+        double rad = Math.Min(r * Zoom, Math.Min(x1 - x0, y1 - y0) / 2.0);
+        if (color >> 24 != 0) Add(new Cmd { Kind = Kind.Round, X0 = x0, Y0 = y0, X1 = x1, Y1 = y1, Color = color, Radius16 = (int)Math.Round(rad * 16) });
     }
 
     /// <summary>글의 크기를 판 좌표로 — 가운데 · 오른쪽 맞춤 셈에 쓴다.</summary>
@@ -169,19 +136,10 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     internal void DrawText(string text, int x, int y, uint color, float size = 13f)
     {
         if (text.Length == 0) return;
-        Ensure();
         var (px, w, h) = Glyphs(text, color, size);
+        if (w <= 0 || h <= 0) return;
         int left = Sx(x), top = Sy(y);
-        for (int yy = 0; yy < h; yy++)
-        {
-            int py = top + yy;
-            if ((uint)py >= _h) continue;
-            for (int xx = 0; xx < w; xx++)
-            {
-                int qx = left + xx;
-                if ((uint)qx < _w) Over(ref _px[py * _w + qx], px[yy * w + xx]);
-            }
-        }
+        Add(new Cmd { Kind = Kind.Text, X0 = left, Y0 = top, X1 = left + w, Y1 = top + h, Data = px, W = w, H = h, Color = 0xFFFFFFFF });
     }
 
     /// <summary>글을 「크기 × 배율」로 굽는다 — 배율이 바뀌면 열쇠가 달라져 새로 굽는다.</summary>
@@ -195,79 +153,220 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         return _text[key] = made;
     }
 
-    private void FillPx(int x0, int y0, int x1, int y1, uint color)
+    // ── GPU 로 그리기 ─────────────────────────────────────────────────────────
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Vertex { public float X, Y, U, V; public uint Color; }
+
+    private sealed class Tex(ID3D11Texture2D texture, ID3D11ShaderResourceView view, int w, int h) : IDisposable
     {
-        x0 = Math.Max(0, x0); y0 = Math.Max(0, y0); x1 = Math.Min(_w, x1); y1 = Math.Min(_h, y1);
-        if (x0 >= x1 || y0 >= y1 || color >> 24 == 0) return;
-        if (color >> 24 == 0xFF) { for (int y = y0; y < y1; y++) _px.AsSpan(y * _w + x0, x1 - x0).Fill(color); return; }
-        for (int y = y0; y < y1; y++)
-            for (int x = x0; x < x1; x++) Over(ref _px[y * _w + x], color);
+        public readonly ID3D11ShaderResourceView View = view;
+        public readonly int W = w, H = h;
+        public void Dispose() { View.Dispose(); texture.Dispose(); }
     }
 
-    /// <summary>알파를 곱해 둔 바탕 위에 곱하지 않은 색을 얹는다.</summary>
-    private static void Over(ref uint dst, uint src)
+    private ID3D11VertexShader? _vs;
+    private ID3D11PixelShader? _ps;
+    private ID3D11InputLayout? _layout;
+    private ID3D11BlendState? _blend;
+    private ID3D11RasterizerState? _raster;
+    private ID3D11SamplerState? _point, _linear;
+    private ID3D11Buffer? _vb;
+    private int _vbVerts;
+    private Tex? _white;
+
+    /// <summary>글 · 그림 · 그라데이션의 텍스처 — 점 배열(같은 배열이면 같은 그림)과 찍는 방식으로 찾는다.</summary>
+    private readonly Dictionary<(uint[] Data, int Stride, int Mode), Tex> _textures = new(new DataKey());
+    private readonly Dictionary<(int W, int H, int Radius16, uint Color), Tex> _rounds = [];
+
+    private sealed class DataKey : IEqualityComparer<(uint[] Data, int Stride, int Mode)>
     {
-        uint a = src >> 24;
-        if (a == 0) return;
-        if (a == 0xFF) { dst = src; return; }
-        uint ia = 255 - a, d = dst;
-        uint Ch(int shift) => ((src >> shift & 0xFF) * a + (d >> shift & 0xFF) * ia + 127) / 255;
-        uint oa = a + ((d >> 24) * ia + 127) / 255;
-        dst = oa << 24 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+        public bool Equals((uint[] Data, int Stride, int Mode) a, (uint[] Data, int Stride, int Mode) b) => ReferenceEquals(a.Data, b.Data) && a.Stride == b.Stride && a.Mode == b.Mode;
+        public int GetHashCode((uint[] Data, int Stride, int Mode) k) => HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(k.Data), k.Stride, k.Mode);
     }
 
-    /// <summary>판 그림을 그린 뒤, 화면에 내기 전에 — 이 층을 창 전체에 겹쳐 그린다.</summary>
-    internal void Present()
+    private void CreateDeviceObjects()
     {
-        if (!Used) return;
         var device = host._device;
-        var ctx = host._ctx;
-        if (_ps == null)
+        const string shader = """
+            Texture2D<float4> T : register(t0);
+            SamplerState S : register(s0);
+            struct VI { float2 pos : POSITION; float2 uv : TEXCOORD0; float4 col : COLOR0; };
+            struct VO { float4 pos : SV_Position; float2 uv : TEXCOORD0; float4 col : COLOR0; };
+            VO VS(VI i) { VO o; o.pos = float4(i.pos, 0, 1); o.uv = i.uv; o.col = i.col; return o; }
+            float4 PS(VO i) : SV_Target { return T.Sample(S, i.uv) * i.col; }
+            """;
+        var vsBlob = Compiler.Compile(shader, "VS", "hicanvas.hlsl", "vs_4_0");
+        var psBlob = Compiler.Compile(shader, "PS", "hicanvas.hlsl", "ps_4_0");
+        _vs = device.CreateVertexShader(vsBlob.Span);
+        _ps = device.CreatePixelShader(psBlob.Span);
+        _layout = device.CreateInputLayout(
+        [
+            new InputElementDescription("POSITION", 0, Format.R32G32_Float, 0, 0),
+            new InputElementDescription("TEXCOORD", 0, Format.R32G32_Float, 8, 0),
+            new InputElementDescription("COLOR", 0, Format.B8G8R8A8_UNorm, 16, 0),
+        ], vsBlob.Span);
+        _blend = device.CreateBlendState(BlendDescription.NonPremultiplied);
+        _raster = device.CreateRasterizerState(RasterizerDescription.CullNone);
+        _point = device.CreateSamplerState(SamplerDescription.PointClamp);
+        _linear = device.CreateSamplerState(SamplerDescription.LinearClamp);
+        _white = Upload([0xFFFFFFFF], 1, 1);
+    }
+
+    private Tex Upload(ReadOnlySpan<uint> px, int w, int h)
+    {
+        var device = host._device;
+        var texture = device.CreateTexture2D(new Texture2DDescription
         {
-            const string shader = """
-                Texture2D<float4> Layer : register(t0);
-                float4 PS(float4 pos : SV_Position) : SV_Target { return Layer.Load(int3(int2(pos.xy), 0)); }
-                """;
-            _ps = device.CreatePixelShader(Compiler.Compile(shader, "PS", "hicanvas.hlsl", "ps_4_0").Span);
-            _blend = device.CreateBlendState(BlendDescription.AlphaBlend);
-        }
-        if (_tex == null || _texW != _w || _texH != _h)
-        {
-            _srv?.Dispose();
-            _tex?.Dispose();
-            _tex = device.CreateTexture2D(new Texture2DDescription
-            {
-                Width = (uint)_w,
-                Height = (uint)_h,
-                MipLevels = 1,
-                ArraySize = 1,
-                Format = Format.B8G8R8A8_UNorm,
-                SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Dynamic,
-                BindFlags = BindFlags.ShaderResource,
-                CPUAccessFlags = CpuAccessFlags.Write,
-            });
-            _srv = device.CreateShaderResourceView(_tex);
-            (_texW, _texH) = (_w, _h);
-        }
-        var map = ctx.Map(_tex, 0, MapMode.WriteDiscard);
+            Width = (uint)w,
+            Height = (uint)h,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Dynamic,
+            BindFlags = BindFlags.ShaderResource,
+            CPUAccessFlags = CpuAccessFlags.Write,
+        });
+        var map = host._ctx.Map(texture, 0, MapMode.WriteDiscard);
         try
         {
-            for (int y = 0; y < _h; y++)
-                _px.AsSpan(y * _w, _w).CopyTo(new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), _w));
+            for (int y = 0; y < h; y++) px.Slice(y * w, w).CopyTo(new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), w));
         }
-        finally { ctx.Unmap(_tex, 0); }
-
-        ctx.RSSetViewport(0, 0, _w, _h);
-        ctx.PSSetShader(_ps);
-        ctx.PSSetShaderResources(0, [_srv!]);
-        ctx.OMSetBlendState(_blend);
-        ctx.Draw(3, 0);
-        ctx.OMSetBlendState(null);
+        finally { host._ctx.Unmap(texture, 0); }
+        return new Tex(texture, device.CreateShaderResourceView(texture), w, h);
     }
 
+    /// <summary>명령의 텍스처 — 처음 쓰는 것이면 올린다. 그림은 투명(알파 0)이 아닌 점을 불투명으로 바꿔 올린다(판의 가림 방식).</summary>
+    private Tex TextureFor(in Cmd c)
+    {
+        switch (c.Kind)
+        {
+            case Kind.Fill: return _white!;
+            case Kind.Round:
+            {
+                var key = (c.X1 - c.X0, c.Y1 - c.Y0, c.Radius16, c.Color);
+                if (!_rounds.TryGetValue(key, out var round)) _rounds[key] = round = Upload(RoundPixels(key.Item1, key.Item2, c.Radius16 / 16.0, c.Color), key.Item1, key.Item2);
+                return round;
+            }
+        }
+        var data = c.Data!;
+        int mode = c.Kind == Kind.Image ? 1 + (c.Opaque ? 1 : 0) + (c.Dim ? 2 : 0) : c.Kind == Kind.Gradient ? 5 : 0;
+        int stride = c.Kind == Kind.Image ? c.Stride : c.Kind == Kind.Gradient ? 1 : c.W;
+        if (_textures.TryGetValue((data, stride, mode), out var tex)) return tex;
+        int rows = data.Length / stride;
+        if (c.Kind == Kind.Text) tex = Upload(data, stride, rows);
+        else
+        {
+            var fixedPx = new uint[stride * rows];
+            for (int i = 0; i < fixedPx.Length; i++)
+            {
+                uint p = data[i];
+                bool shown = c.Kind == Kind.Gradient || c.Opaque || (p & 0xFF000000) != 0;
+                fixedPx[i] = !shown ? 0 : c.Dim ? GameWindow.ScaleColor(p, 15, 31) : p | 0xFF000000;
+            }
+            tex = Upload(fixedPx, stride, rows);
+        }
+        return _textures[(data, stride, mode)] = tex;
+    }
+
+    /// <summary>둥근 네모의 점들(곱하지 않은 알파) — 가장자리는 덮인 넓이만큼 흐리게.</summary>
+    private static uint[] RoundPixels(int w, int h, double rad, uint color)
+    {
+        var px = new uint[w * h];
+        double cx = w / 2.0, cy = h / 2.0, hx = w / 2.0 - rad, hy = h / 2.0 - rad;
+        uint alpha = color >> 24;
+        for (int y = 0; y < h; y++)
+        {
+            double dy = Math.Max(0, Math.Abs(y + 0.5 - cy) - hy);
+            for (int x = 0; x < w; x++)
+            {
+                double dx = Math.Max(0, Math.Abs(x + 0.5 - cx) - hx);
+                double cover = Math.Clamp(rad + 0.5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
+                px[y * w + x] = (uint)(alpha * cover) << 24 | color & 0xFFFFFF;
+            }
+        }
+        return px;
+    }
+
+    private Vertex[] _verts = [];
+
+    /// <summary>판 그림을 그린 뒤, 화면에 내기 전에 — 적어 둔 명령을 창 전체에 차례대로 그린다.</summary>
+    internal void Present()
+    {
+        if (!Used || _cmds.Count == 0 || _w <= 0 || _h <= 0) return;
+        var device = host._device;
+        var ctx = host._ctx;
+        if (_vs == null) CreateDeviceObjects();
+        // 텍스처가 너무 쌓이면 통째로 비운다(지나간 글 · 움직이는 그림의 장들) — 다음 틀부터 쓰는 것만 다시 올린다.
+        if (_textures.Count > 1500) { foreach (var t in _textures.Values) t.Dispose(); _textures.Clear(); }
+        if (_rounds.Count > 300) { foreach (var t in _rounds.Values) t.Dispose(); _rounds.Clear(); }
+
+        var cmds = CollectionsMarshal.AsSpan(_cmds);
+        if (_verts.Length < cmds.Length * 6) _verts = new Vertex[cmds.Length * 6 * 2];
+        var views = new ID3D11ShaderResourceView[cmds.Length];
+        float sx = 2f / _w, sy = 2f / _h;
+        for (int i = 0; i < cmds.Length; i++)
+        {
+            ref var c = ref cmds[i];
+            var tex = TextureFor(c);
+            views[i] = tex.View;
+            float u1 = 1, v1 = 1;
+            if (c.Kind == Kind.Image) (u1, v1) = ((float)c.W / tex.W, (float)c.H / tex.H);
+            uint color = c.Color;
+            float tint = c.Tint;
+            if (tint < 1)
+                color = color & 0xFF000000 | (uint)((color >> 16 & 0xFF) * tint) << 16 | (uint)((color >> 8 & 0xFF) * tint) << 8 | (uint)((color & 0xFF) * tint);
+            float l = c.X0 * sx - 1, r = c.X1 * sx - 1, t = 1 - c.Y0 * sy, b = 1 - c.Y1 * sy;
+            int at = i * 6;
+            _verts[at] = new Vertex { X = l, Y = t, U = 0, V = 0, Color = color };
+            _verts[at + 1] = new Vertex { X = r, Y = t, U = u1, V = 0, Color = color };
+            _verts[at + 2] = new Vertex { X = l, Y = b, U = 0, V = v1, Color = color };
+            _verts[at + 3] = _verts[at + 1];
+            _verts[at + 4] = new Vertex { X = r, Y = b, U = u1, V = v1, Color = color };
+            _verts[at + 5] = _verts[at + 2];
+        }
+
+        int count = cmds.Length * 6;
+        if (_vb == null || _vbVerts < count)
+        {
+            _vb?.Dispose();
+            _vbVerts = Math.Max(count * 2, 6 * 256);
+            _vb = device.CreateBuffer(new BufferDescription((uint)(_vbVerts * sizeof(Vertex)), BindFlags.VertexBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write));
+        }
+        var map = ctx.Map(_vb, 0, MapMode.WriteDiscard);
+        try { _verts.AsSpan(0, count).CopyTo(new Span<Vertex>((void*)map.DataPointer, count)); }
+        finally { ctx.Unmap(_vb, 0); }
+
+        ctx.RSSetViewport(0, 0, _w, _h);
+        ctx.RSSetState(_raster);
+        ctx.IASetInputLayout(_layout);
+        ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        ctx.IASetVertexBuffer(0, _vb, (uint)sizeof(Vertex));
+        ctx.VSSetShader(_vs);
+        ctx.PSSetShader(_ps);
+        ctx.OMSetBlendState(_blend);
+        // 같은 텍스처 · 같은 늘림 방식이 이어지는 명령은 한 번에 그린다.
+        for (int i = 0; i < cmds.Length;)
+        {
+            bool smooth = cmds[i].Kind == Kind.Gradient;
+            int j = i + 1;
+            while (j < cmds.Length && ReferenceEquals(views[j], views[i]) && (cmds[j].Kind == Kind.Gradient) == smooth) j++;
+            ctx.PSSetSampler(0, smooth ? _linear : _point);
+            ctx.PSSetShaderResource(0, views[i]);
+            ctx.Draw((uint)((j - i) * 6), (uint)(i * 6));
+            i = j;
+        }
+        ctx.OMSetBlendState(null);
+        ctx.RSSetState(null);
+        ctx.IASetInputLayout(null);
+    }
+
+    // ── 스냅샷용 CPU 그리기 ───────────────────────────────────────────────────
+
     /// <summary>
-    /// 판 그림과 이 층을 겹친 창 크기 그림(화면 밖 시험의 스냅샷용) — 판은 화면에 내는 것과 같이 가장 가까운 점으로 늘린다.
+    /// 판 그림과 이 층을 겹친 창 크기 그림(화면 밖 시험의 스냅샷용) — 판은 화면에 내는 것과 같이 가장 가까운 점으로 늘리고,
+    /// 이번 틀의 명령을 CPU 로 차례대로 그려 얹는다.
     /// </summary>
     internal (uint[] Px, int W, int H) Composite()
     {
@@ -279,21 +378,65 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
             for (int x = 0; x < _w; x++)
             {
                 int bx = (int)Math.Floor((x - ox) / Zoom);
-                uint under = (uint)bx < host.ViewWidth && (uint)by < host.ViewHeight ? host._fb[(host._camY + by) * host.BoardWidth + host._camX + bx] | 0xFF000000 : 0xFF000000;
-                uint over = _px[y * _w + x], ia = 255 - (over >> 24);
-                uint Ch(int shift) => Math.Min(255, (over >> shift & 0xFF) + ((under >> shift & 0xFF) * ia + 127) / 255);
-                shot[y * _w + x] = 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+                shot[y * _w + x] = (uint)bx < host.ViewWidth && (uint)by < host.ViewHeight ? host._fb[(host._camY + by) * host.BoardWidth + host._camX + bx] | 0xFF000000 : 0xFF000000;
             }
+        }
+        foreach (var c in _cmds)
+        {
+            int pw = c.X1 - c.X0, ph = c.Y1 - c.Y0;
+            uint[]? round = c.Kind == Kind.Round ? RoundPixels(pw, ph, c.Radius16 / 16.0, c.Color) : null;
+            for (int py = Math.Max(0, c.Y0); py < Math.Min(_h, c.Y1); py++)
+                for (int px = Math.Max(0, c.X0); px < Math.Min(_w, c.X1); px++)
+                {
+                    int rx = px - c.X0, ry = py - c.Y0;
+                    uint src;
+                    switch (c.Kind)
+                    {
+                        case Kind.Fill: src = c.Color; break;
+                        case Kind.Round: src = round![ry * pw + rx]; break;
+                        case Kind.Text: src = c.Data![ry * c.W + rx]; break;
+                        case Kind.Image:
+                            src = c.Data![ry * c.H / ph * c.Stride + rx * c.W / pw];
+                            if (!c.Opaque && (src & 0xFF000000) == 0) continue;
+                            src = c.Dim ? GameWindow.ScaleColor(src, 15, 31) : src | 0xFF000000;
+                            break;
+                        default:
+                        {
+                            double at = (ry + 0.5) * c.Data!.Length / ph - 0.5;
+                            int i = Math.Clamp((int)Math.Floor(at), 0, c.Data.Length - 1), j = Math.Min(c.Data.Length - 1, i + 1);
+                            int k = Math.Clamp((int)((at - i) * 256), 0, 256);
+                            uint a = c.Data[i], b = c.Data[j];
+                            uint Mix(int shift) => (uint)(((int)(a >> shift & 0xFF) * (256 - k) + (int)(b >> shift & 0xFF) * k) / 256);
+                            src = c.Color & 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+                            break;
+                        }
+                    }
+                    uint alpha = src >> 24;
+                    if (alpha == 0) continue;
+                    uint dst = shot[py * _w + px];
+                    uint Ch(int shift) => (uint)(((src >> shift & 0xFF) * c.Tint * alpha + (dst >> shift & 0xFF) * (255 - alpha)) / 255);
+                    shot[py * _w + px] = 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+                }
         }
         return (shot, _w, _h);
     }
 
     public void Dispose()
     {
-        _srv?.Dispose();
-        _tex?.Dispose();
-        _ps?.Dispose();
+        foreach (var t in _textures.Values) t.Dispose();
+        foreach (var t in _rounds.Values) t.Dispose();
+        _textures.Clear();
+        _rounds.Clear();
+        _white?.Dispose();
+        _vb?.Dispose();
+        _linear?.Dispose();
+        _point?.Dispose();
+        _raster?.Dispose();
         _blend?.Dispose();
-        (_srv, _tex, _ps, _blend) = (null, null, null, null);
+        _layout?.Dispose();
+        _ps?.Dispose();
+        _vs?.Dispose();
+        (_white, _vb, _linear, _point, _raster, _blend, _layout, _ps, _vs) = (null, null, null, null, null, null, null, null, null);
+        _vbVerts = 0;
     }
 }

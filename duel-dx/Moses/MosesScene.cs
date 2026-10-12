@@ -938,9 +938,14 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 if (_cleanBgId != _mosesBgId || _cleanBgOf != bg) (_cleanBg, _cleanBgId, _cleanBgOf) = (WithoutBgLabels(bg, labels), _mosesBgId, bg);
                 bg = _cleanBg!;
             }
-            for (int y = 0; y < MosesH; y++)
-                for (int x = 0; x < MosesW; x++)
-                    host.SetPixel(ox + x, oy + y, bg[y * MosesW + x] | 0xFF000000);
+            // 줄 단위로 옮긴다 — 점마다 SetPixel 을 부르면 화면 가득한 그림 한 장에 몇 ms 가 든다.
+            int bx0 = Math.Max(0, ox), bx1 = Math.Min(host.BoardWidth, ox + MosesW);
+            for (int y = Math.Max(0, -oy); y < MosesH && oy + y < host.BoardHeight && bx0 < bx1; y++)
+            {
+                var line = bg.AsSpan(y * MosesW + bx0 - ox, bx1 - bx0);
+                var to = host._fb.AsSpan((oy + y) * host.BoardWidth + bx0, bx1 - bx0);
+                for (int i = 0; i < line.Length; i++) to[i] = line[i] | 0xFF000000;
+            }
             if (labels != null)
                 foreach (var l in labels)
                 {

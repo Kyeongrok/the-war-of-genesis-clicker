@@ -197,6 +197,7 @@ internal sealed unsafe partial class GameWindow
     internal void DrawSceneTag()
     {
         if (!_showSceneTag || TitleScr._titleOpen || RecordsScr._recordsOpen) return;
+        if (_hiResUi && _statusUnit >= 0) return;   // 화면 가득한 Status(층) 위로는 안 올린다 — 판에 그릴 때는 Status 에 가려졌다
         string tag;
         if (EpisodesScr._episodesOpen) tag = "연대표";
         else if (Fld._field != null) tag = $"Fld {Fld._field.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc);
