@@ -946,7 +946,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         // 챕터 스크립트의 대사·고르기 — 모세스 화면 위에(원본 창 +0x2ee0 「대사·말풍선 묶음」)
         host._uiClip = (ox, oy, MosesW, MosesH);
         host.Tlk.DrawTalk(layer: calm && !choosing);
-        host.Fld.DrawFieldChoices();
+        host.Fld.DrawFieldChoices(layer: calm);
         host._uiClip = null;
         // 910 이 켠 동안 — 매 틀 무작위 줄 하나와 그 다음 줄이 10px 왼쪽으로 밀린다(0x100f65b0: rand() % 470).
         if (_mosesAltVoice)

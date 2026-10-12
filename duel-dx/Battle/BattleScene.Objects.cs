@@ -962,16 +962,16 @@ internal sealed unsafe partial class BattleScene
         }
         int x = host._camX + 8, y = host._camY + (host._showStatusBar ? GridTop + 4 : 8);
         // 오른쪽 위에 접기 단추(− 접기 · + 펴기) 자리를 남긴다.
-        int w = Math.Max(lines.Max(l => host.GetText(l.Text, l.Color, 12).W) + 12, host.GetText(lines[0].Text, lines[0].Color, 12).W + 40), lineH = 17;
-        host.FillRect(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
-        for (int i = 0; i < lines.Count; i++) host.DrawText(lines[i].Text, x + 2, y + i * lineH, lines[i].Color, 12);
+        int w = Math.Max(lines.Max(l => host.UiGetText(l.Text, l.Color, 12).W) + 12, host.UiGetText(lines[0].Text, lines[0].Color, 12).W + 40), lineH = 17;
+        host.UiFill(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
+        for (int i = 0; i < lines.Count; i++) host.UiText(lines[i].Text, x + 2, y + i * lineH, lines[i].Color, 12);
         var fold = (X: x - 4 + w - 19, Y: y - 1, W: 16, H: 15);
         _chestFoldButton = fold;
         bool over = host._mouse.X >= fold.X && host._mouse.X < fold.X + fold.W && host._mouse.Y >= fold.Y && host._mouse.Y < fold.Y + fold.H;
-        host.FillRect(fold.X, fold.Y, fold.W, fold.H, over ? 0xFF2A4A8A : 0xFF303030);
-        host.StrokeRect(fold.X, fold.Y, fold.W, fold.H, 0xFF909090);
-        host.FillRect(fold.X + 4, fold.Y + 7, 8, 1, White);
-        if (_chestListFolded) host.FillRect(fold.X + 7, fold.Y + 4, 1, 8, White);
+        host.UiFill(fold.X, fold.Y, fold.W, fold.H, over ? 0xFF2A4A8A : 0xFF303030);
+        host.UiStroke(fold.X, fold.Y, fold.W, fold.H, 0xFF909090);
+        host.UiFill(fold.X + 4, fold.Y + 7, 8, 1, White);
+        if (_chestListFolded) host.UiFill(fold.X + 7, fold.Y + 4, 1, 8, White);
     }
 
     /// <summary>물체를 칸에 그린다 — 인물보다 먼저(뒤에) 그려 인물이 앞에 서게 한다.</summary>

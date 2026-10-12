@@ -1760,9 +1760,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         foreach (var (text, size, x, y, start, color) in _popups)
         {
             int rise = (int)((host._lastTime - start) * 30);
-            var (_, w, _) = host.GetText(text, color, size);
-            host.DrawText(text, x - w / 2 + 1, y - rise + 1, 0xFF000000, size);
-            host.DrawText(text, x - w / 2, y - rise, color, size);
+            int w = host.BattleTextSize(text, color, size).W;
+            host.BattleText(text, x - w / 2 + 1, y - rise + 1, 0xFF000000, size);
+            host.BattleText(text, x - w / 2, y - rise, color, size);
         }
     }
 
@@ -1781,11 +1781,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (u.IsAlly && u.Data is { } d)
             {
                 string lv = d.Level.ToString();
-                var (_, tw, th) = host.GetText(lv, 0xFFFFFFFF, GaugeLevelFont);
+                var (tw, th) = host.BattleTextSize(lv, 0xFFFFFFFF, GaugeLevelFont);
                 int r = Math.Max(5, (tw + 3) / 2), cx = x - 2 - r, cy = y + 2;
                 host.FillCircle(cx, cy, r + 1, 0xE0000000);
                 host.FillCircle(cx, cy, r, 0xE0305070);
-                host.DrawText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont);
+                host.BattleText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont);
             }
         }
     }

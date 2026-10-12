@@ -90,7 +90,7 @@ internal sealed unsafe partial class BattleScene
         // 원본 상태이상 칸(0x100d53c0, 정보 창에선 (0,228,140,40)): s = (폭 − 40)/3, 가운데 x = 10 + s/2 + (s + 10)·i, y = (높이 − 20)/2 + 10
         // → 본문 (26 + 43i, 248)(0x100d5437~0x100d54dd, 감사4 I4).
         for (int i = 0; i < 3; i++)
-            host.UiSprite(AilmentIconObs, AilmentIconMotion(unit, i), 0, x + 26 + 43 * i, y + 248, loop: false);
+            host.StatusScr.DrawAilmentIcon(unit, i, x + 26 + 43 * i, y + 248);
         for (int i = 0; i < effects.Count; i++)
             host.UiText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
 

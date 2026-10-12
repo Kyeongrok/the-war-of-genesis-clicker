@@ -138,10 +138,10 @@ internal sealed unsafe partial class GameWindow
             }
     }
 
-    /// <param name="onLayer">새 UI 층에 한 번 더 그리나 — 층에 그린 창이 떠 있으면 판에 그린 알림은 그 밑에 깔린다.</param>
+    /// <param name="onLayer">새 UI 층에 그리나 — 새 UI 에서는 화면마다 부르는 판 그리기는 건너뛰고, 틀 끝에 층에 한 번만 그린다(모든 창 위).</param>
     internal void DrawToast(bool onLayer = false)
     {
-        if (_toast.Length == 0 || _lastTime > _toastUntil) return;
+        if (_toast.Length == 0 || _lastTime > _toastUntil || (_hiResUi && !onLayer)) return;
         if (onLayer)
         {
             var (lw, lh) = Hi.Measure(_toast, White);
@@ -166,6 +166,22 @@ internal sealed unsafe partial class GameWindow
 
     internal void UiText(string text, int x, int y, uint argb, float size = 13f) { if (_hiResUi) Hi.DrawText(text, x, y, argb, size); else DrawText(text, x, y, argb, size); }
 
+    /// <summary>
+    /// 전투 판 위에 뜨는 글(피해 숫자 · 알림 글 · 체력바의 레벨) — 새 UI 에서는 층에 창 해상도로, 다만 다른 화면이 전투를 덮고 있으면 판에(그 화면에 가려진다).
+    /// 층에서도 그린 차례대로 쌓이므로 뒤에 그리는 HUD · 목록 · Status 가 전처럼 이 글을 덮는다.
+    /// </summary>
+    internal void BattleText(string text, int x, int y, uint argb, float size = 13f)
+    {
+        if (_hiResUi && !BattleCovered) Hi.DrawText(text, x, y, argb, size); else DrawText(text, x, y, argb, size);
+    }
+
+    internal (int W, int H) BattleTextSize(string text, uint argb, float size = 13f)
+    {
+        if (_hiResUi && !BattleCovered) return Hi.Measure(text, argb, size);
+        var (_, w, h) = GetText(text, argb, size);
+        return (w, h);
+    }
+
     /// <summary>글의 크기(판 좌표) — <see cref="GetText"/> 와 같은 꼴로 돌려주되 새 UI 에서는 픽셀이 비어 있다(크기만 쓴다).</summary>
     internal (uint[] Px, int W, int H) UiGetText(string text, uint argb, float size = 13f)
     {
@@ -187,10 +203,10 @@ internal sealed unsafe partial class GameWindow
         else if (Mos._mosesOpen) tag = Mos._mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc) : "모세스";
         else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {Btl._turnNo}" + (Btl._runningEvent >= 0 ? $" · 사건 {Btl._runningEvent}" : "");
         else return;
-        var (_, w, h) = GetText(tag, White, 11f);
+        var (_, w, h) = UiGetText(tag, White, 11f);
         int x = _camX + 4, y = _camY + ViewHeight - h - 4;
-        FillRect(x - 2, y - 1, w + 4, h + 2, 0x90000000);
-        DrawText(tag, x, y, 0xFFB0B8C8, 11f);
+        UiFill(x - 2, y - 1, w + 4, h + 2, 0x90000000);
+        UiText(tag, x, y, 0xFFB0B8C8, 11f);
 
         static string ScriptPlace(int ev, int pc) => ev >= 0 ? $" · 사건 {ev} · 줄 {Math.Max(0, pc - 1)}" : "";
     }

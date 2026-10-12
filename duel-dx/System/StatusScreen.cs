@@ -510,6 +510,19 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         foreach (var (row, text) in StatNames) RowText(text, ox, oy + 81 + 15 * row - 8, 16, StatusWhite, left: StatNameX);
     }
 
+    /// <summary>
+    /// 상태이상 칸 하나(가운데 (cx, cy)) — Obs 0489 아이콘. 빈 칸(모션 0)의 「EMPTY」 판은 점 글씨라, 새 UI 는 같은 크기의 판과 글로 그린다(Status · 전투 정보 창).
+    /// </summary>
+    internal void DrawAilmentIcon(UnitState unit, int slot, int cx, int cy)
+    {
+        int motion = host.Btl.AilmentIconMotion(unit, slot);
+        if (!host._hiResUi || motion != 0) { host.UiSprite(BattleScene.AilmentIconObs, motion, 0, cx, cy, loop: false); return; }
+        host.Hi.FillRound(cx - 19, cy - 8, 38, 17, 4, 0xFF8090D8);
+        host.Hi.FillRound(cx - 18, cy - 7, 36, 15, 3, 0xFF1A2248);
+        var (w, h) = host.Hi.Measure("EMPTY", StatusDim, 8f);
+        host.Hi.DrawText("EMPTY", cx - w / 2, cy - h / 2, 0xFFB8C4F0, 8f);
+    }
+
     internal bool MouseIn(int x, int y, int w, int h) => host._mouse.X >= x && host._mouse.X < x + w && host._mouse.Y >= y && host._mouse.Y < y + h;
 
     /// <summary>줄 상자 안에 글을 세로 가운데로 찍는다 — 가로는 왼쪽 여백(<paramref name="left"/>) 또는 오른끝(<paramref name="right"/>).</summary>
@@ -546,7 +559,16 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
             host.UiFrame(ox, oy + FrameTitleH, StatusW, StatusH - FrameTitleH, "STATUS");
             host.UiText("assets/moses/bgr/0058.bgr 이 없어 틀만 그렸습니다", ox + 20, oy + 40, DimGray);
         }
-        host.UiSprite(RowObs, 28, 0, ox + CloseX + CloseW / 2, oy + CloseY + CloseH / 2);
+        // CLOSE 단추 — 새 UI 는 그림(점 글씨) 대신 둥근 단추와 글로 그린다.
+        if (host._hiResUi)
+        {
+            bool overClose = MouseIn(ox + CloseX, oy + CloseY, CloseW, CloseH);
+            host.Hi.FillRound(ox + CloseX + 1, oy + CloseY + 1, CloseW - 2, CloseH - 2, 7, 0xFF8FA4F0);
+            host.Hi.FillRound(ox + CloseX + 2, oy + CloseY + 2, CloseW - 4, CloseH - 4, 6, overClose ? 0xFF4A66D0 : 0xFF3048A8);
+            var (cw, ch) = host.Hi.Measure("CLOSE", White, 12f);
+            host.Hi.DrawText("CLOSE", ox + CloseX + (CloseW - cw) / 2, oy + CloseY + (CloseH - ch) / 2, White, 12f);
+        }
+        else host.UiSprite(RowObs, 28, 0, ox + CloseX + CloseW / 2, oy + CloseY + CloseH / 2);
 
         var unit = StatusUnit();
         if (host._db is not { } db || unit.Data is not { } c)
@@ -605,7 +627,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         for (int i = 0; i < 3; i++)
         {
             int cx = ox + 242 + 53 * i, cy = oy + 81;
-            host.UiSprite(BattleScene.AilmentIconObs, host.Btl.AilmentIconMotion(unit, i), 0, cx, cy, loop: false);
+            DrawAilmentIcon(unit, i, cx, cy);
             int id = unit.StatusId[i];
             if (id != 0 && db.Statuses.GetValueOrDefault(id) is { } sta && db.T(sta.DescriptionId) is { Length: > 0 } fmt)
             {

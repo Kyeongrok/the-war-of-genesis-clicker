@@ -344,7 +344,13 @@ internal sealed unsafe partial class BattleScene
                 var (_, w, h) = host.GetText(hoverName[..3], enabled ? White : DimGray);
                 host.DrawText(hoverName[..3], x - w / 2, y - h / 2, enabled ? White : DimGray);
             }
-            if (hover && !host.DrawUi(452, labelMotion, RingTick(_ringHoverAt), x - 23, y + 7, UiBlend.Alpha))
+            // 새 UI 는 이름표 그림(점 글씨, Obs 0452) 대신 같은 자리에 글로 쓴다(menu-57) — 검은 그림자 한 겹.
+            if (hover && host._hiResUi && !host.BattleCovered)
+            {
+                host.Hi.DrawText(hoverName, x - 22, y + 9, 0xE0000000, 14);
+                host.Hi.DrawText(hoverName, x - 23, y + 8, White, 14);
+            }
+            else if (hover && !host.DrawUi(452, labelMotion, RingTick(_ringHoverAt), x - 23, y + 7, UiBlend.Alpha))
                 host.DrawText(hoverName, x - 23, y + 12, White, 15);
         }
         if (_ringHelp is { Length: > 0 } help) host.StatusScr.DrawDescriptionTip(help, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);

@@ -356,45 +356,51 @@ internal sealed unsafe partial class BattleScene
     internal void DrawDeployPanel()
     {
         if (!_deployOpen || host._db is not { } db) return;
+        if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         var roster = DeployRoster();
         var (x, y) = DeployPanel();
         bool pad = host.Pad.Active && host.Pad.Connected;
         int h = DeployTop + roster.Count * DeployRowH + 108 + (pad ? 18 : 0);
-        host.FillRect(x, y, DeployW, h, StatusScreen.PanelBg);
-        host.StrokeRect(x, y, DeployW, h, StatusScreen.BoxLine);
-        host.FillRect(x, y, DeployW, 26, StatusScreen.HeadBg);
+        host.UiFill(x, y, DeployW, h, StatusScreen.PanelBg);
+        host.UiStroke(x, y, DeployW, h, StatusScreen.BoxLine);
+        host.UiFill(x, y, DeployW, 26, StatusScreen.HeadBg);
         int movable = roster.Count(DeployMovable), placed = roster.Count(u => DeployMovable(u) && u.OnField);
-        host.DrawText("캐릭터 배치", x + 10, y + 4, White);
+        host.UiText("캐릭터 배치", x + 10, y + 4, White);
         string count = $"{placed}/{movable}";
-        var (_, cw, _) = host.GetText(count, White);
-        host.DrawText(count, x + DeployW - 12 - cw, y + 4, placed == movable ? PlacedColor : UnplacedColor);
+        var (_, cw, _) = host.UiGetText(count, White);
+        host.UiText(count, x + DeployW - 12 - cw, y + 4, placed == movable ? PlacedColor : UnplacedColor);
 
         for (int i = 0; i < roster.Count; i++)
         {
             var u = roster[i];
             int ry = y + DeployTop + i * DeployRowH;
             bool fixedHere = !DeployMovable(u);
-            if (u == _deployPick) host.FillRect(x + 4, ry - 2, DeployW - 8, DeployRowH - 2, 0xFF2A4A8A);
+            if (u == _deployPick) host.UiFill(x + 4, ry - 2, DeployW - 8, DeployRowH - 2, 0xFF2A4A8A);
             // 패드가 짚은 줄 — 커서 테와 같은 색의 둥근 테(칸 고르기 중에는 고른 인물 줄에 그대로).
-            if (pad && i == _deployFocus && !_deployCellMode) host.Pad.StrokeFocus(x + 4, ry - 2, DeployW - 8, DeployRowH - 2);
+            if (pad && i == _deployFocus && !_deployCellMode) Focus(x + 4, ry - 2, DeployW - 8, DeployRowH - 2);
             string name = u.Data is { } c ? db.T(c.NameId) : $"Chr {u.ChrCode}";
             uint colour = fixedHere ? FixedColor : u.OnField ? White : UnplacedColor;
             // 줄 머리의 점 — 찬 점은 판에 섰다, 빈 점은 아직이다. 고정은 점 없이 이름만.
             if (!fixedHere)
             {
-                if (u.OnField) host.FillCircle(x + 14, ry + 9, 3, PlacedColor);
+                if (host._hiResUi)
+                {
+                    host.Hi.FillRound(x + 11, ry + 6, 7, 7, 4, u.OnField ? PlacedColor : UnplacedColor);
+                    if (!u.OnField) host.Hi.FillRound(x + 12, ry + 7, 5, 5, 3, u == _deployPick ? 0xFF2A4A8A : StatusScreen.PanelBg);
+                }
+                else if (u.OnField) host.FillCircle(x + 14, ry + 9, 3, PlacedColor);
                 else host.StrokeCircle(x + 14, ry + 9, 3, UnplacedColor, 1);
             }
-            host.DrawText(name, x + 24, ry + 2, colour);
+            host.UiText(name, x + 24, ry + 2, colour);
             if (DeployHasLegion(u) && !_deployNoLegion.Contains(u))
             {
-                var (_, nw, _) = host.GetText(name, colour);
-                host.DrawText("군단", x + 28 + nw, ry + 3, 0xFF80D0FF, 11);
+                var (_, nw, _) = host.UiGetText(name, colour);
+                host.UiText("군단", x + 28 + nw, ry + 3, 0xFF80D0FF, 11);
             }
             string tag = fixedHere ? "고정" : u.OnField ? "배치됨" : "미배치";
             uint tagColor = fixedHere ? 0xFFFFE070 : u.OnField ? PlacedColor : UnplacedColor;
-            var (_, tw, _) = host.GetText(tag, tagColor);
-            host.DrawText(tag, x + DeployW - 12 - tw, ry + 2, tagColor);
+            var (_, tw, _) = host.UiGetText(tag, tagColor);
+            host.UiText(tag, x + DeployW - 12 - tw, ry + 2, tagColor);
         }
 
         int by = y + DeployTop + roster.Count * DeployRowH + 8;
@@ -403,7 +409,7 @@ internal sealed unsafe partial class BattleScene
             // 지금 할 일 한 줄 — 명단에서는 고르기, 칸 고르기에서는 세우기.
             string step = _deployCellMode ? $"십자키로 초록 칸 → {host.Pad.Name(PadAction.Confirm)} 세우기 · {host.Pad.Name(PadAction.Cancel)} 돌아가기"
                                           : $"십자키 위 · 아래로 인물 · 단추 → {host.Pad.Name(PadAction.Confirm)}";
-            host.DrawText(step, x + 10, by - 2, 0xFFD0E8D0, 11);
+            host.UiText(step, x + 10, by - 2, 0xFFD0E8D0, 11);
             by += 18;
         }
         string Key(PadAction a) => pad ? $" {host.Pad.Name(a)}" : "";
@@ -428,22 +434,30 @@ internal sealed unsafe partial class BattleScene
                 2 => (x + 8, by + 32, DeployW - 16, 26),
                 _ => (x + 8, by + 64, DeployW - 16, 28),
             };
-            host.Pad.StrokeFocus(fx0, fy0, fw, fh);
+            Focus(fx0, fy0, fw, fh);
         }
 
         // 고른 사람은 발밑에 표시
         if (_deployPick is { OnField: true } pick)
         {
             var (fx, fy) = host.Btl.UnitFoot(pick);
-            host.StrokeRect(fx - TileW / 2, fy - TileH / 2, TileW, TileH, GamePad.FocusColor);
+            host.UiStroke(fx - TileW / 2, fy - TileH / 2, TileW, TileH, GamePad.FocusColor);
+        }
+
+        // 패드 커서 테 — 새 UI 에서는 창과 같은 층에(판에 그리면 창 밑에 깔린다).
+        void Focus(int fx1, int fy1, int fw1, int fh1)
+        {
+            if (!host._hiResUi) { host.Pad.StrokeFocus(fx1, fy1, fw1, fh1); return; }
+            host.Hi.StrokeRect(fx1 - 2, fy1 - 2, fw1 + 4, fh1 + 4, GamePad.FocusColor);
+            host.Hi.StrokeRect(fx1 - 3, fy1 - 3, fw1 + 6, fh1 + 6, 0x80000000 | (GamePad.FocusColor & 0xFFFFFF));
         }
 
         void Button(int bx, int by2, int bw, int bh, string text, uint bg, uint fg, bool border = false)
         {
-            host.FillRect(bx, by2, bw, bh, bg);
-            if (border) host.StrokeRect(bx, by2, bw, bh, StatusScreen.BoxLine);
-            var (_, tw, th) = host.GetText(text, fg);
-            host.DrawText(text, bx + (bw - tw) / 2, by2 + (bh - th) / 2, fg);
+            host.UiFill(bx, by2, bw, bh, bg);
+            if (border) host.UiStroke(bx, by2, bw, bh, StatusScreen.BoxLine);
+            var (_, tw, th) = host.UiGetText(text, fg);
+            host.UiText(text, bx + (bw - tw) / 2, by2 + (bh - th) / 2, fg);
         }
     }
 }

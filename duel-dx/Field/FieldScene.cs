@@ -1594,7 +1594,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     }
 
     /// <summary>고르기 띠 묶음 — 필드와 모세스(챕터 스크립트) 둘 다 쓴다.</summary>
-    internal void DrawFieldChoices()
+    /// <param name="layer">고르기 글을 새 UI 층에 쓴다 — 띠 그림은 판에 둔다. 판의 점을 다시 만지는 효과가 도는 틀에는 부르는 쪽이 끈다.</param>
+    internal void DrawFieldChoices(bool layer = false)
     {
         if (_fieldChoices is not { Count: > 0 } choices) return;
         for (int i = 0; i < choices.Count; i++)
@@ -1602,7 +1603,8 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             var (x, y) = FieldChoiceBand(i, choices.Count);
             for (int m = 3; m <= 5; m++) host.DrawUi(TalkBox.TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha, fade: 24 / 31.0);
             for (int m = 0; m <= 2; m++) host.DrawUi(TalkBox.TalkBandObs, m, 0, x, y, GameWindow.UiBlend.Alpha);
-            host.DrawText(choices[i], x + 12, y + 10, i == _fieldChoicePick ? 0xFF00FFFF : White, 13);
+            uint ink = i == _fieldChoicePick ? 0xFF00FFFF : White;
+            if (layer && host._hiResUi) host.Hi.DrawText(choices[i], x + 12, y + 10, ink, 13); else host.DrawText(choices[i], x + 12, y + 10, ink, 13);
         }
     }
 
@@ -1697,7 +1699,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
         else DrawFieldScene(ox, oy, 9);
 
         host.Tlk.DrawTalk(layer: _screenWaveOwner is null && _fieldChoices is not { Count: > 0 });   // 물결(409)이 일거나 고르기 띠가 대사 위에 뜰 때는 글도 판에
-        DrawFieldChoices();
+        DrawFieldChoices(layer: _screenWaveOwner is null);
         host._uiClip = null;
         ApplyScreenWave(ox, oy, (int)(host._lastTime * TicksPerSecond));   // 409 물결 — 대화창까지 일렁인다(0x100ec03d)
         host.DrawToast();

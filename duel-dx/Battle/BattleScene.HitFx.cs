@@ -466,13 +466,13 @@ internal sealed unsafe partial class BattleScene
                 int value = c.From + Math.Sign(c.To - c.From) * Math.Min(Math.Abs(c.To - c.From), step * tick);
                 shown = $"{text} {value}";
             }
-            var (_, w, _) = host.GetText(shown, color, 16);
+            int w = host.BattleTextSize(shown, color, 16).W;
             // 피해 숫자는 유닛 기준 x −30 에서 왼쪽 맞춤(0x100d22e0(−30, 0, 40, …)) — Miss·회복은 전처럼 가운데.
             int left = color == DamageColor ? x - 30 : x - w / 2;
             // 검정 1픽셀 테두리 뒤에 제 색
             foreach (var (ox, oy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-                host.DrawText(shown, left + ox, y - lift + oy, 0xFF000000, 16);
-            host.DrawText(shown, left, y - lift, color, 16);
+                host.BattleText(shown, left + ox, y - lift + oy, 0xFF000000, 16);
+            host.BattleText(shown, left, y - lift, color, 16);
         }
     }
 }

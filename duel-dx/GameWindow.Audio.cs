@@ -364,9 +364,9 @@ internal sealed unsafe partial class GameWindow
         long at = Volatile.Read(ref _voiceMissingAt);
         if (at == 0 || Environment.TickCount64 - at > 5000) return;
         if (AssetPack.VoiceStatus is not { Length: > 0 } text) return;
-        var (_, w, h) = GetText(text, White, 12);
-        FillRect(right - w - 8, top - 3, w + 16, h + 6, 0xD0101828);
-        DrawText(text, right - w, top, White, 12);
+        var (_, w, h) = UiGetText(text, White, 12);
+        UiFill(right - w - 8, top - 3, w + 16, h + 6, 0xD0101828);
+        UiText(text, right - w, top, White, 12);
     }
 
     internal void StopTalkVoice()

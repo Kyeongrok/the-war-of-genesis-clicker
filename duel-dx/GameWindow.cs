@@ -1295,7 +1295,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawAbilityMenu();
         Btl.DrawItemMenu();
         StatusScr.DrawStatusScreen();
-        Tlk.DrawTalk(layer: !BattleCovered);
+        Tlk.DrawTalk(layer: !BattleCovered && _statusUnit < 0);   // Status(층, 화면 가득)가 떠 있으면 대사 글도 판에 — 층에 쓰면 Status 위로 글만 비친다
         DrawToast();
         DrawVoiceNotice(_camX + ViewWidth - 12, _camY + 10);
         DrawOutcomeBanner();
@@ -1327,7 +1327,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TimedEditScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
-        if (Hi.Used) DrawToast(onLayer: true);   // 새 UI 창 위로 알림을 한 번 더
+        if (_hiResUi) DrawToast(onLayer: true);   // 새 UI 의 알림은 층에 한 번 — 모든 창 위에
         Pad.DrawFocus();                       // 패드 커서가 선 자리의 테와 조작 안내 — 창들 위에
         Pad.DrawGuide();
         if (Cut.Showing) Hi.Begin();           // 컷신은 판에 그린다 — 층에 그린 창(HUD · 안내)이 그 위에 남지 않게 비운다
@@ -1354,16 +1354,17 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal void DrawStatus()
     {
+        if (_hiResUi && BattleCovered) return;   // 층에 그리는 줄은 판을 덮은 화면이 가려 주지 못한다
         // 설정 > 상단 상태 줄 보이기(기본 끔) — 꺼 두어도 자료를 못 읽었다는 경고는 보인다.
         if (!_showStatusBar)
         {
-            if (!_loading && _loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 4, 0xFFD05050);
+            if (!_loading && _loadError.Length > 0) UiText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 4, 0xFFD05050);
             return;
         }
-        FillRect(_camX, _camY, ViewWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
+        UiFill(_camX, _camY, ViewWidth, GridTop, _camY > 0 ? 0xE014100C : 0);
         if (_loading)
         {
-            DrawText("전투 자료를 읽는 중...", _camX + 4, _camY + 4, White);
+            UiText("전투 자료를 읽는 중...", _camX + 4, _camY + 4, White);
             return;
         }
 
@@ -1371,10 +1372,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int allies = _units.Count(u => u.Alive && u.OnField && u.IsAlly);
         int enemies = _units.Count(u => u.Alive && u.OnField && !u.IsAlly);
         // 보이는 폭이 640 이라 짧게 — 자세한 단축키는 설정 메뉴에서.
-        DrawText($"{_scene.Title} — Btl {_scene.Id:D4}   아군 {allies}  적군 {enemies}   {KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물  {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자  {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바",
+        UiText($"{_scene.Title} — Btl {_scene.Id:D4}   아군 {allies}  적군 {enemies}   {KeyBindings.KeyName(_keys[KeyAction.NextUnit])}: 인물  {KeyBindings.KeyName(_keys[KeyAction.Grid])}: 격자  {KeyBindings.KeyName(_keys[KeyAction.Gauges])}: 체력바",
                  _camX + 4, _camY + 4, White);
-        if (_loadError.Length > 0) DrawText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 20, 0xFFD05050);
-        else DrawText(Btl.TurnLine(), _camX + 4, _camY + 20, 0xFFFFE8A0);
+        if (_loadError.Length > 0) UiText($"못 읽은 자료가 있습니다: {_loadError}", _camX + 4, _camY + 20, 0xFFD05050);
+        else UiText(Btl.TurnLine(), _camX + 4, _camY + 20, 0xFFFFE8A0);
     }
 
     // ── 글자 ─────────────────────────────────────────────────────────────────

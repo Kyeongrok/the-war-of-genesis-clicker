@@ -232,6 +232,6 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
                 host._fb[by * host.BoardWidth + bx] = _frame[sy + x * clip.Width / w] | 0xFF000000;
             }
         }
-        host.DrawText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
+        host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
     }
 }
