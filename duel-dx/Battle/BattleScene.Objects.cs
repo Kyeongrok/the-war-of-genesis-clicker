@@ -1041,6 +1041,28 @@ internal sealed unsafe partial class BattleScene
             int x = obj.Col * TileW + obj.Data.DrawW, y = host.CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
             double fade = aiming && obj.Data.Kind is 1 or 2 or 6 or 7 or 8 or 9 or 10 ? BlendFade(4) : 1;
             host.DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: !once && motion is 0 or 9 or 10, fade: fade);
+            // 모드 > 편의성 > 상자 강조 — 아직 안 연 상자(2)·폭탄 상자(8)는 바닥과 빛깔이 비슷해 잘 안 보인다(사용자 요청).
+            if (host._highlightChests && obj.Data.Kind is 2 or 8 && !_opened.Contains(obj)
+                && host.UiFor(obj.Data.SpriteId)?.FrameAt(motion, tick, !once && motion is 0 or 9 or 10) is { } frame)
+                DrawOutline(frame, x, y);
         }
+    }
+
+    /// <summary>그림의 바깥 둘레 두 픽셀에 노랑↔흰색으로 깜박이는 테두리를 두른다(상자 강조).</summary>
+    private void DrawOutline(SpriteFrame f, int x, int y)
+    {
+        double pulse = 0.5 + 0.5 * Math.Sin(host._lastTime * 6);
+        uint color = 0xFFFF0000 | (uint)(215 + 40 * pulse) << 8 | (uint)(255 * pulse);
+        bool Solid(int xx, int yy) => (uint)xx < f.W && (uint)yy < f.H && (f.Px[yy * f.W + xx] & 0xFF000000) != 0;
+        for (int yy = -2; yy < f.H + 2; yy++)
+            for (int xx = -2; xx < f.W + 2; xx++)
+            {
+                if (Solid(xx, yy)) continue;
+                bool near = false;
+                for (int d = 1; d <= 2 && !near; d++)
+                    near = Solid(xx - d, yy) || Solid(xx + d, yy) || Solid(xx, yy - d) || Solid(xx, yy + d);
+                if (near || Solid(xx - 1, yy - 1) || Solid(xx + 1, yy - 1) || Solid(xx - 1, yy + 1) || Solid(xx + 1, yy + 1))
+                    host.SetPixel(x + f.X + xx, y + f.Y + yy, color);
+            }
     }
 }

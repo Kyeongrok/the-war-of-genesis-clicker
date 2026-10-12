@@ -327,11 +327,11 @@ internal sealed unsafe partial class GameWindow
         StopTalkVoice();
         if (id <= 0) return;
         int tag = _talkVoiceTag = ++_soundTag;
+        NoteIfVoiceMissing(id);
         var (left, right) = VoicePan(screenX);
         LoadClip(id, pcm =>
         {
             if (!Muted && pcm != null && tag == Volatile.Read(ref _talkVoiceTag)) _mixer.PlayEffect(pcm, _effectGain, tag, left: left, right: right);
-            if (!Muted && pcm == null) NoteVoiceMissing();
             // 이 부름은 배경 실에서 온다 — 기록 파일에 바로 쓰면 주 실의 기록(필드 스크립트 줄)과 부딪쳐 IOException 으로 죽는다.
             // 대사가 줄을 안 막게 된 뒤로 대사 바로 다음 줄을 같은 틀에 적어 자주 부딪쳤다. 주 실(UpdateSounds)이 대신 적는다.
             if (BattleScene.Trace) _backgroundTrace.Enqueue($"talk voice {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} gain {_effectGain:0.00} L {left:0.00} R {right:0.00}");
@@ -341,12 +341,16 @@ internal sealed unsafe partial class GameWindow
     /// <summary>배경 실이 남긴 추적 줄 — 주 실이 <see cref="UpdateSounds"/> 에서 파일에 옮겨 적는다.</summary>
     internal readonly System.Collections.Concurrent.ConcurrentQueue<string> _backgroundTrace = new();
 
-    /// <summary>대사 음성 파일이 없던 때(<see cref="Environment.TickCount64"/>) — 배경 실이 적는다. 0 이면 그런 적 없음.</summary>
+    /// <summary>대사 음성 파일이 없던 때(<see cref="Environment.TickCount64"/>). 0 이면 그런 적 없음.</summary>
     private long _voiceMissingAt;
 
     /// <summary>대사 음성 파일이 없어 목소리를 못 냈다 — 받는 중이면 음성부터 받게 당기고 잠깐 알린다(<see cref="DrawVoiceNotice"/>).</summary>
-    internal void NoteVoiceMissing()
+    /// <remarks>
+    /// 주 실에서 바로 본다 — 자료를 받는 동안에는 배경 실이 받기를 기다리느라 밀려, 소리를 푸는 쪽(<see cref="LoadClip"/>)에서 알리면 한참 늦는다.
+    /// </remarks>
+    internal void NoteIfVoiceMissing(int id)
     {
+        if (id <= 0 || CachedClip(id) != null || File.Exists(VoicePack.BgmPath(id))) return;
         AssetPack.WantVoices();
         Volatile.Write(ref _voiceMissingAt, Environment.TickCount64);
     }

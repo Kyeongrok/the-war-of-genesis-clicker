@@ -32,7 +32,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool FullSoulAtStart = false, int Difficulty = 0, int SoulWeight = 100,
                                     int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkFillFirst = true,
                                     bool SkipEnemyAction = true, bool SendStats = true, string StatsAskedAt = "", bool PlanetMarks = true,
-                                    bool SkillMovies = true, bool TimedHit = false, bool Fullscreen = false, int BattleZoomPercent = -1, int BubbleScalePercent = 100, bool HiResUi = true)
+                                    bool SkillMovies = true, bool TimedHit = false, bool Fullscreen = false, int BattleZoomPercent = -1, int BubbleScalePercent = 100, bool HiResUi = true,
+                                    bool HighlightChests = false)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

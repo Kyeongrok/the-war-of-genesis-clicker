@@ -107,7 +107,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>「대사 사이 멈춤」 줄 번호 — 1130 + <see cref="TalkPauseChoices"/> 순번.</summary>
     internal const int MenuTalkPauseBase = 1130;
 
-    internal const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106, MenuTalkClickFills = 1108;
+    internal const int MenuSceneTag = 1103, MenuProgress = 1104, MenuChestContents = 1105, MenuFullSoul = 1106, MenuTalkClickFills = 1108, MenuChestGlow = 1175;
 
     /// <summary>대사 사이 멈춤(초) 고르기 — −1 은 원본대로(스크립트 값, 보통 1초).</summary>
     internal static readonly double[] TalkPauseChoices = [0, 0.1, 0.2, 0.3, 0.5, -1];
@@ -214,7 +214,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -296,6 +296,9 @@ internal sealed unsafe partial class GameWindow
 
     /// <summary>지금 전투의 상자에 든 것을 왼쪽 위에 보이나 — 모드 > 상자 내용물 보기(원본에 없는 도움 기능, 기본 끔).</summary>
     internal bool _showChestContents = UserSettings.Current.ShowChestContents;
+
+    /// <summary>아직 안 연 상자에 깜박이는 테두리를 두르나 — 모드 > 편의성 > 상자 강조(원본에 없는 도움 기능, 기본 끔).</summary>
+    internal bool _highlightChests = UserSettings.Current.HighlightChests;
 
     /// <summary>화면 맨 위 상태 줄을 보일지 — 설정 > 상단 상태 줄 보이기(기본 끔).</summary>
     internal bool _showStatusBar = UserSettings.Current.ShowStatusBar;
@@ -420,6 +423,11 @@ internal sealed unsafe partial class GameWindow
                 _showChestContents = !_showChestContents;
                 Win32.CheckMenuItem(_menuBar, MenuChestContents, Win32.MF_BYCOMMAND | (_showChestContents ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_showChestContents ? "상자 내용물을 왼쪽 위에 보입니다" : "상자 내용물을 숨깁니다");
+                SaveSettings();
+                break;
+            case MenuChestGlow:
+                _highlightChests = !_highlightChests;
+                Toast(_highlightChests ? "아직 안 연 상자에 테두리를 두릅니다" : "상자를 원본대로 그립니다");
                 SaveSettings();
                 break;
             case MenuSceneTag:
