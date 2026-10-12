@@ -41,6 +41,56 @@ internal sealed unsafe partial class GameWindow
         DrawUi(FrameObs, 3, 0, x + w - 1, y + h - 1, GameWindow.UiBlend.Alpha);
     }
 
+    // ── 새 UI 로 가는 창 틀 · 그림(사용자 요청 menu-57) ─────────────────────────
+    // 원본 틀을 쓰는 창(시스템 메뉴 · 세이브 목록 · 확인 창 …)을 새 UI 층에 그릴 때 쓴다 — 「새 UI」가 꺼져 있으면 전처럼 판에 그린다.
+
+    private uint[]? _frameColumn;
+
+    /// <summary>
+    /// 창 틀 — 새 UI 에서는 바탕 그라데이션을 창 픽셀마다 부드럽게 잇고(판에서는 184줄을 늘려 띠가 졌다), 테두리 · 제목 글을 창 해상도로 그린다.
+    /// 귀퉁이 장식은 원본 그림 그대로다. 자리 · 크기는 <see cref="DrawGameFrame"/> 과 같다.
+    /// </summary>
+    internal void UiFrame(int x, int y, int w, int h, string? title = null)
+    {
+        if (!_hiResUi) { DrawGameFrame(x, y, w, h, title); return; }
+        bool titled = title != null;
+        int top = titled ? y - FrameTitleH : y, full = titled ? h + FrameTitleH : h;
+
+        if (_frameColumn == null && UiFor(FrameObs)?.FrameAt(7, 0) is { W: > 0, H: > 0 } f)
+            _frameColumn = [.. Enumerable.Range(0, f.H).Select(r => f.Px[r * f.W])];
+        if (_frameColumn != null) Hi.FillGradient(x, top, w, full, _frameColumn, 255u * FrameBlend / FrameBlendMax);
+        else Hi.FillRect(x, top, w, full, StatusScreen.PanelBg);
+        Hi.StrokeRect(x - 1, top - 1, w + 2, full + 2, White);
+
+        if (titled)
+        {
+            Hi.FillRect(x, y - 1, w, 1, White);
+            UiSprite(FrameObs, 4, 0, x, y - 18);
+            var (tw, th) = Hi.Measure(title!, White, 15);
+            Hi.DrawText(title!, x + (w - tw) / 2, top + (FrameTitleH - th) / 2, White, 15);
+        }
+
+        UiSprite(FrameObs, 0, 0, x, top);
+        UiSprite(FrameObs, 1, 0, x + w - 1, top);
+        UiSprite(FrameObs, 2, 0, x, y + h - 1);
+        UiSprite(FrameObs, 3, 0, x + w - 1, y + h - 1);
+    }
+
+    /// <summary>UI Obs 한 장 — 새 UI 에서는 층에, 아니면 판에(<see cref="DrawUi"/>). 그렸으면 true.</summary>
+    internal bool UiSprite(int obs, int motion, int tick, int x, int y, bool loop = true)
+    {
+        if (!_hiResUi) return DrawUi(obs, motion, tick, x, y, UiBlend.Alpha, loop);
+        if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return false;
+        Hi.DrawImage(f.Px, f.W, f.W, f.H, x + f.X, y + f.Y);
+        return true;
+    }
+
+    internal void UiRightText(string text, int right, int y, uint color, float size = 13f)
+    {
+        var (_, w, _) = UiGetText(text, color, size);
+        UiText(text, right - w, y, color, size);
+    }
+
     /// <summary>바탕 — Obs 0970 모션 7 의 2×184 그라데이션을 창 크기로 늘려 반투명하게 덮는다.</summary>
     internal void DrawFrameBackground(int x, int y, int w, int h)
     {

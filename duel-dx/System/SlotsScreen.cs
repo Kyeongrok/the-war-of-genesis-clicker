@@ -54,13 +54,17 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     internal static string SlotPath(int slot) =>
         UserDataFolder.File($"battle-save-{slot:D2}.json");
 
-    /// <summary>DUELDX_SLOTS=load|save 면 시작하자마자 그 슬롯 목록을 연다(화면 밖 시험용).</summary>
+    /// <summary>DUELDX_SLOTS=load|save 면 시작하자마자 그 슬롯 목록을 연다(화면 밖 시험용). menu · mission · volume · confirm 은 시스템 메뉴의 그 창을 연다.</summary>
     internal void OpenSlotsIfAsked()
     {
         switch (Environment.GetEnvironmentVariable("DUELDX_SLOTS"))
         {
             case "load": OpenSlots(1); break;
             case "save": OpenSlots(0); break;
+            case "menu": host.Sys._systemMenu = true; break;
+            case "mission": host.Sys._missionWindow = true; break;
+            case "volume": host.Sys._volumeWindow = true; break;
+            case "confirm": host.Sys._confirm = ("Load", "저장하지 않은 데이터는 없어집니다.\n로드하시겠습니까?", () => { }); break;
         }
     }
 
@@ -236,9 +240,9 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         int tick = (int)(host._lastTime * TicksPerSecond);
 
         // 「Select your record」 화면에서는 배경 글씨가 제목 노릇을 해서 제목줄 글자를 안 그린다.
-        host.DrawGameFrame(x, y, SlotsW, SlotsH, host.RecordsScr._recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
-        if (!host.DrawUi(FrameObs, 5, 0, x + 296, y - 24, GameWindow.UiBlend.Alpha))
-            host.StrokeRect(x + 296, y - 24, 18, 18, White);
+        host.UiFrame(x, y, SlotsW, SlotsH, host.RecordsScr._recordsOpen ? "" : _slotsMode == 0 ? "Save" : "Load");
+        if (!host.UiSprite(FrameObs, 5, 0, x + 296, y - 24))
+            host.UiStroke(x + 296, y - 24, 18, 18, White);
 
         for (int i = 0; i < SlotsVisible; i++)
         {
@@ -248,31 +252,31 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
             var head = SlotHead(slot);
             bool dim = _slotsMode == 1 && head == null;
 
-            if (slot == _slotsHover && !dim && !host.DrawUi(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry, GameWindow.UiBlend.Alpha))
-                host.FillRect(rx, ry, SlotRowW, SlotRowH, 0x4060A0FF);
+            if (slot == _slotsHover && !dim && !host.UiSprite(SlotHighlightObs, SlotHighlightMotion, tick, rx, ry))
+                host.UiFill(rx, ry, SlotRowW, SlotRowH, 0x4060A0FF);
 
             if (head == null)
             {
                 string none = host._db?.T(0) is { Length: > 0 } t ? t : "없음";
                 if (slot >= AutoSlot) none = $"자동 저장{(slot > AutoSlot ? $" {slot - AutoSlot}차례 전" : "")} — {none}";
-                var (_, nw, nh) = host.GetText(none, White);
-                host.DrawText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
+                var (_, nw, nh) = host.UiGetText(none, White);
+                host.UiText(none, rx + (SlotRowW - nw) / 2, ry + (SlotRowH - nh) / 2, dim ? DimGray : White);
                 continue;
             }
 
             string title = host._db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
-            var (_, tw, _) = host.GetText(title, White);
+            var (_, tw, _) = host.UiGetText(title, White);
             string label = slot == AutoSlot ? "[자동 저장]" : slot > AutoSlot ? $"[자동 {slot - AutoSlot}차례 전]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
             // 줄 높이는 표시 글로 잰다 — 연대표 세이브는 이름이 빈 글(TXR 2557)이라 이름으로 재면 높이 0 이 되어 그 줄만 아래로 처졌다.
-            var (_, lw, th) = host.GetText(label, SlotLabelColor);
+            var (_, lw, th) = host.UiGetText(label, SlotLabelColor);
             // 이름은 가운데지만, 표시 글(특히 「[자동 저장]」)과 겹치면 그 뒤로 민다.
-            host.DrawText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
-            host.DrawText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
+            host.UiText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
+            host.UiText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
 
             long ms = head.PlayMs;
             string time = $"{ms / 3600000,3}:{ms % 3600000 / 60000:D2}:{ms % 60000 / 1000:D2}";
-            var (_, pw, _) = host.GetText(time, White);
-            host.DrawText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, SlotTimeColor);
+            var (_, pw, _) = host.UiGetText(time, White);
+            host.UiText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, SlotTimeColor);
         }
 
         DrawSlotScrollbar(x + 304, y, tick);
@@ -281,8 +285,8 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     /// <summary>스크롤 막대 — 위·아래 화살표와 손잡이(움직이는 길 232).</summary>
     internal void DrawSlotScrollbar(int x, int y, int tick)
     {
-        if (!host.DrawUi(SlotScrollObs, 2, tick, x, y, GameWindow.UiBlend.Alpha)) host.StrokeRect(x, y, 16, 16, White);
-        if (!host.DrawUi(SlotScrollObs, 4, tick, x, y + SlotsH - 16, GameWindow.UiBlend.Alpha)) host.StrokeRect(x, y + SlotsH - 16, 16, 16, White);
+        if (!host.UiSprite(SlotScrollObs, 2, tick, x, y)) host.UiStroke(x, y, 16, 16, White);
+        if (!host.UiSprite(SlotScrollObs, 4, tick, x, y + SlotsH - 16)) host.UiStroke(x, y + SlotsH - 16, 16, 16, White);
 
         int track = SlotsH - 32, span = Math.Max(1, SlotRows - SlotsVisible);
         // 손잡이 자리는 <b>그리는 그림의 높이</b>로 잰다 — 전에는 길 × 보이는 줄/전체 줄(≈100)로 쳐서, 그림(그보다 훨씬 짧다)이 맨 아래까지
@@ -290,7 +294,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         int fallbackH = Math.Max(16, track * SlotsVisible / SlotRows);
         int handleH = host.UiFor(SlotScrollObs)?.FrameAt(6, tick) is { H: > 0 } frame ? frame.H : fallbackH;
         int hy = y + 16 + (track - handleH) * _slotsTop / span;
-        if (!host.DrawUi(SlotScrollObs, 6, tick, x, hy, GameWindow.UiBlend.Alpha)) host.FillRect(x + 2, hy, 12, fallbackH, StatusScreen.BoxLine);
+        if (!host.UiSprite(SlotScrollObs, 6, tick, x, hy)) host.UiFill(x + 2, hy, 12, fallbackH, StatusScreen.BoxLine);
     }
 
     /// <summary>「저장되었습니다.」 같은 알림창 — 원본 메시지 창과 같은 틀.</summary>
@@ -298,10 +302,10 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     {
         if (_notice is not { } notice) return;
         if (host._lastTime >= notice.Until) { _notice = null; return; }
-        var (_, tw, th) = host.GetText(notice.Title, White);
+        var (_, tw, th) = host.UiGetText(notice.Title, White);
         int w = tw + 60, h = th + 40;
         int x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2;
-        host.DrawGameFrame(x, y, w, h);
-        host.DrawText(notice.Title, x + (w - tw) / 2, y + (h - th) / 2, White);
+        host.UiFrame(x, y, w, h);
+        host.UiText(notice.Title, x + (w - tw) / 2, y + (h - th) / 2, White);
     }
 }

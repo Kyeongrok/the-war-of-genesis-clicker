@@ -74,6 +74,46 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         FillPx(x1 - t, y0 + t, x1, y1 - t, color);
     }
 
+    /// <summary>
+    /// 그림(Obs 한 장)을 판 좌표 자리에 찍는다 — 판의 한 점이 배율만큼의 네모가 된다(가장 가까운 점). 그림은 또렷해질 수 없으니 판에 찍던 것과 같은 모양이고,
+    /// 층에 그린 창 위에 놓이게 하려는 것이다. 투명이 아닌 점은 불투명으로 덮는다(판의 <c>DrawUi</c> 와 같다).
+    /// </summary>
+    /// <param name="stride">그림 한 줄의 점 수 — <paramref name="w"/> 가 그보다 작으면 왼쪽 일부만 찍는다.</param>
+    internal void DrawImage(uint[] src, int stride, int w, int h, int x, int y)
+    {
+        if (w <= 0 || h <= 0) return;
+        Ensure();
+        int x0 = Sx(x), y0 = Sy(y), dw = Sx(x + w) - x0, dh = Sy(y + h) - y0;
+        if (dw <= 0 || dh <= 0) return;
+        int px0 = Math.Max(0, x0), px1 = Math.Min(_w, x0 + dw);
+        for (int py = Math.Max(0, y0); py < Math.Min(_h, y0 + dh); py++)
+        {
+            int row = (py - y0) * h / dh * stride, at = py * _w;
+            for (int px = px0; px < px1; px++)
+            {
+                uint c = src[row + (px - x0) * w / dw];
+                if ((c & 0xFF000000) != 0) _px[at + px] = c | 0xFF000000;
+            }
+        }
+    }
+
+    /// <summary>위에서 아래로 색이 바뀌는 네모 — <paramref name="column"/> 의 색들을 높이에 맞춰 늘리고 사이를 부드럽게 잇는다. 알파(0~255)로 반투명하게 덮는다.</summary>
+    internal void FillGradient(int x, int y, int w, int h, uint[] column, uint alpha)
+    {
+        if (column.Length == 0) return;
+        Ensure();
+        int x0 = Sx(x), y0 = Sy(y), x1 = Sx(x + w), y1 = Sy(y + h), dh = y1 - y0;
+        for (int py = y0; py < y1; py++)
+        {
+            double at = (py - y0 + 0.5) * column.Length / dh - 0.5;
+            int i = Math.Clamp((int)Math.Floor(at), 0, column.Length - 1), j = Math.Min(column.Length - 1, i + 1);
+            int k = Math.Clamp((int)((at - i) * 256), 0, 256);
+            uint a = column[i], b = column[j];
+            uint Ch(int shift) => (uint)(((int)(a >> shift & 0xFF) * (256 - k) + (int)(b >> shift & 0xFF) * k) / 256);
+            FillPx(x0, py, x1, py + 1, alpha << 24 | Ch(16) << 16 | Ch(8) << 8 | Ch(0));
+        }
+    }
+
     /// <summary>글의 크기를 판 좌표로 — 가운데 · 오른쪽 맞춤 셈에 쓴다.</summary>
     internal (int W, int H) Measure(string text, uint color, float size = 13f)
     {

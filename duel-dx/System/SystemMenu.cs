@@ -229,7 +229,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     {
         var (x, y, h) = SystemMenuRect();
         // 모든 창은 원본 틀(Obs 0970 — 바탕 모션 7, 귀퉁이 0~3, 제목줄 4, 바깥 1px 흰 선)이다(ba-20 G13). 전에는 단색 네모였다.
-        host.DrawGameFrame(x, y, SystemW, h, "System Menu");
+        host.UiFrame(x, y, SystemW, h, "System Menu");
 
         var items = MenuItems;
         for (int i = 0; i < items.Length; i++)
@@ -238,18 +238,32 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             int rx = x + SystemPad, ry = y + SystemPad + i * SystemRowH;
             // 평소 칸은 바탕 + 테두리(원본 갈래 0 단추 0x100432e0). Obs 0471 모션 7(190×37 파란 빛)은 <b>보조 그림</b>(단추 +0x10c)이라
             // 마우스가 올라간 줄에만 덧그린다 — 전에는 모든 줄에 그려 전부 올림 상태로 보였다.
-            host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxBg);
-            host.StrokeRect(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxLine);
+            host.UiFill(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxBg);
+            host.UiStroke(rx, ry, SystemRowW, SystemRowH - 3, StatusScreen.BoxLine);
             bool disabled = item == SystemItem.Save && SaveBlockedReason != null;
             bool hover = !disabled && host._mouse.X >= rx && host._mouse.X < rx + SystemRowW && host._mouse.Y >= ry && host._mouse.Y < ry + SystemRowH - 3;
-            if (hover) host.DrawUi(ListRowObs, 7, 0, rx, ry, GameWindow.UiBlend.Alpha, loop: false);
+            if (hover) host.UiSprite(ListRowObs, 7, 0, rx, ry, loop: false);
+            // 새 UI 는 글자 그림(점으로 된 글씨라 늘리면 깍두기가 된다) 대신 아이콘만 그림에서 따오고 글은 창 해상도로 쓴다(menu-57).
+            if (host._hiResUi)
+            {
+                if (motion == -2) DrawSettingLabel(rx + 20, ry + 10, iconOnly: true);
+                else if (motion < 0) DrawModeLabel(rx + 20, ry + 10, iconOnly: true);
+                else if (host.UiFor(SystemObs)?.FrameAt(motion, 0, loop: false) is { } f)
+                    host.Hi.DrawImage(f.Px, f.W, Math.Min(f.W, LabelIconW), f.H, rx + 20 + f.X, ry + 10 + f.Y);
+                var (_, _, th) = host.UiGetText(label, White, LabelSize);
+                host.UiText(label, rx + 20 + LabelTextX, ry + (SystemRowH - 3 - th) / 2, disabled ? DimGray : White, LabelSize);
+            }
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
+            else if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
                 host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
-            if (disabled) host.FillRect(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
+            if (disabled) host.UiFill(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
         }
     }
+
+    /// <summary>새 UI 의 줄 글 — 글자 그림에서 아이콘으로 치는 왼쪽 너비, 글이 시작하는 자리(글자 그림의 글자 자리와 같다), 글 크기.</summary>
+    private const int LabelIconW = 24, LabelTextX = 32;
+    private const float LabelSize = 15f;
 
     /// <summary>「MODE」 줄 그림 — 처음 그릴 때 한 번 만든다(너비 81 · 높이 22, 기준점은 (2, 3)).</summary>
     private uint[]? _modeLabel;
@@ -259,7 +273,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// 「MODE」 줄을 다른 줄과 같은 글씨로 그린다 — Obs 0894 에 그 그림이 없어 있는 그림에서 따온다:
     /// 아이콘은 S.E 줄(모션 6)의 반짝이, 글자 M · O · E 는 VOLUME(모션 2), D 는 LOAD(모션 1)에서. 그림 크기가 다르면(다른 판 자료) false — 글자로 그린다.
     /// </summary>
-    private bool DrawModeLabel(int x, int y)
+    private bool DrawModeLabel(int x, int y, bool iconOnly = false)
     {
         if (_modeLabel == null)
         {
@@ -278,7 +292,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             Copy(volume.Px, volume.W, 89, 5, 9, 12, 72, 5);     // E
             _modeLabel = canvas;
         }
-        host.BlitMasked(_modeLabel, ModeLabelW, ModeLabelH, x - 2, y - 3);
+        if (iconOnly) host.Hi.DrawImage(_modeLabel, ModeLabelW, LabelIconW, ModeLabelH, x - 2, y - 3);
+        else host.BlitMasked(_modeLabel, ModeLabelW, ModeLabelH, x - 2, y - 3);
         return true;
     }
 
@@ -296,7 +311,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// 「SETTING」 줄 — 「MODE」와 같은 꼴로 만든다: 글자 S 는 SAVE(모션 0), E 는 VOLUME(2), T 는 RESTART(3), I · N 은 MISSION(11), G 는 EXIT GAME(4)에서 따오고,
     /// 아이콘은 톱니를 점으로 그린다. 그림 크기가 다르면 false — 글자로 그린다.
     /// </summary>
-    private bool DrawSettingLabel(int x, int y)
+    private bool DrawSettingLabel(int x, int y, bool iconOnly = false)
     {
         if (_settingLabel == null)
         {
@@ -325,7 +340,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             Copy(exit.Px, exit.W, 73, 4, 10, 12, 97, 5);          // G
             _settingLabel = canvas;
         }
-        host.BlitMasked(_settingLabel, SettingLabelW, ModeLabelH, x - 2, y - 3);
+        if (iconOnly) host.Hi.DrawImage(_settingLabel, SettingLabelW, LabelIconW, ModeLabelH, x - 2, y - 3);
+        else host.BlitMasked(_settingLabel, SettingLabelW, ModeLabelH, x - 2, y - 3);
         return true;
     }
 
@@ -333,16 +349,16 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal void DrawMissionWindow()
     {
         int w = 400, h = 180, x = host._camX + (host.ViewWidth - w) / 2, y = host._camY + (host.ViewHeight - h) / 2;
-        host.DrawGameFrame(x, y + 26, w, h - 26, host._scene.Title);
+        host.UiFrame(x, y + 26, w, h - 26, host._scene.Title);
         // 원본 0x100e3d60(400×180): 깃발 Obs 0894 모션 9 @ (20,20), 「승리 조건」 @ (50,20) 노랑, 조건 글 @ (50,50) 흰,
         // 해골 모션 10 @ (20,100), 「패배 조건」 @ (50,100) 노랑, 글 @ (50,130) 흰(ba-21 battle-flow 4). 전에는 라벨이 하늘색·붉은색이고 글이 같은 줄이었다.
         int by = y + 26;
-        host.DrawUi(BattleScene.HudObs, 9, 0, x + 20, by + 20, GameWindow.UiBlend.Alpha, loop: false);
-        host.DrawText("승리 조건", x + 50, by + 14, BattleScene.HudYellow);
-        host.DrawText(host._db?.T(host._scene.WinTextId) ?? "", x + 50, by + 44, White);
-        host.DrawUi(BattleScene.HudObs, 10, 0, x + 20, by + 100, GameWindow.UiBlend.Alpha, loop: false);
-        host.DrawText("패배 조건", x + 50, by + 94, BattleScene.HudYellow);
-        host.DrawText(host._db?.T(host._scene.LoseTextId) ?? "", x + 50, by + 124, White);
+        host.UiSprite(BattleScene.HudObs, 9, 0, x + 20, by + 20, loop: false);
+        host.UiText("승리 조건", x + 50, by + 14, BattleScene.HudYellow);
+        host.UiText(host._db?.T(host._scene.WinTextId) ?? "", x + 50, by + 44, White);
+        host.UiSprite(BattleScene.HudObs, 10, 0, x + 20, by + 100, loop: false);
+        host.UiText("패배 조건", x + 50, by + 94, BattleScene.HudYellow);
+        host.UiText(host._db?.T(host._scene.LoseTextId) ?? "", x + 50, by + 124, White);
 
     }
 
@@ -396,26 +412,26 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal void DrawVolumeWindow()
     {
         var (x, y) = VolumeOrigin();
-        host.DrawGameFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
+        host.UiFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
 
         foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume) })
         {
-            host.DrawText(label, x + 20, y + rowY - 18, White);
+            host.UiText(label, x + 20, y + rowY - 18, White);
             for (int i = 0; i < VolumeCells; i++)
             {
                 int cx = x + 20 + i * 9;
                 bool on = 5 * i + 5 <= value;
-                host.FillRect(cx, y + rowY, 8, 13, on ? 0xFF6AA8FF : 0xFF203050);
-                host.StrokeRect(cx, y + rowY, 8, 13, StatusScreen.BoxLine);
+                host.UiFill(cx, y + rowY, 8, 13, on ? 0xFF6AA8FF : 0xFF203050);
+                host.UiStroke(cx, y + rowY, 8, 13, StatusScreen.BoxLine);
             }
-            host.RightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
+            host.UiRightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
         }
         // 「배경음악」 체크 상자(Obs 806 모션 1/2 자리) — 그림 대신 네모.
-        host.StrokeRect(x + 78, y + 118, 14, 14, White);
-        if (_bgmOn) host.FillRect(x + 81, y + 121, 8, 8, White);
-        host.DrawText("배경음악", x + 98, y + 117, White);
-        host.DrawText("X", x + VolumeW - 18, y + 5, White, 15);
-        host.DrawText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
+        host.UiStroke(x + 78, y + 118, 14, 14, White);
+        if (_bgmOn) host.UiFill(x + 81, y + 121, 8, 8, White);
+        host.UiText("배경음악", x + 98, y + 117, White);
+        host.UiText("X", x + VolumeW - 18, y + 5, White, 15);
+        host.UiText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
     }
 
     // ── 확인 창 ──────────────────────────────────────────────────────────────
@@ -423,7 +439,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal (int X, int Y, int W, int H) ConfirmRect()
     {
         // 높이는 본문 줄 수에 맞춘다 — 고정 120 이면 세 줄짜리 전직 확인(「…사라집니다 / 전직할까요?」)의 끝 줄이 단추에 가렸다.
-        int textH = _confirm is { } cf ? host.GetText(cf.Text, White).Item3 : 16;
+        int textH = _confirm is { } cf ? host.UiGetText(cf.Text, White).H : 16;
         int w = 340, h = Math.Max(120, 48 + textH + 14 + 34);
         return (host._camX + (host.ViewWidth - w) / 2, host._camY + (host.ViewHeight - h) / 2, w, h);
     }
@@ -432,16 +448,16 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     {
         if (_confirm is not { } confirm) return;
         var (x, y, w, h) = ConfirmRect();
-        host.DrawGameFrame(x, y + 26, w, h - 26, confirm.Title);
-        var (_, tw, _) = host.GetText(confirm.Text, White);
-        host.DrawText(confirm.Text, x + (w - tw) / 2, y + 48, White);
+        host.UiFrame(x, y + 26, w, h - 26, confirm.Title);
+        var (_, tw, _) = host.UiGetText(confirm.Text, White);
+        host.UiText(confirm.Text, x + (w - tw) / 2, y + 48, White);
 
         foreach (var (bx, label) in new (int, string)[] { (x + w / 2 - 86, "예"), (x + w / 2 + 10, "아니오") })
         {
-            host.FillRect(bx, y + h - 34, 76, 26, StatusScreen.HeadBg);
-            host.StrokeRect(bx, y + h - 34, 76, 26, StatusScreen.BoxLine);
-            var (_, lw, _) = host.GetText(label, White);
-            host.DrawText(label, bx + (76 - lw) / 2, y + h - 30, White);
+            host.UiFill(bx, y + h - 34, 76, 26, StatusScreen.HeadBg);
+            host.UiStroke(bx, y + h - 34, 76, 26, StatusScreen.BoxLine);
+            var (_, lw, _) = host.UiGetText(label, White);
+            host.UiText(label, bx + (76 - lw) / 2, y + h - 30, White);
         }
     }
 
