@@ -32,7 +32,7 @@
     "accuracy": 85,
     "critical": 10,
     "soul": 20,
-    "soulSpend": 0,
+    "soulSpend": 1,
     "b50": 0,
     "b51": 0,
     "b52": 1,

@@ -66,7 +66,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     ] : _tuningTab == TabBalance ?
     [
         // 밸런스 탭 — 어빌리티 · 체질 자료를 고쳐 쓰는 개편(사용자 요청 menu-64). 기본은 모두 끔.
-        ("어빌리티 개편", "타키리온 체질 개편 · 연 SOUL 70 → 20", MenuTachyrionRework, host._tachyrionRework),
+        ("어빌리티 개편", "타키리온 체질 개편 · 연이 SOUL 20 을 쓴다", MenuTachyrionRework, host._tachyrionRework),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
