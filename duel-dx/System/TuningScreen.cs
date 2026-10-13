@@ -188,6 +188,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             [
                 "· 타키리온 체질 — 소울 블레스트가 범위 SOUL 흡수기로, 락킹 필드 · 배리어 · 리콜이 바뀐다",
                 "· 연 — SOUL 20 이 있으면 쓸 수 있고, 쓰면 그 20 이 빠진다 (원본: 70 필요 · 안 빠짐)",
+                "· 엘레맨탈 파이어 — 필요 TP 가 20% 줄어든다 (레벨 1: 160 → 128 · 레벨 9 부터: 200 → 160)",
                 $"· 일반 공격 — SOUL 로 늘어나는 공격력이 {ReworkSoulPercent}% 가 된다 (일반 탭의 소울 기여도에 곱한다)",
             ];
             for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
