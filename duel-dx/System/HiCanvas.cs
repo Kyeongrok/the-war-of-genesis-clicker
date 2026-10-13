@@ -138,14 +138,14 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         if (text.Length == 0) return;
         var (px, w, h) = Glyphs(text, color, size);
         if (w <= 0 || h <= 0) return;
-        int left = Sx(x), top = Sy(y);
+        int left = Sx(x), top = Sy(y) + (int)Math.Round(host.FontShift(size) * Zoom);
         Add(new Cmd { Kind = Kind.Text, X0 = left, Y0 = top, X1 = left + w, Y1 = top + h, Data = px, W = w, H = h, Color = 0xFFFFFFFF });
     }
 
-    /// <summary>글을 「크기 × 배율」로 굽는다 — 배율이 바뀌면 열쇠가 달라져 새로 굽는다.</summary>
+    /// <summary>글을 「크기 × 글자 크기 설정 × 배율」로 굽는다 — 배율이나 설정이 바뀌면 열쇠가 달라져 새로 굽는다.</summary>
     private (uint[] Px, int W, int H) Glyphs(string text, uint color, float size)
     {
-        float real = (float)Math.Round(size * Zoom * 4) / 4;
+        float real = (float)Math.Round(host.FontSize(size) * Zoom * 4) / 4;
         string key = text + ":" + color + ":" + real;
         if (_text.TryGetValue(key, out var cached)) return cached;
         var made = TextRaster.Render(text, Color.FromArgb((int)color), real) ?? ([], 0, 0);

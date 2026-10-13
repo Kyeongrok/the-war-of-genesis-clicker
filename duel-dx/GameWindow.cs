@@ -466,6 +466,21 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>설정 > 화면 > 전투 말풍선 크기 % — 전투 중 인물 머리 위 말풍선(601 · 602)의 틀 · 얼굴 · 글을 함께 키운다. 100 이 원본.</summary>
     internal int _bubbleScalePercent = Array.IndexOf(BubbleScaleChoices, UserSettings.Current.BubbleScalePercent) >= 0 ? UserSettings.Current.BubbleScalePercent : 100;
 
+    /// <summary>
+    /// 설정 > 화면 > 글자 크기 % — 게임이 쓰는 모든 글(<see cref="GetText"/> · <see cref="HiCanvas"/>)의 크기에 곱한다. 100 이 기본(사용자 요청 menu-60).
+    /// 창 · 칸의 자리는 그대로라 크게 하면 좁은 칸에서는 글이 넘칠 수 있다.
+    /// </summary>
+    internal int _fontScalePercent = Array.IndexOf(FontScaleChoices, UserSettings.Current.FontScalePercent) >= 0 ? UserSettings.Current.FontScalePercent : 100;
+
+    /// <summary>글자 크기 설정을 곱한 글꼴 크기.</summary>
+    internal float FontSize(float size) => _fontScalePercent == 100 ? size : (float)Math.Round(size * _fontScalePercent / 100.0 * 4) / 4;
+
+    /// <summary>
+    /// 글자 크기를 바꾼 만큼 글을 위아래로 옮길 양(판 좌표) — 글은 왼위 자리로 그리므로, 키우면 아래로만 자라 칸 밑으로 처진다.
+    /// 줄의 가운데가 제자리에 있게 높이 차이(글꼴 크기의 약 1.33배가 줄 높이)의 절반만큼 올린다(줄이면 내린다).
+    /// </summary>
+    internal double FontShift(float size) => (size - FontSize(size)) * 0.66;
+
     /// <summary>배율·해상도를 바꿨을 때 — 판은 그대로 두고 셰이더·텍스처·창만 다시 만든다.</summary>
     internal void ApplyZoom(bool force = false)
     {
@@ -1396,6 +1411,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f)
     {
+        size = FontSize(size);
         string key = text + ":" + argb + ":" + size;
         if (_textCache.TryGetValue(key, out var cached)) return cached;
 
@@ -1410,7 +1426,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         if (text.Length == 0) return;
         var (px, w, h) = GetText(text, argb, size);
-        if (w > 0) BlitMasked(px, w, h, x, y);
+        if (w > 0) BlitMasked(px, w, h, x, y + (int)Math.Round(FontShift(size)));
     }
 
     // ── 그림 원소 ────────────────────────────────────────────────────────────

@@ -61,6 +61,7 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 int battleTop = Array.FindIndex(BattleZoomChoices, z => z / 100.0 > host.MaxUsableZoom + 1e-6);
                 if (battleTop < 0) battleTop = BattleZoomChoices.Length - 1;
                 int bubble = Math.Max(0, Array.IndexOf(BubbleScaleChoices, host._bubbleScalePercent));
+                int font = Math.Max(0, Array.IndexOf(FontScaleChoices, host._fontScalePercent));
                 double battleReal = Math.Min(host._battleZoomPercent / 100.0, host.MaxUsableZoom);
                 return
                 [
@@ -76,6 +77,9 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                     new("전투 말풍선 크기", host._bubbleScalePercent == 100 ? "100% (원본)" : $"{host._bubbleScalePercent}%",
                         Step: d => host.OnMenuCommand(MenuBubbleScale + Math.Clamp(bubble + d, 0, BubbleScaleChoices.Length - 1)),
                         NoPrev: bubble == 0, NoNext: bubble >= BubbleScaleChoices.Length - 1),
+                    new("글자 크기", host._fontScalePercent == 100 ? "100% (기본)" : $"{host._fontScalePercent}%",
+                        Step: d => host.OnMenuCommand(MenuFontScale + Math.Clamp(font + d, 0, FontScaleChoices.Length - 1)),
+                        NoPrev: font == 0, NoNext: font >= FontScaleChoices.Length - 1),
                     new("전체화면", "", Toggle: () => host.OnMenuCommand(MenuFullscreen), On: host._fullscreen, Note: "모니터를 가득 채운다 (F11)"),
                     new("격자 보이기", "", Toggle: () => host.OnMenuCommand(MenuGrid), On: host._showGrid),
                     new("상단 상태 줄 보이기", "", Toggle: () => host.OnMenuCommand(MenuStatusBar), On: host._showStatusBar),

@@ -145,6 +145,10 @@ internal sealed unsafe partial class GameWindow
     internal bool _hiResUi = UserSettings.Current.HiResUi;
     internal const int MenuHiResUi = 1196;
     internal static readonly int[] BubbleScaleChoices = [100, 125, 150, 175, 200];
+
+    /// <summary>글자 크기 고르기(사용자 요청 menu-60).</summary>
+    internal const int MenuFontScale = 1800;
+    internal static readonly int[] FontScaleChoices = [80, 90, 100, 110, 120];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     internal const int MenuResBase = 1020;
     /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
@@ -230,7 +234,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -500,6 +504,10 @@ internal sealed unsafe partial class GameWindow
                 Toast(_zoomPercent == 0 ? "배율: 자동(창을 채움)" : $"배율: {_zoomPercent}%");
                 break;
             }
+            case >= MenuFontScale and < MenuFontScale + 5:
+                _fontScalePercent = FontScaleChoices[id - MenuFontScale];
+                SaveSettings();
+                break;
             case >= MenuBubbleScale and < MenuBubbleScale + 5:
                 _bubbleScalePercent = BubbleScaleChoices[id - MenuBubbleScale];
                 SaveSettings();
