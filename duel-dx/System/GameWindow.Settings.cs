@@ -26,7 +26,7 @@ namespace DuelDx;
 /// <param name="TalkFillFirst">대사 첫 클릭·키가 흐르는 글을 <b>채우기만</b> 하고 두 번째에 닫을지. 원본(<c>0x1003bfe0</c>)은 첫 클릭에 곧바로 닫는다 —
 /// 기본 끔(원본대로), 켜면 예전 데모 동작(감사 3 T1).</param>
 /// <param name="FontScalePercent">설정 &gt; 화면 &gt; 글자 크기 % — 게임이 쓰는 모든 글에 곱한다. 100 이 기본.</param>
-/// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 일반, 기본 끔(원본대로).</param>
+/// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,

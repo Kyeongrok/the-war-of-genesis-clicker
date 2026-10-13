@@ -43,7 +43,7 @@ internal sealed partial class GamePad
             }
             for (int t = 0; t < TuningScreen.TabNames.Length; t++)
                 list.Add((x + 12 + t * (TuningScreen.TabW + 4), y + TuningScreen.TabY, TuningScreen.TabW, TuningScreen.TabH));
-            if (tuning._tuningTab == 1)
+            if (tuning._tuningTab == TuningScreen.TabStory)
                 for (int i = 0; i < GameWindow.TalkPauseChoices.Length; i++)
                     list.Add((x + 16 + i * (TuningScreen.PauseW + TuningScreen.PauseGap), y + TuningScreen.PauseY, TuningScreen.PauseW, TuningScreen.PauseH));
             else
@@ -51,7 +51,7 @@ internal sealed partial class GamePad
                 int rows = tuning.TuningChecks().Length;
                 for (int i = 0; i < rows; i++)
                     list.Add((x + 12, y + TuningScreen.TuningCheckY + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
-                if (tuning._tuningTab == 0) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
+                if (tuning._tuningTab == TuningScreen.TabGeneral) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
             }
             list.Add((x + TuningScreen.TuningW - 116, y + TuningScreen.TuningH - 40, 100, 28));   // 닫기
             return list;

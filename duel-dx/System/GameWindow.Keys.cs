@@ -155,7 +155,7 @@ internal sealed unsafe partial class GameWindow
     internal const int MenuResetView = 1167;
 
     /// <summary>
-    /// 타키리온 개편 — 모드 > 일반(기본 끔, 사용자 요청). 켜면 자료 모드 <c>assets/data/mods/tachyrion</c> 이 바탕 스킬 · 체질 자료를 덮는다:
+    /// 어빌리티 개편(지금은 타키리온 체질) — 모드 > 밸런스(기본 끔, 사용자 요청 menu-64). 켜면 자료 모드 <c>assets/data/mods/tachyrion</c> 이 바탕 스킬 · 체질 자료를 덮는다:
     /// 소울 블레스트가 범위 SOUL 흡수기가 되고, 락킹 필드 · 배리어 · 리콜이 바뀌고, 리미트 캐스트 · 파워드 배리어 · 마인드 콘트롤이 목록에서 빠진다.
     /// </summary>
     internal const int MenuTachyrionRework = 1177;
@@ -451,7 +451,7 @@ internal sealed unsafe partial class GameWindow
                 _tachyrionRework = !_tachyrionRework;
                 ApplyDataMods();
                 _db?.ReloadSkills();
-                Toast(_tachyrionRework ? "타키리온 개편을 켰습니다 — 소울 블레스트가 범위 SOUL 흡수기가 됩니다" : "타키리온을 원본대로 되돌렸습니다");
+                Toast(_tachyrionRework ? "어빌리티 개편을 켰습니다 — 소울 블레스트가 범위 SOUL 흡수기가 됩니다" : "어빌리티를 원본대로 되돌렸습니다");
                 SaveSettings();
                 break;
             case MenuChestGlow:
