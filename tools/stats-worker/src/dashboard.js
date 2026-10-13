@@ -37,6 +37,9 @@ export const DASHBOARD_HTML = `<!doctype html>
   td.bar i { display: block; height: 10px; background: var(--bar); border-radius: 3px; min-width: 1px; }
   .dim { color: var(--dim); }
   .good { color: var(--good); } .bad { color: var(--bad); }
+  .envgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 24px; }
+  .envgrid h3 { font-size: 13px; margin: 0 0 4px; color: var(--accent); }
+  .envgrid td.bar { width: 30%; }
   .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   #error { color: var(--bad); }
 </style>
@@ -54,6 +57,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section><h2>어빌리티 순위</h2><table id="abilities"></table></section>
   <section><h2>인물별</h2><div class="tabs" id="chartabs"></div><table id="chars"></table></section>
   <section><h2>전투별</h2><table id="battles"></table></section>
+  <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
 </main>
 <script>
@@ -81,6 +85,34 @@ function abilityTable(el, rows, sortable) {
         + '<td class="bar"><i style="width:' + (100 * r[sortKey] / top).toFixed(1) + '%"></i></td></tr>').join('')
       : '<tr><td colspan="10" class="dim name">아직 자료가 없습니다.</td></tr>');
   if (sortable) el.querySelectorAll('th.sort').forEach((th) => th.onclick = () => { sortKey = th.dataset.k; render(); });
+}
+
+// 환경 · 설정 표들 — [자료 열쇠, 제목, 값을 사람이 읽는 말로].
+const onOff = (k) => (k ? '켬' : '끔');
+const ENV_TABLES = [
+  ['platform', '기기 종류', (k) => ({ desktop: '데스크톱', laptop: '노트북', umpc: '휴대용 PC (UMPC)', deck: '스팀 덱', wine: 'Wine (리눅스 · 안드로이드 등)' }[k] || k)],
+  ['control', '조작 방식', (k) => ({ pad: '패드 위주', mixed: '패드 + 키보드 · 마우스', keys: '키보드 · 마우스' }[k] || k)],
+  ['res', '해상도 (설정)', (k) => String(k).replace('x', '×')],
+  ['screen', '모니터 크기', (k) => String(k).replace('x', '×')],
+  ['fullscreen', '전체화면', onOff],
+  ['hiResUi', '새 UI', onOff],
+  ['font', '글자 크기', (k) => k + '%'],
+  ['zoom', '배율', (k) => (Number(k) === 0 ? '자동' : k + '%')],
+  ['touch', '터치 화면', (k) => (k ? '있음' : '없음')],
+];
+
+function envTables() {
+  $('env').innerHTML = ENV_TABLES.map(([key, title, label]) => {
+    const rows = (data.env && data.env[key]) || [];
+    const known = rows.filter((r) => r.k !== null), none = rows.find((r) => r.k === null);
+    const sum = known.reduce((s, r) => s + r.battles, 0);
+    return '<div><h3>' + title + '</h3><table><tr><th class="name">값</th><th>전투</th><th>설치</th><th>비중</th><th></th></tr>'
+      + (known.length ? known.map((r) => '<tr><td class="name">' + esc(label(r.k)) + '</td><td>' + n(r.battles) + '</td><td>' + n(r.installs) + '</td><td>'
+          + (100 * r.battles / sum).toFixed(1) + '%</td><td class="bar"><i style="width:' + (100 * r.battles / sum).toFixed(1) + '%"></i></td></tr>').join('')
+        : '<tr><td colspan="5" class="dim name">아직 자료가 없습니다.</td></tr>')
+      + (none ? '<tr><td class="name dim">자료 없음 (옛 판)</td><td class="dim">' + n(none.battles) + '</td><td class="dim">' + n(none.installs) + '</td><td></td><td></td></tr>' : '')
+      + '</table></div>';
+  }).join('');
 }
 
 function render() {
@@ -115,6 +147,8 @@ function render() {
         + g.rows.sort((a, b) => a.battle - b.battle).map((b) => '<tr><td class="name indent"><span class="dim">Btl ' + String(b.battle).padStart(4, '0') + '</span> '
             + esc(b.name || '') + '</td>' + cells(b) + '</tr>').join('')).join('')
       || '<tr><td colspan="7" class="dim name">아직 자료가 없습니다.</td></tr>');
+
+  envTables();
 
   $('days').innerHTML = '<tr><th class="name">날짜</th><th class="name">버전</th><th>전투</th><th>설치</th></tr>'
     + data.days.map((d) => '<tr><td class="name">' + esc(d.day) + '</td><td class="name">' + esc(d.version) + '</td><td>' + n(d.battles) + '</td><td>' + n(d.installs) + '</td></tr>').join('');

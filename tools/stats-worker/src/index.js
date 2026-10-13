@@ -69,15 +69,24 @@ async function getDashboard(url, env) {
   const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const sums = 'SUM(s.uses) AS uses, SUM(s.hits) AS hits, SUM(s.damage) AS damage, SUM(s.kills) AS kills, SUM(s.heal) AS heal, COUNT(DISTINCT s.report) AS battles';
   const all = (sql) => env.DB.prepare(sql).bind(...args).all().then((r) => r.results);
-  const [total, abilities, chars, battles, days, versions] = await Promise.all([
+  // 환경 · 설정(flags 의 값)별 판 수와 설치 수 — 그 칸을 안 보낸 옛 판은 k 가 NULL 로 한 줄에 모인다(대시보드가 「자료 없음」으로 따로 적는다).
+  const flag = (name) => `json_extract(b.flags, '$.${name}')`;
+  const dim = (expr) => all(`SELECT ${expr} AS k, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond} GROUP BY k ORDER BY battles DESC LIMIT 40`);
+  // 조작 방식 — 그 판에서 기술을 패드로 더 많이 썼으면 pad, 패드를 조금이라도 썼으면 mixed, 아니면 keys.
+  const control = `CASE WHEN ${flag('pad')} IS NULL THEN NULL WHEN ${flag('pad')} > ${flag('keys')} THEN 'pad' WHEN ${flag('pad')} > 0 THEN 'mixed' ELSE 'keys' END`;
+  const ENV = { platform: flag('platform'), control, res: flag('res'), screen: flag('screen'), fullscreen: flag('fullscreen'), hiResUi: flag('hiResUi'),
+                font: flag('font'), zoom: flag('zoom'), touch: flag('touch') };
+  const envRows = Promise.all(Object.values(ENV).map(dim)).then((lists) => Object.fromEntries(Object.keys(ENV).map((key, i) => [key, lists[i]])));
+  const [total, abilities, chars, battles, days, versions, env_] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT install) AS installs, COALESCE(SUM(outcome = 'win'), 0) AS wins, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(seconds), 0) AS secSum, COUNT(seconds) AS secN FROM battles b ${cond}`).bind(...args).first(),
     all(`SELECT s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY s.ability, s.work`),
     all(`SELECT s.chr, s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY s.chr, s.ability, s.work`),
     all(`SELECT b.battle, COUNT(*) AS n, SUM(b.outcome = 'win') AS wins, AVG(b.turns) AS turns, COALESCE(SUM(b.seconds), 0) AS secSum, COUNT(b.seconds) AS secN FROM battles b ${cond} GROUP BY b.battle ORDER BY n DESC, b.battle LIMIT 300`),
     all(`SELECT substr(b.received_at, 1, 10) AS day, b.version, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond} GROUP BY day, b.version ORDER BY day DESC, b.version DESC LIMIT 120`),
     env.DB.prepare('SELECT DISTINCT version FROM battles ORDER BY version DESC LIMIT 50').all().then((r) => r.results.map((v) => v.version)),
+    envRows,
   ]);
-  return json({ total, abilities, chars, battles, days, versions, names: { abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS } });
+  return json({ total, abilities, chars, battles, days, versions, env: env_, names: { abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS } });
 }
 
 export default {
