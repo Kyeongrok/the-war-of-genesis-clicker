@@ -238,6 +238,11 @@ internal sealed class BattleStats(GameWindow host)
                 charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart,
                 pad = _padActs, keys = _keyActs, timedHit = host._timedHit, timed = new[] { _timedShown, _timedBoth, _timedOne },
                 tachyrion = host._tachyrionRework,
+                // 화면 설정과 기기 갈래(사용자 요청 menu-61) — res = 설정의 해상도, zoom = 배율 %(0 = 자동), screen = 모니터 크기,
+                // platform = desktop · laptop · umpc · deck · wine(PlatformInfo — 기종 이름은 안 보낸다), touch = 터치 화면이 있나
+                res = $"{host._viewW}x{host._viewH}", zoom = host._zoomPercent, battleZoom = host._battleZoomPercent, fullscreen = host._fullscreen,
+                hiResUi = host._hiResUi, font = host._fontScalePercent,
+                platform = PlatformInfo.Current.Kind, touch = PlatformInfo.Current.Touch, screen = PlatformInfo.Current.Screen,
             },
             skills = _battle.Select(p => new
             {

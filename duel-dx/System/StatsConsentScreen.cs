@@ -18,7 +18,7 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed unsafe class StatsConsentScreen(GameWindow host)
 {
-    internal const int W = 500, H = 250, ButtonW = 130, ButtonH = 30;
+    internal const int W = 500, H = 268, ButtonW = 130, ButtonH = 30;
 
     /// <summary>꺼 둔 사람에게 다시 권하는 간격(일).</summary>
     internal const int AskAgainDays = 7;
@@ -58,7 +58,8 @@ internal sealed unsafe class StatsConsentScreen(GameWindow host)
         "익명 전투 통계 보내기가 꺼져 있습니다.",
         "",
         "보내는 것: 전투에서 쓴 어빌리티의 횟수와 피해, 전투 번호, 승패,",
-        "              조작 방식(패드 · 키보드), 켜 둔 모드, 게임 판 번호,",
+        "              조작 방식(패드 · 키보드), 켜 둔 모드, 화면 설정,",
+        "              기기 종류(데스크톱 · 노트북 · 휴대용), 게임 판 번호,",
         "              설치마다 하나인 무작위 번호",
         "보내지 않는 것: 이름, 계정, 세이브 내용",
         "",
@@ -68,7 +69,8 @@ internal sealed unsafe class StatsConsentScreen(GameWindow host)
         "게임을 다듬는 데 쓰려고 전투 통계를 익명으로 수집합니다.",
         "",
         "보내는 것: 전투에서 쓴 어빌리티의 횟수와 피해, 전투 번호, 승패,",
-        "              조작 방식(패드 · 키보드), 켜 둔 모드, 게임 판 번호,",
+        "              조작 방식(패드 · 키보드), 켜 둔 모드, 화면 설정,",
+        "              기기 종류(데스크톱 · 노트북 · 휴대용), 게임 판 번호,",
         "              설치마다 하나인 무작위 번호",
         "보내지 않는 것: 이름, 계정, 세이브 내용",
         "",

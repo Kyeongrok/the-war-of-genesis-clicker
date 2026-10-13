@@ -29,6 +29,15 @@ npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT ability,
 
 캐릭터 에디터를 쓴 판은 `battles.flags` 에 표시가 있다 — 빼고 보려면 `battles` 와 묶어 `flags NOT LIKE '%"charEdit":true%'`.
 
+`flags` 에는 화면 설정과 기기 갈래도 실린다(이 칸을 넣은 판부터): `res`(설정의 해상도 「가로x세로」) · `zoom`(배율 %, 0 = 자동) · `battleZoom` ·
+`fullscreen` · `hiResUi`(새 UI) · `font`(글자 크기 %) · `platform`(`desktop` · `laptop` · `umpc` · `deck` · `wine` — 기종 이름은 안 보낸다) ·
+`touch`(터치 화면) · `screen`(모니터 크기). 안드로이드(Winlator 따위)는 `wine` 으로 잡히니 `touch` 와 `screen` 으로 짐작한다.
+
+```
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT json_extract(flags,'$.platform') platform, COUNT(DISTINCT install) installs, COUNT(*) battles, SUM(json_extract(flags,'$.fullscreen')) fullscreen, SUM(json_extract(flags,'$.hiResUi')) new_ui FROM battles WHERE json_extract(flags,'$.platform') IS NOT NULL GROUP BY platform"
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT json_extract(flags,'$.res') res, COUNT(DISTINCT install) installs, COUNT(*) battles FROM battles WHERE json_extract(flags,'$.res') IS NOT NULL GROUP BY res ORDER BY battles DESC"
+```
+
 `flags` 에는 조작 방식과 타이밍 공격도 실린다(v0.31.1 부터 — 그 전 판은 이 칸이 없다):
 `pad` · `keys` = 그 판에서 내 인물이 기술을 쓴 횟수(패드로 / 키보드 · 마우스로), `timedHit` = 타이밍 공격을 켰나,
 `timed` = [띠가 뜬 횟수, 박자 둘 다 맞춤, 하나만 맞춤].
