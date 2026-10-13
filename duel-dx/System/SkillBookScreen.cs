@@ -182,6 +182,10 @@ internal sealed unsafe class SkillBookScreen(GameWindow host)
         var costs = levels.Select(p => db.WorkCostsFor(_body, p.Work)).ToList();
         _shown = [costs.Any(c => c.Tp != 0), costs.Any(c => c.SoulNeed != 0 || c.Soul != 0), costs.Any(c => c.Hp != 0), levels.Any(p => p.Work.ExpCost != 0)];
         int effectW = DetailW - 8 - LevelW - CostColumns.Where((_, i) => _shown[i]).Sum(c => c.Width);
+        // 모든 레벨이 똑같은 효과(「맞힌 대상마다 내 SOUL +10」 따위)는 표 위에 한 번만 적는다 — 줄마다 되풀이하면 표가 길어진다.
+        var effects = levels.Select(p => host.StatusScr.WorkEffect(p.Work).Split(" · ", StringSplitOptions.RemoveEmptyEntries)).ToList();
+        var always = levels.Count > 1 ? effects[0].Where(bit => effects.All(e => e.Contains(bit))).ToList() : [];
+        if (always.Count > 0) Wrap("모든 레벨: " + string.Join(" · ", always), White);
         lines.Add(new Line("", White));
         lines.Add(new Line("효과", DimGray, ["Lv", .. CostColumns.Select(c => c.Label)]));
         for (int i = 0; i < levels.Count; i++)
@@ -194,7 +198,7 @@ internal sealed unsafe class SkillBookScreen(GameWindow host)
             var bits = new List<string>();
             // 위력이 0 이하인 피해 기술은 효과 글에 위력이 안 나온다 — 표에서는 줄마다 적어 둔다.
             if (damage && w.Power <= 0) bits.Add($"위력 {w.Power}");
-            if (host.StatusScr.WorkEffect(w) is { Length: > 0 } text) bits.Add(text);
+            bits.AddRange(effects[i].Where(bit => !always.Contains(bit)));
             if (rangeVaries) bits.Add($"사거리 {w.RangeMax}칸");
             string effect = string.Join(" · ", bits);
             var c = costs[i];

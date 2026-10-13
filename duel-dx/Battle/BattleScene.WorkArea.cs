@@ -240,19 +240,7 @@ internal sealed unsafe partial class BattleScene
         // 큐어(11) — 자료 범위는 레벨 따라 0→3 이지만 핸들러 0x10081830 은 겨눈 유닛 하나에게만 보낸다(0x10081b3c, ba-20 D4).
         if (w.AbilityId == CureAbility) return [(col, row)];
         var cells = AreaCells(w, user, col, row).ToHashSet();
-        // 소울 블레스트(28) — 탄(Obs 0x319)이 시전자 자리에서 겨눈 칸까지 날며 지나는 칸마다 적을 한 번씩 친다
-        // (슬롯 2 0x100c28f0, 0x1009e9e5, ba-20 D5). 지나는 칸은 직선을 칸으로 자른 것(가설).
-        if (w.AbilityId == SoulBlastAbility)
-        {
-            // 탄은 칸 가운데에서 칸 가운데로 10px/틱 직선 — 틱마다 표본 자리의 칸이 바뀌면 그 칸을 친다(0x100c2e90, 트윈 0x10037b50, ba-20 E6).
-            double x0 = user.Col * 40 + 20, y0 = user.Row * 40 + 20, x1 = col * 40 + 20, y1 = row * 40 + 20;
-            double length = Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
-            for (double d = 10; d < length; d += 10)
-            {
-                var cell = ((int)((x0 + (x1 - x0) * d / length) / 40), (int)((y0 + (y1 - y0) * d / length) / 40));
-                if (cell != (user.Col, user.Row)) cells.Add(cell);
-            }
-        }
+        // 소울 블레스트(28)는 원본에서 탄이 지나는 칸마다 적을 치는 관통기였다(0x100c28f0) — 겨눈 칸 둘레를 치는 범위기로 바꿨다(사용자 요청, 타키리온 개편).
         // 헬 레이져(172) — 타격 이펙트 Obs 1050 다섯이 시전자 <b>앞 5칸</b> 줄의 옆 −2..+2 칸에 놓이고 그 칸 하나씩만 친다
         // (0x100b39a0 · 0x100b3c6d~, ba-20 E3). 자료 범위(2칸 앞 줄)와 다르다 — 화면 확인은 못 했다(코드로만 확정).
         if (w.AbilityId == SpecialHitsSkill.HellLaserAbility)

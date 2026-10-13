@@ -957,6 +957,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         foreach (bool _ in WaitFollowersStopped(userIndex)) yield return true;   // 걷던 부하가 다 선 뒤(감사5 L-A)
         CommitMove(a);
         _buffedAllies.Clear();
+        _soulGain = default;
         _timedCritBy = null;
 
         if (targetIndex >= 0) (col, row) = (host._units[targetIndex].Col, host._units[targetIndex].Row);
@@ -1509,7 +1510,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         if (a.Data is not { } cost || host._db is not { } db2) return;
         // +0xa4 ≠ 0(사건 207·909)이면 TP·SOUL·HP 비용을 통째로 건너뛰고(0x10076384 jne 0x10076586) SOUL 증가만 한다(감사5 B2).
-        if (free) { AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 }); return; }
+        if (free) { AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 }); PaySoulGain(a); return; }
         a.Tp -= TpCostFor(a, cost, w.Id);
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
@@ -1519,6 +1520,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         AddSoul(a, w.Kind switch { 0 => db2.N(26), 1 => db2.N(27), 2 => db2.N(28), 3 => db2.N(29), _ => 0 });
         int hp = db2.WorkHpCost(cost, w.Id);
         if (hp > 0 && cost.JobId != 37 && a.Hp > 0) a.Hp = Math.Max(1, a.Hp - hp);   // 직업 37 은 SOUL·HP 소비 면제(0x100764d3), TP 는 뺀다
+        PaySoulGain(a);
+    }
+
+    /// <summary>50(맞힌 대상마다 SOUL)으로 모인 몫을 비용을 치른 뒤에 준다 — 소울 블레스트의 SOUL 흡수(Ailment.cs).</summary>
+    internal void PaySoulGain(UnitState a)
+    {
+        if (_soulGain.Who != a) return;
+        int before = a.Soul;
+        AddSoul(a, _soulGain.Amount);
+        _soulGain = default;
+        if (a.Soul > before) Popup(a, $"{host._db?.T(41)} +{a.Soul - before}", HealColor2, 13);
     }
 
     /// <summary>타이밍 크리티컬을 맞춘 인물 — 그 행동이 끝날 때까지 그 인물의 타격은 반드시 맞고 크리티컬이다(<see cref="TimedHit"/>).</summary>

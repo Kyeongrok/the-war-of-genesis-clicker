@@ -98,6 +98,7 @@ internal sealed unsafe partial class BattleScene
             // 전투 목록(0x10032760)은 분류 1(전투)·4 만 보여 준다(분석-스킬) — 비전투 수련(0, 발키리의 혼 따위)·군단기(2)·
             // 장착형 패시브(3, PSY증가 따위)는 안 나온다.
             if (ab.Category is not (1 or 4)) continue;
+            if (host._db.IsHidden(abilityId)) continue;   // 없앤 어빌리티는 배워 둔 인물의 목록에도 안 나온다(사용자 요청)
             // 직업 37 은 부족해도 줄이 안 흐려진다(0x100d58a1). HP 비용도 본다(0x100d588b).
             string reason = w.Kind == 4 ? "쓸 수 없음"
                 : c.JobId == 37 ? ""

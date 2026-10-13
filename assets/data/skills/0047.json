@@ -1,6 +1,7 @@
 {
   "ability": 47,
   "name": "마인드 콘트롤",
+  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 1,

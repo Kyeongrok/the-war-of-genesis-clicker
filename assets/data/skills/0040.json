@@ -1,6 +1,7 @@
 {
   "ability": 40,
   "name": "브레인 스톰",
+  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 8,

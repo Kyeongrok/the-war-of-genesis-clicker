@@ -78,6 +78,19 @@ internal sealed unsafe partial class BattleScene
     internal static bool IsStatBonus(int id) => id is 30 or 31 or 32 or 33 or 34 or 37 or 48;
 
     /// <summary>
+    /// 데모가 붙인 번호(원본에 없다, 사용자 요청 — 타키리온의 SOUL 흡수): <b>49</b> 는 맞은 대상의 <b>지금 SOUL</b> 을 값만큼 바꾸고(−30 이면 30 깎는다),
+    /// <b>50</b> 은 맞힌 대상 하나마다 <b>건 사람</b>의 SOUL 을 값만큼 채운다. 둘 다 칸에 안 들어가고 그 자리에서 끝난다.
+    /// 건 사람 몫은 기술 비용을 치른 뒤에 한꺼번에 준다(<see cref="PayWorkCost"/>) — 먼저 주면 SOUL 이 가득일 때 넘친 만큼 잃는다.
+    /// </summary>
+    internal const int SoulDrainEffect = 49, SoulGainEffect = 50;
+
+    /// <summary>칸에도 보정에도 안 남고 걸리는 순간 끝나는 번호(49 · 50).</summary>
+    internal static bool IsInstant(int id) => id is SoulDrainEffect or SoulGainEffect;
+
+    /// <summary>이번 행동에서 50(맞힌 대상마다 SOUL)으로 모인 몫과 그 주인.</summary>
+    internal (UnitState? Who, int Amount) _soulGain;
+
+    /// <summary>
     /// 상태이상까지 얹은 능력치 — 판정·이동 범위·능력치 표시는 모두 이것을 써야 한다.
     /// </summary>
     /// <remarks>
@@ -156,6 +169,18 @@ internal sealed unsafe partial class BattleScene
         foreach (var (id, value) in effects)
         {
             if (id == 0) continue;
+            if (id == SoulDrainEffect)
+            {
+                int before = target.Soul;
+                target.Soul = Math.Clamp(target.Soul + value, 0, Math.Max(target.Soul, target.MaxSoul));
+                if (target.Soul != before) Popup(target, $"{host._db?.T(41)} {target.Soul - before:+#;-#}", value < 0 ? MissColor : HealColor2, 13);
+                continue;
+            }
+            if (id == SoulGainEffect)
+            {
+                _soulGain = (attacker, (_soulGain.Who == attacker ? _soulGain.Amount : 0) + value);
+                continue;
+            }
             if (IsStatBonus(id))
             {
                 AddStatBonus(target, id, value);

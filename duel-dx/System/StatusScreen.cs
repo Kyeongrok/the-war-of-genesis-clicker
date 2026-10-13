@@ -698,7 +698,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         }
 
         // ── 획득한 어빌리티(0x10035290) — 번호 차례, 여섯 줄씩 ──
-        var learned = c.Abilities.OrderBy(a => a.Ability)
+        var learned = c.Abilities.Where(a => !db.IsHidden(a.Ability)).OrderBy(a => a.Ability)   // 없앤 어빌리티는 숨긴다
             .Select(a => (Ab: db.Abilities.GetValueOrDefault(a.Ability), Level: (int)a.Level, Legion: false)).Where(a => a.Ab != null).ToList();
         // 군단기 — 배속 군단(CChr+0x1c)의 기술 다섯 칸(For +0x1e, 6바이트씩) 가운데 필요 세력·대장 조건이 맞는 것을 목록 끝에(0x100326bd~0x1003274c).
         // 레벨 게터 0x10032a30 은 분류 2 면 늘 1, 다음 레벨(0x10032450)은 최대 레벨 1 을 넘어 −1 → 숫자 없는 꺼진 줄 「이름 Lv1」, 설명만 된다(감사4 S6).
@@ -1000,7 +1000,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         foreach (var (stat, value) in w.Bonuses)
             if (BonusText(stat, value) is { } bonus) bits.Add(bonus);
         // 44~46 은 상태이상 칸을 「없음」으로 덮어쓰는 번호다(PutAilment) — 칸에 드는 효과가 셋이면 세 칸이 다 새로 쓰여 걸려 있던 것이 모두 지워진다(큐어).
-        int clears = w.Bonuses.Count(b => b.Stat is 44 or 45 or 46), slots = w.Bonuses.Count(b => b.Stat != 0 && !BattleScene.IsStatBonus(b.Stat));
+        int clears = w.Bonuses.Count(b => b.Stat is 44 or 45 or 46), slots = w.Bonuses.Count(b => b.Stat != 0 && !BattleScene.IsStatBonus(b.Stat) && !BattleScene.IsInstant(b.Stat));
         if (clears == 3) bits.Add("상태이상 모두 회복");
         else if (clears > 0) bits.Add(slots == 3 ? "다른 상태이상 지움" : $"상태이상 {clears}칸 회복");
         return string.Join(" · ", bits);
@@ -1011,6 +1011,8 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     {
         if (stat is 0 or 44 or 45 or 46) return null;           // 44~46 은 원본의 「없음」 칸
         if (stat == ItemBook.ExpStat) return $"얻는 경험치 {value:+#;-#;0}%";
+        if (stat == BattleScene.SoulDrainEffect) return $"대상 SOUL {value:+#;-#;0}";
+        if (stat == BattleScene.SoulGainEffect) return $"맞힌 대상마다 내 SOUL {value:+#;-#;0}";
         if (StatBonusNames.TryGetValue(stat, out var statName)) return $"{statName} {value:+#;-#;0}";
         if (BattleScene.ChangeText(stat, value) is { } change) return change;
         string desc = host._db?.Statuses.GetValueOrDefault(stat) is { } st ? host._db.T(st.DescriptionId) : "";

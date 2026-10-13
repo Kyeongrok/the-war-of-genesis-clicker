@@ -51,6 +51,12 @@ public sealed class SkillFile
     /// </summary>
     public int IconSide { get; set; } = -1;
 
+    /// <summary>
+    /// 없앤 어빌리티 — 체질에서 뺀 뒤에도 이미 배운 인물의 목록(전투 어빌리티 창 · Status 의 획득한 어빌리티)에 남지 않게 숨긴다(사용자 요청, 타키리온 개편).
+    /// 자료와 work 는 그대로라 적 · 사건이 쓰는 데는 지장이 없다.
+    /// </summary>
+    public bool Hidden { get; set; }
+
     public int IconArea { get; set; } = -1;
 
     public int IconKind { get; set; } = -1;
@@ -229,6 +235,7 @@ public static class SkillBook
         sb.Append($"  \"name\": {JsonSerializer.Serialize(skill.Name, Json)},\n");
         if (skill.Description.Length > 0) sb.Append($"  \"description\": {JsonSerializer.Serialize(skill.Description, Json)},\n");
         if (skill.MaxLevel > 0) sb.Append($"  \"maxLevel\": {skill.MaxLevel},\n");
+        if (skill.Hidden) sb.Append("  \"hidden\": true,\n");
         if (skill.IconSide >= 0) sb.Append($"  \"iconSide\": {skill.IconSide},\n");
         if (skill.IconArea >= 0) sb.Append($"  \"iconArea\": {skill.IconArea},\n");
         if (skill.IconKind >= 0) sb.Append($"  \"iconKind\": {skill.IconKind},\n");
@@ -253,6 +260,7 @@ public static class SkillBook
             Name = o["name"]?.GetValue<string>() ?? "",
             Description = o["description"]?.GetValue<string>() ?? "",
             MaxLevel = o["maxLevel"]?.GetValue<int>() ?? 0,
+            Hidden = o["hidden"]?.GetValue<bool>() ?? false,
             IconSide = o["iconSide"]?.GetValue<int>() ?? -1,
             IconArea = o["iconArea"]?.GetValue<int>() ?? -1,
             IconKind = o["iconKind"]?.GetValue<int>() ?? -1,

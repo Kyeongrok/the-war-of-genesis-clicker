@@ -401,7 +401,7 @@ public sealed class GameDatabase
         for (int i = 0, n = U16(d, 2), o = 6; i < n && o + 18 <= d.Length; i++, o += 18)
             statuses[U16(d, o)] = new StatusData(U16(d, o), U16(d, o + 2), U16(d, o + 5));
 
-        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses) { _descriptions = descriptions };
+        return new GameDatabase(files, text, jobs, deps, items, abilities, works, num, statuses) { _descriptions = descriptions, _hidden = HiddenOf(skills) };
     }
 
     /// <summary>work 레코드 62바이트(<paramref name="o"/> 부터) 하나 — <c>.att</c> 에서도, <see cref="SkillBook.Expand"/> 가 펼친 것에서도 같은 식으로 읽는다.</summary>
@@ -416,6 +416,13 @@ public sealed class GameDatabase
 
     /// <summary>스킬 파일이 덮어쓴 어빌리티 설명(어빌리티 번호 → 글). 비어 있으면 원본 TXR 을 쓴다.</summary>
     private Dictionary<int, string> _descriptions = [];
+
+    private HashSet<int> _hidden = [];
+
+    private static HashSet<int> HiddenOf(List<SkillFile> skills) => [.. skills.Where(s => s.Hidden && s.Ability > 0).Select(s => s.Ability)];
+
+    /// <summary>없앤 어빌리티인가(스킬 파일의 <c>hidden</c>) — 이미 배운 인물의 목록에서 숨긴다. 적 · 사건이 쓰는 것은 막지 않는다.</summary>
+    public bool IsHidden(int abilityId) => _hidden.Contains(abilityId);
 
     private static Dictionary<int, string> DescriptionsOf(List<SkillFile> skills) =>
         skills.Where(s => s.Ability > 0 && s.Description.Length > 0).GroupBy(s => s.Ability).ToDictionary(g => g.Key, g => g.First().Description);
@@ -451,6 +458,7 @@ public sealed class GameDatabase
         }
         Works = works;
         _descriptions = DescriptionsOf(skills);
+        _hidden = HiddenOf(skills);
         // 체질(직업)별 배울 수 있는 어빌리티(assets/data/jobs)도 다시 읽는다 — 편집기에서 빼고 저장해도 게임을 켜 둔 채면
         // 어빌리티 반영이 직업을 안 읽어 그대로 배울 수 있게 보였다(사용자 보고: 체질에서 어빌리티 빼기가 안 된다).
         if (Jobs is Dictionary<int, JobData> jobs)
