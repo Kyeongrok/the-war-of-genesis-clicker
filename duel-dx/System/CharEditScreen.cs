@@ -6,11 +6,13 @@ namespace DuelDx;
 using static DuelDx.GameWindow;
 
 /// <summary>
-/// 도구 &gt; 캐릭터 에디터 — 인물마다 레벨(누적 경험치)과 장비 칸의 아이템, 파티의 소지금을 게임 안에서 바꾼다(사용자 요청, 원본에 없는 시험용 도구).
+/// 도구 &gt; 캐릭터 에디터 — 인물마다 레벨(누적 경험치)과 장비 칸의 아이템·어빌리티, 파티의 소지금을 게임 안에서 바꾼다(사용자 요청, 원본에 없는 시험용 도구).
 /// </summary>
 /// <remarks>
 /// 대상은 지금 파티의 동료(전직 화면에 서는 인물)다 — 자료는 판에 서 있으면 그 유닛의 것, 아니면 명부(<c>_party</c>)의 것. 레벨은 <see cref="GameDatabase.SetLevel"/>(스크립트 805 와 같은 식)로
 /// 능력치까지 다시 세고 누적 경험치를 레벨 × 100 으로 맞춘다. 장비는 칸마다 아이템 번호를 앞뒤로 넘긴다(0 = 비움). 바꾸면 명부와 판 위의 유닛에 바로 든다.
+/// 오른쪽 칸은 「장비」·「어빌리티」 갈래 — 어빌리티 갈래는 게임의 모든 어빌리티를 줄로 올려 ＋ 로 넣고(Lv1) 레벨을 올리고, − 로 내리다 Lv1 에서 지운다.
+/// 직업 목록·선행 어빌리티·EXP 는 따지지 않는다(사용자 요청 menu-59).
 /// 고칠 인물이 없으면(타이틀처럼 아직 아무것도 안 불러온 때) 세이브 파일 목록부터 보인다 — 고르면 그 세이브를 불러온 뒤 고친다(사용자 요청 menu-8).
 /// 맨 위 줄은 파티 것: 소지금 올리고 내리기와 「나야트레이 등장」(Chr 563 을 801 처럼 지금 파티에 넣는다).
 /// </remarks>
@@ -26,6 +28,9 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal int _top;              // 목록 스크롤
     internal bool _pickSave;        // 인물이 있어도 세이브 목록을 보인다(「세이브 고르기」)
     internal int _saveTop;          // 세이브 목록 스크롤
+    internal int _tab;              // 오른쪽 칸 갈래 — 0 장비 · 1 어빌리티
+    internal int _abTop;            // 어빌리티 목록 스크롤
+    private (int Chr, List<int> Ids)? _abRows;
     private List<(int Slot, SystemMenu.SaveState Head)>? _saves;
 
     /// <summary>파일이 있는 세이브 칸들 — 파일을 통째로 읽는 일이라 창을 열 때 한 번만 훑는다.</summary>
@@ -41,6 +46,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         _open = !_open;
         _pickSave = false;
         _saves = null;
+        _abRows = null;
     }
 
     /// <summary>고른 세이브를 불러온다 — 그 뒤로는 불러온 게임의 인물을 고친다.</summary>
@@ -107,6 +113,45 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         Apply(chr, c with { Items = [.. c.Items.Select((it, k) => k == slot ? (ushort)next : it)] });
     }
 
+    /// <summary>
+    /// 어빌리티 갈래의 줄 — 이름이 있고 없애지 않은(<see cref="GameDatabase.IsHidden"/>) 어빌리티 모두. 그 인물이 가진 것을 앞에 놓는다.
+    /// 줄 차례는 인물을 고를 때 한 번 정해 둔다 — 넣고 지울 때마다 다시 세우면 누르던 줄이 발밑에서 달아난다.
+    /// </summary>
+    internal List<int> AbilityRows(GameDatabase db, CharacterData c)
+    {
+        if (_abRows is { } rows && rows.Chr == c.Code) return rows.Ids;
+        // 어빌리티 표에도 갈래 머리줄(「=== … ===」)과 이름 없는 빈 줄이 섞여 있다 — 건너뛴다. work 가 하나도 없는 것은 넣어도 쓸 수 없다(패시브는 빼고).
+        List<int> ids = [.. db.Abilities.Values
+            .Where(ab => ab.Id != 0 && !db.IsHidden(ab.Id) && (ab.WorkByLevel.Count > 0 || ab.IsPassive || c.HasAbility(ab.Id))
+                         && db.T(ab.NameId) is { Length: > 0 } name && !name.StartsWith('='))
+            .OrderBy(ab => c.HasAbility(ab.Id) ? 0 : 1).ThenBy(ab => ab.Id).Select(ab => ab.Id)];
+        (_abRows, _abTop) = ((c.Code, ids), 0);
+        return ids;
+    }
+
+    /// <summary>어빌리티를 넣거나(없던 것 +1 = Lv1) 레벨을 올리고 내린다 — Lv1 에서 내리면 지우고, 장착 칸에 끼워 둔 패시브였으면 그 칸도 비운다.</summary>
+    internal void ChangeAbility(int chr, int id, int delta)
+    {
+        if (host._db is not { } db || DataOf(chr) is not { } c || !db.Abilities.TryGetValue(id, out var ab)) return;
+        var list = c.Abilities.ToList();
+        int i = list.FindIndex(a => a.Ability == id);
+        if (i < 0 && delta < 0) return;
+        int level = (i < 0 ? 0 : list[i].Level) + delta;
+        if (level > Math.Max(1, (int)ab.MaxLevel)) { host.Toast("최대 레벨입니다"); return; }
+        var passives = c.Passives;
+        if (level <= 0)
+        {
+            list.RemoveAt(i);
+            passives = [.. passives.Select(p => p == id ? (ushort)0 : p)];
+        }
+        else if (i < 0) list.Add(((ushort)id, (ushort)level));
+        else list[i] = ((ushort)id, (ushort)level);
+        Apply(chr, c with { Abilities = [.. list], Passives = passives });
+    }
+
+    internal const int TabDx = 234, TabW = 72, AbRowH = 22, AbRows = 9;
+    internal static readonly string[] Tabs = ["장비", "어빌리티"];
+
     internal bool In(int bx, int by, int x, int y, int w, int h) => bx >= x && bx < x + w && by >= y && by < y + h;
 
     /// <summary>열려 있으면 클릭을 먹는다.</summary>
@@ -138,11 +183,28 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         }
         if (_chosen >= people.Count) return true;
         int chr = people[_chosen], px = x + ListW + 30;
+        for (int t = 0; t < Tabs.Length; t++)
+            if (In(bx, by, px + TabDx + t * (TabW + 4), y + 42, TabW, 22)) { _tab = t; return true; }
         // 레벨 단추 — −10 · −1 · +1 · +10
         int ly = y + 76;
         (int Dx, int Delta)[] steps = [(170, -10), (214, -1), (258, 1), (302, 10)];
         foreach (var (dx, delta) in steps)
             if (bx >= px + dx && bx < px + dx + 40 && by >= ly && by < ly + 22) { ChangeLevel(chr, delta); return true; }
+        if (_tab == 1)
+        {
+            // 어빌리티 줄 — − ＋
+            if (host._db is { } db && DataOf(chr) is { } ac)
+            {
+                var ids = AbilityRows(db, ac);
+                for (int i = 0; i < AbRows && _abTop + i < ids.Count; i++)
+                {
+                    int ry = y + 130 + i * AbRowH;
+                    if (In(bx, by, px + 318, ry, 30, 20)) { ChangeAbility(chr, ids[_abTop + i], -1); return true; }
+                    if (In(bx, by, px + 352, ry, 30, 20)) { ChangeAbility(chr, ids[_abTop + i], 1); return true; }
+                }
+            }
+            return true;
+        }
         // 장비 칸 — ◀◀ ◀ ▶ ▶▶ (10 · 1 씩)
         if (DataOf(chr) is { } c)
             for (int slot = 0; slot < c.Items.Length; slot++)
@@ -161,6 +223,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     {
         var people = People();
         if (_pickSave || NoGame(people)) _saveTop = Math.Clamp(_saveTop - delta, 0, Math.Max(0, Saves().Count - SaveRows));
+        // 어빌리티 갈래에서 마우스가 오른쪽 칸 위면 어빌리티 목록을 굴린다(줄이 많아 한 번에 세 줄) — 넘친 값은 그릴 때 자른다.
+        else if (_tab == 1 && host._mouse.X >= Origin().X + 12 + ListW + 8) _abTop -= delta * 3;
         else _top = Math.Clamp(_top - delta, 0, Math.Max(0, people.Count - ListRows));
     }
 
@@ -169,13 +233,32 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if (key == Win32.VK_ESCAPE) _open = false;
     }
 
-    internal void Button(int bx, int by, int w, string text)
+    internal void Button(int bx, int by, int w, string text, bool on = false, int h = 22)
     {
-        bool here = In(host._mouse.X, host._mouse.Y, bx, by, w, 22);
-        host.UiFill(bx, by, w, 22, here ? 0xFF2A4A8A : StatusScreen.BoxBg);
-        host.UiStroke(bx, by, w, 22, StatusScreen.BoxLine);
+        bool here = In(host._mouse.X, host._mouse.Y, bx, by, w, h);
+        host.UiFill(bx, by, w, h, here || on ? 0xFF2A4A8A : StatusScreen.BoxBg);
+        host.UiStroke(bx, by, w, h, StatusScreen.BoxLine);
         var (_, tw, _) = host.UiGetText(text, White, 12);
-        host.UiText(text, bx + (w - tw) / 2, by + 3, White, 12);
+        host.UiText(text, bx + (w - tw) / 2, by + (h - 16) / 2, White, 12);
+    }
+
+    /// <summary>어빌리티 갈래 — 가진 것은 밝게 레벨과 함께, 없는 것은 흐리게. 줄마다 − ＋.</summary>
+    internal void DrawAbilities(GameDatabase db, CharacterData c, int px, int y)
+    {
+        var ids = AbilityRows(db, c);
+        _abTop = Math.Clamp(_abTop, 0, Math.Max(0, ids.Count - AbRows));
+        host.UiText("어빌리티 (＋ 넣기·올리기 · − 내리기·지우기)", px, y + 110, DimGray, 12);
+        string range = $"{Math.Min(ids.Count, _abTop + 1)}–{Math.Min(ids.Count, _abTop + AbRows)} / {ids.Count}";
+        host.UiText(range, px + 382 - host.UiGetText(range, DimGray, 12).W, y + 110, DimGray, 12);
+        for (int i = 0; i < AbRows && _abTop + i < ids.Count; i++)
+        {
+            var ab = db.Abilities[ids[_abTop + i]];
+            int ry = y + 130 + i * AbRowH;
+            bool has = c.HasAbility(ab.Id);
+            host.UiText($"{db.T(ab.NameId)}  #{ab.Id}{(ab.IsPassive ? "  패시브" : "")}", px, ry + 2, has ? White : DimGray, 12);
+            if (has) host.UiText($"Lv{c.AbilityLevel(ab.Id)}/{Math.Max(1, (int)ab.MaxLevel)}", px + 256, ry + 2, 0xFF00FFFF, 12);
+            Button(px + 318, ry, 30, "−", h: 20); Button(px + 352, ry, 30, "＋", h: 20);
+        }
     }
 
     /// <summary>세이브 고르기 쪽 — 파일이 있는 칸만 줄로 올린다. 누르면 불러온다.</summary>
@@ -209,7 +292,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiFill(x, y, W, H, StatusScreen.PanelBg);
         host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
         host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
-        host.UiText("캐릭터 에디터 — 레벨·장비·소지금 바꾸기(시험용)", x + 10, y + 6, White);
+        host.UiText("캐릭터 에디터 — 레벨·장비·어빌리티·소지금 바꾸기(시험용)", x + 10, y + 6, White);
 
         var people = People();
         bool picking = _pickSave || NoGame(people);
@@ -249,8 +332,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             host.UiText($"{db.T(c.NameId)}  (Chr {c.Code})", px, y + 44, White);
             host.UiText($"레벨 {c.Level}  ·  누적 EXP {c.CumExp}", px, y + 78, White);
             Button(px + 170, y + 76, 40, "−10"); Button(px + 214, y + 76, 40, "−1"); Button(px + 258, y + 76, 40, "+1"); Button(px + 302, y + 76, 40, "+10");
-            host.UiText("장비 (칸마다 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
-            for (int slot = 0; slot < c.Items.Length; slot++)
+            for (int t = 0; t < Tabs.Length; t++) Button(px + TabDx + t * (TabW + 4), y + 42, TabW, Tabs[t], on: t == _tab);
+            if (_tab == 1) DrawAbilities(db, c, px, y);
+            else host.UiText("장비 (칸마다 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
+            for (int slot = 0; _tab == 0 && slot < c.Items.Length; slot++)
             {
                 int iy = y + 140 + slot * 30;
                 int id = c.Items[slot];
