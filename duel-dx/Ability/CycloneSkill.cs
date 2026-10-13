@@ -97,6 +97,8 @@ internal sealed unsafe class CycloneSkill(GameWindow host)
         var btl = host.Btl;
         var (ux, uy) = btl.UnitFoot(user);
         int last = 0;
+        // 카메라가 좌우로 ±9 · ±8 · … · ±4 를 차례로 오간다(빠르기 10 — 한 번에 두 틱쯤, 0x1008c2ba~0x1008c4eb).
+        for (int k = 0; k < 6; k++) host.HeavenEarthAb._shakes.Add((At(4 * k), At(4 * k + 4), 9 - k, false));
         foreach (var t in Targets(w, user, col, row))
         {
             var (tx, ty) = btl.UnitFoot(t);

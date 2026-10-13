@@ -144,6 +144,19 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 소닉 블레이드(<c>0x1008ac1b</c> · <c>0x1008ae60</c>) · 비연참(<c>0x10080538</c>)의 옆 분신 둘 — 시전자의 지금 모습 그대로, 겨눈 쪽의 옆으로 하나씩(그리기 칸 5).
+    /// 모으는 동안은 틱당 1 씩 벌어지고(수명 = 모으기 동작 길이 + 1), 소닉 블레이드가 베는 동안은 ±40 에 서 있다(수명 = 그 동작 길이).
+    /// </summary>
+    internal void SpawnSideClones(UnitState user, Facing toward, bool drift)
+    {
+        if (!host._sprites.TryGetValue(user.ChrCode, out var sprite)) return;
+        int ticks = Math.Max(1, (int)Math.Round(sprite.ActionSeconds(DrawnAction(user, drift ? 5 : 12), user.Facing) * TicksPerSecond)) + (drift ? 1 : 0);
+        var (dx, dy) = toward is Facing.Up or Facing.Down ? (1, 0) : (0, 1);
+        foreach (int side in new[] { 1, -1 })
+            _bodyShapes.Add((user, 11, host._lastTime, drift ? ticks : -ticks, null, side * dx, side * dy, 5 / 9.0, null));
+    }
+
+    /// <summary>
     /// 꼴이 있는 복제 — 1 늘어남(Param = 틱 수, 20 또는 120) · 2 떨림(Param = 치우침) · 3 꼬리(Param 틱 전 자리 + (Dx, Dy)) · 4 메아리(Param 틱 전 모습을 제자리에) ·
     /// 5 크기(1.84배에서 틱마다 × 0.97, 10틱) · 6 리콜의 사라짐/나타남 크기(Param 0/1). History 는 주인이 틱마다 지나온 자리·모습(같은 묶음이 함께 쓴다). Fade 는 그리기 칸(+0x13) ÷ 9.
     /// </summary>
@@ -225,6 +238,22 @@ internal sealed unsafe partial class BattleScene
                         ? sprite.FrameOfMotion(hitClip.Id, 0, c.Owner.Facing == Facing.Right) ?? frame : frame;
                     host.BlitMasked(pose.Px, pose.W, pose.H, fx + pose.X, fy + pose.Y - lift);
                     host.DrawUi(587, 4, tick, fx, fy - lift, UiBlend.Add, loop: true);
+                    break;
+                }
+                case 11:
+                {
+                    // 옆 분신(SpawnSideClones) — Param > 0 이면 틱당 1 씩 벌어지고, < 0 이면 40 에 서 있다. (Dx, Dy) 는 벌어지는 쪽.
+                    if (tick >= Math.Abs(c.Param)) { _bodyShapes.RemoveAt(i); continue; }
+                    int off = c.Param > 0 ? Math.Min(40, tick) : 40;
+                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + c.Dx * off, fy + frame.Y + (int)(c.Dy * off * 0.8), fade: c.Fade);
+                    break;
+                }
+                case 12:
+                {
+                    // 블라인드의 도는 복제(OzmaSkill.SpawnBlind) — Param = 자리(60° × Param), 반지름 15, 100틱.
+                    if (tick >= 100) { _bodyShapes.RemoveAt(i); continue; }
+                    double angle = (60 * c.Param + tick) * Math.PI / 180;
+                    host.BlitMasked(frame.Px, frame.W, frame.H, fx + frame.X + (int)Math.Round(15 * Math.Cos(angle)), fy + frame.Y + (int)Math.Round(15 * Math.Sin(angle) * 0.8), fade: c.Fade);
                     break;
                 }
                 case 6:

@@ -36,7 +36,7 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
     /// <summary>
     /// 밀어내기 — <paramref name="target"/> 을 시전자가 보는 쪽으로 사거리 끝까지(막히면 거기까지) 밀고, 시전자는 동작 24 로 돌아온다.
     /// </summary>
-    internal IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0, int pushCells = -1)
+    internal IEnumerable<bool> KnockbackRoutine(UnitState user, WorkData w, UnitState target, int soulDrain = 0, int pushCells = -1, double fixedSpeed = 0)
     {
         var (dc, dr) = user.Facing switch
         {
@@ -56,7 +56,7 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
         if (moved > 0)
         {
             // 한 틱에 가는 거리 — 원본 이동기처럼 틱마다 곱해 줄고 1 아래로는 안 준다.
-            var (speed, factor) = push > 5 ? (35.0, 0.87) : push > 3 ? (28.0, 0.83) : (20.0, 0.8);
+            var (speed, factor) = fixedSpeed > 0 ? (fixedSpeed, 1.0) : push > 5 ? (35.0, 0.87) : push > 3 ? (28.0, 0.83) : (20.0, 0.8);
             var steps = new List<double>();
             for (double pos = 0, total = moved * WorldPerCell; pos < total;)
             {
@@ -71,22 +71,59 @@ internal sealed unsafe class KnockbackSkill(GameWindow host)
             host.Btl._effects.Add((BiTrailObs, 0, host._lastTime, tx, ty));
             target.BeginSlide(col, row);
             double start = host._lastTime;
+            var mark = (tx, ty);
             for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < steps.Count;)
             {
                 target.SetSlide(steps[k]);
+                mark = Trail(target, mark);
                 yield return true;
             }
             target.SetSlide(1);
             target.PlayAction(ObsMotionTable.ActionStand, 0);
         }
-        // 다이나믹 크래쉬 — 다 밀린 뒤 대상 SOUL −min(10, SOUL)(0x1009fd40 단계 2).
-        if (soulDrain > 0 && host._db is { } db)
-        {
-            int drain = Math.Min(soulDrain, target.Soul);
-            target.Soul -= drain;
-            host.Btl.ShowNumber(target, $"{db.T(41)} -{drain}", BattleScene.MissColor);
-        }
+        if (soulDrain > 0) DrainSoul(target, soulDrain);
         if (BiWorks.Contains(w.Id)) host.Btl.PlayAction(user, host.Btl.DrawnAction(user, 24));
+    }
+
+    /// <summary>
+    /// 미는 자국 — 이동기에 건 <c>0x100cae10(109, 0, 1, 10)</c>: 마지막 자국에서 10 넘게 움직일 때마다 그 자리에 109:0 을 하나 남긴다
+    /// (<c>0x100cb1cc</c>~<c>0x100cb3e8</c>, 비 · 혼 · 비연참 · 다이나믹 크래쉬). 돌려주는 값이 새 「마지막 자국」.
+    /// </summary>
+    internal (int X, int Y) Trail(UnitState unit, (int X, int Y) last)
+    {
+        var (x, y) = host.Btl.UnitFoot(unit);
+        double dx = x - last.X, dy = (y - last.Y) / 0.8;
+        if (dx * dx + dy * dy <= 100) return last;
+        host.Btl._effects.Add((BiTrailObs, 0, host._lastTime, x, y));
+        return (x, y);
+    }
+
+    /// <summary>다이나믹 크래쉬 — 판정 뒤 대상 SOUL −min(10, SOUL)(0x1009fd40 단계 2).</summary>
+    internal void DrainSoul(UnitState target, int amount)
+    {
+        if (host._db is not { } db) return;
+        int drain = Math.Min(amount, target.Soul);
+        target.Soul -= drain;
+        host.Btl.ShowNumber(target, $"{db.T(41)} -{drain}", BattleScene.MissColor);
+    }
+
+    /// <summary>
+    /// 다이나믹 크래쉬(<c>0x1009fd40</c>) — 보이지 않는 탄이 시전자 한 칸 앞(높이 50)에서 대상까지 틱당 20 으로 날며 틱마다 700:10(세로) · 700:11(가로)을 남기고
+    /// (<c>0x100c3c50</c> · <c>0x100c3c90(700, …)</c> · <c>0x100c3d20</c>), 거리 × 2틱 뒤 대상이 맞음 자세로 사거리 끝까지 틱당 20 으로 밀린다(<c>0x100a00dc</c>).
+    /// 판정과 SOUL −10 은 다 밀린 뒤다(단계 2) — 부르는 쪽이 낸다.
+    /// </summary>
+    internal IEnumerable<bool> DynamicCrashRoutine(UnitState user, WorkData w, UnitState target)
+    {
+        var (dc, dr) = user.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+        int distance = Math.Max(1, Math.Abs(target.Col - user.Col) + Math.Abs(target.Row - user.Row));
+        var (ux, uy) = host.Btl.UnitFoot(user);
+        for (int t = 0; t <= 2 * (distance - 1); t++)
+        {
+            double along = WorldPerCell + 20 * t;
+            host.ForcetrulAb.Fx(w, 700, dc != 0 ? 11 : 10, t, ux + dc * along, uy + dr * along * 0.8 - 30);
+        }
+        for (double end = host._lastTime + 2 * distance / TicksPerSecond; host._lastTime < end;) yield return true;
+        foreach (bool _ in KnockbackRoutine(user, w, target, fixedSpeed: 20)) yield return true;
     }
 
     internal static Facing Opposite(Facing f) => f switch

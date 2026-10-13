@@ -220,8 +220,19 @@ internal sealed unsafe partial class BattleScene
         // 블레이드 샤워 16명(0x100844aa), 카운터 스피어·진 풍아열공참·빅 뱅 20명.
         int cap = w.AbilityId switch { 112 => 16, 77 or 127 or 166 => 20, _ => int.MaxValue };
         if (cap != int.MaxValue) hit = hit.OrderBy(i => host._units[i].Row).ThenBy(i => host._units[i].Col).Take(cap);
+        // 회복 다섯(와이드 힐 93 · 리커버리 141 · 리제너레이션 142 · 엘레맨탈 힐 143 · 힐 윈드 144) — 모은 대상이 여섯을 넘으면 무작위 자리부터
+        // 연달아(끝에서 처음으로 돌아) 여섯만 고른다(0x100a55d4 · 0x100a3fb4 · 0x100a4584 · 0x100a4ad9 · 0x100a5019, gm-skil-21).
+        // 한 번 시전하는 동안은 같은 여섯이게 시전마다 _healPick 을 새로 뽑는다(Turn).
+        if (w.AbilityId is 93 or 141 or 142 or 143 or 144)
+        {
+            var all = hit.OrderBy(i => host._units[i].Row).ThenBy(i => host._units[i].Col).ToList();
+            if (all.Count > 6) return [.. Enumerable.Range(0, 6).Select(j => all[(_healPick + j) % all.Count])];
+        }
         return [.. hit];
     }
+
+    /// <summary>회복 다섯의 「여섯만」 고르기가 시작하는 자리 — 시전마다 새로 뽑는다.</summary>
+    internal int _healPick;
 
     /// <summary>실제로 판정이 나는 칸 — 자료 범위(<see cref="AreaCells"/>)에 핸들러가 박아 둔 예외를 얹는다. 겨눔 미리보기도 이것을 쓴다.</summary>
     internal HashSet<(int Col, int Row)> EffectCells(WorkData w, UnitState user, int col, int row)

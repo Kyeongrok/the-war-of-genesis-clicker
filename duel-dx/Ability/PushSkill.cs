@@ -219,10 +219,12 @@ internal sealed unsafe class PushSkill(GameWindow host)
         a.OriginRow = endRow;
         var struck = new HashSet<UnitState>();
         double start = host._lastTime;
+        var mark = host.Btl.UnitFoot(a);
         for (int k; (k = (int)((host._lastTime - start) * TicksPerSecond)) < steps.Count;)
         {
             double p = steps[k];
             a.SetSlide(p);
+            if (w.Id != 517) mark = host.KnockbackAb.Trail(a, mark);      // 혼 0x1007f3cb · 비연참 0x1008093e — 10 넘게 갈 때마다 자국 109:0
             // 지난 칸까지의 적을 친다.
             int passed = Math.Min(cells.Count, (int)Math.Floor(p * cells.Count + 0.5));
             for (int i = 0; i < passed; i++)

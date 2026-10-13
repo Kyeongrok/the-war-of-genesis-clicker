@@ -24,7 +24,8 @@ using static DuelDx.GameWindow;
 internal sealed unsafe class OzmaSkill(GameWindow host)
 {
     internal const int CounterShield = 98, WeakenArmor = 99, PoweredArmor = 100, PowerDown = 101, PowerUp = 102, SpeedUp = 103, SpeedDown = 104,
-                       GravityBalance = 111, BladeShower = 112, CounterField = 113, BlackHole = 115, Miracle = 116, CrashBomb = 94;
+                       GravityBalance = 111, BladeShower = 112, CounterField = 113, BlackHole = 115, Miracle = 116, CrashBomb = 94,
+                       DynamicCrash = 96, Blind = 107;
 
     internal static bool Owns(WorkData w, BattleScene.AbilityEffect e) => w.AbilityId switch
     {
@@ -34,6 +35,7 @@ internal sealed unsafe class OzmaSkill(GameWindow host)
         Miracle => e.Obs == 210,
         BlackHole => e.Obs == 278 || (e.Obs == 6 && e.Motion == 1),
         BladeShower => e.Obs == 171 || (e.Obs == 1415 && e.Motion == 2),
+        DynamicCrash => e.Obs == 109,      // 자국은 밀리는 동안 이동기가 남긴다(KnockbackSkill)
         _ => false,
     };
 
@@ -58,6 +60,17 @@ internal sealed unsafe class OzmaSkill(GameWindow host)
         return feet;
     }
 
+    /// <summary>
+    /// 블라인드 <c>0x100a1920</c> — 대상 몸의 복제 다섯이 반지름 15 의 원 위에 60° 간격으로 서서 돈다(<c>0x100c5460</c> · <c>0x100c5550</c>(…, 15, …, 1.0, 100 + 늦음),
+    /// 그리기 칸 2, 0 · 8 · 16 · 25 · 33틱 뒤에 하나씩 나타나 100틱). 도는 빠르기는 곡선 이동기 안쪽이라 못 풀었다 — 인자 1.0 을 틱당 1° 로 읽었다(가설).
+    /// </summary>
+    private void SpawnBlind(WorkData w, UnitState user, int col, int row)
+    {
+        foreach (var t in Targets(w, user, col, row))
+            for (int i = 1; i <= 5; i++)
+                host.Btl._bodyShapes.Add((t, 12, At((1 + 50 * (i - 1)) / 6), i, null, 0, 0, 2 / 9.0, null));
+    }
+
     internal void Spawn(WorkData w, UnitState user, int col, int row)
     {
         switch (w.AbilityId)
@@ -71,6 +84,13 @@ internal sealed unsafe class OzmaSkill(GameWindow host)
             case Miracle: SpawnMiracle(w, user, col, row); break;
             case BlackHole: SpawnBlackHole(w, user); break;
             case BladeShower: SpawnBladeShower(w, user, col, row); break;
+            case Blind: SpawnBlind(w, user, col, row); break;
+            case CrashBomb:
+                // 단계 1 — 카메라가 위아래로 ±5 여섯 번 · ±3 네 번 · ±1 네 번(빠르기 10 — 한 틱씩, 0x100b1b75~0x100b1e04).
+                host.HeavenEarthAb._shakes.Add((At(1), At(7), 5, true));
+                host.HeavenEarthAb._shakes.Add((At(7), At(11), 3, true));
+                host.HeavenEarthAb._shakes.Add((At(11), At(15), 1, true));
+                break;
         }
     }
 

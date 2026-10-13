@@ -1031,6 +1031,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             CenterOn(gx, gy);
             targetCentred = true;
         }
+        _healPick = host._rng.Next(1 << 16);
         for (int step = 0; step < Math.Max(actions.Length, 1); step++)
         {
             // 어빌리티 사슬은 <b>타격 동작마다</b> 친다 — 「연」은 레벨이 오르면 13 → 14 → 8 처럼 타격 동작이 늘어나
@@ -1039,9 +1040,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (!strikes)
             {
                 if (step >= actions.Length || step < preludeSteps) continue;
+                // 소닉 블레이드 · 비연참의 모으기(동작 5) — 몸 복제 둘이 옆으로 벌어지고, 비연참은 모으는 동안 아래를 본다
+                // (0x1008abde · 0x10080480 face(2), gm-skil-21). 돌진할 때 겨눈 쪽으로 다시 돈다(0x10080806).
+                bool charging = w.AbilityId is 19 or 20 && actions[step] == 5;
+                var chargeFacing = a.Facing;
+                if (charging && w.AbilityId == 19) a.Facing = Facing.Down;
                 PlayChainStep(a, actions[step], HoldSeconds);
+                if (charging) SpawnSideClones(a, chargeFacing, drift: true);
                 if (actions[step] >= RawHold) for (double end = host._lastTime + 0.5; host._lastTime < end;) yield return true;   // 치는 칸이 아닌 붙듦(드묾)은 잠깐만
                 else while (a.IsBusy) yield return true;
+                if (charging) a.Facing = chargeFacing;
                 continue;
             }
 
@@ -1072,6 +1080,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             else if (step < actions.Length && step >= preludeSteps)
             {
                 PlayAction(a, DrawnAction(a, actions[step]));
+                if (w.AbilityId == 20 && actions[step] == 12) SpawnSideClones(a, a.Facing, drift: false);   // 소닉 블레이드 — 베는 동안 분신 둘이 ±40 에 선다(0x1008ae60)
                 hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
                 // 준비 2·3·5·6 의 발동 동작 15 는 끝까지 튼 뒤에 핸들러가 돈다 — 효과·판정을 그때로(ba-15 R6).
                 if (w.Prepare is 2 or 3 or 5 or 6 && actions[step] == 15 && host._sprites.TryGetValue(a.ChrCode, out var sp15))
@@ -1229,10 +1238,20 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             double stagedFrom = host._lastTime;
             if (step == hitStep) foreach (bool _ in host.StagingAb.StageBeforeHit(w, a, targetIndex, col, row)) yield return true;   // 밸런싱·웹폰 크래쉬·블랙홀(ba-20 P6~P8)
+            // 다이나믹 크래쉬 — 탄이 닿고(거리 × 2틱) 대상이 다 밀린 뒤에 판정과 SOUL −10 이 든다(0x1009fd40 단계 1·2, gm-skil-21). 전에는 맞고 나서 밀렸다.
+            bool crashed = false;
+            if (step == hitStep && PushSkill.DynamicCrashWorks.Contains(w.Id)
+                && (targetIndex >= 0 ? host._units[targetIndex] : LiveUnitAt(col, row)) is { Alive: true } crashTarget && crashTarget != a)
+            {
+                crashed = true;
+                foreach (bool _ in host.KnockbackAb.DynamicCrashRoutine(a, w, crashTarget)) yield return true;
+                ApplyWork(a, hitWork, crashTarget, dying);
+                if (crashTarget.Alive && crashTarget.Hp > 0) host.KnockbackAb.DrainSoul(crashTarget, 10);
+            }
             // 핸들러가 판정(1001)을 보내는 틱까지 기다린다(ba-21 T1) — 원본은 이펙트가 다 나온 뒤에 숫자·맞음 동작이 뜬다(힐 114틱, 프레셔 49틱 …).
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
-            if (step == hitStep && host._lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !LegionStageSkill.IsLegionSkill(w.Id) && !host.SpecialHitsAb.HasSpecialHit(w)
+            if (step == hitStep && !crashed && host._lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !LegionStageSkill.IsLegionSkill(w.Id) && !host.SpecialHitsAb.HasSpecialHit(w)
                 && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (ArriveHit(w) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);
@@ -1273,7 +1292,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 continue;
             }
             // 리인카네이션은 보통 타격이 없다 — 피해는 밀어내기 슬롯만 준다(RadialPushRoutine, 0x1008d940 · ba-16 R1).
-            for (int hit = 0; hit < (PushSkill.ReincarnationWorks.Contains(w.Id) ? 0 : hitTimes.Count); hit++)
+            for (int hit = 0; hit < (PushSkill.ReincarnationWorks.Contains(w.Id) || crashed ? 0 : hitTimes.Count); hit++)
             {
                 if (hit > 0)
                     for (double end = host._lastTime + (hitTimes[hit] - hitTimes[hit - 1]); host._lastTime < end;) yield return true;
@@ -1328,7 +1347,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             // 비·다이나믹 크래쉬 — 맞은 인물을 시전자가 보는 쪽으로 밀어낸다(fg-18·fg-21 ⑧). 그 타로 쓰러질 인물도 밀린 칸에서 쓰러진다
             // (비 단계 2 0x10080111~0x1008035c 는 겨눈 유닛을 조건 없이 민다 · 다이나믹 크래쉬는 밀고 나서 판정, ba-21 T5). 전에는 쓰러질 인물은 안 밀었다.
-            if (KnockbackSkill.BiWorks.Contains(w.Id) || PushSkill.DynamicCrashWorks.Contains(w.Id))
+            if (KnockbackSkill.BiWorks.Contains(w.Id) || (PushSkill.DynamicCrashWorks.Contains(w.Id) && !crashed))
             {
                 var knocked = (targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row))
                               .Select(i => host._units[i]).FirstOrDefault(u => u.Alive && u != a);
