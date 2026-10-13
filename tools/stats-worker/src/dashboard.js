@@ -47,6 +47,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
     <label>버전 <select id="version"><option value="">전체</option></select></label>
+    <label>타키리온 개편 <select id="tachyrion"><option value="">전체</option><option value="1">켠 판</option><option value="0">끈 판</option></select></label>
     <span id="error"></span>
   </div>
   <div class="tiles" id="tiles"></div>
@@ -62,7 +63,7 @@ const n = (v) => Number(v || 0).toLocaleString('ko-KR');
 const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum / count); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 let data = null, sortKey = 'uses', pickedChar = null;
-const state = { version: '' };
+const state = { version: '', tachyrion: '' };
 
 const abilityName = (r) => r.ability > 0 ? (data.names.abilities[r.ability] || '어빌리티 ' + r.ability) : r.work === 0 ? '일반 공격' : '아이템·기타 (work ' + r.work + ')';
 const charName = (id) => data.names.characters[id] || '인물 ' + id;
@@ -122,7 +123,7 @@ function render() {
 async function load() {
   $('error').textContent = '';
   try {
-    const q = new URLSearchParams({ version: state.version });
+    const q = new URLSearchParams({ version: state.version, tachyrion: state.tachyrion });
     const res = await fetch('/v1/dashboard?' + q);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     data = await res.json();
@@ -133,6 +134,7 @@ async function load() {
   } catch (e) { $('error').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 $('version').onchange = (e) => { state.version = e.target.value; load(); };
+$('tachyrion').onchange = (e) => { state.tachyrion = e.target.value; load(); };
 load();
 </script>
 </body>

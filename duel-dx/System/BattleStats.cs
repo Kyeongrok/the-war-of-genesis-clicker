@@ -232,10 +232,12 @@ internal sealed class BattleStats(GameWindow host)
             turns = host.Btl._turnNo,
             seconds = (int)Math.Clamp(host._realTime - _startedAt, 0, 86400),
             // pad · keys = 내 인물이 기술을 쓴 횟수(패드로 / 키보드 · 마우스로), timedHit = 타이밍 어택을 켰나, timed = [띠가 뜬 횟수, 둘 다 맞춤, 하나만 맞춤]
+            // tachyrion = 모드 > 타키리온 개편을 켠 판인가 — 켠 판과 끈 판의 어빌리티 쓰임을 견주려고(사용자 요청)
             flags = new
             {
                 charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart,
                 pad = _padActs, keys = _keyActs, timedHit = host._timedHit, timed = new[] { _timedShown, _timedBoth, _timedOne },
+                tachyrion = host._tachyrionRework,
             },
             skills = _battle.Select(p => new
             {

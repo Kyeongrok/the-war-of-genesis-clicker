@@ -55,13 +55,17 @@ async function getTop(env) {
   return json({ total, skills: results });
 }
 
-// 대시보드 집계 — 버전(없으면 전체)으로 거른다. 캐릭터 에디터를 쓴 판도 넣는다(사용자 결정) — noedit=1 을 줄 때만 뺀다.
+// 대시보드 집계 — 버전(없으면 전체)과 타키리온 개편 모드(tachyrion=1 켠 판 · 0 끈 판, 없으면 전체)로 거른다.
+// 그 칸이 생기기 전 판(v0.34 까지)은 모드가 없었으니 끈 판으로 센다. 캐릭터 에디터를 쓴 판도 넣는다(사용자 결정) — noedit=1 을 줄 때만 뺀다.
 async function getDashboard(url, env) {
   const version = (url.searchParams.get('version') || '').slice(0, 32);
   const noedit = url.searchParams.get('noedit') === '1';
   const where = [], args = [];
   if (version) { where.push('b.version = ?'); args.push(version); }
   if (noedit) where.push(`b.flags NOT LIKE '%"charEdit":true%'`);
+  const tachyrion = url.searchParams.get('tachyrion');
+  if (tachyrion === '1') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 1`);
+  if (tachyrion === '0') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 0`);
   const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const sums = 'SUM(s.uses) AS uses, SUM(s.hits) AS hits, SUM(s.damage) AS damage, SUM(s.kills) AS kills, SUM(s.heal) AS heal, COUNT(DISTINCT s.report) AS battles';
   const all = (sql) => env.DB.prepare(sql).bind(...args).all().then((r) => r.results);

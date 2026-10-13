@@ -40,6 +40,13 @@ npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT version,
 npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT COUNT(DISTINCT install) FROM battles WHERE json_extract(flags,'$.pad') > 0"
 ```
 
+`tachyrion` = 모드 > 타키리온 개편을 켠 판인가(그 칸이 없는 옛 판은 끈 판으로 센다). 대시보드의 「타키리온 개편」 고르기가 이것으로 거른다(`/v1/dashboard?tachyrion=1` · `0`).
+
+```
+# 켠 판 · 끈 판의 어빌리티 쓰임
+npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT COALESCE(json_extract(b.flags,'$.tachyrion'),0) rework, s.ability, SUM(s.uses) uses FROM skill_stats s JOIN battles b ON b.report = s.report GROUP BY rework, s.ability ORDER BY rework, uses DESC"
+```
+
 ## 적히는 것
 
 `battles`(판 하나에 한 줄: 전투 번호 · 판 번호 · 난이도 · 승패 · 턴 수 · 설치 번호)와 `skill_stats`(인물 × 어빌리티마다 한 줄).
