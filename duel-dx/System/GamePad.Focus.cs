@@ -442,6 +442,12 @@ internal sealed partial class GamePad
             else if (score < asideScore) { asideScore = score; aside_ = i; }
         }
         if (best >= 0) MoveCursorTo(targets[best].X + targets[best].W / 2, targets[best].Y + targets[best].H / 2);
+        // 시스템 메뉴는 한 줄짜리 목록이라 끝에서 반대쪽 끝으로 돈다 — 맨 위 MISSION 에서 ↑ 는 EXIT GAME, 맨 아래에서 ↓ 는 맨 위(사용자 요청 menu-66).
+        else if (dy != 0 && cur >= 0 && host.Sys._systemMenu && targets.Count == host.Sys.MenuItems.Length)
+        {
+            var end = targets[dy < 0 ? targets.Count - 1 : 0];
+            MoveCursorTo(end.X + end.W / 2, end.Y + end.H / 2);
+        }
         // 그 방향에 자리가 없으면 목록을 한 줄 굴린다 — 로드 슬롯처럼 보이는 줄 너머가 있는 목록은 커서 밑에서 다음 줄이 올라온다(menu-27).
         else if (dy != 0 && cur >= 0 && CanScroll(dy)) PostMouse(Win32.WM_MOUSEWHEEL, dy < 0 ? 120 : -120);
         else if (aside_ >= 0) MoveCursorTo(targets[aside_].X + targets[aside_].W / 2, targets[aside_].Y + targets[aside_].H / 2);

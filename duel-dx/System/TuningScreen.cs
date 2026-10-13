@@ -47,8 +47,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
     internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == TabLab ?
     [
-        // 실험 탭 — 아직 다듬는 중인 것(사용자 요청 fg-32). 기본은 모두 끔.
-        ("타이밍 어택", "박자에 맞춰 Space(패드 LT → RT)", MenuTimedHit, host._timedHit),
+        // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
         ("새 UI (또렷한 글자)", "설정 창을 화면 해상도로 그린다 · 끄면 이전 UI", MenuHiResUi, host._hiResUi),
     ] : _tuningTab == TabComfort ?
     [
@@ -65,8 +64,11 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("익명 전투 통계 보내기", "쓴 어빌리티 · 피해 · 조작 방식 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
     ] : _tuningTab == TabBalance ?
     [
-        // 밸런스 탭 — 어빌리티 · 체질 자료를 고쳐 쓰는 개편(사용자 요청 menu-64). 기본은 모두 끔.
-        ("어빌리티 개편", "타키리온 체질 개편 · 연이 SOUL 20 을 쓴다", MenuTachyrionRework, host._tachyrionRework),
+        // 밸런스 탭 — 전투의 세기를 바꾸는 것: 타이밍 어택 · 타이밍 명중(사용자 요청 menu-65)과 어빌리티 · 체질 자료를 고쳐 쓰는 개편(menu-64).
+        // 기본은 모두 끔. 어빌리티 개편은 맨 아래 — 그 밑에 개편에 든 것을 적는다.
+        ("타이밍 어택", "박자에 맞춰 Space(패드 LT → RT)", MenuTimedHit, host._timedHit),
+        ("타이밍 명중", $"어빌리티 앞의 띠 — 명중률 하나 +{TimedHit.AimBonusFor(1)}% · 둘 +{TimedHit.AimBonusFor(2)}%", MenuTimedAim, host._timedAim),
+        ("어빌리티 개편", "켜면 아래 것들이 원본과 달라진다", MenuTachyrionRework, host._tachyrionRework),
     ] :
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
@@ -77,7 +79,13 @@ internal sealed unsafe class TuningScreen(GameWindow host)
 
     /// <summary>일반 공격을 셀 때 쓰는 SOUL — 시작값에서 벌어진 몫만 기여도만큼.</summary>
     internal int BasicAttackSoul(int soul) =>
-        host._db is not { } db || _soulWeight == 100 ? soul : Math.Max(0, db.SoulStart + (soul - db.SoulStart) * _soulWeight / 100);
+        host._db is not { } db || SoulWeightNow == 100 ? soul : Math.Max(0, db.SoulStart + (soul - db.SoulStart) * SoulWeightNow / 100);
+
+    /// <summary>어빌리티 개편을 켜면 일반 공격의 소울 몫이 지금의 80% 가 된다(사용자 요청 fg-33) — 고른 기여도에 곱한다.</summary>
+    internal const int ReworkSoulPercent = 80;
+
+    /// <summary>지금 걸리는 기여도(%) — 고른 값 × 어빌리티 개편의 몫.</summary>
+    internal int SoulWeightNow => host._tachyrionRework ? _soulWeight * ReworkSoulPercent / 100 : _soulWeight;
 
     /// <summary>그 work 로 칠 때 쓰는 SOUL — 어빌리티에 안 딸린 work(일반 공격·몬스터 기본기)만 기여도를 건다.</summary>
     internal int AttackSoul(WorkData w, int soul) => w.AbilityId == 0 ? BasicAttackSoul(soul) : soul;
@@ -173,6 +181,17 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.UiText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
         }
 
+        if (_tuningTab == TabBalance)
+        {
+            // 어빌리티 개편에 든 것 — 체크 줄 아래에 한 줄씩.
+            string[] rework =
+            [
+                "· 타키리온 체질 — 소울 블레스트가 범위 SOUL 흡수기로, 락킹 필드 · 배리어 · 리콜이 바뀐다",
+                "· 연 — SOUL 20 이 있으면 쓸 수 있고, 쓰면 그 20 이 빠진다 (원본: 70 필요 · 안 빠짐)",
+                $"· 일반 공격 — SOUL 로 늘어나는 공격력이 {ReworkSoulPercent}% 가 된다 (일반 탭의 소울 기여도에 곱한다)",
+            ];
+            for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
+        }
         if (_tuningTab != TabGeneral) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         host.UiText("일반 공격 소울 기여도", x + 16, boxY + 4, White);

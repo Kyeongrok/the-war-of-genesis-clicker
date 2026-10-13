@@ -747,6 +747,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 if ((((long)lParam) & 0xFFFF) == Win32.HTCLIENT) { Win32.SetCursor(_hwCursor); return (IntPtr)1; }
                 break;
             case Win32.WM_KEYDOWN:
+                // 패드의 확인 · 취소 단추가 눌린 바로 그때 온 Enter · Esc 는 단추 → 키 바꾸개(스팀 데스크톱 구성 따위)가 겹쳐 보낸 것 — 버린다.
+                // 안 그러면 A 한 번이 패드의 「고르기」와 키보드의 「배치종료」를 함께 누른다(사용자 보고 fa-62).
+                if (((int)wParam == Win32.VK_RETURN && Pad.HeldNow(PadAction.Confirm)) || ((int)wParam == Win32.VK_ESCAPE && Pad.HeldNow(PadAction.Cancel)))
+                    return IntPtr.Zero;
                 // 키 반복(lParam 30번 비트)은 무시한다 — 누르고 있는 동안은 Update 가 알아서 이어 걷는다.
                 Pad.Active = false;   // 키보드를 잡았다
                 if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);

@@ -642,7 +642,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         // ATK 줄에 마우스를 올리면 바탕 × 소울 배율로 풀어 보인다(사용자 요청) — 그림은 창 맨 위에 그린다.
         int atkY = oy + 81 + 15 * 15 - 8;
         string? atkHover = _statusTip == null && _popup == null && MouseIn(ox + 20, atkY, StatRight - 20, 16) ? AtkBreakdown(db, eff, host.TuningScr.BasicAttackSoul(unit.Soul), weaponPct)
-              + (host.TuningScr._soulWeight != 100 ? $"$n(모드 > 조정: 소울 기여도 {host.TuningScr._soulWeight}% — SOUL {unit.Soul} 을 {host.TuningScr.BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
+              + (host.TuningScr.SoulWeightNow != 100 ? $"$n(모드: 소울 기여도 {host.TuningScr.SoulWeightNow}% — SOUL {unit.Soul} 을 {host.TuningScr.BasicAttackSoul(unit.Soul)} 로 셈)" : "") : null;
         StatLine(16, acr.ToString());
         StatLine(17, rdp.ToString());
         // STP 0x1007acf0 = 최대 TP(상태 33 포함) / 제수, 부하는 대장 것 — RefreshUnitStats 가 셈해 둔 unit.Stp(감사4 S3).

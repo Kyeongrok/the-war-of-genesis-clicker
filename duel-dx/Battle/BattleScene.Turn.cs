@@ -959,6 +959,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _buffedAllies.Clear();
         _soulGain = default;
         _timedCritBy = null;
+        _timedAimBy = null;
 
         if (targetIndex >= 0) (col, row) = (host._units[targetIndex].Col, host._units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
@@ -966,11 +967,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
         if (w.TintMode == 1) host._mapTintTarget = w.TintLevel;   // 기술을 쓰는 동안 맵이 물든다(0x10069efa, ba-20 P2)
 
-        // 타이밍 크리티컬(모드 > 실험) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
+        // 타이밍 크리티컬(모드 > 밸런스) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
         if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
         {
             foreach (bool _ in host.TimedHitFx.Prompt(a, target: targetIndex >= 0 ? host._units[targetIndex] : null)) yield return true;
             if (host.TimedHitFx.Hits > 0) _timedCritBy = a;
+        }
+        // 타이밍 명중(모드 > 밸런스, fg-34) — 명중률이 있는 어빌리티 앞에 같은 띠를 띄우고, 맞춘 박자마다 이 행동의 내 명중률을 올린다.
+        else if (!eventFinisher && host.TimedHitFx.WantedAim(a, w))
+        {
+            foreach (bool _ in host.TimedHitFx.Prompt(a, aim: true)) yield return true;
+            if (host.TimedHitFx.Hits > 0) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(host.TimedHitFx.Hits));
         }
 
         var dying = new List<UnitState>();
@@ -1491,6 +1498,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 전멸 판정(상태 4, 0x1006ed10)은 그 뒤라 마지막 적을 쓰러뜨린 사람의 레벨업 창도 전투가 끝나기 전에 뜬다(ba-15 Q7).
         // 전에는 CheckOutcome 이 먼저 결과를 세워 UpdateTurn 이 레벨업 창 앞에서 돌아가 버렸다.
         _timedCritBy = null;
+        _timedAimBy = null;
         AutoHealAll();   // 상태 20 갈래 0(0x10067d70) — 행동이 끝날 때마다 8(자동 회복)을 전원에게(ba-20 C1)
         QueueLevelUps();
         _eventCheckDue |= 1 << 1;
@@ -1539,12 +1547,18 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>그 타격의 피해 배율(%) — 두 번 치는 동작으로 바꿨으면 100(두 번 맞아 2배), 한 번 치면 200. 0 은 「크리티컬로」(박자 하나만 맞춤).</summary>
     internal int _timedPercent = 200;
 
+    /// <summary>타이밍 명중을 맞춘 인물과 그 몫(%) — 그 행동이 끝날 때까지 그 인물의 명중 굴림(피해 · 상태이상)에 더한다(<see cref="TimedHit.WantedAim"/>).</summary>
+    internal UnitState? _timedAimBy;
+    internal int _timedAimBonus;
+
+    internal int AimBonus(UnitState a) => a == _timedAimBy ? _timedAimBonus : 0;
+
     internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
         if (host._db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
-        var (amount, result, crit) = host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29));
+        var (amount, result, crit) = host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
         bool timed = a == _timedCritBy && w.IsDamage;
         if (timed)
         {

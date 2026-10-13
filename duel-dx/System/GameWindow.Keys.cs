@@ -235,7 +235,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -266,10 +266,15 @@ internal sealed unsafe partial class GameWindow
 
     internal const int MenuSkillMovies = 1170;
 
-    /// <summary>모드 > 실험 > 타이밍 어택 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
+    /// <summary>모드 > 밸런스 > 타이밍 어택 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
     internal bool _timedHit = UserSettings.Current.TimedHit;
 
     internal const int MenuTimedHit = 1172;
+
+    /// <summary>모드 > 밸런스 > 타이밍 명중 — 명중률이 있는 어빌리티를 쓰기 앞에 띠가 뜨고, 박자를 맞춘 만큼 명중률이 오른다(<see cref="TimedHit.AimBonusFor"/> — 하나 10% · 둘 15%, 사용자 요청 fg-34 · fg-35, 기본 끔).</summary>
+    internal bool _timedAim = UserSettings.Current.TimedAim;
+
+    internal const int MenuTimedAim = 1178;
 
     /// <summary>
     /// 설정 > 화면 > 전체화면 — 테두리 없는 창으로 주 모니터를 가득 덮는다(사용자 요청 menu-38, 기본 끔). 메뉴 막대도 숨긴다(menu-42) —
@@ -380,6 +385,11 @@ internal sealed unsafe partial class GameWindow
             case MenuTimedHit:
                 _timedHit = !_timedHit;
                 Toast(_timedHit ? "기본공격 앞에 띠가 뜹니다 — 박자 칸마다 Space(패드 LT → RT) — 둘 맞추면 두 번 공격, 하나면 크리티컬" : "타이밍 어택을 껐습니다");
+                SaveSettings();
+                break;
+            case MenuTimedAim:
+                _timedAim = !_timedAim;
+                Toast(_timedAim ? $"명중률이 있는 어빌리티 앞에 띠가 뜹니다 — {TimedHit.AimGuide}" : "타이밍 명중을 껐습니다");
                 SaveSettings();
                 break;
             case MenuSendStats:

@@ -163,7 +163,7 @@ internal sealed class TimedHitConfig
 }
 
 /// <summary>
-/// 타이밍 어택(모드 &gt; 실험, 사용자 요청 fg-32 — 원본에 없다). 내가 움직이는 인물이 기본공격을 하기 바로 앞에 띠가 뜨고,
+/// 타이밍 어택(모드 &gt; 밸런스, 사용자 요청 fg-32 — 원본에 없다). 내가 움직이는 인물이 기본공격을 하기 바로 앞에 띠가 뜨고,
 /// 띠 위를 달리는 표시가 <b>박자 칸</b>을 지날 때마다 단추를 하나씩 누른다 — <b>맞춘 박자만큼 친다</b>(박자 하나가 한 대, 「연」처럼 여섯 대까지),
 /// <b>하나만 맞추면 한 대를 크리티컬로</b> 친다. 어느 쪽이든 빗나가지 않는다. 하나도 못 맞추면 보통 판정 그대로다(벌은 없다).
 /// 패드는 박자마다 어빌리티 단추 · 공격 단추가 번갈아(기본 LT → RT → LT …), 키보드는 박자마다 Space.
@@ -221,13 +221,35 @@ internal sealed class TimedHit(GameWindow host)
     internal bool Wanted(UnitState a, WarOfGenesis.Assets.WorkData w) =>
         host._timedHit && !host._skippingAction && host.Btl.IsMine(a) && a.LeaderIndex < 0 && w.IsDamage && a.Data?.BasicWorkId == w.Id;
 
+    /// <summary>타이밍 명중(모드 &gt; 밸런스, 사용자 요청 fg-34 · fg-35) — 박자 하나를 맞추면 오르는 명중률(%)과, 하나 더 맞출 때마다 더 오르는 몫. 하나면 10, 둘이면 15.</summary>
+    internal const int AimPercentFirst = 10, AimPercentMore = 5;
+
+    /// <summary>맞춘 박자 수만큼 오르는 명중률(%) — 0 · 10 · 15 · 20 …</summary>
+    internal static int AimBonusFor(int hits) => hits <= 0 ? 0 : AimPercentFirst + (hits - 1) * AimPercentMore;
+
+    /// <summary>안내 글 — 「하나 +10% · 둘 +15%」.</summary>
+    internal static string AimGuide => $"박자 하나 맞추면 명중률 +{AimBonusFor(1)}% · 둘이면 +{AimBonusFor(2)}%";
+
+    /// <summary>
+    /// 타이밍 명중을 띄울 것인가 — 켜져 있고, 내가 움직이는 인물이 <b>명중률이 있는 어빌리티</b>를 쓸 때. 기본공격은 타이밍 어택의 몫이라 뺀다.
+    /// 명중 굴림이 뜻이 있는 것만: 피해 어빌리티, 그리고 적에게 거는 보조(종류 2·3). 회복과 아군 보조에는 안 뜬다.
+    /// </summary>
+    internal bool WantedAim(UnitState a, WarOfGenesis.Assets.WorkData w) =>
+        host._timedAim && !host._skippingAction && host.Btl.IsMine(a) && a.LeaderIndex < 0 && w.AbilityId != 0 && a.Data?.BasicWorkId != w.Id
+        && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1)));
+
+    /// <summary>이번 띠가 타이밍 명중의 것인가 — 안내 글과 결과 글이 달라진다.</summary>
+    private bool _aim;
+
     /// <summary>
     /// 띠를 띄우고 박자가 다 눌리거나 놓칠 때까지 기다린다 — 끝나면 <see cref="Hits"/> · <see cref="AllHit"/> 에 결과가 있다.
     /// <paramref name="a"/> 가 없으면 미리 보기 — <paramref name="anchor"/> 자리에 그린다.
     /// </summary>
     /// <param name="target">치려는 대상 — 패턴 잇기는 같은 대상을 칠 때만 이어진다.</param>
-    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null)
+    /// <param name="aim">타이밍 명중의 띠인가 — 늘 시작 패턴을 띄우고(패턴 잇기 없음) 타이밍 어택 통계에 안 센다.</param>
+    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null, bool aim = false)
     {
+        _aim = aim;
         Cfg.Normalize();
         // 어느 패턴을 띄울까 — 미리 보기는 수정 창에서 보고 있는 패턴, 전투는 이 인물이 같은 대상에게 이어 가던 패턴(없으면 시작 패턴).
         if (!ReferenceEquals(_chainBattle, host._units)) { _chainBattle = host._units; _chain.Clear(); }
@@ -249,7 +271,7 @@ internal sealed class TimedHit(GameWindow host)
         }
         Hits = _beat.Count(b => b == 1);
         AllHit = Hits == _beat.Length;
-        if (a != null)
+        if (a != null && !aim)
         {
             host.Stats.Timed(Math.Min(Hits, 2));   // 통계 — 둘 이상(여러 번 치기) · 하나(크리티컬) · 없음
             // 다 맞췄으면 다음 공격은 이 패턴이 가리키는 패턴(없으면 이 패턴 그대로), 아니면 처음으로.
@@ -326,7 +348,7 @@ internal sealed class TimedHit(GameWindow host)
         double at = Math.Clamp(((_result == null ? host._realTime : _resultAt) - _startAt) / seconds, 0, 1);
 
         // 바탕 — 안내 글 · 단추 · 띠를 한 판에.
-        string guide = _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬";
+        string guide = _aim ? AimGuide : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬";
         var (_, gw, gh) = Measure(guide, 0xFFFFFFFF, 11f);
         int top = y - Cap - 8 - gh - 4;
         Fill(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
@@ -354,7 +376,7 @@ internal sealed class TimedHit(GameWindow host)
         // 결과 — 눌린 것이 바로 보이게 크게.
         if (_result is { } hit)
         {
-            string word = !hit ? "놓침" : Hits == 1 ? "크리티컬!" : (AllHit ? "성공! " : "") + $"{Hits}번 공격";
+            string word = !hit ? "놓침" : _aim ? $"명중률 +{AimBonusFor(Hits)}%" : Hits == 1 ? "크리티컬!" : (AllHit ? "성공! " : "") + $"{Hits}번 공격";
             uint color = hit ? 0xFFFFE040 : 0xFFFF7060;
             var (_, ww, wh) = Measure(word, color, 18f);
             int wy = y + BarH + 10;

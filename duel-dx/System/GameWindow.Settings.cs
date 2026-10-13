@@ -26,6 +26,7 @@ namespace DuelDx;
 /// <param name="TalkFillFirst">대사 첫 클릭·키가 흐르는 글을 <b>채우기만</b> 하고 두 번째에 닫을지. 원본(<c>0x1003bfe0</c>)은 첫 클릭에 곧바로 닫는다 —
 /// 기본 끔(원본대로), 켜면 예전 데모 동작(감사 3 T1).</param>
 /// <param name="FontScalePercent">설정 &gt; 화면 &gt; 글자 크기 % — 게임이 쓰는 모든 글에 곱한다. 100 이 기본.</param>
+/// <param name="TimedAim">모드 &gt; 밸런스 &gt; 타이밍 명중 — 명중률이 있는 어빌리티 앞에 띠를 띄워 맞춘 박자마다 명중률을 올릴지(사용자 요청 fg-34, 기본 끔).</param>
 /// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
@@ -35,7 +36,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkFillFirst = true,
                                     bool SkipEnemyAction = true, bool SendStats = true, string StatsAskedAt = "", bool PlanetMarks = true,
                                     bool SkillMovies = true, bool TimedHit = false, bool Fullscreen = false, int BattleZoomPercent = -1, int BubbleScalePercent = 100, bool HiResUi = true,
-                                    bool HighlightChests = false, bool TachyrionRework = false, int FontScalePercent = 100)
+                                    bool HighlightChests = false, bool TachyrionRework = false, int FontScalePercent = 100, bool TimedAim = false)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

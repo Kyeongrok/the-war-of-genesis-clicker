@@ -90,7 +90,7 @@ internal sealed class BattleStats(GameWindow host)
     /// </summary>
     private int _padActs, _keyActs;
 
-    /// <summary>이 판의 타이밍 어택(모드 &gt; 실험) — 띠가 뜬 횟수, 박자 둘을 다 맞춘 횟수, 하나만 맞춘 횟수.</summary>
+    /// <summary>이 판의 타이밍 어택(모드 &gt; 밸런스) — 띠가 뜬 횟수, 박자 둘을 다 맞춘 횟수, 하나만 맞춘 횟수.</summary>
     private int _timedShown, _timedBoth, _timedOne;
 
     /// <summary>타이밍 어택의 띠가 한 번 끝났다 — <paramref name="hits"/> 는 맞춘 박자 수.</summary>
@@ -236,7 +236,7 @@ internal sealed class BattleStats(GameWindow host)
             flags = new
             {
                 charEdit = _charEdited, soulWeight = host.TuningScr._soulWeight, fullSoul = host._fullSoulAtStart,
-                pad = _padActs, keys = _keyActs, timedHit = host._timedHit, timed = new[] { _timedShown, _timedBoth, _timedOne },
+                pad = _padActs, keys = _keyActs, timedHit = host._timedHit, timedAim = host._timedAim, timed = new[] { _timedShown, _timedBoth, _timedOne },
                 tachyrion = host._tachyrionRework,
                 // 화면 설정과 기기 갈래(사용자 요청 menu-61) — res = 설정의 해상도, zoom = 배율 %(0 = 자동), screen = 모니터 크기,
                 // platform = desktop · laptop · umpc · deck · wine(PlatformInfo — 기종 이름은 안 보낸다), touch = 터치 화면이 있나

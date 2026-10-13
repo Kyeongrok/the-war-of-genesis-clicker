@@ -196,7 +196,20 @@ internal sealed partial class GamePad(GameWindow host)
         _ => host._keys[KeyAction.System],
     };
 
-    private static readonly (int Button, int Key)[] Directions = [(Up, Win32.VK_UP), (Down, Win32.VK_DOWN), (Left, Win32.VK_LEFT), (Right, Win32.VK_RIGHT)];
+    /// <summary>
+    /// 그 동작의 단추가 <b>지금</b> 눌려 있나 — 패드를 바로 읽는다. 스팀 데스크톱 구성 같은 단추 → 키 바꾸개가 켜져 있으면 A 가 패드 단추로도,
+    /// Enter 키로도 한꺼번에 들어온다. 그 겹친 키를 걸러 내는 데 쓴다(사용자 보고 fa-62: 배치 명단에서 A 가 배치종료까지 눌렀다).
+    /// </summary>
+    internal bool HeldNow(PadAction action)
+    {
+        if (GameWindow.Offscreen || _noLibrary || _pad < 0 || !Read(_pad, out var state)) return false;
+        int now = state.Buttons;
+        if (state.LeftTrigger > TriggerOn) now |= LT;
+        if (state.RightTrigger > TriggerOn) now |= RT;
+        return (now & _map[action]) != 0;
+    }
+
+    private static readonly (int Button, int Key)[] Directions =[(Up, Win32.VK_UP), (Down, Win32.VK_DOWN), (Left, Win32.VK_LEFT), (Right, Win32.VK_RIGHT)];
 
     /// <summary>틀마다 한 번 — 새로 눌린 단추는 키 누름으로, 뗀 방향은 걷기 멈춤으로 넘긴다. 설정 창이 기다리는 중이면 눌린 단추를 그 동작에 묶는다.</summary>
     /// <summary>DUELDX_PAD=1 — 패드가 꽂혀 있는 것처럼 군다(화면 밖 시험용 — 노란 테 · 안내 줄). DUELDX_PADGUIDE=1 이면 안내 창을 띄운 채.</summary>

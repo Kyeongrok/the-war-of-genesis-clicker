@@ -145,7 +145,7 @@ internal sealed unsafe partial class BattleScene
         _ailmentLanded = false;
         // 굴림은 종류 0·1·2·3 만(0x1007b580) — 물체 work(1471·1473·1474·1526, 종류 5·7)은 안 굴린다(ba-20 K8).
         if (w.Kind <= 3 && host._db is { } hitDb && attacker.Data is { } ha && target.Data is { } ht
-            && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance)) return false;
+            && _ailmentRandom.Next(100) >= hitDb.HitChance(ha, attacker.Tp, ht, target.Tp, w, target.Stance) + AimBonus(attacker)) return false;
 
         // <b>치명타인 기본공격</b>(work 번호 == 인물의 기본 work)이면 work 이 아니라 <b>무기 Itm 의 공격 효과</b>(파일 30/34/38)를 건다
         // (0x1007bcc0 의 둘째 인자 = 판정의 치명 깃발, 0x1007bd62~0x1007be4b). 무기가 없으면 아무것도 안 건다(0x1007bda4).
