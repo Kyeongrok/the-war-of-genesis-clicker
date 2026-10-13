@@ -645,6 +645,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.HeavenEarthAb._debris.Clear();
         host.HeavenEarthAb._shakes.Clear();
         host.AcrostAb._fireBalls.Clear();
+        host.FxLine.Clear();
+        host.PushAb._thrown = null;
         host.Mov._ripples.Clear();
         host.Btl._nextTickAt = 0;
         host.Btl.CancelTargeting();
@@ -1167,6 +1169,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.HeavenEarthAb._debris.Clear();
         host.HeavenEarthAb._shakes.Clear();
         host.AcrostAb._fireBalls.Clear();
+        host.FxLine.Clear();
+        host.PushAb._thrown = null;
         host.Mov._ripples.Clear();
         host.Btl._heldMoveKeys.Clear();
 

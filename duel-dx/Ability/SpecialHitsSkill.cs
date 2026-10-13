@@ -73,6 +73,10 @@ internal sealed unsafe class SpecialHitsSkill(GameWindow host)
                     if (!t.Alive || dying.Contains(t)) continue;
                     var (tx, ty) = host.Btl.UnitFoot(t);
                     host.Btl._effects.Add((204, 1, host._lastTime, tx, ty));
+                    // 맞을 때 204:1 과 함께 276:1(수명 25) · 220:0(23틱 뒤) · 소리 385:3 이 뜬다(0x10087ff0 단계 5).
+                    host.ForcetrulAb.Fx(w, 276, 1, 0, tx, ty, 25);
+                    host.ForcetrulAb.Fx(w, 220, 0, 23, tx, ty);
+                    host.ForcetrulAb.Fx(w, 385, 3, 0, tx, ty);
                     host.Btl.ApplyWork(a, hitWork, t, dying);
                     for (double end = host._lastTime + 25 / TicksPerSecond; host._lastTime < end;) yield return true;
                 }

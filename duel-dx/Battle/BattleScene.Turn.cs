@@ -744,7 +744,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>TP 와 SOUL 이 되나 — 필요 SOUL 은 체질 덧붙임까지 넣은 값이다(분석-전투 ba-4).</summary>
     /// <summary>핸들러 첫 단계에서 대상 칸으로 카메라를 보내는 어빌리티(0x100eab80 을 부르는 28개 핸들러 — ba17-camera C14 · ba-20 O P7).</summary>
     internal static readonly HashSet<int> TargetCameraAbilities =
-        [31, 37, 39, 40, 42, 43, 50, 55, 56, 72, 79, 81, 88, 93, 97, 107, 108, 116, 126, 141, 142, 166, 169, 171, 186, 191, 192];
+        [31, 37, 39, 40, 42, 43, 50, 56, 79, 81, 88, 93, 97, 107, 108, 116, 126, 141, 142, 166, 169, 171, 186, 191, 192];
+    // 55 익스퍼트 블레스트 · 72 화이어 웨이브는 겨눈 칸이 아니라 시전자 앞쪽으로, 그것도 핸들러 중간에 간다(0x100ae8ce · 0x1008535d) — TachyrionSkill · ElementalSkill 이 보낸다.
 
     /// <summary>
     /// 카메라를 겨눈 칸이 아니라 <b>시전자 앞쪽 지점</b>으로 보내는 어빌리티(gm-skil-20) — 가로로 볼 때 Side, 세로로 볼 때 Deep 만큼(화면 픽셀).
@@ -1098,6 +1099,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
                 _fxStagger = 0;
                 _fxHitAt.Clear();
+                _fxUntouched.Clear();
                 _fxArriveAt = 0;
                 SpawnAbilityEffects(w, a, col, row);
                 _fxTargets = null;
@@ -1303,11 +1305,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 for (int k = 0; k < targets.Count; k++)
                 {
                     if (k > 0 && !a.Alive) break;
+                    if (_fxUntouched.Contains(host._units[targets[k]])) continue;      // 이펙트가 안 닿은 대상(엘레맨탈 아이스의 빈 칸)
                     if (k > 0 && stagger > 0)
                         for (double end = host._lastTime + stagger / TicksPerSecond; host._lastTime < end;) yield return true;
-                    // 이펙트가 그 대상에 닿는 때가 정해진 기술(라이트닝 샤벨)은 그때까지 기다린다 — 시작에서 300틱을 안 넘게.
+                    // 이펙트가 그 대상에 닿는 때가 정해진 기술(라이트닝 샤벨)은 그때까지 기다린다 — 시작에서 450틱을 안 넘게
+                    // (오버 테이크 340~389틱 · 블리자드 97 + 41N 틱이 가장 길다).
                     if (_fxHitAt.TryGetValue(host._units[targets[k]], out double reach))
-                        for (double end = Math.Min(reach, effectsAt + 300 / TicksPerSecond); host._lastTime < end;) yield return true;
+                        for (double end = Math.Min(reach, effectsAt + 450 / TicksPerSecond); host._lastTime < end;) yield return true;
                     ApplyWork(a, hitWork, host._units[targets[k]], dying);
                 }
                 HitObjects(hitWork);
@@ -1356,6 +1360,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 else if (KnockbackSkill.BiWorks.Contains(w.Id)) PlayAction(a, DrawnAction(a, 24));
             }
             // 리인카네이션 — 범위 안 적을 시전자 반대쪽으로 범위 밖까지 밀어낸다(fg-21 ⑧).
+            if (PushSkill.ReincarnationWorks.Contains(w.Id))
+                for (double end = effectsAt + ElementalSkill.ReincarnationPush / TicksPerSecond; host._lastTime < end;) yield return true;   // 쫓는 그림이 사라지고 279:1 이 뜬 6틱 뒤(0x1008d940 단계 2)
             if (PushSkill.ReincarnationWorks.Contains(w.Id))
                 foreach (bool _ in host.PushAb.RadialPushRoutine(a, w, col, row, WorkTargets(w, a, col, row), dying)) yield return true;
             // 워핑 — 대상을 멀리 날려 보낸다(fg-21 ⑧).

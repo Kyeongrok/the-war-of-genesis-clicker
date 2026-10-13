@@ -328,6 +328,7 @@ internal sealed unsafe partial class BattleScene
     {
         DrawBodyShapes();
         DrawBodyShots();
+        host.PushAb.DrawThrown();
         for (int i = _bodyClones.Count - 1; i >= 0; i--)
         {
             var c = _bodyClones[i];

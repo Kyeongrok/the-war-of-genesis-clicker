@@ -36,6 +36,12 @@ internal sealed unsafe partial class GameWindow
     internal CycloneSkill CycloneAb => _cycloneAb ?? LazyInitializer.EnsureInitialized(ref _cycloneAb, () => new CycloneSkill(this));
     internal OzmaSkill? _ozmaAb;
     internal OzmaSkill OzmaAb => _ozmaAb ?? LazyInitializer.EnsureInitialized(ref _ozmaAb, () => new OzmaSkill(this));
+    internal ElementalSkill? _elementalAb;
+    internal ElementalSkill ElementalAb => _elementalAb ?? LazyInitializer.EnsureInitialized(ref _elementalAb, () => new ElementalSkill(this));
+    internal TachyrionSkill? _tachyrionAb;
+    internal TachyrionSkill TachyrionAb => _tachyrionAb ?? LazyInitializer.EnsureInitialized(ref _tachyrionAb, () => new TachyrionSkill(this));
+    internal FxTimeline? _fxLine;
+    internal FxTimeline FxLine => _fxLine ?? LazyInitializer.EnsureInitialized(ref _fxLine, () => new FxTimeline(this));
     internal IdeaCannonSkill? _ideaCannonAb;
     internal IdeaCannonSkill IdeaCannonAb => _ideaCannonAb ?? LazyInitializer.EnsureInitialized(ref _ideaCannonAb, () => new IdeaCannonSkill(this));
     internal GravityFieldSkill? _gravityFieldAb;

@@ -102,7 +102,7 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         return null;
     }
 
-    /// <summary>리콜 연출 — 대상이 사라지고(40틱) 시전자 옆에 빛(210:3)과 함께 나타난다(40틱).</summary>
+    /// <summary>리콜 연출 — 대상이 가늘어지며 사라지고(61틱) 시전자 옆에 빛(210:3)과 함께 길쭉한 꼴에서 돌아온다(114틱).</summary>
     internal IEnumerable<bool> RecallRoutine(UnitState caster, UnitState target)
     {
         const double Tick = 1 / TicksPerSecond;
@@ -110,25 +110,23 @@ internal sealed unsafe class TeleportSkill(GameWindow host)
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                                $"recall: {target.ChrCode} ({target.Col},{target.Row}) → ({lc},{lr}) beside {caster.ChrCode} ({caster.Col},{caster.Row})" + Environment.NewLine);
-        // 사라지는 크기 복제(가늘고 길게) — 뜨는 때는 사라짐 첫머리로 둔다(가설).
+        // 원본 시각(0x1009da20) — 61틱에 숨으며 가늘어지는 복제 10틱 → 72틱에 자리를 옮기고 새 자리에 210:3(모션 × 3)과 카메라 →
+        // 103틱에 제 크기로 돌아오는 복제 10틱 → 114틱에 다시 보인다. 전에는 제 시계(40 + 40틱)로 흐려졌다 또렷해졌다.
+        double t0 = host._lastTime;
+        while (host._lastTime < t0 + 61 * Tick) yield return true;
         host.Btl._bodyShapes.Add((target, 6, host._lastTime, 0, null, 0, 0, 3 / 9.0, null));
-        for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
-        {
-            target.Fade = Math.Max(0, 1 - (host._lastTime - start) / (40 * Tick));
-            yield return true;
-        }
+        target.Fade = 0;
+        while (host._lastTime < t0 + 72 * Tick) yield return true;
         target.WarpTo(lc, lr);
         target.OriginCol = lc;
         target.OriginRow = lr;
         target.Facing = caster.Facing;
         var (x, y) = host.Btl.UnitFoot(target);
-        host.Btl._effects.Add((210, 3, host._lastTime, x, y));
+        host.HeavenEarthAb.AddTimedFx(210, 3, host._lastTime, (x, y), Math.Max(1, host.EffectTicks(210, 3)) * 3, false);
+        host.Btl.CenterOn(x, y);
+        while (host._lastTime < t0 + 103 * Tick) yield return true;
         host.Btl._bodyShapes.Add((target, 6, host._lastTime, 1, null, 0, 0, 3 / 9.0, null));     // 길쭉한 꼴에서 제 크기로
-        for (double start = host._lastTime, end = start + 40 * Tick; host._lastTime < end;)
-        {
-            target.Fade = Math.Min(1, (host._lastTime - start) / (40 * Tick));
-            yield return true;
-        }
+        while (host._lastTime < t0 + 114 * Tick) yield return true;
         target.Fade = 1;
     }
 }

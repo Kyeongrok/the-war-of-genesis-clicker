@@ -403,6 +403,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>이펙트가 대상에 닿는 때(게임 초) — 있으면 그 대상의 판정은 그때 든다(라이트닝 샤벨: 칼이 그 칸에 닿을 때, 0x100704f0 → 0x3e9).</summary>
     internal readonly Dictionary<UnitState, double> _fxHitAt = [];
 
+    /// <summary>이펙트가 닿지 않아 판정에서 빠지는 대상 — 엘레맨탈 아이스는 얼음이 떨어진 칸만 친다(0x1009f581).</summary>
+    internal readonly HashSet<UnitState> _fxUntouched = [];
+
     internal void SpawnSabreBlade(double start, int userX, int userY, List<(int X, int Y)> targets, List<UnitState> units)
     {
         double Wy(int screenY) => screenY / 0.8;
@@ -485,7 +488,6 @@ internal sealed unsafe partial class BattleScene
     {
         host.Mov.SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
         host.Cut.Start(w);                                               // 전체 화면 컷신(헬 카이트·진무 천지파열 …) — 도는 동안 전투가 선다
-        host.Mov.SpawnRipples(w, col, row);                              // 익스퍼트 웨이브 파문(코드 이펙트)
         SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         host.UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
@@ -494,6 +496,8 @@ internal sealed unsafe partial class BattleScene
         if (w.AbilityId == IdeaCannonSkill.Ability) host.IdeaCannonAb.Spawn(w, user, col, row);
         host.OzmaAb.Spawn(w, user, col, row);                                             // 오즈마 — 버프 낱알 기둥 · 카운터 실드/필드 · 블랙홀 · 블레이드 샤워 …
         host.CycloneAb.Spawn(w, user, col, row);                                          // 사이클론 — 폭 · 메테오스트라이크 · 포스 리젼 · 희생 · 익스플로젼
+        host.ElementalAb.Spawn(w, user, col, row);                                        // 아크로스트 — 블리자드 · 엘레맨탈 아이스 · 화이어 웨이브 · 포이즌 · 엘레맨탈 베이스 …
+        host.TachyrionAb.Spawn(w, user, col, row);                                        // 타키리온 — 익스퍼트 웨이브 · 소울 스트라이크 · 윤곽 알갱이 셋 · 익스퍼트 블레스트 …
         var script = ScriptFor(w.Id);
         // 가장 늦게 뜨는 이펙트의 시작 때 — 행동 루틴이 그때까지는 끝나지 않는다(늦은 이펙트가 다음 행동 위에 겹치지 않게).
         _fxLatestStart = Math.Max(_fxLatestStart, host._lastTime + (script is { Effects.Length: > 0 } timed ? timed.Effects.Max(e => e.Delay) : 0) / TicksPerSecond);
@@ -511,18 +515,18 @@ internal sealed unsafe partial class BattleScene
         int cheerDelay = 0;      // 격려 — 윤곽 알갱이가 다 뜬 뒤에야 떠오르는 알갱이가 나온다
         foreach (var raw in m.Effects)
         {
-            var e = OzmaSkill.Adjust(w, CycloneSkill.Adjust(w, raw));
+            var e = TachyrionSkill.Adjust(w, ElementalSkill.Adjust(w, OzmaSkill.Adjust(w, CycloneSkill.Adjust(w, raw))));
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
             if (w.Prepare == 7 && e.Obs is 1338 or 487 or FinisherPreludeSkill.PreludeDotObs or FinisherPreludeSkill.PreludeBandObs) continue;
             // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.
             if (PushSkill.CounterMissileWorks.Contains(w.Id) && e.Obs == 637 && e.Motion != 6) continue;
-            if (CycloneSkill.Owns(w, e) || OzmaSkill.Owns(w, e)) continue;
+            if (CycloneSkill.Owns(w, e) || OzmaSkill.Owns(w, e) || ElementalSkill.Owns(w, e) || TachyrionSkill.Owns(w, e)) continue;
             if (ForcetrulSkill.Owns(w, e) || (w.AbilityId == IdeaCannonSkill.Ability && e.Obs == IdeaCannonSkill.BeamObs)) continue;   // 전용 루틴이 깐다
             if (e.Facing >= 0 && e.Facing != user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 }) continue;
             var (x, y) = e.OnTarget ? (targetX, targetY) : (userX, userY);
-            double start = host._lastTime + (e.Delay + CycloneSkill.Late(w, e) + OzmaSkill.Late(w, e)) / TicksPerSecond;
+            double start = host._lastTime + (e.Delay + CycloneSkill.Late(w, e) + OzmaSkill.Late(w, e) + ElementalSkill.Late(w, e) + TachyrionSkill.Late(w, e)) / TicksPerSecond;
             // 줄별 덧정보(WorkFxExtra.g.cs, ba-21 fx 「덧정보 표 생성 기록」) — 좌우 뒤집기 · 기준 자리에서의 치우침 · 대상마다 하나씩(엇갈림) · 직선탄의 빠르기.
             int userDir = user.Facing switch { Facing.Up => 0, Facing.Left => 1, Facing.Down => 2, _ => 3 };
             // 같은 열쇠의 Row 가 여럿이면 원본은 그 수만큼 따로(자리·뒤집기가 다르게) 띄운다 — Row 마다 하나씩. 방향마다 값이 다른 줄은 시전자 방향 것만.
@@ -637,12 +641,14 @@ internal sealed unsafe partial class BattleScene
                 // 그 밖(9) 가운데 식을 읽은 둘 — 표에 인자 자리가 없어 여기 적는다(ba-21 fx F2 뒤 분석).
                 // 리미트 크래쉬 · 리미트 캐스트 476:3 · 8:1(0x100c57d0 → 틱 0x100389a0): 조각 50개가 대상 둘레 반지름 30 원을 틱당 8점씩 돌며
                 // 틱당 2.0~2.9 씩 떠오른다(모두 약 100 높이, 조각마다 0~79틱 늦게). 원 한 바퀴의 점 수(≈ 둘레 188)는 가설.
+                // 리미트 캐스트는 dz 의 부호가 뒤집혀(0x1009b6a0 fchs) 대상 위 100 에서 내려온다 — 전에는 둘 다 올라갔다.
                 if (extra is { Move: 9 } && !e.Fly && ((e.Obs == 476 && e.Motion == 3) || (e.Obs == 8 && e.Motion == 1)))
                 {
                     for (int n = 0; n < 50; n++)
                     {
                         double dz = 2.0 + 0.1 * _fxRandom.Next(10);
-                        _movers.Add((e.Obs, e.Motion, start + _fxRandom.Next(80) / TicksPerSecond, 6, x, y - e.Lift, 0, 0, (int)(100 / dz), 30, dz,
+                        _movers.Add((e.Obs, e.Motion, start + _fxRandom.Next(80) / TicksPerSecond, 6, x, y - e.Lift, 0, 0, (int)(100 / dz), 30,
+                                     w.AbilityId == TachyrionSkill.LimitCast ? -dz : dz,
                                      _fxRandom.NextDouble() * 2 * Math.PI, 8.0 / 30, mirrored));
                     }
                     continue;

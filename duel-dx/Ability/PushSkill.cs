@@ -160,29 +160,51 @@ internal sealed unsafe class PushSkill(GameWindow host)
         if (landing is not var (lc, lr)) yield break;
 
         const double Tick = 1 / TicksPerSecond;
+        // 원본 0x1009d6b6~ — 대상 본체는 숨고, 맞는 자세의 몸 복제가 안 보이는 앞잡이(시전자 위 500 → 착지 칸)를 쫓아 날아간다(빠르기 10 × 1.05).
+        // 카메라가 복제를 따라가고(camFollow(20)) 587:4 가 복제에 붙는다. 전에는 대상이 흐려졌다가 새 칸에서 나타났다.
+        // 쫓기는 앞잡이의 길을 그대로 따라가는 것으로 옮겼고, 빠르기 한도는 이동기 기본값 40 으로 두었다(가설). 구슬 209 와 몸을 잇는 끈(0x100ca210)은 못 읽어 없다.
         var (fx, fy) = host.Btl.UnitFoot(t);
-        host.Btl._effects.Add((587, 4, host._lastTime, fx, fy));
-        for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
-        {
-            t.Fade = Math.Max(0, 1 - (host._lastTime - start) / (12 * Tick));
-            yield return true;
-        }
+        var (ux, uy) = host.Btl.UnitFoot(user);
+        (double X, double Y)[] via = [(ux, uy - 500 * 0.6), (lc * TileW + TileW / 2, host.CellCenterY(lc, lr))];
+        double x = fx, y = fy, speed = 10, began = host._lastTime, stepped = began;
         t.Fade = 0;
-        // 날아가는 동안 — 거리에 맞춰 잠깐(칸당 1틱).
-        for (double end = host._lastTime + (Math.Abs(lc - t.Col) + Math.Abs(lr - t.Row)) * Tick; host._lastTime < end;) yield return true;
+        _thrown = (t, x, y, began);
+        for (int leg = 0; leg < via.Length && host._lastTime < began + 10;)
+        {
+            int ticks = (int)((host._lastTime - stepped) * TicksPerSecond);
+            stepped += ticks * Tick;
+            for (; ticks > 0 && leg < via.Length; ticks--)
+            {
+                double dx = via[leg].X - x, dy = via[leg].Y - y, far = Math.Sqrt(dx * dx + dy * dy);
+                if (far <= speed) { (x, y) = via[leg]; leg++; }
+                else (x, y) = (x + dx / far * speed, y + dy / far * speed);
+                speed = Math.Min(40, speed * 1.05);
+            }
+            _thrown = (t, x, y, began);
+            host.Btl.CenterOn(x, y, 20);
+            if (leg < via.Length) yield return true;
+        }
+        _thrown = null;
         t.WarpTo(lc, lr);
         t.OriginCol = lc;
         t.OriginRow = lr;
         if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"warping: {user.ChrCode} → {t.ChrCode} 를 ({lc},{lr}) 로" + Environment.NewLine);
-        for (double start = host._lastTime, end = start + 12 * Tick; host._lastTime < end;)
-        {
-            t.Fade = Math.Min(1, (host._lastTime - start) / (12 * Tick));
-            yield return true;
-        }
         t.Fade = 1;
         t.PlayAction(BattleScene.HitAction, 15 * Tick);
+    }
+
+    /// <summary>워핑으로 날아가는 몸 — (대상, 화면 자리, 시작 때). 본체는 그동안 숨는다.</summary>
+    internal (UnitState Unit, double X, double Y, double Start)? _thrown;
+
+    internal void DrawThrown()
+    {
+        if (_thrown is not var (t, x, y, start) || !host._sprites.TryGetValue(t.ChrCode, out var sprite)) return;
+        var pose = (sprite.Clip(BattleScene.HitAction, t.Facing) is { } clip ? sprite.FrameOfMotion(clip.Id, 0, t.Facing == Facing.Right) : null) ?? sprite.FrameFor(t);
+        if (pose == null) return;
+        host.BlitMasked(pose.Px, pose.W, pose.H, (int)x + pose.X, (int)y + pose.Y);
+        host.DrawUi(587, 4, (int)((host._lastTime - start) * TicksPerSecond), (int)x, (int)y, UiBlend.Add, loop: true);
     }
 
     /// <summary>
