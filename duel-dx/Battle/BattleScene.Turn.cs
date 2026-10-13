@@ -190,6 +190,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void UpdateTurn()
     {
         if (host._loading || host._db == null) return;
+        if (StepSkillDemo()) return;             // 어빌리티 시연 — 판이 서기를 기다리거나 끝나서 되돌리는 틀(SkillDemo.cs)
         StepDelayedHits();                       // 포탑 사격처럼 나중에 맞는 타격
         if (_outcome.Length > 0)
         {
@@ -1430,7 +1431,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         host._mapTintTarget = -1;   // 행동이 끝나면 맵 물들이기를 푼다(0x1002e920)
         // 희생(13)·익스플로젼(22) — 아군을 회복시킨 뒤 시전자 HP 를 0 으로 쓴다(0x10090d62 · 0x100915f9, ba-20 D1).
         // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)은 되살린다 — 되살림은 쓰러짐 처리 상태기(0x10067fe2~0x10068152)가 HP ≤ 0 인 유닛 모두에게 까닭을 가리지 않고 한다(ba-22 확인).
-        if (w.AbilityId is SacrificeAbility or ExplosionAbility && a.Alive && !dying.Contains(a))
+        if (w.AbilityId is SacrificeAbility or ExplosionAbility && a.Alive && !dying.Contains(a) && _demo == null)
         {
             a.Hp = 0;
             if (!SurvivesFatal(a)) dying.Add(a);
@@ -1447,7 +1448,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
         foreach (var d in host._units)
-            if (d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
+            if (_demo == null && d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
         // 행동 끝 사건 검사(갈래 2, 0x100680a3)는 쓰러짐 처리(상태 18)보다 <b>앞</b>이다 — HP 0 유닛이 아직 서 있을 때 본다(ba-20 V1).
         // 보스가 죽지 않고 물러나는 사건(201)·풀피 회복(707)·HP 조건(203) 사건이 이때 터진다. 전에는 쓰러뜨린 뒤에 봐서
         // Btl 0092 사건 3·0145 사건 4(그 전투의 유일한 끝 사건)가 통째로 빠졌다.
@@ -1581,7 +1582,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 명중 굴림·상태·맞음 SOUL·처치 보상이 없고(1016 을 안 보냄 — 가설), 시전자·아군도 범위에 든다(범위 대상 5).
         if (w.AbilityId == BlackHoleAbility)
         {
-            if (t.Hp < w.Power)
+            if (t.Hp < w.Power && _demo == null)
             {
                 t.Hp = 0;
                 if (!SurvivesFatal(t)) dying.Add(t);
@@ -1618,7 +1619,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 $"{(IsFoeSide(a) && !IsFoeSide(t) ? "foe" : "ally")} hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         host.Stats.Hit(a, w, Math.Min(amount, t.Hp));   // 통계에는 실제로 깎인 만큼만
-        t.Hp = Math.Max(0, t.Hp - amount);
+        t.Hp = Math.Max(_demo != null ? 1 : 0, t.Hp - amount);   // 시연 중에는 아무도 안 쓰러진다(SkillDemo.cs)
         RushTp(t);
         ShowNumber(t, $"{host._db.T(159)} {amount}", DamageColor);
         PlayHitReaction(t, damaged: true);

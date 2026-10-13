@@ -483,6 +483,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.Toast($"전투 {id:D4} 자료가 assets 에 없습니다");
             return false;
         }
+        // 어빌리티 시연 — 그 전투의 적은 두고 아군은 시연할 인물 하나만 세운다(SkillDemo.cs).
+        if (host.Btl._demo is { } demo) scene = GameWindow.ArenaScene(scene, demo.Chr) with { Title = "어빌리티 시연" };
         try
         {
             host._map = ObtMap.Load(AssetPack.MapPath(scene.MapFile));

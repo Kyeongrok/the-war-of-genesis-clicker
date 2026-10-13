@@ -999,6 +999,10 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         else if (w.IsDamage && w.Power > 0) bits.Add($"위력 {w.Power}");
         foreach (var (stat, value) in w.Bonuses)
             if (BonusText(stat, value) is { } bonus) bits.Add(bonus);
+        // 44~46 은 상태이상 칸을 「없음」으로 덮어쓰는 번호다(PutAilment) — 칸에 드는 효과가 셋이면 세 칸이 다 새로 쓰여 걸려 있던 것이 모두 지워진다(큐어).
+        int clears = w.Bonuses.Count(b => b.Stat is 44 or 45 or 46), slots = w.Bonuses.Count(b => b.Stat != 0 && !BattleScene.IsStatBonus(b.Stat));
+        if (clears == 3) bits.Add("상태이상 모두 회복");
+        else if (clears > 0) bits.Add(slots == 3 ? "다른 상태이상 지움" : $"상태이상 {clears}칸 회복");
         return string.Join(" · ", bits);
     }
 

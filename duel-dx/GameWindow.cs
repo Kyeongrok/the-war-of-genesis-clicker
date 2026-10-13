@@ -756,6 +756,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when StatsScr._open:
                 StatsScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when SkillBookScr._open:
+                SkillBookScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when CharEditScr._open:
                 CharEditScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
@@ -858,6 +861,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (TimedEditScr._open) { TimedEditScr.OnKey(key); return; }
         if (DevScr._open) { DevScr.OnKey(key); return; }
         if (StatsScr._open) { StatsScr.OnKey(key); return; }
+        if (SkillBookScr._open) { SkillBookScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
@@ -1004,6 +1008,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (TimedEditScr.OnClick(bx, by)) return;      // 개발 > 타이밍 어택 수정 창
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
+        if (SkillBookScr.OnClick(bx, by)) return;      // 도구 > 체질별 어빌리티
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (Btl.OnChestListClick(bx, by)) return;      // 상자 목록의 접기 단추
@@ -1327,6 +1332,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TuningScr.DrawTuning();
         CharEditScr.Draw();
         StatsScr.Draw();
+        SkillBookScr.Draw();
         SettingsScr.Draw();
         DevScr.Draw();
         TimedEditScr.Draw();

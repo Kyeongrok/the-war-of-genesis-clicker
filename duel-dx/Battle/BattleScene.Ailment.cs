@@ -390,7 +390,7 @@ internal sealed unsafe partial class BattleScene
         if (target.Data is { } td && Work(td.BasicWorkId) is { } basic && !InWorkRange(basic, target.Col, target.Row, attacker.Col, attacker.Row, target)) return;
         int back = amount * percent / 100;
         if (back <= 0) return;
-        attacker.Hp = Math.Max(0, attacker.Hp - back);
+        attacker.Hp = Math.Max(_demo != null ? 1 : 0, attacker.Hp - back);
         ShowNumber(attacker, $"{host._db?.T(159)} {back}", DamageColor);
         if (attacker.Hp > 0) return;
         // 반사로 쓰러뜨리면 반사한 쪽(부하면 대장)이 처치 보상을 받는다(메시지 1016).

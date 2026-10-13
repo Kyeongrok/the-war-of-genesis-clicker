@@ -744,8 +744,20 @@ public sealed class GameDatabase
         !Works.TryGetValue(workId, out var w) ? 0 : BodyShare(c, w, 44, 41);
 
     /// <summary>체질 덧붙임 — <c>+0x2e × Num[표+3(체질−1)]% ÷ Num[나눗수]</c>.</summary>
-    private int BodyShare(CharacterData c, WorkData w, int table, int divisor) =>
-        c.Body is >= 1 and <= 5 && N(divisor) != 0 ? w.HpFactor * N(table + 3 * (c.Body - 1)) / 100 / N(divisor) : 0;
+    private int BodyShare(CharacterData c, WorkData w, int table, int divisor) => BodyShare(c.Body, w, table, divisor);
+
+    private int BodyShare(int body, WorkData w, int table, int divisor) =>
+        body is >= 1 and <= 5 && N(divisor) != 0 ? w.HpFactor * N(table + 3 * (body - 1)) / 100 / N(divisor) : 0;
+
+    /// <summary>
+    /// 체질 <paramref name="body"/>(0 무속성 · 1 에텔 … 5 메텔)인 인물이 그 work 에 무는 값 — 인물 없이 표로 볼 때 쓴다(어빌리티 도감).
+    /// <see cref="WorkTpCost"/>·<see cref="WorkSoulNeed"/>·<see cref="WorkSoulCost"/>·<see cref="WorkHpCost"/> 와 같은 식이다.
+    /// </summary>
+    public (int Tp, int SoulNeed, int Soul, int Hp) WorkCostsFor(int body, WorkData w)
+    {
+        int soul = BodyShare(body, w, 45, 33);
+        return (w.TpBase + BodyShare(body, w, 46, 34), w.SoulBase + soul, (w.SoulSpend != 0 ? w.SoulBase : 0) + soul, BodyShare(body, w, 44, 41));
+    }
 
     /// <summary>이동 예산(상태 12 <c>0x10069cc9</c>) = 현재TP + min(0, CTP − 기본공격 TP 비용).</summary>
     public int MoveBudget(CharacterData c, int currentTp) => currentTp + Math.Min(0, c.Ctp - WorkTpCost(c, c.BasicWorkId));

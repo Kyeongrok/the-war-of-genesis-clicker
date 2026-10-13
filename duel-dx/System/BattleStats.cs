@@ -118,7 +118,7 @@ internal sealed class BattleStats(GameWindow host)
 
     private Row? RowFor(UnitState a, WorkData w)
     {
-        if (Owner(a) is not { } owner) return null;
+        if (host.Btl._demo != null || Owner(a) is not { } owner) return null;   // 어빌리티 시연은 세지 않는다
         // 「연」의 막타: 방금 그 유닛이 다른 기술을 썼고 이번 타가 제 일반 공격 work 면 쓴 기술 몫이다.
         if (_cast.User == a && _cast.Work is { } cast && cast.Id != w.Id && a.Data?.BasicWorkId == w.Id) w = cast;
         bool basic = a.Data?.BasicWorkId == w.Id;
