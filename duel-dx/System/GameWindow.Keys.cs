@@ -151,7 +151,7 @@ internal sealed unsafe partial class GameWindow
     internal static readonly int[] FontScaleChoices = [80, 90, 100, 110, 120];
     /// <summary>설정 > 해상도 — 보이는 영역 크기. 원본 640×480 부터.</summary>
     internal const int MenuResBase = 1020;
-    /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
+    /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대의 개발 아래에 있다.</summary>
     internal const int MenuResetView = 1167;
 
     /// <summary>
@@ -196,8 +196,9 @@ internal sealed unsafe partial class GameWindow
         IntPtr dev = Win32.CreatePopupMenu();
         Win32.AppendMenuW(dev, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)...");
         Win32.AppendMenuW(dev, Win32.MF_STRING, TimedHitEditScreen.MenuTimedEdit, "타이밍 어택 수정(&T)...");
+        // 화면 비율 초기화는 막대에서 개발 아래로 옮겼다(사용자 요청) — 펼침 메뉴라 설정 창이 잘려도 여전히 누를 수 있다.
+        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuResetView, "화면 비율 초기화(&V)");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
-        Win32.AppendMenuW(bar, Win32.MF_STRING, MenuResetView, "화면 비율 초기화(&V)");
         return bar;
     }
 
