@@ -288,6 +288,23 @@ public static class SkillBook
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return list; }
         foreach (var name in names.Keys)
             if (files.Read("skills", name) is { } b && FromJson(Encoding.UTF8.GetString(b)) is { } skill) list.Add(skill);
+        // 켜 둔 자료 모드(GameDatabase.DataMods)의 스킬 파일이 같은 이름의 바탕 파일을 덮는다 — 모드 폴더에는 바꾼 파일만 둔다.
+        foreach (string mod in GameDatabase.DataMods)
+        {
+            string folder = $"{ModsFolder}/{mod}/skills";
+            IReadOnlyDictionary<string, long> over;
+            try { over = files.List(folder, ".json"); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            foreach (var name in over.Keys)
+            {
+                if (files.Read(folder, name) is not { } b || FromJson(Encoding.UTF8.GetString(b)) is not { } skill) continue;
+                list.RemoveAll(s => s.FileName == skill.FileName);
+                list.Add(skill);
+            }
+        }
         return list;
     }
+
+    /// <summary>자료 모드 폴더(<c>assets/data/mods/이름/skills · jobs</c>) — 모드 창에서 켜면 바탕 자료 위에 덮인다(타키리온 개편).</summary>
+    public const string ModsFolder = "mods";
 }

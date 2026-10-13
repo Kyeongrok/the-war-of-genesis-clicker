@@ -255,6 +255,20 @@ public static class JobBook
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return list; }
         foreach (var name in names.Keys)
             if (files.Read(Folder, name) is { } b && FromJson(Encoding.UTF8.GetString(b)) is { } file) list.Add(file);
+        // 켜 둔 자료 모드의 직업 파일이 같은 계열의 바탕 파일을 덮는다(SkillBook.Load 와 같다).
+        foreach (string mod in GameDatabase.DataMods)
+        {
+            string folder = $"{SkillBook.ModsFolder}/{mod}/{Folder}";
+            IReadOnlyDictionary<string, long> over;
+            try { over = files.List(folder, ".json"); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            foreach (var name in over.Keys)
+            {
+                if (files.Read(folder, name) is not { } b || FromJson(Encoding.UTF8.GetString(b)) is not { } file) continue;
+                list.RemoveAll(f => f.Family == file.Family);
+                list.Add(file);
+            }
+        }
         return list;
     }
 }

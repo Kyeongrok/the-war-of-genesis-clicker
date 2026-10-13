@@ -149,6 +149,21 @@ internal sealed unsafe partial class GameWindow
     internal const int MenuResBase = 1020;
     /// <summary>화면 비율 초기화 — 해상도와 배율을 처음 값(1280×960 · 자동)으로. 배율을 크게 잡아 설정 창이 잘려도 누를 수 있게 메뉴 막대에 있다.</summary>
     internal const int MenuResetView = 1167;
+
+    /// <summary>
+    /// 타키리온 개편 — 모드 > 일반(기본 끔, 사용자 요청). 켜면 자료 모드 <c>assets/data/mods/tachyrion</c> 이 바탕 스킬 · 체질 자료를 덮는다:
+    /// 소울 블레스트가 범위 SOUL 흡수기가 되고, 락킹 필드 · 배리어 · 리콜이 바뀌고, 리미트 캐스트 · 파워드 배리어 · 마인드 콘트롤이 목록에서 빠진다.
+    /// </summary>
+    internal const int MenuTachyrionRework = 1177;
+    internal const string TachyrionMod = "tachyrion";
+    internal bool _tachyrionRework = UserSettings.Current.TachyrionRework;
+
+    /// <summary>모드 창의 값대로 자료 모드를 켜고 끈다 — 자료를 읽기 전에(켤 때), 그리고 값을 바꾼 뒤 <see cref="WarOfGenesis.Assets.GameDatabase.ReloadSkills"/> 앞에서 부른다.</summary>
+    internal void ApplyDataMods()
+    {
+        if (_tachyrionRework) WarOfGenesis.Assets.GameDatabase.DataMods.Add(TachyrionMod);
+        else WarOfGenesis.Assets.GameDatabase.DataMods.Remove(TachyrionMod);
+    }
     internal static readonly (int W, int H)[] ResChoices =
         [(640, 480), (800, 600), (1024, 768), (1280, 720), (1280, 960), (1600, 900), (1920, 1080), (2560, 1440), (2560, 1600), (3440, 1440), (3840, 2160)];
 
@@ -215,7 +230,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -425,6 +440,13 @@ internal sealed unsafe partial class GameWindow
                 _showChestContents = !_showChestContents;
                 Win32.CheckMenuItem(_menuBar, MenuChestContents, Win32.MF_BYCOMMAND | (_showChestContents ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_showChestContents ? "상자 내용물을 왼쪽 위에 보입니다" : "상자 내용물을 숨깁니다");
+                SaveSettings();
+                break;
+            case MenuTachyrionRework:
+                _tachyrionRework = !_tachyrionRework;
+                ApplyDataMods();
+                _db?.ReloadSkills();
+                Toast(_tachyrionRework ? "타키리온 개편을 켰습니다 — 소울 블레스트가 범위 SOUL 흡수기가 됩니다" : "타키리온을 원본대로 되돌렸습니다");
                 SaveSettings();
                 break;
             case MenuChestGlow:

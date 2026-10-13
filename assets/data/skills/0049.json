@@ -1,7 +1,6 @@
 {
   "ability": 49,
   "name": "파워드 배리어",
-  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 0,

@@ -30,7 +30,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 464, TuningBoxX = 300, TuningBoxY = 142, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 464, TuningBoxX = 300, TuningBoxY = 174, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 스토리(대사 진행). 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
@@ -66,6 +66,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
         ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, host._fullSoulAtStart),
+        ("타키리온 개편", "소울 블레스트가 범위 SOUL 흡수기로 바뀐다", MenuTachyrionRework, host._tachyrionRework),
     ];
 
     internal static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };

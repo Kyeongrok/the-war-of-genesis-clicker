@@ -417,6 +417,12 @@ public sealed class GameDatabase
     /// <summary>스킬 파일이 덮어쓴 어빌리티 설명(어빌리티 번호 → 글). 비어 있으면 원본 TXR 을 쓴다.</summary>
     private Dictionary<int, string> _descriptions = [];
 
+    /// <summary>
+    /// 켜 둔 자료 모드 이름들(<c>assets/data/mods/이름</c>) — 게임이 모드 창의 값으로 채우고 <see cref="ReloadSkills"/> 로 반영한다.
+    /// 편집기는 비워 둔다(바탕 자료만 고친다).
+    /// </summary>
+    public static HashSet<string> DataMods { get; } = [];
+
     private HashSet<int> _hidden = [];
 
     private static HashSet<int> HiddenOf(List<SkillFile> skills) => [.. skills.Where(s => s.Hidden && s.Ability > 0).Select(s => s.Ability)];

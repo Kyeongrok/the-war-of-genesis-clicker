@@ -1,7 +1,6 @@
 {
   "ability": 46,
   "name": "리미트 캐스트",
-  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 8,

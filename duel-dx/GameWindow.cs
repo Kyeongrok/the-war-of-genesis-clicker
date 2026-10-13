@@ -298,6 +298,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         try
         {
+            ApplyDataMods();   // 모드 창에서 켜 둔 자료 모드(타키리온 개편)를 얹어 읽는다
             _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data")));
 
             // 시작하자마자 전투를 읽지는 않는다 — 어느 전투를 할지는 타이틀에서 고르고 나서야 정해진다.
