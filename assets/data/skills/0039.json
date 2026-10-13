@@ -1,7 +1,6 @@
 {
   "ability": 39,
   "name": "쇼크",
-  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 2,

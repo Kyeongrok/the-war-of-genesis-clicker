@@ -1,7 +1,6 @@
 {
   "ability": 50,
   "name": "브레인 브레이크",
-  "hidden": true,
   "att": 2,
   "common": {
     "rangeShape": 1,
