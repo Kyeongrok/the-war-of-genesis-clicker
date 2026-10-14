@@ -113,7 +113,7 @@ internal static unsafe class Win32
     public const uint PM_REMOVE = 0x0001;
 
     public const int VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
-    public const int VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B, VK_F11 = 0x7A;
+    public const int VK_LBUTTON = 0x01, VK_RETURN = 0x0D, VK_SPACE = 0x20, VK_ESCAPE = 0x1B, VK_F11 = 0x7A;
     public const int VK_TAB = 0x09;
 
     public const int IDC_ARROW = 32512;

@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.RegularExpressions;
+using DuelDx.Native;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -47,6 +48,20 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
 
     /// <summary>저절로 넘김 — 조건이 선 뒤 카운터가 118 을 넘는 틱(<c>0x1003b9be</c>).</summary>
     internal const int TalkAutoTicks = 118;
+
+    /// <summary>
+    /// 필드에서 왼쪽 단추(패드 A)를 누르고 있으면 — 글이 <see cref="TalkHoldSpeed"/> 배로 흐르고, 다 나온 뒤
+    /// <see cref="TalkHoldAutoTicks"/> 틱 만에 닫혀 다음 대사로 간다(음성이 돌아도 끊는다). 원본에는 없다 — 사용자 요청 fa-63.
+    /// </summary>
+    internal const int TalkHoldSpeed = 4, TalkHoldAutoTicks = 15;
+
+    /// <summary>지난 <see cref="UpdateTalk"/> 의 시각 — 누르고 있는 동안 흐른 틱을 센다.</summary>
+    private double _talkLastUpdate = -1;
+
+    /// <summary>필드 대사를 넘기는 단추를 지금 누르고 있나 — 왼쪽 단추 또는 패드 확인(A).</summary>
+    internal bool TalkHeld() =>
+        host.FieldOpen && !GameWindow.Offscreen
+        && ((Win32.GetKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 || host.Pad.HeldNow(PadAction.Confirm));
 
     /// <summary>글 한 걸음(한 글자)의 틱 수 — <c>[+0x21c] % 3</c>(<c>0x10029070</c>).</summary>
     internal const int TalkStepTicks = 3;
@@ -109,6 +124,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         public int MaxLines, TextLeft;
         public bool Portrait;
         public int Revealed, Steps, TopLine, ScrollPx;
+        /// <summary>누르고 있는 동안 더 간 글 틱 — 흘리기 시각에 더한다(<see cref="TalkHeld"/>).</summary>
+        public double HoldBoost;
         public bool AllRevealed => Revealed >= Clean.Length;
     }
 
@@ -403,6 +420,9 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// </summary>
     internal void UpdateTalk()
     {
+        bool held = _talks.Count > 0 && TalkHeld();
+        double heldTicks = held && _talkLastUpdate >= 0 ? (host._lastTime - _talkLastUpdate) * TicksPerSecond : 0;
+        _talkLastUpdate = host._lastTime;
         for (int i = _talks.Count - 1; i >= 0; i--)
         {
             if (i >= _talks.Count) continue;
@@ -416,7 +436,20 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             if (t < 0) continue;                                  // 펴지는 중 — 글도 음성도 아직
             EnsureTalkLayout(w);
             if (w.Voice > 0 && !w.VoiceStarted) { w.VoiceStarted = true; StartTalkWindowVoice(w); }
-            AdvanceTalk(w, (int)t);
+            if (held)
+            {
+                // 누르는 동안은 음성을 안 따르고 글 걸음으로 빨리 흘린다
+                w.HoldBoost += heldTicks * (TalkHoldSpeed - 1);
+                int target = ((int)(t + w.HoldBoost) + TalkStepTicks - 1) / TalkStepTicks;
+                while (w.Steps < target && !w.AllRevealed) TalkStep(w);
+                if (w.AllRevealed)
+                {
+                    if (w.DoneAt < 0) w.DoneAt = host._lastTime;
+                    if ((host._lastTime - w.DoneAt) * TicksPerSecond > TalkHoldAutoTicks) BeginCloseTalk(w);
+                }
+                continue;
+            }
+            AdvanceTalk(w, (int)(t + w.HoldBoost));
             if (w.AllRevealed && !TalkVoicePlaying(w))
             {
                 if (w.DoneAt < 0) w.DoneAt = host._lastTime;
