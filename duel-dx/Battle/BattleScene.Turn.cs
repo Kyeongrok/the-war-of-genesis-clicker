@@ -1830,10 +1830,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         host.ScheduleActionSounds(u, action);
     }
 
-    internal void Popup(UnitState u, string text, uint color, float size = 18)
+    internal void Popup(UnitState u, string text, uint color, float size = 18, int rise = 70)
     {
         var (x, y) = host.Btl.UnitFoot(u);
-        _popups.Add((text, size, x, y - 70, host._lastTime, color));
+        _popups.Add((text, size, x, y - rise, host._lastTime, color));
     }
 
     internal void DrawPopups()
@@ -1869,10 +1869,51 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 host.FillCircle(cx, cy, r, 0xE0305070);
                 host.BattleText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont);
             }
+            DrawAilmentChips(u, fx, y + 7);
         }
     }
 
     internal const float GaugeLevelFont = 7f;
+
+    /// <summary>
+    /// 체력바 아래 상태이상 딱지 — 칸 셋 가운데 걸린 것만 두 글자로, 해로운 것은 빨강 · 이로운 것은 파랑 바탕(사용자 요청 fa-64).
+    /// 원본에는 없다 — 원본은 Status · 정보 창의 칸에서만 보인다.
+    /// </summary>
+    internal void DrawAilmentChips(UnitState u, int cx, int top)
+    {
+        var chips = new List<(string Text, uint Back)>();
+        for (int k = 0; k < 3; k++)
+        {
+            int id = u.StatusId[k];
+            if (id is 0 or 44 or 45 or 46) continue;
+            int score = AilmentScore(id, u.StatusValue[k]);
+            chips.Add((AilmentChipText(id, u.StatusValue[k]), score < 0 ? 0xE0A02828u : score > 0 ? 0xE02858B0u : 0xE0505860u));
+        }
+        if (chips.Count == 0) return;
+        const int pad = 2, gap = 1;
+        var sizes = chips.Select(c => host.BattleTextSize(c.Text, 0xFFFFFFFF, AilmentChipFont)).ToList();
+        int h = sizes.Max(s => s.H) + 1, total = sizes.Sum(s => s.W + 2 * pad) + gap * (chips.Count - 1), x = cx - total / 2;
+        for (int k = 0; k < chips.Count; k++)
+        {
+            int w = sizes[k].W + 2 * pad;
+            host.FillRect(x - 1, top - 1, w + 2, h + 2, 0xC0000000);
+            host.FillRect(x, top, w, h, chips[k].Back);
+            host.BattleText(chips[k].Text, x + pad, top + (h - sizes[k].H) / 2, 0xFFFFFFFF, AilmentChipFont);
+            x += w + gap;
+        }
+    }
+
+    internal const float AilmentChipFont = 6f;
+
+    /// <summary>딱지에 쓸 두 글자 — 값의 부호로 뜻이 갈리는 것(13·14·38)은 화살표를 붙인다. 표에 없으면 이름 앞 두 글자.</summary>
+    internal static string AilmentChipText(int id, int value) => id switch
+    {
+        1 => "둔화", 4 => "광폭", 7 => "보호", 8 => "재생", 10 => "가속", 11 or 42 => "경험", 12 => "봉인",
+        13 => value < 0 ? "공↓" : "공↑", 14 => value < 0 ? "방↓" : "방↑", 15 => "SL↓", 16 => "TP↓", 17 => "HP↓",
+        18 => "SL비", 19 => "정지", 20 => "TP비", 22 or 23 or 24 => "사망", 25 => "속박", 26 => "불면", 27 => "무장",
+        29 => "무기", 38 => value < 0 ? "느림" : "빠름", 40 => "DEP↓", 47 => "불사",
+        _ => AilmentNames.TryGetValue(id, out var n) ? n[..Math.Min(2, n.Length)] : id.ToString(),
+    };
 
     /// <summary>어빌리티 대상 고르는 중이면 사거리 칸(노랑)을 깐다.</summary>
     internal void DrawWorkRange()

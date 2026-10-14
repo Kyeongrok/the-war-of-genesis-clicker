@@ -306,6 +306,8 @@ internal sealed unsafe partial class GameWindow
         // 건너뛰는 동안 뜬 숫자를 지금으로 다시 맞춘다 — 결과(피해·회복·Miss)는 보인다.
         for (int i = 0; i < Btl._numbers.Count; i++)
             if (Btl._numbers[i].Start >= _skipFrom) Btl._numbers[i] = Btl._numbers[i] with { Start = _lastTime };
+        for (int i = 0; i < Btl._popups.Count; i++)   // 걸린 상태이상 글(「이동 불가 · 체력 소모」)도
+            if (Btl._popups[i].Start >= _skipFrom) Btl._popups[i] = Btl._popups[i] with { Start = _lastTime };
         // 지나간 이펙트는 지운다(때가 지나 한 틀 번쩍이고 사라지지 않게).
         Btl._effects.RemoveAll(e => e.Start < _lastTime);
         Btl._effectMirrors.RemoveAll(e => e.Start < _lastTime);

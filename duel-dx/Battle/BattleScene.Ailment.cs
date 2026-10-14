@@ -25,6 +25,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>상태이상 칸 그림 — <c>Obs 0489</c>(전투가 미리 읽어 두는 공용 그림 스물넷 중 하나).</summary>
     internal const int AilmentIconObs = 489;
 
+    /// <summary>해로운 상태이상이 걸릴 때 뜨는 글 색(연보라).</summary>
+    internal const uint AilmentPopupColor = 0xFFE090FF;
+
     /// <summary>
     /// 그 유닛의 <paramref name="slot"/> 번째 상태이상 칸에 그릴 <c>Obs 0489</c> 모션.
     /// </summary>
@@ -166,6 +169,7 @@ internal sealed unsafe partial class BattleScene
         if (effects.Length == 0) return true;
 
         var used = new List<int>();
+        var landed = new List<string>();
         foreach (var (id, value) in effects)
         {
             if (id == 0) continue;
@@ -187,7 +191,10 @@ internal sealed unsafe partial class BattleScene
                 continue;
             }
             PutAilment(target, (byte)id, (short)value, used, attacker);
+            if (id is not (44 or 45 or 46) && AilmentNames.TryGetValue(id, out var name)) landed.Add(name);
         }
+        // 걸린 상태이상 이름을 피해 숫자 위에 띄운다 — 원본은 아무것도 안 띄워 걸린 줄 몰랐다(사용자 보고 fa-64).
+        if (landed.Count > 0) Popup(target, string.Join(" · ", landed), effects.Any(e => AilmentScore(e.Id, e.Value) < 0) ? AilmentPopupColor : HealColor2, 12, rise: 88);
         host.StatusScr.RefreshUnitStats(target);
         if (target.Hp > target.MaxHp) target.Hp = target.MaxHp;
         _ailmentLanded = effects.Any(e => e.Id != 0);
