@@ -528,13 +528,7 @@ internal sealed unsafe partial class BattleScene
         if (user.Data is not { } c || Work(c.BasicWorkId) is not { } w || !CanAfford(user, w)) return false;
         if (InWorkRange(w, user.Col, user.Row, obj.Col, obj.Row, user)) return TryBreakObject(obj.Col, obj.Row);
         if (ComputeRange(user) is not { } range) return false;
-        int best = -1, bestCost = int.MaxValue;
-        for (int i = 0; i < range.Cost.Length; i++)
-        {
-            if (range.Cost[i] >= bestCost || !range.CanReach(i) || !InWorkRange(w, i % host.Cols, i / host.Cols, obj.Col, obj.Row, user)) continue;
-            bestCost = range.Cost[i];
-            best = i;
-        }
+        int best = ObjectAttackCell(user, w, obj, range);
         if (best < 0 || PathWithin(range, user.Col, user.Row, best) is not { } path)
         {
             host.Hint("거기까지 가서 칠 수 없습니다");
@@ -544,6 +538,32 @@ internal sealed unsafe partial class BattleScene
         _commitUndo = null;
         _routine = WalkThenBreak(user, path, obj.Col, obj.Row);
         return true;
+    }
+
+    /// <summary>그 물체를 기본공격으로 칠 수 있는 칸 가운데 가장 싼 칸(판 번호) — 없으면 −1.</summary>
+    internal int ObjectAttackCell(UnitState user, WorkData w, DemoObject obj, MoveRange range)
+    {
+        int best = -1, bestCost = int.MaxValue;
+        for (int i = 0; i < range.Cost.Length; i++)
+        {
+            if (range.Cost[i] >= bestCost || !range.CanReach(i) || !InWorkRange(w, i % host.Cols, i / host.Cols, obj.Col, obj.Row, user)) continue;
+            bestCost = range.Cost[i];
+            best = i;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// 기본공격으로 그 물체를 치러 갈 걸음 비용 — 이미 사거리 안이면 0, 못 치면 −1.
+    /// 커서(<see cref="AttackableObjects"/>)가 <see cref="TryAttackObject"/> 와 같은 규칙으로 가린다.
+    /// </summary>
+    internal int ObjectAttackCost(UnitState user, DemoObject obj)
+    {
+        if (user.Data is not { } c || Work(c.BasicWorkId) is not { } w || !CanAfford(user, w)) return -1;
+        if (InWorkRange(w, user.Col, user.Row, obj.Col, obj.Row, user)) return 0;
+        if (ComputeRange(user) is not { } range) return -1;
+        int best = ObjectAttackCell(user, w, obj, range);
+        return best < 0 || PathWithin(range, user.Col, user.Row, best) == null ? -1 : range.Cost[best];
     }
 
     internal IEnumerator<bool> WalkThenBreak(UnitState user, List<(int Col, int Row)> path, int col, int row)
@@ -990,7 +1010,12 @@ internal sealed unsafe partial class BattleScene
             {
                 int sinceBroken = (int)((host._lastTime - broken.At) * TicksPerSecond);
                 if (sinceBroken >= 0 && sinceBroken < (host.UiFor(obj.Data.SpriteId)?.MotionLength(broken.Motion) ?? 0))
-                    host.DrawUi(obj.Data.SpriteId, broken.Motion, sinceBroken, obj.Col * TileW + obj.Data.DrawW, host.CellTop(obj.Col, obj.Row) + obj.Data.DrawH, UiBlend.Alpha, loop: false);
+                {
+                    int bx = obj.Col * TileW + obj.Data.DrawW, by = host.CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
+                    host.DrawUi(obj.Data.SpriteId, broken.Motion, sinceBroken, bx, by, UiBlend.Alpha, loop: false);
+                    // 부서지는 모션의 폭발은 자식 키다(기총포탑 Obs 0958 모션 4 = 자식 Obs 0110 · 0739) — 자식까지 그려야 터지는 것이 보인다(사용자 보고 fa-65).
+                    DrawUnitLayers(host.UiFor(obj.Data.SpriteId)?.Clip(broken.Motion), sinceBroken, bx, by, mirror: false, loop: false);
+                }
                 else _brokenAt.Remove(obj);
                 continue;
             }

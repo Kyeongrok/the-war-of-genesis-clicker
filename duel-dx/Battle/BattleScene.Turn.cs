@@ -47,6 +47,15 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>공격 대상 커서 — 공격을 열면 칠 수 있는 적 중 HP 가 가장 낮은 적. 없으면 −1.</summary>
     internal int _attackCursor = -1;
 
+    /// <summary>
+    /// 기본공격 커서가 유닛 대신 가리키는 부술 수 있는 적 물체(기총포탑 따위) — 이것이 서면 <see cref="_attackCursor"/> 는 −1.
+    /// 전에는 커서가 유닛만 돌아 E·Enter·패드로는 포탑을 못 쳤다(사용자 보고 fa-65: Btl 0161).
+    /// </summary>
+    internal DemoObject? _attackObject;
+
+    /// <summary>겨누는 중에 커서가 무엇이든(적 · 물체) 서 있나.</summary>
+    internal bool HasAttackCursor => _attackCursor >= 0 || _attackObject != null;
+
     /// <summary>기본공격 work 1 의 동작 — 준비 5 → 베기 8 → 복귀 24(분석-모션 <c>0x1007f0a0</c>). 판정은 베기 끝에 들어간다.</summary>
     internal static readonly int[] StrikeActions = [5, 8, 24];
 
@@ -612,6 +621,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         _commitUndo = null;
         _attackCursor = -1;
+        _attackObject = null;
         _aimCell = null;
         _targetHotkey = -1;
         _targetWork = -1;
@@ -823,16 +833,42 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _targetWork = c.BasicWorkId;
         _targetIsBasicAttack = true;
 
-        var targets = AttackableEnemies();
+        var targets = AttackCursorTargets();
         if (targets.Count == 0)
         {
             CancelTargeting(refund: true);
             host.Toast("공격할 수 있는 적이 없습니다");
             return;
         }
-        _attackCursor = targets[0];
+        (_attackCursor, _attackObject) = targets[0];
+        AttackCursorHint();
+    }
+
+    internal void AttackCursorHint()
+    {
         string confirm = KeyBindings.KeyName(host._keys[KeyAction.Attack]);
-        host.Hint($"{host.UnitName(_attackCursor)} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
+        string name = _attackObject is { } o ? host._db?.T((ushort)o.Data.NameId) ?? "물체" : host.UnitName(_attackCursor);
+        host.Hint($"{name} 을(를) 노립니다 — 클릭·Enter·{confirm}: 공격, Tab: 다른 적, 우클릭·Esc: 취소");
+    }
+
+    /// <summary>기본공격 커서가 도는 차례 — 칠 수 있는 적과 물체를 한데 모아 걸음 비용이 적은 순(같으면 적 먼저).</summary>
+    internal List<(int Unit, DemoObject? Obj)> AttackCursorTargets()
+    {
+        var user = host._units[_turn];
+        return [.. AttackableEnemies().Select((i, k) => (Unit: i, Obj: (DemoObject?)null, Cost: FindAttackPath(_turn, i)?.Cost ?? 0, Order: k))
+                    .Concat(AttackableObjects().Select((o, k) => (Unit: -1, Obj: (DemoObject?)o, Cost: ObjectAttackCost(user, o), Order: 10000 + k)))
+                    .OrderBy(t => t.Cost).ThenBy(t => t.Order)
+                    .Select(t => (t.Unit, t.Obj))];
+    }
+
+    /// <summary>차례인 인물이 걸어가서 칠 수 있는 부술 수 있는 적 물체 — 걸음 비용이 적은 순.</summary>
+    internal List<DemoObject> AttackableObjects()
+    {
+        var user = host._units[_turn];
+        return [.. Objects.Where(o => o.Alive && o.Data.Breakable && ObjectInBounds(o) && ObjectHostile(o, user))
+                          .Select(o => (Obj: o, Cost: ObjectAttackCost(user, o)))
+                          .Where(t => t.Cost >= 0)
+                          .OrderBy(t => t.Cost).Select(t => t.Obj)];
     }
 
     /// <summary>
@@ -852,8 +888,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <param name="step">+1 다음 적, −1 이전 적(패드 LB).</param>
     internal void CycleAttackCursor(int step = 1)
     {
-        var targets = !_targetIsBasicAttack && _targetWork >= 0 && Work(_targetWork) is { } aw
-            ? AbilityTargets(aw) : AttackableEnemies();
+        if (_targetIsBasicAttack)
+        {
+            // 기본공격은 적 다음에 칠 수 있는 물체까지 한 줄로 돈다.
+            var all = AttackCursorTargets();
+            if (all.Count == 0) return;
+            int at = all.FindIndex(t => _attackObject != null ? t.Obj == _attackObject : t.Unit == _attackCursor);
+            (_attackCursor, _attackObject) = all[((at + step) % all.Count + all.Count) % all.Count];
+            AttackCursorHint();
+            return;
+        }
+        var targets = _targetWork >= 0 && Work(_targetWork) is { } aw ? AbilityTargets(aw) : AttackableEnemies();
         if (targets.Count == 0) return;
         _attackCursor = targets[((targets.IndexOf(_attackCursor) + step) % targets.Count + targets.Count) % targets.Count];
     }
@@ -861,8 +906,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>커서의 적을 친다.</summary>
     internal void AttackCursorTarget()
     {
-        if (_attackCursor < 0 || !IsPlayerTurn) return;
-        var (col, row) = (host._units[_attackCursor].Col, host._units[_attackCursor].Row);
+        if (!HasAttackCursor || !IsPlayerTurn) return;
+        var (col, row) = _attackObject is { } o ? (o.Col, o.Row) : (host._units[_attackCursor].Col, host._units[_attackCursor].Row);
         OnTargetClick(col, row);
     }
 
@@ -1886,7 +1931,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             int id = u.StatusId[k];
             if (id is 0 or 44 or 45 or 46) continue;
-            int score = AilmentScore(id, u.StatusValue[k]);
+            int score = id is 1 or 40 ? -1 : AilmentScore(id, u.StatusValue[k]);   // DEX·DEP 저하는 원본 점수표엔 0 이지만 해롭다
             chips.Add((AilmentChipText(id, u.StatusValue[k]), score < 0 ? 0xE0A02828u : score > 0 ? 0xE02858B0u : 0xE0505860u));
         }
         if (chips.Count == 0) return;
@@ -1918,13 +1963,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>어빌리티 대상 고르는 중이면 사거리 칸(노랑)을 깐다.</summary>
     internal void DrawWorkRange()
     {
-        if (_targetWork >= 0 && _targetIsBasicAttack && _attackCursor >= 0)
+        if (_targetWork >= 0 && _targetIsBasicAttack && HasAttackCursor)
         {
-            // 노리는 적 칸에 깜빡이는 빨간 테두리
-            var t = host._units[_attackCursor];
+            // 노리는 적(물체) 칸에 깜빡이는 빨간 테두리
+            var (tc, tr) = _attackObject is { } o ? (o.Col, o.Row) : (host._units[_attackCursor].Col, host._units[_attackCursor].Row);
             uint alpha = (uint)(160 + 95 * (0.5 + 0.5 * Math.Sin(host._lastTime * Math.PI * 4)));
             uint color = alpha << 24 | 0xFF3030;
-            int cx = t.Col * TileW, cy = host.CellTop(t.Col, t.Row);
+            int cx = tc * TileW, cy = host.CellTop(tc, tr);
             for (int k = 0; k < 3; k++) host.StrokeRect(cx + k, cy + k, TileW - 2 * k, TileH - 2 * k, color);
             return;
         }

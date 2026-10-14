@@ -425,7 +425,7 @@ internal sealed partial class GamePad(GameWindow host)
                 if (action == PadAction.Attack) { _rightDown = true; PostMouse(Win32.WM_RBUTTONDOWN); continue; }
             }
             // 겨누는 중에는 LB · RB 가 이전 · 다음 적(사용자 요청 fa-32).
-            if (host.Btl._targetWork >= 0 && host.Btl._attackCursor >= 0 && action is PadAction.PrevUnit or PadAction.NextUnit) { host.Btl.CycleAttackCursor(action == PadAction.PrevUnit ? -1 : 1); continue; }
+            if (host.Btl._targetWork >= 0 && host.Btl.HasAttackCursor && action is PadAction.PrevUnit or PadAction.NextUnit) { host.Btl.CycleAttackCursor(action == PadAction.PrevUnit ? -1 : 1); continue; }
             // 커서가 손댈 수 있는 물체(상자 · 문) 위면 확인이 그 물체를 누른다(fa-35) — 걸어가서 연다.
             if (action == PadAction.Confirm && TouchableUnderCursor()) { PostMouse(Win32.WM_LBUTTONDOWN); continue; }
             // 어빌리티 목록에서는 LB · RB 도 줄을 위 · 아래로 옮긴다(사용자 요청 fa-30) — 십자키와 같은 일이다.

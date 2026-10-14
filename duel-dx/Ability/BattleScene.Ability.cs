@@ -298,18 +298,27 @@ internal sealed unsafe partial class BattleScene
         {
             // 지금 겨눈 적에서 그 쪽으로 가장 가까운 대상 — 쪽으로 간 칸 수가 옆으로 벗어난 칸 수보다 큰 것을 먼저 보고,
             // 그런 대상이 없으면 그 쪽으로 한 칸이라도 간 대상 가운데 옆으로 덜 벗어난 것으로 간다.
-            var from = _attackCursor >= 0 ? host._units[_attackCursor] : user;
-            int best = -1, bestFar = int.MaxValue;
-            foreach (int i in _targetIsBasicAttack ? AttackableEnemies() : AbilityTargets(w))
+            // 기본공격이면 칠 수 있는 적 물체(기총포탑 따위)도 대상이다(fa-65).
+            var (fromCol, fromRow) = _attackObject is { } fo ? (fo.Col, fo.Row) : _attackCursor >= 0 ? (host._units[_attackCursor].Col, host._units[_attackCursor].Row) : (user.Col, user.Row);
+            var candidates = (_targetIsBasicAttack ? AttackableEnemies() : AbilityTargets(w))
+                .Where(i => i != _attackCursor && (_targetIsBasicAttack || CanAimAt(w, user, host._units[i].Col, host._units[i].Row)))
+                .Select(i => (Unit: i, Obj: (DemoObject?)null, host._units[i].Col, host._units[i].Row));
+            if (_targetIsBasicAttack)
+                candidates = candidates.Concat(AttackableObjects().Where(o => o != _attackObject).Select(o => (Unit: -1, Obj: (DemoObject?)o, o.Col, o.Row)));
+            (int Unit, DemoObject? Obj)? best = null;
+            int bestFar = int.MaxValue;
+            foreach (var (unit, obj, tc, tr) in candidates)
             {
-                var t = host._units[i];
-                if (i == _attackCursor || (!_targetIsBasicAttack && !CanAimAt(w, user, t.Col, t.Row))) continue;
-                int along = (t.Col - from.Col) * dx + (t.Row - from.Row) * dy, aside = Math.Abs((t.Col - from.Col) * dy) + Math.Abs((t.Row - from.Row) * dx);
+                int along = (tc - fromCol) * dx + (tr - fromRow) * dy, aside = Math.Abs((tc - fromCol) * dy) + Math.Abs((tr - fromRow) * dx);
                 if (along <= 0) continue;
                 int far = aside > along ? 1000 + aside * 3 + along : along + aside;
-                if (far < bestFar) (best, bestFar) = (i, far);
+                if (far < bestFar) (best, bestFar) = ((unit, obj), far);
             }
-            if (best >= 0) { _attackCursor = best; _aimCell = null; }
+            if (best is { } b)
+            {
+                (_attackCursor, _attackObject, _aimCell) = (b.Unit, b.Obj, null);
+                if (_targetIsBasicAttack) AttackCursorHint();
+            }
             return true;
         }
         if (w.SelfCentred) return true;   // 자기 자리에 쓰는 기술은 옮길 데가 없다
