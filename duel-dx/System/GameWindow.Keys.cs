@@ -144,6 +144,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>모드 > 실험 > 새 UI — 창을 화면 해상도로 그려 큰 배율에서도 글자가 또렷하다(지금은 설정 창). 끄면 이전 UI(사용자 요청 menu-55).</summary>
     internal bool _hiResUi = UserSettings.Current.HiResUi;
     internal const int MenuHiResUi = 1196;
+
+    /// <summary>모드 > 실험 > 고해상도 모세스 — 모세스 배경을 4배로 키워 판 밑에 깐다(<see cref="HiResBackdrop"/>, 사용자 요청 menu-74, 기본 끔).</summary>
+    internal bool _hiResMoses = UserSettings.Current.HiResMoses;
+    internal const int MenuHiResMoses = 1197;
     internal static readonly int[] BubbleScaleChoices = [100, 125, 150, 175, 200];
 
     /// <summary>글자 크기 고르기(사용자 요청 menu-60).</summary>
@@ -235,7 +239,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -382,6 +386,14 @@ internal sealed unsafe partial class GameWindow
             case MenuHiResUi:
                 _hiResUi = !_hiResUi;
                 Toast(_hiResUi ? "새 UI — 설정 창을 화면 해상도로 그립니다" : "이전 UI 로 그립니다");
+                SaveSettings();
+                break;
+            case MenuHiResMoses:
+                _hiResMoses = !_hiResMoses;
+                if (_hiResMoses) HiBack.Start(); else HiBack.Drop();
+                Toast(!_hiResMoses ? "모세스 배경을 원본대로 그립니다"
+                      : HiBack.Made == HiResBackdrop.MosesBackgrounds.Length ? "고해상도 모세스 배경을 씁니다"
+                      : "고해상도 모세스 배경을 만듭니다 — 지금 화면의 배경부터, 다 된 것부터 바뀝니다");
                 SaveSettings();
                 break;
             case MenuTimedHit:

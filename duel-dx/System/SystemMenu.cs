@@ -692,11 +692,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// <summary>인물 레코드에서 세이브가 따로 적는 칸들(<see cref="SaveUnit.Char"/>).</summary>
     internal sealed record SaveChar(ushort NameId, ushort Name2Id, ushort SpriteId, ushort FaceId, ushort TitleId, byte Body, ushort JobId,
                                    ushort BasicWorkId, uint Lp, ushort Psy, ushort Tp, ushort TpDivisor, ushort Ctp, ushort Dep, ushort Dex,
-                                   byte WeaponBand, byte WeaponType);
+                                   byte WeaponBand, byte WeaponType, ushort? VoiceSet = null);
 
     internal static SaveChar? SaveCharOf(CharacterData? c) => c == null ? null
         : new SaveChar(c.NameId, c.Name2Id, c.SpriteId, c.FaceId, c.TitleId, c.Body, c.JobId, c.BasicWorkId,
-                       c.Lp, c.Psy, c.Tp, c.TpDivisor, c.Ctp, c.Dep, c.Dex, c.WeaponBand, c.WeaponType);
+                       c.Lp, c.Psy, c.Tp, c.TpDivisor, c.Ctp, c.Dep, c.Dex, c.WeaponBand, c.WeaponType, c.VoiceSet);
 
     /// <summary>
     /// 세이브의 인물 칸을 바탕 자료 위에 되살린다. <paramref name="regrow"/> 면 인물 레코드가 안 적힌 옛 세이브에서
@@ -719,6 +719,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             {
                 NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = k.FaceId, TitleId = k.TitleId, Body = k.Body,
                 JobId = k.JobId, BasicWorkId = k.BasicWorkId, TpDivisor = k.TpDivisor, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
+                VoiceSet = k.VoiceSet ?? baseData.VoiceSet,     // 캐릭터 에디터 「외형」이 목소리도 바꾼다 — 옛 세이브에는 칸이 없다
             };
             if (trustStats) c = c with { Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, Ctp = k.Ctp, Dep = k.Dep, Dex = k.Dex };
         }

@@ -946,6 +946,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 var to = host._fb.AsSpan((oy + y) * host.BoardWidth + bx0, bx1 - bx0);
                 for (int i = 0; i < line.Length; i++) to[i] = line[i] | 0xFF000000;
             }
+            // 모드 > 고해상도 모세스 — 키운 배경을 판 밑에 깐다. 판에서 원본 배경 그대로인 점만 비치므로 글씨를 지운 사본이 아닌 원본으로 견준다.
+            if (_mosesBgAt == (0, 0) && _mosesBg is { } original) host.HiBack.Mark(_mosesBgId, original, ox, oy);
             if (labels != null)
                 foreach (var l in labels)
                 {

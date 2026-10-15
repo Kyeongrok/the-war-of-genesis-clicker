@@ -14,6 +14,8 @@
         <!-- 창 제목에 찍는 버전 — 릴리즈는 태그로 덮어쓴다(-p:Version). 손으로 빌드하면 개발판. -->
         <Version>0.0.0-dev</Version>
         <RootNamespace>DuelDx</RootNamespace>
+        <!-- 64비트로 — 고해상도 모세스의 DirectML(그래픽 카드 업스케일)이 x64 일 때만 DirectML.dll 을 실어 준다(AnyCPU 면 빠져 CPU 로 떨어졌다). -->
+        <PlatformTarget>x64</PlatformTarget>
     </PropertyGroup>
 
     <ItemGroup>
@@ -21,6 +23,8 @@
         <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
         <!-- 설치판(Setup.exe)과 자동 업데이트 — CLI(vpk, release.yml)와 버전을 맞춘다. -->
         <PackageReference Include="Velopack" Version="0.0.1298" />
+        <!-- 모드 > 실험 > 고해상도 모세스 — 배경을 업스케일 모델로 키운다(Moses/HiResBackdrop.cs). 그래픽 카드(DirectML), 안 되면 CPU. -->
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.17.3" />
     </ItemGroup>
 
     <ItemGroup>
@@ -38,6 +42,13 @@
         <PropertyGroup Condition="'$(GitDescribeExit)' == '0'">
             <InformationalVersion>$(GitDescribe.TrimStart('v'))</InformationalVersion>
         </PropertyGroup>
+    </Target>
+
+    <!-- DirectML 꾸러미가 딸려 보내는 디버그판(DirectML.Debug.dll)과 기호 파일(.pdb)은 배포에서 뺀다 — 쓰는 것은 DirectML.dll 뿐이다. -->
+    <Target Name="DropDirectMLDebug" AfterTargets="ComputeResolvedFilesToPublishList">
+        <ItemGroup>
+            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)' == 'DirectML.Debug' or ('%(Filename)' == 'DirectML' and '%(Extension)' == '.pdb')" />
+        </ItemGroup>
     </Target>
 
     <!-- 배포용 exe 에 저장소의 assets 폴더를 함께 싣는다. 단일 exe 로 publish 할 때

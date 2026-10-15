@@ -33,9 +33,21 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         public bool Opaque, Dim;
         public int Radius16;            // 둥근 네모: 반지름 × 16(창 픽셀)
         public float Tint;              // 장면 페이드가 곱한 밝기
+        public bool Smooth;             // 그림을 겹선형으로 늘리고 줄인다(판 밑에 까는 고해상도 배경)
     }
 
     private readonly List<Cmd> _cmds = [];
+
+    /// <summary>
+    /// 판 <b>밑</b>에 까는 그림 — 고해상도 모세스 배경(사용자 요청 menu-74). 판을 올릴 때 배경 원본 그대로인 점은 투명하게 해(<see cref="UnderLow"/>)
+    /// 그 자리에만 이 그림이 비친다 — 단추 · 글 · 효과가 그려진 점은 판 그대로다.
+    /// </summary>
+    private readonly List<Cmd> _under = [];
+
+    /// <summary>밑깔기가 덮는 판의 원본 배경(640×480)과 그 판 좌표 — 이 배열과 같은 점이 투명해진다.</summary>
+    internal (uint[] Low, int X, int Y, int W, int H)? UnderLow { get; private set; }
+
+    internal bool HasUnder => _under.Count > 0;
     private int _w, _h;
 
     /// <summary>이번 틀에 이 층에 그린 것이 있나.</summary>
@@ -47,6 +59,8 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     internal void Begin()
     {
         _cmds.Clear();
+        _under.Clear();
+        UnderLow = null;
         Used = false;
     }
 
@@ -55,6 +69,8 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     {
         var span = CollectionsMarshal.AsSpan(_cmds);
         for (int i = 0; i < span.Length; i++) span[i].Tint *= (float)num / den;
+        var under = CollectionsMarshal.AsSpan(_under);
+        for (int i = 0; i < under.Length; i++) under[i].Tint *= (float)num / den;
     }
 
     private void Add(Cmd cmd)
@@ -109,6 +125,23 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
             Kind = Kind.Image, X0 = x0, Y0 = y0, X1 = Sx(x + (dw > 0 ? dw : w)), Y1 = Sy(y + (dh > 0 ? dh : h)),
             Data = src, Stride = stride, W = w, H = h, Opaque = opaque, Dim = dim, Color = 0xFFFFFFFF,
         });
+    }
+
+    /// <summary>
+    /// 판 밑에 큰 그림(<paramref name="hi"/>, 키운 배경)을 깐다 — 판 좌표 (<paramref name="x"/>, <paramref name="y"/>) 부터 <paramref name="low"/> 크기만큼.
+    /// 판에서 <paramref name="low"/> 와 같은 점만 투명해져 이 그림이 보인다.
+    /// </summary>
+    internal void DrawUnder(uint[] hi, int hiW, int hiH, uint[] low, int x, int y, int w, int h)
+    {
+        (_w, _h) = (host._resW, host._resH);
+        var cmd = new Cmd
+        {
+            Kind = Kind.Image, X0 = Sx(x), Y0 = Sy(y), X1 = Sx(x + w), Y1 = Sy(y + h),
+            Data = hi, Stride = hiW, W = hiW, H = hiH, Opaque = true, Smooth = true, Color = 0xFFFFFFFF, Tint = 1,
+        };
+        if (cmd.X1 <= cmd.X0 || cmd.Y1 <= cmd.Y0) return;
+        _under.Add(cmd);
+        UnderLow = (low, x, y, w, h);
     }
 
     /// <summary>위에서 아래로 색이 바뀌는 네모 — <paramref name="column"/> 의 색들을 높이에 맞춰 늘리고 사이를 부드럽게 잇는다. 알파(0~255)로 반투명하게 덮는다.</summary>
@@ -294,7 +327,23 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     /// <summary>판 그림을 그린 뒤, 화면에 내기 전에 — 적어 둔 명령을 창 전체에 차례대로 그린다.</summary>
     internal void Present()
     {
-        if (!Used || _cmds.Count == 0 || _w <= 0 || _h <= 0) return;
+        if (!Used || _cmds.Count == 0) return;
+        PresentCmds(_cmds);
+    }
+
+    /// <summary>판을 그리기 <b>전에</b> — 밑깔기를 그린다. 판은 그 뒤에 섞기(<see cref="Blend"/>)를 켜고 그린다.</summary>
+    internal void PresentUnder()
+    {
+        if (_under.Count == 0) return;
+        PresentCmds(_under);
+    }
+
+    /// <summary>알파 섞기 — 밑깔기 위에 판을 얹을 때 쓴다(밑깔기를 한 번 그린 뒤라 만들어져 있다).</summary>
+    internal ID3D11BlendState? Blend => _blend;
+
+    private void PresentCmds(List<Cmd> list)
+    {
+        if (_w <= 0 || _h <= 0) return;
         var device = host._device;
         var ctx = host._ctx;
         if (_vs == null) CreateDeviceObjects();
@@ -302,7 +351,7 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         if (_textures.Count > 1500) { foreach (var t in _textures.Values) t.Dispose(); _textures.Clear(); }
         if (_rounds.Count > 300) { foreach (var t in _rounds.Values) t.Dispose(); _rounds.Clear(); }
 
-        var cmds = CollectionsMarshal.AsSpan(_cmds);
+        var cmds = CollectionsMarshal.AsSpan(list);
         if (_verts.Length < cmds.Length * 6) _verts = new Vertex[cmds.Length * 6 * 2];
         var views = new ID3D11ShaderResourceView[cmds.Length];
         float sx = 2f / _w, sy = 2f / _h;
@@ -349,9 +398,9 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
         // 같은 텍스처 · 같은 늘림 방식이 이어지는 명령은 한 번에 그린다.
         for (int i = 0; i < cmds.Length;)
         {
-            bool smooth = cmds[i].Kind == Kind.Gradient;
+            bool smooth = cmds[i].Kind == Kind.Gradient || cmds[i].Smooth;
             int j = i + 1;
-            while (j < cmds.Length && ReferenceEquals(views[j], views[i]) && (cmds[j].Kind == Kind.Gradient) == smooth) j++;
+            while (j < cmds.Length && ReferenceEquals(views[j], views[i]) && (cmds[j].Kind == Kind.Gradient || cmds[j].Smooth) == smooth) j++;
             ctx.PSSetSampler(0, smooth ? _linear : _point);
             ctx.PSSetShaderResource(0, views[i]);
             ctx.Draw((uint)((j - i) * 6), (uint)(i * 6));
@@ -379,6 +428,15 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
             {
                 int bx = (int)Math.Floor((x - ox) / Zoom);
                 shot[y * _w + x] = (uint)bx < host.ViewWidth && (uint)by < host.ViewHeight ? host._fb[(host._camY + by) * host.BoardWidth + host._camX + bx] | 0xFF000000 : 0xFF000000;
+                // 밑깔기 — 판의 점이 원본 배경 그대로면 큰 그림의 그 자리(가장 가까운 점)를 보인다.
+                if (UnderLow is { } low && _under.Count > 0 && (uint)bx < host.ViewWidth && (uint)by < host.ViewHeight)
+                {
+                    int lx = host._camX + bx - low.X, ly = host._camY + by - low.Y;
+                    var u = _under[0];
+                    if ((uint)lx < low.W && (uint)ly < low.H && (host._fb[(host._camY + by) * host.BoardWidth + host._camX + bx] | 0xFF000000) == (low.Low[ly * low.W + lx] | 0xFF000000)
+                        && x >= u.X0 && x < u.X1 && y >= u.Y0 && y < u.Y1)
+                        shot[y * _w + x] = u.Data![(y - u.Y0) * u.H / (u.Y1 - u.Y0) * u.Stride + (x - u.X0) * u.W / (u.X1 - u.X0)] | 0xFF000000;
+                }
             }
         }
         foreach (var c in _cmds)

@@ -245,7 +245,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
                     ? (m.Name, Path.Combine(assetsRoot, CharacterExport.FolderNameFor(chrCode, m.Name), CharacterExport.ObsFileName(m.SpriteCode)))
                     : LoadFromGameFolder(chrCode);
                 // 바뀐 그림이 그 인물 폴더에 있으면 그것을 쓴다(없으면 목록 그림 그대로).
-                if (wanted > 0 && Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changedPath && CharacterFile(changedPath, 30) is var changed && File.Exists(changed))
+                // 캐릭터 에디터의 「외형」은 남의 그림을 빌린다 — 제 폴더에 없으면 그 그림을 가진 인물의 폴더에서 찾는다(사용자 요청 menu-67).
+                if (wanted > 0 && (Path.Combine(Path.GetDirectoryName(obsPath)!, CharacterExport.ObsFileName(wanted)) is var changedPath && CharacterFile(changedPath, 30) is var own && File.Exists(own)
+                                   ? own : BorrowedSprite(assetsRoot, manifests, wanted)) is { } changed && File.Exists(changed))
                 {
                     obsPath = changed;
                     if (BattleScene.Trace)
@@ -588,6 +590,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
         catch (DirectoryNotFoundException) { return ""; }
     }
 
+    /// <summary>
+    /// 다른 인물 폴더에 든 그림 — 그 그림을 목록 그림으로 쓰는 인물, 아니면 그 파일이 놓인 아무 인물 폴더. 끝내 없으면 null.
+    /// </summary>
+    internal static string? BorrowedSprite(string assetsRoot, Dictionary<int, ExportedCharacter> manifests, int obs)
+    {
+        string file = CharacterExport.ObsFileName(obs);
+        foreach (var (code, m) in manifests.Where(kv => kv.Value.SpriteCode == obs))
+            if (CharacterFile(Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), file), 30) is var path && File.Exists(path)) return path;
+        try { return Directory.EnumerateDirectories(assetsRoot).Select(d => Path.Combine(d, file)).FirstOrDefault(File.Exists); }
+        catch (DirectoryNotFoundException) { return null; }
+    }
+
     /// <summary>뽑아 둔 목록(<c>assets/characters</c>)에 없는 인물 — 인물 레코드의 그림을 원본 게임 폴더에서 바로 가져온다.</summary>
     internal (string Name, string ObsPath) LoadFromGameFolder(int chrCode)
     {
@@ -755,6 +769,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Pad.Active = false;   // 키보드를 잡았다
                 if (((long)lParam & 0x40000000) == 0) OnKeyDown((int)wParam);
                 return IntPtr.Zero;
+            // 캐릭터 에디터의 이름 찾기 — 다 된 글자는 WM_CHAR, 한글 조합 중인 글자는 WM_IME_COMPOSITION 으로 받는다(사용자 요청 menu-71).
+            // IME 의 따로 뜨는 조합 창은 끄고(START 를 먹는다) 찾기 칸 안에 조합 중인 글자를 그린다. 조합 결과는 DefWindowProc 가 WM_CHAR 로 바꿔 보낸다.
+            case Win32.WM_CHAR when CharEditScr.SearchActive:
+                CharEditScr.OnChar((char)(long)wParam);
+                return IntPtr.Zero;
+            case Win32.WM_IME_STARTCOMPOSITION when CharEditScr.SearchActive:
+                return IntPtr.Zero;
+            case Win32.WM_IME_COMPOSITION when CharEditScr.SearchActive:
+                CharEditScr.OnComposition(Win32.CompositionString(hWnd));
+                break;
+            case Win32.WM_IME_ENDCOMPOSITION when CharEditScr.SearchActive:
+                CharEditScr.OnComposition("");
+                break;
             case Win32.WM_KEYUP:
                 Btl._heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
@@ -822,6 +849,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Mos._styleTip = null;          // 모세스 전직 화면의 어빌리티 설명도
                 Mos._shopTip = null;           // 상점 아이템 설명도
                 Btl._ringHelp = null;          // 링 항목 설명도
+                CharEditScr._tip = null;       // 캐릭터 에디터의 어빌리티 설명도
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
@@ -838,7 +866,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 TitleScr.UpdateTitleHover(bx, by);
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
-                if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
+                if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
+                else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
             }
@@ -865,6 +894,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
         if (key == Win32.VK_F11) { OnMenuCommand(MenuFullscreen); return; }   // 전체화면 켜고 끄기 — 어느 화면에서나
         if (TimedHitFx.Running) { TimedHitFx.PressKey(key); return; }   // 타이밍 크리티컬 — 공격 키만 받는다
+        if (CharEditScr.SearchActive) { CharEditScr.OnKey(key); return; }   // 에디터 찾기 칸에 글자를 치는 동안 W · T 같은 시험 단축키가 안 돌게
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
@@ -1632,10 +1662,21 @@ internal sealed unsafe partial class GameWindow : IDisposable
         var map = _ctx.Map(_boardTex, 0, MapMode.WriteDiscard);
         try
         {
+            var under = Hi.HasUnder ? Hi.UnderLow : null;
             for (int y = 0; y < ViewHeight; y++)
             {
                 var dst = new Span<uint>((void*)(map.DataPointer + y * map.RowPitch), ViewWidth);
                 _fb.AsSpan((_camY + y) * BoardWidth + _camX, ViewWidth).CopyTo(dst);
+                // 고해상도 배경을 밑에 깔았으면 — 원본 배경 그대로인 점만 투명하게(알파 0) 해 그 자리에 큰 그림이 비치게 한다(사용자 요청 menu-74).
+                // 단추 · 글 · 효과가 그려졌거나 어두워진 점은 원본과 달라 판 그대로 남는다.
+                if (under is not { } u) continue;
+                int ly = _camY + y - u.Y;
+                if ((uint)ly >= (uint)u.H) continue;
+                int x0 = Math.Max(0, u.X - _camX), x1 = Math.Min(ViewWidth, u.X + u.W - _camX);
+                var low = u.Low.AsSpan(ly * u.W);
+                var src = _fb.AsSpan((_camY + y) * BoardWidth + _camX, ViewWidth);
+                for (int x = x0; x < x1; x++)
+                    if ((src[x] | 0xFF000000) == (low[_camX + x - u.X] | 0xFF000000)) dst[x] &= 0x00FFFFFF;
             }
         }
         finally { _ctx.Unmap(_boardTex, 0); }
@@ -1646,12 +1687,16 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int w = (int)(ViewWidth * _zoom), h = (int)(ViewHeight * _zoom);
         _ctx.OMSetRenderTargets(_backBufferRtv);
         _ctx.ClearRenderTargetView(_backBufferRtv, new Vortice.Mathematics.Color4(0, 0, 0, 1));
+        bool under = Hi.HasUnder;
+        if (under) Hi.PresentUnder();   // 고해상도 배경을 먼저 깔고, 판은 그 위에 알파로 얹는다(투명한 점 = 원본 배경 그대로인 자리)
         _ctx.RSSetViewport(ViewOffsetX, ViewOffsetY, w, h);   // 판이 창보다 작으면 가운데
         _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         _ctx.VSSetShader(_vs);
         _ctx.PSSetShader(_ps);
         _ctx.PSSetShaderResources(0, [_boardSrv]);
+        if (under) _ctx.OMSetBlendState(Hi.Blend);
         _ctx.Draw(3, 0);
+        if (under) _ctx.OMSetBlendState(null);
         Hi.Present();   // 새 UI 층(창 해상도)을 판 그림 위에
         if (_gpuShotAsked) { _gpuShotAsked = false; SaveGpuShot(); }
         _swapChain.Present(1, PresentFlags.None);

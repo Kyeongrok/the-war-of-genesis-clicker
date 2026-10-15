@@ -49,6 +49,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
         ("새 UI (또렷한 글자)", "설정 창을 화면 해상도로 그린다 · 끄면 이전 UI", MenuHiResUi, host._hiResUi),
+        ("고해상도 모세스", host.HiBack.StatusLine, MenuHiResMoses, host._hiResMoses),
     ] : _tuningTab == TabComfort ?
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),

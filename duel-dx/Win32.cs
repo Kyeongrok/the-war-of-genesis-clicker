@@ -24,6 +24,38 @@ internal static unsafe class Win32
     public const uint WM_SETCURSOR = 0x0020;
     public const int HTCLIENT = 1;
 
+    // 글자 입력 — 캐릭터 에디터의 이름 찾기가 쓴다. 한글은 IME 가 조합하는 동안 WM_IME_COMPOSITION(GCS_COMPSTR)으로, 다 된 글자는 WM_CHAR 로 온다.
+    public const uint WM_CHAR = 0x0102;
+    public const uint WM_IME_STARTCOMPOSITION = 0x010D, WM_IME_ENDCOMPOSITION = 0x010E, WM_IME_COMPOSITION = 0x010F;
+    public const int GCS_COMPSTR = 0x0008;
+    public const int VK_BACK = 0x08;
+
+    [DllImport("imm32.dll")]
+    public static extern IntPtr ImmGetContext(IntPtr hWnd);
+
+    [DllImport("imm32.dll")]
+    public static extern bool ImmReleaseContext(IntPtr hWnd, IntPtr context);
+
+    /// <summary>조합 중인 글자를 바이트 수로 돌려준다 — <paramref name="buffer"/> 가 null 이면 길이만.</summary>
+    [DllImport("imm32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ImmGetCompositionStringW(IntPtr context, int index, char[]? buffer, int bufferBytes);
+
+    /// <summary>창의 조합 중 글자(한글 한 자 따위) — 없으면 빈 문자열.</summary>
+    public static string CompositionString(IntPtr hWnd)
+    {
+        IntPtr imc = ImmGetContext(hWnd);
+        if (imc == IntPtr.Zero) return "";
+        try
+        {
+            int bytes = ImmGetCompositionStringW(imc, GCS_COMPSTR, null, 0);
+            if (bytes <= 0) return "";
+            var buffer = new char[bytes / 2];
+            ImmGetCompositionStringW(imc, GCS_COMPSTR, buffer, bytes);
+            return new string(buffer);
+        }
+        finally { ImmReleaseContext(hWnd, imc); }
+    }
+
     [DllImport("user32.dll")]
     public static extern IntPtr SetCursor(IntPtr cursor);
 
