@@ -31,6 +31,10 @@ internal static class ReleaseNotes
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return ""; }
     }
 
+    /// <summary>노트의 모든 판 대목을 새 판부터 — 개발 > 패치 내역으로 다시 볼 때(사용자 요청 menu-75).</summary>
+    public static string All(string text) =>
+        string.Join("\n\n", Parse(text).OrderByDescending(s => s.Version).Select(s => $"v{s.Version}\n{s.Body}"));
+
     /// <summary>
     /// <paramref name="seen"/> 뒤부터 <paramref name="current"/> 까지의 대목을 새 판부터 이어 낸다. 보여 줄 것이 없으면 빈 글.
     /// </summary>
@@ -162,7 +166,23 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 못 읽거나 못 적으면 이번에는 안 띄운다 */ }
     }
 
-    internal void Show(string notes) => (_text, _top, _lines, _thanks) = (notes, 0, null, null);
+    /// <summary>메뉴 막대 개발 > 패치 내역.</summary>
+    internal const int MenuNotes = 1198;
+
+    /// <summary>창 머리 글 — 업데이트 뒤에 뜰 때와 메뉴로 다시 볼 때가 다르다.</summary>
+    private string _title = UpdatedTitle;
+    private const string UpdatedTitle = "릴리즈 노트 — 이번 업데이트로 바뀐 것";
+
+    internal void Show(string notes) => (_text, _top, _lines, _thanks, _title) = (notes, 0, null, null, UpdatedTitle);
+
+    /// <summary>모든 판의 노트를 띄운다 — 노트 파일이 없으면 그렇다고 알린다.</summary>
+    internal void ShowAll()
+    {
+        string notes = ReleaseNotes.All(ReleaseNotes.Read());
+        if (notes.Length == 0) { host.Toast("패치 내역 파일(릴리즈노트.md)을 찾지 못했습니다"); return; }
+        Show(notes);
+        _title = "패치 내역 — 지금까지의 모든 판";
+    }
 
     internal void Close() => (_text, _lines) = ("", null);
 
@@ -195,7 +215,7 @@ internal sealed unsafe class ReleaseNotesScreen(GameWindow host)
         host.UiFill(x, y, W, H, StatusScreen.PanelBg);
         host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
         host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
-        host.UiText("릴리즈 노트 — 이번 업데이트로 바뀐 것", x + 10, y + 6, White);
+        host.UiText(_title, x + 10, y + 6, White);
 
         var lines = Lines();
         for (int i = 0; i < Rows && _top + i < lines.Count; i++)

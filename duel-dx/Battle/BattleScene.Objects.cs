@@ -1066,6 +1066,8 @@ internal sealed unsafe partial class BattleScene
             int x = obj.Col * TileW + obj.Data.DrawW, y = host.CellTop(obj.Col, obj.Row) + obj.Data.DrawH;
             double fade = aiming && obj.Data.Kind is 1 or 2 or 6 or 7 or 8 or 9 or 10 ? BlendFade(4) : 1;
             host.DrawUi(obj.Data.SpriteId, motion, tick, x, y, UiBlend.Alpha, loop: !once && motion is 0 or 9 or 10, fade: fade);
+            // 자식 키도 그린다 — 글로리발 여객선의 상자(Obs 0910)는 제 그림이 받침뿐이고 상자 몸통(0913)·위의 빛(0939)이 자식이다(사용자 보고 fg-37).
+            DrawUnitLayers(host.UiFor(obj.Data.SpriteId)?.Clip(motion), tick, x, y, mirror: false, fade, loop: !once && motion is 0 or 9 or 10);
             // 모드 > 편의성 > 상자 강조 — 아직 안 연 상자(2)·폭탄 상자(8)는 바닥과 빛깔이 비슷해 잘 안 보인다(사용자 요청).
             if (host._highlightChests && obj.Data.Kind is 2 or 8 && !_opened.Contains(obj)
                 && host.UiFor(obj.Data.SpriteId)?.FrameAt(motion, tick, !once && motion is 0 or 9 or 10) is { } frame)

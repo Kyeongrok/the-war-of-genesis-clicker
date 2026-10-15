@@ -200,8 +200,9 @@ internal sealed unsafe partial class GameWindow
         IntPtr dev = Win32.CreatePopupMenu();
         Win32.AppendMenuW(dev, Win32.MF_STRING, DevScreen.MenuDev, "개발(&D)...");
         Win32.AppendMenuW(dev, Win32.MF_STRING, TimedHitEditScreen.MenuTimedEdit, "타이밍 어택 수정(&T)...");
-        // 화면 비율 초기화는 막대에서 개발 아래로 옮겼다(사용자 요청) — 펼침 메뉴라 설정 창이 잘려도 여전히 누를 수 있다.
-        Win32.AppendMenuW(dev, Win32.MF_STRING, MenuResetView, "화면 비율 초기화(&V)");
+        // 화면 비율 초기화는 개발 아래에서 뺐다 — 잘못 눌리면 불편하다(사용자 요청 menu-75). 설정 창 안의 줄로 누른다.
+        // 패치 내역 — 업데이트 뒤 처음 켤 때 한 번 뜨는 릴리즈 노트를 언제든 다시 본다(사용자 요청 menu-75).
+        Win32.AppendMenuW(dev, Win32.MF_STRING, ReleaseNotesScreen.MenuNotes, "패치 내역(&N)...");
         Win32.AppendMenuW(bar, Win32.MF_POPUP, (nuint)dev, "개발(&D)");
         return bar;
     }
@@ -357,6 +358,7 @@ internal sealed unsafe partial class GameWindow
     {
         if (Btl.OnDifficultyMenu(id)) return;
         if (id == DevScreen.MenuDev) { DevScr._open = !DevScr._open; return; }
+        if (id == ReleaseNotesScreen.MenuNotes) { NotesScr.ShowAll(); return; }
         if (id == TimedHitEditScreen.MenuTimedEdit) { TimedEditScr._open = !TimedEditScr._open; return; }
         if (id == SettingsScreen.MenuSettings) { if (SettingsScr._open) SettingsScr.Close(); else SettingsScr.Open(); return; }
         if (id == TuningScreen.MenuTuning) { TuningScr._tuningOpen = true; TuningScr._tuningListOpen = false; return; }

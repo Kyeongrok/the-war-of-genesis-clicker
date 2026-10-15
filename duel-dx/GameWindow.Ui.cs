@@ -211,6 +211,13 @@ internal sealed class UiSprite
     /// <summary>그 모션이 한 바퀴 도는 데 걸리는 틱 — 모르면 0.</summary>
     public int MotionLength(int motion) => _table?.Clips.GetValueOrDefault(motion)?.Length ?? 0;
 
+    /// <summary>
+    /// 그림이 보이는 길이 — 적힌 길이와 마지막 키의 끝 중 긴 것(<see cref="ObsMotionClip.KeyAt"/> 과 같은 셈).
+    /// 상자 빛기둥 Obs 0913 모션 0 은 길이 3 인데 키가 0+4 라, 적힌 길이로 자식을 지우면 4틱마다 1틱씩 꺼져 깜박였다(사용자 보고 fg-37).
+    /// </summary>
+    public int ShownLength(int motion) => _table?.Clips.GetValueOrDefault(motion) is { } c
+        ? Math.Max(c.Length, c.Keys.Count > 0 ? c.Keys[^1].Start + c.Keys[^1].Length : 0) : 0;
+
     /// <summary>그 모션의 키 묶음(자식 그림·소리 따위) — 없으면 null.</summary>
     public ObsMotionClip? Clip(int motion) => _table?.Clips.GetValueOrDefault(motion);
 

@@ -86,7 +86,7 @@ internal sealed unsafe partial class BattleScene
             // DUELDX_TRACE 면 못 읽은 자식 그림(무기 층 따위)을 한 번씩 적는다 — 「무기를 안 들고 친다」 같은 증상을 가르려고.
             if (Trace && host.UiFor(obs) == null && _missingLayers.Add(obs))
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"layer obs {obs} motion {motion}: 그림 없음" + Environment.NewLine);
-            int life = host.UiFor(obs)?.MotionLength(motion) ?? 0;
+            int life = host.UiFor(obs)?.ShownLength(motion) ?? 0;
             if (life > 0 && cycle - start >= life) continue;
             var blend = BlendOf(host.UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleScene
             foreach (var (nestedStart, nestedObs, nestedMotion, ndx, ndy, _, nestedFlag) in host.UiFor(obs)?.Clip(motion)?.Children ?? [])
             {
                 if (nestedStart > age || host.UiFor(nestedObs) is not { } nested) continue;
-                int nestedAge = age - nestedStart, nestedLife = nested.MotionLength(nestedMotion);
+                int nestedAge = age - nestedStart, nestedLife = nested.ShownLength(nestedMotion);
                 if (nestedLife > 0 && nestedAge >= nestedLife) continue;
                 bool nestedFlip = mirror && nestedFlag == 0;
                 host.DrawUi(nestedObs, nestedMotion, nestedAge, footX + (flip ? -dx : dx) + (nestedFlip ? -ndx : ndx), footY + dy + ndy,
