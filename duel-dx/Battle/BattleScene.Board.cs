@@ -339,8 +339,10 @@ internal sealed unsafe partial class BattleScene
                 var (ox, oy) = clip?.OffsetAt(tick) ?? (0, 0);
                 // 몸 그림도 모션표의 섞기 키(종류 3)를 따른다 — 17 이면 더하기. 장교(Obs 0165·0863)는 걸을 때 몸이 빛 공으로 바뀌는데,
                 // 불투명으로 찍어 공 둘레의 검은 부분이 원판처럼 남았다(사용자 보고, Btl 0256). 딸린 층·필드 소품은 이미 이렇게 그린다.
-                bool additive = clip?.BlendAt(tick) == 17;
-                host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade, additive);
+                // 1~7 은 비침(4k/31) — 베라모드(Obs 0507)는 칼을 휘두르는 동안(모션 9~11) 몸이 키 1 로 거의 사라졌다가 2~7 로 다시 나타난다(사용자 보고 fa-66).
+                int bodyKey = clip?.BlendAt(tick) ?? 0;
+                bool additive = bodyKey == 17;
+                host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade * BlendFade(bodyKey), additive);
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }

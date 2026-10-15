@@ -756,7 +756,17 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             int pose = 2 * Math.Max(0, w.Pose) + 11;
             // 초상 모션은 키가 있으면 된다 — 한 장짜리 정지 초상(퉁 파오 Obs 0786 모션 11: 길이 0, 키 1)도 있다.
             // 예전에는 길이 > 0 만 봐서 정지 초상인 인물은 작은 얼굴로 떨어졌다(사용자 보고: Fld 0094).
-            bool portrait = w.Portrait && host.DrawUi(portraitObs, pose, tick, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha);
+            // 초상은 원본 화면 높이(480)에 맞춘 그림이다 — 넓은 화면이라 보이는 판이 그보다 낮으면 머리 위가 잘렸다(사용자 보고 fa-67: Btl 0078 샤크바리).
+            // 그럴 때만 발밑(화면 아래 가운데)을 기준으로 보이는 높이에 맞춰 줄인다.
+            int footX = x - 10 + 320, footY = y - 370 + 480;
+            double scale = PortraitScale(portraitObs, pose, tick, footY - sy);
+            void DrawPortrait(int motion, int at, bool loop)
+            {
+                if (scale >= 1) host.DrawUi(portraitObs, motion, at, footX, footY, GameWindow.UiBlend.Alpha, loop: loop);
+                else DrawUiScaled(portraitObs, motion, footX, footY, scale, footX, footY, footX, footY, 1, at, loop);
+            }
+            bool portrait = w.Portrait && host.UiFor(portraitObs)?.FrameAt(pose, tick) != null;
+            if (portrait) DrawPortrait(pose, tick, true);
             // 눈 깜빡임(0x1003c55b): 깜빡이는 중이 아니면 틱마다 1/45 확률로 모션 (표정+1)을 한 번 겹친다 — 전에는 3초마다 규칙적으로 깜빡였다(ba-21 field Y5).
             if (portrait && host.UiFor(portraitObs)?.MotionLength(pose + 1) is > 0 and var blink)
             {
@@ -766,7 +776,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
                 for (; w.BlinkTick < now; w.BlinkTick++)
                     if (w.BlinkAt < 0 && host.Btl._drawRng.Next(45) == 0) w.BlinkAt = w.BlinkTick + 1;
                 if (w.BlinkAt >= 0 && now >= w.BlinkAt)
-                    host.DrawUi(portraitObs, pose + 1, now - w.BlinkAt, x - 10 + 320, y - 370 + 480, GameWindow.UiBlend.Alpha, loop: false);
+                    DrawPortrait(pose + 1, now - w.BlinkAt, false);
             }
             for (int m = 3; m <= 5; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha, fade: 20 / 31.0);
             for (int m = 0; m <= 2; m++) host.DrawUi(TalkBoxObs, m, 0, x, y - 25, GameWindow.UiBlend.Alpha);
@@ -928,12 +938,19 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         }
     }
 
+    /// <summary>큰 초상을 줄일 배율 — 발밑에서 위로 <paramref name="room"/> 픽셀 안에 다 들어가면 1(그대로).</summary>
+    private double PortraitScale(int obs, int motion, int tick, int room)
+    {
+        int height = -(host.UiFor(obs)?.FrameAt(motion, tick)?.Y ?? 0);
+        return height > room && room > 0 ? (double)room / height : 1;
+    }
+
     /// <summary>
     /// UI Obs 한 장을 배율 <paramref name="s"/> 로 — 원래 자리 P 는 <c>(tx,ty) + (P − (ax,ay))·s</c> 로 옮겨 그린다(대사창 펴짐·접힘).
     /// </summary>
-    internal void DrawUiScaled(int obs, int motion, int x, int y, double s, int ax, int ay, int tx, int ty, double fade)
+    internal void DrawUiScaled(int obs, int motion, int x, int y, double s, int ax, int ay, int tx, int ty, double fade, int tick = 0, bool loop = true)
     {
-        if (s <= 0.01 || host.UiFor(obs) is not { } sprite || sprite.FrameAt(motion, 0) is not { } f) return;
+        if (s <= 0.01 || host.UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop) is not { } f) return;
         int left = tx + (int)Math.Floor((x + f.X - ax) * s), top = ty + (int)Math.Floor((y + f.Y - ay) * s);
         // 너비·높이는 「다음 조각이 시작하는 자리」까지로 잡는다 — 조각마다 따로 반올림하면 나란한 조각(대사 상자의 왼쪽·가운데·오른쪽)이
         // 한 픽셀 겹쳐, 반투명 바탕이 두 번 섞인 어두운 세로줄 둘이 접히는 동안 보였다(사용자 보고).

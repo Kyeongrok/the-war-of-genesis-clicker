@@ -88,10 +88,13 @@ internal sealed unsafe partial class BattleScene
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"layer obs {obs} motion {motion}: 그림 없음" + Environment.NewLine);
             int life = host.UiFor(obs)?.ShownLength(motion) ?? 0;
             if (life > 0 && cycle - start >= life) continue;
-            var blend = BlendOf(host.UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0);
+            // 섞기 키 1~7 은 비침이다(4k/31) — 그리는 방식만 바꾸고 비침을 안 곱해, 베라모드(Obs 0507)가 칼을 휘두를 때 남기는 잔상(모션 84~89)이
+            // 불투명하게 찍혔다(사용자 보고 fa-66).
+            int key = host.UiFor(obs)?.BlendAt(motion, cycle - start) ?? 0;
+            var blend = BlendOf(key);
             // 치우침(x, y)은 키에 들어 있다(분석-모션 ba-8: 인자 2·3). 주인이 반대쪽 옆을 보면 깃발 0 인 자식은 x 를 뒤집고 자식 그림도 뒤집는다(0x100e56f0).
             bool flip = mirror && flag == 0;
-            host.DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade);
+            host.DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade * BlendFade(key));
             // 무기 층이 다시 부르는 자식(총구의 광선 Obs 0118 · 불꽃 · 검기 따위)도 그린다 — 원본 애니메이터는 자식의 자식까지 만든다(0x100e5410).
             // 전에는 한 겹만 그려 글로리가드의 사격(동작 9)에 광선이 안 나왔다(사용자 보고: Btl 0146). 자식도 제 모션이 끝나면 사라진다.
             int age = cycle - start;
@@ -101,8 +104,9 @@ internal sealed unsafe partial class BattleScene
                 int nestedAge = age - nestedStart, nestedLife = nested.ShownLength(nestedMotion);
                 if (nestedLife > 0 && nestedAge >= nestedLife) continue;
                 bool nestedFlip = mirror && nestedFlag == 0;
+                int nestedKey = nested.BlendAt(nestedMotion, nestedAge);
                 host.DrawUi(nestedObs, nestedMotion, nestedAge, footX + (flip ? -dx : dx) + (nestedFlip ? -ndx : ndx), footY + dy + ndy,
-                            BlendOf(nested.BlendAt(nestedMotion, nestedAge)), loop: false, mirror: nestedFlip, fade: fade);
+                            BlendOf(nestedKey), loop: false, mirror: nestedFlip, fade: fade * BlendFade(nestedKey));
             }
         }
     }
