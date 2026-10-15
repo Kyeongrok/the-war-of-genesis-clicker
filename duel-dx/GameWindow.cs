@@ -1675,8 +1675,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 int x0 = Math.Max(0, u.X - _camX), x1 = Math.Min(ViewWidth, u.X + u.W - _camX);
                 var low = u.Low.AsSpan(ly * u.W);
                 var src = _fb.AsSpan((_camY + y) * BoardWidth + _camX, ViewWidth);
+                // dst 는 쓰기 결합 메모리라 읽으면(&=) 한 점마다 버스를 기다려 한 틀 60ms 가 들었다(사용자 보고 mo-25) — 판(src)만 읽고 dst 에는 쓰기만 한다.
                 for (int x = x0; x < x1; x++)
-                    if ((src[x] | 0xFF000000) == (low[_camX + x - u.X] | 0xFF000000)) dst[x] &= 0x00FFFFFF;
+                    if ((src[x] | 0xFF000000) == (low[_camX + x - u.X] | 0xFF000000)) dst[x] = src[x] & 0x00FFFFFF;
             }
         }
         finally { _ctx.Unmap(_boardTex, 0); }
