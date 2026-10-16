@@ -1125,6 +1125,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 치는 동작은 끝까지 기다리지 않는다 — 동작이 뜨고 0.05초 뒤부터,
             // 그 모션에 든 타격 키 수(동작 13 = 2타, 14 = 3타)만큼 그 간격대로 판정을 낸다(분석-모션 ba-10).
             var hitTimes = new List<double> { 0 };
+            List<int> hitAbilities = [];                   // 타격 키마다 적힌 어빌리티(hitTimes 와 같은 차례) — 비어 있으면 모두 이 work
             if (step < actions.Length && step >= preludeSteps && actions[step] >= RawOnce)
             {
                 // 모션 번호 — 붙드는 모션이면 그 자세로 이펙트가 터지고, 한 번 트는 모션이면 뜨자마자 친다.
@@ -1137,9 +1138,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 PlayAction(a, DrawnAction(a, actions[step]));
                 if (w.AbilityId == 20 && actions[step] == 12) SpawnSideClones(a, a.Facing, drift: false);   // 소닉 블레이드 — 베는 동안 분신 둘이 ±40 에 선다(0x1008ae60)
                 hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
+                hitAbilities = HitAbilitiesFor(a, DrawnAction(a, actions[step]));
                 // 준비 2·3·5·6 의 발동 동작 15 는 끝까지 튼 뒤에 핸들러가 돈다 — 효과·판정을 그때로(ba-15 R6).
                 if (w.Prepare is 2 or 3 or 5 or 6 && actions[step] == 15 && host._sprites.TryGetValue(a.ChrCode, out var sp15))
-                    hitTimes = [Math.Max(0.05, sp15.ActionSeconds(DrawnAction(a, 15), a.Facing))];
+                    (hitTimes, hitAbilities) = ([Math.Max(0.05, sp15.ActionSeconds(DrawnAction(a, 15), a.Facing))], []);
                 for (double end = host._lastTime + hitTimes[0]; host._lastTime < end;) yield return true;
             }
             int effectMark = _effects.Count;
@@ -1352,6 +1354,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             {
                 if (hit > 0)
                     for (double end = host._lastTime + (hitTimes[hit] - hitTimes[hit - 1]); host._lastTime < end;) yield return true;
+                // 타격 키의 어빌리티가 work 을 고른다(0x100322e0) — 난타 필살(동작 27)의 앞 타격 키는 Hunter(125 → work 1468, 위력 −175)라
+                // 작게 여러 대 들고, 마지막 키(풍아열공참 21)만 그 기술 위력이다(gm-skil-25). 전에는 키 열한 개가 모두 기술 위력으로 들었다.
+                bool hunterHit = hit < hitAbilities.Count && hitAbilities[hit] == HunterAbility;
+                var strikeWork = hunterHit && Work(HunterWork) is { } hunter ? hunter : hitWork;
+                // 그 마지막 한 대는 대상 위의 찌르기 이펙트(풍아열공참 Obs 301, 단계 0 부터 68틱)가 터질 때 든다 — 몸짓의 키(57틱)보다 늦다.
+                if (!hunterHit && hit > 0 && hitAbilities.Take(hit).Contains(HunterAbility)
+                    && ScriptFor(w.Id)?.Effects.FirstOrDefault(e => e.OnTarget).Delay is > 0 and var burst)
+                    for (double end = effectsAt + burst / TicksPerSecond; host._lastTime < end;) yield return true;
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 // 대상마다 이펙트가 엇갈려 뜨는 기술(헤비프레셔 15틱 · 엘레맨탈 썬더 8틱 …)은 판정도 그 간격으로 하나씩 든다(ba-21 fx F6).
                 // 간격은 이펙트가 실제로 엇갈려 뜬 값(_fxStagger)이고, 다 합쳐 150틱을 안 넘는다. 반사로 시전자가 쓰러지면 거기서 멈춘다.
@@ -1366,9 +1376,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                     // (오버 테이크 340~389틱 · 블리자드 97 + 41N 틱이 가장 길다).
                     if (_fxHitAt.TryGetValue(host._units[targets[k]], out double reach))
                         for (double end = Math.Min(reach, effectsAt + 450 / TicksPerSecond); host._lastTime < end;) yield return true;
-                    ApplyWork(a, hitWork, host._units[targets[k]], dying);
+                    ApplyWork(a, strikeWork, host._units[targets[k]], dying);
                 }
-                HitObjects(hitWork);
+                HitObjects(strikeWork);
                 // 군단 행동(상태 15) — 대장이 기술을 쓰면 부하들도 <b>한 번</b> 같은 패스로 제 기술을 쓴다(여러 타를 쳐도 부하는 한 번).
                 // 합류는 대장 work +0x41 만 본다(0x1006a110 → 0x1005fa90, FollowersAttack 첫머리). 패스는 대장 work 의 <b>효과 대상 +0x1e</b> 로 가른다
                 // (0x1005fb6d~0x1005fbca): 4 → 아군 패스, 5 → 겨눈 유닛이 적이 아니면 아군 패스, 그 밖 → 적 패스. 종류(피해·보조)는 안 본다.
@@ -1687,7 +1697,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"{(IsFoeSide(a) && !IsFoeSide(t) ? "foe" : "ally")} hit {a.ChrCode} → {t.ChrCode}: {amount} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
+                $"{host._lastTime:F2} {(IsFoeSide(a) && !IsFoeSide(t) ? "foe" : "ally")} hit {a.ChrCode} → {t.ChrCode}: {amount} work {w.Id} (HP {t.Hp}/{t.MaxHp}, 난이도 {_difficulty})" + Environment.NewLine);
         t.LastHitBy = a;                        // 맞았을 때만 적는다(빗나가면 그대로) — 원본 0x10079990
         host.Stats.Hit(a, w, Math.Min(amount, t.Hp));   // 통계에는 실제로 깎인 만큼만
         t.Hp = Math.Max(_demo != null ? 1 : 0, t.Hp - amount);   // 시연 중에는 아무도 안 쓰러진다(SkillDemo.cs)
@@ -1846,6 +1856,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         double at = ranged ? Math.Max(first, starts[0] / TicksPerSecond) : first;
         return [.. starts.Select(t => at + (t - starts[0]) / TicksPerSecond)];
     }
+
+    /// <summary>타격 키 어빌리티 125(Hunter)가 고르는 work — 원본 <c>0x100322e0</c> 에 박혀 있다.</summary>
+    internal const int HunterAbility = 125, HunterWork = 1468;
+
+    /// <summary>그 동작의 타격 키마다 적힌 어빌리티 번호 — <see cref="HitTimesFor"/> 와 같은 차례(시각 순). 키가 없으면 빈 목록.</summary>
+    internal List<int> HitAbilitiesFor(UnitState u, int action) =>
+        host._sprites.TryGetValue(u.ChrCode, out var sprite) && sprite.Clip(action, u.Facing) is { Hits.Count: > 0 } clip
+            ? [.. clip.Hits.OrderBy(h => h.Start).Select(h => h.Ability)] : [];
 
     /// <summary>
     /// 그 인물 그림에 그 동작이 비어 있으면(키 없음) 대신 그릴 동작 — 7(쏘기·휘두르기), 그다음 5. 판정 자리는 원래 동작 목록대로 둔다.
