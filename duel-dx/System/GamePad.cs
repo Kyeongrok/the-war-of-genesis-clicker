@@ -589,6 +589,20 @@ internal sealed partial class GamePad(GameWindow host)
     }
 
     /// <summary>
+    /// 창 조작의 한 줄 — 늘 보이던 넷(3~6번 줄)에서 행성 설명(Y)과 목록 굴리기(LB · RB)를 뺀다. 행성 설명은 성도에 행성이 있을 때만
+    /// 「(Push) 설명 보기」로 짧게 붙인다(사용자 요청 mo-26). 풀어 쓴 설명은 안내 창에 그대로 있다.
+    /// </summary>
+    private List<(string Button, string Does)> PointerBar(List<(string Button, string Does)> lines)
+    {
+        string rest = Name(PadAction.Rest), scroll = $"{Name(PadAction.PrevUnit)} · {Name(PadAction.NextUnit)}";
+        var bar = lines.Skip(3).Take(4).Where(l => l.Button != rest && l.Button != scroll).ToList();
+        var mos = host.Mos;
+        if (mos._mosesOpen && mos._mosesPage == 0 && mos._mosesStep == 1 && !host.Sys.SystemOpen && host._statusUnit < 0 && mos.MosesSystemPlanets().Count > 0)
+            bar.Add((rest, "(Push) 설명 보기"));
+        return bar;
+    }
+
+    /// <summary>
     /// 패드 조작 안내 — 패드를 잡고 있는 동안 화면 아래에 지금 누를 수 있는 것을 한 줄로 보이고, 안내 창이 열려 있으면 가운데에 줄마다 풀어 보인다.
     /// 단추 이름은 설정 &gt; 패드의 묶음을 따른다.
     /// </summary>
@@ -602,6 +616,7 @@ internal sealed partial class GamePad(GameWindow host)
             // 전투 줄은 짧은 말로 따로 적는다(사용자 요청 fa-57 · fa-59) — 확인 · 취소 · 커맨드 · 조작. 풀어 쓴 설명은 안내 창에 있다.
             var shown = title == "전투"
                 ? [(Name(PadAction.Confirm), "확인"), (Name(PadAction.Cancel), "취소"), (Name(PadAction.Ring), "커맨드")]
+                : PointerMode ? PointerBar(lines)
                 : lines.Count > 6 ? lines.Skip(3).Take(4).ToList() : lines;
             // 조작 안내 단추는 짧게 — 「L 스틱 누름」은 「L」, 「R 스틱 누름」은 「R」.
             shown = [.. shown, (Name(PadAction.Help).Replace(" 스틱 누름", ""), "조작")];
