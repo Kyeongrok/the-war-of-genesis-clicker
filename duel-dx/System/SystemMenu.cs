@@ -861,8 +861,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // 편을 안 적던 옛 세이브는 −1 이라 아군·적군을 못 가린다 — 그때는 넣지 않는다(적이 파티에 들어가느니 예전대로).
         // 군단 부하는 명부에 넣지 않는다 — 부하의 적힌 레벨은 절반 값이라, 명부에 들어가면 다음 전투가 그것을 「이어받은 인물」로 보고
         // 파티 레벨로 안 키운 채 다시 절반으로 깎았다(불러올 때마다 9 → 4 → 2 로 줄었다 — 사용자 보고: 대장 21 에 용병 3~4).
+        // 레벨 0 은 자료 없는 유닛(NEW GAME 이 비운 앞 판 유닛)을 적은 것이다 — 넣으면 살라딘이 레벨 0 · 어빌리티 없이 돌아왔다(사용자 보고).
+        // 빼 두면 아래 동료 목록이 .chr 처음 값으로 채운다.
         foreach (var s in state.Units)
-            if (s.Side == 4 && (s.LeaderIndex ?? -1) < 0 && host._db?.Character(s.ChrCode) is { } bc)
+            if (s.Side == 4 && (s.LeaderIndex ?? -1) < 0 && s.Level > 0 && host._db?.Character(s.ChrCode) is { } bc)
                 host._party[s.ChrCode] = Restored(bc, s, regrow: true);
         // 전투 밖 인물 — 이제는 명부 전체(어느 파티에 있든, 파티에서 빠졌든)가 여기 실린다. 옛 세이브는 지금 파티 사람만 적혀 있다.
         foreach (var s in state.Party ?? [])
@@ -993,7 +995,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 host.EpisodesScr._chapterDone, host.EpisodesScr._partyNo, [.. host.Mos._members],
                 // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
                 // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
-                [.. host._party.Where(p => !host._units.Any(u => u.ChrCode == p.Key)).Select(p => PartyUnit(p.Key, p.Value))],
+                // 자료 없는 유닛(NEW GAME 이 비운 앞 판 유닛)은 빼고 본다 — 그것이 명부의 같은 인물을 가려 레벨 0 · 어빌리티 없이 적혔다(사용자 보고).
+                [.. host._party.Where(p => !host._units.Any(u => u.ChrCode == p.Key && u.Data != null)).Select(p => PartyUnit(p.Key, p.Value))],
                 [.. host.Mos._ownedLegions], host.PartySt.SaveBank(),
                 [.. host.Mos._mailbox], [.. host.Mos._mailRead], [.. host.Mos._planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
                 Enumerable.Range(0, host.Fld._chapterVars.Length).Where(i => host.Fld._chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)host.Fld._chapterVars[i]),
@@ -1210,7 +1213,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             if (s.Awake is { } awake) u.Awake = awake;   // 깨어남 +0x4e8 — 안 적으면 거리 조건으로 깼던 적이 다시 잠들었다(Q5 #3)
             // 아군은 위에서 되살린 파티 자료가, 적은 파티 레벨에 맞춰 자란 자료가 바탕이다 — 인물 칸이 적혀 있으면 그것으로 덮는다.
             // 부하의 적힌 레벨은 판을 세울 때 새로 셈한 값(파티 레벨의 절반)을 둔다 — 줄어든 값이 적힌 세이브도 불러오면 바로잡힌다.
-            if (u.Data is { } c) u.Data = (s.LeaderIndex ?? -1) >= 0 ? Restored(c, s, regrow: false) with { Level = c.Level, CumExp = c.CumExp } : Restored(c, s, regrow: false);
+            // 레벨 0 칸은 자료 없이 적힌 것(NEW GAME 이 비운 앞 판 유닛)이라 덮지 않는다 — 덮으면 레벨 0 · 어빌리티 없음이 됐다(사용자 보고).
+            if (u.Data is { } c && s.Level > 0) u.Data = (s.LeaderIndex ?? -1) >= 0 ? Restored(c, s, regrow: false) with { Level = c.Level, CumExp = c.CumExp } : Restored(c, s, regrow: false);
             u.ClearStatus();
             // 모세스에서 적은 세이브는 끝난 전투의 상태이상을 들고 있을 수 있다(고치기 전 판) — 되살리지 않는다.
             for (int k = 0; k < 3 && !state.InMoses; k++)

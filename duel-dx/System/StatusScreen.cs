@@ -118,7 +118,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// <summary>파티원(Chr)의 스테이터스 창을 연다 — 전투에 서 있으면 그 유닛, 아니면 파티 자료로 임시 유닛을 만든다.</summary>
     internal void OpenStatusFor(int chr)
     {
-        int index = Array.FindIndex(host._units, u => u.ChrCode == chr);
+        int index = Array.FindIndex(host._units, u => u.ChrCode == chr && u.Data != null);   // NEW GAME 이 자료를 비운 앞 판 유닛은 건너뛴다
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"status open: Chr {chr} → {(index >= 0 ? $"전투 유닛 {index}" : "임시 유닛")}, 파티 자료 EXP {host._party.GetValueOrDefault(chr)?.Exp}" + Environment.NewLine);
