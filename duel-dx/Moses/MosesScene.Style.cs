@@ -241,8 +241,10 @@ internal sealed unsafe partial class MosesScene
         {
             var (cx, cy) = StyleBodyCells[i];
             if (x < cx || x >= cx + 68 || y < cy || y >= cy + 28) continue;
-            // 만들어지지 않은 단추와 지금 직업 칸은 아무 일도 안 한다.
-            if (i >= jobs.Count || StyleData() is not { } c || c.JobId == jobs[i]) return true;
+            // 만들어지지 않은 단추는 아무 일도 안 한다. 지금 직업 칸은 미리보기만 제 것으로 되돌린다 — 다른 형을 본 뒤
+            // 지금 형 값으로 돌아오려면 다른 인물을 눌렀다 와야 했다(사용자 요청 mo-27).
+            if (i >= jobs.Count || StyleData() is not { } c) return true;
+            if (c.JobId == jobs[i]) { if (_stylePick != i) { _stylePick = i; host.Play(MosesClickSound); } return true; }
             // 첫 클릭은 미리보기만, 같은 칸을 다시 눌러야 확인창이 뜬다(0x10100afa).
             if (_stylePick != i) { _stylePick = i; host.Play(MosesClickSound); return true; }
             ushort pick = jobs[i];
