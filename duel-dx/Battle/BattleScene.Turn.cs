@@ -492,10 +492,27 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         int at = ready.IndexOf(_turn);
         var others = ready.Where(i => i != _turn).ToList();
         if (others.Count == 0) { host.Toast("차례를 기다리는 다른 인물이 없습니다"); return false; }
-        var cur = host._units[_turn];
-        if (cur.IsBusy || cur.Col != cur.OriginCol || cur.Row != cur.OriginRow) { host.Toast("움직인 뒤에는 차례를 넘길 수 없습니다"); return false; }
         int next = at < 0 ? others[0] : ready[((at + step) % ready.Count + ready.Count) % ready.Count];
         if (next == _turn) next = others[0];
+        return SwitchTurnTo(next);
+    }
+
+    /// <summary>
+    /// 차례를 기다리는 다른 내 인물(▼)을 왼쪽 클릭 — 그 인물에게 지금 차례를 넘긴다. 원본 상태 22(<c>0x1006aeba</c>)는 클릭한 칸의 유닛이
+    /// 내가 고를 수 있고(<c>0x100742e0</c>) 타고 있지 않고 차례 깃발(<c>+0xfe</c>, <c>0x100e71e0</c>)이 서 있으면 그 유닛을 지금 유닛(<c>+0x4ce8</c>)으로 바꾼다
+    /// (사용자 지적 fa-68, 전에는 클릭이 고르기만 하고 차례는 그대로였다). 넘길 수 없으면 false — 그때는 평소처럼 고르기만 한다.
+    /// </summary>
+    internal bool TrySwitchTurnTo(int index)
+    {
+        if (!IsPlayerTurn || index == _turn || !ReadyUnits().Contains(index)) return false;
+        return SwitchTurnTo(index);
+    }
+
+    /// <summary>지금 인물이 아직 아무것도 안 했으면(원래 칸 · 바쁘지 않음) 링 · 겨눔을 풀고 <paramref name="next"/> 의 차례로. 지금 인물의 차례는 남아 다시 돌아온다.</summary>
+    bool SwitchTurnTo(int next)
+    {
+        var cur = host._units[_turn];
+        if (cur.IsBusy || cur.Col != cur.OriginCol || cur.Row != cur.OriginRow) { host.Toast("움직인 뒤에는 차례를 넘길 수 없습니다"); return false; }
         CancelStep(undoMove: true);   // 링 · 겨눔을 풀고
         StartTurn(next);              // 그 인물의 차례로 — 부르는 목소리도 여기서
         return true;

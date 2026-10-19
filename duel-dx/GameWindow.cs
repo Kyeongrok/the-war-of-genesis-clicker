@@ -1094,7 +1094,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (index >= 0)
         {
             // 적군은 고를 수 없다(fa-9) — 대신 내 차례면 클릭만으로 바로 공격한다(fa-12).
-            if (_units[index].IsAlly) _selected = index;
+            // 차례를 기다리는(▼) 다른 내 인물이면 그 인물에게 차례를 넘긴다(원본 상태 22 0x1006aeba).
+            if (_units[index].IsAlly) { if (!Btl.TrySwitchTurnTo(index)) _selected = index; }
             else if (Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy) Btl.QuickAttack(index);
             return;
         }
