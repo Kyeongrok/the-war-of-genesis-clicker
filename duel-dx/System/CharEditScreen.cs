@@ -239,6 +239,29 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         else host.LoadRosterSprites();
     }
 
+    /// <summary>고를 수 있는 목소리 묶음 번호 — Dmg.dat 에서 한 마디라도 있는 것, 번호 차례.</summary>
+    internal List<int> VoiceSets() =>
+        [.. host._voices.Where(kv => kv.Key > 0 && kv.Value.Hurt.Length + kv.Value.Call.Length > 0).Select(kv => kv.Key).Order()];
+
+    /// <summary>
+    /// 목소리 묶음만 번호로 앞뒤로 넘긴다 — 모습과 목소리를 따로 고르게(사용자 요청 ed-3: 「네리사 목소리 3 → 14(데미안)」처럼 번호로 말하는 요청).
+    /// 지금 번호가 목록에 없으면(0 따위) 그 번호 바로 다음(◀ 면 바로 앞) 것으로.
+    /// </summary>
+    internal void StepVoice(int chr, int delta)
+    {
+        if (DataOf(chr) is not { } c || VoiceSets() is not { Count: > 0 } sets) return;
+        int at = sets.IndexOf(c.VoiceSet);
+        int next = at >= 0 ? sets[((at + delta) % sets.Count + sets.Count) % sets.Count]
+                 : delta > 0 ? sets.FirstOrDefault(v => v > c.VoiceSet, sets[0]) : sets.LastOrDefault(v => v < c.VoiceSet, sets[^1]);
+        _firstLook.TryAdd(chr, (c.SpriteId, c.FaceId, c.VoiceSet));
+        Apply(chr, c with { VoiceSet = (ushort)next });
+        PlayVoiceSample(next);
+    }
+
+    /// <summary>그 목소리 묶음을 쓰는 인물 이름(번호가 가장 작은 레코드) — 없으면 빈 글.</summary>
+    internal string VoiceOwner(GameDatabase db, int set) =>
+        AllLooks(db).Where(l => l.Voice == set).OrderBy(l => l.Chr).Select(l => db.T(l.NameId)).FirstOrDefault() ?? "";
+
     /// <summary>들어 보기 목소리의 효과음 표 — 다음 것을 틀 때 앞 것을 끊는다.</summary>
     internal const int VoiceSampleTag = 990;
     private int _voiceTurn;
@@ -289,8 +312,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal const int PickW = 210, PickRowH = 22;
     internal const int TabW = 72, AbRowH = 22, AbRows = 9;
     internal const int SearchDy = 106, RowsDy = 130;
-    internal const int LookNameDx = 42, LookShapeDx = 262, LookVoiceDx = 306, LookListW = 356, LookPreviewDx = 368, LookPreviewW = ContentW - LookPreviewDx;
+    internal const int LookNameDx = 42, LookShapeDx = 236, LookVoiceDx = 280, LookVoiceW = 74, LookListW = 356, LookPreviewDx = 368, LookPreviewW = ContentW - LookPreviewDx;
     internal const int ResetDy = H - PartyH - 70;
+    // 외형 갈래 아래 줄 — 목소리 묶음 번호 ◀ ▶ 와 듣기(사용자 요청 ed-3).
+    internal const int VoicePrevDx = 70, VoiceNextDx = 252, VoicePlayDx = 288;
     internal static readonly string[] Tabs = ["장비", "어빌리티", "외형"];
 
     internal static int TabX(int px, int t) => px + ContentW - (Tabs.Length - t) * (TabW + 4) + 4;
@@ -385,6 +410,9 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if (_tab == 2)
         {
             if (In(bx, by, px + LookPreviewDx, y + ResetDy, LookPreviewW, 20)) { ResetLook(chr); return true; }
+            if (In(bx, by, px + VoicePrevDx, y + ResetDy, 30, 20)) { StepVoice(chr, -1); return true; }
+            if (In(bx, by, px + VoiceNextDx, y + ResetDy, 30, 20)) { StepVoice(chr, 1); return true; }
+            if (In(bx, by, px + VoicePlayDx, y + ResetDy, 60, 20) && DataOf(chr) is { } vc) { PlayVoiceSample(vc.VoiceSet); return true; }
             if (host._db is { } ldb && DataOf(chr) is { } lc)
             {
                 var looks = LookView(ldb, lc);
@@ -392,7 +420,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
                 {
                     int ry = y + RowsDy + i * AbRowH;
                     if (In(bx, by, px + LookShapeDx, ry, 40, 20)) { ChangeLook(chr, looks[_lookTop + i], voice: false); return true; }
-                    if (In(bx, by, px + LookVoiceDx, ry, 48, 20) && looks[_lookTop + i].Voice > 0) { ChangeLook(chr, looks[_lookTop + i], voice: true); return true; }
+                    if (In(bx, by, px + LookVoiceDx, ry, LookVoiceW, 20) && looks[_lookTop + i].Voice > 0) { ChangeLook(chr, looks[_lookTop + i], voice: true); return true; }
                 }
             }
             return true;
@@ -541,7 +569,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             host.UiText(no, px + LookNameDx - 6 - host.UiGetText(no, DimGray, 12).W, ry + 2, wearing ? 0xFF00FFFF : DimGray, 12);
             host.UiText(label, px + LookNameDx, ry + 2, wearing ? 0xFF00FFFF : White, 12);
             Button(px + LookShapeDx, ry, 40, "모습", on: wearing, h: 20);
-            if (look.Voice > 0) Button(px + LookVoiceDx, ry, 48, "목소리", on: look.Voice == c.VoiceSet, h: 20);
+            if (look.Voice > 0) Button(px + LookVoiceDx, ry, LookVoiceW, $"목소리 {look.Voice}", on: look.Voice == c.VoiceSet, h: 20);
         }
         if (rows.Count == 0) host.UiText("맞는 모습이 없습니다", px + LookNameDx, y + RowsDy + 2, DimGray, 12);
         // 미리 보기 — 왼쪽 앞모습(서기 모션 2), 오른쪽 옆모습(서기 모션 1). 창 층에 그려야 창 바탕에 안 가린다(DrawUi 는 판 밑그림에 그린다).
@@ -554,9 +582,19 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiSprite(sprite, ObsMotionTable.DirectionSide, tick, bx + half + half / 2, by + bh - 24, loop: true);
         host.UiText("앞", bx + 4, by + 2, DimGray, 12);
         host.UiText("옆", bx + half + 4, by + 2, DimGray, 12);
-        string caption = hover != null ? $"Chr {hover.Chr}" : "지금 모습";
+        // 코드에서 찾아 고칠 수 있게 번호를 다 보인다 — Chr · 모습(Obs) · 목소리 묶음(사용자 요청 ed-3).
+        string caption = hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {c.SpriteId} · 목소리 {c.VoiceSet}";
         host.UiText(caption, bx + (bw - host.UiGetText(caption, DimGray, 12).W) / 2, by + bh - 18, DimGray, 12);
         Button(bx, y + ResetDy, bw, "원래대로", h: 20);
+        // 목소리만 번호로 고르기 — 모습과 따로.
+        int vy = y + ResetDy;
+        host.UiText("목소리", px, vy + 2, DimGray, 12);
+        Button(px + VoicePrevDx, vy, 30, "◀", h: 20);
+        string owner = VoiceOwner(db, c.VoiceSet), voice = owner.Length > 0 ? $"#{c.VoiceSet}  {owner}" : $"#{c.VoiceSet}";
+        while (voice.Length > 2 && host.UiGetText(voice, White, 12).W > VoiceNextDx - VoicePrevDx - 40) voice = voice[..^1];
+        host.UiText(voice, px + VoicePrevDx + 30 + (VoiceNextDx - VoicePrevDx - 30 - host.UiGetText(voice, White, 12).W) / 2, vy + 2, 0xFF00FFFF, 12);
+        Button(px + VoiceNextDx, vy, 30, "▶", h: 20);
+        Button(px + VoicePlayDx, vy, 60, "듣기", h: 20);
     }
 
     /// <summary>세이브 고르기 쪽 — 파일이 있는 칸만 줄로 올린다. 누르면 불러온다.</summary>
