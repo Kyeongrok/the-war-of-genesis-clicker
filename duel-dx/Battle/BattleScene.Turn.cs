@@ -1689,6 +1689,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             t.Soul -= drain;
             ShowNumber(t, $"{host._db.T(41)} -{drain}", MissColor);
             PlayHitReaction(t, damaged: false);
+            // 적의 SOUL 을 깎은 것도 약화라 보조 경험치를 센다 — 피해 종류(0)라 MarkBuffed 가 걸러 빠져 있었다(사용자 요청 menu-88).
+            if (drain > 0 && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);
             return;
         }
         // 블랙홀(115) — 피해 판정이 없다. 화면 HP 가 위력(500~1000)보다 적은 유닛만 HP 0(0x1008d85f~0x1008d885, ba-20 D2).
