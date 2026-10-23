@@ -32,7 +32,9 @@ internal static class AssetPack
     private static readonly object LogGate = new();
 
     /// <summary>그 파일이 앞으로 올 수 있나 — 받는 길이고 아직 못 받았을 때만(부르는 쪽이 「없는 그림」으로 기억하면 안 된다).</summary>
-    public static bool MayCome(string kind, string file) => Part1Game.GameNumberOf(file) == null && AssetDownload.MayCome($"{kind}/{file}");
+    // 파트1 번호대는 파트1 폴더가 없으면 릴리즈에서 올 수 있다 — 「없는 그림」으로 굳히지 않는다(menu-91).
+    public static bool MayCome(string kind, string file) =>
+        Part1Game.GameNumberOf(file) != null ? Part1Game.Root == null : AssetDownload.MayCome($"{kind}/{file}");
 
     /// <summary>
     /// 파트1(전작) 그림·소리를 게임이 읽는 꼴로 만들어 두는 폴더 — 번호가 <see cref="Part1Game.ObsBase"/> 위인 것은 사용자의 파트1 폴더에서 만든다(사용자 요청 menu-76).
@@ -41,14 +43,15 @@ internal static class AssetPack
 
     /// <summary>
     /// 파트1 번호대 파일 — 파트1 폴더가 있으면 거기서 만들고, 없으면 릴리즈(pack.json 의 「찾을 때만 받는 것」, <c>assets-part1-1</c>)에서 받는다(사용자 요청 menu-80).
-    /// 몇 백 KB 라 적어도 20초는 기다린다 — 안 기다리면 캐릭터 에디터가 「전투에 못 서는 그림」으로 기억해 줄을 뺀다.
+    /// 기다리는 것은 부르는 쪽이 준 <paramref name="seconds"/> 만큼이다 — 0 이면 받게 걸어만 두고 바로 돌아온다. 전에는 적어도 20초를 기다려,
+    /// 파트1 이 없는 PC 에서 그리기(<c>UiFor</c>)가 처음 보는 파트1 이펙트마다 20초씩 멈췄다(menu-91).
     /// </summary>
     private static string? Part1(string file, int seconds)
     {
         if (Part1Game.FilePath(file, Part1Folder) is { } made) return made;
         string kind = $"part1/{Part1Game.CacheSub(file)}", path = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file);
         if (AssetDownload.FetchExtra(kind, file) is { } got) return got;
-        for (var until = DateTime.UtcNow.AddSeconds(Math.Max(seconds, 20)); DateTime.UtcNow < until; Thread.Sleep(100))
+        for (var until = DateTime.UtcNow.AddSeconds(seconds); DateTime.UtcNow < until; Thread.Sleep(100))
             if (File.Exists(path)) return path;
         return null;
     }

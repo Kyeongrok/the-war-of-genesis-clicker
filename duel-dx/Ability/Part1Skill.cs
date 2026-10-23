@@ -206,6 +206,14 @@ internal sealed partial class Part1Skill(GameWindow host)
     internal IEnumerable<bool> Routine(WorkData w, UnitState user, List<int> targets, List<(int Col, int Row)> cells, (int Col, int Row) aim, Action<int> hit)
     {
         host.PreloadSounds([.. Part1Game.SkillSounds.Select(P)]);
+        // 파트1 이 없는 PC — 이 기술의 그림을 릴리즈에서 받는다. 다 올 때까지(최대 40초) 기다리며 몇 개 받았는지 알린다(menu-91).
+        int[] need = [.. NeedsFor(w.Id).Select(P), .. user.Data?.SpriteId is > Part1Game.ObsBase and var own ? [(int)own] : Array.Empty<int>()];
+        bool Ready(int id) => AssetPack.Fetch("moses/obs", $"{id:D4}.obs", 0) != null;
+        for (double until = host._lastTime + 40; need.Any(id => !Ready(id)) && host._lastTime < until;)
+        {
+            host.Toast($"파트1 그림을 받는 중입니다… ({need.Count(Ready)}/{need.Length})");
+            for (double poll = host._lastTime + 0.5; host._lastTime < poll;) yield return true;
+        }
         _user = user;
         _home = host.Btl.UnitFoot(user);
         _events.Clear();
@@ -259,6 +267,28 @@ internal sealed partial class Part1Skill(GameWindow host)
         user.Fade = 1;
         user.Facing = facing;
         user.PlayAction(ObsMotionTable.ActionStand, 0);
+    }
+
+    /// <summary>그 기술이 쓰는 파트1 그림(앞머리 · 자식 그림까지) — 파트1 이 없는 PC 에서 쓰기 전에 받아 둔다.</summary>
+    private static int[] NeedsFor(int work)
+    {
+        int[] sword = [395], summon = [55, 49, 91, 50, 897];
+        int[] own = work switch
+        {
+            BlizzardWork => [37, 39, 897, 101, 56, 112, 51, 768, 787],
+            SeolhwaWork => [39, 173, 190, 192, 118, 101, 56, 112, 51, 767, 787],
+            HellStrikeWork => [124, 10, 832, 228, 38],
+            AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
+            ThunderWork => [75, 379, 71, 277, 77],
+            HellKiteWork => [503, 504, 230],
+            NereidWork => [959, 75, 72, 379, 76, 67],
+            MuspelWork => [10, 36],
+            KannonWork => [497, 212, 194],
+            TitaniaWork => [210, 71, 379, 667],
+            BlackFoxWork => [282, 56, 526, 192],
+            _ => [],
+        };
+        return [.. (work is BlizzardWork or SeolhwaWork or HellStrikeWork or AsuraWork ? sword : summon).Concat(own).Distinct()];
     }
 
     /// <summary>검 기술 앞머리(<c>0x10043950</c>, 50틱) — 시전자 둘레에 Obs 395:0(소리 1878), 정면을 보고 공격 준비(파트1 동작 9)를 붙든다.</summary>

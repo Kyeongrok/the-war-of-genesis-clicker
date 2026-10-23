@@ -24,7 +24,8 @@ internal sealed unsafe partial class GameWindow
             {
                 // 모세스 화면 그림은 처음 쓸 때 가져온다(AssetPack) — 올 수 없는 것이면 「없는 그림」으로 기억한다.
                 if (_uiPaths.Count == 0) return null;
-                path = AssetPack.Fetch("moses/obs", $"{id:D4}.obs");
+                // 파트1 번호대는 그리는 길에서 기다리지 않는다 — 받으면 다음 틀에 그린다(menu-91).
+                path = AssetPack.Fetch("moses/obs", $"{id:D4}.obs", id > Part1Game.ObsBase ? 0 : 15);
                 if (path == null)
                 {
                     if (!AssetPack.MayCome("moses/obs", $"{id:D4}.obs")) _ui[id] = null;
