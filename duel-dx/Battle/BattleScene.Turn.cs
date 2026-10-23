@@ -1211,7 +1211,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 var cells = EffectCells(w, a, col, row).ToList();
                 var struck = new HashSet<int>();
-                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                bool each = Part1Skill.HitsEachTime(w.Id);
+                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying); }))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {

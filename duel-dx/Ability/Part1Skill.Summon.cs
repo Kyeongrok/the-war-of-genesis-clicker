@@ -151,29 +151,6 @@ internal sealed partial class Part1Skill
             }
     }
 
-    /// <summary>머스펠 헤임 — 범위의 칸마다 불 폭발(10:0, 소리 8)과 솟는 불티 열(36:0)이 시전자에서 먼 순으로(20 + 거리/10 틱) 번진다. 그 칸의 사람을 폭발 때 친다.</summary>
-    private int Muspel(List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
-    {
-        var user = _user;
-        user.Facing = FacingOf(aim.X - _home.X, aim.Y - _home.Y);
-        Act(user, 22, 8);
-        int last = 0, n = 0;
-        foreach (var (col, row) in cells.OrderBy(c => Math.Abs(c.Col - user.Col) + Math.Abs(c.Row - user.Row)))
-        {
-            var (cx, cy) = CellFoot(col, row);
-            double dw = Math.Sqrt(Math.Pow((col - user.Col) * 40, 2) + Math.Pow((row - user.Row) * 40, 2));
-            int at = 20 + (int)(dw / 10);
-            Put(10, 0, at, cx, cy, sounds: n++ % 3 == 0);
-            for (int k = 0; k < 10; k++) Rise(36, 0, at + Rand(20), cx + Rand(41) - 20, cy + Rand(41) - 20, Rand(10) + 5, 0.95);
-            for (int i = 0; i < host._units.Length; i++)
-                if (host._units[i] is { Alive: true, OnField: true } u && u.Col == col && u.Row == row && u != user && BattleScene.SeesAsFoe(user, u))
-                    HitAt(at + 1, i, hit);
-            last = Math.Max(last, at + Length(10, 0) + 20);
-        }
-        Later(22, () => host.Btl.CenterOn(aim.X, aim.Y));
-        return Math.Max(last, 40);
-    }
-
     /// <summary>
     /// 천수관음 — 화면 가운데에 금빛(497)과 천수관음(212)이 떠올라 240틱 동안 흔들리며 떠 있고, 가운데에서 빛살 3000 줄기가 뻗는다.
     /// 대상마다 빛기둥(194)이 서고 그 빛기둥이 사라지기 시작할 때(50~149 + 114 틱) 회복한다(파트1 식 6 = 힐과 같은 식).

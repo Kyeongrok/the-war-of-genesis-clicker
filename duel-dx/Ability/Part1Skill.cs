@@ -23,7 +23,8 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     internal static readonly HashSet<int> Works =
-        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, KannonWork, TitaniaWork, BlackFoxWork];
+        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork,
+         HellKiteWork, NereidWork, MuspelWork, KannonWork, TitaniaWork, BlackFoxWork];
 
     private static int P(int part1) => Part1Game.ObsBase + part1;
 
@@ -238,6 +239,9 @@ internal sealed partial class Part1Skill(GameWindow host)
             ThunderWork => Thunder(targets, hit),
             FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
             StormSwordWork => StormSword(targets, hit),
+            HellKiteWork => HellKite(targets, hit),
+            NereidWork => Nereid(targets, hit),
+            MuspelWork => Muspel(targets, hit),
             KannonWork => Kannon(targets, hit),
             TitaniaWork => Titania(cells, hit),
             BlackFoxWork => BlackFox(targets, hit),
@@ -281,6 +285,9 @@ internal sealed partial class Part1Skill(GameWindow host)
             ThunderWork => [75, 379, 71, 277, 77],
             FlyingSlashWork => [503, 504, 230],
             StormSwordWork => [959, 75, 72, 379, 76, 67],
+            HellKiteWork => [103, 671, 10, 23, 93],
+            NereidWork => [114, 56, 65, 51, 787],
+            MuspelWork => [211],
             KannonWork => [497, 212, 194],
             TitaniaWork => [210, 71, 379, 667],
             BlackFoxWork => [282, 56, 526, 192],

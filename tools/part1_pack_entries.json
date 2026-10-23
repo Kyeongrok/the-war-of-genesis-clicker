@@ -544,6 +544,70 @@
     "release": "assets-part1-1"
   },
   {
+    "name": "part1/v8/obs/20103.obs",
+    "asset": "part1_v8_obs_20103.obs",
+    "size": 956923,
+    "sha256": "9e82073305890b71d37e564ed1b93be83a74d0660b4ec65e243e01beb095b3ff",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20671.obs",
+    "asset": "part1_v8_obs_20671.obs",
+    "size": 18052,
+    "sha256": "aaf6b2f24120e6757cb9bd471de0ec867f6da11f18c96e9790044372ff540829",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20023.obs",
+    "asset": "part1_v8_obs_20023.obs",
+    "size": 146177,
+    "sha256": "774d9412a557292f91005ae04426c8292161cab84a360f0a4b872d929258941f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20093.obs",
+    "asset": "part1_v8_obs_20093.obs",
+    "size": 70971,
+    "sha256": "8d56ac4c40859a17b693f6ea848b4ab76f8bb94baca345b3a8c5b2df68ddac42",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20114.obs",
+    "asset": "part1_v8_obs_20114.obs",
+    "size": 34937,
+    "sha256": "595ae2bb40ac3b8b1165dadabdc900752852491aa4ff17d96e6d9a1870f9bcbf",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20065.obs",
+    "asset": "part1_v8_obs_20065.obs",
+    "size": 5905,
+    "sha256": "d9ff15db8150701958e9bf1abba14a784fff37386e91371faf7d85ca4497a097",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20051.obs",
+    "asset": "part1_v8_obs_20051.obs",
+    "size": 304686,
+    "sha256": "0d51d896afcfc61c91a6ee1b0457f6f128fe7bd266f8e0b366db04335bba8697",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20211.obs",
+    "asset": "part1_v8_obs_20211.obs",
+    "size": 559201,
+    "sha256": "09f6f41cdb2e76481891c09868fdb4466cd2bf1ca70df5fde99da7f0270c3773",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
     "name": "part1/v8/sounds/22026.wav",
     "asset": "part1_v8_sounds_22026.wav",
     "size": 1595600,
@@ -812,6 +876,110 @@
     "asset": "part1_v8_sounds_22089.wav",
     "size": 1815668,
     "sha256": "ffafae5ee1716e19867b63f544d35d1e69d6cc3ae1b4e58db25d68a3382fc66c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21929.wav",
+    "asset": "part1_v8_sounds_21929.wav",
+    "size": 565088,
+    "sha256": "34e469fe2f97ef66f5f9d82bf3b3d4cb23bb40f77561cabd74224765939e7b02",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22066.wav",
+    "asset": "part1_v8_sounds_22066.wav",
+    "size": 382628,
+    "sha256": "ac435533303669b821fb976d65f58f229306975c96f7943cbd8276225281014d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22065.wav",
+    "asset": "part1_v8_sounds_22065.wav",
+    "size": 242500,
+    "sha256": "ded1d0f7b697b810f89fa3fa8236665a9b8dfcc4a979459164ac3c9ab0b3071a",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21930.wav",
+    "asset": "part1_v8_sounds_21930.wav",
+    "size": 1055280,
+    "sha256": "2482e4bb7a3c5250de42565f265d134db45abf48a11ba21957cde95d49db71f0",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20060.wav",
+    "asset": "part1_v8_sounds_20060.wav",
+    "size": 184488,
+    "sha256": "2666dd831fe9f37e68e12278bf021f97c733bc9abce3f7b76bad2381db0f86d8",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20061.wav",
+    "asset": "part1_v8_sounds_20061.wav",
+    "size": 179772,
+    "sha256": "6905dbf1f2e18f77d0d99dd70f627fffd0ce66bb2f04bf932bb3cbced8112d70",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20062.wav",
+    "asset": "part1_v8_sounds_20062.wav",
+    "size": 300120,
+    "sha256": "5889fb587b3aadf44084b3fc9fdc767ead66dd6df9a86cd4f73316089b5536f5",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21931.wav",
+    "asset": "part1_v8_sounds_21931.wav",
+    "size": 1657432,
+    "sha256": "50553cb0c3a3c33d6c5718e1450beb8c74dad438d71f5a79bcdd80c60a643892",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21932.wav",
+    "asset": "part1_v8_sounds_21932.wav",
+    "size": 735036,
+    "sha256": "a9a0a6bc523a8d370ec6c32d03cb14ffa464a84dc62d257756d76bceea57e89f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21933.wav",
+    "asset": "part1_v8_sounds_21933.wav",
+    "size": 176576,
+    "sha256": "2008803a40488a37e3c84db9bab0152e5230e92e23f586f6d3a6611cfe0ee0a7",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22003.wav",
+    "asset": "part1_v8_sounds_22003.wav",
+    "size": 1818780,
+    "sha256": "b2ce9ec2330b32ac6c9c1e79aa8c8094c0f1e21fa6d1b4a19090fbcec6b4e7b0",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22004.wav",
+    "asset": "part1_v8_sounds_22004.wav",
+    "size": 356996,
+    "sha256": "db17b07ede46ad39a046340b7aa8f61ea4cb701e1fa83a229711f92a578b3b77",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22005.wav",
+    "asset": "part1_v8_sounds_22005.wav",
+    "size": 137000,
+    "sha256": "d1d3744069601f1578af3a17e8335326383755bbb217472b4e6fc804f4eae102",
     "tier": 90,
     "release": "assets-part1-1"
   },
@@ -1128,14 +1296,6 @@
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v8/obs/20051.obs",
-    "asset": "part1_v8_obs_20051.obs",
-    "size": 304686,
-    "sha256": "0d51d896afcfc61c91a6ee1b0457f6f128fe7bd266f8e0b366db04335bba8697",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
     "name": "part1/v8/sounds/20079.wav",
     "asset": "part1_v8_sounds_20079.wav",
     "size": 77764,
@@ -1208,18 +1368,26 @@
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v8/sounds/20083.wav",
-    "asset": "part1_v8_sounds_20083.wav",
-    "size": 131096,
-    "sha256": "6668f80820fc0cbbc1776c8cd4d86591594fae2f3713eb5786cdcf62e7e9fb18",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
     "name": "part1/v8/sounds/20071.wav",
     "asset": "part1_v8_sounds_20071.wav",
     "size": 160380,
     "sha256": "15f83aa91ec91094c433691428f0eb279755c6491a5e337e21190c8de93277bb",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22006.wav",
+    "asset": "part1_v8_sounds_22006.wav",
+    "size": 179936,
+    "sha256": "b791c2feda763637fd2bfd62f8bf0cd0fa29a763a6c54e92b3dec757a5026932",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20083.wav",
+    "asset": "part1_v8_sounds_20083.wav",
+    "size": 131096,
+    "sha256": "6668f80820fc0cbbc1776c8cd4d86591594fae2f3713eb5786cdcf62e7e9fb18",
     "tier": 90,
     "release": "assets-part1-1"
   }

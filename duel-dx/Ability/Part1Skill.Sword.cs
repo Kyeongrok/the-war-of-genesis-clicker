@@ -200,7 +200,7 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 휘어 나는 이동기(<c>0x1007e060</c>) — 조절점들을 잇는 곡선(캣멀롬)을 빠르기 1 에서 틱마다 곱수를 곱해(최대 70) 따라간다. 틱마다의 자리.
     /// </summary>
-    private static List<(double X, double Y)> CurveWalk(List<(double X, double Y)> controls, double speed, double factor, double max)
+    private static List<(double X, double Y)> CurveWalk(List<(double X, double Y)> controls, double speed, double factor, double max, double min = 0)
     {
         var dense = new List<(double X, double Y)>();
         for (int i = 0; i + 1 < controls.Count; i++)
@@ -228,7 +228,7 @@ internal sealed partial class Part1Skill
                 (x, y) = dense[++k];
             }
             points.Add((x, y));
-            speed = Math.Min(max, speed * factor);
+            speed = Math.Clamp(speed * factor, Math.Max(0.5, min), max);
         }
         return points;
     }
