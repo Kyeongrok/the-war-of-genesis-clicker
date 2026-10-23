@@ -1,0 +1,11 @@
+{
+  "id": 48,
+  "name": "레토르트",
+  "price": 1500,
+  "attack": 100,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 15 }],
+  "attackEffects": []
+}

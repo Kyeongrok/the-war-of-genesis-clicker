@@ -1,0 +1,11 @@
+{
+  "id": 86,
+  "name": "파워드 슈즈",
+  "price": 2700,
+  "attack": 0,
+  "defense": 0,
+  "range": 0,
+  "useWork": 0,
+  "bonuses": [{ "stat": 33, "value": 40 }, { "stat": 30, "value": 30 }],
+  "attackEffects": []
+}

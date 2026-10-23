@@ -1,0 +1,11 @@
+{
+  "id": 199,
+  "name": "토르",
+  "price": 12000,
+  "attack": 135,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 30, "value": 10 }, { "stat": 32, "value": 10 }, { "stat": 33, "value": 10 }],
+  "attackEffects": []
+}

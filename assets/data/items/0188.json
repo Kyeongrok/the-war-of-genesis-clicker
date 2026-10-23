@@ -1,0 +1,11 @@
+{
+  "id": 188,
+  "name": "빅 BAL.",
+  "price": 13000,
+  "attack": 160,
+  "defense": 0,
+  "range": 2,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 20 }],
+  "attackEffects": []
+}

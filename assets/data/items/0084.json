@@ -1,0 +1,11 @@
+{
+  "id": 84,
+  "name": "등산화",
+  "price": 300,
+  "attack": 0,
+  "defense": 0,
+  "range": 0,
+  "useWork": 0,
+  "bonuses": [{ "stat": 33, "value": 10 }, { "stat": 30, "value": 10 }],
+  "attackEffects": []
+}

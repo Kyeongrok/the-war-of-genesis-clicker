@@ -1,0 +1,11 @@
+{
+  "id": 74,
+  "name": "클래식 아머",
+  "price": 9600,
+  "attack": 0,
+  "defense": 170,
+  "range": 1,
+  "useWork": 0,
+  "bonuses": [{ "stat": 33, "value": -10 }, { "stat": 30, "value": -10 }],
+  "attackEffects": []
+}

@@ -1,0 +1,11 @@
+{
+  "id": 51,
+  "name": "가리우스",
+  "price": 5000,
+  "attack": 130,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 20 }],
+  "attackEffects": []
+}

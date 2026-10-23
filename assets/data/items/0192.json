@@ -1,0 +1,11 @@
+{
+  "id": 192,
+  "name": "위너 BAL.",
+  "price": 35000,
+  "attack": 180,
+  "defense": 0,
+  "range": 2,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 25 }],
+  "attackEffects": []
+}

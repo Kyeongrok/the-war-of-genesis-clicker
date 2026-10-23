@@ -1,0 +1,11 @@
+{
+  "id": 87,
+  "name": "램버트의 슈즈",
+  "price": 4500,
+  "attack": 0,
+  "defense": 0,
+  "range": 0,
+  "useWork": 0,
+  "bonuses": [{ "stat": 33, "value": 50 }, { "stat": 30, "value": 40 }],
+  "attackEffects": []
+}

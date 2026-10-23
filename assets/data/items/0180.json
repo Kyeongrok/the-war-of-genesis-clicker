@@ -1,0 +1,11 @@
+{
+  "id": 180,
+  "name": "실버 BAL.",
+  "price": 750,
+  "attack": 80,
+  "defense": 0,
+  "range": 2,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 10 }],
+  "attackEffects": []
+}

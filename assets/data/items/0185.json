@@ -1,0 +1,11 @@
+{
+  "id": 185,
+  "name": "골드 BAL.",
+  "price": 4200,
+  "attack": 130,
+  "defense": 0,
+  "range": 2,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 15 }],
+  "attackEffects": []
+}

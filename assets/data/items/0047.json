@@ -1,0 +1,11 @@
+{
+  "id": 47,
+  "name": "토르트",
+  "price": 800,
+  "attack": 90,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 10 }],
+  "attackEffects": []
+}

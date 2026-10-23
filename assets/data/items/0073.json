@@ -1,0 +1,11 @@
+{
+  "id": 73,
+  "name": "세라믹 아머",
+  "price": 3600,
+  "attack": 0,
+  "defense": 140,
+  "range": 1,
+  "useWork": 0,
+  "bonuses": [{ "stat": 30, "value": 10 }],
+  "attackEffects": []
+}

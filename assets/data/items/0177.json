@@ -1,0 +1,11 @@
+{
+  "id": 177,
+  "name": "바운서",
+  "price": 600,
+  "attack": 0,
+  "defense": 100,
+  "range": 0,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": 5 }],
+  "attackEffects": []
+}

@@ -1,0 +1,11 @@
+{
+  "id": 53,
+  "name": "아이리스써클렛",
+  "price": 15000,
+  "attack": 135,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 30, "value": 20 }],
+  "attackEffects": []
+}

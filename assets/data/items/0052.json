@@ -1,0 +1,11 @@
+{
+  "id": 52,
+  "name": "G-써클렛",
+  "price": 8000,
+  "attack": 140,
+  "defense": 0,
+  "range": 5,
+  "useWork": 0,
+  "bonuses": [{ "stat": 32, "value": -20 }],
+  "attackEffects": []
+}
