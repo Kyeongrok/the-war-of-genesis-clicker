@@ -1013,6 +1013,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         if (stat == ItemBook.ExpStat) return $"얻는 경험치 {value:+#;-#;0}%";
         if (stat == BattleScene.SoulDrainEffect) return $"대상 SOUL {value:+#;-#;0}";
         if (stat == BattleScene.SoulGainEffect) return $"맞힌 대상마다 내 SOUL {value:+#;-#;0}";
+        if (stat == ItemBook.ExpStat) return $"얻는 경험치 {value:+#;-#;0}%";   // 처치 · 도움 경험치에 자른 뒤 얹는다(GameDatabase.WithEquipExp, menu-86)
         if (StatBonusNames.TryGetValue(stat, out var statName)) return $"{statName} {value:+#;-#;0}";
         if (BattleScene.ChangeText(stat, value) is { } change) return change;
         string desc = host._db?.Statuses.GetValueOrDefault(stat) is { } st ? host._db.T(st.DescriptionId) : "";

@@ -191,6 +191,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
         Win32.AppendMenuW(tools, Win32.MF_STRING, StatsScreen.MenuStats, "전투 통계(&S)...");
         Win32.AppendMenuW(tools, Win32.MF_STRING, SkillBookScreen.MenuSkillBook, "체질별 어빌리티(&A)...");
+        Win32.AppendMenuW(tools, Win32.MF_STRING, ItemBookScreen.MenuItemBook, "아이템 보기(&I)...");
         _replayMenu = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_POPUP, (nuint)_replayMenu, "다녀온 장소 다시 열기(&R)");
         Win32.AppendMenuW(tools, Win32.MF_STRING, MenuProgress, "진행 상태 보기(&P)");
@@ -369,6 +370,7 @@ internal sealed unsafe partial class GameWindow
             case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
             case StatsScreen.MenuStats: StatsScr._open = !StatsScr._open; break;
             case SkillBookScreen.MenuSkillBook: SkillBookScr.Toggle(); break;
+            case ItemBookScreen.MenuItemBook: ItemBookScr.Toggle(); break;
             case MenuPlanetMarks:
                 _planetMarks = !_planetMarks;
                 SaveSettings();
