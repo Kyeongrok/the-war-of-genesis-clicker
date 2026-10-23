@@ -141,12 +141,13 @@ internal sealed unsafe partial class BattleScene
     internal void ApplyAimHook()
     {
         string[] aim = Environment.GetEnvironmentVariable("DUELDX_AIM")?.Split(':') ?? [];
-        // DUELDX_AIM=basic:ally — 링 「공격」으로 가장 가까운 아군을 겨눈다(버서커 시험).
-        if (!_aimHookDone && aim is ["basic", "ally"] && IsPlayerTurn && _routine == null && host.Tlk._talk == null && _runningEvent < 0
+        // DUELDX_AIM=basic:ally — 링 「공격」으로 가장 가까운 아군을 겨눈다(버서커 시험). basic:foe 면 가장 가까운 적(빌린 모습의 공격 동작 시험).
+        if (!_aimHookDone && aim is ["basic", "ally" or "foe"] && IsPlayerTurn && _routine == null && host.Tlk._talk == null && _runningEvent < 0
             && host._units[_turn] is { Data: { } bd } bu && Work(bd.BasicWorkId) is { } bw)
         {
             _aimHookDone = true;
-            var mate = host._units.Where(x => x != bu && x.Alive && x.OnField && x.IsAlly).OrderBy(x => Math.Abs(x.Col - bu.Col) + Math.Abs(x.Row - bu.Row)).FirstOrDefault();
+            bool foe = aim[1] == "foe";
+            var mate = host._units.Where(x => x != bu && x.Alive && x.OnField && (foe ? SeesAsFoe(bu, x) : x.IsAlly)).OrderBy(x => Math.Abs(x.Col - bu.Col) + Math.Abs(x.Row - bu.Row)).FirstOrDefault();
             (_targetWork, _targetIsBasicAttack) = (bw.Id, true);
             int hpBefore = mate?.Hp ?? -1;
             bool tookBasic = mate != null && OnTargetClick(mate.Col, mate.Row);
