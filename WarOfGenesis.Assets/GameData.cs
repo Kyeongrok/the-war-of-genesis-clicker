@@ -652,12 +652,20 @@ public sealed class GameDatabase
     /// 쓰러뜨렸을 때 받는 경험치(<c>0x10033020</c>) = Num[14] + Num[15] × (쓰러뜨린 적 레벨 − 내 레벨), Num[16]~Num[17] 로 자른다.
     /// </summary>
     /// <param name="bonusPercent">상태 11(경험치 증가) 값% — 자르기 <b>앞</b>에 더한다(<c>0x10072285</c>~).</param>
+    /// <remarks>장비의 경험치 %(보정 42)는 여기 넣지 않는다 — 자른 뒤에 <see cref="WithEquipExp"/> 로 더한다.</remarks>
     public int ExpForKill(CharacterData killer, int targetLevel, int bonusPercent = 0)
     {
         int exp = N(14) + N(15) * (targetLevel - killer.Level);
         if (bonusPercent > 0) exp += exp * bonusPercent / 100;
         return Math.Clamp(exp, N(16), N(17));
     }
+
+    /// <summary>
+    /// 장비·장착 어빌리티의 경험치 %(보정 42, 바운서 EXP. 따위 +20)를 얹은 경험치. 원본은 이 번호를 안 읽어 이 게임이 따로 먹이는 것이라
+    /// <b>상한(Num 17)·하한으로 자른 뒤</b>에 더한다 — 자르기 앞에 더하던 때는 레벨 차가 크면(상한 100 · 하한 10) 보정이 다 깎여
+    /// 「EXP 장비가 경험치를 더 안 준다」는 말을 들었다(menu-86). 도움(버프) 경험치에도 똑같이 든다.
+    /// </summary>
+    public int WithEquipExp(CharacterData c, int exp) => EquipBonus(c, ItemBook.ExpStat) is > 0 and var pct ? exp + exp * pct / 100 : exp;
 
     /// <summary>
     /// 레벨업(<c>0x100318d0</c>) — 쌓인 경험치 ÷ 100 이 새 레벨. 오름 = 직업 성장률% × <b>기본값</b> / 100 × 오른 레벨 수(난수 없음).

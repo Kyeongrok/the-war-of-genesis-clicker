@@ -750,8 +750,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         int n = _buffedAllies.Count;
         _buffedAllies.Clear();
-        if (n == 0 || !a.IsAlly || a.Data is not { } c) return;
-        int exp = BuffExpPerAlly * n;
+        if (n == 0 || !a.IsAlly || a.Data is not { } c || host._db is not { } db) return;
+        int exp = db.WithEquipExp(c, BuffExpPerAlly * n);
         a.Data = c with { Exp = c.Exp + exp, CumExp = c.CumExp + exp };
         Popup(a, $"EXP +{exp}", 0xFF90D0FF, 15);
         if (Trace)
