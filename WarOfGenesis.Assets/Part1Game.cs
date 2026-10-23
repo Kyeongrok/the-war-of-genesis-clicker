@@ -35,7 +35,7 @@ public static class Part1Game
     public const int ObsBase = 20000;
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 7;
+    public const int ConvertVersion = 8;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -116,6 +116,7 @@ public static class Part1Game
         new(1, "마르자나", 352, 384, 167), new(0, "살라딘", 196, 478, 158), new(16, "얀 지슈카", 513, 484, 166), new(30, "버몬트 대공", 5, 422, 130),
         new(32, "어윈 록슬리", 213, 380, 157), new(36, "해럴드 깁슨", 280, 466, 137), new(64, "알바티니 데 메디치", 239, 431, 126),
         new(65, "크리스티앙 메디치", 206, 453, 132), new(71, "죠안 카트라이트", 345, 446, 145),
+        new(58, "철가면", 605, 449, 141),   // 킹 — 아수라파천무가 이 그림의 모션 132~138 로 분신을 만든다(menu-89)
     ];
 
     /// <summary>
@@ -270,13 +271,13 @@ public static class Part1Game
     /// <summary>
     /// 파트1 섞기 키(종류 3)의 첫 인자 → 파트2 섞기 번호(0 = 안 옮김). 9 는 검은 바탕의 빛(Obs 0010·0014·0017 · 마르자나의 연 291)이라 가산(17).
     /// 11(검 기술의 얼음 기둥 118 · 연기 173 · 꽃잎 190 — 역시 검은 바탕)은 스크린(12), 10(맞는 빛 101:2·6)은 닷지(10),
-    /// 13 은 둘째 인자 1~8 이 옅어지는 단계라 파트2 반투명 1~7 로 옮긴다(menu-85 — 눈으로 맞춘 것, 가설). 14 는 뜻을 몰라 뺀다.
+    /// 12(번개 터짐 71 — 원본은 뒤집는 섞기)도 스크린(12)으로(menu-89). 13 은 둘째 인자 1~8 이 옅어지는 단계라 파트2 반투명 1~7 로 옮긴다(menu-85 — 눈으로 맞춘 것, 가설). 14 는 뜻을 몰라 뺀다.
     /// </summary>
     private static short BlendOf(short kind, short level) => kind switch
     {
         9 => 17,
         10 => 10,
-        11 => 12,
+        11 or 12 => 12,
         13 => (short)Math.Clamp((int)level, 1, 7),
         _ => 0,
     };
@@ -292,20 +293,31 @@ public static class Part1Game
     [
         (0, (0, 0, 0)), (1, (1, 0, 0)), (2, (5, 0, 0)), (5, (9, 0, 0)), (6, (6, 0, 0)), (7, (4, 0, 0)),
         (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (11, 25, 2)), (14, (12, 25, 3)), (15, (11, 25, 1)),
-        (ThrowAction, (17, 0, 0)), (DashAction, (18, 0, 0)),
+        .. Enumerable.Range(ExtraFrom, 58 - ExtraFrom).Select(a => (ExtraBase + a, (a, 0, 0))),
     ];
 
     /// <summary>
-    /// 파트1 검 기술이 시전자에게 거는 동작(menu-85) — 파트2 에 없는 것이라 비어 있는 동작 번호에 옮겨 둔다.
-    /// 블리자드 스탐의 얼음 던지기(파트1 동작 17)와 설화난영참의 돌진 자세(파트1 동작 18).
+    /// 파트1 기술이 시전자에게 거는 동작(menu-85 · menu-89) — 동작 16 이상(던지기 17 · 돌진 18 · 시전 24 · 아수라파천무의 132~138 모션 …)은
+    /// 파트2 에 없는 것이라 동작 번호에 40 을 더한 비어 있는 자리에 그대로 옮겨 둔다. 파트1 모션 m(48 이상)은 이 게임에서 m + 120 이다.
     /// </summary>
-    public const int ThrowAction = 60, DashAction = 61;
+    public const int ExtraFrom = 16, ExtraBase = 40;
 
-    /// <summary>파트1 검 기술(블리자드 스탐 · 설화난영참)이 쓰는 이펙트 그림 — 파트1 팩에 함께 싣는다(<c>tools/part1-pack</c>). 자식·소리 키는 따라간다.</summary>
-    public static readonly int[] SkillObs = [395, 37, 39, 897, 101, 768, 787, 118, 190, 173, 767];
+    /// <summary>파트1 기술(검 기술 · 마법 · 소환)이 쓰는 이펙트 그림 — 파트1 팩에 함께 싣는다(<c>tools/part1-pack</c>). 자식·소리 키는 따라간다.</summary>
+    public static readonly int[] SkillObs =
+    [
+        395, 37, 39, 897, 101, 768, 787, 118, 190, 173, 767,                       // 블리자드 스탐 · 설화난영참
+        55, 49, 91, 50, 503, 230, 959, 75, 72, 379, 76, 67, 10, 36,               // 소환 앞머리 · 헬카이트 · 어비스 네레이드 · 머스펠 헤임
+        497, 212, 194, 210, 71, 667, 282, 56, 526, 192,                           // 천수관음 · 타이타니아 · 묵호자
+        277, 77, 124, 832, 228, 38, 846, 696, 518, 519, 83, 843, 862,             // 썬더스탐 · 헬 스트라이크 · 아수라파천무
+    ];
 
     /// <summary>그 기술의 핸들러가 직접 내는 소리(그림 키에 없는 것).</summary>
-    public static readonly int[] SkillSounds = [2026, 2027, 2028, 2029, 2030, 2031, 1934, 70];
+    public static readonly int[] SkillSounds =
+    [
+        2026, 2027, 2028, 2029, 2030, 2031, 1934, 70,
+        2079, 2080, 2081, 2082, 1935, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2039, 2040, 2041, 2042, 2052, 2067,
+        194, 2025, 2020, 2085, 2086, 2087, 2088, 2089,
+    ];
 
     /// <summary>
     /// 파트1 번호대(<see cref="ObsBase"/> 위) 파일(<c>20352.obs</c> · <c>20026.wav</c>)을 게임이 읽는 꼴로 <paramref name="cacheFolder"/> 에 만들어 둔다 —

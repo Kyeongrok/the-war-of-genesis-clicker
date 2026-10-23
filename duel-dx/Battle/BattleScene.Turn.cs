@@ -1205,12 +1205,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            // 파트1 검 기술(블리자드 스탐 · 설화난영참) — 시각표를 깔고 대상마다 얼음이 닿거나 돌진이 닿을 때 한 번씩 친다(menu-85).
-            if (Part1SwordSkill.Works.Contains(w.Id) && targetIndex < 0)
+            // 파트1 기술(검 기술 · 썬더스탐 · 소환) — 시각표를 깔고 대상마다 그 기술이 닿을 때 한 번씩 친다(menu-85 · menu-89).
+            if (Part1Skill.Works.Contains(w.Id))
             {
-                var targets = WorkTargets(w, a, col, row);
+                var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
+                var cells = EffectCells(w, a, col, row).ToList();
                 var struck = new HashSet<int>();
-                foreach (bool _ in host.Part1SwordAb.Routine(w, a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {

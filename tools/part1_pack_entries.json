@@ -1,551 +1,1223 @@
 [
   {
-    "name": "part1/v7/obs/20352.obs",
-    "asset": "part1_v7_obs_20352.obs",
-    "size": 245442,
-    "sha256": "9b8e5ba827e0640bedeb50428e60aee13092d4ae3a402558e02d61803e028b98",
+    "name": "part1/v8/obs/20352.obs",
+    "asset": "part1_v8_obs_20352.obs",
+    "size": 248048,
+    "sha256": "752fc12e971c1b46adc59bc08eec3ba79728648c9b028af8851d08050b7bc4b2",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20384.obs",
-    "asset": "part1_v7_obs_20384.obs",
+    "name": "part1/v8/obs/20384.obs",
+    "asset": "part1_v8_obs_20384.obs",
     "size": 3555,
     "sha256": "92d9f1f1eb0b98b55df0df3eb6420bd69dc4ce64e0c0be4328ab4c7574f00fcd",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20196.obs",
-    "asset": "part1_v7_obs_20196.obs",
-    "size": 305093,
-    "sha256": "73ddfd40aafc714226ddcfe0531ddcda7ab0ba2acdd38b0959a7c337a5b8f5aa",
+    "name": "part1/v8/obs/20196.obs",
+    "asset": "part1_v8_obs_20196.obs",
+    "size": 308667,
+    "sha256": "28c7ebe04f778159d5108f381564e79fcf6a0d268693e5af51b859d4ba36791f",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20478.obs",
-    "asset": "part1_v7_obs_20478.obs",
+    "name": "part1/v8/obs/20478.obs",
+    "asset": "part1_v8_obs_20478.obs",
     "size": 3555,
     "sha256": "3be60118674d5d6dbdf82aa5444887bff7350ee098c591af814228dbc527c68a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20513.obs",
-    "asset": "part1_v7_obs_20513.obs",
-    "size": 125861,
-    "sha256": "af237cab87aaaf1e7cee47476949afce9134d607181df3569bb8fc73045b73b9",
+    "name": "part1/v8/obs/20513.obs",
+    "asset": "part1_v8_obs_20513.obs",
+    "size": 131765,
+    "sha256": "a63f6c590e2ce682f6398191c76b011412ca5bbcaf10a51d9894e3eaee3cfd36",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20484.obs",
-    "asset": "part1_v7_obs_20484.obs",
+    "name": "part1/v8/obs/20484.obs",
+    "asset": "part1_v8_obs_20484.obs",
     "size": 3555,
     "sha256": "a950596f72675779cabdde3e38efb9e96fc87c740571ced7546933233e21657e",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20005.obs",
-    "asset": "part1_v7_obs_20005.obs",
-    "size": 183009,
-    "sha256": "f6ede13e91ddb04a494e9017aae859e6cd9d8ce40f86b333d1483b608ed134dc",
+    "name": "part1/v8/obs/20005.obs",
+    "asset": "part1_v8_obs_20005.obs",
+    "size": 188749,
+    "sha256": "e40edfe484ecfc807b30baf5ff881a7600aada89d934758c133c9bf20aec92a1",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20422.obs",
-    "asset": "part1_v7_obs_20422.obs",
+    "name": "part1/v8/obs/20422.obs",
+    "asset": "part1_v8_obs_20422.obs",
     "size": 3555,
     "sha256": "cfd46bcd3442f626c6d5d6789522f1db252bcd08c995e45d1bc71f9d7a10a2ae",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20213.obs",
-    "asset": "part1_v7_obs_20213.obs",
-    "size": 86808,
-    "sha256": "f4ea2ad3e106f70484f3bc76fdc9bb9ca99d4730ab06f97139a22961684785c0",
+    "name": "part1/v8/obs/20213.obs",
+    "asset": "part1_v8_obs_20213.obs",
+    "size": 87372,
+    "sha256": "a9dd6b9e4706474f86c6f583c52a15cd32d6fd48938484539af6704f7adb9b45",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20380.obs",
-    "asset": "part1_v7_obs_20380.obs",
+    "name": "part1/v8/obs/20380.obs",
+    "asset": "part1_v8_obs_20380.obs",
     "size": 3555,
     "sha256": "3bdbc464f77d3a3fe3c3b0b672893dc5e6e5b96b88a16a765b38996f1f43c1dd",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20280.obs",
-    "asset": "part1_v7_obs_20280.obs",
-    "size": 132187,
-    "sha256": "8f3d741750624466bd274d96123e263ad64f591ab783ed1735d81a4dd436d659",
+    "name": "part1/v8/obs/20280.obs",
+    "asset": "part1_v8_obs_20280.obs",
+    "size": 132751,
+    "sha256": "d9c40794aefb873f31a4a6dc1c1e797b3e512d4e25025589de691f95f223acf8",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20466.obs",
-    "asset": "part1_v7_obs_20466.obs",
+    "name": "part1/v8/obs/20466.obs",
+    "asset": "part1_v8_obs_20466.obs",
     "size": 3555,
     "sha256": "4ba03dcb07a5aed21ceb4b6ceacde00a385aa71572632eda6e80c0a52407e2aa",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20239.obs",
-    "asset": "part1_v7_obs_20239.obs",
-    "size": 133886,
-    "sha256": "e04ca85d0da89ad82a2eb8a101bf02d2c97ec64ccba4fa1c71260f25dd0745e0",
+    "name": "part1/v8/obs/20239.obs",
+    "asset": "part1_v8_obs_20239.obs",
+    "size": 134450,
+    "sha256": "1310dde211d44a1fbaa5851f779d10cbc1151ae53446cfadf2c786bfd6edba54",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20431.obs",
-    "asset": "part1_v7_obs_20431.obs",
+    "name": "part1/v8/obs/20431.obs",
+    "asset": "part1_v8_obs_20431.obs",
     "size": 3555,
     "sha256": "1e73ea98a1bc03fc67ab3c2e7c6ace13e4a1a96050c77abcd73196978a24402a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20206.obs",
-    "asset": "part1_v7_obs_20206.obs",
-    "size": 191642,
-    "sha256": "95ee099ca2f0102e98718359a755ba5a6ab434b903825810dc3cda3e36b140cf",
+    "name": "part1/v8/obs/20206.obs",
+    "asset": "part1_v8_obs_20206.obs",
+    "size": 192332,
+    "sha256": "94b582ea1a71618cdd96e72027493068f2d9236e737ff6a0ef6496f0f8a18dc3",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20453.obs",
-    "asset": "part1_v7_obs_20453.obs",
+    "name": "part1/v8/obs/20453.obs",
+    "asset": "part1_v8_obs_20453.obs",
     "size": 3555,
     "sha256": "b4cf6e498d88ca34b9d656702f35014d35a24d315981830f076b3528087dd89f",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20345.obs",
-    "asset": "part1_v7_obs_20345.obs",
-    "size": 126662,
-    "sha256": "a3679051356f8ff83fc4c21b343711fe95deedffad994842051e38084b9894d6",
+    "name": "part1/v8/obs/20345.obs",
+    "asset": "part1_v8_obs_20345.obs",
+    "size": 128774,
+    "sha256": "7c784b5bc8c212d3f4c899a22ed24241b2321b6f8c0df9ebf2bdfc5883184bdf",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20446.obs",
-    "asset": "part1_v7_obs_20446.obs",
+    "name": "part1/v8/obs/20446.obs",
+    "asset": "part1_v8_obs_20446.obs",
     "size": 3555,
     "sha256": "81144185a25dc35c395570493ecfd0c987a210664a71086cd761ba931473fe14",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20395.obs",
-    "asset": "part1_v7_obs_20395.obs",
+    "name": "part1/v8/obs/20605.obs",
+    "asset": "part1_v8_obs_20605.obs",
+    "size": 347011,
+    "sha256": "8ce8a9697b84769af9872a86c7cf102283f79ac7ba04a97302eea6347920efb9",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20449.obs",
+    "asset": "part1_v8_obs_20449.obs",
+    "size": 3555,
+    "sha256": "b1836c2c9e5db68c216fd7d788a3a60237e5a9a4afaa4a21180891d445b7f3ee",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20395.obs",
+    "asset": "part1_v8_obs_20395.obs",
     "size": 352352,
     "sha256": "d75166a3d3987eec8737cde356fbe57bf324e257ebcffc5ee7bdf16c7afdfc66",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20037.obs",
-    "asset": "part1_v7_obs_20037.obs",
+    "name": "part1/v8/obs/20037.obs",
+    "asset": "part1_v8_obs_20037.obs",
     "size": 7546,
     "sha256": "bcd872d86be17de15b3d77a715676fe84bb8f052ee07ba4ef7dd33ba0cd1b435",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20039.obs",
-    "asset": "part1_v7_obs_20039.obs",
+    "name": "part1/v8/obs/20039.obs",
+    "asset": "part1_v8_obs_20039.obs",
     "size": 22920,
     "sha256": "18ff6bf91be046db75437733e80b45ebf45a138bd678f2f345fc18a794c77d50",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20897.obs",
-    "asset": "part1_v7_obs_20897.obs",
+    "name": "part1/v8/obs/20897.obs",
+    "asset": "part1_v8_obs_20897.obs",
     "size": 529214,
     "sha256": "581d22557f64c1d8f30952b3057e9a51476454ea3d624cb4b0e5a2648129b9cd",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20101.obs",
-    "asset": "part1_v7_obs_20101.obs",
+    "name": "part1/v8/obs/20101.obs",
+    "asset": "part1_v8_obs_20101.obs",
     "size": 102339,
     "sha256": "aaaa00f21a2f463c63de89b13284a4b92343ca2e29c212e332ae783fd172259b",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20768.obs",
-    "asset": "part1_v7_obs_20768.obs",
+    "name": "part1/v8/obs/20768.obs",
+    "asset": "part1_v8_obs_20768.obs",
     "size": 197886,
     "sha256": "913d29bfe9c0725dda17cd5144695287a0e88c124fe832407906967ed8401e58",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20787.obs",
-    "asset": "part1_v7_obs_20787.obs",
+    "name": "part1/v8/obs/20787.obs",
+    "asset": "part1_v8_obs_20787.obs",
     "size": 178856,
     "sha256": "9d553df17d9fb5761c7fb3d6dd928dfe27337de61952fd026e0a7d4083756a1f",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20118.obs",
-    "asset": "part1_v7_obs_20118.obs",
+    "name": "part1/v8/obs/20118.obs",
+    "asset": "part1_v8_obs_20118.obs",
     "size": 346464,
     "sha256": "6569fccdf9b8987b9bb610089cd0d4a476c9d8c6f1763d7ce0a620c7db560310",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20190.obs",
-    "asset": "part1_v7_obs_20190.obs",
+    "name": "part1/v8/obs/20190.obs",
+    "asset": "part1_v8_obs_20190.obs",
     "size": 62645,
     "sha256": "4e5f7a725dab191c5ede7f701c12b0bb2ce87927312e77e4a66b77454c2ee96c",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20173.obs",
-    "asset": "part1_v7_obs_20173.obs",
+    "name": "part1/v8/obs/20173.obs",
+    "asset": "part1_v8_obs_20173.obs",
     "size": 23610,
     "sha256": "6edd2fe2e86da280016fe95dd406e1ced7387c9fed24f8275ed26f2abf4f582a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20767.obs",
-    "asset": "part1_v7_obs_20767.obs",
+    "name": "part1/v8/obs/20767.obs",
+    "asset": "part1_v8_obs_20767.obs",
     "size": 122489,
     "sha256": "e0aafb5a16de72cabd6e10230aa66b6f4f196309e04248631342844962b1813d",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22026.wav",
-    "asset": "part1_v7_sounds_22026.wav",
-    "size": 1595600,
-    "sha256": "e653a7e1824725a2f3a2e6704102b1029926311403cfd2f6f323d6b619d71f52",
+    "name": "part1/v8/obs/20055.obs",
+    "asset": "part1_v8_obs_20055.obs",
+    "size": 227168,
+    "sha256": "e8b696cfaac48177e32bde245b4b2c8102acd30cd6064742258c9c7c8e84828e",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22027.wav",
-    "asset": "part1_v7_sounds_22027.wav",
-    "size": 1119452,
-    "sha256": "76489f575b0ea903de0963e2fb16b627702d43dc8b7efe731320eafd6ced5e1d",
+    "name": "part1/v8/obs/20049.obs",
+    "asset": "part1_v8_obs_20049.obs",
+    "size": 83658,
+    "sha256": "18e7d0fa57e3e8585ccf7cfc9892543457946824ac64268f72c6d528fea36e91",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22028.wav",
-    "asset": "part1_v7_sounds_22028.wav",
-    "size": 167704,
-    "sha256": "a3736976aa4c94fb06776aebbf9504896d6b6f3e8bf4d58abaca84185fbfc9be",
+    "name": "part1/v8/obs/20091.obs",
+    "asset": "part1_v8_obs_20091.obs",
+    "size": 124987,
+    "sha256": "c436702ec6f5c79fd1d8add4f5870f6f943badc86be17990d5991f10534af84e",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22029.wav",
-    "asset": "part1_v7_sounds_22029.wav",
-    "size": 380176,
-    "sha256": "21844bd7a3fe46c74285a450e3a1dab7ba0d42e7ca8da9979fb7610e001671b7",
+    "name": "part1/v8/obs/20050.obs",
+    "asset": "part1_v8_obs_20050.obs",
+    "size": 5815,
+    "sha256": "5afeaa40c1f53e3f74782892f23fd7596c60bbfd8af5a28cba3f2dbbda668f9b",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22030.wav",
-    "asset": "part1_v7_sounds_22030.wav",
-    "size": 1152884,
-    "sha256": "79a9045ef448032e8bafcee672465b62b6d976e2493892cb4e8f1aebfd68efbd",
+    "name": "part1/v8/obs/20503.obs",
+    "asset": "part1_v8_obs_20503.obs",
+    "size": 376270,
+    "sha256": "ee2acc1bf9a184ecf7fbcba1ab8efce631a34e07b76c2d426f9302b5c19befaa",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/22031.wav",
-    "asset": "part1_v7_sounds_22031.wav",
-    "size": 165788,
-    "sha256": "6ad29f01941720f468fa97a1a15af1509f0620b5d8f7ce9688e8fb43ebbe8d2a",
+    "name": "part1/v8/obs/20230.obs",
+    "asset": "part1_v8_obs_20230.obs",
+    "size": 20585,
+    "sha256": "0ec2c56039e66f65ce079d33b38dbdeb340a06a0d95f11c3a44d690fb9ea8504",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/21934.wav",
-    "asset": "part1_v7_sounds_21934.wav",
-    "size": 209496,
-    "sha256": "43ca0c1eb152f4912e7c4a6ba76e76751faf14fb8433ab6e0eec2e1a0fe16025",
+    "name": "part1/v8/obs/20959.obs",
+    "asset": "part1_v8_obs_20959.obs",
+    "size": 540533,
+    "sha256": "ee401dde3b1ebcc72467dd9d003ba4c9d60188d69aaa29437870b729368032d6",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20070.wav",
-    "asset": "part1_v7_sounds_20070.wav",
-    "size": 665148,
-    "sha256": "03a57823c8bafe967f0a0f1916b293b35eb072e95a9c448a1fb7af0ae2f6a989",
+    "name": "part1/v8/obs/20075.obs",
+    "asset": "part1_v8_obs_20075.obs",
+    "size": 54170,
+    "sha256": "3c7f0e065e24fcd4f41d7d19a5b8ab1ec36b16477ca3a38c0763bc63ac5e8462",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20026.wav",
-    "asset": "part1_v7_sounds_20026.wav",
-    "size": 64788,
-    "sha256": "c08228edcc13f138aafdf0c9eac5a998622a972624b9a3ddeaed355dfdf89d84",
+    "name": "part1/v8/obs/20072.obs",
+    "asset": "part1_v8_obs_20072.obs",
+    "size": 39241,
+    "sha256": "eb0853d33b639cb8d1066bd78b12f71d70edd28ac07f44696d81eb51add2c21a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20015.wav",
-    "asset": "part1_v7_sounds_20015.wav",
-    "size": 96236,
-    "sha256": "0ae26e750417b6a3c3204a7bb6fe57c2aa38bf17dc2565735567bb45ccce30b1",
+    "name": "part1/v8/obs/20379.obs",
+    "asset": "part1_v8_obs_20379.obs",
+    "size": 79932,
+    "sha256": "ec4f963cb0741665d73d00484e244b852e3540bb96d6f593e4c99a5c8cf8f5d9",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20011.wav",
-    "asset": "part1_v7_sounds_20011.wav",
-    "size": 53016,
-    "sha256": "1e8439f925d8d693329b12a7d30eb12a23146c192f4b5b5f8db5be571f6006fb",
+    "name": "part1/v8/obs/20076.obs",
+    "asset": "part1_v8_obs_20076.obs",
+    "size": 45225,
+    "sha256": "79628338c058c3bfbe03c9bf7c2b01bd47a2cc7ea83063d28823cb5f5ccfdf0e",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20291.obs",
-    "asset": "part1_v7_obs_20291.obs",
-    "size": 116391,
-    "sha256": "848c0f120daba392f55c1032a2407766c049bf5e40589ac777c020eb2fc21d8c",
+    "name": "part1/v8/obs/20067.obs",
+    "asset": "part1_v8_obs_20067.obs",
+    "size": 1586,
+    "sha256": "489c572ab6135d9f17e005484dc3d6b96fc39128d730970f01ed6ec2daed57a3",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20096.wav",
-    "asset": "part1_v7_sounds_20096.wav",
-    "size": 90372,
-    "sha256": "778bd8c653d66f657074cfbe0e4c42d4f48bcb2fa9ee41feb62ff357e872dca3",
+    "name": "part1/v8/obs/20010.obs",
+    "asset": "part1_v8_obs_20010.obs",
+    "size": 121697,
+    "sha256": "d9328a3a5e7cb879d3a3e7348208769f163a853d8678df3f81845cba022870cc",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20023.wav",
-    "asset": "part1_v7_sounds_20023.wav",
-    "size": 70672,
-    "sha256": "d6a405a3c62ea60a372a078a5268cdd4e3f907435f06cec4eadc3488a1e9320b",
+    "name": "part1/v8/obs/20036.obs",
+    "asset": "part1_v8_obs_20036.obs",
+    "size": 4823,
+    "sha256": "3807a92c707de59c4ed7bebe8e76bbef7dbc9e80b99d7fc679c4bd186f707621",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20022.wav",
-    "asset": "part1_v7_sounds_20022.wav",
-    "size": 114328,
-    "sha256": "b2059731b33f9aba497d2a1beedf429234f30e8be57c7a149032d725e9c2dda9",
+    "name": "part1/v8/obs/20497.obs",
+    "asset": "part1_v8_obs_20497.obs",
+    "size": 716896,
+    "sha256": "76e9db79d7f2dfe07292ad2e70b4bda08ca45c1b28145f6537fecdbcd5f557e4",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20043.wav",
-    "asset": "part1_v7_sounds_20043.wav",
-    "size": 98680,
-    "sha256": "8db20350add958f018480caa6839b0279b6a04cdf19f29b27ecb9318ba7e5400",
+    "name": "part1/v8/obs/20212.obs",
+    "asset": "part1_v8_obs_20212.obs",
+    "size": 56879,
+    "sha256": "e00cbea6579f77fdacc2d4305f96cb755582b2cf0e1c9fc9f0af439abbf25a8e",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20024.wav",
-    "asset": "part1_v7_sounds_20024.wav",
-    "size": 92568,
-    "sha256": "c1b874fa153d36bad36c81897cdc7e9e9addfdb1f9bb3464222eb4e66dd1acda",
+    "name": "part1/v8/obs/20194.obs",
+    "asset": "part1_v8_obs_20194.obs",
+    "size": 520673,
+    "sha256": "5da86c007f2ad0cb266c8b953d37b9a006b2cf71d422181ba25bbdcd92167e21",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20016.wav",
-    "asset": "part1_v7_sounds_20016.wav",
-    "size": 90688,
-    "sha256": "d4780b40dc589ab8f1c373cab71e6e41e773068c87d28166d76381336d457b96",
+    "name": "part1/v8/obs/20210.obs",
+    "asset": "part1_v8_obs_20210.obs",
+    "size": 160703,
+    "sha256": "b1b84907744139e98183bfb77222ebc55226d96a1d40ebfe527ce7c12d53908b",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20507.obs",
-    "asset": "part1_v7_obs_20507.obs",
-    "size": 226639,
-    "sha256": "ea49bcf39d184a6ecfb1930c897c100e37e84dfaa4915d9d252a29fc4e72e833",
+    "name": "part1/v8/obs/20071.obs",
+    "asset": "part1_v8_obs_20071.obs",
+    "size": 187505,
+    "sha256": "e7dfde62b9103b3ebe50bb8c9179cad31061102167e584012ac2e9442b329daa",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20041.wav",
-    "asset": "part1_v7_sounds_20041.wav",
-    "size": 113000,
-    "sha256": "a93dd33f657510ccd32d71a923b9e3f1e7e2d55fce71e4730db608fc241445a8",
+    "name": "part1/v8/obs/20667.obs",
+    "asset": "part1_v8_obs_20667.obs",
+    "size": 154713,
+    "sha256": "0a1f23773273c962f40c9daf85d00033d8b54c6c9884055247be78dc46be2efa",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20042.wav",
-    "asset": "part1_v7_sounds_20042.wav",
-    "size": 141304,
-    "sha256": "be040d4e25263531050aac07bdc88401a30793001148142fb824cbf3bc62ea26",
+    "name": "part1/v8/obs/20282.obs",
+    "asset": "part1_v8_obs_20282.obs",
+    "size": 273854,
+    "sha256": "e04e99f943162dc72ce80f845439cc2da06a89240b0f7e8cb72c5325151748da",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20005.wav",
-    "asset": "part1_v7_sounds_20005.wav",
-    "size": 200164,
-    "sha256": "3ce82d45a71036140444a44071b5d7cf1ae4179f6cc40b6bec03c110c97a3a8f",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20231.obs",
-    "asset": "part1_v7_obs_20231.obs",
-    "size": 52620,
-    "sha256": "c253c6adbd2846aa47f1a0de9feb442af3a8ed21b21bd0eb5a0ff29dbbfc0b0f",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/20032.wav",
-    "asset": "part1_v7_sounds_20032.wav",
-    "size": 217820,
-    "sha256": "7e3deaed0911b6198869c365fab68ba2d1363ed3b61b9f77f1666d593bc82a39",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/20040.wav",
-    "asset": "part1_v7_sounds_20040.wav",
-    "size": 69584,
-    "sha256": "a96e4f70e48b2afa349d54f662321d53f93ffda3aab0efe6ce3f64d892e06e0c",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20104.obs",
-    "asset": "part1_v7_obs_20104.obs",
-    "size": 4935,
-    "sha256": "f8ccc7c50a4a687074787a97f0788317b2ecd91fede8f94ba3a7a976bce0423d",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20195.obs",
-    "asset": "part1_v7_obs_20195.obs",
-    "size": 25952,
-    "sha256": "aba4e7555b42cf21ecfda0eccc1a85d42a17b76e47cb500404d236c2e4af7b7a",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20529.obs",
-    "asset": "part1_v7_obs_20529.obs",
-    "size": 22459,
-    "sha256": "9496ec2e5b8d49cdae94f17804768a066bff9a687a4672dd1246472ea9b661ee",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/20048.wav",
-    "asset": "part1_v7_sounds_20048.wav",
-    "size": 85404,
-    "sha256": "ec858b6ed5eeb578de0b9bb70dbfd406204d33a24145940604f12db874c1151b",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20208.obs",
-    "asset": "part1_v7_obs_20208.obs",
-    "size": 5604,
-    "sha256": "65c564a281db1ebc9988b4dba1fead539c5d496da01b9ebe57c02245b8a9c322",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20359.obs",
-    "asset": "part1_v7_obs_20359.obs",
-    "size": 23871,
-    "sha256": "6e221312de4e5174821e1b5d106269ff1f2320fadbd1bae636145e58406ddbaf",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20349.obs",
-    "asset": "part1_v7_obs_20349.obs",
-    "size": 19893,
-    "sha256": "889c34ae75e34b23e25fc9ca31fb46efbcbba38d1db814064f8774648ff7dc24",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/21878.wav",
-    "asset": "part1_v7_sounds_21878.wav",
-    "size": 252764,
-    "sha256": "6ba43cb615421b5503f2c38fc47c092b3700a7945a2f6fb0118262bf121e6b50",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20056.obs",
-    "asset": "part1_v7_obs_20056.obs",
+    "name": "part1/v8/obs/20056.obs",
+    "asset": "part1_v8_obs_20056.obs",
     "size": 227168,
     "sha256": "cb2e5ac0b9f9e3af9e070c104736969e757a757bbfba1930cd4582ffa6d4d72a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20112.obs",
-    "asset": "part1_v7_obs_20112.obs",
-    "size": 20417,
-    "sha256": "35f47cdc98f674d17ce3c1602245aff7676cb31381ed710807d6d8004155a45a",
+    "name": "part1/v8/obs/20526.obs",
+    "asset": "part1_v8_obs_20526.obs",
+    "size": 121697,
+    "sha256": "88a477b86c36d80a9485d59ce5f9a719cb9370385c68a8449a868fa7ba33b28a",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/obs/20051.obs",
-    "asset": "part1_v7_obs_20051.obs",
-    "size": 304686,
-    "sha256": "0d51d896afcfc61c91a6ee1b0457f6f128fe7bd266f8e0b366db04335bba8697",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/20079.wav",
-    "asset": "part1_v7_sounds_20079.wav",
-    "size": 77764,
-    "sha256": "968e84edb6cc25611c1aeef8c816afba1be0a7034ac7aafb1d804e3a287d7139",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/sounds/20078.wav",
-    "asset": "part1_v7_sounds_20078.wav",
-    "size": 129096,
-    "sha256": "9e7fb6cf4801ecfb1cfd4e9e2e24bb0de4b77b8d945d7ebe9f7218ed05ed1a72",
-    "tier": 90,
-    "release": "assets-part1-1"
-  },
-  {
-    "name": "part1/v7/obs/20192.obs",
-    "asset": "part1_v7_obs_20192.obs",
+    "name": "part1/v8/obs/20192.obs",
+    "asset": "part1_v8_obs_20192.obs",
     "size": 2378,
     "sha256": "e9f746f97864c534e804a6e8890114a3a7bf554ea83e5b64ed1506036dc24c40",
     "tier": 90,
     "release": "assets-part1-1"
   },
   {
-    "name": "part1/v7/sounds/20071.wav",
-    "asset": "part1_v7_sounds_20071.wav",
+    "name": "part1/v8/obs/20277.obs",
+    "asset": "part1_v8_obs_20277.obs",
+    "size": 49964,
+    "sha256": "41b9f73ab0b0d63b8ec1b236f44fc4e2ccf170ef37b69a47a12fe4e65aeacf4e",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20077.obs",
+    "asset": "part1_v8_obs_20077.obs",
+    "size": 26226,
+    "sha256": "2b848df58de69878ffb5ee639872e508913d1896f7cc678ebec9b9481f82fc0d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20124.obs",
+    "asset": "part1_v8_obs_20124.obs",
+    "size": 1034399,
+    "sha256": "456ee2f11803ac47e20e031262cbecb7b6cbb319ba6a3aeb666f223d3c9eb6dd",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20832.obs",
+    "asset": "part1_v8_obs_20832.obs",
+    "size": 44498,
+    "sha256": "4b8b8ff46e9cffe04614fc431d79d42109728acb60caffe6e2d164bb4c01b478",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20228.obs",
+    "asset": "part1_v8_obs_20228.obs",
+    "size": 27359,
+    "sha256": "8b582ab68acd1f5b3a49de59de9be5d814761bebea2bce01455f22caabe2deb1",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20038.obs",
+    "asset": "part1_v8_obs_20038.obs",
+    "size": 49990,
+    "sha256": "12ccb0a7414cdb9ae6d4880a5fd75736aaae0eaaeccaa43e94362f5a1505739d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20846.obs",
+    "asset": "part1_v8_obs_20846.obs",
+    "size": 519846,
+    "sha256": "405dc055a253482609e7fedd34b69dabb7b257806c0f646b306abc7f0fe89183",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20696.obs",
+    "asset": "part1_v8_obs_20696.obs",
+    "size": 733031,
+    "sha256": "f176417a9df03b34f6d2ca1c55cf3d569a94d77f2b2e973e6d3206085fd6fe2c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20518.obs",
+    "asset": "part1_v8_obs_20518.obs",
+    "size": 125502,
+    "sha256": "684f9287797e4f54a9b8147a25426c531b0e6a0b6281d9e3988f0b4304da03f4",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20519.obs",
+    "asset": "part1_v8_obs_20519.obs",
+    "size": 67855,
+    "sha256": "c753a660e1ee3b77cd0ce53c343838f0e596d746be0bbc2d7b4c96e5489bc118",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20083.obs",
+    "asset": "part1_v8_obs_20083.obs",
+    "size": 472047,
+    "sha256": "d4c94577bdf4dfb339897348c01eaa9231f7cc3fb013bce9c1715133abbf4651",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20843.obs",
+    "asset": "part1_v8_obs_20843.obs",
+    "size": 106481,
+    "sha256": "19521944ff9ed7d68c42a53663f74dd977f2269781c4de911e69da030ab9b3bf",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20862.obs",
+    "asset": "part1_v8_obs_20862.obs",
+    "size": 53031,
+    "sha256": "99178b2f364d7b6e7cadc35b556eb38649fb78262549008ac0a674b0278538b6",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22026.wav",
+    "asset": "part1_v8_sounds_22026.wav",
+    "size": 1595600,
+    "sha256": "e653a7e1824725a2f3a2e6704102b1029926311403cfd2f6f323d6b619d71f52",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22027.wav",
+    "asset": "part1_v8_sounds_22027.wav",
+    "size": 1119452,
+    "sha256": "76489f575b0ea903de0963e2fb16b627702d43dc8b7efe731320eafd6ced5e1d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22028.wav",
+    "asset": "part1_v8_sounds_22028.wav",
+    "size": 167704,
+    "sha256": "a3736976aa4c94fb06776aebbf9504896d6b6f3e8bf4d58abaca84185fbfc9be",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22029.wav",
+    "asset": "part1_v8_sounds_22029.wav",
+    "size": 380176,
+    "sha256": "21844bd7a3fe46c74285a450e3a1dab7ba0d42e7ca8da9979fb7610e001671b7",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22030.wav",
+    "asset": "part1_v8_sounds_22030.wav",
+    "size": 1152884,
+    "sha256": "79a9045ef448032e8bafcee672465b62b6d976e2493892cb4e8f1aebfd68efbd",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22031.wav",
+    "asset": "part1_v8_sounds_22031.wav",
+    "size": 165788,
+    "sha256": "6ad29f01941720f468fa97a1a15af1509f0620b5d8f7ce9688e8fb43ebbe8d2a",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21934.wav",
+    "asset": "part1_v8_sounds_21934.wav",
+    "size": 209496,
+    "sha256": "43ca0c1eb152f4912e7c4a6ba76e76751faf14fb8433ab6e0eec2e1a0fe16025",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20070.wav",
+    "asset": "part1_v8_sounds_20070.wav",
+    "size": 665148,
+    "sha256": "03a57823c8bafe967f0a0f1916b293b35eb072e95a9c448a1fb7af0ae2f6a989",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22079.wav",
+    "asset": "part1_v8_sounds_22079.wav",
+    "size": 1412656,
+    "sha256": "d78ade50e9259bdb412be41434a13ce5210b8a6bfee8b76dbb236d961e7b86f2",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22080.wav",
+    "asset": "part1_v8_sounds_22080.wav",
+    "size": 1625720,
+    "sha256": "e9646d8f4d552c6fe13b99639d339b9296ed429930c68da0aa0705e29434a08c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22081.wav",
+    "asset": "part1_v8_sounds_22081.wav",
+    "size": 369060,
+    "sha256": "45195ab9b25a8ede0e113fc98e2c3fd8f2abb448b677b3102ff006853e62abf4",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22082.wav",
+    "asset": "part1_v8_sounds_22082.wav",
+    "size": 415532,
+    "sha256": "b89a38c96881da86937ab0bbd3a729421ea15810f492d03e1a35ebd4fb4ca9c3",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21935.wav",
+    "asset": "part1_v8_sounds_21935.wav",
+    "size": 1954156,
+    "sha256": "af4bd65d8b9b4830f09ca971826f1076db0c3911353753c6f6733bd1f4dbc3b2",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22045.wav",
+    "asset": "part1_v8_sounds_22045.wav",
+    "size": 711332,
+    "sha256": "4ec660bc7a596ff9c4c5ee9f06c57d23002aeb16cd8570966fd4a8c2b58ae29b",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22046.wav",
+    "asset": "part1_v8_sounds_22046.wav",
+    "size": 1181200,
+    "sha256": "e31069e6ddb5d3f3bebeb7c3073544bd3c9203f3793a3c63317a54342a7983ab",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22047.wav",
+    "asset": "part1_v8_sounds_22047.wav",
+    "size": 114704,
+    "sha256": "b32f8e707267801f2500930691a7a120723040577bb16c3136233d0a770d2b34",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22048.wav",
+    "asset": "part1_v8_sounds_22048.wav",
+    "size": 115256,
+    "sha256": "4578e631a85779afb7b0cece1d55008a91571fc295d6b358a59b4b26034e55c4",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22049.wav",
+    "asset": "part1_v8_sounds_22049.wav",
+    "size": 114684,
+    "sha256": "efeaf58b0c718359928804b5c18e3f5898d2445c8a94fb8820b30752e9d1c7fa",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22050.wav",
+    "asset": "part1_v8_sounds_22050.wav",
+    "size": 112128,
+    "sha256": "16cd62b261a7e6806215cf240b9029a153d70dc6616c0485e8a2982f0bb67e1f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22051.wav",
+    "asset": "part1_v8_sounds_22051.wav",
+    "size": 531548,
+    "sha256": "b4d6ddcca386455f58f9f04b39977a6a39987217b5df2d88983b0a24b07d1ddf",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22039.wav",
+    "asset": "part1_v8_sounds_22039.wav",
+    "size": 1107656,
+    "sha256": "403c22fdd8d9a87fd4708ee7e8db8cfb4624abab5f05aef343cbcf5a0d38f9d0",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22040.wav",
+    "asset": "part1_v8_sounds_22040.wav",
+    "size": 103976,
+    "sha256": "ead19aceef362bfb0dd8af1de5f18ad6da9305121e2f81e3cde69a5e9febc37c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22041.wav",
+    "asset": "part1_v8_sounds_22041.wav",
+    "size": 169916,
+    "sha256": "7b4178e62174ff27f0f3709935705464808fef95e55ccf3eda21c1e4398a2521",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22042.wav",
+    "asset": "part1_v8_sounds_22042.wav",
+    "size": 622124,
+    "sha256": "6f6b18f11b3158974b898209d91b667fcbb1275a8ede9fda7539455b18e15051",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22052.wav",
+    "asset": "part1_v8_sounds_22052.wav",
+    "size": 190516,
+    "sha256": "1f30b8d4006272a0492b946b36113ef6d9eb2cb8b42869acf6fc93c6e7a7e824",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22067.wav",
+    "asset": "part1_v8_sounds_22067.wav",
+    "size": 114488,
+    "sha256": "292aac38e2ef6f7d7d1625b14613e33f61b235df79cb93ef58ea112ad894e208",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20194.wav",
+    "asset": "part1_v8_sounds_20194.wav",
+    "size": 1983584,
+    "sha256": "1b519480abf9501447eafcda7bbcc326d713f8ba0b0a44bd7a7aa61f18927724",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22025.wav",
+    "asset": "part1_v8_sounds_22025.wav",
+    "size": 388128,
+    "sha256": "b8a829864af07d7f546a16928e0615be8e2c5d9e99ebb8afb7589242edf3f4ea",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22020.wav",
+    "asset": "part1_v8_sounds_22020.wav",
+    "size": 641604,
+    "sha256": "958bdbc5f54d576e2499c570f4e2b2c1c426fac21c2b9c53c79b3465455a7d28",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22085.wav",
+    "asset": "part1_v8_sounds_22085.wav",
+    "size": 561688,
+    "sha256": "ea1abe4fe9ed05158fe948a34de0aad39544b96eb5f5a7504c9a401131c98482",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22086.wav",
+    "asset": "part1_v8_sounds_22086.wav",
+    "size": 220280,
+    "sha256": "a63a6ecb7bf18a120036c3935c3157818382774f191d86b9bd75d7cf436886c7",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22087.wav",
+    "asset": "part1_v8_sounds_22087.wav",
+    "size": 1338472,
+    "sha256": "44596fe944541dec78121a12a0d33898f0a9d69e1773be67af30d70094a50bd8",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22088.wav",
+    "asset": "part1_v8_sounds_22088.wav",
+    "size": 663464,
+    "sha256": "23a721065556927245ddb31e6239c22831f85b4573e53a6d431feb1a9a05d07c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22089.wav",
+    "asset": "part1_v8_sounds_22089.wav",
+    "size": 1815668,
+    "sha256": "ffafae5ee1716e19867b63f544d35d1e69d6cc3ae1b4e58db25d68a3382fc66c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20026.wav",
+    "asset": "part1_v8_sounds_20026.wav",
+    "size": 64788,
+    "sha256": "c08228edcc13f138aafdf0c9eac5a998622a972624b9a3ddeaed355dfdf89d84",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20015.wav",
+    "asset": "part1_v8_sounds_20015.wav",
+    "size": 96236,
+    "sha256": "0ae26e750417b6a3c3204a7bb6fe57c2aa38bf17dc2565735567bb45ccce30b1",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20011.wav",
+    "asset": "part1_v8_sounds_20011.wav",
+    "size": 53016,
+    "sha256": "1e8439f925d8d693329b12a7d30eb12a23146c192f4b5b5f8db5be571f6006fb",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20291.obs",
+    "asset": "part1_v8_obs_20291.obs",
+    "size": 116391,
+    "sha256": "848c0f120daba392f55c1032a2407766c049bf5e40589ac777c020eb2fc21d8c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20096.wav",
+    "asset": "part1_v8_sounds_20096.wav",
+    "size": 90372,
+    "sha256": "778bd8c653d66f657074cfbe0e4c42d4f48bcb2fa9ee41feb62ff357e872dca3",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20023.wav",
+    "asset": "part1_v8_sounds_20023.wav",
+    "size": 70672,
+    "sha256": "d6a405a3c62ea60a372a078a5268cdd4e3f907435f06cec4eadc3488a1e9320b",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20022.wav",
+    "asset": "part1_v8_sounds_20022.wav",
+    "size": 114328,
+    "sha256": "b2059731b33f9aba497d2a1beedf429234f30e8be57c7a149032d725e9c2dda9",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20043.wav",
+    "asset": "part1_v8_sounds_20043.wav",
+    "size": 98680,
+    "sha256": "8db20350add958f018480caa6839b0279b6a04cdf19f29b27ecb9318ba7e5400",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20024.wav",
+    "asset": "part1_v8_sounds_20024.wav",
+    "size": 92568,
+    "sha256": "c1b874fa153d36bad36c81897cdc7e9e9addfdb1f9bb3464222eb4e66dd1acda",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20016.wav",
+    "asset": "part1_v8_sounds_20016.wav",
+    "size": 90688,
+    "sha256": "d4780b40dc589ab8f1c373cab71e6e41e773068c87d28166d76381336d457b96",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20507.obs",
+    "asset": "part1_v8_obs_20507.obs",
+    "size": 226639,
+    "sha256": "ea49bcf39d184a6ecfb1930c897c100e37e84dfaa4915d9d252a29fc4e72e833",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20041.wav",
+    "asset": "part1_v8_sounds_20041.wav",
+    "size": 113000,
+    "sha256": "a93dd33f657510ccd32d71a923b9e3f1e7e2d55fce71e4730db608fc241445a8",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20042.wav",
+    "asset": "part1_v8_sounds_20042.wav",
+    "size": 141304,
+    "sha256": "be040d4e25263531050aac07bdc88401a30793001148142fb824cbf3bc62ea26",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20005.wav",
+    "asset": "part1_v8_sounds_20005.wav",
+    "size": 200164,
+    "sha256": "3ce82d45a71036140444a44071b5d7cf1ae4179f6cc40b6bec03c110c97a3a8f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21851.wav",
+    "asset": "part1_v8_sounds_21851.wav",
+    "size": 331316,
+    "sha256": "21ac31dbbf4fc0b397b88b4657eaa77071eebac4d83057bf2be0ec601842499f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20231.obs",
+    "asset": "part1_v8_obs_20231.obs",
+    "size": 52620,
+    "sha256": "c253c6adbd2846aa47f1a0de9feb442af3a8ed21b21bd0eb5a0ff29dbbfc0b0f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20193.obs",
+    "asset": "part1_v8_obs_20193.obs",
+    "size": 6647,
+    "sha256": "7923f0eccfc9e8a01c87d258f0bb6bfa49ebc1e5dc25d9140986c10b49ddd251",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20032.wav",
+    "asset": "part1_v8_sounds_20032.wav",
+    "size": 217820,
+    "sha256": "7e3deaed0911b6198869c365fab68ba2d1363ed3b61b9f77f1666d593bc82a39",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20040.wav",
+    "asset": "part1_v8_sounds_20040.wav",
+    "size": 69584,
+    "sha256": "a96e4f70e48b2afa349d54f662321d53f93ffda3aab0efe6ce3f64d892e06e0c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20104.obs",
+    "asset": "part1_v8_obs_20104.obs",
+    "size": 4935,
+    "sha256": "f8ccc7c50a4a687074787a97f0788317b2ecd91fede8f94ba3a7a976bce0423d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20195.obs",
+    "asset": "part1_v8_obs_20195.obs",
+    "size": 25952,
+    "sha256": "aba4e7555b42cf21ecfda0eccc1a85d42a17b76e47cb500404d236c2e4af7b7a",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20529.obs",
+    "asset": "part1_v8_obs_20529.obs",
+    "size": 22459,
+    "sha256": "9496ec2e5b8d49cdae94f17804768a066bff9a687a4672dd1246472ea9b661ee",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20048.wav",
+    "asset": "part1_v8_sounds_20048.wav",
+    "size": 85404,
+    "sha256": "ec858b6ed5eeb578de0b9bb70dbfd406204d33a24145940604f12db874c1151b",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20208.obs",
+    "asset": "part1_v8_obs_20208.obs",
+    "size": 5604,
+    "sha256": "65c564a281db1ebc9988b4dba1fead539c5d496da01b9ebe57c02245b8a9c322",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20359.obs",
+    "asset": "part1_v8_obs_20359.obs",
+    "size": 23871,
+    "sha256": "6e221312de4e5174821e1b5d106269ff1f2320fadbd1bae636145e58406ddbaf",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20349.obs",
+    "asset": "part1_v8_obs_20349.obs",
+    "size": 19893,
+    "sha256": "889c34ae75e34b23e25fc9ca31fb46efbcbba38d1db814064f8774648ff7dc24",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20615.obs",
+    "asset": "part1_v8_obs_20615.obs",
+    "size": 43084,
+    "sha256": "5d9283424417fd5e528268cc2f575e20b6989234a66bfa0bb27e653c98a25477",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21927.wav",
+    "asset": "part1_v8_sounds_21927.wav",
+    "size": 123644,
+    "sha256": "47b56be9fbfe284ccd5d77e52d8696be2dd5c1e0d0c3f291821974f4b462c1f3",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20227.obs",
+    "asset": "part1_v8_obs_20227.obs",
+    "size": 153401,
+    "sha256": "4d9135b448b27bc9493e7c6540bd8c4f1b07dbb17e6e589ad08613789c279d6c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20184.obs",
+    "asset": "part1_v8_obs_20184.obs",
+    "size": 98952,
+    "sha256": "cb4d90d4cf9727ef68a5ac0136b43df080b3e0a900c655ba01ca5c6c73cff1d7",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20672.obs",
+    "asset": "part1_v8_obs_20672.obs",
+    "size": 25752,
+    "sha256": "65b90ccee2ac437554a376fc4cdd47894d714fa849088e936715cbdb6fc2dc38",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20205.obs",
+    "asset": "part1_v8_obs_20205.obs",
+    "size": 33498,
+    "sha256": "43fa657e6488c849a38ec70b71627e6ff45414d6f2fc8baaaf8fc597d8c58882",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20347.obs",
+    "asset": "part1_v8_obs_20347.obs",
+    "size": 30354,
+    "sha256": "9316223f5896205678c431765eae06afa4b8a8d7c62dec1e74b19c01db7a44d0",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22083.wav",
+    "asset": "part1_v8_sounds_22083.wav",
+    "size": 752376,
+    "sha256": "95a73bea79b53d6641e0282e04474bd2021bb88efbe91c313ae65237cf2eb5d1",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/22084.wav",
+    "asset": "part1_v8_sounds_22084.wav",
+    "size": 162876,
+    "sha256": "0914577fae4eee4e285ad7592178da9bc05ca3d5bbd3db7024bdd9bdbff27a4f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21919.wav",
+    "asset": "part1_v8_sounds_21919.wav",
+    "size": 195132,
+    "sha256": "74e46723125598c8bdc1a42299dfcf96183116e88e092c475aa59a57f9ded725",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21840.wav",
+    "asset": "part1_v8_sounds_21840.wav",
+    "size": 126364,
+    "sha256": "349d3893169b8ada59640ebcc4c85e734fbd1687331f83b3f154149ebbfc1bad",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21878.wav",
+    "asset": "part1_v8_sounds_21878.wav",
+    "size": 252764,
+    "sha256": "6ba43cb615421b5503f2c38fc47c092b3700a7945a2f6fb0118262bf121e6b50",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20112.obs",
+    "asset": "part1_v8_obs_20112.obs",
+    "size": 20417,
+    "sha256": "35f47cdc98f674d17ce3c1602245aff7676cb31381ed710807d6d8004155a45a",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20051.obs",
+    "asset": "part1_v8_obs_20051.obs",
+    "size": 304686,
+    "sha256": "0d51d896afcfc61c91a6ee1b0457f6f128fe7bd266f8e0b366db04335bba8697",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20079.wav",
+    "asset": "part1_v8_sounds_20079.wav",
+    "size": 77764,
+    "sha256": "968e84edb6cc25611c1aeef8c816afba1be0a7034ac7aafb1d804e3a287d7139",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20078.wav",
+    "asset": "part1_v8_sounds_20078.wav",
+    "size": 129096,
+    "sha256": "9e7fb6cf4801ecfb1cfd4e9e2e24bb0de4b77b8d945d7ebe9f7218ed05ed1a72",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20073.wav",
+    "asset": "part1_v8_sounds_20073.wav",
+    "size": 406168,
+    "sha256": "51582c82a2be1c3c003a37bc8aa1c7839d89c2e8c9817d97793f404e05ee2c85",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21846.wav",
+    "asset": "part1_v8_sounds_21846.wav",
+    "size": 317752,
+    "sha256": "ff024d262e549dd0b80d39aaf9ce7074a99fd16b6c37599688d6489f35cb90f0",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/21883.wav",
+    "asset": "part1_v8_sounds_21883.wav",
+    "size": 537892,
+    "sha256": "60c6cde310036c665452fa4148bcf53ccef263a62be8f155e6bd23a8ac7d9b10",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/obs/20504.obs",
+    "asset": "part1_v8_obs_20504.obs",
+    "size": 21473,
+    "sha256": "85eb735e85ca9b2a076dc0c32e056f665a1d614b5f77f19c2afa4f716553454c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20008.wav",
+    "asset": "part1_v8_sounds_20008.wav",
+    "size": 174936,
+    "sha256": "adcd8d73ac4d912f5274e5f6a5486df654ca801366a329123bdc11553f0dcc6d",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20002.wav",
+    "asset": "part1_v8_sounds_20002.wav",
+    "size": 142828,
+    "sha256": "b3d52df4fa7b594e85b415589d8a8d950f83c72fd07eff72434eb0fbb36fa979",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20009.wav",
+    "asset": "part1_v8_sounds_20009.wav",
+    "size": 235948,
+    "sha256": "814e5cd52ec6b9b1116b64e99c4204fae1fb10eceb6bfa6157193936996dc685",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20083.wav",
+    "asset": "part1_v8_sounds_20083.wav",
+    "size": 131096,
+    "sha256": "6668f80820fc0cbbc1776c8cd4d86591594fae2f3713eb5786cdcf62e7e9fb18",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v8/sounds/20071.wav",
+    "asset": "part1_v8_sounds_20071.wav",
     "size": 160380,
     "sha256": "15f83aa91ec91094c433691428f0eb279755c6491a5e337e21190c8de93277bb",
     "tier": 90,
