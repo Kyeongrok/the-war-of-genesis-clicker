@@ -1397,6 +1397,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TimedEditScr.Draw();
         ConsentScr.Draw();
         NotesScr.Draw();
+        DrawUpdateNotice();
         if (_hiResUi) DrawToast(onLayer: true);   // 새 UI 의 알림은 층에 한 번 — 모든 창 위에
         Pad.DrawFocus();                       // 패드 커서가 선 자리의 테와 조작 안내 — 창들 위에
         Pad.DrawGuide();

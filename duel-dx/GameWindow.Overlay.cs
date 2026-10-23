@@ -138,6 +138,25 @@ internal sealed unsafe partial class GameWindow
             }
     }
 
+    /// <summary>
+    /// 업데이트 알림(<see cref="Updater.Status"/>) — 화면 아래 가운데에 「업데이트 확인 중…」, 받는 중이면 그 밑에 진행 막대(사용자 요청 menu-90).
+    /// 모든 화면 위에 그린다(타이틀 · 모세스 · 전투).
+    /// </summary>
+    internal void DrawUpdateNotice()
+    {
+        if (Updater.Status is not { Length: > 0 } text) return;
+        int progress = Updater.Progress, barW = 220, w = Math.Max(barW, UiGetText(text, White, 12).W) + 24, h = progress >= 0 ? 44 : 28;
+        int x = _camX + (ViewWidth - w) / 2, y = _camY + ViewHeight - h - 6;
+        UiFill(x, y, w, h, 0xD0101828);
+        UiStroke(x, y, w, h, 0xFF3A4A70);
+        UiText(text, x + (w - UiGetText(text, White, 12).W) / 2, y + 6, White, 12);
+        if (progress < 0) return;
+        int bx = x + (w - barW) / 2, by = y + 28;
+        UiFill(bx, by, barW, 8, 0xFF202838);
+        UiFill(bx, by, barW * Math.Clamp(progress, 0, 100) / 100, 8, 0xFF58A8FF);
+        UiStroke(bx, by, barW, 8, 0xFF3A4A70);
+    }
+
     /// <param name="onLayer">새 UI 층에 그리나 — 새 UI 에서는 화면마다 부르는 판 그리기는 건너뛰고, 틀 끝에 층에 한 번만 그린다(모든 창 위).</param>
     internal void DrawToast(bool onLayer = false)
     {
