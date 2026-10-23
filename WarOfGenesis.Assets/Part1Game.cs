@@ -20,7 +20,9 @@ public sealed record Part1Character(int Code, string Name, ushort SpriteId, usho
 /// 장 자료의 RLE(<c>0x100a69d0</c>)는 파트2 와 바이트 하나 안 다르다 — 그래서 파트2 꼴 Obs 로 다시 싸기만 하면(<see cref="ToPart2Obs"/>)
 /// 게임의 그림 읽기(<see cref="ObsSprite"/>·<see cref="ObsMotionTable"/>)가 그대로 읽는다. 모션 번호도 파트2 처럼 동작 × 3 + 방향이다.
 /// 키 종류는 그림(0)·소리(1)·자식 Obs(2)만 옮긴다 — 소리·자식은 파트1 번호라 <see cref="ObsBase"/> 를 더해 파트1 것을 부르게 한다(마르자나의 연 = 자식 Obs 291).
-/// 자식 키의 반전 깃발 자리는 파트1 이 거의 9(안 씀)로 채워 두어 0(주인과 같이 뒤집기)으로 읽는다. 3·4·9 는 뜻이 파트2 와 달라 아직 뺀다.
+/// 자식 키의 반전 깃발 자리는 파트1 이 거의 9(안 씀)로 채워 두어 0(주인과 같이 뒤집기)으로 읽는다.
+/// 섞기(3)는 인자 9 만 옮긴다 — 이 키가 붙은 그림(Obs 0010·0014·0017 · 마르자나의 연 291)은 모두 검은 바탕의 빛이라 파트2 가산(17)이다.
+/// 섞기의 다른 인자(14·13·11)와 4·9 는 뜻을 몰라 아직 뺀다.
 /// 동작 번호는 파트2 와 뜻이 달라(파트1 동작 2 = 공격, 파트2 동작 2 = 맞기) <see cref="ActionMap"/> 으로 바꿔 쓴다.
 /// 효과음(<c>Snd</c> 의 <c>NNNN.snd</c>)은 파트2 처럼 WAV 그대로다. 묶음 색인(<c>Obss.idx</c>·<c>Snd.idx</c>): u32 수, 30바이트 레코드(파일 이름 9 · pak 이름 13 · u32 시작 · u32 끝) — 파트2 와 달리 XOR 이 없다.
 /// 인물 레코드 <c>Chars\NNNN.chr</c>(175바이트): 0x00 한글 이름(cp949, XOR 0xFF), 0x18 영문 이름, 0x3a u16 전투 그림, 0x3c u16 초상.
@@ -31,7 +33,7 @@ public static class Part1Game
     public const int ObsBase = 20000;
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 3;
+    public const int ConvertVersion = 4;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -192,7 +194,8 @@ public static class Part1Game
                     var key = (short[])raw.Clone();
                     if (key[2] is 1 or 2) key[3] += ObsBase;
                     if (key[2] == 2 && key[8] == 9) key[8] = 0;
-                    if (key[2] is 0 or 1 or 2) keys.Add(key);
+                    if (key[2] == 3 && key[3] == 9) { key[3] = 17; key[4] = 0; }
+                    if (key[2] is 0 or 1 or 2 || key[2] == 3 && key[3] == 17) keys.Add(key);
                     else if (key[2] == 5 && key[3] is 0 or 1 && ability > 0 && struck++ < hits) keys.Add([key[0], 1, 6, (short)ability, 0, 0, 0, 0, 0]);
                 }
                 motions.Add((action * 3 + dir, src.Length, keys));
