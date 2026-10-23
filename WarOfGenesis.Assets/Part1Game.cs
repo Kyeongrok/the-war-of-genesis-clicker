@@ -24,8 +24,7 @@ public sealed record Part1Character(int Code, string Name, ushort SpriteId, usho
 /// 게임의 그림 읽기(<see cref="ObsSprite"/>·<see cref="ObsMotionTable"/>)가 그대로 읽는다. 모션 번호도 파트2 처럼 동작 × 3 + 방향이다.
 /// 키 종류는 그림(0)·소리(1)·자식 Obs(2)만 옮긴다 — 소리·자식은 파트1 번호라 <see cref="ObsBase"/> 를 더해 파트1 것을 부르게 한다(마르자나의 연 = 자식 Obs 291).
 /// 자식 키의 반전 깃발 자리는 파트1 이 거의 9(안 씀)로 채워 두어 0(주인과 같이 뒤집기)으로 읽는다.
-/// 섞기(3)는 인자 9 만 옮긴다 — 이 키가 붙은 그림(Obs 0010·0014·0017 · 마르자나의 연 291)은 모두 검은 바탕의 빛이라 파트2 가산(17)이다.
-/// 섞기의 다른 인자(14·13·11)와 4·9 는 뜻을 몰라 아직 뺀다.
+/// 섞기(3)는 <see cref="BlendOf"/> 로 파트2 섞기 번호로 옮긴다. 키 종류 4·9 는 뜻을 몰라 아직 뺀다.
 /// 동작 번호는 파트2 와 뜻이 달라(파트1 동작 2 = 공격, 파트2 동작 2 = 맞기) <see cref="ActionMap"/> 으로 바꿔 쓴다.
 /// 효과음(<c>Snd</c> 의 <c>NNNN.snd</c>)은 WAV 지만 파트2(8비트 PCM)와 달리 MS ADPCM(형식 2, 44.1kHz 스테레오)이라 게임이 읽는 PCM 으로 푼다. 묶음 색인(<c>Obss.idx</c>·<c>Snd.idx</c>): u32 수, 30바이트 레코드(파일 이름 9 · pak 이름 13 · u32 시작 · u32 끝) — 파트2 와 달리 XOR 이 없다.
 /// 인물 레코드 <c>Chars\NNNN.chr</c>(175바이트): 0x00 한글 이름(cp949, XOR 0xFF), 0x18 영문 이름, 0x3a u16 전투 그림, 0x3c u16 반신 초상, 0x3e u16 얼굴.
@@ -36,7 +35,7 @@ public static class Part1Game
     public const int ObsBase = 20000;
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 6;
+    public const int ConvertVersion = 7;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -217,8 +216,8 @@ public static class Part1Game
                     var key = (short[])raw.Clone();
                     if (key[2] is 1 or 2) key[3] += ObsBase;
                     if (key[2] == 2 && key[8] == 9) key[8] = 0;
-                    if (key[2] == 3 && key[3] == 9) { key[3] = 17; key[4] = 0; }
-                    if (key[2] is 0 or 1 or 2 || key[2] == 3 && key[3] == 17) keys.Add(key);
+                    if (key[2] == 3) (key[3], key[4]) = (BlendOf(key[3], key[4]), 0);
+                    if (key[2] is 0 or 1 or 2 || key[2] == 3 && key[3] != 0) keys.Add(key);
                     else if (key[2] == 5 && ability > 0 && struck++ < hits) keys.Add([key[0], 1, 6, (short)ability, 0, 0, 0, 0, 0]);
                 }
                 motions.Add((action * 3 + dir, src.Length, keys));
@@ -269,6 +268,20 @@ public static class Part1Game
     }
 
     /// <summary>
+    /// 파트1 섞기 키(종류 3)의 첫 인자 → 파트2 섞기 번호(0 = 안 옮김). 9 는 검은 바탕의 빛(Obs 0010·0014·0017 · 마르자나의 연 291)이라 가산(17).
+    /// 11(검 기술의 얼음 기둥 118 · 연기 173 · 꽃잎 190 — 역시 검은 바탕)은 스크린(12), 10(맞는 빛 101:2·6)은 닷지(10),
+    /// 13 은 둘째 인자 1~8 이 옅어지는 단계라 파트2 반투명 1~7 로 옮긴다(menu-85 — 눈으로 맞춘 것, 가설). 14 는 뜻을 몰라 뺀다.
+    /// </summary>
+    private static short BlendOf(short kind, short level) => kind switch
+    {
+        9 => 17,
+        10 => 10,
+        11 => 12,
+        13 => (short)Math.Clamp((int)level, 1, 7),
+        _ => 0,
+    };
+
+    /// <summary>
     /// 파트2 동작 ← 파트1 동작(마르자나 Obs 352 의 그림을 보고 고른 것, 사용자 요청 menu-77). 타격 키 어빌리티(25 접근 · 26 원거리 · 0 없음)와 최대 타 수.
     /// 파트2: 0 서기 · 1 걷기 · 2 맞기·죽기 · 5 공격 준비 · 6 시전 자세 · 7 기 모으기 · 8 기본 공격 · 9 원거리 · 13 2타 · 14 3타 · 15 발동(분석-모션).
     /// 파트1: 0 서기 · 1 걷기 · 2 기본 공격 · 3 원거리 · 4 숨 고르기(54틱) · 5 맞기(떨림 키) · 6 팔짱 · 9 공격 자세 ·
@@ -279,7 +292,20 @@ public static class Part1Game
     [
         (0, (0, 0, 0)), (1, (1, 0, 0)), (2, (5, 0, 0)), (5, (9, 0, 0)), (6, (6, 0, 0)), (7, (4, 0, 0)),
         (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (11, 25, 2)), (14, (12, 25, 3)), (15, (11, 25, 1)),
+        (ThrowAction, (17, 0, 0)), (DashAction, (18, 0, 0)),
     ];
+
+    /// <summary>
+    /// 파트1 검 기술이 시전자에게 거는 동작(menu-85) — 파트2 에 없는 것이라 비어 있는 동작 번호에 옮겨 둔다.
+    /// 블리자드 스탐의 얼음 던지기(파트1 동작 17)와 설화난영참의 돌진 자세(파트1 동작 18).
+    /// </summary>
+    public const int ThrowAction = 60, DashAction = 61;
+
+    /// <summary>파트1 검 기술(블리자드 스탐 · 설화난영참)이 쓰는 이펙트 그림 — 파트1 팩에 함께 싣는다(<c>tools/part1-pack</c>). 자식·소리 키는 따라간다.</summary>
+    public static readonly int[] SkillObs = [395, 37, 39, 897, 101, 768, 787, 118, 190, 173, 767];
+
+    /// <summary>그 기술의 핸들러가 직접 내는 소리(그림 키에 없는 것).</summary>
+    public static readonly int[] SkillSounds = [2026, 2027, 2028, 2029, 2030, 2031, 1934, 70];
 
     /// <summary>
     /// 파트1 번호대(<see cref="ObsBase"/> 위) 파일(<c>20352.obs</c> · <c>20026.wav</c>)을 게임이 읽는 꼴로 <paramref name="cacheFolder"/> 에 만들어 둔다 —

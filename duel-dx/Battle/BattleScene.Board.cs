@@ -400,6 +400,6 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
     internal (int X, int Y) UnitFoot(UnitState unit) =>
-        ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX,
-         GridTop + host.BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(host.HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY);
+        ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX + (int)unit.Shift.X,
+         GridTop + host.BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(host.HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY + (int)unit.Shift.Y);
 }

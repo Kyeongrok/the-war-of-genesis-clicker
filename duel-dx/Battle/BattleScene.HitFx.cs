@@ -373,6 +373,7 @@ internal sealed unsafe partial class BattleScene
         host.FinisherPreludeAb.DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
         host.AcrostAb.DrawSummonGrow();
         host.HeavenEarthAb.DrawHeavenEarthFx();                                // 천지 파열무의 X 자 불길·파편(시각표 효과 — 서몬 몬스터도 쓴다)
+        host.Part1SwordAb.Draw();                                              // 파트1 검 기술(블리자드 스탐 · 설화난영참)
         host.AcrostAb.DrawFireBalls();                                    // 엘레맨탈 파이어의 도는 불덩이
         host.FxLine.Draw();                                               // 마디를 따라가는 알갱이(일루션 히트 · 마인드 체인지 · 오버 테이크)와 때맞춘 일
         host.AstralArrowAb.DrawArrows();                                       // 아스트럴 애로우의 오르내리는 화살

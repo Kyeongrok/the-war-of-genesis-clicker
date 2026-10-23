@@ -18,9 +18,11 @@ if (Part1Game.Root == null) { Console.Error.WriteLine("파트1 폴더를 못 찾
 string outRoot = Path.GetFullPath(args[0]), cache = Path.Combine(outRoot, "cache"), upload = Path.Combine(outRoot, Release);
 Directory.CreateDirectory(upload);
 // 인물마다 전투 그림과 Status 얼굴(menu-84) — 그림이 부르는 소리·자식은 아래에서 따라간다.
-int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [.. Part1Game.Shipped.SelectMany(p => new[] { (int)p.SpriteId, p.FaceId })];
+// 파트1 검 기술의 이펙트 그림과 핸들러가 내는 소리(menu-85)도 함께.
+int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [.. Part1Game.Shipped.SelectMany(p => new[] { (int)p.SpriteId, p.FaceId }), .. Part1Game.SkillObs];
+string[] sounds = args.Length > 1 ? [] : [.. Part1Game.SkillSounds.Select(s => $"{Part1Game.ObsBase + s}.wav")];
 
-var todo = new Queue<string>(sprites.Select(s => $"{Part1Game.ObsBase + s}.obs"));
+var todo = new Queue<string>([.. sprites.Select(s => $"{Part1Game.ObsBase + s}.obs"), .. sounds]);
 var seen = new HashSet<string>(todo);
 var entries = new List<Dictionary<string, object>>();
 while (todo.Count > 0)

@@ -91,4 +91,18 @@ public sealed class TxrTable
 
     /// <summary>그 번호의 첫 글. 없으면 빈 문자열.</summary>
     public string TextOf(ushort txrId) => _byId.GetValueOrDefault(txrId, "");
+
+    /// <summary>
+    /// 원본에 없는 글(스킬 파일로 새로 만든 어빌리티의 이름 따위)을 비어 있는 번호에 넣고 그 번호를 돌려준다 — 65535 부터 아래로 찾는다.
+    /// 같은 글이 이미 이렇게 들어가 있으면 그 번호를 그대로 쓴다.
+    /// </summary>
+    public ushort AddText(string text)
+    {
+        if (_added.TryGetValue(text, out ushort id)) return id;
+        for (id = ushort.MaxValue; _byId.ContainsKey(id); id--) { }
+        _byId[id] = text;
+        return _added[text] = id;
+    }
+
+    private readonly Dictionary<string, ushort> _added = [];
 }

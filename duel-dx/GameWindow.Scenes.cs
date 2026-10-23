@@ -53,6 +53,9 @@ internal sealed unsafe partial class GameWindow
     internal HeavenEarthSkill? _heavenEarthAb;
     internal HeavenEarthSkill HeavenEarthAb => _heavenEarthAb ?? LazyInitializer.EnsureInitialized(ref _heavenEarthAb, () => new HeavenEarthSkill(this));
 
+    internal Part1SwordSkill? _part1SwordAb;
+    internal Part1SwordSkill Part1SwordAb => _part1SwordAb ?? LazyInitializer.EnsureInitialized(ref _part1SwordAb, () => new Part1SwordSkill(this));
+
     internal NineCrusaderSkill? _nineCrusaderAb;
     internal NineCrusaderSkill NineCrusaderAb => _nineCrusaderAb ?? LazyInitializer.EnsureInitialized(ref _nineCrusaderAb, () => new NineCrusaderSkill(this));
 

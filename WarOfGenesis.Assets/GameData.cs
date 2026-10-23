@@ -385,6 +385,7 @@ public sealed class GameDatabase
                                                        U16(a, o + 6), a[o + 8], U16(a, o + 9), a[o + 11], a[o + 12], U16(a, o + 24),
                                                        U16(a, o + 18), U16(a, o + 20), U16(a, o + 22));
         }
+        AddNewAbilities(abilities, skills, text);
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && abilities.TryGetValue(w.AbilityId, out var ab))
                 ab.WorkByLevel[w.Level] = w.Id;
@@ -446,6 +447,7 @@ public sealed class GameDatabase
         if (skills.Count == 0) return 0;
         var works = new Dictionary<int, WorkData>();
         foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
+        if (Abilities is Dictionary<int, AbilityData> known) AddNewAbilities(known, skills, Text);
         foreach (var ab in Abilities.Values) ab.WorkByLevel.Clear();
         foreach (var w in works.Values)
             if (w.AbilityId != 0 && w.Level != 0 && Abilities.TryGetValue(w.AbilityId, out var ab))
@@ -471,6 +473,23 @@ public sealed class GameDatabase
             foreach (var job in JobBook.Load(_files).SelectMany(JobBook.Expand)) jobs[job.Id] = job;
         return skills.Count;
     }
+
+    /// <summary>
+    /// 원본 <c>.abi</c> 에 없는 어빌리티 번호의 스킬 파일 — 그 파일의 이름으로 새 어빌리티를 만든다(전투 갈래 1). 파트1 의 검 기술
+    /// (블리자드 스탐 20097 · 설화난영참 20099, 사용자 요청 menu-85)처럼 원본에 없던 것을 스킬 파일 하나로 더한다.
+    /// 아이콘을 안 적었으면 <see cref="NewAbilityIconFrom"/> 의 것을 빌린다.
+    /// </summary>
+    private static void AddNewAbilities(Dictionary<int, AbilityData> abilities, List<SkillFile> skills, TxrTable text)
+    {
+        var icon = abilities.GetValueOrDefault(NewAbilityIconFrom);
+        foreach (var s in skills)
+            if (s.Ability > 0 && s.Name.Length > 0 && !abilities.ContainsKey(s.Ability))
+                abilities[s.Ability] = new AbilityData(s.Ability, text.AddText(s.Name), (ushort)Math.Max(1, s.MaxLevel), [], Category: 1,
+                                                       IconSide: icon?.IconSide ?? 0xFFFF, IconArea: icon?.IconArea ?? 0, IconKind: icon?.IconKind ?? 0);
+    }
+
+    /// <summary>새로 만든 어빌리티가 아이콘을 빌리는 어빌리티 — 나인 크루세이더(검 필살기).</summary>
+    private const int NewAbilityIconFrom = 139;
 
     /// <summary>
     /// 스킬 파일의 <c>maxLevel</c>(0 이 아니면)·<c>iconSide/iconArea/iconKind</c>(−1 이 아니면)로 어빌리티를 덮는다 — <c>.abi</c> 파일은 안 고친다(사용자 요청).

@@ -194,6 +194,9 @@ internal sealed class UnitState(DemoUnit unit)
 
     public bool Entering => EntryX != 0 || EntryY != 0;
 
+    /// <summary>그릴 때만 더하는 픽셀 어긋남 — 기술 연출이 시전자 그림을 옮길 때(설화난영참의 돌진). 저절로 줄지 않는다.</summary>
+    public (double X, double Y) Shift { get; set; }
+
     public void BeginEntry(double x, double y) => (EntryX, EntryY) = (x, y);
 
     /// <summary>어긋남을 0 쪽으로 <paramref name="px"/> 만큼 줄인다.</summary>

@@ -1205,6 +1205,21 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 파트1 검 기술(블리자드 스탐 · 설화난영참) — 시각표를 깔고 대상마다 얼음이 닿거나 돌진이 닿을 때 한 번씩 친다(menu-85).
+            if (Part1SwordSkill.Works.Contains(w.Id) && targetIndex < 0)
+            {
+                var targets = WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in host.Part1SwordAb.Routine(w, a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                    yield return true;
+                if (!followersDone && targets.Count > 0)
+                {
+                    FollowersAttack(userIndex, host._units[targets[0]], dying, allyPass: false, leaderWork: w);
+                    followersDone = true;
+                }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             // 아크로스트의 엘레맨탈 파이어(불덩이가 돌다 대상마다 날아가 터짐)·서몬 몬스터(대상마다 몬스터가 나타나 침) — 피해는 대상마다 그때 한 번.
             // 편집기에서 대상 방식을 「아무 칸」(메테오처럼)으로 바꿔도 같은 연출 — 불덩이는 시전자 위에서 돌고 고른 범위의 대상에게 날아간다.
             if (w.AbilityId is AcrostSkill.ElementalFireAbility or AcrostSkill.SummonMonsterAbility)
