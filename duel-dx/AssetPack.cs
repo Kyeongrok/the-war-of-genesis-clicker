@@ -35,16 +35,30 @@ internal static class AssetPack
     public static bool MayCome(string kind, string file) => Part1Game.GameNumberOf(file) == null && AssetDownload.MayCome($"{kind}/{file}");
 
     /// <summary>
-    /// 파트1(전작) 그림·소리를 게임이 읽는 꼴로 만들어 두는 폴더 — 번호가 <see cref="Part1Game.ObsBase"/> 위인 것은 받지 않고 사용자의 파트1 폴더에서 만든다(사용자 요청 menu-76).
+    /// 파트1(전작) 그림·소리를 게임이 읽는 꼴로 만들어 두는 폴더 — 번호가 <see cref="Part1Game.ObsBase"/> 위인 것은 사용자의 파트1 폴더에서 만든다(사용자 요청 menu-76).
     /// </summary>
     public static string Part1Folder => Path.Combine(Folder, "part1");
+
+    /// <summary>
+    /// 파트1 번호대 파일 — 파트1 폴더가 있으면 거기서 만들고, 없으면 릴리즈(pack.json 의 「찾을 때만 받는 것」, <c>assets-part1-1</c>)에서 받는다(사용자 요청 menu-80).
+    /// 몇 백 KB 라 적어도 20초는 기다린다 — 안 기다리면 캐릭터 에디터가 「전투에 못 서는 그림」으로 기억해 줄을 뺀다.
+    /// </summary>
+    private static string? Part1(string file, int seconds)
+    {
+        if (Part1Game.FilePath(file, Part1Folder) is { } made) return made;
+        string kind = $"part1/{Part1Game.CacheSub(file)}", path = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file);
+        if (AssetDownload.FetchExtra(kind, file) is { } got) return got;
+        for (var until = DateTime.UtcNow.AddSeconds(Math.Max(seconds, 20)); DateTime.UtcNow < until; Thread.Sleep(100))
+            if (File.Exists(path)) return path;
+        return null;
+    }
 
     /// <summary>그 파일을 쓸 수 있는 자리 — 받는 길이면 올 때까지(최대 <paramref name="seconds"/>초) 기다린다. 끝내 없으면 null.</summary>
     public static string? Fetch(string kind, string file, int seconds = 15)
     {
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log)
             try { lock (LogGate) File.AppendAllText(log, $"{kind}/{file}" + Environment.NewLine); } catch (IOException) { }
-        if (Part1Game.GameNumberOf(file) != null) return Part1Game.FilePath(file, Part1Folder);
+        if (Part1Game.GameNumberOf(file) != null) return Part1(file, seconds);
         return AssetDownload.Active ? AssetDownload.Fetch(kind, file, seconds) : OriginalAssets.Fetch(kind, file);
     }
 
@@ -53,7 +67,7 @@ internal static class AssetPack
     /// 받는 길이면 먼저 받게 당겨만 둔다.
     /// </summary>
     public static string PathOf(string kind, string file) =>
-        (Part1Game.GameNumberOf(file) != null ? Part1Game.FilePath(file, Part1Folder) : AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
+        (Part1Game.GameNumberOf(file) != null ? Part1(file, 0) : AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
 
     /// <summary>그 파일이 올 때까지 기다린다 — 음악처럼 뒤 스레드에서 기다려도 되는 것. 있으면 true.</summary>
     public static bool EnsureNow(string kind, string file, int seconds) => Fetch(kind, file, seconds) != null;

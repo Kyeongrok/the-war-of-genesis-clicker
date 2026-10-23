@@ -290,6 +290,10 @@ def main():
         os.makedirs(os.path.join(out, release), exist_ok=True)
         shutil.copyfile(src, os.path.join(out, release, asset))
         files.append({'name': name, 'asset': asset, 'size': os.path.getsize(src), 'sha256': sha(src), 'tier': tier, 'release': release})
+    # 파트1(전작) 인물 모습 — tools/part1-pack 이 만들어 assets-part1-1 에 따로 올려 둔 것. 이 꾸러미에는 파일을 안 넣고 줄만 옮겨 적는다(menu-80).
+    part1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part1_pack_entries.json')
+    if os.path.exists(part1):
+        files += json.load(open(part1, encoding='utf-8'))
     pack['files'] = files
 
     pack['voices'] = []

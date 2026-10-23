@@ -1,0 +1,82 @@
+[
+  {
+    "name": "part1/v5/obs/20352.obs",
+    "asset": "part1_v5_obs_20352.obs",
+    "size": 245476,
+    "sha256": "c27ee1f13e176ce1ab6918d11f9cb0c3018fad3f3db40eac4d5b445e42b57bc5",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20026.wav",
+    "asset": "part1_v5_sounds_20026.wav",
+    "size": 64788,
+    "sha256": "c08228edcc13f138aafdf0c9eac5a998622a972624b9a3ddeaed355dfdf89d84",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20015.wav",
+    "asset": "part1_v5_sounds_20015.wav",
+    "size": 96236,
+    "sha256": "0ae26e750417b6a3c3204a7bb6fe57c2aa38bf17dc2565735567bb45ccce30b1",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20011.wav",
+    "asset": "part1_v5_sounds_20011.wav",
+    "size": 53016,
+    "sha256": "1e8439f925d8d693329b12a7d30eb12a23146c192f4b5b5f8db5be571f6006fb",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/obs/20291.obs",
+    "asset": "part1_v5_obs_20291.obs",
+    "size": 116391,
+    "sha256": "848c0f120daba392f55c1032a2407766c049bf5e40589ac777c020eb2fc21d8c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20096.wav",
+    "asset": "part1_v5_sounds_20096.wav",
+    "size": 90372,
+    "sha256": "778bd8c653d66f657074cfbe0e4c42d4f48bcb2fa9ee41feb62ff357e872dca3",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20023.wav",
+    "asset": "part1_v5_sounds_20023.wav",
+    "size": 70672,
+    "sha256": "d6a405a3c62ea60a372a078a5268cdd4e3f907435f06cec4eadc3488a1e9320b",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20022.wav",
+    "asset": "part1_v5_sounds_20022.wav",
+    "size": 114328,
+    "sha256": "b2059731b33f9aba497d2a1beedf429234f30e8be57c7a149032d725e9c2dda9",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/obs/20227.obs",
+    "asset": "part1_v5_obs_20227.obs",
+    "size": 153401,
+    "sha256": "4d9135b448b27bc9493e7c6540bd8c4f1b07dbb17e6e589ad08613789c279d6c",
+    "tier": 90,
+    "release": "assets-part1-1"
+  },
+  {
+    "name": "part1/v5/sounds/20005.wav",
+    "asset": "part1_v5_sounds_20005.wav",
+    "size": 200164,
+    "sha256": "3ce82d45a71036140444a44071b5d7cf1ae4179f6cc40b6bec03c110c97a3a8f",
+    "tier": 90,
+    "release": "assets-part1-1"
+  }
+]
