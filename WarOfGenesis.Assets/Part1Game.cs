@@ -24,7 +24,7 @@ public sealed record Part1Character(int Code, string Name, ushort SpriteId, usho
 /// 섞기(3)는 인자 9 만 옮긴다 — 이 키가 붙은 그림(Obs 0010·0014·0017 · 마르자나의 연 291)은 모두 검은 바탕의 빛이라 파트2 가산(17)이다.
 /// 섞기의 다른 인자(14·13·11)와 4·9 는 뜻을 몰라 아직 뺀다.
 /// 동작 번호는 파트2 와 뜻이 달라(파트1 동작 2 = 공격, 파트2 동작 2 = 맞기) <see cref="ActionMap"/> 으로 바꿔 쓴다.
-/// 효과음(<c>Snd</c> 의 <c>NNNN.snd</c>)은 파트2 처럼 WAV 그대로다. 묶음 색인(<c>Obss.idx</c>·<c>Snd.idx</c>): u32 수, 30바이트 레코드(파일 이름 9 · pak 이름 13 · u32 시작 · u32 끝) — 파트2 와 달리 XOR 이 없다.
+/// 효과음(<c>Snd</c> 의 <c>NNNN.snd</c>)은 WAV 지만 파트2(8비트 PCM)와 달리 MS ADPCM(형식 2, 44.1kHz 스테레오)이라 게임이 읽는 PCM 으로 푼다. 묶음 색인(<c>Obss.idx</c>·<c>Snd.idx</c>): u32 수, 30바이트 레코드(파일 이름 9 · pak 이름 13 · u32 시작 · u32 끝) — 파트2 와 달리 XOR 이 없다.
 /// 인물 레코드 <c>Chars\NNNN.chr</c>(175바이트): 0x00 한글 이름(cp949, XOR 0xFF), 0x18 영문 이름, 0x3a u16 전투 그림, 0x3c u16 초상.
 /// </remarks>
 public static class Part1Game
@@ -33,7 +33,7 @@ public static class Part1Game
     public const int ObsBase = 20000;
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 4;
+    public const int ConvertVersion = 5;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -258,7 +258,7 @@ public static class Part1Game
 
     /// <summary>
     /// 파트1 번호대(<see cref="ObsBase"/> 위) 파일(<c>20352.obs</c> · <c>20026.wav</c>)을 게임이 읽는 꼴로 <paramref name="cacheFolder"/> 에 만들어 둔다 —
-    /// 그림은 파트2 꼴로 다시 싸고(<see cref="ToPart2Obs"/>), 소리는 그대로 옮긴다. 파트1 이 없거나 못 읽으면 null.
+    /// 그림은 파트2 꼴로 다시 싸고(<see cref="ToPart2Obs"/>), 소리는 PCM 으로 푼다(<see cref="AdpcmToPcm"/>). 파트1 이 없거나 못 읽으면 null.
     /// </summary>
     public static string? FilePath(string file, string cacheFolder)
     {
@@ -269,7 +269,7 @@ public static class Part1Game
         if (Read(obs ? "Obss" : "Snd", $"{n - ObsBase:D4}.{(obs ? "obs" : "snd")}") is not { } p1) return null;
         try
         {
-            byte[] converted = obs ? ToPart2Obs(p1, body: BodySprites().Contains(n - ObsBase)) : p1;
+            byte[] converted = obs ? ToPart2Obs(p1, body: BodySprites().Contains(n - ObsBase)) : AdpcmToPcm(p1);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             string temp = path + ".tmp";
             File.WriteAllBytes(temp, converted);
@@ -283,6 +283,69 @@ public static class Part1Game
     public static int? GameNumberOf(string file) =>
         (file.EndsWith(".obs", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
         && int.TryParse(Path.GetFileNameWithoutExtension(file), out int n) && n > ObsBase ? n : null;
+
+    private static readonly int[] AdpcmAdapt = [230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230];
+
+    /// <summary>
+    /// MS ADPCM WAV(형식 2)를 16비트 PCM WAV 로 푼다 — 게임의 소리 읽기(<see cref="WaveSound"/>)는 PCM 만 받는다. 이미 PCM 이거나 꼴이 다르면 그대로 돌려준다.
+    /// 블록마다 채널별 예측 번호 · 델타 · 앞 두 표본을 읽고, 바이트마다 높은 4비트가 앞 채널이다(스테레오면 왼쪽 · 오른쪽).
+    /// </summary>
+    public static byte[] AdpcmToPcm(byte[] wav)
+    {
+        int fmt = -1, data = -1, dataLen = 0;
+        for (int o = 12; o + 8 <= wav.Length;)
+        {
+            string id = Encoding.ASCII.GetString(wav, o, 4);
+            int len = BitConverter.ToInt32(wav, o + 4);
+            if (id == "fmt ") fmt = o + 8;
+            else if (id == "data") { data = o + 8; dataLen = Math.Min(len, wav.Length - data); }
+            o += 8 + len + (len & 1);
+        }
+        if (fmt < 0 || data < 0 || BitConverter.ToUInt16(wav, fmt) != 2) return wav;
+        int channels = BitConverter.ToUInt16(wav, fmt + 2), rate = BitConverter.ToInt32(wav, fmt + 4), blockAlign = BitConverter.ToUInt16(wav, fmt + 12);
+        int perBlock = BitConverter.ToUInt16(wav, fmt + 18), coefCount = BitConverter.ToUInt16(wav, fmt + 20);
+        var coef = new (int C1, int C2)[coefCount];
+        for (int i = 0; i < coefCount; i++) coef[i] = (BitConverter.ToInt16(wav, fmt + 22 + 4 * i), BitConverter.ToInt16(wav, fmt + 24 + 4 * i));
+        if (channels is < 1 or > 2 || blockAlign < 7 * channels || coefCount == 0) return wav;
+
+        var pcm = new List<short>();
+        for (int block = data; block + 7 * channels <= data + dataLen; block += blockAlign)
+        {
+            int end = Math.Min(block + blockAlign, data + dataLen), p = block;
+            var c = new (int C1, int C2)[channels];
+            var delta = new int[channels];
+            var s1 = new int[channels];
+            var s2 = new int[channels];
+            for (int ch = 0; ch < channels; ch++) c[ch] = coef[Math.Min(wav[p++], coefCount - 1)];
+            for (int ch = 0; ch < channels; ch++, p += 2) delta[ch] = BitConverter.ToInt16(wav, p);
+            for (int ch = 0; ch < channels; ch++, p += 2) s1[ch] = BitConverter.ToInt16(wav, p);
+            for (int ch = 0; ch < channels; ch++, p += 2) s2[ch] = BitConverter.ToInt16(wav, p);
+            for (int ch = 0; ch < channels; ch++) pcm.Add((short)s2[ch]);
+            for (int ch = 0; ch < channels; ch++) pcm.Add((short)s1[ch]);
+            int left = (perBlock - 2) * channels;
+            for (int ch = 0; p < end && left > 0; p++)
+                foreach (int nibble in new[] { wav[p] >> 4, wav[p] & 15 })
+                {
+                    if (left-- <= 0) break;
+                    int signed = nibble >= 8 ? nibble - 16 : nibble;
+                    int predicted = Math.Clamp((s1[ch] * c[ch].C1 + s2[ch] * c[ch].C2) / 256 + signed * delta[ch], short.MinValue, short.MaxValue);
+                    (s2[ch], s1[ch]) = (s1[ch], predicted);
+                    delta[ch] = Math.Max(16, delta[ch] * AdpcmAdapt[nibble] / 256);
+                    pcm.Add((short)predicted);
+                    ch = (ch + 1) % channels;
+                }
+        }
+
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        int bytes = pcm.Count * 2;
+        w.Write("RIFF"u8); w.Write(36 + bytes); w.Write("WAVE"u8);
+        w.Write("fmt "u8); w.Write(16); w.Write((ushort)1); w.Write((ushort)channels); w.Write(rate); w.Write(rate * channels * 2); w.Write((ushort)(channels * 2)); w.Write((ushort)16);
+        w.Write("data"u8); w.Write(bytes);
+        foreach (short v in pcm) w.Write(v);
+        w.Flush();
+        return ms.ToArray();
+    }
 
     private static int I32(byte[] b, ref int o) { int v = BitConverter.ToInt32(b, o); o += 4; return v; }
     private static short I16(byte[] b, ref int o) { short v = BitConverter.ToInt16(b, o); o += 2; return v; }

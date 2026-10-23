@@ -121,6 +121,29 @@ internal sealed unsafe partial class GameWindow
     /// <summary>Snd 효과음을 한 번 튼다.</summary>
     /// <param name="screenX">640 틀 기준 화면 x — 좌우를 가른다(NaN 이면 가운데). <see cref="SoundScreenX"/> 로 바꿔 넣는다.</param>
     /// <param name="loop">되풀이 — 되풀이 소리(감사4 S3)만 쓴다. 끌 때는 <see cref="AudioMixer.EndLoop"/>.</param>
+    /// <summary>그 소리들을 뒤에서 읽어 둔다 — 처음 틀 때 가져오느라 조용히 넘어가지 않게(<see cref="Play"/> 는 없으면 가져오기만 걸고 넘어간다).</summary>
+    internal void PreloadSounds(IEnumerable<int> sounds)
+    {
+        foreach (int sound in sounds.Distinct().ToList())
+        {
+            lock (_sfx) if (_sfx.ContainsKey(sound)) continue;
+            if (!_sfxFetching.TryAdd(sound, true)) continue;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    if (AssetPack.Fetch("sounds", $"{sound:D4}.wav", 60) is { } got)
+                    {
+                        var parsed = WaveSound.Parse(File.ReadAllBytes(got));
+                        lock (_sfx) _sfx[sound] = parsed;
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException) { }
+                finally { if (AssetPack.MayCome("sounds", $"{sound:D4}.wav")) _sfxFetching.TryRemove(sound, out _); }
+            });
+        }
+    }
+
     internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false)
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)

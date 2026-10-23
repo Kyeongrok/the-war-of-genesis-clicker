@@ -259,6 +259,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 var motions = ObsSprite.Decode(obsPath);
                 if (motions.Count == 0) continue;
                 sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
+                // 파트1 그림의 소리는 assets 에 없어 처음 칠 때 조용했다(가져오는 동안 넘어간다) — 미리 읽어 둔다(사용자 요청 menu-79).
+                if (wanted > Part1Game.ObsBase) PreloadSounds(sprites[chrCode]._table?.Clips.Values.SelectMany(c => c.Sounds).Select(s => s.Sound) ?? []);
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException
                                              or InvalidOperationException or ArgumentException)
