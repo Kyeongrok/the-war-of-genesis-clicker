@@ -80,11 +80,22 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     /// <summary>
     /// 고칠 수 있는 인물 — 전직 화면에 서는 인물과 같다(<see cref="MosesScene.StyleParty"/>: 스크립트 801 로 들어온 동료, 그 차례대로).
     /// 전에는 명부 전체에 판 위의 내 편을 더해서 동맹 NPC(제이슨)나 파티를 떠난 인물까지 나왔다(사용자 요청 menu-10).
+    /// 전투 중이면 그 뒤에 이 판에 우리 편(편 4 · 동맹 편 3)으로 나온 인물을 더한다 — Btl 0078 의 루시엔(아직 801 전)·샤크바리(동맹)처럼
+    /// 동료가 아닌데 함께 싸우는 인물(사용자 요청 menu-82). 이들은 명부에 없어 바꾼 것이 이 전투에만 든다.
     /// </summary>
-    internal List<int> People() => host.Mos.StyleParty();
+    internal List<int> People()
+    {
+        var people = host.Mos.StyleParty();
+        if (!host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen) return people;
+        foreach (var u in host._units)
+            if (OnOurSide(u) && !people.Contains(u.ChrCode)) people.Add(u.ChrCode);
+        return people;
+    }
+
+    private static bool OnOurSide(UnitState u) => u.Side is 3 or 4 && u.LeaderIndex < 0;
 
     internal CharacterData? DataOf(int chr) =>
-        host._units.FirstOrDefault(u => u.ChrCode == chr && u.Side == 4 && u.LeaderIndex < 0)?.Data ?? host._party.GetValueOrDefault(chr);
+        host._units.FirstOrDefault(u => u.ChrCode == chr && OnOurSide(u))?.Data ?? host._party.GetValueOrDefault(chr);
 
     internal (int X, int Y) Origin() => (host._camX + (host.ViewWidth - W) / 2, host._camY + (host.ViewHeight - H) / 2);
 
@@ -93,7 +104,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     {
         host.Stats._charEdited = true;
         if (host._party.ContainsKey(chr) || host.Mos._members.Contains(chr)) host._party[chr] = changed;
-        foreach (var u in host._units.Where(u => u.ChrCode == chr && u.Side == 4 && u.LeaderIndex < 0))
+        foreach (var u in host._units.Where(u => u.ChrCode == chr && OnOurSide(u)))
         {
             u.Data = changed;
             host.StatusScr.RefreshUnitStats(u);
