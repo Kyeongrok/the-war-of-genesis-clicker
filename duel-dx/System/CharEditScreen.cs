@@ -163,7 +163,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice, string? Part1Name = null);
 
     /// <summary>외형 갈래에 올리는 파트1 인물 레코드 — 지금은 마르자나(Chr 0001) 하나(사용자 요청 menu-76: 「그 캐릭터 하나만 일단」).</summary>
-    internal static readonly int[] Part1Chrs = [1];
+    internal static IEnumerable<int> Part1Chrs => Part1Game.Shipped.Select(p => p.Code);
 
     /// <summary>파트1 인물의 모습 — 파트1 폴더가 없거나 그림이 전투에 못 서면 뺀다. 목소리는 아직 안 옮겼다(0).</summary>
     internal IEnumerable<Look> Part1Looks() =>
@@ -226,7 +226,9 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         byte[]? bytes = OriginalGame.Files?.Read("Obs", $"{obs:D4}.obs");
         if (bytes == null && AssetPack.Fetch("moses/obs", $"{obs:D4}.obs", 0) is { } path)
             try { bytes = File.ReadAllBytes(path); } catch (IOException) { }
-        ready = bytes != null && ObsMotionTable.Parse(bytes) is { } table && table.Clips.Keys.DefaultIfEmpty(-1).Max() >= BattleMotionMax;
+        // 파트1 그림은 동작을 파트2 번호로 옮겨 쓴 것이라(Part1Game.ActionMap) 모션 번호가 47 에서 끝난다 — 기본 공격(동작 8 = 모션 24)이 있으면 선다.
+        ready = bytes != null && ObsMotionTable.Parse(bytes) is { } table
+                && (obs > Part1Game.ObsBase ? table.Clips.ContainsKey(24) : table.Clips.Keys.DefaultIfEmpty(-1).Max() >= BattleMotionMax);
         return _battleReady[obs] = ready;
     }
 

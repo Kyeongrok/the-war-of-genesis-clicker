@@ -1,6 +1,6 @@
 // 파트1(전작) 인물 모습의 릴리즈 에셋 팩을 만든다 — 파트1 이 없는 PC 도 캐릭터 에디터에서 그 모습을 쓰게(사용자 요청 menu-80).
 //
-//   dotnet run --project tools/part1-pack -- <내보낼 폴더> [파트1 그림 번호 …]   (기본: 마르자나 352)
+//   dotnet run --project tools/part1-pack -- <내보낼 폴더> [파트1 그림 번호 …]   (기본: Part1Game.Shipped 의 인물 그림 모두)
 //
 // 사용자의 파트1 폴더(Part1Game.Root — 파트2 폴더 옆 「…파트1…」 또는 WAROFGENESIS_PART1)에서 그 그림을 게임과 똑같이 변환하고
 // (Part1Game.FilePath), 모션이 부르는 소리·자식 그림(연 따위)까지 따라가 모은다. 내보낼 폴더/assets-part1-1 에 올릴 파일을,
@@ -17,7 +17,7 @@ if (args.Length < 1) { Console.Error.WriteLine("사용법: part1-pack <내보낼
 if (Part1Game.Root == null) { Console.Error.WriteLine("파트1 폴더를 못 찾았습니다 — WAROFGENESIS_PART1=<폴더> 로 알려 주세요."); return 1; }
 string outRoot = Path.GetFullPath(args[0]), cache = Path.Combine(outRoot, "cache"), upload = Path.Combine(outRoot, Release);
 Directory.CreateDirectory(upload);
-int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [352];
+int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [.. Part1Game.Shipped.Select(p => (int)p.SpriteId)];
 
 var todo = new Queue<string>(sprites.Select(s => $"{Part1Game.ObsBase + s}.obs"));
 var seen = new HashSet<string>(todo);
