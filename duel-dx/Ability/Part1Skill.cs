@@ -23,7 +23,7 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     internal static readonly HashSet<int> Works =
-        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, ThunderWork, HellKiteWork, NereidWork, MuspelWork, KannonWork, TitaniaWork, BlackFoxWork];
+        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, KannonWork, TitaniaWork, BlackFoxWork];
 
     private static int P(int part1) => Part1Game.ObsBase + part1;
 
@@ -236,9 +236,8 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => HellStrike(targets, hit),
             AsuraWork => Asura(targets, hit),
             ThunderWork => Thunder(targets, hit),
-            HellKiteWork => HellKite(targets, (ax, ay), hit),
-            NereidWork => Nereid(targets, hit),
-            MuspelWork => Muspel(cells, (ax, ay), hit),
+            FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
+            StormSwordWork => StormSword(targets, hit),
             KannonWork => Kannon(targets, hit),
             TitaniaWork => Titania(cells, hit),
             BlackFoxWork => BlackFox(targets, hit),
@@ -280,15 +279,14 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => [124, 10, 832, 228, 38],
             AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
             ThunderWork => [75, 379, 71, 277, 77],
-            HellKiteWork => [503, 504, 230],
-            NereidWork => [959, 75, 72, 379, 76, 67],
-            MuspelWork => [10, 36],
+            FlyingSlashWork => [503, 504, 230],
+            StormSwordWork => [959, 75, 72, 379, 76, 67],
             KannonWork => [497, 212, 194],
             TitaniaWork => [210, 71, 379, 667],
             BlackFoxWork => [282, 56, 526, 192],
             _ => [],
         };
-        return [.. (work is BlizzardWork or SeolhwaWork or HellStrikeWork or AsuraWork ? sword : summon).Concat(own).Distinct()];
+        return [.. (work is BlizzardWork or SeolhwaWork or HellStrikeWork or AsuraWork or StormSwordWork or FlyingSlashWork ? sword : summon).Concat(own).Distinct()];
     }
 
     /// <summary>검 기술 앞머리(<c>0x10043950</c>, 50틱) — 시전자 둘레에 Obs 395:0(소리 1878), 정면을 보고 공격 준비(파트1 동작 9)를 붙든다.</summary>

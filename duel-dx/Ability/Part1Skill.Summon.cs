@@ -19,14 +19,20 @@ internal sealed partial class Part1Skill
 {
     internal const int HellKiteWork = 20345, NereidWork = 20346, MuspelWork = 20347, KannonWork = 20348, TitaniaWork = 20349, BlackFoxWork = 20350;
 
+    /// <summary>
+    /// 폭풍검(공격 287, 스탐블링거) · 비연참(294) — 처음에 소환 핸들러로 잘못 읽은 것(0x1005c040 · 0x10060780)이 실제로는 이 둘의 핸들러였다(menu-92 —
+    /// 공격 번호 0x150 위는 다른 표 0x10043684 로 간다). 시각표는 그대로 두고 제 이름의 기술로 붙인다. 앞머리는 검 기술 것(종류 1).
+    /// </summary>
+    internal const int StormSwordWork = 20287, FlyingSlashWork = 20294;
+
     private (double X, double Y) CellFoot(int col, int row) => (col * TileW + TileW / 2, host.CellCenterY(col, row));
 
     private IEnumerable<int> FoesOf(UnitState user) =>
         Enumerable.Range(0, host._units.Length).Where(i => host._units[i] is { Alive: true, OnField: true } u && u != user && BattleScene.SeesAsFoe(user, u));
 
-    /// <summary>헬카이트 — 시전자 등에 불 날개(503, 높이 100)가 돋고, 동작 9 를 23번 한 뒤 불 소용돌이(230)와 함께 대상까지 돌진한다(빠르기 20 × 1.8).
+    /// <summary>비연참(파트1, 핸들러 0x10060780) — 시전자 등에 불 날개(503, 높이 100)가 돋고, 동작 9 를 23번 한 뒤 불 소용돌이(230)와 함께 대상까지 돌진한다(빠르기 20 × 1.8).
     /// 돌진이 지나는 칸의 적마다 한 번 친다(칸이 바뀔 때마다 — 0x100769b0).</summary>
-    private int HellKite(List<int> targets, (double X, double Y) aim, Action<int> hit)
+    private int FlyingSlash(List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
         var (hx, hy) = _home;
         var user = _user;
@@ -73,10 +79,10 @@ internal sealed partial class Part1Skill
     }
 
     /// <summary>
-    /// 어비스 네레이드 — 800틱 비 · 처음 100틱의 번쩍임 · 화면 구름 서른 · 200틱부터 시전자의 번개 기둥, 300틱부터 대상마다 땅을 타고 가는 빛(379)과
+    /// 폭풍검(핸들러 0x1005c040) — 800틱 비 · 처음 100틱의 번쩍임 · 화면 구름 서른 · 200틱부터 시전자의 번개 기둥, 300틱부터 대상마다 땅을 타고 가는 빛(379)과
     /// 비스듬히 떨어지는 번개(959:0), 396+2i 틱에 대상마다 터짐(959:2)과 함께 한 번 친다. 399틱에 화면이 하얗게 바랜다.
     /// </summary>
-    private int Nereid(List<int> targets, Action<int> hit)
+    private int StormSword(List<int> targets, Action<int> hit)
     {
         var (hx, hy) = _home;
         var user = _user;
