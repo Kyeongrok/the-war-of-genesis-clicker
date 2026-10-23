@@ -32,13 +32,19 @@ internal static class AssetPack
     private static readonly object LogGate = new();
 
     /// <summary>그 파일이 앞으로 올 수 있나 — 받는 길이고 아직 못 받았을 때만(부르는 쪽이 「없는 그림」으로 기억하면 안 된다).</summary>
-    public static bool MayCome(string kind, string file) => AssetDownload.MayCome($"{kind}/{file}");
+    public static bool MayCome(string kind, string file) => Part1Game.GameObsOf(file) == null && AssetDownload.MayCome($"{kind}/{file}");
+
+    /// <summary>
+    /// 파트1(전작) 그림을 파트2 꼴로 다시 싸 둔 폴더 — 그림 번호가 <see cref="Part1Game.ObsBase"/> 위인 것은 받지 않고 사용자의 파트1 폴더에서 만든다(사용자 요청 menu-76).
+    /// </summary>
+    public static string Part1Folder => Path.Combine(Folder, "part1", "obs");
 
     /// <summary>그 파일을 쓸 수 있는 자리 — 받는 길이면 올 때까지(최대 <paramref name="seconds"/>초) 기다린다. 끝내 없으면 null.</summary>
     public static string? Fetch(string kind, string file, int seconds = 15)
     {
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log)
             try { lock (LogGate) File.AppendAllText(log, $"{kind}/{file}" + Environment.NewLine); } catch (IOException) { }
+        if (Part1Game.GameObsOf(file) is { } part1) return Part1Game.ObsPath(part1, Part1Folder);
         return AssetDownload.Active ? AssetDownload.Fetch(kind, file, seconds) : OriginalAssets.Fetch(kind, file);
     }
 
@@ -47,7 +53,7 @@ internal static class AssetPack
     /// 받는 길이면 먼저 받게 당겨만 둔다.
     /// </summary>
     public static string PathOf(string kind, string file) =>
-        (AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
+        (Part1Game.GameObsOf(file) is { } part1 ? Part1Game.ObsPath(part1, Part1Folder) : AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
 
     /// <summary>그 파일이 올 때까지 기다린다 — 음악처럼 뒤 스레드에서 기다려도 되는 것. 있으면 true.</summary>
     public static bool EnsureNow(string kind, string file, int seconds) => Fetch(kind, file, seconds) != null;

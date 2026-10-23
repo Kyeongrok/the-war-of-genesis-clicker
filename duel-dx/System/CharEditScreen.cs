@@ -156,8 +156,22 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         Apply(chr, c with { Abilities = [.. list], Passives = passives });
     }
 
-    /// <summary>빌려 올 수 있는 모습 하나 — 그 그림을 쓰는 인물 레코드(이름·칭호를 보이는 데 쓴다)와 그 인물의 목소리 묶음.</summary>
-    internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice);
+    /// <summary>
+    /// 빌려 올 수 있는 모습 하나 — 그 그림을 쓰는 인물 레코드(이름·칭호를 보이는 데 쓴다)와 그 인물의 목소리 묶음.
+    /// 파트1(전작) 인물이면 <paramref name="Part1Name"/> 에 이름이 들고 <paramref name="Chr"/> 는 파트1 레코드 번호, 그림 번호는 <see cref="Part1Game.ObsBase"/> 위다.
+    /// </summary>
+    internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice, string? Part1Name = null);
+
+    /// <summary>외형 갈래에 올리는 파트1 인물 레코드 — 지금은 마르자나(Chr 0001) 하나(사용자 요청 menu-76: 「그 캐릭터 하나만 일단」).</summary>
+    internal static readonly int[] Part1Chrs = [1];
+
+    /// <summary>파트1 인물의 모습 — 파트1 폴더가 없거나 그림이 전투에 못 서면 뺀다. 목소리는 아직 안 옮겼다(0).</summary>
+    internal IEnumerable<Look> Part1Looks() =>
+        Part1Chrs.Select(Part1Game.Character).OfType<Part1Character>()
+            .Where(p => p.SpriteId > 0 && BattleReady(Part1Game.ObsBase + p.SpriteId))
+            .Select(p => new Look(p.Code, 0, 0, (ushort)(Part1Game.ObsBase + p.SpriteId), (ushort)(Part1Game.ObsBase + p.FaceId), 0, p.Name));
+
+    internal static string LookName(GameDatabase db, Look l) => l.Part1Name is { } p1 ? $"{p1} · 파트1" : db.T(l.NameId);
 
     internal const int LookScanMax = 1200;
 
@@ -180,10 +194,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var shared = records.GroupBy(c => c.SpriteId).Where(g => g.Select(c => c.NameId).Distinct().Count() >= 3).Select(g => g.Key).ToHashSet();
         return _looks = [.. records.GroupBy(c => (c.SpriteId, NameId: shared.Contains(c.SpriteId) ? (ushort)0 : c.NameId))
             .Select(g => g.OrderByDescending(c => db.Character(c.Code) != null).ThenByDescending(c => c.VoiceSet > 0).First())
-            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId)))];
+            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId))), .. Part1Looks()];
     }
 
-    /// <summary>외형 갈래의 줄 — 이름이 같은 인물(제 다른 복장)을 맨 앞에, 그다음 주역, 그다음 게임 자료에 없고 원본에만 있는 레코드(흑태자 · 블랙 레이븐 · 팬텀마리아 …), 그다음 나머지. 인물을 고를 때 한 번 정한다.</summary>
+    /// <summary>외형 갈래의 줄 — 이름이 같은 인물(제 다른 복장)을 맨 앞에, 그다음 파트1 인물, 그다음 주역, 그다음 게임 자료에 없고 원본에만 있는 레코드(흑태자 · 블랙 레이븐 · 팬텀마리아 …), 그다음 나머지. 인물을 고를 때 한 번 정한다.</summary>
     internal List<Look> LookRows(GameDatabase db, CharacterData c)
     {
         if (_lookRows is { } rows && rows.Chr == c.Code) return rows.Rows;
@@ -192,7 +206,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var listed = AllLooks(db).Where(l => l.NameId == c.NameId).Select(l => (int)l.Sprite).ToHashSet();
         var extra = OwnFolderSprites(c.Code).Where(o => o != c.FaceId && o != own?.FaceId && BattleReady(o) && listed.Add(o))
             .Select(o => new Look(c.Code, c.NameId, c.TitleId, (ushort)o, own?.FaceId ?? c.FaceId, own?.VoiceSet ?? c.VoiceSet));
-        List<Look> list = [.. AllLooks(db).Concat(extra).OrderBy(l => l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 1 : db.Character(l.Chr) == null ? 2 : 3).ThenBy(l => l.Chr)];
+        List<Look> list = [.. AllLooks(db).Concat(extra).OrderBy(l => l.Part1Name != null ? 1 : l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 2 : db.Character(l.Chr) == null ? 3 : 4).ThenBy(l => l.Chr)];
         (_lookRows, _lookTop) = ((c.Code, list), 0);
         return list;
     }
@@ -361,7 +375,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         Query is { Length: > 0 } q ? [.. AbilityRows(db, c).Where(id => Matches(q, [db.T(db.Abilities[id].NameId)], [id]))] : AbilityRows(db, c);
 
     internal List<Look> LookView(GameDatabase db, CharacterData c) =>
-        Query is { Length: > 0 } q ? [.. LookRows(db, c).Where(l => Matches(q, [db.T(l.NameId), db.T(l.TitleId)], [l.Sprite, l.Chr]))] : LookRows(db, c);
+        Query is { Length: > 0 } q ? [.. LookRows(db, c).Where(l => Matches(q, [LookName(db, l), db.T(l.TitleId)], [l.Sprite, l.Chr]))] : LookRows(db, c);
 
     /// <summary>열려 있으면 클릭을 먹는다.</summary>
     internal bool OnClick(int bx, int by)
@@ -560,9 +574,9 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             var look = rows[_lookTop + i];
             int ry = y + RowsDy + i * AbRowH;
             if (In(host._mouse.X, host._mouse.Y, px, ry, LookListW, AbRowH)) { hover = look; host.UiFill(px - 4, ry, LookShapeDx, AbRowH - 2, 0xFF1C2E52); }
-            string title = db.T(look.TitleId) is { Length: > 0 } t && t != "없음" ? $" · {t}" : "";
+            string title = look.Part1Name == null && db.T(look.TitleId) is { Length: > 0 } t && t != "없음" ? $" · {t}" : "";
             // 앞 칸은 그림(Obs) 번호 — 인물 번호(Chr)가 아니다. 오른쪽에 맞춰 세워 이름 칸이 한 줄로 선다(사용자 요청 menu-70).
-            string label = $"{db.T(look.NameId)}{title}";
+            string label = $"{LookName(db, look)}{title}";
             while (label.Length > 2 && host.UiGetText(label, White, 12).W > LookShapeDx - LookNameDx - 6) label = label[..^1];
             bool wearing = look.Sprite == c.SpriteId;
             string no = $"#{look.Sprite}";
@@ -583,7 +597,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiText("앞", bx + 4, by + 2, DimGray, 12);
         host.UiText("옆", bx + half + 4, by + 2, DimGray, 12);
         // 코드에서 찾아 고칠 수 있게 번호를 다 보인다 — Chr · 모습(Obs) · 목소리 묶음(사용자 요청 ed-3).
-        string caption = hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {c.SpriteId} · 목소리 {c.VoiceSet}";
+        string caption = hover is { Part1Name: not null } ? $"파트1 Chr {hover.Chr:D4} · 모습 {hover.Sprite - Part1Game.ObsBase}"
+                       : hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {c.SpriteId} · 목소리 {c.VoiceSet}";
         host.UiText(caption, bx + (bw - host.UiGetText(caption, DimGray, 12).W) / 2, by + bh - 18, DimGray, 12);
         Button(bx, y + ResetDy, bw, "원래대로", h: 20);
         // 목소리만 번호로 고르기 — 모습과 따로.
