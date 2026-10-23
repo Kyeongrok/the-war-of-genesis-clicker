@@ -17,7 +17,8 @@ if (args.Length < 1) { Console.Error.WriteLine("사용법: part1-pack <내보낼
 if (Part1Game.Root == null) { Console.Error.WriteLine("파트1 폴더를 못 찾았습니다 — WAROFGENESIS_PART1=<폴더> 로 알려 주세요."); return 1; }
 string outRoot = Path.GetFullPath(args[0]), cache = Path.Combine(outRoot, "cache"), upload = Path.Combine(outRoot, Release);
 Directory.CreateDirectory(upload);
-int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [.. Part1Game.Shipped.Select(p => (int)p.SpriteId)];
+// 인물마다 전투 그림과 Status 얼굴(menu-84) — 그림이 부르는 소리·자식은 아래에서 따라간다.
+int[] sprites = args.Length > 1 ? [.. args.Skip(1).Select(int.Parse)] : [.. Part1Game.Shipped.SelectMany(p => new[] { (int)p.SpriteId, p.FaceId })];
 
 var todo = new Queue<string>(sprites.Select(s => $"{Part1Game.ObsBase + s}.obs"));
 var seen = new HashSet<string>(todo);

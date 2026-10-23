@@ -717,7 +717,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             c = c with
             {
-                NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = k.FaceId, TitleId = k.TitleId, Body = k.Body,
+                NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = Part1Game.FixFace(k.FaceId), TitleId = k.TitleId, Body = k.Body,
                 JobId = k.JobId, BasicWorkId = k.BasicWorkId, TpDivisor = k.TpDivisor, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
                 VoiceSet = k.VoiceSet ?? baseData.VoiceSet,     // 캐릭터 에디터 「외형」이 목소리도 바꾼다 — 옛 세이브에는 칸이 없다
             };

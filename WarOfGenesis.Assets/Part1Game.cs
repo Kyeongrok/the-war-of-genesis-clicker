@@ -3,8 +3,11 @@ using System.Text;
 
 namespace WarOfGenesis.Assets;
 
-/// <summary>파트1(전작) 인물 레코드에서 읽는 것 — 이름(한글), 전투 그림, 초상.</summary>
-public sealed record Part1Character(int Code, string Name, ushort SpriteId, ushort FaceId);
+/// <summary>
+/// 파트1(전작) 인물 레코드에서 읽는 것 — 이름(한글), 전투 그림, 얼굴(Status 칸의 작은 것, 50×50 가운데 기준 — 파트2 FaceId 와 같은 갈래),
+/// 반신 초상(대사용 큰 그림, 발밑 기준).
+/// </summary>
+public sealed record Part1Character(int Code, string Name, ushort SpriteId, ushort FaceId, ushort BustId);
 
 /// <summary>
 /// 사용자가 가진 <b>창세기전3 파트1</b> 폴더(<c>Obss</c>·<c>Chars</c> 가 든 곳) — 캐릭터 에디터가 전작 인물의 모습을 빌려 쓸 때 읽는다(사용자 요청 menu-76).
@@ -25,7 +28,7 @@ public sealed record Part1Character(int Code, string Name, ushort SpriteId, usho
 /// 섞기의 다른 인자(14·13·11)와 4·9 는 뜻을 몰라 아직 뺀다.
 /// 동작 번호는 파트2 와 뜻이 달라(파트1 동작 2 = 공격, 파트2 동작 2 = 맞기) <see cref="ActionMap"/> 으로 바꿔 쓴다.
 /// 효과음(<c>Snd</c> 의 <c>NNNN.snd</c>)은 WAV 지만 파트2(8비트 PCM)와 달리 MS ADPCM(형식 2, 44.1kHz 스테레오)이라 게임이 읽는 PCM 으로 푼다. 묶음 색인(<c>Obss.idx</c>·<c>Snd.idx</c>): u32 수, 30바이트 레코드(파일 이름 9 · pak 이름 13 · u32 시작 · u32 끝) — 파트2 와 달리 XOR 이 없다.
-/// 인물 레코드 <c>Chars\NNNN.chr</c>(175바이트): 0x00 한글 이름(cp949, XOR 0xFF), 0x18 영문 이름, 0x3a u16 전투 그림, 0x3c u16 초상.
+/// 인물 레코드 <c>Chars\NNNN.chr</c>(175바이트): 0x00 한글 이름(cp949, XOR 0xFF), 0x18 영문 이름, 0x3a u16 전투 그림, 0x3c u16 반신 초상, 0x3e u16 얼굴.
 /// </remarks>
 public static class Part1Game
 {
@@ -107,14 +110,21 @@ public static class Part1Game
 
     /// <summary>
     /// 캐릭터 에디터에 올리는 파트1 인물 — 파트1 이 없는 PC 는 이 표의 레코드를 쓰고 그림·소리는 릴리즈 에셋 팩으로 받는다(<c>tools/part1-pack</c>).
-    /// 값은 파트1 <c>Chars\NNNN.chr</c> 그대로(이름 0x00 · 그림 0x3a · 초상 0x3c). 마르자나(menu-80)에 주역들을 더했다(menu-81).
+    /// 값은 파트1 <c>Chars\NNNN.chr</c> 그대로(이름 0x00 · 그림 0x3a · 얼굴 0x3e · 반신 0x3c). 마르자나(menu-80)에 주역들을 더했다(menu-81).
     /// </summary>
     public static readonly IReadOnlyList<Part1Character> Shipped =
     [
-        new(1, "마르자나", 352, 167), new(0, "살라딘", 196, 158), new(16, "얀 지슈카", 513, 166), new(30, "버몬트 대공", 5, 130),
-        new(32, "어윈 록슬리", 213, 157), new(36, "해럴드 깁슨", 280, 137), new(64, "알바티니 데 메디치", 239, 126),
-        new(65, "크리스티앙 메디치", 206, 132), new(71, "죠안 카트라이트", 345, 145),
+        new(1, "마르자나", 352, 384, 167), new(0, "살라딘", 196, 478, 158), new(16, "얀 지슈카", 513, 484, 166), new(30, "버몬트 대공", 5, 422, 130),
+        new(32, "어윈 록슬리", 213, 380, 157), new(36, "해럴드 깁슨", 280, 466, 137), new(64, "알바티니 데 메디치", 239, 431, 126),
+        new(65, "크리스티앙 메디치", 206, 453, 132), new(71, "죠안 카트라이트", 345, 446, 145),
     ];
+
+    /// <summary>
+    /// 세이브의 얼굴 번호 — v0.46.0 까지는 반신 초상(0x3c)을 얼굴로 넣어 Status 칸 밖으로 크게 찍혔다(사용자 요청 menu-84).
+    /// 그때 넣은 파트1 반신 번호면 그 인물의 얼굴로 바꾼다.
+    /// </summary>
+    public static ushort FixFace(ushort face) =>
+        face > ObsBase && Shipped.FirstOrDefault(p => ObsBase + p.BustId == face) is { } p ? (ushort)(ObsBase + p.FaceId) : face;
 
     private static HashSet<int>? _bodySprites;
 
@@ -140,10 +150,10 @@ public static class Part1Game
         try
         {
             byte[] b = File.ReadAllBytes(Path.Combine(root, "Chars", $"{code:D4}.chr"));
-            if (b.Length < 0x3e) return null;
+            if (b.Length < 0x40) return null;
             var name = b.Take(0x18).Select(x => (byte)(x ^ 0xFF)).TakeWhile(x => x != 0).ToArray();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return new Part1Character(code, Encoding.GetEncoding(949).GetString(name), BitConverter.ToUInt16(b, 0x3a), BitConverter.ToUInt16(b, 0x3c));
+            return new Part1Character(code, Encoding.GetEncoding(949).GetString(name), BitConverter.ToUInt16(b, 0x3a), BitConverter.ToUInt16(b, 0x3e), BitConverter.ToUInt16(b, 0x3c));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
