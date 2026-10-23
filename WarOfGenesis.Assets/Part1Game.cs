@@ -33,7 +33,7 @@ public static class Part1Game
     public const int ObsBase = 20000;
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 5;
+    public const int ConvertVersion = 6;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -193,7 +193,7 @@ public static class Part1Game
         }
 
         // 파트2 동작마다 파트1 의 어느 동작을 쓰나(ActionMap) — 방향 셋을 함께 옮긴다. 키는 그림 · 소리 · 자식 Obs 만 옮기고(머리 주석)
-        // 소리·자식 번호는 파트1 번호대로 옮긴다. 파트1 키 종류 5 중 첫 인자 0·1 인 것(연을 내지르는 틱)은 파트2 타격 키(종류 6)로 바꾼다.
+        // 소리·자식 번호는 파트1 번호대로 옮긴다. 파트1 키 종류 5(때리는 틱 — 첫 인자 0·1 은 손, 29·30 은 무기·연 쪽)는 파트2 타격 키(종류 6)로 바꾼다.
         var motions = new List<(int Id, int Length, List<short[]> Keys)>();
         var plan = body ? ActionMap : [.. Enumerable.Range(0, (part1.Count + 2) / 3).Select(a => (a, (a, 0, 0)))];
         foreach (var (action, (from, ability, hits)) in plan)
@@ -209,7 +209,7 @@ public static class Part1Game
                     if (key[2] == 2 && key[8] == 9) key[8] = 0;
                     if (key[2] == 3 && key[3] == 9) { key[3] = 17; key[4] = 0; }
                     if (key[2] is 0 or 1 or 2 || key[2] == 3 && key[3] == 17) keys.Add(key);
-                    else if (key[2] == 5 && key[3] is 0 or 1 && ability > 0 && struck++ < hits) keys.Add([key[0], 1, 6, (short)ability, 0, 0, 0, 0, 0]);
+                    else if (key[2] == 5 && ability > 0 && struck++ < hits) keys.Add([key[0], 1, 6, (short)ability, 0, 0, 0, 0, 0]);
                 }
                 motions.Add((action * 3 + dir, src.Length, keys));
             }
@@ -261,12 +261,14 @@ public static class Part1Game
     /// <summary>
     /// 파트2 동작 ← 파트1 동작(마르자나 Obs 352 의 그림을 보고 고른 것, 사용자 요청 menu-77). 타격 키 어빌리티(25 접근 · 26 원거리 · 0 없음)와 최대 타 수.
     /// 파트2: 0 서기 · 1 걷기 · 2 맞기·죽기 · 5 공격 준비 · 6 시전 자세 · 7 기 모으기 · 8 기본 공격 · 9 원거리 · 13 2타 · 14 3타 · 15 발동(분석-모션).
-    /// 파트1: 0 서기 · 1 걷기 · 2·3 연 던지기 · 4 숨 고르기(54틱) · 5 맞기(떨림 키) · 6 팔짱 · 9 연 든 자세 · 11 연 던지기 · 12 2타 · 14 3타.
+    /// 파트1: 0 서기 · 1 걷기 · 2 기본 공격 · 3 원거리 · 4 숨 고르기(54틱) · 5 맞기(떨림 키) · 6 팔짱 · 9 공격 자세 ·
+    /// 11~15 연속 공격 2타~6타(타격 키 2·3·4·5·6개 — 아홉 인물이 모두 같다). 전에는 마르자나만 보고 2타 ← 12(3타)·3타 ← 14(5타)로 붙여
+    /// 휘두르는 수가 맞는 수보다 많았다(얀 지슈카, 사용자 요청 menu-83).
     /// </summary>
     internal static readonly (int Action, (int From, int Ability, int Hits) Source)[] ActionMap =
     [
         (0, (0, 0, 0)), (1, (1, 0, 0)), (2, (5, 0, 0)), (5, (9, 0, 0)), (6, (6, 0, 0)), (7, (4, 0, 0)),
-        (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (12, 25, 2)), (14, (14, 25, 3)), (15, (11, 25, 1)),
+        (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (11, 25, 2)), (14, (12, 25, 3)), (15, (11, 25, 1)),
     ];
 
     /// <summary>
