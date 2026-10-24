@@ -87,6 +87,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         string day = DateTime.Now.ToString("MM/dd");
         _bg = ReadBackground(day == "01/01" ? NewYearBackground : TitleBackground) ?? ReadBackground(TitleBackground);
         _open = true;
+        SlotsScreen.Part1Slots = true;
         _hover = -1;
         host.StopMusic();
         host.EnterSceneFade();
@@ -96,6 +97,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal void Close()
     {
         _open = false;
+        SlotsScreen.Part1Slots = false;
         if (_chapter != null) _chapter._open = false;
         if (_timeline != null) _timeline._open = false;
         if (_field != null) _field._open = false;

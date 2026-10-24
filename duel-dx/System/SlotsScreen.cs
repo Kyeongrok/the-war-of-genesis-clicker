@@ -52,7 +52,10 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     internal void ScrollSlots(int rows) => _slotsTop = Math.Clamp(_slotsTop + rows, 0, Math.Max(0, SlotRows - SlotsVisible));
 
     internal static string SlotPath(int slot) =>
-        UserDataFolder.File($"battle-save-{slot:D2}.json");
+        UserDataFolder.File(Part1Slots ? $"part1-battle-save-{slot:D2}.json" : $"battle-save-{slot:D2}.json");
+
+    /// <summary>파트1 을 하는 중 — 세이브 칸을 파트2 와 따로 쓴다(<c>part1-battle-save-NN.json</c>, 사용자 요청). 파트1 타이틀에 들어가면 켜고 파트2 로 나오면 끈다.</summary>
+    internal static bool Part1Slots;
 
     /// <summary>DUELDX_SLOTS=load|save 면 시작하자마자 그 슬롯 목록을 연다(화면 밖 시험용). menu · mission · volume · confirm 은 시스템 메뉴의 그 창을 연다.</summary>
     internal void OpenSlotsIfAsked()
