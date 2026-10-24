@@ -18,7 +18,8 @@ namespace DuelDx;
 /// <param name="ShowSceneTag">화면 왼쪽 아래에 지금 장면 번호(Fld·Btl·Chp, 사건·줄)를 보일지 — 대화할 때 짚기 쉽게(사용자 요청, 기본 켬).</param>
 /// <param name="SoulWeight">일반 공격 소울 기여도 % — 100 이 원본(모드 &gt; 조정, GameWindow.Tuning.cs).</param>
 /// <param name="Difficulty">난이도 — 0 보통(원본) · 1 어려움 · 2 매우 어려움(GameWindow.Difficulty.cs).</param>
-/// <param name="KeepExpOnJobChange">전직(세부 체질 바꾸기)할 때 남은 EXP 를 그대로 둘지. 원본은 0 으로 비운다 — 켜면 원본과 다르다(사용자 요청).</param>
+/// <param name="DropExpOnJobChange">전직할 때 남은 EXP 를 비울지 — 원본은 비운다. 기본은 남긴다(사용자 요청: 「경험치 없애는 건 모드에 넣고 기본은 안 없애는 걸로」).
+/// 예전 칸 KeepExpOnJobChange(기본 끔 = 비움)는 읽지 않는다 — 기본이 바뀌어서 새 이름으로 둔다.</param>
 /// <param name="SkipEnemyAction">적(과 AI 가 움직이는 편)이 행동하는 동안 클릭하면 그 행동의 모션·이펙트를 건너뛰고 결과만 보인다(사용자 요청 — 원본에 없다).</param>
 /// <param name="SendStats">전투가 끝날 때 어빌리티 통계(쓴 횟수 · 피해)를 익명으로 보낼지 — 기본 켬, 모드 &gt; 편의성에서 끈다(BattleStats.cs).</param>
 /// <param name="StatsAskedAt">통계 알림이나 켜기 권유를 마지막으로 띄운 때(UTC) — 꺼 두었으면 이레 뒤에 다시 권한다(StatsConsentScreen.cs).</param>
@@ -31,7 +32,7 @@ namespace DuelDx;
 /// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
-                                    bool KeepExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
+                                    bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
                                     double TalkPauseSeconds = 0.1, bool ShowSceneTag = true, bool ShowChestContents = false,
                                     bool FullSoulAtStart = false, int Difficulty = 0, int SoulWeight = 100,
                                     int BgmVolume = 90, int SeVolume = 100, bool BgmOn = true, bool TalkFillFirst = true,

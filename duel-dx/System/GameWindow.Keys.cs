@@ -241,7 +241,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _keepJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -353,7 +353,9 @@ internal sealed unsafe partial class GameWindow
     internal int _gameSpeed = UserSettings.Current.GameSpeed is 100 or 150 or 200 ? UserSettings.Current.GameSpeed : 100;
 
     /// <summary>전직할 때 EXP 를 남길지 — 설정 > 전직할 때 EXP 유지. 원본은 0 으로 비운다.</summary>
-    internal bool _keepJobExp = UserSettings.Current.KeepExpOnJobChange;
+    internal bool _dropJobExp = UserSettings.Current.DropExpOnJobChange;
+
+    internal bool _keepJobExp => !_dropJobExp;
 
     internal void OnMenuCommand(int id)
     {
@@ -498,9 +500,9 @@ internal sealed unsafe partial class GameWindow
                 SaveSettings();
                 break;
             case MenuKeepJobExp:
-                _keepJobExp = !_keepJobExp;
-                Win32.CheckMenuItem(_menuBar, MenuKeepJobExp, Win32.MF_BYCOMMAND | (_keepJobExp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
-                Toast(_keepJobExp ? "전직해도 EXP 를 남깁니다" : "전직하면 EXP 가 0 이 됩니다(원본대로)");
+                _dropJobExp = !_dropJobExp;
+                Win32.CheckMenuItem(_menuBar, MenuKeepJobExp, Win32.MF_BYCOMMAND | (_dropJobExp ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_dropJobExp ? "전직하면 EXP 를 비웁니다(원본대로)" : "전직해도 EXP 를 남깁니다"); 
                 SaveSettings();
                 break;
             case MenuKeys: _keysOpen = true; _keysCapture = -1; Btl._heldMoveKeys.Clear(); break;

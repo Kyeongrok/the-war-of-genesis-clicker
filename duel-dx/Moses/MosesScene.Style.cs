@@ -360,7 +360,7 @@ internal sealed unsafe partial class MosesScene
         return jobs.FindIndex(j => j == c.JobId);
     }
 
-    /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로). 설정 「전직할 때 EXP 유지」면 EXP 도 남긴다.</summary>
+    /// <summary>전직 — 원본은 <b>직업 번호와 남은 EXP 만</b> 건드린다(능력치·레벨·어빌리티는 그대로). 모드 「전직할 때 EXP 없애기」를 끄면(기본) EXP 도 남긴다.</summary>
     internal void ChangeJob(ushort jobId)
     {
         if (StyleData() is not { } c) return;

@@ -37,31 +37,59 @@ internal sealed class Part1StatusPanel(GameWindow host)
     internal bool OnClick(UnitState u, int bx, int by)
     {
         static bool In((int X, int Y, int W, int H) r, int px, int py) => px >= r.X && px < r.X + r.W && py >= r.Y && py < r.Y + r.H;
-        if (In(_jobRow, bx, by)) { CycleJob(u); return true; }
+        if (_jobChoices is { } choices)
+        {
+            // 직업 목록이 떠 있으면 — 줄을 누르면 그 직업으로, 밖을 누르면 그냥 닫는다.
+            for (int i = 0; i < choices.Count; i++)
+                if (In(JobChoiceRow(i), bx, by)) { ChangeJob(u, choices[i]); break; }
+            _jobChoices = null;
+            return true;
+        }
+        if (In(_jobRow, bx, by)) { OpenJobChoices(u); return true; }
         for (int s = 0; s < 5; s++)
             if (In(_equipRows[s], bx, by)) { CycleEquipment(u, s); return true; }
         return In(_panel, bx, by);
     }
 
+    /// <summary>떠 있는 직업 목록(원본처럼 직업 줄을 누르면 고를 수 있는 직업이 창으로 뜬다 — 사용자 화면) — 없으면 null.</summary>
+    private List<int>? _jobChoices;
+
+    internal const int JobRowH = 24, JobBoxW = 150;
+
+    private (int X, int Y, int W, int H) JobChoiceRow(int i) => (_jobRow.X + 6, _jobRow.Y + _jobRow.H + 10 + i * JobRowH, JobBoxW - 12, JobRowH - 2);
+
     /// <summary>
-    /// 직업 줄을 누르면 — 바꿀 수 있는 직업을 차례로(원본 0x1009e6f0: Job.dat 머리 짝 다섯이 조건 — 그 어빌리티를 그 레벨 이상). 원본처럼 이번 레벨의 경험치는 잃는다
-    /// (0x1011c20c 「직업을 바꾸면 현재 경험치가 없어지고…」 — 누적을 100 단위로 내린다). 행동은 안 쓴다.
+    /// 직업 줄을 누르면 — 바꿀 수 있는 직업 목록을 띄운다(원본 0x1009e6f0: Job.dat 머리 짝 다섯이 조건 — 그 어빌리티를 그 레벨 이상). 행동은 안 쓴다.
     /// </summary>
-    private void CycleJob(UnitState u)
+    private void OpenJobChoices(UnitState u)
     {
         if (!host.Part1.IsOurs(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 직업을 바꿀 수 있습니다"); return; }
         var chr = host.Part1.Apply(raw);
         _jobs ??= Part1Job.LoadAll();
-        var options = _jobs.Where(j => j.Id == chr.Fields[7] || j.Firsts.Where(f => f.A > 0).All(f => chr.AbilityLevel(f.A) >= Math.Max(1, f.B)))
-                           .Where(j => j.Firsts.Any(f => f.A > 0) || j.Id == chr.Fields[7]).Select(j => j.Id).ToList();
-        if (options.Count <= 1) { host.Toast("바꿀 수 있는 직업이 없습니다"); return; }
-        int next = options[(options.IndexOf(chr.Fields[7]) + 1) % options.Count];
+        var options = _jobs.Where(j => j.Id != chr.Fields[7] && j.Firsts.Any(f => f.A > 0)
+                                       && j.Firsts.Where(f => f.A > 0).All(f => chr.AbilityLevel(f.A) >= Math.Max(1, f.B)))
+                           .Select(j => j.Id).ToList();
+        if (options.Count == 0) { host.Toast("바꿀 수 있는 직업이 없습니다"); return; }
+        _jobChoices = options;
+    }
+
+    /// <summary>
+    /// 그 직업으로 전직. 원본은 이번 레벨의 경험치를 잃는다(0x1011c20c 「직업을 바꾸면 현재 경험치가 없어지고…」 — 누적을 100 단위로 내린다) —
+    /// 리메이크는 모드 &gt; 편의성 「전직할 때 EXP 없애기」를 켰을 때만 그렇게 한다(기본은 그대로 둔다, 사용자 요청).
+    /// </summary>
+    private void ChangeJob(UnitState u, int job)
+    {
+        if (Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) return;
+        var chr = host.Part1.Apply(raw);
         var growth = host.Part1.GrowthOf(u.ChrCode, chr.Experience);
-        growth.Job = next;
-        growth.Experience = growth.Experience / 100 * 100;
+        growth.Job = job;
+        if (host._dropJobExp) growth.Experience = growth.Experience / 100 * 100;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(u.ChrCode);
-        host.Toast($"{Part1Job.ById(_jobs, next)?.Name} 로 전직 — 이번 레벨의 경험치는 없어집니다");
+        string name = Part1Job.ById(_jobs!, job)?.Name ?? "";
+        // 받침이 있으면 「으로」(ㄹ 받침은 「로」) — 「무슬림 로 전직」이 어색했다.
+        bool batchim = name.Length > 0 && name[^1] is >= '가' and <= '힣' && (name[^1] - '가') % 28 is not (0 or 8);
+        host.Toast($"{name}{(batchim ? "으로" : "로")} 전직{(host._dropJobExp ? " — 이번 레벨의 경험치는 없어집니다" : "")}");
     }
 
     /// <summary>그 칸에 가방의 다음 맞는 것을 끼운다(끼던 것은 가방으로) — 일행 창(Part1PartyScreen)과 같은 규칙. 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
@@ -161,6 +189,22 @@ internal sealed class Part1StatusPanel(GameWindow host)
                 host.BlitScaled(icon, lx + 6, ly + 6 + i * 16, 14, 14);
             host.UiText(name, lx + 24, ly + 6 + i * 16, GameWindow.White, 11);
             host.UiText($"LV{learned[i].Level}", lx + ListW - 34, ly + 6 + i * 16, 0xFFFFE080, 11);
+        }
+
+        // 직업 목록 — 직업 줄 아래에 틀 창, 줄마다 구슬 · 이름(원본 꼴). 짚은 줄은 밝게.
+        if (_jobChoices is { } choices)
+        {
+            // 틀 바탕이 비쳐 뒤 패널 글이 보였다 — 먼저 불투명하게 깐다.
+            host.UiFill(_jobRow.X, _jobRow.Y + _jobRow.H + 4, JobBoxW, 12 + choices.Count * JobRowH, 0xFF201838);
+            host.UiFrame(_jobRow.X, _jobRow.Y + _jobRow.H + 4, JobBoxW, 12 + choices.Count * JobRowH);
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var (rx, ry, rw, rh) = JobChoiceRow(i);
+                if (host._mouse.X >= rx && host._mouse.X < rx + rw && host._mouse.Y >= ry && host._mouse.Y < ry + rh)
+                    host.UiFill(rx, ry, rw, rh, 0x60A090E0);
+                host.UiText("●", rx + 4, ry + 3, 0xFFC8B8F0, 12);
+                host.UiText(Part1Job.ById(_jobs, choices[i])?.Name ?? $"#{choices[i]}", rx + 24, ry + 3, GameWindow.White, 12);
+            }
         }
     }
 }
