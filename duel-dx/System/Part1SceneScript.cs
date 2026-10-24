@@ -118,7 +118,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>성우 대사의 재생 표지 — 다음 성우 대사가 앞 목소리를 끊는다.</summary>
     private const int VoiceTag = 0x5011;
 
-    /// <summary>지금 성우 목소리가 끝나는 때 — 원본은 상자를 닫아도 목소리가 끝나야 다음 행동으로 간다(분석-파트1-챕터 11절).</summary>
+    /// <summary>지금 성우 목소리가 끝나는 때 — 대사를 넘기면 그때 끊는다(원본은 끝날 때까지 다음 행동을 미룬다, 분석-파트1-챕터 11절).</summary>
     private double _voiceEnd;
 
     /// <summary>
@@ -181,13 +181,20 @@ internal sealed class Part1SceneScript(GameWindow host)
         if (Talk == null && (_waitUntil > 0 || _waitBusy)) Run();
     }
 
+    /// <summary>울리는 성우 목소리를 끊는다 — 대사를 넘길 때 · 장면을 떠날 때.</summary>
+    internal void StopVoice()
+    {
+        if (host._lastTime < _voiceEnd) host._mixer.StopEffect(VoiceTag);
+        _voiceEnd = 0;
+    }
+
     /// <summary>대사를 넘긴다.</summary>
     internal void Advance()
     {
         Talk = null;
         _talkAutoAt = 0;
-        // 목소리가 아직 울리면 끝날 때까지 다음 행동을 미룬다(누르기로 목소리를 자르지 않는다).
-        if (Timed && host._lastTime < _voiceEnd) _waitUntil = Math.Max(_waitUntil, _voiceEnd);
+        // 넘기면 목소리도 끊는다(사용자 요청 — 원본은 목소리가 끝날 때까지 기다리지만 넘길 때 끝까지 나오면 답답하다).
+        StopVoice();
         Run();
     }
 
@@ -273,7 +280,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                         host.Play(Part1Game.ObsBase + a[2], VoiceTag);
                         PcmSound? clip;
                         lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
-                        _voiceEnd = clip != null && !GameWindow.Muted ? host._lastTime + GameWindow.ClipSeconds(clip) : 0;
+                        _voiceEnd = clip != null ? host._lastTime + GameWindow.ClipSeconds(clip) : host._lastTime + 30;   // 아직 안 받았으면 넉넉히 — 넘길 때 끊게
                     }
                     break;
                 }

@@ -139,6 +139,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     private void End()
     {
         GameWindow.TestRunTrace($"part1 field {_field?.Id} end");   // 시험 전용 줄
+        Script.StopVoice();                                          // Esc 로 끝내도 목소리가 이어 나오지 않게
         var onEnd = _onEnd;
         _onEnd = null;
         host.LeaveScene(() => { _open = false; _bg = null; onEnd?.Invoke(); });
