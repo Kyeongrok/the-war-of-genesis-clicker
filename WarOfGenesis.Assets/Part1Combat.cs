@@ -126,3 +126,31 @@ public static class Part1Combat
     public static int EvadeChance(int targetDex, bool fullDex, int attackerHit, int attackerDex) =>
         attackerHit + attackerDex > 0 ? (fullDex ? targetDex : targetDex / 2) * 100 / (attackerHit + attackerDex) : 0;
 }
+
+/// <summary>
+/// 파트1 아이템 보정 코드(<see cref="Part1Item.Bonuses"/>) — 아이템 설명 글과 짝을 맞춘 것(옵시디안 「분석-파트1-전투」 9.1).
+/// </summary>
+public static class Part1Bonus
+{
+    public const int Dex = 200, Str = 201, Ac = 202, Int = 203, Mr = 204, Spd = 205, Range = 206, Accuracy = 207;
+
+    /// <summary>속성 저항 — 화염 · 빙한 · 전격 · 회복 · 암흑(속성 번호 1~5 차례). 값이 음수일수록 덜 받는다.</summary>
+    public const int FireResist = 208, IceResist = 209, ThunderResist = 210, HolyResist = 211, DarkResist = 212;
+
+    /// <summary>총 피해 약화 — 총 기술의 방어에 더한다.</summary>
+    public const int GunGuard = 244;
+
+    /// <summary>회피 불능 — 때린 이가 가졌으면 회피·막기를 굴리지 않는다.</summary>
+    public const int NeverMissed = 246;
+
+    public const int StatusGuard = 247;
+
+    /// <summary>맞힌 대상에게 — 300 메테오 · 301 라이트닝 볼츠 · 302 썬더스탐 · 303 버써크 · 304 중독 · 305 최면 · 306 상태이상 · 307 혼란 · 308 마비 · 309 암살.</summary>
+    public const int OnHitFirst = 300, OnHitLast = 309;
+
+    /// <summary>소울치 추가 회복.</summary>
+    public const int SoulRegen = 401;
+
+    /// <summary>속성 번호(1~5) → 저항 보정 코드.</summary>
+    public static int ResistOf(int element) => element is >= 1 and <= 5 ? FireResist + element - 1 : 0;
+}
