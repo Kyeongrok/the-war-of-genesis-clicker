@@ -23,7 +23,7 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     internal static readonly HashSet<int> Works =
-        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork,
+        [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, MeteorWork,
          HellKiteWork, NereidWork, MuspelWork, KannonWork, TitaniaWork, BlackFoxWork];
 
     private static int P(int part1) => Part1Game.ObsBase + part1;
@@ -224,7 +224,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         var (ax, ay) = CellFoot(aim.Col, aim.Row);
 
         _t0 = host._lastTime;
-        int prep = w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork
+        int prep = w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
 
@@ -237,6 +237,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => HellStrike(targets, hit),
             AsuraWork => Asura(targets, hit),
             ThunderWork => Thunder(targets, hit),
+            MeteorWork => Meteor(targets, hit),
             FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
             StormSwordWork => StormSword(targets, hit),
             HellKiteWork => HellKite(targets, hit),
@@ -283,6 +284,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => [124, 10, 832, 228, 38],
             AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
             ThunderWork => [75, 379, 71, 277, 77],
+            MeteorWork => [115, 34, 64, 123, 228, 124, 116, 23, 96, 93],
             FlyingSlashWork => [503, 504, 230],
             StormSwordWork => [959, 75, 72, 379, 76, 67],
             HellKiteWork => [103, 671, 10, 23, 93],

@@ -69,7 +69,7 @@ internal sealed unsafe partial class BattleScene
         [1583] = ([], [new(1320, 0, false, 0)]),                                // 이스케이프(순간이동)
         // 파트1 검 기술 — 공격 준비(5) 한 칸에서 Part1SwordSkill 이 앞머리부터 다 한다(menu-85).
         [Part1Skill.BlizzardWork] = ([5], []), [Part1Skill.SeolhwaWork] = ([5], []), [Part1Skill.HellStrikeWork] = ([5], []), [Part1Skill.AsuraWork] = ([5], []),
-        [Part1Skill.ThunderWork] = ([7], []), [Part1Skill.StormSwordWork] = ([5], []), [Part1Skill.FlyingSlashWork] = ([5], []),
+        [Part1Skill.ThunderWork] = ([7], []), [Part1Skill.MeteorWork] = ([7], []), [Part1Skill.StormSwordWork] = ([5], []), [Part1Skill.FlyingSlashWork] = ([5], []),
         [Part1Skill.HellKiteWork] = ([7], []), [Part1Skill.NereidWork] = ([7], []), [Part1Skill.MuspelWork] = ([7], []),
         [Part1Skill.KannonWork] = ([7], []), [Part1Skill.TitaniaWork] = ([7], []), [Part1Skill.BlackFoxWork] = ([7], []),
         // 기본공격 1479(47명) — 때리는 동작 하나에 이펙트 1401 이 붙는다(분석-모션, 0x10094590).
