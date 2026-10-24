@@ -101,9 +101,14 @@ internal sealed class Part1Progress
 
     /// <summary>
     /// 용병 · 탑승물 — Chr → 수(챕터 사건 908 · 910, 마을 용병 길드). 원본은 무리마다 (Chr, 수) 칸 32개(+0x910 · +0xa14)를 들고
-    /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 명단 끝에 수만큼 세우고, 탑승물은 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다.
+    /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 창 「용병 배치」(Part1MercDeploy)로 고른 인물 둘레 3×3 의 부하로 세우고,
+    /// 탑승물은 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다. 시험용 DUELDX_PART1MERCS=「580:3,587:2」(파트1 번호:수)로 용병을 미리 채운다.
     /// </summary>
-    internal Dictionary<int, int> Mercenaries = [], Mounts = [];
+    internal Dictionary<int, int> Mercenaries = (Environment.GetEnvironmentVariable("DUELDX_PART1MERCS") ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Split(':'))
+        .Where(p => p.Length == 2 && int.TryParse(p[0], out _) && int.TryParse(p[1], out int c) && c > 0)
+        .GroupBy(p => WarOfGenesis.Assets.Part1Game.ChrBase + int.Parse(p[0])).ToDictionary(g => g.Key, g => g.Sum(p => int.Parse(p[1])));
+    internal Dictionary<int, int> Mounts = [];
 
     /// <summary>
     /// 탈 사람 → 탈것(둘 다 20000 + 파트1 번호) — 일행 창에서 정한다(원본은 출전 배치 창의 「탑승」, 칸 +0x68). 전투에서는 탈것으로 서고

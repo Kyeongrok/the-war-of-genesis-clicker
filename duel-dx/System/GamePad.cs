@@ -324,6 +324,20 @@ internal sealed partial class GamePad(GameWindow host)
         if (host.Btl._deployOpen && !pointer)
         {
             var btl = host.Btl;
+            // 파트1 「용병 배치」 칸 창 — 위 · 아래 용병 목록, 왼 · 오른 칸, A 넣기, X 비우기, B 닫기, Start 배치종료.
+            if (host.MercDeploy.Open)
+            {
+                var merc = host.MercDeploy;
+                if ((pressed & Up) != 0) merc.ListStep(-1);
+                else if ((pressed & Down) != 0) merc.ListStep(1);
+                else if ((pressed & Left) != 0) merc.SlotStep(-1);
+                else if ((pressed & Right) != 0) merc.SlotStep(1);
+                if ((pressed & _map[PadAction.Confirm]) != 0) merc.AssignFocused();
+                if ((pressed & _map[PadAction.Ring]) != 0) merc.Clear();
+                if ((pressed & _map[PadAction.Cancel]) != 0 || (pressed & _map[PadAction.PrevUnit]) != 0) merc.Leader = null;
+                if ((pressed & _map[PadAction.System]) != 0) btl.FinishDeploy();
+                return;
+            }
             if (btl._deployCellMode) SnapByPad(pressed, now);
             else if ((pressed & Up) != 0) btl.DeployFocusMove(-1);
             else if ((pressed & Down) != 0) btl.DeployFocusMove(1);

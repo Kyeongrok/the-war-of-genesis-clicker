@@ -644,7 +644,10 @@ internal sealed unsafe partial class BattleScene
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
                 int x1 = Math.Min(A(3), A(5)), x2 = Math.Max(A(3), A(5));
                 int y1 = Math.Min(A(4), A(6)), y2 = Math.Max(A(4), A(6));
-                int n = side < 0 ? 0 : host._units.Count(u => u.OnField && u.Side == side              // 쓰러진 인물도 센다(ba-14 E2)
+                // 파트2 는 쓰러진 인물도 센다(ba-14 E2). 파트1(0x1001d820)은 판 명단(+0xb9a0)의 인물만 세는데 쓰러지면 명단에서 빠진다 —
+                // 쓰러진 적까지 세면 Btl 0091 「적이 하나 남고 크리스티앙이 붙으면」(사건 2) 이 영영 안 터졌다(사용자 보고).
+                bool part1 = host._scene.IsPart1;
+                int n = side < 0 ? 0 : host._units.Count(u => u.OnField && (!part1 || u.Alive) && u.Side == side
                                                           && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 return Compare(n, A(1), A(2));
             }

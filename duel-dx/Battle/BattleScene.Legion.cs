@@ -78,8 +78,8 @@ internal sealed unsafe partial class BattleScene
         {
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
-            // 파트1 은 일행 뒤에 용병(908 · 용병 길드)을 수만큼 세운다 — 배치 창에서 고르고, 못 선 사람은 판에서 빠진다.
-            var party = scene.IsPart1 ? [.. host.Part1.ActiveMembers(), .. host.Part1.Mercenaries.SelectMany(m => Enumerable.Repeat(m.Key, m.Value))]
+            // 파트1 용병(908 · 용병 길드)은 배치 칸에 따로 서지 않는다 — 아래에서 판 밖에 만들어 두고, 배치종료 때 「용병 배치」로 고른 인물의 3×3 부하로 붙인다(Part1MercDeploy).
+            var party = scene.IsPart1 ? [.. host.Part1.ActiveMembers()]
                       : host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
                       : host._party.Keys.Count > 0 ? host._party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
@@ -136,7 +136,18 @@ internal sealed unsafe partial class BattleScene
                 placedFollowers.AddRange(SpawnFollowers(rec, list.Count - 1, legions, list.Concat(placedFollowers)));
             }
             list.AddRange(placedFollowers);
+            // 파트1 용병 — 판 밖(0,0)에 수만큼. 옮길 수 있는 사람(_deployMovable)으로 두어 배치종료 · 불러오기가 안 쓴 것을 지운다.
+            if (scene.IsPart1)
+                foreach (var (chr, count) in host.Part1.Mercenaries.OrderBy(m => m.Key))
+                    for (int n = 0; n < count; n++)
+                    {
+                        var merc = new UnitState(new DemoUnit(chr, 0, 0, 3, 0, Facing.Up)) { OnField = false, Awake = true };
+                        list.Add(merc);
+                        _part1Mercs.Add(merc);
+                        _deployMovable.Add(merc);
+                    }
         }
+        host.MercDeploy.Reset(scene.Id);   // 파트1 「용병 배치」 — 다른 전투면 고른 칸을 지운다(창도 닫는다)
         return [.. list];
     }
 
