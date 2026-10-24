@@ -67,6 +67,9 @@ internal sealed class Part1Progress
     {
         public int Experience { get; set; }
         public Dictionary<int, int> Abilities { get; set; } = [];
+
+        /// <summary>바꾼 직업(Job.dat 번호, 인물 칸 7) — 0 이면 레코드 그대로.</summary>
+        public int Job { get; set; }
     }
 
     internal Dictionary<int, Growth> Grown = [];
@@ -218,7 +221,11 @@ internal sealed class Part1Progress
     internal Part1Chr Apply(Part1Chr chr)
     {
         int code = Part1Game.ChrBase + chr.Code;
-        if (Grown.TryGetValue(code, out var g)) chr = chr.WithGrowth(g.Experience, g.Abilities);
+        if (Grown.TryGetValue(code, out var g))
+        {
+            chr = chr.WithGrowth(g.Experience, g.Abilities);
+            if (g.Job > 0) { var f = (int[])chr.Fields.Clone(); f[7] = g.Job; chr = chr with { Fields = f }; }
+        }
         if (Equipped.TryGetValue(code, out var slots)) chr = chr.WithEquipment(slots);
         return chr;
     }

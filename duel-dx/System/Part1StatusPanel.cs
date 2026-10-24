@@ -31,13 +31,37 @@ internal sealed class Part1StatusPanel(GameWindow host)
     private (int X, int Y, int W, int H) _panel;
     private readonly (int X, int Y, int W, int H)[] _equipRows = new (int, int, int, int)[5];
 
+    private (int X, int Y, int W, int H) _jobRow;
+
     /// <summary>패널을 눌렀다 — 장비 줄이면 바꾸고 true, 패널 안이면 true, 밖이면 false(닫기).</summary>
     internal bool OnClick(UnitState u, int bx, int by)
     {
         static bool In((int X, int Y, int W, int H) r, int px, int py) => px >= r.X && px < r.X + r.W && py >= r.Y && py < r.Y + r.H;
+        if (In(_jobRow, bx, by)) { CycleJob(u); return true; }
         for (int s = 0; s < 5; s++)
             if (In(_equipRows[s], bx, by)) { CycleEquipment(u, s); return true; }
         return In(_panel, bx, by);
+    }
+
+    /// <summary>
+    /// 직업 줄을 누르면 — 바꿀 수 있는 직업을 차례로(원본 0x1009e6f0: Job.dat 머리 짝 다섯이 조건 — 그 어빌리티를 그 레벨 이상). 원본처럼 이번 레벨의 경험치는 잃는다
+    /// (0x1011c20c 「직업을 바꾸면 현재 경험치가 없어지고…」 — 누적을 100 단위로 내린다). 행동은 안 쓴다.
+    /// </summary>
+    private void CycleJob(UnitState u)
+    {
+        if (!host.Part1.IsOurs(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 직업을 바꿀 수 있습니다"); return; }
+        var chr = host.Part1.Apply(raw);
+        _jobs ??= Part1Job.LoadAll();
+        var options = _jobs.Where(j => j.Id == chr.Fields[7] || j.Firsts.Where(f => f.A > 0).All(f => chr.AbilityLevel(f.A) >= Math.Max(1, f.B)))
+                           .Where(j => j.Firsts.Any(f => f.A > 0) || j.Id == chr.Fields[7]).Select(j => j.Id).ToList();
+        if (options.Count <= 1) { host.Toast("바꿀 수 있는 직업이 없습니다"); return; }
+        int next = options[(options.IndexOf(chr.Fields[7]) + 1) % options.Count];
+        var growth = host.Part1.GrowthOf(u.ChrCode, chr.Experience);
+        growth.Job = next;
+        growth.Experience = growth.Experience / 100 * 100;
+        host._db?.ForgetPart1Characters();
+        host.Btl.Part1.Forget(u.ChrCode);
+        host.Toast($"{Part1Job.ById(_jobs, next)?.Name} 로 전직 — 이번 레벨의 경험치는 없어집니다");
     }
 
     /// <summary>그 칸에 가방의 다음 맞는 것을 끼운다(끼던 것은 가방으로) — 일행 창(Part1PartyScreen)과 같은 규칙. 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
@@ -81,6 +105,9 @@ internal sealed class Part1StatusPanel(GameWindow host)
         host.UiText(chr.Name, x + 60, y + 10, 0xFFFFE080, 13);
         int affiliation = chr.Fields[6];
         host.UiText(affiliation >= 0 && affiliation < Affiliations.Length ? Affiliations[affiliation] : "", x + 60, y + 28, 0xFFB0C0D8, 11);
+        _jobRow = (x + 56, y + 42, W - 62, 16);
+        if (host._mouse.X >= _jobRow.X && host._mouse.X < _jobRow.X + _jobRow.W && host._mouse.Y >= _jobRow.Y && host._mouse.Y < _jobRow.Y + _jobRow.H)
+            host.UiFill(_jobRow.X, _jobRow.Y, _jobRow.W, _jobRow.H, 0xC0304870);
         host.UiText(Part1Job.ById(_jobs, chr.Fields[7])?.Name ?? "—", x + 60, y + 44, GameWindow.White, 11);
 
         int row = y + 66;
@@ -122,13 +149,17 @@ internal sealed class Part1StatusPanel(GameWindow host)
         int lx = x + W + 4, ly = y;
         var learned = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).ToList();
         int lh = 10 + Math.Max(1, learned.Count) * 16;
-        host.UiFill(lx, ly, ListW, lh, 0xF0101828);
+        host.FillRect(lx, ly, ListW, lh, 0xFF101828);   // 그림 층 — 아이콘(그림 층)이 덮이지 않게
         host.UiStroke(lx, ly, ListW, lh, 0xFF8098C8);
         if (learned.Count == 0) host.UiText("없음", lx + 8, ly + 6, 0xFF808890, 11);
         for (int i = 0; i < learned.Count; i++)
         {
-            string name = Part1Ability.ById(_abilities, learned[i].Ability)?.Name ?? $"#{learned[i].Ability}";
-            host.UiText(name, lx + 8, ly + 6 + i * 16, GameWindow.White, 11);
+            var info = Part1Ability.ById(_abilities, learned[i].Ability);
+            string name = info?.Name ?? $"#{learned[i].Ability}";
+            // 아이콘 — Obs 0011 의 모션 (Abi +0x28) + 0x13(0x10090970, 분석-파트1-전투 24절 B).
+            if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon)
+                host.BlitScaled(icon, lx + 6, ly + 6 + i * 16, 14, 14);
+            host.UiText(name, lx + 24, ly + 6 + i * 16, GameWindow.White, 11);
             host.UiText($"LV{learned[i].Level}", lx + ListW - 34, ly + 6 + i * 16, 0xFFFFE080, 11);
         }
     }
