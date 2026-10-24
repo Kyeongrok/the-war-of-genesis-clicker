@@ -341,7 +341,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     // ── 레벨업 고르기 — 전투에서 오른 레벨마다 직업 어빌리티 하나(원본 0x1009dac0 은 전투 안에서 고른다) ──
 
-    internal const int PickHit = 2000, PickX = 150, PickY = 120, PickW = 340, PickRowH = 24;
+    internal const int PickHit = 2000, PickX = 190, PickY = 150, PickW = 260, PickRowH = 24;
 
     /// <summary>고를 레벨업이 있고 대사가 없다 — 지도 위에 고르기 창을 띄운다.</summary>
     internal bool Picking => host.Part1.LevelPicks.Count > 0 && Events.Talk == null;
@@ -367,7 +367,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (CurrentPick() is not { } pick) return -1;
         var (ox, oy) = host.Mos.MosesOrigin();
         for (int i = 0; i < pick.Options.Count; i++)
-            if (bx >= ox + PickX && bx < ox + PickX + PickW && by >= oy + PickY + 40 + i * PickRowH && by < oy + PickY + 40 + (i + 1) * PickRowH - 2) return i;
+            if (bx >= ox + PickX && bx < ox + PickX + PickW && by >= oy + PickY + i * PickRowH && by < oy + PickY + (i + 1) * PickRowH - 2) return i;
         return -1;
     }
 
@@ -387,21 +387,32 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     internal void DrawPick(int ox, int oy)
     {
+        // 원본 꼴(사용자 화면) — 작은 목록 창: 아이콘 · 이름 · 「LV n」(오를 레벨) · 소울 비용. 머리글 없이, 짚은 줄은 파랗게.
         if (CurrentPick() is not { } pick) return;
-        int h = 52 + pick.Options.Count * PickRowH;
-        host.UiFill(ox + PickX - 10, oy + PickY - 10, PickW + 20, h, 0xF0101828);
-        host.UiStroke(ox + PickX - 10, oy + PickY - 10, PickW + 20, h, 0xFFFFE080);
-        string name = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : $"Chr {pick.Chr}";
-        host.UiText($"{name} 레벨 {pick.Level} — 올릴 어빌리티를 고르세요", ox + PickX, oy + PickY, 0xFFFFE080, 13);
+        _abilityList ??= Part1Ability.LoadAll();
+        _attackList ??= Part1Attack.LoadAll();
+        int h = 12 + pick.Options.Count * PickRowH;
+        host.UiFill(ox + PickX - 6, oy + PickY - 6, PickW + 12, h, 0xFF1C2246);
+        host.UiStroke(ox + PickX - 6, oy + PickY - 6, PickW + 12, h, 0xFFB0B8E0);
+        string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
+        host.UiText($"{who} LV {pick.Level}", ox + PickX, oy + PickY - 24, 0xFFFFE080, 12);
         for (int i = 0; i < pick.Options.Count; i++)
         {
-            var (_, level, label) = pick.Options[i];
-            int y = oy + PickY + 40 + i * PickRowH;
-            bool hot = _hover == PickHit + i;
-            host.UiFill(ox + PickX, y, PickW, PickRowH - 2, hot ? 0xF0305080u : 0xC0202838u);
-            host.UiText(level == 1 ? $"{label} (새로 배움)" : $"{label} Lv {level - 1} → {level}", ox + PickX + 10, y + 3, GameWindow.White, 12);
+            var (ability, level, label) = pick.Options[i];
+            int y = oy + PickY + i * PickRowH;
+            if (_hover == PickHit + i) host.UiFill(ox + PickX, y, PickW, PickRowH - 2, 0xFF2840C8);
+            var info = Part1Ability.ById(_abilityList, ability);
+            if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon)
+                host.UiSprite(Part1Game.ObsBase + 11, info.Tail + 0x13, 0, ox + PickX + 6 - icon.X, y + 3 - icon.Y);   // 창과 같은 층에
+            host.UiText(label, ox + PickX + 28, y + 3, GameWindow.White, 12);
+            host.UiText($"LV{level}", ox + PickX + PickW - 76, y + 3, 0xFFFF6060, 12);
+            int cost = info != null && info.AttackId > 0 ? Part1Attack.ById(_attackList, info.AttackId + level - 1)?.Cost ?? 0 : 0;
+            if (cost > 0) host.UiText($"{cost}", ox + PickX + PickW - 34, y + 3, 0xFFFFE080, 12);
         }
     }
+
+    private IReadOnlyList<Part1Ability>? _abilityList;
+    private IReadOnlyList<Part1Attack>? _attackList;
 
     internal void OnClick(int bx, int by)
     {
@@ -473,6 +484,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             host.UiText(region, ox + (MosesScene.MosesW - rw) / 2, oy + 46, 0xFFB0C0D8, 12);
         }
 
+        // 레벨업 고르기 창이 뜨면 지도 장소(UI 층)가 창 위로 비친다 — 고르는 동안은 장소를 안 그린다.
+        if (Picking && Events.Talk == null)
+        {
+            DrawPick(ox, oy);
+            host.DrawToast();
+            return;
+        }
         // 잇닿은 장소(낱말 9~13, 가설) — 점선.
         for (int i = 0; i < chapter.Places.Count; i++)
             foreach (short next in chapter.Places[i].Words[9..14])
