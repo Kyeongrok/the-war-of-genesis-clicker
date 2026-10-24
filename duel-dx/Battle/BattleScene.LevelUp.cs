@@ -66,7 +66,7 @@ internal sealed unsafe partial class BattleScene
         for (int level = before / 100 + 1; level <= growth.Experience / 100; level++)
         {
             host.Part1.LevelPicks.Add((killer.ChrCode, level));
-            host.Toast($"{k.Chr.Name} 레벨 {level}");   // 고르기 창이 바로 뜬다(GameWindow.Part1PickOpen)
+            host.Toast($"{k.Chr.Name} — 어빌리티를 하나 올릴 수 있습니다");   // 고르기 창이 바로 뜬다(GameWindow.Part1PickOpen). 파트1 은 레벨이 없다
             if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}" + Environment.NewLine);
         }
         db.ForgetPart1Characters();
