@@ -8,12 +8,13 @@ namespace WarOfGenesis.Assets;
 /// <param name="Bonuses">보정 짝 셋(코드, 값) — 코드 0xc8~0xd4 는 능력치·저항(<see cref="Part1Chr.StatSource"/>), 300 대는 특수 효과로 보인다.</param>
 /// <param name="Attack">메모리 <c>+0x54</c> — 피해 세기 식의 ATK.</param>
 /// <param name="Defense">메모리 <c>+0x58</c> — 막기에 성공하면 방어에 더한다.</param>
-/// <param name="Critical">메모리 <c>+0x65</c> — 치명률(어쌔신 대거 25).</param>
+/// <param name="Accuracy">메모리 <c>+0x60</c> — 명중값(회피·막기 식의 분모, 보정 0xcf 를 더한다).</param>
+/// <param name="Critical">메모리 <c>+0x65</c> — 치명률(%) — 물리 기술이 rand()%100 &lt; 이 값이면 피해 × 2(어쌔신 대거 25).</param>
 /// <param name="Element">메모리 <c>+0x6c</c> — 무기 속성(0 없음).</param>
 /// <param name="ElementPower">메모리 <c>+0x6e</c> — 세기 식의 E(제곱해 더한다).</param>
 /// <param name="Weight">메모리 <c>+0x6f</c> — 세기 식의 W(DEX·SKILL 과 곱한다).</param>
 public sealed record Part1Item(int Id, string Name, string EnglishName, int Price, int Type, (int Code, int Value)[] Bonuses,
-                               int Attack, int Defense, int Critical, int Element, int ElementPower, int Weight, string Description)
+                               int Attack, int Defense, int Accuracy, int Critical, int Element, int ElementPower, int Weight, string Description)
 {
     public const int Size = 204;
 
@@ -46,7 +47,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
             // 파일 차례: u32 값 · u8 종류 · u8 · (코드, 값, 코드, 값, 코드, 값) 이 아니라 코드 +0x46 · 값 +0x4c · 코드 +0x48 · 값 +0x4e · 코드 +0x4a · 값 +0x50
             (int, int)[] bonuses = [.. new[] { (U16(6), S16(8)), (U16(10), S16(12)), (U16(14), S16(16)) }.Where(x => x.Item1 != 0)];
             items.Add(new Part1Item(i, Text(o, 30), Text(o + 30, 30), I32(0), b[p + 4], bonuses,
-                                    Attack: I32(18), Defense: I32(22), Critical: b[p + 35], Element: b[p + 40],
+                                    Attack: I32(18), Defense: I32(22), Accuracy: I32(30), Critical: b[p + 35], Element: b[p + 40],
                                     ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)));
         }
         return items;
@@ -103,6 +104,13 @@ public static class Part1Combat
         int r = damage / 3;
         if (r != 0) damage += roll % r - damage / 6;
         return damage;
+    }
+
+    /// <summary>치명 — 피해가 양수인 보통 맞음에서 rand()%100 &lt; 치명률이면 × 2(<c>0x100417ec</c>). 치명률은 선택자 0~3 이 무기1, 29~31 이 무기2 것이다.</summary>
+    public static int Critical(int damage, int criticalRate, int roll, out bool critical)
+    {
+        critical = damage > 0 && roll % 100 < criticalRate;
+        return critical ? damage * 2 : damage;
     }
 
     /// <summary>회복(선택자 6) — 최대 HP × 세기 / 20000, 잃은 HP 까지. 결과는 양수(HP 에 더할 값).</summary>
