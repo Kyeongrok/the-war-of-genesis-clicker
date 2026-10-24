@@ -159,7 +159,11 @@ internal sealed unsafe partial class BattleScene
             var u = list[i];
             if (u.Part1Leader < 0 || u.Part1Leader == u.Record || !byRecord.TryGetValue(u.Part1Leader, out int leader) || leader == i) continue;
             var boss = list[leader];
-            if (boss.Side != u.Side || boss.Part1Leader != boss.Record) continue;   // 편이 다르거나 대장이 또 누구의 부하면 잇지 않는다
+            // 편이 다르면 잇지 않는다 — 다만 <b>아군 대장(편 4) + 동맹 용병(편 3)</b>은 잇는다: 원본 LoadBtl(0x1002d41b~0x1002d475)은 편을 안 보고
+            // 0x10036790(대장, 이, 1)로 잇는다. Btl 0138 레코드 18~21(용병 580·587, 편 3)이 레코드 1(편 4)을 대장으로 적는데, 전에는 편이 달라
+            // 안 이어져 용병마다 제 차례가 돌았다(사용자 보고). 부하(+0x1bf)는 차례 고르기(0x10031dc7)에서 빠진다. 대장이 또 누구의 부하여도 안 잇는다.
+            bool allies = boss.Side is 3 or 4 && u.Side is 3 or 4;
+            if ((boss.Side != u.Side && !allies) || boss.Part1Leader != boss.Record) continue;
             u.LeaderIndex = leader;
             u.FormationSlot = slots[leader] = slots.GetValueOrDefault(leader, -1) + 1;
             boss.LegionId = Part1SquadLegion;
@@ -629,6 +633,23 @@ internal sealed unsafe partial class BattleScene
     {
         var followers = FollowersOf(leaderIndex);
         if (followers.Count == 0) return;
+        // 파트1 아군 부대(대장 편 4 — 용병을 거느린 주인공)는 대장이 쓰러지면 <b>부대가 풀린다</b>: 원본 죽음 처리(0x100345f2~0x10034646)가
+        // 부하마다 대장 연결(+0x1e0 · +0x1bf)을 끊고 편 4 면 편 3 으로 바꾼다 — 새 대장을 뽑지 않고, 저마다 제 차례(동맹 AI)를 받는다.
+        // 적 부대는 사용자 요청대로 새 대장을 뽑는다(아래).
+        if (host._scene.IsPart1 && host._units[leaderIndex].Side == 4)
+        {
+            foreach (var f in followers)
+            {
+                f.LeaderIndex = -1;
+                f.FormationSlot = -1;
+                _followerTarget.Remove(f);
+                if (f.Side == 4) f.Side = 3;
+                f.Awake = true;
+                host.StatusScr.RefreshUnitStats(f);
+            }
+            host._units[leaderIndex].LegionId = 0;
+            return;
+        }
         // 플레이어 군단의 대장이 죽으면 떨어져 나온 부하들은 <b>편 3(동맹 AI)</b>이 된다(0x100716c0) — 더는 명령할 수 없다.
         if (host._units[leaderIndex].Side == 4)
             foreach (var f in followers) { f.Side = 3; f.Awake = true; }
