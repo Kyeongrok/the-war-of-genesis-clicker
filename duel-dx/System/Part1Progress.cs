@@ -43,6 +43,7 @@ internal sealed class Part1Progress
         ChapterId = -1;
         PartyPlace = 0;
         PendingActions = [];
+        Chain = null;
         Grown = [];
         Eld = 0;
         LevelPicks = [];
@@ -85,8 +86,9 @@ internal sealed class Part1Progress
         if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw) return [];
         var chr = Apply(raw);
         var abilities = Part1Ability.LoadAll();
+        // 원본(0x1009dac0)은 배운 어빌리티를 번호별 칸(+0x8c + 번호, 0xff = 안 배움)에 두어 개수 제한이 없다 — 예전 10개 제한 때문에
+        // 10개를 배운 버몬트에게 직업의 새 어빌리티(갑옷 장착 · HP · STR …)가 후보로 안 떴다(사용자 보고).
         return Part1Job.ById(Part1Job.LoadAll(), chr.JobId)?.LevelUpCandidates(chr)
-                   .Where(c => c.NewLevel > 1 || chr.Abilities.Length < 10)
                    .Select(c => (c.Ability, c.NewLevel, Part1Ability.ById(abilities, c.Ability)?.Name ?? $"어빌리티 {c.Ability}")).ToList() ?? [];
     }
 
@@ -257,6 +259,13 @@ internal sealed class Part1Progress
     /// <summary>챕터 사건의 남은 행동 — 전투·필드에 갔다 오면 이어 돌 것(세이브에 같이 적는다).</summary>
     internal List<ScriptCommand> PendingActions = [];
 
+    /// <summary>
+    /// 사슬 자리 — 챕터 사건이 연 장면(남은 행동 머리의 502 · 503 · 900)이 다음 장면으로 이어졌을 때(전투 101 → 전투 · 104 → 필드 · 필드 502 → 전투 · 501 → 필드)
+    /// 지금 가 있는 장면 [갈래(1 전투 · 2 필드), 번호]. 챕터로 돌아오면 지운다. 있으면 남은 행동 머리는 이미 지난 것 —
+    /// 이어 하기는 이 장면부터 열고, 전투 세이브는 머리를 빼고 잇는다(분석-파트1-챕터 15절). 원본은 사슬 안에서 세이브가 장면 번호를 적는다.
+    /// </summary>
+    internal int[]? Chain;
+
     internal static string SavePath => UserDataFolder.File("part1.json");
 
     internal static bool HasSave => File.Exists(SavePath);
@@ -270,7 +279,8 @@ internal sealed class Part1Progress
                                    Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null,
                                    Dictionary<int, int>? Riding = null,
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
-                                   Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null);
+                                   Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null,
+                                   int[]? Chain = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
@@ -287,7 +297,7 @@ internal sealed class Part1Progress
     internal string ToJson(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain);
         return JsonSerializer.Serialize(data);
     }
 
@@ -331,6 +341,7 @@ internal sealed class Part1Progress
             SelectedTeam = data.SelectedTeam ?? [];
             ChapterMarkerPrev = data.ChapterMarkerPrev ?? [];
             Home = data.Home ?? [];
+            Chain = data.Chain is [_, _] chain ? chain : null;
             _homeVersion++;
             return true;
         }
