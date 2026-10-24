@@ -20,7 +20,16 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     private int _bgW, _bgH;
     private Action? _onEnd;
 
-    internal Part1SceneScript Script => _script ??= new(host) { SceneChange = OnSceneChange, BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id) };
+    internal Part1SceneScript Script => _script ??= new(host)
+    {
+        SceneChange = OnSceneChange,
+        BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
+        SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) _spots[n] = (x, y); },
+        SpriteShift = (n, dx, dy) => { if (n >= 0 && n < _spots.Length) _spots[n] = (_spots[n].X + dx, _spots[n].Y + dy); },
+    };
+
+    /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮긴다.</summary>
+    private (int X, int Y)[] _spots = [];
     private Part1SceneScript? _script;
 
     /// <summary>그 필드를 연다 — 끝나면(행동 500 · Esc · 대사가 다 끝나고 누름) <paramref name="onEnd"/>. 못 읽으면 곧바로 <paramref name="onEnd"/>.</summary>
@@ -35,6 +44,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _field = field;
         _onEnd = onEnd;
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
+        _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
         _open = true;
         Script.Start(field.Events, field.Lines, []);
     }
@@ -105,14 +115,27 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     {
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        if (_bg is { } bg && _field is { } field)
+        if (_field is { } field)
         {
             const int W = MosesScene.MosesW, H = MosesScene.MosesH;
-            int camX = Math.Clamp((int)field.Header[1], 0, Math.Max(0, _bgW - W)), camY = Math.Clamp((int)field.Header[2], 0, Math.Max(0, _bgH - H));
+            // 화면 자리 — 머리 낱말 1·2 가 처음 자리이고, 넓은 그림(0002 의 1300 폭 파노라마)에서는 인물들 가운데를 따라간다(화면 이동 401 은 아직 안 풀었다).
+            int followX = _spots.Length > 0 ? (int)_spots.Average(p => p.X) - W / 2 : field.Header[1];
+            int camX = Math.Clamp(_bgW > W && _spots.Length > 0 ? followX : field.Header[1], 0, Math.Max(0, _bgW - W)), camY = Math.Clamp((int)field.Header[2], 0, Math.Max(0, _bgH - H));
             int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
-            for (int y = 0; y < Math.Min(H, _bgH); y++)
-                for (int x = 0; x < Math.Min(W, _bgW); x++)
-                    host.SetPixel(ox + x, oy + top + y, bg[(camY + y) * _bgW + camX + x] | 0xFF000000);
+            if (_bg is { } bg)
+                for (int y = 0; y < Math.Min(H, _bgH); y++)
+                    for (int x = 0; x < Math.Min(W, _bgW); x++)
+                        host.SetPixel(ox + x, oy + top + y, bg[(camY + y) * _bgW + camX + x] | 0xFF000000);
+            // 인물 — 서기 모션(동작 0)을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽). 아래쪽에 선 사람을 나중에.
+            int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
+            foreach (int i in Enumerable.Range(0, Math.Min(_spots.Length, field.Sprites.Count)).OrderBy(i => _spots[i].Y))
+            {
+                var sprite = field.Sprites[i];
+                var facing = sprite.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
+                var (x, y) = _spots[i];
+                host.DrawUi(Part1Game.ObsBase + sprite.SpriteId, ObsMotionTable.DirectionOf(facing), tick, ox + x - camX, oy + top + y - camY,
+                            GameWindow.UiBlend.Alpha, loop: true, mirror: facing == Facing.Right);
+            }
         }
         if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
         else host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);

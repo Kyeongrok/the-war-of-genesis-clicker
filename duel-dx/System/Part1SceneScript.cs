@@ -25,6 +25,12 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>장면을 넘기는 행동(500 · 502 · 503) — 넘기면 true(실행을 멈춘다), 모르는 것이면 false.</summary>
     internal Func<ScriptCommand, bool>? SceneChange;
 
+    /// <summary>행동 303 [인물 차례, x, y] — 필드 인물을 그 자리로 옮긴다(걷기 302 는 아직 없어 도착 자리만 맞춘다).</summary>
+    internal Action<int, int, int>? SpritePlace;
+
+    /// <summary>행동 302 [인물 차례, dx, dy, 틱] — 틱마다 (dx, dy) 씩 걷는다(필드 0002: [0, 0, -4, 90] 로 화면 아래에서 걸어 들어온다). 지금은 걸음 없이 도착 자리로 옮긴다.</summary>
+    internal Action<int, int, int>? SpriteShift;
+
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
@@ -129,6 +135,8 @@ internal sealed class Part1SceneScript(GameWindow host)
                 }
                 case >= 203 and <= 206: Talk = null; break;
                 case 100: BackgroundChange?.Invoke(a[0]); break;
+                case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
+                case 302: SpriteShift?.Invoke(a[0], a[1] * a[3], a[2] * a[3]); break;
                 case 101: _vars[a[0]] = _vars.GetValueOrDefault(a[0]) + 1; break;
                 case 800: _vars[a[0]] = a[1]; break;
                 case 802:
