@@ -1797,7 +1797,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             _part1ProcBy = a;
             if (Work(Part1Game.ChrBase + proc.Attack) is { } procWork) _part1Proc = (Array.IndexOf(host._units, a), procWork, t.Col, t.Row);
             var used = new List<int>();
-            if (_part1Proc == null && t.Hp > 0)
+            // 309 암살(Attack 389, 0x1006e860) — 남은 HP 가 500 이하면 굴림 없이 쓰러뜨린다(처치 보상은 여느 처치와 같다), 넘으면 아무 일도 없다.
+            if (proc.Code == 309)
+            {
+                if (t.Hp is > 0 and <= 500)
+                {
+                    t.Hp = 0;
+                    used.Add(389);
+                    Popup(t, "암살", AilmentPopupColor, 12, rise: 88);
+                }
+            }
+            else if (_part1Proc == null && t.Hp > 0)
             {
                 // 상태만 거는 갈래 — 파트1 상태를 가까운 파트2 상태로(Part1Item.Part2Status, 가설). 중독은 차례마다 최대 HP 5%, 나머지는 값 1.
                 if (Part1Item.Part2Status(proc.Code) is > 0 and var status)
@@ -1808,7 +1818,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                    $"part1 weapon proc {a.ChrCode} → {t.ChrCode}: {weapon.Name} (보정 {proc.Code} → Attack {proc.Attack}{(_part1Proc != null ? " 쏨" : used.Count > 0 ? " 상태만" : " 없음")})" + Environment.NewLine);
+                    $"part1 weapon proc {a.ChrCode} → {t.ChrCode}: {weapon.Name} (보정 {proc.Code} → Attack {proc.Attack}{(_part1Proc != null ? " 쏨" : used.Contains(389) ? " 암살" : used.Count > 0 ? " 상태만" : " 없음")})" + Environment.NewLine);
         }
         // 피해 기술이 적에게 상태이상·약화를 함께 걸었으면(엘레맨탈 파이어의 점화 따위) 그 적도 보조 경험치 대상으로 센다(사용자 요청 — 원본에 없다).
         if (_ailmentLanded && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);

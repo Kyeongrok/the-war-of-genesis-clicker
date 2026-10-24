@@ -588,7 +588,7 @@ internal sealed unsafe partial class BattleScene
         {
             var goals = MoveGoals(u, enemies).ToList();
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"ai no attack: unit {index} chr {u.ChrCode} side {u.Side} ({u.Col},{u.Row}) TP {u.Tp} works [{string.Join(",", AiWorks(u).Select(x => x.Id))}] enemies {enemies.Count} nearest {nearest} goals {goals.Count}"
+                $"ai no attack: unit {index} chr {u.ChrCode} side {u.Side} ({u.Col},{u.Row}) TP {u.Tp} works [{string.Join(",", AiWorks(u).Select(x => $"{x.Id} 사거리 {x.RangeKind}:{x.RangeMinQuarters}~{RangeMaxOf(x, u)} 모양 {x.RangeShape}/{x.AreaShape}"))}] enemies {enemies.Count} nearest {nearest} goals {goals.Count}"
                 + (goals.Count > 0 ? $" first ({goals[0].Col},{goals[0].Row}) reach {NearestReachableTo(u, range, goals[0].Col, goals[0].Row)}" : "") + Environment.NewLine);
         }
 

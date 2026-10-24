@@ -522,7 +522,9 @@ public sealed class GameDatabase
                     var chr = Part1Chr.Load(code - Part1Game.ChrBase) is { } loaded ? Part1Growth?.Invoke(loaded) ?? loaded : null;
                     ushort nameId = (ushort)Math.Min(ushort.MaxValue, Part1Game.NameTextBase + code - Part1Game.ChrBase);
                     if (chr != null) _part1Names[nameId] = chr.Name;
-                    made = chr?.ToCharacterData(Part1BasicWork, nameId);
+                    // 기본 공격 — 활 · 총을 든 인물은 파트2 의 쏘는 기본 공격(work 6, 동작 9 = 파트1 동작 3 원거리)을, 나머지는 살라딘의 베기를 빌린다.
+                    var weapon = chr != null && chr.Equipment[0] > 0 ? Part1Item.ById(_part1Items ??= Part1Item.LoadAll(), chr.Equipment[0]) : null;
+                    made = chr?.ToCharacterData(Part1Item.ShootsBasic(weapon) ? Part1ShootWork : Part1BasicWork, nameId);
                     // 파트1 어빌리티 가운데 이 게임에 기술 파일이 있는 것(assets/data/skills/200NN.json — 썬더스탐 · 헬 스트라이크 · 블리자드 스탐 …)은
                     // 어빌리티 20000 + 번호로 붙인다. 살라딘은 96 헬 스트라이크를 갖고 시작한다.
                     if (made != null && chr != null)
@@ -571,6 +573,10 @@ public sealed class GameDatabase
     /// <summary>파트1 인물이 빌려 쓰는 기본 공격 — 파트2 살라딘(Chr 219)의 것. 파트1 기본 공격 연출을 옮기기 전까지의 자리.</summary>
     private ushort Part1BasicWork => _part1BasicWork ??= Character(219)?.BasicWorkId ?? 0;
     private ushort? _part1BasicWork;
+
+    /// <summary>파트1 의 활 · 총이 빌려 쓰는 쏘는 기본 공격 — 파트2 원거리 기본 work 6(동작 9).</summary>
+    private const ushort Part1ShootWork = 6;
+    private IReadOnlyList<Part1Item>? _part1Items;
 
     /// <summary>인물 덮어쓰기 폴더(<c>assets/data/chr-edits/NNNN.json</c>) — 원본 <c>.chr</c> 은 그대로 둔다.</summary>
     public const string CharacterEditFolder = "chr-edits";

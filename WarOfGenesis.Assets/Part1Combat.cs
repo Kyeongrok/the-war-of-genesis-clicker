@@ -39,6 +39,19 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
         _ => 0,
     };
 
+    /// <summary>
+    /// 이 무기로 치는 기본 공격(<c>Attack.dat</c> 번호) — 1 칼공격 · 2 창공격 · 3 빔소드공격 · 4 활공격 · 5 단발사격 · 10 빔라이플공격.
+    /// 무기 갈래(+0x44)로 고른다: 6 빔소드 → 3 · 7 활 → 4 · 8 권총 · 9 소총 → 5 · 10 빔라이플 → 10 · 11 창 → 2 · 나머지(칼 · 맨손) → 1.
+    /// 가설 — 원본이 이 짝을 고르는 자리는 못 찾았다(Attack.dat 1~10 의 이름과 사거리 갈래가 갈래별 무기와 맞다).
+    /// </summary>
+    public static int BasicAttack(Part1Item? weapon) => weapon?.Type switch
+    {
+        6 => 3, 7 => 4, 8 or 9 => 5, 10 => 10, 11 => 2, _ => 1,
+    };
+
+    /// <summary>쏘는 기본 공격인가(활 · 총 · 빔라이플) — 파트2 의 원거리 기본 공격 work 를 빌린다.</summary>
+    public static bool ShootsBasic(Part1Item? weapon) => BasicAttack(weapon) is 4 or 5 or 10;
+
     public (int Code, int Attack) ProcAttack()
     {
         foreach (var (code, value) in Bonuses)
@@ -269,6 +282,15 @@ public sealed record Part1Fighter(Part1Chr Chr, Part1Item?[] Equipment)
 
     /// <summary>명중값 — 무기1 명중 + 보정 207(회피 식의 분모).</summary>
     public int HitValue => (Weapon1?.Accuracy ?? 0) + EquipBonus(Part1Bonus.Accuracy);
+
+    /// <summary>
+    /// 무기 사거리(Attack.dat +0x21 = 2 — 활공격 · 단발사격 · 빔라이플공격) — 무기 아이템 +0x68(시판 무기는 모두 8) + 장비 보정 206(RANGE).
+    /// 범위 칠하기가 ÷ 2 해 칸 반경으로 쓴다(<c>0x10038ae0</c> · <c>0x1008ac1e</c>, 분석-파트1-전투 15절) — 그래서 칸 수로 돌려준다.
+    /// </summary>
+    public int WeaponRangeTiles => (WeaponReach + EquipBonus(Part1Bonus.Range)) / 2;
+
+    /// <summary>무기 아이템 +0x68 — 파일 자리를 아직 안 읽어 시판 무기 값 8 을 쓴다.</summary>
+    private const int WeaponReach = 8;
 
     /// <summary>속성 1~5 저항(칸 30~34, 10 이 보통) + 장비 보정 — 속성이 없으면 null.</summary>
     public int? Resist(int element) => element is >= 1 and <= 5 ? Chr.Fields[30 + element - 1] + EquipBonus(Part1Bonus.ResistOf(element)) : null;
