@@ -34,6 +34,24 @@ internal sealed unsafe partial class BattleScene
         (RingCommand.Rest, 91, 2, "REST"),
     ];
 
+    /// <summary>
+    /// 파트1 의 턴 메뉴 — 넷뿐이다(<c>0x10090420</c>, 분석-파트1-전투 24절): 왼위 어빌리티 · 오른위 휴식 · 왼아래 아이템 · 오른아래 상태.
+    /// 공격 항목은 없다 — 이동 단계에서 기본 공격 범위 안의 적을 누르면 친다. 시스템 메뉴는 Esc 로. 그림은 파트2 링을 그대로 쓴다.
+    /// </summary>
+    internal static readonly (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] Part1RingItems =
+    [
+        (RingCommand.Ability, 87, 0, "ABILITY"),
+        (RingCommand.Rest, 91, 2, "REST"),
+        (RingCommand.Item, 89, 4, "ITEM"),
+        (RingCommand.Status, 88, 5, "STATUS"),
+    ];
+
+    /// <summary>파트1 링 항목의 자리 각도 — 원본 단추 자리(−100,−60) · (+100,−60) · (−100,0) · (+100,0) 의 방향.</summary>
+    private static readonly double[] Part1RingAngles = [-0.85 * Math.PI, -0.15 * Math.PI, 0.85 * Math.PI, 0.15 * Math.PI];
+
+    /// <summary>지금 판의 링 항목 — 파트1 판이면 넷, 아니면 파트2 의 여섯.</summary>
+    internal (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] Items => host._scene.IsPart1 ? Part1RingItems : RingItems;
+
     internal enum RingPhase { Opening, Reopening, Idle, Picking, Cancelling }
 
     internal const int RingRadius = 66, RingLift = 40, RingEdge = 89, RingHitRadius = 18;
@@ -58,7 +76,7 @@ internal sealed unsafe partial class BattleScene
                             host._uiPaths[id] = path;
 
             // 링 그림만 미리 풀어 둔다 — 나머지(이펙트·무기 층)는 처음 쓸 때 푼다.
-            foreach (int id in RingItems.Select(r => r.IconObs).Concat([86, 105, 106, 452])) host.UiFor(id);
+            foreach (int id in Items.Select(r => r.IconObs).Concat([86, 105, 106, 452])) host.UiFor(id);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -81,7 +99,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>지금 단계·틱에서 i 번 항목의 중심(링 중심 기준).</summary>
     internal (int X, int Y) RingItemOffset(int i)
     {
-        double baseAngle = 2 * Math.PI * (6 - i) / 6 - Math.PI / 2;
+        double baseAngle = host._scene.IsPart1 && i < Part1RingAngles.Length ? Part1RingAngles[i] : 2 * Math.PI * (6 - i) / 6 - Math.PI / 2;
         int n = RingTick(_ringPhaseStart) + 1;
         double r, a;
         switch (_ringPhase)
@@ -99,7 +117,7 @@ internal sealed unsafe partial class BattleScene
     {
         if (_ringUnit < 0 || _ringPhase != RingPhase.Idle) return -1;
         var (cx, cy) = RingCenter(host._units[_ringUnit]);
-        for (int i = 0; i < RingItems.Length; i++)
+        for (int i = 0; i < Items.Length; i++)
         {
             var (ox, oy) = RingItemOffset(i);
             int dx = bx - cx - ox, dy = by - cy - oy;
@@ -178,14 +196,14 @@ internal sealed unsafe partial class BattleScene
                 // 걸을 칸도 칠 적도 없으면 REST 를 미리 짚어 둔다(사용자 요청 cmd-4, 원본에 없다) — 확인만 누르면 쉰다. 패드면 커서도 그리로 간다(GamePad.RingByStick).
                 if (_ringHover < 0 && OnlyRestLeft(_ringUnit))
                 {
-                    _ringHover = Array.FindIndex(RingItems, r => r.Command == RingCommand.Rest);
+                    _ringHover = Array.FindIndex(Items, r => r.Command == RingCommand.Rest);
                     _ringHoverAt = host._lastTime;
                 }
                 break;
             case RingPhase.Picking when n > 8:
                 int unit = _ringUnit, item = _ringPicked;
                 _ringUnit = -1;
-                RunRingCommand(unit, RingItems[item].Command);
+                RunRingCommand(unit, Items[item].Command);
                 break;
             case RingPhase.Cancelling when n > 10:
                 _ringUnit = -1;
@@ -268,7 +286,7 @@ internal sealed unsafe partial class BattleScene
 
     internal void PickRingItem(int item)
     {
-        var (command, _, _, hover) = RingItems[item];
+        var (command, _, _, hover) = Items[item];
         if (!RingItemEnabled(command, _ringUnit))
         {
             host.Toast(_ringUnit != _turn || !host._units[_ringUnit].IsAlly ? $"{hover}: 차례인 아군만 쓸 수 있습니다" : $"{hover}: TP 가 모자랍니다");
@@ -283,14 +301,14 @@ internal sealed unsafe partial class BattleScene
     /// <summary>단축키로 링 명령을 바로 실행한다 — 링이 열려 있으면 고름 움직임을 거친다.</summary>
     internal void RingShortcut(RingCommand command)
     {
-        int item = Array.FindIndex(RingItems, r => r.Command == command);
+        int item = Array.FindIndex(Items, r => r.Command == command);
         if (_ringUnit >= 0)
         {
             if (_ringPhase == RingPhase.Idle) PickRingItem(item);
             return;
         }
         if (!IsPlayerTurn || _abilityMenu || _targetWork >= 0) return;
-        if (!RingItemEnabled(command, _turn)) { host.Toast($"{RingItems[item].Hover}: 지금은 쓸 수 없습니다"); return; }
+        if (!RingItemEnabled(command, _turn)) { host.Toast($"{Items[item].Hover}: 지금은 쓸 수 없습니다"); return; }
         RunRingCommand(_turn, command);
     }
 
@@ -328,9 +346,9 @@ internal sealed unsafe partial class BattleScene
         if (!closing) host.DrawUi(106, 0, t, cx, cy, UiBlend.Darken);
         if (!closing && (_ringPhase != RingPhase.Opening || n >= 7)) host.DrawUi(86, 1, t, cx, cy, UiBlend.Add);
 
-        for (int i = 0; i < RingItems.Length; i++)
+        for (int i = 0; i < Items.Length; i++)
         {
-            var (command, iconObs, labelMotion, hoverName) = RingItems[i];
+            var (command, iconObs, labelMotion, hoverName) = Items[i];
             var (ox, oy) = RingItemOffset(i);
             int x = cx + ox, y = cy + oy;
             bool hover = _ringPhase == RingPhase.Idle && i == _ringHover;

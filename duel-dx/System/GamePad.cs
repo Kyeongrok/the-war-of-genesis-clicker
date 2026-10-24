@@ -468,7 +468,7 @@ internal sealed partial class GamePad(GameWindow host)
         if (x == 0 && y == 0) { _ringStickItem = -1; return; }
         int best = -1;
         double bestDot = double.MinValue;
-        for (int i = 0; i < BattleScene.RingItems.Length; i++)
+        for (int i = 0; i < btl.Items.Length; i++)
         {
             var (ox, oy) = btl.RingItemOffset(i);
             double dot = (ox * x + oy * y) / Math.Max(1, Math.Sqrt(ox * ox + oy * oy));

@@ -113,6 +113,10 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     /// <summary>전투 판에 없는 파티원을 위한 임시 유닛 — 창을 닫으면 <see cref="SyncVirtualStatus"/> 가 자료를 파티에 되돌려 적는다.</summary>
     internal UnitState? _statusVirtual;
 
+    /// <summary>파트1 전투의 상태 패널.</summary>
+    private Part1StatusPanel Part1Panel => _part1Panel ??= new(host);
+    private Part1StatusPanel? _part1Panel;
+
     internal UnitState StatusUnit() => host._statusUnit == VirtualStatus && _statusVirtual != null ? _statusVirtual : host._units[host._statusUnit];
 
     /// <summary>파티원(Chr)의 스테이터스 창을 연다 — 전투에 서 있으면 그 유닛, 아니면 파티 자료로 임시 유닛을 만든다.</summary>
@@ -181,6 +185,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     internal bool OnStatusClick(int bx, int by)
     {
         if (host._statusUnit < 0) return false;
+        if (Part1Panel.Applies(StatusUnit())) { host._statusUnit = -1; return true; }   // 파트1 패널은 보기만 — 누르면 닫는다
         if (_statusTip != null) return true;   // 설명이 떠 있는 동안은 다른 입력을 받지 않는다(0x10042c00)
         var (ox, oy) = StatusOrigin();
 
@@ -565,6 +570,8 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         _statusHits.Clear();
         _statusRightHits.Clear();
         if (host._statusUnit < 0) return;
+        // 파트1 판의 파트1 인물 — 원본 파트1 의 곁 패널(Part1StatusPanel)로 그린다.
+        if (Part1Panel.Applies(StatusUnit())) { Part1Panel.Draw(StatusUnit()); return; }
         var (ox, oy) = StatusOrigin();
 
         // 원본 Status 는 화면 전체를 쓰는 창이다 — 둘레는 검게, 가운데 640×480 에 배경 한 장(0x100e09f0).

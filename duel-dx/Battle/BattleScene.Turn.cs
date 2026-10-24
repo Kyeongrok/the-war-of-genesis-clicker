@@ -729,7 +729,19 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             return;
         }
         RestFollowers(index);        // 대장이 쉬면 부하도 먼저 쉰다(0x1005f62a, 감사3 L3)
-        if (u.Tp > 0 && u.MaxTp > 0 && host._db != null && !u.HasStatus(26))
+        // 파트1 휴식(0x1003e580, 분석-파트1-전투 24절) — 안 움직였으면 잃은 HP 의 1/5, 움직였으면 1/10. 소울은 그대로.
+        if (host._scene.IsPart1)
+        {
+            bool stayed = u.Col == u.OriginCol && u.Row == u.OriginRow;
+            int gain = (u.MaxHp - u.Hp) / (stayed ? 5 : 10);
+            if (gain > 0 && !u.HasStatus(26))
+            {
+                int before = u.Hp;
+                u.Hp += gain;
+                ShowNumber(u, host._db?.T(159) ?? "HP", HealColor2, rise: false, count: (before, u.Hp));
+            }
+        }
+        else if (u.Tp > 0 && u.MaxTp > 0 && host._db != null && !u.HasStatus(26))
         {
             int heal = (int)((long)(u.MaxHp - u.Hp) * u.Tp / u.MaxTp * host._db.N(35) / 100);
             if (heal > 0)
