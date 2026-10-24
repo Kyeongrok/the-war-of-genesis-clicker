@@ -1769,6 +1769,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);
         ApplyAilments(a, t, w, crit);
+        // 파트1 무기 덧효과(분석-파트1-전투 23절) — 무기로 친 치명타면 무기 보정 300~309 의 기술이 한 번 덧붙는다(0x1003dc9f → 메시지 105).
+        // 덧기술 연출은 아직 없어 상태만 건다: 304 중독(파트2 상태 3, 차례마다 최대 HP 5%) · 303 버써크(4). 나머지(메테오 · 번개 · 암살 …)는 아직.
+        if (crit && host._scene.IsPart1 && Part1.AttackOf(w) == null && Part1.Fighter(a)?.Weapon1 is { } weapon && t.Alive && t.Hp > 0)
+        {
+            var used = new List<int>();
+            if (weapon.Bonus(304) > 0) { PutAilment(t, 3, 5, used, a); Popup(t, "중독", AilmentPopupColor, 12, rise: 88); }
+            if (weapon.Bonus(303) > 0) { PutAilment(t, 4, 1, used, a); Popup(t, "버써크", AilmentPopupColor, 12, rise: 88); }
+            if (Trace && used.Count > 0)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"part1 weapon proc {a.ChrCode} → {t.ChrCode}: {weapon.Name}" + Environment.NewLine);
+        }
         // 피해 기술이 적에게 상태이상·약화를 함께 걸었으면(엘레맨탈 파이어의 점화 따위) 그 적도 보조 경험치 대상으로 센다(사용자 요청 — 원본에 없다).
         if (_ailmentLanded && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);
         Counterattack(a, t, amount);
