@@ -267,7 +267,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
                 continue;
             }
 
-            string title = host._db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
+            string title = head.SceneTitle is { Length: > 0 } saved ? saved : host._db?.T((ushort)head.SceneText) is { Length: > 0 } s ? s : "";
             var (_, tw, _) = host.UiGetText(title, White);
             string label = slot == AutoSlot ? "[자동 저장]" : slot > AutoSlot ? $"[자동 {slot - AutoSlot}차례 전]" : $"[{slot:D2}:{head.SceneKind switch { 4 => "챕  터", 7 => "연대표", _ => "전  투" }}]";
             // 줄 높이는 표시 글로 잰다 — 연대표 세이브는 이름이 빈 글(TXR 2557)이라 이름으로 재면 높이 0 이 되어 그 줄만 아래로 처졌다.

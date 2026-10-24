@@ -759,7 +759,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null,
                                     bool MosesAltVoice = false,    // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
                                     int? Bgm = null,
-                                    string? Part1 = null);         // 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
+                                    string? Part1 = null,
+                                    string? SceneTitle = null);    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
+                                                                   // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
     // 꼬리 셋(없으면 옛 세이브라 예전처럼):
     // Entry = 전투 들어가기 직전 가방·GP·명부·군단 — 원본 전투 세이브의 전역 본문(판 부분과 따로, 분석-시스템메뉴 2.3/2.4b). RESTART 기준(감사5 S5).
@@ -1025,7 +1027,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 Camera: battleSave ? [host._camX, host._camY] : null,
                 EventCheckDue: battleSave ? host.Btl._eventCheckDue : null,
                 MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null,
-                Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null);
+                Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null,
+                SceneTitle: host._scene.IsPart1 ? host._scene.Title : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
