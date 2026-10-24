@@ -302,6 +302,8 @@ internal sealed unsafe partial class BattleScene
     internal void RingShortcut(RingCommand command)
     {
         int item = Array.FindIndex(Items, r => r.Command == command);
+        // 이 링에 없는 명령의 단축키는 무시한다 — 파트1 링(어빌리티 · 휴식 · 상태 · 아이템)에서 공격 키를 누르면 칸 −1 을 읽어 튕겼다(사용자 보고).
+        if (item < 0) return;
         if (_ringUnit >= 0)
         {
             if (_ringPhase == RingPhase.Idle) PickRingItem(item);
