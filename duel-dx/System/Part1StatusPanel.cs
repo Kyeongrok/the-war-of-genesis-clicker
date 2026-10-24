@@ -208,23 +208,38 @@ internal sealed class Part1StatusPanel(GameWindow host)
             row += EquipRowH;
         }
 
-        // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV.
+        // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV. 지금 직업이 가르치는 것(Job.dat 짝 — 고르기 창 후보와 같은 표)은
+        // 「지금/최대」로, 아직 안 배운 것도 흐리게 함께 보인다 — 무엇을 몇까지 올릴 수 있는지 보이게(사용자 요청).
         int lx = x + W + 4, ly = y;
-        var learned = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).ToList();
-        int lh = 10 + Math.Max(1, learned.Count) * 16;
+        var job = Part1Job.ById(_jobs, chr.Fields[7]);
+        var teach = job?.Abilities.Where(a => a.Ability > 0 && a.Level > 0).GroupBy(a => a.Ability).ToDictionary(g => g.Key, g => g.Max(a => a.Level)) ?? [];
+        var rows = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).Select(a => (a.Ability, a.Level)).ToList();
+        foreach (var (ability, _) in teach) if (!rows.Any(r => r.Ability == ability)) rows.Add((ability, 0));
+        const int RowH = 16;
+        int lh = 10 + Math.Max(1, rows.Count) * RowH + (teach.Count > 0 ? 16 : 0);
         host.FillRect(lx, ly, ListW, lh, 0xFF101828);   // 그림 층 — 아이콘(그림 층)이 덮이지 않게
         host.UiStroke(lx, ly, ListW, lh, 0xFF8098C8);
-        if (learned.Count == 0) host.UiText("없음", lx + 8, ly + 6, 0xFF808890, 11);
-        for (int i = 0; i < learned.Count; i++)
+        if (rows.Count == 0) host.UiText("없음", lx + 8, ly + 6, 0xFF808890, 11);
+        for (int i = 0; i < rows.Count; i++)
         {
-            var info = Part1Ability.ById(_abilities, learned[i].Ability);
-            string name = info?.Name ?? $"#{learned[i].Ability}";
+            var (ability, level) = rows[i];
+            var info = Part1Ability.ById(_abilities, ability);
+            string name = info?.Name ?? $"#{ability}";
+            int ry = ly + 6 + i * RowH;
             // 아이콘 — Obs 0011 의 모션 (Abi +0x28) + 0x13(0x10090970, 분석-파트1-전투 24절 B).
             if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon)
-                host.BlitScaled(icon, lx + 6, ly + 6 + i * 16, 14, 14);
-            host.UiText(name, lx + 24, ly + 6 + i * 16, GameWindow.White, 11);
-            host.UiText($"LV{learned[i].Level}", lx + ListW - 34, ly + 6 + i * 16, 0xFFFFE080, 11);
+                host.BlitScaled(icon, lx + 6, ry, 14, 14);
+            bool taught = teach.TryGetValue(ability, out int max);
+            uint nameColor = level == 0 ? 0xFF808890 : GameWindow.White;
+            host.UiText(name, lx + 24, ry, nameColor, 11);
+            // 지금 직업이 가르치면 「지금/최대」(다 올렸으면 초록), 아니면 지금 단계만.
+            string lv = taught ? $"{level}/{max}" : $"LV{level}";
+            uint lvColor = !taught ? 0xFFFFE080 : level >= max ? 0xFF80E080 : level == 0 ? 0xFF808890 : 0xFFFFE080;
+            var (_, lw, _) = host.UiGetText(lv, lvColor, 11);
+            host.UiText(lv, lx + ListW - 8 - lw, ry, lvColor, 11);
         }
+        if (teach.Count > 0)
+            host.UiText($"{job!.Name} — 지금/최대", lx + 8, ly + 6 + rows.Count * RowH + 2, 0xFF8098C8, 10);
 
         // 장비 목록 — 누른 슬롯 아래에 틀 창, 줄마다 그림 · 이름.
         if (_equipChoices is { } equipChoices)
