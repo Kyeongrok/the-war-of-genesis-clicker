@@ -31,6 +31,12 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 302 [인물 차례, dx, dy, 틱] — 틱마다 (dx, dy) 씩 걷는다(필드 0002: [0, 0, -4, 90] 로 화면 아래에서 걸어 들어온다).</summary>
     internal Action<int, int, int, int>? SpriteShift;
 
+    /// <summary>행동 300 [10000 + 인물 차례, 모션, 뒤집기] — 모션 번호를 바로 건다(필드 0002: 걷기 앞 3 = 걷기·뒷모습, 선 뒤 0 · 1 = 서기).</summary>
+    internal Action<int, int, bool>? SpriteMotion;
+
+    /// <summary>행동 304 [인물 차례] 숨기기 · 305 [인물 차례] 보이기(필드 0007 은 들머리에서 여럿을 숨겼다가 차례로 보인다).</summary>
+    internal Action<int, bool>? SpriteVisible;
+
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
@@ -191,6 +197,8 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
+                case 300 when a[0] >= 10000: SpriteMotion?.Invoke(a[0] - 10000, a[1], a[2] == 1); break;
+                case 304 or 305: SpriteVisible?.Invoke(a[0], c.Code == 305); break;
                 case 101: _vars[a[0]] = _vars.GetValueOrDefault(a[0]) + 1; break;
                 case 800: _vars[a[0]] = a[1]; break;
                 case 802:

@@ -28,6 +28,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
         SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) { _walks.Remove(n); _spots[n] = (x, y); } },
         SpriteShift = (n, dx, dy, ticks) => { if (n >= 0 && n < _spots.Length) Walk(n, dx, dy, ticks); },
+        SpriteMotion = (n, motion, mirror) => { if (n >= 0 && n < _spots.Length) _motion[n] = (motion, mirror); },
+        SpriteVisible = (n, shown) => { if (n >= 0 && n < _spots.Length) _hidden[n] = !shown; },
     };
 
     /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮기고 302 가 걷게 한다.</summary>
@@ -45,6 +47,12 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
 
     /// <summary>바라보는 쪽(걸으면 걷는 쪽으로 돈다) — 인물 칸 방향에서 시작.</summary>
     private Facing[] _facing = [];
+
+    /// <summary>행동 300 이 건 모션(번호, 뒤집기) — 있으면 방향·걷기로 고른 모션 대신 이것을 튼다.</summary>
+    private (int Motion, bool Mirror)?[] _motion = [];
+
+    /// <summary>행동 304 로 숨긴 인물.</summary>
+    private bool[] _hidden = [];
 
     private void Walk(int n, int dx, int dy, int ticks)
     {
@@ -80,6 +88,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
         _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
         _walks.Clear();
+        _motion = new (int, bool)?[field.Sprites.Count];
+        _hidden = new bool[field.Sprites.Count];
         _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
         _open = true;
         GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
@@ -169,13 +179,14 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             // 인물 — 서기(동작 0) · 걷는 중이면 걷기(동작 1) 모션을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽).
             // 모션 번호 = 동작 × 3 + 방향(ObsMotionTable). 아래쪽에 선 사람을 나중에.
             int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
-            foreach (int i in Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).OrderBy(i => spots[i].Y))
+            foreach (int i in Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).OrderBy(i => spots[i].Y))
             {
                 var facing = _facing[i];
                 int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+                var (motion, mirror) = _motion[i] ?? (action * 3 + ObsMotionTable.DirectionOf(facing), facing == Facing.Right);
                 var (x, y) = spots[i];
-                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, action * 3 + ObsMotionTable.DirectionOf(facing), tick, ox + x - camX, oy + top + y - camY,
-                            GameWindow.UiBlend.Alpha, loop: true, mirror: facing == Facing.Right);
+                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, tick, ox + x - camX, oy + top + y - camY,
+                            GameWindow.UiBlend.Alpha, loop: true, mirror: mirror);
             }
         }
         if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
