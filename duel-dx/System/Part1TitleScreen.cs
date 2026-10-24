@@ -46,8 +46,40 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>파트2 타이틀의 「PART 1」 단추를 누른다 — 파트1 폴더가 없으면 알리고 머문다.</summary>
     internal void PressEntry()
     {
-        if (Part1Game.Root is null) { host.Toast("파트1 폴더를 찾지 못했습니다 — 파트2 폴더 옆에 두세요"); return; }
+        if (Part1Game.Root is null && !AskPart1Folder()) return;
         host.LeaveScene(Open);
+    }
+
+    /// <summary>
+    /// 파트1 폴더를 못 찾았다 — 원본 「창세기전3 파트1」 설치 폴더를 고르게 한다(파트2 의 OriginalGameSetup 과 같은 방식, 사용자 요청).
+    /// 고른 폴더는 적어 두어 다음부터는 안 묻는다. 파트1 자료는 배포판에 없고 사용자의 원본에서 읽는다. 화면 밖 시험에서는 창을 띄우지 않는다.
+    /// </summary>
+    private bool AskPart1Folder()
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1") { host.Toast("파트1 폴더를 찾지 못했습니다 — WAROFGENESIS_PART1 로 알려 주세요"); return false; }
+        var owner = new System.Windows.Forms.NativeWindow();
+        owner.AssignHandle(host._hwnd);
+        try
+        {
+            var answer = System.Windows.Forms.MessageBox.Show(owner,
+                "파트1 은 원본 「창세기전3 파트1」의 자료(전투 · 인물 · 지도 · 그림 · 소리)를 씁니다.\n\n" +
+                "원본 파트1 이 설치된 폴더(Chars · Obss · Btls 폴더가 든 곳)를 골라 주세요. 원본 폴더에는 아무것도 쓰지 않습니다.",
+                "창세기전3 파트1", System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Information);
+            while (answer == System.Windows.Forms.DialogResult.OK)
+            {
+                using var dialog = new System.Windows.Forms.FolderBrowserDialog { Description = "원본 창세기전3 파트1 폴더 (Chars · Obss · Btls 가 든 곳)", UseDescriptionForTitle = true };
+                if (dialog.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK) return false;
+                if (Part1Game.IsValid(dialog.SelectedPath))
+                {
+                    Part1Game.Use(dialog.SelectedPath);
+                    return true;
+                }
+                answer = System.Windows.Forms.MessageBox.Show(owner, $"'{dialog.SelectedPath}' 에서 Obss\\Obss.idx · Chars 를 못 찾았습니다. 다시 고를까요?",
+                    "창세기전3 파트1", System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Warning);
+            }
+            return false;
+        }
+        finally { owner.ReleaseHandle(); }
     }
 
     internal void Open()

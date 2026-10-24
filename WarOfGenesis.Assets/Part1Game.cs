@@ -72,6 +72,21 @@ public static class Part1Game
     private static bool _searched;
     private static readonly Dictionary<string, Dictionary<string, (string Pak, uint Start, uint End)>> _index = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>그 폴더를 파트1 폴더로 쓰고 적어 둔다(<c>%APPDATA%\DuelDx\part1root.txt</c>) — 사용자가 PART 1 단추에서 골랐을 때.</summary>
+    public static void Use(string root)
+    {
+        _root = root;
+        _searched = true;
+        _bodySprites = null;
+        lock (_index) _index.Clear();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            File.WriteAllText(SettingsPath, root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 못 적어도 이번 판은 돈다 */ }
+    }
+
     /// <summary>파트1 폴더처럼 보이나 — <c>Obss\Obss.idx</c> 와 <c>Chars</c> 가 있다.</summary>
     public static bool IsValid(string? root) =>
         root is { Length: > 0 } && File.Exists(Path.Combine(root, "Obss", "Obss.idx")) && Directory.Exists(Path.Combine(root, "Chars"));
