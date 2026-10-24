@@ -46,6 +46,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 _resume = true;
                 host.LeaveScene(() => shell.StartBattle(target));
                 return true;
+            case 501:
+                // 챕터 끝 — 장면 10(0x100c04b0 → 생성 0x100d2470 이 Eps\episode.elg 를 연다) = 연대표로. 끝낸 챕터는 연대표에 ✓.
+                if (_chapter is { } done) host.Part1.FinishedChapters.Add(done.Id);
+                host.LeaveScene(() => { _open = false; shell.Timeline.Open(); });
+                return true;
             case 503:
                 int chapterId = _chapter?.Id ?? -1;
                 _resume = true;

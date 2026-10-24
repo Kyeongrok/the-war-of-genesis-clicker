@@ -43,16 +43,17 @@ public static class Part1Game
     /// <summary>파트1 인물 이름의 글 번호 자리 — 파트2 글 표(TXR)는 이보다 훨씬 작다. <c>GameDatabase.T</c> 가 이 위를 파트1 이름으로 돌려준다.</summary>
     public const int NameTextBase = 60000;
 
-    /// <summary>
-    /// 파트1 글(<c>.dlg</c>·<c>.clg</c>) 표시를 보통 글로 — 「/m0[말하는 이]/m1」 머리는 떼고, 「/n」 은 줄 바꿈, 「/cN」 색 바꿈은 지운다.
-    /// </summary>
     /// <summary>「/m0[말하는 이]/m1」 머리의 이름 — 없으면 빈 글.</summary>
     public static string Speaker(string text) =>
         System.Text.RegularExpressions.Regex.Match(text, @"/m0\[([^\]]*)\]/m1") is { Success: true } m ? m.Groups[1].Value : "";
 
+    /// <summary>
+    /// 파트1 글(<c>.dlg</c>·<c>.clg</c>·<c>.flg</c>) 표시를 보통 글로 — 「/m0[말하는 이]/m1」 머리는 떼고, 「/n」 은 줄 바꿈,
+    /// 나머지 표시(/cN 색 · /dN 쉼 · /tN · /p 기다림 · /sN · /wN · /fN, 짝 없는 /m0 · /m1)는 지운다.
+    /// </summary>
     public static string PlainText(string text) =>
         System.Text.RegularExpressions.Regex.Replace(
-            System.Text.RegularExpressions.Regex.Replace(text, @"/m0\[[^\]]*\]/m1", ""), @"/c\d", "").Replace("/n", "\n").Trim('\n');
+            System.Text.RegularExpressions.Regex.Replace(text, @"/m0\[[^\]]*\]/m1", ""), @"/(?:[cdtpswf]\d*|m[01])", "").Replace("/n", "\n").Trim('\n');
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
     public const int ConvertVersion = 8;

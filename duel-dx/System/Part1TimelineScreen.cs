@@ -29,6 +29,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal void Open()
     {
+        GameWindow.TestRunTrace("part1 timeline open");   // 시험 전용 줄
         _episodes = Part1Episode.LoadAll();
         var cells = new List<(int, int)>();
         var headers = new List<(string, int)>();
@@ -99,7 +100,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
             bool current = _episodes[i].ChapterId == host.Part1.ChapterId;
             host.UiFill(ox + x, oy + y, CellW, CellH, _hover == i ? 0xF0305080u : current ? 0xD0405828u : 0xC0202838u);
             host.UiStroke(ox + x, oy + y, CellW, CellH, _hover == i ? 0xFFB0D0FFu : 0xFF506080u);
-            string name = _episodes[i].Name;
+            string name = (host.Part1.FinishedChapters.Contains(_episodes[i].ChapterId) ? "✓ " : "") + _episodes[i].Name;
             // 칸보다 긴 이름은 끝을 줄여 「…」 — 이웃 칸을 덮었다.
             while (name.Length > 1 && host.UiGetText(name, GameWindow.White, 11).W > CellW - 4) name = name[..^2] + "…";
             var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);

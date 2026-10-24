@@ -46,6 +46,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
         _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
         _open = true;
+        GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
         Script.Start(field.Events, field.Lines, []);
     }
 
@@ -70,6 +71,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
 
     private void End()
     {
+        GameWindow.TestRunTrace($"part1 field {_field?.Id} end");   // 시험 전용 줄
         var onEnd = _onEnd;
         _onEnd = null;
         host.LeaveScene(() => { _open = false; _bg = null; onEnd?.Invoke(); });

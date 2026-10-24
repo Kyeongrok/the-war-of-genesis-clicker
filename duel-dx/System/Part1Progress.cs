@@ -19,6 +19,9 @@ internal sealed class Part1Progress
     /// <summary>이긴 전투(파트1 번호) — 챕터 지도에 ✓ 로 보인다.</summary>
     internal readonly HashSet<int> Cleared = [];
 
+    /// <summary>끝낸 챕터(챕터 사건 501) — 연대표에 ✓.</summary>
+    internal readonly HashSet<int> FinishedChapters = [];
+
     /// <summary>챕터 사건 발동 수 — 챕터 → (사건 → 횟수)(<see cref="Part1SceneScript"/>). 지도로 돌아와도 들머리가 다시 안 나오게.</summary>
     internal readonly Dictionary<int, Dictionary<int, int>> Fired = [];
 
@@ -30,6 +33,7 @@ internal sealed class Part1Progress
     {
         Party.Clear();
         Cleared.Clear();
+        FinishedChapters.Clear();
         Fired.Clear();
         ChapterId = -1;
     }
