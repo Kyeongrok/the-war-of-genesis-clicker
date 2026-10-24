@@ -86,6 +86,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>
     /// 기본 공격 사거리(칸) — Attack +0x21 갈래로(0x10038ae0): 1 RANGE 능력치 + 값 · 2 무기 사거리 + RANGE 보정 · 3 값 그대로 · 4 무기 사거리, 모두 ÷ 2 칸.
     /// </summary>
+    private const int GunReach = 8;
+
     internal int BasicRangeTiles(UnitState u)
     {
         if (Fighter(u) is not { } f || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(f)) is not { } a) return 1;
@@ -93,7 +95,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         {
             1 => (f.Stat(Part1Chr.Range) + a.RangeValue) / 2,
             2 or 4 => f.WeaponRangeTiles,
-            _ => a.RangeValue / 2,
+            // 갈래 3 의 쏘는 기본 공격은 총만큼(시판 무기 8 = 4칸)으로 자른다 — 원본 자료로는 록슬리 330 이 값 32 = 16칸인데,
+            // 너무 멀고(사용자: 「총 정도 사거리여야」) 넓은 범위는 AI 계산도 무겁다.
+            _ => Math.Min(a.RangeValue, GunReach) / 2,
         };
     }
 

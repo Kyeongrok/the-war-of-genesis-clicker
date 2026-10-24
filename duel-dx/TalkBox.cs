@@ -679,6 +679,24 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (_layerText) host.Hi.DrawText(text, x, y, color, size); else host.DrawText(text, x, y, color, size);
     }
 
+    /// <summary>
+    /// 이름 글의 위 자리 — 글자 획(잉크)이 탭 안(<paramref name="top"/>~<paramref name="bottom"/>) 가운데에 오게.
+    /// 원본(굴림 9pt GDI)은 글 상자 위가 곧 획 위라 (창y−15) 이면 맞지만, 우리 글꼴은 상자 위에 여백이 있어 그대로 두면 이름이 아래로 처진다(사용자 보고).
+    /// </summary>
+    private int NameTop(string text, float size, int top, int bottom)
+    {
+        var (px, gw, gh) = host.GetText(text, White, size);
+        int ink0 = gh, ink1 = -1;
+        for (int y = 0; y < gh; y++)
+            for (int x = 0; x < gw; x++)
+                if (px[y * gw + x] >> 24 != 0) { ink0 = Math.Min(ink0, y); ink1 = y; break; }
+        if (ink1 < 0) return top;
+        // 새 UI 는 글 높이가 다를 수 있어 비율로 옮긴다.
+        double r = (double)TxtSize(text, White, size).H / gh;
+        int inkH = (int)Math.Round((ink1 - ink0 + 1) * r);
+        return top + (bottom - top - inkH) / 2 - (int)Math.Round(ink0 * r);
+    }
+
     private (int W, int H) TxtSize(string text, uint color, float size)
     {
         if (_layerText) return host.Hi.Measure(text, color, size);
@@ -871,7 +889,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             DrawUiScaled(w.FrameObs, 1, ax, ay, S, ax, ay, fx0, fy0, w.FrameFade);
             DrawUiScaled(w.FrameObs, 0, ax, ay, S, ax, ay, fx0, fy0, 1);
             int snw = TxtSize(w.Name, White, big).W;
-            Txt(w.Name, bx - Sc(11) - snw / 2, by - Sc(15), White, big);
+            Txt(w.Name, bx - Sc(11) - snw / 2, NameTop(w.Name, big, by - Sc(19), by - Sc(1)), White, big);
             if (faceFrame != null)
             {
                 DrawTalkFace(faceFrame, bx - Sc(57), by, Sc(60), w.Tint);
@@ -889,7 +907,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         float nameSize = 12;
         while (nameSize > 8 && TxtSize(w.Name, White, nameSize).W > 104) nameSize -= 1;
         int bnw = TxtSize(w.Name, White, nameSize).W;
-        Txt(w.Name, bx - 11 - bnw / 2, by - 15, White, nameSize);
+        Txt(w.Name, bx - 11 - bnw / 2, NameTop(w.Name, nameSize, by - 19, by - 1), White, nameSize);
         if (faceFrame != null)
         {
             DrawTalkFace(faceFrame, bx - 57, by, 60, w.Tint);
