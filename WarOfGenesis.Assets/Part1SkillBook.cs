@@ -55,6 +55,8 @@ public static class Part1SkillBook
                 // (사용자 화면: 화이어 애로우에 「화염 · DEP↓ · 둔화」가 붙었다). AI 가 대상 둘 이상일 때만 쓰던 조건(minTargets 2)도 1 로.
                 ["bonus1Stat"] = 0, ["bonus2Stat"] = 0, ["bonus3Stat"] = 0,
                 ["minTargets"] = 1,
+                // 엘레맨탈 파이어 틀의 효과 범위 최소 1칸(가운데 칸 빼기)도 뗀다 — 누른 칸의 적이 대상에서 빠져 록슬리 마법이 아무도 못 맞혔다(사용자 보고).
+                ["areaMin"] = 0,
             };
             skills.Add(new SkillFile { Ability = id, Name = ab.Name, MaxLevel = levels.Count, Common = common, Levels = levels });
         }

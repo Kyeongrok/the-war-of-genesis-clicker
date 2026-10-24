@@ -59,6 +59,7 @@ internal sealed unsafe partial class BattleScene
             // 그 밖의 승리 = 장면 4 챕터 지도. 전에는 늘 챕터로 돌아가 이어지는 전투(0039 → 0040)와 끝 필드(0023 → 필드 29)를 건너뛰었다.
             // 챕터의 남은 행동(502 뒤)은 그 사슬이 챕터로 돌아온 뒤에 잇는다.
             if (won && chapterEnd) { TestRunTrace("dest part1 timeline (105)"); host.Part1TitleScr.EndChapterFromBattle(); return; }   // 시험 전용 줄
+            if (won && eventNext > 0) host.Part1TitleScr.ChainTo(1, eventNext);   // 사슬 자리 — 이어 하기 · 전투 세이브가 이 전투부터
             if (won && eventNext > 0 && host.Part1TitleScr.StartBattle(eventNext)) { TestRunTrace($"dest part1 battle {eventNext}"); return; }   // 시험 전용 줄
             if (won && nextField > 0) { TestRunTrace($"dest part1 field {nextField}"); host.Part1TitleScr.FieldFromBattle(nextField); return; }   // 시험 전용 줄
             TestRunTrace($"dest part1 chapter {host.Part1.ChapterId}");   // 시험 전용 줄
@@ -304,7 +305,9 @@ internal sealed unsafe partial class BattleScene
             _routine = UseWorkRoutine(caster, w, -1, tc, tr, []);
             return;
         }
-        _routine = UseWorkRoutine(caster, w, target,
+        // 「…:cell」 이 붙으면 사람이 칸을 누를 때처럼 대상 번호 없이(−1) 그 적의 칸을 겨눈다 — 범위로 대상을 고르는 길을 시험한다.
+        int pick = parts.Contains("cell") ? -1 : target;
+        _routine = UseWorkRoutine(caster, w, pick,
                                   target >= 0 ? host._units[target].Col : a.Col,
                                   target >= 0 ? host._units[target].Row : a.Row, []);
     }
