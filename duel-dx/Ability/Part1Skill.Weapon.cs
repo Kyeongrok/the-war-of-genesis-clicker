@@ -67,6 +67,7 @@ internal sealed partial class Part1Skill
         host.Btl.CenterOnUnit(user);
         if (aim != _home) user.Facing = FacingOf(aim.X - hx, aim.Y - hy);
         user.PlayAction(Part2Action(9), 25 / TicksPerSecond);
+        _afterPrep = (9, 5, false);   // 24틱에 공격 자세를 한 번 더(잠그지 않는다)
         return 25;
     }
 

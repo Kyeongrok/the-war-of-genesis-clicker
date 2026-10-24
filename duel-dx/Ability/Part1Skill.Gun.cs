@@ -100,6 +100,7 @@ internal sealed partial class Part1Skill
                 if (aim != _home) user.Facing = FacingOf(aim.X - hx, aim.Y - hy);
                 // 파트1 동작 10 은 이 게임 동작표에 없다 — 공격 준비(5)로 붙든다.
                 user.PlayAction(5, 35 / TicksPerSecond);
+                _afterPrep = (9, 5, true);   // 34틱에 동작 10 을 다시 걸고 잠근다(0x100444b6..0x100444d7) — 10 이 없어 공격 준비로
                 return 35;
             default: return 1;
         }

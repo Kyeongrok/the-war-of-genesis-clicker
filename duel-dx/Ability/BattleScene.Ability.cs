@@ -386,8 +386,10 @@ internal sealed unsafe partial class BattleScene
         }
 
         // 오른쪽 단추를 누르고 있는 줄의 설명(abi +0x1c 설명 TXR) — 스테이터스와 같은 설명 창(0x10042c00): 마우스 + (16,16), 제목줄 없음, 글 가운데.
+        // 파트1 어빌리티(20000 + Abi)는 원본에 설명 글이 없어(설명 TXR 0 = 「없음」) 자료로 엮은 글(Part1AbilityTip)을 머리에 둔다.
         if (_abilityPressed >= 0 && _abilityPressed < rows.Count
-            && host._db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed) && host._db.AbilityDescription(pressed) is { Length: > 0 } desc)
+            && host._db.Abilities.TryGetValue(rows[_abilityPressed].Work.AbilityId, out var pressed)
+            && (pressed.Id >= Part1Game.ChrBase ? Part1AbilityTip.Text(pressed.Id, rows[_abilityPressed].Work.Level, reach: false) : host._db.AbilityDescription(pressed)) is { Length: > 0 } desc)
             host.StatusScr.DrawDescriptionTip(desc + host.StatusScr.AbilityEffectText(pressed, rows[_abilityPressed].Work.Level, host._units[_turn]) + host.StatusScr.UltimateStyleText(pressed, host._units[_turn].Data), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 }

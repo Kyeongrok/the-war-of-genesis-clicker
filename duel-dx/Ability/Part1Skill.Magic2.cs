@@ -108,7 +108,7 @@ internal sealed partial class Part1Skill
         host.Btl.CenterOnUnit(user);
         if (aim != _home) user.Facing = FacingOf(aim.X - hx, aim.Y - hy);
         user.PlayAction(Part2Action(4), 54 / TicksPerSecond);
-        Later(54, () => Act(user, 24, ObsMotionTable.ActionStand));
+        _afterPrep = (24, Part2Action(4), true);   // 54틱 — 동작 24 를 걸고 잠근다(0x10043d85..0x10043d9c)
         return 55;
     }
 

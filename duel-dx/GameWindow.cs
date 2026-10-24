@@ -863,6 +863,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Mos._shopTip = null;           // 상점 아이템 설명도
                 Btl._ringHelp = null;          // 링 항목 설명도
                 CharEditScr._tip = null;       // 캐릭터 에디터의 어빌리티 설명도
+                _part1PickTip = null;          // 파트1 레벨업 고르기 창의 어빌리티 설명도
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
@@ -880,7 +881,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
                 if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
-                if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
+                if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
+                else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);
@@ -1131,6 +1133,21 @@ internal sealed unsafe partial class GameWindow : IDisposable
     // 행동(기술 연출)이 다 끝나고 모두 선 뒤에 뜬다 — 전에는 연출 한가운데 떠서 가렸다(사용자 보고: 원본은 안 그렇다).
     internal bool Part1PickOpen => _battleLoaded && _scene.IsPart1 && Part1.LevelPicks.Count > 0 && Tlk._talk == null && Btl._outcome.Length == 0
         && Btl._routine == null && !_units.Any(u => u.IsBusy);
+
+    /// <summary>레벨업 고르기 창(전투 안 · 파트1 지도)에서 오른쪽 단추를 누르고 있는 줄의 설명 — 떼면 null.</summary>
+    internal (string Text, int X, int Y)? _part1PickTip;
+
+    /// <summary>고르기 창 줄 위에서 오른쪽 단추를 눌렀으면 그 어빌리티 설명을 띄우고 true(<see cref="Part1AbilityTip"/>).</summary>
+    private bool ShowPart1PickTip(int bx, int by)
+    {
+        bool onMap = Part1TitleScr._open && Part1TitleScr.Chapter._open && Part1TitleScr.Chapter.Picking;
+        if (!Part1PickOpen && !onMap || Part1.LevelPicks.Count == 0) return false;
+        int row = Part1TitleScr.Chapter.PickAt(bx, by);
+        var options = row >= 0 ? Part1.PickCandidates(Part1.LevelPicks[0].Chr) : [];
+        if (row < 0 || row >= options.Count || Part1AbilityTip.Text(options[row].Ability, options[row].NewLevel) is not { } tip) return false;
+        _part1PickTip = (tip, bx, by);
+        return true;
+    }
 
     internal void Update(double dt)
     {
@@ -1410,6 +1427,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         DrawSceneFade();                       // 전투 시작·끝 16틀 페이드(감사4 C6·C7)
         DrawSceneTag();
         ProgressScr.DrawProgress();
+        if (_part1PickTip is { } pickTip) StatusScr.DrawDescriptionTip(pickTip.Text, pickTip.X, pickTip.Y, _camX, _camY, ViewWidth, ViewHeight);
         // 메뉴 막대에서 여는 창들(모드 · 캐릭터 에디터 · 개발)은 어느 화면 위에서든 맨 위에 — 전에는 전투 판 차례에 그려 타이틀·연대표·모세스 그림에
         // 가려 안 보였다(사용자 보고: 타이틀에서 캐릭터 에디터를 눌러도 반응이 없음).
         TuningScr.DrawTuning();

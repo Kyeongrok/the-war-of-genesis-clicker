@@ -237,6 +237,12 @@ internal sealed class Part1StatusPanel(GameWindow host)
             uint lvColor = !taught ? 0xFFFFE080 : level >= max ? 0xFF80E080 : level == 0 ? 0xFF808890 : 0xFFFFE080;
             var (_, lw, _) = host.UiGetText(lv, lvColor, 11);
             host.UiText(lv, lx + ListW - 8 - lw, ry, lvColor, 11);
+            // 오른쪽 단추를 누르고 있는 동안 설명(원본엔 글이 없어 자료로 엮는다 — Part1AbilityTip). 떼면 사라진다(WM_RBUTTONUP).
+            int tipMax = taught ? max : 0;
+            host.StatusScr._statusRightHits.Add((lx, ry - 1, ListW, RowH, () =>
+            {
+                if (Part1AbilityTip.Text(ability, level, tipMax) is { } tip) host.StatusScr.ShowStatusTip(tip);
+            }));
         }
         if (teach.Count > 0)
             host.UiText($"{job!.Name} — 지금/최대", lx + 8, ly + 6 + rows.Count * RowH + 2, 0xFF8098C8, 10);
@@ -274,5 +280,8 @@ internal sealed class Part1StatusPanel(GameWindow host)
                 host.UiText(Part1Job.ById(_jobs, choices[i])?.Name ?? $"#{choices[i]}", rx + 24, ry + 3, GameWindow.White, 12);
             }
         }
+
+        if (host.StatusScr._statusTip is { } shown)
+            host.StatusScr.DrawDescriptionTip(shown.Text, shown.X, shown.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
 }

@@ -71,6 +71,9 @@ internal sealed partial class Part1Skill(GameWindow host)
     private readonly List<(double Start, int Frames, uint Color)> _whiteouts = [];
 
     private double _t0;
+
+    /// <summary>앞머리가 끝날 때 시전자에게 걸 파트1 동작(그림에 없으면 Fallback) — Hold 면 원본 잠금(+0x26 = −1)처럼 기술이 끝날 때까지 붙든다.</summary>
+    private (int Part1, int Fallback, bool Hold)? _afterPrep;
     private UnitState _user = null!;
     private (double X, double Y) _home;
     private readonly List<(double At, Action Run)> _events = [];
@@ -237,6 +240,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             for (double poll = host._lastTime + 0.5; host._lastTime < poll;) yield return true;
         }
         _user = user;
+        _afterPrep = null;
         _home = host.Btl.UnitFoot(user);
         _events.Clear();
         _shifts.Clear();
@@ -251,6 +255,11 @@ internal sealed partial class Part1Skill(GameWindow host)
             : IsGunWork(w.Id) ? GunPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay)) : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
+        // 앞머리 끝 자세 — 원본은 앞머리 마지막 틱에 동작을 한 번 더 걸고, 마법 · 소환(종류 3 · 4)과 총(종류 5)은 +0x26 = −1(0x1009a210)로
+        // 모션 키 진행을 멈춰 그 자세(록슬리 동작 24 = 팔을 뻗은 장 41/48)를 핸들러가 끝날 때까지 붙든다(0x100982d0 이 +0x26 ≠ 0 이면 건너뛴다).
+        // 전에는 이것을 Later 로 걸어 바로 아래 _events.Clear() 에 지워져, 화살이 나는 동안 시전자가 서 있었다.
+        if (!proc && _afterPrep is { } after) Act(user, after.Part1, after.Fallback, after.Hold ? 0 : 1);
+        _afterPrep = null;
 
         _t0 = host._lastTime;
         _events.Clear();
@@ -342,6 +351,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         host.Btl.CenterOnUnit(user);
         user.Facing = Facing.Down;
         user.PlayAction(5, 51 / TicksPerSecond);
+        _afterPrep = (9, 5, false);   // 50틱에 동작 9 를 한 번 더(잠그지 않는다)
         return 51;
     }
 
@@ -366,7 +376,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         host.Btl.CenterOnUnit(user);
         if (aim != _home) user.Facing = FacingOf(aim.X - hx, aim.Y - hy);
         user.PlayAction(Part2Action(4), 54 / TicksPerSecond);
-        Later(54, () => Act(user, 24, ObsMotionTable.ActionStand));
+        _afterPrep = (24, Part2Action(4), true);
         return 55;
     }
 
