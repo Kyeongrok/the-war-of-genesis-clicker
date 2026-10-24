@@ -40,6 +40,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 401 [dx, dy, 틱] — 화면을 틱마다 (dx, dy) 씩, 틱 수만큼 민다(0x100cd950, 그림 끝에서 자른다).</summary>
     internal Action<int, int, int>? CameraPan;
 
+    /// <summary>챕터 행동 1201 [장소, 전투] — 그 장소를 그 전투 장소로 바꾼다(0x100c1a50: 장소 낱말 7 = 전투, 낱말 6 = 0).</summary>
+    internal Action<int, int>? PlaceBattle;
+
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
@@ -209,6 +212,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // 906 [무리, 아이템, 수] = 무리 가방에 아이템(0x100c14f0 → 0x100ada10, 챕터 0: 다마스커스 2 · 회복약 10 · 해독제 10 …) ·
                 // 912 [eld] = 무리 돈(0x100c1850, 0x101a07e0 — 챕터 0: 3000) · 904 [무리, Chr] = 그 인물을 무리 명단에(0x100c12e0 — 일행에 든다로 친다).
                 case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
+                case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;
                 case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;

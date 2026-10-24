@@ -50,6 +50,7 @@ internal sealed class Part1Progress
         Equipped = [];
         Mercenaries = [];
         Mounts = [];
+        PlaceBattles = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -90,6 +91,9 @@ internal sealed class Part1Progress
     /// </summary>
     internal Dictionary<int, int> Mercenaries = [], Mounts = [];
 
+    /// <summary>챕터 사건 1201 이 바꾼 장소 — 「챕터:장소」 → 전투 번호(장소를 그 전투 장소로 만든다).</summary>
+    internal Dictionary<string, int> PlaceBattles = [];
+
     /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>).</summary>
     internal int Eld;
 
@@ -127,13 +131,14 @@ internal sealed class Part1Progress
                                    Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending,
                                    Dictionary<int, Growth>? Grown = null, int Eld = 0, List<int[]>? LevelPicks = null,
                                    List<int>? Bag = null, Dictionary<int, int[]>? Equipped = null,
-                                   Dictionary<int, int>? Mercenaries = null, Dictionary<int, int>? Mounts = null);
+                                   Dictionary<int, int>? Mercenaries = null, Dictionary<int, int>? Mounts = null,
+                                   Dictionary<string, int>? PlaceBattles = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -166,6 +171,7 @@ internal sealed class Part1Progress
             Equipped = data.Equipped ?? [];
             Mercenaries = data.Mercenaries ?? [];
             Mounts = data.Mounts ?? [];
+            PlaceBattles = data.PlaceBattles ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

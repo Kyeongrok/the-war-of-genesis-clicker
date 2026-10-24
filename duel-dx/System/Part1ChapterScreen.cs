@@ -31,7 +31,22 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal int _party;
 
     /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
-    internal Part1SceneScript Events => _events ??= new(host) { SceneChange = OnSceneChange };
+    internal Part1SceneScript Events => _events ??= new(host) { SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle };
+
+    /// <summary>1201 — 장소를 전투 장소로 바꾸고 진행에 적는다(다시 열어도 그대로).</summary>
+    private void SetPlaceBattle(int place, int battle)
+    {
+        if (_chapter is not { } chapter || place < 0 || place >= chapter.Places.Count) return;
+        host.Part1.PlaceBattles[$"{chapter.Id}:{place}"] = battle;
+        _chapter = WithPlaceBattles(chapter);
+    }
+
+    /// <summary>진행에 적힌 1201 바꿈을 장소에 입힌다.</summary>
+    private Part1Chapter WithPlaceBattles(Part1Chapter chapter) =>
+        chapter with
+        {
+            Places = [.. chapter.Places.Select((p, i) => host.Part1.PlaceBattles.TryGetValue($"{chapter.Id}:{i}", out int battle) ? p with { Kind = 0, Target = battle } : p)],
+        };
     private Part1SceneScript? _events;
 
     /// <summary>사건이 전투·필드로 보냈다 — 같은 챕터로 돌아오면 남은 행동을 잇는다.</summary>
@@ -73,7 +88,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             host.Toast($"파트1 챕터 {chapterId} 를 못 읽었습니다");
             return false;
         }
-        _chapter = chapter;
+        _chapter = chapter = WithPlaceBattles(chapter);
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
         int minX = places.Min(p => p.X), maxX = places.Max(p => p.X), minY = places.Min(p => p.Y), maxY = places.Max(p => p.Y);
