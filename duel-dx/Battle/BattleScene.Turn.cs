@@ -1235,6 +1235,26 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 파트1 내리기(어빌리티 166 → Attack 399, 0x100733f0) — 탄 이를 고른 빈 칸에 내려놓는다. 원본은 빈 탈것이 판에 남지만[H]
+            // 여기서는 빈 탈것을 판에서 빼 무리로 돌려보낸다(수는 그대로).
+            if (w.Id == Part1DismountWork)
+            {
+                if (_part1Riders.Remove(a, out var rider) && rider.Alive)
+                {
+                    var (dc, dr) = FreeCellNear(col, row, rider);
+                    rider.OnField = true;
+                    rider.ResetTo(dc, dr);
+                    rider.StartCol = dc;
+                    rider.StartRow = dr;
+                    rider.Facing = a.Facing;
+                    a.OnField = false;
+                    a.ResetTo(0, 0);
+                    if (Trace)
+                        System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                            $"part1 dismount {a.ChrCode} → rider {rider.ChrCode} at ({dc},{dr})" + Environment.NewLine);
+                }
+                continue;
+            }
             // 파트1 기술(검 기술 · 썬더스탐 · 소환) — 시각표를 깔고 대상마다 그 기술이 닿을 때 한 번씩 친다(menu-85 · menu-89).
             if (Part1Skill.Works.Contains(w.Id))
             {
@@ -1691,6 +1711,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>이번 차례에 덧기술이 이미 터진 인물(원본 +0x265 — 차례가 바뀌면 지운다).</summary>
     internal UnitState? _part1ProcBy;
+
+    /// <summary>파트1 탈것의 「내리기」 work(어빌리티 20166 · Attack 399).</summary>
+    internal const int Part1DismountWork = 20399;
 
     /// <summary>덧기술을 쏘는 중 — 파트1 기술이 앞머리 없이 바로 돈다(<see cref="Part1Skill.Routine"/>).</summary>
     private bool _part1ProcRunning;
