@@ -35,6 +35,10 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal sealed class SoundQueue : List<(double Time, int Sound, float X)>
     {
+        /// <summary>예약하는 순간 그 소리를 미리 받아 둔다 — 틀 때가 되어서야 찾으면 처음 한 번은 조용히 지나갔다(사용자 보고: 라이트닝볼츠 효과음이 안 난다).</summary>
+        internal Action<int>? Prefetch;
+
+        public new void Add((double Time, int Sound, float X) s) { Prefetch?.Invoke(s.Sound); base.Add(s); }
         public void Add((double Time, int Sound) s) => Add((s.Time, s.Sound, float.NaN));
         public void AddRange(IEnumerable<(double Time, int Sound)> list) { foreach (var s in list) Add(s); }
     }
@@ -68,6 +72,7 @@ internal sealed unsafe partial class GameWindow
     /// <summary>효과음·배경음악·목소리 표를 읽는다. 소리 자료가 없으면 조용히 넘어간다.</summary>
     internal void LoadAudio()
     {
+        _pendingSounds.Prefetch = s => PrefetchSound(s);
         try
         {
             string folder = AssetsFolder.Find("sounds");
@@ -153,22 +158,10 @@ internal sealed unsafe partial class GameWindow
         lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } assetLog)
             try { File.AppendAllText(assetLog, $"sounds/{sound:D4}.wav" + Environment.NewLine); } catch (IOException) { }
-        // 큰 효과음은 미리 차려 두지 않는다(AssetPack) — 없으면 뒤에서 가져와 두고 이번에는 조용히 넘어간다(다음부터 난다).
-        // 한 번 찾아 본 번호는 다시 찾지 않는다(없는 번호를 틀 때마다 뒤지지 않게) — 아직 받는 중인 것만 다음에 다시 찾는다.
-        if (!loaded && _sfxFetching.TryAdd(sound, true))
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                try
-                {
-                    if (AssetPack.Fetch("sounds", $"{sound:D4}.wav", 60) is { } got)
-                    {
-                        var parsed = WaveSound.Parse(File.ReadAllBytes(got));
-                        lock (_sfx) _sfx[sound] = parsed;
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or InvalidDataException) { }
-                finally { if (AssetPack.MayCome("sounds", $"{sound:D4}.wav")) _sfxFetching.TryRemove(sound, out _); }
-            });
+        // 파트1 효과음은 이 PC 의 원본 폴더에서 바로 푼다(내려받기가 아니다) — 그 자리에서 기다려 이번에도 난다.
+        if (!loaded && sound >= Part1Game.ObsBase && PrefetchSound(sound) is { } task && task.Wait(300))
+            lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
+        else if (!loaded) PrefetchSound(sound);
         var (left, right) = SndPan(screenX);
         float gain = SndGain;
         // 화면 밖에서 난 소리는 작게 들린다 — 원본(0x10028c18~0x10028cef)은 화면 밖이면 −(d² % 5000)/100 dB(평균 약 −15 dB, 거리에 단조가 아님)다.
@@ -187,6 +180,38 @@ internal sealed unsafe partial class GameWindow
     /// DirectSound 팬은 <b>반대쪽만</b> 줄인다: 팬 &lt; 0 이면 오른쪽 × 10^(팬/2000), 팬 &gt; 0 이면 왼쪽 × 10^(−팬/2000)(감사4 S1).
     /// 화면 밖의 거리 감쇠(<c>0x10028c18~</c>)는 옮기지 않고 가장자리 팬으로 둔다.
     /// </summary>
+    /// <summary>
+    /// 효과음을 뒤에서 받아 둔다. 큰 효과음은 미리 차려 두지 않는다(AssetPack) — 없으면 가져와 두고, 아직이면 그 회는 조용히 넘어간다.
+    /// 한 번 찾아 본 번호는 다시 찾지 않는다(없는 번호를 틀 때마다 뒤지지 않게) — 아직 받는 중인 것만 다음에 다시 찾는다. 받는 중인 것의 일을 돌려준다.
+    /// </summary>
+    internal System.Threading.Tasks.Task? PrefetchSound(int sound)
+    {
+        lock (_sfx) if (_sfx.ContainsKey(sound)) return System.Threading.Tasks.Task.CompletedTask;
+        if (_sfxTasks.TryGetValue(sound, out var running)) return running;
+        if (!_sfxFetching.TryAdd(sound, true)) return null;
+        var task = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                if (AssetPack.Fetch("sounds", $"{sound:D4}.wav", 60) is { } got)
+                {
+                    var parsed = WaveSound.Parse(File.ReadAllBytes(got));
+                    lock (_sfx) _sfx[sound] = parsed;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+            finally
+            {
+                _sfxTasks.TryRemove(sound, out _);
+                if (AssetPack.MayCome("sounds", $"{sound:D4}.wav")) _sfxFetching.TryRemove(sound, out _);
+            }
+        });
+        _sfxTasks[sound] = task;
+        return task;
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, System.Threading.Tasks.Task> _sfxTasks = new();
+
     internal static (float Left, float Right) SndPan(float screenX)
     {
         if (float.IsNaN(screenX)) return (1f, 1f);
