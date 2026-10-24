@@ -116,7 +116,7 @@ public static class Part1Combat
     /// <summary>회복(선택자 6) — 최대 HP × 세기 / 20000, 잃은 HP 까지. 결과는 양수(HP 에 더할 값).</summary>
     public static int Heal(int power, int maxHp, int hp) => Math.Min(maxHp * (power / 50) / 400, maxHp - hp);
 
-    /// <summary>기력 게이지(유닛 +0xe8, 0~150)에 따른 능력치 — 값 − 값·⅔·(150 − 게이지)/150(<c>0x1003ec10</c>). 0 이면 ⅓.</summary>
+    /// <summary>소울 게이지(유닛 +0xe8, 0~150 — 보정 401 「소울치 추가 회복」이 더해지는 값)에 따른 능력치 — 값 − 값·⅔·(150 − 게이지)/150(<c>0x1003ec10</c>). 0 이면 ⅓.</summary>
     public static int Scaled(int stat, int gauge) => Math.Max(0, stat + (-2 * stat / 3) * (150 - gauge) / 150);
 
     /// <summary>차례가 올 때 게이지 — +20(상태 +0x24c 면 +40), 150(상태에 따라 120·50)에서 자른다(<c>0x10034f80</c>). 처음 값은 40.</summary>
@@ -148,8 +148,14 @@ public static class Part1Bonus
     /// <summary>맞힌 대상에게 — 300 메테오 · 301 라이트닝 볼츠 · 302 썬더스탐 · 303 버써크 · 304 중독 · 305 최면 · 306 상태이상 · 307 혼란 · 308 마비 · 309 암살.</summary>
     public const int OnHitFirst = 300, OnHitLast = 309;
 
-    /// <summary>소울치 추가 회복.</summary>
-    public const int SoulRegen = 401;
+    /// <summary>차례 시작에 HP · 소울(유닛 +0xe8)에 더한다.</summary>
+    public const int HpRegen = 400, SoulRegen = 401;
+
+    /// <summary>기술 해금 코드 216~238 → 쓸 수 있게 되는 Attack.dat 번호(<c>0x1009dc6c</c>). 249 는 101.</summary>
+    public static readonly int[] UnlockAttacks = [154, 155, 156, 23, 24, 26, 27, 33, 34, 38, 40, 39, 43, 44, 47, 49, 48, 50, 55, 53, 57, 59, 56];
+
+    /// <summary>그 보정 코드가 여는 Attack.dat 번호 — 해금 코드가 아니면 0.</summary>
+    public static int UnlockedAttack(int code) => code switch { >= 216 and <= 238 => UnlockAttacks[code - 216], 249 => 101, _ => 0 };
 
     /// <summary>속성 번호(1~5) → 저항 보정 코드.</summary>
     public static int ResistOf(int element) => element is >= 1 and <= 5 ? FireResist + element - 1 : 0;
