@@ -347,6 +347,13 @@ internal sealed unsafe partial class BattleScene
                     if (TalkRidesOn(e)) { _talkNoWait = true; break; }
                     _talkNoWait = false;                                // 앞 말풍선의 「안 기다림」이 이 대사로 새지 않게
                     return;
+                case Part1Script.Part1Only + 706 when host._scene.IsPart1:
+                    // 파트1 출전 배치(행동 706 → 0x10096e70) — 들머리 대사 끝에서 배치 창을 띄우고, 닫힐 때까지 사건을 붙든다(배치 중에는 사건이 안 돈다).
+                    _part1DeployNow = true;
+                    BeginDeployOrDrop(host._scene, fresh: true);
+                    _part1DeployNow = false;
+                    if (_deployOpen) return;
+                    break;
                 case 207 or 909 when _eventRoutine != null:
                     _eventRoutineFree = false;                          // 앞 기술이 아직 돈다 — 끝난 뒤 이 줄을 다시 본다
                     _eventPc--;

@@ -238,8 +238,18 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
                     : host._units[speaker].Data is { } c ? host._db?.T(c.NameId) ?? "" : "";
         int faceCode = 0;
         // 말하는 이가 판에 없으면(0x1004ebd0, ba-20 V6): Chr 번호(1~9999)는 명부에서 이름·얼굴을 달아 가운데 창으로, 말하는 이 0 은 그 줄을 건너뛴다.
-        if (speaker < 0 && A(0) == 0) return;
-        if (speaker < 0 && A(0) > 0 && A(0) < 10000 && host._db?.Character(A(0)) is { } absent)
+        // 파트1 판은 Chr 0(살라딘)도 말하는 이고 번호가 파트1 번호다 — 판에 없으면(배치 706 전의 일행) 파트1 인물(Chr 20000 + n)의 이름·얼굴로 띄운다.
+        if (speaker < 0 && host._scene.IsPart1)
+        {
+            if (A(0) is >= 0 and < 10000 && host._db?.Character(Part1Game.ChrBase + A(0)) is { } part1)
+            {
+                name = host._db.T(part1.NameId);
+                host.Fld.LoadFieldFace(part1);
+                faceCode = part1.Code;
+            }
+        }
+        else if (speaker < 0 && A(0) == 0) return;
+        else if (speaker < 0 && A(0) > 0 && A(0) < 10000 && host._db?.Character(A(0)) is { } absent)
         {
             name = host._db.T(absent.NameId);
             host.Fld.LoadFieldFace(absent);

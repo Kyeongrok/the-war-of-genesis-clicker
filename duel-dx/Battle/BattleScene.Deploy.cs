@@ -201,9 +201,16 @@ internal sealed unsafe partial class BattleScene
         }
     }
 
+    /// <summary>파트1 사건 706 이 배치를 여는 중 — 판을 열 때는 미뤄 둔 배치를 이때 연다.</summary>
+    internal bool _part1DeployNow;
+
     /// <summary>새 전투를 열 때 — 배치칸이 있으면 배치 단계를 연다, 아니면 맵 밖에 둔 여분을 지운다.</summary>
     internal void BeginDeployOrDrop(DemoScene scene, bool fresh)
     {
+        // 파트1 판은 들머리 대사 뒤 행동 706 이 배치를 연다(분석-파트1-전투 13절) — 그런 사건이 있으면 판을 열 때는 맵 밖 여분을 그대로 두고 기다린다.
+        if (fresh && scene.IsPart1 && !_part1DeployNow && !AutoPlay && _deployMovable.Count > 0
+            && Part1Battle.Load(scene.Id - Part1Game.BattleBase) is { } part1 && part1.Events.Any(e => e.Actions.Any(a => a.Code == 706)))
+            return;
         _deployOpen = false;
         _deployPick = null;
         _deployNoLegion.Clear();
