@@ -138,7 +138,11 @@ internal sealed class Part1JobTree(GameWindow host)
     /// </summary>
     private static bool Leads(Part1Job from, Part1Job to, Part1Chr? chr)
     {
-        if (from.Id == to.Id || !to.Firsts.Any(f => f.A > 0) || Weight(to) <= Weight(from)) return false;
+        if (from.Id == to.Id || !to.Firsts.Any(f => f.A > 0)) return false;
+        // 소속이 다른 직업(마하즈리다 → 무슬림)은 무게를 안 보고, from 이 가르치는 능력치 아닌 조건 어빌리티가 있을 때만 잇는다(사용자 요청).
+        // 같은 소속 안에서는 예전처럼 조건이 더 무거운 쪽으로만 잇는다.
+        bool cross = from.Head.A != to.Head.A;
+        if (cross ? !Needs(to).Any(n => n.Ability > StatAbilityMax && Teaches(from, n.Ability) > 0) : Weight(to) <= Weight(from)) return false;
         var own = Needs(from).ToDictionary(n => n.Ability, n => n.Need);
         foreach (var (ability, need) in Needs(to))
         {
