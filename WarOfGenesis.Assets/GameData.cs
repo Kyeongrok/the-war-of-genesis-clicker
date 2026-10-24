@@ -366,6 +366,7 @@ public sealed class GameDatabase
         // work — 저장소 assets/data/skills(어빌리티마다 공통 정의 + 레벨별 칸, SkillBook)가 있으면 거기서, 없으면(게임 폴더) .att 에서.
         var works = new Dictionary<int, WorkData>();
         var skills = SkillBook.Load(files);
+        Part1SkillBook.AddTo(skills);   // 스킬 파일 없는 파트1 어빌리티도(파트1 폴더가 있으면)
         var descriptions = DescriptionsOf(skills);
         if (skills.Count > 0)
             foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
@@ -444,6 +445,7 @@ public sealed class GameDatabase
     public int ReloadSkills()
     {
         var skills = SkillBook.Load(_files);
+        Part1SkillBook.AddTo(skills);
         if (skills.Count == 0) return 0;
         var works = new Dictionary<int, WorkData>();
         foreach (var (id, record) in skills.SelectMany(SkillBook.Expand)) works[id] = ParseWork(record, 0);
