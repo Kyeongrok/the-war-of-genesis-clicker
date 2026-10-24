@@ -8,7 +8,7 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 1·2절. 장소 낱말 1·2(지도 자리)를 화면 칸에 맞춰 줄여 놓고, 낱말 9~13(잇닿은 장소 — 가설)을 점선으로 잇는다.
-/// 챕터 사건(대사 · 502 전투로 · 깃발)은 <see cref="Part1ChapterEvents"/> 가 돌린다. 지도 그림·인물 말은 아직 없다. 마을(종류 1)은 이름만 보인다.
+/// 챕터 사건(대사 · 502 전투로 · 503 필드로 · 깃발)은 <see cref="Part1SceneScript"/> 가 돌린다 — 전투·필드를 마치고 돌아오면 남은 행동을 잇는다. 지도 그림·인물 말은 아직 없다. 마을(종류 1)은 이름만 보인다.
 /// </remarks>
 internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -27,13 +27,36 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal (int X, int Y)[] _spots = [];
     internal int _hover = -1;
 
-    /// <summary>챕터 사건(대사 · 다음 전투 · 다음 챕터).</summary>
-    internal Part1ChapterEvents Events => _events ??= new(host, shell);
-    private Part1ChapterEvents? _events;
+    /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
+    internal Part1SceneScript Events => _events ??= new(host) { SceneChange = OnSceneChange };
+    private Part1SceneScript? _events;
+
+    /// <summary>사건이 전투·필드로 보냈다 — 같은 챕터로 돌아오면 남은 행동을 잇는다.</summary>
+    private bool _resume;
+
+    private bool OnSceneChange(ScriptCommand c)
+    {
+        int target = c.Args[0];
+        switch (c.Code)
+        {
+            case 502:
+                _resume = true;
+                host.LeaveScene(() => shell.StartBattle(target));
+                return true;
+            case 503:
+                int chapterId = _chapter?.Id ?? -1;
+                _resume = true;
+                host.LeaveScene(() => { _open = false; shell.Field.Open(target, () => Open(chapterId)); });
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>그 챕터를 연다 — 못 읽으면 알리고 false.</summary>
     internal bool Open(int chapterId)
     {
+        bool resume = _resume && _chapter?.Id == chapterId;
+        _resume = false;
         if (Part1Chapter.Load(chapterId) is not { Places.Count: > 0 } chapter)
         {
             host.Toast($"파트1 챕터 {chapterId} 를 못 읽었습니다");
@@ -59,7 +82,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
         _open = true;
         _hover = -1;
-        Events.Start(chapter);
+        Events.Start(chapter.Events, chapter.Lines, host.Part1.ChapterFired(chapterId), resume);
         return true;
     }
 
@@ -164,24 +187,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             var (x, y, name) = Buttons[i];
             shell.DrawButton(ox + x, oy + y, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, name, _hover == ButtonHit + i);
         }
-        if (Events.Talk is { } talk) DrawTalk(ox, oy, talk.Speaker, talk.Text);
+        if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
         host.DrawToast();
-    }
-
-    /// <summary>챕터 대사 창 — 아래쪽에 말하는 이와 글(줄 바꿈 그대로).</summary>
-    private void DrawTalk(int ox, int oy, string speaker, string text)
-    {
-        const int X = 24, Y = 340, W = 592, H = 124;
-        host.UiFill(ox + X, oy + Y, W, H, 0xE8101828);
-        host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
-        int y = oy + Y + 10;
-        if (speaker.Length > 0) { host.UiText(speaker, ox + X + 14, y, 0xFFFFE080, 13); y += 22; }
-        foreach (string line in text.Split('\n'))
-        {
-            host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
-            y += 19;
-        }
-        host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
     }
 
     private void DottedLine(int ox, int oy, (int X, int Y) a, (int X, int Y) b)

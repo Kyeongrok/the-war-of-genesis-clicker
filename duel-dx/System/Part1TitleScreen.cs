@@ -32,6 +32,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>파트1 챕터 지도 · 연대표 — 이 화면 위에 열려 타이틀 장면(TitleScreen 의 문)을 그대로 쓴다.</summary>
     internal Part1ChapterScreen Chapter => _chapter ??= new(host, this);
     internal Part1TimelineScreen Timeline => _timeline ??= new(host, this);
+    internal Part1FieldScreen Field => _field ??= new(host, this);
+    private Part1FieldScreen? _field;
     private Part1ChapterScreen? _chapter;
     private Part1TimelineScreen? _timeline;
     internal int _hover = -1;
@@ -60,6 +62,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         _open = false;
         if (_chapter != null) _chapter._open = false;
         if (_timeline != null) _timeline._open = false;
+        if (_field != null) _field._open = false;
         _entryHover = false;
         _bg = null;
         host.TitleScr.OpenTitle();
@@ -110,7 +113,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void UpdateHover(int bx, int by)
     {
-        if (_open && _chapter is { _open: true }) _chapter.UpdateHover(bx, by);
+        if (_open && _field is { _open: true }) { }
+        else if (_open && _chapter is { _open: true }) _chapter.UpdateHover(bx, by);
         else if (_open && _timeline is { _open: true }) _timeline.UpdateHover(bx, by);
         else if (_open) _hover = ButtonAt(bx, by);
         else _entryHover = EntryAt(bx, by);
@@ -119,7 +123,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnClick(int bx, int by)
     {
         if (!_open) return false;
-        if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
+        if (_field is { _open: true }) _field.OnClick();
+        else if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
         else if (_timeline is { _open: true }) _timeline.OnClick(bx, by);
         else Press(ButtonAt(bx, by));
         return true;
@@ -129,7 +134,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnKey(int key)
     {
         if (!_open) return false;
-        if (_chapter is { _open: true }) _chapter.OnKey(key);
+        if (_field is { _open: true }) _field.OnKey(key);
+        else if (_chapter is { _open: true }) _chapter.OnKey(key);
         else if (_timeline is { _open: true }) _timeline.OnKey(key);
         else if (key == Win32.VK_ESCAPE) Press(ButtonPart2);
         else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
@@ -168,6 +174,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             _bg = null;
             if (_chapter != null) _chapter._open = false;
             if (_timeline != null) _timeline._open = false;
+            if (_field != null) _field._open = false;
             return;
         }
         host.Toast($"파트1 전투 {part1Battle} 를 열지 못했습니다");
@@ -191,6 +198,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void Draw()
     {
+        if (_field is { _open: true }) { _field.Draw(); return; }
         if (_chapter is { _open: true }) { _chapter.Draw(); return; }
         if (_timeline is { _open: true }) { _timeline.Draw(); return; }
         var (ox, oy) = host.Mos.MosesOrigin();
@@ -205,6 +213,22 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             DrawButton(ox + x, oy + y, ButtonW, ButtonH, name, _hover == i);
         }
         host.DrawToast();
+    }
+
+    /// <summary>챕터·필드 대사 창 — 아래쪽에 말하는 이와 글(줄 바꿈 그대로).</summary>
+    internal void DrawTalk(int ox, int oy, string speaker, string text)
+    {
+        const int X = 24, Y = 340, W = 592, H = 124;
+        host.UiFill(ox + X, oy + Y, W, H, 0xE8101828);
+        host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
+        int y = oy + Y + 10;
+        if (speaker.Length > 0) { host.UiText(speaker, ox + X + 14, y, 0xFFFFE080, 13); y += 22; }
+        foreach (string line in text.Split('\n'))
+        {
+            host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
+            y += 19;
+        }
+        host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
     }
 
     internal void DrawButton(int x, int y, int w, int h, string label, bool hot)

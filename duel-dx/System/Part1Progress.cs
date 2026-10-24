@@ -19,8 +19,11 @@ internal sealed class Part1Progress
     /// <summary>이긴 전투(파트1 번호) — 챕터 지도에 ✓ 로 보인다.</summary>
     internal readonly HashSet<int> Cleared = [];
 
-    /// <summary>챕터 사건 발동 수 — (챕터, 사건) → 횟수(<see cref="Part1ChapterEvents"/>). 지도로 돌아와도 들머리가 다시 안 나오게.</summary>
-    internal readonly Dictionary<(int Chapter, int Event), int> Fired = [];
+    /// <summary>챕터 사건 발동 수 — 챕터 → (사건 → 횟수)(<see cref="Part1SceneScript"/>). 지도로 돌아와도 들머리가 다시 안 나오게.</summary>
+    internal readonly Dictionary<int, Dictionary<int, int>> Fired = [];
+
+    internal Dictionary<int, int> ChapterFired(int chapterId) =>
+        Fired.TryGetValue(chapterId, out var fired) ? fired : Fired[chapterId] = [];
 
     /// <summary>새 게임 — 일행·챕터·이긴 전투·사건 발동 수를 비운다.</summary>
     internal void Reset()
