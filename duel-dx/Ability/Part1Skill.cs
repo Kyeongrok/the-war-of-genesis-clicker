@@ -22,6 +22,9 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed partial class Part1Skill(GameWindow host)
 {
+    /// <summary>이 틀이 그리는 파트1 기술인가 — 고정 work 들 · 라이트닝볼츠(Attack 번호로 · 생성된 어빌리티 work 포함).</summary>
+    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work);
+
     internal static readonly HashSet<int> Works =
         [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, MeteorWork,
          LightningWork, LightningWork + 1, LightningWork + 2, LightningWork + 3,

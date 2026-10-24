@@ -1,6 +1,7 @@
 namespace DuelDx;
 
 using static DuelDx.GameWindow;
+using WarOfGenesis.Assets;
 
 /// <summary>
 /// 파트1 라이트닝볼츠(공격 134~137) — 라이트닝 무기(보정 301)가 치명타 때 맞은 자리에 덧붙여 떨어뜨리는 벼락. 핸들러 <c>0x1004ca20</c>(볼트 분석-파트1-기술-b 7절).
@@ -15,11 +16,12 @@ internal sealed partial class Part1Skill
 {
     internal const int LightningWork = 20134;
 
-    internal static bool IsLightning(int work) => work is >= LightningWork and <= LightningWork + 3;
+    /// <summary>라이트닝볼츠 1~9(Attack 134~142) — 덧기술 · 어빌리티 43 · 겹침으로 비켜 준 work(+1000)까지.</summary>
+    internal static bool IsLightning(int work) => work > Part1GameBase && Part1SkillBook.AttackIdOf(work) is >= 134 and <= 142;
 
     private int Lightning(int work, List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
-        int n = 10 * (work - Part1GameBase - 129), k = work - Part1GameBase - 131;
+        int id = Part1SkillBook.AttackIdOf(work), n = 10 * (id - 129), k = id - 131;
         // T — 맞은 이가 그 칸에 있으면 그 발 자리, 없으면 칸 가운데(0x1004ca44).
         var (tx, ty) = targets.Count > 0 && host._units[targets[0]] is { } struck ? host.Btl.UnitFoot(struck) : aim;
         double ox = tx, oy = ty - 252;

@@ -145,6 +145,7 @@ internal sealed unsafe partial class BattleScene
     {
         // 하이 텔레포트 — 떠나는 자리의 빛만. 나타나는 빛(381:1)은 새 칸에서 TeleportRoutine 이 띄운다.
         // 엘레맨탈 파이어·서몬 몬스터 — 효과는 GameWindow.Acrost.cs 가 대상마다 깐다(준비의 시전 영상만 남긴다).
+        if (Part1Skill.IsLightning(work)) return ([7], []);   // 파트1 라이트닝볼츠(어빌리티 · 덧기술) — 기 모으기 한 번, 벼락은 Part1Skill 이 깐다
         if (AcrostSkill.AcrostWorks.Contains(work)) return ([6, 15], []);
         // 그라비티 필드 — 중력장은 GameWindow.GravityField.cs 가 대상마다 깐다.
         if (GravityFieldWorks.Contains(work)) return ([6, 15], []);
