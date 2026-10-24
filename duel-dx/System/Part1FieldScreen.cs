@@ -363,7 +363,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             // 효과 그림(300 [Obs < 10000]) — 다 돈 것은 지운다. 층 0 은 인물과 함께 발끝(y) 차례로, 층 1 · 2 는 그 위에 차례로(0x100c8120 은 층마다 y 로 줄 세워 그린다).
             _effects.RemoveAll(e => (host._lastTime - e.Start) * GameWindow.TicksPerSecond >= e.Length);
             void DrawEffect(Effect e) =>
-                host.DrawUi(e.Obs, e.Motion, (int)((host._lastTime - e.Start) * GameWindow.TicksPerSecond), ox + e.X - camX, oy + top + e.Y - camY, GameWindow.UiBlend.Alpha, loop: false);
+                DrawObs(e.Obs, e.Motion, (int)((host._lastTime - e.Start) * GameWindow.TicksPerSecond), ox + e.X - camX, oy + top + e.Y - camY, loop: false);
             var people = Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).Select(i => (Y: spots[i].Y, Person: i, Fx: (Effect?)null))
                                    .Concat(_effects.Where(e => e.Layer <= 0).Select(e => (Y: e.Y, Person: -1, Fx: (Effect?)e))).OrderBy(d => d.Y).ToList();
             foreach (var (_, i, fx) in people)
@@ -376,14 +376,29 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                 int personTick = MotionTick(i);
                 if (_shadow[i])
                     host.DrawUi(Part1Game.ObsBase + ShadowObs, 0, tick, ox + x - camX, oy + top + y - camY, GameWindow.UiBlend.Darken, loop: true, fade: 0.55);   // 그림자 그림의 점은 어둡기 단계(0~31, 섞기 8) — 바탕을 어둡게
-                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, personTick, ox + x - camX, oy + top + y - camY,
-                            GameWindow.UiBlend.Alpha, loop: _motion[i] == null || !_motionOnce[i], mirror: mirror ^ _flip[i]);
+                DrawObs(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, personTick, ox + x - camX, oy + top + y - camY,
+                        loop: _motion[i] == null || !_motionOnce[i], mirror: mirror ^ _flip[i]);
             }
             foreach (var e in _effects.Where(e => e.Layer > 0).OrderBy(e => e.Layer).ThenBy(e => e.Y)) DrawEffect(e);
             if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
         }
         DrawTalkLayer(ox, oy);
         host.DrawToast();
+    }
+
+    /// <summary>
+    /// 필드 인물 · 효과 그림 한 장 — 그 모션 틱의 섞기 키(종류 3)대로. 파트1 섞기 9 는 더하기(<c>0x1000b8d0</c> 색표 = min(31, 바탕 + 그림)),
+    /// 다시 쌀 때 파트2 17 로 옮겼다. 빛 기둥(Obs 389 · 388, 필드 0072 · 0078)은 모든 장이 섞기 9 라 보통으로 찍으면 검은 기둥이 된다(사용자 보고).
+    /// </summary>
+    private void DrawObs(int obs, int motion, int tick, int x, int y, bool loop, bool mirror = false)
+    {
+        int key = 0;
+        if (host.UiFor(obs) is { } sprite)
+        {
+            int len = sprite.ShownLength(motion);
+            key = sprite.BlendAt(motion, len > 0 ? loop ? (tick % len + len) % len : Math.Min(tick, len - 1) : tick);
+        }
+        host.DrawUi(obs, motion, tick, x, y, GameWindow.BlendOf(key), loop: loop, fade: GameWindow.BlendFade(key), mirror: mirror);
     }
 
     /// <summary>덮개 — 한 빛깔이면 채우고, 그림이면 그림 안 (X, Y) 부터 화면 크기만큼 왼위에 찍는다(0x100c7d8f: OffsetRect).</summary>

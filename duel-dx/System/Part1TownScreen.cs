@@ -24,6 +24,9 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
 
     internal bool _open;
     private Part1Field? _field;
+
+    /// <summary>열린 마을 필드 번호(장면 번호 꼬리표) — 없으면 −1.</summary>
+    internal int FieldId => _field?.Id ?? -1;
     private List<Facility> _facilities = [];
     private int _selected = -1;
     private int _hover = -1;

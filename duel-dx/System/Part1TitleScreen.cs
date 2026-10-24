@@ -351,6 +351,21 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         DrawButton(ox + x, oy + y, w, h, "PART 1", _entryHover);
     }
 
+    /// <summary>
+    /// 장면 번호 꼬리표(파트2 의 「Fld 0365 · 사건 3 · 줄 12」 자리) — 「P1 Fld 0072 · 사건 3 · 줄 12」 · 「P1 Fld 0138 · 마을」 · 「P1 Chp 0020」.
+    /// 사건 · 줄은 사건이 도는 동안만(다 돌았으면 번호만). 타이틀 · 일행 창이면 null.
+    /// </summary>
+    internal string? SceneTag()
+    {
+        static string Place(Part1SceneScript s) => !s.Idle && s.Place is ( >= 0, >= 0) p ? $" · 사건 {p.Event} · 줄 {p.Line}" : "";
+        if (_party is { _open: true }) return null;
+        if (_town is { _open: true, FieldId: >= 0 } town) return $"P1 Fld {town.FieldId:D4} · 마을";
+        if (_field is { _open: true, _field: { } f } field) return $"P1 Fld {f.Id:D4}" + Place(field.Script);
+        if (_chapter is { _open: true, _chapter: { } c } chapter) return $"P1 Chp {c.Id:D4}" + Place(chapter.Events);
+        if (_timeline is { _open: true }) return "P1 연대표";
+        return null;
+    }
+
     internal void Draw()
     {
         if (_party is { _open: true }) { _party.Draw(); return; }

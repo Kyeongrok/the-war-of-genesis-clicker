@@ -233,7 +233,7 @@ internal sealed class Part1SceneScript(GameWindow host)
         _waitSound = false;
         _leaving = false;
         _away = null;
-        if (!resume) { _pending.Clear(); Array.Clear(Faces); }
+        if (!resume) { _pending.Clear(); Array.Clear(Faces); Place = (-1, -1); }
         // 성우 대사(206~208 의 셋째 인자 = Snd 번호)는 처음 틀 때 받느라 조용히 지나가므로 장면을 열 때 미리 받아 둔다.
         host.PreloadSounds([.. events.SelectMany(e => e.Actions).Where(a => a.Code is >= 206 and <= 208 && a.Args.Length > 2 && a.Args[2] > 0)
                                      .Select(a => Part1Game.ObsBase + a.Args[2])]);
@@ -311,6 +311,16 @@ internal sealed class Part1SceneScript(GameWindow host)
         Run();
     }
 
+    /// <summary>방금 돈 행동의 자리 — 사건 번호 · 그 사건 안 줄(0부터). 장면 번호 꼬리표(설정 > 장면 번호 보이기)가 「사건 n · 줄 m」으로 보인다. 없으면 −1.</summary>
+    internal (int Event, int Line) Place { get; private set; } = (-1, -1);
+
+    private void NotePlace(ScriptCommand c)
+    {
+        foreach (var e in _events)
+            for (int i = 0; i < e.Actions.Count; i++)
+                if (ReferenceEquals(e.Actions[i], c)) { Place = (e.Index, i); return; }
+    }
+
     private static void AddCount(Dictionary<int, int> pool, int chr, int count) =>
         pool[chr] = Math.Max(0, pool.GetValueOrDefault(chr) + count);
 
@@ -380,6 +390,7 @@ internal sealed class Part1SceneScript(GameWindow host)
             }
             var c = _pending[0];
             _pending.RemoveAt(0);
+            NotePlace(c);
             short[] a = c.Args;
             if (IsField && RunField(c)) { if (_sceneLeft) return; continue; }
             // 챕터만의 것 — 100 · 102 · 103 은 필드와 같은 덮개 틀(0x100bf890 CBgr · 0x100bf860 · 0x100bf960 0x1009b0f0 떠 두기),
