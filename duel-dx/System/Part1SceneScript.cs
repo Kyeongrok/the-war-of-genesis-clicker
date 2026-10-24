@@ -212,6 +212,12 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>지금 성우 목소리가 끝나는 때 — 대사를 넘기면 그때 끊는다(원본은 끝날 때까지 다음 행동을 미룬다, 분석-파트1-챕터 11절).</summary>
     private double _voiceEnd;
 
+    /// <summary>목소리 길이를 알았나(파일을 이미 받아 둠) — 모르면 저절로 넘기지 않는다.</summary>
+    private bool _voiceKnown;
+
+    /// <summary>목소리가 끝난 뒤 넘기기까지 쉬는 틈(초).</summary>
+    private const double VoiceAfterSeconds = 0.8;
+
     /// <summary>
     /// 새로 돌린다 — <paramref name="fired"/> 는 발동 수(챕터는 진행에 남겨 지도로 돌아와도 들머리가 다시 안 나오게, 필드는 들어올 때마다 새것).
     /// <paramref name="resume"/> 면 남은 행동을 이어 돈다(전투를 마치고 돌아왔을 때).
@@ -289,6 +295,13 @@ internal sealed class Part1SceneScript(GameWindow host)
     internal void Pump()
     {
         if (Talk != null && _talkAutoAt > 0 && host._lastTime >= _talkAutoAt) { Advance(); return; }
+        // 성우 대사는 목소리가 끝나고 조금 뒤 저절로 넘어간다(사용자 요청) — 장이 남았으면 다음 장부터. 받는 중이라 길이를 모르면(30초 어림) 기다리지 않는다.
+        if (Talk != null && _voiceEnd > 0 && _voiceKnown && host._lastTime >= _voiceEnd + VoiceAfterSeconds)
+        {
+            _voiceEnd = 0;
+            if (!host.Part1TitleScr.NextTalkPage()) Advance();
+            return;
+        }
         if (Talk == null && (_waitUntil > 0 || _waitBusy || _waitSound)) Run();
     }
 
@@ -422,6 +435,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                         PcmSound? clip;
                         lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
                         _voiceEnd = clip != null ? host._lastTime + GameWindow.ClipSeconds(clip) : host._lastTime + 30;   // 아직 안 받았으면 넉넉히 — 넘길 때 끊게
+                        _voiceKnown = clip != null;
                     }
                     break;
                 }
