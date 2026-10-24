@@ -40,6 +40,18 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 401 [dx, dy, 틱] — 화면을 틱마다 (dx, dy) 씩, 틱 수만큼 민다(0x100cd950, 그림 끝에서 자른다).</summary>
     internal Action<int, int, int>? CameraPan;
 
+    /// <summary>
+    /// 지도 말 — 차례(0부터) → 장소. 챕터를 열 때 처음 장소로 채우고, 행동 900 [말(1부터), 장소] 이 옮긴다(<see cref="MarkerMoved"/> 가 그 뒤를 맡는다).
+    /// 조건 301 [말, v] 은 「말이 살아 있나」(원본 +0xe — 리메이크는 늘 산 것으로 본다, 가설), 302 [장소, 말, v] 는 「말이 그 장소에 있나」.
+    /// </summary>
+    internal List<int> Markers = [];
+
+    /// <summary>지금 챕터 지도 턴 — 조건 1 [값, 연산] 이 본다(챕터만).</summary>
+    internal Func<int>? MapTurn;
+
+    /// <summary>900 으로 말이 옮겨졌다(말 차례, 장소) — 일행이 선 전투 장소면 그 전투가 열린다(0x100c10a0). 장면을 넘겼으면 true.</summary>
+    internal Func<int, int, bool>? MarkerMoved;
+
     /// <summary>챕터 행동 1201 [장소, 전투] — 그 장소를 그 전투 장소로 바꾼다(0x100c1a50: 장소 낱말 7 = 전투, 낱말 6 = 0).</summary>
     internal Action<int, int>? PlaceBattle;
 
@@ -159,6 +171,10 @@ internal sealed class Part1SceneScript(GameWindow host)
             0 => true,
             100 => _vars.GetValueOrDefault(a[0]) == a[1],
             200 => a[1] == Arrived,
+            // 조건은 말을 0부터 센다(0x100bd510 · 0x100bd550 — 칸 a0 · a1 을 바로 쓴다), 행동 900 은 1부터(0x100c10a0 — 칸 a0 − 1).
+            301 => (a[0] >= 0 && a[0] < Markers.Count && Markers[a[0]] >= 0) == (a[1] != 0),
+            302 => (a[1] >= 0 && a[1] < Markers.Count && Markers[a[1]] == a[0]) == (a[2] != 0),
+            1 => MapTurn != null && BattleScene.Compare(MapTurn(), a[1], a[0]),     // [값, 연산] — 지도 턴(0x100bcf40 → 0x100bce90)
             101 => BattleScene.Compare(a[0] >= 0 && a[0] < host.FlagSt._flags.Length ? host.FlagSt._flags[a[0]] : 0, a[2], a[1]),
             _ => false,                                                     // 아직 안 푼 조건은 안 터뜨린다
         };
@@ -213,6 +229,10 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // 912 [eld] = 무리 돈(0x100c1850, 0x101a07e0 — 챕터 0: 3000) · 904 [무리, Chr] = 그 인물을 무리 명단에(0x100c12e0 — 일행에 든다로 친다).
                 case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
+                case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count:
+                    Markers[a[0] - 1] = a[1];
+                    if (MarkerMoved?.Invoke(a[0] - 1, a[1]) == true) { _sceneChanged = true; return; }
+                    break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;
                 case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;

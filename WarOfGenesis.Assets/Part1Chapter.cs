@@ -23,6 +23,12 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
 {
     public IReadOnlyList<string> Lines { get; init; } = [];
 
+    /// <summary>
+    /// 지도 말(적 무리로 보인다)의 처음 장소 — 장소 뒤 첫 목록(u16 M, M 낱말). 챕터 10 「시지아의 결전」: 16 · 14 · 15.
+    /// 사건 900 [말(1부터), 장소] 이 옮기고, 조건 301 · 302 가 본다(분석-파트1-챕터 4절). −1 은 안 쓰는 칸.
+    /// </summary>
+    public IReadOnlyList<int> Markers { get; init; } = [];
+
     public string Title => Lines.Count > 0 ? Lines[0] : "";
     public string Region => Lines.Count > 1 ? Lines[1] : "";
     public string NameOf(Part1ChapterPlace place) => place.NameLine >= 0 && place.NameLine < Lines.Count ? Lines[place.NameLine] : "";
@@ -56,7 +62,7 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
         if (!Need(2)) return null;
         int m = H();
         if (m < 0 || !Need(2 * m)) return null;
-        o += 2 * m;
+        var markers = Enumerable.Range(0, m).Select(_ => (int)H()).ToList();
         for (int i = 0; i < m; i++)
         {
             if (!Need(2)) return null;
@@ -81,7 +87,7 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
             if (na < 0 || !Need(14 * na)) break;
             events.Add(new Part1BattleEvent(i, max, conds, Commands(b, ref o, na)));
         }
-        return new Part1Chapter(id, header, places, events);
+        return new Part1Chapter(id, header, places, events) { Markers = markers };
     }
 
     private static List<ScriptCommand> Commands(byte[] b, ref int o, int count)

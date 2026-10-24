@@ -18,9 +18,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int SpotW = 116, SpotH = 22;
 
     /// <summary>아래 단추 — 연대표 · 파트1 타이틀.</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(90, 436, "연대표"), (250, 436, "일행"), (410, 436, "타이틀")];
+    internal static readonly (int X, int Y, string Name)[] Buttons = [(10, 436, "턴 종료"), (170, 436, "연대표"), (330, 436, "일행"), (490, 436, "타이틀")];
 
-    internal const int ButtonTimeline = 0, ButtonParty = 1, ButtonTitle = 2, ButtonHit = 1000;
+    internal const int ButtonEndTurn = 0, ButtonTimeline = 1, ButtonParty = 2, ButtonTitle = 3, ButtonHit = 1000;
 
     internal bool _open;
     internal Part1Chapter? _chapter;
@@ -31,7 +31,36 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal int _party;
 
     /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
-    internal Part1SceneScript Events => _events ??= new(host) { SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle };
+    internal Part1SceneScript Events => _events ??= new(host)
+    {
+        SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle, MarkerMoved = OnMarkerMoved,
+        MapTurn = () => _chapter is { } c ? host.Part1.MapTurns.GetValueOrDefault(c.Id) : 0,
+    };
+
+    /// <summary>
+    /// 턴 종료(원본 0x100b4010) — 지도 턴 +1 하고 사건을 다시 훑는다(조건 1 의 턴 사건 — 챕터 10 의 말 옮기기 따위).
+    /// 원본은 턴이 머리 낱말 10(챕터 0 은 10 · 1 은 15)에 닿으면 행동 500 을 부르는데 그 뜻을 아직 몰라 안 옮겼다.
+    /// </summary>
+    private void EndMapTurn()
+    {
+        if (_chapter is not { } chapter) return;
+        int turn = host.Part1.MapTurns[chapter.Id] = host.Part1.MapTurns.GetValueOrDefault(chapter.Id) + 1;
+        host.Toast($"턴 {turn}");
+        Events.Arrive(-1);
+        host.Part1.Save(host.FlagSt._flags);
+    }
+
+    /// <summary>
+    /// 900 이 말을 일행이 선 장소로 옮겼고 그 장소가 전투 장소면 그 전투를 연다(0x100c10a0 — 장면 3, 장소 낱말 7). 남은 행동은 돌아와서 잇는다.
+    /// </summary>
+    private bool OnMarkerMoved(int marker, int place)
+    {
+        if (_chapter is not { } chapter || place != _party || place < 0 || place >= chapter.Places.Count || !chapter.Places[place].IsBattle) return false;
+        int battle = chapter.Places[place].Target;
+        _resume = true;
+        host.LeaveScene(() => shell.StartBattle(battle));
+        return true;
+    }
 
     /// <summary>1201 — 장소를 전투 장소로 바꾸고 진행에 적는다(다시 열어도 그대로).</summary>
     private void SetPlaceBattle(int place, int battle)
@@ -89,6 +118,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             return false;
         }
         _chapter = chapter = WithPlaceBattles(chapter);
+        // 지도 말 — 같은 챕터로 돌아온 것이면 옮긴 자리를 그대로 둔다.
+        if (!resume || Events.Markers.Count != chapter.Markers.Count) Events.Markers = [.. chapter.Markers];
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
         int minX = places.Min(p => p.X), maxX = places.Max(p => p.X), minY = places.Min(p => p.Y), maxY = places.Max(p => p.Y);
@@ -234,6 +265,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_chapter is not { } chapter) return;
         switch (hit)
         {
+            case ButtonHit + ButtonEndTurn: EndMapTurn(); break;
             case ButtonHit + ButtonTimeline: host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case ButtonHit + ButtonTitle: host.LeaveScene(() => _open = false); break;
             case ButtonHit + ButtonParty:
@@ -293,6 +325,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             if (name.Length == 0) name = place.IsBattle ? $"전투 {place.Target}" : "길목";
             if (cleared) name = "✓ " + name;
             if (i == _party) host.UiText("◆", ox + x - 12, oy + y + 4, 0xFFFFE080, 12);
+            // 지도 말(적 무리) — 그 장소 오른쪽에 붉은 ✕(말 수만큼).
+            int markers = Events.Markers.Count(m => m == i);
+            if (markers > 0) host.UiText(new string('✕', markers), ox + x + SpotW + 2, oy + y + 3, 0xFFFF6060, 12);
             var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);
             host.UiText(name, ox + x + Math.Max(2, (SpotW - nw) / 2), oy + y + (SpotH - nh) / 2, GameWindow.White, 11);
         }
