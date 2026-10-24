@@ -56,7 +56,7 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>
     /// 파트1 약 쓰기 — 지금 차례의 인물에게 보정 100(HP 회복, 9999 = 가득)을 주고 하나 덜고 차례를 끝낸다.
-    /// 상태 치료(보정 102~107)는 파트2 상태이상과 짝을 아직 안 맞춰 하나 덜기만 한다.
+    /// 상태 치료는 짝을 아는 것만(102 버서커 · 104 중독 · 107 모두).
     /// </summary>
     internal void UsePart1Item(Part1Item item)
     {
@@ -68,8 +68,19 @@ internal sealed unsafe partial class BattleScene
             u.Hp = heal >= 9999 ? u.MaxHp : Math.Min(u.MaxHp, u.Hp + heal);
             ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
         }
+        // 상태 치료 — 보정 102 버서커 · 104 중독은 파트2 상태 4 · 3 과 같은 것으로 보고 지운다, 107(동자삼 · 엔젤더스트)은 모두 지운다.
+        // 103 혼란 · 105 최면 · 106 컨디션은 짝을 아직 못 찾아 효과가 없다.
+        bool cured = false;
+        if (item.Bonus(107) > 0) { cured = u.StatusId.Any(id => id != 0); u.ClearStatus(); }
+        foreach (var (code, status) in new[] { (102, 4), (104, 3) })
+            if (item.Bonus(code) > 0 && u.HasStatus(status))
+            {
+                int k = Array.IndexOf(u.StatusId, (byte)status);   // byte 배열이라 byte 로 찾아야 한다(int 로 찾으면 늘 -1)
+                u.StatusId[k] = 0; u.StatusValue[k] = 0;
+                cured = true;
+            }
         host.Part1.Bag.Remove(item.Id);
-        host.Toast(heal > 0 ? $"{item.Name} — HP +{u.Hp - before}" : $"{item.Name} — 썼다");
+        host.Toast(heal > 0 ? $"{item.Name} — HP +{u.Hp - before}" : cured ? $"{item.Name} — 상태 회복" : $"{item.Name} — 썼다");
         EndTurn();
     }
 
