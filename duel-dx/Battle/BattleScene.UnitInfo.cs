@@ -55,7 +55,10 @@ internal sealed unsafe partial class BattleScene
                                                ("최대 TP", unit.BonusMaxTp), ("최대 SOUL", unit.BonusMaxSoul), ("최대 HP", unit.BonusMaxHp) })
             if (value != 0) effects.Add($"{label} {value:+#;-#}");
         const int EffectLineH = 16;
-        int h = InfoH + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0);
+        // 가진 어빌리티(전투에서 쓰는 것) — 적이 무엇을 쓰는지 미리 보이게(사용자 요청, 원본에 없는 덧붙임).
+        var abilities = c.Abilities.Where(a => db.Abilities.TryGetValue(a.Ability, out var ab) && ab.Category is 1 or 4 && !db.IsHidden(a.Ability))
+                                   .Select(a => $"{db.T(db.Abilities[a.Ability].NameId)} Lv{a.Level}").ToList();
+        int h = InfoH + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0) + (abilities.Count > 0 ? abilities.Count * EffectLineH + 22 : 0);
         y = Math.Min(y, host._camY + host.ViewHeight - h);
 
         // 원본 창 틀 — 제목줄에 이름(분석-시스템메뉴 「메시지 창 틀」)
@@ -93,6 +96,13 @@ internal sealed unsafe partial class BattleScene
             host.StatusScr.DrawAilmentIcon(unit, i, x + 26 + 43 * i, y + 248);
         for (int i = 0; i < effects.Count; i++)
             host.UiText(effects[i], x + 10, y + 268 + i * EffectLineH, 0xFFFFE070, 11f);
+        if (abilities.Count > 0)
+        {
+            int ay = y + 268 + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0);
+            Rule(x, ay);
+            for (int i = 0; i < abilities.Count; i++)
+                host.UiText(abilities[i], x + 10, ay + 6 + i * EffectLineH, 0xFFB0D8FF, 11f);
+        }
 
         void Centre(string text, int left, int top, uint color)
         {
