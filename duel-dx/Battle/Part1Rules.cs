@@ -61,10 +61,24 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     {
         if (Fighter(a) is not { } fa || Fighter(t) is not { } ft || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), attackId) is not { } attack)
             return true;
+        // 대상 거르기(0x10041880, 표 0x1011c084) — 선택자 25 · 27 · 28 은 인물 칸 10(+0xb8, 종족으로 보임)이 0 인 사람에게만 듣는다.
+        if (attack.Formula is 25 or 27 or 28 && ft.Chr.Fields[10] != 0)
+        {
+            if (BattleScene.Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}: 칸 10 = {ft.Chr.Fields[10]} 이라 안 듣는다" + Environment.NewLine);
+            return false;
+        }
         int power = Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd;
         bool guard = ft.Equipment.Any(i => i?.Bonus(247) is not (null or 0));
+        // 25(컨디션이상)는 최면 · 혼란이, 28(혼란)은 최면이 걸려 있으면 안 걸린다(0x10041a7f · 0x10041b15).
+        bool blocked = attack.Formula switch
+        {
+            25 or 26 => HasAilment(t, Hypnosis) || HasAilment(t, Confusion),
+            28 => HasAilment(t, Hypnosis),
+            _ => false,
+        };
         bool lands = Part1Combat.StatusLands(attack.Formula, power, ft.Stat(Part1Chr.Mr, t.Soul), ft.Stat(Part1Chr.Luck, t.Soul),
-                                             a.IsAlly == t.IsAlly, guard, false, rng.Next(32768));
+                                             a.IsAlly == t.IsAlly, guard, blocked, rng.Next(32768));
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}(식 {attack.Formula}): 세기 {power} · MR {ft.Stat(Part1Chr.Mr, t.Soul)} · Luck {ft.Stat(Part1Chr.Luck, t.Soul)}{(guard ? " · 막기 247" : "")} → {(lands ? "걸림" : "안 걸림")}" + Environment.NewLine);
@@ -87,6 +101,57 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
             : null;
 
     internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
+
+    /// <summary>파트1 상태 번호 — 유닛 바이트 +0x246 + 번호: 14 최면(+0x254) · 15 컨디션이상(+0x255) · 16 혼란(+0x256).</summary>
+    internal const int Hypnosis = 14, Condition = 15, Confusion = 16;
+
+    /// <summary>
+    /// 파트1 상태 14 · 15 · 16 이 걸린 사람(분석-파트1-전투 25절). 원본은 값 1 을 넣고 줄이지 않는다 — 시간 틱마다 따로 굴려 풀린다(<see cref="RecoveryRoll"/>).
+    /// </summary>
+    internal readonly Dictionary<UnitState, HashSet<int>> Ailments = [];
+
+    private static Part1Rules? s_current;
+    internal Part1Rules(Func<int, Part1Chr?> load, bool current) : this(load) { if (current) s_current = this; }
+
+    internal bool HasAilment(UnitState u, int s) => Ailments.TryGetValue(u, out var set) && set.Contains(s);
+
+    /// <summary>혼란이면 자기 말고 모두가 적이다 — 원본은 편 판정 칸 +0x1f8 을 2(모두 적)로 바꾼다(<c>0x10042674</c> · <c>0x10038550</c>).</summary>
+    internal static bool SeesAllAsFoes(UnitState u) => s_current?.HasAilment(u, Confusion) == true;
+
+    /// <summary>
+    /// 상태를 건다(<c>0x10042570</c> — 이미 걸려 있으면 그대로). 최면은 컨디션이상 · 혼란을, 혼란은 컨디션이상을 지운다(<c>0x10042648</c> · <c>0x10042674</c>).
+    /// 새로 걸렸으면 true.
+    /// </summary>
+    internal bool AddAilment(UnitState u, int s)
+    {
+        if (HasAilment(u, s)) return false;
+        if (!Ailments.TryGetValue(u, out var set)) Ailments[u] = set = [];
+        if (s == Hypnosis) { set.Remove(Condition); set.Remove(Confusion); }
+        if (s == Confusion) set.Remove(Condition);
+        set.Add(s);
+        return true;
+    }
+
+    internal bool ClearAilment(UnitState u, int s)
+    {
+        if (!Ailments.TryGetValue(u, out var set) || !set.Remove(s)) return false;
+        if (set.Count == 0) Ailments.Remove(u);
+        return true;
+    }
+
+    internal static int AilmentOf(int selector) => selector switch { 27 => Hypnosis, 28 => Confusion, _ => Condition };
+
+    /// <summary>AI 가 그 대상에게 선택자 25 · 27 · 28 을 쓸 만한가 — 듣는 종족(칸 10 = 0)이고 그 상태가 없고 막는 상태도 없을 때.</summary>
+    internal bool AilmentWorth(UnitState t, int selector) =>
+        (Fighter(t) is not { } f || f.Chr.Fields[10] == 0) && !HasAilment(t, AilmentOf(selector))
+        && !(selector == 25 && (HasAilment(t, Hypnosis) || HasAilment(t, Confusion))) && !(selector == 28 && HasAilment(t, Hypnosis));
+
+    /// <summary>
+    /// 시간 틱마다의 풀림 굴림(<c>0x10035150</c> → <c>0x10041c00</c>, 유닛 vt+0x54 — 아무도 움직일 수 없어 틱이 오를 때 모두에게).
+    /// 컨디션이상: rand() % (최대 HP × 4) ≤ HP ÷ 10 · 최면 · 혼란(과 중독): rand() % 600 ≤ 소울 ÷ 10. 풀리면 true.
+    /// </summary>
+    internal static bool RecoveryRoll(int status, int hp, int maxHp, int soul, int roll) =>
+        status == Condition ? roll % Math.Max(1, maxHp * 4) <= hp / 10 : roll % 600 <= soul / 10;
 
     /// <summary>그 기술이 속성 부여면 그 속성(1 · 2 · 3), 아니면 0.</summary>
     internal int EnchantOf(WorkData w) => AttackOf(w)?.Formula is >= 10 and <= 12 and var sel ? sel - 9 : 0;

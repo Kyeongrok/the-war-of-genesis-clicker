@@ -68,9 +68,12 @@ internal sealed unsafe partial class BattleScene
             u.Hp = heal >= 9999 ? u.MaxHp : Math.Min(u.MaxHp, u.Hp + heal);
             ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
         }
-        // 상태 치료 — 보정 102~106 은 짝지은 파트2 상태(Part1Item.Part2Status: 버써크·혼란 4 · 중독 3 · 최면 5 · 컨디션 1)를 지우고, 107 은 모두 지운다.
+        // 상태 치료 — 보정 102 · 104 는 짝지은 파트2 상태(Part1Item.Part2Status: 버써크 4 · 중독 3)를, 103 · 105 · 106 은 파트1 상태
+        // 혼란 · 최면 · 컨디션이상(Part1Rules.Ailments, 0x1003ead2~)을 지우고, 107 은 모두 지운다(0x10042150).
         bool cured = false;
-        if (item.Bonus(107) > 0) { cured = u.StatusId.Any(id => id != 0); u.ClearStatus(); }
+        if (item.Bonus(107) > 0) { cured = u.StatusId.Any(id => id != 0) || Part1.Ailments.ContainsKey(u); u.ClearStatus(); Part1.Ailments.Remove(u); }
+        foreach (var (code, p1) in new[] { (103, Part1Rules.Confusion), (105, Part1Rules.Hypnosis), (106, Part1Rules.Condition) })
+            if (item.Bonus(code) > 0 && Part1.ClearAilment(u, p1)) cured = true;
         foreach (int code in new[] { 102, 103, 104, 105, 106 })
             if (item.Bonus(code) > 0 && Part1Item.Part2Status(code) is > 0 and var status && u.HasStatus(status))
             {

@@ -122,7 +122,7 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     /// <remarks>판정은 <b>움직이는 쪽</b> 기준이다. 버서커가 걸린 인물만 편을 못 가리고, 남들이 그 인물을 보는 눈은 그대로다.</remarks>
     internal static bool SeesAsFoe(UnitState viewer, UnitState other) =>
-        viewer != other && (viewer.HasStatus(4) || Hostile(viewer, other));
+        viewer != other && (viewer.HasStatus(4) || Part1Rules.SeesAllAsFoes(viewer) || Hostile(viewer, other));   // 파트1 혼란도 모두가 적
 
     /// <summary>
     /// 두 편이 적인가 — 원본 세력 행렬(<c>0x1006b76f</c>)은 편 3·4 만 한편이고 <b>편 0·1·2 는 서로도 적</b>이다(fg-21 ⑭).
@@ -363,8 +363,11 @@ internal sealed unsafe partial class BattleScene
         ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
     }
 
-    /// <summary>차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>).</summary>
-    internal static bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6);
+    /// <summary>
+    /// 차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>). 파트1 최면(상태 14, +0x254)도 못 받는다 —
+    /// 차례 고르기(<c>0x10031d20</c>)의 <c>0x10042750(4)</c> → <c>0x10042871</c> 이 +0x247 · +0x248 · +0x254 를 본다.
+    /// </summary>
+    internal bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6) && !(host._scene.IsPart1 && Part1.HasAilment(u, Part1Rules.Hypnosis));
 
     /// <summary>쓰러질 때 — 47(전투불능 방지)이 있으면 한 번 살아나고 그 칸이 지워진다.</summary>
     internal bool SurvivesFatal(UnitState u)

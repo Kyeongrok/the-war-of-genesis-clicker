@@ -196,6 +196,10 @@ internal sealed unsafe partial class BattleScene
         // 파트1 속성 부여 — 이미 그 속성이 걸린 사람에게는 다시 안 건다(사용자 보고: Btl 20087 위자드가 화이어 블레이드를 되풀이).
         if (host._scene.IsPart1 && Part1.EnchantOf(w) is > 0 and var element)
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t) && Part1.Enchant.GetValueOrDefault(t) != element);
+        // 파트1 최면 · 혼란 · 컨디션이상 — 적이고, 듣는 종족이고, 그 상태가 아직 없고 막는 상태도 없는 대상만 센다(원본 AI 평가 0x1003fd93 이
+        // 이미 걸린 대상에게 0 을 준다).
+        if (host._scene.IsPart1 && Part1.AttackOf(w)?.Formula is (25 or 27 or 28) and var p1sel)
+            return targets.Count(i => host._units[i] is var t && SeesAsFoe(user, t) && Part1.AilmentWorth(t, p1sel)) >= w.MinTargets + 1;
         if (w.AbilityId == CureAbility)
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t)
                                     && Enumerable.Range(0, 3).Any(k => AilmentScore(t.StatusId[k], t.StatusValue[k]) < 0));

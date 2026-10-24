@@ -77,15 +77,19 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal const int StanceDefendWork = 516, StanceEvadeWork = 515;
     internal const double TickDelaySeconds = 0.2;   // 행동 끝 → 다음 GETNEXT 까지 상태 20·18·19·21·4 를 지나 약 6걸음(ba-20 W)
 
-    /// <summary>그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.</summary>
-    internal bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !host._allyAi));
+    /// <summary>
+    /// 그 인물을 내가 직접 움직이나 — 편 4 는 늘, 편 3(동맹)은 「모드 &gt; 동맹을 AI 가 움직임」을 껐을 때.
+    /// 파트1 혼란(상태 16)이 걸린 동안은 AI 가 움직인다 — 원본은 편 4 를 3(AI 동맹)으로 바꾸고 AI 칸 +0x262 를 1 로 둔다(<c>0x10042674</c>).
+    /// </summary>
+    internal bool IsMine(UnitState u) => !AutoPlay && (u.PlayerControlled || (u.IsAlly && !host._allyAi))
+                                         && !(host._scene.IsPart1 && Part1.HasAilment(u, Part1Rules.Confusion));
 
     /// <summary>DUELDX_AUTOPLAY=1 이면 내 부대도 AI 가 움직인다 — 화면 밖 시험에서 전투를 저절로 돌리려고.</summary>
     internal static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
 
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
     /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
-    internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null)
+    internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null, current: true)
     {
         RiderOf = u => _part1Riders.GetValueOrDefault(u),
     };
@@ -412,6 +416,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (part1)
             {
                 ReleaseFreeze(u);
+                RollPart1Recovery(u);
+                TickPart1Buffs(u);
                 if (!u.HasTurn && CanTakeTurn(u) && _tick % Math.Max(1, (int)(u.Data?.TpDivisor ?? 1)) == 0) u.Tp = u.MaxTp;
                 continue;
             }
@@ -561,7 +567,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             var p1u = host._units[index];
             p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);
             if (Part1.Has(p1u, 15)) p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);   // 블래스 — 오를 때마다 +20 더
-            TickPart1Buffs(p1u);
+            CapPart1Soul(p1u);
         }
         _turn = index;
         host._selected = index;
@@ -611,7 +617,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         else
         {
             if (host._units[index].IsAlly)
-                host.Toast(host._units[index].HasStatus(4) ? $"{host.UnitName(index)} 이(가) 버서커 상태라 스스로 움직입니다" : $"{host.UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
+                host.Toast(host._units[index].HasStatus(4) || Part1Rules.SeesAllAsFoes(host._units[index]) ? $"{host.UnitName(index)} 이(가) {(host._units[index].HasStatus(4) ? "버서커" : "혼란")} 상태라 스스로 움직입니다" : $"{host.UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
             // AI 는 행동 전에 카메라가 그 인물에게 가서 선다(상태 14 CHRWORK 0x10069df0, 감사4 C4). 내 차례(상태 22)는 안 옮긴다(C3).
             _routine = CameraThen(host._units[index], AiRoutine(index));
         }
@@ -1893,7 +1899,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             {
                 // 상태만 거는 갈래 — 파트1 상태를 가까운 파트2 상태로(Part1Item.Part2Status, 가설). 중독은 차례마다 최대 HP 5%, 나머지는 값 1.
                 // 걸리는지는 원본처럼 굴린다 — 같은 편 · INT²/MR · 100 − Luck(선택자마다, 분석-파트1-전투 18절), 보정 247 이면 안 걸린다.
-                if (Part1Item.Part2Status(proc.Code) is > 0 and var status && Part1.StatusLands(host._rng, a, t, proc.Attack))
+                // 305 최면 · 306 컨디션이상 · 307 혼란은 파트1 상태(Part1Rules.Ailments)로 — 대개는 그 기술(20386 · 20385 · 20384)이 있어 위에서 쏜다.
+                if (proc.Code is 305 or 306 or 307)
+                {
+                    if (Part1.StatusLands(host._rng, a, t, proc.Attack))
+                    {
+                        LandPart1Ailment(t, proc.Code switch { 305 => Part1Rules.Hypnosis, 306 => Part1Rules.Condition, _ => Part1Rules.Confusion });
+                        used.Add(proc.Attack);
+                    }
+                }
+                else if (Part1Item.Part2Status(proc.Code) is > 0 and var status && Part1.StatusLands(host._rng, a, t, proc.Attack))
                 {
                     PutAilment(t, (byte)status, (short)(status == 3 ? 5 : 1), used, a);
                     Popup(t, BattleScene.AilmentNames.GetValueOrDefault(status, "상태이상"), AilmentPopupColor, 12, rise: 88);
@@ -2147,6 +2162,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             int score = id is 1 or 40 ? -1 : AilmentScore(id, u.StatusValue[k]);   // DEX·DEP 저하는 원본 점수표엔 0 이지만 해롭다
             chips.Add((AilmentChipText(id, u.StatusValue[k]), score < 0 ? 0xE0A02828u : score > 0 ? 0xE02858B0u : 0xE0505860u));
         }
+        if (host._scene.IsPart1 && Part1.Ailments.TryGetValue(u, out var part1))   // 파트1 최면 · 컨디션이상 · 혼란(Part1Rules.Ailments)
+            foreach (int s in part1.Order()) chips.Add((Part1AilmentChip(s), 0xE0A02828u));
         if (chips.Count == 0) return;
         const int pad = 2, gap = 1;
         var sizes = chips.Select(c => host.BattleTextSize(c.Text, 0xFFFFFFFF, AilmentChipFont)).ToList();

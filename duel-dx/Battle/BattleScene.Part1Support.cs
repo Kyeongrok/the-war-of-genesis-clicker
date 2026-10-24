@@ -1,16 +1,18 @@
 namespace DuelDx;
 
 using WarOfGenesis.Assets;
+using static DuelDx.GameWindow;
 
 /// <summary>
 /// 파트1 보조 마법의 실제 효과 — 세기 식(Attack +0x42)으로 가른다(볼트 분석-파트1-기술-b 9절 「Game effects」).
 /// (6 힐 · 힐 윈드는 파트2 회복 갈래에서 양만 바꾼다 — <see cref="Part1Rules.HealAmount"/>.) 16 큐어: 상태 · 강화 · 속성 부여를 모두 지운다.
 /// 15 블래스(소울 +20 더) · 17 스피디(SPD +8) · 20 배리어(마법 피해 0, 그 밖의 피해 ×2) · 22 쉐도우 실드(AC ×1.5 · MR ×0.5)
-/// · 23 블러드 러스트(무기 공격 ×1.5)는 <see cref="Part1Rules.Buffs"/> 에 남은 차례로 건다. 21 커즈: 소울 0.
+/// · 23 블러드 러스트(무기 공격 ×1.5)는 <see cref="Part1Rules.Buffs"/> 에 남은 차례로 건다. 21 커즈: 소울 0 + 20% 씩 컨디션이상 · 중독 · 최면.
+/// 25 컨디션이상 · 27 최면 · 28 혼란은 파트1 상태(<see cref="Part1Rules.Ailments"/>)로 건다(분석-파트1-전투 25절).
 /// </summary>
 /// <remarks>
-/// 길이 = 적에게 세기 ÷ MR ÷ 10 + (+0x58), 같은 편에게 √세기 ÷ 10 + (+0x58)(원본, 255 에서 자름). 원본이 이 값을 무엇마다 줄이는지는 못 찾아서
-/// 리메이크는 그 사람 차례마다 10씩 줄인다(가설 — 스피디 40~60 = 4~6 차례).
+/// 길이 = 적에게 세기 ÷ MR ÷ 10 + (+0x58), 같은 편에게 √세기 ÷ 10 + (+0x58)(원본, 255 에서 자름). 원본은 빈 시간 틱마다 1씩 줄인다
+/// (<c>0x10035150</c> → <c>0x10041c00</c>, 상태 3~12 · 22 — 분석-파트1-전투 25절).
 /// </remarks>
 internal sealed unsafe partial class BattleScene
 {
@@ -45,6 +47,19 @@ internal sealed unsafe partial class BattleScene
                 return true;
         }
         int sel = attack.Formula;
+        // 최면(27) · 혼란(28) · 컨디션이상(25) — 명중 굴림 없이 걸림 굴림만 한다(0x1003e3ba → 0x10042290: 대상 거르기 · 0x10041960 · 거는 칸).
+        // 못 걸면 「빗나감」 글(0x1011c0f8), 걸리면 맞음 동작(0x10035fa0(15)). 원본은 상태 이름 글을 안 띄운다 — 리메이크는 이름을 띄운다.
+        if (sel is 25 or 27 or 28)
+        {
+            bool lands = Part1.StatusLands(host._rng, a, t, attack.Id);
+            if (lands) LandPart1Ailment(t, Part1Rules.AilmentOf(sel));
+            else ShowNumber(t, host._db?.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 ailment {a.ChrCode} → {t.ChrCode} {attack.Name}(식 {sel}): {(lands ? "걸림" : "안 걸림")} · 지금 [{string.Join(",", Part1.Ailments.GetValueOrDefault(t) ?? [])}]" + Environment.NewLine);
+            if (lands) MarkBuffed(a, t, w);
+            return true;
+        }
         if (sel is not (15 or 16 or 17 or 20 or 21 or 22 or 23)) return false;
         if (result == 3)
         {
@@ -58,11 +73,19 @@ internal sealed unsafe partial class BattleScene
                 t.ClearStatus();
                 Part1.Buffs.Remove(t);
                 Part1.Enchant.Remove(t);
+                Part1.Ailments.Remove(t);
                 Popup(t, "큐어", HealColor2, 12, rise: 88);
                 break;
             case 21:
+                // 커즈(0x10042375) — 소울 0, 그다음 rand()%100 이 0~19 면 컨디션이상 · 20~39 면 중독(상태 13, 파트2 상태 3 으로) · 40~59 면 최면.
                 t.Soul = 0;
                 Popup(t, "커즈", AilmentPopupColor, 12, rise: 88);
+                switch (host._rng.Next(32768) % 100)
+                {
+                    case < 20: LandPart1Ailment(t, Part1Rules.Condition); break;
+                    case < 40: PutAilment(t, 3, 5, [], a); break;
+                    case < 60: LandPart1Ailment(t, Part1Rules.Hypnosis); break;
+                }
                 break;
             default:
                 bool ally = !Hostile(a, t);
@@ -81,12 +104,82 @@ internal sealed unsafe partial class BattleScene
         return true;
     }
 
-    /// <summary>그 사람 차례가 오면 파트1 강화의 남은 길이를 10 줄인다(<see cref="ApplyPart1Support"/> 의 가설).</summary>
+    private static readonly Dictionary<int, string> Part1AilmentNames = new()
+    {
+        [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
+    };
+
+    /// <summary>체력바 아래 딱지 글(두 글자).</summary>
+    internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
+
+    /// <summary>
+    /// 파트1 상태 14 · 15 · 16 을 건다 — <see cref="Part1Rules.AddAilment"/>(최면은 15 · 16 을, 혼란은 15 를 지운다). 맞음 동작과 이름 글.
+    /// 혼란이 걸린 내 인물은 풀릴 때까지 AI 가 움직인다(<see cref="IsMine"/>), 최면이 걸린 사람은 차례를 못 받는다(<see cref="CanTakeTurn"/>).
+    /// </summary>
+    internal void LandPart1Ailment(UnitState t, int status)
+    {
+        Part1.AddAilment(t, status);
+        PlayHitReaction(t, damaged: false);
+        Popup(t, Part1AilmentNames[status], AilmentPopupColor, 12, rise: 88);
+        host.StatusScr.RefreshUnitStats(t);
+    }
+
+    /// <summary>
+    /// 빈 시간 틱마다 — 파트1 상태 15 · 14 · 16 의 풀림 굴림(<c>0x10035150</c> 의 첫 고리, 차례 [15, 13, 14, 16]). 원본은 이 셋을 줄여 가지 않는다.
+    /// </summary>
+    internal void RollPart1Recovery(UnitState u)
+    {
+        if (!Part1.Ailments.TryGetValue(u, out var set)) return;
+        foreach (int s in (ReadOnlySpan<int>)[Part1Rules.Condition, Part1Rules.Hypnosis, Part1Rules.Confusion])
+        {
+            if (!set.Contains(s) || !Part1Rules.RecoveryRoll(s, u.Hp, u.MaxHp, u.Soul, _ailmentRandom.Next(32768))) continue;
+            Part1.ClearAilment(u, s);
+            if (Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 ailment {u.ChrCode} 풀림 {Part1AilmentNames[s]} (틱 {_tick}, HP {u.Hp}/{u.MaxHp}, 소울 {u.Soul})" + Environment.NewLine);
+        }
+    }
+
+    /// <summary>차례가 올 때 소울을 더한 뒤 — 중독(상태 13, 리메이크는 파트2 상태 3)이면 120, 컨디션이상이면 50 에서 자른다(<c>0x10034f80</c>).</summary>
+    private void CapPart1Soul(UnitState u)
+    {
+        if (u.HasStatus(3)) u.Soul = Math.Min(u.Soul, 120);
+        if (Part1.HasAilment(u, Part1Rules.Condition)) u.Soul = Math.Min(u.Soul, 50);
+    }
+
+    /// <summary>
+    /// 머리 위 표지(<c>0x10041c60</c>, 상태가 지워지면 스스로 사라진다 — <c>0x10083a70</c> · <c>0x10083bd0</c> · <c>0x10083cb0</c>):
+    /// 컨디션이상 = Obs 181 모션 0 하나(자리 0, 30, 높이 120) · 최면 = Obs 180 모션 5 다섯 · 혼란 = Obs 180 모션 6 + rand%4 다섯 —
+    /// 다섯은 높이 100 에서 반지름 18 원(8r = 144 점)을 틱마다 5 점씩 돈다(원 따라가기 <c>+0x110(−1, 5, …, 18)</c>), 6 틱씩 늦게 나선다.
+    /// </summary>
+    internal void DrawPart1AilmentMarks()
+    {
+        if (!host._scene.IsPart1 || Part1.Ailments.Count == 0) return;
+        int tick = (int)(host._lastTime * TicksPerSecond);
+        foreach (var (u, set) in Part1.Ailments)
+        {
+            if (!u.Alive || !u.OnField) continue;
+            var (fx, fy) = host.Btl.UnitFoot(u);
+            if (set.Contains(Part1Rules.Condition))
+                host.DrawUi(Part1Game.ObsBase + 181, 0, tick, fx, fy + (int)(30 * 0.8 - 120 * 0.6), UiBlend.Alpha);
+            bool hypnosis = set.Contains(Part1Rules.Hypnosis);
+            if (!hypnosis && !set.Contains(Part1Rules.Confusion)) continue;
+            for (int k = 0; k < 5; k++)
+            {
+                double angle = (tick - 6 * k) * 5 / 144.0 * 2 * Math.PI;
+                int x = fx + (int)Math.Round(18 * Math.Sin(angle)), y = fy - (int)(100 * 0.6) - (int)Math.Round(18 * 0.8 * Math.Cos(angle));
+                int motion = hypnosis ? 5 : 6 + (int)((uint)(u.ChrCode * 7 + k * 13) % 4);
+                host.DrawUi(Part1Game.ObsBase + 180, motion, tick, x, y, UiBlend.Alpha);
+            }
+        }
+    }
+
+    /// <summary>시간 틱마다 파트1 강화의 남은 길이를 1 줄인다(원본 <c>0x10041c00</c>).</summary>
     private void TickPart1Buffs(UnitState u)
     {
         if (!Part1.Buffs.TryGetValue(u, out var buffs)) return;
         foreach (int sel in buffs.Keys.ToList())
-            if ((buffs[sel] -= 10) <= 0) buffs.Remove(sel);
+            if (--buffs[sel] <= 0) buffs.Remove(sel);
         if (buffs.Count == 0) Part1.Buffs.Remove(u);
     }
 }
