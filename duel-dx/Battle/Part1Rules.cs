@@ -80,6 +80,23 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>그 기술이 속성 부여면 그 속성(1 · 2 · 3), 아니면 0.</summary>
     internal int EnchantOf(WorkData w) => AttackOf(w)?.Formula is >= 10 and <= 12 and var sel ? sel - 9 : 0;
 
+    /// <summary>기본 공격의 Attack.dat 번호 — 인물 칸 9, 없으면 무기 갈래의 것.</summary>
+    internal static int BasicAttackOf(Part1Fighter f) => f.Chr.BasicAttackId > 0 ? f.Chr.BasicAttackId : Part1Item.BasicAttack(f.Weapon1);
+
+    /// <summary>
+    /// 기본 공격 사거리(칸) — Attack +0x21 갈래로(0x10038ae0): 1 RANGE 능력치 + 값 · 2 무기 사거리 + RANGE 보정 · 3 값 그대로 · 4 무기 사거리, 모두 ÷ 2 칸.
+    /// </summary>
+    internal int BasicRangeTiles(UnitState u)
+    {
+        if (Fighter(u) is not { } f || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(f)) is not { } a) return 1;
+        return a.RangeKind switch
+        {
+            1 => (f.Stat(Part1Chr.Range) + a.RangeValue) / 2,
+            2 or 4 => f.WeaponRangeTiles,
+            _ => a.RangeValue / 2,
+        };
+    }
+
     /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)로 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>
@@ -88,7 +105,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (!w.IsDamage || Fighter(a) is not { } fa || Fighter(t) is not { } ft) return null;
         // 기술이면 Attack.dat 의 세기 식(+0x42) · 명중률(+0x48) · 속성(+0x64) · 더하는 세기(+0x44 제곱) · 곱(+0x66)을 쓴다.
         // 상태이상 기술(선택자 10~28)은 피해가 아니어서 파트2 식으로 넘긴다. 기본 공격은 무기 갈래의 기본 공격 칸(칼 1 — 식 0 · 명중 100, 활 4 — 식 3 · 명중 90 …).
-        var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), Part1Item.BasicAttack(fa.Weapon1));
+        var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
         int selector = attack?.Formula ?? 0;
         if (selector is >= 10 and <= 28) return null;
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;

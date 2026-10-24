@@ -89,7 +89,7 @@ internal sealed unsafe partial class BattleScene
     {
         int weapon = 0;
         // 파트1 인물은 파트2 장비가 없다 — 쏘는 기본 공격(파트2 work 6 을 빌린다)은 파트1 무기 사거리로(칸 × 4 = 사분 칸).
-        if (w.RangeKind is 2 or 4 && user != null && Part1.Fighter(user) is { } p1) weapon = p1.WeaponRangeTiles * 4;
+        if (w.RangeKind is 2 or 4 && user != null && Part1.Fighter(user) is not null) weapon = Part1.BasicRangeTiles(user) * 4;
         else if (w.RangeKind is 2 or 4 && user?.Data is { } c && c.Items.Length > 0
             && host._db?.Items.GetValueOrDefault(c.Items[0]) is { } item) weapon = item.Range * 4;
         return w.RangeKind switch

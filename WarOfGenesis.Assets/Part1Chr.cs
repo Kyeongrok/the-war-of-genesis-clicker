@@ -75,6 +75,12 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         RideAbility(mount) is > 0 and var ability && AbilityLevel(ability) >= 0
         && (ability != 121 || equipment.Any(i => i?.Bonus(248) is not (null or 0)));
 
+    /// <summary>
+    /// 기본 공격(Attack.dat 번호) — 인물 칸 9(유닛 +0xb6, 분석-파트1-전투 24절 A: 이동 단계에 이 기술의 범위를 칠하고 적을 누르면 친다).
+    /// 록슬리 330 「용병 라이트닝볼츠1」 · 살라딘 352 「더블 어택」 · 깁슨 5 「단발사격」 … 0 이면 무기 갈래의 것(<see cref="Part1Item.BasicAttack"/>).
+    /// </summary>
+    public int BasicAttackId => Fields[9];
+
     /// <summary>최대 HP — 칸 19 + 어빌리티 1 레벨 × 100(<c>0x1009ea50</c>).</summary>
     public int MaxHp => BaseMaxHp + Math.Max(0, AbilityLevel(1)) * 100;
 
