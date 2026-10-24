@@ -33,6 +33,8 @@ internal sealed unsafe partial class BattleScene
     internal List<(ItemData Item, int Count)> ItemRowsList()
     {
         if (host._db is not { } db) return [];
+        // 파트1 판에서는 파트2 가방을 안 보인다 — 파트1 가방(Part1Progress.Bag)의 약은 아직 전투에서 못 쓴다.
+        if (host._scene.IsPart1) return [];
         var list = new List<(ItemData Item, int Count)>();
         // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
         // 전에는 work 이 있는 것만 보였다(원본차이-전투규칙 25).
