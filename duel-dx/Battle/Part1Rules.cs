@@ -40,6 +40,24 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     }
 
     /// <summary>
+    /// 상태이상 기술(<c>Attack.dat</c> 번호, 선택자 10~28)이 걸리나 — <see cref="Part1Combat.StatusLands"/>(<c>0x10041960</c>, 분석-파트1-전투 18절).
+    /// 세기 = 그 선택자의 세기 식 + (+0x44)². 대상이 보정 247(상태이상 막기)을 가졌으면 실패. 파트1 인물이 아니면 늘 걸린다.
+    /// </summary>
+    internal bool StatusLands(Random rng, UnitState a, UnitState t, int attackId)
+    {
+        if (Fighter(a) is not { } fa || Fighter(t) is not { } ft || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), attackId) is not { } attack)
+            return true;
+        int power = Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd;
+        bool guard = ft.Equipment.Any(i => i?.Bonus(247) is not (null or 0));
+        bool lands = Part1Combat.StatusLands(attack.Formula, power, ft.Stat(Part1Chr.Mr, t.Soul), ft.Stat(Part1Chr.Luck, t.Soul),
+                                             a.IsAlly == t.IsAlly, guard, false, rng.Next(32768));
+        if (BattleScene.Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}(식 {attack.Formula}): 세기 {power} · MR {ft.Stat(Part1Chr.Mr, t.Soul)} · Luck {ft.Stat(Part1Chr.Luck, t.Soul)}{(guard ? " · 막기 247" : "")} → {(lands ? "걸림" : "안 걸림")}" + Environment.NewLine);
+        return lands;
+    }
+
+    /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)로 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>
     internal (int Amount, int Result, bool Critical)? Resolve(Random rng, UnitState a, UnitState t, WorkData w)

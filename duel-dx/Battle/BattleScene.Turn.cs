@@ -1816,7 +1816,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             else if (_part1Proc == null && t.Hp > 0)
             {
                 // 상태만 거는 갈래 — 파트1 상태를 가까운 파트2 상태로(Part1Item.Part2Status, 가설). 중독은 차례마다 최대 HP 5%, 나머지는 값 1.
-                if (Part1Item.Part2Status(proc.Code) is > 0 and var status)
+                // 걸리는지는 원본처럼 굴린다 — 같은 편 · INT²/MR · 100 − Luck(선택자마다, 분석-파트1-전투 18절), 보정 247 이면 안 걸린다.
+                if (Part1Item.Part2Status(proc.Code) is > 0 and var status && Part1.StatusLands(host._rng, a, t, proc.Attack))
                 {
                     PutAilment(t, (byte)status, (short)(status == 3 ? 5 : 1), used, a);
                     Popup(t, BattleScene.AilmentNames.GetValueOrDefault(status, "상태이상"), AilmentPopupColor, 12, rise: 88);
