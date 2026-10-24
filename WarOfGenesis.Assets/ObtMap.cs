@@ -62,7 +62,7 @@ public sealed record ObtFootprint(int Cols, int Rows, ushort[] Raw, ushort[] Fla
 public static class ObtMap
 {
     public const int CellWidth = 40, CellHeight = 32;
-    private const int StripWidth = 40, StripHeight = 8;
+    internal const int StripWidth = 40, StripHeight = 8;
 
     public static ObtMapImage Load(string path) => Parse(File.ReadAllBytes(path), Path.GetFileName(path));
 
