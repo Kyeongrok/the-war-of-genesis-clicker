@@ -109,6 +109,19 @@ public static class Part1Combat
         return damage;
     }
 
+    /// <summary>
+    /// 쓰러뜨린 보상 — 맞은 이가 HP 0 이 되면 때린 이에게 메시지 0x10(값 = 죽은 이 칸 18 경험치)이 가고(<c>0x1003de76</c>),
+    /// 때린 이가 편 4 이고 Chr &lt; 106 이면 경험치를 받는다(<c>0x10035908</c>~, 탈것·탄 이는 짝에게 넘긴다).
+    /// 경험치 = ⌊죽은 이 경험치 / 100⌋ × 2000 / (때린 이 레벨 × 100) — 곧 죽은 이 레벨 × 20 / 때린 이 레벨(레벨 0 이면 죽은 이 경험치 × 20).
+    /// 돈(eld, 전투 <c>+0xb95c</c>) = 때린 이 Luck × 죽은 이 경험치 / 1000.
+    /// </summary>
+    public static (int Exp, int Eld) KillReward(int victimExp, int attackerExp, int attackerLuck)
+    {
+        int levelBase = attackerExp / 100 * 100;
+        int exp = levelBase != 0 ? victimExp / 100 * 2000 / levelBase : victimExp * 20;
+        return ((short)exp, attackerLuck * victimExp / 20 / 50);
+    }
+
     /// <summary>명중 굴림 — rand()%100 &lt; 기술 명중률(<see cref="Part1Attack.Accuracy"/>)이면 맞는다. 못 맞으면 결과 3(<c>0x10041050</c>).</summary>
     public static bool Hits(int accuracy, int roll) => roll % 100 < accuracy;
 
