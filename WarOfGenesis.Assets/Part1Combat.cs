@@ -125,6 +125,30 @@ public static class Part1Combat
     /// <summary>차례가 올 때 게이지 — +20(상태 +0x24c 면 +40), 150(상태에 따라 120·50)에서 자른다(<c>0x10034f80</c>). 처음 값은 40.</summary>
     public static int GaugeOnTurn(int gauge, bool doubled = false, int cap = 150) => Math.Min(cap, gauge + (doubled ? 40 : 20));
 
+    /// <summary>
+    /// 상태이상 기술(선택자 10~28)이 걸리나 — <c>0x10041960</c>. 대상이 보정 247 을 가졌으면 실패(같은 편 상대 갈래 빼고).
+    /// <paramref name="roll"/> 은 rand() 한 번, <paramref name="blockedByStatus"/> 는 선택자 25·26(상태 +0x254·+0x256)·28(+0x254)이 막히는 대상 상태가 걸려 있는가.
+    /// </summary>
+    public static bool StatusLands(int selector, int power, int targetMr, int targetLuck, bool sameSide, bool statusGuard, bool blockedByStatus, int roll)
+    {
+        int mr = Math.Max(1, targetMr);
+        switch (selector)
+        {
+            case >= 10 and <= 14 or 18 or (>= 22 and <= 24):
+                return sameSide || (!statusGuard && roll % 400 < power / mr);
+            case >= 15 and <= 17 or 20:
+                return true;
+            case 19 or 21:
+                return !statusGuard && roll % 200 < (100 - targetLuck) * power / mr / 100;
+            case 25 or 26 or 28:
+                return !statusGuard && !blockedByStatus && roll % 100 < 100 - targetLuck;
+            case 27:
+                return !statusGuard && roll % 100 < 100 - targetLuck;
+            default:
+                return false;
+        }
+    }
+
     /// <summary>회피 확률(%) — 대상이 어빌리티 77 을 가졌을 때. 상태 +0x258 이 없으면 대상 DEX 는 반만 친다.</summary>
     public static int EvadeChance(int targetDex, bool fullDex, int attackerHit, int attackerDex) =>
         attackerHit + attackerDex > 0 ? (fullDex ? targetDex : targetDex / 2) * 100 / (attackerHit + attackerDex) : 0;
