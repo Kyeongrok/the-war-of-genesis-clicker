@@ -84,6 +84,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
 
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
+    /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
+    internal Part1Rules Part1 => _part1 ??= new();
+    private Part1Rules? _part1;
+
     internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
 
     internal bool IsPlayerTurn => _turn >= 0 && IsMine(host._units[_turn]) && _routine == null && _outcome.Length == 0;
@@ -1647,7 +1651,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (host._db == null || a.Data == null || t.Data == null || t.Hp <= 0) return;
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
-        var (amount, result, crit) = host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
+        // 파트1 판은 피해만 파트1 식(세기 ÷ 방어)으로 굴린다 — Part1Rules(사용자 결정 「중간안」).
+        var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(host._rng, a, t, w) : null)
+            ?? host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
         bool timed = a == _timedCritBy && w.IsDamage;
         if (timed)
         {

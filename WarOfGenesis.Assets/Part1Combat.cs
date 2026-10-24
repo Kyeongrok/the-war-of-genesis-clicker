@@ -171,6 +171,37 @@ public static class Part1Combat
 }
 
 /// <summary>
+/// 파트1 싸우는 이 — 인물 레코드와 장비 다섯(칸 39~43)에서 쓰는 능력치를 셈한다(바탕 + 어빌리티 레벨 × 5 + 장비 보정, <c>0x1009eaa0</c>~).
+/// </summary>
+/// <remarks>살라딘은 칸 39·40 에 다마스커스 둘(쌍검) — 둘째 무기가 선택자 29~31 의 W2 다.</remarks>
+public sealed record Part1Fighter(Part1Chr Chr, Part1Item?[] Equipment)
+{
+    public static Part1Fighter From(Part1Chr chr, IReadOnlyList<Part1Item> items) => new(chr, [.. chr.Equipment.Select(id => Part1Item.ById(items, id))]);
+
+    public Part1Item? Weapon1 => Equipment.Length > 0 ? Equipment[0] : null;
+    public Part1Item? Weapon2 => Equipment.Length > 1 ? Equipment[1] : null;
+
+    private int EquipBonus(int code) => code > 0 ? Equipment.Sum(i => i?.Bonus(code) ?? 0) : 0;
+
+    public int Stat(int field) => Chr.Stat(field) + EquipBonus(Part1Chr.StatSource(field).Bonus);
+
+    /// <summary>소울 게이지(0~150)로 깎은 능력치(<see cref="Part1Combat.Scaled"/>) — 싸울 때 쓰는 값.</summary>
+    public int Stat(int field, int gauge) => Part1Combat.Scaled(Stat(field), Math.Clamp(gauge, 0, 150));
+
+    public Part1Combat.Attacker AttackerAt(int gauge) =>
+        new(Stat(Part1Chr.Str, gauge), Stat(Part1Chr.Skill, gauge), Stat(Part1Chr.Dex, gauge), Stat(Part1Chr.Int, gauge), Weapon1, Weapon2);
+
+    /// <summary>명중값 — 무기1 명중 + 보정 207(회피 식의 분모).</summary>
+    public int HitValue => (Weapon1?.Accuracy ?? 0) + EquipBonus(Part1Bonus.Accuracy);
+
+    /// <summary>속성 1~5 저항(칸 30~34, 10 이 보통) + 장비 보정 — 속성이 없으면 null.</summary>
+    public int? Resist(int element) => element is >= 1 and <= 5 ? Chr.Fields[30 + element - 1] + EquipBonus(Part1Bonus.ResistOf(element)) : null;
+
+    /// <summary>어빌리티 77 회피 — 이것이 있어야 회피를 굴린다.</summary>
+    public bool CanEvade => Chr.AbilityLevel(77) >= 0;
+}
+
+/// <summary>
 /// 파트1 아이템 보정 코드(<see cref="Part1Item.Bonuses"/>) — 아이템 설명 글과 짝을 맞춘 것(옵시디안 「분석-파트1-전투」 9.1).
 /// </summary>
 public static class Part1Bonus
