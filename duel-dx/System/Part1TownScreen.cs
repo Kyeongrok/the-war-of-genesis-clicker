@@ -126,7 +126,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         if (host.Part1.Eld < item.Price) { host.Toast($"{item.Name} — eld 가 모자랍니다({host.Part1.Eld} / {item.Price})"); return; }
         host.Part1.Eld -= item.Price;
         host.Part1.Bag.Add(item.Id);
-        host.Part1.Save(host.FlagSt._flags);
+        shell.Chapter.SaveProgress();
         host.Toast($"{item.Name} 을(를) 샀습니다 — 남은 eld {host.Part1.Eld}");
     }
 
@@ -140,7 +140,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         if (host.Part1.Eld < price) { host.Toast($"{name} — eld 가 모자랍니다({host.Part1.Eld} / {price})"); return; }
         host.Part1.Eld -= price;
         host.Part1.Mercenaries[code] = host.Part1.Mercenaries.GetValueOrDefault(code) + 1;   // 용병 — 일행이 아니라 용병 칸(배치 창에서 세운다)
-        host.Part1.Save(host.FlagSt._flags);
+        shell.Chapter.SaveProgress();
         host.Toast($"{name} 을(를) 고용했습니다(용병 {host.Part1.Mercenaries[code]}) — 남은 eld {host.Part1.Eld}");
     }
 

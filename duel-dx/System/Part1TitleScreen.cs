@@ -173,6 +173,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     private void NewGame()
     {
         host.Part1.Reset();
+        Chapter.Forget();
         HookGrowth();
         Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
         int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
@@ -223,6 +224,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         host.TitleScr.OpenTitle();
         Open();
         if (won && host.Part1.ChapterId >= 0) Chapter.Open(host.Part1.ChapterId);
+        else Chapter.Forget();   // 졌다 — 이어 돌던 사건은 버린다(이어 하기는 저장된 자리에서, 새 게임은 깨끗하게)
     }
 
     /// <summary>파트2 타이틀 위의 「PART 1」 단추.</summary>

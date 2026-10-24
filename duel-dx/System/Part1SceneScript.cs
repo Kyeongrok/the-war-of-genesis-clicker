@@ -20,7 +20,8 @@ internal sealed class Part1SceneScript(GameWindow host)
     private IReadOnlyList<Part1BattleEvent> _events = [];
     private IReadOnlyList<string> _lines = [];
     private Dictionary<int, int> _fired = [];
-    private readonly Dictionary<int, int> _vars = [];
+    /// <summary>장면 변수(800 · 101 · 조건 100) — 챕터는 진행에 남는 것을, 필드는 새것을 받는다(<see cref="Start"/>).</summary>
+    private Dictionary<int, int> _vars = [];
 
     /// <summary>장면을 넘기는 행동(500 · 502 · 503) — 넘기면 true(실행을 멈춘다), 모르는 것이면 false.</summary>
     internal Func<ScriptCommand, bool>? SceneChange;
@@ -87,20 +88,18 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// 새로 돌린다 — <paramref name="fired"/> 는 발동 수(챕터는 진행에 남겨 지도로 돌아와도 들머리가 다시 안 나오게, 필드는 들어올 때마다 새것).
     /// <paramref name="resume"/> 면 남은 행동을 이어 돈다(전투를 마치고 돌아왔을 때).
     /// </summary>
-    internal void Start(IReadOnlyList<Part1BattleEvent> events, IReadOnlyList<string> lines, Dictionary<int, int> fired, bool resume = false)
+    internal void Start(IReadOnlyList<Part1BattleEvent> events, IReadOnlyList<string> lines, Dictionary<int, int> fired, bool resume = false,
+                        Dictionary<int, int>? vars = null)
     {
         _events = events;
         _lines = lines;
         _fired = fired;
+        _vars = vars ?? [];
         Talk = null;
         _waitUntil = 0;
         _waitBusy = false;
         _away = null;
-        if (!resume)
-        {
-            _pending.Clear();
-            _vars.Clear();
-        }
+        if (!resume) _pending.Clear();
         Run();
     }
 
@@ -183,7 +182,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     private void Run()
     {
         // 할 일이 비면 사건 0 을 다시 훑는다 — 사건 0 은 발동 한도가 없어 늘 「부르기」만 넣으니, 그 훑기로 새로 터진 사건이 없으면 멈춘다.
-        int firedBefore = -1;
+        int firedBefore = -1, rescans = 0;
         while (Talk == null)
         {
             if (_waitUntil > 0)
@@ -199,7 +198,8 @@ internal sealed class Part1SceneScript(GameWindow host)
             if (_pending.Count == 0)
             {
                 int firedNow = FiredEvents();
-                if (firedNow == firedBefore) return;
+                // 발동 한도가 없는 사건이 조건을 늘 채우면 훑을 때마다 다시 터진다 — 한 번 돌 때 훑기를 64 번으로 자른다(멈춤 막기).
+                if (firedNow == firedBefore || ++rescans > 64) return;
                 firedBefore = firedNow;
                 if (!Call(0)) return;
             }
@@ -231,7 +231,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
                 case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count:
                     Markers[a[0] - 1] = a[1];
-                    if (MarkerMoved?.Invoke(a[0] - 1, a[1]) == true) { _sceneChanged = true; return; }
+                    if (MarkerMoved?.Invoke(a[0] - 1, a[1]) == true) { _sceneChanged = true; _away = c; return; }   // 이어 하기가 이 전투부터 다시 하게
                     break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;

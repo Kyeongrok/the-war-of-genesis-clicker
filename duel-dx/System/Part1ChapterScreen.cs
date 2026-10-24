@@ -47,7 +47,30 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         int turn = host.Part1.MapTurns[chapter.Id] = host.Part1.MapTurns.GetValueOrDefault(chapter.Id) + 1;
         host.Toast($"턴 {turn}");
         Events.Arrive(-1);
+        SaveProgress();
+    }
+
+    /// <summary>
+    /// 진행을 적는다 — 일행 장소와 지금 남은 사건 행동(가 있던 전투·필드부터)을 함께. 진행을 적는 곳은 모두 이것을 쓴다:
+    /// 따로 적으면 지난번 지도를 열 때의 남은 행동이 남아, 이어 하기가 이미 돈 행동(아이템 · eld · 용병)을 또 돌렸다.
+    /// </summary>
+    internal void SaveProgress()
+    {
+        if (_chapter != null)
+        {
+            host.Part1.PartyPlace = _party;
+            host.Part1.PendingActions = [.. Events.SavePending];
+        }
         host.Part1.Save(host.FlagSt._flags);
+    }
+
+    /// <summary>새 게임 · 진 전투 뒤 — 앞 판의 이어 돌기 · 일행 장소를 버린다(남아 있으면 새 게임 첫 챕터가 앞 판의 남은 행동을 돌렸다).</summary>
+    internal void Forget()
+    {
+        _resume = false;
+        _chapter = null;
+        _party = 0;
+        _open = false;
     }
 
     /// <summary>
@@ -94,7 +117,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 // 챕터 끝 — 장면 10(0x100c04b0 → 생성 0x100d2470 이 Eps\episode.elg 를 연다) = 연대표로. 끝낸 챕터는 연대표에 ✓.
                 if (_chapter is { } done) host.Part1.FinishedChapters.Add(done.Id);
                 host.Part1.PendingActions = [];
-                host.Part1.Save(host.FlagSt._flags);
+                host.Part1.Save(host.FlagSt._flags);   // 챕터가 끝났다 — 남은 행동 없이
                 host.LeaveScene(() => { _open = false; shell.Timeline.Open(); });
                 return true;
             case 503:
@@ -118,8 +141,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             return false;
         }
         _chapter = chapter = WithPlaceBattles(chapter);
-        // 지도 말 — 같은 챕터로 돌아온 것이면 옮긴 자리를 그대로 둔다.
-        if (!resume || Events.Markers.Count != chapter.Markers.Count) Events.Markers = [.. chapter.Markers];
+        // 지도 말 — 챕터마다 진행에 남긴 자리(900 이 옮긴 것)를 쓴다. 처음 여는 챕터면 처음 장소로.
+        if (!host.Part1.ChapterMarkers.TryGetValue(chapterId, out var markers) || markers.Count != chapter.Markers.Count)
+            host.Part1.ChapterMarkers[chapterId] = markers = [.. chapter.Markers];
+        Events.Markers = markers;
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
         int minX = places.Min(p => p.X), maxX = places.Max(p => p.X), minY = places.Min(p => p.Y), maxY = places.Max(p => p.Y);
@@ -139,11 +164,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
         _open = true;
         _hover = -1;
-        Events.Start(chapter.Events, chapter.Lines, host.Part1.ChapterFired(chapterId), resume);
+        Events.Start(chapter.Events, chapter.Lines, host.Part1.ChapterFired(chapterId), resume, host.Part1.VarsOf(chapterId));
         // 열 때마다 적어 둔다 — 사건이 전투·필드로 보냈으면 남은 행동까지(CONTINUE 가 그 자리에서 잇는다).
-        host.Part1.PartyPlace = _party;
-        host.Part1.PendingActions = [.. Events.SavePending];
-        host.Part1.Save(host.FlagSt._flags);
+        SaveProgress();
         return true;
     }
 
@@ -152,11 +175,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         _resume = host.Part1.PendingActions.Count > 0;
         Events.Restore(host.Part1.PendingActions);
-        int place = host.Part1.PartyPlace;
         if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
-        if (!Open(host.Part1.ChapterId)) return false;
-        _party = place;
-        return true;
+        _party = host.Part1.PartyPlace;   // Open 앞에 — 남은 행동(900 의 「일행이 선 장소」)과 Open 이 적는 장소가 이 값을 본다
+        return Open(host.Part1.ChapterId);
     }
 
     private static bool Overlaps((int X, int Y) a, (int X, int Y) b) => Math.Abs(a.X - b.X) < SpotW && Math.Abs(a.Y - b.Y) < SpotH;
@@ -223,7 +244,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         host.Btl.Part1.Forget(pick.Chr);
         string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
         host.Toast($"{who} — {option.Name} Lv {option.NewLevel}");
-        host.Part1.Save(host.FlagSt._flags);
+        SaveProgress();
     }
 
     private void DrawPick(int ox, int oy)
