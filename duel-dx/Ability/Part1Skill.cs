@@ -24,6 +24,7 @@ internal sealed partial class Part1Skill(GameWindow host)
 {
     internal static readonly HashSet<int> Works =
         [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, MeteorWork,
+         LightningWork, LightningWork + 1, LightningWork + 2, LightningWork + 3,
          HellKiteWork, NereidWork, MuspelWork, KannonWork, TitaniaWork, BlackFoxWork];
 
     private static int P(int part1) => Part1Game.ObsBase + part1;
@@ -203,8 +204,10 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>
     /// 기술 하나를 처음부터 끝까지 — 앞머리 뒤 시각표를 깔고, 대상마다 맞는 때에 <paramref name="hit"/> 를 부른다.
     /// <paramref name="cells"/> 는 범위 칸(대상을 고르지 않고 칸마다 터지는 머스펠 헤임 · 타이타니아가 쓴다).
+    /// <paramref name="proc"/> 면 무기 덧기술 — 원본은 +0x212 = 1 로 불러 앞머리 없이 바로 핸들러를 돈다(<c>0x10035661</c> → <c>0x10039e60(…, 1)</c>).
     /// </summary>
-    internal IEnumerable<bool> Routine(WorkData w, UnitState user, List<int> targets, List<(int Col, int Row)> cells, (int Col, int Row) aim, Action<int> hit)
+    internal IEnumerable<bool> Routine(WorkData w, UnitState user, List<int> targets, List<(int Col, int Row)> cells, (int Col, int Row) aim, Action<int> hit,
+                                       bool proc = false)
     {
         host.PreloadSounds([.. Part1Game.SkillSounds.Select(P)]);
         // 파트1 이 없는 PC — 이 기술의 그림을 릴리즈에서 받는다. 다 올 때까지(최대 40초) 기다리며 몇 개 받았는지 알린다(menu-91).
@@ -224,7 +227,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         var (ax, ay) = CellFoot(aim.Col, aim.Row);
 
         _t0 = host._lastTime;
-        int prep = w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
+        int prep = proc ? 0 : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
 
@@ -238,6 +241,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             AsuraWork => Asura(targets, hit),
             ThunderWork => Thunder(targets, hit),
             MeteorWork => Meteor(targets, hit),
+            _ when IsLightning(w.Id) => Lightning(w.Id, targets, (ax, ay), hit),
             FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
             StormSwordWork => StormSword(targets, hit),
             HellKiteWork => HellKite(targets, hit),
@@ -285,6 +289,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
             ThunderWork => [75, 379, 71, 277, 77],
             MeteorWork => [115, 34, 64, 123, 228, 124, 116, 23, 96, 93],
+            _ when IsLightning(work) => [56, 35, 65, 76, 75, 379, 71, 277, 41, 77],
             FlyingSlashWork => [503, 504, 230],
             StormSwordWork => [959, 75, 72, 379, 76, 67],
             HellKiteWork => [103, 671, 10, 23, 93],

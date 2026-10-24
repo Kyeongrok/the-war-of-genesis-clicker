@@ -1,0 +1,73 @@
+{
+  "ability": 20991,
+  "name": "라이트닝볼츠",
+  "description": "창세기전3 파트1 의 라이트닝볼츠(공격 134~137) — 라이트닝 무기(보정 301)가 치명타 때 맞은 자리에 덧붙여 떨어뜨리는 벼락(무기 덧기술 전용, 숨김).",
+  "maxLevel": 4,
+  "att": 8,
+  "common": {
+    "rangeShape": 1,
+    "rangeKind": 1,
+    "rangeMin": 1,
+    "rangeMax": 8,
+    "b11": 0,
+    "heightRange": 0,
+    "sight": 1,
+    "sameHeightRange": 0,
+    "heightGraded": 0,
+    "targetMode": 1,
+    "areaShape": 1,
+    "b18": 0,
+    "heightArea": 0,
+    "b20": 1,
+    "sameHeightArea": 0,
+    "areaMax": 0,
+    "areaMin": 0,
+    "areaMode": 1,
+    "kind": 0,
+    "bonus1Stat": 0,
+    "bonus1Value": 0,
+    "bonus2Stat": 0,
+    "bonus2Value": 0,
+    "bonus3Stat": 0,
+    "bonus3Value": 0,
+    "power": 100,
+    "accuracy": 90,
+    "critical": 10,
+    "hpFactor": 0,
+    "exp": 500,
+    "tp": 0,
+    "soul": 0,
+    "soulSpend": 1,
+    "b50": 0,
+    "b51": 0,
+    "b52": 1,
+    "b53": 16,
+    "b54": 1,
+    "minTargets": 0,
+    "aiCriterion": 1,
+    "prepare": 1,
+    "b58": 1,
+    "b59": 0,
+    "b60": 0,
+    "b61": 0
+  },
+  "levels": [
+    {
+      "work": 20134,
+      "level": 1
+    },
+    {
+      "work": 20135,
+      "level": 2
+    },
+    {
+      "work": 20136,
+      "level": 3
+    },
+    {
+      "work": 20137,
+      "level": 4
+    }
+  ],
+  "hidden": true
+}

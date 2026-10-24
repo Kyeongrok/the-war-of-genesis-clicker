@@ -1236,7 +1236,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 var cells = EffectCells(w, a, col, row).ToList();
                 var struck = new HashSet<int>();
                 bool each = Part1Skill.HitsEachTime(w.Id);
-                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying); },
+                                                         proc: _part1ProcRunning))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
@@ -1571,8 +1572,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (_part1Proc is { } part1Proc && !eventFinisher)
         {
             _part1Proc = null;
+            _part1ProcRunning = true;
             var procRoutine = UseWorkRoutine(part1Proc.User, part1Proc.Work, -1, part1Proc.Col, part1Proc.Row, [], eventFinisher: true);
             while (procRoutine.MoveNext()) yield return procRoutine.Current;
+            _part1ProcRunning = false;
             dying.RemoveAll(d => d.Hp > 0);
             foreach (var d in host._units)
                 if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
@@ -1682,6 +1685,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>이번 차례에 덧기술이 이미 터진 인물(원본 +0x265 — 차례가 바뀌면 지운다).</summary>
     internal UnitState? _part1ProcBy;
+
+    /// <summary>덧기술을 쏘는 중 — 파트1 기술이 앞머리 없이 바로 돈다(<see cref="Part1Skill.Routine"/>).</summary>
+    private bool _part1ProcRunning;
 
     internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
