@@ -279,6 +279,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         for (int guard = 0; guard < 10000; guard++)
         {
             int next = Array.FindIndex(host._units, u => u.Alive && u.OnField && u.HasTurn && u.LeaderIndex < 0 && CanTakeTurn(u));
+            // 파트1 은 같은 틱 안에서 편 차례로 돈다(편 4 → 3 → 0 → 1 → 2, 0x10031d20) — 그 편 안에서는 배열 차례.
+            if (next >= 0 && host._scene.IsPart1)
+                next = Enumerable.Range(0, host._units.Length)
+                    .Where(i => host._units[i] is { Alive: true, OnField: true, HasTurn: true, LeaderIndex: < 0 } u && CanTakeTurn(u))
+                    .OrderBy(i => host._units[i].Side switch { 4 => 0, 3 => 1, 0 => 2, 1 => 3, 2 => 4, _ => 5 }).ThenBy(i => i).First();
             if (next >= 0) { StartTurn(next); return; }
             // 물체는 그 틱의 유닛 차례가 <b>모두 끝난 뒤</b>에야 움직인다 — 유닛 고르기(0x1006db20)가 −1 일 때만 물체 고르기(0x1006dbf0)로 간다
             // (GETNEXT 0x10067d0c, ba-15 Q6). 전에는 틱을 올리자마자 유닛보다 먼저 쐈다.
@@ -386,8 +391,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // → 물체 깃발(0x1006dab0) → 갈래 3 검사 → 상태 16(매 턴 피해). 풀림 굴림은 깃발 <b>앞</b>이다(ba-15 Q4·Q6).
         // 켜 둔 이벤트 타이머는 틱마다 하나씩 센다(0x10067d3c — 틱을 올린 바로 다음 줄). 갈래 3 이벤트 검사도 이때다.
         for (int i = 0; i < _eventTimer.Length; i++) if (_eventTimerRun[i]) _eventTimer[i]++;
+        // 파트1 판은 차례가 고정 간격이다(분석-파트1-전투 11.1, 0x10030060) — 시간 틱이 그 인물의 행동 간격(WTP, 인물 칸 28)으로 나누어떨어질 때
+        // 차례가 온다. TP 게이지는 안 차고, 차례가 오는 틱에 가득 채운다(이동·행동 예산은 공용 틀 그대로).
+        bool part1 = host._scene.IsPart1;
         foreach (var u in host._units.Where(u => u.Alive))
         {
+            if (part1)
+            {
+                ReleaseFreeze(u);
+                if (!u.HasTurn && CanTakeTurn(u) && _tick % Math.Max(1, (int)(u.Data?.TpDivisor ?? 1)) == 0) u.Tp = u.MaxTp;
+                continue;
+            }
             // 원본(0x10071db0)은 STP 와 턴 속도(38)를 <b>먼저 다 더하고</b> 한 번만 자른 뒤 차례 깃발을 세운다 —
             // 나중에 더하면 38 이 양수일 때 차례가 한 틱 늦는다. 아래쪽 0 자르기는 원본에 없다. 마비·빙결 중에도 TP 는 찬다.
             u.Tp += u.Stp;
