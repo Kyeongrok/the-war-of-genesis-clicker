@@ -43,6 +43,15 @@ public static class Part1Game
     /// <summary>파트1 인물 이름의 글 번호 자리 — 파트2 글 표(TXR)는 이보다 훨씬 작다. <c>GameDatabase.T</c> 가 이 위를 파트1 이름으로 돌려준다.</summary>
     public const int NameTextBase = 60000;
 
+    /// <summary>파트1 배경음악 번호 자리 — 곡 n(<c>BGMs\NNNN.bgm</c>)은 이 게임에서 BGM 20000 + n 이다(파트2 BGM 번호는 이보다 작다).</summary>
+    public const int BgmBase = 20000;
+
+    /// <summary>
+    /// 파트1 배경음악 <c>BGMs\NNNN.bgm</c> — 머리가 RIFF WAVE 형식 2(MS ADPCM, 44.1kHz 스테레오)라 <see cref="AdpcmToPcm"/> 로 풀어 읽는다. 없으면 null.
+    /// </summary>
+    public static PcmSound? Music(int n) =>
+        n >= 0 && Read("BGMs", $"{n:D4}.bgm") is { } bytes ? WaveSound.Parse(AdpcmToPcm(bytes)) : null;
+
     /// <summary>「/m0[말하는 이]/m1」 머리의 이름 — 없으면 빈 글.</summary>
     public static string Speaker(string text) =>
         System.Text.RegularExpressions.Regex.Match(text, @"/m0\[([^\]]*)\]/m1") is { Success: true } m ? m.Groups[1].Value : "";

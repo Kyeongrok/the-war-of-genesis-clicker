@@ -295,6 +295,16 @@ internal sealed unsafe partial class GameWindow
         {
             try
             {
+                // 파트1 곡(BGM 20000 + n)은 사용자의 파트1 폴더 BGMs 에서 풀어 쓴다.
+                if (id >= Part1Game.BgmBase)
+                {
+                    var part1 = CachedClip(id) ?? Part1Game.Music(id - Part1Game.BgmBase);
+                    if (request != Volatile.Read(ref _musicRequest)) return;
+                    if (part1 == null) { _mixer.StopMusic(); return; }
+                    _mixer.PlayMusic(part1, loop, _musicAudible ?? _musicGain);
+                    if (_musicPaused) _mixer.PauseMusic();
+                    return;
+                }
                 string path = VoicePack.BgmPath(id);
                 // 아직 못 받은 곡이면 받아질 때까지 잠깐 기다린다(뒤 스레드라 화면은 안 멈춘다) — 그새 다른 곡을 걸었으면 아래에서 버려진다.
                 if (!File.Exists(path) && AssetPack.EnsureNow("bgm", $"{id:D4}.bgm", 90)) path = VoicePack.BgmPath(id);

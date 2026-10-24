@@ -119,7 +119,8 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
         // 배치 칸(절 C) — BuildUnits 가 파트1 일행(Part1Progress) 가운데 Btl 에 없는 사람을 세운다.
         var placement = battle.Placement.Select(p => (p.X, p.Y, FacingOf(p.Direction))).ToList();
         string title = battle.Line(battle.TitleLine) is { Length: > 0 } t ? t : $"파트1 전투 {id - Part1Game.BattleBase}";
-        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", 0, 0, 0, 0, roster, 0, placement, [], EngineJudgesWipe: false)
+        int bgm = battle.Bgm >= 0 ? Part1Game.BgmBase + battle.Bgm : 0;   // 머리 낱말 8 — BGMs\NNNN.bgm, -1 은 없음
+        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", bgm, 0, 0, 0, roster, 0, placement, [], EngineJudgesWipe: false)
         {
             StartCol = battle.StartX, StartRow = battle.StartY,
         };
