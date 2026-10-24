@@ -325,11 +325,14 @@ public static class Part1Bonus
     /// <summary>차례 시작에 HP · 소울(유닛 +0xe8)에 더한다.</summary>
     public const int HpRegen = 400, SoulRegen = 401;
 
-    /// <summary>기술 해금 코드 216~238 → 쓸 수 있게 되는 Attack.dat 번호(<c>0x1009dc6c</c>). 249 는 101.</summary>
-    public static readonly int[] UnlockAttacks = [154, 155, 156, 23, 24, 26, 27, 33, 34, 38, 40, 39, 43, 44, 47, 49, 48, 50, 55, 53, 57, 59, 56];
+    /// <summary>
+    /// 기술 해금 코드 216~238 → 쓸 수 있게 되는 <b>어빌리티</b>(Abi.dat) 번호(<c>0x1009dc6c</c> — 직업이 가르친 어빌리티 목록에 덧붙인다). 249 는 101.
+    /// 전에는 Attack.dat 번호로 읽어 앤젤 블래스(232 → 어빌리티 48 블래스)가 「광3」으로 보였다(사용자 보고).
+    /// </summary>
+    public static readonly int[] UnlockAbilities = [154, 155, 156, 23, 24, 26, 27, 33, 34, 38, 40, 39, 43, 44, 47, 49, 48, 50, 55, 53, 57, 59, 56];
 
-    /// <summary>그 보정 코드가 여는 Attack.dat 번호 — 해금 코드가 아니면 0.</summary>
-    public static int UnlockedAttack(int code) => code switch { >= 216 and <= 238 => UnlockAttacks[code - 216], 249 => 101, _ => 0 };
+    /// <summary>그 보정 코드가 여는 어빌리티 번호 — 해금 코드가 아니면 0.</summary>
+    public static int UnlockedAbility(int code) => code switch { >= 216 and <= 238 => UnlockAbilities[code - 216], 249 => 101, _ => 0 };
 
     /// <summary>속성 번호(1~5) → 저항 보정 코드.</summary>
     public static int ResistOf(int element) => element is >= 1 and <= 5 ? FireResist + element - 1 : 0;

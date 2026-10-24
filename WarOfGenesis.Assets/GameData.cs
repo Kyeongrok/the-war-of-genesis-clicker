@@ -532,9 +532,16 @@ public sealed class GameDatabase
                     made = chr?.ToCharacterData(ranged ? Part1ShootWork : Part1BasicWork, nameId);
                     // 파트1 어빌리티 가운데 이 게임에 기술 파일이 있는 것(assets/data/skills/200NN.json — 썬더스탐 · 헬 스트라이크 · 블리자드 스탐 …)은
                     // 어빌리티 20000 + 번호로 붙인다. 살라딘은 96 헬 스트라이크를 갖고 시작한다.
+                    // 장비가 여는 어빌리티(보정 216~238 · 249 — 앤젤 블래스 → 블래스)도 안 배웠으면 레벨 1 로 덧붙인다(원본 0x1009dc6c).
                     if (made != null && chr != null)
-                        made = made with { Abilities = [.. chr.Abilities.Where(a => a.Ability > 0 && Abilities.ContainsKey(Part1Game.ChrBase + a.Ability))
-                                                                   .Select(a => ((ushort)(Part1Game.ChrBase + a.Ability), (ushort)Math.Max(1, a.Level)))] };
+                    {
+                        var own = chr.Abilities.Where(a => a.Ability > 0).Select(a => (a.Ability, Level: Math.Max(1, a.Level))).ToList();
+                        foreach (int id in chr.Equipment.Where(e => e > 0).Select(e => Part1Item.ById(_part1Items ??= Part1Item.LoadAll(), e)).OfType<Part1Item>()
+                                                  .SelectMany(i => i.Bonuses).Select(b => Part1Bonus.UnlockedAbility(b.Code)).Where(id => id > 0))
+                            if (!own.Any(a => a.Ability == id)) own.Add((id, 1));
+                        made = made with { Abilities = [.. own.Where(a => Abilities.ContainsKey(Part1Game.ChrBase + a.Ability))
+                                                              .Select(a => ((ushort)(Part1Game.ChrBase + a.Ability), (ushort)a.Level))] };
+                    }
                     _part1Characters[code] = made;
                 }
                 return made;

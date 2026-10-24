@@ -140,6 +140,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         host.Part1.Equipped[code] = slots;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);
+        host.Btl.RefreshPart1Abilities(code);   // 장비가 여는 어빌리티(앤젤 블래스 → 블래스)를 그 판 목록에도 바로
         _onChange?.Invoke();
     }
 

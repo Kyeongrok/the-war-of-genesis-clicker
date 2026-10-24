@@ -79,11 +79,8 @@ internal static class Part1ItemTip
                 case 106: effects.Add("컨디션 이상 치료"); break;
                 case 107: effects.Add("모든 상태이상 치료"); break;
                 default:
-                    if (Part1Bonus.UnlockedAttack(code) is > 0 and var attack)
-                    {
-                        _attacks ??= Part1Attack.LoadAll();
-                        if (Part1Attack.ById(_attacks, attack) is { } a) effects.Add($"「{a.Name}」 사용 가능");
-                    }
+                    if (Part1Bonus.UnlockedAbility(code) is > 0 and var ability && Part1Ability.ById(Part1Ability.LoadAll(), ability) is { } ab)
+                        effects.Add($"「{ab.Name}」 사용 가능");
                     break;
             }
         }
