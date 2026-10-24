@@ -302,8 +302,13 @@ internal sealed unsafe partial class BattleScene
     internal void RingShortcut(RingCommand command)
     {
         int item = Array.FindIndex(Items, r => r.Command == command);
-        // 이 링에 없는 명령의 단축키는 무시한다 — 파트1 링(어빌리티 · 휴식 · 상태 · 아이템)에서 공격 키를 누르면 칸 −1 을 읽어 튕겼다(사용자 보고).
-        if (item < 0) return;
+        // 이 링에 없는 명령 — 파트1 링(어빌리티 · 휴식 · 상태 · 아이템)엔 공격이 없다(원본은 이동 단계에서 적을 눌러 친다). 칸 −1 을 읽어 튕겼으니(사용자 보고)
+        // 링이 떠 있으면 무시하고, 아니면 공격 키(E)는 그대로 기본 공격 겨누기로 보낸다(사용자: 「e키가 안 먹지」).
+        if (item < 0)
+        {
+            if (command == RingCommand.Attack && _ringUnit < 0 && IsPlayerTurn && !_abilityMenu && _targetWork < 0) RunRingCommand(_turn, command);
+            return;
+        }
         if (_ringUnit >= 0)
         {
             if (_ringPhase == RingPhase.Idle) PickRingItem(item);
