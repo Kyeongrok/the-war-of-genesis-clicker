@@ -71,7 +71,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
     /// </summary>
     internal string? SaveBlockedReason =>
-        host.FieldOpen ? "필드에서는 저장할 수 없습니다"
+        // 파트1 은 챕터 지도를 열 때 part1.json 에 저절로 적는다 — 파트2 슬롯에 파트1 판을 넣으면 불러올 때 파트2 판처럼 열린다.
+        host._battleLoaded && host._scene.IsPart1 && !host.TitleScr._titleOpen ? "파트1 은 챕터 지도에서 저절로 저장됩니다(타이틀의 CONTINUE)"
+        : host.FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
         : !host.Mos._mosesOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
