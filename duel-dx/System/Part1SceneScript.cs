@@ -28,8 +28,8 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 303 [인물 차례, x, y] — 필드 인물을 그 자리로 옮긴다(걷기 302 는 아직 없어 도착 자리만 맞춘다).</summary>
     internal Action<int, int, int>? SpritePlace;
 
-    /// <summary>행동 302 [인물 차례, dx, dy, 틱] — 틱마다 (dx, dy) 씩 걷는다(필드 0002: [0, 0, -4, 90] 로 화면 아래에서 걸어 들어온다). 지금은 걸음 없이 도착 자리로 옮긴다.</summary>
-    internal Action<int, int, int>? SpriteShift;
+    /// <summary>행동 302 [인물 차례, dx, dy, 틱] — 틱마다 (dx, dy) 씩 걷는다(필드 0002: [0, 0, -4, 90] 로 화면 아래에서 걸어 들어온다).</summary>
+    internal Action<int, int, int, int>? SpriteShift;
 
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
@@ -69,6 +69,8 @@ internal sealed class Part1SceneScript(GameWindow host)
         _lines = lines;
         _fired = fired;
         Talk = null;
+        _waitUntil = 0;
+        _waitBusy = false;
         _away = null;
         if (!resume)
         {
@@ -92,6 +94,27 @@ internal sealed class Part1SceneScript(GameWindow host)
     {
         _pending.Clear();
         _pending.AddRange(pending);
+    }
+
+    /// <summary>
+    /// 기다림을 지키나 — 필드만 켠다. 행동 2 [틱] 은 그만큼 쉬고, 행동 1 은 걷던 인물이 다 설 때까지(<see cref="Busy"/>) 쉰다.
+    /// 챕터는 끄고 바로 넘긴다(지도 연출이 아직 없어 기다릴 것이 없다).
+    /// </summary>
+    internal bool Timed;
+
+    /// <summary>행동 1 이 기다릴 일 — 걷는 인물이 있나.</summary>
+    internal Func<bool>? Busy;
+
+    private double _waitUntil;
+    private bool _waitBusy;
+
+    /// <summary>다 돌았나 — 대사도 기다림도 남은 행동도 없다.</summary>
+    internal bool Idle => Talk == null && _waitUntil == 0 && !_waitBusy && _pending.Count == 0;
+
+    /// <summary>쉬는 중이었으면 때가 됐는지 보고 잇는다 — 필드 화면이 틀마다 부른다.</summary>
+    internal void Pump()
+    {
+        if (Talk == null && (_waitUntil > 0 || _waitBusy)) Run();
     }
 
     /// <summary>대사를 넘긴다.</summary>
@@ -132,6 +155,16 @@ internal sealed class Part1SceneScript(GameWindow host)
         int firedBefore = -1;
         while (Talk == null)
         {
+            if (_waitUntil > 0)
+            {
+                if (host._lastTime < _waitUntil) return;
+                _waitUntil = 0;
+            }
+            if (_waitBusy)
+            {
+                if (Busy?.Invoke() == true) return;
+                _waitBusy = false;
+            }
             if (_pending.Count == 0)
             {
                 int firedNow = FiredEvents();
@@ -145,6 +178,8 @@ internal sealed class Part1SceneScript(GameWindow host)
             switch (c.Code)
             {
                 case 0: Call(a[0]); break;
+                case 1: _waitBusy = Timed; break;
+                case 2: if (Timed && a[0] > 0) _waitUntil = host._lastTime + a[0] / GameWindow.TicksPerSecond; break;
                 case >= 200 and <= 202 or >= 206 and <= 208:
                 {
                     string raw = a[1] >= 0 && a[1] < _lines.Count ? _lines[a[1]] : "";
@@ -155,7 +190,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 100: BackgroundChange?.Invoke(a[0]); break;
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
-                case 302: SpriteShift?.Invoke(a[0], a[1] * a[3], a[2] * a[3]); break;
+                case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
                 case 101: _vars[a[0]] = _vars.GetValueOrDefault(a[0]) + 1; break;
                 case 800: _vars[a[0]] = a[1]; break;
                 case 802:

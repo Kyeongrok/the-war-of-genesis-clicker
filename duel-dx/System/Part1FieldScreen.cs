@@ -22,14 +22,48 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
 
     internal Part1SceneScript Script => _script ??= new(host)
     {
+        Timed = true,
+        Busy = () => _walks.Any(w => !w.Value.Done(host._lastTime)),
         SceneChange = OnSceneChange,
         BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
-        SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) _spots[n] = (x, y); },
-        SpriteShift = (n, dx, dy) => { if (n >= 0 && n < _spots.Length) _spots[n] = (_spots[n].X + dx, _spots[n].Y + dy); },
+        SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) { _walks.Remove(n); _spots[n] = (x, y); } },
+        SpriteShift = (n, dx, dy, ticks) => { if (n >= 0 && n < _spots.Length) Walk(n, dx, dy, ticks); },
     };
 
-    /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮긴다.</summary>
+    /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮기고 302 가 걷게 한다.</summary>
     private (int X, int Y)[] _spots = [];
+
+    /// <summary>걷는 중 — 틱마다 (dx, dy) 씩, 틱 수만큼(행동 302). 다 걸으면 그 자리에 선다.</summary>
+    private sealed record Walking(int FromX, int FromY, int Dx, int Dy, int Ticks, double Start)
+    {
+        public int Elapsed(double now) => Math.Min(Ticks, (int)((now - Start) * GameWindow.TicksPerSecond));
+        public bool Done(double now) => Elapsed(now) >= Ticks;
+        public (int X, int Y) At(double now) => (FromX + Dx * Elapsed(now), FromY + Dy * Elapsed(now));
+    }
+
+    private readonly Dictionary<int, Walking> _walks = [];
+
+    /// <summary>바라보는 쪽(걸으면 걷는 쪽으로 돈다) — 인물 칸 방향에서 시작.</summary>
+    private Facing[] _facing = [];
+
+    private void Walk(int n, int dx, int dy, int ticks)
+    {
+        var (x, y) = PositionOf(n);
+        _spots[n] = (x, y);
+        if (ticks <= 0) { _spots[n] = (x + dx, y + dy); return; }
+        _walks[n] = new Walking(x, y, dx, dy, ticks, host._lastTime);
+        if (dx != 0 || dy != 0)
+            _facing[n] = Math.Abs(dx) >= Math.Abs(dy) ? dx > 0 ? Facing.Right : Facing.Left : dy > 0 ? Facing.Down : Facing.Up;
+    }
+
+    /// <summary>지금 자리 — 걷는 중이면 걸은 만큼, 다 걸었으면 도착 자리로 굳힌다.</summary>
+    private (int X, int Y) PositionOf(int n)
+    {
+        if (!_walks.TryGetValue(n, out var walk)) return _spots[n];
+        var at = walk.At(host._lastTime);
+        if (walk.Done(host._lastTime)) { _walks.Remove(n); _spots[n] = at; }
+        return at;
+    }
     private Part1SceneScript? _script;
 
     /// <summary>그 필드를 연다 — 끝나면(행동 500 · Esc · 대사가 다 끝나고 누름) <paramref name="onEnd"/>. 못 읽으면 곧바로 <paramref name="onEnd"/>.</summary>
@@ -45,6 +79,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _onEnd = onEnd;
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
         _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
+        _walks.Clear();
+        _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
         _open = true;
         GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
         Script.Start(field.Events, field.Lines, []);
@@ -80,7 +116,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     internal void OnClick()
     {
         if (Script.Talk != null) Script.Advance();
-        else End();                                                         // 대사가 다 끝났는데 500 이 없으면 누르면 돌아간다
+        else if (Script.Idle) End();                                        // 다 돌았는데 500 이 없으면 누르면 돌아간다(걷는 중 · 기다리는 중에는 안 받는다)
     }
 
     internal void OnKey(int key)
@@ -115,32 +151,35 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
 
     internal void Draw()
     {
+        Script.Pump();
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_field is { } field)
         {
             const int W = MosesScene.MosesW, H = MosesScene.MosesH;
             // 화면 자리 — 머리 낱말 1·2 가 처음 자리이고, 넓은 그림(0002 의 1300 폭 파노라마)에서는 인물들 가운데를 따라간다(화면 이동 401 은 아직 안 풀었다).
-            int followX = _spots.Length > 0 ? (int)_spots.Average(p => p.X) - W / 2 : field.Header[1];
-            int camX = Math.Clamp(_bgW > W && _spots.Length > 0 ? followX : field.Header[1], 0, Math.Max(0, _bgW - W)), camY = Math.Clamp((int)field.Header[2], 0, Math.Max(0, _bgH - H));
+            var spots = Enumerable.Range(0, _spots.Length).Select(PositionOf).ToArray();
+            int followX = spots.Length > 0 ? (int)spots.Average(p => p.X) - W / 2 : field.Header[1];
+            int camX = Math.Clamp(_bgW > W && spots.Length > 0 ? followX : field.Header[1], 0, Math.Max(0, _bgW - W)), camY = Math.Clamp((int)field.Header[2], 0, Math.Max(0, _bgH - H));
             int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
             if (_bg is { } bg)
                 for (int y = 0; y < Math.Min(H, _bgH); y++)
                     for (int x = 0; x < Math.Min(W, _bgW); x++)
                         host.SetPixel(ox + x, oy + top + y, bg[(camY + y) * _bgW + camX + x] | 0xFF000000);
-            // 인물 — 서기 모션(동작 0)을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽). 아래쪽에 선 사람을 나중에.
+            // 인물 — 서기(동작 0) · 걷는 중이면 걷기(동작 1) 모션을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽).
+            // 모션 번호 = 동작 × 3 + 방향(ObsMotionTable). 아래쪽에 선 사람을 나중에.
             int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
-            foreach (int i in Enumerable.Range(0, Math.Min(_spots.Length, field.Sprites.Count)).OrderBy(i => _spots[i].Y))
+            foreach (int i in Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).OrderBy(i => spots[i].Y))
             {
-                var sprite = field.Sprites[i];
-                var facing = sprite.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
-                var (x, y) = _spots[i];
-                host.DrawUi(Part1Game.ObsBase + sprite.SpriteId, ObsMotionTable.DirectionOf(facing), tick, ox + x - camX, oy + top + y - camY,
+                var facing = _facing[i];
+                int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+                var (x, y) = spots[i];
+                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, action * 3 + ObsMotionTable.DirectionOf(facing), tick, ox + x - camX, oy + top + y - camY,
                             GameWindow.UiBlend.Alpha, loop: true, mirror: facing == Facing.Right);
             }
         }
         if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
-        else host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);
+        else if (Script.Idle) host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);
         host.DrawToast();
     }
 }
