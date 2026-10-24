@@ -21,7 +21,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         "제국병단", "발키리", "제국마법사단", "흑태자교단", "예니체리", "투르병단", "앙그라교단", "한제국", "커티스공화국", "그라나다상단",
     ];
 
-    internal const int W = 170, H = 300, ListW = 150;
+    internal const int W = 170, H = 345, ListW = 150, EquipRowH = 26;
 
     private IReadOnlyList<Part1Job>? _jobs;
     private IReadOnlyList<Part1Ability>? _abilities;
@@ -45,9 +45,17 @@ internal sealed class Part1StatusPanel(GameWindow host)
             _jobChoices = null;
             return true;
         }
+        if (_equipChoices is { } items)
+        {
+            // 장비 목록 — 줄을 누르면 그것을 낀다(0 은 「벗기」), 밖을 누르면 닫는다.
+            for (int i = 0; i < items.Count; i++)
+                if (In(EquipChoiceRow(i), bx, by)) { Equip(u, _equipSlot, items[i]); break; }
+            _equipChoices = null;
+            return true;
+        }
         if (In(_jobRow, bx, by)) { OpenJobChoices(u); return true; }
         for (int s = 0; s < 5; s++)
-            if (In(_equipRows[s], bx, by)) { CycleEquipment(u, s); return true; }
+            if (In(_equipRows[s], bx, by)) { OpenEquipChoices(u, s); return true; }
         return In(_panel, bx, by);
     }
 
@@ -92,24 +100,49 @@ internal sealed class Part1StatusPanel(GameWindow host)
         host.Toast($"{name}{(batchim ? "으로" : "로")} 전직{(host._dropJobExp ? " — 이번 레벨의 경험치는 없어집니다" : "")}");
     }
 
-    /// <summary>그 칸에 가방의 다음 맞는 것을 끼운다(끼던 것은 가방으로) — 일행 창(Part1PartyScreen)과 같은 규칙. 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
-    private void CycleEquipment(UnitState u, int slot)
+    /// <summary>떠 있는 장비 목록(슬롯을 누르면 그 칸에 낄 수 있는 가방의 아이템이 뜬다 — 원본 0x100925f0, 사용자 화면) — 0 은 「벗기」.</summary>
+    private List<int>? _equipChoices;
+    private int _equipSlot;
+
+    private (int X, int Y, int W, int H) EquipChoiceRow(int i) =>
+        (_equipRows[_equipSlot].X + 6, _equipRows[_equipSlot].Y + EquipRowH + 10 + i * JobRowH, EquipBoxW - 12, JobRowH - 2);
+
+    internal const int EquipBoxW = 190;
+
+    /// <summary>슬롯을 누르면 — 그 칸에 맞는 가방의 아이템 목록(일행 창 Part1PartyScreen 과 같은 규칙). 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
+    private void OpenEquipChoices(UnitState u, int slot)
     {
         if (!host.Part1.IsOurs(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 장비를 바꿀 수 있습니다"); return; }
         var chr = host.Part1.Apply(raw);
         _items ??= Part1Item.LoadAll();
-        var options = host.Part1.Bag.Distinct().Where(id => Part1Item.ById(_items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, _items)).ToList();
+        var options = host.Part1.Bag.Distinct().Where(id => id != chr.Equipment[slot] && Part1Item.ById(_items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, _items)).ToList();
+        if (chr.Equipment[slot] != 0) options.Add(0);
+        if (options.Count == 0) { host.Toast("가방에 이 칸에 맞는 것이 없습니다"); return; }
+        _equipSlot = slot;
+        _equipChoices = options;
+    }
+
+    /// <summary>그 칸에 <paramref name="next"/> 를 끼운다(끼던 것은 가방으로, 0 이면 벗기만).</summary>
+    private void Equip(UnitState u, int slot, int next)
+    {
+        if (Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) return;
+        var chr = host.Part1.Apply(raw);
         var slots = (int[])chr.Equipment.Clone();
         int old = slots[slot];
-        int at = options.IndexOf(old);
-        int next = options.Count == 0 ? 0 : old == 0 ? options[0] : at + 1 < options.Count ? options[at + 1] : 0;
-        if (next == old) { host.Toast("가방에 이 칸에 맞는 것이 없다"); return; }
+        if (next == old) return;
         if (next != 0) host.Part1.Bag.Remove(next);
         if (old != 0) host.Part1.Bag.Add(old);
         slots[slot] = next;
         host.Part1.Equipped[u.ChrCode] = slots;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(u.ChrCode);
+    }
+
+    /// <summary>아이템 그림(Obs 0012 모션 = 아이템 +0x45)을 size 칸에 — UI 층(목록 창 위에 보이게). 없으면 그리지 않는다.</summary>
+    private void DrawItemIcon(Part1Item? item, int x, int y, int size = 22)
+    {
+        if (item == null || host.UiFor(Part1Game.ObsBase + 12)?.FrameAt(item.Icon, 0) is not { } icon) return;
+        host.UiSprite(Part1Game.ObsBase + 12, item.Icon, 0, x + (size - icon.W) / 2 - icon.X, y + (size - icon.H) / 2 - icon.Y);
     }
 
     /// <summary>파트1 판의 파트1 인물이면 이 창을 쓴다.</summary>
@@ -163,14 +196,16 @@ internal sealed class Part1StatusPanel(GameWindow host)
         }
         row += 3 * 17 + 8;
 
+        // 장비 다섯 칸 — 줄마다 아이템 그림(Obs 0012 모션 = 아이템 +0x45) · 칸 이름 · 아이템 이름. 누르면 낄 것 목록.
         for (int s = 0; s < 5; s++)
         {
-            string name = Part1Item.ById(_items, chr.Equipment[s])?.Name ?? "—";
-            _equipRows[s] = (x + 6, row - 2, W - 12, 17);
-            bool hot = host._mouse.X >= x + 6 && host._mouse.X < x + W - 6 && host._mouse.Y >= row - 2 && host._mouse.Y < row + 15;
-            if (hot) host.UiFill(x + 6, row - 2, W - 12, 17, 0xC0304870);
-            host.UiText($"{Part1PartyScreen.SlotNames[s]}: {name}", x + 10, row, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
-            row += 17;
+            var item = Part1Item.ById(_items, chr.Equipment[s]);
+            _equipRows[s] = (x + 6, row - 2, W - 12, EquipRowH - 2);
+            bool hot = host._mouse.X >= x + 6 && host._mouse.X < x + W - 6 && host._mouse.Y >= row - 2 && host._mouse.Y < row + EquipRowH - 4;
+            if (hot) host.UiFill(x + 6, row - 2, W - 12, EquipRowH - 2, 0xC0304870);
+            DrawItemIcon(item, x + 10, row);
+            host.UiText($"{Part1PartyScreen.SlotNames[s]}: {item?.Name ?? "—"}", x + 36, row + 4, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
+            row += EquipRowH;
         }
 
         // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV.
@@ -189,6 +224,24 @@ internal sealed class Part1StatusPanel(GameWindow host)
                 host.BlitScaled(icon, lx + 6, ly + 6 + i * 16, 14, 14);
             host.UiText(name, lx + 24, ly + 6 + i * 16, GameWindow.White, 11);
             host.UiText($"LV{learned[i].Level}", lx + ListW - 34, ly + 6 + i * 16, 0xFFFFE080, 11);
+        }
+
+        // 장비 목록 — 누른 슬롯 아래에 틀 창, 줄마다 그림 · 이름.
+        if (_equipChoices is { } equipChoices)
+        {
+            var (ex, ey, _, _) = _equipRows[_equipSlot];
+            int eh = 12 + equipChoices.Count * JobRowH;
+            host.UiFill(ex, ey + EquipRowH + 4, EquipBoxW, eh, 0xFF201838);
+            host.UiFrame(ex, ey + EquipRowH + 4, EquipBoxW, eh);
+            for (int i = 0; i < equipChoices.Count; i++)
+            {
+                var (rx, ry, rw, rh) = EquipChoiceRow(i);
+                if (host._mouse.X >= rx && host._mouse.X < rx + rw && host._mouse.Y >= ry && host._mouse.Y < ry + rh)
+                    host.UiFill(rx, ry, rw, rh, 0x60A090E0);
+                var item = Part1Item.ById(_items, equipChoices[i]);
+                if (item != null) DrawItemIcon(item, rx + 2, ry - 1, 22);
+                host.UiText(item?.Name ?? "벗기", rx + 28, ry + 3, GameWindow.White, 12);
+            }
         }
 
         // 직업 목록 — 직업 줄 아래에 틀 창, 줄마다 구슬 · 이름(원본 꼴). 짚은 줄은 밝게.
