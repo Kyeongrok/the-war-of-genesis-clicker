@@ -49,6 +49,9 @@ internal sealed unsafe partial class BattleScene
 
         list.AddRange(followers);
 
+        // 파트1 판에 편 4 로 나온 사람은 일행에 들인다(배치 칸이 없는 판도) — 다음 판의 배치 칸에 선다.
+        if (scene.IsPart1) host.Part1.Join(list.Where(u => u.Side == 4 && u.ChrCode >= Part1Game.ChrBase).Select(u => u.ChrCode));
+
         // 배치 칸이 있는 전투는 파티를 거기 세운다 — 원본은 배치 칸이 있으면 싱글에서 늘 「캐릭터 배치」(상태 2, 0x10066d00)로 시작한다.
         // 전에는 고정 아군이 하나라도 있으면 건너뛰어, Btl 0140 처럼 진(고정)만 서고 나머지 파티가 안 나왔다(사용자 보고, 26개 전투).
         // 이미 Btl 에 선 사람은 빼고, 빈 칸에만 차례로 세운다(자동 배치 0x10066480 과 같은 차례). 고르는 화면은 아직 없다.
@@ -56,8 +59,6 @@ internal sealed unsafe partial class BattleScene
         {
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
-            // 파트1 판은 파트1 일행(Part1Progress)이 선다 — 이 판에 편 4 로 나온 사람은 먼저 일행에 들인다.
-            if (scene.IsPart1) host.Part1.Join(list.Where(u => u.Side == 4 && u.ChrCode >= Part1Game.ChrBase).Select(u => u.ChrCode));
             var party = scene.IsPart1 ? [.. host.Part1.Party]
                       : host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
                       : host._party.Keys.Count > 0 ? host._party.Keys.ToList()

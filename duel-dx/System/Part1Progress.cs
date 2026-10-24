@@ -1,3 +1,7 @@
+using System.IO;
+using System.Text.Json;
+using WarOfGenesis.Assets;
+
 namespace DuelDx;
 
 /// <summary>
@@ -5,7 +9,8 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 파트1 은 판에 편 4 로 나온 인물이 그대로 일행이 된다고 보고(가설 — 합류 명령은 챕터 사건 쪽, 아직 안 풀었다), 판을 세울 때 들인다.
-/// 다음 판에서 Btl 에 없는 일행은 그 판의 배치 칸(절 C)에 서고, 파트2 배치 단계로 고쳐 세운다. 세이브에는 아직 안 적는다(챕터·연대표 단계에서).
+/// 다음 판에서 Btl 에 없는 일행은 그 판의 배치 칸(절 C)에 서고, 파트2 배치 단계로 고쳐 세운다.
+/// 챕터 지도를 열 때마다 <c>part1.json</c>(저장 폴더)에 적어 두고, 파트1 타이틀의 CONTINUE 가 그 챕터에서 이어 간다(파트2 세이브 슬롯과 따로).
 /// </remarks>
 internal sealed class Part1Progress
 {
@@ -36,6 +41,56 @@ internal sealed class Part1Progress
         FinishedChapters.Clear();
         Fired.Clear();
         ChapterId = -1;
+        PartyPlace = 0;
+        PendingActions = [];
+    }
+
+    /// <summary>일행이 선 챕터 지도 장소(차례).</summary>
+    internal int PartyPlace;
+
+    /// <summary>챕터 사건의 남은 행동 — 전투·필드에 갔다 오면 이어 돌 것(세이브에 같이 적는다).</summary>
+    internal List<ScriptCommand> PendingActions = [];
+
+    internal static string SavePath => UserDataFolder.File("part1.json");
+
+    internal static bool HasSave => File.Exists(SavePath);
+
+    private sealed record SaveData(List<int> Party, int ChapterId, int PartyPlace, List<int> Cleared, List<int> FinishedChapters,
+                                   Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending);
+
+    /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
+    internal void Save(byte[] flags)
+    {
+        var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])]);
+        try
+        {
+            Directory.CreateDirectory(UserDataFolder.Path);
+            File.WriteAllText(SavePath, JsonSerializer.Serialize(data));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>적어 둔 진행을 읽어 들인다 — 깃발은 <paramref name="flags"/> 에 덮어쓴다. 없거나 못 읽으면 false.</summary>
+    internal bool Load(byte[] flags)
+    {
+        try
+        {
+            if (JsonSerializer.Deserialize<SaveData>(File.ReadAllText(SavePath)) is not { } data) return false;
+            Reset();
+            Party.AddRange(data.Party);
+            ChapterId = data.ChapterId;
+            PartyPlace = data.PartyPlace;
+            Cleared.UnionWith(data.Cleared);
+            FinishedChapters.UnionWith(data.FinishedChapters);
+            foreach (var (chapter, events) in data.Fired) Fired[chapter] = new(events);
+            var saved = Convert.FromBase64String(data.Flags);
+            Array.Clear(flags);
+            saved.AsSpan(0, Math.Min(saved.Length, flags.Length)).CopyTo(flags);
+            PendingActions = [.. data.Pending.Where(w => w.Length > 0).Select(w => new ScriptCommand((ushort)w[0], w[1..]))];
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }
     }
 
     /// <summary>판에 편 4 로 선 인물을 일행에 들인다(차례 유지, 겹치지 않게).</summary>

@@ -69,12 +69,29 @@ internal sealed class Part1SceneScript(GameWindow host)
         _lines = lines;
         _fired = fired;
         Talk = null;
+        _away = null;
         if (!resume)
         {
             _pending.Clear();
             _vars.Clear();
         }
         Run();
+    }
+
+    /// <summary>
+    /// 세이브에 적을 남은 행동 — 지금 가 있는 장면(전투·필드)을 연 행동을 앞에 붙인다. 이어 하기는 그 장면부터 다시 한다
+    /// (돌아와서 잇는 <see cref="Start"/>(resume) 는 그 행동을 빼고 남은 것만 돈다).
+    /// </summary>
+    internal IReadOnlyList<ScriptCommand> SavePending => _away is { } away ? [away, .. _pending] : _pending;
+
+    /// <summary>장면을 넘긴 행동(502 · 503) — 그 장면을 마치고 돌아와 다시 돌기 시작하면 지운다.</summary>
+    private ScriptCommand? _away;
+
+    /// <summary>세이브에서 읽은 남은 행동을 넣는다 — 다음 <see cref="Start"/>(resume) 가 이어 돈다.</summary>
+    internal void Restore(IEnumerable<ScriptCommand> pending)
+    {
+        _pending.Clear();
+        _pending.AddRange(pending);
     }
 
     /// <summary>대사를 넘긴다.</summary>
@@ -145,7 +162,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     if (a[0] >= 0 && a[0] < host.FlagSt._flags.Length) host.FlagSt._flags[a[0]] = (byte)Math.Clamp((int)a[1], 0, 255);
                     break;
                 case >= 500 and <= 503:
-                    if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; return; }
+                    if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; _away = c.Code is 502 or 503 ? c : null; return; }
                     break;
             }
         }

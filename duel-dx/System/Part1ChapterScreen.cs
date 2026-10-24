@@ -92,6 +92,22 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         _open = true;
         _hover = -1;
         Events.Start(chapter.Events, chapter.Lines, host.Part1.ChapterFired(chapterId), resume);
+        // 열 때마다 적어 둔다 — 사건이 전투·필드로 보냈으면 남은 행동까지(CONTINUE 가 그 자리에서 잇는다).
+        host.Part1.PartyPlace = _party;
+        host.Part1.PendingActions = [.. Events.SavePending];
+        host.Part1.Save(host.FlagSt._flags);
+        return true;
+    }
+
+    /// <summary>세이브에서 이어 간다 — 적어 둔 챕터를 열고 남은 행동을 잇는다.</summary>
+    internal bool Continue()
+    {
+        _resume = host.Part1.PendingActions.Count > 0;
+        Events.Restore(host.Part1.PendingActions);
+        int place = host.Part1.PartyPlace;
+        if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
+        if (!Open(host.Part1.ChapterId)) return false;
+        _party = place;
         return true;
     }
 

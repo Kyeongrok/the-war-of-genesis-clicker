@@ -22,9 +22,9 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 84, 26);
 
     /// <summary>파트1 타이틀의 단추 — 가운데 아래.</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 380, "NEW GAME"), (250, 412, "PART 2")];
+    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 364, "NEW GAME"), (250, 396, "CONTINUE"), (250, 428, "PART 2")];
 
-    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonPart2 = 1;
+    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonContinue = 1, ButtonPart2 = 2;
 
     internal bool _open;
     internal bool _entryHover;
@@ -149,6 +149,10 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         switch (button)
         {
             case ButtonNewGame: host.LeaveScene(NewGame); break;
+            case ButtonContinue:
+                if (!Part1Progress.HasSave) { host.Toast("파트1 진행 기록이 없습니다 — NEW GAME 으로 시작하세요"); break; }
+                host.LeaveScene(ContinueGame);
+                break;
             case ButtonPart2: host.LeaveScene(Close); break;
         }
     }
@@ -160,6 +164,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
         int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
         if (!Chapter.Open(chapter)) Timeline.Open();
+    }
+
+    /// <summary>파트1 이어 하기 — <c>part1.json</c> 의 챕터에서 남은 사건을 잇는다. 못 읽으면 알리고 타이틀에 머문다.</summary>
+    private void ContinueGame()
+    {
+        if (!host.Part1.Load(host.FlagSt._flags) || host.Part1.ChapterId < 0 || !Chapter.Continue())
+            host.Toast("파트1 진행 기록을 읽지 못했습니다");
     }
 
     /// <summary>
