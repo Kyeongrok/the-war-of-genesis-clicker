@@ -27,6 +27,11 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// <summary>능력치 칸 번호 — 쓸 때 값은 바탕 + 같은 번호 어빌리티 레벨 × 5 + 장비 보정이다(<see cref="Stat"/>).</summary>
     public const int Str = 20, Skill = 21, Dex = 22, Int = 23, Spd = 25, Ac = 26, Mr = 27, Range = 29;
 
+    /// <summary>칸 28 — <b>행동 간격</b>: 시간 틱이 이 값으로 나누어떨어질 때 차례가 온다(<c>0x10031d20</c>). 작을수록 자주 움직인다.</summary>
+    public const int Interval = 28;
+
+    public int ActionInterval => Math.Max(1, Fields[Interval]);
+
     /// <summary>능력치 칸 → 그것을 올리는 어빌리티(<c>Abi.dat</c> 2 STR … 9 MR)와 장비 보정 코드(<c>0x1009eaa0</c>~<c>0x1009ec70</c>).</summary>
     public static (int Ability, int Bonus) StatSource(int field) => field switch
     {

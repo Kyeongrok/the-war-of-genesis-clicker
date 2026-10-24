@@ -108,6 +108,12 @@ public static class Part1Combat
     /// <summary>회복(선택자 6) — 최대 HP × 세기 / 20000, 잃은 HP 까지. 결과는 양수(HP 에 더할 값).</summary>
     public static int Heal(int power, int maxHp, int hp) => Math.Min(maxHp * (power / 50) / 400, maxHp - hp);
 
+    /// <summary>기력 게이지(유닛 +0xe8, 0~150)에 따른 능력치 — 값 − 값·⅔·(150 − 게이지)/150(<c>0x1003ec10</c>). 0 이면 ⅓.</summary>
+    public static int Scaled(int stat, int gauge) => Math.Max(0, stat + (-2 * stat / 3) * (150 - gauge) / 150);
+
+    /// <summary>차례가 올 때 게이지 — +20(상태 +0x24c 면 +40), 150(상태에 따라 120·50)에서 자른다(<c>0x10034f80</c>). 처음 값은 40.</summary>
+    public static int GaugeOnTurn(int gauge, bool doubled = false, int cap = 150) => Math.Min(cap, gauge + (doubled ? 40 : 20));
+
     /// <summary>회피 확률(%) — 대상이 어빌리티 77 을 가졌을 때. 상태 +0x258 이 없으면 대상 DEX 는 반만 친다.</summary>
     public static int EvadeChance(int targetDex, bool fullDex, int attackerHit, int attackerDex) =>
         attackerHit + attackerDex > 0 ? (fullDex ? targetDex : targetDex / 2) * 100 / (attackerHit + attackerDex) : 0;
