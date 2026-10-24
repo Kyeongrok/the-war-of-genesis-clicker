@@ -45,6 +45,14 @@ internal sealed unsafe partial class BattleScene
         // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
         int next = _eventNextBattle > 0 ? _eventNextBattle : host.EpisodesScr.Episodes().Count == 0 ? host._scene.NextBattle : 0;
         _eventNextBattle = 0;
+        // 파트1 판은 챕터 지도로 돌아간다(이기면 ✓) — 파트1 의 다음 판은 챕터 사건(502)이 정하는데, 그것을 옮기기 전까지는 플레이어가 지도에서 고른다.
+        if (host._scene.IsPart1)
+        {
+            if (won) host.Part1.Cleared.Add(host._scene.Id - Part1Game.BattleBase);
+            TestRunTrace($"dest part1 chapter {host.Part1.ChapterId}");   // 시험 전용 줄
+            host.Part1TitleScr.ReturnFromBattle(won);
+            return;
+        }
         if (won && next > 0 && host.Sys.StartBattle(next)) { TestRunTrace($"dest battle {next}"); return; }   // 시험 전용 줄
         // 행동 6 은 전투를 끝내고 그 필드로 보낸다.
         if (won && nextField > 0 && host.Fld.OpenField(nextField)) { TestRunTrace($"dest field {nextField}"); return; }   // 시험 전용 줄

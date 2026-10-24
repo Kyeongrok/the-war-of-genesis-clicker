@@ -28,6 +28,12 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal bool _open;
     internal bool _entryHover;
+
+    /// <summary>파트1 챕터 지도 · 연대표 — 이 화면 위에 열려 타이틀 장면(TitleScreen 의 문)을 그대로 쓴다.</summary>
+    internal Part1ChapterScreen Chapter => _chapter ??= new(host, this);
+    internal Part1TimelineScreen Timeline => _timeline ??= new(host, this);
+    private Part1ChapterScreen? _chapter;
+    private Part1TimelineScreen? _timeline;
     internal int _hover = -1;
     private uint[]? _bg;
 
@@ -52,6 +58,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal void Close()
     {
         _open = false;
+        if (_chapter != null) _chapter._open = false;
+        if (_timeline != null) _timeline._open = false;
         _entryHover = false;
         _bg = null;
         host.TitleScr.OpenTitle();
@@ -102,14 +110,18 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void UpdateHover(int bx, int by)
     {
-        if (_open) _hover = ButtonAt(bx, by);
+        if (_open && _chapter is { _open: true }) _chapter.UpdateHover(bx, by);
+        else if (_open && _timeline is { _open: true }) _timeline.UpdateHover(bx, by);
+        else if (_open) _hover = ButtonAt(bx, by);
         else _entryHover = EntryAt(bx, by);
     }
 
     internal bool OnClick(int bx, int by)
     {
         if (!_open) return false;
-        Press(ButtonAt(bx, by));
+        if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
+        else if (_timeline is { _open: true }) _timeline.OnClick(bx, by);
+        else Press(ButtonAt(bx, by));
         return true;
     }
 
@@ -117,7 +129,9 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnKey(int key)
     {
         if (!_open) return false;
-        if (key == Win32.VK_ESCAPE) Press(ButtonPart2);
+        if (_chapter is { _open: true }) _chapter.OnKey(key);
+        else if (_timeline is { _open: true }) _timeline.OnKey(key);
+        else if (key == Win32.VK_ESCAPE) Press(ButtonPart2);
         else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
             _hover = _hover < 0 ? 0 : (_hover + 1) % Buttons.Length;
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) Press(Math.Max(0, _hover));
@@ -128,29 +142,42 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         switch (button)
         {
-            // 연대표 첫 칸(카디스 요새 = 챕터 0)의 첫 전투로 — 챕터 지도·연대표 화면을 옮기기 전까지의 자리.
-            case ButtonNewGame: host.LeaveScene(StartFirstBattle); break;
+            case ButtonNewGame: host.LeaveScene(NewGame); break;
             case ButtonPart2: host.LeaveScene(Close); break;
         }
     }
 
-    /// <summary>
-    /// 파트1 새 게임 — 연대표 첫 칸이 여는 챕터의 첫 전투(카디스 요새 → 챕터 0 → 전투 6 「카디스 지하 통로」)를 연다.
-    /// 판·맵·그림은 파트2 틀로, 인물은 파트1 레코드에서(<see cref="Part1Game.ChrBase"/>).
-    /// </summary>
-    private void StartFirstBattle()
+    /// <summary>파트1 새 게임 — 진행을 비우고 연대표 첫 칸이 여는 챕터(카디스 요새 → 챕터 0) 지도를 연다.</summary>
+    private void NewGame()
     {
-        int first = Part1Episode.LoadAll().FirstOrDefault() is { } episode && Part1Chapter.Load(episode.ChapterId) is { } chapter
-            ? chapter.Battles.FirstOrDefault(-1) : -1;
-        _open = false;
-        _bg = null;
-        host.TitleScr._titleOpen = false;
         host.Part1.Reset();
-        if (first < 0 || !host.Sys.StartBattle(Part1Game.BattleBase + first, rememberParty: false))
+        int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
+        if (!Chapter.Open(chapter)) Timeline.Open();
+    }
+
+    /// <summary>
+    /// 파트1 전투(파트1 번호)를 연다 — 판·맵·그림은 파트2 틀로, 인물은 파트1 레코드에서(<see cref="Part1Game.ChrBase"/>).
+    /// 못 열면 챕터 지도에 머문다.
+    /// </summary>
+    internal void StartBattle(int part1Battle)
+    {
+        if (host.Sys.StartBattle(Part1Game.BattleBase + part1Battle, rememberParty: false))
         {
-            host.TitleScr.OpenTitle();
-            host.Toast("파트1 첫 전투를 열지 못했습니다");
+            _open = false;
+            _bg = null;
+            if (_chapter != null) _chapter._open = false;
+            if (_timeline != null) _timeline._open = false;
+            return;
         }
+        host.Toast($"파트1 전투 {part1Battle} 를 열지 못했습니다");
+    }
+
+    /// <summary>파트1 전투를 마치고 — 이겼으면 그 챕터 지도로, 졌으면 파트1 타이틀로 돌아온다.</summary>
+    internal void ReturnFromBattle(bool won)
+    {
+        host.TitleScr.OpenTitle();
+        Open();
+        if (won && host.Part1.ChapterId >= 0) Chapter.Open(host.Part1.ChapterId);
     }
 
     /// <summary>파트2 타이틀 위의 「PART 1」 단추.</summary>
@@ -163,6 +190,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void Draw()
     {
+        if (_chapter is { _open: true }) { _chapter.Draw(); return; }
+        if (_timeline is { _open: true }) { _timeline.Draw(); return; }
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_bg is { } bg)
@@ -177,7 +206,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         host.DrawToast();
     }
 
-    private void DrawButton(int x, int y, int w, int h, string label, bool hot)
+    internal void DrawButton(int x, int y, int w, int h, string label, bool hot)
     {
         host.UiFill(x, y, w, h, hot ? 0xC0305080u : 0x90101828u);
         host.UiStroke(x, y, w, h, hot ? 0xFFB0D0FFu : 0xFF6078A0u);
