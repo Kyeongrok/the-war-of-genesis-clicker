@@ -18,9 +18,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int SpotW = 116, SpotH = 22;
 
     /// <summary>아래 단추 — 연대표 · 파트1 타이틀.</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(170, 436, "연대표"), (330, 436, "타이틀")];
+    internal static readonly (int X, int Y, string Name)[] Buttons = [(90, 436, "연대표"), (250, 436, "일행"), (410, 436, "타이틀")];
 
-    internal const int ButtonTimeline = 0, ButtonTitle = 1, ButtonHit = 1000;
+    internal const int ButtonTimeline = 0, ButtonParty = 1, ButtonTitle = 2, ButtonHit = 1000;
 
     internal bool _open;
     internal Part1Chapter? _chapter;
@@ -219,6 +219,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         {
             case ButtonHit + ButtonTimeline: host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case ButtonHit + ButtonTitle: host.LeaveScene(() => _open = false); break;
+            case ButtonHit + ButtonParty:
+            {
+                int chapterId = chapter.Id;
+                host.LeaveScene(() => { _open = false; shell.Party.Open(() => Open(chapterId)); });
+                break;
+            }
             case >= 0 when hit < chapter.Places.Count:
                 // 일행을 그 장소로 옮긴다 — 닿으면 조건 200 사건(챕터 0 카디스요새 → 필드 2 · 전투 6 …)이 돈다.
                 // 아무 사건도 없으면 전투 장소는 그 전투를, 마을은 아직 없다고 알린다.

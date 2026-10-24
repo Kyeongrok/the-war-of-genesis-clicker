@@ -46,6 +46,8 @@ internal sealed class Part1Progress
         Grown = [];
         Eld = 0;
         LevelPicks = [];
+        Bag = [];
+        Equipped = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -88,8 +90,19 @@ internal sealed class Part1Progress
         Grown.TryGetValue(chrCode, out var g) ? g : Grown[chrCode] = new Growth { Experience = baseExperience };
 
     /// <summary>인물 레코드에 자란 것을 입힌다(GameDatabase.Part1Growth).</summary>
-    internal Part1Chr Apply(Part1Chr chr) =>
-        Grown.TryGetValue(Part1Game.ChrBase + chr.Code, out var g) ? chr.WithGrowth(g.Experience, g.Abilities) : chr;
+    internal Part1Chr Apply(Part1Chr chr)
+    {
+        int code = Part1Game.ChrBase + chr.Code;
+        if (Grown.TryGetValue(code, out var g)) chr = chr.WithGrowth(g.Experience, g.Abilities);
+        if (Equipped.TryGetValue(code, out var slots)) chr = chr.WithEquipment(slots);
+        return chr;
+    }
+
+    /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번).</summary>
+    internal List<int> Bag = [];
+
+    /// <summary>인물마다 바꿔 낀 장비 다섯 칸 — 없으면 인물 레코드 그대로.</summary>
+    internal Dictionary<int, int[]> Equipped = [];
 
     /// <summary>일행이 선 챕터 지도 장소(차례).</summary>
     internal int PartyPlace;
@@ -103,13 +116,14 @@ internal sealed class Part1Progress
 
     private sealed record SaveData(List<int> Party, int ChapterId, int PartyPlace, List<int> Cleared, List<int> FinishedChapters,
                                    Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending,
-                                   Dictionary<int, Growth>? Grown = null, int Eld = 0, List<int[]>? LevelPicks = null);
+                                   Dictionary<int, Growth>? Grown = null, int Eld = 0, List<int[]>? LevelPicks = null,
+                                   List<int>? Bag = null, Dictionary<int, int[]>? Equipped = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])]);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -138,6 +152,8 @@ internal sealed class Part1Progress
             Grown = data.Grown ?? [];
             Eld = data.Eld;
             LevelPicks = [.. (data.LevelPicks ?? []).Where(p => p.Length == 2).Select(p => (p[0], p[1]))];
+            Bag = data.Bag ?? [];
+            Equipped = data.Equipped ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

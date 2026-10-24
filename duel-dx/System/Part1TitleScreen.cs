@@ -34,6 +34,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal Part1TimelineScreen Timeline => _timeline ??= new(host, this);
     internal Part1FieldScreen Field => _field ??= new(host, this);
     internal Part1TownScreen Town => _town ??= new(host, this);
+    internal Part1PartyScreen Party => _party ??= new(host, this);
+    private Part1PartyScreen? _party;
     private Part1TownScreen? _town;
     private Part1FieldScreen? _field;
     private Part1ChapterScreen? _chapter;
@@ -66,6 +68,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (_timeline != null) _timeline._open = false;
         if (_field != null) _field._open = false;
         if (_town != null) _town._open = false;
+        if (_party != null) _party._open = false;
         _entryHover = false;
         _bg = null;
         host.TitleScr.OpenTitle();
@@ -116,7 +119,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void UpdateHover(int bx, int by)
     {
-        if (_open && _town is { _open: true }) _town.UpdateHover(bx, by);
+        if (_open && _party is { _open: true }) _party.UpdateHover(bx, by);
+        else if (_open && _town is { _open: true }) _town.UpdateHover(bx, by);
         else if (_open && _field is { _open: true }) { }
         else if (_open && _chapter is { _open: true }) _chapter.UpdateHover(bx, by);
         else if (_open && _timeline is { _open: true }) _timeline.UpdateHover(bx, by);
@@ -127,7 +131,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnClick(int bx, int by)
     {
         if (!_open) return false;
-        if (_town is { _open: true }) _town.OnClick(bx, by);
+        if (_party is { _open: true }) _party.OnClick(bx, by);
+        else if (_town is { _open: true }) _town.OnClick(bx, by);
         else if (_field is { _open: true }) _field.OnClick();
         else if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
         else if (_timeline is { _open: true }) _timeline.OnClick(bx, by);
@@ -139,7 +144,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnKey(int key)
     {
         if (!_open) return false;
-        if (_town is { _open: true }) _town.OnKey(key);
+        if (_party is { _open: true }) _party.OnKey(key);
+        else if (_town is { _open: true }) _town.OnKey(key);
         else if (_field is { _open: true }) _field.OnKey(key);
         else if (_chapter is { _open: true }) _chapter.OnKey(key);
         else if (_timeline is { _open: true }) _timeline.OnKey(key);
@@ -205,6 +211,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             if (_timeline != null) _timeline._open = false;
             if (_field != null) _field._open = false;
             if (_town != null) _town._open = false;
+            if (_party != null) _party._open = false;
             return;
         }
         host.Toast($"파트1 전투 {part1Battle} 를 열지 못했습니다");
@@ -228,6 +235,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void Draw()
     {
+        if (_party is { _open: true }) { _party.Draw(); return; }
         if (_town is { _open: true }) { _town.Draw(); return; }
         if (_field is { _open: true }) { _field.Draw(); return; }
         if (_chapter is { _open: true }) { _chapter.Draw(); return; }

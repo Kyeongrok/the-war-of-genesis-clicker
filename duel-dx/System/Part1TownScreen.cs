@@ -10,7 +10,7 @@ namespace DuelDx;
 /// 마을 필드는 사건 0 이 「시설 고르기」 사건들을 늘어놓고, 사건마다 조건 200 [시설 차례]·행동 묶음 하나다(분석-파트1-챕터 8절):
 /// 1000~1003 상점(1001 [얼굴, 인사 줄] · 1002 [아이템, 0] 파는 물건) · 1100~1103 용병 길드(1101 인사 · 1102 [Chr, 값] 용병) ·
 /// 1200~1203 주점(1201 인사 · 1202 [얼굴, 줄] 소문). 배경은 그 필드의 <c>BGRs</c>.
-/// 옮긴 것: 시설 목록 · 상점 물건과 값 보기(사기는 아직 — 파트1 가방·장비 창이 없다) · 용병 고용(값을 eld 로 치르고 일행에 든다 — 값 뜻은 가설) · 주점 소문 대사.
+/// 옮긴 것: 시설 목록 · 상점(값을 eld 로 치르고 가방에 — <see cref="Part1PartyScreen"/> 에서 낀다) · 용병 고용(값을 eld 로 치르고 일행에 든다 — 값 뜻은 가설) · 주점 소문 대사.
 /// </remarks>
 internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -74,7 +74,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         if (x >= 250 && x < 250 + Part1TitleScreen.ButtonW && y >= 446 && y < 446 + Part1TitleScreen.ButtonH) return ButtonHit;
         for (int i = 0; i < _facilities.Count; i++)
             if (x >= ListX && x < ListX + RowW && y >= ListY + i * (RowH + 4) && y < ListY + i * (RowH + 4) + RowH) return i;
-        if (_selected >= 0 && _facilities[_selected].Kind == Kind.Guild)
+        if (_selected >= 0 && _facilities[_selected].Kind != Kind.Pub)
             for (int i = 0; i < _facilities[_selected].Entries.Count; i++)
                 if (x >= DetailX && x < DetailX + DetailW && y >= ListY + 60 + i * RowH && y < ListY + 60 + (i + 1) * RowH - 2) return EntryHit + i;
         return -1;
@@ -87,7 +87,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         if (_talk != null) { NextTalk(); return; }
         int hit = HitAt(bx, by);
         if (hit == ButtonHit) { Leave(); return; }
-        if (hit >= EntryHit) { Hire(hit - EntryHit); return; }
+        if (hit >= EntryHit) { if (_facilities[_selected].Kind == Kind.Shop) Buy(hit - EntryHit); else Hire(hit - EntryHit); return; }
         if (hit < 0 || hit >= _facilities.Count) return;
         _selected = hit;
         var facility = _facilities[hit];
@@ -116,6 +116,18 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         var onLeave = _onLeave;
         _onLeave = null;
         host.LeaveScene(() => { _open = false; _bg = null; onLeave?.Invoke(); });
+    }
+
+    /// <summary>물건 사기 — 값(Item.dat +0x40)을 eld 로 치르고 가방에 넣는다. 일행 화면에서 낀다.</summary>
+    private void Buy(int i)
+    {
+        if (_selected < 0 || _facilities[_selected] is not { Kind: Kind.Shop } shop || i >= shop.Entries.Count) return;
+        if (Part1Item.ById(Part1Item.LoadAll(), shop.Entries[i].Id) is not { } item) return;
+        if (host.Part1.Eld < item.Price) { host.Toast($"{item.Name} — eld 가 모자랍니다({host.Part1.Eld} / {item.Price})"); return; }
+        host.Part1.Eld -= item.Price;
+        host.Part1.Bag.Add(item.Id);
+        host.Part1.Save(host.FlagSt._flags);
+        host.Toast($"{item.Name} 을(를) 샀습니다 — 남은 eld {host.Part1.Eld}");
     }
 
     /// <summary>용병 고용 — 값(1102 둘째 인자)을 eld 로 치르고 일행에 넣는다. 이미 일행이면 알린다.</summary>
@@ -161,7 +173,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
             int h = 70 + sel.Entries.Count * RowH;
             host.UiFill(ox + DetailX - 8, oy + ListY - 8, DetailW + 16, h, 0xE0101828);
             host.UiStroke(ox + DetailX - 8, oy + ListY - 8, DetailW + 16, h, 0xFF6078A0);
-            host.UiText(sel.Kind == Kind.Shop ? $"{sel.Name} — 파는 물건(사기는 아직 없다)" : $"{sel.Name} — 누르면 고용", ox + DetailX, oy + ListY + 4, 0xFFFFE080, 12);
+            host.UiText(sel.Kind == Kind.Shop ? $"{sel.Name} — 누르면 사서 가방에(일행 화면에서 낀다)" : $"{sel.Name} — 누르면 고용", ox + DetailX, oy + ListY + 4, 0xFFFFE080, 12);
             var items = sel.Kind == Kind.Shop ? Part1Item.LoadAll() : null;
             for (int i = 0; i < sel.Entries.Count; i++)
             {
@@ -169,7 +181,10 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
                 int y = oy + ListY + 60 + i * RowH;
                 string label;
                 if (items != null)
+                {
                     label = Part1Item.ById(items, id) is { } item ? $"{item.Name}   {item.Price} eld" : $"아이템 {id}";
+                    host.UiFill(ox + DetailX, y, DetailW, RowH - 2, _hover == EntryHit + i ? 0xF0305080u : 0xC0202838u);
+                }
                 else
                 {
                     int code = Part1Game.ChrBase + id;

@@ -95,6 +95,14 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         return this with { Fields = fields, Abilities = [.. merged] };
     }
 
+    /// <summary>장비 다섯 칸(39~43)을 바꾼 모습.</summary>
+    public Part1Chr WithEquipment(int[] slots)
+    {
+        var fields = (int[])Fields.Clone();
+        for (int i = 0; i < 5 && i < slots.Length; i++) fields[39 + i] = slots[i];
+        return this with { Fields = fields };
+    }
+
     public static Part1Chr? Load(int code) => Parse(code, Part1Game.Read("Chars", $"{code:D4}.chr"));
 
     public static Part1Chr? Parse(int code, byte[]? b)
