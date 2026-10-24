@@ -23,7 +23,10 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     /// <summary>이 틀이 그리는 파트1 기술인가 — 고정 work 들 · 라이트닝볼츠(Attack 번호로 · 생성된 어빌리티 work 포함).</summary>
-    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work);
+    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work) || IsWeaponWork(work);
+
+    /// <summary>무기 기술(연 · 살 · 비 · 혼 · 파 · 참 · 격 · 광, Part1Skill.Weapon) — Attack 번호로.</summary>
+    internal static bool IsWeaponWork(int work) => work > Part1Game.ChrBase && IsWeaponSkill(Part1SkillBook.AttackIdOf(work));
 
     internal static readonly HashSet<int> Works =
         [BlizzardWork, SeolhwaWork, HellStrikeWork, AsuraWork, StormSwordWork, FlyingSlashWork, ThunderWork, MeteorWork,
@@ -177,7 +180,7 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>파트1 동작 번호 → 이 게임의 동작 번호(<see cref="Part1Game.ActionMap"/>). 16 이상은 40 을 더한 자리에 옮겨 두었다.</summary>
     private static int Part2Action(int part1) => part1 switch
     {
-        0 => 0, 1 => 1, 2 => 8, 3 => 9, 4 => 7, 5 => 2, 6 => 6, 9 => 5, 11 => 13, 12 => 14,
+        0 => 0, 1 => 1, 2 => 8, 3 => 9, 4 => 7, 5 => 2, 6 => 6, 9 => 5, 11 => 13, 12 => 14, 13 or 14 or 15 => Part1Game.ExtraBase + part1,
         >= Part1Game.ExtraFrom => Part1Game.ExtraBase + part1,
         _ => 0,
     };
@@ -230,7 +233,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         var (ax, ay) = CellFoot(aim.Col, aim.Row);
 
         _t0 = host._lastTime;
-        int prep = proc ? 0 : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
+        int prep = proc ? 0 : IsWeaponWork(w.Id) ? WeaponPrep(user, (ax, ay)) : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
 
@@ -245,6 +248,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             ThunderWork => Thunder(targets, hit),
             MeteorWork => Meteor(targets, hit),
             _ when IsLightning(w.Id) => Lightning(w.Id, targets, (ax, ay), hit),
+            _ when IsWeaponWork(w.Id) => Weapon(Part1SkillBook.AttackIdOf(w.Id), targets, (ax, ay), hit),
             FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
             StormSwordWork => StormSword(targets, hit),
             HellKiteWork => HellKite(targets, hit),
@@ -283,6 +287,7 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>그 기술이 쓰는 파트1 그림(앞머리 · 자식 그림까지) — 파트1 이 없는 PC 에서 쓰기 전에 받아 둔다.</summary>
     private static int[] NeedsFor(int work)
     {
+        if (IsWeaponWork(work)) return WeaponNeeds(Part1SkillBook.AttackIdOf(work));
         int[] sword = [395], summon = [55, 49, 91, 50, 897];
         int[] own = work switch
         {

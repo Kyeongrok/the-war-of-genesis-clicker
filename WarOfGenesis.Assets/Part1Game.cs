@@ -65,7 +65,7 @@ public static class Part1Game
             System.Text.RegularExpressions.Regex.Replace(text, @"/m0\[[^\]]*\]/m1", ""), @"/(?:[cdtpswf]\d*|m[01])", "").Replace("/n", "\n").Trim('\n');
 
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
-    public const int ConvertVersion = 8;
+    public const int ConvertVersion = 9;
 
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "part1root.txt");
     private static string? _root;
@@ -338,6 +338,8 @@ public static class Part1Game
     [
         (0, (0, 0, 0)), (1, (1, 0, 0)), (2, (5, 0, 0)), (5, (9, 0, 0)), (6, (6, 0, 0)), (7, (4, 0, 0)),
         (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (11, 25, 2)), (14, (12, 25, 3)), (15, (11, 25, 1)),
+        // 4타 · 5타 · 6타(파트1 동작 13~15 — 연 · 참 Lv3~5) — 파트2 에 없는 동작이라 40 을 더한 빈 자리에(53~55).
+        (ExtraBase + 13, (13, 25, 4)), (ExtraBase + 14, (14, 25, 5)), (ExtraBase + 15, (15, 25, 6)),
         .. Enumerable.Range(ExtraFrom, 58 - ExtraFrom).Select(a => (ExtraBase + a, (a, 0, 0))),
     ];
 
