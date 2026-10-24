@@ -21,10 +21,10 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>파트2 타이틀 위에 얹는 들어가기 단추(왼위·크기) — 640×480 화면 기준.</summary>
     internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 84, 26);
 
-    /// <summary>파트1 타이틀의 단추 — 가운데 아래.</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 364, "NEW GAME"), (250, 396, "CONTINUE"), (250, 428, "PART 2")];
+    /// <summary>파트1 타이틀의 단추 — 가운데 아래. LOAD GAME 은 파트2 타이틀처럼 저장 칸을 골라 부른다(사용자 요청 — 파트1 세이브 칸은 따로, part1-battle-save-NN).</summary>
+    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 348, "NEW GAME"), (250, 378, "LOAD GAME"), (250, 408, "CONTINUE"), (250, 438, "PART 2")];
 
-    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonContinue = 1, ButtonPart2 = 2;
+    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3;
 
     internal bool _open;
     internal bool _entryHover;
@@ -202,6 +202,11 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         switch (button)
         {
             case ButtonNewGame: host.LeaveScene(NewGame); break;
+            case ButtonLoad:
+                // 저장 칸 창(불러오기)을 연다 — 파트1 칸(SlotsScreen.Part1Slots)이 열려 있다. 고르면 SystemMenu 가 판을 불러오고 PrepareBattleLoad 가 파트1 진행을 되살린다.
+                if (host.SlotsScr.LatestSlot() < 0) { host.Toast("파트1 저장 기록이 없습니다 — 전투 중 시스템 메뉴의 SAVE 로 저장합니다"); break; }
+                host.SlotsScr.OpenSlots(1);
+                break;
             case ButtonContinue:
                 if (!Part1Progress.HasSave) { host.Toast("파트1 진행 기록이 없습니다 — NEW GAME 으로 시작하세요"); break; }
                 host.LeaveScene(ContinueGame);
@@ -315,11 +320,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             for (int y = 0; y < MosesScene.MosesH; y++)
                 for (int x = 0; x < MosesScene.MosesW; x++)
                     host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
-        for (int i = 0; i < Buttons.Length; i++)
-        {
-            var (x, y, name) = Buttons[i];
-            DrawButton(ox + x, oy + y, ButtonW, ButtonH, name, _hover == i);
-        }
+        // 저장 칸 창(LOAD GAME)이 떠 있으면 단추는 숨긴다 — 창 위에 겹쳐 그려졌다.
+        if (!host.SlotsScr.SlotsOpen)
+            for (int i = 0; i < Buttons.Length; i++)
+            {
+                var (x, y, name) = Buttons[i];
+                DrawButton(ox + x, oy + y, ButtonW, ButtonH, name, _hover == i);
+            }
         host.DrawToast();
     }
 
