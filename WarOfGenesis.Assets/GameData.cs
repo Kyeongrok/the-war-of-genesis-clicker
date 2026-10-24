@@ -522,7 +522,13 @@ public sealed class GameDatabase
                     var chr = Part1Chr.Load(code - Part1Game.ChrBase);
                     ushort nameId = (ushort)Math.Min(ushort.MaxValue, Part1Game.NameTextBase + code - Part1Game.ChrBase);
                     if (chr != null) _part1Names[nameId] = chr.Name;
-                    _part1Characters[code] = made = chr?.ToCharacterData(Part1BasicWork, nameId);
+                    made = chr?.ToCharacterData(Part1BasicWork, nameId);
+                    // 파트1 어빌리티 가운데 이 게임에 기술 파일이 있는 것(assets/data/skills/200NN.json — 썬더스탐 · 헬 스트라이크 · 블리자드 스탐 …)은
+                    // 어빌리티 20000 + 번호로 붙인다. 살라딘은 96 헬 스트라이크를 갖고 시작한다.
+                    if (made != null && chr != null)
+                        made = made with { Abilities = [.. chr.Abilities.Where(a => a.Ability > 0 && Abilities.ContainsKey(Part1Game.ChrBase + a.Ability))
+                                                                   .Select(a => ((ushort)(Part1Game.ChrBase + a.Ability), (ushort)Math.Max(1, a.Level)))] };
+                    _part1Characters[code] = made;
                 }
                 return made;
             }
