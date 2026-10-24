@@ -10,7 +10,7 @@ namespace DuelDx;
 /// 옵시디안 「분석-파트1-챕터」 4·7절. 옮긴 것: 조건 0(언제나) · 100 [변수, 값](장면 변수 같은가 — 가설) · 101 [깃발, 값, 연산](진행 깃발 비교) ·
 /// 행동 0 사건 부르기 · 100 [그림] 배경 바꾸기 · 200·201·202 [얼굴, 줄] · 206·207·208 [얼굴, 줄, 목소리?] 대사(창 자리만 다르다 — 가설) · 203~205 대사 창 닫기 ·
 /// 800 [변수, 값] 장면 변수 = 값 · 101 [변수] 장면 변수 + 1(필드 0001: 800 [1,1] → 사건 2 「변수 1 == 1」 → 끝의 101 [1] → 사건 3 「== 2」 — 자료로 본 가설) ·
-/// 700 [곡, 되풀이] 배경음악(<c>BGMs</c>) · 802 [깃발, 값] 진행 깃발. 장면을 넘기는 행동(500 필드 끝 · 501 챕터 끝 → 연대표 · 502 전투 · 503 필드)은 <see cref="SceneChange"/> 가 맡는다.
+/// 600 [소리] 효과음(<c>Snd</c>) · 700 [곡, 되풀이] 배경음악(<c>BGMs</c>) · 802 [깃발, 값] 진행 깃발. 장면을 넘기는 행동(500 필드 끝 · 501 챕터 끝 → 연대표 · 502 전투 · 503 필드)은 <see cref="SceneChange"/> 가 맡는다.
 /// 나머지(300대 인물 걷기·모습 · 400대 화면 · 700대 소리 · 900대 지도 연출 · 1000대)는 아직 건너뛴다.
 /// 진행 깃발은 전투 사건(702·703 → 파트2 102·103)과 같은 <see cref="FlagStore"/> 다.
 /// </remarks>
@@ -195,6 +195,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case >= 203 and <= 205: Talk = null; break;
                 case 100: BackgroundChange?.Invoke(a[0]); break;
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
+                case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
                 case 300 when a[0] >= 10000: SpriteMotion?.Invoke(a[0] - 10000, a[1], a[2] == 1); break;
