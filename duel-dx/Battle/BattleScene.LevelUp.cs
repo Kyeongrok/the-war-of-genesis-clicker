@@ -45,9 +45,9 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>
     /// 파트1 처치 보상(<c>0x1003de76</c> → <c>0x10035908</c>~) — 때린 이가 편 4 이고 파트1 Chr &lt; 106 이면 경험치 = 죽은 이 레벨 × 20 / 때린 이 레벨,
-    /// eld += Luck × 죽은 이 경험치 / 1000(<see cref="Part1Combat.KillReward"/>). 레벨(경험치 ÷ 100)이 오르면 직업 어빌리티 하나를 올린다
-    /// (<see cref="Part1Job.LevelUpCandidates"/>) — 원본은 플레이어가 후보에서 고르는데(<c>0x1009dac0</c>), 고르는 창이 아직 없어 첫 후보를 올린다.
-    /// 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
+    /// eld += Luck × 죽은 이 경험치 / 1000(<see cref="Part1Combat.KillReward"/>). 레벨(경험치 ÷ 100)이 오르면 직업 어빌리티 하나를 올리는데
+    /// (<see cref="Part1Job.LevelUpCandidates"/>), 원본은 플레이어가 후보에서 고른다(<c>0x1009dac0</c>) — 여기서는 오른 레벨을 쌓아 두었다가
+    /// 전투를 마치고 챕터 지도에서 고르게 한다(<see cref="Part1Progress.LevelPicks"/>). 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
     /// </summary>
     internal void GainPart1KillExp(UnitState killer, UnitState victim)
     {
@@ -63,17 +63,11 @@ internal sealed unsafe partial class BattleScene
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 kill {killer.ChrCode} → {victim.ChrCode}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
-        var chr = k.Chr;
         for (int level = before / 100 + 1; level <= growth.Experience / 100; level++)
         {
-            chr = chr.WithGrowth(growth.Experience, growth.Abilities);
-            // 어빌리티 칸은 10 개뿐이다(인물 레코드) — 다 찼으면 이미 배운 것을 올리는 후보만 남는다.
-            if (Part1Job.ById(Part1Job.LoadAll(), chr.JobId)?.LevelUpCandidates(chr).FirstOrDefault(c => c.NewLevel > 1 || chr.Abilities.Length < 10)
-                is not { Ability: > 0 } pick) continue;
-            growth.Abilities[pick.Ability] = pick.NewLevel;
-            string name = Part1Ability.ById(Part1Ability.LoadAll(), pick.Ability)?.Name ?? $"어빌리티 {pick.Ability}";
-            host.Toast($"{chr.Name} 레벨 {level} — {name} Lv {pick.NewLevel}");
-            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}: {name} Lv {pick.NewLevel}" + Environment.NewLine);
+            host.Part1.LevelPicks.Add((killer.ChrCode, level));
+            host.Toast($"{k.Chr.Name} 레벨 {level} — 전투가 끝나면 어빌리티를 고릅니다");
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}" + Environment.NewLine);
         }
         db.ForgetPart1Characters();
         Part1.Forget(killer.ChrCode);

@@ -45,6 +45,7 @@ internal sealed class Part1Progress
         PendingActions = [];
         Grown = [];
         Eld = 0;
+        LevelPicks = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -55,6 +56,29 @@ internal sealed class Part1Progress
     }
 
     internal Dictionary<int, Growth> Grown = [];
+
+    /// <summary>고를 레벨업(인물, 오른 레벨) — 전투에서 쌓이고 챕터 지도에서 하나씩 고른다(<see cref="Part1ChapterScreen"/>).</summary>
+    internal List<(int Chr, int Level)> LevelPicks = [];
+
+    /// <summary>
+    /// 그 인물이 올릴 수 있는 어빌리티 — 직업 표의 후보(<see cref="Part1Job.LevelUpCandidates"/>). 어빌리티 칸은 10 개라 다 찼으면 이미 배운 것을 올리는 것만.
+    /// </summary>
+    internal List<(int Ability, int NewLevel, string Name)> PickCandidates(int chrCode)
+    {
+        if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw) return [];
+        var chr = Apply(raw);
+        var abilities = Part1Ability.LoadAll();
+        return Part1Job.ById(Part1Job.LoadAll(), chr.JobId)?.LevelUpCandidates(chr)
+                   .Where(c => c.NewLevel > 1 || chr.Abilities.Length < 10)
+                   .Select(c => (c.Ability, c.NewLevel, Part1Ability.ById(abilities, c.Ability)?.Name ?? $"어빌리티 {c.Ability}")).ToList() ?? [];
+    }
+
+    /// <summary>고른 어빌리티를 올린다.</summary>
+    internal void Pick(int chrCode, int ability, int newLevel)
+    {
+        if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw) return;
+        GrowthOf(chrCode, raw.Experience).Abilities[ability] = newLevel;
+    }
 
     /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>).</summary>
     internal int Eld;
@@ -79,13 +103,13 @@ internal sealed class Part1Progress
 
     private sealed record SaveData(List<int> Party, int ChapterId, int PartyPlace, List<int> Cleared, List<int> FinishedChapters,
                                    Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending,
-                                   Dictionary<int, Growth>? Grown = null, int Eld = 0);
+                                   Dictionary<int, Growth>? Grown = null, int Eld = 0, List<int[]>? LevelPicks = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])]);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -113,6 +137,7 @@ internal sealed class Part1Progress
             PendingActions = [.. data.Pending.Where(w => w.Length > 0).Select(w => new ScriptCommand((ushort)w[0], w[1..]))];
             Grown = data.Grown ?? [];
             Eld = data.Eld;
+            LevelPicks = [.. (data.LevelPicks ?? []).Where(p => p.Length == 2).Select(p => (p[0], p[1]))];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

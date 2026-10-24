@@ -130,11 +130,76 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         return -1;
     }
 
-    internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
+    internal void UpdateHover(int bx, int by) => _hover = Picking ? PickAt(bx, by) + PickHit : HitAt(bx, by);
+
+    // ── 레벨업 고르기 — 전투에서 오른 레벨마다 직업 어빌리티 하나(원본 0x1009dac0 은 전투 안에서 고른다) ──
+
+    internal const int PickHit = 2000, PickX = 150, PickY = 120, PickW = 340, PickRowH = 24;
+
+    /// <summary>고를 레벨업이 있고 대사가 없다 — 지도 위에 고르기 창을 띄운다.</summary>
+    internal bool Picking => host.Part1.LevelPicks.Count > 0 && Events.Talk == null;
+
+    private (int Chr, List<(int Ability, int NewLevel, string Name)> Options)? _pickCache;
+
+    /// <summary>지금 고를 인물과 후보 — 후보가 없는 것(다 올린 인물)은 건너뛴다.</summary>
+    private (int Chr, int Level, List<(int Ability, int NewLevel, string Name)> Options)? CurrentPick()
+    {
+        while (host.Part1.LevelPicks.Count > 0)
+        {
+            var (chr, level) = host.Part1.LevelPicks[0];
+            if (_pickCache is not { } cache || cache.Chr != chr) _pickCache = cache = (chr, host.Part1.PickCandidates(chr));
+            if (cache.Options.Count > 0) return (chr, level, cache.Options);
+            host.Part1.LevelPicks.RemoveAt(0);
+            _pickCache = null;
+        }
+        return null;
+    }
+
+    private int PickAt(int bx, int by)
+    {
+        if (CurrentPick() is not { } pick) return -1;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        for (int i = 0; i < pick.Options.Count; i++)
+            if (bx >= ox + PickX && bx < ox + PickX + PickW && by >= oy + PickY + 40 + i * PickRowH && by < oy + PickY + 40 + (i + 1) * PickRowH - 2) return i;
+        return -1;
+    }
+
+    private void PressPick(int i)
+    {
+        if (CurrentPick() is not { } pick || i < 0 || i >= pick.Options.Count) return;
+        var option = pick.Options[i];
+        host.Part1.Pick(pick.Chr, option.Ability, option.NewLevel);
+        host.Part1.LevelPicks.RemoveAt(0);
+        _pickCache = null;
+        host._db?.ForgetPart1Characters();
+        host.Btl.Part1.Forget(pick.Chr);
+        string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
+        host.Toast($"{who} — {option.Name} Lv {option.NewLevel}");
+        host.Part1.Save(host.FlagSt._flags);
+    }
+
+    private void DrawPick(int ox, int oy)
+    {
+        if (CurrentPick() is not { } pick) return;
+        int h = 52 + pick.Options.Count * PickRowH;
+        host.UiFill(ox + PickX - 10, oy + PickY - 10, PickW + 20, h, 0xF0101828);
+        host.UiStroke(ox + PickX - 10, oy + PickY - 10, PickW + 20, h, 0xFFFFE080);
+        string name = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : $"Chr {pick.Chr}";
+        host.UiText($"{name} 레벨 {pick.Level} — 올릴 어빌리티를 고르세요", ox + PickX, oy + PickY, 0xFFFFE080, 13);
+        for (int i = 0; i < pick.Options.Count; i++)
+        {
+            var (_, level, label) = pick.Options[i];
+            int y = oy + PickY + 40 + i * PickRowH;
+            bool hot = _hover == PickHit + i;
+            host.UiFill(ox + PickX, y, PickW, PickRowH - 2, hot ? 0xF0305080u : 0xC0202838u);
+            host.UiText(level == 1 ? $"{label} (새로 배움)" : $"{label} Lv {level - 1} → {level}", ox + PickX + 10, y + 3, GameWindow.White, 12);
+        }
+    }
 
     internal void OnClick(int bx, int by)
     {
         if (Events.Talk != null) { Events.Advance(); return; }   // 대사가 떠 있으면 누르면 넘어간다
+        if (Picking) { PressPick(PickAt(bx, by)); return; }
         Press(HitAt(bx, by));
     }
 
@@ -142,6 +207,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void OnKey(int key)
     {
         if (Events.Talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) Events.Advance(); return; }
+        if (Picking) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressPick(Math.Max(0, _hover - PickHit)); return; }   // 고르기 창은 닫을 수 없다(짚은 것 없으면 첫 후보)
         if (key == Win32.VK_ESCAPE) Press(ButtonHit + ButtonTitle);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
     }
@@ -218,6 +284,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             shell.DrawButton(ox + x, oy + y, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, name, _hover == ButtonHit + i);
         }
         if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
+        else if (Picking) DrawPick(ox, oy);
         host.DrawToast();
     }
 
