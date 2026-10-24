@@ -77,6 +77,17 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// </summary>
     internal readonly Dictionary<UnitState, int> Enchant = [];
 
+    /// <summary>파트1 강화(블래스 15 · 스피디 17 · 배리어 20 · 쉐도우 실드 22 · 블러드 러스트 23) — 유닛 → 세기 식 → 남은 길이(BattleScene.Part1Support).</summary>
+    internal readonly Dictionary<UnitState, Dictionary<int, int>> Buffs = [];
+
+    /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.</summary>
+    internal int? HealAmount(UnitState a, UnitState t, WorkData w) =>
+        AttackOf(w) is { Formula: 6 } attack && Fighter(a) is { } fa
+            ? (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
+            : null;
+
+    internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
+
     /// <summary>그 기술이 속성 부여면 그 속성(1 · 2 · 3), 아니면 0.</summary>
     internal int EnchantOf(WorkData w) => AttackOf(w)?.Formula is >= 10 and <= 12 and var sel ? sel - 9 : 0;
 
@@ -122,12 +133,16 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (enchant > 0) attacker = attacker with { Enchanted = true };
         if (a.Status(4) > 0) attacker = attacker with { Str = attacker.Str * 3 / 2 };
         int power = Part1Combat.Power(selector, attacker);
+        bool weaponHit = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31;
+        if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
         if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * Math.Max(1, attack.Hits);
         int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
         if (!magic && t.Status(4) > 0) defense /= 2;
+        if (Has(t, 22)) defense = magic ? defense / 2 : defense * 3 / 2;   // 쉐도우 실드 — AC ×1.5 · MR ×0.5
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
+        if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
         int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;
         damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out bool crit);

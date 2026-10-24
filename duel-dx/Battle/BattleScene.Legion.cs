@@ -32,6 +32,7 @@ internal sealed unsafe partial class BattleScene
         _deployBench.Clear();
         _part1Riders.Clear();
         Part1.Enchant.Clear();
+        Part1.Buffs.Clear();
         _part1LostMounts.Clear();
         _part1TeamMounts.Clear();
         _part1Mercs.Clear();

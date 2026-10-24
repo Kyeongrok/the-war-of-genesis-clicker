@@ -121,7 +121,8 @@ internal sealed unsafe partial class BattleScene
 
         // 파트1 판 — 이동력은 SPD × 2, 한 걸음 = (높이 차 + 2) × 4 (평지 한 칸 8 — 아이템 「이동거리 −1」이 SPD −4 인 것과 맞춘 값, 가설).
         // 파트2 틀은 걸음을 TP 로 빼므로, 최대 TP 가 파트1 이동력과 같아지게 걸음 값을 TP 로 바꾼다(분석-파트1-전투 11.3). 공격 값은 CTP 100 이 빚으로 받아 준다(Part1Chr.ToCharacterData).
-        int part1Points = host._scene.IsPart1 && Part1.Fighter(unit) is { } p1 ? Math.Max(1, p1.Stat(Part1Chr.Spd) * 2) : 0;
+        // 스피디(파트1 강화 17)는 SPD +8 — 이동 두 칸(0x10051640 의 상태 17, 분석-파트1-기술-b 9절).
+        int part1Points = host._scene.IsPart1 && Part1.Fighter(unit) is { } p1 ? Math.Max(1, (p1.Stat(Part1Chr.Spd) + (Part1.Has(unit, 17) ? 8 : 0)) * 2) : 0;
         int part1Scale = Math.Max(1, unit.MaxTp);
 
         // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).

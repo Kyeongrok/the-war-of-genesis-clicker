@@ -91,6 +91,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     };
     private Part1Rules? _part1;
 
+    /// <summary>
+    /// 파트1 인물이 기본 공격(빌린 파트2 기본 work)을 쓰면 그 Attack.dat 번호(인물 칸 9, 없으면 무기 갈래) — <see cref="Part1Skill"/> 가 그 연출을 그릴 수 있을 때만.
+    /// 아니면 0(파트2 그대로).
+    /// </summary>
+    private int Part1BasicAttack(UnitState a, WorkData w) =>
+        a.ChrCode >= Part1Game.ChrBase && a.Data?.BasicWorkId == w.Id && Part1.Fighter(a) is { } f
+        && Part1Rules.BasicAttackOf(f) is var id && Part1Skill.DrawsBasic(id) ? id : 0;
+
     internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
 
     internal bool IsPlayerTurn => _turn >= 0 && IsMine(host._units[_turn]) && _routine == null && _outcome.Length == 0;
@@ -549,7 +557,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             foreach (var mount in _part1Riders.Keys) mount.Hp = Math.Min(mount.Hp, mountHp);
         // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
         if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
-            host._units[index].Soul = Part1Combat.GaugeOnTurn(host._units[index].Soul, cap: host._units[index].MaxSoul);
+        {
+            var p1u = host._units[index];
+            p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);
+            if (Part1.Has(p1u, 15)) p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);   // 블래스 — 오를 때마다 +20 더
+            TickPart1Buffs(p1u);
+        }
         _turn = index;
         host._selected = index;
         _turnNo++;
@@ -1087,7 +1100,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         var dying = new List<UnitState>();
         int[] actions = ActionsFor(w);
         int hitStep = HitStepFor(w, actions.Length);
-        bool timedChain = false;   // 타이밍 어택이 타격 동작을 여럿 이어 붙였나 — 그러면 「연」처럼 타격 동작마다 친다
+        // 파트1 인물의 기본 공격 — 빌린 파트2 work 의 동작 · 이펙트 대신 원본 기본 공격 핸들러의 연출(Part1Skill.Basic)로 친다. 피해는 그대로 Part1Rules.
+        int part1Basic = Part1BasicAttack(a, w);
+        if (part1Basic > 0) (actions, hitStep) = ([], 0);
+        bool timedChain = false;  // 타이밍 어택이 타격 동작을 여럿 이어 붙였나 — 그러면 「연」처럼 타격 동작마다 친다
         if (_timedCritBy == a)
         {
             // 박자 둘을 다 맞췄으면 치는 동작을 「연」의 여러 번 치는 동작(13 — 타격 키 둘 · 14 — 셋)으로 바꿔 보통 피해로 여러 번 친다(사용자 요청).
@@ -1208,7 +1224,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 「연」 사슬 끝의 동작 8 한 대는 연 위력이 아니라 기본공격 위력이다(키 인자 25 = work 1, 분석-모션 ba-10).
             var hitWork = chained && step < actions.Length && actions[step] == 8 && a.Data is { } ad
                           && Work(ad.BasicWorkId) is { } basic ? basic : w;
-            if (!effectsDone)
+            if (!effectsDone && part1Basic == 0)
             {
                 host.ScheduleAbilitySounds(w);
                 _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
@@ -1269,14 +1285,15 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 continue;
             }
             // 파트1 기술(검 기술 · 썬더스탐 · 소환) — 시각표를 깔고 대상마다 그 기술이 닿을 때 한 번씩 친다(menu-85 · menu-89).
-            if (Part1Skill.Handles(w.Id))
+            if (Part1Skill.Handles(w.Id) || part1Basic > 0)
             {
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 var cells = EffectCells(w, a, col, row).ToList();
                 var struck = new HashSet<int>();
-                bool each = Part1Skill.HitsEachTime(w.Id);
-                foreach (bool _ in host.Part1Ab.Routine(w, a, targets, cells, (col, row), ti => { if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying); },
-                                                         proc: _part1ProcRunning))
+                bool each = part1Basic == 0 && Part1Skill.HitsEachTime(w.Id);
+                void Part1Hit(int ti) { if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying); }
+                foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
+                                                  : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
@@ -1755,6 +1772,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             else if (result == 2 && _timedPercent != 100) (amount, crit) = ((crit ? amount * 100 / Math.Max(1, host._db.N(23)) : amount) * _timedPercent / 100, true);
         }
 
+        // 파트1 힐 · 힐 윈드(세기 식 6) — 최대 HP × 세기 ÷ 20000(원본). 보여 주는 꼴은 파트2 회복 그대로.
+        if (result == 1 && host._scene.IsPart1 && Part1.HealAmount(a, t, w) is { } part1Heal) amount = part1Heal;
         if (result == 1)
         {
             int before = t.Hp;
@@ -1807,6 +1826,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             Popup(t, element switch { 1 => "화염 부여", 2 => "빙한 부여", _ => "전격 부여" }, 0xFFFFC060, 13);
             return;
         }
+        if (ApplyPart1Support(a, t, w, result)) return;   // 파트1 보조 마법(힐 · 큐어 · 스피디 · 배리어 …) — 파트2 보조 틀 대신
         if (!w.IsDamage)
         {
             // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).
