@@ -27,6 +27,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal (int X, int Y)[] _spots = [];
     internal int _hover = -1;
 
+    /// <summary>일행이 선 장소(차례) — 처음엔 첫 장소. 지도에 ◆ 로 보인다.</summary>
+    internal int _party;
+
     /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
     internal Part1SceneScript Events => _events ??= new(host) { SceneChange = OnSceneChange };
     private Part1SceneScript? _events;
@@ -57,6 +60,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         bool resume = _resume && _chapter?.Id == chapterId;
         _resume = false;
+        if (_chapter?.Id != chapterId) _party = 0;
         if (Part1Chapter.Load(chapterId) is not { Places.Count: > 0 } chapter)
         {
             host.Toast($"파트1 챕터 {chapterId} 를 못 읽었습니다");
@@ -129,7 +133,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             case ButtonHit + ButtonTimeline: host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case ButtonHit + ButtonTitle: host.LeaveScene(() => _open = false); break;
             case >= 0 when hit < chapter.Places.Count:
+                // 일행을 그 장소로 옮긴다 — 닿으면 조건 200 사건(챕터 0 카디스요새 → 필드 2 · 전투 6 …)이 돈다.
+                // 아무 사건도 없으면 전투 장소는 그 전투를, 마을은 아직 없다고 알린다.
                 var place = chapter.Places[hit];
+                _party = hit;
+                if (Events.Arrive(hit)) break;
                 if (place.IsBattle) host.LeaveScene(() => shell.StartBattle(place.Target));
                 else if (place.IsTown) host.Toast($"{chapter.NameOf(place)} — 마을은 아직 옮기지 않았습니다");
                 break;
@@ -170,6 +178,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             string name = Part1Game.PlainText(chapter.NameOf(place)).Replace('\n', ' ');
             if (name.Length == 0) name = place.IsBattle ? $"전투 {place.Target}" : "길목";
             if (cleared) name = "✓ " + name;
+            if (i == _party) host.UiText("◆", ox + x - 12, oy + y + 4, 0xFFFFE080, 12);
             var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);
             host.UiText(name, ox + x + Math.Max(2, (SpotW - nw) / 2), oy + y + (SpotH - nh) / 2, GameWindow.White, 11);
         }

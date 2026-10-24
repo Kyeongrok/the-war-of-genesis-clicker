@@ -28,6 +28,28 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
+    /// <summary>
+    /// 챕터 지도에서 일행이 막 닿은 장소(조건 200 [갈래, 장소] — <c>0x100bcfd0</c>: 무리의 지금 장소 ≠ 앞 장소이고 지금 장소 == 값). 없으면 -1.
+    /// 갈래 0 은 「한 무리라도」, 1 은 「모든 무리가」인데 리메이크는 일행 하나라 같다. <see cref="Arrive"/> 가 한 번 훑는 동안만 산다.
+    /// </summary>
+    internal int Arrived = -1;
+
+    private bool _sceneChanged;
+
+    /// <summary>일행이 그 장소에 닿았다 — 조건 200 이 맞는 사건을 돌린다. 무엇이 일어났으면(사건 · 대사 · 장면 넘김) true.</summary>
+    internal bool Arrive(int place)
+    {
+        int before = FiredEvents();
+        _sceneChanged = false;
+        Arrived = place;
+        Run();
+        Arrived = -1;
+        return _sceneChanged || Talk != null || FiredEvents() != before;
+    }
+
+    /// <summary>사건 0(늘 도는 목록)을 뺀 발동 수 합.</summary>
+    private int FiredEvents() => _fired.Where(f => f.Key != 0).Sum(f => f.Value);
+
     /// <summary>떠 있는 대사(말하는 이, 글) — 누르면 다음으로.</summary>
     internal (string Speaker, string Text)? Talk { get; private set; }
 
@@ -74,6 +96,7 @@ internal sealed class Part1SceneScript(GameWindow host)
         {
             0 => true,
             100 => _vars.GetValueOrDefault(a[0]) == a[1],
+            200 => a[1] == Arrived,
             101 => BattleScene.Compare(a[0] >= 0 && a[0] < host.FlagSt._flags.Length ? host.FlagSt._flags[a[0]] : 0, a[2], a[1]),
             _ => false,                                                     // 아직 안 푼 조건은 안 터뜨린다
         };
@@ -87,7 +110,7 @@ internal sealed class Part1SceneScript(GameWindow host)
         {
             if (_pending.Count == 0)
             {
-                int firedNow = _fired.Where(f => f.Key != 0).Sum(f => f.Value);
+                int firedNow = FiredEvents();
                 if (firedNow == firedBefore) return;
                 firedBefore = firedNow;
                 if (!Call(0)) return;
@@ -112,7 +135,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     if (a[0] >= 0 && a[0] < host.FlagSt._flags.Length) host.FlagSt._flags[a[0]] = (byte)Math.Clamp((int)a[1], 0, 255);
                     break;
                 case 500 or 502 or 503:
-                    if (SceneChange?.Invoke(c) == true) return;
+                    if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; return; }
                     break;
             }
         }
