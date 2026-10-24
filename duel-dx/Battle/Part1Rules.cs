@@ -189,9 +189,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int selector = attack?.Formula ?? 0;
         if (selector is >= 10 and <= 28) return null;
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
-        if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return (0, 3, false);
+        if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return Missed("명중 굴림");
         if (ft.CanEvade && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), false, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))
-            return (0, 3, false);
+            return Missed("회피");
         // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
         var attacker = fa.AttackerAt(a.Soul);
         int enchant = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31 ? Enchant.GetValueOrDefault(a) : 0;
@@ -215,5 +215,13 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}" + Environment.NewLine);
         return (Math.Max(0, damage), 2, crit);
+
+        (int, int, bool) Missed(string why)
+        {
+            if (BattleScene.Trace)
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 miss {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}" : "")}: {why} (명중 {accuracy})" + Environment.NewLine);
+            return (0, 3, false);
+        }
     }
 }

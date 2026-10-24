@@ -51,6 +51,10 @@ public static class Part1SkillBook
                 ["accuracy"] = first.Accuracy > 0 ? first.Accuracy : 100,
                 ["kind"] = isHeal ? 1 : status ? 2 : 0,
                 ["soul"] = first.Cost,
+                // 빌린 파트2 틀의 덧효과(엘레맨탈 파이어의 화염 · DEP 저하 · 둔화 따위)는 떼어 낸다 — 파트1 기술의 효과는 Part1Rules · Part1Support 가 맡는다
+                // (사용자 화면: 화이어 애로우에 「화염 · DEP↓ · 둔화」가 붙었다). AI 가 대상 둘 이상일 때만 쓰던 조건(minTargets 2)도 1 로.
+                ["bonus1Stat"] = 0, ["bonus2Stat"] = 0, ["bonus3Stat"] = 0,
+                ["minTargets"] = 1,
             };
             skills.Add(new SkillFile { Ability = id, Name = ab.Name, MaxLevel = levels.Count, Common = common, Levels = levels });
         }
