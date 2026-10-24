@@ -7,8 +7,9 @@ namespace DuelDx;
 /// 파트1 챕터 지도 — 챕터(<see cref="Part1Chapter"/>)의 장소를 지도 자리대로 늘어놓고, 전투 장소를 누르면 그 전투를 연다.
 /// </summary>
 /// <remarks>
-/// 옵시디안 「분석-파트1-챕터」 1·2절. 장소 낱말 1·2(지도 자리)를 화면 칸에 맞춰 줄여 놓고, 낱말 9~13(잇닿은 장소 — 가설)을 점선으로 잇는다.
-/// 챕터 사건(대사 · 502 전투로 · 503 필드로 · 깃발)은 <see cref="Part1SceneScript"/> 가 돌린다 — 전투·필드를 마치고 돌아오면 남은 행동을 잇는다. 지도 그림·인물 말은 아직 없다. 마을(종류 1)은 이름만 보인다.
+/// 옵시디안 「분석-파트1-챕터」 1·2절. 장소 낱말 1~4(지도 자리 · 크기)를 한 배율로 화면 칸에 줄여 놓고, 낱말 9~13(잇닿은 장소 — 가설)을 점선으로 잇는다.
+/// 바탕은 지역 지도(<see cref="MapOf"/>)를 같은 배율로 줄인 것 — 지도 밖과 빛깔 열쇠(노랑 · 파랑)는 바다 무늬(BGR 0, 128×128)를 깐다.
+/// 챕터 사건(대사 · 502 전투로 · 503 필드로 · 깃발)은 <see cref="Part1SceneScript"/> 가 돌린다 — 전투·필드를 마치고 돌아오면 남은 행동을 잇는다. 인물 말은 아직 없다. 마을(종류 1)은 이름만 보인다.
 /// </remarks>
 internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -25,6 +26,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal bool _open;
     internal Part1Chapter? _chapter;
     internal (int X, int Y)[] _spots = [];
+
+    /// <summary>
+    /// 지역 지도 — 챕터 머리 낱말 1 → <c>BGRs</c> 번호: 1 → 1(시반 슈미터 · 카디스 섬) · 2 → 2(팬드래건 쪽) · 3 → 6(안타나나리보 · 로우엔 쪽) · 4 → 3.
+    /// 원본이 고르는 자리는 못 찾았다 — 장소 이름과 지도에 그려진 이름을 맞춰 본 짝이다(챕터 0 · 4 · 16 · 20 · 42 · 48, 가설). 그 밖(0 · 13)은 지도 없음.
+    /// </summary>
+    internal static int MapOf(Part1Chapter chapter) => chapter.Header.Length > 1 ? chapter.Header[1] switch { 1 => 1, 2 => 2, 3 => 6, 4 => 3, _ => 0 } : 0;
+
+    /// <summary>장소 칸에 깐 지도(칸 크기 그대로) — 없으면 null.</summary>
+    private uint[]? _map;
+
+    private static readonly Dictionary<int, (uint[]? Px, int W, int H)> Maps = [];
     internal int _hover = -1;
 
     /// <summary>일행이 선 장소(차례) — 처음엔 첫 장소. 지도에 ◆ 로 보인다.</summary>
@@ -147,9 +159,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         Events.Markers = markers;
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
-        int minX = places.Min(p => p.X), maxX = places.Max(p => p.X), minY = places.Min(p => p.Y), maxY = places.Max(p => p.Y);
-        static int Fit(int v, int min, int max, int start, int span) => start + (max == min ? span / 2 : (v - min) * span / (max - min));
-        _spots = [.. places.Select(p => (Fit(p.X, minX, maxX, Area.X, Area.W - SpotW), Fit(p.Y, minY, maxY, Area.Y, Area.H - SpotH)))];
+        // 지도 자리 — 장소 칸(낱말 1·2 왼위 · 3·4 크기)의 가운데. 한 배율(1 이하)로 칸에 넣고 가운데에 둔다(지도가 찌그러지지 않게).
+        var points = places.Select(p => (X: p.X + p.Words[3] / 2.0, Y: p.Y + p.Words[4] / 2.0)).ToList();
+        const double margin = 70;
+        double minX = points.Min(p => p.X) - margin, maxX = points.Max(p => p.X) + margin;
+        double minY = points.Min(p => p.Y) - margin, maxY = points.Max(p => p.Y) + margin;
+        double scale = Math.Min(1, Math.Min(Area.W / (maxX - minX), Area.H / (maxY - minY)));
+        double wx0 = (minX + maxX) / 2 - Area.W / 2 / scale, wy0 = (minY + maxY) / 2 - Area.H / 2 / scale;
+        _spots = [.. points.Select(p => (
+            Math.Clamp((int)(Area.X + (p.X - wx0) * scale) - SpotW / 2, Area.X, Area.X + Area.W - SpotW),
+            Math.Clamp((int)(Area.Y + (p.Y - wy0) * scale) - SpotH / 2, Area.Y, Area.Y + Area.H - SpotH)))];
+        _map = RenderMap(MapOf(chapter), wx0, wy0, scale);
         // 같은 자리의 전투·마을(챕터 1 무타나비)이 겹치지 않게 — 앞 장소와 겹치면 한 칸씩 아래·위로 번갈아 비켜 본다(칸 안에서만).
         for (int i = 1; i < _spots.Length; i++)
         {
@@ -168,6 +188,37 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         // 열 때마다 적어 둔다 — 사건이 전투·필드로 보냈으면 남은 행동까지(CONTINUE 가 그 자리에서 잇는다).
         SaveProgress();
         return true;
+    }
+
+    /// <summary>지도를 장소 칸 크기로 — 칸 (x, y) 는 지도 (wx0 + x / 배율, wy0 + y / 배율). 지도 밖 · 열쇠 빛깔은 바다 무늬.</summary>
+    private uint[]? RenderMap(int id, double wx0, double wy0, double scale)
+    {
+        if (id <= 0) return null;
+        (uint[]? Px, int W, int H) Image(int bgr)
+        {
+            lock (Maps) if (Maps.TryGetValue(bgr, out var hit)) return hit;
+            var read = shell.Field.ReadImage(bgr);
+            lock (Maps) Maps[bgr] = read;
+            return read;
+        }
+        var (map, mw, mh) = Image(id);
+        var (sea, sw, sh) = Image(0);
+        if (map == null) return null;
+        static bool Key(uint c) => (c & 0xFFFFFF) is var rgb && ((rgb >> 16 & 0xFF) > 240 && (rgb >> 8 & 0xFF) > 240 && (rgb & 0xFF) < 16
+                                                             || (rgb >> 16 & 0xFF) < 16 && (rgb >> 8 & 0xFF) < 16 && (rgb & 0xFF) > 240);
+        var px = new uint[Area.W * Area.H];
+        for (int y = 0; y < Area.H; y++)
+        {
+            int wy = (int)Math.Floor(wy0 + y / scale);
+            for (int x = 0; x < Area.W; x++)
+            {
+                int wx = (int)Math.Floor(wx0 + x / scale);
+                uint c = wx >= 0 && wy >= 0 && wx < mw && wy < mh ? map[wy * mw + wx] : 0xFFFFFF00;
+                if (Key(c)) c = sea != null && sw > 0 && sh > 0 ? sea[(wy % sh + sh) % sh * sw + (wx % sw + sw) % sw] : 0xFF102040;
+                px[y * Area.W + x] = c | 0xFF000000;
+            }
+        }
+        return px;
     }
 
     /// <summary>세이브에서 이어 간다 — 적어 둔 챕터를 열고 남은 행동을 잇는다.</summary>
@@ -316,8 +367,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_chapter is not { } chapter) return;
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        host.UiFill(ox, oy, MosesScene.MosesW, MosesScene.MosesH, 0xFF141A24);
-        host.UiFill(ox + Area.X - 8, oy + Area.Y - 8, Area.W + 16, Area.H + 16, 0xFF1C2433);
+        // 바탕은 그림 층(FillRect · SetPixel)에 — UI 층(UiFill)은 그 위라 지도를 덮는다.
+        host.FillRect(ox, oy, MosesScene.MosesW, MosesScene.MosesH, 0xFF141A24);
+        host.FillRect(ox + Area.X - 8, oy + Area.Y - 8, Area.W + 16, Area.H + 16, 0xFF1C2433);
+        if (_map is { } map)
+            for (int y = 0; y < Area.H; y++)
+                for (int x = 0; x < Area.W; x++)
+                    host.SetPixel(ox + Area.X + x, oy + Area.Y + y, map[y * Area.W + x]);
         host.UiStroke(ox + Area.X - 8, oy + Area.Y - 8, Area.W + 16, Area.H + 16, 0xFF3A4A66);
 
         string title = chapter.Title is { Length: > 0 } t ? Part1Game.PlainText(t).Replace('\n', ' ') : $"챕터 {chapter.Id}";
