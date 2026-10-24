@@ -875,6 +875,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 TitleScr.UpdateTitleHover(bx, by);
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
+                if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
                 if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);
@@ -1080,6 +1081,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (SlotsScr._notice != null) { SlotsScr._notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
         // 배너는 클릭 한 번으로 넘긴다 — 전에는 키만 받아서 눌러도 바로 안 넘어갔다.
         if (Btl._outcome.Length > 0 && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen) { if (OutcomeInputReady) Btl.LeaveFinishedBattle(); return; }
+        // 레벨업 고르기 창은 맨 위 — 다른 창(컷씬 기다림 넘기기 따위)이 클릭을 먼저 먹어 한 번에 안 눌렸다.
+        if (Part1PickOpen) { Part1TitleScr.Chapter.PressPick(Part1TitleScr.Chapter.PickAt(bx, by)); return; }
         if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
@@ -1090,7 +1093,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ChaptersScr.OnChaptersClick(bx, by)) return;
         if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
-        if (Part1PickOpen) { Part1TitleScr.Chapter.PressPick(Part1TitleScr.Chapter.PickAt(bx, by)); return; }
         if (OnKeysClick(bx, by) || Sys.OnSystemClick(bx, by) || StatusScr.OnStatusClick(bx, by)) return;
         if (Btl.OnItemMenuClick(bx, by)) return;
         if (Btl.OnRingClick(bx, by) || Btl.OnAbilityMenuClick(bx, by)) return;
@@ -1120,7 +1122,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal volatile bool _openHooksPending;
 
     /// <summary>파트1 전투에서 레벨업 어빌리티를 고를 차례 — 대사가 없고 판이 안 끝났을 때.</summary>
-    internal bool Part1PickOpen => _battleLoaded && _scene.IsPart1 && Part1.LevelPicks.Count > 0 && Tlk._talk == null && Btl._outcome.Length == 0;
+    // 행동(기술 연출)이 다 끝나고 모두 선 뒤에 뜬다 — 전에는 연출 한가운데 떠서 가렸다(사용자 보고: 원본은 안 그렇다).
+    internal bool Part1PickOpen => _battleLoaded && _scene.IsPart1 && Part1.LevelPicks.Count > 0 && Tlk._talk == null && Btl._outcome.Length == 0
+        && Btl._routine == null && !_units.Any(u => u.IsBusy);
 
     internal void Update(double dt)
     {
