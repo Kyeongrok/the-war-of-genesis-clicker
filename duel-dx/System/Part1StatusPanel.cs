@@ -9,7 +9,8 @@ namespace DuelDx;
 /// <para>170×300 패널을 인물 화면 자리 + (−220, −80) 에(판 밖으로 안 나가게 민다): 얼굴(인물 칸 5) · 이름 · 소속(칸 6 → 이름표 21개) · 직업(칸 7) ·
 /// HP · SOUL(150) · EXP(누적 % 100) 막대 · 능력치 3×3(Str Dex Int / Skill Luck Spd / Ac Mr Wtp — 바탕 + 어빌리티 + 장비, 소울로 안 깎은 값) ·
 /// 장비 다섯. 오른쪽에 그 인물의 어빌리티와 레벨. 레벨 · RANGE · 저항은 원본도 안 보인다.</para>
-/// <para>원본은 이 창에서 장비 · 직업을 바꿀 수 있는데(행동을 안 쓴다) 여기서는 보기만 한다 — 장비는 챕터 지도의 일행 창에서.</para>
+/// <para>원본처럼 장비 줄을 누르면 바꾼다(행동을 안 쓴다) — 가방에서 그 칸에 맞는 것을 차례로 끼우고 마지막은 빼기. 직업 바꾸기는 아직 없다.
+/// 패널 밖을 누르면 닫힌다.</para>
 /// </remarks>
 internal sealed class Part1StatusPanel(GameWindow host)
 {
@@ -26,6 +27,39 @@ internal sealed class Part1StatusPanel(GameWindow host)
     private IReadOnlyList<Part1Ability>? _abilities;
     private IReadOnlyList<Part1Item>? _items;
 
+    /// <summary>지난 틀에 그린 패널 · 장비 줄 자리(누르기 판정).</summary>
+    private (int X, int Y, int W, int H) _panel;
+    private readonly (int X, int Y, int W, int H)[] _equipRows = new (int, int, int, int)[5];
+
+    /// <summary>패널을 눌렀다 — 장비 줄이면 바꾸고 true, 패널 안이면 true, 밖이면 false(닫기).</summary>
+    internal bool OnClick(UnitState u, int bx, int by)
+    {
+        static bool In((int X, int Y, int W, int H) r, int px, int py) => px >= r.X && px < r.X + r.W && py >= r.Y && py < r.Y + r.H;
+        for (int s = 0; s < 5; s++)
+            if (In(_equipRows[s], bx, by)) { CycleEquipment(u, s); return true; }
+        return In(_panel, bx, by);
+    }
+
+    /// <summary>그 칸에 가방의 다음 맞는 것을 끼운다(끼던 것은 가방으로) — 일행 창(Part1PartyScreen)과 같은 규칙. 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
+    private void CycleEquipment(UnitState u, int slot)
+    {
+        if (!host.Part1.Party.Contains(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 장비를 바꿀 수 있습니다"); return; }
+        var chr = host.Part1.Apply(raw);
+        _items ??= Part1Item.LoadAll();
+        var options = host.Part1.Bag.Distinct().Where(id => Part1Item.ById(_items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, _items)).ToList();
+        var slots = (int[])chr.Equipment.Clone();
+        int old = slots[slot];
+        int at = options.IndexOf(old);
+        int next = options.Count == 0 ? 0 : old == 0 ? options[0] : at + 1 < options.Count ? options[at + 1] : 0;
+        if (next == old) { host.Toast("가방에 이 칸에 맞는 것이 없다"); return; }
+        if (next != 0) host.Part1.Bag.Remove(next);
+        if (old != 0) host.Part1.Bag.Add(old);
+        slots[slot] = next;
+        host.Part1.Equipped[u.ChrCode] = slots;
+        host._db?.ForgetPart1Characters();
+        host.Btl.Part1.Forget(u.ChrCode);
+    }
+
     /// <summary>파트1 판의 파트1 인물이면 이 창을 쓴다.</summary>
     internal bool Applies(UnitState u) => host._battleLoaded && host._scene.IsPart1 && u.ChrCode >= Part1Game.ChrBase && !host.Mos._mosesOpen;
 
@@ -40,6 +74,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         int x = Math.Clamp(fx - 220, host._camX + 4, host._camX + host.ViewWidth - W - ListW - 8);
         int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - H - 4);
         host.FillRect(x, y, W, H, 0xFF101828);   // 바탕은 그림 층에 — UI 층(UiFill)은 얼굴 그림을 덮는다
+        _panel = (x, y, W + 4 + ListW, H);
         host.UiStroke(x, y, W, H, 0xFF8098C8);
 
         if (chr.FaceId > 0) host.DrawUi(Part1Game.ObsBase + chr.FaceId, 0, 0, x + 30, y + 30, GameWindow.UiBlend.Alpha);
@@ -76,6 +111,9 @@ internal sealed class Part1StatusPanel(GameWindow host)
         for (int s = 0; s < 5; s++)
         {
             string name = Part1Item.ById(_items, chr.Equipment[s])?.Name ?? "—";
+            _equipRows[s] = (x + 6, row - 2, W - 12, 17);
+            bool hot = host._mouse.X >= x + 6 && host._mouse.X < x + W - 6 && host._mouse.Y >= row - 2 && host._mouse.Y < row + 15;
+            if (hot) host.UiFill(x + 6, row - 2, W - 12, 17, 0xC0304870);
             host.UiText($"{Part1PartyScreen.SlotNames[s]}: {name}", x + 10, row, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
             row += 17;
         }

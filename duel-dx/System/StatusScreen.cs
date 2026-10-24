@@ -185,7 +185,7 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
     internal bool OnStatusClick(int bx, int by)
     {
         if (host._statusUnit < 0) return false;
-        if (Part1Panel.Applies(StatusUnit())) { host._statusUnit = -1; return true; }   // 파트1 패널은 보기만 — 누르면 닫는다
+        if (Part1Panel.Applies(StatusUnit())) { if (!Part1Panel.OnClick(StatusUnit(), bx, by)) host._statusUnit = -1; return true; }   // 파트1 패널 — 장비 줄은 바꾸기, 밖은 닫기
         if (_statusTip != null) return true;   // 설명이 떠 있는 동안은 다른 입력을 받지 않는다(0x10042c00)
         var (ox, oy) = StatusOrigin();
 
