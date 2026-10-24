@@ -71,8 +71,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
     /// </summary>
     internal string? SaveBlockedReason =>
+        // 파트1 챕터 지도 — 사건이 멎어 있으면 저장한다(장면 갈래 4, SavePart1ChapterTo).
+        host.Part1TitleScr.TimelineOpen ? null
+        : host.Part1TitleScr.ChapterMapOpen ? (host.Part1TitleScr.Chapter.CanSave ? null : "사건이 진행 중이라 저장할 수 없습니다")
         // 파트1 전투도 저장한다 — 파트1 진행(일행 · 성장 · 챕터 · 남은 사건)을 세이브에 같이 싣는다(SaveState.Part1, 사용자 요청).
-        host.FieldOpen ? "필드에서는 저장할 수 없습니다"
+        : host.FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
         : !host.Mos._mosesOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
@@ -956,6 +959,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// <summary>전투판을 그 파일에 적는다. 적었으면 true.</summary>
     internal bool SaveBattleTo(string path)
     {
+        if (host.Part1TitleScr.TimelineOpen) return SavePart1ChapterTo(path, 7);
+        if (host.Part1TitleScr.ChapterMapOpen) return SavePart1ChapterTo(path, 4);
         bool battleSave = !InChapterScene && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded;
         try
         {
@@ -1041,6 +1046,28 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         }
     }
 
+    /// <summary>
+    /// 파트1 챕터 지도 세이브 — 전투판 없이 장면 갈래 4(칸 목록 「챕  터」) · 파트1 진행 전부(팀 자리 · 턴 · 남은 사건) · 이름 = 지역 이름.
+    /// 불러오면(<see cref="LoadBattleFrom"/>) 그 챕터 지도를 연다. <paramref name="kind"/> 7 = 연대표에서(이름 「연대표」, 불러오면 연대표).
+    /// </summary>
+    private bool SavePart1ChapterTo(string path, int kind)
+    {
+        try
+        {
+            if (kind == 4) host.Part1TitleScr.Chapter.SaveProgress();   // 지금 팀 자리 · 남은 사건을 진행에 맞춘다
+            var state = new SaveState(SaveVersion, DateTime.Now.ToString("yyyy-MM-dd HH:mm"), 0, 0, [], [], SceneKind: kind, PlayMs: PlayMs,
+                                      Part1: host.Part1.ToJson(host.FlagSt._flags), SceneTitle: kind == 7 ? "연대표" : host.Part1TitleScr.Chapter.RegionName);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            host.Toast($"저장하지 못했습니다: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>그 파일에서 전투판을 되살린다. 되살렸으면 true.</summary>
     internal bool LoadBattleFrom(string path)
     {
@@ -1054,6 +1081,17 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             host.Toast($"불러오지 못했습니다: {ex.Message}");
             return false;
+        }
+        // 파트1 챕터 지도 세이브(장면 갈래 4 · 전투판 없음) — 진행을 되살리고 그 지도를 연다.
+        if (state is { SceneKind: 4 or 7, Units.Length: 0, Part1: { } mapPart1 } && state.Version is >= OldestSaveVersion and <= SaveVersion)
+        {
+            if (!host.Part1.FromJson(mapPart1, host.FlagSt._flags)) { host.Toast("저장 파일을 읽을 수 없습니다"); return false; }
+            _playBase = state.PlayMs - host._realTime * 1000;
+            _systemMenu = false;
+            if (state.SceneKind == 7) host.Part1TitleScr.LoadTimelineSave();   // 연대표 세이브(파트1)
+            else host.Part1TitleScr.LoadChapterSave();
+            host.Toast($"불러왔습니다 — {state.SavedAt}");
+            return true;
         }
         // 연대표(장면 7) 세이브는 전투판이 비어 있어도 된다 — 새 게임 직후에는 아직 전투가 없다.
         if (state is not { } || state.Version is < OldestSaveVersion or > SaveVersion || (state.Units.Length == 0 && state.SceneKind != 7))

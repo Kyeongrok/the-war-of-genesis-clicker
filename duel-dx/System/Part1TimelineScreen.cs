@@ -24,7 +24,15 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal static readonly (int X, int Y, string Name)[] Back = [(10, 452, "타이틀")];
 
-    internal const int ButtonHit = 1000, ScrollUpHit = 1001, ScrollDownHit = 1002;
+    internal const int ButtonHit = 1000, ScrollUpHit = 1001, ScrollDownHit = 1002, MenuHit = 5000;
+
+    /// <summary>Esc 메뉴 — 저장 · 불러오기(파트1 칸 창, 장면 갈래 7 「연대표」) · 타이틀 · 돌아가기(사용자 요청: 연대표에서도 저장).</summary>
+    internal static readonly string[] MenuItems = ["저장", "불러오기", "파트1 타이틀", "돌아가기"];
+
+    internal const int MenuX = 250, MenuY = 170, MenuW = 140, MenuRowH = 28;
+
+    /// <summary>Esc 메뉴가 떠 있나.</summary>
+    internal bool _menu;
 
     internal bool _open;
     internal IReadOnlyList<Part1Episode> _episodes = [];
@@ -55,6 +63,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         _contentH = cells.Length > 0 ? cells.Max(c => c.Item2) + CellH : 0;
         _bg ??= shell.Field.ReadImage(Background).Px;
         _scroll = 0;
+        _menu = false;
         _open = true;
         _hover = -1;
     }
@@ -66,6 +75,12 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     internal int HitAt(int bx, int by)
     {
         var (ox, oy) = host.Mos.MosesOrigin();
+        if (_menu)
+        {
+            for (int i = 0; i < MenuItems.Length; i++)
+                if (bx >= ox + MenuX && bx < ox + MenuX + MenuW && by >= oy + MenuY + 30 + i * MenuRowH && by < oy + MenuY + 30 + (i + 1) * MenuRowH - 2) return MenuHit + i;
+            return -1;
+        }
         var (backX, backY, _) = Back[0];
         if (bx >= ox + backX && bx < ox + backX + Part1TitleScreen.ButtonW && by >= oy + backY && by < oy + backY + Part1TitleScreen.ButtonH) return ButtonHit;
         // 오른쪽 띠의 위 · 아래 화살표(배경 그림의 장식).
@@ -83,11 +98,17 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
-    internal void OnClick(int bx, int by) => Press(HitAt(bx, by));
+    internal void OnClick(int bx, int by)
+    {
+        int hit = HitAt(bx, by);
+        if (_menu && hit < 0) { _menu = false; return; }   // 메뉴 밖을 누르면 닫는다
+        Press(hit);
+    }
 
     internal void OnKey(int key)
     {
-        if (key == Win32.VK_ESCAPE) Press(ButtonHit);
+        if (key == Win32.VK_ESCAPE) { _menu = !_menu; _hover = -1; }   // Esc — 저장 · 불러오기 메뉴(다시 누르면 닫는다)
+        else if (_menu) { if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= MenuHit) Press(_hover); }
         else if (key == Win32.VK_UP) Scroll(-1);
         else if (key == Win32.VK_DOWN) Scroll(1);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
@@ -103,6 +124,17 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     private void Press(int hit)
     {
+        if (hit >= MenuHit)
+        {
+            _menu = false;
+            switch (hit - MenuHit)
+            {
+                case 0: host.SlotsScr.OpenSlots(0); break;                       // 저장 — SystemMenu.SaveBattleTo 가 연대표(장면 갈래 7)로 적는다
+                case 1: host.SlotsScr.OpenSlots(1); break;
+                case 2: host.LeaveScene(() => _open = false); break;
+            }
+            return;
+        }
         if (hit == ButtonHit) host.LeaveScene(() => _open = false);
         else if (hit == ScrollUpHit) Scroll(-2);
         else if (hit == ScrollDownHit) Scroll(2);
@@ -157,6 +189,19 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         }
         var (bx, by, bn) = Back[0];
         shell.DrawButton(ox + bx, oy + by, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, bn, _hover == ButtonHit);
+        if (_menu)
+        {
+            int h = 36 + MenuItems.Length * MenuRowH;
+            host.UiFill(ox + MenuX - 10, oy + MenuY, MenuW + 20, h, 0xF0182040);
+            host.UiStroke(ox + MenuX - 10, oy + MenuY, MenuW + 20, h, 0xFFE8ECF8);
+            host.UiText("메뉴", ox + MenuX, oy + MenuY + 8, 0xFFFFE080, 13);
+            for (int i = 0; i < MenuItems.Length; i++)
+            {
+                int y = oy + MenuY + 30 + i * MenuRowH;
+                if (_hover == MenuHit + i) host.UiFill(ox + MenuX, y, MenuW, MenuRowH - 2, 0xFF2840C8);
+                host.UiText(MenuItems[i], ox + MenuX + 10, y + 5, GameWindow.White, 13);
+            }
+        }
         host.DrawToast();
     }
 }

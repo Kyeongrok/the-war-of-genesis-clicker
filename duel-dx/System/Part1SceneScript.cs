@@ -34,8 +34,22 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 302 [인물 차례, dx, dy, 틱] — 틱마다 (dx, dy) 씩 걷는다(필드 0002: [0, 0, -4, 90] 로 화면 아래에서 걸어 들어온다).</summary>
     internal Action<int, int, int, int>? SpriteShift;
 
-    /// <summary>행동 300 [10000 + 인물 차례, 모션, 뒤집기] — 모션 번호를 바로 건다(필드 0002: 걷기 앞 3 = 걷기·뒷모습, 선 뒤 0 · 1 = 서기).</summary>
-    internal Action<int, int, bool>? SpriteMotion;
+    /// <summary>
+    /// 필드 300 [10000 + 인물 차례, 모션, 되풀이] — 모션 번호를 바로 건다(0x100cdca0: +0x54 = 0, vt+0x80(모션), +0x46 = 0 틱 켬). 되풀이 = 1 이면 칸을 곧 비우고
+    /// 모션은 돈다. 그 밖이면 한 바퀴 돌 때까지 칸에 남고(행동 1 이 기다린다) 끝 그림에서 멈춘다(+0x46 = −1). 뒤집기는 건드리지 않는다(+0x68 은 306 만).
+    /// 돌려주는 값 = 칸에 남을 초(되풀이면 0). 자료: 걷기 모션 3~5 는 거의 1, 한 번 하는 동작(174 · 175 …)은 0.
+    /// </summary>
+    internal Func<int, int, bool, double>? SpriteMotion;
+
+    /// <summary>
+    /// 필드 300 [Obs, 모션, −, 층, x, y](Obs &lt; 10000) — 효과 그림 하나(0x6c 개체 0x1009f4d0(Obs, 모션, 화면 자리 + (x, y)))를 층(0~2, +0x78 + 층 × 0x1c)에 넣는다.
+    /// 그 모션이 한 바퀴 돌 때까지 칸에 남고(+0x54 ≥ 모션 길이) 끝나면 지운다. 필드 0019 · 0025 · 0090 · 0093 의 Obs 91(빛 기둥 0 → 1) · 0072 · 0078 의 388 · 279 …
+    /// 돌려주는 값 = 칸에 남을 초.
+    /// </summary>
+    internal Func<int, int, int, int, int, double>? EffectStart;
+
+    /// <summary>필드 301 [인물] — 모션 틱을 멈춘다(0x100cdbe0: +0x46 = −1 — 지금 그림에서 선다).</summary>
+    internal Action<int>? SpriteFreeze;
 
     /// <summary>행동 304 [인물 차례] 숨기기 · 305 [인물 차례] 보이기(필드 0007 은 들머리에서 여럿을 숨겼다가 차례로 보인다).</summary>
     internal Action<int, bool>? SpriteVisible;
@@ -248,6 +262,17 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// </summary>
     internal bool Timed;
 
+    /// <summary>챕터에서도 기다림을 지킬 때 — 그림 덮개 · 화면 바꾸기(챕터 100 · 103)가 떠 있는 동안(그것이 보이게).</summary>
+    internal Func<bool>? TimedNow;
+
+    private bool IsTimed => Timed || TimedNow?.Invoke() == true;
+
+    /// <summary>챕터 505 — 지도 단추 · 떠 있는 창 · 이동 고르기를 닫는다(0x100c0d50 → 0x100b3f90: 단추 다섯 숨김 0x100b2070, 창 +0x13bf8 · +0x13bfc 지움, 고르기 +0x13c30 = 0).</summary>
+    internal Action? UiReset;
+
+    /// <summary>챕터 705 [n] — 영상 n(0 = G3.pak 안 · 1 = Setup\_sys2.cab)을 틀고 장면 7(불러오기 · 타이틀 · 새로)로(0x100c1ab0 → 장면 6 0x100d5480 DirectShow). 챕터 55 끝(엔딩) · 56.</summary>
+    internal Action<int>? Ending;
+
     /// <summary>행동 1 이 기다릴 일 — 걷는 인물이 있나.</summary>
     internal Func<bool>? Busy;
 
@@ -357,11 +382,20 @@ internal sealed class Part1SceneScript(GameWindow host)
             _pending.RemoveAt(0);
             short[] a = c.Args;
             if (IsField && RunField(c)) { if (_sceneLeft) return; continue; }
+            // 챕터만의 것 — 100 · 102 · 103 은 필드와 같은 덮개 틀(0x100bf890 CBgr · 0x100bf860 · 0x100bf960 0x1009b0f0 떠 두기),
+            // 1100~1104 는 필드 900~904 와 같은 고르기 · 표 창(0x100bf0a0 → 0x100aa690 · 0x100bf1d0 → 0x100aa750 · 0x101b43cc 표 · 0x100a9000).
+            if (!IsField && c.Code is 100 or 102 or 103 or >= 1100 and <= 1104)
+            {
+                RunField(c.Code >= 1100 ? new ScriptCommand(c.Code - 200, c.Args) : c);
+                continue;
+            }
+            if (!IsField && c.Code == 505) { UiReset?.Invoke(); continue; }
+            if (!IsField && c.Code == 705 && Ending != null) { _pending.Clear(); _sceneChanged = true; Ending(a.Length > 0 ? a[0] : 0); return; }
             switch (c.Code)
             {
                 case 0: Call(a[0]); break;
-                case 1: _waitBusy = Timed; break;
-                case 2: if (Timed && a[0] > 0) _waitUntil = host._lastTime + a[0] / GameWindow.TicksPerSecond; break;
+                case 1: _waitBusy = IsTimed || Choice != null; break;   // 챕터 고르기(1100)도 고를 때까지 기다린다
+                case 2: if (IsTimed && a[0] > 0) _waitUntil = host._lastTime + a[0] / GameWindow.TicksPerSecond; break;
                 // 대사 [얼굴(Obss 번호), 줄] — 200·201·202 는 왼 · 오른 · 가운데 상자, 206·207·208 은 같은 자리에 성우 [얼굴, 줄, Snd 번호].
                 case >= 200 and <= 202 or >= 206 and <= 208:
                 {
@@ -423,7 +457,6 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
-                case 300 when a[0] >= 10000: SpriteMotion?.Invoke(a[0] - 10000, a[1], a[2] == 1); break;
                 case 304 or 305: SpriteVisible?.Invoke(a[0], c.Code == 305); break;
                 case 401: CameraPan?.Invoke(a[0], a[1], a[2]); break;
                 case 101: _vars[a[0]] = _vars.GetValueOrDefault(a[0]) + 1; break;
@@ -463,10 +496,17 @@ internal sealed class Part1SceneScript(GameWindow host)
                 int kind = c.Code == 103 ? A(1) : 1;
                 int fadeOut = Math.Max(1, c.Code == 103 ? A(2) : A(2) / 2), fadeIn = Math.Max(1, c.Code == 103 ? A(3) : A(2) - A(2) / 2);
                 Transition?.Invoke(A(0), kind, fadeOut, fadeIn);
-                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(fadeOut + fadeIn));
+                if (IsTimed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(fadeOut + fadeIn));
                 return true;
             }
-            case 301: return true;                                            // [인물] 모션 틱을 멈춘다(+0x46 = −1) — 아직 없음
+            case 300:
+            {
+                // 칸에 남는 동안 행동 1 이 기다린다 — 너무 긴 모션에 장면이 서지 않게 4 초로 자른다(원본은 끝까지 — 리메이크 갈음).
+                double hold = A(0) >= 10000 ? SpriteMotion?.Invoke(A(0) - 10000, A(1), A(2) == 1) ?? 0 : EffectStart?.Invoke(A(0), A(1), A(3), A(4), A(5)) ?? 0;
+                if (IsTimed && hold > 0) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + Math.Min(hold, 4));
+                return true;
+            }
+            case 301: SpriteFreeze?.Invoke(A(0)); return true;                 // [인물] 모션 틱을 멈춘다(+0x46 = −1)
             case 304: SpriteShadow?.Invoke(A(0), false); SpriteVisible?.Invoke(A(0), false); return true;   // 숨기면 그림자도 끈다(0x100cdb7f)
             case 306: SpriteFlip?.Invoke(A(0)); return true;
             case 307: SpriteShadow?.Invoke(A(0), true); return true;
@@ -489,7 +529,7 @@ internal sealed class Part1SceneScript(GameWindow host)
             {
                 int ticks = A(0) > 0 ? (int)Math.Ceiling(127 * host._musicGain / A(0)) : 0;
                 host.FadeMusic(0, ticks);
-                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
+                if (IsTimed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
                 return true;
             }
             case 704:                                                         // [걸음] 0 에서 127 까지(0x100cd5b0 — 첫 부름에 0 으로)
@@ -497,7 +537,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 int ticks = A(0) > 0 ? (127 + A(0) - 1) / A(0) : 0;
                 host.SetMusicLevel(0);
                 host.FadeMusic(100, ticks);
-                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
+                if (IsTimed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
                 return true;
             }
             case 801: _vars[A(0)] = (byte)(_vars.GetValueOrDefault(A(0)) + A(1)); return true;   // 장면 변수 += (바이트, 0x100cffa0)

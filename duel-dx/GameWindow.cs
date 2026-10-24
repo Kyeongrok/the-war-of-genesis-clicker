@@ -1011,6 +1011,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case KeyAction.Attack: Btl.RingShortcut(BattleScene.RingCommand.Attack); break;
             case KeyAction.Ability: Btl.RingShortcut(BattleScene.RingCommand.Ability); break;
             case KeyAction.Rest: Btl.RingShortcut(BattleScene.RingCommand.Rest); break;
+            case KeyAction.March: Btl.RingShortcut(BattleScene.RingCommand.March); break;
             case KeyAction.Status:
                 if (Btl._ringUnit >= 0) Btl.RingShortcut(BattleScene.RingCommand.Status);
                 else if ((uint)_selected < _units.Length) _statusUnit = _selected;

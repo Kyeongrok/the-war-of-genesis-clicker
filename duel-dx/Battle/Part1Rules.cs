@@ -46,6 +46,15 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         return f;
     }
 
+    /// <summary>파트1 전투 행동 500 — 그 인물 칸(레코드 차례)을 값으로(원본은 유닛마다 CChr 를 들어 그 유닛만, 리메이크는 인물 번호마다 한 벌).</summary>
+    internal void SetField(UnitState u, int slot, int value)
+    {
+        if (MountFighter(u) is not { } f || slot < 0 || slot >= f.Chr.Fields.Length) return;
+        var fields = (int[])f.Chr.Fields.Clone();
+        fields[slot] = value;
+        _fighters[u.ChrCode] = f with { Chr = f.Chr with { Fields = fields } };
+    }
+
     /// <summary>자란 모습이 바뀐 인물(없으면 모두)을 다시 읽게 한다.</summary>
     internal void Forget(int? chrCode = null)
     {

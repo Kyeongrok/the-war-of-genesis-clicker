@@ -44,11 +44,12 @@ internal sealed class UnitState(DemoUnit unit)
     public int LevelOffset { get; } = unit.LevelOffset;
 
     /// <summary>AI 이동 방식·깨어남 조건 — 배치 레코드가 사람마다 들고 있다.</summary>
-    public int AiMove { get; } = unit.AiMove;
+    public int AiMove { get; set; } = unit.AiMove;
 
-    public int WakeCondition { get; } = unit.WakeCondition;
+    /// <summary>파트1 행동 705(AI 바꾸기)가 바꾼다.</summary>
+    public int WakeCondition { get; set; } = unit.WakeCondition;
 
-    public int WakeValue { get; } = unit.WakeValue;
+    public int WakeValue { get; set; } = unit.WakeValue;
 
     /// <summary>
     /// 깨어났나 — 깨기 전에는 제 차례마다 쉬기만 한다. 사람이 움직이는 인물(편 4)만 늘 깨어 있다.

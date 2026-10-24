@@ -667,7 +667,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void EndTurn()
     {
         _eventCheckDue |= 1 << 2;                // 갈래 2 = 행동 끝(0x100680a3)
-        if (_turn >= 0) host._units[_turn].HasTurn = false;
+        if (_turn >= 0) { host._units[_turn].HasTurn = false; NoteActed(host._units[_turn]); }
         _turn = -1;
         _ringUnit = -1;
         _skillLeader = -1;

@@ -53,8 +53,17 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     internal bool _part1ChapterEnd;
 
+    /// <summary>
+    /// 파트1 행동 106 — 결과 배너를 안 띄운다(0x1001e1e0: 전투 +0x2c = 0 → 전투 끝 연출 0x1002eac0 이 승리·패배 그림(0x315)·소리 없이 곧 끝낸다).
+    /// 대개 104(필드로) 바로 앞 — 전투가 이야기 장면으로 바로 이어진다. 시판 27곳.
+    /// </summary>
+    internal bool _part1NoBanner;
+
     /// <summary>파트1 행동 205 가 되풀이로 튼 효과음의 표지 — 206 · 전투 끝이 끊는다.</summary>
     internal const int Part1LoopSoundTag = 0x5021;
+
+    /// <summary>파트1 AI 표(Dats/AI.dat) — 행동 705 가 처음 쓸 때 읽는다.</summary>
+    private IReadOnlyList<Part1Ai>? _part1Ais;
 
     /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
     /// <summary>행동 512 가 바꾼 곡 번호 — 안 바꿨으면 null(전투 머리 곡).</summary>
@@ -81,6 +90,7 @@ internal sealed unsafe partial class BattleScene
         _eventNextBattle = 0;
         _eventNextField = 0;
         _part1ChapterEnd = false;
+        _part1NoBanner = false;
         _eventSoundSeconds = 0;                  // 앞 전투에서 늦게 풀린 소리가 이 전투의 이벤트를 멈추지 않게
         Array.Clear(_battleVars);
         Array.Clear(_eventTimer);
@@ -976,6 +986,31 @@ internal sealed unsafe partial class BattleScene
                 break;
             case Part1Script.Part1Only + 206 when host._scene.IsPart1:
                 host._mixer.StopEffect(Part1LoopSoundTag);
+                break;
+            case Part1Script.Part1Only + 106 when host._scene.IsPart1:
+                _part1NoBanner = true;
+                break;
+            case Part1Script.Part1Only + 500 when host._scene.IsPart1:
+                // [대상, 칸, 값] 인물 칸 넣기(0x1001ff80) — 칸 = 인물 레코드 차례(분석-파트1-전투 8절). 19 기본 최대 HP(HP 를 자른다) · 20~29 능력치 · 30~38.
+                // 칸 8(대전 판 플레이어 번호)은 이야기 전투에서 아무 일도 안 한다 — 자료 44번 중 35번. 리메이크는 19~38 만 받는다(파트1 식이 읽는 칸).
+                if (A(1) is >= 19 and <= 38)
+                    foreach (var u in EventTargets(A(0), out _))
+                    {
+                        Part1.SetField(u, A(1), A(2));
+                        if (A(1) == 19 && Part1.Fighter(u) is { } f) { u.MaxHp = Math.Max(1, f.Chr.MaxHp); u.Hp = Math.Min(u.Hp, u.MaxHp); }
+                    }
+                break;
+            case Part1Script.Part1Only + 705 when host._scene.IsPart1:
+                // [대상, AI 번호] AI 바꾸기(0x10021620: 유닛 +0x262 = a1, 편이면 모두) — 판을 열 때처럼 AI.dat 칸을 파트2 이동 방식 · 깨어나는 조건으로(DemoScene.LoadPart1).
+                // 사람이 움직이는 편(4)은 바꾸지 않는다(0137 의 [20004, 41] — 리메이크는 편 4 를 AI 로 돌리지 않는다).
+                if ((_part1Ais ??= Part1Ai.LoadAll()) is { Count: > 0 } ais && A(1) >= 0 && A(1) < ais.Count)
+                    foreach (var u in EventTargets(A(0), out _).Where(u => !u.PlayerControlled))
+                    {
+                        var ai = ais[A(1)];
+                        u.AiMove = ai.MoveMode == 3 ? 6 : 0;
+                        u.WakeCondition = ai.Wake;
+                        u.WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance;
+                    }
                 break;
             case Part1Script.Part1Only + 503 when host._scene.IsPart1:   // [?, 아이템, 수] — 전투 팀 가방에 더한다(0x100209a0 → 0x100ada10)
                 for (int k = 0; k < Math.Clamp((int)A(2), 0, 99) && A(1) > 0; k++) host.Part1.Bag.Add(A(1));

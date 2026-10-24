@@ -22,7 +22,7 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed unsafe partial class BattleScene
 {
-    internal enum RingCommand { Attack, Ability, Item, System, Status, Rest }
+    internal enum RingCommand { Attack, Ability, Item, System, Status, Rest, March }
 
     internal static readonly (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] RingItems =
     [
@@ -44,10 +44,12 @@ internal sealed unsafe partial class BattleScene
         (RingCommand.Rest, 91, 2, "REST"),
         (RingCommand.Item, 89, 4, "ITEM"),
         (RingCommand.Status, 88, 5, "STATUS"),
+        // 행군 — 원본에 없는 편의 명령(사용자 요청). 맞는 그림이 없어 아이콘·이름표 그림 없이(−1) 글자 동그라미로 그린다.
+        (RingCommand.March, -1, -1, "MARCH"),
     ];
 
-    /// <summary>파트1 링 항목의 자리 각도 — 원본 단추 자리(−100,−60) · (+100,−60) · (−100,0) · (+100,0) 의 방향.</summary>
-    private static readonly double[] Part1RingAngles = [-0.85 * Math.PI, -0.15 * Math.PI, 0.85 * Math.PI, 0.15 * Math.PI];
+    /// <summary>파트1 링 항목의 자리 각도 — 원본 단추 자리(−100,−60) · (+100,−60) · (−100,0) · (+100,0) 의 방향. 다섯째(행군, 원본에 없음)는 바로 아래.</summary>
+    private static readonly double[] Part1RingAngles = [-0.85 * Math.PI, -0.15 * Math.PI, 0.85 * Math.PI, 0.15 * Math.PI, 0.5 * Math.PI];
 
     /// <summary>지금 판의 링 항목 — 파트1 판이면 넷, 아니면 파트2 의 여섯.</summary>
     internal (RingCommand Command, int IconObs, int LabelMotion, string Hover)[] Items => host._scene.IsPart1 ? Part1RingItems : RingItems;
@@ -76,7 +78,7 @@ internal sealed unsafe partial class BattleScene
                             host._uiPaths[id] = path;
 
             // 링 그림만 미리 풀어 둔다 — 나머지(이펙트·무기 층)는 처음 쓸 때 푼다.
-            foreach (int id in Items.Select(r => r.IconObs).Concat([86, 105, 106, 452])) host.UiFor(id);
+            foreach (int id in Items.Select(r => r.IconObs).Where(id => id > 0).Concat([86, 105, 106, 452])) host.UiFor(id);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -149,6 +151,7 @@ internal sealed unsafe partial class BattleScene
         {
             RingCommand.Ability => enoughTp && !unit.HasStatus(12),
             RingCommand.Item => enoughTp,
+            RingCommand.March => MarchTarget(unit) != null,
             _ => true,
         };
     }
@@ -186,6 +189,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>링 단계를 넘긴다 — 열기가 끝나면 대기, 고름이 끝나면 명령 실행, 취소가 끝나면 없앤다.</summary>
     internal void UpdateRing()
     {
+        UpdateMarch();
         if (_ringUnit < 0) return;
         int n = RingTick(_ringPhaseStart) + 1;
         switch (_ringPhase)
@@ -246,7 +250,7 @@ internal sealed unsafe partial class BattleScene
         {
             // 항목 위에서 오른쪽 단추를 누르고 있는 동안 설명(TXR 1375~1380, 0x1003fc80 모달 · 떼면 0x10042ac0) — 항목 밖 우클릭만 링 취소(0x100e1540). ba-14 U1.
             int item = RingItemAt(bx, by);
-            if (item >= 0 && _ringPhase == RingPhase.Idle) { _ringHelp = host._db?.T((ushort)(1375 + item)); return; }
+            if (item >= 0 && _ringPhase == RingPhase.Idle) { _ringHelp = Items[item].Command == RingCommand.March ? MarchHelp : host._db?.T((ushort)(1375 + item)); return; }
             CancelRing();
             return;
         }
@@ -289,7 +293,8 @@ internal sealed unsafe partial class BattleScene
         var (command, _, _, hover) = Items[item];
         if (!RingItemEnabled(command, _ringUnit))
         {
-            host.Toast(_ringUnit != _turn || !host._units[_ringUnit].IsAlly ? $"{hover}: 차례인 아군만 쓸 수 있습니다" : $"{hover}: TP 가 모자랍니다");
+            host.Toast(_ringUnit != _turn || !host._units[_ringUnit].IsAlly ? $"{hover}: 차례인 아군만 쓸 수 있습니다"
+                : command == RingCommand.March ? $"{hover}: 따라갈 아군이 없습니다" : $"{hover}: TP 가 모자랍니다");
             return;
         }
         _ringPicked = item;
@@ -325,6 +330,7 @@ internal sealed unsafe partial class BattleScene
         {
             case RingCommand.Status: host._statusUnit = unit; break;
             case RingCommand.Rest: host.Toast($"{host.UnitName(unit)} 휴식"); Rest(unit); break;
+            case RingCommand.March: March(unit); break;
             case RingCommand.Attack: BeginAttackTargeting(); break;
             case RingCommand.Ability:
                 // 12(어빌리티 사용 불가)면 목록 자체가 안 열린다(0x100e17d8).
@@ -366,8 +372,9 @@ internal sealed unsafe partial class BattleScene
             {
                 // 그림이 없으면 글자로
                 host.FillCircle(x, y, 20, 0xE0142850);
-                var (_, w, h) = host.GetText(hoverName[..3], enabled ? White : DimGray);
-                host.DrawText(hoverName[..3], x - w / 2, y - h / 2, enabled ? White : DimGray);
+                string shortName = command == RingCommand.March ? "행군" : hoverName[..3];
+                var (_, w, h) = host.GetText(shortName, enabled ? White : DimGray);
+                host.DrawText(shortName, x - w / 2, y - h / 2, enabled ? White : DimGray);
             }
             // 새 UI 는 이름표 그림(점 글씨, Obs 0452) 대신 같은 자리에 글로 쓴다(menu-57) — 검은 그림자 한 겹.
             if (hover && host._hiResUi && !host.BattleCovered)

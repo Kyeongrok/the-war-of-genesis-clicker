@@ -28,7 +28,9 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
         SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) { _walks.Remove(n); _spots[n] = (x, y); } },
         SpriteShift = (n, dx, dy, ticks) => { if (n >= 0 && n < _spots.Length) Walk(n, dx, dy, ticks); },
-        SpriteMotion = (n, motion, mirror) => { if (n >= 0 && n < _spots.Length) { _motion[n] = (motion, mirror); _flip[n] = false; } },
+        SpriteMotion = StartMotion,
+        EffectStart = StartEffect,
+        SpriteFreeze = n => { if (n >= 0 && n < _spots.Length) _frozen[n] = MotionTick(n); },
         SpriteVisible = (n, shown) => { if (n >= 0 && n < _spots.Length) _hidden[n] = !shown; },
         CameraPan = (dx, dy, ticks) => { _cam = Camera(); _pan = (_cam.X, _cam.Y, dx, dy, Math.Max(1, ticks), host._lastTime); },
         IsField = true,
@@ -104,8 +106,51 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     /// <summary>바라보는 쪽(걸으면 걷는 쪽으로 돈다) — 인물 칸 방향에서 시작.</summary>
     private Facing[] _facing = [];
 
-    /// <summary>행동 300 이 건 모션(번호, 뒤집기) — 있으면 방향·걷기로 고른 모션 대신 이것을 튼다.</summary>
+    /// <summary>행동 300 이 건 모션(번호, 처음 뒤집기) — 있으면 방향·걷기로 고른 모션 대신 이것을 튼다. 뒤집기는 인물 칸 방향(3 = 오른쪽) ^ 306.</summary>
     private (int Motion, bool Mirror)?[] _motion = [];
+
+    /// <summary>300 이 모션을 건 시각(모션은 0 틀부터) · 한 번만 돌고 끝 그림에서 멈추나(되풀이 ≠ 1).</summary>
+    private double[] _motionStart = [];
+    private bool[] _motionOnce = [];
+
+    /// <summary>301 이 멈춘 그림 틱(멈추지 않았으면 null) — 300 이 새 모션을 걸면 푼다.</summary>
+    private int?[] _frozen = [];
+
+    /// <summary>300 [Obs &lt; 10000, …] 효과 그림 — 층(0 = 인물과 함께 아래부터 · 1 · 2 = 그 위), 자리(인물과 같은 배경 자리), 시작, 길이(틱).</summary>
+    private sealed record Effect(int Obs, int Motion, int Layer, int X, int Y, double Start, int Length);
+    private readonly List<Effect> _effects = [];
+
+    private int SpriteObs(int n) => Part1Game.ObsBase + (_field is { } f && n < f.Sprites.Count ? f.Sprites[n].SpriteId : 0);
+
+    /// <summary>지금 그릴 모션 틱 — 멈췄으면 그 틱, 300 이 건 모션이면 건 때부터(한 번이면 끝 그림에서 선다), 아니면 늘 도는 틱.</summary>
+    private int MotionTick(int n)
+    {
+        if (_frozen[n] is int frozen) return frozen;
+        int now = (int)(host._lastTime * GameWindow.TicksPerSecond);
+        if (_motion[n] is not { } m) return now;
+        int t = (int)((host._lastTime - _motionStart[n]) * GameWindow.TicksPerSecond);
+        if (_motionOnce[n] && host.UiFor(SpriteObs(n))?.ShownLength(m.Motion) is > 0 and var len) t = Math.Min(t, len - 1);
+        return t;
+    }
+
+    private double StartMotion(int n, int motion, bool loop)
+    {
+        if (n < 0 || n >= _spots.Length || _field is not { } field) return 0;
+        _motion[n] = (motion, field.Sprites[n].Direction == 3);
+        _motionStart[n] = host._lastTime;
+        _motionOnce[n] = !loop;
+        _frozen[n] = null;
+        if (loop) return 0;
+        return (host.UiFor(SpriteObs(n))?.ShownLength(motion) ?? 0) / GameWindow.TicksPerSecond;
+    }
+
+    private double StartEffect(int obs, int motion, int layer, int x, int y)
+    {
+        if (obs <= 0) return 0;
+        int len = Math.Max(1, host.UiFor(Part1Game.ObsBase + obs)?.ShownLength(motion) ?? 1);
+        _effects.Add(new Effect(Part1Game.ObsBase + obs, motion, layer, x, y, host._lastTime, len));
+        return len / GameWindow.TicksPerSecond;
+    }
 
     /// <summary>행동 304 로 숨긴 인물.</summary>
     private bool[] _hidden = [];
@@ -147,6 +192,10 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _pan = null;
         _cam = (field.Header[1], field.Header[2]);
         _motion = new (int, bool)?[field.Sprites.Count];
+        _motionStart = new double[field.Sprites.Count];
+        _motionOnce = new bool[field.Sprites.Count];
+        _frozen = new int?[field.Sprites.Count];
+        _effects.Clear();
         _hidden = new bool[field.Sprites.Count];
         _flip = new bool[field.Sprites.Count];
         _shadow = new bool[field.Sprites.Count];
@@ -167,12 +216,14 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             case 502:
                 int battle = c.Args[0];
                 _open = false;
+                shell.ChainTo(1, battle);                                 // 사슬 자리 — 이 필드는 지났다(전투를 마치면 챕터로)
                 host.LeaveScene(() => shell.StartBattle(battle));   // 필드 안의 전투 — 마치면 챕터로 돌아간다
                 return true;
             case 501:                                                 // 다음 필드(0x100cfeb0 → 장면 5). 503 은 마을 갈래 낱말이라 필드를 안 넘긴다(0x100d09a0).
                 int next = c.Args[0];
                 var onEnd = _onEnd;
                 Script.StopSounds();
+                shell.ChainTo(2, next);
                 host.LeaveScene(() => Open(next, onEnd ?? (() => { })));
                 return true;
             case 506:                                                 // 챕터 끝(0x100cfe60: 팀을 무리로 → 장면 10 연대표)
@@ -309,17 +360,26 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             // 인물 — 서기(동작 0) · 걷는 중이면 걷기(동작 1) 모션을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽).
             // 모션 번호 = 동작 × 3 + 방향(ObsMotionTable). 아래쪽에 선 사람을 나중에.
             int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
-            foreach (int i in Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).OrderBy(i => spots[i].Y))
+            // 효과 그림(300 [Obs < 10000]) — 다 돈 것은 지운다. 층 0 은 인물과 함께 발끝(y) 차례로, 층 1 · 2 는 그 위에 차례로(0x100c8120 은 층마다 y 로 줄 세워 그린다).
+            _effects.RemoveAll(e => (host._lastTime - e.Start) * GameWindow.TicksPerSecond >= e.Length);
+            void DrawEffect(Effect e) =>
+                host.DrawUi(e.Obs, e.Motion, (int)((host._lastTime - e.Start) * GameWindow.TicksPerSecond), ox + e.X - camX, oy + top + e.Y - camY, GameWindow.UiBlend.Alpha, loop: false);
+            var people = Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).Select(i => (Y: spots[i].Y, Person: i, Fx: (Effect?)null))
+                                   .Concat(_effects.Where(e => e.Layer <= 0).Select(e => (Y: e.Y, Person: -1, Fx: (Effect?)e))).OrderBy(d => d.Y).ToList();
+            foreach (var (_, i, fx) in people)
             {
+                if (fx != null) { DrawEffect(fx); continue; }
                 var facing = _facing[i];
                 int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
                 var (motion, mirror) = _motion[i] ?? (action * 3 + ObsMotionTable.DirectionOf(facing), facing == Facing.Right);
                 var (x, y) = spots[i];
+                int personTick = MotionTick(i);
                 if (_shadow[i])
                     host.DrawUi(Part1Game.ObsBase + ShadowObs, 0, tick, ox + x - camX, oy + top + y - camY, GameWindow.UiBlend.Darken, loop: true, fade: 0.55);   // 그림자 그림의 점은 어둡기 단계(0~31, 섞기 8) — 바탕을 어둡게
-                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, tick, ox + x - camX, oy + top + y - camY,
-                            GameWindow.UiBlend.Alpha, loop: true, mirror: mirror ^ _flip[i]);
+                host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, personTick, ox + x - camX, oy + top + y - camY,
+                            GameWindow.UiBlend.Alpha, loop: _motion[i] == null || !_motionOnce[i], mirror: mirror ^ _flip[i]);
             }
+            foreach (var e in _effects.Where(e => e.Layer > 0).OrderBy(e => e.Layer).ThenBy(e => e.Y)) DrawEffect(e);
             if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
         }
         DrawTalkLayer(ox, oy);

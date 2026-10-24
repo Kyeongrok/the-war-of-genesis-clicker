@@ -27,7 +27,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int BannerObs = 219, TeamObs = 226, RingObs = 182;
 
     /// <summary>Esc 메뉴 — 원본 지도에는 없다(시스템 메뉴 쪽). 리메이크에 있던 연대표 · 일행 창 · 타이틀을 여기에 둔다.</summary>
-    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "파트1 타이틀", "돌아가기"];
+    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
 
     internal const int MenuX = 250, MenuY = 170, MenuW = 140, MenuRowH = 28;
 
@@ -119,7 +119,45 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         TeamPlace = team => _teams is { } teams && team >= 0 && team < teams.Count ? teams[team].Place : -1,
         TeamMoved = (team, place) => { if (_teams is { } teams && team >= 0 && team < teams.Count && _chapter is { } c && place >= 0 && place < c.Places.Count) teams[team].Place = place; },
         TeamJoin = JoinTeam,
+        // 챕터 100 · 102 · 103(챕터 29 한 곳: 그림 342 를 바래 띄우고 30틱 뒤 바래 걷는다) — 덮개가 떠 있는 동안은 기다림(2 · 1)을 지킨다.
+        TimedNow = () => _cover != null || _transition != null,
+        PictureShow = (id, x, y, _) => { var (px, w, h) = shell.Field.ReadImage(id); _cover = px != null ? (px, w, h, x, y) : null; },
+        PictureClear = () => _cover = null,
+        Transition = (mode, _, fadeOut, fadeIn) =>
+        {
+            _transition = (_shownCover, fadeOut, fadeIn, host._lastTime);
+            if (mode == 1) _cover = null;
+        },
+        UiReset = () => { CloseWindows(); _hover = -1; },
+        Ending = OnEnding,
     };
+
+    /// <summary>챕터 100 의 그림 덮개(BGRs, 그림 안 자리) — 덮인 동안 지도 대신 그린다. 102 · 103 [1, …] 이 걷는다.</summary>
+    private (uint[] Px, int W, int H, int X, int Y)? _cover;
+
+    /// <summary>지난 틀에 보인 덮개 — 103 의 「옛 화면」.</summary>
+    private (uint[] Px, int W, int H, int X, int Y)? _shownCover;
+
+    /// <summary>103 화면 바꾸기 — (옛 덮개, 나감 틱, 들어옴 틱, 시작). 나감 동안 옛 화면을 검게 바래고, 들어옴 동안 새 화면을 드러낸다(0x100ab380).</summary>
+    private ((uint[] Px, int W, int H, int X, int Y)? From, int Out, int In, double Start)? _transition;
+
+    /// <summary>
+    /// 챕터 705 [n] — 원본은 영상(0 = G3.pak 엔딩 · 1 = Setup\_sys2.cab)을 틀고 장면 7(불러오기 · 타이틀 · 새로)로 간다. 리메이크는 영상을 넣지 않아(사용자 결정)
+    /// 챕터를 끝낸 것으로 적고 파트1 타이틀로 돌아간다.
+    /// </summary>
+    private void OnEnding(int movie)
+    {
+        GameWindow.TestRunTrace($"part1 chapter {_chapter?.Id} ending {movie}");   // 시험 전용 줄
+        int done = _chapter?.Id ?? host.Part1.ChapterId;
+        if (done >= 0) host.Part1.FinishedChapters.Add(done);
+        host.Part1.PendingActions = [];
+        host.Part1.Chain = null;
+        _resume = false;
+        host.Part1.Save(host.FlagSt._flags);
+        _gameOver = true;
+        host.Toast("파트1 끝");
+        host.LeaveScene(() => { _open = false; shell.ReturnFromBattle(false); });
+    }
 
     /// <summary>
     /// 게임 오버 — 챕터 행동 500(0x100c04e0 → 0x100b44c0: 그림 789 를 띄우고 장면 7 = 불러오기 · 타이틀 · 새로)과 턴 한도.
@@ -241,7 +279,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             case 503:
                 int chapterId = _chapter?.Id ?? -1;
                 _resume = true;
-                host.LeaveScene(() => { _open = false; shell.Field.Open(target, () => Open(chapterId)); });
+                // 떠나기 전에 남은 행동(503 을 머리에)을 적는다 — 안 적으면 필드 안 전투의 세이브가 지난번에 적힌 남은 행동을 실었다.
+                host.LeaveScene(() => { SaveProgress(); _open = false; shell.Field.Open(target, () => Open(chapterId)); });
                 return true;
         }
         return false;
@@ -256,6 +295,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         int done = _chapter?.Id ?? host.Part1.ChapterId;
         if (done >= 0) host.Part1.FinishedChapters.Add(done);
         host.Part1.PendingActions = [];
+        host.Part1.Chain = null;
         _resume = false;
         host.Part1.Save(host.FlagSt._flags);   // 챕터가 끝났다 — 남은 행동 없이
         _open = false;
@@ -290,6 +330,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         _teams = teams;
         _team = Math.Clamp(host.Part1.SelectedTeam.GetValueOrDefault(chapterId), 0, teams.Count - 1);
         host.Part1.ChapterId = chapterId;
+        host.Part1.Chain = null;   // 챕터로 돌아왔다 — 사슬은 끝났다(아래 SaveProgress 가 지운 것을 적는다)
+        PlayMapMusic(chapter);
         BuildMap(chapter);
         // 처음 화면 자리 = (min(낱말 3, 폭 − 640), min(낱말 4, 높이 − 480))(13.1). 전투 · 필드에서 돌아오면 보던 자리 그대로.
         if (!same) _cam = (chapter.Header.Length > 4 ? chapter.Header[3] : 0, chapter.Header.Length > 4 ? chapter.Header[4] : 0);
@@ -302,6 +344,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         // 열 때마다 적어 둔다 — 사건이 전투·필드로 보냈으면 남은 행동까지(CONTINUE 가 그 자리에서 잇는다).
         SaveProgress();
         return true;
+    }
+
+    /// <summary>
+    /// 지도 배경음악 — 챕터 머리 낱말 8(무리 표 +0x16, 머리 로더 0x100ade70)의 <c>BGMs</c> 곡을 되풀이로(장면 4 0x100af69a: 0xffff 가 아니면 0x100094e0(곡, 1)).
+    /// 챕터 0 은 16, 20~29 는 17. 전투 · 필드가 제 곡으로 바꾸고, 돌아와 지도를 열면 다시 건다(같은 곡이 돌고 있으면 그대로).
+    /// </summary>
+    private void PlayMapMusic(Part1Chapter chapter)
+    {
+        if (chapter.Header.Length <= 8 || chapter.Header[8] < 0) return;
+        int bgm = Part1Game.BgmBase + chapter.Header[8];
+        if (host._musicId != bgm) host.PlayMusicFile(bgm, loop: true);
     }
 
     /// <summary>지도 그림을 1:1 로 — 열쇠 빛깔(노랑 · 파랑)과 그림 밖은 바다 무늬(BGR 0). 그림이 없으면 장소를 다 담는 크기의 바다.</summary>
@@ -448,7 +501,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>세이브에서 이어 간다 — 적어 둔 챕터를 열고 남은 행동을 잇는다.</summary>
     internal bool Continue()
     {
+        var chain = host.Part1.Chain;
         PrepareContinue();
+        // 사슬 안에서 적힌 진행 — 그 장면(전투 · 필드)부터 연다. 마치면 챕터로 돌아와 머리를 뺀 남은 행동을 잇는다.
+        if (chain is [1, int battle] && shell.StartBattle(battle)) return true;
+        if (chain is [2, int field]) { shell.FieldFromBattle(field); return true; }
         return Open(host.Part1.ChapterId);
     }
 
@@ -461,7 +518,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void PrepareContinue(bool inBattle = false)
     {
         var pending = host.Part1.PendingActions;
-        if (inBattle && pending.Count > 0 && pending[0].Code is 502 or 900) pending = [.. pending.Skip(1)];
+        // 사슬 안(Chain)이면 머리(사슬을 연 502 · 503 · 900)는 이미 지났다 — 이어 하기 · 전투 세이브 모두 뺀다.
+        if ((inBattle || host.Part1.Chain != null) && pending.Count > 0 && (pending[0].Code is 502 or 900 || host.Part1.Chain != null && pending[0].Code == 503))
+            pending = [.. pending.Skip(1)];
         _resume = pending.Count > 0;
         Events.Restore(pending);
         if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
@@ -539,6 +598,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     internal void UpdateHover(int bx, int by)
     {
+        if (Events.Choice != null && Events.Talk == null) { if (ChoiceAt(bx, by) is >= 0 and var c) _choiceHover = c; return; }
         if (Picking) { _hover = PickAt(bx, by) + PickHit; return; }
         if (_status is { _open: true }) { _status.UpdateHover(bx, by); return; }
         if (_exchange is { _open: true }) { _exchange.UpdateHover(bx, by); return; }
@@ -586,6 +646,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         _pickCache = null;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(pick.Chr);
+        host.Btl.RefreshPart1Abilities(pick.Chr);   // 전투 안에서 고르면 그 판의 어빌리티 목록에도 바로(사용자 보고: 필살 6연사를 배웠는데 목록에 없다)
         string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
         host.Toast($"{who} — {option.Name} Lv {option.NewLevel}");
         SaveProgress();
@@ -625,6 +686,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void OnClick(int bx, int by)
     {
         if (Events.Talk != null) { if (!shell.NextTalkPage()) Events.Advance(); return; }   // 대사가 떠 있으면 누르면 다음 장 · 다음 대사
+        if (Events.Choice != null) { if (Events.WaitingOnChoice && ChoiceAt(bx, by) is >= 0 and var c) Events.Choose(c); return; }
+        if (_cover != null || _transition != null) return;
         if (Picking) { PressPick(PickAt(bx, by)); return; }
         if (_status is { _open: true }) { _status.OnClick(bx, by); return; }
         if (_exchange is { _open: true }) { _exchange.OnClick(bx, by); return; }
@@ -633,6 +696,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_mode == Mode.Menu && hit < 0) { _mode = Mode.Map; return; }
         Press(hit);
     }
+
+    /// <summary>지도 저장을 받을 수 있나 — 사건 · 대사 · 고르기 · 덮개 · 레벨업 고르기가 없을 때.</summary>
+    internal bool CanSave => _chapter != null && Events.Idle && !Picking && _cover == null && _transition == null;
+
+    /// <summary>지도 세이브의 이름(칸 목록 글) — 지역 이름(머리 낱말 11).</summary>
+    internal string RegionName => _chapter is { } c && c.Header.Length > 11 && c.Header[11] >= 0 && c.Header[11] < c.Lines.Count
+        ? Part1Game.PlainText(c.Lines[c.Header[11]]).Replace('\n', ' ').Trim() : "";
 
     /// <summary>오른 단추 — 떠 있는 창 · 이동 고르기를 닫는다(원본 메시지 0x3ec). 아무것도 없으면 Esc 메뉴.</summary>
     internal void OnRightClick()
@@ -653,6 +723,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void OnKey(int key)
     {
         if (Events.Talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE && !shell.NextTalkPage()) Events.Advance(); return; }
+        if (Events.Choice is { } choosing)
+        {
+            int n = choosing.Options.Count;
+            if (n > 0 && key is Win32.VK_UP or Win32.VK_DOWN) _choiceHover = (Math.Clamp(_choiceHover, 0, n - 1) + (key == Win32.VK_UP ? n - 1 : 1)) % n;
+            else if (n > 0 && key is Win32.VK_RETURN or Win32.VK_SPACE && Events.WaitingOnChoice) Events.Choose(Math.Clamp(_choiceHover, 0, n - 1));
+            return;
+        }
+        if (_cover != null || _transition != null) return;
         if (Picking) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressPick(Math.Max(0, _hover - PickHit)); return; }   // 고르기 창은 닫을 수 없다(짚은 것 없으면 첫 후보)
         if (key == Win32.VK_ESCAPE) { Back(); return; }
         if (WindowOpen) return;
@@ -680,8 +758,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             case >= TargetHit and < TargetHit + 1000: _mode = Mode.Map; MoveTo(hit - TargetHit); break;
             case MenuHit + 0: _mode = Mode.Map; host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case MenuHit + 1: _mode = Mode.Map; OpenParty(0); break;
-            case MenuHit + 2: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
-            case MenuHit + 3: _mode = Mode.Map; break;
+            // 저장 · 불러오기 — 전투 SAVE 와 같은 칸 창(파트1 칸 part1-battle-save-NN.json). 지도에서 적은 칸은 장면 갈래 4(「챕  터」)로, 불러오면 이 지도로 돌아온다.
+            case MenuHit + 2: _mode = Mode.Map; SaveProgress(); host.SlotsScr.OpenSlots(0); break;
+            case MenuHit + 3: _mode = Mode.Map; host.SlotsScr.OpenSlots(1); break;
+            case MenuHit + 4: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
+            case MenuHit + 5: _mode = Mode.Map; break;
             case >= 0 when hit < chapter.Places.Count: GoTo(hit); break;
         }
     }
@@ -702,6 +783,22 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (MoveTargets().Count == 0) return;
         _mode = Mode.Move;
         _hover = -1;
+        RevealTargets();
+    }
+
+    /// <summary>
+    /// 이동 고르기를 열 때 팀 자리와 갈 곳이 다 보이게 화면을 민다(리메이크 편의 — 원본은 마우스 쪽 이웃 하나에 고리를 둔다).
+    /// 챕터 20 처음 화면(385, 397)에서는 솔즈베리다리(398, 450)가 왼위 지역 띠 밑에 가려 고리가 띠 아래 반쯤 숨었다(사용자 보고).
+    /// </summary>
+    private void RevealTargets()
+    {
+        if (_chapter is not { } chapter || _party < 0 || _party >= chapter.Places.Count) return;
+        var points = MoveTargets().Append(_party).Select(n => Center(chapter.Places[n])).ToList();
+        int minX = points.Min(p => p.X), maxX = points.Max(p => p.X), minY = points.Min(p => p.Y), maxY = points.Max(p => p.Y);
+        const int left = 40, right = 500, top = 100, bottom = 440;   // 띠(152×64) · 오른쪽 단추(x 520~) · 아래 안내 글을 비킨다
+        int dx = minX - _cam.X < left ? minX - left - _cam.X : maxX - _cam.X > right ? maxX - right - _cam.X : 0;
+        int dy = minY - _cam.Y < top ? minY - top - _cam.Y : maxY - _cam.Y > bottom ? maxY - bottom - _cam.Y : 0;
+        if (dx != 0 || dy != 0) Scroll(dx, dy);
     }
 
     /// <summary>
@@ -759,6 +856,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void Draw()
     {
         if (_chapter is not { } chapter) return;
+        Events.Pump();   // 챕터 덮개 동안의 기다림(2 · 1)을 잇는다
         var (ox, oy) = host.Mos.MosesOrigin();
         const int W = MosesScene.MosesW, H = MosesScene.MosesH;
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
@@ -800,7 +898,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             }
 
         // 지도 글(층)은 창 · 메뉴 · 턴 끝 알림 밑으로 비치므로 그동안은 안 그린다.
-        bool window = WindowOpen || _mode == Mode.Menu || host._lastTime < _noticeUntil;
+        bool window = WindowOpen || _mode == Mode.Menu || host._lastTime < _noticeUntil || host.SlotsScr.SlotsOpen || host.Sys._confirm != null;
         bool calm = Events.Talk == null && !Picking;
 
         // 장소 이름 — 마을(종류 1)만, 장소 아래 가운데(낱말 0 의 clg 글, 0x100b2940). 전투 장소 이름은 지도 그림에 그려져 있다. 지도 그림이 없으면 다 적는다.
@@ -819,7 +917,19 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 host.UiText(name, sx - tw / 2, sy, GameWindow.White, 12);
             }
 
-        // 이동 고르기 — 갈 수 있는 이웃마다 퍼지는 고리(Obs 182, 0x100c4cf0).
+        // 이동 고르기 — 갈 수 있는 이웃마다 퍼지는 고리(Obs 182, 0x100c4cf0)와 팀 자리에서 그 이웃까지의 선.
+        // 원본(0x100c4e00)은 고리 하나를 마우스 쪽 이웃에 두고(0x100c50b0), 팀 장소 가운데 → 고리 자리로 선을 긋는다:
+        // 0x1000c8b0 선을 (0,0) · x+1 · y+1 · x−1 · y−1 로 다섯 번(굵기 3 십자꼴), 빛깔 16비트 0x6259(15비트 0x3139) = (99, 73, 206).
+        // 리메이크는 이웃마다 고리와 선을 함께 그린다.
+        if (_mode == Mode.Move && _party >= 0 && _party < chapter.Places.Count)
+        {
+            var (fx, fy) = Screen(chapter.Places[_party], ox, oy);
+            foreach (int n in MoveTargets())
+            {
+                var (tx, ty) = Screen(chapter.Places[n], ox, oy);
+                foreach (var (dx, dy) in RouteOffsets) Line(fx + dx, fy + dy, tx + dx, ty + dy, RouteColor);
+            }
+        }
         if (_mode == Mode.Move)
             foreach (int n in MoveTargets())
             {
@@ -847,7 +957,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                     bool on = at[k] == _team;
                     int tx = gx + 59, ty = gy + 18 * k - 75;
                     Art.Blit(Art.Motion(TeamObs, on ? 1 : 2, tick), tx, ty);
-                    if (!window) Art.TextCentered($"{at[k] + 1} 팀", tx + 20, ty + 9, on ? GameWindow.White : 0xFFD0D8F0, 11);
+                    // 꼬리표 글은 판 위 층이라 창을 뚫고 보인다 — 전에는 메뉴 · 턴 끝 알림이 뜨기만 하면 모든 꼬리표 글을 숨겨 빈 상자로 보였다(사용자 보고).
+                    // 이제는 그 꼬리표가 메뉴 · 알림 상자에 실제로 덮일 때만 숨긴다(상태 · 교환 창은 화면을 거의 덮어 늘 숨긴다).
+                    if (!TagCovered(tx - ox, ty - oy, 39, 18)) Art.TextCentered($"{at[k] + 1} 팀", tx + 20, ty + 9, on ? GameWindow.White : 0xFFD0D8F0, 11);
                 }
             }
         }
@@ -886,9 +998,96 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
         if (_mode == Mode.Menu) DrawMenu(ox, oy);
 
-        if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Events.TalkSlot, Events.Faces);
+        DrawCover(ox, oy);
+        if (Events.Talk is { } page && Events.TalkSlot == Part1SceneScript.PageSlot)
+            shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                 // 1104 표 창(0x100a9000, 70 · 100 · 500×285)
+        else if (Events.Talk is { } narration && Events.TalkSlot == Part1SceneScript.NarrationSlot)
+            shell.DrawTalkBox(ox + 10, oy + 5, 619, 35, "", narration.Text);               // 210 해설 띠
+        else if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Events.TalkSlot, Events.Faces);
+        else if (Events.Choice is { } choice)
+        {
+            // 1100 물음 + 1101 고를 줄(0x100aa690 · 0x100aa750) — 고르면 챕터 변수 = 1부터 센 차례.
+            shell.DrawTalkBox(ox + 64, oy + 336, 511, 111, choice.Speaker, choice.Text);
+            for (int i = 0; i < choice.Options.Count; i++)
+            {
+                var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+                shell.DrawButton(ox + x, oy + y, w, h, choice.Options[i], i == _choiceHover);
+            }
+        }
         else if (Picking) DrawPick(ox, oy);
         host.DrawToast();
+    }
+
+    /// <summary>화면(640×480) 네모 (x, y, w, h) 가 떠 있는 창 · 메뉴 · 턴 끝 알림에 덮이나.</summary>
+    private bool TagCovered(int x, int y, int w, int h)
+    {
+        if (WindowOpen || host.SlotsScr.SlotsOpen || host.Sys._confirm != null) return true;   // 저장 칸 창 · 확인 창 위로 글이 비치지 않게
+        bool Hit(int rx, int ry, int rw, int rh) => x < rx + rw && x + w > rx && y < ry + rh && y + h > ry;
+        if (_mode == Mode.Menu && Hit(MenuX - 10, MenuY, MenuW + 20, 36 + MenuItems.Length * MenuRowH)) return true;
+        return host._lastTime < _noticeUntil && Hit(200, 200, 240, 40);
+    }
+
+    /// <summary>이동 고르기 선 빛깔(0x100c4e00: 16비트 0x6259) · 다섯 번 긋는 어긋남.</summary>
+    private const uint RouteColor = 0xFF6349CE;
+    private static readonly (int, int)[] RouteOffsets = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1)];
+
+    /// <summary>한 점 굵기 선(브레젠험) — 화면(640×480) 안만.</summary>
+    private void Line(int x0, int y0, int x1, int y1, uint color)
+    {
+        int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        var fb = host._fb;
+        int bw = host.BoardWidth, bh = host.BoardHeight;
+        for (int guard = 0; guard < 8000; guard++)
+        {
+            if (x0 >= ox && x0 < ox + MosesScene.MosesW && y0 >= oy && y0 < oy + MosesScene.MosesH && (uint)x0 < (uint)bw && (uint)y0 < (uint)bh) fb[y0 * bw + x0] = color;
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+    }
+
+    /// <summary>챕터 100 덮개 · 103 바꾸기 — 바꾸는 중이면 나감 동안 옛 화면(덮개 또는 지도)을 검게, 들어옴 동안 새 화면을 드러낸다.</summary>
+    private void DrawCover(int ox, int oy)
+    {
+        const int W = MosesScene.MosesW, H = MosesScene.MosesH;
+        var cover = _cover;
+        double fade = 0;
+        if (_transition is { } tr)
+        {
+            double t = (host._lastTime - tr.Start) * GameWindow.TicksPerSecond;
+            if (t < tr.Out) { cover = tr.From; fade = t / Math.Max(1, tr.Out); }
+            else if (t < tr.Out + tr.In) fade = 1 - (t - tr.Out) / Math.Max(1, tr.In);
+            else _transition = null;
+        }
+        _shownCover = cover;
+        if (cover is { } c)
+        {
+            int sx = Math.Clamp(c.X, 0, Math.Max(0, c.W - W)), sy = Math.Clamp(c.Y, 0, Math.Max(0, c.H - H));
+            host.FillRect(ox, oy, W, H, 0xFF000000);
+            for (int y = 0; y < Math.Min(H, c.H - sy); y++)
+                for (int x = 0; x < Math.Min(W, c.W - sx); x++)
+                    host.SetPixel(ox + x, oy + y, c.Px[(sy + y) * c.W + sx + x] | 0xFF000000);
+        }
+        if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24);
+    }
+
+    /// <summary>고르기 줄 자리(필드와 같은 꼴) — 물음 상자 위에 쌓는다.</summary>
+    private static (int X, int Y, int W, int H) ChoiceRow(int i, int count) => (120, 330 - (count - i) * 32, 400, 28);
+
+    private int _choiceHover;
+
+    private int ChoiceAt(int bx, int by)
+    {
+        if (Events.Choice is not { } choice) return -1;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        for (int i = 0; i < choice.Options.Count; i++)
+        {
+            var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+            if (bx >= ox + x && bx < ox + x + w && by >= oy + y && by < oy + y + h) return i;
+        }
+        return -1;
     }
 
     private void DrawMenu(int ox, int oy)

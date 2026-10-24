@@ -185,6 +185,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool OnKey(int key)
     {
         if (!_open) return false;
+        // 저장 칸 창 · 확인 창이 떠 있으면 키는 그 창 몫이다(타이틀 길이 Esc 로 닫는다) — 전에는 확인 창에서 Enter 가 파트1 타이틀의 NEW GAME 을 눌렀다.
+        if (host.Sys.SystemOpen) return false;
         if (_party is { _open: true }) _party.OnKey(key);
         else if (_town is { _open: true }) _town.OnKey(key);
         else if (_field is { _open: true }) _field.OnKey(key);
@@ -242,6 +244,35 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         Chapter.PrepareContinue(inBattle: true);
     }
 
+    /// <summary>챕터 지도가 떠 있나(필드 · 마을 · 일행 창이 아니라) — 지도 저장(장면 갈래 4)이 본다.</summary>
+    internal bool ChapterMapOpen => _chapter is { _open: true } && _field is not { _open: true } && _town is not { _open: true } && _party is not { _open: true };
+
+    /// <summary>연대표가 떠 있나 — 연대표 저장(장면 갈래 7)이 본다.</summary>
+    internal bool TimelineOpen => _timeline is { _open: true } && _chapter is not { _open: true };
+
+    /// <summary>연대표에서 적은 세이브(장면 갈래 7 + 파트1 진행)를 불러온 뒤 — 그 진행으로 연대표를 연다.</summary>
+    internal void LoadTimelineSave()
+    {
+        HookGrowth();
+        host.TitleScr.OpenTitle();
+        Open();
+        Chapter.Forget();
+        Timeline.Open();
+    }
+
+    /// <summary>
+    /// 지도에서 적은 세이브(장면 갈래 4)를 불러온 뒤 — 진행(<see cref="Part1Progress.FromJson"/>)은 이미 되살렸다. 전투 · 타이틀 어디서 불렀든 그 챕터 지도를 연다
+    /// (팀 자리 · 지도 턴 · 남은 사건 그대로 — 이어 하기와 같은 길).
+    /// </summary>
+    internal void LoadChapterSave()
+    {
+        HookGrowth();
+        host.TitleScr.OpenTitle();
+        Open();
+        Chapter.Forget();
+        if (host.Part1.ChapterId < 0 || !Chapter.Continue()) host.Toast("파트1 진행 기록을 읽지 못했습니다");
+    }
+
     /// <summary>파트1 인물을 읽을 때 진행의 자란 것(경험치 · 어빌리티)을 입히게 한다 — 만들어 둔 인물은 버린다.</summary>
     internal void HookGrowth()
     {
@@ -277,9 +308,21 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// </summary>
     internal void FieldFromBattle(int field)
     {
+        ChainTo(2, field);
         host.TitleScr.OpenTitle();
         Open();
         Field.Open(field, () => ReturnFromBattle(true));
+    }
+
+    /// <summary>
+    /// 사슬 — 챕터 사건이 연 장면이 다음 장면(전투 101 · 104, 필드 502 · 501)으로 넘어간다. 그 자리를 진행에 적어 둔다(<see cref="Part1Progress.Chain"/>):
+    /// 이어 하기는 이 장면부터 열고, 이 장면 안의 전투 세이브는 챕터 남은 행동의 머리(사슬을 연 502 · 503)를 빼고 잇는다.
+    /// </summary>
+    internal void ChainTo(int kind, int id)
+    {
+        if (host.Part1.ChapterId < 0) return;
+        host.Part1.Chain = [kind, id];
+        host.Part1.Save(host.FlagSt._flags);
     }
 
     /// <summary>전투 행동 105(결과 7 → 장면 10) — 이기고 챕터를 끝내 연대표로.</summary>
