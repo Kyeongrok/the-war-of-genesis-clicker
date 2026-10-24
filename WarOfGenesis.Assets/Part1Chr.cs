@@ -24,6 +24,19 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// <summary>칸 19 — 기본 최대 HP(어빌리티 1 이 레벨마다 100 을 더한다).</summary>
     public int BaseMaxHp => Fields[19];
 
+    /// <summary>능력치 칸 번호 — 쓸 때 값은 바탕 + 같은 번호 어빌리티 레벨 × 5 + 장비 보정이다(<see cref="Stat"/>).</summary>
+    public const int Str = 20, Skill = 21, Dex = 22, Int = 23, Spd = 25, Ac = 26, Mr = 27, Range = 29;
+
+    /// <summary>능력치 칸 → 그것을 올리는 어빌리티(<c>Abi.dat</c> 2 STR … 9 MR)와 장비 보정 코드(<c>0x1009eaa0</c>~<c>0x1009ec70</c>).</summary>
+    public static (int Ability, int Bonus) StatSource(int field) => field switch
+    {
+        Str => (2, 0xc9), Skill => (3, 0), Dex => (4, 0xc8), Int => (5, 0xcb),
+        Range => (6, 0xce), Spd => (7, 0xcd), Ac => (8, 0xca), Mr => (9, 0xcc), _ => (0, 0),
+    };
+
+    /// <summary>장비 보정을 뺀 능력치 — 바탕 + 어빌리티 레벨 × 5.</summary>
+    public int Stat(int field) => Fields[field] + (StatSource(field).Ability is > 0 and var a ? Math.Max(0, AbilityLevel(a)) * 5 : 0);
+
     /// <summary>칸 39~43 — 장비 아이템 번호 다섯(0 은 빈 칸).</summary>
     public int[] Equipment => Fields[39..44];
 
