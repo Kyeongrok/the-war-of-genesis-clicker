@@ -259,6 +259,17 @@ public static class Part1Combat
     /// <summary>회피 확률(%) — 대상이 어빌리티 77 을 가졌을 때. 상태 +0x258 이 없으면 대상 DEX 는 반만 친다.</summary>
     public static int EvadeChance(int targetDex, bool fullDex, int attackerHit, int attackerDex) =>
         attackerHit + attackerDex > 0 ? (fullDex ? targetDex : targetDex / 2) * 100 / (attackerHit + attackerDex) : 0;
+
+    /// <summary>
+    /// 막기 — <c>0x10040eb0</c>: 어빌리티 76 이면 (대상 두 손 명중 + DEX, 자세 +0x257 이 없으면 ½) × 150 / (때린 이 명중값 + DEX) &gt; rand()%100,
+    /// 80 이면 × 200(자세 +0x25b 면 늘). <paramref name="roll"/> 은 rand()%100.
+    /// </summary>
+    public static bool Blocks(int ability, int guard, int attackerHit, int attackerDex, int roll)
+    {
+        int against = attackerHit + attackerDex;
+        if (ability == 0 || against <= 0) return false;
+        return (ability == 76 ? guard / 2 * 150 : guard * 200) / against > roll;
+    }
 }
 
 /// <summary>
@@ -299,6 +310,18 @@ public sealed record Part1Fighter(Part1Chr Chr, Part1Item?[] Equipment)
 
     /// <summary>어빌리티 77 회피 — 이것이 있어야 회피를 굴린다.</summary>
     public bool CanEvade => Chr.AbilityLevel(77) >= 0;
+
+    /// <summary>막기 — 어빌리티 76 방어(대상 값 ½ · ×150) 또는 80 완전방어(×200)를 가졌을 때만 굴린다(<c>0x10040eb0</c>). 0 없음.</summary>
+    public int BlockAbility => Chr.AbilityLevel(76) >= 0 ? 76 : Chr.AbilityLevel(80) >= 0 ? 80 : 0;
+
+    /// <summary>막기 식의 대상 쪽 값 — 두 손 아이템 명중(<c>+0x60</c>) + 보정 207 둘(<c>0x1003f240</c>). 여기에 DEX 를 더한다.</summary>
+    public int GuardValue => (Weapon1?.Accuracy ?? 0) + (Weapon2?.Accuracy ?? 0) + 2 * EquipBonus(Part1Bonus.Accuracy);
+
+    /// <summary>막으면 방어에 더하는 값 — 두 손 아이템 <c>+0x58</c>(<c>0x1003f220</c>).</summary>
+    public int BlockDefense => (Weapon1?.Defense ?? 0) + (Weapon2?.Defense ?? 0);
+
+    /// <summary>장비 가운데 그 보정 코드를 단 것이 있나(<c>0x1009e120</c> — 개수를 센다).</summary>
+    public bool HasBonus(int code) => Equipment.Any(i => i?.Bonuses.Any(b => b.Code == code) == true);
 }
 
 /// <summary>

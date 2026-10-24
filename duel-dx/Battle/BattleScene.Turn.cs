@@ -1865,9 +1865,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
         if (timed && amount <= 0) amount = 1;   // 타이밍 크리티컬은 「Miss」로 떨어지지 않는다
-        if (result == 3 || amount <= 0)
+        bool part1Guard = host._scene.IsPart1 && result is Part1Rules.Blocked or Part1Rules.Dodged;
+        if (result == 3 || amount <= 0 || (part1Guard && result == Part1Rules.Dodged))
         {
             ShowNumber(t, host._db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
+            // 파트1 피함(결과 5) — 「빗나감」 글에 더해 때린 이 쪽을 보고 동작 54 를 한다(0x1003dfda). 막았는데 피해가 0 이어도 동작 6(0x1003df9a).
+            if (part1Guard) PlayGuardReaction(a, t, result);
             // 빗나가도 원본은 상태이상을 따로 굴리고(0x1007a285 → 0x1007bcc0) 피격 가속(10)도 건다(0x10079f59, 결과 2·3 모두) — fg-21 ⑪.
             RushTp(t);
             ApplyAilments(a, t, w);
@@ -1882,7 +1885,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         t.Hp = Math.Max(_demo != null ? 1 : 0, t.Hp - amount);   // 시연 중에는 아무도 안 쓰러진다(SkillDemo.cs)
         RushTp(t);
         ShowNumber(t, $"{host._db.T(159)} {amount}", DamageColor);
-        PlayHitReaction(t, damaged: true, spark: !host._scene.IsPart1 || Part1.SparksOnHit(a, w));
+        // 파트1 막음(결과 4) — 피해 숫자는 뜨지만 맞기 몸짓 · 불꽃 대신 때린 이 쪽을 보고 동작 6(팔짱)을 한다(0x1003df9a).
+        if (part1Guard) PlayGuardReaction(a, t, result);
+        else PlayHitReaction(t, damaged: true, spark: !host._scene.IsPart1 || Part1.SparksOnHit(a, w));
         if (crit) PlayCritFlash();
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);

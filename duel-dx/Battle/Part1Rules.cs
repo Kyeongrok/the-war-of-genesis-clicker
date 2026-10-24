@@ -197,8 +197,11 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         };
     }
 
+    /// <summary>파트1 피해 결과(<c>0x100413b0</c>) — 4 막음(피해는 들어간다, 맞는 이는 동작 6) · 5 피함(피해 0, 동작 54). 7(역습 자세로 피함)은 자세를 안 옮겨 안 나온다.</summary>
+    internal const int Blocked = 4, Dodged = 5;
+
     /// <summary>
-    /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)로 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
+    /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)에 파트1 의 4 막음 · 5 피함을 더해 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>
     internal (int Amount, int Result, bool Critical)? Resolve(Random rng, UnitState a, UnitState t, WorkData w)
     {
@@ -209,9 +212,17 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int selector = attack?.Formula ?? 0;
         if (selector is >= 10 and <= 28) return null;
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
+        // 원본 차례(0x100413b0): 무기로 치는 물리(선택자 0 · 1 · 29 · 30)만 ① 회피(0x10040fa0 → 결과 5, 역습 자세 +0x25a 면 7) ② 명중 굴림(결과 3)
+        // ③ 막기(0x10040eb0 → 결과 4 — 피해는 들어가고 방어에 두 손 아이템 +0x58 을 더한다). 때린 이 장비에 보정 246(회피 불능)이 있으면 ①③ 을 안 굴린다.
+        // 자세(+0x257 ~ +0x25b)는 아직 옮기지 않아 늘 꺼진 것으로 본다. 시험용 DUELDX_P1GUARD=block|dodge 면 굴림 없이 그렇게 된다.
+        bool guardable = selector is 0 or 1 or 29 or 30 && !fa.HasBonus(Part1Bonus.NeverMissed);
+        string? forcedGuard = Environment.GetEnvironmentVariable("DUELDX_P1GUARD");
+        if (guardable && (forcedGuard == "dodge" || (ft.CanEvade
+            && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), false, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))))
+            return Missed("회피", Dodged);
         if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return Missed("명중 굴림");
-        if (ft.CanEvade && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), false, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))
-            return Missed("회피");
+        bool blocked = guardable && (forcedGuard == "block" || Part1Combat.Blocks(ft.BlockAbility, ft.GuardValue + ft.Stat(Part1Chr.Dex, t.Soul),
+            fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul), rng.Next(100)));
         // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
         var attacker = fa.AttackerAt(a.Soul);
         int enchant = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31 ? Enchant.GetValueOrDefault(a) : 0;
@@ -226,22 +237,25 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
         if (!magic && t.Status(4) > 0) defense /= 2;
         if (Has(t, 22)) defense = magic ? defense / 2 : defense * 3 / 2;   // 쉐도우 실드 — AC ×1.5 · MR ×0.5
+        if (blocked) defense += ft.BlockDefense;
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
         if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
         int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;
-        damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out bool crit);
+        // 치명은 결과 2(와 반격 6)에서만 — 막은 것(4)은 굴리지 않는다(0x100417e4).
+        bool crit = false;
+        if (!blocked) damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out crit);
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}" + Environment.NewLine);
-        return (Math.Max(0, damage), 2, crit);
+                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}{(blocked ? " 막음" : "")}" + Environment.NewLine);
+        return (Math.Max(0, damage), blocked ? Blocked : 2, crit);
 
-        (int, int, bool) Missed(string why)
+        (int, int, bool) Missed(string why, int result = 3)
         {
             if (BattleScene.Trace)
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                    $"part1 miss {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}" : "")}: {why} (명중 {accuracy})" + Environment.NewLine);
-            return (0, 3, false);
+                    $"part1 miss {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}" : "")}: {why} (명중 {accuracy}, 결과 {result})" + Environment.NewLine);
+            return (0, result, false);
         }
     }
 }

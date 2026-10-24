@@ -28,7 +28,7 @@ internal sealed unsafe partial class BattleScene
 
     internal readonly List<(int Obs, int Motion, double Start, int X, int Y)> _effects = [];
 
-    /// <summary>치명타가 난 틱에 화면 전체를 한 번 물들인다(<c>0x1002e8f0(9,16,1,0)</c>).</summary>
+    /// <summary>치명타가 난 틱에 화면 전체를 한 번 물들인다(<c>0x1002e8f0(9,16,1,0)</c>, 파트1 은 <c>0x1001c3c0(22,16,1,0)</c>).</summary>
     internal double _critFlashAt = -1;
 
     /// <summary>맞은 쪽 반응 — 동작 2 와 불꽃 이펙트(피해가 있을 때만).</summary>
@@ -55,6 +55,27 @@ internal sealed unsafe partial class BattleScene
             return;
         }
         _effects.Add((HitEffectObs, host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
+    }
+
+    /// <summary>파트1 막기 · 피하기 동작 — 파트1 동작 6(모션 0x12, 팔짱) · 동작 54(모션 0xa2). 54 는 40 뒤 자리(<see cref="Part1Game.ActionMap"/>)에 실려 있다.</summary>
+    internal const int Part1BlockAction = 6, Part1DodgeAction = Part1Game.ExtraBase + 54;
+
+    /// <summary>
+    /// 파트1 막음(결과 4) · 피함(결과 5 · 7) — 맞는 이가 때린 이 쪽으로 돌아서(<c>0x10019de0</c> → <c>0x10035fa0</c> 가 방향 +0x4e 도 바꾼다)
+    /// 막기는 동작 6, 피하기는 동작 54 를 한 번 한다(<c>0x1003df9a</c> · <c>0x1003dfda</c>). 맞기 몸짓 · 불꽃은 없다.
+    /// 파트1 인물 그림 244 가운데 모션 18 이 빈 것이 156, 162 가 빈 것이 147 이다 — 원본도 빈 모션을 틀 뿐이라, 그러면 서 있는 그림 그대로다
+    /// (<see cref="ObsMotionTable.Resolve"/> 가 서기를 준다).
+    /// </summary>
+    internal void PlayGuardReaction(UnitState attacker, UnitState target, int result)
+    {
+        if (attacker != target && (attacker.Col, attacker.Row) != (target.Col, target.Row))
+            target.Facing = FacingToward(target.Col, target.Row, attacker.Col, attacker.Row);
+        int action = result == Part1Rules.Blocked ? Part1BlockAction : Part1DodgeAction;
+        host._sprites.TryGetValue(target.ChrCode, out var sprite);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"{host._lastTime:F2} part1 guard result {result} on {target.ChrCode}: action {action} facing {target.Facing} clip {sprite?.Clip(action, target.Facing)?.Id.ToString() ?? "none"} len {sprite?.Clip(action, target.Facing)?.Length ?? 0}" + Environment.NewLine);
+        PlayAction(target, action);
     }
 
     /// <summary>쓰러질 때 소리 — 파트2 Snd 106, 파트1 Snd 2032(죽음 루틴 <c>0x1003e51d</c>).</summary>
@@ -435,7 +456,10 @@ internal sealed unsafe partial class BattleScene
         return host.UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
     }
 
-    /// <summary>치명타 물들이기 — 방식 9(픽셀 절반)에 가깝게 한 프레임만 화면을 어둡게 번쩍인다.</summary>
+    /// <summary>파트1 치명 물들이기 세기(<c>0x1003dcf6</c> 의 0x10).</summary>
+    internal const int Part1CritLevel = 16;
+
+    /// <summary>치명타 물들이기 — 파트2 는 방식 9(픽셀 절반)에 가깝게, 파트1 은 방식 22(붉은 반전) 로 한 프레임만 화면을 번쩍인다.</summary>
     internal void DrawCritFlash()
     {
         if (_tintFlash.At >= 0 && host._lastTime - _tintFlash.At <= _tintFlash.Ticks / TicksPerSecond && _tintFlash.Mode is >= 1 and <= 7)
@@ -448,6 +472,19 @@ internal sealed unsafe partial class BattleScene
             }
         }
         if (_critFlashAt < 0 || host._lastTime - _critFlashAt > 1.0 / TicksPerSecond) return;
+        if (host._scene.IsPart1)
+        {
+            // 파트1 치명 — 0x1001c3c0(22, 16, 1, 0): 한 틱 동안 그리는 개체 모두를 섞기 22 · 세기 16 으로(0x1001ae96). 색표(0x1000b8d0 을 돌려 읽음,
+            // 555 표 R 0x10132dcc · G 0x101385cc · B 0x10137dcc): R = 세기(픽셀과 상관없음), G · B = 세기 × (31 − 픽셀) / 31 — 붉은 기 도는 어두운 반전.
+            const int level = Part1CritLevel;
+            uint red = (uint)(level * 255 / 31);
+            for (int i = 0; i < host._fb.Length; i++)
+            {
+                uint c = host._fb[i];
+                host._fb[i] = 0xFF000000 | red << 16 | (uint)(level * (255 - (int)(c >> 8 & 0xFF)) / 31) << 8 | (uint)(level * (255 - (int)(c & 0xFF)) / 31);
+            }
+            return;
+        }
         for (int i = 0; i < host._fb.Length; i++)
         {
             uint c = host._fb[i];
