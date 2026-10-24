@@ -387,7 +387,7 @@ internal sealed class Part1JobTree(GameWindow host)
 
         int tx = x + half + 8;
         host.UiFill(x + half, y + 6, 1, h - 12, Line);
-        host.UiText("가르치는 어빌리티  (지금/최대)", tx, y + 6, Gold, 11);
+        host.UiText("배울 수 있는 어빌리티  (지금/최대)", tx, y + 6, Gold, 11);
         var teach = job.Abilities.Where(a => a.Ability > 0).GroupBy(a => a.Ability).Select(g => (Ability: g.Key, Max: g.Max(a => a.Level))).ToList();
         int colW = (x + w - tx - 4) / 2, rows = (h - 30) / 16;
         for (int i = 0; i < teach.Count && i < rows * 2; i++)
