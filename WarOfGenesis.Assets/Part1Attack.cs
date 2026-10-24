@@ -131,6 +131,19 @@ public sealed record Part1Job(int Id, string Name, string EnglishName, (int A, i
 
     public static IReadOnlyList<Part1Job> LoadAll() => ParseAll(Part1Game.Read("Dats", "Job.dat"));
 
+    /// <summary>
+    /// 레벨업 후보(<c>0x1009dac0</c>) — 이 직업의 어빌리티 가운데 아직 안 배운 것은 레벨 1, 최대보다 낮은 것은 지금 + 1. 레벨이 하나 오를 때마다 이 가운데 하나를 올린다.
+    /// </summary>
+    public IEnumerable<(int Ability, int NewLevel)> LevelUpCandidates(Part1Chr chr)
+    {
+        foreach (var (ability, max) in Abilities)
+        {
+            int now = chr.AbilityLevel(ability);
+            if (now < 0) yield return (ability, 1);
+            else if (now < max) yield return (ability, now + 1);
+        }
+    }
+
     public static Part1Job? ById(IReadOnlyList<Part1Job> list, int id) => id >= 1 && id <= list.Count ? list[id - 1] : null;
 
     public static IReadOnlyList<Part1Job> ParseAll(byte[]? b)
