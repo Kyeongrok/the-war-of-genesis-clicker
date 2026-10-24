@@ -132,14 +132,16 @@ internal sealed class Part1JobTree(GameWindow host)
     /// <summary>원본 규칙 — 조건 어빌리티가 모두 그 레벨 이상이면 지금 바꿀 수 있다.</summary>
     private static bool CanChange(Part1Chr? chr, Part1Job job) => chr != null && job.Firsts.Any(f => f.A > 0) && Needs(job).All(n => chr.AbilityLevel(n.Ability) >= n.Need);
 
-    /// <summary>from 에서 to 로 이어지나 — to 의 능력치 아닌 조건을 from 이 가르치는 최대 · from 의 조건 · 인물의 지금 레벨로 채운다.</summary>
+    /// <summary>
+    /// from 에서 to 로 이어지나 — to 의 조건을 모두(HP · SKILL 같은 능력치 어빌리티도) from 이 가르치는 최대 · from 의 조건 · 인물의 지금 레벨로 채울 수 있어야 한다.
+    /// 전에는 능력치 조건을 빼고 봐서 파일럿(HP 최대 3)에서 스페셜 오피서(HP 5)로 바로 이었다(사용자 지적 — 오피서를 거쳐야 한다).
+    /// </summary>
     private static bool Leads(Part1Job from, Part1Job to, Part1Chr? chr)
     {
         if (from.Id == to.Id || !to.Firsts.Any(f => f.A > 0) || Weight(to) <= Weight(from)) return false;
         var own = Needs(from).ToDictionary(n => n.Ability, n => n.Need);
         foreach (var (ability, need) in Needs(to))
         {
-            if (ability <= StatAbilityMax) continue;
             if (Math.Max(Math.Max(Teaches(from, ability), own.GetValueOrDefault(ability)), Level(chr, ability)) < need) return false;
         }
         return true;
