@@ -12,8 +12,8 @@ namespace WarOfGenesis.Assets;
 ///   s16 cols, s16 rows
 ///   cols*rows 바이트  칸 높이(z = 값 × 20 — 파트2 「층」과 같은 단위, 맵 +0x68)
 ///   cols*rows 바이트  칸 지형(비트 1 걷는 유닛 금지 · 2 다른 이동 금지 · 4·8 계단·비탈 걸음, 맵 +0x6c)
-///   s16 layerW, layerH, layerX, layerY — 화면 x = 세계 x − layerX·40, y = 세계 y·32/40 − z·12/20 − layerY·8
-///   layerW*layerH × (s8, s8, u16 타일) 바탕 배치표 — 윗층이 덮는 자리는 검은 타일로 비어 있다
+///   s16 layerW, layerH, layerX, layerY — 띠 (i, j) 는 화면 ((layerX + i)·40, (layerY + j)·8), 칸 (c, r) 윗면은 (40c, 32r − 12A)
+///   layerW*layerH × (u8 칸 줄, u8 높이, u16 타일) 바탕 배치표 — 윗층이 덮는 자리는 검은 타일로 비어 있다
 ///   u32 m, m × (s16 x, s16 y, s16 w, s16 h, w*h × (s8, s8, u16 타일))  윗층(띠 단위 자리) — 색 0 은 투명
 ///   u32 t, t × 640 바이트(40×8 RGB555), t × 1 바이트
 /// u32 k, k × (u32, u32 c, c × (u16, u16, u16, 12바이트))  — 장 넘기기 차례(움직이는 그림)
@@ -54,13 +54,16 @@ public static class Part1Map
             byte[] tiles = reader.ReadBytes(tileCount * ObtMap.StripWidth * ObtMap.StripHeight * 2);
             if (tiles.Length != tileCount * ObtMap.StripWidth * ObtMap.StripHeight * 2) return null;
 
-            // 그림의 왼쪽 끝을 세계 x = 0 에 맞춘다 — 띠 열 layerX 가 그림의 0 열이다(파트2 맵은 layerX 가 0 이라 안 쓴다).
-            int width = Math.Max(0, layerW - layerX) * ObtMap.StripWidth, imageHeight = layerH * ObtMap.StripHeight;
+            // 원본은 띠 (열, 줄)을 세계 (layerX + 열)·40, (layerY + 줄)·8 에 그린다(0x1009765b·윗층 0x100973ef) — 그림이 layerX 띠만큼 <b>오른쪽</b>으로 간다.
+            // 띠마다 붙은 (칸 줄, 높이) 바이트로 맞춰 보면 띠 열 i 가 칸 열 i + layerX 다(0050: 94% 맞음, −layerX 로 두면 59%). layerX 가 0 이 아닌 맵이 40개다
+            // (−2~6). 전에는 거꾸로 왼쪽으로 당겨 그림이 칸과 2·layerX 칸 어긋났다(사용자 보고: btl 20087 = obt 0050, layerX 2).
+            // 세계 x 0 왼쪽(음수 layerX)은 잘라 내고, 오른쪽으로 민 자리는 비워 둔다.
+            int width = Math.Max(0, layerW + layerX) * ObtMap.StripWidth, imageHeight = layerH * ObtMap.StripHeight;
             var bgra = new byte[width * imageHeight * 4];
             void Put(int col, int row, int tile, bool keyed)
             {
                 if (tile >= tileCount) return;
-                int sx = (col - layerX) * ObtMap.StripWidth, sy = row * ObtMap.StripHeight;
+                int sx = (col + layerX) * ObtMap.StripWidth, sy = row * ObtMap.StripHeight;
                 int src = tile * ObtMap.StripWidth * ObtMap.StripHeight * 2;
                 for (int py = 0; py < ObtMap.StripHeight; py++)
                     for (int px = 0; px < ObtMap.StripWidth; px++, src += 2)
@@ -97,7 +100,7 @@ public static class Part1Map
         var tiles = new int[count];
         for (int i = 0; i < count; i++)
         {
-            reader.ReadInt16();                       // s8 두 개 — 윗층에서는 그리는 차례로 보인다(아직 모름)
+            reader.ReadInt16();                       // u8 두 개 — 그 띠의 칸 줄·높이(A). 원본은 유닛과 앞뒤를 가리는 깊이로만 쓴다(0x100978a2)
             tiles[i] = reader.ReadUInt16();
         }
         return tiles;

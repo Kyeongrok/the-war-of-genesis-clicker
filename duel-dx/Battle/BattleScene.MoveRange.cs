@@ -300,8 +300,19 @@ internal sealed unsafe partial class BattleScene
     internal readonly HashSet<int> _touchable = [];
     internal (object? Range, int Turn, bool Mine, int Objects) _touchableFor;
 
+    /// <summary>시험용 DUELDX_HEIGHTS=1 — 칸마다 걷기 높이 숫자를 그 칸 그린 자리(높이만큼 올린 곳)에 띄운다. 지형 그림과 높이 자료가 맞는지 볼 때.</summary>
+    private static readonly bool ShowHeights = Environment.GetEnvironmentVariable("DUELDX_HEIGHTS") == "1";
+
     internal void DrawMoveRange()
     {
+        if (ShowHeights && host.BoardIsMap)
+            for (int r = 0; r < host.Rows; r++)
+                for (int c = 0; c < host.Cols; c++)
+                {
+                    int top = host.CellTop(c, r);
+                    host.UiStroke(c * TileW, top, TileW, TileH, 0x80FFFFFF);
+                    host.UiText($"{WalkHeightAt(c, r)}", c * TileW + 14, top + 8, (host._map!.FlagsAt(c, r) & 1) != 0 ? 0xFFFF4040 : 0xFFFFFF00, 11);
+                }
         if (_rangeUnit < 0 || _range is not { } range) return;
         // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.
         if (range.Cost.Length != host.Cols * host.Rows || range.Red.Length != host.Cols * host.Rows) { _range = null; _rangeUnit = -1; return; }
