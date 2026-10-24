@@ -78,3 +78,36 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
         return list;
     }
 }
+
+/// <summary>
+/// 파트1 어빌리티 <c>Dats\Abi.dat</c> 한 칸(39바이트) — 로더 <c>alpha.dll 0x100a7980</c>. <b>번호 = 레코드 + 1</b>(1 HP · 2 STR … 9 MR · 77 회피 …).
+/// </summary>
+/// <param name="AttackId">메모리 <c>+0x20</c> — 쓰면 나가는 기술(Attack.dat 번호), 0 이면 패시브.</param>
+/// <param name="Kind">메모리 <c>+0x24</c> — 2 면 아이템이 주는 기술(<see cref="ItemId"/> 를 장비해야 쓴다), 3·5 는 그런 것의 무리(<c>0x1003f260</c>).</param>
+/// <param name="ItemId">메모리 <c>+0x26</c> — <see cref="Kind"/> 2·4 일 때 그 아이템.</param>
+public sealed record Part1Ability(int Id, string Name, int Flag, int AttackId, int Kind, int ItemId, int Tail)
+{
+    public const int FileSize = 39;
+
+    public static IReadOnlyList<Part1Ability> LoadAll() => ParseAll(Part1Game.Read("Dats", "Abi.dat"));
+
+    public static Part1Ability? ById(IReadOnlyList<Part1Ability> list, int id) => id >= 1 && id <= list.Count ? list[id - 1] : null;
+
+    public static IReadOnlyList<Part1Ability> ParseAll(byte[]? b)
+    {
+        if (b is not { Length: >= 2 }) return [];
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var cp949 = Encoding.GetEncoding(949);
+        int count = BitConverter.ToUInt16(b, 0);
+        var list = new List<Part1Ability>(count);
+        for (int i = 0, o = 2; i < count && o + FileSize <= b.Length; i++, o += FileSize)
+        {
+            var plain = new byte[30];
+            for (int k = 0; k < 30; k++) plain[k] = (byte)~b[o + k];
+            int end = Array.IndexOf(plain, (byte)0);
+            list.Add(new Part1Ability(i + 1, cp949.GetString(plain, 0, end < 0 ? 30 : end), b[o + 30], BitConverter.ToInt32(b, o + 31),
+                                      b[o + 35], BitConverter.ToUInt16(b, o + 36), b[o + 38]));
+        }
+        return list;
+    }
+}
