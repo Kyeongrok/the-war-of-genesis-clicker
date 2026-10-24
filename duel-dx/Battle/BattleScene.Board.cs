@@ -49,6 +49,10 @@ internal sealed unsafe partial class BattleScene
         if (host._scene.IsPart1)
         {
             if (won) host.Part1.Cleared.Add(host._scene.Id - Part1Game.BattleBase);
+            // 쓰러진 용병은 잃는다 — 일행이 아닌 편 4 인물 가운데 용병 칸에 있는 것이 쓰러졌으면 그만큼 뺀다.
+            foreach (var u in host._units)
+                if (!u.Alive && u.Side == 4 && !host.Part1.Party.Contains(u.ChrCode) && host.Part1.Mercenaries.GetValueOrDefault(u.ChrCode) > 0)
+                    host.Part1.Mercenaries[u.ChrCode]--;
             TestRunTrace($"dest part1 chapter {host.Part1.ChapterId}");   // 시험 전용 줄
             host.Part1TitleScr.ReturnFromBattle(won);
             return;
