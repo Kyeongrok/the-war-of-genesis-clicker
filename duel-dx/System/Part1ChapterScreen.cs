@@ -226,7 +226,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 _party = hit;
                 if (Events.Arrive(hit)) break;
                 if (place.IsBattle) host.LeaveScene(() => shell.StartBattle(place.Target));
-                else if (place.IsTown) host.Toast($"{chapter.NameOf(place)} — 마을은 아직 옮기지 않았습니다");
+                else if (place.IsTown)
+                {
+                    int chapterId = chapter.Id;
+                    host.LeaveScene(() => { _open = false; shell.Town.Open(place.Target, () => Open(chapterId)); });   // 마을 = 그 번호의 필드(시설)
+                }
                 break;
         }
     }

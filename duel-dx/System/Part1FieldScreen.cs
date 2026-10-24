@@ -136,7 +136,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     }
 
     /// <summary>파트1 <c>BGRs</c> 그림 한 장(크기 그대로).</summary>
-    private (uint[]? Px, int W, int H) ReadImage(int id)
+    internal (uint[]? Px, int W, int H) ReadImage(int id)
     {
         if (Part1Game.Read("BGRs", $"{id:D4}.bgr") is not { } bytes) return (null, 0, 0);
         try
