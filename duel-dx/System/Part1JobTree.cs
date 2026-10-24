@@ -147,6 +147,21 @@ internal sealed class Part1JobTree(GameWindow host)
         return true;
     }
 
+    /// <summary>
+    /// 그 인물이 지금 직업에서 갈 수 있는 다음 직업과, 직업마다 아직 모자란 조건(어빌리티, 지금, 필요) — 레벨업 고르기 창 옆에 보인다.
+    /// 지금 바로 바꿀 수 있는 직업은 모자란 것이 빈 목록이다.
+    /// </summary>
+    internal static List<(Part1Job Job, List<(int Ability, int Now, int Need)> Missing)> NextJobsFor(Part1Chr chr)
+    {
+        var jobs = Part1Job.LoadAll();
+        if (Part1Job.ById(jobs, chr.Fields[7]) is not { } now) return [];
+        return [.. jobs.Where(b => Leads(now, b, chr) || (b.Id != now.Id && CanChange(chr, b)))
+                       .OrderBy(b => Needs(b).Count(n => chr.AbilityLevel(n.Ability) < n.Need)).ThenBy(Weight)
+                       .Select(b => (b, Needs(b).Where(n => chr.AbilityLevel(n.Ability) < n.Need)
+                                               .Select(n => (n.Ability, Math.Max(0, chr.AbilityLevel(n.Ability)), n.Need)).ToList()))
+                       .Take(MaxSide)];
+    }
+
     private List<Part1Job> NextOf(Part1Job job, Part1Chr? chr) =>
         [.. _jobs!.Where(b => Leads(job, b, chr)).OrderBy(Weight).ThenBy(b => b.Id).Take(MaxSide)];
 

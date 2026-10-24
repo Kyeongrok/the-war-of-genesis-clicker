@@ -684,6 +684,47 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             int cost = info != null && info.AttackId > 0 ? Part1Attack.ById(_attackList, info.AttackId + level - 1)?.Cost ?? 0 : 0;
             if (cost > 0) host.UiText($"{cost}", ox + PickX + PickW - 34, y + 3, 0xFFFFE080, 12);
         }
+        DrawPickJobs(pick.Chr, ox + Math.Min(PickX + PickW + 8, MosesScene.MosesW - PickJobsW - 2), oy + PickY - 6);
+    }
+
+    /// <summary>
+    /// 고르기 창 오른쪽 — 갈 수 있는 다음 직업과 그 직업에 가려면 더 올려야 할 어빌리티(지금/필요). 바로 바꿀 수 있으면 「가능」(사용자 요청).
+    /// 고르는 줄을 짚으면 그 어빌리티를 올렸을 때 채워지는 조건이 초록으로 바뀐다.
+    /// </summary>
+    private const int PickJobsW = 182;
+
+    private void DrawPickJobs(int chrCode, int x, int y)
+    {
+        if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw) return;
+        var chr = host.Part1.Apply(raw);
+        var next = Part1JobTree.NextJobsFor(chr);
+        var current = Part1Job.ById(Part1Job.LoadAll(), chr.Fields[7]);
+        int hovered = CurrentPick() is { } pick && _hover - PickHit is var hi && hi >= 0 && hi < pick.Options.Count ? pick.Options[hi].Ability : -1;
+        int hoveredLevel = hovered > 0 && CurrentPick() is { } p2 ? p2.Options[_hover - PickHit].NewLevel : 0;
+        const int W = PickJobsW, RowH = 17;
+        int h = 32 + Math.Max(1, next.Sum(n => 1 + n.Missing.Count)) * RowH;
+        host.UiFill(x, y, W, h, 0xFF1C2246);
+        host.UiStroke(x, y, W, h, 0xFFB0B8E0);
+        host.UiText($"{current?.Name ?? ""} → 갈 수 있는 직업", x + 8, y + 6, 0xFFFFE080, 10);
+        int ry = y + 28;
+        if (next.Count == 0) host.UiText("없음", x + 10, ry, 0xFF808890, 11);
+        foreach (var (job, missing) in next)
+        {
+            bool ready = missing.Count == 0 || missing.All(m => m.Ability == hovered && hoveredLevel >= m.Need);
+            host.UiText(job.Name, x + 8, ry, ready ? 0xFF80E080 : GameWindow.White, 12);
+            if (missing.Count == 0) host.UiText("가능", x + W - 40, ry, 0xFF80E080, 11);
+            ry += RowH;
+            for (int i = 0; i < missing.Count; i++)
+            {
+                var (ability, now, need) = missing[i];
+                bool met = ability == hovered && hoveredLevel >= need;
+                string name = Part1Ability.ById(_abilityList ??= Part1Ability.LoadAll(), ability)?.Name ?? $"#{ability}";
+                host.UiText($"{name}", x + 18, ry, met ? 0xFF80E080 : 0xFFE8C860, 10);
+                var (_, nw, _) = host.UiGetText($"{now}/{need}", 0xFFE8C860, 10);
+                host.UiText($"{now}/{need}", x + W - 10 - nw, ry, met ? 0xFF80E080 : 0xFFE8C860, 10);
+                ry += RowH;
+            }
+        }
     }
 
     private IReadOnlyList<Part1Ability>? _abilityList;
