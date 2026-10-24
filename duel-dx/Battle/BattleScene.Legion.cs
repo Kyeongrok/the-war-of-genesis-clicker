@@ -56,7 +56,10 @@ internal sealed unsafe partial class BattleScene
         {
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
-            var party = host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
+            // 파트1 판은 파트1 일행(Part1Progress)이 선다 — 이 판에 편 4 로 나온 사람은 먼저 일행에 들인다.
+            if (scene.IsPart1) host.Part1.Join(list.Where(u => u.Side == 4 && u.ChrCode >= Part1Game.ChrBase).Select(u => u.ChrCode));
+            var party = scene.IsPart1 ? [.. host.Part1.Party]
+                      : host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
                       : host._party.Keys.Count > 0 ? host._party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
             party = [.. party.Where(chr => !list.Any(u => u.ChrCode == chr))];

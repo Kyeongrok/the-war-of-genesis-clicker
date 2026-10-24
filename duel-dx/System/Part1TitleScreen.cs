@@ -145,6 +145,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         _open = false;
         _bg = null;
         host.TitleScr._titleOpen = false;
+        host.Part1.Reset();
         if (first < 0 || !host.Sys.StartBattle(Part1Game.BattleBase + first, rememberParty: false))
         {
             host.TitleScr.OpenTitle();

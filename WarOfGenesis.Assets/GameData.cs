@@ -518,7 +518,12 @@ public sealed class GameDatabase
             lock (_part1Characters)
             {
                 if (!_part1Characters.TryGetValue(code, out var made))
-                    _part1Characters[code] = made = Part1Chr.Load(code - Part1Game.ChrBase)?.ToCharacterData(Part1BasicWork);
+                {
+                    var chr = Part1Chr.Load(code - Part1Game.ChrBase);
+                    ushort nameId = (ushort)Math.Min(ushort.MaxValue, Part1Game.NameTextBase + code - Part1Game.ChrBase);
+                    if (chr != null) _part1Names[nameId] = chr.Name;
+                    _part1Characters[code] = made = chr?.ToCharacterData(Part1BasicWork, nameId);
+                }
                 return made;
             }
         }
@@ -575,7 +580,10 @@ public sealed class GameDatabase
         return edits;
     }
 
-    public string T(ushort id) => Text.TextOf(id);
+    public string T(ushort id) => id >= Part1Game.NameTextBase && _part1Names.TryGetValue(id, out var part1) ? part1 : Text.TextOf(id);
+
+    /// <summary>파트1 인물 이름(글 번호 <see cref="Part1Game.NameTextBase"/> + 파트1 번호) — 파트2 글 표에 없어 인물을 만들 때 적어 둔다.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ushort, string> _part1Names = new();
 
     // ── 이름 ─────────────────────────────────────────────────────────────────
 

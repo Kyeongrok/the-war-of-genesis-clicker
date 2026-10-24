@@ -40,6 +40,9 @@ public static class Part1Game
     /// </summary>
     public const int ChrBase = 20000, BattleBase = 20000;
 
+    /// <summary>파트1 인물 이름의 글 번호 자리 — 파트2 글 표(TXR)는 이보다 훨씬 작다. <c>GameDatabase.T</c> 가 이 위를 파트1 이름으로 돌려준다.</summary>
+    public const int NameTextBase = 60000;
+
     /// <summary>
     /// 파트1 글(<c>.dlg</c>·<c>.clg</c>) 표시를 보통 글로 — 「/m0[말하는 이]/m1」 머리는 떼고, 「/n」 은 줄 바꿈, 「/cN」 색 바꿈은 지운다.
     /// </summary>

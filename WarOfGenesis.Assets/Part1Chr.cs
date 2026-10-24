@@ -76,8 +76,8 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// 파트1 판의 피해·차례·이동은 파트1 식(<see cref="Part1Combat"/>)으로 돌린다(옵시디안 분석-파트1-전투 17절, 사용자 결정 「중간안」).
     /// 장비·어빌리티는 파트2 번호와 겹치므로 비운다.
     /// </summary>
-    public CharacterData ToCharacterData(ushort basicWork) =>
-        new(Part1Game.ChrBase + Code, 0, 0, (ushort)(Part1Game.ObsBase + SpriteId), (ushort)(FaceId > 0 ? Part1Game.ObsBase + FaceId : 0), 0,
+    public CharacterData ToCharacterData(ushort basicWork, ushort nameId = 0) =>
+        new(Part1Game.ChrBase + Code, nameId, 0, (ushort)(Part1Game.ObsBase + SpriteId), (ushort)(FaceId > 0 ? Part1Game.ObsBase + FaceId : 0), 0,
             0, 0, basicWork, (ushort)Math.Max(1, Level), (uint)Math.Max(1, MaxHp),
             (ushort)Stat(Str), 100, (ushort)ActionInterval, 100, (ushort)Stat(Ac), (ushort)Stat(Dex),
             new ushort[6], []);

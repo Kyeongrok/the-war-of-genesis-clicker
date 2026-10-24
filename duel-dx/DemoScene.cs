@@ -104,7 +104,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
 
     /// <summary>
     /// 파트1 전투(<see cref="Part1Battle"/>)를 판으로 — 인물 번호는 <see cref="Part1Game.ChrBase"/> 를 더하고, 안 쓰는 레코드는 뺀다.
-    /// 이벤트가 사람을 10000+n(파일 차례)으로 가리키므로 <see cref="DemoUnit.Record"/> 는 파일 차례다. 사건·대사는 아직 안 붙인다(다음 단계).
+    /// 이벤트가 사람을 10000+n(파일 차례)으로 가리키므로 <see cref="DemoUnit.Record"/> 는 파일 차례다. 사건·대사는 BattleScene.LoadEvents 가 Part1Script 로 붙인다.
     /// </summary>
     private static DemoScene? LoadPart1(int id)
     {
@@ -116,9 +116,10 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             .Select(x => new DemoUnit(Part1Game.ChrBase + x.u.ChrCode, x.u.X, x.u.Y, x.u.Side, 0, FacingOf(x.u.Direction)) { Record = x.index })
             .ToArray();
         if (roster.Length == 0) return null;
-        // 배치 칸은 아직 안 넘긴다 — 넘기면 BuildUnits 가 파트2 파티를 거기 세운다. 파트1 출전 화면(행동 706)·파티를 만들 때 붙인다.
+        // 배치 칸(절 C) — BuildUnits 가 파트1 일행(Part1Progress) 가운데 Btl 에 없는 사람을 세운다.
+        var placement = battle.Placement.Select(p => (p.X, p.Y, FacingOf(p.Direction))).ToList();
         string title = battle.Line(battle.TitleLine) is { Length: > 0 } t ? t : $"파트1 전투 {id - Part1Game.BattleBase}";
-        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", 0, 0, 0, 0, roster, 0, null, [], EngineJudgesWipe: false)
+        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", 0, 0, 0, 0, roster, 0, placement, [], EngineJudgesWipe: false)
         {
             StartCol = battle.StartX, StartRow = battle.StartY,
         };
