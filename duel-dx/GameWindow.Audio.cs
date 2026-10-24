@@ -120,8 +120,12 @@ internal sealed unsafe partial class GameWindow
         if (_battleLoaded) StartBattleMusic();
     }
 
-    /// <summary>DUELDX_MUTE=1 이면 소리를 내지 않는다 — 자동 테스트가 사용자 스피커로 소리를 내지 않게.</summary>
-    internal static readonly bool Muted = Environment.GetEnvironmentVariable("DUELDX_MUTE") == "1";
+    /// <summary>
+    /// DUELDX_MUTE=1 이면 소리를 내지 않는다 — 자동 테스트가 사용자 스피커로 소리를 내지 않게.
+    /// 화면 밖 시험(DUELDX_OFFSCREEN=1)도 늘 조용하다 — MUTE 를 빠뜨린 시험의 배경음악이 사용자에게 들렸다(사용자 요청). DUELDX_MUTE=0 이면 화면 밖에서도 낸다.
+    /// </summary>
+    internal static readonly bool Muted = Environment.GetEnvironmentVariable("DUELDX_MUTE") is "1"
+        || (Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1" && Environment.GetEnvironmentVariable("DUELDX_MUTE") != "0");
 
     /// <summary>Snd 효과음을 한 번 튼다.</summary>
     /// <param name="screenX">640 틀 기준 화면 x — 좌우를 가른다(NaN 이면 가운데). <see cref="SoundScreenX"/> 로 바꿔 넣는다.</param>
