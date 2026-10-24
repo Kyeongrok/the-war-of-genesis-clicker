@@ -49,6 +49,17 @@ internal sealed unsafe partial class BattleScene
     /// (<see cref="Part1Job.LevelUpCandidates"/>), 원본처럼 플레이어가 후보에서 바로 고른다(<c>0x1009dac0</c>) — 오른 레벨을 쌓으면(<see cref="Part1Progress.LevelPicks"/>)
     /// 전투가 멈추고 고르기 창이 뜬다. 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
     /// </summary>
+    /// <summary>
+    /// 고른 어빌리티를 지금 판의 그 인물에게도 바로 붙인다 — 전투 유닛 자료는 판을 열 때 한 번 만들어서, 전투 안에서 배운 기술(필살 6연사 따위)이
+    /// 다음 판에야 목록에 떴다. 어빌리티 칸만 새 자료로 바꾸고 HP · TP · 소울 · 자리는 그대로 둔다.
+    /// </summary>
+    internal void RefreshPart1Abilities(int chrCode)
+    {
+        if (!host._battleLoaded || !host._scene.IsPart1 || host._db?.Character(chrCode) is not { } fresh) return;
+        foreach (var u in host._units)
+            if (u.ChrCode == chrCode && u.Data is { } d) u.Data = d with { Abilities = fresh.Abilities };
+    }
+
     internal void GainPart1KillExp(UnitState killer, UnitState victim)
     {
         if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
