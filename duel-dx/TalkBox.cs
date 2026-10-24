@@ -719,6 +719,9 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         var (sx, sy) = framed ? host.Mos.MosesOrigin() : (host._camX, host._camY);
         int screenW = framed ? MosesScene.MosesW : host.ViewWidth, screenH = framed ? MosesScene.MosesH : host.ViewHeight;
         host._faces.TryGetValue(TalkFaceCode(w), out var face);
+        // 파트1 인물 — 초상은 인물 레코드의 얼굴 Obs(칸 5, 파트2 꼴 자료의 FaceId)를 그대로 쓴다(사용자 보고: 전투 대사에 초상이 없었다).
+        if (face == null && TalkFaceCode(w) >= Part1Game.ChrBase && host._db?.Character(TalkFaceCode(w)) is { FaceId: > 0 } p1c)
+            face = host.UiFor(p1c.FaceId)?.FrameAt(0, 0);
 
         if (w.IsBand)
         {
@@ -882,8 +885,11 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         // 틀 Obs 0221(602 는 0222/0223)을 창 (−60, −20) 에 — 바탕(모션 1)은 효과 5(602 는 6), 테두리(모션 0)는 불투명. 이름은 탭 가운데 (창x−11, 창y−15).
         host.DrawUi(w.FrameObs, 1, 0, ax, ay, GameWindow.UiBlend.Alpha, fade: w.FrameFade);
         host.DrawUi(w.FrameObs, 0, 0, ax, ay, GameWindow.UiBlend.Alpha);
-        int bnw = TxtSize(w.Name, White, 12).W;
-        Txt(w.Name, bx - 11 - bnw / 2, by - 15, White, 12);
+        // 이름은 탭(폭 약 120) 안에 — 길면 글씨를 줄인다(사용자 보고: 「해럴드 깁슨」이 탭 선을 넘었다).
+        float nameSize = 12;
+        while (nameSize > 8 && TxtSize(w.Name, White, nameSize).W > 104) nameSize -= 1;
+        int bnw = TxtSize(w.Name, White, nameSize).W;
+        Txt(w.Name, bx - 11 - bnw / 2, by - 15, White, nameSize);
         if (faceFrame != null)
         {
             DrawTalkFace(faceFrame, bx - 57, by, 60, w.Tint);
