@@ -487,7 +487,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         if (host.Btl._demo is { } demo) scene = GameWindow.ArenaScene(scene, demo.Chr) with { Title = "어빌리티 시연" };
         try
         {
-            host._map = ObtMap.Load(AssetPack.MapPath(scene.MapFile));
+            host._map = DemoScene.LoadMap(scene);
             host.ResizeBoard(host._map.Cols, host._map.Rows);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)

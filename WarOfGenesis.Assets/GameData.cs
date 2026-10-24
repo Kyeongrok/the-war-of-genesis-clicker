@@ -512,9 +512,25 @@ public sealed class GameDatabase
 
     public CharacterData? Character(int code)
     {
+        // 파트1 인물(Chr 20000 + 파트1 번호) — 사용자의 파트1 폴더에서 읽어 파트2 꼴로 바꾼다. 자주 불리므로 한 번 만든 것을 둔다.
+        if (code >= Part1Game.ChrBase)
+        {
+            lock (_part1Characters)
+            {
+                if (!_part1Characters.TryGetValue(code, out var made))
+                    _part1Characters[code] = made = Part1Chr.Load(code - Part1Game.ChrBase)?.ToCharacterData(Part1BasicWork);
+                return made;
+            }
+        }
         var c = CharacterData.Parse(code, _files.Read("Chr", $"{code:D4}.chr"));
         return c != null && CharacterEdits.TryGetValue(code, out var edit) ? edit(c) : c;
     }
+
+    private readonly Dictionary<int, CharacterData?> _part1Characters = [];
+
+    /// <summary>파트1 인물이 빌려 쓰는 기본 공격 — 파트2 살라딘(Chr 219)의 것. 파트1 기본 공격 연출을 옮기기 전까지의 자리.</summary>
+    private ushort Part1BasicWork => _part1BasicWork ??= Character(219)?.BasicWorkId ?? 0;
+    private ushort? _part1BasicWork;
 
     /// <summary>인물 덮어쓰기 폴더(<c>assets/data/chr-edits/NNNN.json</c>) — 원본 <c>.chr</c> 은 그대로 둔다.</summary>
     public const string CharacterEditFolder = "chr-edits";

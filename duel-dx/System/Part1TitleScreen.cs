@@ -128,8 +128,27 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         switch (button)
         {
-            case ButtonNewGame: host.Toast("파트1 본편은 아직 옮기는 중입니다"); break;
+            // 연대표 첫 칸(카디스 요새 = 챕터 0)의 첫 전투로 — 챕터 지도·연대표 화면을 옮기기 전까지의 자리.
+            case ButtonNewGame: host.LeaveScene(StartFirstBattle); break;
             case ButtonPart2: host.LeaveScene(Close); break;
+        }
+    }
+
+    /// <summary>
+    /// 파트1 새 게임 — 연대표 첫 칸이 여는 챕터의 첫 전투(카디스 요새 → 챕터 0 → 전투 6 「카디스 지하 통로」)를 연다.
+    /// 판·맵·그림은 파트2 틀로, 인물은 파트1 레코드에서(<see cref="Part1Game.ChrBase"/>).
+    /// </summary>
+    private void StartFirstBattle()
+    {
+        int first = Part1Episode.LoadAll().FirstOrDefault() is { } episode && Part1Chapter.Load(episode.ChapterId) is { } chapter
+            ? chapter.Battles.FirstOrDefault(-1) : -1;
+        _open = false;
+        _bg = null;
+        host.TitleScr._titleOpen = false;
+        if (first < 0 || !host.Sys.StartBattle(Part1Game.BattleBase + first, rememberParty: false))
+        {
+            host.TitleScr.OpenTitle();
+            host.Toast("파트1 첫 전투를 열지 못했습니다");
         }
     }
 

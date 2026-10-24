@@ -34,6 +34,12 @@ public static class Part1Game
     /// <summary>파트1 그림 번호를 파트2 번호와 안 겹치게 옮겨 쓰는 자리 — 파트1 Obs 352 는 게임 안에서 20352 다.</summary>
     public const int ObsBase = 20000;
 
+    /// <summary>
+    /// 파트1 인물·전투를 이 게임 안에서 부르는 번호 자리 — 파트1 Chr 387 은 Chr 20387, 파트1 전투 0010 은 전투 20010 이다.
+    /// 그림 번호(<see cref="ObsBase"/>)와 같은 값이라 헷갈리지 않는다(파트2 번호는 모두 이보다 작다).
+    /// </summary>
+    public const int ChrBase = 20000, BattleBase = 20000;
+
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
     public const int ConvertVersion = 8;
 

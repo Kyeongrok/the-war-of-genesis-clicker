@@ -88,11 +88,48 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
         [.. BattleDemoScene.Roster.Select(u => new DemoUnit(u.ChrCode, u.Col, u.Row, u.IsAlly ? 4 : 0, 0, u.IsAlly ? Facing.Right : Facing.Left))],
         NextBattle: 46);
 
+    /// <summary>
+    /// 판의 맵 그림 — 파트1 판(<see cref="Part1MapPrefix"/>)이면 사용자의 파트1 폴더 <c>Obts</c> 에서(<see cref="Part1Map"/>), 아니면 파트2 Obt 파일에서.
+    /// </summary>
+    public static ObtMapImage LoadMap(DemoScene scene) =>
+        scene.MapFile.StartsWith(Part1MapPrefix, StringComparison.Ordinal)
+            ? Part1Map.Load(int.Parse(scene.MapFile[Part1MapPrefix.Length..])) ?? throw new InvalidDataException($"파트1 맵 {scene.MapFile} 을 못 읽었습니다")
+            : ObtMap.Load(AssetPack.MapPath(scene.MapFile));
+
+    /// <summary>파트1 판의 맵 이름 앞머리 — 「part1:0173」 은 파트1 <c>Obts3.obt</c>.</summary>
+    public const string Part1MapPrefix = "part1:";
+
+    /// <summary>파트1 판인가 — 전투 번호가 <see cref="Part1Game.BattleBase"/> 위다.</summary>
+    public bool IsPart1 => Id >= Part1Game.BattleBase;
+
+    /// <summary>
+    /// 파트1 전투(<see cref="Part1Battle"/>)를 판으로 — 인물 번호는 <see cref="Part1Game.ChrBase"/> 를 더하고, 안 쓰는 레코드는 뺀다.
+    /// 이벤트가 사람을 10000+n(파일 차례)으로 가리키므로 <see cref="DemoUnit.Record"/> 는 파일 차례다. 사건·대사는 아직 안 붙인다(다음 단계).
+    /// </summary>
+    private static DemoScene? LoadPart1(int id)
+    {
+        if (Part1Battle.Load(id - Part1Game.BattleBase) is not { } battle) return null;
+        static Facing FacingOf(int direction) => direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
+        var roster = battle.Units
+            .Select((u, index) => (u, index))
+            .Where(x => x.u.Disabled == 0 && x.u.ChrCode >= 0)
+            .Select(x => new DemoUnit(Part1Game.ChrBase + x.u.ChrCode, x.u.X, x.u.Y, x.u.Side, 0, FacingOf(x.u.Direction)) { Record = x.index })
+            .ToArray();
+        if (roster.Length == 0) return null;
+        // 배치 칸은 아직 안 넘긴다 — 넘기면 BuildUnits 가 파트2 파티를 거기 세운다. 파트1 출전 화면(행동 706)·파티를 만들 때 붙인다.
+        string title = battle.Line(battle.TitleLine) is { Length: > 0 } t ? t : $"파트1 전투 {id - Part1Game.BattleBase}";
+        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", 0, 0, 0, 0, roster, 0, null, [], EngineJudgesWipe: false)
+        {
+            StartCol = battle.StartX, StartRow = battle.StartY,
+        };
+    }
+
     /// <summary>그 번호의 전투를 assets 에서 읽는다. 자료가 없으면 null.</summary>
     public static DemoScene? Load(int id, GameDatabase? db)
     {
         try
         {
+            if (id >= Part1Game.BattleBase) return LoadPart1(id);
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
             if (BattleFile.Parse(id, files.Read("Btl", $"{id:D4}.btl")) is not { } battle) return null;
             if (BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) is not { } obt) return null;

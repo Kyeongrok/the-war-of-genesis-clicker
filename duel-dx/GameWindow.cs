@@ -351,7 +351,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             _party[pchr] = record with { SpriteId = pobs };
         if (DemoScene.Load(id, _db) is { } loaded) _scene = loaded;
         if (Arena is { } arena) _scene = ArenaScene(_scene, arena.Chr);
-        _map = ObtMap.Load(AssetPack.MapPath(_scene.MapFile));
+        _map = DemoScene.LoadMap(_scene);
         ResizeBoard(_map.Cols, _map.Rows);
         _units = Btl.BuildUnits(_scene);
         // 첫 판(시험 훅 포함)은 배치 단계 없이 — 새로 거는 전투(StartBattle)만 연다. DUELDX_DEPLOY=1 이면 첫 판에서도 연다(화면 밖 시험용).
@@ -608,7 +608,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal (string Name, string ObsPath) LoadFromGameFolder(int chrCode)
     {
         var record = _db?.Character(chrCode) ?? throw new FileNotFoundException($"Chr {chrCode:D4} 을(를) 못 찾았습니다.");
-        string name = _db.T(record.NameId);
+        // 파트1 인물은 이름이 TXR 이 아니라 인물 레코드에 글로 들어 있다.
+        string name = chrCode >= Part1Game.ChrBase ? Part1Chr.Load(chrCode - Part1Game.ChrBase)?.Name ?? "" : _db.T(record.NameId);
         if (name.Length == 0) name = _db.T(record.Name2Id);
         string obsName = CharacterExport.ObsFileName(record.SpriteId);
         string path = AssetPack.Fetch($"characters/{chrCode:D4}", obsName) ?? throw new FileNotFoundException($"{obsName} 을(를) 원본 게임 폴더에서 못 찾았습니다.");
