@@ -31,6 +31,9 @@ internal sealed unsafe partial class BattleScene
         _deployMovable.Clear();
         _deployBench.Clear();
         _part1Riders.Clear();
+        _part1LostMounts.Clear();
+        _part1Mercs.Clear();
+        _part1ProcRunning = false;
         var followers = new List<UnitState>();
 
         foreach (var rosterRecord in scene.Roster)
@@ -84,7 +87,13 @@ internal sealed unsafe partial class BattleScene
             }
             // 파트1 용병(일행이 아닌 사람)은 편 3 — 파트2 AI 가 알아서 싸운다(사용자 결정: 파트1 AI 보다 파트2 AI 가 낫다). 「동맹을 AI 가 움직임」을 끄면 직접 조종.
             int SideOf(int chr) => scene.IsPart1 && !host.Part1.Party.Contains(chr) ? 3 : 4;
-            int Mounted(int chr) => scene.IsPart1 && host.Part1.Riding.TryGetValue(chr, out int mount) && mountsLeft.GetValueOrDefault(mount) > 0 ? mount : chr;
+            // 탈 수 있는지는 배치할 때 다시 본다 — 열쇠(보정 248)를 빼거나 어빌리티가 없어졌으면 걸어서 선다.
+            var items = scene.IsPart1 ? Part1Item.LoadAll() : [];
+            bool CanRide(int chr, int mount) =>
+                Part1Chr.Load(chr - Part1Game.ChrBase) is { } raw && host.Part1.Apply(raw) is var c
+                && c.CanRide(mount - Part1Game.ChrBase, c.Equipment.Select(id => Part1Item.ById(items, id)));
+            int Mounted(int chr) => scene.IsPart1 && host.Part1.Riding.TryGetValue(chr, out int mount) && mountsLeft.GetValueOrDefault(mount) > 0
+                                    && CanRide(chr, mount) ? mount : chr;
             for (int i = 0; i < free.Count && i < party.Count; i++)
             {
                 int stand = Mounted(party[i]);
@@ -92,6 +101,7 @@ internal sealed unsafe partial class BattleScene
                 var rec = new DemoUnit(stand, free[i].Col, free[i].Row, SideOf(party[i]), LegionOf(party[i]), free[i].Facing);
                 var placed = new UnitState(rec);
                 if (rider != null) _part1Riders[placed] = rider;
+                if (SideOf(party[i]) == 3) _part1Mercs.Add(placed);
                 list.Add(placed);
                 _deployMovable.Add(placed);
                 placedFollowers.AddRange(SpawnFollowers(rec, list.Count - 1, legions, list.Concat(placedFollowers)));
@@ -104,6 +114,7 @@ internal sealed unsafe partial class BattleScene
                 var rec = new DemoUnit(stand, 0, 0, SideOf(party[i]), LegionOf(party[i]), Facing.Up);
                 var bench = new UnitState(rec);
                 if (rider != null) _part1Riders[bench] = rider;
+                if (SideOf(party[i]) == 3) _part1Mercs.Add(bench);
                 list.Add(bench);
                 _deployMovable.Add(bench);
                 _deployBench.Add(bench);

@@ -220,7 +220,7 @@ internal sealed unsafe partial class BattleScene
         if (!open)
         {
             if (_keepBenchForLoad) return;      // 불러오기 — 세이브에 적힌 인물을 보고 LoadBattleFrom 이 추린다
-            if (_deployBench.Count > 0) DropUnits(_deployBench.Contains);   // 맵 밖 여분의 부하도 함께, 대장 번호는 다시 맞춘다
+            if (_deployBench.Count > 0) DropUnits(WithRiders(_deployBench.Contains));   // 맵 밖 여분의 부하 · 탄 이도 함께, 대장 번호는 다시 맞춘다
             _deployBench.Clear();
             return;
         }
@@ -287,8 +287,8 @@ internal sealed unsafe partial class BattleScene
         // 「군단사용」을 끈 대장 — 이 전투의 군단(+0x4ea)은 0 이고 부하는 없다(원본은 켜진 사람만 부하를 만든다, 0x100673dd~).
         var noLegion = _deployNoLegion.Where(u => u.OnField).ToHashSet();
         foreach (var leader in noLegion) leader.LegionId = 0;
-        DropUnits(u => (DeployMovable(u) && !u.OnField)
-                       || (u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length && noLegion.Contains(host._units[u.LeaderIndex])));
+        DropUnits(WithRiders(u => (DeployMovable(u) && !u.OnField)
+                                  || (u.LeaderIndex >= 0 && u.LeaderIndex < host._units.Length && noLegion.Contains(host._units[u.LeaderIndex]))));
         _deployNoLegion.Clear();
         _deployBench.Clear();
         _deployMovable.Clear();

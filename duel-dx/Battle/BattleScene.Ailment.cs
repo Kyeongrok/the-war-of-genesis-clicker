@@ -407,6 +407,20 @@ internal sealed unsafe partial class BattleScene
     /// <summary>파트1 탈것 → 그 위의 탄 이(판 밖에 둔 유닛). 전투를 세울 때 채운다(BuildUnits).</summary>
     internal readonly Dictionary<UnitState, UnitState> _part1Riders = [];
 
+    /// <summary>이 전투에서 쓰러진 무리 탈것(Chr) — 진행의 탈것 수는 전투가 끝날 때 뺀다(RESTART · 불러오기가 되돌릴 수 있게).</summary>
+    internal readonly List<int> _part1LostMounts = [];
+
+    /// <summary>이 전투에 세운 용병 — 전투가 끝날 때 쓰러진 것만 용병 칸에서 뺀다(Btl 의 같은 Chr 동맹은 안 센다).</summary>
+    internal readonly HashSet<UnitState> _part1Mercs = [];
+
+    /// <summary>지우는 조건에 그 탈것의 탄 이도 함께 — 배치에서 빠진 탈것의 탄 이가 판 밖 「산 아군」으로 남지 않게.</summary>
+    internal Func<UnitState, bool> WithRiders(Func<UnitState, bool> drop)
+    {
+        var riders = _part1Riders.Where(kv => drop(kv.Key)).Select(kv => kv.Value).ToHashSet();
+        foreach (var mount in _part1Riders.Keys.Where(drop).ToList()) _part1Riders.Remove(mount);
+        return u => drop(u) || riders.Contains(u);
+    }
+
     /// <summary>
     /// 탈것이 쓰러졌다 — 탄 이는 그 칸(막혔으면 가장 가까운 빈 칸)에 내려서 살고, 무리는 그 탈것을 하나 잃는다(<c>0x10034560</c> → <c>0x100add40</c> · <c>0x100365e0</c>,
     /// 분석-파트1-챕터 10.3). 탈것이 모자라게 되면 그 사람의 탑승 지정도 지운다.
@@ -420,15 +434,31 @@ internal sealed unsafe partial class BattleScene
         rider.StartCol = col;
         rider.StartRow = row;
         rider.Facing = mount.Facing;
-        if (host.Part1.Mounts.GetValueOrDefault(mount.ChrCode) is > 0 and var left)
-        {
-            if (left == 1) host.Part1.Mounts.Remove(mount.ChrCode); else host.Part1.Mounts[mount.ChrCode] = left - 1;
-            int riders = host.Part1.Riding.Count(r => r.Value == mount.ChrCode);
-            if (riders > left - 1) host.Part1.Riding.Remove(rider.ChrCode);
-        }
+        _part1LostMounts.Add(mount.ChrCode);
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 mount down {mount.ChrCode} → rider {rider.ChrCode} at ({col},{row}), mounts left {host.Part1.Mounts.GetValueOrDefault(mount.ChrCode)}" + Environment.NewLine);
+                $"part1 mount down {mount.ChrCode} → rider {rider.ChrCode} at ({col},{row}), lost this battle {_part1LostMounts.Count(m => m == mount.ChrCode)}" + Environment.NewLine);
+    }
+
+    /// <summary>
+    /// 전투가 끝날 때 — 쓰러진 탈것 · 용병을 진행에서 뺀다. 탈것이 모자라게 되면 그 탈것을 정한 사람의 탑승 지정도 지운다(뒤에 정한 사람부터).
+    /// </summary>
+    internal void SettlePart1Losses()
+    {
+        foreach (int mount in _part1LostMounts)
+        {
+            if (host.Part1.Mounts.GetValueOrDefault(mount) is not (> 0 and var left)) continue;
+            if (left == 1) host.Part1.Mounts.Remove(mount); else host.Part1.Mounts[mount] = left - 1;
+            var riders = host.Part1.Riding.Where(r => r.Value == mount).Select(r => r.Key).ToList();
+            for (int i = riders.Count - 1; i >= left - 1 && i >= 0; i--) host.Part1.Riding.Remove(riders[i]);
+        }
+        foreach (var u in _part1Mercs)
+            if (!u.Alive && host.Part1.Mercenaries.GetValueOrDefault(u.ChrCode) is > 0 and var count)
+            {
+                if (count == 1) host.Part1.Mercenaries.Remove(u.ChrCode); else host.Part1.Mercenaries[u.ChrCode] = count - 1;
+            }
+        _part1LostMounts.Clear();
+        _part1Mercs.Clear();
     }
 
     /// <summary>피해 보정 — 때리는 쪽 13(공격력), 맞는 쪽 14(방어력)·7(피해 감소).</summary>

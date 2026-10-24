@@ -1249,6 +1249,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                     rider.Facing = a.Facing;
                     a.OnField = false;
                     a.ResetTo(0, 0);
+                    a.Alive = false;      // 빈 탈것은 무리로 돌아갔다 — 판 밖 「산 아군」으로 세지 않는다(쓰러진 것이 아니라 잃지 않는다)
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                             $"part1 dismount {a.ChrCode} → rider {rider.ChrCode} at ({dc},{dr})" + Environment.NewLine);
@@ -1599,9 +1600,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             _part1Proc = null;
             _part1ProcRunning = true;
-            var procRoutine = UseWorkRoutine(part1Proc.User, part1Proc.Work, -1, part1Proc.Col, part1Proc.Row, [], eventFinisher: true);
-            while (procRoutine.MoveNext()) yield return procRoutine.Current;
-            _part1ProcRunning = false;
+            try
+            {
+                var procRoutine = UseWorkRoutine(part1Proc.User, part1Proc.Work, -1, part1Proc.Col, part1Proc.Row, [], eventFinisher: true);
+                while (procRoutine.MoveNext()) yield return procRoutine.Current;
+            }
+            finally { _part1ProcRunning = false; }   // 불러오기 · RESTART 가 이 루틴을 버려도 남지 않게
             dying.RemoveAll(d => d.Hp > 0);
             foreach (var d in host._units)
                 if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
@@ -1716,7 +1720,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal const int Part1DismountWork = 20399;
 
     /// <summary>덧기술을 쏘는 중 — 파트1 기술이 앞머리 없이 바로 돈다(<see cref="Part1Skill.Routine"/>).</summary>
-    private bool _part1ProcRunning;
+    internal bool _part1ProcRunning;
 
     internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {

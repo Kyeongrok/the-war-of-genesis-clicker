@@ -57,6 +57,7 @@ internal sealed class Part1Progress
         Riding = [];
         ChapterTeams = [];
         SelectedTeam = [];
+        ChapterMarkerPrev = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -132,6 +133,9 @@ internal sealed class Part1Progress
 
     /// <summary>챕터마다 지도 말 자리(900 이 옮긴 것)와 장면 변수(800 · 101) — 지도를 다시 열어도 · 이어 하기에도 그대로.</summary>
     internal Dictionary<int, List<int>> ChapterMarkers = [];
+
+    /// <summary>챕터마다 지도 말의 앞 장소(900 이 옮길 때 옛 장소) — 조건 201(막 닿음) · 303(머무름)이 본다. 전투 · 필드에 다녀와도 그대로.</summary>
+    internal Dictionary<int, List<int>> ChapterMarkerPrev = [];
     internal Dictionary<int, Dictionary<int, int>> ChapterVars = [];
 
     internal Dictionary<int, int> VarsOf(int chapterId) =>
@@ -178,13 +182,14 @@ internal sealed class Part1Progress
                                    Dictionary<string, int>? PlaceBattles = null, Dictionary<int, int>? MapTurns = null,
                                    Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null,
                                    Dictionary<int, int>? Riding = null,
-                                   Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null);
+                                   Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
+                                   Dictionary<int, List<int>>? ChapterMarkerPrev = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -224,6 +229,7 @@ internal sealed class Part1Progress
             Riding = data.Riding ?? [];
             ChapterTeams = data.ChapterTeams ?? [];
             SelectedTeam = data.SelectedTeam ?? [];
+            ChapterMarkerPrev = data.ChapterMarkerPrev ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

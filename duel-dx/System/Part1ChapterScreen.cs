@@ -93,6 +93,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// </summary>
     private void GameOver()
     {
+        // 게임 오버 뒤에는 적지 않는다 — 500 을 터뜨린 사건의 발동 수 · 남은 행동을 적으면 이어 하기가 게임 오버를 건너뛴다.
+        _gameOver = true;
         host.Toast("게임 오버");
         host.LeaveScene(() => { _open = false; shell.ReturnFromBattle(false); });
     }
@@ -116,8 +118,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// 진행을 적는다 — 일행 장소와 지금 남은 사건 행동(가 있던 전투·필드부터)을 함께. 진행을 적는 곳은 모두 이것을 쓴다:
     /// 따로 적으면 지난번 지도를 열 때의 남은 행동이 남아, 이어 하기가 이미 돈 행동(아이템 · eld · 용병)을 또 돌렸다.
     /// </summary>
+    private bool _gameOver;
+
     internal void SaveProgress()
     {
+        if (_gameOver) return;
         if (_chapter != null)
         {
             host.Part1.PartyPlace = _party;
@@ -201,6 +206,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         bool resume = _resume && _chapter?.Id == chapterId;
         _resume = false;
+        _gameOver = false;
         if (_chapter?.Id != chapterId) { _teams = null; _party = 0; }
         if (Part1Chapter.Load(chapterId) is not { Places.Count: > 0 } chapter)
         {
@@ -212,7 +218,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (!host.Part1.ChapterMarkers.TryGetValue(chapterId, out var markers) || markers.Count != chapter.Markers.Count)
             host.Part1.ChapterMarkers[chapterId] = markers = [.. chapter.Markers];
         Events.Markers = markers;
-        Events.MarkerPrev = [.. markers];
+        // 앞 장소 — 진행에 남긴 것(900 이 적은 옛 장소). 처음이면 지금 장소(아직 안 움직임).
+        if (!host.Part1.ChapterMarkerPrev.TryGetValue(chapterId, out var prev) || prev.Count != markers.Count)
+            host.Part1.ChapterMarkerPrev[chapterId] = prev = [.. markers];
+        Events.MarkerPrev = prev;
         // 팀 — 진행에 남긴 것을 쓴다. 처음 여는 챕터면 팀 0 하나(일행 모두)를 지금 자리에.
         if (!host.Part1.ChapterTeams.TryGetValue(chapterId, out var teams) || teams.Count == 0)
             host.Part1.ChapterTeams[chapterId] = teams = [new Part1Team { Place = _party }];
