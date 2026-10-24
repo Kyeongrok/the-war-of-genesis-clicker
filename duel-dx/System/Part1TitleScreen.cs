@@ -246,12 +246,35 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
         int y = oy + Y + 10;
         if (speaker.Length > 0) { host.UiText(speaker, ox + X + 14, y, 0xFFFFE080, 13); y += 22; }
-        foreach (string line in text.Split('\n'))
+        if (!_wrapped.TryGetValue(text, out var lines))
+        {
+            if (_wrapped.Count > 64) _wrapped.Clear();
+            _wrapped[text] = lines = [.. text.Split('\n').SelectMany(l => Wrap(l, W - 28))];
+        }
+        foreach (string line in lines)
         {
             host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
             y += 19;
         }
         host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
+    }
+
+    /// <summary>접어 둔 대사(글 → 줄들) — 틀마다 글 폭을 다시 재지 않게.</summary>
+    private readonly Dictionary<string, string[]> _wrapped = [];
+
+    /// <summary>창 폭에 맞춰 줄을 접는다 — 띄어쓰기에서 끊고, 띄어쓰기 없이 긴 말은 글자에서 끊는다.</summary>
+    private IEnumerable<string> Wrap(string line, int width)
+    {
+        while (line.Length > 0 && host.UiGetText(line, GameWindow.White, 13).W > width)
+        {
+            int cut = line.Length - 1;
+            while (cut > 1 && host.UiGetText(line[..cut], GameWindow.White, 13).W > width) cut--;
+            int space = line.LastIndexOf(' ', cut - 1);
+            if (space > cut / 2) cut = space + 1;
+            yield return line[..cut].TrimEnd();
+            line = line[cut..].TrimStart();
+        }
+        yield return line;
     }
 
     internal void DrawButton(int x, int y, int w, int h, string label, bool hot)
