@@ -23,6 +23,27 @@ internal sealed unsafe partial class BattleScene
     private bool ApplyPart1Support(UnitState a, UnitState t, WorkData w, int result)
     {
         if (!host._scene.IsPart1 || Part1.AttackOf(w) is not { } attack) return false;
+        // 희생 · 해체대법 · 도발 — 핸들러가 t0 에 직접 고친다(0x1006c0a0 · 0x1006c8f0 · 0x1006d360, 분석-파트1-기술-b 10절). 소울 칸 +0xe8(최대 150).
+        switch (attack.Id)
+        {
+            case 376 when t != a:                     // 희생 — 같은 편 모두 HP 가득 · 소울 150(시전자는 그대로)
+                t.Hp = t.MaxHp;
+                t.Soul = Math.Min(t.MaxSoul, 150);
+                Popup(t, "희생", HealColor2, 12, rise: 88);
+                MarkBuffed(a, t, w);
+                return true;
+            case 377:                                 // 해체대법 — 대상 HP 1 · 소울 150
+                t.Hp = Math.Min(t.Hp, 1);
+                t.Soul = Math.Min(t.MaxSoul, 150);
+                Popup(t, "해체대법", AilmentPopupColor, 12, rise: 88);
+                return true;
+            case 382:                                 // 도발 — 소울 −20(0 아래로는 안)
+                t.Soul = Math.Max(0, t.Soul - 20);
+                Popup(t, "도발", AilmentPopupColor, 12, rise: 88);
+                return true;
+            case 376:
+                return true;
+        }
         int sel = attack.Formula;
         if (sel is not (15 or 16 or 17 or 20 or 21 or 22 or 23)) return false;
         if (result == 3)

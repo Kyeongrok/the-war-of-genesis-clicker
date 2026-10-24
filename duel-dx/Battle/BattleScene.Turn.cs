@@ -1295,6 +1295,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
+                // 댓쉬(366) · 워프(367) — 시전자가 겨눈 칸으로 옮겨 선다(0x1006b340 · 0x1006b640 끝의 유닛 맞춤 0x10081350). 칸이 차 있으면 제자리.
+                if (host._scene.IsPart1 && Part1.AttackOf(w)?.Id is 366 or 367
+                    && !host._units.Any(u => u != a && u.Alive && u.OnField && u.Col == col && u.Row == row))
+                    a.WarpTo(col, row);
                 if (!followersDone && targets.Count > 0)
                 {
                     FollowersAttack(userIndex, host._units[targets[0]], dying, allyPass: false, leaderWork: w);
