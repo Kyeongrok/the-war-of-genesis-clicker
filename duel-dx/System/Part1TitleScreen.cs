@@ -239,7 +239,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal void PrepareBattleLoad()
     {
         HookGrowth();
-        Chapter.PrepareContinue();
+        Chapter.PrepareContinue(inBattle: true);
     }
 
     /// <summary>파트1 인물을 읽을 때 진행의 자란 것(경험치 · 어빌리티)을 입히게 한다 — 만들어 둔 인물은 버린다.</summary>

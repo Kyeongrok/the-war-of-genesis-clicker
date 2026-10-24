@@ -199,7 +199,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_teams != null && team != _team) { _team = team; host.Part1.SelectedTeam[chapter.Id] = team; }
         int battle = chapter.Places[place].Target;
         _resume = true;
-        host.LeaveScene(() => shell.StartBattle(battle));
+        host.LeaveScene(() => { SaveProgress(); shell.StartBattle(battle); });   // 남은 행동을 적고 간다 — 전투 세이브가 이 진행을 싣는다
         return true;
     }
 
@@ -229,7 +229,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         {
             case 502:
                 _resume = true;
-                host.LeaveScene(() => shell.StartBattle(target));
+                // 떠나기 전에 남은 행동(502 를 앞에 붙여)을 적는다 — 닿기 사건(Arrive)에서 온 502 는 Open 이 적지 않아 전투 세이브가 옛 남은 행동을 실었다.
+                host.LeaveScene(() => { SaveProgress(); shell.StartBattle(target); });
                 return true;
             case 501:
                 host.LeaveScene(EndChapter);
@@ -452,10 +453,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     }
 
     /// <summary>진행에서 이어 갈 준비 — 남은 행동을 되살리고 그 챕터 · 일행 자리를 세운다(지도는 아직 안 연다). 전투 세이브를 불러올 때도 쓴다.</summary>
-    internal void PrepareContinue()
+    /// <remarks>
+    /// <paramref name="inBattle"/> = 전투 세이브를 불러올 때. 진행의 남은 행동 머리는 그 전투를 연 행동(502 · 전투 장소로 옮긴 900, <see cref="Part1SceneScript.SavePending"/>)이라
+    /// 이어 하기는 그것부터 다시 하지만, 전투 세이브는 이미 그 전투 안이다 — 머리를 빼고 잇는다. 안 빼면 이기고 돌아와 같은 전투가 또 열렸다(20087 사용자 보고).
+    /// 원본은 전투를 마치면 장면 4 로 돌아와 502 다음 행동부터 돈다.
+    /// </remarks>
+    internal void PrepareContinue(bool inBattle = false)
     {
-        _resume = host.Part1.PendingActions.Count > 0;
-        Events.Restore(host.Part1.PendingActions);
+        var pending = host.Part1.PendingActions;
+        if (inBattle && pending.Count > 0 && pending[0].Code is 502 or 900) pending = [.. pending.Skip(1)];
+        _resume = pending.Count > 0;
+        Events.Restore(pending);
         if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
         _mapPx = [];
         _teams = null;
