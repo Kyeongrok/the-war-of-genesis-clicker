@@ -212,7 +212,10 @@ internal sealed class TimedHit(GameWindow host)
     /// 방금 것으로 칠 횟수 — <b>맞춘 박자 수</b>다(박자를 하나 더할 때마다 한 대 더, 사용자 요청). 둘 이상이면 그만큼 여러 번 치고,
     /// 하나면 한 번을 크리티컬로 친다. 전에는 박자 둘에 「연속 성공마다 +1, 3번까지」였는데 박자 수가 곧 횟수가 되면서 그 규칙은 뺐다.
     /// </summary>
-    internal int AttackCount => Math.Max(1, Hits);
+    internal int AttackCount => ForcedHits > 0 ? ForcedHits : Math.Max(1, Hits);
+
+    /// <summary>시험용 DUELDX_TIMEDHITS=&lt;n&gt; — 띠 없이 박자 n 개를 맞춘 것으로 친다(화면 밖에서 연속 공격을 보려고).</summary>
+    internal static readonly int ForcedHits = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TIMEDHITS"), out int n) ? n : 0;
 
     /// <summary>아직 안 끝난 첫 박자 — 다 끝났으면 박자 수.</summary>
     private int Pending => Array.IndexOf(_beat, 0) is var i and >= 0 ? i : _beat.Length;

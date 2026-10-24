@@ -150,10 +150,32 @@ internal sealed partial class Part1Skill
     /// </summary>
     private int BasicMelee(int id, List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
-        var (len, at) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
+        // 타이밍 어택으로 박자를 n(2~6)개 맞췄으면 「연」의 연속 공격 동작(파트1 동작 9 + n = 11~15, 타격 키 n 개)으로 n 번 친다(사용자 요청).
+        // 그 인물 그림에 그 동작이 없으면 가진 것 가운데 가장 긴 연속 공격으로 내린다.
+        if (ChainHits >= 2 && host._sprites.TryGetValue(_user.ChrCode, out var sprite))
+            for (int n = Math.Min(6, ChainHits); n >= 2; n--)
+            {
+                int act = WeaponAction(9 + n);
+                if (sprite.RawClip(act * 3) == null) continue;
+                var toward = TargetPoint(targets, aim);
+                if (toward != _home) _user.Facing = FacingOf(toward.X - _home.X, toward.Y - _home.Y);
+                int len = Swing(_user, 9 + n, 8);
+                var keys = sprite.Clip(act, _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).ToList() ?? [];
+                if (keys.Count == 0) break;
+                foreach (int k in keys) foreach (int ti in targets) HitAt(k, ti, hit);
+                ChainStruck = keys.Count;
+                return Math.Max(len, keys[^1]) + 1;
+            }
+        var (len1, at) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
         foreach (int ti in targets) HitAt(at, ti, hit);
-        return Math.Max(len, at) + 1;
+        return Math.Max(len1, at) + 1;
     }
+
+    /// <summary>이번 기본 공격의 타이밍 어택 박자 수(부르는 쪽이 넣는다) — 2 이상이면 연속 공격 동작으로 친다.</summary>
+    internal int ChainHits;
+
+    /// <summary>연속 공격으로 실제 친 횟수 — 0 이면 한 번만 쳤다(부르는 쪽이 피해 배율을 정할 때 본다).</summary>
+    internal int ChainStruck;
 
     /// <summary>
     /// 활공격(<c>0x10044640</c>) — 시전자 앞(방향 4: 위 · 왼 · 아래 · 오른으로 20) z+60 에 빛 56:1, 28틱 뒤 화살 793(16방향 — 9 이상은 16−d 를 뒤집어,

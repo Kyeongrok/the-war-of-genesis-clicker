@@ -266,9 +266,12 @@ internal sealed unsafe partial class BattleScene
         if (host.Tlk._talk != null || _outcome.Length > 0) return;   // 대사가 끝나기를 기다린다
         if (_turnNo < 1) return;                            // 시작 사건(적이 나타나기 전)이 끝나기를 기다린다
         var parts = WorkHook.Split(':');
-        if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
         // DUELDX_WORKBY=<Chr> 면 그 인물이 쓴다(없으면 첫 아군).
         int by = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_WORKBY"), out int chrBy) ? chrBy : 0;
+        // 「basic」 이면 그 인물의 기본 공격 work.
+        if (parts[0] == "basic" && host._units.FirstOrDefault(u => u.Alive && u.OnField && u.IsAlly && (by == 0 || u.ChrCode == by))?.Data is { } bd)
+            parts[0] = bd.BasicWorkId.ToString();
+        if (!int.TryParse(parts[0], out int id) || Work(id) is not { } w) return;
         int caster = Array.FindIndex(host._units, u => u.Alive && u.OnField && u.IsAlly && (by == 0 || u.ChrCode == by));
         if (caster < 0) return;
         _workHookDone = true;

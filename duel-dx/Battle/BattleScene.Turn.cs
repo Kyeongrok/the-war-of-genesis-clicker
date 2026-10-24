@@ -1092,7 +1092,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (w.TintMode == 1) host._mapTintTarget = w.TintLevel;   // 기술을 쓰는 동안 맵이 물든다(0x10069efa, ba-20 P2)
 
         // 타이밍 크리티컬(모드 > 밸런스) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
-        if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
+        if (TimedHit.ForcedHits > 0 && !eventFinisher && a.IsAlly && w.IsDamage) _timedCritBy = a;   // 시험용
+        else if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
         {
             foreach (bool _ in host.TimedHitFx.Prompt(a, target: targetIndex >= 0 ? host._units[targetIndex] : null)) yield return true;
             if (host.TimedHitFx.Hits > 0) _timedCritBy = a;
@@ -1297,12 +1298,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 var cells = EffectCells(w, a, col, row).ToList();
                 var struck = new HashSet<int>();
-                bool each = part1Basic == 0 && Part1Skill.HitsEachTime(w.Id);
+                // 파트1 기본 공격의 타이밍 어택 — 박자 수만큼 「연」 동작으로 여러 번(Part1Skill.BasicMelee). 그러면 타마다 보통 피해(배율 100).
+                host.Part1Ab.ChainHits = part1Basic > 0 && _timedCritBy == a ? host.TimedHitFx.AttackCount : 0;
+                host.Part1Ab.ChainStruck = 0;
+                bool each = (part1Basic == 0 && Part1Skill.HitsEachTime(w.Id)) || host.Part1Ab.ChainHits >= 2;
                 void Part1Hit(int ti)
                 {
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                             $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage}" + Environment.NewLine);
+                    if (host.Part1Ab.ChainStruck >= 2) _timedPercent = 100;   // 연속 공격으로 여러 번 치면 타마다 보통 피해
                     if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying);
                 }
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
