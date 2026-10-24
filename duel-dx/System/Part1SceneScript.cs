@@ -206,6 +206,11 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 1000 when a[1] == 8 && a[0] >= 0: host.Part1.Join([Part1Game.ChrBase + a[0]]); break;
                 // [무리, Chr, 수] — 무리의 용병(908, 0x100c1610 → 0x100adb60, 칸 +0x910) · 탑승물(910, 0x100c1730 → 0x100adcc0, 칸 +0xa14)에 더한다.
                 // 무리 99 는 지금 무리. 챕터 0 들머리: 용병 알가지 5 · 바시아조크 5, 탑승물 아지다하카 3.
+                // 906 [무리, 아이템, 수] = 무리 가방에 아이템(0x100c14f0 → 0x100ada10, 챕터 0: 다마스커스 2 · 회복약 10 · 해독제 10 …) ·
+                // 912 [eld] = 무리 돈(0x100c1850, 0x101a07e0 — 챕터 0: 3000) · 904 [무리, Chr] = 그 인물을 무리 명단에(0x100c12e0 — 일행에 든다로 친다).
+                case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
+                case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
+                case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;
                 case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
                 case 910 when a[1] > 0: AddCount(host.Part1.Mounts, Part1Game.ChrBase + a[1], a[2]); break;
                 case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
