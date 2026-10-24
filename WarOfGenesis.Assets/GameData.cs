@@ -542,6 +542,26 @@ public sealed class GameDatabase
     /// <summary>파트1 인물의 자란 모습(경험치 · 어빌리티 레벨)을 입힌다 — 게임이 진행에서 채운다. 바뀌면 <see cref="ForgetPart1Characters"/>.</summary>
     public Func<Part1Chr, Part1Chr>? Part1Growth { get; set; }
 
+    /// <summary>
+    /// 파트1 글 한 줄(전투 제목 · 승패 조건 따위)에 글 번호를 준다 — 64000 위를 차례로 쓰고 같은 글은 같은 번호. <see cref="T"/> 가 돌려준다.
+    /// </summary>
+    public ushort Part1TextId(string text)
+    {
+        if (text.Length == 0) return 0;
+        lock (_part1TextIds)
+        {
+            if (_part1TextIds.TryGetValue(text, out ushort id)) return id;
+            if (_part1TextIds.Count >= ushort.MaxValue - Part1TextBase) return 0;
+            id = (ushort)(Part1TextBase + _part1TextIds.Count);
+            _part1TextIds[text] = id;
+            _part1Names[id] = text;
+            return id;
+        }
+    }
+
+    private const int Part1TextBase = 64000;
+    private readonly Dictionary<string, ushort> _part1TextIds = [];
+
     /// <summary>만들어 둔 파트1 인물을 버린다 — 자란 모습이 바뀌었을 때(레벨업 · 새 게임 · 이어 하기).</summary>
     public void ForgetPart1Characters()
     {

@@ -106,7 +106,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     /// 파트1 전투(<see cref="Part1Battle"/>)를 판으로 — 인물 번호는 <see cref="Part1Game.ChrBase"/> 를 더하고, 안 쓰는 레코드는 뺀다.
     /// 이벤트가 사람을 10000+n(파일 차례)으로 가리키므로 <see cref="DemoUnit.Record"/> 는 파일 차례다. 사건·대사는 BattleScene.LoadEvents 가 Part1Script 로 붙인다.
     /// </summary>
-    private static DemoScene? LoadPart1(int id)
+    private static DemoScene? LoadPart1(int id, GameDatabase? db)
     {
         if (Part1Battle.Load(id - Part1Game.BattleBase) is not { } battle) return null;
         static Facing FacingOf(int direction) => direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
@@ -120,7 +120,10 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
         var placement = battle.Placement.Select(p => (p.X, p.Y, FacingOf(p.Direction))).ToList();
         string title = battle.Line(battle.TitleLine) is { Length: > 0 } t ? t : $"파트1 전투 {id - Part1Game.BattleBase}";
         int bgm = battle.Bgm >= 0 ? Part1Game.BgmBase + battle.Bgm : 0;   // 머리 낱말 8 — BGMs\NNNN.bgm, -1 은 없음
-        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", bgm, 0, 0, 0, roster, 0, placement, [], EngineJudgesWipe: false)
+        // 제목 · 승리 · 패배 조건 줄(머리 낱말 3·4·5, .dlg 줄)은 파트1 글이라 글 번호를 따로 붙인다 — 시스템 메뉴 「전투 조건」이 보인다.
+        ushort Text(int line) => db?.Part1TextId(Part1Game.PlainText(battle.Line(line)).Replace('\n', ' ')) ?? 0;
+        return new DemoScene(id, title, $"{Part1MapPrefix}{battle.ObtId:D4}", bgm, Text(battle.TitleLine), Text(battle.WinLine), Text(battle.LoseLine),
+                             roster, 0, placement, [], EngineJudgesWipe: false)
         {
             StartCol = battle.StartX, StartRow = battle.StartY,
         };
@@ -131,7 +134,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     {
         try
         {
-            if (id >= Part1Game.BattleBase) return LoadPart1(id);
+            if (id >= Part1Game.BattleBase) return LoadPart1(id, db);
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
             if (BattleFile.Parse(id, files.Read("Btl", $"{id:D4}.btl")) is not { } battle) return null;
             if (BattleFile.ObtOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) is not { } obt) return null;
