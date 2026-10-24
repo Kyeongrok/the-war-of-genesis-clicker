@@ -98,8 +98,9 @@ internal sealed class Part1Progress
         return chr;
     }
 
-    /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번).</summary>
-    internal List<int> Bag = [];
+    /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번). 시험용 DUELDX_PART1BAG=「126,126」 으로 미리 채운다.</summary>
+    internal List<int> Bag = [.. (Environment.GetEnvironmentVariable("DUELDX_PART1BAG") ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => int.TryParse(x, out int n) ? n : 0).Where(n => n > 0)];
 
     /// <summary>인물마다 바꿔 낀 장비 다섯 칸 — 없으면 인물 레코드 그대로.</summary>
     internal Dictionary<int, int[]> Equipped = [];

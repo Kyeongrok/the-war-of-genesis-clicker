@@ -33,7 +33,7 @@ internal sealed unsafe partial class BattleScene
     internal List<(ItemData Item, int Count)> ItemRowsList()
     {
         if (host._db is not { } db) return [];
-        // 파트1 판에서는 파트2 가방을 안 보인다 — 파트1 가방(Part1Progress.Bag)의 약은 아직 전투에서 못 쓴다.
+        // 파트1 판에서는 파트2 가방을 안 보인다 — 파트1 가방의 약은 Part1ItemRows 가 따로 든다.
         if (host._scene.IsPart1) return [];
         var list = new List<(ItemData Item, int Count)>();
         // 원본 목록(0x100d39a6~0x100d39fc)은 가방에서 <b>종류 7 을 모두</b> 줄로 넣는다 — 쓰는 work 이 0 인 것도 보인다(고르면 쓸 수 없다고만 알린다).
@@ -44,10 +44,40 @@ internal sealed unsafe partial class BattleScene
         return list;
     }
 
+    /// <summary>
+    /// 파트1 가방에서 전투에 쓸 것 — 약(갈래 20 · 25: 보정 100 = HP 회복, 9999 면 가득)과 상태 치료(24). 들어온 차례대로 (아이템, 개수).
+    /// </summary>
+    internal List<(Part1Item Item, int Count)> Part1ItemRows()
+    {
+        var items = Part1Item.LoadAll();
+        return [.. host.Part1.Bag.GroupBy(id => id).Select(g => (Part1Item.ById(items, g.Key), g.Count()))
+                    .Where(r => r.Item1 is { Type: 20 or 24 or 25 }).Select(r => (r.Item1!, r.Item2))];
+    }
+
+    /// <summary>
+    /// 파트1 약 쓰기 — 지금 차례의 인물에게 보정 100(HP 회복, 9999 = 가득)을 주고 하나 덜고 차례를 끝낸다.
+    /// 상태 치료(보정 102~107)는 파트2 상태이상과 짝을 아직 안 맞춰 하나 덜기만 한다.
+    /// </summary>
+    internal void UsePart1Item(Part1Item item)
+    {
+        var u = host._units[_turn];
+        CommitMoveForAction();
+        int heal = item.Bonus(100), before = u.Hp;
+        if (heal > 0)
+        {
+            u.Hp = heal >= 9999 ? u.MaxHp : Math.Min(u.MaxHp, u.Hp + heal);
+            ShowNumber(u, host._db?.T(159) ?? "", HealColor2, rise: false, count: (before, u.Hp));
+        }
+        host.Part1.Bag.Remove(item.Id);
+        host.Toast(heal > 0 ? $"{item.Name} — HP +{u.Hp - before}" : $"{item.Name} — 썼다");
+        EndTurn();
+    }
+
+    internal int ItemRowCount => host._scene.IsPart1 ? Part1ItemRows().Count : ItemRowsList().Count;
+
     internal (int X, int Y, int H) ItemMenuRect()
     {
-        var rows = ItemRowsList();
-        int shown = Math.Clamp(rows.Count, 1, ItemRows);
+        int shown = Math.Clamp(ItemRowCount, 1, ItemRows);
         int h = shown * ItemRowH + 24;
         var (cx, cy) = RingCenter(host._units[Math.Max(_turn, 0)]);
         int x = Math.Clamp(cx - ItemMenuW / 2, host._camX + 8, host._camX + host.ViewWidth - ItemMenuW - 8);
@@ -65,11 +95,12 @@ internal sealed unsafe partial class BattleScene
         var rows = ItemRowsList();
         var (x, y, h) = ItemMenuRect();
         int index = _itemTop + (by - y - 12) / ItemRowH;
-        if (bx < x || bx >= x + ItemMenuW || by < y + 12 || by >= y + 12 + ItemRows * ItemRowH || index < 0 || index >= rows.Count)
+        if (bx < x || bx >= x + ItemMenuW || by < y + 12 || by >= y + 12 + ItemRows * ItemRowH || index < 0 || index >= ItemRowCount)
         {
             CancelTargeting(refund: true);
             return true;
         }
+        if (host._scene.IsPart1) { UsePart1Item(Part1ItemRows()[index].Item); return true; }
 
         var (item, _) = rows[index];
         if (Work(item.UseWork) is not { } w) { _itemMenu = true; host.Toast($"{host._db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }
@@ -107,12 +138,13 @@ internal sealed unsafe partial class BattleScene
         if (!_itemMenu || _turn < 0 || host._db is not { } db) return;
         if (host._hiResUi && host.BattleCovered) return;   // 층에 그리는 창은 판을 덮은 화면(모세스 · 필드 …)이 가려 주지 못한다
         var rows = ItemRowsList();
+        var part1Rows = host._scene.IsPart1 ? Part1ItemRows() : null;
         var (x, y, h) = ItemMenuRect();
 
         host.UiDarken(x - 1, y - 21, ItemMenuW + 2, h + 22);
         host.UiFrame(x, y, ItemMenuW, h, db.T(4) is { Length: > 0 } t ? t : "ITEM");
 
-        if (rows.Count == 0)
+        if (ItemRowCount == 0)
         {
             string none = db.T(0) is { Length: > 0 } n ? n : "없음";
             var (_, nw, _) = host.UiGetText(none, DimGray);
@@ -123,9 +155,20 @@ internal sealed unsafe partial class BattleScene
         for (int r = 0; r < ItemRows; r++)
         {
             int index = _itemTop + r;
-            if (index >= rows.Count) break;
-            var (item, count) = rows[index];
+            if (index >= ItemRowCount) break;
             int rx = x + 12, ry = y + 12 + r * ItemRowH;
+            if (part1Rows != null)
+            {
+                // 파트1 약 — 그림 없이 이름과 개수만.
+                var (p1, p1Count) = part1Rows[index];
+                if (host._mouse.X >= rx - 4 && host._mouse.X < rx - 4 + ItemRowW + 8 && host._mouse.Y >= ry && host._mouse.Y < ry + ItemRowH)
+                    host.UiSprite(ItemRowObs, ItemRowMotion, 0, rx - 4, ry, loop: false);
+                host.UiText(p1.Name, rx + 8, ry + 4, White, 12);
+                string many = $"(x{p1Count})";
+                host.UiText(many, rx + ItemRowW - 6 - host.UiGetText(many, White, 12).W, ry + 4, White, 12);
+                continue;
+            }
+            var (item, count) = rows[index];
             // 줄 바탕(밝은 띠)은 마우스를 올린 줄에만 — 전에는 모든 줄에 그려 다 올린 것처럼 보였다(사용자 보고). 어빌리티 목록과 같은 꼴
             // — 원본도 그렇다: 줄에 0x10043810(−4, 0, Obs 0471, 모션 4)로 단 덧그림(0x100d393c · 0x100d3b3e)이고, 그것은 줄 +0x58(마우스 올림)일 때만 그려진다(0x10043040).
             bool over = host._mouse.X >= rx - 4 && host._mouse.X < rx - 4 + ItemRowW + 8 && host._mouse.Y >= ry && host._mouse.Y < ry + ItemRowH;
