@@ -37,6 +37,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>행동 304 [인물 차례] 숨기기 · 305 [인물 차례] 보이기(필드 0007 은 들머리에서 여럿을 숨겼다가 차례로 보인다).</summary>
     internal Action<int, bool>? SpriteVisible;
 
+    /// <summary>행동 401 [dx, dy, 틱] — 화면을 틱마다 (dx, dy) 씩, 틱 수만큼 민다(0x100cd950, 그림 끝에서 자른다).</summary>
+    internal Action<int, int, int>? CameraPan;
+
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
@@ -203,6 +206,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
                 case 300 when a[0] >= 10000: SpriteMotion?.Invoke(a[0] - 10000, a[1], a[2] == 1); break;
                 case 304 or 305: SpriteVisible?.Invoke(a[0], c.Code == 305); break;
+                case 401: CameraPan?.Invoke(a[0], a[1], a[2]); break;
                 case 101: _vars[a[0]] = _vars.GetValueOrDefault(a[0]) + 1; break;
                 case 800: _vars[a[0]] = a[1]; break;
                 case 802:

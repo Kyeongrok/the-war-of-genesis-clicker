@@ -23,13 +23,14 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     internal Part1SceneScript Script => _script ??= new(host)
     {
         Timed = true,
-        Busy = () => _walks.Any(w => !w.Value.Done(host._lastTime)),
+        Busy = () => _walks.Any(w => !w.Value.Done(host._lastTime)) || _pan is { } pan && (host._lastTime - pan.Start) * GameWindow.TicksPerSecond < pan.Ticks,
         SceneChange = OnSceneChange,
         BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
         SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) { _walks.Remove(n); _spots[n] = (x, y); } },
         SpriteShift = (n, dx, dy, ticks) => { if (n >= 0 && n < _spots.Length) Walk(n, dx, dy, ticks); },
         SpriteMotion = (n, motion, mirror) => { if (n >= 0 && n < _spots.Length) _motion[n] = (motion, mirror); },
         SpriteVisible = (n, shown) => { if (n >= 0 && n < _spots.Length) _hidden[n] = !shown; },
+        CameraPan = (dx, dy, ticks) => { _cam = Camera(); _pan = (_cam.X, _cam.Y, dx, dy, Math.Max(1, ticks), host._lastTime); },
     };
 
     /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮기고 302 가 걷게 한다.</summary>
@@ -44,6 +45,24 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     }
 
     private readonly Dictionary<int, Walking> _walks = [];
+
+    /// <summary>화면 왼위(배경 그림 위) — 처음은 머리 낱말 1·2, 401 이 밀면 그 끝자리로 굳는다.</summary>
+    private (int X, int Y) _cam;
+
+    /// <summary>미는 중(401) — 시작 자리, 틱마다 (Dx, Dy), 틱 수, 시작 시각.</summary>
+    private (int X, int Y, int Dx, int Dy, int Ticks, double Start)? _pan;
+
+    /// <summary>지금 화면 왼위 — 미는 중이면 지난 틱만큼, 그림 끝에서 자른다(0x100cd98a~0x100cda06).</summary>
+    private (int X, int Y) Camera()
+    {
+        int x = _cam.X, y = _cam.Y;
+        if (_pan is { } pan)
+        {
+            int n = Math.Min(pan.Ticks, (int)((host._lastTime - pan.Start) * GameWindow.TicksPerSecond));
+            (x, y) = (pan.X + pan.Dx * n, pan.Y + pan.Dy * n);
+        }
+        return (Math.Clamp(x, 0, Math.Max(0, _bgW - MosesScene.MosesW)), Math.Clamp(y, 0, Math.Max(0, _bgH - MosesScene.MosesH)));
+    }
 
     /// <summary>바라보는 쪽(걸으면 걷는 쪽으로 돈다) — 인물 칸 방향에서 시작.</summary>
     private Facing[] _facing = [];
@@ -88,6 +107,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
         _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
         _walks.Clear();
+        _pan = null;
+        _cam = (field.Header[1], field.Header[2]);
         _motion = new (int, bool)?[field.Sprites.Count];
         _hidden = new bool[field.Sprites.Count];
         _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
@@ -167,10 +188,9 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         if (_field is { } field)
         {
             const int W = MosesScene.MosesW, H = MosesScene.MosesH;
-            // 화면 자리 — 머리 낱말 1·2 가 처음 자리이고, 넓은 그림(0002 의 1300 폭 파노라마)에서는 인물들 가운데를 따라간다(화면 이동 401 은 아직 안 풀었다).
+            // 화면 자리 — 머리 낱말 1·2 가 처음 자리, 행동 401 이 민다(Camera).
             var spots = Enumerable.Range(0, _spots.Length).Select(PositionOf).ToArray();
-            int followX = spots.Length > 0 ? (int)spots.Average(p => p.X) - W / 2 : field.Header[1];
-            int camX = Math.Clamp(_bgW > W && spots.Length > 0 ? followX : field.Header[1], 0, Math.Max(0, _bgW - W)), camY = Math.Clamp((int)field.Header[2], 0, Math.Max(0, _bgH - H));
+            var (camX, camY) = Camera();
             int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
             if (_bg is { } bg)
                 for (int y = 0; y < Math.Min(H, _bgH); y++)
