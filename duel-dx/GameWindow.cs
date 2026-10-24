@@ -1087,6 +1087,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ChaptersScr.OnChaptersClick(bx, by)) return;
         if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
+        if (Part1PickOpen) { Part1TitleScr.Chapter.PressPick(Part1TitleScr.Chapter.PickAt(bx, by)); return; }
         if (OnKeysClick(bx, by) || Sys.OnSystemClick(bx, by) || StatusScr.OnStatusClick(bx, by)) return;
         if (Btl.OnItemMenuClick(bx, by)) return;
         if (Btl.OnRingClick(bx, by) || Btl.OnAbilityMenuClick(bx, by)) return;
@@ -1114,6 +1115,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     /// <summary>배경 읽기가 끝난 뒤 주 스레드에서 한 번 돌릴 시험 훅(DUELDX_TITLE·MOSES·FIELD·LEVELUP).</summary>
     internal volatile bool _openHooksPending;
+
+    /// <summary>파트1 전투에서 레벨업 어빌리티를 고를 차례 — 대사가 없고 판이 안 끝났을 때.</summary>
+    internal bool Part1PickOpen => _battleLoaded && _scene.IsPart1 && Part1.LevelPicks.Count > 0 && Tlk._talk == null && Btl._outcome.Length == 0;
 
     internal void Update(double dt)
     {
@@ -1216,6 +1220,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Tlk.UpdateTalk();
         // 페이드인 동안은 틱·이벤트가 멈춘다(원본은 페이드를 다 한 뒤에 루프로 들어간다, 0x10061ad0).
         if (_fadeInStart >= 0) return;
+        // 파트1 레벨업 — 원본처럼 전투 안에서 바로 어빌리티를 고른다(0x1009dac0, 사용자 요청). 고르는 동안 전투를 멈춘다. 자동 진행이면 첫 후보.
+        if (Part1PickOpen)
+        {
+            if (BattleScene.AutoPlay) Part1TitleScr.Chapter.PressPick(0);
+            return;
+        }
         Btl.StepEvent();
         Btl.UpdateTurn();
         Btl.RefreshMoveRange();
@@ -1364,6 +1374,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawAbilityMenu();
         Btl.DrawItemMenu();
         StatusScr.DrawStatusScreen();
+        if (Part1PickOpen) { var (pox, poy) = Mos.MosesOrigin(); Part1TitleScr.Chapter.DrawPick(pox, poy); }
         Tlk.DrawTalk(layer: !BattleCovered && _statusUnit < 0);   // Status(층, 화면 가득)가 떠 있으면 대사 글도 판에 — 층에 쓰면 Status 위로 글만 비친다
         DrawToast();
         DrawVoiceNotice(_camX + ViewWidth - 12, _camY + 10);

@@ -46,8 +46,8 @@ internal sealed unsafe partial class BattleScene
     /// <summary>
     /// 파트1 처치 보상(<c>0x1003de76</c> → <c>0x10035908</c>~) — 때린 이가 편 4 이고 파트1 Chr &lt; 106 이면 경험치 = 죽은 이 레벨 × 20 / 때린 이 레벨,
     /// eld += Luck × 죽은 이 경험치 / 1000(<see cref="Part1Combat.KillReward"/>). 레벨(경험치 ÷ 100)이 오르면 직업 어빌리티 하나를 올리는데
-    /// (<see cref="Part1Job.LevelUpCandidates"/>), 원본은 플레이어가 후보에서 고른다(<c>0x1009dac0</c>) — 여기서는 오른 레벨을 쌓아 두었다가
-    /// 전투를 마치고 챕터 지도에서 고르게 한다(<see cref="Part1Progress.LevelPicks"/>). 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
+    /// (<see cref="Part1Job.LevelUpCandidates"/>), 원본처럼 플레이어가 후보에서 바로 고른다(<c>0x1009dac0</c>) — 오른 레벨을 쌓으면(<see cref="Part1Progress.LevelPicks"/>)
+    /// 전투가 멈추고 고르기 창이 뜬다. 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
     /// </summary>
     internal void GainPart1KillExp(UnitState killer, UnitState victim)
     {
@@ -66,7 +66,7 @@ internal sealed unsafe partial class BattleScene
         for (int level = before / 100 + 1; level <= growth.Experience / 100; level++)
         {
             host.Part1.LevelPicks.Add((killer.ChrCode, level));
-            host.Toast($"{k.Chr.Name} 레벨 {level} — 전투가 끝나면 어빌리티를 고릅니다");
+            host.Toast($"{k.Chr.Name} 레벨 {level}");   // 고르기 창이 바로 뜬다(GameWindow.Part1PickOpen)
             if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}" + Environment.NewLine);
         }
         db.ForgetPart1Characters();

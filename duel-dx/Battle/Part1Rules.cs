@@ -18,7 +18,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     /// <summary>파트1 기술(work 20000 + <c>Attack.dat</c> 번호 — 헬 스트라이크 20288 따위)의 Attack.dat 칸. 기본 공격이면 null.</summary>
     internal Part1Attack? AttackOf(WorkData w) =>
-        w.Id > Part1Game.ChrBase && Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), w.Id - Part1Game.ChrBase) is { } attack ? attack : null;
+        w.Id > Part1Game.ChrBase && Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), Part1SkillBook.AttackIdOf(w.Id)) is { } attack ? attack : null;
     private readonly Dictionary<int, Part1Fighter?> _fighters = [];
 
     /// <summary>탈것 → 탄 이(전투가 채운다). 탈것의 SKILL 은 탄 이의 SKILL 이다(<c>0x100364b0</c> → <c>0x1009eb20</c>, 255 에서 자름).</summary>

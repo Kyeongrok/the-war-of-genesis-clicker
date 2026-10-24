@@ -21,6 +21,8 @@ public static class Part1SkillBook
         var attacks = Part1Attack.LoadAll();
         if (abilities.Count == 0 || attacks.Count == 0) return;
         var have = skills.Select(s => s.Ability).ToHashSet();
+        // 여러 어빌리티가 같은 Attack 을 쓰면(연 · 다하카 두번 물기 = 11) work 번호가 겹친다 — 뒤의 것은 1000 씩 비켜 준다(<see cref="AttackIdOf"/>).
+        var used = skills.SelectMany(s => s.Levels).Select(l => l.Work).ToHashSet();
         var heal = skills.FirstOrDefault(s => s.Ability == 9)?.Common;
         var melee = skills.FirstOrDefault(s => s.Ability == 1)?.Common;
         var magic = skills.FirstOrDefault(s => s.Ability == 29)?.Common;
@@ -34,7 +36,10 @@ public static class Part1SkillBook
             for (int lv = 1; lv <= 9; lv++)
             {
                 if (Part1Attack.ById(attacks, ab.AttackId + lv - 1) is not { } a || (lv > 1 && Head(a.Name) != head)) break;
-                levels.Add(new SkillLevel { Work = Part1Game.ChrBase + a.Id, Level = lv });
+                int work = Part1Game.ChrBase + a.Id;
+                while (used.Contains(work) && work < ushort.MaxValue - 1000) work += WorkStride;
+                used.Add(work);
+                levels.Add(new SkillLevel { Work = work, Level = lv });
             }
             int sel = first.Formula;
             bool isHeal = sel == 6, weapon = sel is (>= 0 and <= 4) or (>= 29 and <= 31), status = sel is >= 10 and <= 28;
@@ -50,6 +55,12 @@ public static class Part1SkillBook
             skills.Add(new SkillFile { Ability = id, Name = ab.Name, MaxLevel = levels.Count, Common = common, Levels = levels });
         }
     }
+
+    /// <summary>겹친 work 를 비켜 주는 폭 — Attack.dat 는 1000 칸이 안 된다.</summary>
+    public const int WorkStride = 1000;
+
+    /// <summary>파트1 work 번호의 Attack.dat 번호 — 20000 위의 1000 나머지.</summary>
+    public static int AttackIdOf(int work) => (work - Part1Game.ChrBase) % WorkStride;
 
     private static string Head(string name) => name.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Trim();
 }

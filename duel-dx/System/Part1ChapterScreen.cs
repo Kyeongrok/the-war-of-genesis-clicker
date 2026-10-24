@@ -362,7 +362,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         return null;
     }
 
-    private int PickAt(int bx, int by)
+    internal int PickAt(int bx, int by)
     {
         if (CurrentPick() is not { } pick) return -1;
         var (ox, oy) = host.Mos.MosesOrigin();
@@ -371,7 +371,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         return -1;
     }
 
-    private void PressPick(int i)
+    internal void PressPick(int i)
     {
         if (CurrentPick() is not { } pick || i < 0 || i >= pick.Options.Count) return;
         var option = pick.Options[i];
@@ -385,7 +385,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         SaveProgress();
     }
 
-    private void DrawPick(int ox, int oy)
+    internal void DrawPick(int ox, int oy)
     {
         if (CurrentPick() is not { } pick) return;
         int h = 52 + pick.Options.Count * PickRowH;
