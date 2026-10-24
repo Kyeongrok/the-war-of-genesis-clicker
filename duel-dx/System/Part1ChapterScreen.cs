@@ -27,7 +27,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int BannerObs = 219, TeamObs = 226, RingObs = 182;
 
     /// <summary>Esc 메뉴 — 원본 지도에는 없다(시스템 메뉴 쪽). 리메이크에 있던 연대표 · 일행 창 · 타이틀을 여기에 둔다.</summary>
-    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
+    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "일행 한눈에", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
 
     internal const int MenuX = 250, MenuY = 170, MenuW = 140, MenuRowH = 28;
 
@@ -809,11 +809,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             case >= TargetHit and < TargetHit + 1000: _mode = Mode.Map; MoveTo(hit - TargetHit); break;
             case MenuHit + 0: _mode = Mode.Map; host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case MenuHit + 1: _mode = Mode.Map; OpenParty(0); break;
+            case MenuHit + 2: _mode = Mode.Map; host.PartyTable.Open(); break;   // 일행 표(Part1PartyTable, P 와 같다)
             // 저장 · 불러오기 — 전투 SAVE 와 같은 칸 창(파트1 칸 part1-battle-save-NN.json). 지도에서 적은 칸은 장면 갈래 4(「챕  터」)로, 불러오면 이 지도로 돌아온다.
-            case MenuHit + 2: _mode = Mode.Map; SaveProgress(); host.SlotsScr.OpenSlots(0); break;
-            case MenuHit + 3: _mode = Mode.Map; host.SlotsScr.OpenSlots(1); break;
-            case MenuHit + 4: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
-            case MenuHit + 5: _mode = Mode.Map; break;
+            case MenuHit + 3: _mode = Mode.Map; SaveProgress(); host.SlotsScr.OpenSlots(0); break;
+            case MenuHit + 4: _mode = Mode.Map; host.SlotsScr.OpenSlots(1); break;
+            case MenuHit + 5: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
+            case MenuHit + 6: _mode = Mode.Map; break;
             case >= 0 when hit < chapter.Places.Count: GoTo(hit); break;
         }
     }

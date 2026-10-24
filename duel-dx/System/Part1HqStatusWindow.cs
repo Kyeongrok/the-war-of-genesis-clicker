@@ -15,7 +15,10 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
 {
     internal const int X = 65, Y = 80, W = 510, H = 370;
 
-    internal const int FaceHit = 5000, ItemHit = 1000, PeopleHit = 0x190, MountHit = 0x191, ItemUp = 900, ItemDown = 901, MercUp = 910, MercDown = 911;
+    internal const int FaceHit = 5000, ItemHit = 1000, PeopleHit = 0x190, MountHit = 0x191, ItemUp = 900, ItemDown = 901, MercUp = 910, MercDown = 911, TableHit = 920;
+
+    /// <summary>「일행 한눈에」 단추(리메이크 — 일행 표 <see cref="Part1PartyTable"/>) — 팀 이름표 오른쪽.</summary>
+    private const int TableX = 196, TableY = 10, TableW = 88, TableH = 20;
 
     /// <summary>아이템 목록 (14, 181) — 8열 × 3줄, 칸 25×43, 여백 10 · 틈 5.</summary>
     internal const int ItemX = 14, ItemY = 181, ItemW = 270, ItemH = 160, ItemCols = 8, ItemRows = 3, CellW = 25, CellH = 43;
@@ -97,6 +100,7 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
             int cx = ItemX + 10 + k % ItemCols * (CellW + 5), cy = ItemY + 10 + k / ItemCols * (CellH + 5);
             if (x >= cx && x < cx + CellW && y >= cy && y < cy + CellH) return ItemHit + i;
         }
+        if (x >= TableX && x < TableX + TableW && y >= TableY && y < TableY + TableH) return TableHit;
         if (x >= MercX + 150 && x < MercX + 173 && y >= MercY + 5 && y < MercY + 28) return PeopleHit;
         if (x >= MercX + 173 && x < MercX + 196 && y >= MercY + 5 && y < MercY + 28) return MountHit;
         return -1;
@@ -116,6 +120,7 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
                 var members = host.Part1.TeamMembers(_team);
                 if (hit - FaceHit < members.Count) Panel.OpenOff(members[hit - FaceHit], members, map.SaveProgress);
                 break;
+            case TableHit: host.PartyTable.Open(); break;
             case PeopleHit: _mounts = false; _mercTop = 0; break;
             case MountHit: _mounts = true; _mercTop = 0; break;
             case ItemUp: _itemTop = Math.Max(0, _itemTop - 1); break;
@@ -132,6 +137,9 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         int wx = ox + X, wy = oy + Y;
         art.Box(wx, wy, W, H);
         art.Tag(wx + 30, wy + 10, $"{_team + 1} 팀");
+        host.UiFill(wx + TableX, wy + TableY, TableW, TableH, _hover == TableHit ? 0xFF4A66D0 : 0xFF2A3A80);
+        host.UiStroke(wx + TableX, wy + TableY, TableW, TableH, 0xFFB0C0F0);
+        host.UiText("일행 한눈에", wx + TableX + (TableW - host.UiGetText("일행 한눈에", GameWindow.White, 11).W) / 2, wy + TableY + 4, GameWindow.White, 11);
 
         // 인물 10칸 — 얼굴(Obs 단추) 또는 Obs 217 모션 2 「Empty」.
         var members = host.Part1.TeamMembers(_team);

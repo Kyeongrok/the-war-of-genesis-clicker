@@ -681,6 +681,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>공격 대상 고르기·어빌리티 목록을 닫는다. <paramref name="refund"/> 면 열 때 뺀 걸음 비용을 돌려준다.</summary>
     internal void CancelTargeting(bool refund = false)
     {
+        _part1TargetItem = 0;
         if (refund && _commitUndo is { } undo && _turn >= 0)
         {
             var u = host._units[_turn];
@@ -995,6 +996,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         if (_targetWork < 0) return false;
         if (!IsPlayerTurn || Work(_targetWork) is not { } w) { CancelTargeting(); return true; }
+        if (_part1TargetItem != 0) return OnPart1ItemTarget(col, row);   // 파트1 약 — 누른 아군에게 쓴다
         var user = host._units[_turn];
 
         if (_targetIsBasicAttack)

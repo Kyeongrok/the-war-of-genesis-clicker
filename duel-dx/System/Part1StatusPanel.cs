@@ -172,6 +172,9 @@ internal sealed class Part1StatusPanel(GameWindow host)
     private List<int> _offMembers = [];
     private Action? _onChange;
 
+    /// <summary>전투 중에 연 패널이면 그 사람의 판 위 인물(일행 한눈에 <see cref="Part1PartyTable"/>) — 있으면 HP · SOUL · 능력치를 그 판 값으로.</summary>
+    private Func<int, UnitState?>? _offUnitOf;
+
     /// <summary>전투 밖 패널에서 오른 단추를 누를 자리(어빌리티 줄 설명) — 전투는 StatusScreen 의 목록을 쓴다.</summary>
     private readonly List<(int X, int Y, int W, int H, Action Click)> _offRightHits = [];
 
@@ -189,8 +192,9 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// 전투 밖에서 그 사람의 패널을 연다 — 챕터 지도 상태 창의 얼굴(원본 인물 상세 창 0x100bb580 자리). HP 는 최대, SOUL 은 전투 처음 값 40(<see cref="Part1Combat.GaugeOnTurn"/>).
     /// <paramref name="members"/> 는 ←/→ · 위 얼굴 띠로 오갈 사람들, <paramref name="onChange"/> 는 장비 · 직업을 바꾼 뒤(진행 저장).
     /// </summary>
-    internal void OpenOff(int chr, List<int> members, Action? onChange)
+    internal void OpenOff(int chr, List<int> members, Action? onChange, Func<int, UnitState?>? unitOf = null)
     {
+        _offUnitOf = unitOf;
         _offChr = chr;
         _offMembers = members;
         _onChange = onChange;
@@ -248,6 +252,8 @@ internal sealed class Part1StatusPanel(GameWindow host)
         _items ??= Part1Item.LoadAll();
         var chr = host.Part1.Apply(raw);
         var fighter = Part1Fighter.From(chr, _items);
+        var unit = _offUnitOf?.Invoke(_offChr);
+        if (unit != null && host.Btl.Part1.Fighter(unit) is { } inBattle) fighter = inBattle;
         _layer = host._hiResUi;
         _offRightHits.Clear();
         host.UiDarken(ox, oy, 640, 480, 14, 31);
@@ -273,7 +279,8 @@ internal sealed class Part1StatusPanel(GameWindow host)
 
         int y = y0 + StripH + StripGap;
         int maxHp = Math.Max(1, chr.MaxHp);
-        DrawAt(fighter, maxHp, maxHp, 40, x, y, _offRightHits);
+        if (unit != null) DrawAt(fighter, unit.Hp, unit.MaxHp, unit.Soul, x, y, _offRightHits);
+        else DrawAt(fighter, maxHp, maxHp, 40, x, y, _offRightHits);
         _panel = (x, y0, total, StripH + StripGap + Math.Max(H, _listH));
     }
 

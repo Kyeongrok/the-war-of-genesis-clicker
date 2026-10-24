@@ -58,9 +58,40 @@ internal sealed unsafe partial class BattleScene
     /// 파트1 약 쓰기 — 지금 차례의 인물에게 보정 100(HP 회복, 9999 = 가득)을 주고 하나 덜고 차례를 끝낸다.
     /// 상태 치료는 짝을 아는 것만(102 버서커 · 104 중독 · 107 모두).
     /// </summary>
-    internal void UsePart1Item(Part1Item item)
+    /// <summary>
+    /// 대상 고르기 중인 파트1 약(0 이면 아님). 원본은 약을 고르면 「아이템 힐 · 큐어 · 소울」(Attack 390~392 — 반경 6칸 · 같은 편)로
+    /// 대상 고르기에 가고 누른 사람에게 쓴다(0x1002e34c, 분석-파트1-전투 24절 D). 범위 칠하기는 같은 사거리의 힐 Lv1(work 20162)을 빌린다.
+    /// </summary>
+    internal int _part1TargetItem;
+
+    internal const int Part1ItemAimWork = Part1Game.ChrBase + 162;
+
+    /// <summary>약을 고르면 — 범위를 칠하고 대상을 기다린다. 빌릴 work 가 없으면 예전처럼 자기에게 바로 쓴다.</summary>
+    internal void BeginPart1ItemTargeting(Part1Item item)
     {
-        var u = host._units[_turn];
+        if (Work(Part1ItemAimWork) is not { } w) { UsePart1Item(item); return; }
+        CommitMoveForAction();
+        _targetWork = w.Id;
+        _targetIsBasicAttack = false;
+        _part1TargetItem = item.Id;
+        host.Hint($"{item.Name} — 노란 칸 안의 아군을 클릭하세요 (우클릭·Esc 취소)");
+    }
+
+    /// <summary>대상 칸을 눌렀다 — 사거리 안의 같은 편이면 그 사람에게 쓴다.</summary>
+    internal bool OnPart1ItemTarget(int col, int row)
+    {
+        var user = host._units[_turn];
+        if (Work(_targetWork) is not { } w || Part1Item.ById(Part1Item.LoadAll(), _part1TargetItem) is not { } item) { CancelTargeting(); return true; }
+        if (!InWorkRange(w, user.Col, user.Row, col, row, user)) { host.Hint("사거리 밖입니다 — 노란 칸을 고르세요 (우클릭·Esc 취소)"); return true; }
+        if (LiveUnitAt(col, row) is not { } t || Hostile(user, t)) { host.Hint("아군을 고르세요 (우클릭·Esc 취소)"); return true; }
+        CancelTargeting();
+        UsePart1Item(item, t);
+        return true;
+    }
+
+    internal void UsePart1Item(Part1Item item, UnitState? target = null)
+    {
+        var u = target ?? host._units[_turn];
         CommitMoveForAction();
         int heal = item.Bonus(100), before = u.Hp;
         if (heal > 0)
@@ -113,7 +144,7 @@ internal sealed unsafe partial class BattleScene
             CancelTargeting(refund: true);
             return true;
         }
-        if (host._scene.IsPart1) { UsePart1Item(Part1ItemRows()[index].Item); return true; }
+        if (host._scene.IsPart1) { BeginPart1ItemTargeting(Part1ItemRows()[index].Item); return true; }
 
         var (item, _) = rows[index];
         if (Work(item.UseWork) is not { } w) { _itemMenu = true; host.Toast($"{host._db?.T(item.NameId)} — 쓸 수 없습니다"); return true; }

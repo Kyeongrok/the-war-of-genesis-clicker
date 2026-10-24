@@ -89,6 +89,7 @@ internal sealed unsafe partial class BattleScene
     internal string? AimingName()
     {
         if (_targetWork < 0 || _targetIsBasicAttack || _abilityMenu || !IsPlayerTurn || host._db is not { } db || Work(_targetWork) is not { } w) return null;
+        if (_part1TargetItem != 0) return Part1Item.ById(Part1Item.LoadAll(), _part1TargetItem)?.Name;   // 파트1 약 — 빌린 힐 이름 대신
         if (_targetItem != 0) return db.Items.GetValueOrDefault(_targetItem) is { } item ? db.T(item.NameId) : null;
         if (!db.Abilities.TryGetValue(w.AbilityId, out var ab)) return null;
         // 군단기(분류 2)는 목록에서도 레벨 없이 보인다.

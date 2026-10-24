@@ -806,6 +806,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when NotesScr.Open:
                 NotesScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _partyTable is { _open: true }:
+                _partyTable.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 파트1 일행 한눈에
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when StatsScr._open:
                 StatsScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
@@ -881,7 +884,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
                 if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
-                if (msg == Win32.WM_RBUTTONDOWN && _jobTree is { _open: true }) _jobTree.Close();   // 전직 트리는 오른쪽 단추로 닫는다
+                if (msg == Win32.WM_RBUTTONDOWN && _partyTable is { _open: true }) _partyTable.OnRightDown(bx, by);   // 파트1 일행 한눈에
+                else if (msg == Win32.WM_RBUTTONDOWN && _jobTree is { _open: true }) _jobTree.Close();   // 전직 트리는 오른쪽 단추로 닫는다
                 else if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
                 else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
@@ -931,12 +935,14 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (StatsScr._open) { StatsScr.OnKey(key); return; }
         if (SkillBookScr._open) { SkillBookScr.OnKey(key); return; }
         if (_jobTree is { _open: true }) { JobTree.OnKey(key); return; }   // 파트1 전직 트리
+        if (_partyTable is { _open: true }) { PartyTable.OnKey(key); return; }   // 파트1 일행 한눈에
         if (ItemBookScr._open) { ItemBookScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (ChaptersScr._chaptersOpen) { if (key == Win32.VK_ESCAPE) ChaptersScr._chaptersOpen = false; return; }
+        if (_keys.ActionFor(key) == KeyAction.PartyTable && PartyTable.Toggle()) return;   // 파트1 전투 · 챕터 지도만
         if (_keys.ActionFor(key) == KeyAction.JobTree && JobTree.Toggle()) return;   // 파트1 전투 · 챕터 지도만 — 파트2 는 그냥 지나간다
         // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
         if (TitleScr.OnTitleKey(key)) return;
@@ -1082,6 +1088,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
         if (SkillBookScr.OnClick(bx, by)) return;      // 도구 > 체질별 어빌리티
         if (_jobTree?.OnClick(bx, by) == true) return;  // 파트1 전직 트리
+        if (_partyTable?.OnClick(bx, by) == true) return;  // 파트1 일행 한눈에
         if (ItemBookScr.OnClick(bx, by)) return;       // 도구 > 아이템 보기
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
@@ -1442,6 +1449,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         SkillBookScr.Draw();
         ItemBookScr.Draw();
         _jobTree?.Draw();
+        _partyTable?.Draw();
         SettingsScr.Draw();
         DevScr.Draw();
         TimedEditScr.Draw();

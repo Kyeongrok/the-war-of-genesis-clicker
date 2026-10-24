@@ -5,7 +5,7 @@ using DuelDx.Native;
 namespace DuelDx;
 
 /// <summary>단축키로 바꿀 수 있는 동작.</summary>
-internal enum KeyAction { MoveUp, MoveDown, MoveLeft, MoveRight, Ring, Attack, Ability, Rest, Status, Item, System, NextUnit, Grid, Gauges, March, JobTree }
+internal enum KeyAction { MoveUp, MoveDown, MoveLeft, MoveRight, Ring, Attack, Ability, Rest, Status, Item, System, NextUnit, Grid, Gauges, March, JobTree, PartyTable }
 
 /// <summary>
 /// 동작 ↔ 가상 키 표. <c>%APPDATA%\DuelDx\keys.json</c> 에 저장한다. 방향키(걷기)와 Esc(취소)는 늘 고정.
@@ -31,6 +31,7 @@ internal sealed class KeyBindings
         (KeyAction.Gauges, "체력바 켜기·끄기", 'H'),
         (KeyAction.March, "행군(파트1)", 'F'),
         (KeyAction.JobTree, "전직 트리(파트1)", 'T'),
+        (KeyAction.PartyTable, "일행 한눈에(파트1)", 'P'),
     ];
 
     internal readonly Dictionary<KeyAction, int> _keys = [];
@@ -104,6 +105,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 전직 트리(T) — 전투 · 챕터 지도 위에 뜬다(<see cref="Part1JobTree"/>).</summary>
     internal Part1JobTree JobTree => _jobTree ??= new(this);
     private Part1JobTree? _jobTree;
+
+    /// <summary>파트1 일행 한눈에(P) — 전투 · 챕터 지도 위에 뜨는 일행 표(<see cref="Part1PartyTable"/>).</summary>
+    internal Part1PartyTable PartyTable => _partyTable ??= new(this);
+    private Part1PartyTable? _partyTable;
     internal bool _keysOpen;
     internal int _keysCapture = -1;
 
