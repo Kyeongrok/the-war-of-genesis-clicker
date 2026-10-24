@@ -201,15 +201,15 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         }
     }
 
-    /// <summary>파트1 새 게임 — 진행을 비우고 연대표 첫 칸이 여는 챕터(카디스 요새 → 챕터 0) 지도를 연다.</summary>
+    /// <summary>파트1 새 게임 — 진행을 비우고 연대표를 연다. 거기서 줄기마다 열린 첫 칸 가운데 어디서 시작할지 고른다.</summary>
     private void NewGame()
     {
         host.Part1.Reset();
         Chapter.Forget();
         HookGrowth();
         Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
-        int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
-        if (!Chapter.Open(chapter)) Timeline.Open();
+        // 원본처럼 연대표에서 어디서 시작할지 고른다 — 줄기마다 첫 칸(살라딘 「카디스 요새」 · 바이올라 「반기」 · 인페르노 「인페르노의 음모」)이 열려 있다.
+        Timeline.Open();
     }
 
     /// <summary>파트1 이어 하기 — <c>part1.json</c> 의 챕터에서 남은 사건을 잇는다. 못 읽으면 알리고 타이틀에 머문다.</summary>
