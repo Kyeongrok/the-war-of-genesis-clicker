@@ -109,6 +109,9 @@ public static class Part1Combat
         return damage;
     }
 
+    /// <summary>명중 굴림 — rand()%100 &lt; 기술 명중률(<see cref="Part1Attack.Accuracy"/>)이면 맞는다. 못 맞으면 결과 3(<c>0x10041050</c>).</summary>
+    public static bool Hits(int accuracy, int roll) => roll % 100 < accuracy;
+
     /// <summary>치명 — 피해가 양수인 보통 맞음에서 rand()%100 &lt; 치명률이면 × 2(<c>0x100417ec</c>). 치명률은 선택자 0~3 이 무기1, 29~31 이 무기2 것이다.</summary>
     public static int Critical(int damage, int criticalRate, int roll, out bool critical)
     {

@@ -41,6 +41,13 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
     /// <summary><c>+0x4c</c> 소울 비용으로 보인다 — 쓸 수 있나가 소울 − 50 과 견준다(<c>0x10026df2</c>).</summary>
     public int Cost => Raw[0x4c];
 
+    /// <summary><c>+0x48</c> 명중률(%) — 맞기 전에 rand()%100 ≥ 이 값이면 빗나간다(결과 3, <c>0x10041050</c>).</summary>
+    public int Accuracy => Raw[0x48];
+
+    /// <summary><c>+0x64</c> 속성(1 화염 · 2 빙한 · 3 전격 · 4 회복 · 5 암흑) — 0 이면 무기 속성을 쓴다. <c>+0x65</c> 둘째 속성(1~4, 인물 칸 35~38).</summary>
+    public int Element => Raw[0x64];
+    public int Element2 => Raw[0x65];
+
     /// <summary><c>+0x66</c> 세기에 곱하는 값(타수로 보인다).</summary>
     public int Hits => Raw[0x66];
 
