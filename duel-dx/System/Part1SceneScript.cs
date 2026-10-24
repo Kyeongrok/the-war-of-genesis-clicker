@@ -104,8 +104,16 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// </summary>
     internal readonly int[] Faces = new int[3];
 
-    /// <summary>지금 대사가 뜬 상자(0 왼 · 1 오른 · 2 가운데).</summary>
+    /// <summary>지금 대사가 뜬 상자(0 왼 · 1 오른 · 2 가운데 · <see cref="BubbleSlot"/> 필드 인물 말풍선 · <see cref="NarrationSlot"/> 위쪽 해설 띠).</summary>
     internal int TalkSlot { get; private set; } = 2;
+
+    internal const int BubbleSlot = 3, NarrationSlot = 4;
+
+    /// <summary>209 의 말하는 필드 인물(차례) — 말풍선을 그 머리 위에.</summary>
+    internal int TalkPerson { get; private set; } = -1;
+
+    /// <summary>209 · 210 은 정한 틱이 지나면 저절로 넘어간다(누르면 먼저 넘어간다). 0 이면 저절로 안 넘어감.</summary>
+    private double _talkAutoAt;
 
     /// <summary>성우 대사의 재생 표지 — 다음 성우 대사가 앞 목소리를 끊는다.</summary>
     private const int VoiceTag = 0x5011;
@@ -169,6 +177,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>쉬는 중이었으면 때가 됐는지 보고 잇는다 — 필드 화면이 틀마다 부른다.</summary>
     internal void Pump()
     {
+        if (Talk != null && _talkAutoAt > 0 && host._lastTime >= _talkAutoAt) { Advance(); return; }
         if (Talk == null && (_waitUntil > 0 || _waitBusy)) Run();
     }
 
@@ -176,6 +185,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     internal void Advance()
     {
         Talk = null;
+        _talkAutoAt = 0;
         // 목소리가 아직 울리면 끝날 때까지 다음 행동을 미룬다(누르기로 목소리를 자르지 않는다).
         if (Timed && host._lastTime < _voiceEnd) _waitUntil = Math.Max(_waitUntil, _voiceEnd);
         Run();
@@ -268,6 +278,18 @@ internal sealed class Part1SceneScript(GameWindow host)
                     break;
                 }
                 case >= 203 and <= 205: Faces[c.Code - 203] = 0; Talk = null; break;
+                // 209 [필드 인물, 얼굴, 줄, 틱] — 그 인물 머리 위 말풍선, 틱 뒤 저절로 넘어간다. 210 [줄, 틱] — 화면 위 해설 띠(10, 5, 619×35), 그림 없음.
+                case 209 or 210:
+                {
+                    int line = c.Code == 209 ? a[2] : a[0], ticks = c.Code == 209 ? a[3] : a[1];
+                    string raw = line >= 0 && line < _lines.Count ? _lines[line] : "";
+                    if (raw.Length == 0) break;
+                    Talk = (Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw));
+                    TalkSlot = c.Code == 209 ? BubbleSlot : NarrationSlot;
+                    TalkPerson = c.Code == 209 ? a[0] : -1;
+                    _talkAutoAt = Timed && ticks > 0 ? host._lastTime + ticks / GameWindow.TicksPerSecond : 0;
+                    break;
+                }
                 case 100: BackgroundChange?.Invoke(a[0]); break;
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
                 // [Chr, 8, 무리] — 그 인물을 일행 무리로 옮긴다(0x100c1890: 지금 무리에서 빼 무리 a2 에 넣는다, 무리 표 0x101a0828).

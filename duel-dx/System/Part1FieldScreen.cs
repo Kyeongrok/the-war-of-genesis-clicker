@@ -209,7 +209,19 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                             GameWindow.UiBlend.Alpha, loop: true, mirror: mirror);
             }
         }
-        if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Script.TalkSlot, Script.Faces);
+        if (Script.Talk is { } talk && Script.TalkSlot == Part1SceneScript.NarrationSlot)
+            shell.DrawTalkBox(ox + 10, oy + 5, 619, 35, "", talk.Text);                            // 210 해설 띠(그림 없음)
+        else if (Script.Talk is { } bubble && Script.TalkSlot == Part1SceneScript.BubbleSlot && _field is { } shown
+                 && Script.TalkPerson >= 0 && Script.TalkPerson < _spots.Length)
+        {
+            // 209 말풍선 — 그 인물 머리 위(화면 안으로 민다).
+            var (px, py) = PositionOf(Script.TalkPerson);
+            var (camX, camY) = Camera();
+            int top = Math.Max(0, (MosesScene.MosesH - _bgH) / 2);
+            int bx = Math.Clamp(px - camX - 130, 4, MosesScene.MosesW - 264), by = Math.Clamp(py - camY + top - 150, 4, MosesScene.MosesH - 104);
+            shell.DrawTalkBox(ox + bx, oy + by, 260, 100, bubble.Speaker, bubble.Text);
+        }
+        else if (Script.Talk is { } talk2) shell.DrawTalk(ox, oy, talk2.Speaker, talk2.Text, Script.TalkSlot, Script.Faces);
         else if (Script.Idle) host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);
         host.DrawToast();
     }

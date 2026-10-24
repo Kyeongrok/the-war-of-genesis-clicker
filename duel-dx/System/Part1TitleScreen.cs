@@ -321,7 +321,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void DrawTalk(int ox, int oy, string speaker, string text) => DrawTalkBox(ox + 24, oy + 340, 592, 124, speaker, text);
 
-    private void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text)
+    internal void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text)
     {
         int ox = bx, oy = by;
         const int X = 0, Y = 0;
