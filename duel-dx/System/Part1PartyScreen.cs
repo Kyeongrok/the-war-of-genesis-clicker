@@ -7,8 +7,8 @@ namespace DuelDx;
 /// 파트1 일행 — 일행 명단 · 고른 인물의 능력치와 장비 다섯 칸. 칸을 누르면 가방(<see cref="Part1Progress.Bag"/>)에서 그 칸에 맞는 것을 골라 바꿔 낀다.
 /// </summary>
 /// <remarks>
-/// 장비 칸(인물 레코드 39~43): 0 무기 · 1 둘째 무기나 방패 · 2 갑옷 · 3·4 장신구(분석-파트1-전투 9.1 — 살라딘 [다마스커스, 다마스커스, 방탄복]).
-/// 직업이 쓸 수 있는 무기 갈래는 아직 안 풀어서, 무기 칸은 그 인물이 처음 든 것과 같은 갈래만 받는다(빈 칸이면 아무 무기나).
+/// 장비 칸(인물 레코드 39~43): 0 무기 · 1 둘째 손(칼 · 방패 · 스코프) · 2 몸 · 3·4 장신구(분석-파트1-전투 9.1 — 살라딘 [다마스커스, 다마스커스, 방탄복]).
+/// 낄 수 있나는 원본 규칙(<see cref="Part1Item.CanEquip"/> — 무기 갈래마다 다루는 어빌리티 · 칸마다 받는 갈래)대로.
 /// </remarks>
 internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -34,29 +34,10 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
     private Part1Chr? Member(int i) =>
         i >= 0 && i < host.Part1.Party.Count && Part1Chr.Load(host.Part1.Party[i] - Part1Game.ChrBase) is { } raw ? host.Part1.Apply(raw) : null;
 
-    /// <summary>그 칸에 낄 수 있나 — 칸마다 아이템 갈래(Item.dat +0x44).</summary>
-    private bool Fits(Part1Chr chr, int slot, Part1Item item)
-    {
-        int type = item.Type;
-        switch (slot)
-        {
-            case 0:
-            case 1:
-                if (slot == 1 && type == 13) return true;                    // 방패
-                if (type is < 1 or > 11) return false;
-                // 처음 든 무기와 같은 갈래만(직업의 무기 갈래를 아직 몰라서) — 처음 칸이 비었으면 아무 무기나.
-                var items = Part1Item.LoadAll();
-                int first = Part1Chr.Load(chr.Code) is { } raw ? raw.Equipment[slot] : 0;
-                return first == 0 || Part1Item.ById(items, first)?.Type == type;
-            case 2: return type is 14 or 26;
-            default: return type is 12 or 15 or 16;
-        }
-    }
-
     private List<int> BagFor(Part1Chr chr, int slot)
     {
         var items = Part1Item.LoadAll();
-        return [.. host.Part1.Bag.Distinct().Where(id => Part1Item.ById(items, id) is { } item && Fits(chr, slot, item))];
+        return [.. host.Part1.Bag.Distinct().Where(id => Part1Item.ById(items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, items))];
     }
 
     private int HitAt(int bx, int by)

@@ -20,6 +20,48 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
 
     public int Bonus(int code) => Bonuses.Where(b => b.Code == code).Sum(b => b.Value);
 
+    /// <summary>
+    /// 이 아이템을 그 인물의 장비 칸에 낄 수 있나 — <c>alpha.dll 0x1009e260(칸, 아이템)</c>.
+    /// 갈래(+0x44)마다 그 무기를 다루는 어빌리티가 하나라도 있어야 하고(1 단검→14 · 2 세검→10 · 3 장검→11 · 4 곡도→12 · 5 대검→13 · 6 빔소드→15 ·
+    /// 7 활→19 · 8 권총→16 · 9 소총→17 · 10 빔라이플→18 · 11 창→20 · 12 써크렛→21 · 13 방패→14·10·11 · 14 갑옷→22 · 16 스코프→16·17 · 18 필름→11 ·
+    /// 22 → 11 · 23 → 10·14·11·13·12·20), 칸마다 받는 갈래가 있다: 0 무기(두손 5·7·11 은 둘째 손이 비어야) · 1 둘째 손(첫 손이 두손·총이면 안 됨,
+    /// 칼은 어빌리티 128 쌍검술이 있어야, 방패는 첫 손이 칼일 때, 스코프는 첫 손이 총·활일 때, 필름은 첫 손이 22 일 때) · 2 몸(14 · 15 · 17 · 23 · 26) · 3·4 장신구(15 · 17 · 23).
+    /// 19 · 20 · 21 · 24 · 25(약 · 소모품 · 열쇠)는 못 낀다.
+    /// </summary>
+    /// <param name="equipment">그 인물의 지금 장비 다섯 칸(아이템 번호).</param>
+    public bool CanEquip(Part1Chr chr, int slot, int[] equipment, IReadOnlyList<Part1Item> items)
+    {
+        bool Has(params int[] abilities) => abilities.Any(a => chr.AbilityLevel(a) >= 0);
+        int TypeOf(int id) => ById(items, id)?.Type ?? 0;
+        int t = Type;
+        bool learned = t switch
+        {
+            19 or 20 or 21 or 24 or 25 => false,
+            1 => Has(14), 2 => Has(10), 3 => Has(11), 4 => Has(12), 5 => Has(13), 6 => Has(15), 7 => Has(19), 8 => Has(16), 9 => Has(17),
+            10 => Has(18), 11 => Has(20), 12 => Has(21), 13 => Has(14, 10, 11), 14 => Has(22), 16 => Has(17, 16), 18 => Has(11), 22 => Has(11),
+            23 => Has(10, 14, 11, 13, 12, 20),
+            _ => true,
+        };
+        if (!learned) return false;
+        int first = TypeOf(equipment[0]);
+        switch (slot)
+        {
+            case 0:
+                if (t is not (>= 1 and <= 12 or 22)) return false;
+                return t is not (5 or 7 or 11) || equipment[1] == 0;
+            case 1:
+                if (first is 5 or 7 or 9 or 10 or 11) return false;
+                if (t is 0 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or 12 or 14 or 15 or 17 or 22 or 23 or 26) return false;
+                if (t is >= 1 and <= 4 && !Has(128)) return false;
+                if (t == 13) return first is >= 1 and <= 4 or 22;
+                if (t == 18) return first == 22;
+                if (t == 16) return first is 7 or 8 or 9;
+                return true;
+            case 2: return t is 14 or 15 or 17 or 23 or 26;
+            default: return t is 15 or 17 or 23;
+        }
+    }
+
     /// <summary>번호로 찾는다(<see cref="LoadAll"/> 의 목록은 번호 1 부터) — 0·범위 밖은 null.</summary>
     public static Part1Item? ById(IReadOnlyList<Part1Item> items, int id) => id >= 1 && id <= items.Count ? items[id - 1] : null;
 
