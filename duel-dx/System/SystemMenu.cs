@@ -71,9 +71,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// 전투에서 내 차례 조종 상태가 아닐 때(S1 방어 — 메뉴는 그때만 열리지만 창이 떠 있는 사이 바뀌었을 수 있다).
     /// </summary>
     internal string? SaveBlockedReason =>
-        // 파트1 은 챕터 지도를 열 때 part1.json 에 저절로 적는다 — 파트2 슬롯에 파트1 판을 넣으면 불러올 때 파트2 판처럼 열린다.
-        host._battleLoaded && host._scene.IsPart1 && !host.TitleScr._titleOpen ? "파트1 은 챕터 지도에서 저절로 저장됩니다(타이틀의 CONTINUE)"
-        : host.FieldOpen ? "필드에서는 저장할 수 없습니다"
+        // 파트1 전투도 저장한다 — 파트1 진행(일행 · 성장 · 챕터 · 남은 사건)을 세이브에 같이 싣는다(SaveState.Part1, 사용자 요청).
+        host.FieldOpen ? "필드에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
         : !host.Mos._mosesOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;
@@ -759,7 +758,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     int[]? NavStart = null, int[]? NavAt = null,
                                     SaveEntry? Entry = null, int[]? Camera = null, int? EventCheckDue = null,
                                     bool MosesAltVoice = false,    // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
-                                    int? Bgm = null);              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
+                                    int? Bgm = null,
+                                    string? Part1 = null);         // 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
     // 꼬리 셋(없으면 옛 세이브라 예전처럼):
     // Entry = 전투 들어가기 직전 가방·GP·명부·군단 — 원본 전투 세이브의 전역 본문(판 부분과 따로, 분석-시스템메뉴 2.3/2.4b). RESTART 기준(감사5 S5).
@@ -1024,7 +1024,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                     : null,
                 Camera: battleSave ? [host._camX, host._camY] : null,
                 EventCheckDue: battleSave ? host.Btl._eventCheckDue : null,
-                MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null);
+                MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null,
+                Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -1066,6 +1067,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // <c>_members ∩ _party</c> 를 세우기 때문이다. 차례가 뒤집혀 있어서, 타이틀에서 불러오면 그 둘이 아직 비어
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
         _restoreVersion = state.Version;
+        // 파트1 전투 세이브 — 판을 세우기 전에 파트1 진행을 되살린다(배치 · 인물 성장이 그것을 읽는다). 이기면 그 챕터의 남은 사건을 잇는다.
+        if (state.Part1 is { } part1 && host.Part1.FromJson(part1, host.FlagSt._flags)) host.Part1TitleScr.PrepareBattleLoad();
         RestorePartyBeforeBoard(state);
         // 연대표에서 저장한 것(머리 장면 7) — 원본은 챕터 상태를 안 싣고 불러오면 0x10007030(7, …) 로 연대표를 연다.
         // 전에는 InMoses 만 보아서 새 게임 직후면 옛 전투(state.Battle)가, 앞 판을 했으면 그 챕터 모세스가 열렸다(감사 F6).

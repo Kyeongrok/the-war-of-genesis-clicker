@@ -188,22 +188,35 @@ internal sealed class Part1Progress
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
-        var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
-            File.WriteAllText(SavePath, JsonSerializer.Serialize(data));
+            File.WriteAllText(SavePath, ToJson(flags));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>진행 전부를 JSON 한 덩이로 — part1.json 과 전투 세이브(SystemMenu 의 SaveState.Part1)가 같이 쓴다.</summary>
+    internal string ToJson(byte[] flags)
+    {
+        var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev);
+        return JsonSerializer.Serialize(data);
     }
 
     /// <summary>적어 둔 진행을 읽어 들인다 — 깃발은 <paramref name="flags"/> 에 덮어쓴다. 없거나 못 읽으면 false.</summary>
     internal bool Load(byte[] flags)
     {
+        try { return FromJson(File.ReadAllText(SavePath), flags); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary><see cref="ToJson"/> 로 적은 것을 되살린다 — 깃발은 <paramref name="flags"/> 에 덮어쓴다. 못 읽으면 false.</summary>
+    internal bool FromJson(string json, byte[] flags)
+    {
         try
         {
-            if (JsonSerializer.Deserialize<SaveData>(File.ReadAllText(SavePath)) is not { } data) return false;
+            if (JsonSerializer.Deserialize<SaveData>(json) is not { } data) return false;
             Reset();
             Party.AddRange(data.Party);
             ChapterId = data.ChapterId;

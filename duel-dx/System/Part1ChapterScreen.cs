@@ -298,12 +298,18 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>세이브에서 이어 간다 — 적어 둔 챕터를 열고 남은 행동을 잇는다.</summary>
     internal bool Continue()
     {
+        PrepareContinue();
+        return Open(host.Part1.ChapterId);
+    }
+
+    /// <summary>진행에서 이어 갈 준비 — 남은 행동을 되살리고 그 챕터 · 일행 자리를 세운다(지도는 아직 안 연다). 전투 세이브를 불러올 때도 쓴다.</summary>
+    internal void PrepareContinue()
+    {
         _resume = host.Part1.PendingActions.Count > 0;
         Events.Restore(host.Part1.PendingActions);
         if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
         _teams = null;
         _party = host.Part1.PartyPlace;   // Open 앞에 — 남은 행동(900 의 「일행이 선 장소」)과 Open 이 적는 장소가 이 값을 본다
-        return Open(host.Part1.ChapterId);
     }
 
     private static bool Overlaps((int X, int Y) a, (int X, int Y) b) => Math.Abs(a.X - b.X) < SpotW && Math.Abs(a.Y - b.Y) < SpotH;
