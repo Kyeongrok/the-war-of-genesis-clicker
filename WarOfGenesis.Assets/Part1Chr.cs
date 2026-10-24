@@ -25,9 +25,17 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     public int BaseMaxHp => Fields[19];
 
     /// <summary>능력치 칸 번호 — 쓸 때 값은 바탕 + 같은 번호 어빌리티 레벨 × 5 + 장비 보정이다(<see cref="Stat"/>).</summary>
-    public const int Str = 20, Skill = 21, Dex = 22, Int = 23, Spd = 25, Ac = 26, Mr = 27, Range = 29;
+    /// <remarks>상태 화면 이름표(<c>0x10091b31</c>~): SOUL · EXP · Str · Dex · Int · Skill · Luck · Spd · Ac · Mr · Wtp.</remarks>
+    public const int Str = 20, Skill = 21, Dex = 22, Int = 23, Luck = 24, Spd = 25, Ac = 26, Mr = 27, Range = 29;
 
-    /// <summary>칸 28 — <b>행동 간격</b>: 시간 틱이 이 값으로 나누어떨어질 때 차례가 온다(<c>0x10031d20</c>). 작을수록 자주 움직인다.</summary>
+    /// <summary>칸 18 — 누적 경험치. 상태 화면 EXP 는 이 값 % 100, 레벨은 ÷ 100(<c>0x10091c5e</c>).</summary>
+    public int Experience => Fields[18];
+    public int Level => Fields[18] / 100;
+
+    /// <summary>칸 7 — 직업(<see cref="Part1Job"/> 번호).</summary>
+    public int JobId => Fields[7];
+
+    /// <summary>칸 28 — <b>행동 간격</b>(상태 화면 이름 「Wtp」): 시간 틱이 이 값으로 나누어떨어질 때 차례가 온다(<c>0x10031d20</c>). 작을수록 자주 움직인다.</summary>
     public const int Interval = 28;
 
     public int ActionInterval => Math.Max(1, Fields[Interval]);
