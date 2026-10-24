@@ -21,6 +21,26 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
     public int Bonus(int code) => Bonuses.Where(b => b.Code == code).Sum(b => b.Value);
 
     /// <summary>
+    /// 무기 덧기술 — 보정 300~309 가 덧붙이는 <c>Attack.dat</c> 번호(<c>alpha.dll 0x10042990</c>, 값 v 는 <c>max(v−1, 0)</c> 만큼 더한다).
+    /// 300 메테오 87 · 301 라이트닝 볼츠 134+ · 302 썬더스탐 161 · 303 버써크 208+ · 304 중독 383+ · 305 최면 386+ · 306 상태이상 385+ · 307 혼란 384+ · 308 마비 388 · 309 암살 389.
+    /// 없으면 (0, 0).
+    /// </summary>
+    public (int Code, int Attack) ProcAttack()
+    {
+        foreach (var (code, value) in Bonuses)
+        {
+            int up = Math.Max(value - 1, 0);
+            int attack = code switch
+            {
+                300 => 87, 301 => 134 + up, 302 => 161, 303 => 208 + up, 304 => 383 + up,
+                305 => 386 + up, 306 => 385 + up, 307 => 384 + up, 308 => 388, 309 => 389, _ => 0,
+            };
+            if (attack > 0) return (code, attack);
+        }
+        return (0, 0);
+    }
+
+    /// <summary>
     /// 이 아이템을 그 인물의 장비 칸에 낄 수 있나 — <c>alpha.dll 0x1009e260(칸, 아이템)</c>.
     /// 갈래(+0x44)마다 그 무기를 다루는 어빌리티가 하나라도 있어야 하고(1 단검→14 · 2 세검→10 · 3 장검→11 · 4 곡도→12 · 5 대검→13 · 6 빔소드→15 ·
     /// 7 활→19 · 8 권총→16 · 9 소총→17 · 10 빔라이플→18 · 11 창→20 · 12 써크렛→21 · 13 방패→14·10·11 · 14 갑옷→22 · 16 스코프→16·17 · 18 필름→11 ·

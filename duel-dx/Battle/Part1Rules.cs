@@ -59,7 +59,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
-        damage = Part1Combat.Critical(damage, fa.Weapon1?.Critical ?? 0, rng.Next(32768), out bool crit);
+        // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
+        int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;
+        damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out bool crit);
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}" + Environment.NewLine);

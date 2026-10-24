@@ -540,6 +540,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     internal void StartTurn(int index, bool resume = false)
     {
+        _part1ProcBy = null;
         // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
         if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
             host._units[index].Soul = Part1Combat.GaugeOnTurn(host._units[index].Soul, cap: host._units[index].MaxSoul);
@@ -1566,6 +1567,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 사건 207 의 쓰러짐 처리(0x1004e6d0)는 지금 차례 유닛([ctrl+0x4ce8])이면 HP 1 로 남긴다(0x1004e757~0x1004e765, 감사5 B3).
         if (eventFinisher && (uint)_turn < host._units.Length && host._units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
 
+        // 파트1 무기 덧기술 — 치명타가 걸어 둔 기술을 맞은 자리에 공짜로 쏜다(사건 207 과 같은 길, 비용 없음).
+        if (_part1Proc is { } part1Proc && !eventFinisher)
+        {
+            _part1Proc = null;
+            var procRoutine = UseWorkRoutine(part1Proc.User, part1Proc.Work, -1, part1Proc.Col, part1Proc.Row, [], eventFinisher: true);
+            while (procRoutine.MoveNext()) yield return procRoutine.Current;
+            dying.RemoveAll(d => d.Hp > 0);
+            foreach (var d in host._units)
+                if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
+        }
+
         // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
         foreach (var d in host._units)
             if (_demo == null && d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
@@ -1664,6 +1676,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal int _timedAimBonus;
 
     internal int AimBonus(UnitState a) => a == _timedAimBy ? _timedAimBonus : 0;
+
+    /// <summary>파트1 무기 덧기술 — 행동 끝에 쏠 것(시전자, work, 칸). 한 행동에 한 번(<see cref="_part1ProcBy"/>).</summary>
+    internal (int User, WorkData Work, int Col, int Row)? _part1Proc;
+
+    /// <summary>이번 차례에 덧기술이 이미 터진 인물(원본 +0x265 — 차례가 바뀌면 지운다).</summary>
+    internal UnitState? _part1ProcBy;
 
     internal void ApplyWork(UnitState a, WorkData w, UnitState t, List<UnitState> dying)
     {
@@ -1769,15 +1787,24 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);
         ApplyAilments(a, t, w, crit);
-        // 파트1 무기 덧효과(분석-파트1-전투 23절) — 무기로 친 치명타면 무기 보정 300~309 의 기술이 한 번 덧붙는다(0x1003dc9f → 메시지 105).
-        // 덧기술 연출은 아직 없어 상태만 건다: 304 중독(파트2 상태 3, 차례마다 최대 HP 5%) · 303 버써크(4). 나머지(메테오 · 번개 · 암살 …)는 아직.
-        if (crit && host._scene.IsPart1 && Part1.AttackOf(w) == null && Part1.Fighter(a)?.Weapon1 is { } weapon && t.Alive && t.Hp > 0)
+        // 파트1 무기 덧효과(분석-파트1-전투 23절) — 무기로 친 치명타면 무기 보정 300~309 의 기술이 한 번 덧붙는다(0x1003dc9f → 메시지 105,
+        // 처리기 0x10035661 이 맞은 자리에 쏜다, 차례당 한 번 +0x265). 그 기술(work 20000 + Attack 번호)이 이 게임에 있으면(썬더스탐 20161 …)
+        // 행동 끝에 공짜로 쏘고(UseWorkRoutine 의 _part1Proc), 없으면 상태만 건다: 304 중독(파트2 상태 3, 차례마다 최대 HP 5%) · 303 버써크(4).
+        // 맞은 이가 쓰러져도 쏜다 — 원본은 피해를 적용한 바로 뒤 메시지를 보낸다(0x1003dce5). 상태만 거는 갈래는 산 대상에게만.
+        if (crit && host._scene.IsPart1 && Part1.AttackOf(w) == null && Part1.Fighter(a)?.Weapon1 is { } weapon
+            && weapon.ProcAttack() is { Attack: > 0 } proc && _part1ProcBy != a)
         {
+            _part1ProcBy = a;
+            if (Work(Part1Game.ChrBase + proc.Attack) is { } procWork) _part1Proc = (Array.IndexOf(host._units, a), procWork, t.Col, t.Row);
             var used = new List<int>();
-            if (weapon.Bonus(304) > 0) { PutAilment(t, 3, 5, used, a); Popup(t, "중독", AilmentPopupColor, 12, rise: 88); }
-            if (weapon.Bonus(303) > 0) { PutAilment(t, 4, 1, used, a); Popup(t, "버써크", AilmentPopupColor, 12, rise: 88); }
-            if (Trace && used.Count > 0)
-                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"part1 weapon proc {a.ChrCode} → {t.ChrCode}: {weapon.Name}" + Environment.NewLine);
+            if (_part1Proc == null && t.Hp > 0)
+            {
+                if (proc.Code == 304) { PutAilment(t, 3, 5, used, a); Popup(t, "중독", AilmentPopupColor, 12, rise: 88); }
+                if (proc.Code == 303) { PutAilment(t, 4, 1, used, a); Popup(t, "버써크", AilmentPopupColor, 12, rise: 88); }
+            }
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 weapon proc {a.ChrCode} → {t.ChrCode}: {weapon.Name} (보정 {proc.Code} → Attack {proc.Attack}{(_part1Proc != null ? " 쏨" : used.Count > 0 ? " 상태만" : " 없음")})" + Environment.NewLine);
         }
         // 피해 기술이 적에게 상태이상·약화를 함께 걸었으면(엘레맨탈 파이어의 점화 따위) 그 적도 보조 경험치 대상으로 센다(사용자 요청 — 원본에 없다).
         if (_ailmentLanded && w.AbilityId != 0 && t.IsAlly != a.IsAlly) _buffedAllies.Add(t);
