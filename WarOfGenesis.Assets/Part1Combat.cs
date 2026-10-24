@@ -20,9 +20,12 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
 
     public int Bonus(int code) => Bonuses.Where(b => b.Code == code).Sum(b => b.Value);
 
+    /// <summary>번호로 찾는다(<see cref="LoadAll"/> 의 목록은 번호 1 부터) — 0·범위 밖은 null.</summary>
+    public static Part1Item? ById(IReadOnlyList<Part1Item> items, int id) => id >= 1 && id <= items.Count ? items[id - 1] : null;
+
     public static IReadOnlyList<Part1Item> LoadAll() => ParseAll(Part1Game.Read("Dats", "Item.dat"));
 
-    /// <summary>파일: u16 수, 아이템마다 이름 30 · 영문 30(비트 반전 cp949) · 값 44바이트 · 설명 100.</summary>
+    /// <summary>파일: u16 수, 아이템마다 이름 30 · 영문 30(비트 반전 cp949) · 값 44바이트 · 설명 100. <b>아이템 번호 = 레코드 + 1</b> — 메모리 0 번은 「없음」 빈 칸이다(<c>0x100a7480</c>).</summary>
 
     public static IReadOnlyList<Part1Item> ParseAll(byte[]? b)
     {
@@ -46,7 +49,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
             int I32(int at) => BitConverter.ToInt32(b, p + at);
             // 파일 차례: u32 값 · u8 종류 · u8 · (코드, 값, 코드, 값, 코드, 값) 이 아니라 코드 +0x46 · 값 +0x4c · 코드 +0x48 · 값 +0x4e · 코드 +0x4a · 값 +0x50
             (int, int)[] bonuses = [.. new[] { (U16(6), S16(8)), (U16(10), S16(12)), (U16(14), S16(16)) }.Where(x => x.Item1 != 0)];
-            items.Add(new Part1Item(i, Text(o, 30), Text(o + 30, 30), I32(0), b[p + 4], bonuses,
+            items.Add(new Part1Item(i + 1, Text(o, 30), Text(o + 30, 30), I32(0), b[p + 4], bonuses,
                                     Attack: I32(18), Defense: I32(22), Accuracy: I32(30), Critical: b[p + 35], Element: b[p + 40],
                                     ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)));
         }
