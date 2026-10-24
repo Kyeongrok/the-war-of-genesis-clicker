@@ -86,11 +86,15 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return (0, 3, false);
         if (ft.CanEvade && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), false, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))
             return (0, 3, false);
-        int power = Part1Combat.Power(selector, fa.AttackerAt(a.Soul));
+        // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
+        var attacker = fa.AttackerAt(a.Soul);
+        if (a.Status(4) > 0) attacker = attacker with { Str = attacker.Str * 3 / 2 };
+        int power = Part1Combat.Power(selector, attacker);
         if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * Math.Max(1, attack.Hits);
         int element = attack is { Element: > 0 } ? attack.Element : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
+        if (!magic && t.Status(4) > 0) defense /= 2;
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
         int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;

@@ -147,7 +147,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// </summary>
     private bool OnMarkerMoved(int marker, int place)
     {
-        if (_chapter is not { } chapter || place != _party || place < 0 || place >= chapter.Places.Count || !chapter.Places[place].IsBattle) return false;
+        if (_chapter is not { } chapter || place < 0 || place >= chapter.Places.Count || !chapter.Places[place].IsBattle) return false;
+        // 그 장소에 선 팀이 싸운다(원본 +0x5578 = 그 장소 첫 칸의 팀) — 고른 팀이 아니면 그 팀으로 바꾼다.
+        int team = _teams?.FindIndex(t => t.Place == place) ?? (place == _party ? 0 : -1);
+        if (team < 0) return false;
+        if (_teams != null && team != _team) { _team = team; host.Part1.SelectedTeam[chapter.Id] = team; }
         int battle = chapter.Places[place].Target;
         _resume = true;
         host.LeaveScene(() => shell.StartBattle(battle));
