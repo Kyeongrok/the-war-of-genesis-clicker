@@ -48,6 +48,8 @@ internal sealed class Part1Progress
         LevelPicks = [];
         Bag = [];
         Equipped = [];
+        Mercenaries = [];
+        Mounts = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -81,6 +83,12 @@ internal sealed class Part1Progress
         if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw) return;
         GrowthOf(chrCode, raw.Experience).Abilities[ability] = newLevel;
     }
+
+    /// <summary>
+    /// 용병 · 탑승물 — Chr → 수(챕터 사건 908 · 910, 마을 용병 길드). 원본은 무리마다 (Chr, 수) 칸 32개(+0x910 · +0xa14)를 들고
+    /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 명단 끝에 수만큼 세우고, 탑승물은 적어만 둔다.
+    /// </summary>
+    internal Dictionary<int, int> Mercenaries = [], Mounts = [];
 
     /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>).</summary>
     internal int Eld;
@@ -118,13 +126,14 @@ internal sealed class Part1Progress
     private sealed record SaveData(List<int> Party, int ChapterId, int PartyPlace, List<int> Cleared, List<int> FinishedChapters,
                                    Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending,
                                    Dictionary<int, Growth>? Grown = null, int Eld = 0, List<int[]>? LevelPicks = null,
-                                   List<int>? Bag = null, Dictionary<int, int[]>? Equipped = null);
+                                   List<int>? Bag = null, Dictionary<int, int[]>? Equipped = null,
+                                   Dictionary<int, int>? Mercenaries = null, Dictionary<int, int>? Mounts = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -155,6 +164,8 @@ internal sealed class Part1Progress
             LevelPicks = [.. (data.LevelPicks ?? []).Where(p => p.Length == 2).Select(p => (p[0], p[1]))];
             Bag = data.Bag ?? [];
             Equipped = data.Equipped ?? [];
+            Mercenaries = data.Mercenaries ?? [];
+            Mounts = data.Mounts ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

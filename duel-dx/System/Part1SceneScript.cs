@@ -133,6 +133,9 @@ internal sealed class Part1SceneScript(GameWindow host)
         Run();
     }
 
+    private static void AddCount(Dictionary<int, int> pool, int chr, int count) =>
+        pool[chr] = Math.Max(0, pool.GetValueOrDefault(chr) + count);
+
     private bool Call(int index)
     {
         if (_events.FirstOrDefault(e => e.Index == index) is not { } e) return false;
@@ -201,6 +204,10 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // [Chr, 8, 무리] — 그 인물을 일행 무리로 옮긴다(0x100c1890: 지금 무리에서 빼 무리 a2 에 넣는다, 무리 표 0x101a0828).
                 // 리메이크는 일행이 하나라 「일행에 든다」로 친다(챕터 1: 누르 에드 딘 · 일 사담 · 이븐 시나).
                 case 1000 when a[1] == 8 && a[0] >= 0: host.Part1.Join([Part1Game.ChrBase + a[0]]); break;
+                // [무리, Chr, 수] — 무리의 용병(908, 0x100c1610 → 0x100adb60, 칸 +0x910) · 탑승물(910, 0x100c1730 → 0x100adcc0, 칸 +0xa14)에 더한다.
+                // 무리 99 는 지금 무리. 챕터 0 들머리: 용병 알가지 5 · 바시아조크 5, 탑승물 아지다하카 3.
+                case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
+                case 910 when a[1] > 0: AddCount(host.Part1.Mounts, Part1Game.ChrBase + a[1], a[2]); break;
                 case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;

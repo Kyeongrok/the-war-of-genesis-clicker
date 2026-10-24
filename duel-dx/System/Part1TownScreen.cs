@@ -137,12 +137,11 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         var (chr, price) = guild.Entries[i];
         int code = Part1Game.ChrBase + chr;
         string name = host._db?.Character(code) is { } c ? host._db.T(c.NameId) : $"Chr {chr}";
-        if (host.Part1.Party.Contains(code)) { host.Toast($"{name} — 이미 일행입니다"); return; }
         if (host.Part1.Eld < price) { host.Toast($"{name} — eld 가 모자랍니다({host.Part1.Eld} / {price})"); return; }
         host.Part1.Eld -= price;
-        host.Part1.Join([code]);
+        host.Part1.Mercenaries[code] = host.Part1.Mercenaries.GetValueOrDefault(code) + 1;   // 용병 — 일행이 아니라 용병 칸(배치 창에서 세운다)
         host.Part1.Save(host.FlagSt._flags);
-        host.Toast($"{name} 을(를) 고용했습니다 — 남은 eld {host.Part1.Eld}");
+        host.Toast($"{name} 을(를) 고용했습니다(용병 {host.Part1.Mercenaries[code]}) — 남은 eld {host.Part1.Eld}");
     }
 
     internal void Draw()
@@ -190,7 +189,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
                     int code = Part1Game.ChrBase + id;
                     var c = host._db?.Character(code);
                     string name = c != null ? host._db!.T(c.NameId) : $"Chr {id}";
-                    label = $"{name}  Lv {c?.Level ?? 0}   {value} eld{(host.Part1.Party.Contains(code) ? "  (일행)" : "")}";
+                    label = $"{name}  Lv {c?.Level ?? 0}   {value} eld{(host.Part1.Mercenaries.GetValueOrDefault(code) is > 0 and var have ? $"  (용병 {have})" : "")}";
                     host.UiFill(ox + DetailX, y, DetailW, RowH - 2, _hover == EntryHit + i ? 0xF0305080u : 0xC0202838u);
                 }
                 host.UiText(label, ox + DetailX + 8, y + 4, GameWindow.White, 12);
