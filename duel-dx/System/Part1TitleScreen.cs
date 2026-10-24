@@ -400,7 +400,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void DrawTalk(int ox, int oy, string speaker, string text) => DrawTalkBox(ox + 24, oy + 340, 592, 124, speaker, text);
 
-    internal void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text)
+    internal void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text, bool arrow = true)
     {
         int ox = bx, oy = by;
         const int X = 0, Y = 0;
@@ -423,7 +423,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             y += 19;
         }
         // 넘김 표시 — 반짝인다(0.5초 켜짐 · 0.25초 꺼짐).
-        if (host._lastTime % 0.75 < 0.5) host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
+        if (arrow && host._lastTime % 0.75 < 0.5) host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
     }
 
     private string? _pageText;

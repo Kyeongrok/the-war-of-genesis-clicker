@@ -506,6 +506,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         // 사슬 안에서 적힌 진행 — 그 장면(전투 · 필드)부터 연다. 마치면 챕터로 돌아와 머리를 뺀 남은 행동을 잇는다.
         if (chain is [1, int battle] && shell.StartBattle(battle)) return true;
         if (chain is [2, int field]) { shell.FieldFromBattle(field); return true; }
+        // 시험: DUELDX_PART1TOWN=필드 — 챕터를 열고 곧바로 그 마을로.
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_PART1TOWN"), out int town) && town > 0 && Open(host.Part1.ChapterId))
+        {
+            int chapterId = host.Part1.ChapterId;
+            _open = false;
+            shell.Town.Open(town, () => Open(chapterId));
+            return true;
+        }
         return Open(host.Part1.ChapterId);
     }
 
