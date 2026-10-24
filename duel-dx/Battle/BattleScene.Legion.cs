@@ -61,7 +61,7 @@ internal sealed unsafe partial class BattleScene
             // 세우는 것은 <b>동료</b>(801 로 들어온 인물)다 — _party 에는 앞 전투가 편 3 으로 끼워 준 제이슨·용병까지 남아 있어
             // 그대로 쓰면 훈련용 던젼에 제이슨이 따라 들어왔다(사용자 지적). 동료 목록이 없으면 예전대로.
             // 파트1 은 일행 뒤에 용병(908 · 용병 길드)을 수만큼 세운다 — 배치 창에서 고르고, 못 선 사람은 판에서 빠진다.
-            var party = scene.IsPart1 ? [.. host.Part1.Party, .. host.Part1.Mercenaries.SelectMany(m => Enumerable.Repeat(m.Key, m.Value))]
+            var party = scene.IsPart1 ? [.. host.Part1.ActiveMembers(), .. host.Part1.Mercenaries.SelectMany(m => Enumerable.Repeat(m.Key, m.Value))]
                       : host.Mos._members.Count > 0 ? host.Mos._members.Where(host._party.ContainsKey).ToList()
                       : host._party.Keys.Count > 0 ? host._party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];

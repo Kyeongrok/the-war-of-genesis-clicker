@@ -55,6 +55,8 @@ internal sealed class Part1Progress
         ChapterMarkers = [];
         ChapterVars = [];
         Riding = [];
+        ChapterTeams = [];
+        SelectedTeam = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -100,6 +102,27 @@ internal sealed class Part1Progress
     /// 탄 이는 판 밖에 있다가 탈것이 쓰러지면 그 칸에 내려선다(<see cref="BattleScene"/> 의 _part1Riders).
     /// </summary>
     internal Dictionary<int, int> Riding = [];
+
+    /// <summary>
+    /// 챕터 팀(원본 챕터 +0x38, 8개까지 · 분석-파트1-챕터 10.4) — 챕터 → 팀들. 팀 0 은 다른 팀에 안 든 일행 모두, 팀 1 부터는 904 [팀, Chr] 가 옮긴 사람들.
+    /// 팀마다 지도 자리가 있고 「N팀」 단추로 고른 팀이 움직이고 싸운다(<see cref="SelectedTeam"/>).
+    /// </summary>
+    internal Dictionary<int, List<Part1Team>> ChapterTeams = [];
+
+    /// <summary>챕터 → 고른 팀(원본 장면 +0x13c04).</summary>
+    internal Dictionary<int, int> SelectedTeam = [];
+
+    /// <summary>
+    /// 지금 싸우러 나가는 사람 — 지금 챕터에서 고른 팀(팀 0 이면 다른 팀에 안 든 일행, 팀 N 이면 그 팀 사람). 팀이 없으면 일행 모두.
+    /// </summary>
+    internal List<int> ActiveMembers()
+    {
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return Party;
+        int team = Math.Clamp(SelectedTeam.GetValueOrDefault(ChapterId), 0, teams.Count - 1);
+        if (team > 0) return [.. Party.Where(teams[team].Members.Contains)];
+        var elsewhere = teams.Skip(1).SelectMany(t => t.Members).ToHashSet();
+        return [.. Party.Where(c => !elsewhere.Contains(c))];
+    }
 
     /// <summary>챕터 사건 1201 이 바꾼 장소 — 「챕터:장소」 → 전투 번호(장소를 그 전투 장소로 만든다).</summary>
     internal Dictionary<string, int> PlaceBattles = [];
@@ -154,13 +177,14 @@ internal sealed class Part1Progress
                                    Dictionary<int, int>? Mercenaries = null, Dictionary<int, int>? Mounts = null,
                                    Dictionary<string, int>? PlaceBattles = null, Dictionary<int, int>? MapTurns = null,
                                    Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null,
-                                   Dictionary<int, int>? Riding = null);
+                                   Dictionary<int, int>? Riding = null,
+                                   Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -198,6 +222,8 @@ internal sealed class Part1Progress
             ChapterMarkers = data.ChapterMarkers ?? [];
             ChapterVars = data.ChapterVars ?? [];
             Riding = data.Riding ?? [];
+            ChapterTeams = data.ChapterTeams ?? [];
+            SelectedTeam = data.SelectedTeam ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }
@@ -209,4 +235,11 @@ internal sealed class Part1Progress
         foreach (int chr in chrCodes)
             if (!Party.Contains(chr)) Party.Add(chr);
     }
+}
+
+/// <summary>챕터 팀 하나 — 사람(팀 1 부터만 적는다, 20000 + 파트1 번호)과 지도 자리(장소 차례).</summary>
+internal sealed class Part1Team
+{
+    public List<int> Members { get; set; } = [];
+    public int Place { get; set; }
 }

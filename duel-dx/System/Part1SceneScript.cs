@@ -50,8 +50,11 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>지도 말의 앞 장소(원본 +0xc — 900 이 옮길 때 옛 장소를 적는다). 조건 201(막 옮겨 닿음) · 303(머무름)이 본다. 열 때는 지금 장소로.</summary>
     internal List<int> MarkerPrev = [];
 
-    /// <summary>일행(팀 0)이 선 장소 — 조건 302 [장소, 팀, v] 가 본다.</summary>
-    internal Func<int>? PartyPlace;
+    /// <summary>그 팀이 선 장소(없는 팀이면 −1) — 조건 302 [장소, 팀, v] 가 본다.</summary>
+    internal Func<int, int>? TeamPlace;
+
+    /// <summary>904 [팀, Chr] — 그 사람을 그 팀으로(0x100c12e0: 팀이 없으면 만들고 장소 0 에 새 팀 말을 놓는다).</summary>
+    internal Action<int, int>? TeamJoin;
 
     /// <summary>903 [팀, 장소] — 팀 말을 전투 없이 그 장소로(0x100c14a0 → 0x100b2840). 리메이크는 팀 0(일행)만 있다.</summary>
     internal Action<int, int>? TeamMoved;
@@ -186,7 +189,7 @@ internal sealed class Part1SceneScript(GameWindow host)
             // 303 [장소, 말, v] 말이 살았고 지금·앞 둘 다 그 장소(머무름). v = 0 이면 뒤집는다.
             201 => a[0] >= 0 && a[0] < Markers.Count && Markers[a[0]] >= 0 && Markers[a[0]] == a[1] && Prev(a[0]) != a[1],
             301 => (a[0] >= 0 && a[0] < Markers.Count && Markers[a[0]] >= 0) == (a[1] != 0),
-            302 => (a[1] == 0 && PartyPlace?.Invoke() == a[0]) == (a[2] != 0),
+            302 => (TeamPlace?.Invoke(a[1]) == a[0]) == (a[2] != 0),
             303 => (a[1] >= 0 && a[1] < Markers.Count && Markers[a[1]] == a[0] && Prev(a[1]) == a[0]) == (a[2] != 0),
             1 => MapTurn != null && BattleScene.Compare(MapTurn(), a[1], a[0]),     // [값, 연산] — 지도 턴(0x100bcf40 → 0x100bce90)
             101 => BattleScene.Compare(a[0] >= 0 && a[0] < host.FlagSt._flags.Length ? host.FlagSt._flags[a[0]] : 0, a[2], a[1]),
@@ -254,7 +257,10 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 902 when a[0] >= 1 && a[0] - 1 < Markers.Count: Markers[a[0] - 1] = -1; break;
                 case 903: TeamMoved?.Invoke(a[0], a[1]); break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
-                case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;
+                case 904 when a[1] >= 0:
+                    host.Part1.Join([Part1Game.ChrBase + a[1]]);
+                    TeamJoin?.Invoke(a[0], Part1Game.ChrBase + a[1]);
+                    break;
                 case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
                 case 910 when a[1] > 0: AddCount(host.Part1.Mounts, Part1Game.ChrBase + a[1], a[2]); break;
                 case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])

@@ -23,6 +23,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     internal const int ButtonEndTurn = 0, ButtonTimeline = 1, ButtonParty = 2, ButtonTitle = 3, ButtonHit = 1000;
 
+    /// <summary>「N팀」 단추 — 지도 칸 아래 오른쪽에 나란히(위는 지역 글 자리).</summary>
+    internal const int TeamHit = 3000, TeamW = 52, TeamH = 18;
+
+    /// <summary>팀 말 그림 — Obs 654(지도 위 작은 인물).</summary>
+    internal const int MarkerObs = 654;
+
+    internal static (int X, int Y) TeamButton(int i, int count) => (Area.X + Area.W - (count - i) * (TeamW + 4), Area.Y + Area.H + 10);
+
     internal bool _open;
     internal Part1Chapter? _chapter;
     internal (int X, int Y)[] _spots = [];
@@ -39,16 +47,44 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     private static readonly Dictionary<int, (uint[]? Px, int W, int H)> Maps = [];
     internal int _hover = -1;
 
-    /// <summary>일행이 선 장소(차례) — 처음엔 첫 장소. 지도에 ◆ 로 보인다.</summary>
-    internal int _party;
+    /// <summary>고른 팀이 선 장소(차례) — 처음엔 첫 장소. 팀이 아직 없을 때(챕터를 열기 전)는 따로 둔다.</summary>
+    internal int _party
+    {
+        get => _teams is { Count: > 0 } teams ? teams[Math.Clamp(_team, 0, teams.Count - 1)].Place : _loosePlace;
+        set { if (_teams is { Count: > 0 } teams) teams[Math.Clamp(_team, 0, teams.Count - 1)].Place = value; else _loosePlace = value; }
+    }
+
+    private int _loosePlace;
+
+    /// <summary>이 챕터의 팀들(진행의 <see cref="Part1Progress.ChapterTeams"/>)과 고른 팀.</summary>
+    private List<Part1Team>? _teams;
+    private int _team;
+
+    /// <summary>904 — 그 사람을 팀으로 옮긴다. 없는 팀이면 만들고(8개까지) 장소 0 에 세운다.</summary>
+    private void JoinTeam(int team, int chr)
+    {
+        if (_teams is not { } teams || team < 0 || team >= 8) return;
+        while (teams.Count <= team) teams.Add(new Part1Team { Place = 0 });
+        foreach (var t in teams) t.Members.Remove(chr);
+        if (team > 0) teams[team].Members.Add(chr);
+    }
+
+    private void SelectTeam(int team)
+    {
+        if (_teams is not { } teams || _chapter is not { } chapter || team < 0 || team >= teams.Count) return;
+        _team = team;
+        host.Part1.SelectedTeam[chapter.Id] = team;
+        SaveProgress();
+    }
 
     /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
     internal Part1SceneScript Events => _events ??= new(host)
     {
         SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle, MarkerMoved = OnMarkerMoved,
         MapTurn = () => _chapter is { } c ? host.Part1.MapTurns.GetValueOrDefault(c.Id) : 0,
-        PartyPlace = () => _party,
-        TeamMoved = (team, place) => { if (team == 0 && _chapter is { } c && place >= 0 && place < c.Places.Count) _party = place; },
+        TeamPlace = team => _teams is { } teams && team >= 0 && team < teams.Count ? teams[team].Place : -1,
+        TeamMoved = (team, place) => { if (_teams is { } teams && team >= 0 && team < teams.Count && _chapter is { } c && place >= 0 && place < c.Places.Count) teams[team].Place = place; },
+        TeamJoin = JoinTeam,
     };
 
     /// <summary>
@@ -95,6 +131,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         _resume = false;
         _chapter = null;
+        _teams = null;
+        _team = 0;
         _party = 0;
         _open = false;
     }
@@ -163,7 +201,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         bool resume = _resume && _chapter?.Id == chapterId;
         _resume = false;
-        if (_chapter?.Id != chapterId) _party = 0;
+        if (_chapter?.Id != chapterId) { _teams = null; _party = 0; }
         if (Part1Chapter.Load(chapterId) is not { Places.Count: > 0 } chapter)
         {
             host.Toast($"파트1 챕터 {chapterId} 를 못 읽었습니다");
@@ -175,6 +213,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             host.Part1.ChapterMarkers[chapterId] = markers = [.. chapter.Markers];
         Events.Markers = markers;
         Events.MarkerPrev = [.. markers];
+        // 팀 — 진행에 남긴 것을 쓴다. 처음 여는 챕터면 팀 0 하나(일행 모두)를 지금 자리에.
+        if (!host.Part1.ChapterTeams.TryGetValue(chapterId, out var teams) || teams.Count == 0)
+            host.Part1.ChapterTeams[chapterId] = teams = [new Part1Team { Place = _party }];
+        _teams = teams;
+        _team = Math.Clamp(host.Part1.SelectedTeam.GetValueOrDefault(chapterId), 0, teams.Count - 1);
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
         // 지도 자리 — 장소 칸(낱말 1·2 왼위 · 3·4 크기)의 가운데. 한 배율(1 이하)로 칸에 넣고 가운데에 둔다(지도가 찌그러지지 않게).
@@ -245,6 +288,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         _resume = host.Part1.PendingActions.Count > 0;
         Events.Restore(host.Part1.PendingActions);
         if (Part1Chapter.Load(host.Part1.ChapterId) is { } chapter) _chapter = chapter;   // 같은 챕터로 열어 resume 이 맞게
+        _teams = null;
         _party = host.Part1.PartyPlace;   // Open 앞에 — 남은 행동(900 의 「일행이 선 장소」)과 Open 이 적는 장소가 이 값을 본다
         return Open(host.Part1.ChapterId);
     }
@@ -259,6 +303,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             var (x, y, _) = Buttons[i];
             if (bx >= ox + x && bx < ox + x + Part1TitleScreen.ButtonW && by >= oy + y && by < oy + y + Part1TitleScreen.ButtonH) return ButtonHit + i;
         }
+        if (_teams is { Count: > 1 } teams)
+            for (int i = 0; i < teams.Count; i++)
+            {
+                var (x, y) = TeamButton(i, teams.Count);
+                if (bx >= ox + x && bx < ox + x + TeamW && by >= oy + y && by < oy + y + TeamH) return TeamHit + i;
+            }
         // 나중에 그린 장소가 위에 있으니 뒤에서부터 본다.
         for (int i = _spots.Length - 1; i >= 0; i--)
         {
@@ -356,6 +406,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         switch (hit)
         {
             case ButtonHit + ButtonEndTurn: EndMapTurn(); break;
+            case >= TeamHit and < TeamHit + 8: SelectTeam(hit - TeamHit); break;
             case ButtonHit + ButtonTimeline: host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case ButtonHit + ButtonTitle: host.LeaveScene(() => _open = false); break;
             case ButtonHit + ButtonParty:
@@ -419,12 +470,20 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             string name = Part1Game.PlainText(chapter.NameOf(place)).Replace('\n', ' ');
             if (name.Length == 0) name = place.IsBattle ? $"전투 {place.Target}" : "길목";
             if (cleared) name = "✓ " + name;
-            // 일행 말 — 챕터 머리 낱말 6 의 그림(Obs 654 · 655 · 1281 · 1282 — 지도 위 작은 인물, 가설), 못 읽으면 ◆.
-            if (i == _party && !(chapter.Header.Length > 6 && chapter.Header[6] > 0
-                                 && host.DrawUi(Part1Game.ObsBase + chapter.Header[6], 0, (int)(host._lastTime * GameWindow.TicksPerSecond),
-                                                ox + x - 14, oy + y + SpotH / 2 + 8, GameWindow.UiBlend.Alpha, loop: true)))
-                host.UiText("◆", ox + x - 12, oy + y + 4, 0xFFFFE080, 12);
-            // 지도 말(적 무리) — 그 장소 오른쪽에 붉은 ✕(말 수만큼).
+            // 팀 말 — 작은 인물 Obs 654(챕터 0 머리 낱말 6), 못 읽으면 ◆. 원본은 Obs 226 모습 0(파란 깃발, 0x100b20d0)인데 줄인 지도에서는 너무 크다.
+            // 팀이 여럿이면 번호를 붙이고 고른 팀은 노랗게.
+            if (_teams is { } teamList)
+                for (int tm = 0, at = 0; tm < teamList.Count; tm++)
+                {
+                    if (teamList[tm].Place != i) continue;
+                    int mx = ox + x - 14 - at * 12;
+                    at++;
+                    if (!host.DrawUi(Part1Game.ObsBase + MarkerObs, 0, (int)(host._lastTime * GameWindow.TicksPerSecond),
+                                     mx, oy + y + SpotH / 2 + 8, GameWindow.UiBlend.Alpha, loop: true))
+                        host.UiText("◆", mx - 4, oy + y + 4, tm == _team ? 0xFFFFE080 : 0xFFB0C0D8, 12);
+                    if (teamList.Count > 1) host.UiText($"{tm + 1}", mx - 22, oy + y + 3, tm == _team ? 0xFFFFE080 : 0xFFB0C0D8, 13);   // 인물 왼쪽(그림 층이 글 위라 겹치면 가린다)
+                }
+            // 지도 말(적 무리) — 그 장소 오른쪽에 붉은 ✕(말 수만큼). 원본은 Obs 226 모습 3(붉은 깃발)인데 1:1 지도에 맞춘 크기라 줄인 지도에서는 이름표를 덮는다.
             int markers = Events.Markers.Count(m => m == i);
             if (markers > 0) host.UiText(new string('✕', markers), ox + x + SpotW + 2, oy + y + 3, 0xFFFF6060, 12);
             var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);
@@ -444,6 +503,16 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             var (x, y, name) = Buttons[i];
             shell.DrawButton(ox + x, oy + y, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, name, _hover == ButtonHit + i);
         }
+        // 「N팀」 단추(원본 0x100b20d0 — 번호 0x12c + 팀 + 1) — 팀이 여럿일 때만. 고른 팀이 움직이고 싸운다.
+        if (_teams is { Count: > 1 } teams)
+            for (int i = 0; i < teams.Count; i++)
+            {
+                var (x, y) = TeamButton(i, teams.Count);
+                bool on = i == _team;
+                host.UiFill(ox + x, oy + y, TeamW, TeamH, on ? 0xF0605020u : _hover == TeamHit + i ? 0xE0283850u : 0xC0202838u);
+                host.UiStroke(ox + x, oy + y, TeamW, TeamH, on ? 0xFFFFE080u : 0xFF607090u);
+                host.UiText($"{i + 1} 팀", ox + x + 10, oy + y + 2, GameWindow.White, 11);
+            }
         if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
         else if (Picking) DrawPick(ox, oy);
         host.DrawToast();
