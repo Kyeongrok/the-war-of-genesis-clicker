@@ -77,6 +77,14 @@ internal sealed unsafe partial class BattleScene
         Array.Clear(_eventTimerRun);
         try
         {
+            // 파트1 판 — 파트1 사건을 파트2 명령으로 바꿔 쓴다(Part1Script). 대사 줄은 그 전투의 .dlg 라 TalkBox.Part1Text 가 읽는다.
+            if (battleId >= Part1Game.BattleBase)
+            {
+                if (Part1Battle.Load(battleId - Part1Game.BattleBase) is not { } part1) return;
+                _events = [.. part1.Events.Select(Part1Script.Event)];
+                _eventFired = new int[_events.Count];
+                return;
+            }
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
             if (files.Read("Btl", $"{battleId:D4}.btl") is not { } bytes) return;
             if (BattleEvents.Parse(bytes, out _) is not { } events) return;
@@ -502,8 +510,16 @@ internal sealed unsafe partial class BattleScene
         if (value == 20010) return _eventFoundA is null ? [] : [_eventFoundA];
         if (value == 20011) return _eventFoundB is null ? [] : [_eventFoundB];
         if (value >= 10000) return [.. host._units.Where(x => x.Record == value - 10000)];
-        return value > 0 ? [.. host._units.Where(x => x.ChrCode == value)] : [];
+        return EventChr(value) is int chr ? [.. host._units.Where(x => x.ChrCode == chr)] : [];
     }
+
+    /// <summary>
+    /// 이벤트 인자의 Chr 번호(0~9999)를 판의 인물 번호로 — 파트1 판은 인물이 <see cref="Part1Game.ChrBase"/> 위에 서고, Chr 0(살라딘)도 사람이다.
+    /// 파트2 판은 1~9999 만 사람이고 0 은 「없음」. 사람이 아니면 null.
+    /// </summary>
+    internal int? EventChr(int value) =>
+        host._scene.IsPart1 ? (value is >= 0 and < 10000 ? Part1Game.ChrBase + value : null)
+                            : (value is > 0 and < 10000 ? value : null);
 
     /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
     internal List<UnitState> EventTargets(int value, out bool wholeSide)
@@ -519,7 +535,7 @@ internal sealed unsafe partial class BattleScene
         }
         // 10000+N 은 Btl 레코드 번호다(빈 칸을 걸러 낸 뒤의 배열 자리가 아니다).
         if (value >= 10000) return [.. host._units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000)];
-        return value > 0 ? [.. host._units.Where(u => u.ChrCode == value)] : [];
+        return EventChr(value) is int chr ? [.. host._units.Where(u => u.ChrCode == chr)] : [];
     }
 
     internal bool EventCondition(ScriptCommand c)

@@ -40,6 +40,13 @@ public static class Part1Game
     /// </summary>
     public const int ChrBase = 20000, BattleBase = 20000;
 
+    /// <summary>
+    /// 파트1 글(<c>.dlg</c>·<c>.clg</c>) 표시를 보통 글로 — 「/m0[말하는 이]/m1」 머리는 떼고, 「/n」 은 줄 바꿈, 「/cN」 색 바꿈은 지운다.
+    /// </summary>
+    public static string PlainText(string text) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            System.Text.RegularExpressions.Regex.Replace(text, @"/m0\[[^\]]*\]/m1", ""), @"/c\d", "").Replace("/n", "\n").Trim('\n');
+
     /// <summary>다시 싸는 셈(<see cref="ToPart2Obs"/>)을 고치면 올린다 — 만들어 둔 파일 자리가 바뀌어 옛 것을 안 쓴다.</summary>
     public const int ConvertVersion = 8;
 

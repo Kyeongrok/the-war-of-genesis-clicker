@@ -198,6 +198,18 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         return _battleTalk;
     }
 
+    private Part1Battle? _part1Talk;
+
+    /// <summary>
+    /// 파트1 판의 대사 줄 — 그 전투의 <c>.dlg</c>(<see cref="Part1Battle.Lines"/>). 줄 앞의 「/m0[이름]/m1」 표시는 떼고, 「/n」 은 줄 바꿈으로.
+    /// </summary>
+    internal string Part1Text(int line)
+    {
+        int id = host._scene.Id - Part1Game.BattleBase;
+        if (_part1Talk?.Id != id) _part1Talk = Part1Battle.Load(id);
+        return Part1Game.PlainText(_part1Talk?.Line(line) ?? "");
+    }
+
     /// <summary>말하는 이를 찾는다 — 없으면 −1(화면 가운데에 띄운다).</summary>
     internal int TalkSpeaker(int value)
     {
@@ -210,8 +222,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (value >= 20000) return -1;
         // 10000+N 은 배열 자리가 아니라 <b>Btl 레코드 번호</b>다 — 빈 칸을 걸러 낸 뒤의 자리와 다르다.
         if (value >= 10000) return Array.FindIndex(host._units, u => u.LeaderIndex < 0 && u.Record == value - 10000);
-        if (value <= 0) return -1;
-        return Array.FindIndex(host._units, u => u.ChrCode == value);
+        return host.Btl.EventChr(value) is int chr ? Array.FindIndex(host._units, u => u.ChrCode == chr) : -1;
     }
 
     /// <summary>전투 대사 한 줄을 띄운다(행동 600·601).</summary>
@@ -220,9 +231,11 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (_talkSkip) return;
 
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
-        string text = TalkTableFor(host._scene.Id)?[A(2)] ?? "";
+        string text = host._scene.IsPart1 ? Part1Text(A(2)) : TalkTableFor(host._scene.Id)?[A(2)] ?? "";
         int speaker = TalkSpeaker(A(0));
-        string name = speaker >= 0 && host._units[speaker].Data is { } c ? host._db?.T(c.NameId) ?? "" : "";
+        // 파트1 인물은 이름이 TXR 이 아니다 — 그림을 읽을 때 적어 둔 이름(_names)을 쓴다.
+        string name = speaker < 0 ? "" : host._scene.IsPart1 ? host._names.GetValueOrDefault(host._units[speaker].ChrCode, "")
+                    : host._units[speaker].Data is { } c ? host._db?.T(c.NameId) ?? "" : "";
         int faceCode = 0;
         // 말하는 이가 판에 없으면(0x1004ebd0, ba-20 V6): Chr 번호(1~9999)는 명부에서 이름·얼굴을 달아 가운데 창으로, 말하는 이 0 은 그 줄을 건너뛴다.
         if (speaker < 0 && A(0) == 0) return;
