@@ -1799,8 +1799,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             var used = new List<int>();
             if (_part1Proc == null && t.Hp > 0)
             {
-                if (proc.Code == 304) { PutAilment(t, 3, 5, used, a); Popup(t, "중독", AilmentPopupColor, 12, rise: 88); }
-                if (proc.Code == 303) { PutAilment(t, 4, 1, used, a); Popup(t, "버써크", AilmentPopupColor, 12, rise: 88); }
+                // 상태만 거는 갈래 — 파트1 상태를 가까운 파트2 상태로(Part1Item.Part2Status, 가설). 중독은 차례마다 최대 HP 5%, 나머지는 값 1.
+                if (Part1Item.Part2Status(proc.Code) is > 0 and var status)
+                {
+                    PutAilment(t, (byte)status, (short)(status == 3 ? 5 : 1), used, a);
+                    Popup(t, BattleScene.AilmentNames.GetValueOrDefault(status, "상태이상"), AilmentPopupColor, 12, rise: 88);
+                }
             }
             if (Trace)
                 System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),

@@ -25,6 +25,20 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
     /// 300 메테오 87 · 301 라이트닝 볼츠 134+ · 302 썬더스탐 161 · 303 버써크 208+ · 304 중독 383+ · 305 최면 386+ · 306 상태이상 385+ · 307 혼란 384+ · 308 마비 388 · 309 암살 389.
     /// 없으면 (0, 0).
     /// </summary>
+    /// <summary>
+    /// 파트1 상태 → 파트2 상태 번호(가까운 것, 가설): 중독 → 3 · 버써크 → 4 · 혼란 → 4(아무나 친다) · 최면 → 5(못 움직임) · 마비 → 5 · 컨디션 이상 → 1(DEX 저하).
+    /// 키는 무기 보정(300대)과 치료 보정(100대) 둘 다 받는다 — 302/102 버써크, 303/103 혼란은 짝이 엇갈리지 않게 따로 적었다.
+    /// </summary>
+    public static int Part2Status(int code) => code switch
+    {
+        304 or 104 => 3,
+        303 or 102 => 4,
+        307 or 103 => 4,
+        305 or 105 or 308 => 5,
+        306 or 106 => 1,
+        _ => 0,
+    };
+
     public (int Code, int Attack) ProcAttack()
     {
         foreach (var (code, value) in Bonuses)
