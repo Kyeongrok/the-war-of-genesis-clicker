@@ -401,7 +401,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             string name = Part1Game.PlainText(chapter.NameOf(place)).Replace('\n', ' ');
             if (name.Length == 0) name = place.IsBattle ? $"전투 {place.Target}" : "길목";
             if (cleared) name = "✓ " + name;
-            if (i == _party) host.UiText("◆", ox + x - 12, oy + y + 4, 0xFFFFE080, 12);
+            // 일행 말 — 챕터 머리 낱말 6 의 그림(Obs 654 · 655 · 1281 · 1282 — 지도 위 작은 인물, 가설), 못 읽으면 ◆.
+            if (i == _party && !(chapter.Header.Length > 6 && chapter.Header[6] > 0
+                                 && host.DrawUi(Part1Game.ObsBase + chapter.Header[6], 0, (int)(host._lastTime * GameWindow.TicksPerSecond),
+                                                ox + x - 14, oy + y + SpotH / 2 + 8, GameWindow.UiBlend.Alpha, loop: true)))
+                host.UiText("◆", ox + x - 12, oy + y + 4, 0xFFFFE080, 12);
             // 지도 말(적 무리) — 그 장소 오른쪽에 붉은 ✕(말 수만큼).
             int markers = Events.Markers.Count(m => m == i);
             if (markers > 0) host.UiText(new string('✕', markers), ox + x + SpotW + 2, oy + y + 3, 0xFFFF6060, 12);
