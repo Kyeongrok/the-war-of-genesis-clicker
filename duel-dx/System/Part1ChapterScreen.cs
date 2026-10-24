@@ -405,7 +405,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     internal void OnClick(int bx, int by)
     {
-        if (Events.Talk != null) { Events.Advance(); return; }   // 대사가 떠 있으면 누르면 넘어간다
+        if (Events.Talk != null) { if (!shell.NextTalkPage()) Events.Advance(); return; }   // 대사가 떠 있으면 누르면 다음 장 · 다음 대사
         if (Picking) { PressPick(PickAt(bx, by)); return; }
         Press(HitAt(bx, by));
     }
@@ -413,7 +413,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>Esc 는 파트1 타이틀로, Enter · Space 는 짚은 것을 누른다.</summary>
     internal void OnKey(int key)
     {
-        if (Events.Talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) Events.Advance(); return; }
+        if (Events.Talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE && !shell.NextTalkPage()) Events.Advance(); return; }
         if (Picking) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressPick(Math.Max(0, _hover - PickHit)); return; }   // 고르기 창은 닫을 수 없다(짚은 것 없으면 첫 후보)
         if (key == Win32.VK_ESCAPE) Press(ButtonHit + ButtonTitle);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);

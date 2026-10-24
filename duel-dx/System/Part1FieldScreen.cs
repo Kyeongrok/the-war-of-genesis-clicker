@@ -147,7 +147,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
 
     internal void OnClick()
     {
-        if (Script.Talk != null) Script.Advance();
+        if (Script.Talk != null) { if (!shell.NextTalkPage()) Script.Advance(); }
         else if (Script.Idle) End();                                        // 다 돌았는데 500 이 없으면 누르면 돌아간다(걷는 중 · 기다리는 중에는 안 받는다)
     }
 

@@ -336,12 +336,28 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             if (_wrapped.Count > 64) _wrapped.Clear();
             _wrapped[text] = lines = [.. text.Split('\n').SelectMany(l => Wrap(l, W - 28))];
         }
-        foreach (string line in lines)
+        // 상자에 드는 줄만 — 넘치면 장을 나눠 누를 때마다 다음 장(사용자 보고: 글이 상자 밖으로 흘렀다).
+        int fit = Math.Max(1, (oy + Y + H - 8 - y) / 19);
+        if (!ReferenceEquals(text, _pageText) && text != _pageText) { _pageText = text; _page = 0; }
+        _pages = (lines.Length + fit - 1) / fit;
+        foreach (string line in lines.Skip(_page * fit).Take(fit))
         {
             host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
             y += 19;
         }
-        host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
+        // 넘김 표시 — 반짝인다(0.5초 켜짐 · 0.25초 꺼짐).
+        if (host._lastTime % 0.75 < 0.5) host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
+    }
+
+    private string? _pageText;
+    private int _page, _pages;
+
+    /// <summary>대사에 남은 장이 있으면 다음 장으로 넘기고 true — 화면들이 대사를 넘기기 전에 묻는다.</summary>
+    internal bool NextTalkPage()
+    {
+        if (_page + 1 >= _pages) return false;
+        _page++;
+        return true;
     }
 
     /// <summary>접어 둔 대사(글 → 줄들) — 틀마다 글 폭을 다시 재지 않게.</summary>
