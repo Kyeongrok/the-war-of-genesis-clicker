@@ -110,6 +110,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>성우 대사의 재생 표지 — 다음 성우 대사가 앞 목소리를 끊는다.</summary>
     private const int VoiceTag = 0x5011;
 
+    /// <summary>지금 성우 목소리가 끝나는 때 — 원본은 상자를 닫아도 목소리가 끝나야 다음 행동으로 간다(분석-파트1-챕터 11절).</summary>
+    private double _voiceEnd;
+
     /// <summary>
     /// 새로 돌린다 — <paramref name="fired"/> 는 발동 수(챕터는 진행에 남겨 지도로 돌아와도 들머리가 다시 안 나오게, 필드는 들어올 때마다 새것).
     /// <paramref name="resume"/> 면 남은 행동을 이어 돈다(전투를 마치고 돌아왔을 때).
@@ -173,6 +176,8 @@ internal sealed class Part1SceneScript(GameWindow host)
     internal void Advance()
     {
         Talk = null;
+        // 목소리가 아직 울리면 끝날 때까지 다음 행동을 미룬다(누르기로 목소리를 자르지 않는다).
+        if (Timed && host._lastTime < _voiceEnd) _waitUntil = Math.Max(_waitUntil, _voiceEnd);
         Run();
     }
 
@@ -256,6 +261,9 @@ internal sealed class Part1SceneScript(GameWindow host)
                     {
                         host._mixer.StopEffect(VoiceTag);
                         host.Play(Part1Game.ObsBase + a[2], VoiceTag);
+                        PcmSound? clip;
+                        lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
+                        _voiceEnd = clip != null && !GameWindow.Muted ? host._lastTime + GameWindow.ClipSeconds(clip) : 0;
                     }
                     break;
                 }
