@@ -299,9 +299,10 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>SOUL 을 채운다 — 19(소울이 차지 않음)가 걸려 있으면 하나도 안 들어간다(<c>0x10071d45</c>).</summary>
-    internal static void AddSoul(UnitState u, int amount)
+    internal void AddSoul(UnitState u, int amount)
     {
-        if (amount <= 0 || u.HasStatus(19)) return;
+        // 파트1 소울 게이지는 차례마다 +20 만 오른다(Part1Combat.GaugeOnTurn, StartTurn) — 행동·맞음으로 오르는 파트2 몫은 안 받는다.
+        if (amount <= 0 || u.HasStatus(19) || host._scene.IsPart1) return;
         u.Soul = Math.Min(u.MaxSoul, u.Soul + amount);
     }
 

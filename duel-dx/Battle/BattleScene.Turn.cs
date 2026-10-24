@@ -163,6 +163,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             unit.Soul = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SOUL"), out int soul) ? Math.Min(unit.MaxSoul, soul) : host._db.SoulStart;
             // 모드 > 전투 시작 시 소울 가득 — 내 편(편 4)만 SOUL 을 최대로 채우고 시작한다(원본에 없는 편의 기능, 사용자 요청).
             if (host._fullSoulAtStart && unit.PlayerControlled) unit.Soul = unit.MaxSoul;
+            // 파트1 소울 게이지는 0~150, 처음 40(분석-파트1-전투 11.2, 0x10034f80).
+            if (host._scene.IsPart1) { unit.MaxSoul = 150; unit.Soul = host._fullSoulAtStart && unit.PlayerControlled ? 150 : Math.Min(150, soul > 0 ? soul : 40); }
             // DUELDX_AILMENT=<번호>[:<값>][,<번호>[:<값>]…] 이면 그 상태이상들을 칸 순서대로 걸고 시작한다(화면 밖 시험용).
             if (Environment.GetEnvironmentVariable("DUELDX_AILMENT") is { Length: > 0 } spec)
             {
@@ -538,6 +540,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     internal void StartTurn(int index, bool resume = false)
     {
+        // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
+        if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
+            host._units[index].Soul = Part1Combat.GaugeOnTurn(host._units[index].Soul, cap: host._units[index].MaxSoul);
         _turn = index;
         host._selected = index;
         _turnNo++;
