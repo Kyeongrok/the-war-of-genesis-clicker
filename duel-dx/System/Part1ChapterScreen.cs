@@ -413,7 +413,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
     }
 
-    private void Press(int hit)
+    internal void Press(int hit)
     {
         if (_chapter is not { } chapter) return;
         switch (hit)

@@ -156,7 +156,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         return true;
     }
 
-    private void Press(int button)
+    internal void Press(int button)
     {
         switch (button)
         {

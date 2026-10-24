@@ -59,10 +59,14 @@ internal sealed unsafe partial class GameWindow
 
     readonly HashSet<(UnitState, UnitState)> _testOverlaps = [];
 
+    /// <summary>시험 전용: 파트1 이야기 자동 진행(DUELDX_P1AUTO).</summary>
+    private Part1Auto? _part1Auto;
+
     /// <summary>시험 전용: 갱신 한 번 뒤 — 사건 건너뛰기, 몇 초마다 상태 줄.</summary>
     internal void TestRunTick()
     {
         TestClicksTick();
+        if (Part1Auto.On) (_part1Auto ??= new(this)).Tick();
         if (!TestRun) return;
         if (TestSkip && _battleLoaded && !FieldOpen && !Mos._mosesOpen && !TitleScr._titleOpen && Btl._outcome.Length == 0)
         {
