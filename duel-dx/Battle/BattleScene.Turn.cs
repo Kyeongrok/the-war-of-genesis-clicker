@@ -1800,6 +1800,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             return;
         }
+        // 파트1 속성 부여(화이어 · 아이스 · 썬더 블레이드) — 대상 무기에 그 속성을 건다(Part1Rules.Enchant).
+        if (host._scene.IsPart1 && Part1.EnchantOf(w) is > 0 and var element)
+        {
+            Part1.Enchant[t] = element;
+            Popup(t, element switch { 1 => "화염 부여", 2 => "빙한 부여", _ => "전격 부여" }, 0xFFFFC060, 13);
+            return;
+        }
         if (!w.IsDamage)
         {
             // 보조기도 빗나가면 「Miss」, 들어가면 맞음 동작(원본 반응표 — 전에는 아무 표시가 없었다).

@@ -193,6 +193,9 @@ internal sealed unsafe partial class BattleScene
         int need = w.MinTargets + 1;
         // 큐어는 한 명에게만 간다(WorkTargets) — <b>제 편이고 해로운 상태가 걸린</b> 대상일 때만 쓴다. 큐어의 대상 방식은 5(아무 유닛)라
         // 전에는 적에게도(상태가 없는 상대에게도) 썼다(사용자 보고: Btl 0136 의 이반). 원본 AI 가 어떻게 거르는지는 확인하지 않았다(상식대로).
+        // 파트1 속성 부여 — 이미 그 속성이 걸린 사람에게는 다시 안 건다(사용자 보고: Btl 20087 위자드가 화이어 블레이드를 되풀이).
+        if (host._scene.IsPart1 && Part1.EnchantOf(w) is > 0 and var element)
+            return targets.Any(i => host._units[i] is var t && !Hostile(user, t) && Part1.Enchant.GetValueOrDefault(t) != element);
         if (w.AbilityId == CureAbility)
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t)
                                     && Enumerable.Range(0, 3).Any(k => AilmentScore(t.StatusId[k], t.StatusValue[k]) < 0));

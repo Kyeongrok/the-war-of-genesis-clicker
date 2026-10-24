@@ -72,6 +72,15 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     }
 
     /// <summary>
+    /// 속성 부여(유닛 +0x249 화염 · +0x24a 빙한 · +0x24b 전격) — 화이어 · 아이스 · 썬더 블레이드(세기 식 10 · 11 · 12)가 대상에게 건다.
+    /// 걸린 동안 그 사람의 무기 공격은 그 속성이 되고 무기 E 가 ×1.2(<c>0x1003f000</c> · <c>0x1003f070</c>, 분석-파트1-전투 9절). 유닛 → 속성(1~3).
+    /// </summary>
+    internal readonly Dictionary<UnitState, int> Enchant = [];
+
+    /// <summary>그 기술이 속성 부여면 그 속성(1 · 2 · 3), 아니면 0.</summary>
+    internal int EnchantOf(WorkData w) => AttackOf(w)?.Formula is >= 10 and <= 12 and var sel ? sel - 9 : 0;
+
+    /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)로 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>
     internal (int Amount, int Result, bool Critical)? Resolve(Random rng, UnitState a, UnitState t, WorkData w)
@@ -88,10 +97,12 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
             return (0, 3, false);
         // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
         var attacker = fa.AttackerAt(a.Soul);
+        int enchant = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31 ? Enchant.GetValueOrDefault(a) : 0;
+        if (enchant > 0) attacker = attacker with { Enchanted = true };
         if (a.Status(4) > 0) attacker = attacker with { Str = attacker.Str * 3 / 2 };
         int power = Part1Combat.Power(selector, attacker);
         if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * Math.Max(1, attack.Hits);
-        int element = attack is { Element: > 0 } ? attack.Element : fa.Weapon1?.Element ?? 0;
+        int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
         if (!magic && t.Status(4) > 0) defense /= 2;
