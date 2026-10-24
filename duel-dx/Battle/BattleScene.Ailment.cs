@@ -308,18 +308,28 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>work 이 무는 SOUL — 18(소울 소모량 %)만큼 늘거나 준다(<c>0x100724c4</c>).</summary>
     internal int SoulCostFor(UnitState u, CharacterData c, int workId) =>
-        u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
+        Part1SoulCost(workId) is { } p1 ? p1
+        : u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulCost(c, workId) ?? 0, u.Status(18));   // 직업 37 은 비용 면제(0x10076380)
 
     /// <summary>work 을 쓰려면 있어야 하는 SOUL — 비용과 같은 보정을 받는다.</summary>
     internal int SoulNeedFor(UnitState u, CharacterData c, int workId) =>
-        u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
+        Part1SoulCost(workId) is { } p1 ? p1
+        : u.Data is { JobId: 37 } ? 0 : PercentAdjust(host._db?.WorkSoulNeed(c, workId) ?? 0, u.Status(18));
+
+    /// <summary>
+    /// 파트1 판의 파트1 기술(work 20000 + Attack.dat 번호) — 원본은 소울(<c>Attack +0x4c</c>, 0~150 게이지)만 내고 TP 는 따로 없다(어빌리티 목록이 소울로 잿빛을 가른다,
+    /// 분석-파트1-전투 24절 B). 이 게임은 TP 를 한 번의 행동값으로 쓰니 TP 는 기본 공격과 같게 둔다(<see cref="TpCostFor"/>). 파트1 기술이 아니면 null.
+    /// 스킬 파일의 TP · 소울(파트2 인물이 쓸 때의 값)은 그대로다.
+    /// </summary>
+    private int? Part1SoulCost(int workId) =>
+        host._scene.IsPart1 && Work(workId) is { } w && Part1.AttackOf(w) is { } attack ? attack.Cost : null;
 
     /// <summary><c>cost += cost × 값 / 100</c>(0x100726a1) — 곱한 몫만 0 쪽으로 버린다. <c>cost × (100+값) / 100</c> 은 값이 음수일 때 1 작게 나왔다(fg-22).</summary>
     internal static int PercentAdjust(int cost, int percent) => Math.Max(0, cost + cost * percent / 100);
 
     /// <summary>work 이 무는 TP — 20(TP 소모량 %)만큼 늘거나 준다(<c>0x10072694</c>).</summary>
     internal int TpCostFor(UnitState u, CharacterData c, int workId) =>
-        PercentAdjust(host._db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
+        PercentAdjust(Part1SoulCost(workId) is not null && host._db is { } db ? db.WorkTpCost(c, c.BasicWorkId) : host._db?.WorkTpCost(c, workId) ?? 0, u.Status(20));   // cost += cost×값/100(0x100726a1)
 
     /// <summary>
     /// 상태이상이 거는 사망 조건 — 22 SOUL 이 값 아래 · 23 TP 가 값 아래 · 24 SOUL 이 가득(<c>0x1007c689</c>~).
