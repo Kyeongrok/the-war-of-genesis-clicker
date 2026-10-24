@@ -65,7 +65,7 @@ internal sealed unsafe partial class BattleScene
         }
 
         // 원본 자리는 (134,26)·(134,38)·(134,50)인데 우리 글꼴이 아래로 처져 보여 조금 올린다(사용자 요청).
-        Right($"{host.Mos._shopMoney}GP", 134, 20);
+        Right(host._scene.IsPart1 ? $"{host.Part1.Eld} eld" : $"{host.Mos._shopMoney}GP", 134, 20);   // 파트1 판은 파트1 돈(eld)
         // Tp·Soul 은 고른 유닛이 아니라 <b>지금 차례인 유닛</b>([CBattle+0x4ce8])의 것이다(0x100e3f60, ba-20 G16) — AI 차례에도 그 유닛 값이 보인다.
         if (_turn >= 0 && _turn < host._units.Length && host._units[_turn] is { Alive: true } unit)
         {
