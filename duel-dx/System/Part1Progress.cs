@@ -121,15 +121,29 @@ internal sealed class Part1Progress
     /// <summary>
     /// 지금 싸우러 나가는 사람 — 지금 챕터에서 고른 팀(팀 0 이면 다른 팀에 안 든 일행, 팀 N 이면 그 팀 사람). 팀이 없으면 일행 모두.
     /// </summary>
-    internal List<int> ActiveMembers()
+    internal List<int> ActiveMembers() => TeamMembers(SelectedTeam.GetValueOrDefault(ChapterId));
+
+    /// <summary>지금 챕터의 그 팀 사람 — 팀 0 은 다른 팀에 안 든 무리 앞 10명, 팀 N 은 그 팀에 옮긴 사람(무리 차례). 팀이 없으면 무리 앞 10명.</summary>
+    internal List<int> TeamMembers(int team)
     {
         var group = GroupMembers();
         if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return [.. group.Take(TeamSize)];
-        int team = Math.Clamp(SelectedTeam.GetValueOrDefault(ChapterId), 0, teams.Count - 1);
+        team = Math.Clamp(team, 0, teams.Count - 1);
         if (team > 0) return [.. group.Where(teams[team].Members.Contains)];
-        var elsewhere = teams.Skip(1).SelectMany(t => t.Members).ToHashSet();
-        return [.. group.Where(c => !elsewhere.Contains(c)).Take(TeamSize)];
+        return [.. PoolMembers().Take(TeamSize)];
     }
+
+    /// <summary>본부 — 팀 1 부터에 안 든 무리 사람 모두(팀 0 은 이 앞 10명). 교환 창의 「본  부」 쪽.</summary>
+    internal List<int> PoolMembers()
+    {
+        var group = GroupMembers();
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return group;
+        var elsewhere = teams.Skip(1).SelectMany(t => t.Members).ToHashSet();
+        return [.. group.Where(c => !elsewhere.Contains(c))];
+    }
+
+    /// <summary>팀 하나에 들 수 있는 사람 수(원본 교환 창 0x100b87d0 — 받는 쪽이 팀이면 10명까지).</summary>
+    internal const int TeamLimit = TeamSize;
 
     /// <summary>504 · 506 이 팀 0 으로 옮기는 수 — 무리 앞 10명(Chr 번호 차례, 0x100c0620).</summary>
     private const int TeamSize = 10;
@@ -336,4 +350,7 @@ internal sealed class Part1Team
 {
     public List<int> Members { get; set; } = [];
     public int Place { get; set; }
+
+    /// <summary>이번 턴에 움직였나(원본 팀 칸 +0xaa4) — 「이  동」 · 「진  입」이 켜고 「턴종료」가 끈다. 팀은 턴마다 한 번 움직인다.</summary>
+    public bool Moved { get; set; }
 }

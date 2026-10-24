@@ -18,6 +18,9 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
 {
     public const int Size = 204;
 
+    /// <summary>그림 바이트(메모리 <c>+0x45</c>) — 상태 · 교환 창의 아이템 칸이 Obs 12 의 이 모션을 그린다(분석-파트1-챕터 13.5).</summary>
+    public int Icon { get; init; }
+
     public int Bonus(int code) => Bonuses.Where(b => b.Code == code).Sum(b => b.Value);
 
     /// <summary>
@@ -140,7 +143,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
             (int, int)[] bonuses = [.. new[] { (U16(6), S16(8)), (U16(10), S16(12)), (U16(14), S16(16)) }.Where(x => x.Item1 != 0)];
             items.Add(new Part1Item(i + 1, Text(o, 30), Text(o + 30, 30), I32(0), b[p + 4], bonuses,
                                     Attack: I32(18), Defense: I32(22), Accuracy: I32(30), Critical: b[p + 35], Element: b[p + 40],
-                                    ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)));
+                                    ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)) { Icon = b[p + 5] });
         }
         return items;
     }

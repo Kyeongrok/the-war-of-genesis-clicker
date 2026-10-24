@@ -877,6 +877,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Fld.UpdateFieldHover(bx, by);
                 if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
                 if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
+                else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);
                 return IntPtr.Zero;

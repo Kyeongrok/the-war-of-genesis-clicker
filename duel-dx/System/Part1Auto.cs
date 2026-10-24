@@ -54,6 +54,7 @@ internal sealed class Part1Auto(GameWindow host)
     {
         if (screen._chapter is not { } chapter) return;
         if (screen.Events.Talk != null || screen.Picking) { screen.OnKey(Win32.VK_RETURN); return; }
+        if (screen.WindowOpen || screen._mode != Part1ChapterScreen.Mode.Map) { screen.OnKey(Win32.VK_ESCAPE); return; }
         if (chapter.Id != _chapterId)
         {
             _chapterId = chapter.Id;
@@ -68,7 +69,7 @@ internal sealed class Part1Auto(GameWindow host)
             if (_tried.Contains(i) || !(place.IsBattle && !host.Part1.Cleared.Contains(place.Target) || place.IsTown)) continue;
             _tried.Add(i);
             Log($"chapter {chapter.Id} press place {i} ({(place.IsBattle ? $"battle {place.Target}" : $"town {place.Target}")})");
-            screen.Press(i);
+            screen.GoTo(i);   // 이웃 · 턴 제한 없이 곧장 옮겨 들어간다
             Wait();
             return;
         }

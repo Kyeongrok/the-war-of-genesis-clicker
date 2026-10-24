@@ -22,10 +22,10 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
 
     internal static readonly string[] SlotNames = ["무기", "둘째 손", "갑옷", "장신구", "장신구"];
 
-    internal void Open(Action onLeave)
+    internal void Open(Action onLeave, int member = 0)
     {
         _onLeave = onLeave;
-        _member = 0;
+        _member = member;
         _slot = -1;
         _hover = -1;
         _open = true;
