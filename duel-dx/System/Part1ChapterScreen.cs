@@ -54,7 +54,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     /// <summary>
     /// 지역 지도 — 챕터 머리 낱말 1 → <c>BGRs</c> 번호: 1 → 1(시반 슈미터 · 카디스 섬) · 2 → 2(팬드래건 쪽) · 3 → 6(안타나나리보 · 로우엔 쪽) · 4 → 3.
-    /// 원본은 <c>obts\%04d.obt</c>(머리 낱말 0) 타일 지도를 그린다 — BGRs 는 같은 지도를 미리 그린 그림으로 보인다(13.1, 가설). 그 밖(0 · 13)은 지도 없음.
+    /// 원본은 <c>obts\%04d.obt</c>(머리 낱말 0) 타일 지도를 그린다(<see cref="BuildTileMap"/>, 13.8) — 이 BGR 그림은 obt 를 못 읽을 때만 쓴다(장소 이름이 박혀 있다). 그 밖(0 · 13)은 지도 없음.
     /// </summary>
     internal static int MapOf(Part1Chapter chapter) => chapter.Header.Length > 1 ? chapter.Header[1] switch { 1 => 1, 2 => 2, 3 => 6, 4 => 3, _ => 0 } : 0;
 
@@ -302,8 +302,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             lock (Maps) Maps[bgr] = read;
             return read;
         }
-        var (map, mw, mh) = MapOf(chapter) is > 0 and var id ? Image(id) : (null, 0, 0);
         var (sea, sw, sh) = Image(0);
+        (_sea, _seaW, _seaH) = (sea, sw, sh);
+        if (BuildTileMap(chapter)) return;
+        var (map, mw, mh) = MapOf(chapter) is > 0 and var id ? Image(id) : (null, 0, 0);
         _hasMap = map != null;
         int needW = chapter.Places.Max(p => p.X + p.Words[3]) + 120, needH = chapter.Places.Max(p => p.Y + p.Words[4]) + 120;
         _mapW = Math.Max(MosesScene.MosesW, _hasMap ? mw : needW);
@@ -319,6 +321,97 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 px[y * _mapW + x] = c | 0xFF000000;
             }
         _mapPx = px;
+    }
+
+    /// <summary>타일 지도(머리 낱말 0 의 obt) — 한 번 읽어 둔다. 못 읽으면 null(BGR 그림으로 물러선다).</summary>
+    private static readonly Dictionary<int, Part1ChapterMap?> TileMaps = [];
+
+    /// <summary>바다 그림(BGR 0, 128×128)과 이번 틱 물결 무늬.</summary>
+    private uint[]? _sea;
+    private int _seaW, _seaH, _rippleFrame = -1;
+    private readonly uint[] _ripple = new uint[128 * 128];
+
+    /// <summary>obt 타일 지도로 깔았나 — 알파 0 픽셀이 바다(그릴 때 물결로 채운다).</summary>
+    private bool _tiled;
+
+    /// <summary>구름 스무 장(0x1011f1f0 — 3D 가속이 있을 때) — 세계 자리 (X, Y), 무늬 번호.</summary>
+    private readonly List<(int X, int Y, int Look)> _clouds = [];
+    private static byte[][]? _cloudLooks;
+    private int _cloudTick;
+    private Random _cloudRng = new(1);
+
+    /// <summary>
+    /// 원본 지도 객체 0x100c3960 그대로 — <c>obts\%04d.obt</c>(머리 낱말 0)를 40×8 띠로 깔고 빈 자리는 바다(분석-파트1-챕터 13.1 · 13.x).
+    /// BGR 지도와 달리 장소 이름이 그림에 없다 — 원본도 장소 종류 1 만 글로 쓴다.
+    /// </summary>
+    private bool BuildTileMap(Part1Chapter chapter)
+    {
+        int id = chapter.Header.Length > 0 ? chapter.Header[0] : 0;
+        Part1ChapterMap? map;
+        lock (TileMaps)
+            if (!TileMaps.TryGetValue(id, out map)) TileMaps[id] = map = Part1ChapterMap.Load(id);
+        _tiled = map != null;
+        if (map == null) return false;
+        _hasMap = true;
+        _mapW = Math.Max(MosesScene.MosesW, map.Width);
+        _mapH = Math.Max(MosesScene.MosesH, map.Height);
+        var px = new uint[_mapW * _mapH];
+        for (int y = 0; y < map.Height; y++) Array.Copy(map.Px, y * map.Width, px, y * _mapW, map.Width);
+        _mapPx = px;
+        _rippleFrame = -1;
+        // 구름 — 처음 자리 (난수 % W · 40, 난수 % H · 8)(띠 수 W × H).
+        _cloudLooks ??= [.. Enumerable.Range(0, 20).Select(i => Part1ChapterMap.Cloud(new Random(100 + i)))];
+        _cloudRng = new Random(chapter.Id);
+        _clouds.Clear();
+        int sw = map.Width / 40, sh = map.Height / 8;
+        for (int i = 0; i < 20; i++) _clouds.Add((_cloudRng.Next(sw) * 40, _cloudRng.Next(sh) * 8, i));
+        _cloudTick = (int)(host._lastTime * GameWindow.TicksPerSecond);
+        return true;
+    }
+
+    /// <summary>구름을 틱만큼 민다(0x100c4c80): x +1, 세 틱마다 y −1. 지도 오른끝을 넘거나 y &lt; −240 이면 x = −320, y = 난수 % H · 16.</summary>
+    private void StepClouds(int tick)
+    {
+        int steps = Math.Clamp(tick - _cloudTick, 0, 300);
+        if (tick - _cloudTick < 0 || tick - _cloudTick > 300) _cloudTick = tick;
+        int sh = Math.Max(1, _mapH / 8);
+        for (; steps > 0; steps--)
+        {
+            _cloudTick++;
+            for (int i = 0; i < _clouds.Count; i++)
+            {
+                var (x, y, look) = _clouds[i];
+                x++;
+                if (_cloudTick % 3 == 0) y--;
+                if (x >= _mapW || y < -240) { x = -320; y = _cloudRng.Next(sh) * 16; }
+                _clouds[i] = (x, y, look);
+            }
+        }
+    }
+
+    /// <summary>구름 한 장 — 128×128 무늬를 320×240 으로 늘려 스크린 섞기(원본 D3D: 원본 × (1 − 판) + 판).</summary>
+    private void DrawCloud(byte[] look, int sx, int sy, int ox, int oy)
+    {
+        var fb = host._fb;
+        int bw = host.BoardWidth, bh = host.BoardHeight;
+        int x0 = Math.Max(Math.Max(sx, ox), 0), x1 = Math.Min(Math.Min(sx + 320, ox + MosesScene.MosesW), bw);
+        int y0 = Math.Max(Math.Max(sy, oy), 0), y1 = Math.Min(Math.Min(sy + 240, oy + MosesScene.MosesH), bh);
+        for (int y = y0; y < y1; y++)
+        {
+            // 원본은 겹선형 거르기(D3D 확대 · 축소 거르기 2)로 늘린다 — 8비트 고정 소수점으로 같은 꼴.
+            int fy = (y - sy) * 127 * 256 / 239, ty = fy >> 8, wy = fy & 0xFF, r0 = ty * 128, r1 = Math.Min(ty + 1, 127) * 128;
+            for (int x = x0; x < x1; x++)
+            {
+                int fx = (x - sx) * 127 * 256 / 319, tx = fx >> 8, wx = fx & 0xFF, tx1 = Math.Min(tx + 1, 127);
+                int top = look[r0 + tx] * (256 - wx) + look[r0 + tx1] * wx, bottom = look[r1 + tx] * (256 - wx) + look[r1 + tx1] * wx;
+                int a = (top * (256 - wy) + bottom * wy) * 255 / (31 << 16);
+                if (a == 0) continue;
+                uint d = fb[y * bw + x];
+                int r = (int)(d >> 16 & 0xFF), g = (int)(d >> 8 & 0xFF), b = (int)(d & 0xFF);
+                r += a * (255 - r) / 255; g += a * (255 - g) / 255; b += a * (255 - b) / 255;
+                fb[y * bw + x] = 0xFF000000u | (uint)r << 16 | (uint)g << 8 | (uint)b;
+            }
+        }
     }
 
     private void ClampCamera() =>
@@ -653,7 +746,29 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         var fb = host._fb;
         int bw = host.BoardWidth, bh = host.BoardHeight;
         int x0 = Math.Max(0, ox), x1 = Math.Min(bw, ox + W);
-        if (_mapPx.Length > 0 && x1 > x0)
+        int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
+        if (_tiled && _mapPx.Length > 0 && x1 > x0)
+        {
+            // 바다(알파 0) — 물결 무늬(0x100c3d40)를 세계 자리 & 127 로. 그 위 구름(0x1011f1f0 일 때 스무 장).
+            if (_rippleFrame != tick && _sea is { } sea && _seaW > 0 && _seaH > 0) { Part1ChapterMap.Ripple(sea, _seaW, _seaH, tick, _ripple); _rippleFrame = tick; }
+            bool hasSea = _rippleFrame >= 0;
+            for (int y = 0; y < H; y++)
+            {
+                int py = oy + y, my = _cam.Y + y;
+                if ((uint)py >= bh || my >= _mapH) continue;
+                int src = my * _mapW + _cam.X + (x0 - ox), dst = py * bw + x0, n = Math.Min(x1 - x0, _mapW - _cam.X - (x0 - ox));
+                int seaRow = (my & 127) * 128, mx = _cam.X + (x0 - ox);
+                for (int i = 0; i < n; i++)
+                {
+                    uint c = _mapPx[src + i];
+                    fb[dst + i] = c >> 24 != 0 ? c : hasSea ? _ripple[seaRow + ((mx + i) & 127)] | 0xFF000000u : 0xFF102040u;
+                }
+            }
+            StepClouds(tick);
+            foreach (var (cx, cy, look) in _clouds)
+                DrawCloud(_cloudLooks![look], ox + cx - _cam.X, oy + cy - _cam.Y, ox, oy);
+        }
+        else if (_mapPx.Length > 0 && x1 > x0)
             for (int y = 0; y < H; y++)
             {
                 int py = oy + y, my = _cam.Y + y;
@@ -664,7 +779,6 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         // 지도 글(층)은 창 · 메뉴 · 턴 끝 알림 밑으로 비치므로 그동안은 안 그린다.
         bool window = WindowOpen || _mode == Mode.Menu || host._lastTime < _noticeUntil;
         bool calm = Events.Talk == null && !Picking;
-        int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
 
         // 장소 이름 — 마을(종류 1)만, 장소 아래 가운데(낱말 0 의 clg 글, 0x100b2940). 전투 장소 이름은 지도 그림에 그려져 있다. 지도 그림이 없으면 다 적는다.
         if (!window)
