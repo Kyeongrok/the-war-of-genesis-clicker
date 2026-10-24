@@ -47,16 +47,30 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle, MarkerMoved = OnMarkerMoved,
         MapTurn = () => _chapter is { } c ? host.Part1.MapTurns.GetValueOrDefault(c.Id) : 0,
+        PartyPlace = () => _party,
+        TeamMoved = (team, place) => { if (team == 0 && _chapter is { } c && place >= 0 && place < c.Places.Count) _party = place; },
     };
 
     /// <summary>
+    /// 게임 오버 — 챕터 행동 500(0x100c04e0 → 0x100b44c0: 그림 789 를 띄우고 장면 7 = 불러오기 · 타이틀 · 새로)과 턴 한도.
+    /// 전투에 진 것과 같은 끝이라 파트1 타이틀로 돌아간다(이어 하기는 저장된 자리에서). 분석-파트1-챕터 10.2.
+    /// </summary>
+    private void GameOver()
+    {
+        host.Toast("게임 오버");
+        host.LeaveScene(() => { _open = false; shell.ReturnFromBattle(false); });
+    }
+
+    /// <summary>
     /// 턴 종료(원본 0x100b4010) — 지도 턴 +1 하고 사건을 다시 훑는다(조건 1 의 턴 사건 — 챕터 10 의 말 옮기기 따위).
-    /// 원본은 턴이 머리 낱말 10(챕터 0 은 10 · 1 은 15)에 닿으면 행동 500 을 부르는데 그 뜻을 아직 몰라 안 옮겼다.
+    /// 턴이 머리 낱말 10(챕터 0 은 10 · 1 은 15)에 닿으면 행동 500 = 게임 오버(<see cref="GameOver"/>).
     /// </summary>
     private void EndMapTurn()
     {
         if (_chapter is not { } chapter) return;
         int turn = host.Part1.MapTurns[chapter.Id] = host.Part1.MapTurns.GetValueOrDefault(chapter.Id) + 1;
+        // 턴 한도(머리 낱말 10) — 닿으면 원본은 행동 500 을 넣고 바로 나간다(사건을 다시 훑지 않는다, 0x100b4010).
+        if (chapter.Header.Length > 10 && chapter.Header[10] > 0 && turn >= chapter.Header[10]) { GameOver(); return; }
         host.Toast($"턴 {turn}");
         Events.Arrive(-1);
         SaveProgress();
@@ -132,6 +146,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 host.Part1.Save(host.FlagSt._flags);   // 챕터가 끝났다 — 남은 행동 없이
                 host.LeaveScene(() => { _open = false; shell.Timeline.Open(); });
                 return true;
+            case 500:
+                GameOver();
+                return true;
             case 503:
                 int chapterId = _chapter?.Id ?? -1;
                 _resume = true;
@@ -157,6 +174,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (!host.Part1.ChapterMarkers.TryGetValue(chapterId, out var markers) || markers.Count != chapter.Markers.Count)
             host.Part1.ChapterMarkers[chapterId] = markers = [.. chapter.Markers];
         Events.Markers = markers;
+        Events.MarkerPrev = [.. markers];
         host.Part1.ChapterId = chapterId;
         var places = chapter.Places;
         // 지도 자리 — 장소 칸(낱말 1·2 왼위 · 3·4 크기)의 가운데. 한 배율(1 이하)로 칸에 넣고 가운데에 둔다(지도가 찌그러지지 않게).

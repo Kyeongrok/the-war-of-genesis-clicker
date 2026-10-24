@@ -47,6 +47,17 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// </summary>
     internal List<int> Markers = [];
 
+    /// <summary>지도 말의 앞 장소(원본 +0xc — 900 이 옮길 때 옛 장소를 적는다). 조건 201(막 옮겨 닿음) · 303(머무름)이 본다. 열 때는 지금 장소로.</summary>
+    internal List<int> MarkerPrev = [];
+
+    /// <summary>일행(팀 0)이 선 장소 — 조건 302 [장소, 팀, v] 가 본다.</summary>
+    internal Func<int>? PartyPlace;
+
+    /// <summary>903 [팀, 장소] — 팀 말을 전투 없이 그 장소로(0x100c14a0 → 0x100b2840). 리메이크는 팀 0(일행)만 있다.</summary>
+    internal Action<int, int>? TeamMoved;
+
+    private int Prev(int m) => m >= 0 && m < MarkerPrev.Count ? MarkerPrev[m] : m >= 0 && m < Markers.Count ? Markers[m] : -1;
+
     /// <summary>지금 챕터 지도 턴 — 조건 1 [값, 연산] 이 본다(챕터만).</summary>
     internal Func<int>? MapTurn;
 
@@ -170,9 +181,13 @@ internal sealed class Part1SceneScript(GameWindow host)
             0 => true,
             100 => _vars.GetValueOrDefault(a[0]) == a[1],
             200 => a[1] == Arrived,
-            // 조건은 말을 0부터 센다(0x100bd510 · 0x100bd550 — 칸 a0 · a1 을 바로 쓴다), 행동 900 은 1부터(0x100c10a0 — 칸 a0 − 1).
+            // 조건은 말을 0부터 센다(0x100bd140 · 0x100bd510 · 0x100bd550 — 칸을 바로 쓴다), 행동 900 · 902 는 1부터(칸 a0 − 1). 분석-파트1-챕터 10.2.
+            // 201 [말, 장소] 막 옮겨(지금 ≠ 앞) 그 장소에 닿음 · 301 [말, v] 살았나 · 302 [장소, 팀, v] 팀이 그 장소에(팀 0 = 일행) ·
+            // 303 [장소, 말, v] 말이 살았고 지금·앞 둘 다 그 장소(머무름). v = 0 이면 뒤집는다.
+            201 => a[0] >= 0 && a[0] < Markers.Count && Markers[a[0]] >= 0 && Markers[a[0]] == a[1] && Prev(a[0]) != a[1],
             301 => (a[0] >= 0 && a[0] < Markers.Count && Markers[a[0]] >= 0) == (a[1] != 0),
-            302 => (a[1] >= 0 && a[1] < Markers.Count && Markers[a[1]] == a[0]) == (a[2] != 0),
+            302 => (a[1] == 0 && PartyPlace?.Invoke() == a[0]) == (a[2] != 0),
+            303 => (a[1] >= 0 && a[1] < Markers.Count && Markers[a[1]] == a[0] && Prev(a[1]) == a[0]) == (a[2] != 0),
             1 => MapTurn != null && BattleScene.Compare(MapTurn(), a[1], a[0]),     // [값, 연산] — 지도 턴(0x100bcf40 → 0x100bce90)
             101 => BattleScene.Compare(a[0] >= 0 && a[0] < host.FlagSt._flags.Length ? host.FlagSt._flags[a[0]] : 0, a[2], a[1]),
             _ => false,                                                     // 아직 안 푼 조건은 안 터뜨린다
@@ -230,9 +245,14 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
                 case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count:
+                    while (MarkerPrev.Count < Markers.Count) MarkerPrev.Add(Markers[MarkerPrev.Count]);
+                    MarkerPrev[a[0] - 1] = Markers[a[0] - 1];
                     Markers[a[0] - 1] = a[1];
                     if (MarkerMoved?.Invoke(a[0] - 1, a[1]) == true) { _sceneChanged = true; _away = c; return; }   // 이어 하기가 이 전투부터 다시 하게
                     break;
+                // 902 [말] — 말을 지도에서 뺀다(0x100c1270: 살았나 +0xe = 0). 챕터 10 사건 12 · 28 사건 2.
+                case 902 when a[0] >= 1 && a[0] - 1 < Markers.Count: Markers[a[0] - 1] = -1; break;
+                case 903: TeamMoved?.Invoke(a[0], a[1]); break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0: host.Part1.Join([Part1Game.ChrBase + a[1]]); break;
                 case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
