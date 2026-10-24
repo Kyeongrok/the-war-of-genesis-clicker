@@ -1,0 +1,80 @@
+using System.Text;
+
+namespace WarOfGenesis.Assets;
+
+/// <summary>
+/// 파트1 기술 <c>Dats\Attack.dat</c> 한 칸 — 로더 <c>alpha.dll 0x10023260</c>(파일 94바이트 → 메모리 0x6c바이트). <b>번호 = 레코드 + 1</b>(메모리 0 번은 비어 있다).
+/// </summary>
+/// <remarks>
+/// 옵시디안 「분석-파트1-검기술」 0.1, 「분석-파트1-전투」 9·15절. <see cref="Raw"/> 는 메모리 자리 → 값이다.
+/// </remarks>
+public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, int> Raw)
+{
+    /// <summary>파일 칸 차례 — (메모리 자리, 바이트 수, 부호).</summary>
+    private static readonly (int At, int Size)[] Layout =
+    [
+        (0x20, 1), (0x21, 1), (0x24, 4), (0x28, 4),
+        (0x2c, 1), (0x2d, 1), (0x2e, 1), (0x2f, 1), (0x30, 1), (0x31, 1), (0x32, 1), (0x33, 1), (0x34, 1), (0x35, 1), (0x36, 1),
+        (0x38, 4), (0x3c, 4), (0x40, 1), (0x41, 1), (0x42, 1), (0x44, 4), (0x48, 1),
+        (0x4c, 4), (0x50, 4), (0x54, 4), (0x58, 4), (0x5c, 1), (0x60, 4),
+        (0x64, 1), (0x65, 1), (0x66, 1), (0x67, 1), (0x68, 1), (0x69, 1),
+    ];
+
+    public const int FileSize = 94;
+
+    /// <summary><c>+0x21</c> 사거리 갈래 — 1 RANGE 능력치 + <see cref="RangeValue"/> · 2 무기 사거리 + RANGE 보정 · 3 <see cref="RangeValue"/> 그대로 · 4 무기 사거리(<c>0x10038ae0</c>).</summary>
+    public int RangeKind => Raw[0x21];
+    public int RangeValue => Raw[0x24];
+
+    /// <summary><c>+0x40</c> 맞는 칸 둘레(유닛 모으기 <c>0x10039690</c> 에 넘긴다).</summary>
+    public int Area => Raw[0x40];
+
+    /// <summary><c>+0x41</c> 1 이면 맵 칸도 맞는다(<c>0x10076c46</c>).</summary>
+    public bool HitsTiles => Raw[0x41] == 1;
+
+    /// <summary><c>+0x42</c> 피해 세기 식 선택자(<see cref="Part1Combat.Power"/>).</summary>
+    public int Formula => Raw[0x42];
+
+    /// <summary><c>+0x44</c> 세기에 이 값의 제곱을 더한다(<c>0x10040694</c>).</summary>
+    public int PowerAdd => Raw[0x44];
+
+    /// <summary><c>+0x4c</c> 소울 비용으로 보인다 — 쓸 수 있나가 소울 − 50 과 견준다(<c>0x10026df2</c>).</summary>
+    public int Cost => Raw[0x4c];
+
+    /// <summary><c>+0x66</c> 세기에 곱하는 값(타수로 보인다).</summary>
+    public int Hits => Raw[0x66];
+
+    /// <summary><c>+0x69</c> 기술 전 준비 동작 갈래(<c>0x10042fc4</c>).</summary>
+    public int Prep => Raw[0x69];
+
+    /// <summary>번호(1 부터)로 찾는다.</summary>
+    public static Part1Attack? ById(IReadOnlyList<Part1Attack> list, int id) => id >= 1 && id <= list.Count ? list[id - 1] : null;
+
+    public static IReadOnlyList<Part1Attack> LoadAll() => ParseAll(Part1Game.Read("Dats", "Attack.dat"));
+
+    public static IReadOnlyList<Part1Attack> ParseAll(byte[]? b)
+    {
+        if (b is not { Length: >= 2 }) return [];
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var cp949 = Encoding.GetEncoding(949);
+        int count = BitConverter.ToUInt16(b, 0);
+        var list = new List<Part1Attack>(count);
+        for (int i = 0, o = 2; i < count && o + FileSize <= b.Length; i++)
+        {
+            var plain = new byte[30];
+            for (int k = 0; k < 30; k++) plain[k] = (byte)~b[o + k];
+            int end = Array.IndexOf(plain, (byte)0);
+            string name = cp949.GetString(plain, 0, end < 0 ? 30 : end);
+            int p = o + 30;
+            var raw = new Dictionary<int, int>();
+            foreach (var (at, size) in Layout)
+            {
+                raw[at] = size == 1 ? b[p] : BitConverter.ToInt32(b, p);
+                p += size;
+            }
+            list.Add(new Part1Attack(i + 1, name, raw));
+            o += FileSize;
+        }
+        return list;
+    }
+}
