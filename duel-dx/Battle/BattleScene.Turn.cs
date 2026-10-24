@@ -1983,6 +1983,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (_outcome.Length > 0 || EventsBusy) return;
         // 머리 워드 9 가 0 인 전투는 엔진이 전멸을 아예 안 본다(0x1006ed10 첫머리) — 승패는 스크립트(행동 11·10·6)만 낸다.
         // 적을 다 잡아도 조건(특정 칸 도달 따위)을 채워야 넘어간다. 전에는 전멸이면 끝내고 스크립트의 나가는 길을 대신 골랐다(fg-21 ⑬).
+        // 파트1 판은 탈출 · 도달처럼 전멸을 안 보는 판이라도, 맵 밖에서 기다리는 증원까지 적이 하나도 안 남으면 이긴다
+        // (사용자 요청: 「다 죽였으면 클리어 — 도망갈 이유가 없으면」, 원본은 조건 칸에 닿아야 끝난다). 나가는 길은 스크립트의 승리 갈래를 따른다.
+        if (!host._scene.EngineJudgesWipe && host._scene.IsPart1
+            && host._units.Any(u => !u.IsAlly) && !host._units.Any(u => u.Alive && !u.IsAlly)
+            && host._units.Any(u => u.Alive && u.OnField && u.Side == 4))
+        {
+            ScriptedDestinationOnWipe();
+            _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = host._lastTime;
+            TestRunTrace($"outcome part1 wipe-win btl {host._scene.Id} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {host._lastTime:F1}");   // 시험 전용
+            return;
+        }
         if (!host._scene.EngineJudgesWipe)
         {
             // 원본은 여기서 AI 차례만 영영 돈다(0x1006ed6c — 시스템 메뉴도 못 여는 막다른 길, Btl 0079·0102·0252·0221).
@@ -2048,7 +2059,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (_outcome.Length > 0) return;
         _outcome = win ? "승리" : "패배";
         _outcomeAt = host._lastTime;
-        _outcomeQuiet = quiet;
+        _outcomeQuiet = quiet || host._scene.IsPart1 && _part1NoBanner;   // 파트1 106 — 배너 없이
         // 시험 전용: 사건이 낸 결과를 남긴다(DUELDX_TESTRUN 일 때만).
         TestRunTrace($"outcome event btl {host._scene.Id} win {win} quiet {quiet} 사건 {_runningEvent} 줄 {_eventPc - 1} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {host._lastTime:F1}");
         _outcomeLeaveAt = host._lastTime + (OutcomeBannerDelayTicks + OutcomeAutoTicks + 1) / TicksPerSecond;
