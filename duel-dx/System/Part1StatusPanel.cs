@@ -43,7 +43,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// <summary>그 칸에 가방의 다음 맞는 것을 끼운다(끼던 것은 가방으로) — 일행 창(Part1PartyScreen)과 같은 규칙. 일행이 아니면(용병 · 적) 못 바꾼다.</summary>
     private void CycleEquipment(UnitState u, int slot)
     {
-        if (!host.Part1.Party.Contains(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 장비를 바꿀 수 있습니다"); return; }
+        if (!host.Part1.IsOurs(u.ChrCode) || Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 장비를 바꿀 수 있습니다"); return; }
         var chr = host.Part1.Apply(raw);
         _items ??= Part1Item.LoadAll();
         var options = host.Part1.Bag.Distinct().Where(id => Part1Item.ById(_items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, _items)).ToList();

@@ -301,7 +301,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
                 // [Chr, 8, 무리] — 그 인물을 일행 무리로 옮긴다(0x100c1890: 지금 무리에서 빼 무리 a2 에 넣는다, 무리 표 0x101a0828).
                 // 리메이크는 일행이 하나라 「일행에 든다」로 친다(챕터 1: 누르 에드 딘 · 일 사담 · 이븐 시나).
-                case 1000 when a[1] == 8 && a[0] >= 0: host.Part1.Join([Part1Game.ChrBase + a[0]]); break;
+                case 1000 when a[1] == 8 && a[0] >= 0: host.Part1.MoveToGroup(Part1Game.ChrBase + a[0], a[2]); break;
                 // [무리, Chr, 수] — 무리의 용병(908, 0x100c1610 → 0x100adb60, 칸 +0x910) · 탑승물(910, 0x100c1730 → 0x100adcc0, 칸 +0xa14)에 더한다.
                 // 무리 99 는 지금 무리. 챕터 0 들머리: 용병 알가지 5 · 바시아조크 5, 탑승물 아지다하카 3.
                 // 906 [무리, 아이템, 수] = 무리 가방에 아이템(0x100c14f0 → 0x100ada10, 챕터 0: 다마스커스 2 · 회복약 10 · 해독제 10 …) ·

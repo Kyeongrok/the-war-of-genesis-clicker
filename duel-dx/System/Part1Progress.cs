@@ -58,6 +58,8 @@ internal sealed class Part1Progress
         ChapterTeams = [];
         SelectedTeam = [];
         ChapterMarkerPrev = [];
+        Home = [];
+        _homeVersion++;
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -118,12 +120,76 @@ internal sealed class Part1Progress
     /// </summary>
     internal List<int> ActiveMembers()
     {
-        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return Party;
+        var group = GroupMembers();
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return [.. group.Take(TeamSize)];
         int team = Math.Clamp(SelectedTeam.GetValueOrDefault(ChapterId), 0, teams.Count - 1);
-        if (team > 0) return [.. Party.Where(teams[team].Members.Contains)];
+        if (team > 0) return [.. group.Where(teams[team].Members.Contains)];
         var elsewhere = teams.Skip(1).SelectMany(t => t.Members).ToHashSet();
-        return [.. Party.Where(c => !elsewhere.Contains(c))];
+        return [.. group.Where(c => !elsewhere.Contains(c)).Take(TeamSize)];
     }
+
+    /// <summary>504 · 506 이 팀 0 으로 옮기는 수 — 무리 앞 10명(Chr 번호 차례, 0x100c0620).</summary>
+    private const int TeamSize = 10;
+
+    /// <summary>
+    /// 이야기 무리(원본 16개, 0x101a0828 · 분석-파트1-챕터 12절) — 인물마다 「집 무리」. 처음 값은 인물 레코드 칸 8(파일 0x42), 행동 1000 [Chr, 8, 무리] 가 바꾼다.
+    /// 무리 1 살라딘 · 마르자나 · 무카파 · 발라, 2 버몬트 · 록슬리 · 깁슨, 3 크리스티앙 · 시리우스 … — 챕터 머리 낱말 1 이 지금 무리다.
+    /// </summary>
+    internal Dictionary<int, int> Home = [];
+
+    private static Dictionary<int, int>? _homeDefaults;
+
+    internal int HomeOf(int chr)
+    {
+        if (Home.TryGetValue(chr, out int g)) return g;
+        _homeDefaults ??= [];
+        lock (_homeDefaults)
+        {
+            if (!_homeDefaults.TryGetValue(chr, out g))
+                _homeDefaults[chr] = g = WarOfGenesis.Assets.Part1Chr.Load(chr - WarOfGenesis.Assets.Part1Game.ChrBase) is { } c ? c.Fields[8] : 0;
+        }
+        return g;
+    }
+
+    /// <summary>지금 챕터의 무리(머리 낱말 1) — 0 이면 무리 없음(일행 목록을 쓴다).</summary>
+    internal int CurrentGroup
+    {
+        get
+        {
+            if (_groupOf is { } known && known.Chapter == ChapterId) return known.Group;
+            int g = ChapterId >= 0 && WarOfGenesis.Assets.Part1Chapter.Load(ChapterId) is { Header.Length: > 1 } c ? c.Header[1] : 0;
+            _groupOf = (ChapterId, g);
+            return g;
+        }
+    }
+
+    private (int Chapter, int Group)? _groupOf;
+
+    /// <summary>지금 무리의 사람 — 인물 0~105(원본이 무리를 채우는 범위)와 일행에 든 사람 가운데 집 무리가 지금 무리인 것, Chr 번호 차례. 무리가 없으면 일행.</summary>
+    internal List<int> GroupMembers()
+    {
+        int g = CurrentGroup;
+        if (g <= 0) return Party;
+        if (_groupCache is { } cached && cached.Group == g && cached.Version == _homeVersion) return cached.Members;
+        var members = Enumerable.Range(WarOfGenesis.Assets.Part1Game.ChrBase, 106).Concat(Party).Distinct()
+                                .Where(c => HomeOf(c) == g).OrderBy(c => c).ToList();
+        _groupCache = (g, _homeVersion, members);
+        return members;
+    }
+
+    private (int Group, int Version, List<int> Members)? _groupCache;
+    private int _homeVersion;
+
+    /// <summary>행동 1000 [Chr, 8, 무리] — 그 사람의 집 무리를 바꾼다(0x100c1890).</summary>
+    internal void MoveToGroup(int chr, int group)
+    {
+        Home[chr] = group;
+        _homeVersion++;
+        Join([chr]);
+    }
+
+    /// <summary>우리 편 사람인가(지금 무리 · 일행) — 아니면 용병.</summary>
+    internal bool IsOurs(int chr) => Party.Contains(chr) || GroupMembers().Contains(chr);
 
     /// <summary>챕터 사건 1201 이 바꾼 장소 — 「챕터:장소」 → 전투 번호(장소를 그 전투 장소로 만든다).</summary>
     internal Dictionary<string, int> PlaceBattles = [];
@@ -183,7 +249,7 @@ internal sealed class Part1Progress
                                    Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null,
                                    Dictionary<int, int>? Riding = null,
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
-                                   Dictionary<int, List<int>>? ChapterMarkerPrev = null);
+                                   Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
@@ -200,7 +266,7 @@ internal sealed class Part1Progress
     internal string ToJson(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home);
         return JsonSerializer.Serialize(data);
     }
 
@@ -243,6 +309,8 @@ internal sealed class Part1Progress
             ChapterTeams = data.ChapterTeams ?? [];
             SelectedTeam = data.SelectedTeam ?? [];
             ChapterMarkerPrev = data.ChapterMarkerPrev ?? [];
+            Home = data.Home ?? [];
+            _homeVersion++;
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

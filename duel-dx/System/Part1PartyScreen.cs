@@ -31,8 +31,11 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         _open = true;
     }
 
+    /// <summary>지금 무리의 사람(무리가 없으면 일행).</summary>
+    private List<int> Members => host.Part1.GroupMembers();
+
     private Part1Chr? Member(int i) =>
-        i >= 0 && i < host.Part1.Party.Count && Part1Chr.Load(host.Part1.Party[i] - Part1Game.ChrBase) is { } raw ? host.Part1.Apply(raw) : null;
+        i >= 0 && i < Members.Count && Part1Chr.Load(Members[i] - Part1Game.ChrBase) is { } raw ? host.Part1.Apply(raw) : null;
 
     private List<int> BagFor(Part1Chr chr, int slot)
     {
@@ -45,7 +48,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         var (ox, oy) = host.Mos.MosesOrigin();
         int x = bx - ox, y = by - oy;
         if (x >= 250 && x < 250 + Part1TitleScreen.ButtonW && y >= 446 && y < 446 + Part1TitleScreen.ButtonH) return ButtonHit;
-        for (int i = 0; i < host.Part1.Party.Count; i++)
+        for (int i = 0; i < Members.Count; i++)
             if (x >= ListX && x < ListX + RowW && y >= ListY + i * (RowH + 2) && y < ListY + i * (RowH + 2) + RowH) return i;
         for (int s = 0; s < 5; s++)
             if (x >= InfoX && x < InfoX + 200 && y >= SlotY + s * RowH && y < SlotY + (s + 1) * RowH - 2) return SlotHit + s;
@@ -68,7 +71,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         if (hit == RideHit) { NextMount(); return; }
         if (hit >= BagHit) { Equip(hit - BagHit); return; }
         if (hit >= SlotHit) { _slot = hit - SlotHit; return; }
-        if (hit >= 0 && hit < host.Part1.Party.Count) { _member = hit; _slot = -1; }
+        if (hit >= 0 && hit < Members.Count) { _member = hit; _slot = -1; }
     }
 
     internal void OnKey(int key)
@@ -137,10 +140,10 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         string eld = $"eld {host.Part1.Eld}";
         host.UiText(eld, ox + 616 - host.UiGetText(eld, 0xFFFFE080, 13).W, oy + 22, 0xFFFFE080, 13);
         var items = Part1Item.LoadAll();
-        for (int i = 0; i < host.Part1.Party.Count; i++)
+        for (int i = 0; i < Members.Count; i++)
         {
             int y = oy + ListY + i * (RowH + 2);
-            string name = Member(i)?.Name ?? $"Chr {host.Part1.Party[i]}";
+            string name = Member(i)?.Name ?? $"Chr {Members[i]}";
             host.UiFill(ox + ListX, y, RowW, RowH, i == _member ? 0xF0305080u : _hover == i ? 0xE0283850u : 0xC0202838u);
             host.UiText(name, ox + ListX + 8, y + 4, GameWindow.White, 12);
         }

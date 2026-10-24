@@ -98,7 +98,7 @@ internal sealed unsafe partial class BattleScene
                 return rider;
             }
             // 파트1 용병(일행이 아닌 사람)은 편 3 — 파트2 AI 가 알아서 싸운다(사용자 결정: 파트1 AI 보다 파트2 AI 가 낫다). 「동맹을 AI 가 움직임」을 끄면 직접 조종.
-            int SideOf(int chr) => scene.IsPart1 && !host.Part1.Party.Contains(chr) ? 3 : 4;
+            int SideOf(int chr) => scene.IsPart1 && !host.Part1.IsOurs(chr) ? 3 : 4;
             // 탈 수 있는지는 배치할 때 다시 본다 — 열쇠(보정 248)를 빼거나 어빌리티가 없어졌으면 걸어서 선다.
             var items = scene.IsPart1 ? Part1Item.LoadAll() : [];
             bool CanRide(int chr, int mount) =>
