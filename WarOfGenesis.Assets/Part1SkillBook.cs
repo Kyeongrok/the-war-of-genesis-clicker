@@ -9,7 +9,7 @@ namespace WarOfGenesis.Assets;
 /// 이름의 끝 숫자를 뺀 머리가 같은 동안 레벨을 잇는다(「화이어 애로우1」 「화이어 애로우2」 …).</para>
 /// <para>피해 · 명중 · 소울 비용은 전투가 Attack.dat 으로 다시 셈한다(Part1Rules · SoulCostFor). 여기서는 겨냥 틀만 잡는다:
 /// 세기 식(+0x42) 6 은 회복 — 파트2 힐(어빌리티 9)의 틀, 0~4 · 29~31(무기 기술)은 파트2 연(1), 그 밖은 엘레맨탈 파이어(29).
-/// 사거리 = +0x24 ÷ 2 칸, 범위 = +0x31 − 1 칸(가설). 10~28(상태이상)은 피해가 아닌 기술(종류 2)로 둔다 — 효과는 아직 없다.</para>
+/// 사거리 = +0x24 ÷ 2 칸, 범위 = +0x38 ÷ 4 칸, 누가 맞나 = +0x31(겨누기) · +0x40(효과 범위) 거르기(<see cref="AimFields"/>). 10~28(상태이상)은 피해가 아닌 기술(종류 2)로 둔다 — 효과는 아직 없다.</para>
 /// <para>이미 스킬 파일이 있는 어빌리티는 건드리지 않는다. 같은 work 를 쓰는 숨은 덧기술(라이트닝볼츠 20991)은 이 어빌리티가 덮어써도 덧기술 길은 work 번호로 찾아 그대로다.</para>
 /// </remarks>
 public static class Part1SkillBook
@@ -39,7 +39,7 @@ public static class Part1SkillBook
                 int work = Part1Game.ChrBase + a.Id;
                 while (used.Contains(work) && work < ushort.MaxValue - 1000) work += WorkStride;
                 used.Add(work);
-                levels.Add(new SkillLevel { Work = work, Level = lv });
+                levels.Add(new SkillLevel { Work = work, Level = lv, Fields = AimFields(a) });
             }
             int sel = first.Formula;
             bool isHeal = sel == 6, weapon = sel is (>= 0 and <= 4) or (>= 29 and <= 31), status = sel is >= 10 and <= 28;
@@ -47,7 +47,6 @@ public static class Part1SkillBook
             {
                 ["rangeMax"] = Math.Max(1, (first.RangeValue + 1) / 2),
                 ["rangeMin"] = isHeal ? 0 : 1,
-                ["areaMax"] = Math.Max(0, first.Raw.GetValueOrDefault(0x31) - 1),
                 ["accuracy"] = first.Accuracy > 0 ? first.Accuracy : 100,
                 ["kind"] = isHeal ? 1 : status ? 2 : 0,
                 ["soul"] = first.Cost,
@@ -58,8 +57,33 @@ public static class Part1SkillBook
                 // 엘레맨탈 파이어 틀의 효과 범위 최소 1칸(가운데 칸 빼기)도 뗀다 — 누른 칸의 적이 대상에서 빠져 록슬리 마법이 아무도 못 맞혔다(사용자 보고).
                 ["areaMin"] = 0,
             };
+            foreach (var (k, v) in AimFields(first)) common[k] = v;
             skills.Add(new SkillFile { Ability = id, Name = ab.Name, MaxLevel = levels.Count, Common = common, Levels = levels });
         }
+    }
+
+    /// <summary>
+    /// 누가 맞나 · 범위 — Attack 의 거르기 바이트를 파트2 대상 방식으로 옮긴다(분석-파트1-전투 「기술 대상 거르기」).
+    /// 효과 범위 거르기 <c>+0x40</c>: 1 적만 → 1 · 3 같은 편·자신만 → 4 · 5 유닛 누구나 → 5 · 2 아무 칸(범위 안 모두) → 3.
+    /// 겨누기 <c>+0x31</c>: 1 · 3 · 5 는 그 유닛을 누른다(같은 값으로) · 2 아무 칸 — 범위가 한 칸뿐이면 그 칸의 유닛 하나를 고르는 것과 같아 효과 거르기의 유닛 방식으로 둔다.
+    /// 그 밖(4 자기 자리 · 6 · 7 돌진 길 · 0)은 빌린 틀의 것을 그대로 둔다. 범위 반경 = <c>+0x38</c> ÷ 4 칸(<see cref="Part1Attack.AreaTiles"/>).
+    /// 전에는 엘레맨탈 파이어 틀의 효과 대상 3(아무 칸)을 그대로 써 적 마법이 제 편 몬스터까지 맞혔다(사용자 보고: btl 20007 이븐시나의 아이스 미사일).
+    /// </summary>
+    internal static Dictionary<string, int> AimFields(Part1Attack a)
+    {
+        static int? Mode(int filter) => filter switch { 1 => 1, 3 => 4, 5 => 5, 2 => 3, _ => null };
+        var f = new Dictionary<string, int>();
+        int area = a.AreaTiles();
+        f["areaMax"] = area;
+        if (Mode(a.AreaFilter) is { } am) f["areaMode"] = am;
+        int? tm = a.AimFilter switch
+        {
+            1 or 3 or 5 => Mode(a.AimFilter),
+            2 => area == 0 ? Mode(a.AreaFilter) : 3,
+            _ => null,
+        };
+        if (tm is { } t) f["targetMode"] = t;
+        return f;
     }
 
     /// <summary>겹친 work 를 비켜 주는 폭 — Attack.dat 는 1000 칸이 안 된다.</summary>

@@ -41,7 +41,7 @@ internal static class Part1AbilityTip
             lines.Add(EffectText(a.Id, a.Formula) ?? kind);
             var where = new List<string>();
             if (reach && RangeText(a) is { Length: > 0 } range) where.Add(range);
-            int area = a.Raw.GetValueOrDefault(0x31) - 1;
+            int area = a.AreaTiles();   // +0x38 ÷ 4 칸(+0x31 은 겨누기 거르기다)
             if (reach && area > 0) where.Add($"범위 {area}칸");
             if (a.Hits > 1) where.Add($"타수 {a.Hits}");
             if (where.Count > 0) lines.Add(string.Join(" · ", where));

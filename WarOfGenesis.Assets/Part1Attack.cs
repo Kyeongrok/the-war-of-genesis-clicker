@@ -26,8 +26,27 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
     public int RangeKind => Raw[0x21];
     public int RangeValue => Raw[0x24];
 
-    /// <summary><c>+0x40</c> 맞는 칸 둘레(유닛 모으기 <c>0x10039690</c> 에 넘긴다).</summary>
-    public int Area => Raw[0x40];
+    /// <summary>
+    /// <c>+0x31</c> 사거리 칸 거르기 — 누를 수 있는 칸(<c>0x10032229</c> · 칠하기 <c>0x10038c31</c> → 칸 거르개 <c>0x1008a950</c>):
+    /// 1 적이 선 칸 · 3 같은 편(자신 포함)이 선 칸 · 5 누가 선 칸 · 2 아무 칸 · 7 따로(돌진·워프 길) · 4 자기 자리(사거리 0 인 것들).
+    /// 사거리 칸은 <c>+0x20</c> 모양 · <c>+0x24</c> 크기 · <c>+0x28</c> 최소 · <c>+0x2c</c>~<c>+0x30</c> · <c>+0x32</c> 인자다.
+    /// </summary>
+    public int AimFilter => Raw[0x31];
+
+    /// <summary>
+    /// <c>+0x40</c> 효과 범위 칸 거르기 — <see cref="AimFilter"/> 와 같은 값(1 적만 · 3 같은 편·자신만 · 5 유닛 누구나 · 2 아무 칸 — 범위 안 모두).
+    /// 범위 칠하기 <c>0x100393b0</c>(인자 6 = 0)와 맞는 순간 유닛 모으기 <c>0x10039690</c> 가 둘 다 이 값을 칸 거르개 <c>0x1008a950</c> 에 넘긴다 —
+    /// 1 이면 적이 아닌 유닛의 칸은 범위에서 빠져 맞지 않는다(<c>0x10038550</c> 적인가).
+    /// </summary>
+    public int AreaFilter => Raw[0x40];
+
+    /// <summary><c>+0x33</c> 효과 범위 모양(1~5, 0 이면 범위 없음) · <c>+0x38</c> 크기 · <c>+0x3c</c> 최소 — 크기는 4분의 1칸(칸마다 4, 높이 차 보정, <c>0x1008a950</c>).</summary>
+    public int AreaShape => Raw[0x33];
+    public int AreaSize => Raw[0x38];
+    public int AreaMinSize => Raw[0x3c];
+
+    /// <summary>효과 범위 반경(칸) — <see cref="AreaSize"/> ÷ 4(평지 맨해튼). 9999(판 전체)는 <paramref name="cap"/> 칸으로 자른다.</summary>
+    public int AreaTiles(int cap = 16) => AreaShape == 0 ? 0 : Math.Min(cap, Math.Max(0, AreaSize) / 4);
 
     /// <summary><c>+0x41</c> 1 이면 맵 칸도 맞는다(<c>0x10076c46</c>).</summary>
     public bool HitsTiles => Raw[0x41] == 1;

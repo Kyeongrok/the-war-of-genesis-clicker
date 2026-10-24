@@ -230,6 +230,13 @@ internal sealed unsafe partial class BattleScene
             }
             return count >= need;
         }
+        // 파트1 피해 기술 — 적만 센다. 범위 안 모두를 맞히는 것(Attack +0x40 = 2: 화이어 필드 · 프로즌 아이스 · 다탄두 미사일 …)은
+        // 제 편이 적보다 많이 맞는 칸은 고르지 않는다(원본 AI 는 AI 표 거르기 +0xe 로 0x10039d30 에서 센다 — 상식대로 옮긴 것).
+        if (host._scene.IsPart1 && w.IsDamage)
+        {
+            int foes = targets.Count(i => SeesAsFoe(user, host._units[i]));
+            return foes >= need && foes > targets.Count - foes;
+        }
         return targets.Count >= need;
     }
 
