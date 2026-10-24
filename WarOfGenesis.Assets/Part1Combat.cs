@@ -21,6 +21,12 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
     /// <summary>그림 바이트(메모리 <c>+0x45</c>) — 상태 · 교환 창의 아이템 칸이 Obs 12 의 이 모션을 그린다(분석-파트1-챕터 13.5).</summary>
     public int Icon { get; init; }
 
+    /// <summary>
+    /// 사거리 값(메모리 <c>+0x68</c>, 파일 +36) — 4분의 1칸 단위(칸 거르개 <c>0x1008a950</c> 가 4 × 맨해튼 + 높이 보정과 견준다).
+    /// 칼 · 빔소드 · 맨손 갈래 8 · 창 12 · 권총 28~40 · 소총 16~64 · 활 52 · 72 · 빔라이플 · 천궁 9999. 기본 공격 사거리 갈래 2 · 4 가 쓴다(<c>0x10038ae0</c>).
+    /// </summary>
+    public int Reach { get; init; }
+
     public int Bonus(int code) => Bonuses.Where(b => b.Code == code).Sum(b => b.Value);
 
     /// <summary>
@@ -142,7 +148,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
             (int, int)[] bonuses = [.. new[] { (U16(6), S16(8)), (U16(10), S16(12)), (U16(14), S16(16)) }.Where(x => x.Item1 != 0)];
             items.Add(new Part1Item(i + 1, Text(o, 30), Text(o + 30, 30), I32(0), b[p + 4], bonuses,
                                     Attack: I32(18), Defense: I32(22), Accuracy: I32(30), Critical: b[p + 35], Element: b[p + 40],
-                                    ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)) { Icon = b[p + 5] });
+                                    ElementPower: b[p + 42], Weight: b[p + 43], Description: Text(p + 44, 100)) { Icon = b[p + 5], Reach = I32(36) });
         }
         return items;
     }
@@ -297,13 +303,16 @@ public sealed record Part1Fighter(Part1Chr Chr, Part1Item?[] Equipment)
     public int HitValue => (Weapon1?.Accuracy ?? 0) + EquipBonus(Part1Bonus.Accuracy);
 
     /// <summary>
-    /// 무기 사거리(Attack.dat +0x21 = 2 — 활공격 · 단발사격 · 빔라이플공격) — 무기 아이템 +0x68(시판 무기는 모두 8) + 장비 보정 206(RANGE).
-    /// 범위 칠하기가 ÷ 2 해 칸 반경으로 쓴다(<c>0x10038ae0</c> · <c>0x1008ac1e</c>, 분석-파트1-전투 15절) — 그래서 칸 수로 돌려준다.
+    /// 무기 사거리(4분의 1칸) — 무기(장비 칸 0) 아이템 <c>+0x68</c>(<see cref="Part1Item.Reach"/>). 사거리 갈래 2 는 여기에 장비 보정 206(RANGE)을 더하고,
+    /// 4 는 기술 값 <c>+0x24</c> 를 더한다(<c>0x10038ae0</c>). 칸 수는 ÷ 4 — 분석-파트1-전투 29절(전에는 「모두 8 · ÷ 2 칸」으로 읽었다).
     /// </summary>
-    public int WeaponRangeTiles => (WeaponReach + EquipBonus(Part1Bonus.Range)) / 2;
+    public int WeaponReach => Weapon1?.Reach ?? 0;
 
-    /// <summary>무기 아이템 +0x68 — 파일 자리를 아직 안 읽어 시판 무기 값 8 을 쓴다.</summary>
-    private const int WeaponReach = 8;
+    /// <summary>RANGE 능력치(칸 29 + 장비 보정 206) — 사거리 갈래 1 이 기술 값에 더한다(<c>0x1003eea0</c>, 소울 게이지로 깎지 않는다).</summary>
+    public int RangeStat => Stat(Part1Chr.Range);
+
+    /// <summary>장비 보정 206(RANGE) 합 — 사거리 갈래 2 가 무기 사거리에 더한다(<c>0x1009e180(0xce)</c>).</summary>
+    public int RangeBonus => EquipBonus(Part1Bonus.Range);
 
     /// <summary>속성 1~5 저항(칸 30~34, 10 이 보통) + 장비 보정 — 속성이 없으면 null.</summary>
     public int? Resist(int element) => element is >= 1 and <= 5 ? Chr.Fields[30 + element - 1] + EquipBonus(Part1Bonus.ResistOf(element)) : null;

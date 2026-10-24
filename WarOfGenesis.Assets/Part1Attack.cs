@@ -22,9 +22,43 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
 
     public const int FileSize = 94;
 
-    /// <summary><c>+0x21</c> 사거리 갈래 — 1 RANGE 능력치 + <see cref="RangeValue"/> · 2 무기 사거리 + RANGE 보정 · 3 <see cref="RangeValue"/> 그대로 · 4 무기 사거리(<c>0x10038ae0</c>).</summary>
+    /// <summary>
+    /// <c>+0x21</c> 사거리 갈래 — 1 RANGE 능력치 + <see cref="RangeValue"/> · 2 무기 사거리 + RANGE 보정 · 3 <see cref="RangeValue"/> 그대로 · 4 무기 사거리 + <see cref="RangeValue"/>(<c>0x10038ae0</c>).
+    /// 사거리는 효과 범위 크기와 같은 <b>4분의 1칸</b>이다(평지 칸마다 4, <c>0x1008a950</c>) — 칸 수 = 값 ÷ 4. 최소 <c>+0x28</c> 도 같은 단위.
+    /// </summary>
     public int RangeKind => Raw[0x21];
     public int RangeValue => Raw[0x24];
+
+    /// <summary>
+    /// <c>+0x20</c> 사거리 모양(<c>0x10038ce8</c> 점프표 <c>0x10039054</c>) — 1 십자(<c>0x1008b360</c>, 같은 줄 · 같은 열만) · 2 네 방향 외줄(<c>0x1008af30</c> ×4) ·
+    /// 3 마름모(<c>0x1008ab80</c>) · 4 네 방향 부채꼴(<c>0x1008b710</c> ×4 — 앞으로 f 칸 가면 옆으로 f/3 칸까지) · 5 네 방향 폭 3 줄(<c>0x1008c440</c> ×4).
+    /// 거리는 모양과 상관없이 늘 4 × 맨해튼 + 높이 보정(<c>0x1008a950</c>)이다.
+    /// </summary>
+    public int RangeShape => Raw[0x20];
+
+    /// <summary><c>+0x28</c> 사거리 최소(4분의 1칸) — 높이 보정은 늘 2 × |높이 차|로 잰 거리와 견준다(<c>0x1008ad64</c>). 칼 5 · 창 4 · 활 9 · 총 13.</summary>
+    public int RangeMin => Raw[0x28];
+
+    /// <summary><c>+0x2d</c> 사거리 거리에 높이 차를 넣는다 · <c>+0x30</c> 차등(오르막 ×3 · 내리막 −×2, 끄면 2 × |차|) · <c>+0x2e</c> 시야(<c>0x1008a7a0</c>) · <c>+0x2f</c> 같은 높이 칸만.</summary>
+    public bool RangeHeight => Raw[0x2d] != 0;
+    public bool RangeGraded => Raw[0x30] != 0;
+    public bool RangeSight => Raw[0x2e] != 0;
+    public bool RangeSameHeight => Raw[0x2f] != 0;
+
+    /// <summary>
+    /// 모양 <see cref="RangeShape"/> 이 (dx, dy) 칸을 덮나 — 네 방향 모양(2 · 4 · 5)은 사거리 칠하기가 네 번 불러 합친다(<c>0x10038d39</c>~). 거리는 따로 본다.
+    /// </summary>
+    public bool RangeShapeCovers(int dx, int dy)
+    {
+        int ax = Math.Abs(dx), ay = Math.Abs(dy);
+        return RangeShape switch
+        {
+            1 or 2 => dx == 0 || dy == 0,
+            4 => Math.Min(ax, ay) <= Math.Max(ax, ay) / 3,
+            5 => ax <= 1 || ay <= 1,
+            _ => true,
+        };
+    }
 
     /// <summary>
     /// <c>+0x31</c> 사거리 칸 거르기 — 누를 수 있는 칸(<c>0x10032229</c> · 칠하기 <c>0x10038c31</c> → 칸 거르개 <c>0x1008a950</c>):

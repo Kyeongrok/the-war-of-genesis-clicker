@@ -9,7 +9,7 @@ namespace WarOfGenesis.Assets;
 /// 이름의 끝 숫자를 뺀 머리가 같은 동안 레벨을 잇는다(「화이어 애로우1」 「화이어 애로우2」 …).</para>
 /// <para>피해 · 명중 · 소울 비용은 전투가 Attack.dat 으로 다시 셈한다(Part1Rules · SoulCostFor). 여기서는 겨냥 틀만 잡는다:
 /// 세기 식(+0x42) 6 은 회복 — 파트2 힐(어빌리티 9)의 틀, 0~4 · 29~31(무기 기술)은 파트2 연(1), 그 밖은 엘레맨탈 파이어(29).
-/// 사거리 = +0x24 ÷ 2 칸, 범위 = +0x38 ÷ 4 칸, 누가 맞나 = +0x31(겨누기) · +0x40(효과 범위) 거르기(<see cref="AimFields"/>). 10~28(상태이상)은 피해가 아닌 기술(종류 2)로 둔다 — 효과는 아직 없다.</para>
+/// 사거리 = (+0x21 갈래 1 이면 RANGE 능력치 +) +0x24 ÷ 4 칸, 범위 = +0x38 ÷ 4 칸, 누가 맞나 = +0x31(겨누기) · +0x40(효과 범위) 거르기(<see cref="AimFields"/>). 10~28(상태이상)은 피해가 아닌 기술(종류 2)로 둔다 — 효과는 아직 없다.</para>
 /// <para>이미 스킬 파일이 있는 어빌리티는 건드리지 않는다. 같은 work 를 쓰는 숨은 덧기술(라이트닝볼츠 20991)은 이 어빌리티가 덮어써도 덧기술 길은 work 번호로 찾아 그대로다.</para>
 /// </remarks>
 public static class Part1SkillBook
@@ -45,7 +45,9 @@ public static class Part1SkillBook
             bool isHeal = sel == 6, weapon = sel is (>= 0 and <= 4) or (>= 29 and <= 31), status = sel is >= 10 and <= 28;
             var common = new Dictionary<string, int>(isHeal ? heal : weapon ? melee : magic)
             {
-                ["rangeMax"] = Math.Max(1, (first.RangeValue + 1) / 2),
+                // 사거리는 4분의 1칸(분석-파트1-전투 29절). 싸울 때는 RangeMaxOf 가 Attack.dat 갈래로 다시 셈한다(갈래 1 은 시전자 RANGE 능력치를 더한다) —
+                // 여기 값은 화면 글 · 미리보기용으로, 갈래 1 은 흔한 RANGE 10 을 더해 둔다.
+                ["rangeMax"] = Math.Max(1, (first.RangeValue + (first.RangeKind == 1 ? 10 : 0)) / 4),
                 ["rangeMin"] = isHeal ? 0 : 1,
                 ["accuracy"] = first.Accuracy > 0 ? first.Accuracy : 100,
                 ["kind"] = isHeal ? 1 : status ? 2 : 0,

@@ -88,8 +88,12 @@ internal sealed unsafe partial class BattleScene
     internal int RangeMaxOf(WorkData w, UnitState? user)
     {
         int weapon = 0;
-        // 파트1 인물은 파트2 장비가 없다 — 쏘는 기본 공격(파트2 work 6 을 빌린다)은 파트1 무기 사거리로(칸 × 4 = 사분 칸).
-        if (w.RangeKind is 2 or 4 && user != null && Part1.Fighter(user) is not null) weapon = Part1.BasicRangeTiles(user) * 4;
+        // 파트1 기술(work 20000 + Attack 번호)은 Attack.dat 의 사거리 갈래 · 값을 그대로 4분의 1칸으로 쓴다(Part1Rules.RangeQuarters — 0x10038ae0, RANGE 능력치 · 무기 +0x68 포함).
+        // 자기 자리 기술(+0x31 = 4 — 메테오 · 힐 윈드 · 기도 …)은 빌린 틀의 것을 둔다. 기본 공격(빌린 파트2 베기 · 쏘기)은 인물의 기본 공격 칸으로.
+        if (user != null && Part1.Fighter(user) is not null && Part1.AttackOf(w) is { AimFilter: not 4 } p1) return Part1.RangeQuarters(user, p1);
+        if (user != null && host._scene.IsPart1 && user.Data?.BasicWorkId == w.Id && Part1.Fighter(user) is not null) return Part1.BasicRangeQuarters(user);
+        // 파트1 인물은 파트2 장비가 없다 — 쏘는 기본 공격(파트2 work 6 을 빌린다)은 파트1 기본 공격 칸의 사거리로(이미 4분의 1칸).
+        if (w.RangeKind is 2 or 4 && user != null && Part1.Fighter(user) is not null) weapon = Part1.BasicRangeQuarters(user);
         else if (w.RangeKind is 2 or 4 && user?.Data is { } c && c.Items.Length > 0
             && host._db?.Items.GetValueOrDefault(c.Items[0]) is { } item) weapon = item.Range * 4;
         return w.RangeKind switch
@@ -98,6 +102,17 @@ internal sealed unsafe partial class BattleScene
             4 => weapon + w.RangeMaxQuarters,
             _ => w.RangeMaxQuarters,
         };
+    }
+
+    /// <summary>
+    /// 파트1 판에서 파트1 인물이 쓰는 이 work 의 겨눔 칸(Attack.dat) — 파트1 기술(work 20000 + Attack, 자기 자리 +0x31 = 4 는 빼고)은 그 칸,
+    /// 기본 공격(빌린 파트2 work)은 인물의 기본 공격 칸. 그 밖(파트2 판 · 파트2 인물 · 기술 파일을 가진 파트2 틀 기술)은 null — 파트2 식으로 잰다.
+    /// </summary>
+    internal Part1Attack? Part1AimOf(WorkData w, UnitState? user)
+    {
+        if (user == null || !host._scene.IsPart1 || Part1.Fighter(user) is null) return null;
+        if (Part1.AttackOf(w) is { AimFilter: not 4 } skill) return skill;
+        return user.Data?.BasicWorkId == w.Id ? Part1.BasicAttack(user) : null;
     }
 
     /// <summary>모양 <paramref name="shape"/> 가 그 칸을 덮나(거리는 이미 최소·최대로 걸렀다고 보고 모양만 본다).</summary>
@@ -139,6 +154,17 @@ internal sealed unsafe partial class BattleScene
 
         int dx = col - fromCol, dy = row - fromRow;
         if (w.SelfCentred || w.RangeShape == 0) return dx == 0 && dy == 0;
+
+        // 파트1 — 기술 · 기본 공격 모두 Attack.dat 사거리 칸 인자 그대로(모양 +0x20 · 크기 · 최소 +0x28 · 높이 +0x2d/+0x30 · 시야 +0x2e · 같은 높이 +0x2f).
+        // 칸이 켜지는 것은 크기 ≥ d1(차등 높이) 이고 최소 ≤ d2(2 × |높이 차|)일 때(0x1008ad5d · 0x1008ad64, 분석-파트1-전투 29 · 30절).
+        if (Part1AimOf(w, user) is { } p1)
+        {
+            if (p1.RangeSameHeight && HeightAt(col, row) != HeightAt(fromCol, fromRow)) return false;
+            if (!p1.RangeShapeCovers(dx, dy)) return false;
+            var (d1, d2) = WorkDistance(fromCol, fromRow, col, row, p1.RangeHeight, p1.RangeGraded);
+            if (d1 > RangeMaxOf(w, user) || d2 < p1.RangeMin) return false;
+            return !p1.RangeSight || HasSight(fromCol, fromRow, col, row);
+        }
 
         if (w.SameHeightRange != 0 && HeightAt(col, row) != HeightAt(fromCol, fromRow)) return false;
         // 모양 1 의 보조(종류 2) work 은 물체가 선 칸을 못 겨눈다(0x100db640).

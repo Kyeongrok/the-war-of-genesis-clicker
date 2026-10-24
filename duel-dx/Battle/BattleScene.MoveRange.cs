@@ -119,11 +119,14 @@ internal sealed unsafe partial class BattleScene
         int budget = playerBrowse && !unit.HasStatus(25) ? Math.Max(narrow, unit.Tp) : narrow;
         bool redAllowed = !playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId);
 
-        // 파트1 판 — 이동력은 SPD × 2, 한 걸음 = (높이 차 + 2) × 4 (평지 한 칸 8 — 아이템 「이동거리 −1」이 SPD −4 인 것과 맞춘 값, 가설).
-        // 파트2 틀은 걸음을 TP 로 빼므로, 최대 TP 가 파트1 이동력과 같아지게 걸음 값을 TP 로 바꾼다(분석-파트1-전투 11.3). 공격 값은 CTP 100 이 빚으로 받아 준다(Part1Chr.ToCharacterData).
-        // 스피디(파트1 강화 17)는 SPD +8 — 이동 두 칸(0x10051640 의 상태 17, 분석-파트1-기술-b 9절).
+        // 파트1 판 — 이동력은 SPD × 2(0x1003a9ec → A* 0x100239d0 의 한도, 0x10023d93), 한 걸음 = (|높이 차| + 2 · 맨해튼) × 2(0x1008a4f0) —
+        // 평지 한 칸 4, 높이 한 단마다 2 더. 높이 차 2 넘는 칸은 못 간다(0x1008a130). 전에는 (높이 차 + 2) × 4 = 평지 8 로 원본의 반만 갔다.
+        // 파트2 틀은 걸음을 TP 로 빼므로, 걸음 값은 파트1 이동력 단위로 길을 찾은 뒤 최대 TP 가 그 이동력과 같아지게 TP 로 바꾼다(분석-파트1-전투 11.3 · 30절).
+        // 공격 값은 CTP 100 이 빚으로 받아 준다(Part1Chr.ToCharacterData). 스피디(파트1 강화 17)는 SPD +8(0x10051640 의 상태 17, 분석-파트1-기술-b 9절).
         int part1Points = host._scene.IsPart1 && Part1.Fighter(unit) is { } p1 ? Math.Max(1, (p1.Stat(Part1Chr.Spd) + (Part1.Has(unit, 17) ? 8 : 0)) * 2) : 0;
         int part1Scale = Math.Max(1, unit.MaxTp);
+        // 파트1 길찾기 한도(이동력 단위) — TP 예산을 이동력으로 바꾼 값(내림). 칸 값은 끝에서 TP 로 올림해 바꾸므로 예산을 넘지 않는다.
+        int walkBudget = part1Points > 0 ? (int)Math.Min(int.MaxValue, Math.Max(0L, budget) * part1Points / part1Scale) : budget;
 
         // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).
         int H(int col, int row) => WalkHeightAt(col, row);
@@ -191,15 +194,19 @@ internal sealed unsafe partial class BattleScene
                 int nx = cell.Col + dx, ny = cell.Row + dy;
                 if (!Enterable(nx, ny) || Math.Abs(H(cell.Col, cell.Row) - H(nx, ny)) > 2) continue;
                 int step = part1Points > 0
-                    ? Math.Max(1, (Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) + 2) * 4 * part1Scale / part1Points)
+                    ? (Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) + 2) * 2
                     : num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) / dex) / 2;
                 int next = cost + step;
-                if (next > budget || next >= costs[ny * host.Cols + nx]) continue;
+                if (next > walkBudget || next >= costs[ny * host.Cols + nx]) continue;
                 costs[ny * host.Cols + nx] = next;
                 prev[ny * host.Cols + nx] = cell.Row * host.Cols + cell.Col;
                 queue.Enqueue((nx, ny), next);
             }
         }
+        // 파트1 — 이동력 단위 칸 값을 TP 로(올림). 걸은 만큼 TP 를 빼는 틀(CommitMove)과 좁은 예산 비교가 TP 로 본다.
+        if (part1Points > 0)
+            for (int i = 0; i < n; i++)
+                if (costs[i] != int.MaxValue) costs[i] = (int)Math.Min(Math.Max(0, budget), ((long)costs[i] * part1Scale + part1Points - 1) / part1Points);
 
         // 문·스위치문 칸에는 <b>설 수</b> 없다(0x100746b0) — 닫힌 문은 도장 플래그로 이미 벽이고, 열린 문은 지나가기만 한다.
         for (int i = 0; i < n; i++)

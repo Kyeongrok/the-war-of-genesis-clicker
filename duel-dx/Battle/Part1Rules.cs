@@ -180,21 +180,38 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     internal static int BasicAttackOf(Part1Fighter f) => f.Chr.BasicAttackId > 0 ? f.Chr.BasicAttackId : Part1Item.BasicAttack(f.Weapon1);
 
     /// <summary>
-    /// 기본 공격 사거리(칸) — Attack +0x21 갈래로(0x10038ae0): 1 RANGE 능력치 + 값 · 2 무기 사거리 + RANGE 보정 · 3 값 그대로 · 4 무기 사거리, 모두 ÷ 2 칸.
+    /// 사거리(4분의 1칸) — <c>0x10038ae0</c>: Attack <c>+0x21</c> 갈래 1 RANGE 능력치 + 값 <c>+0x24</c> · 2 무기 <c>+0x68</c> + 보정 206 · 3 값 그대로 · 4 무기 <c>+0x68</c> + 값.
+    /// 범위 칠하기(<c>0x10038bb0</c> · <c>0x10039070</c>)가 이 값을 <b>그대로</b> 모양 함수(<c>0x1008ab80</c> 등)의 크기로 넘기고, 칸 거르개 <c>0x1008a950</c> 이
+    /// 4 × 맨해튼 + 높이 보정과 견준다 — 곧 칸 수 = 값 ÷ 4(분석-파트1-전투 29절). 전에는 ÷ 2 로 읽어 두 배 멀리 닿았다.
     /// </summary>
-    private const int GunReach = 8;
-
-    internal int BasicRangeTiles(UnitState u)
+    internal int RangeQuarters(UnitState u, Part1Attack a)
     {
-        if (Fighter(u) is not { } f || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(f)) is not { } a) return 1;
+        if (Fighter(u) is not { } f) return a.RangeValue;
         return a.RangeKind switch
         {
-            1 => (f.Stat(Part1Chr.Range) + a.RangeValue) / 2,
-            2 or 4 => f.WeaponRangeTiles,
-            // 갈래 3 의 쏘는 기본 공격은 총만큼(시판 무기 8 = 4칸)으로 자른다 — 원본 자료로는 록슬리 330 이 값 32 = 16칸인데,
-            // 너무 멀고(사용자: 「총 정도 사거리여야」) 넓은 범위는 AI 계산도 무겁다.
-            _ => Math.Min(a.RangeValue, GunReach) / 2,
+            1 => f.RangeStat + a.RangeValue,
+            2 => f.WeaponReach + f.RangeBonus,
+            4 => f.WeaponReach + a.RangeValue,
+            _ => a.RangeValue,
         };
+    }
+
+    /// <summary>
+    /// 사람 손에 든 총의 사거리(4분의 1칸) — 권총 피스톨 · 킬러(<c>+0x68</c> 32, 8칸). 갈래 3 의 쏘는 기본 공격을 여기서 자른다:
+    /// 사용자 요청 「록슬리의 기본 공격은 총 정도 사거리」 — 록슬리 330(용병 라이트닝볼츠) 값 32 = 8칸이라 지금은 그대로 같다.
+    /// </summary>
+    private const int GunReach = 32;
+
+    /// <summary>그 인물의 기본 공격 칸(Attack.dat) — 인물 칸 9, 없으면 무기 갈래의 것(<see cref="BasicAttackOf"/>). 파트1 인물이 아니면 null.</summary>
+    internal Part1Attack? BasicAttack(UnitState u) =>
+        Fighter(u) is { } f ? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(f)) : null;
+
+    /// <summary>기본 공격 사거리(4분의 1칸) — 인물의 기본 공격 칸(<see cref="BasicAttackOf"/>)으로 <see cref="RangeQuarters"/>. 갈래 3 은 총만큼으로 자른다.</summary>
+    internal int BasicRangeQuarters(UnitState u)
+    {
+        if (BasicAttack(u) is not { } a) return 4;
+        int q = RangeQuarters(u, a);
+        return a.RangeKind == 3 ? Math.Min(q, GunReach) : q;
     }
 
     /// <summary>파트1 피해 결과(<c>0x100413b0</c>) — 4 막음(피해는 들어간다, 맞는 이는 동작 6) · 5 피함(피해 0, 동작 54). 7(역습 자세로 피함)은 자세를 안 옮겨 안 나온다.</summary>

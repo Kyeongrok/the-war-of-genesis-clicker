@@ -589,7 +589,8 @@ internal sealed unsafe partial class BattleScene
             {
                 var wRange = ComputeRange(u, w.Id, tp: u.MaxTp) ?? fullRange;
                 if (BestUse(index, w, wRange, approach: true) is not { } use) continue;
-                int go = NearestReachableTo(u, range, use.Col, use.Row);
+                // 파트1 은 최소 사거리가 있어(칼 5 = 2칸 · 총 13 = 4칸, Attack +0x28) 겨눌 칸 쪽으로만 가면 너무 붙는다 — 그 칸을 칠 수 있는 설 칸 쪽으로 간다.
+                int go = host._scene.IsPart1 ? NearestReachableTo(u, range, use.Stand % host.Cols, use.Stand / host.Cols) : NearestReachableTo(u, range, use.Col, use.Row);
                 if (go < 0) continue;                        // 길이 없으면 다음 기술(0x1005cb40, ba-20 J N2)
                 if (range.Cost[go] > 0) foreach (var r in WalkTo(u, range, go)) yield return r;
                 yield break;                                 // 접근 뒤에는 쉰다(0x2716)

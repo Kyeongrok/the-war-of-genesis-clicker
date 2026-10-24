@@ -177,7 +177,17 @@ internal sealed unsafe partial class BattleScene
                     $"aim hook basic: {bu.ChrCode}({bu.Col},{bu.Row}) berserk {bu.HasStatus(4)} → ally {mate?.ChrCode}({mate?.Col},{mate?.Row}) hp {hpBefore} took {tookBasic} routine {_routine != null} hint '{host._toast}'" + Environment.NewLine);
             return;
         }
-        if (_aimHookDone || aim.Length == 0 || !int.TryParse(aim[0], out int id)) return;
+        // 「basic」 은 차례 인물의 기본 공격 work(DUELDX_AIMSHOW 와 함께 — 기본 공격 사거리만 칠해 볼 때).
+        if (_aimHookDone || aim.Length == 0) return;
+        // DUELDX_AIMBY=<Chr> — 그 인물의 차례가 올 때까지 다른 내 인물은 쉬게 한다(총 · 회복 사거리를 그 인물로 칠해 볼 때).
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIMBY"), out int aimBy) && IsPlayerTurn && host.Tlk._talk == null && _runningEvent < 0
+            && host._units[_turn].ChrCode != aimBy)
+        {
+            Rest(_turn);
+            return;
+        }
+        int id =aim[0] == "basic" ? (_turn >= 0 && host._units[_turn].Data is { } turnData ? turnData.BasicWorkId : -1) : int.TryParse(aim[0], out int parsed) ? parsed : -1;
+        if (id < 0) return;
         if (!IsPlayerTurn || _routine != null || host.Tlk._talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
         _aimHookDone = true;
         var u = host._units[_turn];
