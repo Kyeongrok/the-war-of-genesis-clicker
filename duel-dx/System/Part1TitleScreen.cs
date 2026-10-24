@@ -122,6 +122,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 var pixels = new uint[W * H];
                 for (int y = 0; y < Math.Min(H, bitmap.Height); y++)
                     new Span<uint>((void*)(data.Scan0 + y * data.Stride), Math.Min(W, bitmap.Width)).CopyTo(pixels.AsSpan(y * W));
+                // 원본 타이틀은 이 그림을 빨강 · 파랑을 바꿔 그린다 — 파일은 푸른빛인데 원본 화면은 붉다(사용자 화면, 필드 배경 JPEG 은 그대로).
+                if (id == TitleBackground)
+                    for (int i = 0; i < pixels.Length; i++)
+                    {
+                        uint c = pixels[i];
+                        pixels[i] = (c & 0xFF00FF00) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
+                    }
                 return pixels;
             }
             finally { bitmap.UnlockBits(data); }
