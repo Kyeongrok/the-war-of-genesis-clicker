@@ -110,10 +110,20 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     {
         if (Part1Battle.Load(id - Part1Game.BattleBase) is not { } battle) return null;
         static Facing FacingOf(int direction) => direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
+        // AI 표(Dats/AI.dat, 유닛 칸의 AI 번호)를 파트2 AI 칸으로 — 깨어나는 조건(+0x1d: 0 처음 · 1 깨어난 같은 편 거리 · 2 적 거리 · 3 틱)은 번호가 같다.
+        // 이동 방식(+0)은 3 「움직이지 않음」만 파트2 의 「목표 없음(제자리)」으로 옮기고, 0 정한 칸 · 1 따라가기 · 2 보통은 보통으로 친다.
+        var ais = Part1Ai.LoadAll();
+        DemoUnit Unit(Part1BattleUnit u, int index)
+        {
+            var unit = new DemoUnit(Part1Game.ChrBase + u.ChrCode, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index };
+            if (u.Side == 4 || u.AiType < 0 || u.AiType >= ais.Count) return unit;
+            var ai = ais[u.AiType];
+            return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance };
+        }
         var roster = battle.Units
             .Select((u, index) => (u, index))
             .Where(x => x.u.Disabled == 0 && x.u.ChrCode >= 0)
-            .Select(x => new DemoUnit(Part1Game.ChrBase + x.u.ChrCode, x.u.X, x.u.Y, x.u.Side, 0, FacingOf(x.u.Direction)) { Record = x.index })
+            .Select(x => Unit(x.u, x.index))
             .ToArray();
         if (roster.Length == 0) return null;
         // 배치 칸(절 C) — BuildUnits 가 파트1 일행(Part1Progress) 가운데 Btl 에 없는 사람을 세운다.
