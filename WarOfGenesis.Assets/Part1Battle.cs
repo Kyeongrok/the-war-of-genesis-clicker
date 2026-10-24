@@ -2,12 +2,13 @@ using System.Text;
 
 namespace WarOfGenesis.Assets;
 
-/// <summary>파트1 <c>.btl</c> 인물 레코드(17바이트) — Chr, 처음에 숨김, 칸, 방향, 대장의 인물 차례, 편, 레벨, ?.</summary>
-/// <param name="Hidden">≠0 이면 처음엔 맵에 없다 — 로더가 만든 뒤 바로 지운다(<c>0x1002d50f</c>, 증원으로 보임).</param>
+/// <summary>파트1 <c>.btl</c> 인물 레코드(17바이트) — Chr, 안 씀, 칸, 방향, 대장의 인물 차례, 편, 레벨, 탈것.</summary>
+/// <param name="Disabled">≠0 이면 안 쓰는 레코드 — 로더가 만든 뒤 곧바로 지운다(<c>0x1002d50f</c>, 소멸자). 자료 113개, 어느 이벤트도 부르지 않는다.
+/// 증원은 이것이 아니라 칸 (1000, 1000) 에 둔 인물을 행동 300 이 불러들인다.</param>
 /// <param name="Leader">대장의 인물 차례 번호 — 자기 차례면 대장, 아니면 그 대장에게 붙는다(<c>0x10036790</c>).</param>
 /// <param name="Level">레벨 그대로(파트2 처럼 파티 레벨에 더하는 보정이 아니다 — 가설).</param>
-/// <param name="Extra">숨김이 아닐 때 ≠0 이면 <c>0x100364b0(값)</c> 에 넘긴다 — 뜻은 아직 모른다(AI 방식으로 보임).</param>
-public sealed record Part1BattleUnit(int ChrCode, int Hidden, int X, int Y, int Direction, int Leader, int Side, int Level, int Extra);
+/// <param name="MountChr">≠0 이면 그 Chr 의 탈것을 같은 칸에 만들어 태운다(<c>0x100364b0</c> — 유닛 <c>+0x1bc</c> = 1, <c>+0x1cc</c> = 탈것).</param>
+public sealed record Part1BattleUnit(int ChrCode, int Disabled, int X, int Y, int Direction, int Leader, int Side, int Level, int MountChr);
 
 /// <summary>파트1 이벤트 하나 — 최대 발동 횟수, 조건들(모두 참이어야), 행동들. 명령은 코드 + 인자 6칸(14바이트)이다.</summary>
 public sealed record Part1BattleEvent(int Index, int MaxFire, IReadOnlyList<ScriptCommand> Conditions, IReadOnlyList<ScriptCommand> Actions);
@@ -71,8 +72,8 @@ public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int 
         if (!Need(17 * n)) return null;
         for (int i = 0; i < n; i++)
         {
-            int chr = H(), hidden = H(), x = H(), y = H(), dir = B();
-            units.Add(new Part1BattleUnit(chr, hidden, x, y, dir, Leader: H(), Side: H(), Level: H(), Extra: H()));
+            int chr = H(), disabled = H(), x = H(), y = H(), dir = B();
+            units.Add(new Part1BattleUnit(chr, disabled, x, y, dir, Leader: H(), Side: H(), Level: H(), MountChr: H()));
         }
 
         // 뒤쪽 절이 통째로 빠진 파일(0018 — 배치 칸 뒤가 없다)은 그 절을 0개로 읽는다.
