@@ -8,7 +8,7 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 3절. 원본 연대표는 칸의 가로 자리(u16 +2, 20 단위)대로 긴 띠에 그리지만, 한 화면에 다 들어가게 줄기마다 일곱 칸씩 접어 놓는다.
-/// 칸을 여는 조건(앞 칸을 끝냈나)은 아직 모른다 — 다 열어 둔다.
+/// 칸은 낱말 0 의 진행 깃발이 서면 열린다(<see cref="Unlocked"/>) — 닫힌 칸은 어둡게 보이고 안 눌린다.
 /// </remarks>
 internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -75,11 +75,20 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
     }
 
+    /// <summary>
+    /// 그 칸이 열렸나 — 낱말 0 이 여는 진행 깃발이다(챕터 0 끝의 802 [4, 1] → 다음 칸 「무타나비의 성녀」 낱말 0 = 4, 자료로 본 가설).
+    /// -1 이면 처음부터 열려 있다(줄기 첫 칸). 시험용 DUELDX_P1OPEN=1 이면 다 연다.
+    /// </summary>
+    private bool Unlocked(Part1Episode e) =>
+        e.Words[0] < 0 || Environment.GetEnvironmentVariable("DUELDX_P1OPEN") == "1"
+        || e.Words[0] < host.FlagSt._flags.Length && host.FlagSt._flags[e.Words[0]] != 0;
+
     private void Press(int hit)
     {
         if (hit == ButtonHit) host.LeaveScene(() => _open = false);
         else if (hit >= 0 && hit < _episodes.Count)
         {
+            if (!Unlocked(_episodes[hit])) { host.Toast($"{_episodes[hit].Name} — 아직 열리지 않았습니다"); return; }
             int chapter = _episodes[hit].ChapterId;
             host.LeaveScene(() => { if (shell.Chapter.Open(chapter)) _open = false; });
         }
@@ -97,14 +106,14 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         for (int i = 0; i < _cells.Length && i < _episodes.Count; i++)
         {
             var (x, y) = _cells[i];
-            bool current = _episodes[i].ChapterId == host.Part1.ChapterId;
-            host.UiFill(ox + x, oy + y, CellW, CellH, _hover == i ? 0xF0305080u : current ? 0xD0405828u : 0xC0202838u);
+            bool current = _episodes[i].ChapterId == host.Part1.ChapterId, open = Unlocked(_episodes[i]);
+            host.UiFill(ox + x, oy + y, CellW, CellH, !open ? 0x80101418u : _hover == i ? 0xF0305080u : current ? 0xD0405828u : 0xC0202838u);
             host.UiStroke(ox + x, oy + y, CellW, CellH, _hover == i ? 0xFFB0D0FFu : 0xFF506080u);
             string name = (host.Part1.FinishedChapters.Contains(_episodes[i].ChapterId) ? "✓ " : "") + _episodes[i].Name;
             // 칸보다 긴 이름은 끝을 줄여 「…」 — 이웃 칸을 덮었다.
             while (name.Length > 1 && host.UiGetText(name, GameWindow.White, 11).W > CellW - 4) name = name[..^2] + "…";
             var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);
-            host.UiText(name, ox + x + Math.Max(2, (CellW - nw) / 2), oy + y + (CellH - nh) / 2, GameWindow.White, 11);
+            host.UiText(name, ox + x + Math.Max(2, (CellW - nw) / 2), oy + y + (CellH - nh) / 2, open ? GameWindow.White : 0xFF606878u, 11);
         }
         var (bx, by, bn) = Back[0];
         shell.DrawButton(ox + bx, oy + by, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, bn, _hover == ButtonHit);
