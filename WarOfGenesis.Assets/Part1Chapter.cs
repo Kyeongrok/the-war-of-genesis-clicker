@@ -96,3 +96,41 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
         return list;
     }
 }
+
+/// <summary>
+/// 파트1 에피소드(연대표 칸) — <c>Eps\episode.eps</c>, 로더 <c>alpha.dll 0x100a7c40</c>. 이야기 줄기 3개, 줄기마다 u16 수 + 34바이트 칸.
+/// </summary>
+/// <param name="Line">이야기 줄기 0~2(살라딘 쪽 · 바이올라 쪽 · 인페르노 쪽).</param>
+/// <param name="Row">바이트 0 — 연대표의 줄(1~3).</param>
+/// <param name="X">u16 +2 — 연대표 위 가로 자리(20 단위).</param>
+/// <param name="ChapterId">낱말 3(+0x1e) — 이 칸이 여는 <see cref="Part1Chapter"/> 번호.</param>
+/// <param name="Words">+0x18 의 낱말 다섯 그대로(0 앞 칸? · 1 540~ · 2 줄기 첫 칸 표시 · 3 챕터 · 4 다른 챕터?).</param>
+public sealed record Part1Episode(int Line, int Index, int Row, int X, string Name, int ChapterId, short[] Words)
+{
+    public const int Size = 34;
+
+    public static IReadOnlyList<Part1Episode> LoadAll() => Parse(Part1Game.Read("Eps", "episode.eps"));
+
+    public static IReadOnlyList<Part1Episode> Parse(byte[]? b)
+    {
+        var list = new List<Part1Episode>();
+        if (b is null) return list;
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var cp949 = System.Text.Encoding.GetEncoding(949);
+        int o = 0;
+        for (int line = 0; line < 3 && o + 2 <= b.Length; line++)
+        {
+            int count = BitConverter.ToUInt16(b, o);
+            o += 2;
+            for (int i = 0; i < count && o + Size <= b.Length; i++, o += Size)
+            {
+                var plain = new byte[20];
+                for (int k = 0; k < 20; k++) plain[k] = (byte)~b[o + 4 + k];
+                int end = Array.IndexOf(plain, (byte)0);
+                var words = Enumerable.Range(0, 5).Select(k => BitConverter.ToInt16(b, o + 24 + 2 * k)).ToArray();
+                list.Add(new Part1Episode(line, i, b[o], BitConverter.ToUInt16(b, o + 2), cp949.GetString(plain, 0, end < 0 ? 20 : end), words[3], words));
+            }
+        }
+        return list;
+    }
+}
