@@ -948,13 +948,14 @@ internal sealed unsafe partial class BattleScene
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;
             case 102:
-                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length) host.FlagSt._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
+                // 파트1 진행 깃발은 0 번도 쓴다(전투 0009 「702 [0, 1]」 — 챕터 조건이 본다). 파트2 는 0 번을 안 쓴다.
+                if ((A(0) > 0 || A(0) == 0 && host._scene.IsPart1) && A(0) < host.FlagSt._flags.Length) host.FlagSt._flags[A(0)] = (byte)Math.Clamp((int)A(1), 0, 255);
                 break;
             case 103:
                 // [깃발, 연산자, 값] — 0 더하기 · 1 빼기 · 2 곱하기 · 3 나누기(0x10050de0: 연산자 = 워드 +2, 값 = 바이트 +4).
                 // 전에는 인자 1(연산자)을 값으로 더해서, 프레야 평원·던젼(Btl 0240·0239)의 「깃발 110 += 1」이 0 을 더해
                 // 북 평원(Btl 0238, 깃발 110 == 2)이 영영 안 열렸다(사용자 보고, Chp 0064). 필드판과 달리 두 번 더하는 흠은 없다.
-                if (A(0) > 0 && A(0) < host.FlagSt._flags.Length)
+                if ((A(0) > 0 || A(0) == 0 && host._scene.IsPart1) && A(0) < host.FlagSt._flags.Length)
                     host.FlagSt._flags[A(0)] = FieldScene.FieldArith(host.FlagSt._flags[A(0)], A(1), A(2));
                 break;
         }
