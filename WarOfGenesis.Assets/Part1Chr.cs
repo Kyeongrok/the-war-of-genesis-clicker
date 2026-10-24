@@ -56,6 +56,25 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// <summary>그 어빌리티의 레벨 — 없으면 -1(원본은 0xff).</summary>
     public int AbilityLevel(int ability) => Abilities.FirstOrDefault(a => a.Ability == ability) is { Ability: > 0 } a ? a.Level : -1;
 
+    /// <summary>
+    /// 그 탈것(파트1 Chr 번호)을 타는 데 드는 어빌리티 — <c>0x1009e750</c>(분석-파트1-챕터 10.3): 121 아론다이트탑승 · 122 마장기탑승 · 123 아지다하카탑승 ·
+    /// 125 비행기탑승 · 126 탱크탑승. 탈것이 아니면 0.
+    /// </summary>
+    public static int RideAbility(int mount) => mount switch
+    {
+        433 or 476 => 121,
+        177 or 477 or 478 or 314 or 425 or 431 or 419 or 424 or 469 or 470 => 122,
+        473 or 488 or 507 or 516 or 517 or 625 => 123,
+        471 or 472 or 475 => 125,
+        417 or 418 => 126,
+        _ => 0,
+    };
+
+    /// <summary>이 인물이 그 탈것(파트1 Chr 번호)을 탈 수 있나 — 그 어빌리티가 있어야 하고, 아론다이트는 장비 보정 248(바리사다 II 「아론다이트의 열쇠」)도.</summary>
+    public bool CanRide(int mount, IEnumerable<Part1Item?> equipment) =>
+        RideAbility(mount) is > 0 and var ability && AbilityLevel(ability) >= 0
+        && (ability != 121 || equipment.Any(i => i?.Bonus(248) is not (null or 0)));
+
     /// <summary>최대 HP — 칸 19 + 어빌리티 1 레벨 × 100(<c>0x1009ea50</c>).</summary>
     public int MaxHp => BaseMaxHp + Math.Max(0, AbilityLevel(1)) * 100;
 

@@ -30,6 +30,7 @@ internal sealed unsafe partial class BattleScene
         var list = new List<UnitState>();
         _deployMovable.Clear();
         _deployBench.Clear();
+        _part1Riders.Clear();
         var followers = new List<UnitState>();
 
         foreach (var rosterRecord in scene.Roster)
@@ -71,10 +72,26 @@ internal sealed unsafe partial class BattleScene
             // 여기서는 기본값(켜짐)으로 만들고, 배치 창의 「군단사용」 단추가 끄면 배치종료 때 부하를 지운다(Deploy.cs). 부하는 파티원들 뒤에 붙인다 — 맵 밖 여분을 지울 때 DropUnits 가 번호를 다시 맞춘다.
             var placedFollowers = new List<UnitState>();
             int LegionOf(int chr) => scene.LegionsAllowed ? host.Mos._unitLegion.GetValueOrDefault(chr) : 0;
+            // 파트1 — 일행 창에서 탈것을 정한 사람은 탈것으로 선다(0x100364b0: 탈것 유닛을 그 칸에, 탄 이는 판 밖). 탈것 수만큼만.
+            var mountsLeft = scene.IsPart1 ? new Dictionary<int, int>(host.Part1.Mounts) : [];
+            UnitState? RiderFor(int chr)
+            {
+                if (!scene.IsPart1 || !host.Part1.Riding.TryGetValue(chr, out int mount) || mountsLeft.GetValueOrDefault(mount) <= 0) return null;
+                mountsLeft[mount]--;
+                var rider = new UnitState(new DemoUnit(chr, 0, 0, 4, 0, Facing.Up)) { OnField = false };
+                list.Add(rider);
+                return rider;
+            }
+            // 파트1 용병(일행이 아닌 사람)은 편 3 — 파트2 AI 가 알아서 싸운다(사용자 결정: 파트1 AI 보다 파트2 AI 가 낫다). 「동맹을 AI 가 움직임」을 끄면 직접 조종.
+            int SideOf(int chr) => scene.IsPart1 && !host.Part1.Party.Contains(chr) ? 3 : 4;
+            int Mounted(int chr) => scene.IsPart1 && host.Part1.Riding.TryGetValue(chr, out int mount) && mountsLeft.GetValueOrDefault(mount) > 0 ? mount : chr;
             for (int i = 0; i < free.Count && i < party.Count; i++)
             {
-                var rec = new DemoUnit(party[i], free[i].Col, free[i].Row, 4, LegionOf(party[i]), free[i].Facing);
+                int stand = Mounted(party[i]);
+                var rider = stand != party[i] ? RiderFor(party[i]) : null;
+                var rec = new DemoUnit(stand, free[i].Col, free[i].Row, SideOf(party[i]), LegionOf(party[i]), free[i].Facing);
                 var placed = new UnitState(rec);
+                if (rider != null) _part1Riders[placed] = rider;
                 list.Add(placed);
                 _deployMovable.Add(placed);
                 placedFollowers.AddRange(SpawnFollowers(rec, list.Count - 1, legions, list.Concat(placedFollowers)));
@@ -82,8 +99,11 @@ internal sealed unsafe partial class BattleScene
             // 칸이 모자라 못 선 파티원은 맵 밖(0,0)에 만들어 둔다 — 배치 단계에서 바꿔 세울 수 있게. 배치 단계를 안 열면 지운다(Deploy.cs).
             for (int i = free.Count; i < party.Count; i++)
             {
-                var rec = new DemoUnit(party[i], 0, 0, 4, LegionOf(party[i]), Facing.Up);
+                int stand = Mounted(party[i]);
+                var rider = stand != party[i] ? RiderFor(party[i]) : null;
+                var rec = new DemoUnit(stand, 0, 0, SideOf(party[i]), LegionOf(party[i]), Facing.Up);
                 var bench = new UnitState(rec);
+                if (rider != null) _part1Riders[bench] = rider;
                 list.Add(bench);
                 _deployMovable.Add(bench);
                 _deployBench.Add(bench);

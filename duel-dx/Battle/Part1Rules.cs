@@ -21,9 +21,23 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         w.Id > Part1Game.ChrBase && Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), w.Id - Part1Game.ChrBase) is { } attack ? attack : null;
     private readonly Dictionary<int, Part1Fighter?> _fighters = [];
 
+    /// <summary>탈것 → 탄 이(전투가 채운다). 탈것의 SKILL 은 탄 이의 SKILL 이다(<c>0x100364b0</c> → <c>0x1009eb20</c>, 255 에서 자름).</summary>
+    internal Func<UnitState, UnitState?>? RiderOf;
+
     internal Part1Fighter? Fighter(UnitState u)
     {
         if (u.ChrCode < Part1Game.ChrBase) return null;
+        if (RiderOf?.Invoke(u) is { } rider && Fighter(rider) is { } pilot && MountFighter(u) is { } mount)
+        {
+            var fields = (int[])mount.Chr.Fields.Clone();
+            fields[Part1Chr.Skill] = Math.Min(255, pilot.Stat(Part1Chr.Skill));
+            return mount with { Chr = mount.Chr with { Fields = fields, Abilities = [.. mount.Chr.Abilities.Where(a => a.Ability != 3)] } };
+        }
+        return MountFighter(u);
+    }
+
+    private Part1Fighter? MountFighter(UnitState u)
+    {
         if (!_fighters.TryGetValue(u.ChrCode, out var f))
         {
             _items ??= Part1Item.LoadAll();

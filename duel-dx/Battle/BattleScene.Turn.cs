@@ -85,7 +85,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
     /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
-    internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null);
+    internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null)
+    {
+        RiderOf = u => _part1Riders.GetValueOrDefault(u),
+    };
     private Part1Rules? _part1;
 
     internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
@@ -541,6 +544,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void StartTurn(int index, bool resume = false)
     {
         _part1ProcBy = null;
+        // 시험용 DUELDX_P1MOUNTHP=<HP> 면 파트1 탈것의 HP 를 그 아래로 깎아 둔다(쓰러져 탄 이가 내려서는 것을 화면 밖에서 보려고).
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1MOUNTHP"), out int mountHp) && mountHp > 0)
+            foreach (var mount in _part1Riders.Keys) mount.Hp = Math.Min(mount.Hp, mountHp);
         // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
         if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
             host._units[index].Soul = Part1Combat.GaugeOnTurn(host._units[index].Soul, cap: host._units[index].MaxSoul);

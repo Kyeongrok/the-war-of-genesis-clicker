@@ -18,7 +18,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
     private int _slot = -1;
     private int _hover = -1;
 
-    internal const int ListX = 24, ListY = 70, RowW = 170, RowH = 24, InfoX = 210, SlotY = 230, BagX = 420, ButtonHit = 1000, SlotHit = 2000, BagHit = 3000;
+    internal const int ListX = 24, ListY = 70, RowW = 170, RowH = 24, InfoX = 210, SlotY = 230, BagX = 420, ButtonHit = 1000, SlotHit = 2000, BagHit = 3000, RideHit = 4000;
 
     internal static readonly string[] SlotNames = ["무기", "둘째 손", "갑옷", "장신구", "장신구"];
 
@@ -49,6 +49,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
             if (x >= ListX && x < ListX + RowW && y >= ListY + i * (RowH + 2) && y < ListY + i * (RowH + 2) + RowH) return i;
         for (int s = 0; s < 5; s++)
             if (x >= InfoX && x < InfoX + 200 && y >= SlotY + s * RowH && y < SlotY + (s + 1) * RowH - 2) return SlotHit + s;
+        if (x >= InfoX && x < InfoX + 200 && y >= RideY && y < RideY + RowH - 2) return RideHit;
         if (_slot >= 0 && Member(_member) is { } chr)
         {
             int count = BagFor(chr, _slot).Count + 1;                       // 맨 끝 줄은 「빼기」
@@ -64,6 +65,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
     {
         int hit = HitAt(bx, by);
         if (hit == ButtonHit) { Leave(); return; }
+        if (hit == RideHit) { NextMount(); return; }
         if (hit >= BagHit) { Equip(hit - BagHit); return; }
         if (hit >= SlotHit) { _slot = hit - SlotHit; return; }
         if (hit >= 0 && hit < host.Part1.Party.Count) { _member = hit; _slot = -1; }
@@ -79,6 +81,32 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         var onLeave = _onLeave;
         _onLeave = null;
         host.LeaveScene(() => { _open = false; onLeave?.Invoke(); });
+    }
+
+    /// <summary>탑승 줄 — 장비 다섯 칸 아래.</summary>
+    private const int RideY = SlotY + 5 * RowH + 6;
+
+    /// <summary>이 사람이 탈 수 있고 남은 것이 있는 탈것(20000 + 파트1 번호) — 다른 사람이 정한 만큼은 뺀다.</summary>
+    private List<int> MountsFor(Part1Chr chr)
+    {
+        var items = Part1Item.LoadAll();
+        var equipment = chr.Equipment.Select(id => Part1Item.ById(items, id)).ToList();
+        int code = Part1Game.ChrBase + chr.Code;
+        return [.. host.Part1.Mounts.Where(m => m.Value - host.Part1.Riding.Count(r => r.Key != code && r.Value == m.Key) > 0
+                                               && chr.CanRide(m.Key - Part1Game.ChrBase, equipment)).Select(m => m.Key).OrderBy(m => m)];
+    }
+
+    /// <summary>탑승 줄을 누르면 — 안 탐 → 탈 수 있는 탈것 차례로 → 안 탐.</summary>
+    private void NextMount()
+    {
+        if (Member(_member) is not { } chr) return;
+        int code = Part1Game.ChrBase + chr.Code;
+        var options = MountsFor(chr);
+        if (options.Count == 0) { host.Toast("탈 수 있는 탈것이 없다(탑승 어빌리티 · 남은 탈것)"); return; }
+        int now = host.Part1.Riding.TryGetValue(code, out int m) ? options.IndexOf(m) : -1;
+        if (now + 1 < options.Count) host.Part1.Riding[code] = options[now + 1];
+        else host.Part1.Riding.Remove(code);
+        shell.Chapter.SaveProgress();
     }
 
     /// <summary>가방의 i 번째 맞는 것을 그 칸에 낀다(끼던 것은 가방으로). 맨 끝 줄은 칸을 비운다.</summary>
@@ -131,6 +159,13 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
                 string item = Part1Item.ById(items, chr.Equipment[s])?.Name ?? "—";
                 host.UiFill(ox + InfoX, y, 200, RowH - 2, s == _slot ? 0xF0305080u : _hover == SlotHit + s ? 0xE0283850u : 0xC0202838u);
                 host.UiText($"{SlotNames[s]}: {item}", ox + InfoX + 8, y + 4, GameWindow.White, 12);
+            }
+            {
+                int code = Part1Game.ChrBase + chr.Code;
+                string ride = host.Part1.Riding.TryGetValue(code, out int mount) && Part1Chr.Load(mount - Part1Game.ChrBase) is { } m
+                    ? m.Name : "—";
+                host.UiFill(ox + InfoX, oy + RideY, 200, RowH - 2, _hover == RideHit ? 0xE0283850u : 0xC0202838u);
+                host.UiText($"탑승: {ride}", ox + InfoX + 8, oy + RideY + 4, GameWindow.White, 12);
             }
             if (_slot >= 0)
             {

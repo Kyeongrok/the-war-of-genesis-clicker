@@ -401,6 +401,34 @@ internal sealed unsafe partial class BattleScene
         u.Alive = false;
         int index = Array.IndexOf(host._units, u);
         if (index >= 0) PromoteFollower(index);
+        DropRider(u);
+    }
+
+    /// <summary>파트1 탈것 → 그 위의 탄 이(판 밖에 둔 유닛). 전투를 세울 때 채운다(BuildUnits).</summary>
+    internal readonly Dictionary<UnitState, UnitState> _part1Riders = [];
+
+    /// <summary>
+    /// 탈것이 쓰러졌다 — 탄 이는 그 칸(막혔으면 가장 가까운 빈 칸)에 내려서 살고, 무리는 그 탈것을 하나 잃는다(<c>0x10034560</c> → <c>0x100add40</c> · <c>0x100365e0</c>,
+    /// 분석-파트1-챕터 10.3). 탈것이 모자라게 되면 그 사람의 탑승 지정도 지운다.
+    /// </summary>
+    private void DropRider(UnitState mount)
+    {
+        if (!_part1Riders.Remove(mount, out var rider) || !rider.Alive) return;
+        var (col, row) = FreeCellNear(mount.Col, mount.Row, rider);
+        rider.OnField = true;
+        rider.ResetTo(col, row);
+        rider.StartCol = col;
+        rider.StartRow = row;
+        rider.Facing = mount.Facing;
+        if (host.Part1.Mounts.GetValueOrDefault(mount.ChrCode) is > 0 and var left)
+        {
+            if (left == 1) host.Part1.Mounts.Remove(mount.ChrCode); else host.Part1.Mounts[mount.ChrCode] = left - 1;
+            int riders = host.Part1.Riding.Count(r => r.Value == mount.ChrCode);
+            if (riders > left - 1) host.Part1.Riding.Remove(rider.ChrCode);
+        }
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 mount down {mount.ChrCode} → rider {rider.ChrCode} at ({col},{row}), mounts left {host.Part1.Mounts.GetValueOrDefault(mount.ChrCode)}" + Environment.NewLine);
     }
 
     /// <summary>피해 보정 — 때리는 쪽 13(공격력), 맞는 쪽 14(방어력)·7(피해 감소).</summary>

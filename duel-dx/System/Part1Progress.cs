@@ -54,6 +54,7 @@ internal sealed class Part1Progress
         MapTurns = [];
         ChapterMarkers = [];
         ChapterVars = [];
+        Riding = [];
     }
 
     /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
@@ -90,9 +91,15 @@ internal sealed class Part1Progress
 
     /// <summary>
     /// 용병 · 탑승물 — Chr → 수(챕터 사건 908 · 910, 마을 용병 길드). 원본은 무리마다 (Chr, 수) 칸 32개(+0x910 · +0xa14)를 들고
-    /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 명단 끝에 수만큼 세우고, 탑승물은 적어만 둔다.
+    /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 명단 끝에 수만큼 세우고, 탑승물은 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다.
     /// </summary>
     internal Dictionary<int, int> Mercenaries = [], Mounts = [];
+
+    /// <summary>
+    /// 탈 사람 → 탈것(둘 다 20000 + 파트1 번호) — 일행 창에서 정한다(원본은 출전 배치 창의 「탑승」, 칸 +0x68). 전투에서는 탈것으로 서고
+    /// 탄 이는 판 밖에 있다가 탈것이 쓰러지면 그 칸에 내려선다(<see cref="BattleScene"/> 의 _part1Riders).
+    /// </summary>
+    internal Dictionary<int, int> Riding = [];
 
     /// <summary>챕터 사건 1201 이 바꾼 장소 — 「챕터:장소」 → 전투 번호(장소를 그 전투 장소로 만든다).</summary>
     internal Dictionary<string, int> PlaceBattles = [];
@@ -146,13 +153,14 @@ internal sealed class Part1Progress
                                    List<int>? Bag = null, Dictionary<int, int[]>? Equipped = null,
                                    Dictionary<int, int>? Mercenaries = null, Dictionary<int, int>? Mounts = null,
                                    Dictionary<string, int>? PlaceBattles = null, Dictionary<int, int>? MapTurns = null,
-                                   Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null);
+                                   Dictionary<int, List<int>>? ChapterMarkers = null, Dictionary<int, Dictionary<int, int>>? ChapterVars = null,
+                                   Dictionary<int, int>? Riding = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -189,6 +197,7 @@ internal sealed class Part1Progress
             MapTurns = data.MapTurns ?? [];
             ChapterMarkers = data.ChapterMarkers ?? [];
             ChapterVars = data.ChapterVars ?? [];
+            Riding = data.Riding ?? [];
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }
