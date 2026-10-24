@@ -32,6 +32,7 @@ internal sealed unsafe partial class BattleScene
         _deployBench.Clear();
         _part1Riders.Clear();
         _part1LostMounts.Clear();
+        _part1TeamMounts.Clear();
         _part1Mercs.Clear();
         _part1ProcRunning = false;
         var followers = new List<UnitState>();
@@ -52,6 +53,17 @@ internal sealed unsafe partial class BattleScene
         }
 
         list.AddRange(followers);
+        if (scene.IsPart1)
+        {
+            LinkPart1Squads(list);
+            // 전투 파일이 태워 둔 사람 — 판 밖에서 기다리다 탈것이 쓰러지면 그 칸에 내려선다(일행 탑승과 같은 틀).
+            foreach (var mount in list.Where(u => u.Part1Rider > 0).ToList())
+            {
+                var rider = new UnitState(new DemoUnit(mount.Part1Rider, 0, 0, mount.Side, 0, mount.Facing)) { OnField = false, Awake = true };
+                list.Add(rider);
+                _part1Riders[mount] = rider;
+            }
+        }
 
         // 파트1 판에 편 4 로 나온 사람은 일행에 들인다(배치 칸이 없는 판도) — 다음 판의 배치 칸에 선다.
         if (scene.IsPart1) host.Part1.Join(list.Where(u => u.Side == 4 && u.ChrCode >= Part1Game.ChrBase).Select(u => u.ChrCode));
@@ -100,7 +112,7 @@ internal sealed unsafe partial class BattleScene
                 var rider = stand != party[i] ? RiderFor(party[i]) : null;
                 var rec = new DemoUnit(stand, free[i].Col, free[i].Row, SideOf(party[i]), LegionOf(party[i]), free[i].Facing);
                 var placed = new UnitState(rec);
-                if (rider != null) _part1Riders[placed] = rider;
+                if (rider != null) { _part1Riders[placed] = rider; _part1TeamMounts.Add(placed); }
                 if (SideOf(party[i]) == 3) _part1Mercs.Add(placed);
                 list.Add(placed);
                 _deployMovable.Add(placed);
@@ -113,7 +125,7 @@ internal sealed unsafe partial class BattleScene
                 var rider = stand != party[i] ? RiderFor(party[i]) : null;
                 var rec = new DemoUnit(stand, 0, 0, SideOf(party[i]), LegionOf(party[i]), Facing.Up);
                 var bench = new UnitState(rec);
-                if (rider != null) _part1Riders[bench] = rider;
+                if (rider != null) { _part1Riders[bench] = rider; _part1TeamMounts.Add(bench); }
                 if (SideOf(party[i]) == 3) _part1Mercs.Add(bench);
                 list.Add(bench);
                 _deployMovable.Add(bench);
@@ -123,6 +135,32 @@ internal sealed unsafe partial class BattleScene
             list.AddRange(placedFollowers);
         }
         return [.. list];
+    }
+
+    /// <summary>파트1 부대 대장의 군단 표시 — 군단 자료(For.dat)는 없지만 0 이 아니어야 파트2 의 따라 걷기(<see cref="SyncFollowers"/>)가 돈다.</summary>
+    internal const int Part1SquadLegion = -1;
+
+    /// <summary>
+    /// 파트1 부대를 파트2 군단 틀로 잇는다(사용자 요청: 부대는 대장을 따라 함께 움직이고, 대장이 죽으면 새 대장을 뽑아 계속 부대로) —
+    /// Btl 인물 칸 9(대장 차례)가 다른 사람을 가리키면 그 사람의 부하(<see cref="UnitState.LeaderIndex"/>, 진형 순번)로 두고, 대장에게 군단 표시를 단다.
+    /// 부하는 파트2 처럼 제 차례가 없고 대장 차례에 따라 걷고 함께 친다. 대장이 쓰러지면 첫 부하가 대장이 된다(<see cref="PromoteFollower"/>).
+    /// </summary>
+    private static void LinkPart1Squads(List<UnitState> list)
+    {
+        var byRecord = new Dictionary<int, int>();
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].Record >= 0) byRecord.TryAdd(list[i].Record, i);
+        var slots = new Dictionary<int, int>();
+        for (int i = 0; i < list.Count; i++)
+        {
+            var u = list[i];
+            if (u.Part1Leader < 0 || u.Part1Leader == u.Record || !byRecord.TryGetValue(u.Part1Leader, out int leader) || leader == i) continue;
+            var boss = list[leader];
+            if (boss.Side != u.Side || boss.Part1Leader != boss.Record) continue;   // 편이 다르거나 대장이 또 누구의 부하면 잇지 않는다
+            u.LeaderIndex = leader;
+            u.FormationSlot = slots[leader] = slots.GetValueOrDefault(leader, -1) + 1;
+            boss.LegionId = Part1SquadLegion;
+        }
     }
 
     /// <summary>

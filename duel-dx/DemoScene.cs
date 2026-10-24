@@ -34,6 +34,14 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
 
     public int WakeValue { get; init; }
 
+    /// <summary>
+    /// 파트1 부대 — 대장의 인물 차례 번호(파일 칸 9, <c>0x10036790(대장, 이, 1)</c>). 제 차례(<see cref="Record"/>)면 대장, 다른 차례면 그 대장의 부하. 파트2 판은 −1.
+    /// </summary>
+    public int Part1Leader { get; init; } = -1;
+
+    /// <summary>파트1 — 이 칸은 탈것(<see cref="ChrCode"/>)이고 탄 사람은 이 Chr(20000 + 번호, Btl 인물 칸 15 · <c>0x100364b0</c>). 0 이면 탄 사람 없음.</summary>
+    public int Part1Rider { get; init; }
+
     /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
     public bool IsAlly => Side >= 3;
 
@@ -115,7 +123,10 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
         var ais = Part1Ai.LoadAll();
         DemoUnit Unit(Part1BattleUnit u, int index)
         {
-            var unit = new DemoUnit(Part1Game.ChrBase + u.ChrCode, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index };
+            // 탈것이 적힌 사람은 탈것으로 선다 — 차례 번호(사건이 가리키는 것)는 그대로라 조건 200·201 이 원본처럼 탈것을 본다.
+            var unit = u.MountChr > 0
+                ? new DemoUnit(Part1Game.ChrBase + u.MountChr, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader, Part1Rider = Part1Game.ChrBase + u.ChrCode }
+                : new DemoUnit(Part1Game.ChrBase + u.ChrCode, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader };
             if (u.Side == 4 || u.AiType < 0 || u.AiType >= ais.Count) return unit;
             var ai = ais[u.AiType];
             return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance };

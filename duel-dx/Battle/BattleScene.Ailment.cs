@@ -410,6 +410,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>이 전투에서 쓰러진 무리 탈것(Chr) — 진행의 탈것 수는 전투가 끝날 때 뺀다(RESTART · 불러오기가 되돌릴 수 있게).</summary>
     internal readonly List<int> _part1LostMounts = [];
 
+    /// <summary>배치에서 무리 탈것으로 세운 유닛(원본 +0x1c0 = 1) — 쓰러지면 무리가 하나 잃는다.</summary>
+    internal readonly HashSet<UnitState> _part1TeamMounts = [];
+
     /// <summary>이 전투에 세운 용병 — 전투가 끝날 때 쓰러진 것만 용병 칸에서 뺀다(Btl 의 같은 Chr 동맹은 안 센다).</summary>
     internal readonly HashSet<UnitState> _part1Mercs = [];
 
@@ -434,7 +437,7 @@ internal sealed unsafe partial class BattleScene
         rider.StartCol = col;
         rider.StartRow = row;
         rider.Facing = mount.Facing;
-        _part1LostMounts.Add(mount.ChrCode);
+        if (_part1TeamMounts.Remove(mount)) _part1LostMounts.Add(mount.ChrCode);   // 무리 탈것(원본 +0x1c0)만 잃는다 — 전투 파일이 태운 탈것은 아니다
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 mount down {mount.ChrCode} → rider {rider.ChrCode} at ({col},{row}), lost this battle {_part1LostMounts.Count(m => m == mount.ChrCode)}" + Environment.NewLine);

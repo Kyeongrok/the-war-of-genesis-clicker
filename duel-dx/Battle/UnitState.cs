@@ -17,6 +17,12 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>Btl 배치표에서의 레코드 번호 — 이벤트가 <c>10000+N</c> 으로 가리키는 번호. 부하는 대장 것을 물려받는다.</summary>
     public int Record { get; } = unit.Record;
 
+    /// <summary>파트1 부대의 대장 차례(<see cref="DemoUnit.Part1Leader"/>) — 전투를 세울 때 <see cref="LeaderIndex"/> 로 잇는다.</summary>
+    public int Part1Leader { get; } = unit.Part1Leader;
+
+    /// <summary>파트1 — 전투 파일이 태워 둔 사람(<see cref="DemoUnit.Part1Rider"/>), 0 이면 없음.</summary>
+    public int Part1Rider { get; } = unit.Part1Rider;
+
     /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
     /// <summary>사람이 명령하는 유닛인가 — 편 4. 이벤트 행동 708 로 편이 바뀌면 조종 주체도 따라간다(원본 WAITNEXT 는 매번 +0x78 을 본다).</summary>
     public bool PlayerControlled => Side == 4;
