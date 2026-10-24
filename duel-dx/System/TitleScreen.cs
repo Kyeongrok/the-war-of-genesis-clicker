@@ -55,6 +55,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     internal void OpenTitle()
     {
         _titleOpen = true;
+        if (host._part1TitleScr is { } part1) part1._open = false;
         _titleHover = -1;
         _titleOpenedAt = host._lastTime;
         host.Mos._mosesOpen = false;
@@ -189,6 +190,9 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (!_titleOpen) return false;
         // CONTINUE 로 연 슬롯 창이 떠 있으면 그 창이 먼저 클릭을 받는다.
         if (host.Sys.SystemOpen) return host.Sys.OnSystemClick(bx, by);
+        // 파트1 타이틀이 떠 있으면 그 화면이, 아니면 왼쪽 아래 「PART 1」 단추가 먼저 받는다.
+        if (host.Part1TitleScr.OnClick(bx, by)) return true;
+        if (host.Part1TitleScr.EntryAt(bx, by)) { host.Part1TitleScr.PressEntry(); return true; }
         PressTitleButton(TitleButtonAt(bx, by));
         return true;
     }
@@ -200,6 +204,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     internal bool OnTitleKey(int key)
     {
         if (!_titleOpen) return false;
+        if (host.Part1TitleScr.OnKey(key)) return true;
         if (key == Win32.VK_ESCAPE) host.Sys.CloseSystemWindow();
         else if (host.Sys.SystemOpen) { }
         // 위·아래 이동 키(기본 W · S, 방향키)로 단추를 옮기고 Enter · Space 로 누른다(사용자 요청 menu-33) — 짚은 단추가 없으면 NEW GAME.
@@ -275,12 +280,15 @@ internal sealed unsafe class TitleScreen(GameWindow host)
 
     internal void UpdateTitleHover(int bx, int by)
     {
-        if (_titleOpen) _titleHover = TitleButtonAt(bx, by);
+        if (!_titleOpen) return;
+        host.Part1TitleScr.UpdateHover(bx, by);
+        _titleHover = host.Part1TitleScr._open ? -1 : TitleButtonAt(bx, by);
     }
 
     internal void DrawTitle()
     {
         if (!_titleOpen) return;
+        if (host._part1TitleScr is { _open: true } part1) { part1.Draw(); return; }
         // 원본 타이틀 틱(0x10105920)은 3340틱(약 111초)을 넘으면 오프닝 필드(Fld 0022·0413 — Mov)로 갔다가 돌아온다(ba-20 T2).
         // 오프닝 영상은 없으니 곡만 처음부터 다시 건다 — 전에는 곡이 한 번 끝나면 계속 조용했다.
         if (_titleOpen && !host.Sys.SystemOpen && (host._lastTime - _titleMusicAt) * TicksPerSecond > 3340)
@@ -317,6 +325,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         // 자료를 뒤에서 받는 동안 진행을 왼쪽 위에 보인다(AssetDownload).
         if (AssetPack.Status is { Length: > 0 } pack) host.UiText(pack, ox + 8, oy + 10, White, 12);
 
+        host.Part1TitleScr.DrawEntry();   // 파트1 로 가는 단추(리메이크에만 있다)
         host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();
     }

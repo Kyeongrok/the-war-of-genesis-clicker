@@ -86,6 +86,9 @@ internal sealed unsafe partial class GameWindow
     internal TitleScreen? _titleScr;
     internal TitleScreen TitleScr => _titleScr ?? LazyInitializer.EnsureInitialized(ref _titleScr, () => new TitleScreen(this));
 
+    internal Part1TitleScreen? _part1TitleScr;
+    internal Part1TitleScreen Part1TitleScr => _part1TitleScr ?? LazyInitializer.EnsureInitialized(ref _part1TitleScr, () => new Part1TitleScreen(this));
+
     internal EpisodesScreen? _episodesScr;
     internal EpisodesScreen EpisodesScr => _episodesScr ?? LazyInitializer.EnsureInitialized(ref _episodesScr, () => new EpisodesScreen(this));
 
