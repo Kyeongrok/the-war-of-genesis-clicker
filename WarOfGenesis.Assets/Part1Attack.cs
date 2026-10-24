@@ -111,3 +111,43 @@ public sealed record Part1Ability(int Id, string Name, int Flag, int AttackId, i
         return list;
     }
 }
+
+/// <summary>
+/// 파트1 직업 <c>Dats\Job.dat</c> 한 칸(100바이트) — 로더 <c>alpha.dll 0x100a77ad</c>. <b>번호 = 레코드 + 1</b>(인물 레코드 칸 7 — 살라딘 1 슈미터 · 셰라자드 78 무슬림).
+/// </summary>
+/// <param name="Head">메모리 <c>+0x3e</c>·<c>+0x3f</c> 두 바이트(뜻 모름).</param>
+/// <param name="Firsts">메모리 <c>+0x40+i</c>·<c>+0x45+i</c> 짝 다섯 — 어빌리티 번호와 레벨로 보인다(슈미터: 12 · 128 레벨 1).</param>
+/// <param name="Abilities">메모리 <c>+0x4a+i</c>(어빌리티)·<c>+0x58+i</c>(레벨) 14칸 — 이 직업이 다루는 어빌리티와 그 레벨(슈미터: 12·1 · 128·2 · 1 HP·3 · 2 STR·2 …).</param>
+public sealed record Part1Job(int Id, string Name, string EnglishName, (int A, int B) Head, (int A, int B)[] Firsts, (int Ability, int Level)[] Abilities)
+{
+    public const int FileSize = 100;
+
+    public static IReadOnlyList<Part1Job> LoadAll() => ParseAll(Part1Game.Read("Dats", "Job.dat"));
+
+    public static Part1Job? ById(IReadOnlyList<Part1Job> list, int id) => id >= 1 && id <= list.Count ? list[id - 1] : null;
+
+    public static IReadOnlyList<Part1Job> ParseAll(byte[]? b)
+    {
+        if (b is not { Length: >= 2 }) return [];
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var cp949 = Encoding.GetEncoding(949);
+        string Text(int o)
+        {
+            var plain = new byte[30];
+            for (int k = 0; k < 30; k++) plain[k] = (byte)~b[o + k];
+            int end = Array.IndexOf(plain, (byte)0);
+            return cp949.GetString(plain, 0, end < 0 ? 30 : end);
+        }
+        int count = BitConverter.ToUInt16(b, 0);
+        var list = new List<Part1Job>(count);
+        for (int i = 0, o = 2; i < count && o + FileSize <= b.Length; i++, o += FileSize)
+        {
+            int p = o + 62;
+            var firsts = Enumerable.Range(0, 5).Select(k => ((int)b[p + 2 * k], (int)b[p + 2 * k + 1])).Where(x => x.Item1 != 0).ToArray();
+            p += 10;
+            var abilities = Enumerable.Range(0, 14).Select(k => ((int)b[p + 2 * k], (int)b[p + 2 * k + 1])).Where(x => x.Item1 != 0).ToArray();
+            list.Add(new Part1Job(i + 1, Text(o), Text(o + 30), (b[o + 60], b[o + 61]), firsts, abilities));
+        }
+        return list;
+    }
+}
