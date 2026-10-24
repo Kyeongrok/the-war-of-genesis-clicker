@@ -162,7 +162,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         if (_open && _party is { _open: true }) _party.UpdateHover(bx, by);
         else if (_open && _town is { _open: true }) _town.UpdateHover(bx, by);
-        else if (_open && _field is { _open: true }) { }
+        else if (_open && _field is { _open: true }) _field.UpdateHover(bx, by);
         else if (_open && _chapter is { _open: true }) _chapter.UpdateHover(bx, by);
         else if (_open && _timeline is { _open: true }) _timeline.UpdateHover(bx, by);
         else if (_open) _hover = ButtonAt(bx, by);
@@ -174,7 +174,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (!_open) return false;
         if (_party is { _open: true }) _party.OnClick(bx, by);
         else if (_town is { _open: true }) _town.OnClick(bx, by);
-        else if (_field is { _open: true }) _field.OnClick();
+        else if (_field is { _open: true }) _field.OnClick(bx, by);
         else if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
         else if (_timeline is { _open: true }) _timeline.OnClick(bx, by);
         else Press(ButtonAt(bx, by));
@@ -250,7 +250,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// 파트1 전투(파트1 번호)를 연다 — 판·맵·그림은 파트2 틀로, 인물은 파트1 레코드에서(<see cref="Part1Game.ChrBase"/>).
     /// 못 열면 챕터 지도에 머문다.
     /// </summary>
-    internal void StartBattle(int part1Battle)
+    internal bool StartBattle(int part1Battle)
     {
         if (host.Sys.StartBattle(Part1Game.BattleBase + part1Battle, rememberParty: false))
         {
@@ -261,9 +261,28 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             if (_field != null) _field._open = false;
             if (_town != null) _town._open = false;
             if (_party != null) _party._open = false;
-            return;
+            return true;
         }
         host.Toast($"파트1 전투 {part1Battle} 를 열지 못했습니다");
+        return false;
+    }
+
+    /// <summary>
+    /// 전투 행동 104(결과 6 → 장면 5) — 전투를 마치고 그 필드로. 필드가 끝나면(500 → 장면 4) 챕터로 돌아가 남은 행동을 잇는다.
+    /// </summary>
+    internal void FieldFromBattle(int field)
+    {
+        host.TitleScr.OpenTitle();
+        Open();
+        Field.Open(field, () => ReturnFromBattle(true));
+    }
+
+    /// <summary>전투 행동 105(결과 7 → 장면 10) — 이기고 챕터를 끝내 연대표로.</summary>
+    internal void EndChapterFromBattle()
+    {
+        host.TitleScr.OpenTitle();
+        Open();
+        Chapter.EndChapter();
     }
 
     /// <summary>파트1 전투를 마치고 — 이겼으면 그 챕터 지도로, 졌으면 파트1 타이틀로 돌아온다.</summary>

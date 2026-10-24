@@ -47,6 +47,15 @@ internal sealed unsafe partial class BattleScene
     /// <summary>이벤트 행동 6 이 정한 다음 필드 — 0 이면 모세스로 간다.</summary>
     internal int _eventNextField;
 
+    /// <summary>
+    /// 파트1 행동 105 — 이기고 <b>챕터를 끝낸다</b>(결과 7, <c>0x1001e1c0</c>: 전투 끝 <c>0x1002c798</c> 이 장면 10 = 연대표로, <c>0x1002df3a</c> 가 팀을 무리로 되돌린다).
+    /// 편 전멸(조건 301)에 이것 하나만 붙은 전투가 34곳이다(0043 · 0062 · 0066 · 0090 · 0135 · 0169 …) — 전에는 안 옮겨 그 전투가 끝나지 않았다.
+    /// </summary>
+    internal bool _part1ChapterEnd;
+
+    /// <summary>파트1 행동 205 가 되풀이로 튼 효과음의 표지 — 206 · 전투 끝이 끊는다.</summary>
+    internal const int Part1LoopSoundTag = 0x5021;
+
     /// <summary>그 전투의 이벤트를 읽어 둔다.</summary>
     /// <summary>행동 512 가 바꾼 곡 번호 — 안 바꿨으면 null(전투 머리 곡).</summary>
     internal int? _eventBgm;
@@ -71,6 +80,7 @@ internal sealed unsafe partial class BattleScene
         _eventFoundA = _eventFoundB = null;
         _eventNextBattle = 0;
         _eventNextField = 0;
+        _part1ChapterEnd = false;
         _eventSoundSeconds = 0;                  // 앞 전투에서 늦게 풀린 소리가 이 전투의 이벤트를 멈추지 않게
         Array.Clear(_battleVars);
         Array.Clear(_eventTimer);
@@ -602,6 +612,13 @@ internal sealed unsafe partial class BattleScene
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
                 return side >= 0 && !host._units.Any(u => u.Alive && u.OnField && u.Side == side);
             }
+            case Part1Script.Part1Only + 103 when host._scene.IsPart1:
+            {
+                // 파트1 조건 103 [대상, 기준, 연산] — HP <b>값</b>(+0xe4)을 견준다, 편이면 누구 하나라도(0x1001caf0). 파트2 203 은 퍼센트라 따로 둔다.
+                var hit = EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField && Compare(u.Hp, A(2), A(1)));
+                if (hit != null && A(0) >= 20000) RememberFound(hit);
+                return hit != null;
+            }
             case 402:                                                           // 사각형 안에 있나
             {
                 var list = EventTargets(A(0), out _);
@@ -944,6 +961,24 @@ internal sealed unsafe partial class BattleScene
                 host.StopMusic();
                 _eventBgm = A(0);                          // 판의 곡 번호(CBattle+0x3c64) — 전투 세이브에 실린다
                 if (A(0) > 1 && A(0) != 0xffff) host.PlayMusicFile(A(0), loop: true);
+                break;
+            // ── 파트1 만의 행동(Part1Script 가 Part1Only + 코드로 남긴 것) ──
+            case Part1Script.Part1Only + 105 when host._scene.IsPart1:
+                _part1ChapterEnd = true;                 // 이기고 챕터 끝 — LeaveFinishedBattleNow 가 연대표로 보낸다
+                SetEventOutcome(win: true);
+                break;
+            case Part1Script.Part1Only + 204 when host._scene.IsPart1:   // 효과음 a0 한 번(0x1001eb50 → 0x1001a330(소리, 0)) — 기다리지 않는다
+                if (!host.Tlk._talkSkip && A(0) > 0) host.Play(Part1Game.ObsBase + A(0));
+                break;
+            case Part1Script.Part1Only + 205 when host._scene.IsPart1:   // 효과음 a0 되풀이(0x1001eb80 → 0x1001a330(소리, 1)) — 206 이 끊는다
+                host._mixer.StopEffect(Part1LoopSoundTag);
+                if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), Part1LoopSoundTag, loop: true);
+                break;
+            case Part1Script.Part1Only + 206 when host._scene.IsPart1:
+                host._mixer.StopEffect(Part1LoopSoundTag);
+                break;
+            case Part1Script.Part1Only + 503 when host._scene.IsPart1:   // [?, 아이템, 수] — 전투 팀 가방에 더한다(0x100209a0 → 0x100ada10)
+                for (int k = 0; k < Math.Clamp((int)A(2), 0, 99) && A(1) > 0; k++) host.Part1.Bag.Add(A(1));
                 break;
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;

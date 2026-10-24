@@ -9,8 +9,8 @@ namespace DuelDx;
 /// 파트1 필드 — 챕터 사건 503 이 여는 연출 장면(<see cref="Part1Field"/>). 배경 그림 위에서 사건 대사를 차례로 띄우고, 행동 500 이면 챕터로 돌아간다.
 /// </summary>
 /// <remarks>
-/// 옵시디안 「분석-파트1-챕터」 7절. 지금은 배경(<c>BGRs</c>, 0002 는 1300×500 파노라마 — 머리 낱말 1·2 자리에서 본다)과 대사만 옮겼다.
-/// 인물 그림·걷기(300대)·화면 이동(400대)·소리(700대)는 아직 없다. Esc 는 필드를 건너뛴다.
+/// 옵시디안 「분석-파트1-챕터」 7 · 14절. 배경(<c>BGRs</c>, 0002 는 1300×500 파노라마 — 머리 낱말 1·2 자리에서 본다) · 인물 · 대사 ·
+/// 그림 덮개(100 · 101 · 102)와 화면 바꾸기(103~107) · 그림자(307) · 뒤집기(306) · 고르기(900 · 901) · 글 쪽 창(904). Esc 는 필드를 건너뛴다.
 /// </remarks>
 internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -28,10 +28,47 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         BackgroundChange = id => (_bg, _bgW, _bgH) = ReadImage(id),
         SpritePlace = (n, x, y) => { if (n >= 0 && n < _spots.Length) { _walks.Remove(n); _spots[n] = (x, y); } },
         SpriteShift = (n, dx, dy, ticks) => { if (n >= 0 && n < _spots.Length) Walk(n, dx, dy, ticks); },
-        SpriteMotion = (n, motion, mirror) => { if (n >= 0 && n < _spots.Length) _motion[n] = (motion, mirror); },
+        SpriteMotion = (n, motion, mirror) => { if (n >= 0 && n < _spots.Length) { _motion[n] = (motion, mirror); _flip[n] = false; } },
         SpriteVisible = (n, shown) => { if (n >= 0 && n < _spots.Length) _hidden[n] = !shown; },
         CameraPan = (dx, dy, ticks) => { _cam = Camera(); _pan = (_cam.X, _cam.Y, dx, dy, Math.Max(1, ticks), host._lastTime); },
+        IsField = true,
+        PictureShow = (id, x, y, talk) => { var (px, w, h) = ReadImage(id); _cover = new Cover(px, w, h, x, y, 0, talk); },
+        ColorShow = color => _cover = new Cover(null, 0, 0, 0, 0, color switch { 0 => 0xFFFFFFFFu, 2 => 0xFFFF0000u, _ => 0xFF000000u }, false),
+        PictureClear = () => _cover = null,
+        Transition = (mode, kind, fadeOut, fadeIn) =>
+        {
+            // 옛 화면 = 지난 틀에 보인 것(같은 틀에 앞서 돈 100 · 101 은 아직 안 보였다). 갈래 1 은 필드 그대로로 — 끝에 덮개를 지운다(0x100cf502).
+            _transition = (_shown, kind == 0 ? 0xFFFFFFFFu : 0xFF000000u, fadeOut, fadeIn, host._lastTime);
+            if (mode == 1) _cover = null;
+        },
+        SpriteFlip = n => { if (n >= 0 && n < _flip.Length) _flip[n] = !_flip[n]; },
+        SpriteShadow = (n, on) => { if (n >= 0 && n < _shadow.Length) _shadow[n] = on; },
+        CameraSet = (x, y) => { _pan = null; _cam = (x, y); },
     };
+
+    /// <summary>화면 가득 덮는 것 — 그림(BGRs, 그림 안 자리 X·Y 부터) 또는 한 빛깔(그림이 없을 때). 덮인 동안 필드 배경·인물은 안 그린다(0x100c7cfd).</summary>
+    private sealed record Cover(uint[]? Px, int W, int H, int X, int Y, uint Color, bool ShowTalk);
+
+    /// <summary>지금 덮개(100 · 101 이 놓고 102 · 103 [1, …] 이 걷는다). null 이면 필드.</summary>
+    private Cover? _cover;
+
+    /// <summary>지난 틀에 보인 덮개 — 화면 바꾸기의 「옛 화면」.</summary>
+    private Cover? _shown;
+
+    /// <summary>화면 바꾸기 — (옛 덮개, 바랠 빛깔, 나감 틱, 들어옴 틱, 시작).</summary>
+    private (Cover? From, uint Color, int Out, int In, double Start)? _transition;
+
+    /// <summary>306 이 뒤집은 인물 — 300 이 모션을 새로 걸면 푼다(그 모션의 뒤집기를 쓴다).</summary>
+    private bool[] _flip = [];
+
+    /// <summary>307 이 켠 발밑 그림자.</summary>
+    private bool[] _shadow = [];
+
+    /// <summary>필드 인물 그림자 그림(0x100c7790: <c>0x1009f4d0(0x4a, …)</c>).</summary>
+    private const int ShadowObs = 74;
+
+    /// <summary>고르기에서 짚은 줄(마우스 · 화살표).</summary>
+    private int _choiceHover;
 
     /// <summary>인물 자리(배경 그림 위 발끝) — 필드 인물 칸에서 시작해 행동 303 이 옮기고 302 가 걷게 한다.</summary>
     private (int X, int Y)[] _spots = [];
@@ -111,6 +148,11 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _cam = (field.Header[1], field.Header[2]);
         _motion = new (int, bool)?[field.Sprites.Count];
         _hidden = new bool[field.Sprites.Count];
+        _flip = new bool[field.Sprites.Count];
+        _shadow = new bool[field.Sprites.Count];
+        _cover = _shown = null;
+        _transition = null;
+        _choiceHover = 0;
         _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
         _open = true;
         GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
@@ -127,10 +169,18 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                 _open = false;
                 host.LeaveScene(() => shell.StartBattle(battle));   // 필드 안의 전투 — 마치면 챕터로 돌아간다
                 return true;
-            case 503:
+            case 501:                                                 // 다음 필드(0x100cfeb0 → 장면 5). 503 은 마을 갈래 낱말이라 필드를 안 넘긴다(0x100d09a0).
                 int next = c.Args[0];
                 var onEnd = _onEnd;
+                Script.StopSounds();
                 host.LeaveScene(() => Open(next, onEnd ?? (() => { })));
+                return true;
+            case 506:                                                 // 챕터 끝(0x100cfe60: 팀을 무리로 → 장면 10 연대표)
+                GameWindow.TestRunTrace($"part1 field {_field?.Id} chapter end");   // 시험 전용 줄
+                Script.StopVoice();
+                Script.StopSounds();
+                _onEnd = null;
+                host.LeaveScene(() => { _open = false; _bg = null; shell.Chapter.EndChapter(); });
                 return true;
         }
         return false;
@@ -140,19 +190,57 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     {
         GameWindow.TestRunTrace($"part1 field {_field?.Id} end");   // 시험 전용 줄
         Script.StopVoice();                                          // Esc 로 끝내도 목소리가 이어 나오지 않게
+        Script.StopSounds();
         var onEnd = _onEnd;
         _onEnd = null;
         host.LeaveScene(() => { _open = false; _bg = null; onEnd?.Invoke(); });
     }
 
+    /// <summary>고르기 줄 자리(화면 640×480 기준) — 물음 상자 위에 쌓는다.</summary>
+    private static (int X, int Y, int W, int H) ChoiceRow(int i, int count) => (120, 330 - (count - i) * 32, 400, 28);
+
+    private int ChoiceAt(int bx, int by)
+    {
+        if (Script.Choice is not { } choice) return -1;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        for (int i = 0; i < choice.Options.Count; i++)
+        {
+            var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+            if (bx >= ox + x && bx < ox + x + w && by >= oy + y && by < oy + y + h) return i;
+        }
+        return -1;
+    }
+
+    internal void UpdateHover(int bx, int by)
+    {
+        if (ChoiceAt(bx, by) is >= 0 and var i) _choiceHover = i;
+    }
+
+    internal void OnClick(int bx, int by)
+    {
+        if (Script.Choice != null && Script.Talk == null) { if (Script.WaitingOnChoice && ChoiceAt(bx, by) is >= 0 and var i) Script.Choose(i); return; }
+        OnClick();
+    }
+
     internal void OnClick()
     {
+        // 고르기 — 짚은 줄을 고른다(자동 진행 · Enter). 고를 줄이 아직 다 안 떴으면(901 사이의 기다림) 안 받는다.
+        if (Script.Choice is { } choice && Script.Talk == null)
+        {
+            if (choice.Options.Count > 0 && Script.WaitingOnChoice) Script.Choose(Math.Clamp(_choiceHover, 0, choice.Options.Count - 1));
+            return;
+        }
         if (Script.Talk != null) { if (!shell.NextTalkPage()) Script.Advance(); }
         else if (Script.Idle) End();                                        // 다 돌았는데 500 이 없으면 누르면 돌아간다(걷는 중 · 기다리는 중에는 안 받는다)
     }
 
     internal void OnKey(int key)
     {
+        if (Script.Choice is { Options.Count: > 0 } choice && Script.Talk == null && key is Win32.VK_UP or Win32.VK_DOWN)
+        {
+            _choiceHover = (Math.Clamp(_choiceHover, 0, choice.Options.Count - 1) + (key == Win32.VK_UP ? choice.Options.Count - 1 : 1)) % choice.Options.Count;
+            return;
+        }
         if (key == Win32.VK_ESCAPE) End();
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) OnClick();
     }
@@ -193,6 +281,27 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             var spots = Enumerable.Range(0, _spots.Length).Select(PositionOf).ToArray();
             var (camX, camY) = Camera();
             int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
+            // 덮개 · 화면 바꾸기 — 바꾸는 중이면 나감 동안 옛 것을 빛깔로 바래고, 들어옴 동안 새 것을 드러낸다(0x100ab380).
+            var cover = _cover;
+            uint fadeColor = 0;
+            double fade = 0;
+            if (_transition is { } tr)
+            {
+                double t = (host._lastTime - tr.Start) * GameWindow.TicksPerSecond;
+                if (t < tr.Out) { cover = tr.From; fade = t / tr.Out; }
+                else if (t < tr.Out + tr.In) fade = 1 - (t - tr.Out) / tr.In;
+                else _transition = null;
+                fadeColor = tr.Color;
+            }
+            _shown = cover;
+            if (cover != null)
+            {
+                DrawCover(cover, ox, oy);
+                if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
+                DrawTalkLayer(ox, oy);
+                host.DrawToast();
+                return;
+            }
             if (_bg is { } bg)
                 for (int y = 0; y < Math.Min(H, _bgH); y++)
                     for (int x = 0; x < Math.Min(W, _bgW); x++)
@@ -206,11 +315,34 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                 int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
                 var (motion, mirror) = _motion[i] ?? (action * 3 + ObsMotionTable.DirectionOf(facing), facing == Facing.Right);
                 var (x, y) = spots[i];
+                if (_shadow[i])
+                    host.DrawUi(Part1Game.ObsBase + ShadowObs, 0, tick, ox + x - camX, oy + top + y - camY, GameWindow.UiBlend.Darken, loop: true, fade: 0.55);   // 그림자 그림의 점은 어둡기 단계(0~31, 섞기 8) — 바탕을 어둡게
                 host.DrawUi(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, tick, ox + x - camX, oy + top + y - camY,
-                            GameWindow.UiBlend.Alpha, loop: true, mirror: mirror);
+                            GameWindow.UiBlend.Alpha, loop: true, mirror: mirror ^ _flip[i]);
             }
+            if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
         }
-        if (Script.Talk is { } talk && Script.TalkSlot == Part1SceneScript.NarrationSlot)
+        DrawTalkLayer(ox, oy);
+        host.DrawToast();
+    }
+
+    /// <summary>덮개 — 한 빛깔이면 채우고, 그림이면 그림 안 (X, Y) 부터 화면 크기만큼 왼위에 찍는다(0x100c7d8f: OffsetRect).</summary>
+    private void DrawCover(Cover cover, int ox, int oy)
+    {
+        const int W = MosesScene.MosesW, H = MosesScene.MosesH;
+        if (cover.Px is not { } px) { host.FillRect(ox, oy, W, H, cover.Color); return; }
+        int sx = Math.Clamp(cover.X, 0, Math.Max(0, cover.W - W)), sy = Math.Clamp(cover.Y, 0, Math.Max(0, cover.H - H));
+        for (int y = 0; y < Math.Min(H, cover.H - sy); y++)
+            for (int x = 0; x < Math.Min(W, cover.W - sx); x++)
+                host.SetPixel(ox + x, oy + y, px[(sy + y) * cover.W + sx + x] | 0xFF000000);
+    }
+
+    /// <summary>대사 · 고르기 · 글 쪽 창.</summary>
+    private void DrawTalkLayer(int ox, int oy)
+    {
+        if (Script.Talk is { } page && Script.TalkSlot == Part1SceneScript.PageSlot)
+            shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                          // 904 글 쪽 창(0x100d04b3)
+        else if (Script.Talk is { } talk && Script.TalkSlot == Part1SceneScript.NarrationSlot)
             shell.DrawTalkBox(ox + 10, oy + 5, 619, 35, "", talk.Text);                            // 210 해설 띠(그림 없음)
         else if (Script.Talk is { } bubble && Script.TalkSlot == Part1SceneScript.BubbleSlot && _field is { } shown
                  && Script.TalkPerson >= 0 && Script.TalkPerson < _spots.Length)
@@ -223,7 +355,16 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             shell.DrawTalkBox(ox + bx, oy + by, 260, 100, bubble.Speaker, bubble.Text);
         }
         else if (Script.Talk is { } talk2) shell.DrawTalk(ox, oy, talk2.Speaker, talk2.Text, Script.TalkSlot, Script.Faces);
+        else if (Script.Choice is { } choice)
+        {
+            // 900 물음 + 901 고를 줄 — 고르면 장면 변수 = 1부터 센 차례(0x100aa690).
+            shell.DrawTalkBox(ox + 64, oy + 336, 511, 111, choice.Speaker, choice.Text);
+            for (int i = 0; i < choice.Options.Count; i++)
+            {
+                var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+                shell.DrawButton(ox + x, oy + y, w, h, choice.Options[i], i == _choiceHover);
+            }
+        }
         else if (Script.Idle) host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);
-        host.DrawToast();
     }
 }

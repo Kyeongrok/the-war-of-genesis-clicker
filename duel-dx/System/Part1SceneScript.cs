@@ -11,7 +11,9 @@ namespace DuelDx;
 /// 행동 0 사건 부르기 · 100 [그림] 배경 바꾸기 · 200·201·202 [얼굴, 줄] · 206·207·208 [얼굴, 줄, 목소리?] 대사(창 자리만 다르다 — 가설) · 203~205 대사 창 닫기 ·
 /// 800 [변수, 값] 장면 변수 = 값 · 101 [변수] 장면 변수 + 1(필드 0001: 800 [1,1] → 사건 2 「변수 1 == 1」 → 끝의 101 [1] → 사건 3 「== 2」 — 자료로 본 가설) ·
 /// 600 [소리] 효과음(<c>Snd</c>) · 700 [곡, 되풀이] 배경음악(<c>BGMs</c>) · 802 [깃발, 값] 진행 깃발. 장면을 넘기는 행동(500 필드 끝 · 501 챕터 끝 → 연대표 · 502 전투 · 503 필드)은 <see cref="SceneChange"/> 가 맡는다.
-/// 나머지(300대 인물 걷기·모습 · 400대 화면 · 700대 소리 · 900대 지도 연출 · 1000대)는 아직 건너뛴다.
+/// 필드만의 것(<see cref="IsField"/>, 분석-파트1-챕터 14절): 100 그림 덮개 · 101 빛깔 화면 · 102 덮개 걷기 · 103~107 화면 바꾸기 · 306 뒤집기 · 307 그림자 ·
+/// 400 화면 자리 · 600~605 효과음 · 701~704 배경음악 기다림·멈춤·작게·크게 · 801 장면 변수 += · 900·901 고르기 · 902~904 글 쪽 창 · 501 다음 필드 · 506 챕터 끝.
+/// 같은 번호라도 챕터에서는 뜻이 다르다(900~904 는 지도 말·팀, 101 은 안 쓴다).
 /// 진행 깃발은 전투 사건(702·703 → 파트2 102·103)과 같은 <see cref="FlagStore"/> 다.
 /// </remarks>
 internal sealed class Part1SceneScript(GameWindow host)
@@ -40,6 +42,78 @@ internal sealed class Part1SceneScript(GameWindow host)
 
     /// <summary>행동 401 [dx, dy, 틱] — 화면을 틱마다 (dx, dy) 씩, 틱 수만큼 민다(0x100cd950, 그림 끝에서 자른다).</summary>
     internal Action<int, int, int>? CameraPan;
+
+    /// <summary>필드 실행기 — 필드와 챕터는 같은 번호를 다른 뜻으로 쓴다(필드 처리기 분기 0x100d1590, 챕터 0x100c2010).</summary>
+    internal bool IsField;
+
+    /// <summary>필드 100 [BGRs, x, y, 대사 보임] — 화면 가득 그림을 덮는다(0x100cf1f0: 덮개 0x101b454c, 자리 0x101b4548/4544, 대사 0x101b4540).</summary>
+    internal Action<int, int, int, bool>? PictureShow;
+
+    /// <summary>필드 101 [빛깔] — 화면을 한 빛깔로 덮는다(0x100cf0b0: 0 흰 · 1 검 · 2 빨).</summary>
+    internal Action<int>? ColorShow;
+
+    /// <summary>필드 102 — 덮개를 걷어 필드(배경 + 인물)로 돌아간다(0x100cf1c0).</summary>
+    internal Action? PictureClear;
+
+    /// <summary>
+    /// 필드 103~107 [갈래, 빛깔, 나감 틱, 들어옴 틱] — 화면 바꾸기(0x100ab310: 단계값 0→31 을 31/나감 씩 올려 옛 화면을 빛깔로 바래고, 31→63 을 31/들어옴 씩 올려 새 화면을 드러낸다).
+    /// 갈래 0 = 덮개(100·101)로, 1 = 필드 그대로로(끝에 덮개를 지운다). 빛깔 0 = 0xe(흰 — 가설) · 1 = 0xf(검 — 전투 끝 바램 0x1002c8da 와 같다) · 2 = 0x20(가설).
+    /// </summary>
+    internal Action<int, int, int, int>? Transition;
+
+    /// <summary>필드 306 [인물] — 좌우 뒤집기를 바꾼다(0x100cdc20: +0x68 = !+0x68).</summary>
+    internal Action<int>? SpriteFlip;
+
+    /// <summary>필드 307 [인물] — 발밑 그림자(Obs 0074)를 켠다(0x100cdc60: +0x4e = 1, 그리기 0x100c81a4). 304 가 끈다.</summary>
+    internal Action<int, bool>? SpriteShadow;
+
+    /// <summary>필드 400 [x, y] — 화면 자리를 바로 옮긴다(0x100cd880, 그림 끝에서 자른다).</summary>
+    internal Action<int, int>? CameraSet;
+
+    /// <summary>필드 고르기(900 [그림, 물음 줄, 변수] + 901 [고를 줄] ×) — 고르면 장면 변수 = 1부터 센 차례(0x100d02b0 → 0x100aa690, 0x101bb14c + 변수).</summary>
+    internal sealed class Choosing(string speaker, string text, int variable)
+    {
+        public readonly string Speaker = speaker, Text = text;
+        public readonly int Variable = variable;
+        public readonly List<string> Options = [];
+    }
+
+    /// <summary>떠 있는 고르기 — 행동 1 이 고를 때까지 기다린다.</summary>
+    internal Choosing? Choice { get; private set; }
+
+    /// <summary>고를 줄이 다 떴고(901 다음의 행동 1 에 닿았다) 고르기를 기다리는 중.</summary>
+    internal bool WaitingOnChoice => Choice != null && _waitBusy;
+
+    /// <summary>고른다(0부터) — 장면 변수에 1부터 센 차례를 넣고 잇는다.</summary>
+    internal void Choose(int index)
+    {
+        if (Choice is not { } c || index < 0 || index >= c.Options.Count) return;
+        _vars[c.Variable] = index + 1;
+        Choice = null;
+        Run();
+    }
+
+    /// <summary>필드 903 이 쌓은 글 쪽(줄 넷) — 904 가 차례로 띄운다(0x100d0900 · 0x100d0440).</summary>
+    private readonly List<short[]> _pageTable = [];
+
+    /// <summary>904 가 띄울 남은 쪽.</summary>
+    private readonly Queue<string> _pages = [];
+
+    /// <summary>필드 행동이 건 「칸」(화면 바꾸기 · 음악 크기)이 끝나는 때 — 행동 1 이 기다린다(원본 실행기는 칸이 다 빌 때까지 1 에 머문다).</summary>
+    private double _slotsUntil;
+
+    /// <summary>602 — 600 의 소리가 끝날 때까지.</summary>
+    private bool _waitSound;
+
+    /// <summary>필드 600 의 소리 칸(0x101b452c) · 604 의 되풀이 칸(0x101b4528).</summary>
+    private const int SoundTag = 0x5012, LoopTag = 0x5013;
+
+    /// <summary>필드 소리를 끊는다 — 필드를 떠날 때.</summary>
+    internal void StopSounds()
+    {
+        host._mixer.StopEffect(SoundTag);
+        host._mixer.StopEffect(LoopTag);
+    }
 
     /// <summary>
     /// 지도 말 — 차례(0부터) → 장소. 챕터를 열 때 처음 장소로 채우고, 행동 900 [말(1부터), 장소] 이 옮긴다(<see cref="MarkerMoved"/> 가 그 뒤를 맡는다).
@@ -72,6 +146,9 @@ internal sealed class Part1SceneScript(GameWindow host)
 
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
+
+    /// <summary>챕터 조건 202 [0, 장소] — 「진입」한 장소(0x101b4444). <see cref="Part1ChapterScreen.EnterHere"/> 가 훑는 동안만 산다.</summary>
+    internal int Entered = -1;
 
     /// <summary>
     /// 챕터 지도에서 일행이 막 닿은 장소(조건 200 [갈래, 장소] — <c>0x100bcfd0</c>: 무리의 지금 장소 ≠ 앞 장소이고 지금 장소 == 값). 없으면 -1.
@@ -107,7 +184,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>지금 대사가 뜬 상자(0 왼 · 1 오른 · 2 가운데 · <see cref="BubbleSlot"/> 필드 인물 말풍선 · <see cref="NarrationSlot"/> 위쪽 해설 띠).</summary>
     internal int TalkSlot { get; private set; } = 2;
 
-    internal const int BubbleSlot = 3, NarrationSlot = 4;
+    internal const int BubbleSlot = 3, NarrationSlot = 4, PageSlot = 5;
 
     /// <summary>209 의 말하는 필드 인물(차례) — 말풍선을 그 머리 위에.</summary>
     internal int TalkPerson { get; private set; } = -1;
@@ -133,8 +210,14 @@ internal sealed class Part1SceneScript(GameWindow host)
         _fired = fired;
         _vars = vars ?? [];
         Talk = null;
+        Choice = null;
+        _pages.Clear();
+        _pageTable.Clear();
         _waitUntil = 0;
         _waitBusy = false;
+        _slotsUntil = 0;
+        _waitSound = false;
+        _leaving = false;
         _away = null;
         if (!resume) { _pending.Clear(); Array.Clear(Faces); }
         // 성우 대사(206~208 의 셋째 인자 = Snd 번호)는 처음 틀 때 받느라 조용히 지나가므로 장면을 열 때 미리 받아 둔다.
@@ -172,13 +255,16 @@ internal sealed class Part1SceneScript(GameWindow host)
     private bool _waitBusy;
 
     /// <summary>다 돌았나 — 대사도 기다림도 남은 행동도 없다.</summary>
-    internal bool Idle => Talk == null && _waitUntil == 0 && !_waitBusy && _pending.Count == 0;
+    internal bool Idle => Talk == null && Choice == null && _waitUntil == 0 && !_waitBusy && !_waitSound && _pending.Count == 0 && !_leaving;
+
+    /// <summary>장면을 넘겼다(500~506) — 넘어가는 바램 동안 「다 돌았다」로 보지 않는다(그 사이 누름이 필드를 한 번 더 끝내지 않게).</summary>
+    private bool _leaving;
 
     /// <summary>쉬는 중이었으면 때가 됐는지 보고 잇는다 — 필드 화면이 틀마다 부른다.</summary>
     internal void Pump()
     {
         if (Talk != null && _talkAutoAt > 0 && host._lastTime >= _talkAutoAt) { Advance(); return; }
-        if (Talk == null && (_waitUntil > 0 || _waitBusy)) Run();
+        if (Talk == null && (_waitUntil > 0 || _waitBusy || _waitSound)) Run();
     }
 
     /// <summary>울리는 성우 목소리를 끊는다 — 대사를 넘길 때 · 장면을 떠날 때.</summary>
@@ -193,6 +279,8 @@ internal sealed class Part1SceneScript(GameWindow host)
     {
         Talk = null;
         _talkAutoAt = 0;
+        // 904 글 쪽 창 — 남은 쪽이 있으면 다음 쪽(마지막 쪽을 넘기면 잇는다).
+        if (_pages.Count > 0) { Talk = ("", _pages.Dequeue()); return; }
         // 넘기면 목소리도 끊는다(사용자 요청 — 원본은 목소리가 끝날 때까지 기다리지만 넘길 때 끝까지 나오면 답답하다).
         StopVoice();
         Run();
@@ -219,7 +307,8 @@ internal sealed class Part1SceneScript(GameWindow host)
         return c.Code switch
         {
             0 => true,
-            100 => _vars.GetValueOrDefault(a[0]) == a[1],
+            100 => BattleScene.Compare(_vars.GetValueOrDefault(a[0]), a[2], a[1]),   // [변수, 값, 연산](챕터 0x100bcf70 → 0x100bce90) — 자료의 연산은 모두 0(같다)
+            202 => a[0] == 0 && Entered >= 0 && a[1] == Entered,                       // [0, 장소] 그 장소에 진입(0x100bd320)
             200 => a[1] == Arrived,
             // 조건은 말을 0부터 센다(0x100bd140 · 0x100bd510 · 0x100bd550 — 칸을 바로 쓴다), 행동 900 · 902 는 1부터(칸 a0 − 1). 분석-파트1-챕터 10.2.
             // 201 [말, 장소] 막 옮겨(지금 ≠ 앞) 그 장소에 닿음 · 301 [말, v] 살았나 · 302 [장소, 팀, v] 팀이 그 장소에(팀 0 = 일행) ·
@@ -247,8 +336,14 @@ internal sealed class Part1SceneScript(GameWindow host)
             }
             if (_waitBusy)
             {
-                if (Busy?.Invoke() == true) return;
+                // 행동 1 — 걷는 인물(Busy) · 화면 바꾸기 · 음악 크기 칸 · 떠 있는 고르기가 다 끝날 때까지.
+                if (Busy?.Invoke() == true || host._lastTime < _slotsUntil || Choice != null) return;
                 _waitBusy = false;
+            }
+            if (_waitSound)
+            {
+                if (host._mixer.IsPlaying(SoundTag)) return;
+                _waitSound = false;
             }
             if (_pending.Count == 0)
             {
@@ -261,6 +356,7 @@ internal sealed class Part1SceneScript(GameWindow host)
             var c = _pending[0];
             _pending.RemoveAt(0);
             short[] a = c.Args;
+            if (IsField && RunField(c)) { if (_sceneLeft) return; continue; }
             switch (c.Code)
             {
                 case 0: Call(a[0]); break;
@@ -336,9 +432,103 @@ internal sealed class Part1SceneScript(GameWindow host)
                     if (a[0] >= 0 && a[0] < host.FlagSt._flags.Length) host.FlagSt._flags[a[0]] = (byte)Math.Clamp((int)a[1], 0, 255);
                     break;
                 case >= 500 and <= 503:
-                    if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; _away = c.Code is 502 or 503 ? c : null; return; }
+                    if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; _leaving = IsField; _away = c.Code is 502 or 503 ? c : null; return; }
                     break;
             }
         }
+    }
+
+    /// <summary><see cref="RunField"/> 가 장면을 넘겼다 — 실행을 멈춘다.</summary>
+    private bool _sceneLeft;
+
+    private static double TicksToSeconds(int ticks) => Math.Max(0, ticks) / GameWindow.TicksPerSecond;
+
+    /// <summary>
+    /// 필드만의 행동(필드 처리기 분기 0x100d1590) — 맡았으면 true. 챕터와 번호가 겹치는 것(101 · 900~904 · 501 · 503 · 506)도 여기서 필드 뜻으로 돈다.
+    /// </summary>
+    private bool RunField(ScriptCommand c)
+    {
+        short[] a = c.Args;
+        short A(int i) => i < a.Length ? a[i] : (short)0;
+        _sceneLeft = false;
+        switch (c.Code)
+        {
+            case 100: PictureShow?.Invoke(A(0), A(1), A(2), A(3) != 0); return true;
+            case 101: ColorShow?.Invoke(A(0)); return true;
+            case 102: PictureClear?.Invoke(); return true;
+            case >= 103 and <= 107:
+            {
+                // 103 [갈래, 빛깔, 나감, 들어옴] · 104·105 [갈래, 띠, 틱](0x100ab550 · 0x100ab880 — 닦아 내기) · 106·107 [갈래, …](0x100abf70 · 0x100ac870).
+                // 104~107 의 닦기 무늬는 아직 없어 그 틱을 반씩 검게 바래고 드러내는 것으로 갈음한다(가설).
+                int kind = c.Code == 103 ? A(1) : 1;
+                int fadeOut = Math.Max(1, c.Code == 103 ? A(2) : A(2) / 2), fadeIn = Math.Max(1, c.Code == 103 ? A(3) : A(2) - A(2) / 2);
+                Transition?.Invoke(A(0), kind, fadeOut, fadeIn);
+                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(fadeOut + fadeIn));
+                return true;
+            }
+            case 301: return true;                                            // [인물] 모션 틱을 멈춘다(+0x46 = −1) — 아직 없음
+            case 304: SpriteShadow?.Invoke(A(0), false); SpriteVisible?.Invoke(A(0), false); return true;   // 숨기면 그림자도 끈다(0x100cdb7f)
+            case 306: SpriteFlip?.Invoke(A(0)); return true;
+            case 307: SpriteShadow?.Invoke(A(0), true); return true;
+            case 400: CameraSet?.Invoke(A(0), A(1)); return true;
+            case 600:                                                         // [소리] 칸 소리 — 앞 소리를 끊고 튼다(0x100cd6b0)
+                host._mixer.StopEffect(SoundTag);
+                if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), SoundTag);
+                return true;
+            case 601: host._mixer.StopEffect(SoundTag); return true;           // 칸 소리 끄기(0x100cd720)
+            case 602: _waitSound = Timed; return true;                       // 칸 소리가 끝날 때까지(0x100cd740)
+            case 603: if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0)); return true;   // 한 번 — 칸 없이(0x100cd7a0 → 0x1001a330)
+            case 604:                                                         // 되풀이 소리(0x100cd7f0 → 0x1001a910(소리, 1))
+                host._mixer.StopEffect(LoopTag);
+                if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), LoopTag, loop: true);
+                return true;
+            case 605: host._mixer.StopEffect(LoopTag); return true;
+            case 701: return true;                                            // CD 곡이 끝날 때까지(0x100cd510 → 0x100096d0) — 되풀이 곡뿐이라 안 기다린다(가설)
+            case 702: host.StopMusic(); return true;                          // 곡 멈춤(0x100cd550)
+            case 703:                                                         // [걸음] 크기 127 에서 틱마다 걸음씩 0 까지(0x100cd570, 0x1011beb0)
+            {
+                int ticks = A(0) > 0 ? (int)Math.Ceiling(127 * host._musicGain / A(0)) : 0;
+                host.FadeMusic(0, ticks);
+                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
+                return true;
+            }
+            case 704:                                                         // [걸음] 0 에서 127 까지(0x100cd5b0 — 첫 부름에 0 으로)
+            {
+                int ticks = A(0) > 0 ? (127 + A(0) - 1) / A(0) : 0;
+                host.SetMusicLevel(0);
+                host.FadeMusic(100, ticks);
+                if (Timed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
+                return true;
+            }
+            case 801: _vars[A(0)] = (byte)(_vars.GetValueOrDefault(A(0)) + A(1)); return true;   // 장면 변수 += (바이트, 0x100cffa0)
+            case 900:
+            {
+                string raw = A(1) >= 0 && A(1) < _lines.Count ? _lines[A(1)] : "";
+                Choice = new Choosing(Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw), A(2));
+                return true;
+            }
+            case 901:
+                if (Choice is { } open && A(0) >= 0 && A(0) < _lines.Count) open.Options.Add(Part1Game.PlainText(_lines[A(0)]));
+                return true;
+            case 902: _pageTable.Clear(); return true;
+            case 903: _pageTable.Add([A(0), A(1), A(2), A(3)]); return true;
+            case 904:
+            {
+                // 표 창(70, 100, 500×285) — 903 한 칸이 한 줄: [이름, 확률, 글 1, 글 2](필드 0034 · 0101 의 참모 의견 「이븐 시나 90% …」).
+                // 칸을 모두 한 창에 쌓는다(넘치면 상자가 쪽을 나눈다). 다 넘기면 잇는다.
+                _pages.Clear();
+                string Line(int l) => l >= 0 && l < _lines.Count ? Part1Game.PlainText(_lines[l]).Trim() : "";
+                var rows = _pageTable.Select(r => $"{Line(r[0])}  {Line(r[1])}  {string.Join(" ", r.Skip(2).Select(l => Line(l)).Where(t => t.Length > 0))}".Trim())
+                                     .Where(t => t.Length > 0).ToList();
+                if (rows.Count > 0) { Talk = ("", string.Join("\n", rows)); TalkSlot = PageSlot; TalkPerson = -1; _talkAutoAt = 0; }
+                return true;
+            }
+            case 503: return true;                                            // 마을 갈래 낱말(+0x56) — 마을 화면이 따로 맡는다
+            case 501 or 506:                                                  // 501 [필드] 다음 필드(장면 5) · 506 챕터 끝(0x100cfe60 → 장면 10)
+                if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; _sceneLeft = _leaving = true; _pending.Clear(); }
+                return true;
+            case >= 1000 and <= 1203: return true;                            // 마을 시설(상점 · 길드 · 주점) — 마을 화면이 맡는다
+        }
+        return false;
     }
 }

@@ -43,6 +43,7 @@ internal sealed unsafe partial class BattleScene
         // 진행 깃발은 <b>실제로 돈</b> 행동 102 만 세운다(RunEventAction) — 이긴 뒤 파일의 102 를 모두 적용하던 것은 안 터진 갈래의 깃발까지 세웠다(fg-21 ⑬).
         // 이어지는 전투는 이벤트 행동 10 이 정한 것뿐이다. Btl 자료의 첫 행동 10 은 챕터 자료가 없는 데모 흐름에서만 쓴다 —
         // 원본은 전멸·행동 11[0] 승리를 챕터(모세스)로 돌린다.
+        int eventNext = _eventNextBattle;
         int next = _eventNextBattle > 0 ? _eventNextBattle : host.EpisodesScr.Episodes().Count == 0 ? host._scene.NextBattle : 0;
         _eventNextBattle = 0;
         // 파트1 판은 챕터 지도로 돌아간다(이기면 ✓) — 파트1 의 다음 판은 챕터 사건(502)이 정하는데, 그것을 옮기기 전까지는 플레이어가 지도에서 고른다.
@@ -51,6 +52,15 @@ internal sealed unsafe partial class BattleScene
             if (won) host.Part1.Cleared.Add(host._scene.Id - Part1Game.BattleBase);
             // 쓰러진 용병 · 무리 탈것은 잃는다 — 이 전투에 세운 것만(전투 끝에 한 번, RESTART · 불러오기는 되돌린다).
             SettlePart1Losses();
+            host._mixer.StopEffect(Part1LoopSoundTag);
+            bool chapterEnd = _part1ChapterEnd;
+            _part1ChapterEnd = false;
+            // 원본 전투 끝(0x1002c744): 결과 5(행동 101 → 10) = 장면 3 그 전투로 · 6(104 → 6) = 장면 5 그 필드로 · 7(105) = 장면 10 연대표(챕터 끝) ·
+            // 그 밖의 승리 = 장면 4 챕터 지도. 전에는 늘 챕터로 돌아가 이어지는 전투(0039 → 0040)와 끝 필드(0023 → 필드 29)를 건너뛰었다.
+            // 챕터의 남은 행동(502 뒤)은 그 사슬이 챕터로 돌아온 뒤에 잇는다.
+            if (won && chapterEnd) { TestRunTrace("dest part1 timeline (105)"); host.Part1TitleScr.EndChapterFromBattle(); return; }   // 시험 전용 줄
+            if (won && eventNext > 0 && host.Part1TitleScr.StartBattle(eventNext)) { TestRunTrace($"dest part1 battle {eventNext}"); return; }   // 시험 전용 줄
+            if (won && nextField > 0) { TestRunTrace($"dest part1 field {nextField}"); host.Part1TitleScr.FieldFromBattle(nextField); return; }   // 시험 전용 줄
             TestRunTrace($"dest part1 chapter {host.Part1.ChapterId}");   // 시험 전용 줄
             host.Part1TitleScr.ReturnFromBattle(won);
             return;

@@ -232,11 +232,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 host.LeaveScene(() => shell.StartBattle(target));
                 return true;
             case 501:
-                // 챕터 끝 — 장면 10(0x100c04b0 → 생성 0x100d2470 이 Eps\episode.elg 를 연다) = 연대표로. 끝낸 챕터는 연대표에 ✓.
-                if (_chapter is { } done) host.Part1.FinishedChapters.Add(done.Id);
-                host.Part1.PendingActions = [];
-                host.Part1.Save(host.FlagSt._flags);   // 챕터가 끝났다 — 남은 행동 없이
-                host.LeaveScene(() => { _open = false; shell.Timeline.Open(); });
+                host.LeaveScene(EndChapter);
                 return true;
             case 500:
                 GameOver();
@@ -248,6 +244,21 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// 챕터 끝 — 장면 10(0x100c04b0 → 생성 0x100d2470 이 Eps\episode.elg 를 연다) = 연대표로. 끝낸 챕터는 연대표에 ✓.
+    /// 챕터 행동 501 · 필드 행동 506(0x100cfe60) · 전투 행동 105(결과 7)가 부른다.
+    /// </summary>
+    internal void EndChapter()
+    {
+        int done = _chapter?.Id ?? host.Part1.ChapterId;
+        if (done >= 0) host.Part1.FinishedChapters.Add(done);
+        host.Part1.PendingActions = [];
+        _resume = false;
+        host.Part1.Save(host.FlagSt._flags);   // 챕터가 끝났다 — 남은 행동 없이
+        _open = false;
+        shell.Timeline.Open();
     }
 
     /// <summary>그 챕터를 연다 — 못 읽으면 알리고 false.</summary>
@@ -706,7 +717,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void EnterHere()
     {
         if (_chapter is not { } chapter || _party < 0 || _party >= chapter.Places.Count) return;
-        if (Events.Arrive(_party)) return;
+        // 조건 202 [0, 장소] — 「진입」한 팀(0x101b4440)과 그 장소(0x101b4444, 0x100b0d9d). 챕터 29 · 31 · 42 는 장소에 들어서면 마을 · 전투 대신 이야기를 튼다.
+        Events.Entered = _party;
+        bool fired = Events.Arrive(_party);
+        Events.Entered = -1;
+        if (fired) return;
         var place = chapter.Places[_party];
         if (place.IsBattle)
         {
