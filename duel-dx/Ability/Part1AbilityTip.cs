@@ -38,7 +38,7 @@ internal static class Part1AbilityTip
         {
             string element = a.Element is > 0 and < 6 ? ElementNames[a.Element] : "";
             string kind = KindText(a.Formula, element);
-            lines.Add(kind);
+            lines.Add(EffectText(a.Id, a.Formula) ?? kind);
             var where = new List<string>();
             if (reach && RangeText(a) is { Length: > 0 } range) where.Add(range);
             int area = a.Raw.GetValueOrDefault(0x31) - 1;
@@ -55,10 +55,7 @@ internal static class Part1AbilityTip
         }
         else if (PassiveText(ability, shown) is { Length: > 0 } passive) lines.Add(passive);
 
-        // 직업 바꾸기 조건(Job.dat 머리 짝 다섯 — 그 어빌리티를 그 레벨 이상, 0x1009e6f0)에 쓰이면 그 직업들.
-        _jobs ??= Part1Job.LoadAll();
-        var needs = _jobs.Where(j => j.Firsts.Any(f => f.A == ability)).Select(j => $"{j.Name}(Lv {Math.Max(1, j.Firsts.First(f => f.A == ability).B)})").Distinct().ToList();
-        if (needs.Count > 0) lines.Add("전직 조건: " + string.Join(" · ", needs.Take(4)) + (needs.Count > 4 ? $" 외 {needs.Count - 4}" : ""));
+        // 전직 조건은 뺐다 — 전직 트리(T) · 레벨업 창 옆에서 본다(사용자 요청).
 
         if (ab.Kind is 2 or 4 && ab.ItemId > 0)
         {
@@ -68,6 +65,34 @@ internal static class Part1AbilityTip
         }
         return string.Join("$n", lines);
     }
+
+    /// <summary>
+    /// 보조 · 상태 기술의 실제 효과(원본 분석 — 분석-파트1-기술-b 9 · 10절, 분석-파트1-전투 25절). 걸리는 길이는 시간이 흐르며 준다. 따로 없으면 null.
+    /// </summary>
+    private static string? EffectText(int attackId, int formula) => attackId switch
+    {
+        375 => "기도 — 5% 썬 라이트 · 25% 힐 윈드가 내린다(나머지는 빛만)",
+        376 => "희생 — 다른 아군 모두 HP 가득 · SOUL 150",
+        377 => "해체대법 — 대상 HP 1 · SOUL 150",
+        382 => "도발 — 대상 SOUL −20",
+        366 => "댓쉬 — 겨눈 칸으로 달려간다",
+        367 => "워프 — 겨눈 칸으로 순간 이동",
+        _ => formula switch
+        {
+            6 => "회복 — 최대 HP × 세기 ÷ 20000",
+            15 => "블래스 — 걸린 동안 차례마다 SOUL 이 +20 더 오른다(두 배로 빨리 찬다)",
+            16 => "큐어 — 상태이상 · 강화 · 속성 부여를 모두 푼다",
+            17 => "스피디 — 걸린 동안 SPD +8(이동 두 칸 더)",
+            20 => "배리어 — 걸린 동안 마법 피해 0, 그 밖의 피해는 두 배",
+            21 => "커즈 — SOUL 0, 그리고 20% 씩 중독 · 최면 · 컨디션 이상",
+            22 => "쉐도우 실드 — 걸린 동안 AC ×1.5, MR ×0.5",
+            23 => "블러드 러스트 — 걸린 동안 무기 공격 ×1.5",
+            25 => "컨디션 이상 — SOUL 이 50 을 못 넘는다(능력치가 떨어진다)",
+            27 => "최면 — 차례가 오지 않는다",
+            28 => "혼란 — 자기 말고 모두를 적으로 본다",
+            _ => null,
+        },
+    };
 
     /// <summary>세기 식(<c>Attack +0x42</c>, <see cref="Part1Combat.Power"/>)으로 본 종류.</summary>
     private static string KindText(int formula, string element)

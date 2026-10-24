@@ -885,9 +885,11 @@ internal sealed unsafe partial class StatusScreen(GameWindow host)
         // 대상·범위 — 자료(대상 방식·사거리·범위 모양·크기)로 만든 줄이라 스킬을 고치면 저절로 따라온다(사용자 요청: 오버플로우 설명이 「적군 한명」 그대로).
         // 지금 레벨(배우기 전이면 Lv1) 것을 보이고, 다음 레벨에서 달라지면 그것도 보인다.
         int shown = Math.Max(1, level);
-        string? reachNow = ab.WorkByLevel.TryGetValue(shown, out int nowWork) && host.Btl.Work(nowWork) is { } nw ? TargetText(nw) : null;
+        // 파트1 어빌리티는 대상 · 범위 줄을 뺀다 — 눌러 보면 범위가 칠해진다(사용자 요청).
+        bool part1 = ab.Id >= Part1Game.ChrBase;
+        string? reachNow = !part1 && ab.WorkByLevel.TryGetValue(shown, out int nowWork) && host.Btl.Work(nowWork) is { } nw ? TargetText(nw) : null;
         if (reachNow != null) parts.Add(reachNow);
-        if (ab.WorkByLevel.TryGetValue(shown + 1, out int nextWork) && host.Btl.Work(nextWork) is { } xw && TargetText(xw) is var reachNext && reachNext != reachNow)
+        if (!part1 && ab.WorkByLevel.TryGetValue(shown + 1, out int nextWork) && host.Btl.Work(nextWork) is { } xw && TargetText(xw) is var reachNext && reachNext != reachNow)
             parts.Add($"(Lv{shown + 1}부터 {reachNext})");
         if (level > 0 && Line(level) is { Length: > 0 } now) parts.Add($"Lv{level}: {now}");
         int next = level + 1;
