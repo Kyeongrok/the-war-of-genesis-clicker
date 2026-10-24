@@ -23,10 +23,13 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     /// <summary>이 틀이 그리는 파트1 기술인가 — 고정 work 들 · 라이트닝볼츠(Attack 번호로 · 생성된 어빌리티 work 포함).</summary>
-    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work) || IsWeaponWork(work) || IsMagicWork(work) || IsSword2Work(work) || IsGunWork(work);
+    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work) || IsWeaponWork(work) || IsMagicWork(work) || IsSword2Work(work) || IsGunWork(work) || IsBigWork(work);
 
     /// <summary>총 · 기계 · 용병 · 잡기술(연사 · 저격 · 댓쉬 · 워프 · 도발 · 집중 · 기도 · 희생 · 최면 … , Part1Skill.Gun).</summary>
     internal static bool IsGunWork(int work) => work > Part1Game.ChrBase && !Works.Contains(work) && IsGunSkill(Part1SkillBook.AttackIdOf(work));
+
+    /// <summary>큰 기계 · 활 · 소환수 기술(다탄두 미사일 · 확산 레이져 · 버스터 포/캐논/런쳐 · 롱 레이져 · 천노탄 · 다크 라이트 · 네크로 · 가베라의 저주, Part1Skill.Big).</summary>
+    internal static bool IsBigWork(int work) => work > Part1Game.ChrBase && !Works.Contains(work) && IsBigSkill(Part1SkillBook.AttackIdOf(work));
 
     /// <summary>남은 검 특기(천지파열무 · 풍아열공참 · 지하드 · 새틀라이트 어택 · 마룡광아탄 · 플라즈마 슬래쉬 · 혈랑마혼 · 소드브레이크, Part1Skill.Sword2).</summary>
     internal static bool IsSword2Work(int work) => work > Part1Game.ChrBase && !Works.Contains(work) && IsSword2Skill(Part1SkillBook.AttackIdOf(work));
@@ -244,6 +247,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         _t0 = host._lastTime;
         int prep = proc ? 0 : IsWeaponWork(w.Id) ? WeaponPrep(user, (ax, ay)) : IsMagicWork(w.Id) ? MagicPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
             : IsSword2Work(w.Id) ? Sword2Prep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
+            : IsBigWork(w.Id) ? BigPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
             : IsGunWork(w.Id) ? GunPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay)) : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
@@ -262,6 +266,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             _ when IsWeaponWork(w.Id) => Weapon(Part1SkillBook.AttackIdOf(w.Id), targets, (ax, ay), hit),
             _ when IsMagicWork(w.Id) => Magic(Part1SkillBook.AttackIdOf(w.Id), targets, cells, (ax, ay), hit),
             _ when IsSword2Work(w.Id) => Sword2(Part1SkillBook.AttackIdOf(w.Id), targets, cells, (ax, ay), hit),
+            _ when IsBigWork(w.Id) => Big(Part1SkillBook.AttackIdOf(w.Id), targets, cells, (ax, ay), hit),
             _ when IsGunWork(w.Id) => Gun(Part1SkillBook.AttackIdOf(w.Id), targets, cells, (ax, ay), hit),
             FlyingSlashWork => FlyingSlash(targets, (ax, ay), hit),
             StormSwordWork => StormSword(targets, hit),
@@ -305,6 +310,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         if (IsMagicWork(work)) return MagicNeeds(Part1SkillBook.AttackIdOf(work));
         if (IsSword2Work(work)) return Sword2Needs(Part1SkillBook.AttackIdOf(work));
         if (IsGunWork(work)) return GunNeeds(Part1SkillBook.AttackIdOf(work));
+        if (IsBigWork(work)) return BigNeeds(Part1SkillBook.AttackIdOf(work));
         int[] sword = [395], summon = [55, 49, 91, 50, 897];
         int[] own = work switch
         {

@@ -13,7 +13,7 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill
 {
     /// <summary>어비스 네레이드는 원본대로 대상마다 얼음 셋이 한 번씩 친다(세 번) — 다른 파트1 기술은 대상마다 한 번.</summary>
-    internal static bool HitsEachTime(int work) => work == NereidWork;
+    internal static bool HitsEachTime(int work) => work == NereidWork || BigHitsEachTime(work);
 
     /// <summary>원본 화면 픽셀(640×480) → 화면 가운데 기준.</summary>
     private static (double X, double Y) Scr(double sx, double sy) => (sx - 320, sy - 240);
