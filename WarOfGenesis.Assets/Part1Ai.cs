@@ -20,6 +20,18 @@ public sealed record Part1Ai(int Index, IReadOnlyDictionary<int, int> Raw)
 
     public const int FileSize = 33;
 
+    /// <summary><c>+0</c> 이동 방식 — 0 정한 칸(<see cref="GoalX"/>, <see cref="GoalY"/>)으로 · 1 Chr <see cref="FollowChr"/> 를 따라감 · 2 보통 · 3 움직이지 않음(<c>0x10026570</c>).</summary>
+    public int MoveMode => Raw[0x00];
+    public int GoalX => Raw[0x06];
+    public int GoalY => Raw[0x08];
+    public int FollowChr => Raw[0x0a];
+
+    /// <summary><c>+0xc</c> 이동 한도 — 이동력을 이 값으로 자른다(100 이 대부분, 사실상 한도 없음).</summary>
+    public int MoveCap => Raw[0x0c];
+
+    /// <summary><c>+0x16</c> 먼저 쓸 기술(Attack.dat 번호), 0 이면 없음.</summary>
+    public int PreferredAttack => Raw[0x16];
+
     /// <summary><c>+0x1d</c> 깨어나는 조건 — 0 처음부터 · 1 가까운 깨어난 유닛까지 거리 ≤ <see cref="WakeDistance"/> · 2 다른 거리 ≤ 그 값 · 3 시간 틱 ≥ <see cref="WakeTick"/> (<c>0x10026230</c>).</summary>
     public int Wake => Raw[0x1d];
     public int WakeDistance => Raw[0x1e];
