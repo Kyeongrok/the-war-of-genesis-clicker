@@ -593,7 +593,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         host.UiFill(ox + PickX - 6, oy + PickY - 6, PickW + 12, h, 0xFF1C2246);
         host.UiStroke(ox + PickX - 6, oy + PickY - 6, PickW + 12, h, 0xFFB0B8E0);
         string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
-        host.UiText($"{who} LV {pick.Level}", ox + PickX, oy + PickY - 24, 0xFFFFE080, 12);
+        host.UiText(who, ox + PickX, oy + PickY - 24, 0xFFFFE080, 12);   // 파트1 은 레벨이 없다 — 이름만
         for (int i = 0; i < pick.Options.Count; i++)
         {
             var (ability, level, label) = pick.Options[i];

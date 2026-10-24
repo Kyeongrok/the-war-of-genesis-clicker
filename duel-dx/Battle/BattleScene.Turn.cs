@@ -155,7 +155,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                       : c with { CumExp = c.Level * 100 };
             // 파티 레벨에 맞춰 자란다 — 면제 명단(0002.nch)에 없는 인물은 <b>편과 상관없이</b>(0x100633ff — 편 3 손님 제이슨도 자란다).
             // 파티 객체에서 온 인물(_party)은 제 레벨을 그대로 쓴다.
-            if (!unit.IsAlly || follower || carried == null) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
+            // 파트1 판은 키우지 않는다 — 파트1 에는 레벨이 없고 능력치는 인물 레코드와 어빌리티(HP · AC · SKILL …)로만 오른다(사용자 지적).
+            if (!host._scene.IsPart1 && (!unit.IsAlly || follower || carried == null)) unit.Data = GrowToPartyLevel(unit.Data ?? c, unit.LevelOffset, partyLevel);
             // 군단 부하는 능력치는 제 레벨 줄로 키우되 <b>적히는 레벨은 절반</b>이다(0x1007a916~0x1007a948 — max(1, L/2), EXP 는 그 ×100).
             // 처치 EXP(레벨 차)·상태이상 레벨 조건·정보 창이 이 값을 읽는다(ba-20 M1). 전에는 부하를 잡으면 EXP 가 과했다.
             if (unit.LeaderIndex >= 0 && unit.Data is { } fd)
@@ -2138,8 +2139,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             host.FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
             host.FillRect(x, y, w * u.Hp / u.MaxHp, 3, u.IsAlly ? 0xFF50D060 : 0xFFE05050);
             if (u.MaxTp > 0) host.FillRect(x, y + 3, w * Math.Clamp(u.Tp, 0, u.MaxTp) / u.MaxTp, 2, 0xFFE8C040);
-            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다.
-            if (u.IsAlly && u.Data is { } d)
+            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다. 파트1 은 레벨이 없다(EXP 가 차면 어빌리티를 하나 올린다 — 사용자 지적).
+            if (u.IsAlly && !host._scene.IsPart1 && u.Data is { } d)
             {
                 string lv = d.Level.ToString();
                 var (tw, th) = host.BattleTextSize(lv, 0xFFFFFFFF, GaugeLevelFont);
