@@ -46,6 +46,10 @@ public static class Part1Game
     /// <summary>
     /// 파트1 글(<c>.dlg</c>·<c>.clg</c>) 표시를 보통 글로 — 「/m0[말하는 이]/m1」 머리는 떼고, 「/n」 은 줄 바꿈, 「/cN」 색 바꿈은 지운다.
     /// </summary>
+    /// <summary>「/m0[말하는 이]/m1」 머리의 이름 — 없으면 빈 글.</summary>
+    public static string Speaker(string text) =>
+        System.Text.RegularExpressions.Regex.Match(text, @"/m0\[([^\]]*)\]/m1") is { Success: true } m ? m.Groups[1].Value : "";
+
     public static string PlainText(string text) =>
         System.Text.RegularExpressions.Regex.Replace(
             System.Text.RegularExpressions.Regex.Replace(text, @"/m0\[[^\]]*\]/m1", ""), @"/c\d", "").Replace("/n", "\n").Trim('\n');

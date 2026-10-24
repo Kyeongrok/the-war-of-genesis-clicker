@@ -8,8 +8,7 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 1·2절. 장소 낱말 1·2(지도 자리)를 화면 칸에 맞춰 줄여 놓고, 낱말 9~13(잇닿은 장소 — 가설)을 점선으로 잇는다.
-/// 원본 챕터 장면(종류 5, <c>0x100c54d0</c>)의 지도 그림·인물 말·챕터 사건(202 대사 · 502 전투로 · 503 챕터로)은 아직 안 옮겼다 —
-/// 지금은 장소를 골라 전투로 가는 길만 있다. 마을(종류 1)은 이름만 보인다.
+/// 챕터 사건(대사 · 502 전투로 · 깃발)은 <see cref="Part1ChapterEvents"/> 가 돌린다. 지도 그림·인물 말은 아직 없다. 마을(종류 1)은 이름만 보인다.
 /// </remarks>
 internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -27,6 +26,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal Part1Chapter? _chapter;
     internal (int X, int Y)[] _spots = [];
     internal int _hover = -1;
+
+    /// <summary>챕터 사건(대사 · 다음 전투 · 다음 챕터).</summary>
+    internal Part1ChapterEvents Events => _events ??= new(host, shell);
+    private Part1ChapterEvents? _events;
 
     /// <summary>그 챕터를 연다 — 못 읽으면 알리고 false.</summary>
     internal bool Open(int chapterId)
@@ -56,6 +59,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
         _open = true;
         _hover = -1;
+        Events.Start(chapter);
         return true;
     }
 
@@ -80,11 +84,16 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
-    internal void OnClick(int bx, int by) => Press(HitAt(bx, by));
+    internal void OnClick(int bx, int by)
+    {
+        if (Events.Talk != null) { Events.Advance(); return; }   // 대사가 떠 있으면 누르면 넘어간다
+        Press(HitAt(bx, by));
+    }
 
     /// <summary>Esc 는 파트1 타이틀로, Enter · Space 는 짚은 것을 누른다.</summary>
     internal void OnKey(int key)
     {
+        if (Events.Talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) Events.Advance(); return; }
         if (key == Win32.VK_ESCAPE) Press(ButtonHit + ButtonTitle);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
     }
@@ -155,7 +164,24 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             var (x, y, name) = Buttons[i];
             shell.DrawButton(ox + x, oy + y, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, name, _hover == ButtonHit + i);
         }
+        if (Events.Talk is { } talk) DrawTalk(ox, oy, talk.Speaker, talk.Text);
         host.DrawToast();
+    }
+
+    /// <summary>챕터 대사 창 — 아래쪽에 말하는 이와 글(줄 바꿈 그대로).</summary>
+    private void DrawTalk(int ox, int oy, string speaker, string text)
+    {
+        const int X = 24, Y = 340, W = 592, H = 124;
+        host.UiFill(ox + X, oy + Y, W, H, 0xE8101828);
+        host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
+        int y = oy + Y + 10;
+        if (speaker.Length > 0) { host.UiText(speaker, ox + X + 14, y, 0xFFFFE080, 13); y += 22; }
+        foreach (string line in text.Split('\n'))
+        {
+            host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
+            y += 19;
+        }
+        host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
     }
 
     private void DottedLine(int ox, int oy, (int X, int Y) a, (int X, int Y) b)

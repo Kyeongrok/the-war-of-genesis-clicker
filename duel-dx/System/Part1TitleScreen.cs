@@ -151,6 +151,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     private void NewGame()
     {
         host.Part1.Reset();
+        Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
         int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
         if (!Chapter.Open(chapter)) Timeline.Open();
     }
