@@ -209,7 +209,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                             GameWindow.UiBlend.Alpha, loop: true, mirror: mirror);
             }
         }
-        if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
+        if (Script.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Script.TalkSlot, Script.Faces);
         else if (Script.Idle) host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);
         host.DrawToast();
     }

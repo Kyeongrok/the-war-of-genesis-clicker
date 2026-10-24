@@ -532,7 +532,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 host.UiStroke(ox + x, oy + y, TeamW, TeamH, on ? 0xFFFFE080u : 0xFF607090u);
                 host.UiText($"{i + 1} 팀", ox + x + 10, oy + y + 2, GameWindow.White, 11);
             }
-        if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
+        if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Events.TalkSlot, Events.Faces);
         else if (Picking) DrawPick(ox, oy);
         host.DrawToast();
     }

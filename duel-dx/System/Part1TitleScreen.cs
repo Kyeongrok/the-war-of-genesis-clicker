@@ -296,9 +296,35 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     }
 
     /// <summary>챕터·필드 대사 창 — 아래쪽에 말하는 이와 글(줄 바꿈 그대로).</summary>
-    internal void DrawTalk(int ox, int oy, string speaker, string text)
+    /// <summary>원본 대사 상자 셋의 자리(640×480) — 0 왼쪽 · 1 오른쪽 · 2 가운데, 모두 511×111(<c>0x100a9000</c>).</summary>
+    internal static readonly (int X, int Y)[] TalkBoxes = [(16, 232), (112, 352), (64, 336)];
+
+    /// <summary>일러스트를 둘 때 화면 가운데(320)에서 옮기는 거리 — 원본은 모션의 키(종류 9)가 정한다(살라딘 309: −204 · +152, 발라 305: −198 · +172). 어림값.</summary>
+    internal static readonly int[] FaceShift = [-200, 160, 0];
+
+    /// <summary>
+    /// 필드 · 챕터 대사 — 떠 있는 상자의 일러스트를 먼저(뒤에) 깔고, 지금 대사를 그 상자 자리에 그린다. 일러스트는 네 조각으로 나뉜 한 장이라
+    /// 벌 0 의 장을 모두 (320 + 옮김, 240) 기준으로 찍는다(아래 끝이 화면 아래 480 에 닿는다, 분석-파트1-챕터 11절).
+    /// </summary>
+    internal void DrawTalk(int ox, int oy, string speaker, string text, int slot, int[] faces)
     {
-        const int X = 24, Y = 340, W = 592, H = 124;
+        for (int s = 0; s < faces.Length; s++)
+        {
+            if (faces[s] <= 0 || host.UiFor(Part1Game.ObsBase + faces[s]) is not { } sprite) continue;
+            int cx = ox + 320 + FaceShift[s], cy = oy + 240;
+            foreach (var ((sub, _), frame) in sprite._frames)
+                if (sub == 0) host.BlitScaled(frame, cx + frame.X, cy + frame.Y, frame.W, frame.H);
+        }
+        var (bx, by) = TalkBoxes[Math.Clamp(slot, 0, 2)];
+        DrawTalkBox(ox + bx, oy + by, 511, 111, speaker, text);
+    }
+
+    internal void DrawTalk(int ox, int oy, string speaker, string text) => DrawTalkBox(ox + 24, oy + 340, 592, 124, speaker, text);
+
+    private void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text)
+    {
+        int ox = bx, oy = by;
+        const int X = 0, Y = 0;
         host.UiFill(ox + X, oy + Y, W, H, 0xE8101828);
         host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
         int y = oy + Y + 10;

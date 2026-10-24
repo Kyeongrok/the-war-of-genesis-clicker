@@ -99,6 +99,18 @@ internal sealed class Part1SceneScript(GameWindow host)
     internal (string Speaker, string Text)? Talk { get; private set; }
 
     /// <summary>
+    /// 대사 상자 셋(0 왼쪽 200·206 · 1 오른쪽 201·207 · 2 가운데 202·208)마다 띄운 일러스트 — Obss 번호(0 이면 없음).
+    /// 원본 <c>0x100a9000</c>: 상자를 닫는 203~205 가 그 칸을 지운다(분석-파트1-챕터 11절). 여러 칸이 함께 떠 있을 수 있다.
+    /// </summary>
+    internal readonly int[] Faces = new int[3];
+
+    /// <summary>지금 대사가 뜬 상자(0 왼 · 1 오른 · 2 가운데).</summary>
+    internal int TalkSlot { get; private set; } = 2;
+
+    /// <summary>성우 대사의 재생 표지 — 다음 성우 대사가 앞 목소리를 끊는다.</summary>
+    private const int VoiceTag = 0x5011;
+
+    /// <summary>
     /// 새로 돌린다 — <paramref name="fired"/> 는 발동 수(챕터는 진행에 남겨 지도로 돌아와도 들머리가 다시 안 나오게, 필드는 들어올 때마다 새것).
     /// <paramref name="resume"/> 면 남은 행동을 이어 돈다(전투를 마치고 돌아왔을 때).
     /// </summary>
@@ -113,7 +125,10 @@ internal sealed class Part1SceneScript(GameWindow host)
         _waitUntil = 0;
         _waitBusy = false;
         _away = null;
-        if (!resume) _pending.Clear();
+        if (!resume) { _pending.Clear(); Array.Clear(Faces); }
+        // 성우 대사(206~208 의 셋째 인자 = Snd 번호)는 처음 틀 때 받느라 조용히 지나가므로 장면을 열 때 미리 받아 둔다.
+        host.PreloadSounds([.. events.SelectMany(e => e.Actions).Where(a => a.Code is >= 206 and <= 208 && a.Args.Length > 2 && a.Args[2] > 0)
+                                     .Select(a => Part1Game.ObsBase + a.Args[2])]);
         Run();
     }
 
@@ -229,13 +244,22 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 0: Call(a[0]); break;
                 case 1: _waitBusy = Timed; break;
                 case 2: if (Timed && a[0] > 0) _waitUntil = host._lastTime + a[0] / GameWindow.TicksPerSecond; break;
+                // 대사 [얼굴(Obss 번호), 줄] — 200·201·202 는 왼 · 오른 · 가운데 상자, 206·207·208 은 같은 자리에 성우 [얼굴, 줄, Snd 번호].
                 case >= 200 and <= 202 or >= 206 and <= 208:
                 {
+                    int slot = c.Code >= 206 ? c.Code - 206 : c.Code - 200;
+                    Faces[slot] = a[0] > 0 ? a[0] : 0;
+                    TalkSlot = slot;
                     string raw = a[1] >= 0 && a[1] < _lines.Count ? _lines[a[1]] : "";
                     if (raw.Length > 0) Talk = (Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw));
+                    if (c.Code >= 206 && a.Length > 2 && a[2] > 0)
+                    {
+                        host._mixer.StopEffect(VoiceTag);
+                        host.Play(Part1Game.ObsBase + a[2], VoiceTag);
+                    }
                     break;
                 }
-                case >= 203 and <= 205: Talk = null; break;
+                case >= 203 and <= 205: Faces[c.Code - 203] = 0; Talk = null; break;
                 case 100: BackgroundChange?.Invoke(a[0]); break;
                 case 303: SpritePlace?.Invoke(a[0], a[1], a[2]); break;
                 // [Chr, 8, 무리] — 그 인물을 일행 무리로 옮긴다(0x100c1890: 지금 무리에서 빼 무리 a2 에 넣는다, 무리 표 0x101a0828).
