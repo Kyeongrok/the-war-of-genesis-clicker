@@ -881,7 +881,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
                 if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
-                if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
+                if (msg == Win32.WM_RBUTTONDOWN && _jobTree is { _open: true }) _jobTree.Close();   // 전직 트리는 오른쪽 단추로 닫는다
+                else if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
                 else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
@@ -929,12 +930,14 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (DevScr._open) { DevScr.OnKey(key); return; }
         if (StatsScr._open) { StatsScr.OnKey(key); return; }
         if (SkillBookScr._open) { SkillBookScr.OnKey(key); return; }
+        if (_jobTree is { _open: true }) { JobTree.OnKey(key); return; }   // 파트1 전직 트리
         if (ItemBookScr._open) { ItemBookScr.OnKey(key); return; }
         if (CharEditScr._open) { CharEditScr.OnKey(key); return; }
         if (TuningScr._tuningOpen) { TuningScr.OnTuningKey(key); return; }
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (ChaptersScr._chaptersOpen) { if (key == Win32.VK_ESCAPE) ChaptersScr._chaptersOpen = false; return; }
+        if (_keys.ActionFor(key) == KeyAction.JobTree && JobTree.Toggle()) return;   // 파트1 전투 · 챕터 지도만 — 파트2 는 그냥 지나간다
         // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
         if (TitleScr.OnTitleKey(key)) return;
         // 연대표에서도 전투 키는 안 먹고 Esc 로 시스템 메뉴만 연다.
@@ -1078,6 +1081,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
         if (SkillBookScr.OnClick(bx, by)) return;      // 도구 > 체질별 어빌리티
+        if (_jobTree?.OnClick(bx, by) == true) return;  // 파트1 전직 트리
         if (ItemBookScr.OnClick(bx, by)) return;       // 도구 > 아이템 보기
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
@@ -1435,6 +1439,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         StatsScr.Draw();
         SkillBookScr.Draw();
         ItemBookScr.Draw();
+        _jobTree?.Draw();
         SettingsScr.Draw();
         DevScr.Draw();
         TimedEditScr.Draw();
@@ -1547,6 +1552,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (fade <= 0) return;
         int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
         int level = tint is { } tt ? Math.Clamp(tt.Strength, 0, 31) * 255 / 31 : 0;
+        bool screen = tint is { Mode: Part1Game.ScreenTint };
         int k = fade < 1 ? Math.Clamp((int)(fade * 256), 0, 256) : 256;
 
         for (int y = 0; y < srcH; y++)
@@ -1563,6 +1569,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 {
                     uint Ch(int shift) => (uint)Math.Clamp((n * (int)(c >> shift & 0xFF) + (31 - n) * level) / 31, 0, 255);
                     c = c & 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+                }
+                else if (screen)
+                {
+                    // 파트1 물들이기 14 — 픽셀 + 세기 × (31 − 픽셀) / 31(색표 0x101365cc, 생성기 0x1000b8d0): 회색 스크린이라 세기만큼 하얗게 뜬다.
+                    uint Sc(int shift) { int p = (int)(c >> shift & 0xFF); return (uint)Math.Clamp(p + level * (255 - p) / 255, 0, 255); }
+                    c = c & 0xFF000000 | Sc(16) << 16 | Sc(8) << 8 | Sc(0);
                 }
                 if (status is { } st) c = BattleScene.ApplyStatusTint(c, st);
                 if (additive)

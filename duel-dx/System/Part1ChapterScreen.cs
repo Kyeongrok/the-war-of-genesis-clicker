@@ -708,12 +708,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void OnRightClick()
     {
         if (Events.Talk != null || Picking) return;
+        if (_status is { _open: true } && _status.OnRightDown(host._mouse.X, host._mouse.Y)) return;   // 상태 패널: 어빌리티 설명 · 목록 닫기 · 밖이면 패널만 닫기
         Back();
     }
 
     private void Back()
     {
-        if (_status is { _open: true }) _status.Close();
+        if (_status is { _open: true }) { if (!_status.ClosePanel()) _status.Close(); }   // 얼굴로 연 상태 패널이 있으면 그것만
         else if (_exchange is { _open: true }) _exchange.Close();
         else if (_mode != Mode.Map) _mode = Mode.Map;
         else _mode = Mode.Menu;
@@ -733,6 +734,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_cover != null || _transition != null) return;
         if (Picking) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressPick(Math.Max(0, _hover - PickHit)); return; }   // 고르기 창은 닫을 수 없다(짚은 것 없으면 첫 후보)
         if (key == Win32.VK_ESCAPE) { Back(); return; }
+        if (_status is { _open: true } && _status.OnKey(key)) return;   // 상태 패널: ←/→ 로 사람 바꾸기
         if (WindowOpen) return;
         switch (key)
         {
@@ -767,7 +769,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
     }
 
-    /// <summary>일행 창(장비 · 탑승) — 상태 창의 얼굴을 누르면 그 사람으로(원본 인물 상세 창 0x100bb580 자리).</summary>
+    /// <summary>일행 창(장비 · 탑승) — Esc 메뉴 「일행 · 장비」. 상태 창의 얼굴은 전투와 같은 상태 패널을 띄운다(<see cref="Part1HqStatusWindow"/>).</summary>
     internal void OpenParty(int chr)
     {
         if (_chapter is not { } chapter) return;

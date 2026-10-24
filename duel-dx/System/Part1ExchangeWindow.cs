@@ -204,8 +204,12 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         map.SaveProgress();
     }
 
+    /// <summary>이번 틀에 짚은 아이템 칸의 설명(이름 · 설명 · 효과, <see cref="Part1ItemTip"/>).</summary>
+    private string? _tip;
+
     internal void Draw(int ox, int oy)
     {
+        _tip = null;
         var art = map.Art;
         int wx = ox + X, wy = oy + Y;
         art.Box(wx, wy, W, H);
@@ -221,6 +225,7 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
 
         art.Button(wx + 100, wy + 367, "이전단계", _hover == PrevStep, !CanPrev);
         art.Button(wx + 410, wy + 367, "다음단계", _hover == NextStep, !CanNext);
+        if (_tip is { Length: > 0 } tip) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, 640, 480);
     }
 
     private void DrawList(Part1MapArt art, int lx, int wy, int side, HashSet<int> selected, int hitBase)
@@ -260,6 +265,7 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
                 if (Part1Item.ById(table, items[i].Id) is { } item && art.Motion(12, item.Icon) is { } icon) art.Blit(icon, sx - icon.X, sy - icon.Y);
                 art.TextCentered($"[{items[i].Count}]", sx + 13, sy + 33, GameWindow.White, 10);
                 Mark(art, sx - 1, sy - 1, 28, 28, selected.Contains(i), _hover == hitBase + i);
+                if (_hover == hitBase + i) _tip = Part1ItemTip.Text(Part1Item.ById(table, items[i].Id));
             }
             return;
         }

@@ -399,7 +399,7 @@ internal sealed unsafe partial class BattleScene
     internal void KillUnit(UnitState u)
     {
         MarkDead(u);
-        host.Play(SoundDeath);
+        host.Play(DeathSound);
         CheckOutcome();
     }
 

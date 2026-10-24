@@ -6,7 +6,8 @@ namespace DuelDx;
 /// 파트1 챕터 지도의 상태 창(「상  태」 단추, 원본 <c>0x100b4fe0</c>) — 고른 팀의 인물 10칸 · 소지금액 · 아이템 격자 · 용병/탑승물 정보.
 /// </summary>
 /// <remarks>
-/// 옵시디안 「분석-파트1-챕터」 13.5. 틀 상자 (65, 80) 510×370. 얼굴을 누르면 원본은 인물 상세 창(0x100bb580)을 여는데, 리메이크는 그 자리에 일행 창(장비 · 탑승)을 연다.
+/// 옵시디안 「분석-파트1-챕터」 13.5. 틀 상자 (65, 80) 510×370. 얼굴을 누르면 원본은 인물 상세 창(0x100bb580)을 여는데, 리메이크는 그 자리에 전투와 같은 상태 패널(<see cref="Part1StatusPanel"/>)을 가운데에 띄운다(사용자 요청).
+/// 아이템 칸을 짚으면 이름 · 설명 · 효과(<see cref="Part1ItemTip"/>).
 /// 원본은 아이템 · 용병 · 탑승물을 팀마다 들지만 리메이크는 무리 하나가 같이 쓴다(<see cref="Part1Progress.Bag"/> · <see cref="Part1Progress.Mercenaries"/> · <see cref="Part1Progress.Mounts"/>).
 /// 돈은 원본도 이야기 무리 돈(0x101a07e0[머리 낱말 1])이다 — 리메이크의 eld.
 /// </remarks>
@@ -39,7 +40,37 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         _mounts = false;
     }
 
-    internal void Close() => _open = false;
+    internal void Close() { _panel?.CloseOff(); _open = false; }
+
+    /// <summary>얼굴을 누르면 뜨는 상태 패널(전투의 것과 같은 그림, 전투 밖 꼴).</summary>
+    private Part1StatusPanel Panel => _panel ??= new(host);
+    private Part1StatusPanel? _panel;
+
+    internal bool PanelOpen => _panel is { OffOpen: true };
+
+    /// <summary>Esc — 패널이 떠 있으면 패널만 닫는다. 닫았으면 true.</summary>
+    internal bool ClosePanel()
+    {
+        if (!PanelOpen) return false;
+        _panel!.CloseOff();
+        return true;
+    }
+
+    /// <summary>←/→ — 패널이 떠 있으면 팀의 앞 · 뒤 사람으로.</summary>
+    internal bool OnKey(int key)
+    {
+        if (!PanelOpen || key is not (Native.Win32.VK_LEFT or Native.Win32.VK_RIGHT)) return false;
+        _panel!.SwitchOff(key == Native.Win32.VK_LEFT ? -1 : 1);
+        return true;
+    }
+
+    /// <summary>오른 단추 — 패널이 떠 있으면 패널이 받는다(어빌리티 설명 · 목록 닫기 · 밖이면 패널 닫기). 받았으면 true.</summary>
+    internal bool OnRightDown(int bx, int by)
+    {
+        if (!PanelOpen) return false;
+        _panel!.OffRightDown(bx, by);
+        return true;
+    }
 
     /// <summary>가방을 (아이템, 수) 로 — 처음 들어온 차례.</summary>
     private List<(int Id, int Count)> Items() => [.. host.Part1.Bag.GroupBy(id => id).Select(g => (g.Key, g.Count()))];
@@ -71,10 +102,11 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         return -1;
     }
 
-    internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
+    internal void UpdateHover(int bx, int by) => _hover = PanelOpen ? -1 : HitAt(bx, by);
 
     internal void OnClick(int bx, int by)
     {
+        if (PanelOpen) { _panel!.OffClick(bx, by); return; }
         int hit = HitAt(bx, by);
         var (ox, oy) = host.Mos.MosesOrigin();
         int x = bx - ox, y = by - oy;
@@ -82,7 +114,7 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         {
             case >= FaceHit and < FaceHit + 10:
                 var members = host.Part1.TeamMembers(_team);
-                if (hit - FaceHit < members.Count) { _open = false; map.OpenParty(members[hit - FaceHit]); }
+                if (hit - FaceHit < members.Count) Panel.OpenOff(members[hit - FaceHit], members, map.SaveProgress);
                 break;
             case PeopleHit: _mounts = false; _mercTop = 0; break;
             case MountHit: _mounts = true; _mercTop = 0; break;
@@ -134,7 +166,7 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
             if (item == null || art.Motion(12, item.Icon) is not { } icon) art.Stroke(cx, cy, CellW, CellW, 0xFF8890B8);
             else art.Blit(icon, cx - icon.X, cy - icon.Y);
             art.TextCentered($"[{items[i].Count}]", cx + CellW / 2, cy + 34, GameWindow.White, 10);
-            if (_hover == ItemHit + i) { art.Stroke(cx - 1, cy - 1, CellW + 2, CellW + 2, 0xFFFFE080); tip = item?.Name; }
+            if (_hover == ItemHit + i) { art.Stroke(cx - 1, cy - 1, CellW + 2, CellW + 2, 0xFFFFE080); tip = Part1ItemTip.Text(item); }
         }
 
         // 용병 정보 — 제목 · 사람(0x190)/탑승물(0x191) 고르기(Obs 613) · 칸마다 전투 그림 · 이름(연두) · 머릿수(분홍) · 능력치.
@@ -167,12 +199,10 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         }
         if (mercs.Count == 0) art.TextCentered(_mounts ? "탑승물이 없습니다" : "용병이 없습니다", wx + MercX + 90, wy + MercY + 80, 0xFFA0A8C8, 12);
 
-        if (tip is { Length: > 0 } && host._mouse is var (mx, my))
-        {
-            int tw = art.TextW(tip, 12);
-            host.UiFill(mx + 12, my + 14, tw + 12, 20, 0xF0101438);
-            host.UiStroke(mx + 12, my + 14, tw + 12, 20, 0xFFE8ECF8);
-            host.UiText(tip, mx + 18, my + 17, GameWindow.White, 12);
-        }
+        // 아이템 설명 — 이름 · 설명 · 효과(사용자 요청: 이름만 보였다).
+        if (tip is { Length: > 0 } && !PanelOpen) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, 640, 480);
+
+        // 얼굴을 눌러 연 상태 패널 — 창 위 가운데에.
+        if (PanelOpen) _panel!.DrawOff(ox, oy);
     }
 }

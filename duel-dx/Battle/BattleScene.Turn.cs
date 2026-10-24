@@ -1687,7 +1687,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             // 18 CHRDIE(0x1006a8b1) — 쓰러질 유닛마다 가운데 명령을 같은 틀에 걸어 목록 순서 <b>마지막</b>이 이긴다. 기다리지 않고 죽는 동작을 같이 한다(감사4 C17).
             CenterOnUnit(dying.OrderBy(d => Array.IndexOf(host._units, d)).Last());
-            foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); host.Play(SoundDeath); }
+            foreach (var d in dying) { PlayActionFor(d, HitAction, DeathActionTicks); host.Play(DeathSound); }
             // 쓰러지는 21틱 동안 옅어진다 — 섞기 단계 = 8 − 카운터/3, 가중 4k/31(그리기 0x10071af5~0x10071bdd, ba-20 P3).
             for (double fallAt = host._lastTime; dying.Any(d => d.IsBusy);)
             {
@@ -1882,7 +1882,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         t.Hp = Math.Max(_demo != null ? 1 : 0, t.Hp - amount);   // 시연 중에는 아무도 안 쓰러진다(SkillDemo.cs)
         RushTp(t);
         ShowNumber(t, $"{host._db.T(159)} {amount}", DamageColor);
-        PlayHitReaction(t, damaged: true);
+        PlayHitReaction(t, damaged: true, spark: !host._scene.IsPart1 || Part1.SparksOnHit(a, w));
         if (crit) PlayCritFlash();
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);

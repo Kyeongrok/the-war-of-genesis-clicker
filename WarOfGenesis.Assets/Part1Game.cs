@@ -357,6 +357,7 @@ public static class Part1Game
         497, 212, 194, 210, 71, 667, 282, 56, 526, 192,                           // 천수관음 · 타이타니아 · 묵호자
         277, 77, 124, 832, 228, 38, 846, 696, 518, 519, 83, 843, 862,             // 썬더스탐 · 헬 스트라이크 · 아수라파천무
         103, 671, 23, 93, 114, 65, 51, 211,                                       // 헬카이트 · 어비스 네레이드 · 머스펠 헤임(진짜 핸들러, menu-92)
+        HitSparkObs,                                                              // 맞은 자리의 타격 불꽃(피해 적용 0x1003df4e)
     ];
 
     /// <summary>그 기술의 핸들러가 직접 내는 소리(그림 키에 없는 것).</summary>
@@ -366,7 +367,84 @@ public static class Part1Game
         2079, 2080, 2081, 2082, 1935, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2039, 2040, 2041, 2042, 2052, 2067,
         194, 2025, 2020, 2085, 2086, 2087, 2088, 2089,
         1929, 2066, 2065, 1930, 60, 61, 62, 1931, 1932, 1933, 2003, 2004, 2005,
+        DeathSnd,                                                                 // 쓰러질 때(죽음 루틴 0x1003e51d)
     ];
+
+    /// <summary>
+    /// 맞은 자리의 타격 불꽃 — 피해 적용(<c>0x1003dc30</c>)이 결과 2(맞음)·피해 &gt; 0 이고 무기로 친 것(선택자 0 · 1 · 3 · 29 · 30)이면
+    /// 화면 개체 <c>0x10085e00(Obs 0x31c, rand()%3, 0, 0, z 30, 0, 맞은 이)</c> 를 띄운다(쓰러지면 모션 0). 모션 셋 20~22틱, 섞기 9(더하기), 소리 키 없음.
+    /// 파트2 의 Obs 73 과 같은 자리·꼴이다(분석-파트1-전투 「맞는 효과」).
+    /// </summary>
+    public const int HitSparkObs = 796;
+
+    /// <summary>쓰러질 때 소리 — 죽음 루틴 <c>0x1003e480</c> 이 동작 15(맞기)를 걸고 <c>0x1001a640(0x7f0)</c> 로 낸다. 파트2 의 Snd 106 자리.</summary>
+    public const int DeathSnd = 2032;
+
+    /// <summary>
+    /// 파트1 맞기 동작(동작 5 = 모션 15~17)의 번쩍임·떨림 — 파트1 키 종류 3 의 섞기 <b>14</b>(세기 5 · 15 · 30 · 15 · 5, 색표 = 픽셀 + 세기 × (31 − 픽셀) / 31,
+    /// 회색 스크린 = 하얗게 뜸 — 색표 생성기 <c>0x1000b8d0</c> 를 돌려 읽은 값)와 종류 9 의 자리 <b>더하기</b>(<c>0x1009fa6a</c> — +2 −4 +4 … −2, 2픽셀 좌우 떨림).
+    /// 그림을 파트2 꼴로 쌀 때(<see cref="ToPart2Obs"/>)는 이 둘을 버려 맞아도 몸이 그대로였다 — 다시 싸면 팩도 새로 올려야 해서(<see cref="ConvertVersion"/>)
+    /// 읽은 모션표에 덧입힌다: 파트2 동작 2(모션 6~8)에 물들이기(방식 <see cref="ScreenTint"/>) · 자리 키로. 파트1 폴더가 있으면 그 그림의 키를, 없으면
+    /// 인물 244 가운데 195 가 쓰는 표를 쓴다.
+    /// </summary>
+    public static (List<(int Start, int Mode, int Strength)> Tints, List<(int Start, int X, int Y)> Offsets)? HurtKeys(int part1Obs, int dir)
+    {
+        if (Root != null)
+        {
+            if (!BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+            try { return HurtKeysOf(RawMotion(p1, 15 + dir)); }
+            catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+        }
+        var tints = new List<(int, int, int)> { (0, ScreenTint, 5), (1, ScreenTint, 15), (2, ScreenTint, 30), (3, ScreenTint, 15), (4, ScreenTint, 5) };
+        var offsets = new List<(int, int, int)>();
+        for (int t = 3, x = 0; t <= 12; t++) offsets.Add((t, x += t == 3 ? 2 : t == 12 ? -2 : t % 2 == 0 ? -4 : 4, 0));
+        return (tints, offsets);
+    }
+
+    /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
+    public const int ScreenTint = 14;
+
+    private static (List<(int Start, int Mode, int Strength)> Tints, List<(int Start, int X, int Y)> Offsets)? HurtKeysOf(List<short[]>? keys)
+    {
+        if (keys == null) return null;
+        var tints = new List<(int, int, int)>();
+        var offsets = new List<(int, int, int)>();
+        int x = 0, y = 0;
+        foreach (var k in keys.OrderBy(k => k[0]))
+        {
+            if (k[2] == 3 && k[3] == ScreenTint) tints.Add((k[0], ScreenTint, k[4]));
+            else if (k[2] == 9) offsets.Add((k[0], x += k[3], y += k[4]));
+        }
+        return tints.Count + offsets.Count > 0 ? (tints, offsets) : null;
+    }
+
+    /// <summary>파트1 Obs 의 모션 하나의 키(9칸: 틱 · 길이 · 종류 · 인자 6) — 없으면 null.</summary>
+    private static List<short[]>? RawMotion(byte[] p1, int motion)
+    {
+        int o = 0, subCount = I32(p1, ref o);
+        if (subCount is < 1 or > 512) throw new InvalidDataException($"파트1 몸짓 수가 이상합니다: {subCount}");
+        for (int s = 0; s < subCount; s++)
+        {
+            int frameCount = BitConverter.ToUInt16(p1, o + 0x42);
+            o += 0x80;
+            for (int f = 0; f < frameCount; f++) o += 12 + BitConverter.ToInt32(p1, o);
+            o += 768;
+        }
+        int motionCount = o + 4 <= p1.Length ? I32(p1, ref o) : 0;
+        for (int m = 0; m < motionCount; m++)
+        {
+            o += 4;
+            int keyCount = I32(p1, ref o);
+            if (m == motion)
+            {
+                var keys = new List<short[]>();
+                for (int k = 0; k < keyCount; k++) { var key = new short[9]; for (int i = 0; i < 9; i++) key[i] = I16(p1, ref o); keys.Add(key); }
+                return keys;
+            }
+            o += 18 * keyCount;
+        }
+        return null;
+    }
 
     /// <summary>
     /// 파트1 번호대(<see cref="ObsBase"/> 위) 파일(<c>20352.obs</c> · <c>20026.wav</c>)을 게임이 읽는 꼴로 <paramref name="cacheFolder"/> 에 만들어 둔다 —

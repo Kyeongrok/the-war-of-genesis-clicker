@@ -182,6 +182,11 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
                 }
                 if (options.Count == 0) host.UiText("가방에 맞는 것이 없다", ox + BagX, oy + SlotY - 24, 0xFFB0C0D8, 12);
             }
+            // 짚은 장비 칸 · 가방 줄의 아이템 설명(이름 · 설명 · 효과).
+            int tipId = _hover is >= SlotHit and < SlotHit + 5 ? chr.Equipment[_hover - SlotHit]
+                : _slot >= 0 && _hover >= BagHit && _hover - BagHit < BagFor(chr, _slot).Count ? BagFor(chr, _slot)[_hover - BagHit] : 0;
+            if (Part1ItemTip.Text(Part1Item.ById(items, tipId)) is { } tip)
+                host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, 640, 480);
         }
         shell.DrawButton(ox + 250, oy + 446, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, "나가기", _hover == ButtonHit);
         host.DrawToast();

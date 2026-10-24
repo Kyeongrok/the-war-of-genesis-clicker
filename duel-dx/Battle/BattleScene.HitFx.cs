@@ -32,15 +32,33 @@ internal sealed unsafe partial class BattleScene
     internal double _critFlashAt = -1;
 
     /// <summary>맞은 쪽 반응 — 동작 2 와 불꽃 이펙트(피해가 있을 때만).</summary>
-    internal void PlayHitReaction(UnitState target, bool damaged)
+    /// <param name="spark">
+    /// 파트1 판에서 불꽃을 띄우나 — 원본 피해 적용(<c>0x1003df30</c>)은 무기로 친 것(선택자 0 · 1 · 3 · 29 · 30)에만 띄운다(<see cref="Part1Rules.SparksOnHit"/>).
+    /// 파트2 는 늘 띄운다.
+    /// </param>
+    internal void PlayHitReaction(UnitState target, bool damaged, bool spark = true)
     {
         // 맞음 동작은 그 유닛 모션(6·7·8)의 길이만큼 한 번 돈다 — 15틱이 아닌 모션이 119개다(ba-21 T7). 전에는 늘 15틱으로 잘랐다.
+        // 파트1 그림은 동작 2 ← 파트1 동작 5(SetAction 기준 0xf, 0x1003df2b) — 흰 번쩍임·떨림은 모션표에 덧입혀 둔다(Part1Game.HurtKeys).
         int ticks = host._sprites.TryGetValue(target.ChrCode, out var sprite) ? sprite.Clip(HitAction, target.Facing)?.Length ?? 0 : 0;
         PlayActionFor(target, HitAction, ticks > 0 ? ticks : HitActionTicks);
         if (!damaged) return;
         var (x, y) = host.Btl.UnitFoot(target);
+        if (host._scene.IsPart1)
+        {
+            // 파트1 — Obs 796 모션 rand()%3, z 30(= 18px 위), 쓰러지면 모션 0(0x1003de9d). 그림을 아직 못 받았으면(팩에 없는 PC) 파트2 의 Obs 73 으로.
+            if (!spark) return;
+            int obs = host.UiFor(Part1Game.ObsBase + Part1Game.HitSparkObs) != null ? Part1Game.ObsBase + Part1Game.HitSparkObs : HitEffectObs;
+            _effects.Add((obs, target.Hp <= 0 ? 0 : host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{host._lastTime:F2} part1 hit spark obs {obs} on {target.ChrCode}" + Environment.NewLine);
+            return;
+        }
         _effects.Add((HitEffectObs, host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
     }
+
+    /// <summary>쓰러질 때 소리 — 파트2 Snd 106, 파트1 Snd 2032(죽음 루틴 <c>0x1003e51d</c>).</summary>
+    internal int DeathSound => host._scene.IsPart1 ? Part1Game.ObsBase + Part1Game.DeathSnd : SoundDeath;
 
     internal void PlayCritFlash() => _critFlashAt = host._lastTime;
 

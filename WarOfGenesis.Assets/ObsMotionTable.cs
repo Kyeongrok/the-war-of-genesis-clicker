@@ -136,6 +136,11 @@ public sealed class ObsMotionTable
     {
         var table = Parse(File.ReadAllBytes(path));
         if (table == null || !applyEdits || !int.TryParse(Path.GetFileNameWithoutExtension(path), out int obs)) return table;
+        // 파트1 인물 그림(기본 공격 모션 24 가 있는 것) — 싸면서 버린 맞기 동작의 번쩍임·떨림을 동작 2(모션 6~8)에 덧입힌다(Part1Game.HurtKeys).
+        if (obs > Part1Game.ObsBase && table._clips.ContainsKey(24))
+            for (int dir = 0; dir < 3; dir++)
+                if (table._clips.GetValueOrDefault(6 + dir) is { Tints.Count: 0, Offsets.Count: 0 } hurt && Part1Game.HurtKeys(obs - Part1Game.ObsBase, dir) is { } keys)
+                    table._clips[6 + dir] = hurt with { Tints = keys.Tints, Offsets = keys.Offsets };
         foreach (int id in table._clips.Keys.ToList())
             if (MotionEdits.Get(obs, id) is { } edit) table._clips[id] = MotionEdits.Apply(table._clips[id], edit);
         return table;

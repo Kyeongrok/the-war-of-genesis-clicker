@@ -165,6 +165,17 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>그 기술이 속성 부여면 그 속성(1 · 2 · 3), 아니면 0.</summary>
     internal int EnchantOf(WorkData w) => AttackOf(w)?.Formula is >= 10 and <= 12 and var sel ? sel - 9 : 0;
 
+    /// <summary>
+    /// 그 공격이 맞은 자리에 타격 불꽃(Obs 796)을 띄우나 — 피해 적용 <c>0x1003df30</c> 은 세기 식(선택자) 0 · 1 · 3 · 29 · 30 일 때만 띄운다
+    /// (무기로 치는 것 — 마법 · 소환은 몸짓만). 기본 공격은 무기 갈래의 기본 공격 칸으로 본다. 파트1 인물이 아니면 늘 띄운다.
+    /// </summary>
+    internal bool SparksOnHit(UnitState a, WorkData w)
+    {
+        if (Fighter(a) is not { } fa) return true;
+        var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
+        return (attack?.Formula ?? 0) is 0 or 1 or 3 or 29 or 30;
+    }
+
     /// <summary>기본 공격의 Attack.dat 번호 — 인물 칸 9, 없으면 무기 갈래의 것.</summary>
     internal static int BasicAttackOf(Part1Fighter f) => f.Chr.BasicAttackId > 0 ? f.Chr.BasicAttackId : Part1Item.BasicAttack(f.Weapon1);
 
