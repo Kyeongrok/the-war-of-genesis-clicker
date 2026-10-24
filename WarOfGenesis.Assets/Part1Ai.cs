@@ -4,7 +4,7 @@ namespace WarOfGenesis.Assets;
 /// 파트1 AI 표 <c>Dats\AI.dat</c> 한 칸 — 로더 <c>alpha.dll 0x10023640</c>. 유닛은 <see cref="Part1BattleUnit.AiType"/>(유닛 <c>+0x262</c>)로 칸을 고른다.
 /// </summary>
 /// <remarks>
-/// 옵시디안 「분석-파트1-전투」 12절. 파일 33바이트를 메모리 38바이트 칸 자리(<see cref="Raw"/> 의 번호)로 옮긴다.
+/// 옵시디안 「분석-파트1-전투」 12절. 0 번은 엔진이 만든 「제자리」 칸이고 파일 칸은 1~48 번이다(인물 레코드의 AI 번호 0 이 1451개로 가장 흔하다). 파일 33바이트를 메모리 38바이트 칸 자리(<see cref="Raw"/> 의 번호)로 옮긴다.
 /// 뜻을 안 칸만 이름을 붙였다 — 나머지는 대상·기술 고르기에 쓰인다.
 /// </remarks>
 /// <param name="Raw">메모리 자리 → 값(0x00 · 0x01 · 0x02 · 0x03 · 0x04 · 0x06 · 0x08 · 0x0a · 0x0c~0x10 · 0x12 · 0x14 · 0x16 · 0x18(3바이트) · 0x1b~0x1e · 0x20 · 0x22 · 0x24).</param>
@@ -43,14 +43,18 @@ public sealed record Part1Ai(int Index, IReadOnlyDictionary<int, int> Raw)
     /// <summary>도망 문턱 HP — 최대 HP 에서 셈한 값, 안 하면 -1.</summary>
     public int FleeHp(int maxHp) => FleeThreshold switch { 1 => maxHp * 8 / 10, 2 => maxHp * 5 / 10, 3 => maxHp * 2 / 10, _ => -1 };
 
+    /// <summary>AI 번호로 고른다 — 목록의 차례가 곧 번호다(0 은 엔진이 만든 칸).</summary>
     public static IReadOnlyList<Part1Ai> LoadAll() => ParseAll(Part1Game.Read("Dats", "AI.dat"));
 
     public static IReadOnlyList<Part1Ai> ParseAll(byte[]? b)
     {
         if (b is not { Length: >= 2 }) return [];
         int count = BitConverter.ToUInt16(b, 0);
-        var list = new List<Part1Ai>(count);
-        for (int i = 0, o = 2; i < count && o + FileSize <= b.Length; i++)
+        // 0 번은 파일에 없고 엔진이 채운다(0x100236af) — 제자리(이동 방식 3) · +0xd 2 · 도망 안 함(4). 파일 칸은 1 번부터다.
+        var builtin = Layout.ToDictionary(f => f.At, _ => 0);
+        builtin[0x00] = 3; builtin[0x0d] = 2; builtin[0x1c] = 4;
+        var list = new List<Part1Ai>(count + 1) { new(0, builtin) };
+        for (int i = 1, o = 2; i <= count && o + FileSize <= b.Length; i++)
         {
             var raw = new Dictionary<int, int>();
             foreach (var (at, size) in Layout)
