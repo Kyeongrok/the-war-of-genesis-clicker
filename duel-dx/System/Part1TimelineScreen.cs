@@ -4,10 +4,12 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 파트1 연대표 — <c>Eps\episode.eps</c>(<see cref="Part1Episode"/>)의 이야기 줄기 셋을 줄마다 늘어놓고, 칸을 누르면 그 칸이 여는 챕터로 간다.
+/// 파트1 연대표 — 원본 화면(배경 <c>BGRs\0096</c>: 제목 · 세 줄기 머리글 「Shivan Scimitar · Crimson Crusade · Apocalypse」이 그림에 있다)대로
+/// 줄기마다 한 세로 줄에 칸을 때 차례로 늘어놓고, 칸을 누르면 그 칸이 여는 챕터로 간다(사용자 화면 · 분석-파트1-챕터 3절).
 /// </summary>
 /// <remarks>
-/// 옵시디안 「분석-파트1-챕터」 3절. 원본 연대표는 칸의 가로 자리(u16 +2, 20 단위)대로 긴 띠에 그리지만, 한 화면에 다 들어가게 줄기마다 일곱 칸씩 접어 놓는다.
+/// 칸 이름은 그림이다 — 낱말 1 의 Obs(540~ : 「카디스 요새 / A maiden fortress, Cardis」). 세로 자리 = 때((줄 − 1) × 240 + 가로 자리, 20 마다 48px),
+/// 왼쪽에 「1281. 00 · 20 · 40 …」 눈금. 때가 같은 칸은 아래로 비켜 놓는다. 휠 · 위아래 키 · 오른쪽 화살표로 굴린다.
 /// 칸은 낱말 0 의 진행 깃발이 서면 열린다(<see cref="Unlocked"/>) — 닫힌 칸은 어둡게 보이고 안 눌린다.
 /// </remarks>
 internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shell)
@@ -15,52 +17,66 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     /// <summary>줄기 이름 — 줄기 0 살라딘 쪽 · 1 바이올라 쪽 · 2 인페르노 쪽(첫 칸 이름으로 붙인 것).</summary>
     internal static readonly string[] LineNames = ["살라딘", "바이올라", "인페르노"];
 
-    internal const int Columns = 7, CellW = 84, CellH = 22, Left = 26, Top = 56;
+    /// <summary>줄기 가운데(배경 머리글 자리) · 칸 크기 · 보이는 띠(위 · 아래).</summary>
+    internal static readonly int[] ColumnX = [155, 320, 505];
 
-    internal static readonly (int X, int Y, string Name)[] Back = [(250, 446, "타이틀")];
+    internal const int CellW = 170, CellH = 34, BandTop = 112, BandBottom = 470, Background = 96, Step = 48;
 
-    internal const int ButtonHit = 1000;
+    internal static readonly (int X, int Y, string Name)[] Back = [(10, 452, "타이틀")];
+
+    internal const int ButtonHit = 1000, ScrollUpHit = 1001, ScrollDownHit = 1002;
 
     internal bool _open;
     internal IReadOnlyList<Part1Episode> _episodes = [];
+
+    /// <summary>칸 가운데 — x 와 띠 맨 위에서의 y.</summary>
     internal (int X, int Y)[] _cells = [];
-    internal (string Name, int Y)[] _headers = [];
     internal int _hover = -1;
+    private int _scroll, _contentH;
+    private uint[]? _bg;
+
+    /// <summary>칸의 때 — 줄(1~3)마다 240, 가로 자리를 더한다.</summary>
+    private static int TimeOf(Part1Episode e) => (Math.Max(1, e.Row) - 1) * 240 + e.X;
 
     internal void Open()
     {
         GameWindow.TestRunTrace("part1 timeline open");   // 시험 전용 줄
         _episodes = Part1Episode.LoadAll();
-        var cells = new List<(int, int)>();
-        var headers = new List<(string, int)>();
-        int y = Top;
-        foreach (var line in _episodes.GroupBy(e => e.Line).OrderBy(g => g.Key))
+        var cells = new (int, int)[_episodes.Count];
+        var taken = new HashSet<(int, int)>();
+        for (int i = 0; i < _episodes.Count; i++)
         {
-            headers.Add((line.Key < LineNames.Length ? LineNames[line.Key] : $"줄기 {line.Key}", y));
-            y += 18;
-            int k = 0;
-            foreach (var _ in line)
-            {
-                cells.Add((Left + k % Columns * (CellW + 2), y + k / Columns * (CellH + 3)));
-                k++;
-            }
-            y += (k + Columns - 1) / Columns * (CellH + 3) + 8;
+            var e = _episodes[i];
+            int col = Math.Clamp(e.Line, 0, ColumnX.Length - 1), y = 30 + TimeOf(e) * Step / 20;
+            while (!taken.Add((col, y))) y += CellH + 4;   // 때가 같은 칸(사략해적 · 호위선단)은 아래로
+            cells[i] = (ColumnX[col], y);
         }
-        _cells = [.. cells];
-        _headers = [.. headers];
+        _cells = cells;
+        _contentH = cells.Length > 0 ? cells.Max(c => c.Item2) + CellH : 0;
+        _bg ??= shell.Field.ReadImage(Background).Px;
+        _scroll = 0;
         _open = true;
         _hover = -1;
     }
+
+    private int MaxScroll => Math.Max(0, _contentH - (BandBottom - BandTop));
+
+    internal void Scroll(int notches) => _scroll = Math.Clamp(_scroll + notches * Step, 0, MaxScroll);
 
     internal int HitAt(int bx, int by)
     {
         var (ox, oy) = host.Mos.MosesOrigin();
         var (backX, backY, _) = Back[0];
         if (bx >= ox + backX && bx < ox + backX + Part1TitleScreen.ButtonW && by >= oy + backY && by < oy + backY + Part1TitleScreen.ButtonH) return ButtonHit;
+        // 오른쪽 띠의 위 · 아래 화살표(배경 그림의 장식).
+        if (bx >= ox + 596 && bx < ox + 620 && by >= oy + 140 && by < oy + 190) return ScrollUpHit;
+        if (bx >= ox + 596 && bx < ox + 620 && by >= oy + 380 && by < oy + 430) return ScrollDownHit;
+        if (by < oy + BandTop || by >= oy + BandBottom) return -1;
         for (int i = 0; i < _cells.Length; i++)
         {
             var (x, y) = _cells[i];
-            if (bx >= ox + x && bx < ox + x + CellW && by >= oy + y && by < oy + y + CellH) return i;
+            int top = oy + BandTop + y - _scroll - CellH / 2;
+            if (bx >= ox + x - CellW / 2 && bx < ox + x + CellW / 2 && by >= top && by < top + CellH) return i;
         }
         return -1;
     }
@@ -72,6 +88,8 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     internal void OnKey(int key)
     {
         if (key == Win32.VK_ESCAPE) Press(ButtonHit);
+        else if (key == Win32.VK_UP) Scroll(-1);
+        else if (key == Win32.VK_DOWN) Scroll(1);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
     }
 
@@ -86,6 +104,8 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     private void Press(int hit)
     {
         if (hit == ButtonHit) host.LeaveScene(() => _open = false);
+        else if (hit == ScrollUpHit) Scroll(-2);
+        else if (hit == ScrollDownHit) Scroll(2);
         else if (hit >= 0 && hit < _episodes.Count)
         {
             if (!Unlocked(_episodes[hit])) { host.Toast($"{_episodes[hit].Name} — 아직 열리지 않았습니다"); return; }
@@ -98,22 +118,42 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     {
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        host.UiFill(ox, oy, MosesScene.MosesW, MosesScene.MosesH, 0xFF141A24);
-        const string title = "연대표";
-        var (_, tw, _) = host.UiGetText(title, GameWindow.White, 18);
-        host.UiText(title, ox + (MosesScene.MosesW - tw) / 2, oy + 18, GameWindow.White, 18);
-        foreach (var (name, y) in _headers) host.UiText(name, ox + Left, oy + y, 0xFFFFE080, 12);
+        if (_bg is { } bg)
+            for (int y = 0; y < MosesScene.MosesH; y++)
+                for (int x = 0; x < MosesScene.MosesW; x++)
+                    host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
+        else host.FillRect(ox, oy, MosesScene.MosesW, MosesScene.MosesH, 0xFF141A24);
+
+        // 눈금 — 20 마다, 240(한 해)마다 「1281. 00」 꼴.
+        for (int t = 0; 30 + t * Step / 20 <= _contentH; t += 20)
+        {
+            int y = oy + BandTop + 30 + t * Step / 20 - _scroll;
+            if (y < oy + BandTop - 6 || y > oy + BandBottom - 10) continue;
+            string label = t % 240 == 0 ? $"{1281 + t / 240}. 00" : $"{t % 240}";
+            host.UiText(label, ox + 8, y - 7, 0xFFB09880, 10);
+            if (t % 240 == 0) host.UiFill(ox + 56, y, 115, 1, 0xC0D0C0B0);
+        }
+
+        int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
         for (int i = 0; i < _cells.Length && i < _episodes.Count; i++)
         {
-            var (x, y) = _cells[i];
-            bool current = _episodes[i].ChapterId == host.Part1.ChapterId, open = Unlocked(_episodes[i]);
-            host.UiFill(ox + x, oy + y, CellW, CellH, !open ? 0x80101418u : _hover == i ? 0xF0305080u : current ? 0xD0405828u : 0xC0202838u);
-            host.UiStroke(ox + x, oy + y, CellW, CellH, _hover == i ? 0xFFB0D0FFu : 0xFF506080u);
-            string name = (host.Part1.FinishedChapters.Contains(_episodes[i].ChapterId) ? "✓ " : "") + _episodes[i].Name;
-            // 칸보다 긴 이름은 끝을 줄여 「…」 — 이웃 칸을 덮었다.
-            while (name.Length > 1 && host.UiGetText(name, GameWindow.White, 11).W > CellW - 4) name = name[..^2] + "…";
-            var (_, nw, nh) = host.UiGetText(name, GameWindow.White, 11);
-            host.UiText(name, ox + x + Math.Max(2, (CellW - nw) / 2), oy + y + (CellH - nh) / 2, open ? GameWindow.White : 0xFF606878u, 11);
+            var (x, cy) = _cells[i];
+            int y = oy + BandTop + cy - _scroll;
+            if (y < oy + BandTop || y > oy + BandBottom - 8) continue;
+            var e = _episodes[i];
+            bool open = Unlocked(e), done = host.Part1.FinishedChapters.Contains(e.ChapterId);
+            if (_hover == i) host.UiFill(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0x60FFE0A0);
+            // 이름 그림(Obs 낱말 1) — 그림 가운데를 칸 가운데에. 못 읽으면 글로.
+            if (e.Words.Length > 1 && host.UiFor(Part1Game.ObsBase + e.Words[1])?.FrameAt(0, tick) is { } f)
+                host.BlitScaled(f, ox + x - f.W / 2, y - f.H / 2, f.W, f.H);
+            else
+            {
+                var (_, nw, nh) = host.UiGetText(e.Name, GameWindow.White, 12);
+                host.UiText(e.Name, ox + x - nw / 2, y - nh / 2, GameWindow.White, 12);
+            }
+            if (!open) host.UiFill(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0xA0000000);   // 닫힌 칸은 어둡게
+            if (done) host.UiText("✓", ox + x - CellW / 2 - 4, y - 8, 0xFFFFE080, 12);
+            if (e.ChapterId == host.Part1.ChapterId) host.UiStroke(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0xFFFFE080);
         }
         var (bx, by, bn) = Back[0];
         shell.DrawButton(ox + bx, oy + by, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, bn, _hover == ButtonHit);

@@ -788,6 +788,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_KEYUP:
                 Btl._heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when Part1TitleScr._open && Part1TitleScr.Timeline._open && !Part1TitleScr.Chapter._open:
+                Part1TitleScr.Timeline.Scroll(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 파트1 연대표를 굴린다
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when ProgressScr._progressOpen:
                 ProgressScr._progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
                 return IntPtr.Zero;
