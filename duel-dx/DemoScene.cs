@@ -123,6 +123,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
         var ais = Part1Ai.LoadAll();
         DemoUnit Unit(Part1BattleUnit u, int index)
         {
+            // 증원은 칸 (1000, 1000)에 두었다가 행동 300 이 불러들인다(분석-파트1-전투 2.2) — 파트2 처럼 (0, 0) 대기로 둔다.
+            // 그대로 두면 판 위로 쳐져 차례가 오고 카메라가 판 귀퉁이로 갔다(사용자 보고: Btl 20087 적 차례 뒤 카메라가 아래를 비춤).
+            if (u.X >= 1000 || u.Y >= 1000) u = u with { X = 0, Y = 0 };
             // 탈것이 적힌 사람은 탈것으로 선다 — 차례 번호(사건이 가리키는 것)는 그대로라 조건 200·201 이 원본처럼 탈것을 본다.
             var unit = u.MountChr > 0
                 ? new DemoUnit(Part1Game.ChrBase + u.MountChr, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader, Part1Rider = Part1Game.ChrBase + u.ChrCode }
