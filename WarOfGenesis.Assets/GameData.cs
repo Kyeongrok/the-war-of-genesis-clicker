@@ -519,7 +519,7 @@ public sealed class GameDatabase
             {
                 if (!_part1Characters.TryGetValue(code, out var made))
                 {
-                    var chr = Part1Chr.Load(code - Part1Game.ChrBase);
+                    var chr = Part1Chr.Load(code - Part1Game.ChrBase) is { } loaded ? Part1Growth?.Invoke(loaded) ?? loaded : null;
                     ushort nameId = (ushort)Math.Min(ushort.MaxValue, Part1Game.NameTextBase + code - Part1Game.ChrBase);
                     if (chr != null) _part1Names[nameId] = chr.Name;
                     made = chr?.ToCharacterData(Part1BasicWork, nameId);
@@ -538,6 +538,15 @@ public sealed class GameDatabase
     }
 
     private readonly Dictionary<int, CharacterData?> _part1Characters = [];
+
+    /// <summary>파트1 인물의 자란 모습(경험치 · 어빌리티 레벨)을 입힌다 — 게임이 진행에서 채운다. 바뀌면 <see cref="ForgetPart1Characters"/>.</summary>
+    public Func<Part1Chr, Part1Chr>? Part1Growth { get; set; }
+
+    /// <summary>만들어 둔 파트1 인물을 버린다 — 자란 모습이 바뀌었을 때(레벨업 · 새 게임 · 이어 하기).</summary>
+    public void ForgetPart1Characters()
+    {
+        lock (_part1Characters) _part1Characters.Clear();
+    }
 
     /// <summary>파트1 인물이 빌려 쓰는 기본 공격 — 파트2 살라딘(Chr 219)의 것. 파트1 기본 공격 연출을 옮기기 전까지의 자리.</summary>
     private ushort Part1BasicWork => _part1BasicWork ??= Character(219)?.BasicWorkId ?? 0;

@@ -43,7 +43,29 @@ internal sealed class Part1Progress
         ChapterId = -1;
         PartyPlace = 0;
         PendingActions = [];
+        Grown = [];
+        Eld = 0;
     }
+
+    /// <summary>인물마다 자란 것 — 누적 경험치와 어빌리티 레벨(레벨업으로 올린 것). 인물 레코드에 덮어 쓴다(<see cref="Apply"/>).</summary>
+    internal sealed class Growth
+    {
+        public int Experience { get; set; }
+        public Dictionary<int, int> Abilities { get; set; } = [];
+    }
+
+    internal Dictionary<int, Growth> Grown = [];
+
+    /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>).</summary>
+    internal int Eld;
+
+    /// <summary>그 인물의 자란 것 — 없으면 레코드의 경험치로 새로 만든다.</summary>
+    internal Growth GrowthOf(int chrCode, int baseExperience) =>
+        Grown.TryGetValue(chrCode, out var g) ? g : Grown[chrCode] = new Growth { Experience = baseExperience };
+
+    /// <summary>인물 레코드에 자란 것을 입힌다(GameDatabase.Part1Growth).</summary>
+    internal Part1Chr Apply(Part1Chr chr) =>
+        Grown.TryGetValue(Part1Game.ChrBase + chr.Code, out var g) ? chr.WithGrowth(g.Experience, g.Abilities) : chr;
 
     /// <summary>일행이 선 챕터 지도 장소(차례).</summary>
     internal int PartyPlace;
@@ -56,13 +78,14 @@ internal sealed class Part1Progress
     internal static bool HasSave => File.Exists(SavePath);
 
     private sealed record SaveData(List<int> Party, int ChapterId, int PartyPlace, List<int> Cleared, List<int> FinishedChapters,
-                                   Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending);
+                                   Dictionary<int, Dictionary<int, int>> Fired, string Flags, List<short[]> Pending,
+                                   Dictionary<int, Growth>? Grown = null, int Eld = 0);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])]);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld);
         try
         {
             Directory.CreateDirectory(UserDataFolder.Path);
@@ -88,6 +111,8 @@ internal sealed class Part1Progress
             Array.Clear(flags);
             saved.AsSpan(0, Math.Min(saved.Length, flags.Length)).CopyTo(flags);
             PendingActions = [.. data.Pending.Where(w => w.Length > 0).Select(w => new ScriptCommand((ushort)w[0], w[1..]))];
+            Grown = data.Grown ?? [];
+            Eld = data.Eld;
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or NotSupportedException) { return false; }

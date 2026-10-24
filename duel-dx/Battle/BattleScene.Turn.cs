@@ -85,7 +85,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
     /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
-    internal Part1Rules Part1 => _part1 ??= new();
+    internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null);
     private Part1Rules? _part1;
 
     internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";

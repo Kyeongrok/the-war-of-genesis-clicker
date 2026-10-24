@@ -161,6 +161,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     private void NewGame()
     {
         host.Part1.Reset();
+        HookGrowth();
         Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
         int chapter = Part1Episode.LoadAll().FirstOrDefault()?.ChapterId ?? 0;
         if (!Chapter.Open(chapter)) Timeline.Open();
@@ -169,8 +170,19 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>파트1 이어 하기 — <c>part1.json</c> 의 챕터에서 남은 사건을 잇는다. 못 읽으면 알리고 타이틀에 머문다.</summary>
     private void ContinueGame()
     {
-        if (!host.Part1.Load(host.FlagSt._flags) || host.Part1.ChapterId < 0 || !Chapter.Continue())
+        bool loaded = host.Part1.Load(host.FlagSt._flags);
+        HookGrowth();
+        if (!loaded || host.Part1.ChapterId < 0 || !Chapter.Continue())
             host.Toast("파트1 진행 기록을 읽지 못했습니다");
+    }
+
+    /// <summary>파트1 인물을 읽을 때 진행의 자란 것(경험치 · 어빌리티)을 입히게 한다 — 만들어 둔 인물은 버린다.</summary>
+    private void HookGrowth()
+    {
+        if (host._db is not { } db) return;
+        db.Part1Growth = host.Part1.Apply;
+        db.ForgetPart1Characters();
+        host.Btl.Part1.Forget();
     }
 
     /// <summary>

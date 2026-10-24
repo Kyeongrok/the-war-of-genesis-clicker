@@ -82,6 +82,19 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
             (ushort)Stat(Str), 100, (ushort)ActionInterval, 100, (ushort)Stat(Ac), (ushort)Stat(Dex),
             new ushort[6], []);
 
+    /// <summary>
+    /// 자란 모습 — 칸 18 누적 경험치(레벨 = ÷100)를 <paramref name="experience"/> 로, 어빌리티 레벨을 <paramref name="abilities"/> 로 덮는다(없던 것은 더한다, 10칸까지).
+    /// </summary>
+    public Part1Chr WithGrowth(int experience, IReadOnlyDictionary<int, int> abilities)
+    {
+        var fields = (int[])Fields.Clone();
+        fields[18] = experience;
+        var merged = Abilities.Select(a => abilities.TryGetValue(a.Ability, out int level) ? (a.Ability, level) : a).ToList();
+        foreach (var (ability, level) in abilities)
+            if (merged.Count < 10 && !merged.Any(a => a.Ability == ability)) merged.Add((ability, level));
+        return this with { Fields = fields, Abilities = [.. merged] };
+    }
+
     public static Part1Chr? Load(int code) => Parse(code, Part1Game.Read("Chars", $"{code:D4}.chr"));
 
     public static Part1Chr? Parse(int code, byte[]? b)

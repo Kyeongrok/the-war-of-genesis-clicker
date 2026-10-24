@@ -33,6 +33,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>쓰러뜨린 쪽에 경험치를 준다(메시지 1016). 여럿이 나누면 <paramref name="share"/> 로 나눈 몫(1 이상).</summary>
     internal void GainKillExp(UnitState killer, UnitState victim, int share = 1)
     {
+        if (host._scene.IsPart1) { GainPart1KillExp(killer, victim); return; }
         // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
         if (host._db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
         // 11(경험치 증가)은 자르기 <b>앞</b>에 더한다(0x10072285~) — 그래서 한 번에 상한(Num 17)을 넘지 않는다.
@@ -40,6 +41,42 @@ internal sealed unsafe partial class BattleScene
         int exp = Math.Max(1, host._db.WithEquipExp(k, host._db.ExpForKill(k, v.Level, killer.Status(11))) / share);
         killer.Data = k with { Exp = k.Exp + exp, CumExp = k.CumExp + exp };
         Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
+    }
+
+    /// <summary>
+    /// 파트1 처치 보상(<c>0x1003de76</c> → <c>0x10035908</c>~) — 때린 이가 편 4 이고 파트1 Chr &lt; 106 이면 경험치 = 죽은 이 레벨 × 20 / 때린 이 레벨,
+    /// eld += Luck × 죽은 이 경험치 / 1000(<see cref="Part1Combat.KillReward"/>). 레벨(경험치 ÷ 100)이 오르면 직업 어빌리티 하나를 올린다
+    /// (<see cref="Part1Job.LevelUpCandidates"/>) — 원본은 플레이어가 후보에서 고르는데(<c>0x1009dac0</c>), 고르는 창이 아직 없어 첫 후보를 올린다.
+    /// 자란 것은 파트1 진행에 남아 다음 판·세이브로 간다.
+    /// </summary>
+    internal void GainPart1KillExp(UnitState killer, UnitState victim)
+    {
+        if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
+            || Part1.Fighter(killer) is not { } k || Part1.Fighter(victim) is not { } v) return;
+        int before = k.Chr.Experience;
+        var (exp, eld) = Part1Combat.KillReward(v.Chr.Experience, before, k.Stat(Part1Chr.Luck));
+        if (exp <= 0) return;
+        var growth = host.Part1.GrowthOf(killer.ChrCode, before);
+        growth.Experience += exp;
+        host.Part1.Eld += eld;
+        Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 kill {killer.ChrCode} → {victim.ChrCode}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
+        var chr = k.Chr;
+        for (int level = before / 100 + 1; level <= growth.Experience / 100; level++)
+        {
+            chr = chr.WithGrowth(growth.Experience, growth.Abilities);
+            // 어빌리티 칸은 10 개뿐이다(인물 레코드) — 다 찼으면 이미 배운 것을 올리는 후보만 남는다.
+            if (Part1Job.ById(Part1Job.LoadAll(), chr.JobId)?.LevelUpCandidates(chr).FirstOrDefault(c => c.NewLevel > 1 || chr.Abilities.Length < 10)
+                is not { Ability: > 0 } pick) continue;
+            growth.Abilities[pick.Ability] = pick.NewLevel;
+            string name = Part1Ability.ById(Part1Ability.LoadAll(), pick.Ability)?.Name ?? $"어빌리티 {pick.Ability}";
+            host.Toast($"{chr.Name} 레벨 {level} — {name} Lv {pick.NewLevel}");
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}: {name} Lv {pick.NewLevel}" + Environment.NewLine);
+        }
+        db.ForgetPart1Characters();
+        Part1.Forget(killer.ChrCode);
     }
 
     /// <summary>

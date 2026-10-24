@@ -10,7 +10,7 @@ namespace DuelDx;
 /// 회피는 대상이 어빌리티 77 을 가졌을 때만 굴린다. 능력치는 소울 게이지로 깎는다(<see cref="Part1Combat.Scaled"/> — 파트2 SOUL 을 그 게이지로 쓴다).
 /// 기본 공격(파트2 살라딘의 기본 work)은 세기 식 0(무기1 · STR) · 명중 100 으로, 파트1 기술(work 20000 + Attack.dat 번호)은 그 칸의 식으로 친다.
 /// </remarks>
-internal sealed class Part1Rules
+internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 {
     private IReadOnlyList<Part1Item>? _items;
     private IReadOnlyList<Part1Attack>? _attacks;
@@ -26,9 +26,16 @@ internal sealed class Part1Rules
         if (!_fighters.TryGetValue(u.ChrCode, out var f))
         {
             _items ??= Part1Item.LoadAll();
-            _fighters[u.ChrCode] = f = Part1Chr.Load(u.ChrCode - Part1Game.ChrBase) is { } chr ? Part1Fighter.From(chr, _items) : null;
+            _fighters[u.ChrCode] = f = load(u.ChrCode - Part1Game.ChrBase) is { } chr ? Part1Fighter.From(chr, _items) : null;
         }
         return f;
+    }
+
+    /// <summary>자란 모습이 바뀐 인물(없으면 모두)을 다시 읽게 한다.</summary>
+    internal void Forget(int? chrCode = null)
+    {
+        if (chrCode is { } code) _fighters.Remove(code);
+        else _fighters.Clear();
     }
 
     /// <summary>
