@@ -22,9 +22,9 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 84, 26);
 
     /// <summary>파트1 타이틀의 단추 — 가운데 아래. LOAD GAME 은 파트2 타이틀처럼 저장 칸을 골라 부른다(사용자 요청 — 파트1 세이브 칸은 따로, part1-battle-save-NN).</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 348, "NEW GAME"), (250, 378, "LOAD GAME"), (250, 408, "CONTINUE"), (250, 438, "PART 2")];
+    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 324, "NEW GAME"), (250, 354, "LOAD GAME"), (250, 384, "CONTINUE"), (250, 414, "PART 2"), (250, 444, "EXIT")];
 
-    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3;
+    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4;
 
     internal bool _open;
     internal bool _entryHover;
@@ -214,6 +214,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 host.LeaveScene(ContinueGame);
                 break;
             case ButtonPart2: host.LeaveScene(Close); break;
+            case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)
         }
     }
 
