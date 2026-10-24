@@ -845,6 +845,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_COMMAND:
                 OnMenuCommand((int)((long)wParam & 0xFFFF));
                 return IntPtr.Zero;
+            case Win32.WM_ACTIVATEAPP:
+                // 다른 프로그램이 앞에 오면 배경음악을 5% 로 줄이고, 돌아오면 원래대로(사용자 요청). 효과음 · 음성은 그대로.
+                _mixer.MusicFocus = wParam != IntPtr.Zero ? 1f : 0.05f;
+                return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
             case Win32.WM_KILLFOCUS:
                 Btl._heldMoveKeys.Clear();
                 return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);

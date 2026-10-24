@@ -16,6 +16,7 @@ internal static unsafe class Win32
     public const uint WM_KEYDOWN = 0x0100;
     public const uint WM_KEYUP = 0x0101;
     public const uint WM_KILLFOCUS = 0x0008;
+    public const uint WM_ACTIVATEAPP = 0x001C;
     public const uint WM_MOUSEMOVE = 0x0200;
     public const uint WM_LBUTTONDOWN = 0x0201;
     public const uint WM_RBUTTONDOWN = 0x0204;

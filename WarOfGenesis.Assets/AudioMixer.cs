@@ -141,6 +141,15 @@ public sealed class AudioMixer : IDisposable
 
     private float _musicVolume = 1f;
 
+    /// <summary>창이 뒤에 있을 때 배경음악에 더 곱하는 값 — 앞이면 1, 다른 창이 앞이면 0.05(사용자 요청: 백그라운드에서는 BGM 5%).</summary>
+    public float MusicFocus
+    {
+        get { lock (_gate) return _musicFocus; }
+        set { lock (_gate) _musicFocus = Math.Clamp(value, 0f, 1f); }
+    }
+
+    private float _musicFocus = 1f;
+
     /// <summary>배경음악 소리 크기만 바꾼다(레벨업 창이 뜨면 40%). 실제 크기는 여기에 <see cref="MusicVolume"/> 를 곱한 것.</summary>
     public void SetMusicGain(float gain)
     {
@@ -204,7 +213,7 @@ public sealed class AudioMixer : IDisposable
                     Array.Clear(mix);
                     lock (_gate)
                     {
-                        if (_music != null && !_musicPaused && !Mix(_music, mix, _musicVolume)) _music = null;
+                        if (_music != null && !_musicPaused && !Mix(_music, mix, _musicVolume * _musicFocus)) _music = null;
                         _effects.RemoveAll(v => !Mix(v, mix, 1f));
                     }
                     for (int i = 0; i < mix.Length; i++) pcm[i] = (short)Math.Clamp(mix[i], short.MinValue, short.MaxValue);
