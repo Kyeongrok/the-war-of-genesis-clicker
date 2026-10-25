@@ -47,7 +47,8 @@ public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int 
     public static Part1Battle? Load(int id)
     {
         var battle = Parse(id, Part1Game.Read("Btls", $"{id:D4}.btl"));
-        return battle is null ? null : battle with { Lines = ParseDialogue(Part1Game.Read("Btls", $"{id:D4}.dlg")) };
+        // 원본에 없는 덧대사(사용자 요청)는 원본 줄을 읽은 뒤에 붙인다.
+        return battle is null ? null : Part1BattleAdditions.Apply(battle with { Lines = ParseDialogue(Part1Game.Read("Btls", $"{id:D4}.dlg")) });
     }
 
     public static Part1Battle? Parse(int id, byte[]? b)
