@@ -97,7 +97,7 @@ internal sealed unsafe partial class BattleScene
     /// <param name="tp">지금 TP 대신 쓸 값(접근 단계는 최대 TP 로 잰다) — null 이면 지금 TP.</param>
     /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
     /// <param name="flee">파트1 AI 표 「움직이지 않음」(+0 = 3) 인물도 도망칠 때는 걷는다(0x10026470 은 이동 방식을 안 본다).</param>
-    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null, bool flee = false)
+    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null, bool flee = false, bool withRed = true)
     {
         if (host._map is not { } map || host._db is not { } db || unit.Data is not { } c) return null;
 
@@ -119,7 +119,8 @@ internal sealed unsafe partial class BattleScene
         // 플레이어가 인물을 고른 상태 10 은 파랑을 <b>현재 TP 전부</b>로 한 번 더 칠한다(0x10069659) — 멀리 걸어가 쉴 수 있다.
         // 빨강(기본공격 자리)은 좁은 예산 기준이고, TP+CTP 가 기본공격 비용에 못 미치면 아예 없다(0x10069524). fg-22.
         int budget = playerBrowse && !unit.HasStatus(25) ? Math.Max(narrow, unit.Tp) : narrow;
-        bool redAllowed = !playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId);
+        // withRed: false 면 붉은 칸(기본공격 사거리)을 안 칠한다 — 칸마다 사거리 창을 훑어 가장 비싼 부분이라, 길만 필요한 곳(FindAttackPath)은 끈다.
+        bool redAllowed = withRed && (!playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId));
 
         // 파트1 판 — 이동력은 SPD × 2(0x1003a9ec → A* 0x100239d0 의 한도, 0x10023d93), 한 걸음 = (|높이 차| + 2 · 맨해튼) × 2(0x1008a4f0) —
         // 평지 한 칸 4, 높이 한 단마다 2 더. 높이 차 2 넘는 칸은 못 간다(0x1008a130). 전에는 (높이 차 + 2) × 4 = 평지 8 로 원본의 반만 갔다.

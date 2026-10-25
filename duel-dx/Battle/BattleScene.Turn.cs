@@ -877,7 +877,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         var a = host._units[attackerIndex];
         var t = host._units[targetIndex];
         if (!a.Alive || !t.Alive || !SeesAsFoe(a, t) || a.Data == null || Work(a.Data.BasicWorkId) is not { } w || !CanAfford(a, w)) return null;
-        if (ComputeRange(a) is not { } range) return null;
+        // 이동 범위는 같은 틀 · 같은 자리 · 같은 TP 면 한 번만 센다 — 공격 대상 고르기(E)는 적마다 이것을 부르고, 커서는 틀마다 부른다.
+        // 전에는 적 하나에 범위를 두 번(좁은 · 넓은 예산), 붉은 칸까지 칠해 셌다 — 사거리 긴 인물 · 적 많은 판(20089 록슬리)에서 크게 렉(사용자 보고).
+        var key = (a, host._lastTime, a.Col, a.Row, a.Tp, a.Ctp);
+        if (_attackRanges is not { } cache || cache.Key != key) _attackRanges = cache = new AttackRanges(key, ComputeRange(a, withRed: false));
+        if (cache.Narrow is not { } range) return null;
 
         // 원본 0x100608e0 — 기준 칸에서 칠한 파랑(좁은 예산) 가운데 대상이 사거리에 드는 칸 중 <b>지금 선 칸에서 가장 가까운</b> 칸
         // (맨해튼, 같으면 배열 번호 순). 비용은 기준 칸 → 그 칸 한 번이다(ba-20 M2). 전에는 기준 칸에서 가장 싼 칸을 골라,
@@ -893,8 +897,19 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             best = i;
         }
         // 길은 넓은 예산(지금 TP 전부)으로 찾는다 — 대상 고르기 중의 range 는 좁은 예산이라, 멀리 걸어가 있으면 지금 칸이 그 밖이라 길이 안 나왔다.
-        var wide = ComputeRange(a, tp: Math.Max(a.Tp, 0)) ?? range;
+        if (best < 0) return null;
+        var wide = cache.Wide ??= ComputeRange(a, tp: Math.Max(a.Tp, 0), withRed: false) ?? range;
         return best < 0 || (PathWithin(wide, a.Col, a.Row, best) ?? PathWithin(range, a.Col, a.Row, best)) is not { } path ? null : (path, range.Cost[best]);
+    }
+
+    /// <summary><see cref="FindAttackPath"/> 가 센 이동 범위 — (인물, 틀, 자리, TP, CTP) 가 같으면 다시 쓴다.</summary>
+    private AttackRanges? _attackRanges;
+
+    private sealed class AttackRanges((UnitState, double, int, int, int, int) key, MoveRange? narrow)
+    {
+        public readonly (UnitState, double, int, int, int, int) Key = key;
+        public readonly MoveRange? Narrow = narrow;
+        public MoveRange? Wide;
     }
 
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
@@ -921,14 +936,24 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _targetWork = c.BasicWorkId;
         _targetIsBasicAttack = true;
 
-        var targets = AttackCursorTargets();
-        if (targets.Count == 0)
+        // 처음 고를 대상만 센다(사용자 요청) — 지금 자리에서 칠 수 있는 적이 1순위, 없으면 가까운 적부터 걸어가 칠 수 있는지 보고 처음 걸린 적에서 멈춘다.
+        // 전에는 판의 모든 적 · 물체를 걸음 비용으로 다 세어 줄을 세웠다(적 많은 판에서 E 가 렉). 다음 대상 돌리기(CycleAttackCursor)는 그때 다 센다.
+        var user = host._units[_turn];
+        var foes = Enumerable.Range(0, host._units.Length)
+            .Where(i => host._units[i].Alive && host._units[i].OnField && SeesAsFoe(user, host._units[i]))
+            .OrderBy(i => Math.Abs(host._units[i].Col - user.Col) + Math.Abs(host._units[i].Row - user.Row)).ThenBy(i => host._units[i].Hp).ThenBy(i => i)
+            .ToList();
+        int first = Work(c.BasicWorkId) is { } basic && CanAfford(user, basic)
+            ? foes.FirstOrDefault(i => InWorkRange(basic, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user), -1) : -1;
+        if (first < 0) first = foes.FirstOrDefault(i => FindAttackPath(_turn, i) != null, -1);
+        if (first >= 0) (_attackCursor, _attackObject) = (first, null);
+        else if (AttackableObjects() is [var obj, ..]) (_attackCursor, _attackObject) = (-1, obj);
+        else
         {
             CancelTargeting(refund: true);
             host.Toast("공격할 수 있는 적이 없습니다");
             return;
         }
-        (_attackCursor, _attackObject) = targets[0];
         AttackCursorHint();
     }
 
@@ -1834,11 +1859,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _part1Counters.Add((by, target, basic));
     }
 
-    /// <summary>파트1 자세를 켠다 — 자세 몸짓(동작 21 = 모션 63~65, <c>0x10035e00(0x15, 방향, 10000)</c>)으로 서 있는다.</summary>
+    /// <summary>파트1 자세를 켠다 — 자세 몸짓(동작 21 = 모션 63~65, <c>0x10035e00(0x15, 방향, 10000)</c>)을 한 번 하고 선다.</summary>
     internal void EnterPart1Stance(UnitState u, int ability)
     {
         Part1.Stances[u] = ability;
-        u.IdleAction = Part1StanceAction;
+        // 몸짓은 한 번만(사용자 보고: 반격 몸짓이 계속 되풀이된다) — 전에는 서기 대신 되풀이할 동작(IdleAction)으로 걸었다.
+        PlayAction(u, Part1StanceAction);
         Popup(u, Part1Rules.StanceName(ability), 0xFFB0E0FF, 15);
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
