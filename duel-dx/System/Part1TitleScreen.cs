@@ -51,7 +51,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     }
 
     /// <summary>
-    /// 파트1 폴더를 못 찾았다 — 원본 「창세기전3 파트1」 설치 폴더를 고르게 한다(파트2 의 OriginalGameSetup 과 같은 방식, 사용자 요청).
+    /// 파트1 폴더를 못 찾았다 — 원본이 있어야 한다고 알리고, 압축을 풀어 둔 원본을 찾아본 뒤(<see cref="Part1Game.Scan"/>) 찾으면 쓸지 묻고,
+    /// 못 찾거나 마다하면 설치 폴더를 고르게 한다(파트2 의 OriginalGameSetup 과 같은 방식, 사용자 요청).
     /// 고른 폴더는 적어 두어 다음부터는 안 묻는다. 파트1 자료는 배포판에 없고 사용자의 원본에서 읽는다. 화면 밖 시험에서는 창을 띄우지 않는다.
     /// </summary>
     private bool AskPart1Folder()
@@ -61,10 +62,46 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         owner.AssignHandle(host._hwnd);
         try
         {
+            const string Title = "창세기전3 파트1";
             var answer = System.Windows.Forms.MessageBox.Show(owner,
-                "파트1 은 원본 「창세기전3 파트1」의 자료(전투 · 인물 · 지도 · 그림 · 소리)를 씁니다.\n\n" +
-                "원본 파트1 이 설치된 폴더(Chars · Obss · Btls 폴더가 든 곳)를 골라 주세요. 원본 폴더에는 아무것도 쓰지 않습니다.",
-                "창세기전3 파트1", System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Information);
+                "파트1 을 하려면 원본 「창세기전3 파트1」이 있어야 합니다 — 전투 · 인물 · 지도 · 그림 · 소리를 원본에서 읽습니다.\n\n" +
+                "확인을 누르면 이 PC 에서 압축을 풀어 둔 원본 폴더(Chars · Obss · Btls 폴더가 든 곳)를 찾아봅니다. 원본 폴더에는 아무것도 쓰지 않습니다.",
+                Title, System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Information);
+            if (answer != System.Windows.Forms.DialogResult.OK) return false;
+
+            var cursor = System.Windows.Forms.Cursor.Current;
+            System.Windows.Forms.Cursor.Current = System.Windows.Forms.Cursors.WaitCursor;
+            string? found;
+            try { found = Part1Game.Scan(TimeSpan.FromSeconds(20)); }
+            finally { System.Windows.Forms.Cursor.Current = cursor; }
+            if (found != null)
+            {
+                if (System.Windows.Forms.MessageBox.Show(owner, $"원본 파트1 을 찾았습니다.\n\n{found}\n\n이 폴더를 쓸까요?", Title,
+                        System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
+                {
+                    Part1Game.Use(found);
+                    return true;
+                }
+                answer = System.Windows.Forms.MessageBox.Show(owner, "원본 파트1 폴더를 직접 골라 주세요.", Title,
+                    System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Information);
+            }
+            else
+            {
+                // 못 찾았다 — 직접 고르기 · 구글에서 「창세기전3 파트1」 검색(웹 브라우저) · 취소(사용자 요청). 검색해도 창은 닫지 않고 다시 고르게 둔다.
+                var pick = new System.Windows.Forms.TaskDialogButton("폴더 직접 고르기");
+                var google = new System.Windows.Forms.TaskDialogButton("구글에서 「창세기전3 파트1」 찾아보기") { AllowCloseDialog = false };
+                google.Click += (_, _) => OpenUrl("https://www.google.com/search?q=" + Uri.EscapeDataString("창세기전3 파트1"));
+                var page = new System.Windows.Forms.TaskDialogPage
+                {
+                    Caption = Title,
+                    Heading = "원본 파트1 폴더를 찾지 못했습니다",
+                    Text = "압축을 풀어 둔 원본 파트1 폴더(Chars · Obss · Btls 폴더가 든 곳)를 직접 골라 주세요.\n원본이 없으면 구글에서 찾아볼 수 있습니다.",
+                    Icon = System.Windows.Forms.TaskDialogIcon.Warning,
+                    Buttons = { pick, google, System.Windows.Forms.TaskDialogButton.Cancel },
+                };
+                answer = System.Windows.Forms.TaskDialog.ShowDialog(owner.Handle, page) == pick
+                    ? System.Windows.Forms.DialogResult.OK : System.Windows.Forms.DialogResult.Cancel;
+            }
             while (answer == System.Windows.Forms.DialogResult.OK)
             {
                 using var dialog = new System.Windows.Forms.FolderBrowserDialog { Description = "원본 창세기전3 파트1 폴더 (Chars · Obss · Btls 가 든 곳)", UseDescriptionForTitle = true };
@@ -80,6 +117,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             return false;
         }
         finally { owner.ReleaseHandle(); }
+    }
+
+    /// <summary>기본 웹 브라우저로 주소를 연다 — 못 열어도 그냥 넘어간다.</summary>
+    private static void OpenUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     internal void Open()
