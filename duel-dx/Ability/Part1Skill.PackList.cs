@@ -26,6 +26,7 @@ internal sealed partial class Part1Skill
         obs.UnionWith([Part1Game.HitSparkObs, 11, 12, 180, 181]);
         // 파트1 판의 지도 · 본부 · 교환 · 가게 창(Part1MapArt · Part1ChapterScreen · Part1HqStatusWindow · Part1ExchangeWindow · Part1TownWindow · Part1FieldScreen).
         obs.UnionWith([111, Part1ChapterScreen.BannerObs, Part1ChapterScreen.TeamObs, Part1ChapterScreen.RingObs, 217, 516, 613, 678, 74]);
+        obs.Add(677);   // 전투 승리 · 패배 조건 창(Part1ConditionWindow)의 깃발 · 해골
         sounds.UnionWith(Part1Game.SkillSounds);
         sounds.UnionWith(BasicSounds);
         sounds.UnionWith([Part1Game.DeathSnd, 0x34]);   // 쓰러짐 · 가게 사고팔기(Part1TownWindow)

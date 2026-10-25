@@ -72,6 +72,16 @@ internal sealed unsafe partial class BattleScene
     /// <summary>파트1 해설 상자가 떠 있으면 누름을 받는다.</summary>
     internal bool OnPart1NarrationClick() => _part1Narration?.Click() == true;
 
+    /// <summary>파트1 승리 · 패배 조건 창(행동 706) — 처음 쓸 때 만든다.</summary>
+    internal Part1ConditionWindow Part1Conditions => _part1Conditions ??= new(host);
+    private Part1ConditionWindow? _part1Conditions;
+
+    /// <summary>파트1 조건 창을 화면 자리(640×480 원점)에.</summary>
+    internal void DrawPart1Conditions() => _part1Conditions?.Draw();
+
+    /// <summary>파트1 조건 창이 떠 있으면 누름(왼 · 오른 단추)을 받아 닫는다(0x10097260).</summary>
+    internal bool OnPart1ConditionsClick() => _part1Conditions?.Click() == true;
+
     /// <summary>파트1 AI 표(Dats/AI.dat) — 행동 705 가 처음 쓸 때 읽는다.</summary>
     private IReadOnlyList<Part1Ai>? _part1Ais;
 
@@ -82,6 +92,7 @@ internal sealed unsafe partial class BattleScene
     internal void LoadEvents(int battleId)
     {
         _part1Narration?.Reset();                // 해설 상자 크기 200 × 100(0x10021b0e) · 떠 있던 상자 닫기
+        _part1Conditions?.Close();               // 떠 있던 조건 창도
         if (host._scene.IsPart1) Part1Objects.Reset();   // 맵 물체도 처음 동작(0)으로 — 판을 세울 때 · RESTART
         _events = [];
         _eventFired = [];
@@ -299,6 +310,7 @@ internal sealed unsafe partial class BattleScene
     internal void StepEvent()
     {
         _part1Narration?.Update();                // 파트1 해설 상자(202)는 칸에 걸린 채 제 틱으로 닫힌다 — 줄을 붙드는 것은 행동 1
+        _part1Conditions?.Update();               // 조건 창(706)도 — 눌러 닫혀 다 사라질 때까지
         while (_runningEvent >= 0)
         {
             if (_eventRoutine != null)
@@ -345,6 +357,7 @@ internal sealed unsafe partial class BattleScene
                     _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
                     if (host.Tlk._talk != null) { _eventPc--; return; }
                     if (_part1Narration?.IsOpen == true) { _eventPc--; return; }   // 파트1 해설 상자(202)도 — 칸이 끝날 때까지(0x1001eab1~)
+                    if (_part1Conditions?.IsOpen == true) { _eventPc--; return; }  // 조건 창(706)도 — 제목 띠가 다 사라질 때까지(0x1002182c~)
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술도
                     if (_eventCamPending && CameraBusy && !host.Tlk._talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
                     _eventCamPending = false;
@@ -384,7 +397,8 @@ internal sealed unsafe partial class BattleScene
                     return;
                 case Part1Script.Part1Only + 706 when host._scene.IsPart1:
                     // 파트1 행동 706(0x10021790 → 창 0x10096e70)은 배치가 아니라 「승리 조건」 · 「패배 조건」 창이다(창 글 0x1011c4fc · 0x1011c4f0) —
-                    // 배치는 판을 열 때 이미 했다(BeginDeployOrDrop, 원본 단계 0xb). 파트1 조건 글 창은 아직 없어 넘긴다 [H: 닫힐 때까지 사건을 붙든다].
+                    // 배치는 판을 열 때 이미 했다(BeginDeployOrDrop, 원본 단계 0xb). 창은 칸에 걸 뿐이고 줄을 붙드는 것은 뒤따르는 행동 1(자료 56곳 모두 706 → 1).
+                    Part1Conditions.Show();
                     break;
                 case 207 or 909 when _eventRoutine != null:
                     _eventRoutineFree = false;                          // 앞 기술이 아직 돈다 — 끝난 뒤 이 줄을 다시 본다

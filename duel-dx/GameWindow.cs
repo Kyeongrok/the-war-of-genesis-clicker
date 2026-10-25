@@ -927,6 +927,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (key == Win32.VK_ESCAPE && Tlk.SkipScene()) return;
         if (Tlk.OnTalkInput(skipAll: key == Win32.VK_ESCAPE)) return;
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Btl.OnPart1NarrationClick()) return;   // 파트1 전투 해설 상자(202)
+        if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Btl.OnPart1ConditionsClick()) return;  // 파트1 승리 · 패배 조건 창(706)
         if ((key == Win32.VK_RETURN || key == Win32.VK_SPACE) && Tlk.SkipCurrentWait()) return;   // 컷씬 기다림은 Enter·Space 로 넘긴다
         if (NotesScr.Open) { NotesScr.OnKey(key); return; }
         if (ConsentScr.Open) { ConsentScr.OnKey(key); return; }
@@ -1109,6 +1110,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Part1PickOpen) { Part1TitleScr.Chapter.PressPick(Part1TitleScr.Chapter.PickAt(bx, by)); return; }
         if (Tlk.OnTalkInput()) return;            // 대사는 클릭 한 번으로 넘긴다
         if (Btl.OnPart1NarrationClick()) return;  // 파트1 전투 해설 상자(202)도
+        if (Btl.OnPart1ConditionsClick()) return; // 파트1 승리 · 패배 조건 창(706) — 화면 어디를 눌러도 닫힌다
         if (Tlk.SkipCurrentWait()) return;        // 컷씬(그림만 띄워 두고 기다리는 틈)도 클릭 한 번으로 넘긴다
         if (Btl.OnDeployClick(bx, by)) return;   // 캐릭터 배치 단계
         if (Fld.OnFieldClick(bx, by)) return;
@@ -1427,6 +1429,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         StatusScr.DrawStatusScreen();
         if (Part1PickOpen) { var (pox, poy) = Mos.MosesOrigin(); Part1TitleScr.Chapter.DrawPick(pox, poy); }
         Btl.DrawPart1Narration();                 // 파트1 전투 해설 상자(행동 202)
+        Btl.DrawPart1Conditions();                // 파트1 승리 · 패배 조건 창(행동 706)
         Tlk.DrawTalk(layer: !BattleCovered && _statusUnit < 0);   // Status(층, 화면 가득)가 떠 있으면 대사 글도 판에 — 층에 쓰면 Status 위로 글만 비친다
         DrawToast();
         DrawVoiceNotice(_camX + ViewWidth - 12, _camY + 10);
