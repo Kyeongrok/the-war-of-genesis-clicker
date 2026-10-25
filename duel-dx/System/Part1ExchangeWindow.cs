@@ -9,8 +9,10 @@ namespace DuelDx;
 /// <para>옵시디안 「분석-파트1-챕터」 13.6. 틀 상자 (65, 65) 510×390. 갈래: 고른 팀이 본부(머리 낱말 9 장소)에 있으면 「본  부」 ↔ 팀,
 /// 아니면 같은 장소의 팀끼리. 단계 0 인물 · 1 아이템 · 2 용병 · 3 탑승물 — 「다음단계」가 단계 3 에서 오른쪽을 다음 팀으로 넘긴다.</para>
 /// <para>리메이크의 팀: 팀 0 은 다른 팀에 안 든 무리 사람(앞 10명), 팀 1 부터는 옮긴 사람만 적는다(<see cref="Part1Team.Members"/>).
-/// 그래서 「본  부」 = 팀 1 부터에 안 든 사람 모두(<see cref="Part1Progress.PoolMembers"/>)이고, 본부에서는 오른쪽 끝에 빈 새 팀을 두어 팀을 만든다(원본 갈래 0 팀 편성 자리).
-/// 아이템 · 용병 · 탑승물은 리메이크가 무리 하나로 들고 있어(팀마다 나누지 않는다) 보이기만 하고 옮기지 않는다.</para>
+/// 그래서 「본  부」 = 팀 1 부터에 안 든 사람 모두(<see cref="Part1Progress.PoolMembers"/>)이고, 본부에서는 오른쪽 끝에 빈 새 팀을 두어 팀을 만든다(원본 갈래 0 팀 편성 자리).</para>
+/// <para>아이템 · 용병 · 탑승물은 원본처럼 팀마다 따로 든다(<see cref="Part1Team.Stock"/>) — 「본  부」 쪽은 이야기 무리 짐(<see cref="Part1Progress.CurrentStock"/>, 원본 0x101a0828[머리 낱말 1]).
+/// 칸 하나를 Ctrl 없이 고르고 ▶ ◀ 를 누르면 하나씩(0x100b97a0 · 0x100b9ac0 · 0x100b9df0), 여럿이거나 Ctrl 이면 고른 칸을 통째로(0x100b8b20 · 0x100b8f40 · 0x100b9370) 옮기고,
+/// 받는 쪽이 팀이면 칸마다 99 까지(0x100ba3d0 · 본부는 한도 없음). 사람을 다 내보낸 팀은 짐도 받는 쪽으로 따라간다(0x100b87d0, 팀 해산).</para>
 /// </remarks>
 internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen map)
 {
@@ -26,6 +28,7 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
     internal const int Pool = -1, NewTeam = -2;
 
     internal bool _open;
+    private bool _formation;
     private int _step;
     private int _left;
     private List<int> _rights = [];
@@ -37,13 +40,17 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
 
     private int RightSide => _right >= 0 && _right < _rights.Count ? _rights[_right] : NewTeam;
 
-    internal void Open()
+    /// <summary>
+    /// 연다 — <paramref name="formation"/> 이면 팀 편성(원본 갈래 0: 팀이 하나도 없이 지도가 손에 들어올 때 0x100b3f10 이 연다) — 장소와 상관없이 본부 ↔ 팀.
+    /// </summary>
+    internal void Open(bool formation = false)
     {
         if (map._chapter is not { } chapter || map.SelectedTeam is not { } team) return;
         int t = map.SelectedTeamIndex;
         _place = team.Place;
         int hq = chapter.Header.Length > 9 ? chapter.Header[9] : -1;
-        _hq = hq >= 0 && _place == hq;
+        _formation = formation;
+        _hq = formation || hq >= 0 && _place == hq;
         _left = _hq ? Pool : t;
         _rights = Candidates(t);
         if (_rights.Count == 0) { host.Toast("같은 장소에 교환할 다른 팀이 없습니다"); return; }
@@ -55,13 +62,16 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         _open = true;
     }
 
-    /// <summary>오른쪽 차례 — 본부: 이 장소의 팀 1 부터(고른 팀 먼저) + 새 팀(8개 못 채웠으면), 그 밖: 같은 장소의 다른 팀.</summary>
+    /// <summary>
+    /// 오른쪽 차례 — 본부: 이 장소의 팀(고른 팀 먼저, 팀 0 도 — 짐은 본부와 따로다) + 새 팀(8개 못 채웠으면), 그 밖: 같은 장소의 다른 팀.
+    /// 팀 편성이면 장소와 상관없이 모든 팀.
+    /// </summary>
     private List<int> Candidates(int selected)
     {
         var teams = map.Teams;
-        var here = Enumerable.Range(0, teams.Count).Where(i => teams[i].Place == _place).ToList();
+        var here = Enumerable.Range(0, teams.Count).Where(i => _formation || teams[i].Place == _place).ToList();
         if (!_hq) return [.. here.Where(i => i != selected)];
-        var list = here.Where(i => i >= 1).OrderBy(i => i == selected ? -1 : i).ToList();
+        var list = here.OrderBy(i => i == selected ? -1 : i).ToList();
         if (teams.Count < 8) list.Add(NewTeam);
         return list;
     }
@@ -72,11 +82,14 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
     internal void Close()
     {
         _open = false;
+        if (_formation && map._chapter is { } chapter) host.Part1.Formed.Add(chapter.Id);
+        _formation = false;
         var teams = map.MutableTeams;
         int selected = map.SelectedTeamIndex;
         for (int i = teams.Count - 1; i >= 1; i--)
         {
             if (teams[i].Members.Count > 0) continue;
+            host.Part1.CurrentStock.TakeAll(teams[i].Stock);   // 사람 없이 짐만 남은 팀(행동이 적어 둔 칸) — 지우기 전에 본부로
             teams.RemoveAt(i);
             if (selected == i) selected = 0;
             else if (selected > i) selected--;
@@ -93,14 +106,25 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         _ => host.Part1.TeamMembers(side),
     };
 
-    /// <summary>한쪽 목록의 칸 수(지금 단계).</summary>
-    private int Count(int side) => _step switch
+    /// <summary>한쪽의 짐 — 본부는 이야기 무리 짐, 팀은 그 팀 짐, 새 팀은 없음.</summary>
+    private Part1Progress.Stock? StockOf(int side) => side switch
     {
-        0 => Members(side).Count,
-        1 => side == _left ? host.Part1.Bag.Distinct().Count() : 0,
-        2 => side == _left ? host.Part1.Mercenaries.Count(m => m.Value > 0) : 0,
-        _ => side == _left ? host.Part1.Mounts.Count(m => m.Value > 0) : 0,
+        Pool => host.Part1.CurrentStock,
+        NewTeam => null,
+        _ => side >= 0 && side < map.Teams.Count ? map.Teams[side].Stock : null,
     };
+
+    /// <summary>한쪽 목록의 칸(단계 1 아이템 · 2 용병 · 3 탑승물) — (번호, 수). 아이템은 가방 차례, 용병 · 탑승물은 Chr 차례.</summary>
+    private List<(int Id, int Count)> Entries(int side) => StockOf(side) is not { } stock ? [] : _step switch
+    {
+        1 => [.. stock.Bag.GroupBy(id => id).Select(x => (x.Key, x.Count()))],
+        2 => [.. stock.Mercenaries.Where(m => m.Value > 0).OrderBy(m => m.Key).Select(m => (m.Key, m.Value))],
+        3 => [.. stock.Mounts.Where(m => m.Value > 0).OrderBy(m => m.Key).Select(m => (m.Key, m.Value))],
+        _ => [],
+    };
+
+    /// <summary>한쪽 목록의 칸 수(지금 단계).</summary>
+    private int Count(int side) => _step == 0 ? Members(side).Count : Entries(side).Count;
 
     /// <summary>단계별 격자 — 열 · 줄 · 칸 크기(13.6 표).</summary>
     private (int Cols, int Rows, int CellW, int CellH, int GapX, int GapY) Grid => _step switch
@@ -175,12 +199,13 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
     }
 
     /// <summary>
-    /// 옮기기(0x100b87d0) — 고른 인물을 다른 쪽으로. 받는 쪽이 팀이면 10명까지(본부는 한도 없음). 단계 1~3 은 리메이크가 무리 하나로 들고 있어 못 옮긴다.
+    /// 옮기기(0x100b87d0) — 고른 인물을 다른 쪽으로. 받는 쪽이 팀이면 10명까지(본부는 한도 없음). 보낸 팀이 비면 그 짐도 받는 쪽으로 따라간다.
+    /// 단계 1~3 은 <see cref="TransferStock"/>.
     /// </summary>
     private void Transfer(HashSet<int> selected, int from, int to)
     {
         if (selected.Count == 0) return;
-        if (_step > 0) { host.Toast("아이템 · 용병 · 탑승물은 아직 무리 공용입니다 — 팀마다 나누지 않습니다"); return; }
+        if (_step > 0) { TransferStock(selected, from, to); return; }
         var teams = map.MutableTeams;
         var members = Members(from);
         var moving = selected.Where(i => i < members.Count).Select(i => members[i]).ToList();
@@ -201,6 +226,39 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
             if (from >= 1) teams[from].Members.Remove(chr);
             if (to >= 1 && !teams[to].Members.Contains(chr)) teams[to].Members.Add(chr);
         }
+        // 팀 해산 — 사람을 다 내보낸 팀(1 부터)의 아이템 · 용병 · 탑승물은 받는 쪽으로(0x100b87d0).
+        if (from >= 1 && teams[from].Members.Count == 0 && StockOf(to) is { } into) into.TakeAll(teams[from].Stock);
+        if (map._chapter is { } chapter) host.Part1.Formed.Add(chapter.Id);
+        map.SaveProgress();
+    }
+
+    /// <summary>
+    /// 짐 옮기기 — 칸 하나를 Ctrl 없이 골랐으면 하나씩(0x100b97a0 · 0x100b9ac0 · 0x100b9df0), 여럿이거나 Ctrl 이면 고른 칸 통째로(0x100b8b20 …).
+    /// 받는 쪽이 팀이면 칸마다 99 까지(0x100ba3d0 — 꽉 찼으면 못 옮김), 본부는 한도 없음.
+    /// </summary>
+    private void TransferStock(HashSet<int> selected, int from, int to)
+    {
+        if (StockOf(from) is not { } src || StockOf(to) is not { } dst) return;
+        var entries = Entries(from);
+        var picked = selected.Where(i => i < entries.Count).Select(i => entries[i]).ToList();
+        selected.Clear();
+        bool one = picked.Count == 1 && !MosesScene.CtrlHeld;
+        int cap = to == Pool ? int.MaxValue : 99;
+        bool full = false;
+        foreach (var (id, count) in picked)
+        {
+            int have = _step switch { 1 => dst.Bag.Count(b => b == id), 2 => dst.Mercenaries.GetValueOrDefault(id), _ => dst.Mounts.GetValueOrDefault(id) };
+            int n = Math.Min(one ? 1 : count, cap - have);
+            if (n <= 0) { full = true; continue; }
+            if (_step == 1) for (int k = 0; k < n; k++) { src.Bag.Remove(id); dst.Bag.Add(id); }
+            else
+            {
+                var (a, b) = _step == 2 ? (src.Mercenaries, dst.Mercenaries) : (src.Mounts, dst.Mounts);
+                if (count - n > 0) a[id] = count - n; else a.Remove(id);
+                b[id] = have + n;
+            }
+        }
+        if (full) host.Toast("한 칸에 99 까지입니다");
         map.SaveProgress();
     }
 
@@ -248,16 +306,10 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
             if (side == Pool && members.Count > g.Cols * g.Rows) art.TextCentered($"외 {members.Count - g.Cols * g.Rows}명", lx + ListW / 2, wy + ListY + ListH - 12, 0xFFA0A8C8, 11);
             return;
         }
-        if (side != _left)
-        {
-            art.TextCentered("무리 공용", lx + ListW / 2, wy + ListY + ListH / 2 - 10, 0xFFA0A8C8, 12);
-            art.TextCentered("(팀마다 나누지 않는다)", lx + ListW / 2, wy + ListY + ListH / 2 + 10, 0xFFA0A8C8, 11);
-            return;
-        }
         if (_step == 1)
         {
             var table = Part1Item.LoadAll();
-            var items = host.Part1.Bag.GroupBy(id => id).Select(x => (Id: x.Key, Count: x.Count())).ToList();
+            var items = Entries(side);
             for (int i = 0; i < Math.Min(items.Count, g.Cols * g.Rows); i++)
             {
                 var (cx, cy) = Cell(lx - wx, i);
@@ -269,15 +321,15 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
             }
             return;
         }
-        var list = (_step == 2 ? host.Part1.Mercenaries : host.Part1.Mounts).Where(m => m.Value > 0).OrderBy(m => m.Key).ToList();
+        var list = Entries(side);
         for (int i = 0; i < Math.Min(list.Count, g.Rows); i++)
         {
             var (cx, cy) = Cell(lx - wx, i);
             int sx = wx + cx, sy = wy + cy;
-            if (art.Chr(list[i].Key) is not { } chr) continue;
+            if (art.Chr(list[i].Id) is not { } chr) continue;
             if (chr.SpriteId > 0) art.Blit(art.Motion(chr.SpriteId, 2, tick), sx + 25, sy + 76);
             art.Text(chr.Name, sx + 55, sy + 12, 0xFFC8FF96, 12);
-            art.TextRight($"{list[i].Value}", sx + 124, sy + 12, 0xFFFF96C8, 12);
+            art.TextRight($"{list[i].Count}", sx + 124, sy + 12, 0xFFFF96C8, 12);
             art.Text($"Hp {chr.MaxHp}", sx + 55, sy + 34, 0xFFE0E4F0, 11);
             Mark(art, sx, sy, g.CellW, g.CellH, selected.Contains(i), _hover == hitBase + i);
         }

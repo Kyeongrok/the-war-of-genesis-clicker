@@ -446,8 +446,8 @@ internal sealed class Part1SceneScript(GameWindow host)
             }
             if (!IsField && c.Code == 505) { UiReset?.Invoke(); continue; }
             // 504 · 506 — 팀이 없고 머리 낱말 2 == 1 이면 이야기 무리 앞 열 명 · 가방 · 용병 · 탑승물을 팀 0 으로 옮긴다(0x100c0620 · 0x100c0a60,
-            // 분석-파트1-챕터 12.3). 리메이크는 챕터를 열 때부터 팀 0 = 일행이라 할 일이 없다(일부러 비운 갈래).
-            if (!IsField && c.Code is 504 or 506) continue;
+            // 분석-파트1-챕터 12.3). 리메이크는 챕터를 열 때부터 팀 0 = 무리 앞 10명이라 짐만 옮긴다(칸마다 99 까지).
+            if (!IsField && c.Code is 504 or 506) { host.Part1.FormTeamZero(); continue; }
             // 304 [n] — 챕터 지도 그림(장소 뒤 12바이트 목록, 0x100b2b16 이 만든 +0x13c28[n] — Obs 820 엇갈린 두 칼 …)을 숨긴다(0x100bdb00: vt+0x78, +0x69 = 0xff). 챕터 56 한 곳.
             if (!IsField && c.Code == 304) { PictureHide?.Invoke(a[0]); continue; }
             if (!IsField && c.Code == 705 && Ending != null) { _pending.Clear(); _sceneChanged = true; Ending(a.Length > 0 ? a[0] : 0); return; }
@@ -498,10 +498,10 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // 리메이크는 일행이 하나라 「일행에 든다」로 친다(챕터 1: 누르 에드 딘 · 일 사담 · 이븐 시나).
                 case 1000 when a[1] == 8 && a[0] >= 0: host.Part1.MoveToGroup(Part1Game.ChrBase + a[0], a[2]); break;
                 // [무리, Chr, 수] — 무리의 용병(908, 0x100c1610 → 0x100adb60, 칸 +0x910) · 탑승물(910, 0x100c1730 → 0x100adcc0, 칸 +0xa14)에 더한다.
-                // 무리 99 는 지금 무리. 챕터 0 들머리: 용병 알가지 5 · 바시아조크 5, 탑승물 아지다하카 3.
+                // 무리 99 는 지금 이야기 무리(본부), 0~7 은 그 챕터 팀(Part1Progress.ScriptStock). 챕터 0 들머리: 팀 0 에 용병 알가지 5 · 바시아조크 5, 탑승물 아지다하카 3.
                 // 906 [무리, 아이템, 수] = 무리 가방에 아이템(0x100c14f0 → 0x100ada10, 챕터 0: 다마스커스 2 · 회복약 10 · 해독제 10 …) ·
                 // 912 [eld] = 무리 돈(0x100c1850, 0x101a07e0 — 챕터 0: 3000) · 904 [무리, Chr] = 그 인물을 무리 명단에(0x100c12e0 — 일행에 든다로 친다).
-                case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
+                case 906 when a[1] > 0: { var bag = host.Part1.ScriptStock(a[0]).Bag; for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) bag.Add(a[1]); break; }
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
                 // 1200 [장소, 마을] — 그 장소를 그 마을 장소로(0x100c19f0: 장소 낱말 7 = 마을, 낱말 6 = 1). 챕터 28 사건 38: 말 1 이 쓰러지면 장소 23 → 마을 153.
                 case 1200: PlaceTown?.Invoke(a[0], a[1]); break;
@@ -517,10 +517,11 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0:
                     host.Part1.Join([Part1Game.ChrBase + a[1]]);
+                    if (host.Part1.ChapterId >= 0) host.Part1.Formed.Add(host.Part1.ChapterId);   // 팀 수 ≠ 0 — 뒤 504 는 할 일이 없다(챕터 1 · 17)
                     TeamJoin?.Invoke(a[0], Part1Game.ChrBase + a[1]);
                     break;
-                case 908 when a[1] > 0: AddCount(host.Part1.Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
-                case 910 when a[1] > 0: AddCount(host.Part1.Mounts, Part1Game.ChrBase + a[1], a[2]); break;
+                case 908 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
+                case 910 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mounts, Part1Game.ChrBase + a[1], a[2]); break;
                 case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;

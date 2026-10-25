@@ -58,6 +58,7 @@ internal sealed class Part1Progress
         SelectedTeam = [];
         ChapterMarkerPrev = [];
         Home = [];
+        Formed = [];
         _homeVersion++;
     }
 
@@ -100,12 +101,12 @@ internal sealed class Part1Progress
     /// <summary>
     /// 용병 · 탑승물 — Chr → 수(챕터 사건 908 · 910, 마을 용병 길드). 원본은 무리마다 (Chr, 수) 칸 32개(+0x910 · +0xa14)를 들고
     /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 창 「용병 배치」(Part1MercDeploy)로 고른 인물 둘레 3×3 의 부하로 세우고,
-    /// 탑승물은 배치 창 「탑승」(Part1MountDeploy)이나 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다. 지금 챕터 무리의 것이다(<see cref="Stocks"/>).
+    /// 탑승물은 배치 창 「탑승」(Part1MountDeploy)이나 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다. 원본처럼 지금 고른(들어간) 팀의 것이다(<see cref="ActiveStock"/>).
     /// 시험용 DUELDX_PART1MERCS=「580:3,587:2」(파트1 번호:수)로 무리마다 처음 용병을, DUELDX_PART1MOUNTS=「473:2」로 탑승물을 미리 채운다.
     /// </summary>
-    internal Dictionary<int, int> Mercenaries { get => CurrentStock.Mercenaries; set => CurrentStock.Mercenaries = value; }
+    internal Dictionary<int, int> Mercenaries { get => ActiveStock.Mercenaries; set => ActiveStock.Mercenaries = value; }
 
-    internal Dictionary<int, int> Mounts { get => CurrentStock.Mounts; set => CurrentStock.Mounts = value; }
+    internal Dictionary<int, int> Mounts { get => ActiveStock.Mounts; set => ActiveStock.Mounts = value; }
 
     private static readonly Dictionary<int, int> TestMercs = TestCounts("DUELDX_PART1MERCS"), TestMounts = TestCounts("DUELDX_PART1MOUNTS");
 
@@ -117,13 +118,42 @@ internal sealed class Part1Progress
     private static readonly List<int> TestBag = [.. (Environment.GetEnvironmentVariable("DUELDX_PART1BAG") ?? "")
         .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => int.TryParse(x, out int n) ? n : 0).Where(n => n > 0)];
 
-    /// <summary>이야기 무리 하나의 짐 — 아이템(+0x10c) · 용병(+0x910) · 탑승물(+0xa14) · 돈(0x101a07e0[무리]).</summary>
+    /// <summary>이야기 무리 · 챕터 팀 하나의 짐 — 아이템(+0x10c) · 용병(+0x910) · 탑승물(+0xa14). 돈(0x101a07e0[무리])은 무리에만 있다(팀 짐의 <see cref="Eld"/> 는 안 쓴다).</summary>
     internal sealed class Stock
     {
         public List<int> Bag { get; set; } = [];
         public Dictionary<int, int> Mercenaries { get; set; } = [];
         public Dictionary<int, int> Mounts { get; set; } = [];
         public int Eld { get; set; }
+
+        internal bool IsEmpty => Bag.Count == 0 && Mercenaries.Values.All(v => v <= 0) && Mounts.Values.All(v => v <= 0);
+
+        /// <summary>
+        /// 다른 짐을 통째로 이리 더한다(<paramref name="cap"/> 이 있으면 칸마다 그 수까지 — 넘는 것은 <paramref name="from"/> 에 남는다).
+        /// 504 · 506 이 무리 → 팀 0 을 99 로 잘라 옮기고(0x100c0620), 챕터 끝이 팀 → 무리를 자르지 않고 되돌린다(0x100ae560).
+        /// </summary>
+        internal void TakeAll(Stock from, int cap = int.MaxValue)
+        {
+            if (ReferenceEquals(from, this)) return;
+            foreach (int id in from.Bag.Distinct().ToList())
+            {
+                int move = Math.Min(from.Bag.Count(b => b == id), Math.Max(0, cap - Bag.Count(b => b == id)));
+                for (int k = 0; k < move; k++) { from.Bag.Remove(id); Bag.Add(id); }
+            }
+            Merge(Mercenaries, from.Mercenaries, cap);
+            Merge(Mounts, from.Mounts, cap);
+        }
+
+        private static void Merge(Dictionary<int, int> to, Dictionary<int, int> from, int cap)
+        {
+            foreach (var (chr, count) in from.ToList())
+            {
+                int move = Math.Min(count, Math.Max(0, cap - to.GetValueOrDefault(chr)));
+                if (move <= 0) continue;
+                to[chr] = to.GetValueOrDefault(chr) + move;
+                if (count - move > 0) from[chr] = count - move; else from.Remove(chr);
+            }
+        }
     }
 
     /// <summary>
@@ -134,8 +164,49 @@ internal sealed class Part1Progress
     /// </summary>
     internal Dictionary<int, Stock> Stocks = [];
 
-    /// <summary>지금 챕터 무리의 짐(무리가 없으면 0 칸).</summary>
+    /// <summary>지금 챕터 무리의 짐(무리가 없으면 0 칸) — 교환 창의 「본  부」 쪽이다.</summary>
     internal Stock CurrentStock => StockOf(CurrentGroup);
+
+    /// <summary>
+    /// 지금 쓰는 짐 — 이 챕터에 팀이 있으면 고른(지도에서 전투 · 마을에 들어간, 원본 +0x5578) 팀의 짐, 없으면 무리 짐.
+    /// 원본은 팀마다 아이템 · 용병 · 탑승물을 따로 들어(챕터 +0x38 팀 8칸 × 0xaa8) 전투(0x10032f50 이 그 팀을 전투 +0xaea0 으로 베낀다) ·
+    /// 배치 창의 용병 배치 · 탑승 · 마을 상점(0x100cafdf) · 상태 창 아이템이 모두 그 팀 것을 쓴다. 돈만 무리 것이다(<see cref="Eld"/>).
+    /// </summary>
+    internal Stock ActiveStock => ActiveTeam?.Stock ?? CurrentStock;
+
+    /// <summary>지금 챕터에서 고른 팀(팀이 없으면 null).</summary>
+    internal Part1Team? ActiveTeam =>
+        ChapterId >= 0 && ChapterTeams.TryGetValue(ChapterId, out var teams) && teams.Count > 0
+            ? teams[Math.Clamp(SelectedTeam.GetValueOrDefault(ChapterId), 0, teams.Count - 1)] : null;
+
+    /// <summary>
+    /// 행동 906 · 908 · 910 [무리, …] 이 쓸 짐 — 99 = 이야기 무리(본부), 0~7 = 지금 챕터의 그 팀(0x100c14f0 · 0x100c1610 · 0x100c1730 이 0x63 으로 갈래).
+    /// 팀이 아직 없으면 만들어 둔다(원본도 팀 수를 늘리지 않고 그 칸에 적는다 — 챕터 0 의 906 [0, …] 은 504 앞에 있다).
+    /// </summary>
+    internal Stock ScriptStock(int target)
+    {
+        if (target is < 0 or > 7 || ChapterId < 0) return CurrentStock;
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams)) ChapterTeams[ChapterId] = teams = [];
+        while (teams.Count <= target) teams.Add(new Part1Team { Place = 0 });
+        return teams[target].Stock;
+    }
+
+    /// <summary>
+    /// 팀을 꾸린 챕터 — 원본 팀 수(+0x557e) ≠ 0 에 맞선다. 리메이크는 챕터를 열 때부터 팀 0(무리 앞 10명)을 두므로 「원본에도 팀이 있나」를 따로 든다:
+    /// 504 · 506 이 옮겼거나 904 가 팀에 사람을 넣었거나 교환 창으로 팀을 꾸렸으면 켠다. 안 켜진 채 지도가 손에 들어오면 원본처럼 팀 편성 교환 창을 연다(0x100b3f10).
+    /// </summary>
+    internal HashSet<int> Formed = [];
+
+    /// <summary>
+    /// 504 · 506(0x100c0620 · 0x100c0a60) — 팀을 아직 안 꾸렸고 머리 낱말 2 == 1 이면 무리 짐을 칸마다 99 까지 팀 0 으로 옮긴다(사람은 리메이크의 팀 0 = 무리 앞 10명이라 할 일이 없다).
+    /// </summary>
+    internal void FormTeamZero()
+    {
+        if (ChapterId < 0 || Formed.Contains(ChapterId)) return;
+        if (WarOfGenesis.Assets.Part1Chapter.Load(ChapterId) is not { Header.Length: > 2 } chapter || chapter.Header[2] != 1) return;
+        ScriptStock(0).TakeAll(CurrentStock, 99);
+        Formed.Add(ChapterId);
+    }
 
     internal Stock StockOf(int group) =>
         Stocks.TryGetValue(group, out var s) ? s : Stocks[group] = new Stock { Bag = [.. TestBag], Mercenaries = new(TestMercs), Mounts = new(TestMounts) };
@@ -147,6 +218,11 @@ internal sealed class Part1Progress
     internal void CloseChapter()
     {
         var stock = CurrentStock;
+        // 팀 짐을 무리로 되돌린다(자르지 않는다) — 팀 · 고른 팀 · 꾸림 표도 지운다(다음에 이 챕터를 열면 원본처럼 새 챕터 객체에서 시작).
+        if (ChapterId >= 0 && ChapterTeams.Remove(ChapterId, out var teams))
+            foreach (var team in teams) stock.TakeAll(team.Stock);
+        SelectedTeam.Remove(ChapterId);
+        Formed.Remove(ChapterId);
         stock.Eld += stock.Mercenaries.Values.Where(v => v > 0).Sum() * 100;
         stock.Mercenaries.Clear();
         stock.Mounts.Clear();
@@ -277,7 +353,7 @@ internal sealed class Part1Progress
     internal Dictionary<int, int> VarsOf(int chapterId) =>
         ChapterVars.TryGetValue(chapterId, out var vars) ? vars : ChapterVars[chapterId] = [];
 
-    /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>). 원본처럼 지금 챕터 무리의 돈이다(0x101a07e0[머리 낱말 1], <see cref="Stocks"/>).</summary>
+    /// <summary>번 돈(eld) — 처치 보상(<see cref="Part1Combat.KillReward"/>). 원본처럼 팀이 아니라 지금 챕터 무리의 돈이다(0x101a07e0[머리 낱말 1], 상태 창 소지금도 이것).</summary>
     internal int Eld { get => CurrentStock.Eld; set => CurrentStock.Eld = value; }
 
     /// <summary>그 인물의 자란 것 — 없으면 레코드의 경험치로 새로 만든다.</summary>
@@ -297,8 +373,8 @@ internal sealed class Part1Progress
         return chr;
     }
 
-    /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번). 지금 챕터 무리의 것(<see cref="Stocks"/>). 시험용 DUELDX_PART1BAG=「126,126」 으로 무리마다 미리 채운다.</summary>
-    internal List<int> Bag { get => CurrentStock.Bag; set => CurrentStock.Bag = value; }
+    /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번). 지금 고른 팀의 것(<see cref="ActiveStock"/>). 시험용 DUELDX_PART1BAG=「126,126」 으로 무리마다 미리 채운다.</summary>
+    internal List<int> Bag { get => ActiveStock.Bag; set => ActiveStock.Bag = value; }
 
     /// <summary>인물마다 바꿔 낀 장비 다섯 칸 — 없으면 인물 레코드 그대로.</summary>
     internal Dictionary<int, int[]> Equipped = [];
@@ -330,7 +406,11 @@ internal sealed class Part1Progress
                                    Dictionary<int, int>? Riding = null,
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
                                    Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null,
-                                   int[]? Chain = null, Dictionary<string, int>? PlaceTowns = null, Dictionary<int, Stock>? Stocks = null);
+                                   int[]? Chain = null, Dictionary<string, int>? PlaceTowns = null, Dictionary<int, Stock>? Stocks = null,
+                                   List<int>? Formed = null, int StockVersion = 0);
+
+    /// <summary>세이브 짐 꼴 — 1 = 팀마다 짐(<see cref="Part1Team.Stock"/>). 0 은 팀이 무리 짐을 같이 쓰던 세이브.</summary>
+    private const int StockVersionNow = 1;
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
@@ -347,7 +427,8 @@ internal sealed class Part1Progress
     internal string ToJson(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, 0, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], null, Equipped, null, null, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain, PlaceTowns, Stocks);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, 0, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], null, Equipped, null, null, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain, PlaceTowns, Stocks,
+                                [.. Formed], StockVersionNow);
         return JsonSerializer.Serialize(data);
     }
 
@@ -389,6 +470,7 @@ internal sealed class Part1Progress
             ChapterMarkerPrev = data.ChapterMarkerPrev ?? [];
             Home = data.Home ?? [];
             Chain = data.Chain is [_, _] chain ? chain : null;
+            Formed = [.. data.Formed ?? []];
             _homeVersion++;
             if (data.Stocks != null) Stocks = data.Stocks;
             else
@@ -401,6 +483,13 @@ internal sealed class Part1Progress
                               .GroupBy(c => WarOfGenesis.Assets.Part1Game.ChrBase + c.Args[1]).ToDictionary(g => g.Key, g => g.Sum(c => (int)c.Args[2])) ?? [];
                 foreach (var (mount, count) in data.Mounts ?? [])
                     if (Math.Min(count, granted.GetValueOrDefault(mount)) is > 0 and var keep) stock.Mounts[mount] = keep;
+            }
+            if (data.StockVersion < 1)
+            {
+                // 팀마다 짐 전의 세이브 — 팀이 무리 짐을 같이 썼다. 이미 연 챕터는 꾸린 것으로 치고, 지금 챕터의 무리 짐은 504 가 한 것처럼 팀 0 에 넘긴다
+                // (그 판의 사람들이 쓰던 짐이 그대로 손에 남게; 지난 챕터의 팀 표는 짐이 비어 있다).
+                Formed = [.. ChapterTeams.Keys];
+                if (ChapterId >= 0 && ChapterTeams.TryGetValue(ChapterId, out var teams) && teams.Count > 0) teams[0].Stock.TakeAll(CurrentStock);
             }
             return true;
         }
@@ -423,4 +512,7 @@ internal sealed class Part1Team
 
     /// <summary>이번 턴에 움직였나(원본 팀 칸 +0xaa4) — 「이  동」 · 「진  입」이 켜고 「턴종료」가 끈다. 팀은 턴마다 한 번 움직인다.</summary>
     public bool Moved { get; set; }
+
+    /// <summary>팀의 짐(원본 팀 칸 +0x108 아이템 · +0x90c 용병 · +0xa10 탑승물) — 챕터 끝에 무리로 돌아간다(<see cref="Part1Progress.CloseChapter"/>).</summary>
+    public Part1Progress.Stock Stock { get; set; } = new();
 }

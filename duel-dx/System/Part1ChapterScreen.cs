@@ -1084,6 +1084,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (_chapter is not { } chapter) return;
         Events.Pump();   // 챕터 덮개 동안의 기다림(2 · 1)을 잇는다
+        // 팀을 안 꾸린 채(504 · 904 가 없거나 머리 낱말 2 ≠ 1) 지도가 손에 들어오면 원본처럼 팀 편성 교환 창(갈래 0)을 연다(0x100b3f10 → 0x100b6860(-1)).
+        // 본부 짐(이야기 무리)을 팀으로 나눠 가지는 자리다 — 닫으면 꾸린 것으로 친다.
+        if (_open && !host.Part1.Formed.Contains(chapter.Id) && Events.Idle && !WindowOpen && !Picking && _mode == Mode.Map
+            && _cover == null && _transition == null && SelectedTeam != null)
+            Exchange.Open(formation: true);
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         var view = MapView();
         var (ox, oy, W, H) = view;
