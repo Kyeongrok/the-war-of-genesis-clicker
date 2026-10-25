@@ -238,6 +238,7 @@ internal sealed unsafe partial class BattleScene
         const int edge = 24;
         // 마우스는 화면(보이는 영역) 자리로 본다 — 판 자리로 보면 카메라가 한 번 밀린 뒤 마우스가 띠 밖으로 나간 셈이 되어 멈췄다.
         var (mx, my) = _mouseView;
+        if (host.MiniMap.Contains(host._mouse.X, host._mouse.Y)) return (0, 0);   // 미니맵 위에서는 안 민다 — 누르러 가다 화면이 밀렸다
         if (host._mouse.X < 0 || mx < 0 || mx >= host.ViewWidth || my < 0 || my >= host.ViewHeight) return (0, 0);
         double ddx = mx < edge ? -20 : mx >= host.ViewWidth - edge ? 20 : 0;
         double ddy = my < GridTop + edge && my >= GridTop ? -16 : my >= host.ViewHeight - edge ? 16 : 0;

@@ -165,6 +165,9 @@ internal sealed unsafe partial class GameWindow
     internal TimedHitEditScreen TimedEditScr => _timedEditScr ?? LazyInitializer.EnsureInitialized(ref _timedEditScr, () => new TimedHitEditScreen(this));
     internal GamePad? _pad;
     internal GamePad Pad => _pad ?? LazyInitializer.EnsureInitialized(ref _pad, () => new GamePad(this));
+    internal BattleMiniMap? _miniMap;
+    /// <summary>전투 화면 왼쪽 위 미니맵(접기 단추가 있다).</summary>
+    internal BattleMiniMap MiniMap => _miniMap ?? LazyInitializer.EnsureInitialized(ref _miniMap, () => new BattleMiniMap(this));
     internal ReleaseNotesScreen? _notesScr;
     internal ReleaseNotesScreen NotesScr => _notesScr ?? LazyInitializer.EnsureInitialized(ref _notesScr, () => new ReleaseNotesScreen(this));
 }
