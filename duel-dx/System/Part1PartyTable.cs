@@ -11,7 +11,7 @@ namespace DuelDx;
 /// <para>전투는 내 편(편 4) 파트1 인물 — HP 지금/최대 · SOUL 지금 값. 챕터 지도는 나갈 팀(없으면 무리 · 일행) — HP 는 최대, SOUL 은 「—」.</para>
 /// <para>줄을 누르면 그 사람의 상태 패널(<see cref="Part1StatusPanel"/> 의 전투 밖 꼴 — 전투면 그 판의 HP · SOUL)이 표 위에 뜨고 장비 · 직업을
 /// 바꿀 수 있다. 머리 칸을 누르면 그 값으로 줄을 세운다(한 번 더 누르면 거꾸로). 휠 · ↑/↓ 로 굴린다. Esc · P · 오른쪽 단추 · 창 밖 누르기로 닫는다.
-/// 장비 그림 · 어빌리티를 짚으면 설명(<see cref="Part1ItemTip"/> · <see cref="Part1AbilityTip"/>).</para>
+/// 장비 그림을 짚으면 설명(<see cref="Part1ItemTip"/>). 어빌리티는 개수만 — 줄을 누르면 상태 창에 다 나온다.</para>
 /// </remarks>
 internal sealed class Part1PartyTable(GameWindow host)
 {
@@ -36,12 +36,13 @@ internal sealed class Part1PartyTable(GameWindow host)
     private Part1StatusPanel? _panel;
     private bool PanelOpen => _panel is { OffOpen: true };
 
-    private const int HeadH = 20, FootH = 18, FaceW = 40, IconW = 22, CellW = 92, WideMin = 874;
+    private const int HeadH = 20, FootH = 18, FaceW = 40, IconW = 22, WideMin = 874;
 
     /// <summary>좁은 화면(640 폭 …) — 장비 · 어빌리티를 능력치 아래 둘째 줄에 둔다. <see cref="Window"/> 가 정한다.</summary>
     private bool _narrow;
     private int RowH => _narrow ? 54 : 44;
     private int NameW => _narrow ? 132 : 150;
+    private const int AbilityW = 52;
     private int HpW => _narrow ? 62 : 64;
     private int SoulW => _narrow ? 36 : 38;
     private int ExpW => _narrow ? 40 : 46;
@@ -300,10 +301,14 @@ internal sealed class Part1PartyTable(GameWindow host)
         var cols = new List<(int X, int W)>();
         int cx = x + 6;
         void Col(int cw) { cols.Add((cx, cw)); cx += cw; }
-        Col(FaceW + 4); Col(NameW); Col(HpW); Col(SoulW); Col(ExpW);
+        // 어빌리티 칸은 개수만(사용자 요청 — 누르면 상태 창에 다 나온다), 남는 너비는 이름 칸으로 준다.
+        // 좁으면 장비 · 어빌리티가 둘째 줄이라 첫 줄(얼굴 · 이름 · HP · SOUL · EXP · 능력치)만 잰다.
+        int fixedW = FaceW + 4 + HpW + SoulW + ExpW + Stats.Length * StatW + (_narrow ? 0 : 5 * IconW + 8 + AbilityW);
+        int nameW = Math.Max(NameW, w - 16 - fixedW);
+        Col(FaceW + 4); Col(nameW); Col(HpW); Col(SoulW); Col(ExpW);
         foreach (var _ in Stats) Col(StatW);
         if (_narrow) cx = cols[2].X;
-        Col(5 * IconW + 8); Col(x + w - 10 - cx);
+        Col(5 * IconW + 8); Col(AbilityW);
 
         // 머리 줄 — 누르면 그 값으로 줄 세우기.
         int hy = y + 6;
@@ -413,27 +418,10 @@ internal sealed class Part1PartyTable(GameWindow host)
             }
         }
 
-        // 어빌리티 — 능력치 어빌리티(1~9)를 뺀 높은 차례, 두 줄. 짚으면 설명.
+        // 어빌리티 — 배운 개수만(사용자 요청). 무엇을 배웠는지는 줄을 눌러 여는 상태 창에 나온다.
         var (ax, aw) = cols[6 + Stats.Length];
-        var learned = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).ToList();
-        var key = learned.Where(a => a.Ability > 9).OrderByDescending(a => a.Level).ThenBy(a => a.Ability).ToList();
-        int lines = _narrow ? 1 : 2, top = _narrow ? ry + 31 : ry + 4;
-        host.UiRightText($"{learned.Count}개", ax + aw - 4, _narrow ? top + 1 : ry + 2, Dim, 9);
-        int perLine = Math.Max(1, (aw - 30) / CellW);
-        for (int i = 0; i < key.Count && i < perLine * lines; i++)
-        {
-            var (ability, level) = key[i];
-            int px = ax + 4 + i % perLine * CellW, py = top + i / perLine * 18;
-            var info = Part1Ability.ById(_abilities!, ability);
-            if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon) Img(icon, px, py, 14, 14);
-            string name = Fit(info?.Name ?? $"#{ability}", CellW - 40, 10);
-            // 쓰는 레벨(원본 0x1009e020) — 지금 직업이 안 다루면 흐리게 「-」, 직업 최대로 막히면 그 값. 아이템 기술(폭풍검)은 초필살기 제어 + 그 무기일 때만.
-            int use = chr.ListedLevel(ability);
-            host.UiText(name, px + 17, py, use > 0 ? GameWindow.White : Dim, 10);
-            host.UiText(use > 0 ? $"{use}" : "-", px + 19 + TextW(name, 10), py, use > 0 ? Yellow : Dim, 10);
-            if (Hot(px, py - 1, CellW - 4, 16)) tip = Part1AbilityTip.Text(ability, level);
-        }
-        if (key.Count == 0) host.UiText(learned.Count > 0 ? "능력치 어빌리티만" : "없음", ax + 4, _narrow ? top : ry + 14, Dim, 10);
+        int learned = chr.Abilities.Count(a => a.Ability > 0 && a.Level > 0);
+        CenterText($"{learned}개", (ax, aw), _narrow ? ry + 31 : ry + 14, Dim, 10);
         return tip;
     }
 
