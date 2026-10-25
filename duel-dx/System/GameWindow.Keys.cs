@@ -582,17 +582,28 @@ internal sealed unsafe partial class GameWindow
 
     internal const int KeysW = 420, KeysRowH = 26, KeysTop = 40;
 
+    /// <summary>창에 다 안 들어가면 보이는 줄만큼만 띄우고 굴린다(사용자 요청: J 목록이 길어 잘린다) — 첫 줄 번호.</summary>
+    internal int _keysScroll;
+
+    /// <summary>화면 높이에 들어가는 줄 수.</summary>
+    internal int KeysVisibleRows => Math.Clamp((ViewHeight - GridTop - 16 - KeysTop - 56) / KeysRowH, 1, KeyBindings.All.Length);
+
     internal (int X, int Y, int H) KeysPanel()
     {
-        int h = KeysTop + KeyBindings.All.Length * KeysRowH + 56;
+        int h = KeysTop + KeysVisibleRows * KeysRowH + 56;
         return (_camX + (ViewWidth - KeysW) / 2, _camY + GridTop + (ViewHeight - GridTop - h) / 2, h);
     }
+
+    /// <summary>휠 · 위아래 키로 줄을 굴린다.</summary>
+    internal void ScrollKeys(int rows) => _keysScroll = Math.Clamp(_keysScroll + rows, 0, KeyBindings.All.Length - KeysVisibleRows);
 
     internal void OnKeysKey(int key)
     {
         if (_keysCapture < 0)
         {
             if (key == Win32.VK_ESCAPE || _keys.ActionFor(key) == KeyAction.KeyHelp) _keysOpen = false;   // 단축키 목록 키(J)로 열고 닫는다
+            else if (key == Win32.VK_UP) ScrollKeys(-1);
+            else if (key == Win32.VK_DOWN) ScrollKeys(1);
             return;
         }
         if (key != Win32.VK_ESCAPE)
@@ -608,7 +619,7 @@ internal sealed unsafe partial class GameWindow
         if (!_keysOpen) return false;
         var (x, y, h) = KeysPanel();
         int row = (by - y - KeysTop) / KeysRowH;
-        if (by >= y + KeysTop && row < KeyBindings.All.Length && bx >= x && bx < x + KeysW) { _keysCapture = row; return true; }
+        if (by >= y + KeysTop && row < KeysVisibleRows && _keysScroll + row < KeyBindings.All.Length && bx >= x && bx < x + KeysW) { _keysCapture = _keysScroll + row; return true; }
 
         int buttonsY = y + h - 40;
         if (by >= buttonsY && by < buttonsY + 28)
@@ -628,10 +639,12 @@ internal sealed unsafe partial class GameWindow
         UiFill(x, y, KeysW, 28, StatusScreen.HeadBg);
         UiText("단축키 설정 — 줄을 누르고 새 키를 누르세요 (Esc: 그만)", x + 10, y + 6, White);
 
-        for (int i = 0; i < KeyBindings.All.Length; i++)
+        ScrollKeys(0);   // 창 크기가 바뀌었으면 굴림을 다시 맞춘다
+        int rows = KeysVisibleRows;
+        for (int i = _keysScroll; i < KeyBindings.All.Length && i < _keysScroll + rows; i++)
         {
             var (action, label, _) = KeyBindings.All[i];
-            int ry = y + KeysTop + i * KeysRowH;
+            int ry = y + KeysTop + (i - _keysScroll) * KeysRowH;
             bool capturing = i == _keysCapture;
             if (capturing) UiFill(x + 4, ry - 2, KeysW - 8, KeysRowH - 2, 0xFF2A4A8A);
             UiText(label, x + 16, ry + 3, White);
@@ -647,7 +660,7 @@ internal sealed unsafe partial class GameWindow
         UiText("기본값으로", x + 42, by + 6, White);
         UiFill(x + KeysW - 116, by, 100, 28, StatusScreen.HeadBg);
         UiText("닫기", x + KeysW - 80, by + 6, White);
-        UiText("Esc: 취소(고정)", x + 150, by + 7, DimGray);
+        UiText(rows < KeyBindings.All.Length ? $"휠·↑↓ 굴리기 {_keysScroll + 1}-{_keysScroll + rows}/{KeyBindings.All.Length}" : "Esc: 취소(고정)", x + 150, by + 7, DimGray);
     }
 
     /// <summary>
