@@ -51,10 +51,10 @@ public sealed record Part1Ai(int Index, IReadOnlyDictionary<int, int> Raw)
     /// <summary><c>+0x18</c> 먼저 쓸 기술을 볼 확률(%) — 3바이트 칸의 첫 바이트.</summary>
     public int PreferredChance => Raw[0x18] & 0xFF;
 
-    /// <summary><c>+0x19</c> 어빌리티 목록을 볼 확률(%).</summary>
+    /// <summary><c>+0x19</c> 어빌리티 목록을 볼 확률(%) — 먼저 쓸 기술 다음에 새로 굴린다(<c>0x100273f0</c>: <c>rand % 100 &lt; 값</c>). 들면 Abi 갈래 1 이고 비용 ≤ 소울 − 50 인 어빌리티만(<c>0x10027488</c>). 굴림 칸은 50 이 많다(47 은 0 — 기본 공격만).</summary>
     public int SkillChance => (Raw[0x18] >> 8) & 0xFF;
 
-    /// <summary><c>+0x1a</c> 기본 공격을 볼 확률(%).</summary>
+    /// <summary><c>+0x1a</c> 기본 공격을 볼 확률(%) — 어빌리티를 못 골랐을 때 또 새로 굴린다(<c>0x10027571</c>), 못 들면 행동 없음. 자료는 모두 100.</summary>
     public int BasicChance => (Raw[0x18] >> 16) & 0xFF;
 
     /// <summary><c>+0x1b</c> 기술을 쓸 어림 문턱(<c>0x10040c20</c> 의 값, 대부분 10).</summary>

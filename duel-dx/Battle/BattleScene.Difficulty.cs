@@ -74,10 +74,10 @@ internal sealed unsafe partial class BattleScene
     /// 강화 AI 의 공격 고르기 — 쓸 수 있는 <b>피해 기술</b>마다 가장 좋은 (설 칸, 겨눌 칸)을 찾아 점수가 가장 높은 것을 고른다.
     /// 피해 기술을 못 쓰면 null(원본 차례대로 돌아간다).
     /// </summary>
-    internal (WorkData Work, (int Stand, int Col, int Row, int Score) Use)? SmartPick(int index, MoveRange range)
+    internal (WorkData Work, (int Stand, int Col, int Row, int Score) Use)? SmartPick(int index, MoveRange range, IEnumerable<WorkData>? works = null)
     {
         (WorkData, (int, int, int, int))? best = null;
-        foreach (var w in AiWorks(host._units[index]))
+        foreach (var w in works ?? AiWorks(host._units[index]))   // works — 파트1 AI 표 굴림이 거른 목록(Part1RolledWorks), null 이면 모두
         {
             if (!w.IsDamage || BestUse(index, w, ComputeRange(host._units[index], w.Id) ?? range) is not { } use) continue;   // 이동 예산은 그 기술 기준(ba-20 J N13)
             if (best is not { } b || use.Score > b.Item2.Item4) best = (w, use);

@@ -579,6 +579,41 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 파트1 AI 표 <c>+0x19</c> · <c>+0x1a</c> 굴림 — <c>+0x14</c> = 0 인 칸이 행동을 고를 때 먼저 쓸 기술(<c>+0x18</c>) 다음에 <b>따로</b> 굴리는 두 번
+    /// (<c>0x100273f0</c> · <c>0x10027571</c>, <c>+0xf</c> ≠ 11 갈래 <c>0x1002797f</c> · <c>0x10027b94</c>, Chr 먼저 갈래 <c>0x10026d4e</c> · <c>0x10026f5a</c>):
+    /// ② <c>rand % 100 &lt; +0x19</c> 에 들면 어빌리티 목록(<c>0x1009db90</c>) 가운데 <b>Abi 갈래 1</b>(<c>+0x24</c> = 1, 무기 · 옷 기술 2 · 4 · 초필살기 3 · 소환 5 는 빠짐)이고
+    /// 비용 <c>Attack +0x4c</c> ≤ 소울 − 50 인 것(<c>0x10027488</c> — 소울 50 을 남긴다)만, ③ 못 골랐으면 <c>rand % 100 &lt; +0x1a</c> 에 들면 기본 공격(<c>+0xb6</c>).
+    /// 둘 다 못 들면 행동이 없다(<c>0x10028008</c>). 굴림 칸(17칸)의 <c>+0x19</c> 는 50(열 칸) · 66(넷) · 0(47) · 10(48), <c>+0x1a</c> 는 모두 100 — 곧 반쯤은 기본 공격만 본다, 47 은 늘.
+    /// 굴림 칸이 아니면(<c>+0x14</c> ≠ 0 · 표 없음) null — 그대로 <see cref="AiWorks"/>.
+    /// [H] 리메이크는 고른 목록 안에서 파트2 틀(센 기술부터 · 회복 먼저)대로 고르고, 원본의 어림 문턱(<c>+0x1b</c>, <c>+0xf</c> = 11 갈래는 ±5 와 10분의 굴림)은 BestUse 점수 &gt; 0 으로 본다.
+    /// </summary>
+    internal List<WorkData>? Part1RolledWorks(UnitState u, Part1Ai? ai, string where)
+    {
+        if (ai is not { PickByScore: 0 } || host._db is not { } db || u.Data is not { } c) return null;
+        bool skill = host._rng.Next(100) < ai.SkillChance;
+        bool basic = host._rng.Next(100) < ai.BasicChance;
+        var works = AiWorks(u);
+        var basicWork = Work(c.BasicWorkId);
+        var list = new List<WorkData>();
+        if (skill)
+            foreach (var w in works)
+            {
+                if (w == basicWork) continue;
+                // 그 work 을 주는 어빌리티의 Abi 갈래 — 파트1 어빌리티(20000 + 번호)만 갈래 1 을 본다.
+                var from = c.Abilities.Where(a => db.Abilities.TryGetValue(a.Item1, out var ab) && ab.TryWorkAt(a.Item2, out int wid) && wid == w.Id).Select(a => (int)a.Item1).DefaultIfEmpty(-1).First();
+                if (from >= Part1Game.ChrBase && Part1Ability.ById(Part1Tables.Abilities, from - Part1Game.ChrBase)?.Kind != 1) continue;
+                if (SoulNeedFor(u, c, w.Id) > u.Soul - 50) continue;
+                list.Add(w);
+            }
+        if (basic && basicWork != null && works.Contains(basicWork)) list.Add(basicWork);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"p1ai roll btl {host._scene.Id} chr {u.ChrCode} ai {u.Part1AiType} {where} skill {(skill ? "o" : "x")}({ai.SkillChance}%) basic {(basic ? "o" : "x")}({ai.BasicChance}%) soul {u.Soul}"
+                + $" works [{string.Join(",", list.Select(w => w.Id))}] of [{string.Join(",", works.Select(w => w.Id))}]" + Environment.NewLine);
+        return list;
+    }
+
+    /// <summary>
     /// 그 인물의 파트1 AI 표 칸(<c>Dats\AI.dat</c>, 유닛 <c>+0x262</c>) — 파트1 판이고 AI 가 움직이며 표 번호가 있을 때만. 사람이 움직이는 편(4)·용병 등 번호 없는 인물은 null.
     /// </summary>
     internal Part1Ai? Part1AiOf(UnitState u) =>
@@ -759,7 +794,8 @@ internal sealed unsafe partial class BattleScene
             WorkData? focusWork = null;
             (int Stand, int Col, int Row, int Score)? focusUse = null;
             MoveRange? focusRange = null;
-            foreach (var w in Part1PreferredFirst(u, p1ai).Concat(AiWorks(u)).Where(w => !w.IsHeal))
+            // 원본 Chr 먼저 갈래도 먼저 쓸 기술 → +0x19 어빌리티 → +0x1a 기본 공격을 따로 굴린다(0x10026c5a · 0x10026d4e · 0x10026f5a) — 다 못 들면 보통으로(0x10026f6e).
+            foreach (var w in Part1PreferredFirst(u, p1ai).Concat(Part1RolledWorks(u, p1ai, "focus") ?? AiWorks(u)).Where(w => !w.IsHeal))
             {
                 var wr = stay ?? ComputeRange(u, w.Id) ?? range;
                 if (BestUse(index, w, wr) is not { } use || !WorkTargetsFrom(w, u, use.Stand % host.Cols, use.Stand / host.Cols, use.Col, use.Row).Contains(Array.IndexOf(host._units, focus))) continue;
@@ -779,7 +815,7 @@ internal sealed unsafe partial class BattleScene
         }
 
         // 파트1 AI 표 +0x16 먼저 쓸 기술 — +0x14 = 0 이면 +0x18% 로 맨 먼저 본다(0x1002733e~0x100273eb). 칠 대상이 있어야 쓴다(어림 ≥ +0x1b, [H] 리메이크는 BestUse 점수 &gt; 0).
-        // 못 쓰면 원본은 어빌리티(+0x19%) → 기본 공격(+0x1a%) 굴림으로 넘어간다 — 리메이크는 그 자리를 아래 파트2 틀(센 기술부터)이 맡는다.
+        // 못 쓰면 원본은 어빌리티(+0x19%) → 기본 공격(+0x1a%) 굴림으로 넘어간다 — 리메이크는 그 굴림으로 거른 목록(Part1RolledWorks)을 아래 파트2 틀(센 기술부터)이 훑는다.
         foreach (var w in Part1PreferredFirst(u, p1ai))
         {
             var wr = stay ?? ComputeRange(u, w.Id) ?? range;
@@ -800,16 +836,18 @@ internal sealed unsafe partial class BattleScene
 
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
         // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
+        // 파트1 굴림 칸(+0x14 = 0)은 +0x19 · +0x1a 굴림에 든 것만 본다(0x100273f0 · 0x10027571) — 회복 먼저 · 난이도 겨냥도 그 안에서.
+        var p1Works = Part1RolledWorks(u, p1ai, "normal");
         for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
         {
             // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
-            if (pass == 1 && stay == null && SmartAi(u) && SmartPick(index, range) is { } smart)
+            if (pass == 1 && stay == null && SmartAi(u) && SmartPick(index, range, p1Works) is { } smart)
             {
                 report(true);
                 foreach (bool r in AiUseWork(index, smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range)) yield return r;
                 yield break;
             }
-            foreach (var w in AiWorks(u))
+            foreach (var w in p1Works ?? AiWorks(u))
             {
                 if (pass == 0 && !w.IsHeal) continue;
                 // 이동 예산은 <b>그 기술</b>의 TP 비용을 뺀 만큼이다(0x1005d070) — 늘 기본공격 기준이면 비싼 기술도 너무 멀리 걸어가 쓴다.
