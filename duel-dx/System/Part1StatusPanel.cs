@@ -381,7 +381,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
             bool hot = host._mouse.X >= x + 6 && host._mouse.X < x + W - 6 && host._mouse.Y >= row - 2 && host._mouse.Y < row + EquipRowH - 4;
             if (hot) { host.UiFill(x + 6, row - 2, W - 12, EquipRowH - 2, 0xC0304870); hoverItem = item; }
             DrawItemIcon(item, x + 10, row);
-            host.UiText($"{Part1PartyScreen.SlotNames[s]}: {item?.Name ?? "—"}", x + 36, row + 4, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
+            host.UiText($"{Part1PartyScreen.SlotName(s, item)}: {item?.Name ?? "—"}", x + 36, row + 4, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
             row += EquipRowH;
         }
 

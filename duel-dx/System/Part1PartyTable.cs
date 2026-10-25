@@ -409,7 +409,7 @@ internal sealed class Part1PartyTable(GameWindow host)
             if (item != null && Hot(ix, iy, IconW - 2, IconW - 2))
             {
                 host.UiStroke(ix, iy, IconW - 2, IconW - 2, 0xFFFFE080);
-                tip = Part1ItemTip.Text(item) is { } t ? $"{Part1PartyScreen.SlotNames[slot]}: {t}" : null;
+                tip = Part1ItemTip.Text(item) is { } t ? $"{Part1PartyScreen.SlotName(slot, item)}: {t}" : null;
             }
         }
 

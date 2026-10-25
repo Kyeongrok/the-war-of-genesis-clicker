@@ -1312,7 +1312,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 // 파트1 기본 공격의 타이밍 어택 — 박자 수만큼 「연」 동작으로 여러 번(Part1Skill.BasicMelee). 그러면 타마다 보통 피해(배율 100).
                 host.Part1Ab.ChainHits = part1Basic > 0 && _timedCritBy == a ? host.TimedHitFx.AttackCount : 0;
                 host.Part1Ab.ChainStruck = 0;
-                bool each = (part1Basic == 0 && Part1Skill.HitsEachTime(w.Id)) || host.Part1Ab.ChainHits >= 2;
+                // 타수가 둘 이상인 파트1 기본 공격(쌍검 더블 어택 · 쌍권총)은 타격마다 따로 친다 — 타수를 세기에 곱하지 않는다.
+                host.Part1Ab.SplitStruck = 0;
+                bool split = part1Basic > 0 && host.Part1Ab.ChainHits < 2
+                             && Part1Attack.ById(Part1Attack.LoadAll(), part1Basic) is { Hits: >= 2 };
+                Part1.SplitHits = split;
+                bool each = (part1Basic == 0 && Part1Skill.HitsEachTime(w.Id)) || host.Part1Ab.ChainHits >= 2 || split;
                 void Part1Hit(int ti)
                 {
                     if (Trace)
@@ -1324,6 +1329,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
+                Part1.SplitHits = false;
                 // 댓쉬(366) · 워프(367) — 시전자가 겨눈 칸으로 옮겨 선다(0x1006b340 · 0x1006b640 끝의 유닛 맞춤 0x10081350). 칸이 차 있으면 제자리.
                 if (host._scene.IsPart1 && Part1.AttackOf(w)?.Id is 366 or 367
                     && !host._units.Any(u => u != a && u.Alive && u.OnField && u.Col == col && u.Row == row))

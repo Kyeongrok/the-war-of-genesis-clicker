@@ -20,7 +20,14 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
 
     internal const int ListX = 24, ListY = 70, RowW = 170, RowH = 24, InfoX = 210, SlotY = 230, BagX = 420, ButtonHit = 1000, SlotHit = 2000, BagHit = 3000, RideHit = 4000;
 
-    internal static readonly string[] SlotNames = ["무기", "둘째 손", "갑옷", "장신구", "장신구"];
+    internal static readonly string[] SlotNames = ["무기", "보조", "갑옷", "장신구", "장신구"];
+
+    /// <summary>
+    /// 장비 칸 이름 — 칸 1 은 든 것에 따라 「무기 2」(칼 · 총 갈래 1~12 — 쌍검 · 쌍권총), 「방패」(13), 그 밖(스코프 16 · 필름 18)과 빈 칸은 「보조」
+    /// (사용자 요청: 「둘째 손」은 어색하다).
+    /// </summary>
+    internal static string SlotName(int slot, Part1Item? item) =>
+        slot != 1 || item == null ? SlotNames[slot] : item.Type switch { >= 1 and <= 12 => "무기 2", 13 => "방패", _ => "보조" };
 
     internal void Open(Action onLeave, int member = 0)
     {
@@ -159,9 +166,10 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
             for (int s = 0; s < 5; s++)
             {
                 int y = oy + SlotY + s * RowH;
-                string item = Part1Item.ById(items, chr.Equipment[s])?.Name ?? "—";
+                var held = Part1Item.ById(items, chr.Equipment[s]);
+                string item = held?.Name ?? "—";
                 host.UiFill(ox + InfoX, y, 200, RowH - 2, s == _slot ? 0xF0305080u : _hover == SlotHit + s ? 0xE0283850u : 0xC0202838u);
-                host.UiText($"{SlotNames[s]}: {item}", ox + InfoX + 8, y + 4, GameWindow.White, 12);
+                host.UiText($"{SlotName(s, held)}: {item}", ox + InfoX + 8, y + 4, GameWindow.White, 12);
             }
             {
                 int code = Part1Game.ChrBase + chr.Code;

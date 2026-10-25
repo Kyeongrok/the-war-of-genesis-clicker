@@ -109,6 +109,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
             ? (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
             : null;
 
+    /// <summary>이번 기본 공격을 타수만큼 나눠 친다 — 그동안 타수를 세기에 곱하지 않는다(BattleScene 이 켜고 끈다).</summary>
+    internal bool SplitHits;
+
     internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
 
     /// <summary>파트1 상태 번호 — 유닛 바이트 +0x246 + 번호: 14 최면(+0x254) · 15 컨디션이상(+0x255) · 16 혼란(+0x256).</summary>
@@ -272,7 +275,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int power = Part1Combat.Power(selector, attacker);
         bool weaponHit = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31;
         if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
-        if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * Math.Max(1, attack.Hits);
+        // 타수(+0x66) — 원본은 세기에 곱해 한 번에 준다. 쌍검 · 쌍권총처럼 타격 키마다 따로 치는 기본 공격은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
+        if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
         int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);

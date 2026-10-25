@@ -166,10 +166,39 @@ internal sealed partial class Part1Skill
                 ChainStruck = keys.Count;
                 return Math.Max(len, keys[^1]) + 1;
             }
+        // 더블 어택처럼 타수(+0x66)가 둘 이상이면 그 동작의 타격 키마다 한 번씩 — 피해 숫자가 타마다 뜬다(사용자 요청).
+        int hits = Part1Attack.ById(_basicAttacks ??= Part1Attack.LoadAll(), id)?.Hits ?? 1;
+        if (hits >= 2 && host._sprites.TryGetValue(_user.ChrCode, out var spr))
+        {
+            var toward = TargetPoint(targets, aim);
+            var (lenS, _) = BasicSwing(toward, BasicAction(id));
+            var keys = spr.Clip(WeaponAction(BasicAction(id)), _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).Take(hits).ToList() ?? [];
+            if (keys.Count >= 2)
+            {
+                foreach (int k in keys) foreach (int ti in targets) HitAt(k, ti, hit);
+                SplitStruck = keys.Count;
+                return Math.Max(lenS, keys[^1]) + 1;
+            }
+            // 타격 키가 모자라면 동작 길이를 나눠 친다.
+            for (int i = 0; i < hits; i++) foreach (int ti in targets) HitAt(Math.Max(1, lenS * (i + 1) / (hits + 1)), ti, hit);
+            SplitStruck = hits;
+            return lenS + 1;
+        }
         var (len1, at) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
         foreach (int ti in targets) HitAt(at, ti, hit);
         return Math.Max(len1, at) + 1;
     }
+
+    private static IReadOnlyList<Part1Attack>? _basicAttacks;
+
+    /// <summary>이번 기본 공격을 타수만큼 나눠 쳤나(쌍검 · 쌍권총) — 부르는 쪽이 타마다 피해를 준다.</summary>
+    internal int SplitStruck;
+
+    /// <summary>총알마다 나눠 칠까 — 타수가 둘 이상인 사격(쌍권총).</summary>
+    private bool SplitShots => _splitShots;
+    private bool _splitShots;
+
+    private static int ShotHits(int id) => Part1Attack.ById(_basicAttacks ??= Part1Attack.LoadAll(), id)?.Hits ?? 1;
 
     /// <summary>이번 기본 공격의 타이밍 어택 박자 수(부르는 쪽이 넣는다) — 2 이상이면 연속 공격 동작으로 친다.</summary>
     internal int ChainHits;
@@ -215,6 +244,8 @@ internal sealed partial class Part1Skill
             _ => [20],
         };
         bool bazooka = id is >= 342 and <= 344;
+        _splitShots = ShotHits(id) >= 2;
+        if (_splitShots) SplitStruck = Math.Min(ShotHits(id), delays.Length);
         int first = targets.Count > 0 ? targets[0] : -1;
         var (len, _) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
         int last = len;
@@ -223,11 +254,10 @@ internal sealed partial class Part1Skill
             var p = BodyPoint(first, aim);
             if (bazooka) Put(10, 0, delays[k], p.X, p.Y, sounds: true);
             else Put(183, Rand(3), delays[k], p.X, p.Y, sounds: true);
-            if (k == 0)
-            {
-                Later(delays[k] + 1, () => host.Btl.CenterOn(p.X, p.Y));
+            if (k == 0) Later(delays[k] + 1, () => host.Btl.CenterOn(p.X, p.Y));
+            // 쌍권총(타수 2)은 총알마다 한 번씩 — 나머지 연사는 예전처럼 첫 발에 몰아 준다(타수가 1 이라 곱할 것이 없다).
+            if (k == 0 || (SplitShots && k < ShotHits(id)))
                 foreach (int ti in targets) HitAt(delays[k] + 1, ti, hit);
-            }
             last = Math.Max(last, delays[k] + (bazooka ? Length(10, 0) : Length(183, 0)));
         }
         return last + 1;
