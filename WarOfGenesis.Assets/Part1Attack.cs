@@ -216,7 +216,8 @@ public sealed record Part1Job(int Id, string Name, string EnglishName, (int A, i
 {
     public const int FileSize = 100;
 
-    public static IReadOnlyList<Part1Job> LoadAll() => ParseAll(Part1Game.Read("Dats", "Job.dat"));
+    /// <summary>모든 직업 — 원본 <c>Job.dat</c> 에 리메이크가 더한 어빌리티(<see cref="Part1JobAdditions"/>)를 얹는다.</summary>
+    public static IReadOnlyList<Part1Job> LoadAll() => Part1JobAdditions.Apply(ParseAll(Part1Game.Read("Dats", "Job.dat")));
 
     /// <summary>
     /// 레벨업 후보(<c>0x1009dac0</c>) — 이 직업의 어빌리티 가운데 아직 안 배운 것은 레벨 1, 최대보다 낮은 것은 지금 + 1. 레벨이 하나 오를 때마다 이 가운데 하나를 올린다.
