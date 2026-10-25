@@ -251,7 +251,7 @@ internal sealed partial class Part1Skill
             Put(55, 1, 20 * k + 20, s.X, s.Y, life: 56);
             Put(33, 0, 20 * k + 23, s.X, s.Y);
             int go = 20 * k + 23 + Length(33, 0) + 1;
-            int impact = FireMissile(17, 0, false, go, s, t, 1.2, sounds: true);
+            int impact = FireMissile(17, 0, false, go, s, t, 1.2);
             if (k == 1 && id != 77) Later(go, () => host.Btl.CenterOn(t.X, t.Y));
             if (k == 0) Later(go, () => host.Btl.CenterOn(t.X, t.Y));
             Put(48, 1, impact + 2, t.X, t.Y);
@@ -297,7 +297,7 @@ internal sealed partial class Part1Skill
         Put(83, 0, 44, p.X, p.Y, life: 31);
         Put(83, 0, 47, p.X, p.Y, life: 31, mirror: true);
         int go = 30 + 28 + 2;
-        int impact = FireMissile(20, 1, false, go, p, a, 1.2, sounds: true, trail: 34);
+        int impact = FireMissile(20, 1, false, go, p, a, 1.2, trail: 34);
         Later(go, () => host.Btl.CenterOn(a.X, a.Y));
         Put(48, 1, impact + 2, a.X, a.Y, life: 24);
         Put(10, 1, impact + 2, a.X, a.Y, life: 46);
@@ -350,10 +350,10 @@ internal sealed partial class Part1Skill
     /// 날아가는 불 — 곧은 이동기(빠르기 1 × <paramref name="factor"/>, 최대 40)로 <paramref name="from"/> → <paramref name="to"/>. 2틱마다 뒤로 흩어지는 불티 꼬리
     /// (<c>0x10078a90</c> 꼬리 정보 — 64 또는 <paramref name="trail"/>, 24틱)를 남긴다. 닿는 틱을 돌려준다.
     /// </summary>
-    private int FireMissile(int obs, int motion, bool mirror, int tick, (double X, double Y) from, (double X, double Y) to, double factor, bool sounds = false, int trail = 64)
+    private int FireMissile(int obs, int motion, bool mirror, int tick, (double X, double Y) from, (double X, double Y) to, double factor, int trail = 64)
     {
         var path = Move(from, to, 1, factor);
-        Along(obs, motion, tick, AsPath(path.Prepend(from).ToList()), life: path.Count, mirror: mirror, sounds: sounds);
+        Along(obs, motion, tick, AsPath(path.Prepend(from).ToList()), life: path.Count, mirror: mirror);
         double len = Math.Max(1, Dist(from, to)), bx = (from.X - to.X) / len, by = (from.Y - to.Y) / len;
         for (int t = 0; t < path.Count; t += 2)
         {
@@ -939,7 +939,6 @@ internal sealed partial class Part1Skill
     {
         int Sign() => Rand(2) == 0 ? -1 : 1;
         int last = 0;
-        bool loud = true;
         foreach (var (ti, (tx, ty)) in Points(targets, aim))
         {
             double head = ty - 40 * 0.6;
@@ -950,8 +949,7 @@ internal sealed partial class Part1Skill
             {
                 double cx = tx + Sign() * Rand(40), cy = head + Sign() * Rand(40) * 0.8;
                 var path = Circle(cx, cy, Rand(10) + 15, 63, 2, 1.0, Rand(2) == 1, -Math.PI / 2);
-                Along(108, 0, 0, path, life: 63, sounds: loud);
-                loud = false;
+                Along(108, 0, 0, path, life: 63);
                 // 잔상(0x100810d0 — 빠르기 1 × 0.5 로 뒤따르다 14틱에 사라진다) — 2틱 늦은 같은 길로 어림했다.
                 Along(108, 0, 2, path, life: 14, fadeFrom: 0.6, fadeTo: 0.6);
             }

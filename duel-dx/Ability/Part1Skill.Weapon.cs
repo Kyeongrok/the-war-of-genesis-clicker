@@ -267,12 +267,11 @@ internal sealed partial class Part1Skill
             cells.RemoveAll(c => c.Target < 0 && Math.Abs(c.X - fx) < 20 && Math.Abs(c.Y - fy) < 16);
             cells.Add((ti, fx, fy));
         }
-        var loud = new HashSet<int>();
         foreach (var (ti, x, y) in cells)
         {
             double d = Math.Sqrt((x - hx) * (x - hx) + (y - hy) / 0.8 * ((y - hy) / 0.8));
             int at = 20 + (int)(d / 10);
-            Put(10, 0, at, x, y, sounds: loud.Add(at));
+            Put(10, 0, at, x, y);
             if (ti >= 0) HitAt(at + 1, ti, hit);
             for (int n = 0; n < 10; n++)
                 Rise(36, 0, at + Rand(20), x + (Rand(2) == 0 ? -1 : 1) * Rand(20), y + (Rand(2) == 0 ? -1 : 1) * Rand(20) * 0.8, Rand(10) + 5, 0.95);

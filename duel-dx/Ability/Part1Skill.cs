@@ -86,23 +86,49 @@ internal sealed partial class Part1Skill(GameWindow host)
     private void Later(int tick, Action run) => _events.Add((At(tick), run));
     private void HitAt(int tick, int target, Action<int> hit) => Later(tick, () => hit(target));
 
-    private void Put(int obs, int motion, int tick, double x, double y, int? life = null, bool mirror = false, bool sounds = false) =>
+    private void Put(int obs, int motion, int tick, double x, double y, int? life = null, bool mirror = false, bool? sounds = null) =>
         Along(obs, motion, tick, [(0, x, y)], life, mirror, sounds);
 
-    private void Along(int obs, int motion, int tick, (int Tick, double X, double Y)[] path, int? life = null, bool mirror = false, bool sounds = false,
+    /// <summary>
+    /// 그림 하나를 깐다. 원본 이펙트(<c>0x10085e00</c> 과 그 이동기들 — 키 처리가 모두 <c>0x100982d0</c> → <c>0x10098370</c>)는 제 모션의 소리 키(종류 1)를
+    /// 늘 스스로 내고(<c>0x1001a330</c>), 자식 키(종류 2)로 붙는 이펙트도 제 소리를 낸다. 그래서 <paramref name="sounds"/> 를 안 주면 소리를 낸다 —
+    /// 다만 시전자 그림을 빌린 잔상(<paramref name="rawObs"/>)은 그 동작 소리를 시전자 동작이 이미 내므로 달라고 할 때만 낸다.
+    /// </summary>
+    private void Along(int obs, int motion, int tick, (int Tick, double X, double Y)[] path, int? life = null, bool mirror = false, bool? sounds = null,
                        bool screen = false, double fadeFrom = 1, double fadeTo = 1, bool flicker = false, bool rawObs = false)
     {
         int id = rawObs ? obs : P(obs);
         _fx.Add(new Fx(id, motion, At(tick), path, life, mirror, screen, fadeFrom, fadeTo, flicker));
-        if (sounds && host.UiFor(id)?.Clip(motion) is { } clip)
-            foreach (var (t, sound) in clip.Sounds) host._pendingSounds.Add((At(tick + t), sound));
+        if (sounds ?? !rawObs) KeySounds(id, motion, tick, 0);
     }
 
+    /// <summary>그 모션의 소리 키와 자식 이펙트의 소리 키를 틱에 맞춰 예약한다(자식은 넷 깊이까지).</summary>
+    private void KeySounds(int id, int motion, int tick, int depth)
+    {
+        if (host.UiFor(id)?.Clip(motion) is not { } clip) return;
+        foreach (var (t, sound) in clip.Sounds) QueueSound(tick + t, sound);
+        if (depth < 4)
+            foreach (var (start, obs, child, _, _, _, _) in clip.Children) KeySounds(obs, child, tick + start, depth + 1);
+    }
+
+    /// <summary>
+    /// 소리 하나를 예약한다 — 원본 <c>0x1001a330</c> 은 같은 소리가 이미 이번 장(+0x30 = 장 번호)에 울렸으면 다시 내지 않는다.
+    /// 그래서 같은 틱의 같은 소리는 한 번만 낸다(같은 틱에 터지는 폭발 여럿 · 원을 도는 해골 셋). 파트1 소리 0 은 빈 키다(번개알 276).
+    /// </summary>
+    private void QueueSound(int tick, int sound)
+    {
+        long at = (long)Math.Round(At(tick) * TicksPerSecond);
+        if (sound <= Part1Game.ObsBase || !_soundTicks.Add((at, sound))) return;
+        host._pendingSounds.Add((At(tick), sound));
+    }
+
+    private readonly HashSet<(long Tick, int Sound)> _soundTicks = [];
+
     /// <summary>화면에 붙는 그림 — 화면 가운데에서 (dx, dy) 만큼.</summary>
-    private void Screen(int obs, int motion, int tick, double dx, double dy, int? life = null, bool mirror = false, bool sounds = false, double fadeFrom = 1, double fadeTo = 1) =>
+    private void Screen(int obs, int motion, int tick, double dx, double dy, int? life = null, bool mirror = false, bool? sounds = null, double fadeFrom = 1, double fadeTo = 1) =>
         Along(obs, motion, tick, [(0, dx, dy)], life, mirror, sounds, screen: true, fadeFrom: fadeFrom, fadeTo: fadeTo);
 
-    private void Sound(int part1, int tick) => host._pendingSounds.Add((At(tick), P(part1)));
+    private void Sound(int part1, int tick) => QueueSound(tick, P(part1));
 
     /// <summary>곧은 이동기 — 틱마다의 자리(첫 칸 = 출발 다음 틱). 닿은 틱이 마지막 칸이다.</summary>
     private static List<(double X, double Y)> Move((double X, double Y) from, (double X, double Y) to, double speed, double factor, double max = 40, double min = 1, bool add = false)
@@ -249,6 +275,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         _home = host.Btl.UnitFoot(user);
         _events.Clear();
         _shifts.Clear();
+        _soundTicks.Clear();
         var facing = user.Facing;
         var (hx, hy) = _home;
         var (ax, ay) = CellFoot(aim.Col, aim.Row);

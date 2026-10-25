@@ -317,7 +317,7 @@ internal sealed partial class Part1Skill
         Put(glow, 1, 0, s.X, s.Y);
         int start = 20 + Rand(15);
         var flight = Move(s, t, 1, 1.3);
-        Along(shot, shot == 275 ? Dir16(s, t) : 0, start, AsPath(flight.Prepend(s).ToList(), 2), life: flight.Count, sounds: shot != 276);   // 276 의 소리 키는 0(없음)
+        Along(shot, shot == 275 ? Dir16(s, t) : 0, start, AsPath(flight.Prepend(s).ToList(), 2), life: flight.Count);   // 276 의 소리 키는 0(없음 — QueueSound 가 건너뛴다)
         Later(start, () => host.Btl.CenterOn(t.X, t.Y));
         int arrive = start + flight.Count;
         Put(burst, 0, arrive + 1, t.X, t.Y, life: life, sounds: true);

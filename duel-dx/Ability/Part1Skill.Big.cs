@@ -242,7 +242,7 @@ internal sealed partial class Part1Skill
                 Put(526, 0, at, body.X, body.Y, sounds: true);
             }
             if (variant <= 1) Put(667, 0, at, body.X, body.Y + 20 * 0.8 - 20 * 0.6, sounds: true);
-            Put(526, 0, at, body.X, body.Y, sounds: variant == 2);
+            Put(526, 0, at, body.X, body.Y);
             Put(518 + Rand(3), 0, at, body.X, body.Y);
             Put(518 + Rand(3), 0, at, body.X, body.Y, mirror: true);
             for (int n = 0; n < 20; n++) Debris(35, 0, at, body.X, body.Y, Rand(3) + 1, 1.1);
@@ -468,7 +468,7 @@ internal sealed partial class Part1Skill
             Along(283, m, leave, AsPath(arc.Prepend(s1).ToList()), life: arc.Count, mirror: d >= 9);
             int land = leave + arc.Count + 1;
             first = Math.Min(first, leave);
-            Put(Rand(2) == 0 ? 10 : 48, 0, land, goal.X, goal.Y, sounds: i % 3 == 0);
+            Put(Rand(2) == 0 ? 10 : 48, 0, land, goal.X, goal.Y);
             if (ti >= 0 && struck.Add(ti)) HitAt(land + 1, ti, hit);
             for (int n = 0; n < 5; n++) Rise(34, 0, land + 5 + Rand(10), goal.X + (Rand(2) == 0 ? -1 : 1) * Rand(20), goal.Y + (Rand(2) == 0 ? -1 : 1) * Rand(20) * 0.8, 3, 1.1);
             for (int n = 0; n < 5; n++) Debris(38, 0, land + Rand(10), goal.X, goal.Y, 15, 0.9);

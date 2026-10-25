@@ -417,10 +417,10 @@ internal sealed partial class Part1Skill
     /// 칸 하나가 터진다(미사일 · 포격 · 자주포 · 폭격 · 공폭탄 공용) — <paramref name="tick"/> + 0~4 에 폭발 Obs 10 · 48(반반) 모션 0(소리 8 · 58)과 한 틱 뒤 맞힘,
     /// 먼지 34:0 다섯(5~14틱 늦게 솟는다, 3 × 1.1), 흙 38:0 다섯(빠르기 5, 0~9틱), 파편 366:0~3 열(빠르기 20 × 0.8, 0~9틱). 맞히는 틱을 돌려준다.
     /// </summary>
-    private int GunBlast(int tick, double x, double y, bool sound)
+    private int GunBlast(int tick, double x, double y)
     {
         int at = tick + Rand(5);
-        Put(Rand(2) == 0 ? 10 : 48, 0, at, x, y, sounds: sound);
+        Put(Rand(2) == 0 ? 10 : 48, 0, at, x, y);
         for (int n = 0; n < 5; n++) Rise(34, 0, tick + Rand(10) + 5, x + (Rand(2) == 0 ? -1 : 1) * Rand(20), y + (Rand(2) == 0 ? -1 : 1) * Rand(20) * 0.8, 3, 1.1);
         for (int n = 0; n < 5; n++) Debris(38, 0, tick + Rand(10), x, y, 5, 0.97);
         for (int n = 0; n < 10; n++) Debris(366, Rand(4), tick + Rand(10), x, y, 20, 0.8);
@@ -431,13 +431,12 @@ internal sealed partial class Part1Skill
     private int GunBlastCells(List<int> targets, List<(int Col, int Row)> cells, Func<(int Col, int Row), int> start, int fallback, Action<int> hit)
     {
         var hitAt = new Dictionary<(int, int), int>();
-        var loud = new HashSet<int>();
         int last = fallback;
         foreach (var cell in cells)
         {
             var (cx, cy) = CellFoot(cell.Col, cell.Row);
             int s = start(cell);
-            hitAt[cell] = GunBlast(s, cx, cy, loud.Add(s));
+            hitAt[cell] = GunBlast(s, cx, cy);
             last = Math.Max(last, s + 20 + Math.Max(Length(10, 0), Length(366, 0)));
         }
         foreach (int ti in targets)
@@ -530,7 +529,7 @@ internal sealed partial class Part1Skill
             var fall = Move(from, (cx, cy), 1, 1.4);
             Along(283, side ? 7 : 8, s, AsPath(fall.Prepend(from).ToList()), life: fall.Count, mirror: dir == 1);
             int land = s + fall.Count + 2;
-            int at = GunBlast(land, cx, cy, i % 3 == 0);
+            int at = GunBlast(land, cx, cy);
             hitAt.TryAdd(cell, at);
             last = Math.Max(last, land + 20 + Length(366, 0));
         }

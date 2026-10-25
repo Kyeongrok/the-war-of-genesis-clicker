@@ -261,7 +261,7 @@ internal sealed partial class Part1Skill
             var fall = Move((cx + 400, top - 60), (cx, cy), Rand(5) + 5, 1.6, 100);
             Along(210, 9, delay, AsPath(fall), life: fall.Count);
             int e = delay + fall.Count + 1;
-            Put(71, 0, e, cx, cy, sounds: n % 4 == 0);
+            Put(71, 0, e, cx, cy);
             Put(379, 0, e, cx, cy);
             Put(667, 1, e, cx - TileW / 2, cy - TileH / 2);
             for (int i = 0; i < host._units.Length; i++)
