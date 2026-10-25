@@ -49,7 +49,22 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         _field = field;
         _onLeave = onLeave;
         (_bg, _bgW, _bgH) = shell.Field.ReadImage(field.Background);
-        _facilities = [];
+        _facilities = FacilitiesOf(field);
+        _selected = -1;
+        _hover = -1;
+        _talks.Clear();
+        _talk = null;
+        if (_window != null) _window._open = false;
+        _open = true;
+        // 시험: DUELDX_PART1SHOP=n — n 번째 시설 창을 곧바로 연다.
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_PART1SHOP"), out int open) && open >= 0 && open < _facilities.Count) OpenFacility(open);
+    }
+
+    /// <summary>마을 필드의 시설들 — 조건 200 사건마다 머리 행동(1001 · 1101 · 1201)과 그 목록(+1). 챕터 지도의 상점 정보 창(<see cref="Part1TownShopInfo"/>)도 이것을 쓴다.</summary>
+    internal static List<Facility> FacilitiesOf(Part1Field field)
+    {
+        string Line(int i) => i >= 0 && i < field.Lines.Count ? field.Lines[i] : "";
+        var list = new List<Facility>();
         foreach (var e in field.Events)
         {
             if (e.Conditions.FirstOrDefault()?.Code != 200 || e.Actions.Count == 0) continue;
@@ -60,16 +75,9 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
             var entries = e.Actions.Where(a => a.Code == listCode).Select(a => a.Args).ToList();
             string speaker = Part1Game.Speaker(Line(head.Args[1])).Trim();
             string name = speaker.EndsWith("주인") ? speaker[..^2] : speaker.Length > 0 ? speaker : kind switch { Kind.Shop => "상점", Kind.Guild => "용병 길드", _ => "주점" };
-            _facilities.Add(new Facility(name, kind, head.Args, entries));
+            list.Add(new Facility(name, kind, head.Args, entries));
         }
-        _selected = -1;
-        _hover = -1;
-        _talks.Clear();
-        _talk = null;
-        if (_window != null) _window._open = false;
-        _open = true;
-        // 시험: DUELDX_PART1SHOP=n — n 번째 시설 창을 곧바로 연다.
-        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_PART1SHOP"), out int open) && open >= 0 && open < _facilities.Count) OpenFacility(open);
+        return list;
     }
 
     private string Line(int i) => _field is { } f && i >= 0 && i < f.Lines.Count ? f.Lines[i] : "";

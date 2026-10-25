@@ -178,6 +178,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>챕터 행동 1200 [장소, 마을] — 그 장소를 그 마을 장소로 바꾼다(0x100c19f0: 장소 낱말 7 = 마을, 낱말 6 = 1).</summary>
     internal Action<int, int>? PlaceTown;
 
+    /// <summary>챕터 행동 304 [n] — 지도 그림(<see cref="Part1Chapter.Pictures"/>) n 번을 숨긴다(0x100bdb00).</summary>
+    internal Action<int>? PictureHide;
+
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
 
@@ -445,9 +448,8 @@ internal sealed class Part1SceneScript(GameWindow host)
             // 504 · 506 — 팀이 없고 머리 낱말 2 == 1 이면 이야기 무리 앞 열 명 · 가방 · 용병 · 탑승물을 팀 0 으로 옮긴다(0x100c0620 · 0x100c0a60,
             // 분석-파트1-챕터 12.3). 리메이크는 챕터를 열 때부터 팀 0 = 일행이라 할 일이 없다(일부러 비운 갈래).
             if (!IsField && c.Code is 504 or 506) continue;
-            // 304 [n] — 챕터 지도 그림(장소 뒤 12바이트 목록, 0x100b2b16 이 만든 +0x13c28[n] — Obs 820 깃발 …)을 숨긴다(0x100bdb00: vt+0x78, +0x69 = 0xff).
-            // 리메이크는 그 그림 목록을 아직 안 그려 숨길 것이 없다(챕터 56 한 곳).
-            if (!IsField && c.Code == 304) continue;
+            // 304 [n] — 챕터 지도 그림(장소 뒤 12바이트 목록, 0x100b2b16 이 만든 +0x13c28[n] — Obs 820 엇갈린 두 칼 …)을 숨긴다(0x100bdb00: vt+0x78, +0x69 = 0xff). 챕터 56 한 곳.
+            if (!IsField && c.Code == 304) { PictureHide?.Invoke(a[0]); continue; }
             if (!IsField && c.Code == 705 && Ending != null) { _pending.Clear(); _sceneChanged = true; Ending(a.Length > 0 ? a[0] : 0); return; }
             switch (c.Code)
             {

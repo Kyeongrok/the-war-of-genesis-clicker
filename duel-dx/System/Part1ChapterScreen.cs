@@ -20,8 +20,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int ButtonX = 570;
     internal const int ButtonMove = 0, ButtonEnter = 1, ButtonStatus = 2, ButtonExchange = 3, ButtonEndTurn = 4, ButtonHit = 1000;
 
-    /// <summary>「N 팀」 꼬리표(id 0x12d + 팀) · 이동 고르기 장소 · Esc 메뉴 줄.</summary>
-    internal const int TeamHit = 3000, TargetHit = 4000, MenuHit = 5000;
+    /// <summary>「N 팀」 꼬리표(id 0x12d + 팀) · 이동 고르기 장소 · Esc 메뉴 줄 · 마을 장소(누르면 상점 정보).</summary>
+    internal const int TeamHit = 3000, TargetHit = 4000, MenuHit = 5000, TownHit = 6000;
+
+    /// <summary>
+    /// 단추 소리 — 원본 장면 4 메시지 처리기(0x100aff10~)가 「상  태」(0x100b0e58) · 「교  환」(0x100b0e90) · 「턴종료」(0x100b0ecf)를 누를 때(0x3e8)와
+    /// 「N 팀」 꼬리표를 누를 때(0x3e9, 0x100aff43) <c>0x1001a330(0x34, 0)</c> = <c>Snd 0052</c> 를 한 번 낸다. 「이  동」 · 「진  입」 · 이동 고르기 · 짚기는 소리가 없고,
+    /// 못 쓰는 단추(상태 3)는 메시지가 안 와 소리도 없다.
+    /// </summary>
+    internal const int PressSound = 0x34;
+
+    private void PlayPress() => host.Play(Part1Game.ObsBase + PressSound);
 
     /// <summary>원본 그림 — 지역 띠 · 팀 말(깃대 · 꼬리표) · 이동 표지(퍼지는 고리).</summary>
     internal const int BannerObs = 219, TeamObs = 226, RingObs = 182;
@@ -50,7 +59,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     private Part1ExchangeWindow? _exchange;
 
     /// <summary>상태 · 교환 창이 떠 있나 — 그동안 지도 단추 · 지도 글은 숨긴다(원본 0x100b2070).</summary>
-    internal bool WindowOpen => _status is { _open: true } || _exchange is { _open: true };
+    internal bool WindowOpen => _status is { _open: true } || _exchange is { _open: true } || _shops is { _open: true };
+
+    /// <summary>마을 상점 정보 창 — 지도에서 마을 장소를 누르면 뜬다(<see cref="Part1TownShopInfo"/>).</summary>
+    internal Part1TownShopInfo Shops => _shops ??= new(host, this);
+    private Part1TownShopInfo? _shops;
 
     /// <summary>
     /// 지역 지도 — 챕터 머리 낱말 1 → <c>BGRs</c> 번호: 1 → 1(시반 슈미터 · 카디스 섬) · 2 → 2(팬드래건 쪽) · 3 → 6(안타나나리보 · 로우엔 쪽) · 4 → 3.
@@ -129,6 +142,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             if (mode == 1) _cover = null;
         },
         UiReset = () => { CloseWindows(); _hover = -1; },
+        PictureHide = n => { if (_chapter is { } c) _hiddenPictures.Add((c.Id, n)); },
         Ending = OnEnding,
     };
 
@@ -223,6 +237,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (_status != null) _status._open = false;
         if (_exchange != null) _exchange._open = false;
+        _shops?.Close();
         _mode = Mode.Map;
     }
 
@@ -615,7 +630,24 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             for (int k = 0; k < at.Count; k++)
                 if (bx >= gx + 59 && bx < gx + 59 + 39 && by >= gy + 18 * k - 75 && by < gy + 18 * k - 75 + 18) return TeamHit + at[k];
         }
+        // 마을 장소 — 장소 네모(낱말 1~4)나 그 밑 이름 글.
+        for (int i = 0; i < chapter.Places.Count; i++)
+            if (TownBounds(chapter, i, ox, oy) is { } b && (In(b.Place, bx, by) || In(b.Label, bx, by))) return TownHit + i;
         return -1;
+    }
+
+    private static bool In((int X, int Y, int W, int H) r, int x, int y) => x >= r.X && x < r.X + r.W && y >= r.Y && y < r.Y + r.H;
+
+    /// <summary>마을 장소(종류 1, 마을 번호 있음)의 화면 네모 — 장소 네모와 이름 글 네모(<see cref="Draw"/> 의 장소 이름 자리). 마을이 아니면 null.</summary>
+    private ((int X, int Y, int W, int H) Place, (int X, int Y, int W, int H) Label)? TownBounds(Part1Chapter chapter, int i, int ox, int oy)
+    {
+        var p = chapter.Places[i];
+        if (!p.IsTown) return null;
+        int px = ox + p.X - _cam.X, py = oy + p.Y - _cam.Y, pw = Math.Max(20, (int)p.Words[3]), ph = Math.Max(20, (int)p.Words[4]);
+        string name = Part1Game.PlainText(chapter.NameOf(p)).Replace('\n', ' ');
+        int tw = name.Length > 0 ? Art.TextW(name, 12) : 0;
+        int sx = px + p.Words[3] / 2, sy = py + p.Words[4] + 15;
+        return ((px, py, pw, ph), (sx - tw / 2 - 3, sy - 1, tw + 6, 17));
     }
 
     internal void UpdateHover(int bx, int by)
@@ -624,6 +656,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (Picking) { _hover = PickAt(bx, by) + PickHit; return; }
         if (_status is { _open: true }) { _status.UpdateHover(bx, by); return; }
         if (_exchange is { _open: true }) { _exchange.UpdateHover(bx, by); return; }
+        if (_shops is { _open: true }) { _shops.UpdateHover(bx, by); _hover = -1; return; }
         _hover = HitAt(bx, by);
     }
 
@@ -754,6 +787,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (Picking) { PressPick(PickAt(bx, by)); return; }
         if (_status is { _open: true }) { _status.OnClick(bx, by); return; }
         if (_exchange is { _open: true }) { _exchange.OnClick(bx, by); return; }
+        if (_shops is { _open: true }) { _shops.OnClick(bx, by); return; }   // 창 밖을 누르면 닫힌다
         int hit = HitAt(bx, by);
         if (_mode == Mode.Move && hit < 0) { _mode = Mode.Map; return; }   // 표지 밖을 누르면 취소(단추가 다시 보인다)
         if (_mode == Mode.Menu && hit < 0) { _mode = Mode.Map; return; }
@@ -779,6 +813,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (_status is { _open: true }) { if (!_status.ClosePanel()) _status.Close(); }   // 얼굴로 연 상태 패널이 있으면 그것만
         else if (_exchange is { _open: true }) _exchange.Close();
+        else if (_shops is { _open: true }) _shops.Close();
         else if (_mode != Mode.Map) _mode = Mode.Map;
         else _mode = Mode.Menu;
     }
@@ -816,10 +851,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         {
             case ButtonHit + ButtonMove: StartMove(); break;
             case ButtonHit + ButtonEnter: if (CanEnter()) EnterHere(); break;          // 못 쓰는 단추(상태 3)는 눌러도 아무 일 없다
-            case ButtonHit + ButtonStatus: Status.Open(); break;
-            case ButtonHit + ButtonExchange: if (CanExchange()) Exchange.Open(); break;
-            case ButtonHit + ButtonEndTurn: EndMapTurn(); break;
-            case >= TeamHit and < TeamHit + 8: SelectTeam(hit - TeamHit); break;
+            case ButtonHit + ButtonStatus: PlayPress(); Status.Open(); break;
+            case ButtonHit + ButtonExchange: if (CanExchange()) { PlayPress(); Exchange.Open(); } break;
+            case ButtonHit + ButtonEndTurn: PlayPress(); EndMapTurn(); break;
+            case >= TeamHit and < TeamHit + 8: PlayPress(); SelectTeam(hit - TeamHit); break;
+            case >= TownHit and < TownHit + 1000 when hit - TownHit < chapter.Places.Count && chapter.Places[hit - TownHit] is { IsTown: true } town:
+                PlayPress();
+                Shops.Open(Part1Game.PlainText(chapter.NameOf(town)).Replace('\n', ' ').Trim(), town.Target);
+                break;
             case >= TargetHit and < TargetHit + 1000: _mode = Mode.Map; MoveTo(hit - TargetHit); break;
             case MenuHit + 0: _mode = Mode.Map; host.LeaveScene(() => { _open = false; shell.Timeline.Open(); }); break;
             case MenuHit + 1: _mode = Mode.Map; OpenParty(0); break;
@@ -1003,6 +1042,27 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                 host.UiText(name, sx - tw / 2, sy, GameWindow.White, 12);
             }
 
+        // 짚은 마을 — 장소 네모에 노란 두 줄 테, 이름 글에 노란 테(이동 고르기 · 고르기 창의 짚음과 같은 빛깔). 누르면 상점 정보 창.
+        if (!window && _mode == Mode.Map && calm && _hover >= TownHit && _hover - TownHit < chapter.Places.Count
+            && TownBounds(chapter, _hover - TownHit, ox, oy) is { } town)
+        {
+            var (r, l) = (town.Place, town.Label);
+            Art.Stroke(r.X - 3, r.Y - 3, r.W + 6, r.H + 6, HoverColor);
+            Art.Stroke(r.X - 2, r.Y - 2, r.W + 4, r.H + 4, HoverColor);
+            if (l.W > 6) { host.UiStroke(l.X, l.Y, l.W, l.H, HoverColor); host.UiStroke(l.X + 1, l.Y + 1, l.W - 2, l.H - 2, 0x80FFE080); }
+        }
+
+        // 지도 그림(장소 뒤 12바이트 목록 — 거의 Obs 820 엇갈린 두 칼, 전투 장소마다) — 원본 0x100b2b30 이 지도를 세울 때 모션 0 을 (x, y) 에 되풀이로 둔다.
+        // 팀 말(0x100b20d0)보다 먼저 만든 개체라 그 밑에 그린다. 챕터 304 [n] 이 숨긴다(_hiddenPictures).
+        for (int i = 0; i < chapter.Pictures.Count; i++)
+        {
+            var pic = chapter.Pictures[i];
+            if (pic.Length < 3 || pic[0] <= 0 || _hiddenPictures.Contains((chapter.Id, i))) continue;
+            int px = ox + pic[1] - _cam.X, py = oy + pic[2] - _cam.Y;
+            if (px < ox - 120 || px > ox + W + 120 || py < oy - 120 || py > oy + H + 120) continue;
+            Art.Blit(Art.Motion(pic[0], 0, tick), px, py);
+        }
+
         // 이동 고르기 — 갈 수 있는 이웃마다 퍼지는 고리(Obs 182, 0x100c4cf0)와 팀 자리에서 그 이웃까지의 선.
         // 원본(0x100c4e00)은 고리 하나를 마우스 쪽 이웃에 두고(0x100c50b0), 팀 장소 가운데 → 고리 자리로 선을 긋는다:
         // 0x1000c8b0 선을 (0,0) · x+1 · y+1 · x−1 · y−1 로 다섯 번(굵기 3 십자꼴), 빛깔 16비트 0x6259(15비트 0x3139) = (99, 73, 206).
@@ -1080,6 +1140,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
         if (_status is { _open: true }) _status.Draw(ox, oy);
         if (_exchange is { _open: true }) _exchange.Draw(ox, oy);
+        if (_shops is { _open: true }) _shops.Draw(ox, oy);
         Art.Clip = default;
 
         // 턴 끝 알림 — 틀 상자 (200, 200) 240×40, 가운데 글.
@@ -1118,6 +1179,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_mode == Mode.Menu && Hit(MenuX - 10, MenuY, MenuW + 20, 36 + MenuItems.Length * MenuRowH)) return true;
         return host._lastTime < _noticeUntil && Hit(200, 200, 240, 40);
     }
+
+    /// <summary>짚음 테 빛깔 — 이동 고르기 고리 · 주점 얼굴의 짚음과 같은 노랑.</summary>
+    private const uint HoverColor = 0xFFFFE080;
+
+    /// <summary>챕터 304 [n] 이 숨긴 지도 그림(챕터, n) — 원본은 지도를 다시 세울 때까지 숨긴다(챕터 56 한 곳).</summary>
+    private readonly HashSet<(int Chapter, int Index)> _hiddenPictures = [];
 
     /// <summary>이동 고르기 선 빛깔(0x100c4e00: 16비트 0x6259) · 다섯 번 긋는 어긋남.</summary>
     private const uint RouteColor = 0xFF6349CE;
