@@ -786,8 +786,16 @@ internal sealed class Part1MapObjects(GameWindow host)
     // 화이어 볼은 대상이 없을 때 공이 떨어진 칸에 rand%10+20 남긴다. 프로즌 아이스는 칸마다 얼음 덩이를 n = 30·(R+1) − 30·⌊거리/40⌋ 시간 틱
     // (R = 범위의 가장 먼 맨해튼 칸, 거리 = 겨눈 칸 가운데에서 그 칸 가운데까지의 픽셀 — 0x1004c344~). 둘 다 바탕 0x1007b720: 나이 1 에 시간 틱을 적고
     // 그 틱 + 길이에 끝 표지(+0x14a, 0x1007b940). 첫 장과 시간 틱마다(vt+0x54 — 땅불 0x1007bd90 · 얼음 0x1007c490) 끝 검사 뒤 제 칸의 유닛 · 물체에
-    // 땅불은 알림 10(열), 얼음은 알림 11(냉기)을 보낸다. 남이 보낸 10 · 11 · 14 를 받으면 꺼진다(위 Send). 땅불 그림은 기술 쪽이 그리고,
-    // 얼음 덩이는 기술이 넘겨준 뒤 여기서 그린다(Obs 118 r+3 되풀이 → 끝나면 r+6 녹기). 덩이의 떨림(0x1007c3a0, ±1 px)은 안 옮겼다.
+    // 땅불은 알림 10(열), 얼음은 알림 11(냉기)을 보낸다. 남이 보낸 10 · 11 · 14 를 받으면 꺼진다(위 Send).
+    // 그림도 기운이 그린다 — 기술은 칸에 닿는 틱에 넘겨주기만 한다(화이어 필드 0x10049edd~ · 화이어 볼 0x10049405~ · 메테오 0x1004a9ca~ · 프로즌 아이스 0x1004c2a2~).
+    // 땅불(0x1007b970)은 사는 동안 Obs 23 r 을 되풀이하고(장마다 1/50 로 불티 54/64 m0, 0x1007bc3c), 끝나면(꺼져도) 사슬이 잇는다:
+    // 23 r+3(0x1007ca20, 한 번 — 자식 93 연기) → 96 r(한 번) → 재 96 r+3(0x1007beb0, 공격 9998 — 같은 바탕의 시간 틱 hold rand%10+10. vt+0x54 가 바탕의 끝 검사 0x1007b940 뿐이라 알림을 안 보내고,
+    // vt+0x48 0x1007c160 은 땅불처럼 10 · 11 · 14 · 1000 · 2000 에 꺼진다) → 96 r+6(한 번).
+    // 얼음 덩이(0x1007c1b0)는 Obs 118 r+3 되풀이 → 끝나면 r+6 녹기. 덩이의 떨림(0x1007c3a0, ±1 px)은 안 옮겼다.
+    // (2026-10-26 전까지는 땅불 그림을 기술이 제 시각표 안에서 짧게 그려, 기술이 끝나자마자 불이 안 보였다 — 사용자 보고 「필드류 마법 … 바로 사라지고 있습니다」.)
+
+    /// <summary>재 — 땅불이 다 타고 남는 96 r+3(<c>0x1007beb0</c>, 공격 9998). 알림을 안 보내고(vt+0x54 = <c>0x1007b940</c>), 남의 10 · 11 · 14 에 꺼진다(vt+0x48 <c>0x1007c160</c>).</summary>
+    private const int AshNotice = 0;
 
     private sealed class Lingering(int col, int row, int start, int end, int notice, int motion)
     {
@@ -799,10 +807,23 @@ internal sealed class Part1MapObjects(GameWindow host)
     private readonly List<Lingering> _lingering = [];
     private readonly List<Lingering> _melting = [];
 
-    private static string LingerName(Lingering l) => $"{(l.Notice == 10 ? "땅불" : "얼음")} ({l.Col},{l.Row})";
+    /// <summary>땅불이 튀기는 불티(<c>0x10079200</c> 솟는 이동기 — 끝 24, 빠르기 rand%7+7, ×0.9).</summary>
+    private readonly record struct Ember(int Obs, double Start, double X, double Y, double Z, int Speed);
 
-    /// <summary>칸에 불을 놓는다 — 놓자마자 한 번 알림 10(<c>0x1007bc39</c>).</summary>
-    internal void AddFire(int col, int row, int life) => Linger(col, row, life, 10, -1);
+    private readonly List<Ember> _embers = [];
+    private long _emberTick = -1;
+
+    private static string LingerName(Lingering l) => $"{l.Notice switch { 10 => "땅불", 11 => "얼음", _ => "재" }} ({l.Col},{l.Row})";
+
+    /// <summary>
+    /// 칸에 불을 놓는다 — 놓자마자 한 번 알림 10(<c>0x1007bc39</c>). <paramref name="motion"/> 은 Obs 23 의 r(0~2), <paramref name="life"/> 는 시간 틱
+    /// (화이어 필드 rand%20+30 · 화이어 볼 · 메테오 rand%10+20 — <c>vt+0xfc</c>).
+    /// </summary>
+    internal void AddFire(int col, int row, int motion, int life)
+    {
+        Ensure();
+        Linger(col, row, life, 10, motion);
+    }
 
     /// <summary>프로즌 아이스가 칸에 얼음 덩이를 남긴다(<c>0x1004c339</c>) — 놓자마자 한 번 알림 11. <paramref name="motion"/> 은 Obs 118 의 r(0~2).</summary>
     internal void AddIce(int col, int row, int motion, int life)
@@ -817,7 +838,62 @@ internal sealed class Part1MapObjects(GameWindow host)
         var l = new Lingering(col, row, tick, tick + life, notice, motion) { DrawFrom = host._lastTime };
         _lingering.Add(l);
         Log($"p1temp {LingerName(l)} 놓음: 길이 {life} 시간 틱 (틱 {tick} → {tick + life})");
-        Send(null, col, row, 0, notice, default, self: true, source: l);
+        if (notice != AshNotice) Send(null, col, row, 0, notice, default, self: true, source: l);
+    }
+
+    /// <summary>
+    /// 끝 표지가 선 기운을 치운다 — 얼음은 녹는 그림(118 r+6)으로, 땅불은 사슬의 다음(23 r+3 → 96 r → 재 96 r+3)으로, 재는 96 r+6 으로.
+    /// 시간 틱(<see cref="TimeStep"/>)과 그리기마다 부른다 — 원본은 +0x14a 가 서면 다음 장에 끝나 사슬이 곧바로 잇는다(남의 알림으로 꺼질 때도).
+    /// </summary>
+    private void Retire()
+    {
+        if (!_lingering.Any(l => l.Out)) return;
+        var done = _lingering.Where(l => l.Out).ToList();
+        _lingering.RemoveAll(l => l.Out);
+        foreach (var l in done)
+        {
+            if (l.Notice == 10)
+            {
+                // 땅불 다음 — 재(0x1007beb0)는 제 나이 1 에 시간 틱을 적는다. 23 r+3 · 96 r 은 그 앞에 그려진다(DrawFrom 부터, 아래 AshIntro).
+                int tick = host.Btl._tick, life = host._rng.Next(10) + 10;
+                var ash = new Lingering(l.Col, l.Row, tick, tick + life, AshNotice, l.Motion) { DrawFrom = host._lastTime };
+                _lingering.Add(ash);
+                Log($"p1temp {LingerName(ash)} 남음: 길이 {life} 시간 틱 (틱 {tick} → {tick + life})");
+                continue;
+            }
+            l.EndedAt = Math.Max(host._lastTime, l.Notice == AshNotice ? l.DrawFrom + AshIntro(l.Motion) / TicksPerSecond : host._lastTime);
+            _melting.Add(l);
+        }
+    }
+
+    /// <summary>재의 앞 — 23 r+3 한 번 + 2 · 96 r 한 번 + 2 (사슬마다 앞 것이 끝난 뒤 2틱).</summary>
+    private int AshIntro(int motion)
+    {
+        int Len(int obs, int m) => Math.Max(1, host.UiFor(Part1Game.ObsBase + obs)?.MotionLength(m) ?? 1);
+        return Len(23, motion + 3) + 2 + Len(96, motion) + 2;
+    }
+
+    /// <summary>파트1 Obs 한 모션을 칸 자리에 그린다 — 자식 키(23 r+3 의 연기 93)까지, 섞기 키대로.</summary>
+    private void DrawCellObs(int obs, int motion, int tick, int col, int row, bool loop, double dx = 0, double dy = 0)
+    {
+        int id = Part1Game.ObsBase + obs;
+        if (host.UiFor(id) is not { } sprite) return;
+        int x = col * TileW + TileW / 2 + (int)dx, y = host.CellCenterY(col, row) + (int)dy;
+        int len = Math.Max(1, sprite.MotionLength(motion));
+        if (sprite.Clip(motion) is { Children.Count: > 0 } clip) host.Btl.DrawUnitLayers(clip, tick, x, y, false, 1, loop: loop);
+        int key = sprite.BlendAt(motion, loop ? tick % len : Math.Min(tick, len - 1));
+        host.DrawUi(id, motion, tick, x, y, BlendOf(key), loop: loop, fade: BlendFade(key));
+    }
+
+    /// <summary>재 하나를 그린다 — 앞(23 r+3 → 96 r), 그다음 96 r+3 되풀이. <paramref name="age"/> 는 땅불이 꺼진 뒤 틱.</summary>
+    private void DrawAsh(Lingering l, int age)
+    {
+        int m = l.Motion;
+        int first = Math.Max(1, host.UiFor(Part1Game.ObsBase + 23)?.MotionLength(m + 3) ?? 1), a = first + 2;
+        int b = AshIntro(m), second = b - 2;
+        if (age < first) DrawCellObs(23, m + 3, age, l.Col, l.Row, loop: false);
+        else if (age >= a && age < second) DrawCellObs(96, m, age - a, l.Col, l.Row, loop: false);
+        else if (age >= b) DrawCellObs(96, m + 3, age - b, l.Col, l.Row, loop: true);
     }
 
     /// <summary>그 칸에 타는 땅불이 있나(<c>0x1008fc20</c> — 칸의 기운 가운데 화이어 필드 78~86 · 화이어 볼 69~77 의 것).</summary>
@@ -829,53 +905,83 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>얼음 덩이를 그린다 — 물체와 함께, 유닛보다 먼저(덩이는 칸 바닥 높이, 유닛은 그 위 +19 라 원본 깊이로도 유닛이 앞이다).</summary>
     private void DrawLingering()
     {
-        int id = Part1Game.ObsBase + 118;
-        if (host.UiFor(id) is not { } sprite) return;
+        Retire();
+        double now = host._lastTime;
         foreach (var l in _lingering)
         {
-            if (l.Notice != 11) continue;
-            int tick = (int)((host._lastTime - l.DrawFrom) * TicksPerSecond);
-            int key = sprite.BlendAt(l.Motion + 3, tick % Math.Max(1, sprite.MotionLength(l.Motion + 3)));
-            host.DrawUi(id, l.Motion + 3, tick, l.Col * TileW + TileW / 2, host.CellCenterY(l.Col, l.Row), BlendOf(key), loop: true, fade: BlendFade(key));
+            int tick = (int)((now - l.DrawFrom) * TicksPerSecond);
+            switch (l.Notice)
+            {
+                case 11: DrawCellObs(118, l.Motion + 3, tick, l.Col, l.Row, loop: true); break;
+                case 10: DrawCellObs(23, l.Motion, tick, l.Col, l.Row, loop: true); break;
+                default: DrawAsh(l, tick); break;
+            }
         }
         _melting.RemoveAll(l =>
         {
-            int age = (int)((host._lastTime - l.EndedAt) * TicksPerSecond);
-            if (age >= Math.Max(1, sprite.MotionLength(l.Motion + 6))) return true;
-            int key = sprite.BlendAt(l.Motion + 6, age);
-            host.DrawUi(id, l.Motion + 6, age, l.Col * TileW + TileW / 2, host.CellCenterY(l.Col, l.Row), BlendOf(key), loop: false, fade: BlendFade(key));
+            if (l.Notice == AshNotice && now < l.EndedAt) { DrawAsh(l, (int)((now - l.DrawFrom) * TicksPerSecond)); return false; }
+            int obs = l.Notice == 11 ? 118 : 96, age = (int)((now - l.EndedAt) * TicksPerSecond);
+            if (age >= Math.Max(1, host.UiFor(Part1Game.ObsBase + obs)?.MotionLength(l.Motion + 6) ?? 1)) return true;
+            DrawCellObs(obs, l.Motion + 6, age, l.Col, l.Row, loop: false);
+            return false;
+        });
+        DrawEmbers(now);
+    }
+
+    /// <summary>
+    /// 땅불의 불티 — 타는 동안 장마다 1/50 로(<c>0x1007bc3c</c>) Obs 54 또는 64 m0 이 칸 ±rand%20 · 높이 +rand%20 에서 솟는다
+    /// (<c>0x10079200</c>, <c>vt+0x114(24, rand%7+7, ×0.9, 1)</c> — 24틱, 틱마다 높이 += 빠르기, 빠르기 ×0.9 · 1 아래로는 안).
+    /// </summary>
+    private void DrawEmbers(double now)
+    {
+        long tickNow = (long)(now * TicksPerSecond);
+        if (_emberTick < 0 || tickNow - _emberTick > 30) _emberTick = tickNow;
+        var rng = host.Btl._fxRandom;
+        for (; _emberTick < tickNow; _emberTick++)
+            foreach (var l in _lingering)
+                if (l is { Notice: 10, Out: false } && rng.Next(50) == 0)
+                {
+                    double x = l.Col * TileW + TileW / 2 + (rng.Next(2) == 0 ? -1 : 1) * rng.Next(20);
+                    double y = host.CellCenterY(l.Col, l.Row) + (rng.Next(2) == 0 ? -1 : 1) * rng.Next(20) * 0.8;
+                    _embers.Add(new(rng.Next(2) == 0 ? 54 : 64, (_emberTick + 1) / TicksPerSecond, x, y, rng.Next(20), rng.Next(7) + 7));
+                }
+        _embers.RemoveAll(e =>
+        {
+            int age = (int)((now - e.Start) * TicksPerSecond);
+            if (age >= 24) return true;
+            double z = e.Z, speed = e.Speed;
+            for (int k = 0; k < age; k++) { z += speed; speed = Math.Clamp(speed * 0.9, 1, 40); }
+            int id = Part1Game.ObsBase + e.Obs;
+            if (host.UiFor(id) is not { } sprite) return true;
+            int key = sprite.BlendAt(0, age % Math.Max(1, sprite.MotionLength(0)));
+            host.DrawUi(id, 0, age, (int)e.X, (int)(e.Y - z * 0.6), BlendOf(key), loop: true, fade: BlendFade(key));
             return false;
         });
     }
 
     /// <summary>
     /// 맞는 기술이 맵 칸도 칠 때(<c>Attack +0x41</c> = 1, <c>0x10076c46</c>) — 범위의 물체에 알림 1 과 공격 서술을 보낸다. 부르는 곳은 파트1 기술이 끝난 뒤(BattleScene.UseWorkRoutine).
-    /// 원본은 핸들러마다 타격 사건의 칸이 다르다: 화이어 볼(69~77)은 공마다 한 칸(대상이 있으면 대상의 칸, 없으면 범위 안 아무 칸 + 땅불), 화이어 필드(78~86)는 타격이 없고 칸마다 불,
-    /// 프로즌 아이스(115~123)는 타격이 없다(얼음 덩이는 기술이 <see cref="AddIce"/> 로 넘긴다), 그 밖(검기 · 총 · 메테오 …)은 리메이크가 범위 칸 전체로 본다 [H: 핸들러별 타격 칸은 안 옮겼다].
+    /// 원본은 핸들러마다 타격 사건의 칸이 다르다: 화이어 볼(69~77)은 공마다 한 칸(대상이 있으면 대상의 칸, 없으면 범위 안 아무 칸 — 그 땅불은 기술이 <see cref="AddFire"/> 로 넘긴다),
+    /// 화이어 필드(78~86) · 프로즌 아이스(115~123)는 타격이 없다(땅불 · 얼음 덩이는 기술이 <see cref="AddFire"/> · <see cref="AddIce"/> 로 넘긴다), 그 밖(검기 · 총 · 메테오 …)은 리메이크가 범위 칸 전체로 본다 [H: 핸들러별 타격 칸은 안 옮겼다].
     /// </summary>
     internal void HitByAttack(UnitState a, Part1Attack attack, IReadOnlyList<(int Col, int Row)> cells, IReadOnlyList<int> targets)
     {
         Ensure();
-        if (attack.Id is >= 115 and <= 123) return;
-        if (cells.Count == 0 || _objects.Count == 0 && attack.Id is not (>= 69 and <= 86)) return;
+        // 화이어 필드 · 프로즌 아이스는 타격이 없다 — 땅불 · 얼음 덩이는 기술이 칸에 닿는 틱에 넘긴다(AddFire · AddIce).
+        if (attack.Id is (>= 78 and <= 86) or (>= 115 and <= 123)) return;
+        if (cells.Count == 0 || _objects.Count == 0) return;
         var rules = host.Btl.Part1;
         var fa = rules.Fighter(a);
         int power = fa is null ? 0 : Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd;
         int element = attack.Element > 0 ? attack.Element : rules.Enchant.GetValueOrDefault(a) is > 0 and var e ? e : fa?.Weapon1?.Element ?? 0;
         var hit = new Hit(power, element);
         Log($"p1heat 기술 {attack.Id} {attack.Name} by {a.ChrCode}: 세기 {power} 속성 {element} 범위 {cells.Count} 칸 대상 {targets.Count}");
-        if (attack.Id is >= 78 and <= 86)
-        {
-            foreach (var (c, r) in cells) AddFire(c, r, 30 + host._rng.Next(20));
-            return;
-        }
         if (attack.Id is >= 69 and <= 77)
         {
             for (int k = 0; k < Math.Max(1, attack.Hits); k++)
             {
                 var (c, r) = targets.Count > 0 && host._units[targets[host._rng.Next(targets.Count)]] is var t ? (t.Col, t.Row) : cells[host._rng.Next(cells.Count)];
-                Send(null, c, r, 0, 1, hit, self: true);
-                if (targets.Count == 0) AddFire(c, r, 20 + host._rng.Next(10));
+                Send(null, c, r, 0, 1, hit, self: true);   // 빈 땅에 떨어진 공의 땅불은 기술이 놓는다(Part1Skill.FireBall)
             }
             return;
         }
@@ -911,11 +1017,9 @@ internal sealed class Part1MapObjects(GameWindow host)
                 l.Out = true;
                 Log($"p1temp {LingerName(l)} 다 탐/녹음 (틱 {tick}, 놓은 틱 {l.Start})");
             }
-            Send(null, l.Col, l.Row, 0, l.Notice, default, self: true, source: l);
+            if (l.Notice != AshNotice) Send(null, l.Col, l.Row, 0, l.Notice, default, self: true, source: l);
         }
-        foreach (var l in _lingering.Where(l => l.Out))
-            if (l.Notice == 11) { l.EndedAt = host._lastTime; _melting.Add(l); }
-        _lingering.RemoveAll(l => l.Out);
+        Retire();
     }
 
     // ── 유닛 온도(+0x4a) ─────────────────────────────────────────────────────────────────────────────────
@@ -1290,8 +1394,8 @@ internal sealed class Part1MapObjects(GameWindow host)
     private const int LingerFields = 6;
 
     /// <summary>
-    /// 칸의 기운(땅불 · 얼음 덩이) — 기운마다 (열, 줄, 알림 10 · 11, 모션 r, 놓은 지 몇 시간 틱, 남은 시간 틱). 끝 표지가 선 것은 뺀다.
-    /// 원본은 맵 층 저장이 기술 번호 78~86(화이어 필드) · 115~123(프로즌 아이스) · 9998(화이어 볼의 땅불)의 기운을 싣고 읽는다
+    /// 칸의 기운(땅불 · 얼음 덩이 · 재) — 기운마다 (열, 줄, 알림 10 · 11 · 재 0, 모션 r, 놓은 지 몇 시간 틱, 남은 시간 틱). 끝 표지가 선 것은 뺀다.
+    /// 원본은 맵 층 저장이 기술 번호 78~86(화이어 필드 · 화이어 볼 · 메테오의 땅불) · 115~123(프로즌 아이스) · 9998(땅불이 남긴 재 96 r+3)의 기운을 싣고 읽는다
     /// (<c>0x100901c0</c> → <c>0x1007b9e0</c> · <c>0x1007c260</c> · <c>0x1007bf20</c>, 바탕 <c>0x1007b7d0</c>: 놓은 틱 +0x140 · 길이 +0x144).
     /// </summary>
     internal int[]? SaveLingering()
@@ -1311,9 +1415,11 @@ internal sealed class Part1MapObjects(GameWindow host)
         if (saved == null || saved.Length % LingerFields != 0) return;
         for (int at = 0; at < saved.Length; at += LingerFields)
         {
-            int notice = saved[at + 2];
-            if (notice is not (10 or 11)) continue;
-            var l = new Lingering(saved[at], saved[at + 1], tick - saved[at + 4], tick + saved[at + 5], notice, saved[at + 3]) { DrawFrom = host._lastTime };
+            int notice = saved[at + 2], motion = saved[at + 3];
+            if (notice is not (10 or 11 or AshNotice)) continue;
+            if (motion is < 0 or > 2) motion = host._rng.Next(3);   // 2026-10-26 앞 세이브의 땅불은 모션이 없었다(−1)
+            var l = new Lingering(saved[at], saved[at + 1], tick - saved[at + 4], tick + saved[at + 5], notice, motion) { DrawFrom = host._lastTime };
+            if (notice == AshNotice) l.DrawFrom -= AshIntro(motion) / TicksPerSecond;   // 재는 앞(23 r+3 → 96 r)을 다시 안 그린다
             _lingering.Add(l);
             Log($"p1temp {LingerName(l)} 불러옴: 놓은 틱 {l.Start} · 끝 틱 {l.End} (지금 {tick})");
         }

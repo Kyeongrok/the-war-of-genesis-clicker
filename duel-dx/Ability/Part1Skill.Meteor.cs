@@ -7,7 +7,7 @@ using static DuelDx.GameWindow;
 /// </summary>
 /// <remarks>
 /// <para>보이는 판의 아무 칸 35곳에 15틱 간격(+0~9)으로 운석(115:0 큰 것 1/3 · 115:3 작은 것 2/3)이 왼위에서 날아와 떨어진다 — 발사 소리 60/61,
-/// 떨어지면 소리 62(작은 것 63·64), 폭발 123:5, 파편 228 둘, 충격 124:0·18(큰 것) 또는 116:0(작은 것), 반쯤은 땅불(23 → 96)이 탄다.
+/// 떨어지면 소리 62(작은 것 63·64), 폭발 123:5, 파편 228 둘, 충격 124:0·18(큰 것) 또는 116:0(작은 것), 반쯤은 땅불(23 r — 판의 기운, 시간 틱 동안 남는다)이 탄다.
 /// 폭발 1틱 뒤 그 칸에서 맨해튼 3칸(큰 것) · 4칸(작은 것) 안의 적을 한 번씩 친다. 판 밖의 대상은 바로(원본은 판 밖 칸마다 보이지 않는 운석을 떨어뜨린다).</para>
 /// <para>원본과 다르게 한 것: 꼬리 입자(틱마다 34/64 둘)는 3틱마다 하나로 줄였다. 운석이 날아오는 길은 곧은 이동기(빠르기 1, ×(5~8), 최대 40)로 셈한다.</para>
 /// </remarks>
@@ -52,19 +52,13 @@ internal sealed partial class Part1Skill
             if (small) Put(116, 0, impact + 2, px, py);
             else { Put(124, 0, impact + 2, px, py); Put(124, 18, impact + 2, px, py); }
             int end = impact + 2 + Math.Max(Length(123, 5), Length(small ? 116 : 124, 0));
+            // 반쯤 땅불(0x1007b970, 공격 0x4e = 화이어 필드의 것, vt+0xfc(rand%10+20), 0x1004a9ca~) — 판의 기운으로 넘겨 시간 틱 동안 타고 23 r+3 → 96 r → 재로 사그라진다(Part1MapObjects).
+            // 원본은 칸을 걸을 수 있고 운석이 땅에 닿았을 때만 붙인다 — 그 거르기는 안 옮겼다 [H].
             if (Rand(2) == 1)
             {
-                int r = Rand(3), f1 = impact + 2, hold = Rand(10) + 20;
-                Put(23, r, f1, px, py, life: hold);
-                int f2 = f1 + hold + 2;
-                Put(23, r + 3, f2, px, py);
-                int f3 = f2 + Length(23, r + 3) + 2;
-                Put(96, r, f3, px, py);
-                int f4 = f3 + Length(96, r) + 2, hold4 = Rand(10) + 10;
-                Put(96, r + 3, f4, px, py, life: hold4);
-                int f5 = f4 + hold4 + 2;
-                Put(96, r + 6, f5, px, py);
-                end = Math.Max(end, f5 + Length(96, r + 6));
+                int r = Rand(3), f1 = impact + 2, hold = Rand(10) + 20, fc = col, fr = row;
+                Later(f1, () => host.Btl.Part1Objects.AddFire(fc, fr, r, hold));
+                end = Math.Max(end, f1 + 2);
             }
             // 폭발 1틱 뒤 — 맨해튼 3(큰 것, 원본 값 12) · 4(작은 것, 16) 칸 안의 적을 한 번씩.
             int reach = small ? 4 : 3;

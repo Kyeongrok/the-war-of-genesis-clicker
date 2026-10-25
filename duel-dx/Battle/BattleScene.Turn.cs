@@ -1436,7 +1436,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
                 Part1.SplitHits = false;
-                // 맵 칸도 치는 기술(Attack +0x41 = 1) — 범위의 맵 물체에 알림 1 · 공격 서술(0x10076c46), 화이어 필드는 칸마다 불(Part1MapObjects.HitByAttack).
+                // 맵 칸도 치는 기술(Attack +0x41 = 1) — 범위의 맵 물체에 알림 1 · 공격 서술(0x10076c46)(Part1MapObjects.HitByAttack). 땅불 · 얼음 덩이는 기술이 닿는 틱에 놓는다.
                 // 통이 부서지며 터지는 키 6(틱 4) · 불붙는 동작이 끝날 때까지 기다렸다가 그 사이 쓰러진 유닛을 함께 치운다.
                 if (host._scene.IsPart1 && Part1.AttackOf(w) is { HitsTiles: true } tileAttack)
                 {

@@ -216,7 +216,7 @@ internal sealed partial class Part1Skill
     }
 
     /// <summary>화이어 볼이 쓰는 파트1 그림(땅불 23 · 96 과 그 자식 93 까지).</summary>
-    private static readonly int[] FireBallNeeds = [64, 55, 33, 17, 48, 10, 34, 38, 23, 96, 93];
+    private static readonly int[] FireBallNeeds = [64, 55, 33, 17, 48, 10, 34, 38, 54, 23, 96, 93];
 
     /// <summary>
     /// 화이어 볼(공격 69~77, 핸들러 <c>0x10048970</c> — 퓨리 오브 화이어 77 · 묵호파 76 도) — 시전자 둘레 반지름 50(76 · 77 은 80)의 원을 공 수(Attack +0x66: 3~7 · 1 · 1 · 30 · 20)로
@@ -257,37 +257,30 @@ internal sealed partial class Part1Skill
             Put(48, 1, impact + 2, t.X, t.Y);
             if (victim >= 0 && hitDone.Add(victim)) HitAt(impact + 3, victim, hit);
             last = Math.Max(last, FireBurst(impact + 2, t, s));
-            // 빈 땅 — 땅불이 붙었다가 사그라진다(23 r → 23 r+3 → 96 r → 96 r+3 → 96 r+6, 메테오와 같은 사슬).
+            // 빈 땅 — 땅불(0x1007b970, 공격 78, vt+0xfc(rand%10+20), 0x10049405~)을 판의 기운으로 넘긴다. 시간 틱 동안 타고 23 r+3 → 96 r → 재로 사그라진다(Part1MapObjects).
             if (victim < 0)
             {
                 int m = Rand(3), f1 = impact + 2, hold = Rand(10) + 20;
-                Put(23, m, f1, t.X, t.Y, life: hold);
-                int f2 = f1 + hold + 2;
-                Put(23, m + 3, f2, t.X, t.Y);
-                int f3 = f2 + Length(23, m + 3) + 2;
-                Put(96, m, f3, t.X, t.Y);
-                int f4 = f3 + Length(96, m) + 2, hold4 = Rand(10) + 10;
-                Put(96, m + 3, f4, t.X, t.Y, life: hold4);
-                int f5 = f4 + hold4 + 2;
-                Put(96, m + 6, f5, t.X, t.Y);
-                last = Math.Max(last, f5 + Length(96, m + 6));
+                int col = Math.Clamp((int)(t.X / TileW), 0, host.Cols - 1), row = Math.Clamp(host.RowAt((int)t.X, (int)t.Y), 0, host.Rows - 1);
+                Later(f1, () => host.Btl.Part1Objects.AddFire(col, row, m, hold));
+                last = Math.Max(last, f1 + 2);
             }
         }
         return last + 1;
     }
 
     /// <summary>화이어 필드가 쓰는 파트1 그림.</summary>
-    private static readonly int[] FireFieldNeeds = [34, 55, 20, 83, 48, 10, 64, 23, 96, 93];
+    private static readonly int[] FireFieldNeeds = [34, 55, 20, 83, 48, 10, 64, 54, 23, 96, 93];
 
     /// <summary>
     /// 화이어 필드(공격 78~86, 핸들러 <c>0x10049760</c>) — 겨눈 칸 A 위 높이 500(화면 300px)의 점 P 로 불티 34 예순이 모여들고(소리 3), P 에 기운 55:0(89틱),
     /// 30틱에 불꽃 20:0(28틱), 44 · 47틱에 83:0 둘(하나는 뒤집어). 20:0 이 지면 불덩이 20:1(소리 4)이 P 에서 A 로 빠르기 1 × 1.2 로 떨어지고,
-    /// 닿으면 터짐 48:1 · 불기둥 10:1 · 소리 1. 그때 범위의 칸마다 땅을 기는 불티 64:2 가 A 에서 그 칸으로 가고(빠르기 1 × 1.1), 닿은 칸에 땅불(23 → 96)이 탄다.
+    /// 닿으면 터짐 48:1 · 불기둥 10:1 · 소리 1. 그때 범위의 칸마다 땅을 기는 불티 64:2 가 A 에서 그 칸으로 가고(빠르기 1 × 1.1), 닿은 칸에 땅불(23 r)이 붙는다 — 땅불은 판의 기운(Part1MapObjects.AddFire)이라 기술이 끝나도 시간 틱 동안 남는다.
     /// </summary>
     /// <remarks>원본은 <b>피해를 주지 않는다</b> — 핸들러(<c>0x10049760</c>)에 피해 서술(<c>0x1003f3c0</c>) · 타격 사건(<c>0x100768f0</c> · <c>0x10076950</c> ·
     /// <c>0x100769b0</c> · <c>0x10076a10</c>) · 바로 치기(<c>0x1009d440(…, 1, …)</c>)가 없고, 땅불(<c>0x1007b970</c>)은 붙는 틱(나이 1)과 차례 수가 돌 때마다
     /// 그 칸의 유닛 · 물체에 메시지 10(열, <c>0x1007bd90</c>)만 보낸다. 유닛 메시지 10 은 +0x4a(온도)를 올린다(<c>0x10035537</c>) — 160 을 넘으면
-    /// 그 유닛이 시간 틱마다 식 9 불 피해를 받는다(Part1MapObjects 유닛 온도). 그래서 <c>hit</c> 를 부르지 않는다. 땅불은 기술이 끝난 뒤 Part1MapObjects.HitByAttack 이 놓는다. 원본의 땅불은 판에 남아 차례 수(+0x144 = 30~49)만큼 탄다 — 여기서는 메테오처럼 틱으로 짧게 태운다.</remarks>
+    /// 그 유닛이 시간 틱마다 식 9 불 피해를 받는다(Part1MapObjects 유닛 온도). 그래서 <c>hit</c> 를 부르지 않는다. 땅불은 판에 남아 시간 틱(+0x144 = 30~49)만큼 탄다 — 불티가 칸에 닿는 틱에 Part1MapObjects.AddFire 로 넘긴다(그림도 거기서).</remarks>
     private int FireField(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         var a = aim;
@@ -311,18 +304,10 @@ internal sealed partial class Part1Skill
             var c = CellFoot(col, row);
             var walk = Move(a, c, 1, 1.1);
             Along(64, 2, impact + 2, AsPath(walk.Prepend(a).ToList(), 2), life: walk.Count);
+            // 닿은 칸에 땅불(0x1007b970, Obs 23 r, vt+0xfc(rand%20+30)) — 판의 기운으로 넘겨 시간 틱 동안 타며 그려지고, 다 타면 23 r+3 → 96 r → 재(Part1MapObjects).
             int f1 = impact + 2 + walk.Count + 2, m = Rand(3), hold = Rand(20) + 30;
-            Put(23, m, f1, c.X, c.Y, life: hold);
-            if (Rand(2) == 0) Rise(Rand(2) == 0 ? 54 : 64, 0, f1 + Rand(hold), c.X + Rand(41) - 20, c.Y + (Rand(41) - 20) * 0.8, Rand(7) + 7, 0.9, life: 24);
-            int f2 = f1 + hold + 2;
-            Put(23, m + 3, f2, c.X, c.Y);
-            int f3 = f2 + Length(23, m + 3) + 2;
-            Put(96, m, f3, c.X, c.Y);
-            int f4 = f3 + Length(96, m) + 2, hold4 = Rand(10) + 10;
-            Put(96, m + 3, f4, c.X, c.Y, life: hold4);
-            int f5 = f4 + hold4 + 2;
-            Put(96, m + 6, f5, c.X, c.Y);
-            last = Math.Max(last, f5 + Length(96, m + 6));
+            Later(f1, () => host.Btl.Part1Objects.AddFire(col, row, m, hold));
+            last = Math.Max(last, f1 + 2);
         }
         return last + 1;
     }

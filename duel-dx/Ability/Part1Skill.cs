@@ -364,7 +364,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => [124, 10, 832, 228, 38],
             AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
             ThunderWork => [75, 379, 71, 277, 77],
-            MeteorWork => [115, 34, 64, 123, 228, 124, 116, 23, 96, 93],
+            MeteorWork => [115, 34, 64, 54, 123, 228, 124, 116, 23, 96, 93],
             _ when IsLightning(work) => [56, 35, 65, 76, 75, 379, 71, 277, 41, 77],
             FlyingSlashWork => [503, 504, 230],
             StormSwordWork => [959, 75, 72, 379, 76, 67],
