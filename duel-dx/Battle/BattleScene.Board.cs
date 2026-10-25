@@ -317,6 +317,15 @@ internal sealed unsafe partial class BattleScene
         int target = parts.Length > 1 && parts[1] == "ally"
             ? Array.IndexOf(host._units, host._units.Where(u => u.Alive && u.OnField && u.IsAlly && u != a).OrderByDescending(u => Math.Abs(u.Col - a.Col) + Math.Abs(u.Row - a.Row)).FirstOrDefault())
             : Array.FindIndex(host._units, u => u.Alive && u.OnField && !u.IsAlly);
+        // 「<work>:<열>,<줄>[:<설 열>,<설 줄>]」 — 그 칸을 대상 번호 없이 겨눈다(맵 물체 · 빈 칸에 쏘는 시험, 사거리는 안 본다). 셋째 칸이 있으면 시전자를 먼저 그 칸에 세운다.
+        if (parts.Length > 1 && parts[1].Split(',') is [var ac, var ar] && int.TryParse(ac, out int aimCol) && int.TryParse(ar, out int aimRow))
+        {
+            if (parts.Length > 2 && parts[2].Split(',') is [var sc, var sr] && int.TryParse(sc, out int standCol) && int.TryParse(sr, out int standRow))
+                a.WarpTo(standCol, standRow);
+            CenterOnCell(aimCol, aimRow);
+            _routine = UseWorkRoutine(caster, w, -1, aimCol, aimRow, []);
+            return;
+        }
         // 자기 중심 기술은 게임처럼 대상 없이(−1) 제 칸에 쓴다(UseSelfCentredWork).
         if (w.SelfCentred) { _routine = UseWorkRoutine(caster, w, -1, a.Col, a.Row, []); return; }
         // 빈 칸을 겨누는 기술(방식 7 — 혼·오메가 스윙)은 그 적 너머의 빈 칸을 겨눈다(돌진 시험).

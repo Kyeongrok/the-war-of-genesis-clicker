@@ -335,6 +335,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 if (_outcome.Length > 0 || EventsBusy) return;
                 continue;
             }
+            // 파트1 — 불붙는 · 부서지는 동작이 도는 맵 물체가 있으면 시간 틱을 올리지 않는다(+0xc9b8, 0x10030075).
+            if (host._scene.IsPart1 && _part1Objects?.Busy == true) return;
             AdvanceTick();
             for (int g = 0; g < 8 && _events.Count > 0 && _eventCheckDue != 0 && !EventsBusy && _outcome.Length == 0; g++) RunEvents();
             if (_outcome.Length > 0 || EventsBusy) return;   // 틱 사건이 다 돈 뒤에 유닛을 고른다(GETNEXT 0x10067d36~0x10067d64, ba-20 V3)
@@ -443,8 +445,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (u.Tp > u.MaxTp) u.Tp = u.MaxTp;
             ReleaseFreeze(u);
         }
-        // 파트1 — 유닛 틱(0x1001c400) 다음에 판의 물체에 vt+0x54 를 돌린다(0x10030097): 에너지 필드의 기운이 제 칸의 기계를 굴린다.
-        if (part1) _part1Fields?.Step();
+        // 파트1 — 유닛 틱(0x1001c400) 다음에 판의 물체에 vt+0x54 를 돌린다(0x10030097): 유닛 · 맵 물체 온도가 기온 쪽으로 가고 타는 물체 · 칸의 불이
+        // 곁을 덥히며(Part1MapObjects.TimeStep), 에너지 필드의 기운이 제 칸의 기계를 굴린다.
+        if (part1)
+        {
+            _part1Objects?.TimeStep();
+            _part1Fields?.Step();
+        }
         foreach (var u in host._units.Where(u => u.Alive))
         {
             // 깃발은 <b>차례를 받을 수 있을 때만</b> 선다(0x1006e940(u,4) = 0x1007c480: 마비·빙결이면 거짓) — TP 가 정확히 최대일 때(0x100743f2 sete).
@@ -1413,6 +1420,15 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
                 Part1.SplitHits = false;
+                // 맵 칸도 치는 기술(Attack +0x41 = 1) — 범위의 맵 물체에 알림 1 · 공격 서술(0x10076c46), 화이어 필드는 칸마다 불(Part1MapObjects.HitByAttack).
+                // 통이 부서지며 터지는 키 6(틱 4) · 불붙는 동작이 끝날 때까지 기다렸다가 그 사이 쓰러진 유닛을 함께 치운다.
+                if (host._scene.IsPart1 && Part1.AttackOf(w) is { HitsTiles: true } tileAttack)
+                {
+                    Part1Objects.HitByAttack(a, tileAttack, [.. cells], targets);
+                    for (double until = host._lastTime + 3; Part1Objects.Busy && host._lastTime < until;) yield return true;
+                    foreach (var d in host._units)
+                        if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
+                }
                 // 겨누기 +0x31 = 7 인 파트1 기술(혼 · 혈랑마혼 · 비연참 · 댓쉬 · 워프) — 시전자가 겨눈 칸으로 옮겨 선다. 이동기 0x100816d0 이 끝날 때
                 // (소멸자 0x10081750) 시전자를 그 칸 가운데에 맞추고(×40 + 20) 판 자리에 다시 올린다(0x10037080). 워프는 유닛 맞춤 0x10081350.
                 // 칸이 차 있으면 제자리. 걸은 비용을 다시 세지 않게 시작 자리도 옮긴다(파트2 돌진 DashRoutine 과 같이).

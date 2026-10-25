@@ -39,10 +39,26 @@ public sealed record Part1MapObjectReaction(int Message, int Action, short[] Arg
 /// 동작표(장 넘기기 차례)가 장을 고른다. 칸 격자는 판에 찍는 발자국이다 — 그림이 없는 Obt 0260(1×1, 지형 1)·0270(10×1)·0262(5×3, 높이 20) 은
 /// <b>보이지 않는 벽</b>이다. 물체마다 그림자(Obs 0355 둥근 · 0356 비스듬한)를 동작 키 종류 2 로 자식처럼 붙인다.
 /// </remarks>
-/// <param name="Properties">동작표 뒤 32바이트(낱말 8, 가상 +0x60 → Obt <c>+0x18</c>). 칸 6(<c>+0x18</c>) ≠ 0 이면 타는 동작(20~22 · 26~34) 동안 곁의 유닛을 다치게 한다
-/// (<c>0x10097b04</c>) — 나무 233 만 1. 칸 0~2 는 [H: 불붙는 온도 · 열 받는 정도] (통 80·128·80, 상자 150·10·10, 문 120 30000·100·100). 리메이크는 아직 안 쓴다.</param>
+/// <param name="Properties">동작표 뒤 32바이트(낱말 8, 가상 +0x60 이 이 자리를 준다). 칸 0 <b>내구</b>(반응 0 · 1 이 피해만큼 깎는다) · 1 <b>터질 때 세기</b>(키 6 알림 1 의 서술 +8 = 칸 1², <c>0x1009ab20</c>) ·
+/// 2 <b>방어</b>(피해 = 공격 세기 ÷ 칸 2, <c>0x1009ab70</c>) · 3 터질 때 속성 · 6 <b>탄다</b>(≠ 0 이면 160 넘게 달아 타는 동작으로, 타는 동안 곁에 알림 10, <c>0x10097b04</c>) —
+/// 통 245 80·128·80 · 나무 상자 150·10·10 · 나무 0261 80·50·50·…·1 · 문 120 30000·100·100.</param>
 public sealed record Part1MapObject(int Id, IReadOnlyList<Part1MapObjectFrame> Frames, IReadOnlyList<Part1MapObjectMotion?> Motions, int[] Properties)
 {
+    /// <summary>성질 칸 0 — 내구. 반응 0 · 1 이 피해만큼 깎아 0 이하면 부서진다(<c>0x1009a483</c>).</summary>
+    public int Durability => Properties[0];
+
+    /// <summary>성질 칸 1 — 물체가 키 6 으로 알림 1 을 보낼 때(통이 터질 때)의 세기 바탕: 서술 +8 = 칸 1², 세기 식 7(<c>0x1009ab20</c>).</summary>
+    public int BlastPower => Properties[1] * Properties[1];
+
+    /// <summary>성질 칸 2 — 방어. 맞은 피해 = 공격 서술 +8 ÷ 이 값(0 이면 나누지 않는다, <c>0x1009ab70</c>).</summary>
+    public int Defense => Properties[2];
+
+    /// <summary>성질 칸 3 — 키 6 알림 1 의 속성(서술 +3).</summary>
+    public int BlastElement => Properties[3];
+
+    /// <summary>성질 칸 6 — 탄다. 온도가 160 을 넘으면 타는 동작으로 바뀌고, 타는 동안 시간 틱마다 곁에 알림 10 을 보낸다(<c>0x1009a3b0</c> · <c>0x10097b04</c>).</summary>
+    public bool Burns => Properties[6] != 0;
+
     /// <summary>알림 반응표(<see cref="Part1MapObjectReaction"/>) — 성질 뒤에 없으면 빈 목록.</summary>
     public IReadOnlyList<Part1MapObjectReaction> Reactions { get; init; } = [];
 
