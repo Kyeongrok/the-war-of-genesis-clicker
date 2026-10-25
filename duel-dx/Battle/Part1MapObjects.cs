@@ -77,6 +77,18 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>열린 상자 수 — 닿는 칸 칠하기(<see cref="BattleScene"/> 이동 영역)가 다시 셀 때를 안다.</summary>
     internal int OpenedChests { get { Ensure(); return _objects.Count(o => o is { Chest: not null } && Opened(o)); } }
 
+    /// <summary>상자 목록(모드 &gt; 상자 내용물 보기) — 상자마다 몸 칸 · 든 것 · 잠김 · 열었나.</summary>
+    internal IEnumerable<(int Col, int Row, int Item, int Gold, bool Locked, bool Opened)> Chests()
+    {
+        Ensure();
+        foreach (var o in _objects)
+            if (o is { Chest: { } c })
+            {
+                var (col, row) = BodyCells(o)[0];
+                yield return (col, row, c.Item, c.Gold, c.Locked, Opened(o));
+            }
+    }
+
     private static bool Opened(Obj o) => o.Motion is Part1MapObject.OpenMotion or Part1MapObject.OpenedMotion;
 
     /// <summary>상자의 몸 — 찍힌 장에서 걷기 금지(지형 비트 1) 칸. 상자 324 · 147 은 1×3 의 가운데 칸.</summary>

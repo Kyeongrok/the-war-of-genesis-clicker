@@ -994,20 +994,23 @@ internal sealed unsafe partial class BattleScene
     {
         _chestFoldButton = null;
         if (!host._showChestContents || !host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen || host.TitleScr._titleOpen || host.EpisodesScr._episodesOpen || host._db is not { } db) return;
-        var chests = Objects.Where(o => o.Data.Kind is 2 or 8).OrderBy(o => _opened.Contains(o)).ThenBy(o => o.Row).ThenBy(o => o.Col).ToList();
+        // 파트1 판은 절 A 의 Obt 상자(Part1MapObjects) — 파트2 물체 목록은 비어 있다(사용자 보고: 20089 에 상자가 있는데 「상자 없음」).
+        var rows = host._scene.IsPart1
+            ? Part1Objects.Chests().Select(c => (c.Col, c.Row, c.Opened,
+                What: (c.Item > 0 ? Part1Item.ById(Part1Tables.Items, c.Item)?.Name ?? $"아이템 {c.Item}" : c.Gold > 0 ? $"{c.Gold} eld" : "무작위 아이템")
+                      + (c.Locked ? " (잠김)" : ""))).ToList()
+            : Objects.Where(o => o.Data.Kind is 2 or 8).Select(o => (o.Col, o.Row, Opened: _opened.Contains(o),
+                What: o.Data.Kind == 8 ? $"폭탄 (공격 {ObjAttack(o)}, 반경 {o.Data.Radius})"
+                    : o.Record.ItemId > 0 ? (db.Items.GetValueOrDefault(o.Record.ItemId) is { } item ? db.T(item.NameId) : $"아이템 {o.Record.ItemId}")
+                    : o.Record.Gold > 0 ? $"{o.Record.Gold} GP" : "비어 있음")).ToList();
+        rows = [.. rows.OrderBy(r => r.Opened).ThenBy(r => r.Row).ThenBy(r => r.Col)];
         var lines = new List<(string Text, uint Color)>
         {
-            (chests.Count == 0 ? "상자 없음" : $"상자 {chests.Count(o => !_opened.Contains(o))}/{chests.Count}", 0xFFFFE070),
+            (rows.Count == 0 ? "상자 없음" : $"상자 {rows.Count(r => !r.Opened)}/{rows.Count}", 0xFFFFE070),
         };
-        foreach (var o in _chestListFolded ? [] : chests)
-        {
-            string what = o.Data.Kind == 8 ? $"폭탄 (공격 {ObjAttack(o)}, 반경 {o.Data.Radius})"
-                : o.Record.ItemId > 0 ? (db.Items.GetValueOrDefault(o.Record.ItemId) is { } item ? db.T(item.NameId) : $"아이템 {o.Record.ItemId}")
-                : o.Record.Gold > 0 ? $"{o.Record.Gold} GP" : "비어 있음";
-            bool opened = _opened.Contains(o);
-            lines.Add(($"({o.Col},{o.Row}) {what}{(opened ? " — 열었음" : "")}", opened ? 0xFF808080 : White));
-        }
-        int x = host._camX + 8, y = host._camY + (host._showStatusBar ? GridTop + 4 : 8);
+        foreach (var r in _chestListFolded ? [] : rows)
+            lines.Add(($"({r.Col},{r.Row}) {r.What}{(r.Opened ? " — 열었음" : "")}", r.Opened ? 0xFF808080 : White));
+        int x = host._camX + 8, y = host._camY + (host._showStatusBar ? GridTop + 4 : 8) + host.MiniMap.StackHeight;   // 미니맵이 떠 있으면 그 아래로
         // 오른쪽 위에 접기 단추(− 접기 · + 펴기) 자리를 남긴다.
         int w = Math.Max(lines.Max(l => host.UiGetText(l.Text, l.Color, 12).W) + 12, host.UiGetText(lines[0].Text, lines[0].Color, 12).W + 40), lineH = 17;
         host.UiFill(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
