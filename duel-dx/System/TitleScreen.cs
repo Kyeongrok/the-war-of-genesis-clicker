@@ -56,6 +56,9 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     {
         _titleOpen = true;
         if (host._part1TitleScr is { } part1) part1._open = false;
+        // 파트2 타이틀이면 저장 칸도 파트2 것 — 파트1 에서 진 판 · 시스템 메뉴의 타이틀로 돌아오면 파트1 칸이 켜진 채 남아
+        // 파트2 LOAD 에 파트1 세이브가 떴다(사용자 보고). 파트1 타이틀을 다시 열면(Part1TitleScreen.Open) 다시 켠다.
+        SlotsScreen.Part1Slots = false;
         _titleHover = -1;
         _titleOpenedAt = host._lastTime;
         host.Mos._mosesOpen = false;
