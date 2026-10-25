@@ -235,6 +235,7 @@ internal sealed unsafe partial class BattleScene
     internal (double X, double Y) EdgePush()
     {
         if (!EdgeScrollAllowed || _edgeBlocked) return (0, 0);
+        if (host._dragScroll is { Held: true }) return (0, 0);   // 왼쪽 단추를 판 위에서 누르고 있는 동안은 끌기만(BattleDragScroll) — 떼는 칸이 누른 칸 그대로
         const int edge = 24;
         // 마우스는 화면(보이는 영역) 자리로 본다 — 판 자리로 보면 카메라가 한 번 밀린 뒤 마우스가 띠 밖으로 나간 셈이 되어 멈췄다.
         var (mx, my) = _mouseView;

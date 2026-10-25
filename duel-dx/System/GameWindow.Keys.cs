@@ -111,6 +111,9 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 일행 한눈에(P) — 전투 · 챕터 지도 위에 뜨는 일행 표(<see cref="Part1PartyTable"/>).</summary>
     internal Part1PartyTable PartyTable => _partyTable ??= new(this);
     private Part1PartyTable? _partyTable;
+
+    /// <summary>전직 트리 · 일행 표가 떠 있나 — 그 위의 누름은 끌어서 밀기가 아니다(<see cref="BattleDragScroll"/>).</summary>
+    internal bool Part1TablesOpen => _jobTree is { _open: true } || _partyTable is { _open: true };
     internal bool _keysOpen;
     internal int _keysCapture = -1;
 

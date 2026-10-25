@@ -71,6 +71,9 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     /// <summary>파트1 챕터 지도 · 연대표 — 이 화면 위에 열려 타이틀 장면(TitleScreen 의 문)을 그대로 쓴다.</summary>
     internal Part1ChapterScreen Chapter => _chapter ??= new(host, this);
+
+    /// <summary>파트1 지도가 맨 위에 떠 있나 — 일행 · 마을 · 필드 화면이 그 위에 없을 때(끌어서 밀기가 본다).</summary>
+    internal bool ChapterOnTop => _open && _chapter is { _open: true } && _party is not { _open: true } && _town is not { _open: true } && _field is not { _open: true };
     internal Part1TimelineScreen Timeline => _timeline ??= new(host, this);
     internal Part1FieldScreen Field => _field ??= new(host, this);
     internal Part1TownScreen Town => _town ??= new(host, this);

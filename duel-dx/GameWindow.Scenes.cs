@@ -168,6 +168,9 @@ internal sealed unsafe partial class GameWindow
     internal BattleMiniMap? _miniMap;
     /// <summary>전투 화면 왼쪽 위 미니맵(접기 단추가 있다).</summary>
     internal BattleMiniMap MiniMap => _miniMap ?? LazyInitializer.EnsureInitialized(ref _miniMap, () => new BattleMiniMap(this));
+    internal BattleDragScroll? _dragScroll;
+    /// <summary>끌어서 화면 밀기(전투 판 · 파트1 지도, 왼쪽 단추).</summary>
+    internal BattleDragScroll DragScroll => _dragScroll ?? LazyInitializer.EnsureInitialized(ref _dragScroll, () => new BattleDragScroll(this));
     internal ReleaseNotesScreen? _notesScr;
     internal ReleaseNotesScreen NotesScr => _notesScr ?? LazyInitializer.EnsureInitialized(ref _notesScr, () => new ReleaseNotesScreen(this));
 }

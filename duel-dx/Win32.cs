@@ -22,6 +22,8 @@ internal static unsafe class Win32
     public const uint WM_RBUTTONDOWN = 0x0204;
     public const uint WM_RBUTTONUP = 0x0205;
     public const uint WM_LBUTTONUP = 0x0202;
+    public const uint WM_CAPTURECHANGED = 0x0215;
+    public const int MK_LBUTTON = 0x0001;
     public const uint WM_SETCURSOR = 0x0020;
     public const int HTCLIENT = 1;
 
@@ -59,6 +61,13 @@ internal static unsafe class Win32
 
     [DllImport("user32.dll")]
     public static extern IntPtr SetCursor(IntPtr cursor);
+
+    // 끌어서 화면 밀기(BattleDragScroll) — 누른 채 창 밖으로 나가도 WM_LBUTTONUP 을 받는다.
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetCapture(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ReleaseCapture();
 
     [StructLayout(LayoutKind.Sequential)]
     public struct IconInfo

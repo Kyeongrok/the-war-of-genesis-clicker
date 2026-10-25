@@ -875,9 +875,20 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
             case Win32.WM_KILLFOCUS:
                 Btl._heldMoveKeys.Clear();
+                DragScroll.Cancel();
+                return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
+            case Win32.WM_CAPTURECHANGED when lParam != hWnd:
+                DragScroll.Cancel();   // 다른 창이 마우스를 가져갔다 — 미뤄 둔 누름을 버린다
                 return Win32.DefWindowProcW(hWnd, msg, wParam, lParam);
             case Win32.WM_LBUTTONDOWN:
-                OnClick((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
+            {
+                int cx = (short)((long)lParam & 0xFFFF), cy = (short)(((long)lParam >> 16) & 0xFFFF);
+                // 판 위의 누름은 끌기일 수 있어 클릭을 뗄 때까지 미룬다(BattleDragScroll) — 아니면 예전처럼 누르는 순간 클릭.
+                if (!DragScroll.OnDown(cx, cy, ((long)wParam & Win32.MK_LBUTTON) != 0)) OnClick(cx, cy);
+                return IntPtr.Zero;
+            }
+            case Win32.WM_LBUTTONUP:
+                if (DragScroll.OnUp() is var (ux, uy)) OnClick(ux, uy);   // 끌지 않았으면 누른 자리의 클릭
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONUP:
                 Btl.CloseUnitInfo();
@@ -892,6 +903,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_RBUTTONDOWN:
             case Win32.WM_MOUSEMOVE:
             {
+                if (msg == Win32.WM_MOUSEMOVE && DragScroll.Held)
+                {
+                    int mx = (short)((long)lParam & 0xFFFF), my = (short)(((long)lParam >> 16) & 0xFFFF);
+                    if (((long)wParam & Win32.MK_LBUTTON) != 0) DragScroll.OnMove(mx, my);   // 끄는 중 — 카메라를 먼저 옮겨 아래 판 자리가 새 카메라로 잡힌다
+                    else if (DragScroll.OnUp() is var (lx, ly)) OnClick(lx, ly);        // 떼는 메시지를 놓쳤다 — 뗀 것으로 본다
+                }
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
                 if (Btl._mouseView != (bx - _camX, by - _camY)) Btl._edgeBlocked = false;   // 마우스가 정말 움직였으면 가장자리 스크롤을 다시 받는다

@@ -574,6 +574,22 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         ClampCamera();
     }
 
+    /// <summary>끌어서 밀 수 있는 누름인가(<see cref="BattleDragScroll"/>) — 가장자리 스크롤과 같은 때, 지도가 화면보다 크고 누른 자리가 지도 화면 안.</summary>
+    internal bool DragScrollAllowed(int bx, int by)
+    {
+        if (_chapter == null || WindowOpen || _mode == Mode.Menu || Events.Talk != null || Events.Choice != null || Picking || _cover != null || _transition != null) return false;
+        var (x, y, w, h) = MapView();
+        return (_mapW > w || _mapH > h) && bx >= x && bx < x + w && by >= y && by < y + h;
+    }
+
+    /// <summary>끄는 동안 — 지도 왼위를 (x, y) 로 두고 지도 안으로 자른다.</summary>
+    internal void DragCamera(int x, int y)
+    {
+        _cam = (x, y);
+        _camAim = null;
+        ClampCamera();
+    }
+
     /// <summary>그 장소가 화면 가운데쯤 오게.</summary>
     internal void CenterOn(int place)
     {
@@ -1353,6 +1369,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         double now = host._lastTime, dt = Math.Clamp(now - _lastScroll, 0, 0.1);
         _lastScroll = now;
         if (WindowOpen || _mode == Mode.Menu || Events.Talk != null || Picking) return;
+        if (host._dragScroll is { Held: true }) return;   // 왼쪽 단추로 끄는 동안은 끌기만(BattleDragScroll)
         var (mx, my) = host._mouse;
         int x = mx - view.X, y = my - view.Y;
         if (x < 0 || y < 0 || x >= view.W || y >= view.H) return;
