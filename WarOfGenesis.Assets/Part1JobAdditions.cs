@@ -12,6 +12,7 @@ public static class Part1JobAdditions
     /// <summary>직업 번호 → (어빌리티, 최대 레벨) 들.</summary>
     private static readonly Dictionary<int, (int Ability, int Level)[]> Adds = new()
     {
+        [19] = [(47, 1)],   // 돌격기사 — 힐 1(사용자 요청). 나이트 · 로열가드처럼 1 까지
         [20] = [(26, 1)],   // 전투기사 — 혼 1(사용자 요청). 투사(6)는 혼 5 까지 가르친다
     };
 
