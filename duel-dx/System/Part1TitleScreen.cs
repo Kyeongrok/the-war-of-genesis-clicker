@@ -154,7 +154,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 if (System.Windows.Forms.MessageBox.Show(owner, $"원본 파트1 을 찾았습니다.\n\n{found}\n\n이 폴더를 쓸까요?", Title,
                         System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
                 {
-                    Part1Game.Use(found);
+                    UsePart1Folder(found);
                     return true;
                 }
                 answer = System.Windows.Forms.MessageBox.Show(owner, "원본 파트1 폴더를 직접 골라 주세요.", Title,
@@ -183,7 +183,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 if (dialog.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK) return false;
                 if (Part1Game.IsValid(dialog.SelectedPath))
                 {
-                    Part1Game.Use(dialog.SelectedPath);
+                    UsePart1Folder(dialog.SelectedPath);
                     return true;
                 }
                 answer = System.Windows.Forms.MessageBox.Show(owner, $"'{dialog.SelectedPath}' 에서 Obss\\Obss.idx · Chars 를 못 찾았습니다. 다시 고를까요?",
@@ -192,6 +192,18 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             return false;
         }
         finally { owner.ReleaseHandle(); }
+    }
+
+    /// <summary>
+    /// 고른 파트1 폴더를 쓴다 — 게임 자료는 켤 때 이미 읽었고 그때 파트1 폴더를 몰라 파트1 어빌리티(연 · 댓쉬 · 화이어 애로우 …, Part1SkillBook)가
+    /// 어빌리티 표에 없었다. 그대로면 인물의 전투 목록이 그 표에 있는 것만 남겨 비었다(사용자 보고: 처음 전투에 기본 어빌리티도 없다 · 껐다 켜면 나온다).
+    /// 스킬 표를 다시 읽고 만들어 둔 파트1 인물도 버린다.
+    /// </summary>
+    private void UsePart1Folder(string root)
+    {
+        Part1Game.Use(root);
+        host._db?.ReloadSkills();
+        host._db?.ForgetPart1Characters();
     }
 
     /// <summary>기본 웹 브라우저로 주소를 연다 — 못 열어도 그냥 넘어간다.</summary>

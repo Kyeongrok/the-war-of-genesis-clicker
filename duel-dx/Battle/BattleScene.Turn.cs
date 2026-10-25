@@ -143,7 +143,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 내 편이라도 <b>부대원이 아닌 손님</b>(편 3 동맹 따위)은 이어받지 않는다 — 전투가 끝날 때 RememberParty 가 판의 아군을 모두 적어 두는데,
             // 손님이 그 기록을 이어받으면 처음 나온 전투의 레벨에 머문다. 원본은 명부 밖 유닛을 전투마다 지금 파티 레벨로 새로 키운다(ba-22).
             bool mine = unit.IsAlly && (host.Mos._members.Contains(unit.ChrCode) || host.Mos._members.Count == 0);
-            if (carried != null && (follower || !(mine || host._db.LevelExempt.Contains(unit.ChrCode))))
+            // 파트1 인물은 명부를 이어받지 않는다 — 자란 것(경험치 · 배운 어빌리티 · 직업 · 장비)은 파트1 진행(Part1Progress)에 있고
+            // db.Character 가 그것을 입혀 늘 새로 만든다. 명부에는 파트1 전투 세이브를 불러올 때(RestorePartyBeforeBoard) 그때의 사본이 들어가는데,
+            // 파트1 판은 끝날 때 명부를 안 고치므로(rememberParty: false) 그 뒤 판마다 불러온 때의 어빌리티 목록으로 섰다
+            // (사용자 보고: 다음 전투에 앞 판에서 올린 어빌리티가 안 보이다가 몇 턴 뒤 그 인물이 또 고르면 뜬다 · 마르자나는 늘 기본만).
+            bool part1Chr = unit.ChrCode >= Part1Game.ChrBase;
+            if (carried != null && (follower || part1Chr || !(mine || host._db.LevelExempt.Contains(unit.ChrCode))))
             {
                 if (!follower) c = c with { SpriteId = carried.SpriteId, FaceId = carried.FaceId, NameId = carried.NameId, Name2Id = carried.Name2Id, TitleId = carried.TitleId };
                 carried = null;
@@ -195,6 +200,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             // 차례 깃발도 0 으로 시작한다(0x1007196c) — 틱이 흘러 TP 가 가득 차야 차례가 온다.
             unit.HasTurn = false;
+            if (Trace && host._scene.IsPart1 && unit.IsAlly)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 abilities btl {host._scene.Id} chr {unit.ChrCode} {host._db.T(c.NameId)} side {unit.Side} carried {carried != null}: [{string.Join(",", (unit.Data ?? c).Abilities.Select(a => $"{a.Ability}:{a.Level}"))}]" + Environment.NewLine);
         }
         // 군단 부하는 LP 게터가 늘 대장 세력 × For.dat 보정을 더한다(0x1007ac70) — 위에서는 보정 없이 셌으므로 다시 세고 가득 채운다.
         // 전에는 레벨업·대장 교체 때만 붙어 가이아 버그즈 부하(LP +20)가 보정 없이 시작했다.

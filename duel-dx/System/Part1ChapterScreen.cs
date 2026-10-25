@@ -780,6 +780,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (CurrentPick() is not { } pick || i < 0 || i >= pick.Options.Count) return;
         var option = pick.Options[i];
         host.Part1.Pick(pick.Chr, option.Ability, option.NewLevel);
+        if (BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 pick {pick.Chr} ability {option.Ability} ({option.Name}) Lv {option.NewLevel} in battle {host._battleLoaded}" + Environment.NewLine);
         host.Part1.LevelPicks.RemoveAt(0);
         _pickCache = null;
         host._db?.ForgetPart1Characters();
