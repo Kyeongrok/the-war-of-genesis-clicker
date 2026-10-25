@@ -27,7 +27,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int BannerObs = 219, TeamObs = 226, RingObs = 182;
 
     /// <summary>Esc 메뉴 — 원본 지도에는 없다(시스템 메뉴 쪽). 리메이크에 있던 연대표 · 일행 창 · 타이틀을 여기에 둔다.</summary>
-    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "일행 한눈에", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
+    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "동료 정보", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
 
     internal const int MenuX = 250, MenuY = 170, MenuW = 140, MenuRowH = 28;
 

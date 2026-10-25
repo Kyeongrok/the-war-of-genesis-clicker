@@ -294,7 +294,7 @@ internal sealed class Part1PartyTable(GameWindow host)
         _hits.Clear();
         var (x, y, w, h) = Window();
         host.UiFill(x, y - GameWindow.FrameTitleH, w, h + GameWindow.FrameTitleH, Bg);   // 틀 바탕이 비치지 않게 먼저 깐다
-        host.UiFrame(x, y, w, h, InBattle ? $"일행 한눈에 — 전투 ({_rows.Count}명)" : $"일행 한눈에 ({_rows.Count}명)");
+        host.UiFrame(x, y, w, h, InBattle ? $"동료 정보 — 전투 ({_rows.Count}명)" : $"동료 정보 ({_rows.Count}명)");
 
         // 칸의 왼쪽 끝과 너비 — 좁으면 장비 · 어빌리티 칸은 HP 칸 아래(둘째 줄)부터.
         var cols = new List<(int X, int W)>();

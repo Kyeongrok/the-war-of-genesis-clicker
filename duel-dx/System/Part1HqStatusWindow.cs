@@ -139,7 +139,7 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
         art.Tag(wx + 30, wy + 10, $"{_team + 1} 팀");
         host.UiFill(wx + TableX, wy + TableY, TableW, TableH, _hover == TableHit ? 0xFF4A66D0 : 0xFF2A3A80);
         host.UiStroke(wx + TableX, wy + TableY, TableW, TableH, 0xFFB0C0F0);
-        host.UiText("일행 한눈에", wx + TableX + (TableW - host.UiGetText("일행 한눈에", GameWindow.White, 11).W) / 2, wy + TableY + 4, GameWindow.White, 11);
+        host.UiText("동료 정보", wx + TableX + (TableW - host.UiGetText("동료 정보", GameWindow.White, 11).W) / 2, wy + TableY + 4, GameWindow.White, 11);
 
         // 인물 10칸 — 얼굴(Obs 단추) 또는 Obs 217 모션 2 「Empty」.
         var members = host.Part1.TeamMembers(_team);

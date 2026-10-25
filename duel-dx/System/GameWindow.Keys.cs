@@ -31,7 +31,7 @@ internal sealed class KeyBindings
         (KeyAction.Gauges, "체력바 켜기·끄기", 'H'),
         (KeyAction.March, "행군(파트1)", 'F'),
         (KeyAction.JobTree, "전직 트리(파트1)", 'T'),
-        (KeyAction.PartyTable, "일행 한눈에(파트1)", 'P'),
+        (KeyAction.PartyTable, "동료 정보(파트1)", 'P'),
     ];
 
     internal readonly Dictionary<KeyAction, int> _keys = [];
