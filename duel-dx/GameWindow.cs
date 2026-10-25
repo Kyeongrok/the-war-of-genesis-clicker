@@ -1611,10 +1611,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// 방식 3 은 n = 19 로 맞을 때의 흰 번쩍임이다(분석-전투 "맞는 효과").
     /// </summary>
     /// <param name="fade">0~1 의 밝기 — 이스케이프처럼 인물이 사라졌다 나타날 때 쓴다(<see cref="UnitState.Fade"/>). 1 이면 그대로 그린다.</param>
+    /// <param name="part1">파트1 그림의 섞기 키(<see cref="Part1Blend"/>) — 물들인 그림을 원본 색표로 바탕과 섞는다.</param>
     internal void BlitMasked(uint[] src, int srcW, int srcH, int dstX, int dstY, (int Mode, int Strength)? tint = null,
-                            (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1, bool additive = false)
+                            (byte[] R, byte[] G, byte[] B)? status = null, double fade = 1, bool additive = false, Part1Blend.Plan? part1 = null)
     {
-        if (fade <= 0) return;
+        if (fade <= 0 || part1 is { None: true }) return;
+        if (part1 is { Copy: true }) part1 = null;
         int n = tint is { } t ? t.Mode switch { 1 => 27, 2 => 23, 3 => 19, 4 => 15, 5 => 11, 6 => 7, 7 => 3, _ => 31 } : 31;
         int level = tint is { } tt ? Math.Clamp(tt.Strength, 0, 31) * 255 / 31 : 0;
         bool screen = tint is { Mode: Part1Game.ScreenTint };
@@ -1642,7 +1644,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
                     c = c & 0xFF000000 | Sc(16) << 16 | Sc(8) << 8 | Sc(0);
                 }
                 if (status is { } st) c = BattleScene.ApplyStatusTint(c, st);
-                if (additive)
+                if (part1 != null) c = part1.Mix(_fb[dy * BoardWidth + dx], c);
+                else if (additive)
                 {
                     // 더하기 합성 — 검정은 +0 이라 안 보인다. 흐려지는 중(fade)이면 덜 더한다.
                     int at = dy * BoardWidth + dx;

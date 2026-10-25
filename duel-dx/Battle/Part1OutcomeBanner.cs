@@ -78,12 +78,12 @@ internal static class Part1OutcomeBanner
         int step = win ? 142 : 143;
         if (sprite.FrameAt(win ? 8 : 10, 0) is { } tile)
             for (int k = -4; k <= 4; k++)
-                Blend(host, tile, cx + k * step, cy, Glow);
+                Blend(host, tile, cx + k * step, cy, Glow.Mix);
         // 글 — 번진 그림(모션 4 · 6 / 5 · 7, 섞기 13 세기 4) 위에 글씨(모션 0 · 2 / 1 · 3, 섞기 9 더하기).
         foreach (int m in win ? (int[])[4, 6] : [5, 7])
-            host.DrawUi(Obs, m, 0, cx, cy, UiBlend.Alpha, fade: 16 / 31.0);
+            host.DrawUi(Obs, m, 0, cx, cy, Part1Blend.AsUiBlend(Part1Game.BlendKey(13, 4)));
         foreach (int m in win ? (int[])[0, 2] : [1, 3])
-            if (sprite.FrameAt(m, 0) is { } f) Blend(host, f, cx, cy, Add);
+            if (sprite.FrameAt(m, 0) is { } f) Blend(host, f, cx, cy, Add.Mix);
     }
 
     /// <summary>방식 15 물들이기 — 채널마다 <c>c·(31−L)/31</c>.</summary>
@@ -101,23 +101,8 @@ internal static class Part1OutcomeBanner
             }
     }
 
-    /// <summary>섞기 10 — <c>min(255, 바탕 + 그림²/255)</c>.</summary>
-    static uint Glow(uint d, uint c)
-    {
-        uint Ch(int shift)
-        {
-            int a = (int)(d >> shift & 0xFF), b = (int)(c >> shift & 0xFF);
-            return (uint)Math.Min(255, a + b * b / 255);
-        }
-        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
-    }
-
-    /// <summary>섞기 9 — <c>min(255, 바탕 + 그림)</c>.</summary>
-    static uint Add(uint d, uint c)
-    {
-        uint Ch(int shift) => (uint)Math.Min(255, (int)(d >> shift & 0xFF) + (int)(c >> shift & 0xFF));
-        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
-    }
+    /// <summary>섞기 10 — <c>min(31, 바탕 + 그림²/31)</c> · 섞기 9 — <c>min(31, 바탕 + 그림)</c>(원본 5비트 색표, <see cref="Part1Blend"/>).</summary>
+    static readonly Part1Blend.Plan Glow = Part1Blend.PlanOf(Part1Game.BlendKey(10, 0))!, Add = Part1Blend.PlanOf(Part1Game.BlendKey(9, 0))!;
 
     /// <summary>컷을 기준점 (x, y) 에 <paramref name="mix"/>(바탕, 그림) 로 찍는다 — 판 밖은 자른다.</summary>
     static void Blend(GameWindow host, SpriteFrame f, int x, int y, Func<uint, uint, uint> mix)

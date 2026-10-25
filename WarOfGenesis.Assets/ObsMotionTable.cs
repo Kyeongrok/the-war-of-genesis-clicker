@@ -141,6 +141,19 @@ public sealed class ObsMotionTable
             for (int dir = 0; dir < 3; dir++)
                 if (table._clips.GetValueOrDefault(6 + dir) is { Tints.Count: 0, Offsets.Count: 0 } hurt && Part1Game.HurtKeys(obs - Part1Game.ObsBase, dir) is { } keys)
                     table._clips[6 + dir] = hurt with { Tints = keys.Tints, Offsets = keys.Offsets };
+        // 파트1 그림의 섞기 키는 원본 (방식, 세기)로 되살린다(Part1Game.BlendKey) — 그리는 쪽이 파트1 색표 식으로 섞는다(Part1Blend).
+        if (obs > Part1Game.ObsBase)
+        {
+            var raw = Part1Game.RawBlends(obs - Part1Game.ObsBase);
+            foreach (int id in table._clips.Keys.ToList())
+            {
+                var clip = table._clips[id];
+                IReadOnlyList<(int Start, int Mode)> blends = raw != null
+                    ? raw.GetValueOrDefault(id) ?? []
+                    : [.. clip.Blends.Select(b => (b.Start, Part1Game.BlendKeyFromPart2(b.Mode)))];
+                table._clips[id] = clip with { Blends = blends };
+            }
+        }
         foreach (int id in table._clips.Keys.ToList())
             if (MotionEdits.Get(obs, id) is { } edit) table._clips[id] = MotionEdits.Apply(table._clips[id], edit);
         return table;

@@ -49,12 +49,20 @@ internal sealed unsafe partial class GameWindow
     internal enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen }
 
     /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
-    internal static UiBlend BlendOf(int key) => key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
+    /// <remarks>파트1 그림의 키(<see cref="Part1Game.BlendKey"/>, 0x1000 위)는 값을 그대로 담아 <see cref="Part1Blend"/> 의 원본 색표로 섞는다.</remarks>
+    internal static UiBlend BlendOf(int key) => Part1Blend.Is(key) ? Part1Blend.AsUiBlend(key)
+        : key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
+
+    /// <summary>
+    /// 이펙트 줄의 섞기 — 비침(1~8) · 닷지 · 스크린 · 파트1 키는 그 섞기, 그 밖(17 · 키 없음 · 풀지 못한 번호)은 더하기.
+    /// </summary>
+    internal static UiBlend FxBlendOf(int key) => key is (>= 1 and <= 8) or 10 or 12 || Part1Blend.Is(key) ? BlendOf(key) : UiBlend.Add;
 
     /// <summary>
     /// 섞기 키 1~7 의 비침 — 원본 색표(<c>0x1000b7c0</c>)는 k 에서 <c>(4k·그림 + (31−4k)·바탕)/31</c>, 8 은 그림 그대로다.
     /// 그 밖의 키는 1(불투명). 분석-필드 「Fld 0354 돌문」.
     /// </summary>
+    /// <remarks>파트1 키는 1 — 비침(방식 13)도 색표가 섞는다.</remarks>
     internal static double BlendFade(int key) => key is >= 1 and <= 7 ? 4 * key / 31.0 : 1;
 
     internal static uint DodgeColor(uint d, uint c)
@@ -107,6 +115,9 @@ internal sealed unsafe partial class GameWindow
         if (x0 >= x1 || y0 >= y1) return;
         var src = f.Px;
         var fb = _fb;
+        var part1 = Part1Blend.PlanOf((int)blend);
+        if (part1 is { None: true }) return;
+        if (part1 is { Copy: true }) (blend, part1) = (UiBlend.Alpha, null);
         // 가장 흔한 꼴(불투명 덮어쓰기)은 곧바로 옮긴다.
         if (blend == UiBlend.Alpha && fade >= 1)
         {
@@ -131,7 +142,7 @@ internal sealed unsafe partial class GameWindow
                 if ((c & 0xFF000000) == 0) continue;
                 int i = py * BoardWidth + px;
                 uint d = _fb[i];
-                uint drawn = blend switch
+                uint drawn = part1 != null ? part1.Mix(d, c) : blend switch
                 {
                     UiBlend.Add => AddColor(d, c, 256),
                     UiBlend.AddDim => AddColor(d, c, 100),

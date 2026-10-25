@@ -95,7 +95,7 @@ internal sealed unsafe class FxTimeline(GameWindow host)
             double f = to.Tick > from.Tick ? Math.Clamp((tick - from.Tick) / (double)(to.Tick - from.Tick), 0, 1) : 1;
             int key = sprite.BlendAt(g.Motion, tick);
             host.DrawUi(g.Obs, g.Motion, tick, (int)(from.X + (to.X - from.X) * f), (int)(from.Y + (to.Y - from.Y) * f),
-                        key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key));
+                        FxBlendOf(key), loop: true, fade: BlendFade(key));
             return false;
         });
     }

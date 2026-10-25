@@ -382,7 +382,9 @@ internal sealed unsafe partial class BattleScene
                 // 파트1: 지금 차례인 유닛(편 가리지 않음)에 주황↔노랑 1픽셀 테두리를 몸 뒤에(Part1TurnOutline, 0x10034bd9~) — 모드 > 일반, 기본 끔.
                 if (i == _turn && host._part1TurnOutline && host._scene.IsPart1 && unit.Fade > 0)
                     Part1TurnOutline.Draw(host, frame, footX + frame.X + ox, footY + frame.Y + oy, (int)(host._lastTime * TicksPerSecond));
-                host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade * BlendFade(bodyKey), additive);
+                // 파트1 그림의 키(9 더하기 · 13 비침 · 18 · 19 물들이기 …)는 원본 색표로(Part1Blend).
+                host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade * BlendFade(bodyKey), additive,
+                                Part1Blend.PlanOf(bodyKey));
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }

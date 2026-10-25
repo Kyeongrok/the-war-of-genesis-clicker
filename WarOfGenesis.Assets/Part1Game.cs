@@ -464,6 +464,81 @@ public static class Part1Game
         return tints.Count + offsets.Count > 0 ? (tints, offsets) : null;
     }
 
+    /// <summary>
+    /// 파트1 섞기 키를 파트2 섞기 번호와 안 겹치게 담는 자리 — <c>BlendKeyBase | 방식 &lt;&lt; 5 | 세기</c>(방식 0~30, 세기 0~31).
+    /// 파트2 섞기 번호는 모두 이보다 작다. 그리는 쪽(<c>Part1Blend</c>)이 원본 색표 식으로 섞는다(볼트 분석-파트1-전투 「섞기 색표」).
+    /// </summary>
+    public const int BlendKeyBase = 0x1000;
+
+    /// <summary>파트1 섞기 (방식, 세기) → 담는 값. 원본 그리개(<c>0x1000c4f0</c>)가 안 그리는 값(방식 &gt; 30 · 세기 &gt; 31)은 방식 31(안 그림)로.</summary>
+    public static int BlendKey(int mode, int level) =>
+        mode is < 0 or > 30 || level is < 0 or > 31 ? BlendKeyBase | 31 << 5 : BlendKeyBase | mode << 5 | level;
+
+    /// <summary>
+    /// 다시 싼 파트1 그림(<see cref="ToPart2Obs"/>)의 모션마다 원본 섞기 키(종류 3)를 <see cref="BlendKey"/> 값으로 — 싸면서 (방식, 세기)를 파트2 번호로
+    /// 줄여 버린 것(<see cref="BlendOf"/>)을 되살린다. 파트1 폴더가 없으면 null(그때는 <see cref="BlendKeyFromPart2"/> 로 되짚는다).
+    /// 인물 그림의 방식 14(맞을 때 하얗게)는 <see cref="HurtKeys"/> 가 물들이기로 덧입히므로 뺀다.
+    /// </summary>
+    public static Dictionary<int, List<(int Start, int Key)>>? RawBlends(int part1Obs)
+    {
+        if (Root == null || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            var raw = RawMotions(p1);
+            bool body = BodySprites().Contains(part1Obs);
+            var plan = body ? ActionMap : [.. Enumerable.Range(0, (raw.Count + 2) / 3).Select(a => (a, (a, 0, 0)))];
+            var result = new Dictionary<int, List<(int, int)>>();
+            foreach (var (action, (from, _, _)) in plan)
+                for (int dir = 0; dir < 3; dir++)
+                {
+                    if (from * 3 + dir >= raw.Count) continue;
+                    var blends = raw[from * 3 + dir].Where(k => k[2] == 3 && !(body && k[3] == ScreenTint))
+                                                    .OrderBy(k => k[0]).Select(k => ((int)k[0], BlendKey(k[3], k[4]))).ToList();
+                    result[action * 3 + dir] = blends;
+                }
+            return result;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
+    /// <summary>
+    /// 파트1 폴더 없이 받은 팩의 그림 — 싸면서 남긴 파트2 번호(<see cref="BlendOf"/>)에서 파트1 방식을 되짚는다: 17 → 9, 10 → 10, 12 → 11(12 도 12 로 쌌지만 11 이 훨씬 많다),
+    /// 1~7 → 13 의 그 세기(8 은 7 로 · 0 은 1 로 줄어 있다). 그 밖은 그대로(0 = 키 없음).
+    /// </summary>
+    public static int BlendKeyFromPart2(int key) => key switch
+    {
+        17 => BlendKey(9, 0),
+        10 => BlendKey(10, 0),
+        12 => BlendKey(11, 0),
+        >= 1 and <= 7 => BlendKey(13, key),
+        _ => key,
+    };
+
+    /// <summary>파트1 Obs 의 모든 모션 키(9칸).</summary>
+    private static List<List<short[]>> RawMotions(byte[] p1)
+    {
+        int o = 0, subCount = I32(p1, ref o);
+        if (subCount is < 1 or > 512) throw new InvalidDataException($"파트1 몸짓 수가 이상합니다: {subCount}");
+        for (int s = 0; s < subCount; s++)
+        {
+            int frameCount = BitConverter.ToUInt16(p1, o + 0x42);
+            o += 0x80;
+            for (int f = 0; f < frameCount; f++) o += 12 + BitConverter.ToInt32(p1, o);
+            o += 768;
+        }
+        var motions = new List<List<short[]>>();
+        int motionCount = o + 4 <= p1.Length ? I32(p1, ref o) : 0;
+        for (int m = 0; m < motionCount; m++)
+        {
+            o += 4;
+            int keyCount = I32(p1, ref o);
+            var keys = new List<short[]>();
+            for (int k = 0; k < keyCount; k++) { var key = new short[9]; for (int i = 0; i < 9; i++) key[i] = I16(p1, ref o); keys.Add(key); }
+            motions.Add(keys);
+        }
+        return motions;
+    }
+
     /// <summary>파트1 Obs 의 모션 하나의 키(9칸: 틱 · 길이 · 종류 · 인자 6) — 없으면 null.</summary>
     private static List<short[]>? RawMotion(byte[] p1, int motion)
     {

@@ -214,7 +214,7 @@ internal sealed unsafe partial class BattleScene
                 (fx, fy) = far <= 2 ? (lx, ly) : (fx + cx / far * 2, fy + cy / far * 2);
             }
             int key = host.UiFor(c.Obs)?.BlendAt(c.Motion, ticks) ?? 0;
-            host.DrawUi(c.Obs, c.Motion, ticks, (int)(c.X + fx), (int)(c.Y + fy * 0.8), key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+            host.DrawUi(c.Obs, c.Motion, ticks, (int)(c.X + fx), (int)(c.Y + fy * 0.8), FxBlendOf(key),
                         loop: true, fade: BlendFade(key), mirror: c.Mirror);
             return false;
         });
@@ -242,7 +242,7 @@ internal sealed unsafe partial class BattleScene
             double k = total > 0 ? gone / total : 0;
             int key = host.UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
             host.DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
-                        key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: false, fade: BlendFade(key), mirror: s.Mirror);
+                        FxBlendOf(key), loop: false, fade: BlendFade(key), mirror: s.Mirror);
             return false;
         });
     }
@@ -267,7 +267,7 @@ internal sealed unsafe partial class BattleScene
                 (x, y) = (p.Cx + far * Math.Cos(angle), p.Cy + far * Math.Sin(angle) * 0.8);
             }
             int key = host.UiFor(p.Obs)?.BlendAt(p.Motion, tick) ?? 0;
-            host.DrawUi(p.Obs, p.Motion, tick, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key));
+            host.DrawUi(p.Obs, p.Motion, tick, (int)x, (int)y, FxBlendOf(key), loop: true, fade: BlendFade(key));
             return false;
         });
     }
@@ -284,7 +284,7 @@ internal sealed unsafe partial class BattleScene
             if (tick >= s.Frames.Length || host.UiFor(s.Obs) == null) return true;
             var f = s.Frames[tick];
             int key = host.UiFor(s.Obs)?.BlendAt(f.Motion, tick) ?? 0;
-            host.DrawUi(s.Obs, f.Motion, tick, f.X, f.Y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key), mirror: f.Mirror);
+            host.DrawUi(s.Obs, f.Motion, tick, f.X, f.Y, FxBlendOf(key), loop: true, fade: BlendFade(key), mirror: f.Mirror);
             return false;
         });
     }
@@ -303,7 +303,7 @@ internal sealed unsafe partial class BattleScene
             for (int i = Math.Max(0, now - len + 1); i <= now && i < m.Points.Length; i++)
             {
                 int age = now - i, key = host.UiFor(m.Obs)?.BlendAt(m.Motion, age) ?? 0;
-                host.DrawUi(m.Obs, m.Motion, age, m.Points[i].X, m.Points[i].Y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+                host.DrawUi(m.Obs, m.Motion, age, m.Points[i].X, m.Points[i].Y, FxBlendOf(key),
                             loop: false, fade: BlendFade(key), mirror: m.Mirror);
             }
             return false;
@@ -329,7 +329,7 @@ internal sealed unsafe partial class BattleScene
                 if (vz > -5 && vz < 5 && z < 5) return true;
             }
             int key = host.UiFor(f.Obs)?.BlendAt(f.Motion, ticks) ?? 0;
-            host.DrawUi(f.Obs, f.Motion, ticks, (int)x, (int)(y - z * 0.6), key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+            host.DrawUi(f.Obs, f.Motion, ticks, (int)x, (int)(y - z * 0.6), FxBlendOf(key),
                         loop: true, fade: BlendFade(key), mirror: f.Mirror);
             return false;
         });
@@ -354,7 +354,7 @@ internal sealed unsafe partial class BattleScene
             if (m.Kind == 6)        // 떠오르는 나선 — 반지름 R0 원을 각속도 W 로 돌며 틱당 R1 씩 뜬다(높이 × 0.6)
                 (x, y) = (m.X0 + m.R0 * Math.Cos(m.A0 + m.W * (int)ticks), m.Y0 + m.R0 * Math.Sin(m.A0 + m.W * (int)ticks) * TileH / TileW - m.R1 * (int)ticks * 0.6);
             int key = host.UiFor(m.Obs)?.BlendAt(m.Motion, (int)ticks) ?? 0;
-            host.DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add,
+            host.DrawUi(m.Obs, m.Motion, (int)ticks, (int)x, (int)y, FxBlendOf(key),
                    loop: true, fade: BlendFade(key), mirror: m.Mirror);
             return false;
         });
@@ -383,7 +383,7 @@ internal sealed unsafe partial class BattleScene
             double k = gone / total;
             int key = host.UiFor(s.Obs)?.BlendAt(s.Motion, tick) ?? 0;
             host.DrawUi(s.Obs, s.Motion, tick, (int)(s.FromX + dx * k), (int)(s.FromY + dy * k),
-                   key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add, loop: true, fade: BlendFade(key), mirror: s.Mirror);
+                   FxBlendOf(key), loop: true, fade: BlendFade(key), mirror: s.Mirror);
             return false;
         });
     }
@@ -441,7 +441,7 @@ internal sealed unsafe partial class BattleScene
                 void Layer(int layerObs, int layerMotion, int lx, int ly)
                 {
                     int layerKey = host.UiFor(layerObs)?.BlendAt(layerMotion, age) ?? 0;
-                    host.DrawUi(layerObs, layerMotion, age, lx, ly, layerKey is (>= 1 and <= 8) or 10 or 12 ? BlendOf(layerKey) : layerKey == 17 ? UiBlend.Add : UiBlend.Alpha,
+                    host.DrawUi(layerObs, layerMotion, age, lx, ly, layerKey is (>= 1 and <= 8) or 10 or 12 || Part1Blend.Is(layerKey) ? BlendOf(layerKey) : layerKey == 17 ? UiBlend.Add : UiBlend.Alpha,
                                 loop: false, fade: BlendFade(layerKey), mirror: mirror);
                 }
                 Layer(obs, motion, e.X + dx, e.Y + dy);
@@ -451,7 +451,7 @@ internal sealed unsafe partial class BattleScene
         // 섞기 방식은 모션의 종류 3 키를 따른다(ba-21 fx F14): 1~8 은 그 단계의 반투명(칼날 171 · 바위 251:6 · 422:1), 10 은 닷지(450:0),
         // 그 밖(17 가산 · 키 없음 · 19 — 식을 못 푼 것)은 전처럼 가산. 전에는 전부 가산이라 반투명 이펙트가 하얗게 탔다.
         int key = host.UiFor(e.Obs)?.BlendAt(e.Motion, tick) ?? 0;
-        var blend = key is (>= 1 and <= 8) or 10 or 12 ? BlendOf(key) : UiBlend.Add;
+        var blend = FxBlendOf(key);
         if (host.DrawUi(e.Obs, e.Motion, tick, e.X, e.Y, blend, loop: false, fade: BlendFade(key), mirror: mirror)) return false;
         return host.UiFor(e.Obs) is not { } sprite || tick >= Math.Max(sprite.MotionLength(e.Motion), clip?.Children.Count > 0 ? clip.Length : 0);
     }
