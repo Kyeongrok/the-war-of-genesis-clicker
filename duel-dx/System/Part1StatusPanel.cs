@@ -172,6 +172,13 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// <summary>파트1 판의 파트1 인물이면 이 창을 쓴다.</summary>
     internal bool Applies(UnitState u) => host._battleLoaded && host._scene.IsPart1 && u.ChrCode >= Part1Game.ChrBase && !host.Mos._mosesOpen;
 
+    /// <summary>두 빛깔 사이 — <paramref name="at"/> / <paramref name="span"/> 만큼 간 빛깔(불투명).</summary>
+    private static uint Lerp(uint from, uint to, int at, int span)
+    {
+        uint Ch(int s) => (uint)(((int)(from >> s & 0xFF) * (span - at) + (int)(to >> s & 0xFF) * at) / Math.Max(1, span));
+        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+    }
+
     internal void Draw(UnitState u)
     {
         if (host.Btl.Part1.Fighter(u) is not { } fighter) return;
@@ -344,16 +351,20 @@ internal sealed class Part1StatusPanel(GameWindow host)
         host.UiText(Part1Job.ById(_jobs, chr.Fields[7])?.Name ?? "—", x + 60, y + 44, GameWindow.White, 11);
 
         int row = y + 66;
-        void Bar(string label, int value, int max, uint color)
+        // 막대는 원본 인물 창처럼 왼쪽 → 오른쪽 그라데이션(사용자 요청) — HP 빨강 → 노랑, SOUL 보라 → 분홍, EXP 파랑 → 하늘.
+        // 빛깔은 막대 전체 길이에 걸쳐 정하고 찬 만큼만 칠한다(원본 화면을 보고 고른 값).
+        void Bar(string label, int value, int max, uint from, uint to)
         {
             host.UiText($"{label} {value}/{max}", x + 10, row, GameWindow.White, 11);
             host.UiFill(x + 10, row + 15, ListW, 3, 0xFF303848);
-            if (max > 0) host.UiFill(x + 10, row + 15, ListW * Math.Clamp(value, 0, max) / max, 3, color);
+            int filled = max > 0 ? ListW * Math.Clamp(value, 0, max) / max : 0;
+            for (int bx = 0; bx < filled; bx += 2)
+                host.UiFill(x + 10 + bx, row + 15, Math.Min(2, filled - bx), 3, Lerp(from, to, bx, ListW));
             row += 22;
         }
-        Bar("HP", hp, maxHp, 0xFF60D060);
-        Bar("SOUL", soul, 150, 0xFF60A0F0);
-        Bar("EXP", chr.Experience % 100, 100, 0xFFF0C060);
+        Bar("HP", hp, maxHp, 0xFFC02828, 0xFFF0D040);
+        Bar("SOUL", soul, 150, 0xFF7838C0, 0xFFE8A8E8);
+        Bar("EXP", chr.Experience % 100, 100, 0xFF2850C0, 0xFF68E0F0);
 
         string? hoverStat = null;
         (string Label, int Field)[] stats =
