@@ -337,7 +337,6 @@ internal sealed unsafe partial class BattleScene
     internal int Part1Z(UnitState u) => Part1Flyer(u) is { } c ? Part1FlyHeight(c, u.Col, u.Row) : WalkHeightAt(u.Col, u.Row);
 
     /// <summary>
-    /// <summary>
     /// 파트1 SPD(<c>0x1003ece0</c>) — 바탕(칸 25 + 어빌리티 7 × 5 + 장비) + 스피디(상태 7, 강화 17) 8 + 지형 적응(<see cref="Part1Adapted"/>) 8,
     /// 온도(유닛 +0x4a)가 0 아래면 그만큼 뺀다(⌊60·t/60⌋ = t). 0 아래는 0. 이동력(× 2) · 동결 검사가 쓴다.
     /// </summary>
@@ -355,6 +354,7 @@ internal sealed unsafe partial class BattleScene
     internal bool Part1Adapted(UnitState u) =>
         host._scene.Part1Terrain is >= 1 and <= 6 && Part1.Fighter(u)?.Chr.EffectiveLevel(85 + host._scene.Part1Terrain) >= 0;
 
+    /// <summary>
     /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
     /// </summary>
     internal List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)
