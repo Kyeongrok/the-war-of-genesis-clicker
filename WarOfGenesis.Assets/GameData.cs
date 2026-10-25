@@ -539,6 +539,7 @@ public sealed class GameDatabase
                         foreach (int id in chr.Equipment.Where(e => e > 0).Select(e => Part1Item.ById(_part1Items ??= Part1Item.LoadAll(), e)).OfType<Part1Item>()
                                                   .SelectMany(i => i.Bonuses).Select(b => Part1Bonus.UnlockedAbility(b.Code)).Where(id => id > 0))
                             if (!own.Any(a => a.Ability == id)) own.Add((id, 1));
+                        Part1ItemSkills(own, chr.Equipment[0], chr.Equipment[2]);
                         made = made with { Abilities = [.. own.Where(a => Abilities.ContainsKey(Part1Game.ChrBase + a.Ability))
                                                               .Select(a => ((ushort)(Part1Game.ChrBase + a.Ability), (ushort)a.Level))] };
                     }
@@ -590,6 +591,31 @@ public sealed class GameDatabase
     private const ushort Part1ShootWork = 6;
     private IReadOnlyList<Part1Item>? _part1Items;
     private IReadOnlyList<Part1Attack>? _part1Attacks;
+    private IReadOnlyList<Part1Ability>? _part1Abis;
+
+    /// <summary>
+    /// 아이템이 주는 파트1 기술을 원본 규칙대로 단다 — 전투 목록(<c>0x10090c4b</c>)은 인물의 어빌리티 가운데 갈래(+0x24) 1 · 3 · 5 만 모으고(<c>0x1009dda0</c>),
+    /// 갈래 3 「초필살기 제어」(120)는 갈래 2 어빌리티 가운데 <b>무기 칸(장비 0, 유닛 +0xea)</b>의 아이템이 +0x26 과 같은 첫 것 하나로
+    /// (<c>0x10090c87</c>~<c>0x10090ce5</c> — 멸살지옥검 → 천지파열무 · 엑스칼리버 → 블리자드 스탐 · 지하드 → 지하드 …),
+    /// 갈래 5 「소환 능력」(119)은 갈래 4 어빌리티 가운데 <b>몸 칸(장비 2, 유닛 +0xee)</b>의 옷과 같은 첫 것 하나로 바꾼다(<c>0x10090cea</c>~<c>0x10090d4c</c>).
+    /// 그 기술은 배우지 않아도 레벨 1(<c>0x1009e020</c> 이 갈래 2 · 4 는 늘 1). 그래서 갈래 2 · 4 를 직접 배워 둔 것(버몬트의 96 · 97 · 바이올라의 109)은 목록에 안 나오고,
+    /// 120 · 119 가 있어도 그 무기 · 옷이 없으면 없다. 갈래 1 기술(필살 6연사 · 새틀라이트 어택 · 6연사 …)은 배운 대로 그대로 나온다.
+    /// </summary>
+    private void Part1ItemSkills(List<(int Ability, int Level)> own, int weaponItem, int bodyItem)
+    {
+        var abis = _part1Abis ??= Part1Ability.LoadAll();
+        own.RemoveAll(a => Part1Ability.ById(abis, a.Ability)?.Kind is 2 or 4);
+        void Grant(int gate, int kind, int item)
+        {
+            if (item <= 0 || !own.Any(a => a.Ability == gate)) return;
+            if (abis.FirstOrDefault(a => a.Kind == kind && a.ItemId == item) is { } skill) own.Add((skill.Id, 1));
+        }
+        Grant(FinisherAbility, 2, weaponItem);
+        Grant(SummonAbility, 4, bodyItem);
+    }
+
+    /// <summary>파트1 「초필살기 제어」(Abi 120, 갈래 3) · 「소환 능력」(Abi 119, 갈래 5).</summary>
+    public const int FinisherAbility = 120, SummonAbility = 119;
 
     /// <summary>인물 덮어쓰기 폴더(<c>assets/data/chr-edits/NNNN.json</c>) — 원본 <c>.chr</c> 은 그대로 둔다.</summary>
     public const string CharacterEditFolder = "chr-edits";
