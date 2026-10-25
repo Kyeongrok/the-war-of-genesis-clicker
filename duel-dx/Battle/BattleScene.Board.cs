@@ -286,6 +286,15 @@ internal sealed unsafe partial class BattleScene
         if (caster < 0) return;
         _workHookDone = true;
         var a = host._units[caster];
+        // DUELDX_P1BUFF=<선택자,…> 면 파트1 판의 적 모두에게 그 강화(배리어 20 · 쉐도우 실드 22 …)를 99 동안 걸어 둔다 — 맞을 때의 막 번쩍임을 보려고.
+        if (host._scene.IsPart1 && Environment.GetEnvironmentVariable("DUELDX_P1BUFF") is { Length: > 0 } forcedBuffs)
+            foreach (var enemy in host._units.Where(u => u.Alive && u.OnField && !u.IsAlly))
+                foreach (var sel in forcedBuffs.Split(','))
+                    if (int.TryParse(sel, out int s))
+                    {
+                        if (!Part1.Buffs.TryGetValue(enemy, out var buffs)) Part1.Buffs[enemy] = buffs = [];
+                        buffs[s] = 99;
+                    }
         // 「<work>:near」 면 적 셋을 시전자 곁 칸으로 옮겨 둔다 — 자기 중심 범위기(나인 크루세이더)를 시험할 때 대상이 있게.
         // 「<work>:near:mid:<L|R|U|D>」 — 시전자를 맵 가운데로 옮기고 첫 적을 그 방향 두 칸 앞에 둔다(방향 가지를 시험할 때).
         if (parts.Length > 2 && parts[2] == "mid") a.WarpTo(host.Cols / 2, host.Rows / 2);

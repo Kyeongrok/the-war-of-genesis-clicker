@@ -590,8 +590,9 @@ internal sealed partial class Part1Skill
 
     /// <summary>
     /// 에너지 필드(공격 152~160, 핸들러 <c>0x1004d850</c>) — 소리 1906. 겨눈 칸 가운데에서 범위 칸마다 보이지 않는 타이머가 걸어 나가(빠르기 1 × 1.1)
-    /// 닿으면 그 칸에 기운 81:6 이 솟고, 이어 기운 81:r 이 칸에 남았다가 81:r+3 으로 흩어진다.
-    /// 원본의 남는 기운(40 차례)은 차례마다 그 칸의 기계(종족 2 — 마장기 · 탱크)를 1/50 로 상태 2 에 건다(메시지 14). 원본에는 피해 묶음이 없다 — 여기서는 기운이 남는 틱에 그 칸의 대상을 한 번 친다.
+    /// 닿으면 그 칸에 기운 81:6 이 솟고, 이어 기운 81:r 이 칸에 남는다 — 남는 기운은 판의 물체(<see cref="Part1EnergyFields"/>)로 넘겨,
+    /// 시간 틱 40 동안 틱마다 그 칸의 기계(종족 2 — 마장기 · 탱크)를 1/50 로 쇼크(상태 2)에 걸고(메시지 14) 끝나면 81:r+3 으로 흩어진다.
+    /// 원본에는 피해 묶음이 없다 — 여기서는 기운이 남는 틱에 그 칸의 대상을 한 번 친다.
     /// </summary>
     private int EnergyField(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
@@ -604,13 +605,12 @@ internal sealed partial class Part1Skill
             var (px, py) = CellFoot(col, row);
             int r = Rand(3);
             int a = Move(aim, (px, py), 1, 1.1).Count;
-            int burst = a + 2, stay = burst + Length(81, 6) + 2, hold = 60 + Rand(30), fade = stay + hold + 2;
-            Put(81, 6, burst, px, py, sounds: true);
-            Put(81, r, stay, px, py, life: hold);
-            Put(81, r + 3, fade, px, py);
+            int burst = a + 2, stay = burst + Length(81, 6) + 2;
+            Put(81, 6, burst, px, py);
+            Later(stay, () => host.Btl.Part1Fields.Add(col, row, r));
             for (int i = 0; i < host._units.Length; i++)
                 if (targets.Contains(i) && host._units[i] is { } u && u.Col == col && u.Row == row && struck.Add(i)) HitAt(stay + 1, i, hit);
-            last = Math.Max(last, fade + Length(81, r + 3));
+            last = Math.Max(last, stay + 2);
         }
         foreach (int ti in targets) if (struck.Add(ti)) HitAt(20, ti, hit);
         Later(0, () => host.Btl.CenterOn(aim.X, aim.Y));

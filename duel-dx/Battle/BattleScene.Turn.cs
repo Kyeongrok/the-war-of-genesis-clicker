@@ -443,6 +443,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (u.Tp > u.MaxTp) u.Tp = u.MaxTp;
             ReleaseFreeze(u);
         }
+        // 파트1 — 유닛 틱(0x1001c400) 다음에 판의 물체에 vt+0x54 를 돌린다(0x10030097): 에너지 필드의 기운이 제 칸의 기계를 굴린다.
+        if (part1) _part1Fields?.Step();
         foreach (var u in host._units.Where(u => u.Alive))
         {
             // 깃발은 <b>차례를 받을 수 있을 때만</b> 선다(0x1006e940(u,4) = 0x1007c480: 마비·빙결이면 거짓) — TP 가 정확히 최대일 때(0x100743f2 sete).
@@ -2071,6 +2073,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 맞음 동작은 없다 — 거는 함수는 0(성공)·3(실패)만 돌려줘 「2 → 맞음 동작」 가지(0x1007a2ba)가 죽은 코드다(ba-20 K6).
             return;
         }
+        if (host._scene.IsPart1 && result is 2 or Part1Rules.Blocked or Part1Rules.CounterHit) FlashPart1Shield(t, Part1.SelectorOf(a, w));
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
         if (timed && amount <= 0) amount = 1;   // 타이밍 크리티컬은 「Miss」로 떨어지지 않는다

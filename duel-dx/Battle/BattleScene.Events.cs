@@ -94,6 +94,7 @@ internal sealed unsafe partial class BattleScene
         _part1Narration?.Reset();                // 해설 상자 크기 200 × 100(0x10021b0e) · 떠 있던 상자 닫기
         _part1Conditions?.Close();               // 떠 있던 조건 창도
         if (host._scene.IsPart1) Part1Objects.Reset();   // 맵 물체도 처음 동작(0)으로 — 판을 세울 때 · RESTART
+        _part1Fields?.Clear();                     // 에너지 필드의 남은 기운도
         _events = [];
         _eventFired = [];
         _eventBgm = null;

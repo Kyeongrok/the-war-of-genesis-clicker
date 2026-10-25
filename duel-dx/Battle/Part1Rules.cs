@@ -310,6 +310,10 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>자세 이름(어빌리티 이름 — 분석-파트1-전투 24절 A).</summary>
     internal static string StanceName(int ability) => ability switch { 76 => "방어", 77 => "회피", 78 => "반격", 79 => "역습", 80 => "완전방어", _ => "" };
 
+    /// <summary>이번 타격의 세기 식(선택자) — 기술이면 Attack +0x42, 기본 공격이면 무기 갈래의 기본 공격 칸 것(<see cref="Resolve"/> 와 같다). 모르면 0.</summary>
+    internal int SelectorOf(UnitState a, WorkData w) =>
+        (AttackOf(w) ?? (Fighter(a) is { } fa ? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa)) : null))?.Formula ?? 0;
+
     /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)에 파트1 의 4 막음 · 5 피함을 더해 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>

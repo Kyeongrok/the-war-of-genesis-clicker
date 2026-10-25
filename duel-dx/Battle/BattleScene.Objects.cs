@@ -19,6 +19,10 @@ internal sealed unsafe partial class BattleScene
     internal Part1MapObjects Part1Objects => _part1Objects ??= new(host);
     private Part1MapObjects? _part1Objects;
 
+    /// <summary>파트1 에너지 필드가 칸에 남긴 기운(시간 틱 40, 기계에게 쇼크 1/50).</summary>
+    internal Part1EnergyFields Part1Fields => _part1Fields ??= new(host);
+    private Part1EnergyFields? _part1Fields;
+
     /// <summary>
     /// 그 칸의 물체 — 없으면 null. 원본 물체 격자 <c>+0x74</c>(<c>0x100d93e0</c>)처럼 <b>Obt 발자국 전체</b>(비트 0x10 아닌 칸)가 제 칸이고,
     /// <b>열린 문·연 상자도 돌려준다</b>(열린 문은 도장은 빠져도 격자에 남는다, 감사3 R1). 부서진 물체·터진 폭탄 상자만 뺀다.
@@ -1032,7 +1036,7 @@ internal sealed unsafe partial class BattleScene
         // 그림 그리기 방식 바이트([+0x58]+0x13)를 4 로 — 섞기 방식 4 = 그림 가중 16/31 반투명(0x100e6250, 되돌림 0x100e62a0).
         // 리메이크의 상태 0xa = 차례인 인물의 이동 영역이 떠 있을 때, 0xb = 어빌리티·공격 대상을 고를 때.
         bool aiming = host._battleLoaded && IsPlayerTurn && ((_rangeUnit == _turn && _range != null) || _targetWork >= 0);
-        if (host._scene.IsPart1) Part1Objects.Draw();
+        if (host._scene.IsPart1) { Part1Objects.Draw(); Part1Fields.Draw(); }
         foreach (var obj in Objects)
         {
             if (obj.Data.SpriteId <= 0) continue;

@@ -57,7 +57,30 @@ internal sealed unsafe partial class BattleScene
         _effects.Add((HitEffectObs, host._rng.Next(3), host._lastTime, x, y - HitEffectLift));
     }
 
-    /// <summary>파트1 막기 · 피하기 동작 — 파트1 동작 6(모션 0x12, 팔짱) · 동작 54(모션 0xa2). 54 는 40 뒤 자리(<see cref="Part1Game.ActionMap"/>)에 실려 있다.</summary>
+    /// <summary>
+    /// 파트1 막 번쩍임 — 원본은 맞은 결과가 2 · 4 · 6 이면(<c>0x1003e235~</c>) 맞은 이의 상태 바이트를 보고 상태 그림 짓기 <c>0x10041c60</c> 으로
+    /// 그 위(z 40)에 막 하나를 한 번 띄운다(<c>0x10085e00</c>, 맞은 이를 따라간다): 상태 10(아이스 실드, 선택자 14 · +0x250)이면 Obs 27:0,
+    /// 쉐도우 실드(선택자 22 · 상태 11 · +0x251)면 들어온 타격의 선택자(+0x26a)가 5 · 6 이 아닐 때 Obs 14:0,
+    /// 배리어(선택자 20 · 상태 9 · +0x24f)면 선택자가 5(마법)일 때 Obs 24:0. 셋은 따로 굴려 함께 뜰 수 있다.
+    /// 리메이크는 아이스 실드를 아직 상태로 걸지 않아 27 은 <see cref="Part1Rules.Buffs"/> 에 14 가 있을 때만 뜬다.
+    /// </summary>
+    internal void FlashPart1Shield(UnitState t, int selector)
+    {
+        var (x, y) = host.Btl.UnitFoot(t);
+        int lift = (int)(40 * 0.6);
+        void Flash(int obs)
+        {
+            _effects.Add((Part1Game.ObsBase + obs, 0, host._lastTime, x, y - lift));
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"{host._lastTime:F2} part1 shield flash obs {obs} on {t.ChrCode} (식 {selector})" + Environment.NewLine);
+        }
+        if (Part1.Has(t, 14)) Flash(27);
+        if (selector is not (5 or 6) && Part1.Has(t, 22)) Flash(14);
+        if (selector == 5 && Part1.Has(t, 20)) Flash(24);
+    }
+
+    /// <summary>파트1 막기 · 피하기 동작 —파트1 동작 6(모션 0x12, 팔짱) · 동작 54(모션 0xa2). 54 는 40 뒤 자리(<see cref="Part1Game.ActionMap"/>)에 실려 있다.</summary>
     internal const int Part1BlockAction = 6, Part1DodgeAction = Part1Game.ExtraBase + 54;
 
     /// <summary>
