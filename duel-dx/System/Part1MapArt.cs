@@ -34,6 +34,40 @@ internal sealed class Part1MapArt(GameWindow host)
                 Put(px, py, f.Px[(py - top) * f.W + px - left], alpha, add, dim);
     }
 
+    /// <summary>
+    /// 장 하나를 <paramref name="scale"/> 배(≤ 1)로 줄여 기준점 (x, y) 에 — 줄인 칸마다 덮는 원본 픽셀을 투명도로 가중 평균하고, 반 넘게 덮일 때만 찍는다.
+    /// 1 이면 <see cref="Blit"/> 와 같다. 교환 창 탈것 줄처럼 큰 그림을 칸에 맞출 때 쓴다.
+    /// </summary>
+    internal void BlitScaled(SpriteFrame? f, int x, int y, double scale)
+    {
+        if (scale >= 1) { Blit(f, x, y); return; }
+        if (f is null || f.W == 0 || f.H == 0 || scale <= 0) return;
+        double left = x + f.X * scale, top = y + f.Y * scale;
+        var (x0, y0, x1, y1) = Bounds((int)Math.Floor(left), (int)Math.Floor(top), (int)Math.Ceiling(f.W * scale) + 1, (int)Math.Ceiling(f.H * scale) + 1);
+        double inv = 1 / scale;
+        for (int py = y0; py < y1; py++)
+        {
+            int sy0 = Math.Max(0, (int)((py - top) * inv)), sy1 = Math.Min(f.H, Math.Max(sy0 + 1, (int)((py + 1 - top) * inv)));
+            for (int px = x0; px < x1; px++)
+            {
+                int sx0 = Math.Max(0, (int)((px - left) * inv)), sx1 = Math.Min(f.W, Math.Max(sx0 + 1, (int)((px + 1 - left) * inv)));
+                if (sx0 >= f.W || sy0 >= f.H) continue;
+                int n = 0, solid = 0, r = 0, g = 0, b = 0;
+                for (int sy = sy0; sy < sy1; sy++)
+                    for (int sx = sx0; sx < sx1; sx++)
+                    {
+                        n++;
+                        uint c = f.Px[sy * f.W + sx];
+                        if (c >> 24 == 0) continue;
+                        solid++;
+                        r += (int)(c >> 16 & 0xFF); g += (int)(c >> 8 & 0xFF); b += (int)(c & 0xFF);
+                    }
+                if (solid * 2 < n || solid == 0) continue;
+                Put(px, py, 0xFF000000u | (uint)(r / solid) << 16 | (uint)(g / solid) << 8 | (uint)(b / solid), 256, 0, false);
+            }
+        }
+    }
+
     /// <summary>장을 네모에 깐다(되풀이) — 틀 상자의 돌 무늬.</summary>
     internal void Tile(SpriteFrame? f, int x, int y, int w, int h, int alpha = 256)
     {

@@ -30,6 +30,10 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         public readonly Part1MapObject Def = def;
         public readonly (int Item, int Gold, bool Locked)? Chest = def.Chest;
+        // 문 — 반응 6 이 있고 든 것(동작 19 의 키 6 알림 12 · 13)이 없는 Obt(0061 · 0120 · 0160 · 0204 · 0210 · 0211 · 0213 · 0215 · 0220 · 0237 · 0264 · 0265).
+        // 알림 5 에만 반응 6 이면 잠긴 문(어빌리티 63) — 자료에는 없다.
+        public readonly bool Door = def.Chest == null && def.Reactions.Any(r => r.Action == 6);
+        public readonly bool DoorLocked = def.Chest == null && !def.Reactions.Any(r => r.Action == 6 && r.Message == 2);
         public readonly int Col = col, Row = row;
         public int Motion, Frame, Z, AnchorX, AnchorY;
         public int StampFrame;           // 판에 찍힌 장 — 원본은 만들 때와 키 9 때만 찍어서, 그 뒤 장이 바뀌어도 판은 그대로다
@@ -85,8 +89,103 @@ internal sealed class Part1MapObjects(GameWindow host)
     // 동작 19 의 키 6 이 곁 유닛에 알림 12(아이템) · 13(eld)을 보내 전투가 가방 · 돈에 넣고 창을 띄운다(0x100330f0 · 0x10033450), 19 가 끝나면 동작 5(열린 장).
     // 리메이크는 사용자 결정대로 파트2 처럼 — 차례인 인물이 닿는 상자 위에 주먹 커서, 누르면(필요하면 옆까지 걸어가) 연다(TP 80).
 
-    /// <summary>열린 상자 수 — 닿는 칸 칠하기(<see cref="BattleScene"/> 이동 영역)가 다시 셀 때를 안다.</summary>
-    internal int OpenedChests { get { Ensure(); return _objects.Count(o => o is { Chest: not null } && Opened(o)); } }
+    /// <summary>열린 상자 · 문 수 — 닿는 칸 칠하기(<see cref="BattleScene"/> 이동 영역)가 다시 셀 때를 안다.</summary>
+    internal int OpenedChests { get { Ensure(); return _objects.Count(o => o is { Chest: not null } or { Door: true } && Opened(o)); } }
+
+    // ── 문 — 곁에서 대기(반응 6, 든 것 없음) ─────────────────────────────────────────────────────────────────
+    // 원본(분석-파트1-전투 37.3): 반응 6 만 있고 동작 19 에 키 6 이 없는 Obt 열둘. 모두 알림 2 에 반응 6 — 사람 조종 유닛이 「곁」(알림 칸: 지금 장의
+    // 0x10 아닌 칸, 0x1008f390 의 c = 3 → 맨해튼 0 칸이라 그 칸에 서야 한다)에서 이동도 행동도 안 하고 차례를 마치면 동작 19 → 끝나면 5.
+    // 동작 19 는 문 그림(장 0)을 열린 문짝(장 2)으로 돌리다 마지막 틱(문 26 · 작은 문 12 · 다리 6)에 장 1 과 키 9 — 판을 다시 찍어 막힘(지형 1)과
+    // 문턱 높이가 빠진다(문 120: 5칸 막힘 · 높이 20 → 모두 0x10). 동작 5 는 장 1 그대로. 다리 0213 · 0264 는 장 1 에서 가운데 막힘이 풀려 건너간다.
+    // 리메이크: 원본 길(대기)을 그대로 두고, 상자처럼 문 그림 위 주먹 커서로 눌러도 연다 — 서는 칸(알림 칸 가운데 걸을 수 있는 칸)까지 걸어가 TP 80.
+
+    /// <summary>문이 받는 칸 가운데 설 수 있는 칸 — 지금 장에서 0x10(그림만)도 1(못 들어감)도 아닌 칸. 원본의 「곁에서 대기」 자리.</summary>
+    private static List<(int Col, int Row)> StandCells(Obj o)
+    {
+        var f = o.Def.Frames[o.Frame];
+        var cells = new List<(int, int)>();
+        for (int r = 0; r < f.Rows; r++)
+            for (int c = 0; c < f.Cols; c++)
+                if ((f.Terrain[r * f.Cols + c] & 0x11) == 0) cells.Add((o.Col + c, o.Row + r));
+        return cells;
+    }
+
+    private bool CanOpenDoor(UnitState u, Obj o) => o.Door && !Opened(o) && o.State == -1 && u.PlayerControlled && (!o.DoorLocked || CanUnlock(u));
+
+    /// <summary>
+    /// 마우스가 문으로 치는 칸 — 찍힌 장의 막힌 칸, 또는 문 그림이 걸친 칸(0x10) 가운데 그 인물이 걸어서 못 가는 칸(문짝 · 벽 앞). 걸어갈 수 있는 칸은 걷기로 둔다.
+    /// </summary>
+    private Obj? DoorAt(int col, int row, BattleScene.MoveRange? range)
+    {
+        Ensure();
+        bool walkable = range != null && (uint)col < (uint)host.Cols && (uint)row < (uint)host.Rows && range.CanReach(row * host.Cols + col);
+        foreach (var o in _objects)
+        {
+            if (o is not { Door: true } || Opened(o) || !Covers(o, col, row)) continue;
+            var f = o.Def.Frames[o.StampFrame];
+            bool blocked = (f.Terrain[(row - o.Row) * f.Cols + col - o.Col] & 1) != 0;
+            if (blocked || !walkable) return o;
+        }
+        return null;
+    }
+
+    /// <summary>서는 칸까지의 길(이미 서 있으면 빈 길) — 못 가면 null. <paramref name="needTp"/> 면 걷고도 TP+CTP 로 80 을 낼 수 있는 칸만.</summary>
+    private List<(int Col, int Row)>? StandPath(UnitState user, Obj o, BattleScene.MoveRange? known = null, bool needTp = false)
+    {
+        var btl = host.Btl;
+        if ((known ?? btl.ComputeRange(user)) is not { } range) return null;
+        bool Ok(int c, int r) => (uint)c < (uint)host.Cols && (uint)r < (uint)host.Rows && range.CanReach(r * host.Cols + c)
+            && (!needTp || range.Cost[r * host.Cols + c] <= user.Tp + Math.Min(0, user.Ctp - BattleScene.ObjectTouchTp));
+        var cells = StandCells(o);
+        if (cells.Contains((user.Col, user.Row)) && Ok(user.Col, user.Row)) return [];
+        // 걸음 비용이 가장 적은 칸, 같으면 인물에게서 가까운 칸(문 앞 다섯 칸 가운데 정면).
+        int best = -1;
+        (int Cost, int Far) bestKey = (int.MaxValue, int.MaxValue);
+        foreach (var (c, r) in cells)
+        {
+            if (!Ok(c, r)) continue;
+            var k = (range.Cost[r * host.Cols + c], Math.Abs(c - user.Col) + Math.Abs(r - user.Row));
+            if (k.CompareTo(bestKey) < 0) (best, bestKey) = (r * host.Cols + c, k);
+        }
+        return best < 0 ? null : btl.PathWithin(range, user.Col, user.Row, best);
+    }
+
+    /// <summary>알림을 보내는 유닛 — 반응 6 이 「사람 조종 유닛이 보냈나」를 본다(<c>0x10032bb0</c> · <c>+0x1f8</c>). 알림을 다 보내면 지운다.</summary>
+    private UnitState? _noticeFrom;
+
+    private void NotifyFrom(UnitState u, Obj o, int notice)
+    {
+        _noticeFrom = u;
+        try { Notify(o, notice, default); }
+        finally { _noticeFrom = null; }
+    }
+
+    /// <summary>
+    /// 차례 끝 대기(<c>0x10030164</c> → <c>0x10036350</c>) — 이동도 행동도 안 하고 쉰 유닛이 선 칸을 알림 칸으로 가진 물체마다 알림 2, 어빌리티 63 이면 알림 5 도.
+    /// 상자는 거른다(사용자 결정: 클릭으로만). 부르는 곳은 파트1 휴식(<see cref="BattleScene.Rest"/>). 원본의 높이 거르기(a3)는 안 옮겼다 [H].
+    /// </summary>
+    internal void WaitTurnEnd(UnitState u)
+    {
+        Ensure();
+        bool key = CanUnlock(u);
+        foreach (var o in _objects.ToList())
+        {
+            if (o == null || o.Chest != null || !Touches(o, (c, r) => c == u.Col && r == u.Row)) continue;
+            Log($"p1door {Name(o)} ← 알림 2{(key ? " · 5" : "")} (대기 {u.ChrCode} ({u.Col},{u.Row}){(u.PlayerControlled ? "" : " · 사람 조종 아님")})");
+            NotifyFrom(u, o, 2);
+            if (key) NotifyFrom(u, o, 5);
+        }
+    }
+
+    /// <summary>문을 연다(클릭) — 서는 칸에서 대기한 것과 같은 알림(2, 잠긴 문이면 5)을 보내 반응 6 이 동작 19 를 건다. 차례는 이어지고 TP 80 을 쓴다.</summary>
+    private void OpenDoor(Obj o, UnitState user)
+    {
+        var btl = host.Btl;
+        btl.CommitMove(user);
+        user.Tp -= BattleScene.ObjectTouchTp;
+        Log($"p1door {Name(o)} 클릭 ← {user.ChrCode} ({user.Col},{user.Row})");
+        NotifyFrom(user, o, o.DoorLocked ? 5 : 2);
+    }
 
     /// <summary>상자 목록(모드 &gt; 상자 내용물 보기) — 상자마다 몸 칸 · 든 것 · 잠김 · 열었나.</summary>
     internal IEnumerable<(int Col, int Row, int Item, int Gold, bool Locked, bool Opened)> Chests()
@@ -141,8 +240,10 @@ internal sealed class Part1MapObjects(GameWindow host)
     internal bool CanTouchAt(int col, int row)
     {
         var btl = host.Btl;
-        if (btl._turn < 0 || row < 0 || ChestAt(col, row) is not { } o) return false;
+        if (btl._turn < 0 || row < 0) return false;
         var user = host._units[btl._turn];
+        if (ChestAt(col, row) is not { } o)
+            return btl.ComputeRange(user) is { } range && DoorAt(col, row, range) is { } door && CanOpenDoor(user, door) && StandPath(user, door, range) != null;
         return CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o)) != null;
     }
 
@@ -152,6 +253,15 @@ internal sealed class Part1MapObjects(GameWindow host)
         Ensure();
         foreach (var o in _objects)
         {
+            if (o is { Door: true } && CanOpenDoor(user, o) && StandPath(user, o, range) != null)
+            {
+                // 문은 찍힌 장의 막힌 칸(문턱)을 칠한다 — 막힌 칸이 없는 문(0061 · 0215 …)은 서는 칸을.
+                var f = o.Def.Frames[o.StampFrame];
+                var body = BodyCells(o).Where(p => (uint)(p.Col - o.Col) < (uint)f.Cols && (f.Terrain[(p.Row - o.Row) * f.Cols + p.Col - o.Col] & 1) != 0).ToList();
+                foreach (var (c, r) in body.Count > 0 ? body : StandCells(o))
+                    if ((uint)c < (uint)host.Cols && (uint)r < (uint)host.Rows) yield return r * host.Cols + c;
+                continue;
+            }
             if (o == null || !CanOpen(user, o) || host.Btl.FindTouchPathTo(user, BodyCells(o), range) == null) continue;
             foreach (var (c, r) in BodyCells(o))
                 if ((uint)c < (uint)host.Cols && (uint)r < (uint)host.Rows) yield return r * host.Cols + c;
@@ -200,6 +310,7 @@ internal sealed class Part1MapObjects(GameWindow host)
     internal bool TryTouch(int col, int row)
     {
         var btl = host.Btl;
+        if (ChestAt(col, row) is null && TryTouchDoor(col, row)) return true;
         if (ChestAt(col, row) is not { } o || Opened(o)) return false;
         var user = host._units[btl._turn];
         var body = BodyCells(o);
@@ -230,7 +341,30 @@ internal sealed class Part1MapObjects(GameWindow host)
         var user = host._units[btl._turn];
         if (user.IsBusy) return;
         _pendingTouch = null;
+        if (o.Door) { if (CanOpenDoor(user, o) && StandPath(user, o, needTp: true) is { Count: 0 }) OpenDoor(o, user); return; }
         if (CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o), needTp: true) is { Count: 0 }) Open(o, user);
+    }
+
+    /// <summary>문 그림을 눌렀을 때 — 서는 칸이면 바로, 아니면 서는 칸까지 걸어가서 연다. 처리했으면 true.</summary>
+    private bool TryTouchDoor(int col, int row)
+    {
+        var btl = host.Btl;
+        var user = host._units[btl._turn];
+        if (btl.ComputeRange(user) is not { } range || DoorAt(col, row, range) is not { } o || StandPath(user, o, range) == null) return false;
+        if (!CanOpenDoor(user, o))
+        {
+            if (o.DoorLocked && !CanUnlock(user)) { host.Toast("잠긴 문입니다 — 「잠긴상자열기」 어빌리티가 있어야 열 수 있습니다."); return true; }
+            return false;
+        }
+        if (StandPath(user, o, range, needTp: true) is not { } path)
+        {
+            host.Hint($"TP 가 모자랍니다 — 문을 열려면 문 앞 칸까지 걷고도 TP+CTP 로 {BattleScene.ObjectTouchTp} 을 낼 수 있어야 합니다");
+            return true;
+        }
+        if (path.Count == 0) { OpenDoor(o, user); return true; }
+        foreach (var cell in path) user.Path.Enqueue(cell);
+        _pendingTouch = o;
+        return true;
     }
 
     /// <summary>
@@ -434,7 +568,7 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>
     /// 반응(가상 +0x74 + 4·번호): 0 · 1 맞음(<c>0x1009a450</c> · <c>0x1009a520</c> — 내구를 깎고 열을 더해, 0 이하면 부서짐 13~15 · 16~18) · 2 곧바로 200 · 타기(<c>0x1009a5f0</c>) ·
     /// 3 · 4 곧바로 부서짐(<c>0x1009a660</c> · <c>0x1009a6a0</c>) · 5 동작 35(<c>0x1009a6e0</c>) · 11 열 +5, 160 이상이면 타기(<c>0x1009a600</c>) ·
-    /// 12 열 −5, 160 아래면 식기(<c>0x1009a630</c>) · 13 열만(<c>0x1009a3b0</c>). 6(상자 열기)은 <see cref="Open"/> 이, 7~10 은 안 옮겼다.
+    /// 12 열 −5, 160 아래면 식기(<c>0x1009a630</c>) · 13 열만(<c>0x1009a3b0</c>). 6 동작 19 → 5(<c>0x10099e1e</c>, 사람 조종 유닛이 보낸 알림만 — 문 · 다리. 상자는 <see cref="Open"/> 이 클릭으로) · 7~10 은 안 옮겼다.
     /// </summary>
     private void React(Obj o, int notice, int action, Hit hit)
     {
@@ -460,6 +594,13 @@ internal sealed class Part1MapObjects(GameWindow host)
             case 5:
                 Start(o, 35);
                 SetState(o, 5);
+                break;
+            case 6:
+                // 0x10099e1e — 보낸 이가 판의 유닛이고 조종 +0x1f8 = 4(사람)일 때만: 동작 19(여는 동작), 다음 상태 6(끝나면 동작 5 — StepState).
+                // 상자(든 것이 있는 반응 6)는 사용자 결정대로 클릭으로만 연다(Open) — 곁에서 대기하는 길(WaitTurnEnd)은 상자를 거른다.
+                if (_noticeFrom is not { PlayerControlled: true } || o.Chest != null || Opened(o)) return;
+                Start(o, Part1MapObject.OpenMotion);
+                SetState(o, 6);
                 break;
             case 11:
                 o.Heat = Math.Min(MaxHeat, o.Heat + 5);
@@ -560,6 +701,12 @@ internal sealed class Part1MapObjects(GameWindow host)
                 FinishMotion(o);
                 Start(o, 4);
                 ClearState(o);
+                break;
+            case 6 when Ended(o):                        // 0x1009a8ec — 여는 동작 19 가 끝나면(키 9 로 판도 다시 찍은 뒤) 동작 5(열린 장)
+                FinishMotion(o);
+                Start(o, Part1MapObject.OpenedMotion);
+                ClearState(o);
+                Log($"p1door {Name(o)} 열림 → 동작 {o.Motion} 장 {o.Frame} 찍힌 장 {o.StampFrame}");
                 break;
             case 2:
                 if (o.Heat < IgniteHeat) { Cool(o); break; }
@@ -1115,7 +1262,7 @@ internal sealed class Part1MapObjects(GameWindow host)
             if (fields == SaveFields)
             {
                 (o.Durability, o.Heat, o.State, o.StateAt) = (saved[at + 6], saved[at + 7], saved[at + 8], host.Btl._tick - saved[at + 9]);
-                o.Busy = o.State is 0 or 1 or 3 or 4 or 5 || (o.State == 2 && o.Motion is 26 or 28 or 30);
+                o.Busy = o.State is 0 or 1 or 3 or 4 or 5 or 6 || (o.State == 2 && o.Motion is 26 or 28 or 30);
             }
             o.MotionAt = host._lastTime;
             o.DoneTick = 0;

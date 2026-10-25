@@ -327,12 +327,37 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
             var (cx, cy) = Cell(lx - wx, i);
             int sx = wx + cx, sy = wy + cy;
             if (art.Chr(list[i].Id) is not { } chr) continue;
-            if (chr.SpriteId > 0) art.Blit(art.Motion(chr.SpriteId, 2, tick), sx + 25, sy + 76);
-            art.Text(chr.Name, sx + 55, sy + 12, 0xFFC8FF96, 12);
-            art.TextRight($"{list[i].Count}", sx + 124, sy + 12, 0xFFFF96C8, 12);
+            if (chr.SpriteId > 0) DrawRowSprite(art, chr.SpriteId, tick, sx, sy, g.CellH);
+            // 글은 그림 칸 오른쪽(55~124) — 이름이 길면 글씨를 줄이고, 수는 이름과 겹치지 않게 셋째 줄에.
+            float size = 12;
+            while (size > 9 && art.TextW(chr.Name, size) > TextW) size--;
+            art.Text(chr.Name, sx + 55, sy + 12, 0xFFC8FF96, size);
             art.Text($"Hp {chr.MaxHp}", sx + 55, sy + 34, 0xFFE0E4F0, 11);
+            art.Text($"× {list[i].Count}", sx + 55, sy + 56, 0xFFFF96C8, 12);
             Mark(art, sx, sy, g.CellW, g.CellH, selected.Contains(i), _hover == hitBase + i);
         }
+    }
+
+    /// <summary>용병 · 탈것 줄의 글 칸 폭(55 ~ 124).</summary>
+    private const int TextW = 69;
+
+    /// <summary>
+    /// 용병 · 탈것 줄의 그림 — 줄 왼쪽 칸(52 × 줄 높이) 안에. 큰 탈것(아지다하카 따위)은 모션 2 첫 장의 크기로 줄여(장마다 다시 재면 출렁인다)
+    /// 칸 가운데 · 바닥에 맞추고, 도는 장이 그보다 커도 칸 밖으로는 안 그린다.
+    /// </summary>
+    private static void DrawRowSprite(Part1MapArt art, int sprite, int tick, int sx, int sy, int cellH)
+    {
+        const int BoxW = 52, Pad = 2;
+        if (art.Motion(sprite, 2, 0) is not { W: > 0, H: > 0 } first) return;
+        int boxH = cellH - 2 * Pad;
+        double scale = Math.Min(1.0, Math.Min((BoxW - 2.0 * Pad) / first.W, (double)boxH / first.H));
+        // 첫 장의 네모를 칸 가운데 · 바닥(줄 아래 Pad)에 둘 기준점. 줄지 않는 그림은 예전 자리(발 = sx + 25, sy + 76)를 넘지 않게 둔다.
+        int ax = scale < 1 ? (int)Math.Round(sx + BoxW / 2.0 - scale * (first.X + first.W / 2.0)) : sx + 25;
+        int ay = scale < 1 ? (int)Math.Round(sy + Pad + boxH - scale * (first.Y + first.H)) : Math.Min(sy + 76, sy + Pad + boxH - (first.Y + first.H));
+        var clip = art.Clip;
+        art.Clip = (sx, sy, BoxW, cellH);
+        art.BlitScaled(art.Motion(sprite, 2, tick), ax, ay, scale);
+        art.Clip = clip;
     }
 
     /// <summary>고른 칸 · 짚은 칸 표시(원본 효과 9 · 0x14 의 모양은 모른다 — 노란 테).</summary>

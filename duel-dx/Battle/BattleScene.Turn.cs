@@ -801,6 +801,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 안 움직였으면 그다음 자세 하나(76 → 80 가운데 가진 첫째)를 켠다 — 대장 · 탄 이(탈것)는 빼고(0x1003e6ca). AI 도 쉬면 같다.
         if (host._scene.IsPart1)
         {
+            // 차례 끝 대기(0x10030164 → 0x10036350) — 안 움직이고 안 했으면 선 칸의 맵 물체에 알림 2(· 어빌리티 63 이면 5): 문 곁에서 쉬면 문이 열린다.
+            if (part1Stayed) Part1Objects.WaitTurnEnd(u);
             int gain = (u.MaxHp - u.Hp) / (part1Stayed ? 5 : 10);
             if (gain > 0 && !u.HasStatus(26))
             {
