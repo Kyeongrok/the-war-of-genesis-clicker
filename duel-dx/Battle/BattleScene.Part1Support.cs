@@ -154,8 +154,10 @@ internal sealed unsafe partial class BattleScene
     /// </summary>
     internal void DrawPart1AilmentMarks()
     {
-        if (!host._scene.IsPart1 || Part1.Ailments.Count == 0) return;
+        if (!host._scene.IsPart1) return;
         int tick = (int)(host._lastTime * TicksPerSecond);
+        DrawPart1BuffMarks(tick);
+        if (Part1.Ailments.Count == 0) return;
         foreach (var (u, set) in Part1.Ailments)
         {
             if (!u.Alive || !u.OnField) continue;
@@ -171,6 +173,29 @@ internal sealed unsafe partial class BattleScene
                 int motion = hypnosis ? 5 : 6 + (int)((uint)(u.ChrCode * 7 + k * 13) % 4);
                 host.DrawUi(Part1Game.ObsBase + 180, motion, tick, x, y, UiBlend.Alpha);
             }
+        }
+    }
+
+    /// <summary>
+    /// 강화 표지 — 유닛 오른쪽 아래에 붙어 따라다니는 Obs 180 의 작은 그림(<c>0x10041c60</c> 갈래 6 · 7 · 8 · 12, 걸 때와 유닛을 만들 때
+    /// <c>0x1003446a~</c>). 모두 자리 (x + 12, y + 19) 이고 높이만 달라 겹쳐 걸리면 세로로 쌓인다:
+    /// 블래스(상태 6, 클래스 <c>0x10083950</c>) 모션 3 · 높이 40 / 스피디(7, <c>0x10083870</c>) 모션 0 · 60 /
+    /// 버써크(8, <c>0x100838e0</c>) 모션 1 · 80 / 블러드 러스트(12, <c>0x100839c0</c>) 모션 2 · 100.
+    /// 틱마다 상태 칸(<c>+0x24c</c> · <c>+0x24d</c> · <c>+0x24e</c> · <c>+0x252</c>)이 0 이면 스스로 지운다.
+    /// 배리어(9) · 쉐도우 실드(11)는 늘 붙은 표지가 없고, 맞을 때 막(24:0 · 14:0)이 한 번 선다(<c>0x1003e249~</c>, 리메이크는 안 옮김).
+    /// </summary>
+    private void DrawPart1BuffMarks(int tick)
+    {
+        foreach (var u in host._units)
+        {
+            if (!u.Alive || !u.OnField) continue;
+            bool berserk = u.Status(4) > 0;                       // 리메이크는 파트1 버써크를 파트2 상태 4 로 건다
+            if (!berserk && !Part1.Buffs.ContainsKey(u)) continue;
+            var (fx, fy) = host.Btl.UnitFoot(u);
+            foreach (var (on, motion, height) in (ReadOnlySpan<(bool, int, int)>)
+                     [(Part1.Has(u, 15), 3, 40), (Part1.Has(u, 17), 0, 60), (berserk, 1, 80), (Part1.Has(u, 23), 2, 100)])
+                if (on)
+                    host.DrawUi(Part1Game.ObsBase + 180, motion, tick, fx + 12, fy + (int)(19 * 0.8 - height * 0.6), UiBlend.Alpha);
         }
     }
 
