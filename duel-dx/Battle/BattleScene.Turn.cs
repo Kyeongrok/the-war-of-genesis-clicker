@@ -1163,7 +1163,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (TimedHit.ForcedHits > 0 && !eventFinisher && a.IsAlly && w.IsDamage) _timedCritBy = a;   // 시험용
         else if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
         {
-            foreach (bool _ in host.TimedHitFx.Prompt(a, target: targetIndex >= 0 ? host._units[targetIndex] : null)) yield return true;
+            var aimed = targetIndex >= 0 ? host._units[targetIndex] : null;
+            foreach (bool _ in host.TimedHitFx.Prompt(a, target: aimed, guide: aimed != null ? ExpectedDamageText(a, aimed, w) : null)) yield return true;
             if (host.TimedHitFx.Hits > 0) _timedCritBy = a;
         }
         // 타이밍 명중(모드 > 밸런스, fg-34) — 명중률이 있는 어빌리티 앞에 같은 띠를 띄우고, 맞춘 박자마다 이 행동의 내 명중률을 올린다.
@@ -1860,6 +1861,28 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>그 타격의 피해 배율(%) — 두 번 치는 동작으로 바꿨으면 100(두 번 맞아 2배), 한 번 치면 200. 0 은 「크리티컬로」(박자 하나만 맞춤).</summary>
     internal int _timedPercent = 200;
+
+    /// <summary>
+    /// 타이밍 어택 띠의 안내 글 — 그 대상에게 이 기본공격이 맞으면 들어갈 피해와 크리티컬이면 들어갈 피해(사용자 요청).
+    /// 실제 판정(ApplyWork 첫 줄과 같은 식)을 따로 둔 난수로 여러 번 굴려, 맞은 것 가운데 크리티컬이 아닌 피해의 가운데 값을 「예상」으로,
+    /// 거기에 크리티컬 배율(Num 23 — 타이밍 어택의 한 대 크리티컬과 같다)을 건 값을 「크리티컬」로 보인다. 한 번도 안 맞으면 null(규칙 안내 그대로).
+    /// </summary>
+    internal string? ExpectedDamageText(UnitState a, UnitState t, WorkData w)
+    {
+        if (host._db is not { } db || a.Data == null || t.Data == null) return null;
+        var rng = new Random(12345);
+        var hits = new List<int>();
+        for (int i = 0; i < 48; i++)
+        {
+            var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(rng, a, t, w) : null)
+                ?? db.Resolve(rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
+            if (result != 3 && result != 1 && !crit) hits.Add(amount);
+        }
+        if (hits.Count == 0) return null;
+        hits.Sort();
+        int normal = hits[hits.Count / 2], critical = normal * db.N(23) / 100;
+        return $"예상 피해 {normal} · 크리티컬 {critical}";
+    }
 
     /// <summary>타이밍 명중을 맞춘 인물과 그 몫(%) — 그 행동이 끝날 때까지 그 인물의 명중 굴림(피해 · 상태이상)에 더한다(<see cref="TimedHit.WantedAim"/>).</summary>
     internal UnitState? _timedAimBy;

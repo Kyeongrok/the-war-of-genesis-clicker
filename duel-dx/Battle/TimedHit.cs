@@ -244,15 +244,19 @@ internal sealed class TimedHit(GameWindow host)
     /// <summary>이번 띠가 타이밍 명중의 것인가 — 안내 글과 결과 글이 달라진다.</summary>
     private bool _aim;
 
+    /// <summary>이번 띠의 안내 글 — 대상을 치는 타이밍 어택이면 예상 피해(사용자 요청), 아니면 null(규칙 안내).</summary>
+    private string? _guide;
+
     /// <summary>
     /// 띠를 띄우고 박자가 다 눌리거나 놓칠 때까지 기다린다 — 끝나면 <see cref="Hits"/> · <see cref="AllHit"/> 에 결과가 있다.
     /// <paramref name="a"/> 가 없으면 미리 보기 — <paramref name="anchor"/> 자리에 그린다.
     /// </summary>
     /// <param name="target">치려는 대상 — 패턴 잇기는 같은 대상을 칠 때만 이어진다.</param>
     /// <param name="aim">타이밍 명중의 띠인가 — 늘 시작 패턴을 띄우고(패턴 잇기 없음) 타이밍 어택 통계에 안 센다.</param>
-    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null, bool aim = false)
+    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null, bool aim = false, string? guide = null)
     {
         _aim = aim;
+        _guide = guide;
         Cfg.Normalize();
         // 어느 패턴을 띄울까 — 미리 보기는 수정 창에서 보고 있는 패턴, 전투는 이 인물이 같은 대상에게 이어 가던 패턴(없으면 시작 패턴).
         if (!ReferenceEquals(_chainBattle, host._units)) { _chainBattle = host._units; _chain.Clear(); }
@@ -351,7 +355,7 @@ internal sealed class TimedHit(GameWindow host)
         double at = Math.Clamp(((_result == null ? host._realTime : _resultAt) - _startAt) / seconds, 0, 1);
 
         // 바탕 — 안내 글 · 단추 · 띠를 한 판에.
-        string guide = _aim ? AimGuide : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬";
+        string guide = _guide ?? (_aim ? AimGuide : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬");
         var (_, gw, gh) = Measure(guide, 0xFFFFFFFF, 11f);
         int top = y - Cap - 8 - gh - 4;
         Fill(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
