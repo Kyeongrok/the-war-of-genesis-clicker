@@ -1,7 +1,7 @@
 {
   "ability": 20100,
   "name": "비연참 (파트1)",
-  "description": "창세기전3 파트1 의 검 기술. 불 날개를 펴고 대상까지 돌진하며 지나는 칸의 적을 친다.",
+  "description": "창세기전3 파트1 의 검 기술. 불 날개를 펴고 고른 빈 칸까지 돌진하며 지나는 칸의 적을 친다.",
   "maxLevel": 1,
   "att": 8,
   "common": {
@@ -14,7 +14,7 @@
     "sight": 1,
     "sameHeightRange": 0,
     "heightGraded": 0,
-    "targetMode": 1,
+    "targetMode": 7,
     "areaShape": 1,
     "b18": 0,
     "heightArea": 0,

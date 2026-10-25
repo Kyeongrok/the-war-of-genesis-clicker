@@ -307,8 +307,11 @@ internal sealed unsafe partial class BattleScene
         // ① 겨눌 칸 — 점수는 지금 서 있는 자리에서 잰다.
         (int Col, int Row, int Score)? aim = null;
         bool aimIsObject = false;
+        // 파트1 겨누기 +0x31 = 7(혼 · 혈랑마혼 · 비연참 · 댓쉬 · 워프)은 시전자가 설 수 있는 빈 칸만 겨눈다(0x1008a950 → 0x10089bf0) — 높이는 설 칸에서 따로 본다.
+        bool landOnly = Part1.AttackOf(w) is { AimFilter: 7 };
         foreach (var (col, row) in candidates)
         {
+            if (landOnly && !CanLandOn(col, row, user)) continue;
             var targets = WorkTargets(w, user, col, row);
             // 파트1 AI 표 이동 한도 밖의 적은 대상으로 안 센다(AiThink 가 정한 _part1Aware).
             if (_part1Aware is ({ } owner, { } seen) && owner == user) targets.RemoveAll(i => SeesAsFoe(user, host._units[i]) && !seen.Contains(i));
@@ -341,6 +344,7 @@ internal sealed unsafe partial class BattleScene
             int sc = stand % host.Cols, sr = stand / host.Cols;
             if (taken != null && stand != here && taken.Contains(stand)) continue;
             if (!InWorkRange(w, sc, sr, pick.Col, pick.Row, user)) continue;
+            if (landOnly && HeightAt(sc, sr) != HeightAt(pick.Col, pick.Row)) continue;   // 거르기 7 — 겨눈 칸이 설 칸과 같은 높이(0x1008a9db)
             if (WorkTargetsFrom(w, user, sc, sr, pick.Col, pick.Row) is not { Count: > 0 } && AiObjectAt(w, user, pick.Col, pick.Row) == null) continue;
             int d = Math.Abs(sc - user.Col) + Math.Abs(sr - user.Row);
             if (d < bestDist) { bestDist = d; bestStand = stand; }

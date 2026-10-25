@@ -14,7 +14,7 @@ using static DuelDx.GameWindow;
 /// 핸들러는 이펙트 · 시전자 동작 · 피해 사건만 깐다 — 소드브레이크가 무기를 깨뜨리거나 혈랑마혼이 빨아들이는 일은 핸들러에 없다.</para>
 /// <para>사슬은 앞 것이 끝난 다음 틱에, 지연이 붙은 사슬은 끝나고 (지연 + 2) 틱에 시작한다(<c>0x10076610</c>). 피해 사건(<c>0x100768f0</c>)은 그 그림의
 /// 첫 틱에 난다. 높이 z 는 판 픽셀로 −0.6 배, 월드 y 는 0.8 배(<c>0x1008fbb0</c>).</para>
-/// <para>원본과 다르게 한 것: 혈랑마혼은 원본에서 시전자가 대상 자리에 남지만 여기서는 비연참처럼 제자리로 돌아온다. 플라즈마 슬래쉬 · 마룡광아탄의
+/// <para>원본과 다르게 한 것: 플라즈마 슬래쉬 · 마룡광아탄의
 /// 범위 칸은 전투가 넘겨준 <c>cells</c> 를 쓴다(대상의 칸이 그 안에 없으면 가장 가까운 칸이 터질 때 맞는다). 천지파열무의 큰 인물용 금 모션(21)은
 /// 인물 크기(+0xb9)를 알 수 없어 늘 보통(19)을 쓴다.</para>
 /// </remarks>
@@ -322,13 +322,13 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 혈랑마혼(292) — 시전자 오른쪽 위(x+30, z+140)에서 칼빛 536:0 이 왼쪽 아래로 내려긋고(빠르기 10 × 0.8, 잔상 536:3 36틱), 시전자는 정면을 보고
     /// 파트1 동작 9 를 36번. 그 뒤 불 소용돌이 230 과 함께 대상까지 돌진하고(20 × 1.8), 옆 40 에 반투명한 분신 둘이 나란히 달린다(10 × 1.1).
-    /// 셋 모두 지나는 칸의 적을 친다(<c>0x100769b0</c>). 닿으면 돌진 자세 두 번 → 동작 21, 여기서는 제자리로 돌아온다.
+    /// 셋 모두 지나는 칸의 적을 친다(<c>0x100769b0</c>). 닿으면 돌진 자세 두 번 → 동작 21, 시전자는 겨눈 칸에 남는다(원본 그대로).
     /// </summary>
     private int S2Hyeollang(List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
         var (hx, hy) = _home;
         var user = _user;
-        var t = TargetPoint(targets, aim);
+        var t = aim;   // 겨눈 빈 칸(+0x31 = 7)
         int dir = Dir4(t.X - hx, t.Y - hy);
         (double X, double Y, double Z) from = (hx + 30, hy, 140);
         var stroke = S2Fly(from, (hx - 30, hy, 0), 10, 0.8);
@@ -372,14 +372,13 @@ internal sealed partial class Part1Skill
             HitAt(go + (best < 0 ? charge.Count - 1 : best) + 1, ti, hit);
         }
         int arrive = go + charge.Count;
+        // 닿은 뒤 돌진 자세 두 번 → 동작 21. 원본은 이동기(0x100816d0)가 시전자를 그 칸에 내려놓는다 — 끝날 때까지 그 자리에 붙들고, 판 자리는 전투가 옮긴다.
         Later(arrive, () => Act(user, 18, 1, 2));
-        Carry(arrive, Enumerable.Repeat(t, 40).ToList());
-        int back = arrive + 30;
-        Later(back - 15, () => Act(user, 21, 8));
-        var ret = Move(t, _home, 20, 1.8);
-        Later(back, () => { user.Facing = FacingOf(hx - t.X, hy - t.Y); Act(user, 18, 1, repeat: 0); host.Btl.CenterOnUnit(user); });
-        Carry(back, ret);
-        return Math.Max(back + ret.Count + 2, Length(536, 0));
+        int swing = arrive + 15;
+        Later(swing, () => Act(user, 21, 8));
+        int last = swing + ActionTicks(user, 21, 8);
+        Carry(arrive, Enumerable.Repeat(t, last - arrive + 1).ToList());
+        return Math.Max(last + 1, Length(536, 0));
     }
 
     /// <summary>

@@ -31,12 +31,11 @@ internal sealed partial class Part1Skill
         Enumerable.Range(0, host._units.Length).Where(i => host._units[i] is { Alive: true, OnField: true } u && u != user && BattleScene.SeesAsFoe(user, u));
 
     /// <summary>비연참(파트1, 핸들러 0x10060780) — 시전자 등에 불 날개(503, 높이 100)가 돋고, 동작 9 를 23번 한 뒤 불 소용돌이(230)와 함께 대상까지 돌진한다(빠르기 20 × 1.8).
-    /// 돌진이 지나는 칸의 적마다 한 번 친다(칸이 바뀔 때마다 — 0x100769b0).</summary>
+    /// 돌진이 지나는 칸의 적마다 한 번 친다(칸이 바뀔 때마다 — 0x100769b0). 겨누는 것은 빈 칸(+0x31 = 7)이고 시전자는 그 칸에 남는다.</summary>
     private int FlyingSlash(List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
         var (hx, hy) = _home;
         var user = _user;
-        if (targets.Count > 0) aim = host.Btl.UnitFoot(host._units[targets[0]]);
         Put(503, 0, 0, hx, hy - 100 * 0.6, sounds: true);
         var dir = FacingOf(aim.X - hx, aim.Y - hy);
         user.Facing = Facing.Down;
@@ -51,31 +50,23 @@ internal sealed partial class Part1Skill
         var charge = Move(_home, aim, 20, 1.8);
         Later(go, () => { user.Facing = dir; Act(user, 18, 1, repeat: 0); host.Btl.CenterOn(aim.X, aim.Y); });
         Carry(go, charge);
-        // 지나는 칸 — 돌진 길에서 20px 안에 서 있는 적을 그 자리를 지날 때 친다.
-        foreach (int ti in FoesOf(user))
+        // 지나는 칸 — 대상(돌진 길에 들어서는 칸의 적, BattleScene.Part1DashCells)마다 길에서 가장 가까운 틱에 친다.
+        foreach (int ti in targets)
         {
             var (fx, fy) = host.Btl.UnitFoot(host._units[ti]);
-            int best = -1;
-            double near = 22;
-            for (int t = 0; t < charge.Count; t++)
-            {
-                double d = Math.Sqrt((charge[t].X - fx) * (charge[t].X - fx) + (charge[t].Y - fy) * (charge[t].Y - fy));
-                if (d < near) (near, best) = (d, t);
-            }
-            if (best >= 0) HitAt(go + best + 1, ti, hit);
+            int best = 0;
+            for (int t = 1; t < charge.Count; t++)
+                if (Dist(charge[t], (fx, fy)) < Dist(charge[best], (fx, fy))) best = t;
+            HitAt(go + best + 1, ti, hit);
         }
         int arrive = go + charge.Count;
-        // 닿은 뒤 돌진 자세 두 번 → 동작 21 — 원본은 그 칸에 남지만 여기서는 제자리로 돌아온다(빠르기 20 × 1.8).
-        int pose = 0;
-        Later(arrive, () => pose = Act(user, 18, 1, 2));
-        var hold = Enumerable.Repeat(aim, 40).ToList();
-        Carry(arrive, hold);
-        int back = arrive + 30;
-        Later(back - 15, () => Act(user, 21, 8));
-        var ret = Move(aim, _home, 20, 1.8);
-        Later(back, () => { user.Facing = FacingOf(hx - aim.X, hy - aim.Y); Act(user, 18, 1, repeat: 0); host.Btl.CenterOnUnit(user); });
-        Carry(back, ret);
-        return back + ret.Count + 2;
+        // 닿은 뒤 돌진 자세 두 번 → 동작 21. 원본은 이동기(0x100816d0)가 시전자를 그 칸에 내려놓는다 — 끝날 때까지 그 자리에 붙들고, 판 자리는 전투가 옮긴다.
+        Later(arrive, () => Act(user, 18, 1, 2));
+        int swing = arrive + 15;
+        Later(swing, () => Act(user, 21, 8));
+        int last = swing + ActionTicks(user, 21, 8);
+        Carry(arrive, Enumerable.Repeat(aim, last - arrive + 1).ToList());
+        return last + 1;
     }
 
     /// <summary>

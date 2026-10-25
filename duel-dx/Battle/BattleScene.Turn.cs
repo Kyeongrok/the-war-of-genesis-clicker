@@ -1045,6 +1045,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             return true;
         }
         // 대상 방식 3·6(아무 칸)·7(빈 칸)은 메테오처럼 <b>칸을 고르는</b> 기술이라 그 칸에 아무도 없어도 된다.
+        // 7 은 시전자가 설 수 있는 빈 칸이어야 한다(파트2 0x100daca0 모드 7 · 파트1 0x1008a950 거르기 7) — 그 밖의 칸은 누르지 못한다.
+        if (w.TargetMode == 7 && !CanAimAt(w, user, col, row))
+        {
+            host.Hint("설 수 있는 빈 칸을 고르세요 — 적 옆 칸 · 높이가 다른 칸은 안 됩니다 (우클릭·Esc 취소)");
+            return true;
+        }
         bool needsUnit = w.TargetMode is 1 or 4 or 5;
         // 적 물체(바리케이트·포탑 따위 부술 수 있는 것)도 대상이다 — 피해 기술은 범위 안의 적 물체를 친다(아래 판정, 0x100d9510 은 물체를 먼저 돌려준다).
         // 전에는 유닛만 세어, 기본공격으로는 칠 수 있는 물체에 기술을 쓰면 「대상이 없습니다」가 떴다(사용자 보고: Btl 0133 (1,15)).
@@ -1330,10 +1336,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
                 Part1.SplitHits = false;
-                // 댓쉬(366) · 워프(367) — 시전자가 겨눈 칸으로 옮겨 선다(0x1006b340 · 0x1006b640 끝의 유닛 맞춤 0x10081350). 칸이 차 있으면 제자리.
-                if (host._scene.IsPart1 && Part1.AttackOf(w)?.Id is 366 or 367
+                // 겨누기 +0x31 = 7 인 파트1 기술(혼 · 혈랑마혼 · 비연참 · 댓쉬 · 워프) — 시전자가 겨눈 칸으로 옮겨 선다. 이동기 0x100816d0 이 끝날 때
+                // (소멸자 0x10081750) 시전자를 그 칸 가운데에 맞추고(×40 + 20) 판 자리에 다시 올린다(0x10037080). 워프는 유닛 맞춤 0x10081350.
+                // 칸이 차 있으면 제자리. 걸은 비용을 다시 세지 않게 시작 자리도 옮긴다(파트2 돌진 DashRoutine 과 같이).
+                if (Part1.AttackOf(w) is { AimFilter: 7 } && (a.Col, a.Row) != (col, row)
                     && !host._units.Any(u => u != a && u.Alive && u.OnField && u.Col == col && u.Row == row))
+                {
                     a.WarpTo(col, row);
+                    a.OriginCol = col;
+                    a.OriginRow = row;
+                }
                 if (!followersDone && targets.Count > 0)
                 {
                     FollowersAttack(userIndex, host._units[targets[0]], dying, allyPass: false, leaderWork: w);

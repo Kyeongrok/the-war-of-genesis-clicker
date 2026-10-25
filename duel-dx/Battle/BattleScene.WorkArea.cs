@@ -186,6 +186,7 @@ internal sealed unsafe partial class BattleScene
     internal List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
     {
         if (w.SelfCentred) (col, row) = (user.Col, user.Row);
+        if (Part1DashOf(w) is { } dash) return Part1DashCells(dash, user, col, row);
         if (Part1AreaOf(w, user) is { } p1) return Part1AreaCells(p1, user, col, row);
         var cells = new List<(int, int)>();
         if (w.AreaShape == 0) { cells.Add((col, row)); return cells; }
@@ -219,6 +220,57 @@ internal sealed unsafe partial class BattleScene
                 else if (!ShapeCovers(w.AreaShape, 0, 0, facing) || plain < w.AreaMinQuarters) continue;
                 cells.Add((cx, cy));
             }
+        return cells;
+    }
+
+    /// <summary>
+    /// 파트1 돌진 기술(혼 26~30 · 혈랑마혼 292 · 비연참 294) — 겨누기 <c>+0x31</c> = 7(시전자가 설 수 있는 빈 칸, <c>0x1008a950</c> → <c>0x10089bf0</c>)이고
+    /// 효과 거르기 <c>+0x40</c> = 1(적)인 Attack. 핸들러가 시전자를 이동기 <c>0x100816d0</c> 에 실어 겨눈 칸까지 나르며 「칸이 바뀔 때」 맞음 사건
+    /// (<c>0x100769b0</c> → <c>0x1007676e</c>)으로 들어선 칸의 적을 친다. 같은 +0x31 = 7 이라도 댓쉬 366(+0x40 = 2) · 워프 367 · 내리기 399 는 치지 않는다.
+    /// 파트1 판이든 파트2 판(편집기로 붙인 비연참 20100)이든 Attack.dat 으로 정한다.
+    /// </summary>
+    internal Part1Attack? Part1DashOf(WorkData w) => w.Id > Part1Game.ChrBase && Part1.AttackOf(w) is { AimFilter: 7, AreaFilter: 1 } a ? a : null;
+
+    /// <summary>
+    /// 파트1 돌진 기술의 맞는 칸 — 이동기가 지나며 <b>들어서는</b> 칸들(출발 칸 빼고, 겨눈 칸까지). 이동기를 틱마다 그대로 밟아(빠르기 20 × 1.8, 최대 40 —
+    /// 혼 <c>0x100460d5</c> · 비연참 <c>0x1006097f</c> · 혈랑마혼 <c>0x1005fdae</c>) 그 틱 자리의 칸(월드 ÷ 40)을 모은다 — 비스듬한 비연참도 원본처럼.
+    /// 혈랑마혼은 시전자 옆 ±40 에 나란히 달리는 분신 둘(<c>0x1007cf00</c>, 10 × 1.1)도 칸이 바뀔 때 친다 — 그 두 길의 칸도 넣는다.
+    /// </summary>
+    internal List<(int Col, int Row)> Part1DashCells(Part1Attack a, UnitState user, int col, int row)
+    {
+        const int W = 40;   // 월드 한 칸(0x66666667 >> 4 = ÷ 40)
+        var cells = new List<(int Col, int Row)>();
+        void Lane(double fx, double fy, double tx, double ty, double speed, double factor)
+        {
+            int last = (int)Math.Floor(fx / W) * 1000 + (int)Math.Floor(fy / W);
+            double x = fx, y = fy;
+            for (int guard = 0; guard < 600; guard++)
+            {
+                double dx = tx - x, dy = ty - y, far = Math.Sqrt(dx * dx + dy * dy);
+                if (far <= speed) (x, y) = (tx, ty);
+                else (x, y) = (x + dx / far * speed, y + dy / far * speed);
+                int c = (int)Math.Floor(x / W), r = (int)Math.Floor(y / W);
+                if (c * 1000 + r != last)
+                {
+                    last = c * 1000 + r;
+                    if ((uint)c < host.Cols && (uint)r < host.Rows && !cells.Contains((c, r))) cells.Add((c, r));
+                }
+                if (far <= speed) break;
+                speed = Math.Clamp(speed * factor, 1, 40);
+            }
+        }
+        double ux = user.Col * W + W / 2.0, uy = user.Row * W + W / 2.0, gx = col * W + W / 2.0, gy = row * W + W / 2.0;
+        Lane(ux, uy, gx, gy, 20, 1.8);
+        if (a.Id == 292)
+        {
+            int dir = Part1Attack.AreaDirection(user.Col, user.Row, col, row);
+            foreach (int o in new[] { -W, W })
+            {
+                var (ox, oy) = dir is 0 or 2 ? (o, 0) : (0, o);
+                Lane(ux + ox, uy + oy, gx + ox, gy + oy, 10, 1.1);
+            }
+        }
+        cells.Remove((user.Col, user.Row));
         return cells;
     }
 
