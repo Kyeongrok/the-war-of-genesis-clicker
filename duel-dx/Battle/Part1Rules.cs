@@ -285,7 +285,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int power = Part1Combat.Power(selector, attacker);
         bool weaponHit = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31;
         if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
-        // 타수(+0x66) — 원본은 세기에 곱해 한 번에 준다. 쌍검 · 쌍권총처럼 타격 키마다 따로 치는 기본 공격은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
+        // 타수(+0x66) — 세기에 곱해 한 번에 준다(원본 AI 어림 0x10040985 와 같다). 쌍검 · 쌍권총 · 연 · 참처럼 타격 키마다 따로 치는 것은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
         if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
         int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);

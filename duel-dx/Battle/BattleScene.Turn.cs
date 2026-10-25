@@ -1387,8 +1387,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 host.Part1Ab.ChainStruck = 0;
                 // 타수가 둘 이상인 파트1 기본 공격(쌍검 더블 어택 · 쌍권총)은 타격마다 따로 친다 — 타수를 세기에 곱하지 않는다.
                 host.Part1Ab.SplitStruck = 0;
-                bool split = part1Basic > 0 && host.Part1Ab.ChainHits < 2
-                             && Part1Attack.ById(Part1Attack.LoadAll(), part1Basic) is { Hits: >= 2 };
+                // 연 · 참도 모션의 타격 키마다 따로 친다(원본 0x10036130 — 키마다 0x1009d440, Part1Skill.StrikesEachKey).
+                bool split = (part1Basic > 0 && host.Part1Ab.ChainHits < 2
+                              && Part1Attack.ById(Part1Attack.LoadAll(), part1Basic) is { Hits: >= 2 })
+                             || (part1Basic == 0 && Part1Skill.StrikesEachKey(w.Id));
                 Part1.SplitHits = split;
                 bool each = (part1Basic == 0 && Part1Skill.HitsEachTime(w.Id)) || host.Part1Ab.ChainHits >= 2 || split;
                 void Part1Hit(int ti)

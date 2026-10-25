@@ -113,5 +113,13 @@ public static class Part1SkillBook
     /// <summary>파트1 work 번호의 Attack.dat 번호 — 20000 위의 1000 나머지.</summary>
     public static int AttackIdOf(int work) => (work - Part1Game.ChrBase) % WorkStride;
 
-    private static string Head(string name) => name.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Trim();
+    /// <summary>
+    /// 레벨 이름의 머리 — 끝 숫자를 뗀다(「혼1」 → 「혼」). 연의 레벨은 숫자가 앞에 있어(「2연」~「6연」, Attack 11~15) 「연」으로 본다 —
+    /// 전에는 「2연」 ≠ 「3연」이라 연이 1레벨뿐이어서 2레벨을 배운 이(죠안 · 살라딘)도 2연을 썼다(사용자 보고: btl 20141 죠안의 연 레벨2).
+    /// </summary>
+    private static string Head(string name)
+    {
+        string h = name.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Trim();
+        return h.Length >= 2 && h[^1] == '연' && h[..^1].All(char.IsAsciiDigit) ? "연" : h;
+    }
 }
