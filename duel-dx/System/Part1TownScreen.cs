@@ -67,6 +67,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         _talks.Clear();
         _talk = null;
         if (_window != null) _window._open = false;
+        _panel?.CloseOff();
         _open = true;
         // 시험: DUELDX_PART1SHOP=n — n 번째 시설 창을 곧바로 연다.
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_PART1SHOP"), out int open) && open >= 0 && open < _facilities.Count) OpenFacility(open);
@@ -100,21 +101,31 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         var (ox, oy) = host.Mos.MosesOrigin();
         int hit = Menu.HitAt(bx - ox, by - oy);
         if (hit == Part1TownMenu.HitExit) return ButtonHit;
+        if (hit >= Part1TownMenu.HitFace) return hit;   // 얼굴 단추 5000 + i
         return hit < 0 ? -1 : Array.IndexOf(_slots, hit);
     }
 
     internal void UpdateHover(int bx, int by)
     {
         if (_window is { _open: true } w) { w.UpdateHover(bx, by); return; }
-        _hover = HitAt(bx, by);
+        _hover = PanelOpen ? -1 : HitAt(bx, by);
     }
 
     internal void OnClick(int bx, int by)
     {
         if (_window is { _open: true } w) { w.OnClick(bx, by); return; }
         if (_talk != null) { NextTalk(); return; }
+        if (PanelOpen) { _panel!.OffClick(bx, by); return; }
         int hit = HitAt(bx, by);
         if (hit == ButtonHit) { Leave(); return; }
+        if (hit >= Part1TownMenu.HitFace)
+        {
+            // 얼굴 단추(0x100c67e7) — 원본은 그 사람의 인물 창(0x100cb860)을 연다. 리메이크는 챕터 지도 상태 창처럼 상태 패널을 띄운다.
+            var members = host.Part1.ActiveMembers();
+            if (hit - Part1TownMenu.HitFace < members.Count) Panel.OpenOff(members[hit - Part1TownMenu.HitFace], members, shell.Chapter.SaveProgress);
+            _hover = -1;
+            return;
+        }
         if (hit < 0 || hit >= _facilities.Count) return;
         OpenFacility(hit);
     }
@@ -131,7 +142,26 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
     {
         if (_window is { _open: true } w) { w.OnKey(key); return; }
         if (_talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) NextTalk(); return; }
+        if (PanelOpen)
+        {
+            if (key == Win32.VK_ESCAPE) _panel!.CloseOff();
+            else if (key is Win32.VK_LEFT or Win32.VK_RIGHT) _panel!.SwitchOff(key == Win32.VK_LEFT ? -1 : 1);
+            return;
+        }
         if (key == Win32.VK_ESCAPE) Leave();
+    }
+
+    /// <summary>얼굴 단추로 연 상태 패널(전투와 같은 그림, 전투 밖 꼴 — <see cref="Part1HqStatusWindow"/> 와 같다).</summary>
+    private Part1StatusPanel Panel => _panel ??= new(host);
+    private Part1StatusPanel? _panel;
+    private bool PanelOpen => _panel is { OffOpen: true };
+
+    /// <summary>오른 단추 — 상태 패널이 떠 있으면 패널이 받는다(어빌리티 설명 · 목록 닫기 · 밖이면 닫기). 받았으면 true.</summary>
+    internal bool OnRightDown(int bx, int by)
+    {
+        if (_window is { _open: true } || !PanelOpen) return false;
+        _panel!.OffRightDown(bx, by);
+        return true;
     }
 
     private void Say(string raw)
@@ -157,8 +187,9 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
                 for (int x = 0; x < Math.Min(MosesScene.MosesW, _bgW); x++)
                     host.SetPixel(ox + x, oy + y, bg[y * _bgW + x] | 0xFF000000);
         if (_window is { _open: true } w) { w.Draw(ox, oy); host.DrawToast(); return; }
-        int hover = _hover == ButtonHit ? Part1TownMenu.HitExit : _hover >= 0 && _hover < _slots.Length ? _slots[_hover] : -1;
+        int hover = _hover == ButtonHit ? Part1TownMenu.HitExit : _hover >= Part1TownMenu.HitFace ? _hover : _hover >= 0 && _hover < _slots.Length ? _slots[_hover] : -1;
         Menu.Draw(ox, oy, hover);
+        if (PanelOpen) _panel!.DrawOff(ox, oy);
         if (_talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
         host.DrawToast();
     }

@@ -926,6 +926,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 else if (msg == Win32.WM_RBUTTONDOWN && _jobTree is { _open: true }) _jobTree.Close();   // 전직 트리는 오른쪽 단추로 닫는다
                 else if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
                 else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
+                else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Town._open && Part1TitleScr.Town.OnRightDown(bx, by)) { }   // 파트1 마을: 얼굴로 연 상태 패널
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);

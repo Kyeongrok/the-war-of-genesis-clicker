@@ -12,11 +12,16 @@ namespace DuelDx;
 /// <para>단추 칸 n 을 누르면 조건 200 [n] 사건이 돈다(<c>0x100c5ca5</c> → <c>0x101b4524</c> = n, 조건 <c>0x100cd040</c>) — 사건 차례가 아니라 칸 번호다(0109 는 사건 차례와 다르다).</para>
 /// <para>틀(<c>0x100c82c0</c>): 위 창 (0, 7) 640×33 — Obs 678 모션 3 (0, 0) · 모션 4 (552, 33) 장식, 이름 = 글 줄[머리 낱말 3] 글꼴 6 을 (320, 23) 가운데.
 /// 아래 창 (0, 360) 640×120 — Obs 678 모션 5 · 6 (75, 369) 틀, 얼굴 10칸 가운데 (72 + 55i, 420)(없으면 Obs 217 모션 2 「Empty」 (47 + 55i, 395)), EXIT 0x3e8 (577, 457) Obs 370.</para>
+/// <para>얼굴 단추 5000 + i 를 누르면(<c>0x100c67e7</c>) 시설 단추를 숨기고 그 팀 사람의 인물 창(<c>0x100cb860</c>, 자리 (320, 130), 인물 레코드 <c>0x101ab2a8</c> + Chr × 0x154)을 연다 —
+/// 리메이크는 챕터 지도 상태 창의 얼굴처럼 전투와 같은 상태 패널(<see cref="Part1StatusPanel"/>)을 띄운다(<see cref="Part1TownScreen"/>).</para>
 /// </remarks>
 internal sealed class Part1TownMenu(GameWindow host)
 {
     internal const int ButtonX = 491, ButtonY = 51, ButtonStep = 40, ButtonW = 140, ButtonH = 36, IconObs = 678, ExitObs = 370;
     internal const int ExitX = 577, ExitY = 457, ExitW = 60, ExitH = 15, HitExit = -2;
+
+    /// <summary>얼굴 단추 i 의 짚기 값 — 원본 단추 id 5000 + i(가운데 (72 + 55i, 420), 50×50).</summary>
+    internal const int HitFace = 5000, FaceX = 72, FaceY = 420, FaceStep = 55;
 
     /// <summary>시설 단추 하나 — 필드 인물 칸 차례(= 조건 200 의 값), 아이콘 Obs, 글.</summary>
     internal sealed record Button(int Slot, int Obs, string Label, int Flag);
@@ -46,6 +51,9 @@ internal sealed class Part1TownMenu(GameWindow host)
     internal int HitAt(int x, int y)
     {
         if (x >= ExitX && x < ExitX + ExitW && y >= ExitY && y < ExitY + ExitH) return HitExit;
+        int people = Math.Min(10, host.Part1.ActiveMembers().Count);
+        for (int i = 0; i < people; i++)
+            if (Math.Abs(x - (FaceX + FaceStep * i)) < 25 && Math.Abs(y - FaceY) < 25) return HitFace + i;
         foreach (var b in _buttons)
         {
             int by = ButtonY + ButtonStep * b.Slot;
@@ -90,8 +98,11 @@ internal sealed class Part1TownMenu(GameWindow host)
         DrawObs(IconObs, 6, ox + 75, oy + 369);
         var members = host.Part1.ActiveMembers();
         for (int i = 0; i < 10; i++)
-            if (i >= members.Count || !_art.Face(members[i], ox + 72 + 55 * i, oy + 420))
+        {
+            if (i >= members.Count || !_art.Face(members[i], ox + FaceX + FaceStep * i, oy + FaceY))
                 _art.Blit(_art.Frame(217, 2, 0), ox + 47 + 55 * i, oy + 395);
+            else if (hover == HitFace + i) _art.Stroke(ox + FaceX + FaceStep * i - 25, oy + FaceY - 25, 50, 50, 0xFFFFE080);
+        }
         DrawObs(ExitObs, 0, ox + ExitX, oy + ExitY);
         _art.TextCentered("EXIT", ox + ExitX + ExitW / 2, oy + ExitY + ExitH / 2, hover == HitExit ? 0xFFFFE080u : GameWindow.White, 11);
     }
