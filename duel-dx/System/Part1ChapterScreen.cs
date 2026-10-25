@@ -307,6 +307,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         int done = _chapter?.Id ?? host.Part1.ChapterId;
         if (done >= 0) host.Part1.FinishedChapters.Add(done);
+        host.Part1.CloseChapter();   // 용병 → eld(×100), 용병 · 탑승물 비우기(0x100ae560)
         host.Part1.PendingActions = [];
         host.Part1.Chain = null;
         _resume = false;
@@ -814,9 +815,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         switch (hit)
         {
             case ButtonHit + ButtonMove: StartMove(); break;
-            case ButtonHit + ButtonEnter: EnterHere(); break;
+            case ButtonHit + ButtonEnter: if (CanEnter()) EnterHere(); break;          // 못 쓰는 단추(상태 3)는 눌러도 아무 일 없다
             case ButtonHit + ButtonStatus: Status.Open(); break;
-            case ButtonHit + ButtonExchange: Exchange.Open(); break;
+            case ButtonHit + ButtonExchange: if (CanExchange()) Exchange.Open(); break;
             case ButtonHit + ButtonEndTurn: EndMapTurn(); break;
             case >= TeamHit and < TeamHit + 8: SelectTeam(hit - TeamHit); break;
             case >= TargetHit and < TargetHit + 1000: _mode = Mode.Map; MoveTo(hit - TargetHit); break;
@@ -839,6 +840,26 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         int chapterId = chapter.Id;
         int member = Math.Max(0, host.Part1.GroupMembers().IndexOf(chr));
         host.LeaveScene(() => { _open = false; shell.Party.Open(() => Open(chapterId), member); });
+    }
+
+    /// <summary>
+    /// 「진  입」을 쓸 수 있나 — 원본은 지도를 다시 그릴 때마다(0x100b20d0 끝, 0x100b265c~) 단추 상태를 정한다: 고른 팀이 이번 턴에 움직였으면(+0xaa4) 「이  동」과 함께 못 씀(상태 3, 회색),
+    /// 아니면 그 팀 장소의 낱말 7(전투 · 마을 번호)이 −1 이거나 전투 장소(낱말 6 = 0)인데 낱말 8 ≠ 0(적 말이 길목에서 막는 전투 — 이동으로만 부딪친다)이면 못 씀.
+    /// 들어갈 곳이 없는 장소(챕터 21 팬드래건 북부 처음 자리)에서 단추가 살아 「들어갈 곳이 없습니다」만 띄웠다(사용자 보고).
+    /// </summary>
+    internal bool CanEnter()
+    {
+        if (_chapter is not { } chapter || _party < 0 || _party >= chapter.Places.Count || SelectedTeam is { Moved: true }) return false;
+        var place = chapter.Places[_party];
+        return place.Target >= 0 && !(place.Kind == 0 && place.Words.Length > 8 && place.Words[8] != 0);
+    }
+
+    /// <summary>「교  환」을 쓸 수 있나(0x100b2780~) — 고른 팀 장소에 다른 팀이 있거나, 그 장소가 본부(머리 낱말 9)일 때. 움직였는지는 안 본다.</summary>
+    internal bool CanExchange()
+    {
+        if (_chapter is not { } chapter || SelectedTeam is not { } team) return false;
+        if (TeamsAt(team.Place).Any(t => t != SelectedTeamIndex)) return true;
+        return chapter.Header.Length > 9 && chapter.Header[9] >= 0 && team.Place == chapter.Header[9];
     }
 
     /// <summary>「이  동」 — 고른 팀이 이번 턴에 안 움직였고 갈 이웃이 있으면 고르기 표지를 띄운다(없으면 아무 일 없음).</summary>
@@ -1046,7 +1067,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (!WindowOpen && _mode == Mode.Map && calm)
             for (int i = 0; i < Buttons.Length; i++)
             {
-                bool disabled = i == ButtonMove && (SelectedTeam is { Moved: true } || MoveTargets().Count == 0);
+                bool disabled = i switch
+                {
+                    ButtonMove => SelectedTeam is { Moved: true } || MoveTargets().Count == 0,
+                    ButtonEnter => !CanEnter(),
+                    ButtonExchange => !CanExchange(),
+                    _ => false,
+                };
                 Art.Button(ox + ButtonX, oy + Buttons[i].Y, Buttons[i].Name, _hover == ButtonHit + i, disabled);
             }
         if (_mode == Mode.Move && calm) Art.TextCentered("갈 곳을 고르세요 (오른 단추 · Esc 취소)", ox + W / 2, oy + H - 16, 0xFFFFE080, 12);

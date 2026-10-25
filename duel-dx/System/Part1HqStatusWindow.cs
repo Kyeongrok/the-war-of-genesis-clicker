@@ -8,7 +8,7 @@ namespace DuelDx;
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 13.5. 틀 상자 (65, 80) 510×370. 얼굴을 누르면 원본은 인물 상세 창(0x100bb580)을 여는데, 리메이크는 그 자리에 전투와 같은 상태 패널(<see cref="Part1StatusPanel"/>)을 가운데에 띄운다(사용자 요청).
 /// 아이템 칸을 짚으면 이름 · 설명 · 효과(<see cref="Part1ItemTip"/>).
-/// 원본은 아이템 · 용병 · 탑승물을 팀마다 들지만 리메이크는 무리 하나가 같이 쓴다(<see cref="Part1Progress.Bag"/> · <see cref="Part1Progress.Mercenaries"/> · <see cref="Part1Progress.Mounts"/>).
+/// 원본은 아이템 · 용병 · 탑승물을 팀마다 들지만 리메이크는 지금 챕터의 이야기 무리 짐(<see cref="Part1Progress.Stocks"/>)을 팀이 같이 쓴다 — 다른 줄기(무리)의 짐은 안 보인다.
 /// 돈은 원본도 이야기 무리 돈(0x101a07e0[머리 낱말 1])이다 — 리메이크의 eld.
 /// </remarks>
 internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen map)
