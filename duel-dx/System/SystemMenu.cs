@@ -788,7 +788,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     int? Part1Ambient = null,      // 파트1 기온(행동 102 가 바꾼 것, 안 바꿨으면 null) — 원본 전투 세이브의 +0xb96e(0x10033625)
                                     int[]? Part1Lingering = null,  // 파트1 칸의 기운(땅불 · 얼음 덩이)마다 (열, 줄, 알림, 모션, 놓은 지, 남은 틱) — 원본 맵 층 저장(0x100901c0)
                                     int[]? Part1Energy = null,     // 파트1 에너지 필드 기운마다 (열, 줄, 모션, 깐 지) — 같은 맵 층 저장의 기술 152~160 갈래
-                                    string? SceneTitle = null);    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
+                                    string? SceneTitle = null,
+                                    int[]? Part1Riders = null,     // 파트1 탈것 짝마다 (탈것 자리, 탄 이 자리, 무리 탈것 1/0) — 원본 유닛 기록의 +0x1cc · +0x1d0 · +0x1c0
+                                    int[]? Part1LostMounts = null);   // 이 판에서 쓰러진 무리 탈것(Chr) — 전투가 끝날 때 무리에서 뺀다(SettlePart1Losses)    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
                                                                    // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
     // 꼬리 셋(없으면 옛 세이브라 예전처럼):
@@ -1063,7 +1065,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 Part1Ambient: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.SavedAmbient : null,
                 Part1Lingering: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.SaveLingering() : null,
                 Part1Energy: battleSave && host._scene.IsPart1 ? host.Btl.Part1Fields.Save() : null,
-                SceneTitle: host._scene.IsPart1 ? host._scene.Title : null);
+                SceneTitle: host._scene.IsPart1 ? host._scene.Title : null,
+                Part1Riders: battleSave && host._scene.IsPart1 ? host.Btl.SaveRiders() : null,
+                Part1LostMounts: battleSave && host._scene.IsPart1 ? [.. host.Btl._part1LostMounts] : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -1188,7 +1192,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 (true, 2, on.No, chp.Systems.FirstOrDefault(s => s.Planets.Contains(on.No))?.No ?? host.Mos._mosesSystem);
         // 시험 전용: 되살린 항행 자리와 그 챕터의 전투 장소들(DUELDX_TESTRUN 일 때만).
         TestRunTrace($"load nav chp {host.Mos._mosesChp?.Id} navAt {(state.NavAt == null ? "-" : string.Join(',', state.NavAt))} → visited {host.Mos._mosesNavVisited} step {host.Mos._mosesStep} planet {host.Mos._mosesPlanet} system {host.Mos._mosesSystem}; battle places {string.Join(' ', host.Mos._mosesChp?.Places.Where(p => p.Kind == ChapterFile.PlaceKind.Battle).Select(p => $"{p.No}:{p.Target}") ?? [])}");
-        if (!host._battleLoaded || battle != host._scene.Id || fromMoses)
+        if (!host._battleLoaded || battle != host._scene.Id || fromMoses || Part1RidersMissing(state))
         {
             // 판을 새로 세울 때 맵 밖 여분(벤치)을 바로 지우지 않는다 — 저장할 때 벤치에서 꺼내 세운 인물이 사라지고, 뺀 인물이 새 몸으로 서고,
             // 「군단사용」을 끈 대장의 부하가 되살아났다(ba-21 outer-rules 2.1). 세이브에 적힌 인물만 남기고 나머지 배치 인물을 뺀다.
@@ -1332,7 +1336,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? host._units[foundA] : null;
         host.Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? host._units[foundB] : null;
         RestoreObjects(state);
-        if (host._scene.IsPart1) RestorePart1Battle(state, restored);
+        if (host._scene.IsPart1) RestorePart1Battle(state, restored, Mapped);
         _restartPart1 = null;
 
         // 전투 전 스냅숏(감사5 S5) — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티이고 전투 안 값은 판 부분(유닛)에 따로 있다.
@@ -1480,12 +1484,23 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     }
 
     /// <summary>
+    /// 같은 판에서 불러오는데 세이브의 탈것 짝에 든 유닛(탈것 · 탄 이)이 지금 판에 모자라는가 — 저장 뒤 RESTART 하고 배치에서 내렸으면 탈것 유닛이 없다.
+    /// 그러면 판을 새로 세운다(세이브의 파트1 진행 · 탑승 지정대로 탈것과 탄 이가 다시 선다).
+    /// </summary>
+    private bool Part1RidersMissing(SaveState state) =>
+        host._battleLoaded && host._scene.IsPart1 && state.Part1Riders is { } pairs
+        && pairs.Where((_, k) => k % 3 != 2).Where(i => i >= 0 && i < state.Units.Length).Select(i => state.Units[i].ChrCode).Distinct()
+                .Any(chr => host._units.Count(u => u.ChrCode == chr) < state.Units.Count(s => s.ChrCode == chr));
+
+    /// <summary>
     /// 파트1 전투 상태를 되살린다 — 기온(행동 102) · 칸의 기운(땅불 · 얼음 덩이) · 에너지 필드 · 유닛마다 상태 · 강화 · 속성 부여 · 자세 · 온도(그다음 동결 표지).
     /// 같은 판에서 불러오면 판을 새로 안 세우므로 먼저 모두 비운다. 칸이 없는 옛 세이브는 맵 기온 · 기운 없음 · 80 · 모두 풀림(예전과 같다).
     /// 시간 틱 바탕은 세이브 틱(아래에서 <c>_tick</c> 에 넣는 값)이다.
     /// </summary>
-    private void RestorePart1Battle(SaveState state, List<(UnitState Unit, SaveUnit Save)> restored)
+    private void RestorePart1Battle(SaveState state, List<(UnitState Unit, SaveUnit Save)> restored, Func<int, int> mapped)
     {
+        // 탈것 짝(+0x1cc · +0x1d0) · 무리 탈것(+0x1c0) · 이 판에서 잃은 무리 탈것 — 판을 세운 짝 대신 세이브의 짝으로.
+        if (!state.InMoses) host.Btl.RestoreRiders(state.Part1Riders, state.Part1LostMounts, mapped);
         int tick = Math.Max(1, state.Tick);
         var btl = host.Btl;
         btl.Part1Objects.RestoreAmbient(state.Part1Ambient);

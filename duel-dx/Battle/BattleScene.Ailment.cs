@@ -438,6 +438,44 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 세이브 칸 — 탈것 ↔ 탄 이 짝마다 (탈것 자리, 탄 이 자리, 무리 탈것 1/0). 원본 유닛 기록(0x100340b0)이 탈것 <c>+0x1cc</c>(탄 이) ·
+    /// 탄 이 <c>+0x1d0</c>(탈것) · <c>+0x1bc</c> · 무리 탈것 <c>+0x1c0</c> 를 함께 싣는다. 탄 이의 HP · 소울 · 상태는 판 밖 유닛 칸 그대로 적힌다.
+    /// </summary>
+    internal int[] SaveRiders() =>
+        [.. _part1Riders.Select(kv => (Mount: Array.IndexOf(host._units, kv.Key), Rider: Array.IndexOf(host._units, kv.Value), Team: _part1TeamMounts.Contains(kv.Key)))
+                        .Where(p => p.Mount >= 0 && p.Rider >= 0).SelectMany(p => new[] { p.Mount, p.Rider, p.Team ? 1 : 0 })];
+
+    /// <summary>
+    /// 불러온 판에 탈것 짝 · 무리 탈것 깃발 · 이 판에서 잃은 무리 탈것을 되살린다 — 자리 번호는 세이브 → 지금 판(<paramref name="mapped"/>).
+    /// 칸이 없는 옛 세이브는 판을 세운 짝을 두되, 쓰러진 탈것의 짝은 풀고 무리 탈것이었으면 잃은 것으로 센다(쓰러질 때 DropRider 가 하던 것).
+    /// </summary>
+    internal void RestoreRiders(int[]? saved, int[]? lost, Func<int, int> mapped)
+    {
+        if (saved == null)
+        {
+            foreach (var mount in _part1Riders.Keys.Where(m => !m.Alive).ToList())
+            {
+                _part1Riders.Remove(mount);
+                if (_part1TeamMounts.Remove(mount)) _part1LostMounts.Add(mount.ChrCode);
+            }
+            return;
+        }
+        _part1Riders.Clear();
+        _part1TeamMounts.Clear();
+        _part1LostMounts.Clear();
+        for (int k = 0; k + 2 < saved.Length; k += 3)
+        {
+            if (mapped(saved[k]) is not (>= 0 and var m) || mapped(saved[k + 1]) is not (>= 0 and var r)) continue;
+            _part1Riders[host._units[m]] = host._units[r];
+            if (saved[k + 2] != 0) _part1TeamMounts.Add(host._units[m]);
+        }
+        if (lost != null) _part1LostMounts.AddRange(lost);
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 load riders {string.Join(' ', _part1Riders.Select(kv => $"{kv.Key.ChrCode}@({kv.Key.Col},{kv.Key.Row}){(kv.Key.Alive ? "" : "x")}{(_part1TeamMounts.Contains(kv.Key) ? "*" : "")}<-{kv.Value.ChrCode} hp {kv.Value.Hp} soul {kv.Value.Soul} field {kv.Value.OnField}"))}; lost [{string.Join(',', _part1LostMounts)}]" + Environment.NewLine);
+    }
+
+    /// <summary>
     /// 탈것이 쓰러졌다 — 탄 이는 그 칸(막혔으면 가장 가까운 빈 칸)에 내려서 살고, 무리는 그 탈것을 하나 잃는다(<c>0x10034560</c> → <c>0x100add40</c> · <c>0x100365e0</c>,
     /// 분석-파트1-챕터 10.3). 탈것이 모자라게 되면 그 사람의 탑승 지정도 지운다.
     /// </summary>
