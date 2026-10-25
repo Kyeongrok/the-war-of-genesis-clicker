@@ -268,13 +268,14 @@ public static class Part1Combat
 
     /// <summary>
     /// 막기 — <c>0x10040eb0</c>: 어빌리티 76 이면 (대상 두 손 명중 + DEX, 자세 +0x257 이 없으면 ½) × 150 / (때린 이 명중값 + DEX) &gt; rand()%100,
-    /// 80 이면 × 200(자세 +0x25b 면 늘). <paramref name="roll"/> 은 rand()%100.
+    /// 80 이면 × 200(자세 +0x25b 면 굴림 없이 늘). <paramref name="stance"/> = 그 어빌리티의 자세가 켜져 있나. <paramref name="roll"/> 은 rand()%100.
     /// </summary>
-    public static bool Blocks(int ability, int guard, int attackerHit, int attackerDex, int roll)
+    public static bool Blocks(int ability, bool stance, int guard, int attackerHit, int attackerDex, int roll)
     {
+        if (ability == 80 && stance) return true;
         int against = attackerHit + attackerDex;
         if (ability == 0 || against <= 0) return false;
-        return (ability == 76 ? guard / 2 * 150 : guard * 200) / against > roll;
+        return (ability == 76 ? (stance ? guard : guard / 2) * 150 : guard * 200) / against > roll;
     }
 }
 

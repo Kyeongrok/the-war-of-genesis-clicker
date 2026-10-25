@@ -214,8 +214,27 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         return a.RangeKind == 3 ? Math.Min(q, GunReach) : q;
     }
 
-    /// <summary>파트1 피해 결과(<c>0x100413b0</c>) — 4 막음(피해는 들어간다, 맞는 이는 동작 6) · 5 피함(피해 0, 동작 54). 7(역습 자세로 피함)은 자세를 안 옮겨 안 나온다.</summary>
-    internal const int Blocked = 4, Dodged = 5;
+    /// <summary>
+    /// 파트1 피해 결과(<c>0x100413b0</c>) — 4 막음(피해는 들어간다, 맞는 이는 동작 6) · 5 피함(피해 0, 동작 54) ·
+    /// 6 반격 자세로 맞음(맞기 몸짓 + 되받아치기) · 7 역습 자세로 피함(동작 54 + 되받아치기). 분석-파트1-전투 32절.
+    /// </summary>
+    internal const int Blocked = 4, Dodged = 5, CounterHit = 6, CounterDodge = 7;
+
+    /// <summary>
+    /// 파트1 자세(유닛 바이트 +0x257 방어 · +0x258 회피 · +0x259 반격 · +0x25a 역습 · +0x25b 완전방어) — 유닛 → 어빌리티 76~80.
+    /// 안 움직이고 아무것도 안 한 채 휴식(명령 0x3f3 → <c>0x1003e580</c>)하면 가진 것 가운데 첫째(76 → 80 차례) 하나가 켜지고,
+    /// 다음 자기 차례가 올 때 모두 지운다(<c>0x10036350</c>). 대장 · 탄 이는 안 켠다.
+    /// </summary>
+    internal readonly Dictionary<UnitState, int> Stances = [];
+
+    internal int StanceOf(UnitState u) => Stances.GetValueOrDefault(u);
+
+    /// <summary>쉬면 켜질 자세 — 어빌리티 76 · 77 · 78 · 79 · 80 가운데 가진 첫째(<c>0x1003e6e6</c>~). 없거나 파트1 인물이 아니면 0.</summary>
+    internal int StanceAbility(UnitState u) =>
+        Fighter(u) is { } f ? new[] { 76, 77, 78, 79, 80 }.FirstOrDefault(id => f.Chr.AbilityLevel(id) >= 0) : 0;
+
+    /// <summary>자세 이름(어빌리티 이름 — 분석-파트1-전투 24절 A).</summary>
+    internal static string StanceName(int ability) => ability switch { 76 => "방어", 77 => "회피", 78 => "반격", 79 => "역습", 80 => "완전방어", _ => "" };
 
     /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)에 파트1 의 4 막음 · 5 피함을 더해 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
@@ -231,15 +250,20 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
         // 원본 차례(0x100413b0): 무기로 치는 물리(선택자 0 · 1 · 29 · 30)만 ① 회피(0x10040fa0 → 결과 5, 역습 자세 +0x25a 면 7) ② 명중 굴림(결과 3)
         // ③ 막기(0x10040eb0 → 결과 4 — 피해는 들어가고 방어에 두 손 아이템 +0x58 을 더한다). 때린 이 장비에 보정 246(회피 불능)이 있으면 ①③ 을 안 굴린다.
-        // 자세(+0x257 ~ +0x25b)는 아직 옮기지 않아 늘 꺼진 것으로 본다. 시험용 DUELDX_P1GUARD=block|dodge 면 굴림 없이 그렇게 된다.
+        // 자세(+0x257 ~ +0x25b, Stances): 회피는 77 이 있으면 DEX(회피 자세가 아니면 ½), 77 이 없어도 역습 자세면 DEX 그대로 굴린다(0x10040fa0).
+        // 역습 자세로 피하면 결과 7(0x10041080). 막기는 76 이면 방어 자세일 때 ½ 없이, 80 이면 완전방어 자세일 때 굴림 없이 막는다(0x10040eb0).
+        // 시험용 DUELDX_P1GUARD=block|dodge 면 굴림 없이 그렇게 된다. DUELDX_P1STANCE=76~80 이면 자세가 없는 파트1 대상을 그 자세로 본다.
+        int stance = StanceOf(t);
+        if (stance == 0 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1STANCE"), out int forcedStance) && forcedStance is >= 76 and <= 80) stance = forcedStance;
         bool guardable = selector is 0 or 1 or 29 or 30 && !fa.HasBonus(Part1Bonus.NeverMissed);
         string? forcedGuard = Environment.GetEnvironmentVariable("DUELDX_P1GUARD");
-        if (guardable && (forcedGuard == "dodge" || (ft.CanEvade
-            && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), false, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))))
-            return Missed("회피", Dodged);
+        bool rollsEvade = ft.CanEvade || stance == 79;
+        if (guardable && (forcedGuard == "dodge" || (rollsEvade
+            && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), !ft.CanEvade || stance == 77, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))))
+            return Missed("회피", stance == 79 ? CounterDodge : Dodged);
         if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return Missed("명중 굴림");
-        bool blocked = guardable && (forcedGuard == "block" || Part1Combat.Blocks(ft.BlockAbility, ft.GuardValue + ft.Stat(Part1Chr.Dex, t.Soul),
-            fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul), rng.Next(100)));
+        bool blocked = guardable && (forcedGuard == "block" || Part1Combat.Blocks(ft.BlockAbility, stance != 0 && stance == ft.BlockAbility,
+            ft.GuardValue + ft.Stat(Part1Chr.Dex, t.Soul), fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul), rng.Next(100)));
         // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
         var attacker = fa.AttackerAt(a.Soul);
         int enchant = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31 ? Enchant.GetValueOrDefault(a) : 0;
@@ -255,17 +279,19 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (!magic && t.Status(4) > 0) defense /= 2;
         if (Has(t, 22)) defense = magic ? defense / 2 : defense * 3 / 2;   // 쉐도우 실드 — AC ×1.5 · MR ×0.5
         if (blocked) defense += ft.BlockDefense;
+        if (stance == 80 && selector != 5) defense += defense / 2;           // 완전방어 자세 — 마법(식 5) 말고는 방어 ×1.5(0x100415e1)
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
         if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
         int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;
-        // 치명은 결과 2(와 반격 6)에서만 — 막은 것(4)은 굴리지 않는다(0x100417e4).
+        // 반격 자세면 결과는 막았어도 6 이다(0x100417c5 가 4 를 덮는다). 치명은 결과 2 · 6 에서만 — 막은 것(4)은 굴리지 않는다(0x100417e4).
+        int result = stance == 78 ? CounterHit : blocked ? Blocked : 2;
         bool crit = false;
-        if (!blocked) damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out crit);
+        if (result != Blocked) damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out crit);
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}{(blocked ? " 막음" : "")}" + Environment.NewLine);
-        return (Math.Max(0, damage), blocked ? Blocked : 2, crit);
+                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}{(blocked ? " 막음" : "")}{(stance != 0 ? $" 자세 {stance}" : "")} → 결과 {result}" + Environment.NewLine);
+        return (Math.Max(0, damage), result, crit);
 
         (int, int, bool) Missed(string why, int result = 3)
         {

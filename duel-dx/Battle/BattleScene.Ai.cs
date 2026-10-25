@@ -310,6 +310,8 @@ internal sealed unsafe partial class BattleScene
         foreach (var (col, row) in candidates)
         {
             var targets = WorkTargets(w, user, col, row);
+            // 파트1 AI 표 이동 한도 밖의 적은 대상으로 안 센다(AiThink 가 정한 _part1Aware).
+            if (_part1Aware is ({ } owner, { } seen) && owner == user) targets.RemoveAll(i => SeesAsFoe(user, host._units[i]) && !seen.Contains(i));
             int value;
             bool onObject = false;
             if (targets.Count > 0 && WorthUsing(user, w, targets)) value = TargetValue(user, w, targets);
@@ -383,6 +385,7 @@ internal sealed unsafe partial class BattleScene
         bool InBounds(int x, int y) => (uint)x < host.Cols && (uint)y < host.Rows && x < map.Cols && y < map.Rows;
         if (!InBounds(col, row)) return null;
         int dex = Math.Max(1, db.Dex(CombatData(u) ?? c)), num5 = db.N(5);
+        bool fly = Part1Flyer(u) != null;                    // 파트1 나는 유닛은 벽 · 높이 차를 넘는다(ComputeRange 와 같은 규칙)
         var costs = new int[host.Cols * host.Rows];
         Array.Fill(costs, int.MaxValue);
         costs[row * host.Cols + col] = 0;
@@ -396,9 +399,9 @@ internal sealed unsafe partial class BattleScene
             foreach (var (dx, dy) in dirs)
             {
                 int nx = cell.Col + dx, ny = cell.Row + dy;
-                if (!InBounds(nx, ny) || (CellFlagsAt(nx, ny) & 0x9) != 0) continue;
+                if (!InBounds(nx, ny) || (!fly && (CellFlagsAt(nx, ny) & 0x9) != 0)) continue;
                 int nh = WalkHeightAt(nx, ny);
-                if (Math.Abs(nh - h) > 2) continue;
+                if (!fly && Math.Abs(nh - h) > 2) continue;
                 int next = cost + num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(nh - h) / dex) / 2;
                 if (next >= costs[ny * host.Cols + nx]) continue;
                 costs[ny * host.Cols + nx] = next;
@@ -463,6 +466,20 @@ internal sealed unsafe partial class BattleScene
         return null;
     }
 
+    /// <summary>파트1 AI 표가 이번 생각에서 보게 한 적(이동 방식 2 의 +0xc 한도 안) — 그 인물의 BestUse 만 거른다. null 이면 거르지 않는다.</summary>
+    internal (UnitState Owner, HashSet<int> Seen)? _part1Aware;
+
+    /// <summary>
+    /// 그 인물의 파트1 AI 표 칸(<c>Dats\AI.dat</c>, 유닛 <c>+0x262</c>) — 파트1 판이고 AI 가 움직이며 표 번호가 있을 때만. 사람이 움직이는 편(4)·용병 등 번호 없는 인물은 null.
+    /// </summary>
+    internal Part1Ai? Part1AiOf(UnitState u) =>
+        host._scene.IsPart1 && !u.PlayerControlled && u.Part1AiType >= 0 && (_part1Ais ??= Part1Ai.LoadAll()) is { } ais && u.Part1AiType < ais.Count
+            ? ais[u.Part1AiType] : null;
+
+    /// <summary>파트1 AI 거리(<c>0x10028e00</c>) — (|Δz| + 2·(|Δx| + |Δy|)) × 2, z 는 유닛 높이(나는 유닛은 나는 높이). AI 표 +0xc 와 견준다.</summary>
+    internal int Part1AiDistance(UnitState a, UnitState b) =>
+        (Math.Abs(Part1Z(a) - Part1Z(b)) + 2 * (Math.Abs(a.Col - b.Col) + Math.Abs(a.Row - b.Row))) * 2;
+
     /// <summary>고른 (설 칸, 겨눌 칸)으로 걸어가 work 을 쓴다.</summary>
     internal IEnumerable<bool> AiUseWork(int index, WorkData w, (int Stand, int Col, int Row, int Score) use, MoveRange range)
     {
@@ -523,12 +540,37 @@ internal sealed unsafe partial class BattleScene
         // 가까운 적 거리에는 높이 차의 절반도 든다(0x1007b0f0: |Δx| + |Δy| + |Δ높이|/2, ba-20 AI N7).
         int nearest = enemies.Count == 0 ? 99 : enemies.Min(t => Math.Abs(t.Col - u.Col) + Math.Abs(t.Row - u.Row) + Math.Abs(HeightAt(t.Col, t.Row) - HeightAt(u.Col, u.Row)) / 2);
 
+        // 파트1 AI 표(Dats\AI.dat, 유닛 +0x262) — 파트2 AI 틀은 그대로 두고 표가 정한 한도만 얹는다(분석-파트1-전투 33절).
+        var p1ai = Part1AiOf(u);
+        _part1Aware = null;
+        bool p1Blind = false;
+        if (p1ai is { MoveMode: 2 })
+        {
+            // 이동 방식 2(보통)는 대상 찾기(0x100288c0)를 「AI 표 +0xc 거리」 안으로 자른다 — 거리 = (|Δz| + 2·(|Δx| + |Δy|)) × 2(0x10028e00, 걸음 비용과 같은 자).
+            // 원본은 칠 대상을 min(사거리 + SPD, +0xc), 다가갈 대상을 +0xc 안에서만 찾는다. 리메이크는 칠 대상을 파트2 틀(걸어서 닿는 칸)대로 두고 +0xc 만 얹는다 —
+            // 100(25칸)이 대부분이라 사실상 그대로이고, 36(AI 26) · 44(AI 40)는 9 · 11칸 밖의 적을 못 본다.
+            var aware = enemies.Where(t => Part1AiDistance(u, t) <= p1ai.MoveCap).ToList();
+            p1Blind = aware.Count == 0;                      // 볼 적이 없으면 (도망 판단 뒤에) 아무것도 안 하고 쉰다(0x100269de → 0x10026b57)
+            enemies = aware;
+            _part1Aware = (u, [.. aware.Select(t => Array.IndexOf(host._units, t))]);
+        }
+
         // 2단계 도망(0x1005b4e0) — 피가 적고 적이 가까우면 물러난다. 위험도 0.70 이하인 칸 중 <b>지금 자리에서 맨해튼으로 가장 가까운 칸</b>,
         // 없으면 위험도가 가장 작은 칸. 지금 칸이 이미 0.70 이하면 안 움직인다. 부대장이 아니고 회복기가 있으면 물러난 자리에서 회복기를 쓴다.
-        if (hpPercent < db.N(66) && nearest < db.N(90))
+        // 파트1 표 인물은 문턱을 표가 정한다(0x100263a0): +0x1c 1·2·3 = HP ≤ 최대 × 8 · 5 · 2 / 10, 4 = 안 함, 0 과 그 밖은 늘 위험. 칸 10 이 2 인 인물은 늘 아님.
+        // 위험하면 가장 가까운 적이 10 안(|Δx| + |Δy| + |Δ높이|/2, 0x1003f6d0 · 0x1003fa22)일 때 물러나고, 아니면 치지 않고 쉰다 — 위험 갈래(상태 3 · 0)에는 공격이 없다.
+        bool p1Danger = p1ai != null && Part1.Fighter(u)?.Chr.Fields[Part1Chr.KindField] != 2
+                        && p1ai.FleeThreshold switch { 4 => false, 1 or 2 or 3 => u.Hp <= p1ai.FleeHp(u.MaxHp), _ => true };
+        if (Trace && host._scene.IsPart1)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"p1ai btl {host._scene.Id} unit {index} chr {u.ChrCode} ai {u.Part1AiType} mode {p1ai?.MoveMode} cap {p1ai?.MoveCap} foes {enemies.Count} nearest {nearest} danger {p1Danger}"
+                + $" fly {Part1Flyer(u) != null} reach {range.Cost.Count(x => x != int.MaxValue)} seen {_part1Aware?.Seen.Count} blind {p1Blind}" + Environment.NewLine);
+        if (p1ai != null && p1Danger && nearest > 10) yield break;
+        if (p1ai != null ? p1Danger : hpPercent < db.N(66) && nearest < db.N(90))
         {
             var heal = FollowersOf(index).Count == 0 ? FleeHeal(u) : null;
-            var fleeRange = heal != null ? ComputeRange(u, heal.Id) ?? range : range;
+            // 「움직이지 않음」(+0 = 3)도 도망은 걷는다 — 도망 이동(0x10026470)은 이동 방식을 안 본다.
+            var fleeRange = (heal != null ? ComputeRange(u, heal.Id, flee: true) : p1ai is { MoveMode: 3 } ? ComputeRange(u, flee: true) : null) ?? range;
             int here = u.Row * host.Cols + u.Col, safest = here;
             if (FleeDanger(u, u.Col, u.Row) > SafeDanger)
             {
@@ -556,6 +598,7 @@ internal sealed unsafe partial class BattleScene
             }
             yield break;                                     // 도망만 했으면 쉰다(원본 0x2716)
         }
+        if (p1Blind) yield break;
 
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
         // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.

@@ -28,6 +28,13 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// <remarks>상태 화면 이름표(<c>0x10091b31</c>~): SOUL · EXP · Str · Dex · Int · Skill · Luck · Spd · Ac · Mr · Wtp.</remarks>
     public const int Str = 20, Skill = 21, Dex = 22, Int = 23, Luck = 24, Spd = 25, Ac = 26, Mr = 27, Range = 29;
 
+    /// <summary>
+    /// 칸 10~14(파일 0x45~0x49 = 유닛 <c>+0xb8</c>~<c>+0xbc</c>, CChr 는 유닛 +0x68) — 10 종류(2 면 AI 가 도망치지 않는다, <c>0x100263a6</c>) ·
+    /// 11 큰 유닛(3×3, <c>+0xb9</c>) · 12 <b>난다</b>(<c>+0xba</c>) · 13·14 나는 높이 바탕 · 최소(<c>0x10038090</c>).
+    /// 나는 인물은 아지다하카 · 티아마트 · 썬더볼트 · 라이트닝(4 · 8) · 아지(12 · 20) — 모두 큰 유닛이다(옵시디안 분석-파트1-전투 33절).
+    /// </summary>
+    public const int KindField = 10, BigField = 11, FlyField = 12, FlyBaseField = 13, FlyMinField = 14;
+
     /// <summary>칸 18 — 누적 경험치. 상태 화면 EXP 는 이 값 % 100, 레벨은 ÷ 100(<c>0x10091c5e</c>).</summary>
     public int Experience => Fields[18];
     public int Level => Fields[18] / 100;

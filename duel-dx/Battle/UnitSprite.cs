@@ -65,7 +65,8 @@ internal sealed class UnitSprite
     internal int ActionOf(UnitState unit)
     {
         if (unit.Action >= 0) return unit.Action;
-        if (!unit.IsMoving && !unit.Entering) return ObsMotionTable.ActionStand;
+        if (!unit.IsMoving && !unit.Entering)
+            return unit.IdleAction >= 0 && _table?.Resolve(unit.IdleAction, ObsMotionTable.DirectionOf(unit.Facing)) is { Keys.Count: > 0 } ? unit.IdleAction : ObsMotionTable.ActionStand;
         var walk = _table?.Resolve(ObsMotionTable.ActionWalk, ObsMotionTable.DirectionOf(unit.Facing));
         return walk is { Keys.Count: > 1 } ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
     }

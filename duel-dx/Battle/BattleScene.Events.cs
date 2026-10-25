@@ -1013,6 +1013,7 @@ internal sealed unsafe partial class BattleScene
                         u.AiMove = ai.MoveMode == 3 ? 6 : 0;
                         u.WakeCondition = ai.Wake;
                         u.WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance;
+                        u.Part1AiType = A(1);
                     }
                 break;
             case Part1Script.Part1Only + 503 when host._scene.IsPart1:   // [?, 아이템, 수] — 전투 팀 가방에 더한다(0x100209a0 → 0x100ada10)

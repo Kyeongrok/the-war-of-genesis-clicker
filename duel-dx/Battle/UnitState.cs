@@ -23,6 +23,9 @@ internal sealed class UnitState(DemoUnit unit)
     /// <summary>파트1 — 전투 파일이 태워 둔 사람(<see cref="DemoUnit.Part1Rider"/>), 0 이면 없음.</summary>
     public int Part1Rider { get; } = unit.Part1Rider;
 
+    /// <summary>파트1 AI 표 번호(<see cref="DemoUnit.Part1AiType"/>) — 행동 705 가 바꾼다. 이동 한도 · 제자리 · 도망 문턱을 이 칸에서 읽는다(BattleScene.Ai).</summary>
+    public int Part1AiType { get; set; } = unit.Part1AiType;
+
     /// <summary>플레이어가 직접 움직이는가 — 편 4 만 그렇다. 편 3(동맹)은 제 차례에 AI 가 움직인다(ba-6).</summary>
     /// <summary>사람이 명령하는 유닛인가 — 편 4. 이벤트 행동 708 로 편이 바뀌면 조종 주체도 따라간다(원본 WAITNEXT 는 매번 +0x78 을 본다).</summary>
     public bool PlayerControlled => Side == 4;
@@ -127,6 +130,7 @@ internal sealed class UnitState(DemoUnit unit)
         Alive = true;
         HasTurn = true;
         Stance = 0;
+        IdleAction = -1;
         Action = -1;
         Motion = -1;
         MotionLoops = false;
@@ -136,6 +140,9 @@ internal sealed class UnitState(DemoUnit unit)
 
     /// <summary>자세(<c>+0x4d4</c>) — 1 방어(work 516), 2 회피(work 515). 다음 차례가 오면 풀린다.</summary>
     public int Stance { get; set; }
+
+    /// <summary>서 있을 때 되풀이할 동작 — −1 이면 서기(0). 파트1 자세(Part1Rules.Stances)가 켜지면 자세 몸짓(파트1 동작 21)으로 선다.</summary>
+    public int IdleAction { get; set; } = -1;
 
     /// <summary>상태이상 칸 셋(<c>+0x4bf[3]</c> 번호 · <c>+0x4c2[3]</c> 값) — 분석-전투 「6. 상태이상」.</summary>
     public byte[] StatusId { get; } = new byte[3];

@@ -42,6 +42,9 @@ internal sealed record DemoUnit(int ChrCode, int Col, int Row, int Side, int Leg
     /// <summary>파트1 — 이 칸은 탈것(<see cref="ChrCode"/>)이고 탄 사람은 이 Chr(20000 + 번호, Btl 인물 칸 15 · <c>0x100364b0</c>). 0 이면 탄 사람 없음.</summary>
     public int Part1Rider { get; init; }
 
+    /// <summary>파트1 — AI 표 <c>Dats\AI.dat</c> 번호(유닛 <c>+0x262</c>, Btl 인물 칸 13 · 행동 705). 사람이 움직이는 편(4)과 파트2 판은 −1.</summary>
+    public int Part1AiType { get; init; } = -1;
+
     /// <summary>편 4 = 내가 움직이는 부대, 3 = 같은 편 AI(동맹), 0~2 = 적.</summary>
     public bool IsAlly => Side >= 3;
 
@@ -132,7 +135,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 : new DemoUnit(Part1Game.ChrBase + u.ChrCode, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader };
             if (u.Side == 4 || u.AiType < 0 || u.AiType >= ais.Count) return unit;
             var ai = ais[u.AiType];
-            return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance };
+            return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance, Part1AiType = u.AiType };
         }
         var roster = battle.Units
             .Select((u, index) => (u, index))

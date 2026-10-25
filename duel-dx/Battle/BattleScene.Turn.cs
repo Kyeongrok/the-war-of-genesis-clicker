@@ -438,6 +438,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             turnStarts.Add(u);
             // 방어·회피 자세는 깃발이 서는 <b>그 틱</b>에 풀린다(0x100743b0 → 0x10072d90, +0x4d4 = 0).
             u.Stance = 0;
+            // 파트1 자세(+0x257~+0x25b)도 차례가 올 때 지운다(0x10036350) — 자세 몸짓(동작 21)도 서기로.
+            if (part1) ClearPart1Stance(u);
         }
         _objectsDue = Objects.Count > 0;
         _eventCheckDue |= 1 << 3;
@@ -559,6 +561,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void StartTurn(int index, bool resume = false)
     {
         _part1ProcBy = null;
+        if (!resume) _part1ActedBy = null;
         // 시험용 DUELDX_P1MOUNTHP=<HP> 면 파트1 탈것의 HP 를 그 아래로 깎아 둔다(쓰러져 탄 이가 내려서는 것을 화면 밖에서 보려고).
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1MOUNTHP"), out int mountHp) && mountHp > 0)
             foreach (var mount in _part1Riders.Keys) mount.Hp = Math.Min(mount.Hp, mountHp);
@@ -740,6 +743,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void Rest(int index)
     {
         var u = host._units[index];
+        // 파트1 — 차례 시작 칸 그대로이고 아직 아무것도 안 했나(0x1003e5c0~: 이동 · 행동이 다 남고 칸이 같다). CommitMove 가 시작 칸을 옮기기 전에 본다.
+        bool part1Stayed = u.Col == u.OriginCol && u.Row == u.OriginRow && _part1ActedBy != u;
         CommitMove(u);
         // TP 를 다 쓰고(≤ 0) 끝나는 차례는 휴식이 아니다 — 원본은 깃발만 내리고(0x10071e20 → 0x10074400) 자동 휴식(WAITNEXT 0x10067a7a)에
         // 오지 않아 <b>음수 TP(빚)가 그대로 남는다</b>. 다음 차례가 그만큼 늦다(ba-20 K1). 전에는 늘 0 으로 올려 줘 연속 행동이 공짜였다.
@@ -750,17 +755,20 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             return;
         }
         RestFollowers(index);        // 대장이 쉬면 부하도 먼저 쉰다(0x1005f62a, 감사3 L3)
-        // 파트1 휴식(0x1003e580, 분석-파트1-전투 24절) — 안 움직였으면 잃은 HP 의 1/5, 움직였으면 1/10. 소울은 그대로.
+        // 파트1 휴식(0x1003e580, 분석-파트1-전투 24절) — 안 움직였으면 잃은 HP 의 1/5, 움직였거나 이미 했으면 1/10. 소울은 그대로.
+        // 안 움직였으면 그다음 자세 하나(76 → 80 가운데 가진 첫째)를 켠다 — 대장 · 탄 이(탈것)는 빼고(0x1003e6ca). AI 도 쉬면 같다.
         if (host._scene.IsPart1)
         {
-            bool stayed = u.Col == u.OriginCol && u.Row == u.OriginRow;
-            int gain = (u.MaxHp - u.Hp) / (stayed ? 5 : 10);
+            int gain = (u.MaxHp - u.Hp) / (part1Stayed ? 5 : 10);
             if (gain > 0 && !u.HasStatus(26))
             {
                 int before = u.Hp;
                 u.Hp += gain;
                 ShowNumber(u, host._db?.T(159) ?? "HP", HealColor2, rise: false, count: (before, u.Hp));
             }
+            if (part1Stayed && FollowersOf(index).Count == 0 && !_part1Riders.ContainsKey(u) && !_part1Riders.ContainsValue(u)
+                && Part1.StanceAbility(u) is > 0 and var stance)
+                EnterPart1Stance(u, stance);
         }
         else if (u.Tp > 0 && u.MaxTp > 0 && host._db != null && !u.HasStatus(26))
         {
@@ -1069,9 +1077,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal static bool ArriveHit(WorkData w) => WorkFxExtra.ArriveHitWorks.Contains(w.Id) || BladeMissileSkill.Works.Contains(w.Id);
 
     internal IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
-                                             List<(int Col, int Row)> path, bool eventFinisher = false)
+                                             List<(int Col, int Row)> path, bool eventFinisher = false, bool part1Counter = false)
     {
         var a = host._units[userIndex];
+        if (!eventFinisher && userIndex == _turn) _part1ActedBy = a;   // 파트1 휴식이 「이미 했다」를 본다
         host.Stats.BeginCast(a, w);
         // 이동 + 기술이면 진형을 다시 세우지 않는다 — 원본은 계산만 하고 결과를 안 읽는다(0x1005fa90·0x1005fd00, 분석-군단).
         // 진형은 「이동만」·「이동+휴식」(0x1005f670·0x1005f870)에서만 다시 선다. 전에는 기술 앞에서 늘 다시 세웠다.
@@ -1646,10 +1655,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _formationAt[userIndex] = (a.Col, a.Row);
         _skillLeader = -1;
         // 사건 207 의 쓰러짐 처리(0x1004e6d0)는 지금 차례 유닛([ctrl+0x4ce8])이면 HP 1 로 남긴다(0x1004e757~0x1004e765, 감사5 B3).
-        if (eventFinisher && (uint)_turn < host._units.Length && host._units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
+        if (eventFinisher && !part1Counter && (uint)_turn < host._units.Length && host._units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
 
         // 파트1 무기 덧기술 — 치명타가 걸어 둔 기술을 맞은 자리에 공짜로 쏜다(사건 207 과 같은 길, 비용 없음).
-        if (_part1Proc is { } part1Proc && !eventFinisher)
+        if (_part1Proc is { } part1Proc && (!eventFinisher || part1Counter))   // 되받아치기의 치명도 덧기술을 쏜다
         {
             _part1Proc = null;
             _part1ProcRunning = true;
@@ -1659,6 +1668,30 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (procRoutine.MoveNext()) yield return procRoutine.Current;
             }
             finally { _part1ProcRunning = false; }   // 불러오기 · RESTART 가 이 루틴을 버려도 남지 않게
+            dying.RemoveAll(d => d.Hp > 0);
+            foreach (var d in host._units)
+                if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
+        }
+
+        // 파트1 반격 · 역습 자세 — 맞은(피한) 이가 때린 이에게 기본 공격을 한 번 되돌린다. 원본은 맞은 이의 다음 명령 칸(+0x220)에
+        // 기본 공격 +0xb6 · 때린 이 칸을 넣고(0x1003a2f0) 그 사람의 행동 끝(0x1003a350)에 돌린다 — 한 행동에 맞은 이마다 한 번(같은 칸을 덮어쓴다).
+        // 되받아치기는 보통 공격 그대로 굴린다(피하기 · 막기 · 치명). 되받아치는 중에는 다시 걸지 않는다.
+        if (_part1Counters.Count > 0 && !part1Counter)
+        {
+            var counters = _part1Counters.ToList();
+            _part1Counters.Clear();
+            foreach (var (by, target, basic) in counters)
+            {
+                if (!by.Alive || !by.OnField || by.Hp <= 0 || !target.Alive || !target.OnField || target.Hp <= 0 || dying.Contains(by)) continue;
+                if (!InWorkRange(basic, by.Col, by.Row, target.Col, target.Row, by)) continue;
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"{host._lastTime:F2} part1 counter {by.ChrCode} → {target.ChrCode} ({Part1Rules.StanceName(Part1.StanceOf(by))}) work {basic.Id}" + Environment.NewLine);
+                var counterRoutine = UseWorkRoutine(Array.IndexOf(host._units, by), basic, Array.IndexOf(host._units, target), target.Col, target.Row, [],
+                                                    eventFinisher: true, part1Counter: true);
+                while (counterRoutine.MoveNext()) yield return counterRoutine.Current;
+            }
+            _part1Counters.Clear();   // 되받아치는 동안 걸린 것은 버린다(되받아치기의 되받아치기는 없다)
             dying.RemoveAll(d => d.Hp > 0);
             foreach (var d in host._units)
                 if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
@@ -1769,6 +1802,40 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>이번 차례에 덧기술이 이미 터진 인물(원본 +0x265 — 차례가 바뀌면 지운다).</summary>
     internal UnitState? _part1ProcBy;
 
+    /// <summary>이번 차례에 기술 · 공격을 한 인물 — 파트1 휴식이 자세를 켤지 본다(원본 남은 행동 +0x1c4).</summary>
+    internal UnitState? _part1ActedBy;
+
+    /// <summary>행동 끝에 되받아칠 것(파트1 반격 · 역습 자세) — 맞은 이, 때린 이, 맞은 이의 기본 공격 work. 맞은 이마다 하나.</summary>
+    internal readonly List<(UnitState By, UnitState Target, WorkData Basic)> _part1Counters = [];
+
+    /// <summary>되받아치기를 걸어 둔다 — 맞은 이의 기본 공격이 있고 때린 이가 다른 사람일 때. 같은 맞은 이는 마지막 것만(원본 +0x220 덮어쓰기).</summary>
+    internal void QueuePart1Counter(UnitState by, UnitState target, WorkData w)
+    {
+        if (by == target || by.Data is not { } d || Work(d.BasicWorkId) is not { } basic) return;
+        _part1Counters.RemoveAll(c => c.By == by);
+        _part1Counters.Add((by, target, basic));
+    }
+
+    /// <summary>파트1 자세를 켠다 — 자세 몸짓(동작 21 = 모션 63~65, <c>0x10035e00(0x15, 방향, 10000)</c>)으로 서 있는다.</summary>
+    internal void EnterPart1Stance(UnitState u, int ability)
+    {
+        Part1.Stances[u] = ability;
+        u.IdleAction = Part1StanceAction;
+        Popup(u, Part1Rules.StanceName(ability), 0xFFB0E0FF, 15);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"{host._lastTime:F2} part1 stance {u.ChrCode}: {ability} {Part1Rules.StanceName(ability)}" + Environment.NewLine);
+    }
+
+    internal void ClearPart1Stance(UnitState u)
+    {
+        Part1.Stances.Remove(u);
+        if (u.IdleAction == Part1StanceAction) u.IdleAction = -1;
+    }
+
+    /// <summary>파트1 자세 몸짓 — 파트1 동작 21(0x15). 16 이상은 40 뒤 자리(<see cref="Part1Game.ActionMap"/>).</summary>
+    internal const int Part1StanceAction = Part1Game.ExtraBase + 21;
+
     /// <summary>파트1 탈것의 「내리기」 work(어빌리티 20166 · Attack 399).</summary>
     internal const int Part1DismountWork = 20399;
 
@@ -1867,11 +1934,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 상태이상 보정(7·13·14)은 <b>판정 함수 안에서</b> 끝나고, 「Miss」는 그 뒤에 남은 양으로 가른다(0x10078e60).
         amount = ScaleDamage(a, t, AilmentDamage(a, t, amount));
         if (timed && amount <= 0) amount = 1;   // 타이밍 크리티컬은 「Miss」로 떨어지지 않는다
-        bool part1Guard = host._scene.IsPart1 && result is Part1Rules.Blocked or Part1Rules.Dodged;
-        if (result == 3 || amount <= 0 || (part1Guard && result == Part1Rules.Dodged))
+        bool part1Guard = host._scene.IsPart1 && result is Part1Rules.Blocked or Part1Rules.Dodged or Part1Rules.CounterDodge;
+        bool part1Dodge = part1Guard && result is Part1Rules.Dodged or Part1Rules.CounterDodge;
+        // 파트1 반격(결과 6) · 역습(결과 7) 자세 — 맞은 이의 기본 공격 사거리에 때린 이가 있으면 행동 끝에 기본 공격으로 되받아친다(0x1003e01e · 0x1003e115).
+        if (host._scene.IsPart1 && result is Part1Rules.CounterHit or Part1Rules.CounterDodge) QueuePart1Counter(t, a, w);
+        if (result == 3 || amount <= 0 || part1Dodge)
         {
             ShowNumber(t, host._db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
-            // 파트1 피함(결과 5) — 「빗나감」 글에 더해 때린 이 쪽을 보고 동작 54 를 한다(0x1003dfda). 막았는데 피해가 0 이어도 동작 6(0x1003df9a).
+            // 파트1 피함(결과 5 · 7) — 「빗나감」 글에 더해 때린 이 쪽을 보고 동작 54 를 한다(0x1003dfda). 막았는데 피해가 0 이어도 동작 6(0x1003df9a).
             if (part1Guard) PlayGuardReaction(a, t, result);
             // 빗나가도 원본은 상태이상을 따로 굴리고(0x1007a285 → 0x1007bcc0) 피격 가속(10)도 건다(0x10079f59, 결과 2·3 모두) — fg-21 ⑪.
             RushTp(t);
@@ -2194,6 +2264,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
         if (host._scene.IsPart1 && Part1.Ailments.TryGetValue(u, out var part1))   // 파트1 최면 · 컨디션이상 · 혼란(Part1Rules.Ailments)
             foreach (int s in part1.Order()) chips.Add((Part1AilmentChip(s), 0xE0A02828u));
+        // 파트1 자세(Part1Rules.Stances) — 원본은 자세 몸짓만 보인다. 몸짓이 빈 인물이 많아(모션 63~65) 파란 딱지를 덧붙인다(리메이크).
+        if (host._scene.IsPart1 && Part1.StanceOf(u) is > 0 and var stance)
+            chips.Add((stance == 80 ? "완방" : Part1Rules.StanceName(stance), 0xE02858B0u));
         if (chips.Count == 0) return;
         const int pad = 2, gap = 1;
         var sizes = chips.Select(c => host.BattleTextSize(c.Text, 0xFFFFFFFF, AilmentChipFont)).ToList();

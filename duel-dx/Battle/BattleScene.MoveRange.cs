@@ -19,7 +19,8 @@ using static DuelDx.GameWindow;
 /// </list>
 /// 차례인 인물은 <b>차례를 시작한 자리</b>에서 셈한다 — 걷는 동안에는 TP 를 안 쓰고 그 안에서 마음대로 오가며,
 /// 공격·어빌리티·휴식을 할 때 시작 자리에서 지금 자리까지의 걸음 비용을 한 번에 뺀다(<see cref="CommitMove"/>).
-/// 물체는 판에 찍은 플래그·높이로 막는다(<see cref="CellFlagsAt"/>·<see cref="WalkHeightAt"/>, 감사3 R1). 날기는 자료에 쓰는 인물이 없어 빠져 있다.
+/// 물체는 판에 찍은 플래그·높이로 막는다(<see cref="CellFlagsAt"/>·<see cref="WalkHeightAt"/>, 감사3 R1). 날기는 파트2 자료에 쓰는 인물이 없어 빠져 있고,
+/// 파트1 나는 유닛(인물 칸 12)만 <see cref="Part1Flyer"/> 규칙으로 걷는다.
 /// </remarks>
 internal sealed unsafe partial class BattleScene
 {
@@ -95,7 +96,8 @@ internal sealed unsafe partial class BattleScene
     /// <param name="workId">예산에서 뺄 기술(0 이면 플레이어가 고른 기술·기본공격) — AI 는 기술마다 예산이 다르다(0x1005d070).</param>
     /// <param name="tp">지금 TP 대신 쓸 값(접근 단계는 최대 TP 로 잰다) — null 이면 지금 TP.</param>
     /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
-    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null)
+    /// <param name="flee">파트1 AI 표 「움직이지 않음」(+0 = 3) 인물도 도망칠 때는 걷는다(0x10026470 은 이동 방식을 안 본다).</param>
+    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null, bool flee = false)
     {
         if (host._map is not { } map || host._db is not { } db || unit.Data is not { } c) return null;
 
@@ -127,6 +129,13 @@ internal sealed unsafe partial class BattleScene
         int part1Scale = Math.Max(1, unit.MaxTp);
         // 파트1 길찾기 한도(이동력 단위) — TP 예산을 이동력으로 바꾼 값(내림). 칸 값은 끝에서 TP 로 올림해 바꾸므로 예산을 넘지 않는다.
         int walkBudget = part1Points > 0 ? (int)Math.Min(int.MaxValue, Math.Max(0L, budget) * part1Points / part1Scale) : budget;
+        // 파트1 AI 표 이동 방식 3(움직이지 않음 — 엔진 0 번 칸 · AI 24)은 이동 고르기(0x10026520)를 통째로 건너뛰고 제자리에서만 친다(0x10026b80).
+        if (!flee && origin == null && Part1AiOf(unit) is { MoveMode: 3 }) walkBudget = 0;
+        // 파트1 나는 유닛(인물 칸 12 = 유닛 +0xba ≠ 0 — 비룡 아지다하카 · 티아마트 · 썬더볼트 · 라이트닝 · 아지): 지나는 칸은 판 안이기만 하면 되고
+        // (0x1008a130 의 +0xba 갈래 — 벽 비트 1 · 높이 차 · 유닛 · ZOC 를 안 본다, 큰 유닛 +0xb9 면 3×3 이 판 안), 설 칸은 지형 비트 2 가 없어야 한다
+        // (0x10089bf0 의 +0xba 갈래 0x10089cc9 · 큰 유닛 0x10089ed9). 걸음 비용은 같은 꼴에 높이만 나는 높이(0x10038090)로 잰다.
+        var flyer = part1Points > 0 && Part1Flyer(unit) is { } fc ? fc : null;
+        bool flyBig = flyer != null && flyer.Fields[Part1Chr.BigField] != 0;
 
         // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).
         int H(int col, int row) => WalkHeightAt(col, row);
@@ -155,6 +164,7 @@ internal sealed unsafe partial class BattleScene
         bool Enterable(int col, int row)
         {
             if (col == originCol && row == originRow) return true;
+            if (flyer != null) return flyBig ? InBounds(col - 1, row - 1) && InBounds(col + 1, row + 1) : InBounds(col, row);
             if (!InBounds(col, row) || (F(col, row) & 0x9) != 0) return false;
             if (LiveUnitAt(col, row) is { } other && Blocks(other)) return false;
             // 큰 유닛(.chr 18 = 1)은 3×3 이 모두 판 안이고, 플래그 &9 가 없고, 가운데와 높이차 ≤ 2 이고, 다른 유닛이 없어야 들어간다 —
@@ -192,8 +202,10 @@ internal sealed unsafe partial class BattleScene
             foreach (var (dx, dy) in dirs)
             {
                 int nx = cell.Col + dx, ny = cell.Row + dy;
-                if (!Enterable(nx, ny) || Math.Abs(H(cell.Col, cell.Row) - H(nx, ny)) > 2) continue;
-                int step = part1Points > 0
+                if (!Enterable(nx, ny) || (flyer == null && Math.Abs(H(cell.Col, cell.Row) - H(nx, ny)) > 2)) continue;
+                int step = flyer != null
+                    ? (Math.Abs(Part1FlyHeight(flyer, nx, ny) - Part1FlyHeight(flyer, cell.Col, cell.Row)) + 2) * 2
+                    : part1Points > 0
                     ? (Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) + 2) * 2
                     : num5 * Math.Abs(dy) / dex + num5 * Math.Abs(dx) / dex + (num5 * Math.Abs(H(nx, ny) - H(cell.Col, cell.Row)) / dex) / 2;
                 int next = cost + step;
@@ -207,6 +219,20 @@ internal sealed unsafe partial class BattleScene
         if (part1Points > 0)
             for (int i = 0; i < n; i++)
                 if (costs[i] != int.MaxValue) costs[i] = (int)Math.Min(Math.Max(0, budget), ((long)costs[i] * part1Scale + part1Points - 1) / part1Points);
+
+        // 나는 유닛이 설 수 없는 칸 — 지형 비트 2(큰 유닛은 3×3 어디든), 물체가 찍힌 칸(&8). 지나가기만 한 칸은 Prev 가 남아 길에는 든다(PathWithin).
+        // 원본은 큰 유닛의 3×3 에 다른 유닛도 없어야 하지만, 리메이크는 파트1 큰 유닛을 한 칸으로 세우므로 그 칸만 본다(아래 「다른 인물이 선 칸」).
+        if (flyer != null)
+            for (int i = 0; i < n; i++)
+            {
+                if (costs[i] == int.MaxValue || i == start) continue;
+                int col = i % host.Cols, row = i / host.Cols;
+                bool bad = false;
+                for (int by = flyBig ? row - 1 : row; by <= (flyBig ? row + 1 : row) && !bad; by++)
+                    for (int bx = flyBig ? col - 1 : col; bx <= (flyBig ? col + 1 : col) && !bad; bx++)
+                        bad = InBounds(bx, by) && ((map.FlagsAt(bx, by) >> Part1Map.RawShift & 2) != 0 || (F(bx, by) & 0x8) != 0);
+                if (bad) costs[i] = int.MaxValue;
+            }
 
         // 문·스위치문 칸에는 <b>설 수</b> 없다(0x100746b0) — 닫힌 문은 도장 플래그로 이미 벽이고, 열린 문은 지나가기만 한다.
         for (int i = 0; i < n; i++)
@@ -255,6 +281,27 @@ internal sealed unsafe partial class BattleScene
         }
         return new MoveRange(costs, prev, red) { Width = host.Cols };
     }
+
+    /// <summary>파트1 판에서 나는 유닛이면 그 인물 레코드(탈것이면 탈것의 것) — 칸 12(유닛 <c>+0xba</c>) ≠ 0. 아니면 null.</summary>
+    internal Part1Chr? Part1Flyer(UnitState u) =>
+        host._scene.IsPart1 && Part1.Fighter(u)?.Chr is { } c && c.Fields[Part1Chr.FlyField] != 0 ? c : null;
+
+    /// <summary>
+    /// 나는 유닛의 높이(<c>0x10038090</c> 의 +0xba 갈래) — 칸 높이 A(큰 유닛 +0xb9 면 3×3 가운데 가장 높은 것)에
+    /// max(칸 13 − A/2, 칸 14) 를 더한 값(바이트). 자료는 모두 칸 13 &lt; 칸 14(4·8, 아지 12·20)라 늘 A + 칸 14 — 걸음 비용의 높이 차는 땅 유닛과 같다.
+    /// </summary>
+    internal int Part1FlyHeight(Part1Chr c, int col, int row)
+    {
+        int a = WalkHeightAt(col, row) & 0xFF;
+        if (c.Fields[Part1Chr.BigField] != 0)
+            for (int y = row - 1; y <= row + 1; y++)
+                for (int x = col - 1; x <= col + 1; x++)
+                    if ((uint)x < host.Cols && (uint)y < host.Rows) a = Math.Max(a, WalkHeightAt(x, y) & 0xFF);
+        return (a + Math.Max(c.Fields[Part1Chr.FlyBaseField] - (a >> 1), c.Fields[Part1Chr.FlyMinField])) & 0xFF;
+    }
+
+    /// <summary>파트1 유닛의 높이 z(유닛 <c>+0x3a</c> / 20) — 나는 유닛은 나는 높이, 땅 유닛은 칸 높이. AI 거리(0x10028e00)가 쓴다.</summary>
+    internal int Part1Z(UnitState u) => Part1Flyer(u) is { } c ? Part1FlyHeight(c, u.Col, u.Row) : WalkHeightAt(u.Col, u.Row);
 
     /// <summary>
     /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
