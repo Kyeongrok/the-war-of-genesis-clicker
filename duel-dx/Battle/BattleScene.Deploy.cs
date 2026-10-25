@@ -150,7 +150,7 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>명단 — 내가 움직이는 사람(편 4) 가운데 군단 부하가 아닌 이. Btl 에 박힌 사람(고정)이 앞.</summary>
     internal List<UnitState> DeployRoster() =>
-        [.. host._units.Where(u => u.PlayerControlled && u.LeaderIndex < 0 && u.Alive).OrderBy(u => DeployMovable(u) ? 1 : 0)];
+        [.. host._units.Where(u => u.PlayerControlled && u.LeaderIndex < 0 && u.Alive && !_part1Mercs.Contains(u)).OrderBy(u => DeployMovable(u) ? 1 : 0)];   // 파트1 용병은 명단에 안 든다(파트2 는 늘 빈 집합)
 
     /// <summary>옮길 수 있는 사람 — BuildUnits 가 배치칸이나 맵 밖에 세운 파티원. Btl 레코드로 선 사람은 「Entry」 고정.</summary>
     internal bool DeployMovable(UnitState u) => _deployMovable.Contains(u);
@@ -202,16 +202,14 @@ internal sealed unsafe partial class BattleScene
         }
     }
 
-    /// <summary>파트1 사건 706 이 배치를 여는 중 — 판을 열 때는 미뤄 둔 배치를 이때 연다.</summary>
-    internal bool _part1DeployNow;
-
     /// <summary>새 전투를 열 때 — 배치칸이 있으면 배치 단계를 연다, 아니면 맵 밖에 둔 여분을 지운다.</summary>
+    /// <remarks>
+    /// 파트1 도 판을 열 때 연다 — 원본 LoadBtl 끝(<c>0x1002d7a9~0x1002d7cb</c>)이 챕터 객체(<c>0x101a0820</c>)가 있고 배치 칸 수(<c>0x101924a2</c>) ≠ 0 이면
+    /// 전투 단계 <c>+0xb98d</c> = 0xb(배치, <c>0x1002f740</c>), 아니면 6 으로 시작하고, 사건은 단계 0xa·0xb·0xc 가 아닐 때만 돈다(<c>0x1002e683~0x1002e6c2</c>) —
+    /// 들머리 대사보다 배치가 먼저다. 전에는 행동 706 을 배치로 잘못 읽어 706 이 있고 배치 칸도 있는 판(41개)만 대사 뒤로 미뤘다(706 은 승리·패배 조건 창 <c>0x10096e70</c>).
+    /// </remarks>
     internal void BeginDeployOrDrop(DemoScene scene, bool fresh)
     {
-        // 파트1 판은 들머리 대사 뒤 행동 706 이 배치를 연다(분석-파트1-전투 13절) — 그런 사건이 있으면 판을 열 때는 맵 밖 여분을 그대로 두고 기다린다.
-        if (fresh && scene.IsPart1 && !_part1DeployNow && !AutoPlay && _deployMovable.Count > 0
-            && Part1Battle.Load(scene.Id - Part1Game.BattleBase) is { } part1 && part1.Events.Any(e => e.Actions.Any(a => a.Code == 706)))
-            return;
         _deployOpen = false;
         _deployPick = null;
         _deployNoLegion.Clear();
@@ -221,8 +219,13 @@ internal sealed unsafe partial class BattleScene
         if (!open)
         {
             if (_keepBenchForLoad) return;      // 불러오기 — 세이브에 적힌 인물을 보고 LoadBattleFrom 이 추린다
-            // 파트1 용병 — 배치 창 없이 시작하면 첫 출전 인물의 부하로 붙이고(Part1MercDeploy.Apply), 못 붙인 것은 지운다.
-            if (scene.IsPart1 && _part1Mercs.Count > 0) { host.MercDeploy.Apply(autoFill: true); DropUnmarchedMercs(); }
+            // 파트1 용병 — 원본은 배치 창(단계 0xb)에서 인물을 「출전」시킬 때만 용병을 세운다(0x1002f2d1~) — 배치 창이 없는 판에는 안 나온다.
+            // 화면 밖 자동 진행(AUTOPLAY)만 배치 칸이 있고 용병을 허락하는 판에서 첫 출전 인물부터 채운다(시험용). 못 붙인 것은 지운다.
+            if (scene.IsPart1 && _part1Mercs.Count > 0)
+            {
+                if (AutoPlay && scene.Placement is { Count: > 0 }) host.MercDeploy.Apply(autoFill: true);
+                DropUnmarchedMercs();
+            }
             if (_deployBench.Count > 0) DropUnits(WithRiders(_deployBench.Contains));   // 맵 밖 여분의 부하 · 탄 이도 함께, 대장 번호는 다시 맞춘다
             _deployBench.Clear();
             return;
@@ -344,7 +347,7 @@ internal sealed unsafe partial class BattleScene
             }
             if (by >= by0 + 32 && by < by0 + 58)
             {
-                if (host._scene.IsPart1) host.MercDeploy.Toggle(_deployPick ?? (roster.Count > 0 ? roster[0] : null));   // 파트1 — 「용병 배치」
+                if (host._scene.IsPart1) host.MercDeploy.Toggle(_deployPick ?? host.MercDeploy.FirstLeader(roster));   // 파트1 — 「용병 배치」(안 골랐으면 거느릴 수 있는 첫 인물)
                 else ToggleDeployLegion();
                 return true;
             }
@@ -433,6 +436,11 @@ internal sealed unsafe partial class BattleScene
                 var (_, nw, _) = host.UiGetText(name, colour);
                 host.UiText("군단", x + 28 + nw, ry + 3, 0xFF80D0FF, 11);
             }
+            else if (host._scene.IsPart1 && host.MercDeploy.CountOf(u) is > 0 and var mercs)
+            {
+                var (_, nw, _) = host.UiGetText(name, colour);
+                host.UiText($"용병 {mercs}", x + 28 + nw, ry + 3, 0xFF80D0FF, 11);   // 파트1 — 그 인물이 거느린 용병 수
+            }
             string tag = fixedHere ? "고정" : u.OnField ? "배치됨" : "미배치";
             uint tagColor = fixedHere ? 0xFFFFE070 : u.OnField ? PlacedColor : UnplacedColor;
             var (_, tw, _) = host.UiGetText(tag, tagColor);
@@ -454,11 +462,12 @@ internal sealed unsafe partial class BattleScene
         var who = _deployPick ?? (pad && roster.Count > 0 ? roster[DeployRowFocus(roster.Count)] : null);
         bool canUnplace = who != null && DeployMovable(who) && who.OnField;
         bool part1 = host._scene.IsPart1;
-        bool canLegion = part1 ? host.MercDeploy.HasMercs : _deployLegionsAllowed && who != null && DeployHasLegion(who);
+        bool canLegion = part1 ? host.MercDeploy.Open || host.MercDeploy.CannotLead(who ?? host.MercDeploy.FirstLeader(roster)) == null
+                               : _deployLegionsAllowed && who != null && DeployHasLegion(who);
         const uint OffBg = 0xFF182238, OffInk = 0xFF707070;
         Button(x + 8, by, DeployW / 2 - 12, 26, "배치취소" + Key(PadAction.Ring), canUnplace ? StatusScreen.HeadBg : OffBg, canUnplace ? White : OffInk);
         Button(x + DeployW / 2 + 4, by, DeployW / 2 - 12, 26, "자동배치" + Key(PadAction.Rest), StatusScreen.HeadBg, White);
-        string legionLabel = part1 ? (host.MercDeploy.Open ? "용병 배치: 닫기" : "용병 배치")
+        string legionLabel = part1 ? (host.MercDeploy.Forbidden ? "용병 금지" : host.MercDeploy.Open ? "용병 배치: 닫기" : "용병 배치")   // 원본 낱말 10 ≠ 0 → 「용병 금지」(0x100947fa)
                            : who != null && DeployHasLegion(who) ? (_deployNoLegion.Contains(who) ? "군단사용: 끔" : "군단사용: 켬") : "군단사용";
         Button(x + 8, by + 32, DeployW - 16, 26, legionLabel + Key(PadAction.PrevUnit), canLegion ? StatusScreen.HeadBg : OffBg, canLegion ? White : OffInk);
         Button(x + 8, by + 64, DeployW - 16, 28, pad ? "배치종료" + Key(PadAction.System) : "배치종료 (Enter)", 0xFF2A6A3A, White, border: true);

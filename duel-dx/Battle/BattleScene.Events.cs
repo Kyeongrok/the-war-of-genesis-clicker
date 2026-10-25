@@ -381,11 +381,8 @@ internal sealed unsafe partial class BattleScene
                     _talkNoWait = false;                                // 앞 말풍선의 「안 기다림」이 이 대사로 새지 않게
                     return;
                 case Part1Script.Part1Only + 706 when host._scene.IsPart1:
-                    // 파트1 출전 배치(행동 706 → 0x10096e70) — 들머리 대사 끝에서 배치 창을 띄우고, 닫힐 때까지 사건을 붙든다(배치 중에는 사건이 안 돈다).
-                    _part1DeployNow = true;
-                    BeginDeployOrDrop(host._scene, fresh: true);
-                    _part1DeployNow = false;
-                    if (_deployOpen) return;
+                    // 파트1 행동 706(0x10021790 → 창 0x10096e70)은 배치가 아니라 「승리 조건」 · 「패배 조건」 창이다(창 글 0x1011c4fc · 0x1011c4f0) —
+                    // 배치는 판을 열 때 이미 했다(BeginDeployOrDrop, 원본 단계 0xb). 파트1 조건 글 창은 아직 없어 넘긴다 [H: 닫힐 때까지 사건을 붙든다].
                     break;
                 case 207 or 909 when _eventRoutine != null:
                     _eventRoutineFree = false;                          // 앞 기술이 아직 돈다 — 끝난 뒤 이 줄을 다시 본다

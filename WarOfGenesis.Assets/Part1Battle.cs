@@ -19,7 +19,7 @@ public sealed record Part1BattleEvent(int Index, int MaxFire, IReadOnlyList<Scri
 /// <remarks>
 /// 옵시디안 분석 「분석-파트1-전투」(ba-p1-1), 로더 <c>alpha.dll 0x1002cb20</c>:
 /// <code>
-/// 머리 낱말 11 — 맵 Obt, 첫 화면 x·y, 제목·승리·패배 대사 줄, 밝기?(80·120…), 지형(0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다), BGM, 용병 고정?, 출전 고정?
+/// 머리 낱말 11 — 맵 Obt, 첫 화면 x·y, 제목·승리·패배 대사 줄, 밝기?(80·120…), 지형(0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다), BGM, 탑승 금지, 용병 금지(배치 창 메뉴 <c>0x100948b5</c> · <c>0x100947fa</c>)
 /// u16 n, n × 6바이트  맵 물체(Obs?, x, y)
 /// u16 n, n × 17바이트 인물(<see cref="Part1BattleUnit"/>)
 /// u16 n, n × 7바이트  아군 배치 칸(x, y, u8 방향, ?)
@@ -29,9 +29,11 @@ public sealed record Part1BattleEvent(int Index, int MaxFire, IReadOnlyList<Scri
 /// 파트2(<see cref="BattleFile"/>)와 달리 절 개수 뒤의 빈 낱말이 없고, Map 파일 없이 Obt 를 바로 적고, 글은 TXR·Tlk 가 아니라 .dlg 줄 번호다.
 /// 시판 자료 455개 중 453개가 파일 끝까지 딱 맞는다. 0018 은 대전 칸·이벤트 절이 없어 0개로 읽고, 0214 는 인물 100명이라 적고 자료가 모자라 못 읽는다(null).
 /// </remarks>
+/// <param name="MountsForbidden">머리 낱말 9(전투 <c>+0xb974</c>) ≠ 0 — 배치 창 인물 메뉴의 다섯째 단추(차례 4)가 「탑승 금지」로 잠긴다(<c>0x100948b5</c> → 0x1011c2bc).</param>
+/// <param name="MercenariesForbidden">머리 낱말 10(전투 <c>+0xb976</c>) ≠ 0 — 셋째 단추(차례 2)가 「용병 금지」로 잠겨 이 판에는 용병을 못 세운다(<c>0x100947fa</c> → 0x1011c2c8). 배치 칸 있는 판 164 가운데 26.</param>
 /// <param name="Terrain">머리 낱말 7 — 전장 지형 0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다(전투 정보 창 <c>0x100957a0</c> 의 이름 차례). 맵 생성은 사막·극지에서만 색을 바꾼다.</param>
 public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int TitleLine, int WinLine, int LoseLine,
-                                 int Ambient, int Terrain, int Bgm, bool MercenariesFixed, bool SortieFixed,
+                                 int Ambient, int Terrain, int Bgm, bool MountsForbidden, bool MercenariesForbidden,
                                  IReadOnlyList<(int Obs, int X, int Y)> Objects, IReadOnlyList<Part1BattleUnit> Units,
                                  IReadOnlyList<BattlePlacementCell> Placement, IReadOnlyList<Part1BattleEvent> Events)
 {

@@ -15,8 +15,14 @@ using static DuelDx.GameWindow;
 /// 찬 칸을 다시 누르면 비운다(<c>0x10093d5d~</c>). 출전 확정(<c>0x1002f2d1~0x1002f6fb</c>)이 칸 i(a = i%3, b = i/3)마다
 /// 대장 방향(<c>+0x4e</c>)으로 돌린 자리에 새 유닛(<c>0x10042ee0</c>)을 세우고 <c>0x10036790(대장, 용병, 1)</c>로 잇는다 —
 /// b = 0 줄이 대장 <b>뒤</b>, b = 2 줄이 앞. 막힌 칸 검사는 없다(리메이크는 설 수 없으면 가까운 빈 칸).
+/// <para>누가 거느리나 — 인물 메뉴(<c>0x10094630</c>)의 셋째 단추(차례 2) 「용병 배치」는 머리 낱말 10(<c>+0xb976</c>)이 0 이고,
+/// 용병 목록이 있고(<c>+0x6a</c> ≠ 0), 그 인물이 아직 안 섰고(<c>+0x24</c> = 0 — 전투 파일로 선 고정 인물은 처음부터 1, <c>0x100933c1</c>),
+/// 탈것을 안 골랐을 때(<c>+0x68</c> = 0xffff)만 켜진다. 낱말 10 ≠ 0 이면 「용병 금지」(0x1011c2c8)로 잠긴다. 어빌리티 · 직업 검사는 없다.
+/// 거꾸로 용병을 거느린 인물은 「탑승」이 잠긴다(<c>0x100948e1</c>: <c>+0x2e</c> ≠ 0).
+/// 리메이크는 일행을 처음부터 칸에 세워 두므로 「안 섰을 때」 대신 「고정이 아니고 탈것을 안 탔을 때」로 본다 — 용병은 배치종료 때 그 자리 둘레에 선다.</para>
+/// <para>배치 창이 없는 판(배치 칸 0, 또는 챕터 밖)은 원본 단계 6 으로 바로 시작해(<c>0x1002d7cb</c>) 용병이 나오지 않는다.</para>
 /// 리메이크는 용병을 편 3(파트2 AI, 사용자 결정)으로 두고 대장의 부하로 잇는다 — 제 차례가 없고 대장 차례에 따라 걷고 함께 친다.
-/// 배치 창 없이 시작한 판만, 아무에게도 안 붙였으면 첫 출전 인물에게(8 이 넘으면 다음 인물에게) 차례로 붙인다. 배치 창에서 안 붙인 용병은 나오지 않는다.
+/// 목록 줄의 −/+ 와 인물별 수는 리메이크가 더한 것이다(+ = 원본의 목록 줄 누르기, − = 그 갈래 하나를 그 인물에게서 뺀다).
 /// </remarks>
 internal sealed class Part1MercDeploy(GameWindow host)
 {
@@ -40,9 +46,30 @@ internal sealed class Part1MercDeploy(GameWindow host)
     /// <summary>판을 새로 세울 때 — 다른 전투면 고른 것을 지운다(RESTART 는 같은 전투라 남긴다).</summary>
     internal void Reset(int sceneId)
     {
-        if (sceneId != _sceneId) _slots.Clear();
+        if (sceneId != _sceneId)
+        {
+            _slots.Clear();
+            // 머리 낱말 10(+0xb976) ≠ 0 — 「용병 금지」 판(0x100947fa). 배치 칸 있는 판 164 가운데 26.
+            Forbidden = sceneId >= Part1Game.BattleBase && Part1Battle.Load(sceneId - Part1Game.BattleBase) is { MercenariesForbidden: true };
+        }
         _sceneId = sceneId;
         Leader = null;
+    }
+
+    /// <summary>이 판이 「용병 금지」인가(머리 낱말 10).</summary>
+    internal bool Forbidden { get; private set; }
+
+    /// <summary>그 인물이 용병을 거느릴 수 없는 까닭 — 거느릴 수 있으면 null(인물 메뉴 차례 2 의 켜짐 조건, 0x100947f4~0x100948a9).</summary>
+    internal string? CannotLead(UnitState? who)
+    {
+        var btl = host.Btl;
+        if (Forbidden) return "이 전투는 용병 금지입니다";
+        if (!HasMercs) return "고용한 용병이 없습니다 — 마을 용병 길드에서 고용하세요";
+        if (who == null) return "용병을 거느릴 인물을 명단에서 고르세요";
+        if (btl._part1Mercs.Contains(who)) return "용병은 용병을 거느릴 수 없습니다";
+        if (!btl.DeployMovable(who)) return "이 전투에 고정된 인물은 용병을 거느릴 수 없습니다";
+        if (btl._part1Riders.ContainsKey(who)) return "탑승한 인물은 용병을 거느릴 수 없습니다";
+        return null;
     }
 
     /// <summary>칸 i 의 대장 기준 자리 — 원본 출전 확정의 방향 점프표(<c>0x1002f72c</c>: 0 위 · 1 왼 · 2 아래 · 3 오른).</summary>
@@ -70,17 +97,21 @@ internal sealed class Part1MercDeploy(GameWindow host)
 
     internal bool HasMercs => host.Btl._part1Mercs.Count > 0;
 
+    /// <summary>명단에서 용병을 거느릴 수 있는 첫 인물 — 없으면 명단 첫 인물(까닭을 알리게).</summary>
+    internal UnitState? FirstLeader(List<UnitState> roster) => roster.FirstOrDefault(u => CannotLead(u) == null) ?? roster.FirstOrDefault();
+
     /// <summary>「용병 배치」 단추 — 그 인물의 용병 칸 창을 연다(같은 인물이면 닫는다).</summary>
     internal void Toggle(UnitState? who)
     {
-        if (!HasMercs) { host.Toast("고용한 용병이 없습니다 — 마을 용병 길드에서 고용하세요"); return; }
-        if (who == null) { host.Toast("용병을 거느릴 인물을 명단에서 고르세요"); return; }
-        if (Leader == who) { Leader = null; return; }
-        OpenFor(who);
+        if (who != null && Leader == who) { Leader = null; return; }
+        if (CannotLead(who) is { } why) { host.Toast(why); return; }
+        OpenFor(who!);
     }
 
+    /// <summary>창을 그 인물로 — 거느릴 수 없는 인물이면 알리고 창은 그대로.</summary>
     internal void OpenFor(UnitState who)
     {
+        if (CannotLead(who) is { } why) { host.Toast(why); return; }
         Leader = who;
         var s = SlotsOf(who.ChrCode);
         Slot = Enumerable.Range(0, SlotCount).FirstOrDefault(i => i != Center && s[i] == 0, 0);
@@ -105,6 +136,35 @@ internal sealed class Part1MercDeploy(GameWindow host)
     internal void Clear()
     {
         if (Leader is { } leader && Slot != Center) SlotsOf(leader.ChrCode)[Slot] = 0;
+    }
+
+    /// <summary>그 인물이 거느린 용병 수(칸 8 개 가운데).</summary>
+    internal int CountOf(UnitState u) => _slots.TryGetValue(u.ChrCode, out var s) && CannotLead(u) == null ? s.Count(c => c > 0) : 0;
+
+    /// <summary>그 인물이 거느린 그 갈래 용병 수.</summary>
+    internal int CountOf(UnitState u, int chr) => _slots.TryGetValue(u.ChrCode, out var s) ? s.Count(c => c == chr) : 0;
+
+    /// <summary>목록 줄의 「+」 — 그 갈래 하나를 넣는다. 고른 칸이 차 있으면 첫 빈 칸에(원본 목록 누르기는 고른 칸을 갈아 끼운다 — 그것은 줄 이름을 누를 때).</summary>
+    internal void AddOne(int chr)
+    {
+        if (Leader is not { } leader) return;
+        var s = SlotsOf(leader.ChrCode);
+        if (s[Slot] != 0 || Slot == Center)
+        {
+            int empty = Enumerable.Range(0, SlotCount).FirstOrDefault(i => i != Center && s[i] == 0, -1);
+            if (empty < 0) { host.Toast("한 인물이 거느릴 수 있는 용병은 8 명까지입니다"); return; }
+            Slot = empty;
+        }
+        Assign(chr);
+    }
+
+    /// <summary>목록 줄의 「−」 — 그 인물에게서 그 갈래 하나를 뺀다(뒤 칸부터). 빈 칸이 고른 칸이 된다.</summary>
+    internal void RemoveOne(int chr)
+    {
+        if (Leader is not { } leader) return;
+        var s = SlotsOf(leader.ChrCode);
+        for (int i = SlotCount - 1; i >= 0; i--)
+            if (i != Center && s[i] == chr) { s[i] = 0; Slot = i; return; }
     }
 
     /// <summary>칸을 누름 — 이미 고른 찬 칸이면 비우고(원본 0x10093d5d), 아니면 그 칸을 고른다.</summary>
@@ -137,7 +197,7 @@ internal sealed class Part1MercDeploy(GameWindow host)
     /// 출전 확정 — 판에 선 대장마다 칸의 용병을 대장 둘레에 세우고 부하로 잇는다(<c>0x1002f2d1~</c>). 안 쓴 용병은 판 밖에 남긴다(부른 쪽이 지운다).
     /// 판에 선 대장 누구에게도 안 붙였으면 출전 인물 차례로 8 씩 붙인다.
     /// </summary>
-    /// <param name="autoFill">배치 창 없이 시작한 판(자동 진행 · 화면 밖 시험)만 true — 고른 것이 없으면 첫 출전 인물부터 채운다.
+    /// <param name="autoFill">화면 밖 자동 진행(AUTOPLAY)이 배치 창을 건너뛴 판만 true — 고른 것이 없으면 첫 출전 인물부터 채운다(시험용).
     /// 배치 창에서 「용병 배치」를 안 했으면 원본처럼 용병은 나오지 않는다(사용자 보고: 원하지 않아도 배치됐다).</param>
     internal void Apply(bool autoFill = false)
     {
@@ -145,7 +205,8 @@ internal sealed class Part1MercDeploy(GameWindow host)
         Leader = null;
         if (btl._part1Mercs.Count == 0) return;
         var units = host._units;
-        var leaders = units.Where(u => u.Alive && u.OnField && u.PlayerControlled && u.LeaderIndex < 0 && !btl._part1Mercs.Contains(u)).ToList();
+        // 거느릴 수 있는 사람만(고정 · 탑승 · 용병 금지 판은 빠진다 — CannotLead).
+        var leaders = units.Where(u => u.Alive && u.OnField && u.LeaderIndex < 0 && CannotLead(u) == null).ToList();
         // RESTART — 앞서 붙인 용병을 떼고 다시 붙인다.
         foreach (var m in btl._part1Mercs.Where(m => m.LeaderIndex >= 0)) { m.LeaderIndex = -1; m.FormationSlot = -1; }
         foreach (var m in btl._part1Mercs) m.OnField = false;
@@ -211,15 +272,15 @@ internal sealed class Part1MercDeploy(GameWindow host)
         return btl.FreeCellNear(leader.Col, leader.Row, merc);
     }
 
-    /// <summary>배치 창 바로 아래에 붙는 용병 칸 창의 자리 — 판의 인물을 가리지 않게.</summary>
+    /// <summary>용병 칸 창의 자리 — 배치 창 왼쪽에 위를 맞춰 붙인다(명단이 길어도 화면 밑으로 안 나가게).</summary>
     internal (int X, int Y) Panel()
     {
         var (px, py) = host.Btl.DeployPanel();
-        return (px + BattleScene.DeployW - PanelW, py + host.Btl.DeployPanelHeight() + 6);
+        return (px - PanelW - 8, py);
     }
 
     private int GridTop => 30;
-    private int ListTop => GridTop + 3 * CellH + 10;
+    private int ListTop => GridTop + 3 * CellH + 34;
 
     /// <summary>칸 (gx, gy) 에 그릴 칸 번호 — 대장이 보는 쪽으로 돌린 판 그대로 보여 준다(위 = 판의 위).</summary>
     private static int SlotAt(int gx, int gy, Facing f)
@@ -229,6 +290,9 @@ internal sealed class Part1MercDeploy(GameWindow host)
     }
 
     private int PanelH(int poolCount) => ListTop + Math.Max(1, poolCount) * RowH + 44;
+
+    /// <summary>목록 줄의 −/+ 단추 자리(창 왼쪽 기준 x).</summary>
+    private const int MinusX = PanelW - 58, PlusX = PanelW - 30, PmW = 24;
 
     /// <summary>창의 클릭 — 창 안이면 먹는다.</summary>
     internal bool OnClick(int bx, int by)
@@ -244,11 +308,18 @@ internal sealed class Part1MercDeploy(GameWindow host)
             return true;
         }
         int row = (by - y - ListTop) / RowH;
-        if (by >= y + ListTop && row >= 0 && row < pool.Count) { ListFocus = row; Assign(pool[row].Chr); return true; }
+        if (by >= y + ListTop && row >= 0 && row < pool.Count)
+        {
+            ListFocus = row;
+            if (bx >= x + MinusX && bx < x + MinusX + PmW) RemoveOne(pool[row].Chr);
+            else if (bx >= x + PlusX && bx < x + PlusX + PmW) AddOne(pool[row].Chr);
+            else Assign(pool[row].Chr);                     // 줄 이름 — 원본 목록 누르기(고른 칸에 넣고 다음 빈 칸으로)
+            return true;
+        }
         int bty = y + ListTop + Math.Max(1, pool.Count) * RowH + 8;
         if (by >= bty && by < bty + 26)
         {
-            if (bx < x + PanelW / 2) Array.Clear(SlotsOf(leader.ChrCode));
+            if (bx < x + PanelW / 2) Array.Clear(SlotsOf(leader.ChrCode));   // 원본 「용병 배치 취소」(차례 3)
             else Leader = null;
         }
         return true;
@@ -267,8 +338,9 @@ internal sealed class Part1MercDeploy(GameWindow host)
         string Name(int chr) => db.Character(chr) is { } c ? db.T(c.NameId) : $"Chr {chr}";
         var s = SlotsOf(leader.ChrCode);
         host.UiText($"용병 배치 — {Name(leader.ChrCode)}", x + 10, y + 4, White);
-        string count = $"{s.Count(c => c > 0)}/8";
-        host.UiText(count, x + PanelW - 12 - host.UiGetText(count, White).W, y + 4, White);
+        int mine = s.Count(c => c > 0);
+        string count = $"{mine}/8";
+        host.UiText(count, x + PanelW - 12 - host.UiGetText(count, White).W, y + 4, mine == 8 ? 0xFFFFE070 : White);
 
         int gx0 = x + (PanelW - 3 * CellW) / 2;
         for (int gy = 0; gy < 3; gy++)
@@ -283,6 +355,12 @@ internal sealed class Part1MercDeploy(GameWindow host)
                 var (_, tw, th) = host.UiGetText(label, ink, 11);
                 host.UiText(label, cx + (CellW - tw) / 2, cy + (CellH - th) / 2, ink, 11);
             }
+        // 칸 아래 — 앞이 어느 쪽인지(원본 b = 2 줄이 대장 앞) · 표 머리.
+        int hy = y + GridTop + 3 * CellH + 4;
+        host.UiText("갈래", x + 12, hy + 6, DimGray, 11);
+        host.UiText("이 인물", x + 84, hy + 6, DimGray, 11);
+        host.UiText("남음", x + MinusX - 4 - host.UiGetText("남음", DimGray, 11).W, hy + 6, DimGray, 11);
+        host.UiText("− / +", x + MinusX + 6, hy + 6, DimGray, 11);
 
         for (int r = 0; r < pool.Count; r++)
         {
@@ -291,20 +369,26 @@ internal sealed class Part1MercDeploy(GameWindow host)
             if (pad && r == ListFocus) host.UiStroke(x + 4, ry - 1, PanelW - 8, RowH - 2, GamePad.FocusColor);
             uint ink = left > 0 ? White : DimGray;
             host.UiText(Name(chr), x + 12, ry + 2, ink);
+            int here = CountOf(leader, chr);
+            string hs = $"×{here}";
+            host.UiText(hs, x + 90, ry + 2, here > 0 ? 0xFF80D0FF : DimGray);
             string n = $"{left}/{total}";
-            host.UiText(n, x + PanelW - 12 - host.UiGetText(n, ink).W, ry + 2, ink);
+            host.UiText(n, x + MinusX - 4 - host.UiGetText(n, ink).W, ry + 2, ink);
+            Button(x + MinusX, ry, PmW, RowH - 4, "−", here > 0);
+            Button(x + PlusX, ry, PmW, RowH - 4, "+", left > 0 && mine < 8);
         }
         if (pool.Count == 0) host.UiText("고용한 용병이 없습니다", x + 12, y + ListTop + 2, DimGray);
 
         int by = y + ListTop + Math.Max(1, pool.Count) * RowH + 8;
-        Button(x + 8, by, PanelW / 2 - 12, 26, pad ? $"비우기 {host.Pad.Name(PadAction.Ring)}" : "모두 비우기");
-        Button(x + PanelW / 2 + 4, by, PanelW / 2 - 12, 26, pad ? $"닫기 {host.Pad.Name(PadAction.Cancel)}" : "닫기");
+        Button(x + 8, by, PanelW / 2 - 12, 26, pad ? $"비우기 {host.Pad.Name(PadAction.Ring)}" : "모두 비우기", mine > 0);
+        Button(x + PanelW / 2 + 4, by, PanelW / 2 - 12, 26, pad ? $"닫기 {host.Pad.Name(PadAction.Cancel)}" : "닫기", true);
 
-        void Button(int bx, int by2, int bw, int bh, string text)
+        void Button(int bx, int by2, int bw, int bh, string text, bool on)
         {
-            host.UiFill(bx, by2, bw, bh, StatusScreen.HeadBg);
-            var (_, tw, th) = host.UiGetText(text, White);
-            host.UiText(text, bx + (bw - tw) / 2, by2 + (bh - th) / 2, White);
+            host.UiFill(bx, by2, bw, bh, on ? StatusScreen.HeadBg : 0xFF182238);
+            uint fg = on ? White : 0xFF707070;
+            var (_, tw, th) = host.UiGetText(text, fg);
+            host.UiText(text, bx + (bw - tw) / 2, by2 + (bh - th) / 2, fg);
         }
     }
 
@@ -313,7 +397,7 @@ internal sealed class Part1MercDeploy(GameWindow host)
     /// <summary>배치 단계에서 고른 칸이 판 어디인지 — 초록 칸 위에 파란 칸으로 미리 보여 준다.</summary>
     internal IEnumerable<(int Col, int Row)> PreviewCells()
     {
-        foreach (var u in host._units.Where(u => u.Alive && u.OnField && u.PlayerControlled && u.LeaderIndex < 0))
+        foreach (var u in host._units.Where(u => u.Alive && u.OnField && u.LeaderIndex < 0 && CannotLead(u) == null))
             if (_slots.TryGetValue(u.ChrCode, out var s))
                 for (int i = 0; i < SlotCount; i++)
                     if (i != Center && s[i] > 0 && Offset(i, u.Facing) is var (dx, dy)) yield return (u.Col + dx, u.Row + dy);
