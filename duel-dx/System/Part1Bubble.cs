@@ -1,7 +1,7 @@
 namespace DuelDx;
 
 /// <summary>
-/// 파트1 필드 말풍선(209) · 해설 띠(210) · 전투 해설 상자(202, <see cref="OpenFixed"/>) — 원본 창 <c>0x100a7ef0</c>(vtable <c>0x1010a6e4</c>, 그리기 <c>0x100a8ba0</c>, 틱 <c>0x100a8670</c>)를 옮긴 것.
+/// 파트1 필드 말풍선(209) · 해설 띠(210) · 전투 해설 상자(202, <see cref="OpenFixed"/>) · 전투 대사(200, <see cref="OpenBattle"/>) — 원본 창 <c>0x100a7ef0</c>(vtable <c>0x1010a6e4</c>, 그리기 <c>0x100a8ba0</c>, 틱 <c>0x100a8670</c>)를 옮긴 것.
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 11.5절. 틀은 창 바탕 <c>0x100a18b0</c> — <b>Obs 111 벌 0</b>(파란 돌 무늬 100×50)을 창에 깔아 섞기 13 · 단계 6(24/31)으로 비치게,
@@ -31,8 +31,15 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     private bool _narration;
     private int _ax, _ay, _x, _y, _w, _h, _ticks, _face;
 
-    /// <summary>틀 무늬의 Obs 111 벌 — 0(모션 1, 209 · 210) · 5(모션 9, 전투 202).</summary>
+    /// <summary>틀 무늬의 Obs 111 벌 — 0(모션 1, 209 · 210 · 전투 200 편 4·3) · 4(모션 8, 전투 200 적) · 5(모션 9, 전투 202 · 판에 없는 이의 200).</summary>
     private int _frameSet;
+
+    /// <summary>창의 이름 칸(<c>+0x80</c>) — 전투 200 만 쓴다(필드 209 는 글 안의 /m0[이름]). 빛깔은 칸 <c>+0x8a</c>(빛깔 표 차례를 COLORREF 로).</summary>
+    private string _name = "";
+    private uint _nameColor = NameColor;
+
+    /// <summary>몸글 첫 줄의 창 안 y — 이름이 없으면 8, 있으면 8 + 이름 높이 + 8(<c>0x100a846a</c>~<c>0x100a848c</c>).</summary>
+    private int _textTop = 8;
     private List<(string Text, uint Color)> _lines = [];
     private readonly List<int> _pageStarts = [];
     private int _page;
@@ -53,6 +60,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         _ticks = ticks;
         _face = narration ? 0 : face;
         _frameSet = 0;
+        (_name, _textTop) = ("", 8);
         string full = speaker.Length > 0 ? $"[{speaker}]\n{text}" : text;
         var rows = full.Split('\n');
         int nameRows = speaker.Length > 0 ? 1 : 0;
@@ -69,15 +77,53 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
             // 화면 안으로(0x100a822d~) — 오른쪽 끝, 얼굴이 왼쪽 밖으로 안 나가게, 아래 끝, 위.
             _x = ax;
             _y = ay - _h - 50;
-            var f = FaceFrame();
-            if (_x + _w >= ScreenW) _x = ScreenW - _w;
-            if (f != null) { if (_x - f.W + 20 < 0) _x = f.W - 20; }
-            else if (_x < 0) _x = 0;
-            if (_y + _h >= ScreenH) _y = ScreenH - _h;
-            if (f != null && _h <= f.H) { if (_y + _h - f.H < 0) _y = f.H - _h; }
-            else if (_y < 0) _y = 0;
+            KeepOnScreen();
         }
         Layout(colored);
+    }
+
+    /// <summary>화면 안으로(<c>0x100a822d</c>~) — 오른쪽 끝, 얼굴이 왼쪽 밖으로 안 나가게, 아래 끝, 위.</summary>
+    private void KeepOnScreen()
+    {
+        var f = FaceFrame();
+        if (_x + _w >= ScreenW) _x = ScreenW - _w;
+        if (f != null) { if (_x - f.W + 20 < 0) _x = f.W - 20; }
+        else if (_x < 0) _x = 0;
+        if (_y + _h >= ScreenH) _y = ScreenH - _h;
+        if (f != null && _h <= f.H) { if (_y + _h - f.H < 0) _y = f.H - _h; }
+        else if (_y < 0) _y = 0;
+    }
+
+    /// <summary>
+    /// 파트1 전투 대사 200(<c>0x1001e200</c>) — <c>0x100a7ef0(0, 150, 닻 x, 닻 y, 창 x, 창 y, −1, −1, 짧은 이름, 글, 반신 초상, 판, 0x6f, 틀 모션)</c>.
+    /// 크기는 글로(<c>0x100a7ffa</c>~): 폭 = max(긴 줄 + 16, 이름 폭 + 16) ≤ 200, 높이 = ⌈긴 줄 / (폭 − 16)⌉ × (글 높이 + 4) + 16 + (이름 높이 + 8) ≤ 100.
+    /// 창 x 가 −1 이면 창 왼위 = (닻 x, 닻 y − 높이 − 50). 이름은 (창 + 8, 창 + 8)(<c>0x100a82e6</c>~), 몸글은 그 아래 이름 높이 + 8 부터.
+    /// 이름은 창이 다 펴진 뒤(<c>+0x69 == 0xff</c>) 통째로 찍는다(<c>0x100a8e96</c> → <c>0x10018c30</c>) — 한 글자씩이 아니다.
+    /// </summary>
+    internal void OpenBattle(int serial, string name, uint nameColor, IReadOnlyList<(string Text, uint Color)> rows, int face, int ticks,
+                             int ax, int ay, int x, int y, int frameSet)
+    {
+        _serial = serial;
+        _narration = false;
+        _ticks = ticks;
+        _face = face;
+        _frameSet = frameSet;
+        (_name, _nameColor) = (name, nameColor);
+        (_ax, _ay) = (ax, ay);
+        int maxW = rows.Select(r => Width(r.Text)).DefaultIfEmpty(0).Max();
+        int totalH = rows.Count * LineH + 4 * Math.Max(0, rows.Count - 1);
+        _w = maxW + 16;
+        if (name.Length > 0) _w = Math.Max(_w, Width(name) + 16);
+        _w = Math.Min(200, _w);
+        int wraps = _w > 16 ? (_w + maxW - 17) / (_w - 16) : 1;
+        _h = wraps * (totalH + 4) + 16;
+        if (name.Length > 0) _h += LineH + 8;
+        _h = Math.Min(100, _h);
+        _textTop = name.Length > 0 ? 8 + LineH + 8 : 8;
+        if (x == -1) (_x, _y) = (ax, ay - _h - 50);
+        else (_x, _y) = (x, y);
+        KeepOnScreen();
+        Layout(rows);
     }
 
     /// <summary>
@@ -92,6 +138,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         _ticks = ticks;
         _face = 0;
         _frameSet = frameSet;
+        (_name, _textTop) = ("", 8);
         (_x, _y, _w, _h) = (x, y, w, h);
         (_ax, _ay) = (x + w / 2, y + h / 2);
         if (_x + _w >= ScreenW) _x = ScreenW - _w;
@@ -124,7 +171,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         }
         // 쪽 — 첫 줄 (8, 8), 줄마다 높이 + 4 아래로, 줄 밑이 창 밑 − 8 을 넘으면 다음 쪽(다섯 줄까지).
         _pageStarts.Clear();
-        int perPage = Math.Clamp((_h - 8 - 8 - LineH) / (LineH + 4) + 1, 1, 5);
+        int perPage = Math.Clamp((_h - _textTop - 8 - LineH) / (LineH + 4) + 1, 1, 5);
         for (int i = 0; i < _lines.Count; i += perPage) _pageStarts.Add(i);
         if (_pageStarts.Count == 0) _pageStarts.Add(0);
         _page = 0;
@@ -202,8 +249,9 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         if (face != null) art.Blit(face, ox + _x - face.W + 20 - face.X, oy + _y + _h - face.H - face.Y);
         DrawFrame(ox + _x, oy + _y, _w, _h);
         // 글 — (창 + 8, 창 + 8) 부터, 글자는 틱마다 하나(/v 기본 6). 검은 테두리(위아래 왼오른 1픽셀) 위에 빛깔(0x100194b0).
+        if (_name.Length > 0) Outlined(_name, ox + _x + 8, oy + _y + 8, _nameColor);
         int shown = _doneAt > 0 ? int.MaxValue : Math.Max(0, (int)Ticks(_typeAt));
-        int ty = oy + _y + 8;
+        int ty = oy + _y + _textTop;
         foreach (var (text, color) in PageLines())
         {
             if (shown <= 0) break;

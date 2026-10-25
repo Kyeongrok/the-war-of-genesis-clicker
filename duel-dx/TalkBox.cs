@@ -127,6 +127,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         /// <summary>누르고 있는 동안 더 간 글 틱 — 흘리기 시각에 더한다(<see cref="TalkHeld"/>).</summary>
         public double HoldBoost;
         public bool AllRevealed => Revealed >= Clean.Length;
+        /// <summary>파트1 전투 대사 200 의 창(<see cref="Part1BattleTalk"/>) — 있으면 펴짐 · 글 · 넘김 · 그리기를 이 창이 한다.</summary>
+        public Part1Bubble? Part1;
     }
 
     /// <summary>떠 있는 대사창 — 나중에 연 것이 뒤. 접히는 중인 창도 다 접힐 때까지 남는다.</summary>
@@ -207,8 +209,19 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     {
         int id = host._scene.Id - Part1Game.BattleBase;
         if (_part1Talk?.Id != id) _part1Talk = Part1Battle.Load(id);
-        return Part1Game.PlainText(_part1Talk?.Line(line) ?? "");
+        return Part1Game.PlainText(Part1RawText(line));
     }
+
+    /// <summary>꾸밈 코드를 남긴 .dlg 줄 — 파트1 전투 대사 창이 /c · /n 을 직접 푼다.</summary>
+    internal string Part1RawText(int line)
+    {
+        int id = host._scene.Id - Part1Game.BattleBase;
+        if (_part1Talk?.Id != id) _part1Talk = Part1Battle.Load(id);
+        return _part1Talk?.Line(line) ?? "";
+    }
+
+    private Part1BattleTalk? _part1BattleTalk;
+    private Part1BattleTalk Part1Battle200 => _part1BattleTalk ??= new(host);
 
     /// <summary>말하는 이를 찾는다 — 없으면 −1(화면 가운데에 띄운다).</summary>
     internal int TalkSpeaker(int value)
@@ -231,6 +244,12 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (_talkSkip) return;
 
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
+        // 파트1 전투 대사 200(Part1Script 가 601 로 옮김)은 원본 창 0x100a7ef0 으로 — 파트2 말풍선이 아니다(분석-파트1-전투 36절).
+        if (host._scene.IsPart1 && !box)
+        {
+            if (Part1Battle200.Open(A(0), TalkSpeaker(A(0)), Part1RawText(A(2))) is { } p1) OpenTalkWindow(p1);
+            return;
+        }
         string text = host._scene.IsPart1 ? Part1Text(A(2)) : TalkTableFor(host._scene.Id)?[A(2)] ?? "";
         int speaker = TalkSpeaker(A(0));
         // 파트1 인물은 이름이 TXR 이 아니다 — 그림을 읽을 때 적어 둔 이름(_names)을 쓴다.
@@ -369,6 +388,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         if (_talks.Count == 0) return false;
         if (skipAll) { SkipTalk(); return true; }
         if (_talks.LastOrDefault(t => t.ClosingAt < 0) is not { } w) return true;   // 접히는 중이면 입력만 먹는다
+        if (w.Part1 != null) { w.Part1.Click(); return true; }                     // 파트1 전투 대사 — 찍는 중이면 쪽을 다 보이고, 다 찍었으면 넘김 [H]
         if (host._talkClickFills && !w.AllRevealed) { FillTalk(w); return true; }
         BeginCloseTalk(w);
         return true;
@@ -450,6 +470,11 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         {
             if (i >= _talks.Count) continue;
             var w = _talks[i];
+            if (w.Part1 != null)
+            {
+                if (w.Part1.Update()) RemoveTalkWindow(w);                   // 창이 다 사라지면(0x1001e581) 다음 줄로
+                continue;
+            }
             if (w.ClosingAt >= 0)
             {
                 if ((host._lastTime - w.ClosingAt) * TicksPerSecond >= w.OpenTicks) RemoveTalkWindow(w);
@@ -569,6 +594,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     /// <summary>글을 다 채운다 — 마지막 칸만큼의 줄을 보인다.</summary>
     internal void FillTalk(TalkWindow w)
     {
+        if (w.Part1 != null) return;
         EnsureTalkLayout(w);
         w.Revealed = w.Clean.Length;
         w.ScrollPx = 0;
@@ -723,6 +749,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
 
     internal void DrawTalkWindow(TalkWindow w)
     {
+        if (w.Part1 != null) { Part1Battle200.Draw(w); return; }
         EnsureTalkLayout(w);
         int tick = (int)((host._lastTime - w.OpenedAt) * TicksPerSecond);
         double open = w.ClosingAt >= 0

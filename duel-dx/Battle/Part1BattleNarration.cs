@@ -33,7 +33,7 @@ internal sealed class Part1BattleNarration(GameWindow host)
     private const int DefaultW = 200, DefaultH = 100;
 
     /// <summary>빛깔 표 <c>0x10018730</c>(COLORREF) — 0 흰 · 1 빨 · 2 초록 · 3 파랑 · 4 노랑 · 5 자홍 · 6 · 7 · 8 · 9.</summary>
-    private static readonly uint[] Colors =
+    internal static readonly uint[] Colors =
         [0xFFFFFFFF, 0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF00FF, 0xFFF9D9A1, 0xFF00FF96, 0xFFFFDC00, 0xFFB400FF];
 
     private int _w = DefaultW, _h = DefaultH, _serial;
@@ -42,6 +42,9 @@ internal sealed class Part1BattleNarration(GameWindow host)
     private Part1Battle? _dlg;
 
     private Part1Bubble Bubble => _bubble ??= new(host, new Part1MapArt(host));
+
+    /// <summary>203 이 정한 크기 — 판에 없는 이의 200 대사도 이것으로 자리를 잡는다(<c>0x1001e51c</c>~: 창 = (화면 폭/2 − 폭, 화면 높이/2 − 높이)).</summary>
+    internal (int W, int H) Size => (_w, _h);
 
     /// <summary>상자가 떠 있나 — 행동 1 이 이것을 기다린다.</summary>
     internal bool IsOpen => _open;
@@ -101,7 +104,7 @@ internal sealed class Part1BattleNarration(GameWindow host)
     /// 파트1 글을 줄 · 빛깔로 — 「/n」 은 줄 바꿈(맨 앞의 「/n」 도 빈 줄로 남긴다 — 0138 「/n/s2…」), /cN 은 그 뒤 빛깔, 다른 꾸밈은 지운다.
     /// 끝의 빈 줄만 버린다.
     /// </summary>
-    private static List<(string Text, uint Color)> Rows(string raw)
+    internal static List<(string Text, uint Color)> Rows(string raw)
     {
         var rows = new List<(string, uint)>();
         uint color = Colors[0];
