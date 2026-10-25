@@ -642,7 +642,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>지금 창 틱 — 리메이크 틀 시각 × 30.</summary>
     private long FrameTick => (long)Math.Floor(host._lastTime * GameWindow.TicksPerSecond);
 
-    /// <summary>꾸밈 글 창이 지금 대사를 들고 있나 — 옛 상자(<see cref="DrawTalkBox"/>)가 그리면 아니다.</summary>
+    /// <summary>꾸밈 글 창이 지금 대사를 들고 있나 — 표 창(<see cref="DrawTableWindow"/>)이 떠 있거나 새 대사가 아직 안 그려졌으면 아니다.</summary>
     private Part1TextTyper? LiveTyper => _talkTyper is { } t && t.Text.Length > 0 && ReferenceEquals(t.Text, _pageText) ? t : null;
 
     /// <summary>새 대사가 떴다 — 글이 앞 대사와 같아도 처음부터 다시 찍는다(원본은 대사마다 창을 새로 짓는다).</summary>
@@ -722,7 +722,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// </summary>
     internal void DrawTableWindow(int bx, int by, IReadOnlyList<string[]> rows)
     {
-        (_talkTyper, _pageText, _page, _pages) = (null, null, 0, 0);   // 누르면 곧 닫힌다(넘길 쪽 없음)
+        (_talkTyper, _pageText) = (null, null);   // 누르면 곧 닫힌다(넘길 쪽 없음)
         host.UiFill(bx, by, 500, 285, 0xE8101828);
         host.UiStroke(bx, by, 500, 285, 0xFF8098C8);
         var st = Part1Text.Start;
@@ -751,39 +751,12 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>마을 첫 화면의 대사(꾸밈째 글) — 마을 대사 창처럼 찍는다(<c>0x100a98a0</c>). 자리 · 크기는 리메이크 것.</summary>
     internal void DrawTalk(int ox, int oy, string raw) => DrawFormattedBox(ox + 24, oy + 340, 592, 124, raw, town: true);
 
-    internal void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text, bool arrow = true)
-    {
-        int ox = bx, oy = by;
-        const int X = 0, Y = 0;
-        host.UiFill(ox + X, oy + Y, W, H, 0xE8101828);
-        host.UiStroke(ox + X, oy + Y, W, H, 0xFF8098C8);
-        int y = oy + Y + 10;
-        if (speaker.Length > 0) { host.UiText(speaker, ox + X + 14, y, 0xFFFFE080, 13); y += 22; }
-        if (!_wrapped.TryGetValue(text, out var lines))
-        {
-            if (_wrapped.Count > 64) _wrapped.Clear();
-            _wrapped[text] = lines = [.. text.Split('\n').SelectMany(l => Wrap(l, W - 28))];
-        }
-        // 상자에 드는 줄만 — 넘치면 장을 나눠 누를 때마다 다음 장(사용자 보고: 글이 상자 밖으로 흘렀다).
-        int fit = Math.Max(1, (oy + Y + H - 8 - y) / 19);
-        if (!ReferenceEquals(text, _pageText) && text != _pageText) { _pageText = text; _page = 0; }
-        _pages = (lines.Length + fit - 1) / fit;
-        foreach (string line in lines.Skip(_page * fit).Take(fit))
-        {
-            host.UiText(line, ox + X + 14, y, GameWindow.White, 13);
-            y += 19;
-        }
-        // 넘김 표시 — 반짝인다(0.5초 켜짐 · 0.25초 꺼짐).
-        if (arrow && host._lastTime % 0.75 < 0.5) host.UiText("▼", ox + X + W - 22, oy + Y + H - 20, 0xFFFFC060, 12);
-    }
-
     private string? _pageText;
-    private int _page, _pages;
 
     /// <summary>
     /// 누름 — 화면들이 대사를 넘기기 전에 묻는다. 꾸밈 글 창(<see cref="DrawFormattedBox"/>)은 원본 <c>0x100a97c0</c> 대로: 아직 찍는 중이면 아무것도 안 하고 true
     /// (누르고 있으면 빨라질 뿐 — 쪽 끝에서 누른 것만 넘긴다, <c>+0x134</c>), 다 찍었으면 소리 0x33 뒤 남은 글이 있으면 그 자리(<c>+0x114</c>)부터 다음 쪽(true), 없으면 false(닫기).
-    /// 옛 상자(<see cref="DrawTalkBox"/>)는 남은 장이 있으면 다음 장으로 넘기고 true.
+    /// 꾸밈 글 창이 없으면(904 표 창) false.
     /// </summary>
     internal bool NextTalkPage(bool sound = true)
     {
@@ -797,27 +770,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             _held = Held();
             return true;
         }
-        if (_page + 1 >= _pages) return false;
-        _page++;
-        return true;
-    }
-
-    /// <summary>접어 둔 대사(글 → 줄들) — 틀마다 글 폭을 다시 재지 않게.</summary>
-    private readonly Dictionary<string, string[]> _wrapped = [];
-
-    /// <summary>창 폭에 맞춰 줄을 접는다 — 띄어쓰기에서 끊고, 띄어쓰기 없이 긴 말은 글자에서 끊는다.</summary>
-    private IEnumerable<string> Wrap(string line, int width)
-    {
-        while (line.Length > 0 && host.UiGetText(line, GameWindow.White, 13).W > width)
-        {
-            int cut = line.Length - 1;
-            while (cut > 1 && host.UiGetText(line[..cut], GameWindow.White, 13).W > width) cut--;
-            int space = line.LastIndexOf(' ', cut - 1);
-            if (space > cut / 2) cut = space + 1;
-            yield return line[..cut].TrimEnd();
-            line = line[cut..].TrimStart();
-        }
-        yield return line;
+        return false;
     }
 
     internal void DrawButton(int x, int y, int w, int h, string label, bool hot)
