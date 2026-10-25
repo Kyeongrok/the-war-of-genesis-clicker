@@ -540,6 +540,44 @@ internal sealed unsafe partial class BattleScene
     /// <summary>파트1 AI 표가 이번 생각에서 보게 한 적(이동 방식 2 의 +0xc 한도 안) — 그 인물의 BestUse 만 거른다. null 이면 거르지 않는다.</summary>
     internal (UnitState Owner, HashSet<int> Seen)? _part1Aware;
 
+    /// <summary>이번 차례에 목표 칸 쪽으로 이미 걸은 파트1 이동 방식 0 · 1 인물 — 다시 생각할 때는 그 자리에서만 친다(원본 남은 이동 +0x1c2 = 0 이면 상태 2).</summary>
+    internal UnitState? _part1GoalWalked;
+
+    /// <summary>지금 칸에만 설 수 있는 이동 영역 — 걸은 뒤 그 자리에서 고르는 행동(<c>0x10026b80</c>)에 쓴다.</summary>
+    internal MoveRange StayRange(UnitState u)
+    {
+        int n = host.Cols * host.Rows;
+        var cost = new int[n];
+        var prev = new int[n];
+        Array.Fill(cost, int.MaxValue);
+        Array.Fill(prev, -1);
+        if ((uint)u.Col < host.Cols && (uint)u.Row < host.Rows) cost[u.Row * host.Cols + u.Col] = 0;
+        return new MoveRange(cost, prev, new bool[n]) { Width = host.Cols };
+    }
+
+    /// <summary>
+    /// 파트1 AI 표 <c>+0x16</c> 먼저 쓸 기술 — <c>+0x14</c> = 0 이고 <c>+0x18</c>% 굴림에 들면 그 work 하나, 아니면 빈 목록(<c>0x1002733e</c>~).
+    /// 어빌리티 번호를 그 인물이 쓰는 기술로 바꾼다(<c>0x1003f260</c>): 배워 쓰는 레벨이 있어야 하고(전투 목록 = 쓰는 레벨, <c>0x1009e020</c>),
+    /// 갈래 3(초필살기 제어) · 5(소환 능력)는 무기 · 옷이 주는 갈래 2 · 4 기술로. 원본 굴림 칸은 소울 비용을 안 보지만 리메이크는 쓸 수 있는 것(AiWorks)만.
+    /// </summary>
+    internal IEnumerable<WorkData> Part1PreferredFirst(UnitState u, Part1Ai? ai)
+    {
+        if (ai is not { PickByScore: 0, PreferredAttack: > 0 } || host._db is not { } db || u.Data is not { } c) yield break;
+        if (host._rng.Next(100) >= ai.PreferredChance) yield break;
+        int kind = Part1Ability.ById(Part1Tables.Abilities, ai.PreferredAttack)?.Kind ?? -1;
+        foreach (var (abilityId, level) in c.Abilities)
+        {
+            int k = Part1Ability.ById(Part1Tables.Abilities, abilityId - Part1Game.ChrBase)?.Kind ?? -1;   // 리메이크 어빌리티 번호 = 20000 + 파트1 번호
+            bool match = abilityId == Part1Game.ChrBase + ai.PreferredAttack || kind == 3 && k == 2 || kind == 5 && k == 4;
+            if (!match || !db.Abilities.TryGetValue(abilityId, out var ab) || !ab.TryWorkAt(level, out int wid) || Work(wid) is not { } w) continue;
+            if (AiWorks(u).Contains(w)) yield return w;
+            yield break;
+        }
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"p1ai pref btl {host._scene.Id} chr {u.ChrCode} ability {ai.PreferredAttack} 없음(안 배움 · 지금 직업이 안 다룸)" + Environment.NewLine);
+    }
+
     /// <summary>
     /// 그 인물의 파트1 AI 표 칸(<c>Dats\AI.dat</c>, 유닛 <c>+0x262</c>) — 파트1 판이고 AI 가 움직이며 표 번호가 있을 때만. 사람이 움직이는 편(4)·용병 등 번호 없는 인물은 null.
     /// </summary>
@@ -570,6 +608,7 @@ internal sealed unsafe partial class BattleScene
     internal IEnumerator<bool> AiRoutine(int index)
     {
         var u = host._units[index];
+        _part1GoalWalked = null;                             // 파트1 이동 방식 0 · 1 은 차례마다 한 번 걷는다(원본 남은 이동 +0x1c2)
         for (double end = host._lastTime + 0.4; host._lastTime < end;) yield return true;
         for (int think = 0; think < 8; think++)
         {
@@ -615,7 +654,15 @@ internal sealed unsafe partial class BattleScene
         var p1ai = Part1AiOf(u);
         _part1Aware = null;
         bool p1Blind = false;
-        if (p1ai is { MoveMode: 2 })
+        // 이동 방식 0 · 1(0x10026570) — 0 은 정한 칸(+6, +8), 1 은 Chr +0xa 인 유닛의 칸(유닛 배열을 끝까지 훑어 마지막으로 맞는 것, 0x100265c4~0x1002664f).
+        // 1 은 그 유닛이 없으면 2(보통)와 같다. 두 방식 모두 적을 찾지 않는다(0x10026694 → 0x100269cd).
+        (int Col, int Row)? p1Goal = p1ai switch
+        {
+            { MoveMode: 0 } => (p1ai.GoalX, p1ai.GoalY),
+            { MoveMode: 1 } when host._units.LastOrDefault(t => t.Alive && t.OnField && t.ChrCode == Part1Game.ChrBase + p1ai.FollowChr) is { } lead => (lead.Col, lead.Row),
+            _ => null,
+        };
+        if (p1ai is { MoveMode: 1 or 2 } && p1Goal == null)
         {
             // 이동 방식 2(보통)는 대상 찾기(0x100288c0)를 「AI 표 +0xc 거리」 안으로 자른다 — 거리 = (|Δz| + 2·(|Δx| + |Δy|)) × 2(0x10028e00, 걸음 비용과 같은 자).
             // 원본은 칠 대상을 min(사거리 + SPD, +0xc), 다가갈 대상을 +0xc 안에서만 찾는다. 리메이크는 칠 대상을 파트2 틀(걸어서 닿는 칸)대로 두고 +0xc 만 얹는다 —
@@ -635,7 +682,8 @@ internal sealed unsafe partial class BattleScene
         if (Trace && host._scene.IsPart1)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"p1ai btl {host._scene.Id} unit {index} chr {u.ChrCode} ai {u.Part1AiType} mode {p1ai?.MoveMode} cap {p1ai?.MoveCap} foes {enemies.Count} nearest {nearest} danger {p1Danger}"
-                + $" fly {Part1Flyer(u) != null} reach {range.Cost.Count(x => x != int.MaxValue)} seen {_part1Aware?.Seen.Count} blind {p1Blind}" + Environment.NewLine);
+                + $" fly {Part1Flyer(u) != null} reach {range.Cost.Count(x => x != int.MaxValue)} seen {_part1Aware?.Seen.Count} blind {p1Blind}"
+                + (p1ai != null ? $" goal {(p1Goal is { } g0 ? $"({g0.Col},{g0.Row})" : "-")} act {p1ai.TargetMode} pref {p1ai.PreferredAttack}" : "") + Environment.NewLine);
         if (p1ai != null && p1Danger && nearest > 10) yield break;
         if (p1ai != null ? p1Danger : hpPercent < db.N(66) && nearest < db.N(90))
         {
@@ -671,12 +719,91 @@ internal sealed unsafe partial class BattleScene
         }
         if (p1Blind) yield break;
 
+        // 파트1 이동 방식 0 · 1 — 차례의 이동(상태 1, 0x10026330: 남은 이동 +0x1c2)은 목표 칸으로만 걷고, 행동(상태 2 · 0x10026b80)은 걸은 뒤 그 자리에서 한다.
+        // 목표 칸이 전장 밖이거나 벽(비트 1, 나는 유닛은 비트 2)이면 0x10025ce0 → 0x1008a250 이 0xffff 라 걷지 않고 제자리에서 행동한다.
+        // 갈 칸은 그 칸에서 목표까지 A* 비용이 가장 작은 칸(같으면 먼저 훑은 칸, 0x10026ac5) — 리메이크는 NearestReachableTo(목표에서 거꾸로 잰 비용).
+        bool p1InPlace = false;
+        if (p1Goal is { } p1g)
+        {
+            p1InPlace = true;
+            if (_part1GoalWalked != u)
+            {
+                _part1GoalWalked = u;
+                bool goalOk = (uint)p1g.Col < host.Cols && (uint)p1g.Row < host.Rows && Part1Range.Contains(p1g.Col, p1g.Row)
+                              && (CellFlagsAt(p1g.Col, p1g.Row) & (Part1Flyer(u) != null ? 0x2 : 0x1)) == 0;   // [H] 원본 지형 비트 1 · 2 ↔ 리메이크 칸 플래그
+                int go = goalOk ? NearestReachableTo(u, range, p1g.Col, p1g.Row) : -1;
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"p1ai goal btl {host._scene.Id} unit {index} chr {u.ChrCode} mode {p1ai!.MoveMode} ({u.Col},{u.Row}) -> goal ({p1g.Col},{p1g.Row}) ok {goalOk} flags {CellFlagsAt(p1g.Col, p1g.Row)} go {(go >= 0 ? $"({go % host.Cols},{go / host.Cols})" : "-")} act {p1ai.TargetMode}" + Environment.NewLine);
+                if (go >= 0 && range.Cost[go] > 0)
+                {
+                    foreach (var r in WalkTo(u, range, go)) yield return r;
+                    CommitMove(u);
+                }
+            }
+        }
+
+        // 파트1 AI 표 +0xd = 2 — 행동 고르기가 곧장 끝난다(0x10026bc4 → 0x10028008): 엔진 0 번(이동 방식 3)은 서 있기만, AI 24 는 도망만, 38 · 39 · 42 는 걷기만 한다.
+        if (p1ai is { TargetMode: 2 }) yield break;
+
+        // 걸은 뒤(이동 방식 0 · 1)에는 그 자리에서만 친다 — 설 칸이 지금 칸뿐인 영역.
+        MoveRange? stay = p1InPlace ? StayRange(u) : null;
+
+        // 파트1 AI 표 +0xd = 0 — Chr +0x12 인 유닛을 먼저 친다(0x10026bdd~: 배열 끝까지 훑어 마지막으로 맞는 것). 그 유닛을 칠 수 없으면 보통(+0xd = 1)으로 간다(0x10027322).
+        // [H] 원본은 그 유닛이 같은 편이어도 「칠 수 있나」(0x1003fbd0)만 본다 — 리메이크는 적일 때만 겨눈다.
+        if (p1ai is { TargetMode: 0 } && p1ai.TargetChr != 0xFFFF
+            && host._units.LastOrDefault(t => t.Alive && t.OnField && t.ChrCode == Part1Game.ChrBase + p1ai.TargetChr) is { } focus && SeesAsFoe(u, focus))
+        {
+            var keep = _part1Aware;
+            _part1Aware = (u, [Array.IndexOf(host._units, focus)]);
+            WorkData? focusWork = null;
+            (int Stand, int Col, int Row, int Score)? focusUse = null;
+            MoveRange? focusRange = null;
+            foreach (var w in Part1PreferredFirst(u, p1ai).Concat(AiWorks(u)).Where(w => !w.IsHeal))
+            {
+                var wr = stay ?? ComputeRange(u, w.Id) ?? range;
+                if (BestUse(index, w, wr) is not { } use || !WorkTargetsFrom(w, u, use.Stand % host.Cols, use.Stand / host.Cols, use.Col, use.Row).Contains(Array.IndexOf(host._units, focus))) continue;
+                (focusWork, focusUse, focusRange) = (w, use, wr);
+                break;
+            }
+            _part1Aware = keep;
+            if (focusWork != null)
+            {
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"p1ai focus btl {host._scene.Id} unit {index} chr {u.ChrCode} -> chr {focus.ChrCode} work {focusWork.Id}" + Environment.NewLine);
+                report(true);
+                foreach (bool r in AiUseWork(index, focusWork, focusUse!.Value, focusRange!)) yield return r;
+                yield break;
+            }
+        }
+
+        // 파트1 AI 표 +0x16 먼저 쓸 기술 — +0x14 = 0 이면 +0x18% 로 맨 먼저 본다(0x1002733e~0x100273eb). 칠 대상이 있어야 쓴다(어림 ≥ +0x1b, [H] 리메이크는 BestUse 점수 &gt; 0).
+        // 못 쓰면 원본은 어빌리티(+0x19%) → 기본 공격(+0x1a%) 굴림으로 넘어간다 — 리메이크는 그 자리를 아래 파트2 틀(센 기술부터)이 맡는다.
+        foreach (var w in Part1PreferredFirst(u, p1ai))
+        {
+            var wr = stay ?? ComputeRange(u, w.Id) ?? range;
+            if (BestUse(index, w, wr) is not { } use)
+            {
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"p1ai pref btl {host._scene.Id} unit {index} chr {u.ChrCode} ability {p1ai!.PreferredAttack} work {w.Id} 칠 대상 없음 → 보통 고르기" + Environment.NewLine);
+                break;
+            }
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"p1ai pref btl {host._scene.Id} unit {index} chr {u.ChrCode} ability {p1ai!.PreferredAttack} work {w.Id} aim ({use.Col},{use.Row})" + Environment.NewLine);
+            report(true);
+            foreach (bool r in AiUseWork(index, w, use, wr)) yield return r;
+            yield break;
+        }
+
         // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
         // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
         for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
         {
             // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
-            if (pass == 1 && SmartAi(u) && SmartPick(index, range) is { } smart)
+            if (pass == 1 && stay == null && SmartAi(u) && SmartPick(index, range) is { } smart)
             {
                 report(true);
                 foreach (bool r in AiUseWork(index, smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range)) yield return r;
@@ -686,13 +813,15 @@ internal sealed unsafe partial class BattleScene
             {
                 if (pass == 0 && !w.IsHeal) continue;
                 // 이동 예산은 <b>그 기술</b>의 TP 비용을 뺀 만큼이다(0x1005d070) — 늘 기본공격 기준이면 비싼 기술도 너무 멀리 걸어가 쓴다.
-                var workRange = ComputeRange(u, w.Id) ?? range;
+                var workRange = stay ?? ComputeRange(u, w.Id) ?? range;
                 if (BestUse(index, w, workRange) is not { } use) continue;
                 report(true);
                 foreach (bool r in AiUseWork(index, w, use, workRange)) yield return r;
                 yield break;
             }
         }
+        // 이동 방식 0 · 1 은 걸은 뒤 칠 것이 없으면 쉰다 — 다가가기(4단계 B · 6단계)는 목표 칸 걷기가 대신했다.
+        if (p1InPlace) yield break;
 
         // 4단계 (B) 접근(0x1005e39b) — 지금은 못 치지만 <b>최대 TP</b> 로는 닿는 적이 있으면, 목록 차례로 첫 성공 기술이 겨눌 칸을 향해
         // 지금 TP 로 갈 수 있는 칸 중 경로 비용이 가장 짧은 칸으로 가서 쉰다. 이 단계는 5단계 휴식보다 앞이다(fg-21 ⑮).
