@@ -87,6 +87,8 @@ internal sealed unsafe partial class BattleScene
     /// <summary>어빌리티 목록 줄 아이콘 — 분석-스킬 ba-12: Obs 0488 의 17×17 그림 24장(기준점 가운데).</summary>
     internal const int AbilityIconObs = 488;
 
+    private static IReadOnlyList<Part1Ability>? _part1Abilities;
+
     internal List<(string Name, WorkData Work, bool Enabled, string Reason)> MenuRows()
     {
         var rows = new List<(string, WorkData, bool, string)>();
@@ -370,7 +372,11 @@ internal sealed unsafe partial class BattleScene
                 host.UiText(hotkey, rx + MenuRowW - 2 - hw, y + 7, i == _abilityHover ? White : DimGray, 9);
             }
             // 줄 왼쪽에 아이콘 둘 — 종류(攻·回·異·軍·必)와 대상(한 사람·두 사람), 원본은 (14, 줄높이/2)·(34, …)
-            if (host._db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
+            // 파트1 어빌리티는 제 아이콘(Obs 0011 모션 = Abi 꼬리 + 0x13 — 技 · 必 · 魔 · 能 …, 0x10090970) 하나를 — 빌린 파트2 틀의 종류 아이콘은 모두 빨간 必 이었다(사용자 보고).
+            if (w.AbilityId >= Part1Game.ChrBase && Part1Ability.ById(_part1Abilities ??= Part1Ability.LoadAll(), w.AbilityId - Part1Game.ChrBase) is { } p1ab
+                && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(p1ab.Tail + 0x13, 0) is { } p1icon)
+                host.UiSprite(Part1Game.ObsBase + 11, p1ab.Tail + 0x13, 0, rx + 24 - p1icon.W / 2 - p1icon.X, y + (MenuRowH - p1icon.H) / 2 - p1icon.Y);
+            else if (host._db.Abilities.TryGetValue(w.AbilityId, out var ab) && ab.IconKindMotion >= 0)
             {
                 host.UiSprite(AbilityIconObs, ab.IconKindMotion, 0, rx + 14, y + MenuRowH / 2);
                 host.UiSprite(AbilityIconObs, ab.IconTargetMotion, 0, rx + 34, y + MenuRowH / 2);
