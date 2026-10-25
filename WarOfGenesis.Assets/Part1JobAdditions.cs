@@ -5,7 +5,7 @@ namespace WarOfGenesis.Assets;
 /// </summary>
 /// <remarks>
 /// <c>Job.dat</c> 은 사용자의 파트1 폴더에서 읽으므로 고치지 않는다. 원본 칸은 14개까지(<see cref="Part1Job.ParseAll"/>) — 넘치면 더하지 않는다.
-/// 이미 가르치는 어빌리티면 최대 레벨만 그 값으로 올린다.
+/// 이미 가르치는 어빌리티면 최대 레벨만 그 값으로 올린다. 레벨 0 이면 그 직업에서 뺀다.
 /// </remarks>
 public static class Part1JobAdditions
 {
@@ -14,6 +14,7 @@ public static class Part1JobAdditions
     {
         [19] = [(47, 1)],   // 돌격기사 — 힐 1(사용자 요청). 나이트 · 로열가드처럼 1 까지
         [20] = [(26, 1)],   // 전투기사 — 혼 1(사용자 요청). 투사(6)는 혼 5 까지 가르친다
+        [78] = [(119, 0), (33, 1)],   // 무슬림 — 소환 능력을 빼고 화이어 애로우 1(사용자 요청). 나이트 · 마하즈리다처럼 1 까지
     };
 
     private const int MaxSlots = 14;
@@ -27,7 +28,8 @@ public static class Part1JobAdditions
         foreach (var (ability, level) in adds)
         {
             int at = list.FindIndex(a => a.Ability == ability);
-            if (at >= 0) list[at] = (ability, Math.Max(list[at].Level, level));
+            if (level <= 0) { if (at >= 0) list.RemoveAt(at); }
+            else if (at >= 0) list[at] = (ability, Math.Max(list[at].Level, level));
             else if (list.Count < MaxSlots) list.Add((ability, level));
         }
         return [.. list];
