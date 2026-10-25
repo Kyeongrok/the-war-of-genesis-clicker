@@ -15,6 +15,8 @@ namespace DuelDx;
 /// 「C 에서 B 로 간다」= B 의 조건 무게(레벨 합)가 C 보다 크고, B 의 조건 가운데 능력치(어빌리티 1~9 — 어느 직업에서나 오른다)가 아닌 것을
 /// C 가 가르치는 최대치 · C 의 조건 · 그 인물의 지금 레벨 가운데 큰 것으로 채울 수 있을 때다. 이렇게 하면 슈미터 → 에스코트 · 레인져 · 해적 →
 /// 투사 → 어절트 슈미터 · 수크라 · 카빌라카 → 티아마타 같은 줄이 나온다. Job.dat 머리 (A, B) 의 A 는 소속(상태 창 이름표 21개)이다.</para>
+/// <para>여러 단계 경로(사용자 요청): 조건을 한 직업이 다 가르치지 않는 직업(티아마타 · 시반 블레이드)은 그 인물의 지금 직업 · 레벨에서 가장 적게 바꾸는 길을
+/// 찾아(<see cref="Search"/>) 아래 「경로」 줄에 칸마다 올릴 것과 함께 보이고, 바로 오는 직업이 없으면 그 길의 마지막 직업을 왼쪽에, 그런 직업을 오른쪽에 흐리게 둔다.</para>
 /// </remarks>
 internal sealed class Part1JobTree(GameWindow host)
 {
@@ -31,7 +33,7 @@ internal sealed class Part1JobTree(GameWindow host)
 
     private readonly List<(int X, int Y, int W, int H, Action Act)> _hits = [];
 
-    private const int StatAbilityMax = 9, NodeGap = 6, ListW = 100, DetailH = 150, ChipsH = 40, MaxSide = 7;
+    private const int StatAbilityMax = 9, NodeGap = 6, ListW = 100, DetailH = 150, ChipsH = 40, RouteH = 38, MaxSide = 7;
     private const uint NodeBg = 0xFF242C52, NodeHot = 0xFF34407A, Green = 0xFF78E078, Yellow = 0xFFFFE070, Gold = 0xFFFFC840,
                        Dim = 0xFF8890B0, Line = 0xFF6070A8, Blue = 0xFFB8D0FF;
 
@@ -52,6 +54,7 @@ internal sealed class Part1JobTree(GameWindow host)
         _jobs ??= Part1Job.LoadAll();
         _abilities ??= Part1Ability.LoadAll();
         _chrs.Clear();
+        _routes.Clear();
         _members = Members(out int focus);
         if (_members.Count == 0 || _jobs.Count == 0) { host.Toast("전직 트리를 볼 인물이 없습니다"); return true; }
         _open = true;
@@ -172,11 +175,120 @@ internal sealed class Part1JobTree(GameWindow host)
     private List<Part1Job> PrevOf(Part1Job job) =>
         [.. _jobs!.Where(p => Leads(p, job, null)).OrderByDescending(Weight).ThenBy(p => p.Id).Take(MaxSide)];
 
+    // ── 여러 단계 경로 ──
+
+    private sealed class RouteSet
+    {
+        internal Dictionary<int, List<Part1Job>> All = [];                                       // 한 번에 찾은 길(목표 → 거칠 직업)
+        internal readonly Dictionary<int, List<(Part1Job Job, List<(int Ability, int Level)> Raise)>?> Built = [];
+    }
+
+    /// <summary>사람마다 경로 셈(창을 열 때 비운다).</summary>
+    private readonly Dictionary<int, RouteSet> _routes = [];
+
+    private RouteSet RoutesOf(Part1Chr chr)
+    {
+        if (!_routes.TryGetValue(chr.Code, out var set))
+        {
+            _routes[chr.Code] = set = new RouteSet();
+            if (Part1Job.ById(_jobs!, chr.Fields[7]) is { } now) set.All = Search(_jobs!, chr, now, null);
+        }
+        return set;
+    }
+
+    /// <summary>지금 직업에서 target 까지 — [지금 직업, 거칠 직업…] 과 칸마다 「거기서 올릴 것」. target 은 넣지 않는다. null = 경로 없음.</summary>
+    private List<(Part1Job Job, List<(int Ability, int Level)> Raise)>? RouteTo(Part1Chr chr, Part1Job target)
+    {
+        var set = RoutesOf(chr);
+        if (set.Built.TryGetValue(target.Id, out var built)) return built;
+        List<(Part1Job, List<(int, int)>)>? result = null;
+        if (Part1Job.ById(_jobs!, chr.Fields[7]) is { } now && target.Id != now.Id && target.Firsts.Any(f => f.A > 0))
+        {
+            // 모두 찾기에서 넓이를 잘라 놓쳤으면 그 목표 하나만 다시 찾는다.
+            var path = set.All.GetValueOrDefault(target.Id) ?? Search(_jobs!, chr, now, target).GetValueOrDefault(target.Id);
+            if (path != null) result = Steps(chr, [now, .. path], target);
+        }
+        return set.Built[target.Id] = result;
+    }
+
+    /// <summary>
+    /// 지금 직업에서 가장 적게 바꾸는 길(목표 → 거칠 직업). 어빌리티 레벨은 직업을 바꿔도 남으므로 상태 = 지금까지 오른 레벨 벡터(조건에 나오는 어빌리티만,
+    /// 조건 최대치로 자름)다. 한 직업에 가면 그 직업이 가르치는 최대치까지 올린다고 보고(레벨은 내려가지 않으니 손해가 없다), 다음 직업은 원본 규칙
+    /// (<see cref="CanChange"/>) 그대로 조건을 모두 채운 직업. 너비 우선으로 단계를 늘리며 같은 벡터는 한 번만 보고, 한 단계가 너무 넓으면 target
+    /// (없으면 레벨 합)에 가까운 상태만 남긴다. 같은 단계 길이 여럿이면 조건이 가벼운 쪽. target 이 있으면 그것만, 없으면 모든 직업의 길을 찾는다.
+    /// </summary>
+    private static Dictionary<int, List<Part1Job>> Search(IReadOnlyList<Part1Job> jobs, Part1Chr chr, Part1Job now, Part1Job? target)
+    {
+        var cap = new Dictionary<int, int>();
+        foreach (var j in jobs) foreach (var (a, n) in Needs(j)) cap[a] = Math.Max(cap.GetValueOrDefault(a), n);
+        var ids = cap.Keys.OrderBy(a => a).ToArray();
+        var index = ids.Select((a, i) => (a, i)).ToDictionary(p => p.a, p => p.i);
+        var teach = jobs.ToDictionary(j => j.Id, j => ids.Select(a => (char)Math.Min(cap[a], Teaches(j, a))).ToArray());
+        var needs = jobs.ToDictionary(j => j.Id, j => Needs(j).Select(n => (I: index[n.Ability], n.Need)).ToArray());
+        bool Ok(char[] l, Part1Job j) => needs[j.Id].All(n => l[n.I] >= n.Need);
+        char[] Max(char[] a, char[] b) { var r = new char[a.Length]; for (int i = 0; i < a.Length; i++) r[i] = a[i] > b[i] ? a[i] : b[i]; return r; }
+        int Score(char[] l) => target != null ? needs[target.Id].Sum(n => Math.Min(l[n.I], n.Need)) : l.Sum(c => c);
+
+        var start = Max([.. ids.Select(a => (char)Math.Min(cap[a], Math.Max(0, chr.AbilityLevel(a))))], teach[now.Id]);
+        var goals = jobs.Where(j => j.Id != now.Id && j.Firsts.Any(f => f.A > 0) && (target == null || j.Id == target.Id)).ToList();
+        var candidates = jobs.Where(j => j.Id != now.Id && j.Firsts.Any(f => f.A > 0)).OrderBy(Weight).ThenBy(j => j.Id).ToList();
+        var found = new Dictionary<int, List<Part1Job>>();
+        foreach (var g in goals) if (Ok(start, g)) found[g.Id] = [];
+        var seen = new HashSet<string> { new(start) };
+        var frontier = new List<(char[] L, List<Part1Job> Path, int Cost)> { (start, [], 0) };
+        for (int depth = 1; depth <= 6 && frontier.Count > 0 && found.Count < goals.Count; depth++)
+        {
+            var next = new List<(char[] L, List<Part1Job> Path, int Cost)>();
+            var best = new Dictionary<int, (List<Part1Job> Path, int Cost)>();
+            foreach (var (l, path, cost) in frontier)
+                foreach (var j in candidates)
+                {
+                    if (!Ok(l, j)) continue;
+                    var l2 = Max(l, teach[j.Id]);
+                    if (!seen.Add(new string(l2))) continue;
+                    List<Part1Job> p2 = [.. path, j];
+                    int c2 = cost + Weight(j);
+                    foreach (var g in goals)
+                        if (!found.ContainsKey(g.Id) && g.Id != j.Id && Ok(l2, g) && (!best.TryGetValue(g.Id, out var b) || c2 < b.Cost)) best[g.Id] = (p2, c2);
+                    next.Add((l2, p2, c2));
+                }
+            foreach (var (id, b) in best) found[id] = b.Path;
+            frontier = next.Count > 3000 ? [.. next.OrderByDescending(s => Score(s.L)).ThenBy(s => s.Cost).Take(3000)] : next;
+        }
+        return found;
+    }
+
+    /// <summary>칸마다 올릴 것 — 뒤 칸(목표 포함)의 조건 가운데 아직 모자라고 이 직업이 더 올려 주는 것을, 뒤에서 필요한 만큼(이 직업의 최대까지).</summary>
+    private static List<(Part1Job Job, List<(int Ability, int Level)> Raise)> Steps(Part1Chr chr, List<Part1Job> seq, Part1Job target)
+    {
+        var level = new Dictionary<int, int>();
+        int Have(int a) => level.TryGetValue(a, out int v) ? v : Math.Max(0, chr.AbilityLevel(a));
+        var result = new List<(Part1Job Job, List<(int Ability, int Level)> Raise)>();
+        for (int i = 0; i < seq.Count; i++)
+        {
+            var later = seq.Skip(i + 1).Append(target).SelectMany(Needs).GroupBy(n => n.Ability).ToDictionary(g => g.Key, g => g.Max(n => n.Need));
+            var raise = new List<(int Ability, int Level)>();
+            foreach (var (a, need) in later.OrderBy(p => p.Key))
+            {
+                int have = Have(a), t = Teaches(seq[i], a);
+                if (have < need && t > have) raise.Add((a, Math.Min(t, need)));
+            }
+            foreach (var a in later.Keys) level[a] = Math.Max(Have(a), Teaches(seq[i], a));
+            result.Add((seq[i], raise));
+        }
+        return result;
+    }
+
+    /// <summary>한 직업에서 바로 오는 길이 없는 직업 가운데, 그 인물의 가장 짧은 길이 center 를 마지막으로 거치는 것 — 오른쪽에 흐리게.</summary>
+    private List<Part1Job> MultiNextOf(Part1Job center, Part1Chr chr) =>
+        [.. RoutesOf(chr).All.Where(r => r.Value.Count > 0 && r.Value[^1].Id == center.Id).Select(r => Job(r.Key)!)
+                         .Where(j => j.Id != center.Id && PrevOf(j).Count == 0).OrderBy(Weight).ThenBy(j => j.Id)];
+
     // ── 그리기 ──
 
     private (int X, int Y, int W, int H) Window()
     {
-        int w = Math.Min(720, host.ViewWidth - 16), h = Math.Min(500, host.ViewHeight - GameWindow.FrameTitleH - 16);
+        int w = Math.Min(720, host.ViewWidth - 16), h = Math.Min(540, host.ViewHeight - GameWindow.FrameTitleH - 16);
         return (host._camX + (host.ViewWidth - w) / 2, host._camY + (host.ViewHeight - h + GameWindow.FrameTitleH) / 2, w, h);
     }
 
@@ -260,7 +372,7 @@ internal sealed class Part1JobTree(GameWindow host)
         }
 
         // 가운데 · 양옆 자리.
-        int areaX = x + ListW + 16, areaR = x + W - 10, areaY = y + 10, areaB = y + H - DetailH - ChipsH - 22;
+        int areaX = x + ListW + 16, areaR = x + W - 10, areaY = y + 10, areaB = y + H - DetailH - ChipsH - RouteH - 32;
         const int Gap = 28;
         int prevW = 128, centerW = 170, nextW = areaR - areaX - prevW - centerW - 2 * Gap;
         int prevX = areaX, centerX = prevX + prevW + Gap, nextX = centerX + centerW + Gap;
@@ -270,6 +382,9 @@ internal sealed class Part1JobTree(GameWindow host)
 
         var prev = PrevOf(center);
         var next = NextOf(center, chr);
+        // 바로 오는 길이 없는 직업 가운데 그 인물의 가장 짧은 길이 이 직업을 마지막으로 거치는 것도 흐리게(오른쪽 끝).
+        int multiFrom = next.Count;
+        if (chr != null) next.AddRange(MultiNextOf(center, chr).Take(Math.Max(0, MaxSide - next.Count)));
         var needs = Needs(center).ToList();
         int centerH = 64 + needs.Count * 15;
         int centerY = top + Math.Max(0, (space - centerH) / 2);
@@ -280,11 +395,15 @@ internal sealed class Part1JobTree(GameWindow host)
         int prevTotal = prev.Count * (PrevH + NodeGap) - NodeGap;
         int py = top + Math.Max(0, (space - prevTotal) / 2);
         foreach (var p in prev) { nodes.Add((p, prevX, py, prevW, PrevH, -1)); py += PrevH + NodeGap; }
-        var nextHeights = next.Select(n => NextHeight(n, chr, nextW)).ToList();
+        // 한 직업에서 바로 오는 길이 없으면 — 그 인물의 지금 직업에서 가는 가장 짧은 여러 단계 길의 마지막 직업을 흐리게.
+        var route = chr != null && center.Id != current ? RouteTo(chr, center) : null;
+        if (prev.Count == 0 && route is { Count: > 0 } && route[^1].Job.Id != center.Id)
+            nodes.Add((route[^1].Job, prevX, top + Math.Max(0, (space - PrevH) / 2), prevW, PrevH, -2));
+        var nextHeights = next.Select((n, i) => i >= multiFrom ? PrevH : NextHeight(n, chr, nextW)).ToList();
         int gap = NodeGap, nextTotal = nextHeights.Sum() + gap * Math.Max(0, next.Count - 1);
         if (nextTotal > space && next.Count > 1) { gap = Math.Max(1, (space - nextHeights.Sum()) / (next.Count - 1)); nextTotal = nextHeights.Sum() + gap * (next.Count - 1); }
         int ny = top + Math.Max(0, (space - nextTotal) / 2);
-        for (int i = 0; i < next.Count; i++) { nodes.Add((next[i], nextX, ny, nextW, nextHeights[i], 1)); ny += nextHeights[i] + gap; }
+        for (int i = 0; i < next.Count; i++) { nodes.Add((next[i], nextX, ny, nextW, nextHeights[i], i >= multiFrom ? 2 : 1)); ny += nextHeights[i] + gap; }
 
         Part1Job? hover = null;
         foreach (var n in nodes) if (Hot(n.X, n.Y, n.W, n.H)) hover = n.Job;
@@ -295,8 +414,9 @@ internal sealed class Part1JobTree(GameWindow host)
         foreach (var n in nodes)
         {
             uint color = n.Job == hover ? Blue : Line;
-            if (n.Side < 0) Elbow(n.X + n.W, n.Y + n.H / 2, centerX, centerY + 18, color);
-            else Elbow(centerX + centerW, centerY + 18, n.X, n.Y + Math.Min(n.H / 2, 10), n.Job == hover ? Blue : StateColor(chr, n.Job) == Green ? Green : Line);
+            if (n.Side == -2) Elbow(n.X + n.W, n.Y + n.H / 2, centerX, centerY + 18, n.Job == hover ? Blue : Dim);
+            else if (n.Side < 0) Elbow(n.X + n.W, n.Y + n.H / 2, centerX, centerY + 18, color);
+            else Elbow(centerX + centerW, centerY + 18, n.X, n.Y + Math.Min(n.H / 2, 10), n.Job == hover ? Blue : n.Side == 2 ? Dim : StateColor(chr, n.Job) == Green ? Green : Line);
         }
 
         // 가운데 칸 — 이름 · 영어 이름 · 소속 · 조건(지금/필요).
@@ -322,6 +442,17 @@ internal sealed class Part1JobTree(GameWindow host)
         foreach (var (job, nx, nyy, nw, nh, side) in nodes)
         {
             bool hot = job == hover;
+            if (side is -2 or 2)
+            {
+                int changes = (side < 0 ? route : RouteTo(chr!, job))?.Count ?? 0;
+                host.UiFill(nx, nyy, nw, nh, hot ? NodeHot : 0xFF1A2040);
+                host.UiStroke(nx, nyy, nw, nh, Dim);
+                host.UiText(job.Name, nx + 6, nyy + 4, job.Id == current ? Gold : 0xFFC0C8E0, 12);
+                host.UiText($"여러 단계 · {changes}번 바꿈", nx + 6, nyy + 19, Dim, 9);
+                int mid = job.Id;
+                _hits.Add((nx, nyy, nw, nh, () => _center = mid));
+                continue;
+            }
             host.UiFill(nx, nyy, nw, nh, hot ? NodeHot : NodeBg);
             host.UiStroke(nx, nyy, nw, nh, job.Id == current ? Gold : StateColor(chr, job));
             host.UiText(job.Name, nx + 6, nyy + 4, job.Id == current ? Gold : GameWindow.White, 12);
@@ -347,7 +478,7 @@ internal sealed class Part1JobTree(GameWindow host)
             int id = job.Id;
             _hits.Add((nx, nyy, nw, nh, () => _center = id));
         }
-        if (prev.Count == 0) host.UiText("(첫 직업 · 따로 오는 길)", prevX, top + space / 2 - 6, Dim, 10);
+        if (prev.Count == 0 && !nodes.Any(n => n.Side == -2)) host.UiText("(첫 직업 · 따로 오는 길)", prevX, top + space / 2 - 6, Dim, 10);
         if (next.Count == 0) host.UiText("(이어지는 직업 없음)", nextX, top + space / 2 - 6, Dim, 10);
 
         // 지금 바꿀 수 있는 직업 — 원본 규칙(0x1009e6f0) 그대로.
@@ -372,8 +503,58 @@ internal sealed class Part1JobTree(GameWindow host)
             chipX += cw + 4;
         }
 
+        DrawRoute(center, chr, current, route, areaX, y + H - DetailH - 20 - RouteH, areaR);
         DrawDetail(hover ?? center, chr, areaX, y + H - DetailH - 22, areaR - areaX, DetailH);
         host.UiText("직업을 누르면 그 직업을 가운데로 · 가운데를 누르면 지금 직업 · Esc/T/오른쪽 단추: 닫기", x + 10, y + H - 17, Dim, 9);
+    }
+
+    /// <summary>
+    /// 「경로」 줄 — 가운데 직업까지 「지금 직업 → 거칠 직업 (거기서 올릴 것) → … → 목표」. 칸을 누르면 그 직업을 가운데로.
+    /// 지금 조건을 다 채웠으면 「바로 갈 수 있음」, 길이 없으면 「경로 없음」.
+    /// </summary>
+    private void DrawRoute(Part1Job center, Part1Chr? chr, int current, List<(Part1Job Job, List<(int Ability, int Level)> Raise)>? route, int x0, int y0, int right)
+    {
+        host.UiFill(x0, y0 - 3, right - x0, 1, Line);
+        host.UiText("경로:", x0, y0 + 2, Dim, 10);
+        int x = x0 + TextW("경로:", 10) + 8, y = y0;
+        string? note = chr == null ? "인물 없음" : center.Id == current ? "지금 직업" : CanChange(chr, center) ? "바로 갈 수 있음"
+                       : route == null ? "경로 없음" : null;
+        if (note != null) { host.UiText(note, x, y + 2, note == "경로 없음" ? 0xFFE08080 : note == "바로 갈 수 있음" ? Green : Gold, 10); return; }
+        // 거기서 올릴 것까지 두 줄에 안 들어가면 직업 이름만.
+        string Label(int i, bool full) => (i == 0 ? "지금 " : "") + route![i].Job.Name
+            + (full && route[i].Raise.Count > 0 ? " (" + string.Join(" · ", route[i].Raise.Select(r => $"{AbilityName(r.Ability)} {r.Level}")) + ")" : "");
+        var steps = new List<(Part1Job Job, string Text, bool Final, int X, int Y, int W)>();
+        foreach (bool full in new[] { true, false })
+        {
+            steps.Clear();
+            int cx = x, cy = y;
+            var texts = route!.Select((s, i) => (s.Job, Text: Label(i, full), Final: false)).Append((Job: center, Text: center.Name, Final: true)).ToList();
+            for (int i = 0; i < texts.Count; i++)
+            {
+                int cw = TextW(texts[i].Text, 10) + 12;
+                if (i > 0)
+                {
+                    int aw = TextW("→", 10) + 6;
+                    if (cx + aw + cw > right && cx > x0 + 40) { cx = x0 + 8; cy += 18; }
+                    cx += aw;
+                }
+                steps.Add((texts[i].Job, texts[i].Text, texts[i].Final, cx, cy, cw));
+                cx += cw + 4;
+            }
+            if (cy + 16 <= y0 + RouteH) break;
+        }
+        for (int i = 0; i < steps.Count; i++)
+        {
+            var (job, text, final, sx, sy, cw) = steps[i];
+            if (sy + 16 > y0 + RouteH) break;
+            if (i > 0) host.UiText("→", sx - TextW("→", 10) - 4, sy + 2, Dim, 10);
+            bool hot = Hot(sx, sy, cw, 16);
+            host.UiFill(sx, sy, cw, 16, hot ? NodeHot : NodeBg);
+            host.UiStroke(sx, sy, cw, 16, final || i == 0 ? Gold : CanChange(chr, job) ? Green : Line);
+            host.UiText(text, sx + 6, sy + 2, final ? Gold : GameWindow.White, 10);
+            int id = job.Id;
+            _hits.Add((sx, sy, cw, 16, () => _center = id));
+        }
     }
 
     /// <summary>아래 칸 — 그 직업의 전직 조건과 그 조건을 가르치는 직업, 그 직업이 가르치는 어빌리티(지금/최대).</summary>
