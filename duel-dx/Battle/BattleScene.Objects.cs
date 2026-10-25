@@ -976,8 +976,8 @@ internal sealed unsafe partial class BattleScene
     /// 모드 &gt; 상자 내용물 보기 — 지금 전투의 상자(종류 2)·폭탄 상자(8)와 든 것을 화면 왼쪽 위에 적는다. 연 것은 흐리게.
     /// 원본에 없는 도움 기능이다(사용자 요청). 든 것 = 아이템(.btl 물체 +0x144)이 있으면 아이템, 없으면 GP(+0x146).
     /// </summary>
-    /// <summary>상자 목록을 접어 두었나 — 머리 줄만 남긴다. 켤 때마다 펼친 채로 시작한다.</summary>
-    internal bool _chestListFolded;
+    /// <summary>상자 목록을 접어 두었나 — 머리 줄만 남긴다. 접힌 채로 시작한다(사용자 요청: 접히는 게 기본).</summary>
+    internal bool _chestListFolded = true;
 
     /// <summary>상자 목록의 접기 단추 자리(판 좌표) — 목록이 안 떠 있으면 null.</summary>
     internal (int X, int Y, int W, int H)? _chestFoldButton;
