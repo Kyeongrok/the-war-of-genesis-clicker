@@ -203,6 +203,13 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>209 의 말하는 필드 인물(차례) — 말풍선을 그 머리 위에.</summary>
     internal int TalkPerson { get; private set; } = -1;
 
+    /// <summary>209 의 얼굴(Chr 칸 4 반신 초상 Obs, 0 없음) · 209 · 210 의 저절로 넘김 틱 · 새 209 · 210 마다 오르는 번호 — 말풍선(<see cref="Part1Bubble"/>)이 쓴다.</summary>
+    internal int TalkFace { get; private set; }
+
+    internal int TalkTicks { get; private set; }
+
+    internal int TalkSerial { get; private set; }
+
     /// <summary>209 · 210 은 정한 틱이 지나면 저절로 넘어간다(누르면 먼저 넘어간다). 0 이면 저절로 안 넘어감.</summary>
     private double _talkAutoAt;
 
@@ -449,7 +456,11 @@ internal sealed class Part1SceneScript(GameWindow host)
                     Talk = (Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw));
                     TalkSlot = c.Code == 209 ? BubbleSlot : NarrationSlot;
                     TalkPerson = c.Code == 209 ? a[0] : -1;
-                    _talkAutoAt = Timed && ticks > 0 ? host._lastTime + ticks / GameWindow.TicksPerSecond : 0;
+                    TalkFace = c.Code == 209 ? a[1] : 0;
+                    TalkTicks = ticks;
+                    TalkSerial++;
+                    // 틱은 쪽을 다 찍은 뒤부터 센다(0x100a8685) — 말풍선이 제 때를 재고 넘긴다. 필드 밖(챕터)은 말풍선이 없으니 예전대로.
+                    _talkAutoAt = Timed && ticks > 0 && !IsField ? host._lastTime + ticks / GameWindow.TicksPerSecond : 0;
                     break;
                 }
                 case 100: BackgroundChange?.Invoke(a[0]); break;

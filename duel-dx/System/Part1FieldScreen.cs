@@ -175,6 +175,13 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     }
     private Part1SceneScript? _script;
 
+    /// <summary>시험용 <c>DUELDX_P1FIELD=&lt;필드&gt;</c> — 켜자마자 파트1 로 들어가 그 필드를 연다(화면 밖에서 말풍선 · 연출을 보려고).</summary>
+    internal void OpenIfAsked()
+    {
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1FIELD"), out int id) || id <= 0 || Part1Game.Root is null) return;
+        host.LeaveScene(() => { shell.Open(); Open(id, () => { }); });
+    }
+
     /// <summary>그 필드를 연다 — 끝나면(행동 500 · Esc · 대사가 다 끝나고 누름) <paramref name="onEnd"/>. 못 읽으면 곧바로 <paramref name="onEnd"/>.</summary>
     internal void Open(int id, Action onEnd)
     {
@@ -281,7 +288,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             if (choice.Options.Count > 0 && Script.WaitingOnChoice) Script.Choose(Math.Clamp(_choiceHover, 0, choice.Options.Count - 1));
             return;
         }
-        if (Script.Talk != null) { if (!shell.NextTalkPage()) Script.Advance(); }
+        if (BubbleTalk) { PumpBubble(); Bubble.Click(); }
+        else if (Script.Talk != null) { if (!shell.NextTalkPage()) Script.Advance(); }
         else if (Script.Idle) End();                                        // 다 돌았는데 500 이 없으면 누르면 돌아간다(걷는 중 · 기다리는 중에는 안 받는다)
     }
 
@@ -323,6 +331,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     internal void Draw()
     {
         Script.Pump();
+        PumpBubble();
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_field is { } field)
@@ -412,23 +421,42 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                 host.SetPixel(ox + x, oy + y, px[(sy + y) * cover.W + sx + x] | 0xFF000000);
     }
 
+    /// <summary>209 말풍선 · 210 해설 띠 — 원본 창 0x100a7ef0(분석-파트1-챕터 11.5절).</summary>
+    private Part1Bubble Bubble => _bubble ??= new(host, new Part1MapArt(host));
+    private Part1Bubble? _bubble;
+
+    /// <summary>지금 대사가 209 · 210 인가.</summary>
+    private bool BubbleTalk => Script.Talk != null && Script.TalkSlot is Part1SceneScript.BubbleSlot or Part1SceneScript.NarrationSlot;
+
+    /// <summary>
+    /// 새 209 · 210 이면 말풍선을 연다 — 자리는 그 순간 인물의 화면 자리(발밑, 0x100d00b8 인물 +0x30/+0x32)에 고정(그 뒤 인물이 걸어도 안 따라간다).
+    /// 말풍선이 쪽을 다 찍고 정한 틱이 지나 닫히면 다음 행동으로.
+    /// </summary>
+    private void PumpBubble()
+    {
+        if (!BubbleTalk) { _bubble?.Close(); return; }
+        if (!Bubble.IsOpen(Script.TalkSerial))
+        {
+            bool narration = Script.TalkSlot == Part1SceneScript.NarrationSlot;
+            int ax = MosesScene.MosesW / 2, ay = MosesScene.MosesH / 2;
+            if (!narration && Script.TalkPerson >= 0 && Script.TalkPerson < _spots.Length)
+            {
+                var (px, py) = PositionOf(Script.TalkPerson);
+                var (camX, camY) = Camera();
+                (ax, ay) = (px - camX, py - camY + Math.Max(0, (MosesScene.MosesH - _bgH) / 2));
+            }
+            var talk = Script.Talk!.Value;
+            Bubble.Open(Script.TalkSerial, narration, talk.Speaker, talk.Text, Script.TalkFace, Script.TalkTicks, ax, ay);
+        }
+        if (Bubble.Update()) { Bubble.Close(); Script.Advance(); }
+    }
+
     /// <summary>대사 · 고르기 · 글 쪽 창.</summary>
     private void DrawTalkLayer(int ox, int oy)
     {
         if (Script.Talk is { } page && Script.TalkSlot == Part1SceneScript.PageSlot)
             shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                          // 904 글 쪽 창(0x100d04b3)
-        else if (Script.Talk is { } talk && Script.TalkSlot == Part1SceneScript.NarrationSlot)
-            shell.DrawTalkBox(ox + 10, oy + 5, 619, 35, "", talk.Text);                            // 210 해설 띠(그림 없음)
-        else if (Script.Talk is { } bubble && Script.TalkSlot == Part1SceneScript.BubbleSlot && _field is { } shown
-                 && Script.TalkPerson >= 0 && Script.TalkPerson < _spots.Length)
-        {
-            // 209 말풍선 — 그 인물 머리 위(화면 안으로 민다).
-            var (px, py) = PositionOf(Script.TalkPerson);
-            var (camX, camY) = Camera();
-            int top = Math.Max(0, (MosesScene.MosesH - _bgH) / 2);
-            int bx = Math.Clamp(px - camX - 130, 4, MosesScene.MosesW - 264), by = Math.Clamp(py - camY + top - 150, 4, MosesScene.MosesH - 104);
-            shell.DrawTalkBox(ox + bx, oy + by, 260, 100, bubble.Speaker, bubble.Text);
-        }
+        else if (BubbleTalk) Bubble.Draw(ox, oy);                                                  // 209 말풍선 · 210 해설 띠(Part1Bubble)
         else if (Script.Talk is { } talk2) shell.DrawTalk(ox, oy, talk2.Speaker, talk2.Text, Script.TalkSlot, Script.Faces);
         else if (Script.Choice is { } choice)
         {

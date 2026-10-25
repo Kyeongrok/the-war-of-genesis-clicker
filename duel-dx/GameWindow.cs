@@ -1168,6 +1168,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             TitleScr.OpenTitleIfAsked();
             Mos.OpenMosesIfAsked();
             Fld.OpenFieldIfAsked();
+            Part1TitleScr.Field.OpenIfAsked();
             Btl.OpenLevelUpIfAsked();
             SlotsScr.OpenSlotsIfAsked();
             NotesScr.OpenIfUpdated();
