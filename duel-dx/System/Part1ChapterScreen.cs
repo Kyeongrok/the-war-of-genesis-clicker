@@ -14,10 +14,13 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell)
 {
-    /// <summary>오른쪽 단추 다섯 — 가운데 x 570, 가운데 y 와 글(원본 0x100b1c30, id 0x64~0x68).</summary>
+    /// <summary>오른쪽 단추 다섯 — 가운데 x 570(지도 화면 오른끝 − 70), 가운데 y 와 글(원본 0x100b1c30, id 0x64~0x68).</summary>
     internal static readonly (int Y, string Name)[] Buttons = [(30, "이  동"), (65, "진  입"), (100, "상  태"), (135, "교  환"), (185, "턴종료")];
 
     internal const int ButtonX = 570;
+
+    /// <summary>단추 가운데 x — 원본 640 화면의 570 을 지도 화면 오른끝에 붙인다(넓은 창에서도 오른위).</summary>
+    private static int ButtonLeft(int ox, int w) => ox + w - (MosesScene.MosesW - ButtonX);
     internal const int ButtonMove = 0, ButtonEnter = 1, ButtonStatus = 2, ButtonExchange = 3, ButtonEndTurn = 4, ButtonHit = 1000;
 
     /// <summary>「N 팀」 꼬리표(id 0x12d + 팀) · 이동 고르기 장소 · Esc 메뉴 줄 · 마을 장소(누르면 상점 정보).</summary>
@@ -80,6 +83,47 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     /// <summary>화면 왼위의 지도 자리.</summary>
     internal (int X, int Y) _cam;
+
+    /// <summary>처음 화면 가운데(지도 좌표) — 지도 화면 크기는 판을 넓힌 뒤에야 알므로 첫 그리기에서 <see cref="_cam"/> 로 바꾼다.</summary>
+    private (int X, int Y)? _camAim;
+
+    /// <summary>
+    /// 지도를 비추는 화면 네모 — 보이는 판 전체(사용자 요청: 넓은 창이면 지도를 넓게). 지도가 그보다 작으면 지도 크기로 가운데에 두고 둘레는 검게.
+    /// 원본은 640×480 한 장 — 지역 띠는 이 네모 왼위, 단추는 오른위에 붙고, 창 · 메뉴 · 대사는 가운데 640×480 틀(<see cref="MosesScene.MosesOrigin"/>)에 그대로 뜬다.
+    /// </summary>
+    internal (int X, int Y, int W, int H) MapView()
+    {
+        int vw = host.ViewWidth, vh = host.ViewHeight;
+        int w = Math.Min(vw, _mapW > 0 ? _mapW : MosesScene.MosesW), h = Math.Min(vh, _mapH > 0 ? _mapH : MosesScene.MosesH);
+        return (host._camX + (vw - w) / 2, host._camY + (vh - h) / 2, w, h);
+    }
+
+    /// <summary>
+    /// 판 크기 — 지도를 그리는 동안은 창(해상도 ÷ 배율)만큼 넓은 판을 쓰고, 다른 파트1 화면으로 가면 640 틀 판으로 되돌린다.
+    /// 판이 640 틀이면 <see cref="GameWindow.ViewWidth"/> 가 640 에 묶여 넓은 창에서도 지도가 가운데 640×480 만 보였다(사용자 보고).
+    /// 배율은 판 너비 640 이상이면 판과 상관없다(<see cref="GameWindow.FitZoom"/>) — 글 · 그림 크기는 그대로, 보이는 지도만 넓어진다.
+    /// </summary>
+    internal void FitBoard(bool showing)
+    {
+        if (showing)
+        {
+            double zoom = host._zoom > 0 ? host._zoom : 1;
+            int w = (int)Math.Ceiling(host._resW / zoom), h = (int)Math.Ceiling(host._resH / zoom);
+            int cols = Math.Max(GameWindow.TitleBoardCols, (w + GameWindow.TileW - 1) / GameWindow.TileW);
+            // 보이는 높이는 판의 70% 까지(ViewHeight) — 그만큼 줄을 넉넉히.
+            int rows = Math.Max(GameWindow.TitleBoardRows, (int)Math.Ceiling((h * 10 / 7.0 - GameWindow.GridTop) / GameWindow.TileH) + 1);
+            if (host.Cols != cols || host.Rows != rows) host.ResizeViewBoard(cols, rows);
+            _wideBoard = (cols, rows);
+        }
+        else if (_wideBoard != default)
+        {
+            // 전투가 판을 제 맵으로 갈았으면 그대로 둔다 — 이 지도가 넓힌 판일 때만 되돌린다.
+            if ((host.Cols, host.Rows) == _wideBoard && !host.BoardIsMap) host.ResizeViewBoard(GameWindow.TitleBoardCols, GameWindow.TitleBoardRows);
+            _wideBoard = default;
+        }
+    }
+
+    private (int Cols, int Rows) _wideBoard;
 
     private double _lastScroll;
 
@@ -363,7 +407,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         PlayMapMusic(chapter);
         BuildMap(chapter);
         // 처음 화면 자리 = (min(낱말 3, 폭 − 640), min(낱말 4, 높이 − 480))(13.1). 전투 · 필드에서 돌아오면 보던 자리 그대로.
-        if (!same) _cam = (chapter.Header.Length > 4 ? chapter.Header[3] : 0, chapter.Header.Length > 4 ? chapter.Header[4] : 0);
+        // 넓은 창이면 원본 640×480 의 가운데를 지도 화면 가운데에 둔다(첫 그리기에서, _camAim).
+        if (!same)
+        {
+            _cam = (chapter.Header.Length > 4 ? chapter.Header[3] : 0, chapter.Header.Length > 4 ? chapter.Header[4] : 0);
+            ClampCamera(MosesScene.MosesW, MosesScene.MosesH);
+            _camAim = (_cam.X + MosesScene.MosesW / 2, _cam.Y + MosesScene.MosesH / 2);
+        }
         ClampCamera();
         _open = true;
         _hover = -1;
@@ -484,12 +534,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     }
 
     /// <summary>구름 한 장 — 128×128 무늬를 320×240 으로 늘려 스크린 섞기(원본 D3D: 원본 × (1 − 판) + 판).</summary>
-    private void DrawCloud(byte[] look, int sx, int sy, int ox, int oy)
+    private void DrawCloud(byte[] look, int sx, int sy, (int X, int Y, int W, int H) view)
     {
         var fb = host._fb;
         int bw = host.BoardWidth, bh = host.BoardHeight;
-        int x0 = Math.Max(Math.Max(sx, ox), 0), x1 = Math.Min(Math.Min(sx + 320, ox + MosesScene.MosesW), bw);
-        int y0 = Math.Max(Math.Max(sy, oy), 0), y1 = Math.Min(Math.Min(sy + 240, oy + MosesScene.MosesH), bh);
+        int x0 = Math.Max(Math.Max(sx, view.X), 0), x1 = Math.Min(Math.Min(sx + 320, view.X + view.W), bw);
+        int y0 = Math.Max(Math.Max(sy, view.Y), 0), y1 = Math.Min(Math.Min(sy + 240, view.Y + view.H), bh);
         for (int y = y0; y < y1; y++)
         {
             // 원본은 겹선형 거르기(D3D 확대 · 축소 거르기 2)로 늘린다 — 8비트 고정 소수점으로 같은 꼴.
@@ -508,8 +558,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
     }
 
-    private void ClampCamera() =>
-        _cam = (Math.Clamp(_cam.X, 0, Math.Max(0, _mapW - MosesScene.MosesW)), Math.Clamp(_cam.Y, 0, Math.Max(0, _mapH - MosesScene.MosesH)));
+    private void ClampCamera()
+    {
+        var (_, _, w, h) = MapView();
+        ClampCamera(w, h);
+    }
+
+    private void ClampCamera(int w, int h) =>
+        _cam = (Math.Clamp(_cam.X, 0, Math.Max(0, _mapW - w)), Math.Clamp(_cam.Y, 0, Math.Max(0, _mapH - h)));
 
     /// <summary>화면을 민다(지도 좌표).</summary>
     internal void Scroll(int dx, int dy)
@@ -523,7 +579,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (_chapter is not { } chapter || place < 0 || place >= chapter.Places.Count) return;
         var (cx, cy) = Center(chapter.Places[place]);
-        _cam = (cx - MosesScene.MosesW / 2, cy - MosesScene.MosesH / 2);
+        var (_, _, w, h) = MapView();
+        _cam = (cx - w / 2, cy - h / 2);
+        _camAim = null;
         ClampCamera();
     }
 
@@ -596,31 +654,56 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                     .Where(n => chapter.Places[n].Words[5] is var gate && (gate < 0 || gate < flags.Length && flags[gate] != 0))];
     }
 
+    /// <summary>이동 고르기 표지가 선 이웃(장소 차례) — 처음엔 첫 이웃, 마우스를 움직이면 마우스 쪽 이웃.</summary>
+    private int _moveAim = -1;
+
+    /// <summary>
+    /// 이동 고르기 표지의 이웃 — 원본 0x100c50b0(틱마다): 팀 장소 가운데 → 마우스 벡터와 팀 → 이웃 벡터의 코사인이 가장 큰 이웃(깃발 낱말 5 로 거른 것)으로
+    /// 고리(Obs 182)를 옮긴다. 마우스가 팀 가운데에 있으면 그대로. 고리 · 선은 이 이웃 하나에만 그린다(사용자 보고: 갈 수 있는 모든 곳에 선이 나온다).
+    /// </summary>
+    private int MoveAim(int bx, int by)
+    {
+        if (_chapter is not { } chapter || _party < 0 || _party >= chapter.Places.Count) return -1;
+        var targets = MoveTargets();
+        if (targets.Count == 0) return _moveAim = -1;
+        if (!targets.Contains(_moveAim)) _moveAim = targets[0];
+        var (fx, fy) = Center(chapter.Places[_party]);
+        var (ox, oy, _, _) = MapView();
+        double mx = bx - (ox + fx - _cam.X), my = by - (oy + fy - _cam.Y), mm = Math.Sqrt(mx * mx + my * my);
+        if (mm < 1) return _moveAim;
+        double best = -2;
+        foreach (int n in targets)
+        {
+            var (tx, ty) = Center(chapter.Places[n]);
+            double vx = tx - fx, vy = ty - fy, vv = Math.Sqrt(vx * vx + vy * vy);
+            double cos = vv < 1 ? -1 : (vx * mx + vy * my) / (vv * mm);
+            if (cos > best) { best = cos; _moveAim = n; }
+        }
+        return _moveAim;
+    }
+
     // ── 맞음 ──
 
     internal int HitAt(int bx, int by)
     {
-        var (ox, oy) = host.Mos.MosesOrigin();
         if (_chapter is not { } chapter) return -1;
         if (_mode == Mode.Menu)
         {
+            var (mx, my) = host.Mos.MosesOrigin();   // 메뉴는 가운데 640×480 틀
             for (int i = 0; i < MenuItems.Length; i++)
-                if (bx >= ox + MenuX && bx < ox + MenuX + MenuW && by >= oy + MenuY + 30 + i * MenuRowH && by < oy + MenuY + 30 + (i + 1) * MenuRowH - 2) return MenuHit + i;
+                if (bx >= mx + MenuX && bx < mx + MenuX + MenuW && by >= my + MenuY + 30 + i * MenuRowH && by < my + MenuY + 30 + (i + 1) * MenuRowH - 2) return MenuHit + i;
             return -1;
         }
+        var (ox, oy, ow, _) = MapView();
         if (_mode == Mode.Move)
         {
-            foreach (int n in MoveTargets())
-            {
-                var p = chapter.Places[n];
-                var (sx, sy) = Screen(p, ox, oy);
-                int hw = Math.Max(24, p.Words[3] / 2), hh = Math.Max(24, p.Words[4] / 2);
-                if (Math.Abs(bx - sx) <= hw && Math.Abs(by - sy) <= hh) return TargetHit + n;
-            }
-            return -1;
+            // 원본 0x100c4e00 의 표지는 하나 — 지도 화면 어디를 눌러도 표지가 선 이웃(마우스 쪽)으로 간다. 오른 단추 · Esc 가 취소.
+            var (_, _, _, oh) = MapView();
+            if (bx < ox || by < oy || bx >= ox + ow || by >= oy + oh) return -1;
+            return MoveAim(bx, by) is >= 0 and var aim ? TargetHit + aim : -1;
         }
         for (int i = 0; i < Buttons.Length; i++)
-            if (Part1MapArt.ButtonHit(ox + ButtonX, oy + Buttons[i].Y, bx, by)) return ButtonHit + i;
+            if (Part1MapArt.ButtonHit(ButtonLeft(ox, ow), oy + Buttons[i].Y, bx, by)) return ButtonHit + i;
         // 「N 팀」 꼬리표 — 묶음 기준 (59, 18k − 75), 39×18.
         for (int i = 0; i < chapter.Places.Count; i++)
         {
@@ -789,7 +872,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_exchange is { _open: true }) { _exchange.OnClick(bx, by); return; }
         if (_shops is { _open: true }) { _shops.OnClick(bx, by); return; }   // 창 밖을 누르면 닫힌다
         int hit = HitAt(bx, by);
-        if (_mode == Mode.Move && hit < 0) { _mode = Mode.Map; return; }   // 표지 밖을 누르면 취소(단추가 다시 보인다)
+        if (_mode == Mode.Move && hit < 0) { _mode = Mode.Map; return; }   // 지도 화면 밖을 누르면 취소(단추가 다시 보인다)
         if (_mode == Mode.Menu && hit < 0) { _mode = Mode.Map; return; }
         Press(hit);
     }
@@ -908,6 +991,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (MoveTargets().Count == 0) return;
         _mode = Mode.Move;
         _hover = -1;
+        _moveAim = -1;
         RevealTargets();
     }
 
@@ -920,7 +1004,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_chapter is not { } chapter || _party < 0 || _party >= chapter.Places.Count) return;
         var points = MoveTargets().Append(_party).Select(n => Center(chapter.Places[n])).ToList();
         int minX = points.Min(p => p.X), maxX = points.Max(p => p.X), minY = points.Min(p => p.Y), maxY = points.Max(p => p.Y);
-        const int left = 40, right = 500, top = 100, bottom = 440;   // 띠(152×64) · 오른쪽 단추(x 520~) · 아래 안내 글을 비킨다
+        var (_, _, w, h) = MapView();
+        int left = 40, right = w - 140, top = 100, bottom = h - 40;   // 띠(152×64) · 오른쪽 단추(오른끝 − 120 ~) · 아래 안내 글을 비킨다
         int dx = minX - _cam.X < left ? minX - left - _cam.X : maxX - _cam.X > right ? maxX - right - _cam.X : 0;
         int dy = minY - _cam.Y < top ? minY - top - _cam.Y : maxY - _cam.Y > bottom ? maxY - bottom - _cam.Y : 0;
         if (dx != 0 || dy != 0) Scroll(dx, dy);
@@ -982,11 +1067,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (_chapter is not { } chapter) return;
         Events.Pump();   // 챕터 덮개 동안의 기다림(2 · 1)을 잇는다
-        var (ox, oy) = host.Mos.MosesOrigin();
-        const int W = MosesScene.MosesW, H = MosesScene.MosesH;
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        EdgeScroll(ox, oy);
-        Art.Clip = (ox, oy, W, H);
+        var view = MapView();
+        var (ox, oy, W, H) = view;
+        var (cx0, cy0) = host.Mos.MosesOrigin();   // 창 · 메뉴 · 대사 · 알림 — 가운데 640×480 틀
+        if (_camAim is { } aim) { _cam = (aim.X - W / 2, aim.Y - H / 2); _camAim = null; }
+        ClampCamera(W, H);   // 창 크기가 바뀌어도 지도 밖을 비추지 않게
+        EdgeScroll(view);
+        Art.Clip = view;
 
         // 지도 — 판에 줄 단위로 옮긴다(그림 층).
         var fb = host._fb;
@@ -1012,7 +1100,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             }
             StepClouds(tick);
             foreach (var (cx, cy, look) in _clouds)
-                DrawCloud(_cloudLooks![look], ox + cx - _cam.X, oy + cy - _cam.Y, ox, oy);
+                DrawCloud(_cloudLooks![look], ox + cx - _cam.X, oy + cy - _cam.Y, view);
         }
         else if (_mapPx.Length > 0 && x1 > x0)
             for (int y = 0; y < H; y++)
@@ -1064,26 +1152,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
 
         // 이동 고르기 — 갈 수 있는 이웃마다 퍼지는 고리(Obs 182, 0x100c4cf0)와 팀 자리에서 그 이웃까지의 선.
-        // 원본(0x100c4e00)은 고리 하나를 마우스 쪽 이웃에 두고(0x100c50b0), 팀 장소 가운데 → 고리 자리로 선을 긋는다:
+        // 원본(0x100c4e00)은 고리 하나를 마우스 쪽 이웃에 두고(0x100c50b0, MoveAim), 팀 장소 가운데 → 고리 자리로 선을 긋는다:
         // 0x1000c8b0 선을 (0,0) · x+1 · y+1 · x−1 · y−1 로 다섯 번(굵기 3 십자꼴), 빛깔 16비트 0x6259(15비트 0x3139) = (99, 73, 206).
-        // 리메이크는 이웃마다 고리와 선을 함께 그린다.
-        if (_mode == Mode.Move && _party >= 0 && _party < chapter.Places.Count)
+        // 전에는 이웃마다 고리와 선을 다 그렸다 — 원본처럼 표지가 선 이웃 하나만(사용자 보고).
+        if (_mode == Mode.Move && _party >= 0 && _party < chapter.Places.Count && MoveAim(host._mouse.X, host._mouse.Y) is >= 0 and var aimed)
         {
             var (fx, fy) = Screen(chapter.Places[_party], ox, oy);
-            foreach (int n in MoveTargets())
-            {
-                var (tx, ty) = Screen(chapter.Places[n], ox, oy);
-                foreach (var (dx, dy) in RouteOffsets) Line(fx + dx, fy + dy, tx + dx, ty + dy, RouteColor);
-            }
+            var (tx, ty) = Screen(chapter.Places[aimed], ox, oy);
+            foreach (var (dx, dy) in RouteOffsets) Line(fx + dx, fy + dy, tx + dx, ty + dy, RouteColor);
+            if (!host.DrawUi(Part1Game.ObsBase + RingObs, 0, tick, tx, ty, GameWindow.UiBlend.Add, loop: true))   // 빛 고리 — 더하기로(검은 바탕이 지도를 가리지 않게)
+                Art.Stroke(tx - 12, ty - 12, 24, 24, 0xFFFFE080);
         }
-        if (_mode == Mode.Move)
-            foreach (int n in MoveTargets())
-            {
-                var (sx, sy) = Screen(chapter.Places[n], ox, oy);
-                if (!host.DrawUi(Part1Game.ObsBase + RingObs, 0, tick, sx, sy, GameWindow.UiBlend.Add, loop: true))   // 빛 고리 — 더하기로(검은 바탕이 지도를 가리지 않게)
-                    Art.Stroke(sx - 12, sy - 12, 24, 24, 0xFFFFE080);
-                if (_hover == TargetHit + n) Art.Stroke(sx - 26, sy - 26, 52, 52, 0xFFFFE080);
-            }
 
         // 팀 말 — 장소 가운데에 깃대(Obs 226 모션 0, 적 말이면 모션 3) · 얼굴 (34, −48) · 「N 팀」 꼬리표 (59, 18k − 75)(0x100b20d0).
         for (int i = 0; i < chapter.Places.Count; i++)
@@ -1105,7 +1184,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                     Art.Blit(Art.Motion(TeamObs, on ? 1 : 2, tick), tx, ty);
                     // 꼬리표 글은 판 위 층이라 창을 뚫고 보인다 — 전에는 메뉴 · 턴 끝 알림이 뜨기만 하면 모든 꼬리표 글을 숨겨 빈 상자로 보였다(사용자 보고).
                     // 이제는 그 꼬리표가 메뉴 · 알림 상자에 실제로 덮일 때만 숨긴다(상태 · 교환 창은 화면을 거의 덮어 늘 숨긴다).
-                    if (!TagCovered(tx - ox, ty - oy, 39, 18)) Art.TextCentered($"{at[k] + 1} 팀", tx + 20, ty + 9, on ? GameWindow.White : 0xFFD0D8F0, 11);
+                    if (!TagCovered(tx - cx0, ty - cy0, 39, 18)) Art.TextCentered($"{at[k] + 1} 팀", tx + 20, ty + 9, on ? GameWindow.White : 0xFFD0D8F0, 11);
                 }
             }
         }
@@ -1134,24 +1213,25 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
                     ButtonExchange => !CanExchange(),
                     _ => false,
                 };
-                Art.Button(ox + ButtonX, oy + Buttons[i].Y, Buttons[i].Name, _hover == ButtonHit + i, disabled);
+                Art.Button(ButtonLeft(ox, W), oy + Buttons[i].Y, Buttons[i].Name, _hover == ButtonHit + i, disabled);
             }
         if (_mode == Mode.Move && calm) Art.TextCentered("갈 곳을 고르세요 (오른 단추 · Esc 취소)", ox + W / 2, oy + H - 16, 0xFFFFE080, 12);
 
-        if (_status is { _open: true }) _status.Draw(ox, oy);
-        if (_exchange is { _open: true }) _exchange.Draw(ox, oy);
-        if (_shops is { _open: true }) _shops.Draw(ox, oy);
+        if (_status is { _open: true }) _status.Draw(cx0, cy0);
+        if (_exchange is { _open: true }) _exchange.Draw(cx0, cy0);
+        if (_shops is { _open: true }) _shops.Draw(cx0, cy0);
         Art.Clip = default;
 
         // 턴 끝 알림 — 틀 상자 (200, 200) 240×40, 가운데 글.
         if (host._lastTime < _noticeUntil)
         {
-            Art.Box(ox + 200, oy + 200, 240, 40);
-            Art.TextCentered(_notice, ox + 320, oy + 220, GameWindow.White, 14);
+            Art.Box(cx0 + 200, cy0 + 200, 240, 40);
+            Art.TextCentered(_notice, cx0 + 320, cy0 + 220, GameWindow.White, 14);
         }
-        if (_mode == Mode.Menu) DrawMenu(ox, oy);
+        if (_mode == Mode.Menu) DrawMenu(cx0, cy0);
 
-        DrawCover(ox, oy);
+        DrawCover(view, cx0, cy0);
+        (ox, oy) = (cx0, cy0);   // 아래 대사 · 고르기 창은 가운데 640×480 틀
         if (Events.Talk is { } page && Events.TalkSlot == Part1SceneScript.PageSlot)
             shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                 // 1104 표 창(0x100a9000, 70 · 100 · 500×285)
         else if (Events.Talk is { } narration && Events.TalkSlot == Part1SceneScript.NarrationSlot)
@@ -1171,7 +1251,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         host.DrawToast();
     }
 
-    /// <summary>화면(640×480) 네모 (x, y, w, h) 가 떠 있는 창 · 메뉴 · 턴 끝 알림에 덮이나.</summary>
+    /// <summary>가운데 640×480 틀 기준 네모 (x, y, w, h) 가 떠 있는 창 · 메뉴 · 턴 끝 알림에 덮이나.</summary>
     private bool TagCovered(int x, int y, int w, int h)
     {
         if (WindowOpen || host.SlotsScr.SlotsOpen || host.Sys._confirm != null) return true;   // 저장 칸 창 · 확인 창 위로 글이 비치지 않게
@@ -1190,16 +1270,16 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     private const uint RouteColor = 0xFF6349CE;
     private static readonly (int, int)[] RouteOffsets = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1)];
 
-    /// <summary>한 점 굵기 선(브레젠험) — 화면(640×480) 안만.</summary>
+    /// <summary>한 점 굵기 선(브레젠험) — 지도 화면 안만.</summary>
     private void Line(int x0, int y0, int x1, int y1, uint color)
     {
         int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
-        var (ox, oy) = host.Mos.MosesOrigin();
+        var (ox, oy, vw, vh) = MapView();
         var fb = host._fb;
         int bw = host.BoardWidth, bh = host.BoardHeight;
         for (int guard = 0; guard < 8000; guard++)
         {
-            if (x0 >= ox && x0 < ox + MosesScene.MosesW && y0 >= oy && y0 < oy + MosesScene.MosesH && (uint)x0 < (uint)bw && (uint)y0 < (uint)bh) fb[y0 * bw + x0] = color;
+            if (x0 >= ox && x0 < ox + vw && y0 >= oy && y0 < oy + vh && (uint)x0 < (uint)bw && (uint)y0 < (uint)bh) fb[y0 * bw + x0] = color;
             if (x0 == x1 && y0 == y1) break;
             int e2 = 2 * err;
             if (e2 >= dy) { err += dy; x0 += sx; }
@@ -1207,8 +1287,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
     }
 
-    /// <summary>챕터 100 덮개 · 103 바꾸기 — 바꾸는 중이면 나감 동안 옛 화면(덮개 또는 지도)을 검게, 들어옴 동안 새 화면을 드러낸다.</summary>
-    private void DrawCover(int ox, int oy)
+    /// <summary>
+    /// 챕터 100 덮개 · 103 바꾸기 — 바꾸는 중이면 나감 동안 옛 화면(덮개 또는 지도)을 검게, 들어옴 동안 새 화면을 드러낸다.
+    /// 덮개 그림은 원본 화면 한 장이라 가운데 640×480 틀(<paramref name="ox"/>, <paramref name="oy"/>)에 두고, 지도 화면 나머지는 검게 · 페이드는 지도 화면 전체에.
+    /// </summary>
+    private void DrawCover((int X, int Y, int W, int H) view, int ox, int oy)
     {
         const int W = MosesScene.MosesW, H = MosesScene.MosesH;
         var cover = _cover;
@@ -1224,12 +1307,12 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (cover is { } c)
         {
             int sx = Math.Clamp(c.X, 0, Math.Max(0, c.W - W)), sy = Math.Clamp(c.Y, 0, Math.Max(0, c.H - H));
-            host.FillRect(ox, oy, W, H, 0xFF000000);
+            host.FillRect(view.X, view.Y, view.W, view.H, 0xFF000000);
             for (int y = 0; y < Math.Min(H, c.H - sy); y++)
                 for (int x = 0; x < Math.Min(W, c.W - sx); x++)
                     host.SetPixel(ox + x, oy + y, c.Px[(sy + y) * c.W + sx + x] | 0xFF000000);
         }
-        if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24);
+        if (fade > 0) host.FillRect(view.X, view.Y, view.W, view.H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24);
     }
 
     /// <summary>고르기 줄 자리(필드와 같은 꼴) — 물음 상자 위에 쌓는다.</summary>
@@ -1264,16 +1347,16 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     }
 
     /// <summary>마우스가 화면 가장자리(8점 안)에 있으면 그쪽으로 민다 — 초에 600점. 창 · 메뉴 · 대사 중에는 안 민다.</summary>
-    private void EdgeScroll(int ox, int oy)
+    private void EdgeScroll((int X, int Y, int W, int H) view)
     {
         double now = host._lastTime, dt = Math.Clamp(now - _lastScroll, 0, 0.1);
         _lastScroll = now;
         if (WindowOpen || _mode == Mode.Menu || Events.Talk != null || Picking) return;
         var (mx, my) = host._mouse;
-        int x = mx - ox, y = my - oy;
-        if (x < 0 || y < 0 || x >= MosesScene.MosesW || y >= MosesScene.MosesH) return;
+        int x = mx - view.X, y = my - view.Y;
+        if (x < 0 || y < 0 || x >= view.W || y >= view.H) return;
         int step = (int)Math.Round(600 * dt);
-        int dx = x < 8 ? -step : x >= MosesScene.MosesW - 8 ? step : 0, dy = y < 8 ? -step : y >= MosesScene.MosesH - 8 ? step : 0;
+        int dx = x < 8 ? -step : x >= view.W - 8 ? step : 0, dy = y < 8 ? -step : y >= view.H - 8 ? step : 0;
         if (dx != 0 || dy != 0) Scroll(dx, dy);
     }
 }

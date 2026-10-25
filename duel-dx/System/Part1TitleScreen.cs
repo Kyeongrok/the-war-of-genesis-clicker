@@ -503,6 +503,10 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         return null;
     }
 
+    /// <summary>판 크기 — 챕터 지도를 그리는 동안은 창만큼 넓게, 다른 파트1 화면으로 가면 640 틀로 되돌린다(<see cref="Part1ChapterScreen.FitBoard"/>).</summary>
+    internal void FitBoard() =>
+        _chapter?.FitBoard(_open && _chapter._open && _party is not { _open: true } && _town is not { _open: true } && _field is not { _open: true });
+
     internal void Draw()
     {
         if (_party is { _open: true }) { _party.Draw(); return; }

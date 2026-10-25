@@ -522,8 +522,25 @@ internal sealed unsafe partial class GameWindow : IDisposable
         RebuildView();
     }
 
-    /// <summary>보이는 판 크기·배율에 맞춰 셰이더·텍스처·창·스왑체인을 다시 만든다.</summary>
-    internal void RebuildView()
+    /// <summary>
+    /// 판 크기만 바꾼다 — <see cref="ResizeBoard"/> 와 달리 장면 페이드 · 전투 카메라 · 창은 건드리지 않는다.
+    /// 파트1 챕터 지도가 창만큼 넓은 판을 쓰고(<see cref="Part1ChapterScreen.FitBoard"/>), 다른 파트1 화면으로 가면 640 틀로 되돌릴 때 쓴다.
+    /// </summary>
+    internal void ResizeViewBoard(int cols, int rows)
+    {
+        cols = Math.Max(1, cols);
+        rows = Math.Max(1, rows);
+        if (cols == Cols && rows == Rows && _fb.Length == BoardWidth * BoardHeight) return;
+        Cols = cols;
+        Rows = rows;
+        _zoom = FitZoom();
+        if (_fb.Length != BoardWidth * BoardHeight) _fb = new uint[BoardWidth * BoardHeight];
+        _camX = _camY = 0;
+        if (_hwnd != IntPtr.Zero) RebuildView(window: false);
+    }
+
+    /// <summary>보이는 판 크기·배율에 맞춰 셰이더·텍스처·창·스왑체인을 다시 만든다. <paramref name="window"/> 가 거짓이면 셰이더 · 텍스처만(창 크기는 그대로).</summary>
+    internal void RebuildView(bool window = true)
     {
         // 배율과 판 자리는 픽셀 셰이더에 박혀 있다 — 달라졌으면 셰이더부터 다시 빌드한다.
         if (Math.Abs(_shaderZoom - _zoom) > 1e-9 || _shaderOffset != (ViewOffsetX, ViewOffsetY)) CompileShaders();
@@ -544,6 +561,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             CPUAccessFlags = CpuAccessFlags.Write,
         });
         _boardSrv = _device.CreateShaderResourceView(_boardTex);
+        if (!window) return;
 
         // 창과 스왑체인은 해상도 그대로 — 판 그림은 그 안 가운데에 놓인다(Draw 의 뷰포트).
         int pixelW = _resW, pixelH = _resH;
@@ -1389,6 +1407,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void Compose()
     {
         if (PerfLog) _pMark = _perf.Elapsed.TotalMilliseconds;
+        _part1TitleScr?.FitBoard();   // 파트1 챕터 지도는 창만큼 넓은 판 — 그리기 전에 판 크기부터
         Hi.Begin();
         // 판은 맵 전체 크기지만 화면에 나가는 것은 카메라가 비추는 네모뿐이다 — 그 네모만 지우고 맵도 그만큼만 깐다. 전에는 틀마다 판 전체를 지우고
         // 맵 전체를 베껴, 넓은 맵에서는 보이지도 않는 곳에 한 틀 5ms 를 썼다(사용자 요청 menu-58).
