@@ -2,6 +2,7 @@
 
     python tools/make_asset_pack.py --plan                                  # 장마다 얼마나 되는지만 본다
     python tools/make_asset_pack.py <내보낼 폴더> [--game <원본 게임 폴더>]   # 꾸러미를 만든다
+    python tools/make_asset_pack.py <내보낼 폴더> --part1-only <지금 올린 pack.json>  # 파트1 줄만 갈아 끼운 pack.json
 
 게임을 처음 켤 때 원본 게임 폴더를 「모른다」고 한 사용자는 자산을 GitHub 릴리즈에서 받는다. 받는 것은 세 갈래다.
 
@@ -249,8 +250,26 @@ def zips(out, stem, items):
     return made
 
 
+def part1_only(out, live):
+    """올려 둔 pack.json 의 파트1 줄만 tools/part1_pack_entries.json 으로 갈아 끼운다 — 바탕 · 낱장 · 음성은 손대지 않는다.
+    새 줄과 같은 판(part1/vN/)의 옛 줄만 빼고, 옛 판의 줄(옛 게임이 받는 것)은 둔다."""
+    pack = json.load(open(live, encoding='utf-8'))
+    new = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part1_pack_entries.json'), encoding='utf-8'))
+    versions = {x['name'].split('/')[1] for x in new}
+    old = len(pack['files'])
+    pack['files'] = [x for x in pack['files'] if not (x['name'].startswith('part1/') and x['name'].split('/')[1] in versions)] + new
+    first = os.path.join(out, 'assets-base-1')
+    os.makedirs(first, exist_ok=True)
+    with open(os.path.join(first, 'pack.json'), 'w', encoding='utf-8') as f:
+        json.dump(pack, f, indent=0)
+    print('낱장 %d → %d줄 (파트1 %s %d줄) → %s' % (old, len(pack['files']), ' '.join(sorted(versions)), len(new), os.path.join(first, 'pack.json')))
+    print('올리기: gh release upload assets-base-1 %s --clobber' % os.path.join(first, 'pack.json'))
+
+
 def main():
     args = sys.argv[1:]
+    if '--part1-only' in args:
+        return part1_only(args[0], args[args.index('--part1-only') + 1])
     game = args[args.index('--game') + 1] if '--game' in args else None
     tiers, voices, rows = plan(game)
 
