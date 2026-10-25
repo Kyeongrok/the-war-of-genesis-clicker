@@ -36,7 +36,14 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
     private readonly Queue<(string Speaker, string Text)> _talks = [];
     private (string Speaker, string Text)? _talk;
 
-    internal const int ListX = 24, ListY = 70, RowW = 180, RowH = 26, ButtonHit = 1000;
+    internal const int ButtonHit = 1000;
+
+    /// <summary>이름 띠 · 시설 단추(건물 아이콘) · 얼굴 칸 · EXIT — 원본 마을 첫 화면.</summary>
+    private Part1TownMenu Menu => _menu ??= new(host);
+    private Part1TownMenu? _menu;
+
+    /// <summary>시설마다 조건 200 의 값(= 단추 칸) — 시설 목록과 같은 차례.</summary>
+    private int[] _slots = [];
 
     internal void Open(int fieldId, Action onLeave)
     {
@@ -46,6 +53,11 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
             onLeave();
             return;
         }
+        Menu.Open(field);
+        _slots = [.. field.Events.Where(e => e.Conditions.FirstOrDefault()?.Code == 200 && e.Actions.Any(a => a.Code is 1001 or 1101 or 1201))
+                                 .Select(e => (int)e.Conditions[0].Args[0])];
+        // 마을 배경음악 — 머리 낱말 4 의 BGMs 곡을 되풀이로(장면 0x100c5716: 마을(+0xd4)이고 0xffff 가 아니면 0x100094e0(곡, 1), +0xdc 로 한 번만).
+        if (field.Header.Length > 4 && field.Header[4] >= 0) host.PlayMusicFile(Part1Game.BgmBase + field.Header[4], loop: true);
         _field = field;
         _onLeave = onLeave;
         (_bg, _bgW, _bgH) = shell.Field.ReadImage(field.Background);
@@ -82,20 +94,13 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
 
     private string Line(int i) => _field is { } f && i >= 0 && i < f.Lines.Count ? f.Lines[i] : "";
 
-    private string TownName => _field is { Lines.Count: > 0 } f ? Part1Game.PlainText(f.Lines[0]) : "마을";
-
-    /// <summary>나가기 단추 자리 — 시설 목록 밑(예전엔 대사 상자 밑에 깔려 가려졌다).</summary>
-    private (int X, int Y) LeaveButton => (ListX + (RowW - Part1TitleScreen.ButtonW) / 2, ListY + _facilities.Count * (RowH + 4) + 12);
-
+    /// <summary>EXIT → <see cref="ButtonHit"/>, 시설 단추 → 그 시설 차례(조건 200 [칸] 사건), 없으면 −1.</summary>
     private int HitAt(int bx, int by)
     {
         var (ox, oy) = host.Mos.MosesOrigin();
-        int x = bx - ox, y = by - oy;
-        var (lx, ly) = LeaveButton;
-        if (x >= lx && x < lx + Part1TitleScreen.ButtonW && y >= ly && y < ly + Part1TitleScreen.ButtonH) return ButtonHit;
-        for (int i = 0; i < _facilities.Count; i++)
-            if (x >= ListX && x < ListX + RowW && y >= ListY + i * (RowH + 4) && y < ListY + i * (RowH + 4) + RowH) return i;
-        return -1;
+        int hit = Menu.HitAt(bx - ox, by - oy);
+        if (hit == Part1TownMenu.HitExit) return ButtonHit;
+        return hit < 0 ? -1 : Array.IndexOf(_slots, hit);
     }
 
     internal void UpdateHover(int bx, int by)
@@ -152,23 +157,8 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
                 for (int x = 0; x < Math.Min(MosesScene.MosesW, _bgW); x++)
                     host.SetPixel(ox + x, oy + y, bg[y * _bgW + x] | 0xFF000000);
         if (_window is { _open: true } w) { w.Draw(ox, oy); host.DrawToast(); return; }
-        host.UiFill(ox, oy, MosesScene.MosesW, 52, 0xC0101828);
-        host.UiText(TownName, ox + 24, oy + 14, GameWindow.White, 18);
-        string eld = $"eld {host.Part1.Eld}";
-        host.UiText(eld, ox + 616 - host.UiGetText(eld, 0xFFFFE080, 13).W, oy + 18, 0xFFFFE080, 13);
-
-        for (int i = 0; i < _facilities.Count; i++)
-        {
-            var f = _facilities[i];
-            int y = oy + ListY + i * (RowH + 4);
-            host.UiFill(ox + ListX, y, RowW, RowH, _hover == i || _selected == i ? 0xF0305080u : 0xD0182030u);
-            host.UiStroke(ox + ListX, y, RowW, RowH, 0xFF6078A0);
-            string tag = f.Kind switch { Kind.Shop => "상점", Kind.Guild => "용병", _ => "주점" };
-            host.UiText($"[{tag}] {f.Name}", ox + ListX + 8, y + 5, GameWindow.White, 12);
-        }
-
-        var (lx, ly) = LeaveButton;
-        shell.DrawButton(ox + lx, oy + ly, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH, "나가기", _hover == ButtonHit);
+        int hover = _hover == ButtonHit ? Part1TownMenu.HitExit : _hover >= 0 && _hover < _slots.Length ? _slots[_hover] : -1;
+        Menu.Draw(ox, oy, hover);
         if (_talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
         host.DrawToast();
     }

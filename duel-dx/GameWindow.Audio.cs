@@ -313,6 +313,7 @@ internal sealed unsafe partial class GameWindow
         _musicPaused = false;
         _musicDuckRestoreAt = null;
         _chapterEventMusic = false;
+        if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 걸기 loop {loop}{(Muted ? " (소리 끔)" : !Sys._bgmOn ? " (BGM 꺼짐)" : "")}");
         if (Muted || !Sys._bgmOn) return;
         // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
         _musicFade = null;
@@ -332,6 +333,7 @@ internal sealed unsafe partial class GameWindow
                     if (part1 == null) { _mixer.StopMusic(); return; }
                     _mixer.PlayMusic(part1, loop, _musicAudible ?? _musicGain);
                     if (_musicPaused) _mixer.PauseMusic();
+                    if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작(파트1 BGMs) gain {_musicAudible ?? _musicGain:0.00}");
                     return;
                 }
                 string path = VoicePack.BgmPath(id);
