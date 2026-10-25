@@ -32,6 +32,7 @@ namespace DuelDx;
 /// <param name="MiniMapFolded">전투 화면 왼쪽 위 미니맵을 접어 두었나 — 기본은 접힘(사용자 요청: 「미니맵, 상자는 접히는게 기본」), 접기 단추로 바꾸고 다음 전투 · 다음 실행에도 이어진다(BattleMiniMap.cs).</param>
 /// <param name="Part1Difficulty">파트1 난이도 — 0 쉬움(원본 그대로, 기본) · 1 보통 · 2 어려움. 단계마다 적이 내 편을 칠 때 빗나갈 확률이 절반(사용자 요청, BattleScene.Difficulty.cs).</param>
 /// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
+/// <param name="Part1TurnVoice">모드 &gt; 일반 &gt; 파트1 차례 목소리 — 파트1 인물(크리스티앙 …)의 차례에 필드 대사 음성 한 마디를 낼지(원본에 없음, 사용자 요청, 기본 켬).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -41,7 +42,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool SkipEnemyAction = true, bool SendStats = true, string StatsAskedAt = "", bool PlanetMarks = true,
                                     bool SkillMovies = true, bool TimedHit = false, bool Fullscreen = false, int BattleZoomPercent = -1, int BubbleScalePercent = 100, bool HiResUi = true,
                                     bool HighlightChests = false, bool TachyrionRework = false, int FontScalePercent = 100, bool TimedAim = false,
-                                    bool HiResMoses = false, bool MiniMapFolded = true, int Part1Difficulty = 0)
+                                    bool HiResMoses = false, bool MiniMapFolded = true, int Part1Difficulty = 0,
+                                    bool Part1TurnVoice = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

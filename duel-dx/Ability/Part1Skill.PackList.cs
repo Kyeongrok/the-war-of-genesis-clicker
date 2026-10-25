@@ -30,6 +30,7 @@ internal sealed partial class Part1Skill
         sounds.UnionWith(Part1Game.SkillSounds);
         sounds.UnionWith(BasicSounds);
         sounds.UnionWith([Part1Game.DeathSnd, 0x34]);   // 쓰러짐 · 가게 사고팔기(Part1TownWindow)
+        sounds.UnionWith(Part1TurnCall.Sounds);         // 파트1 인물 차례 목소리(Part1TurnCall)
         obs.RemoveWhere(n => n <= 0);
         sounds.RemoveWhere(n => n <= 0);
         return (obs, sounds);

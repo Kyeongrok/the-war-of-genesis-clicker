@@ -74,6 +74,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
         ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, host._fullSoulAtStart),
+        ("파트1 차례 목소리", "파트1 인물 차례에 성우 한 마디(원본에 없음)", MenuPart1TurnVoice, host._part1TurnVoice),
     ];
 
     internal static string SoulWeightLabel(int p) => p switch { 100 => "100% (원본)", 0 => "0% (소울 무관)", _ => $"{p}%" };

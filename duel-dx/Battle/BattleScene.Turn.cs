@@ -659,10 +659,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 차례가 왔을 때 부르는 목소리 — 원본은 AI 차례(상태 8, <c>0x10068600~0x10068698</c>)와 플레이어 고르기 상태(<c>0x100693a7~0x10069461</c>) 두 곳에서,
     /// <b>TP 가 최대일 때만</b>(<c>0x1007aef0 == 0x1007aeb0</c>) <c>call[frame &amp; 3]</c> 을 낸다. 플레이어 쪽은 <b>원래 칸에 있을 때만</b>
     /// (<c>+0x4b8/+0x4ba == +0x44/+0x46</c>) — 차례를 막 받은 지금은 늘 원래 칸이다. 전에는 내 편만, 조건 없이 냈다(ba-15 목소리).
+    /// 파트1 판의 파트1 인물은 <see cref="Part1TurnCall"/> 표의 목소리를 낸다(원본에 없음 — 모드 &gt; 일반에서 끈다).
     /// </summary>
     internal void PlayTurnCall(UnitState u)
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
+        // 파트1 인물의 차례 목소리(원본에 없음, Part1TurnCall) — 내가 움직이는 인물만, 모드에서 켰을 때.
+        if (host._scene.IsPart1 && Part1TurnCall.For(u) is { Length: > 0 } p1call)
+        {
+            if (IsMine(u) && host._part1TurnVoice) host.Play(p1call[(_tick & 3) % p1call.Length], 1000 + Array.IndexOf(host._units, u));
+            return;
+        }
         if (host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
         {
             // 차례를 부르는 목소리는 <b>가운데에서 제 크기로</b> 낸다(사용자 보고 — 「작게 나온다」). 원본은 유닛 자리에서 내는데(0x1006866b)
