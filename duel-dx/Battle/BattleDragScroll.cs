@@ -115,7 +115,7 @@ internal sealed class BattleDragScroll(GameWindow host)
         if (btl._chestFoldButton is var (fx, fy, fw, fh) && bx >= fx && bx < fx + fw && by >= fy && by < fy + fh) return false;
         if (btl._deployOpen)
         {
-            if (host._scene.IsPart1 && host.MercDeploy.Open) return false;
+            if (host._scene.IsPart1 && (host.MercDeploy.Open || host.MountDeploy.Open)) return false;
             var (px, py) = btl.DeployPanel();
             if (bx >= px && bx < px + BattleScene.DeployW && by >= py && by < py + btl.DeployPanelHeight()) return false;
         }

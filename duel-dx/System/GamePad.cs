@@ -338,6 +338,18 @@ internal sealed partial class GamePad(GameWindow host)
                 if ((pressed & _map[PadAction.System]) != 0) btl.FinishDeploy();
                 return;
             }
+            // 파트1 「탑승」 탈것 창 — 위 · 아래 목록, A 태우기, X 탑승 취소, B · RB 닫기, Start 배치종료.
+            if (host.MountDeploy.Open)
+            {
+                var mount = host.MountDeploy;
+                if ((pressed & Up) != 0) mount.ListStep(-1);
+                else if ((pressed & Down) != 0) mount.ListStep(1);
+                if ((pressed & _map[PadAction.Confirm]) != 0) mount.RideFocused();
+                if ((pressed & _map[PadAction.Ring]) != 0) mount.Cancel();
+                if ((pressed & _map[PadAction.Cancel]) != 0 || (pressed & _map[PadAction.NextUnit]) != 0) mount.Who = null;
+                if ((pressed & _map[PadAction.System]) != 0) btl.FinishDeploy();
+                return;
+            }
             if (btl._deployCellMode) SnapByPad(pressed, now);
             else if ((pressed & Up) != 0) btl.DeployFocusMove(-1);
             else if ((pressed & Down) != 0) btl.DeployFocusMove(1);
@@ -350,6 +362,7 @@ internal sealed partial class GamePad(GameWindow host)
             if ((pressed & _map[PadAction.Ring]) != 0) btl.DeployPadUnplace();
             if ((pressed & _map[PadAction.Rest]) != 0) btl.AutoDeploy();
             if ((pressed & _map[PadAction.PrevUnit]) != 0) btl.DeployPadLegion();
+            if ((pressed & _map[PadAction.NextUnit]) != 0) btl.DeployPadMount();
             if ((pressed & _map[PadAction.System]) != 0) btl.FinishDeploy();
             return;
         }

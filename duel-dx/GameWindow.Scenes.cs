@@ -116,6 +116,9 @@ internal sealed unsafe partial class GameWindow
     internal Part1MercDeploy? _mercDeploy;
     internal Part1MercDeploy MercDeploy => _mercDeploy ?? LazyInitializer.EnsureInitialized(ref _mercDeploy, () => new Part1MercDeploy(this));
 
+    internal Part1MountDeploy? _mountDeploy;
+    internal Part1MountDeploy MountDeploy => _mountDeploy ?? LazyInitializer.EnsureInitialized(ref _mountDeploy, () => new Part1MountDeploy(this));
+
     internal StatusScreen? _statusScr;
     internal StatusScreen StatusScr => _statusScr ?? LazyInitializer.EnsureInitialized(ref _statusScr, () => new StatusScreen(this));
 

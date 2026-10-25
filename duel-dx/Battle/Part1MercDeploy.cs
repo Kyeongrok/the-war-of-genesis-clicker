@@ -112,6 +112,7 @@ internal sealed class Part1MercDeploy(GameWindow host)
     internal void OpenFor(UnitState who)
     {
         if (CannotLead(who) is { } why) { host.Toast(why); return; }
+        host.MountDeploy.Who = null;   // 탈것 창과 한 자리 — 하나만
         Leader = who;
         var s = SlotsOf(who.ChrCode);
         Slot = Enumerable.Range(0, SlotCount).FirstOrDefault(i => i != Center && s[i] == 0, 0);

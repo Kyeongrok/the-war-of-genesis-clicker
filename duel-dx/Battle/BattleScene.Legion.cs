@@ -109,7 +109,9 @@ internal sealed unsafe partial class BattleScene
             bool CanRide(int chr, int mount) =>
                 Part1Chr.Load(chr - Part1Game.ChrBase) is { } raw && host.Part1.Apply(raw) is var c
                 && c.CanRide(mount - Part1Game.ChrBase, c.Equipment.Select(id => Part1Item.ById(items, id)));
-            int Mounted(int chr) => scene.IsPart1 && host.Part1.Riding.TryGetValue(chr, out int mount) && mountsLeft.GetValueOrDefault(mount) > 0
+            // 「탑승 금지」 판(머리 낱말 9)은 태우지 않는다 — 원본은 배치 창의 「탑승」으로만 태우고 그 단추가 잠긴다(0x100948b5).
+            bool ridingForbidden = scene.IsPart1 && Part1MountDeploy.IsForbidden(scene.Id);
+            int Mounted(int chr) => scene.IsPart1 && !ridingForbidden && host.Part1.Riding.TryGetValue(chr, out int mount) && mountsLeft.GetValueOrDefault(mount) > 0
                                     && CanRide(chr, mount) ? mount : chr;
             for (int i = 0; i < free.Count && i < party.Count; i++)
             {
@@ -150,6 +152,7 @@ internal sealed unsafe partial class BattleScene
                     }
         }
         host.MercDeploy.Reset(scene.Id);   // 파트1 「용병 배치」 — 다른 전투면 고른 칸을 지운다(창도 닫는다)
+        host.MountDeploy.Reset(scene.Id);  // 파트1 「탑승」 — 창을 닫고 탑승 금지(낱말 9)를 읽는다
         return [.. list];
     }
 

@@ -100,14 +100,16 @@ internal sealed class Part1Progress
     /// <summary>
     /// 용병 · 탑승물 — Chr → 수(챕터 사건 908 · 910, 마을 용병 길드). 원본은 무리마다 (Chr, 수) 칸 32개(+0x910 · +0xa14)를 들고
     /// 출전 배치 창이 「용병 배치」 · 「탑승」으로 꺼내 쓴다. 리메이크는 용병을 배치 창 「용병 배치」(Part1MercDeploy)로 고른 인물 둘레 3×3 의 부하로 세우고,
-    /// 탑승물은 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다. 지금 챕터 무리의 것이다(<see cref="Stocks"/>).
-    /// 시험용 DUELDX_PART1MERCS=「580:3,587:2」(파트1 번호:수)로 무리마다 처음 용병을 미리 채운다.
+    /// 탑승물은 배치 창 「탑승」(Part1MountDeploy)이나 일행 창에서 정한 사람(<see cref="Riding"/>)이 타고 선다. 지금 챕터 무리의 것이다(<see cref="Stocks"/>).
+    /// 시험용 DUELDX_PART1MERCS=「580:3,587:2」(파트1 번호:수)로 무리마다 처음 용병을, DUELDX_PART1MOUNTS=「473:2」로 탑승물을 미리 채운다.
     /// </summary>
     internal Dictionary<int, int> Mercenaries { get => CurrentStock.Mercenaries; set => CurrentStock.Mercenaries = value; }
 
     internal Dictionary<int, int> Mounts { get => CurrentStock.Mounts; set => CurrentStock.Mounts = value; }
 
-    private static readonly Dictionary<int, int> TestMercs = (Environment.GetEnvironmentVariable("DUELDX_PART1MERCS") ?? "")
+    private static readonly Dictionary<int, int> TestMercs = TestCounts("DUELDX_PART1MERCS"), TestMounts = TestCounts("DUELDX_PART1MOUNTS");
+
+    private static Dictionary<int, int> TestCounts(string variable) => (Environment.GetEnvironmentVariable(variable) ?? "")
         .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Split(':'))
         .Where(p => p.Length == 2 && int.TryParse(p[0], out _) && int.TryParse(p[1], out int c) && c > 0)
         .GroupBy(p => WarOfGenesis.Assets.Part1Game.ChrBase + int.Parse(p[0])).ToDictionary(g => g.Key, g => g.Sum(p => int.Parse(p[1])));
@@ -136,7 +138,7 @@ internal sealed class Part1Progress
     internal Stock CurrentStock => StockOf(CurrentGroup);
 
     internal Stock StockOf(int group) =>
-        Stocks.TryGetValue(group, out var s) ? s : Stocks[group] = new Stock { Bag = [.. TestBag], Mercenaries = new(TestMercs) };
+        Stocks.TryGetValue(group, out var s) ? s : Stocks[group] = new Stock { Bag = [.. TestBag], Mercenaries = new(TestMercs), Mounts = new(TestMounts) };
 
     /// <summary>
     /// 챕터 끝(0x100ae560) — 원본은 팀 짐을 무리에 되돌린 뒤 무리 용병을 머릿수 × 100 eld 로 바꾸고(0x100ae714) 용병 수 · 탑승물 수(+0x90c · +0xa10)를 0 으로 한다.
@@ -152,7 +154,7 @@ internal sealed class Part1Progress
     }
 
     /// <summary>
-    /// 탈 사람 → 탈것(둘 다 20000 + 파트1 번호) — 일행 창에서 정한다(원본은 출전 배치 창의 「탑승」, 칸 +0x68). 전투에서는 탈것으로 서고
+    /// 탈 사람 → 탈것(둘 다 20000 + 파트1 번호) — 배치 창의 「탑승」(원본 칸 +0x68, Part1MountDeploy)이나 일행 창에서 정한다. 원본은 판마다 새로 고르지만 리메이크는 적어 두고 다음 판도 태운다. 전투에서는 탈것으로 서고
     /// 탄 이는 판 밖에 있다가 탈것이 쓰러지면 그 칸에 내려선다(<see cref="BattleScene"/> 의 _part1Riders).
     /// </summary>
     internal Dictionary<int, int> Riding = [];
