@@ -169,6 +169,72 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
                                           * Math.Max(1, attack.Hits) * (attack.Accuracy > 0 ? attack.Accuracy : 100) / 100)
             : 0;
 
+    /// <summary>AI 가 보는 AC — <c>0x1003edc0</c>: 바탕 AC(<c>0x1009ebf0</c>), 쉐도우 실드(+0x251) ×1.5, 버써크(+0x24e) ½, 그 뒤 소울 게이지로 깎는다.</summary>
+    internal int AiAc(UnitState t)
+    {
+        if (Fighter(t) is not { } f) return 0;
+        int ac = f.Stat(Part1Chr.Ac);
+        if (Has(t, 22)) ac = ac * 3 / 2;
+        if (t.Status(4) > 0) ac /= 2;
+        return Part1Combat.Scaled(ac, t.Soul);
+    }
+
+    /// <summary>AI 가 보는 MR — <c>0x1003ed50</c>: 쉐도우 실드 ½, 소울 게이지로 깎는다.</summary>
+    internal int AiMr(UnitState t)
+    {
+        if (Fighter(t) is not { } f) return 0;
+        int mr = f.Stat(Part1Chr.Mr);
+        if (Has(t, 22)) mr /= 2;
+        return Part1Combat.Scaled(mr, t.Soul);
+    }
+
+    /// <summary>AI 가 보는 DEX — <c>0x1003ec10</c>(소울 게이지로 깎은 값).</summary>
+    internal int AiDex(UnitState t) => Fighter(t) is { } f ? f.Stat(Part1Chr.Dex, t.Soul) : 0;
+
+    /// <summary>
+    /// AI 어림의 대상 하나 값 — <c>0x100410a0(대상, 서술, AI 표 +0x24)</c>. 서술은 세기 식(<c>0x1003f3c0</c>) + 더하는 세기²(<c>0x10040694</c>).
+    /// 선택자 8 은 적이면 5 · 아니면 6 으로 보고(<c>0x100410c8</c>), 6 = 회복: 기계(칸 10 = 2)는 0, 아니면 min(최대 HP·(세기/50)/600, 잃은 HP) · 잃은 HP / 최대 HP · 2,
+    /// 9 = 세기 그대로, 0~7 · 29~31 = 피해: <paramref name="resist"/>(AI 표 +0x24)면 속성 저항 ×/10, 방어(표 <c>0x10041368</c> — 5 는 MR, 6 은 없음, 그 밖 AC)로 나누고,
+    /// 대상 HP 보다 크면 HP × 1.5. 그 밖(상태 기술 10~28)은 0. 끝에 ±1/6 을 흔든다(<c>0x10041323</c>, rand 한 번).
+    /// [H] 서술 +0xc 의 ×/100 · 둘째 속성(+4) 저항은 리메이크 피해 식(<see cref="Resolve"/>)에 없어 뺐다. 타수는 부르는 쪽이 곱한다(<c>0x10040985</c>).
+    /// </summary>
+    internal int AiDamage(UnitState a, UnitState t, WorkData w, bool resist, bool foe, int roll)
+    {
+        if (Fighter(a) is not { } fa || Fighter(t) is not { } ft) return 0;
+        var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
+        int selector = attack?.Formula ?? 0;
+        if (selector == 8) selector = foe ? 5 : 6;
+        int value;
+        if (selector == 6 || selector == 9 || selector is (>= 0 and <= 7) or (>= 29 and <= 31))
+        {
+            var attacker = fa.AttackerAt(a.Soul);
+            int enchant = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31 ? Enchant.GetValueOrDefault(a) : 0;
+            if (enchant > 0) attacker = attacker with { Enchanted = true };
+            if (a.Status(4) > 0) attacker = attacker with { Str = attacker.Str * 3 / 2 };
+            int power = Part1Combat.Power(selector, attacker);
+            if ((attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31) && Has(a, 23)) power = power * 3 / 2;
+            if (attack != null) power += attack.PowerAdd * attack.PowerAdd;
+            if (selector == 6)
+            {
+                int lost = t.MaxHp - t.Hp;
+                value = IsMachine(t) || t.MaxHp <= 0 ? 0 : Math.Min(t.MaxHp * (power / 50) / 600, lost) * lost / t.MaxHp * 2;
+            }
+            else if (selector == 9) value = power;
+            else
+            {
+                int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
+                if (resist && ft.Resist(element) is { } r1) power = power * r1 / 10;
+                int defense = selector == 5 ? AiMr(t) : AiAc(t);
+                value = defense != 0 ? power / defense : power;
+                if (value > t.Hp) value = t.Hp * 3 / 2;
+            }
+        }
+        else value = 0;
+        int jitter = value / 3;
+        if (jitter != 0) value += roll % jitter - value / 6;
+        return value;
+    }
+
     /// <summary>이번 기본 공격을 타수만큼 나눠 친다 — 그동안 타수를 세기에 곱하지 않는다(BattleScene 이 켜고 끈다).</summary>
     internal bool SplitHits;
 

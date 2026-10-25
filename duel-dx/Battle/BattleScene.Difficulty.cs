@@ -77,7 +77,7 @@ internal sealed unsafe partial class BattleScene
     internal (WorkData Work, (int Stand, int Col, int Row, int Score) Use)? SmartPick(int index, MoveRange range, IEnumerable<WorkData>? works = null)
     {
         (WorkData, (int, int, int, int))? best = null;
-        foreach (var w in works ?? AiWorks(host._units[index]))   // works — 파트1 AI 표 굴림이 거른 목록(Part1RolledWorks), null 이면 모두
+        foreach (var w in works ?? AiWorks(host._units[index]))   // works — 파트1 AI 표가 볼 수 있는 것(Part1ScoreWorks), null 이면 모두
         {
             if (!w.IsDamage || BestUse(index, w, ComputeRange(host._units[index], w.Id) ?? range) is not { } use) continue;   // 이동 예산은 그 기술 기준(ba-20 J N13)
             if (best is not { } b || use.Score > b.Item2.Item4) best = (w, use);

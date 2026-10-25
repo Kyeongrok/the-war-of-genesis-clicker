@@ -45,6 +45,18 @@ public sealed record Part1Ai(int Index, IReadOnlyDictionary<int, int> Raw)
     /// <summary><c>+0x12</c> 먼저 칠 Chr 번호(<see cref="TargetMode"/> 0), 0xffff 면 없음.</summary>
     public int TargetChr => Raw[0x12];
 
+    /// <summary><c>+0xe</c> 대상 편(<c>0x10039af0</c>) — 0 적만 · 1 적 아닌 것만 · 그 밖 모두(AI 37 만 2).</summary>
+    public int TargetSide => Raw[0x0e];
+
+    /// <summary><c>+0xf</c> 대상 고르기(<c>0x100284c0</c>) — 11 그 자리에서 가장 좋은 칸(<c>0x10040c20</c>, 32칸) · 0 거리 · 1 HP · 5 DEX · 9 AC 순으로 정렬해 맨 앞.</summary>
+    public int TargetPick => Raw[0x0f];
+
+    /// <summary><c>+0x10</c> 정렬 방향 — 1 이면 HP · DEX · AC 큰 것부터 · 거리 가까운 것부터, 0 이면 거꾸로.</summary>
+    public int TargetHigh => Raw[0x10];
+
+    /// <summary><c>+0x24</c> 어림에 속성 저항을 넣나(<c>0x100410a0</c> 의 둘째 인자).</summary>
+    public int ResistAware => Raw[0x24];
+
     /// <summary><c>+0x14</c> 기술 고르기 — 0 굴림(먼저 쓸 기술 → 어빌리티 → 기본 공격 차례로 <c>+0x18</c>~<c>+0x1a</c>%) · 그 밖은 굴림 없이 어림이 가장 큰 것(먼저 쓸 기술을 안 본다).</summary>
     public int PickByScore => Raw[0x14];
 

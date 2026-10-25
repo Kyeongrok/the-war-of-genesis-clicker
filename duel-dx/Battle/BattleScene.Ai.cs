@@ -578,39 +578,236 @@ internal sealed unsafe partial class BattleScene
                 $"p1ai pref btl {host._scene.Id} chr {u.ChrCode} ability {ai.PreferredAttack} 없음(안 배움 · 지금 직업이 안 다룸)" + Environment.NewLine);
     }
 
-    /// <summary>
-    /// 파트1 AI 표 <c>+0x19</c> · <c>+0x1a</c> 굴림 — <c>+0x14</c> = 0 인 칸이 행동을 고를 때 먼저 쓸 기술(<c>+0x18</c>) 다음에 <b>따로</b> 굴리는 두 번
-    /// (<c>0x100273f0</c> · <c>0x10027571</c>, <c>+0xf</c> ≠ 11 갈래 <c>0x1002797f</c> · <c>0x10027b94</c>, Chr 먼저 갈래 <c>0x10026d4e</c> · <c>0x10026f5a</c>):
-    /// ② <c>rand % 100 &lt; +0x19</c> 에 들면 어빌리티 목록(<c>0x1009db90</c>) 가운데 <b>Abi 갈래 1</b>(<c>+0x24</c> = 1, 무기 · 옷 기술 2 · 4 · 초필살기 3 · 소환 5 는 빠짐)이고
-    /// 비용 <c>Attack +0x4c</c> ≤ 소울 − 50 인 것(<c>0x10027488</c> — 소울 50 을 남긴다)만, ③ 못 골랐으면 <c>rand % 100 &lt; +0x1a</c> 에 들면 기본 공격(<c>+0xb6</c>).
-    /// 둘 다 못 들면 행동이 없다(<c>0x10028008</c>). 굴림 칸(17칸)의 <c>+0x19</c> 는 50(열 칸) · 66(넷) · 0(47) · 10(48), <c>+0x1a</c> 는 모두 100 — 곧 반쯤은 기본 공격만 본다, 47 은 늘.
-    /// 굴림 칸이 아니면(<c>+0x14</c> ≠ 0 · 표 없음) null — 그대로 <see cref="AiWorks"/>.
-    /// [H] 리메이크는 고른 목록 안에서 파트2 틀(센 기술부터 · 회복 먼저)대로 고르고, 원본의 어림 문턱(<c>+0x1b</c>, <c>+0xf</c> = 11 갈래는 ±5 와 10분의 굴림)은 BestUse 점수 &gt; 0 으로 본다.
-    /// </summary>
-    internal List<WorkData>? Part1RolledWorks(UnitState u, Part1Ai? ai, string where)
+    /// <summary>파트1 AI 가 고른 행동 — work · (설 칸, 겨눌 칸) · 그 이동 영역 · 원본 어림(<see cref="Part1AiEstimate"/>).</summary>
+    internal sealed record Part1Pick(WorkData Work, (int Stand, int Col, int Row, int Score) Use, MoveRange Range, int Estimate);
+
+    /// <summary>그 work 을 주는 어빌리티가 Abi 갈래 1 인가 — 파트1 어빌리티(20000 + 번호)만 본다, 파트1 어빌리티가 아니면 참.</summary>
+    private bool Part1KindOne(CharacterData c, WorkData w)
     {
-        if (ai is not { PickByScore: 0 } || host._db is not { } db || u.Data is not { } c) return null;
-        bool skill = host._rng.Next(100) < ai.SkillChance;
-        bool basic = host._rng.Next(100) < ai.BasicChance;
-        var works = AiWorks(u);
-        var basicWork = Work(c.BasicWorkId);
-        var list = new List<WorkData>();
-        if (skill)
-            foreach (var w in works)
-            {
-                if (w == basicWork) continue;
-                // 그 work 을 주는 어빌리티의 Abi 갈래 — 파트1 어빌리티(20000 + 번호)만 갈래 1 을 본다.
-                var from = c.Abilities.Where(a => db.Abilities.TryGetValue(a.Item1, out var ab) && ab.TryWorkAt(a.Item2, out int wid) && wid == w.Id).Select(a => (int)a.Item1).DefaultIfEmpty(-1).First();
-                if (from >= Part1Game.ChrBase && Part1Ability.ById(Part1Tables.Abilities, from - Part1Game.ChrBase)?.Kind != 1) continue;
-                if (SoulNeedFor(u, c, w.Id) > u.Soul - 50) continue;
-                list.Add(w);
-            }
-        if (basic && basicWork != null && works.Contains(basicWork)) list.Add(basicWork);
-        if (Trace)
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                $"p1ai roll btl {host._scene.Id} chr {u.ChrCode} ai {u.Part1AiType} {where} skill {(skill ? "o" : "x")}({ai.SkillChance}%) basic {(basic ? "o" : "x")}({ai.BasicChance}%) soul {u.Soul}"
-                + $" works [{string.Join(",", list.Select(w => w.Id))}] of [{string.Join(",", works.Select(w => w.Id))}]" + Environment.NewLine);
+        if (host._db is not { } db) return true;
+        int from = c.Abilities.Where(a => db.Abilities.TryGetValue(a.Item1, out var ab) && ab.TryWorkAt(a.Item2, out int wid) && wid == w.Id).Select(a => (int)a.Item1).DefaultIfEmpty(-1).First();
+        return from < Part1Game.ChrBase || Part1Ability.ById(Part1Tables.Abilities, from - Part1Game.ChrBase)?.Kind == 1;
+    }
+
+    /// <summary>
+    /// 원본 행동 고르기가 견주는 어빌리티 — 어빌리티 목록(<c>0x1009db90</c>)의 <b>Abi 갈래 1</b>(<c>+0x24</c> = 1 — 무기 · 옷 기술 2 · 4, 초필살기 3, 소환 5, 자세 6 은 빠짐)이고
+    /// 비용 <c>Attack +0x4c</c> ≤ 소울 − 50(<c>0x10027488</c> — 소울 50 을 남긴다)인 것. 리메이크는 쓸 수 있는 것(<see cref="AiWorks"/>) 가운데서.
+    /// </summary>
+    internal List<WorkData> Part1Abilities(UnitState u)
+    {
+        if (u.Data is not { } c) return [];
+        var basic = Work(c.BasicWorkId);
+        return [.. AiWorks(u).Where(w => w != basic && Part1KindOne(c, w) && SoulNeedFor(u, c, w.Id) <= u.Soul - 50)];
+    }
+
+    /// <summary>원본이 볼 수 있는 것 모두 — <see cref="Part1Abilities"/> 와 기본 공격(<c>+0xb6</c>). 난이도 겨냥(<see cref="SmartPick"/>)이 이 안에서 고른다.</summary>
+    internal List<WorkData> Part1ScoreWorks(UnitState u)
+    {
+        var list = Part1Abilities(u);
+        if (u.Data is { } c && Work(c.BasicWorkId) is { } basic && AiWorks(u).Contains(basic)) list.Add(basic);
         return list;
+    }
+
+    /// <summary>소환류 — 가장 가까운 적이 10 넘게 멀면 그 자리 어림이 −1(<c>0x10040c46</c>~<c>0x10040d0d</c>, <c>+0xf</c> = 11 갈래만).</summary>
+    private static bool Part1NeedsNearFoe(int attackId) =>
+        attackId is (>= 0x33 and <= 0x3b) or (>= 0x58 and <= 0x60) or (>= 0x7d and <= 0x85) or (>= 0x6a and <= 0x72) or (>= 0xab and <= 0xb3)
+            or (>= 0xc7 and <= 0xcf) or (>= 0xe2 and <= 0xea) or (>= 0xf4 and <= 0xfc) or (>= 0xfd and <= 0x105) or (>= 0xd0 and <= 0xd8);
+
+    /// <summary>
+    /// 원본 AI 어림 <c>0x1003ff40(공격, _, x, y, 방향, AI 표 +0x24)</c> — 그 칸을 겨눴을 때의 값, 못 쓰면 −1. 두 번째 인자(0 · 1)는 읽지 않는다.
+    /// <list type="bullet">
+    /// <item><c>Attack +0x68</c>(대상 편: 1 적만 · 3 적 아닌 것만) = 0 이면 −1(<c>0x1003ff74</c>).</item>
+    /// <item>화이어 필드 · 프로즌 아이스는 온도 값(<see cref="Part1TemperatureValue"/>).</item>
+    /// <item>겨누기(<c>+0x31</c>) 1 · 3 · 5 = 한 유닛(<c>0x10040833</c>): 그 칸 유닛 v = 값(<see cref="Part1Rules.AiDamage"/>) × 타수(<c>+0x66</c>), 식 5 면 × 명중(<c>+0x48</c>)/100,
+    /// + <c>Attack +0x54</c>, 어림 = 20·v·(AC + MR)/200.</item>
+    /// <item>그 밖 = 범위(<c>0x100405eb</c>): 범위 유닛마다(편 거르기) v 를 같은 식으로(타수 없이) 더해 × 20, 공격 87 이면 × 100/수, <c>+0x67</c> ≠ 0 이면 × 타수/수.</item>
+    /// </list>
+    /// 끝으로 150 − 소울 − 비용 &gt; 0 이면 ÷ (150 + 비용 − (소울 − 비용 + 20)/2)(<c>0x1004080b</c> — 소울이 모자랄수록 비싼 기술을 깎는다). 0 이면 −1.
+    /// [H] 공격 366 · 367 · 152~160 · 180~188 의 따로 갈래와 대상 거르기 <c>0x1003fd40</c>(+0x247 · 이미 걸린 상태)는 범위 식으로 본다.
+    /// </summary>
+    internal int Part1AiEstimate(UnitState u, WorkData w, int aimCol, int aimRow, List<int> targets, Part1Ai ai)
+    {
+        if ((Part1.AttackOf(w) ?? Part1.BasicAttack(u)) is not { } attack) return -1;
+        int side = attack.Raw.GetValueOrDefault(0x68);
+        if (side == 0) return -1;
+        bool resist = ai.ResistAware != 0;
+        int bonus = attack.Raw.GetValueOrDefault(0x54);
+        long total;
+        if (Part1Rules.TemperatureSkill(attack) is not 0 and var heat) total = Part1TemperatureValue(u, heat, targets);
+        else if (attack.AimFilter is 1 or 3 or 5)
+        {
+            if (LiveUnitAt(aimCol, aimRow) is not { } t) return -1;
+            bool foe = SeesAsFoe(u, t);
+            if (side == 1 && !foe || side == 3 && foe) return -1;
+            long v = (long)Part1.AiDamage(u, t, w, resist, foe, host._rng.Next(32768)) * attack.Hits;
+            if (attack.Formula == 5) v = v * attack.Accuracy / 100;
+            v += bonus;
+            total = 20 * v * (Part1.AiAc(t) + Part1.AiMr(t)) / 200;
+        }
+        else
+        {
+            if (targets.Count == 0) return -1;
+            long sum = 0;
+            foreach (int i in targets)
+            {
+                var t = host._units[i];
+                bool foe = SeesAsFoe(u, t);
+                if (side == 1 && !foe || side == 3 && foe) continue;
+                long v = Part1.AiDamage(u, t, w, resist, foe, host._rng.Next(32768));
+                if (attack.Formula == 5) v = v * attack.Accuracy / 100;
+                v += bonus;
+                sum += v * (Part1.AiAc(t) + Part1.AiMr(t)) / 200;
+            }
+            total = sum * 20;
+            if (attack.Id == 87) total = total * 100 / targets.Count;
+            else if (attack.Raw.GetValueOrDefault(0x67) != 0) total = attack.Hits * total / targets.Count;
+        }
+        int cost = attack.Cost;
+        if (150 - u.Soul - cost > 0) total /= 150 + cost - (u.Soul - cost + 20) / 2;
+        return total == 0 ? -1 : (int)Math.Clamp(total, int.MinValue, int.MaxValue);
+    }
+
+    /// <summary>
+    /// <c>+0xf</c> ≠ 11 의 대상 차례 — 사거리 안 유닛(<c>0x10039d30</c>: <c>+0xe</c> 0 적만 · 1 적 아닌 것만 · 그 밖 모두, 칸 줄 → 칸 차례)을
+    /// <c>0x100284c0(x, y, z, 목록, 수, +0xf, +0x10)</c> 이 거품 정렬해 맨 앞을 친다. 쓰는 것(AI.dat): 0 거리(<c>0x1002ad40</c> · <c>0x1002ae70</c>), 1 HP(<c>0x1003eb90</c>),
+    /// 5 DEX(<c>0x1003ec10</c>), 9 AC(<c>0x1003edc0</c>). <c>+0x10</c> = 1 이면 HP · DEX · AC 는 큰 것부터, 거리는 가까운 것부터 — 0 이면 거꾸로.
+    /// 거리 견주기는 원본 그대로 앞 유닛 6|Δy| + 4|Δx|, 뒤 유닛 4(|Δx| + |Δy|) + 2|Δz| 다(두 쪽 식이 다르다). 그 밖의 번호는 자료에 없어 차례를 안 바꾼다.
+    /// [H] 리메이크는 이 차례로 칠 수 있는 첫 유닛을 겨눈다(원본은 지금 칸 사거리 안의 맨 앞). <c>+0xe</c> 1 · 2(AI 37)여도 피해 기술은 적만 겨눈다(<see cref="WorthUsing"/>).
+    /// </summary>
+    internal List<int> Part1TargetOrder(UnitState u, Part1Ai ai)
+    {
+        var list = new List<int>();
+        for (int i = 0; i < host._units.Length; i++)
+        {
+            var t = host._units[i];
+            if (t == u || !t.Alive || !t.OnField) continue;
+            bool foe = SeesAsFoe(u, t);
+            if (ai.TargetSide == 0 ? foe : ai.TargetSide != 1 || !foe) list.Add(i);
+        }
+        list.Sort((a, b) => host._units[a].Row != host._units[b].Row ? host._units[a].Row.CompareTo(host._units[b].Row) : host._units[a].Col.CompareTo(host._units[b].Col));
+        int z = Part1Z(u);
+        bool high = ai.TargetHigh != 0;
+        Func<UnitState, int>? key = ai.TargetPick switch
+        {
+            1 => t => t.Hp,
+            5 => t => Part1.AiDex(t),
+            9 => t => Part1.AiAc(t),
+            _ => null,
+        };
+        if (ai.TargetPick != 0 && key == null) return list;
+        for (int pass = list.Count - 1; pass > 0; pass--)
+            for (int k = 0; k < pass; k++)
+            {
+                UnitState a = host._units[list[k]], b = host._units[list[k + 1]];
+                bool swap;
+                if (ai.TargetPick == 0)
+                {
+                    int da = 6 * Math.Abs(u.Row - a.Row) + 4 * Math.Abs(u.Col - a.Col);
+                    int db = 4 * (Math.Abs(u.Col - b.Col) + Math.Abs(u.Row - b.Row)) + 2 * Math.Abs(z - Part1Z(b));
+                    swap = high ? da > db : da < db;
+                }
+                else swap = high ? key!(a) < key!(b) : key!(a) > key!(b);
+                if (swap) (list[k], list[k + 1]) = (list[k + 1], list[k]);
+            }
+        return list;
+    }
+
+    /// <summary>
+    /// 그 work 하나를 원본처럼 잰다 — <paramref name="forced"/>(Chr 먼저)면 그 유닛, <c>+0xf</c> ≠ 11 이면 <see cref="Part1TargetOrder"/> 의 칠 수 있는 첫 유닛,
+    /// 11 이면 그 자리에서 가장 좋은 칸(<c>0x10040c20</c> — [H] 리메이크는 BestUse 의 칸)을 겨눠 어림을 낸다. 칠 것이 없으면 null.
+    /// </summary>
+    private Part1Pick? Part1Eval(int index, UnitState u, Part1Ai ai, WorkData w, MoveRange range, MoveRange? stay, int? forced, int nearest)
+    {
+        var wr = stay ?? ComputeRange(u, w.Id) ?? range;
+        var keep = _part1Aware;
+        try
+        {
+            (int Stand, int Col, int Row, int Score)? Aim(int target)
+            {
+                if (keep is ({ } owner, { } seen) && owner == u && SeesAsFoe(u, host._units[target]) && !seen.Contains(target)) return null;
+                _part1Aware = (u, [target]);
+                return BestUse(index, w, wr) is { } x && WorkTargetsFrom(w, u, x.Stand % host.Cols, x.Stand / host.Cols, x.Col, x.Row).Contains(target) ? x : null;
+            }
+            (int Stand, int Col, int Row, int Score)? use = null;
+            if (forced is { } f) use = Aim(f);
+            else if (ai.TargetPick != 11)
+            {
+                if (BestUse(index, w, wr) == null) return null;
+                foreach (int t in Part1TargetOrder(u, ai))
+                    if (Aim(t) is { } x) { use = x; break; }
+            }
+            else
+            {
+                if (Part1NeedsNearFoe((Part1.AttackOf(w) ?? Part1.BasicAttack(u))?.Id ?? 0) && nearest > 10) return null;
+                use = BestUse(index, w, wr);
+            }
+            if (use is not { } got) return null;
+            var targets = WorkTargetsFrom(w, u, got.Stand % host.Cols, got.Stand / host.Cols, got.Col, got.Row);
+            return new Part1Pick(w, got, wr, Part1AiEstimate(u, w, got.Col, got.Row, targets, ai));
+        }
+        finally { _part1Aware = keep; }
+    }
+
+    /// <summary>
+    /// 파트1 행동 고르기 <c>0x10026b80</c>(Chr 먼저 <c>0x10026c4f</c>~, 보통 <c>0x10027328</c>~). 세 갈래(Chr 먼저 · <c>+0xf</c> = 11 · 그 밖) 모두 같은 꼴:
+    /// <list type="number">
+    /// <item><c>+0x14</c> = 0(굴림): ① <c>rand%100 &lt; +0x18</c> 이면 먼저 쓸 기술 — 어림 ≥ <c>+0x1b</c> 면 쓴다. ② 새로 <c>&lt; +0x19</c> 면 <see cref="Part1Abilities"/> 가운데
+    /// 어림이 가장 큰 것(문턱 <c>+0x1b</c> 에서 시작). ③ 못 골랐으면 새로 <c>&lt; +0x1a</c> 면 기본 공격(어림 ≥ 0). 다 못 들면 행동 없음(<c>0x10028008</c>).</item>
+    /// <item><c>+0x14</c> ≠ 0(<c>0x10027609</c> · <c>0x10027cc1</c>): 굴림 없이 ②, 이어 기본 공격 어림이 고른 것 이상이거나 아무것도 못 골랐고(문턱 그대로) ≥ 0 이면 기본 공격,
+    /// 아니면 고른 어빌리티(<c>0x100277b4</c> · <c>0x10027fa7</c>).</item>
+    /// </list>
+    /// 어빌리티 견주기: <c>+0xf</c> = 11 과 Chr 먼저는 어림 ≥ 가장 큰 것 − 5 면 받되, 가장 큰 것 + 5 보다 작으면 <c>rand%10 ≤ 가장 큰 것 − 어림 + 10</c> 일 때만(<c>0x100274e6</c>~ — 비슷한 것끼리 섞인다),
+    /// 그 밖은 어림 ≥ 가장 큰 것(<c>0x10027b15</c>). 받으면 그 어림이 새 가장 큰 것.
+    /// </summary>
+    internal Part1Pick? Part1PickAction(int index, UnitState u, Part1Ai ai, MoveRange range, MoveRange? stay, int? forced, int nearest)
+    {
+        if (u.Data is not { } c) return null;
+        bool rolled = ai.PickByScore == 0;
+        bool fuzzy = forced != null || ai.TargetPick == 11;
+        var log = Trace ? new System.Text.StringBuilder() : null;
+        Part1Pick? Done(Part1Pick? p, string why)
+        {
+            if (log != null)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"p1ai pick btl {host._scene.Id} chr {u.ChrCode} ai {u.Part1AiType} {(forced != null ? "focus" : "normal")} {(rolled ? "roll" : "score")} f {ai.TargetPick}/{ai.TargetHigh} e {ai.TargetSide} soul {u.Soul}{log}"
+                    + $" -> {(p != null ? $"work {p.Work.Id} est {p.Estimate} aim ({p.Use.Col},{p.Use.Row})" : "없음")} ({why})" + Environment.NewLine);
+            return p;
+        }
+        if (rolled)
+            foreach (var w in Part1PreferredFirst(u, ai))
+            {
+                var e = Part1Eval(index, u, ai, w, range, stay, forced, nearest);
+                log?.Append($" pref {w.Id}:{e?.Estimate.ToString() ?? "-"}");
+                if (e is { } pe && pe.Estimate >= ai.MinScore) return Done(pe, "먼저 쓸 기술");
+            }
+        bool skill = !rolled || host._rng.Next(100) < ai.SkillChance;
+        if (rolled) log?.Append($" skill {(skill ? "o" : "x")}({ai.SkillChance}%)");
+        Part1Pick? chosen = null;
+        int best = ai.MinScore;
+        if (skill)
+            foreach (var w in Part1Abilities(u))
+            {
+                if (Part1Eval(index, u, ai, w, range, stay, forced, nearest) is not { } e) { log?.Append($" {w.Id}:-"); continue; }
+                int s = e.Estimate;
+                bool take = fuzzy ? s >= best - 5 && (s >= best + 5 || host._rng.Next(10) <= best - s + 10) : s >= best;
+                log?.Append($" {w.Id}:{s}{(take ? "+" : "")}");
+                if (take) (chosen, best) = (e, s);
+            }
+        var basicWork = Work(c.BasicWorkId) is { } bw && AiWorks(u).Contains(bw) ? bw : null;
+        if (rolled)
+        {
+            if (chosen != null) return Done(chosen, "어빌리티");
+            bool basicRoll = host._rng.Next(100) < ai.BasicChance;
+            log?.Append($" basic {(basicRoll ? "o" : "x")}({ai.BasicChance}%)");
+            if (!basicRoll || basicWork == null) return Done(null, "기본 공격 굴림");
+            var eb = Part1Eval(index, u, ai, basicWork, range, stay, forced, nearest);
+            log?.Append($" {basicWork.Id}:{eb?.Estimate.ToString() ?? "-"}");
+            return Done(eb is { Estimate: >= 0 } ? eb : null, "기본 공격");
+        }
+        var basic = basicWork != null ? Part1Eval(index, u, ai, basicWork, range, stay, forced, nearest) : null;
+        log?.Append($" basic {basicWork?.Id}:{basic?.Estimate.ToString() ?? "-"} best {best}");
+        if (basic != null && (basic.Estimate >= best || best == ai.MinScore && basic.Estimate >= 0)) return Done(basic, "기본 공격 ≥ 어빌리티");
+        return Done(chosen, chosen != null ? "어빌리티 > 기본 공격" : "칠 것 없음");
     }
 
     /// <summary>
@@ -784,78 +981,50 @@ internal sealed unsafe partial class BattleScene
         // 걸은 뒤(이동 방식 0 · 1)에는 그 자리에서만 친다 — 설 칸이 지금 칸뿐인 영역.
         MoveRange? stay = p1InPlace ? StayRange(u) : null;
 
-        // 파트1 AI 표 +0xd = 0 — Chr +0x12 인 유닛을 먼저 친다(0x10026bdd~: 배열 끝까지 훑어 마지막으로 맞는 것). 그 유닛을 칠 수 없으면 보통(+0xd = 1)으로 간다(0x10027322).
-        // [H] 원본은 그 유닛이 같은 편이어도 「칠 수 있나」(0x1003fbd0)만 본다 — 리메이크는 적일 때만 겨눈다.
-        if (p1ai is { TargetMode: 0 } && p1ai.TargetChr != 0xFFFF
-            && host._units.LastOrDefault(t => t.Alive && t.OnField && t.ChrCode == Part1Game.ChrBase + p1ai.TargetChr) is { } focus && SeesAsFoe(u, focus))
+        // 파트1 AI 표가 있으면 행동 고르기 0x10026b80 을 그대로 — 먼저 쓸 기술 · 어빌리티 · 기본 공격을 원본 어림(0x1003ff40)으로 고른다(Part1PickAction).
+        // 못 고르면 원본은 남은 이동으로 이동 고르기를 한다(0x1002842d) — 리메이크는 아래 다가가기(4단계 B · 6단계)가 맡는다.
+        if (p1ai != null)
         {
-            var keep = _part1Aware;
-            _part1Aware = (u, [Array.IndexOf(host._units, focus)]);
-            WorkData? focusWork = null;
-            (int Stand, int Col, int Row, int Score)? focusUse = null;
-            MoveRange? focusRange = null;
-            // 원본 Chr 먼저 갈래도 먼저 쓸 기술 → +0x19 어빌리티 → +0x1a 기본 공격을 따로 굴린다(0x10026c5a · 0x10026d4e · 0x10026f5a) — 다 못 들면 보통으로(0x10026f6e).
-            foreach (var w in Part1PreferredFirst(u, p1ai).Concat(Part1RolledWorks(u, p1ai, "focus") ?? AiWorks(u)).Where(w => !w.IsHeal))
+            Part1Pick? pick = null;
+            // 어려움 이상(리메이크 난이도)은 쓸 수 있는 것(갈래 1 · 소울 − 50 · 기본 공격) 가운데 가장 많이 깎는 것.
+            if (stay == null && SmartAi(u) && SmartPick(index, range, Part1ScoreWorks(u)) is { } smart)
+                pick = new(smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range, smart.Use.Score);
+            // +0xd = 0 — Chr +0x12 인 유닛을 먼저 친다(0x10026bdd~: 배열 끝까지 훑어 마지막으로 맞는 것). 못 고르면 보통(+0xd = 1)으로(0x10027322).
+            // [H] 원본은 그 유닛이 같은 편이어도 「칠 수 있나」(0x1003fbd0)만 본다 — 리메이크는 적일 때만 겨눈다.
+            if (pick == null && p1ai is { TargetMode: 0 } && p1ai.TargetChr != 0xFFFF
+                && host._units.LastOrDefault(t => t.Alive && t.OnField && t.ChrCode == Part1Game.ChrBase + p1ai.TargetChr) is { } focus && SeesAsFoe(u, focus))
+                pick = Part1PickAction(index, u, p1ai, range, stay, Array.IndexOf(host._units, focus), nearest);
+            pick ??= Part1PickAction(index, u, p1ai, range, stay, null, nearest);
+            if (pick != null)
             {
-                var wr = stay ?? ComputeRange(u, w.Id) ?? range;
-                if (BestUse(index, w, wr) is not { } use || !WorkTargetsFrom(w, u, use.Stand % host.Cols, use.Stand / host.Cols, use.Col, use.Row).Contains(Array.IndexOf(host._units, focus))) continue;
-                (focusWork, focusUse, focusRange) = (w, use, wr);
-                break;
-            }
-            _part1Aware = keep;
-            if (focusWork != null)
-            {
-                if (Trace)
-                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                        $"p1ai focus btl {host._scene.Id} unit {index} chr {u.ChrCode} -> chr {focus.ChrCode} work {focusWork.Id}" + Environment.NewLine);
                 report(true);
-                foreach (bool r in AiUseWork(index, focusWork, focusUse!.Value, focusRange!)) yield return r;
+                foreach (bool r in AiUseWork(index, pick.Work, pick.Use, pick.Range)) yield return r;
                 yield break;
             }
         }
-
-        // 파트1 AI 표 +0x16 먼저 쓸 기술 — +0x14 = 0 이면 +0x18% 로 맨 먼저 본다(0x1002733e~0x100273eb). 칠 대상이 있어야 쓴다(어림 ≥ +0x1b, [H] 리메이크는 BestUse 점수 &gt; 0).
-        // 못 쓰면 원본은 어빌리티(+0x19%) → 기본 공격(+0x1a%) 굴림으로 넘어간다 — 리메이크는 그 굴림으로 거른 목록(Part1RolledWorks)을 아래 파트2 틀(센 기술부터)이 훑는다.
-        foreach (var w in Part1PreferredFirst(u, p1ai))
+        else
         {
-            var wr = stay ?? ComputeRange(u, w.Id) ?? range;
-            if (BestUse(index, w, wr) is not { } use)
+            // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
+            // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
+            for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
             {
-                if (Trace)
-                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                        $"p1ai pref btl {host._scene.Id} unit {index} chr {u.ChrCode} ability {p1ai!.PreferredAttack} work {w.Id} 칠 대상 없음 → 보통 고르기" + Environment.NewLine);
-                break;
-            }
-            if (Trace)
-                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                    $"p1ai pref btl {host._scene.Id} unit {index} chr {u.ChrCode} ability {p1ai!.PreferredAttack} work {w.Id} aim ({use.Col},{use.Row})" + Environment.NewLine);
-            report(true);
-            foreach (bool r in AiUseWork(index, w, use, wr)) yield return r;
-            yield break;
-        }
-
-        // 3단계 자가 회복 → 4단계 공격. 원본은 <b>회복기만 한 바퀴 돌고, 못 쓰면 전부 한 바퀴</b> 돈다 —
-        // 예전처럼 「피가 적으면 회복기 아닌 것을 건너뛴다」로 하면 회복기가 없는 인물이 공격까지 통째로 걸렀다.
-        // 파트1 굴림 칸(+0x14 = 0)은 +0x19 · +0x1a 굴림에 든 것만 본다(0x100273f0 · 0x10027571) — 회복 먼저 · 난이도 겨냥도 그 안에서.
-        var p1Works = Part1RolledWorks(u, p1ai, "normal");
-        for (int pass = hpPercent < db.N(70) ? 0 : 1; pass < 2; pass++)
-        {
-            // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
-            if (pass == 1 && stay == null && SmartAi(u) && SmartPick(index, range, p1Works) is { } smart)
-            {
-                report(true);
-                foreach (bool r in AiUseWork(index, smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range)) yield return r;
-                yield break;
-            }
-            foreach (var w in p1Works ?? AiWorks(u))
-            {
-                if (pass == 0 && !w.IsHeal) continue;
-                // 이동 예산은 <b>그 기술</b>의 TP 비용을 뺀 만큼이다(0x1005d070) — 늘 기본공격 기준이면 비싼 기술도 너무 멀리 걸어가 쓴다.
-                var workRange = stay ?? ComputeRange(u, w.Id) ?? range;
-                if (BestUse(index, w, workRange) is not { } use) continue;
-                report(true);
-                foreach (bool r in AiUseWork(index, w, use, workRange)) yield return r;
-                yield break;
+                // 어려움 이상의 적은 첫 work 대신 피해 기술 가운데 가장 많이 깎는 것을 쓴다(Difficulty.cs).
+                if (pass == 1 && stay == null && SmartAi(u) && SmartPick(index, range) is { } smart)
+                {
+                    report(true);
+                    foreach (bool r in AiUseWork(index, smart.Work, smart.Use, ComputeRange(u, smart.Work.Id) ?? range)) yield return r;
+                    yield break;
+                }
+                foreach (var w in AiWorks(u))
+                {
+                    if (pass == 0 && !w.IsHeal) continue;
+                    // 이동 예산은 <b>그 기술</b>의 TP 비용을 뺀 만큼이다(0x1005d070) — 늘 기본공격 기준이면 비싼 기술도 너무 멀리 걸어가 쓴다.
+                    var workRange = stay ?? ComputeRange(u, w.Id) ?? range;
+                    if (BestUse(index, w, workRange) is not { } use) continue;
+                    report(true);
+                    foreach (bool r in AiUseWork(index, w, use, workRange)) yield return r;
+                    yield break;
+                }
             }
         }
         // 이동 방식 0 · 1 은 걸은 뒤 칠 것이 없으면 쉰다 — 다가가기(4단계 B · 6단계)는 목표 칸 걷기가 대신했다.
