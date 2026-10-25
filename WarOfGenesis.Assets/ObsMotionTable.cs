@@ -26,6 +26,12 @@ public sealed record ObsMotionClip(int Id, int Length, IReadOnlyList<MotionKey> 
     public IReadOnlyList<ChildKey> Children { get; init; } = [];
 
     /// <summary>
+    /// 파트1 뒤집기 키(종류 10, 인자 ≠ 0 — <c>0x1009869c</c> 가 방향을 3 으로) — 이 모션은 주인과 상관없이 좌우를 뒤집어 그리고, 물려받는 자식도 뒤집힌다.
+    /// 파트1 그림만 쓴다(<see cref="Part1Game.RawChildKeys"/>).
+    /// </summary>
+    public bool Mirror { get; init; }
+
+    /// <summary>
     /// 타격 키(종류 6) — 그 틱에 판정이 난다. 인자는 <b>어빌리티 번호</b>(25 접근공격·26 원거리 …)이고,
     /// 게임은 그 번호로 인물 레벨에 맞는 work 를 골라 판정을 낸다(분석-모션 ba-10 「타격 판정은 어디서 나나」).
     /// 한 모션에 여러 개면 그 수만큼 친다(동작 13 = 2타, 14 = 3타).
@@ -144,14 +150,26 @@ public sealed class ObsMotionTable
         // 파트1 그림의 섞기 키는 원본 (방식, 세기)로 되살린다(Part1Game.BlendKey) — 그리는 쪽이 파트1 색표 식으로 섞는다(Part1Blend).
         if (obs > Part1Game.ObsBase)
         {
-            var raw = Part1Game.RawBlends(obs - Part1Game.ObsBase);
+            int part1 = obs - Part1Game.ObsBase;
+            var raw = Part1Game.RawBlends(part1);
+            var rawChildren = Part1Game.RawChildKeys(part1);
             foreach (int id in table._clips.Keys.ToList())
             {
                 var clip = table._clips[id];
                 IReadOnlyList<(int Start, int Mode)> blends = raw != null
                     ? raw.GetValueOrDefault(id) ?? []
                     : [.. clip.Blends.Select(b => (b.Start, Part1Game.BlendKeyFromPart2(b.Mode)))];
-                table._clips[id] = clip with { Blends = blends };
+                // 자식 키의 치우침은 원본에서 <b>세계</b> 자리(x, y, z)다 — 자식은 주인 세계 자리 + 치우침에 서고 화면으로는 x · y × 0.8 − z × 0.6(0x1008fbb0).
+                // 화면 픽셀로 그대로 더해 충격파 124 의 32줄 띠(40 씩 쌓은 자식 넷)가 8픽셀씩 벌어져 하늘색 줄무늬 네모가 됐다(사용자 보고: 메테오).
+                // 깃발은 원본 뜻(≠ 0 이면 주인 방향을 물려받음)을 파트2 뜻(0 이면 물려받음)으로 — 팩만 있으면 9 · 1 이 물려받는 것이라 모두 0 으로(원본 깃발 0 은 넷뿐).
+                var info = rawChildren?.GetValueOrDefault(id);
+                var children = clip.Children.Select((c, i) => c with
+                {
+                    Y = (int)Math.Round(c.Y * 0.8 - c.Z * 0.6),
+                    Flag = info is { } known && i < known.Inherit.Count ? (known.Inherit[i] ? 0 : 1) : 0,
+                }).ToList();
+                bool mirror = rawChildren != null ? info?.Mirror == true : Part1Game.MirroredMotions.GetValueOrDefault(part1)?.Contains(id) == true;
+                table._clips[id] = clip with { Blends = blends, Children = children, Mirror = mirror };
             }
         }
         foreach (int id in table._clips.Keys.ToList())

@@ -221,7 +221,8 @@ internal sealed class UiSprite
     public SpriteFrame? FrameAt(int motion, int tick, bool loop = true, bool mirror = false)
     {
         if (KeyAt(motion, tick, loop) is not { } k || !_frames.TryGetValue((k.SubentryId, k.Slot), out var frame)) return null;
-        if (!mirror) return frame;
+        // 파트1 뒤집기 키(종류 10)가 걸린 모션은 늘 뒤집는다 — 충격파 124:18 은 124:0 을 뒤집은 오른쪽 반이다(ObsMotionClip.Mirror).
+        if (!mirror && Clip(motion)?.Mirror != true) return frame;
         if (!_mirrored.TryGetValue((k.SubentryId, k.Slot), out var m)) _mirrored[(k.SubentryId, k.Slot)] = m = frame.Mirrored();
         return m;
     }

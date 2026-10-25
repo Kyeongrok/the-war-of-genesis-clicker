@@ -502,6 +502,40 @@ public static class Part1Game
     }
 
     /// <summary>
+    /// 다시 싼 파트1 그림(<see cref="ToPart2Obs"/>)의 모션마다 자식 키(종류 2)가 주인 방향을 물려받나와 뒤집기 키(종류 10)가 있나 — 싸면서 깃발 9 만 0 으로 바꾸고
+    /// 종류 10 은 버렸다. 원본 키 처리(<c>0x10098370</c>): 종류 2 는 깃발 ≠ 0 이면 자식이 주인 방향(+0x4e)을 물려받고 주인이 뒤집혀 있으면(3) x 를 뒤집는다,
+    /// 깃발 0 이면 방향 없이(0xff) 만든다. 종류 10(<c>0x1009869c</c>)은 인자 ≠ 0 이면 제 방향을 3(뒤집힘)으로, 0 이면 1 로 둔다.
+    /// 충격파 124 는 모션 18 이 이 키로 모션 0(왼쪽 반)을 뒤집은 오른쪽 반이다. 파트1 폴더가 없으면 null(그때는 <see cref="MirroredMotions"/>).
+    /// </summary>
+    public static Dictionary<int, (bool Mirror, List<bool> Inherit)>? RawChildKeys(int part1Obs)
+    {
+        if (Root == null || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            var raw = RawMotions(p1);
+            var plan = BodySprites().Contains(part1Obs) ? ActionMap : [.. Enumerable.Range(0, (raw.Count + 2) / 3).Select(a => (a, (a, 0, 0)))];
+            var result = new Dictionary<int, (bool, List<bool>)>();
+            foreach (var (action, (from, _, _)) in plan)
+                for (int dir = 0; dir < 3; dir++)
+                {
+                    if (from * 3 + dir >= raw.Count) continue;
+                    var keys = raw[from * 3 + dir];
+                    bool mirror = false;
+                    foreach (var k in keys.Where(k => k[2] == 10).OrderBy(k => k[0])) mirror = k[3] != 0;
+                    result[action * 3 + dir] = (mirror, [.. keys.Where(k => k[2] == 2).Select(k => k[8] != 0)]);
+                }
+            return result;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
+    /// <summary>
+    /// 파트1 폴더 없이 받은 팩의 그림에서 뒤집기 키(종류 10, 인자 1)가 있던 모션 — 팩은 그 키를 버리고 쌌다. 파트1 Obs 전부를 훑은 것(키가 있는 그림은 이 둘뿐):
+    /// 충격파 124 모션 18(모션 0 의 오른쪽 반), 마르자나의 연 291 모션 9~11.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<int, int[]> MirroredMotions = new Dictionary<int, int[]> { [124] = [18], [291] = [9, 10, 11] };
+
+    /// <summary>
     /// 파트1 폴더 없이 받은 팩의 그림 — 싸면서 남긴 파트2 번호(<see cref="BlendOf"/>)에서 파트1 방식을 되짚는다: 17 → 9, 10 → 10, 12 → 11(12 도 12 로 쌌지만 11 이 훨씬 많다),
     /// 1~7 → 13 의 그 세기(8 은 7 로 · 0 은 1 로 줄어 있다). 그 밖은 그대로(0 = 키 없음).
     /// </summary>

@@ -139,6 +139,8 @@ internal sealed unsafe partial class BattleScene
         if (clip == null || fade <= 0) return;
         // 되풀이하는 몸 모션에서는 틱을 한 바퀴로 접는다 — 원본도 모션이 처음으로 돌아가면 키를 다시 읽는다.
         int cycle = loop && clip.Length > 0 ? tick % clip.Length : tick;
+        // 파트1 뒤집기 키(종류 10)가 걸린 모션은 주인과 상관없이 뒤집힌 쪽이다 — 물려받는 자식도 뒤집히고 x 가 뒤집힌다(0x1009869c · 0x100983e3).
+        mirror |= clip.Mirror;
         foreach (var (start, obs, motion, dx, dy, _, flag) in clip.Children)
         {
             if (start > cycle) continue;
@@ -159,17 +161,30 @@ internal sealed unsafe partial class BattleScene
             host.DrawUi(obs, motion, cycle - start, footX + (flip ? -dx : dx), footY + dy, blend, mirror: flip, fade: fade * BlendFade(key));
             // 무기 층이 다시 부르는 자식(총구의 광선 Obs 0118 · 불꽃 · 검기 따위)도 그린다 — 원본 애니메이터는 자식의 자식까지 만든다(0x100e5410).
             // 전에는 한 겹만 그려 글로리가드의 사격(동작 9)에 광선이 안 나왔다(사용자 보고: Btl 0146). 자식도 제 모션이 끝나면 사라진다.
-            int age = cycle - start;
-            foreach (var (nestedStart, nestedObs, nestedMotion, ndx, ndy, _, nestedFlag) in host.UiFor(obs)?.Clip(motion)?.Children ?? [])
-            {
-                if (nestedStart > age || host.UiFor(nestedObs) is not { } nested) continue;
-                int nestedAge = age - nestedStart, nestedLife = nested.ShownLength(nestedMotion);
-                if (nestedLife > 0 && nestedAge >= nestedLife) continue;
-                bool nestedFlip = mirror && nestedFlag == 0;
-                int nestedKey = nested.BlendAt(nestedMotion, nestedAge);
-                host.DrawUi(nestedObs, nestedMotion, nestedAge, footX + (flip ? -dx : dx) + (nestedFlip ? -ndx : ndx), footY + dy + ndy,
-                            BlendOf(nestedKey), loop: false, mirror: nestedFlip, fade: fade * BlendFade(nestedKey));
-            }
+            // 파트1 충격파 124 는 자식이 자식을 부르며 띠 다섯 줄을 쌓는다(124:0 → 2 → 4 → 6 → 8) — 그래서 몇 겹이든 따라간다.
+            var childClip = host.UiFor(obs)?.Clip(motion);
+            DrawNestedLayers(childClip, cycle - start, footX + (flip ? -dx : dx), footY + dy, flip || childClip?.Mirror == true, fade, 1);
+        }
+    }
+
+    /// <summary>
+    /// 자식 층이 다시 부르는 자식들 — <paramref name="ownerMirror"/> 는 부른 층이 뒤집혀 있나(깃발 0 인 자식은 그것을 물려받아 x 와 그림을 뒤집는다).
+    /// 자식도 제 모션이 끝나면 사라진다. 여덟 겹에서 멈춘다(제 자신을 부르는 그림 막기).
+    /// </summary>
+    private void DrawNestedLayers(ObsMotionClip? clip, int age, int x, int y, bool ownerMirror, double fade, int depth)
+    {
+        if (clip == null || depth > 8) return;
+        foreach (var (nestedStart, nestedObs, nestedMotion, ndx, ndy, _, nestedFlag) in clip.Children)
+        {
+            if (nestedStart > age || host.UiFor(nestedObs) is not { } nested) continue;
+            int nestedAge = age - nestedStart, nestedLife = nested.ShownLength(nestedMotion);
+            if (nestedLife > 0 && nestedAge >= nestedLife) continue;
+            bool nestedFlip = ownerMirror && nestedFlag == 0;
+            int nestedKey = nested.BlendAt(nestedMotion, nestedAge);
+            int nx = x + (nestedFlip ? -ndx : ndx), ny = y + ndy;
+            host.DrawUi(nestedObs, nestedMotion, nestedAge, nx, ny, BlendOf(nestedKey), loop: false, mirror: nestedFlip, fade: fade * BlendFade(nestedKey));
+            var nestedClip = nested.Clip(nestedMotion);
+            DrawNestedLayers(nestedClip, nestedAge, nx, ny, nestedFlip || nestedClip?.Mirror == true, fade, depth + 1);
         }
     }
 
