@@ -2311,10 +2311,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             host.FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
             host.FillRect(x, y, w * u.Hp / u.MaxHp, 3, u.IsAlly ? 0xFF50D060 : 0xFFE05050);
             if (u.MaxTp > 0) host.FillRect(x, y + 3, w * Math.Clamp(u.Tp, 0, u.MaxTp) / u.MaxTp, 2, 0xFFE8C040);
-            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다. 파트1 은 레벨이 없다(EXP 가 차면 어빌리티를 하나 올린다 — 사용자 지적).
-            if (u.IsAlly && !host._scene.IsPart1 && u.Data is { } d)
+            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다. 파트1 은 누적 경험치 ÷ 100(Part1Chr.Level — EXP 100 마다
+            // 어빌리티를 하나 올린 횟수)을 파트2 처럼 보인다(사용자 요청). 전투 중 오른 것까지 보이게 파트1 인물 자료에서 읽는다.
+            int? level = !u.IsAlly ? null : host._scene.IsPart1 ? Part1.Fighter(u)?.Chr.Level : u.Data?.Level;
+            if (level is { } shown)
             {
-                string lv = d.Level.ToString();
+                string lv = shown.ToString();
                 var (tw, th) = host.BattleTextSize(lv, 0xFFFFFFFF, GaugeLevelFont);
                 int r = Math.Max(5, (tw + 3) / 2), cx = x - 2 - r, cy = y + 2;
                 host.FillCircle(cx, cy, r + 1, 0xE0000000);
