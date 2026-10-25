@@ -231,7 +231,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     /// <summary>쉬면 켜질 자세 — 어빌리티 76 · 77 · 78 · 79 · 80 가운데 가진 첫째(<c>0x1003e6e6</c>~). 없거나 파트1 인물이 아니면 0.</summary>
     internal int StanceAbility(UnitState u) =>
-        Fighter(u) is { } f ? new[] { 76, 77, 78, 79, 80 }.FirstOrDefault(id => f.Chr.AbilityLevel(id) >= 0) : 0;
+        Fighter(u) is { } f ? new[] { 76, 77, 78, 79, 80 }.FirstOrDefault(id => f.Chr.EffectiveLevel(id) >= 0) : 0;   // 쓰는 레벨(0x1009e020) — 지금 직업이 다루는 것만
 
     /// <summary>자세 이름(어빌리티 이름 — 분석-파트1-전투 24절 A).</summary>
     internal static string StanceName(int ability) => ability switch { 76 => "방어", 77 => "회피", 78 => "반격", 79 => "역습", 80 => "완전방어", _ => "" };

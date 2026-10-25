@@ -370,8 +370,11 @@ internal sealed class Part1StatusPanel(GameWindow host)
         var teach = job?.Abilities.Where(a => a.Ability > 0 && a.Level > 0).GroupBy(a => a.Ability).ToDictionary(g => g.Key, g => g.Max(a => a.Level)) ?? [];
         var rows = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).Select(a => (a.Ability, a.Level)).ToList();
         foreach (var (ability, _) in teach) if (!rows.Any(r => r.Ability == ability)) rows.Add((ability, 0));
+        // 쓰는 레벨(원본 0x1009e020) — 배웠어도 지금 직업이 안 다루면 못 쓴다(흐리게), 직업 최대보다 높으면 최대로 막힌다.
+        var usable = rows.Select(r => r.Ability).Distinct().ToDictionary(a => a, chr.EffectiveLevel);
+        bool anyLocked = rows.Any(r => r.Level > 0 && usable[r.Ability] <= 0);
         const int RowH = 16;
-        int lh = 10 + Math.Max(1, rows.Count) * RowH + (teach.Count > 0 ? 16 : 0);
+        int lh = 10 + Math.Max(1, rows.Count) * RowH + (teach.Count > 0 ? 16 : 0) + (anyLocked ? 14 : 0);
         _listH = lh;
         Bg(lx, ly, ListW, lh, 0xFF101828);   // 그림 층 — 아이콘(그림 층)이 덮이지 않게
         host.UiStroke(lx, ly, ListW, lh, 0xFF8098C8);
@@ -386,22 +389,30 @@ internal sealed class Part1StatusPanel(GameWindow host)
             if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon)
                 Img(icon, lx + 6, ry, 14, 14);
             bool taught = teach.TryGetValue(ability, out int max);
-            uint nameColor = level == 0 ? 0xFF808890 : GameWindow.White;
+            int use = usable[ability];
+            bool locked = level > 0 && use <= 0;
+            uint nameColor = level == 0 || locked ? 0xFF808890 : GameWindow.White;
             host.UiText(name, lx + 24, ry, nameColor, 11);
-            // 지금 직업이 가르치면 「지금/최대」(다 올렸으면 초록), 아니면 지금 단계만.
-            string lv = taught ? $"{level}/{max}" : $"LV{level}";
-            uint lvColor = !taught ? 0xFFFFE080 : level >= max ? 0xFF80E080 : level == 0 ? 0xFF808890 : 0xFFFFE080;
+            // 지금 직업이 가르치면 「지금/최대」(다 올렸으면 초록), 아니면 지금 단계만. 못 쓰면 「(배운 레벨)」(흐리게),
+            // 직업 최대로 막혔으면 「쓰는 (배운 N)」.
+            string lv = locked ? $"({level})"
+                      : level > 0 && use > 0 && use != level ? $"{use} (배운 {level})"
+                      : taught ? $"{level}/{max}" : $"LV{level}";
+            uint lvColor = locked ? 0xFF606870 : !taught ? 0xFFFFE080 : level >= max ? 0xFF80E080 : level == 0 ? 0xFF808890 : 0xFFFFE080;
             var (_, lw, _) = host.UiGetText(lv, lvColor, 11);
             host.UiText(lv, lx + ListW - 8 - lw, ry, lvColor, 11);
             // 오른쪽 단추를 누르고 있는 동안 설명(원본엔 글이 없어 자료로 엮는다 — Part1AbilityTip). 떼면 사라진다(WM_RBUTTONUP).
             int tipMax = taught ? max : 0;
             rightHits.Add((lx, ry - 1, ListW, RowH, () =>
             {
-                if (Part1AbilityTip.Text(ability, level, tipMax) is { } tip) host.StatusScr.ShowStatusTip(tip);
+                if (Part1AbilityTip.Text(ability, level, tipMax) is { } tip)
+                    host.StatusScr.ShowStatusTip(tip + (locked ? "\n지금 직업에서는 못 씀" : level > 0 && use > 0 && use < level ? $"\n지금 직업에서는 {use} 까지만 씀" : ""));
             }));
         }
         if (teach.Count > 0)
             host.UiText($"{job!.Name} — 지금/최대", lx + 8, ly + 6 + rows.Count * RowH + 2, 0xFF8098C8, 10);
+        if (anyLocked)
+            host.UiText("흐림: 지금 직업에서는 못 씀", lx + 8, ly + 6 + rows.Count * RowH + (teach.Count > 0 ? 16 : 0) + 2, 0xFF808890, 10);
 
         // 장비 목록 — 누른 슬롯 아래에 틀 창, 줄마다 그림 · 이름. 짚은 줄은 아이템 설명.
         if (_equipChoices is { } equipChoices)

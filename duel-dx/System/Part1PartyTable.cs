@@ -427,8 +427,10 @@ internal sealed class Part1PartyTable(GameWindow host)
             var info = Part1Ability.ById(_abilities!, ability);
             if (info != null && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(info.Tail + 0x13, 0) is { } icon) Img(icon, px, py, 14, 14);
             string name = Fit(info?.Name ?? $"#{ability}", CellW - 40, 10);
-            host.UiText(name, px + 17, py, GameWindow.White, 10);
-            host.UiText($"{level}", px + 19 + TextW(name, 10), py, Yellow, 10);
+            // 쓰는 레벨(원본 0x1009e020) — 지금 직업이 안 다루면 흐리게 「-」, 직업 최대로 막히면 그 값.
+            int use = chr.EffectiveLevel(ability);
+            host.UiText(name, px + 17, py, use > 0 ? GameWindow.White : Dim, 10);
+            host.UiText(use > 0 ? $"{use}" : "-", px + 19 + TextW(name, 10), py, use > 0 ? Yellow : Dim, 10);
             if (Hot(px, py - 1, CellW - 4, 16)) tip = Part1AbilityTip.Text(ability, level);
         }
         if (key.Count == 0) host.UiText(learned.Count > 0 ? "능력치 어빌리티만" : "없음", ax + 4, _narrow ? top : ry + 14, Dim, 10);

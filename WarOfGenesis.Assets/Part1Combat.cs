@@ -86,7 +86,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
     /// <param name="equipment">그 인물의 지금 장비 다섯 칸(아이템 번호).</param>
     public bool CanEquip(Part1Chr chr, int slot, int[] equipment, IReadOnlyList<Part1Item> items)
     {
-        bool Has(params int[] abilities) => abilities.Any(a => chr.AbilityLevel(a) >= 0);
+        bool Has(params int[] abilities) => abilities.Any(a => chr.EffectiveLevel(a) >= 0);   // 원본도 쓰는 레벨(0x1009e020) — 지금 직업이 다루는 무기만
         int TypeOf(int id) => ById(items, id)?.Type ?? 0;
         int t = Type;
         bool learned = t switch
@@ -319,10 +319,10 @@ public sealed record Part1Fighter(Part1Chr Chr, Part1Item?[] Equipment)
     public int? Resist(int element) => element is >= 1 and <= 5 ? Chr.Fields[30 + element - 1] + EquipBonus(Part1Bonus.ResistOf(element)) : null;
 
     /// <summary>어빌리티 77 회피 — 이것이 있어야 회피를 굴린다.</summary>
-    public bool CanEvade => Chr.AbilityLevel(77) >= 0;
+    public bool CanEvade => Chr.EffectiveLevel(77) >= 0;
 
     /// <summary>막기 — 어빌리티 76 방어(대상 값 ½ · ×150) 또는 80 완전방어(×200)를 가졌을 때만 굴린다(<c>0x10040eb0</c>). 0 없음.</summary>
-    public int BlockAbility => Chr.AbilityLevel(76) >= 0 ? 76 : Chr.AbilityLevel(80) >= 0 ? 80 : 0;
+    public int BlockAbility => Chr.EffectiveLevel(76) >= 0 ? 76 : Chr.EffectiveLevel(80) >= 0 ? 80 : 0;
 
     /// <summary>막기 식의 대상 쪽 값 — 두 손 아이템 명중(<c>+0x60</c>) + 보정 207 둘(<c>0x1003f240</c>). 여기에 DEX 를 더한다.</summary>
     public int GuardValue => (Weapon1?.Accuracy ?? 0) + (Weapon2?.Accuracy ?? 0) + 2 * EquipBonus(Part1Bonus.Accuracy);
@@ -366,6 +366,9 @@ public static class Part1Bonus
 
     /// <summary>그 보정 코드가 여는 어빌리티 번호 — 해금 코드가 아니면 0.</summary>
     public static int UnlockedAbility(int code) => code switch { >= 216 and <= 238 => UnlockAbilities[code - 216], 249 => 101, _ => 0 };
+
+    /// <summary>그 어빌리티를 여는 보정 코드(<see cref="UnlockedAbility"/> 의 거꾸로 — <c>0x1009d850</c> 의 갈래 표) — 없으면 0.</summary>
+    public static int UnlockCode(int ability) => ability == 101 ? 249 : Array.IndexOf(UnlockAbilities, ability) is >= 0 and var i ? 216 + i : 0;
 
     /// <summary>속성 번호(1~5) → 저항 보정 코드.</summary>
     public static int ResistOf(int element) => element is >= 1 and <= 5 ? FireResist + element - 1 : 0;

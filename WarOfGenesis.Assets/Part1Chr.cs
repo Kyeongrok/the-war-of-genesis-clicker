@@ -54,14 +54,64 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         Range => (6, 0xce), Spd => (7, 0xcd), Ac => (8, 0xca), Mr => (9, 0xcc), _ => (0, 0),
     };
 
-    /// <summary>장비 보정을 뺀 능력치 — 바탕 + 어빌리티 레벨 × 5.</summary>
-    public int Stat(int field) => Fields[field] + (StatSource(field).Ability is > 0 and var a ? Math.Max(0, AbilityLevel(a)) * 5 : 0);
+    /// <summary>장비 보정을 뺀 능력치 — 바탕 + <b>쓰는</b> 어빌리티 레벨(<see cref="EffectiveLevel"/>) × 5(<c>0x1009eaa0</c>~, 0xff 면 안 더한다).</summary>
+    public int Stat(int field) => Fields[field] + (StatSource(field).Ability is > 0 and var a ? Math.Max(0, EffectiveLevel(a)) * 5 : 0);
 
     /// <summary>칸 39~43 — 장비 아이템 번호 다섯(0 은 빈 칸).</summary>
     public int[] Equipment => Fields[39..44];
 
-    /// <summary>그 어빌리티의 레벨 — 없으면 -1(원본은 0xff).</summary>
+    /// <summary>
+    /// <b>배운</b> 어빌리티 레벨(CChr <c>+0x8c</c> + 번호) — 없으면 -1(원본은 0xff). 전직 조건(<c>0x1009e6f0</c>) · 레벨업 후보(<c>0x1009dac0</c>) · 직업 나무 · 저장은 이것을 쓴다.
+    /// 전투에서 쓰는 값은 <see cref="EffectiveLevel"/>.
+    /// </summary>
     public int AbilityLevel(int ability) => Abilities.FirstOrDefault(a => a.Ability == ability) is { Ability: > 0 } a ? a.Level : -1;
+
+    /// <summary>직업 0x5e(94) — Job.dat(93칸) 밖의 특별 직업: 모든 어빌리티를 쓴다(안 배운 것은 레벨 1, <c>0x1009e020</c> · 목록 <c>0x1009dda0</c>).</summary>
+    public const int AllAbilitiesJob = 0x5e;
+
+    /// <summary>
+    /// 지금 직업으로 쓰는 레벨(장비 빼고) — <c>0x1009e020</c> 의 앞 절반: 직업 0 이면 배운 레벨 그대로 · 94 면 배운 레벨(안 배웠으면 1) ·
+    /// 갈래(Abi +0x24) 2·4(무기 덧기술 · 소환)면 1 · 그 밖은 지금 직업의 14칸(Job.dat +0x4a/+0x58)에 있어야 min(배운, 직업 최대), 없거나 안 배웠으면 -1.
+    /// </summary>
+    public int JobLevel(int ability)
+    {
+        int raw = AbilityLevel(ability), job = JobId;
+        if (job == 0) return raw;
+        if (job == AllAbilitiesJob) return raw >= 0 ? raw : 1;
+        if (Part1Ability.ById(Part1Tables.Abilities, ability)?.Kind is 2 or 4) return 1;
+        if (Part1Job.ById(Part1Tables.Jobs, job) is not { } j) return -1;
+        foreach (var (a, max) in j.Abilities)
+            if (a == ability) return raw < 0 ? -1 : Math.Min(raw, max);
+        return -1;
+    }
+
+    /// <summary>
+    /// 장비가 주는 레벨 — <c>0x1009d850</c>: 해금 보정(216~238 · 249, <see cref="Part1Bonus.UnlockCode"/>)이 있는 어빌리티면 장비 다섯의 그 보정 값 가운데 큰 것(<c>0x1009e1f0</c>, 없으면 0),
+    /// 해금 보정이 없는 어빌리티면 -1(0xff).
+    /// </summary>
+    public int ItemLevel(int ability)
+    {
+        int code = Part1Bonus.UnlockCode(ability);
+        if (code == 0) return -1;
+        int best = 0;
+        foreach (int id in Equipment)
+            if (id > 0 && Part1Item.ById(Part1Tables.Items, id) is { } item)
+                foreach (var b in item.Bonuses)
+                    if (b.Code == code && b.Value > best) best = b.Value;
+        return best;
+    }
+
+    /// <summary>
+    /// 전투에서 <b>쓰는</b> 어빌리티 레벨 — <c>alpha.dll 0x1009e020</c>: <see cref="JobLevel"/> 와 <see cref="ItemLevel"/> 가운데 큰 것(한쪽이 0xff 면 다른 쪽).
+    /// 능력치(× 5) · 최대 HP(어빌리티 1 × 100) · 회피 · 막기 · 자세 · 무기 장비 · 탈것이 이것을 쓴다. -1 이면 못 쓴다.
+    /// 해금 보정이 있는 어빌리티를 지금 직업이 안 다루고 장비도 없으면 원본처럼 0 이 나온다(목록에는 안 오른다).
+    /// </summary>
+    public int EffectiveLevel(int ability)
+    {
+        int job = JobLevel(ability), item = ItemLevel(ability);
+        if (job < 0) return item;
+        return item < 0 ? job : Math.Max(job, item);
+    }
 
     /// <summary>
     /// 그 탈것(파트1 Chr 번호)을 타는 데 드는 어빌리티 — <c>0x1009e750</c>(분석-파트1-챕터 10.3): 121 아론다이트탑승 · 122 마장기탑승 · 123 아지다하카탑승 ·
@@ -79,7 +129,7 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
 
     /// <summary>이 인물이 그 탈것(파트1 Chr 번호)을 탈 수 있나 — 그 어빌리티가 있어야 하고, 아론다이트는 장비 보정 248(바리사다 II 「아론다이트의 열쇠」)도.</summary>
     public bool CanRide(int mount, IEnumerable<Part1Item?> equipment) =>
-        RideAbility(mount) is > 0 and var ability && AbilityLevel(ability) >= 0
+        RideAbility(mount) is > 0 and var ability && EffectiveLevel(ability) >= 0
         && (ability != 121 || equipment.Any(i => i?.Bonus(248) is not (null or 0)));
 
     /// <summary>
@@ -88,8 +138,8 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     /// </summary>
     public int BasicAttackId => Fields[9];
 
-    /// <summary>최대 HP — 칸 19 + 어빌리티 1 레벨 × 100(<c>0x1009ea50</c>).</summary>
-    public int MaxHp => BaseMaxHp + Math.Max(0, AbilityLevel(1)) * 100;
+    /// <summary>최대 HP — 칸 19 + <b>쓰는</b> 어빌리티 1 레벨(<see cref="EffectiveLevel"/> — 직업 최대로 막힌다) × 100(<c>0x1009ea50</c>).</summary>
+    public int MaxHp => BaseMaxHp + Math.Max(0, EffectiveLevel(1)) * 100;
 
     /// <summary>칸마다 파일에서 차지하는 바이트 수(칸 3 부터) — 1 바이트, 2 낱말, 4 u32.</summary>
     internal static readonly int[] Widths =
@@ -166,4 +216,16 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         }
         return new Part1Chr(code, Text(0, 0x18), Text(0x18, 0x18), Text(0x30, 10), fields, [.. abilities]);
     }
+}
+
+/// <summary>파트1 표(Job.dat · Abi.dat · Item.dat)를 한 번 읽어 둔다 — <see cref="Part1Chr.EffectiveLevel"/> 가 자주 부른다. 비어 있으면(파트1 폴더를 아직 모름) 다음에 다시 읽는다.</summary>
+public static class Part1Tables
+{
+    private static IReadOnlyList<Part1Job>? _jobs;
+    private static IReadOnlyList<Part1Ability>? _abilities;
+    private static IReadOnlyList<Part1Item>? _items;
+
+    public static IReadOnlyList<Part1Job> Jobs => _jobs is { Count: > 0 } j ? j : _jobs = Part1Job.LoadAll();
+    public static IReadOnlyList<Part1Ability> Abilities => _abilities is { Count: > 0 } a ? a : _abilities = Part1Ability.LoadAll();
+    public static IReadOnlyList<Part1Item> Items => _items is { Count: > 0 } i ? i : _items = Part1Item.LoadAll();
 }

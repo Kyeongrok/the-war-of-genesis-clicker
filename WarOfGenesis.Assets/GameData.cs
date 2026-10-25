@@ -532,13 +532,23 @@ public sealed class GameDatabase
                     made = chr?.ToCharacterData(ranged ? Part1ShootWork : Part1BasicWork, nameId);
                     // 파트1 어빌리티 가운데 이 게임에 기술 파일이 있는 것(assets/data/skills/200NN.json — 썬더스탐 · 헬 스트라이크 · 블리자드 스탐 …)은
                     // 어빌리티 20000 + 번호로 붙인다. 살라딘은 96 헬 스트라이크를 갖고 시작한다.
-                    // 장비가 여는 어빌리티(보정 216~238 · 249 — 앤젤 블래스 → 블래스)도 안 배웠으면 레벨 1 로 덧붙인다(원본 0x1009dc6c).
+                    // 목록은 원본 0x1009dda0 대로 — 직업 0 이면 배운 것 모두 · 94 면 모든 어빌리티 · 그 밖은 <b>지금 직업이 가르치는</b> 14칸 가운데 배운 것만,
+                    // 그중 갈래(Abi +0x24) 1·3·5(쓰는 기술 · 초필살기 제어 · 소환 능력)만. 레벨은 쓰는 레벨(Part1Chr.EffectiveLevel — 직업 최대로 막힘).
+                    // 장비가 여는 어빌리티(보정 216~238 · 249 — 앤젤 블래스 → 블래스 · M.C.디바이스 → 새틀라이트 어택)는 직업과 상관없이 덧붙인다.
                     if (made != null && chr != null)
                     {
-                        var own = chr.Abilities.Where(a => a.Ability > 0).Select(a => (a.Ability, Level: Math.Max(1, a.Level))).ToList();
+                        var abis = _part1Abis ??= Part1Ability.LoadAll();
+                        IEnumerable<int> source = chr.JobId switch
+                        {
+                            0 => chr.Abilities.Where(a => a.Ability > 0).Select(a => a.Ability),
+                            Part1Chr.AllAbilitiesJob => abis.Select(a => a.Id),
+                            _ => Part1Job.ById(Part1Tables.Jobs, chr.JobId)?.Abilities.Select(a => a.Ability).Where(id => chr.AbilityLevel(id) >= 0) ?? [],
+                        };
+                        var own = source.Where(id => Part1Ability.ById(abis, id)?.Kind is 1 or 3 or 5).Distinct()
+                                        .Select(id => (Ability: id, Level: Math.Max(1, chr.EffectiveLevel(id)))).ToList();
                         foreach (int id in chr.Equipment.Where(e => e > 0).Select(e => Part1Item.ById(_part1Items ??= Part1Item.LoadAll(), e)).OfType<Part1Item>()
                                                   .SelectMany(i => i.Bonuses).Select(b => Part1Bonus.UnlockedAbility(b.Code)).Where(id => id > 0))
-                            if (!own.Any(a => a.Ability == id)) own.Add((id, 1));
+                            if (!own.Any(a => a.Ability == id)) own.Add((id, Math.Max(1, chr.EffectiveLevel(id))));
                         Part1ItemSkills(own, chr.Equipment[0], chr.Equipment[2]);
                         made = made with { Abilities = [.. own.Where(a => Abilities.ContainsKey(Part1Game.ChrBase + a.Ability))
                                                               .Select(a => ((ushort)(Part1Game.ChrBase + a.Ability), (ushort)a.Level))] };
