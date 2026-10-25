@@ -256,6 +256,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             return;
         }
         // DUELDX_WIN=2 면 승리 조건을 안 보고 곧장 이긴 것으로 나간다 — 이벤트로만 이기는 판(전멸이 승리가 아닌 판)에서 모세스 복귀를 시험할 때.
+        // DUELDX_WIN=3 이면 곧장 진 것으로 친다(배너 있는 패배 — 파트1 「Game Over」 띠를 화면 밖에서 볼 때).
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "3" && host._battleLoaded && !host.Mos._mosesOpen)
+        {
+            SetEventOutcome(win: false);
+            return;
+        }
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "2" && host._battleLoaded && !host.Mos._mosesOpen)
         {
             _outcome = "승리";
@@ -2264,6 +2270,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 시험 전용: 사건이 낸 결과를 남긴다(DUELDX_TESTRUN 일 때만).
         TestRunTrace($"outcome event btl {host._scene.Id} win {win} quiet {quiet} 사건 {_runningEvent} 줄 {_eventPc - 1} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {host._lastTime:F1}");
         _outcomeLeaveAt = host._lastTime + (OutcomeBannerDelayTicks + OutcomeAutoTicks + 1) / TicksPerSecond;
+        // 파트1 의 배너 없는 끝은 어둡게도 기다리지도 않고 곧 넘어간다(0x1002eaf4 · 0x1002ed7f — 하위 0 에서 바로 +0x28 = 1).
+        if (host._scene.IsPart1 && _outcomeQuiet) _outcomeLeaveAt = host._lastTime;
     }
 
     // ── 표시 ─────────────────────────────────────────────────────────────────

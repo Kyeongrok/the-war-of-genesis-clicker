@@ -727,16 +727,17 @@ internal sealed unsafe partial class BattleScene
         switch (a.Code)
         {
             case 11:                                     // 승패 — 결과 = 인자0 + 1: 0 승리(배너), 3 패배(Game Over 배너), 1 은 배너·음악 없이 조용히 끝(호위 실패)
-                SetEventOutcome(A(0) == 0, quiet: A(0) == 1);
+                // 파트1 100 은 결과 = 인자0 + 1 이고 배너는 결과 1 · 4 뿐 — 인자 1 · 2(결과 2 · 3)는 배너 없이 곧 끝난다(0x1001ddb0 · 0x1002eb0c).
+                SetEventOutcome(A(0) == 0, quiet: A(0) == 1 || host._scene.IsPart1 && A(0) == 2);
                 break;
             case 10:                                     // 이어지는 전투(결과 5) — 배너 없이 120틱 뒤 넘어간다(0x1006afa0)
                 _eventNextBattle = A(0);
-                SetEventOutcome(win: true, quiet: true);
+                SetEventOutcome(win: true, quiet: !host._scene.IsPart1);   // 파트1 101(결과 5)은 「Scenario Clear」 를 띄운다(0x1002eb16)
                 break;
             case 6:                                      // 끝내고 <b>그 필드로</b>(결과 6) — 배너 없이 120틱 뒤
                 _eventNextBattle = 0;
                 _eventNextField = A(0);
-                SetEventOutcome(win: true, quiet: true);
+                SetEventOutcome(win: true, quiet: !host._scene.IsPart1);   // 파트1 104(결과 6)도 배너를 띄운다 — 106 이 앞서면 안 띄운다
                 break;
             case 200:                                    // 증원 — 그 사람들을 전장에 세운다(0x10050eb0). 인자1 은 원본도 안 읽는다.
             case 214:                                    // 워프 등장 — 자리는 200 과 같고 하이 텔레포트(work 585) 연출로 나타난다(0x10052bf0).

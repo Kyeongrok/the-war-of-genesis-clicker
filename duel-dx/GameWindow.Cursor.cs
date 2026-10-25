@@ -155,6 +155,7 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal void UpdateOutcomeBanner()
     {
+        if (_scene.IsPart1) { Part1OutcomeBanner.Update(this); return; }   // 파트1 — 곡은 결과와 함께, 배너는 입력을 기다린다(0x1002eac0)
         if (Btl._outcome.Length == 0 || Btl._outcomeQuiet || Mos._mosesOpen || FieldOpen || EpisodesScr._episodesOpen) return;
         bool win = Btl._outcome.StartsWith('승');
         if (_outcomeMusicFor != Btl._outcomeAt)
@@ -183,6 +184,7 @@ internal sealed unsafe partial class GameWindow
     internal void DrawOutcomeBanner()
     {
         if (Btl._outcome.Length == 0) return;
+        if (_scene.IsPart1) { Part1OutcomeBanner.Draw(this); return; }     // 파트1 — 「Scenario Clear」 · 「Game Over」 띠(Obs 789)
         bool win = Btl._outcome.StartsWith('승');
 
         // 화면 전체를 물들이기 방식 2·세기 16 으로(0x1002e8d0(2, 16)) — 채널마다 (23·c + 8·16)/31(5비트) ≈ 74% 밝기 + 검정이 조금 뜬다.
