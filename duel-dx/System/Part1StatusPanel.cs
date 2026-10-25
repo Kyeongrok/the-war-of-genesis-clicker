@@ -97,6 +97,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         if (host._dropJobExp) growth.Experience = growth.Experience / 100 * 100;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);
+        host.Btl.RefreshPart1Abilities(code);   // 전투 안에서 바꾸면 그 판의 기술 목록 · 정보 창도 바로 새 직업 것으로(사용자 보고: 록슬리 과학자로 돌아왔는데 화이어 애로우가 없다)
         string name = Part1Job.ById(_jobs!, job)?.Name ?? "";
         // 받침이 있으면 「으로」(ㄹ 받침은 「로」) — 「무슬림 로 전직」이 어색했다.
         bool batchim = name.Length > 0 && name[^1] is >= '가' and <= '힣' && (name[^1] - '가') % 28 is not (0 or 8);
@@ -385,16 +386,24 @@ internal sealed class Part1StatusPanel(GameWindow host)
             row += EquipRowH;
         }
 
-        // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV. 지금 직업이 가르치는 것(Job.dat 짝 — 고르기 창 후보와 같은 표)은
-        // 「지금/최대」로, 아직 안 배운 것도 흐리게 함께 보인다 — 무엇을 몇까지 올릴 수 있는지 보이게(사용자 요청).
+        // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV. 원본 전투 목록(0x1009dda0)처럼 <b>지금 직업으로 쓰는 것</b>만 —
+        // 지금 직업이 가르치는 것(Job.dat 14칸)은 「지금/최대」로, 아직 안 배운 것도 흐리게 함께(무엇을 몇까지 올릴 수 있는지, 사용자 요청),
+        // 장비가 여는 것(해금 보정)과 아이템 기술(초필살기 제어 + 무기 · 소환 능력 + 옷 — 스탐블링거 → 폭풍검)은 「LV」로.
+        // 다른 직업에서 배운 것(롤랑의 초필살기 제어 · 댓쉬 · 비 — 나이트는 안 가르친다)은 줄로 늘어놓지 않고 개수만 적는다 — 배운 레벨은 남아서
+        // 그것을 가르치는 직업으로 바꾸면 바로 다시 나온다(사용자 보고: 「나이트에서 초필살기 제어 못 배우는데 왜 있지」).
         int lx = x + W + 4, ly = y;
         var job = Part1Job.ById(_jobs, chr.Fields[7]);
         var teach = job?.Abilities.Where(a => a.Ability > 0 && a.Level > 0).GroupBy(a => a.Ability).ToDictionary(g => g.Key, g => g.Max(a => a.Level)) ?? [];
-        var rows = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).Select(a => (a.Ability, a.Level)).ToList();
+        var learned = chr.Abilities.Where(a => a.Ability > 0 && a.Level > 0).ToList();
+        var rows = learned.Where(a => teach.ContainsKey(a.Ability) || chr.ListedLevel(a.Ability) > 0).Select(a => (a.Ability, a.Level)).ToList();
         foreach (var (ability, _) in teach) if (!rows.Any(r => r.Ability == ability)) rows.Add((ability, 0));
-        // 쓰는 레벨(원본 0x1009e020) — 배웠어도 지금 직업이 안 다루면 못 쓴다(흐리게), 직업 최대보다 높으면 최대로 막힌다.
-        var usable = rows.Select(r => r.Ability).Distinct().ToDictionary(a => a, chr.EffectiveLevel);
-        bool anyLocked = rows.Any(r => r.Level > 0 && usable[r.Ability] <= 0);
+        foreach (int ability in chr.ItemSkills().Concat(chr.Equipment.Where(e => e > 0).Select(e => Part1Item.ById(_items, e)).OfType<Part1Item>()
+                                                   .SelectMany(i => i.Bonuses).Select(b => Part1Bonus.UnlockedAbility(b.Code)).Where(id => id > 0)))
+            if (!rows.Any(r => r.Ability == ability) && chr.ListedLevel(ability) > 0) rows.Add((ability, chr.ListedLevel(ability)));
+        int otherJob = learned.Count(a => !rows.Any(r => r.Ability == a.Ability) && Part1Ability.ById(_abilities, a.Ability)?.Kind is not (2 or 4));   // 직접 배운 아이템 기술(폭풍검)은 직업 것이 아니다
+        // 쓰는 레벨(원본 0x1009e020) — 직업 최대보다 높으면 최대로 막힌다.
+        var usable = rows.Select(r => r.Ability).Distinct().ToDictionary(a => a, chr.ListedLevel);
+        bool anyLocked = otherJob > 0;
         const int RowH = 16;
         int lh = 10 + Math.Max(1, rows.Count) * RowH + (teach.Count > 0 ? 16 : 0) + (anyLocked ? 14 : 0);
         _listH = lh;
@@ -434,7 +443,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         if (teach.Count > 0)
             host.UiText($"{job!.Name} — 지금/최대", lx + 8, ly + 6 + rows.Count * RowH + 2, 0xFF8098C8, 10);
         if (anyLocked)
-            host.UiText("흐림: 지금 직업에서는 못 씀", lx + 8, ly + 6 + rows.Count * RowH + (teach.Count > 0 ? 16 : 0) + 2, 0xFF808890, 10);
+            host.UiText($"다른 직업에서 배운 것 {otherJob}개", lx + 8, ly + 6 + rows.Count * RowH + (teach.Count > 0 ? 16 : 0) + 2, 0xFF808890, 10);
 
         // 장비 목록 — 누른 슬롯 아래에 틀 창, 줄마다 그림 · 이름. 짚은 줄은 아이템 설명.
         if (_equipChoices is { } equipChoices)

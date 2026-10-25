@@ -114,6 +114,25 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
     }
 
     /// <summary>
+    /// 아이템이 주는 기술(갈래 2 · 4) 가운데 지금 나오는 것 — 원본 전투 목록 <c>0x10090c87</c>~<c>0x10090d4c</c>: 「초필살기 제어」(120)를 쓰면 갈래 2 가운데
+    /// <b>무기 칸</b>(장비 0) 아이템이 +0x26 과 같은 첫 것(스탐블링거 34 → 폭풍검 94 · 엑스칼리버 → 블리자드 스탐 …), 「소환 능력」(119)을 쓰면 갈래 4 가운데 <b>몸 칸</b>(장비 2)의 옷과 같은 첫 것.
+    /// 갈래 2 · 4 를 직접 배워 둔 것(롤랑 · 아델라이데의 폭풍검)은 이 조건을 못 채우면 안 나온다.
+    /// </summary>
+    public IEnumerable<int> ItemSkills()
+    {
+        foreach (var (gate, kind, item) in new[] { (120, 2, Equipment[0]), (119, 4, Equipment[2]) })
+            if (item > 0 && EffectiveLevel(gate) > 0 && Part1Tables.Abilities.FirstOrDefault(a => a.Kind == kind && a.ItemId == item) is { } skill)
+                yield return skill.Id;
+    }
+
+    /// <summary>
+    /// 목록(상태 · 일행 표)에 보일 쓰는 레벨 — <see cref="EffectiveLevel"/> 이되, 갈래 2 · 4(아이템 기술)는 <see cref="ItemSkills"/> 에 들 때만 1, 아니면 -1.
+    /// <c>0x1009e020</c> 은 갈래 2 · 4 를 늘 1 로 주지만 원본 목록은 그것을 직접 모으지 않는다(<c>0x1009dda0</c> 은 갈래 1 · 3 · 5 만).
+    /// </summary>
+    public int ListedLevel(int ability) =>
+        Part1Ability.ById(Part1Tables.Abilities, ability)?.Kind is 2 or 4 ? (ItemSkills().Contains(ability) ? 1 : -1) : EffectiveLevel(ability);
+
+    /// <summary>
     /// 그 탈것(파트1 Chr 번호)을 타는 데 드는 어빌리티 — <c>0x1009e750</c>(분석-파트1-챕터 10.3): 121 아론다이트탑승 · 122 마장기탑승 · 123 아지다하카탑승 ·
     /// 125 비행기탑승 · 126 탱크탑승. 탈것이 아니면 0.
     /// </summary>

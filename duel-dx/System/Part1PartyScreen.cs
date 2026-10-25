@@ -135,6 +135,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         host.Part1.Equipped[code] = slots;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);
+        host.Btl.RefreshPart1Abilities(code);
         shell.Chapter.SaveProgress();
     }
 
