@@ -51,13 +51,19 @@ internal sealed class BattleMiniMap(GameWindow host)
     internal bool Contains(int bx, int by) => _box is var (x, y, w, h) && bx >= x && bx < x + w && by >= y && by < y + h;
 
     /// <summary>미니맵을 눌렀으면 true — 접기 단추면 접거나 펴고, 그림이면 그 자리로 카메라를 옮긴다.</summary>
+    /// <summary>접기 · 펴기 — 접기 단추와 M 키(KeyAction.MiniMap)가 같이 쓴다. 다음 전투 · 다음 실행에도 이어진다.</summary>
+    internal void ToggleFold()
+    {
+        Folded = !Folded;
+        host.SaveSettings();
+    }
+
     internal bool OnClick(int bx, int by)
     {
         if (!Contains(bx, by)) return false;
         if (_fold is var (fx, fy, fw, fh) && bx >= fx && bx < fx + fw && by >= fy && by < fy + fh)
         {
-            Folded = !Folded;
-            host.SaveSettings();
+            ToggleFold();
             return true;
         }
         if (_body is var (ix, iy, iw, ih) && bx >= ix && bx < ix + iw && by >= iy && by < iy + ih && _scale > 0

@@ -943,6 +943,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Btl._deployOpen && (key == Win32.VK_RETURN || key == Win32.VK_ESCAPE)) { Btl.OnDeployKey(key); return; }
         if (_keysOpen) { OnKeysKey(key); return; }
         if (ChaptersScr._chaptersOpen) { if (key == Win32.VK_ESCAPE) ChaptersScr._chaptersOpen = false; return; }
+        // 단축키 목록(J) — 단축키 설정 창을 연다(사용자 요청). 미니맵(M) — 전투 판에서 접기 · 펴기(접기 단추와 같다, 사용자 요청).
+        if (_keys.ActionFor(key) == KeyAction.KeyHelp) { OnMenuCommand(MenuKeys); return; }
+        if (_keys.ActionFor(key) == KeyAction.MiniMap && _battleLoaded && !Mos._mosesOpen && !FieldOpen && !Part1TitleScr._open) { MiniMap.ToggleFold(); return; }
         if (_keys.ActionFor(key) == KeyAction.PartyTable && PartyTable.Toggle()) return;   // 파트1 전투 · 챕터 지도만
         if (_keys.ActionFor(key) == KeyAction.JobTree && JobTree.Toggle()) return;   // 파트1 전투 · 챕터 지도만 — 파트2 는 그냥 지나간다
         // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
