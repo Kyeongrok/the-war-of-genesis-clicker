@@ -1019,6 +1019,26 @@ internal sealed unsafe partial class BattleScene
             case Part1Script.Part1Only + 503 when host._scene.IsPart1:   // [?, 아이템, 수] — 전투 팀 가방에 더한다(0x100209a0 → 0x100ada10)
                 for (int k = 0; k < Math.Clamp((int)A(2), 0, 99) && A(1) > 0; k++) host.Part1.Bag.Add(A(1));
                 break;
+            // 아직 안 옮긴 파트1 행동 — 일부러 비운 갈래(분석-파트1-챕터 17절):
+            // 102 [밝기] 머리 낱말 6 을 바꾸고 맵 층 +0x2c = (a0 + 60)·62/126 − 2(0x1001de20) — 리메이크는 판 밝기(머리 낱말 6)부터 안 그린다(전투 0205 둘).
+            // 103 [x1|y1, x2|y2] 전장 범위(+0x1f4..+0x1fa, 맵 크기로 자름)와 그 픽셀 끝(+0x1fc..+0x202)을 바꾼다(0x1001deb0) — 증원이 들어오는 가장자리 ·
+            //     이동 · 카메라가 그 범위를 쓰는데 리메이크는 전장 범위가 없다(전투 0193 · 0261).
+            // 203 [폭, 높이] 해설 상자 크기(0x1018ac6a/68, 0x1001eb10) — 202 가 그 크기로 (a0, a1) 에 창 0x100a7ef0 을 띄우는데 리메이크는 202 를 아래 상자(600)로 갈음한다.
+            case Part1Script.Part1Only + 102 or Part1Script.Part1Only + 103 or Part1Script.Part1Only + 203 when host._scene.IsPart1:
+                break;
+            case Part1Script.Part1Only + 505 when host._scene.IsPart1:
+                // [eld] 전투 돈(+0xb958) += a0(0x10020a60) — 판을 열 때 무리 돈(0x101a07e0[무리])을 받아 끝에 되돌려 적는다(0x1002de1c · 0x1002df14).
+                // 리메이크는 전투 동안에도 무리 돈 하나를 쓴다. 전투 0394 [30000] 한 곳.
+                host.Part1.Eld = Math.Max(0, host.Part1.Eld + A(0));
+                break;
+            case Part1Script.Part1Only + 303 when host._scene.IsPart1:
+            {
+                // [대상, dx, dy] 지금 칸 + (dx, dy) 로 걷기(0x1001f390) — 302 와 같은 걷기(기술 1000)에 목표만 (픽셀 자리 / 40 + d). 대상 하나(0x1001c4c0),
+                // 탄 사람이면 탈것째(+0x1cc). 전투 0185 [99, 0, −1] 한 곳.
+                if (EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField) is { } mover)
+                    RunEventAction(new ScriptCommand(202, [A(0), 0, (short)(mover.Col + A(1)), (short)(mover.Row + A(2)), 0, 0, 0, 0]));
+                break;
+            }
             case 100: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp((int)A(1), 0, 255); break;
             case 101: _battleVars[A(0) & 0xFF] = (byte)Math.Clamp(_battleVars[A(0) & 0xFF] + A(1), 0, 255); break;
             case 102:

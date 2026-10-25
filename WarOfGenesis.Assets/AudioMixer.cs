@@ -34,6 +34,8 @@ public sealed class AudioMixer : IDisposable
         /// <summary>효과음 칸 하나를 차지하나(<see cref="EffectSlots"/>).</summary>
         public readonly bool Slotted = slotted;
         public double Position;
+        /// <summary>되풀이로 처음에 되감은 수 — <see cref="MusicPlayback"/>.</summary>
+        public int Laps;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -124,6 +126,7 @@ public sealed class AudioMixer : IDisposable
         lock (_gate)
         {
             _music = sound.FrameCount == 0 ? null : new Voice(sound, gain, loop, -1);
+            _musicSerial++;
             _musicPaused = false;
         }
     }
@@ -159,6 +162,16 @@ public sealed class AudioMixer : IDisposable
     public void StopMusic()
     {
         lock (_gate) { _music = null; _musicPaused = false; }
+    }
+
+    private long _musicSerial;
+
+    /// <summary>
+    /// 지금 울리는 배경음악 — (곡을 건 차례, 되감은 수). 곡이 없거나 멈춰 있으면 null. 파트1 필드 701(곡이 끝날 때까지)이 걸 때 값과 견준다.
+    /// </summary>
+    public (long Serial, int Laps)? MusicPlayback
+    {
+        get { lock (_gate) return _music == null || _musicPaused ? null : (_musicSerial, _music.Laps); }
     }
 
     /// <summary>음악이 멈춰 있나(개체는 남아 있다) — <see cref="PauseMusic"/>.</summary>
@@ -266,6 +279,7 @@ public sealed class AudioMixer : IDisposable
             {
                 if (!v.Loop) return false;
                 v.Position -= frames * Math.Floor(v.Position / frames);
+                v.Laps++;
                 idx = (long)v.Position;
             }
             long next = idx + 1 < frames ? idx + 1 : v.Loop ? 0 : idx;

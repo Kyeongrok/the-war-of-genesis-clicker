@@ -75,6 +75,12 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// </summary>
     internal Action<int, int, int, int>? Transition;
 
+    /// <summary>
+    /// 필드 103~107 [갈래, …] — 원본 화면 바꾸기 개체를 그대로 건다(<see cref="Part1Wipe"/>). 돌려주는 값 = 칸에 남을 틱(행동 1 이 기다린다).
+    /// 없으면(챕터) 103 만 <see cref="Transition"/> 으로 간다 — 챕터 자료에는 104~107 이 없다.
+    /// </summary>
+    internal Func<int, short[], int>? Wipe;
+
     /// <summary>필드 306 [인물] — 좌우 뒤집기를 바꾼다(0x100cdc20: +0x68 = !+0x68).</summary>
     internal Action<int>? SpriteFlip;
 
@@ -119,6 +125,17 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>602 — 600 의 소리가 끝날 때까지.</summary>
     private bool _waitSound;
 
+    /// <summary>701 이 건 칸 — 걸 때의 곡(바뀌거나 · 멈추거나 · 한 바퀴 돌면 빈다). 행동 1 이 기다린다.</summary>
+    private (long Serial, int Laps)? _musicSlot;
+
+    private bool MusicSlotBusy()
+    {
+        if (_musicSlot is not { } slot) return false;
+        if (host._mixer.MusicPlayback == slot) return true;
+        _musicSlot = null;
+        return false;
+    }
+
     /// <summary>필드 600 의 소리 칸(0x101b452c) · 604 의 되풀이 칸(0x101b4528).</summary>
     private const int SoundTag = 0x5012, LoopTag = 0x5013;
 
@@ -157,6 +174,9 @@ internal sealed class Part1SceneScript(GameWindow host)
 
     /// <summary>챕터 행동 1201 [장소, 전투] — 그 장소를 그 전투 장소로 바꾼다(0x100c1a50: 장소 낱말 7 = 전투, 낱말 6 = 0).</summary>
     internal Action<int, int>? PlaceBattle;
+
+    /// <summary>챕터 행동 1200 [장소, 마을] — 그 장소를 그 마을 장소로 바꾼다(0x100c19f0: 장소 낱말 7 = 마을, 낱말 6 = 1).</summary>
+    internal Action<int, int>? PlaceTown;
 
     /// <summary>행동 100 [그림] — 필드 배경을 그 <c>BGRs</c> 그림으로 바꾼다.</summary>
     internal Action<int>? BackgroundChange;
@@ -243,6 +263,7 @@ internal sealed class Part1SceneScript(GameWindow host)
         _waitUntil = 0;
         _waitBusy = false;
         _slotsUntil = 0;
+        _musicSlot = null;
         _waitSound = false;
         _leaving = false;
         _away = null;
@@ -283,7 +304,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>챕터 505 — 지도 단추 · 떠 있는 창 · 이동 고르기를 닫는다(0x100c0d50 → 0x100b3f90: 단추 다섯 숨김 0x100b2070, 창 +0x13bf8 · +0x13bfc 지움, 고르기 +0x13c30 = 0).</summary>
     internal Action? UiReset;
 
-    /// <summary>챕터 705 [n] — 영상 n(0 = G3.pak 안 · 1 = Setup\_sys2.cab)을 틀고 장면 7(불러오기 · 타이틀 · 새로)로(0x100c1ab0 → 장면 6 0x100d5480 DirectShow). 챕터 55 끝(엔딩) · 56.</summary>
+    /// <summary>챕터 705 — 엔딩 영상(<c>Setup\_sys2.cab</c>, 인자는 안 읽는다)을 틀고 장면 7(불러오기 · 타이틀 · 새로)로(0x100c1ab0 → 장면 6 번호 1, 0x100d5500). 챕터 55 끝 · 56.</summary>
     internal Action<int>? Ending;
 
     /// <summary>행동 1 이 기다릴 일 — 걷는 인물이 있나.</summary>
@@ -392,7 +413,7 @@ internal sealed class Part1SceneScript(GameWindow host)
             if (_waitBusy)
             {
                 // 행동 1 — 걷는 인물(Busy) · 화면 바꾸기 · 음악 크기 칸 · 떠 있는 고르기가 다 끝날 때까지.
-                if (Busy?.Invoke() == true || host._lastTime < _slotsUntil || Choice != null) return;
+                if (Busy?.Invoke() == true || host._lastTime < _slotsUntil || MusicSlotBusy() || Choice != null) return;
                 _waitBusy = false;
             }
             if (_waitSound)
@@ -421,6 +442,12 @@ internal sealed class Part1SceneScript(GameWindow host)
                 continue;
             }
             if (!IsField && c.Code == 505) { UiReset?.Invoke(); continue; }
+            // 504 · 506 — 팀이 없고 머리 낱말 2 == 1 이면 이야기 무리 앞 열 명 · 가방 · 용병 · 탑승물을 팀 0 으로 옮긴다(0x100c0620 · 0x100c0a60,
+            // 분석-파트1-챕터 12.3). 리메이크는 챕터를 열 때부터 팀 0 = 일행이라 할 일이 없다(일부러 비운 갈래).
+            if (!IsField && c.Code is 504 or 506) continue;
+            // 304 [n] — 챕터 지도 그림(장소 뒤 12바이트 목록, 0x100b2b16 이 만든 +0x13c28[n] — Obs 820 깃발 …)을 숨긴다(0x100bdb00: vt+0x78, +0x69 = 0xff).
+            // 리메이크는 그 그림 목록을 아직 안 그려 숨길 것이 없다(챕터 56 한 곳).
+            if (!IsField && c.Code == 304) continue;
             if (!IsField && c.Code == 705 && Ending != null) { _pending.Clear(); _sceneChanged = true; Ending(a.Length > 0 ? a[0] : 0); return; }
             switch (c.Code)
             {
@@ -474,6 +501,8 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // 912 [eld] = 무리 돈(0x100c1850, 0x101a07e0 — 챕터 0: 3000) · 904 [무리, Chr] = 그 인물을 무리 명단에(0x100c12e0 — 일행에 든다로 친다).
                 case 906 when a[1] > 0: for (int k = 0; k < Math.Clamp((int)a[2], 0, 99); k++) host.Part1.Bag.Add(a[1]); break;
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
+                // 1200 [장소, 마을] — 그 장소를 그 마을 장소로(0x100c19f0: 장소 낱말 7 = 마을, 낱말 6 = 1). 챕터 28 사건 38: 말 1 이 쓰러지면 장소 23 → 마을 153.
+                case 1200: PlaceTown?.Invoke(a[0], a[1]); break;
                 case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count:
                     while (MarkerPrev.Count < Markers.Count) MarkerPrev.Add(Markers[MarkerPrev.Count]);
                     MarkerPrev[a[0] - 1] = Markers[a[0] - 1];
@@ -527,12 +556,17 @@ internal sealed class Part1SceneScript(GameWindow host)
             case 102: PictureClear?.Invoke(); return true;
             case >= 103 and <= 107:
             {
-                // 103 [갈래, 빛깔, 나감, 들어옴] · 104·105 [갈래, 띠, 틱](0x100ab550 · 0x100ab880 — 닦아 내기) · 106·107 [갈래, …](0x100abf70 · 0x100ac870).
-                // 104~107 의 닦기 무늬는 아직 없어 그 틱을 반씩 검게 바래고 드러내는 것으로 갈음한다(가설).
-                int kind = c.Code == 103 ? A(1) : 1;
-                int fadeOut = Math.Max(1, c.Code == 103 ? A(2) : A(2) / 2), fadeIn = Math.Max(1, c.Code == 103 ? A(3) : A(2) - A(2) / 2);
-                Transition?.Invoke(A(0), kind, fadeOut, fadeIn);
-                if (IsTimed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(fadeOut + fadeIn));
+                // 103 [갈래, 빛깔, 나감, 들어옴](0x100ab310) · 104 [갈래, 띠, 틱](0x100ab550) · 105 [갈래, 쪽, 틱](0x100ab880) ·
+                // 106 [갈래, 쪽, 폭, 빠르기, 사이](0x100abf70) · 107 [갈래, 쪽, 폭, 빠르기, 사이, 빛깔](0x100ac870) — 무늬는 Part1Wipe.
+                int ticks = 0;
+                if (Wipe != null) ticks = Wipe(c.Code, a);
+                else if (c.Code == 103)
+                {
+                    int fadeOut = Math.Max(1, (int)A(2)), fadeIn = Math.Max(1, (int)A(3));
+                    Transition?.Invoke(A(0), A(1), fadeOut, fadeIn);
+                    ticks = fadeOut + fadeIn;
+                }
+                if (IsTimed) _slotsUntil = Math.Max(_slotsUntil, host._lastTime + TicksToSeconds(ticks));
                 return true;
             }
             case 300:
@@ -559,7 +593,13 @@ internal sealed class Part1SceneScript(GameWindow host)
                 if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), LoopTag, loop: true);
                 return true;
             case 605: host._mixer.StopEffect(LoopTag); return true;
-            case 701: return true;                                            // CD 곡이 끝날 때까지(0x100cd510 → 0x100096d0) — 되풀이 곡뿐이라 안 기다린다(가설)
+            case 701:
+                // 곡이 끝날 때까지 칸에 남는다(0x100cd510 → 0x100096d0: 파일 곡은 재생 자리 < 길이 0x100092b0, CD 곡은 MCI 「재생 중」 0x10009460) —
+                // 행동 1 이 기다린다. 건너뛰는 중(0x101bb148)이면 곡을 멈추고 곧 끝 — 리메이크의 Esc 는 필드를 통째로 끝낸다.
+                // 되풀이 곡(700 [곡, 1])은 끝에서 되감는 고리(0x100096f0)와 701 의 부름 차례를 안 봐서, 한 바퀴 돌면 끝으로 친다(가설).
+                // 곡이 안 돌면(음악 끔 · 소리 없음 · 아직 푸는 중) 곧 끝 — 원본은 소리를 꺼도 곡이 돌아 기다린다(리메이크 갈음).
+                _musicSlot = Timed ? host._mixer.MusicPlayback : null;
+                return true;
             case 702: host.StopMusic(); return true;                          // 곡 멈춤(0x100cd550)
             case 703:                                                         // [걸음] 크기 127 에서 틱마다 걸음씩 0 까지(0x100cd570, 0x1011beb0)
             {
@@ -600,6 +640,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 return true;
             }
             case 503: return true;                                            // 마을 갈래 낱말(+0x56) — 마을 화면이 따로 맡는다
+            case 504: return true;                                            // 마을 들머리(0x100d0960 → 0x100c8270) — 마을 필드에만 있고 마을 화면이 연다
             case 501 or 506:                                                  // 501 [필드] 다음 필드(장면 5) · 506 챕터 끝(0x100cfe60 → 장면 10)
                 if (SceneChange?.Invoke(c) == true) { _sceneChanged = true; _sceneLeft = _leaving = true; _pending.Clear(); }
                 return true;

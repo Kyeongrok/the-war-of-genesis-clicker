@@ -52,6 +52,7 @@ internal sealed class Part1Progress
         Mercenaries = [];
         Mounts = [];
         PlaceBattles = [];
+        PlaceTowns = [];
         MapTurns = [];
         ChapterMarkers = [];
         ChapterVars = [];
@@ -218,6 +219,9 @@ internal sealed class Part1Progress
     /// <summary>챕터 사건 1201 이 바꾼 장소 — 「챕터:장소」 → 전투 번호(장소를 그 전투 장소로 만든다).</summary>
     internal Dictionary<string, int> PlaceBattles = [];
 
+    /// <summary>챕터 사건 1200 이 바꾼 장소 — 「챕터:장소」 → 마을 번호(장소를 그 마을 장소로 만든다).</summary>
+    internal Dictionary<string, int> PlaceTowns = [];
+
     /// <summary>챕터 지도 턴(원본 +0x557c — 「턴 종료」마다 +1, 조건 1 이 본다) — 챕터 → 턴.</summary>
     internal Dictionary<int, int> MapTurns = [];
 
@@ -285,7 +289,7 @@ internal sealed class Part1Progress
                                    Dictionary<int, int>? Riding = null,
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
                                    Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null,
-                                   int[]? Chain = null);
+                                   int[]? Chain = null, Dictionary<string, int>? PlaceTowns = null);
 
     /// <summary>진행과 진행 깃발(파트2 와 같은 칸)을 적는다. 못 적으면 조용히 넘어간다.</summary>
     internal void Save(byte[] flags)
@@ -302,7 +306,7 @@ internal sealed class Part1Progress
     internal string ToJson(byte[] flags)
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
-                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain);
+                                [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, Eld, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], Bag, Equipped, Mercenaries, Mounts, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain, PlaceTowns);
         return JsonSerializer.Serialize(data);
     }
 
@@ -338,6 +342,7 @@ internal sealed class Part1Progress
             Mercenaries = data.Mercenaries ?? [];
             Mounts = data.Mounts ?? [];
             PlaceBattles = data.PlaceBattles ?? [];
+            PlaceTowns = data.PlaceTowns ?? [];
             MapTurns = data.MapTurns ?? [];
             ChapterMarkers = data.ChapterMarkers ?? [];
             ChapterVars = data.ChapterVars ?? [];

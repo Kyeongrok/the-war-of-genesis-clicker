@@ -114,7 +114,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>챕터 사건 — 502 전투 · 503 필드로 가면 돌아와서 남은 행동을 잇는다.</summary>
     internal Part1SceneScript Events => _events ??= new(host)
     {
-        SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle, MarkerMoved = OnMarkerMoved,
+        SceneChange = OnSceneChange, PlaceBattle = SetPlaceBattle, PlaceTown = SetPlaceTown, MarkerMoved = OnMarkerMoved,
         MapTurn = () => _chapter is { } c ? host.Part1.MapTurns.GetValueOrDefault(c.Id) : 0,
         TeamPlace = team => _teams is { } teams && team >= 0 && team < teams.Count ? teams[team].Place : -1,
         TeamMoved = (team, place) => { if (_teams is { } teams && team >= 0 && team < teams.Count && _chapter is { } c && place >= 0 && place < c.Places.Count) teams[team].Place = place; },
@@ -142,8 +142,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     private ((uint[] Px, int W, int H, int X, int Y)? From, int Out, int In, double Start)? _transition;
 
     /// <summary>
-    /// 챕터 705 [n] — 원본은 영상(0 = G3.pak 엔딩 · 1 = Setup\_sys2.cab)을 틀고 장면 7(불러오기 · 타이틀 · 새로)로 간다. 리메이크는 영상을 넣지 않아(사용자 결정)
-    /// 챕터를 끝낸 것으로 적고 파트1 타이틀로 돌아간다.
+    /// 챕터 705(0x100c1ab0) — <b>인자를 안 읽고</b> 장면 요청 6 · 번호 1, +0x13ca0 = 1. 장면 6(0x100d5480 → 0x100d5500)은 번호(+0xc)가 0 이면 <c>G3.pak</c>(오프닝 영상 —
+    /// 부팅이 거는 것), 아니면 <c>Setup\_sys2.cab</c>(엔딩 영상 — 설치 폴더에 없으면 시디에서, 0x10004ac0)을 DirectShow(0x100089b0)로 틀고 Esc 로 건너뛴 뒤 장면 7(불러오기 · 타이틀 · 새로)로 간다.
+    /// 챕터 55 [0] · 56 [1] 둘 다 엔딩 영상이다. 리메이크는 그 영상이 없어(시디에만 있다) 영상 없이 챕터를 끝낸 것으로 적고 파트1 타이틀로 돌아간다.
     /// </summary>
     private void OnEnding(int movie)
     {
@@ -245,15 +246,27 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     private void SetPlaceBattle(int place, int battle)
     {
         if (_chapter is not { } chapter || place < 0 || place >= chapter.Places.Count) return;
+        host.Part1.PlaceTowns.Remove($"{chapter.Id}:{place}");
         host.Part1.PlaceBattles[$"{chapter.Id}:{place}"] = battle;
         _chapter = WithPlaceBattles(chapter);
     }
 
-    /// <summary>진행에 적힌 1201 바꿈을 장소에 입힌다.</summary>
+    /// <summary>챕터 1200 [장소, 마을] — 그 장소를 마을 장소로(0x100c19f0: 낱말 7 = 마을, 낱말 6 = 1). 진행에 적어 다시 열어도 남는다.</summary>
+    private void SetPlaceTown(int place, int town)
+    {
+        if (_chapter is not { } chapter || place < 0 || place >= chapter.Places.Count) return;
+        host.Part1.PlaceBattles.Remove($"{chapter.Id}:{place}");
+        host.Part1.PlaceTowns[$"{chapter.Id}:{place}"] = town;
+        _chapter = WithPlaceBattles(chapter);
+    }
+
+    /// <summary>진행에 적힌 1201 · 1200 바꿈을 장소에 입힌다.</summary>
     private Part1Chapter WithPlaceBattles(Part1Chapter chapter) =>
         chapter with
         {
-            Places = [.. chapter.Places.Select((p, i) => host.Part1.PlaceBattles.TryGetValue($"{chapter.Id}:{i}", out int battle) ? p with { Kind = 0, Target = battle } : p)],
+            Places = [.. chapter.Places.Select((p, i) =>
+                host.Part1.PlaceBattles.TryGetValue($"{chapter.Id}:{i}", out int battle) ? p with { Kind = 0, Target = battle }
+                : host.Part1.PlaceTowns.TryGetValue($"{chapter.Id}:{i}", out int town) ? p with { Kind = 1, Target = town } : p)],
         };
     private Part1SceneScript? _events;
 

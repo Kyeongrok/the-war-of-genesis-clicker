@@ -37,12 +37,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         PictureShow = (id, x, y, talk) => { var (px, w, h) = ReadImage(id); _cover = new Cover(px, w, h, x, y, 0, talk); },
         ColorShow = color => _cover = new Cover(null, 0, 0, 0, 0, color switch { 0 => 0xFFFFFFFFu, 2 => 0xFFFF0000u, _ => 0xFF000000u }, false),
         PictureClear = () => _cover = null,
-        Transition = (mode, kind, fadeOut, fadeIn) =>
-        {
-            // 옛 화면 = 지난 틀에 보인 것(같은 틀에 앞서 돈 100 · 101 은 아직 안 보였다). 갈래 1 은 필드 그대로로 — 끝에 덮개를 지운다(0x100cf502).
-            _transition = (_shown, kind == 0 ? 0xFFFFFFFFu : 0xFF000000u, fadeOut, fadeIn, host._lastTime);
-            if (mode == 1) _cover = null;
-        },
+        Wipe = StartWipe,
         SpriteFlip = n => { if (n >= 0 && n < _flip.Length) _flip[n] = !_flip[n]; },
         SpriteShadow = (n, on) => { if (n >= 0 && n < _shadow.Length) _shadow[n] = on; },
         CameraSet = (x, y) => { _pan = null; _cam = (x, y); },
@@ -54,11 +49,40 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     /// <summary>지금 덮개(100 · 101 이 놓고 102 · 103 [1, …] 이 걷는다). null 이면 필드.</summary>
     private Cover? _cover;
 
-    /// <summary>지난 틀에 보인 덮개 — 화면 바꾸기의 「옛 화면」.</summary>
-    private Cover? _shown;
+    /// <summary>지난 틀에 그린 장면(대사 창 없이, 640×480) — 화면 바꾸기의 「옛 화면」(0x1009b0f0 이 뜨는 화면).</summary>
+    private uint[] _lastScene = [];
 
-    /// <summary>화면 바꾸기 — (옛 덮개, 바랠 빛깔, 나감 틱, 들어옴 틱, 시작).</summary>
-    private (Cover? From, uint Color, int Out, int In, double Start)? _transition;
+    /// <summary>도는 화면 바꾸기(103~107)와 그 시작 시각 — 사는 동안 필드는 이것만 그린다(0x100c7ce0).</summary>
+    private (Part1Wipe Wipe, double Start)? _wipe;
+
+    /// <summary>
+    /// 103~107 [갈래, …] — 옛 화면을 떠 두고 개체를 건다(처리기 0x100cf2c0 · cf540 · cf730 · cf920 · cfb20). 갈래 0 은 덮개(100 · 101)가 새 화면,
+    /// 1 은 지금 필드를 그려 덮개로 삼았다가 끝에 지운다(0x100cf502) — 리메이크는 덮개를 곧 걷고 첫 틀의 필드를 떠 둔다. 돌려주는 값 = 칸에 남을 틱.
+    /// </summary>
+    private int StartWipe(int code, short[] args)
+    {
+        if (!Part1Wipe.Makes(code, args)) return 0;
+        // 앞 바꾸기가 아직 돌면 그 끝 화면이 옛 화면이다(원본은 칸이 비어야 다음 행동이 돌아 겹치지 않는다).
+        var old = _lastScene.Length == Part1Wipe.W * Part1Wipe.H ? (uint[])_lastScene.Clone() : new uint[Part1Wipe.W * Part1Wipe.H];
+        _wipe = (new Part1Wipe(code, args, old), host._lastTime);
+        if (args.Length > 0 && args[0] == 1) _cover = null;
+        return Part1Wipe.Duration(code, args);
+    }
+
+    /// <summary>판의 (ox, oy) 640×480 을 <paramref name="px"/> 에 떠 온다(크기가 안 맞으면 새로).</summary>
+    private uint[] CaptureScene(int ox, int oy, uint[] px)
+    {
+        const int W = Part1Wipe.W, H = Part1Wipe.H;
+        if (px.Length != W * H) px = new uint[W * H];
+        int stride = host.BoardWidth, rows = host.BoardHeight;
+        for (int y = 0; y < H; y++)
+        {
+            int fy = oy + y;
+            if ((uint)fy >= rows) { px.AsSpan(y * W, W).Fill(0xFF000000); continue; }
+            for (int x = 0; x < W; x++) px[y * W + x] = (uint)(ox + x) < stride ? host._fb[fy * stride + ox + x] : 0xFF000000;
+        }
+        return px;
+    }
 
     /// <summary>306 이 뒤집은 인물 — 300 이 모션을 새로 걸면 푼다(그 모션의 뒤집기를 쓴다).</summary>
     private bool[] _flip = [];
@@ -206,8 +230,9 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _hidden = new bool[field.Sprites.Count];
         _flip = new bool[field.Sprites.Count];
         _shadow = new bool[field.Sprites.Count];
-        _cover = _shown = null;
-        _transition = null;
+        _cover = null;
+        _wipe = null;
+        _lastScene = [];
         _choiceHover = 0;
         _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
         _open = true;
@@ -336,63 +361,66 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_field is { } field)
         {
-            const int W = MosesScene.MosesW, H = MosesScene.MosesH;
-            // 화면 자리 — 머리 낱말 1·2 가 처음 자리, 행동 401 이 민다(Camera).
-            var spots = Enumerable.Range(0, _spots.Length).Select(PositionOf).ToArray();
-            var (camX, camY) = Camera();
-            int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
-            // 덮개 · 화면 바꾸기 — 바꾸는 중이면 나감 동안 옛 것을 빛깔로 바래고, 들어옴 동안 새 것을 드러낸다(0x100ab380).
-            var cover = _cover;
-            uint fadeColor = 0;
-            double fade = 0;
-            if (_transition is { } tr)
+            // 화면 바꾸기(103~107)가 도는 동안은 그것만 그린다(0x100c7ce0) — 새 화면은 시작한 틀에 덮개 · 필드를 한 번 그려 떠 둔다.
+            if (_wipe is { } wiping)
             {
-                double t = (host._lastTime - tr.Start) * GameWindow.TicksPerSecond;
-                if (t < tr.Out) { cover = tr.From; fade = t / tr.Out; }
-                else if (t < tr.Out + tr.In) fade = 1 - (t - tr.Out) / tr.In;
-                else _transition = null;
-                fadeColor = tr.Color;
+                var wipe = wiping.Wipe;
+                if (wipe.New == null) { DrawScene(field, ox, oy); wipe.New = CaptureScene(ox, oy, []); }
+                for (int due = (int)((host._lastTime - wiping.Start) * GameWindow.TicksPerSecond); wipe.Ticks < due && !wipe.Done;) wipe.Step();
+                if (wipe.Done) _wipe = null;
+                else
+                {
+                    wipe.Draw(host._fb, host.BoardWidth, host.BoardHeight, ox, oy);
+                    _lastScene = CaptureScene(ox, oy, _lastScene);
+                    DrawTalkLayer(ox, oy);
+                    host.DrawToast();
+                    return;
+                }
             }
-            _shown = cover;
-            if (cover != null)
-            {
-                DrawCover(cover, ox, oy);
-                if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
-                DrawTalkLayer(ox, oy);
-                host.DrawToast();
-                return;
-            }
-            if (_bg is { } bg)
-                for (int y = 0; y < Math.Min(H, _bgH); y++)
-                    for (int x = 0; x < Math.Min(W, _bgW); x++)
-                        host.SetPixel(ox + x, oy + top + y, bg[(camY + y) * _bgW + camX + x] | 0xFF000000);
-            // 인물 — 서기(동작 0) · 걷는 중이면 걷기(동작 1) 모션을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽).
-            // 모션 번호 = 동작 × 3 + 방향(ObsMotionTable). 아래쪽에 선 사람을 나중에.
-            int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
-            // 효과 그림(300 [Obs < 10000]) — 다 돈 것은 지운다. 층 0 은 인물과 함께 발끝(y) 차례로, 층 1 · 2 는 그 위에 차례로(0x100c8120 은 층마다 y 로 줄 세워 그린다).
-            _effects.RemoveAll(e => (host._lastTime - e.Start) * GameWindow.TicksPerSecond >= e.Length);
-            void DrawEffect(Effect e) =>
-                DrawObs(e.Obs, e.Motion, (int)((host._lastTime - e.Start) * GameWindow.TicksPerSecond), ox + e.X - camX, oy + top + e.Y - camY, loop: false);
-            var people = Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).Select(i => (Y: spots[i].Y, Person: i, Fx: (Effect?)null))
-                                   .Concat(_effects.Where(e => e.Layer <= 0).Select(e => (Y: e.Y, Person: -1, Fx: (Effect?)e))).OrderBy(d => d.Y).ToList();
-            foreach (var (_, i, fx) in people)
-            {
-                if (fx != null) { DrawEffect(fx); continue; }
-                var facing = _facing[i];
-                int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
-                var (motion, mirror) = _motion[i] ?? (action * 3 + ObsMotionTable.DirectionOf(facing), facing == Facing.Right);
-                var (x, y) = spots[i];
-                int personTick = MotionTick(i);
-                if (_shadow[i])
-                    host.DrawUi(Part1Game.ObsBase + ShadowObs, 0, tick, ox + x - camX, oy + top + y - camY, GameWindow.UiBlend.Darken, loop: true, fade: 0.55);   // 그림자 그림의 점은 어둡기 단계(0~31, 섞기 8) — 바탕을 어둡게
-                DrawObs(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, personTick, ox + x - camX, oy + top + y - camY,
-                        loop: _motion[i] == null || !_motionOnce[i], mirror: mirror ^ _flip[i]);
-            }
-            foreach (var e in _effects.Where(e => e.Layer > 0).OrderBy(e => e.Layer).ThenBy(e => e.Y)) DrawEffect(e);
-            if (fade > 0) host.FillRect(ox, oy, W, H, (uint)(Math.Clamp(fade, 0, 1) * 255) << 24 | fadeColor & 0xFFFFFF);
+            DrawScene(field, ox, oy);
+            _lastScene = CaptureScene(ox, oy, _lastScene);
         }
         DrawTalkLayer(ox, oy);
         host.DrawToast();
+    }
+
+    /// <summary>장면 — 덮개(100 · 101)가 있으면 그것, 없으면 배경 · 인물 · 효과 그림.</summary>
+    private void DrawScene(Part1Field field, int ox, int oy)
+    {
+        const int W = MosesScene.MosesW, H = MosesScene.MosesH;
+        // 화면 자리 — 머리 낱말 1·2 가 처음 자리, 행동 401 이 민다(Camera).
+        var spots = Enumerable.Range(0, _spots.Length).Select(PositionOf).ToArray();
+        var (camX, camY) = Camera();
+        int top = Math.Max(0, (H - _bgH) / 2);   // 500 높이 그림은 가운데에
+        // 덮개가 있으면 그것만(0x100c7cfd) — 필드 배경 · 인물은 안 그린다.
+        if (_cover is { } cover) { DrawCover(cover, ox, oy); return; }
+        if (_bg is { } bg)
+            for (int y = 0; y < Math.Min(H, _bgH); y++)
+                for (int x = 0; x < Math.Min(W, _bgW); x++)
+                    host.SetPixel(ox + x, oy + top + y, bg[(camY + y) * _bgW + camX + x] | 0xFF000000);
+        // 인물 — 서기(동작 0) · 걷는 중이면 걷기(동작 1) 모션을 방향대로(전투 인물 칸과 같은 방향 번호: 0 위 · 2 아래 · 3 오른쪽 · 그 밖 왼쪽).
+        // 모션 번호 = 동작 × 3 + 방향(ObsMotionTable). 아래쪽에 선 사람을 나중에.
+        int tick = (int)(host._lastTime * GameWindow.TicksPerSecond);
+        // 효과 그림(300 [Obs < 10000]) — 다 돈 것은 지운다. 층 0 은 인물과 함께 발끝(y) 차례로, 층 1 · 2 는 그 위에 차례로(0x100c8120 은 층마다 y 로 줄 세워 그린다).
+        _effects.RemoveAll(e => (host._lastTime - e.Start) * GameWindow.TicksPerSecond >= e.Length);
+        void DrawEffect(Effect e) =>
+            DrawObs(e.Obs, e.Motion, (int)((host._lastTime - e.Start) * GameWindow.TicksPerSecond), ox + e.X - camX, oy + top + e.Y - camY, loop: false);
+        var people = Enumerable.Range(0, Math.Min(spots.Length, field.Sprites.Count)).Where(i => !_hidden[i]).Select(i => (Y: spots[i].Y, Person: i, Fx: (Effect?)null))
+                               .Concat(_effects.Where(e => e.Layer <= 0).Select(e => (Y: e.Y, Person: -1, Fx: (Effect?)e))).OrderBy(d => d.Y).ToList();
+        foreach (var (_, i, fx) in people)
+        {
+            if (fx != null) { DrawEffect(fx); continue; }
+            var facing = _facing[i];
+            int action = _walks.ContainsKey(i) ? ObsMotionTable.ActionWalk : ObsMotionTable.ActionStand;
+            var (motion, mirror) = _motion[i] ?? (action * 3 + ObsMotionTable.DirectionOf(facing), facing == Facing.Right);
+            var (x, y) = spots[i];
+            int personTick = MotionTick(i);
+            if (_shadow[i])
+                host.DrawUi(Part1Game.ObsBase + ShadowObs, 0, tick, ox + x - camX, oy + top + y - camY, GameWindow.UiBlend.Darken, loop: true, fade: 0.55);   // 그림자 그림의 점은 어둡기 단계(0~31, 섞기 8) — 바탕을 어둡게
+            DrawObs(Part1Game.ObsBase + field.Sprites[i].SpriteId, motion, personTick, ox + x - camX, oy + top + y - camY,
+                    loop: _motion[i] == null || !_motionOnce[i], mirror: mirror ^ _flip[i]);
+        }
+        foreach (var e in _effects.Where(e => e.Layer > 0).OrderBy(e => e.Layer).ThenBy(e => e.Y)) DrawEffect(e);
     }
 
     /// <summary>
