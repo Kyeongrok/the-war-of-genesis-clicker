@@ -63,11 +63,31 @@ internal static unsafe class Win32
     public static extern IntPtr SetCursor(IntPtr cursor);
 
     // 끌어서 화면 밀기(BattleDragScroll) — 누른 채 창 밖으로 나가도 WM_LBUTTONUP 을 받는다.
-    [DllImport("user32.dll")]
-    public static extern IntPtr SetCapture(IntPtr hWnd);
+    [DllImport("user32.dll", EntryPoint = "SetCapture")]
+    private static extern IntPtr SetCaptureNative(IntPtr hWnd);
 
-    [DllImport("user32.dll")]
-    public static extern bool ReleaseCapture();
+    [DllImport("user32.dll", EntryPoint = "ReleaseCapture")]
+    private static extern bool ReleaseCaptureNative();
+
+    /// <summary>
+    /// 마우스 잡기 — 없어도 끌기는 된다(창 밖에서 떼면 놓칠 뿐). 다른 기기용 바꿔 끼움(Unix 의 user32 대역)에는 이 입구가 없어
+    /// 누르는 순간 DllNotFoundException 으로 꺼졌다(사용자 제보, v1.0.7 · Unix) — 한 번 실패하면 다시 부르지 않는다.
+    /// </summary>
+    private static bool _noCapture;
+
+    public static void SetCapture(IntPtr hWnd)
+    {
+        if (_noCapture) return;
+        try { SetCaptureNative(hWnd); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { _noCapture = true; }
+    }
+
+    public static void ReleaseCapture()
+    {
+        if (_noCapture) return;
+        try { ReleaseCaptureNative(); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { _noCapture = true; }
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct IconInfo
