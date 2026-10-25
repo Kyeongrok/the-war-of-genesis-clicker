@@ -1165,8 +1165,12 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (by < GridTop) return;
         int col = bx / TileW, row = RowAt(bx, by);
         // 적 몸통을 눌렀으면 그 적의 칸을 누른 것으로 본다 — 발밑 칸만 보면 몸통 클릭이 윗칸(빈 칸)으로 갔다.
+        // 빈 칸을 고르는 기술(대상 방식 7 — 혼 · 혈랑마혼 · 비연참 · 댓쉬 · 워프)을 겨누는 동안은 몸통을 보지 않고 발밑 칸 그대로다 —
+        // 원본은 누른 자리를 커서 칸(+0xca06 / +0xca08, 커서 물체 월드 ÷ 40)으로만 보고 유닛을 쥐는 것은 +0x31 = 1 · 3 · 5 뿐이다(0x10032229).
+        // 전에는 적 그림이 덮은 빈 칸(높은 칸에 선 적 · 큰 유닛의 그림 아래)을 누르면 그 적의 칸으로 바뀌어 「설 수 있는 빈 칸을 고르세요」가 떴다(사용자 보고: 살라딘 혈랑마혼).
+        bool emptyCellAim = Btl._targetWork >= 0 && !Btl._targetIsBasicAttack && Btl.Work(Btl._targetWork) is { TargetMode: 7 };
         int index = UnitOrFoeAt(bx, by);
-        if (index >= 0) (col, row) = (_units[index].Col, _units[index].Row);
+        if (index >= 0 && !emptyCellAim) (col, row) = (_units[index].Col, _units[index].Row);
         if (row < 0) return;
         if (Btl.OnTargetClick(col, row)) return;
 
