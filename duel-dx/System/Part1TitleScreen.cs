@@ -50,13 +50,16 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     [
         ("NEW GAME", 0, Cx - 49, Cy + 101, Cx + 46, Cy + 116),
         ("LOAD GAME", 1, Cx - 51, Cy + 124, Cx + 48, Cy + 139),
-        ("CONTINUE", -1, 530, 428, 630, 446),
+        ("CONTINUE", 2, Cx - 46, Cy + 147, Cx + 46, Cy + 162),   // 원본에 없는 줄 — LOAD GAME 아래(사용자 요청). 튜토리얼 · EXIT 는 한 줄씩 내린다
         ("PART 2", -1, 530, 450, 630, 468),
-        ("EXIT", 3, Cx - 15, Cy + 170, Cx + 16, Cy + 184),
+        ("EXIT", 4, Cx - 15, Cy + 193, Cx + 16, Cy + 207),
     ];
 
-    /// <summary>위·아래 키로 옮기는 차례 — 원본 메뉴 줄 먼저, 그다음 오른쪽 아래 글 단추.</summary>
-    private static readonly int[] KeyOrder = [0, 1, 4, 2, 3];
+    /// <summary>튜토리얼 줄(누를 수 없음) — CONTINUE 아래, EXIT 위.</summary>
+    private const int TutorialY = Cy + 177;
+
+    /// <summary>위·아래 키로 옮기는 차례 — 가운데 메뉴 줄 먼저, 그다음 오른쪽 아래 PART 2.</summary>
+    private static readonly int[] KeyOrder = [0, 1, 2, 4, 3];
 
     /// <summary>글 단추 크기 — 연대표 · 마을 · 일행 창이 <see cref="DrawButton"/> 과 함께 쓴다.</summary>
     internal const int ButtonW = 140, ButtonH = 24;
@@ -535,13 +538,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             // 메뉴 줄 — 원본은 그림(Obs 0751 모션 10~13 · 짚으면 0~3)이지만 CONTINUE · PART 2 와 같은 글꼴의 글로 쓴다(사용자 요청).
             // 자리는 원본 맞는 칸 가운데, 튜토리얼은 늘 「못 누름」 빛깔. 밝아지는 것(FadeFrom)은 원본 차례 그대로.
             double dim = FadeFrom(menuAt, 4);
-            for (int row = 0; row < 4; row++)
+            for (int row = 0; row < 5; row++)
             {
                 int button = Array.FindIndex(Buttons, b => b.Row == row);
-                var (cx, cy) = row == 2 ? (Cx, Cy + 154) : ((Buttons[button].X0 + Buttons[button].X1) / 2, (Buttons[button].Y0 + Buttons[button].Y1) / 2);
-                string label = row == 2 ? "TUTORIAL" : Buttons[button].Name;
+                var (cx, cy) = button < 0 ? (Cx, TutorialY) : ((Buttons[button].X0 + Buttons[button].X1) / 2, (Buttons[button].Y0 + Buttons[button].Y1) / 2);
+                string label = button < 0 ? "TUTORIAL" : Buttons[button].Name;
                 bool hot = button >= 0 && _hover == button && FadeFrom(menuAt) >= 1;
-                uint color = row == 2 ? 0xFF5C544Cu : hot ? 0xFFFFF0C8u : 0xFFA89C90u;
+                uint color = button < 0 ? 0xFF5C544Cu : hot ? 0xFFFFF0C8u : 0xFFA89C90u;
                 color = (uint)(Math.Clamp(dim, 0, 1) * 255) << 24 | (color & 0xFFFFFF);
                 var (_, w, h) = host.UiGetText(label, color, 14);
                 host.UiText(label, ox + cx - w / 2, oy + cy - h / 2, color, 14);
