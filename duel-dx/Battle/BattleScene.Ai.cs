@@ -315,6 +315,8 @@ internal sealed unsafe partial class BattleScene
             var targets = WorkTargets(w, user, col, row);
             // 파트1 AI 표 이동 한도 밖의 적은 대상으로 안 센다(AiThink 가 정한 _part1Aware).
             if (_part1Aware is ({ } owner, { } seen) && owner == user) targets.RemoveAll(i => SeesAsFoe(user, host._units[i]) && !seen.Contains(i));
+            // 파트1 대상 거르기 — 표에서 떨어지는 대상(기계에게 블래스 · 스피디 …)과 기계에게 회복은 원본 AI 어림이 0 이다(0x1003fd6f · 0x100410b2 · 0x100410f9).
+            if (host._scene.IsPart1) targets.RemoveAll(i => !Part1.AiAffects(w, host._units[i]));
             int value;
             bool onObject = false;
             if (targets.Count > 0 && WorthUsing(user, w, targets)) value = TargetValue(user, w, targets);

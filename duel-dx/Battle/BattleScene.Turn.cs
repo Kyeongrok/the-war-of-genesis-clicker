@@ -1981,8 +1981,30 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             else if (result == 2 && _timedPercent != 100) (amount, crit) = ((crit ? amount * 100 / Math.Max(1, host._db.N(23)) : amount) * _timedPercent / 100, true);
         }
 
+        // 파트1 대상 거르기(0x10041880, 표 0x1011c084 — Part1Rules.TargetFilter) — 선택자 10~28 은 상태 길(0x10042290)이 맨 먼저 걸러
+        // 떨어지면 결과 3 「Miss」(0x1003e3dd). 편은 안 본다: 같은 편 기계에게 블래스 · 스피디 · 블레이드를 걸어도 Miss.
+        if (host._scene.IsPart1 && Part1.AttackOf(w) is { Formula: >= 10 and <= 28 } filtered && !Part1.TargetFilter(filtered.Formula, t))
+        {
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 filter {a.ChrCode} → unit {Array.IndexOf(host._units, t)} chr {t.ChrCode} {filtered.Name}(식 {filtered.Formula}): 대상 거르기에서 떨어짐 → Miss" + Environment.NewLine);
+            ShowNumber(t, host._db.T(42) is { Length: > 0 } fm ? fm : "Miss", MissColor);
+            return;
+        }
         // 파트1 힐 · 힐 윈드(세기 식 6) — 최대 HP × 세기 ÷ 20000(원본). 보여 주는 꼴은 파트2 회복 그대로.
-        if (result == 1 && host._scene.IsPart1 && Part1.HealAmount(a, t, w) is { } part1Heal) amount = part1Heal;
+        // 기계(칸 10 = 2)는 회복량 0 — 원본은 0 을 「Miss」로 띄운다(0x10041430 → 0x1003dc30).
+        if (result == 1 && host._scene.IsPart1 && Part1.HealAmount(a, t, w) is { } part1Heal)
+        {
+            if (part1Heal == 0 && Part1.IsMachine(t))
+            {
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 heal {a.ChrCode} → unit {Array.IndexOf(host._units, t)} chr {t.ChrCode} work {w.Id}: 기계라 0 → Miss" + Environment.NewLine);
+                ShowNumber(t, host._db.T(42) is { Length: > 0 } hm ? hm : "Miss", MissColor);
+                return;
+            }
+            amount = part1Heal;
+        }
         if (result == 1)
         {
             int before = t.Hp;

@@ -70,12 +70,11 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     {
         if (Fighter(a) is not { } fa || Fighter(t) is not { } ft || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), attackId) is not { } attack)
             return true;
-        // 대상 거르기(0x10041880, 표 0x1011c084) — 선택자 25 · 27 · 28 은 인물 칸 10(+0xb8, 종족으로 보임)이 0 인 사람에게만 듣는다.
-        // 13(쇼크 웨이브)은 거꾸로 칸 10 = 2(기계 — 마장기 · 탱크 · 썬더볼트 · 성문)에게만 듣는다(표 값 3, 0x100418c5).
-        if (attack.Formula is 25 or 27 or 28 && ft.Chr.Fields[10] != 0 || attack.Formula == 13 && ft.Chr.Fields[10] != 2)
+        // 대상 거르기(0x10041880, 표 0x1011c084 — TargetFilter). 25 · 27 · 28 은 보통 사람(칸 10 = 0)이고 큰 유닛이 아닐 때만, 13 은 기계만.
+        if (!TargetFilter(attack.Formula, t))
         {
             if (BattleScene.Trace)
-                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}: 칸 10 = {ft.Chr.Fields[10]} 이라 안 듣는다" + Environment.NewLine);
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}: 대상 거르기 (칸 10 = {ft.Chr.Fields[Part1Chr.KindField]} · 11 = {ft.Chr.Fields[Part1Chr.BigField]}) 라 안 듣는다" + Environment.NewLine);
             return false;
         }
         int power = Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd;
@@ -96,6 +95,46 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     }
 
     /// <summary>
+    /// 대상 거르기 표 <c>0x1011c084</c>(<c>0x10041880(선택자)</c> 가 읽는다, 선택자 0~31 마다 3바이트, 32 이상은 늘 떨어진다). 유닛 바이트를 본다 —
+    /// 첫 바이트 → <c>+0xb8</c>(인물 칸 10 종류: 0 보통 · 1 언데드 · 괴물 · 2 기계 — 마장기 · 탱크 · 썬더볼트 · 성문 · 아지다하카):
+    /// 1 = 0 일 때만 · 2 = 1 일 때만 · 3 = 2 일 때만 · 4 = 2 가 아닐 때만. 둘째 → <c>+0xb9</c>(칸 11 큰 유닛), 셋째 → <c>+0xba</c>(칸 12 난다):
+    /// 1 = 0 일 때만 · 2 = 0 이 아닐 때만(그 밖의 값은 거르지 않는다 — 선택자 6 의 셋째 바이트 4 는 아무 일도 안 한다).
+    /// </summary>
+    /// <remarks>
+    /// 값: 10 · 11 · 12 · 15 · 17~21 · 23 · 26 = (4, 0, 0) · 13 = (3, 0, 0) · 14 · 22 = (4, 1, 0) · 25 · 27 · 28 = (1, 1, 0) · 6 = (0, 0, 4) · 나머지 0.
+    /// 피해 길(<c>0x100413b0</c>) · 상태 길(<c>0x10042290</c>) · AI 어림(<c>0x100410a0</c> · <c>0x1003fd55</c>) 모두 맨 먼저 거르고, 편은 안 본다 —
+    /// 같은 편 기계에게 블래스 · 스피디를 걸어도 「Miss」(결과 3, <c>0x1011c0f8</c>).
+    /// </remarks>
+    private static ReadOnlySpan<byte> FilterTable =>
+    [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,   // 0~9
+        4, 0, 0, 4, 0, 0, 4, 0, 0, 3, 0, 0, 4, 1, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 4, 0, 0,   // 10~19
+        4, 0, 0, 4, 0, 0, 4, 1, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 4, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0,   // 20~29
+        0, 0, 0, 0, 0, 0,   // 30~31
+    ];
+
+    /// <summary>표 <see cref="FilterTable"/> 로 그 선택자가 이 종류 · 큰 유닛 · 나는 값의 대상에게 듣나(<c>0x10041880</c>).</summary>
+    internal static bool TargetFilter(int selector, int kind, int big, int fly)
+    {
+        if (selector is < 0 or >= 32) return false;
+        var row = FilterTable.Slice(selector * 3, 3);
+        bool kindOk = row[0] switch { 1 => kind == 0, 2 => kind == 1, 3 => kind == 2, 4 => kind != 2, _ => true };
+        return kindOk && Flag(row[1], big) && Flag(row[2], fly);
+        static bool Flag(int rule, int value) => rule switch { 1 => value == 0, 2 => value != 0, _ => true };
+    }
+
+    /// <summary>그 대상(탈것이면 탈것의 인물 칸)에게 선택자가 듣나. 파트1 인물이 아니면 늘 듣는다.</summary>
+    internal bool TargetFilter(int selector, UnitState t) =>
+        Fighter(t) is not { } f || TargetFilter(selector, f.Chr.Fields[Part1Chr.KindField], f.Chr.Fields[Part1Chr.BigField], f.Chr.Fields[Part1Chr.FlyField]);
+
+    /// <summary>기계(칸 10 = 2)인가 — 회복(선택자 6)은 표와 따로 이 대상에게 0 을 준다(<c>0x10041430</c> · AI 어림 <c>0x100410f9</c>).</summary>
+    internal bool IsMachine(UnitState t) => Fighter(t)?.Chr.Fields[Part1Chr.KindField] == 2;
+
+    /// <summary>AI 가 그 대상을 그 기술의 대상으로 셀까 — 표에서 떨어지거나 기계에게 회복이면 원본 어림이 0 이다.</summary>
+    internal bool AiAffects(WorkData w, UnitState t) =>
+        AttackOf(w) is not { } attack || TargetFilter(attack.Formula, t) && !(attack.Formula == 6 && IsMachine(t));
+
+    /// <summary>
     /// 속성 부여(유닛 +0x249 화염 · +0x24a 빙한 · +0x24b 전격) — 화이어 · 아이스 · 썬더 블레이드(세기 식 10 · 11 · 12)가 대상에게 건다.
     /// 걸린 동안 그 사람의 무기 공격은 그 속성이 되고 무기 E 가 ×1.2(<c>0x1003f000</c> · <c>0x1003f070</c>, 분석-파트1-전투 9절). 유닛 → 속성(1~3).
     /// </summary>
@@ -104,10 +143,11 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>파트1 강화(블래스 15 · 스피디 17 · 배리어 20 · 쉐도우 실드 22 · 블러드 러스트 23) — 유닛 → 세기 식 → 남은 길이(BattleScene.Part1Support).</summary>
     internal readonly Dictionary<UnitState, Dictionary<int, int>> Buffs = [];
 
-    /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.</summary>
+    /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.
+    /// 기계(칸 10 = 2)에게는 0 — 원본은 그 0 을 「Miss」로 띄운다(<c>0x10041430</c> → <c>0x1003dc30</c>).</summary>
     internal int? HealAmount(UnitState a, UnitState t, WorkData w) =>
         AttackOf(w) is { Formula: 6 } attack && Fighter(a) is { } fa
-            ? (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
+            ? IsMachine(t) ? 0 : (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
             : null;
 
     /// <summary>
@@ -184,9 +224,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// </summary>
     internal static bool ShockRecovers(int soul, int roll) => roll % 150 <= (soul + 150) / 5;
 
-    /// <summary>AI 가 그 대상에게 선택자 13 · 25 · 27 · 28 을 쓸 만한가 — 듣는 종족(13 은 칸 10 = 2, 나머지는 0)이고 그 상태가 없고 막는 상태도 없을 때.</summary>
+    /// <summary>AI 가 그 대상에게 선택자 13 · 25 · 27 · 28 을 쓸 만한가 — 대상 거르기(<see cref="TargetFilter(int, UnitState)"/>)를 지나고 그 상태가 없고 막는 상태도 없을 때.</summary>
     internal bool AilmentWorth(UnitState t, int selector) =>
-        (Fighter(t) is not { } f || f.Chr.Fields[10] == (selector == 13 ? 2 : 0)) && !HasAilment(t, AilmentOf(selector))
+        TargetFilter(selector, t) && !HasAilment(t, AilmentOf(selector))
         && !(selector == 25 && (HasAilment(t, Hypnosis) || HasAilment(t, Confusion))) && !(selector == 28 && HasAilment(t, Hypnosis));
 
     /// <summary>
