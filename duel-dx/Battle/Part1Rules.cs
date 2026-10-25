@@ -290,6 +290,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
+        // 쏘기(선택자 2 · 31)는 AC + 대상 장비 보정 244(총 피해 약화) — 방어 표 0x1004182c(바이트 표 0x1004183c 의 갈래 1 → 0x1004158d).
+        if (selector is 2 or 31) defense += ft.Equipment.Sum(i => i?.Bonus(Part1Bonus.GunGuard) ?? 0);
         if (!magic && t.Status(4) > 0) defense /= 2;
         if (Has(t, 22)) defense = magic ? defense / 2 : defense * 3 / 2;   // 쉐도우 실드 — AC ×1.5 · MR ×0.5
         if (blocked) defense += ft.BlockDefense;
@@ -297,7 +299,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
         if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
-        int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced : fa.Weapon1?.Critical ?? 0;
+        // 치명률은 세기 식이 서술 +0xe 에 넣는다(0x1003f62b~) — 선택자 0~3 은 무기1, 29~31 은 무기2 의 아이템 +0x65, 그 밖(마법 · 살 4 …)은 0.
+        int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced
+            : selector switch { >= 0 and <= 3 => fa.Weapon1?.Critical ?? 0, >= 29 and <= 31 => fa.Weapon2?.Critical ?? 0, _ => 0 };
         // 반격 자세면 결과는 막았어도 6 이다(0x100417c5 가 4 를 덮는다). 치명은 결과 2 · 6 에서만 — 막은 것(4)은 굴리지 않는다(0x100417e4).
         int result = stance == 78 ? CounterHit : blocked ? Blocked : 2;
         bool crit = false;
