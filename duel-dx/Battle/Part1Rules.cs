@@ -322,6 +322,41 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     internal int StanceOf(UnitState u) => Stances.GetValueOrDefault(u);
 
+    /// <summary>
+    /// 유닛 하나의 파트1 전투 상태 — 저장 칸(<see cref="SystemMenu.SaveUnit"/> 의 P1 칸). 원본 유닛 기록(<c>0x100340b0</c> 읽기)이 상태 바이트 +0x246~+0x25c
+    /// (동결 · 쇼크 · 속성 부여 +0x249~ · 강화 · 최면 · 컨디션이상 · 혼란 · 자세 +0x257~ · 집중 +0x25c — 바이트 값이 남은 길이다)를 통째로 싣는다 —
+    /// 리메이크는 그것을 나눠 든 사전(<see cref="Ailments"/> · <see cref="Buffs"/> · <see cref="Enchant"/> · <see cref="Stances"/>)을 싣는다.
+    /// 강화는 (세기 식 · 남은 길이) 짝을 잇대어 적는다. 비었으면 null.
+    /// </summary>
+    internal (int[]? Ailments, int[]? Buffs, int? Enchant, int? Stance) SaveUnit(UnitState u) =>
+        (Ailments.TryGetValue(u, out var set) && set.Count > 0 ? [.. set.Order()] : null,
+         Buffs.TryGetValue(u, out var b) && b.Count > 0 ? [.. b.OrderBy(p => p.Key).SelectMany(p => new[] { p.Key, p.Value })] : null,
+         Enchant.TryGetValue(u, out int e) && e != 0 ? e : null,
+         Stances.TryGetValue(u, out int st) && st != 0 ? st : null);
+
+    /// <summary>불러오기 전에 모두 비운다 — 같은 판에서 불러오면 판을 새로 안 세워 지금 상태가 남는다.</summary>
+    internal void ClearUnitStates()
+    {
+        Enchant.Clear();
+        Buffs.Clear();
+        Ailments.Clear();
+        Stances.Clear();
+    }
+
+    /// <summary>저장한 칸을 그 유닛에 되살린다 — 칸이 없는 옛 세이브면 아무것도 안 건다(예전처럼 모두 풀린 채).</summary>
+    internal void RestoreUnit(UnitState u, int[]? ailments, int[]? buffs, int? enchant, int? stance)
+    {
+        if (ailments is { Length: > 0 }) Ailments[u] = [.. ailments];
+        if (buffs is { Length: >= 2 })
+        {
+            var d = new Dictionary<int, int>();
+            for (int i = 0; i + 1 < buffs.Length; i += 2) d[buffs[i]] = buffs[i + 1];
+            Buffs[u] = d;
+        }
+        if (enchant is > 0 and var en) Enchant[u] = en;
+        if (stance is > 0 and var sn) Stances[u] = sn;
+    }
+
     /// <summary>쉬면 켜질 자세 — 어빌리티 76 · 77 · 78 · 79 · 80 가운데 가진 첫째(<c>0x1003e6e6</c>~). 없거나 파트1 인물이 아니면 0.</summary>
     internal int StanceAbility(UnitState u) =>
         Fighter(u) is { } f ? new[] { 76, 77, 78, 79, 80 }.FirstOrDefault(id => f.Chr.EffectiveLevel(id) >= 0) : 0;   // 쓰는 레벨(0x1009e020) — 지금 직업이 다루는 것만

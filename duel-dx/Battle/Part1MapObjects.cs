@@ -929,7 +929,8 @@ internal sealed class Part1MapObjects(GameWindow host)
     //     뛰면 ③ 을 안 지나 풀리지 않는다(원본 그대로). 상태 1 은 차례를 못 받게 한다(0x10042871).
     // 알림 10(0x10035537): 기계가 아니면 += ⌊5·X/10⌋(X = 0x1003eee0 = 화염 저항(칸 30 + 보정 208) −10~20 + 빙한 부여(+0x24a)면 5), 200 에서 자름.
     // 알림 11(0x10035580): 기계 · 큰 유닛(+0xb9)이 아니면 −= ⌊5·Y/10⌋(Y = 0x1003ef00 = 빙한 저항(칸 31 + 보정 209) −10~20 + 화염 부여(+0x249)면 5), −60 에서 자름.
-    // 온도는 저장에 안 싣는다(상태 · 강화처럼).
+    // 저장: 원본 유닛 기록(바탕 물체 읽기 0x10099980 이 +0x4a 를 읽는다)이 온도를 싣고, 상태 바이트 +0x246~ 와 함께 동결 표지도 다시 단다(0x10034461).
+    // 리메이크는 SaveUnit.P1Heat 으로 싣는다(SaveUnitHeat · RestoreUnitHeat).
 
     /// <summary>유닛을 만들 때의 온도(<c>0x10034871</c>).</summary>
     internal const int UnitStartHeat = 80;
@@ -1235,7 +1236,8 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     /// <summary>
     /// 저장 — 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y, 내구, 온도, 상태, 불붙은 지 몇 시간 틱). 못 읽은 물체는 −1 열.
-    /// 칸의 불(<see cref="AddFire"/>) · 유닛 온도는 싣지 않는다 — 불러오면 꺼지고 기온으로 돌아간다.
+    /// 원본은 물체 몸을 0x154 바이트 통째로 싣는다(<c>0x1009f050</c>) — 온도 +0x4a · 상태 +0x42 · 불붙은 틱 +0x44 · 바쁨 +0x41 이 다 든다.
+    /// 칸의 기운 · 유닛 온도 · 기온은 따로(<see cref="SaveLingering"/> · <see cref="UnitHeat"/> · <see cref="SavedAmbient"/>).
     /// </summary>
     internal int[] Save()
     {
@@ -1244,8 +1246,11 @@ internal sealed class Part1MapObjects(GameWindow host)
             : [o.Motion, o.Frame, o.StampFrame, o.Z, o.AnchorX, o.AnchorY, o.Durability, o.Heat, o.State, host.Btl._tick - o.StateAt])];
     }
 
-    /// <summary>되살리기 — 동작은 지금부터 다시 돈다(틱 0 키는 이미 돈 것으로). 칸 수가 안 맞으면(다른 판) 그대로 둔다. 예전 저장(물체마다 여섯 칸)도 읽는다.</summary>
-    internal void Restore(int[]? saved)
+    /// <summary>
+    /// 되살리기 — 동작은 지금부터 다시 돈다(틱 0 키는 이미 돈 것으로). 칸 수가 안 맞으면(다른 판) 그대로 둔다. 예전 저장(물체마다 여섯 칸)도 읽는다.
+    /// <paramref name="tick"/> 은 불러온 시간 틱 — 불붙은 틱을 거기서 거꾸로 센다(판을 막 세운 지금의 틱으로 세면 타는 물체가 곧바로 다음 단계로 넘어갔다).
+    /// </summary>
+    internal void Restore(int[]? saved, int tick)
     {
         Ensure();
         if (saved == null) return;
@@ -1261,7 +1266,7 @@ internal sealed class Part1MapObjects(GameWindow host)
             (o.Z, o.AnchorX, o.AnchorY) = (saved[at + 3], saved[at + 4], saved[at + 5]);
             if (fields == SaveFields)
             {
-                (o.Durability, o.Heat, o.State, o.StateAt) = (saved[at + 6], saved[at + 7], saved[at + 8], host.Btl._tick - saved[at + 9]);
+                (o.Durability, o.Heat, o.State, o.StateAt) = (saved[at + 6], saved[at + 7], saved[at + 8], tick - saved[at + 9]);
                 o.Busy = o.State is 0 or 1 or 3 or 4 or 5 or 6 || (o.State == 2 && o.Motion is 26 or 28 or 30);
             }
             o.MotionAt = host._lastTime;
@@ -1269,5 +1274,75 @@ internal sealed class Part1MapObjects(GameWindow host)
         }
         _zMode = ZMode.Keep;
         host.Btl.RestampObjects();
+    }
+
+    /// <summary>행동 102 가 바꾼 기온 — 안 바꿨으면 null(맵 머리 값). 원본 전투 세이브가 +0xb96e 를 싣는다(<c>0x10033625</c> · 읽기 <c>0x10033a20</c>).</summary>
+    internal int? SavedAmbient => _ambient;
+
+    /// <summary>기온을 되살린다 — null 이면(옛 세이브 · 안 바꾼 판) 맵 머리 값.</summary>
+    internal void RestoreAmbient(int? ambient)
+    {
+        Ensure();
+        _ambient = ambient;
+        if (ambient is { } a) Log($"p1temp 기온 {a} (불러옴)");
+    }
+
+    private const int LingerFields = 6;
+
+    /// <summary>
+    /// 칸의 기운(땅불 · 얼음 덩이) — 기운마다 (열, 줄, 알림 10 · 11, 모션 r, 놓은 지 몇 시간 틱, 남은 시간 틱). 끝 표지가 선 것은 뺀다.
+    /// 원본은 맵 층 저장이 기술 번호 78~86(화이어 필드) · 115~123(프로즌 아이스) · 9998(화이어 볼의 땅불)의 기운을 싣고 읽는다
+    /// (<c>0x100901c0</c> → <c>0x1007b9e0</c> · <c>0x1007c260</c> · <c>0x1007bf20</c>, 바탕 <c>0x1007b7d0</c>: 놓은 틱 +0x140 · 길이 +0x144).
+    /// </summary>
+    internal int[]? SaveLingering()
+    {
+        Ensure();
+        int tick = host.Btl._tick;
+        var live = _lingering.Where(l => !l.Out).ToList();
+        return live.Count == 0 ? null : [.. live.SelectMany(l => new[] { l.Col, l.Row, l.Notice, l.Motion, tick - l.Start, l.End - tick })];
+    }
+
+    /// <summary>칸의 기운을 되살린다 — 놓을 때의 알림은 다시 안 보낸다(원본 읽기도 몸만 읽는다). <paramref name="tick"/> = 불러온 시간 틱.</summary>
+    internal void RestoreLingering(int[]? saved, int tick)
+    {
+        Ensure();
+        _lingering.Clear();
+        _melting.Clear();
+        if (saved == null || saved.Length % LingerFields != 0) return;
+        for (int at = 0; at < saved.Length; at += LingerFields)
+        {
+            int notice = saved[at + 2];
+            if (notice is not (10 or 11)) continue;
+            var l = new Lingering(saved[at], saved[at + 1], tick - saved[at + 4], tick + saved[at + 5], notice, saved[at + 3]) { DrawFrom = host._lastTime };
+            _lingering.Add(l);
+            Log($"p1temp {LingerName(l)} 불러옴: 놓은 틱 {l.Start} · 끝 틱 {l.End} (지금 {tick})");
+        }
+    }
+
+    /// <summary>그 유닛의 온도를 저장할까 — 파트1 판이면 늘(80 이어도). 시험 훅 온도와 헷갈리지 않게 지금 값 그대로.</summary>
+    internal int SaveUnitHeat(UnitState u) => UnitHeat(u);
+
+    /// <summary>
+    /// 유닛 온도 · 동결 표지를 되살린다 — <paramref name="heat"/> 가 null 인 유닛(옛 세이브)은 처음 값(80)으로. 동결(상태 1)이면 원본 읽기처럼
+    /// 얼음 표지를 다시 달고(<c>0x10034461</c> → <c>0x10041c60(1)</c>) 몸짓을 멈춘다. 상태(<see cref="Part1Rules.Ailments"/>)는 먼저 되살려 둔다.
+    /// </summary>
+    internal void RestoreUnitHeat(IEnumerable<(UnitState Unit, int? Heat)> units)
+    {
+        Ensure();
+        _unitHeat.Clear();
+        _iceMarks.Clear();
+        foreach (var u in host._units) u.AnimFrozen = false;
+        var rules = host.Btl.Part1;
+        foreach (var (u, heat) in units)
+        {
+            if (heat is { } h) _unitHeat[u] = Math.Clamp(h, MinHeat, MaxHeat);
+            if (rules.HasAilment(u, Part1Rules.Frozen) && u.Alive)
+            {
+                u.AnimFrozen = true;
+                _iceMarks[u] = (host._lastTime, -1);
+            }
+            if (heat is { } logged && (logged != UnitStartHeat || u.AnimFrozen))
+                Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode}: 온도 {logged}{(u.AnimFrozen ? " · 동결" : "")} (불러옴)");
+        }
     }
 }

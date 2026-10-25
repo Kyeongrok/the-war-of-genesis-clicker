@@ -43,6 +43,25 @@ internal sealed class Part1EnergyFields(GameWindow host)
         Roll(f);
     }
 
+    /// <summary>
+    /// 저장 — 산 기운마다 (열, 줄, 모션 r, 깐 지 몇 시간 틱). 원본은 맵 층 저장이 기술 152~160 의 기운을 싣는다
+    /// (<c>0x100901c0</c> 의 0x98~0xa0 갈래 → <c>0x1007c660</c>, 바탕 <c>0x1007b7d0</c>: 깐 틱 +0x140 · 길이 +0x144).
+    /// </summary>
+    internal int[]? Save()
+    {
+        var live = _fields.Where(f => f.EndedAt < 0).ToList();
+        return live.Count == 0 ? null : [.. live.SelectMany(f => new[] { f.Col, f.Row, f.Motion, host.Btl._tick - f.Start })];
+    }
+
+    /// <summary>되살리기 — <paramref name="tick"/> = 불러온 시간 틱. 깔 때의 한 번 굴림은 다시 안 한다. 옛 세이브(null)면 비운다.</summary>
+    internal void Restore(int[]? saved, int tick)
+    {
+        _fields.Clear();
+        if (saved == null || saved.Length % 4 != 0) return;
+        for (int at = 0; at < saved.Length; at += 4)
+            _fields.Add(new Field { Col = saved[at], Row = saved[at + 1], Motion = saved[at + 2], Start = tick - saved[at + 3], DrawFrom = host._lastTime });
+    }
+
     /// <summary>시간 틱이 올랐을 때(<see cref="BattleScene.AdvanceTick"/>) — 산 기운마다 제 칸을 굴리고, 길이가 다 된 것은 끝낸다.</summary>
     internal void Step()
     {

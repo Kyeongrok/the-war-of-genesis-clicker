@@ -687,7 +687,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                    bool? OnField = null, int[]? Bonus = null, int Stance = 0, bool? Awake = null, int LastHitBy = -1,
                                    int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null,
                                    int? OriginCol = null, int? OriginRow = null, bool? Detached = null,
-                                   int? StartCol = null, int? StartRow = null, int[]? StatusBy = null, int? StartFacing = null);
+                                   int? StartCol = null, int? StartRow = null, int[]? StatusBy = null, int? StartFacing = null,
+                                   int? P1Heat = null, int[]? P1Ailments = null, int[]? P1Buffs = null, int? P1Enchant = null, int? P1Stance = null);
+
+    // P1 칸 = 파트1 전투 유닛 상태 — 원본 유닛 기록(읽기 0x100340b0)이 온도 +0x4a(바탕 0x10099980)와 상태 바이트 +0x246~+0x25c 를 싣는다.
+    // P1Heat 온도, P1Ailments 동결 1 · 쇼크 2 · 최면 14 · 컨디션이상 15 · 혼란 16, P1Buffs (세기 식 · 남은 길이) 짝(집중 1022 · 아이스 실드 14 …),
+    // P1Enchant 속성 부여 1~3, P1Stance 자세 76~80. 없으면(옛 세이브 · 파트2) 예전처럼 80 · 모두 풀린 채.
 
     // StartCol·StartRow = 배치 단계가 옮긴 처음 자리(불러온 뒤 RESTART 가 Btl 기본 줄로 돌아가지 않게), StatusBy = 상태를 건 유닛의 자리 번호
     // (매 턴 피해로 쓰러뜨렸을 때 EXP 를 받을 사람 — 불러오면 사라졌다). ba-21 outer-rules 7.
@@ -780,6 +785,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     string? Part1 = null,
                                     int[]? Part1Objects = null,    // 파트1 맵 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y) — 행동 707 로 연 벽이 불러온 뒤 다시 닫히지 않게
                                     int[]? Part1Range = null,      // 파트1 전장 범위(행동 103 — 왼, 위, 오른, 아래) — 시작 사건이 정한 범위가 불러온 뒤 맵 전체로 풀리지 않게
+                                    int? Part1Ambient = null,      // 파트1 기온(행동 102 가 바꾼 것, 안 바꿨으면 null) — 원본 전투 세이브의 +0xb96e(0x10033625)
+                                    int[]? Part1Lingering = null,  // 파트1 칸의 기운(땅불 · 얼음 덩이)마다 (열, 줄, 알림, 모션, 놓은 지, 남은 틱) — 원본 맵 층 저장(0x100901c0)
+                                    int[]? Part1Energy = null,     // 파트1 에너지 필드 기운마다 (열, 줄, 모션, 깐 지) — 같은 맵 층 저장의 기술 152~160 갈래
                                     string? SceneTitle = null);    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
                                                                    // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
@@ -991,7 +999,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                     u.LastHitBy is { } hitter ? Array.IndexOf(host._units, hitter) : -1,
                     u.LeaderIndex, u.FormationSlot, u.LegionId, u.LegionPowerPercent, u.OriginCol, u.OriginRow, u.Detached ? true : null,
                     u.StartCol, u.StartRow, [.. u.StatusSource.Select(src => src is { } by ? Array.IndexOf(host._units, by) : -1)],
-                    (int)u.StartFacing))],
+                    (int)u.StartFacing)).Select((s, i) => WithPart1(s, host._units[i], battleSave))],
                 host.StatusScr._inventory.ToDictionary(p => p.Key.ToString(), p => p.Value),
                 // 챕터 안이면 장면 갈래 4(챕터)·챕터 제목으로 적고, 불러올 때 그 챕터로 돌아간다(원본 세이브 머리와 같다).
                 // 모세스 주 화면뿐 아니라 <b>필드·연대표</b>도 챕터 안이다 — 거기서 저장하면 마지막 전투 이름이 적혀
@@ -1052,6 +1060,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null,
                 Part1Objects: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.Save() : null,
                 Part1Range: battleSave && host._scene.IsPart1 ? host.Btl.Part1Range.Save() : null,
+                Part1Ambient: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.SavedAmbient : null,
+                Part1Lingering: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.SaveLingering() : null,
+                Part1Energy: battleSave && host._scene.IsPart1 ? host.Btl.Part1Fields.Save() : null,
                 SceneTitle: host._scene.IsPart1 ? host._scene.Title : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -1063,6 +1074,14 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.Toast($"저장하지 못했습니다: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>파트1 전투판이면 유닛 칸에 파트1 상태(온도 · 상태 · 강화 · 속성 부여 · 자세)를 붙인다 — <see cref="SaveUnit"/> 의 P1 칸.</summary>
+    private SaveUnit WithPart1(SaveUnit s, UnitState u, bool battleSave)
+    {
+        if (!battleSave || !host._scene.IsPart1) return s;
+        var (ailments, buffs, enchant, stance) = host.Btl.Part1.SaveUnit(u);
+        return s with { P1Heat = host.Btl.Part1Objects.SaveUnitHeat(u), P1Ailments = ailments, P1Buffs = buffs, P1Enchant = enchant, P1Stance = stance };
     }
 
     /// <summary>
@@ -1313,6 +1332,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? host._units[foundA] : null;
         host.Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? host._units[foundB] : null;
         RestoreObjects(state);
+        if (host._scene.IsPart1) RestorePart1Battle(state, restored);
         _restartPart1 = null;
 
         // 전투 전 스냅숏(감사5 S5) — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티이고 전투 안 값은 판 부분(유닛)에 따로 있다.
@@ -1460,12 +1480,31 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     }
 
     /// <summary>
+    /// 파트1 전투 상태를 되살린다 — 기온(행동 102) · 칸의 기운(땅불 · 얼음 덩이) · 에너지 필드 · 유닛마다 상태 · 강화 · 속성 부여 · 자세 · 온도(그다음 동결 표지).
+    /// 같은 판에서 불러오면 판을 새로 안 세우므로 먼저 모두 비운다. 칸이 없는 옛 세이브는 맵 기온 · 기운 없음 · 80 · 모두 풀림(예전과 같다).
+    /// 시간 틱 바탕은 세이브 틱(아래에서 <c>_tick</c> 에 넣는 값)이다.
+    /// </summary>
+    private void RestorePart1Battle(SaveState state, List<(UnitState Unit, SaveUnit Save)> restored)
+    {
+        int tick = Math.Max(1, state.Tick);
+        var btl = host.Btl;
+        btl.Part1Objects.RestoreAmbient(state.Part1Ambient);
+        btl.Part1Objects.RestoreLingering(state.Part1Lingering, tick);
+        btl.Part1Fields.Restore(state.Part1Energy, tick);
+        btl.Part1.ClearUnitStates();
+        foreach (var (u, s) in restored)
+            if (!state.InMoses) btl.Part1.RestoreUnit(u, s.P1Ailments, s.P1Buffs, s.P1Enchant, s.P1Stance);
+        btl.Part1Objects.RestoreUnitHeat(restored.Select(r => (r.Unit, state.InMoses ? null : r.Save.P1Heat)));
+        foreach (var (u, _) in restored) host.StatusScr.RefreshUnitStats(u);
+    }
+
+    /// <summary>
     /// 세이브의 물체 칸을 판에 되살린다(원본 <c>0x100e80f0</c> 의 짝) — HP·편·열림/부서짐·충전.
     /// 물체 칸이 없는 옛 세이브는 판을 세운 그대로 둔다. 같은 번호(배치 +0x140)끼리 짝짓고, 안 맞으면 자리 순번으로 본다.
     /// </summary>
     internal void RestoreObjects(SaveState state)
     {
-        if (host._scene.IsPart1) host.Btl.Part1Objects.Restore(state.Part1Objects);
+        if (host._scene.IsPart1) host.Btl.Part1Objects.Restore(state.Part1Objects, Math.Max(1, state.Tick));   // 불러온 시간 틱(아래에서 _tick 에 넣는 값)
         if (host._scene.IsPart1) host.Btl.Part1Range.Restore(state.Part1Range);
         if (state.Objects is not { } saved) return;
         var objects = host.Btl.Objects;
