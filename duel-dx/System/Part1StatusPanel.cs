@@ -151,6 +151,23 @@ internal sealed class Part1StatusPanel(GameWindow host)
         host.UiSprite(Part1Game.ObsBase + 12, item.Icon, 0, x + (size - icon.W) / 2 - icon.X, y + (size - icon.H) / 2 - icon.Y);
     }
 
+    /// <summary>
+    /// 능력치 설명 — 원본 식에서 그 값이 쓰이는 곳(분석-파트1-전투: 피해 세기 식 · 방어 · 회피 · 막기 · 상태이상 · 이동 · 차례 · 처치 보상).
+    /// 싸울 때 능력치는 SOUL 로 깎인다(150 이면 그대로, 0 이면 ⅓) — 여기 보이는 값은 깎기 전이다.
+    /// </summary>
+    private static readonly Dictionary<string, string> StatTips = new()
+    {
+        ["Str"] = "STR — 칼 · 도끼 같은 무기 공격의 세기(무기 공격력 + 10) × STR,$n창 · 활 · 둘째 손 무기 식에도 들어간다$n싸울 때는 SOUL 로 깎인다(150 이면 그대로)",
+        ["Dex"] = "DEX — 피하기 확률(DEX × 100 ÷ (상대 명중값 + DEX)) · 막기 확률$n총 · 단검 공격의 세기((DEX + SKILL) × 무게)$n싸울 때는 SOUL 로 깎인다",
+        ["Int"] = "INT — 마법 피해 · 회복 · 상태이상 거는 힘(INT²)$n싸울 때는 SOUL 로 깎인다",
+        ["Skill"] = "SKILL — 무기 공격의 세기(창 · 활 · 총 · 둘째 손 무기 식)$n싸울 때는 SOUL 로 깎인다",
+        ["Luck"] = "LUCK — 상태이상을 버티는 힘(100 − LUCK % 로 걸린다)$n처치할 때 받는 eld(LUCK × 상대 경험치 ÷ 1000)",
+        ["Spd"] = "SPD — 이동력(SPD × 2 — 평지 한 칸 4, 높이 한 단 +2)",
+        ["Ac"] = "AC — 무기 · 물리 공격을 받을 때의 방어(피해 = 세기 ÷ AC)$n싸울 때는 SOUL 로 깎인다",
+        ["Mr"] = "MR — 마법 공격을 받을 때의 방어(피해 = 세기 ÷ MR)$n상태이상 · 보조 마법이 걸리는 길이에도 들어간다$n싸울 때는 SOUL 로 깎인다",
+        ["Wtp"] = "WTP — 차례가 오는 간격(틱) — 작을수록 자주 움직인다",
+    };
+
     /// <summary>파트1 판의 파트1 인물이면 이 창을 쓴다.</summary>
     internal bool Applies(UnitState u) => host._battleLoaded && host._scene.IsPart1 && u.ChrCode >= Part1Game.ChrBase && !host.Mos._mosesOpen;
 
@@ -337,6 +354,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         Bar("SOUL", soul, 150, 0xFF60A0F0);
         Bar("EXP", chr.Experience % 100, 100, 0xFFF0C060);
 
+        string? hoverStat = null;
         (string Label, int Field)[] stats =
         [
             ("Str", Part1Chr.Str), ("Dex", Part1Chr.Dex), ("Int", Part1Chr.Int),
@@ -346,7 +364,11 @@ internal sealed class Part1StatusPanel(GameWindow host)
         for (int k = 0; k < stats.Length; k++)
         {
             int value = stats[k].Field == Part1Chr.Interval ? chr.ActionInterval : fighter.Stat(stats[k].Field);
-            host.UiText($"{stats[k].Label} {value}", x + 10 + k % 3 * 52, row + k / 3 * 17, GameWindow.White, 11);
+            int sx = x + 10 + k % 3 * 52, sy = row + k / 3 * 17;
+            host.UiText($"{stats[k].Label} {value}", sx, sy, GameWindow.White, 11);
+            // 마우스를 올리면 그 능력치가 어디에 쓰이는지(원본 식 — Part1Combat.Power · Damage · EvadeChance · StatusLands, 사용자 요청).
+            if (hoverStat == null && host._mouse.X >= sx && host._mouse.X < sx + 50 && host._mouse.Y >= sy - 1 && host._mouse.Y < sy + 16)
+                hoverStat = StatTips.GetValueOrDefault(stats[k].Label);
         }
         row += 3 * 17 + 8;
 
@@ -455,6 +477,8 @@ internal sealed class Part1StatusPanel(GameWindow host)
 
         if (host.StatusScr._statusTip is { } shown)
             host.StatusScr.DrawDescriptionTip(shown.Text, shown.X, shown.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+        else if (hoverStat != null)
+            host.StatusScr.DrawDescriptionTip(hoverStat, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
         else if (Part1ItemTip.Text(hoverItem) is { } itemTip)
             host.StatusScr.DrawDescriptionTip(itemTip, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
     }
