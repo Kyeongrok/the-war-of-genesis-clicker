@@ -6,8 +6,17 @@ namespace WarOfGenesis.Assets;
 /// <summary>파트1 맵 물체의 한 장 — 칸 격자(높이 · 지형)와 그림. 그림 자리는 물체 기준점(칸 왼쪽 위, 물체 높이)에서 픽셀로.</summary>
 /// <param name="Heights">칸 높이 A — 0 이 아니면 판 높이를 「물체 높이 + A」로 덮는다(<c>0x100997a3</c>). 0 이면 판 높이를 건드리지 않는다.</param>
 /// <param name="Terrain">칸 지형 B — 판 지형 바이트를 <b>그대로 덮는다</b>(<c>0x1009977e</c>). 비트 1 걷기 금지 · 2 나는 유닛 설 수 없음 · 0x10 「그림만 걸친 칸」(물체 높이를 잴 때 뺀다, <c>0x100979c2</c>).</param>
-/// <param name="Pixels">ARGB — 알파 0 이 비침. 띠 번호 0 은 안 그리고(<c>0x100975c9</c> · <c>0x10097881</c>), 색 0 도 비친다 [H: 맵 윗층과 같은 그리기 0x1001bc60].</param>
-public sealed record Part1MapObjectFrame(int Cols, int Rows, byte[] Heights, byte[] Terrain, int X, int Y, int Width, int Height, uint[] Pixels);
+/// <param name="X">그림 전체(모든 층)의 왼쪽 위 — 물체 기준점에서 픽셀.</param>
+/// <param name="Layers">깊이 층 — 띠마다 적힌 (칸 줄, 높이) 가 같은 띠끼리 모은 그림, (줄, 높이) 차례. 원본은 띠 하나하나를 그 둘로 유닛과 앞뒤를 가린다(<c>0x100978a2</c> → <c>0x1001bc60</c>).</param>
+public sealed record Part1MapObjectFrame(int Cols, int Rows, byte[] Heights, byte[] Terrain, int X, int Y, int Width, int Height, IReadOnlyList<Part1MapObjectLayer> Layers);
+
+/// <summary>
+/// 맵 물체 그림의 깊이 층 — 띠 항목의 바이트 둘(u8 칸 줄 · u8 높이 A, 물체 칸 격자 기준)이 같은 띠를 모은 그림.
+/// 원본은 띠마다 깊이 (줄·40 + 물체 세계 y, A·20 + 물체 세계 z) 를 그리기 목록에 넣고(<c>0x1001bc60</c>) 유닛(깊이 (세계 y, 세계 z + 19), <c>0x100349b6</c>)과 함께
+/// (y, z, 넣은 차례)로 늘어놓아 앞에서부터 그린다(<c>0x1001ad10</c>). 그래서 유닛보다 앞줄이거나 같은 줄에서 더 높은 띠가 유닛을 가린다.
+/// </summary>
+/// <param name="Pixels">ARGB — 알파 0 이 비침. 띠 번호 0 은 안 그리고(<c>0x100975c9</c> · <c>0x10097881</c>), 색 0 도 비친다.</param>
+public sealed record Part1MapObjectLayer(int Row, int Level, int X, int Y, int Width, int Height, uint[] Pixels);
 
 /// <summary>맵 물체 동작의 키 — (틱, 길이, 종류, 인자 6). 꼴은 인물 Obs 의 키와 같고, 처리기는 바탕 틀의 <c>0x10098c70</c>(가상 +0xb4) 이다.</summary>
 public sealed record Part1MapObjectKey(int Start, int Length, int Kind, short[] Args);
@@ -113,14 +122,14 @@ public sealed record Part1MapObject(int Id, IReadOnlyList<Part1MapObjectFrame> F
                 byte[] heights = reader.ReadBytes(cols * rows), terrain = reader.ReadBytes(cols * rows);
                 int layerW = reader.ReadInt16(), layerH = reader.ReadInt16(), layerX = reader.ReadInt16(), layerY = reader.ReadInt16();
                 // 띠 (열, 줄, 타일) — 바탕은 (layerX + i, layerY + j), 윗층은 (layerX + 윗층 x + i, layerY + 윗층 y + j) 에 그린다(0x100973ef · 0x10097681).
-                var strips = new List<(int Col, int Row, int Tile)>();
+                var strips = new List<(int Col, int Row, int Tile, int Depth)>();
                 void ReadStrips(int x0, int y0, int w, int h)
                 {
                     for (int i = 0; i < w * h; i++)
                     {
-                        reader.ReadInt16();                   // u8 두 개 — 그 띠의 칸 줄·높이. 원본은 유닛과 앞뒤를 가리는 깊이로 쓴다(0x100975e6)
+                        int row = reader.ReadByte(), level = reader.ReadByte();   // 그 띠의 칸 줄 · 높이 — 유닛과 앞뒤를 가리는 깊이(0x100978a2)
                         int tile = reader.ReadUInt16();
-                        if (tile != 0) strips.Add((x0 + i % w, y0 + i / w, tile));
+                        if (tile != 0) strips.Add((x0 + i % w, y0 + i / w, tile, row << 8 | level));
                     }
                 }
                 ReadStrips(layerX, layerY, layerW, layerH);
@@ -139,21 +148,29 @@ public sealed record Part1MapObject(int Id, IReadOnlyList<Part1MapObjectFrame> F
 
                 int minC = strips.Count > 0 ? strips.Min(s => s.Col) : 0, maxC = strips.Count > 0 ? strips.Max(s => s.Col) + 1 : 0;
                 int minR = strips.Count > 0 ? strips.Min(s => s.Row) : 0, maxR = strips.Count > 0 ? strips.Max(s => s.Row) + 1 : 0;
-                int width = (maxC - minC) * ObtMap.StripWidth, height = (maxR - minR) * ObtMap.StripHeight;
-                var px = new uint[width * height];
-                foreach (var (col, row, tile) in strips)
+                // 깊이가 같은 띠끼리 한 그림으로 — 층 안에서는 읽은 차례(바탕 → 윗층)로 덮는다.
+                var layers = new List<Part1MapObjectLayer>();
+                foreach (var group in strips.GroupBy(s => s.Depth).OrderBy(g => g.Key))
                 {
-                    int src = tile * stripBytes, sx = (col - minC) * ObtMap.StripWidth, sy = (row - minR) * ObtMap.StripHeight;
-                    for (int y = 0; y < ObtMap.StripHeight; y++)
-                        for (int x = 0; x < ObtMap.StripWidth; x++, src += 2)
-                        {
-                            int c = tiles[src] | tiles[src + 1] << 8;
-                            if (c == 0) continue;
-                            px[(sy + y) * width + sx + x] = 0xFF000000u | (uint)((c >> 10 & 0x1F) * 255 / 31) << 16
-                                                            | (uint)((c >> 5 & 0x1F) * 255 / 31) << 8 | (uint)((c & 0x1F) * 255 / 31);
-                        }
+                    int c0 = group.Min(s => s.Col), c1 = group.Max(s => s.Col) + 1, r0 = group.Min(s => s.Row), r1 = group.Max(s => s.Row) + 1;
+                    int lw = (c1 - c0) * ObtMap.StripWidth, lh = (r1 - r0) * ObtMap.StripHeight;
+                    var px = new uint[lw * lh];
+                    foreach (var (col, row, tile, _) in group)
+                    {
+                        int src = tile * stripBytes, sx = (col - c0) * ObtMap.StripWidth, sy = (row - r0) * ObtMap.StripHeight;
+                        for (int y = 0; y < ObtMap.StripHeight; y++)
+                            for (int x = 0; x < ObtMap.StripWidth; x++, src += 2)
+                            {
+                                int c = tiles[src] | tiles[src + 1] << 8;
+                                if (c == 0) continue;
+                                px[(sy + y) * lw + sx + x] = 0xFF000000u | (uint)((c >> 10 & 0x1F) * 255 / 31) << 16
+                                                             | (uint)((c >> 5 & 0x1F) * 255 / 31) << 8 | (uint)((c & 0x1F) * 255 / 31);
+                            }
+                    }
+                    layers.Add(new Part1MapObjectLayer(group.Key >> 8, group.Key & 0xFF, c0 * ObtMap.StripWidth, r0 * ObtMap.StripHeight, lw, lh, px));
                 }
-                frames.Add(new Part1MapObjectFrame(cols, rows, heights, terrain, minC * ObtMap.StripWidth, minR * ObtMap.StripHeight, width, height, px));
+                frames.Add(new Part1MapObjectFrame(cols, rows, heights, terrain, minC * ObtMap.StripWidth, minR * ObtMap.StripHeight,
+                                                   (maxC - minC) * ObtMap.StripWidth, (maxR - minR) * ObtMap.StripHeight, layers));
             }
 
             int motionCount = reader.ReadInt32();

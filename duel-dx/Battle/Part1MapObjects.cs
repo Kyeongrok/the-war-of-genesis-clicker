@@ -23,7 +23,7 @@ using static DuelDx.GameWindow;
 /// </list>
 /// 안 옮긴 것: 온도(머리 낱말 6 쪽으로 틱마다 1씩, <c>0x10099f60</c>)와 불·얼음 공격이 물체에 열을 더해(<c>0x1009a3b0</c>) 160 을 넘으면 타는 동작(26·28·30 · 32~34)으로
 /// 바뀌는 길, 타는 물체가 곁 유닛을 다치게 하는 것(<c>0x10097af0</c> · 키 6 <c>0x10098d53</c>), 키 11(<c>0x10098f66</c> 물체 뿌리기 [H]).
-/// 그리기 깊이: 원본은 띠마다 (칸 줄, 높이) 바이트로 유닛과 앞뒤를 가리지만(<c>0x1001bc60</c>) 리메이크는 파트2 물체처럼 유닛 <b>뒤</b>에 그린다 [H].
+/// 그리기 깊이: 원본처럼 띠마다 (칸 줄, 높이) 바이트로 유닛과 앞뒤를 가린다(<c>0x1001bc60</c> · 아래 「그리기 깊이」).
 /// </remarks>
 internal sealed class Part1MapObjects(GameWindow host)
 {
@@ -151,11 +151,19 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     /// <summary>
     /// 화면 밖 시험(T 키, <c>DUELDX_TOUCH</c>) — 그 인물을 가장 가까운 닫힌 상자(「열,줄」이면 그 칸의 상자) 몸 아래 칸에 세우고 연다.
-    /// 잠긴 상자를 못 여는 인물이면 알림만 띄운다. TP 는 안 본다. 「place」 는 두 칸 떨어져 세우기만, 「…key」 는 어빌리티 63 을 가진 아군으로.
+    /// 잠긴 상자를 못 여는 인물이면 알림만 띄운다. TP 는 안 본다. 「place」 는 두 칸 떨어져 세우기만, 「…key」 는 어빌리티 63 을 가진 아군으로,
+    /// 「at:열,줄」 은 그 칸에 세우기만.
     /// </summary>
     internal bool TouchNearestForTest(UnitState user, string spec)
     {
         Ensure();
+        // 「at:열,줄」 — 그 칸에 세우기만(물체 뒤에 가려지는지 · 물체 위에 서는 높이를 볼 때).
+        if (spec.StartsWith("at:") && spec[3..].Split(',') is [var sc, var sr] && int.TryParse(sc, out int ac) && int.TryParse(sr, out int ar))
+        {
+            user.ResetTo(ac, ar, keepFacing: true);
+            host.Btl.CenterOnCell(ac, ar);
+            return true;
+        }
         bool place = spec == "place";
         // 「…,key」 — 잠긴 상자를 여는 인물(어빌리티 63)로 바꿔 시험한다.
         if (spec.EndsWith("key"))
@@ -363,10 +371,36 @@ internal sealed class Part1MapObjects(GameWindow host)
         _zMode = ZMode.Keep;
     }
 
-    /// <summary>물체를 그린다 — 키를 돌리고, 자식 그림 가운데 z &lt; 0(그림자 — 땅에 깔린다)을 먼저, 물체 장, 나머지 자식(불꽃) 차례로 [H: 원본은 깊이로 가린다].</summary>
+    // ── 그리기 깊이 ──────────────────────────────────────────────────────────────────────────────────────
+    // 원본(분석-파트1-전투 36.3): 물체 그리기 0x10097390 이 띠마다 깊이 (줄·40 + 물체 세계 y, 높이·20 + 물체 세계 z) 로 그리기 목록에 넣고(0x1001bc60),
+    // 유닛은 (세계 y — 걷는 중이면 칸 사이, 세계 z + 19) 로 넣는다(0x100349b6 · vt+0x70 0x10097f70). 목록은 (y, z, 넣은 차례) 로 늘어놓아
+    // 뒤에서부터 그린다(0x1001ad10 → 0x1001ae70). 리메이크: 물체 그림을 같은 깊이 층(Part1MapObjectLayer)으로 미리 나눠 두고,
+    // DrawObjects 때 그림자(z < 0 자식)만 바로 그리고 나머지 층·자식은 깊이 차례로 모아 둔 뒤 DrawUnits 가 유닛 사이사이에 풀어 그린다.
+    // 열쇠는 세계 단위(칸 40 · 높이 한 단 20) — y · 1,000,000 + z.
+
+    private readonly record struct Pending(long Key, int Seq, uint[]? Pixels, int W, int H, int X, int Y, Part1MapObjectKey? Child, int Age);
+
+    private readonly List<Pending> _pending = [];
+    private int _drawn;
+    // 같은 깊이면 넣은 차례(원본 +0x34) — List.Sort 는 차례를 안 지키므로 차례 번호를 함께 본다.
+    private static readonly Comparison<Pending> ByKey = (a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Seq.CompareTo(b.Seq);
+
+    /// <summary>깊이 열쇠(세계 y, 세계 z) — y 가 먼저, 같으면 z.</summary>
+    internal static long DepthKey(double worldY, int worldZ) => (long)Math.Floor(worldY) * 1_000_000L + worldZ;
+
+    /// <summary>유닛의 깊이 열쇠 — 세계 (40·줄, 20·높이 + 19)(<c>0x100349b6</c>). 높이는 물체까지 찍은 판 높이(통 · 상자 위에 서면 그만큼 높다).</summary>
+    internal static long UnitKey(double row, double height) => DepthKey(row * 40, (int)Math.Round(height * 20) + 19);
+
+    /// <summary>
+    /// 물체를 준비한다 — 키를 돌리고, 그림자(z &lt; 0 자식 — 땅에 깔린다)는 바로 그리고, 장의 깊이 층과 나머지 자식(불꽃)은 깊이 차례로 모아 둔다.
+    /// 모은 것은 <see cref="DrawUntil"/>(유닛 사이) · <see cref="Flush"/>(유닛 다 그린 뒤)가 그린다.
+    /// </summary>
     internal void Draw()
     {
         Ensure();
+        _pending.Clear();
+        _drawn = 0;
+        int viewX0 = host._camX, viewX1 = host._camX + host.ViewWidth, viewY0 = host._camY, viewY1 = host._camY + host.ViewHeight;
         foreach (var o in _objects)
         {
             if (o == null) continue;
@@ -374,9 +408,39 @@ internal sealed class Part1MapObjects(GameWindow host)
             var f = o.Def.Frames[o.Frame];
             int ox = o.Col * TileW, oy = GridTop + host.BoardPad + o.Row * TileH - o.Z * HeightStep;
             DrawChildren(o, ox, oy, under: true);
-            if (f.Width > 0 && f.Height > 0) host.BlitMasked(f.Pixels, f.Width, f.Height, ox + f.X, oy + f.Y);
-            DrawChildren(o, ox, oy, under: false);
+            // 화면 밖 물체의 층은 모으지 않는다 — 넓은 판(물체 100여 개)에서 정렬할 것을 줄인다.
+            bool onScreen = f.Width > 0 && ox + f.X < viewX1 && ox + f.X + f.Width > viewX0 && oy + f.Y < viewY1 && oy + f.Y + f.Height > viewY0;
+            if (onScreen)
+                foreach (var l in f.Layers)
+                    _pending.Add(new(DepthKey(40 * (o.Row + l.Row), 20 * (o.Z + l.Level)), _pending.Count, l.Pixels, l.Width, l.Height, ox + l.X, oy + l.Y, null, 0));
+            if (o.Def.Motion(o.Motion) is not { } m) continue;
+            int tick = TickOf(o), cycle = m.Length > 0 ? tick % m.Length : tick;
+            foreach (var k in m.Keys)
+                if (k.Kind == 2 && k.Start <= cycle && k.Args[4] >= 0)
+                    // 자식은 제 세계 자리(물체 + (a2, a3, a4))의 깊이 — 그림(Obs) 개체라 z + 19(0x100850f2 와 같은 꼴).
+                    _pending.Add(new(DepthKey(40 * o.Row + k.Args[3], 20 * o.Z + k.Args[4] + 19), _pending.Count, null, 0, 0, ox, oy, k, cycle - k.Start));
         }
+        _pending.Sort(ByKey);
+    }
+
+    /// <summary>깊이 열쇠가 <paramref name="key"/> 보다 뒤인 층 · 자식을 그린다 — 유닛 하나를 그리기 바로 앞에.</summary>
+    internal void DrawUntil(long key)
+    {
+        for (; _drawn < _pending.Count && _pending[_drawn].Key < key; _drawn++) DrawPending(_pending[_drawn]);
+    }
+
+    /// <summary>남은 층 · 자식을 다 그린다 — 유닛을 다 그린 뒤.</summary>
+    internal void Flush()
+    {
+        DrawUntil(long.MaxValue);
+        _pending.Clear();
+        _drawn = 0;
+    }
+
+    private void DrawPending(in Pending p)
+    {
+        if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); return; }
+        if (p.Child is { } k) DrawChild(k, p.Age, p.X, p.Y);
     }
 
     /// <summary>
@@ -388,15 +452,17 @@ internal sealed class Part1MapObjects(GameWindow host)
         if (o.Def.Motion(o.Motion) is not { } m) return;
         int tick = TickOf(o), cycle = m.Length > 0 ? tick % m.Length : tick;
         foreach (var k in m.Keys)
-        {
-            if (k.Kind != 2 || k.Start > cycle || (k.Args[4] < 0) != under) continue;
-            int obs = Part1Game.ObsBase + k.Args[0], motion = k.Args[1], age = cycle - k.Start;
-            if (host.UiFor(obs) is not { } sprite) continue;
-            int life = sprite.ShownLength(motion);
-            if (life > 0 && age >= life) continue;
-            int key = sprite.BlendAt(motion, age);
-            host.DrawUi(obs, motion, age, ox + k.Args[2], oy + k.Args[3] * 32 / 40 - k.Args[4] * 12 / 20, BlendOf(key), loop: false, fade: BlendFade(key));
-        }
+            if (k.Kind == 2 && k.Start <= cycle && (k.Args[4] < 0) == under) DrawChild(k, cycle - k.Start, ox, oy);
+    }
+
+    private void DrawChild(Part1MapObjectKey k, int age, int ox, int oy)
+    {
+        int obs = Part1Game.ObsBase + k.Args[0], motion = k.Args[1];
+        if (host.UiFor(obs) is not { } sprite) return;
+        int life = sprite.ShownLength(motion);
+        if (life > 0 && age >= life) return;
+        int key = sprite.BlendAt(motion, age);
+        host.DrawUi(obs, motion, age, ox + k.Args[2], oy + k.Args[3] * 32 / 40 - k.Args[4] * 12 / 20, BlendOf(key), loop: false, fade: BlendFade(key));
     }
 
     private const int SaveFields = 6;

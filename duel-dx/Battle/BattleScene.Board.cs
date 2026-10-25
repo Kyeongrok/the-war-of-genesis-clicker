@@ -360,10 +360,15 @@ internal sealed unsafe partial class BattleScene
         var units = host._units;
 
         // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
-        foreach (int i in Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y))
+        // 파트1 판은 원본 그리기 목록 차례(세계 y, 세계 z + 19 — 0x1001ad10)로 — 맵 물체의 깊이 층(Part1MapObjects)을 유닛 사이사이에 끼워 그린다.
+        var p1 = host._scene.IsPart1 ? Part1Objects : null;
+        var order = p1 == null ? Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y)
+                               : Enumerable.Range(0, units.Length).OrderBy(i => Part1UnitKey(units[i]));
+        foreach (int i in order)
         {
             var unit = units[i];
             if (!unit.Alive || !unit.OnField) continue;
+            p1?.DrawUntil(Part1UnitKey(unit));
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
 
@@ -392,6 +397,22 @@ internal sealed unsafe partial class BattleScene
             bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
             if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
         }
+        p1?.Flush();
+    }
+
+    /// <summary>파트1 유닛의 깊이 열쇠 — 칸 사이를 걷는 중이면 그 사이 줄 · 높이(<see cref="Part1MapObjects.UnitKey"/>).</summary>
+    private long Part1UnitKey(UnitState unit) => Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y));
+
+    /// <summary>
+    /// 물체까지 찍은 걷기 높이(<see cref="WalkHeightAt"/>)를 네 이웃 칸으로 섞은 값 — 파트1 유닛이 서는 높이. 원본은 물체가 판 높이를 덮어써서(<c>0x100996e0</c>)
+    /// 통 · 상자 위에 선 유닛은 그만큼 높이 선다. 파트2 는 맵 높이 그대로(<see cref="GameWindow.HeightPxAt"/>).
+    /// </summary>
+    private double StampedHeightAt(double x, double y)
+    {
+        int x0 = (int)Math.Floor(x), y0 = (int)Math.Floor(y);
+        double fx = x - x0, fy = y - y0;
+        double H(int c, int r, double w) => w == 0 ? 0 : WalkHeightAt(c, r) * w;
+        return H(x0, y0, (1 - fx) * (1 - fy)) + H(x0 + 1, y0, fx * (1 - fy)) + H(x0, y0 + 1, (1 - fx) * fy) + H(x0 + 1, y0 + 1, fx * fy);
     }
 
     /// <summary>차례 표시 그림 — Obs 0163(0x100d1de0 → 0x100e5310(Obs 0xa3, 모션)).</summary>
@@ -442,5 +463,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>인물 발 자리(판 픽셀) — 걷는 중이면 두 칸 사이.</summary>
     internal (int X, int Y) UnitFoot(UnitState unit) =>
         ((int)(unit.X * TileW) + TileW / 2 + (int)unit.EntryX + (int)unit.Shift.X,
-         GridTop + host.BoardPad + (int)(unit.Y * TileH) + TileH / 2 - (int)Math.Round(host.HeightPxAt(unit.X, unit.Y)) + (int)unit.EntryY + (int)unit.Shift.Y);
+         GridTop + host.BoardPad + (int)(unit.Y * TileH) + TileH / 2
+         - (int)Math.Round(host._scene.IsPart1 && host.BoardIsMap ? HeightStep * StampedHeightAt(unit.X, unit.Y) : host.HeightPxAt(unit.X, unit.Y))
+         + (int)unit.EntryY + (int)unit.Shift.Y);
 }
