@@ -345,3 +345,140 @@ internal sealed class Part1TextPainter(GameWindow host)
         return starts;
     }
 }
+
+/// <summary>
+/// 글 쪽 창의 찍기 — 장면 대사 창 <c>0x100a9000</c>(200~208 · 904, 틱 <c>0x100a9190</c>) · 마을 대사 창 <c>0x100a98a0</c>(틱 <c>0x100a9960</c>) ·
+/// 고르기 물음 <c>0x100aa690</c>(틱 <c>0x100aa7e0</c>) · 고를 줄 <c>0x100a9ce0</c>(틱 <c>0x100a9d30</c>)이 같은 틱을 돈다. 틀마다 지나간 창 틱만큼 <see cref="Run"/>.
+/// </summary>
+/// <remarks>
+/// 옵시디안 「분석-파트1-전투」 35.1절. 창 칸: <c>+0x20</c> 창 틱 · <c>+0x110</c> 글 · <c>+0x114</c> 자리 · <c>+0x118</c> 찍는 줄 · <c>+0x94</c>~ 줄 칸(20B, <c>+6</c> 찍은 끝) ·
+/// <c>+0x126</c> 줄 길이 · <c>+0x11a</c> 틱마다 걸음 · <c>+0x14c</c> 빠르기 · <c>+0x148</c> /v 틱 · <c>+0x140/+0x144</c> /d 쉼 · <c>+0x14d</c> 쉼 건너뛰기 · <c>+0x7c</c> 상태(2 찍는 중 · 3 쪽 끝).
+/// <list type="bullet">
+/// <item>쉼(<c>0x100a91c0</c>~): 건너뛰기가 아니고 쉼이 걸려 있으면, 끝나지 않았으면 이 틱은 쉬고 끝났으면 쉼을 풀고 그 틱도 쉰다.</item>
+/// <item>빠르기(<c>0x100a920d</c>, 점프표 <c>0x100a9514</c>): 틱마다 걸음이 1 일 때만 본다 — 0~5 는 (틱 − /v 틱) 이 32 · 16 · 8 · 4 · 3 · 2 로 나뉘어야 한 걸음,
+/// 6 은 1, <b>7~9 는 걸음 수를 2 · 3 · 4 로 바꿔 둔다</b> — 1 이 아니게 되면 다시 안 보므로 그 쪽이 끝날 때까지(또는 단추를 뗄 때까지) 이어진다(원본 그대로).</item>
+/// <item>걸음: <c>/n</c> 둘 · <c>/p</c> 둘(쪽 끝 — 마을 창 틱 <c>0x100a9960</c> 은 /p 를 모르고 셋) · <c>/v</c> 셋(빠르기 · /v 틱) · <c>/d</c> 셋(쉼 = N×10 틱, 걸음이 10000 이 아니면 그 틱을 끝낸다) ·
+/// 그 밖의 「/」 셋 · 글자 하나(한글 2 바이트 = 글자 하나). 줄을 다 찍으면 /p 였거나 끝 줄이면 쪽 끝(상태 3), 아니면 다음 줄(앞 빈칸 건너뜀).</item>
+/// <item>누름(<c>0x100a8f90</c>): 찍는 중이면 틱마다 4 걸음 · 쉼 건너뛰기. 뗌(<c>0x100a8fc0</c>): 찍는 중이면 1 걸음 · 쉼 지킴. 쪽 끝에서 누르면 넘김(<c>0x100a97c0</c>: 소리 0x33, 글 끝이면 닫고 아니면 그 자리부터 다음 쪽 · 걸음 1).</item>
+/// </list>
+/// </remarks>
+internal sealed class Part1TextTyper
+{
+    internal string Text { get; private set; } = "";
+    internal List<Part1Text.Line> Lines { get; private set; } = [];
+
+    /// <summary>글 자리(<c>+0x114</c>) — 쪽 끝에서 다음 쪽이 여기서 시작한다.</summary>
+    internal int Pos { get; private set; }
+
+    /// <summary>찍는 줄(<c>+0x118</c>)과 줄마다 찍은 끝(줄 칸 <c>+6</c>).</summary>
+    internal int Line { get; private set; }
+    private int[] _ends = [];
+
+    /// <summary>쪽을 다 찍었나(상태 3).</summary>
+    internal bool Done { get; private set; }
+
+    private readonly bool _pageCode;
+    private int _tick, _perTick = 1, _speed = 6, _vAt, _delayAt = -1, _delayLen = -1;
+    private bool _skipDelay;
+    private long _lastFrameTick = -1;
+
+    /// <param name="pageCode">찍기가 <c>/p</c> 를 쪽 끝으로 아나 — 장면 대사 · 고르기 창은 안다, 마을 대사 창(<c>0x100a9960</c>)은 모른다.</param>
+    internal Part1TextTyper(bool pageCode = true) => _pageCode = pageCode;
+
+    /// <summary>새 글 — 첫 쪽부터, 빠르기 /v6(창을 지을 때 <c>0x100a8382</c> 와 같다고 봤다 [H]).</summary>
+    internal void Start(string text, List<Part1Text.Line> firstPage)
+    {
+        Text = text;
+        _speed = 6;
+        _vAt = 0;
+        _tick = 0;
+        _delayAt = _delayLen = -1;
+        _skipDelay = false;
+        _lastFrameTick = -1;
+        Page(firstPage);
+    }
+
+    /// <summary>쪽을 새로(<c>0x100a980d</c>~: 줄 0 · 상태 2 · 걸음 1 · 줄 나누기). 빠르기 · /v 틱은 남는다.</summary>
+    internal void Page(List<Part1Text.Line> lines)
+    {
+        Lines = lines;
+        Line = 0;
+        _ends = [.. lines.Select(l => l.Start)];
+        Pos = lines.Count > 0 ? lines[0].Start : Pos;
+        _perTick = 1;
+        Done = lines.Count == 0;
+    }
+
+    /// <summary>누름 · 뗌(<c>0x100a8f90</c> · <c>0x100a8fc0</c>) — 찍는 중일 때만 걸음 · 쉼을 바꾼다.</summary>
+    internal void Hold(bool down)
+    {
+        if (Done) return;
+        (_perTick, _skipDelay) = down ? (4, true) : (1, false);
+    }
+
+    /// <summary>창 틱을 지금 틀 틱(<paramref name="frameTick"/>)까지 돌린다 — 처음 부른 틀은 틱 하나.</summary>
+    internal void Run(long frameTick)
+    {
+        long n = _lastFrameTick < 0 ? 1 : Math.Clamp(frameTick - _lastFrameTick, 0, 600);
+        _lastFrameTick = frameTick;
+        for (long i = 0; i < n && !Done; i++) Tick();
+    }
+
+    private int Digit(int i) => i < Text.Length ? (byte)(Text[i] - '0') : 0xd0;
+
+    private void Tick()
+    {
+        _tick++;
+        if (!_skipDelay && _delayAt != -1)
+        {
+            if (_delayAt + _delayLen > _tick) return;
+            _delayAt = _delayLen = -1;
+            return;
+        }
+        if (_perTick == 1)
+        {
+            switch (_speed)
+            {
+                case 0: if ((_tick - _vAt) % 32 != 0) return; break;
+                case 1: if ((_tick - _vAt) % 16 != 0) return; break;
+                case 2: if ((_tick - _vAt) % 8 != 0) return; break;
+                case 3: if ((_tick - _vAt) % 4 != 0) return; break;
+                case 4: if ((_tick - _vAt) % 3 != 0) return; break;
+                case 5: if ((_tick - _vAt) % 2 != 0) return; break;
+                case 7: _perTick = 2; break;
+                case 8: _perTick = 3; break;
+                case 9: _perTick = 4; break;
+            }
+        }
+        for (int k = 0; k < _perTick; k++)
+        {
+            bool pageEnd = false;
+            int step = 1;
+            if (Pos < Text.Length && Text[Pos] == '/')
+            {
+                char c = Pos + 1 < Text.Length ? Text[Pos + 1] : '\0';
+                if (c is 'n' or 'N') step = 2;
+                else if (_pageCode && c is 'p' or 'P') { step = 2; pageEnd = true; }
+                else if (c is 'v' or 'V') { step = 3; _speed = Digit(Pos + 2); _vAt = _tick; }
+                else if (c is 'd' or 'D')
+                {
+                    _delayAt = _tick;
+                    _delayLen = (Pos + 2 < Text.Length ? Text[Pos + 2] - '0' : -'0') * 10;   // movsx · sub 0x30 — 숫자가 아니면 음수(쉼이 곧 끝난다)
+                    step = 3;
+                    if (_perTick != 10000) { Pos += step; _ends[Line] += step; return; }
+                }
+                else step = 3;
+            }
+            Pos += step;
+            _ends[Line] += step;
+            var l = Lines[Line];
+            if (_ends[Line] - l.Start < l.Length) continue;
+            if (pageEnd || Line >= Lines.Count - 1) { Done = true; return; }
+            Line++;
+            while (Pos < Text.Length && Text[Pos] == ' ') Pos++;
+        }
+    }
+
+    /// <summary>줄 <paramref name="i"/> 의 찍은 끝 — 그리기는 줄 0 부터 찍는 줄까지 [첫 자리, 이 끝) 을 그린다(<c>0x100a9590</c>~).</summary>
+    internal int End(int i) => i < _ends.Length ? Math.Min(_ends[i], Text.Length) : 0;
+}

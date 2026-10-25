@@ -91,12 +91,19 @@ internal sealed class Part1SceneScript(GameWindow host)
     internal Action<int, int>? CameraSet;
 
     /// <summary>필드 고르기(900 [그림, 물음 줄, 변수] + 901 [고를 줄] ×) — 고르면 장면 변수 = 1부터 센 차례(0x100d02b0 → 0x100aa690, 0x101bb14c + 변수).</summary>
-    internal sealed class Choosing(string speaker, string text, int variable)
+    internal sealed class Choosing(string speaker, string text, int variable, string raw = "")
     {
         public readonly string Speaker = speaker, Text = text;
         public readonly int Variable = variable;
         public readonly List<string> Options = [];
+
+        /// <summary>꾸밈째 물음 · 고를 줄 — 창이 꾸밈(<see cref="Part1Text"/>)대로 찍는다(물음 <c>0x100aa690</c> · 줄 <c>0x100a9ce0</c>). <see cref="Text"/> · <see cref="Options"/> 는 꾸밈을 지운 글.</summary>
+        public readonly string Raw = raw;
+        public readonly List<string> RawOptions = [];
     }
+
+    /// <summary>904 · 1104 표 창의 줄들 — 903 한 칸 = [이름, 확률, 글 1, 글 2] 줄 글(꾸밈을 지운 것, 칸은 꾸밈을 안 푼다). 표 창(<see cref="Part1TitleScreen.DrawTableWindow"/>)이 그린다.</summary>
+    internal IReadOnlyList<string[]> PageRows { get; private set; } = [];
 
     /// <summary>떠 있는 고르기 — 행동 1 이 고를 때까지 기다린다.</summary>
     internal Choosing? Choice { get; private set; }
@@ -328,12 +335,16 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>쉬는 중이었으면 때가 됐는지 보고 잇는다 — 필드 화면이 틀마다 부른다.</summary>
     internal void Pump()
     {
+        // 저절로 넘기는 틱 · 성우 뒤 넘김은 쪽을 다 찍은 뒤부터 센다(창 틱 0x100a8685 — 찍는 동안은 상태 2 라 세지 않는다).
+        bool typing = Talk != null && host.Part1TitleScr.TalkTyping;
+        if (typing && _talkAutoAt > 0) _talkAutoAt = host._lastTime + TalkTicks / GameWindow.TicksPerSecond;
+        if (typing && _voiceEnd > 0 && host._lastTime >= _voiceEnd) _voiceEnd = host._lastTime;
         if (Talk != null && _talkAutoAt > 0 && host._lastTime >= _talkAutoAt) { Advance(); return; }
         // 성우 대사는 목소리가 끝나고 조금 뒤 저절로 넘어간다(사용자 요청) — 장이 남았으면 다음 장부터. 받는 중이라 길이를 모르면(30초 어림) 기다리지 않는다.
         if (Talk != null && _voiceEnd > 0 && _voiceKnown && host._lastTime >= _voiceEnd + VoiceAfterSeconds)
         {
             _voiceEnd = 0;
-            if (!host.Part1TitleScr.NextTalkPage()) Advance();
+            if (!host.Part1TitleScr.NextTalkPage(sound: false)) Advance();
             return;
         }
         if (Talk == null && (_waitUntil > 0 || _waitBusy || _waitSound)) Run();
@@ -466,7 +477,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     Faces[slot] = a[0] > 0 ? a[0] : 0;
                     TalkSlot = slot;
                     string raw = a[1] >= 0 && a[1] < _lines.Count ? _lines[a[1]] : "";
-                    if (raw.Length > 0) (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw);
+                    if (raw.Length > 0) { (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw); host.Part1TitleScr.ResetTalk(); }
                     if (c.Code >= 206 && a.Length > 2 && a[2] > 0)
                     {
                         host._mixer.StopEffect(VoiceTag);
@@ -486,6 +497,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     string raw = line >= 0 && line < _lines.Count ? _lines[line] : "";
                     if (raw.Length == 0) break;
                     (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw);
+                    host.Part1TitleScr.ResetTalk();
                     TalkSlot = c.Code == 209 ? BubbleSlot : NarrationSlot;
                     TalkPerson = c.Code == 209 ? a[0] : -1;
                     TalkFace = c.Code == 209 ? a[1] : 0;
@@ -626,22 +638,27 @@ internal sealed class Part1SceneScript(GameWindow host)
             case 900:
             {
                 string raw = A(1) >= 0 && A(1) < _lines.Count ? _lines[A(1)] : "";
-                Choice = new Choosing(Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw), A(2));
+                Choice = new Choosing(Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw), A(2), raw);
+                host.Part1TitleScr.ResetTalk();
                 return true;
             }
             case 901:
-                if (Choice is { } open && A(0) >= 0 && A(0) < _lines.Count) open.Options.Add(Part1Game.PlainText(_lines[A(0)]));
+                if (Choice is { } open && A(0) >= 0 && A(0) < _lines.Count)
+                {
+                    open.Options.Add(Part1Game.PlainText(_lines[A(0)]));
+                    open.RawOptions.Add(_lines[A(0)]);
+                }
                 return true;
             case 902: _pageTable.Clear(); return true;
             case 903: _pageTable.Add([A(0), A(1), A(2), A(3)]); return true;
             case 904:
             {
-                // 표 창(70, 100, 500×285) — 903 한 칸이 한 줄: [이름, 확률, 글 1, 글 2](필드 0034 · 0101 의 참모 의견 「이븐 시나 90% …」).
-                // 칸을 모두 한 창에 쌓는다(넘치면 상자가 쪽을 나눈다). 다 넘기면 잇는다.
+                // 표 창(70, 100, 500×285, 0x100d0440) — 903 한 칸이 한 줄: [이름, 확률, 글 1, 글 2](필드 0034 · 0101 의 참모 의견 「이븐 시나 90% …」).
+                // 원본은 칸을 글 칸(0x100a2570)으로 단다 — 이름 · 확률 · 두 줄 글을 제자리에(Part1TitleScreen.DrawTableWindow). 누르면 닫히고 잇는다.
                 _pages.Clear();
-                string Line(int l) => l >= 0 && l < _lines.Count ? Part1Game.PlainText(_lines[l]).Trim() : "";
-                var rows = _pageTable.Select(r => $"{Line(r[0])}  {Line(r[1])}  {string.Join(" ", r.Skip(2).Select(l => Line(l)).Where(t => t.Length > 0))}".Trim())
-                                     .Where(t => t.Length > 0).ToList();
+                string Line(int l) => l >= 0 && l < _lines.Count ? Part1Game.PlainText(_lines[l]).Replace('\n', ' ').Trim() : "";
+                PageRows = [.. _pageTable.Select(r => r.Select(l => Line(l)).ToArray())];
+                var rows = PageRows.Select(r => string.Join("  ", r.Where(t => t.Length > 0))).Where(t => t.Length > 0).ToList();
                 if (rows.Count > 0) { Talk = ("", string.Join("\n", rows)); TalkSlot = PageSlot; TalkPerson = -1; _talkAutoAt = 0; }
                 return true;
             }

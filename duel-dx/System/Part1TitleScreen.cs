@@ -626,31 +626,130 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     private Part1TextPainter? _paint;
     private Part1TextPainter Paint => _paint ??= new(host);
-    private readonly Dictionary<(string, int, int), List<int>> _pageStarts = [];
+
+    /// <summary>떠 있는 글 쪽 창의 찍기(<see cref="Part1TextTyper"/>) — 한 번에 하나만 뜬다(장면 대사 · 210 띠 · 고르기 물음 · 마을 대사).</summary>
+    private readonly Part1TextTyper _typer = new(), _townTyper = new(pageCode: false);
+    private Part1TextTyper? _talkTyper;
+    private (int W, int H) _talkBox;
+    private bool _held;
+
+    /// <summary>글을 넘기는 단추를 누르고 있나 — 왼 단추 · Enter · Space · 패드 확인(화면 밖 시험에서는 늘 뗀 것).</summary>
+    private bool Held() =>
+        !GameWindow.Offscreen
+        && ((Win32.GetKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 || (Win32.GetKeyState(Win32.VK_RETURN) & 0x8000) != 0
+            || (Win32.GetKeyState(Win32.VK_SPACE) & 0x8000) != 0 || host.Pad.HeldNow(PadAction.Confirm));
+
+    /// <summary>지금 창 틱 — 리메이크 틀 시각 × 30.</summary>
+    private long FrameTick => (long)Math.Floor(host._lastTime * GameWindow.TicksPerSecond);
+
+    /// <summary>꾸밈 글 창이 지금 대사를 들고 있나 — 옛 상자(<see cref="DrawTalkBox"/>)가 그리면 아니다.</summary>
+    private Part1TextTyper? LiveTyper => _talkTyper is { } t && t.Text.Length > 0 && ReferenceEquals(t.Text, _pageText) ? t : null;
+
+    /// <summary>새 대사가 떴다 — 글이 앞 대사와 같아도 처음부터 다시 찍는다(원본은 대사마다 창을 새로 짓는다).</summary>
+    internal void ResetTalk() => _pageText = null;
+
+    /// <summary>대사 쪽을 아직 찍는 중인가 — 성우 · 틱으로 저절로 넘기는 것은 다 찍은 뒤부터(<c>0x100a8685</c> 처럼).</summary>
+    internal bool TalkTyping => LiveTyper is { Done: false };
 
     /// <summary>
     /// 꾸밈째 글을 상자에 — 원본 대사 창 <c>0x100a9000</c> 처럼 글 그리기 <c>0x10018c30</c> 로: 「/m0[이름]」 은 꼴 표 3 · 빛깔 7, 「/m1」 뒤 몸글은 가을체 12pt 굵게,
-    /// /c /f /s /t /w 는 그 자리부터. 줄은 (상자 + 8, 상자 + 8) 부터 폭 − 16 에서 글자로 끊고, 상자 밑 − 8 을 넘거나 /p 면 다음 쪽(누르면 넘긴다).
-    /// [H] 상자 틀 · 한 번에 다 보이는 것(글자씩 찍기 · /d 쉼 없음)은 리메이크 그대로. 줄 나누기 · 쪽은 0x100a7ef0 의 것(0x100a8440)으로 봤다.
+    /// /c /f /s /t /w 는 그 자리부터. 줄은 (상자 + 8, 상자 + 8) 부터 폭 − 16 에서 글자로 끊고(<c>0x100a8440</c>), 상자 밑 − 8 을 넘거나 /p 면 다음 쪽.
+    /// 글은 창 틱(<c>0x100a9190</c>)대로 한 글자씩 찍는다 — /v 빠르기 · /d 쉼, 누르고 있으면 틱마다 4 걸음 · 쉼 없이(<c>0x100a8f90</c>).
+    /// <paramref name="town"/> 이면 마을 대사 창(<c>0x100a98a0</c>, 틱 <c>0x100a9960</c> — /p 를 모른다).
+    /// 그리기(<c>0x100a9540</c>)는 줄 0 부터 찍는 줄까지 찍은 데까지. [H] 상자 틀 · ▼(쪽을 다 찍었을 때만)는 리메이크 것 — 원본 그리기에는 ▼ 가 없다.
     /// </summary>
-    internal void DrawFormattedBox(int bx, int by, int W, int H, string raw, bool arrow = true)
+    internal void DrawFormattedBox(int bx, int by, int W, int H, string raw, bool arrow = true, bool town = false)
     {
         host.UiFill(bx, by, W, H, 0xE8101828);
         host.UiStroke(bx, by, W, H, 0xFF8098C8);
-        var key = (raw, W, H);
-        if (!_pageStarts.TryGetValue(key, out var starts))
+        var typer = town ? _townTyper : _typer;
+        if (!ReferenceEquals(typer, _talkTyper) || !ReferenceEquals(raw, _pageText) && raw != _pageText || _talkBox != (W, H))
         {
-            if (_pageStarts.Count > 64) _pageStarts.Clear();
-            _pageStarts[key] = starts = Paint.PageStarts(raw, W - 16, 8, H - 8);
+            (_talkTyper, _pageText, _talkBox) = (typer, raw, (W, H));
+            typer.Start(raw, Part1Text.Page(raw, 0, W - 16, 8, H - 8, Paint.Width));
+            _held = Held();   // 앞 대사를 넘긴 누름은 이 창의 누름이 아니다(누름은 그때 떠 있던 창이 받는다)
         }
-        if (!ReferenceEquals(raw, _pageText) && raw != _pageText) { _pageText = raw; _page = 0; }
-        _pages = starts.Count;
-        foreach (var l in Part1Text.Page(raw, starts[Math.Clamp(_page, 0, starts.Count - 1)], W - 16, 8, H - 8, Paint.Width))
-            Paint.DrawLine(raw, l, l.End, bx + 8, by);
-        if (arrow && host._lastTime % 0.75 < 0.5) host.UiText("▼", bx + W - 22, by + H - 20, 0xFFFFC060, 12);
+        bool held = Held();
+        if (held != _held) { typer.Hold(held); _held = held; }
+        typer.Run(FrameTick);
+        DrawTyped(typer, bx + 8, by);
+        if (arrow && typer.Done && host._lastTime % 0.75 < 0.5) host.UiText("▼", bx + W - 22, by + H - 20, 0xFFFFC060, 12);
     }
 
-    internal void DrawTalk(int ox, int oy, string speaker, string text) => DrawTalkBox(ox + 24, oy + 340, 592, 124, speaker, text);
+    /// <summary>찍은 데까지 — 줄 0 부터 찍는 줄까지, 줄마다 [첫 자리, 찍은 끝)(<c>0x100a9590</c>~ → <c>0x10018c30</c>).</summary>
+    private void DrawTyped(Part1TextTyper typer, int x, int windowY)
+    {
+        for (int i = 0; i <= typer.Line && i < typer.Lines.Count; i++)
+        {
+            var l = typer.Lines[i];
+            int end = Math.Min(l.End, typer.End(i));
+            if (end > l.Start) Paint.DrawLine(typer.Text, l, end, x, windowY);
+        }
+    }
+
+    /// <summary>고를 줄 창(<c>0x100a9ce0</c>)마다의 찍기 — 줄 차례 → (글, 찍기). 줄 창도 틱 <c>0x100a9d30</c> 로 한 글자씩 찍는다.</summary>
+    private readonly Dictionary<int, (string Raw, Part1TextTyper Typer)> _options = [];
+
+    /// <summary>
+    /// 고를 줄 하나 — 단추 틀(리메이크) 안에 꾸밈째 글을 (+8, +8) 부터 찍는다(그리기 <c>0x100a9540</c> → <c>0x10018c30</c>, 꾸밈 없으면 굴림 9 흰색).
+    /// 짚으면 틀만 밝다(원본은 Obs 111 모션 9 · 13 틀, <c>0x100aa120</c> · <c>0x100aa130</c> [H 틀 그림은 안 옮김]).
+    /// </summary>
+    internal void DrawOptionLine(int key, int x, int y, int w, int h, string raw, bool hot)
+    {
+        host.UiFill(x, y, w, h, hot ? 0xC0305080u : 0x90101828u);
+        host.UiStroke(x, y, w, h, hot ? 0xFFB0D0FFu : 0xFF6078A0u);
+        if (!_options.TryGetValue(key, out var o) || o.Raw != raw)
+        {
+            if (_options.Count > 32) _options.Clear();
+            o = (raw, new Part1TextTyper());
+            o.Typer.Start(raw, Part1Text.Page(raw, 0, w - 16, 8, Math.Max(h - 8, 9), Paint.Width));
+            _options[key] = o;
+        }
+        o.Typer.Run(FrameTick);
+        DrawTyped(o.Typer, x + 8, y);
+    }
+
+    /// <summary>고르기가 닫히면 줄 찍기를 잊는다 — 같은 줄이 다시 나오면 처음부터 찍게.</summary>
+    internal void ClearOptions() => _options.Clear();
+
+    /// <summary>
+    /// 904 · 챕터 1104 표 창(<c>0x100d0440</c>) — 창 (70, 100) 500×285(<c>0x100a9000</c>, 글은 빈칸 하나)에 글 칸(<c>0x100a2570</c>)을 단다. 칸은 꼴 표 0(굴림 9)으로
+    /// 꾸밈을 안 풀고 테두리 글로 찍는다(칸 그리기 <c>0x100190b0</c> → 꼴 표 길). 칸 네모는 (왼, 위, 1, 1)(<c>0x1009f1b0</c>) — 세로 = 위 + (1 − 위 − 글 높이)/2,
+    /// 맞춤 0 은 x = 옮김, 1 은 (1 − 왼 − 글 폭)/2 + 왼(<c>0x100a27f0</c>).
+    /// 머리: 「이  름」 빛깔 7 (0, 30) 옮김 20 · 「신뢰도」 빛깔 4 (230, 30) 가운데 · 「내 … 용」 빛깔 0 (0, 30) 옮김 250.
+    /// 줄 i(903 의 넷 <c>0x101bab48</c> · <c>ab2c</c> · <c>ab10</c> · <c>aaf4</c>): 이름 빛깔 7 (0, 80 + 70i) 옮김 20 · 확률 빛깔 4 (230, 80 + 70i) 가운데 ·
+    /// 글 1 빛깔 0 (0, 80 + 70i) 옮김 180 · 글 2 빛깔 0 (0, 110 + 70i) 옮김 180. 누르면 닫힌다(글이 빈칸 하나라 곧 쪽 끝).
+    /// </summary>
+    internal void DrawTableWindow(int bx, int by, IReadOnlyList<string[]> rows)
+    {
+        (_talkTyper, _pageText, _page, _pages) = (null, null, 0, 0);   // 누르면 곧 닫힌다(넘길 쪽 없음)
+        host.UiFill(bx, by, 500, 285, 0xE8101828);
+        host.UiStroke(bx, by, 500, 285, 0xFF8098C8);
+        var st = Part1Text.Start;
+        void Cell(string text, int left, int top, int align, int offset, int color)
+        {
+            if (text.Length == 0) return;
+            int w = Paint.Width(text, st), h = st.Pixels;
+            int x = align == 1 ? (1 - left - w) / 2 + left : offset;
+            int y = top + (1 - top - h) / 2;
+            Paint.Outlined(text, bx + x, by + y, st, Part1Text.Colors[color]);
+        }
+        Cell("이  름", 0, 30, 0, 20, 7);
+        Cell("신뢰도", 230, 30, 1, 0, 4);
+        Cell("내                          용", 0, 30, 0, 250, 0);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            string At(int k) => k < r.Length ? r[k] : "";
+            Cell(At(0), 0, 80 + 70 * i, 0, 20, 7);
+            Cell(At(1), 230, 80 + 70 * i, 1, 0, 4);
+            Cell(At(2), 0, 80 + 70 * i, 0, 180, 0);
+            Cell(At(3), 0, 110 + 70 * i, 0, 180, 0);
+        }
+    }
+
+    /// <summary>마을 첫 화면의 대사(꾸밈째 글) — 마을 대사 창처럼 찍는다(<c>0x100a98a0</c>). 자리 · 크기는 리메이크 것.</summary>
+    internal void DrawTalk(int ox, int oy, string raw) => DrawFormattedBox(ox + 24, oy + 340, 592, 124, raw, town: true);
 
     internal void DrawTalkBox(int bx, int by, int W, int H, string speaker, string text, bool arrow = true)
     {
@@ -681,9 +780,23 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     private string? _pageText;
     private int _page, _pages;
 
-    /// <summary>대사에 남은 장이 있으면 다음 장으로 넘기고 true — 화면들이 대사를 넘기기 전에 묻는다.</summary>
-    internal bool NextTalkPage()
+    /// <summary>
+    /// 누름 — 화면들이 대사를 넘기기 전에 묻는다. 꾸밈 글 창(<see cref="DrawFormattedBox"/>)은 원본 <c>0x100a97c0</c> 대로: 아직 찍는 중이면 아무것도 안 하고 true
+    /// (누르고 있으면 빨라질 뿐 — 쪽 끝에서 누른 것만 넘긴다, <c>+0x134</c>), 다 찍었으면 소리 0x33 뒤 남은 글이 있으면 그 자리(<c>+0x114</c>)부터 다음 쪽(true), 없으면 false(닫기).
+    /// 옛 상자(<see cref="DrawTalkBox"/>)는 남은 장이 있으면 다음 장으로 넘기고 true.
+    /// </summary>
+    internal bool NextTalkPage(bool sound = true)
     {
+        if (LiveTyper is { } t)
+        {
+            if (!t.Done) return true;
+            if (sound) host.Play(Part1Game.ObsBase + 0x33);
+            int next = t.Pos;
+            if (next >= t.Text.Length || Part1Game.PlainText(t.Text[next..]).Trim().Length == 0) return false;
+            t.Page(Part1Text.Page(t.Text, next, _talkBox.W - 16, 8, _talkBox.H - 8, Paint.Width));
+            _held = Held();
+            return true;
+        }
         if (_page + 1 >= _pages) return false;
         _page++;
         return true;

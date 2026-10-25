@@ -22,7 +22,8 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
     private Action? _onClose;
     private bool _sell, _leaving;
     private int _scroll, _hover = -1;
-    private string _speaker = "", _text = "";
+    /// <summary>대사 창의 꾸밈째 글(「/m0[주인]/m1/n…」) — 마을 대사 창 <c>0x100a98a0</c> 처럼 꾸밈대로 한 글자씩 찍는다.</summary>
+    private string _raw = "";
     private readonly Queue<string> _rumors = [];
     private readonly List<Row> _rows = [];
     private IReadOnlyList<Part1Item>? _items;
@@ -69,12 +70,12 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
 
     private void Say(int lineNo) => SayRaw(line(lineNo));
 
-    private void SayRaw(string raw)
-    {
-        string who = Part1Game.Speaker(raw).Trim();
-        _speaker = who.Length > 0 ? $"[{who}]" : "";
-        _text = Part1Game.PlainText(raw);
-    }
+    private void SayRaw(string raw) { _raw = raw; shell.ResetTalk(); }
+
+    /// <summary>
+    /// 대사 창을 누름 — 원본 대사 창(<c>0x100a97c0</c>)처럼 찍는 중이면 아무것도 안 하고, 다 찍었으면 다음 쪽. 넘길 쪽이 없으면 false(창이 상태 4 — 다 읽음).
+    /// </summary>
+    private bool TalkPage() => _raw.Length > 0 && shell.NextTalkPage();
 
     /// <summary>목록을 다시 세운다(고른 수는 0 으로) — 상점 구입(cab30) · 판매(caf90), 길드는 1102 의 둘.</summary>
     private void Rebuild()
@@ -157,9 +158,10 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
 
     internal void OnClick(int bx, int by)
     {
-        if (_leaving) { Close(); return; }
-        if (_rumors.Count > 0) { SayRaw(_rumors.Dequeue()); return; }
+        if (_leaving) { if (!TalkPage()) Close(); return; }   // 1003 은 작별 줄을 다 읽기(상태 4)를 기다려 닫는다
+        if (_rumors.Count > 0) { if (!TalkPage()) SayRaw(_rumors.Dequeue()); return; }
         int hit = HitAt(bx, by);
+        if (hit < 0 && by - host.Mos.MosesOrigin().Y >= TalkY) { TalkPage(); return; }   // 대사 창 안 — 다음 쪽
         switch (hit)
         {
             case HitExit: Leave(); return;
@@ -178,8 +180,8 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
 
     internal void OnKey(int key)
     {
-        if (_leaving) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) Close(); return; }
-        if (_rumors.Count > 0) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) SayRaw(_rumors.Dequeue()); else if (key == Win32.VK_ESCAPE) _rumors.Clear(); return; }
+        if (_leaving) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE && (key == Win32.VK_ESCAPE || !TalkPage())) Close(); return; }
+        if (_rumors.Count > 0) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) { if (!TalkPage()) SayRaw(_rumors.Dequeue()); } else if (key == Win32.VK_ESCAPE) _rumors.Clear(); return; }
         if (key == Win32.VK_ESCAPE) Leave();
     }
 
@@ -269,7 +271,7 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
             default: DrawPub(art, ox, oy); break;
         }
 
-        shell.DrawTalkBox(ox, oy + TalkY, 640, 120, _speaker, _text, arrow: false);
+        shell.DrawFormattedBox(ox, oy + TalkY, 640, 120, _raw, arrow: false, town: true);   // 대사 창(0x100a98a0, (0, 360) 640×120)
         SmallButton(ox + ExitX, oy + ExitY, "EXIT", _hover == HitExit);
         if (_tip is { Length: > 0 } tip) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, ox, oy, 640, 480);
     }

@@ -481,18 +481,19 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     /// <summary>대사 · 고르기 · 글 쪽 창.</summary>
     private void DrawTalkLayer(int ox, int oy)
     {
-        if (Script.Talk is { } page && Script.TalkSlot == Part1SceneScript.PageSlot)
-            shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                          // 904 글 쪽 창(0x100d04b3)
+        if (Script.Choice == null) shell.ClearOptions();                                       // 고르기가 닫히면 줄 찍기를 잊는다
+        if (Script.Talk != null && Script.TalkSlot == Part1SceneScript.PageSlot)
+            shell.DrawTableWindow(ox + 70, oy + 100, Script.PageRows);                               // 904 표 창(0x100d0440 · 0x100d04b3)
         else if (BubbleTalk) Bubble.Draw(ox, oy);                                                  // 209 말풍선 · 210 해설 띠(Part1Bubble)
         else if (Script.Talk != null) shell.DrawTalk(ox, oy, Script.TalkRaw, Script.TalkSlot, Script.Faces);
         else if (Script.Choice is { } choice)
         {
             // 900 물음 + 901 고를 줄 — 고르면 장면 변수 = 1부터 센 차례(0x100aa690).
-            shell.DrawTalkBox(ox + 64, oy + 336, 511, 111, choice.Speaker, choice.Text);
+            shell.DrawFormattedBox(ox + 64, oy + 336, 511, 111, choice.Raw, arrow: false);   // 물음 창도 꾸밈대로 찍는다(틱 0x100aa7e0)
             for (int i = 0; i < choice.Options.Count; i++)
             {
                 var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
-                shell.DrawButton(ox + x, oy + y, w, h, choice.Options[i], i == _choiceHover);
+                shell.DrawOptionLine(i, ox + x, oy + y, w, h, choice.RawOptions[i], i == _choiceHover);
             }
         }
         else if (Script.Idle) host.UiText("누르면 돌아갑니다", ox + 500, oy + 456, 0xFFB0C0D8, 12);

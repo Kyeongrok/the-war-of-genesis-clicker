@@ -1254,19 +1254,20 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
         DrawCover(view, cx0, cy0);
         (ox, oy) = (cx0, cy0);   // 아래 대사 · 고르기 창은 가운데 640×480 틀
-        if (Events.Talk is { } page && Events.TalkSlot == Part1SceneScript.PageSlot)
-            shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                 // 1104 표 창(0x100a9000, 70 · 100 · 500×285)
+        if (Events.Choice == null) shell.ClearOptions();                                       // 고르기가 닫히면 줄 찍기를 잊는다
+        if (Events.Talk != null && Events.TalkSlot == Part1SceneScript.PageSlot)
+            shell.DrawTableWindow(ox + 70, oy + 100, Events.PageRows);                      // 1104 표 창(0x100a9000, 70 · 100 · 500×285)
         else if (Events.Talk != null && Events.TalkSlot == Part1SceneScript.NarrationSlot)
             shell.DrawFormattedBox(ox + 10, oy + 5, 619, 35, Events.TalkRaw);                 // 210 해설 띠
         else if (Events.Talk != null) shell.DrawTalk(ox, oy, Events.TalkRaw, Events.TalkSlot, Events.Faces);
         else if (Events.Choice is { } choice)
         {
             // 1100 물음 + 1101 고를 줄(0x100aa690 · 0x100aa750) — 고르면 챕터 변수 = 1부터 센 차례.
-            shell.DrawTalkBox(ox + 64, oy + 336, 511, 111, choice.Speaker, choice.Text);
+            shell.DrawFormattedBox(ox + 64, oy + 336, 511, 111, choice.Raw, arrow: false);   // 물음 창도 꾸밈대로 찍는다(틱 0x100aa7e0)
             for (int i = 0; i < choice.Options.Count; i++)
             {
                 var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
-                shell.DrawButton(ox + x, oy + y, w, h, choice.Options[i], i == _choiceHover);
+                shell.DrawOptionLine(i, ox + x, oy + y, w, h, choice.RawOptions[i], i == _choiceHover);
             }
         }
         else if (Picking) DrawPick(ox, oy);

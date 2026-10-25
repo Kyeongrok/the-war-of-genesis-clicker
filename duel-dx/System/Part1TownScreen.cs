@@ -33,8 +33,8 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
     private Action? _onLeave;
     private uint[]? _bg;
     private int _bgW, _bgH;
-    private readonly Queue<(string Speaker, string Text)> _talks = [];
-    private (string Speaker, string Text)? _talk;
+    private readonly Queue<string> _talks = [];
+    private string? _talk;
 
     internal const int ButtonHit = 1000;
 
@@ -114,7 +114,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
     internal void OnClick(int bx, int by)
     {
         if (_window is { _open: true } w) { w.OnClick(bx, by); return; }
-        if (_talk != null) { NextTalk(); return; }
+        if (_talk != null) { if (!shell.NextTalkPage()) NextTalk(); return; }
         if (PanelOpen) { _panel!.OffClick(bx, by); return; }
         int hit = HitAt(bx, by);
         if (hit == ButtonHit) { Leave(); return; }
@@ -141,7 +141,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
     internal void OnKey(int key)
     {
         if (_window is { _open: true } w) { w.OnKey(key); return; }
-        if (_talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE) NextTalk(); return; }
+        if (_talk != null) { if (key is Win32.VK_RETURN or Win32.VK_SPACE or Win32.VK_ESCAPE && !shell.NextTalkPage()) NextTalk(); return; }
         if (PanelOpen)
         {
             if (key == Win32.VK_ESCAPE) _panel!.CloseOff();
@@ -166,7 +166,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
 
     private void Say(string raw)
     {
-        if (raw.Length > 0) _talks.Enqueue((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)));
+        if (raw.Length > 0) _talks.Enqueue(raw);   // 꾸밈째 — 창이 꾸밈대로 찍는다(Part1Text)
     }
 
     private void NextTalk() => _talk = _talks.Count > 0 ? _talks.Dequeue() : null;
@@ -190,7 +190,7 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         int hover = _hover == ButtonHit ? Part1TownMenu.HitExit : _hover >= Part1TownMenu.HitFace ? _hover : _hover >= 0 && _hover < _slots.Length ? _slots[_hover] : -1;
         Menu.Draw(ox, oy, hover);
         if (PanelOpen) _panel!.DrawOff(ox, oy);
-        if (_talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text);
+        if (_talk is { } talk) shell.DrawTalk(ox, oy, talk);
         host.DrawToast();
     }
 }
