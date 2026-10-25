@@ -526,7 +526,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         _entryOwnedLegions = [.. host.Mos._ownedLegions];
         RestartBattle();
         // 새로 거는 전투면 배치 단계(원본 상태 2) — 불러오기(rememberParty: false)는 저장된 판으로 바로 돌아간다.
-        host.Btl.BeginDeployOrDrop(scene, fresh: rememberParty || scene.IsPart1);   // 파트1 판은 파트2 파티를 안 들고 가도(rememberParty: false) 새로 거는 판이다
+        // 파트1 판은 파트2 파티를 안 들고 가도(rememberParty: false) 새로 거는 판이다 — 전투 세이브를 불러온 것(_keepBenchForLoad)만 빼고.
+        host.Btl.BeginDeployOrDrop(scene, fresh: rememberParty || (scene.IsPart1 && !host.Btl._keepBenchForLoad));
         host.Toast($"{scene.Title} — 전투 Btl {scene.Id:D4}");
         return true;
     }
