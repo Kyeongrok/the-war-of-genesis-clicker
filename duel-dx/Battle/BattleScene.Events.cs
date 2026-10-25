@@ -62,6 +62,16 @@ internal sealed unsafe partial class BattleScene
     /// <summary>파트1 행동 205 가 되풀이로 튼 효과음의 표지 — 206 · 전투 끝이 끊는다.</summary>
     internal const int Part1LoopSoundTag = 0x5021;
 
+    /// <summary>파트1 해설 상자(행동 202 · 203) — 처음 쓸 때 만든다.</summary>
+    internal Part1BattleNarration Part1Narration => _part1Narration ??= new(host);
+    private Part1BattleNarration? _part1Narration;
+
+    /// <summary>파트1 해설 상자를 화면 자리(640×480 원점)에 — 판 그리기의 창 차례.</summary>
+    internal void DrawPart1Narration() => _part1Narration?.Draw();
+
+    /// <summary>파트1 해설 상자가 떠 있으면 누름을 받는다.</summary>
+    internal bool OnPart1NarrationClick() => _part1Narration?.Click() == true;
+
     /// <summary>파트1 AI 표(Dats/AI.dat) — 행동 705 가 처음 쓸 때 읽는다.</summary>
     private IReadOnlyList<Part1Ai>? _part1Ais;
 
@@ -71,6 +81,7 @@ internal sealed unsafe partial class BattleScene
 
     internal void LoadEvents(int battleId)
     {
+        _part1Narration?.Reset();                // 해설 상자 크기 200 × 100(0x10021b0e) · 떠 있던 상자 닫기
         _events = [];
         _eventFired = [];
         _eventBgm = null;
@@ -285,6 +296,7 @@ internal sealed unsafe partial class BattleScene
     /// </remarks>
     internal void StepEvent()
     {
+        _part1Narration?.Update();                // 파트1 해설 상자(202)는 칸에 걸린 채 제 틱으로 닫힌다 — 줄을 붙드는 것은 행동 1
         while (_runningEvent >= 0)
         {
             if (_eventRoutine != null)
@@ -330,6 +342,7 @@ internal sealed unsafe partial class BattleScene
                     // 200/202 묶음(45개/31전투)은 함께 들어온다. 전에는 한 명씩 차례로 들어왔다(ba-20 V2).
                     _talkNoWait = false;                                // 행동 1 은 떠 있는 대사도 기다린다
                     if (host.Tlk._talk != null) { _eventPc--; return; }
+                    if (_part1Narration?.IsOpen == true) { _eventPc--; return; }   // 파트1 해설 상자(202)도 — 칸이 끝날 때까지(0x1001eab1~)
                     if (_eventRoutine != null) { _eventRoutineFree = false; _eventPc--; return; }   // 돌던 기술도
                     if (_eventCamPending && CameraBusy && !host.Tlk._talkSkip) { _eventPc--; return; }      // 보내 둔 카메라도
                     _eventCamPending = false;
@@ -1023,8 +1036,15 @@ internal sealed unsafe partial class BattleScene
             // 102 [밝기] 머리 낱말 6 을 바꾸고 맵 층 +0x2c = (a0 + 60)·62/126 − 2(0x1001de20) — 리메이크는 판 밝기(머리 낱말 6)부터 안 그린다(전투 0205 둘).
             // 103 [x1|y1, x2|y2] 전장 범위(+0x1f4..+0x1fa, 맵 크기로 자름)와 그 픽셀 끝(+0x1fc..+0x202)을 바꾼다(0x1001deb0) — 증원이 들어오는 가장자리 ·
             //     이동 · 카메라가 그 범위를 쓰는데 리메이크는 전장 범위가 없다(전투 0193 · 0261).
-            // 203 [폭, 높이] 해설 상자 크기(0x1018ac6a/68, 0x1001eb10) — 202 가 그 크기로 (a0, a1) 에 창 0x100a7ef0 을 띄우는데 리메이크는 202 를 아래 상자(600)로 갈음한다.
-            case Part1Script.Part1Only + 102 or Part1Script.Part1Only + 103 or Part1Script.Part1Only + 203 when host._scene.IsPart1:
+            case Part1Script.Part1Only + 102 or Part1Script.Part1Only + 103 when host._scene.IsPart1:
+                break;
+            // 203 [폭, 높이] 해설 상자 크기(0x1001eb10: 0x1018ac6a = a0 · 0x1018ac68 = a1) · 202 [x, y, 줄] 그 크기로 (x, y) 에 창 0x100a7ef0(0x1001e9b0) —
+            // 필드 209 · 210 과 같은 창(Part1Bubble). 기다리지 않고 칸에 걸어 둔다 — 뒤따르는 행동 1 이 닫힐 때까지 붙든다(분석-파트1-전투 35절).
+            case Part1Script.Part1Only + 203 when host._scene.IsPart1:
+                Part1Narration.SetSize(A(0), A(1));
+                break;
+            case Part1Script.Part1Only + 202 when host._scene.IsPart1:
+                Part1Narration.Show(A(0), A(1), A(2));
                 break;
             case Part1Script.Part1Only + 505 when host._scene.IsPart1:
                 // [eld] 전투 돈(+0xb958) += a0(0x10020a60) — 판을 열 때 무리 돈(0x101a07e0[무리])을 받아 끝에 되돌려 적는다(0x1002de1c · 0x1002df14).

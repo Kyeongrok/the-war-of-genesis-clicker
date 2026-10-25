@@ -1,7 +1,7 @@
 namespace DuelDx;
 
 /// <summary>
-/// 파트1 필드 말풍선(209) · 해설 띠(210) — 원본 창 <c>0x100a7ef0</c>(vtable <c>0x1010a6e4</c>, 그리기 <c>0x100a8ba0</c>, 틱 <c>0x100a8670</c>)를 옮긴 것.
+/// 파트1 필드 말풍선(209) · 해설 띠(210) · 전투 해설 상자(202, <see cref="OpenFixed"/>) — 원본 창 <c>0x100a7ef0</c>(vtable <c>0x1010a6e4</c>, 그리기 <c>0x100a8ba0</c>, 틱 <c>0x100a8670</c>)를 옮긴 것.
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 11.5절. 틀은 창 바탕 <c>0x100a18b0</c> — <b>Obs 111 벌 0</b>(파란 돌 무늬 100×50)을 창에 깔아 섞기 13 · 단계 6(24/31)으로 비치게,
@@ -30,6 +30,9 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     private int _serial = -1;
     private bool _narration;
     private int _ax, _ay, _x, _y, _w, _h, _ticks, _face;
+
+    /// <summary>틀 무늬의 Obs 111 벌 — 0(모션 1, 209 · 210) · 5(모션 9, 전투 202).</summary>
+    private int _frameSet;
     private List<(string Text, uint Color)> _lines = [];
     private readonly List<int> _pageStarts = [];
     private int _page;
@@ -49,9 +52,11 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         _narration = narration;
         _ticks = ticks;
         _face = narration ? 0 : face;
+        _frameSet = 0;
         string full = speaker.Length > 0 ? $"[{speaker}]\n{text}" : text;
         var rows = full.Split('\n');
         int nameRows = speaker.Length > 0 ? 1 : 0;
+        var colored = rows.Select((r, i) => (r, i < nameRows ? NameColor : GameWindow.White)).ToList();
         if (narration) (_ax, _ay, _x, _y, _w, _h) = (320, 15, 10, 5, 619, 35);
         else
         {
@@ -72,12 +77,37 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
             if (f != null && _h <= f.H) { if (_y + _h - f.H < 0) _y = f.H - _h; }
             else if (_y < 0) _y = 0;
         }
+        Layout(colored);
+    }
+
+    /// <summary>
+    /// 자리 · 크기를 정해 연다 — 파트1 전투 해설 202(<c>0x1001e9b0</c>): <c>0x100a7ef0(1, 150, x + 폭/2, y + 높이/2, x, y, 폭, 높이, 0, 글, 0, 판, 0x6f, 9)</c>.
+    /// 이름 · 얼굴 없음, 닻은 창 가운데라 가운데에서 커지며 나온다. 틀은 Obs 111 모션 9 = 벌 5(푸른 돌) — <paramref name="frameSet"/> 에 벌 번호.
+    /// 화면 안으로 미는 것(<c>0x100a822d</c>~)은 정한 자리에도 걸린다 — 자료의 자리는 모두 화면 안이라 아무 일 없다.
+    /// </summary>
+    internal void OpenFixed(int serial, IReadOnlyList<(string Text, uint Color)> rows, int ticks, int x, int y, int w, int h, int frameSet)
+    {
+        _serial = serial;
+        _narration = true;
+        _ticks = ticks;
+        _face = 0;
+        _frameSet = frameSet;
+        (_x, _y, _w, _h) = (x, y, w, h);
+        (_ax, _ay) = (x + w / 2, y + h / 2);
+        if (_x + _w >= ScreenW) _x = ScreenW - _w;
+        if (_x < 0) _x = 0;
+        if (_y + _h >= ScreenH) _y = ScreenH - _h;
+        if (_y < 0) _y = 0;
+        Layout(rows);
+    }
+
+    private void Layout(IReadOnlyList<(string Text, uint Color)> rows)
+    {
         // 줄 나누기(0x100a8440) — 앞 빈칸은 건너뛰고, 「/n」 이나 폭 − 16 을 넘는 글자에서 끊는다(낱말이 아니라 글자에서).
         _lines = [];
-        for (int r = 0; r < rows.Length; r++)
+        foreach (var (row, color) in rows)
         {
-            uint color = r < nameRows ? NameColor : GameWindow.White;
-            string rest = rows[r];
+            string rest = row;
             do
             {
                 rest = rest.TrimStart(' ');
@@ -191,7 +221,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     private void DrawFrame(int x, int y, int w, int h)
     {
         if (w <= 0 || h <= 0) return;
-        art.Tile(art.Frame(FrameObs, 0, 0), x, y, w, h, FrameAlpha);
+        art.Tile(art.Frame(FrameObs, _frameSet, 0) ?? art.Frame(FrameObs, 0, 0), x, y, w, h, FrameAlpha);
         if (w < 10 || h < 10) return;
         const uint Line = 0xFFFFFFFF;
         art.Fill(x + 5, y, w - 10, 1, Line);
