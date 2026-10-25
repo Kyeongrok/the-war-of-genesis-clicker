@@ -44,7 +44,8 @@ internal sealed unsafe partial class BattleScene
         (RingCommand.Rest, 91, 2, "REST"),
         (RingCommand.Item, 89, 4, "ITEM"),
         (RingCommand.Status, 88, 5, "STATUS"),
-        // 행군 — 원본에 없는 편의 명령(사용자 요청). 맞는 그림이 없어 아이콘·이름표 그림 없이(−1) 글자 동그라미로 그린다.
+        // 행군 — 원본에 없는 편의 명령(사용자 요청). 원본(파트1 글 단추 넷 · 파트2 링 0087~0092)에 맞는 그림이 없어 Obs 대신(−1)
+        // 손그림 아이콘(MarchIcon — 군기를 들고 걷는 사람, 링 아이콘 빛깔·숨쉬기)을 그린다. 이름표 그림(0452)에도 MARCH 가 없어 글로 쓴다.
         (RingCommand.March, -1, -1, "MARCH"),
     ];
 
@@ -368,11 +369,12 @@ internal sealed unsafe partial class BattleScene
             bool enabled = RingItemEnabled(command, _ringUnit);
 
             if (hover) host.DrawUi(105, 0, RingTick(_ringHoverAt), x - 1, y - 1, UiBlend.Add);
-            if (!host.DrawUi(iconObs, 1, t, x, y, enabled ? UiBlend.Add : UiBlend.AddDim))
+            if (command == RingCommand.March) host.DrawFrame(MarchIcon.Frame(t), x, y, enabled ? UiBlend.Add : UiBlend.AddDim);
+            else if (!host.DrawUi(iconObs, 1, t, x, y, enabled ? UiBlend.Add : UiBlend.AddDim))
             {
                 // 그림이 없으면 글자로
                 host.FillCircle(x, y, 20, 0xE0142850);
-                string shortName = command == RingCommand.March ? "행군" : hoverName[..3];
+                string shortName = hoverName[..3];
                 var (_, w, h) = host.GetText(shortName, enabled ? White : DimGray);
                 host.DrawText(shortName, x - w / 2, y - h / 2, enabled ? White : DimGray);
             }

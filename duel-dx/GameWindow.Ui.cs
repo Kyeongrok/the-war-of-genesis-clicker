@@ -86,8 +86,15 @@ internal sealed unsafe partial class GameWindow
     /// </param>
     internal bool DrawUi(int obs, int motion, int tick, int x, int y, UiBlend blend, bool loop = true, double fade = 1, bool mirror = false)
     {
-        var clip = _uiClip;
         if (UiFor(obs) is not { } sprite || sprite.FrameAt(motion, tick, loop, mirror) is not { } f) return false;
+        DrawFrame(f, x, y, blend, fade);
+        return true;
+    }
+
+    /// <summary>컷 하나를 (x, y) 에 그린다 — <see cref="DrawUi"/> 의 그리기 몸통. Obs 가 아닌 손그림(<see cref="MarchIcon"/>)도 이 길로 그린다.</summary>
+    internal void DrawFrame(SpriteFrame f, int x, int y, UiBlend blend, double fade = 1)
+    {
+        var clip = _uiClip;
         int left = x + f.X, top = y + f.Y;
         // 그릴 네모를 판과 자르기 네모로 먼저 자른다 — 전에는 픽셀마다 경계를 검사해, 화면보다 큰 필드 그림(층마다 통짜 그림)이 여러 장이면
         // 한 틀에 40~160ms 가 들었다(사용자 보고: Fld 0017 이 툭툭 끊김).
@@ -97,7 +104,7 @@ internal sealed unsafe partial class GameWindow
             x0 = Math.Max(x0, box.Left); x1 = Math.Min(x1, box.Left + box.Width);
             y0 = Math.Max(y0, box.Top); y1 = Math.Min(y1, box.Top + box.Height);
         }
-        if (x0 >= x1 || y0 >= y1) return true;
+        if (x0 >= x1 || y0 >= y1) return;
         var src = f.Px;
         var fb = _fb;
         // 가장 흔한 꼴(불투명 덮어쓰기)은 곧바로 옮긴다.
@@ -112,7 +119,7 @@ internal sealed unsafe partial class GameWindow
                     if ((c & 0xFF000000) != 0) fb[di] = c | 0xFF000000;
                 }
             }
-            return true;
+            return;
         }
         for (int py = y0; py < y1; py++)
         {
@@ -145,7 +152,6 @@ internal sealed unsafe partial class GameWindow
                 _fb[i] = drawn;
             }
         }
-        return true;
     }
 
     /// <summary>
