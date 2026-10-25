@@ -33,17 +33,20 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>적이면 최대 HP 에 난이도 배율을 건다.</summary>
     internal int ScaleMaxHp(UnitState u, int maxHp) =>
-        IsFoeSide(u) ? Math.Max(1, (int)((long)maxHp * DifficultyChoices[_difficulty].HpPercent / 100)) : maxHp;
+        IsFoeSide(u) ? Math.Max(1, (int)((long)maxHp * DifficultyChoices[Part2Difficulty].HpPercent / 100)) : maxHp;
 
     /// <summary>적이 내 편을 때린 피해에 난이도 배율을 건다(적끼리·내 편끼리는 그대로).</summary>
     internal int ScaleDamage(UnitState attacker, UnitState target, int amount) =>
-        IsFoeSide(attacker) && !IsFoeSide(target) ? (int)((long)amount * DifficultyChoices[_difficulty].DamagePercent / 100) : amount;
+        IsFoeSide(attacker) && !IsFoeSide(target) ? (int)((long)amount * DifficultyChoices[Part2Difficulty].DamagePercent / 100) : amount;
 
     /// <summary>
     /// 강화된 AI 를 쓰나 — 어려움 이상의 적만. 원본 AI(<c>0x10060730</c>)는 목록에서 <b>쓸 수 있는 첫 work</b> 을 쓰고,
     /// 대상은 work <c>+0x3e</c> 기준(HP·SOUL 따위의 최댓값)으로 고른다. 강화 AI 는 피해 기술을 모두 재어 가장 많이 깎는 것을 고른다.
     /// </summary>
-    internal bool SmartAi(UnitState u) => _difficulty > 0 && IsFoeSide(u);
+    internal bool SmartAi(UnitState u) => Part2Difficulty > 0 && IsFoeSide(u);
+
+    /// <summary>지금 판에 거는 파트2 난이도 — 파트1 판은 파트1 난이도(<see cref="Part1Difficulty"/>)만 걸고 이것은 보통(원본)으로 둔다(설정 창이 그 쪽 것만 보인다).</summary>
+    private int Part2Difficulty => host._scene.IsPart1 ? 0 : _difficulty;
 
     /// <summary>
     /// 강화 AI 의 대상 점수 — 맞는 적마다 「기대 피해가 그 적 최대 HP 의 몇 ‰ 인가」를 더하고, 쓰러뜨릴 수 있으면 크게 더한다.
