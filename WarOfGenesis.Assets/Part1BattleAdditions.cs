@@ -13,7 +13,13 @@ public static class Part1BattleAdditions
     private static readonly Dictionary<int, (int Event, int Speaker, string Text)[]> Lines = new()
     {
         // 0012 「라쉬카의 역습」 — 시작 인트로(사건 3: 「모두들 정신 바짝차리고 적들을 상대하도록!」) 뒤에 라쉬카가 받는다.
-        [12] = [(3, 27, "웬 놈들이냐! 모두 처리해라!")],
+        // 술탄 편 어쌔신 무리의 지휘관 · 향초로 민심을 흐리는 자(사용자 설명). 아직 상대가 살라딘인 줄 모른다 — 알아보는 것은 사건 4(「라쉬카 너냐!」 「오랫만이군.」).
+        [12] =
+        [
+            (3, 27, "웬 놈들이 감히 이 몸의 일을 방해하러 왔느냐?"),
+            (3, 27, "후후… 마을 놈들은 이미 향에 취해 우리 손안에 있다. 쥐새끼 몇 마리쯤이야."),
+            (3, 27, "어쌔신들이여, 모두 처리해라! 한 놈도 살려 보내지 마라!"),
+        ],
     };
 
     public static Part1Battle Apply(Part1Battle battle)
