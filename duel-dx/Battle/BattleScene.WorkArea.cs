@@ -108,6 +108,9 @@ internal sealed unsafe partial class BattleScene
     /// 파트1 판에서 파트1 인물이 쓰는 이 work 의 겨눔 칸(Attack.dat) — 파트1 기술(work 20000 + Attack, 자기 자리 +0x31 = 4 는 빼고)은 그 칸,
     /// 기본 공격(빌린 파트2 work)은 인물의 기본 공격 칸. 그 밖(파트2 판 · 파트2 인물 · 기술 파일을 가진 파트2 틀 기술)은 null — 파트2 식으로 잰다.
     /// </summary>
+    /// <summary>파트1 사거리에 높이 차를 넣나 — Attack +0x2d, 다만 집중(상태 22, <see cref="Part1Rules.FocusStatus"/>)이 걸려 있으면 0 으로 본다(<c>0x1003909d</c>).</summary>
+    internal bool Part1RangeHeight(Part1Attack p1, UnitState? user) => p1.RangeHeight && !(user != null && Part1.Has(user, Part1Rules.FocusStatus));
+
     internal Part1Attack? Part1AimOf(WorkData w, UnitState? user)
     {
         if (user == null || !host._scene.IsPart1 || Part1.Fighter(user) is null) return null;
@@ -161,7 +164,7 @@ internal sealed unsafe partial class BattleScene
         {
             if (p1.RangeSameHeight && HeightAt(col, row) != HeightAt(fromCol, fromRow)) return false;
             if (!p1.RangeShapeCovers(dx, dy)) return false;
-            var (d1, d2) = WorkDistance(fromCol, fromRow, col, row, p1.RangeHeight, p1.RangeGraded);
+            var (d1, d2) = WorkDistance(fromCol, fromRow, col, row, Part1RangeHeight(p1, user), p1.RangeGraded);
             if (d1 > RangeMaxOf(w, user) || d2 < p1.RangeMin) return false;
             return !p1.RangeSight || HasSight(fromCol, fromRow, col, row);
         }

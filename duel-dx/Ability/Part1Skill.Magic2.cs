@@ -284,8 +284,10 @@ internal sealed partial class Part1Skill
     /// 30틱에 불꽃 20:0(28틱), 44 · 47틱에 83:0 둘(하나는 뒤집어). 20:0 이 지면 불덩이 20:1(소리 4)이 P 에서 A 로 빠르기 1 × 1.2 로 떨어지고,
     /// 닿으면 터짐 48:1 · 불기둥 10:1 · 소리 1. 그때 범위의 칸마다 땅을 기는 불티 64:2 가 A 에서 그 칸으로 가고(빠르기 1 × 1.1), 닿은 칸에 땅불(23 → 96)이 탄다.
     /// </summary>
-    /// <remarks>원본 핸들러에는 맞히는 사건이 없다 — 땅불(<c>0x1007b970</c>)이 붙는 틱(나이 1)에 그 칸의 유닛에게 메시지 10 을 보낸다(<c>0x1007bd90</c>).
-    /// 여기서는 그 땅불이 붙고 한 틱 뒤 그 칸에 선 대상을 친다. 원본의 땅불은 판에 남아 차례 수(+0x144 = 30~49)만큼 탄다 — 여기서는 메테오처럼 틱으로 짧게 태운다.</remarks>
+    /// <remarks>원본은 <b>피해를 주지 않는다</b> — 핸들러(<c>0x10049760</c>)에 피해 서술(<c>0x1003f3c0</c>) · 타격 사건(<c>0x100768f0</c> · <c>0x10076950</c> ·
+    /// <c>0x100769b0</c> · <c>0x10076a10</c>) · 바로 치기(<c>0x1009d440(…, 1, …)</c>)가 없고, 땅불(<c>0x1007b970</c>)은 붙는 틱(나이 1)과 차례 수가 돌 때마다
+    /// 그 칸의 유닛 · 물체에 메시지 10(열, <c>0x1007bd90</c>)만 보낸다. 유닛 메시지 10 은 +0x4a(온도)를 올릴 뿐이다(<c>0x10035537</c>) — 리메이크에 유닛 온도가 없어
+    /// 아무것도 안 한다. 그래서 <c>hit</c> 를 부르지 않는다. 원본의 땅불은 판에 남아 차례 수(+0x144 = 30~49)만큼 탄다 — 여기서는 메테오처럼 틱으로 짧게 태운다.</remarks>
     private int FireField(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         var a = aim;
@@ -304,7 +306,6 @@ internal sealed partial class Part1Skill
         Sound(1, impact + 2);
         int last = impact + 2 + 46;
         List<(int Col, int Row)> area = cells.Count > 0 ? cells : [((int)(a.X / TileW), host.RowAt((int)a.X, (int)a.Y))];
-        var hitDone = new HashSet<int>();
         foreach (var (col, row) in area)
         {
             var c = CellFoot(col, row);
@@ -322,11 +323,7 @@ internal sealed partial class Part1Skill
             int f5 = f4 + hold4 + 2;
             Put(96, m + 6, f5, c.X, c.Y);
             last = Math.Max(last, f5 + Length(96, m + 6));
-            for (int i = 0; i < host._units.Length; i++)
-                if (targets.Contains(i) && host._units[i] is { } u && u.Col == col && u.Row == row && hitDone.Add(i)) HitAt(f1 + 1, i, hit);
         }
-        foreach (int ti in targets)
-            if (hitDone.Add(ti)) HitAt(impact + 3, ti, hit);
         return last + 1;
     }
 
@@ -486,14 +483,16 @@ internal sealed partial class Part1Skill
     /// 프로즌 아이스(공격 115~123, 핸들러 <c>0x1004bee0</c>) — 범위 칸마다(소리 70, 20틱) 보이지 않는 타이머가 칸 가운데로 걸어 들어온 뒤(빠르기 1 × 1.03),
     /// 눈보라 190:0 다섯이 반지름 30 으로 돌고(5틱 간격, 51틱), 40틱 뒤 얼음 118:r 이 솟아 얼음 덩이 118:r+3 으로 남는다.
     /// 원본 얼음 덩이는 판에 남아 차례가 돌 때마다 그 칸의 인물을 식히고(메시지 11) 칸 가운데에서 멀수록 일찍 녹는다(118:r+6).
-    /// 원본에는 피해 묶음이 없다 — 여기서는 덩이가 서는 틱에 그 칸의 대상을 한 번 친다.
+    /// 원본은 <b>피해를 주지 않는다</b> — 핸들러(<c>0x1004bee0</c>)에 피해 서술(<c>0x1003f3c0</c>) · 타격 사건(<c>0x100768f0</c> · <c>0x10076950</c> ·
+    /// <c>0x100769b0</c> · <c>0x10076a10</c>) · 바로 치기(<c>0x1009d440(…, 1, …)</c>)가 없고, 얼음 덩이(<c>0x1007c1b0</c>, vt+0x54 <c>0x1007c490</c>)는
+    /// 메시지 11(냉기)만 보낸다. 유닛 메시지 11 은 기계 · 큰 유닛이 아니면 +0x4a(온도)를 ⌊5·X/10⌋ 내릴 뿐이다(<c>0x10035580</c>, −60 아래로는 안) —
+    /// 리메이크에 유닛 온도가 없어 아무것도 안 한다. 그래서 <c>hit</c> 를 부르지 않는다. 덩이는 여기서 60틱 보이고 녹는다(원본은 차례 수 30·(R+1) − 30·⌊거리/40⌋).
     /// </summary>
     private int FrozenIce(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         Sound(70, 20);
         var area = cells.Count > 0 ? cells : [((int)aim.X / TileW, host.RowAt((int)aim.X, (int)aim.Y))];
         int last = 0;
-        var struck = new HashSet<int>();
         int Sign() => Rand(2) == 0 ? -1 : 1;
         foreach (var (col, row) in area)
         {
@@ -507,11 +506,8 @@ internal sealed partial class Part1Skill
             Put(118, r, rise, px, py);
             Put(118, r + 3, hold, px, py, life: 60);
             Put(118, r + 6, melt, px, py);
-            for (int i = 0; i < host._units.Length; i++)
-                if (targets.Contains(i) && host._units[i] is { } u && u.Col == col && u.Row == row && struck.Add(i)) HitAt(hold + 1, i, hit);
             last = Math.Max(last, Math.Max(a + 2 + 20 + 51, melt + Length(118, r + 6)));
         }
-        foreach (int ti in targets) if (struck.Add(ti)) HitAt(45, ti, hit);
         Later(0, () => host.Btl.CenterOn(aim.X, aim.Y));
         return last + 1;
     }

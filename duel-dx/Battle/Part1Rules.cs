@@ -143,6 +143,14 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>파트1 강화(아이스 실드 14 · 블래스 15 · 스피디 17 · 배리어 20 · 쉐도우 실드 22 · 블러드 러스트 23) — 유닛 → 세기 식 → 남은 길이(BattleScene.Part1Support).</summary>
     internal readonly Dictionary<UnitState, Dictionary<int, int>> Buffs = [];
 
+    /// <summary>
+    /// <see cref="Buffs"/> 에서 집중(Attack 378, <c>0x1006cad0</c>)의 열쇠 — 세기 식(0)이 아니라 상태 22(+0x25c)라 1000 을 더해 겹치지 않게 둔다.
+    /// 핸들러가 t0 에 +0x25c := 40 을 바로 쓰고(<c>0x1006cbd7</c>, 맞히는 사건 없음), 빈 시간 틱마다 1 씩 준다(<c>0x10035150</c> 둘째 목록 3~12 · 22).
+    /// 0 이 아닌 동안 사거리 칠하기(<c>0x10039070</c>)가 Attack +0x2d(사거리에 높이 차 넣기)를 0 으로 본다 — 높이 차가 사거리를 안 깎는다.
+    /// 큐어(<c>0x10042150</c>)는 22 를 안 지운다.
+    /// </summary>
+    internal const int FocusStatus = 1022;
+
     /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.
     /// 기계(칸 10 = 2)에게는 0 — 원본은 그 0 을 「Miss」로 띄운다(<c>0x10041430</c> → <c>0x1003dc30</c>).</summary>
     internal int? HealAmount(UnitState a, UnitState t, WorkData w) =>

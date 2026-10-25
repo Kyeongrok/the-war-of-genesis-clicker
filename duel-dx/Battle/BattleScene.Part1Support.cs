@@ -75,7 +75,12 @@ internal sealed unsafe partial class BattleScene
         {
             case 16:
                 t.ClearStatus();
-                Part1.Buffs.Remove(t);
+                // 큐어는 집중(상태 22)을 안 지운다(0x10042150 의 목록에 없다).
+                if (Part1.Buffs.TryGetValue(t, out var cured))
+                {
+                    foreach (int k in cured.Keys.Where(k => k != Part1Rules.FocusStatus).ToList()) cured.Remove(k);
+                    if (cured.Count == 0) Part1.Buffs.Remove(t);
+                }
                 Part1.Enchant.Remove(t);
                 Part1.CureAilments(t);   // 쇼크(2)는 원본대로 안 풀린다(0x1004223f)
                 Popup(t, "큐어", HealColor2, 12, rise: 88);
@@ -217,6 +222,33 @@ internal sealed unsafe partial class BattleScene
                 if (on)
                     host.DrawUi(Part1Game.ObsBase + 180, motion, tick, fx + 12, fy + (int)(19 * 0.8 - height * 0.6), UiBlend.Alpha);
         }
+    }
+
+    /// <summary>
+    /// 집중(Attack 378, <c>0x1006cad0</c>) — 대상이 판에 있으면 상태 22(+0x25c) := 40(<c>0x1006cbd7</c>, 늘 덮어쓴다). 피해 · 굴림 · 글은 없다.
+    /// </summary>
+    internal void ApplyPart1Focus(UnitState a, UnitState t)
+    {
+        if (!t.Alive || !t.OnField) return;
+        if (!Part1.Buffs.TryGetValue(t, out var buffs)) Part1.Buffs[t] = buffs = [];
+        buffs[Part1Rules.FocusStatus] = 40;
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 support {a.ChrCode} → {t.ChrCode} 집중: 상태 22 = 40 (사거리 높이 차 무시)" + Environment.NewLine);
+        host.StatusScr.RefreshUnitStats(t);
+    }
+
+    /// <summary>
+    /// 기도(Attack 375, <c>0x1006bbe0</c>)의 덧기술 — 다음 명령 칸에 넣은 공격(198 썬 라이트 · 193 힐 윈드5)을 행동 끝에 앞머리 없이 공짜로 쏜다
+    /// (무기 덧기술과 같은 <see cref="_part1Proc"/> 길). 그 work 가 없으면 아무것도 안 한다.
+    /// </summary>
+    internal void QueuePart1FollowUp(UnitState a, int attackId)
+    {
+        var w = Work(Part1Game.ChrBase + attackId);
+        if (w != null) _part1Proc = (Array.IndexOf(host._units, a), w, a.Col, a.Row);
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 follow-up {a.ChrCode}: Attack {attackId} → work {(w != null ? w.Id.ToString() : "없음")}" + Environment.NewLine);
     }
 
     /// <summary>시간 틱마다 파트1 강화의 남은 길이를 1 줄인다(원본 <c>0x10041c00</c>).</summary>

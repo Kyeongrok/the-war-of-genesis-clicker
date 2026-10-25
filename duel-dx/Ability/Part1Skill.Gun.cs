@@ -34,8 +34,8 @@ internal sealed partial class Part1Skill
         366 => GunDash(targets, aim),
         367 => GunWarp(targets, aim),
         382 => GunTaunt(targets, hit),
-        378 => GunFocus(targets, aim, hit),
-        375 => GunPray(targets, aim, hit),
+        378 => GunFocus(targets, aim),
+        375 => GunPray(targets, aim),
         376 => GunSacrifice(targets, aim, hit),
         377 => GunDismantle(targets, hit),
         374 => GunSteal(targets, aim, hit),
@@ -274,9 +274,11 @@ internal sealed partial class Part1Skill
 
     /// <summary>
     /// 집중(378, <c>0x1006cad0</c>) — 소리 1938, 대상 칸 가운데 z+60 에 Obs 56:0(89틱), 그 둘레 ±150px(월드)에서 빛알 백 개(Obs 54 · 57 · 58 · 63 의 모션 2)가
-    /// 그 점으로 모인다(빠르기 1~3 × 1.1). 처음 스물은 0~9틱, 나머지는 i/5 + 10 틱 늦게 떠난다. 원본은 핸들러 때 대상 +0x25c = 40 을 넣는다.
+    /// 그 점으로 모인다(빠르기 1~3 × 1.1). 처음 스물은 0~9틱, 나머지는 i/5 + 10 틱 늦게 떠난다. 원본은 핸들러 때 대상 +0x25c(상태 22) = 40 을 넣는다.
+    /// 맞히는 사건 · 피해 서술이 없다(<c>0x1006cad0</c> — 세기 식 0 이라 <c>hit</c> 를 부르면 같은 편을 쳤다). 그래서 <c>hit</c> 대신 집중을 바로 건다
+    /// (<see cref="Part1Rules.FocusStatus"/> — 사거리가 높이 차에 안 깎인다).
     /// </summary>
-    private int GunFocus(List<int> targets, (double X, double Y) aim, Action<int> hit)
+    private int GunFocus(List<int> targets, (double X, double Y) aim)
     {
         var t = TargetPoint(targets, aim);
         (double X, double Y) c = (t.X, t.Y - 60 * 0.6);
@@ -292,7 +294,8 @@ internal sealed partial class Part1Skill
             Along(obs[Rand(4)], 2, d, AsPath(flight.Prepend(from).ToList(), 2), life: flight.Count);
             last = Math.Max(last, d + flight.Count);
         }
-        foreach (int ti in targets) HitAt(1, ti, hit);
+        foreach (int ti in targets)
+            if (host._units[ti] is { } u) Later(0, () => host.Btl.ApplyPart1Focus(_user, u));
         return last + 1;
     }
 
@@ -319,14 +322,20 @@ internal sealed partial class Part1Skill
 
     /// <summary>
     /// 기도(375, <c>0x1006bbe0</c>) — 대상 칸에 빛기둥 194:0~5(머묾 56틱). 원본은 rand()%100 으로 나눈다: 0~4 면 빛기둥 없이 덧기술 198 「썬라이트」,
-    /// 5~29 면 덧기술 193 「힐윈드5」 + 빛기둥, 30 이상이면 소리 1936 + 빛기둥만(아무 일 없음). 여기서는 늘 빛기둥과 소리를 내고 기둥이 머무는 틱에 부른다.
+    /// 5~29 면 덧기술 193 「힐윈드5」 + 빛기둥(소리 없음), 30 이상이면 소리 1936 + 빛기둥만(아무 일 없음).
+    /// 덧기술은 다음 명령 칸(<c>0x1003a2f0(공격, 0, 0, 0, 0, 1)</c> → 행동 끝 <c>0x1003a350</c> 이 <c>0x10039e60(…, 1)</c>)으로 앞머리 없이 돈다 —
+    /// 둘 다 판 전체를 훑으니 겨눈 칸(0, 0)은 상관없다. 기도 자신은 맞히는 사건 · 피해 서술이 없다(세기 식 8 이라 <c>hit</c> 를 부르면 늘 썬 라이트처럼 고쳤다).
+    /// 리메이크는 덧기술을 무기 덧기술과 같은 길(<see cref="BattleScene._part1Proc"/>)로 행동 끝에 공짜로 쏜다.
     /// </summary>
-    private int GunPray(List<int> targets, (double X, double Y) aim, Action<int> hit)
+    private int GunPray(List<int> targets, (double X, double Y) aim)
     {
+        int r = host._rng.Next(32768) % 100;
+        int follow = r < 5 ? 198 : r < 30 ? 193 : 0;
+        if (follow != 0) host.Btl.QueuePart1FollowUp(_user, follow);
+        if (r < 5) return 1;
         var t = TargetPoint(targets, aim);
-        Sound(1936, 0);
+        if (r >= 30) Sound(1936, 0);
         int end = GunPillar(t.X, t.Y, 0, 56);
-        foreach (int ti in targets) HitAt(Length(194, 0) + 2, ti, hit);
         return end + 1;
     }
 
