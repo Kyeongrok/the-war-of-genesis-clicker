@@ -22,6 +22,12 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal const int CellW = 170, CellH = 34, BandTop = 112, BandBottom = 470, Background = 96, Step = 48;
 
+    /// <summary>
+    /// 연대표 배경음악 — <c>BGMs3</c> 되풀이. 원본 장면 10(<c>0x100d2470</c>)의 돌리기(vt+4 <c>0x100d2d50</c>)가 들어서자마자
+    /// <c>0x100094e0(0x17, 1)</c> 로 걸고(날짜 · 깃발 갈래 없음), 나갈 때 <c>0x10009590</c> 으로 끈다(리메이크는 장면 페이드아웃이 끈다).
+    /// </summary>
+    internal const int Bgm = 23;
+
     internal static readonly (int X, int Y, string Name)[] Back = [(10, 452, "타이틀")];
 
     internal const int ButtonHit = 1000, ScrollUpHit = 1001, ScrollDownHit = 1002, MenuHit = 5000;
@@ -62,6 +68,8 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         _cells = cells;
         _contentH = cells.Length > 0 ? cells.Max(c => c.Item2) + CellH : 0;
         _bg ??= shell.Field.ReadImage(Background).Px;
+        // 이미 이 곡이 돌고 있으면(연대표 안에서 저장 창을 다녀왔을 때 등) 다시 걸지 않는다.
+        if (host._musicId != Part1Game.BgmBase + Bgm) host.PlayMusicFile(Part1Game.BgmBase + Bgm, loop: true);
         _scroll = 0;
         _menu = false;
         _open = true;
