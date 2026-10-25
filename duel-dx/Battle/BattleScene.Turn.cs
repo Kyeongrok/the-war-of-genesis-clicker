@@ -1980,12 +1980,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             _part1ProcBy = a;
             if (Work(Part1Game.ChrBase + proc.Attack) is { } procWork) _part1Proc = (Array.IndexOf(host._units, a), procWork, t.Col, t.Row);
             var used = new List<int>();
-            // 309 암살(Attack 389, 0x1006e860) — 남은 HP 가 500 이하면 굴림 없이 쓰러뜨린다(처치 보상은 여느 처치와 같다), 넘으면 아무 일도 없다.
+            // 309 암살(Attack 389, 0x1006e860) — 원본은 남은 HP 가 500 이하면 굴림 없이 쓰러뜨린다. 리메이크는 HP 1 을 남긴다
+            // (사용자 요청: 터지면 죽어서 너무 억울하다). 1 이하면 아무 일도 없다 · 500 넘어도 아무 일도 없다.
             if (proc.Code == 309)
             {
-                if (t.Hp is > 0 and <= 500)
+                if (t.Hp is > 1 and <= 500)
                 {
-                    t.Hp = 0;
+                    t.Hp = 1;
                     used.Add(389);
                     Popup(t, "암살", AilmentPopupColor, 12, rise: 88);
                 }
