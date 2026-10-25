@@ -1567,23 +1567,23 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     // ── 글자 ─────────────────────────────────────────────────────────────────
 
-    internal (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f)
+    internal (uint[] Px, int W, int H) GetText(string text, uint argb, float size = 13f, string? face = null, bool bold = true)
     {
         size = FontSize(size);
-        string key = text + ":" + argb + ":" + size;
+        string key = text + ":" + argb + ":" + size + (face == null && bold ? "" : ":" + face + ":" + bold);
         if (_textCache.TryGetValue(key, out var cached)) return cached;
 
         var color = Color.FromArgb((int)argb);
-        var made = TextRaster.Render(text, color, size) ?? ([], 0, 0);
+        var made = TextRaster.Render(text, color, size, face, bold) ?? ([], 0, 0);
         if (_textCache.Count > 500) _textCache.Clear();
         _textCache[key] = made;
         return made;
     }
 
-    internal void DrawText(string text, int x, int y, uint argb, float size = 13f)
+    internal void DrawText(string text, int x, int y, uint argb, float size = 13f, string? face = null, bool bold = true)
     {
         if (text.Length == 0) return;
-        var (px, w, h) = GetText(text, argb, size);
+        var (px, w, h) = GetText(text, argb, size, face, bold);
         if (w > 0) BlitMasked(px, w, h, x, y + (int)Math.Round(FontShift(size)));
     }
 

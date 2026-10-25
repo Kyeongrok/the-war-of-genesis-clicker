@@ -44,8 +44,7 @@ internal sealed class Part1BattleTalk(GameWindow host)
     /// <summary>200 을 창으로 — 띄울 것이 없으면 null(줄을 그냥 지나간다).</summary>
     internal TalkBox.TalkWindow? Open(int speakerArg, int speaker, string raw)
     {
-        var rows = Part1BattleNarration.Rows(raw);
-        if (rows.Count == 0) return null;
+        if (Part1Game.PlainText(raw).Trim().Length == 0) return null;
         var bubble = new Part1Bubble(host, _art);
         var (ox, oy) = host.Mos.MosesOrigin();
         string name;
@@ -55,7 +54,7 @@ internal sealed class Part1BattleTalk(GameWindow host)
             name = chr?.ShortName is { Length: > 0 } shortName ? shortName : host._names.GetValueOrDefault(u.ChrCode, "");
             bool ally = u.Side is 4 or 3;
             var (fx, fy) = host.Btl.UnitFoot(u);
-            bubble.OpenBattle(++_serial, name, Part1BattleNarration.Colors[ally ? 7 : 8], rows, chr?.BustId ?? 0, Ticks,
+            bubble.OpenBattle(++_serial, name, Part1Text.Colors[ally ? 7 : 8], raw, chr?.BustId ?? 0, Ticks,
                               fx - ox, fy - oy, -1, -1, ally ? AllySet : EnemySet);
         }
         else
@@ -63,7 +62,7 @@ internal sealed class Part1BattleTalk(GameWindow host)
             if (speakerArg is < 0 or >= PersonCount || Chr(speakerArg) is not { } person) return null;
             name = person.ShortName.Length > 0 ? person.ShortName : person.Name;
             var (w, h) = host.Btl.Part1Narration.Size;
-            bubble.OpenBattle(++_serial, name, Part1BattleNarration.Colors[7], rows, person.BustId, Ticks,
+            bubble.OpenBattle(++_serial, name, Part1Text.Colors[Part1Text.NameColor], raw, person.BustId, Ticks,
                               -10, -10, 320 - w, 240 - h, AbsentSet);
         }
         return new TalkBox.TalkWindow { Kind = 601, Speaker = speaker, Name = name, Text = Part1Game.PlainText(raw), Part1 = bubble };

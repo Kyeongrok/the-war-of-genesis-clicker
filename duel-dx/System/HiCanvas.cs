@@ -160,28 +160,28 @@ internal sealed unsafe class HiCanvas(GameWindow host) : IDisposable
     }
 
     /// <summary>글의 크기를 판 좌표로 — 가운데 · 오른쪽 맞춤 셈에 쓴다.</summary>
-    internal (int W, int H) Measure(string text, uint color, float size = 13f)
+    internal (int W, int H) Measure(string text, uint color, float size = 13f, string? face = null, bool bold = true)
     {
-        var (_, w, h) = Glyphs(text, color, size);
+        var (_, w, h) = Glyphs(text, color, size, face, bold);
         return ((int)Math.Ceiling(w / Zoom), (int)Math.Ceiling(h / Zoom));
     }
 
-    internal void DrawText(string text, int x, int y, uint color, float size = 13f)
+    internal void DrawText(string text, int x, int y, uint color, float size = 13f, string? face = null, bool bold = true)
     {
         if (text.Length == 0) return;
-        var (px, w, h) = Glyphs(text, color, size);
+        var (px, w, h) = Glyphs(text, color, size, face, bold);
         if (w <= 0 || h <= 0) return;
         int left = Sx(x), top = Sy(y) + (int)Math.Round(host.FontShift(size) * Zoom);
         Add(new Cmd { Kind = Kind.Text, X0 = left, Y0 = top, X1 = left + w, Y1 = top + h, Data = px, W = w, H = h, Color = 0xFFFFFFFF });
     }
 
     /// <summary>글을 「크기 × 글자 크기 설정 × 배율」로 굽는다 — 배율이나 설정이 바뀌면 열쇠가 달라져 새로 굽는다.</summary>
-    private (uint[] Px, int W, int H) Glyphs(string text, uint color, float size)
+    private (uint[] Px, int W, int H) Glyphs(string text, uint color, float size, string? face = null, bool bold = true)
     {
         float real = (float)Math.Round(host.FontSize(size) * Zoom * 4) / 4;
-        string key = text + ":" + color + ":" + real;
+        string key = text + ":" + color + ":" + real + (face == null && bold ? "" : ":" + face + ":" + bold);
         if (_text.TryGetValue(key, out var cached)) return cached;
-        var made = TextRaster.Render(text, Color.FromArgb((int)color), real) ?? ([], 0, 0);
+        var made = TextRaster.Render(text, Color.FromArgb((int)color), real, face, bold) ?? ([], 0, 0);
         if (_text.Count > 400) _text.Clear();
         return _text[key] = made;
     }

@@ -1,6 +1,5 @@
 namespace DuelDx;
 
-using System.Text.RegularExpressions;
 using WarOfGenesis.Assets;
 
 /// <summary>
@@ -17,8 +16,8 @@ using WarOfGenesis.Assets;
 /// <item>기다림: 창은 쪽을 다 찍은 뒤 150틱이 지나면 다음 쪽 · 닫기(창 <c>0x100a8685</c>). 202 는 칸에 걸어 둘 뿐이라 줄을 붙드는 것은 뒤따르는 행동 1 이다(실행기 <c>0x100229b0</c>) —
 /// 0053 · 0169 · 0394 는 202 뒤 503 · 702 가 상자가 뜬 채 돌고, 0138 은 증원이 들어오는 동안 상자가 떠 있다.</item>
 /// <item>누름: 창의 누름 처리는 안 봤다 [H: 필드 말풍선처럼 찍는 중이면 쪽을 다 보이고, 다 찍었으면 넘김]. 건너뛰기(Esc)면 곧바로 닫는다(리메이크 갈음).</item>
-/// <item>글 꾸밈(<c>0x10018c94</c> 표): /cN 빛깔 · /fN 꼴 이름 · /sN 크기 · /wN 굵기 · /tN 꼴 표 차례 · /m0 · /m1. 리메이크는 /c 만 줄 단위로 따르고
-/// (줄 첫 글자 때의 빛깔 [H]) 나머지 꼴 바꾸기는 지운다 — 0415 · 0420 의 「/s3」 · 0195 의 「/t3」 은 크기 · 꼴이 원본과 다르다 [H].</item>
+/// <item>글 꾸밈(/c /f /s /t /w /m · /n /p /d /v)은 창이 그대로 푼다(<see cref="Part1Text"/>) — 꾸밈 없는 줄은 꼴 표 0(굴림 9pt) 흰색,
+/// 0415 · 0420 의 「/s3」 은 굴림 12pt(보통 굵기), 0195 의 「/c6/t3」 은 굴림 12pt 굵게 빛깔 6.</item>
 /// </list>
 /// </remarks>
 internal sealed class Part1BattleNarration(GameWindow host)
@@ -31,10 +30,6 @@ internal sealed class Part1BattleNarration(GameWindow host)
 
     /// <summary>판을 열 때의 크기(<c>0x10021b0e</c> · <c>0x10021b17</c>).</summary>
     private const int DefaultW = 200, DefaultH = 100;
-
-    /// <summary>빛깔 표 <c>0x10018730</c>(COLORREF) — 0 흰 · 1 빨 · 2 초록 · 3 파랑 · 4 노랑 · 5 자홍 · 6 · 7 · 8 · 9.</summary>
-    internal static readonly uint[] Colors =
-        [0xFFFFFFFF, 0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF00FF, 0xFFF9D9A1, 0xFF00FF96, 0xFFFFDC00, 0xFFB400FF];
 
     private int _w = DefaultW, _h = DefaultH, _serial;
     private bool _open;
@@ -65,9 +60,9 @@ internal sealed class Part1BattleNarration(GameWindow host)
         if (host.Tlk._talkSkip) return;
         int id = host._scene.Id - Part1Game.BattleBase;
         if (_dlg?.Id != id) _dlg = Part1Battle.Load(id);
-        var rows = Rows(_dlg?.Line(line) ?? "");
-        if (rows.Count == 0) return;
-        Bubble.OpenFixed(++_serial, rows, Ticks, x, y, _w, _h, FrameSet);
+        string raw = _dlg?.Line(line) ?? "";
+        if (Part1Game.PlainText(raw).Trim().Length == 0) return;
+        Bubble.OpenFixed(++_serial, raw, Ticks, x, y, _w, _h, FrameSet);
         _open = true;
     }
 
@@ -98,36 +93,5 @@ internal sealed class Part1BattleNarration(GameWindow host)
         if (!_open) return;
         var (ox, oy) = host.Mos.MosesOrigin();
         Bubble.Draw(ox, oy);
-    }
-
-    /// <summary>
-    /// 파트1 글을 줄 · 빛깔로 — 「/n」 은 줄 바꿈(맨 앞의 「/n」 도 빈 줄로 남긴다 — 0138 「/n/s2…」), /cN 은 그 뒤 빛깔, 다른 꾸밈은 지운다.
-    /// 끝의 빈 줄만 버린다.
-    /// </summary>
-    internal static List<(string Text, uint Color)> Rows(string raw)
-    {
-        var rows = new List<(string, uint)>();
-        uint color = Colors[0];
-        foreach (string part in Regex.Replace(raw, @"/m0\[[^\]]*\]/m1", "").Split("/n"))
-        {
-            uint rowColor = color;
-            bool seenText = false;
-            var text = new System.Text.StringBuilder();
-            foreach (Match m in Regex.Matches(part, @"/([cC])(\d)|/[fFsStTwW]\d?|/[mM][01]|/[dDpP]\d*|[^/]+|/"))
-            {
-                if (m.Groups[1].Success)
-                {
-                    color = Colors[Math.Min(Colors.Length - 1, m.Groups[2].Value[0] - '0')];
-                    if (!seenText) rowColor = color;
-                    continue;
-                }
-                if (m.Value.StartsWith('/') && m.Value.Length > 1) continue;
-                text.Append(m.Value);
-                if (m.Value.Trim().Length > 0) seenText = true;
-            }
-            rows.Add((text.ToString(), rowColor));
-        }
-        while (rows.Count > 0 && rows[^1].Item1.Trim().Length == 0) rows.RemoveAt(rows.Count - 1);
-        return rows;
     }
 }

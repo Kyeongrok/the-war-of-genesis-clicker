@@ -183,7 +183,10 @@ internal sealed unsafe partial class GameWindow
 
     internal void UiStroke(int x, int y, int w, int h, uint color) { if (_hiResUi) Hi.StrokeRect(x, y, w, h, color); else StrokeRect(x, y, w, h, color); }
 
-    internal void UiText(string text, int x, int y, uint argb, float size = 13f) { if (_hiResUi) Hi.DrawText(text, x, y, argb, size); else DrawText(text, x, y, argb, size); }
+    internal void UiText(string text, int x, int y, uint argb, float size = 13f, string? face = null, bool bold = true)
+    {
+        if (_hiResUi) Hi.DrawText(text, x, y, argb, size, face, bold); else DrawText(text, x, y, argb, size, face, bold);
+    }
 
     /// <summary>
     /// 전투 판 위에 뜨는 글(피해 숫자 · 알림 글 · 체력바의 레벨) — 새 UI 에서는 층에 창 해상도로, 다만 다른 화면이 전투를 덮고 있으면 판에(그 화면에 가려진다).
@@ -202,10 +205,10 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>글의 크기(판 좌표) — <see cref="GetText"/> 와 같은 꼴로 돌려주되 새 UI 에서는 픽셀이 비어 있다(크기만 쓴다).</summary>
-    internal (uint[] Px, int W, int H) UiGetText(string text, uint argb, float size = 13f)
+    internal (uint[] Px, int W, int H) UiGetText(string text, uint argb, float size = 13f, string? face = null, bool bold = true)
     {
-        if (!_hiResUi) return GetText(text, argb, size);
-        var (w, h) = Hi.Measure(text, argb, size);
+        if (!_hiResUi) return GetText(text, argb, size, face, bold);
+        var (w, h) = Hi.Measure(text, argb, size, face, bold);
         return ([], w, h);
     }
 

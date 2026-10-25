@@ -16,16 +16,14 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     /// <summary>바탕 섞기 13 단계 6 — <c>(7·바탕 + 24·그림)/31</c>.</summary>
     private const int FrameAlpha = 24 * 256 / 31;
 
-    /// <summary>글꼴 — 이름 /m0 은 꼴 3(굴림 12pt 굵게) · 빛깔 7, 몸 /m1 은 꼴 4(가을체 12pt 굵게) · 흰색(<c>0x10018018</c>). 12pt = 16 픽셀.</summary>
-    private const float FontSize = 16;
-
-    /// <summary>한 줄 높이 — GDI 12pt 글의 높이 [H]. 줄 내림은 높이 + 4(<c>0x100a85d4</c>).</summary>
-    private const int LineH = 16;
-
-    /// <summary>/m0 이름 빛깔 7 = COLORREF 0x96FF00 → RGB(0, 255, 150).</summary>
-    private const uint NameColor = 0xFF00FF96;
+    /// <summary>이름 칸 꼴 — 꼴 표 3(굴림 12pt 굵게). 몸글은 <see cref="Part1Text"/> 꾸밈대로(꾸밈 없으면 꼴 표 0 굴림 9pt).</summary>
+    private static readonly Part1TextStyle NameStyle = Part1Text.Fixed(Part1Text.NameTable, Part1Text.NameColor);
 
     private const int ScreenW = 640, ScreenH = 480, GrowTicks = 8, ShrinkTicks = 4;
+
+    private readonly Part1TextPainter _paint = new(host);
+
+    private int Width(string s, Part1TextStyle st) => _paint.Width(s, st);
 
     private int _serial = -1;
     private bool _narration;
@@ -36,13 +34,16 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
 
     /// <summary>창의 이름 칸(<c>+0x80</c>) — 전투 200 만 쓴다(필드 209 는 글 안의 /m0[이름]). 빛깔은 칸 <c>+0x8a</c>(빛깔 표 차례를 COLORREF 로).</summary>
     private string _name = "";
-    private uint _nameColor = NameColor;
+    private uint _nameColor = Part1Text.Colors[Part1Text.NameColor];
 
     /// <summary>몸글 첫 줄의 창 안 y — 이름이 없으면 8, 있으면 8 + 이름 높이 + 8(<c>0x100a846a</c>~<c>0x100a848c</c>).</summary>
     private int _textTop = 8;
-    private List<(string Text, uint Color)> _lines = [];
-    private readonly List<int> _pageStarts = [];
-    private int _page;
+
+    /// <summary>꾸밈째 글(<c>+0x110</c>) · 지금 쪽 첫 자리(<c>+0x114</c>) · 쪽의 줄 · 찍는 걸음(줄, 자리, 틱) · 빠르기(<c>/v</c>, 쪽이 바뀌어도 남는다).</summary>
+    private string _text = "";
+    private int _pos, _speed = 6;
+    private List<Part1Text.Line> _lines = [];
+    private List<(int Line, int Pos, int Tick)> _steps = [];
 
     /// <summary>지금 쪽을 찍기 시작한 때 · 다 찍은 때(쪽 끝 기다림, 0 이면 아직 찍는 중) · 닫기 시작한 때(0 이면 안 닫음).</summary>
     private double _typeAt, _doneAt, _closeAt, _openAt;
@@ -51,9 +52,10 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
 
     /// <summary>
     /// 새 말풍선 — 209 는 인물 발밑 (ax, ay)(화면 640×480 자리)에서, 210 은 (320, 15) 에서 (10, 5) 619×35 띠로.
-    /// 크기는 글로 정한다(<c>0x100a7feb</c>~): 폭 = 가장 긴 줄 + 16(≤ 200), 높이 = ⌈긴 줄 / (폭 − 16)⌉ × (글 높이 + 4) + 16(≤ 100).
+    /// <paramref name="text"/> 는 꾸밈째 글(「/m0[이름]/m1/n…」 — 이름도 글 안에 있다).
+    /// 크기는 글로 정한다(<c>0x100a7feb</c>~, 재기 <c>0x100187d0</c>): 폭 = 가장 긴 줄 + 16(≤ 200), 높이 = ⌈긴 줄 / (폭 − 16)⌉ × (글 높이 + 4) + 16(≤ 100).
     /// </summary>
-    internal void Open(int serial, bool narration, string speaker, string text, int face, int ticks, int ax, int ay)
+    internal void Open(int serial, bool narration, string text, int face, int ticks, int ax, int ay)
     {
         _serial = serial;
         _narration = narration;
@@ -61,26 +63,23 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         _face = narration ? 0 : face;
         _frameSet = 0;
         (_name, _textTop) = ("", 8);
-        string full = speaker.Length > 0 ? $"[{speaker}]\n{text}" : text;
-        var rows = full.Split('\n');
-        int nameRows = speaker.Length > 0 ? 1 : 0;
-        var colored = rows.Select((r, i) => (r, i < nameRows ? NameColor : GameWindow.White)).ToList();
         if (narration) (_ax, _ay, _x, _y, _w, _h) = (320, 15, 10, 5, 619, 35);
         else
         {
             (_ax, _ay) = (ax, ay);
-            int maxW = rows.Select(r => Width(r)).DefaultIfEmpty(0).Max();
-            int totalH = rows.Length * LineH + 4 * (rows.Length - 1);
+            var (maxW, totalH) = Part1Text.Measure(text, 0, text.Length, Width);
             _w = Math.Min(200, maxW + 16);
-            int wraps = _w > 16 ? (_w + maxW - 17) / (_w - 16) : 1;
-            _h = Math.Min(100, wraps * (totalH + 4) + 16);
+            _h = Math.Min(100, Wraps(maxW) * (totalH + 4) + 16);
             // 화면 안으로(0x100a822d~) — 오른쪽 끝, 얼굴이 왼쪽 밖으로 안 나가게, 아래 끝, 위.
             _x = ax;
             _y = ay - _h - 50;
             KeepOnScreen();
         }
-        Layout(colored);
+        Start(text);
     }
+
+    /// <summary>⌈긴 줄 / (폭 − 16)⌉ — <c>0x100a8062</c>: (폭 + 긴 줄 − 17) / (폭 − 16).</summary>
+    private int Wraps(int maxW) => _w > 16 ? (_w + maxW - 17) / (_w - 16) : 1;
 
     /// <summary>화면 안으로(<c>0x100a822d</c>~) — 오른쪽 끝, 얼굴이 왼쪽 밖으로 안 나가게, 아래 끝, 위.</summary>
     private void KeepOnScreen()
@@ -99,8 +98,9 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     /// 크기는 글로(<c>0x100a7ffa</c>~): 폭 = max(긴 줄 + 16, 이름 폭 + 16) ≤ 200, 높이 = ⌈긴 줄 / (폭 − 16)⌉ × (글 높이 + 4) + 16 + (이름 높이 + 8) ≤ 100.
     /// 창 x 가 −1 이면 창 왼위 = (닻 x, 닻 y − 높이 − 50). 이름은 (창 + 8, 창 + 8)(<c>0x100a82e6</c>~), 몸글은 그 아래 이름 높이 + 8 부터.
     /// 이름은 창이 다 펴진 뒤(<c>+0x69 == 0xff</c>) 통째로 찍는다(<c>0x100a8e96</c> → <c>0x10018c30</c>) — 한 글자씩이 아니다.
+    /// 이름 칸은 꾸밈을 안 푸는 꼴 표 3(굴림 12pt 굵게)이다(<c>+0x8c</c> = 3).
     /// </summary>
-    internal void OpenBattle(int serial, string name, uint nameColor, IReadOnlyList<(string Text, uint Color)> rows, int face, int ticks,
+    internal void OpenBattle(int serial, string name, uint nameColor, string text, int face, int ticks,
                              int ax, int ay, int x, int y, int frameSet)
     {
         _serial = serial;
@@ -110,20 +110,19 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         _frameSet = frameSet;
         (_name, _nameColor) = (name, nameColor);
         (_ax, _ay) = (ax, ay);
-        int maxW = rows.Select(r => Width(r.Text)).DefaultIfEmpty(0).Max();
-        int totalH = rows.Count * LineH + 4 * Math.Max(0, rows.Count - 1);
+        var (maxW, totalH) = Part1Text.Measure(text, 0, text.Length, Width);
+        int nameH = NameStyle.Pixels;
         _w = maxW + 16;
-        if (name.Length > 0) _w = Math.Max(_w, Width(name) + 16);
+        if (name.Length > 0) _w = Math.Max(_w, Width(name, NameStyle) + 16);
         _w = Math.Min(200, _w);
-        int wraps = _w > 16 ? (_w + maxW - 17) / (_w - 16) : 1;
-        _h = wraps * (totalH + 4) + 16;
-        if (name.Length > 0) _h += LineH + 8;
+        _h = Wraps(maxW) * (totalH + 4) + 16;
+        if (name.Length > 0) _h += nameH + 8;
         _h = Math.Min(100, _h);
-        _textTop = name.Length > 0 ? 8 + LineH + 8 : 8;
+        _textTop = name.Length > 0 ? 8 + nameH + 8 : 8;
         if (x == -1) (_x, _y) = (ax, ay - _h - 50);
         else (_x, _y) = (x, y);
         KeepOnScreen();
-        Layout(rows);
+        Start(text);
     }
 
     /// <summary>
@@ -131,7 +130,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     /// 이름 · 얼굴 없음, 닻은 창 가운데라 가운데에서 커지며 나온다. 틀은 Obs 111 모션 9 = 벌 5(푸른 돌) — <paramref name="frameSet"/> 에 벌 번호.
     /// 화면 안으로 미는 것(<c>0x100a822d</c>~)은 정한 자리에도 걸린다 — 자료의 자리는 모두 화면 안이라 아무 일 없다.
     /// </summary>
-    internal void OpenFixed(int serial, IReadOnlyList<(string Text, uint Color)> rows, int ticks, int x, int y, int w, int h, int frameSet)
+    internal void OpenFixed(int serial, string text, int ticks, int x, int y, int w, int h, int frameSet)
     {
         _serial = serial;
         _narration = true;
@@ -145,52 +144,33 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         if (_x < 0) _x = 0;
         if (_y + _h >= ScreenH) _y = ScreenH - _h;
         if (_y < 0) _y = 0;
-        Layout(rows);
+        Start(text);
     }
 
-    private void Layout(IReadOnlyList<(string Text, uint Color)> rows)
+    private void Start(string text)
     {
-        // 줄 나누기(0x100a8440) — 앞 빈칸은 건너뛰고, 「/n」 이나 폭 − 16 을 넘는 글자에서 끊는다(낱말이 아니라 글자에서).
-        _lines = [];
-        foreach (var (row, color) in rows)
-        {
-            string rest = row;
-            do
-            {
-                rest = rest.TrimStart(' ');
-                int cut = rest.Length;
-                if (Width(rest) > _w - 16)
-                {
-                    int lo = 1, hi = rest.Length - 1;   // 들어가는 가장 긴 앞자리 — 반씩 좁힌다(글 재기가 비싸다)
-                    while (lo < hi) { int mid = (lo + hi + 1) / 2; if (Width(rest[..mid]) <= _w - 16) lo = mid; else hi = mid - 1; }
-                    cut = lo;
-                }
-                _lines.Add((rest[..cut], color));
-                rest = rest[cut..];
-            } while (rest.Length > 0);
-        }
-        // 쪽 — 첫 줄 (8, 8), 줄마다 높이 + 4 아래로, 줄 밑이 창 밑 − 8 을 넘으면 다음 쪽(다섯 줄까지).
-        _pageStarts.Clear();
-        int perPage = Math.Clamp((_h - _textTop - 8 - LineH) / (LineH + 4) + 1, 1, 5);
-        for (int i = 0; i < _lines.Count; i += perPage) _pageStarts.Add(i);
-        if (_pageStarts.Count == 0) _pageStarts.Add(0);
-        _page = 0;
+        _text = text;
+        _pos = 0;
+        _speed = 6;   // 창을 지을 때 /v6(0x100a8382)
         _openAt = host._lastTime;
-        _typeAt = _openAt + GrowTicks / GameWindow.TicksPerSecond;
+        Layout(GrowTicks / GameWindow.TicksPerSecond);
+    }
+
+    /// <summary>
+    /// 지금 자리(<see cref="_pos"/>)부터 한 쪽 — 줄 나누기 <c>0x100a8440</c>(폭 − 16 · 창 밑 − 8 · 다섯 줄 · /n · /p)와 찍는 걸음(틱 <c>0x100a873e</c>).
+    /// </summary>
+    private void Layout(double delay)
+    {
+        _lines = Part1Text.Page(_text, _pos, _w - 16, _textTop, _h - 8, Width);
+        _steps = Part1Text.Steps(_text, _lines, ref _speed);
+        _typeAt = host._lastTime + delay;
         _doneAt = _closeAt = 0;
     }
 
-    private int Width(string s) => s.Length == 0 ? 0 : host.UiGetText(s, GameWindow.White, FontSize).W;
-
     private SpriteFrame? FaceFrame() => _face > 0 ? art.Frame(_face, 0, 0) : null;
 
-    private IEnumerable<(string Text, uint Color)> PageLines()
-    {
-        int start = _pageStarts[_page], end = _page + 1 < _pageStarts.Count ? _pageStarts[_page + 1] : _lines.Count;
-        return _lines.Skip(start).Take(end - start);
-    }
-
-    private int PageChars() => PageLines().Sum(l => l.Text.Length);
+    /// <summary>쪽을 다 찍는 틱 — 마지막 걸음의 틱.</summary>
+    private int PageTicks() => _steps.Count == 0 ? 0 : _steps[^1].Tick;
 
     private double Ticks(double since) => (host._lastTime - since) * GameWindow.TicksPerSecond;
 
@@ -199,7 +179,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     {
         if (_serial < 0) return false;
         if (_closeAt > 0) return Ticks(_closeAt) >= ShrinkTicks;
-        if (_doneAt == 0 && host._lastTime >= _typeAt && Ticks(_typeAt) >= PageChars()) _doneAt = host._lastTime;
+        if (_doneAt == 0 && host._lastTime >= _typeAt && Ticks(_typeAt) >= PageTicks()) _doneAt = host._lastTime;
         if (_doneAt > 0 && _ticks > 0 && Ticks(_doneAt) > _ticks) Next();
         return false;
     }
@@ -208,19 +188,21 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     internal void Click()
     {
         if (_serial < 0 || _closeAt > 0) return;
-        if (_doneAt == 0) { _typeAt = host._lastTime - (PageChars() + 1) / GameWindow.TicksPerSecond; _doneAt = host._lastTime; return; }
+        if (_doneAt == 0) { _typeAt = host._lastTime - (PageTicks() + 1) / GameWindow.TicksPerSecond; _doneAt = host._lastTime; return; }
         Next();
     }
 
+    /// <summary>다음 쪽은 마지막 걸음 뒤 자리부터(<c>+0x114</c>), 글이 끝났으면 닫기(<c>0x100a86a2</c>).</summary>
     private void Next()
     {
-        if (_page + 1 < _pageStarts.Count)
+        int next = _steps.Count > 0 ? _steps[^1].Pos : Part1Text.After(_lines);
+        if (_lines.Count > 0 && next > _pos && next < _text.Length)
         {
-            _page++;
-            _typeAt = host._lastTime;
-            _doneAt = 0;
+            _pos = next;
+            Layout(0);
+            if (_lines.Count > 0) return;
         }
-        else _closeAt = host._lastTime;
+        _closeAt = host._lastTime;
     }
 
     internal void Close() => _serial = -1;
@@ -248,17 +230,20 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         }
         if (face != null) art.Blit(face, ox + _x - face.W + 20 - face.X, oy + _y + _h - face.H - face.Y);
         DrawFrame(ox + _x, oy + _y, _w, _h);
-        // 글 — (창 + 8, 창 + 8) 부터, 글자는 틱마다 하나(/v 기본 6). 검은 테두리(위아래 왼오른 1픽셀) 위에 빛깔(0x100194b0).
-        if (_name.Length > 0) Outlined(_name, ox + _x + 8, oy + _y + 8, _nameColor);
-        int shown = _doneAt > 0 ? int.MaxValue : Math.Max(0, (int)Ticks(_typeAt));
-        int ty = oy + _y + _textTop;
-        foreach (var (text, color) in PageLines())
+        // 글 — (창 + 8, 줄 y) 부터. 줄마다 [첫 자리, 찍은 자리) 를 꾸밈대로(0x100a8ec9 → 0x10018c30), 찍는 줄까지만.
+        if (_name.Length > 0) _paint.Outlined(_name, ox + _x + 8, oy + _y + 8, NameStyle, _nameColor);
+        int tick = (int)Math.Floor(Ticks(_typeAt));
+        int line = -1, typed = 0;
+        foreach (var st in _steps)
         {
-            if (shown <= 0) break;
-            string part = text.Length <= shown ? text : text[..shown];
-            shown -= text.Length;
-            Outlined(part, ox + _x + 8, ty, color);
-            ty += LineH + 4;
+            if (_doneAt == 0 && st.Tick > tick) break;
+            (line, typed) = (st.Line, st.Pos);
+        }
+        for (int i = 0; i <= line && i < _lines.Count; i++)
+        {
+            var l = _lines[i];
+            int end = i < line ? l.End : Math.Min(l.End, typed);
+            if (end > l.Start) _paint.DrawLine(_text, l, end, ox + _x + 8, oy + _y);
         }
         // ▼ — 창 (w − 10, h − 2) 의 Obs 111 모션 0(0x100a81f4), 쪽을 다 찍으면 뜬다(상태 3, 0x100a8a54).
         if (_doneAt > 0) art.Blit(art.Motion(FrameObs, 0, (int)Ticks(_doneAt)), ox + _x + _w - 10, oy + _y + _h - 2);
@@ -280,16 +265,5 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         art.Blit(art.Frame(FrameObs, 2, 1), x + w - 1, y);
         art.Blit(art.Frame(FrameObs, 2, 2), x, y + h - 1);
         art.Blit(art.Frame(FrameObs, 2, 3), x + w - 1, y + h - 1);
-    }
-
-    private void Outlined(string text, int x, int y, uint color)
-    {
-        if (text.Length == 0) return;
-        const uint Black = 0xFF000000;
-        host.UiText(text, x + 1, y, Black, FontSize);
-        host.UiText(text, x - 1, y, Black, FontSize);
-        host.UiText(text, x, y + 1, Black, FontSize);
-        host.UiText(text, x, y - 1, Black, FontSize);
-        host.UiText(text, x, y, color, FontSize);
     }
 }

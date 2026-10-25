@@ -611,7 +611,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// 필드 · 챕터 대사 — 떠 있는 상자의 일러스트를 먼저(뒤에) 깔고, 지금 대사를 그 상자 자리에 그린다. 일러스트는 네 조각으로 나뉜 한 장이라
     /// 벌 0 의 장을 모두 (320 + 옮김, 240) 기준으로 찍는다(아래 끝이 화면 아래 480 에 닿는다, 분석-파트1-챕터 11절).
     /// </summary>
-    internal void DrawTalk(int ox, int oy, string speaker, string text, int slot, int[] faces)
+    internal void DrawTalk(int ox, int oy, string raw, int slot, int[] faces)
     {
         for (int s = 0; s < faces.Length; s++)
         {
@@ -621,7 +621,33 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 if (sub == 0) host.BlitScaled(frame, cx + frame.X, cy + frame.Y, frame.W, frame.H);
         }
         var (bx, by) = TalkBoxes[Math.Clamp(slot, 0, 2)];
-        DrawTalkBox(ox + bx, oy + by, 511, 111, speaker, text);
+        DrawFormattedBox(ox + bx, oy + by, 511, 111, raw);
+    }
+
+    private Part1TextPainter? _paint;
+    private Part1TextPainter Paint => _paint ??= new(host);
+    private readonly Dictionary<(string, int, int), List<int>> _pageStarts = [];
+
+    /// <summary>
+    /// 꾸밈째 글을 상자에 — 원본 대사 창 <c>0x100a9000</c> 처럼 글 그리기 <c>0x10018c30</c> 로: 「/m0[이름]」 은 꼴 표 3 · 빛깔 7, 「/m1」 뒤 몸글은 가을체 12pt 굵게,
+    /// /c /f /s /t /w 는 그 자리부터. 줄은 (상자 + 8, 상자 + 8) 부터 폭 − 16 에서 글자로 끊고, 상자 밑 − 8 을 넘거나 /p 면 다음 쪽(누르면 넘긴다).
+    /// [H] 상자 틀 · 한 번에 다 보이는 것(글자씩 찍기 · /d 쉼 없음)은 리메이크 그대로. 줄 나누기 · 쪽은 0x100a7ef0 의 것(0x100a8440)으로 봤다.
+    /// </summary>
+    internal void DrawFormattedBox(int bx, int by, int W, int H, string raw, bool arrow = true)
+    {
+        host.UiFill(bx, by, W, H, 0xE8101828);
+        host.UiStroke(bx, by, W, H, 0xFF8098C8);
+        var key = (raw, W, H);
+        if (!_pageStarts.TryGetValue(key, out var starts))
+        {
+            if (_pageStarts.Count > 64) _pageStarts.Clear();
+            _pageStarts[key] = starts = Paint.PageStarts(raw, W - 16, 8, H - 8);
+        }
+        if (!ReferenceEquals(raw, _pageText) && raw != _pageText) { _pageText = raw; _page = 0; }
+        _pages = starts.Count;
+        foreach (var l in Part1Text.Page(raw, starts[Math.Clamp(_page, 0, starts.Count - 1)], W - 16, 8, H - 8, Paint.Width))
+            Paint.DrawLine(raw, l, l.End, bx + 8, by);
+        if (arrow && host._lastTime % 0.75 < 0.5) host.UiText("▼", bx + W - 22, by + H - 20, 0xFFFFC060, 12);
     }
 
     internal void DrawTalk(int ox, int oy, string speaker, string text) => DrawTalkBox(ox + 24, oy + 340, 592, 124, speaker, text);

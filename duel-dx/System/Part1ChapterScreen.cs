@@ -1256,9 +1256,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         (ox, oy) = (cx0, cy0);   // 아래 대사 · 고르기 창은 가운데 640×480 틀
         if (Events.Talk is { } page && Events.TalkSlot == Part1SceneScript.PageSlot)
             shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                 // 1104 표 창(0x100a9000, 70 · 100 · 500×285)
-        else if (Events.Talk is { } narration && Events.TalkSlot == Part1SceneScript.NarrationSlot)
-            shell.DrawTalkBox(ox + 10, oy + 5, 619, 35, "", narration.Text);               // 210 해설 띠
-        else if (Events.Talk is { } talk) shell.DrawTalk(ox, oy, talk.Speaker, talk.Text, Events.TalkSlot, Events.Faces);
+        else if (Events.Talk != null && Events.TalkSlot == Part1SceneScript.NarrationSlot)
+            shell.DrawFormattedBox(ox + 10, oy + 5, 619, 35, Events.TalkRaw);                 // 210 해설 띠
+        else if (Events.Talk != null) shell.DrawTalk(ox, oy, Events.TalkRaw, Events.TalkSlot, Events.Faces);
         else if (Events.Choice is { } choice)
         {
             // 1100 물음 + 1101 고를 줄(0x100aa690 · 0x100aa750) — 고르면 챕터 변수 = 1부터 센 차례.

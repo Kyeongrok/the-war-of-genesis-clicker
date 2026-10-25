@@ -212,6 +212,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>떠 있는 대사(말하는 이, 글) — 누르면 다음으로.</summary>
     internal (string Speaker, string Text)? Talk { get; private set; }
 
+    /// <summary>떠 있는 대사의 꾸밈째 글(「/m0[이름]/m1/n…」) — 창이 꾸밈(<see cref="Part1Text"/>)대로 그린다. <see cref="Talk"/> 는 꾸밈을 지운 글.</summary>
+    internal string TalkRaw { get; private set; } = "";
+
     /// <summary>
     /// 대사 상자 셋(0 왼쪽 200·206 · 1 오른쪽 201·207 · 2 가운데 202·208)마다 띄운 일러스트 — Obss 번호(0 이면 없음).
     /// 원본 <c>0x100a9000</c>: 상자를 닫는 203~205 가 그 칸을 지운다(분석-파트1-챕터 11절). 여러 칸이 함께 떠 있을 수 있다.
@@ -463,7 +466,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     Faces[slot] = a[0] > 0 ? a[0] : 0;
                     TalkSlot = slot;
                     string raw = a[1] >= 0 && a[1] < _lines.Count ? _lines[a[1]] : "";
-                    if (raw.Length > 0) Talk = (Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw));
+                    if (raw.Length > 0) (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw);
                     if (c.Code >= 206 && a.Length > 2 && a[2] > 0)
                     {
                         host._mixer.StopEffect(VoiceTag);
@@ -482,7 +485,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     int line = c.Code == 209 ? a[2] : a[0], ticks = c.Code == 209 ? a[3] : a[1];
                     string raw = line >= 0 && line < _lines.Count ? _lines[line] : "";
                     if (raw.Length == 0) break;
-                    Talk = (Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw));
+                    (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw);
                     TalkSlot = c.Code == 209 ? BubbleSlot : NarrationSlot;
                     TalkPerson = c.Code == 209 ? a[0] : -1;
                     TalkFace = c.Code == 209 ? a[1] : 0;

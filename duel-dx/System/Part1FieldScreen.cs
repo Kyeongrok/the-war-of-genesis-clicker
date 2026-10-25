@@ -473,8 +473,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
                 var (camX, camY) = Camera();
                 (ax, ay) = (px - camX, py - camY + Math.Max(0, (MosesScene.MosesH - _bgH) / 2));
             }
-            var talk = Script.Talk!.Value;
-            Bubble.Open(Script.TalkSerial, narration, talk.Speaker, talk.Text, Script.TalkFace, Script.TalkTicks, ax, ay);
+            Bubble.Open(Script.TalkSerial, narration, Script.TalkRaw, Script.TalkFace, Script.TalkTicks, ax, ay);
         }
         if (Bubble.Update()) { Bubble.Close(); Script.Advance(); }
     }
@@ -485,7 +484,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         if (Script.Talk is { } page && Script.TalkSlot == Part1SceneScript.PageSlot)
             shell.DrawTalkBox(ox + 70, oy + 100, 500, 285, "", page.Text);                          // 904 글 쪽 창(0x100d04b3)
         else if (BubbleTalk) Bubble.Draw(ox, oy);                                                  // 209 말풍선 · 210 해설 띠(Part1Bubble)
-        else if (Script.Talk is { } talk2) shell.DrawTalk(ox, oy, talk2.Speaker, talk2.Text, Script.TalkSlot, Script.Faces);
+        else if (Script.Talk != null) shell.DrawTalk(ox, oy, Script.TalkRaw, Script.TalkSlot, Script.Faces);
         else if (Script.Choice is { } choice)
         {
             // 900 물음 + 901 고를 줄 — 고르면 장면 변수 = 1부터 센 차례(0x100aa690).
