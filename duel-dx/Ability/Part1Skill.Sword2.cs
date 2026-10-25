@@ -333,8 +333,9 @@ internal sealed partial class Part1Skill
         (double X, double Y, double Z) from = (hx + 30, hy, 140);
         var stroke = S2Fly(from, (hx - 30, hy, 0), 10, 0.8);
         var strokePath = AsPath(stroke.Prepend(S2Board(from)).ToList());
-        Along(536, 0, 0, strokePath, life: Length(536, 0));
-        Along(536, 3, 0, strokePath, life: 36);
+        // 칼빛 536:0 의 소리 키(1틱에 Snd 1884)가 이 기술의 휘두르는 소리다 — 원본 이펙트는 제 모션의 소리 키를 늘 내지만 여기서는 sounds 로 켜야 난다.
+        Along(536, 0, 0, strokePath, life: Length(536, 0), sounds: true);
+        Along(536, 3, 0, strokePath, life: 36, sounds: true);
 
         user.Facing = Facing.Down;
         int go = Act(user, 9, 5, 36) + 1;
@@ -344,7 +345,7 @@ internal sealed partial class Part1Skill
             0 => (0, hx, hy, false), 1 => (1, hx, hy, false),
             2 => (0, hx, hy + 20 * 0.8, false), _ => (1, hx + 20, hy, true),
         };
-        Put(230, sm, go, sx, sy, mirror: mirror);
+        Put(230, sm, go, sx, sy, mirror: mirror, sounds: true);
         var charge = Move(_home, t, 20, 1.8);
         Later(go, () => { user.Facing = FacingOf4(dir); Act(user, 18, 1, repeat: 0); host.Btl.CenterOn(t.X, t.Y); });
         Carry(go, charge);
