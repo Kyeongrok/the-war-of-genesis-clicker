@@ -591,8 +591,9 @@ internal sealed class Part1JobTree(GameWindow host)
         host.UiFill(x + half, y + 6, 1, h - 12, Line);
         host.UiText("배울 수 있는 어빌리티  (지금/최대)", tx, y + 6, Gold, 11);
         var teach = job.Abilities.Where(a => a.Ability > 0).GroupBy(a => a.Ability).Select(g => (Ability: g.Key, Max: g.Max(a => a.Level))).ToList();
-        int colW = (x + w - tx - 4) / 2, rows = (h - 30) / 16;
-        for (int i = 0; i < teach.Count && i < rows * 2; i++)
+        // 원본 직업은 14칸(두 줄 × 7)이지만 리메이크가 20칸까지 더하므로(Part1JobAdditions) 넘치면 세 줄로 나눈다.
+        int rows = (h - 30) / 16, cols = Math.Max(2, (teach.Count + rows - 1) / Math.Max(1, rows)), colW = (x + w - tx - 4) / cols;
+        for (int i = 0; i < teach.Count && i < rows * cols; i++)
         {
             var (ability, max) = teach[i];
             int cx = tx + i / rows * colW, cy = y + 24 + i % rows * 16;

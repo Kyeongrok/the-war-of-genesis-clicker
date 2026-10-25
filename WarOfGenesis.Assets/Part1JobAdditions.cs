@@ -4,7 +4,7 @@ namespace WarOfGenesis.Assets;
 /// 원본에 없는 파트1 직업 어빌리티 — <c>Job.dat</c> 을 읽은 뒤 직업이 가르치는 칸에 덧붙인다(사용자 요청).
 /// </summary>
 /// <remarks>
-/// <c>Job.dat</c> 은 사용자의 파트1 폴더에서 읽으므로 고치지 않는다. 원본 칸은 14개까지(<see cref="Part1Job.ParseAll"/>) — 넘치면 더하지 않는다.
+/// <c>Job.dat</c> 은 사용자의 파트1 폴더에서 읽으므로 고치지 않는다. 원본 칸은 14개(<see cref="Part1Job.ParseAll"/>)지만 리메이크는 20개까지 더한다(사용자 요청) — 넘치면 더하지 않는다.
 /// 이미 가르치는 어빌리티면 최대 레벨만 그 값으로 올린다. 레벨 0 이면 그 직업에서 뺀다.
 /// </remarks>
 public static class Part1JobAdditions
@@ -17,7 +17,7 @@ public static class Part1JobAdditions
         [78] = [(119, 0), (33, 1)],   // 무슬림 — 소환 능력을 빼고 화이어 애로우 1(사용자 요청). 나이트 · 마하즈리다처럼 1 까지
     };
 
-    private const int MaxSlots = 14;
+    private const int MaxSlots = 20;
 
     public static IReadOnlyList<Part1Job> Apply(IReadOnlyList<Part1Job> jobs) =>
         [.. jobs.Select(job => Adds.TryGetValue(job.Id, out var adds) ? job with { Abilities = Merge(job.Abilities, adds) } : job)];
