@@ -193,7 +193,8 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         var merged = Abilities.Select(a => abilities.TryGetValue(a.Ability, out int level) ? (a.Ability, level) : a).ToList();
         foreach (var (ability, level) in abilities)
             if (!merged.Any(a => a.Ability == ability)) merged.Add((ability, level));   // 원본 메모리는 어빌리티 번호별 칸이라 개수 제한이 없다(Chr.dat 의 10칸은 시작값일 뿐)
-        return this with { Fields = fields, Abilities = [.. merged] };
+        // 레벨 0 은 「안 배움」 — 캐릭터 에디터가 지울 때 적는다(Chr.dat 도 레벨 0 칸은 버린다).
+        return this with { Fields = fields, Abilities = [.. merged.Where(a => a.Item2 > 0)] };
     }
 
     /// <summary>장비 다섯 칸(39~43)을 바꾼 모습.</summary>

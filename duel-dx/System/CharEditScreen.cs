@@ -39,6 +39,13 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     private readonly Dictionary<int, (ushort Sprite, ushort Face, ushort Voice)> _firstLook = [];
     private List<(int Slot, SystemMenu.SaveState Head)>? _saves;
 
+    /// <summary>파트1 을 하는 동안 고치는 쪽 — eld · 무리 가방 · 파트1 장비 다섯 칸 · 파트1 어빌리티(<see cref="Part1CharEdit"/>).</summary>
+    private Part1CharEdit? _p1;
+    internal Part1CharEdit P1 => _p1 ??= new Part1CharEdit(host, this);
+
+    /// <summary>파트1 자료를 고치나 — 파트1 타이틀 · 챕터 · 마을 · 전투.</summary>
+    internal bool Part1Mode => P1.Active;
+
     /// <summary>파일이 있는 세이브 칸들 — 파일을 통째로 읽는 일이라 창을 열 때 한 번만 훑는다.</summary>
     internal List<(int Slot, SystemMenu.SaveState Head)> Saves() =>
         _saves ??= [.. Enumerable.Range(0, SlotsScreen.SaveSlots + SlotsScreen.AutoSlots)
@@ -54,6 +61,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         _saves = null;
         _abRows = null;
         _lookRows = null;
+        _p1?.Forget();
     }
 
     /// <summary>고른 세이브를 불러온다 — 그 뒤로는 불러온 게임의 인물을 고친다.</summary>
@@ -85,6 +93,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     /// </summary>
     internal List<int> People()
     {
+        if (Part1Mode) return P1.People();
         var people = host.Mos.StyleParty();
         if (!host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen) return people;
         foreach (var u in host._units)
@@ -414,6 +423,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             if (In(bx, by, px, y + PartyH + 42 + 24, PickW, people.Count * PickRowH) && row < people.Count) _chosen = row;
             return true;
         }
+        if (Part1Mode) return P1.OnClick(bx, by, x, y, people);
         // 파티 줄 — 소지금 · 나야트레이
         foreach (var (dx, delta, _) in MoneySteps)
             if (In(bx, by, x + dx, y + 36, 54, 22)) { ChangeMoney(delta); return true; }
@@ -490,6 +500,12 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     /// </summary>
     internal void OnRightDown(int bx, int by)
     {
+        if (Part1Mode)
+        {
+            var p1People = People();
+            if (!_pickSave && !_pickerOpen && !NoGame(p1People)) { var (ox, oy) = Origin(); _tip = P1.TipAt(bx, by, ox, oy, p1People); }
+            return;
+        }
         if (_tab != 1 || _pickSave || _pickerOpen || host._db is not { } db) return;
         var people = People();
         if (NoGame(people) || _chosen >= people.Count || DataOf(people[_chosen]) is not { } c) return;
@@ -648,7 +664,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         }
     }
 
-    internal string PersonLabel(GameDatabase db, int chr) => DataOf(chr) is { } d ? $"{db.T(d.NameId)}  Lv{d.Level}  (Chr {chr})" : $"Chr {chr}";
+    internal string PersonLabel(GameDatabase db, int chr) => Part1Mode ? P1.Label(chr) : DataOf(chr) is { } d ? $"{db.T(d.NameId)}  Lv{d.Level}  (Chr {chr})" : $"Chr {chr}";
 
     internal void Draw()
     {
@@ -658,7 +674,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiFill(x, y, W, H, StatusScreen.PanelBg);
         host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
         host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
-        host.UiText("캐릭터 에디터 — 레벨·장비·어빌리티·외형·소지금 바꾸기(시험용)", x + 10, y + 6, White);
+        host.UiText(Part1Mode ? "캐릭터 에디터 (파트1) — 레벨·장비·어빌리티·가방·eld 바꾸기(시험용)" : "캐릭터 에디터 — 레벨·장비·어빌리티·외형·소지금 바꾸기(시험용)", x + 10, y + 6, White);
 
         var people = People();
         bool picking = _pickSave || NoGame(people);
@@ -674,6 +690,14 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiText("Esc: 닫기 · 휠: 목록", x + 16, fy + 7, DimGray);
         if (picking) { DrawSaves(x, y, !NoGame(people)); return; }
 
+        _chosen = Math.Clamp(_chosen, 0, Math.Max(0, people.Count - 1));
+        if (Part1Mode)
+        {
+            P1.Draw(x, y, people);
+            if (_tip is { } p1Tip) host.StatusScr.DrawDescriptionTip(p1Tip.Text, p1Tip.X, p1Tip.Y, x, y, W, H);
+            DrawPicker(db, x + ContentDx, y + PartyH, people);
+            return;
+        }
         // 파티 줄 — 소지금 · 나야트레이
         host.UiText($"소지금 {host.Mos._shopMoney}GP", x + 16, y + 39, White);
         foreach (var (dx, _, text) in MoneySteps) Button(x + dx, y + 36, 54, text);
@@ -706,7 +730,12 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
 
         if (_tip is { } tip) host.StatusScr.DrawDescriptionTip(tip.Text, tip.X, tip.Y, x, y - PartyH, W, H);
 
-        // 인물 펼침 상자 — 마지막에 그려 펼친 목록이 아래 줄들을 덮는다.
+        DrawPicker(db, px, y, people);
+    }
+
+    /// <summary>인물 펼침 상자 — 마지막에 그려 펼친 목록이 아래 줄들을 덮는다. <paramref name="y"/> 는 파티 줄 아래.</summary>
+    internal void DrawPicker(GameDatabase db, int px, int y, List<int> people)
+    {
         string chosen = people.Count > 0 ? PersonLabel(db, people[_chosen]) : "";
         host.UiFill(px, y + 42, PickW, 22, _pickerOpen ? 0xFF2A4A8A : StatusScreen.BoxBg);
         host.UiStroke(px, y + 42, PickW, 22, StatusScreen.BoxLine);
