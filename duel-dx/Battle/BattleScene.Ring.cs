@@ -170,7 +170,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>차례인 내 인물이 걸어갈 칸(파랑)도, 기본공격이 닿는 적(빨강 안)도 없는가 — 쉬는 것 말고 할 일이 마땅찮은 때.</summary>
     internal bool OnlyRestLeft(int index)
     {
-        if (!IsPlayerTurn || index != _turn || host._units[index] is not { IsBusy: false } u || ComputeRange(u) is not { } range) return false;
+        if (!IsPlayerTurn || index != _turn || host._units[index] is not { IsBusy: false } u || ((_rangeUnit == index ? _range : null) ?? ComputeRange(u, withRed: true)) is not { } range) return false;
         int here = u.Row * host.Cols + u.Col;
         for (int i = 0; i < range.Cost.Length; i++)
             if (i != here && range.CanReach(i)) return false;

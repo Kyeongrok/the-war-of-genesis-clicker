@@ -75,7 +75,7 @@ internal sealed unsafe partial class BattleScene
         if (host._selected == _rangeUnit && oc == _rangeCol && or == _rangeRow && unit.Tp == _rangeTp
             && _range is { } cached && cached.Cost.Length == host.Cols * host.Rows) return;   // 판 크기가 바뀌었으면 다시 셈한다
 
-        _range = ComputeRange(unit);
+        _range = ComputeRange(unit, withRed: true);
         if (_range == null) { _rangeUnit = -1; return; }
         if (host._selected != _rangeUnit || oc != _rangeCol || or != _rangeRow) _rangeStart = host._lastTime;
         _rangeUnit = host._selected;
@@ -97,7 +97,7 @@ internal sealed unsafe partial class BattleScene
     /// <param name="tp">지금 TP 대신 쓸 값(접근 단계는 최대 TP 로 잰다) — null 이면 지금 TP.</param>
     /// <param name="origin">출발 칸을 바꿔 잰다(목표 칸에서의 경로 비용 지도) — 예산은 <paramref name="tp"/> 로 넉넉히.</param>
     /// <param name="flee">파트1 AI 표 「움직이지 않음」(+0 = 3) 인물도 도망칠 때는 걷는다(0x10026470 은 이동 방식을 안 본다).</param>
-    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null, bool flee = false, bool withRed = true)
+    internal MoveRange? ComputeRange(UnitState unit, int workId = 0, int? tp = null, (int Col, int Row)? origin = null, bool flee = false, bool withRed = false)
     {
         if (host._map is not { } map || host._db is not { } db || unit.Data is not { } c) return null;
 
@@ -119,7 +119,8 @@ internal sealed unsafe partial class BattleScene
         // 플레이어가 인물을 고른 상태 10 은 파랑을 <b>현재 TP 전부</b>로 한 번 더 칠한다(0x10069659) — 멀리 걸어가 쉴 수 있다.
         // 빨강(기본공격 자리)은 좁은 예산 기준이고, TP+CTP 가 기본공격 비용에 못 미치면 아예 없다(0x10069524). fg-22.
         int budget = playerBrowse && !unit.HasStatus(25) ? Math.Max(narrow, unit.Tp) : narrow;
-        // withRed: false 면 붉은 칸(기본공격 사거리)을 안 칠한다 — 칸마다 사거리 창을 훑어 가장 비싼 부분이라, 길만 필요한 곳(FindAttackPath)은 끈다.
+        // 붉은 칸(기본공격 사거리)은 withRed 일 때만 칠한다 — 갈 칸마다 사거리 창을 훑어(시야선까지) 범위 계산의 9할을 먹는다(사거리 긴 인물 70~80ms).
+        // 쓰는 곳은 판에 그리는 이동 영역(_range)과 링의 「쉬기만 남음」뿐이다 — 전에는 AI · 길찾기의 모든 계산이 같이 칠해 적 차례가 느렸다(사용자 보고).
         bool redAllowed = withRed && (!playerBrowse || unit.Tp + c.Ctp >= TpCostFor(unit, c, c.BasicWorkId));
 
         // 파트1 판 — 이동력은 SPD × 2(0x1003a9ec → A* 0x100239d0 의 한도, 0x10023d93), 한 걸음 = (|높이 차| + 2 · 맨해튼) × 2(0x1008a4f0) —
@@ -266,7 +267,36 @@ internal sealed unsafe partial class BattleScene
         {
             // 훑는 창은 최대/2 칸 — 원본 모양 함수가 그만큼 네모를 훑는다(0x100db6d4~0x100db6df, 0x100dc63c~). 내리막 차등(−2/층)으로
             // 사거리 칸 수보다 먼 칸도 켜질 수 있어서다. 전에는 최대/4 라 그런 칸이 빨강에서 빠지고 겨눔(CanAimAt)과 어긋났다(감사3 R7).
-            int reach = Math.Max(1, RangeMaxOf(basic, unit) / 2);
+            int max = RangeMaxOf(basic, unit), reach = Math.Max(1, max / 2);
+            // 파트1 — 사거리 칸 인자(모양 · 최소 · 최대 · 높이 · 시야)는 이 인물 · 이 기본 공격에서 늘 같으므로 한 번만 꺼내고, 모양이 덮는 어긋남(dx, dy)도
+            // 한 번만 추려 둔다(사용자 요청: 사거리 모양을 미리 계산). 칸마다 하던 InWorkRange 는 매번 인물 · 기술 표를 다시 찾고 무기 사거리를 다시 셈해
+            // 사거리 긴 인물(록슬리)은 이 고리가 70ms 넘게 걸렸다. 판정 자체는 InWorkRange 의 파트1 갈래와 같다.
+            if (!basic.SelfCentred && basic.RangeShape != 0 && Part1AimOf(basic, unit) is { } aim1)   // InWorkRange 와 같은 차례 — 자기 자리 · 모양 0 은 아래 일반 고리로
+            {
+                var offsets = new List<(int Dx, int Dy)>();
+                for (int dy = -reach; dy <= reach; dy++)
+                    for (int dx = -reach; dx <= reach; dx++)
+                        if ((dx != 0 || dy != 0) && aim1.RangeShapeCovers(dx, dy)) offsets.Add((dx, dy));
+                for (int i = 0; i < n; i++)
+                {
+                    if (costs[i] == int.MaxValue || costs[i] > narrow) continue;
+                    int col = i % host.Cols, row = i / host.Cols, fromH = HeightAt(col, row);
+                    foreach (var (dx, dy) in offsets)
+                    {
+                        int ax = col + dx, ay = row + dy;
+                        if (!InBounds(ax, ay)) continue;
+                        int j = ay * host.Cols + ax;
+                        if (costs[j] != int.MaxValue || red[j]) continue;
+                        if (host._map is not null && (CellFlagsAt(ax, ay) & 0x8) != 0
+                            && !(ObjectAt(ax, ay) is { Data.Breakable: true, Alive: true } aimed && !_opened.Contains(aimed))) continue;
+                        if (aim1.RangeSameHeight && HeightAt(ax, ay) != fromH) continue;
+                        var (d1, d2) = WorkDistance(col, row, ax, ay, aim1.RangeHeight, aim1.RangeGraded);
+                        if (d1 > max || d2 < aim1.RangeMin) continue;
+                        if (!aim1.RangeSight || HasSight(col, row, ax, ay)) red[j] = true;
+                    }
+                }
+            }
+            else
             for (int i = 0; i < n; i++)
             {
                 if (costs[i] == int.MaxValue || costs[i] > narrow) continue;   // 빨강은 좁은 예산 안에서만
