@@ -132,13 +132,20 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>602 — 600 의 소리가 끝날 때까지.</summary>
     private bool _waitSound;
 
-    /// <summary>701 이 건 칸 — 걸 때의 곡(바뀌거나 · 멈추거나 · 한 바퀴 돌면 빈다). 행동 1 이 기다린다.</summary>
-    private (long Serial, int Laps)? _musicSlot;
+    /// <summary>701 이 건 칸 — 걸 때의 곡(<see cref="GameWindow.MusicTrack"/>: 바뀌거나 · 멈추거나 · 한 바퀴 돌면 빈다). 행동 1 이 기다린다.</summary>
+    private (int Request, int Laps)? _musicSlot;
 
     private bool MusicSlotBusy()
     {
         if (_musicSlot is not { } slot) return false;
-        if (host._mixer.MusicPlayback == slot) return true;
+        var now = host.MusicTrack();
+        if (now is { } n && n.Request == slot.Request)
+        {
+            if (n.Laps < 0) return true;                                     // 아직 푸는 중 — 원본은 곡이 곧 돈다
+            if (slot.Laps < 0) { _musicSlot = n; return true; }              // 걸 때 풀리던 곡 — 처음 들린 바퀴부터 센다
+            if (n.Laps == slot.Laps) return true;
+        }
+        if (BattleScene.Trace) host._backgroundTrace.Enqueue($"part1 701 풀림 — 걸 때 {slot} · 지금 {(now is { } m ? m.ToString() : "곡 없음")} at {host._lastTime:F2}");
         _musicSlot = null;
         return false;
     }
@@ -155,7 +162,8 @@ internal sealed class Part1SceneScript(GameWindow host)
 
     /// <summary>
     /// 지도 말 — 차례(0부터) → 장소. 챕터를 열 때 처음 장소로 채우고, 행동 900 [말(1부터), 장소] 이 옮긴다(<see cref="MarkerMoved"/> 가 그 뒤를 맡는다).
-    /// 조건 301 [말, v] 은 「말이 살아 있나」(원본 +0xe — 리메이크는 늘 산 것으로 본다, 가설), 302 [장소, 말, v] 는 「말이 그 장소에 있나」.
+    /// 조건 301 [말, v] 은 「말이 살아 있나」(원본 +0xe — 열 때 처음 장소 ≠ −1 이면 1(0x100ae059), 902 · 지도 전투에 지면 0(0x100c1297 · 0x100b4e3c · 0x100b4e81)).
+    /// −1 이 쓰러진 말이다(<see cref="Part1ChapterScreen.SettleFight"/>). 303 [장소, 말, v] 는 「말이 살았고 그 장소에 머무나」.
     /// </summary>
     internal List<int> Markers = [];
 
@@ -520,7 +528,8 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 1201: PlaceBattle?.Invoke(a[0], a[1]); break;
                 // 1200 [장소, 마을] — 그 장소를 그 마을 장소로(0x100c19f0: 장소 낱말 7 = 마을, 낱말 6 = 1). 챕터 28 사건 38: 말 1 이 쓰러지면 장소 23 → 마을 153.
                 case 1200: PlaceTown?.Invoke(a[0], a[1]); break;
-                case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count:
+                // 900 [말(1부터), 장소] — 쓰러진 말(살았나 +0xe = 0)은 안 옮긴다(0x100c10ca). 전에는 902 로 뺀 말을 다시 세웠다(챕터 28 사건 13 의 900 [1, 7]).
+                case 900 when a[0] >= 1 && a[0] - 1 < Markers.Count && Markers[a[0] - 1] >= 0:
                     while (MarkerPrev.Count < Markers.Count) MarkerPrev.Add(Markers[MarkerPrev.Count]);
                     MarkerPrev[a[0] - 1] = Markers[a[0] - 1];
                     Markers[a[0] - 1] = a[1];
@@ -614,9 +623,12 @@ internal sealed class Part1SceneScript(GameWindow host)
             case 701:
                 // 곡이 끝날 때까지 칸에 남는다(0x100cd510 → 0x100096d0: 파일 곡은 재생 자리 < 길이 0x100092b0, CD 곡은 MCI 「재생 중」 0x10009460) —
                 // 행동 1 이 기다린다. 건너뛰는 중(0x101bb148)이면 곡을 멈추고 곧 끝 — 리메이크의 Esc 는 필드를 통째로 끝낸다.
-                // 되풀이 곡(700 [곡, 1])은 끝에서 되감는 고리(0x100096f0)와 701 의 부름 차례를 안 봐서, 한 바퀴 돌면 끝으로 친다(가설).
-                // 곡이 안 돌면(음악 끔 · 소리 없음 · 아직 푸는 중) 곧 끝 — 원본은 소리를 꺼도 곡이 돌아 기다린다(리메이크 갈음).
-                _musicSlot = Timed ? host._mixer.MusicPlayback : null;
+                // 되풀이 곡(700 [곡, 1])도 한 바퀴 끝에서 풀린다 — 틀마다 칸(0x100d0d80, 필드 vt+0x28 0x100c80c0)이 곡 고리(0x100096f0: 되풀이 깃발
+                // 0x1011fd68 · 끝났으면 멈추고 처음부터 0x100095b0 · 0x100095d0)보다 먼저 돌아(필드 틀 0x100c58de → 0x100c58f2) 끝난 그 틀을 701 이 본다.
+                // 소리를 꺼도(원본은 크기만 0, 0x10009690) 곡 길이로 센다 · 푸는 동안은 기다린다(MusicTrack). 곡이 없으면 곧 끝.
+                // 자료 10곳(필드 7 · 9 · 44 · 66 · 67 · 72 · 78 · 225 · 999)은 거의 앞서 건 한 번 곡(700 [곡, 0])의 끝을 기다린다.
+                _musicSlot = Timed ? host.MusicTrack() : null;
+                if (BattleScene.Trace) host._backgroundTrace.Enqueue($"part1 701 곡 끝 기다림 — {(_musicSlot is { } s ? s.ToString() : "곡 없음(곧 끝)")} at {host._lastTime:F2}");
                 return true;
             case 702: host.StopMusic(); return true;                          // 곡 멈춤(0x100cd550)
             case 703:                                                         // [걸음] 크기 127 에서 틱마다 걸음씩 0 까지(0x100cd570, 0x1011beb0)

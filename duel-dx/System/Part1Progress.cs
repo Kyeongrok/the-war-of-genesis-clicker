@@ -44,6 +44,7 @@ internal sealed class Part1Progress
         PartyPlace = 0;
         PendingActions = [];
         Chain = null;
+        Fight = null;
         Grown = [];
         LevelPicks = [];
         Stocks = [];
@@ -392,6 +393,12 @@ internal sealed class Part1Progress
     /// </summary>
     internal int[]? Chain;
 
+    /// <summary>
+    /// 지도에서 연 전투 — [챕터, 갈래, 말(0부터, 없으면 −1), 장소]. 원본 장면 4 의 돌아온 갈래 <c>+0x13cac</c>(1 진입 0x100b0ddb · 2 팀이 말에게 0x100b131a ·
+    /// 3 말이 팀에게 900 0x100c117d)다. 이기고 챕터로 돌아오면(<see cref="Part1ChapterScreen.SettleFight"/>) 그 장소의 전투를 지우고 말을 쓰러뜨린다(0x100b4de0).
+    /// </summary>
+    internal int[]? Fight;
+
     internal static string SavePath => UserDataFolder.File("part1.json");
 
     internal static bool HasSave => File.Exists(SavePath);
@@ -407,7 +414,7 @@ internal sealed class Part1Progress
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
                                    Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null,
                                    int[]? Chain = null, Dictionary<string, int>? PlaceTowns = null, Dictionary<int, Stock>? Stocks = null,
-                                   List<int>? Formed = null, int StockVersion = 0);
+                                   List<int>? Formed = null, int StockVersion = 0, int[]? Fight = null);
 
     /// <summary>세이브 짐 꼴 — 1 = 팀마다 짐(<see cref="Part1Team.Stock"/>). 0 은 팀이 무리 짐을 같이 쓰던 세이브.</summary>
     private const int StockVersionNow = 1;
@@ -428,7 +435,7 @@ internal sealed class Part1Progress
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
                                 [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, 0, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], null, Equipped, null, null, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain, PlaceTowns, Stocks,
-                                [.. Formed], StockVersionNow);
+                                [.. Formed], StockVersionNow, Fight);
         return JsonSerializer.Serialize(data);
     }
 
@@ -470,6 +477,7 @@ internal sealed class Part1Progress
             ChapterMarkerPrev = data.ChapterMarkerPrev ?? [];
             Home = data.Home ?? [];
             Chain = data.Chain is [_, _] chain ? chain : null;
+            Fight = data.Fight is [_, _, _, _] fight ? fight : null;
             Formed = [.. data.Formed ?? []];
             _homeVersion++;
             if (data.Stocks != null) Stocks = data.Stocks;

@@ -510,7 +510,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         host.TitleScr.OpenTitle();
         Open();
-        if (won && host.Part1.ChapterId >= 0) Chapter.Open(host.Part1.ChapterId);
+        if (won && host.Part1.ChapterId >= 0) { Chapter.SettleFight(); Chapter.Open(host.Part1.ChapterId); }
         else Chapter.Forget();   // 졌다 — 이어 돌던 사건은 버린다(이어 하기는 저장된 자리에서, 새 게임은 깨끗하게)
     }
 

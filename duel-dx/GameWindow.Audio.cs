@@ -314,7 +314,13 @@ internal sealed unsafe partial class GameWindow
         _musicDuckRestoreAt = null;
         _chapterEventMusic = false;
         if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 걸기 loop {loop}{(Muted ? " (소리 끔)" : !Sys._bgmOn ? " (BGM 꺼짐)" : "")}");
-        if (Muted || !Sys._bgmOn) return;
+        if (Muted || !Sys._bgmOn)
+        {
+            // 소리 없이도 곡은 돈다 — 원본은 음악 크기 0 이어도 곡을 틀어(0x10009690: 크기 −10000) 필드 701 이 끝을 기다린다. 길이는 701 이 물을 때 잰다.
+            _silentTrack = (Interlocked.Increment(ref _musicRequest), id, loop, System.Diagnostics.Stopwatch.GetTimestamp());
+            return;
+        }
+        _silentTrack = null;
         // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
         _musicFade = null;
         _musicGain = gain ?? MusicGain;
@@ -350,7 +356,50 @@ internal sealed unsafe partial class GameWindow
                 if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {Sys._bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
+            finally { if (request == Volatile.Read(ref _musicRequest)) Volatile.Write(ref _musicReady, request); }   // 풀기가 끝났다(틀었든 · 없든)
         });
+    }
+
+    /// <summary>다 풀린(믹서에 넘긴 · 못 찾은) 마지막 곡 걸기 번호표 — <see cref="_musicRequest"/> 와 다르면 아직 푸는 중.</summary>
+    private int _musicReady;
+
+    /// <summary>소리 없이 건 곡(소리 끔 · BGM 꺼짐) — (번호표, 곡, 되풀이, 건 때). 곡 시계 <see cref="MusicTrack"/> 가 길이로 돈다.</summary>
+    private (int Request, int Id, bool Loop, long Start)? _silentTrack;
+
+    /// <summary>소리 없이 건 곡의 길이(초) — (번호표, 초). 0 이하면 곡이 없다.</summary>
+    private (int Request, double Seconds)? _silentLength;
+    private int _silentLengthAsked;
+
+    /// <summary>
+    /// 지금 곡 — (곡을 건 번호표, 되감은 수). 곡이 없거나 · 끝났거나 · 멈췄으면 null, 아직 푸는 중이면 되감은 수 −1.
+    /// 파트1 필드 701(<c>0x100cd510</c> → <c>0x100096d0</c>)이 걸 때와 견주어 끝을 기다린다. 소리를 꺼 믹서에 곡이 없으면 건 때부터 곡 길이로 센다
+    /// (원본은 크기만 0 으로 곡을 돌린다 — 파트1 곡만, 파트2 곡은 null).
+    /// </summary>
+    internal (int Request, int Laps)? MusicTrack()
+    {
+        int request = Volatile.Read(ref _musicRequest);
+        if (_musicId == 0) return null;
+        if (_silentTrack is { } s)
+        {
+            if (s.Request != request || s.Id < Part1Game.BgmBase) return null;
+            if (_silentLength is not { } len || len.Request != request)
+            {
+                if (Interlocked.Exchange(ref _silentLengthAsked, request) != request)
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        double seconds = 0;
+                        try { if ((CachedClip(s.Id) ?? Part1Game.Music(s.Id - Part1Game.BgmBase)) is { FrameCount: > 0 } pcm) seconds = pcm.Duration.TotalSeconds; }
+                        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
+                        _silentLength = (request, seconds);
+                    });
+                return (request, -1);
+            }
+            if (len.Seconds <= 0) return null;
+            int laps = (int)(System.Diagnostics.Stopwatch.GetElapsedTime(s.Start).TotalSeconds / len.Seconds);
+            return !s.Loop && laps > 0 ? null : (request, laps);
+        }
+        if (Volatile.Read(ref _musicReady) != request) return (request, -1);
+        return _mixer.MusicPlayback is { } p ? (request, p.Laps) : null;
     }
 
     /// <summary>이미 푼 대사 소리(BGM 번호 → 소리) — 행동 500 이 같은 것을 두 번 풀지 않게.</summary>

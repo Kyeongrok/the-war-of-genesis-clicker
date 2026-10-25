@@ -269,6 +269,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal void Forget()
     {
         _resume = false;
+        host.Part1.Fight = null;
         _chapter = null;
         _teams = null;
         _team = 0;
@@ -297,8 +298,30 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_teams != null && team != _team) { _team = team; host.Part1.SelectedTeam[chapter.Id] = team; }
         int battle = chapter.Places[place].Target;
         _resume = true;
+        host.Part1.Fight = [chapter.Id, 3, marker, place];   // 갈래 3 — 말이 팀에게(0x100c117d)
         host.LeaveScene(() => { SaveProgress(); shell.StartBattle(battle); });   // 남은 행동을 적고 간다 — 전투 세이브가 이 진행을 싣는다
         return true;
+    }
+
+    /// <summary>
+    /// 지도에서 연 전투를 이기고 돌아왔다(<see cref="Part1Progress.Fight"/>) — 원본 장면 4 를 다시 열 때(0x100b4de0, 돌아온 갈래 <c>+0x13cac</c>):
+    /// 1 진입 = 그 장소 낱말 7(전투) = −1(결과 2 가 아니면) · 2 팀이 말에게 = 말 살았나 <c>+0xe</c> = 0 · 장소 칸 비움 · 팀을 그 장소로 · 낱말 7 = −1(결과 2 면 팀은 제자리) ·
+    /// 3 말이 팀에게(900) = 말 <c>+0xe</c> = 0 · 낱말 7 = −1(결과를 안 본다). 챕터 조건 301 [말, v](0x100bd510)이 이 「살았나」를 본다 —
+    /// 챕터 28 사건 38(말 1 이 쓰러지면 장소 23 을 마을 153 으로) · 25 · 28 · 34~36, 챕터 10 사건 12 · 15.
+    /// 리메이크는 진 전투(결과 2 · 4)를 타이틀로 보내므로 이긴 때만 온다. 쓰러진 말은 지도 말 −1(902 와 같다), 지운 전투는 장소 전투 −1(길목)로 적는다.
+    /// </summary>
+    internal void SettleFight()
+    {
+        if (host.Part1.Fight is not [int chapterId, int kind, int marker, int place]) return;
+        host.Part1.Fight = null;
+        if (kind is 2 or 3 && marker >= 0)
+        {
+            if (!host.Part1.ChapterMarkers.TryGetValue(chapterId, out var markers) && Part1Chapter.Load(chapterId) is { } loaded)
+                host.Part1.ChapterMarkers[chapterId] = markers = [.. loaded.Markers];
+            if (markers != null && marker < markers.Count) markers[marker] = -1;
+        }
+        host.Part1.PlaceTowns.Remove($"{chapterId}:{place}");
+        host.Part1.PlaceBattles[$"{chapterId}:{place}"] = -1;
     }
 
     /// <summary>1201 — 장소를 전투 장소로 바꾸고 진행에 적는다(다시 열어도 그대로).</summary>
@@ -367,6 +390,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         int done = _chapter?.Id ?? host.Part1.ChapterId;
         if (done >= 0) host.Part1.FinishedChapters.Add(done);
         host.Part1.CloseChapter();   // 용병 → eld(×100), 용병 · 탑승물 비우기(0x100ae560)
+        host.Part1.Fight = null;
         host.Part1.PendingActions = [];
         host.Part1.Chain = null;
         _resume = false;
@@ -380,6 +404,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         bool resume = _resume && _chapter?.Id == chapterId;
         bool same = _chapter?.Id == chapterId && _mapPx.Length > 0;
+        host.Part1.Fight = null;   // 이긴 전투에서 돌아왔으면 SettleFight 가 이미 적었다 — 이어 하기 등 다른 길이면 그 전투는 다시 연다
         _resume = false;
         _gameOver = false;
         if (_chapter?.Id != chapterId) { _teams = null; _party = 0; }
@@ -1039,7 +1064,11 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         SaveProgress();
         if (Events.Arrive(place)) return;
         var p = chapter.Places[place];
-        if (EnemyAt(place) && p.IsBattle) host.LeaveScene(() => shell.StartBattle(p.Target));
+        if (EnemyAt(place) && p.IsBattle)
+        {
+            host.Part1.Fight = [chapter.Id, 2, Events.Markers.FindIndex(m => m == place), place];   // 갈래 2 — 팀이 말에게(0x100b131a, 그 장소 첫 칸의 말)
+            host.LeaveScene(() => shell.StartBattle(p.Target));
+        }
     }
 
     /// <summary>
@@ -1058,6 +1087,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (place.IsBattle)
         {
             if (SelectedTeam is { } team) team.Moved = true;
+            host.Part1.Fight = [chapter.Id, 1, -1, _party];   // 갈래 1 — 진입(0x100b0ddb)
             host.LeaveScene(() => shell.StartBattle(place.Target));
         }
         else if (place.IsTown)
