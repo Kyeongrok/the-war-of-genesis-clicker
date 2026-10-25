@@ -1066,9 +1066,10 @@ internal sealed unsafe partial class BattleScene
                 Part1Range.Set(A(0), A(1));
                 ClampCameraToRange();
                 break;
-            // 아직 안 옮긴 파트1 행동 — 일부러 비운 갈래(분석-파트1-챕터 17절):
-            // 102 [밝기] 머리 낱말 6 을 바꾸고 맵 층 +0x2c = (a0 + 60)·62/126 − 2(0x1001de20) — 리메이크는 판 밝기(머리 낱말 6)부터 안 그린다(전투 0205 둘).
+            // 102 [기온] 전투 +0xb96e(머리 낱말 6 — 유닛 · 물체 온도가 가는 기온) := a0, 맵 층 +0x2c = (a0 + 60)·62/126 − 2(0x1001de20).
+            //     기온만 옮긴다 — 리메이크는 판 밝기(머리 낱말 6)부터 안 그린다(전투 0205: −40 · 170).
             case Part1Script.Part1Only + 102 when host._scene.IsPart1:
+                Part1Objects.SetAmbient(A(0));
                 break;
             // 203 [폭, 높이] 해설 상자 크기(0x1001eb10: 0x1018ac6a = a0 · 0x1018ac68 = a1) · 202 [x, y, 줄] 그 크기로 (x, y) 에 창 0x100a7ef0(0x1001e9b0) —
             // 필드 209 · 210 과 같은 창(Part1Bubble). 기다리지 않고 칸에 걸어 둔다 — 뒤따르는 행동 1 이 닫힐 때까지 붙든다(분석-파트1-전투 35절).

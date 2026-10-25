@@ -52,6 +52,7 @@ internal sealed class Part1MapObjects(GameWindow host)
     internal void Reset()
     {
         _for = host._scene;
+        _ambient = null;
         _objects.Clear();
         _lingering.Clear();
         _melting.Clear();
@@ -398,8 +399,20 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     private const int MinHeat = -60, MaxHeat = 200, IgniteHeat = 160;
 
-    /// <summary>기온 — 머리 낱말 6(+0xb96e). 물체 · 유닛 온도가 이쪽으로 간다.</summary>
-    private int Ambient => host._scene.Part1Ambient;
+    /// <summary>기온 — 머리 낱말 6(+0xb96e, 로더 <c>0x1002cbe5</c>). 물체 · 유닛 온도가 이쪽으로 간다. 이벤트 행동 102 가 바꾼다(<see cref="SetAmbient"/>).</summary>
+    private int Ambient => _ambient ?? host._scene.Part1Ambient;
+
+    private int? _ambient;
+
+    /// <summary>
+    /// 이벤트 행동 102 [기온] — 전투 <c>+0xb96e</c> := a0(<c>0x1001de20</c>). 그 뒤 시간 틱마다 유닛 · 물체 온도가 새 기온 쪽으로 간다.
+    /// 시판 자료는 전투 0205 둘뿐: 시작 대사 뒤 −40(소리 97), 틱 55 에 170. 원본은 같은 값으로 맵 층 밝기 +0x2c = (a0 + 60)·62/126 − 2 도 바꾸는데, 리메이크는 그 밝기를 그리지 않는다.
+    /// </summary>
+    internal void SetAmbient(int ambient)
+    {
+        Log($"p1temp 기온 {Ambient} → {ambient} (행동 102, 틱 {host.Btl._tick})");
+        _ambient = ambient;
+    }
 
     /// <summary>불붙는 · 부서지는 동작이 도는 물체가 있나 — 원본은 그동안 시간 틱을 올리지 않는다(+0xc9b8, <c>0x10030075</c>).</summary>
     internal bool Busy { get { Ensure(); return _objects.Any(o => o is { Busy: true }); } }
