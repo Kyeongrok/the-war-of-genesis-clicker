@@ -161,6 +161,7 @@ internal sealed unsafe partial class BattleScene
     internal int TargetValue(UnitState user, WorkData w, List<int> targets, bool plain = false)
     {
         if (targets.Count == 0) return 0;
+        if (host._scene.IsPart1 && Part1Rules.TemperatureSkill(Part1.AttackOf(w)) is not 0 and var heat) return Part1TemperatureValue(user, heat, targets);
         if (!plain && w.IsDamage && SmartAi(user)) return SmartValue(user, w, targets);   // 어려움 이상: 가장 많이 깎는 곳(Difficulty.cs)
         int criterion = w.AiCriterion >> 1;
         bool wantMax = (w.AiCriterion & 1) == 0;
@@ -233,6 +234,9 @@ internal sealed unsafe partial class BattleScene
             }
             return count >= need;
         }
+        // 파트1 화이어 필드 · 프로즌 아이스 — 피해가 아니라 온도로 잰 원본 어림(Part1TemperatureValue)이 0 보다 커야 쓴다(0 이면 원본도 −1 「못 씀」, 0x10040c03).
+        if (host._scene.IsPart1 && Part1Rules.TemperatureSkill(Part1.AttackOf(w)) is not 0 and var heat)
+            return Part1TemperatureValue(user, heat, targets) > 0;
         // 파트1 피해 기술 — 적만 센다. 범위 안 모두를 맞히는 것(Attack +0x40 = 2: 화이어 필드 · 프로즌 아이스 · 다탄두 미사일 …)은
         // 제 편이 적보다 많이 맞는 칸은 고르지 않는다(원본 AI 는 AI 표 거르기 +0xe 로 0x10039d30 에서 센다 — 상식대로 옮긴 것).
         if (host._scene.IsPart1 && w.IsDamage)
@@ -241,6 +245,60 @@ internal sealed unsafe partial class BattleScene
             return foes >= need && foes > targets.Count - foes;
         }
         return targets.Count >= need;
+    }
+
+    /// <summary>
+    /// 파트1 온도 기술의 원본 AI 어림(<c>0x1003ff40</c> — 화이어 필드 갈래 <c>0x100400bd</c>, 프로즌 아이스 갈래 <c>0x10040296</c>). 범위의 유닛마다(나는 유닛 +0xba ·
+    /// 기계 +0xb8 = 2 빼고) 온도 t 로 값 v 를 매겨 v·(AC + MR)/200 을 더하고(AC = 쉐도우 실드 ×1.5 · 버써크 ½, MR = 쉐도우 실드 ½, 둘 다 소울 게이지로 깎음 —
+    /// <c>0x1003edc0</c> · <c>0x1003ed50</c>), 합 × 20 을 낸다:
+    /// <list type="bullet">
+    /// <item>화이어 필드(<paramref name="sign"/> +1) — 땅불이 이미 있는 칸(<c>0x1008fc20</c>)은 건너뛴다. 적: t &gt; 60 이면 (t − 80)/2 + 30, 아니면 0.
+    /// 제 편: 얼음 칸(<c>0x1008fcc0</c>)이거나 t ≤ 0 이면 (80 − t)·2(녹여 준다), 아니면 −50.</item>
+    /// <item>프로즌 아이스(−1) — 얼음 칸은 건너뛴다. 적: t &lt; 100 이면 (80 − t)/2 + 30, 아니면 0. 제 편: 땅불 칸이거나 t ≥ 160 이면 2t − 160(식혀 준다), 아니면 −50.</item>
+    /// </list>
+    /// 원본은 이 합을 (150 + 비용 − (소울 − 비용 + 20)/2)로 나눠 다른 기술의 어림과 견주지만, 리메이크 AI 는 기술 차례(<see cref="AiWorks"/>)로 고르므로 합만 쓴다
+    /// (겨눌 칸 점수 · 「쓸 만한가」). 피해 세기(<see cref="Part1Rules.AiStrength"/>)는 0 이라 피해 기술 뒤에 둔다.
+    /// </summary>
+    internal int Part1TemperatureValue(UnitState user, int sign, List<int> targets)
+    {
+        long sum = 0;
+        foreach (int i in targets)
+        {
+            var t = host._units[i];
+            if (Part1.Fighter(t) is not { } f || f.Chr.Fields[Part1Chr.FlyField] != 0 || Part1.IsMachine(t)) continue;
+            int h = Part1Objects.UnitHeat(t);
+            bool foe = SeesAsFoe(user, t), fire = Part1Objects.FireAt(t.Col, t.Row), ice = Part1Objects.IceAt(t.Col, t.Row);
+            int v;
+            if (sign > 0)
+            {
+                if (fire) continue;
+                v = foe ? (h > 60 ? (h - 80) / 2 + 30 : 0) : ice || h <= 0 ? (80 - h) * 2 : -50;
+            }
+            else
+            {
+                if (ice) continue;
+                v = foe ? (h < 100 ? (80 - h) / 2 + 30 : 0) : fire || h >= 160 ? 2 * h - 160 : -50;
+            }
+            int ac = f.Stat(Part1Chr.Ac), mr = f.Stat(Part1Chr.Mr);
+            if (Part1.Has(t, 22)) { ac = ac * 3 / 2; mr /= 2; }
+            if (t.Status(4) > 0) ac /= 2;
+            sum += (long)v * (Part1Combat.Scaled(ac, t.Soul) + Part1Combat.Scaled(mr, t.Soul)) / 200;
+        }
+        long value = sum * 20;
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"p1temp ai unit {Array.IndexOf(host._units, user)} chr {user.ChrCode} {(sign > 0 ? "화이어 필드" : "프로즌 아이스")} 대상 {targets.Count}: 어림 {value}" + Environment.NewLine);
+        return (int)Math.Clamp(value, int.MinValue, int.MaxValue);
+    }
+
+    /// <summary>
+    /// 파트1 AI 가 갈 칸을 고를 때 거르는 칸(<c>0x100267de</c> · <c>0x10026a74</c>) — 제 온도가 140 을 넘으면 땅불 칸(<c>0x1008fc20</c>), 20 아래면 얼음 칸(<c>0x1008fcc0</c>).
+    /// </summary>
+    internal bool Part1AiAvoids(UnitState u, int col, int row)
+    {
+        if (!host._scene.IsPart1) return false;
+        int h = Part1Objects.UnitHeat(u);
+        return h > 140 && Part1Objects.FireAt(col, row) || h < 20 && Part1Objects.IceAt(col, row);
     }
 
     /// <summary>상태 점수표 <c>0x1005c4e0</c> — 해로운 것 −1, 이로운 것 +1, 값의 부호로 갈리는 것(13·14·21·29 는 양수가 이득, 18·20·38 은 음수가 이득), 나머지 0.</summary>
@@ -298,7 +356,7 @@ internal sealed unsafe partial class BattleScene
             // 128개를 시전자가 6층에 서 있지 않으면 사실상 못 쓴다(감사3 R8). 리메이크는 일부러 따라가지 않고 늘 칸 높이로 잰다.
             for (int stand = 0; stand < range.Cost.Length; stand++)
             {
-                if (!range.CanReach(stand) || (stayPut && stand != here)) continue;
+                if (!range.CanReach(stand) || (stayPut && stand != here) || stand != here && Part1AiAvoids(user, stand % host.Cols, stand / host.Cols)) continue;
                 stands.Add(stand);
                 int sc = stand % host.Cols, sr = stand / host.Cols;
                 for (int ay = Math.Max(0, sr - reach); ay <= Math.Min(host.Rows - 1, sr + reach); ay++)
@@ -429,7 +487,7 @@ internal sealed unsafe partial class BattleScene
         {
             // 길이 없는 칸은 후보가 아니다 — 원본 0x10059a20 은 0xffff 를 돌려줘 ⑥은 다음 목표로, 다 없으면 제자리에서 쉰다.
             // 전에는 맨해튼 거리로 대신해 벽 쪽으로 걸어갔다(ba-20 J N2).
-            if (!range.CanReach(i) || cost == null || cost[i] == int.MaxValue) continue;
+            if (!range.CanReach(i) || cost == null || cost[i] == int.MaxValue || Part1AiAvoids(u, i % host.Cols, i / host.Cols)) continue;
             int d = cost[i];
             if (d < bestCost || d == bestCost && range.Cost[i] < bestOwn) { bestCost = d; best = i; bestOwn = range.Cost[i]; }
         }
@@ -592,7 +650,7 @@ internal sealed unsafe partial class BattleScene
                 int leastDangerous = here;
                 for (int i = 0; i < fleeRange.Cost.Length; i++)
                 {
-                    if (!fleeRange.CanReach(i)) continue;
+                    if (!fleeRange.CanReach(i) || i != here && Part1AiAvoids(u, i % host.Cols, i / host.Cols)) continue;
                     double danger = FleeDanger(u, i % host.Cols, i / host.Cols);
                     if (danger < bestDanger) { bestDanger = danger; leastDangerous = i; }
                     if (danger > SafeDanger) continue;

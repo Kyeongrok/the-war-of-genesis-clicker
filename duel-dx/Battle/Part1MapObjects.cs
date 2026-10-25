@@ -21,7 +21,7 @@ using static DuelDx.GameWindow;
 /// 자료 33번 — 보이지 않는 벽 262 를 동작 16(빈 장 + 키 9)·1 로 열고(0042 · 0043 · 0044 · 0046 · 0071 · 0083 · 0397 · 0410, 지키던 이가 죽으면),
 /// 0114 문 120 을 19·5 로, 0226 나무 233 을 20(타는 나무)으로.</item>
 /// </list>
-/// 온도 · 내구 · 타기 · 부서짐(아래 「알림 · 반응」, 분석-파트1-전투 36.4)도 옮겼다. 안 옮긴 것: 키 11(<c>0x10098f66</c> 물체 뿌리기 [H: 불똥]) · 반응 7~10.
+/// 온도 · 내구 · 타기 · 부서짐(아래 「알림 · 반응」, 분석-파트1-전투 36.4), 칸에 남는 땅불 · 얼음 덩이, 유닛 온도(+0x4a — SPD · 동결 · 불 피해 · 물들이기)도 옮겼다. 안 옮긴 것: 키 11(<c>0x10098f66</c> 물체 뿌리기 [H: 불똥]) · 반응 7~10.
 /// 그리기 깊이: 원본처럼 띠마다 (칸 줄, 높이) 바이트로 유닛과 앞뒤를 가린다(<c>0x1001bc60</c> · 아래 「그리기 깊이」).
 /// </remarks>
 internal sealed class Part1MapObjects(GameWindow host)
@@ -53,8 +53,11 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         _for = host._scene;
         _objects.Clear();
-        _fires.Clear();
+        _lingering.Clear();
+        _melting.Clear();
         _unitHeat.Clear();
+        _iceMarks.Clear();
+        foreach (var u in host._units) u.AnimFrozen = false;
         _killsPending = false;
         foreach (var (obt, x, y) in host._scene.Part1Objects ?? [])
         {
@@ -586,15 +589,23 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     /// <summary>
     /// 범위 알림 — 그 칸에서 맨해튼 <paramref name="reach"/> 안의 유닛(<c>0x1008f7c0</c>)과 물체(<c>0x1008f390</c>, 모양 3 — 값 c 는 칸마다 4 라 c/4 칸)에 알림을 보낸다.
-    /// 높이 거르기(인자 a3)는 안 옮겼다 [H].
+    /// 칸에 남은 기운(땅불 · 얼음 덩이, <see cref="Lingering"/>)도 물체 목록에 있어 함께 받는다 — 남이 보낸 알림 10 · 11 · 14 면 꺼진다
+    /// (땅불 vt+0x48 <c>0x1007c9d0</c> · 얼음 덩이 <c>0x1007c5b0</c>: 보낸 이가 자기면 거르고, 아니면 +0x14a = 1). 높이 거르기(인자 a3)는 안 옮겼다 [H].
     /// </summary>
-    private void Send(Obj? from, int col, int row, int reach, int notice, Hit hit, bool self)
+    private void Send(Obj? from, int col, int row, int reach, int notice, Hit hit, bool self, Lingering? source = null)
     {
         bool Near(int c, int r) => Math.Abs(c - col) + Math.Abs(r - row) <= reach;
         foreach (var u in host._units)
-            if (u is { Alive: true, OnField: true } && Near(u.Col, u.Row)) UnitNotice(u, notice, hit, from);
+            if (u is { Alive: true, OnField: true } && Near(u.Col, u.Row)) UnitNotice(u, notice, hit, from, source);
         foreach (var o in _objects)
             if (o != null && (self || o != from) && Touches(o, Near)) Notify(o, notice, hit);
+        if (notice is not (10 or 11 or 14)) return;
+        foreach (var l in _lingering)
+            if (l != source && !l.Out && Near(l.Col, l.Row))
+            {
+                l.Out = true;
+                Log($"p1temp {LingerName(l)} ← 알림 {notice}{(from != null ? $" ({Name(from)})" : source != null ? $" ({LingerName(source)})" : "")}: 꺼짐 (틱 {host.Btl._tick})");
+            }
     }
 
     /// <summary>
@@ -610,29 +621,83 @@ internal sealed class Part1MapObjects(GameWindow host)
         Send(o, o.Col + o.AnchorX, o.Row + o.AnchorY, k.Args[2] / 4, notice, hit, self: false);
     }
 
-    // ── 칸의 불 — 화이어 필드 · 화이어 볼의 땅불(0x1007b970) ───────────────────────────────────────────────
-    // 원본(분석-파트1-기술-b 9.3 · 9.4): 화이어 필드는 타격 사건이 없고, 범위의 칸마다 불(클래스 0x1007b970)을 rand%20+30 시간 틱 남긴다.
-    // 화이어 볼은 대상이 없을 때 공이 떨어진 칸에 땅불(rand%10+20). 불은 첫 장과 시간 틱마다(vt+0x54 0x1007bd90) 제 칸의 유닛 · 물체에 알림 10 을 보낸다.
-    // 그림은 기술 쪽(Part1Skill)이 그린다 — 여기서는 열만 든다.
+    // ── 칸에 남는 기운 — 화이어 필드 · 화이어 볼의 땅불(0x1007b970) · 프로즌 아이스의 얼음 덩이(0x1007c1b0) ─────────────────────
+    // 원본(분석-파트1-기술-b 9.3 · 9.4 · 9.7): 두 기술 모두 타격 사건이 없다. 화이어 필드는 범위의 칸마다 땅불을 rand%20+30 시간 틱,
+    // 화이어 볼은 대상이 없을 때 공이 떨어진 칸에 rand%10+20 남긴다. 프로즌 아이스는 칸마다 얼음 덩이를 n = 30·(R+1) − 30·⌊거리/40⌋ 시간 틱
+    // (R = 범위의 가장 먼 맨해튼 칸, 거리 = 겨눈 칸 가운데에서 그 칸 가운데까지의 픽셀 — 0x1004c344~). 둘 다 바탕 0x1007b720: 나이 1 에 시간 틱을 적고
+    // 그 틱 + 길이에 끝 표지(+0x14a, 0x1007b940). 첫 장과 시간 틱마다(vt+0x54 — 땅불 0x1007bd90 · 얼음 0x1007c490) 끝 검사 뒤 제 칸의 유닛 · 물체에
+    // 땅불은 알림 10(열), 얼음은 알림 11(냉기)을 보낸다. 남이 보낸 10 · 11 · 14 를 받으면 꺼진다(위 Send). 땅불 그림은 기술 쪽이 그리고,
+    // 얼음 덩이는 기술이 넘겨준 뒤 여기서 그린다(Obs 118 r+3 되풀이 → 끝나면 r+6 녹기). 덩이의 떨림(0x1007c3a0, ±1 px)은 안 옮겼다.
 
-    private readonly List<(int Col, int Row, int End)> _fires = [];
+    private sealed class Lingering(int col, int row, int start, int end, int notice, int motion)
+    {
+        public readonly int Col = col, Row = row, Start = start, End = end, Notice = notice, Motion = motion;
+        public bool Out;                 // +0x14a — 끝 표지. 다음 틱에 치운다
+        public double DrawFrom, EndedAt = -1;
+    }
+
+    private readonly List<Lingering> _lingering = [];
+    private readonly List<Lingering> _melting = [];
+
+    private static string LingerName(Lingering l) => $"{(l.Notice == 10 ? "땅불" : "얼음")} ({l.Col},{l.Row})";
 
     /// <summary>칸에 불을 놓는다 — 놓자마자 한 번 알림 10(<c>0x1007bc39</c>).</summary>
-    internal void AddFire(int col, int row, int life)
+    internal void AddFire(int col, int row, int life) => Linger(col, row, life, 10, -1);
+
+    /// <summary>프로즌 아이스가 칸에 얼음 덩이를 남긴다(<c>0x1004c339</c>) — 놓자마자 한 번 알림 11. <paramref name="motion"/> 은 Obs 118 의 r(0~2).</summary>
+    internal void AddIce(int col, int row, int motion, int life)
     {
-        _fires.Add((col, row, host.Btl._tick + life));
-        Send(null, col, row, 0, 10, default, self: true);
+        Ensure();
+        Linger(col, row, life, 11, motion);
+    }
+
+    private void Linger(int col, int row, int life, int notice, int motion)
+    {
+        int tick = host.Btl._tick;
+        var l = new Lingering(col, row, tick, tick + life, notice, motion) { DrawFrom = host._lastTime };
+        _lingering.Add(l);
+        Log($"p1temp {LingerName(l)} 놓음: 길이 {life} 시간 틱 (틱 {tick} → {tick + life})");
+        Send(null, col, row, 0, notice, default, self: true, source: l);
+    }
+
+    /// <summary>그 칸에 타는 땅불이 있나(<c>0x1008fc20</c> — 칸의 기운 가운데 화이어 필드 78~86 · 화이어 볼 69~77 의 것).</summary>
+    internal bool FireAt(int col, int row) => _lingering.Any(l => l is { Notice: 10, Out: false } && l.Col == col && l.Row == row);
+
+    /// <summary>그 칸에 얼음 덩이가 있나(<c>0x1008fcc0</c> — 프로즌 아이스 115~123 의 것).</summary>
+    internal bool IceAt(int col, int row) => _lingering.Any(l => l is { Notice: 11, Out: false } && l.Col == col && l.Row == row);
+
+    /// <summary>얼음 덩이를 그린다 — 물체와 함께, 유닛보다 먼저(덩이는 칸 바닥 높이, 유닛은 그 위 +19 라 원본 깊이로도 유닛이 앞이다).</summary>
+    private void DrawLingering()
+    {
+        int id = Part1Game.ObsBase + 118;
+        if (host.UiFor(id) is not { } sprite) return;
+        foreach (var l in _lingering)
+        {
+            if (l.Notice != 11) continue;
+            int tick = (int)((host._lastTime - l.DrawFrom) * TicksPerSecond);
+            int key = sprite.BlendAt(l.Motion + 3, tick % Math.Max(1, sprite.MotionLength(l.Motion + 3)));
+            host.DrawUi(id, l.Motion + 3, tick, l.Col * TileW + TileW / 2, host.CellCenterY(l.Col, l.Row), BlendOf(key), loop: true, fade: BlendFade(key));
+        }
+        _melting.RemoveAll(l =>
+        {
+            int age = (int)((host._lastTime - l.EndedAt) * TicksPerSecond);
+            if (age >= Math.Max(1, sprite.MotionLength(l.Motion + 6))) return true;
+            int key = sprite.BlendAt(l.Motion + 6, age);
+            host.DrawUi(id, l.Motion + 6, age, l.Col * TileW + TileW / 2, host.CellCenterY(l.Col, l.Row), BlendOf(key), loop: false, fade: BlendFade(key));
+            return false;
+        });
     }
 
     /// <summary>
     /// 맞는 기술이 맵 칸도 칠 때(<c>Attack +0x41</c> = 1, <c>0x10076c46</c>) — 범위의 물체에 알림 1 과 공격 서술을 보낸다. 부르는 곳은 파트1 기술이 끝난 뒤(BattleScene.UseWorkRoutine).
     /// 원본은 핸들러마다 타격 사건의 칸이 다르다: 화이어 볼(69~77)은 공마다 한 칸(대상이 있으면 대상의 칸, 없으면 범위 안 아무 칸 + 땅불), 화이어 필드(78~86)는 타격이 없고 칸마다 불,
-    /// 그 밖(검기 · 총 · 메테오 …)은 리메이크가 범위 칸 전체로 본다 [H: 핸들러별 타격 칸은 안 옮겼다].
+    /// 프로즌 아이스(115~123)는 타격이 없다(얼음 덩이는 기술이 <see cref="AddIce"/> 로 넘긴다), 그 밖(검기 · 총 · 메테오 …)은 리메이크가 범위 칸 전체로 본다 [H: 핸들러별 타격 칸은 안 옮겼다].
     /// </summary>
     internal void HitByAttack(UnitState a, Part1Attack attack, IReadOnlyList<(int Col, int Row)> cells, IReadOnlyList<int> targets)
     {
         Ensure();
-        if (_objects.Count == 0 || cells.Count == 0) return;
+        if (attack.Id is >= 115 and <= 123) return;
+        if (cells.Count == 0 || _objects.Count == 0 && attack.Id is not (>= 69 and <= 86)) return;
         var rules = host.Btl.Part1;
         var fa = rules.Fighter(a);
         int power = fa is null ? 0 : Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd;
@@ -662,7 +727,8 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>
     /// 시간 틱(BattleScene.AdvanceTick — 원본 <c>0x10030086</c>: 유닛 vt+0x54 다음 물체 vt+0x54). 유닛 온도(<see cref="StepUnitHeat"/>) →
     /// 물체마다 <c>0x10097af0</c>: 온도를 기온 쪽으로 2(<c>0x10099f60</c>), 타는 물체(성질 칸 6)가 동작 20~22 · 26~34 이면 기준 칸 둘레 1 칸(모양 3 · 7)의
-    /// 유닛과 물체(<b>제 몸도</b> — 그래서 혼자서도 200 까지 달아 끝까지 탄다)에 알림 10 → 칸의 불마다 제 칸에 알림 10(다 된 불은 끈다).
+    /// 유닛과 물체(<b>제 몸도</b> — 그래서 혼자서도 200 까지 달아 끝까지 탄다) · 칸의 기운에 알림 10 → 칸의 기운마다 끝 검사(<c>0x1007b940</c> — 다 됐으면 끝 표지를 세우되
+    /// 이번 틱은 그래도 보낸다) 뒤 제 칸에 알림 10 · 11. 끝 표지가 선 기운은 치운다(얼음은 녹는 그림 r+6).
     /// </summary>
     internal void TimeStep()
     {
@@ -676,20 +742,47 @@ internal sealed class Part1MapObjects(GameWindow host)
             if (o.Def.Burns && o.Motion is (>= 20 and <= 22) or (>= 26 and <= 34))
                 Send(o, o.Col + o.AnchorX, o.Row + o.AnchorY, 1, 10, default, self: true);
         }
-        _fires.RemoveAll(f => host.Btl._tick >= f.End);
-        foreach (var (c, r, _) in _fires.ToList()) Send(null, c, r, 0, 10, default, self: true);
+        int tick = host.Btl._tick;
+        foreach (var l in _lingering.ToList())
+        {
+            if (l.Out) continue;
+            if (tick >= l.End)
+            {
+                l.Out = true;
+                Log($"p1temp {LingerName(l)} 다 탐/녹음 (틱 {tick}, 놓은 틱 {l.Start})");
+            }
+            Send(null, l.Col, l.Row, 0, l.Notice, default, self: true, source: l);
+        }
+        foreach (var l in _lingering.Where(l => l.Out))
+            if (l.Notice == 11) { l.EndedAt = host._lastTime; _melting.Add(l); }
+        _lingering.RemoveAll(l => l.Out);
     }
 
     // ── 유닛 온도(+0x4a) ─────────────────────────────────────────────────────────────────────────────────
-    // 원본: 알림 10(0x10035537) — 기계(+0xb8 = 2)가 아니면 온도 += 5·X/10(X = 화염 저항 칸 30 + 보정 208, −10~20 · 빙한 부여면 +5), 200 에서 자름.
-    // 시간 틱(0x10035150): 기온 쪽으로 2, 160 을 넘으면 세기 식 9((온도 − 160)/2 + 1) · 화염 · 명중 100 의 서술로 스스로 맞고(0x10039e60(0x3f2) — 맞음 길 그대로),
-    // 10% 로 컨디션이상(15, 0x1003528d). 리메이크는 온도를 기온에서 벗어난 유닛만 든다.
+    // 원본 [C]: 유닛을 만들 때 80(0x10034871 — 기온과 상관없이). 유닛 시간 틱 0x10035150:
+    //  ① 기계(+0xb8 = 2)가 아니면 기온(머리 낱말 6 +0xb96e) 쪽으로 2(같은 비교를 두 번). 전장 지형(낱말 7, 1 사막 ~ 6 바다)의 적응 어빌리티
+    //     (86 사막 · 87 정글 · 88 동굴 · 89 산지 · 90 극지 · 91 바다 적응, 0x10042930)를 가졌으면 기온 대신 80 쪽으로.
+    //  ② 160 을 넘으면 세기 식 9((온도 − 160)·20/40 + 1) · 속성 1(화염) · 명중 100 의 서술로 스스로 맞고(0x10039e60(0x3f2) — 맞음 길 그대로),
+    //     10% 로 대상 거르기 25 를 지나면 컨디션이상(15, 값 20 + (온도 − 160)/2, 0x1003528d).
+    //  ③ 그렇지 않고 0 아래면 SPD(0x1003ece0 — 음수 온도만큼 깎인다)가 4 아래일 때 상태 1(+0x247, 동결)을 건다: 표지 0x10041c60(1)(Obs 101 동작 3 → 4,
+    //     풀리면 5 — 0x10083ae0), 서기 동작에 몸짓을 멈춘다(+0x26 = −1). 걸린 채 SPD 가 4 이상이면 푼다(0x10042700(1), +0x26 = 0). 온도가 0 이상으로
+    //     뛰면 ③ 을 안 지나 풀리지 않는다(원본 그대로). 상태 1 은 차례를 못 받게 한다(0x10042871).
+    // 알림 10(0x10035537): 기계가 아니면 += ⌊5·X/10⌋(X = 0x1003eee0 = 화염 저항(칸 30 + 보정 208) −10~20 + 빙한 부여(+0x24a)면 5), 200 에서 자름.
+    // 알림 11(0x10035580): 기계 · 큰 유닛(+0xb9)이 아니면 −= ⌊5·Y/10⌋(Y = 0x1003ef00 = 빙한 저항(칸 31 + 보정 209) −10~20 + 화염 부여(+0x249)면 5), −60 에서 자름.
+    // 온도는 저장에 안 싣는다(상태 · 강화처럼).
+
+    /// <summary>유닛을 만들 때의 온도(<c>0x10034871</c>).</summary>
+    internal const int UnitStartHeat = 80;
+
+    /// <summary>시험 훅 DUELDX_P1HEAT=&lt;온도&gt; — 판의 유닛이 80 대신 이 온도로 시작한다(동결 · 불 피해를 화면 밖에서 빨리 보려고). 지형 적응의 목표 80 은 그대로.</summary>
+    private static readonly int? HeatHook = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1HEAT"), out int hh) ? hh : null;
 
     private readonly Dictionary<UnitState, int> _unitHeat = [];
 
-    internal int UnitHeat(UnitState u) => _unitHeat.TryGetValue(u, out int h) ? h : Ambient;
+    /// <summary>유닛 온도(+0x4a) — 아직 바뀐 적 없으면 80.</summary>
+    internal int UnitHeat(UnitState u) => _unitHeat.TryGetValue(u, out int h) ? h : HeatHook ?? UnitStartHeat;
 
-    private void UnitNotice(UnitState u, int notice, Hit hit, Obj? from)
+    private void UnitNotice(UnitState u, int notice, Hit hit, Obj? from, Lingering? source)
     {
         var rules = host.Btl.Part1;
         if (notice == 1)
@@ -697,43 +790,151 @@ internal sealed class Part1MapObjects(GameWindow host)
             ObjectHit(u, 7, hit.Power, hit.Element, from is null ? "물체" : Name(from));
             return;
         }
-        if (notice != 10 || rules.IsMachine(u) || rules.Fighter(u) is not { } f) return;
-        int x = Math.Clamp(f.Resist(1) ?? 10, -10, 20) + (rules.Enchant.GetValueOrDefault(u) == 2 ? 5 : 0);
-        int before = UnitHeat(u);
-        _unitHeat[u] = Math.Min(MaxHeat, before + 5 * x / 10);
-        Log($"p1heat unit {Array.IndexOf(host._units, u)} chr {u.ChrCode} ({u.Col},{u.Row}) 알림 10{(from != null ? $" ← {Name(from)}" : "")}: 온도 {before} → {_unitHeat[u]}");
+        if (notice is not (10 or 11) || rules.IsMachine(u) || rules.Fighter(u) is not { } f) return;
+        int before = UnitHeat(u), after;
+        if (notice == 10)
+        {
+            int x = Math.Clamp(f.Resist(1) ?? 10, -10, 20) + (rules.Enchant.GetValueOrDefault(u) == 2 ? 5 : 0);
+            after = Math.Min(MaxHeat, before + 5 * x / 10);
+        }
+        else
+        {
+            if (f.Chr.Fields[Part1Chr.BigField] != 0) return;
+            int y = Math.Clamp(f.Resist(2) ?? 10, -10, 20) + (rules.Enchant.GetValueOrDefault(u) == 1 ? 5 : 0);
+            after = Math.Max(MinHeat, before - 5 * y / 10);
+        }
+        _unitHeat[u] = after;
+        string by = from != null ? $" ← {Name(from)}" : source != null ? $" ← {LingerName(source)}" : "";
+        Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode} ({u.Col},{u.Row}) 알림 {notice}{by}: 온도 {before} → {after} (틱 {host.Btl._tick})");
     }
 
     private void StepUnitHeat()
     {
-        if (_unitHeat.Count == 0) return;
-        var rules = host.Btl.Part1;
+        var btl = host.Btl;
+        var rules = btl.Part1;
         int ambient = Ambient;
-        foreach (var u in _unitHeat.Keys.ToList())
+        foreach (var u in host._units)
         {
-            if (!u.Alive || !u.OnField || Array.IndexOf(host._units, u) < 0) { _unitHeat.Remove(u); continue; }
-            int h = _unitHeat[u];
-            h += Math.Sign(ambient - h) * Math.Min(2, Math.Abs(ambient - h));
-            _unitHeat[u] = h;
-            if (h > IgniteHeat && rules.Fighter(u) is { } f)
+            if (!u.Alive || !u.OnField) continue;
+            int before = UnitHeat(u), h = before;
+            if (!rules.IsMachine(u))
             {
-                int power = Part1Combat.Power(9, f.AttackerAt(u.Soul) with { Brightness = h });
+                bool adapted = btl.Part1Adapted(u);
+                int goal = adapted ? UnitStartHeat : ambient;
+                h += Math.Sign(goal - h) * Math.Min(2, Math.Abs(goal - h));
+                if (h != before)
+                {
+                    _unitHeat[u] = h;
+                    Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode} 틱 {btl._tick}: 온도 {before} → {h} ({(adapted ? "적응 — 80" : $"기온 {ambient}")} 쪽)");
+                }
+            }
+            if (h > IgniteHeat)
+            {
+                if (rules.Fighter(u) is not { } f) continue;
+                int power = Part1Combat.Power(9, f.AttackerAt(u.Soul) with { Temperature = h });
                 ObjectHit(u, 9, power, 1, $"온도 {h}");
                 if (u.Hp > 0 && host._rng.Next(10) == 0 && rules.TargetFilter(25, u) && rules.AddAilment(u, Part1Rules.Condition))
                 {
+                    Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode}: 온도 {h} → 컨디션이상");
                     host.Btl.Popup(u, "컨디션이상", BattleScene.AilmentPopupColor, 12, rise: 88);
                     host.StatusScr.RefreshUnitStats(u);
                 }
             }
-            if (h == ambient) _unitHeat.Remove(u);
+            else if (h < 0) Chill(u, h);
         }
+    }
+
+    /// <summary>0 아래 온도의 동결 검사(<c>0x100352bc</c>~) — SPD &lt; 4 면 상태 1 을 걸고, 걸린 채 4 이상이면 푼다.</summary>
+    private void Chill(UnitState u, int h)
+    {
+        var btl = host.Btl;
+        var rules = btl.Part1;
+        int spd = btl.Part1Spd(u);
+        bool frozen = rules.HasAilment(u, Part1Rules.Frozen);
+        if (frozen == spd < 4)
+        {
+            Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode}: 온도 {h} → SPD {spd} (온도 빼기 전 {btl.Part1Spd(u, heat: false)}){(frozen ? " · 동결 중" : "")}");
+            return;
+        }
+        if (!frozen)
+        {
+            rules.AddAilment(u, Part1Rules.Frozen);
+            u.AnimFrozen = true;
+            _iceMarks[u] = (host._lastTime, -1);
+        }
+        else
+        {
+            rules.ClearAilment(u, Part1Rules.Frozen);
+            u.AnimFrozen = false;
+            if (_iceMarks.TryGetValue(u, out var m)) _iceMarks[u] = (m.Start, host._lastTime);
+        }
+        Log($"p1temp unit {Array.IndexOf(host._units, u)} chr {u.ChrCode}: 온도 {h} · SPD {spd} → {(frozen ? "동결 풀림" : "동결(상태 1)")} (틱 {btl._tick})");
+        host.StatusScr.RefreshUnitStats(u);
+    }
+
+    /// <summary>동결 표지(Obs 101, 클래스 <c>0x10083aa0</c>) — 건 때 · 풀린 때(−1 이면 아직 걸림).</summary>
+    private readonly Dictionary<UnitState, (double Start, double Thaw)> _iceMarks = [];
+
+    /// <summary>
+    /// 동결 표지를 그린다 — 유닛 발치에 Obs 101 동작 3(얼어붙기)을 한 번, 그다음 4 를 되풀이, 풀리면 5(녹기)를 한 번 틀고 지운다(<c>0x10083ae0</c>).
+    /// 유닛 위에(머리 표지와 함께) 그린다.
+    /// </summary>
+    internal void DrawIceMarks()
+    {
+        if (_iceMarks.Count == 0) return;
+        int id = Part1Game.ObsBase + 101;
+        var sprite = host.UiFor(id);
+        foreach (var u in _iceMarks.Keys.ToList())
+        {
+            var (start, thaw) = _iceMarks[u];
+            if (sprite == null || !u.Alive || !u.OnField || Array.IndexOf(host._units, u) < 0) { _iceMarks.Remove(u); continue; }
+            var (fx, fy) = host.Btl.UnitFoot(u);
+            int motion, age;
+            bool loop = false;
+            if (thaw >= 0)
+            {
+                (motion, age) = (5, (int)((host._lastTime - thaw) * TicksPerSecond));
+                if (age >= Math.Max(1, sprite.MotionLength(5))) { _iceMarks.Remove(u); continue; }
+            }
+            else
+            {
+                age = (int)((host._lastTime - start) * TicksPerSecond);
+                int first = Math.Max(1, sprite.MotionLength(3));
+                if (age < first) motion = 3;
+                else { (motion, age, loop) = (4, age - first, true); }
+            }
+            int key = sprite.BlendAt(motion, loop ? age % Math.Max(1, sprite.MotionLength(motion)) : age);
+            host.DrawUi(id, motion, age, fx, fy, BlendOf(key), loop: loop, fade: BlendFade(key));
+        }
+    }
+
+    /// <summary>
+    /// 온도 물들이기(유닛 그리기 <c>0x10034a07</c>~ — 맞을 때의 물들이기 +0x4c 가 없을 때): 0 아래면 방식 29(푸른빛) · 세기 −온도·32 ÷ SPD 바탕(+0xcd, 인물 칸 25),
+    /// 160 을 넘으면 방식 28(주황빛) · 세기 (온도 − 160)·32 ÷ 40. 세기는 바이트로 담아(아래 8비트) 31 에서 자른다. 그 밖은 null.
+    /// </summary>
+    internal Part1Blend.Plan? TemperatureTint(UnitState u)
+    {
+        int h = UnitHeat(u);
+        if (h >= 0 && h <= IgniteHeat) return null;
+        int level;
+        int mode;
+        if (h < 0)
+        {
+            int spd = host.Btl.Part1.Fighter(u)?.Chr.Fields[Part1Chr.Spd] ?? 0;
+            (mode, level) = (29, -h * 32 / Math.Max(1, spd));
+        }
+        else (mode, level) = (28, (h - IgniteHeat) * 32 / 40);
+        level &= 0xff;
+        return Part1Blend.PlanOf(Part1Game.BlendKey(mode, Math.Min(31, level)));
     }
 
     private bool _killsPending;
 
     /// <summary>
-    /// 물체 · 온도가 유닛을 친다 — 서술(세기 식, 세기, 속성)을 원본 피해 길(<c>0x100413b0</c>)처럼: 식 7 · 9 는 회피 · 막기를 안 굴리고 명중 100,
-    /// 방어 AC(버써크 ½ · 쉐도우 실드 ×1.5) · 속성 저항 · ±1/6 · 배리어 ×2. 피해 숫자 · 맞기 몸짓은 기술 피해와 같은 꼴, 0 이면 아무것도 안 띄운다.
+    /// 물체 · 온도가 유닛을 친다 — 서술(세기 식, 세기, 속성)을 원본 피해 길(<c>0x100413b0</c>)처럼: 식 7 · 9 는 회피 · 막기를 안 굴리고 명중 100.
+    /// 식 7 은 방어 AC(버써크 ½ · 쉐도우 실드 ×1.5) · 속성 저항으로, <b>식 9(온도)는 방어 · 저항 칸을 다 건너뛰고</b> 세기 × X / 10
+    /// (X = <c>0x1003eee0</c> = 화염 저항 −10~20 + 빙한 부여 5, <c>0x100414a2</c>)만 — 그 뒤 둘 다 ±1/6 · 배리어 ×2(<c>0x100416fb</c>~).
+    /// 피해 숫자 · 맞기 몸짓은 기술 피해와 같은 꼴, 0 이면 아무것도 안 띄운다.
     /// </summary>
     private void ObjectHit(UnitState t, int selector, int power, int element, string why)
     {
@@ -743,7 +944,14 @@ internal sealed class Part1MapObjects(GameWindow host)
         int defense = ft.Stat(Part1Chr.Ac, t.Soul);
         if (t.Status(4) > 0) defense /= 2;
         if (rules.Has(t, 22)) defense = defense * 3 / 2;
-        int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, host._rng.Next(32768));
+        int damage;
+        if (selector == 9)
+        {
+            int x = Math.Clamp(ft.Resist(1) ?? 10, -10, 20) + (rules.Enchant.GetValueOrDefault(t) == 2 ? 5 : 0);
+            (power, defense) = (x * power / 10, 0);
+            damage = Part1Combat.Damage(power, 0, null, null, host._rng.Next(32768));
+        }
+        else damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, host._rng.Next(32768));
         if (rules.Has(t, 20)) damage *= 2;
         damage = Math.Max(0, damage);
         Log($"p1heat hit unit {Array.IndexOf(host._units, t)} chr {t.ChrCode} ({t.Col},{t.Row}) ← {why}: 식 {selector} 세기 {power} 속성 {element} ÷ AC {defense} = {damage} (HP {t.Hp})");
@@ -797,6 +1005,7 @@ internal sealed class Part1MapObjects(GameWindow host)
         if (CamHold is var (holdCol, holdRow)) host.Btl.CenterNow(holdCol * TileW + TileW / 2, host.CellCenterY(holdCol, holdRow));
         _pending.Clear();
         _drawn = 0;
+        DrawLingering();
         int viewX0 = host._camX, viewX1 = host._camX + host.ViewWidth, viewY0 = host._camY, viewY1 = host._camY + host.ViewHeight;
         foreach (var o in _objects)
         {

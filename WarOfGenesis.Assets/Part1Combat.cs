@@ -164,7 +164,7 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
 public static class Part1Combat
 {
     /// <summary>세기 식에 드는 때린 이 값 — 능력치는 어빌리티·장비 보정이 다 들어간 값이다.</summary>
-    public readonly record struct Attacker(int Str, int Skill, int Dex, int Int, Part1Item? Weapon1, Part1Item? Weapon2, int Brightness = 0, bool Enchanted = false);
+    public readonly record struct Attacker(int Str, int Skill, int Dex, int Int, Part1Item? Weapon1, Part1Item? Weapon2, int Temperature = 80, bool Enchanted = false);
 
     /// <summary>피해 세기 — 선택자는 <c>Attack.dat +0x42</c>. 32 밖은 0.</summary>
     public static int Power(int selector, Attacker a)
@@ -179,7 +179,7 @@ public static class Part1Combat
             3 => w1 * a.Skill / 2 + atk1 * a.Str / 2 + e1 * e1,
             4 => (a.Dex + a.Skill) * w1 / 3 + atk1 * a.Str / 3 + e1 * e1,
             5 or 6 or 8 or (>= 10 and <= 24) => a.Int * a.Int,
-            9 => (a.Brightness - 160) * 20 / 40 + 1,                        // 유닛 +0x4a — 틱마다 머리 낱말 6(밝기) 쪽으로 간다
+            9 => (a.Temperature - 160) * 20 / 40 + 1,                       // 유닛 +0x4a 온도(0x1003f53f) — 쓰는 곳은 온도 160 넘은 유닛의 제 불 피해뿐(Attack.dat 에 식 9 기술은 없다)
             29 => (atk2 + 10) * a.Str + e2 * e2,
             30 => (a.Dex + a.Skill) * w2 / 2 + e2 * e2,
             31 => (atk2 + w2) * a.Skill / 2,

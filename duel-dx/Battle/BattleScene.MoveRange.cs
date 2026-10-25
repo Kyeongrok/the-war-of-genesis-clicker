@@ -126,8 +126,8 @@ internal sealed unsafe partial class BattleScene
         // 파트1 판 — 이동력은 SPD × 2(0x1003a9ec → A* 0x100239d0 의 한도, 0x10023d93), 한 걸음 = (|높이 차| + 2 · 맨해튼) × 2(0x1008a4f0) —
         // 평지 한 칸 4, 높이 한 단마다 2 더. 높이 차 2 넘는 칸은 못 간다(0x1008a130). 전에는 (높이 차 + 2) × 4 = 평지 8 로 원본의 반만 갔다.
         // 파트2 틀은 걸음을 TP 로 빼므로, 걸음 값은 파트1 이동력 단위로 길을 찾은 뒤 최대 TP 가 그 이동력과 같아지게 TP 로 바꾼다(분석-파트1-전투 11.3 · 30절).
-        // 공격 값은 CTP 100 이 빚으로 받아 준다(Part1Chr.ToCharacterData). 스피디(파트1 강화 17)는 SPD +8(0x10051640 의 상태 17, 분석-파트1-기술-b 9절).
-        int part1Points = host._scene.IsPart1 && Part1.Fighter(unit) is { } p1 ? Math.Max(1, (p1.Stat(Part1Chr.Spd) + (Part1.Has(unit, 17) ? 8 : 0)) * 2) : 0;
+        // 공격 값은 CTP 100 이 빚으로 받아 준다(Part1Chr.ToCharacterData). 스피디(파트1 강화 17)는 SPD +8(0x10051640 의 상태 17, 분석-파트1-기술-b 9절), 지형 적응도 +8, 0 아래 온도는 그만큼 깎는다(Part1Spd).
+        int part1Points = host._scene.IsPart1 && Part1.Fighter(unit) != null ? Math.Max(1, Part1Spd(unit) * 2) : 0;
         int part1Scale = Math.Max(1, unit.MaxTp);
         // 파트1 길찾기 한도(이동력 단위) — TP 예산을 이동력으로 바꾼 값(내림). 칸 값은 끝에서 TP 로 올림해 바꾸므로 예산을 넘지 않는다.
         int walkBudget = part1Points > 0 ? (int)Math.Min(int.MaxValue, Math.Max(0L, budget) * part1Points / part1Scale) : budget;
@@ -336,6 +336,24 @@ internal sealed unsafe partial class BattleScene
     internal int Part1Z(UnitState u) => Part1Flyer(u) is { } c ? Part1FlyHeight(c, u.Col, u.Row) : WalkHeightAt(u.Col, u.Row);
 
     /// <summary>
+    /// <summary>
+    /// 파트1 SPD(<c>0x1003ece0</c>) — 바탕(칸 25 + 어빌리티 7 × 5 + 장비) + 스피디(상태 7, 강화 17) 8 + 지형 적응(<see cref="Part1Adapted"/>) 8,
+    /// 온도(유닛 +0x4a)가 0 아래면 그만큼 뺀다(⌊60·t/60⌋ = t). 0 아래는 0. 이동력(× 2) · 동결 검사가 쓴다.
+    /// </summary>
+    /// <param name="heat">거짓이면 온도를 빼지 않은 값(기록용).</param>
+    internal int Part1Spd(UnitState u, bool heat = true)
+    {
+        if (Part1.Fighter(u) is not { } f) return 0;
+        int spd = f.Stat(Part1Chr.Spd) + (Part1.Has(u, 17) ? 8 : 0) + (Part1Adapted(u) ? 8 : 0);
+        int t = heat ? Part1Objects.UnitHeat(u) : 0;
+        if (t < 0) spd += t;
+        return Math.Max(0, spd);
+    }
+
+    /// <summary>전장 지형(머리 낱말 7 = 1~6)에 맞는 적응 어빌리티(86 사막 · 87 정글 · 88 동굴 · 89 산지 · 90 극지 · 91 바다 적응)를 쓰는가(<c>0x10042930</c>).</summary>
+    internal bool Part1Adapted(UnitState u) =>
+        host._scene.Part1Terrain is >= 1 and <= 6 && Part1.Fighter(u)?.Chr.EffectiveLevel(85 + host._scene.Part1Terrain) >= 0;
+
     /// 이동 영역(파랑) 안에서만 밟아 (fromCol, fromRow) 에서 목표 칸까지 가는 가장 짧은 길(출발 칸 뺌). 못 가면 null.
     /// </summary>
     internal List<(int Col, int Row)>? PathWithin(MoveRange range, int fromCol, int fromRow, int target)

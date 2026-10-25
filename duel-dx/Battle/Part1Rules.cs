@@ -160,9 +160,11 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     /// <summary>
     /// AI 가 기술을 고를 때 견주는 세기 — 피해 기술이면 (세기 식 + 더하는 세기²) × 타수 × 명중률(방어 · 속성은 대상마다라 뺀다), 아니면 0.
+    /// 화이어 필드 · 프로즌 아이스(<see cref="TemperatureSkill"/>)는 세기 식 5 지만 피해가 없다 — 원본 AI 어림(<c>0x1003ff40</c> 의 <c>0x100400bd</c> · <c>0x10040296</c> 갈래)도
+    /// 피해가 아니라 온도로 잰다(BattleScene.Part1TemperatureValue). 그래서 0.
     /// </summary>
     internal int AiStrength(UnitState a, WorkData w) =>
-        w.IsDamage && AttackOf(w) is { } attack && attack.Formula is not (>= 10 and <= 28) && Fighter(a) is { } fa
+        w.IsDamage && AttackOf(w) is { } attack && attack.Formula is not (>= 10 and <= 28) && TemperatureSkill(attack) == 0 && Fighter(a) is { } fa
             ? (int)Math.Min(int.MaxValue, (long)(Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd)
                                           * Math.Max(1, attack.Hits) * (attack.Accuracy > 0 ? attack.Accuracy : 100) / 100)
             : 0;
@@ -177,6 +179,15 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// 쇼크와 최면은 둘 다 <b>차례를 못 받게</b> 한다(차례 고르기 <c>0x10042871</c> 이 +0x247 · +0x248 · +0x254 를 본다).
     /// </summary>
     internal const int Shock = 2, Hypnosis = 14, Condition = 15, Confusion = 16;
+
+    /// <summary>
+    /// 파트1 상태 1 동결(+0x247) — 온도(유닛 +0x4a)가 0 아래이고 SPD(<c>0x1003ece0</c>)가 4 아래면 시간 틱이 건다(<c>0x100352d7</c>, Part1MapObjects).
+    /// 차례를 못 받고(<c>0x10042871</c>), AI 의 상태 기술 어림이 그 대상에게 0 이다(<c>0x1003fd44</c>). 큐어(<c>0x10042150</c>)는 안 지운다.
+    /// </summary>
+    internal const int Frozen = 1;
+
+    /// <summary>온도 기술 — 화이어 필드(78~86, 땅불 · 알림 10)면 +1, 프로즌 아이스(115~123, 얼음 덩이 · 알림 11)면 −1, 아니면 0.</summary>
+    internal static int TemperatureSkill(Part1Attack? attack) => attack?.Id switch { >= 78 and <= 86 => 1, >= 115 and <= 123 => -1, _ => 0 };
 
     /// <summary>
     /// 파트1 상태 14 · 15 · 16 이 걸린 사람(분석-파트1-전투 25절). 원본은 값 1 을 넣고 줄이지 않는다 — 시간 틱마다 따로 굴려 풀린다(<see cref="RecoveryRoll"/>).
@@ -216,12 +227,12 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     /// <summary>
     /// 모두 풀기(큐어 · 아이템 107, <c>0x10042150</c>) — 14 · 15 · 16 은 지우지만 쇼크(2)는 남는다: 원본은 +0x248 을 보고서 상태 5 를 지운다
-    /// (<c>0x1004223f</c> push 5, 원본 실수). 원본대로 둔다. 무언가 지웠으면 true.
+    /// (<c>0x1004223f</c> push 5, 원본 실수). 원본대로 둔다. 동결(1)도 목록에 없어 남는다(온도가 푼다). 무언가 지웠으면 true.
     /// </summary>
     internal bool CureAilments(UnitState u)
     {
         if (!Ailments.TryGetValue(u, out var set)) return false;
-        bool any = set.RemoveWhere(s => s != Shock) > 0;
+        bool any = set.RemoveWhere(s => s is not (Shock or Frozen)) > 0;
         if (set.Count == 0) Ailments.Remove(u);
         return any;
     }
@@ -234,7 +245,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     /// <summary>AI 가 그 대상에게 선택자 13 · 25 · 27 · 28 을 쓸 만한가 — 대상 거르기(<see cref="TargetFilter(int, UnitState)"/>)를 지나고 그 상태가 없고 막는 상태도 없을 때.</summary>
     internal bool AilmentWorth(UnitState t, int selector) =>
-        TargetFilter(selector, t) && !HasAilment(t, AilmentOf(selector))
+        !HasAilment(t, Frozen) && TargetFilter(selector, t) && !HasAilment(t, AilmentOf(selector))
         && !(selector == 25 && (HasAilment(t, Hypnosis) || HasAilment(t, Confusion))) && !(selector == 28 && HasAilment(t, Hypnosis));
 
     /// <summary>

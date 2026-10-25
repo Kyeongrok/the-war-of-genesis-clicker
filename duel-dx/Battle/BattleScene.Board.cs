@@ -406,8 +406,11 @@ internal sealed unsafe partial class BattleScene
                 if (i == _turn && host._part1TurnOutline && host._scene.IsPart1 && unit.Fade > 0)
                     Part1TurnOutline.Draw(host, frame, footX + frame.X + ox, footY + frame.Y + oy, (int)(host._lastTime * TicksPerSecond));
                 // 파트1 그림의 키(9 더하기 · 13 비침 · 18 · 19 물들이기 …)는 원본 색표로(Part1Blend).
+                // 파트1 온도 물들이기(0x10034a07~) — 맞을 때의 물들이기(+0x4c)가 없을 때만: 0 아래 푸른빛(29) · 160 넘으면 주황빛(28)(Part1MapObjects.TemperatureTint).
+                var bodyPlan = Part1Blend.PlanOf(bodyKey);
+                if (p1 != null && tint == null && bodyPlan is null or { Copy: true } && p1.TemperatureTint(unit) is { } heatPlan) bodyPlan = heatPlan;
                 host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade * BlendFade(bodyKey), additive,
-                                Part1Blend.PlanOf(bodyKey));
+                                bodyPlan);
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
             }

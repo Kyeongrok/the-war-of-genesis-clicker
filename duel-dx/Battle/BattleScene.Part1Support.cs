@@ -115,11 +115,11 @@ internal sealed unsafe partial class BattleScene
 
     private static readonly Dictionary<int, string> Part1AilmentNames = new()
     {
-        [Part1Rules.Shock] = "쇼크", [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
+        [Part1Rules.Frozen] = "동결", [Part1Rules.Shock] = "쇼크", [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
     };
 
     /// <summary>체력바 아래 딱지 글(두 글자).</summary>
-    internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Shock => "쇼크", Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
+    internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Frozen => "동결", Part1Rules.Shock => "쇼크", Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
 
     /// <summary>
     /// 파트1 상태 14 · 15 · 16 을 건다 — <see cref="Part1Rules.AddAilment"/>(최면은 15 · 16 을, 혼란은 15 를 지운다). 맞음 동작과 이름 글.
@@ -180,6 +180,7 @@ internal sealed unsafe partial class BattleScene
         if (!host._scene.IsPart1) return;
         int tick = (int)(host._lastTime * TicksPerSecond);
         DrawPart1BuffMarks(tick);
+        Part1Objects.DrawIceMarks();                     // 동결(상태 1)의 얼음 Obs 101
         if (Part1.Ailments.Count == 0) return;
         foreach (var (u, set) in Part1.Ailments)
         {

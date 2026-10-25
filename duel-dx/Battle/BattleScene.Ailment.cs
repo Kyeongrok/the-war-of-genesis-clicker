@@ -367,7 +367,7 @@ internal sealed unsafe partial class BattleScene
     /// 차례를 받을 수 있나 — 마비·빙결이면 못 받는다(<c>0x1007c480</c>). 파트1 최면(상태 14, +0x254)도 못 받는다 —
     /// 차례 고르기(<c>0x10031d20</c>)의 <c>0x10042750(4)</c> → <c>0x10042871</c> 이 +0x247 · +0x248 · +0x254 를 본다.
     /// </summary>
-    internal bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6) && !(host._scene.IsPart1 && (Part1.HasAilment(u, Part1Rules.Hypnosis) || Part1.HasAilment(u, Part1Rules.Shock)));
+    internal bool CanTakeTurn(UnitState u) => !u.HasStatus(5) && !u.HasStatus(6) && !(host._scene.IsPart1 && (Part1.HasAilment(u, Part1Rules.Hypnosis) || Part1.HasAilment(u, Part1Rules.Shock) || Part1.HasAilment(u, Part1Rules.Frozen)));
 
     /// <summary>쓰러질 때 — 47(전투불능 방지)이 있으면 한 번 살아나고 그 칸이 지워진다.</summary>
     internal bool SurvivesFatal(UnitState u)

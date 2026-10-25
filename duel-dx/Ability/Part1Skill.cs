@@ -75,6 +75,9 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>앞머리가 끝날 때 시전자에게 걸 파트1 동작(그림에 없으면 Fallback) — Hold 면 원본 잠금(+0x26 = −1)처럼 기술이 끝날 때까지 붙든다.</summary>
     private (int Part1, int Fallback, bool Hold)? _afterPrep;
     private UnitState _user = null!;
+
+    /// <summary>겨눈 칸(원본 +0x200 · +0x202) — 프로즌 아이스가 덩이 길이의 거리를 이 칸 가운데에서 잰다.</summary>
+    private (int Col, int Row) _aimCell;
     private (double X, double Y) _home;
     private readonly List<(double At, Action Run)> _events = [];
     private readonly List<(double Start, List<(double X, double Y)> Points)> _shifts = [];
@@ -271,6 +274,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             for (double poll = host._lastTime + 0.5; host._lastTime < poll;) yield return true;
         }
         _user = user;
+        _aimCell = aim;
         _afterPrep = null;
         _home = host.Btl.UnitFoot(user);
         _events.Clear();

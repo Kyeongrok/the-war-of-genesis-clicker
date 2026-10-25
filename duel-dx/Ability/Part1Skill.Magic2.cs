@@ -286,8 +286,8 @@ internal sealed partial class Part1Skill
     /// </summary>
     /// <remarks>원본은 <b>피해를 주지 않는다</b> — 핸들러(<c>0x10049760</c>)에 피해 서술(<c>0x1003f3c0</c>) · 타격 사건(<c>0x100768f0</c> · <c>0x10076950</c> ·
     /// <c>0x100769b0</c> · <c>0x10076a10</c>) · 바로 치기(<c>0x1009d440(…, 1, …)</c>)가 없고, 땅불(<c>0x1007b970</c>)은 붙는 틱(나이 1)과 차례 수가 돌 때마다
-    /// 그 칸의 유닛 · 물체에 메시지 10(열, <c>0x1007bd90</c>)만 보낸다. 유닛 메시지 10 은 +0x4a(온도)를 올릴 뿐이다(<c>0x10035537</c>) — 리메이크에 유닛 온도가 없어
-    /// 아무것도 안 한다. 그래서 <c>hit</c> 를 부르지 않는다. 원본의 땅불은 판에 남아 차례 수(+0x144 = 30~49)만큼 탄다 — 여기서는 메테오처럼 틱으로 짧게 태운다.</remarks>
+    /// 그 칸의 유닛 · 물체에 메시지 10(열, <c>0x1007bd90</c>)만 보낸다. 유닛 메시지 10 은 +0x4a(온도)를 올린다(<c>0x10035537</c>) — 160 을 넘으면
+    /// 그 유닛이 시간 틱마다 식 9 불 피해를 받는다(Part1MapObjects 유닛 온도). 그래서 <c>hit</c> 를 부르지 않는다. 땅불은 기술이 끝난 뒤 Part1MapObjects.HitByAttack 이 놓는다. 원본의 땅불은 판에 남아 차례 수(+0x144 = 30~49)만큼 탄다 — 여기서는 메테오처럼 틱으로 짧게 태운다.</remarks>
     private int FireField(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         var a = aim;
@@ -485,8 +485,10 @@ internal sealed partial class Part1Skill
     /// 원본 얼음 덩이는 판에 남아 차례가 돌 때마다 그 칸의 인물을 식히고(메시지 11) 칸 가운데에서 멀수록 일찍 녹는다(118:r+6).
     /// 원본은 <b>피해를 주지 않는다</b> — 핸들러(<c>0x1004bee0</c>)에 피해 서술(<c>0x1003f3c0</c>) · 타격 사건(<c>0x100768f0</c> · <c>0x10076950</c> ·
     /// <c>0x100769b0</c> · <c>0x10076a10</c>) · 바로 치기(<c>0x1009d440(…, 1, …)</c>)가 없고, 얼음 덩이(<c>0x1007c1b0</c>, vt+0x54 <c>0x1007c490</c>)는
-    /// 메시지 11(냉기)만 보낸다. 유닛 메시지 11 은 기계 · 큰 유닛이 아니면 +0x4a(온도)를 ⌊5·X/10⌋ 내릴 뿐이다(<c>0x10035580</c>, −60 아래로는 안) —
-    /// 리메이크에 유닛 온도가 없어 아무것도 안 한다. 그래서 <c>hit</c> 를 부르지 않는다. 덩이는 여기서 60틱 보이고 녹는다(원본은 차례 수 30·(R+1) − 30·⌊거리/40⌋).
+    /// 메시지 11(냉기)만 보낸다. 유닛 메시지 11 은 기계 · 큰 유닛이 아니면 +0x4a(온도)를 ⌊5·X/10⌋ 내린다(<c>0x10035580</c>, −60 아래로는 안) —
+    /// 온도가 0 아래면 SPD 가 깎이고 4 아래면 동결(상태 1)이다(Part1MapObjects 유닛 온도). 그래서 <c>hit</c> 를 부르지 않는다.
+    /// 덩이(118:r+3)는 솟은 뒤 <see cref="Part1MapObjects.AddIce"/> 로 넘겨, 시간 틱 n = 30·(R+1) − 30·⌊거리/40⌋ 동안 판에 남아 시간 틱마다 제 칸을 식히고
+    /// 다 되면(또는 남의 알림 10 · 11 · 14 를 받으면) 녹는다(118:r+6). R = 범위의 가장 먼 맨해튼 칸, 거리 = 겨눈 칸 가운데에서 그 칸 가운데까지 픽셀(<c>0x1004c344</c>~).
     /// </summary>
     private int FrozenIce(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
@@ -494,19 +496,21 @@ internal sealed partial class Part1Skill
         var area = cells.Count > 0 ? cells : [((int)aim.X / TileW, host.RowAt((int)aim.X, (int)aim.Y))];
         int last = 0;
         int Sign() => Rand(2) == 0 ? -1 : 1;
+        var (ac, ar) = _aimCell;
+        int reach = area.Max(c => Math.Abs(c.Col - ac) + Math.Abs(c.Row - ar));
         foreach (var (col, row) in area)
         {
             var (px, py) = CellFoot(col, row);
             int r = Rand(3);
+            int life = 30 * (reach + 1) - 30 * ((int)Math.Sqrt(1600.0 * ((col - ac) * (col - ac) + (row - ar) * (row - ar))) / 40);
             var walk = Move((px + Sign() * Rand(20), py + Sign() * Rand(20) * 0.8), (px, py), 1, 1.03);
             int a = walk.Count;
             for (int k = 0; k < 5; k++)
                 Along(190, 0, a + 2 + 5 * k, Circle(px + Sign() * Rand(20), py + Sign() * Rand(20) * 0.8, 30, 51, 15, 0.9, Rand(2) == 1, 0), life: 51);
-            int rise = a + 2 + 40, hold = rise + Length(118, r) + 2, melt = hold + 60;
+            int rise = a + 2 + 40, hold = rise + Length(118, r) + 2;
             Put(118, r, rise, px, py);
-            Put(118, r + 3, hold, px, py, life: 60);
-            Put(118, r + 6, melt, px, py);
-            last = Math.Max(last, Math.Max(a + 2 + 20 + 51, melt + Length(118, r + 6)));
+            Later(hold, () => host.Btl.Part1Objects.AddIce(col, row, r, life));
+            last = Math.Max(last, Math.Max(a + 2 + 20 + 51, hold + 2));
         }
         Later(0, () => host.Btl.CenterOn(aim.X, aim.Y));
         return last + 1;

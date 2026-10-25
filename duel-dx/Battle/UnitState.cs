@@ -249,6 +249,9 @@ internal sealed class UnitState(DemoUnit unit)
         MotionLoops = loop;
     }
 
+    /// <summary>몸짓을 멈춘다 — 파트1 동결(상태 1)이 걸린 동안(원본 +0x26 = −1, <c>0x100352f6</c>). 그동안 <see cref="AnimTime"/> 이 안 흐른다.</summary>
+    public bool AnimFrozen { get; set; }
+
     /// <summary>지금 동작(서기/걷기)을 시작한 뒤 흐른 시간(초). 동작이 바뀌면 0 부터 다시 센다.</summary>
     public double AnimTime { get; private set; }
 
@@ -321,7 +324,7 @@ internal sealed class UnitState(DemoUnit unit)
     /// <param name="ticks">이번 프레임에 흐른 틱(초당 30).</param>
     public void Advance(double ticks, double dt)
     {
-        AnimTime += dt;
+        if (!AnimFrozen) AnimTime += dt;
         if (Action >= 0 && (_actionLeft -= dt) <= 0) { Action = -1; Motion = -1; MotionLoops = false; AnimTime = _idleOffset; }
         if (!IsMoving || _sliding) return;
         _stepTicks += ticks;

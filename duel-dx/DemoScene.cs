@@ -97,6 +97,10 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     /// </summary>
     public int Part1Ambient { get; init; }
 
+    /// <summary>파트1 머리 낱말 7(전투 <c>+0xb970</c>) — 전장 지형 0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다. 1~6 이면 그 적응 어빌리티(85 + 지형)를 가진 유닛이
+    /// SPD +8 이고 온도가 기온 대신 80 쪽으로 간다(<c>0x10042930</c>). 파트2 판은 0.</summary>
+    public int Part1Terrain { get; init; }
+
     /// <summary>Btl 머리 워드 2·3 — 첫 화면 가운데 칸(<see cref="BattleFile.StartX"/>, 감사4 C5). 없으면 −1(예전처럼 왼쪽 위).</summary>
     public int StartCol { get; init; } = -1;
     public int StartRow { get; init; } = -1;
@@ -164,6 +168,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             StartCol = battle.StartX, StartRow = battle.StartY,
             Part1Objects = battle.Objects,       // 절 A — 원본 로더 0x1002d27b 가 판에 찍는 Obt 물체(보이지 않는 벽 · 통 · 상자 · 문 · 나무 …)
             Part1Ambient = battle.Ambient,       // 머리 낱말 6 — 기온(물체 · 유닛 온도가 이쪽으로 간다)
+            Part1Terrain = battle.Terrain,       // 머리 낱말 7 — 전장 지형(적응 어빌리티 86~91)
         };
     }
 
