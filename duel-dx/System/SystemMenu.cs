@@ -713,7 +713,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             CumExp = s.CumExp, Exp = s.Exp,
             Items = s.Items.Length == baseData.Items.Length ? s.Items : baseData.Items,
             Passives = s.Passives.Length == 3 ? s.Passives : baseData.Passives,
-            Abilities = [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
+            // 파트1 인물의 어빌리티는 진행(직업 · 배운 레벨 · 장비)에서 늘 새로 만든다 — 세이브에 적힌 목록을 쓰면 그 뒤에 배운 기술(혼 따위)이
+            // 그 세이브를 불러온 판 내내 안 나왔다(사용자 보고). 진행은 판을 세우기 전에 되살린다(LoadBattle → Part1.FromJson).
+            Abilities = baseData.Code >= Part1Game.ChrBase ? baseData.Abilities : [.. s.Abilities.Select(a => ((ushort)a.Id, (ushort)a.Level))],
         };
         // 형식 9 이하의 능력치는 복리로 불어난 옛 레벨업 식으로 쌓인 것이라 믿지 않는다 — 아군은 아래에서 다시 센다.
         bool trustStats = _restoreVersion >= 10;
