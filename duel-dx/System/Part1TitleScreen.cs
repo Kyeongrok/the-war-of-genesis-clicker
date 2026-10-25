@@ -9,22 +9,59 @@ namespace DuelDx;
 /// 파트1 타이틀 — 파트2 타이틀 왼쪽 아래의 「PART 1」 단추로 들어간다(파트1 을 파트2 엔진으로 옮기는 첫걸음).
 /// </summary>
 /// <remarks>
-/// 파트1 본체 <c>alpha.dll</c> 의 타이틀 장면(<c>0x100d47e0</c>)은 배경을 <c>BGRs\0329.bgr</c>(640×480 JPEG, 어둠 속의 검과 푸른 빛) 한 장으로 걸고,
-/// 날짜가 <c>01/01</c> 이면 <c>BGRs\0372.bgr</c>(근하신년 GIF)로 바꾼다(<c>0x100d4950</c> 이 날짜 글을 <c>"01/01"</c> 과 5자 비교).
-/// 파트2(<c>Bgr\0046</c>)와 달리 메뉴 글자가 그림에 없다 — 단추는 UI 꼴 <c>0x271b</c>(10011)을 화면 가운데에 세워 만든다(<c>0x100a45c0</c>).
-/// 그 꼴은 아직 안 풀어서 단추는 글자로 그린다. 그림은 사용자의 파트1 폴더(<see cref="Part1Game.Root"/>)의 <c>BGRs.pak</c> 에서 읽는다.
+/// 원본 파트1 본체 <c>alpha.dll</c> 의 장면 표(<c>0x10005f60</c> → <c>[0x1011f938 + 4·장면]</c>)에서 타이틀은 장면 7(<c>0x100d5600</c>, 짓기 <c>0x100d5660</c>)이다.
+/// 전에 타이틀로 알았던 <c>0x100d47e0</c>(<c>BGRs\0329</c> · 1월 1일이면 <c>0372</c>)은 장면 9 「불러오기」다 — 그래서 로고가 없었다.
+/// <list type="bullet">
+/// <item>배경 <c>BGRs\0015.bgr</c>(640×480 JPEG, 어두운 붉은 바탕 · 가운데 빛나는 눈 · 붉은 줄기) — 색을 바꾸지 않는다.</item>
+/// <item>그림은 모두 (원본 좌표) 한 창의 자식 Obs 로, 만든 차례대로 그린다(<c>0x1009d110</c> 이 꼬리에 붙인다):
+/// <c>Obs 0361</c> 모션 0 (320,260) 글자 흐름(143틱, 더하기) → <c>Obs 0360</c> 모션 0 (320,244) 로고 왼쪽 「THE WAR OF」 →
+/// <c>Obs 0751</c> 모션 4 (320,240) 저작권 「©1995,1996,1999 Softmax」 → <c>Obs 0360</c> 모션 1 로고 오른쪽 「창세기전 3 / GENESIS III」 →
+/// <c>Obs 0362</c> 모션 0 (420,180) 불티(101틱, 더하기) → <c>Obs 0390</c> 모션 0 (320,253) 불꽃 핵(108틱 되풀이, 더하기) →
+/// 메뉴 단추 넷(<c>Obs 0751</c> 모션 10~13, 섞기 13·4 = 16/31 비침, 마우스를 올리면 모션 0~3 더하기) → 「v1.04」 글(5,10, <c>0x100a2570</c>).</item>
+/// <item>차례(<c>0x100d5e60</c>): 처음엔 글자 흐름만. 그것이 끝나면 지우고 불티 · 핵을 틀고 로고 둘을 밝힌다(<c>vt+0x6c</c> — 섞기 13 세기 1→7, 한 틱에 하나).
+/// 불티가 끝나면 저작권 · 단추 · 판 번호를 밝힌다. Esc(<c>0x100d5f80</c>)는 글자 흐름 · 불티를 지우고 모두 곧바로 밝힌다.</item>
+/// <item>단추 맞는 칸(<c>0x1009f1b0</c>, (320,240) 기준): Start (−49,101)~(46,116) · Load (−51,124)~(48,139) · Tutorial (−33,147)~(31,162) · Exit (−15,170)~(16,184).
+/// Load 는 세이브가 없으면, Tutorial 은 켜는 깃발이 없으면 누를 수 없는 그림(같은 모션)만 둔다. 누르면 효과음 <c>Snd 2034</c>.</item>
+/// <item>음악 <c>BGMs\0022</c> 되풀이(12월 25일이면 <c>0059</c>, <c>0x100d5c90</c>). 곡이 끝나면 오프닝으로 가는 길은 옮기지 않는다(사용자 결정).</item>
+/// </list>
+/// 리메이크: Start Game = NEW GAME · Load Game = LOAD GAME · Exit = EXIT 로 원본 그림 줄을 그대로 쓰고, 튜토리얼은 없어 원본의 「못 누름」 모습으로 둔다.
+/// 원본에 없는 CONTINUE · PART 2 는 로고와 메뉴를 가리지 않게 오른쪽 아래에 작은 글 단추로 둔다.
+/// 그림은 사용자의 파트1 폴더(<see cref="Part1Game.Root"/>)에서 읽는다.
 /// </remarks>
 internal sealed unsafe class Part1TitleScreen(GameWindow host)
 {
-    internal const int TitleBackground = 329, NewYearBackground = 372;
+    internal const int TitleBackground = 15, TitleBgm = 22, ChristmasBgm = 59, PressSound = 2034;
+    internal const int IntroObs = 361, LogoObs = 360, SparkObs = 362, CoreObs = 390, MenuObs = 751;
+
+    /// <summary>글자 흐름(Obs 0361 모션 0) · 불티(Obs 0362 모션 0)의 길이 — 원본 모션표 그대로.</summary>
+    internal const int IntroTicks = 143, SparkTicks = 101;
+
+    /// <summary>원본 타이틀 그림들의 기준점(640×480 화면) — 메뉴 · 저작권 · 단추 맞는 칸이 모두 여기서 잰다.</summary>
+    private const int Cx = 320, Cy = 240;
 
     /// <summary>파트2 타이틀 위에 얹는 들어가기 단추(왼위·크기) — 640×480 화면 기준.</summary>
     internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 124, 26);
 
-    /// <summary>파트1 타이틀의 단추 — 가운데 아래. LOAD GAME 은 파트2 타이틀처럼 저장 칸을 골라 부른다(사용자 요청 — 파트1 세이브 칸은 따로, part1-battle-save-NN).</summary>
-    internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 324, "NEW GAME"), (250, 354, "LOAD GAME"), (250, 384, "CONTINUE"), (250, 414, "PART 2"), (250, 444, "EXIT")];
+    /// <summary>
+    /// 파트1 타이틀의 단추 — <c>Row</c> 는 원본 메뉴 그림 줄(0 Start · 1 Load · 3 Exit, −1 은 리메이크 글 단추), 맞는 칸은 640×480 화면 좌표.
+    /// LOAD GAME 은 파트2 타이틀처럼 저장 칸을 골라 부른다(사용자 요청 — 파트1 세이브 칸은 따로, part1-battle-save-NN).
+    /// </summary>
+    internal static readonly (string Name, int Row, int X0, int Y0, int X1, int Y1)[] Buttons =
+    [
+        ("NEW GAME", 0, Cx - 49, Cy + 101, Cx + 46, Cy + 116),
+        ("LOAD GAME", 1, Cx - 51, Cy + 124, Cx + 48, Cy + 139),
+        ("CONTINUE", -1, 530, 428, 630, 446),
+        ("PART 2", -1, 530, 450, 630, 468),
+        ("EXIT", 3, Cx - 15, Cy + 170, Cx + 16, Cy + 184),
+    ];
 
-    internal const int ButtonW = 140, ButtonH = 24, ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4;
+    /// <summary>위·아래 키로 옮기는 차례 — 원본 메뉴 줄 먼저, 그다음 오른쪽 아래 글 단추.</summary>
+    private static readonly int[] KeyOrder = [0, 1, 4, 2, 3];
+
+    /// <summary>글 단추 크기 — 연대표 · 마을 · 일행 창이 <see cref="DrawButton"/> 과 함께 쓴다.</summary>
+    internal const int ButtonW = 140, ButtonH = 24;
+
+    internal const int ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4;
 
     internal bool _open;
     internal bool _entryHover;
@@ -42,6 +79,41 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     private Part1TimelineScreen? _timeline;
     internal int _hover = -1;
     private uint[]? _bg;
+
+    /// <summary>타이틀 그림 차례를 처음 그린 때(<c>_lastTime</c>) — 열고 아직 안 그렸으면 −1. 챕터 · 필드로 곧바로 가면 차례가 돌지 않는다.</summary>
+    private double _shownAt = -1;
+
+    /// <summary>Esc · 누름으로 글자 흐름 · 불티를 건너뛴 틱(그린 때부터) — 안 건너뛰었으면 −1.</summary>
+    private double _skipTick = -1;
+
+    /// <summary>타이틀 차례의 지금 틱(그린 때부터, 30틱/초).</summary>
+    private double TitleTick => _shownAt < 0 ? 0 : (host._lastTime - _shownAt) * GameWindow.TicksPerSecond;
+
+    /// <summary>글자 흐름이 끝나 로고 · 핵이 나오는 틱.</summary>
+    private double LogoTick => _skipTick >= 0 ? Math.Min(_skipTick, IntroTicks) : IntroTicks;
+
+    /// <summary>불티가 끝나 저작권 · 단추가 나오는 틱.</summary>
+    private double MenuTick => _skipTick >= 0 ? Math.Min(_skipTick, IntroTicks + SparkTicks) : IntroTicks + SparkTicks;
+
+    /// <summary>단추가 나왔나 — 그 전에는 원본처럼 단추가 숨어 있어 누를 수 없다(Esc · 누름은 건너뛰기).</summary>
+    internal bool MenuShown => _shownAt >= 0 && TitleTick >= MenuTick;
+
+    /// <summary>글자 흐름 · 불티를 건너뛴다(원본 0x100d5f80 의 Esc) — 단추가 곧바로 밝아진다.</summary>
+    private void SkipIntro()
+    {
+        if (_shownAt < 0) _shownAt = host._lastTime;
+        _skipTick = TitleTick;
+    }
+
+    /// <summary>
+    /// 그때부터 밝아지는 그림의 비침 — 원본 vt+0x54 · 0x6c 가 섞기 13 의 세기를 한 틱에 하나씩 1→7 로 올리고 8 에서 그대로 그린다(0x1009fc00).
+    /// <paramref name="cap"/> 은 그림 자신의 섞기 13 세기(메뉴 글자 4) — 그 위로는 안 오른다.
+    /// </summary>
+    private double FadeFrom(double startTick, int cap = 8)
+    {
+        int level = Math.Min(cap, (int)(TitleTick - startTick) + 1);
+        return level >= 8 ? 1 : GameWindow.BlendFade(Math.Max(1, level));
+    }
 
     /// <summary>파트2 타이틀의 「PART 1」 단추를 누른다 — 파트1 폴더가 없으면 알리고 머문다.</summary>
     internal void PressEntry()
@@ -128,14 +200,17 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     internal void Open()
     {
-        string day = DateTime.Now.ToString("MM/dd");
-        _bg = ReadBackground(day == "01/01" ? NewYearBackground : TitleBackground) ?? ReadBackground(TitleBackground);
+        _bg = ReadBackground(TitleBackground);
         _open = true;
         SlotsScreen.Part1Slots = true;
         _hover = -1;
+        _shownAt = _skipTick = -1;
         host.StopMusic();
         host.EnterSceneFade();
     }
+
+    /// <summary>타이틀 곡 — 12월 25일이면 캐럴(<c>0x100d5c90</c> 이 날짜 글을 <c>"12/25"</c> 와 5자 비교).</summary>
+    private static int TitleMusic => Part1Game.BgmBase + (DateTime.Now.ToString("MM/dd") == "12/25" ? ChristmasBgm : TitleBgm);
 
     /// <summary>파트2 타이틀로 돌아간다.</summary>
     internal void Close()
@@ -166,13 +241,6 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 var pixels = new uint[W * H];
                 for (int y = 0; y < Math.Min(H, bitmap.Height); y++)
                     new Span<uint>((void*)(data.Scan0 + y * data.Stride), Math.Min(W, bitmap.Width)).CopyTo(pixels.AsSpan(y * W));
-                // 원본 타이틀은 이 그림을 빨강 · 파랑을 바꿔 그린다 — 파일은 푸른빛인데 원본 화면은 붉다(사용자 화면, 필드 배경 JPEG 은 그대로).
-                if (id == TitleBackground)
-                    for (int i = 0; i < pixels.Length; i++)
-                    {
-                        uint c = pixels[i];
-                        pixels[i] = (c & 0xFF00FF00) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
-                    }
                 return pixels;
             }
             finally { bitmap.UnlockBits(data); }
@@ -191,13 +259,15 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         return bx >= ox + x && bx < ox + x + w && by >= oy + y && by < oy + y + h;
     }
 
+    /// <summary>그 자리의 단추 — 단추가 아직 안 나왔으면(글자 흐름 · 불티 동안) 없다.</summary>
     internal int ButtonAt(int bx, int by)
     {
+        if (!MenuShown) return -1;
         var (ox, oy) = host.Mos.MosesOrigin();
         for (int i = 0; i < Buttons.Length; i++)
         {
-            var (x, y, _) = Buttons[i];
-            if (bx >= ox + x && bx < ox + x + ButtonW && by >= oy + y && by < oy + y + ButtonH) return i;
+            var (_, _, x0, y0, x1, y1) = Buttons[i];
+            if (bx >= ox + x0 && bx < ox + x1 && by >= oy + y0 && by < oy + y1) return i;
         }
         return -1;
     }
@@ -221,6 +291,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         else if (_field is { _open: true }) _field.OnClick(bx, by);
         else if (_chapter is { _open: true }) _chapter.OnClick(bx, by);
         else if (_timeline is { _open: true }) _timeline.OnClick(bx, by);
+        else if (!MenuShown) SkipIntro();   // 단추가 나오기 전 — 누르면 글자 흐름 · 불티를 건너뛴다(원본은 Esc 만)
         else Press(ButtonAt(bx, by));
         return true;
     }
@@ -236,9 +307,14 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         else if (_field is { _open: true }) _field.OnKey(key);
         else if (_chapter is { _open: true }) _chapter.OnKey(key);
         else if (_timeline is { _open: true }) _timeline.OnKey(key);
+        else if (!MenuShown) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) SkipIntro(); }   // 원본 0x100d5f80 — Esc 로 건너뛴다
         else if (key == Win32.VK_ESCAPE) Press(ButtonPart2);
         else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
-            _hover = _hover < 0 ? 0 : (_hover + 1) % Buttons.Length;
+        {
+            bool up = key == Win32.VK_UP || host.MoveActionFor(key) == KeyAction.MoveUp;
+            int at = Array.IndexOf(KeyOrder, _hover), n = KeyOrder.Length;
+            _hover = KeyOrder[at < 0 ? (up ? n - 1 : 0) : (at + (up ? n - 1 : 1)) % n];
+        }
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) Press(Math.Max(0, _hover));
         return true;
     }
@@ -247,20 +323,25 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         switch (button)
         {
-            case ButtonNewGame: host.LeaveScene(NewGame); break;
+            case ButtonNewGame: PlayPress(); host.LeaveScene(NewGame); break;
             case ButtonLoad:
                 // 저장 칸 창(불러오기)을 연다 — 파트1 칸(SlotsScreen.Part1Slots)이 열려 있다. 고르면 SystemMenu 가 판을 불러오고 PrepareBattleLoad 가 파트1 진행을 되살린다.
                 if (host.SlotsScr.LatestSlot() < 0) { host.Toast("파트1 저장 기록이 없습니다 — 전투 중 시스템 메뉴의 SAVE 로 저장합니다"); break; }
+                PlayPress();
                 host.SlotsScr.OpenSlots(1);
                 break;
             case ButtonContinue:
                 if (!Part1Progress.HasSave) { host.Toast("파트1 진행 기록이 없습니다 — NEW GAME 으로 시작하세요"); break; }
+                PlayPress();
                 host.LeaveScene(ContinueGame);
                 break;
-            case ButtonPart2: host.LeaveScene(Close); break;
+            case ButtonPart2: PlayPress(); host.LeaveScene(Close); break;
             case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)
         }
     }
+
+    /// <summary>단추를 누른 소리 — 원본 타이틀 단추 알림(0x100d61f0)이 <c>Snd 2034</c> 를 한 번 낸다.</summary>
+    private void PlayPress() => host.Play(Part1Game.ObsBase + PressSound);
 
     /// <summary>파트1 새 게임 — 진행을 비우고 연대표를 연다. 거기서 줄기마다 열린 첫 칸 가운데 어디서 시작할지 고른다.</summary>
     private void NewGame()
@@ -418,18 +499,49 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (_chapter is { _open: true }) { _chapter.Draw(); return; }
         if (_timeline is { _open: true }) { _timeline.Draw(); return; }
         var (ox, oy) = host.Mos.MosesOrigin();
+        if (_shownAt < 0) _shownAt = host._lastTime;
+        // 타이틀 곡 — 장면을 떠나는 페이드 동안은 다시 걸지 않는다(PART 2 로 갈 때 곡이 꺼진 뒤 도로 울렸다).
+        if (host._fadeOutStart < 0 && host._musicId != TitleMusic) host.PlayMusicFile(TitleMusic, loop: true);
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_bg is { } bg)
             for (int y = 0; y < MosesScene.MosesH; y++)
                 for (int x = 0; x < MosesScene.MosesW; x++)
                     host.SetPixel(ox + x, oy + y, bg[y * MosesScene.MosesW + x] | 0xFF000000);
+
+        // 원본이 만든 차례(= 그리는 차례)대로 — 머리 주석. 글자 흐름 · 불티 · 핵은 모션의 섞기 키 9(더하기), 로고 · 저작권은 보통.
+        double t = TitleTick, logoAt = LogoTick, menuAt = MenuTick;
+        int x0 = ox + Cx, y0 = oy + Cy;
+        const int P1 = Part1Game.ObsBase;
+        if (t < logoAt) host.DrawUi(P1 + IntroObs, 0, (int)t, x0, oy + 260, GameWindow.UiBlend.Add, loop: false);
+        bool logo = t >= logoAt, menu = t >= menuAt;
+        if (logo) host.DrawUi(P1 + LogoObs, 0, 0, x0, oy + 244, GameWindow.UiBlend.Alpha, fade: FadeFrom(logoAt));
+        if (menu) host.DrawUi(P1 + MenuObs, 4, 0, x0, y0, GameWindow.UiBlend.Alpha, fade: FadeFrom(menuAt));   // 저작권(왼쪽 아래)
+        if (logo) host.DrawUi(P1 + LogoObs, 1, 0, x0, oy + 244, GameWindow.UiBlend.Alpha, fade: FadeFrom(logoAt));
+        if (logo && !menu) host.DrawUi(P1 + SparkObs, 0, (int)(t - logoAt), ox + 420, oy + 180, GameWindow.UiBlend.Add, loop: false);
+        if (logo) host.DrawUi(P1 + CoreObs, 0, (int)(t - logoAt), x0, oy + 253, GameWindow.UiBlend.Add);
+
         // 저장 칸 창(LOAD GAME)이 떠 있으면 단추는 숨긴다 — 창 위에 겹쳐 그려졌다.
-        if (!host.SlotsScr.SlotsOpen)
-            for (int i = 0; i < Buttons.Length; i++)
+        if (menu && !host.SlotsScr.SlotsOpen)
+        {
+            // 메뉴 줄 — 보통은 모션 10+줄(섞기 13 · 4 = 16/31 비침), 짚으면 모션 줄(더하기). 튜토리얼은 늘 「못 누름」 모습.
+            double dim = FadeFrom(menuAt, 4);
+            for (int row = 0; row < 4; row++)
             {
-                var (x, y, name) = Buttons[i];
-                DrawButton(ox + x, oy + y, ButtonW, ButtonH, name, _hover == i);
+                int button = Array.FindIndex(Buttons, b => b.Row == row);
+                bool hot = button >= 0 && _hover == button && FadeFrom(menuAt) >= 1;
+                if (hot) host.DrawUi(P1 + MenuObs, row, (int)t, x0, y0, GameWindow.UiBlend.Add);
+                else host.DrawUi(P1 + MenuObs, 10 + row, 0, x0, y0, GameWindow.UiBlend.Alpha, fade: dim);
             }
+            // 원본에 없는 단추(리메이크) — 오른쪽 아래에 메뉴 글자 빛깔의 작은 글로.
+            for (int i = 0; i < Buttons.Length; i++)
+                if (Buttons[i] is { Row: < 0 } b)
+                {
+                    uint color = _hover == i ? 0xFFFFF0C8u : 0xFFA89C90u;
+                    var (_, w, h) = host.UiGetText(b.Name, color, 12);
+                    host.UiText(b.Name, ox + b.X1 - w, oy + (b.Y0 + b.Y1 - h) / 2, color, 12);
+                }
+            host.UiText("v1.04", ox + 5, oy + 10, GameWindow.White, 12);   // 원본 판 번호 글(0x100a2570, 「v1.04」)
+        }
         host.DrawToast();
     }
 
