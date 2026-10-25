@@ -109,6 +109,15 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
             ? (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
             : null;
 
+    /// <summary>
+    /// AI 가 기술을 고를 때 견주는 세기 — 피해 기술이면 (세기 식 + 더하는 세기²) × 타수 × 명중률(방어 · 속성은 대상마다라 뺀다), 아니면 0.
+    /// </summary>
+    internal int AiStrength(UnitState a, WorkData w) =>
+        w.IsDamage && AttackOf(w) is { } attack && attack.Formula is not (>= 10 and <= 28) && Fighter(a) is { } fa
+            ? (int)Math.Min(int.MaxValue, (long)(Part1Combat.Power(attack.Formula, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd)
+                                          * Math.Max(1, attack.Hits) * (attack.Accuracy > 0 ? attack.Accuracy : 100) / 100)
+            : 0;
+
     /// <summary>이번 기본 공격을 타수만큼 나눠 친다 — 그동안 타수를 세기에 곱하지 않는다(BattleScene 이 켜고 끈다).</summary>
     internal bool SplitHits;
 

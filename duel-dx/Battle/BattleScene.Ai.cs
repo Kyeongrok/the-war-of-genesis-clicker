@@ -451,6 +451,10 @@ internal sealed unsafe partial class BattleScene
             if (!db.Abilities.TryGetValue(abilityId, out var ab) || ab.Category is not (1 or 2 or 4)) continue;
             if (ab.TryWorkAt(level, out int wid) && Work(wid) is { } w && (ignoreCost || CanAfford(u, w))) list.Add(w);
         }
+        // 파트1 적은 센 피해 기술부터 — 파트2 처럼 목록 차례 첫 기술을 쓰면 위자드가 화이어 볼 · 필드를 두고 가장 약한 화이어 블레이드만 썼다
+        // (사용자 요청: 「공격마법 퍼붓게 해」). 피해 기술이 아닌 것(회복 · 강화 · 상태)은 그 뒤에 원래 차례대로.
+        if (host._scene.IsPart1 && IsFoeSide(u))
+            list = [.. list.Select((w, i) => (w, i)).OrderByDescending(t => Part1.AiStrength(u, t.w)).ThenBy(t => t.i).Select(t => t.w)];
         if (Work(c.BasicWorkId) is { } basic) list.Add(basic);
         return list;
     }
