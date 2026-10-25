@@ -206,6 +206,10 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>
     /// 인물에게 파트1 동작을 건다(<paramref name="repeat"/> 번, 0 이면 붙듦) — 그 동작이 없는 그림(파트2 모습)이면 <paramref name="fallback"/>(이 게임 동작).
     /// 걸린 길이(틱)를 돌려준다.
+    /// <para>원본은 인물 동작을 걸면 그 모션의 키를 틱마다 돌려(<c>0x100982d0</c>) 소리 키(종류 1)와 자식 이펙트(종류 2)의 소리도 낸다 —
+    /// 풍아열공참(293)의 칼질 소리는 핸들러가 아니라 살라딘 동작 14(모션 42~44 의 Snd 24 · 22 · 26 · 16 · 23, 자식 227 의 26)에 있다.
+    /// 그래서 되풀이마다 그 모션의 소리를 예약한다. 붙드는 동작(<paramref name="repeat"/> 0)은 끝나는 때를 몰라 소리를 안 낸다
+    /// (앞머리 끝 자세는 원본도 +0x26 = −1 로 키를 멈춘다).</para>
     /// </summary>
     private int Act(UnitState u, int part1Action, int fallback, int repeat = 1)
     {
@@ -213,6 +217,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         int action = Part2Action(part1Action), use = sprite.RawClip(action * 3) != null ? action : fallback;
         double once = Math.Max(0.1, sprite.ActionSeconds(use, u.Facing));
         u.PlayAction(use, repeat <= 0 ? 30 : once * repeat);
+        for (int r = 0; r < repeat; r++) host.ScheduleActionSounds(u, use, r * once);
         return repeat <= 0 ? 0 : (int)Math.Round(once * repeat * TicksPerSecond);
     }
 

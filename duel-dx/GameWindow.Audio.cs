@@ -606,16 +606,22 @@ internal sealed unsafe partial class GameWindow
 
     // ── 동작에 박힌 소리 ─────────────────────────────────────────────────────
 
-    /// <summary>동작을 시작할 때, 그 모션(과 자식 이펙트 모션)의 소리를 틱에 맞춰 예약한다.</summary>
-    internal void ScheduleActionSounds(UnitState u, int action)
+    /// <summary>
+    /// 동작을 시작할 때(<paramref name="delay"/> 초 뒤에 시작하는 셈으로), 그 모션(과 자식 이펙트 모션)의 소리를 틱에 맞춰 예약한다.
+    /// 파트1 자식(살라딘 동작 14 의 자식 Obs 227 처럼 <see cref="Part1Game.ObsBase"/> 위 번호)은 이펙트 표(assets/effects)에 없어 파트1 그림에서 읽는다.
+    /// </summary>
+    internal void ScheduleActionSounds(UnitState u, int action, double delay = 0)
     {
         if (!_sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { } clip) return;
         float x = Btl.UnitFoot(u).X;                          // 좌우 소리(감사4 S1) — 그 인물의 발 자리
-        foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((_lastTime + start / TicksPerSecond, sound, x));
+        double t0 = _lastTime + delay;
+        foreach (var (start, sound) in clip.Sounds) _pendingSounds.Add((t0 + start / TicksPerSecond, sound, x));
         foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
         {
-            if (_effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion) is not { } child) continue;
-            foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((_lastTime + (start + s) / TicksPerSecond, sound, x));
+            var child = _effectTables.GetValueOrDefault(obs)?.Clips.GetValueOrDefault(motion)
+                        ?? (obs > Part1Game.ObsBase ? UiFor(obs)?.Clip(motion) : null);
+            if (child == null) continue;
+            foreach (var (s, sound) in child.Sounds) _pendingSounds.Add((t0 + (start + s) / TicksPerSecond, sound, x));
         }
     }
 
