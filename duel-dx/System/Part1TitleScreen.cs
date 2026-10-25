@@ -368,6 +368,15 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         HookGrowth();
         Chapter.PrepareContinue(inBattle: true);
+        // 파트1 타이틀 · 지도에서 불러왔으면 그 화면들을 닫는다(StartBattle 과 같이) — 열린 채로 남아 전투 중 T(전직 트리) · P(동료 정보)가
+        // 「전투 판이 아니다」로 보고 안 열렸다(사용자 보고: 20089 에서 P · T 반응이 없다).
+        _open = false;
+        _bg = null;
+        if (_chapter != null) _chapter._open = false;
+        if (_timeline != null) _timeline._open = false;
+        if (_field != null) _field._open = false;
+        if (_town != null) _town._open = false;
+        if (_party != null) _party._open = false;
     }
 
     /// <summary>챕터 지도가 떠 있나(필드 · 마을 · 일행 창이 아니라) — 지도 저장(장면 갈래 4)이 본다.</summary>
