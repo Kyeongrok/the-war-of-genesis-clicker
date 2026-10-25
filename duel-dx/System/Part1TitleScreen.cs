@@ -532,14 +532,19 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         // 저장 칸 창(LOAD GAME)이 떠 있으면 단추는 숨긴다 — 창 위에 겹쳐 그려졌다.
         if (menu && !host.SlotsScr.SlotsOpen)
         {
-            // 메뉴 줄 — 보통은 모션 10+줄(섞기 13 · 4 = 16/31 비침), 짚으면 모션 줄(더하기). 튜토리얼은 늘 「못 누름」 모습.
+            // 메뉴 줄 — 원본은 그림(Obs 0751 모션 10~13 · 짚으면 0~3)이지만 CONTINUE · PART 2 와 같은 글꼴의 글로 쓴다(사용자 요청).
+            // 자리는 원본 맞는 칸 가운데, 튜토리얼은 늘 「못 누름」 빛깔. 밝아지는 것(FadeFrom)은 원본 차례 그대로.
             double dim = FadeFrom(menuAt, 4);
             for (int row = 0; row < 4; row++)
             {
                 int button = Array.FindIndex(Buttons, b => b.Row == row);
+                var (cx, cy) = row == 2 ? (Cx, Cy + 154) : ((Buttons[button].X0 + Buttons[button].X1) / 2, (Buttons[button].Y0 + Buttons[button].Y1) / 2);
+                string label = row == 2 ? "TUTORIAL" : Buttons[button].Name;
                 bool hot = button >= 0 && _hover == button && FadeFrom(menuAt) >= 1;
-                if (hot) host.DrawUi(P1 + MenuObs, row, (int)t, x0, y0, GameWindow.UiBlend.Add);
-                else host.DrawUi(P1 + MenuObs, 10 + row, 0, x0, y0, GameWindow.UiBlend.Alpha, fade: dim);
+                uint color = row == 2 ? 0xFF5C544Cu : hot ? 0xFFFFF0C8u : 0xFFA89C90u;
+                color = (uint)(Math.Clamp(dim, 0, 1) * 255) << 24 | (color & 0xFFFFFF);
+                var (_, w, h) = host.UiGetText(label, color, 14);
+                host.UiText(label, ox + cx - w / 2, oy + cy - h / 2, color, 14);
             }
             // 원본에 없는 단추(리메이크) — 오른쪽 아래에 메뉴 글자 빛깔의 작은 글로.
             for (int i = 0; i < Buttons.Length; i++)
