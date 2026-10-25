@@ -16,7 +16,7 @@ using static DuelDx.GameWindow;
 /// 대장 방향(<c>+0x4e</c>)으로 돌린 자리에 새 유닛(<c>0x10042ee0</c>)을 세우고 <c>0x10036790(대장, 용병, 1)</c>로 잇는다 —
 /// b = 0 줄이 대장 <b>뒤</b>, b = 2 줄이 앞. 막힌 칸 검사는 없다(리메이크는 설 수 없으면 가까운 빈 칸).
 /// 리메이크는 용병을 편 3(파트2 AI, 사용자 결정)으로 두고 대장의 부하로 잇는다 — 제 차례가 없고 대장 차례에 따라 걷고 함께 친다.
-/// 아무에게도 안 붙였으면 첫 출전 인물에게(8 이 넘으면 다음 인물에게) 차례로 붙인다.
+/// 배치 창 없이 시작한 판만, 아무에게도 안 붙였으면 첫 출전 인물에게(8 이 넘으면 다음 인물에게) 차례로 붙인다. 배치 창에서 안 붙인 용병은 나오지 않는다.
 /// </remarks>
 internal sealed class Part1MercDeploy(GameWindow host)
 {
@@ -137,7 +137,9 @@ internal sealed class Part1MercDeploy(GameWindow host)
     /// 출전 확정 — 판에 선 대장마다 칸의 용병을 대장 둘레에 세우고 부하로 잇는다(<c>0x1002f2d1~</c>). 안 쓴 용병은 판 밖에 남긴다(부른 쪽이 지운다).
     /// 판에 선 대장 누구에게도 안 붙였으면 출전 인물 차례로 8 씩 붙인다.
     /// </summary>
-    internal void Apply()
+    /// <param name="autoFill">배치 창 없이 시작한 판(자동 진행 · 화면 밖 시험)만 true — 고른 것이 없으면 첫 출전 인물부터 채운다.
+    /// 배치 창에서 「용병 배치」를 안 했으면 원본처럼 용병은 나오지 않는다(사용자 보고: 원하지 않아도 배치됐다).</param>
+    internal void Apply(bool autoFill = false)
     {
         var btl = host.Btl;
         Leader = null;
@@ -152,7 +154,7 @@ internal sealed class Part1MercDeploy(GameWindow host)
         var plan = new Dictionary<UnitState, int[]>();
         foreach (var l in leaders)
             if (_slots.TryGetValue(l.ChrCode, out var s) && s.Any(c => c > 0)) plan[l] = s;
-        bool fallback = plan.Count == 0;
+        bool fallback = autoFill && plan.Count == 0;
         if (fallback)
         {
             // 아무도 안 골랐다 — 첫 출전 인물부터 칸 0~8(4 제외)을 차례로 채운다.

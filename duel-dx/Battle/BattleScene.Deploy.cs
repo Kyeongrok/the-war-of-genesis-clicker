@@ -222,7 +222,7 @@ internal sealed unsafe partial class BattleScene
         {
             if (_keepBenchForLoad) return;      // 불러오기 — 세이브에 적힌 인물을 보고 LoadBattleFrom 이 추린다
             // 파트1 용병 — 배치 창 없이 시작하면 첫 출전 인물의 부하로 붙이고(Part1MercDeploy.Apply), 못 붙인 것은 지운다.
-            if (scene.IsPart1 && _part1Mercs.Count > 0) { host.MercDeploy.Apply(); DropUnmarchedMercs(); }
+            if (scene.IsPart1 && _part1Mercs.Count > 0) { host.MercDeploy.Apply(autoFill: true); DropUnmarchedMercs(); }
             if (_deployBench.Count > 0) DropUnits(WithRiders(_deployBench.Contains));   // 맵 밖 여분의 부하 · 탄 이도 함께, 대장 번호는 다시 맞춘다
             _deployBench.Clear();
             return;
