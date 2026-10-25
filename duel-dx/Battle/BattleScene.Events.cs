@@ -267,6 +267,7 @@ internal sealed unsafe partial class BattleScene
     internal void RunEvents()
     {
         if (_events.Count == 0 || _outcome.Length > 0 || EventsBusy || _eventCheckDue == 0) return;
+        if (Part1PickPending) return;   // 파트1 레벨업 고르기가 먼저 — 「보스가 죽으면 이긴다」 사건도 고른 뒤에 터진다(CheckOutcome)
         for (int i = 0; i < _events.Count; i++)
         {
             var e = _events[i];

@@ -2063,6 +2063,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void CheckOutcome()
     {
         if (_outcome.Length > 0) return;
+        // 파트1 — 고를 레벨업 어빌리티가 남았으면 승패를 그 뒤로 미룬다. 마지막 적을 잡은 한 방에 레벨이 오르면 고르기 창과 전투 끝이 같이 떠서,
+        // 못 고른 창이 다음 챕터 전투의 배치 화면까지 따라왔다(사용자 보고). 다 고르면 UpdateLevelUp 이 다시 본다.
+        if (Part1PickPending) { _outcomeAfterLevelUp = true; return; }
         // 먼저 이벤트 스크립트 — 「몇 턴 버티기」·「누구를 지키기」처럼 전멸 말고 다른 조건으로 끝나는 전투가 있다.
         _eventCheckDue |= 1 << 2;               // 쓰러짐은 행동 끝에서 본다
         RunEvents();

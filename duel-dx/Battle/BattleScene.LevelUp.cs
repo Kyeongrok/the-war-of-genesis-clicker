@@ -60,6 +60,9 @@ internal sealed unsafe partial class BattleScene
             if (u.ChrCode == chrCode && u.Data is { } d) u.Data = d with { Abilities = fresh.Abilities };
     }
 
+    /// <summary>파트1 판에서 아직 안 고른 레벨업 어빌리티가 있다 — 사건·승패 판정을 그 뒤로 미룬다.</summary>
+    internal bool Part1PickPending => host._scene.IsPart1 && host.Part1.LevelPicks.Count > 0;
+
     internal void GainPart1KillExp(UnitState killer, UnitState victim)
     {
         if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)

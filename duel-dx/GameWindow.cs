@@ -1146,7 +1146,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// <summary>파트1 전투에서 레벨업 어빌리티를 고를 차례 — 대사가 없고 판이 안 끝났을 때.</summary>
     // 행동(기술 연출)이 다 끝나고 모두 선 뒤에 뜬다 — 전에는 연출 한가운데 떠서 가렸다(사용자 보고: 원본은 안 그렇다).
     internal bool Part1PickOpen => _battleLoaded && _scene.IsPart1 && Part1.LevelPicks.Count > 0 && Tlk._talk == null && Btl._outcome.Length == 0
-        && Btl._routine == null && !_units.Any(u => u.IsBusy);
+        && !Btl._deployOpen && Btl._routine == null && !_units.Any(u => u.IsBusy);
 
     /// <summary>레벨업 고르기 창(전투 안 · 파트1 지도)에서 오른쪽 단추를 누르고 있는 줄의 설명 — 떼면 null.</summary>
     internal (string Text, int X, int Y)? _part1PickTip;

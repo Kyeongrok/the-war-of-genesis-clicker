@@ -61,7 +61,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// </summary>
     internal bool CanOpenBattleMenu =>
         host.Btl.IsPlayerTurn && !host._units[host.Btl._turn].IsBusy && !host.Btl.EventsBusy && !host.Btl._deployOpen && host.Btl._levelUpUnit < 0 && host.Btl._levelUpQueue.Count == 0
-        && host.Btl._delayedHits.Count == 0 && !host.SceneFading;
+        && !host.Btl.Part1PickPending && host.Btl._delayedHits.Count == 0 && !host.SceneFading;
 
     /// <summary>모세스 위에서 챕터 사건이 도는 중인가 — 원본 챕터 장면 Esc 는 <c>[0x101bffac]</c>(도는 사건 수)가 0 일 때만 메뉴를 연다(<c>0x100f78ec~0x100f7922</c>).</summary>
     internal bool ChapterEventRunning => host.Mos._mosesOpen && (host.Fld._fieldEvent >= 0 || host.Tlk._talk != null || host.Fld._fieldChoices != null);
