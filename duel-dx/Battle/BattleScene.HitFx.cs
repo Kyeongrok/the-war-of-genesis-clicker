@@ -62,7 +62,7 @@ internal sealed unsafe partial class BattleScene
     /// 그 위(z 40)에 막 하나를 한 번 띄운다(<c>0x10085e00</c>, 맞은 이를 따라간다): 상태 10(아이스 실드, 선택자 14 · +0x250)이면 Obs 27:0,
     /// 쉐도우 실드(선택자 22 · 상태 11 · +0x251)면 들어온 타격의 선택자(+0x26a)가 5 · 6 이 아닐 때 Obs 14:0,
     /// 배리어(선택자 20 · 상태 9 · +0x24f)면 선택자가 5(마법)일 때 Obs 24:0. 셋은 따로 굴려 함께 뜰 수 있다.
-    /// 리메이크는 아이스 실드를 아직 상태로 걸지 않아 27 은 <see cref="Part1Rules.Buffs"/> 에 14 가 있을 때만 뜬다.
+    /// 리메이크는 셋을 <see cref="Part1Rules.Buffs"/> 의 선택자 14 · 22 · 20 으로 본다(아이스 실드는 BattleScene.Part1Support 가 건다).
     /// </summary>
     internal void FlashPart1Shield(UnitState t, int selector)
     {

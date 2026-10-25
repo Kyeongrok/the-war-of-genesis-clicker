@@ -7,7 +7,7 @@ using static DuelDx.GameWindow;
 /// 파트1 보조 마법의 실제 효과 — 세기 식(Attack +0x42)으로 가른다(볼트 분석-파트1-기술-b 9절 「Game effects」).
 /// (6 힐 · 힐 윈드는 파트2 회복 갈래에서 양만 바꾼다 — <see cref="Part1Rules.HealAmount"/>.) 16 큐어: 상태 · 강화 · 속성 부여를 모두 지운다.
 /// 15 블래스(소울 +20 더) · 17 스피디(SPD +8) · 20 배리어(마법 피해 0, 그 밖의 피해 ×2) · 22 쉐도우 실드(AC ×1.5 · MR ×0.5)
-/// · 23 블러드 러스트(무기 공격 ×1.5)는 <see cref="Part1Rules.Buffs"/> 에 남은 차례로 건다. 21 커즈: 소울 0 + 20% 씩 컨디션이상 · 중독 · 최면.
+/// · 23 블러드 러스트(무기 공격 ×1.5) · 14 아이스 실드(능력치 · 피해에 아무 효과 없음 — 맞을 때 막 27:0 만 번쩍인다)는 <see cref="Part1Rules.Buffs"/> 에 남은 차례로 건다. 21 커즈: 소울 0 + 20% 씩 컨디션이상 · 중독 · 최면.
 /// 25 컨디션이상 · 27 최면 · 28 혼란은 파트1 상태(<see cref="Part1Rules.Ailments"/>)로 건다(분석-파트1-전투 25절).
 /// </summary>
 /// <remarks>
@@ -18,7 +18,7 @@ internal sealed unsafe partial class BattleScene
 {
     private static readonly Dictionary<int, string> Part1BuffNames = new()
     {
-        [15] = "블래스", [17] = "스피디", [20] = "배리어", [22] = "쉐도우 실드", [23] = "블러드 러스트",
+        [14] = "아이스 실드", [15] = "블래스", [17] = "스피디", [20] = "배리어", [22] = "쉐도우 실드", [23] = "블러드 러스트",
     };
 
     /// <summary>파트1 보조 마법이면 그 효과를 걸고 true — 파트2 보조 틀(ApplyAilments)은 거치지 않는다.</summary>
@@ -62,8 +62,10 @@ internal sealed unsafe partial class BattleScene
             if (lands) MarkBuffed(a, t, w);
             return true;
         }
-        if (sel is not (15 or 16 or 17 or 20 or 21 or 22 or 23)) return false;
-        if (result == 3)
+        if (sel is not (14 or 15 or 16 or 17 or 20 or 21 or 22 or 23)) return false;
+        // 아이스 실드(14 → 상태 10, +0x250) — 걸림 굴림은 0x10041960 갈래 0(표 0x10041b68[4] = 0): 같은 편이면 늘, 적이면 보정 247 이 없고
+        // rand()%400 < 세기 ÷ MR 일 때(Part1Rules.StatusLands). 대상 거르기 (4, 1, 0) — 기계 · 큰 유닛 말고 — 는 ApplyWork 가 먼저 본다.
+        if (sel == 14 ? !Part1.StatusLands(host._rng, a, t, attack.Id) : result == 3)
         {
             ShowNumber(t, host._db?.T(42) is { Length: > 0 } miss ? miss : "Miss", MissColor);
             return true;
@@ -198,7 +200,9 @@ internal sealed unsafe partial class BattleScene
     /// 블래스(상태 6, 클래스 <c>0x10083950</c>) 모션 3 · 높이 40 / 스피디(7, <c>0x10083870</c>) 모션 0 · 60 /
     /// 버써크(8, <c>0x100838e0</c>) 모션 1 · 80 / 블러드 러스트(12, <c>0x100839c0</c>) 모션 2 · 100.
     /// 틱마다 상태 칸(<c>+0x24c</c> · <c>+0x24d</c> · <c>+0x24e</c> · <c>+0x252</c>)이 0 이면 스스로 지운다.
-    /// 배리어(9) · 쉐도우 실드(11)는 늘 붙은 표지가 없고, 맞을 때 막(24:0 · 14:0)이 한 번 선다(<c>0x1003e249~</c>, 리메이크는 안 옮김).
+    /// 배리어(9) · 쉐도우 실드(11) · 아이스 실드(10)는 늘 붙은 표지가 없고(갈래 9 · 10 · 11 = Obs 24 · 27 · 14 를 z 40 에 한 번 — <c>0x10041e47</c> ·
+    /// <c>0x10041eab</c> · <c>0x10041e79</c> → <c>0x10085e00</c>), 걸 때(<c>0x10042570</c> 갈래 7 = 아무것도)가 아니라 맞을 때만 부른다
+    /// (<c>0x1003e249~</c> — <see cref="FlashPart1Shield"/>).
     /// </summary>
     private void DrawPart1BuffMarks(int tick)
     {

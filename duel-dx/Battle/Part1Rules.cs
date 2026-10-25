@@ -140,7 +140,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// </summary>
     internal readonly Dictionary<UnitState, int> Enchant = [];
 
-    /// <summary>파트1 강화(블래스 15 · 스피디 17 · 배리어 20 · 쉐도우 실드 22 · 블러드 러스트 23) — 유닛 → 세기 식 → 남은 길이(BattleScene.Part1Support).</summary>
+    /// <summary>파트1 강화(아이스 실드 14 · 블래스 15 · 스피디 17 · 배리어 20 · 쉐도우 실드 22 · 블러드 러스트 23) — 유닛 → 세기 식 → 남은 길이(BattleScene.Part1Support).</summary>
     internal readonly Dictionary<UnitState, Dictionary<int, int>> Buffs = [];
 
     /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.
@@ -360,6 +360,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (selector is 2 or 31) defense += ft.Equipment.Sum(i => i?.Bonus(Part1Bonus.GunGuard) ?? 0);
         if (!magic && t.Status(4) > 0) defense /= 2;
         if (Has(t, 22)) defense = magic ? defense / 2 : defense * 3 / 2;   // 쉐도우 실드 — AC ×1.5 · MR ×0.5
+        // 아이스 실드(14, 상태 10 · +0x250)는 여기 아무것도 안 한다 — 원본에서 +0x250 을 읽는 곳은 셋뿐이다: 맞을 때 막 27:0(0x1003e249),
+        // AI 어림(이미 걸렸으면 0, 0x1003fdf9), 큐어(0x100421e9). AC · MR 게터(0x1003edc0 · 0x1003ed50)와 이 함수(0x100413b0)는 안 본다.
         if (blocked) defense += ft.BlockDefense;
         if (stance == 80 && selector != 5) defense += defense / 2;           // 완전방어 자세 — 마법(식 5) 말고는 방어 ×1.5(0x100415e1)
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));

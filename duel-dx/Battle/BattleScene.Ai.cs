@@ -200,6 +200,9 @@ internal sealed unsafe partial class BattleScene
         // 이미 걸린 대상에게 0 을 준다).
         if (host._scene.IsPart1 && Part1.AttackOf(w)?.Formula is (13 or 25 or 27 or 28) and var p1sel)
             return targets.Count(i => host._units[i] is var t && SeesAsFoe(user, t) && Part1.AilmentWorth(t, p1sel)) >= w.MinTargets + 1;
+        // 파트1 아이스 실드(선택자 14 → 상태 10) — 이미 걸린 대상은 원본 AI 어림이 0 이다(0x1003fdf9). 제 편만 세는 것은 상식대로.
+        if (host._scene.IsPart1 && Part1.AttackOf(w)?.Formula == 14)
+            return targets.Count(i => host._units[i] is var t && !Hostile(user, t) && !Part1.Has(t, 14)) >= need;
         if (w.AbilityId == CureAbility)
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t)
                                     && Enumerable.Range(0, 3).Any(k => AilmentScore(t.StatusId[k], t.StatusValue[k]) < 0));
