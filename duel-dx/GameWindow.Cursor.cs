@@ -40,6 +40,8 @@ internal sealed unsafe partial class GameWindow
         // 걸어가서 손댈 수 있는 물체(상자·문)면 주먹 커서 — 원본 「닿을 수 있는 오브젝트 칸」(층 1, 0x1006d0f0 갈래 4).
         if (Btl.IsPlayerTurn && by >= GridTop && Btl.ObjectAt(bx / TileW, RowAt(bx, by)) is { } near
             && Btl.FindTouchPath(_units[Btl._turn], near) != null) return CursorTouch;
+        // 파트1 상자 — 열 수 있는 상자(잠긴 상자는 어빌리티 63 이 있을 때만)면 같은 주먹 커서.
+        if (Btl.IsPlayerTurn && by >= GridTop && _scene.IsPart1 && Btl.Part1Objects.CanTouchAt(bx / TileW, RowAt(bx, by))) return CursorTouch;
 
         // 내 차례에 적 위에 있으면 칼 커서 — 걸어가서 칠 수 있는 적이면 그렇다(fa-12 의 클릭 공격과 같은 판정).
         if (Btl.IsPlayerTurn && by >= GridTop && UnitOrFoeAt(bx, by) is var hit and >= 0 && _units[hit] is var who)

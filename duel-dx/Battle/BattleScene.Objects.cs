@@ -295,13 +295,23 @@ internal sealed unsafe partial class BattleScene
             10 => obj.Team < 0 || (!ObjectHostile(obj, user) && obj.Charged),
             _ => false,
         };
-        if (!touchable || ObjectGone(obj) || (known ?? ComputeRange(user)) is not { } range) return null;
-        bool Affordable(int col, int row) =>
-            (uint)col < host.Cols && (uint)row < host.Rows && range.CanReach(row * host.Cols + col)
-            && (!needTp || range.Cost[row * host.Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
+        if (!touchable || ObjectGone(obj)) return null;
         // work 386 은 십자 한 칸, 대상 8(물체) — 발자국 칸 어디든 옆이면 닿는다(여러 칸짜리 문·아크방전기).
         var cells = FootprintCells(obj).Select(c => (c.Col, c.Row)).ToList();
         if (cells.Count == 0) cells.Add((obj.Col, obj.Row));
+        return FindTouchPathTo(user, cells, known, needTp);
+    }
+
+    /// <summary>
+    /// 그 칸들(물체 몸) 가운데 하나의 상하좌우 옆까지 걷는 길 — 못 닿으면 null, 이미 옆이면 빈 길. 파트2 물체(<see cref="FindTouchPath"/>)와
+    /// 파트1 상자(<see cref="Part1MapObjects"/>)가 같이 쓴다.
+    /// </summary>
+    internal List<(int Col, int Row)>? FindTouchPathTo(UnitState user, List<(int Col, int Row)> cells, MoveRange? known = null, bool needTp = false)
+    {
+        if (cells.Count == 0 || (known ?? ComputeRange(user)) is not { } range) return null;
+        bool Affordable(int col, int row) =>
+            (uint)col < host.Cols && (uint)row < host.Rows && range.CanReach(row * host.Cols + col)
+            && (!needTp || range.Cost[row * host.Cols + col] <= user.Tp + Math.Min(0, user.Ctp - ObjectTouchTp));
         bool Adjacent(int col, int row) => !cells.Contains((col, row)) && cells.Any(c => Math.Abs(c.Col - col) + Math.Abs(c.Row - row) == 1);
         if (Adjacent(user.Col, user.Row) && Affordable(user.Col, user.Row)) return [];
         int best = -1, bestCost = int.MaxValue;
@@ -325,6 +335,7 @@ internal sealed unsafe partial class BattleScene
     internal bool TryTouchObject(int col, int row)
     {
         if (!IsPlayerTurn || host._units[_turn].IsBusy) return false;
+        if (host._scene.IsPart1 && Part1Objects.TryTouch(col, row)) return true;   // 파트1 상자(절 A 의 Obt) — 파트2 처럼 눌러서 연다
         if (ObjectAt(col, row) is not { } obj || FindTouchPath(host._units[_turn], obj) == null) return false;
         if (FindTouchPath(host._units[_turn], obj, needTp: true) is not { } path)
         {
@@ -340,6 +351,7 @@ internal sealed unsafe partial class BattleScene
     /// <summary>걸어간 인물이 멈췄으면 기다리던 물체를 연다 — 매 틀 부른다. 차례가 바뀌었거나 못 닿게 됐으면 그만둔다.</summary>
     internal void ResolvePendingTouch()
     {
+        if (host._scene.IsPart1) Part1Objects.ResolvePendingTouch();
         if (_pendingTouch is not { } obj) return;
         if (!IsPlayerTurn) { _pendingTouch = null; return; }
         if (host._units[_turn].IsBusy) return;
@@ -409,6 +421,15 @@ internal sealed unsafe partial class BattleScene
         var user = host._units.FirstOrDefault(u => u.Alive && u.PlayerControlled);
         if (user is null) return false;
         // B 키면 부술 수 있는 물체를, 그 밖에는 열 수 있는 물체를 고른다.
+        if (host._scene.IsPart1)
+        {
+            if (IsPlayerTurn) user = host._units[_turn];
+            int was = _turn;
+            _turn = Array.IndexOf(host._units, user);
+            bool done = Part1Objects.TouchNearestForTest(user, Environment.GetEnvironmentVariable("DUELDX_TOUCH")!);
+            if (was >= 0 && was != _turn) _turn = was;
+            return done;
+        }
         bool breaking = Environment.GetEnvironmentVariable("DUELDX_TOUCH") == "break";
         // 「열,줄」 이면 그 칸의 물체를 연다(두 칸 문의 오른쪽 칸 따위를 시험할 때).
         var cell = Environment.GetEnvironmentVariable("DUELDX_TOUCH")!.Split(',');

@@ -30,6 +30,7 @@ internal sealed class Part1MapObjects(GameWindow host)
     private sealed class Obj(Part1MapObject def, int col, int row)
     {
         public readonly Part1MapObject Def = def;
+        public readonly (int Item, int Gold, bool Locked)? Chest = def.Chest;
         public readonly int Col = col, Row = row;
         public int Motion, Frame, Z, AnchorX, AnchorY;
         public int StampFrame;           // 판에 찍힌 장 — 원본은 만들 때와 키 9 때만 찍어서, 그 뒤 장이 바뀌어도 판은 그대로다
@@ -66,6 +67,170 @@ internal sealed class Part1MapObjects(GameWindow host)
         if (!ReferenceEquals(_for, host._scene)) Reset();
     }
 
+    // ── 상자 ─────────────────────────────────────────────────────────────────────────────────────────────
+    // 원본(분석-파트1-전투 37절): 차례 끝에 이동도 행동도 안 한 유닛(0x10030164 → 0x10036350)이 곁의 물체(0x1008f390)에 알림 2 를,
+    // 그 유닛이 어빌리티 63 「잠긴상자열기」를 쓰면(0x1009e020 ≠ 0xff) 알림 5 를 더 보낸다. 물체는 Obt 반응표(0x10099d60)대로 —
+    // 나무 상자 · 든 것이 정해진 상자는 알림 2, 쇠 상자(324 · 325~359)는 알림 5 에 반응 6(0x10099e1e: 사람 조종 유닛만) → 동작 19(0x1009a710),
+    // 동작 19 의 키 6 이 곁 유닛에 알림 12(아이템) · 13(eld)을 보내 전투가 가방 · 돈에 넣고 창을 띄운다(0x100330f0 · 0x10033450), 19 가 끝나면 동작 5(열린 장).
+    // 리메이크는 사용자 결정대로 파트2 처럼 — 차례인 인물이 닿는 상자 위에 주먹 커서, 누르면(필요하면 옆까지 걸어가) 연다(TP 80).
+
+    /// <summary>열린 상자 수 — 닿는 칸 칠하기(<see cref="BattleScene"/> 이동 영역)가 다시 셀 때를 안다.</summary>
+    internal int OpenedChests { get { Ensure(); return _objects.Count(o => o is { Chest: not null } && Opened(o)); } }
+
+    private static bool Opened(Obj o) => o.Motion is Part1MapObject.OpenMotion or Part1MapObject.OpenedMotion;
+
+    /// <summary>상자의 몸 — 찍힌 장에서 걷기 금지(지형 비트 1) 칸. 상자 324 · 147 은 1×3 의 가운데 칸.</summary>
+    private static List<(int Col, int Row)> BodyCells(Obj o)
+    {
+        var f = o.Def.Frames[o.StampFrame];
+        var cells = new List<(int, int)>();
+        for (int r = 0; r < f.Rows; r++)
+            for (int c = 0; c < f.Cols; c++)
+                if ((f.Terrain[r * f.Cols + c] & 1) != 0) cells.Add((o.Col + c, o.Row + r));
+        if (cells.Count == 0) cells.Add((o.Col, o.Row));
+        return cells;
+    }
+
+    /// <summary>마우스가 상자로 치는 칸 — 몸 칸과 그림만 걸친 칸(지형 0x10, 뚜껑이 그려진 윗칸).</summary>
+    private static bool Covers(Obj o, int col, int row)
+    {
+        var f = o.Def.Frames[o.StampFrame];
+        int c = col - o.Col, r = row - o.Row;
+        return (uint)c < (uint)f.Cols && (uint)r < (uint)f.Rows && (f.Terrain[r * f.Cols + c] & 0x11) != 0;
+    }
+
+    private Obj? ChestAt(int col, int row)
+    {
+        Ensure();
+        // 몸 칸을 먼저 — 그림만 걸친 칸은 뒤 상자의 몸과 겹칠 수 있다.
+        return _objects.FirstOrDefault(o => o is { Chest: not null } && BodyCells(o).Contains((col, row)))
+            ?? _objects.FirstOrDefault(o => o is { Chest: not null } && Covers(o, col, row));
+    }
+
+    /// <summary>잠긴 상자를 여는 어빌리티 63 「잠긴상자열기」(Attack 368) — 쓰는 레벨(<c>0x1009e020</c>, 직업 · 장비)로 가졌을 때만(<c>0x10036406</c>).</summary>
+    internal const int UnlockAbility = 63;
+
+    private bool CanUnlock(UnitState u) => host.Btl.Part1.Fighter(u)?.Chr.EffectiveLevel(UnlockAbility) >= 0;
+
+    private bool CanOpen(UnitState u, Obj o) => o.Chest is { } chest && !Opened(o) && (!chest.Locked || CanUnlock(u));
+
+    /// <summary>주먹 커서 — 그 칸이 차례인 인물이 열 수 있고(걸어가서라도) 닿는 상자인가.</summary>
+    internal bool CanTouchAt(int col, int row)
+    {
+        var btl = host.Btl;
+        if (btl._turn < 0 || row < 0 || ChestAt(col, row) is not { } o) return false;
+        var user = host._units[btl._turn];
+        return CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o)) != null;
+    }
+
+    /// <summary>이동 영역 위에 노랗게 칠할 상자 칸(판 칸 번호) — 차례인 인물이 걸어가 열 수 있는 것.</summary>
+    internal IEnumerable<int> TouchableCells(UnitState user, BattleScene.MoveRange range)
+    {
+        Ensure();
+        foreach (var o in _objects)
+        {
+            if (o == null || !CanOpen(user, o) || host.Btl.FindTouchPathTo(user, BodyCells(o), range) == null) continue;
+            foreach (var (c, r) in BodyCells(o))
+                if ((uint)c < (uint)host.Cols && (uint)r < (uint)host.Rows) yield return r * host.Cols + c;
+        }
+    }
+
+    private Obj? _pendingTouch;
+
+    /// <summary>
+    /// 화면 밖 시험(T 키, <c>DUELDX_TOUCH</c>) — 그 인물을 가장 가까운 닫힌 상자(「열,줄」이면 그 칸의 상자) 몸 아래 칸에 세우고 연다.
+    /// 잠긴 상자를 못 여는 인물이면 알림만 띄운다. TP 는 안 본다. 「place」 는 두 칸 떨어져 세우기만, 「…key」 는 어빌리티 63 을 가진 아군으로.
+    /// </summary>
+    internal bool TouchNearestForTest(UnitState user, string spec)
+    {
+        Ensure();
+        bool place = spec == "place";
+        // 「…,key」 — 잠긴 상자를 여는 인물(어빌리티 63)로 바꿔 시험한다.
+        if (spec.EndsWith("key"))
+        {
+            spec = spec[..^3].TrimEnd(',');
+            if (host._units.FirstOrDefault(u => u.Alive && u.OnField && u.PlayerControlled && CanUnlock(u)) is { } keyHolder) user = keyHolder;
+        }
+        var cell = spec.Split(',');
+        Obj? o = cell.Length == 2 && int.TryParse(cell[0], out int tc) && int.TryParse(cell[1], out int tr) ? ChestAt(tc, tr)
+            : _objects.Where(x => x is { Chest: not null } && !Opened(x) && x.Col < host.Cols && x.Row < host.Rows)
+                      .OrderBy(x => Math.Abs(x!.Col - user.Col) + Math.Abs(x.Row - user.Row)).FirstOrDefault();
+        if (o == null || Opened(o)) return false;
+        var (bc, br) = BodyCells(o)[^1];
+        user.ResetTo(bc, Math.Clamp(br + 1 + (place ? 2 : 0), 0, host.Rows - 1), keepFacing: true);
+        host.Btl.CenterOnCell(bc, br);
+        if (place) return true;                          // 「place」 — 세우기만(두 칸 떨어져서), 여는 것은 클릭으로 시험한다
+        if (!CanOpen(user, o)) { host.Toast("잠긴 상자입니다 — 「잠긴상자열기」 어빌리티가 있어야 열 수 있습니다."); return true; }
+        Open(o, user);
+        return true;
+    }
+
+    /// <summary>상자 칸을 눌렀을 때 — 옆이면 바로, 아니면 옆까지 걸어가서 연다. 처리했으면 true(연 상자 · 못 닿는 상자 · 상자 아닌 칸은 false).</summary>
+    internal bool TryTouch(int col, int row)
+    {
+        var btl = host.Btl;
+        if (ChestAt(col, row) is not { } o || Opened(o)) return false;
+        var user = host._units[btl._turn];
+        var body = BodyCells(o);
+        if (btl.FindTouchPathTo(user, body) == null) return false;
+        if (!CanOpen(user, o))
+        {
+            host.Toast("잠긴 상자입니다 — 「잠긴상자열기」 어빌리티가 있어야 열 수 있습니다.");
+            return true;
+        }
+        if (btl.FindTouchPathTo(user, body, needTp: true) is not { } path)
+        {
+            host.Hint($"TP 가 모자랍니다 — 상자를 열려면 옆 칸까지 걷고도 TP+CTP 로 {BattleScene.ObjectTouchTp} 을 낼 수 있어야 합니다");
+            return true;
+        }
+        if (path.Count == 0) { Open(o, user); return true; }
+        foreach (var cell in path) user.Path.Enqueue(cell);
+        _pendingTouch = o;
+        return true;
+    }
+
+    /// <summary>걸어간 인물이 멈췄으면 기다리던 상자를 연다 — 매 틀(<see cref="BattleScene.ResolvePendingTouch"/>).</summary>
+    internal void ResolvePendingTouch()
+    {
+        if (_pendingTouch is not { } o) return;
+        var btl = host.Btl;
+        if (!btl.IsPlayerTurn || !ReferenceEquals(_for, host._scene)) { _pendingTouch = null; return; }
+        var user = host._units[btl._turn];
+        if (user.IsBusy) return;
+        _pendingTouch = null;
+        if (CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o), needTp: true) is { Count: 0 }) Open(o, user);
+    }
+
+    /// <summary>
+    /// 상자를 연다 — 동작 19(여는 동작, 끝나면 <see cref="Step"/> 가 동작 5 = 열린 장)를 걸고 든 것을 준다:
+    /// 아이템은 전투 팀 가방(<c>0x100ada10</c>), eld 는 돈(<c>+0xb958</c>). 든 것이 0 이면 무작위(<see cref="Part1MapObject.RandomChestItem"/>).
+    /// 창은 원본 글 그대로 「아이템 획득」 · 「%s 1개를 획득하였습니다.」 / 「eld 획득」 · 「%deld를 획득하였습니다.」
+    /// (<c>0x1011c030</c> · <c>0x1011c03c</c> · <c>0x1011c058</c> · <c>0x1011c064</c>). 원본은 키 6 의 틱(4 · 6 · 12)에 주지만 리메이크는 여는 순간 준다 [H].
+    /// </summary>
+    private void Open(Obj o, UnitState user)
+    {
+        var btl = host.Btl;
+        btl.CommitMove(user);
+        user.Tp -= BattleScene.ObjectTouchTp;
+        Start(o, Part1MapObject.OpenMotion);
+        var (item, gold, _) = o.Chest!.Value;
+        if (gold > 0)
+        {
+            host.Part1.Eld += gold;
+            btl.ShowSpoilMessage(user, "eld 획득", $"{gold}eld를 획득하였습니다.");
+        }
+        else
+        {
+            if (item <= 0) item = Part1MapObject.RandomChestItem(host._rng);
+            host.Part1.Bag.Add(item);
+            string name = Part1Item.ById(Part1Tables.Items, item)?.Name ?? $"아이템 {item}";
+            btl.ShowSpoilMessage(user, "아이템 획득", $"{name} 1개를 획득하였습니다.");
+        }
+        if (BattleScene.Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"p1chest obt {o.Def.Id} at ({o.Col},{o.Row}) by {user.ChrCode} item {item} gold {gold}{Environment.NewLine}");
+    }
+
     /// <summary>동작 걸기(<c>0x10098af0</c>) — 같은 동작이 아직 끝나지 않았으면 그대로 둔다. 장은 첫 종류 0 키의 것(없으면 그대로).</summary>
     private void Start(Obj o, int motion)
     {
@@ -96,6 +261,12 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>동작 키를 지난 틱만큼 돌린다 — 동작은 끝나면 처음으로(<c>0x10098be0</c>).</summary>
     private void Step(Obj o)
     {
+        // 상자 상태 6(0x1009a8ec): 여는 동작 19 가 끝나면 동작 5(열린 장)로.
+        if (o.Chest != null && o.Motion == Part1MapObject.OpenMotion && TickOf(o) >= (o.Def.Motion(o.Motion)?.Length ?? 0))
+        {
+            RunKeys(o, Math.Max(0, o.DoneTick + 1), (o.Def.Motion(o.Motion)?.Length ?? 1) - 1);
+            Start(o, Part1MapObject.OpenedMotion);
+        }
         int now = TickOf(o);
         if (now <= o.DoneTick) return;
         // 오래 멈췄다 돌아오면(창 · 저장) 지난 틱을 다 돌지 않는다 — 키는 장 · 기준 칸 · 다시 찍기라 마지막 몇 바퀴면 같다.

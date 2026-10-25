@@ -379,7 +379,7 @@ internal sealed unsafe partial class BattleScene
         // 물체마다 길찾기를 하므로 틀마다 다시 세지 않는다 — 같은 영역·같은 차례·같은 물체 수인 동안은 앞 틀의 것을 쓴다
         // (전에는 내 차례에 이동 영역이 떠 있는 내내 한 틀에 40ms 를 먹었다).
         bool mine = _rangeUnit == _turn && IsPlayerTurn;
-        int liveObjects = Objects.Count(o => o.Alive);
+        int liveObjects = Objects.Count(o => o.Alive) + (host._scene.IsPart1 ? 1000 * Part1Objects.OpenedChests : 0);
         if (!ReferenceEquals(range, _touchableFor.Range) || _touchableFor.Turn != _turn || _touchableFor.Mine != mine || _touchableFor.Objects != liveObjects)
         {
             _touchable.Clear();
@@ -388,6 +388,8 @@ internal sealed unsafe partial class BattleScene
                     if (FindTouchPath(host._units[_turn], obj, range) != null)
                         foreach (var (fc, fr, _, _) in FootprintCells(obj))   // 발자국 칸 모두(여러 칸짜리 문)
                             if ((uint)fc < host.Cols && (uint)fr < host.Rows && ObjectAt(fc, fr) == obj) _touchable.Add(fr * host.Cols + fc);
+            if (mine && host._scene.IsPart1)
+                foreach (var cell in Part1Objects.TouchableCells(host._units[_turn], range)) _touchable.Add(cell);
             _touchableFor = (range, _turn, mine, liveObjects);
         }
         var touchable = _touchable;

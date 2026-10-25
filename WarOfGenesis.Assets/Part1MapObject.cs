@@ -16,6 +16,13 @@ public sealed record Part1MapObjectKey(int Start, int Length, int Kind, short[] 
 public sealed record Part1MapObjectMotion(int Length, IReadOnlyList<Part1MapObjectKey> Keys);
 
 /// <summary>
+/// 맵 물체가 받는 알림의 반응 — 성질 뒤 <c>u16 수</c> · 16바이트 × 수(<c>u16 알림, u16 반응, i16 × 6</c>). 물체의 알림 처리기 <c>0x10099d60</c>(가상 +0x48)가
+/// 같은 알림의 항목마다 반응 0~13 을 가상 +0x74~+0xa8 로 부른다. 반응 6(<c>0x10099e1e</c>)은 보낸 이가 판의 유닛이고 조종 <c>+0x1f8</c> = 4(사람)일 때만
+/// <c>0x1009a710</c> — 동작 19(여는 동작)를 걸고 다음 상태 6(동작이 끝나면 동작 5 = 열린 장). 상자 147 은 알림 2(곁에서 대기), 쇠 상자 324 는 알림 5(곁에서 대기 + 어빌리티 63).
+/// </summary>
+public sealed record Part1MapObjectReaction(int Message, int Action, short[] Args);
+
+/// <summary>
 /// 파트1 맵 물체 — 전투 파일 절 A 의 첫 낱말이 가리키는 <c>Obts\NNNN.obt</c>. 전투 맵과 <b>같은 Obt 꼴</b>이고 같은 로더(<c>0x10022bc0</c>)가 읽는다.
 /// </summary>
 /// <remarks>
@@ -27,6 +34,56 @@ public sealed record Part1MapObjectMotion(int Length, IReadOnlyList<Part1MapObje
 /// (<c>0x10097b04</c>) — 나무 233 만 1. 칸 0~2 는 [H: 불붙는 온도 · 열 받는 정도] (통 80·128·80, 상자 150·10·10, 문 120 30000·100·100). 리메이크는 아직 안 쓴다.</param>
 public sealed record Part1MapObject(int Id, IReadOnlyList<Part1MapObjectFrame> Frames, IReadOnlyList<Part1MapObjectMotion?> Motions, int[] Properties)
 {
+    /// <summary>알림 반응표(<see cref="Part1MapObjectReaction"/>) — 성질 뒤에 없으면 빈 목록.</summary>
+    public IReadOnlyList<Part1MapObjectReaction> Reactions { get; init; } = [];
+
+    /// <summary>
+    /// 상자의 든 것 — 반응 6(열기)이 알림 2 · 5 에 걸려 있고 여는 동작 19 에 키 6(곁 유닛 알림)이 알림 12(아이템) · 13(eld)을 보내는 Obt.
+    /// 상자가 아니면 null. <c>Item</c> 0 = 무작위(<c>0x100330f0</c> 의 표), <c>Gold</c> 는 eld. <c>Locked</c> = 알림 5 에만 반응(곁에서 대기 + 어빌리티 63 「잠긴상자열기」).
+    /// </summary>
+    /// <remarks>
+    /// 키 6 의 인자: a0 알림(12 · 13) · a1 3 · a2 0 · a3 1 · a4 1 [H: 범위] · a5 값(아이템 번호 · eld). 원본 키 처리기 <c>0x10098d53</c> 가 범위의 유닛마다
+    /// <c>0x1009d440(유닛, a0, 0, a5)</c>, 유닛은 그것을 전투로 넘기고(<c>0x100355dd</c> · <c>0x100355fd</c>) 전투가 준다(<c>0x100330f0</c> · <c>0x10033450</c>).
+    /// </remarks>
+    public (int Item, int Gold, bool Locked)? Chest
+    {
+        get
+        {
+            var open = Reactions.FirstOrDefault(r => r.Action == 6 && r.Message is 2 or 5);
+            if (open is null || Motion(OpenMotion)?.Keys.FirstOrDefault(k => k.Kind == 6 && k.Args[0] is 12 or 13) is not { } loot) return null;
+            return loot.Args[0] == 12 ? (loot.Args[5], 0, open.Message == 5) : (0, loot.Args[5], open.Message == 5);
+        }
+    }
+
+    /// <summary>
+    /// 든 것이 0(무작위)인 상자의 아이템 — <c>0x100330f0</c>: <c>rand() % 139</c> 로 다섯 묶음 가운데 하나, 묶음 안은 고르게
+    /// (0~34 → 5 마다 · 35~62 → 4 마다 · 63~95 → 3 마다 · 96~119 → 2 마다 · 120~138 → 하나씩). 앞 묶음일수록 한 아이템이 흔하다.
+    /// </summary>
+    public static int RandomChestItem(Random rng)
+    {
+        int r = rng.Next(139);
+        return r switch
+        {
+            < 35 => RandomTiers[0][r / 5],
+            < 63 => RandomTiers[1][(r - 35) / 4],
+            < 96 => RandomTiers[2][(r - 63) / 3],
+            < 120 => RandomTiers[3][(r - 96) / 2],
+            _ => RandomTiers[4][r - 120],
+        };
+    }
+
+    private static readonly int[][] RandomTiers =
+    [
+        [0x81, 0x83, 0x84, 0x82, 0x0d, 0x79, 0x7e],
+        [0x01, 0x4c, 0x7a, 0x7b, 0x7c, 0x7d, 0x7f],
+        [0x0e, 0x23, 0x06, 0x02, 0x0f, 0x2d, 0x4d, 0x71, 0x52, 0x42, 0x32],
+        [0x07, 0x1b, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x75, 0x76, 0x77, 0x33, 0x78],
+        [0x11, 0x1c, 0x26, 0x2e, 0x34, 0x35, 0x44, 0x46, 0x47, 0x48, 0x4f, 0x55, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x72],
+    ];
+
+    /// <summary>상자를 여는 동작(<c>0x1009a710</c> 이 거는 19) · 다 연 뒤 도는 동작(상태 6 → <c>0x1009a8ec</c> 의 5 = 열린 장).</summary>
+    public const int OpenMotion = 19, OpenedMotion = 5;
+
     /// <summary>그 동작 — 없으면(길이 −1) null.</summary>
     public Part1MapObjectMotion? Motion(int motion) => (uint)motion < (uint)Motions.Count ? Motions[motion] : null;
 
@@ -117,7 +174,19 @@ public sealed record Part1MapObject(int Id, IReadOnlyList<Part1MapObjectFrame> F
             }
             var props = new int[8];
             for (int i = 0; i < 8; i++) props[i] = reader.ReadInt32();
-            return new Part1MapObject(id, frames, motions, props);
+            var reactions = new List<Part1MapObjectReaction>();
+            if (reader.BaseStream.Length - reader.BaseStream.Position >= 2)
+            {
+                int count = reader.ReadUInt16();
+                for (int r = 0; r < count && reader.BaseStream.Length - reader.BaseStream.Position >= 16; r++)
+                {
+                    int message = reader.ReadUInt16(), action = reader.ReadUInt16();
+                    var args = new short[6];
+                    for (int a = 0; a < 6; a++) args[a] = reader.ReadInt16();
+                    reactions.Add(new Part1MapObjectReaction(message, action, args));
+                }
+            }
+            return new Part1MapObject(id, frames, motions, props) { Reactions = reactions };
         }
         catch (EndOfStreamException) { return null; }
     }

@@ -518,6 +518,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         _restartInventory = [.. host.StatusScr._inventory];
         _entryFlags = (byte[])host.FlagSt._flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)           // 들어온 차례 그대로(감사3 I4)
         _restartMoney = host.Mos._shopMoney;
+        // 파트1 판은 가방 · eld 가 따로(Part1Progress) — 상자 · 행동 503 · 505 로 얻은 것도 RESTART 가 되돌린다.
+        _restartPart1 = scene.IsPart1 ? ([.. host.Part1.Bag], host.Part1.Eld) : null;
         // 전투 전 명부·군단도 — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티다(전투 안 값은 판 부분의 복사본, 감사5 S5).
         _entryRoster = host._party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
         _entryLegions = new Dictionary<int, int>(host.Mos._unitLegion);
@@ -532,6 +534,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// <summary>전투에 들어올 때의 가방·GP — RESTART 가 되돌린다.</summary>
     internal List<KeyValuePair<int, int>>? _restartInventory;
     internal int _restartMoney;
+
+    /// <summary>파트1 판에 들어올 때의 가방 · eld — RESTART 가 되돌린다(불러온 판은 기준이 없어 안 되돌린다).</summary>
+    internal (List<int> Bag, int Eld)? _restartPart1;
 
     /// <summary>
     /// 전투에 들어올 때의 명부(Chr → 인물)·군단 배속·가진 군단 — RESTART 가 되돌린다. 전투 세이브에도 실려서 불러온 뒤 RESTART 도
@@ -585,6 +590,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.StatusScr._inventory.Clear();
             foreach (var (id, n) in _restartInventory) host.StatusScr._inventory[id] = n;
             host.Mos._shopMoney = _restartMoney;
+        }
+        if (host._scene.IsPart1 && _restartPart1 is { } part1)
+        {
+            host.Part1.Bag = [.. part1.Bag];
+            host.Part1.Eld = part1.Eld;
         }
         // 명부·군단도 전투 전으로 — 이것이 없으면 불러온 뒤 RESTART 가 그 전투에서 얻은 EXP·레벨·상자 아이템을 들고 다시 시작했다(감사5 S5).
         if (_entryRoster != null)
@@ -1298,6 +1308,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? host._units[foundA] : null;
         host.Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? host._units[foundB] : null;
         RestoreObjects(state);
+        _restartPart1 = null;
 
         // 전투 전 스냅숏(감사5 S5) — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티이고 전투 안 값은 판 부분(유닛)에 따로 있다.
         // 스냅숏이 있으면 명부를 그것으로 두고(전투 안 값은 유닛이 들고 있다) RESTART 기준도 그것으로 한다.
