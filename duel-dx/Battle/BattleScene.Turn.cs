@@ -565,6 +565,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 시험용 DUELDX_P1MOUNTHP=<HP> 면 파트1 탈것의 HP 를 그 아래로 깎아 둔다(쓰러져 탄 이가 내려서는 것을 화면 밖에서 보려고).
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1MOUNTHP"), out int mountHp) && mountHp > 0)
             foreach (var mount in _part1Riders.Keys) mount.Hp = Math.Min(mount.Hp, mountHp);
+        // 시험용 DUELDX_P1SQUADHP=<HP> 면 부하를 거느린 대장의 HP 를 그 아래로 깎아 둔다(대장이 쓰러져 새 대장을 뽑는 것을 화면 밖에서 보려고).
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1SQUADHP"), out int squadHp) && squadHp > 0)
+            for (int i = 0; i < host._units.Length; i++)
+                if (host._units[i] is { Alive: true, LeaderIndex: < 0 } lead && FollowersOf(i).Count > 0) lead.Hp = Math.Min(lead.Hp, squadHp);
         // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
         if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
         {
@@ -572,6 +576,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);
             if (Part1.Has(p1u, 15)) p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);   // 블래스 — 오를 때마다 +20 더
             CapPart1Soul(p1u);
+            // 파트1 부하는 대장 차례마다 이동 1 · 행동 1 을 받는다(0x10036825: +0x1c6 = +0x1c8 = 1) — 부하 TP 를 채우고 시작 칸을 적는다
+            // (휴식의 1/5 · 1/10 가름). 부하는 제 차례가 없어 틱의 TP 채우기(차례 깃발이 안 선 사람만)를 못 받는다.
+            foreach (var f in FollowersOf(index))
+            {
+                f.Tp = f.MaxTp;
+                f.OriginCol = f.Col;
+                f.OriginRow = f.Row;
+            }
         }
         _turn = index;
         host._selected = index;

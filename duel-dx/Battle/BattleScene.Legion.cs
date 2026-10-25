@@ -439,8 +439,68 @@ internal sealed unsafe partial class BattleScene
     /// <summary>대장이 방금 확정한 자리 기준으로 부하 목표를 다시 잡고, 바로 한 걸음씩 걷게 한다.</summary>
     internal void ReformFollowers(int leaderIndex)
     {
+        if (host._scene.IsPart1) { Part1FollowLeader(leaderIndex); return; }
         AssignFormationTargets(leaderIndex);
         foreach (var follower in FollowersOf(leaderIndex)) TryAdvanceFollower(follower);
+    }
+
+    /// <summary>
+    /// 파트1 부대 — 대장이 걸은 뒤 부하들이 <b>대장 칸에 가장 가까이 닿는 칸</b>으로 걷는다(원본 <c>0x10036a40(대장, X, Y)</c>,
+    /// 대장 이동 명령 0x3e9 끝 <c>0x1003a29f~0x1003a2ca</c> 에서 부른다). 진형표 · 파트2 의 8칸 고리는 안 쓴다.
+    /// </summary>
+    /// <remarks>
+    /// 원본 차례: 대장을 도착 칸에 잠시 세우고, 부하마다 「지금 칸의 거리」를 최선값으로 둔다. 거리 = |높이 차| / 2 + |dx| + |dy|(대장 도착 칸 기준).
+    /// 부하 사슬(<c>+0x1d8 → +0x1e4</c>) 차례로, 제 이동력(<c>0x1003ece0</c> = SPD(+8 스피디))으로 닿는 칸(<c>0x10025960</c>) 가운데
+    /// 설 수 있고(<c>0x10089bf0</c>) 비었거나 제 칸인(<c>0x10089610</c>) 칸을 줄 차례(행 → 열)로 훑어, 거리가 0 이 아니고 최선값보다 <b>작은</b> 첫 칸을 고른다.
+    /// 고른 칸에 미리 세워(<c>0x10037080</c>) 뒤 부하가 같은 칸을 못 고르게 하고 0x3e9 로 걷게 한다. 안 움직인 부하가 있으면 한 번 더 돈다(모두 두 바퀴까지,
+    /// 최선값은 이어진다 — 앞 부하가 비운 칸을 뒤 바퀴에서 얻는다). 부하 걸음은 TP 를 안 쓴다 — 파트1 부하는 대장 차례에 이동 1 · 행동 1(<c>0x10036825</c>).
+    /// </remarks>
+    private void Part1FollowLeader(int leaderIndex)
+    {
+        var leader = host._units[leaderIndex];
+        var followers = FollowersOf(leaderIndex).Where(f => f.OnField && !f.IsBusy).OrderBy(f => f.FormationSlot).ToList();
+        if (followers.Count == 0) return;
+        int lh = WalkHeightAt(leader.Col, leader.Row);
+        int Dist(int c, int r) => Math.Abs(WalkHeightAt(c, r) - lh) / 2 + Math.Abs(c - leader.Col) + Math.Abs(r - leader.Row);
+        // 칸 주인 — 고른 칸으로 미리 옮겨 둔 부하 자리(원본은 고른 칸에 세워 둔다).
+        var at = followers.ToDictionary(f => f, f => f.Row * host.Cols + f.Col);
+        var best = followers.ToDictionary(f => f, f => Dist(f.Col, f.Row));
+        var ranges = new Dictionary<UnitState, MoveRange?>();
+        var moved = new HashSet<UnitState>();
+        bool Taken(int idx, UnitState who)
+        {
+            foreach (var (f, cell) in at) if (cell == idx) return f != who;
+            return LiveUnitAt(idx % host.Cols, idx / host.Cols) is { } other && other != who && !at.ContainsKey(other);
+        }
+        for (int round = 0; round < 2 && moved.Count < followers.Count; round++)
+            foreach (var f in followers)
+            {
+                // 이동력 전부 — 부하 TP 는 걸음 예산이 아니다(파트1 TP 칸은 차례 간격일 뿐).
+                if (!ranges.TryGetValue(f, out var range)) ranges[f] = range = ComputeRange(f, tp: Math.Max(1, f.MaxTp));
+                if (range is null) continue;
+                int pick = -1;
+                for (int idx = 0; idx < range.Cost.Length; idx++)
+                {
+                    if (!range.CanReach(idx)) continue;
+                    int c = idx % host.Cols, r = idx / host.Cols;
+                    if (!CanStand(c, r, f) || Taken(idx, f)) continue;
+                    int d = Dist(c, r);
+                    if (d != 0 && d < best[f]) { best[f] = d; pick = idx; }
+                }
+                if (pick < 0) continue;
+                at[f] = pick;
+                if (pick != f.Row * host.Cols + f.Col) moved.Add(f);
+            }
+        foreach (var f in followers)
+        {
+            int goal = at[f];
+            if (goal == f.Row * host.Cols + f.Col || ranges.GetValueOrDefault(f) is not { } range) continue;
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"p1 squad follow: chr {f.ChrCode} ({f.Col},{f.Row}) → ({goal % host.Cols},{goal / host.Cols}) leader {leader.ChrCode}@({leader.Col},{leader.Row}) dist {best[f]}" + Environment.NewLine);
+            foreach (var step in range.PathTo(goal)) f.Path.Enqueue(step);
+            host.PlayWalkSound(f);
+        }
     }
 
     /// <summary>
@@ -675,6 +735,9 @@ internal sealed unsafe partial class BattleScene
         // 다시 붙는 부하(0x10072ef0(새대장, 부하, 0))는 TP 를 새 대장 것으로 덮는다(감사5 L-C). AI 꼬리는 처음부터 대장 레코드 복사라 같다.
         foreach (var follower in followers.Skip(1)) { follower.LeaderIndex = newIndex; follower.Tp = newLeader.Tp; }
         host.StatusScr.RefreshUnitStats(newLeader);
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"squad leader {host._units[leaderIndex].ChrCode} (unit {leaderIndex}) fell — new leader unit {newIndex} chr {newLeader.ChrCode} at ({newLeader.Col},{newLeader.Row}), followers {followers.Count - 1}, hasTurn {newLeader.HasTurn} TP {newLeader.Tp}/{newLeader.MaxTp}" + Environment.NewLine);
     }
 
     /// <summary>
@@ -718,6 +781,21 @@ internal sealed unsafe partial class BattleScene
     internal void RestFollowers(int leaderIndex)
     {
         if (host._db is not { } db || host._units[leaderIndex].LeaderIndex >= 0) return;
+        // 파트1 — 대장이 쉬면 부하마다 휴식 0x3f3(0x10037040 → 0x1003e580): 대장 차례 동안 안 움직였고 안 했으면 잃은 HP 의 1/5, 아니면 1/10.
+        // TP 는 안 건드린다 — 파트2 식으로 0 으로 깎으면 부하 TP 가 다시 안 차 걷기 · 함께 치기를 못 했다(Btl 20089 사용자 보고).
+        if (host._scene.IsPart1)
+        {
+            foreach (var f in FollowersOf(leaderIndex))
+            {
+                bool stayed = f.Col == f.OriginCol && f.Row == f.OriginRow && f.Tp >= f.MaxTp;
+                int gain = (f.MaxHp - f.Hp) / (stayed ? 5 : 10);
+                if (gain <= 0 || f.HasStatus(26)) continue;
+                int before = f.Hp;
+                f.Hp += gain;
+                ShowNumber(f, db.T(159), HealColor2, rise: false, count: (before, f.Hp));
+            }
+            return;
+        }
         foreach (var f in FollowersOf(leaderIndex))
         {
             if (f.Tp > 0 && f.MaxTp > 0 && !f.HasStatus(26))
