@@ -80,8 +80,8 @@ internal sealed class BattleDragScroll(GameWindow host)
         }
         var b = host.Btl;
         if (!b.EdgeScrollAllowed) return;      // 끄는 사이 차례가 넘어가면 카메라를 놓는다(떼기 전까지 클릭도 안 된다)
-        b._camPosX = b._camTargetX = Math.Clamp(_camX0 - ox, 0, b.CamMaxX);
-        b._camPos = b._camTarget = Math.Clamp(_camY0 - oy, 0, host.CamMax);
+        b._camPosX = b._camTargetX = b.ClampCamX(_camX0 - ox);
+        b._camPos = b._camTarget = b.ClampCamY(_camY0 - oy);
         host._camX = (int)Math.Round(b._camPosX);
         host._camY = (int)Math.Round(b._camPos);
     }

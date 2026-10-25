@@ -1370,24 +1370,33 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            // 파트1 내리기(어빌리티 166 → Attack 399, 0x100733f0) — 탄 이를 고른 빈 칸에 내려놓는다. 원본은 빈 탈것이 판에 남지만[H]
-            // 여기서는 빈 탈것을 판에서 빼 무리로 돌려보낸다(수는 그대로).
+            // 파트1 내리기(어빌리티 166 → Attack 399, 0x100733f0) — 탄 이를 고른 빈 칸(+0x200/+0x202)에 내려놓고(0x100365e0), 탈것의 탄 이 칸(+0x1bd · +0x1d0)을
+            // 지운 뒤 탈것에 메시지 0x3f4 를 보낸다. 0x3f4(0x1003e480)는 쓰러짐 그것이다 — 칸 표에서 빼고 동작 15 · 소리 2032 · 21틱 뒤 지운다(0x1003a350).
+            // 곧 빈 탈것은 판에 남지 않는다. 탄 이를 먼저 지웠으니 소멸자(0x10034560)의 「무리 탈것이고 탄 이가 있고 HP ≤ 0」에 안 걸려 무리 탈것은 줄지 않는다.
+            // 판 위에서 다시 타는 길도 없다 — 태우기 0x100364b0 은 전투를 열 때(0x1002d574)와 배치(0x1002f2a0 · 0x1002faf6)에서만 부른다.
             if (w.Id == Part1DismountWork)
             {
                 if (_part1Riders.Remove(a, out var rider) && rider.Alive)
                 {
                     var (dc, dr) = FreeCellNear(col, row, rider);
-                    rider.OnField = true;
-                    rider.ResetTo(dc, dr);
-                    rider.StartCol = dc;
-                    rider.StartRow = dr;
-                    rider.Facing = a.Facing;
-                    a.OnField = false;
-                    a.ResetTo(0, 0);
-                    a.Alive = false;      // 빈 탈것은 무리로 돌아갔다 — 판 밖 「산 아군」으로 세지 않는다(쓰러진 것이 아니라 잃지 않는다)
+                    PlaceRider(a, rider, dc, dr);
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                            $"part1 dismount {a.ChrCode} → rider {rider.ChrCode} at ({dc},{dr})" + Environment.NewLine);
+                            $"part1 dismount {a.ChrCode} → rider {rider.ChrCode} at ({dc},{dr}) soul {rider.Soul}; empty mount falls (0x3f4), team stock kept" + Environment.NewLine);
+                    // 빈 탈것은 쓰러지는 동작 · 소리로 사라진다 — 쓰러짐(아래 dying)과 같은 21틱 옅어짐.
+                    PlayActionFor(a, HitAction, DeathActionTicks);
+                    host.Play(DeathSound);
+                    for (double fallAt = host._lastTime; a.IsBusy;)
+                    {
+                        int n = 1 + (int)((host._lastTime - fallAt) * TicksPerSecond);
+                        a.Fade = Math.Clamp((8 - n / 3) * 4 / 31.0, 0, 1);
+                        yield return true;
+                    }
+                    a.Fade = 1;
+                    a.OnField = false;
+                    a.ResetTo(0, 0);
+                    _part1TeamMounts.Remove(a);   // 잃은 것이 아니다 — 무리 탈것 수는 그대로(소멸자 0x10034595 의 +0x1bd = 0 갈래)
+                    MarkDead(a);                  // 판 밖 「산 아군」으로 세지 않는다 · 대장이면 승계
                 }
                 continue;
             }

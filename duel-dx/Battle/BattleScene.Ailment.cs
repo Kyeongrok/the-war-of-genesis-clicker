@@ -445,11 +445,7 @@ internal sealed unsafe partial class BattleScene
     {
         if (!_part1Riders.Remove(mount, out var rider) || !rider.Alive) return;
         var (col, row) = FreeCellNear(mount.Col, mount.Row, rider);
-        rider.OnField = true;
-        rider.ResetTo(col, row);
-        rider.StartCol = col;
-        rider.StartRow = row;
-        rider.Facing = mount.Facing;
+        PlaceRider(mount, rider, col, row);
         if (_part1TeamMounts.Remove(mount)) _part1LostMounts.Add(mount.ChrCode);   // 무리 탈것(원본 +0x1c0)만 잃는다 — 전투 파일이 태운 탈것은 아니다
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),

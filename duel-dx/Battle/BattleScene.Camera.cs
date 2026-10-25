@@ -20,9 +20,23 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>카메라가 오른쪽으로 갈 수 있는 끝 — 맵 그림 너비까지.</summary>
     internal int CamMaxX => Math.Max(0, Math.Min(host.BoardWidth, host.BoardIsMap ? Math.Max(host.ViewWidth, host._map!.Width) : host.BoardWidth) - host.ViewWidth);
-    internal void ScrollCamera(double delta) => _camTarget = Math.Clamp(_camTarget + delta, 0, host.CamMax);
+    internal void ScrollCamera(double delta) => _camTarget = ClampCamY(_camTarget + delta);
 
-    internal void ScrollCameraX(double delta) => _camTargetX = Math.Clamp(_camTargetX + delta, 0, CamMaxX);
+    internal void ScrollCameraX(double delta) => _camTargetX = ClampCamX(_camTargetX + delta);
+    /// <summary>카메라 x 끝 — 0 ~ <see cref="CamMaxX"/>, 파트1 전장 범위(행동 103)가 있으면 그 픽셀 끝 안(<c>0x10031c86</c>, <see cref="Part1BattleRange"/>).</summary>
+    internal double ClampCamX(double x) => host._scene.IsPart1 && _part1Range is { Active: true } r ? r.ClampX(x, CamMaxX) : Math.Clamp(x, 0, CamMaxX);
+    internal int ClampCamX(int x) => (int)Math.Round(ClampCamX((double)x));
+
+    /// <summary>카메라 y 끝 — <see cref="ClampCamX"/> 와 같이.</summary>
+    internal double ClampCamY(double y) => host._scene.IsPart1 && _part1Range is { Active: true } r ? r.ClampY(y, host.CamMax) : Math.Clamp(y, 0, host.CamMax);
+    internal int ClampCamY(int y) => (int)Math.Round(ClampCamY((double)y));
+
+    /// <summary>전장 범위가 바뀐 뒤 — 지금 카메라를 그 안으로 곧바로 옮긴다.</summary>
+    internal void ClampCameraToRange()
+    {
+        _camPosX = ClampCamX(_camPosX); _camTargetX = ClampCamX(_camTargetX);
+        _camPos = ClampCamY(_camPos); _camTarget = ClampCamY(_camTarget);
+    }
 
     // ── 카메라 명령 (원본 CBattle +0x3ccc 큐의 축소판, 감사4 C1·C19) ─────────────────────────────
     // 원본은 「이 월드 점을 화면 한가운데에」 명령을 큐 머리에 덮어쓰고(0x1006e570), 틀마다 0x1006dcb0 이
@@ -64,8 +78,8 @@ internal sealed unsafe partial class BattleScene
     {
         _camGoal = null;
         _edgeBlocked = true;
-        _camPosX = _camTargetX = Math.Clamp(x - host.ViewWidth / 2.0, 0, CamMaxX);
-        _camPos = _camTarget = Math.Clamp(y - host.ViewHeight / 2.0, 0, host.CamMax);
+        _camPosX = _camTargetX = ClampCamX(x - host.ViewWidth / 2.0);
+        _camPos = _camTarget = ClampCamY(y - host.ViewHeight / 2.0);
         host._camX = (int)Math.Round(_camPosX);
         host._camY = (int)Math.Round(_camPos);
     }
@@ -171,10 +185,10 @@ internal sealed unsafe partial class BattleScene
         // 휠 스크롤(리메이크 편의)만 부드럽게 따라간다 — 명령·가장자리 스크롤은 _camPos 를 바로 옮기고 목표도 같이 맞춘다.
         _camPos += (_camTarget - _camPos) * Math.Min(1, dt * 8);
         if (Math.Abs(_camTarget - _camPos) < 0.5) _camPos = _camTarget;
-        host._camY = Math.Clamp((int)Math.Round(_camPos), 0, host.CamMax);
+        host._camY = ClampCamY((int)Math.Round(_camPos));
         _camPosX += (_camTargetX - _camPosX) * Math.Min(1, dt * 8);
         if (Math.Abs(_camTargetX - _camPosX) < 0.5) _camPosX = _camTargetX;
-        host._camX = Math.Clamp((int)Math.Round(_camPosX), 0, CamMaxX);
+        host._camX = ClampCamX((int)Math.Round(_camPosX));
         // 기술의 화면 흔들림 — 원본 흔들림 개체(0x100c7040)는 지금 스크롤 기준 +세기 → −세기 로 번갈아 카메라 명령을 걸어
         // 스크롤이 원자리 ↔ 원자리+세기 를 오간다(한쪽, 폭 = 세기, 감사4 C18). ShakeOffset 의 ±세기 중 음수 쪽을 0 으로 접는다.
         var (sx, sy) = host.HeavenEarthAb.ShakeOffset();
@@ -182,8 +196,8 @@ internal sealed unsafe partial class BattleScene
         sy = Math.Max(0, sy);
         if (sx != 0 || sy != 0)
         {
-            host._camX = Math.Clamp(host._camX + sx, 0, CamMaxX);
-            host._camY = Math.Clamp(host._camY + sy, 0, host.CamMax);
+            host._camX = ClampCamX(host._camX + sx);
+            host._camY = ClampCamY(host._camY + sy);
         }
     }
 
@@ -201,7 +215,7 @@ internal sealed unsafe partial class BattleScene
             (int fx, int fy) = host.Btl.UnitFoot(u);
             (gx, gy) = (fx, fy);
         }
-        double tx = Math.Clamp(gx - host.ViewWidth / 2.0, 0, CamMaxX), ty = Math.Clamp(gy - host.ViewHeight / 2.0, 0, host.CamMax);
+        double tx = ClampCamX(gx - host.ViewWidth / 2.0), ty = ClampCamY(gy - host.ViewHeight / 2.0);
         double dx = tx - _camPosX, dy = ty - _camPos, dist = Math.Sqrt(dx * dx + dy * dy);
         int step = g.Speed > 0 ? g.Speed : Math.Max(4, (int)(dist / 5));
         if (dist < step)
@@ -226,8 +240,8 @@ internal sealed unsafe partial class BattleScene
         var (ddx, ddy) = EdgePush();
         if (ddx == 0 && ddy == 0) return;
         var (mx, my) = _mouseView;
-        _camPosX = _camTargetX = Math.Clamp(_camPosX + ddx, 0, CamMaxX);
-        _camPos = _camTarget = Math.Clamp(_camPos + ddy, 0, host.CamMax);
+        _camPosX = _camTargetX = ClampCamX(_camPosX + ddx);
+        _camPos = _camTarget = ClampCamY(_camPos + ddy);
         host._mouse = (mx + (int)Math.Round(_camPosX), my + (int)Math.Round(_camPos));   // 마우스 밑의 판 자리도 따라 옮긴다
     }
 
@@ -284,8 +298,8 @@ internal sealed unsafe partial class BattleScene
         ResetCamera();
         if (host._scene.StartCol < 0 || host._scene.StartRow < 0 || !host.BoardIsMap) return;
         int col = Math.Clamp(host._scene.StartCol, 0, host.Cols - 1), row = Math.Clamp(host._scene.StartRow, 0, host.Rows - 1);
-        _camPosX = _camTargetX = Math.Clamp(col * TileW + TileW / 2 - host.ViewWidth / 2, 0, CamMaxX);
-        _camPos = _camTarget = Math.Clamp(host.CellCenterY(col, row) - host.ViewHeight / 2, 0, host.CamMax);
+        _camPosX = _camTargetX = ClampCamX(col * TileW + TileW / 2 - host.ViewWidth / 2);
+        _camPos = _camTarget = ClampCamY(host.CellCenterY(col, row) - host.ViewHeight / 2);
         host._camX = (int)_camPosX;
         host._camY = (int)_camPos;
     }

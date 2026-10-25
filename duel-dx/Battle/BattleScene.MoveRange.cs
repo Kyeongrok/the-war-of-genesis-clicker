@@ -142,7 +142,8 @@ internal sealed unsafe partial class BattleScene
         // 높이·플래그는 물체까지 찍은 판(+0x78 걷기 높이 · +0x88 플래그)으로 본다 — 상자·포탑·닫힌 문 칸은 &9 벽이다(감사3 R1).
         int H(int col, int row) => WalkHeightAt(col, row);
         ushort F(int col, int row) => CellFlagsAt(col, row);
-        bool InBounds(int col, int row) => (uint)col < host.Cols && (uint)row < host.Rows && col < map.Cols && row < map.Rows;
+        // 파트1 전장 범위(행동 103) 밖은 판 밖과 같다 — 길 찾기 · 설 칸 · 나는 유닛이 지나는 칸 모두(0x100267a8 · 0x10029132 · 0x10089bf0 둘레).
+        bool InBounds(int col, int row) => (uint)col < host.Cols && (uint)row < host.Rows && col < map.Cols && row < map.Rows && Part1Range.Contains(col, row);
 
         var (originCol, originRow) = origin ?? RangeOrigin(unit);
 

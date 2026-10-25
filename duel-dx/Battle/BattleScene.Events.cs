@@ -64,6 +64,10 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>파트1 해설 상자(행동 202 · 203) — 처음 쓸 때 만든다.</summary>
     internal Part1BattleNarration Part1Narration => _part1Narration ??= new(host);
+
+    /// <summary>파트1 전장 범위(행동 103, <see cref="Part1BattleRange"/>) — 길 찾기 · 카메라 · 증원 가장자리가 본다.</summary>
+    internal Part1BattleRange Part1Range => _part1Range ??= new(host);
+    private Part1BattleRange? _part1Range;
     private Part1BattleNarration? _part1Narration;
 
     /// <summary>파트1 해설 상자를 화면 자리(640×480 원점)에 — 판 그리기의 창 차례.</summary>
@@ -94,6 +98,7 @@ internal sealed unsafe partial class BattleScene
         _part1Narration?.Reset();                // 해설 상자 크기 200 × 100(0x10021b0e) · 떠 있던 상자 닫기
         _part1Conditions?.Close();               // 떠 있던 조건 창도
         if (host._scene.IsPart1) Part1Objects.Reset();   // 맵 물체도 처음 동작(0)으로 — 판을 세울 때 · RESTART
+        _part1Range?.Reset();                      // 전장 범위도 맵 전체로(0x100895c0) — 행동 103 이 다시 정한다
         _part1Fields?.Clear();                     // 에너지 필드의 남은 기운도
         _events = [];
         _eventFired = [];
@@ -543,13 +548,19 @@ internal sealed unsafe partial class BattleScene
         }
     }
 
-    internal (int Col, int Row) EdgeCell(int edge, int col, int row) => (edge & 3) switch
+    /// <remarks>파트1 은 맵 끝이 아니라 전장 범위(행동 103)의 변이다(0x1001ec6f~ — 범위 변 밖에서 들어와 범위 안 칸에 닿으면 걷는다).</remarks>
+    internal (int Col, int Row) EdgeCell(int edge, int col, int row)
     {
-        0 => (Math.Clamp(col, 0, host.Cols - 1), 0),
-        1 => (0, Math.Clamp(row, 0, host.Rows - 1)),
-        2 => (Math.Clamp(col, 0, host.Cols - 1), host.Rows - 1),
-        _ => (host.Cols - 1, Math.Clamp(row, 0, host.Rows - 1)),
-    };
+        var r = host._scene.IsPart1 && Part1Range.Active ? Part1Range : null;
+        int left = r?.Left ?? 0, top = r?.Top ?? 0, right = (r?.Right ?? host.Cols) - 1, bottom = (r?.Bottom ?? host.Rows) - 1;
+        return (edge & 3) switch
+        {
+            0 => (Math.Clamp(col, left, right), top),
+            1 => (left, Math.Clamp(row, top, bottom)),
+            2 => (Math.Clamp(col, left, right), bottom),
+            _ => (right, Math.Clamp(row, top, bottom)),
+        };
+    }
 
     /// <summary>
     /// 조건 300·301 이 쓰는 대상 고르기 — <b>죽은 사람도 든다</b>(걸러내기 갈래가 0 이라 NULL 검사뿐)이고,
@@ -1049,11 +1060,15 @@ internal sealed unsafe partial class BattleScene
             case Part1Script.Part1Only + 503 when host._scene.IsPart1:   // [?, 아이템, 수] — 전투 팀 가방에 더한다(0x100209a0 → 0x100ada10)
                 for (int k = 0; k < Math.Clamp((int)A(2), 0, 99) && A(1) > 0; k++) host.Part1.Bag.Add(A(1));
                 break;
+            // 103 [x1|y1, x2|y2] 전장 범위(+0x1f4..+0x1fa, 맵 크기로 자름)와 그 픽셀 끝(+0x1fc..+0x202)을 바꾼다(0x1001deb0) — 길 찾기 · 카메라 ·
+            //     증원이 들어오는 가장자리가 그 범위를 쓴다(Part1BattleRange, 전투 0193 · 0261).
+            case Part1Script.Part1Only + 103 when host._scene.IsPart1:
+                Part1Range.Set(A(0), A(1));
+                ClampCameraToRange();
+                break;
             // 아직 안 옮긴 파트1 행동 — 일부러 비운 갈래(분석-파트1-챕터 17절):
             // 102 [밝기] 머리 낱말 6 을 바꾸고 맵 층 +0x2c = (a0 + 60)·62/126 − 2(0x1001de20) — 리메이크는 판 밝기(머리 낱말 6)부터 안 그린다(전투 0205 둘).
-            // 103 [x1|y1, x2|y2] 전장 범위(+0x1f4..+0x1fa, 맵 크기로 자름)와 그 픽셀 끝(+0x1fc..+0x202)을 바꾼다(0x1001deb0) — 증원이 들어오는 가장자리 ·
-            //     이동 · 카메라가 그 범위를 쓰는데 리메이크는 전장 범위가 없다(전투 0193 · 0261).
-            case Part1Script.Part1Only + 102 or Part1Script.Part1Only + 103 when host._scene.IsPart1:
+            case Part1Script.Part1Only + 102 when host._scene.IsPart1:
                 break;
             // 203 [폭, 높이] 해설 상자 크기(0x1001eb10: 0x1018ac6a = a0 · 0x1018ac68 = a1) · 202 [x, y, 줄] 그 크기로 (x, y) 에 창 0x100a7ef0(0x1001e9b0) —
             // 필드 209 · 210 과 같은 창(Part1Bubble). 기다리지 않고 칸에 걸어 둔다 — 뒤따르는 행동 1 이 닫힐 때까지 붙든다(분석-파트1-전투 35절).

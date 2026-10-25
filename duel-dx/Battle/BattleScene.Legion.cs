@@ -156,6 +156,21 @@ internal sealed unsafe partial class BattleScene
         return [.. list];
     }
 
+    /// <summary>
+    /// 파트1 탄 이를 판에 내려놓는다(<c>0x100365e0</c>) — 그 칸에 서고, 방향은 탈것을 따르고, 소울(+0xe8)은 40 으로 돌아간다(<c>0x100366e3</c>).
+    /// 내리기(166 → Attack 399)와 탈것이 쓰러질 때(<c>0x10034684</c>) 둘 다 이 길이다. 원본은 그 칸에 못 서면 탄 이가 HP 0 이 되지만(<c>0x100366fb</c>)
+    /// 리메이크는 부르는 쪽이 가장 가까운 빈 칸(<see cref="FreeCellNear"/>)을 넘긴다.
+    /// </summary>
+    internal void PlaceRider(UnitState mount, UnitState rider, int col, int row)
+    {
+        rider.OnField = true;
+        rider.ResetTo(col, row);
+        rider.StartCol = col;
+        rider.StartRow = row;
+        rider.Facing = mount.Facing;
+        if (host._scene.IsPart1) rider.Soul = Math.Min(Math.Max(rider.MaxSoul, 0), 40);
+    }
+
     /// <summary>파트1 부대 대장의 군단 표시 — 군단 자료(For.dat)는 없지만 0 이 아니어야 파트2 의 따라 걷기(<see cref="SyncFollowers"/>)가 돈다.</summary>
     internal const int Part1SquadLegion = -1;
 
@@ -377,7 +392,7 @@ internal sealed unsafe partial class BattleScene
 
     internal bool CanStand(int col, int row, UnitState who)
     {
-        if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
+        if ((uint)col >= host.Cols || (uint)row >= host.Rows || !Part1Range.Contains(col, row)) return false;   // 파트1 전장 범위(행동 103) 밖도 못 선다
         if (host._map is { } map && (col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0)) return false;   // 물체를 찍은 칸 기준(ba-16)
         return LiveUnitAt(col, row) is not { } other || other == who;
     }

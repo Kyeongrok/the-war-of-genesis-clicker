@@ -779,6 +779,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     int? Bgm = null,
                                     string? Part1 = null,
                                     int[]? Part1Objects = null,    // 파트1 맵 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y) — 행동 707 로 연 벽이 불러온 뒤 다시 닫히지 않게
+                                    int[]? Part1Range = null,      // 파트1 전장 범위(행동 103 — 왼, 위, 오른, 아래) — 시작 사건이 정한 범위가 불러온 뒤 맵 전체로 풀리지 않게
                                     string? SceneTitle = null);    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
                                                                    // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
@@ -1050,6 +1051,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null,
                 Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null,
                 Part1Objects: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.Save() : null,
+                Part1Range: battleSave && host._scene.IsPart1 ? host.Btl.Part1Range.Save() : null,
                 SceneTitle: host._scene.IsPart1 ? host._scene.Title : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -1451,8 +1453,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal void ApplySavedCamera((int X, int Y) cam)
     {
         host.Btl._camGoal = null;
-        host.Btl._camPosX = host.Btl._camTargetX = Math.Clamp(cam.X, 0, host.Btl.CamMaxX);
-        host.Btl._camPos = host.Btl._camTarget = Math.Clamp(cam.Y, 0, host.CamMax);
+        host.Btl._camPosX = host.Btl._camTargetX = host.Btl.ClampCamX(cam.X);
+        host.Btl._camPos = host.Btl._camTarget = host.Btl.ClampCamY(cam.Y);
         host._camX = (int)host.Btl._camPosX;
         host._camY = (int)host.Btl._camPos;
     }
@@ -1464,6 +1466,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal void RestoreObjects(SaveState state)
     {
         if (host._scene.IsPart1) host.Btl.Part1Objects.Restore(state.Part1Objects);
+        if (host._scene.IsPart1) host.Btl.Part1Range.Restore(state.Part1Range);
         if (state.Objects is not { } saved) return;
         var objects = host.Btl.Objects;
         for (int i = 0; i < objects.Count; i++)

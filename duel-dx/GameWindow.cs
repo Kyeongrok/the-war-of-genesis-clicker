@@ -491,8 +491,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         double zoom = FitZoom();
         if (!force && Math.Abs(zoom - _zoom) < 1e-9) return;
         _zoom = zoom;
-        Btl._camTarget = Math.Clamp(Btl._camTarget, 0, CamMax);
-        Btl._camTargetX = Math.Clamp(Btl._camTargetX, 0, Btl.CamMaxX);
+        Btl._camTarget = Btl.ClampCamY(Btl._camTarget);
+        Btl._camTargetX = Btl.ClampCamX(Btl._camTargetX);
         if (_hwnd != IntPtr.Zero) RebuildView();
     }
 
