@@ -124,8 +124,8 @@ internal sealed unsafe partial class GameWindow
         }
     }
 
-    /// <summary>그림 한 장을 칸 크기에 맞춰 줄여 그린다(가장 가까운 픽셀).</summary>
-    internal void BlitScaled(SpriteFrame frame, int x, int y, int w, int h)
+    /// <summary>그림 한 장을 칸 크기에 맞춰 줄여 그린다(가장 가까운 픽셀). <paramref name="faded"/> 면 바탕에 옅게 비치게(꺼진 항목).</summary>
+    internal void BlitScaled(SpriteFrame frame, int x, int y, int w, int h, bool faded = false)
     {
         if (frame.W == 0 || frame.H == 0 || w <= 0 || h <= 0) return;
         double scale = Math.Min((double)w / frame.W, (double)h / frame.H);
@@ -141,7 +141,9 @@ internal sealed unsafe partial class GameWindow
                 int px = left + xx;
                 if ((uint)px >= BoardWidth) continue;
                 uint c = frame.Px[sy * frame.W + xx * frame.W / dw];
-                if ((c & 0xFF000000) != 0) _fb[py * BoardWidth + px] = c | 0xFF000000;
+                if ((c & 0xFF000000) == 0) continue;
+                int i = py * BoardWidth + px;
+                _fb[i] = faded ? MixColor(_fb[i], c, 2, 7) : c | 0xFF000000;
             }
         }
     }

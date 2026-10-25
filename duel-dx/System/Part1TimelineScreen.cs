@@ -141,6 +141,8 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         else if (hit >= 0 && hit < _episodes.Count)
         {
             if (!Unlocked(_episodes[hit])) { host.Toast($"{_episodes[hit].Name} — 아직 열리지 않았습니다"); return; }
+            // 끝낸 챕터는 다시 못 한다(사용자 요청) — 진행 깃발 · 동료가 이미 다음으로 넘어가 있다.
+            if (host.Part1.FinishedChapters.Contains(_episodes[hit].ChapterId)) { host.Toast($"{_episodes[hit].Name} — 이미 끝낸 챕터입니다"); return; }
             int chapter = _episodes[hit].ChapterId;
             host.LeaveScene(() => { if (shell.Chapter.Open(chapter)) _open = false; });
         }
@@ -174,16 +176,18 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
             if (y < oy + BandTop || y > oy + BandBottom - 8) continue;
             var e = _episodes[i];
             bool open = Unlocked(e), done = host.Part1.FinishedChapters.Contains(e.ChapterId);
-            if (_hover == i) host.UiFill(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0x60FFE0A0);
+            // 닫힌 칸 · 끝낸 칸은 고를 수 없다 — 상자로 덮지 않고 글자만 옅게(사용자 요청).
+            bool playable = open && !done;
+            if (_hover == i && playable) host.UiFill(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0x60FFE0A0);
             // 이름 그림(Obs 낱말 1) — 그림 가운데를 칸 가운데에. 못 읽으면 글로.
             if (e.Words.Length > 1 && host.UiFor(Part1Game.ObsBase + e.Words[1])?.FrameAt(0, tick) is { } f)
-                host.BlitScaled(f, ox + x - f.W / 2, y - f.H / 2, f.W, f.H);
+                host.BlitScaled(f, ox + x - f.W / 2, y - f.H / 2, f.W, f.H, faded: !playable);
             else
             {
-                var (_, nw, nh) = host.UiGetText(e.Name, GameWindow.White, 12);
-                host.UiText(e.Name, ox + x - nw / 2, y - nh / 2, GameWindow.White, 12);
+                uint color = playable ? GameWindow.White : 0xFF707070;
+                var (_, nw, nh) = host.UiGetText(e.Name, color, 12);
+                host.UiText(e.Name, ox + x - nw / 2, y - nh / 2, color, 12);
             }
-            if (!open) host.UiFill(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0xA0000000);   // 닫힌 칸은 어둡게
             if (done) host.UiText("✓", ox + x - CellW / 2 - 4, y - 8, 0xFFFFE080, 12);
             if (e.ChapterId == host.Part1.ChapterId) host.UiStroke(ox + x - CellW / 2, y - CellH / 2, CellW, CellH, 0xFFFFE080);
         }
