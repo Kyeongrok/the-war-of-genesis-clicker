@@ -33,15 +33,18 @@ internal sealed unsafe partial class BattleScene
 
     internal void CloseUnitInfo() => _infoUnit = -1;
 
-    /// <summary>DUELDX_INFO=1 이면 첫 아군의 정보 창을 띄워 둔다(화면 밖 시험용 — 오른쪽 단추를 누르고 있는 것처럼).</summary>
+    /// <summary>DUELDX_INFO=1 이면 첫 아군의, 그 밖의 수면 그 Chr 유닛의 정보 창을 띄워 둔다(화면 밖 시험용 — 오른쪽 단추를 누르고 있는 것처럼).</summary>
     internal void OpenUnitInfoIfAsked()
     {
-        if (Environment.GetEnvironmentVariable("DUELDX_INFO") != "1" || InfoOpen || host._units.Length == 0) return;
-        int ally = Array.FindIndex(host._units, u => u.Alive && u.OnField && u.IsAlly);
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_INFO"), out int want) || InfoOpen || host._units.Length == 0) return;
+        int ally = Array.FindIndex(host._units, u => u.Alive && u.OnField && (want == 1 ? u.IsAlly : u.ChrCode == want));
         if (ally < 0) return;
         _infoUnit = ally;
         _infoAt = (host._camX + 300, host._camY + 80);
     }
+
+    /// <summary>파트1 Attack.dat — 무기 덧효과 이름을 찾는다(틀마다 읽지 않게 한 번만).</summary>
+    private static IReadOnlyList<Part1Attack>? _part1AttackList;
 
     internal void DrawUnitInfo()
     {
@@ -58,7 +61,11 @@ internal sealed unsafe partial class BattleScene
         // 가진 어빌리티(전투에서 쓰는 것) — 적이 무엇을 쓰는지 미리 보이게(사용자 요청, 원본에 없는 덧붙임).
         var abilities = c.Abilities.Where(a => db.Abilities.TryGetValue(a.Ability, out var ab) && ab.Category is 1 or 4 && !db.IsHidden(a.Ability))
                                    .Select(a => $"{db.T(db.Abilities[a.Ability].NameId)} Lv{a.Level}").ToList();
-        int h = InfoH + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0) + (abilities.Count > 0 ? abilities.Count * EffectLineH + 22 : 0);
+        // 파트1 무기 덧효과(보정 300~309) — 어빌리티가 아니라 무기에 붙어 목록에 안 보였다(사용자 보고: 어쌔신 암살). 치명 굴림(무기 치명률)에 걸리면 터진다.
+        if (host._scene.IsPart1 && Part1.Fighter(unit)?.Weapon1 is { } weapon && weapon.ProcAttack() is { Attack: > 0 } proc
+            && Part1Attack.ById(_part1AttackList ??= Part1Attack.LoadAll(), proc.Attack) is { } procAttack)
+            abilities.Add($"{procAttack.Name}(무기 · 치명 {weapon.Critical}%)");
+        int h =InfoH + (effects.Count > 0 ? effects.Count * EffectLineH + 6 : 0) + (abilities.Count > 0 ? abilities.Count * EffectLineH + 22 : 0);
         y = Math.Min(y, host._camY + host.ViewHeight - h);
 
         // 원본 창 틀 — 제목줄에 이름(분석-시스템메뉴 「메시지 창 틀」)
