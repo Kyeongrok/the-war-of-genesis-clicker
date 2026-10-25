@@ -33,6 +33,7 @@ namespace DuelDx;
 /// <param name="Part1Difficulty">파트1 난이도 — 0 쉬움(원본 그대로, 기본) · 1 보통 · 2 어려움. 단계마다 적이 내 편을 칠 때 빗나갈 확률이 절반(사용자 요청, BattleScene.Difficulty.cs).</param>
 /// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
 /// <param name="Part1TurnVoice">모드 &gt; 일반 &gt; 파트1 차례 목소리 — 파트1 인물(크리스티앙 …)의 차례에 필드 대사 음성 한 마디를 낼지(원본에 없음, 사용자 요청, 기본 켬).</param>
+/// <param name="Part1TurnOutline">모드 &gt; 일반 &gt; 파트1 차례 테두리 — 파트1 전투에서 차례인 유닛에 주황 · 노랑으로 반짝이는 1픽셀 테두리를 두를지(원본 <c>0x10034bd9~</c> 을 따르되 빛깔 · 빠르기는 사용자 요청대로, 기본 끔, Part1TurnOutline.cs).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -43,7 +44,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool SkillMovies = true, bool TimedHit = false, bool Fullscreen = false, int BattleZoomPercent = -1, int BubbleScalePercent = 100, bool HiResUi = true,
                                     bool HighlightChests = false, bool TachyrionRework = false, int FontScalePercent = 100, bool TimedAim = false,
                                     bool HiResMoses = false, bool MiniMapFolded = true, int Part1Difficulty = 0,
-                                    bool Part1TurnVoice = true)
+                                    bool Part1TurnVoice = true, bool Part1TurnOutline = false)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

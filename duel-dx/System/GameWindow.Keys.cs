@@ -257,7 +257,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -350,6 +350,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 인물의 차례 목소리(<see cref="Part1TurnCall"/>, 원본에 없음)를 내나 — 모드 > 일반 > 파트1 차례 목소리(사용자 요청, 기본 켬).</summary>
     internal bool _part1TurnVoice = UserSettings.Current.Part1TurnVoice;
     internal const int MenuPart1TurnVoice = 1199;
+
+    /// <summary>파트1 차례 유닛의 반짝이는 테두리(<see cref="Part1TurnOutline"/>)를 두르나 — 모드 > 일반 > 파트1 차례 테두리(사용자 요청, 기본 끔).</summary>
+    internal bool _part1TurnOutline = UserSettings.Current.Part1TurnOutline;
+    internal const int MenuPart1TurnOutline = 1168;
 
     /// <summary>아직 안 연 상자에 깜박이는 테두리를 두르나 — 모드 > 편의성 > 상자 강조(원본에 없는 도움 기능, 기본 끔).</summary>
     internal bool _highlightChests = UserSettings.Current.HighlightChests;
@@ -508,6 +512,12 @@ internal sealed unsafe partial class GameWindow
                 _part1TurnVoice = !_part1TurnVoice;
                 Win32.CheckMenuItem(_menuBar, MenuPart1TurnVoice, Win32.MF_BYCOMMAND | (_part1TurnVoice ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_part1TurnVoice ? "파트1 인물 차례에 목소리를 냅니다" : "파트1 인물 차례 목소리를 끕니다(원본대로)");
+                SaveSettings();
+                break;
+            case MenuPart1TurnOutline:
+                _part1TurnOutline = !_part1TurnOutline;
+                Win32.CheckMenuItem(_menuBar, MenuPart1TurnOutline, Win32.MF_BYCOMMAND | (_part1TurnOutline ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_part1TurnOutline ? "파트1 차례 유닛에 반짝이는 테두리를 두릅니다" : "파트1 차례 테두리를 끕니다");
                 SaveSettings();
                 break;
             case MenuChestGlow:

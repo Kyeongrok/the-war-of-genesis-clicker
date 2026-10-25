@@ -379,6 +379,9 @@ internal sealed unsafe partial class BattleScene
                 // 1~7 은 비침(4k/31) — 베라모드(Obs 0507)는 칼을 휘두르는 동안(모션 9~11) 몸이 키 1 로 거의 사라졌다가 2~7 로 다시 나타난다(사용자 보고 fa-66).
                 int bodyKey = clip?.BlendAt(tick) ?? 0;
                 bool additive = bodyKey == 17;
+                // 파트1: 지금 차례인 유닛(편 가리지 않음)에 주황↔노랑 1픽셀 테두리를 몸 뒤에(Part1TurnOutline, 0x10034bd9~) — 모드 > 일반, 기본 끔.
+                if (i == _turn && host._part1TurnOutline && host._scene.IsPart1 && unit.Fade > 0)
+                    Part1TurnOutline.Draw(host, frame, footX + frame.X + ox, footY + frame.Y + oy, (int)(host._lastTime * TicksPerSecond));
                 host.BlitMasked(frame.Px, frame.W, frame.H, footX + frame.X + ox, footY + frame.Y + oy, tint, BattleScene.StatusTintOf(unit), unit.Fade * BlendFade(bodyKey), additive);
                 headY = footY + frame.Y;
                 DrawUnitLayers(clip, tick, footX + ox, footY + oy, unit.Facing == Facing.Right, unit.Fade, loop: unit.Loops);
