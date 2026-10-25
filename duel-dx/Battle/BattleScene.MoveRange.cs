@@ -230,7 +230,8 @@ internal sealed unsafe partial class BattleScene
                 bool bad = false;
                 for (int by = flyBig ? row - 1 : row; by <= (flyBig ? row + 1 : row) && !bad; by++)
                     for (int bx = flyBig ? col - 1 : col; bx <= (flyBig ? col + 1 : col) && !bad; bx++)
-                        bad = InBounds(bx, by) && ((map.FlagsAt(bx, by) >> Part1Map.RawShift & 2) != 0 || (F(bx, by) & 0x8) != 0);
+                        // 지형 비트 2 는 맵 물체까지 찍은 판에서 본다 — 원본도 물체 지형이 판 지형을 덮는다(0x1009977e, Part1MapObjects).
+                        bad = InBounds(bx, by) && ((F(bx, by) >> Part1Map.RawShift & 2) != 0 || (F(bx, by) & 0x8) != 0);
                 if (bad) costs[i] = int.MaxValue;
             }
 
@@ -365,7 +366,7 @@ internal sealed unsafe partial class BattleScene
                 {
                     int top = host.CellTop(c, r);
                     host.UiStroke(c * TileW, top, TileW, TileH, 0x80FFFFFF);
-                    host.UiText($"{WalkHeightAt(c, r)}", c * TileW + 14, top + 8, (host._map!.FlagsAt(c, r) & 1) != 0 ? 0xFFFF4040 : 0xFFFFFF00, 11);
+                    host.UiText($"{WalkHeightAt(c, r)}", c * TileW + 14, top + 8, (CellFlagsAt(c, r) & 1) != 0 ? 0xFFFF4040 : 0xFFFFFF00, 11);   // 빨강 = 물체까지 찍은 판에서 못 들어가는 칸
                 }
         if (_rangeUnit < 0 || _range is not { } range) return;
         // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.

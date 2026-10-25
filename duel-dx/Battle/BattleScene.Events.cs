@@ -82,6 +82,7 @@ internal sealed unsafe partial class BattleScene
     internal void LoadEvents(int battleId)
     {
         _part1Narration?.Reset();                // 해설 상자 크기 200 × 100(0x10021b0e) · 떠 있던 상자 닫기
+        if (host._scene.IsPart1) Part1Objects.Reset();   // 맵 물체도 처음 동작(0)으로 — 판을 세울 때 · RESTART
         _events = [];
         _eventFired = [];
         _eventBgm = null;
@@ -948,6 +949,8 @@ internal sealed unsafe partial class BattleScene
                 break;
             }
             case 907:                                    // 물체 여닫기(0x10055a50) — 인자0 배치 번호, 인자1 0 닫기 · 그 밖 열기
+                // 파트1 707 — 절 A 차례 a0 의 물체에 동작 a1(0x10021880). 원본은 걸고 곧바로 끝낸다(기다림 없음).
+                if (host._scene.IsPart1) { Part1Objects.SetMotion(A(0), A(1)); break; }
                 ToggleObject(A(0), A(1) != 0);
                 _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + 0.5);       // 여닫는 사이만큼 — 원본은 물체가 다 움직일 때까지 기다린다
                 break;

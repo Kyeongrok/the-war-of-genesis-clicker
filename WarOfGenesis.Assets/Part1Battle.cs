@@ -31,10 +31,14 @@ public sealed record Part1BattleEvent(int Index, int MaxFire, IReadOnlyList<Scri
 /// </remarks>
 /// <param name="MountsForbidden">머리 낱말 9(전투 <c>+0xb974</c>) ≠ 0 — 배치 창 인물 메뉴의 다섯째 단추(차례 4)가 「탑승 금지」로 잠긴다(<c>0x100948b5</c> → 0x1011c2bc).</param>
 /// <param name="MercenariesForbidden">머리 낱말 10(전투 <c>+0xb976</c>) ≠ 0 — 셋째 단추(차례 2)가 「용병 금지」로 잠겨 이 판에는 용병을 못 세운다(<c>0x100947fa</c> → 0x1011c2c8). 배치 칸 있는 판 164 가운데 26.</param>
+/// <param name="Objects">
+/// 절 A 맵 물체 — 첫 낱말은 <b>Obt 번호</b>(<c>Obts\NNNN.obt</c> — Obs 가 아니다). 로더 <c>0x1002d27b</c> 가 0x60 바이트 물체
+/// <c>0x10097270(x, y, 칸 높이, Obt, 0, 맵)</c> 를 맵의 자식으로 만들어 판에 찍는다(<c>0x10097910</c>). 그림·지형·동작은 <see cref="Part1MapObject"/>, 분석-파트1-전투 36절.
+/// </param>
 /// <param name="Terrain">머리 낱말 7 — 전장 지형 0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다(전투 정보 창 <c>0x100957a0</c> 의 이름 차례). 맵 생성은 사막·극지에서만 색을 바꾼다.</param>
 public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int TitleLine, int WinLine, int LoseLine,
                                  int Ambient, int Terrain, int Bgm, bool MountsForbidden, bool MercenariesForbidden,
-                                 IReadOnlyList<(int Obs, int X, int Y)> Objects, IReadOnlyList<Part1BattleUnit> Units,
+                                 IReadOnlyList<(int Obt, int X, int Y)> Objects, IReadOnlyList<Part1BattleUnit> Units,
                                  IReadOnlyList<BattlePlacementCell> Placement, IReadOnlyList<Part1BattleEvent> Events)
 {
     /// <summary>대사 줄(<c>.dlg</c>) — 행동 200 과 머리의 제목·승패 조건이 이 번호를 쓴다.</summary>

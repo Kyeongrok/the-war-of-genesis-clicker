@@ -765,6 +765,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     bool MosesAltVoice = false,    // 행동 910 의 깃발([챕터+0x2ec4]) — 원본도 진행 세이브에 싣는다
                                     int? Bgm = null,
                                     string? Part1 = null,
+                                    int[]? Part1Objects = null,    // 파트1 맵 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y) — 행동 707 로 연 벽이 불러온 뒤 다시 닫히지 않게
                                     string? SceneTitle = null);    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
                                                                    // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
@@ -1035,6 +1036,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 EventCheckDue: battleSave ? host.Btl._eventCheckDue : null,
                 MosesAltVoice: host.Mos._mosesAltVoice, Bgm: host._battleLoaded && !host.Mos._mosesOpen ? host.Btl._eventBgm : null,
                 Part1: battleSave && host._scene.IsPart1 ? host.Part1.ToJson(host.FlagSt._flags) : null,
+                Part1Objects: battleSave && host._scene.IsPart1 ? host.Btl.Part1Objects.Save() : null,
                 SceneTitle: host._scene.IsPart1 ? host._scene.Title : null);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -1447,6 +1449,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// </summary>
     internal void RestoreObjects(SaveState state)
     {
+        if (host._scene.IsPart1) host.Btl.Part1Objects.Restore(state.Part1Objects);
         if (state.Objects is not { } saved) return;
         var objects = host.Btl.Objects;
         for (int i = 0; i < objects.Count; i++)

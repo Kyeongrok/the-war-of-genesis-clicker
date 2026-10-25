@@ -15,6 +15,10 @@ internal sealed unsafe partial class BattleScene
 {
     internal IReadOnlyList<DemoObject> Objects => host._scene.Objects ?? [];
 
+    /// <summary>파트1 판의 맵 물체(Obt 그림 · 발자국 · 행동 707) — 파트2 물체와 따로 든다.</summary>
+    internal Part1MapObjects Part1Objects => _part1Objects ??= new(host);
+    private Part1MapObjects? _part1Objects;
+
     /// <summary>
     /// 그 칸의 물체 — 없으면 null. 원본 물체 격자 <c>+0x74</c>(<c>0x100d93e0</c>)처럼 <b>Obt 발자국 전체</b>(비트 0x10 아닌 칸)가 제 칸이고,
     /// <b>열린 문·연 상자도 돌려준다</b>(열린 문은 도장은 빠져도 격자에 남는다, 감사3 R1). 부서진 물체·터진 폭탄 상자만 뺀다.
@@ -133,6 +137,8 @@ internal sealed unsafe partial class BattleScene
                                                         .Select(p => $"({p.Col},{p.Row}) h{_walkH[p.Row * cols + p.Col]} f{_cellFlags[p.Row * cols + p.Col]:x}"))
                     + Environment.NewLine);
         }
+        // 파트1 판 — 절 A 의 Obt 물체를 찍는다(0x10097910 · 0x100996e0). 파트2 물체 목록은 비어 있다.
+        if (host._scene.IsPart1) Part1Objects.Stamp(_walkH, _aimH, _cellFlags, cols, rows);
         (_stampMap, _stampObjects, _stampCols, _stampRows) = (map, objects, cols, rows);
         _stampKey = StampKey(objects);
         _stampTime = host._lastTime;
@@ -1002,6 +1008,7 @@ internal sealed unsafe partial class BattleScene
         // 그림 그리기 방식 바이트([+0x58]+0x13)를 4 로 — 섞기 방식 4 = 그림 가중 16/31 반투명(0x100e6250, 되돌림 0x100e62a0).
         // 리메이크의 상태 0xa = 차례인 인물의 이동 영역이 떠 있을 때, 0xb = 어빌리티·공격 대상을 고를 때.
         bool aiming = host._battleLoaded && IsPlayerTurn && ((_rangeUnit == _turn && _range != null) || _targetWork >= 0);
+        if (host._scene.IsPart1) Part1Objects.Draw();
         foreach (var obj in Objects)
         {
             if (obj.Data.SpriteId <= 0) continue;
