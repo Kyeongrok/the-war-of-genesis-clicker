@@ -186,6 +186,7 @@ internal sealed unsafe partial class BattleScene
     internal List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
     {
         if (w.SelfCentred) (col, row) = (user.Col, user.Row);
+        if (Part1AreaOf(w, user) is { } p1) return Part1AreaCells(p1, user, col, row);
         var cells = new List<(int, int)>();
         if (w.AreaShape == 0) { cells.Add((col, row)); return cells; }
 
@@ -218,6 +219,45 @@ internal sealed unsafe partial class BattleScene
                 else if (!ShapeCovers(w.AreaShape, 0, 0, facing) || plain < w.AreaMinQuarters) continue;
                 cells.Add((cx, cy));
             }
+        return cells;
+    }
+
+    /// <summary>
+    /// 파트1 판에서 파트1 인물이 쓰는 파트1 기술(<see cref="Part1SkillBook"/> 이 만든 work)의 Attack — 효과 범위를 Attack.dat 로 잰다.
+    /// 기본 공격(빌린 파트2 work)과 손으로 쓴 스킬 파일(썬더스탐 · 소환 …)은 null — 빌린 틀 · 그 파일의 범위를 둔다.
+    /// </summary>
+    internal Part1Attack? Part1AreaOf(WorkData w, UnitState? user) =>
+        user != null && host._scene.IsPart1 && Part1SkillBook.IsGenerated(w.Id) && Part1.Fighter(user) is not null && Part1.AttackOf(w) is { } a ? a : null;
+
+    /// <summary>
+    /// 파트1 효과 범위 칸 — 원본 <c>0x100393b0(atk, 겨눈 x, y, 방향, 0, 0)</c> 그대로(분석-파트1-전투 31절).
+    /// 가운데는 <b>겨눈 칸</b>(자기 자리 기술 +0x31 = 4 는 제 칸), 방향은 시전자 → 겨눈 칸(<see cref="Part1Attack.AreaDirection"/>).
+    /// 모양 <c>+0x33</c>(<see cref="Part1Attack.AreaShapeCovers"/>) · 크기 <c>+0x38</c> ≥ d · 최소 <c>+0x3c</c> ≤ d, d = 4 × 맨해튼 + (<c>+0x35</c> 면 2 × |높이 차|) — 겨눈 칸의 높이에서 잰다.
+    /// <c>+0x36</c> 이면 겨눈 칸과 높이가 같은 칸만. 거르기 <c>+0x40</c> 는 칸이 아니라 WorkTargets(효과 대상 방식)가 맡는다(칠하기는 원본도 거르기 2 — 아무 칸).
+    /// 유닛을 누르는 기술(+0x31 = 1 · 3 · 5)은 누른 유닛을 따로 쥔다(<c>+0x206</c>, <c>0x10039f1c</c>) — 최소가 겨눈 칸을 빼도 그 칸은 넣는다.
+    /// </summary>
+    internal List<(int Col, int Row)> Part1AreaCells(Part1Attack a, UnitState user, int col, int row)
+    {
+        var cells = new List<(int, int)>();
+        if (a.AreaShape == 0) { cells.Add((col, row)); return cells; }
+        int dir = Part1Attack.AreaDirection(user.Col, user.Row, col, row);
+        int size = a.AreaSize, min = a.AreaMinSize;
+        // 높이 보정은 거리를 늘리기만 하므로(차등 없음) 크기 ÷ 4 칸 네모면 넉넉하다 — 9999(판 전체)는 판 크기로.
+        int reach = Math.Min(Math.Max(host.Cols, host.Rows), Math.Max(0, size) / 4);
+        for (int dy = -reach; dy <= reach; dy++)
+            for (int dx = -reach; dx <= reach; dx++)
+            {
+                int cx = col + dx, cy = row + dy;
+                if ((uint)cx >= host.Cols || (uint)cy >= host.Rows) continue;
+                if (!a.AreaShapeCovers(dx, dy, dir)) continue;
+                if (host._map is not null && (CellFlagsAt(cx, cy) & 0x8) != 0
+                    && !(ObjectAt(cx, cy) is { Data.Breakable: true, Alive: true })) continue;
+                if (a.AreaSameHeight && HeightAt(cx, cy) != HeightAt(col, row)) continue;
+                var (d, _) = WorkDistance(col, row, cx, cy, a.AreaHeight, graded: false);
+                if (d > size || d < min) continue;
+                cells.Add((cx, cy));
+            }
+        if (a.AimFilter is 1 or 3 or 5 && !cells.Contains((col, row))) cells.Insert(0, (col, row));
         return cells;
     }
 

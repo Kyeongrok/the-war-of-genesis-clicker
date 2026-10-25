@@ -79,6 +79,40 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
     public int AreaSize => Raw[0x38];
     public int AreaMinSize => Raw[0x3c];
 
+    /// <summary><c>+0x34</c> 맵 +0x6c &amp;1 칸 빼기 · <c>+0x35</c> 거리에 높이 차(늘 2 × |차|, 차등 없음) · <c>+0x36</c> 겨눈 칸과 높이가 같은 칸만 — 효과 범위 쪽 짝(<c>0x10039408</c>~).</summary>
+    public bool AreaHeight => Raw[0x35] != 0;
+    public bool AreaSameHeight => Raw[0x36] != 0;
+
+    /// <summary>
+    /// 효과 범위 방향(<c>0x10019de0(시전자 x, y, 겨눈 x, y)</c>) — 0 위 · 1 왼쪽 · 2 아래 · 3 오른쪽. |dx| ≥ |dy| 면 가로(같으면 가로), 같은 칸이면 2(아래).
+    /// 명령 시작 <c>0x1003a092</c> 이 이 값을 <c>0x100393b0</c> 의 방향 인자로 넘긴다.
+    /// </summary>
+    public static int AreaDirection(int fromCol, int fromRow, int toCol, int toRow)
+    {
+        int adx = Math.Abs(toCol - fromCol), ady = Math.Abs(toRow - fromRow);
+        if (adx >= ady) return fromCol > toCol ? 1 : fromCol < toCol ? 3 : 2;
+        return fromRow > toRow ? 0 : 2;
+    }
+
+    /// <summary>
+    /// 효과 범위 모양 <see cref="AreaShape"/> 이 겨눈 칸에서 (dx, dy) 칸을 덮나 — 점프표 <c>0x10039554</c>: 1 십자 <c>0x1008b360</c> · 2 외줄 <c>0x1008af30</c> ·
+    /// 3 마름모 <c>0x1008ab80</c> · 4 부채꼴 <c>0x1008b710</c> · 5 폭 3 줄 <c>0x1008c440</c>. 2 · 4 · 5 는 <b>한 방향만</b>(<paramref name="dir"/>, <see cref="AreaDirection"/>) —
+    /// 겨눈 칸(앞 0)부터 앞으로, 부채꼴은 앞 f 칸 줄에서 옆 f/3 칸까지, 폭 3 줄은 옆 ±1(겨눈 칸 줄 포함). 거리는 따로 본다(4 × 맨해튼 + 높이).
+    /// </summary>
+    public bool AreaShapeCovers(int dx, int dy, int dir)
+    {
+        var (f, side) = dir switch { 0 => (-dy, dx), 1 => (-dx, dy), 2 => (dy, dx), _ => (dx, dy) };
+        return AreaShape switch
+        {
+            1 => dx == 0 || dy == 0,
+            2 => f >= 0 && side == 0,
+            3 => true,
+            4 => f >= 0 && Math.Abs(side) <= f / 3,
+            5 => f >= 0 && Math.Abs(side) <= 1,
+            _ => dx == 0 && dy == 0,
+        };
+    }
+
     /// <summary>효과 범위 반경(칸) — <see cref="AreaSize"/> ÷ 4(평지 맨해튼). 9999(판 전체)는 <paramref name="cap"/> 칸으로 자른다.</summary>
     public int AreaTiles(int cap = 16) => AreaShape == 0 ? 0 : Math.Min(cap, Math.Max(0, AreaSize) / 4);
 

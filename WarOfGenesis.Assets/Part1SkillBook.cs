@@ -20,6 +20,7 @@ public static class Part1SkillBook
         var abilities = Part1Ability.LoadAll();
         var attacks = Part1Attack.LoadAll();
         if (abilities.Count == 0 || attacks.Count == 0) return;
+        Generated.Clear();
         var have = skills.Select(s => s.Ability).ToHashSet();
         // 여러 어빌리티가 같은 Attack 을 쓰면(연 · 다하카 두번 물기 = 11) work 번호가 겹친다 — 뒤의 것은 1000 씩 비켜 준다(<see cref="AttackIdOf"/>).
         var used = skills.SelectMany(s => s.Levels).Select(l => l.Work).ToHashSet();
@@ -39,6 +40,7 @@ public static class Part1SkillBook
                 int work = Part1Game.ChrBase + a.Id;
                 while (used.Contains(work) && work < ushort.MaxValue - 1000) work += WorkStride;
                 used.Add(work);
+                Generated.Add(work);
                 levels.Add(new SkillLevel { Work = work, Level = lv, Fields = AimFields(a) });
             }
             int sel = first.Formula;
@@ -68,7 +70,7 @@ public static class Part1SkillBook
     /// 누가 맞나 · 범위 — Attack 의 거르기 바이트를 파트2 대상 방식으로 옮긴다(분석-파트1-전투 「기술 대상 거르기」).
     /// 효과 범위 거르기 <c>+0x40</c>: 1 적만 → 1 · 3 같은 편·자신만 → 4 · 5 유닛 누구나 → 5 · 2 아무 칸(범위 안 모두) → 3.
     /// 겨누기 <c>+0x31</c>: 1 · 3 · 5 는 그 유닛을 누른다(같은 값으로) · 2 아무 칸 — 범위가 한 칸뿐이면 그 칸의 유닛 하나를 고르는 것과 같아 효과 거르기의 유닛 방식으로 둔다.
-    /// 그 밖(4 자기 자리 · 6 · 7 돌진 길 · 0)은 빌린 틀의 것을 그대로 둔다. 범위 반경 = <c>+0x38</c> ÷ 4 칸(<see cref="Part1Attack.AreaTiles"/>).
+    /// 4 자기 자리 → 2(제 칸) · 6 → 3(아무 칸). 그 밖(7 돌진 길 · 0)은 빌린 틀의 것을 그대로 둔다. 범위 반경 = <c>+0x38</c> ÷ 4 칸(<see cref="Part1Attack.AreaTiles"/>).
     /// 전에는 엘레맨탈 파이어 틀의 효과 대상 3(아무 칸)을 그대로 써 적 마법이 제 편 몬스터까지 맞혔다(사용자 보고: btl 20007 이븐시나의 아이스 미사일).
     /// </summary>
     internal static Dictionary<string, int> AimFields(Part1Attack a)
@@ -82,11 +84,24 @@ public static class Part1SkillBook
         {
             1 or 3 or 5 => Mode(a.AimFilter),
             2 => area == 0 ? Mode(a.AreaFilter) : 3,
+            // 6(격 · 부메랑)은 유닛이 없어도 되는 칸 누르기다 — 칸 거르개 0x1008a950 이 1 · 3 · 5 · 7 · 2 말고는 유닛을 안 본다, 맵 클릭 0x10032447 도 칸.
+            // 범위(외줄)가 겨눈 칸에서 시전자 → 겨눈 칸 쪽으로 뻗는다. 전에는 빌린 연(1) 틀의 「적 한 명」이라 빈 칸으로 방향을 못 골랐다.
+            6 => 3,
             _ => null,
         };
         if (tm is { } t) f["targetMode"] = t;
+        // +0x31 = 4(사거리 0 — 쇼크 웨이브 · 힐 윈드 · 파 · 필살기)는 제 칸만 누를 수 있고 범위가 시전자 칸에서 퍼진다(0x1003a092 이 누른 칸 = 제 칸을 넘긴다) —
+        // 자기 자리(2)로. 전에는 빌린 틀(엘레맨탈 파이어 3 · 힐 4)의 겨누기 그대로라 곁 칸을 겨눠 범위가 거기서 퍼졌다.
+        if (a.AimFilter == 4) f["targetMode"] = 2;
         return f;
     }
+
+    /// <summary>
+    /// 이 책이 만든 work(스킬 파일 없는 파트1 어빌리티) — 효과 범위를 Attack.dat 모양 <c>+0x33</c> · 크기 <c>+0x38</c> · 최소 <c>+0x3c</c> 로 잰다(BattleScene.AreaCells).
+    /// 손으로 쓴 스킬 파일(썬더스탐 · 소환 따위)은 그 파일의 범위를 둔다.
+    /// </summary>
+    private static readonly HashSet<int> Generated = [];
+    public static bool IsGenerated(int work) => Generated.Contains(work);
 
     /// <summary>겹친 work 를 비켜 주는 폭 — Attack.dat 는 1000 칸이 안 된다.</summary>
     public const int WorkStride = 1000;
