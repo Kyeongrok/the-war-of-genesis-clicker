@@ -96,6 +96,9 @@ internal sealed unsafe class SettingsScreen(GameWindow host)
                 [
                     new("난이도", name, Step: d => host.OnMenuCommand(BattleScene.MenuDifficultyBase + Cycle(hard, d, BattleScene.DifficultyChoices.Length)),
                         Note: hard == 0 ? "" : $"적 HP {hp}% · 적 피해 {damage}% · AI 강화"),
+                    new("파트1 난이도", BattleScene.Part1DifficultyChoices[BattleScene.Part1Difficulty],
+                        Step: d => host.Btl.SetPart1Difficulty(Cycle(BattleScene.Part1Difficulty, d, BattleScene.Part1DifficultyChoices.Length)),
+                        Note: BattleScene.Part1Difficulty switch { 0 => "원본 그대로", 1 => "적이 빗나갈 확률 ½", _ => "적이 빗나갈 확률 ¼" }),
                     new("게임 속도", host._gameSpeed == 100 ? "보통(원본)" : $"{host._gameSpeed / 100.0:0.#}배",
                         Step: d => host.OnMenuCommand(MenuSpeedBase + Cycle(speed, d, SpeedChoices.Length))),
                     new("게임 끝내기", "", Press: () => host.OnMenuCommand(MenuExit)),

@@ -97,6 +97,25 @@ internal sealed unsafe partial class BattleScene
         Win32.AppendMenuW(settings, Win32.MF_POPUP, (nuint)menu, "난이도(&D)");
     }
 
+    /// <summary>
+    /// 파트1 난이도(설정 &gt; 게임, 파트1 판에만) — 쉬움이 지금 그대로(기본)이고, 보통 · 어려움으로 갈수록 적이 내 편을 칠 때 빗나갈 확률이 절반씩 준다
+    /// (사용자 요청). 빗나감은 회피(결과 5 · 7)와 명중 굴림(결과 3) 둘 다 — 빗나갈 굴림이 나오면 2^단계 가운데 하나만 살린다.
+    /// </summary>
+    internal static readonly string[] Part1DifficultyChoices = ["쉬움", "보통", "어려움"];
+
+    internal static int Part1Difficulty = Math.Clamp(UserSettings.Current.Part1Difficulty, 0, 2);
+
+    internal void SetPart1Difficulty(int level)
+    {
+        Part1Difficulty = Math.Clamp(level, 0, Part1DifficultyChoices.Length - 1);
+        host.Toast($"파트1 난이도: {Part1DifficultyChoices[Part1Difficulty]}");
+        host.SaveSettings();
+    }
+
+    /// <summary>파트1 빗나감 굴림이 나왔을 때 그대로 빗나가나 — 적이 내 편을 칠 때만 난이도 단계마다 확률을 절반으로 줄인다.</summary>
+    internal static bool Part1MissStands(Random rng, UnitState attacker, UnitState target) =>
+        Part1Difficulty == 0 || !IsFoeSide(attacker) || IsFoeSide(target) || rng.Next(1 << Part1Difficulty) == 0;
+
     /// <summary>메뉴에서 난이도를 골랐으면 true.</summary>
     internal bool OnDifficultyMenu(int id)
     {

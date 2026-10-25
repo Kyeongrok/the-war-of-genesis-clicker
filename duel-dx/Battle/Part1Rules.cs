@@ -262,9 +262,10 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         string? forcedGuard = Environment.GetEnvironmentVariable("DUELDX_P1GUARD");
         bool rollsEvade = ft.CanEvade || stance == 79;
         if (guardable && (forcedGuard == "dodge" || (rollsEvade
-            && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), !ft.CanEvade || stance == 77, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul)))))
+            && rng.Next(100) < Part1Combat.EvadeChance(ft.Stat(Part1Chr.Dex, t.Soul), !ft.CanEvade || stance == 77, fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul))))
+            && BattleScene.Part1MissStands(rng, a, t))         // 파트1 난이도 — 적의 빗나감을 단계마다 절반(BattleScene.Difficulty)
             return Missed("회피", stance == 79 ? CounterDodge : Dodged);
-        if (!Part1Combat.Hits(accuracy, rng.Next(32768))) return Missed("명중 굴림");
+        if (!Part1Combat.Hits(accuracy, rng.Next(32768)) && BattleScene.Part1MissStands(rng, a, t)) return Missed("명중 굴림");
         bool blocked = guardable && (forcedGuard == "block" || Part1Combat.Blocks(ft.BlockAbility, stance != 0 && stance == ft.BlockAbility,
             ft.GuardValue + ft.Stat(Part1Chr.Dex, t.Soul), fa.HitValue, fa.Stat(Part1Chr.Dex, a.Soul), rng.Next(100)));
         // 버써크(파트1 상태 +0x24e, 분석-파트1-기술-b 8절 — 이 게임은 상태 4 「버서커」) — 걸린 동안 STR ×1.5 · AC ×0.5.
