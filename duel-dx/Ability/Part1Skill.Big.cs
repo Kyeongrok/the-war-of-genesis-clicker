@@ -129,7 +129,7 @@ internal sealed partial class Part1Skill
     {
         var user = _user;
         var (hx, hy) = _home;
-        var t = TargetPoint(targets, aim);
+        var t = aim != _home ? aim : TargetPoint(targets, aim);   // 방향은 겨눈 칸(+0x206 또는 칸, 0x10019de0) — 대상은 판 끝까지의 여럿(BattleScene.Part1BeamCells)
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
         var (vx, vy) = BigDirs[dir];
@@ -262,7 +262,7 @@ internal sealed partial class Part1Skill
     {
         var user = _user;
         var (hx, hy) = _home;
-        var t = TargetPoint(targets, aim);
+        var t = aim != _home ? aim : TargetPoint(targets, aim);   // 방향은 겨눈 칸(+0x206 또는 칸, 0x10019de0) — 대상은 판 끝까지의 여럿(BattleScene.Part1BeamCells)
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
         int last = Swing(user, 42, 8);
@@ -296,7 +296,7 @@ internal sealed partial class Part1Skill
     {
         var user = _user;
         var (hx, hy) = _home;
-        var t = TargetPoint(targets, aim);
+        var t = aim != _home ? aim : TargetPoint(targets, aim);   // 방향은 겨눈 칸(+0x206 또는 칸, 0x10019de0) — 대상은 판 끝까지의 여럿(BattleScene.Part1BeamCells)
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
         Sound(1914, 0);

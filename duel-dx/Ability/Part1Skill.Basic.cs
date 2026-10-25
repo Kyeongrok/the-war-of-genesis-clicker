@@ -270,7 +270,7 @@ internal sealed partial class Part1Skill
     private int BasicBeam(int id, List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
         var (hx, hy) = _home;
-        var t = TargetPoint(targets, aim);
+        var t = aim != _home ? aim : TargetPoint(targets, aim);   // 방향은 겨눈 칸(+0x206 또는 칸, 0x10019de0) — 대상은 판 끝까지의 여럿(BattleScene.Part1BeamCells)
         var (len, _) = BasicSwing(t, BasicAction(id));
         int dir = Dir4(t.X - hx, t.Y - hy), col = Math.Clamp((int)(hx / TileW), 0, Math.Max(0, host.Cols - 1));
         (double X, double Y) s = (hx, hy - 60 * 0.6);

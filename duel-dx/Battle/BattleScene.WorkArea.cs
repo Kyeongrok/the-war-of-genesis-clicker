@@ -190,6 +190,7 @@ internal sealed unsafe partial class BattleScene
     {
         if (w.SelfCentred) (col, row) = (user.Col, user.Row);
         if (Part1DashOf(w) is { } dash) return Part1DashCells(dash, user, col, row);
+        if (Part1BeamOf(w, user) is { } beam) return Part1BeamCells(beam, user, col, row);
         if (Part1AreaOf(w, user) is { } p1) return Part1AreaCells(p1, user, col, row);
         var cells = new List<(int, int)>();
         if (w.AreaShape == 0) { cells.Add((col, row)); return cells; }
@@ -278,6 +279,78 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 파트1 빛살 · 관통탄 기술 — 핸들러가 Attack.dat 효과 범위(<c>+0x33</c>~<c>+0x3c</c>)와 상관없이 시전자 자리에서 <b>전장 범위 끝</b>(맵 <c>+0x1f4</c>~<c>+0x1fa</c>)까지
+    /// 보는 쪽(<c>0x10019de0(시전자, 겨눈 유닛 +0x206 또는 칸)</c>) 축으로 이동기를 빠르기 40 × 1.0(<c>+0x10c</c>)으로 보내고, 그 이동기의 맞음 사건
+    /// <c>0x100769b0(1, desc, 3, 3D, 3, 0)</c> 이 틱마다 칸이 바뀌면(<c>0x1007676e</c>) <c>0x10039690</c> 으로 그 칸의 적(<c>+0x40</c> = 1)을 모은다 — 출발 칸은 안 친다.
+    /// 빔라이플 10 <c>0x100457f0</c> · 용병 빔라이플 315~317 <c>0x10062530</c> · 버스터 캐논 393 <c>0x1006f5a0</c> · 레이저 캐논 394 <c>0x10070440</c> · 버스터 런쳐 397 <c>0x10071690</c> ·
+    /// 롱 레이져 398 <c>0x10072e60</c> · 사이드 슬레이더 400~402 <c>0x10073440</c>, 줄 셋(시전자 줄과 옆 ±40 — <c>0x10057e93</c>)은 버스터 포 282 <c>0x10056140</c> · 다크 라이트 406 <c>0x10073e40</c>.
+    /// 자료 범위가 한 칸(315 · 393 · 394 · 398)이거나 13칸(397)인 것도 판 끝까지 맞는다. 관통사격 9(<c>0x10045590</c>, 같은 꼴)는 기본 공격 그림이 없어 파트2 길이라 뺀다.
+    /// </summary>
+    internal static bool IsPart1Beam(int attackId) => attackId is 10 or 282 or (>= 315 and <= 317) or 393 or 394 or 397 or 398 or (>= 400 and <= 402) or 406;
+
+    /// <summary>파트1 판의 파트1 인물이 쓰는 빛살 기술(기본 공격 빔라이플 포함)의 Attack — <see cref="IsPart1Beam"/>.</summary>
+    internal Part1Attack? Part1BeamOf(WorkData w, UnitState? user) => Part1AimOf(w, user) is { } a && IsPart1Beam(a.Id) ? a : null;
+
+    /// <summary>
+    /// 빛살 기술의 맞는 칸 — 이동기를 틱마다 그대로 밟는다(월드 x · y ÷ 40, z ÷ 20). 끝점은 그 줄의 전장 끝 칸 가운데(위 <c>+0x1f6</c> × 40 + 20 · 아래 <c>+0x1fa</c> × 40 − 20 …).
+    /// 높이: 맞음 사건의 3D 깃발(둘째 바이트, <c>0x10076b78</c> → <c>0x10039690</c> 인자 5)이 서면 칸마다 유닛 몸 높이 k = 0 .. (그림 높이 × 2/3)/12 − 1 에서
+    /// (|탄 z/20 − 유닛 z/20 − k| + 2 × 맨해튼) × 2 ≤ 3 인 유닛만 맞는다(<c>0x100399ac</c>~<c>0x10039a81</c>) — 곧 <b>탄보다 두 층 이상 높이 선 유닛은 안 맞는다</b>.
+    /// (탄보다 훨씬 낮은 유닛이 몸 높이 밖이라 빠지는 아래쪽 끝은 그림 높이를 몰라 안 옮겼다.)
+    /// 탄 높이: 10 시전자 z + 60 · 315~317 · 394 z + 80 · 400~402 z + 40(곧게) · 393 시전자 z → 끝 칸 땅 높이 × 20 · 398 둘레 3×3 칸 가장 높은 땅 × 20 + 20(시전자를 들어 올린 높이).
+    /// 282 · 397 · 406 은 3D 깃발이 0(<c>0x10057e5f</c> · <c>0x10072ca7</c>~ · <c>0x10075c84</c>) — 높이와 상관없이 맞는다.
+    /// </summary>
+    internal List<(int Col, int Row)> Part1BeamCells(Part1Attack a, UnitState user, int col, int row)
+    {
+        const int W = 40;
+        var cells = new List<(int Col, int Row)>();
+        int dir = Part1Attack.AreaDirection(user.Col, user.Row, col, row);
+        var r = Part1Range.Active ? Part1Range : null;
+        int left = r?.Left ?? 0, top = r?.Top ?? 0, right = r?.Right ?? host.Cols, bottom = r?.Bottom ?? host.Rows;
+        bool solid = a.Id is not (282 or 397 or 406);
+        int z0 = HeightAt(user.Col, user.Row) * 20;
+        int lift = a.Id switch { 10 => 60, (>= 315 and <= 317) or 394 => 80, >= 400 and <= 402 => 40, _ => 0 };
+        if (a.Id == 398)
+        {
+            // 0x10072fc0~ — 시전자 둘레 3×3 칸 땅 높이 × 20 의 가장 큰 값, 빛살은 그 + 20 에서 곧게.
+            int top3 = z0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    if ((uint)(user.Col + dx) < host.Cols && (uint)(user.Row + dy) < host.Rows) top3 = Math.Max(top3, HeightAt(user.Col + dx, user.Row + dy) * 20);
+            z0 = top3 + 20;
+        }
+        else z0 += lift;
+        int[] lanes = a.Id is 282 or 406 ? [-1, 0, 1] : [0];
+        foreach (int lane in lanes)
+        {
+            // 옆 줄은 시전자 칸에서 옆으로 한 칸(±40) — 그 줄이 전장 밖이면 안 쏜다(0x10057d30~0x10057d85).
+            int sc = user.Col + (dir is 0 or 2 ? lane : 0), sr = user.Row + (dir is 1 or 3 ? lane : 0);
+            if (sc < left || sc >= right || sr < top || sr >= bottom) continue;
+            var (ec, er) = dir switch { 0 => (sc, top), 2 => (sc, bottom - 1), 1 => (left, sr), _ => (right - 1, sr) };
+            double x = sc * W + W / 2.0, y = sr * W + W / 2.0, z = z0;
+            double tx = ec * W + W / 2.0, ty = er * W + W / 2.0;
+            // 393 은 끝 칸 땅 높이로 내려가거나 올라간다(0x1007021d~0x10070319) — 나머지는 출발 높이 그대로.
+            double tz = a.Id == 393 ? HeightAt(Math.Clamp(ec, 0, host.Cols - 1), Math.Clamp(er, 0, host.Rows - 1)) * 20 : z0;
+            int last = (int)Math.Floor(x / W) * 1000 + (int)Math.Floor(y / W);
+            for (int guard = 0; guard < 1000; guard++)
+            {
+                double dx = tx - x, dy = ty - y, dz = tz - z, far = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (far <= W) (x, y, z) = (tx, ty, tz);
+                else (x, y, z) = (x + dx / far * W, y + dy / far * W, z + dz / far * W);
+                int c = (int)Math.Floor(x / W), rr = (int)Math.Floor(y / W);
+                if (c * 1000 + rr != last)
+                {
+                    last = c * 1000 + rr;
+                    bool reach = !solid || (uint)c >= host.Cols || (uint)rr >= host.Rows || HeightAt(c, rr) <= (int)(z / 20) + 1;
+                    if ((uint)c < host.Cols && (uint)rr < host.Rows && reach && !cells.Contains((c, rr))) cells.Add((c, rr));
+                }
+                if (far <= W) break;
+            }
+        }
+        cells.Remove((user.Col, user.Row));
+        return cells;
+    }
+
+    /// <summary>
     /// 파트1 판에서 파트1 인물이 쓰는 파트1 기술(<see cref="Part1SkillBook"/> 이 만든 work)의 Attack — 효과 범위를 Attack.dat 로 잰다.
     /// 기본 공격(빌린 파트2 work)과 손으로 쓴 스킬 파일(썬더스탐 · 소환 …)은 null — 빌린 틀 · 그 파일의 범위를 둔다.
     /// </summary>
@@ -295,6 +368,7 @@ internal sealed unsafe partial class BattleScene
     {
         var cells = new List<(int, int)>();
         if (a.AreaShape == 0) { cells.Add((col, row)); return cells; }
+        if (a.Id is >= 31 and <= 35) return Part1SpinCells(a, user);
         int dir = Part1Attack.AreaDirection(user.Col, user.Row, col, row);
         int size = a.AreaSize, min = a.AreaMinSize;
         // 높이 보정은 거리를 늘리기만 하므로(차등 없음) 크기 ÷ 4 칸 네모면 넉넉하다 — 9999(판 전체)는 판 크기로.
@@ -313,6 +387,29 @@ internal sealed unsafe partial class BattleScene
                 cells.Add((cx, cy));
             }
         if (a.AimFilter is 1 or 3 or 5 && !cells.Contains((col, row))) cells.Insert(0, (col, row));
+        return cells;
+    }
+
+    /// <summary>
+    /// 파 31~35(<c>0x100463d0</c>) — 맞는 칸은 범위 칠하기(<c>0x100393b0</c>, 최소 <c>+0x3c</c> = 5 라 제 칸 둘레 2칸 고리)가 아니다. 다섯 바퀴 뒤 시전자 자리(x, y, z)에 선
+    /// Obs 245 가 사라질 때 맞음 사건 <c>0x10076950(1, desc, +0x33, +0x35, +0x38, 0)</c>(<c>0x10046a85</c>~<c>0x10046ace</c>)이 <c>0x10039690</c> 으로 그 자리 둘레를 모은다 —
+    /// 이 함수는 모양 함수에 <b>최소 0</b>을 넘기므로(<c>0x100396c6</c>~) <b>이웃 칸도 맞는다</b>(마름모 8 = 맨해튼 2칸 안 모두). 높이(<c>+0x35</c> = 1, 3D):
+    /// 유닛 몸 높이 k 마다 (|시전자 z/20 − 유닛 z/20 − k| + 2 × 맨해튼) × 2 ≤ 8(<c>0x100399ac</c>~) — 시전자보다 높이 선 유닛은 한 층마다 2 를 더 잰다(낮은 유닛은 몸 높이 안이라 0).
+    /// </summary>
+    internal List<(int Col, int Row)> Part1SpinCells(Part1Attack a, UnitState user)
+    {
+        var cells = new List<(int, int)>();
+        int size = a.AreaSize, reach = Math.Max(0, size) / 4, level = HeightAt(user.Col, user.Row);
+        for (int dy = -reach; dy <= reach; dy++)
+            for (int dx = -reach; dx <= reach; dx++)
+            {
+                int cx = user.Col + dx, cy = user.Row + dy;
+                if ((uint)cx >= host.Cols || (uint)cy >= host.Rows) continue;
+                int d = 4 * (Math.Abs(dx) + Math.Abs(dy));
+                if (d > size) continue;
+                if (a.AreaHeight && d + 2 * Math.Max(0, HeightAt(cx, cy) - level) > size) continue;
+                cells.Add((cx, cy));
+            }
         return cells;
     }
 
@@ -337,6 +434,8 @@ internal sealed unsafe partial class BattleScene
         // (0x10083760 · 0x100b220d · 0x100bddd6, ba-20 D3). 전에는 아군과 시전자 자신도 맞았다. 소울 블레스트의 관통탄도 적만(슬롯 2 의 +0x1e = 1).
         if (w.AbilityId is 6 or 159 or 186 or SoulBlastAbility) mode = 1;
         if (w.AbilityId == SpecialHitsSkill.HellLaserAbility) mode = 1;
+        // 파트1 빛살(Part1BeamCells) — 이동기의 맞음 사건이 효과 거르기 +0x40 = 1(적)로 모은다. 빌린 기본 공격 틀(빔라이플)의 대상 방식과 상관없이.
+        if (Part1BeamOf(w, user) is not null) mode = 1;
         var hit = Enumerable.Range(0, host._units.Length)
             .Where(i => host._units[i].Alive && host._units[i].OnField && cells.Contains((host._units[i].Col, host._units[i].Row)) && ModeAccepts(mode, user, host._units[i]));
         // 대상 상한 — 모으는 함수(0x100df5c0 · 0x10070bb0)는 위 행부터, 행 안에서는 왼쪽부터 훑다가 상한에서 멈춘다(ba-20 E8).

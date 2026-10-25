@@ -1405,8 +1405,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 파트1 기술(검 기술 · 썬더스탐 · 소환) — 시각표를 깔고 대상마다 그 기술이 닿을 때 한 번씩 친다(menu-85 · menu-89).
             if (Part1Skill.Handles(w.Id) || part1Basic > 0)
             {
-                var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
+                // 파트1 빛살(빔라이플 기본 공격 · 레이저 캐논 …)은 누른 유닛 하나가 아니라 판 끝까지 지나는 칸의 적 모두다(Part1BeamCells, 0x100769b0 → 0x10039690).
+                var targets = targetIndex >= 0 && Part1BeamOf(w, a) is null ? [targetIndex] : WorkTargets(w, a, col, row);
                 var cells = EffectCells(w, a, col, row).ToList();
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 targets {w.Id} by {a.ChrCode}({a.Col},{a.Row})h{HeightAt(a.Col, a.Row)} aim ({col},{row}): {cells.Count} cells [{string.Join(' ', cells.Select(c => $"{c.Col},{c.Row}"))}], units [{string.Join(' ', targets.Select(ti => $"{host._units[ti].ChrCode}({host._units[ti].Col},{host._units[ti].Row})"))}]"
+                        + $" · on board [{string.Join(' ', host._units.Where(u => u.Alive && u.OnField && u != a).Select(u => $"{u.ChrCode}({u.Col},{u.Row})h{HeightAt(u.Col, u.Row)}"))}]" + Environment.NewLine);
                 var struck = new HashSet<int>();
                 // 파트1 기본 공격의 타이밍 어택 — 박자 수만큼 「연」 동작으로 여러 번(Part1Skill.BasicMelee). 그러면 타마다 보통 피해(배율 100).
                 host.Part1Ab.ChainHits = part1Basic > 0 && _timedCritBy == a ? host.TimedHitFx.AttackCount : 0;
