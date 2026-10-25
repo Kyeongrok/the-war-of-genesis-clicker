@@ -599,9 +599,33 @@ internal sealed unsafe partial class BattleScene
             host.ScheduleAbilitySounds(work);
             SpawnAbilityEffects(work, follower, col, row);
         }
-        foreach (int ti in struck) ApplyWork(follower, work, host._units[ti], dying);
+        // 판정은 부하 <b>제 동작의 타격 키</b> 때 든다 — 원본은 부하도 명령 2(기술)로 보통 work 실행(0x10075ff0)을 돌려 제 모션의 타격 키마다 판정한다.
+        // 전에는 치는 동작을 틀자마자 맞혀, 부하 피해 숫자가 대장 첫 타와 같은 틱 같은 자리에 겹쳐 떴고 정작 부하가 쏠 때는 아무것도 안 떴다
+        // (사용자 보고: Btl 0288 세큐리티볼 부하가 베라모드를 쏴도 피해가 안 들어온다 — HP 는 깎이고 있었다).
+        var hits = HitTimesFor(follower, DrawnAction(follower, strike), ranged: work.RangeMax > 4);
+        foreach (double at in hits) _followerHits.Add((host._lastTime + at, follower, work, struck, dying));
+        if (Trace)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"{host._lastTime:F2} follower strike {follower.ChrCode} work {work.Id} → [{string.Join(",", struck.Select(ti => host._units[ti].ChrCode))}] hits at +{string.Join("/", hits.Select(t => t.ToString("F2")))}" + Environment.NewLine);
         PayWorkCost(follower, work);
         return true;
+    }
+
+    /// <summary>들 때를 기다리는 부하 타격 — (때, 부하, work, 대상 색인, 쓰러짐 목록).</summary>
+    internal readonly List<(double At, UnitState Follower, WorkData Work, List<int> Targets, List<UnitState> Dying)> _followerHits = [];
+
+    /// <summary>때가 된 부하 타격을 든다. <paramref name="flush"/> 면 남은 것을 모두 바로 든다(행동 루틴이 끝날 때).</summary>
+    internal void PumpFollowerHits(bool flush = false)
+    {
+        for (int i = 0; i < _followerHits.Count;)
+        {
+            var h = _followerHits[i];
+            if (!flush && host._lastTime < h.At) { i++; continue; }
+            _followerHits.RemoveAt(i);
+            if (!h.Follower.Alive || h.Follower.Hp <= 0 || h.Dying.Contains(h.Follower)) continue;   // 치기 전에 쓰러진 부하
+            foreach (int ti in h.Targets)
+                if (host._units[ti] is var t && t.Alive && !h.Dying.Contains(t)) ApplyWork(h.Follower, h.Work, t, h.Dying);
+        }
     }
 
     /// <summary>

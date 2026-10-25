@@ -1122,6 +1122,20 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal IEnumerator<bool> UseWorkRoutine(int userIndex, WorkData w, int targetIndex, int col, int row,
                                              List<(int Col, int Row)> path, bool eventFinisher = false, bool part1Counter = false)
     {
+        // 부하의 타격은 부하 제 동작의 타격 키 때 든다(PumpFollowerHits) — 매 틱 확인한다.
+        var core = UseWorkRoutineCore(userIndex, w, targetIndex, col, row, path, eventFinisher, part1Counter);
+        while (true)
+        {
+            PumpFollowerHits();
+            if (!core.MoveNext()) break;
+            yield return core.Current;
+        }
+        PumpFollowerHits(flush: true);
+    }
+
+    private IEnumerator<bool> UseWorkRoutineCore(int userIndex, WorkData w, int targetIndex, int col, int row,
+                                                 List<(int Col, int Row)> path, bool eventFinisher, bool part1Counter)
+    {
         var a = host._units[userIndex];
         if (!eventFinisher && userIndex == _turn) _part1ActedBy = a;   // 파트1 휴식이 「이미 했다」를 본다
         host.Stats.BeginCast(a, w);
@@ -1694,6 +1708,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             a.Fade = 1;
         }
 
+        // 부하의 남은 타격이 다 들 때까지 — 쓰러짐 처리(dying)가 그 뒤에 돈다.
+        while (_followerHits.Count > 0) yield return true;
         host._mapTintTarget = -1;   // 행동이 끝나면 맵 물들이기를 푼다(0x1002e920)
         // 희생(13)·익스플로젼(22) — 아군을 회복시킨 뒤 시전자 HP 를 0 으로 쓴다(0x10090d62 · 0x100915f9, ba-20 D1).
         // 처치 보상은 아무도 안 받는다. 47(전투불능 방지)은 되살린다 — 되살림은 쓰러짐 처리 상태기(0x10067fe2~0x10068152)가 HP ≤ 0 인 유닛 모두에게 까닭을 가리지 않고 한다(ba-22 확인).
@@ -1996,6 +2012,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (host._scene.IsPart1 && result is Part1Rules.CounterHit or Part1Rules.CounterDodge) QueuePart1Counter(t, a, w);
         if (result == 3 || amount <= 0 || part1Dodge)
         {
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"{host._lastTime:F2} {(IsFoeSide(a) && !IsFoeSide(t) ? "foe" : "ally")} miss {a.ChrCode} → {t.ChrCode}: {(result == 3 ? "빗나감" : $"피해 {amount}")} work {w.Id} (TP {a.Tp} vs {t.Tp}, HP {t.Hp}/{t.MaxHp})" + Environment.NewLine);
             ShowNumber(t, host._db.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
             // 파트1 피함(결과 5 · 7) — 「빗나감」 글에 더해 때린 이 쪽을 보고 동작 54 를 한다(0x1003dfda). 막았는데 피해가 0 이어도 동작 6(0x1003df9a).
             if (part1Guard) PlayGuardReaction(a, t, result);
