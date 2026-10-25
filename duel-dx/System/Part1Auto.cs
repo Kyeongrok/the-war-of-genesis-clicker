@@ -15,7 +15,10 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1Auto(GameWindow host)
 {
-    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "1";
+    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial";
+
+    /// <summary><c>DUELDX_P1AUTO=tutorial</c> — NEW GAME 대신 TUTORIAL 을 누르고, 연대표에 닿으면 멈춘다.</summary>
+    private static readonly bool Tutorial = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "tutorial";
 
     private double _nextAt;
     private bool _newGameDone;
@@ -41,9 +44,10 @@ internal sealed class Part1Auto(GameWindow host)
         if (shell.Town._open) { shell.Town.OnKey(Win32.VK_ESCAPE); Wait(); return; }
         if (shell.Field._open) { shell.Field.OnClick(); return; }
         if (shell.Chapter._open) { ChapterStep(shell.Chapter); return; }
+        if (shell.Timeline._open && Tutorial) { Log("tutorial done — timeline"); Wait(9999); return; }
         if (shell.Timeline._open) { NextChapter(shell, "timeline"); return; }
         // 파트1 타이틀 — 처음이면 NEW GAME, 진 뒤면 CONTINUE.
-        if (!_newGameDone) { _newGameDone = true; Log("new game"); shell.Press(Part1TitleScreen.ButtonNewGame); }
+        if (!_newGameDone) { _newGameDone = true; Log(Tutorial ? "tutorial" : "new game"); shell.Press(Tutorial ? Part1TitleScreen.ButtonTutorial : Part1TitleScreen.ButtonNewGame); }
         else { _losses++; Log($"continue after loss #{_losses}"); shell.Press(Part1TitleScreen.ButtonContinue); }
         Wait();
     }

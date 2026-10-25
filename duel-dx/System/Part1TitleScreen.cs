@@ -21,10 +21,13 @@ namespace DuelDx;
 /// <item>차례(<c>0x100d5e60</c>): 처음엔 글자 흐름만. 그것이 끝나면 지우고 불티 · 핵을 틀고 로고 둘을 밝힌다(<c>vt+0x6c</c> — 섞기 13 세기 1→7, 한 틱에 하나).
 /// 불티가 끝나면 저작권 · 단추 · 판 번호를 밝힌다. Esc(<c>0x100d5f80</c>)는 글자 흐름 · 불티를 지우고 모두 곧바로 밝힌다.</item>
 /// <item>단추 맞는 칸(<c>0x1009f1b0</c>, (320,240) 기준): Start (−49,101)~(46,116) · Load (−51,124)~(48,139) · Tutorial (−33,147)~(31,162) · Exit (−15,170)~(16,184).
-/// Load 는 세이브가 없으면, Tutorial 은 켜는 깃발이 없으면 누를 수 없는 그림(같은 모션)만 둔다. 누르면 효과음 <c>Snd 2034</c>.</item>
+/// Load 는 세이브가 없으면, Tutorial 은 시디 1 이 없으면 누를 수 없는 그림(같은 모션)만 둔다. 누르면 효과음 <c>Snd 2034</c>.</item>
+/// <item>단추 알림(<c>0x100d61f0</c>): 단추 2 = Tutorial → 상태 3(<c>0x100d5df2</c>) — 새 게임과 같은 준비(<c>0x100ad560</c> + <c>0x100ad4c0</c>: 깃발 비우기 ·
+/// 무리 다시 채우기 · 돈 0)를 하고 장면 4(챕터 지도)를 챕터 80(<c>Chps\0080.cpr</c>, 무리 13 · 지도 136)으로 연다.</item>
 /// <item>음악 <c>BGMs\0022</c> 되풀이(12월 25일이면 <c>0059</c>, <c>0x100d5c90</c>). 곡이 끝나면 오프닝으로 가는 길은 옮기지 않는다(사용자 결정).</item>
 /// </list>
-/// 리메이크: Start Game = NEW GAME · Load Game = LOAD GAME · Exit = EXIT 로 원본 그림 줄을 그대로 쓰고, 튜토리얼은 없어 원본의 「못 누름」 모습으로 둔다.
+/// 리메이크: Start Game = NEW GAME · Load Game = LOAD GAME · Tutorial = TUTORIAL · Exit = EXIT 로 원본 줄을 그대로 쓴다.
+/// 시디가 없으니 TUTORIAL 은 늘 누를 수 있다.
 /// 원본에 없는 CONTINUE · PART 2 는 로고와 메뉴를 가리지 않게 오른쪽 아래에 작은 글 단추로 둔다.
 /// 그림은 사용자의 파트1 폴더(<see cref="Part1Game.Root"/>)에서 읽는다.
 /// </remarks>
@@ -53,18 +56,19 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         ("CONTINUE", 2, Cx - 46, Cy + 147, Cx + 46, Cy + 162),   // 원본에 없는 줄 — LOAD GAME 아래(사용자 요청). 튜토리얼 · EXIT 는 한 줄씩 내린다
         ("PART 2", -1, 530, 450, 630, 468),
         ("EXIT", 4, Cx - 15, Cy + 193, Cx + 16, Cy + 207),
+        ("TUTORIAL", 3, Cx - 33, Cy + 170, Cx + 31, Cy + 185),   // 원본 단추 2 — CONTINUE 아래, EXIT 위
     ];
 
-    /// <summary>튜토리얼 줄(누를 수 없음) — CONTINUE 아래, EXIT 위.</summary>
-    private const int TutorialY = Cy + 177;
-
     /// <summary>위·아래 키로 옮기는 차례 — 가운데 메뉴 줄 먼저, 그다음 오른쪽 아래 PART 2.</summary>
-    private static readonly int[] KeyOrder = [0, 1, 2, 4, 3];
+    private static readonly int[] KeyOrder = [0, 1, 2, 5, 4, 3];
 
     /// <summary>글 단추 크기 — 연대표 · 마을 · 일행 창이 <see cref="DrawButton"/> 과 함께 쓴다.</summary>
     internal const int ButtonW = 140, ButtonH = 24;
 
-    internal const int ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4;
+    internal const int ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4, ButtonTutorial = 5;
+
+    /// <summary>튜토리얼 챕터 — 원본 상태 3(<c>0x100d5df2</c>)이 장면 4 에 넘기는 챕터 번호(0x50).</summary>
+    internal const int TutorialChapter = 80;
 
     internal bool _open;
     internal bool _entryHover;
@@ -353,6 +357,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 PlayPress();
                 host.LeaveScene(ContinueGame);
                 break;
+            case ButtonTutorial: PlayPress(); host.LeaveScene(StartTutorial); break;
             case ButtonPart2: PlayPress(); host.LeaveScene(Close); break;
             case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)
         }
@@ -370,6 +375,20 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         Array.Clear(host.FlagSt._flags);   // 파트1 진행 깃발은 파트2 와 같은 칸을 쓴다 — 새 게임은 비우고 시작한다
         // 원본처럼 연대표에서 어디서 시작할지 고른다 — 줄기마다 첫 칸(살라딘 「카디스 요새」 · 바이올라 「반기」 · 인페르노 「인페르노의 음모」)이 열려 있다.
         Timeline.Open();
+    }
+
+    /// <summary>
+    /// 튜토리얼 — 원본 상태 3(<c>0x100d5df2</c>): 새 게임과 같은 준비(진행 · 깃발 비우기)를 하고 챕터 80 지도를 연다.
+    /// 챕터 80 의 사건이 필드 11 대사 · 용병 · 아이템을 거쳐 전투 0415 → 0416 → 0417 → 0418 을 잇고 501 로 연대표에 닿는다.
+    /// 진행 자동 저장(part1.json)은 평소대로 한다(사용자 결정) — 전투 SAVE 만 원본처럼 막는다(<see cref="SystemMenu.SaveBlockedReason"/>).
+    /// </summary>
+    private void StartTutorial()
+    {
+        host.Part1.Reset();
+        Chapter.Forget();
+        HookGrowth();
+        Array.Clear(host.FlagSt._flags);
+        if (!Chapter.Open(TutorialChapter)) Open();
     }
 
     /// <summary>파트1 이어 하기 — <c>part1.json</c> 의 챕터에서 남은 사건을 잇는다. 못 읽으면 알리고 타이틀에 머문다.</summary>
@@ -555,15 +574,15 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (menu && !host.SlotsScr.SlotsOpen)
         {
             // 메뉴 줄 — 원본은 그림(Obs 0751 모션 10~13 · 짚으면 0~3)이지만 CONTINUE · PART 2 와 같은 글꼴의 글로 쓴다(사용자 요청).
-            // 자리는 원본 맞는 칸 가운데, 튜토리얼은 늘 「못 누름」 빛깔. 밝아지는 것(FadeFrom)은 원본 차례 그대로.
+            // 자리는 원본 맞는 칸 가운데. 밝아지는 것(FadeFrom)은 원본 차례 그대로.
             double dim = FadeFrom(menuAt, 4);
             for (int row = 0; row < 5; row++)
             {
                 int button = Array.FindIndex(Buttons, b => b.Row == row);
-                var (cx, cy) = button < 0 ? (Cx, TutorialY) : ((Buttons[button].X0 + Buttons[button].X1) / 2, (Buttons[button].Y0 + Buttons[button].Y1) / 2);
-                string label = button < 0 ? "TUTORIAL" : Buttons[button].Name;
-                bool hot = button >= 0 && _hover == button && FadeFrom(menuAt) >= 1;
-                uint color = button < 0 ? 0xFF5C544Cu : hot ? 0xFFFFF0C8u : 0xFFA89C90u;
+                var (cx, cy) = ((Buttons[button].X0 + Buttons[button].X1) / 2, (Buttons[button].Y0 + Buttons[button].Y1) / 2);
+                string label = Buttons[button].Name;
+                bool hot = _hover == button && FadeFrom(menuAt) >= 1;
+                uint color = hot ? 0xFFFFF0C8u : 0xFFA89C90u;
                 color = (uint)(Math.Clamp(dim, 0, 1) * 255) << 24 | (color & 0xFFFFFF);
                 var (_, w, h) = host.UiGetText(label, color, 14);
                 host.UiText(label, ox + cx - w / 2, oy + cy - h / 2, color, 14);
