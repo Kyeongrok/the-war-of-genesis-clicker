@@ -19,7 +19,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal const int TitleBackground = 329, NewYearBackground = 372;
 
     /// <summary>파트2 타이틀 위에 얹는 들어가기 단추(왼위·크기) — 640×480 화면 기준.</summary>
-    internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 84, 26);
+    internal static readonly (int X, int Y, int W, int H) EntryButton = (16, 440, 124, 26);
 
     /// <summary>파트1 타이틀의 단추 — 가운데 아래. LOAD GAME 은 파트2 타이틀처럼 저장 칸을 골라 부른다(사용자 요청 — 파트1 세이브 칸은 따로, part1-battle-save-NN).</summary>
     internal static readonly (int X, int Y, string Name)[] Buttons = [(250, 324, "NEW GAME"), (250, 354, "LOAD GAME"), (250, 384, "CONTINUE"), (250, 414, "PART 2"), (250, 444, "EXIT")];
@@ -343,12 +343,12 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         else Chapter.Forget();   // 졌다 — 이어 돌던 사건은 버린다(이어 하기는 저장된 자리에서, 새 게임은 깨끗하게)
     }
 
-    /// <summary>파트2 타이틀 위의 「PART 1」 단추.</summary>
+    /// <summary>파트2 타이틀 위의 「PART 1 (BETA)」 단추 — 아직 옮기는 중이라 베타로 단다(사용자 요청).</summary>
     internal void DrawEntry()
     {
         var (ox, oy) = host.Mos.MosesOrigin();
         var (x, y, w, h) = EntryButton;
-        DrawButton(ox + x, oy + y, w, h, "PART 1", _entryHover);
+        DrawButton(ox + x, oy + y, w, h, "PART 1 (BETA)", _entryHover);
     }
 
     /// <summary>
