@@ -198,7 +198,7 @@ internal sealed unsafe partial class BattleScene
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t) && Part1.Enchant.GetValueOrDefault(t) != element);
         // 파트1 최면 · 혼란 · 컨디션이상 — 적이고, 듣는 종족이고, 그 상태가 아직 없고 막는 상태도 없는 대상만 센다(원본 AI 평가 0x1003fd93 이
         // 이미 걸린 대상에게 0 을 준다).
-        if (host._scene.IsPart1 && Part1.AttackOf(w)?.Formula is (25 or 27 or 28) and var p1sel)
+        if (host._scene.IsPart1 && Part1.AttackOf(w)?.Formula is (13 or 25 or 27 or 28) and var p1sel)
             return targets.Count(i => host._units[i] is var t && SeesAsFoe(user, t) && Part1.AilmentWorth(t, p1sel)) >= w.MinTargets + 1;
         if (w.AbilityId == CureAbility)
             return targets.Any(i => host._units[i] is var t && !Hostile(user, t)

@@ -47,16 +47,18 @@ internal sealed unsafe partial class BattleScene
                 return true;
         }
         int sel = attack.Formula;
-        // 최면(27) · 혼란(28) · 컨디션이상(25) — 명중 굴림 없이 걸림 굴림만 한다(0x1003e3ba → 0x10042290: 대상 거르기 · 0x10041960 · 거는 칸).
-        // 못 걸면 「빗나감」 글(0x1011c0f8), 걸리면 맞음 동작(0x10035fa0(15)). 원본은 상태 이름 글을 안 띄운다 — 리메이크는 이름을 띄운다.
-        if (sel is 25 or 27 or 28)
+        // 최면(27) · 혼란(28) · 컨디션이상(25) · 쇼크 웨이브(13) — 명중 굴림 없이 걸림 굴림만 한다(0x1003e3ba → 0x10042290: 대상 거르기 · 0x10041960 · 거는 칸).
+        // 못 걸면 「빗나감」 글(0x1011c0f8 「Miss」), 걸리면 맞음 동작(0x10035fa0(15)). 피해는 없다. 원본은 상태 이름 글을 안 띄운다 — 리메이크는 이름을 띄운다.
+        // 13 은 기계(칸 10 = 2)에게만 듣는다 — 다른 대상은 거르기에서 떨어져 「Miss」(0x100422a5 결과 3). 거는 값은 세기 ÷ MR ÷ 10 + (+0x58 = 25~45)라
+        // 늘 0 보다 커 걸린다(0x10041b80 · 0x1004232b) — 그 값은 줄지 않고 따로 굴려 풀린다(RollPart1Recovery).
+        if (sel is 13 or 25 or 27 or 28)
         {
             bool lands = Part1.StatusLands(host._rng, a, t, attack.Id);
             if (lands) LandPart1Ailment(t, Part1Rules.AilmentOf(sel));
             else ShowNumber(t, host._db?.T(42) is { Length: > 0 } m ? m : "Miss", MissColor);
             if (Trace)
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                    $"part1 ailment {a.ChrCode} → {t.ChrCode} {attack.Name}(식 {sel}): {(lands ? "걸림" : "안 걸림")} · 지금 [{string.Join(",", Part1.Ailments.GetValueOrDefault(t) ?? [])}]" + Environment.NewLine);
+                    $"part1 ailment {a.ChrCode} → unit {Array.IndexOf(host._units, t)} chr {t.ChrCode} {attack.Name}(식 {sel}): {(lands ? "걸림" : "안 걸림")} · 지금 [{string.Join(",", Part1.Ailments.GetValueOrDefault(t) ?? [])}]" + Environment.NewLine);
             if (lands) MarkBuffed(a, t, w);
             return true;
         }
@@ -73,7 +75,7 @@ internal sealed unsafe partial class BattleScene
                 t.ClearStatus();
                 Part1.Buffs.Remove(t);
                 Part1.Enchant.Remove(t);
-                Part1.Ailments.Remove(t);
+                Part1.CureAilments(t);   // 쇼크(2)는 원본대로 안 풀린다(0x1004223f)
                 Popup(t, "큐어", HealColor2, 12, rise: 88);
                 break;
             case 21:
@@ -106,11 +108,11 @@ internal sealed unsafe partial class BattleScene
 
     private static readonly Dictionary<int, string> Part1AilmentNames = new()
     {
-        [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
+        [Part1Rules.Shock] = "쇼크", [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
     };
 
     /// <summary>체력바 아래 딱지 글(두 글자).</summary>
-    internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
+    internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Shock => "쇼크", Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
 
     /// <summary>
     /// 파트1 상태 14 · 15 · 16 을 건다 — <see cref="Part1Rules.AddAilment"/>(최면은 15 · 16 을, 혼란은 15 를 지운다). 맞음 동작과 이름 글.
@@ -126,8 +128,22 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>
     /// 빈 시간 틱마다 — 파트1 상태 15 · 14 · 16 의 풀림 굴림(<c>0x10035150</c> 의 첫 고리, 차례 [15, 13, 14, 16]). 원본은 이 셋을 줄여 가지 않는다.
+    /// 쇼크(2)는 그 뒤(<c>0x100353a1</c>)에 틱 % 행동 간격 == 1 일 때만 굴린다(<see cref="Part1Rules.ShockRecovers"/>).
     /// </summary>
-    internal void RollPart1Recovery(UnitState u)
+    internal void RollPart1Recovery(UnitState u, int interval)
+    {
+        RollPart1Ailments(u);
+        if (!Part1.HasAilment(u, Part1Rules.Shock) || _tick == 1 || _tick % Math.Max(1, interval) != 1) return;
+        int roll = _ailmentRandom.Next(32768);
+        bool off = Part1Rules.ShockRecovers(u.Soul, roll);
+        if (off) Part1.ClearAilment(u, Part1Rules.Shock);
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 shock unit {Array.IndexOf(host._units, u)} chr {u.ChrCode} 풀림 굴림 (틱 {_tick}, 간격 {interval}, 소울 {u.Soul}): {roll % 150} ≤ {(u.Soul + 150) / 5} → {(off ? "풀림" : "그대로")}" + Environment.NewLine);
+        if (off) host.StatusScr.RefreshUnitStats(u);
+    }
+
+    private void RollPart1Ailments(UnitState u)
     {
         if (!Part1.Ailments.TryGetValue(u, out var set)) return;
         foreach (int s in (ReadOnlySpan<int>)[Part1Rules.Condition, Part1Rules.Hypnosis, Part1Rules.Confusion])

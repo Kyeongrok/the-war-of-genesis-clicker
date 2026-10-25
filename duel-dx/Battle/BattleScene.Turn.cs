@@ -425,7 +425,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (part1)
             {
                 ReleaseFreeze(u);
-                RollPart1Recovery(u);
+                RollPart1Recovery(u, (int)(u.Data?.TpDivisor ?? 1));
                 TickPart1Buffs(u);
                 if (!u.HasTurn && CanTakeTurn(u) && _tick % Math.Max(1, (int)(u.Data?.TpDivisor ?? 1)) == 0) u.Tp = u.MaxTp;
                 continue;

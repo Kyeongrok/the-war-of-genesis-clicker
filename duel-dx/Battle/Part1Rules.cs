@@ -71,7 +71,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (Fighter(a) is not { } fa || Fighter(t) is not { } ft || Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), attackId) is not { } attack)
             return true;
         // 대상 거르기(0x10041880, 표 0x1011c084) — 선택자 25 · 27 · 28 은 인물 칸 10(+0xb8, 종족으로 보임)이 0 인 사람에게만 듣는다.
-        if (attack.Formula is 25 or 27 or 28 && ft.Chr.Fields[10] != 0)
+        // 13(쇼크 웨이브)은 거꾸로 칸 10 = 2(기계 — 마장기 · 탱크 · 썬더볼트 · 성문)에게만 듣는다(표 값 3, 0x100418c5).
+        if (attack.Formula is 25 or 27 or 28 && ft.Chr.Fields[10] != 0 || attack.Formula == 13 && ft.Chr.Fields[10] != 2)
         {
             if (BattleScene.Trace)
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 status {a.ChrCode} → {t.ChrCode} {attack.Name}: 칸 10 = {ft.Chr.Fields[10]} 이라 안 듣는다" + Environment.NewLine);
@@ -123,8 +124,11 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
 
     internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
 
-    /// <summary>파트1 상태 번호 — 유닛 바이트 +0x246 + 번호: 14 최면(+0x254) · 15 컨디션이상(+0x255) · 16 혼란(+0x256).</summary>
-    internal const int Hypnosis = 14, Condition = 15, Confusion = 16;
+    /// <summary>
+    /// 파트1 상태 번호 — 유닛 바이트 +0x246 + 번호: 2 쇼크(+0x248, 쇼크 웨이브가 기계에 건다) · 14 최면(+0x254) · 15 컨디션이상(+0x255) · 16 혼란(+0x256).
+    /// 쇼크와 최면은 둘 다 <b>차례를 못 받게</b> 한다(차례 고르기 <c>0x10042871</c> 이 +0x247 · +0x248 · +0x254 를 본다).
+    /// </summary>
+    internal const int Shock = 2, Hypnosis = 14, Condition = 15, Confusion = 16;
 
     /// <summary>
     /// 파트1 상태 14 · 15 · 16 이 걸린 사람(분석-파트1-전투 25절). 원본은 값 1 을 넣고 줄이지 않는다 — 시간 틱마다 따로 굴려 풀린다(<see cref="RecoveryRoll"/>).
@@ -160,11 +164,29 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         return true;
     }
 
-    internal static int AilmentOf(int selector) => selector switch { 27 => Hypnosis, 28 => Confusion, _ => Condition };
+    internal static int AilmentOf(int selector) => selector switch { 13 => Shock, 27 => Hypnosis, 28 => Confusion, _ => Condition };
 
-    /// <summary>AI 가 그 대상에게 선택자 25 · 27 · 28 을 쓸 만한가 — 듣는 종족(칸 10 = 0)이고 그 상태가 없고 막는 상태도 없을 때.</summary>
+    /// <summary>
+    /// 모두 풀기(큐어 · 아이템 107, <c>0x10042150</c>) — 14 · 15 · 16 은 지우지만 쇼크(2)는 남는다: 원본은 +0x248 을 보고서 상태 5 를 지운다
+    /// (<c>0x1004223f</c> push 5, 원본 실수). 원본대로 둔다. 무언가 지웠으면 true.
+    /// </summary>
+    internal bool CureAilments(UnitState u)
+    {
+        if (!Ailments.TryGetValue(u, out var set)) return false;
+        bool any = set.RemoveWhere(s => s != Shock) > 0;
+        if (set.Count == 0) Ailments.Remove(u);
+        return any;
+    }
+
+    /// <summary>
+    /// 쇼크(2) 풀림 — 빈 시간 틱 <c>0x100353a1</c>: 틱 ≠ 1 이고 틱 % 행동 간격(WTP, <c>0x1003eeb0</c>) == 1 일 때(곧 차례 간격마다 한 번)
+    /// rand() % 150 ≤ (소울 + 150) ÷ 5 면 풀린다 — 소울 0 이면 31/150(21%) · 40 이면 39/150(26%) · 150 이면 61/150(41%). 맞아도 줄지 않는다.
+    /// </summary>
+    internal static bool ShockRecovers(int soul, int roll) => roll % 150 <= (soul + 150) / 5;
+
+    /// <summary>AI 가 그 대상에게 선택자 13 · 25 · 27 · 28 을 쓸 만한가 — 듣는 종족(13 은 칸 10 = 2, 나머지는 0)이고 그 상태가 없고 막는 상태도 없을 때.</summary>
     internal bool AilmentWorth(UnitState t, int selector) =>
-        (Fighter(t) is not { } f || f.Chr.Fields[10] == 0) && !HasAilment(t, AilmentOf(selector))
+        (Fighter(t) is not { } f || f.Chr.Fields[10] == (selector == 13 ? 2 : 0)) && !HasAilment(t, AilmentOf(selector))
         && !(selector == 25 && (HasAilment(t, Hypnosis) || HasAilment(t, Confusion))) && !(selector == 28 && HasAilment(t, Hypnosis));
 
     /// <summary>
