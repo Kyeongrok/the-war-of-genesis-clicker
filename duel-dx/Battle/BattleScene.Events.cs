@@ -1036,8 +1036,19 @@ internal sealed unsafe partial class BattleScene
                 break;
             case Part1Script.Part1Only + 500 when host._scene.IsPart1:
                 // [대상, 칸, 값] 인물 칸 넣기(0x1001ff80) — 칸 = 인물 레코드 차례(분석-파트1-전투 8절). 19 기본 최대 HP(HP 를 자른다) · 20~29 능력치 · 30~38.
-                // 칸 8(대전 판 플레이어 번호)은 이야기 전투에서 아무 일도 안 한다 — 자료 44번 중 35번. 리메이크는 19~38 만 받는다(파트1 식이 읽는 칸).
-                if (A(1) is >= 19 and <= 38)
+                // 칸 8 은 무리 옮기기다(0x1002009a) — 챕터 1000 [Chr, 8, 무리] 와 같다. 지금 무리에서 빼고(+0xaea0 · 무리 표 +0x20 + 무리×0xaa8)
+                // +0xb4 = a2, 지금 챕터 무리(0x101a0820 +8)면 이 판 무리에 넣는다. 판에 선 인물만(0x10032bb0). 자료 44번 중 35번 — 모건 르 페이(Btl 0090) ·
+                // 레이브 올마이(0228) · 플랑드르 백작(0030) 같은 합류가 이것이다. 전에는 「대전 판에서만」으로 읽고 버려 합류 대사만 나오고 들지 않았다.
+                // 그 밖에 리메이크는 19~38 만 받는다(파트1 식이 읽는 칸).
+                if (A(1) == 8)
+                    foreach (var u in EventTargets(A(0), out _))
+                    {
+                        host.Part1.MoveToGroup(u.ChrCode, A(2));
+                        if (Trace)
+                            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                                $"p1join {u.ChrCode} group {A(2)}{Environment.NewLine}");
+                    }
+                else if (A(1) is >= 19 and <= 38)
                     foreach (var u in EventTargets(A(0), out _))
                     {
                         Part1.SetField(u, A(1), A(2));
