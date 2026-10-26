@@ -2254,6 +2254,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             && host._units.Any(u => u.Alive && u.OnField && u.Side == 4))
         {
             ScriptedDestinationOnWipe();
+            Part1WinFlagsOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = host._lastTime;
             TestRunTrace($"outcome part1 wipe-win btl {host._scene.Id} nextBattle {_eventNextBattle} nextField {_eventNextField} turnNo {_turnNo} t {host._lastTime:F1}");   // 시험 전용
             return;

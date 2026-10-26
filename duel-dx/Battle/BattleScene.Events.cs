@@ -276,6 +276,30 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 파트1 전멸 승리(원본에 없는 편의, CheckOutcome) — 스크립트의 승리 사건(행동 11 [0])이 하던 진행 깃발(102 · 103)과 합류(500 [인물, 8, 무리])를 대신 해 준다.
+    /// 승리 사건을 안 거치고 이기면 깃발이 안 켜져 챕터가 막혔다: 챕터 37 「인페르노의 음모」 사이럽스(Btl 0137)는 10001 이 (2~6, 6~9) 에 닿거나
+    /// 타이머 1 이 300 에 이르러야 깃발 63 = 1 로 이기는데, 적을 다 잡아 이기면 63 이 0 이라 로우엔(사건 2 → Btl 0091)이 마을로만 열렸다(사용자 보고 fg-38).
+    /// 아군 전멸(401 [4])이 조건인 사건은 패배 쪽이라 뺀다. 첫 승리 사건 하나만.
+    /// </summary>
+    internal void Part1WinFlagsOnWipe()
+    {
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0 || (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire)) continue;
+            if (!e.Actions.Any(a => a.Code == 11 && a.Args.Length > 0 && a.Args[0] == 0)) continue;
+            if (e.Conditions.Any(c => c.Code == 401 && c.Args.Length > 0 && c.Args[0] == 4)) continue;
+            _eventFired[i]++;
+            foreach (var a in e.Actions.Where(a => a.Code is 102 or 103 || a.Code == Part1Script.Part1Only + 500 && a.Args.Length > 1 && a.Args[1] == 8))
+                RunEventAction(a);
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"wipe win flags: 사건 {i}" + Environment.NewLine);
+            return;
+        }
+    }
+
+    /// <summary>
     /// 이벤트를 볼 때(비트) — 원본 <c>CheckEvents(갈래)</c> 는 세 자리에서만 돈다: 1 레벨업 끝(0x10068270) · 2 행동 끝(0x100680a3) · 3 새 틱(0x10067d5c).
     /// 사건의 갈래(레코드 +0xe, <see cref="BattleEvent.Word2"/>)가 0 이면 셋 다, 아니면 그때만. 전에는 프레임마다 봤다(fg-22).
     /// </summary>
