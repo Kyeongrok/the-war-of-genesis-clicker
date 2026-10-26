@@ -103,6 +103,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         int col = bx / TileW;
         if ((uint)col >= Cols) return -1;
+        if (_battleLoaded && _scene.IsPart1 && BoardIsMap && !Fld.FieldOpen && !Mos._mosesOpen) return Part1RowAt(col, by);
         // 높이가 다른 칸들의 윗면이 같은 자리에 겹칠 수 있다 — 앞(아래) 칸부터 보되, 벽 칸(플래그 &9 — 못 들어가는 칸)은 뒤에 설 수 있는 칸이
         // 겹쳐 있으면 양보한다. 전에는 높은 벽 칸이 그 뒤 바닥 칸의 클릭을 가로챘다(Btl 0298 의 (21,12) 가 줄 16 으로 잡힘).
         int wall = -1;
@@ -114,6 +115,27 @@ internal sealed unsafe partial class GameWindow : IDisposable
             if (wall < 0) wall = row;
         }
         return wall;
+    }
+
+    /// <summary>
+    /// 파트1 마우스 → 칸(원본 `0x10032990`, 커서 물체 `0x10084410` 이 부른다): 열 = (마우스 x + 스크롤 + layerX·40) ÷ 40, 줄은
+    /// <b>뒤(위) 줄부터</b> 앞으로 훑으며 그 칸 윗면을 화면에 투영(`0x100328e0` — 세계 (열·40, 줄·40, 높이·20))해
+    /// 「앞 줄 경계 ≤ 마우스 y &lt; 이 줄 경계」인 첫 줄을 고른다(`0x10032a69`~`0x10032a75`). 그래서 앞의 높은 벽 칸 윗면이
+    /// 뒤 바닥 칸과 화면에서 겹치면 <b>뒤 바닥이 이긴다</b> — 벽 깃발을 보지 않는다. 전에는 파트2 처럼 앞 줄이 이겨서,
+    /// 걷기 금지(&amp;1)가 아닌 높이 10 벽(Obt 0115 「과학마법연구소 1F」, btl 20229)이 그 뒤 복도 칸을 모두 가로채 이동 · 공격 · 상자를 못 골랐다
+    /// (사용자 보고: 「벽 뒤는 마우스가 아예 선택이 되지 않아」). 리메이크 칸 띠는 [윗줄, 윗줄 + TileH) 라 원본 경계는 그 아랫줄이다.
+    /// 마지막 줄 아래(그림 밖)는 원본이 끝 줄을 돌려주지만 리메이크는 판 밖이라 −1.
+    /// </summary>
+    private int Part1RowAt(int col, int by)
+    {
+        int prev = int.MinValue;
+        for (int row = 0; row < Rows; row++)
+        {
+            int edge = CellTop(col, row) + TileH;
+            if (prev <= by && by < edge) return row;
+            prev = edge;
+        }
+        return -1;
     }
 
     /// <summary>맵 그림의 아랫끝(판 픽셀) — 카메라는 원본처럼 그림 밖으로 안 내려간다(맵 `+0x398~+0x39e` 로 자름).</summary>
