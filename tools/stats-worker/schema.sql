@@ -28,3 +28,10 @@ CREATE TABLE IF NOT EXISTS skill_stats (
 
 CREATE INDEX IF NOT EXISTS skill_stats_report ON skill_stats (report);
 CREATE INDEX IF NOT EXISTS skill_stats_ability ON skill_stats (ability, work);
+
+-- 집계 결과를 잠깐 들고 있는 표(src/index.js 의 cached) — 없으면 worker 가 처음 쓸 때 만든다.
+CREATE TABLE IF NOT EXISTS cache (
+  key  TEXT PRIMARY KEY,
+  at   INTEGER NOT NULL,          -- 만든 때(ms)
+  body TEXT NOT NULL              -- 집계 JSON
+);

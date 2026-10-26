@@ -46,24 +46,45 @@ async function postBattle(request, env) {
   return json({ ok: true });
 }
 
+// 집계 결과를 잠깐 들고 있는다 — D1 은 훑은 줄을 모두 「읽은 줄」로 센다(하루 무료 500만 줄).
+// 대시보드 한 번이 battles 를 열세 번 · skill_stats 를 두 번 다 훑어 수십만 줄이 나가므로, 같은 조건은 CACHE_MS 동안 cache 표의 한 줄로 돌려준다.
+// workers.dev 에서는 Cache API 가 안 들으니 D1 의 작은 표에 둔다. 같은 isolate 안에서는 메모리에서 바로 준다.
+const CACHE_MS = 15 * 60 * 1000;
+const memo = new Map();
+
+async function cached(env, key, make) {
+  const now = Date.now();
+  const hit = memo.get(key);
+  if (hit && now - hit.at < CACHE_MS) return hit.body;
+  try {
+    const row = await env.DB.prepare('SELECT at, body FROM cache WHERE key = ?').bind(key).first();
+    if (row && now - row.at < CACHE_MS) { memo.set(key, row); return row.body; }
+  } catch {
+    await env.DB.exec('CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, at INTEGER NOT NULL, body TEXT NOT NULL)');
+  }
+  const body = JSON.stringify(await make());
+  await env.DB.prepare('INSERT OR REPLACE INTO cache (key, at, body) VALUES (?, ?, ?)').bind(key, now, body).run();
+  memo.set(key, { at: now, body });
+  return body;
+}
+
+const jsonText = (body) => new Response(body, { headers: { 'content-type': 'application/json; charset=utf-8' } });
+
 async function getTop(env) {
   const { results } = await env.DB.prepare(
     `SELECT ability, work, SUM(uses) AS uses, SUM(hits) AS hits, SUM(damage) AS damage, SUM(kills) AS kills, SUM(heal) AS heal,
             COUNT(DISTINCT report) AS battles
      FROM skill_stats GROUP BY ability, work ORDER BY uses DESC LIMIT 200`).all();
   const total = await env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT install) AS installs FROM battles`).first();
-  return json({ total, skills: results });
+  return { total, skills: results };
 }
 
 // 대시보드 집계 — 버전(없으면 전체)과 타키리온 개편 모드(tachyrion=1 켠 판 · 0 끈 판, 없으면 전체)로 거른다.
 // 그 칸이 생기기 전 판(v0.34 까지)은 모드가 없었으니 끈 판으로 센다. 캐릭터 에디터를 쓴 판도 넣는다(사용자 결정) — noedit=1 을 줄 때만 뺀다.
-async function getDashboard(url, env) {
-  const version = (url.searchParams.get('version') || '').slice(0, 32);
-  const noedit = url.searchParams.get('noedit') === '1';
+async function getDashboard(version, noedit, tachyrion, env) {
   const where = [], args = [];
   if (version) { where.push('b.version = ?'); args.push(version); }
   if (noedit) where.push(`b.flags NOT LIKE '%"charEdit":true%'`);
-  const tachyrion = url.searchParams.get('tachyrion');
   if (tachyrion === '1') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 1`);
   if (tachyrion === '0') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 0`);
   const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
@@ -86,7 +107,19 @@ async function getDashboard(url, env) {
     env.DB.prepare('SELECT DISTINCT version FROM battles ORDER BY version DESC LIMIT 50').all().then((r) => r.results.map((v) => v.version)),
     envRows,
   ]);
-  return json({ total, abilities, chars, battles, days, versions, env: env_, names: { abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS } });
+  return { total, abilities, chars, battles, days, versions, env: env_ };
+}
+
+// 이름 표는 코드에 있으니 cache 표에 넣지 않고 내보낼 때 붙인다.
+const NAMES = JSON.stringify({ abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS });
+
+async function dashboard(url, env) {
+  const version = (url.searchParams.get('version') || '').slice(0, 32);
+  if (version && !/^[0-9A-Za-z.+_-]+$/.test(version)) return json({ error: 'bad version' }, 400);
+  const noedit = url.searchParams.get('noedit') === '1';
+  const t = url.searchParams.get('tachyrion'), tachyrion = t === '1' || t === '0' ? t : '';
+  const body = await cached(env, `dashboard|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env));
+  return jsonText(body.slice(0, -1) + ',"names":' + NAMES + '}');
 }
 
 export default {
@@ -94,8 +127,8 @@ export default {
     const url = new URL(request.url), { pathname } = url;
     try {
       if (request.method === 'POST' && pathname === '/v1/battle') return await postBattle(request, env);
-      if (request.method === 'GET' && pathname === '/v1/top') return await getTop(env);
-      if (request.method === 'GET' && pathname === '/v1/dashboard') return await getDashboard(url, env);
+      if (request.method === 'GET' && pathname === '/v1/top') return jsonText(await cached(env, 'top', () => getTop(env)));
+      if (request.method === 'GET' && pathname === '/v1/dashboard') return await dashboard(url, env);
       if (request.method === 'GET' && (pathname === '/dashboard' || pathname === '/'))
         return new Response(DASHBOARD_HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } });
       return json({ error: 'not found' }, 404);
