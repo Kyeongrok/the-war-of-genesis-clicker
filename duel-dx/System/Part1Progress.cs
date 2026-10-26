@@ -462,6 +462,8 @@ internal sealed class Part1Progress
             var saved = Convert.FromBase64String(data.Flags);
             Array.Clear(flags);
             saved.AsSpan(0, Math.Min(saved.Length, flags.Length)).CopyTo(flags);
+            // v1.0.12 전 세이브 — 사이럽스(Btl 0137)를 전멸로 이겨 깃발 63 을 놓쳤으면 켠다(BattleScene.Part1WinFlagsOnWipe, fg-38). 판은 한 번만 열려 다시 못 한다.
+            if (Cleared.Contains(137) && flags.Length > 63 && flags[63] == 0) flags[63] = 1;
             PendingActions = [.. data.Pending.Where(w => w.Length > 0).Select(w => new ScriptCommand((ushort)w[0], w[1..]))];
             Grown = data.Grown ?? [];
             LevelPicks = [.. (data.LevelPicks ?? []).Where(p => p.Length == 2).Select(p => (p[0], p[1]))];
