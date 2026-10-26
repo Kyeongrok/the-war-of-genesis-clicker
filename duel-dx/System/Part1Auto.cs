@@ -15,7 +15,10 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1Auto(GameWindow host)
 {
-    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial";
+    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial" or "continue";
+
+    /// <summary><c>DUELDX_P1AUTO=continue</c> — NEW GAME 대신 CONTINUE 로 세이브(DUELDX_SAVEDIR 의 part1.json)에서 잇는다.</summary>
+    private static readonly bool FromSave = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "continue";
 
     /// <summary><c>DUELDX_P1AUTO=tutorial</c> — NEW GAME 대신 TUTORIAL 을 누르고, 연대표에 닿으면 멈춘다.</summary>
     private static readonly bool Tutorial = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "tutorial";
@@ -47,7 +50,7 @@ internal sealed class Part1Auto(GameWindow host)
         if (shell.Timeline._open && Tutorial) { Log("tutorial done — timeline"); Wait(9999); return; }
         if (shell.Timeline._open) { NextChapter(shell, "timeline"); return; }
         // 파트1 타이틀 — 처음이면 NEW GAME, 진 뒤면 CONTINUE.
-        if (!_newGameDone) { _newGameDone = true; Log(Tutorial ? "tutorial" : "new game"); shell.Press(Tutorial ? Part1TitleScreen.ButtonTutorial : Part1TitleScreen.ButtonNewGame); }
+        if (!_newGameDone) { _newGameDone = true; Log(Tutorial ? "tutorial" : FromSave ? "continue from save" : "new game"); shell.Press(Tutorial ? Part1TitleScreen.ButtonTutorial : FromSave ? Part1TitleScreen.ButtonContinue : Part1TitleScreen.ButtonNewGame); }
         else { _losses++; Log($"continue after loss #{_losses}"); shell.Press(Part1TitleScreen.ButtonContinue); }
         Wait();
     }
@@ -64,7 +67,7 @@ internal sealed class Part1Auto(GameWindow host)
             _chapterId = chapter.Id;
             _turns = 0;
             _tried.Clear();
-            Log($"chapter {chapter.Id} places {chapter.Places.Count} battles [{string.Join(",", chapter.Battles)}]");
+            Log($"chapter {chapter.Id} places {chapter.Places.Count} battles [{string.Join(",", chapter.Battles)}] group {host.Part1.CurrentGroup} [{string.Join(",", host.Part1.GroupMembers())}]");
         }
         // 안 깬 전투 장소 · 안 가 본 마을을 차례로 한 번씩.
         for (int i = 0; i < chapter.Places.Count; i++)
