@@ -1,41 +1,59 @@
-using System.Runtime.InteropServices;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
 /// <summary>
-/// 파트1 배경음악 n — 원본이 시디 곡으로 트는 곡(<see cref="Part1Game.CdTrack"/>: 이 설치본은 15 · 29)은 사용자 폴더의 뜬 트랙
-/// (<see cref="Part1Game.CdTrackFiles"/>, 흔히 <c>bgm\Track02.mp3</c>)을 풀고, 아니면 <c>BGMs\NNNN.bgm</c>(<see cref="Part1Game.Music"/>).
+/// 파트1 배경음악 n — 원본이 시디 곡으로 트는 곡(<see cref="Part1Game.CdTrack"/>: 이 설치본은 15 · 29)은 뜬 트랙을, 아니면 <c>BGMs\NNNN.bgm</c>(<see cref="Part1Game.Music"/>).
 /// </summary>
 /// <remarks>
-/// 원본 <c>0x100094e0</c> 은 시디 표를 <b>먼저</b> 본다 — 표에 있으면 BGMs 에 파일이 있어도 시디다(<c>0x1000951a</c>). 시디 곡이 없으면(트랙 파일 없음 ·
-/// 못 풂) 원본처럼 무음 — 파일 곡으로 넘어가지 않는다(곡 15 · 29 는 BGMs 에 없기도 하다).
-/// MP3 는 저장소에 푸는 것이 없어 Windows Media Foundation(<c>mfplat</c> · <c>mfreadwrite</c>)의 소스 리더로 16비트 PCM 을 받는다.
-/// 유닉스 이식(user32 흉내)이나 MF 가 빠진 Windows N 에서는 DLL · 진입점이 없다 — 모든 실패를 삼켜 null(무음)로 둔다.
+/// 원본 <c>0x100094e0</c> 은 시디 표를 <b>먼저</b> 본다 — 표에 있으면 BGMs 에 파일이 있어도 시디다(<c>0x1000951a</c>). 트랙은 이 차례로 찾는다.
+/// <list type="number">
+/// <item>사용자 폴더의 WAV(<see cref="Part1Game.CdTrackFiles"/> 중 <c>.wav</c>) — 우리 WAV 읽기로 돈다.</item>
+/// <item>우리가 바꿔 올린 WAV(MS ADPCM, <c>tools/part1-cd-pack</c> · 릴리즈 <c>assets-part1cd-1</c>) — 실린 <c>assets/part1/cd</c> 에 있으면 그것, 없으면 받아 온다
+/// (<see cref="AssetPack.Part1CdTrack"/>). 이 함수는 뒤 스레드에서 불려 받는 동안 기다린다 — 화면은 안 멈추고, 파트2 곡처럼 오면 그때 튼다.</item>
+/// <item>사용자 폴더의 그 밖의 것(흔히 <c>bgm\Track02.mp3</c>) — Windows Media Foundation(<see cref="MediaFoundationAudio"/>). 유닉스 이식(user32 흉내)이나
+/// MF 가 빠진 Windows N 에서는 DLL 이 없다 — 그 실패는 삼킨다(그래서 2 가 먼저다).</item>
+/// <item>다 없으면 원본처럼 무음 — 파일 곡으로 넘어가지 않는다(곡 15 · 29 는 BGMs 에 없기도 하다).</item>
+/// </list>
+/// 시디 곡인지는 사용자 폴더의 <c>Tracks.ini</c> · <c>G3CD_k</c> 로 정하므로 파트1 폴더가 없으면 시디 곡도 없다(파트1 은 그 폴더가 있어야 켜진다, <c>Part1TitleScreen</c>).
+/// 시험: <c>DUELDX_NOMF=1</c> 이면 MF 가 없는 PC 처럼 MF 를 안 부른다.
 /// </remarks>
-internal static unsafe class Part1CdMusic
+internal static class Part1CdMusic
 {
+    /// <summary>받아 온 트랙을 기다리는 가장 긴 시간(초) — 파트2 곡(<c>AssetPack.EnsureNow("bgm", …, 90)</c>)과 같다.</summary>
+    private const int FetchSeconds = 90;
+
+    private static readonly bool NoMediaFoundation = Environment.GetEnvironmentVariable("DUELDX_NOMF") == "1";
+
     /// <summary>곡 n 의 소리 — 없거나 못 풀면 null. <paramref name="log"/> 는 시디 곡을 고른 것 · 못 푼 까닭을 받는다(화면 밖 시험의 자취).</summary>
     public static PcmSound? Music(int n, Action<string>? log = null)
     {
         if (Part1Game.CdTrack(n) is not { } track) return Part1Game.Music(n);
-        // 있는 파일을 차례로 — 먼저 풀리는 것이 이긴다(MF 가 없어 mp3 를 못 풀어도 옆의 wav 는 우리 WAV 읽기로 돈다).
         var files = Part1Game.CdTrackFiles(track);
-        foreach (string path in files)
-            if (Decode(path, log) is { } pcm)
-            {
-                log?.Invoke($"music 파트1 곡 {n} → 시디 트랙 {track}: {Path.GetFileName(path)} {pcm.Duration.TotalSeconds:0.0}초 {pcm.SampleRate}Hz {pcm.Channels}ch");
-                return pcm;
-            }
-        log?.Invoke($"music 파트1 곡 {n} → 시디 트랙 {track}: {(files.Count == 0 ? "트랙 파일 없음" : "못 풂")} (무음)");
+        static bool IsWav(string p) => p.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
+        PcmSound? Use(string path, string from, PcmSound? pcm)
+        {
+            if (pcm != null) log?.Invoke($"music 파트1 곡 {n} → 시디 트랙 {track}: {from} {Path.GetFileName(path)} {pcm.Duration.TotalSeconds:0.0}초 {pcm.SampleRate}Hz {pcm.Channels}ch");
+            return pcm;
+        }
+
+        // 1. 사용자 폴더의 WAV.
+        foreach (string path in files.Where(IsWav))
+            if (Use(path, "사용자 WAV", Decode(path, log)) is { } pcm) return pcm;
+        // 2. 실린 · 받아 온 WAV — 우리 읽기로만(MF 를 안 탄다).
+        if (AssetPack.Part1CdTrack(track, FetchSeconds) is { } asset && Use(asset, "자산 WAV", Decode(asset, log, wavOnly: true)) is { } got) return got;
+        // 3. 사용자 폴더의 그 밖의 것(mp3 · ogg) — MF.
+        foreach (string path in files.Where(p => !IsWav(p)))
+            if (Use(path, "사용자 파일(MF)", Decode(path, log)) is { } pcm) return pcm;
+        log?.Invoke($"music 파트1 곡 {n} → 시디 트랙 {track}: {(files.Count == 0 ? "트랙 파일 없음" : "못 풂")} · 자산 없음 (무음)");
         return null;
     }
 
     /// <summary>
     /// 오디오 파일 하나를 16비트 PCM 으로 — RIFF WAV(PCM · MS ADPCM, <see cref="Part1Game.AdpcmToPcm"/>)는 우리 읽기로(MF 없이도 돈다),
-    /// 그 밖(MP3 · OGG …, 또는 우리가 못 읽는 WAV)은 Media Foundation. 못 풀면 null.
+    /// 그 밖(MP3 · OGG …, 또는 우리가 못 읽는 WAV)은 Media Foundation(<paramref name="wavOnly"/> 면 안 탄다). 못 풀면 null.
     /// </summary>
-    public static PcmSound? Decode(string path, Action<string>? log = null)
+    public static PcmSound? Decode(string path, Action<string>? log = null, bool wavOnly = false)
     {
         try
         {
@@ -48,117 +66,17 @@ internal static unsafe class Part1CdMusic
         {
             log?.Invoke($"music {Path.GetFileName(path)} WAV 못 읽음: {ex.Message}");
         }
-        try { return DecodeWithMediaFoundation(path); }
+        if (wavOnly) return null;
+        try
+        {
+            if (NoMediaFoundation) throw new DllNotFoundException("DUELDX_NOMF=1 — MF 가 없는 PC 흉내");
+            return MediaFoundationAudio.Decode(path);
+        }
         catch (Exception ex)
         {
             // DllNotFoundException · EntryPointNotFoundException · COMException · BadImageFormatException … — 무음으로 둔다(튕기지 않는다).
             log?.Invoke($"music {Path.GetFileName(path)} 못 풂: {ex.GetType().Name} {ex.Message}");
             return null;
-        }
-    }
-
-    private const uint MF_VERSION = 0x00020070, MF_SOURCE_READER_FIRST_AUDIO_STREAM = 0xFFFFFFFD, MF_SOURCE_READER_ALL_STREAMS = 0xFFFFFFFE;
-    private const uint MF_SOURCE_READERF_ERROR = 0x1, MF_SOURCE_READERF_ENDOFSTREAM = 0x2;
-    private static readonly Guid MF_MT_MAJOR_TYPE = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
-    private static readonly Guid MF_MT_SUBTYPE = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");
-    private static readonly Guid MF_MT_AUDIO_NUM_CHANNELS = new("37e48bf5-645e-4c5b-89de-ada9e29b696a");
-    private static readonly Guid MF_MT_AUDIO_SAMPLES_PER_SECOND = new("5faeeae7-0290-4c31-9e8a-c534f68d9dba");
-    private static readonly Guid MF_MT_AUDIO_BITS_PER_SAMPLE = new("f2deb57f-40fa-4764-aa33-ed4f2d1ff669");
-    private static readonly Guid MFMediaType_Audio = new("73647561-0000-0010-8000-00aa00389b71");
-    private static readonly Guid MFAudioFormat_PCM = new("00000001-0000-0010-8000-00aa00389b71");
-
-    [DllImport("ole32.dll")] private static extern int CoInitializeEx(IntPtr reserved, uint coInit);
-    [DllImport("ole32.dll")] private static extern void CoUninitialize();
-    [DllImport("mfplat.dll")] private static extern int MFStartup(uint version, uint flags);
-    [DllImport("mfplat.dll")] private static extern int MFShutdown();
-    [DllImport("mfplat.dll")] private static extern int MFCreateMediaType(out IntPtr mediaType);
-    [DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode)] private static extern int MFCreateSourceReaderFromURL(string url, IntPtr attributes, out IntPtr reader);
-
-    /// <summary>COM 개체의 vtable 칸 i.</summary>
-    private static IntPtr Slot(IntPtr obj, int i) => (*(IntPtr**)obj)[i];
-    private static void Release(IntPtr obj) { if (obj != IntPtr.Zero) ((delegate* unmanaged[Stdcall]<IntPtr, uint>)Slot(obj, 2))(obj); }
-    private static void Check(int hr, string what) { if (hr < 0) throw new COMException(what, hr); }
-
-    // IMFAttributes(IUnknown 3칸 뒤): GetUINT32 7 · SetUINT32 21 · SetGUID 24. IMFSourceReader: SetStreamSelection 4 · GetCurrentMediaType 6 ·
-    // SetCurrentMediaType 7 · ReadSample 9. IMFSample(IMFAttributes 30칸 뒤): ConvertToContiguousBuffer 41. IMFMediaBuffer: Lock 3 · Unlock 4.
-    private static uint GetUInt32(IntPtr attrs, Guid key)
-    {
-        uint v;
-        Check(((delegate* unmanaged[Stdcall]<IntPtr, Guid*, uint*, int>)Slot(attrs, 7))(attrs, &key, &v), "GetUINT32");
-        return v;
-    }
-    private static void SetUInt32(IntPtr attrs, Guid key, uint v) =>
-        Check(((delegate* unmanaged[Stdcall]<IntPtr, Guid*, uint, int>)Slot(attrs, 21))(attrs, &key, v), "SetUINT32");
-    private static void SetGuid(IntPtr attrs, Guid key, Guid v) =>
-        Check(((delegate* unmanaged[Stdcall]<IntPtr, Guid*, Guid*, int>)Slot(attrs, 24))(attrs, &key, &v), "SetGUID");
-
-    private static PcmSound? DecodeWithMediaFoundation(string path)
-    {
-        bool com = CoInitializeEx(IntPtr.Zero, 0 /* COINIT_MULTITHREADED */) >= 0;
-        IntPtr reader = IntPtr.Zero, want = IntPtr.Zero, got = IntPtr.Zero;
-        bool started = false;
-        try
-        {
-            Check(MFStartup(MF_VERSION, 0), "MFStartup");
-            started = true;
-            Check(MFCreateSourceReaderFromURL(Path.GetFullPath(path), IntPtr.Zero, out reader), "MFCreateSourceReaderFromURL");
-            var setSelection = (delegate* unmanaged[Stdcall]<IntPtr, uint, int, int>)Slot(reader, 4);
-            Check(setSelection(reader, MF_SOURCE_READER_ALL_STREAMS, 0), "SetStreamSelection");
-            Check(setSelection(reader, MF_SOURCE_READER_FIRST_AUDIO_STREAM, 1), "SetStreamSelection");
-            // 16비트 PCM 을 달라고 한다 — 채널 수 · 표본율은 원래 것 그대로(믹서가 표본율을 맞춘다).
-            Check(MFCreateMediaType(out want), "MFCreateMediaType");
-            SetGuid(want, MF_MT_MAJOR_TYPE, MFMediaType_Audio);
-            SetGuid(want, MF_MT_SUBTYPE, MFAudioFormat_PCM);
-            SetUInt32(want, MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
-            Check(((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr, IntPtr, int>)Slot(reader, 7))(reader, MF_SOURCE_READER_FIRST_AUDIO_STREAM, IntPtr.Zero, want), "SetCurrentMediaType");
-            IntPtr cur;
-            Check(((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr*, int>)Slot(reader, 6))(reader, MF_SOURCE_READER_FIRST_AUDIO_STREAM, &cur), "GetCurrentMediaType");
-            got = cur;
-            int channels = (int)GetUInt32(got, MF_MT_AUDIO_NUM_CHANNELS), rate = (int)GetUInt32(got, MF_MT_AUDIO_SAMPLES_PER_SECOND);
-            if (GetUInt32(got, MF_MT_AUDIO_BITS_PER_SAMPLE) != 16 || channels is < 1 or > 8 || rate <= 0) return null;
-
-            var readSample = (delegate* unmanaged[Stdcall]<IntPtr, uint, uint, uint*, uint*, long*, IntPtr*, int>)Slot(reader, 9);
-            using var pcm = new MemoryStream();
-            while (true)
-            {
-                uint stream, flags;
-                long time;
-                IntPtr sample = IntPtr.Zero;
-                Check(readSample(reader, MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, &stream, &flags, &time, &sample), "ReadSample");
-                try
-                {
-                    if ((flags & MF_SOURCE_READERF_ERROR) != 0) return null;
-                    if (sample != IntPtr.Zero)
-                    {
-                        IntPtr buffer;
-                        Check(((delegate* unmanaged[Stdcall]<IntPtr, IntPtr*, int>)Slot(sample, 41))(sample, &buffer), "ConvertToContiguousBuffer");
-                        try
-                        {
-                            byte* data;
-                            uint max, length;
-                            Check(((delegate* unmanaged[Stdcall]<IntPtr, byte**, uint*, uint*, int>)Slot(buffer, 3))(buffer, &data, &max, &length), "Lock");
-                            pcm.Write(new ReadOnlySpan<byte>(data, (int)length));
-                            ((delegate* unmanaged[Stdcall]<IntPtr, int>)Slot(buffer, 4))(buffer);
-                        }
-                        finally { Release(buffer); }
-                    }
-                }
-                finally { Release(sample); }
-                if ((flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0) break;
-            }
-            int frames = (int)(pcm.Length / (2 * channels));
-            if (frames == 0) return null;
-            var samples = new short[frames * channels];
-            Buffer.BlockCopy(pcm.GetBuffer(), 0, samples, 0, samples.Length * 2);
-            return new PcmSound(samples, rate, channels);
-        }
-        finally
-        {
-            Release(got);
-            Release(want);
-            Release(reader);
-            if (started) MFShutdown();
-            if (com) CoUninitialize();
         }
     }
 }

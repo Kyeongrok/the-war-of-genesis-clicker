@@ -152,6 +152,7 @@ internal static class AssetDownload
             _voices.AddRange(Parts(doc.RootElement, "voices").Where(p => !Done(p)));
             try { _reached = File.Exists(TierPath) && int.TryParse(File.ReadAllText(TierPath), out int saved) ? saved : 0; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _reached = 0; }
+            _listed = true;
         }
         AssetsFolder.Use(Folder);
         Active = true;
@@ -201,6 +202,26 @@ internal static class AssetDownload
         return null;
     }
 
+    /// <summary>
+    /// <see cref="FetchExtra"/> 로 걸어 둔 파일이 올 때까지(최대 <paramref name="seconds"/>초) 기다린다 — 오면 그 자리, 끝내 없으면 null.
+    /// 받기가 안 걸렸거나(받지 않는 판 · 목록을 못 받음) 막혀 쉬는 중이거나 목록에 그 파일이 없으면(옛 목록) 바로 그만둔다. 뒤 스레드에서만 부른다.
+    /// </summary>
+    public static string? WaitExtra(string kind, string file, int seconds)
+    {
+        string path = Path.Combine(Folder, kind.Replace('/', Path.DirectorySeparatorChar), file), name = $"{kind}/{file}";
+        for (var until = DateTime.UtcNow.AddSeconds(seconds); DateTime.UtcNow < until; Thread.Sleep(100))
+        {
+            if (File.Exists(path)) return path;
+            if (!Active && Volatile.Read(ref _extrasStarted) == 0) break;
+            lock (Gate)
+                if (DateTime.UtcNow < _retryAt || (_listed && !_byName.ContainsKey(name))) break;
+        }
+        return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>목록(pack.json)의 낱장을 <see cref="_byName"/> 에 올렸다 — 그 뒤로 거기 없는 이름은 오지 않는다.</summary>
+    private static bool _listed;
+
     /// <summary>원본 폴더로 도는 판의 받기 — 목록에서 「찾을 때만 받는 것」만 걸어 두고 같은 고리를 돌린다(찾은 것만 받는다).</summary>
     private static async Task RunExtrasAsync()
     {
@@ -214,6 +235,7 @@ internal static class AssetDownload
                     _pending.Add(e);
                     _byName[e.Name] = e;
                 }
+            lock (Gate) _listed = true;
             await RunAsync();
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or KeyNotFoundException or UnauthorizedAccessException)

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
+    <!-- 게임과 같은 MP3 풀기(Media Foundation) -->
+    <Compile Include="..\..\duel-dx\System\MediaFoundationAudio.cs" Link="MediaFoundationAudio.cs" />
+  </ItemGroup>
+</Project>

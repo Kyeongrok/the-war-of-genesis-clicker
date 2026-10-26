@@ -250,11 +250,24 @@ def zips(out, stem, items):
     return made
 
 
+# 파트1 줄 — tools/part1-pack 이 쓴 그림 · 소리(assets-part1-vN-…)와 tools/part1-cd-pack 이 쓴 시디 트랙 WAV(part1/cd/…, assets-part1cd-1).
+PART1_ENTRIES = ('part1_pack_entries.json', 'part1_cd_entries.json')
+
+
+def part1_entries():
+    here = os.path.dirname(os.path.abspath(__file__))
+    rows = []
+    for name in PART1_ENTRIES:
+        if os.path.exists(os.path.join(here, name)):
+            rows += json.load(open(os.path.join(here, name), encoding='utf-8'))
+    return rows
+
+
 def part1_only(out, live):
-    """올려 둔 pack.json 의 파트1 줄만 tools/part1_pack_entries.json 으로 갈아 끼운다 — 바탕 · 낱장 · 음성은 손대지 않는다.
+    """올려 둔 pack.json 의 파트1 줄만 tools/part1_pack_entries.json · part1_cd_entries.json 으로 갈아 끼운다 — 바탕 · 낱장 · 음성은 손대지 않는다.
     새 줄과 같은 판(part1/vN/)의 옛 줄만 빼고, 옛 판의 줄(옛 게임이 받는 것)은 둔다."""
     pack = json.load(open(live, encoding='utf-8'))
-    new = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part1_pack_entries.json'), encoding='utf-8'))
+    new = part1_entries()
     versions = {x['name'].split('/')[1] for x in new}
     old = len(pack['files'])
     pack['files'] = [x for x in pack['files'] if not (x['name'].startswith('part1/') and x['name'].split('/')[1] in versions)] + new
@@ -309,10 +322,8 @@ def main():
         os.makedirs(os.path.join(out, release), exist_ok=True)
         shutil.copyfile(src, os.path.join(out, release, asset))
         files.append({'name': name, 'asset': asset, 'size': os.path.getsize(src), 'sha256': sha(src), 'tier': tier, 'release': release})
-    # 파트1(전작) 인물 모습 — tools/part1-pack 이 만들어 assets-part1-1 에 따로 올려 둔 것. 이 꾸러미에는 파일을 안 넣고 줄만 옮겨 적는다(menu-80).
-    part1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'part1_pack_entries.json')
-    if os.path.exists(part1):
-        files += json.load(open(part1, encoding='utf-8'))
+    # 파트1(전작) 인물 모습 · 시디 트랙 — tools/part1-pack · part1-cd-pack 이 만들어 assets-part1-… 에 따로 올려 둔 것. 이 꾸러미에는 파일을 안 넣고 줄만 옮겨 적는다(menu-80).
+    files += part1_entries()
     pack['files'] = files
 
     pack['voices'] = []

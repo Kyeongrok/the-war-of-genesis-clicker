@@ -93,6 +93,20 @@ internal static class AssetPack
         return AssetDownload.FetchExtra(kind, file);
     }
 
+    /// <summary>파트1 시디 트랙을 우리가 바꿔 올린 WAV(<c>tools/part1-cd-pack</c>)가 놓이는 자리 — 실린 <c>assets</c> 와 받은 자료 폴더 밑에서 같다.</summary>
+    public const string Part1CdKind = "part1/cd";
+
+    /// <summary>
+    /// 파트1 시디 트랙 <paramref name="track"/> 의 WAV(<c>part1/cd/TrackNN.wav</c>) — 실린 것이 있으면 그 자리, 없으면 릴리즈(<c>assets-part1cd-1</c>,
+    /// pack.json 의 「찾을 때만 받는 것」)에서 받게 걸고 올 때까지 최대 <paramref name="seconds"/>초 기다린다. 받지 않는 판(저장소 개발 · 화면 밖 시험에서
+    /// <c>DUELDX_PACK</c> · <c>DUELDX_PACKURL</c> 이 없을 때)이거나 받기가 막혔으면 바로 null — 뒤 스레드(곡 풀기)에서만 부른다.
+    /// </summary>
+    public static string? Part1CdTrack(int track, int seconds)
+    {
+        string file = $"Track{track:D2}.wav";
+        return FetchExtra(Part1CdKind, file) ?? AssetDownload.WaitExtra(Part1CdKind, file, seconds);
+    }
+
     /// <summary>연대표의 그 줄(0~14)에 들어갔다 — 받는 길이면 그 줄 + <see cref="AssetDownload.Ahead"/> 까지 미리 받는다.</summary>
     public static void Reach(int row) => AssetDownload.Reach(row);
 }
