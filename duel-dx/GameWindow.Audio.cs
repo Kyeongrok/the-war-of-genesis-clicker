@@ -334,12 +334,12 @@ internal sealed unsafe partial class GameWindow
                 // 파트1 곡(BGM 20000 + n)은 사용자의 파트1 폴더 BGMs 에서 풀어 쓴다.
                 if (id >= Part1Game.BgmBase)
                 {
-                    var part1 = CachedClip(id) ?? Part1Game.Music(id - Part1Game.BgmBase);
+                    var part1 = CachedClip(id) ?? Part1CdMusic.Music(id - Part1Game.BgmBase, BattleScene.Trace ? _backgroundTrace.Enqueue : null);   // 곡 15 · 29 는 시디 트랙(0x100094a0)
                     if (request != Volatile.Read(ref _musicRequest)) return;
                     if (part1 == null) { _mixer.StopMusic(); return; }
                     _mixer.PlayMusic(part1, loop, _musicAudible ?? _musicGain);
                     if (_musicPaused) _mixer.PauseMusic();
-                    if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작(파트1 BGMs) gain {_musicAudible ?? _musicGain:0.00}");
+                    if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작(파트1) gain {_musicAudible ?? _musicGain:0.00}");
                     return;
                 }
                 string path = VoicePack.BgmPath(id);
@@ -388,7 +388,7 @@ internal sealed unsafe partial class GameWindow
                     System.Threading.Tasks.Task.Run(() =>
                     {
                         double seconds = 0;
-                        try { if ((CachedClip(s.Id) ?? Part1Game.Music(s.Id - Part1Game.BgmBase)) is { FrameCount: > 0 } pcm) seconds = pcm.Duration.TotalSeconds; }
+                        try { if ((CachedClip(s.Id) ?? Part1CdMusic.Music(s.Id - Part1Game.BgmBase)) is { FrameCount: > 0 } pcm) seconds = pcm.Duration.TotalSeconds; }
                         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or DirectoryNotFoundException) { }
                         _silentLength = (request, seconds);
                     });

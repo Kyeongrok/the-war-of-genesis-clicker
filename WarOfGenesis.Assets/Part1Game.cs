@@ -52,6 +52,72 @@ public static class Part1Game
     public static PcmSound? Music(int n) =>
         n >= 0 && Read("BGMs", $"{n:D4}.bgm") is { } bytes ? WaveSound.Parse(AdpcmToPcm(bytes)) : null;
 
+    /// <summary>
+    /// 곡 n 을 원본이 <b>시디 곡</b>으로 트는가 — 그 시디 트랙 번호(2~), 아니면 null(<c>BGMs\NNNN.bgm</c> 파일 곡).
+    /// </summary>
+    /// <remarks>
+    /// 원본 곡 걸기 <c>0x100094e0(곡, 되풀이)</c> 은 먼저 <c>0x100094a0</c> 으로 시디 표를 뒤진다: 표 <c>0x1011fcac</c> 의 줄 r(30바이트,
+    /// r = 꽂힌 시디 <c>[0x1011f2f8]</c>)에서 곡 + 1 이 i 번째 칸에 있으면 <b>트랙 i + 2</b> 를 MCI <c>cdaudio</c> 로 튼다(<c>0x100093f0</c>:
+    /// TMSF 로 그 트랙부터 다음 트랙까지, 되풀이는 곡 고리 <c>0x100096f0</c> 이 다시 건다). 표에 없으면 파일 곡(<c>0x10008e00</c>).
+    /// 표는 <c>Tracks.ini</c>(<c>0x10008d80</c>: <c>%d</c> 를 −1 이 나올 때까지 줄마다, 여섯 줄)이고 줄 r 은 시디 r 이다 —
+    /// r 은 <c>0x10004190</c> 이 시디 뿌리(레지스트리 CDRoot 의 드라이브 글자, 비면 게임 폴더)에서 <c>G3CD_0</c>~<c>G3CD_3</c> 을 찾아 k + 1 로 둔다.
+    /// 이 설치본은 게임 폴더에 빈 <c>G3CD_0</c> 이 있어 줄 1 = 「15 29」: 곡 15 → 트랙 2, 곡 29 → 트랙 3. 곡 32 는 어느 줄에도 없다(파일 곡 — <c>0032.bgm</c> 이 없다).
+    /// </remarks>
+    public static int? CdTrack(int n)
+    {
+        if (n < 0 || Root is not { } root) return null;
+        int disc = -1;
+        for (int k = 0; k < 4 && disc < 0; k++)
+            if (File.Exists(Path.Combine(root, $"G3CD_{k}"))) disc = k + 1;
+        if (disc < 0) return null;
+        string[] rows;
+        try { rows = File.ReadAllLines(Path.Combine(root, "Tracks.ini")); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        // 원본은 줄을 가리지 않고 −1 까지를 한 줄로 센다(fscanf %d) — 줄바꿈이 아니라 −1 로 나눈다.
+        var lists = new List<List<int>> { new() };
+        foreach (string word in string.Join(' ', rows).Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!int.TryParse(word, out int v)) break;
+            if (v == -1) { if (lists.Count == 6) break; lists.Add([]); continue; }
+            lists[^1].Add(v);
+        }
+        if (disc >= lists.Count) return null;
+        int i = lists[disc].IndexOf(n);
+        return i is >= 0 and < 30 ? i + 2 : null;
+    }
+
+    /// <summary>
+    /// 시디 트랙을 대신하는 파일들(있는 것만, 먼저 쓸 것부터) — 이 설치본의 시디 흉내(<c>_inmm.dll</c>)가 읽는 <c>_inmm.ini</c> 는 줄마다 파일 하나,
+    /// 첫 줄이 트랙 2 다(<c>bgm\Track02.mp3</c> · <c>Track03.mp3</c> · <c>Track04.mp3</c>). 그 이름 그대로 → 같은 이름의 .wav · .mp3 · .ogg
+    /// (mp3 를 wav 로 바꿔 넣고 ini 는 안 고친 경우 — 제보자: 「wav 로 바꾸면 잘 나온다」) → <c>bgm\TrackNN</c> · 폴더 바로 밑 <c>TrackNN</c>(.wav · .mp3 · .ogg).
+    /// </summary>
+    public static IReadOnlyList<string> CdTrackFiles(int track)
+    {
+        var found = new List<string>();
+        if (Root is not { } root || track < 2) return found;
+        string[] exts = [".wav", ".mp3", ".ogg"];
+        void Try(string p) { if (File.Exists(p) && !found.Contains(p, StringComparer.OrdinalIgnoreCase)) found.Add(p); }
+        try
+        {
+            string ini = Path.Combine(root, "_inmm.ini");
+            if (File.Exists(ini))
+            {
+                var lines = File.ReadAllLines(ini).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#') && !l.StartsWith(';')).ToList();
+                if (track - 2 < lines.Count)
+                {
+                    string mapped = Path.Combine(root, lines[track - 2]);
+                    Try(mapped);
+                    foreach (string ext in exts) Try(Path.ChangeExtension(mapped, ext));
+                }
+            }
+            foreach (string dir in (string[])["bgm", ""])
+                foreach (string ext in exts)
+                    Try(Path.Combine(root, dir, $"Track{track:D2}{ext}"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+        return found;
+    }
+
     /// <summary>「/m0[말하는 이]/m1」 머리의 이름 — 없으면 빈 글.</summary>
     public static string Speaker(string text) =>
         System.Text.RegularExpressions.Regex.Match(text, @"/m0\[([^\]]*)\]/m1") is { Success: true } m ? m.Groups[1].Value : "";
