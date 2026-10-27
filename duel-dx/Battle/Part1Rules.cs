@@ -238,6 +238,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>이번 기본 공격을 타수만큼 나눠 친다 — 그동안 타수를 세기에 곱하지 않는다(BattleScene 이 켜고 끈다).</summary>
     internal bool SplitHits;
 
+    /// <summary>연사를 발마다 나눠 칠 때의 발 수(<see cref="Part1Skill.VolleyShots"/>) — 0 이 아니면 한 발 세기 = 세기 × 타수 ÷ 발 수(다 맞으면 합이 전과 같다).</summary>
+    internal int SplitShots;
+
     internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
 
     /// <summary>
@@ -479,6 +482,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
         // 타수(+0x66) — 세기에 곱해 한 번에 준다(원본 AI 어림 0x10040985 와 같다). 쌍검 · 쌍권총 · 연 · 참처럼 타격 키마다 따로 치는 것은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
         if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
+        if (attack != null && SplitHits && SplitShots > 0) power = power * Math.Max(1, attack.Hits) / SplitShots;
         int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);

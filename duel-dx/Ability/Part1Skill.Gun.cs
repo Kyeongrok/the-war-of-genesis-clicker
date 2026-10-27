@@ -113,6 +113,15 @@ internal sealed partial class Part1Skill
     /// 핸들러 <c>0x10044d50</c> · <c>0x10045010</c> · <c>0x100452e0</c> · <c>0x1006b080</c> · <c>0x1006cdf0</c> · <c>0x10061f00</c> · <c>0x10062210</c> ·
     /// <c>0x10063df0</c> · <c>0x10068fb0</c>.
     /// </summary>
+    /// <summary>
+    /// 연사 기술의 발 수 — 2 이상이면 발마다 따로 친다(명중 · 피함을 발마다 굴리고 한 발 피해 = 세기 × 타수 ÷ 발 수, <see cref="Part1Rules.SplitShots"/>).
+    /// 전에는 첫 발에서 「세기 × 타수」로 한 번만 굴려 첫 발이 빗나가면 다 빗나갔다(카페 제보 fg-51). 원본 핸들러도 탄 자국마다 맞히기 사건을 건다.
+    /// 연사가 아니면 0.
+    /// </summary>
+    internal static int VolleyShots(int work) =>
+        work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is (6 or 7 or 8 or 408 or 365 or (>= 309 and <= 314) or (>= 339 and <= 341) or (>= 355 and <= 357)) and var id
+            ? GunVolleyPlan(id).Delays.Length : 0;
+
     private static (int Action, int[] Delays) GunVolleyPlan(int attackId) => attackId switch
     {
         6 => (11, [20, 29]),
@@ -128,7 +137,7 @@ internal sealed partial class Part1Skill
 
     /// <summary>
     /// 연사 — 시전자가 대상 쪽을 보고 쏘는 동작(파트1 동작 11 · 12 · 15 · 16, 용병 · 저격은 2)을 한 번 하고, 늦춤마다 탄 자국 Obs 183(모션 0~2 중 하나, 3틱)이
-    /// 대상에 붙어 선다(대상이 없으면 칸 안 아무 데나). 자국마다 맞히지만(<c>0x100768f0(1, 서술, 3, 1, 3, 0)</c>) 여기서는 첫 자국 한 틱 뒤에 한 번 부른다.
+    /// 대상에 붙어 선다(대상이 없으면 칸 안 아무 데나). 자국마다 맞힌다(<c>0x100768f0(1, 서술, 3, 1, 3, 0)</c>) — 자국마다 한 틱 뒤에 부른다(fg-51 전에는 첫 자국에 한 번).
     /// 카메라는 핸들러 때 시전자에, 첫 자국이 서는 틱에 대상에(<c>+0xb4 = 1</c>).
     /// </summary>
     private int GunVolley(int attackId, List<int> targets, (double X, double Y) aim, Action<int> hit)
@@ -147,7 +156,8 @@ internal sealed partial class Part1Skill
                 var (px, py) = ti >= 0 ? (x, y) : (x - 20 + Rand(40), y + (Rand(40) - 20) * 0.8);
                 Put(183, Rand(3), d, px, py, sounds: true);
             }
-            if (ti >= 0) HitAt(delays[0] + 1, ti, hit);
+            // 발마다 따로 친다(VolleyShots) — 자국이 서는 틱 한 틱 뒤.
+            if (ti >= 0) foreach (int d in delays.Length > 1 ? delays : delays[..1]) HitAt(d + 1, ti, hit);
         }
         Later(delays[0], () => host.Btl.CenterOn(t.X, t.Y));
         return Math.Max(last, delays[^1] + Length(183, 0)) + 1;

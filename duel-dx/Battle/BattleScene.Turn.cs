@@ -1424,7 +1424,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 bool split = (part1Basic > 0 && host.Part1Ab.ChainHits < 2
                               && Part1Attack.ById(Part1Attack.LoadAll(), part1Basic) is { Hits: >= 2 })
                              || (part1Basic == 0 && Part1Skill.StrikesEachKey(w.Id));
+                // 연사 기술(권총연사 · 3연사 · 6연사 · 9연사 · 기관총)은 발마다 따로 친다 — 첫 발이 빗나가도 나머지가 맞을 수 있다(카페 제보 fg-51).
+                int volley = part1Basic == 0 ? Part1Skill.VolleyShots(w.Id) : 0;
+                if (volley >= 2) split = true;
                 Part1.SplitHits = split;
+                Part1.SplitShots = volley >= 2 ? volley : 0;
                 bool each = (part1Basic == 0 && Part1Skill.HitsEachTime(w.Id)) || host.Part1Ab.ChainHits >= 2 || split;
                 void Part1Hit(int ti)
                 {
@@ -1437,7 +1441,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
                     yield return true;
-                Part1.SplitHits = false;
+                (Part1.SplitHits, Part1.SplitShots) = (false, 0);
                 // 맵 칸도 치는 기술(Attack +0x41 = 1) — 범위의 맵 물체에 알림 1 · 공격 서술(0x10076c46)(Part1MapObjects.HitByAttack). 땅불 · 얼음 덩이는 기술이 닿는 틱에 놓는다.
                 // 통이 부서지며 터지는 키 6(틱 4) · 불붙는 동작이 끝날 때까지 기다렸다가 그 사이 쓰러진 유닛을 함께 치운다.
                 if (host._scene.IsPart1 && Part1.AttackOf(w) is { HitsTiles: true } tileAttack)
