@@ -18,6 +18,7 @@ Obs 꼴(ObsSprite · ObsMotionTable 이 읽는 것, Part1Game.ToPart2Obs 가 쓰
 예: python tools/custom-sprite/sheet_to_obs.py eva.png --rows back:40:280,front:285:515,side:520:755 --col-x 165 --col-w 154 --cols 8 \\
         --id 30000 --name 에바 --flood 14 --height 100 --out 30000_에바.obs --preview preview.png
 서기 시트를 더하려면: --add "stand.png|back:0:418@0,side:418:836@0,front:836:1254@0|0|313|4|key=ff00ff"
+공격(동작 8, 5번째 장에서 맞음): --add "attack.png|back:0:296@8,side:296:591@8,front:591:887@8|0|222|8|key=ff00ff|anchor=foot|hit=5|ticks=4"
 만든 파일은 %APPDATA%\\DuelDx\\sprites\\ 에 넣는다(번호 30000~30999, 파일 이름 「번호_이름.obs」).
 """
 import argparse
@@ -96,6 +97,9 @@ def largest_blob(fg):
 
 
 def cut(sheet, box, part):
+    # 시트 가장자리 2픽셀은 뺀다 — AI 가 그린 시트는 끝 테두리에 바탕이 아닌 선이 남아 마지막 칸에 세로줄로 붙었다.
+    x0, y0, x1, y1 = box
+    box = (max(x0, 2), max(y0, 2), min(x1, sheet.width - 2), min(y1, sheet.height - 2))
     cell = sheet.crop(box).convert("RGB")
     bg = mask_by_key(cell, part["key"], part["key_tol"]) if part["key"] else mask_by_flood(cell, part["flood"])
     fg = largest_blob([[not v for v in row] for row in bg])
@@ -107,6 +111,16 @@ def cut(sheet, box, part):
             if fg[y][x]:
                 dst[x, y] = src[x, y] + (255,)
     return rgba
+
+
+def rear_foot(img, bb, d):
+    """발끝 띠(그림 아래 6%, 적어도 3줄)의 불투명 픽셀 x — 옆모습은 오른쪽 끝(왼쪽을 보는 그림의 뒷발), 그 밖은 가운데."""
+    a = img.getchannel("A").load()
+    band = max(3, (bb[3] - bb[1]) * 6 // 100)
+    xs = [x for y in range(bb[3] - band, bb[3]) for x in range(bb[0], bb[2]) if a[x, y]]
+    if not xs:
+        return (bb[0] + bb[2]) / 2
+    return max(xs) if d == DIRS["side"] else (min(xs) + max(xs)) / 2
 
 
 def hex_color(s):
@@ -128,7 +142,7 @@ def parse_add(text, args):
     """--add 「그림|줄|첫칸x|칸너비|칸수[|key=rrggbb 또는 flood=n]」 — 다른 시트(서기 · 공격 …)를 한 그림에 더한다. 시트마다 따로 --height 로 맞춘다."""
     f = text.split("|")
     part = {"sheet": f[0], "rows": parse_rows(f[1]), "col_x": int(f[2]), "col_w": int(f[3]), "cols": int(f[4]),
-            "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0}
+            "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": 0, "ability": 25, "ticks": 0}
     for opt in f[5:]:
         k, _, v = opt.partition("=")
         if k == "key": part["key"] = hex_color(v)
@@ -136,6 +150,9 @@ def parse_add(text, args):
         elif k == "tol": part["key_tol"] = int(v)
         elif k == "anchor": part["anchor"] = v
         elif k == "frames": part["frames"] = int(v)
+        elif k == "hit": part["hit"] = int(v)
+        elif k == "ability": part["ability"] = int(v)
+        elif k == "ticks": part["ticks"] = int(v)
     return part
 
 
@@ -150,7 +167,8 @@ def main():
     ap.add_argument("--key-tol", type=int, default=40)
     ap.add_argument("--flood", type=int, default=14)
     ap.add_argument("--add", action="append", default=[], help="다른 시트 — 그림|줄|첫칸x|칸너비|칸수[|key=ff00ff|flood=5|tol=40]")
-    ap.add_argument("--anchor", default="body", choices=["body", "cell"], help="발밑 기준 — body 장마다 몸 가운데 · 발끝(기본), cell 칸 가운데 · 줄의 발 높이")
+    ap.add_argument("--anchor", default="body", choices=["body", "cell", "foot"],
+                    help="발밑 기준 — body 장마다 몸 가운데 · 발끝(기본), foot 디딘 뒷발(공격처럼 팔이 뻗는 동작 — 첫 장은 body 와 같게), cell 칸 가운데 · 줄의 발 높이")
     ap.add_argument("--height", type=int, default=100, help="게임 안 키(픽셀) — 인물은 대개 65~95")
     ap.add_argument("--ticks", type=int, default=3, help="걷기 한 장의 틱(30틱 = 1초)")
     ap.add_argument("--stand-ticks", type=int, default=8, help="서기(동작 0) 한 장의 틱")
@@ -161,7 +179,7 @@ def main():
     args = ap.parse_args()
 
     parts = [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
-              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0}] + [parse_add(a, args) for a in args.add]
+              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": 0, "ability": 25, "ticks": 0}] + [parse_add(a, args) for a in args.add]
 
     frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
     for part in parts:
@@ -178,7 +196,7 @@ def main():
         scale = args.height / heights[len(heights) // 2]
         print(f"{part['sheet']}: 배율 {scale:.3f}")
         for d, action, cells, boxes, foot in cut_rows:
-            ids = []
+            ids, row_shift = [], None
             for cell, box in zip(cells, boxes):
                 if not box:
                     continue
@@ -193,12 +211,19 @@ def main():
                 # 칸 가운데를 기준으로 하면 서기가 좌우로 크게 흔들렸다(사용자 보고). --anchor cell 이면 예전처럼 칸 가운데 · 그 줄의 발 높이.
                 if part["anchor"] == "cell":
                     fx, fy = small.width / 2, foot * scale
+                elif part["anchor"] == "foot":
+                    # 디딘 뒷발 — 발끝 띠(그림 아래 6%)의 픽셀 가운데 옆모습은 뒤쪽(왼쪽을 보니 오른쪽 끝), 앞 · 뒷모습은 가운데.
+                    # 첫 장(서기 자세)에서 뒷발과 몸 가운데의 차를 재 두고 모든 장에 더해, 첫 장이 서기 · 걷기와 같은 자리에 서게 한다.
+                    rear = rear_foot(small, bb, d)
+                    if row_shift is None:
+                        row_shift = (bb[0] + bb[2]) / 2 - rear
+                    fx, fy = rear + row_shift, bb[3]
                 else:
                     fx, fy = (bb[0] + bb[2]) / 2, bb[3]
                 piece = small.crop(bb)
                 ids.append(len(frames))
                 frames.append((piece, round(bb[0] - fx), round(bb[1] - fy) + FOOT_BELOW))
-            keyed.append((action, d, ids))
+            keyed.append((action, d, ids, part["hit"], part["ability"], part["ticks"]))
 
     # 모든 장을 한 팔레트(255색 + 투명 0)로.
     total_w = sum(f[0].width for f in frames)
@@ -231,13 +256,17 @@ def main():
 
     # 모션 — 동작 0 서기(걷기 첫 장), 동작 1 걷기(장마다 --ticks), 그 밖 동작은 줄 그대로.
     motions = []
-    for action, d, ids in keyed:
+    # 키: (종류, 시작, 길이, 인자 10) — 종류 0 그림(벌, 장), 6 타격(어빌리티 25 접근 · 26 원거리, 분석-모션 ba-10).
+    for action, d, ids, hit, ability, ticks in keyed:
         if not ids:
             continue
-        if action == 1 and not any(a == 0 and dd == d for a, dd, _ in keyed):
-            motions.append((0 * 3 + d, 1, [(0, 1, 0, ids[0])]))
-        t = args.stand_ticks if action == 0 else args.ticks
-        motions.append((action * 3 + d, t * len(ids), [(k * t, t, 0, f) for k, f in enumerate(ids)]))
+        if action == 1 and not any(k[0] == 0 and k[1] == d for k in keyed):
+            motions.append((0 * 3 + d, 1, [(0, 0, 1, (0, ids[0]))]))
+        t = ticks or (args.stand_ticks if action == 0 else args.ticks)
+        keys = [(0, k * t, t, (0, f)) for k, f in enumerate(ids)]
+        if 1 <= hit <= len(ids):                       # hit=n — n 번째 장이 서는 틱에 판정
+            keys.append((6, (hit - 1) * t, 1, (ability,)))
+        motions.append((action * 3 + d, t * len(ids), keys))
     motions.sort()
 
     out = bytearray()
@@ -251,9 +280,9 @@ def main():
     for i, (mid, length, keys) in enumerate(motions):
         struct.pack_into("<I", out, motion_table + 6 * i + 2, len(out))
         w("<HHHHH", mid, 0, len(keys), length, 0)
-        for start, ln, sub, slot in keys:
-            w("<HHH", 0, start, ln)
-            w("<10h", sub, slot, 0, 0, 0, 0, 0, 0, 0, 0)
+        for kind, start, ln, a in keys:
+            w("<HHH", kind, start, ln)
+            w("<10h", *(list(a) + [0] * (10 - len(a))))
     struct.pack_into("<I", out, sub_table + 2, len(out))
     w("<HHH", 0, len(frames), len(frames) - 1)
     out.append(TRANSPARENT)
@@ -271,7 +300,7 @@ def main():
     print(f"{args.out}: 장 {len(frames)} · 모션 {[m[0] for m in motions]}")
 
     if args.preview:                                   # 핑크 바탕에 장을 늘어놓아 배경이 잘 지워졌는지 본다(2배)
-        cols = max(len(ids) for _, _, ids in keyed)
+        cols = max(len(k[2]) for k in keyed)
         cw = max(p.width for p, _, _ in frames) + 8
         ch = max(p.height for p, _, _ in frames) + 8
         prev = Image.new("RGB", (cw * cols, ch * len(keyed)), (255, 0, 255))
@@ -280,7 +309,7 @@ def main():
         cw = max(left + ox + p.width for p, ox, _ in frames) + 4
         ch = max(top + oy + p.height for p, _, oy in frames) + 4
         prev = Image.new("RGB", (cw * cols, ch * len(keyed)), (255, 0, 255))
-        for r, (_, _, ids) in enumerate(keyed):     # 원점(발밑)을 칸마다 같은 자리에 — 게임에서처럼 흔들림이 보인다
+        for r, (_, _, ids, *_rest) in enumerate(keyed):     # 원점(발밑)을 칸마다 같은 자리에 — 게임에서처럼 흔들림이 보인다
             for c, f in enumerate(ids):
                 piece, ox, oy = frames[f]
                 prev.paste(piece.convert("RGB"), (c * cw + left + ox, r * ch + top + oy), piece)
