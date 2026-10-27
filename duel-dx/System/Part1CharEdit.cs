@@ -100,6 +100,19 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         Changed(code);
     }
 
+    /// <summary>그 칸에 그 아이템을 낀다(고르기 창) — 0 은 비우기.</summary>
+    internal void SetItem(int code, int slot, int id)
+    {
+        if (Chr(code) is not { } c) return;
+        var slots = (int[])c.Equipment.Clone();
+        slots[slot] = id;
+        host.Part1.Equipped[code] = slots;
+        Changed(code);
+    }
+
+    /// <summary>고르기 창이 고르는 칸에 지금 낀 아이템 — 창이 닫혀 있으면 −1.</summary>
+    internal int CurrentItem(int code) => ed.ItemPick.Slot is int slot && Chr(code) is { } c ? c.Equipment[slot] : -1;
+
     /// <summary>그 직업이 그 어빌리티를 올릴 수 있는 레벨 — 직업 표에 없으면 0.</summary>
     internal static int JobMax(Part1Chr c, int ability) =>
         Part1Job.ById(Part1Tables.Jobs, c.JobId)?.Abilities.Where(a => a.Ability == ability).Select(a => a.Level).DefaultIfEmpty(0).Max() ?? 0;
@@ -177,6 +190,12 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         if (ed._tab == 0)
         {
             for (int slot = 0; slot < 5; slot++)
+                if (ed.In(bx, by, px, y + 140 + slot * 30, w - 140, 22))
+                {
+                    ed.ItemPick.Show(code, slot, Part1PartyScreen.SlotName(slot, Part1Item.ById(Part1Tables.Items, c.Equipment[slot])));
+                    return true;
+                }
+            for (int slot = 0; slot < 5; slot++)
                 foreach (var (dx, delta) in ItemTurns)
                     if (ed.In(bx, by, px + w + dx, y + 140 + slot * 30, 30, 22)) { ChangeItem(code, slot, delta); return true; }
             return true;
@@ -249,7 +268,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     {
         var items = Part1Tables.Items;
         int w = CharEditScreen.ContentW;
-        host.UiText("장비 다섯 칸 (칸 갈래에 맞는 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
+        host.UiText("장비 다섯 칸 (이름을 누르면 고르기 창 — ◀◀ ▶▶ 는 10개씩 넘긴다)", px, y + 116, DimGray, 12);
         for (int slot = 0; slot < 5; slot++)
         {
             int iy = y + 140 + slot * 30, id = c.Equipment[slot];

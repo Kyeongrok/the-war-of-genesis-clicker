@@ -43,6 +43,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     private Part1CharEdit? _p1;
     internal Part1CharEdit P1 => _p1 ??= new Part1CharEdit(host, this);
 
+    /// <summary>장비 칸의 아이템 고르기 창(<see cref="CharEditItemPick"/>, menu-95).</summary>
+    private CharEditItemPick? _itemPick;
+    internal CharEditItemPick ItemPick => _itemPick ??= new CharEditItemPick(host, this);
+
     /// <summary>파트1 자료를 고치나 — 파트1 타이틀 · 챕터 · 마을 · 전투.</summary>
     internal bool Part1Mode => P1.Active;
 
@@ -65,6 +69,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         _abRows = null;
         _lookRows = null;
         _p1?.Forget();
+        _itemPick?.Close();
     }
 
     /// <summary>고른 세이브를 불러온다 — 그 뒤로는 불러온 게임의 인물을 고친다.</summary>
@@ -141,6 +146,13 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         int at = Math.Max(0, ids.IndexOf(c.Items[slot]));
         int next = ids[((at + delta) % ids.Count + ids.Count) % ids.Count];
         Apply(chr, c with { Items = [.. c.Items.Select((it, k) => k == slot ? (ushort)next : it)] });
+    }
+
+    /// <summary>그 칸에 그 아이템을 낀다(고르기 창) — 0 은 비우기.</summary>
+    internal void SetItem(int chr, int slot, int id)
+    {
+        if (DataOf(chr) is not { } c || (uint)slot >= c.Items.Length) return;
+        Apply(chr, c with { Items = [.. c.Items.Select((it, k) => k == slot ? (ushort)id : it)] });
     }
 
     /// <summary>
@@ -367,7 +379,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal bool _pickerOpen;      // 인물 펼침 상자가 펼쳐졌나
 
     /// <summary>찾기 칸이 글자를 받나 — 어빌리티 · 외형 갈래가 열려 있을 때.</summary>
-    internal bool SearchActive => _open && !_pickSave && _tab is 1 or 2 && !NoGame(People());
+    internal bool SearchActive => _open && !_pickSave && (_tab is 1 or 2 || _itemPick is { Open: true }) && !NoGame(People());
 
     internal string Query => (_search + _imeComp).Trim();
 
@@ -378,6 +390,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         else if (ch >= ' ' && _search.Length < 20) _search += ch;
         else return;
         (_abTop, _lookTop) = (0, 0);
+        _itemPick?.ResetTop();
     }
 
     /// <summary>한글 조합 중인 글자(WM_IME_COMPOSITION) — 다 되면 WM_CHAR 로 따로 온다.</summary>
@@ -386,6 +399,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if (_imeComp == text) return;
         _imeComp = text;
         (_abTop, _lookTop) = (0, 0);
+        _itemPick?.ResetTop();
     }
 
     /// <summary>찾는 말에 맞나 — 이름 · 칭호에 들었거나, 숫자면(앞의 # 은 떼고) 번호가 같다.</summary>
@@ -417,6 +431,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             if (In(bx, by, x + 12, y + 62, W - 24, SaveRows * SaveRowH) && at < saves.Count) LoadSave(saves[at].Slot);
             return true;
         }
+        // 아이템 고르기 창이 맨 위에 떠 있다 — 먼저 본다.
+        if (_itemPick is { Open: true } pick) return pick.OnClick(bx, by, x, y);
         int px = x + ContentDx;
         // 펼친 인물 목록이 맨 위에 덮여 있다 — 먼저 본다. 바깥을 누르면 접기만 한다.
         if (_pickerOpen)
@@ -480,11 +496,12 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             }
             return true;
         }
-        // 장비 칸 — ◀◀ ◀ ▶ ▶▶ (10 · 1 씩)
+        // 장비 칸 — 이름을 누르면 고르기 창, ◀◀ ◀ ▶ ▶▶ 는 10 · 1 씩
         if (DataOf(chr) is { } c)
             for (int slot = 0; slot < c.Items.Length; slot++)
             {
                 int iy = y + 140 + slot * 30;
+                if (In(bx, by, px, iy, ContentW - 140, 22)) { ItemPick.Show(chr, slot, $"{slot + 1}번 칸"); return true; }
                 (int Dx, int Delta)[] turns = [(-136, -10), (-102, -1), (-68, 1), (-34, 10)];
                 foreach (var (dx, delta) in turns)
                     if (bx >= px + ContentW + dx && bx < px + ContentW + dx + 30 && by >= iy && by < iy + 22) { ChangeItem(chr, slot, delta); return true; }
@@ -526,7 +543,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal void OnWheel(int delta)
     {
         var people = People();
-        if (_pickSave || NoGame(people)) _saveTop = Math.Clamp(_saveTop - delta, 0, Math.Max(0, Saves().Count - SaveRows));
+        if (_itemPick is { Open: true } pick) pick.OnWheel(delta);
+        else if (_pickSave || NoGame(people)) _saveTop = Math.Clamp(_saveTop - delta, 0, Math.Max(0, Saves().Count - SaveRows));
         // 어빌리티 · 외형 목록은 줄이 많아 한 번에 세 줄 — 넘친 값은 그릴 때 자른다.
         else if (_tab == 1) _abTop -= delta * 3;
         else if (_tab == 2) _lookTop -= delta * 3;
@@ -536,7 +554,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     {
         if (key != Win32.VK_ESCAPE) return;
         // Esc 는 펼친 목록 → 찾는 말 → 창 차례로 닫는다.
-        if (_pickerOpen) _pickerOpen = false;
+        if (_itemPick is { Open: true } pick) pick.OnEscape();
+        else if (_pickerOpen) _pickerOpen = false;
         else if (_search.Length > 0 || _imeComp.Length > 0) (_search, _imeComp, _abTop, _lookTop) = ("", "", 0, 0);
         else _open = false;
     }
@@ -551,7 +570,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     }
 
     /// <summary>찾기 칸 — 친 글자와 조합 중인 글자(밑줄), 깜박이는 자리 표시. 오른쪽 끝에 <paramref name="right"/> 글(몇 줄 중 몇째 따위).</summary>
-    internal void DrawSearch(int px, int y, string right)
+    internal void DrawSearch(int px, int y, string right, int width = ContentW)
     {
         int sy = y + SearchDy, boxX = px + 34, boxW = 200;
         host.UiText("찾기", px, sy + 3, DimGray, 12);
@@ -569,7 +588,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if ((int)(host._lastTime * 2) % 2 == 0) host.UiFill(tx + 1, sy + 3, 1, 14, White);
         if (_search.Length == 0 && _imeComp.Length == 0) host.UiText("이름이나 번호를 치세요", boxX + 10, sy + 2, 0xFF5A6A8A, 12);
         else host.UiText("Esc 비우기", boxX + boxW + 8, sy + 3, DimGray, 12);
-        host.UiText(right, px + ContentW - host.UiGetText(right, DimGray, 12).W, sy + 3, DimGray, 12);
+        host.UiText(right, px + width - host.UiGetText(right, DimGray, 12).W, sy + 3, DimGray, 12);
     }
 
     /// <summary>어빌리티 갈래 — 가진 것은 밝게 레벨과 함께, 없는 것은 흐리게. 줄마다 − ＋.</summary>
@@ -699,6 +718,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             P1.Draw(x, y, people);
             if (_tip is { } p1Tip) host.StatusScr.DrawDescriptionTip(p1Tip.Text, p1Tip.X, p1Tip.Y, x, y, W, H);
             DrawPicker(db, x + ContentDx, y + PartyH, people);
+            if (_itemPick is { Open: true } p1Pick) p1Pick.Draw(x, y, P1.CurrentItem(people[_chosen]));
             return;
         }
         // 파티 줄 — 소지금 · 나야트레이
@@ -717,7 +737,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             for (int t = 0; t < Tabs.Length; t++) Button(TabX(px, t), y + 42, TabW, Tabs[t], on: t == _tab);
             if (_tab == 1) DrawAbilities(db, c, px, y);
             else if (_tab == 2) DrawLooks(db, c, px, y);
-            else host.UiText("장비 (칸마다 아이템을 앞뒤로 넘긴다 — ◀◀ ▶▶ 는 10개씩)", px, y + 116, DimGray, 12);
+            else host.UiText("장비 (이름을 누르면 고르기 창 — ◀◀ ▶▶ 는 10개씩 넘긴다)", px, y + 116, DimGray, 12);
             for (int slot = 0; _tab == 0 && slot < c.Items.Length; slot++)
             {
                 int iy = y + 140 + slot * 30;
@@ -734,6 +754,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         if (_tip is { } tip) host.StatusScr.DrawDescriptionTip(tip.Text, tip.X, tip.Y, x, y - PartyH, W, H);
 
         DrawPicker(db, px, y, people);
+        if (_itemPick is { Open: true } pick) pick.Draw(x, y - PartyH, ItemPick.Slot is int s && DataOf(people[_chosen]) is { } pc && s < pc.Items.Length ? pc.Items[s] : -1);
     }
 
     /// <summary>인물 펼침 상자 — 마지막에 그려 펼친 목록이 아래 줄들을 덮는다. <paramref name="y"/> 는 파티 줄 아래.</summary>
