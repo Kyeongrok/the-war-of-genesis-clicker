@@ -77,7 +77,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // 파트1 전투도 저장한다 — 파트1 진행(일행 · 성장 · 챕터 · 남은 사건)을 세이브에 같이 싣는다(SaveState.Part1, 사용자 요청).
         : host.FieldOpen ? "필드에서는 저장할 수 없습니다"
         // 원본은 챕터 79 · 80(튜토리얼) · 55 전투에서 시스템 메뉴의 SAVE 를 끈다(0x10096567). 진행 자동 저장(part1.json)은 그대로 한다(사용자 결정).
-        : host._battleLoaded && host._scene.IsPart1 && host.Part1.ChapterId is 79 or 80 or 55 ? "이 전투에서는 저장할 수 없습니다"
+        // 튜토리얼(79 · 80)은 저장한다(사용자 요청 menu-104) — 55 만 원본대로 막는다.
+        : host._battleLoaded && host._scene.IsPart1 && host.Part1.ChapterId == 55 ? "이 전투에서는 저장할 수 없습니다"
         : ChapterEventRunning ? "사건이 진행 중이라 저장할 수 없습니다"
         : !host.Mos._mosesOpen && !host.EpisodesScr._episodesOpen && !host.TitleScr._titleOpen && !host.RecordsScr._recordsOpen && host._battleLoaded && !CanOpenBattleMenu ? "지금은 저장할 수 없습니다"
         : null;

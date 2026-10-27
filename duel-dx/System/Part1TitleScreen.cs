@@ -384,7 +384,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     /// <summary>
     /// 튜토리얼 — 원본 상태 3(<c>0x100d5df2</c>): 새 게임과 같은 준비(진행 · 깃발 비우기)를 하고 챕터 80 지도를 연다.
     /// 챕터 80 의 사건이 필드 11 대사 · 용병 · 아이템을 거쳐 전투 0415 → 0416 → 0417 → 0418 을 잇고 501 로 연대표에 닿는다.
-    /// 진행 자동 저장(part1.json)은 평소대로 한다(사용자 결정) — 전투 SAVE 만 원본처럼 막는다(<see cref="SystemMenu.SaveBlockedReason"/>).
+    /// 진행 자동 저장(part1.json)은 평소대로 한다(사용자 결정). 전투 SAVE 도 한다 — 원본은 막지만 리메이크는 푼다(사용자 요청 menu-104, <see cref="SystemMenu.SaveBlockedReason"/>).
     /// </summary>
     private void StartTutorial()
     {
