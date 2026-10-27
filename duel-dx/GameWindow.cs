@@ -1517,6 +1517,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         ChaptersScr.DrawChapters();
         DrawSceneFade();                       // 전투 시작·끝 16틀 페이드(감사4 C6·C7)
         DrawSceneTag();
+        DrawMusicNotice();
         ProgressScr.DrawProgress();
         if (_part1PickTip is { } pickTip) StatusScr.DrawDescriptionTip(pickTip.Text, pickTip.X, pickTip.Y, _camX, _camY, ViewWidth, ViewHeight);
         // 메뉴 막대에서 여는 창들(모드 · 캐릭터 에디터 · 개발)은 어느 화면 위에서든 맨 위에 — 전에는 전투 판 차례에 그려 타이틀·연대표·모세스 그림에

@@ -216,6 +216,17 @@ internal sealed unsafe partial class GameWindow
     /// 지금 장면의 번호 — 화면 왼쪽 아래 작은 글(「Fld 0365 · 사건 3 · 줄 12」, 「Btl 0137 · 턴 4」, 「Chp 0011」).
     /// 원본에는 없다 — 어느 장면 이야기인지 서로 짚기 쉽게(사용자 요청). 설정 > 장면 번호 보이기.
     /// </summary>
+    /// <summary>파트1 배경음악을 받는 중 · 못 받음(<see cref="Part1CdMusic.Notice"/>) — 오른쪽 아래 귀퉁이에 작게.</summary>
+    internal void DrawMusicNotice()
+    {
+        if (Part1CdMusic.Notice is not { } notice) return;
+        if (DateTime.UtcNow > notice.Item2) { Part1CdMusic.Notice = null; return; }
+        var (_, w, h) = UiGetText(notice.Item1, White, 11f);
+        int x = _camX + ViewWidth - w - 6, y = _camY + ViewHeight - h - 4;
+        UiFill(x - 2, y - 1, w + 4, h + 2, 0x90000000);
+        UiText(notice.Item1, x, y, 0xFFFFE080, 11f);
+    }
+
     internal void DrawSceneTag()
     {
         if (!_showSceneTag || RecordsScr._recordsOpen) return;
