@@ -128,12 +128,14 @@ def parse_add(text, args):
     """--add 「그림|줄|첫칸x|칸너비|칸수[|key=rrggbb 또는 flood=n]」 — 다른 시트(서기 · 공격 …)를 한 그림에 더한다. 시트마다 따로 --height 로 맞춘다."""
     f = text.split("|")
     part = {"sheet": f[0], "rows": parse_rows(f[1]), "col_x": int(f[2]), "col_w": int(f[3]), "cols": int(f[4]),
-            "key": args.key, "key_tol": args.key_tol, "flood": args.flood}
+            "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0}
     for opt in f[5:]:
         k, _, v = opt.partition("=")
         if k == "key": part["key"] = hex_color(v)
         elif k == "flood": part["key"], part["flood"] = None, int(v)
         elif k == "tol": part["key_tol"] = int(v)
+        elif k == "anchor": part["anchor"] = v
+        elif k == "frames": part["frames"] = int(v)
     return part
 
 
@@ -148,6 +150,7 @@ def main():
     ap.add_argument("--key-tol", type=int, default=40)
     ap.add_argument("--flood", type=int, default=14)
     ap.add_argument("--add", action="append", default=[], help="다른 시트 — 그림|줄|첫칸x|칸너비|칸수[|key=ff00ff|flood=5|tol=40]")
+    ap.add_argument("--anchor", default="body", choices=["body", "cell"], help="발밑 기준 — body 장마다 몸 가운데 · 발끝(기본), cell 칸 가운데 · 줄의 발 높이")
     ap.add_argument("--height", type=int, default=100, help="게임 안 키(픽셀) — 인물은 대개 65~95")
     ap.add_argument("--ticks", type=int, default=3, help="걷기 한 장의 틱(30틱 = 1초)")
     ap.add_argument("--stand-ticks", type=int, default=8, help="서기(동작 0) 한 장의 틱")
@@ -158,7 +161,7 @@ def main():
     args = ap.parse_args()
 
     parts = [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
-              "key": args.key, "key_tol": args.key_tol, "flood": args.flood}] + [parse_add(a, args) for a in args.add]
+              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0}] + [parse_add(a, args) for a in args.add]
 
     frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
     for part in parts:
@@ -166,7 +169,8 @@ def main():
         # 줄마다 칸을 잘라 배경을 지운다 — 발밑은 그 줄 칸들 가운데 가장 낮은 그림 끝, 가로는 칸 가운데.
         cut_rows = []
         for d, action, y0, y1 in part["rows"]:
-            cells = [cut(sheet, (part["col_x"] + i * part["col_w"], y0, part["col_x"] + (i + 1) * part["col_w"], y1), part) for i in range(part["cols"])]
+            used = part["frames"] or part["cols"]          # frames=n 이면 앞 n 장만(서기를 한 장으로 따위)
+            cells = [cut(sheet, (part["col_x"] + i * part["col_w"], y0, part["col_x"] + (i + 1) * part["col_w"], y1), part) for i in range(used)]
             boxes = [c.getbbox() for c in cells]
             foot = max(b[3] for b in boxes if b)
             cut_rows.append((d, action, cells, boxes, foot))
@@ -185,7 +189,12 @@ def main():
                 bb = small.getbbox()
                 if not bb:
                     continue
-                fx, fy = small.width / 2, foot * scale        # 발밑 점(칸 가운데 · 그 줄의 발 높이)
+                # 발밑 점 — 가로는 그 장 몸의 가운데, 세로는 그 장의 발끝(가장 낮은 픽셀). AI 가 그린 시트는 칸 안 자리가 장마다 수십 픽셀씩 달라
+                # 칸 가운데를 기준으로 하면 서기가 좌우로 크게 흔들렸다(사용자 보고). --anchor cell 이면 예전처럼 칸 가운데 · 그 줄의 발 높이.
+                if part["anchor"] == "cell":
+                    fx, fy = small.width / 2, foot * scale
+                else:
+                    fx, fy = (bb[0] + bb[2]) / 2, bb[3]
                 piece = small.crop(bb)
                 ids.append(len(frames))
                 frames.append((piece, round(bb[0] - fx), round(bb[1] - fy) + FOOT_BELOW))
@@ -266,10 +275,15 @@ def main():
         cw = max(p.width for p, _, _ in frames) + 8
         ch = max(p.height for p, _, _ in frames) + 8
         prev = Image.new("RGB", (cw * cols, ch * len(keyed)), (255, 0, 255))
-        for r, (_, _, ids) in enumerate(keyed):
+        left = -min(ox for _, ox, _ in frames) + 4
+        top = -min(oy for _, _, oy in frames) + 4
+        cw = max(left + ox + p.width for p, ox, _ in frames) + 4
+        ch = max(top + oy + p.height for p, _, oy in frames) + 4
+        prev = Image.new("RGB", (cw * cols, ch * len(keyed)), (255, 0, 255))
+        for r, (_, _, ids) in enumerate(keyed):     # 원점(발밑)을 칸마다 같은 자리에 — 게임에서처럼 흔들림이 보인다
             for c, f in enumerate(ids):
-                piece = frames[f][0]
-                prev.paste(piece.convert("RGB"), (c * cw + 4, r * ch + 4), piece)
+                piece, ox, oy = frames[f]
+                prev.paste(piece.convert("RGB"), (c * cw + left + ox, r * ch + top + oy), piece)
         prev.resize((prev.width * 2, prev.height * 2), Image.NEAREST).save(args.preview)
 
 
