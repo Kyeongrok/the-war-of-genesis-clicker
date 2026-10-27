@@ -71,8 +71,8 @@ internal sealed class Part1MapObjects(GameWindow host)
             if (Part1MapObject.Load(obt) is not { } def) { _objects.Add(null); continue; }
             var o = new Obj(def, x, y) { Heat = Ambient };
             // 무작위 상자는 판을 세울 때 굴린다 — 전에는 여는 순간 굴려 열기 전에 저장 · 불러오기로 다시 굴릴 수 있었다(원본이 언제 굴리는지는 안 봤다 [H]).
-            // 리메이크는 전투 시작(· RESTART)에 정하고 세이브에 싣는다 — 전투를 다시 시작하면 다시 굴린다(사용자 요청 fg-59).
-            if (o.Chest is { Item: <= 0, Gold: <= 0 }) o.RolledItem = Part1MapObject.RandomChestItem(host._rng);
+            // 리메이크는 전투 시작(· RESTART)에 정하고 세이브에 싣는다 — 전투를 다시 시작하면 다시 굴린다(사용자 요청 fg-59). 모드 > 일반에서 끄면 열 때(fg-60).
+            if (host._part1ChestRollAtStart && o.Chest is { Item: <= 0, Gold: <= 0 }) o.RolledItem = Part1MapObject.RandomChestItem(host._rng);
             Start(o, 0);
             o.StampFrame = o.Frame;              // 만들자마자 동작 0 의 장으로 찍는다(0x10097910) — 시작 사건의 707 보다 먼저다
             _objects.Add(o);
