@@ -269,7 +269,7 @@ internal sealed class TimedHit(GameWindow host)
         _beat = new int[_beats.Length];
         (_unit, _anchor, _startAt, _result, Hits, AllHit) = (a, a == null ? anchor : null, host._realTime, null, 0, false);
         if (BattleScene.Trace && a != null)
-            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"timed hit prompt: {a.ChrCode} pattern {index + 1} target {(target == null ? -1 : Array.IndexOf(host._units, target))}" + Environment.NewLine);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"timed hit prompt: {a.ChrCode} pattern {index + 1} target {(target == null ? -1 : Array.IndexOf(host._units, target))}{(guide != null ? $" guide {guide.Replace('\n', '|')}" : "")}" + Environment.NewLine);
         // 박자 칸이 지나가도록 안 누르면 그 박자는 놓친 것 — 박자가 다 끝날 때까지 돈다.
         while (Pending is var next && next < _beat.Length)
         {
@@ -356,10 +356,14 @@ internal sealed class TimedHit(GameWindow host)
 
         // 바탕 — 안내 글 · 단추 · 띠를 한 판에.
         string guide = _guide ?? (_aim ? AimGuide : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬");
-        var (_, gw, gh) = Measure(guide, 0xFFFFFFFF, 11f);
+        // 안내 글은 여러 줄일 수 있다 — 예상 피해 아래 명중률 · 셈의 바탕(fg-48). 둘째 줄부터는 조금 작고 흐리게.
+        var lines = guide.Split('\n');
+        var sizes = lines.Select((l, i) => Measure(l, 0xFFFFFFFF, i == 0 ? 11f : 9.5f)).ToArray();
+        int gw = sizes.Max(m => m.W), gh = sizes.Sum(m => m.H + 2) - 2;
         int top = y - Cap - 8 - gh - 4;
         Fill(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
-        Text(guide, cx - gw / 2, top, 0xFFFFFFFF, 11f);
+        for (int i = 0, ly = top; i < lines.Length; ly += sizes[i].H + 2, i++)
+            Text(lines[i], cx - sizes[i].W / 2, ly, i == 0 ? 0xFFFFFFFF : 0xFFC8D0E0, i == 0 ? 11f : 9.5f);
 
         // 띠와 박자 칸 — 맞춘 칸은 초록, 놓친 칸은 붉게, 달리는 표시는 흰 줄. 칸 위에 그 박자에 누를 단추.
         Fill(x, y, BarW, BarH, 0xFF303848);

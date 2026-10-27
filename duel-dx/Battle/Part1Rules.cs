@@ -380,6 +380,12 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     internal const int Blocked = 4, Dodged = 5, CounterHit = 6, CounterDodge = 7;
 
     /// <summary>
+    /// 마지막으로 맞은 굴림의 셈 — 세기 · 방어(AC 또는 MR, 자세 · 막기 · 쉐도우 실드를 건 값) · 마법인가 · 속성 저항(÷10, 없으면 null) · 막았나.
+    /// 타이밍 띠의 예상 피해가 왜 그렇게 나왔는지 보이려고 둔다(<see cref="BattleScene.ExpectedDamageText"/>, 사용자 요청 fg-48).
+    /// </summary>
+    internal (int Power, int Defense, bool Magic, int? Resist, bool Blocked)? LastHit;
+
+    /// <summary>
     /// 파트1 자세(유닛 바이트 +0x257 방어 · +0x258 회피 · +0x259 반격 · +0x25a 역습 · +0x25b 완전방어) — 유닛 → 어빌리티 76~80.
     /// 안 움직이고 아무것도 안 한 채 휴식(명령 0x3f3 → <c>0x1003e580</c>)하면 가진 것 가운데 첫째(76 → 80 차례) 하나가 켜지고,
     /// 다음 자기 차례가 올 때 모두 지운다(<c>0x10036350</c>). 대장 · 탄 이는 안 켠다.
@@ -484,6 +490,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         // AI 어림(이미 걸렸으면 0, 0x1003fdf9), 큐어(0x100421e9). AC · MR 게터(0x1003edc0 · 0x1003ed50)와 이 함수(0x100413b0)는 안 본다.
         if (blocked) defense += ft.BlockDefense;
         if (stance == 80 && selector != 5) defense += defense / 2;           // 완전방어 자세 — 마법(식 5) 말고는 방어 ×1.5(0x100415e1)
+        LastHit = (power, defense, magic, ft.Resist(element), blocked);
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
         if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).

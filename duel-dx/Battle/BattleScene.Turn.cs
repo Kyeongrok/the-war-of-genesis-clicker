@@ -1204,7 +1204,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 타이밍 명중(모드 > 밸런스, fg-34) — 명중률이 있는 어빌리티 앞에 같은 띠를 띄우고, 맞춘 박자마다 이 행동의 내 명중률을 올린다.
         else if (!eventFinisher && host.TimedHitFx.WantedAim(a, w))
         {
-            foreach (bool _ in host.TimedHitFx.Prompt(a, aim: true)) yield return true;
+            foreach (bool _ in host.TimedHitFx.Prompt(a, aim: true, guide: targetIndex >= 0 ? ExpectedDamageText(a, host._units[targetIndex], w, aim: true) : null)) yield return true;
             if (host.TimedHitFx.Hits > 0) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(host.TimedHitFx.Hits));
         }
 
@@ -1922,25 +1922,43 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal int _timedPercent = 200;
 
     /// <summary>
-    /// 타이밍 어택 띠의 안내 글 — 그 대상에게 이 기본공격이 맞으면 들어갈 피해와 크리티컬이면 들어갈 피해(사용자 요청).
+    /// 타이밍 어택 띠의 안내 글 — 그 대상에게 이 공격이 맞으면 들어갈 피해와 크리티컬이면 들어갈 피해(사용자 요청),
+    /// 그 아래 줄에 명중률과 셈의 바탕(파트1: 세기 ÷ 대상 AC · 마법은 MR × 속성 저항/10, 파트2: 공격력 × (Num3 − 대상 방어율) / Num3)(사용자 요청 fg-48).
     /// 실제 판정(ApplyWork 첫 줄과 같은 식)을 따로 둔 난수로 여러 번 굴려, 맞은 것 가운데 크리티컬이 아닌 피해의 가운데 값을 「예상」으로,
-    /// 거기에 크리티컬 배율(Num 23 — 타이밍 어택의 한 대 크리티컬과 같다)을 건 값을 「크리티컬」로 보인다. 한 번도 안 맞으면 null(규칙 안내 그대로).
+    /// 거기에 크리티컬 배율(Num 23 — 타이밍 어택의 한 대 크리티컬과 같다)을 건 값을 「크리티컬」로, 맞은 비율을 「명중」으로 보인다(빗나감 · 피함은 안 맞음, 막음은 맞음).
+    /// 한 번도 안 맞으면 명중 0% 만. <paramref name="aim"/> 이면 타이밍 명중 띠의 것 — 크리티컬 대신 박자 안내를 첫 줄에 둔다.
     /// </summary>
-    internal string? ExpectedDamageText(UnitState a, UnitState t, WorkData w)
+    internal string? ExpectedDamageText(UnitState a, UnitState t, WorkData w, bool aim = false)
     {
-        if (host._db is not { } db || a.Data == null || t.Data == null) return null;
+        if (host._db is not { } db || a.Data == null || t.Data == null || !w.IsDamage) return null;
+        const int Rolls = 200;
         var rng = new Random(12345);
         var hits = new List<int>();
-        for (int i = 0; i < 48; i++)
+        int landed = 0;
+        (int Power, int Defense, bool Magic, int? Resist, bool Blocked)? why = null;
+        for (int i = 0; i < Rolls; i++)
         {
+            Part1.LastHit = null;
             var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(rng, a, t, w) : null)
                 ?? db.Resolve(rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
-            if (result != 3 && result != 1 && !crit) hits.Add(amount);
+            if (result is not (2 or Part1Rules.Blocked or Part1Rules.CounterHit)) continue;
+            landed++;
+            if (!crit) hits.Add(amount);
+            if (Part1.LastHit is { } h && (why == null || why.Value.Blocked && !h.Blocked)) why = h;
         }
-        if (hits.Count == 0) return null;
+        string hitRate = $"명중 {landed * 100 / Rolls}%";
+        if (hits.Count == 0) return aim ? $"{TimedHit.AimGuide}\n{hitRate}" : null;
         hits.Sort();
         int normal = hits[hits.Count / 2], critical = normal * db.N(23) / 100;
-        return $"예상 피해 {normal} · 크리티컬 {critical}";
+        string basis;
+        if (why is { } y)
+            basis = $"세기 {y.Power} ÷ 대상 {(y.Magic ? "MR" : "AC")} {y.Defense}{(y.Resist is { } r && r != 10 ? $" × 속성 {r}/10" : "")}";
+        else if (CombatData(a) is { } ca && CombatData(t) is { } ct)
+            basis = $"공격력 {db.Atk(ca, host.TuningScr.AttackSoul(w, a.Soul), w.Power, a.Status(29))} × 대상 방어율 ({db.N(3)} − {db.Rdp(ct, t.Hp, t.MaxHp)})/{db.N(3)}";
+        else basis = "";
+        string first = aim ? $"{TimedHit.AimGuide}" : $"예상 피해 {normal} · 크리티컬 {critical}";
+        string second = aim ? $"예상 피해 {normal} · {hitRate}" : hitRate;
+        return basis.Length > 0 ? $"{first}\n{second} · {basis}" : $"{first}\n{second}";
     }
 
     /// <summary>타이밍 명중을 맞춘 인물과 그 몫(%) — 그 행동이 끝날 때까지 그 인물의 명중 굴림(피해 · 상태이상)에 더한다(<see cref="TimedHit.WantedAim"/>).</summary>
