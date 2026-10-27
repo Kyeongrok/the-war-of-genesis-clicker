@@ -65,6 +65,9 @@ internal sealed unsafe partial class BattleScene
 
     internal void GainPart1KillExp(UnitState killer, UnitState victim)
     {
+        // 용병(부하)이 쓰러뜨리면 살아 있는 대장이 쓰러뜨린 것으로 친다(사용자 요청 fg-44, 리메이크 — 원본은 용병 처치에 아무것도 안 준다).
+        // 대장이 죽었으면 부대가 풀려(PromoteFollower: 부하는 대장 연결이 끊기고 편 3) 받을 이가 없고, 뽑힌 대장은 용병이라(Chr ≥ 106) 안 받는다.
+        if ((uint)killer.LeaderIndex < host._units.Length && host._units[killer.LeaderIndex] is { Alive: true, Side: 4 } leader) killer = leader;
         if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
             || Part1.Fighter(killer) is not { } k || Part1.Fighter(victim) is not { } v) return;
         int before = k.Chr.Experience;
