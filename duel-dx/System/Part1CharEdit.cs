@@ -47,14 +47,11 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
 
     internal string Label(int code) => Chr(code) is { } c ? $"{c.Name}  Lv{c.Level}  ({code})" : $"Chr {code}";
 
-    /// <summary>지금 무리 이름 — 「무리 3 · 크리스티앙 일행」. 무리가 없는 챕터(또는 챕터 밖)는 일행 하나다.</summary>
-    internal string GroupName()
+    /// <summary>오른쪽 위에 보일 지금 챕터 — 「챕터 4 · 사략해적」(사용자 요청 menu-98: 무리 번호 · 인물 이름 말고 챕터명). 챕터 밖이면 「챕터 없음」.</summary>
+    internal string ChapterName()
     {
-        int g = host.Part1.CurrentGroup;
-        if (g <= 0) return "무리 없음 · 일행 짐";
-        var members = host.Part1.GroupMembers();
-        int lead = host.Part1.Party.FirstOrDefault(members.Contains, members.FirstOrDefault(-1));
-        return lead >= 0 && Part1Chr.Load(lead - Part1Game.ChrBase) is { } c ? $"무리 {g} · {c.Name} 일행" : $"무리 {g}";
+        int id = host.Part1.ChapterId;
+        return id < 0 ? "챕터 없음" : Part1Chapter.Load(id)?.Title is { Length: > 0 } title ? $"챕터 {id} · {title}" : $"챕터 {id}";
     }
 
     /// <summary>바꾼 것을 판 위의 그 인물에게도 — 인물 자료 · 싸움 자료를 다시 읽게 하고 어빌리티 목록 · 레벨 · 능력치 · 최대 HP 를 새로.</summary>
@@ -225,8 +222,8 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     {
         host.UiText($"소지금 {host.Part1.Eld} eld", x + 16, y + 39, 0xFFFFE080);
         foreach (var (dx, _, text) in CharEditScreen.MoneySteps) ed.Button(x + dx, y + 36, 54, text);
-        string group = GroupName();
-        host.UiText(group, x + CharEditScreen.W - 16 - host.UiGetText(group, DimGray, 12).W, y + 40, DimGray, 12);
+        string chapter = ChapterName();
+        host.UiText(chapter, x + CharEditScreen.W - 16 - host.UiGetText(chapter, DimGray, 12).W, y + 40, DimGray, 12);
         host.UiFill(x + 12, y + 36 + 28, CharEditScreen.W - 24, 1, StatusScreen.BoxLine);
         y += CharEditScreen.PartyH;
         int px = x + CharEditScreen.ContentDx, w = CharEditScreen.ContentW;
@@ -243,7 +240,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         {
             0 => "바꾸면 바로 든다 — 시험용이라 직업이 못 다루는 것도 낀다 · 오른쪽 단추: 설명",
             1 => "+ 넣기·올리기 · − 내리기·지우기 — 직업 최대를 넘으면(주황) 전투는 직업 최대로 쓴다.",
-            _ => $"{GroupName()} 가방 — 챕터마다 무리 가방이 따로다 · 오른쪽 단추: 설명",
+            _ => "지금 챕터 무리의 가방 — 챕터마다 무리 가방이 따로다 · 오른쪽 단추: 설명",
         };
         host.UiText(hint, px, y + CharEditScreen.H - CharEditScreen.PartyH - 66, DimGray, 12);
     }
