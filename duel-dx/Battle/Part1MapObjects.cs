@@ -36,6 +36,7 @@ internal sealed class Part1MapObjects(GameWindow host)
         public readonly bool DoorLocked = def.Chest == null && !def.Reactions.Any(r => r.Action == 6 && r.Message == 2);
         public readonly int Col = col, Row = row;
         public int Motion, Frame, Z, AnchorX, AnchorY;
+        public int RolledItem;           // 든 것이 0 인 상자의 무작위 아이템 — 판을 세울 때 굴린다(RESTART 면 다시, 세이브에 실린다, 사용자 요청 fg-59)
         public int StampFrame;           // 판에 찍힌 장 — 원본은 만들 때와 키 9 때만 찍어서, 그 뒤 장이 바뀌어도 판은 그대로다
         public double MotionAt;
         public int DoneTick = -1;        // 처리한 마지막 틱(동작 시작부터) — −1 이면 틱 0 키도 아직
@@ -69,6 +70,9 @@ internal sealed class Part1MapObjects(GameWindow host)
             // 읽지 못한 Obt 도 자리를 둔다 — 행동 707 의 a0 는 절 A 차례다.
             if (Part1MapObject.Load(obt) is not { } def) { _objects.Add(null); continue; }
             var o = new Obj(def, x, y) { Heat = Ambient };
+            // 무작위 상자는 판을 세울 때 굴린다 — 전에는 여는 순간 굴려 열기 전에 저장 · 불러오기로 다시 굴릴 수 있었다(원본이 언제 굴리는지는 안 봤다 [H]).
+            // 리메이크는 전투 시작(· RESTART)에 정하고 세이브에 싣는다 — 전투를 다시 시작하면 다시 굴린다(사용자 요청 fg-59).
+            if (o.Chest is { Item: <= 0, Gold: <= 0 }) o.RolledItem = Part1MapObject.RandomChestItem(host._rng);
             Start(o, 0);
             o.StampFrame = o.Frame;              // 만들자마자 동작 0 의 장으로 찍는다(0x10097910) — 시작 사건의 707 보다 먼저다
             _objects.Add(o);
@@ -195,7 +199,7 @@ internal sealed class Part1MapObjects(GameWindow host)
             if (o is { Chest: { } c })
             {
                 var (col, row) = BodyCells(o)[0];
-                yield return (col, row, c.Item, c.Gold, c.Locked, Opened(o));
+                yield return (col, row, c.Item > 0 ? c.Item : o.RolledItem, c.Gold, c.Locked, Opened(o));
             }
     }
 
@@ -387,7 +391,7 @@ internal sealed class Part1MapObjects(GameWindow host)
         }
         else
         {
-            if (item <= 0) item = Part1MapObject.RandomChestItem(host._rng);
+            if (item <= 0) item = o.RolledItem > 0 ? o.RolledItem : Part1MapObject.RandomChestItem(host._rng);
             host.Part1.Bag.Add(item);
             string name = Part1Item.ById(Part1Tables.Items, item)?.Name ?? $"아이템 {item}";
             btl.ShowSpoilMessage(user, "아이템 획득", $"{name} 1개를 획득하였습니다.");
@@ -1336,10 +1340,10 @@ internal sealed class Part1MapObjects(GameWindow host)
         host.DrawUi(obs, motion, age, ox + k.Args[2], oy + k.Args[3] * 32 / 40 - k.Args[4] * 12 / 20, BlendOf(key), loop: false, fade: BlendFade(key));
     }
 
-    private const int SaveFields = 10, OldSaveFields = 6;
+    private const int SaveFields = 11, OlderSaveFields = 10, OldSaveFields = 6;
 
     /// <summary>
-    /// 저장 — 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y, 내구, 온도, 상태, 불붙은 지 몇 시간 틱). 못 읽은 물체는 −1 열.
+    /// 저장 — 물체마다 (동작, 장, 찍힌 장, 높이, 기준 x, 기준 y, 내구, 온도, 상태, 불붙은 지 몇 시간 틱, 굴린 상자 아이템). 못 읽은 물체는 −1 열.
     /// 원본은 물체 몸을 0x154 바이트 통째로 싣는다(<c>0x1009f050</c>) — 온도 +0x4a · 상태 +0x42 · 불붙은 틱 +0x44 · 바쁨 +0x41 이 다 든다.
     /// 칸의 기운 · 유닛 온도 · 기온은 따로(<see cref="SaveLingering"/> · <see cref="UnitHeat"/> · <see cref="SavedAmbient"/>).
     /// </summary>
@@ -1347,7 +1351,7 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         Ensure();
         return [.. _objects.SelectMany(o => o is null ? Enumerable.Repeat(-1, SaveFields)
-            : [o.Motion, o.Frame, o.StampFrame, o.Z, o.AnchorX, o.AnchorY, o.Durability, o.Heat, o.State, host.Btl._tick - o.StateAt])];
+            : [o.Motion, o.Frame, o.StampFrame, o.Z, o.AnchorX, o.AnchorY, o.Durability, o.Heat, o.State, host.Btl._tick - o.StateAt, o.RolledItem])];
     }
 
     /// <summary>
@@ -1358,7 +1362,8 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         Ensure();
         if (saved == null) return;
-        int fields = saved.Length == _objects.Count * SaveFields ? SaveFields : saved.Length == _objects.Count * OldSaveFields ? OldSaveFields : 0;
+        int fields = saved.Length == _objects.Count * SaveFields ? SaveFields : saved.Length == _objects.Count * OlderSaveFields ? OlderSaveFields
+                   : saved.Length == _objects.Count * OldSaveFields ? OldSaveFields : 0;
         if (fields == 0) return;
         for (int i = 0; i < _objects.Count; i++)
         {
@@ -1368,7 +1373,8 @@ internal sealed class Part1MapObjects(GameWindow host)
             o.Frame = Math.Clamp(saved[at + 1], 0, o.Def.Frames.Count - 1);
             o.StampFrame = Math.Clamp(saved[at + 2], 0, o.Def.Frames.Count - 1);
             (o.Z, o.AnchorX, o.AnchorY) = (saved[at + 3], saved[at + 4], saved[at + 5]);
-            if (fields == SaveFields)
+            if (fields == SaveFields && saved[at + 10] > 0) o.RolledItem = saved[at + 10];   // 앞 세이브는 판을 세울 때 굴린 것 그대로
+            if (fields >= OlderSaveFields)
             {
                 (o.Durability, o.Heat, o.State, o.StateAt) = (saved[at + 6], saved[at + 7], saved[at + 8], tick - saved[at + 9]);
                 o.Busy = o.State is 0 or 1 or 3 or 4 or 5 or 6 || (o.State == 2 && o.Motion is 26 or 28 or 30);
