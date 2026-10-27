@@ -72,6 +72,9 @@ internal sealed class Part1Progress
 
         /// <summary>바꾼 직업(Job.dat 번호, 인물 칸 7) — 0 이면 레코드 그대로.</summary>
         public int Job { get; set; }
+
+        /// <summary>캐릭터 에디터로 더하고 뺀 능력치 — 인물 칸 번호(<see cref="Part1Chr.Str"/> 20 ~ <see cref="Part1Chr.Mr"/> 27) → 더할 값(사용자 요청 menu-102).</summary>
+        public Dictionary<int, int> Stats { get; set; } = [];
     }
 
     internal Dictionary<int, Growth> Grown = [];
@@ -370,6 +373,12 @@ internal sealed class Part1Progress
         {
             chr = chr.WithGrowth(g.Experience, g.Abilities);
             if (g.Job > 0) { var f = (int[])chr.Fields.Clone(); f[7] = g.Job; chr = chr with { Fields = f }; }
+            if (g.Stats is { Count: > 0 })
+            {
+                var f = (int[])chr.Fields.Clone();
+                foreach (var (field, add) in g.Stats) if ((uint)field < f.Length) f[field] = Math.Max(0, f[field] + add);
+                chr = chr with { Fields = f };
+            }
         }
         if (Equipped.TryGetValue(code, out var slots)) chr = chr.WithEquipment(slots);
         // 그림 · 반신 · 얼굴은 따로 — 「초상」만 바꾼 인물(menu-101)은 그림이 0 이다.

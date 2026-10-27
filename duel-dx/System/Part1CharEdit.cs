@@ -1,3 +1,4 @@
+using DuelDx.Native;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -81,6 +82,27 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     {
         if (Chr(code) is not { } c) return;
         GrowthOf(code).Experience = Math.Clamp(c.Level + delta, 1, LevelMax) * 100;
+        Changed(code);
+    }
+
+    /// <summary>에디터가 고치는 능력치 — 인물 칸 번호와 이름(일행 창 차례). 바탕 값(칸)을 고치고, 어빌리티 · 장비 덧셈은 그 위에 그대로 든다.</summary>
+    internal static readonly (int Field, string Label)[] StatFields =
+        [(Part1Chr.Str, "STR"), (Part1Chr.Skill, "SKILL"), (Part1Chr.Dex, "DEX"), (Part1Chr.Int, "INT"),
+         (Part1Chr.Luck, "LUCK"), (Part1Chr.Spd, "SPD"), (Part1Chr.Ac, "AC"), (Part1Chr.Mr, "MR")];
+
+    /// <summary>능력치 칸 — 장비 다섯 칸 밑 두 줄에 넷씩, 칸마다 이름 · 값 · − ＋(Shift 를 누르고 있으면 10씩).</summary>
+    internal const int StatTop = 290, StatRowH = 24, StatLabelW = 60;
+    internal static int StatCellW => (CharEditScreen.ContentW - StatLabelW) / 4;
+    internal static (int X, int Y) StatCell(int px, int y, int k) => (px + StatLabelW + k % 4 * StatCellW, y + StatTop + k / 4 * StatRowH);
+
+    internal void ChangeStat(int code, int field, int delta)
+    {
+        if (Chr(code) is not { } c) return;
+        var stats = GrowthOf(code).Stats;
+        int add = stats.GetValueOrDefault(field) + delta, now = c.Fields[field] + delta;
+        if (now < 0) add -= now;
+        if (now > 999) add -= now - 999;
+        if (add == 0) stats.Remove(field); else stats[field] = add;
         Changed(code);
     }
 
@@ -204,6 +226,13 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
             for (int slot = 0; slot < 5; slot++)
                 foreach (var (dx, delta) in ItemTurns)
                     if (ed.In(bx, by, px + w + dx, y + 140 + slot * 30, 30, 22)) { ChangeItem(code, slot, delta); return true; }
+            int step = (Win32.GetKeyState(Win32.VK_SHIFT) & 0x8000) != 0 ? 10 : 1;
+            for (int k = 0; k < StatFields.Length; k++)
+            {
+                var (sx, sy) = StatCell(px, y, k);
+                if (ed.In(bx, by, sx + StatCellW - 48, sy, 22, 20)) { ChangeStat(code, StatFields[k].Field, -step); return true; }
+                if (ed.In(bx, by, sx + StatCellW - 24, sy, 22, 20)) { ChangeStat(code, StatFields[k].Field, step); return true; }
+            }
             return true;
         }
         var ids = ed._tab == 1 ? AbilityView(c) : BagView();
@@ -405,13 +434,16 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
             int bx = px + w;
             ed.Button(bx - 136, iy, 30, "◀◀"); ed.Button(bx - 102, iy, 30, "◀"); ed.Button(bx - 68, iy, 30, "▶"); ed.Button(bx - 34, iy, 30, "▶▶");
         }
-        // 능력치 — 장비 · 어빌리티를 바꾼 결과를 바로 본다(일행 창과 같은 값).
+        // 능력치 — 장비 · 어빌리티를 바꾼 결과를 바로 본다(일행 창과 같은 값). − ＋ 는 바탕 값을 고친다(사용자 요청 menu-102).
         var fighter = Part1Fighter.From(c, items);
-        int[] stats = [Part1Chr.Str, Part1Chr.Skill, Part1Chr.Dex, Part1Chr.Int, Part1Chr.Luck, Part1Chr.Spd, Part1Chr.Ac, Part1Chr.Mr];
-        string[] labels = ["STR", "SKILL", "DEX", "INT", "LUCK", "SPD", "AC", "MR"];
-        host.UiText($"HP {c.MaxHp}", px, y + 294, 0xFF00FFFF, 12);
-        for (int k = 0; k < stats.Length; k++)
-            host.UiText($"{labels[k]} {fighter.Stat(stats[k])}", px + 80 + k * 62, y + 294, White, 12);
+        host.UiText($"HP {c.MaxHp}", px, y + StatTop + 3, 0xFF00FFFF, 12);
+        host.UiText("Shift 10씩", px, y + StatTop + StatRowH + 3, DimGray, 12);
+        for (int k = 0; k < StatFields.Length; k++)
+        {
+            var (sx, sy) = StatCell(px, y, k);
+            host.UiText($"{StatFields[k].Label} {fighter.Stat(StatFields[k].Field)}", sx, sy + 3, White, 12);
+            ed.Button(sx + StatCellW - 48, sy, 22, "−", h: 20); ed.Button(sx + StatCellW - 24, sy, 22, "＋", h: 20);
+        }
     }
 
     private void DrawAbilities(Part1Chr c, int px, int y)

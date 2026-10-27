@@ -91,7 +91,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.Toast("나야트레이가 파티에 들어왔습니다 — 전투에는 다음 전투부터 나옵니다");
     }
 
-    internal static readonly (int Dx, int Delta, string Text)[] MoneySteps = [(170, -10000, "−1만"), (228, 1000, "+1천"), (286, 10000, "+1만"), (344, 100000, "+10만")];
+    internal static readonly (int Dx, int Delta, string Text)[] MoneySteps = [(170, 1000, "+1천"), (228, 100000, "+10만")];   // ±1만은 뺐다(사용자 요청 menu-102)
 
     /// <summary>
     /// 고칠 수 있는 인물 — 전직 화면에 서는 인물과 같다(<see cref="MosesScene.StyleParty"/>: 스크립트 801 로 들어온 동료, 그 차례대로).
