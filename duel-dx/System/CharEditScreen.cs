@@ -292,6 +292,14 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         else host.LoadRosterSprites();
     }
 
+    /// <summary>그 모습의 초상만 입힌다(사용자 요청 menu-101: 「초상화도 바꿀 수 있게」) — 그림 · 목소리는 그대로.</summary>
+    internal void ChangeFace(int chr, Look look)
+    {
+        if (DataOf(chr) is not { } c) return;
+        _firstLook.TryAdd(chr, (c.SpriteId, c.FaceId, c.VoiceSet));
+        Apply(chr, c with { FaceId = look.Face });
+    }
+
     /// <summary>고를 수 있는 목소리 묶음 번호 — Dmg.dat 에서 한 마디라도 있는 것, 번호 차례.</summary>
     internal List<int> VoiceSets() =>
         [.. host._voices.Where(kv => kv.Key > 0 && kv.Value.Hurt.Length + kv.Value.Call.Length > 0).Select(kv => kv.Key).Order()];
@@ -365,7 +373,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal const int PickW = 210, PickRowH = 22;
     internal const int TabW = 72, AbRowH = 22, AbRows = 9;
     internal const int SearchDy = 106, RowsDy = 130;
-    internal const int LookNameDx = 42, LookShapeDx = 236, LookVoiceDx = 280, LookVoiceW = 74, LookListW = 356, LookPreviewDx = 368, LookPreviewW = ContentW - LookPreviewDx;
+    internal const int LookNameDx = 42, LookShapeDx = 192, LookFaceDx = 236, LookVoiceDx = 280, LookVoiceW = 74, LookListW = 356, LookPreviewDx = 368, LookPreviewW = ContentW - LookPreviewDx;
     internal const int ResetDy = H - PartyH - 70;
     // 외형 갈래 아래 줄 — 목소리 묶음 번호 ◀ ▶ 와 듣기(사용자 요청 ed-3).
     internal const int VoicePrevDx = 70, VoiceNextDx = 252, VoicePlayDx = 288;
@@ -484,6 +492,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
                 {
                     int ry = y + RowsDy + i * AbRowH;
                     if (In(bx, by, px + LookShapeDx, ry, 40, 20)) { ChangeLook(chr, looks[_lookTop + i], voice: false); return true; }
+                    if (In(bx, by, px + LookFaceDx, ry, 40, 20) && looks[_lookTop + i].Face > 0) { ChangeFace(chr, looks[_lookTop + i]); return true; }
                     if (In(bx, by, px + LookVoiceDx, ry, LookVoiceW, 20) && looks[_lookTop + i].Voice > 0) { ChangeLook(chr, looks[_lookTop + i], voice: true); return true; }
                 }
             }
@@ -643,6 +652,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             host.UiText(no, px + LookNameDx - 6 - host.UiGetText(no, DimGray, 12).W, ry + 2, wearing ? 0xFF00FFFF : DimGray, 12);
             host.UiText(label, px + LookNameDx, ry + 2, wearing ? 0xFF00FFFF : White, 12);
             Button(px + LookShapeDx, ry, 40, "모습", on: wearing, h: 20);
+            if (look.Face > 0) Button(px + LookFaceDx, ry, 40, "초상", on: look.Face == c.FaceId, h: 20);
             if (look.Voice > 0) Button(px + LookVoiceDx, ry, LookVoiceW, $"목소리 {look.Voice}", on: look.Voice == c.VoiceSet, h: 20);
         }
         if (rows.Count == 0) host.UiText("맞는 모습이 없습니다", px + LookNameDx, y + RowsDy + 2, DimGray, 12);
@@ -658,7 +668,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiText("옆", bx + half + 4, by + 2, DimGray, 12);
         // 코드에서 찾아 고칠 수 있게 번호를 다 보인다 — Chr · 모습(Obs) · 목소리 묶음(사용자 요청 ed-3).
         string caption = hover is { Part1Name: not null } ? $"파트1 Chr {hover.Chr:D4} · 모습 {hover.Sprite - Part1Game.ObsBase}"
-                       : hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {now} · 목소리 {c.VoiceSet}";
+                       : hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 초상 {hover.Face} · 목소리 {hover.Voice}" : $"모습 {now} · 초상 {c.FaceId} · 목소리 {c.VoiceSet}";
         host.UiText(caption, bx + (bw - host.UiGetText(caption, DimGray, 12).W) / 2, by + bh - 18, DimGray, 12);
         Button(bx, y + ResetDy, bw, "원래대로", h: 20);
         // 목소리만 번호로 고르기 — 모습과 따로.

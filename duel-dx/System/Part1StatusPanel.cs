@@ -294,7 +294,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         {
             int cx = x + 6 + i * StripCell, cy = y0 + 5;
             _strip.Add((cx, cy, StripCell - 2, StripCell - 2));
-            if (Part1Chr.Load(_offMembers[i] - Part1Game.ChrBase) is { } offRaw && host.Part1.Apply(offRaw) is { FaceId: > 0 } m && host.UiFor(Part1Game.ObsBase + m.FaceId)?.FrameAt(0, 0) is { } face)
+            if (Part1Chr.Load(_offMembers[i] - Part1Game.ChrBase) is { } offRaw && host.Part1.FaceObs(host.Part1.Apply(offRaw)) is > 0 and var offFace && host.UiFor(offFace)?.FrameAt(0, 0) is { } face)
                 Img(face, cx, cy, StripCell - 2, StripCell - 2);
             bool hot = host._mouse.X >= cx && host._mouse.X < cx + StripCell - 2 && host._mouse.Y >= cy && host._mouse.Y < cy + StripCell - 2;
             if (_offMembers[i] == _offChr) host.UiStroke(cx - 1, cy - 1, StripCell, StripCell, 0xFFFFE080);
@@ -337,10 +337,10 @@ internal sealed class Part1StatusPanel(GameWindow host)
         Bg(x, y, W, H, 0xFF101828);   // 바탕은 그림 층에 — UI 층(UiFill)은 얼굴 그림을 덮는다
         host.UiStroke(x, y, W, H, 0xFF8098C8);
 
-        if (chr.FaceId > 0)
+        if (host.Part1.FaceObs(chr) is > 0 and var faceObs)
         {
-            if (_layer) host.UiSprite(Part1Game.ObsBase + chr.FaceId, 0, 0, x + 30, y + 30);
-            else host.DrawUi(Part1Game.ObsBase + chr.FaceId, 0, 0, x + 30, y + 30, GameWindow.UiBlend.Alpha);
+            if (_layer) host.UiSprite(faceObs, 0, 0, x + 30, y + 30);
+            else host.DrawUi(faceObs, 0, 0, x + 30, y + 30, GameWindow.UiBlend.Alpha);
         }
         host.UiText(chr.Name, x + 60, y + 10, 0xFFFFE080, 13);
         int affiliation = chr.Fields[6];

@@ -556,7 +556,11 @@ public sealed class GameDatabase
                     // 캐릭터 에디터 「외형」이 준 파트2 목소리 묶음(파트1 인물 레코드에는 목소리 칸이 없다 — menu-97).
                     if (made != null && Part1Voice?.Invoke(code) is ushort voice and > 0) made = made with { VoiceSet = voice };
                     // 파트2 인물 모습을 입혔으면(menu-100) 그 그림 · 얼굴 — 파트1 레코드 칸에는 파트2 번호를 못 넣어 따로 받는다.
-                    if (made != null && Part1Part2Look?.Invoke(code) is { Sprite: > 0 } p2) made = made with { SpriteId = p2.Sprite, FaceId = p2.Face };
+                    if (made != null && Part1Part2Look?.Invoke(code) is var (p2Sprite, p2Face))
+                    {
+                        if (p2Sprite > 0) made = made with { SpriteId = p2Sprite };
+                        if (p2Face > 0) made = made with { FaceId = p2Face };   // 초상만 바꾼 것(menu-101)
+                    }
                     _part1Characters[code] = made;
                 }
                 return made;

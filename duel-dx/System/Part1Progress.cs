@@ -372,10 +372,13 @@ internal sealed class Part1Progress
             if (g.Job > 0) { var f = (int[])chr.Fields.Clone(); f[7] = g.Job; chr = chr with { Fields = f }; }
         }
         if (Equipped.TryGetValue(code, out var slots)) chr = chr.WithEquipment(slots);
-        if (Looks.TryGetValue(code, out var look) && look.Sprite > 0)
+        // 그림 · 반신 · 얼굴은 따로 — 「초상」만 바꾼 인물(menu-101)은 그림이 0 이다.
+        if (Looks.TryGetValue(code, out var look) && (look.Sprite > 0 || look.Bust > 0 || look.Face > 0))
         {
             var f = (int[])chr.Fields.Clone();
-            (f[3], f[4], f[5]) = (look.Sprite, look.Bust, look.Face);
+            if (look.Sprite > 0) f[3] = look.Sprite;
+            if (look.Bust > 0) f[4] = look.Bust;
+            if (look.Face > 0) f[5] = look.Face;
             chr = chr with { Fields = f };
         }
         return chr;
@@ -403,7 +406,11 @@ internal sealed class Part1Progress
 
     /// <summary>그 인물의 목소리 묶음(GameDatabase.Part1Voice) — 안 바꿨으면 0.</summary>
     internal (ushort Sprite, ushort Face) Part2LookOf(int chrCode) =>
-        Looks.TryGetValue(chrCode, out var l) && l.Part2Sprite > 0 ? ((ushort)l.Part2Sprite, (ushort)Math.Max(0, l.Part2Face)) : ((ushort)0, (ushort)0);
+        Looks.TryGetValue(chrCode, out var l) ? ((ushort)Math.Max(0, l.Part2Sprite), (ushort)Math.Max(0, l.Part2Face)) : ((ushort)0, (ushort)0);
+
+    /// <summary>파트1 화면(상태 · 일행)이 그릴 얼굴 Obs — 파트2 초상을 입혔으면 그 번호, 아니면 파트1 얼굴(20000 + 칸 5). 없으면 0.</summary>
+    internal int FaceObs(Part1Chr chr) =>
+        Looks.TryGetValue(Part1Game.ChrBase + chr.Code, out var l) && l.Part2Face > 0 ? l.Part2Face : chr.FaceId > 0 ? Part1Game.ObsBase + chr.FaceId : 0;
 
     internal ushort VoiceOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? (ushort)Math.Clamp(l.Voice, 0, ushort.MaxValue) : (ushort)0;
 

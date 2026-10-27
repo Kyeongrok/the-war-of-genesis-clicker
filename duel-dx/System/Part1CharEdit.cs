@@ -321,6 +321,19 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         LookChanged(code, sprite: true);
     }
 
+    /// <summary>
+    /// 그 모습의 초상만 입힌다(menu-101) — 파트1 줄은 그 레코드의 반신 · 얼굴(파트1 번호), 파트2 줄은 파트2 얼굴 번호. 그림 · 목소리는 그대로.
+    /// 제 레코드의 초상이면 바꾼 초상을 지운다.
+    /// </summary>
+    internal void ChangeFace(int code, CharEditScreen.Look look)
+    {
+        var l = host.Part1.LookOf(code);
+        if (look.Part1Name == null) (l.Part2Face, l.Bust, l.Face) = (look.Face, 0, 0);
+        else if (Part1Game.Character(look.Chr) is { } from)
+            (l.Bust, l.Face, l.Part2Face) = look.Chr == code - Part1Game.ChrBase ? (0, 0, 0) : (from.BustId, from.FaceId, 0);
+        LookChanged(code, sprite: false);
+    }
+
     /// <summary>파트2 모습 줄의 「목소리 N」 — 그 인물의 목소리 묶음을 넣는다(파트2 외형 갈래와 같다).</summary>
     internal void TakeVoice(int code, CharEditScreen.Look look)
     {
@@ -352,7 +365,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     /// <summary>바꾼 외형을 판 위의 그 인물에게도 — 그림이 바뀌었으면 판의 그림을 다시 읽는다. 다 되돌린 것은 진행에서도 뺀다.</summary>
     private void LookChanged(int code, bool sprite)
     {
-        if (host.Part1.Looks.TryGetValue(code, out var l) && l is { Sprite: 0, Voice: 0, Part2Sprite: 0 }) host.Part1.Looks.Remove(code);
+        if (host.Part1.Looks.TryGetValue(code, out var l) && l is { Sprite: 0, Bust: 0, Face: 0, Voice: 0, Part2Sprite: 0, Part2Face: 0 }) host.Part1.Looks.Remove(code);
         Changed(code);
         if (sprite && host._battleLoaded && host._scene.IsPart1) host.LoadRosterSprites();
     }
@@ -371,6 +384,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         {
             int ry = y + CharEditScreen.RowsDy + i * CharEditScreen.AbRowH;
             if (ed.In(bx, by, px + CharEditScreen.LookShapeDx, ry, 40, 20)) { ChangeLook(code, looks[ed._lookTop + i]); return true; }
+            if (ed.In(bx, by, px + CharEditScreen.LookFaceDx, ry, 40, 20) && looks[ed._lookTop + i].Face > 0) { ChangeFace(code, looks[ed._lookTop + i]); return true; }
             if (ed.In(bx, by, px + CharEditScreen.LookVoiceDx, ry, CharEditScreen.LookVoiceW, 20)) { TakeVoice(code, looks[ed._lookTop + i]); return true; }
         }
         return true;

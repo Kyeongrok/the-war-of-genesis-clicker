@@ -373,7 +373,7 @@ internal sealed class Part1PartyTable(GameWindow host)
         string? tip = null;
 
         // 얼굴.
-        if (chr.FaceId > 0 && host.UiFor(Part1Game.ObsBase + chr.FaceId)?.FrameAt(0, 0) is { } face)
+        if (host.Part1.FaceObs(chr) is > 0 and var faceObs && host.UiFor(faceObs)?.FrameAt(0, 0) is { } face)
             Img(face, cols[0].X + 1, ry + 1, FaceW, FaceW);
         host.UiStroke(cols[0].X, ry, FaceW + 2, FaceW + 2, dead ? 0xFF803030 : Line);
 
