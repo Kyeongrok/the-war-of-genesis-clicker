@@ -19,6 +19,7 @@ Obs 꼴(ObsSprite · ObsMotionTable 이 읽는 것, Part1Game.ToPart2Obs 가 쓰
         --id 30000 --name 에바 --flood 14 --height 100 --out 30000_에바.obs --preview preview.png
 서기 시트를 더하려면: --add "stand.png|back:0:418@0,side:418:836@0,front:836:1254@0|0|313|4|key=ff00ff"
 공격(동작 8, 5번째 장에서 맞음): --add "attack.png|back:0:296@8,side:296:591@8,front:591:887@8|0|222|8|key=ff00ff|anchor=foot|hit=5|ticks=4"
+연 2타(동작 13, 3 · 6번째 장): --add "combo.png|back:20:227@13,side:227:394@13,front:394:573@13|0|192|8|key=ff00ff|anchor=foot|hit=3+6|ticks=4"
 만든 파일은 %APPDATA%\\DuelDx\\sprites\\ 에 넣는다(번호 30000~30999, 파일 이름 「번호_이름.obs」).
 """
 import argparse
@@ -142,7 +143,7 @@ def parse_add(text, args):
     """--add 「그림|줄|첫칸x|칸너비|칸수[|key=rrggbb 또는 flood=n]」 — 다른 시트(서기 · 공격 …)를 한 그림에 더한다. 시트마다 따로 --height 로 맞춘다."""
     f = text.split("|")
     part = {"sheet": f[0], "rows": parse_rows(f[1]), "col_x": int(f[2]), "col_w": int(f[3]), "cols": int(f[4]),
-            "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": 0, "ability": 25, "ticks": 0}
+            "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": [], "ability": 25, "ticks": 0}
     for opt in f[5:]:
         k, _, v = opt.partition("=")
         if k == "key": part["key"] = hex_color(v)
@@ -150,7 +151,7 @@ def parse_add(text, args):
         elif k == "tol": part["key_tol"] = int(v)
         elif k == "anchor": part["anchor"] = v
         elif k == "frames": part["frames"] = int(v)
-        elif k == "hit": part["hit"] = int(v)
+        elif k == "hit": part["hit"] = [int(n) for n in v.split("+")]      # hit=3+6 — 3 · 6 번째 장마다 한 번씩(연속 공격)
         elif k == "ability": part["ability"] = int(v)
         elif k == "ticks": part["ticks"] = int(v)
     return part
@@ -179,7 +180,7 @@ def main():
     args = ap.parse_args()
 
     parts = [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
-              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": 0, "ability": 25, "ticks": 0}] + [parse_add(a, args) for a in args.add]
+              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": [], "ability": 25, "ticks": 0}] + [parse_add(a, args) for a in args.add]
 
     frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
     for part in parts:
@@ -264,8 +265,9 @@ def main():
             motions.append((0 * 3 + d, 1, [(0, 0, 1, (0, ids[0]))]))
         t = ticks or (args.stand_ticks if action == 0 else args.ticks)
         keys = [(0, k * t, t, (0, f)) for k, f in enumerate(ids)]
-        if 1 <= hit <= len(ids):                       # hit=n — n 번째 장이 서는 틱에 판정
-            keys.append((6, (hit - 1) * t, 1, (ability,)))
+        for n in hit:                                  # hit=n(+m…) — 그 장이 서는 틱마다 판정(연 2타 = 동작 13 · 3타 = 14 는 타격 키 수만큼 친다)
+            if 1 <= n <= len(ids):
+                keys.append((6, (n - 1) * t, 1, (ability,)))
         motions.append((action * 3 + d, t * len(ids), keys))
     motions.sort()
 
