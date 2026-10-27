@@ -249,6 +249,25 @@ internal sealed partial class Part1Skill
         int first = targets.Count > 0 ? targets[0] : -1;
         var (len, _) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
         int last = len;
+        // 타이밍 어택으로 박자를 n(2~6)개 맞췄으면 n 발 — 칼질의 「연」 동작처럼(BasicMelee), 쏘는 동작을 n 번 이어 걸어(총소리도 그 모션의 소리 키) 한 발마다 보통 피해로 친다
+        // (사용자 보고 fg-50: 해럴드가 박자를 맞춰도 한 발만 쏘고 피해만 곱해졌다). 원본에 없는 리메이크 규칙.
+        if (ChainHits >= 2 && !bazooka)
+        {
+            int n = Math.Min(6, ChainHits), step = Math.Max(12, len * 2 / 3);
+            for (int k = 0; k < n; k++)
+            {
+                int at = k * step;
+                if (k > 0) Later(at, () => Swing(_user, BasicAction(id), 8));
+                var p = BodyPoint(first, aim);
+                Put(183, Rand(3), at + delays[0], p.X, p.Y, sounds: true);
+                if (k == 0) Later(delays[0] + 1, () => host.Btl.CenterOn(p.X, p.Y));
+                foreach (int ti in targets) HitAt(at + delays[0] + 1, ti, hit);
+                last = Math.Max(last, Math.Max(at + len, at + delays[0] + Length(183, 0)));
+            }
+            ChainStruck = n;
+            (_splitShots, SplitStruck) = (false, 0);
+            return last + 1;
+        }
         for (int k = 0; k < delays.Length; k++)
         {
             var p = BodyPoint(first, aim);
