@@ -52,7 +52,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
                        .Select(slot => (Slot: slot, Head: host.SlotsScr.SlotHead(slot))).Where(s => s.Head != null).Select(s => (s.Slot, s.Head!))];
 
     /// <summary>고칠 게임이 아직 없나 — 타이틀·기록 고르기 화면 뒤에는 시연용 기본 판이 서 있어서 인물 수만으로는 모른다.</summary>
-    internal bool NoGame(List<int> people) => people.Count == 0 || host.TitleScr._titleOpen || host.RecordsScr._recordsOpen;
+    /// <remarks>파트1 은 파트2 타이틀 위에서 열려 그 표시(<c>_titleOpen</c>)가 챕터 · 마을에서도 서 있다 — 파트1 은 파트1 타이틀 차림표만 본다. 전에는 파트1 챕터 · 마을에서
+    /// 에디터를 열면 늘 세이브 목록만 나오고, 불러와도 다시 목록이었다(카페 제보).</remarks>
+    internal bool NoGame(List<int> people) =>
+        people.Count == 0 || host.RecordsScr._recordsOpen || (Part1Mode ? host.Part1TitleScr.TitleMenuOpen : host.TitleScr._titleOpen);
 
     internal void Toggle()
     {
