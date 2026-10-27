@@ -849,6 +849,9 @@ internal sealed unsafe partial class BattleScene
             if (!acted || _turn != index || _outcome.Length > 0 || !u.Alive || !u.OnField) break;
             CommitMove(u);                                   // 걸은 비용을 빼야 남은 TP 로 다시 생각할 수 있다
             if (u.Tp <= 0) break;
+            // 파트1 은 한 차례 = 한 번 걷고 걸은 자리에서 한 번 행동(0x10028330 · 남은 행동 +0x1c4, 분석-파트1-전투 「차례 한 번」) — TP 가 남아도 기술 · 공격을 한 번 쓰면 끝.
+            // 전에는 파트2 식으로 다시 생각해 기본 공격(TP 80)을 하고 남은 TP 로 한 번 더 쳤다(사용자 보고 fg-52: Btl 20229 솔져가 3연사를 두 번).
+            if (host._scene.IsPart1 && _part1ActedBy == u) break;
             for (double end = host._lastTime + 0.3; host._lastTime < end;) yield return true;
             // 다시 생각하기 전에 판의 모든 유닛이 설 때까지 — 상태 15 갈래 1 이 0x1006e320(모든 유닛 +0x80 == 0)을 기다린 뒤 GETNEXT(0x1006a241).
             // 이동만 한 군단 대장의 부하가 진형 자리로 다 걸어간 뒤에 다음 공격을 해야 부하가 모두 낀다(감사5 L-A). 멈춤 대비 5초 상한.
