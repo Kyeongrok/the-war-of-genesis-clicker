@@ -65,6 +65,23 @@
                     Click="BodyAbilitiesMenuItem_Click"
                     Header="체질 — 배울 수 있는 어빌리티(_B)" />
             </MenuItem>
+            <MenuItem Header="모션(_O)">
+                <MenuItem
+                    x:Name="CharacterMotionMenuItem"
+                    AutomationProperties.AutomationId="CharacterMotionMenuItem"
+                    Click="CharacterStatsMenuItem_Click"
+                    Header="캐릭터 모션 보기 — 캐릭터 스탯 목록에서 우클릭(_C)" />
+                <MenuItem
+                    x:Name="ObsMotionMenuItem"
+                    AutomationProperties.AutomationId="ObsMotionMenuItem"
+                    Click="ObsMotionMenuItem_Click"
+                    Header="그림 파일(Obs) 모션 보기…(_F)" />
+                <MenuItem
+                    x:Name="CustomSpriteMenuItem"
+                    AutomationProperties.AutomationId="CustomSpriteMenuItem"
+                    Click="CustomSpriteMenuItem_Click"
+                    Header="사용자 그림 만들기 — 그림 시트 → 전투 그림(_U)" />
+            </MenuItem>
             <MenuItem Header="에셋(_A)">
                 <MenuItem
                     x:Name="MusicMenuItem"

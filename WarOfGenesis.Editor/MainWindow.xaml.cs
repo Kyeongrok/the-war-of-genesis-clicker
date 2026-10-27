@@ -157,6 +157,22 @@ public partial class MainWindow : Window
                                 record.SpriteCode, ObsMotionTable.Load(path, applyEdits: false)) { Owner = this }.Show();
     }
 
+    // ── 모션 메뉴 ──────────────────────────────────────────────────────────
+
+    /// <summary>모션 &gt; 그림 파일 모션 보기 — 아무 Obs(사용자 그림 %APPDATA%\DuelDx\sprites 의 것도)를 골라 모션 매핑 창으로 연다(ed-4).</summary>
+    private void ObsMotionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        string sprites = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DuelDx", "sprites");
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "전투 그림 (*.obs)|*.obs", InitialDirectory = Directory.Exists(sprites) ? sprites : "" };
+        if (dialog.ShowDialog(this) != true) return;
+        if (ObsMotionTable.Load(dialog.FileName) is not { } table) { StatusText.Text = $"{Path.GetFileName(dialog.FileName)} 에서 모션표를 못 읽었습니다."; return; }
+        int obs = int.TryParse(Path.GetFileNameWithoutExtension(dialog.FileName).Split('_')[0], out int n) ? n : 0;
+        new MotionMappingWindow(Path.GetFileName(dialog.FileName), table, ObsSprite.Decode(dialog.FileName), obs, ObsMotionTable.Load(dialog.FileName, applyEdits: false)) { Owner = this }.Show();
+    }
+
+    /// <summary>모션 &gt; 사용자 그림 만들기 — PNG 시트를 게임 전투 그림으로(<see cref="CustomSpriteWindow"/>, ed-4).</summary>
+    private void CustomSpriteMenuItem_Click(object sender, RoutedEventArgs e) => new CustomSpriteWindow { Owner = this }.Show();
+
     // ── 요소 > 직업 창 ───────────────────────────────────────────────────────
 
     private void JobViewerMenuItem_Click(object sender, RoutedEventArgs e)

@@ -162,11 +162,11 @@ def parse_add(text, args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sheet")
-    ap.add_argument("--rows", required=True, help="방향:위:아래[@동작] 을 쉼표로 — 예 back:40:280,front:285:515,side:520:755")
+    ap.add_argument("sheet", help="첫 시트 — 「-」 면 없음(시트를 모두 --add 로 줄 때 · 편집기 「사용자 그림 만들기」가 이렇게 부른다)")
+    ap.add_argument("--rows", default="", help="방향:위:아래[@동작] 을 쉼표로 — 예 back:40:280,front:285:515,side:520:755")
     ap.add_argument("--cols", type=int, default=8)
-    ap.add_argument("--col-x", type=int, required=True, help="첫 칸 왼쪽 x")
-    ap.add_argument("--col-w", type=int, required=True, help="칸 너비")
+    ap.add_argument("--col-x", type=int, default=0, help="첫 칸 왼쪽 x")
+    ap.add_argument("--col-w", type=int, default=192, help="칸 너비")
     ap.add_argument("--key", type=hex_color, help="배경 색 rrggbb (예 ff00ff)")
     ap.add_argument("--key-tol", type=int, default=40)
     ap.add_argument("--flood", type=int, default=14)
@@ -182,8 +182,10 @@ def main():
     ap.add_argument("--preview")
     args = ap.parse_args()
 
-    parts = [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
-              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": [], "ability": 25, "ticks": 0, "sounds": []}] + [parse_add(a, args) for a in args.add]
+    parts = ([] if args.sheet == "-" else [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
+              "key": args.key, "key_tol": args.key_tol, "flood": args.flood, "anchor": args.anchor, "frames": 0, "hit": [], "ability": 25, "ticks": 0, "sounds": []}]) + [parse_add(a, args) for a in args.add]
+    if not parts:
+        raise SystemExit("시트가 없습니다")
 
     frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
     for part in parts:
