@@ -139,6 +139,19 @@ internal sealed class BattleMiniMap(GameWindow host)
         else CopyToBoard(img, ix, iy);
         host.UiStroke(ix - 1, iy - 1, _imgW + 2, _imgH + 2, 0xFF606060);
 
+        // 상자 — 아직 안 연 것만 노란 네모(잠긴 것은 주황), 인물 점보다 먼저(사람이 서 있으면 사람이 보인다, 사용자 요청 fa-69).
+        // 파트1 은 Obt 상자(Part1MapObjects.Chests), 파트2 는 물체 갈래 2(폭탄 8 은 뺀다).
+        var chests = host._scene.IsPart1
+            ? host.Btl.Part1Objects.Chests().Where(c => !c.Opened).Select(c => (c.Col, c.Row, c.Locked))
+            : host.Btl.Objects.Where(o => o.Data.Kind == 2 && !host.Btl._opened.Contains(o)).Select(o => (o.Col, o.Row, Locked: false));
+        foreach (var (col, row, locked) in chests)
+        {
+            int px = ix + (int)((col * TileW + TileW / 2 - _srcX0) * _scale), py = iy + (int)((host.CellCenterY(col, row) - _srcY0) * _scale);
+            if (px < ix + 1 || py < iy + 1 || px >= ix + _imgW - 1 || py >= iy + _imgH - 1) continue;
+            host.UiFill(px - 2, py - 2, 5, 5, 0xFF000000);
+            host.UiFill(px - 1, py - 1, 3, 3, locked ? 0xFFFF9020 : 0xFFFFE040);
+        }
+
         // 인물 점 — 쓰러졌거나 아직 안 나온 사람은 뺀다. 지금 차례인 사람은 흰 테를 두른다.
         var units = host._units;
         for (int i = 0; i < units.Length; i++)
