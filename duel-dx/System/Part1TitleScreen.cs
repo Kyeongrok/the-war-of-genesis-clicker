@@ -449,11 +449,12 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (host.Part1.ChapterId < 0 || !Chapter.Continue()) host.Toast("파트1 진행 기록을 읽지 못했습니다");
     }
 
-    /// <summary>파트1 인물을 읽을 때 진행의 자란 것(경험치 · 어빌리티)을 입히게 한다 — 만들어 둔 인물은 버린다.</summary>
+    /// <summary>파트1 인물을 읽을 때 진행의 자란 것(경험치 · 어빌리티)과 에디터가 바꾼 외형 · 목소리를 입히게 한다 — 만들어 둔 인물은 버린다.</summary>
     internal void HookGrowth()
     {
         if (host._db is not { } db) return;
         db.Part1Growth = host.Part1.Apply;
+        db.Part1Voice = host.Part1.VoiceOf;
         db.ForgetPart1Characters();
         host.Btl.Part1.Forget();
     }

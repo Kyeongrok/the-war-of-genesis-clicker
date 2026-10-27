@@ -236,6 +236,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal List<Look> LookRows(GameDatabase db, CharacterData c)
     {
         if (_lookRows is { } rows && rows.Chr == c.Code) return rows.Rows;
+        // 파트1 인물은 파트1 인물 레코드의 모습만(Part1CharEdit.LookRows — 파트2 그림은 파트1 동작이 없다).
+        if (Part1Mode) { var p1 = P1.LookRows(c.Code); (_lookRows, _lookTop) = ((c.Code, p1), 0); return p1; }
         var own = db.Character(c.Code);
         // 어느 레코드에도 없고 스크립트 701 만 입히는 복장(살라딘의 건슬라이서 1185)은 그 인물 폴더의 그림 파일에서 찾는다.
         var listed = AllLooks(db).Where(l => l.NameId == c.NameId).Select(l => (int)l.Sprite).ToHashSet();
@@ -369,7 +371,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal const int VoicePrevDx = 70, VoiceNextDx = 252, VoicePlayDx = 288;
     internal static readonly string[] Tabs = ["장비", "어빌리티", "외형"];
 
-    internal static int TabX(int px, int t) => px + ContentW - (Tabs.Length - t) * (TabW + 4) + 4;
+    internal static int TabX(int px, int t) => TabX(px, t, Tabs.Length);
+
+    /// <summary>갈래 단추 자리 — 오른쪽 끝에 붙여 <paramref name="count"/> 개를 늘어놓는다(파트1 은 넷 — <see cref="Part1CharEdit.Tabs"/>).</summary>
+    internal static int TabX(int px, int t, int count) => px + ContentW - (count - t) * (TabW + 4) + 4;
 
     internal bool In(int bx, int by, int x, int y, int w, int h) => bx >= x && bx < x + w && by >= y && by < y + h;
 
@@ -378,8 +383,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal string _imeComp = "";
     internal bool _pickerOpen;      // 인물 펼침 상자가 펼쳐졌나
 
-    /// <summary>찾기 칸이 글자를 받나 — 어빌리티 · 외형 갈래가 열려 있을 때.</summary>
-    internal bool SearchActive => _open && !_pickSave && (_tab is 1 or 2 || _itemPick is { Open: true }) && !NoGame(People());
+    /// <summary>찾기 칸이 글자를 받나 — 어빌리티 · 외형 갈래(파트1 은 가방 · 외형도)가 열려 있을 때.</summary>
+    internal bool SearchActive => _open && !_pickSave && (_tab is 1 or 2 or 3 || _itemPick is { Open: true }) && !NoGame(People());
 
     internal string Query => (_search + _imeComp).Trim();
 
@@ -414,7 +419,10 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         Query is { Length: > 0 } q ? [.. AbilityRows(db, c).Where(id => Matches(q, [db.T(db.Abilities[id].NameId)], [id]))] : AbilityRows(db, c);
 
     internal List<Look> LookView(GameDatabase db, CharacterData c) =>
-        Query is { Length: > 0 } q ? [.. LookRows(db, c).Where(l => Matches(q, [LookName(db, l), db.T(l.TitleId)], [l.Sprite, l.Chr]))] : LookRows(db, c);
+        Query is { Length: > 0 } q ? [.. LookRows(db, c).Where(l => Matches(q, [LookName(db, l), db.T(l.TitleId)], [l.Sprite, LookNo(l), l.Chr]))] : LookRows(db, c);
+
+    /// <summary>줄 앞에 보이는 그림 번호 — 파트1 모습은 파트1 번호(<see cref="Part1Game.ObsBase"/> 를 뺀 것).</summary>
+    internal static int LookNo(Look l) => l.Part1Name != null && l.Sprite > Part1Game.ObsBase ? l.Sprite - Part1Game.ObsBase : l.Sprite;
 
     /// <summary>열려 있으면 클릭을 먹는다.</summary>
     internal bool OnClick(int bx, int by)
@@ -547,7 +555,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         else if (_pickSave || NoGame(people)) _saveTop = Math.Clamp(_saveTop - delta, 0, Math.Max(0, Saves().Count - SaveRows));
         // 어빌리티 · 외형 목록은 줄이 많아 한 번에 세 줄 — 넘친 값은 그릴 때 자른다.
         else if (_tab == 1) _abTop -= delta * 3;
-        else if (_tab == 2) _lookTop -= delta * 3;
+        else if (_tab is 2 or 3) _lookTop -= delta * 3;   // 파트1 은 2 가방 · 3 외형 — 둘 다 이 자리를 쓴다
     }
 
     internal void OnKey(int key)
@@ -618,7 +626,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         TickVoice();
         var rows = LookView(db, c);
         _lookTop = Math.Clamp(_lookTop, 0, Math.Max(0, rows.Count - AbRows));
-        DrawSearch(px, y, $"지금 그림 #{c.SpriteId} · 목소리 {c.VoiceSet}");
+        int now = c.SpriteId > Part1Game.ObsBase ? c.SpriteId - Part1Game.ObsBase : c.SpriteId;   // 파트1 그림은 파트1 번호로
+        DrawSearch(px, y, $"지금 그림 #{now} · 목소리 {c.VoiceSet}");
         Look? hover = null;
         for (int i = 0; i < AbRows && _lookTop + i < rows.Count; i++)
         {
@@ -630,7 +639,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             string label = $"{LookName(db, look)}{title}";
             while (label.Length > 2 && host.UiGetText(label, White, 12).W > LookShapeDx - LookNameDx - 6) label = label[..^1];
             bool wearing = look.Sprite == c.SpriteId;
-            string no = $"#{look.Sprite}";
+            string no = $"#{LookNo(look)}";
             host.UiText(no, px + LookNameDx - 6 - host.UiGetText(no, DimGray, 12).W, ry + 2, wearing ? 0xFF00FFFF : DimGray, 12);
             host.UiText(label, px + LookNameDx, ry + 2, wearing ? 0xFF00FFFF : White, 12);
             Button(px + LookShapeDx, ry, 40, "모습", on: wearing, h: 20);
@@ -649,14 +658,14 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiText("옆", bx + half + 4, by + 2, DimGray, 12);
         // 코드에서 찾아 고칠 수 있게 번호를 다 보인다 — Chr · 모습(Obs) · 목소리 묶음(사용자 요청 ed-3).
         string caption = hover is { Part1Name: not null } ? $"파트1 Chr {hover.Chr:D4} · 모습 {hover.Sprite - Part1Game.ObsBase}"
-                       : hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {c.SpriteId} · 목소리 {c.VoiceSet}";
+                       : hover != null ? $"Chr {hover.Chr:D4} · 모습 {hover.Sprite} · 목소리 {hover.Voice}" : $"지금 모습 {now} · 목소리 {c.VoiceSet}";
         host.UiText(caption, bx + (bw - host.UiGetText(caption, DimGray, 12).W) / 2, by + bh - 18, DimGray, 12);
         Button(bx, y + ResetDy, bw, "원래대로", h: 20);
         // 목소리만 번호로 고르기 — 모습과 따로.
         int vy = y + ResetDy;
         host.UiText("목소리", px, vy + 2, DimGray, 12);
         Button(px + VoicePrevDx, vy, 30, "◀", h: 20);
-        string owner = VoiceOwner(db, c.VoiceSet), voice = owner.Length > 0 ? $"#{c.VoiceSet}  {owner}" : $"#{c.VoiceSet}";
+        string owner = c.VoiceSet == 0 ? "없음" : VoiceOwner(db, c.VoiceSet), voice = owner.Length > 0 ? $"#{c.VoiceSet}  {owner}" : $"#{c.VoiceSet}";
         while (voice.Length > 2 && host.UiGetText(voice, White, 12).W > VoiceNextDx - VoicePrevDx - 40) voice = voice[..^1];
         host.UiText(voice, px + VoicePrevDx + 30 + (VoiceNextDx - VoicePrevDx - 30 - host.UiGetText(voice, White, 12).W) / 2, vy + 2, 0xFF00FFFF, 12);
         Button(px + VoiceNextDx, vy, 30, "▶", h: 20);
@@ -696,7 +705,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         host.UiFill(x, y, W, H, StatusScreen.PanelBg);
         host.UiStroke(x, y, W, H, StatusScreen.BoxLine);
         host.UiFill(x, y, W, 28, StatusScreen.HeadBg);
-        host.UiText(Part1Mode ? "캐릭터 에디터 (파트1) — 레벨·장비·어빌리티·가방·eld 바꾸기(시험용)" : "캐릭터 에디터 — 레벨·장비·어빌리티·외형·소지금 바꾸기(시험용)", x + 10, y + 6, White);
+        host.UiText(Part1Mode ? "캐릭터 에디터 (파트1) — 레벨·장비·어빌리티·가방·외형·eld 바꾸기(시험용)" : "캐릭터 에디터 — 레벨·장비·어빌리티·외형·소지금 바꾸기(시험용)", x + 10, y + 6, White);
 
         var people = People();
         bool picking = _pickSave || NoGame(people);

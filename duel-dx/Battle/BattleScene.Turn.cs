@@ -150,7 +150,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             bool part1Chr = unit.ChrCode >= Part1Game.ChrBase;
             if (carried != null && (follower || part1Chr || !(mine || host._db.LevelExempt.Contains(unit.ChrCode))))
             {
-                if (!follower) c = c with { SpriteId = carried.SpriteId, FaceId = carried.FaceId, NameId = carried.NameId, Name2Id = carried.Name2Id, TitleId = carried.TitleId };
+                // 파트1 인물의 겉모습도 진행(Part1Progress.Looks — 캐릭터 에디터 「외형」)에서 온다 — 불러온 때의 사본을 입히면 그 뒤에 바꾼 모습이 다음 판에 안 들었다(menu-97).
+                if (!follower && !part1Chr) c = c with { SpriteId = carried.SpriteId, FaceId = carried.FaceId, NameId = carried.NameId, Name2Id = carried.Name2Id, TitleId = carried.TitleId };
                 carried = null;
             }
             unit.Data = carried != null ? carried
@@ -688,7 +689,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     {
         if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         // 파트1 인물의 차례 목소리(원본에 없음, Part1TurnCall) — 내가 움직이는 인물만, 모드에서 켰을 때.
-        if (host._scene.IsPart1 && Part1TurnCall.For(u) is { Length: > 0 } p1call)
+        // 캐릭터 에디터 「외형」으로 파트2 목소리 묶음을 넣었으면(VoiceSet > 0, menu-97) 그것을 파트2 처럼 낸다.
+        if (host._scene.IsPart1 && u.Data.VoiceSet == 0 && Part1TurnCall.For(u) is { Length: > 0 } p1call)
         {
             if (IsMine(u) && host._part1TurnVoice) host.Play(p1call[(_tick & 3) % p1call.Length], 1000 + Array.IndexOf(host._units, u));
             return;

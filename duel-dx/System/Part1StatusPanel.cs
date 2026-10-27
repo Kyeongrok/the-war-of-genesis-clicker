@@ -294,7 +294,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         {
             int cx = x + 6 + i * StripCell, cy = y0 + 5;
             _strip.Add((cx, cy, StripCell - 2, StripCell - 2));
-            if (Part1Chr.Load(_offMembers[i] - Part1Game.ChrBase) is { FaceId: > 0 } m && host.UiFor(Part1Game.ObsBase + m.FaceId)?.FrameAt(0, 0) is { } face)
+            if (Part1Chr.Load(_offMembers[i] - Part1Game.ChrBase) is { } offRaw && host.Part1.Apply(offRaw) is { FaceId: > 0 } m && host.UiFor(Part1Game.ObsBase + m.FaceId)?.FrameAt(0, 0) is { } face)
                 Img(face, cx, cy, StripCell - 2, StripCell - 2);
             bool hot = host._mouse.X >= cx && host._mouse.X < cx + StripCell - 2 && host._mouse.Y >= cy && host._mouse.Y < cy + StripCell - 2;
             if (_offMembers[i] == _offChr) host.UiStroke(cx - 1, cy - 1, StripCell, StripCell, 0xFFFFE080);

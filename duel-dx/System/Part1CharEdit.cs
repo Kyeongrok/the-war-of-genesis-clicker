@@ -12,12 +12,14 @@ using static DuelDx.GameWindow;
 /// 소지금은 지금 챕터 무리의 eld(<see cref="Part1Progress.Eld"/>), 인물은 지금 무리 사람(일행 창과 같은 <see cref="Part1Progress.GroupMembers"/>)에 판 위의 편 4 파트1 인물을 더한다.
 /// 레벨은 누적 경험치 ÷ 100(<see cref="Part1Progress.Growth.Experience"/>), 장비는 다섯 칸(<see cref="Part1Progress.Equipped"/>)을 그 칸 갈래에 맞는 아이템으로 넘긴다
 /// (시험용이라 직업이 다루는지는 따지지 않고 표시만 한다 — 가방에서 꺼내지도 않는다), 어빌리티는 배운 레벨(<see cref="Part1Progress.Growth.Abilities"/>, 0 = 지우기)을
-/// 직업 최대를 넘어서도 바꾼다, 가방은 지금 무리의 것(<see cref="Part1Progress.Bag"/>)에 넣고 뺀다. 외형 · 나야트레이는 파트2 것이라 안 보인다.
+/// 직업 최대를 넘어서도 바꾼다, 가방은 지금 무리의 것(<see cref="Part1Progress.Bag"/>)에 넣고 뺀다. 나야트레이는 파트2 것이라 안 보인다.
+/// 외형은 파트2 「외형」 갈래와 같은 화면으로 다른 파트1 인물의 모습(전투 그림 · 반신 · 얼굴)을 빌리고, 목소리는 파트2 목소리 묶음을 번호로 고른다
+/// (<see cref="Part1Progress.Looks"/> — 사용자 요청 menu-97: 「파트1도 파트2처럼 캐릭터 외형 바꿀 수 있게 해. 목소리도 파트2 목소리뿐이지만 넣을 수 있게」).
 /// 바꾸면 판 위의 그 인물에게도 바로 든다(어빌리티 목록 · 레벨 · 최대 HP · 능력치).
 /// </remarks>
 internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
 {
-    internal static readonly string[] Tabs = ["장비", "어빌리티", "가방"];
+    internal static readonly string[] Tabs = ["장비", "어빌리티", "가방", "외형"];
     internal const int LevelMax = 99, AbilityMax = 99;
 
     private (int Chr, List<int> Ids)? _abRows;
@@ -56,7 +58,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         return Part1TimelineScreen.BranchOf(id) is { } branch ? $"{branch} · {chapter}" : chapter;
     }
 
-    /// <summary>바꾼 것을 판 위의 그 인물에게도 — 인물 자료 · 싸움 자료를 다시 읽게 하고 어빌리티 목록 · 레벨 · 능력치 · 최대 HP 를 새로.</summary>
+    /// <summary>바꾼 것을 판 위의 그 인물에게도 — 인물 자료 · 싸움 자료를 다시 읽게 하고 어빌리티 목록 · 레벨 · 능력치 · 최대 HP · 그림 · 얼굴 · 목소리를 새로.</summary>
     internal void Changed(int code)
     {
         host.Stats._charEdited = true;
@@ -66,7 +68,8 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         if (!host._battleLoaded || !host._scene.IsPart1 || host._db?.Character(code) is not { } fresh) return;
         foreach (var u in host._units.Where(u => u.ChrCode == code && u.Data != null))
         {
-            u.Data = u.Data! with { Level = fresh.Level, Lp = fresh.Lp, Psy = fresh.Psy, Dep = fresh.Dep, Dex = fresh.Dex, BasicWorkId = fresh.BasicWorkId };
+            u.Data = u.Data! with { Level = fresh.Level, Lp = fresh.Lp, Psy = fresh.Psy, Dep = fresh.Dep, Dex = fresh.Dex, BasicWorkId = fresh.BasicWorkId,
+                                    SpriteId = fresh.SpriteId, FaceId = fresh.FaceId, VoiceSet = fresh.VoiceSet };
             if (host.Btl.Part1.Fighter(u) is { } f) u.MaxHp = Math.Max(1, f.Chr.MaxHp);
             u.Hp = Math.Min(Math.Max(1, u.Hp), u.MaxHp);
         }
@@ -180,7 +183,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         if (ed._chosen >= people.Count) return true;
         int code = people[ed._chosen];
         for (int t = 0; t < Tabs.Length; t++)
-            if (ed.In(bx, by, CharEditScreen.TabX(px, t), y + 42, CharEditScreen.TabW, 22))
+            if (ed.In(bx, by, CharEditScreen.TabX(px, t, Tabs.Length), y + 42, CharEditScreen.TabW, 22))
             {
                 if (t != ed._tab) (ed._search, ed._imeComp) = ("", "");
                 ed._tab = t;
@@ -189,6 +192,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         foreach (var (dx, delta) in LevelSteps)
             if (ed.In(bx, by, px + dx, y + 76, 40, 22)) { ChangeLevel(code, delta); return true; }
         if (Chr(code) is not { } c) return true;
+        if (ed._tab == 3) return OnLookClick(bx, by, px, y, code);
         if (ed._tab == 0)
         {
             for (int slot = 0; slot < 5; slot++)
@@ -253,10 +257,12 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         ed.Button(px + 170, y + 76, 40, "−10"); ed.Button(px + 214, y + 76, 40, "−1"); ed.Button(px + 258, y + 76, 40, "+1"); ed.Button(px + 302, y + 76, 40, "+10");
         string job = Part1Job.ById(Part1Tables.Jobs, c.JobId)?.Name is { Length: > 0 } jn ? $"직업 {jn}" : $"직업 {c.JobId}";
         host.UiText(job, px + w - host.UiGetText(job, DimGray, 12).W, y + 80, DimGray, 12);
-        for (int t = 0; t < Tabs.Length; t++) ed.Button(CharEditScreen.TabX(px, t), y + 42, CharEditScreen.TabW, Tabs[t], on: t == ed._tab);
+        for (int t = 0; t < Tabs.Length; t++) ed.Button(CharEditScreen.TabX(px, t, Tabs.Length), y + 42, CharEditScreen.TabW, Tabs[t], on: t == ed._tab);
         if (ed._tab == 0) DrawEquipment(c, px, y);
         else if (ed._tab == 1) DrawAbilities(c, px, y);
-        else DrawBag(px, y);
+        else if (ed._tab == 2) DrawBag(px, y);
+        // 외형 — 파트2 갈래와 같은 화면(줄 · 미리 보기 · 목소리 ◀ ▶ 듣기 · 원래대로). 맨 아래 줄을 목소리가 써서 도움말은 안 띄운다.
+        else { if (host._db is { } db && db.Character(people[ed._chosen]) is { } dc) ed.DrawLooks(db, dc, px, y); return; }
         string hint = ed._tab switch
         {
             0 => "바꾸면 바로 든다 — 시험용이라 직업이 못 다루는 것도 낀다 · 오른쪽 단추: 설명",
@@ -264,6 +270,84 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
             _ => "지금 챕터 무리의 가방 — 챕터마다 무리 가방이 따로다 · 오른쪽 단추: 설명",
         };
         host.UiText(hint, px, y + CharEditScreen.H - CharEditScreen.PartyH - 66, DimGray, 12);
+    }
+
+    // ── 외형 ── 파트2 「외형」 갈래(CharEditScreen.DrawLooks)를 그대로 그리고, 바꾼 것은 파트1 진행(Part1Progress.Looks)에 적어 세이브에 남긴다.
+    private List<CharEditScreen.Look>? _looks;
+
+    /// <summary>
+    /// 고를 수 있는 파트1 모습 — 파트1 인물 레코드(<c>Chars\NNNN.chr</c>)마다, 얼굴이 있는 사람(초상까지 함께 바뀌게)으로 한 칸 인물만(큰 유닛 · 나는 것은 뺀다).
+    /// 그림이 같으면 번호가 작은 레코드 하나. 기본 공격 동작이 없는 그림(사건 전용)은 뺀다.
+    /// 파트2 그림은 올리지 않는다 — 파트1 판은 파트1 동작 번호(<see cref="Part1Game.ActionMap"/>: 연속 공격 4~6타 53~55 · 기술 동작 56~)로 몸을 움직이는데
+    /// 파트2 그림에는 그 동작이 없어 연 · 참 · 기술을 쓰면 몸이 멈춘다. 파트1 폴더가 없으면(에셋 팩) 에디터가 파트2 에 올리는 파트1 주역들(<see cref="CharEditScreen.Part1Looks"/>).
+    /// </summary>
+    internal List<CharEditScreen.Look> AllLooks()
+    {
+        if (_looks != null) return _looks;
+        var records = Enumerable.Range(0, 1000).Select(Part1Chr.Load).OfType<Part1Chr>()
+            .Where(p => p.SpriteId > 0 && p.FaceId > 0 && p.Fields[Part1Chr.BigField] == 0 && p.Fields[Part1Chr.FlyField] == 0 && p.Name.Trim().Length > 0)
+            .GroupBy(p => p.SpriteId).Select(g => g.First())
+            .Where(p => Part1Game.HasBasicAttack(p.SpriteId) ?? ed.BattleReady(Part1Game.ObsBase + p.SpriteId))
+            .Select(p => new CharEditScreen.Look(p.Code, 0, 0, (ushort)(Part1Game.ObsBase + p.SpriteId), (ushort)(Part1Game.ObsBase + p.FaceId), 0, p.Name.Trim())).ToList();
+        return _looks = records.Count > 0 ? records : [.. ed.Part1Looks()];
+    }
+
+    /// <summary>외형 갈래의 줄 — 이름이 같은 레코드(제 다른 모습)를 맨 앞에, 그다음 주역(<see cref="Part1Game.Shipped"/>), 그다음 나머지, 번호 차례.</summary>
+    internal List<CharEditScreen.Look> LookRows(int code)
+    {
+        string name = Part1Chr.Load(code - Part1Game.ChrBase)?.Name.Trim() ?? "";
+        return [.. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
+    }
+
+    /// <summary>그 모습(빌릴 파트1 레코드)의 전투 그림 · 반신 · 얼굴을 입힌다 — 제 레코드의 것이면 바꾼 것을 지운다.</summary>
+    internal void ChangeLook(int code, CharEditScreen.Look look)
+    {
+        if (Part1Game.Character(look.Chr) is not { } from) return;
+        var l = host.Part1.LookOf(code);
+        (l.Sprite, l.Bust, l.Face) = look.Chr == code - Part1Game.ChrBase ? (0, 0, 0) : (from.SpriteId, from.BustId, from.FaceId);
+        LookChanged(code, sprite: true);
+    }
+
+    /// <summary>목소리 묶음을 번호로 앞뒤로 — 파트1 인물은 목소리가 없는 것(0)이 제 자리라 「없음」도 고를 수 있게 0 을 맨 앞에 둔다.</summary>
+    internal void StepVoice(int code, int delta)
+    {
+        List<int> sets = [0, .. ed.VoiceSets()];
+        var l = host.Part1.LookOf(code);
+        int at = sets.IndexOf(l.Voice);
+        l.Voice = at >= 0 ? sets[((at + delta) % sets.Count + sets.Count) % sets.Count]
+                : delta > 0 ? sets.FirstOrDefault(v => v > l.Voice, 0) : sets.LastOrDefault(v => v < l.Voice, 0);
+        LookChanged(code, sprite: false);
+        if (l.Voice > 0) ed.PlayVoiceSample(l.Voice);
+    }
+
+    /// <summary>레코드 그대로 — 바꾼 그림 · 목소리를 모두 지운다.</summary>
+    internal void ResetLook(int code)
+    {
+        if (!host.Part1.Looks.Remove(code)) return;
+        LookChanged(code, sprite: true);
+    }
+
+    /// <summary>바꾼 외형을 판 위의 그 인물에게도 — 그림이 바뀌었으면 판의 그림을 다시 읽는다. 다 되돌린 것은 진행에서도 뺀다.</summary>
+    private void LookChanged(int code, bool sprite)
+    {
+        if (host.Part1.Looks.TryGetValue(code, out var l) && l is { Sprite: 0, Voice: 0 }) host.Part1.Looks.Remove(code);
+        Changed(code);
+        if (sprite && host._battleLoaded && host._scene.IsPart1) host.LoadRosterSprites();
+    }
+
+    /// <summary>외형 갈래의 클릭 — 자리는 파트2 갈래와 같다(<see cref="CharEditScreen.LookShapeDx"/> · <see cref="CharEditScreen.ResetDy"/>). 줄마다 목소리 단추는 없다(파트1 레코드에 목소리가 없다).</summary>
+    private bool OnLookClick(int bx, int by, int px, int y, int code)
+    {
+        int vy = y + CharEditScreen.ResetDy;
+        if (ed.In(bx, by, px + CharEditScreen.LookPreviewDx, vy, CharEditScreen.LookPreviewW, 20)) { ResetLook(code); return true; }
+        if (ed.In(bx, by, px + CharEditScreen.VoicePrevDx, vy, 30, 20)) { StepVoice(code, -1); return true; }
+        if (ed.In(bx, by, px + CharEditScreen.VoiceNextDx, vy, 30, 20)) { StepVoice(code, 1); return true; }
+        if (ed.In(bx, by, px + CharEditScreen.VoicePlayDx, vy, 60, 20)) { if (host.Part1.VoiceOf(code) is var v and > 0) ed.PlayVoiceSample(v); return true; }
+        if (host._db is not { } db || db.Character(code) is not { } dc) return true;
+        var looks = ed.LookView(db, dc);
+        for (int i = 0; i < CharEditScreen.AbRows && ed._lookTop + i < looks.Count; i++)
+            if (ed.In(bx, by, px + CharEditScreen.LookShapeDx, y + CharEditScreen.RowsDy + i * CharEditScreen.AbRowH, 40, 20)) { ChangeLook(code, looks[ed._lookTop + i]); return true; }
+        return true;
     }
 
     private void DrawEquipment(Part1Chr c, int px, int y)

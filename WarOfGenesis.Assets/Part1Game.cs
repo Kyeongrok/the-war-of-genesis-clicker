@@ -493,6 +493,17 @@ public static class Part1Game
     public const int DeathSnd = 2032;
 
     /// <summary>
+    /// 파트1 그림에 기본 공격 동작(파트1 동작 2 = 모션 6)이 있나 — 다시 싸지 않고(<see cref="ToPart2Obs"/>) 모션표만 훑는다. 캐릭터 에디터 「외형」이
+    /// 파트1 인물 모습 수십 개를 고를 때 쓴다(다시 싸면 처음 한 번 몇 초 걸린다). 파트1 폴더가 없거나 못 읽으면 null.
+    /// </summary>
+    public static bool? HasBasicAttack(int part1Obs)
+    {
+        if (Root == null || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try { return RawMotion(p1, 6) is { Count: > 0 }; }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return false; }
+    }
+
+    /// <summary>
     /// 파트1 맞기 동작(동작 5 = 모션 15~17)의 번쩍임·떨림 — 파트1 키 종류 3 의 섞기 <b>14</b>(세기 5 · 15 · 30 · 15 · 5, 색표 = 픽셀 + 세기 × (31 − 픽셀) / 31,
     /// 회색 스크린 = 하얗게 뜸 — 색표 생성기 <c>0x1000b8d0</c> 를 돌려 읽은 값)와 종류 9 의 자리 <b>더하기</b>(<c>0x1009fa6a</c> — +2 −4 +4 … −2, 2픽셀 좌우 떨림).
     /// 그림을 파트2 꼴로 쌀 때(<see cref="ToPart2Obs"/>)는 이 둘을 버려 맞아도 몸이 그대로였다 — 다시 싸면 팩도 새로 올려야 해서(<see cref="ConvertVersion"/>)

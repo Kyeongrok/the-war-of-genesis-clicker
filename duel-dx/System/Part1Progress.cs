@@ -49,6 +49,7 @@ internal sealed class Part1Progress
         LevelPicks = [];
         Stocks = [];
         Equipped = [];
+        Looks = [];
         PlaceBattles = [];
         PlaceTowns = [];
         MapTurns = [];
@@ -371,8 +372,34 @@ internal sealed class Part1Progress
             if (g.Job > 0) { var f = (int[])chr.Fields.Clone(); f[7] = g.Job; chr = chr with { Fields = f }; }
         }
         if (Equipped.TryGetValue(code, out var slots)) chr = chr.WithEquipment(slots);
+        if (Looks.TryGetValue(code, out var look) && look.Sprite > 0)
+        {
+            var f = (int[])chr.Fields.Clone();
+            (f[3], f[4], f[5]) = (look.Sprite, look.Bust, look.Face);
+            chr = chr with { Fields = f };
+        }
         return chr;
     }
+
+    /// <summary>
+    /// 캐릭터 에디터 「외형」이 바꾼 모습(사용자 요청 menu-97) — 다른 파트1 인물 레코드에서 빌린 칸 3 전투 그림 · 칸 4 반신 · 칸 5 얼굴(파트1 번호, 그림 0 = 레코드 그대로)과
+    /// 파트2 목소리 묶음(Dmg.dat 번호, 0 = 없음 — 파트1 에는 목소리 묶음이 없다).
+    /// </summary>
+    internal sealed class Look
+    {
+        public int Sprite { get; set; }
+        public int Bust { get; set; }
+        public int Face { get; set; }
+        public int Voice { get; set; }
+    }
+
+    /// <summary>인물마다 바꾼 외형 — 없으면 인물 레코드 그대로.</summary>
+    internal Dictionary<int, Look> Looks = [];
+
+    internal Look LookOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? l : Looks[chrCode] = new Look();
+
+    /// <summary>그 인물의 목소리 묶음(GameDatabase.Part1Voice) — 안 바꿨으면 0.</summary>
+    internal ushort VoiceOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? (ushort)Math.Clamp(l.Voice, 0, ushort.MaxValue) : (ushort)0;
 
     /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번). 지금 고른 팀의 것(<see cref="ActiveStock"/>). 시험용 DUELDX_PART1BAG=「126,126」 으로 무리마다 미리 채운다.</summary>
     internal List<int> Bag { get => ActiveStock.Bag; set => ActiveStock.Bag = value; }
@@ -414,7 +441,7 @@ internal sealed class Part1Progress
                                    Dictionary<int, List<Part1Team>>? ChapterTeams = null, Dictionary<int, int>? SelectedTeam = null,
                                    Dictionary<int, List<int>>? ChapterMarkerPrev = null, Dictionary<int, int>? Home = null,
                                    int[]? Chain = null, Dictionary<string, int>? PlaceTowns = null, Dictionary<int, Stock>? Stocks = null,
-                                   List<int>? Formed = null, int StockVersion = 0, int[]? Fight = null);
+                                   List<int>? Formed = null, int StockVersion = 0, int[]? Fight = null, Dictionary<int, Look>? Looks = null);
 
     /// <summary>세이브 짐 꼴 — 1 = 팀마다 짐(<see cref="Part1Team.Stock"/>). 0 은 팀이 무리 짐을 같이 쓰던 세이브.</summary>
     private const int StockVersionNow = 1;
@@ -435,7 +462,7 @@ internal sealed class Part1Progress
     {
         var data = new SaveData(Party, ChapterId, PartyPlace, [.. Cleared], [.. FinishedChapters], Fired, Convert.ToBase64String(flags),
                                 [.. PendingActions.Select(c => (short[])[(short)c.Code, .. c.Args])], Grown, 0, [.. LevelPicks.Select(p => (int[])[p.Chr, p.Level])], null, Equipped, null, null, PlaceBattles, MapTurns, ChapterMarkers, ChapterVars, Riding, ChapterTeams, SelectedTeam, ChapterMarkerPrev, Home, Chain, PlaceTowns, Stocks,
-                                [.. Formed], StockVersionNow, Fight);
+                                [.. Formed], StockVersionNow, Fight, Looks.Count > 0 ? Looks : null);
         return JsonSerializer.Serialize(data);
     }
 
@@ -468,6 +495,7 @@ internal sealed class Part1Progress
             Grown = data.Grown ?? [];
             LevelPicks = [.. (data.LevelPicks ?? []).Where(p => p.Length == 2).Select(p => (p[0], p[1]))];
             Equipped = data.Equipped ?? [];
+            Looks = data.Looks ?? [];   // 외형 칸 전의 세이브에는 없다
             PlaceBattles = data.PlaceBattles ?? [];
             PlaceTowns = data.PlaceTowns ?? [];
             MapTurns = data.MapTurns ?? [];
