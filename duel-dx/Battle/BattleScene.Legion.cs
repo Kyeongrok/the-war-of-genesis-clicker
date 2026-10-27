@@ -620,7 +620,13 @@ internal sealed unsafe partial class BattleScene
         // 판정은 부하 <b>제 동작의 타격 키</b> 때 든다 — 원본은 부하도 명령 2(기술)로 보통 work 실행(0x10075ff0)을 돌려 제 모션의 타격 키마다 판정한다.
         // 전에는 치는 동작을 틀자마자 맞혀, 부하 피해 숫자가 대장 첫 타와 같은 틱 같은 자리에 겹쳐 떴고 정작 부하가 쏠 때는 아무것도 안 떴다
         // (사용자 보고: Btl 0288 세큐리티볼 부하가 베라모드를 쏴도 피해가 안 들어온다 — HP 는 깎이고 있었다).
-        var hits = HitTimesFor(follower, DrawnAction(follower, strike), ranged: work.RangeMax > 4);
+        // 파트1 부하(용병)는 대장처럼 그 모션의 첫 타격 키에서 친다(Part1Skill.BasicSwing) — 근접이라고 0.05 초에 치면 1.9 초짜리 베기 동작이
+        // 휘두르기도 전에 피해 · 맞는 몸짓이 나왔다(카페 제보 fg-42: 「전투 공격 모션과 히트 모션이 안 맞고」).
+        var hits = HitTimesFor(follower, DrawnAction(follower, strike), ranged: work.RangeMax > 4 || host._scene.IsPart1);
+        // 파트1 쏘는 동작(용병 총잡이 동작 9)은 타격 키가 없다 — 총소리 키 뒤 0.1 초(대장 BasicShot 처럼 쏜 뒤 맞는다), 소리도 없으면 동작 절반.
+        if (host._scene.IsPart1 && host._sprites.TryGetValue(follower.ChrCode, out var p1sprite)
+            && p1sprite.Clip(DrawnAction(follower, strike), follower.Facing) is { Hits.Count: 0 } p1clip)
+            hits = [p1clip.Sounds.Count > 0 ? p1clip.Sounds.Min(k => k.Start) / TicksPerSecond + 0.1 : Math.Max(0.05, p1sprite.ActionSeconds(DrawnAction(follower, strike), follower.Facing) / 2)];
         foreach (double at in hits) _followerHits.Add((host._lastTime + at, follower, work, struck, dying));
         if (Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),

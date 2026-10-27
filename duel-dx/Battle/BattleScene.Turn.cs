@@ -1430,7 +1430,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 {
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                            $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage}" + Environment.NewLine);
+                            $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage} at {host._lastTime:0.00}" + Environment.NewLine);
                     if (host.Part1Ab.ChainStruck >= 2) _timedPercent = 100;   // 연속 공격으로 여러 번 치면 타마다 보통 피해
                     if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying);
                 }

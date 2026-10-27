@@ -98,7 +98,7 @@ internal sealed partial class Part1Skill
         double finish = At(last);
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 basic {attackId} ({BasicKind(attackId)}): caster {user.ChrCode}, targets {targets.Count}, fx {_fx.Count}, events {_events.Count}, took {last} ticks" + Environment.NewLine);
+                $"part1 basic {attackId} ({BasicKind(attackId)}): caster {user.ChrCode}, targets {targets.Count}, fx {_fx.Count}, events {_events.Count}, took {last} ticks, from {_t0:0.00}" + Environment.NewLine);
         _events.Sort((a, b) => a.At.CompareTo(b.At));
         int next = 0;
         while (host._lastTime < finish || next < _events.Count)

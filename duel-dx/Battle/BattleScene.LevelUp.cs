@@ -73,7 +73,8 @@ internal sealed unsafe partial class BattleScene
         var growth = host.Part1.GrowthOf(killer.ChrCode, before);
         growth.Experience += exp;
         host.Part1.Eld += eld;
-        Popup(killer, $"EXP +{exp}", 0xFF90D0FF, 15);
+        // 번 eld 도 함께 띄운다(리메이크 덧붙임 — 처치해도 돈이 안 들어온다는 카페 제보 fg-43: 들어오고 있었지만 보이는 곳이 상단 소지금뿐이었다).
+        Popup(killer, eld > 0 ? $"EXP +{exp}  {eld} eld" : $"EXP +{exp}", 0xFF90D0FF, 15);
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 kill {killer.ChrCode} → {victim.ChrCode}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
