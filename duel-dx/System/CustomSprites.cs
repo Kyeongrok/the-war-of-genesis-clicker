@@ -5,7 +5,7 @@ namespace DuelDx;
 
 /// <summary>
 /// 사용자 그림 — 내 PC 의 <c>%APPDATA%\DuelDx\sprites\</c> 에 둔 전투 그림(<c>번호_이름.obs</c>, 번호 30000~30999)을 캐릭터 에디터 「외형」 줄로 입힌다
-/// (사용자 요청 menu-103). 그림은 <c>tools/custom-sprite/sheet_to_obs.py</c> 가 PNG 시트에서 만든다. 릴리즈에 싣지 않는다 — 남의 저작물일 수 있어서.
+/// (사용자 요청 menu-103). 그림은 편집기 「모션 > 사용자 그림 만들기」(CustomSpriteBuilder)나 <c>tools/custom-sprite/sheet_to_obs.py</c> 가 PNG 시트에서 만든다. 릴리즈에 싣지 않는다 — 남의 저작물일 수 있어서.
 /// </summary>
 /// <remarks>
 /// 번호는 파트1 그림 자리(<see cref="Part1Game.ObsBase"/> 위)와 겹치지만 파트1 그림 번호는 10000 을 넘지 않아 따로 가린다. 그림 찾기(<see cref="AssetPack.Fetch"/>)가

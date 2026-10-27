@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -54,6 +53,24 @@ public partial class CustomSpriteWindow : Window
         InitializeComponent();
         ActionColumn.ItemsSource = Actions;
         PartsGrid.ItemsSource = _parts;
+        // 넣어 둔 그림을 골라 이어 만든다 — 창을 열면 첫 그림(설정 .json 이 있는 것)을 바로 연다(사용자 보고: 열었는데 에바가 안 보인다).
+        var installed = Directory.Exists(SpriteFolder)
+            ? Directory.EnumerateFiles(SpriteFolder, "*.obs").Select(System.IO.Path.GetFileNameWithoutExtension).OfType<string>().Order().ToList() : [];
+        InstalledBox.ItemsSource = installed;
+        Loaded += (_, _) => { if (installed.Count > 0) InstalledBox.SelectedIndex = 0; else Log("넣어 둔 사용자 그림이 없습니다 — 「시트 추가…」로 시작하세요."); };
+    }
+
+    /// <summary>넣어 둔 그림을 고르면 — 설정(.json)이 있으면 열고 미리보기를 만든다, 없으면 그 그림의 모션만 볼 수 있게.</summary>
+    private void InstalledBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (InstalledBox.SelectedItem is not string stem) return;
+        string obs = System.IO.Path.Combine(SpriteFolder, stem + ".obs"), json = System.IO.Path.ChangeExtension(obs, ".json");
+        _built = obs;
+        string[] head = stem.Split('_', 2);
+        (IdBox.Text, NameBox.Text) = (head[0], head.Length > 1 ? head[1] : "");
+        if (!File.Exists(json)) { _parts.Clear(); Log($"{stem}: 설정(.json)이 없어 시트 목록은 비어 있습니다 — 「모션 보기」로 지금 그림을 볼 수 있습니다."); return; }
+        if (!LoadProject(json)) return;
+        Build_Click(this, new RoutedEventArgs());
     }
 
     private void Log(string text) { LogBox.AppendText(text + Environment.NewLine); LogBox.ScrollToEnd(); }
@@ -132,17 +149,6 @@ public partial class CustomSpriteWindow : Window
 
     // ── 만들기 ─────────────────────────────────────────────────────────────
 
-    /// <summary>tools/custom-sprite/sheet_to_obs.py — 편집기 실행 파일 위로 저장소를 찾아 올라간다.</summary>
-    private static string? ToolPath()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
-        {
-            string path = System.IO.Path.Combine(dir.FullName, "tools", "custom-sprite", "sheet_to_obs.py");
-            if (File.Exists(path)) return path;
-        }
-        return null;
-    }
-
     private (int Id, string Name, int Height)? Header()
     {
         if (!int.TryParse(IdBox.Text, out int id) || id is < 30000 or > 30999) { Log("번호는 30000~30999 로 하세요."); return null; }
@@ -151,55 +157,93 @@ public partial class CustomSpriteWindow : Window
         return (id, name, int.TryParse(HeightBox.Text, out int height) && height > 10 ? height : 100);
     }
 
+    /// <summary>시트를 BGRA 로 푼다 — 같은 시트를 여러 줄이 쓰면 한 번만.</summary>
+    private static CustomSpriteBuilder.Image LoadSheet(string path)
+    {
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.UriSource = new Uri(path);
+        image.EndInit();
+        var bmp = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
+        var px = new byte[bmp.PixelWidth * bmp.PixelHeight * 4];
+        bmp.CopyPixels(px, bmp.PixelWidth * 4, 0);
+        return new CustomSpriteBuilder.Image(bmp.PixelWidth, bmp.PixelHeight, px);
+    }
+
+    /// <summary>표의 한 줄 → 만들기 설정. 틀린 칸이 있으면 그 까닭을 돌려준다.</summary>
+    private static CustomSpriteBuilder.Part ToPart(Part p, CustomSpriteBuilder.Image sheet)
+    {
+        var rows = new List<CustomSpriteBuilder.Row>();
+        foreach (string spec in p.Rows.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string[] f = spec.Split('@')[0].Split(':');
+            if (f.Length != 3 || !int.TryParse(f[1], out int top) || !int.TryParse(f[2], out int bottom)) throw new FormatException($"{p.FileName}: 줄 「{spec}」 — 방향:위:아래 로 적으세요");
+            if (f[0] == "right") continue;                       // 게임이 옆모습을 뒤집는다
+            if (!Enum.TryParse<CustomSpriteBuilder.Direction>(f[0], true, out var dir)) throw new FormatException($"{p.FileName}: 방향 「{f[0]}」 — back · side · front");
+            rows.Add(new(dir, top, bottom));
+        }
+        (byte, byte, byte)? key = null;
+        int flood = 5, tol = 40;
+        foreach (string opt in p.Background.Split('|', ' ', ';').Where(o => o.Length > 0))
+        {
+            string[] kv = opt.Split('=', 2);
+            string v = kv.Length > 1 ? kv[1] : "";
+            if (kv[0] == "key" && v.Length == 6) key = (Convert.ToByte(v[..2], 16), Convert.ToByte(v[2..4], 16), Convert.ToByte(v[4..], 16));
+            else if (kv[0] == "flood" && int.TryParse(v, out int n)) (key, flood) = (null, n);
+            else if (kv[0] == "tol" && int.TryParse(v, out int t)) tol = t;
+        }
+        var anchor = p.Anchor.Trim().ToLowerInvariant() switch { "foot" => CustomSpriteBuilder.Anchor.Foot, "cell" => CustomSpriteBuilder.Anchor.Cell, _ => CustomSpriteBuilder.Anchor.Body };
+        var hits = p.Hit.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList();
+        var sounds = p.Sound.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.Split('@')).Select(x => (int.Parse(x[0]), int.Parse(x[1]))).ToList();
+        return new(sheet, p.Action, rows, p.ColX, p.ColW, p.Cols, key, tol, flood, anchor, hits, 25, sounds, p.Ticks);
+    }
+
+    /// <summary>만들고 미리보기 — <see cref="CustomSpriteBuilder"/>(C#, 파이썬 없이). 시간이 걸려 뒤에서 돈다.</summary>
     private async void Build_Click(object sender, RoutedEventArgs e)
     {
         PartsGrid.CommitEdit();
         if (Header() is not { } head || _parts.Count == 0) { if (_parts.Count == 0) Log("시트를 먼저 추가하세요."); return; }
-        if (ToolPath() is not { } tool) { Log("tools/custom-sprite/sheet_to_obs.py 를 못 찾았습니다 — 저장소에서 빌드한 편집기로 여세요."); return; }
-        string work = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx-custom-sprite");
-        Directory.CreateDirectory(work);
-        string obs = System.IO.Path.Combine(work, $"{head.Id}_{head.Name}.obs"), preview = System.IO.Path.Combine(work, "preview.png");
-        var psi = new ProcessStartInfo("python") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-        psi.Environment["PYTHONIOENCODING"] = "utf-8";
-        foreach (string a in new[] { "-I", tool, "-", "--id", head.Id.ToString(), "--height", head.Height.ToString(), "--out", obs, "--preview", preview })
-            psi.ArgumentList.Add(a);
-        foreach (var p in _parts)
-        {
-            string rows = string.Join(",", p.Rows.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(r => $"{r.Split('@')[0]}@{p.Action}"));
-            var opts = new List<string> { p.Path, rows, p.ColX.ToString(), p.ColW.ToString(), p.Cols.ToString(), p.Background.Trim(), $"anchor={p.Anchor.Trim()}" };
-            if (p.Hit.Trim().Length > 0) opts.Add($"hit={p.Hit.Trim()}");
-            if (p.Sound.Trim().Length > 0) opts.Add($"sound={p.Sound.Trim()}");
-            if (p.Ticks > 0) opts.Add($"ticks={p.Ticks}");
-            psi.ArgumentList.Add("--add");
-            psi.ArgumentList.Add(string.Join("|", opts));
-        }
-        Log("만드는 중…");
+        List<CustomSpriteBuilder.Part> parts;
         try
         {
-            using var process = Process.Start(psi)!;
-            string output = await process.StandardOutput.ReadToEndAsync(), error = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            if (output.Trim().Length > 0) Log(output.Trim());
-            if (process.ExitCode != 0) { Log(error.Trim().Length > 0 ? error.Trim() : $"도구가 {process.ExitCode} 로 끝났습니다."); return; }
+            var sheets = new Dictionary<string, CustomSpriteBuilder.Image>();
+            parts = [.. _parts.Select(p => ToPart(p, sheets.TryGetValue(p.Path, out var img) ? img : sheets[p.Path] = LoadSheet(p.Path)))];
         }
-        catch (System.ComponentModel.Win32Exception) { Log("python 을 못 찾았습니다 — 파이썬과 Pillow(pip install pillow)를 깔아 주세요."); return; }
-        _built = obs;
-        var image = new BitmapImage();
-        image.BeginInit();
-        image.CacheOption = BitmapCacheOption.OnLoad;
-        image.UriSource = new Uri(preview);
-        image.EndInit();
-        PreviewImage.Source = image;
-        Log("미리보기 — 장마다 발밑을 같은 자리에 둔 그림이다. 흔들리거나 잘린 줄이 없으면 「게임에 넣기」.");
+        catch (Exception ex) when (ex is FormatException or IOException or NotSupportedException or IndexOutOfRangeException or OverflowException)
+        {
+            Log($"설정이 틀렸습니다: {ex.Message}");
+            return;
+        }
+        Log("만드는 중…");
+        IsEnabled = false;
+        try
+        {
+            var result = await Task.Run(() => CustomSpriteBuilder.Build(parts, head.Height));
+            string work = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx-custom-sprite");
+            Directory.CreateDirectory(work);
+            string obs = System.IO.Path.Combine(work, $"{head.Id}_{head.Name}.obs");
+            File.WriteAllBytes(obs, result.Obs);
+            _built = obs;
+            var p = result.Preview;
+            var bmp = BitmapSource.Create(p.Width, p.Height, 96, 96, PixelFormats.Bgra32, null, p.Bgra, p.Width * 4);
+            PreviewImage.Source = bmp;
+            Log($"장 {result.Frames} · 모션 {string.Join(" ", result.Motions)} · 배율 {string.Join(" ", result.Scales.Select(x => x.ToString("0.000")))}");
+            Log("미리보기 — 장마다 발밑을 같은 자리에 둔 그림이다. 흔들리거나 잘린 줄이 없으면 「게임에 넣기」.");
+        }
+        catch (InvalidOperationException ex) { Log(ex.Message); }
+        finally { IsEnabled = true; }
     }
 
     private void Install_Click(object sender, RoutedEventArgs e)
     {
         if (_built is not { } built || !File.Exists(built) || Header() is not { } head) { Log("먼저 「만들고 미리보기」를 하세요."); return; }
         Directory.CreateDirectory(SpriteFolder);
-        foreach (string old in Directory.EnumerateFiles(SpriteFolder, $"{head.Id}_*.obs")) File.Delete(old);   // 이름을 바꿨으면 옛 파일을 지운다(같은 번호 둘이면 게임이 하나만 본다)
+        string keep = System.IO.Path.GetFullPath(built);
+        foreach (string old in Directory.EnumerateFiles(SpriteFolder, $"{head.Id}_*.obs").Where(f => !string.Equals(System.IO.Path.GetFullPath(f), keep, StringComparison.OrdinalIgnoreCase))) File.Delete(old);   // 이름을 바꿨으면 옛 파일을 지운다(같은 번호 둘이면 게임이 하나만 본다)
         string target = System.IO.Path.Combine(SpriteFolder, $"{head.Id}_{head.Name}.obs");
-        File.Copy(built, target, true);
+        if (!string.Equals(System.IO.Path.GetFullPath(built), System.IO.Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) File.Copy(built, target, true);
         File.WriteAllText(System.IO.Path.ChangeExtension(target, ".json"), JsonSerializer.Serialize(new Project(head.Id, head.Name, head.Height, [.. _parts]), new JsonSerializerOptions { WriteIndented = true }));
         Log($"넣었습니다: {target} — 게임의 캐릭터 에디터 「외형」 맨 위 「{head.Name} · 사용자 그림」(켜 둔 게임은 갈래를 다시 누르면 보인다).");
     }
@@ -228,14 +272,21 @@ public partial class CustomSpriteWindow : Window
     {
         var dialog = new OpenFileDialog { Filter = "사용자 그림 설정 (*.json)|*.json", InitialDirectory = Directory.Exists(SpriteFolder) ? SpriteFolder : "" };
         if (dialog.ShowDialog(this) != true) return;
+        LoadProject(dialog.FileName);
+    }
+
+    private bool LoadProject(string file)
+    {
         try
         {
-            if (JsonSerializer.Deserialize<Project>(File.ReadAllText(dialog.FileName)) is not { } project) return;
+            if (JsonSerializer.Deserialize<Project>(File.ReadAllText(file)) is not { } project) return false;
             (IdBox.Text, NameBox.Text, HeightBox.Text) = (project.Id.ToString(), project.Name, project.Height.ToString());
             _parts.Clear();
             foreach (var p in project.Parts) _parts.Add(p);
-            Log($"열었습니다: 시트 {_parts.Count}장");
+            var missing = project.Parts.Where(p => !File.Exists(p.Path)).Select(p => p.FileName).Distinct().ToList();
+            Log($"열었습니다: {System.IO.Path.GetFileName(file)} — 시트 {_parts.Count}줄{(missing.Count > 0 ? $" · 없는 시트 {string.Join(", ", missing)}" : "")}");
+            return missing.Count == 0;
         }
-        catch (JsonException ex) { Log($"설정을 못 읽었습니다: {ex.Message}"); }
+        catch (Exception ex) when (ex is JsonException or IOException) { Log($"설정을 못 읽었습니다: {ex.Message}"); return false; }
     }
 }
