@@ -29,7 +29,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
-    internal enum SystemItem { Mission, Restart, Load, Save, Volume, Mods, Settings, Exit }
+    internal enum SystemItem { Mission, Restart, Load, Save, Volume, JobTree, Party, Mods, Settings, Exit }
 
     internal static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
     [
@@ -38,6 +38,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         (SystemItem.Load, 1, "LOAD"),
         (SystemItem.Save, 0, "SAVE"),
         (SystemItem.Volume, 2, "VOLUME"),
+        (SystemItem.JobTree, -3, "전직 트리"),   // 원본에 없는 줄(사용자 요청 menu-106) — 파트1 전직 트리(T 와 같다). 파트1 전투 · 챕터 지도에서만
+        (SystemItem.Party, -3, "동료 정보"),     // 원본에 없는 줄(menu-106) — 파트1 일행 한눈에(P 와 같다)
         (SystemItem.Mods, -1, "MODE"),          // 원본에 없는 줄(사용자 요청 menu-34) — 모드 창을 연다. 글자 그림은 다른 줄에서 따와 만든다(DrawModeLabel)
         (SystemItem.Settings, -2, "SETTING"),   // 원본에 없는 줄(사용자 요청 menu-41) — 설정 창을 연다. 전체화면에서는 메뉴 막대가 없어 여기가 설정으로 가는 길이다
         (SystemItem.Exit, 4, "EXIT GAME"),
@@ -52,7 +54,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// (뒤에 남은 옛 전투의 MISSION·RESTART 는 뜻이 없다) SAVE 는 꺼 둔다(<see cref="SaveBlockedReason"/>).
     /// </remarks>
     internal (SystemItem Item, int Motion, string Label)[] MenuItems =>
-        host.Mos._mosesOpen || host.EpisodesScr._episodesOpen || host.FieldOpen ? [.. SystemItems.Where(i => i.Item is not (SystemItem.Mission or SystemItem.Restart))] : SystemItems;
+        [.. SystemItems.Where(i => !(i.Item is SystemItem.Mission or SystemItem.Restart && (host.Mos._mosesOpen || host.EpisodesScr._episodesOpen || host.FieldOpen))
+                                   && !(i.Item is SystemItem.JobTree or SystemItem.Party && !Part1Screens))];
+
+    /// <summary>전직 트리 · 동료 정보 줄을 둘까 — 둘 다 파트1 화면(전투 · 챕터 지도)에서만 열린다(Part1JobTree · Part1PartyTable).</summary>
+    private bool Part1Screens => host.Part1TitleScr._open || host._battleLoaded && host._scene.IsPart1 && !host.Mos._mosesOpen && !host.FieldOpen;
 
     /// <summary>
     /// 전투 시스템 메뉴를 열어도 되나 — 원본은 <b>플레이어 조종 유닛 차례의 상태 22</b>(<c>0x1006acc0</c>, 입력 깃발 <c>+0x4d17</c>
@@ -124,6 +130,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             case SystemItem.Settings:
                 _systemMenuReturn = false;
                 host.SettingsScr.Open();
+                break;
+            case SystemItem.JobTree:
+            case SystemItem.Party:
+                _systemMenuReturn = false;
+                bool opened = item == SystemItem.JobTree ? host.JobTree.Toggle() : host.PartyTable.Open();
+                if (!opened) { host.Toast("파트1 전투 · 챕터 지도에서 볼 수 있습니다"); _systemMenu = true; }
                 break;
             case SystemItem.Save:
                 // 꺼진 SAVE — 메뉴는 그대로 두고 까닭만 알린다(감사5 S3·S4).
@@ -254,6 +266,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             if (host._hiResUi)
             {
                 if (motion == -2) DrawSettingLabel(rx + 20, ry + 10, iconOnly: true);
+                else if (motion == -3) { }                          // 글만 있는 줄(전직 트리 · 동료 정보)
                 else if (motion < 0) DrawModeLabel(rx + 20, ry + 10, iconOnly: true);
                 else if (host.UiFor(SystemObs)?.FrameAt(motion, 0, loop: false) is { } f)
                     host.Hi.DrawImage(f.Px, f.W, Math.Min(f.W, LabelIconW), f.H, rx + 20 + f.X, ry + 10 + f.Y);
@@ -261,7 +274,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 host.UiText(label, rx + 20 + LabelTextX, ry + (SystemRowH - 3 - th) / 2, disabled ? DimGray : White, LabelSize);
             }
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            else if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
+            else if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion == -3 ? false : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
                 host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
             if (disabled) host.UiFill(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
