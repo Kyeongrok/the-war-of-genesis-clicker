@@ -209,6 +209,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
             {
                 if (t != ed._tab) (ed._search, ed._imeComp) = ("", "");
                 ed._tab = t;
+                ed.ForgetLooks();
                 return true;
             }
         foreach (var (dx, delta) in LevelSteps)

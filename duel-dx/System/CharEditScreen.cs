@@ -198,6 +198,11 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice, string? Part1Name = null, string? CustomName = null);
 
     /// <summary>사용자 그림(<see cref="CustomSprites"/>, menu-103) — 초상 · 목소리는 없어(0) 입혀도 제 것 그대로.</summary>
+    /// <summary>
+    /// 외형 줄을 다시 짓게 한다 — 갈래를 누를 때마다. 사용자 그림은 게임을 켠 채 폴더에 넣을 수 있어 처음 지은 줄을 그대로 두면 안 보였다(사용자 보고).
+    /// </summary>
+    internal void ForgetLooks() => _lookRows = null;
+
     internal static IEnumerable<Look> CustomLooks() =>
         CustomSprites.List().Select(s => new Look(0, 0, 0, (ushort)s.Id, 0, 0, CustomName: s.Name));
 
@@ -234,7 +239,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var shared = records.GroupBy(c => c.SpriteId).Where(g => g.Select(c => c.NameId).Distinct().Count() >= 3).Select(g => g.Key).ToHashSet();
         return _looks = [.. records.GroupBy(c => (c.SpriteId, NameId: shared.Contains(c.SpriteId) ? (ushort)0 : c.NameId))
             .Select(g => g.OrderByDescending(c => db.Character(c.Code) != null).ThenByDescending(c => c.VoiceSet > 0).First())
-            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId))), .. Part1Looks(), .. CustomLooks()];
+            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId))), .. Part1Looks()];
     }
 
     /// <summary>외형 갈래의 줄 — 이름이 같은 인물(제 다른 복장)을 맨 앞에, 그다음 파트1 인물, 그다음 주역, 그다음 게임 자료에 없고 원본에만 있는 레코드(흑태자 · 블랙 레이븐 · 팬텀마리아 …), 그다음 나머지. 인물을 고를 때 한 번 정한다.</summary>
@@ -248,7 +253,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var listed = AllLooks(db).Where(l => l.NameId == c.NameId).Select(l => (int)l.Sprite).ToHashSet();
         var extra = OwnFolderSprites(c.Code).Where(o => o != c.FaceId && o != own?.FaceId && BattleReady(o) && listed.Add(o))
             .Select(o => new Look(c.Code, c.NameId, c.TitleId, (ushort)o, own?.FaceId ?? c.FaceId, own?.VoiceSet ?? c.VoiceSet));
-        List<Look> list = [.. AllLooks(db).Concat(extra).OrderBy(l => l.CustomName != null ? 0 : l.Part1Name != null ? 1 : l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 2 : db.Character(l.Chr) == null ? 3 : 4).ThenBy(l => l.Chr)];
+        List<Look> list = [.. CustomLooks(), .. AllLooks(db).Concat(extra).OrderBy(l => l.CustomName != null ? 0 : l.Part1Name != null ? 1 : l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 2 : db.Character(l.Chr) == null ? 3 : 4).ThenBy(l => l.Chr)];
         (_lookRows, _lookTop) = ((c.Code, list), 0);
         return list;
     }
@@ -477,6 +482,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             {
                 if (t != _tab) (_search, _imeComp) = ("", "");   // 찾는 말은 갈래마다 따로 — 남겨 두면 다른 갈래가 빈 목록으로 열린다
                 _tab = t;
+                ForgetLooks();
                 return true;
             }
         // 레벨 단추 — −10 · −1 · +1 · +10
