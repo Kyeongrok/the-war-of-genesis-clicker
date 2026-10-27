@@ -17,6 +17,7 @@ Obs 꼴(ObsSprite · ObsMotionTable 이 읽는 것, Part1Game.ToPart2Obs 가 쓰
 
 예: python tools/custom-sprite/sheet_to_obs.py eva.png --rows back:40:280,front:285:515,side:520:755 --col-x 165 --col-w 154 --cols 8 \\
         --id 30000 --name 에바 --flood 14 --height 100 --out 30000_에바.obs --preview preview.png
+서기 시트를 더하려면: --add "stand.png|back:0:418@0,side:418:836@0,front:836:1254@0|0|313|4|key=ff00ff"
 만든 파일은 %APPDATA%\\DuelDx\\sprites\\ 에 넣는다(번호 30000~30999, 파일 이름 「번호_이름.obs」).
 """
 import argparse
@@ -94,9 +95,9 @@ def largest_blob(fg):
     return keep
 
 
-def cut(sheet, box, args):
+def cut(sheet, box, part):
     cell = sheet.crop(box).convert("RGB")
-    bg = mask_by_key(cell, args.key, args.key_tol) if args.key else mask_by_flood(cell, args.flood)
+    bg = mask_by_key(cell, part["key"], part["key_tol"]) if part["key"] else mask_by_flood(cell, part["flood"])
     fg = largest_blob([[not v for v in row] for row in bg])
     w, h = cell.size
     rgba = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -108,6 +109,34 @@ def cut(sheet, box, args):
     return rgba
 
 
+def hex_color(s):
+    return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def parse_rows(text):
+    rows = []
+    for spec in text.split(","):
+        head, _, action = spec.partition("@")
+        name, y0, y1 = head.split(":")
+        if name not in DIRS:
+            continue                                   # right 같은 줄은 안 쓴다(게임이 옆모습을 뒤집는다)
+        rows.append((DIRS[name], int(action) if action else 1, int(y0), int(y1)))
+    return rows
+
+
+def parse_add(text, args):
+    """--add 「그림|줄|첫칸x|칸너비|칸수[|key=rrggbb 또는 flood=n]」 — 다른 시트(서기 · 공격 …)를 한 그림에 더한다. 시트마다 따로 --height 로 맞춘다."""
+    f = text.split("|")
+    part = {"sheet": f[0], "rows": parse_rows(f[1]), "col_x": int(f[2]), "col_w": int(f[3]), "cols": int(f[4]),
+            "key": args.key, "key_tol": args.key_tol, "flood": args.flood}
+    for opt in f[5:]:
+        k, _, v = opt.partition("=")
+        if k == "key": part["key"] = hex_color(v)
+        elif k == "flood": part["key"], part["flood"] = None, int(v)
+        elif k == "tol": part["key_tol"] = int(v)
+    return part
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sheet")
@@ -115,54 +144,52 @@ def main():
     ap.add_argument("--cols", type=int, default=8)
     ap.add_argument("--col-x", type=int, required=True, help="첫 칸 왼쪽 x")
     ap.add_argument("--col-w", type=int, required=True, help="칸 너비")
-    ap.add_argument("--key", type=lambda s: tuple(int(s[i:i + 2], 16) for i in (0, 2, 4)), help="배경 색 rrggbb (예 ff00ff)")
+    ap.add_argument("--key", type=hex_color, help="배경 색 rrggbb (예 ff00ff)")
     ap.add_argument("--key-tol", type=int, default=40)
     ap.add_argument("--flood", type=int, default=14)
+    ap.add_argument("--add", action="append", default=[], help="다른 시트 — 그림|줄|첫칸x|칸너비|칸수[|key=ff00ff|flood=5|tol=40]")
     ap.add_argument("--height", type=int, default=100, help="게임 안 키(픽셀) — 인물은 대개 65~95")
     ap.add_argument("--ticks", type=int, default=3, help="걷기 한 장의 틱(30틱 = 1초)")
+    ap.add_argument("--stand-ticks", type=int, default=8, help="서기(동작 0) 한 장의 틱")
     ap.add_argument("--id", type=int, default=30000)
     ap.add_argument("--name", default="")
     ap.add_argument("--out", required=True)
     ap.add_argument("--preview")
     args = ap.parse_args()
 
-    sheet = Image.open(args.sheet)
-    rows = []
-    for spec in args.rows.split(","):
-        head, _, action = spec.partition("@")
-        name, y0, y1 = head.split(":")
-        if name not in DIRS:
-            continue                                   # right 같은 줄은 안 쓴다(게임이 옆모습을 뒤집는다)
-        rows.append((DIRS[name], int(action) if action else 1, int(y0), int(y1)))
-
-    # 줄마다 칸을 잘라 배경을 지운다 — 발밑은 그 줄 칸들 가운데 가장 낮은 그림 끝, 가로는 칸 가운데.
-    cut_rows = []
-    for d, action, y0, y1 in rows:
-        cells = [cut(sheet, (args.col_x + i * args.col_w, y0, args.col_x + (i + 1) * args.col_w, y1), args) for i in range(args.cols)]
-        boxes = [c.getbbox() for c in cells]
-        foot = max(b[3] for b in boxes if b)
-        cut_rows.append((d, action, cells, boxes, foot))
-    heights = sorted(foot - b[1] for _, _, _, bs, foot in cut_rows for b in bs if b)
-    scale = args.height / heights[len(heights) // 2]
+    parts = [{"sheet": args.sheet, "rows": parse_rows(args.rows), "col_x": args.col_x, "col_w": args.col_w, "cols": args.cols,
+              "key": args.key, "key_tol": args.key_tol, "flood": args.flood}] + [parse_add(a, args) for a in args.add]
 
     frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
-    for d, action, cells, boxes, foot in cut_rows:
-        ids = []
-        for cell, box in zip(cells, boxes):
-            if not box:
-                continue
-            w, h = cell.size
-            small = cell.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
-            a = small.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
-            small.putalpha(a)
-            bb = small.getbbox()
-            if not bb:
-                continue
-            fx, fy = small.width / 2, foot * scale        # 발밑 점(칸 가운데 · 그 줄의 발 높이)
-            piece = small.crop(bb)
-            ids.append(len(frames))
-            frames.append((piece, round(bb[0] - fx), round(bb[1] - fy) + FOOT_BELOW))
-        keyed.append((action, d, ids))
+    for part in parts:
+        sheet = Image.open(part["sheet"])
+        # 줄마다 칸을 잘라 배경을 지운다 — 발밑은 그 줄 칸들 가운데 가장 낮은 그림 끝, 가로는 칸 가운데.
+        cut_rows = []
+        for d, action, y0, y1 in part["rows"]:
+            cells = [cut(sheet, (part["col_x"] + i * part["col_w"], y0, part["col_x"] + (i + 1) * part["col_w"], y1), part) for i in range(part["cols"])]
+            boxes = [c.getbbox() for c in cells]
+            foot = max(b[3] for b in boxes if b)
+            cut_rows.append((d, action, cells, boxes, foot))
+        heights = sorted(foot - b[1] for _, _, _, bs, foot in cut_rows for b in bs if b)
+        scale = args.height / heights[len(heights) // 2]
+        print(f"{part['sheet']}: 배율 {scale:.3f}")
+        for d, action, cells, boxes, foot in cut_rows:
+            ids = []
+            for cell, box in zip(cells, boxes):
+                if not box:
+                    continue
+                w, h = cell.size
+                small = cell.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+                a = small.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+                small.putalpha(a)
+                bb = small.getbbox()
+                if not bb:
+                    continue
+                fx, fy = small.width / 2, foot * scale        # 발밑 점(칸 가운데 · 그 줄의 발 높이)
+                piece = small.crop(bb)
+                ids.append(len(frames))
+                frames.append((piece, round(bb[0] - fx), round(bb[1] - fy) + FOOT_BELOW))
+            keyed.append((action, d, ids))
 
     # 모든 장을 한 팔레트(255색 + 투명 0)로.
     total_w = sum(f[0].width for f in frames)
@@ -200,7 +227,8 @@ def main():
             continue
         if action == 1 and not any(a == 0 and dd == d for a, dd, _ in keyed):
             motions.append((0 * 3 + d, 1, [(0, 1, 0, ids[0])]))
-        motions.append((action * 3 + d, args.ticks * len(ids), [(k * args.ticks, args.ticks, 0, f) for k, f in enumerate(ids)]))
+        t = args.stand_ticks if action == 0 else args.ticks
+        motions.append((action * 3 + d, t * len(ids), [(k * t, t, 0, f) for k, f in enumerate(ids)]))
     motions.sort()
 
     out = bytearray()
@@ -231,7 +259,7 @@ def main():
         out.extend(body)
     with open(args.out, "wb") as fh:
         fh.write(out)
-    print(f"{args.out}: 장 {len(frames)} · 모션 {[m[0] for m in motions]} · 배율 {scale:.3f}")
+    print(f"{args.out}: 장 {len(frames)} · 모션 {[m[0] for m in motions]}")
 
     if args.preview:                                   # 핑크 바탕에 장을 늘어놓아 배경이 잘 지워졌는지 본다(2배)
         cols = max(len(ids) for _, _, ids in keyed)
