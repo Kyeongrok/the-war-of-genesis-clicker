@@ -118,6 +118,20 @@ internal sealed unsafe partial class BattleScene
         [Part1Rules.Frozen] = "동결", [Part1Rules.Shock] = "쇼크", [Part1Rules.Hypnosis] = "최면", [Part1Rules.Condition] = "컨디션 이상", [Part1Rules.Confusion] = "혼란",
     };
 
+    /// <summary>
+    /// 그 인물에게 걸린 파트1 상태이상(최면 · 컨디션 이상 · 혼란 …, 해로움)과 보조 마법(블래스 · 스피디 …, 이로움) — 상태 창 밑 줄(<see cref="Part1StatusPanel"/>).
+    /// 체력바 밑 딱지(「컨디」)만 있고 창에는 없어 무엇인지 몰랐다(사용자 보고 fg-49).
+    /// </summary>
+    internal List<(string Name, bool Bad)> Part1Effects(UnitState u)
+    {
+        var list = new List<(string, bool)>();
+        if (Part1.Ailments.TryGetValue(u, out var ailments))
+            foreach (int s in ailments.Order()) list.Add((Part1AilmentNames.GetValueOrDefault(s, $"상태 {s}"), true));
+        if (Part1.Buffs.TryGetValue(u, out var buffs))
+            foreach (int sel in buffs.Keys.Order()) list.Add((Part1BuffNames.GetValueOrDefault(sel, $"보조 {sel}"), false));
+        return list;
+    }
+
     /// <summary>체력바 아래 딱지 글(두 글자).</summary>
     internal static string Part1AilmentChip(int status) => status switch { Part1Rules.Frozen => "동결", Part1Rules.Shock => "쇼크", Part1Rules.Hypnosis => "최면", Part1Rules.Confusion => "혼란", _ => "컨디" };
 

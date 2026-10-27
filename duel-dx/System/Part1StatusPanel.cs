@@ -186,7 +186,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         int x = Math.Clamp(fx - 220, host._camX + 4, host._camX + host.ViewWidth - W - ListW - 8);
         int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - H - 4);
         _layer = false;
-        DrawAt(fighter, u.Hp, u.MaxHp, u.Soul, x, y, host.StatusScr._statusRightHits);
+        DrawAt(fighter, u.Hp, u.MaxHp, u.Soul, x, y, host.StatusScr._statusRightHits, host.Btl.Part1Effects(u));
         _panel = (x, y, W + 4 + ListW, H);
     }
 
@@ -328,7 +328,8 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// <summary>지난 틀의 어빌리티 목록 높이.</summary>
     private int _listH;
 
-    private void DrawAt(Part1Fighter fighter, int hp, int maxHp, int soul, int x, int y, List<(int X, int Y, int W, int H, Action Click)> rightHits)
+    private void DrawAt(Part1Fighter fighter, int hp, int maxHp, int soul, int x, int y, List<(int X, int Y, int W, int H, Action Click)> rightHits,
+                        List<(string Name, bool Bad)>? effects = null)
     {
         var chr = fighter.Chr;
         _jobs ??= Part1Job.LoadAll();
@@ -395,6 +396,21 @@ internal sealed class Part1StatusPanel(GameWindow host)
             DrawItemIcon(item, x + 10, row);
             host.UiText($"{Part1PartyScreen.SlotName(s, item)}: {item?.Name ?? "—"}", x + 36, row + 4, s == 0 ? GameWindow.White : 0xFFD0D8E8, 11);
             row += EquipRowH;
+        }
+
+        // 걸린 상태이상 · 보조 마법(리메이크 — 원본 패널에는 칸이 없고 몸짓 · 이름 글로만 보인다, 사용자 보고 fg-49). 해로운 것은 붉게, 이로운 것은 파랗게.
+        if (effects is { Count: > 0 })
+        {
+            int ex = x + 10;
+            foreach (var (name, bad) in effects)
+            {
+                int tw = host.UiGetText(name, GameWindow.White, 11).W;
+                if (ex + tw > x + W - 6) { ex = x + 10; row += 16; }
+                host.UiText(name, ex, row, bad ? 0xFFFF8070 : 0xFF80C8FF, 11);
+                if (bad && name == "컨디션 이상" && host._mouse.X >= ex && host._mouse.X < ex + tw && host._mouse.Y >= row && host._mouse.Y < row + 16)
+                    hoverStat = "컨디션 이상 — SOUL 이 50 을 못 넘는다(SOUL 로 깎이는 능력치가 떨어진다)$n파이어필드 같은 열로 몸 온도가 오르면 걸리기도 한다";
+                ex += tw + 8;
+            }
         }
 
         // 어빌리티 — 오른쪽 목록(원본도 보기만 한다), 이름 · LV. 원본 전투 목록(0x1009dda0)처럼 <b>지금 직업으로 쓰는 것</b>만 —
