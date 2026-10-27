@@ -58,6 +58,8 @@
              나머지는 사용자의 원본 게임 폴더에서 읽는다(WarOfGenesis.Assets/OriginalAssets.cs · tools/make_originals_manifest.py). -->
         <Content Include="..\assets\**\*.json;..\assets\originals.txt;..\assets\patches.txt" LinkBase="assets" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
         <Content Include="..\assets\icons\*" LinkBase="assets\icons" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+        <!-- 사용자 그림 예제(에바) — 처음 켤 때 %APPDATA%\DuelDx\sprites 로 옮긴다(CustomSprites.InstallExamples). json 은 위 줄이 싣는다. -->
+        <Content Include="..\assets\custom-sprites\**\*.obs;..\assets\custom-sprites\**\*.png" LinkBase="assets\custom-sprites" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
         <!-- 업데이트한 뒤 처음 켤 때 띄우는 릴리즈 노트(System/ReleaseNotesScreen.cs). -->

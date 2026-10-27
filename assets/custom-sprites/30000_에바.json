@@ -1,0 +1,85 @@
+{
+  "Name": "에바",
+  "Id": 30000,
+  "Height": 100,
+  "Parts": [
+    {
+      "ColW": 154,
+      "Cols": 8,
+      "Sound": "",
+      "Ticks": 3,
+      "Hit": "",
+      "Background": "flood=5",
+      "ColX": 165,
+      "Path": "src/에바/sheet.png",
+      "Action": 1,
+      "Rows": "back:40:280,front:285:515,side:520:755",
+      "Anchor": "body"
+    },
+    {
+      "ColW": 313,
+      "Cols": 4,
+      "Sound": "",
+      "Ticks": 8,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/stand.png",
+      "Action": 0,
+      "Rows": "back:0:418,side:418:836,front:836:1254",
+      "Anchor": "body"
+    },
+    {
+      "ColW": 222,
+      "Cols": 8,
+      "Sound": "20022@4+20026@5",
+      "Ticks": 4,
+      "Hit": "5",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/attack.png",
+      "Action": 8,
+      "Rows": "back:0:296,side:296:591,front:591:887",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 192,
+      "Cols": 8,
+      "Sound": "20023@3+20023@6",
+      "Ticks": 4,
+      "Hit": "3+6",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/combo.png",
+      "Action": 13,
+      "Rows": "back:20:227,side:227:394,front:394:573",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 192,
+      "Cols": 8,
+      "Sound": "20023@2+20023@4+20022@6",
+      "Ticks": 4,
+      "Hit": "2+4+6",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/combo.png",
+      "Action": 14,
+      "Rows": "front:573:766,side:766:915",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 192,
+      "Cols": 8,
+      "Sound": "20023@3+20023@5+20022@6",
+      "Ticks": 4,
+      "Hit": "3+5+6",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/combo.png",
+      "Action": 14,
+      "Rows": "back:20:227",
+      "Anchor": "foot"
+    }
+  ]
+}

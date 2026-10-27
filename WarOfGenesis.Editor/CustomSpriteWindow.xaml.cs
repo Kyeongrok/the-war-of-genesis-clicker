@@ -282,7 +282,12 @@ public partial class CustomSpriteWindow : Window
             if (JsonSerializer.Deserialize<Project>(File.ReadAllText(file)) is not { } project) return false;
             (IdBox.Text, NameBox.Text, HeightBox.Text) = (project.Id.ToString(), project.Name, project.Height.ToString());
             _parts.Clear();
-            foreach (var p in project.Parts) _parts.Add(p);
+            // 예제 설정은 시트 길이 설정 파일 폴더 기준이다(src/에바/sheet.png) — 그 자리로 편다.
+            foreach (var p in project.Parts)
+            {
+                if (!System.IO.Path.IsPathRooted(p.Path)) p.Path = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(file)!, p.Path));
+                _parts.Add(p);
+            }
             var missing = project.Parts.Where(p => !File.Exists(p.Path)).Select(p => p.FileName).Distinct().ToList();
             Log($"열었습니다: {System.IO.Path.GetFileName(file)} — 시트 {_parts.Count}줄{(missing.Count > 0 ? $" · 없는 시트 {string.Join(", ", missing)}" : "")}");
             return missing.Count == 0;

@@ -18,6 +18,7 @@ internal static class Program
         Updater.CheckInBackground();
         // 원본 게임의 자료는 싣지 않는다 — 사용자의 원본 게임 폴더를 묻고 거기서 차린다(못 정하면 끝낸다).
         if (!OriginalGameSetup.Ensure()) return;
+        CustomSprites.InstallExamples();   // 사용자 그림 예제(에바)를 처음 한 번 사용자 그림 폴더로
 
         // 게임 창 스레드가 아닌 곳에서 죽어도 같은 창을 띄운다.
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) ReportCrash(ex); };

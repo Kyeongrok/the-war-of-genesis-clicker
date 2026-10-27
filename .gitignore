@@ -10,6 +10,8 @@ obj/
 !/assets/originals.txt
 !/assets/patches.txt
 !/assets/icons/*
+# 사용자 그림 예제(에바 — 시트 · 설정 · 만든 그림, 사용자 요청) — 우리가 만든 것이라 싣는다.
+!/assets/custom-sprites/**
 
 # Visual Studio / Rider
 .vs/

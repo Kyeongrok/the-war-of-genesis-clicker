@@ -17,6 +17,40 @@ internal static class CustomSprites
 
     private static string Folder => UserDataFolder.File("sprites");
 
+    /// <summary>
+    /// 실린 예제(<c>assets/custom-sprites</c> — 에바)를 사용자 그림 폴더로 한 번 옮긴다 — 게임 「외형」과 편집기 「사용자 그림 만들기」가 같은 폴더를 본다.
+    /// 옮긴 이름은 <c>.examples</c> 에 적어, 사용자가 지우면 다시 안 생긴다. 시트(<c>src/</c>)와 설정(.json, 시트 길은 그 폴더 기준)도 같이.
+    /// </summary>
+    internal static void InstallExamples()
+    {
+        try
+        {
+            string src = AssetsFolder.Find("custom-sprites");
+            if (!Directory.Exists(src)) return;
+            Directory.CreateDirectory(Folder);
+            string marker = Path.Combine(Folder, ".examples");
+            var done = File.Exists(marker) ? File.ReadAllLines(marker).ToHashSet() : [];
+            foreach (string obs in Directory.EnumerateFiles(src, "*.obs"))
+            {
+                string stem = Path.GetFileNameWithoutExtension(obs);
+                if (!done.Add(stem)) continue;
+                File.Copy(obs, Path.Combine(Folder, Path.GetFileName(obs)), true);
+                string json = Path.ChangeExtension(obs, ".json");
+                if (File.Exists(json)) File.Copy(json, Path.Combine(Folder, Path.GetFileName(json)), true);
+                string sheets = Path.Combine(src, "src", stem.Split('_', 2).Last());
+                if (Directory.Exists(sheets))
+                {
+                    string to = Path.Combine(Folder, "src", Path.GetFileName(sheets));
+                    Directory.CreateDirectory(to);
+                    foreach (string f in Directory.EnumerateFiles(sheets)) File.Copy(f, Path.Combine(to, Path.GetFileName(f)), true);
+                }
+            }
+            File.WriteAllLines(marker, done);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     /// <summary>사용자 그림 번호인가.</summary>
     internal static bool Is(int obs) => obs is >= First and <= Last;
 
