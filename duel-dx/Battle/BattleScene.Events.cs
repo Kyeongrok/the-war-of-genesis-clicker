@@ -948,11 +948,14 @@ internal sealed unsafe partial class BattleScene
             case 207:                                    // 보스 필살기 — 인자2 가 `.att` work 번호(0x10052400)
             {
                 var caster = EventTargets(A(0), out _).FirstOrDefault(u => u.Alive && u.OnField);
-                if (caster is null || Work(A(2)) is not { } boss)
+                // 파트1 판은 파트1 행동 400 을 옮긴 것이라 인자2 가 파트1 Attack.dat 번호다(Part1Script) — 파트1 work(20000 + 번호)로 읽는다.
+                // 전에는 파트2 work 로 읽어 Btl 20230 올리비에가 프로즌아이스5(119) 대신 파트2 work 119 를 썼다(사용자 보고 fg-53).
+                int bossWork = host._scene.IsPart1 ? Part1Game.ChrBase + A(2) : A(2);
+                if (caster is null || Work(bossWork) is not { } boss)
                 {
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                            $"207: 시전자 {A(0)} 없음(살아 판 위) 또는 work {A(2)} 없음 — 안 쏜다" + Environment.NewLine);
+                            $"207: 시전자 {A(0)} 없음(살아 판 위) 또는 work {bossWork} 없음 — 안 쏜다" + Environment.NewLine);
                     break;
                 }
                 int casterIndex = Array.IndexOf(host._units, caster);
