@@ -328,8 +328,8 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     internal List<CharEditScreen.Look> LookRows(int code)
     {
         string name = Part1Chr.Load(code - Part1Game.ChrBase)?.Name.Trim() ?? "";
-        List<CharEditScreen.Look> rows = [.. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
-        if (host._db is { } db) rows.AddRange(ed.AllLooks(db).Where(l => l.Part1Name == null));
+        List<CharEditScreen.Look> rows = [.. CharEditScreen.CustomLooks(), .. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
+        if (host._db is { } db) rows.AddRange(ed.AllLooks(db).Where(l => l.Part1Name == null && l.CustomName == null));
         return rows;
     }
 

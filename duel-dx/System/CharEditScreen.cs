@@ -195,7 +195,11 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     /// 빌려 올 수 있는 모습 하나 — 그 그림을 쓰는 인물 레코드(이름·칭호를 보이는 데 쓴다)와 그 인물의 목소리 묶음.
     /// 파트1(전작) 인물이면 <paramref name="Part1Name"/> 에 이름이 들고 <paramref name="Chr"/> 는 파트1 레코드 번호, 그림 번호는 <see cref="Part1Game.ObsBase"/> 위다.
     /// </summary>
-    internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice, string? Part1Name = null);
+    internal sealed record Look(int Chr, ushort NameId, ushort TitleId, ushort Sprite, ushort Face, ushort Voice, string? Part1Name = null, string? CustomName = null);
+
+    /// <summary>사용자 그림(<see cref="CustomSprites"/>, menu-103) — 초상 · 목소리는 없어(0) 입혀도 제 것 그대로.</summary>
+    internal static IEnumerable<Look> CustomLooks() =>
+        CustomSprites.List().Select(s => new Look(0, 0, 0, (ushort)s.Id, 0, 0, CustomName: s.Name));
 
     /// <summary>외형 갈래에 올리는 파트1 인물 레코드 — 지금은 마르자나(Chr 0001) 하나(사용자 요청 menu-76: 「그 캐릭터 하나만 일단」).</summary>
     internal static IEnumerable<int> Part1Chrs => Part1Game.Shipped.Select(p => p.Code);
@@ -206,7 +210,8 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
             .Where(p => p.SpriteId > 0 && BattleReady(Part1Game.ObsBase + p.SpriteId))
             .Select(p => new Look(p.Code, 0, 0, (ushort)(Part1Game.ObsBase + p.SpriteId), (ushort)(Part1Game.ObsBase + p.FaceId), 0, p.Name));
 
-    internal static string LookName(GameDatabase db, Look l) => l.Part1Name is { } p1 ? $"{p1} · 파트1" : db.T(l.NameId);
+    internal static string LookName(GameDatabase db, Look l) =>
+        l.CustomName is { } custom ? $"{custom} · 사용자 그림" : l.Part1Name is { } p1 ? $"{p1} · 파트1" : db.T(l.NameId);
 
     internal const int LookScanMax = 1200;
 
@@ -229,7 +234,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var shared = records.GroupBy(c => c.SpriteId).Where(g => g.Select(c => c.NameId).Distinct().Count() >= 3).Select(g => g.Key).ToHashSet();
         return _looks = [.. records.GroupBy(c => (c.SpriteId, NameId: shared.Contains(c.SpriteId) ? (ushort)0 : c.NameId))
             .Select(g => g.OrderByDescending(c => db.Character(c.Code) != null).ThenByDescending(c => c.VoiceSet > 0).First())
-            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId))), .. Part1Looks()];
+            .Select(c => new Look(c.Code, c.NameId, c.TitleId, c.SpriteId, c.FaceId, c.VoiceSet > 0 ? c.VoiceSet : voiceOf.GetValueOrDefault(c.NameId))), .. Part1Looks(), .. CustomLooks()];
     }
 
     /// <summary>외형 갈래의 줄 — 이름이 같은 인물(제 다른 복장)을 맨 앞에, 그다음 파트1 인물, 그다음 주역, 그다음 게임 자료에 없고 원본에만 있는 레코드(흑태자 · 블랙 레이븐 · 팬텀마리아 …), 그다음 나머지. 인물을 고를 때 한 번 정한다.</summary>
@@ -243,7 +248,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
         var listed = AllLooks(db).Where(l => l.NameId == c.NameId).Select(l => (int)l.Sprite).ToHashSet();
         var extra = OwnFolderSprites(c.Code).Where(o => o != c.FaceId && o != own?.FaceId && BattleReady(o) && listed.Add(o))
             .Select(o => new Look(c.Code, c.NameId, c.TitleId, (ushort)o, own?.FaceId ?? c.FaceId, own?.VoiceSet ?? c.VoiceSet));
-        List<Look> list = [.. AllLooks(db).Concat(extra).OrderBy(l => l.Part1Name != null ? 1 : l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 2 : db.Character(l.Chr) == null ? 3 : 4).ThenBy(l => l.Chr)];
+        List<Look> list = [.. AllLooks(db).Concat(extra).OrderBy(l => l.CustomName != null ? 0 : l.Part1Name != null ? 1 : l.NameId == c.NameId || l.NameId == own?.NameId ? 0 : db.LevelExempt.Contains(l.Chr) ? 2 : db.Character(l.Chr) == null ? 3 : 4).ThenBy(l => l.Chr)];
         (_lookRows, _lookTop) = ((c.Code, list), 0);
         return list;
     }
@@ -287,7 +292,7 @@ internal sealed unsafe class CharEditScreen(GameWindow host)
     {
         if (DataOf(chr) is not { } c) return;
         _firstLook.TryAdd(chr, (c.SpriteId, c.FaceId, c.VoiceSet));
-        Apply(chr, voice ? c with { VoiceSet = look.Voice } : c with { SpriteId = look.Sprite, FaceId = look.Face });
+        Apply(chr, voice ? c with { VoiceSet = look.Voice } : c with { SpriteId = look.Sprite, FaceId = look.Face > 0 ? look.Face : c.FaceId });   // 사용자 그림은 초상이 없어 제 것 그대로
         if (voice) PlayVoiceSample(look.Voice);
         else host.LoadRosterSprites();
     }

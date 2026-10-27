@@ -637,6 +637,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     /// </summary>
     internal static string? BorrowedSprite(string assetsRoot, Dictionary<int, ExportedCharacter> manifests, int obs)
     {
+        if (CustomSprites.PathOf(obs) is { } custom) return custom;                  // 사용자 그림(menu-103)
         string file = CharacterExport.ObsFileName(obs);
         foreach (var (code, m) in manifests.Where(kv => kv.Value.SpriteCode == obs))
             if (CharacterFile(Path.Combine(assetsRoot, CharacterExport.FolderNameFor(code, m.Name), file), 30) is var path && File.Exists(path)) return path;

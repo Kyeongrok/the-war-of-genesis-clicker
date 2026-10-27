@@ -1,0 +1,249 @@
+"""사용자 그림 시트(PNG) → 게임 전투 그림(파트2 꼴 Obs) — 캐릭터 에디터 「외형」의 「사용자 그림」 줄로 입힌다(사용자 요청 menu-103).
+
+시트는 줄마다 한 방향 · 칸마다 한 장이다. 줄 이름은 back(위로 걷는 뒷모습) · front(아래로 걷는 앞모습) · side(왼쪽을 보는 옆모습)이고,
+오른쪽은 게임이 옆모습을 뒤집어 그리므로 줄이 있어도 안 쓴다. 지금 만드는 동작은 서기(동작 0 — 걷기 첫 장)와 걷기(동작 1)뿐이고,
+게임은 없는 동작(맞기 · 공격 …)을 서기로 대신한다. 다른 동작 줄은 --action 으로 더한다(줄 이름 뒤 @동작번호).
+
+배경은 --key 색(쨍한 핑크 ff00ff 따위, --key-tol 만큼 가까운 색까지)을 투명으로 친다. --key 가 없으면 칸 가장자리에서
+이웃과 색 차가 --flood 이하인 칸을 따라 번져 지운다(칠해진 그라데이션 · 빛 번짐 바탕용 — 결과를 --preview 로 꼭 볼 것).
+
+Obs 꼴(ObsSprite · ObsMotionTable 이 읽는 것, Part1Game.ToPart2Obs 가 쓰는 것과 같다):
+  u16 0, u16 벌 수, u16 벌 수 − 1, (u16 번호, u32 자리) × 벌     ← 몸짓벌 색인
+  u16 모션 수, u16 가장 큰 모션 번호, (u16 번호, u32 자리) × 모션
+  모션: u16 번호, u16 0, u16 키 수, u16 길이(틱), u16 0, 키 × (u16 종류, u16 시작, u16 길이, i16 × 10)  — 종류 0 그림(벌, 장)
+  벌: u16 번호, u16 장 수, u16 장 수 − 1, u8 투명 색, 팔레트 768, (u16 장, u32 자리) × 장, 장마다 (u16 장, u32 크기, u16 w, u16 h, i16 x, i16 y, 그림)
+  그림: u16 레코드 수, 레코드마다 (u16 건너뜀, u8 넷 묶음 수, u8 낱 수, 색인 바이트) — 여기서는 건너뜀 0 으로 칸을 차례로 다 적는다.
+모션 번호 = 동작 × 3 + 방향(0 뒷모습 · 1 옆모습 · 2 앞모습).
+
+예: python tools/custom-sprite/sheet_to_obs.py eva.png --rows back:40:280,front:285:515,side:520:755 --col-x 165 --col-w 154 --cols 8 \\
+        --id 30000 --name 에바 --flood 14 --height 100 --out 30000_에바.obs --preview preview.png
+만든 파일은 %APPDATA%\\DuelDx\\sprites\\ 에 넣는다(번호 30000~30999, 파일 이름 「번호_이름.obs」).
+"""
+import argparse
+import struct
+from collections import deque
+
+from PIL import Image
+
+DIRS = {"back": 0, "side": 1, "front": 2}
+FOOT_BELOW = 12          # 발밑이 그림 원점보다 아래로 내려오는 픽셀(파트1 · 파트2 인물 그림이 대개 이렇다)
+TRANSPARENT = 0          # 팔레트 0 = 투명
+
+
+def mask_by_key(cell, key, tol):
+    px = cell.load()
+    w, h = cell.size
+    out = [[False] * w for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y][:3]
+            out[y][x] = max(abs(r - key[0]), abs(g - key[1]), abs(b - key[2])) <= tol
+    return out
+
+
+def mask_by_flood(cell, tol):
+    """칸 가장자리에서 번지며 이웃과 색 차가 tol 이하인 곳을 배경으로."""
+    px = cell.load()
+    w, h = cell.size
+    bg = [[False] * w for _ in range(h)]
+    q = deque()
+    for x in range(w):
+        q.append((x, 0)); q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y)); q.append((w - 1, y))
+    for x, y in q:
+        bg[y][x] = True
+    while q:
+        x, y = q.popleft()
+        c = px[x, y]
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not bg[ny][nx]:
+                d = px[nx, ny]
+                if max(abs(d[0] - c[0]), abs(d[1] - c[1]), abs(d[2] - c[2])) <= tol:
+                    bg[ny][nx] = True
+                    q.append((nx, ny))
+    return bg
+
+
+def largest_blob(fg):
+    """앞그림 덩어리 가운데 가장 큰 것의 5% 이상인 것만 — 칸 귀퉁이에 남은 배경 부스러기를 버린다(떨어진 팔 · 무기는 남긴다)."""
+    h, w = len(fg), len(fg[0])
+    seen = [[False] * w for _ in range(h)]
+    blobs = []
+    for sy in range(h):
+        for sx in range(w):
+            if not fg[sy][sx] or seen[sy][sx]:
+                continue
+            blob, q = [], deque([(sx, sy)])
+            seen[sy][sx] = True
+            while q:
+                x, y = q.popleft()
+                blob.append((x, y))
+                for nx in (x - 1, x, x + 1):
+                    for ny in (y - 1, y, y + 1):
+                        if 0 <= nx < w and 0 <= ny < h and fg[ny][nx] and not seen[ny][nx]:
+                            seen[ny][nx] = True
+                            q.append((nx, ny))
+            blobs.append(blob)
+    big = max((len(b) for b in blobs), default=0)
+    keep = [[False] * w for _ in range(h)]
+    for blob in blobs:
+        if len(blob) * 20 >= big:
+            for x, y in blob:
+                keep[y][x] = True
+    return keep
+
+
+def cut(sheet, box, args):
+    cell = sheet.crop(box).convert("RGB")
+    bg = mask_by_key(cell, args.key, args.key_tol) if args.key else mask_by_flood(cell, args.flood)
+    fg = largest_blob([[not v for v in row] for row in bg])
+    w, h = cell.size
+    rgba = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    src, dst = cell.load(), rgba.load()
+    for y in range(h):
+        for x in range(w):
+            if fg[y][x]:
+                dst[x, y] = src[x, y] + (255,)
+    return rgba
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sheet")
+    ap.add_argument("--rows", required=True, help="방향:위:아래[@동작] 을 쉼표로 — 예 back:40:280,front:285:515,side:520:755")
+    ap.add_argument("--cols", type=int, default=8)
+    ap.add_argument("--col-x", type=int, required=True, help="첫 칸 왼쪽 x")
+    ap.add_argument("--col-w", type=int, required=True, help="칸 너비")
+    ap.add_argument("--key", type=lambda s: tuple(int(s[i:i + 2], 16) for i in (0, 2, 4)), help="배경 색 rrggbb (예 ff00ff)")
+    ap.add_argument("--key-tol", type=int, default=40)
+    ap.add_argument("--flood", type=int, default=14)
+    ap.add_argument("--height", type=int, default=100, help="게임 안 키(픽셀) — 인물은 대개 65~95")
+    ap.add_argument("--ticks", type=int, default=3, help="걷기 한 장의 틱(30틱 = 1초)")
+    ap.add_argument("--id", type=int, default=30000)
+    ap.add_argument("--name", default="")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--preview")
+    args = ap.parse_args()
+
+    sheet = Image.open(args.sheet)
+    rows = []
+    for spec in args.rows.split(","):
+        head, _, action = spec.partition("@")
+        name, y0, y1 = head.split(":")
+        if name not in DIRS:
+            continue                                   # right 같은 줄은 안 쓴다(게임이 옆모습을 뒤집는다)
+        rows.append((DIRS[name], int(action) if action else 1, int(y0), int(y1)))
+
+    # 줄마다 칸을 잘라 배경을 지운다 — 발밑은 그 줄 칸들 가운데 가장 낮은 그림 끝, 가로는 칸 가운데.
+    cut_rows = []
+    for d, action, y0, y1 in rows:
+        cells = [cut(sheet, (args.col_x + i * args.col_w, y0, args.col_x + (i + 1) * args.col_w, y1), args) for i in range(args.cols)]
+        boxes = [c.getbbox() for c in cells]
+        foot = max(b[3] for b in boxes if b)
+        cut_rows.append((d, action, cells, boxes, foot))
+    heights = sorted(foot - b[1] for _, _, _, bs, foot in cut_rows for b in bs if b)
+    scale = args.height / heights[len(heights) // 2]
+
+    frames, keyed = [], []                             # frames: (RGBA, 원점 x, 원점 y) — keyed: (동작, 방향, [장 번호])
+    for d, action, cells, boxes, foot in cut_rows:
+        ids = []
+        for cell, box in zip(cells, boxes):
+            if not box:
+                continue
+            w, h = cell.size
+            small = cell.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+            a = small.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+            small.putalpha(a)
+            bb = small.getbbox()
+            if not bb:
+                continue
+            fx, fy = small.width / 2, foot * scale        # 발밑 점(칸 가운데 · 그 줄의 발 높이)
+            piece = small.crop(bb)
+            ids.append(len(frames))
+            frames.append((piece, round(bb[0] - fx), round(bb[1] - fy) + FOOT_BELOW))
+        keyed.append((action, d, ids))
+
+    # 모든 장을 한 팔레트(255색 + 투명 0)로.
+    total_w = sum(f[0].width for f in frames)
+    atlas = Image.new("RGB", (total_w, max(f[0].height for f in frames)), (0, 0, 0))
+    x = 0
+    for piece, _, _ in frames:
+        atlas.paste(piece.convert("RGB"), (x, 0), piece)
+        x += piece.width
+    pal_img = atlas.quantize(colors=255, method=Image.MEDIANCUT)
+    pal = pal_img.getpalette()[:255 * 3]
+    palette = bytes([255, 0, 255]) + bytes(pal) + bytes(768 - 3 - len(pal))
+
+    def indexed(piece):
+        q = piece.convert("RGB").quantize(palette=pal_img, dither=Image.NONE)
+        data, alpha = q.load(), piece.getchannel("A").load()
+        out = bytearray()
+        for yy in range(piece.height):
+            for xx in range(piece.width):
+                out.append(TRANSPARENT if alpha[xx, yy] == 0 else data[xx, yy] + 1)
+        return bytes(out)
+
+    def payload(px):
+        recs, i = [], 0
+        while i < len(px):
+            n = min(1020, len(px) - i)
+            quads, tail = n // 4, n % 4
+            recs.append(struct.pack("<HBB", 0, quads, tail) + px[i:i + n])
+            i += n
+        return struct.pack("<H", len(recs)) + b"".join(recs)
+
+    # 모션 — 동작 0 서기(걷기 첫 장), 동작 1 걷기(장마다 --ticks), 그 밖 동작은 줄 그대로.
+    motions = []
+    for action, d, ids in keyed:
+        if not ids:
+            continue
+        if action == 1 and not any(a == 0 and dd == d for a, dd, _ in keyed):
+            motions.append((0 * 3 + d, 1, [(0, 1, 0, ids[0])]))
+        motions.append((action * 3 + d, args.ticks * len(ids), [(k * args.ticks, args.ticks, 0, f) for k, f in enumerate(ids)]))
+    motions.sort()
+
+    out = bytearray()
+    w = lambda fmt, *v: out.extend(struct.pack(fmt, *v))
+    w("<HHH", 0, 1, 0)
+    sub_table = len(out); w("<HI", 0, 0)
+    w("<HH", len(motions), max(m[0] for m in motions))
+    motion_table = len(out)
+    for mid, _, _ in motions:
+        w("<HI", mid, 0)
+    for i, (mid, length, keys) in enumerate(motions):
+        struct.pack_into("<I", out, motion_table + 6 * i + 2, len(out))
+        w("<HHHHH", mid, 0, len(keys), length, 0)
+        for start, ln, sub, slot in keys:
+            w("<HHH", 0, start, ln)
+            w("<10h", sub, slot, 0, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into("<I", out, sub_table + 2, len(out))
+    w("<HHH", 0, len(frames), len(frames) - 1)
+    out.append(TRANSPARENT)
+    out.extend(palette)
+    slot_table = len(out)
+    for f in range(len(frames)):
+        w("<HI", f, 0)
+    for f, (piece, ox, oy) in enumerate(frames):
+        struct.pack_into("<I", out, slot_table + 6 * f + 2, len(out))
+        body = payload(indexed(piece))
+        w("<HIHHhh", f, len(body), piece.width, piece.height, ox, oy)
+        out.extend(body)
+    with open(args.out, "wb") as fh:
+        fh.write(out)
+    print(f"{args.out}: 장 {len(frames)} · 모션 {[m[0] for m in motions]} · 배율 {scale:.3f}")
+
+    if args.preview:                                   # 핑크 바탕에 장을 늘어놓아 배경이 잘 지워졌는지 본다(2배)
+        cols = max(len(ids) for _, _, ids in keyed)
+        cw = max(p.width for p, _, _ in frames) + 8
+        ch = max(p.height for p, _, _ in frames) + 8
+        prev = Image.new("RGB", (cw * cols, ch * len(keyed)), (255, 0, 255))
+        for r, (_, _, ids) in enumerate(keyed):
+            for c, f in enumerate(ids):
+                piece = frames[f][0]
+                prev.paste(piece.convert("RGB"), (c * cw + 4, r * ch + 4), piece)
+        prev.resize((prev.width * 2, prev.height * 2), Image.NEAREST).save(args.preview)
+
+
+if __name__ == "__main__":
+    main()

@@ -61,6 +61,7 @@ internal static class AssetPack
     {
         if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log)
             try { lock (LogGate) File.AppendAllText(log, $"{kind}/{file}" + Environment.NewLine); } catch (IOException) { }
+        if (CustomSprites.PathOf(file) is { } custom) return custom;                 // 사용자 그림(%APPDATA%\DuelDx\sprites, menu-103)
         if (Part1Game.GameNumberOf(file) != null) return Part1(file, seconds);
         return AssetDownload.Active ? AssetDownload.Fetch(kind, file, seconds) : OriginalAssets.Fetch(kind, file);
     }
@@ -70,7 +71,7 @@ internal static class AssetPack
     /// 받는 길이면 먼저 받게 당겨만 둔다.
     /// </summary>
     public static string PathOf(string kind, string file) =>
-        (Part1Game.GameNumberOf(file) != null ? Part1(file, 0) : AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
+        CustomSprites.PathOf(file) ?? (Part1Game.GameNumberOf(file) != null ? Part1(file, 0) : AssetDownload.Active ? AssetDownload.Fetch(kind, file, 0) : OriginalAssets.Fetch(kind, file)) ?? Path.Combine(AssetsFolder.Find(kind), file);
 
     /// <summary>그 파일이 올 때까지 기다린다 — 음악처럼 뒤 스레드에서 기다려도 되는 것. 있으면 true.</summary>
     public static bool EnsureNow(string kind, string file, int seconds) => Fetch(kind, file, seconds) != null;
