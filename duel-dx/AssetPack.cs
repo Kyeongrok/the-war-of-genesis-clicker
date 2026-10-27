@@ -107,6 +107,19 @@ internal static class AssetPack
         return FetchExtra(Part1CdKind, file) ?? AssetDownload.WaitExtra(Part1CdKind, file, seconds);
     }
 
+    /// <summary>파트1 파일 곡을 우리가 올린 WAV(<c>tools/part1-cd-pack</c>)가 놓이는 자리.</summary>
+    public const string Part1SongKind = "part1/bgm";
+
+    /// <summary>
+    /// 파트1 파일 곡 <paramref name="n"/> 의 WAV(<c>part1/bgm/NNNN.wav</c>, 릴리즈 <c>assets-part1bgm-1</c>) — 사용자 파트1 폴더의 <c>BGMs</c> 에 그 곡이 없을 때만 찾는다.
+    /// <see cref="Part1CdTrack"/> 과 같이 받기를 걸고 최대 <paramref name="seconds"/>초 기다린다 — 뒤 스레드에서만 부른다.
+    /// </summary>
+    public static string? Part1Song(int n, int seconds)
+    {
+        string file = $"{n:D4}.wav";
+        return FetchExtra(Part1SongKind, file) ?? AssetDownload.WaitExtra(Part1SongKind, file, seconds);
+    }
+
     /// <summary>연대표의 그 줄(0~14)에 들어갔다 — 받는 길이면 그 줄 + <see cref="AssetDownload.Ahead"/> 까지 미리 받는다.</summary>
     public static void Reach(int row) => AssetDownload.Reach(row);
 }

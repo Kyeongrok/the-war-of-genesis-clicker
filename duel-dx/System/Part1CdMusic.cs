@@ -30,10 +30,19 @@ internal static class Part1CdMusic
     {
         if (Part1Game.CdTrack(n) is not { } track)
         {
-            // 파일 곡(BGMs\NNNN.bgm) — 없거나 못 풀면 무음인데 자취가 없었다(fg-39 인페르노 지하 곡 10 제보, 이 PC 에서는 재현 안 됨).
-            var song = Part1Game.Music(n);
-            if (song == null) log?.Invoke($"music 파트1 곡 {n} → BGMs\\{n:D4}.bgm 없음 · 못 풂 (무음)");
-            return song;
+            // 파일 곡(BGMs\NNNN.bgm). 곡 6~14 · 26 은 원래 디스크 2~4 의 시디 곡이라, 판에 따라 BGMs 에 없어 무음이었다(카페 제보 fg-39 인페르노 지하 곡 10).
+            // 없거나 못 풀면 우리가 올린 WAV(assets-part1bgm-1, tools/part1-cd-pack)를 받아 쓴다.
+            PcmSound? song = null;
+            try { song = Part1Game.Music(n); }
+            catch (Exception ex) when (ex is InvalidDataException or ArgumentException or IndexOutOfRangeException) { log?.Invoke($"music 파트1 곡 {n} BGMs 못 풂: {ex.Message}"); }
+            if (song != null) return song;
+            if (AssetPack.Part1Song(n, FetchSeconds) is { } songAsset && Decode(songAsset, log, wavOnly: true) is { } fetched)
+            {
+                log?.Invoke($"music 파트1 곡 {n} → 자산 WAV {Path.GetFileName(songAsset)} {fetched.Duration.TotalSeconds:0.0}초");
+                return fetched;
+            }
+            log?.Invoke($"music 파트1 곡 {n} → BGMs\\{n:D4}.bgm 없음 · 자산 없음 (무음)");
+            return null;
         }
         var files = Part1Game.CdTrackFiles(track);
         static bool IsWav(string p) => p.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);

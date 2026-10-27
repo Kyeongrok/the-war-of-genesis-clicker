@@ -1,0 +1,82 @@
+[
+  {
+    "name": "part1/bgm/0006.wav",
+    "asset": "part1_bgm_0006.wav",
+    "size": 6415134,
+    "sha256": "aefffa567b9fdbb8e62049040d7725925c30c42dfd237a5f60ece725b1fa6dd1",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0007.wav",
+    "asset": "part1_bgm_0007.wav",
+    "size": 7147962,
+    "sha256": "7c738f3a042d1a4cfe1e5779fa5f1320ad7b7f4164d744e69e5d086a818170ba",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0008.wav",
+    "asset": "part1_bgm_0008.wav",
+    "size": 5915934,
+    "sha256": "339e8e30b466dd8c1b04d78d9c66661b4a3740a2d84a7af885efc0bba46987ed",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0009.wav",
+    "asset": "part1_bgm_0009.wav",
+    "size": 6448254,
+    "sha256": "01ba4f9d236ebec4c8ca29b8a7c0555ba0f5b6016ad213c3e50e407520719301",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0010.wav",
+    "asset": "part1_bgm_0010.wav",
+    "size": 6463038,
+    "sha256": "b8743a6d29e17ddf35d65700e75f2de8cf611d9a6cb8e337e05cf9a179992144",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0011.wav",
+    "asset": "part1_bgm_0011.wav",
+    "size": 6169086,
+    "sha256": "aeb0a8dc13022175f83d067de969b329cfbf543cd427f17fed5722e90316998a",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0012.wav",
+    "asset": "part1_bgm_0012.wav",
+    "size": 8523114,
+    "sha256": "84a793de14732b4479f589782300e27b92676ea7ed6d4c55c2265779b6fea92a",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0013.wav",
+    "asset": "part1_bgm_0013.wav",
+    "size": 8969670,
+    "sha256": "a9cd52e17af4dd7850f182dedfc2ed345a29b61b378323fa6cb7ef6525628ae9",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0014.wav",
+    "asset": "part1_bgm_0014.wav",
+    "size": 7572630,
+    "sha256": "b55225474a094e84f2fa0f253ab73adb7d24d7726db2ece5900c612606765f66",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  },
+  {
+    "name": "part1/bgm/0026.wav",
+    "asset": "part1_bgm_0026.wav",
+    "size": 8000262,
+    "sha256": "a2467a9395631c84e141ba6cf85a58063712efc2814d338cfcbc827f6a7534b5",
+    "tier": 90,
+    "release": "assets-part1bgm-1"
+  }
+]

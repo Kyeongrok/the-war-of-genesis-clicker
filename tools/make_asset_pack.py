@@ -250,8 +250,8 @@ def zips(out, stem, items):
     return made
 
 
-# 파트1 줄 — tools/part1-pack 이 쓴 그림 · 소리(assets-part1-vN-…)와 tools/part1-cd-pack 이 쓴 시디 트랙 WAV(part1/cd/…, assets-part1cd-1).
-PART1_ENTRIES = ('part1_pack_entries.json', 'part1_cd_entries.json')
+# 파트1 줄 — tools/part1-pack 이 쓴 그림 · 소리(assets-part1-vN-…)와 tools/part1-cd-pack 이 쓴 시디 트랙 WAV(part1/cd/…, assets-part1cd-1) · 파일 곡 WAV(part1/bgm/…, assets-part1bgm-1).
+PART1_ENTRIES = ('part1_pack_entries.json', 'part1_cd_entries.json', 'part1_bgm_entries.json')
 
 
 def part1_entries():

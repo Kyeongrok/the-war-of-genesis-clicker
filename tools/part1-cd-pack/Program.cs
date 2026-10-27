@@ -8,13 +8,16 @@
 // (Part1Game.AdpcmToPcm)로 다시 풀어 인코더가 셈한 것과 표본 하나까지 같은지 보고, 원래 소리와의 SNR 을 찍는다.
 // 내보낼 폴더/assets-part1cd-1 에 올릴 파일(part1_cd_TrackNN.wav)을, tools/part1_cd_entries.json 에 pack.json 의 files 줄
 // (part1/cd/TrackNN.wav, tier 90 = 찾을 때만 받는 것)을 쓴다 — make_asset_pack.py 가 이 줄을 덧붙인다(--part1-only 도).
+// 파일 곡도 — 이 설치본은 곡 6~14 · 26(디스크 2~4 의 시디 곡)을 시디에서 떠 BGMs\NNNN.bgm 에 PCM(형식 1)으로 넣어 둔 판이다.
+// 다른 판에는 그 파일이 없어 전투가 무음이었다(카페 제보 fg-39 인페르노 지하 곡 10). PCM 인 BGMs 파일을 같은 ADPCM 으로 싸
+// 내보낼 폴더/assets-part1bgm-1(part1_bgm_NNNN.wav) · tools/part1_bgm_entries.json(part1/bgm/NNNN.wav) 에 쓴다.
 using System.Security.Cryptography;
 using System.Text.Json;
 using DuelDx;
 using WarOfGenesis.Assets;
 
 const int OnDemandTier = 90, BlockAlign = 2048;
-const string Release = "assets-part1cd-1";
+const string Release = "assets-part1cd-1", SongRelease = "assets-part1bgm-1";
 
 if (args.Length < 1) { Console.Error.WriteLine("사용법: part1-cd-pack <내보낼 폴더>"); return 1; }
 if (Part1Game.Root == null) { Console.Error.WriteLine("파트1 폴더를 못 찾았습니다 — WAROFGENESIS_PART1=<폴더> 로 알려 주세요."); return 1; }
@@ -56,7 +59,46 @@ string list = Path.Combine(repo, "tools", "part1_cd_entries.json");
 File.WriteAllText(list, JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }) + "\n");
 Console.WriteLine($"{entries.Count}개 → {upload}, 목록 {list}");
 Console.WriteLine($"올리기: gh release create {Release} --prerelease --latest=false --title \"파트1 시디 트랙\" --notes \"게임이 받는 파일\" {upload}/*");
+
+// 파일 곡 — BGMs 의 PCM(형식 1) 것만. ADPCM(형식 2) 은 원래 판 그대로라 어느 판에나 있다고 본다(가설 — 판마다 다 본 것은 아님).
+string songUpload = Path.Combine(Path.GetFullPath(args[0]), SongRelease);
+if (Directory.Exists(songUpload)) Directory.Delete(songUpload, true);
+Directory.CreateDirectory(songUpload);
+var songs = new List<Dictionary<string, object>>();
+for (int n = 0; n < 100; n++)
+{
+    if (Part1Game.Read("BGMs", $"{n:D4}.bgm") is not { } raw || WavFormat(raw) != 1) continue;
+    var pcm = WaveSound.Parse(Part1Game.AdpcmToPcm(raw));
+    var (wav, rebuilt) = Adpcm.Encode(pcm, BlockAlign);
+    var back = WaveSound.Parse(Part1Game.AdpcmToPcm(wav));
+    if (back.SampleRate != pcm.SampleRate || back.Channels != pcm.Channels || !back.Samples.AsSpan().SequenceEqual(rebuilt))
+        throw new InvalidDataException($"곡 {n}: 다시 푼 것이 인코더의 복원과 다릅니다");
+    string name = $"part1/bgm/{n:D4}.wav", asset = name.Replace('/', '_');
+    File.WriteAllBytes(Path.Combine(songUpload, asset), wav);
+    songs.Add(new()
+    {
+        ["name"] = name, ["asset"] = asset, ["size"] = wav.Length, ["sha256"] = Convert.ToHexString(SHA256.HashData(wav)).ToLowerInvariant(),
+        ["tier"] = OnDemandTier, ["release"] = SongRelease,
+    });
+    Console.WriteLine($"곡 {n}: {raw.Length >> 10}KB → {asset} {wav.Length >> 10}KB · {pcm.Duration.TotalSeconds:0.0}초 {pcm.SampleRate}Hz {pcm.Channels}ch");
+}
+string songList = Path.Combine(repo, "tools", "part1_bgm_entries.json");
+File.WriteAllText(songList, JsonSerializer.Serialize(songs, new JsonSerializerOptions { WriteIndented = true }) + "\n");
+Console.WriteLine($"{songs.Count}곡 → {songUpload}, 목록 {songList}");
+Console.WriteLine($"올리기: gh release create {SongRelease} --prerelease --latest=false --title \"파트1 파일 곡\" --notes \"게임이 받는 파일\" {songUpload}/*");
 return 0;
+
+/// <summary>RIFF WAV 의 형식 번호(fmt 첫 낱말) — 못 찾으면 −1.</summary>
+static int WavFormat(byte[] wav)
+{
+    for (int o = 12; o + 10 <= wav.Length;)
+    {
+        int len = BitConverter.ToInt32(wav, o + 4);
+        if (wav.AsSpan(o, 4).SequenceEqual("fmt "u8)) return BitConverter.ToUInt16(wav, o + 8);
+        o += 8 + len + (len & 1);
+    }
+    return -1;
+}
 
 /// <summary>
 /// MS ADPCM(형식 2) 인코더 — 블록마다 채널별로 표준 계수 7개 × 시작 델타 여러 개를 다 해 보고 오차가 가장 작은 것을 고른다.
