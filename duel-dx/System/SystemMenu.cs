@@ -1167,6 +1167,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.Btl._outcome = "";
             if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) host.ResizeBoard(TitleBoardCols, TitleBoardRows);
             host._battleLoaded = false;           // 뒤에 남은 전투판은 버린다 — 다음 전투 세이브를 부르면 판을 새로 세운다
+            // 판의 유닛 자료도 버린다(NEW GAME 과 같다) — 켜자마자 깔린 첫 전투(Btl 0045)의 Lv1 살라딘·죠안이 남아 있으면 챕터 사건 701·704(UpdateCharacter)와
+            // 다음 전투의 RememberParty 가 그 자료를 명부에 덮어써, 연대표 세이브로 이어 할 때마다 레벨·장비·어빌리티가 처음으로 돌아갔다(카페 제보 mo-30).
+            foreach (var old in host._units) old.Data = null;
             host.StopMusic();
             host.EpisodesScr.OpenEpisodes();
             _restoreVersion = SaveVersion;
