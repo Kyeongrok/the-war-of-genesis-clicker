@@ -47,11 +47,13 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
 
     internal string Label(int code) => Chr(code) is { } c ? $"{c.Name}  Lv{c.Level}  ({code})" : $"Chr {code}";
 
-    /// <summary>오른쪽 위에 보일 지금 챕터 — 「챕터 4 · 사략해적」(사용자 요청 menu-98: 무리 번호 · 인물 이름 말고 챕터명). 챕터 밖이면 「챕터 없음」.</summary>
+    /// <summary>오른쪽 위에 보일 지금 챕터 — 「시반 슈미터 · 챕터 4 · 사략해적」(분기 · 챕터, 사용자 요청 menu-98: 무리 번호 · 인물 이름 말고 챕터명). 챕터 밖이면 「챕터 없음」.</summary>
     internal string ChapterName()
     {
         int id = host.Part1.ChapterId;
-        return id < 0 ? "챕터 없음" : Part1Chapter.Load(id)?.Title is { Length: > 0 } title ? $"챕터 {id} · {title}" : $"챕터 {id}";
+        if (id < 0) return "챕터 없음";
+        string chapter = Part1Chapter.Load(id)?.Title is { Length: > 0 } title ? $"챕터 {id} · {title}" : $"챕터 {id}";
+        return Part1TimelineScreen.BranchOf(id) is { } branch ? $"{branch} · {chapter}" : chapter;
     }
 
     /// <summary>바꾼 것을 판 위의 그 인물에게도 — 인물 자료 · 싸움 자료를 다시 읽게 하고 어빌리티 목록 · 레벨 · 능력치 · 최대 HP 를 새로.</summary>

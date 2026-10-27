@@ -4,8 +4,8 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 파트1 연대표 — 원본 화면(배경 <c>BGRs\0096</c>: 제목 · 세 줄기 머리글 「Shivan Scimitar · Crimson Crusade · Apocalypse」이 그림에 있다)대로
-/// 줄기마다 한 세로 줄에 칸을 때 차례로 늘어놓고, 칸을 누르면 그 칸이 여는 챕터로 간다(사용자 화면 · 분석-파트1-챕터 3절).
+/// 파트1 연대표 — 원본 화면(배경 <c>BGRs\0096</c>: 제목 · 세 분기 머리글 「Shivan Scimitar · Crimson Crusade · Apocalypse」이 그림에 있다)대로
+/// 분기마다 한 세로 줄에 칸을 때 차례로 늘어놓고, 칸을 누르면 그 칸이 여는 챕터로 간다(사용자 화면 · 분석-파트1-챕터 3절).
 /// </summary>
 /// <remarks>
 /// 칸 이름은 그림이다 — 낱말 1 의 Obs(540~ : 「카디스 요새 / A maiden fortress, Cardis」). 세로 자리 = 때((줄 − 1) × 240 + 가로 자리, 20 마다 48px),
@@ -14,8 +14,18 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shell)
 {
-    /// <summary>줄기 이름 — 줄기 0 살라딘 쪽 · 1 바이올라 쪽 · 2 인페르노 쪽(첫 칸 이름으로 붙인 것).</summary>
-    internal static readonly string[] LineNames = ["살라딘", "바이올라", "인페르노"];
+    /// <summary>
+    /// 분기 이름 — 연대표의 세 세로 줄(<see cref="Part1Episode.Line"/>), 배경 머리글 「Shivan Scimitar · Crimson Crusade · Apocalypse」 그대로
+    /// (분기 0 살라딘 쪽 · 1 바이올라 쪽 · 2 인페르노 쪽). 부르는 말 「분기」는 사용자가 정했다.
+    /// </summary>
+    internal static readonly string[] BranchNames = ["시반 슈미터", "크림슨 크루세이더", "아포칼립스"];
+
+    /// <summary>분기 찾기용 연대표 칸 — 에디터가 틀마다 묻으므로 한 번 읽어 둔다.</summary>
+    private static IReadOnlyList<Part1Episode>? _branchEpisodes;
+
+    /// <summary>그 챕터가 든 분기 이름 — 연대표 칸이 여는 챕터로 찾는다. 칸이 없는 챕터(전투가 이어 여는 챕터 · 시험 챕터)는 null.</summary>
+    internal static string? BranchOf(int chapterId) =>
+        (_branchEpisodes ??= Part1Episode.LoadAll()).FirstOrDefault(e => e.ChapterId == chapterId) is { } ep && (uint)ep.Line < BranchNames.Length ? BranchNames[ep.Line] : null;
 
     /// <summary>줄기 가운데(배경 머리글 자리) · 칸 크기 · 보이는 띠(위 · 아래).</summary>
     internal static readonly int[] ColumnX = [155, 320, 505];
