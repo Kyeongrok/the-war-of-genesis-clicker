@@ -28,7 +28,13 @@ internal static class Part1CdMusic
     /// <summary>곡 n 의 소리 — 없거나 못 풀면 null. <paramref name="log"/> 는 시디 곡을 고른 것 · 못 푼 까닭을 받는다(화면 밖 시험의 자취).</summary>
     public static PcmSound? Music(int n, Action<string>? log = null)
     {
-        if (Part1Game.CdTrack(n) is not { } track) return Part1Game.Music(n);
+        if (Part1Game.CdTrack(n) is not { } track)
+        {
+            // 파일 곡(BGMs\NNNN.bgm) — 없거나 못 풀면 무음인데 자취가 없었다(fg-39 인페르노 지하 곡 10 제보, 이 PC 에서는 재현 안 됨).
+            var song = Part1Game.Music(n);
+            if (song == null) log?.Invoke($"music 파트1 곡 {n} → BGMs\\{n:D4}.bgm 없음 · 못 풂 (무음)");
+            return song;
+        }
         var files = Part1Game.CdTrackFiles(track);
         static bool IsWav(string p) => p.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
         PcmSound? Use(string path, string from, PcmSound? pcm)
