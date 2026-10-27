@@ -54,6 +54,8 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         _left = _hq ? Pool : t;
         _rights = Candidates(t);
         if (_rights.Count == 0) { host.Toast("같은 장소에 교환할 다른 팀이 없습니다"); return; }
+        // 본부에서는 팀 0 도 옮긴 사람만 드는 팀으로 — 안 그러면 본부와 1팀에 같은 사람이 보이고 옮겨도 그대로였다(fg-58). 비운 채 닫으면 되돌린다(Close).
+        if (_hq && map.MutableTeams is { Count: > 0 } all && !all[0].Fixed) (all[0].Fixed, all[0].Members) = (true, []);
         _right = 0;
         _step = 0;
         _selLeft.Clear();
@@ -86,6 +88,7 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         _formation = false;
         var teams = map.MutableTeams;
         int selected = map.SelectedTeamIndex;
+        if (teams.Count > 0 && teams[0].Fixed && teams[0].Members.Count == 0) teams[0].Fixed = false;   // 팀 0 을 비웠으면 「남은 사람」 팀으로 되돌린다
         for (int i = teams.Count - 1; i >= 1; i--)
         {
             if (teams[i].Members.Count > 0) continue;
@@ -209,9 +212,10 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         var teams = map.MutableTeams;
         var members = Members(from);
         var moving = selected.Where(i => i < members.Count).Select(i => members[i]).ToList();
-        selected.Clear();
-        bool pooled(int side) => side is Pool or 0;
-        if (pooled(from) && pooled(to)) return;   // 본부 ↔ 팀 0 은 같은 사람들이다
+        selected.Clear();   // 사람은 옮기면 목록에서 빠져 칸이 당겨진다 — 고름을 남기면 다음 사람이 딸려 간다
+        bool explicitTeam(int side) => side >= 1 || side == 0 && map.Teams.Count > 0 && map.Teams[0].Fixed;
+        bool pooled(int side) => side == Pool || side == 0 && !explicitTeam(0);
+        if (pooled(from) && pooled(to)) return;   // 본부 ↔ (남은 사람) 팀 0 은 같은 사람들이다
         if (to == NewTeam)
         {
             if (teams.Count >= 8) { host.Toast("팀은 8개까지입니다"); return; }
@@ -222,9 +226,9 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         }
         foreach (int chr in moving)
         {
-            if (to >= 1 && teams[to].Members.Count >= Part1Progress.TeamLimit) { host.Toast("한 팀은 10명까지입니다"); break; }
-            if (from >= 1) teams[from].Members.Remove(chr);
-            if (to >= 1 && !teams[to].Members.Contains(chr)) teams[to].Members.Add(chr);
+            if (explicitTeam(to) && teams[to].Members.Count >= Part1Progress.TeamLimit) { host.Toast("한 팀은 10명까지입니다"); break; }
+            if (explicitTeam(from)) teams[from].Members.Remove(chr);
+            if (explicitTeam(to) && !teams[to].Members.Contains(chr)) teams[to].Members.Add(chr);
         }
         // 팀 해산 — 사람을 다 내보낸 팀(1 부터)의 아이템 · 용병 · 탑승물은 받는 쪽으로(0x100b87d0).
         if (from >= 1 && teams[from].Members.Count == 0 && StockOf(to) is { } into) into.TakeAll(teams[from].Stock);
@@ -241,7 +245,6 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
         if (StockOf(from) is not { } src || StockOf(to) is not { } dst) return;
         var entries = Entries(from);
         var picked = selected.Where(i => i < entries.Count).Select(i => entries[i]).ToList();
-        selected.Clear();
         bool one = picked.Count == 1 && !MosesScene.CtrlHeld;
         int cap = to == Pool ? int.MaxValue : 99;
         bool full = false;
@@ -259,6 +262,9 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
             }
         }
         if (full) host.Toast("한 칸에 99 까지입니다");
+        // 고름은 그대로 — 그 아이템이 다 빠져 칸이 사라졌으면 남은 칸 안으로만(사용자 요청 fg-58: 하나씩 여러 번 넘기기).
+        var left = Entries(from);
+        selected.RemoveWhere(i => i >= left.Count || !picked.Any(p => p.Id == left[i].Id));
         map.SaveProgress();
     }
 

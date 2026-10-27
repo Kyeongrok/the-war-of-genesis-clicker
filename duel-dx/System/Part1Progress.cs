@@ -258,9 +258,9 @@ internal sealed class Part1Progress
     internal List<int> TeamMembers(int team)
     {
         var group = GroupMembers();
-        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return [.. group.Take(TeamSize)];
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count == 0 || teams.Count == 1 && !teams[0].Fixed) return [.. group.Take(TeamSize)];
         team = Math.Clamp(team, 0, teams.Count - 1);
-        if (team > 0) return [.. group.Where(teams[team].Members.Contains)];
+        if (team > 0 || teams[0].Fixed) return [.. group.Where(teams[team].Members.Contains)];
         return [.. PoolMembers().Take(TeamSize)];
     }
 
@@ -268,8 +268,8 @@ internal sealed class Part1Progress
     internal List<int> PoolMembers()
     {
         var group = GroupMembers();
-        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count <= 1) return group;
-        var elsewhere = teams.Skip(1).SelectMany(t => t.Members).ToHashSet();
+        if (!ChapterTeams.TryGetValue(ChapterId, out var teams) || teams.Count == 0 || teams.Count == 1 && !teams[0].Fixed) return group;
+        var elsewhere = teams.Skip(teams[0].Fixed ? 0 : 1).SelectMany(t => t.Members).ToHashSet();
         return [.. group.Where(c => !elsewhere.Contains(c))];
     }
 
@@ -568,6 +568,12 @@ internal sealed class Part1Progress
 internal sealed class Part1Team
 {
     public List<int> Members { get; set; } = [];
+
+    /// <summary>
+    /// 팀 0 을 옮긴 사람만 드는 팀으로 쓰나 — 평소 팀 0 은 「다른 팀에 안 든 무리 앞 10명」이라 본부와 같은 사람이 보였다. 본부에서 교환 창을 열면 켜서
+    /// 본부 ↔ 1팀이 나뉘게 한다(사용자 보고 fg-58: Chp 0023). 팀 0 을 비운 채 닫으면 끈다(빈 팀으로 싸우지 않게). 팀 1 부터는 늘 옮긴 사람만.
+    /// </summary>
+    public bool Fixed { get; set; }
     public int Place { get; set; }
 
     /// <summary>이번 턴에 움직였나(원본 팀 칸 +0xaa4) — 「이  동」 · 「진  입」이 켜고 「턴종료」가 끈다. 팀은 턴마다 한 번 움직인다.</summary>

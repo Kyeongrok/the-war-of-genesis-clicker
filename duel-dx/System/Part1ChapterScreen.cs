@@ -157,7 +157,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_teams is not { } teams || team < 0 || team >= 8) return;
         while (teams.Count <= team) teams.Add(new Part1Team { Place = 0 });
         foreach (var t in teams) t.Members.Remove(chr);
-        if (team > 0) teams[team].Members.Add(chr);
+        if (team > 0 || teams[0].Fixed) teams[team].Members.Add(chr);
     }
 
     internal void SelectTeam(int team)
