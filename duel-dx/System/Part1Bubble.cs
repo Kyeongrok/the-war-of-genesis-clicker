@@ -1,3 +1,5 @@
+using WarOfGenesis.Assets;
+
 namespace DuelDx;
 
 /// <summary>
@@ -189,6 +191,9 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
     {
         if (_serial < 0 || _closeAt > 0) return;
         if (_doneAt == 0) { _typeAt = host._lastTime - (PageTicks() + 1) / GameWindow.TicksPerSecond; _doneAt = host._lastTime; return; }
+        // 쪽을 다 찍은 뒤 누를 때만 Snd 0051 — 클릭 0x100a8f00 → 0x100a8f15 push 0x33 → 0x1001a330. 찍는 중 누름 · 150틱 자동 넘김은 소리 없음
+        // (분석-파트1-전투 36.8절, 사용자 보고 fg-47).
+        host.Play(Part1Game.ObsBase + 0x33);
         Next();
     }
 
