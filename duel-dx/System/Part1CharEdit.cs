@@ -278,8 +278,7 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     /// <summary>
     /// 고를 수 있는 파트1 모습 — 파트1 인물 레코드(<c>Chars\NNNN.chr</c>)마다, 얼굴이 있는 사람(초상까지 함께 바뀌게)으로 한 칸 인물만(큰 유닛 · 나는 것은 뺀다).
     /// 그림이 같으면 번호가 작은 레코드 하나. 기본 공격 동작이 없는 그림(사건 전용)은 뺀다.
-    /// 파트2 그림은 올리지 않는다 — 파트1 판은 파트1 동작 번호(<see cref="Part1Game.ActionMap"/>: 연속 공격 4~6타 53~55 · 기술 동작 56~)로 몸을 움직이는데
-    /// 파트2 그림에는 그 동작이 없어 연 · 참 · 기술을 쓰면 몸이 멈춘다. 파트1 폴더가 없으면(에셋 팩) 에디터가 파트2 에 올리는 파트1 주역들(<see cref="CharEditScreen.Part1Looks"/>).
+    /// 파트1 폴더가 없으면(에셋 팩) 에디터가 파트2 에 올리는 파트1 주역들(<see cref="CharEditScreen.Part1Looks"/>). 파트2 모습은 <see cref="LookRows"/> 가 뒤에 붙인다.
     /// </summary>
     internal List<CharEditScreen.Look> AllLooks()
     {
@@ -293,19 +292,42 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     }
 
     /// <summary>외형 갈래의 줄 — 이름이 같은 레코드(제 다른 모습)를 맨 앞에, 그다음 주역(<see cref="Part1Game.Shipped"/>), 그다음 나머지, 번호 차례.</summary>
+    /// <remarks>
+    /// 그 뒤에 파트2 인물 모습(에디터의 파트2 외형 줄, 사용자 요청 menu-100) — 파트1 그림은 파트2 동작 번호로 다시 싸여 있어(<see cref="Part1Game.ActionMap"/>) 서기 · 걷기 · 공격 · 맞기 · 2~3타는
+    /// 파트2 그림에도 같은 자리에 있다. 없는 것은 연속 공격 4~6타(53~55 — <see cref="ObsMotionTable.Resolve"/> 가 3타로)와 파트1 기술의 몸 동작(56~ — 기술이 대신 동작을 준다, Part1Skill.Act)뿐이다.
+    /// </remarks>
     internal List<CharEditScreen.Look> LookRows(int code)
     {
         string name = Part1Chr.Load(code - Part1Game.ChrBase)?.Name.Trim() ?? "";
-        return [.. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
+        List<CharEditScreen.Look> rows = [.. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
+        if (host._db is { } db) rows.AddRange(ed.AllLooks(db).Where(l => l.Part1Name == null));
+        return rows;
     }
 
     /// <summary>그 모습(빌릴 파트1 레코드)의 전투 그림 · 반신 · 얼굴을 입힌다 — 제 레코드의 것이면 바꾼 것을 지운다.</summary>
     internal void ChangeLook(int code, CharEditScreen.Look look)
     {
-        if (Part1Game.Character(look.Chr) is not { } from) return;
         var l = host.Part1.LookOf(code);
+        if (look.Part1Name == null)
+        {
+            // 파트2 인물 모습 — 파트2 그림 · 얼굴 번호를 따로 둔다(반신은 파트1 레코드 그대로).
+            (l.Part2Sprite, l.Part2Face, l.Sprite, l.Bust, l.Face) = (look.Sprite, look.Face, 0, 0, 0);
+            LookChanged(code, sprite: true);
+            return;
+        }
+        if (Part1Game.Character(look.Chr) is not { } from) return;
         (l.Sprite, l.Bust, l.Face) = look.Chr == code - Part1Game.ChrBase ? (0, 0, 0) : (from.SpriteId, from.BustId, from.FaceId);
+        (l.Part2Sprite, l.Part2Face) = (0, 0);
         LookChanged(code, sprite: true);
+    }
+
+    /// <summary>파트2 모습 줄의 「목소리 N」 — 그 인물의 목소리 묶음을 넣는다(파트2 외형 갈래와 같다).</summary>
+    internal void TakeVoice(int code, CharEditScreen.Look look)
+    {
+        if (look.Voice <= 0) return;
+        host.Part1.LookOf(code).Voice = look.Voice;
+        LookChanged(code, sprite: false);
+        ed.PlayVoiceSample(look.Voice);
     }
 
     /// <summary>목소리 묶음을 번호로 앞뒤로 — 파트1 인물은 목소리가 없는 것(0)이 제 자리라 「없음」도 고를 수 있게 0 을 맨 앞에 둔다.</summary>
@@ -330,12 +352,12 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     /// <summary>바꾼 외형을 판 위의 그 인물에게도 — 그림이 바뀌었으면 판의 그림을 다시 읽는다. 다 되돌린 것은 진행에서도 뺀다.</summary>
     private void LookChanged(int code, bool sprite)
     {
-        if (host.Part1.Looks.TryGetValue(code, out var l) && l is { Sprite: 0, Voice: 0 }) host.Part1.Looks.Remove(code);
+        if (host.Part1.Looks.TryGetValue(code, out var l) && l is { Sprite: 0, Voice: 0, Part2Sprite: 0 }) host.Part1.Looks.Remove(code);
         Changed(code);
         if (sprite && host._battleLoaded && host._scene.IsPart1) host.LoadRosterSprites();
     }
 
-    /// <summary>외형 갈래의 클릭 — 자리는 파트2 갈래와 같다(<see cref="CharEditScreen.LookShapeDx"/> · <see cref="CharEditScreen.ResetDy"/>). 줄마다 목소리 단추는 없다(파트1 레코드에 목소리가 없다).</summary>
+    /// <summary>외형 갈래의 클릭 — 자리는 파트2 갈래와 같다(<see cref="CharEditScreen.LookShapeDx"/> · <see cref="CharEditScreen.ResetDy"/>). 줄마다 목소리 단추는 파트2 모습 줄에만 있다(파트1 레코드에 목소리가 없다).</summary>
     private bool OnLookClick(int bx, int by, int px, int y, int code)
     {
         int vy = y + CharEditScreen.ResetDy;
@@ -346,7 +368,11 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
         if (host._db is not { } db || db.Character(code) is not { } dc) return true;
         var looks = ed.LookView(db, dc);
         for (int i = 0; i < CharEditScreen.AbRows && ed._lookTop + i < looks.Count; i++)
-            if (ed.In(bx, by, px + CharEditScreen.LookShapeDx, y + CharEditScreen.RowsDy + i * CharEditScreen.AbRowH, 40, 20)) { ChangeLook(code, looks[ed._lookTop + i]); return true; }
+        {
+            int ry = y + CharEditScreen.RowsDy + i * CharEditScreen.AbRowH;
+            if (ed.In(bx, by, px + CharEditScreen.LookShapeDx, ry, 40, 20)) { ChangeLook(code, looks[ed._lookTop + i]); return true; }
+            if (ed.In(bx, by, px + CharEditScreen.LookVoiceDx, ry, CharEditScreen.LookVoiceW, 20)) { TakeVoice(code, looks[ed._lookTop + i]); return true; }
+        }
         return true;
     }
 

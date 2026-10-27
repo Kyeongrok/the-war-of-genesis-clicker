@@ -245,9 +245,16 @@ public sealed class ObsMotionTable
     };
 
     /// <summary>동작·방향으로 모션을 고른다. 없으면 같은 방향의 서기로 떨어진다.</summary>
+    /// <remarks>
+    /// 파트1 연속 공격 4~6타(동작 53~55, Part1Game.ActionMap)는 파트2 그림에 없다 — 파트1 인물이 파트2 모습을 입었을 때(menu-100) 서기 대신
+    /// 3타(14) → 2타(13) → 공격(8) 차례로 있는 것을 쓴다. 파트1 그림은 53~55 가 있어 그대로다.
+    /// </remarks>
     public ObsMotionClip? Resolve(int action, int direction)
     {
         if (_clips.TryGetValue(action * 3 + direction, out var clip) && clip.Keys.Count > 0) return clip;
+        if (action is >= 53 and <= 55)
+            foreach (int near in (ReadOnlySpan<int>)[14, 13, 8])
+                if (_clips.TryGetValue(near * 3 + direction, out var alt) && alt.Keys.Count > 0) return alt;
         return _clips.GetValueOrDefault(direction);
     }
 

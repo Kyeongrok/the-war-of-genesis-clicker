@@ -391,6 +391,9 @@ internal sealed class Part1Progress
         public int Bust { get; set; }
         public int Face { get; set; }
         public int Voice { get; set; }
+        /// <summary>파트2 인물 모습(menu-100) — 파트2 Obs · 얼굴 번호. 0 이면 없음(그때는 위 파트1 칸을 본다).</summary>
+        public int Part2Sprite { get; set; }
+        public int Part2Face { get; set; }
     }
 
     /// <summary>인물마다 바꾼 외형 — 없으면 인물 레코드 그대로.</summary>
@@ -399,6 +402,9 @@ internal sealed class Part1Progress
     internal Look LookOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? l : Looks[chrCode] = new Look();
 
     /// <summary>그 인물의 목소리 묶음(GameDatabase.Part1Voice) — 안 바꿨으면 0.</summary>
+    internal (ushort Sprite, ushort Face) Part2LookOf(int chrCode) =>
+        Looks.TryGetValue(chrCode, out var l) && l.Part2Sprite > 0 ? ((ushort)l.Part2Sprite, (ushort)Math.Max(0, l.Part2Face)) : ((ushort)0, (ushort)0);
+
     internal ushort VoiceOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? (ushort)Math.Clamp(l.Voice, 0, ushort.MaxValue) : (ushort)0;
 
     /// <summary>가방 — 산 아이템(Item.dat 번호, 같은 것이 여럿이면 여러 번). 지금 고른 팀의 것(<see cref="ActiveStock"/>). 시험용 DUELDX_PART1BAG=「126,126」 으로 무리마다 미리 채운다.</summary>

@@ -455,6 +455,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         if (host._db is not { } db) return;
         db.Part1Growth = host.Part1.Apply;
         db.Part1Voice = host.Part1.VoiceOf;
+        db.Part1Part2Look = host.Part1.Part2LookOf;
         db.ForgetPart1Characters();
         host.Btl.Part1.Forget();
     }

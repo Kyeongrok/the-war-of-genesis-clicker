@@ -555,6 +555,8 @@ public sealed class GameDatabase
                     }
                     // 캐릭터 에디터 「외형」이 준 파트2 목소리 묶음(파트1 인물 레코드에는 목소리 칸이 없다 — menu-97).
                     if (made != null && Part1Voice?.Invoke(code) is ushort voice and > 0) made = made with { VoiceSet = voice };
+                    // 파트2 인물 모습을 입혔으면(menu-100) 그 그림 · 얼굴 — 파트1 레코드 칸에는 파트2 번호를 못 넣어 따로 받는다.
+                    if (made != null && Part1Part2Look?.Invoke(code) is { Sprite: > 0 } p2) made = made with { SpriteId = p2.Sprite, FaceId = p2.Face };
                     _part1Characters[code] = made;
                 }
                 return made;
@@ -571,6 +573,9 @@ public sealed class GameDatabase
 
     /// <summary>파트1 인물(20000 + 파트1 번호)의 목소리 묶음(Dmg.dat 파트2 번호, 0 = 없음) — 게임이 진행에서 채운다. 바뀌면 <see cref="ForgetPart1Characters"/>.</summary>
     public Func<int, ushort>? Part1Voice { get; set; }
+
+    /// <summary>파트1 인물이 입은 파트2 모습(그림 · 얼굴, 파트2 번호, 그림 0 = 없음) — 게임이 진행에서 채운다. 바뀌면 <see cref="ForgetPart1Characters"/>.</summary>
+    public Func<int, (ushort Sprite, ushort Face)>? Part1Part2Look { get; set; }
 
     /// <summary>
     /// 파트1 글 한 줄(전투 제목 · 승패 조건 따위)에 글 번호를 준다 — 64000 위를 차례로 쓰고 같은 글은 같은 번호. <see cref="T"/> 가 돌려준다.
