@@ -1423,7 +1423,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 // 연 · 참도 모션의 타격 키마다 따로 친다(원본 0x10036130 — 키마다 0x1009d440, Part1Skill.StrikesEachKey).
                 bool split = (part1Basic > 0 && host.Part1Ab.ChainHits < 2
                               && Part1Attack.ById(Part1Attack.LoadAll(), part1Basic) is { Hits: >= 2 })
-                             || (part1Basic == 0 && Part1Skill.StrikesEachKey(w.Id));
+                             || (part1Basic == 0 && (Part1Skill.StrikesEachKey(w.Id) || Part1Skill.HitsPerBall(w.Id)));   // 화이어 볼은 공마다(fg-62)
                 // 연사 기술(권총연사 · 3연사 · 6연사 · 9연사 · 기관총)은 발마다 따로 친다 — 첫 발이 빗나가도 나머지가 맞을 수 있다(카페 제보 fg-51).
                 int volley = part1Basic == 0 ? Part1Skill.VolleyShots(w.Id) : 0;
                 if (volley >= 2) split = true;

@@ -1,4 +1,4 @@
-using WarOfGenesis.Assets;
+﻿using WarOfGenesis.Assets;
 
 namespace DuelDx;
 
@@ -215,6 +215,9 @@ internal sealed partial class Part1Skill
         int Sign() => Rand(2) == 0 ? -1 : 1;
     }
 
+    /// <summary>화이어 볼(퓨리 오브 화이어 · 묵호파 포함, 공격 69~77) work 인가 — 공마다 따로 치고 세기에 공 수를 곱하지 않는다(<see cref="FireBall"/>).</summary>
+    internal static bool HitsPerBall(int work) => work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is >= 69 and <= 77;
+
     /// <summary>화이어 볼이 쓰는 파트1 그림(땅불 23 · 96 과 그 자식 93 까지).</summary>
     private static readonly int[] FireBallNeeds = [64, 55, 33, 17, 48, 10, 34, 38, 54, 23, 96, 93];
 
@@ -224,20 +227,24 @@ internal sealed partial class Part1Skill
     /// 대상 하나(목록에서 아무나)로 빠르기 1 × 1.2 로 난다. 닿으면 터짐 48:1 이 한 틱 지나 그 칸을 치고(<c>0x10049115</c>), 불기둥 10:0 과 불티가 튄다.
     /// 대상이 없어 빈 땅에 떨어지면 땅불(23 → 96)이 탄다. 소리 59 는 (20−k)·k 틱.
     /// </summary>
-    /// <remarks>원본은 공마다 대상을 아무렇게나 고른다 — 여기서는 대상 목록을 차례로 돌려 모든 대상이 첫 공에 맞게 했다. 공이 여덟 넘으면 도는 불티를 열로 줄였다.</remarks>
+    /// <remarks>
+    /// 공마다 대상 목록에서 아무나 골라(rand % 수) <b>공마다 따로 친다</b> — 한 공의 세기는 INT² + <c>+0x44</c>² 이고 공 수(+0x66)를 곱하지 않는다
+    /// (핸들러 <c>0x10048a3f</c> 가 서술에 +0x44² 만 더하고, +0x66 은 공을 몇 개 띄울지만 정한다 — <see cref="HitsPerBall"/>). 그래서 한 유닛이 0~N 번 맞는다.
+    /// 전에는 대상을 차례로 돌려 대상마다 한 번, 세기 × 공 수로 쳐서 범위 안의 모두가 공 전부를 맞은 셈이 됐다(화이어볼5 = ×7, 카페 제보 fg-62).
+    /// 공이 여덟 넘으면 도는 불티를 열로 줄였다.
+    /// </remarks>
     private int FireBall(int id, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         int n = id switch { 69 => 3, 70 => 4, 71 => 5, 72 => 6, 73 => 7, 76 => 30, 77 => 20, _ => 1 };
         double r = id is 76 or 77 ? 80 : 50;
         var (hx, hy) = _home;
-        var hitDone = new HashSet<int>();
         int last = 0;
         for (int k = 0; k < n; k++)
         {
             // 원 래스터는 위에서 시작해 시계 방향(0x10009a70) — 그 (점 수 / n)·k 번째 점.
             double a = -Math.PI / 2 + 2 * Math.PI * k / n;
             (double X, double Y) ground = (hx + r * Math.Cos(a), hy + r * Math.Sin(a) * 0.8), s = (ground.X, ground.Y - 120 * 0.6);
-            int victim = targets.Count > 0 ? targets[k % targets.Count] : -1;
+            int victim = targets.Count > 0 ? targets[Rand(targets.Count)] : -1;
             (double X, double Y) t = victim >= 0 ? ((double, double))host.Btl.UnitFoot(host._units[victim])
                 : (aim.X + (Rand(3) - 1) * TileW, aim.Y + (Rand(3) - 1) * 32);
             Sound(59, Math.Max(0, (20 - k) * k));
@@ -255,7 +262,8 @@ internal sealed partial class Part1Skill
             if (k == 1 && id != 77) Later(go, () => host.Btl.CenterOn(t.X, t.Y));
             if (k == 0) Later(go, () => host.Btl.CenterOn(t.X, t.Y));
             Put(48, 1, impact + 2, t.X, t.Y);
-            if (victim >= 0 && hitDone.Add(victim)) HitAt(impact + 3, victim, hit);
+            // 앞 공에 이미 쓰러졌으면 그 공은 헛맞는다.
+            if (victim >= 0) Later(impact + 3, () => { if (host._units[victim].Alive) hit(victim); });
             last = Math.Max(last, FireBurst(impact + 2, t, s));
             // 빈 땅 — 땅불(0x1007b970, 공격 78, vt+0xfc(rand%10+20), 0x10049405~)을 판의 기운으로 넘긴다. 시간 틱 동안 타고 23 r+3 → 96 r → 재로 사그라진다(Part1MapObjects).
             if (victim < 0)
