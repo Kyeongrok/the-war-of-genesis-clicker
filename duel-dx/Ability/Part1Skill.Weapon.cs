@@ -31,6 +31,13 @@ internal sealed partial class Part1Skill
         work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is (>= 11 and <= 15) or (>= 36 and <= 40);
 
     /// <summary>
+    /// 적을 안 치는 파트1 기술 — 타이밍 명중 띠를 안 띄운다(사용자 요청 fg-73). 댓쉬 366 · 워프 367 은 세기 식 4(무기)가 적혀 있어도 옮기기만 하고,
+    /// 효과 범위 거르기 <c>+0x40</c> = 3(같은 편 · 자신만 — 집중 · 기도 · 블래스 · 스피디 · 배리어 …)은 빗나갈 적이 없다.
+    /// </summary>
+    internal static bool HitsNoFoe(int work) =>
+        work >= Part1Game.ChrBase && Part1Attack.ById(Part1Attack.LoadAll(), Part1SkillBook.AttackIdOf(work)) is { } a && (a.Id is 366 or 367 || a.AreaFilter == 3);
+
+    /// <summary>
     /// 검 기술 하나 — 공격 번호로 나눠 시각표를 깔고 끝나는 틱을 돌려준다. <paramref name="aim"/> 은 겨눈 칸의 발 자리(판 픽셀).
     /// 원본 T = 겨눈 칸에 선 이(+0x206)의 자리, 없으면 칸 가운데.
     /// </summary>

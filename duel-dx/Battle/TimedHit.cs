@@ -248,7 +248,7 @@ internal sealed class TimedHit(GameWindow host)
     /// </summary>
     internal bool WantedAim(UnitState a, WarOfGenesis.Assets.WorkData w) =>
         host._timedAim && !host._skippingAction && host.Btl.IsMine(a) && a.LeaderIndex < 0 && w.AbilityId != 0 && a.Data?.BasicWorkId != w.Id
-        && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1)));
+        && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1))) && !Part1Skill.HitsNoFoe(w.Id);
 
     /// <summary>이번 띠가 타이밍 명중의 것인가 — 안내 글과 결과 글이 달라진다.</summary>
     private bool _aim, _aimMagic;
