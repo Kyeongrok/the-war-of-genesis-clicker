@@ -38,7 +38,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         (SystemItem.Load, 1, "LOAD"),
         (SystemItem.Save, 0, "SAVE"),
         (SystemItem.Volume, 2, "VOLUME"),
-        (SystemItem.JobTree, -3, "전직 트리"),   // 원본에 없는 줄(사용자 요청 menu-106) — 파트1 전직 트리(T 와 같다). 파트1 전투 · 챕터 지도에서만
+        (SystemItem.JobTree, -3, "전직 트리"),   // 원본에 없는 줄(사용자 요청 menu-106) — 파트1 전직 트리(T 와 같다). 파트1 전투 · 챕터 지도에서만, 아이콘은 점 그림(DrawDotIcon)
         (SystemItem.Party, -3, "동료 정보"),     // 원본에 없는 줄(menu-106) — 파트1 일행 한눈에(P 와 같다)
         (SystemItem.Mods, -1, "MODE"),          // 원본에 없는 줄(사용자 요청 menu-34) — 모드 창을 연다. 글자 그림은 다른 줄에서 따와 만든다(DrawModeLabel)
         (SystemItem.Settings, -2, "SETTING"),   // 원본에 없는 줄(사용자 요청 menu-41) — 설정 창을 연다. 전체화면에서는 메뉴 막대가 없어 여기가 설정으로 가는 길이다
@@ -266,7 +266,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             if (host._hiResUi)
             {
                 if (motion == -2) DrawSettingLabel(rx + 20, ry + 10, iconOnly: true);
-                else if (motion == -3) { }                          // 글만 있는 줄(전직 트리 · 동료 정보)
+                else if (motion == -3) DrawDotIcon(item, rx + 20, ry + 10, iconOnly: true);   // 전직 트리 · 동료 정보 — 점 그림 아이콘
                 else if (motion < 0) DrawModeLabel(rx + 20, ry + 10, iconOnly: true);
                 else if (host.UiFor(SystemObs)?.FrameAt(motion, 0, loop: false) is { } f)
                     host.Hi.DrawImage(f.Px, f.W, Math.Min(f.W, LabelIconW), f.H, rx + 20 + f.X, ry + 10 + f.Y);
@@ -274,7 +274,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 host.UiText(label, rx + 20 + LabelTextX, ry + (SystemRowH - 3 - th) / 2, disabled ? DimGray : White, LabelSize);
             }
             // 원본은 칸 안 (20,10) 자리에 Obs 0894 글자 그림을 찍는다.
-            else if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion == -3 ? false : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
+            else if (motion == -3)
+            {
+                DrawDotIcon(item, rx + 20, ry + 10);
+                host.DrawText(label, rx + 20 + LabelTextX, ry + 9, White);
+            }
+            else if (!(motion == -2 ? DrawSettingLabel(rx + 20, ry + 10) : motion < 0 ? DrawModeLabel(rx + 20, ry + 10) : host.DrawUi(SystemObs, motion, 0, rx + 20, ry + 10, GameWindow.UiBlend.Alpha, loop: false)))
                 host.DrawText(label, rx + 20, ry + 9, disabled ? DimGray : White);
             // 꺼진 SAVE(필드·챕터 사건 도중)는 어둡게 덮는다.
             if (disabled) host.UiFill(rx, ry, SystemRowW, SystemRowH - 3, 0xA0000000);
@@ -344,10 +349,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 for (int r = 0; r < rows; r++)
                     for (int c = 0; c < cols; c++) canvas[(toY + r) * SettingLabelW + toX + c] = px[(fromY + r) * w + fromX + c];
             }
-            // 아이콘 색은 SAVE 줄 아이콘의 밝은 점에서 가져온다.
-            uint ink = 0xFF80F0C0;
-            for (int i = 0; i < 17 * save.W && i < save.Px.Length; i++)
-                if (i % save.W < 17 && (save.Px[i] & 0xFF000000) != 0 && (save.Px[i] >> 8 & 0xFF) > 150) { ink = save.Px[i] | 0xFF000000; break; }
+            uint ink = IconInk(save);
             for (int r = 0; r < GearIcon.Length; r++)
                 for (int c = 0; c < GearIcon[r].Length; c++)
                     if (GearIcon[r][c] == '#') canvas[(5 + r) * SettingLabelW + 3 + c] = ink;
@@ -363,6 +365,48 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         if (iconOnly) host.Hi.DrawImage(_settingLabel, SettingLabelW, LabelIconW, ModeLabelH, x - 2, y - 3);
         else host.BlitMasked(_settingLabel, SettingLabelW, ModeLabelH, x - 2, y - 3);
         return true;
+    }
+
+    /// <summary>아이콘 색 — SAVE 줄 아이콘의 밝은 점에서 가져온다(다른 줄 아이콘과 같은 색).</summary>
+    private static uint IconInk(SpriteFrame save)
+    {
+        for (int i = 0; i < 17 * save.W && i < save.Px.Length; i++)
+            if (i % save.W < 17 && (save.Px[i] & 0xFF000000) != 0 && (save.Px[i] >> 8 & 0xFF) > 150) return save.Px[i] | 0xFF000000;
+        return 0xFF80F0C0;
+    }
+
+    /// <summary>전직 트리 아이콘 — 위 한 칸에서 아래 세 칸으로 갈라지는 나무(그림에 없어 점으로 그렸다, menu-107).</summary>
+    private static readonly string[] TreeIcon =
+    [
+        ".............", ".....###.....", ".....###.....", ".....###.....", "......#......", "......#......", ".###########.",
+        ".#....#....#.", ".#....#....#.", "###..###..###", "###..###..###", "###..###..###", ".............",
+    ];
+
+    /// <summary>동료 정보 아이콘 — 앞뒤로 선 두 사람(menu-107).</summary>
+    private static readonly string[] PartyIcon =
+    [
+        "........###..", ".......#####.", "..###..#####.", ".#####..###..", ".#####.......", "..###..#####.", ".......######",
+        ".#####.######", "#######.#####", "#######.#####", "#######......", "#######......", ".............",
+    ];
+
+    private uint[]? _treeIcon, _partyIcon;
+
+    /// <summary>전직 트리 · 동료 정보 줄의 아이콘 — 톱니와 같은 꼴(아이콘 칸 24×22, 기준점 (2, 3)). SAVE 그림이 없으면 기본 색으로.</summary>
+    private void DrawDotIcon(SystemItem item, int x, int y, bool iconOnly = false)
+    {
+        ref var cached = ref item == SystemItem.JobTree ? ref _treeIcon : ref _partyIcon;
+        if (cached == null)
+        {
+            var pattern = item == SystemItem.JobTree ? TreeIcon : PartyIcon;
+            uint ink = host.UiFor(SystemObs)?.FrameAt(0, 0) is { } save ? IconInk(save) : 0xFF80F0C0;
+            var canvas = new uint[LabelIconW * ModeLabelH];
+            for (int r = 0; r < pattern.Length; r++)
+                for (int c = 0; c < pattern[r].Length; c++)
+                    if (pattern[r][c] == '#') canvas[(5 + r) * LabelIconW + 3 + c] = ink;
+            cached = canvas;
+        }
+        if (iconOnly) host.Hi.DrawImage(cached, LabelIconW, LabelIconW, ModeLabelH, x - 2, y - 3);
+        else host.BlitMasked(cached, LabelIconW, ModeLabelH, x - 2, y - 3);
     }
 
     /// <summary>MISSION — 승리·패배 조건(Btl 머리 워드 5·6).</summary>
