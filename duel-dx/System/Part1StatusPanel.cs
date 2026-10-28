@@ -65,6 +65,16 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// <summary>떠 있는 직업 목록(원본처럼 직업 줄을 누르면 고를 수 있는 직업이 창으로 뜬다 — 사용자 화면) — 없으면 null.</summary>
     private List<int>? _jobChoices;
 
+    /// <summary>떠 있는 직업 · 장비 목록이 누구 것인가 — 다른 사람 패널을 그리면 닫는다(전에는 전투에서 다른 인물 STATUS 를 열어도 앞 사람의 직업 목록이 남았다, 사용자 보고).</summary>
+    private int _choicesFor;
+
+    private void ForgetChoicesUnlessFor(int code)
+    {
+        if (_choicesFor == code) return;
+        _jobChoices = null;
+        _equipChoices = null;
+    }
+
     internal const int JobRowH = 24, JobBoxW = 150;
 
     private (int X, int Y, int W, int H) JobChoiceRow(int i) => (_jobRow.X + 6, _jobRow.Y + _jobRow.H + 10 + i * JobRowH, JobBoxW - 12, JobRowH - 2);
@@ -82,6 +92,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
                            .Select(j => j.Id).ToList();
         if (options.Count == 0) { host.Toast("바꿀 수 있는 직업이 없습니다"); return; }
         _jobChoices = options;
+        _choicesFor = code;
     }
 
     /// <summary>
@@ -125,6 +136,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         if (options.Count == 0) { host.Toast("가방에 이 칸에 맞는 것이 없습니다"); return; }
         _equipSlot = slot;
         _equipChoices = options;
+        _choicesFor = code;
     }
 
     /// <summary>그 칸에 <paramref name="next"/> 를 끼운다(끼던 것은 가방으로, 0 이면 벗기만).</summary>
@@ -182,6 +194,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
     internal void Draw(UnitState u)
     {
         if (host.Btl.Part1.Fighter(u) is not { } fighter) return;
+        ForgetChoicesUnlessFor(u.ChrCode);
         var (fx, fy) = host.Btl.UnitFoot(u);
         int x = Math.Clamp(fx - 220, host._camX + 4, host._camX + host.ViewWidth - W - ListW - 8);
         int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - H - 4);
@@ -273,6 +286,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
     /// <summary>전투 밖 패널 — 640×480 가운데에, 위에 팀 사람 얼굴 띠. 뒤 지도는 어둡게 한다.</summary>
     internal void DrawOff(int ox, int oy)
     {
+        ForgetChoicesUnlessFor(_offChr);
         if (Part1Chr.Load(_offChr - Part1Game.ChrBase) is not { } raw) { CloseOff(); return; }
         _items ??= Part1Item.LoadAll();
         var chr = host.Part1.Apply(raw);
