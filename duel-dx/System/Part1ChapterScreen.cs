@@ -829,7 +829,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         host.Btl.RefreshPart1Abilities(pick.Chr);   // 전투 안에서 고르면 그 판의 어빌리티 목록에도 바로(사용자 보고: 필살 6연사를 배웠는데 목록에 없다)
         string who = host._db?.Character(pick.Chr) is { } c ? host._db.T(c.NameId) : "";
         host.Toast($"{who} — {option.Name} Lv {option.NewLevel}");
-        SaveProgress();
+        // 전투 안에서 고른 것은 진행 기록에 바로 적지 않는다 — 그 판에서 지면 이어 하기가 배운 어빌리티를 그대로 들고 왔다(fg-70).
+        // 이기면 전투 끝(사슬 · 챕터로 돌아옴)이 적는다. 전투 세이브는 그대로 판 안의 성장을 싣는다.
+        if (!(host._battleLoaded && host._scene.IsPart1 && !host.Part1TitleScr._open)) SaveProgress();
     }
 
     internal void DrawPick(int ox, int oy)

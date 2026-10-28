@@ -579,7 +579,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         _entryFlags = (byte[])host.FlagSt._flags.Clone();   // RESTART 는 진행 깃발도 전투 전으로(0x10064800 · 0x100646d0, ba-20 T1)           // 들어온 차례 그대로(감사3 I4)
         _restartMoney = host.Mos._shopMoney;
         // 파트1 판은 가방 · eld 가 따로(Part1Progress) — 상자 · 행동 503 · 505 로 얻은 것도 RESTART 가 되돌린다.
-        _restartPart1 = scene.IsPart1 ? ([.. host.Part1.Bag], host.Part1.Eld) : null;
+        // 경험치 · 배운 어빌리티(Part1Progress.Grown)도 — 전에는 RESTART 뒤에도 그 판에서 배운 어빌리티가 남았다(fg-70).
+        _restartPart1 = scene.IsPart1 ? ([.. host.Part1.Bag], host.Part1.Eld, host.Part1.SnapshotGrowth()) : null;
         // 전투 전 명부·군단도 — 원본 세이브의 전역 본문은 전투 들어가기 직전 파티다(전투 안 값은 판 부분의 복사본, 감사5 S5).
         _entryRoster = host._party.ToDictionary(p => p.Key, p => CopyChar(p.Value));
         _entryLegions = new Dictionary<int, int>(host.Mos._unitLegion);
@@ -597,7 +598,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal int _restartMoney;
 
     /// <summary>파트1 판에 들어올 때의 가방 · eld — RESTART 가 되돌린다(불러온 판은 기준이 없어 안 되돌린다).</summary>
-    internal (List<int> Bag, int Eld)? _restartPart1;
+    internal (List<int> Bag, int Eld, (Dictionary<int, Part1Progress.Growth> Grown, List<(int Chr, int Level)> Picks) Growth)? _restartPart1;
 
     /// <summary>
     /// 전투에 들어올 때의 명부(Chr → 인물)·군단 배속·가진 군단 — RESTART 가 되돌린다. 전투 세이브에도 실려서 불러온 뒤 RESTART 도
@@ -656,6 +657,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             host.Part1.Bag = [.. part1.Bag];
             host.Part1.Eld = part1.Eld;
+            host.Part1.RestoreGrowth(part1.Growth);
+            host._db?.ForgetPart1Characters();
+            host.Btl.Part1.Forget();
         }
         // 명부·군단도 전투 전으로 — 이것이 없으면 불러온 뒤 RESTART 가 그 전투에서 얻은 EXP·레벨·상자 아이템을 들고 다시 시작했다(감사5 S5).
         if (_entryRoster != null)

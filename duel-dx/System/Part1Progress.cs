@@ -75,9 +75,21 @@ internal sealed class Part1Progress
 
         /// <summary>캐릭터 에디터로 더하고 뺀 능력치 — 인물 칸 번호(<see cref="Part1Chr.Str"/> 20 ~ <see cref="Part1Chr.Mr"/> 27) → 더할 값(사용자 요청 menu-102).</summary>
         public Dictionary<int, int> Stats { get; set; } = [];
+
+        internal Growth Copy() => new() { Experience = Experience, Abilities = new(Abilities), Job = Job, Stats = new(Stats) };
     }
 
     internal Dictionary<int, Growth> Grown = [];
+
+    /// <summary>성장 · 고를 레벨업을 통째로 떠 둔다 — RESTART 가 전투 전으로 되돌린다(<see cref="SystemMenu.RestartBattle"/>).</summary>
+    internal (Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks) SnapshotGrowth() =>
+        (Grown.ToDictionary(g => g.Key, g => g.Value.Copy()), [.. LevelPicks]);
+
+    internal void RestoreGrowth((Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks) shot)
+    {
+        Grown = shot.Grown.ToDictionary(g => g.Key, g => g.Value.Copy());
+        LevelPicks = [.. shot.Picks];
+    }
 
     /// <summary>고를 레벨업(인물, 오른 레벨) — 전투에서 쌓이고 챕터 지도에서 하나씩 고른다(<see cref="Part1ChapterScreen"/>).</summary>
     internal List<(int Chr, int Level)> LevelPicks = [];
