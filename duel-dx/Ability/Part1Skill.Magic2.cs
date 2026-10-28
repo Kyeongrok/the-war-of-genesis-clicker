@@ -217,8 +217,9 @@ internal sealed partial class Part1Skill
     }
 
     /// <summary>화이어 애로우(공격 60~68) · 화이어 볼(퓨리 오브 화이어 · 묵호파 포함, 69~77) work 인가 — 화살 · 공마다 따로 치고 세기에 그 수를 곱하지 않는다
-    /// (<see cref="FireArrow"/> · <see cref="FireBall"/>, 화이어 애로우는 fg-69 — 전에는 첫 화살이 화살 수만큼 곱한 세기로 한 번만 쳤다).</summary>
-    internal static bool HitsPerBall(int work) => work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is >= 60 and <= 77;
+    /// (<see cref="FireArrow"/> · <see cref="FireBall"/>, 화이어 애로우는 fg-69 — 전에는 첫 화살이 화살 수만큼 곱한 세기로 한 번만 쳤다).
+    /// 아이스 미사일(97~105)도 타수만큼 따로 친다(<see cref="IceMissile"/>, fg-71).</summary>
+    internal static bool HitsPerBall(int work) => work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is (>= 60 and <= 77) or (>= 97 and <= 105);
 
     /// <summary>화이어 볼이 쓰는 파트1 그림(땅불 23 · 96 과 그 자식 93 까지).</summary>
     private static readonly int[] FireBallNeeds = [64, 55, 33, 17, 48, 10, 34, 38, 54, 23, 96, 93];
@@ -391,6 +392,7 @@ internal sealed partial class Part1Skill
     {
         var (hx, hy) = _home;
         int n = Math.Max(1, targets.Count), last = 0;
+        int repeats = Math.Max(1, Part1Attack.ById(Part1Attack.LoadAll(), id)?.Hits ?? 1);
         int Sign() => Rand(2) == 0 ? -1 : 1;
         for (int i = 0; i < n; i++)
         {
@@ -413,7 +415,13 @@ internal sealed partial class Part1Skill
             if (i == 0) Later(start, () => host.Btl.CenterOn(t.X, t.Y));
             int arrive = start + flight.Count, impact = arrive + 2;
             Put(51, 0, impact, t.X, t.Y, life: 71, sounds: true);
-            if (ti >= 0) HitAt(impact + 1, ti, hit);
+            // 타수(+0x66, Lv3 · 4 = 2 · Lv5 = 3)는 원본 보통 타격 길이 되풀이한다(9.5 「Hit rule」) — 세기에 곱하지 않고 타마다 따로 굴린다(HitsPerBall, fg-71).
+            // 되풀이 사이 4틱은 숫자가 겹치지 않게 둔 가설 값. 앞 타에 쓰러졌으면 남은 타는 헛맞는다.
+            for (int k = 0; ti >= 0 && k < repeats; k++)
+            {
+                int victim = ti;
+                Later(impact + 1 + 4 * k, () => { if (host._units[victim].Alive) hit(victim); });
+            }
             // 김 — 흔들리며 솟는 35:0 열(빠르기 3 × 1.1, 24틱).
             for (int k = 0; k < 10; k++)
                 Rise(35, 0, impact + 5 + Rand(10), t.X + Sign() * Rand(20), t.Y + Sign() * Rand(20) * 0.8 - (20 + 2 * Rand(20)) * 0.6, 3, 1.1, 24);
