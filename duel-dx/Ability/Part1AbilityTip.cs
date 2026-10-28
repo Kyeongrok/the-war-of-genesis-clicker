@@ -50,10 +50,18 @@ internal static class Part1AbilityTip
             if (a.Accuracy > 0 && a.Accuracy < 100) power.Add($"명중 {a.Accuracy}%");
             if (reach && a.Cost > 0) power.Add($"소울 {a.Cost}");
             if (power.Count > 0) lines.Add(string.Join(" · ", power));
-            if (reach && level > 0 && level < max && Part1Attack.ById(_attacks, ab.AttackId + level) is { } next && next.Cost != a.Cost)
-                lines.Add($"다음 Lv: 소울 {next.Cost}");
+            if (a.DamagePercent != 100) power.Add($"피해 {a.DamagePercent}%");
+            // 다음 레벨에서 달라지는 것(사용자 요청 gm-skil-27) — 레벨 칸은 Attack.dat 의 다음 칸이다(Part1SkillBook.LevelAttackIds).
+            if (level > 0 && level < max && Part1SkillBook.LevelAttackIds(ab, _attacks) is { } ids && level < ids.Count
+                && Part1Attack.ById(_attacks, ids[level]) is { } next && NextText(a, next, reach) is { Length: > 0 } better)
+                lines.Add($"다음 Lv {level + 1}: {better}");
+            else if (level > 0 && level >= max) lines.Add("최대 레벨이다");
         }
-        else if (PassiveText(ability, shown) is { Length: > 0 } passive) lines.Add(passive);
+        else if (PassiveText(ability, shown) is { Length: > 0 } passive)
+        {
+            lines.Add(passive);
+            if (level > 0 && level < max && PassiveNext(ability, level + 1) is { Length: > 0 } better) lines.Add($"다음 Lv {level + 1}: {better}");
+        }
 
         // 전직 조건은 뺐다 — 전직 트리(T) · 레벨업 창 옆에서 본다(사용자 요청).
 
@@ -65,6 +73,33 @@ internal static class Part1AbilityTip
         }
         return string.Join("$n", lines);
     }
+
+    /// <summary>지금 칸과 다음 레벨 칸의 다른 값 — 「세기 +140² → +150² · 타수 2 → 3」. 같으면 빈 글.</summary>
+    private static string NextText(Part1Attack now, Part1Attack next, bool reach)
+    {
+        var bits = new List<string>();
+        void Diff(string label, int a, int b, string unit = "") { if (a != b) bits.Add($"{label} {a}{unit} → {b}{unit}"); }
+        if (now.PowerAdd != next.PowerAdd) bits.Add($"세기 +{now.PowerAdd}² → +{next.PowerAdd}²");
+        Diff("타수", Math.Max(1, now.Hits), Math.Max(1, next.Hits));
+        Diff("명중", now.Accuracy, next.Accuracy, "%");
+        Diff("피해", now.DamagePercent, next.DamagePercent, "%");
+        if (now.Formula != next.Formula) bits.Add($"종류 → {KindText(next.Formula, next.Element is > 0 and < 6 ? ElementNames[next.Element] : "")}");
+        if (reach)
+        {
+            if (RangeText(now) != RangeText(next) && RangeText(next) is { Length: > 0 } r) bits.Add(r);
+            Diff("범위", now.AreaTiles(), next.AreaTiles(), "칸");
+            Diff("소울", now.Cost, next.Cost);
+        }
+        return string.Join(" · ", bits);
+    }
+
+    /// <summary>패시브의 다음 레벨 값 — HP · 능력치 보정만 레벨에 따라 오른다.</summary>
+    private static string PassiveNext(int ability, int level) => ability switch
+    {
+        1 => $"최대 HP +{100 * level}",
+        >= 2 and <= 9 => $"{new[] { "", "", "STR", "SKILL", "DEX", "INT", "RANGE", "SPD", "AC", "MR" }[ability]} +{5 * level}",
+        _ => "",
+    };
 
     /// <summary>
     /// 보조 · 상태 기술의 실제 효과(원본 분석 — 분석-파트1-기술-b 9 · 10절, 분석-파트1-전투 25절). 걸리는 길이는 시간이 흐르며 준다. 따로 없으면 null.
