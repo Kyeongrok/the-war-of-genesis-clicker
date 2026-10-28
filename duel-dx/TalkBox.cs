@@ -234,7 +234,12 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             return host.Btl.EventTargets(value, out _).FirstOrDefault(u => u.Alive && u.OnField) is { } first ? Array.IndexOf(host._units, first) : -1;
         if (value >= 20000) return -1;
         // 10000+N 은 배열 자리가 아니라 <b>Btl 레코드 번호</b>다 — 빈 칸을 걸러 낸 뒤의 자리와 다르다.
-        if (value >= 10000) return Array.FindIndex(host._units, u => u.LeaderIndex < 0 && u.Record == value - 10000);
+        // 파트1 탈것과 탄 이는 같은 레코드다 — 판에 선 쪽이 말한다.
+        if (value >= 10000)
+        {
+            int standing = Array.FindIndex(host._units, u => u.LeaderIndex < 0 && u.Record == value - 10000 && u.Alive && u.OnField);
+            return standing >= 0 ? standing : Array.FindIndex(host._units, u => u.LeaderIndex < 0 && u.Record == value - 10000 && !host.Btl.IsRiding(u));
+        }
         return host.Btl.EventChr(value) is int chr ? Array.FindIndex(host._units, u => u.ChrCode == chr) : -1;
     }
 

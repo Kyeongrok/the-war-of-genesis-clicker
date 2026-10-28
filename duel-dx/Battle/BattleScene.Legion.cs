@@ -62,9 +62,11 @@ internal sealed unsafe partial class BattleScene
         {
             LinkPart1Squads(list);
             // 전투 파일이 태워 둔 사람 — 판 밖에서 기다리다 탈것이 쓰러지면 그 칸에 내려선다(일행 탑승과 같은 틀).
+            // 원본은 그 레코드가 <b>사람</b>이고 탈것은 거기 붙은 것이라(+0x1cc, 0x100364b0) 사건의 10000+N 이 내린 뒤에도 그 사람을 가리킨다 —
+            // 탄 이에게도 같은 레코드 번호를 준다. 전에는 탈것만 그 번호라, 탈것이 쓰러지면 Btl 20072 탈출 칸(조건 302)에 살라딘이 서도 안 끝났다(카페 제보).
             foreach (var mount in list.Where(u => u.Part1Rider > 0).ToList())
             {
-                var rider = new UnitState(new DemoUnit(mount.Part1Rider, 0, 0, mount.Side, 0, mount.Facing)) { OnField = false, Awake = true };
+                var rider = new UnitState(new DemoUnit(mount.Part1Rider, 0, 0, mount.Side, 0, mount.Facing) { Record = mount.Record }) { OnField = false, Awake = true };
                 list.Add(rider);
                 _part1Riders[mount] = rider;
             }

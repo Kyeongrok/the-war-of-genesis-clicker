@@ -598,7 +598,7 @@ internal sealed unsafe partial class BattleScene
                 : [.. host._units.Where(x => x.Side == EventSideOrder[(value - 20000) / 2])];
         if (value == 20010) return _eventFoundA is null ? [] : [_eventFoundA];
         if (value == 20011) return _eventFoundB is null ? [] : [_eventFoundB];
-        if (value >= 10000) return [.. host._units.Where(x => x.Record == value - 10000)];
+        if (value >= 10000) return [.. host._units.Where(x => x.Record == value - 10000 && !RecordMoved(x))];
         return EventChr(value) is int chr ? [.. host._units.Where(x => x.ChrCode == chr)] : [];
     }
 
@@ -611,6 +611,12 @@ internal sealed unsafe partial class BattleScene
                             : (value is > 0 and < 10000 ? value : null);
 
     /// <summary>대상 지정 값이 가리키는 인물들. 편을 가리키면 그 편 전부.</summary>
+    /// <summary>파트1 — 아직 탈것에 타고 있는 사람(판 밖에서 기다린다).</summary>
+    internal bool IsRiding(UnitState u) => _part1Riders.ContainsValue(u);
+
+    /// <summary>파트1 — 레코드 번호가 지금은 다른 유닛을 가리킨다: 아직 타고 있는 사람, 또는 쓰러져 탄 이를 내려놓은 탈것.</summary>
+    private bool RecordMoved(UnitState u) => IsRiding(u) || (u.Part1Rider > 0 && !u.Alive);
+
     internal List<UnitState> EventTargets(int value, out bool wholeSide)
     {
         wholeSide = false;
@@ -623,7 +629,9 @@ internal sealed unsafe partial class BattleScene
             return [.. host._units.Where(u => u.Side == side)];
         }
         // 10000+N 은 Btl 레코드 번호다(빈 칸을 걸러 낸 뒤의 배열 자리가 아니다).
-        if (value >= 10000) return [.. host._units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000)];
+        // 파트1 탈것과 탄 이는 같은 레코드다 — 원본은 레코드가 사람이고 타고 있으면 탈것(+0x1cc)을 다룬다(증원 0x1001ec35).
+        // 타는 동안은 탈것만, 탈것이 쓰러져 내린 뒤에는 그 사람만 가리킨다.
+        if (value >= 10000) return [.. host._units.Where(u => u.LeaderIndex < 0 && !u.Detached && u.Record == value - 10000 && !RecordMoved(u))];
         return EventChr(value) is int chr ? [.. host._units.Where(u => u.ChrCode == chr)] : [];
     }
 
