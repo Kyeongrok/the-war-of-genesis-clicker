@@ -1,0 +1,12 @@
+{
+  "id": 396,
+  "name": "폭격",
+  "formula": 2,
+  "powerAdd": 150,
+  "accuracy": 70,
+  "hits": 1,
+  "element": 0,
+  "element2": 4,
+  "cost": 40,
+  "damagePercent": 80
+}
