@@ -21,6 +21,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         w.Id > Part1Game.ChrBase && Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), Part1SkillBook.AttackIdOf(w.Id)) is { } attack ? attack : null;
     private readonly Dictionary<int, Part1Fighter?> _fighters = [];
 
+    /// <summary>마법 기술인가 — 세기 식 5 · 6 · 8 · 10~24(방어 대신 MR 을 쓰는 갈래와 같다).</summary>
+    internal bool IsMagic(WorkData w) => AttackOf(w)?.Formula is 5 or 6 or 8 or (>= 10 and <= 24);
+
     /// <summary>탈것 → 탄 이(전투가 채운다). 탈것의 SKILL 은 탄 이의 SKILL 이다(<c>0x100364b0</c> → <c>0x1009eb20</c>, 255 에서 자름).</summary>
     internal Func<UnitState, UnitState?>? RiderOf;
 

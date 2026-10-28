@@ -230,11 +230,17 @@ internal sealed class TimedHit(GameWindow host)
     /// <summary>타이밍 명중(모드 &gt; 밸런스, 사용자 요청 fg-34 · fg-35) — 박자 하나를 맞추면 오르는 명중률(%)과, 하나 더 맞출 때마다 더 오르는 몫. 하나면 10, 둘이면 15.</summary>
     internal const int AimPercentFirst = 10, AimPercentMore = 5;
 
-    /// <summary>맞춘 박자 수만큼 오르는 명중률(%) — 0 · 10 · 15 · 20 …</summary>
-    internal static int AimBonusFor(int hits) => hits <= 0 ? 0 : AimPercentFirst + (hits - 1) * AimPercentMore;
+    /// <summary>파트1 마법(세기 식 5 · 6 · 8 · 10~24)은 덜 오른다 — 하나면 5, 둘이면 10(사용자 결정 fg-68).</summary>
+    internal const int MagicAimPercentFirst = 5, MagicAimPercentMore = 5;
+
+    /// <summary>맞춘 박자 수만큼 오르는 명중률(%) — 0 · 10 · 15 · 20 …, 파트1 마법은 0 · 5 · 10 · 15 …</summary>
+    internal static int AimBonusFor(int hits, bool magic = false) =>
+        hits <= 0 ? 0 : magic ? MagicAimPercentFirst + (hits - 1) * MagicAimPercentMore : AimPercentFirst + (hits - 1) * AimPercentMore;
 
     /// <summary>안내 글 — 「하나 +10% · 둘 +15%」.</summary>
-    internal static string AimGuide => $"박자 하나 맞추면 명중률 +{AimBonusFor(1)}% · 둘이면 +{AimBonusFor(2)}%";
+    internal static string AimGuideFor(bool magic) => $"박자 하나 맞추면 명중률 +{AimBonusFor(1, magic)}% · 둘이면 +{AimBonusFor(2, magic)}%";
+
+    internal static string AimGuide => AimGuideFor(false);
 
     /// <summary>
     /// 타이밍 명중을 띄울 것인가 — 켜져 있고, 내가 움직이는 인물이 <b>명중률이 있는 어빌리티</b>를 쓸 때. 기본공격은 타이밍 어택의 몫이라 뺀다.
@@ -245,7 +251,7 @@ internal sealed class TimedHit(GameWindow host)
         && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1)));
 
     /// <summary>이번 띠가 타이밍 명중의 것인가 — 안내 글과 결과 글이 달라진다.</summary>
-    private bool _aim;
+    private bool _aim, _aimMagic;
 
     /// <summary>이번 띠의 안내 글 — 대상을 치는 타이밍 어택이면 예상 피해(사용자 요청), 아니면 null(규칙 안내).</summary>
     private string? _guide;
@@ -256,9 +262,10 @@ internal sealed class TimedHit(GameWindow host)
     /// </summary>
     /// <param name="target">치려는 대상 — 패턴 잇기는 같은 대상을 칠 때만 이어진다.</param>
     /// <param name="aim">타이밍 명중의 띠인가 — 늘 시작 패턴을 띄우고(패턴 잇기 없음) 타이밍 어택 통계에 안 센다.</param>
-    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null, bool aim = false, string? guide = null)
+    internal IEnumerable<bool> Prompt(UnitState? a, Func<(int X, int Y)>? anchor = null, UnitState? target = null, bool aim = false, string? guide = null, bool magic = false)
     {
         _aim = aim;
+        _aimMagic = magic;
         _guide = guide;
         Cfg.Normalize();
         // 어느 패턴을 띄울까 — 미리 보기는 수정 창에서 보고 있는 패턴, 전투는 이 인물이 같은 대상에게 이어 가던 패턴(없으면 시작 패턴).
@@ -358,7 +365,7 @@ internal sealed class TimedHit(GameWindow host)
         double at = Math.Clamp(((_result == null ? host._realTime : _resultAt) - _startAt) / seconds, 0, 1);
 
         // 바탕 — 안내 글 · 단추 · 띠를 한 판에.
-        string guide = _guide ?? (_aim ? AimGuide : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬");
+        string guide = _guide ?? (_aim ? AimGuideFor(_aimMagic) : _beat.Length == 1 ? "박자에 맞추면 크리티컬" : "맞춘 박자만큼 공격 · 하나면 크리티컬");
         // 안내 글은 여러 줄일 수 있다 — 예상 피해 아래 명중률 · 셈의 바탕(fg-48). 둘째 줄부터는 조금 작고 흐리게.
         var lines = guide.Split('\n');
         var sizes = lines.Select((l, i) => Measure(l, 0xFFFFFFFF, i == 0 ? 11f : 9.5f)).ToArray();
@@ -390,7 +397,7 @@ internal sealed class TimedHit(GameWindow host)
         // 결과 — 눌린 것이 바로 보이게 크게.
         if (_result is { } hit)
         {
-            string word = !hit ? "놓침" : _aim ? $"명중률 +{AimBonusFor(Hits)}%" : Hits == 1 ? "크리티컬!" : (AllHit ? "성공! " : "") + $"{Hits}번 공격";
+            string word = !hit ? "놓침" : _aim ? $"명중률 +{AimBonusFor(Hits, _aimMagic)}%" : Hits == 1 ? "크리티컬!" : (AllHit ? "성공! " : "") + $"{Hits}번 공격";
             uint color = hit ? 0xFFFFE040 : 0xFFFF7060;
             var (_, ww, wh) = Measure(word, color, 18f);
             int wy = y + BarH + 10;

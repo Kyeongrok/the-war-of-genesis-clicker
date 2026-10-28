@@ -1206,7 +1206,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         // 타이밍 크리티컬(모드 > 밸런스) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
         if (TimedHit.ForcedHits > 0 && !eventFinisher && a.IsAlly && w.IsDamage) _timedCritBy = a;   // 시험용
-        else if (TimedHit.ForcedAimHits > 0 && !eventFinisher && a.IsAlly && host.TimedHitFx.WantedAim(a, w)) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(TimedHit.ForcedAimHits));   // 시험용
+        else if (TimedHit.ForcedAimHits > 0 && !eventFinisher && a.IsAlly && host.TimedHitFx.WantedAim(a, w)) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(TimedHit.ForcedAimHits, AimIsMagic(w)));   // 시험용
         else if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
         {
             var aimed = targetIndex >= 0 ? host._units[targetIndex] : null;
@@ -1216,8 +1216,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 타이밍 명중(모드 > 밸런스, fg-34) — 명중률이 있는 어빌리티 앞에 같은 띠를 띄우고, 맞춘 박자마다 이 행동의 내 명중률을 올린다.
         else if (!eventFinisher && host.TimedHitFx.WantedAim(a, w))
         {
-            foreach (bool _ in host.TimedHitFx.Prompt(a, aim: true, guide: targetIndex >= 0 ? ExpectedDamageText(a, host._units[targetIndex], w, aim: true) : null)) yield return true;
-            if (host.TimedHitFx.Hits > 0) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(host.TimedHitFx.Hits));
+            foreach (bool _ in host.TimedHitFx.Prompt(a, aim: true, guide: targetIndex >= 0 ? ExpectedDamageText(a, host._units[targetIndex], w, aim: true) : null, magic: AimIsMagic(w))) yield return true;
+            if (host.TimedHitFx.Hits > 0) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(host.TimedHitFx.Hits, AimIsMagic(w)));
         }
 
         var dying = new List<UnitState>();
@@ -1963,7 +1963,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (Part1.LastHit is { } h && (why == null || why.Value.Blocked && !h.Blocked)) why = h;
         }
         string hitRate = $"명중 {landed * 100 / Rolls}%";
-        if (hits.Count == 0) return aim ? $"{TimedHit.AimGuide}\n{hitRate}" : null;
+        if (hits.Count == 0) return aim ? $"{TimedHit.AimGuideFor(AimIsMagic(w))}\n{hitRate}" : null;
         hits.Sort();
         int normal = hits[hits.Count / 2], critical = normal * db.N(23) / 100;
         string basis;
@@ -1972,7 +1972,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         else if (CombatData(a) is { } ca && CombatData(t) is { } ct)
             basis = $"공격력 {db.Atk(ca, host.TuningScr.AttackSoul(w, a.Soul), w.Power, a.Status(29))} × 대상 방어율 ({db.N(3)} − {db.Rdp(ct, t.Hp, t.MaxHp)})/{db.N(3)}";
         else basis = "";
-        string first = aim ? $"{TimedHit.AimGuide}" : $"예상 피해 {normal} · 크리티컬 {critical}";
+        string first = aim ? $"{TimedHit.AimGuideFor(AimIsMagic(w))}" : $"예상 피해 {normal} · 크리티컬 {critical}";
         string second = aim ? $"예상 피해 {normal} · {hitRate}" : hitRate;
         return basis.Length > 0 ? $"{first}\n{second} · {basis}" : $"{first}\n{second}";
     }
@@ -1982,6 +1982,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal int _timedAimBonus;
 
     internal int AimBonus(UnitState a) => a == _timedAimBy ? _timedAimBonus : 0;
+
+    /// <summary>타이밍 명중이 마법 몫(+5 · +10)으로 오르나 — 파트1 마법 기술만.</summary>
+    internal bool AimIsMagic(WorkData w) => host._scene.IsPart1 && Part1.IsMagic(w);
 
     /// <summary>파트1 무기 덧기술 — 행동 끝에 쏠 것(시전자, work, 칸). 한 행동에 한 번(<see cref="_part1ProcBy"/>).</summary>
     internal (int User, WorkData Work, int Col, int Row)? _part1Proc;
