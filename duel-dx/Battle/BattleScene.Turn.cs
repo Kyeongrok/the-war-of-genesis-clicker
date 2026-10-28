@@ -600,6 +600,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);
             if (Part1.Has(p1u, 15)) p1u.Soul = Part1Combat.GaugeOnTurn(p1u.Soul, cap: p1u.MaxSoul);   // 블래스 — 오를 때마다 +20 더
             CapPart1Soul(p1u);
+            // 장비 보정 400 「매 턴 HP 회복」(천사의 목걸이 +100)은 HP 에, 401 「소울치 추가 회복」(사이킥 써크렛)은 소울에 더한다 —
+            // HP 는 최대에서, 소울은 150 에서 자른다(0x10036433 · 0x10036479). 전에는 둘 다 안 들었다(카페 제보).
+            if (Part1.Fighter(p1u) is { } gear)
+            {
+                int hpUp = gear.Equipment.Sum(i => i?.Bonus(400) ?? 0), soulUp = gear.Equipment.Sum(i => i?.Bonus(401) ?? 0);
+                if (hpUp != 0 && p1u.Hp > 0) p1u.Hp = Math.Min(p1u.MaxHp, p1u.Hp + hpUp);
+                if (soulUp != 0) p1u.Soul = Math.Min(p1u.MaxSoul, p1u.Soul + soulUp);
+                if (Trace && hpUp + soulUp != 0)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 turn regen chr {p1u.ChrCode} hp +{hpUp} → {p1u.Hp}/{p1u.MaxHp} soul +{soulUp} → {p1u.Soul}" + Environment.NewLine);
+            }
             // 파트1 부하는 대장 차례마다 이동 1 · 행동 1 을 받는다(0x10036825: +0x1c6 = +0x1c8 = 1) — 부하 TP 를 채우고 시작 칸을 적는다
             // (휴식의 1/5 · 1/10 가름). 부하는 제 차례가 없어 틱의 TP 채우기(차례 깃발이 안 선 사람만)를 못 받는다.
             foreach (var f in FollowersOf(index))
