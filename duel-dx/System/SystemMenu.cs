@@ -1213,8 +1213,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // 기본 파티가 섰고, 전투에 있던 크리스티앙 대신 제이슨이 나왔다(사용자 보고).
         _restoreVersion = state.Version;
         // 파트1 전투 세이브 — 판을 세우기 전에 파트1 진행을 되살린다(배치 · 인물 성장이 그것을 읽는다). 이기면 그 챕터의 남은 사건을 잇는다.
-        if (state.Part1 is { } part1 && host.Part1.FromJson(part1, host.FlagSt._flags)) host.Part1TitleScr.PrepareBattleLoad();
+        bool part1Loaded = state.Part1 is { } part1 && host.Part1.FromJson(part1, host.FlagSt._flags);
+        if (part1Loaded) host.Part1TitleScr.PrepareBattleLoad();
         RestorePartyBeforeBoard(state);
+        // 불러온 진행을 자동 저장(part1.json)에도 적는다 — 안 적으면 그 판에서 지거나 타이틀로 나가 「이어 하기」를 누를 때 불러오기 전(나중) 진행이 돌아와,
+        // 세이브 뒤에 팀을 바꿨으면 바뀐 팀으로 이어졌다(사용자 보고 menu-108: Chp 0023 팀 나누기). 챕터 지도 세이브는 지도를 열며(Open → SaveProgress) 이미 적는다.
+        if (part1Loaded) host.Part1.Save(host.FlagSt._flags);
         // 연대표에서 저장한 것(머리 장면 7) — 원본은 챕터 상태를 안 싣고 불러오면 0x10007030(7, …) 로 연대표를 연다.
         // 전에는 InMoses 만 보아서 새 게임 직후면 옛 전투(state.Battle)가, 앞 판을 했으면 그 챕터 모세스가 열렸다(감사 F6).
         if (state.SceneKind == 7)
