@@ -1206,6 +1206,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
         // 타이밍 크리티컬(모드 > 밸런스) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.
         if (TimedHit.ForcedHits > 0 && !eventFinisher && a.IsAlly && w.IsDamage) _timedCritBy = a;   // 시험용
+        else if (TimedHit.ForcedAimHits > 0 && !eventFinisher && a.IsAlly && host.TimedHitFx.WantedAim(a, w)) (_timedAimBy, _timedAimBonus) = (a, TimedHit.AimBonusFor(TimedHit.ForcedAimHits));   // 시험용
         else if (!eventFinisher && host.TimedHitFx.Wanted(a, w))
         {
             var aimed = targetIndex >= 0 ? host._units[targetIndex] : null;
@@ -1954,7 +1955,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         for (int i = 0; i < Rolls; i++)
         {
             Part1.LastHit = null;
-            var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(rng, a, t, w) : null)
+            var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(rng, a, t, w, AimBonus(a)) : null)
                 ?? db.Resolve(rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
             if (result is not (2 or Part1Rules.Blocked or Part1Rules.CounterHit)) continue;
             landed++;
@@ -2035,7 +2036,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 판정에는 상태이상까지 얹은 능력치를 쓴다(1 DEX −1 · 40 DEP −1 · 30~32 보정).
         // 군단 부하의 DEX 는 대장 것이다(0x1007ae50, 감사3 L2) — CombatData 가 바꿔 준다.
         // 파트1 판은 피해만 파트1 식(세기 ÷ 방어)으로 굴린다 — Part1Rules(사용자 결정 「중간안」).
-        var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(host._rng, a, t, w) : null)
+        var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(host._rng, a, t, w, AimBonus(a)) : null)
             ?? host._db.Resolve(host._rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
         bool timed = a == _timedCritBy && w.IsDamage;
         if (timed)

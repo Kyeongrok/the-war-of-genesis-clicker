@@ -444,9 +444,17 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         (AttackOf(w) ?? (Fighter(a) is { } fa ? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa)) : null))?.Formula ?? 0;
 
     /// <summary>
+    /// 화이어볼1~5 · 필살 화이어볼 20(공격 69~73 · 77) — <b>원본과 다른 손질</b>(사용자 결정 fg-67): 공마다 명중률 80% → 90%, 피해 ×0.8.
+    /// 공마다 따로 굴리게 된 뒤(fg-62) 빗나감이 잦게 느껴져, 평균 피해를 비슷하게 두고(0.9 × 0.8 ≈ 0.8 × 0.9) 덜 빗나가게 했다.
+    /// 화이어볼6 · 7(명중 50%, 한 공) · 필살 화이어볼 30(100%)은 원본 그대로.
+    /// </summary>
+    internal const int FireBallAccuracy = 90, FireBallDamagePercent = 80;
+
+    /// <summary>
     /// 피해 굴림 — 파트2 <c>GameData.Resolve</c> 와 같은 꼴(결과 2 맞음 · 3 빗나감)에 파트1 의 4 막음 · 5 피함을 더해 돌려준다. 파트1 인물이 아니면 null(파트2 식을 쓴다).
     /// </summary>
-    internal (int Amount, int Result, bool Critical)? Resolve(Random rng, UnitState a, UnitState t, WorkData w)
+    /// <param name="aimBonus">타이밍 명중(fg-34)으로 맞춘 몫(%) — 명중 굴림의 명중률에 더한다. 전에는 파트1 판에서 안 들었다(fg-67).</param>
+    internal (int Amount, int Result, bool Critical)? Resolve(Random rng, UnitState a, UnitState t, WorkData w, int aimBonus = 0)
     {
         if (!w.IsDamage || Fighter(a) is not { } fa || Fighter(t) is not { } ft) return null;
         // 기술이면 Attack.dat 의 세기 식(+0x42) · 명중률(+0x48) · 속성(+0x64) · 더하는 세기(+0x44 제곱) · 곱(+0x66)을 쓴다.
@@ -455,6 +463,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int selector = attack?.Formula ?? 0;
         if (selector is >= 10 and <= 28) return null;
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
+        bool fireBall = attack is { Id: (>= 69 and <= 73) or 77 };
+        if (fireBall) accuracy = FireBallAccuracy;
+        accuracy += aimBonus;
         // 원본 차례(0x100413b0): 무기로 치는 물리(선택자 0 · 1 · 29 · 30)만 ① 회피(0x10040fa0 → 결과 5, 역습 자세 +0x25a 면 7) ② 명중 굴림(결과 3)
         // ③ 막기(0x10040eb0 → 결과 4 — 피해는 들어가고 방어에 두 손 아이템 +0x58 을 더한다). 때린 이 장비에 보정 246(회피 불능)이 있으면 ①③ 을 안 굴린다.
         // 자세(+0x257 ~ +0x25b, Stances): 회피는 77 이 있으면 DEX(회피 자세가 아니면 ½), 77 이 없어도 역습 자세면 DEX 그대로 굴린다(0x10040fa0).
@@ -505,9 +516,10 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         int result = stance == 78 ? CounterHit : blocked ? Blocked : 2;
         bool crit = false;
         if (result != Blocked) damage = Part1Combat.Critical(damage, critRate, rng.Next(32768), out crit);
+        if (fireBall) damage = damage * FireBallDamagePercent / 100;
         if (BattleScene.Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}{(blocked ? " 막음" : "")}{(stance != 0 ? $" 자세 {stance}" : "")} → 결과 {result}" + Environment.NewLine);
+                $"part1 hit {a.ChrCode} → {t.ChrCode}{(attack != null ? $" {attack.Name}(식 {selector})" : "")}: 세기 {power} ÷ 방어 {defense} = {damage}{(crit ? " 치명" : "")}{(blocked ? " 막음" : "")}{(stance != 0 ? $" 자세 {stance}" : "")} · 명중 {accuracy} → 결과 {result}" + Environment.NewLine);
         return (Math.Max(0, damage), result, crit);
 
         (int, int, bool) Missed(string why, int result = 3)

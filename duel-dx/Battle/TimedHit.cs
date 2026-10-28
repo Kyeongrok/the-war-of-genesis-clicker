@@ -217,6 +217,9 @@ internal sealed class TimedHit(GameWindow host)
     /// <summary>시험용 DUELDX_TIMEDHITS=&lt;n&gt; — 띠 없이 박자 n 개를 맞춘 것으로 친다(화면 밖에서 연속 공격을 보려고).</summary>
     internal static readonly int ForcedHits = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TIMEDHITS"), out int n) ? n : 0;
 
+    /// <summary>시험용 DUELDX_TIMEDAIM=&lt;박자 수&gt; — 타이밍 명중을 띄우지 않고 그만큼 맞춘 것으로 친다(명중 보정을 화면 밖에서 보려고). 타이밍 명중이 켜져 있어야 한다.</summary>
+    internal static readonly int ForcedAimHits = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TIMEDAIM"), out int m) ? m : 0;
+
     /// <summary>아직 안 끝난 첫 박자 — 다 끝났으면 박자 수.</summary>
     private int Pending => Array.IndexOf(_beat, 0) is var i and >= 0 ? i : _beat.Length;
 
