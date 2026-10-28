@@ -207,7 +207,8 @@ internal sealed partial class Part1Skill
             int impact = FireMissile(18, dir <= 8 ? dir : 16 - dir, dir > 8, go, s, t, 1.3);
             if (k == 0) Later(go, () => host.Btl.CenterOn(t.X, t.Y));
             Put(48, 0, impact + 2, t.X, t.Y, life: 24, sounds: true);
-            if (k == 0 && victim >= 0) HitAt(impact + 3, victim, hit);
+            // 화살마다 한 번씩 친다(0x1004862a, 세기에 화살 수를 곱하지 않는다 — HitsPerBall). 앞 화살에 쓰러졌으면 헛맞는다.
+            if (victim >= 0) Later(impact + 3, () => { if (host._units[victim].Alive) hit(victim); });
             last = Math.Max(last, FireBurst(impact + 2, t, s));
         }
         return last + 1;
@@ -215,8 +216,9 @@ internal sealed partial class Part1Skill
         int Sign() => Rand(2) == 0 ? -1 : 1;
     }
 
-    /// <summary>화이어 볼(퓨리 오브 화이어 · 묵호파 포함, 공격 69~77) work 인가 — 공마다 따로 치고 세기에 공 수를 곱하지 않는다(<see cref="FireBall"/>).</summary>
-    internal static bool HitsPerBall(int work) => work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is >= 69 and <= 77;
+    /// <summary>화이어 애로우(공격 60~68) · 화이어 볼(퓨리 오브 화이어 · 묵호파 포함, 69~77) work 인가 — 화살 · 공마다 따로 치고 세기에 그 수를 곱하지 않는다
+    /// (<see cref="FireArrow"/> · <see cref="FireBall"/>, 화이어 애로우는 fg-69 — 전에는 첫 화살이 화살 수만큼 곱한 세기로 한 번만 쳤다).</summary>
+    internal static bool HitsPerBall(int work) => work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is >= 60 and <= 77;
 
     /// <summary>화이어 볼이 쓰는 파트1 그림(땅불 23 · 96 과 그 자식 93 까지).</summary>
     private static readonly int[] FireBallNeeds = [64, 55, 33, 17, 48, 10, 34, 38, 54, 23, 96, 93];
