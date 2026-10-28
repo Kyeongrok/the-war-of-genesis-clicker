@@ -64,6 +64,11 @@
                     AutomationProperties.AutomationId="BodyAbilitiesMenuItem"
                     Click="BodyAbilitiesMenuItem_Click"
                     Header="체질 — 배울 수 있는 어빌리티(_B)" />
+                <MenuItem
+                    x:Name="Part1AttackEditMenuItem"
+                    AutomationProperties.AutomationId="Part1AttackEditMenuItem"
+                    Click="Part1AttackEditMenuItem_Click"
+                    Header="파트1 기술 편집 — 레벨별 피해 · 명중률 · 효과(_P)" />
             </MenuItem>
             <MenuItem Header="모션(_O)">
                 <MenuItem

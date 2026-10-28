@@ -276,6 +276,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Part1AttackEditMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { new Part1AttackEditWindow { Owner = this }.Show(); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+        {
+            StatusText.Text = $"파트1 기술을 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     private void LegionEditMenuItem_Click(object sender, RoutedEventArgs e)
     {
         try { new LegionEditWindow { Owner = this }.Show(); }

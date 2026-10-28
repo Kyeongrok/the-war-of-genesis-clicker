@@ -1,0 +1,12 @@
+{
+  "id": 77,
+  "name": "필살_화이어볼_20",
+  "formula": 5,
+  "powerAdd": 50,
+  "accuracy": 90,
+  "hits": 20,
+  "element": 1,
+  "element2": 0,
+  "cost": 20,
+  "damagePercent": 80
+}

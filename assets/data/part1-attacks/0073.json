@@ -1,0 +1,12 @@
+{
+  "id": 73,
+  "name": "화이어볼5",
+  "formula": 5,
+  "powerAdd": 60,
+  "accuracy": 90,
+  "hits": 7,
+  "element": 1,
+  "element2": 0,
+  "cost": 50,
+  "damagePercent": 80
+}

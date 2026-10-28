@@ -141,10 +141,17 @@ public sealed record Part1Attack(int Id, string Name, IReadOnlyDictionary<int, i
     /// <summary><c>+0x69</c> 기술 전 준비 동작 갈래(<c>0x10042fc4</c>).</summary>
     public int Prep => Raw[0x69];
 
+    /// <summary>피해에 곱하는 %(원본에 없는 우리 칸 — 편집기 「파트1 기술 편집」, <see cref="Part1AttackBook"/>). 기본 100.</summary>
+    public int DamagePercent { get; init; } = 100;
+
     /// <summary>번호(1 부터)로 찾는다.</summary>
     public static Part1Attack? ById(IReadOnlyList<Part1Attack> list, int id) => id >= 1 && id <= list.Count ? list[id - 1] : null;
 
-    public static IReadOnlyList<Part1Attack> LoadAll() => ParseAll(Part1Game.Read("Dats", "Attack.dat"));
+    /// <summary>원본 <c>Attack.dat</c> 에 편집기의 덮어쓰기(<see cref="Part1AttackBook"/>)를 얹은 것.</summary>
+    public static IReadOnlyList<Part1Attack> LoadAll() => Part1AttackBook.Apply(LoadOriginal());
+
+    /// <summary>덮어쓰기 없는 원본 <c>Attack.dat</c>.</summary>
+    public static IReadOnlyList<Part1Attack> LoadOriginal() => ParseAll(Part1Game.Read("Dats", "Attack.dat"));
 
     public static IReadOnlyList<Part1Attack> ParseAll(byte[]? b)
     {

@@ -110,6 +110,22 @@ public static class Part1SkillBook
     /// <summary>겹친 work 를 비켜 주는 폭 — Attack.dat 는 1000 칸이 안 된다.</summary>
     public const int WorkStride = 1000;
 
+    /// <summary>
+    /// 그 어빌리티의 레벨별 <c>Attack.dat</c> 번호 — 첫 기술부터 이름 머리(「화이어볼」)가 같은 동안 9 레벨까지(<see cref="AddTo"/> 와 같은 셈). 기술이 없으면 빈 목록.
+    /// </summary>
+    public static List<int> LevelAttackIds(Part1Ability ab, IReadOnlyList<Part1Attack> attacks)
+    {
+        var ids = new List<int>();
+        if (ab.AttackId <= 0 || Part1Attack.ById(attacks, ab.AttackId) is not { } first) return ids;
+        string head = Head(first.Name);
+        for (int lv = 1; lv <= 9; lv++)
+        {
+            if (Part1Attack.ById(attacks, ab.AttackId + lv - 1) is not { } a || (lv > 1 && Head(a.Name) != head)) break;
+            ids.Add(a.Id);
+        }
+        return ids;
+    }
+
     /// <summary>파트1 work 번호의 Attack.dat 번호 — 20000 위의 1000 나머지.</summary>
     public static int AttackIdOf(int work) => (work - Part1Game.ChrBase) % WorkStride;
 
