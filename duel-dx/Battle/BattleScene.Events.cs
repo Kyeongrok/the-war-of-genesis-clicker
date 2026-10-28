@@ -706,10 +706,11 @@ internal sealed unsafe partial class BattleScene
                 int side = A(0) >= 0 && A(0) < EventSideOrder.Length ? A(0) : -1;
                 int x1 = Math.Min(A(3), A(5)), x2 = Math.Max(A(3), A(5));
                 int y1 = Math.Min(A(4), A(6)), y2 = Math.Max(A(4), A(6));
-                // 파트2 는 쓰러진 인물도 센다(ba-14 E2). 파트1(0x1001d820)은 판 명단(+0xb9a0)의 인물만 세는데 쓰러지면 명단에서 빠진다 —
-                // 쓰러진 적까지 세면 Btl 0091 「적이 하나 남고 크리스티앙이 붙으면」(사건 2) 이 영영 안 터졌다(사용자 보고).
-                bool part1 = host._scene.IsPart1;
-                int n = side < 0 ? 0 : host._units.Count(u => u.OnField && (!part1 || u.Alive) && u.Side == side
+                // 산 인물만 센다. 파트2 0x10050710 은 명단(+0x3c6c)을 갈래 0(NULL 검사)으로 거르지만, 유닛이 지워질 때 소멸자 0x10071640 이
+                // 그 칸을 0 으로 비운다 — 쓰러진 적은 명단에서 빠진다. 이 조건을 쓰는 파트2 전투는 Btl 0266 하나(「적이 아돌 하나만 남고
+                // 크리스티앙이 붙으면」 승리)뿐인데, 쓰러진 은빛갈기까지 세면 영영 안 끝났다(카페 제보). 파트1(0x1001d820)도 판 명단의 인물만 센다 —
+                // Btl 0091 「적이 하나 남고 크리스티앙이 붙으면」(사건 2)(사용자 보고).
+                int n = side < 0 ? 0 : host._units.Count(u => u.OnField && u.Alive && u.Side == side
                                                           && u.Col >= x1 && u.Col <= x2 && u.Row >= y1 && u.Row <= y2);
                 return Compare(n, A(1), A(2));
             }
