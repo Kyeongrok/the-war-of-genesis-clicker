@@ -505,6 +505,13 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             _fieldWaitChannel = -1;
         }
 
+        // 필드 · 전투에서 돌아왔다 — 그리로 떠난 챕터 사건의 남은 줄부터 잇는다(_chapterResume).
+        if (_fieldEvent < 0 && chapter != null && _chapterResume is var (rChapter, rEvent, rPc) && rChapter == chapter.Id)
+        {
+            _chapterResume = null;
+            if ((uint)rEvent < events.Count) { _fieldEvent = rEvent; _fieldPc = rPc; _fieldReturn.Clear(); }
+            GameWindow.TestRunTrace($"chapter {rChapter} event {rEvent} resumes at line {rPc}");   // 시험 전용 줄
+        }
         if (_fieldEvent < 0)
         {
             if (chapter != null && _chapterFired.ContainsKey((chapter.Id, -1))) return;   // 옛 세이브 표시 — 다 돌았다
@@ -828,7 +835,9 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 break;
 
             case 6:                                          // 다른 필드로
+                RememberChapterResume();
                 if (OpenField(A(0))) return false;
+                _chapterResume = null;                       // 못 열었다 — 떠나지 않았다
                 LeaveField();
                 return false;
             case 7: LeaveField(); return false;              // 필드 끝 — 챕터가 있으니 모세스로(0x100f2d90)
@@ -838,6 +847,7 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
                 LeaveField();
                 return false;
             case 10:                                         // 전투
+                RememberChapterResume();
                 CloseField();
                 if (!host.Sys.StartBattle(A(0))) host.Mos.OpenMoses();
                 return false;
@@ -1232,6 +1242,9 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     {
         // 사건별 횟수가 없던 옛 세이브에서 온 챕터는 「다 돌았다」로 본다(사건 −1 표시).
         if (_chapterFired.ContainsKey((chapter.Id, -1))) return false;
+        RepairDroppedChapterLines(chapter);
+        // 떠났던 사건의 남은 줄이 있으면 실행기(UpdateField)가 그것부터 잇는다 — 여기서 다른 사건을 먼저 돌리지 않는다.
+        if (_chapterResume is { } resume && resume.Chapter == chapter.Id) return false;
         foreach (var wanted in chapter.Events.Count > 0 ? chapter.Events[0].Actions : [])
         {
             int index = wanted.Args.Length > 0 ? wanted.Args[0] : -1;
@@ -1248,10 +1261,39 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             // 버린 채 횟수만 올려, Chp 0057 사건 1(102[38,1] → 10[110])의 자동 전투가 사라지고 Chp 0050 사건 1 의 100[87,1]·100[32,1],
             // Chp 0013 사건 4 의 100[77,10] 이 안 섰다.
             _fieldOwner = index;
-            foreach (var a in e.Actions)
-                if (!RunFieldAction(a)) return true;         // 필드·전투·타이틀로 떠났다
+            for (int i = 0; i < e.Actions.Count; i++)
+            {
+                _chapterScriptAt = (index, i + 1);           // 6 · 10 이 떠나면 이 사건의 다음 줄을 적어 둔다(RememberChapterResume)
+                if (!RunFieldAction(e.Actions[i])) { _chapterScriptAt = null; return true; }   // 필드·전투·타이틀로 떠났다
+            }
+            _chapterScriptAt = null;
         }
         return false;
+    }
+
+    /// <summary>RunChapterScript 가 지금 돌리는 (사건, 다음 줄) — 실행기(UpdateField)를 안 거치는 대사 없는 챕터 사건용.</summary>
+    private (int Event, int Pc)? _chapterScriptAt;
+
+    /// <summary>챕터 사건이 필드 · 전투로 떠난다 — 남은 줄이 있으면 돌아와서 잇게 적는다(<see cref="_chapterResume"/>).</summary>
+    private void RememberChapterResume()
+    {
+        if (RunningChapter is not { } chapter) return;
+        var (ev, pc) = _chapterScriptAt ?? (_fieldEvent, _fieldPc);
+        _chapterResume = (uint)ev < chapter.Events.Count && pc < chapter.Events[ev].Actions.Count ? (chapter.Id, ev, pc) : null;
+        GameWindow.TestRunTrace($"chapter {chapter.Id} event {ev} leaves at line {pc} — resume {(_chapterResume != null ? "kept" : "none")}");   // 시험 전용 줄
+    }
+
+    /// <summary>
+    /// 고치기 전 판이 남긴 세이브 되살리기 — Chp 0016 사건 3(가브리엘 → 필드 117)이 돌았는데 그 뒤 줄 102[245,1] 이 버려져 깃발 245 가 0 인 채면
+    /// 세운다. 안 그러면 알파(사건 4) · 라시덴(사건 12, 크리스티앙 독백)이 영영 안 떠 닥터 K 가 막힌다(사용자 제보 mo-32). 떠난 사건이 아직 돌아오지 않은 때(필드 117 안)는 건드리지 않는다.
+    /// </summary>
+    private void RepairDroppedChapterLines(ChapterFile chapter)
+    {
+        if (chapter.Id == 16 && _chapterResume == null && _chapterFired.GetValueOrDefault((16, 3)) > 0 && host.FlagSt._flags[245] == 0)
+        {
+            host.FlagSt._flags[245] = 1;
+            GameWindow.TestRunTrace("chapter 16 repair: flag 245 = 1 (event 3 line after 6[117] was dropped)");   // 시험 전용 줄
+        }
     }
 
     /// <summary>챕터 사건이 이미 돈 횟수 — (챕터, 사건).</summary>
@@ -1262,6 +1304,18 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
     /// 대신 사건마다 제 「몇 번까지」를 지켜 같은 것을 두 번 주지 않는다.
     /// </remarks>
     internal readonly Dictionary<(int Chapter, int Event), int> _chapterFired = [];
+
+    /// <summary>
+    /// 필드(행동 6) · 전투(10)로 떠난 챕터 사건의 남은 줄 — (챕터, 사건, 다음 줄). 모세스로 돌아오면 그 줄부터 잇는다(사용자 제보 mo-32).
+    /// 챕터 사건은 모세스 위에서 도는 실행기라, 필드 · 전투가 끝나면 그 사건의 다음 줄이 돈다 — 자료가 그렇게 짜여 있다:
+    /// Chp 0016 사건 3 은 6[117] 뒤에 102[245,1] 을 두고, 그 깃발이 있어야 알파 → 라시덴(크리스티앙 독백, 사건 4 · 12)이 이어진다.
+    /// 전에는 6 · 10 에서 사건을 버려 245 가 안 서고 닥터 K 가 더 나아가지 않았다. 같은 꼴: Chp 0016 사건 12(6[119] 뒤 705 돈) · Chp 0050 사건 5(10[290] 뒤 102[285,0]).
+    /// 세이브에 싣는다(SaveState.ChapterResume) — 필드 · 전투 한가운데서 저장해도 잇는다.
+    /// </summary>
+    internal (int Chapter, int Event, int Pc)? _chapterResume;
+
+    /// <summary>지금 모세스 위에서 챕터 사건을 돌리는 중이면 그 챕터.</summary>
+    private ChapterFile? RunningChapter => _field == null && host.Mos._mosesOpen ? host.Mos._mosesChp : null;
 
     internal void RunChapterAction(ScriptCommand a)
     {
