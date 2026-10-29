@@ -143,6 +143,8 @@ internal sealed unsafe partial class GameWindow
     internal DevScreen DevScr => _devScr ?? LazyInitializer.EnsureInitialized(ref _devScr, () => new DevScreen(this));
     internal CharEditScreen? _charEditScr;
     internal CharEditScreen CharEditScr => _charEditScr ?? LazyInitializer.EnsureInitialized(ref _charEditScr, () => new CharEditScreen(this));
+    internal LegionEditScreen? _legionEditScr;
+    internal LegionEditScreen LegionEditScr => _legionEditScr ?? LazyInitializer.EnsureInitialized(ref _legionEditScr, () => new LegionEditScreen(this));
     private HiResBackdrop? _hiBack;
     internal HiResBackdrop HiBack => _hiBack ?? LazyInitializer.EnsureInitialized(ref _hiBack, () => new HiResBackdrop(this));
     internal BattleStats? _stats;

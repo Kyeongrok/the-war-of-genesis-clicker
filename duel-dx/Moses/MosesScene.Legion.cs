@@ -40,6 +40,17 @@ internal sealed unsafe partial class MosesScene
         _legions ??= host._db is { } db ? LegionBook.LoadAll(db.Files) : [];
 
     /// <summary>
+    /// 군단 표를 파일에서 다시 읽는다 — 도구 &gt; 군단 에디터가 저장한 뒤(menu-116). 용병관리에서 고르던 줄은 놓고, 지운 새 군단의 배속은 뗀다.
+    /// 전투에 이미 선 군단 유닛은 그대로고, 구성(부하 · 진형)은 다음 전투부터 새 값이다.
+    /// </summary>
+    internal void ReloadLegions()
+    {
+        _legions = null;
+        _legionPick = -1;
+        DropMissingLegions();
+    }
+
+    /// <summary>
     /// 세이브·전투 전 기록에서 되살린 배속 가운데 <b>없어진 새 군단</b>(편집기에서 지운 <c>legions/9NN.json</c>, ed-8)을 조용히 뗀다.
     /// 원본 번호(<see cref="LegionBook.FirstCustomId"/> 아래)는 건드리지 않는다. 자료를 못 읽었으면(군단 표가 비면) 아무것도 안 뗀다.
     /// </summary>

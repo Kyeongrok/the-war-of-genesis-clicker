@@ -817,6 +817,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             // 캐릭터 에디터의 이름 찾기 — 다 된 글자는 WM_CHAR, 한글 조합 중인 글자는 WM_IME_COMPOSITION 으로 받는다(사용자 요청 menu-71).
             // IME 의 따로 뜨는 조합 창은 끄고(START 를 먹는다) 찾기 칸 안에 조합 중인 글자를 그린다. 조합 결과는 DefWindowProc 가 WM_CHAR 로 바꿔 보낸다.
+            // 군단 에디터(도구 > 군단 에디터)의 찾기 · 이름 칸도 같은 길 — 캐릭터 에디터보다 위에 그리므로 먼저 받는다(menu-116).
+            case Win32.WM_CHAR when LegionEditScr.TextActive:
+                LegionEditScr.OnChar((char)(long)wParam);
+                return IntPtr.Zero;
+            case Win32.WM_IME_STARTCOMPOSITION when LegionEditScr.TextActive:
+                return IntPtr.Zero;
+            case Win32.WM_IME_COMPOSITION when LegionEditScr.TextActive:
+                LegionEditScr.OnComposition(Win32.CompositionString(hWnd));
+                break;
+            case Win32.WM_IME_ENDCOMPOSITION when LegionEditScr.TextActive:
+                LegionEditScr.OnComposition("");
+                break;
             case Win32.WM_CHAR when CharEditScr.SearchActive:
                 CharEditScr.OnChar((char)(long)wParam);
                 return IntPtr.Zero;
@@ -863,6 +875,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when ItemBookScr._open:
                 ItemBookScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
+                return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when LegionEditScr._open:
+                LegionEditScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when CharEditScr._open:
                 CharEditScr.OnWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
@@ -950,6 +965,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 if (msg == Win32.WM_RBUTTONDOWN && _partyTable is { _open: true }) _partyTable.OnRightDown(bx, by);   // 파트1 일행 한눈에
                 else if (msg == Win32.WM_RBUTTONDOWN && _jobTree is { _open: true }) _jobTree.Close();   // 전직 트리는 오른쪽 단추로 닫는다
                 else if (msg == Win32.WM_RBUTTONDOWN && ShowPart1PickTip(bx, by)) { }   // 레벨업 고르기 창 줄 = 누르고 있는 동안 설명(창은 닫지 않는다)
+                else if (msg == Win32.WM_RBUTTONDOWN && LegionEditScr._open) { }   // 군단 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Town._open && Part1TitleScr.Town.OnRightDown(bx, by)) { }   // 파트1 마을: 얼굴로 연 상태 패널
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
@@ -980,6 +996,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
         if (key == Win32.VK_F11) { OnMenuCommand(MenuFullscreen); return; }   // 전체화면 켜고 끄기 — 어느 화면에서나
         if (TimedHitFx.Running) { TimedHitFx.PressKey(key); return; }   // 타이밍 크리티컬 — 공격 키만 받는다
+        if (LegionEditScr.TextActive) { LegionEditScr.OnKey(key); return; }   // 군단 에디터 — 찾기 · 이름 칸에 글자를 치는 동안 시험 단축키가 안 돌게
         if (CharEditScr.SearchActive) { CharEditScr.OnKey(key); return; }   // 에디터 찾기 칸에 글자를 치는 동안 W · T 같은 시험 단축키가 안 돌게
         if (key == 'W' && FieldOpen && Fld.RunWipeIfAsked()) return;   // 화면 밖 시험: DUELDX_WIPE 전환을 손으로 건다
         if (key == 'T' && !FieldOpen && Btl.TouchNearestObjectForTest()) return;
@@ -1159,6 +1176,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_jobTree?.OnClick(bx, by) == true) return;  // 파트1 전직 트리
         if (_partyTable?.OnClick(bx, by) == true) return;  // 파트1 일행 한눈에
         if (ItemBookScr.OnClick(bx, by)) return;       // 도구 > 아이템 보기
+        if (LegionEditScr.OnClick(bx, by)) return;     // 도구 > 군단 에디터(캐릭터 에디터 위에 그린다)
         if (CharEditScr.OnClick(bx, by)) return;       // 도구 > 캐릭터 에디터
         if (TuningScr.OnTuningClick(bx, by)) return;   // 모드 > 조정 창은 어느 화면 위에서든 먼저 받는다
         if (MiniMap.OnClick(bx, by)) return;           // 미니맵(접기 단추 · 누른 자리로 카메라)
@@ -1527,6 +1545,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 가려 안 보였다(사용자 보고: 타이틀에서 캐릭터 에디터를 눌러도 반응이 없음).
         TuningScr.DrawTuning();
         CharEditScr.Draw();
+        LegionEditScr.Draw();
         StatsScr.Draw();
         SkillBookScr.Draw();
         ItemBookScr.Draw();

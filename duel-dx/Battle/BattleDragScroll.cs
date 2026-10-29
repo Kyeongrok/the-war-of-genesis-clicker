@@ -130,5 +130,5 @@ internal sealed class BattleDragScroll(GameWindow host)
     private bool AnyToolWindow() =>
         host.NotesScr.Open || host.ConsentScr.Open || host.SettingsScr._open || host.TimedEditScr._open || host.DevScr._open
         || host.StatsScr._open || host.SkillBookScr._open || host.Part1TablesOpen
-        || host.ItemBookScr._open || host.CharEditScr._open || host.TuningScr._tuningOpen || host._keysOpen;
+        || host.ItemBookScr._open || host.CharEditScr._open || host.LegionEditScr._open || host.TuningScr._tuningOpen || host._keysOpen;
 }

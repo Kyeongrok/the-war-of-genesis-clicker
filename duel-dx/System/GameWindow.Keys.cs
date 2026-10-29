@@ -205,6 +205,7 @@ internal sealed unsafe partial class GameWindow
         Win32.AppendMenuW(bar, Win32.MF_STRING, SettingsScreen.MenuSettings, "설정(&S)");
         IntPtr tools = Win32.CreatePopupMenu();
         Win32.AppendMenuW(tools, Win32.MF_STRING, CharEditScreen.MenuCharEdit, "캐릭터 에디터(&C)...");
+        Win32.AppendMenuW(tools, Win32.MF_STRING, LegionEditScreen.MenuLegionEdit, "군단 에디터(&L)...");   // 파트2 군단의 리더 · 부하 · 진형(사용자 요청 menu-116)
         Win32.AppendMenuW(tools, Win32.MF_STRING, StatsScreen.MenuStats, "전투 통계(&S)...");
         Win32.AppendMenuW(tools, Win32.MF_STRING, SkillBookScreen.MenuSkillBook, "체질별 어빌리티(&A)...");
         Win32.AppendMenuW(tools, Win32.MF_STRING, ItemBookScreen.MenuItemBook, "아이템 보기(&I)...");
@@ -409,6 +410,7 @@ internal sealed unsafe partial class GameWindow
             case MenuChapters: ChaptersScr._chaptersOpen = true; ChaptersScr._chaptersHover = -1; break;
             case MenuClearEnemies: Btl.ClearEnemiesForTest(); break;
             case CharEditScreen.MenuCharEdit: CharEditScr.Toggle(); break;
+            case LegionEditScreen.MenuLegionEdit: LegionEditScr.Toggle(); break;
             case StatsScreen.MenuStats: StatsScr._open = !StatsScr._open; break;
             case SkillBookScreen.MenuSkillBook: SkillBookScr.Toggle(); break;
             case ItemBookScreen.MenuItemBook: ItemBookScr.Toggle(); break;
