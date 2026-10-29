@@ -248,7 +248,15 @@ internal sealed class TimedHit(GameWindow host)
     /// </summary>
     internal bool WantedAim(UnitState a, WarOfGenesis.Assets.WorkData w) =>
         host._timedAim && !host._skippingAction && host.Btl.IsMine(a) && a.LeaderIndex < 0 && w.AbilityId != 0 && a.Data?.BasicWorkId != w.Id
-        && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1))) && !Part1Skill.HitsNoFoe(w.Id);
+        && w.Accuracy > 0 && (w.IsDamage || (w.Kind is 2 or 3 && (w.TargetMode == 1 || w.AreaMode == 1))) && !HitsNoFoe(w) && !Part1Skill.HitsNoFoe(w.Id);
+
+    /// <summary>
+    /// 적을 안 치는 파트2 work — 효과 범위가 겨눈 칸 하나(모양 0)인데 그 칸이 빈 칸(대상 7: 이스케이프 1583 · 순간이동)이거나
+    /// 아군(4) · 자기 자리(0 · 2)인 것, 그리고 효과 범위가 아군만 맞히는 것(+0x1e = 4). 종류 0(피해)으로 적혀 있고 명중 바탕(100)도 있어
+    /// 타이밍 명중 띠가 떴다(사용자 제보 fg-76). 빗나갈 적이 없으니 띄우지 않는다.
+    /// </summary>
+    internal static bool HitsNoFoe(WarOfGenesis.Assets.WorkData w) =>
+        (w.AreaShape == 0 && w.TargetMode is 7 or 4 or 0 or 2) || w.AreaMode == 4;
 
     /// <summary>이번 띠가 타이밍 명중의 것인가 — 안내 글과 결과 글이 달라진다.</summary>
     private bool _aim, _aimMagic;

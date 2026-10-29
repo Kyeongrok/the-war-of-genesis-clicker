@@ -372,15 +372,58 @@ internal sealed unsafe partial class BattleScene
         return plan;
     }
 
+    /// <summary>
+    /// 증원(행동 200 · 214)으로 들어오는 군단의 부하 자리 — 대장이 설 칸 둘레의 8칸 고리에서 정한다(fg-75).
+    /// </summary>
+    /// <remarks>
+    /// 원본(<c>0x100510dc~0x10051240</c>, ba-21 B-1)은 부하 i 를 대장 줄의 옆(짝수 +1 · 홀수 −1)에 두고 대장보다 <c>1 + i/2</c> 칸 뒤(변 쪽)에서
+    /// 같이 곧게 걸어 들어오게 한 뒤 부대 이동(<c>0x1005ad40</c> · <c>0x1005f670</c>)으로 대장 목표 칸 둘레 진형 자리에 세운다.
+    /// 여기서는 그 들어오는 대열을 「바라는 자리」로 삼아 <see cref="FormationPlan"/> 과 같은 고리 · 점수로 설 칸을 고른다 — 다만 판 밖 (0,0) 에 있는
+    /// 부하의 지금 칸이 아니라 <b>대장이 설 칸</b> 둘레를 훑는다. <paramref name="claimed"/>(이 행동이 이미 준 칸)와 대장 칸은 비켜 선다.
+    /// </remarks>
+    internal List<(UnitState Follower, int Col, int Row)> ReinforcementPlan(UnitState leader, int landCol, int landRow, int edge, IReadOnlySet<(int, int)> claimed)
+    {
+        var plan = new List<(UnitState, int, int)>();
+        var followers = FollowersOf(Array.IndexOf(host._units, leader)).OrderBy(f => f.FormationSlot).ToList();
+        if (followers.Count == 0) return plan;
+        var usedRing = new bool[FormationRing.Length];
+        var taken = new HashSet<(int, int)>(claimed) { (landCol, landRow) };
+        for (int i = 0; i < followers.Count; i++)
+        {
+            int side = i % 2 == 0 ? 1 : -1, back = 1 + i / 2;
+            var (dx, dy) = (edge & 3) switch { 0 => (side, -back), 1 => (-back, side), 2 => (side, back), _ => (back, side) };
+            int wantCol = landCol + dx, wantRow = landRow + dy;
+            int best = -1, bestScore = int.MaxValue;
+            for (int k = 0; k < FormationRing.Length; k++)
+            {
+                if (usedRing[k]) continue;
+                int score = Math.Abs(wantCol - (landCol + FormationRing[k].Dx)) + Math.Abs(wantRow - (landRow + FormationRing[k].Dy));
+                if (score < bestScore) (best, bestScore) = (k, score);
+            }
+            if (best < 0) best = 0;   // 부하는 많아야 여섯, 고리는 여덟 — 안 일어난다
+            usedRing[best] = true;
+            int ringCol = Math.Clamp(landCol + FormationRing[best].Dx, 0, host.Cols - 1);
+            int ringRow = Math.Clamp(landRow + FormationRing[best].Dy, 0, host.Rows - 1);
+            var (col, row) = StandingCellFor(followers[i], landCol, landRow, ringCol, ringRow, taken, around: (landCol, landRow));
+            if (taken.Contains((col, row)))
+                (col, row) = FreeCellNear(landCol, landRow, followers[i], taken);   // 둘레 ±20 칸에 설 데가 하나도 없을 때만
+            taken.Add((col, row));
+            plan.Add((followers[i], col, row));
+        }
+        return plan;
+    }
+
     /// <summary>고리 칸을 목표로 부하가 실제로 설 칸 — 못 찾으면 고리 칸 그대로(원본도 그렇다).</summary>
+    /// <param name="around">훑을 가운데 — 없으면 부하의 지금 칸(원본). 증원은 판 밖 부하라 대장이 설 칸을 준다.</param>
     internal (int Col, int Row) StandingCellFor(UnitState follower, int destCol, int destRow,
-                                               int ringCol, int ringRow, HashSet<(int, int)> taken)
+                                               int ringCol, int ringRow, HashSet<(int, int)> taken, (int Col, int Row)? around = null)
     {
         int destHeight = host._map?.HeightAt(destCol, destRow) ?? 0;
         int best = int.MaxValue;
         (int Col, int Row) pick = (ringCol, ringRow);
-        for (int row = follower.Row - 20; row <= follower.Row + 20; row++)
-            for (int col = follower.Col - 20; col <= follower.Col + 20; col++)
+        var (centerCol, centerRow) = around ?? (follower.Col, follower.Row);
+        for (int row = centerRow - 20; row <= centerRow + 20; row++)
+            for (int col = centerCol - 20; col <= centerCol + 20; col++)
             {
                 if (col == destCol && row == destRow) continue;          // 대장 자리는 비켜 준다
                 if (taken.Contains((col, row)) || !CanStand(col, row, follower)) continue;

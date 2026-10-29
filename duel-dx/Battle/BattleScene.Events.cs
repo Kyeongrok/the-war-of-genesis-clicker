@@ -168,15 +168,17 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
-    internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who)
+    /// <param name="reserved">이미 다른 유닛에게 정해 준 칸(증원이 걸어 들어오는 중이라 아직 비어 보이는 칸) — 그 칸도 찬 것으로 본다.</param>
+    internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who, IReadOnlySet<(int, int)>? reserved = null)
     {
-        if (!host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == col && x.Row == row)) return (col, row);
+        bool Taken(int c, int r) => reserved?.Contains((c, r)) == true || host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r);
+        if (!Taken(col, row)) return (col, row);
         for (int radius = 1; radius <= 6; radius++)
             for (int dy = -radius; dy <= radius; dy++)
                 foreach (int dx in new[] { -(radius - Math.Abs(dy)), radius - Math.Abs(dy) }.Distinct())
                 {
                     int c = col + dx, r = row + dy;
-                    if ((uint)c < host.Cols && (uint)r < host.Rows && !host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r) && CanStand(c, r, who)) return (c, r);
+                    if ((uint)c < host.Cols && (uint)r < host.Rows && !Taken(c, r) && CanStand(c, r, who)) return (c, r);
                 }
         return (col, row);
     }
@@ -766,7 +768,7 @@ internal sealed unsafe partial class BattleScene
     internal void RunEventAction(ScriptCommand a)
     {
         short A(int i) => i < a.Args.Length ? a.Args[i] : (short)0;
-        if (Trace && a.Code is 6 or 11 or 207 or 706 or 707 or 708 or 909)
+        if (Trace && a.Code is 6 or 11 or 200 or 207 or 214 or 706 or 707 or 708 or 909)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"event action: 사건 {_runningEvent} 줄 {_eventPc - 1} 행동 {a.Code} [{string.Join(",", a.Args)}]" + Environment.NewLine);
         switch (a.Code)
@@ -790,7 +792,8 @@ internal sealed unsafe partial class BattleScene
                 // 200 은 인자4 의 변(0 위·1 왼·2 아래·3 오른) 바깥 100px 에서 8px/틱으로 곧장 들어와 맵 안에 들어서면 걷는다(ba-14 E7).
                 // 부하는 대장 옆으로 엇갈려 선 뒤 진형으로 따라온다(0x10050f16~). 여기서는 변의 가장자리 칸에서 걸어 들어오게 한다.
                 double longest = 0.4, entryTicks = 0;
-                int entered = 0;
+                // 이 행동이 이미 자리를 정해 준 칸 — 걸어 들어오는 동안 논리 칸은 변 칸이라, 뒤 유닛이 앞 유닛의 설 칸을 또 고르지 않게 잡아 둔다(fg-75).
+                var claimed = new HashSet<(int, int)>();
                 foreach (var u in EventTargets(A(0), out _))
                 {
                     if (!u.Alive) continue;              // 자리 옮기기 명령이라 죽은 인물을 되살리지 않는다(0x1006e940(u,1))
@@ -798,7 +801,8 @@ internal sealed unsafe partial class BattleScene
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     // 그 칸에 누가 서 있으면 가장 가까운 빈 칸에 세운다(200 0x1004ef60 · 214 0x1004f0f0, ba-20 V5). 전에는 겹쳐 섰다.
-                    var (landCol, landRow) = FreeCellNear(A(2), A(3), u);
+                    var (landCol, landRow) = FreeCellNear(A(2), A(3), u, claimed);
+                    claimed.Add((landCol, landRow));
                     if ((landCol, landRow) != (A(2), A(3))) u.ResetTo(landCol, landRow);
                     u.Facing = EdgeFacing(A(4));
                     if (a.Code == 200 && EdgeCell(A(4), A(2), A(3)) is var (ec, er) && (ec, er) != (landCol, landRow))
@@ -848,21 +852,39 @@ internal sealed unsafe partial class BattleScene
                         }
                     }
                     int leader = Array.IndexOf(host._units, u);
-                    foreach (var (follower, col, row) in FormationPlan(u, A(2), A(3)))
+                    // 부하 자리는 대장이 <b>설 칸</b>(landCol, landRow) 둘레에서 정한다(fg-75). 전에는 FormationPlan(u, a2, a3) 를 썼는데,
+                    // 그때 대장은 이미 변 칸에, 부하는 판 밖 (0,0) 에 있어 「대장 따라 평행 이동한 자리」가 엉뚱했고, 설 칸도 부하의 (0,0) 둘레 ±20칸에서만
+                    // 찾아 목표가 맵 귀퉁이에서 멀면(Btl 0049 스턴 (7,23)) 부하가 대장과 떨어진 줄 20 에 섰다. 대장이 비켜 선 칸도 안 비켜 겹칠 수 있었다.
+                    int entered = 0;
+                    foreach (var (follower, col, row) in ReinforcementPlan(u, landCol, landRow, A(4), claimed))
                     {
+                        claimed.Add((col, row));
+                        if (Trace) System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                            $"reinforce follower: chr {follower.ChrCode} → ({col},{row}) leader chr {u.ChrCode} → ({landCol},{landRow})" + Environment.NewLine);
                         follower.OnField = true;
                         follower.ResetTo(col, row);
                         follower.Facing = u.Facing;
                         _followerTarget[follower] = (col, row);
-                        // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2).
+                        // 부하는 둘씩 한 칸씩 더 밖(140·180·220px)에서 같이 들어온다(0x100510dc~0x10051240, ba-21 B2) — 대장처럼 제 줄의 변 칸에서
+                        // 제 자리까지 걷는다(원본은 곧게 들어온 뒤 부대 이동으로 진형 자리에 간다). 전에는 제 자리 바로 바깥에서 미끄러져 맵 한가운데서 나타났다.
                         if (a.Code == 200 && !host.Tlk._talkSkip)
                         {
                             int px = 140 + 40 * (entered++ / 2);
+                            if (EdgeCell(A(4), col, row) is var (fc, fr) && (fc, fr) != (col, row))
+                            {
+                                follower.WarpTo(fc, fr);
+                                var fwalk = ComputeRange(follower, tp: 1 << 20) is { } fr2 && fr2.CanReach(row * host.Cols + col) ? PathWithin(fr2, fc, fr, row * host.Cols + col) : null;
+                                if (fwalk is { Count: > 0 }) { foreach (var step in fwalk) follower.Path.Enqueue(step); longest = Math.Max(longest, WalkSeconds(follower, fc, fr, fwalk)); }
+                                else follower.WarpTo(col, row);
+                                follower.OriginCol = col; follower.OriginRow = row;
+                            }
                             BeginEdgeEntry(follower, A(4), px);
-                            entryTicks = Math.Max(entryTicks, px / 8.0 + StepTicks * 3);   // 들어온 뒤 진형 자리로 몇 걸음
+                            entryTicks = Math.Max(entryTicks, px / 8.0);
                         }
                     }
-                    if (host._units.Any(f => f.LeaderIndex == leader)) AssignFormationTargets(leader);
+                    // 진형은 방금 설 칸 기준으로 정했다 — 대장이 다 걸어 들어와 멈췄을 때 SyncFollowers 가 다시 짜지 않게 그 자리를 적어 둔다.
+                    // 전에는 여기서 AssignFormationTargets 가 아직 변 칸에 있는 대장 둘레로 목표를 덮어써, 부하가 변 쪽으로 되걸어갔다.
+                    if (host._units.Any(f => f.LeaderIndex == leader)) _formationAt[leader] = (landCol, landRow);
                 }
                 longest += entryTicks / TicksPerSecond;   // 변 밖에서 들어오는 시간(가장 긴 유닛)
                 _eventMoveUntil = Math.Max(_eventMoveUntil, host._lastTime + longest);   // 줄은 안 붙든다 — 뒤따르는 행동 1 이 기다린다(ba-20 V2)
