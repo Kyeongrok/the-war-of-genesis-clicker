@@ -278,9 +278,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 _spriteCodes[chrCode] = wanted;
                 _names[chrCode] = name;
                 obsPath = CharacterFile(obsPath);
-                var motions = ObsSprite.Decode(obsPath);
+                // 색만 다른 그림(일반병사 232 · 233)은 바탕 그림(231)을 물들여 쓴다(SharedSprites, 사용자 요청 asset-4).
+                var (motions, table) = SharedSprites.Load(ref obsPath);
                 if (motions.Count == 0) continue;
-                sprites[chrCode] = new UnitSprite(motions, ObsMotionTable.Load(obsPath));
+                sprites[chrCode] = new UnitSprite(motions, table);
                 // 파트1 그림의 소리는 assets 에 없어 처음 칠 때 조용했다(가져오는 동안 넘어간다) — 미리 읽어 둔다(사용자 요청 menu-79).
                 if (wanted > Part1Game.ObsBase) PreloadSounds(sprites[chrCode]._table?.Clips.Values.SelectMany(c => c.Sounds).Select(s => s.Sound) ?? []);
             }

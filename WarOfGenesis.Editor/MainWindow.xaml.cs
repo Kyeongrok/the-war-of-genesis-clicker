@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -148,13 +148,18 @@ public partial class MainWindow : Window
         string? path = EnsureObsPath(record.SpriteCode);
         if (path == null) { StatusText.Text = $"몸짓 그림 {record.SpriteCode:D4}.obs 를 못 찾았습니다."; return; }
 
-        if (ObsMotionTable.Load(path) is not { } table)
+        // 색만 다른 그림(일반병사 232 · 233)은 바탕 그림(231 의 0841)의 모션을 함께 쓴다 — 여기서 고치면 셋 다 바뀐다(SharedSprites, asset-4).
+        int sprite = record.SpriteCode;
+        string shared = "";
+        var (motions, table) = SharedSprites.Load(ref path);
+        if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int baseObs) && baseObs != sprite) (sprite, shared) = (baseObs, $", 그림 {baseObs} 을 함께 씀");
+        if (table is null)
         {
             StatusText.Text = $"{record.SpriteCode:D4}.obs 에서 모션표를 못 읽었습니다.";
             return;
         }
-        new MotionMappingWindow($"{NameOf(record)} (Chr {record.ChrCode:D4}, sprite {record.SpriteCode})", table, ObsSprite.Decode(path),
-                                record.SpriteCode, ObsMotionTable.Load(path, applyEdits: false)) { Owner = this }.Show();
+        new MotionMappingWindow($"{NameOf(record)} (Chr {record.ChrCode:D4}, sprite {record.SpriteCode}{shared})", table, motions,
+                                sprite, ObsMotionTable.Load(path, applyEdits: false)) { Owner = this }.Show();
     }
 
     // ── 모션 메뉴 ──────────────────────────────────────────────────────────

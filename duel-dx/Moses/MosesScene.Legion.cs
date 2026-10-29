@@ -300,8 +300,8 @@ internal sealed unsafe partial class MosesScene
             if (_previewManifests.TryGetValue(chr, out var m))
             {
                 string path = Path.Combine(root, CharacterExport.FolderNameFor(chr, m.Name), CharacterExport.ObsFileName(m.SpriteCode));
-                var motions = ObsSprite.Decode(path);
-                if (motions.Count > 0) sprite = new UnitSprite(motions, ObsMotionTable.Load(path));
+                var (motions, table) = SharedSprites.Load(ref path);
+                if (motions.Count > 0) sprite = new UnitSprite(motions, table);
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException) { }
