@@ -6,7 +6,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>창세기전3 파트2 — 전투 통계</title>
+<title>창세기전3 — 전투 통계</title>
 <style>
   :root { --bg: #0d1424; --panel: #16203a; --line: #2b3a63; --text: #e8ecf7; --dim: #93a0c2; --accent: #6ea8ff; --gold: #ffe070; --bar: #3b6fd6; --good: #5fd08a; --bad: #ff7a7a; }
   @media (prefers-color-scheme: light) { :root { --bg: #f4f6fb; --panel: #ffffff; --line: #d5dbea; --text: #1b2338; --dim: #5d6885; --accent: #2a5fd0; --gold: #a06a00; --bar: #8fb2f2; --good: #1d8a4c; --bad: #c23636; } }
@@ -46,7 +46,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 </head>
 <body>
 <main>
-  <h1>창세기전3 파트2 — 전투 통계</h1>
+  <h1>창세기전3 — 전투 통계 (파트1 · 파트2)</h1>
   <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
     <label>버전 <select id="version"><option value="">전체</option></select></label>
@@ -56,7 +56,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="tiles" id="tiles"></div>
   <section><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
   <section><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
-  <section><h2>인물별</h2><div class="tabs" id="chartabs"></div><table id="chars"></table></section>
+  <section><h2>인물별 (파트마다 많이 쓴 20명 · 어빌리티 상위 20)</h2><div class="sub">파트2</div><div class="tabs" id="chartabs"></div><div class="sub">파트1</div><div class="tabs" id="chartabs1"></div><table id="chars"></table></section>
   <section><h2>분기별</h2><table id="battles"></table></section>
   <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
@@ -128,11 +128,20 @@ function render() {
   abilityTable($('abilities'), data.abilities.filter((r) => !r.p1), true, 20);
   abilityTable($('abilities1'), data.abilities.filter((r) => r.p1), true, 20);
 
-  const ids = [...new Set(data.chars.map((r) => r.chr))].sort((a, b) => data.chars.filter((r) => r.chr === b).reduce((s, r) => s + r.uses, 0) - data.chars.filter((r) => r.chr === a).reduce((s, r) => s + r.uses, 0));
-  if (!ids.includes(pickedChar)) pickedChar = ids[0] ?? null;
-  $('chartabs').innerHTML = ids.map((id) => '<button data-id="' + id + '" class="' + (id === pickedChar ? 'on' : '') + '">' + esc(charName(id)) + '</button>').join('');
-  $('chartabs').querySelectorAll('button').forEach((b) => b.onclick = () => { pickedChar = Number(b.dataset.id); render(); });
-  abilityTable($('chars'), data.chars.filter((r) => r.chr === pickedChar), false);
+  // 인물도 파트로 나눈다 — 파트1 인물은 20000 + 번호. 파트마다 쓴 횟수가 많은 20명, 고른 인물의 어빌리티는 상위 20개(menu-110).
+  const usesOf = new Map();
+  for (const r of data.chars) usesOf.set(r.chr, (usesOf.get(r.chr) || 0) + r.uses);
+  const ranked = [...usesOf.keys()].sort((a, b) => usesOf.get(b) - usesOf.get(a));
+  const part2 = ranked.filter((id) => id < 20000).slice(0, 20), part1 = ranked.filter((id) => id >= 20000).slice(0, 20);
+  if (![...part2, ...part1].includes(pickedChar)) pickedChar = part2[0] ?? part1[0] ?? null;
+  const tabs = (el, ids) => {
+    el.innerHTML = ids.map((id) => '<button data-id="' + id + '" class="' + (id === pickedChar ? 'on' : '') + '">' + esc(charName(id)) + '</button>').join('')
+      || '<span class="dim">아직 자료가 없습니다.</span>';
+    el.querySelectorAll('button').forEach((b) => b.onclick = () => { pickedChar = Number(b.dataset.id); render(); });
+  };
+  tabs($('chartabs'), part2);
+  tabs($('chartabs1'), part1);
+  abilityTable($('chars'), data.chars.filter((r) => r.chr === pickedChar), false, 20);
 
   // 분기마다 판 수만 보인다(사용자 요청 menu-110) — 파트2 Episode 4 · 5, 파트1 시반 슈미터 · 크림슨 크루세이더 · 아포칼립스. 분기를 모르는 전투는 그 파트의 「분기 모름」.
   const branchOf = (id) => data.names.branches[id] || (id >= 20000 ? '파트1 · 분기 모름' : '파트2 · 분기 모름');
