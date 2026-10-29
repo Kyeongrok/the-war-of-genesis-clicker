@@ -35,6 +35,19 @@ internal static class OriginalGameSetup
         // DUELDX_PACK=1 은 파트2 폴더를 알아도 파트1 만 도는 길로 간다(시험).
         bool forced = Environment.GetEnvironmentVariable("DUELDX_PACK") == "1";
         string? root = forced ? null : OriginalGame.Root;
+        // 파트2 폴더를 모르면 먼저 이 PC 에서 찾아본다(사용자 요청 menu-115) — 파트1 만 쓰던 판(예전에 「내려받기」로 하던 분 포함)도 한 번은 찾는다.
+        // 찾아보고도 없던 것은 적어 두어 켤 때마다 훑지 않는다 — 나중에는 파트1 타이틀의 「PART 2 연결」로 다시 찾거나 고른다.
+        if (root == null && !forced && !offscreen && !Part2ScanDone)
+        {
+            Application.EnableVisualStyles();
+            root = ScanAndAsk("창세기전3 파트2", () => OriginalGame.Scan(TimeSpan.FromSeconds(20)), OriginalGame.Use);
+            MarkPart2Scanned();
+        }
+        if (root == null && Part1Game.Root == null && !offscreen)
+        {
+            Application.EnableVisualStyles();
+            ScanAndAsk("창세기전3 파트1", () => Part1Game.Scan(TimeSpan.FromSeconds(20)), Part1Game.Use);   // 둘 다 모르면 파트1 도 찾아본다 — 못 찾으면 아래 창에서 고른다
+        }
         if (root == null && Part1Game.Root == null)
         {
             if (offscreen) throw new DirectoryNotFoundException("원본 게임 폴더를 모릅니다 — WAROFGENESIS_ORIGINAL(파트2)이나 WAROFGENESIS_PART1(파트1)로 알려 주세요.");
@@ -59,13 +72,39 @@ internal static class OriginalGameSetup
         return FromDownload(offscreen);
     }
 
+    private static readonly string Part2ScanPath = UserDataFolder.File("part2scan.txt");
+
+    /// <summary>파트2 폴더를 한 번 찾아봤나(못 찾았어도) — 켤 때마다 20초씩 훑지 않게.</summary>
+    private static bool Part2ScanDone => File.Exists(Part2ScanPath);
+
+    private static void MarkPart2Scanned()
+    {
+        try { Directory.CreateDirectory(UserDataFolder.Path); File.WriteAllText(Part2ScanPath, DateTime.Now.ToString("s")); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// 원본 폴더를 찾아보고(진행 창), 찾으면 쓸지 묻는다 — 「예」면 <paramref name="use"/> 로 적고 그 폴더, 못 찾거나 「아니요」면 null.
+    /// </summary>
+    internal static string? ScanAndAsk(string title, Func<string?> scan, Action<string> use, IWin32Window? owner = null)
+    {
+        var work = Task.Run(scan);
+        if (!Wait(work, 400)) ShowProgress(work, () => (0, 0, $"이 PC 에서 원본 「{title}」 폴더를 찾는 중… (20초쯤 걸릴 수 있습니다)"));
+        string? found = work.GetAwaiter().GetResult();
+        if (found == null) return null;
+        if (MessageBox.Show(owner, $"원본 「{title}」 폴더를 찾았습니다.\n\n{found}\n\n이 폴더를 쓸까요?", title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return null;
+        use(found);
+        return found;
+    }
+
     /// <summary>폴더를 고르게 한다 — 맞는 폴더면 그 자리, 그만두거나 틀린 폴더면 null(틀리면 알린다).</summary>
-    private static string? PickFolder(string description, Func<string, bool> valid, string needs)
+    internal static string? PickFolder(string description, Func<string, bool> valid, string needs, IWin32Window? owner = null)
     {
         using var dialog = new FolderBrowserDialog { Description = description, UseDescriptionForTitle = true };
-        if (dialog.ShowDialog() != DialogResult.OK) return null;
+        if (dialog.ShowDialog(owner) != DialogResult.OK) return null;
         if (valid(dialog.SelectedPath)) return dialog.SelectedPath;
-        MessageBox.Show($"'{dialog.SelectedPath}' 에서 {needs} 를 못 찾았습니다.", Caption, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show(owner, $"'{dialog.SelectedPath}' 에서 {needs} 를 못 찾았습니다.", Caption, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         return null;
     }
 

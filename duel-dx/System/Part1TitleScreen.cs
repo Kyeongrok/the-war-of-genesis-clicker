@@ -206,6 +206,41 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     }
 
     /// <summary>
+    /// 파트1 만 도는 판에서 파트2 원본을 잇는다(사용자 요청 menu-115) — 이 PC 에서 찾아보고, 못 찾으면 폴더를 고르게 한다. 이으면 게임을 다시 켠다
+    /// (파트2 자료는 켤 때 원본 폴더에서 차리므로 — OriginalGameSetup.Ensure). 예전에 「내려받기」로 하던 분 · 파트1 만 고른 분이 파트2 로 오는 길이다.
+    /// </summary>
+    private void ConnectPart2()
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_OFFSCREEN") == "1") { host.Toast("파트2 폴더는 WAROFGENESIS_ORIGINAL 로 알려 주세요"); return; }
+        var owner = new System.Windows.Forms.NativeWindow();
+        owner.AssignHandle(host._hwnd);
+        try
+        {
+            const string Title = "창세기전3 파트2";
+            var cursor = System.Windows.Forms.Cursor.Current;
+            System.Windows.Forms.Cursor.Current = System.Windows.Forms.Cursors.WaitCursor;
+            string? root;
+            try { root = OriginalGameSetup.ScanAndAsk(Title, () => OriginalGame.Scan(TimeSpan.FromSeconds(20)), OriginalGame.Use, owner); }
+            finally { System.Windows.Forms.Cursor.Current = cursor; }
+            if (root == null)
+            {
+                if (System.Windows.Forms.MessageBox.Show(owner, "원본 「창세기전3 파트2」 폴더를 고를까요?\n(TXR · Chr · Obs 폴더가 든 곳 — 원본 폴더에는 아무것도 쓰지 않습니다)", Title,
+                        System.Windows.Forms.MessageBoxButtons.OKCancel, System.Windows.Forms.MessageBoxIcon.Question) != System.Windows.Forms.DialogResult.OK) return;
+                root = OriginalGameSetup.PickFolder("원본 창세기전3 파트2 폴더 (TXR · Chr · Obs 가 든 곳)", OriginalGame.IsValid, @"TXR\Txr.dat · Chr · Obs", owner);
+                if (root == null) return;
+                OriginalGame.Use(root);
+            }
+            System.Windows.Forms.MessageBox.Show(owner, $"파트2 폴더를 이었습니다.\n{root}\n\n게임을 다시 켭니다 — 처음 한 번은 원본에서 자료를 차리느라 조금 걸립니다.", Title,
+                System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            if (Environment.ProcessPath is { } exe)
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false }); }
+                catch (System.ComponentModel.Win32Exception) { host.Toast("게임을 다시 켜 주세요 — 다음부터 파트2 를 할 수 있습니다"); return; }
+            host._running = false;
+        }
+        finally { owner.ReleaseHandle(); }
+    }
+
+    /// <summary>
     /// 고른 파트1 폴더를 쓴다 — 게임 자료는 켤 때 이미 읽었고 그때 파트1 폴더를 몰라 파트1 어빌리티(연 · 댓쉬 · 화이어 애로우 …, Part1SkillBook)가
     /// 어빌리티 표에 없었다. 그대로면 인물의 전투 목록이 그 표에 있는 것만 남겨 비었다(사용자 보고: 처음 전투에 기본 어빌리티도 없다 · 껐다 켜면 나온다).
     /// 스킬 표를 다시 읽고 만들어 둔 파트1 인물도 버린다.
@@ -292,7 +327,6 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         var (ox, oy) = host.Mos.MosesOrigin();
         for (int i = 0; i < Buttons.Length; i++)
         {
-            if (i == ButtonPart2 && OriginalGameSetup.Part1Only) continue;   // 파트2 원본이 없는 PC — 파트2 로 가는 단추가 없다(menu-109)
             var (_, _, x0, y0, x1, y1) = Buttons[i];
             if (bx >= ox + x0 && bx < ox + x1 && by >= oy + y0 && by < oy + y1) return i;
         }
@@ -339,9 +373,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
         {
             bool up = key == Win32.VK_UP || host.MoveActionFor(key) == KeyAction.MoveUp;
-            int[] order = OriginalGameSetup.Part1Only ? [.. KeyOrder.Where(b => b != ButtonPart2)] : KeyOrder;
-            int at = Array.IndexOf(order, _hover), n = order.Length;
-            _hover = order[at < 0 ? (up ? n - 1 : 0) : (at + (up ? n - 1 : 1)) % n];
+            int at = Array.IndexOf(KeyOrder, _hover), n = KeyOrder.Length;
+            _hover = KeyOrder[at < 0 ? (up ? n - 1 : 0) : (at + (up ? n - 1 : 1)) % n];
         }
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) Press(Math.Max(0, _hover));
         return true;
@@ -364,7 +397,8 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 host.LeaveScene(ContinueGame);
                 break;
             case ButtonTutorial: PlayPress(); host.LeaveScene(StartTutorial); break;
-            case ButtonPart2 when !OriginalGameSetup.Part1Only: PlayPress(); host.LeaveScene(Close); break;
+            case ButtonPart2 when OriginalGameSetup.Part1Only: PlayPress(); ConnectPart2(); break;   // 파트2 원본을 몰라 파트1 만 도는 판 — 「PART 2 연결」(menu-115)
+            case ButtonPart2: PlayPress(); host.LeaveScene(Close); break;
             case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)
         }
     }
@@ -597,11 +631,12 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             }
             // 원본에 없는 단추(리메이크) — 오른쪽 아래에 메뉴 글자 빛깔의 작은 글로.
             for (int i = 0; i < Buttons.Length; i++)
-                if (Buttons[i] is { Row: < 0 } b && !(i == ButtonPart2 && OriginalGameSetup.Part1Only))
+                if (Buttons[i] is { Row: < 0 } b)
                 {
                     uint color = _hover == i ? 0xFFFFF0C8u : 0xFFA89C90u;
-                    var (_, w, h) = host.UiGetText(b.Name, color, 12);
-                    host.UiText(b.Name, ox + b.X1 - w, oy + (b.Y0 + b.Y1 - h) / 2, color, 12);
+                    string name = i == ButtonPart2 && OriginalGameSetup.Part1Only ? "PART 2 연결" : b.Name;
+                    var (_, w, h) = host.UiGetText(name, color, 12);
+                    host.UiText(name, ox + b.X1 - w, oy + (b.Y0 + b.Y1 - h) / 2, color, 12);
                 }
             host.UiText("v1.04", ox + 5, oy + 10, GameWindow.White, 12);   // 원본 판 번호 글(0x100a2570, 「v1.04」)
         }

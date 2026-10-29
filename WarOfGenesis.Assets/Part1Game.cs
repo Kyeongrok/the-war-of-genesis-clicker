@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 
 namespace WarOfGenesis.Assets;
@@ -157,47 +157,7 @@ public static class Part1Game
     /// 파트1 폴더를 찾아본다 — 압축을 풀어 둔 원본이 흔히 있는 곳(파트2 옆 · 바탕 화면 · 다운로드 · 문서 · Program Files · 드라이브\Games)을 먼저 깊이 4 까지,
     /// 그다음 고정 드라이브마다 깊이 3 까지 훑는다. 시스템 폴더는 건너뛰고 <paramref name="limit"/> 가 지나면 그만둔다. 못 찾으면 null(사용자 요청).
     /// </summary>
-    public static string? Scan(TimeSpan limit)
-    {
-        var until = DateTime.UtcNow + limit;
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        string Home(Environment.SpecialFolder f) => Environment.GetFolderPath(f);
-        string profile = Home(Environment.SpecialFolder.UserProfile);
-        var drives = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady).Select(d => d.RootDirectory.FullName).ToList();
-        var near = new List<string>(Siblings())
-        {
-            Home(Environment.SpecialFolder.DesktopDirectory), Path.Combine(profile, "Downloads"), Home(Environment.SpecialFolder.MyDocuments), profile,
-            Home(Environment.SpecialFolder.ProgramFilesX86), Home(Environment.SpecialFolder.ProgramFiles),
-        };
-        near.AddRange(drives.Select(d => Path.Combine(d, "Games")));
-        foreach (string start in near)
-            if (Search(start, 4) is { } found) return found;
-        foreach (string drive in drives)
-            if (Search(drive, 3) is { } found) return found;
-        return null;
-
-        string? Search(string start, int depth)
-        {
-            var queue = new Queue<(string Dir, int Depth)>([(start, 0)]);
-            while (queue.Count > 0 && DateTime.UtcNow < until)
-            {
-                var (dir, d) = queue.Dequeue();
-                if (dir.Length == 0 || !seen.Add(dir)) continue;
-                if (IsValid(dir)) return dir;
-                if (d >= depth) continue;
-                try
-                {
-                    foreach (string sub in Directory.EnumerateDirectories(dir))
-                        if (!Skipped(Path.GetFileName(sub))) queue.Enqueue((sub, d + 1));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
-            }
-            return null;
-        }
-
-        static bool Skipped(string name) => name.StartsWith('$') || name.StartsWith('.') || name is "Windows" or "AppData" or "node_modules" or "ProgramData"
-            or "System Volume Information" or "Recovery" or "PerfLogs" or "WinSxS" or "Microsoft" or "obj" or "bin";
-    }
+    public static string? Scan(TimeSpan limit) => FolderScan.Find(IsValid, Siblings(), limit);
 
     /// <summary>파트1 폴더처럼 보이나 — <c>Obss\Obss.idx</c> 와 <c>Chars</c> 가 있다.</summary>
     public static bool IsValid(string? root) =>

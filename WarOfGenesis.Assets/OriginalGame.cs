@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace WarOfGenesis.Assets;
 
@@ -32,6 +32,18 @@ public static class OriginalGame
             string?[] candidates = [Environment.GetEnvironmentVariable("WAROFGENESIS_ORIGINAL"), ReadSaved(SettingsPath), ReadSaved(EditorSettingsPath)];
             return _root = candidates.FirstOrDefault(IsValid);
         }
+    }
+
+    /// <summary>
+    /// 이 PC 에서 파트2 원본 폴더를 찾아본다(<see cref="FolderScan"/>) — 파트1 폴더 옆의 「…파트2…」 · 「…part2…」 폴더를 먼저. 못 찾으면 null(사용자 요청 menu-115).
+    /// </summary>
+    public static string? Scan(TimeSpan limit)
+    {
+        IEnumerable<string> siblings = [];
+        if (Path.GetDirectoryName(Part1Game.Root ?? "") is { Length: > 0 } parent)
+            try { siblings = Directory.EnumerateDirectories(parent).Where(d => Path.GetFileName(d).Contains("파트2") || Path.GetFileName(d).Contains("part2", StringComparison.OrdinalIgnoreCase)).ToList(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        return FolderScan.Find(IsValid, siblings, limit);
     }
 
     /// <summary>원본 게임 폴더의 파일들(낱장 + <c>.idx/.pak</c>) — 폴더를 모르면 null.</summary>
