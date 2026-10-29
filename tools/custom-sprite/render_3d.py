@@ -13,6 +13,9 @@
   {"elevation": 30, "cell": 256, "margin": 1.35, "hide": ["2H_Sword", "Spike_Shield"],
    "actions": [{"action": 0, "clip": "idle", "frames": 4, "ticks": 8}, …]}
   clip 은 애니메이션 이름에 들어 있는 글(대소문자 무시) — 여러 개면 「|」 로(앞의 것부터 찾는다). 「=이름」 이면 그 이름 그대로만. 못 찾은 동작은 건너뛴다.
+  animations 는 동작을 따로 담은 파일(모델 폴더 기준) — Mixamo 는 동작마다 FBX 를 하나씩 준다(첫 것만 「With Skin」, 나머지는 「Without Skin」).
+  들여와 그 동작만 남기고 이름을 파일 이름으로 바꾼다(Mixamo 동작은 모두 「mixamo.com」 이라 그대로는 못 가른다) — clip 에 「=파일 이름」 으로 쓴다.
+  toon(기본 켬)은 셀 음영 · 외곽선 — 색을 단계(toon_levels)로 끊고 바깥 테두리를 outline 픽셀만큼 어둡게 두른다(원본 도트 그림처럼).
   hide 는 렌더하지 않을 물체 이름(무기 · 방패를 여러 벌 싣는 모델 — 하나만 남긴다). 「Icosphere」(glTF 내보내기가 남기는 빈 공)는 늘 숨긴다.
 """
 import json
@@ -27,6 +30,9 @@ from mathutils import Vector
 
 DEFAULT = {
     "elevation": 30,
+    "toon": True,
+    "toon_levels": 6,
+    "outline": 3,
     "cell": 256,
     "margin": 1.35,
     "actions": [
@@ -73,6 +79,39 @@ def load_model(path):
         if o.parent is None and o is not pivot:
             o.parent = pivot
     return arm, pivot
+
+
+def import_animations(model, files):
+    """동작 파일들을 들여와 그 동작만 남긴다 — 이름은 파일 이름(확장자 뺌)."""
+    folder = os.path.dirname(model)
+    for rel in files:
+        path = rel if os.path.isabs(rel) else os.path.join(folder, rel)
+        before_objs, before_acts = set(bpy.data.objects), set(bpy.data.actions)
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".fbx":
+            bpy.ops.import_scene.fbx(filepath=path)
+        else:
+            bpy.ops.import_scene.gltf(filepath=path)
+        for act in set(bpy.data.actions) - before_acts:
+            act.name = os.path.splitext(os.path.basename(path))[0]
+            act.use_fake_user = True
+        for o in set(bpy.data.objects) - before_objs:
+            bpy.data.objects.remove(o, do_unlink=True)
+
+
+def toon(rgba, levels, outline):
+    """셀 음영 · 외곽선 — 색을 levels 단계로 끊고, 불투명한 곳 가운데 투명한 곳에서 outline 픽셀 안쪽을 0.35 배로 어둡게."""
+    rgb, solid = rgba[..., :3], rgba[..., 3] >= 0.5
+    rgb = np.round(np.clip(rgb, 0, 1) * levels) / levels
+    edge = np.zeros_like(solid)
+    for dy in range(-outline, outline + 1):
+        for dx in range(-outline, outline + 1):
+            if dx * dx + dy * dy > outline * outline:
+                continue
+            edge |= ~np.roll(np.roll(solid, dy, axis=0), dx, axis=1)
+    edge &= solid
+    rgb = np.where(edge[..., None], rgb * 0.35, rgb)
+    return np.concatenate([rgb, rgba[..., 3:]], axis=2)
 
 
 def find_action(arm, spec):
@@ -142,6 +181,7 @@ def main():
     model, out, cfg = args()
     os.makedirs(out, exist_ok=True)
     arm, pivot = load_model(model)
+    import_animations(model, cfg.get("animations", []))
     for o in bpy.context.scene.objects:
         if o.name in set(cfg.get("hide", [])) | {"Icosphere"}:
             o.hide_render = True
@@ -181,7 +221,10 @@ def main():
             pivot.rotation_euler = (0, 0, math.radians(angle))
             for col, f in enumerate(frames):
                 bpy.context.scene.frame_set(int(f), subframe=f - int(f))
-                sheet[row * cell:(row + 1) * cell, col * cell:(col + 1) * cell] = render_cell(tmp)
+                px = render_cell(tmp)
+                if cfg.get("toon"):
+                    px = toon(px, cfg["toon_levels"], cfg["outline"])
+                sheet[row * cell:(row + 1) * cell, col * cell:(col + 1) * cell] = px
         # 알파 반에서 끊고 바탕을 핑크로 — 게임 그림에는 반투명이 없다.
         solid = sheet[..., 3] >= 0.5
         rgb = np.where(solid[..., None], sheet[..., :3], np.array(KEY, dtype=np.float32))
