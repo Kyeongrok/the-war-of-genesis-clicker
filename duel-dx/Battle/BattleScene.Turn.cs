@@ -87,6 +87,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>DUELDX_AUTOPLAY=1 이면 내 부대도 AI 가 움직인다 — 화면 밖 시험에서 전투를 저절로 돌리려고.</summary>
     internal static readonly bool AutoPlay = Environment.GetEnvironmentVariable("DUELDX_AUTOPLAY") == "1";
 
+    /// <summary>시험 전용: DUELDX_WIN=chests 가 상자를 연 차례.</summary>
+    private int _chestTestTurn = -1;
+
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
     /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
     internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null, current: true)
@@ -262,6 +265,22 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             SetEventOutcome(win: false);
             return;
+        }
+        // DUELDX_WIN=goal(N) 이면 내 편 N 번째 사람(기본 0)을 조건 402(사각형 안에 있나)의 칸으로 옮긴다 — 계단에 닿아 이기는 판(무영릉)을 시험할 때.
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") is { } goalMode && goalMode.StartsWith("goal") && _turnNo >= 1 && host.Tlk._talk == null && _outcome.Length == 0
+            && _events.SelectMany(e => e.Conditions).FirstOrDefault(c => c.Code == 402) is { } goal
+            && host._units.Where(u => u.Side == 4 && u.Alive && u.OnField).Skip(int.TryParse(goalMode[4..], out int nth) ? nth : 0).FirstOrDefault() is { } walker && !walker.IsBusy
+            && (walker.Col, walker.Row) != (Math.Min(goal.Args[2], goal.Args[4]), Math.Min(goal.Args[3], goal.Args[5])))
+        {
+            walker.WarpTo(Math.Min(goal.Args[2], goal.Args[4]), Math.Min(goal.Args[3], goal.Args[5]));
+            GameWindow.TestRunTrace($"goal warp {walker.ChrCode} to {walker.Col},{walker.Row}");
+        }
+        // DUELDX_WIN=chests 면 내 차례마다 가장 가까운 닫힌 상자를 연다(파트1 — 상자 열기를 화면 밖에서 시험할 때).
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "chests" && host._scene.IsPart1 && _turn >= 0 && host._units[_turn].Side == 4 && _outcome.Length == 0 && host.Tlk._talk == null
+            && _chestTestTurn != _turnNo)
+        {
+            _chestTestTurn = _turnNo;
+            GameWindow.TestRunTrace($"chest test {host._units[_turn].ChrCode} -> {Part1Objects.TouchNearestForTest(host._units[_turn], "1")}");
         }
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "2" && host._battleLoaded && !host.Mos._mosesOpen)
         {
