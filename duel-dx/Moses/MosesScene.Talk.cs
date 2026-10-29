@@ -124,7 +124,7 @@ internal sealed unsafe partial class MosesScene
         if (_talkPick >= 0)
         {
             // 글이 다 나온 뒤에만 닫힌다(0x1003bfe0) — 그 전의 클릭은 남은 글을 한꺼번에 낸다.
-            if (!TalkBubbleTextDone()) { _talkBubbleAt = host._lastTime - (10 + 3 * TalkBubbleText().Length) / TicksPerSecond; return true; }
+            if (!TalkBubbleTextDone()) { _talkBubbleFilled = true; _talkBubbleDoneAt = host._lastTime; return true; }
             _talkPick = -1;
             host.Play(95);
             return true;
@@ -142,11 +142,34 @@ internal sealed unsafe partial class MosesScene
             NextTalkSlot(people[i]);
             _talkPick = i;
             _talkBubbleAt = host._lastTime;
+            _talkBubbleFilled = false;
             _talkBubbleSpot = (px, py);          // 말풍선은 누른 순간의 자리에 서고 그 뒤로 안 움직인다(0x100ff273)
             host.Play(MosesClickSound);
             return true;
         }
         return true;
+    }
+
+    private bool _talkHookDone;
+
+    /// <summary>
+    /// DUELDX_MOSESTALK=<i>번째 사람</i>[:<i>대사 칸</i>] 이면 통신 페이지가 처음 그려질 때 그 사람을 누른 것처럼 말풍선을 띄운다
+    /// (화면 밖 시험용 — 사람이 걸어 다녀 자리 클릭으로는 못 맞춘다).
+    /// </summary>
+    private void PickTalkIfAsked()
+    {
+        if (_talkHookDone || Environment.GetEnvironmentVariable("DUELDX_MOSESTALK") is not { Length: > 0 } spec) return;
+        _talkHookDone = true;
+        var parts = spec.Split(':');
+        var people = TalkPeople();
+        if (!int.TryParse(parts[0], out int i) || i < 0 || i >= people.Count) return;
+        var words = TalkWords(people[i]);
+        _talkShowSlot = parts.Length > 1 && int.TryParse(parts[1], out int slot) ? slot : 0;
+        _talkSlot[people[i].No] = words.Count > 0 ? (_talkShowSlot + 1) % words.Count : 0;
+        _talkPick = i;
+        _talkBubbleAt = host._lastTime;
+        _talkBubbleFilled = false;
+        _talkBubbleSpot = TalkSpot(people[i]);
     }
 
     /// <summary>지금 말풍선이 보여 주는 대사 칸.</summary>
@@ -164,13 +187,59 @@ internal sealed unsafe partial class MosesScene
         return TalkTableFor() is { } table && words.Count > 0 ? TalkBox.CleanTalkText(table[words[_talkShowSlot % words.Count]]) : "";
     }
 
-    /// <summary>글자는 10틱 펴진 뒤 3틱에 하나씩 나온다 — 지금까지 나온 글자 수.</summary>
-    internal int TalkBubbleShown() => Math.Max(0, ((int)((host._lastTime - _talkBubbleAt) * TicksPerSecond) - 10 + 2) / 3);
+    /// <summary>말풍선 글 칸 — 세 줄, 줄 내림 14, 폭은 얼굴 오른쪽(창 +58 ~ 끝 −6).</summary>
+    internal const int TalkBubbleRows = 3, TalkBubbleLinePx = 14, TalkBubbleTextW = TalkBubbleW - 64;
 
-    internal bool TalkBubbleTextDone() => TalkBubbleShown() >= TalkBubbleText().Length;
+    /// <summary>글이 다 나오기 전에 눌러 한꺼번에 채웠나 — 채운 때부터 120틱 뒤 저절로 닫힌다.</summary>
+    internal bool _talkBubbleFilled;
+    internal double _talkBubbleDoneAt;
+
+    private (string Text, bool Layer)? _talkBubbleLinesOf;
+    private List<string> _talkBubbleLines = [];
+
+    /// <summary>지금 대사를 말풍선 폭으로 접은 줄들 — 대사나 글 층(판 · 새 UI 층, 글자 폭이 다르다)이 바뀔 때만 다시 접는다.</summary>
+    internal List<string> TalkBubbleLines()
+    {
+        var key = (TalkBubbleText(), _layerText);
+        if (_talkBubbleLinesOf != key) { _talkBubbleLinesOf = key; _talkBubbleLines = WrapText(key.Item1, TalkBubbleTextW, 11f); }
+        return _talkBubbleLines;
+    }
+
+    /// <summary>
+    /// 글 걸음 <paramref name="steps"/> 번 뒤의 말풍선 — 걸음마다 한 글자, 셋째 줄이 차서 다음 줄로 넘어가야 하면 그 걸음들은
+    /// 줄 높이만큼 1픽셀씩 밀어 올린 뒤 맨 윗줄을 버리고 이어 흘린다(원본 글 객체 <c>0x100290f0</c> 상태 3·5, ba16-talk-hud T5).
+    /// 전에는 세 줄을 넘는 대사가 셋째 줄에서 끊겨 끝을 못 읽었다(제보 mo-33). <c>Done</c> 이면 <c>Steps</c> 가 다 흘리는 데 든 걸음 수.
+    /// </summary>
+    internal (int Line, int Chars, int Top, int ScrollPx, bool Done, int Steps) TalkBubbleState(int steps)
+    {
+        var lines = TalkBubbleLines();
+        int li = 0, ci = 0, top = 0, px = 0, s = 0;
+        for (; ; s++)
+        {
+            while (li < lines.Count && ci >= lines[li].Length) { li++; ci = 0; }
+            if (li >= lines.Count || s >= steps) break;
+            if (px > 0 || li >= top + TalkBubbleRows)
+            {
+                if (++px >= TalkBubbleLinePx) { top++; px = 0; }
+                continue;
+            }
+            ci++;
+        }
+        return (li, ci, top, px, li >= lines.Count, s);
+    }
+
+    /// <summary>10틱 펴진 뒤 3틱에 한 걸음 — 지금까지 간 걸음 수.</summary>
+    internal int TalkBubbleSteps() => Math.Max(0, ((int)((host._lastTime - _talkBubbleAt) * TicksPerSecond) - 10 + 2) / 3);
+
+    internal bool TalkBubbleTextDone() => _talkBubbleFilled || TalkBubbleState(TalkBubbleSteps()).Done;
+
+    /// <summary>글이 다 나온 때 — 채웠으면 채운 때, 아니면 다 흘리는 데 든 걸음으로 센다(줄 올리기 걸음 포함).</summary>
+    internal double TalkBubbleDoneAt() =>
+        _talkBubbleFilled ? _talkBubbleDoneAt : _talkBubbleAt + (10 + 3 * TalkBubbleState(int.MaxValue).Steps) / TicksPerSecond;
 
     internal void DrawMosesTalk(int ox, int oy, int tick)
     {
+        PickTalkIfAsked();
         // 지금 성계의 성도 점(행성 성도 그림, 예 Chp 10 = Obs 0547 모션 6~14)을 켜 둔다 — 사람은 그 사이를 걷는다(0x100fc30c~0x100fc345, 감사5 N9).
         foreach (var mark in TalkMarks())
             host.DrawUi(mark.Obs, mark.Motion, 0, ox + mark.X, oy + mark.Y, GameWindow.UiBlend.Alpha);
@@ -199,8 +268,7 @@ internal sealed unsafe partial class MosesScene
         if (_talkPick >= 0 && _talkPick < people.Count)
         {
             // 글이 다 나오고 120틱이 지나면 저절로 닫힌다(0x1003b9be) — 닫힐 때 Snd 95.
-            int shownTicks = (int)((host._lastTime - _talkBubbleAt) * TicksPerSecond) - 10 - 3 * TalkBubbleText().Length;
-            if (shownTicks > 120) { _talkPick = -1; host.Play(95); }
+            if (TalkBubbleTextDone() && (host._lastTime - TalkBubbleDoneAt()) * TicksPerSecond > 120) { _talkPick = -1; host.Play(95); }
             else DrawTalkBubble(ox, oy, tick, people[_talkPick]);
         }
 
@@ -210,13 +278,7 @@ internal sealed unsafe partial class MosesScene
     /// <summary>말풍선 — 초상화와 대사 한 줄(인물 레코드의 대사 셋을 돌아가며).</summary>
     internal void DrawTalkBubble(int ox, int oy, int tick, ChapterFile.Person person)
     {
-        var words = TalkWords(person);
-        string line = TalkTableFor() is { } table && words.Count > 0
-            ? table[words[_talkShowSlot % words.Count]] : "";
         var (px, py) = _talkBubbleSpot;
-        line = TalkBox.CleanTalkText(line);              // 제어 글($n·$c1)을 지운 글로 자른다 — 전에는 걸친 동안 「$」 가 찍혔다
-        int shown = TalkBubbleShown();
-        if (shown < line.Length) line = line[..shown];
         int x = Math.Clamp(ox + px - TalkBubbleW / 2, ox + 4, ox + MosesW - TalkBubbleW - 4);
         int y = Math.Clamp(oy + py - TalkBubbleH - 30, oy + 4, oy + MosesH - TalkBubbleH - 4);
 
@@ -229,12 +291,18 @@ internal sealed unsafe partial class MosesScene
         // 없는 얼굴 그림(UNKNOWN · NO DATA)은 60×60 쯤이라 제 크기로 찍으면 창 틀을 위아래로 덮는다 — 얼굴 칸에 맞춰 줄여 그린다(사용자 보고 mo-21).
         else if (host.UiFor(TalkFaceFallbackObs)?.FrameAt(0, tick) is { W: > 0 } none) host.BlitScaled(none, x + 4, y + 4, 48, 52);
 
-        int ty = y + 8;
-        foreach (string text in WrapText(line, TalkBubbleW - 64, 11f))
+        // 글 — 셋째 줄이 차면 한 줄씩 밀어 올려 끝까지 흘린다(TalkBubbleState). 채웠으면 마지막 세 줄.
+        // 대사 글은 제어 글($n·$c1)을 지운 글이다(TalkBubbleText) — 전에는 걸친 동안 「$」 가 찍혔다.
+        var lines = TalkBubbleLines();
+        var st = _talkBubbleFilled ? (Line: lines.Count, Chars: 0, Top: Math.Max(0, lines.Count - TalkBubbleRows), ScrollPx: 0, Done: true, Steps: 0)
+                                   : TalkBubbleState(TalkBubbleSteps());
+        for (int i = 0; i < TalkBubbleRows; i++)
         {
-            if (ty > y + TalkBubbleH - 14) break;
-            MText(text, x + 58, ty, White, 11);
-            ty += 14;
+            int li = st.Top + i;
+            if (li >= lines.Count || li > st.Line) break;
+            if (i == 0 && st.ScrollPx >= TalkBubbleLinePx / 2) continue;   // 밀려 올라가는 맨 윗줄은 반을 넘기면 지운다(TalkBox.DrawTalkLines 와 같다)
+            string text = li < st.Line ? lines[li] : lines[li][..Math.Min(st.Chars, lines[li].Length)];
+            if (text.Length > 0) MText(text, x + 58, y + 8 + i * TalkBubbleLinePx - st.ScrollPx, White, 11);
         }
     }
 }

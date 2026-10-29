@@ -45,17 +45,22 @@ internal sealed unsafe partial class GameWindow
     /// 그림 섞기. Dodge·Screen 은 모션 섞기 키 10·12 — 원본 색표(<c>0x1000b7c0</c>, 5비트 채널 a=바탕·b=그림):
     /// 10 = <c>min(31, a·32 / (32−b))</c>(닷지 — 검은 그림은 바탕 그대로), 12 = <c>max + (31−max)·min/31</c>(스크린).
     /// </summary>
-    internal enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen }
+    internal enum UiBlend { Alpha, Add, AddDim, Darken, Dim, Dodge, Screen, Glow }
 
-    /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
+    /// <summary>모션 섞기 키(종류 3) 값 → 섞기. 17 가산 · 18 빛(제곱 더하기) · 10 닷지 · 12 스크린, 나머지는 보통.</summary>
+    /// <remarks>
+    /// 18 은 그리개 <c>0x1000c8c0</c> 갈래표 <c>0x1000cb48</c>[17] → 색표 <c>0x10177818/0x10177018/0x10176818</c>(<c>0x1000b7c0</c> 이 채움)다.
+    /// 표를 에뮬레이터로 뽑아 보니 R·G·B 1024 칸 모두 <c>min(31, 바탕 + 그림²/31)</c>(윗자리가 바탕 — 블리터 <c>0x1000d51a</c>~) — 어두운 곳은 거의 안 더하는 빛이다.
+    /// 델라리움 연구소(Bgr 0063, Fld 0066·0068) 창으로 드는 햇살 Obs 0526·0527 이 이 키라, 보통으로 그리면 창 앞에 불투명한 주름 커튼이 늘어진 것처럼 보였다(제보 mo-34).
+    /// </remarks>
     /// <remarks>파트1 그림의 키(<see cref="Part1Game.BlendKey"/>, 0x1000 위)는 값을 그대로 담아 <see cref="Part1Blend"/> 의 원본 색표로 섞는다.</remarks>
     internal static UiBlend BlendOf(int key) => Part1Blend.Is(key) ? Part1Blend.AsUiBlend(key)
-        : key switch { 17 => UiBlend.Add, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
+        : key switch { 17 => UiBlend.Add, 18 => UiBlend.Glow, 10 => UiBlend.Dodge, 12 => UiBlend.Screen, _ => UiBlend.Alpha };
 
     /// <summary>
-    /// 이펙트 줄의 섞기 — 비침(1~8) · 닷지 · 스크린 · 파트1 키는 그 섞기, 그 밖(17 · 키 없음 · 풀지 못한 번호)은 더하기.
+    /// 이펙트 줄의 섞기 — 비침(1~8) · 닷지 · 스크린 · 빛(18) · 파트1 키는 그 섞기, 그 밖(17 · 키 없음 · 풀지 못한 번호)은 더하기.
     /// </summary>
-    internal static UiBlend FxBlendOf(int key) => key is (>= 1 and <= 8) or 10 or 12 || Part1Blend.Is(key) ? BlendOf(key) : UiBlend.Add;
+    internal static UiBlend FxBlendOf(int key) => key is (>= 1 and <= 8) or 10 or 12 or 18 || Part1Blend.Is(key) ? BlendOf(key) : UiBlend.Add;
 
     /// <summary>
     /// 섞기 키 1~7 의 비침 — 원본 색표(<c>0x1000b7c0</c>)는 k 에서 <c>(4k·그림 + (31−4k)·바탕)/31</c>, 8 은 그림 그대로다.
@@ -70,6 +75,17 @@ internal sealed unsafe partial class GameWindow
         {
             int a = (int)(d >> shift & 0xFF), b = (int)(c >> shift & 0xFF);
             return (uint)Math.Min(255, b >= 255 ? 255 : a * 256 / (256 - b));
+        }
+        return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+    }
+
+    /// <summary>섞기 18 — 바탕 + 그림²/255(포화). 원본 5비트 표 <c>min(31, d + s²/31)</c> 를 8비트로.</summary>
+    internal static uint GlowColor(uint d, uint c)
+    {
+        uint Ch(int shift)
+        {
+            int a = (int)(d >> shift & 0xFF), b = (int)(c >> shift & 0xFF);
+            return (uint)Math.Min(255, a + b * b / 255);
         }
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
     }
@@ -149,6 +165,7 @@ internal sealed unsafe partial class GameWindow
                     UiBlend.Dim => ScaleColor(c, 15, 31),
                     UiBlend.Dodge => DodgeColor(d, c),
                     UiBlend.Screen => ScreenColor(d, c),
+                    UiBlend.Glow => GlowColor(d, c),
                     _ => c | 0xFF000000,
                 };
                 // 밝기가 1 보다 작으면 바탕과 섞는다 — 원본의 8단계 밝기를 그대로 흉내 낸다.

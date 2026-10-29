@@ -170,6 +170,14 @@ internal sealed unsafe partial class MosesScene
 
         if (_mailOpen >= 0)                                   // 뷰어는 아무 데나 누르면 닫히고 읽음이 된다(닫을 때 0x100f809a) — 그 밖에 깃발·돈은 없다
         {
+            // 본문이 열 줄을 넘어 아래가 남았으면 누름은 다음 쪽으로 넘긴다 — 원본은 글이 다 흐를 때까지 클릭을 안 받고 줄을 올려 끝까지 보인다
+            // (0x1003cd54, ba20-moses 4절). 전에는 첫 누름에 닫혀 휠을 모르면 긴 편지의 뒤를 못 읽었다(제보 mo-33).
+            var opened = Mails();
+            if (_mailOpen < opened.Count && _mailViewTop + MailViewRows < MailBodyLines(opened[_mailOpen]).Count)
+            {
+                _mailViewTop += MailViewRows;
+                return true;
+            }
             CloseMailViewer();
             host.Play(95);                                         // 뷰어(말풍선 클래스) 닫기 vt+0xdc = 0x1003cce0 → Snd 95(감사5 L3)
             return true;
@@ -311,8 +319,8 @@ internal sealed unsafe partial class MosesScene
         MText(host._db?.T(mail.OriginText) ?? "", x + 73, y + 54, value, 12);
         MRight("LOCATION", x + 303, y + 54, tag, 12);
 
-        var lines = WrapText(mail.Body, 298 - 6, 12f);
-        const int rows = 10;
+        var lines = MailBodyLines(mail);
+        const int rows = MailViewRows;
         _mailViewTop = Math.Clamp(_mailViewTop, 0, Math.Max(0, lines.Count - rows));
         int ty = y + 76;
         for (int i = _mailViewTop; i < lines.Count && i < _mailViewTop + rows; i++, ty += 16)
@@ -321,7 +329,12 @@ internal sealed unsafe partial class MosesScene
         if (_mailViewTop > 0) MText("▲", x + 296, y + 76, tag, 11);
     }
 
-    /// <summary>편지 뷰어에서 맨 위에 보이는 줄 — 휠로 굴린다.</summary>
+    /// <summary>본문 칸 — 폭 298(글 여백 6 을 뺀다) · 열 줄.</summary>
+    internal const int MailViewRows = 10;
+
+    internal List<string> MailBodyLines(MosesMail mail) => WrapText(mail.Body, 298 - 6, 12f);
+
+    /// <summary>편지 뷰어에서 맨 위에 보이는 줄 — 휠로 굴리고, 아래가 남았으면 누름이 한 쪽(열 줄)씩 넘긴다.</summary>
     internal int _mailViewTop;
 
     /// <summary>
