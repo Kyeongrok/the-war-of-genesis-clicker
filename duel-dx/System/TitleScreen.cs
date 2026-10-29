@@ -335,7 +335,28 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (AssetPack.Status is { Length: > 0 } pack) host.UiText(pack, ox + 8, oy + 10, White, 12);
 
         host.Part1TitleScr.DrawEntry();   // 파트1 로 가는 단추(리메이크에만 있다)
+        DrawFanNotice(270, 250);   // 배경의 원본 저작권 글(x 270, y 232~246) 바로 밑
         host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();
+    }
+
+    /// <summary>타이틀의 저작권 · 팬 메이드 알림 — 파트2 · 파트1 타이틀 둘 다(사용자 요청 menu-114). 두 줄.</summary>
+    internal static readonly string[] FanNotice = ["창세기전3에 대한 모든 저작권은 라인게임즈에 있습니다.", "이 게임은 팬 메이드 모드입니다."];
+
+    /// <summary>
+    /// <see cref="FanNotice"/> 를 그린다 — (<paramref name="x"/>, <paramref name="y"/>)는 640×480 화면 기준 첫 줄 왼위(<paramref name="centered"/> 면 가운데 위).
+    /// 파트2 는 배경의 원본 저작권 글 바로 밑, 파트1 은 맨 아래 원본 저작권 글과 PART 2 단추 사이 — 단추 · 원본 글과 안 겹치는 자리. 밝은 데서도 읽히게 검은 그림자를 한 픽셀 깐다.
+    /// </summary>
+    internal void DrawFanNotice(int x, int y, bool centered = false)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        foreach (string line in FanNotice)
+        {
+            var (_, w, h) = host.UiGetText(line, White, 11);
+            int lx = ox + (centered ? x - w / 2 : x);
+            host.UiText(line, lx + 1, oy + y + 1, 0xFF000000, 11);
+            host.UiText(line, lx, oy + y, 0xFFC8C0B8, 11);
+            y += h;
+        }
     }
 }

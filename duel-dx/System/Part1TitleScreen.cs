@@ -605,6 +605,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 }
             host.UiText("v1.04", ox + 5, oy + 10, GameWindow.White, 12);   // 원본 판 번호 글(0x100a2570, 「v1.04」)
         }
+        host.TitleScr.DrawFanNotice(345, 451, centered: true);   // 저작권 · 팬 메이드 알림(menu-114) — 맨 아래, 원본 저작권 글(~x 165)과 PART 2 단추(x 530~) 사이 · EXIT 밑
         host.DrawToast();
     }
 
