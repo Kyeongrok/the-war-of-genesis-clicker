@@ -986,17 +986,30 @@ internal sealed unsafe partial class BattleScene
     /// <summary>상자 목록의 접기 단추 자리(판 좌표) — 목록이 안 떠 있으면 null.</summary>
     internal (int X, int Y, int W, int H)? _chestFoldButton;
 
-    /// <summary>접기 단추를 눌렀으면 접거나 펴고 true.</summary>
+    /// <summary>상자 목록의 줄 자리(판 좌표)와 그 상자 칸 — 줄을 누르면 카메라가 그 상자를 비춘다(사용자 요청 fa-71).</summary>
+    private readonly List<(int X, int Y, int W, int H, int Col, int Row)> _chestRows = [];
+
+    /// <summary>접기 단추를 눌렀으면 접거나 펴고, 상자 줄을 눌렀으면 카메라를 그 상자로 옮기고 true.</summary>
     internal bool OnChestListClick(int bx, int by)
     {
-        if (_chestFoldButton is not var (fx, fy, fw, fh) || bx < fx || bx >= fx + fw || by < fy || by >= fy + fh) return false;
-        _chestListFolded = !_chestListFolded;
-        return true;
+        if (_chestFoldButton is var (fx, fy, fw, fh) && bx >= fx && bx < fx + fw && by >= fy && by < fy + fh)
+        {
+            _chestListFolded = !_chestListFolded;
+            return true;
+        }
+        foreach (var (x, y, w, h, col, row) in _chestRows)
+            if (bx >= x && bx < x + w && by >= y && by < y + h)
+            {
+                CenterOnCell(col, row);
+                return true;
+            }
+        return false;
     }
 
     internal void DrawChestList()
     {
         _chestFoldButton = null;
+        _chestRows.Clear();
         if (!host._showChestContents || !host._battleLoaded || host.Mos._mosesOpen || host.FieldOpen || host.TitleScr._titleOpen || host.EpisodesScr._episodesOpen || host._db is not { } db) return;
         // 파트1 판은 절 A 의 Obt 상자(Part1MapObjects) — 파트2 물체 목록은 비어 있다(사용자 보고: 20089 에 상자가 있는데 「상자 없음」).
         var rows = host._scene.IsPart1
@@ -1018,6 +1031,15 @@ internal sealed unsafe partial class BattleScene
         // 오른쪽 위에 접기 단추(− 접기 · + 펴기) 자리를 남긴다.
         int w = Math.Max(lines.Max(l => host.UiGetText(l.Text, l.Color, 12).W) + 12, host.UiGetText(lines[0].Text, lines[0].Color, 12).W + 40), lineH = 17;
         host.UiFill(x - 4, y - 3, w, lines.Count * lineH + 6, 0xB0000000);
+        // 상자 줄 — 마우스가 올라가면 밝게, 누르면 그 상자를 비춘다(OnChestListClick).
+        if (!_chestListFolded)
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var hit = (X: x - 4, Y: y + (i + 1) * lineH - 1, W: w, H: lineH);
+                _chestRows.Add((hit.X, hit.Y, hit.W, hit.H, rows[i].Col, rows[i].Row));
+                if (host._mouse.X >= hit.X && host._mouse.X < hit.X + hit.W && host._mouse.Y >= hit.Y && host._mouse.Y < hit.Y + hit.H)
+                    host.UiFill(hit.X, hit.Y, hit.W, hit.H, 0xFF2A4A8A);
+            }
         for (int i = 0; i < lines.Count; i++) host.UiText(lines[i].Text, x + 2, y + i * lineH, lines[i].Color, 12);
         var fold = (X: x - 4 + w - 19, Y: y - 1, W: 16, H: 15);
         _chestFoldButton = fold;
