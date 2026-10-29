@@ -39,6 +39,18 @@ internal sealed unsafe partial class MosesScene
         // 원본 For.dat 위에 편집기가 고친 군단(assets/data/legions/*.json)을 얹는다.
         _legions ??= host._db is { } db ? LegionBook.LoadAll(db.Files) : [];
 
+    /// <summary>
+    /// 세이브·전투 전 기록에서 되살린 배속 가운데 <b>없어진 새 군단</b>(편집기에서 지운 <c>legions/9NN.json</c>, ed-8)을 조용히 뗀다.
+    /// 원본 번호(<see cref="LegionBook.FirstCustomId"/> 아래)는 건드리지 않는다. 자료를 못 읽었으면(군단 표가 비면) 아무것도 안 뗀다.
+    /// </summary>
+    internal void DropMissingLegions()
+    {
+        var legions = Legions();
+        if (legions.Count == 0) return;
+        foreach (var chr in _unitLegion.Where(p => p.Value >= LegionBook.FirstCustomId && !legions.ContainsKey(p.Value)).Select(p => p.Key).ToList())
+            _unitLegion.Remove(chr);
+    }
+
     internal void OpenMosesLegion()
     {
         _mosesPage = 6;
@@ -63,8 +75,9 @@ internal sealed unsafe partial class MosesScene
     {
         // 이 파티 동료만 센다 — 다른 파티 인물의 배속은 그 파티 목록에서 빠진 것이다(파티 객체마다 +0x910 목록).
         bool InParty(int chr) => _members.Count == 0 || _members.Contains(chr);
-        return [.. Legions().Values.Where(l => (_legionsKnown ? _ownedLegions.CountOf(l.Id) : 1)
-                                             > _unitLegion.Count(p => p.Value == l.Id && InParty(p.Key))).OrderBy(l => l.Id)];
+        // 편집기에서 「처음부터 가진 군단」(json owned, ed-8)을 켠 군단은 얻은 개수에 하나를 더한다 — 세이브에는 안 실리고 그때그때 더한다(LegionData.Owned).
+        int Have(LegionData l) => (_legionsKnown ? _ownedLegions.CountOf(l.Id) : 1) + (l.Owned && _legionsKnown ? 1 : 0);
+        return [.. Legions().Values.Where(l => Have(l) > _unitLegion.Count(p => p.Value == l.Id && InParty(p.Key))).OrderBy(l => l.Id)];
     }
 
     /// <summary>파티가 얻은 군단 번호와 개수(스크립트 713). 세이브에 실린다 — 개수만큼 번호를 되풀이해 적는다(옛 세이브는 모두 1개).</summary>
@@ -187,7 +200,7 @@ internal sealed unsafe partial class MosesScene
             // 줄 틀 Obs 1291 모션 5(138×28)는 0x10043810 으로 단 덧그림 — 마우스가 올라간 줄에만(0x100fae6b).
             if (mx >= 445 && mx < 445 + LegionRowW && my >= 70 + r * LegionRowH && my < 70 + (r + 1) * LegionRowH)
                 host.DrawUi(LegionRowObs, LegionRowIconMotion, tick, rx, ry, GameWindow.UiBlend.Alpha);
-            MText(db.T(list[index].NameId), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
+            MText(db.LegionName(list[index]), rx + 18, ry + 4, index == _legionPick ? 0xFF00FF00 : White, 11);
         }
 
         var shown = _legionPick >= 0 && _legionPick < list.Count ? list[_legionPick]
@@ -223,8 +236,8 @@ internal sealed unsafe partial class MosesScene
         }
 
         host.DarkenRect(ox + 440, oy + 225, 190, 165, 12);
-        MText(db.T(legion.NameId), ox + 450, oy + 233, 0xFFFFE070, 13);
-        foreach (var (line, i) in WrapText(db.T(legion.DescriptionId), 180, 11f).Select((l, i) => (l, i)))
+        MText(db.LegionName(legion), ox + 450, oy + 233, 0xFFFFE070, 13);
+        foreach (var (line, i) in WrapText(db.LegionDescription(legion), 180, 11f).Select((l, i) => (l, i)))
         {
             if (i >= 5) break;
             MText(line, ox + 450, oy + 268 + i * 15, White, 11);
@@ -243,7 +256,7 @@ internal sealed unsafe partial class MosesScene
             var lines = new List<string>
             {
                 $"{T(827, "이름")} : {db.T(m.NameId)}",
-                $"{T(828, "소속")} : {db.T(legion.NameId)}",
+                $"{T(828, "소속")} : {db.LegionName(legion)}",
                 $"{T(829, "직업")} : {db.JobName(m)}",
                 "---------------------",
                 $"{T(830, "LP")} : {m.Lp}",

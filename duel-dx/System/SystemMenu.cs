@@ -668,6 +668,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             host.Mos._unitLegion.Clear();
             foreach (var (chr, legion) in _entryLegions) host.Mos._unitLegion[chr] = legion;
+            host.Mos.DropMissingLegions();
         }
         if (_entryOwnedLegions != null)
         {
@@ -891,6 +892,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host.Mos._unitLegion.Clear();
         foreach (var (index, legion) in state.Legions ?? [])
             if (int.TryParse(index, out int chrCode)) host.Mos._unitLegion[chrCode] = legion;   // Chr 번호 → 군단(옛 세이브의 자리 번호는 그냥 안 맞는다)
+        host.Mos.DropMissingLegions();   // 편집기에서 지운 새 군단(ed-8)이 세이브에 남아 있으면 뗀다
 
         host.EpisodesScr._chapterDone = state.ChapterDone;
         host.Mos._mosesAltVoice = state.MosesAltVoice;

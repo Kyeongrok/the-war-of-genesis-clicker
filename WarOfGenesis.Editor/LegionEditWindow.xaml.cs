@@ -11,6 +11,8 @@ namespace WarOfGenesis.Editor;
 /// <summary>
 /// 군단(<c>Dat/For.dat</c>) 편집 창 — 부하 여섯·진형·부하 보정·군단기를 고친다. 원본 For.dat 은 그대로 두고
 /// 고친 군단만 <c>assets/data/legions/NNNN.json</c> 에 적는다(<see cref="LegionBook"/>, 사용자 요청). 게임은 전투를 시작할 때 이 표로 부하를 만든다.
+/// 「새 군단」은 원본에 없는 번호(<see cref="LegionBook.FirstCustomId"/> 부터)로 만들어 이름·설명을 글로 적고, 「처음부터 가진 군단」을 켜면
+/// 게임 모세스 용병관리에서 내 인물에게 배속할 수 있다(사용자 요청 ed-8).
 /// </summary>
 public partial class LegionEditWindow : Window
 {
@@ -19,10 +21,12 @@ public partial class LegionEditWindow : Window
     {
         public LegionData Legion { get; set; } = null!;
         public LegionData? Original { get; init; }
-        public string Name { get; init; } = "";
+        public string Name { get; set; } = "";
         public int Battles { get; init; }
         public bool Dirty { get; set; }
         public int Id => Legion.Id;
+        /// <summary>원본 For.dat 에 없는 새 군단(ed-8) — 이름·설명을 글로 적고, 지울 수 있다.</summary>
+        public bool IsCustom => Original == null;
         public bool Changed => Original == null || !LegionBook.SameContent(Legion, Original);
         public string Mark => Dirty ? "●" : Changed ? "고침" : "";
         public string MembersText { get; set; } = "";
@@ -31,6 +35,9 @@ public partial class LegionEditWindow : Window
     private readonly GameDatabase _db;
     private readonly string _folder;
     private readonly List<LegionRow> _rows = [];
+
+    /// <summary>지운 새 군단 번호 — 「저장」 때 그 json 을 지운다.</summary>
+    private readonly HashSet<int> _deleted = [];
     private readonly List<string> _chrChoices = [];
     private readonly List<string> _abilityChoices = [];
     private readonly Dictionary<int, string> _chrNames = [];
@@ -79,7 +86,7 @@ public partial class LegionEditWindow : Window
             var row = new LegionRow
             {
                 Legion = legion, Original = orig, Battles = battles.GetValueOrDefault(id)?.Count ?? 0,
-                Name = _db.T(legion.NameId) is { Length: > 0 } n ? n : $"군단 {id}",
+                Name = _db.LegionName(legion),
             };
             row.MembersText = MembersText(row.Legion);
             _rows.Add(row);
@@ -88,8 +95,9 @@ public partial class LegionEditWindow : Window
         BuildLeaderRow();
         BuildMemberBoxes();
         BuildSkillRows();
-        StatusText.Text = $"군단 {_rows.Count}개 — 고친 것 {_rows.Count(r => r.Changed)}개. 고치고 「저장」을 누르면 게임이 다음 전투부터 쓴다(게임 켜 둔 채면 개발 > 어빌리티 반영).";
+        StatusText.Text = $"군단 {_rows.Count}개 — 고친 것 {_rows.Count(r => r.Changed)}개, 새 군단 {_rows.Count(r => r.IsCustom)}개. 고치고 「저장」을 누르면 게임이 다음 전투부터 쓴다(게임 켜 둔 채면 개발 > 어빌리티 반영).";
         if (_rows.Count > 0) LegionGrid.SelectedIndex = 0;
+        else Fill();
     }
 
     private LegionRow? Current => LegionGrid.SelectedItem as LegionRow;
@@ -182,13 +190,19 @@ public partial class LegionEditWindow : Window
 
     private void Fill()
     {
-        if (Current is not { } row) { Detail.IsEnabled = false; return; }
+        if (Current is not { } row) { Detail.IsEnabled = false; DeleteLegionButton.IsEnabled = false; return; }
         _filling = true;
         Detail.IsEnabled = true;
+        DeleteLegionButton.IsEnabled = row.IsCustom;
+        RevertButton.IsEnabled = !row.IsCustom;
         var l = row.Legion;
-        TitleText.Text = $"군단 {l.Id} — {row.Name}" + (row.Original == null ? " (원본에 없는 군단)" : "");
-        DescriptionText.Text = (_db.T(l.DescriptionId) is { Length: > 0 } d ? d.Replace("$n", " ") : "(설명 없음)")
+        TitleText.Text = $"군단 {l.Id} — {row.Name}" + (row.IsCustom ? " (새 군단 — 원본에 없는 번호)" : "");
+        DescriptionText.Text = (_db.LegionDescription(l) is { Length: > 0 } d ? d.Replace("$n", " ").Replace("\r", "").Replace("\n", " ") : "(설명 없음)")
                                + $"  ·  이 군단을 쓰는 전투 {row.Battles}개";
+        CustomPanel.Visibility = row.IsCustom ? Visibility.Visible : Visibility.Collapsed;
+        NameBox.Text = l.CustomName ?? "";
+        DescriptionBox.Text = l.CustomDescription ?? "";
+        OwnedBox.IsChecked = l.Owned;
         FormationBox.SelectedIndex = l.Formation;
         _leaderBox.Text = l.Leader == 0 ? "0 전투 자료대로" : ChrLabel(l.Leader);
         BattleLeadersText.Text = _battleLeaders.TryGetValue(l.Id, out var bl) && bl.Count > 0
@@ -324,6 +338,9 @@ public partial class LegionEditWindow : Window
             .Where(s => s.Ability != 0).ToArray();
         var next = old with
         {
+            CustomName = row.IsCustom ? (NameBox.Text.Trim() is { Length: > 0 } name ? name : $"군단 {old.Id}") : null,
+            CustomDescription = row.IsCustom && DescriptionBox.Text.Replace("\r", "").Trim() is { Length: > 0 } desc ? desc : null,
+            Owned = OwnedBox.IsChecked == true,
             Leader = Clamp(LeadingNumber(_leaderBox.Text)),
             Members = members,
             Formation = (byte)Math.Max(0, FormationBox.SelectedIndex),
@@ -335,6 +352,7 @@ public partial class LegionEditWindow : Window
         if (LegionBook.SameContent(next, old)) return;
         row.Legion = next;
         row.Dirty = true;
+        row.Name = _db.LegionName(next);
         row.MembersText = MembersText(next);
         LegionGrid.Items.Refresh();
         Fill();
@@ -345,10 +363,14 @@ public partial class LegionEditWindow : Window
     {
         Commit();
         var dirty = _rows.Where(r => r.Dirty).ToList();
-        if (dirty.Count == 0) { StatusText.Text = "저장할 것이 없습니다."; return; }
+        if (dirty.Count == 0 && _deleted.Count == 0) { StatusText.Text = "저장할 것이 없습니다."; return; }
         try
         {
             Directory.CreateDirectory(_folder);
+            foreach (int id in _deleted)
+                if (System.IO.Path.Combine(_folder, LegionBook.FileName(id)) is var gone && File.Exists(gone)) File.Delete(gone);
+            var deleted = _deleted.ToList();
+            _deleted.Clear();
             foreach (var r in dirty)
             {
                 string path = System.IO.Path.Combine(_folder, LegionBook.FileName(r.Id));
@@ -358,7 +380,10 @@ public partial class LegionEditWindow : Window
                 r.Dirty = false;
             }
             LegionGrid.Items.Refresh();
-            StatusText.Text = $"군단 {string.Join(", ", dirty.Select(r => r.Id))} 을(를) 저장했습니다 — 게임은 다음 전투부터 쓴다(켜 둔 채면 개발 > 어빌리티 반영).";
+            var said = new List<string>();
+            if (dirty.Count > 0) said.Add($"군단 {string.Join(", ", dirty.Select(r => r.Id))} 을(를) 저장했습니다");
+            if (deleted.Count > 0) said.Add($"새 군단 {string.Join(", ", deleted)} 의 파일을 지웠습니다");
+            StatusText.Text = string.Join(" · ", said) + " — 게임은 다음 전투부터 쓴다(켜 둔 채면 개발 > 어빌리티 반영).";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -376,5 +401,40 @@ public partial class LegionEditWindow : Window
         LegionGrid.Items.Refresh();
         Fill();
         StatusText.Text = $"군단 {row.Id} 을(를) 원본 값으로 돌렸습니다 — 「저장」을 누르면 덮어쓰기 파일을 지웁니다.";
+    }
+
+    // ── 새 군단 (ed-8) ───────────────────────────────────────────────────────
+
+    private void Owned_Click(object sender, RoutedEventArgs e) => Commit();
+
+    /// <summary>
+    /// 「새 군단」 — 원본에 없는 다음 번호(<see cref="LegionBook.FirstCustomId"/> 부터, 지운 번호도 피한다)로 빈 군단을 만든다.
+    /// 처음부터 가진 군단을 켜 두어 모세스 용병관리에 바로 나온다. 「저장」해야 파일에 적힌다.
+    /// </summary>
+    private void NewLegion_Click(object sender, RoutedEventArgs e)
+    {
+        Commit();
+        int id = Math.Max(LegionBook.FirstCustomId, _rows.Select(r => r.Id).Concat(_deleted).DefaultIfEmpty(0).Max() + 1);
+        var legion = new LegionData(id, 0, [], 0, 0, 0, 0, [], 0) { CustomName = "새 군단", Owned = true };
+        var row = new LegionRow { Legion = legion, Original = null, Name = _db.LegionName(legion), Dirty = true };
+        _deleted.Remove(id);
+        _rows.Add(row);
+        LegionGrid.Items.Refresh();
+        LegionGrid.SelectedItem = row;
+        LegionGrid.ScrollIntoView(row);
+        StatusText.Text = $"새 군단 {id} 을(를) 만들었습니다 — 이름·부하·진형을 고치고 「저장」을 누르면 legions/{LegionBook.FileName(id)} 에 적힙니다.";
+    }
+
+    /// <summary>「새 군단 지우기」 — 원본 군단은 못 지운다. 게임 세이브에 이 군단 배속이 남아 있으면 불러올 때 조용히 뗀다.</summary>
+    private void DeleteLegion_Click(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { IsCustom: true } row) { StatusText.Text = "원본 For.dat 군단은 지울 수 없습니다(「이 군단 원본으로」만 된다)."; return; }
+        int index = _rows.IndexOf(row);
+        _rows.Remove(row);
+        _deleted.Add(row.Id);
+        LegionGrid.Items.Refresh();
+        if (_rows.Count > 0) LegionGrid.SelectedIndex = Math.Clamp(index, 0, _rows.Count - 1);
+        Fill();
+        StatusText.Text = $"새 군단 {row.Id} {row.Name} 을(를) 지웠습니다 — 「저장」을 누르면 파일도 지웁니다.";
     }
 }

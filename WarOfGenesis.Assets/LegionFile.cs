@@ -30,6 +30,22 @@ public sealed record LegionData(int Id, ushort NameId, ushort[] Members, byte Fo
     /// </summary>
     public ushort Leader { get; init; }
 
+    /// <summary>
+    /// 새 군단(원본 For.dat 에 없는 번호, <see cref="LegionBook.FirstCustomId"/> 부터)의 이름 — 이름 TXR 이 없으니 json 의 <c>name</c> 을 그대로 보인다(ed-8).
+    /// 원본 군단은 null(이름 TXR <see cref="NameId"/> 를 쓴다). 보일 이름은 <see cref="LegionBook.LegionName"/>.
+    /// </summary>
+    public string? CustomName { get; init; }
+
+    /// <summary>새 군단의 설명 글(json <c>description</c>, 줄바꿈은 원본 TXR 처럼 <c>$n</c>). 원본 군단은 null.</summary>
+    public string? CustomDescription { get; init; }
+
+    /// <summary>
+    /// 처음부터 가진 군단(json <c>owned</c>, ed-8) — 켜면 모세스 용병관리 목록에 스크립트 713 으로 얻은 것과 별개로 <b>한 개</b> 더 올라온다.
+    /// 세이브의 얻은 군단 목록(<c>OwnedLegions</c>)에는 안 넣고 그때그때 더하므로 새 게임·불러온 세이브 모두 같고, json 을 지우거나 끄면 바로 사라진다.
+    /// 원본에 없는 동작이다(원본 파티 군단 목록 <c>+0x910</c> 은 713 으로만 찬다, 분석-군단).
+    /// </summary>
+    public bool Owned { get; init; }
+
     /// <summary>진형 이름 TXR — 813 + 진형.</summary>
     public ushort FormationNameId => (ushort)(813 + Formation);
 

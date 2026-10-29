@@ -24,6 +24,23 @@
                 Click="Revert_Click"
                 Content="이 군단 원본으로"
                 DockPanel.Dock="Left" />
+            <Button
+                x:Name="NewLegionButton"
+                Margin="12,0,6,0"
+                Padding="12,3"
+                AutomationProperties.AutomationId="LegionEditNew"
+                Click="NewLegion_Click"
+                Content="새 군단"
+                DockPanel.Dock="Left"
+                ToolTip="원본 For.dat 에 없는 번호(900 부터)로 새 군단을 만든다 — 「처음부터 가진 군단」을 켜 두면 모세스 용병관리에서 배속할 수 있다" />
+            <Button
+                x:Name="DeleteLegionButton"
+                Padding="12,3"
+                AutomationProperties.AutomationId="LegionEditDelete"
+                Click="DeleteLegion_Click"
+                Content="새 군단 지우기"
+                DockPanel.Dock="Left"
+                ToolTip="고른 새 군단을 지운다(원본 군단은 못 지운다) — 「저장」을 누르면 파일도 지운다" />
             <TextBlock
                 x:Name="StatusText"
                 Margin="12,0,0,0"
@@ -68,6 +85,36 @@
                         Margin="0,0,0,8"
                         Foreground="#2B4C7E"
                         TextWrapping="Wrap" />
+
+                    <!--  새 군단(원본에 없는 번호)만 — 이름 TXR 이 없어 이름·설명을 글로 적는다(ed-8)  -->
+                    <StackPanel x:Name="CustomPanel" Margin="0,0,0,8">
+                        <TextBlock FontWeight="Bold" Text="이름 (새 군단 — 게임 모세스 용병관리·부하 도움말에 이대로 나온다)" />
+                        <TextBox
+                            x:Name="NameBox"
+                            Width="330"
+                            Margin="0,2,0,6"
+                            HorizontalAlignment="Left"
+                            AutomationProperties.AutomationId="LegionEditName"
+                            LostFocus="Bonus_LostFocus" />
+                        <TextBlock FontWeight="Bold" Text="설명 (모세스 용병관리 오른쪽 칸 — 다섯 줄까지 보인다)" />
+                        <TextBox
+                            x:Name="DescriptionBox"
+                            Width="500"
+                            Height="60"
+                            Margin="0,2,0,0"
+                            HorizontalAlignment="Left"
+                            AcceptsReturn="True"
+                            AutomationProperties.AutomationId="LegionEditDescription"
+                            LostFocus="Bonus_LostFocus"
+                            TextWrapping="Wrap"
+                            VerticalScrollBarVisibility="Auto" />
+                    </StackPanel>
+                    <CheckBox
+                        x:Name="OwnedBox"
+                        Margin="0,0,0,8"
+                        AutomationProperties.AutomationId="LegionEditOwned"
+                        Click="Owned_Click"
+                        Content="처음부터 가진 군단 — 모세스 용병관리 목록에 하나 더 올라와 내 인물에게 배속할 수 있다(새 게임·불러온 세이브 모두)" />
 
                     <StackPanel Orientation="Horizontal">
                         <StackPanel Width="330">
