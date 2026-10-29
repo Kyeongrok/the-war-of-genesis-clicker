@@ -36,6 +36,9 @@ public sealed record Part1BattleEvent(int Index, int MaxFire, IReadOnlyList<Scri
 /// <c>0x10097270(x, y, 칸 높이, Obt, 0, 맵)</c> 를 맵의 자식으로 만들어 판에 찍는다(<c>0x10097910</c>). 그림·지형·동작은 <see cref="Part1MapObject"/>, 분석-파트1-전투 36절.
 /// </param>
 /// <param name="Terrain">머리 낱말 7 — 전장 지형 0 평지 · 1 사막 · 2 정글 · 3 동굴 · 4 산지 · 5 극지 · 6 바다(전투 정보 창 <c>0x100957a0</c> 의 이름 차례). 맵 생성은 사막·극지에서만 색을 바꾼다.</param>
+/// <summary>전투 파일 절 D 의 칸 하나 — <see cref="Part1Battle.GroupCells"/>.</summary>
+public sealed record Part1GroupCell(int X, int Y, int Direction, int AiType, int Group);
+
 public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int TitleLine, int WinLine, int LoseLine,
                                  int Ambient, int Terrain, int Bgm, bool MountsForbidden, bool MercenariesForbidden,
                                  IReadOnlyList<(int Obt, int X, int Y)> Objects, IReadOnlyList<Part1BattleUnit> Units,
@@ -43,6 +46,13 @@ public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int 
 {
     /// <summary>대사 줄(<c>.dlg</c>) — 행동 200 과 머리의 제목·승패 조건이 이 번호를 쓴다.</summary>
     public IReadOnlyList<string> Lines { get; init; } = [];
+
+    /// <summary>
+    /// 절 D — 무리 칸(<c>u16 x, u16 y, u8 방향, u16 AI 번호, u16 무리</c>). 원본 <c>0x1002d820</c> 은 이야기 전투에서도 읽는다:
+    /// 무리가 0 이 아니면 그 무리의 사람을 차례로 꺼내(이미 판에 선 사람은 건너뛴다) 그 칸에 AI 유닛으로 세운다(+0x1f8 · +0x1f9 = 0, AI 번호 → +0x262).
+    /// 무리 0 은 대전 판 명부에서 꺼내는 칸이라 이야기 전투는 쓰지 않는다. 이 절을 쓰는 이야기 전투는 0213(아델라이데 시계탑 3F — 헤이스팅스 무리 5)이다.
+    /// </summary>
+    public IReadOnlyList<Part1GroupCell> GroupCells { get; init; } = [];
 
     /// <summary>그 줄 — 없으면 빈 문자열. 글 안의 「/n」 은 줄 바꿈이다.</summary>
     public string Line(int index) => index >= 0 && index < Lines.Count ? Lines[index] : "";
@@ -96,7 +106,12 @@ public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int 
 
         n = Need(2) ? U() : 0;
         if (!Need(9 * n)) return null;
-        o += 9 * n;                                     // 대전 판 인물 칸 — 이야기 전투는 안 쓴다
+        var groupCells = new List<Part1GroupCell>();
+        for (int i = 0; i < n; i++)
+        {
+            int x = H(), y = H(), dir = B(), ai = H(), group = H();
+            groupCells.Add(new Part1GroupCell(x, y, dir, ai, group));
+        }
 
         int count = Need(2) ? H() : 0;
         for (int i = 0; i < count; i++)
@@ -111,7 +126,7 @@ public sealed record Part1Battle(int Id, int ObtId, int StartX, int StartY, int 
         }
 
         return new Part1Battle(id, h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8], h[9] != 0, h[10] != 0,
-                               objects, units, placement, events);
+                               objects, units, placement, events) { GroupCells = groupCells };
     }
 
     private static List<ScriptCommand> ReadCommands(byte[] b, ref int o, int count)

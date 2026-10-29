@@ -70,6 +70,20 @@ internal sealed unsafe partial class BattleScene
                 list.Add(rider);
                 _part1Riders[mount] = rider;
             }
+            // 절 D 무리 칸 — 그 무리 사람을 차례로 꺼내(이미 판에 선 사람은 건너뛴다) 그 칸에 편 0 AI 로 세운다(0x1002d820).
+            // 0213 아델라이데 시계탑 3F 는 적이 모두 이 칸(헤이스팅스 무리 5)이라, 안 세우면 적이 없어 시작하자마자 이겼다(카페 제보 fg-79).
+            var picked = new Dictionary<int, int>();
+            foreach (var cell in scene.Part1GroupCells)
+            {
+                var members = host.Part1.GroupMembers(cell.Group);
+                int at = picked.GetValueOrDefault(cell.Group);
+                while (at < members.Count && list.Any(u => u.ChrCode == members[at] || u.Part1Rider == members[at])) at++;
+                if (at >= members.Count) continue;
+                picked[cell.Group] = at + 1;
+                var rec = DemoScene.WithPart1Ai(new DemoUnit(members[at], cell.X, cell.Y, 0, 0, DemoScene.Part1Facing(cell.Direction)), cell.AiType);
+                list.Add(new UnitState(rec));
+                GameWindow.TestRunTrace($"part1 group cell {cell.Group} ({cell.X},{cell.Y}) <- {members[at]}");
+            }
         }
 
         // 파트1 판에 편 4 로 나온 사람은 일행에 들인다(배치 칸이 없는 판도) — 다음 판의 배치 칸에 선다.

@@ -331,11 +331,14 @@ internal sealed class Part1Progress
         int g = CurrentGroup;
         if (g <= 0) return Party;
         if (_groupCache is { } cached && cached.Group == g && cached.Version == _homeVersion) return cached.Members;
-        var members = Enumerable.Range(WarOfGenesis.Assets.Part1Game.ChrBase, 106).Concat(Party).Distinct()
-                                .Where(c => HomeOf(c) == g).OrderBy(c => c).ToList();
+        var members = GroupMembers(g);
         _groupCache = (g, _homeVersion, members);
         return members;
     }
+
+    /// <summary>그 무리의 사람 — 인물 0~105 와 일행 가운데 집 무리가 그것인 사람, Chr 번호 차례(전투 절 D 의 무리 칸도 이 차례로 꺼낸다).</summary>
+    internal List<int> GroupMembers(int group) =>
+        [.. Enumerable.Range(WarOfGenesis.Assets.Part1Game.ChrBase, 106).Concat(Party).Distinct().Where(c => HomeOf(c) == group).OrderBy(c => c)];
 
     private (int Group, int Version, List<int> Members)? _groupCache;
     private int _homeVersion;

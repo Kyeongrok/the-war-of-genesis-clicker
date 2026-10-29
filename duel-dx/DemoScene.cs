@@ -101,6 +101,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     /// SPD +8 이고 온도가 기온 대신 80 쪽으로 간다(<c>0x10042930</c>). 파트2 판은 0.</summary>
     public int Part1Terrain { get; init; }
 
+    /// <summary>파트1 절 D 의 무리 칸(무리 ≠ 0) — 판을 세울 때 그 무리 사람을 차례로 이 칸에 AI 로 세운다(<c>0x1002d820</c>, <see cref="Part1Battle.GroupCells"/>). 파트2 판은 빈 목록.</summary>
+    public IReadOnlyList<Part1GroupCell> Part1GroupCells { get; init; } = [];
+
     /// <summary>Btl 머리 워드 2·3 — 첫 화면 가운데 칸(<see cref="BattleFile.StartX"/>, 감사4 C5). 없으면 −1(예전처럼 왼쪽 위).</summary>
     public int StartCol { get; init; } = -1;
     public int StartRow { get; init; } = -1;
@@ -133,9 +136,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     private static DemoScene? LoadPart1(int id, GameDatabase? db)
     {
         if (Part1Battle.Load(id - Part1Game.BattleBase) is not { } battle) return null;
-        static Facing FacingOf(int direction) => direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
-        // AI 표(Dats/AI.dat, 유닛 칸의 AI 번호)를 파트2 AI 칸으로 — 깨어나는 조건(+0x1d: 0 처음 · 1 깨어난 같은 편 거리 · 2 적 거리 · 3 틱)은 번호가 같다.
-        // 이동 방식(+0)은 3 「움직이지 않음」만 파트2 의 「목표 없음(제자리)」으로 옮기고, 0 정한 칸 · 1 따라가기 · 2 보통은 보통으로 친다.
+        static Facing FacingOf(int direction) => Part1Facing(direction);
         var ais = Part1Ai.LoadAll();
         DemoUnit Unit(Part1BattleUnit u, int index)
         {
@@ -146,9 +147,7 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             var unit = u.MountChr > 0
                 ? new DemoUnit(Part1Game.ChrBase + u.MountChr, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader, Part1Rider = Part1Game.ChrBase + u.ChrCode }
                 : new DemoUnit(Part1Game.ChrBase + u.ChrCode, u.X, u.Y, u.Side, 0, FacingOf(u.Direction)) { Record = index, Part1Leader = u.Leader };
-            if (u.Side == 4 || u.AiType < 0 || u.AiType >= ais.Count) return unit;
-            var ai = ais[u.AiType];
-            return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance, Part1AiType = u.AiType };
+            return u.Side == 4 ? unit : WithPart1Ai(unit, u.AiType, ais);
         }
         var roster = battle.Units
             .Select((u, index) => (u, index))
@@ -169,7 +168,23 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
             Part1Objects = battle.Objects,       // 절 A — 원본 로더 0x1002d27b 가 판에 찍는 Obt 물체(보이지 않는 벽 · 통 · 상자 · 문 · 나무 …)
             Part1Ambient = battle.Ambient,       // 머리 낱말 6 — 기온(물체 · 유닛 온도가 이쪽으로 간다)
             Part1Terrain = battle.Terrain,       // 머리 낱말 7 — 전장 지형(적응 어빌리티 86~91)
+            Part1GroupCells = [.. battle.GroupCells.Where(c => c.Group > 0)],   // 절 D — 무리 칸(BattleScene.BuildUnits 가 그 무리 사람을 세운다)
         };
+    }
+
+    /// <summary>파트1 방향 낱말 → 바라보는 쪽(0 위 · 2 아래 · 3 오른 · 나머지 왼).</summary>
+    internal static Facing Part1Facing(int direction) => direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left };
+
+    /// <summary>
+    /// AI 표(Dats/AI.dat, 유닛 칸의 AI 번호)를 파트2 AI 칸으로 — 깨어나는 조건(+0x1d: 0 처음 · 1 깨어난 같은 편 거리 · 2 적 거리 · 3 틱)은 번호가 같다.
+    /// 이동 방식(+0)은 3 「움직이지 않음」만 파트2 의 「목표 없음(제자리)」으로 옮기고, 0 정한 칸 · 1 따라가기 · 2 보통은 보통으로 친다.
+    /// </summary>
+    internal static DemoUnit WithPart1Ai(DemoUnit unit, int aiType, IReadOnlyList<Part1Ai>? ais = null)
+    {
+        ais ??= Part1Ai.LoadAll();
+        if (aiType < 0 || aiType >= ais.Count) return unit;
+        var ai = ais[aiType];
+        return unit with { AiMove = ai.MoveMode == 3 ? 6 : 0, WakeCondition = ai.Wake, WakeValue = ai.Wake == 3 ? ai.WakeTick : ai.WakeDistance, Part1AiType = aiType };
     }
 
     /// <summary>그 번호의 전투를 assets 에서 읽는다. 자료가 없으면 null.</summary>
