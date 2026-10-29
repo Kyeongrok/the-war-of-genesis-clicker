@@ -54,9 +54,10 @@ export const DASHBOARD_HTML = `<!doctype html>
     <span id="error"></span>
   </div>
   <div class="tiles" id="tiles"></div>
-  <section><h2>어빌리티 순위</h2><table id="abilities"></table></section>
+  <section><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
+  <section><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
   <section><h2>인물별</h2><div class="tabs" id="chartabs"></div><table id="chars"></table></section>
-  <section><h2>전투별</h2><table id="battles"></table></section>
+  <section><h2>분기별</h2><table id="battles"></table></section>
   <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
 </main>
@@ -74,8 +75,8 @@ const charName = (id) => data.names.characters[id] || '인물 ' + id;
 
 const COLS = [['uses', '사용'], ['hits', '명중'], ['damage', '총 피해'], ['perUse', '1회당 피해'], ['kills', '처치'], ['heal', '회복'], ['battles', '전투 수']];
 
-function abilityTable(el, rows, sortable) {
-  rows = rows.map((r) => ({ ...r, perUse: r.uses ? Math.round(r.damage / r.uses) : 0 })).sort((a, b) => b[sortKey] - a[sortKey] || b.damage - a.damage);
+function abilityTable(el, rows, sortable, limit = Infinity) {
+  rows = rows.map((r) => ({ ...r, perUse: r.uses ? Math.round(r.damage / r.uses) : 0 })).sort((a, b) => b[sortKey] - a[sortKey] || b.damage - a.damage).slice(0, limit);
   const top = Math.max(1, ...rows.map((r) => r[sortKey]));
   el.innerHTML = '<tr><th>#</th><th class="name">어빌리티</th>'
     + COLS.map(([k, label]) => '<th class="' + (sortable ? 'sort ' : '') + (k === sortKey ? 'on' : '') + '" data-k="' + k + '">' + label + (k === sortKey ? ' ▼' : '') + '</th>').join('')
@@ -99,6 +100,9 @@ const ENV_TABLES = [
   ['font', '글자 크기', (k) => k + '%'],
   ['zoom', '배율', (k) => (Number(k) === 0 ? '자동' : k + '%')],
   ['touch', '터치 화면', (k) => (k ? '있음' : '없음')],
+  // 원본 설치본 폴더의 마지막 이름(menu-111) — 앞 경로는 안 받는다. 없음 = 그 파트 원본을 모르는 판.
+  ['part2Dir', '파트2 설치본 폴더', (k) => String(k)],
+  ['part1Dir', '파트1 설치본 폴더', (k) => String(k)],
 ];
 
 function envTables() {
@@ -120,7 +124,9 @@ function render() {
   $('tiles').innerHTML = [[t.battles, '전투'], [t.installs, '설치'], [t.battles ? Math.round(100 * t.wins / t.battles) + '%' : '-', '승률'], [t.battles ? Math.round(t.turns / t.battles) : '-', '평균 턴'], [clock(t.secSum, t.secN), '평균 시간']]
     .map(([v, label]) => '<div class="tile"><b>' + (typeof v === 'number' ? n(v) : v) + '</b><span>' + label + '</span></div>').join('');
 
-  abilityTable($('abilities'), data.abilities, true);
+  // 파트1 · 파트2 를 나눠 상위 20 개씩만(사용자 요청 menu-110). 옛 캐시(p1 칸이 없는 것)는 모두 파트2 로 본다.
+  abilityTable($('abilities'), data.abilities.filter((r) => !r.p1), true, 20);
+  abilityTable($('abilities1'), data.abilities.filter((r) => r.p1), true, 20);
 
   const ids = [...new Set(data.chars.map((r) => r.chr))].sort((a, b) => data.chars.filter((r) => r.chr === b).reduce((s, r) => s + r.uses, 0) - data.chars.filter((r) => r.chr === a).reduce((s, r) => s + r.uses, 0));
   if (!ids.includes(pickedChar)) pickedChar = ids[0] ?? null;
@@ -128,25 +134,15 @@ function render() {
   $('chartabs').querySelectorAll('button').forEach((b) => b.onclick = () => { pickedChar = Number(b.dataset.id); render(); });
   abilityTable($('chars'), data.chars.filter((r) => r.chr === pickedChar), false);
 
-  // 전투는 챕터로 묶는다 — 챕터는 이야기 순서, 그 안의 전투는 번호 순. 챕터 줄에는 그 챕터의 합계.
-  const cells = (g) => '<td>' + n(g.n) + '</td><td class="good">' + n(g.wins) + '</td><td class="bad">' + n(g.n - g.wins) + '</td><td>'
-    + Math.round(100 * g.wins / g.n) + '%</td><td>' + Math.round(g.turnSum / g.n) + '</td><td>' + clock(g.secSum, g.secN) + '</td>';
-  const groups = new Map();
-  for (const b of data.battles) {
-    const [chapter, name] = data.names.battles[b.battle] || ['', ''];
-    const key = chapter || '챕터 밖 · 모르는 전투';
-    if (!groups.has(key)) groups.set(key, { n: 0, wins: 0, turnSum: 0, secSum: 0, secN: 0, rows: [] });
-    const g = groups.get(key);
-    g.n += b.n; g.wins += b.wins; g.turnSum += b.turns * b.n; g.secSum += b.secSum; g.secN += b.secN;
-    g.rows.push({ ...b, name, turnSum: b.turns * b.n });
-  }
-  const order = (key) => { const i = data.names.chapters.indexOf(key); return i < 0 ? 9999 : i; };
-  $('battles').innerHTML = '<tr><th class="name">챕터 · 전투</th><th>판 수</th><th>승</th><th>패</th><th>승률</th><th>평균 턴</th><th>평균 시간</th></tr>'
-    + ([...groups.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([key, g]) =>
-        '<tr class="chapter"><td class="name">' + esc(key) + '</td>' + cells(g) + '</tr>'
-        + g.rows.sort((a, b) => a.battle - b.battle).map((b) => '<tr><td class="name indent"><span class="dim">Btl ' + String(b.battle).padStart(4, '0') + '</span> '
-            + esc(b.name || '') + '</td>' + cells(b) + '</tr>').join('')).join('')
-      || '<tr><td colspan="7" class="dim name">아직 자료가 없습니다.</td></tr>');
+  // 분기마다 판 수만 보인다(사용자 요청 menu-110) — 파트2 Episode 4 · 5, 파트1 시반 슈미터 · 크림슨 크루세이더 · 아포칼립스. 분기를 모르는 전투는 그 파트의 「분기 모름」.
+  const branchOf = (id) => data.names.branches[id] || (id >= 20000 ? '파트1 · 분기 모름' : '파트2 · 분기 모름');
+  const counts = new Map();
+  for (const b of data.battles) counts.set(branchOf(b.battle), (counts.get(branchOf(b.battle)) || 0) + b.n);
+  const order = (key) => { const i = data.names.branchOrder.indexOf(key); return i < 0 ? 9999 : i; };
+  $('battles').innerHTML = '<tr><th class="name">분기</th><th>판 수</th></tr>'
+    + ([...counts.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([key, count]) =>
+        '<tr><td class="name">' + esc(key) + '</td><td>' + n(count) + '</td></tr>').join('')
+      || '<tr><td colspan="2" class="dim name">아직 자료가 없습니다.</td></tr>');
 
   envTables();
 

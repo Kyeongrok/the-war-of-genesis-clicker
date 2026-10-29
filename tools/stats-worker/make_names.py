@@ -10,6 +10,7 @@ import glob
 import io
 import json
 import os
+import struct
 import sys
 
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +43,35 @@ if os.path.exists(battle_notes):
 else:
     print(f'전투 목록 노트가 없습니다({battle_notes}) - 전투 표는 비웁니다')
 
+# 분기 — 전투 → 분기 이름(사용자 요청 menu-110: 대시보드는 분기마다 판 수만 보인다). 파트2 는 연대표(EPS/Episode.dat)의 두 줄 —
+# 왼쪽 Episode 4 「영혼의 검」 · 오른쪽 Episode 5 「뫼비우스의 우주」(분석-UI). 한 줄 40바이트, 낱말 7 이 챕터(EpisodesScreen.Episodes).
+part2_branches = ['파트2 · Episode 4 영혼의 검', '파트2 · Episode 5 뫼비우스의 우주']
+side_of = {}
+eps_path = os.path.join(root, 'assets', 'data', 'EPS', 'Episode.dat')
+if os.path.exists(eps_path):
+    eps = open(eps_path, 'rb').read()
+    for r in range(struct.unpack_from('<H', eps, 2)[0]):
+        for side in range(2):
+            o = 4 + 40 * r + 18 * side + 4 + 2 * 7
+            if o + 2 <= len(eps) and struct.unpack_from('<h', eps, o)[0] > 0:
+                side_of.setdefault(struct.unpack_from('<h', eps, o)[0], side)
+branches = {bid: part2_branches[side_of[int(chapter[:4])]] for bid, (chapter, _) in battles.items()
+            if chapter[:4].isdigit() and int(chapter[:4]) in side_of}
+branch_order = part2_branches + ['파트2 · 분기 모름']
+
+# 파트1 — 20000 + 파트1 번호(인물 · 어빌리티 · 전투 · 분기). 파트1 원본 폴더에서만 읽혀 part1_names.ps1 이 따로 뽑아 둔 것을 합친다(menu-110).
+part1_path = os.path.join(root, 'tools', 'stats-worker', 'part1_names.json')
+if os.path.exists(part1_path):
+    part1 = json.load(io.open(part1_path, encoding='utf-8-sig'))
+    characters.update({int(k): v for k, v in part1['characters'].items()})
+    abilities.update({int(k): v for k, v in part1['abilities'].items()})
+    battles.update({int(k): v for k, v in part1['battles'].items()})
+    chapters += [c for c in part1['chapters'] if c not in chapters]
+    branches.update({int(k): v for k, v in part1.get('branches', {}).items()})
+    branch_order += part1.get('branchOrder', [])
+else:
+    print(f'파트1 이름 표가 없습니다({part1_path}) - part1_names.ps1 로 뽑습니다')
+
 out = os.path.join(root, 'tools', 'stats-worker', 'src', 'names.js')
 with io.open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('// make_names.py 가 만든다 — 손으로 고치지 않는다.\n')
@@ -50,4 +80,7 @@ with io.open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('// 전투 번호 → [챕터, 이름] · CHAPTERS 는 이야기 순서\n')
     f.write('export const BATTLES = ' + json.dumps(dict(sorted(battles.items())), ensure_ascii=False) + ';\n')
     f.write('export const CHAPTERS = ' + json.dumps(chapters, ensure_ascii=False) + ';\n')
-print(f'{out}: 어빌리티 {len(abilities)} · 인물 {len(characters)} · 전투 {len(battles)} · 챕터 {len(chapters)}')
+    f.write('// 전투 번호 → 분기 · BRANCH_ORDER 는 보이는 차례(분기를 모르는 전투는 그 파트의 「분기 모름」)\n')
+    f.write('export const BRANCHES = ' + json.dumps(dict(sorted(branches.items())), ensure_ascii=False) + ';\n')
+    f.write('export const BRANCH_ORDER = ' + json.dumps(branch_order, ensure_ascii=False) + ';\n')
+print(f'{out}: 어빌리티 {len(abilities)} · 인물 {len(characters)} · 전투 {len(battles)} · 챕터 {len(chapters)} · 분기 붙은 전투 {len(branches)}')

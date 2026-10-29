@@ -7,7 +7,7 @@
 // 누가 보냈는지는 설치할 때 만든 무작위 번호(install)뿐이다. IP 는 적지 않는다.
 
 import { DASHBOARD_HTML } from './dashboard.js';
-import { ABILITIES, CHARACTERS, BATTLES, CHAPTERS } from './names.js';
+import { ABILITIES, CHARACTERS, BATTLES, CHAPTERS, BRANCHES, BRANCH_ORDER } from './names.js';
 
 const MAX_BODY = 64 * 1024, MAX_SKILLS = 300;
 
@@ -96,11 +96,12 @@ async function getDashboard(version, noedit, tachyrion, env) {
   // 조작 방식 — 그 판에서 기술을 패드로 더 많이 썼으면 pad, 패드를 조금이라도 썼으면 mixed, 아니면 keys.
   const control = `CASE WHEN ${flag('pad')} IS NULL THEN NULL WHEN ${flag('pad')} > ${flag('keys')} THEN 'pad' WHEN ${flag('pad')} > 0 THEN 'mixed' ELSE 'keys' END`;
   const ENV = { platform: flag('platform'), control, res: flag('res'), screen: flag('screen'), fullscreen: flag('fullscreen'), hiResUi: flag('hiResUi'),
-                font: flag('font'), zoom: flag('zoom'), touch: flag('touch') };
+                font: flag('font'), zoom: flag('zoom'), touch: flag('touch'), part2Dir: flag('part2Dir'), part1Dir: flag('part1Dir') };
   const envRows = Promise.all(Object.values(ENV).map(dim)).then((lists) => Object.fromEntries(Object.keys(ENV).map((key, i) => [key, lists[i]])));
   const [total, abilities, chars, battles, days, versions, env_] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT install) AS installs, COALESCE(SUM(outcome = 'win'), 0) AS wins, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(seconds), 0) AS secSum, COUNT(seconds) AS secN FROM battles b ${cond}`).bind(...args).first(),
-    all(`SELECT s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY s.ability, s.work`),
+    // p1 = 파트1 전투(20000 + 번호)의 것 — 대시보드가 어빌리티 순위를 파트1 · 파트2 로 나눈다(menu-110)
+    all(`SELECT (b.battle >= 20000) AS p1, s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY p1, s.ability, s.work`),
     all(`SELECT s.chr, s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY s.chr, s.ability, s.work`),
     all(`SELECT b.battle, COUNT(*) AS n, SUM(b.outcome = 'win') AS wins, AVG(b.turns) AS turns, COALESCE(SUM(b.seconds), 0) AS secSum, COUNT(b.seconds) AS secN FROM battles b ${cond} GROUP BY b.battle ORDER BY n DESC, b.battle LIMIT 300`),
     all(`SELECT substr(b.received_at, 1, 10) AS day, b.version, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond} GROUP BY day, b.version ORDER BY day DESC, b.version DESC LIMIT 120`),
@@ -111,14 +112,14 @@ async function getDashboard(version, noedit, tachyrion, env) {
 }
 
 // 이름 표는 코드에 있으니 cache 표에 넣지 않고 내보낼 때 붙인다.
-const NAMES = JSON.stringify({ abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS });
+const NAMES = JSON.stringify({ abilities: ABILITIES, characters: CHARACTERS, battles: BATTLES, chapters: CHAPTERS, branches: BRANCHES, branchOrder: BRANCH_ORDER });
 
 async function dashboard(url, env) {
   const version = (url.searchParams.get('version') || '').slice(0, 32);
   if (version && !/^[0-9A-Za-z.+_-]+$/.test(version)) return json({ error: 'bad version' }, 400);
   const noedit = url.searchParams.get('noedit') === '1';
   const t = url.searchParams.get('tachyrion'), tachyrion = t === '1' || t === '0' ? t : '';
-  const body = await cached(env, `dashboard|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env));
+  const body = await cached(env, `dashboard2|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env));
   return jsonText(body.slice(0, -1) + ',"names":' + NAMES + '}');
 }
 

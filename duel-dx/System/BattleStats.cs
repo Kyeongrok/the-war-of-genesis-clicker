@@ -208,6 +208,10 @@ internal sealed class BattleStats(GameWindow host)
         UploadUrl.Length > 0 && !GameWindow.Offscreen && !GameWindow.TestRun && GameWindow.AppVersion.StartsWith('v') && !GameWindow.AppVersion.Contains('+');
 
     /// <summary>설치마다 하나인 무작위 번호 — 누구인지는 모르고 같은 설치인지만 안다.</summary>
+    /// <summary>폴더의 마지막 이름 — 「C:\Games\창세기전3 파트2\」 → 「창세기전3 파트2」. 없으면 null.</summary>
+    private static string? DirName(string? root) =>
+        root is { Length: > 0 } ? Path.GetFileName(Path.TrimEndingDirectorySeparator(root)) is { Length: > 0 } leaf ? leaf : root : null;
+
     private static string InstallId()
     {
         if (File.Exists(InstallPath) && Guid.TryParse(File.ReadAllText(InstallPath).Trim(), out var known)) return known.ToString();
@@ -243,6 +247,9 @@ internal sealed class BattleStats(GameWindow host)
                 res = $"{host._viewW}x{host._viewH}", zoom = host._zoomPercent, battleZoom = host._battleZoomPercent, fullscreen = host._fullscreen,
                 hiResUi = host._hiResUi, font = host._fontScalePercent,
                 platform = PlatformInfo.Current.Kind, touch = PlatformInfo.Current.Touch, screen = PlatformInfo.Current.Screen,
+                // 원본 설치본 폴더 이름(사용자 요청 menu-111) — 어떤 설치본 · 압축본을 쓰는지 보려고. 마지막 폴더 이름만(「창세기전3 파트2」) 보내고
+                // 앞의 경로(C:\Users\<이름>\…)는 안 보낸다. 모르면 null. part1Only = 파트2 원본 없이 파트1 만 도는 판(menu-109).
+                part2Dir = DirName(OriginalGame.Root), part1Dir = DirName(Part1Game.Root), part1Only = OriginalGameSetup.Part1Only,
             },
             skills = _battle.Select(p => new
             {
