@@ -145,7 +145,7 @@ public partial class MotionMappingWindow : Window
         if (_current == null) return;
         foreach (var (k, i) in _current.Keys.Select((k, i) => (k, i)))
             KeyList.Items.Add($"{i,3}: 틱 {k.Start,4} ~ {k.Start + k.Length - 1,4} ({k.Length,2}틱)  몸짓벌 {k.SubentryId}  장 {k.Slot,3}" +
-                              (_frames.ContainsKey((k.SubentryId, k.Slot)) ? "" : "  (그림 없음)"));
+                              (_raw.TryGetValue((k.SubentryId, k.Slot), out var f) ? $"  {f.Width}×{f.Height}" : "  (그림 없음)"));
         if (KeyList.Items.Count > 0) KeyList.SelectedIndex = Math.Clamp(select, 0, KeyList.Items.Count - 1);
         EditState.Text = _obs <= 0 ? "(파일 번호를 몰라 저장 안 됨)"
                        : MotionEdits.Get(_obs, _current.Id) != null ? "손질됨 — 게임에 들어감" : "원본";
@@ -269,7 +269,21 @@ public partial class MotionMappingWindow : Window
         }
         FrameImage.Source = bmp;
         int length = Math.Max(1, _current.Length);
-        TickInfo.Text = $"틱 {tick % length} / {length}   몸짓벌 {k.SubentryId} 장 {k.Slot}";
+        TickInfo.Text = $"틱 {tick % length} / {length}   몸짓벌 {k.SubentryId} 장 {k.Slot}" + SizeText(k);
+    }
+
+    /// <summary>그 장의 그림 크기 · 기준점과, 이 모션의 장들을 기준점에 맞춰 겹친 크기(사용자 요청 ed-11).</summary>
+    private string SizeText(MotionKey k)
+    {
+        if (!_raw.TryGetValue((k.SubentryId, k.Slot), out var f)) return "";
+        string text = $"   크기 {f.Width}×{f.Height} (기준점에서 {f.X},{f.Y})";
+        var all = _current!.Keys.Select(x => _raw.GetValueOrDefault((x.SubentryId, x.Slot))).OfType<ObsFrame>().ToList();
+        if (all.Count > 1)
+        {
+            int l = all.Min(a => a.X), t = all.Min(a => a.Y), r = all.Max(a => a.X + a.Width), b = all.Max(a => a.Y + a.Height);
+            text += $"   모션 전체 {r - l}×{b - t}";
+        }
+        return text;
     }
 
     // ── PNG 내보내기(사용자 요청 ed-6) ─────────────────────────────────────
