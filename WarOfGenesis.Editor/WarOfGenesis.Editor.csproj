@@ -16,6 +16,11 @@
         <ProjectReference Include="..\WarOfGenesis.Assets\WarOfGenesis.Assets.csproj" />
     </ItemGroup>
 
+    <!-- 3D 모델 → 사용자 그림 시트 렌더 스크립트(Blender 가 돌린다, CustomSpriteWindow 「3D 모델에서…」 · ed-7) — 편집기 옆에 싣는다. -->
+    <ItemGroup>
+        <None Include="..\tools\custom-sprite\render_3d.py" Link="tools\render_3d.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
     <!-- 배포용 exe 에 저장소의 assets 폴더를 함께 싣는다. 단일 exe 로 publish 할 때
          IncludeAllContentForSelfExtract 로 exe 안에 묶여 실행 시 풀린다(AssetsFolder 가 찾는다). -->
     <!-- EditorWithoutAssets=true 면 assets 를 안 싣는다 — 따로 받는 편집기 꾸러미(게임의 assets 를 쓴다, 릴리즈 워크플로). -->

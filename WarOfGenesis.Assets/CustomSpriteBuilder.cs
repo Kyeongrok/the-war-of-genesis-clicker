@@ -21,9 +21,13 @@ public static class CustomSpriteBuilder
     public sealed record Row(Direction Dir, int Top, int Bottom);
 
     /// <summary>시트 한 장의 설정. <paramref name="Key"/> 가 있으면 색 키(R, G, B), 없으면 번짐.</summary>
+    /// <param name="OriginX">칸 안 원점(발밑) — 3D 렌더처럼 모든 칸을 같은 카메라로 찍은 시트는 렌더러가 안다(tools/custom-sprite/render_3d.py, ed-7).
+    /// 0 이상이면 그림에서 재지 않고 이 자리를 원점으로 쓴다(<see cref="Anchor"/> 무시). −1 이면 예전처럼 잰다.</param>
+    /// <param name="PixelHeight">시트에서 인물 키(픽셀) — 0 보다 크면 배율 = 게임 키 ÷ 이것(시트마다 재지 않아 동작마다 몸 크기가 같다).</param>
     public sealed record Part(Image Sheet, int Action, IReadOnlyList<Row> Rows, int ColX, int ColW, int Cols,
                               (byte R, byte G, byte B)? Key, int KeyTol = 40, int Flood = 5, Anchor Anchor = Anchor.Body,
-                              IReadOnlyList<int>? Hits = null, int Ability = 25, IReadOnlyList<(int Sound, int Frame)>? Sounds = null, int Ticks = 0);
+                              IReadOnlyList<int>? Hits = null, int Ability = 25, IReadOnlyList<(int Sound, int Frame)>? Sounds = null, int Ticks = 0,
+                              int OriginX = -1, int OriginY = -1, double PixelHeight = 0);
 
     public sealed record Result(byte[] Obs, Image Preview, int Frames, IReadOnlyList<int> Motions, IReadOnlyList<double> Scales);
 
@@ -68,19 +72,24 @@ public static class CustomSpriteBuilder
             }
             var heights = cut.SelectMany(r => r.Cells.Select(c => c.Bbox()).Where(b => b != null).Select(b => r.Foot - b!.Value.T)).Order().ToList();
             if (heights.Count == 0) continue;
-            double scale = height / (double)heights[heights.Count / 2];
+            double scale = height / (part.PixelHeight > 0 ? part.PixelHeight : heights[heights.Count / 2]);
             scales.Add(scale);
             foreach (var (dir, cells, foot) in cut)
             {
+                int rowTop = part.Rows.FirstOrDefault(r => (int)r.Dir == dir)?.Top ?? 0;
                 var ids = new List<int>();
                 double? rowShift = null;
-                foreach (var cell in cells)
+                for (int ci = 0; ci < cells.Count; ci++)
                 {
+                    var cell = cells[ci];
                     if (cell.Bbox() == null) continue;
+                    // Cut 은 시트 가장자리 2픽셀을 빼므로 맨 왼 칸 · 맨 윗줄은 칸 시작이 그만큼 밀린다 — 주어진 원점을 그만큼 당긴다.
+                    int cutDx = Math.Max(0, 2 - (part.ColX + ci * part.ColW)), cutDy = Math.Max(0, 2 - rowTop);
                     var small = Resize(cell, Math.Max(1, (int)Math.Round(cell.W * scale)), Math.Max(1, (int)Math.Round(cell.H * scale)));
                     if (small.Bbox() is not { } bb) continue;
                     double fx, fy;
-                    switch (part.Anchor)
+                    if (part.OriginX >= 0 && part.OriginY >= 0) { fx = (part.OriginX - cutDx) * scale; fy = (part.OriginY - cutDy) * scale; }   // 렌더러가 준 원점(칸 기준)
+                    else switch (part.Anchor)
                     {
                         case Anchor.Cell: fx = small.W / 2.0; fy = foot * scale; break;
                         case Anchor.Foot:

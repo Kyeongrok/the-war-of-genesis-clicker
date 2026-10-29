@@ -157,6 +157,8 @@ def parse_add(text, args):
         elif k == "sound":                                                  # sound=20022@4+20026@5 — 4번째 장에 소리 20022, 5번째 장에 20026
             part["sounds"] = [tuple(int(n) for n in item.split("@")) for item in v.split("+")]
         elif k == "ticks": part["ticks"] = int(v)
+        elif k == "origin": part["origin"] = tuple(int(n) for n in v.split(":"))   # origin=128:200 — 칸 안 원점(3D 렌더, render_3d.py)
+        elif k == "px": part["px"] = float(v)                                       # px=230 — 시트에서 인물 키(픽셀), 배율을 재지 않고 이것으로
     return part
 
 
@@ -199,11 +201,12 @@ def main():
             foot = max(b[3] for b in boxes if b)
             cut_rows.append((d, action, cells, boxes, foot))
         heights = sorted(foot - b[1] for _, _, _, bs, foot in cut_rows for b in bs if b)
-        scale = args.height / heights[len(heights) // 2]
+        scale = args.height / (part.get("px") or heights[len(heights) // 2])
         print(f"{part['sheet']}: 배율 {scale:.3f}")
         for d, action, cells, boxes, foot in cut_rows:
             ids, row_shift = [], None
-            for cell, box in zip(cells, boxes):
+            row_top = next(y0 for dd, _, y0, _ in part["rows"] if dd == d)
+            for ci, (cell, box) in enumerate(zip(cells, boxes)):
                 if not box:
                     continue
                 w, h = cell.size
@@ -215,7 +218,12 @@ def main():
                     continue
                 # 발밑 점 — 가로는 그 장 몸의 가운데, 세로는 그 장의 발끝(가장 낮은 픽셀). AI 가 그린 시트는 칸 안 자리가 장마다 수십 픽셀씩 달라
                 # 칸 가운데를 기준으로 하면 서기가 좌우로 크게 흔들렸다(사용자 보고). --anchor cell 이면 예전처럼 칸 가운데 · 그 줄의 발 높이.
-                if part["anchor"] == "cell":
+                if part.get("origin"):
+                    # 렌더러가 준 칸 안 원점 — cut 이 시트 가장자리 2픽셀을 빼서 맨 왼 칸 · 맨 윗줄이 밀린 만큼 당긴다.
+                    ox, oy = part["origin"]
+                    fx = (ox - max(0, 2 - (part["col_x"] + ci * part["col_w"]))) * scale
+                    fy = (oy - max(0, 2 - row_top)) * scale
+                elif part["anchor"] == "cell":
                     fx, fy = small.width / 2, foot * scale
                 elif part["anchor"] == "foot":
                     # 디딘 뒷발 — 발끝 띠(그림 아래 6%)의 픽셀 가운데 옆모습은 뒤쪽(왼쪽을 보니 오른쪽 끝), 앞 · 뒷모습은 가운데.

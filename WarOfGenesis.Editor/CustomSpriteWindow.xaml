@@ -17,6 +17,7 @@
             <TextBlock VerticalAlignment="Center" Text="게임 안 키(px)" />
             <TextBox x:Name="HeightBox" Width="50" Margin="4,0,12,0" Text="100" ToolTip="인물은 대개 65~95" />
             <Button Margin="0,0,6,0" Padding="10,2" Click="AddSheet_Click" Content="시트 추가…" />
+            <Button Margin="0,0,6,0" Padding="10,2" Click="Add3d_Click" Content="3D 모델에서…" ToolTip="뼈대 · 애니메이션이 든 3D 모델(.glb · .gltf · .fbx · .blend)을 Blender 로 동작 · 방향마다 렌더해 시트로 더한다 — 모든 캐릭터가 같은 동작 · 장 수 · 원점으로 나온다" />
             <Button Margin="0,0,6,0" Padding="10,2" Click="RemoveSheet_Click" Content="고른 줄 빼기" />
             <Button Margin="0,0,6,0" Padding="10,2" Click="OpenProject_Click" Content="설정 열기…" />
             <Button Margin="0,0,18,0" Padding="10,2" Click="SaveProject_Click" Content="설정 저장…" />

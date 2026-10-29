@@ -32,6 +32,10 @@ public partial class CustomSpriteWindow : Window
         public string Hit { get; set; } = "";
         public string Sound { get; set; } = "";
         public int Ticks { get; set; }
+        /// <summary>칸 안 원점 · 시트의 인물 키(픽셀) — 3D 렌더가 채운다(−1 · 0 이면 그림에서 잰다).</summary>
+        public int OriginX { get; set; } = -1;
+        public int OriginY { get; set; } = -1;
+        public double PixelHeight { get; set; }
     }
 
     private sealed record Project(int Id, string Name, int Height, List<Part> Parts);
@@ -142,6 +146,92 @@ public partial class CustomSpriteWindow : Window
         return parts;
     }
 
+    // ── 3D 모델에서(사용자 요청 ed-7) ─────────────────────────────────────────
+
+    /// <summary>Blender 자리를 적어 두는 파일 — 처음 한 번 찾거나 고르면 다음부터 안 묻는다.</summary>
+    private static string BlenderSetting => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WarOfGenesis.Editor", "blender.txt");
+
+    /// <summary>
+    /// blender.exe 를 찾는다 — 적어 둔 자리, Program Files\Blender Foundation\*, 사용자 폴더의 toolslender-*(압축판), PATH 차례. 없으면 고르게 한다.
+    /// </summary>
+    private string? FindBlender()
+    {
+        try { if (File.Exists(BlenderSetting) && File.ReadAllText(BlenderSetting).Trim() is { } saved && File.Exists(saved)) return saved; }
+        catch (IOException) { }
+        var candidates = new List<string>();
+        foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
+        {
+            string bf = System.IO.Path.Combine(root, "Blender Foundation");
+            if (Directory.Exists(bf)) candidates.AddRange(Directory.EnumerateDirectories(bf).OrderDescending().Select(d => System.IO.Path.Combine(d, "blender.exe")));
+        }
+        string tools = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "tools");
+        if (Directory.Exists(tools)) candidates.AddRange(Directory.EnumerateDirectories(tools, "blender-*").OrderDescending().Select(d => System.IO.Path.Combine(d, "blender.exe")));
+        candidates.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';').Where(d => d.Length > 0).Select(d => System.IO.Path.Combine(d, "blender.exe")));
+        string? found = candidates.FirstOrDefault(File.Exists);
+        if (found == null)
+        {
+            Log("Blender 를 못 찾았습니다 — blender.exe 를 골라 주세요(https://www.blender.org, 압축판도 된다).");
+            var dialog = new OpenFileDialog { Filter = "Blender (blender.exe)|blender.exe", Title = "blender.exe 고르기" };
+            if (dialog.ShowDialog(this) != true) return null;
+            found = dialog.FileName;
+        }
+        try { Directory.CreateDirectory(System.IO.Path.GetDirectoryName(BlenderSetting)!); File.WriteAllText(BlenderSetting, found); } catch (IOException) { }
+        return found;
+    }
+
+    /// <summary>
+    /// 3D 모델을 Blender 로 렌더해 시트를 더한다 — <c>render_3d.py</c>(편집기 옆 tools 폴더)가 동작마다 시트 한 장(줄 = 뒷 · 옆 · 앞모습)과
+    /// 설정(parts.json: 동작 · 칸 · 원점 · 키)을 쓴다. 모델 옆에 <c>render.json</c> 이 있으면 그것(어느 애니메이션을 어느 동작으로, 숨길 무기 따위)을 쓰고,
+    /// 없으면 이름으로 짐작한다(idle · walk · hit · attack …). 카메라가 고정이라 원점 · 배율을 그림에서 재지 않고 그대로 쓴다.
+    /// </summary>
+    private async void Add3d_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "3D 모델 (*.glb;*.gltf;*.fbx;*.blend)|*.glb;*.gltf;*.fbx;*.blend|모든 파일|*.*", Title = "뼈대 · 애니메이션이 든 3D 모델" };
+        if (dialog.ShowDialog(this) != true) return;
+        string model = dialog.FileName;
+        if (FindBlender() is not { } blender) return;
+        string script = System.IO.Path.Combine(AppContext.BaseDirectory, "tools", "render_3d.py");
+        if (!File.Exists(script)) { Log($"렌더 스크립트가 없습니다: {script}"); return; }
+        string config = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(model)!, "render.json");
+        string stem = System.IO.Path.GetFileNameWithoutExtension(model);
+        string outDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx-3d", stem);
+        var start = new System.Diagnostics.ProcessStartInfo(blender) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+        foreach (string a in new[] { "-b", "--factory-startup", "-P", script, "--", model, outDir }) start.ArgumentList.Add(a);
+        if (File.Exists(config)) start.ArgumentList.Add(config);
+        Log($"Blender 로 렌더하는 중… {System.IO.Path.GetFileName(model)}{(File.Exists(config) ? " · render.json" : " · 설정 없음(이름으로 짐작)")} — 동작마다 수십 초 걸린다.");
+        IsEnabled = false;
+        try
+        {
+            var (code, output) = await Task.Run(() =>
+            {
+                using var p = System.Diagnostics.Process.Start(start)!;
+                var err = p.StandardError.ReadToEndAsync();
+                string text = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                return (p.ExitCode, text + err.Result);
+            });
+            string[] lines = output.Split('\n', StringSplitOptions.TrimEntries);
+            string? done = lines.FirstOrDefault(l => l.StartsWith("RENDER3D "));
+            string parts = System.IO.Path.Combine(outDir, "parts.json");
+            if (done == null || !File.Exists(parts))
+            {
+                Log($"렌더에 실패했습니다(끝 코드 {code}). " + string.Join(" / ", lines.Where(l => l.Contains("Error") || l.Contains("SystemExit") || l.Contains("Traceback")).Take(4)));
+                return;
+            }
+            using var doc = JsonDocument.Parse(File.ReadAllText(parts));
+            var added = JsonSerializer.Deserialize<List<Part>>(doc.RootElement.GetProperty("Parts").GetRawText()) ?? [];
+            foreach (var p in added)
+            {
+                p.Path = System.IO.Path.Combine(outDir, p.Path);
+                _parts.Add(p);
+            }
+            if (NameBox.Text is "" or "에바") NameBox.Text = stem;
+            Log(done[9..].Trim() + $" — 시트 {added.Count}장을 더했습니다({outDir}). 「만들고 미리보기」로 확인하세요.");
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or JsonException or InvalidOperationException) { Log($"렌더에 실패했습니다: {ex.Message}"); }
+        finally { IsEnabled = true; }
+    }
+
     private void RemoveSheet_Click(object sender, RoutedEventArgs e)
     {
         if (PartsGrid.SelectedItem is Part p) _parts.Remove(p);
@@ -197,7 +287,7 @@ public partial class CustomSpriteWindow : Window
         var hits = p.Hit.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList();
         var sounds = p.Sound.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => x.Split('@')).Select(x => (int.Parse(x[0]), int.Parse(x[1]))).ToList();
-        return new(sheet, p.Action, rows, p.ColX, p.ColW, p.Cols, key, tol, flood, anchor, hits, 25, sounds, p.Ticks);
+        return new(sheet, p.Action, rows, p.ColX, p.ColW, p.Cols, key, tol, flood, anchor, hits, 25, sounds, p.Ticks, p.OriginX, p.OriginY, p.PixelHeight);
     }
 
     /// <summary>만들고 미리보기 — <see cref="CustomSpriteBuilder"/>(C#, 파이썬 없이). 시간이 걸려 뒤에서 돈다.</summary>

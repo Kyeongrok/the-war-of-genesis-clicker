@@ -1,0 +1,2 @@
+Knight.glb · knight_texture.png — KayKit Character Pack: Adventurers, Kay Lousberg (https://kaylousberg.com/game-assets/), CC0 1.0.
+Defold examples(model/character)에서 받음. 3D 사용자 그림 시범(ed-7).
