@@ -257,7 +257,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -362,6 +362,13 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 무작위 상자의 아이템을 전투 시작(판 세우기)에 굴리나 — 모드 > 일반(사용자 요청 fg-60, 기본 켬). 끄면 열 때 굴린다(Part1MapObjects).</summary>
     internal bool _part1ChestRollAtStart = UserSettings.Current.Part1ChestRollAtStart;
     internal const int MenuPart1ChestRoll = 1171;
+
+    /// <summary>파트1 세이브 이스터에그(원본은 파트1 세이브의 아이템 개수로 깃발 185 · 186 · 187 을 넣는다, 0x1004b085~) — 모드 &gt; 일반(사용자 요청 menu-113, 기본 끔).
+    /// 켜면 모세스를 열 때 그 깃발을 올린다(<see cref="MosesEasterEggs"/>). 명령 번호는 깃발 번호와 같게 1185 · 1186 · 1187.</summary>
+    internal bool _eggChaosCube = UserSettings.Current.EggChaosCube;
+    internal bool _eggUnknownMap = UserSettings.Current.EggUnknownMap;
+    internal bool _eggUnknownSeed = UserSettings.Current.EggUnknownSeed;
+    internal const int MenuEggChaosCube = 1185, MenuEggUnknownMap = 1186, MenuEggUnknownSeed = 1187;
 
     /// <summary>아직 안 연 상자에 깜박이는 테두리를 두르나 — 모드 > 편의성 > 상자 강조(원본에 없는 도움 기능, 기본 끔).</summary>
     internal bool _highlightChests = UserSettings.Current.HighlightChests;
@@ -526,6 +533,24 @@ internal sealed unsafe partial class GameWindow
                 _part1ChestRollAtStart = !_part1ChestRollAtStart;
                 Win32.CheckMenuItem(_menuBar, MenuPart1ChestRoll, Win32.MF_BYCOMMAND | (_part1ChestRollAtStart ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_part1ChestRollAtStart ? "무작위 상자는 다음 전투부터 시작할 때 정합니다" : "무작위 상자는 열 때 정합니다");
+                SaveSettings();
+                break;
+            case MenuEggChaosCube:
+                _eggChaosCube = !_eggChaosCube;
+                Win32.CheckMenuItem(_menuBar, MenuEggChaosCube, Win32.MF_BYCOMMAND | (_eggChaosCube ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_eggChaosCube ? "카오스 큐브 이스터에그를 켭니다 — 샤이닝 스타에서 메일이 오고, 블랙 레이븐에서 나야트레이가 합류합니다" : "카오스 큐브 이스터에그를 끕니다");
+                SaveSettings();
+                break;
+            case MenuEggUnknownMap:
+                _eggUnknownMap = !_eggUnknownMap;
+                Win32.CheckMenuItem(_menuBar, MenuEggUnknownMap, Win32.MF_BYCOMMAND | (_eggUnknownMap ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_eggUnknownMap ? "알 수 없는 지도 이스터에그를 켭니다 — 의혹에서 파치나에 동굴이 열립니다" : "알 수 없는 지도 이스터에그를 끕니다");
+                SaveSettings();
+                break;
+            case MenuEggUnknownSeed:
+                _eggUnknownSeed = !_eggUnknownSeed;
+                Win32.CheckMenuItem(_menuBar, MenuEggUnknownSeed, Win32.MF_BYCOMMAND | (_eggUnknownSeed ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_eggUnknownSeed ? "알 수 없는 씨앗 이스터에그를 켭니다 — 의혹에서 빅 도그마 메일이 옵니다" : "알 수 없는 씨앗 이스터에그를 끕니다");
                 SaveSettings();
                 break;
             case MenuPart1TutorialSave:

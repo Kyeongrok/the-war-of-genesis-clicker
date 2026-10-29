@@ -53,14 +53,21 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// </summary>
     internal List<string> EnabledMods()
     {
-        var on = new[] { TabGeneral, TabBalance, TabComfort, TabLab }.SelectMany(TuningChecks)
+        var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab }.SelectMany(TuningChecks)
             .Where(c => c.On && c.Command != MenuSendStats).Select(c => c.Label).ToList();
         if (_soulWeight != 100) on.Add($"일반 공격 소울 기여도 {SoulWeightLabel(_soulWeight)}");
         if (host._talkPauseSeconds >= 0) on.Add($"대사 사이 멈춤 {GameWindow.TalkPauseLabel(host._talkPauseSeconds)}");
         return on;
     }
 
-    internal (string Label, string Note, int Command, bool On)[] TuningChecks(int tab) => tab == TabLab ?
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks(int tab) => tab == TabStory ?
+    [
+        // 스토리 탭 — 대사 사이 멈춤 아래(StoryCheckY). 일반 탭에 두면 소울 기여도 상자와 겹쳤다.
+        // 파트1 세이브 이스터에그(원본은 파트1 세이브를 보고 켠다 — MosesEasterEggs.cs). 모세스를 열 때 깃발을 세운다.
+        ("카오스 큐브 · 나야트레이", "샤이닝 스타 메일 → 블랙 레이븐 다리엘에서 합류", MenuEggChaosCube, host._eggChaosCube),
+        ("알 수 없는 지도", "의혹 — 파치나의 동굴 전투가 열린다", MenuEggUnknownMap, host._eggUnknownMap),
+        ("알 수 없는 씨앗", "의혹 — 빅 도그마 메일 · 건슬라이서 맘모스", MenuEggUnknownSeed, host._eggUnknownSeed),
+    ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
         ("새 UI (또렷한 글자)", "설정 창을 화면 해상도로 그린다 · 끄면 이전 UI", MenuHiResUi, host._hiResUi),
@@ -133,6 +140,9 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 int px = x + 16 + i * (PauseW + PauseGap);
                 if (bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
             }
+            var story = TuningChecks();
+            int pick = by >= y + StoryCheckY ? (by - y - StoryCheckY) / TuningCheckH : -1;
+            if (pick >= 0 && pick < story.Length && bx >= x + 12 && bx < x + TuningW - 12) host.OnMenuCommand(story[pick].Command);
             return true;
         }
         if (_tuningTab != TabGeneral)
@@ -187,19 +197,10 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.UiText(TabNames[t], tx + (TabW - host.UiGetText(TabNames[t], White).W) / 2, y + TabY + 4, on ? 0xFF00FFFF : White);
         }
         host.UiFill(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
-        if (_tuningTab == TabStory) { DrawStoryTab(x, y); DrawTuningFoot(x, y); return; }
+        if (_tuningTab == TabStory) { DrawStoryTab(x, y); DrawChecks(x, y + StoryCheckY, TuningChecks()); DrawTuningFoot(x, y); return; }
 
         var checks = TuningChecks();
-        for (int i = 0; i < checks.Length; i++)
-        {
-            int cy = y + TuningCheckY + i * TuningCheckH;
-            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.UiFill(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
-            host.UiFill(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
-            host.UiStroke(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
-            if (checks[i].On) host.UiText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
-            host.UiText(checks[i].Label, x + 44, cy + 6, White);
-            host.UiText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
-        }
+        DrawChecks(x, y + TuningCheckY, checks);
 
         if (_tuningTab == TabBalance)
         {
@@ -256,6 +257,21 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     }
 
     /// <summary>스토리 탭 — 대사 사이 멈춤(설정 메뉴와 같은 값)과 대사 첫 클릭 방식.</summary>
+    /// <summary>체크 줄들을 <paramref name="top"/> 부터 한 줄씩 그린다.</summary>
+    private void DrawChecks(int x, int top, (string Label, string Note, int Command, bool On)[] checks)
+    {
+        for (int i = 0; i < checks.Length; i++)
+        {
+            int cy = top + i * TuningCheckH;
+            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.UiFill(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
+            host.UiFill(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
+            host.UiStroke(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
+            if (checks[i].On) host.UiText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
+            host.UiText(checks[i].Label, x + 44, cy + 6, White);
+            host.UiText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
+        }
+    }
+
     internal void DrawStoryTab(int x, int y)
     {
         host.UiText("대사 사이 멈춤", x + 16, y + PauseY - 28, White);

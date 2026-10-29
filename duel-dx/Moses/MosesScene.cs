@@ -341,6 +341,10 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         foreach (string pair in (Environment.GetEnvironmentVariable("DUELDX_FLAGS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             if (pair.Split('=') is [var f, var v] && int.TryParse(f, out int flag) && int.TryParse(v, out int val) && (uint)flag < host.FlagSt._flags.Length)
                 host.FlagSt._flags[flag] = (byte)val;
+        // DUELDX_VISITS=1,8 이면 그 행성들에 방문 표시를 미리 둔다(화면 밖 시험용 — 조건 505 [행성] 사건, mo-32). DUELDX_CHAPTER 와 함께 쓴다.
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int visitChapter))
+            foreach (string v in (Environment.GetEnvironmentVariable("DUELDX_VISITS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (int.TryParse(v, out int planet)) _planetVisits.Add((visitChapter, planet));
         // DUELDX_CHAPTER=<Chp 번호> 면 그 챕터로 연다(화면 밖 시험용) — 없으면 첫 전투의 챕터.
         OpenMoses(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_CHAPTER"), out int chapterId) ? LoadChapterFile(chapterId) : null);
         // DUELDX_MOSESPAGE=<페이지> 면 프롤로그를 건너뛰고 그 페이지를 바로 연다(화면 밖 시험용) — 7 전직 · 6 용병관리 · 3 상점.
@@ -389,6 +393,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
 
     internal void OpenMoses(ChapterFile? chapter = null)
     {
+        MosesEasterEggs.Apply(host);   // 켠 이스터에그 깃발(185~187)을 챕터 스크립트가 보기 전에 — 원본은 NEW GAME 이 파트1 세이브에서 넣는다(menu-113)
         // 새 챕터를 열면 꺼진다 — 다만 불러오기가 챕터를 다시 여는 길이면 세이브에 적힌 값으로.
         if (_mosesAltVoiceLoaded) _mosesAltVoice = true;
         else if (chapter != null) _mosesAltVoice = false;

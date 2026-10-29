@@ -36,6 +36,9 @@ namespace DuelDx;
 /// <param name="Part1TurnOutline">모드 &gt; 일반 &gt; 파트1 차례 테두리 — 파트1 전투에서 차례인 유닛에 주황 · 노랑으로 반짝이는 1픽셀 테두리를 두를지(원본 <c>0x10034bd9~</c> 을 따르되 빛깔 · 빠르기는 사용자 요청대로, 기본 끔, Part1TurnOutline.cs).</param>
 /// <param name="Part1TutorialSave">모드 &gt; 일반 &gt; 튜토리얼에서도 저장 — 파트1 튜토리얼(챕터 79 · 80) 전투에서 SAVE 를 할지(원본은 막는다, 사용자 요청 menu-104 · menu-105, 기본 켬).</param>
 /// <param name="Part1ChestRollAtStart">모드 &gt; 일반 &gt; 무작위 상자는 전투 시작 때 — 파트1 무작위 상자(든 것 0)의 아이템을 판을 세울 때 굴려 세이브에 둘지(끄면 열 때 굴린다, 사용자 요청 fg-59 · fg-60, 기본 켬).</param>
+/// <param name="EggChaosCube">모드 &gt; 일반 &gt; 카오스 큐브 · 나야트레이 — 파트1 세이브 이스터에그(깃발 185, MosesEasterEggs.cs, 사용자 요청 menu-113, 기본 끔).</param>
+/// <param name="EggUnknownMap">모드 &gt; 일반 &gt; 알 수 없는 지도 — 깃발 186(기본 끔).</param>
+/// <param name="EggUnknownSeed">모드 &gt; 일반 &gt; 알 수 없는 씨앗 — 깃발 187(기본 끔).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -47,7 +50,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool HighlightChests = false, bool TachyrionRework = false, int FontScalePercent = 100, bool TimedAim = false,
                                     bool HiResMoses = false, bool MiniMapFolded = true, int Part1Difficulty = 0,
                                     bool Part1TurnVoice = true, bool Part1TurnOutline = false, bool Part1TutorialSave = true,
-                                    bool Part1ChestRollAtStart = true)
+                                    bool Part1ChestRollAtStart = true,
+                                    bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 
