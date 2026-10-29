@@ -31,7 +31,7 @@ async function postBattle(request, env) {
     `INSERT OR IGNORE INTO battles (report, received_at, install, version, battle, difficulty, outcome, turns, flags, seconds)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(b.report, new Date().toISOString(), b.install, text(b.version, 32), int(b.battle, 99999), int(b.difficulty, 99),
-          outcome, int(b.turns, 99999), JSON.stringify(b.flags ?? {}).slice(0, 1024),
+          outcome, int(b.turns, 99999), JSON.stringify(b.flags ?? {}).slice(0, 2048),
           Number.isFinite(b.seconds) ? int(b.seconds, 86400) : null)   // 걸린 시간 — 옛 판 게임은 안 보낸다
     .run();
   if (!head.meta.changes) return json({ ok: true, duplicate: true });   // 이미 받은 것 — 다시 보낸 것이다
@@ -97,6 +97,9 @@ async function getDashboard(version, noedit, tachyrion, env) {
   const control = `CASE WHEN ${flag('pad')} IS NULL THEN NULL WHEN ${flag('pad')} > ${flag('keys')} THEN 'pad' WHEN ${flag('pad')} > 0 THEN 'mixed' ELSE 'keys' END`;
   const ENV = { platform: flag('platform'), control, res: flag('res'), screen: flag('screen'), fullscreen: flag('fullscreen'), hiResUi: flag('hiResUi'),
                 font: flag('font'), zoom: flag('zoom'), touch: flag('touch'), part2Dir: flag('part2Dir'), part1Dir: flag('part1Dir') };
+  // 켠 모드(flags.mods, menu-112) — 판마다 켠 것이 여럿이라 json_each 로 펼친다. mods 칸을 보낸 판 수도 함께(비중의 밑).
+  const mods = all(`SELECT j.value AS k, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b, json_each(b.flags, '$.mods') j ${cond} GROUP BY k ORDER BY battles DESC LIMIT 60`);
+  const modBase = env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond ? cond + ' AND' : 'WHERE'} json_type(b.flags, '$.mods') = 'array'`).bind(...args).first();
   const envRows = Promise.all(Object.values(ENV).map(dim)).then((lists) => Object.fromEntries(Object.keys(ENV).map((key, i) => [key, lists[i]])));
   const [total, abilities, chars, battles, days, versions, env_] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT install) AS installs, COALESCE(SUM(outcome = 'win'), 0) AS wins, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(seconds), 0) AS secSum, COUNT(seconds) AS secN FROM battles b ${cond}`).bind(...args).first(),
@@ -108,7 +111,7 @@ async function getDashboard(version, noedit, tachyrion, env) {
     env.DB.prepare('SELECT DISTINCT version FROM battles ORDER BY version DESC LIMIT 50').all().then((r) => r.results.map((v) => v.version)),
     envRows,
   ]);
-  return { total, abilities, chars, battles, days, versions, env: env_ };
+  return { total, abilities, chars, battles, days, versions, env: env_, mods: await mods, modBase: await modBase };
 }
 
 // 이름 표는 코드에 있으니 cache 표에 넣지 않고 내보낼 때 붙인다.
@@ -119,7 +122,7 @@ async function dashboard(url, env) {
   if (version && !/^[0-9A-Za-z.+_-]+$/.test(version)) return json({ error: 'bad version' }, 400);
   const noedit = url.searchParams.get('noedit') === '1';
   const t = url.searchParams.get('tachyrion'), tachyrion = t === '1' || t === '0' ? t : '';
-  const body = await cached(env, `dashboard2|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env));
+  const body = await cached(env, `dashboard3|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env));
   return jsonText(body.slice(0, -1) + ',"names":' + NAMES + '}');
 }
 

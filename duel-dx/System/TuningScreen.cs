@@ -1,4 +1,4 @@
-using DuelDx.Native;
+﻿using DuelDx.Native;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -45,12 +45,27 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal const int TuningCheckY = 70, TuningCheckH = 32;
 
     /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
-    internal (string Label, string Note, int Command, bool On)[] TuningChecks() => _tuningTab == TabLab ?
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks() => TuningChecks(_tuningTab);
+
+    /// <summary>
+    /// 켜 둔 모드 — 모든 탭의 체크 줄 가운데 켠 것의 이름과, 원본이 아닌 고르기(소울 기여도 · 대사 사이 멈춤). 전투 통계가 싣는다(사용자 요청 menu-112).
+    /// 「익명 전투 통계 보내기」는 보내는 판이면 늘 켜져 있어 뺀다.
+    /// </summary>
+    internal List<string> EnabledMods()
+    {
+        var on = new[] { TabGeneral, TabBalance, TabComfort, TabLab }.SelectMany(TuningChecks)
+            .Where(c => c.On && c.Command != MenuSendStats).Select(c => c.Label).ToList();
+        if (_soulWeight != 100) on.Add($"일반 공격 소울 기여도 {SoulWeightLabel(_soulWeight)}");
+        if (host._talkPauseSeconds >= 0) on.Add($"대사 사이 멈춤 {GameWindow.TalkPauseLabel(host._talkPauseSeconds)}");
+        return on;
+    }
+
+    internal (string Label, string Note, int Command, bool On)[] TuningChecks(int tab) => tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
         ("새 UI (또렷한 글자)", "설정 창을 화면 해상도로 그린다 · 끄면 이전 UI", MenuHiResUi, host._hiResUi),
         ("고해상도 모세스", host.HiBack.StatusLine, MenuHiResMoses, host._hiResMoses),
-    ] : _tuningTab == TabComfort ?
+    ] : tab == TabComfort ?
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
         ("체력바 보이기", "유닛 머리 위의 HP·TP 막대", MenuGauges, host._showGauges),
@@ -63,7 +78,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("전직할 때 EXP 없애기", "원본처럼 전직하면 쌓인 EXP 를 지운다 · 끄면 남긴다", MenuKeepJobExp, host._dropJobExp),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
         ("익명 전투 통계 보내기", "쓴 어빌리티 · 피해 · 조작 방식 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
-    ] : _tuningTab == TabBalance ?
+    ] : tab == TabBalance ?
     [
         // 밸런스 탭 — 전투의 세기를 바꾸는 것: 타이밍 어택 · 타이밍 명중(사용자 요청 menu-65)과 어빌리티 · 체질 자료를 고쳐 쓰는 개편(menu-64).
         // 기본은 모두 끔. 어빌리티 개편은 맨 아래 — 그 밑에 개편에 든 것을 적는다.

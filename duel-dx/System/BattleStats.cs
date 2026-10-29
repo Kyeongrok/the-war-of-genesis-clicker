@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using WarOfGenesis.Assets;
@@ -250,6 +250,8 @@ internal sealed class BattleStats(GameWindow host)
                 // 원본 설치본 폴더 이름(사용자 요청 menu-111) — 어떤 설치본 · 압축본을 쓰는지 보려고. 마지막 폴더 이름만(「창세기전3 파트2」) 보내고
                 // 앞의 경로(C:\Users\<이름>\…)는 안 보낸다. 모르면 null. part1Only = 파트2 원본 없이 파트1 만 도는 판(menu-109).
                 part2Dir = DirName(OriginalGame.Root), part1Dir = DirName(Part1Game.Root), part1Only = OriginalGameSetup.Part1Only,
+                // 켜 둔 모드 이름들(모드 창의 체크 줄 · 원본이 아닌 고르기, 사용자 요청 menu-112)
+                mods = host.TuningScr.EnabledMods(),
             },
             skills = _battle.Select(p => new
             {

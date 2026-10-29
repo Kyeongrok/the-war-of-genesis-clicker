@@ -58,6 +58,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
   <section><h2>인물별 (파트마다 많이 쓴 20명 · 어빌리티 상위 20)</h2><div class="sub">파트2</div><div class="tabs" id="chartabs"></div><div class="sub">파트1</div><div class="tabs" id="chartabs1"></div><table id="chars"></table></section>
   <section><h2>분기별</h2><table id="battles"></table></section>
+  <section><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
   <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
 </main>
@@ -152,6 +153,13 @@ function render() {
     + ([...counts.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([key, count]) =>
         '<tr><td class="name">' + esc(key) + '</td><td>' + n(count) + '</td></tr>').join('')
       || '<tr><td colspan="2" class="dim name">아직 자료가 없습니다.</td></tr>');
+
+  // 켠 모드(menu-112) — 판마다 여러 개라 비중의 밑은 모드 칸을 보낸 판 수다.
+  const base = (data.modBase && data.modBase.battles) || 0;
+  $('mods').innerHTML = '<tr><th class="name">모드</th><th>전투</th><th>설치</th><th>비중</th><th></th></tr>'
+    + ((data.mods || []).map((r) => '<tr><td class="name">' + esc(String(r.k)) + '</td><td>' + n(r.battles) + '</td><td>' + n(r.installs) + '</td><td>'
+        + (base ? (100 * r.battles / base).toFixed(1) + '%' : '-') + '</td><td class="bar"><i style="width:' + (base ? (100 * r.battles / base).toFixed(1) : 0) + '%"></i></td></tr>').join('')
+      || '<tr><td colspan="5" class="dim name">아직 자료가 없습니다 — 모드 칸은 v1.0.31 판부터 들어옵니다.</td></tr>');
 
   envTables();
 
