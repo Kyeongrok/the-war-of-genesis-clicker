@@ -1,6 +1,7 @@
 {
   "ability": 159,
   "name": "인페르노",
+  "description": "자신의 주위를 불태운다. 엠블라 전용기술. 화령제렴술Lv3필요.",
   "att": 8,
   "common": {
     "rangeShape": 0,

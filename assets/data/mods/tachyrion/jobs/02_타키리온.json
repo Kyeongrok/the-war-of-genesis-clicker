@@ -4,7 +4,7 @@
   "forms": [
     {
       "form": "일반형",
-      "abilities": [28, 40, 155],
+      "abilities": [28, 40, 48, 155],
       "stage1": { "job": 13, "needLevel": 1, "growth": [0, 0, 0, 0, 0, 0, 4, 1, 0, 3, 3, 1], "names": [0, 0, 326, 0, 0, 0], "description": 2720 },
       "stage2": { "job": 18, "needLevel": 30, "growth": [0, 0, 0, 0, 0, 0, 3, 1, 0, 2, 2, 1], "names": [0, 351, 0, 331, 337, 344], "description": 2720 }
     },
