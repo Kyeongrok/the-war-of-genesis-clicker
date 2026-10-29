@@ -170,6 +170,45 @@ public partial class MainWindow : Window
         new MotionMappingWindow(Path.GetFileName(dialog.FileName), table, ObsSprite.Decode(dialog.FileName), obs, ObsMotionTable.Load(dialog.FileName, applyEdits: false)) { Owner = this }.Show();
     }
 
+    /// <summary>
+    /// 모션 &gt; 파트1 캐릭터 모션 보기 — 파트1 폴더 <c>Chars\NNNN.chr</c> 인물을 골라 그 전투 그림(<c>Obss</c>, 인물 칸 3)을 게임이 읽는 꼴로 바꿔
+    /// 모션 매핑 창으로 연다(사용자 요청 ed-10). 그림 번호는 게임 안 번호(20000 + Obs)라 고친 모션은 게임의 파트1 인물에 든다.
+    /// </summary>
+    private void Part1MotionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (Part1Game.Root is not { } root) { StatusText.Text = "파트1 폴더를 못 찾았습니다 — 게임 설정에서 파트1 폴더를 정해 주세요."; return; }
+        var people = new List<(Part1Chr Chr, string Label)>();
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "Chars"), "*.chr").Order())
+            if (int.TryParse(Path.GetFileNameWithoutExtension(file), out int code) && Part1Chr.Load(code) is { SpriteId: > 0 } chr)
+                people.Add((chr, $"{code:D4}  {(chr.Name.Length > 0 ? chr.Name : chr.EnglishName)}  (그림 {chr.SpriteId})"));
+        if (people.Count == 0) { StatusText.Text = "파트1 인물을 못 읽었습니다."; return; }
+
+        var filter = new TextBox { Margin = new Thickness(0, 0, 0, 6) };
+        var list = new ListBox { ItemsSource = people.Select(p => p.Label).ToList() };
+        var dock = new DockPanel { Margin = new Thickness(8) };
+        DockPanel.SetDock(filter, Dock.Top);
+        dock.Children.Add(filter);
+        dock.Children.Add(list);
+        var picker = new Window { Title = "파트1 캐릭터 모션 보기 — 두 번 눌러 열기", Width = 360, Height = 560, Owner = this, Content = dock, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        filter.TextChanged += (_, _) => list.ItemsSource = people.Select(p => p.Label).Where(l => l.Contains(filter.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+        void Open()
+        {
+            if (list.SelectedItem is not string label || people.FirstOrDefault(p => p.Label == label) is not { Chr: { } chr }) return;
+            int obs = Part1Game.ObsBase + chr.SpriteId;
+            string cache = Path.Combine(Path.GetTempPath(), "WarOfGenesis.Editor", "part1");
+            if (Part1Game.FilePath($"{obs}.obs", cache) is not { } path || ObsMotionTable.Load(path) is not { } table)
+            {
+                StatusText.Text = $"파트1 그림 {chr.SpriteId:D4}.obs 를 못 읽었습니다.";
+                return;
+            }
+            new MotionMappingWindow($"(파트1) {(chr.Name.Length > 0 ? chr.Name : chr.EnglishName)} (Chr {chr.Code:D4}, sprite {obs})", table, ObsSprite.Decode(path),
+                                    obs, ObsMotionTable.Load(path, applyEdits: false)) { Owner = this }.Show();
+        }
+        list.MouseDoubleClick += (_, _) => Open();
+        list.KeyDown += (_, k) => { if (k.Key == Key.Enter) Open(); };
+        picker.Show();
+    }
+
     /// <summary>모션 &gt; 사용자 그림 만들기 — PNG 시트를 게임 전투 그림으로(<see cref="CustomSpriteWindow"/>, ed-4).</summary>
     private void CustomSpriteMenuItem_Click(object sender, RoutedEventArgs e) => new CustomSpriteWindow { Owner = this }.Show();
 

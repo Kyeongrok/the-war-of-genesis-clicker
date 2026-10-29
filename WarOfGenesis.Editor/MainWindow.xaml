@@ -77,6 +77,11 @@
                     Click="CharacterStatsMenuItem_Click"
                     Header="캐릭터 모션 보기 — 캐릭터 스탯 목록에서 우클릭(_C)" />
                 <MenuItem
+                    x:Name="Part1MotionMenuItem"
+                    AutomationProperties.AutomationId="Part1MotionMenuItem"
+                    Click="Part1MotionMenuItem_Click"
+                    Header="파트1 캐릭터 모션 보기…(_1)" />
+                <MenuItem
                     x:Name="ObsMotionMenuItem"
                     AutomationProperties.AutomationId="ObsMotionMenuItem"
                     Click="ObsMotionMenuItem_Click"
