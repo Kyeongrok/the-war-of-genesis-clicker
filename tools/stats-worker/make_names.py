@@ -55,8 +55,13 @@ if os.path.exists(eps_path):
             o = 4 + 40 * r + 18 * side + 4 + 2 * 7
             if o + 2 <= len(eps) and struct.unpack_from('<h', eps, o)[0] > 0:
                 side_of.setdefault(struct.unpack_from('<h', eps, o)[0], side)
-branches = {bid: part2_branches[side_of[int(chapter[:4])]] for bid, (chapter, _) in battles.items()
-            if chapter[:4].isdigit() and int(chapter[:4]) in side_of}
+# 연대표에 없는 챕터(앞 챕터가 이어 여는 것, 0067 따위)는 이야기 순서(CHAPTERS)로 바로 앞 챕터의 분기를 잇는다.
+chapter_side, prev = {}, None
+for chapter in chapters:
+    no = int(chapter[:4]) if chapter[:4].isdigit() else None
+    prev = side_of.get(no, prev)
+    if prev is not None: chapter_side[chapter] = prev
+branches = {bid: part2_branches[chapter_side[chapter]] for bid, (chapter, _) in battles.items() if chapter in chapter_side}
 branch_order = part2_branches + ['파트2 · 분기 모름']
 
 # 파트1 — 20000 + 파트1 번호(인물 · 어빌리티 · 전투 · 분기). 파트1 원본 폴더에서만 읽혀 part1_names.ps1 이 따로 뽑아 둔 것을 합친다(menu-110).
