@@ -60,6 +60,7 @@ internal static class Part1AbilityTip
         else if (PassiveText(ability, shown) is { Length: > 0 } passive)
         {
             lines.Add(passive);
+            if (StatUseText(ability) is { Length: > 0 } use) lines.Add(use);
             if (level > 0 && level < max && PassiveNext(ability, level + 1) is { Length: > 0 } better) lines.Add($"다음 Lv {level + 1}: {better}");
         }
 
@@ -159,6 +160,27 @@ internal static class Part1AbilityTip
         3 when a.RangeValue <= 1 => "사거리 제자리",
         3 => $"사거리 {Math.Max(1, (a.RangeValue + 1) / 2)}칸",
         4 => "사거리 무기",
+        _ => "",
+    };
+
+    /// <summary>
+    /// 능력치 어빌리티(2~9)가 올리는 값을 어디에 쓰나(사용자 요청 gm-skil-31) — 세기 식 <see cref="Part1Combat.Power"/>(선택자 0 · 7 · 29 = (공격+10) × STR,
+    /// 1 · 30 = (DEX+SKILL) × 무게 ÷ 2 — 2연~6연, 4 = (DEX+SKILL) × 무게 ÷ 3 + 공격 × STR ÷ 3 — 살 · 비 · 혼 · 파 · 참 · 격 · 광, 2 = 총, 3 = 활, 5 · 6 · 8 · 10~24 = INT²),
+    /// 회피 <see cref="Part1Combat.EvadeChance"/> · 막기 <see cref="Part1Combat.Blocks"/>(맞는 쪽 DEX ↔ 때린 쪽 명중값 + DEX), SPD 는 이동력(× 2, <c>0x1003ece0</c>),
+    /// RANGE 는 사거리 갈래 1 기술에 더한다(Part1Rules.RangeQuarters), AC · MR 은 피해를 나누고 MR 은 상태이상 확률도 나눈다(<see cref="Part1Combat.StatusLands"/>).
+    /// </summary>
+    private static string StatUseText(int ability) => ability switch
+    {
+        2 => "쓰는 곳: 칼 · 창 · 빔소드 기본 공격 세기 · 활 공격 · 칼 필살기(살 · 비 · 혼 …) 세기",
+        3 => "쓰는 곳: 총 · 활 공격 세기 · 연속 공격(2연~6연) · 칼 필살기 세기",
+        4 => "쓰는 곳: 연속 공격(2연~6연) · 칼 필살기(살 · 비 · 혼 · 파 · 참 · 격 · 광) 세기$n"
+             + "회피 · 방어 어빌리티로 피하고 막을 확률이 오른다$n"
+             + "때릴 때는 상대가 피하고 막을 확률이 내려간다",
+        5 => "쓰는 곳: 마법 세기(INT × INT)",
+        6 => "쓰는 곳: 사거리가 능력치를 따르는 기술의 사거리",
+        7 => "쓰는 곳: 이동력(SPD × 2)",
+        8 => "쓰는 곳: 받는 물리 피해를 나눈다",
+        9 => "쓰는 곳: 받는 마법 피해를 나누고, 상태이상에 덜 걸린다",
         _ => "",
     };
 
