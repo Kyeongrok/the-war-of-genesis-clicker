@@ -35,11 +35,15 @@ internal sealed unsafe partial class BattleScene
     internal int HeightAt(int col, int row) => AimHeightAt(col, row);
 
     /// <summary>높이까지 넣은 거리 — 차등을 넣은 값과 안 넣은 값 둘 다 돌려준다(최대는 앞, 최소는 뒤로 잰다).</summary>
-    internal (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded)
+    internal (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded) =>
+        WorkDistance(fromCol, fromRow, col, row, useHeight, graded, HeightAt(fromCol, fromRow), HeightAt(col, row));
+
+    /// <summary><see cref="WorkDistance(int, int, int, int, bool, bool)"/> 을 시전자 · 대상 높이를 주고 잰다(파트1 나는 유닛 — <see cref="Part1AimHeight"/>).</summary>
+    internal (int Graded, int Plain) WorkDistance(int fromCol, int fromRow, int col, int row, bool useHeight, bool graded, int fromHeight, int toHeight)
     {
         int d = CellDistance(fromCol, fromRow, col, row);
         if (!useHeight) return (d, d);
-        int diff = HeightAt(col, row) - HeightAt(fromCol, fromRow);
+        int diff = toHeight - fromHeight;
         int plain = Math.Max(0, d + 2 * Math.Abs(diff));
         int gradedDistance = graded ? Math.Max(0, d + (diff > 0 ? 3 * diff : 2 * diff)) : plain;
         return (gradedDistance, plain);
@@ -111,6 +115,21 @@ internal sealed unsafe partial class BattleScene
     /// <summary>파트1 사거리에 높이 차를 넣나 — Attack +0x2d, 다만 집중(상태 22, <see cref="Part1Rules.FocusStatus"/>)이 걸려 있으면 0 으로 본다(<c>0x1003909d</c>).</summary>
     internal bool Part1RangeHeight(Part1Attack p1, UnitState? user) => p1.RangeHeight && !(user != null && Part1.Has(user, Part1Rules.FocusStatus));
 
+    /// <summary>
+    /// 파트1 사거리 높이 — 칸 거르개 <c>0x1008a950</c>: 시전자가 나는 유닛(<c>+0xba</c>)이면 나는 높이(<c>0x10038090</c>, <c>0x1008aafa</c>~), 대상은 그 칸에 선 유닛의 z ÷ 20
+    /// (<c>0x1008aade</c>) — 나는 유닛(아지다하카 · 티아마트 · 썬더볼트 · 라이트닝)은 칸 높이 + 8단이다. 그래서 높이를 재는(<c>+0x2d</c>) 칼 · 창(사거리 8 · 12)은
+    /// 나는 유닛에 닿지 않고(4 + 2 × 8 = 20), 높이를 안 재는 마법과 사거리 긴 총 · 활만 닿는다(사용자 제보 fg-74). 유닛이 없거나 땅 유닛이면 칸 높이.
+    /// </summary>
+    internal int Part1AimHeight(UnitState? u, int col, int row) =>
+        u != null && Part1Flyer(u) is { } c ? HeightAt(col, row) + Part1FlyHeight(c, col, row) - (WalkHeightAt(col, row) & 0xFF) : HeightAt(col, row);
+
+    /// <summary>
+    /// 파트1 사거리의 대상 높이 — 겨누기 <c>+0x31</c> 이 1 · 3 · 5(유닛을 겨눔)면 그 칸 유닛의 z ÷ 20(<c>0x1008aa36</c> → <c>0x1008aade</c>), 2 면 칸 높이(<c>0x1008aa1d</c>).
+    /// 그 밖은 칸 높이로 둔다(원본은 거르기 값 자체를 높이로 넣는다 — <c>0x1008aaf2</c>, 옮기지 않음).
+    /// </summary>
+    internal int Part1TargetHeight(Part1Attack p1, int col, int row) =>
+        p1.AimFilter is 1 or 3 or 5 ? Part1AimHeight(LiveUnitAt(col, row), col, row) : HeightAt(col, row);
+
     internal Part1Attack? Part1AimOf(WorkData w, UnitState? user)
     {
         if (user == null || !host._scene.IsPart1 || Part1.Fighter(user) is null) return null;
@@ -164,7 +183,8 @@ internal sealed unsafe partial class BattleScene
         {
             if (p1.RangeSameHeight && HeightAt(col, row) != HeightAt(fromCol, fromRow)) return false;
             if (!p1.RangeShapeCovers(dx, dy)) return false;
-            var (d1, d2) = WorkDistance(fromCol, fromRow, col, row, Part1RangeHeight(p1, user), p1.RangeGraded);
+            var (d1, d2) = WorkDistance(fromCol, fromRow, col, row, Part1RangeHeight(p1, user), p1.RangeGraded,
+                                        Part1AimHeight(user, fromCol, fromRow), Part1TargetHeight(p1, col, row));
             if (d1 > RangeMaxOf(w, user) || d2 < p1.RangeMin) return false;
             return !p1.RangeSight || HasSight(fromCol, fromRow, col, row);
         }

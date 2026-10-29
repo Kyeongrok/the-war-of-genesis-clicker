@@ -291,7 +291,8 @@ internal sealed unsafe partial class BattleScene
                         if (host._map is not null && (CellFlagsAt(ax, ay) & 0x8) != 0
                             && !(ObjectAt(ax, ay) is { Data.Breakable: true, Alive: true } aimed && !_opened.Contains(aimed))) continue;
                         if (aim1.RangeSameHeight && HeightAt(ax, ay) != fromH) continue;
-                        var (d1, d2) = WorkDistance(col, row, ax, ay, Part1RangeHeight(aim1, unit), aim1.RangeGraded);
+                        var (d1, d2) = WorkDistance(col, row, ax, ay, Part1RangeHeight(aim1, unit), aim1.RangeGraded,
+                                                    Part1AimHeight(unit, col, row), Part1TargetHeight(aim1, ax, ay));
                         if (d1 > max || d2 < aim1.RangeMin) continue;
                         if (!aim1.RangeSight || HasSight(col, row, ax, ay)) red[j] = true;
                     }

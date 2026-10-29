@@ -21,7 +21,7 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed partial class Part1Skill
 {
-    private enum BasicStyle { None, Melee, Arrow, Shot, Beam, Missile, Boomerang, Throw, Cannon }
+    private enum BasicStyle { None, Melee, Arrow, Shot, Beam, Missile, Boomerang, Throw, Cannon, Volley }
 
     /// <summary>이 틀이 그리는 파트1 기본 공격(Attack 번호)인가.</summary>
     internal static bool DrawsBasic(int attackId) => BasicKind(attackId) != BasicStyle.None;
@@ -37,6 +37,9 @@ internal sealed partial class Part1Skill
         >= 333 and <= 335 => BasicStyle.Boomerang,
         >= 336 and <= 338 => BasicStyle.Throw,
         362 => BasicStyle.Cannon,
+        // 연사가 기본 공격인 인물 — 2연사(안토니오) · 9연사(라이트닝 · 갸트링건 · 마장기) · 아지다하카9연사. 기술 연사와 같은 핸들러(GunVolley)로 발마다 친다.
+        // 전에는 그리는 갈래가 없어 빌린 파트2 공격으로 세기 × 타수를 한 번에 굴렸다(사용자 제보 fg-74 「아지다하카 일반 공격이 단일 한번」).
+        6 or 8 or 408 => BasicStyle.Volley,
         _ => BasicStyle.None,
     };
 
@@ -93,6 +96,7 @@ internal sealed partial class Part1Skill
             BasicStyle.Boomerang => BasicBoomerang(attackId, targets, (ax, ay), hit),
             BasicStyle.Throw => BasicThrow(attackId, targets, (ax, ay), hit),
             BasicStyle.Cannon => BasicCannon(targets, cells, (ax, ay), hit),
+            BasicStyle.Volley => GunVolley(attackId, targets, (ax, ay), hit),
             _ => 0,
         };
         double finish = At(last);
@@ -116,6 +120,7 @@ internal sealed partial class Part1Skill
     private static int[] BasicNeeds(int id) => BasicKind(id) switch
     {
         BasicStyle.Arrow => [56, 793, 183],
+        BasicStyle.Volley => [183],
         BasicStyle.Shot => id is >= 342 and <= 344 ? [10] : [183],
         BasicStyle.Beam => [505],
         BasicStyle.Missile => id switch { <= 326 => [55, 198, 48], <= 329 => [56, 275, 51], _ => [56, 276, 71] },
