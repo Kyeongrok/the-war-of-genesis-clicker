@@ -69,6 +69,12 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         host.EpisodesScr._episodePick = -1;
         // 게임오버(LeaveFinishedBattle)에서 오면 판이 아직 전투 맵 크기다 — 원본은 장면이 새로 선다(감사 F15, 모세스와 같은 까닭).
         if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) { host.ResizeBoard(TitleBoardCols, TitleBoardRows); host._battleLoaded = false; }
+        // 파트2 원본이 없는 PC(파트1 만) — 파트2 타이틀 대신 파트1 타이틀로 곧장 간다(menu-109). 파트2 배경 · 곡은 안 건다.
+        if (OriginalGameSetup.Part1Only)
+        {
+            host.Part1TitleScr.Open();
+            return;
+        }
         bool fresh = host.Mos._mosesBgId != TitleBackground;
         host.Mos.ShowMosesBackground(TitleBackground);
         if (fresh && host.Mos._mosesBgId == TitleBackground && host.Mos._mosesBg is { Length: MosesScene.MosesW * MosesScene.MosesH } loaded) AddLoadGameRow(loaded);

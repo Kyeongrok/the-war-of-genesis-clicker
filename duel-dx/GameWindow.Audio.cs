@@ -153,9 +153,25 @@ internal sealed unsafe partial class GameWindow
         }
     }
 
+    /// <summary>파트2 UI 효과음 → 파트1 원본 Snd 번호(<see cref="Play"/> 가 파트1 만 도는 판에서 바꾼다). 근거: 분석-파트1-전투 「UI 효과음(파트2 → 파트1)」.</summary>
+    /// 파트1 원본의 UI 소리는 단추 누름(Snd 52, 0x100a13cc)과 대사 넘기기(Snd 51, 0x100a8f15) 둘뿐이다 — 링 열기 · 짚기 · 취소 · 시스템 메뉴 열기 · 저장 끝 · 레벨업은 원본에 소리가 없어 안 낸다.
+    internal static readonly Dictionary<int, int> Part1UiSounds = new()
+    {
+        [MosesScene.MosesClickSound] = 0x34,      // 66 메뉴 · 단추 누름
+        [BattleScene.SoundPick] = 0x34,           // 68 링 고르기(타이밍 확정은 파트1 에 없어 같은 소리 — 가설)
+        [TalkBox.TalkCloseSound] = 0x33,          // 95 대사 넘기기 · 닫기
+        [SoundDeath] = Part1Game.DeathSnd,        // 106 쓰러짐
+    };
+
     internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false)
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
+        // 파트1 만 도는 판(파트2 원본이 없는 PC) — 파트2 효과음 대신 파트1 원본의 같은 자리 소리를 낸다. 맞는 것이 없으면 안 낸다(사용자 요청 menu-109).
+        if (OriginalGameSetup.Part1Only && sound is > 0 and < Part1Game.ObsBase)
+        {
+            if (!Part1UiSounds.TryGetValue(sound, out int part1)) return;
+            sound = Part1Game.ObsBase + part1;
+        }
         if (Mos._mosesAltVoice && Mos._mosesOpen && MosesScene.MosesAltSounds.Contains(sound)) sound += 25;   // 910 이 갈아 끼운 모세스 안내 음성
         PcmSound? pcm;
         bool loaded;

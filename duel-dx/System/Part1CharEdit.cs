@@ -1,4 +1,4 @@
-using DuelDx.Native;
+﻿using DuelDx.Native;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -330,7 +330,8 @@ internal sealed class Part1CharEdit(GameWindow host, CharEditScreen ed)
     {
         string name = Part1Chr.Load(code - Part1Game.ChrBase)?.Name.Trim() ?? "";
         List<CharEditScreen.Look> rows = [.. CharEditScreen.CustomLooks(), .. AllLooks().OrderBy(l => l.Part1Name == name ? 0 : Part1Game.Shipped.Any(p => p.Code == l.Chr) ? 1 : 2).ThenBy(l => l.Chr)];
-        if (host._db is { } db) rows.AddRange(ed.AllLooks(db).Where(l => l.Part1Name == null && l.CustomName == null));
+        // 파트2 원본이 없는 PC 에서는 파트2 인물 모습을 안 띄운다(menu-109).
+        if (host._db is { } db && !OriginalGameSetup.Part1Only) rows.AddRange(ed.AllLooks(db).Where(l => l.Part1Name == null && l.CustomName == null));
         return rows;
     }
 

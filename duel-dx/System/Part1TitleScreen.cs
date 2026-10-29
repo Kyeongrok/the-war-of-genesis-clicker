@@ -1,4 +1,4 @@
-using System.Drawing.Imaging;
+﻿using System.Drawing.Imaging;
 using System.IO;
 using DuelDx.Native;
 using WarOfGenesis.Assets;
@@ -292,6 +292,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         var (ox, oy) = host.Mos.MosesOrigin();
         for (int i = 0; i < Buttons.Length; i++)
         {
+            if (i == ButtonPart2 && OriginalGameSetup.Part1Only) continue;   // 파트2 원본이 없는 PC — 파트2 로 가는 단추가 없다(menu-109)
             var (_, _, x0, y0, x1, y1) = Buttons[i];
             if (bx >= ox + x0 && bx < ox + x1 && by >= oy + y0 && by < oy + y1) return i;
         }
@@ -334,12 +335,13 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         else if (_chapter is { _open: true }) _chapter.OnKey(key);
         else if (_timeline is { _open: true }) _timeline.OnKey(key);
         else if (!MenuShown) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) SkipIntro(); }   // 원본 0x100d5f80 — Esc 로 건너뛴다
-        else if (key == Win32.VK_ESCAPE) Press(ButtonPart2);
+        else if (key == Win32.VK_ESCAPE) { if (!OriginalGameSetup.Part1Only) Press(ButtonPart2); }
         else if (host.MoveActionFor(key) is KeyAction.MoveUp or KeyAction.MoveDown || key is Win32.VK_UP or Win32.VK_DOWN)
         {
             bool up = key == Win32.VK_UP || host.MoveActionFor(key) == KeyAction.MoveUp;
-            int at = Array.IndexOf(KeyOrder, _hover), n = KeyOrder.Length;
-            _hover = KeyOrder[at < 0 ? (up ? n - 1 : 0) : (at + (up ? n - 1 : 1)) % n];
+            int[] order = OriginalGameSetup.Part1Only ? [.. KeyOrder.Where(b => b != ButtonPart2)] : KeyOrder;
+            int at = Array.IndexOf(order, _hover), n = order.Length;
+            _hover = order[at < 0 ? (up ? n - 1 : 0) : (at + (up ? n - 1 : 1)) % n];
         }
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) Press(Math.Max(0, _hover));
         return true;
@@ -362,7 +364,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 host.LeaveScene(ContinueGame);
                 break;
             case ButtonTutorial: PlayPress(); host.LeaveScene(StartTutorial); break;
-            case ButtonPart2: PlayPress(); host.LeaveScene(Close); break;
+            case ButtonPart2 when !OriginalGameSetup.Part1Only: PlayPress(); host.LeaveScene(Close); break;
             case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)
         }
     }
@@ -595,7 +597,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
             }
             // 원본에 없는 단추(리메이크) — 오른쪽 아래에 메뉴 글자 빛깔의 작은 글로.
             for (int i = 0; i < Buttons.Length; i++)
-                if (Buttons[i] is { Row: < 0 } b)
+                if (Buttons[i] is { Row: < 0 } b && !(i == ButtonPart2 && OriginalGameSetup.Part1Only))
                 {
                     uint color = _hover == i ? 0xFFFFF0C8u : 0xFFA89C90u;
                     var (_, w, h) = host.UiGetText(b.Name, color, 12);

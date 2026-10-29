@@ -44,6 +44,7 @@ public sealed class GameFiles
         string loose = Path.Combine(_root, folder, name);
         if (File.Exists(loose))
         {
+            if (!_pak) AssetTrace.Note($"data/{folder}/{name}");
             if (maxBytes == int.MaxValue) return File.ReadAllBytes(loose);
             using var lf = File.OpenRead(loose);
             var head = new byte[(int)Math.Min(maxBytes, lf.Length)];

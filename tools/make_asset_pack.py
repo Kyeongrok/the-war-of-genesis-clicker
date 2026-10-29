@@ -3,6 +3,7 @@
     python tools/make_asset_pack.py --plan                                  # 장마다 얼마나 되는지만 본다
     python tools/make_asset_pack.py <내보낼 폴더> [--game <원본 게임 폴더>]   # 꾸러미를 만든다
     python tools/make_asset_pack.py <내보낼 폴더> --part1-only <지금 올린 pack.json>  # 파트1 줄만 갈아 끼운 pack.json
+    python tools/make_asset_pack.py <내보낼 폴더> --part1-base <지금 올린 pack.json>  # 파트1 만 도는 판의 바탕(part1base-NN.zip)과 그 줄을 넣은 pack.json
 
 게임을 처음 켤 때 원본 게임 폴더를 「모른다」고 한 사용자는 자산을 GitHub 릴리즈에서 받는다. 받는 것은 세 갈래다.
 
@@ -279,8 +280,27 @@ def part1_only(out, live):
     print('올리기: gh release upload assets-base-1 %s --clobber' % os.path.join(first, 'pack.json'))
 
 
+def part1_base(out, live):
+    """파트1 만 도는 판(파트2 원본이 없는 PC, menu-109)이 처음에 받는 바탕 — tools/part1_base.txt 의 파트2 파일을 part1base-NN.zip 으로 묶고,
+    올려 둔 pack.json 에 'part1base' 줄을 넣는다(다른 줄은 손대지 않는다 — 옛 판이 받는 것)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    names = sorted({l.strip() for l in open(os.path.join(here, 'part1_base.txt'), encoding='utf-8') if l.strip() and l[0] != '#'})
+    missing = [n for n in names if not os.path.exists(os.path.join(ASSETS, *n.split('/')))]
+    assert not missing, missing
+    pack = json.load(open(live, encoding='utf-8'))
+    first = os.path.join(out, 'assets-base-1')
+    os.makedirs(first, exist_ok=True)
+    pack['part1base'] = zips(first, 'part1base', [(n, os.path.join(ASSETS, *n.split('/'))) for n in names])
+    with open(os.path.join(first, 'pack.json'), 'w', encoding='utf-8') as f:
+        json.dump(pack, f, indent=0)
+    print('파트1 바탕 %d개 → %d덩이 %dKB → %s' % (len(names), len(pack['part1base']), sum(x['size'] for x in pack['part1base']) >> 10, first))
+    print('올리기: gh release upload assets-base-1 %s --clobber' % ' '.join(os.path.join(first, x) for x in ['pack.json'] + [p['asset'] for p in pack['part1base']]))
+
+
 def main():
     args = sys.argv[1:]
+    if '--part1-base' in args:
+        return part1_base(args[0], args[args.index('--part1-base') + 1])
     if '--part1-only' in args:
         return part1_only(args[0], args[args.index('--part1-only') + 1])
     game = args[args.index('--game') + 1] if '--game' in args else None

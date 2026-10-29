@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using WarOfGenesis.Assets;
 
@@ -426,12 +426,13 @@ internal sealed class Part1Progress
     internal Look LookOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? l : Looks[chrCode] = new Look();
 
     /// <summary>그 인물의 목소리 묶음(GameDatabase.Part1Voice) — 안 바꿨으면 0.</summary>
+    // 파트2 원본이 없는 PC 에서는 입혀 둔 파트2 모습을 안 쓴다 — 제 파트1 모습으로 선다(menu-109).
     internal (ushort Sprite, ushort Face) Part2LookOf(int chrCode) =>
-        Looks.TryGetValue(chrCode, out var l) ? ((ushort)Math.Max(0, l.Part2Sprite), (ushort)Math.Max(0, l.Part2Face)) : ((ushort)0, (ushort)0);
+        !OriginalGameSetup.Part1Only && Looks.TryGetValue(chrCode, out var l) ? ((ushort)Math.Max(0, l.Part2Sprite), (ushort)Math.Max(0, l.Part2Face)) : ((ushort)0, (ushort)0);
 
     /// <summary>파트1 화면(상태 · 일행)이 그릴 얼굴 Obs — 파트2 초상을 입혔으면 그 번호, 아니면 파트1 얼굴(20000 + 칸 5). 없으면 0.</summary>
     internal int FaceObs(Part1Chr chr) =>
-        Looks.TryGetValue(Part1Game.ChrBase + chr.Code, out var l) && l.Part2Face > 0 ? l.Part2Face : chr.FaceId > 0 ? Part1Game.ObsBase + chr.FaceId : 0;
+        !OriginalGameSetup.Part1Only && Looks.TryGetValue(Part1Game.ChrBase + chr.Code, out var l) && l.Part2Face > 0 ? l.Part2Face : chr.FaceId > 0 ? Part1Game.ObsBase + chr.FaceId : 0;
 
     internal ushort VoiceOf(int chrCode) => Looks.TryGetValue(chrCode, out var l) ? (ushort)Math.Clamp(l.Voice, 0, ushort.MaxValue) : (ushort)0;
 

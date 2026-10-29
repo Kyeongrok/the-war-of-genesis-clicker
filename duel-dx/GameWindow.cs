@@ -408,7 +408,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         try
         {
-            LoadRosterSprites();
+            // 파트1 만 도는 판(menu-109)은 전투를 열기 전 자리 인물(DemoScene.Fallback — 파트2 죠안 · 살라딘 …)의 그림을 안 읽는다 — 파트2 그림이 없다.
+            if (OriginalGameSetup.Part1Only && !_battleLoaded) _units = [];
+            else LoadRosterSprites();
             Btl.InitBattle();
             Btl.LoadRingAssets();
             LoadAudio();

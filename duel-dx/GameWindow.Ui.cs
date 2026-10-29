@@ -34,8 +34,7 @@ internal sealed unsafe partial class GameWindow
                 _uiPaths[id] = path;
             }
             // 그림이 한 장도 없는 Obs(메테오의 Obs 0311 처럼 소리 키만 든 것)는 ArgumentException 으로 떨어진다 — 없는 그림으로 친다.
-            if (Environment.GetEnvironmentVariable("DUELDX_ASSETLOG") is { Length: > 0 } log && path.Contains("moses"))
-                try { File.AppendAllText(log, $"moses/obs/{id:D4}.obs" + Environment.NewLine); } catch (IOException) { }
+            if (AssetTrace.On) AssetTrace.Note(Path.GetRelativePath(Path.GetDirectoryName(AssetsFolder.Find("data"))!, path).Replace('\\', '/'));
             try { return _ui[id] = new UiSprite(ObsSprite.Decode(path), ObsMotionTable.Load(path)); }
             catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { return _ui[id] = null; }
         }

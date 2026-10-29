@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -7,17 +7,16 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 원본 게임 폴더를 「모른다」고 한 사용자의 자료 — GitHub 릴리즈에서 받아 <c>%APPDATA%\DuelDx\assets</c> 에 저장소의 <c>assets</c> 와
-/// 같은 꼴로 차린다(사용자 요청 menu-22). 꾸러미는 <c>tools/make_asset_pack.py</c> 가 만든다.
+/// GitHub 릴리즈에서 받는 자료 — <c>%APPDATA%\DuelDxssets</c> 에 저장소의 <c>assets</c> 와 같은 꼴로 차린다. 꾸러미는 <c>tools/make_asset_pack.py</c> 가 만든다.
 /// </summary>
 /// <remarks>
+/// 예전에는 원본 파트2 폴더를 「모른다」고 한 사용자가 파트2 자료를 통째로 받았다(menu-22) — 이제 파트2 는 원본이 있어야 하고(사용자 요청 menu-109),
+/// 이 길은 <b>파트1 만 있는 PC</b>(<see cref="OriginalGameSetup.Part1Only"/>)가 쓴다.
 /// <list type="bullet">
-/// <item><b>바탕</b>(<c>base-NN.zip</c>) — 켤 때 폴더를 훑어 읽는 것들. 없으면 게임이 못 켜지므로 처음 한 번 기다려 받는다(<see cref="PrepareBase"/>).</item>
-/// <item><b>낱장</b> — 음악 · 전투 맵 · 인물 그림 · 모세스 그림 · 큰 효과음. 뒤에서 하나씩 받고, 게임이 없는 파일을 찾으면(<see cref="Fetch"/>) 그것부터 받는다.</item>
-/// <item><b>대사 음성</b>(<c>voices-tNN-NN.zip</c>) — 장마다 한 덩이. 낱장을 다 받은 뒤에 받는다(없으면 목소리만 안 난다).</item>
+/// <item><b>파트1 바탕</b>(<c>part1base-NN.zip</c>) — 파트1 이 쓰는 파트2 UI 그림 · 자료 표(<c>tools/part1_base.txt</c>). 처음 한 번 기다려 받는다(<see cref="PrepareBase"/>).</item>
+/// <item><b>찾을 때만 받는 것</b>(장 <see cref="OnDemandTier"/> 이상) — 파트1 폴더에서 만들 수 없는 파트1 그림 · 시디 곡 WAV · 기술 컷신 영상. 게임이 찾으면(<see cref="Fetch"/>) 받는다.</item>
 /// </list>
-/// 낱장과 음성에는 <b>장</b>(연대표의 줄 0~14)이 적혀 있고, 뒤에서 받는 것은 <b>지금까지 들어가 본 줄 + <see cref="Ahead"/></b> 까지다 —
-/// 끝까지 하지 않을 사람이 다 받지 않게. 그 너머의 파일도 게임이 찾으면 그때 받는다.
+/// 파트2 폴더로 도는 판도 「찾을 때만 받는 것」은 받는다(<see cref="FetchExtra"/>). 옛 판이 받는 파트2 바탕 · 낱장 · 음성 줄은 pack.json 에 그대로 남아 있지만 이 판은 안 받는다.
 /// 인터넷이 없거나 GitHub 이 막히면 조용히 쉬었다가 다시 해 본다. 화면 밖 시험에서는 <c>DUELDX_PACK=1</c> 일 때만 이 길로 온다.
 /// </remarks>
 internal static class AssetDownload
@@ -36,24 +35,7 @@ internal static class AssetDownload
 
     private static string Folder => OriginalAssets.LocalFolder;
     private static string PartsFolder => Path.Combine(Folder, ".parts");
-    private static readonly string ChoicePath = UserDataFolder.File("assetsource.txt");
     private static readonly string TierPath = UserDataFolder.File("packtier.txt");
-
-    /// <summary>사용자가 전에 「모른다 — 내려받기」를 골랐나.</summary>
-    public static bool Chosen
-    {
-        get
-        {
-            try { return File.Exists(ChoicePath) && File.ReadAllText(ChoicePath).Trim() == "download"; }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
-        }
-    }
-
-    public static void Choose()
-    {
-        Directory.CreateDirectory(UserDataFolder.Path);
-        File.WriteAllText(ChoicePath, "download");
-    }
 
     /// <summary>이번 판이 받은 자료로 도나 — 바탕을 차린 뒤부터.</summary>
     public static bool Active { get; private set; }
@@ -117,8 +99,13 @@ internal static class AssetDownload
 
     // ── 켤 때 ────────────────────────────────────────────────────────────────
 
+    /// <summary>pack.json 에서 파트1 만 도는 판의 바탕 덩이 줄 — <c>tools/make_asset_pack.py --part1-base</c> 가 <c>tools/part1_base.txt</c> 로 만든다.</summary>
+    private const string Part1BaseKey = "part1base";
+
     /// <summary>
-    /// 바탕을 차리고 뒤에서 받기를 건다 — 이미 받았으면 인터넷 없이 금방 끝난다. 못 받으면 예외(<see cref="HttpRequestException"/> · <see cref="IOException"/>).
+    /// 파트1 만 도는 판(<see cref="OriginalGameSetup.Part1Only"/>)의 바탕을 차리고 뒤에서 받기를 건다 — 이미 받았으면 인터넷 없이 금방 끝난다.
+    /// 받는 것은 파트1 이 쓰는 파트2 바탕(UI 그림 · 자료 표 몇 개, <see cref="Part1BaseKey"/>)과 게임이 찾을 때만 받는 파트1 그림 · 시디 곡뿐이다 —
+    /// 파트2 음악 · 맵 · 인물 그림 · 대사 음성은 받지 않는다(사용자 요청 menu-109). 못 받으면 예외(<see cref="HttpRequestException"/> · <see cref="IOException"/>).
     /// </summary>
     /// <param name="progress">(받은 바이트, 받을 바이트).</param>
     public static void PrepareBase(Action<long, long>? progress = null)
@@ -128,7 +115,8 @@ internal static class AssetDownload
         Directory.CreateDirectory(PartsFolder);
 
         using var doc = JsonDocument.Parse(Manifest().GetAwaiter().GetResult());
-        var bases = Parts(doc.RootElement, "base");
+        var bases = Parts(doc.RootElement, Part1BaseKey);
+        if (bases.Count == 0) throw new HttpRequestException("파트1 바탕 자료 목록이 아직 없습니다 — 잠시 뒤 다시 해 주세요.");
         var todo = bases.Where(p => !Done(p)).ToList();
         long total = todo.Sum(p => p.Size), got = 0;
         foreach (var part in todo)
@@ -144,12 +132,12 @@ internal static class AssetDownload
             _byName.Clear();
             foreach (var e in Entries(doc.RootElement))
             {
-                if (e.Name.Contains("..") || Path.IsPathRooted(e.Name) || e.Asset != Path.GetFileName(e.Asset) || Have(e)) continue;
+                // 파트2 낱장(장 0~14)은 안 받는다 — 찾을 때만 받는 것(파트1 그림 · 시디 곡 · 기술 컷신)만.
+                if (e.Tier < OnDemandTier || e.Name.Contains("..") || Path.IsPathRooted(e.Name) || e.Asset != Path.GetFileName(e.Asset) || Have(e)) continue;
                 _pending.Add(e);
                 _byName[e.Name] = e;
             }
             _voices.Clear();
-            _voices.AddRange(Parts(doc.RootElement, "voices").Where(p => !Done(p)));
             try { _reached = File.Exists(TierPath) && int.TryParse(File.ReadAllText(TierPath), out int saved) ? saved : 0; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _reached = 0; }
             _listed = true;
