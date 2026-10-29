@@ -104,7 +104,9 @@ public partial class MotionMappingWindow : Window
         int action = clip.Id / 3;
         string name = ActionNames.GetValueOrDefault(action, "");
         string edited = MotionEdits.Get(_obs, clip.Id) != null ? " · 손질됨" : "";
-        return $"모션 {clip.Id,3} = 동작 {action,2} {name} · {DirectionNames[clip.Id % 3]} · {clip.Length}틱 · 그림 {clip.Keys.Count}{edited}";
+        // 무슨 동작을 어느 쪽에서 본 것인지를 앞에 — 모션 번호(동작 × 3 + 방향)는 뒤 괄호에(사용자 요청 ed-5: 「모션 0 · 1 · 2」가 셋 다 서기라 헷갈린다).
+        string what = name.Length > 0 ? name : $"동작 {action}";
+        return $"{what} — {DirectionNames[clip.Id % 3]}   (동작 {action} · 모션 {clip.Id}) · {clip.Length}틱 · 그림 {clip.Keys.Count}{edited}";
     }
 
     private void MotionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
