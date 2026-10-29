@@ -100,6 +100,8 @@
                     <Button Margin="12,0,0,0" Padding="8,2" Click="Faster_Click" Content="빠르게 ×0.8" ToolTip="모든 키 길이를 0.8배(최소 1틱)" />
                     <Button Margin="4,0,0,0" Padding="8,2" Click="Slower_Click" Content="느리게 ×1.25" ToolTip="모든 키 길이를 1.25배" />
                     <Button Margin="12,0,0,0" Padding="8,2" Click="Reset_Click" Content="초기화" ToolTip="이 모션을 원본 틱으로 되돌린다" />
+                    <Button Margin="12,0,0,0" Padding="8,2" Click="ExportPng_Click" Content="PNG 내보내기" ToolTip="이 모션의 장들을 한 줄로 늘어놓은 PNG(투명 바탕, 같은 원점)" />
+                    <Button Margin="4,0,0,0" Padding="8,2" Click="ExportAllPng_Click" Content="모두 PNG로" ToolTip="그림 있는 모션마다 PNG 하나씩 고른 폴더에" />
                     <TextBlock x:Name="EditState" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="DimGray" />
                 </StackPanel>
 

@@ -36,6 +36,9 @@ public partial class MotionMappingWindow : Window
     /// <summary>이 몸짓 파일 번호 — 손질을 이 번호로 적는다(<see cref="MotionEdits"/>).</summary>
     private readonly int _obs;
     private readonly Dictionary<(int Sub, int Slot), BitmapSource> _frames = [];
+    /// <summary>장의 원본 픽셀과 원점 기준 자리 — PNG 내보내기(<see cref="StripPng"/>)가 쓴다.</summary>
+    private readonly Dictionary<(int Sub, int Slot), ObsFrame> _raw = [];
+    private readonly string _title;
     private readonly Dictionary<(int Sub, int Slot), BitmapSource> _mirrored = [];
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(15) };
     private readonly Stopwatch _clock = new();
@@ -59,6 +62,7 @@ public partial class MotionMappingWindow : Window
         _table = table;
         _obs = obs;
         _original = original ?? table;
+        _title = title;
         Title = $"모션 매핑 — {title}";
 
         foreach (var sub in subentries)
@@ -69,6 +73,7 @@ public partial class MotionMappingWindow : Window
                 bmp.Freeze();
                 // 모션표가 가리키는 것은 <b>장 번호</b>지 벌 안 순번이 아니다 — 못 푼 장이 하나라도 있으면 순번이 밀린다.
                 _frames[(sub.Id, f.SlotId)] = bmp;
+                _raw[(sub.Id, f.SlotId)] = f;
             }
 
         int withKeys = table.Clips.Values.Count(c => c.Keys.Count > 0);
@@ -265,5 +270,85 @@ public partial class MotionMappingWindow : Window
         FrameImage.Source = bmp;
         int length = Math.Max(1, _current.Length);
         TickInfo.Text = $"틱 {tick % length} / {length}   몸짓벌 {k.SubentryId} 장 {k.Slot}";
+    }
+
+    // ── PNG 내보내기(사용자 요청 ed-6) ─────────────────────────────────────
+
+    /// <summary>
+    /// 모션 하나의 그림 키들을 왼쪽부터 한 칸씩 늘어놓은 PNG — 칸은 모든 장이 들어가는 같은 크기이고, 장마다 원점 기준 자리(<see cref="ObsFrame.X"/> · Y)에 놓아
+    /// 칸끼리 원점이 같다(그대로 이어 보면 게임에서처럼 움직인다). 바탕은 투명. 그림 키가 없거나 장을 못 풀었으면 null.
+    /// </summary>
+    private BitmapSource? StripPng(ObsMotionClip clip, bool mirror)
+    {
+        var frames = clip.Keys.Select(k => _raw.GetValueOrDefault((k.SubentryId, k.Slot))).OfType<ObsFrame>().ToList();
+        if (frames.Count == 0) return null;
+        int left = frames.Min(f => f.X), top = frames.Min(f => f.Y);
+        int cellW = frames.Max(f => f.X + f.Width) - left, cellH = frames.Max(f => f.Y + f.Height) - top;
+        int width = cellW * frames.Count;
+        var px = new byte[width * cellH * 4];
+        for (int n = 0; n < frames.Count; n++)
+        {
+            var f = frames[n];
+            for (int y = 0; y < f.Height; y++)
+                for (int x = 0; x < f.Width; x++)
+                {
+                    int dx = f.X - left + x;
+                    if (mirror) dx = cellW - 1 - dx;
+                    Buffer.BlockCopy(f.Bgra, (y * f.Width + x) * 4, px, ((f.Y - top + y) * width + n * cellW + dx) * 4, 4);
+                }
+        }
+        var bmp = BitmapSource.Create(width, cellH, 96, 96, PixelFormats.Bgra32, null, px, width * 4);
+        bmp.Freeze();
+        return bmp;
+    }
+
+    /// <summary>파일 이름 — 「에바_서기_뒷모습_모션00.png」 꼴(이름 없는 동작은 「동작7」).</summary>
+    private string PngName(ObsMotionClip clip)
+    {
+        string action = ActionNames.GetValueOrDefault(clip.Id / 3, "") is { Length: > 0 } n ? n.Replace("?", "") : $"동작{clip.Id / 3}";
+        string name = $"{_title}_{action}_{DirectionNames[clip.Id % 3]}_모션{clip.Id:D2}.png";
+        return string.Concat(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) || c == ' ' ? '_' : c));
+    }
+
+    private static void SavePng(BitmapSource bmp, string path)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bmp));
+        using var file = System.IO.File.Create(path);
+        encoder.Save(file);
+    }
+
+    private void ExportPng_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null) return;
+        bool mirror = MirrorToggle.IsChecked == true;
+        if (StripPng(_current, mirror) is not { } bmp) { EditState.Text = "그림 키가 없는 모션입니다"; return; }
+        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = PngName(_current), Filter = "PNG 그림|*.png", DefaultExt = ".png" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            SavePng(bmp, dialog.FileName);
+            EditState.Text = $"내보냄: {System.IO.Path.GetFileName(dialog.FileName)} ({_current.Keys.Count}장, {bmp.PixelWidth}×{bmp.PixelHeight}{(mirror ? ", 뒤집음" : "")})";
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { EditState.Text = $"못 썼습니다: {ex.Message}"; }
+    }
+
+    private void ExportAllPng_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "모션 PNG 를 넣을 폴더" };
+        if (dialog.ShowDialog(this) != true) return;
+        bool mirror = MirrorToggle.IsChecked == true;
+        int written = 0;
+        try
+        {
+            foreach (var clip in _table.Clips.Values.OrderBy(c => c.Id))
+                if (StripPng(clip, mirror) is { } bmp)
+                {
+                    SavePng(bmp, System.IO.Path.Combine(dialog.FolderName, PngName(clip)));
+                    written++;
+                }
+            EditState.Text = $"모션 {written}개를 PNG 로 내보냈습니다{(mirror ? "(뒤집음)" : "")}";
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { EditState.Text = $"못 썼습니다({written}개까지): {ex.Message}"; }
     }
 }
