@@ -21,8 +21,8 @@ public partial class MotionMappingWindow : Window
 {
     private static readonly Dictionary<int, string> ActionNames = new()
     {
-        [0] = "서기", [1] = "걷기", [2] = "맞음?", [5] = "공격 준비?", [6] = "시전 자세?", [7] = "기 모으기?",
-        [8] = "베기?", [13] = "연속 베기?", [14] = "연속 베기2?", [15] = "시전 발동?", [24] = "공격 후 복귀?",
+        [0] = "서기", [1] = "걷기", [2] = "맞음", [5] = "공격 준비", [9] = "쏘기", [6] = "시전 자세?", [7] = "기 모으기?",
+        [8] = "베기", [13] = "연속 베기?", [14] = "연속 베기2?", [15] = "시전 발동?", [24] = "공격 후 복귀",
         [26] = "필살기?", [27] = "필살기2?",
     };
 
@@ -278,36 +278,61 @@ public partial class MotionMappingWindow : Window
     /// 모션 하나의 그림 키들을 왼쪽부터 한 칸씩 늘어놓은 PNG — 칸은 모든 장이 들어가는 같은 크기이고, 장마다 원점 기준 자리(<see cref="ObsFrame.X"/> · Y)에 놓아
     /// 칸끼리 원점이 같다(그대로 이어 보면 게임에서처럼 움직인다). 바탕은 투명. 그림 키가 없거나 장을 못 풀었으면 null.
     /// </summary>
-    private BitmapSource? StripPng(ObsMotionClip clip, bool mirror)
+    private BitmapSource? StripPng(ObsMotionClip clip, bool mirror) => SheetPng([clip], mirror);
+
+    /// <summary>모션의 장들(그림 키 차례) — 못 푼 장은 뺀다.</summary>
+    private List<ObsFrame> ClipFrames(ObsMotionClip clip) =>
+        [.. clip.Keys.Select(k => _raw.GetValueOrDefault((k.SubentryId, k.Slot))).OfType<ObsFrame>()];
+
+    /// <summary>
+    /// 여러 모션을 한 장에 — 모션마다 한 줄, 그 모션의 장은 왼쪽부터 한 칸씩. 칸은 시트 안의 모든 장이 들어가는 같은 크기이고 원점도 같다.
+    /// 줄이 짧은 모션은 오른쪽이 빈다(투명). 그림 있는 모션이 하나도 없으면 null.
+    /// </summary>
+    private BitmapSource? SheetPng(IReadOnlyList<ObsMotionClip> clips, bool mirror)
     {
-        var frames = clip.Keys.Select(k => _raw.GetValueOrDefault((k.SubentryId, k.Slot))).OfType<ObsFrame>().ToList();
-        if (frames.Count == 0) return null;
-        int left = frames.Min(f => f.X), top = frames.Min(f => f.Y);
-        int cellW = frames.Max(f => f.X + f.Width) - left, cellH = frames.Max(f => f.Y + f.Height) - top;
-        int width = cellW * frames.Count;
-        var px = new byte[width * cellH * 4];
-        for (int n = 0; n < frames.Count; n++)
-        {
-            var f = frames[n];
-            for (int y = 0; y < f.Height; y++)
-                for (int x = 0; x < f.Width; x++)
-                {
-                    int dx = f.X - left + x;
-                    if (mirror) dx = cellW - 1 - dx;
-                    Buffer.BlockCopy(f.Bgra, (y * f.Width + x) * 4, px, ((f.Y - top + y) * width + n * cellW + dx) * 4, 4);
-                }
-        }
-        var bmp = BitmapSource.Create(width, cellH, 96, 96, PixelFormats.Bgra32, null, px, width * 4);
+        var rows = clips.Select(ClipFrames).Where(r => r.Count > 0).ToList();
+        if (rows.Count == 0) return null;
+        var all = rows.SelectMany(r => r).ToList();
+        int left = all.Min(f => f.X), top = all.Min(f => f.Y);
+        int cellW = all.Max(f => f.X + f.Width) - left, cellH = all.Max(f => f.Y + f.Height) - top;
+        int width = cellW * rows.Max(r => r.Count), height = cellH * rows.Count;
+        var px = new byte[width * height * 4];
+        for (int row = 0; row < rows.Count; row++)
+            for (int n = 0; n < rows[row].Count; n++)
+            {
+                var f = rows[row][n];
+                for (int y = 0; y < f.Height; y++)
+                    for (int x = 0; x < f.Width; x++)
+                    {
+                        int dx = f.X - left + x;
+                        if (mirror) dx = cellW - 1 - dx;
+                        Buffer.BlockCopy(f.Bgra, (y * f.Width + x) * 4, px, ((row * cellH + f.Y - top + y) * width + n * cellW + dx) * 4, 4);
+                    }
+            }
+        var bmp = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, px, width * 4);
         bmp.Freeze();
         return bmp;
     }
+
+    /// <summary>
+    /// 「모두 PNG로」 의 묶음 — 동작 번호로 나눈다(분석-모션): 0 서기 · 1 걷기 · 2 맞음(죽음도 같은 동작) · 5 준비 · 8 베기 · 9 쏘기 · 24 복귀 = 공격,
+    /// 6 · 7 · 13 · 14 · 15 · 26 · 27(시전 · 기 모으기 · 연속 베기 · 필살기) = 기술, 그 밖은 기타(사용자 요청 ed-9: 모션마다 파일 하나면 너무 많다).
+    /// </summary>
+    private static readonly (string Name, int[] Actions)[] SheetGroups =
+    [
+        ("서기", [0]), ("이동", [1]), ("맞음", [2]), ("공격", [5, 8, 9, 24]), ("기술", [6, 7, 13, 14, 15, 26, 27]),
+    ];
+
+    private static string SheetGroup(int action) => SheetGroups.FirstOrDefault(g => g.Actions.Contains(action)).Name ?? "기타";
+
+    private string SafeName(string name) => string.Concat(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) || c == ' ' ? '_' : c));
 
     /// <summary>파일 이름 — 「에바_서기_뒷모습_모션00.png」 꼴(이름 없는 동작은 「동작7」).</summary>
     private string PngName(ObsMotionClip clip)
     {
         string action = ActionNames.GetValueOrDefault(clip.Id / 3, "") is { Length: > 0 } n ? n.Replace("?", "") : $"동작{clip.Id / 3}";
         string name = $"{_title}_{action}_{DirectionNames[clip.Id % 3]}_모션{clip.Id:D2}.png";
-        return string.Concat(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) || c == ' ' ? '_' : c));
+        return SafeName(name);
     }
 
     private static void SavePng(BitmapSource bmp, string path)
@@ -338,17 +363,29 @@ public partial class MotionMappingWindow : Window
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "모션 PNG 를 넣을 폴더" };
         if (dialog.ShowDialog(this) != true) return;
         bool mirror = MirrorToggle.IsChecked == true;
+        // 묶음마다 PNG 한 장(모션마다 한 줄) + 어느 줄이 어느 모션인지 적은 목록 하나.
+        var index = new List<string> { $"{_title} 모션 시트 — 줄마다 모션 하나, 칸마다 장 하나(같은 칸 크기 · 같은 원점, 투명 바탕){(mirror ? ", 좌우 뒤집음" : "")}" };
         int written = 0;
         try
         {
-            foreach (var clip in _table.Clips.Values.OrderBy(c => c.Id))
-                if (StripPng(clip, mirror) is { } bmp)
-                {
-                    SavePng(bmp, System.IO.Path.Combine(dialog.FolderName, PngName(clip)));
-                    written++;
-                }
-            EditState.Text = $"모션 {written}개를 PNG 로 내보냈습니다{(mirror ? "(뒤집음)" : "")}";
+            var groups = _table.Clips.Values.Where(c => ClipFrames(c).Count > 0).OrderBy(c => c.Id).GroupBy(c => SheetGroup(c.Id / 3))
+                .OrderBy(g => Array.FindIndex(SheetGroups, s => s.Name == g.Key) is var i && i >= 0 ? i : SheetGroups.Length);
+            foreach (var group in groups)
+            {
+                var clips = group.ToList();
+                if (SheetPng(clips, mirror) is not { } bmp) continue;
+                string file = SafeName($"{_title}_{group.Key}.png");
+                SavePng(bmp, System.IO.Path.Combine(dialog.FolderName, file));
+                written++;
+                int cellW = bmp.PixelWidth / clips.Max(c => ClipFrames(c).Count), cellH = bmp.PixelHeight / clips.Count;
+                index.Add("");
+                index.Add($"{file} — {clips.Count}줄, 칸 {cellW}×{cellH}");
+                for (int row = 0; row < clips.Count; row++)
+                    index.Add($"  줄 {row}: {ClipLabel(clips[row])}");
+            }
+            if (written > 0) System.IO.File.WriteAllLines(System.IO.Path.Combine(dialog.FolderName, SafeName($"{_title}_목록.txt")), index);
+            EditState.Text = $"시트 {written}장({string.Join(" · ", groups.Select(g => $"{g.Key} {g.Count()}"))})과 목록을 내보냈습니다{(mirror ? "(뒤집음)" : "")}";
         }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { EditState.Text = $"못 썼습니다({written}개까지): {ex.Message}"; }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { EditState.Text = $"못 썼습니다({written}장까지): {ex.Message}"; }
     }
 }
