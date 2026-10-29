@@ -197,6 +197,17 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         Next();
     }
 
+    /// <summary>
+    /// 넘김 단추를 누르고 있는 동안 — 찍는 중이면 <see cref="TalkBox.TalkHoldSpeed"/> 배로 찍고, 쪽을 다 찍은 뒤 <see cref="TalkBox.TalkHoldAutoTicks"/> 틱이면
+    /// 다음 쪽 · 닫기(소리 없이, 저절로 넘김처럼). 원본에는 없다 — 사용자 요청 fa-72(파트2 필드 fa-63 과 같게).
+    /// </summary>
+    internal void Hold(double heldTicks)
+    {
+        if (_serial < 0 || _closeAt > 0 || host._lastTime < _typeAt) return;
+        if (_doneAt == 0) { _typeAt -= heldTicks * (TalkBox.TalkHoldSpeed - 1) / GameWindow.TicksPerSecond; return; }
+        if (Ticks(_doneAt) > TalkBox.TalkHoldAutoTicks) Next();
+    }
+
     /// <summary>다음 쪽은 마지막 걸음 뒤 자리부터(<c>+0x114</c>), 글이 끝났으면 닫기(<c>0x100a86a2</c>).</summary>
     private void Next()
     {

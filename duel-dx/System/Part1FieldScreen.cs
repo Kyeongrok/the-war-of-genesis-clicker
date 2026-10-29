@@ -475,8 +475,15 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             }
             Bubble.Open(Script.TalkSerial, narration, Script.TalkRaw, Script.TalkFace, Script.TalkTicks, ax, ay);
         }
+        // 왼쪽 단추(패드 A)를 누르고 있으면 빨리 찍고, 다 찍으면 저절로 넘긴다 — 파트2 필드 대사(TalkBox.TalkHeld)와 같게(사용자 요청 fa-72).
+        bool held = !GameWindow.Offscreen && ((Win32.GetKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 || host.Pad.HeldNow(PadAction.Confirm));
+        if (held && _holdLast >= 0) Bubble.Hold((host._lastTime - _holdLast) * GameWindow.TicksPerSecond);
+        _holdLast = held ? host._lastTime : -1;
         if (Bubble.Update()) { Bubble.Close(); Script.Advance(); }
     }
+
+    /// <summary>넘김 단추를 누르고 있던 지난 틀의 시각(−1 = 안 누름).</summary>
+    private double _holdLast = -1;
 
     /// <summary>대사 · 고르기 · 글 쪽 창.</summary>
     private void DrawTalkLayer(int ox, int oy)
