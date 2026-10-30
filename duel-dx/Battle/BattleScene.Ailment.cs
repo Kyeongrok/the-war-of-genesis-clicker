@@ -278,6 +278,9 @@ internal sealed unsafe partial class BattleScene
                 int hp = inner > floor ? u.Hp - Math.Min(damage, inner - floor) : u.Hp;
                 if (hp < u.Hp)
                 {
+                    if (Trace)
+                        File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                            $"{host._lastTime:F2} turn ailment unit {Array.IndexOf(host._units, u)} chr {u.ChrCode}{(u.LeaderIndex >= 0 ? $" (부하, 대장 {u.LeaderIndex})" : "")}: HP {u.Hp} → {hp}" + Environment.NewLine);
                     ShowNumber(u, $"{db.T(159)} {u.Hp - hp}", 0xFFFF6060);
                     u.Hp = hp;
                 }

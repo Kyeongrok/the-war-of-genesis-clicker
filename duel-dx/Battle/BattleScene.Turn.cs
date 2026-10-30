@@ -488,8 +488,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _eventCheckDue |= 1 << 3;
         // 매 턴 피해(상태 16 → 17 PRETURN 0x1006a791)는 걸린 유닛마다 카메라를 가운데로 보내고 멈춘 뒤에 든다(감사4 C17) —
         // 줄을 세워 두고 UpdateTurn 이 한 명씩 처리한다. 걸린 사람이 없으면 곧바로 쓰러짐을 본다.
+        // 부하(용병)는 제 차례가 없어 차례 깃발이 처음 한 번 선 뒤로는 다시 안 선다 — 그래서 화상 · 독이 첫 차례에만 들고 그 뒤로는 안 들었다(사용자 제보 fg-89).
+        // 부하는 <b>대장의 차례가 올 때</b> 매 턴 피해를 받는다(제 깃발은 안 본다).
+        bool TurnStarts(UnitState u) =>
+            u.LeaderIndex >= 0 ? (uint)u.LeaderIndex < (uint)host._units.Length && turnStarts.Contains(host._units[u.LeaderIndex]) : turnStarts.Contains(u);
         foreach (var u in host._units)
-            if (u.Alive && turnStarts.Contains(u) && (u.Status(2) + u.Status(3) + u.Status(17) > 0 || u.Status(16) > 0 || u.Status(15) > 0))
+            if (u.Alive && u.OnField && TurnStarts(u) && (u.Status(2) + u.Status(3) + u.Status(17) > 0 || u.Status(16) > 0 || u.Status(15) > 0))
                 _ailmentTickQueue.Enqueue(u);
         if (_ailmentTickQueue.Count == 0) SweepTickDeaths();
         else _ailmentSweepDue = true;
