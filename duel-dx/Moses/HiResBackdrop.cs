@@ -176,7 +176,10 @@ internal sealed class HiResBackdrop(GameWindow host)
     /// </summary>
     private static void PreloadDirectML()
     {
-        foreach (string? dir in new[] { Path.GetDirectoryName(typeof(InferenceSession).Assembly.Location), AppContext.BaseDirectory })
+        // 단일 exe 는 네이티브 DLL 을 임시 폴더(%TEMP%\.net\…)에 푼다 — 그 자리는 NATIVE_DLL_SEARCH_DIRECTORIES 에 있다.
+        // Assembly.Location 은 단일 exe 에서 늘 비어 있어, 이것을 안 보면 System32 의 옛 DirectML 을 잡고 CPU 로 떨어졌다(용의기사2 에서 확인).
+        var native = (AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") as string ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
+        foreach (string? dir in native.Prepend(Path.GetDirectoryName(typeof(InferenceSession).Assembly.Location)).Append(AppContext.BaseDirectory))
             if (!string.IsNullOrEmpty(dir) && Path.Combine(dir, "DirectML.dll") is var path && File.Exists(path))
             {
                 NativeLibrary.TryLoad(path, out _);
