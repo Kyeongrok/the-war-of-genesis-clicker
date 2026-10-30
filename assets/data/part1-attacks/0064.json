@@ -1,0 +1,12 @@
+{
+  "id": 64,
+  "name": "화이어 애로우5",
+  "formula": 5,
+  "powerAdd": 140,
+  "accuracy": 90,
+  "hits": 3,
+  "element": 1,
+  "element2": 0,
+  "cost": 30,
+  "damagePercent": 70
+}

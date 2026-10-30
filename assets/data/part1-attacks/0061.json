@@ -1,0 +1,12 @@
+{
+  "id": 61,
+  "name": "화이어 애로우2",
+  "formula": 5,
+  "powerAdd": 120,
+  "accuracy": 90,
+  "hits": 1,
+  "element": 1,
+  "element2": 0,
+  "cost": 30,
+  "damagePercent": 70
+}
