@@ -1,4 +1,4 @@
-namespace WarOfGenesis.Assets;
+﻿namespace WarOfGenesis.Assets;
 
 /// <summary>
 /// <c>Obj\NNNN.obj</c> — 전투판에 놓이는 물체(상자·문·포탑·바리케이트)의 낱낱 규격.
@@ -28,7 +28,10 @@ public sealed record ObjFile(int Id, int NameId, int Kind, int Level, int MaxHp,
     {
         if (b == null || b.Length < 33) return null;
         ushort U(int o) => BitConverter.ToUInt16(b, o);
+        // 그림 보정(16·18)은 부호 있는 값이다 — 석상(Obj 29·34)의 높이 보정은 −14(0xfff2)라, 부호 없이 읽으면 6만 픽셀 아래에 그려져
+        // 판에서 사라졌다(때리면 맞기는 했다, 사용자 보고 fg-94).
+        short S(int o) => BitConverter.ToInt16(b, o);
         return new ObjFile(id, U(2), U(4), U(6), (int)BitConverter.ToUInt32(b, 8),
-                           U(12), U(14), U(16), U(18), U(23), U(25), U(27), U(31));
+                           U(12), U(14), S(16), S(18), U(23), U(25), U(27), U(31));
     }
 }
