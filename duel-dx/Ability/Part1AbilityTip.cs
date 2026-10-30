@@ -38,6 +38,18 @@ internal static class Part1AbilityTip
         {
             string element = a.Element is > 0 and < 6 ? ElementNames[a.Element] : "";
             string kind = KindText(a.Formula, element);
+            // 킬링 필드(Attack 262~270, 0x10052570) — 맞히기 · 피해 없이 판 위 모든 적 가운데 HP ≤ +0x44 인 이를 쓰러뜨린다.
+            // 사거리 · 범위 · 명중은 안 쓰고 +0x44 는 세기가 아니라 HP 문턱이다(분석-파트1-기술-b 9.21, 사용자 지적).
+            if (KillingField(a))
+            {
+                lines.Add($"판 위의 적 가운데 HP 가 {a.PowerAdd} 이하인 적을 모두 바로 쓰러뜨린다");
+                lines.Add("사거리 · 범위 · 명중 없음 — 맵 전체" + (reach && a.Cost > 0 ? $" · 소울 {a.Cost}" : ""));
+                if (level > 0 && level < max && Part1SkillBook.LevelAttackIds(ab, _attacks) is { } kIds && level < kIds.Count
+                    && Part1Attack.ById(_attacks, kIds[level]) is { } kNext && kNext.PowerAdd != a.PowerAdd)
+                    lines.Add($"다음 Lv {level + 1}: HP 문턱 {a.PowerAdd} → {kNext.PowerAdd}");
+                else if (level > 0 && level >= max) lines.Add("최대 레벨이다");
+                return string.Join("$n", lines);
+            }
             lines.Add(EffectText(a.Id, a.Formula) ?? kind);
             var where = new List<string>();
             if (reach && RangeText(a) is { Length: > 0 } range) where.Add(range);
@@ -74,6 +86,8 @@ internal static class Part1AbilityTip
         }
         return string.Join("$n", lines);
     }
+
+    private static bool KillingField(Part1Attack a) => a.Id is >= 262 and <= 270;
 
     /// <summary>지금 칸과 다음 레벨 칸의 다른 값 — 「세기 +140² → +150² · 타수 2 → 3」. 같으면 빈 글.</summary>
     private static string NextText(Part1Attack now, Part1Attack next, bool reach)
