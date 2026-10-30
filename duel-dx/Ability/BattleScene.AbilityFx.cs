@@ -214,6 +214,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>타격 판정이 드는 동작 — 8·9(베기·찌르기), 13·14(연속), 26·27.</summary>
     internal static bool IsStrikeAction(int action) => action is 8 or 9 or 13 or 14 or 26 or 27;
 
+    /// <summary>「연」의 어빌리티 번호 — 레벨로 동작 사슬이 갈리는 유일한 핸들러(0x1007f860, 분석-모션 ba-10).</summary>
+    internal const int YeonAbility = 1;
+
     internal static int HitStepFor(WorkData w, int steps)
     {
         int[] actions = ActionsFor(w);

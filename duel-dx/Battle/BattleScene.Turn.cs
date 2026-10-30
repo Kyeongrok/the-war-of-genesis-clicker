@@ -1342,6 +1342,11 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 continue;
             }
 
+            // 「연」 사슬의 동작 8 에 타격 키가 없으면(리차드 — 그림 582 의 모션 24~26 은 길이 0) 원본은 빈 모션이라 그 한 대가 안 든다.
+            // 전에는 서 있는 모션(1)으로 대신 4초를 틀고 키 없는 동작이라 0.05초에 기본공격 한 대를 더 쳐, 몸짓에 없는 피해가 났다(fg-91). 첫 타격 단계는 그대로 친다.
+            if (w.AbilityId == YeonAbility && step != hitStep && step < actions.Length && host._sprites.TryGetValue(a.ChrCode, out var yeonSprite)
+                && yeonSprite.Clip(actions[step], a.Facing) is not { Hits.Count: > 0 }) continue;
+
             // 기술은 치는 단계에 들어서면 대상 칸을 가운데로 보내고 멈출 때까지 기다린다 — 스킬 핸들러 27곳의 첫 단계
             // 0x100eab80(대상칸, 0, 0) → 0x1006e850 대기(감사4 C14). 기본공격(명령 0x2712)은 카메라 명령이 없다.
             if (!targetCentred)
@@ -1371,7 +1376,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             {
                 PlayAction(a, DrawnAction(a, actions[step]));
                 if (w.AbilityId == 20 && actions[step] == 12) SpawnSideClones(a, a.Facing, drift: false);   // 소닉 블레이드 — 베는 동안 분신 둘이 ±40 에 선다(0x1008ae60)
-                hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4);
+                // 「연」은 원본 핸들러가 판정을 따로 내지 않고 몸짓 모션의 타격 키(종류 6)가 <b>그 틱에</b> 낸다 — 첫 타도 0.05초로 당기지 않는다.
+                // 리차드(그림 582)의 연 동작 13·14 는 36틱 겨눈 뒤 58틱째에야 베는데, 당겨 친 탓에 휘두르기 2초 전에 피해가 떴다(카페 제보 fg-91).
+                hitTimes = HitTimesFor(a, DrawnAction(a, actions[step]), ranged: w.RangeMax > 4 || w.AbilityId == YeonAbility);
                 hitAbilities = HitAbilitiesFor(a, DrawnAction(a, actions[step]));
                 // 준비 2·3·5·6 의 발동 동작 15 는 끝까지 튼 뒤에 핸들러가 돈다 — 효과·판정을 그때로(ba-15 R6).
                 if (w.Prepare is 2 or 3 or 5 or 6 && actions[step] == 15 && host._sprites.TryGetValue(a.ChrCode, out var sp15))
