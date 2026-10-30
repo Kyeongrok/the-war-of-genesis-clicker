@@ -11,7 +11,7 @@ namespace WarOfGenesis.Editor;
 
 /// <summary>
 /// 게임 소리를 듣는 창 — 배경음악(<c>BGM/*.bgm</c> 스테레오) · 효과음(<c>Snd/*.snd</c>) · 인물 대사(<c>BGM/*.bgm</c> 모노)를
-/// 탭으로 나눠 목록으로 보이고, 고른 것을 풀어(Bink 는 <see cref="BinkAudio"/>, WAV 는 <see cref="WaveSound"/>) 튼다.
+/// 탭으로 나눠 목록으로 보이고(파트1 폴더가 있으면 파트1 성우 대사 — <see cref="Part1VoiceLines"/>, asset-5 — 도), 고른 것을 풀어(Bink 는 <see cref="BinkAudio"/>, WAV 는 <see cref="WaveSound"/>) 튼다.
 /// </summary>
 /// <remarks>
 /// 목록은 파일 머리만 읽어 뒤쪽에서 채운다(3454 + 800개). 소리는 재생을 누를 때 풀고 몇 개만 붙잡아 둔다
@@ -34,7 +34,7 @@ public partial class SoundWindow : Window
         public string Text => line?.Text ?? "";
     }
 
-    public enum Page { Music, Effect, Voice }
+    public enum Page { Music, Effect, Voice, Part1Voice }
 
     private readonly GameFiles _files;
     private readonly string _gameRoot;
@@ -43,8 +43,8 @@ public partial class SoundWindow : Window
     private readonly Dictionary<string, PcmSound> _decoded = [];   // 파일 이름 → 푼 소리(최근 몇 개만)
     private readonly List<string> _decodedOrder = [];
 
-    private ICollectionView? _musicView, _effectView, _voiceView;
-    private int _musicCount, _effectCount, _voiceCount;
+    private ICollectionView? _musicView, _effectView, _voiceView, _part1View;
+    private int _musicCount, _effectCount, _voiceCount, _part1Count;
     private Row? _current;
     private PcmSound? _currentSound;
     private bool _dragging;
@@ -68,6 +68,7 @@ public partial class SoundWindow : Window
     {
         Page.Music => MusicTab,
         Page.Effect => EffectTab,
+        Page.Part1Voice => Part1VoiceTab,
         _ => VoiceTab,
     };
 
@@ -78,6 +79,7 @@ public partial class SoundWindow : Window
         StatusText.Text = "목록을 읽는 중…";
         try
         {
+            var part1Task = Task.Run(LoadPart1Rows);
             var (music, voices, effects, lines) = await Task.Run(() =>
             {
                 var (m, v) = SoundCatalog.ScanBgm(_gameRoot);
@@ -105,6 +107,14 @@ public partial class SoundWindow : Window
             VoiceHelpText.Text = lines.Count == 0
                 ? "BGM\\NNNN.bgm 중 모노인 것(음성). 대사·말하는 이는 이 게임 폴더에서 찾지 못했다."
                 : $"BGM\\NNNN.bgm 중 모노인 것(음성). 대사·말하는 이를 찾은 것 {matched}/{voiceRows.Count}개 — {VoiceLines.SourceNote}";
+            var part1Rows = await part1Task;
+            _part1Count = part1Rows.Count;
+            Part1VoiceGrid.ItemsSource = part1Rows;
+            _part1View = CollectionViewSource.GetDefaultView(part1Rows);
+            _part1View.Filter = Accept;
+            Part1VoiceHelpText.Text = Part1Game.Root == null
+                ? "파트1 폴더를 못 찾았습니다 — 게임 설정에서 파트1 폴더를 정하면 파트1 성우 대사가 나옵니다."
+                : $"파트1 Snd\\NNNN.snd 가운데 필드 · 챕터 대사(행동 206~208)가 부르는 성우 음성 {part1Rows.Count}개. 대사 위치는 처음 나오는 곳이다. 파트1 전투 대사에는 음성이 없다.";
             if (musicRows.Count + effectRows.Count + voiceRows.Count == 0)
                 StatusText.Text = $"'{_gameRoot}' 에서 BGM\\*.bgm · Snd\\*.snd 를 못 찾았습니다.";
             else
@@ -114,6 +124,17 @@ public partial class SoundWindow : Window
         {
             StatusText.Text = $"소리 목록을 읽지 못했습니다: {ex.Message}";
         }
+    }
+
+    /// <summary>파트1 성우 대사 줄 — 파트1 폴더가 없거나 못 읽으면 빈 목록.</summary>
+    private static List<Row> LoadPart1Rows()
+    {
+        if (Part1Game.Root == null) return [];
+        try
+        {
+            return [.. Part1VoiceLines.Load().Select(v => Part1VoiceLines.Entry(v) is { } e ? new Row(e, v.Line) : null).OfType<Row>()];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { return []; }
     }
 
     private bool Accept(object o)
@@ -128,6 +149,7 @@ public partial class SoundWindow : Window
     {
         TabItem t when t == MusicTab => (MusicGrid, _musicView, _musicCount, "배경음악"),
         TabItem t when t == EffectTab => (EffectGrid, _effectView, _effectCount, "효과음"),
+        TabItem t when t == Part1VoiceTab => (Part1VoiceGrid, _part1View, _part1Count, "파트1 대사"),
         _ => (VoiceGrid, _voiceView, _voiceCount, "인물 대사"),
     };
 
@@ -144,6 +166,7 @@ public partial class SoundWindow : Window
         _musicView?.Refresh();
         _effectView?.Refresh();
         _voiceView?.Refresh();
+        _part1View?.Refresh();
         UpdateStatus();
     }
 
@@ -217,10 +240,12 @@ public partial class SoundWindow : Window
         PcmSound sound;
         try
         {
-            if (!_decoded.TryGetValue(row.FileName, out sound!))
+            string key = $"{row.Entry.Folder}\\{row.FileName}";   // 파트1 Snd 와 파트2 Snd 는 이름이 겹친다
+            if (!_decoded.TryGetValue(key, out sound!))
             {
-                sound = await Task.Run(() => SoundCatalog.Load(_files, row.Entry));
-                Remember(row.FileName, sound);
+                bool part1 = row.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal);
+                sound = await Task.Run(() => part1 ? Part1VoiceLines.Decode(row.Id) : SoundCatalog.Load(_files, row.Entry));
+                Remember(key, sound);
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)

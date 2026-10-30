@@ -215,6 +215,44 @@
                     </DataGrid>
                 </DockPanel>
             </TabItem>
+            <TabItem x:Name="Part1VoiceTab" Header="파트1 대사">
+                <DockPanel>
+                    <TextBlock
+                        x:Name="Part1VoiceHelpText"
+                        Margin="0,4,0,0"
+                        DockPanel.Dock="Bottom"
+                        Foreground="DimGray"
+                        Text="파트1 Snd\NNNN.snd 가운데 필드 대사가 부르는 성우 음성."
+                        TextWrapping="Wrap" />
+                    <DataGrid
+                        x:Name="Part1VoiceGrid"
+                        AutoGenerateColumns="False"
+                        CanUserAddRows="False"
+                        GridLinesVisibility="Horizontal"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        MouseDoubleClick="Grid_MouseDoubleClick"
+                        SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding Id, StringFormat=D4}" Header="번호" />
+                            <DataGridTextColumn Binding="{Binding Length}" Header="길이" />
+                            <DataGridTextColumn Binding="{Binding SizeText}" Header="크기" />
+                            <DataGridTextColumn Binding="{Binding Speaker}" Header="말하는 이" />
+                            <DataGridTextColumn Binding="{Binding Source}" Header="대사 위치" />
+                            <DataGridTextColumn
+                                Width="*"
+                                Binding="{Binding Text}"
+                                Header="대사">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

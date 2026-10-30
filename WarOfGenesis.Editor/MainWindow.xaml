@@ -108,6 +108,11 @@
                     AutomationProperties.AutomationId="VoiceMenuItem"
                     Click="VoiceMenuItem_Click"
                     Header="인물 대사(_V)" />
+                <MenuItem
+                    x:Name="Part1VoiceMenuItem"
+                    AutomationProperties.AutomationId="Part1VoiceMenuItem"
+                    Click="Part1VoiceMenuItem_Click"
+                    Header="파트1 대사(_P)" />
             </MenuItem>
             <MenuItem
                 x:Name="BattleMapMenuItem"

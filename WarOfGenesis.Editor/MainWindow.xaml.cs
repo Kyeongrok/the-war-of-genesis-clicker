@@ -364,6 +364,8 @@ public partial class MainWindow : Window
 
     private void VoiceMenuItem_Click(object sender, RoutedEventArgs e) => OpenSoundWindow(SoundWindow.Page.Voice);
 
+    private void Part1VoiceMenuItem_Click(object sender, RoutedEventArgs e) => OpenSoundWindow(SoundWindow.Page.Part1Voice);
+
     /// <summary>소리 창은 하나만 띄운다 — 이미 떠 있으면 그 탭으로 옮겨 앞으로 가져온다.</summary>
     private void OpenSoundWindow(SoundWindow.Page page)
     {
