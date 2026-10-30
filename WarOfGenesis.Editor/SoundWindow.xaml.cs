@@ -112,6 +112,10 @@ public partial class SoundWindow : Window
             Part1VoiceGrid.ItemsSource = part1Rows;
             _part1View = CollectionViewSource.GetDefaultView(part1Rows);
             _part1View.Filter = Accept;
+            // 말하는 이 고르기 — 대사가 많은 사람부터(asset-6).
+            Part1SpeakerBox.ItemsSource = new[] { AllSpeakers }.Concat(part1Rows.Where(r => r.Speaker.Length > 0).GroupBy(r => r.Speaker)
+                .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).Select(g => $"{g.Key} ({g.Count()})")).ToList();
+            Part1SpeakerBox.SelectedIndex = 0;
             Part1VoiceHelpText.Text = Part1Game.Root == null
                 ? "파트1 폴더를 못 찾았습니다 — 게임 설정에서 파트1 폴더를 정하면 파트1 성우 대사가 나옵니다."
                 : $"파트1 Snd\\NNNN.snd 가운데 필드 · 챕터 대사(행동 206~208)가 부르는 성우 음성 {part1Rows.Count}개. 대사 위치는 처음 나오는 곳이다. 파트1 전투 대사에는 음성이 없다.";
@@ -137,9 +141,16 @@ public partial class SoundWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { return []; }
     }
 
+    private const string AllSpeakers = "(모두)";
+
+    /// <summary>파트1 대사 탭에서 고른 말하는 이 — 「(모두)」면 null.</summary>
+    private string? Part1Speaker =>
+        Part1SpeakerBox?.SelectedItem is string s && s != AllSpeakers ? s[..s.LastIndexOf(" (", StringComparison.Ordinal)] : null;
+
     private bool Accept(object o)
     {
         if (o is not Row r) return false;
+        if (Part1Speaker is { } who && r.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal) && r.Speaker != who) return false;
         string q = FilterBox.Text.Trim();
         return q.Length == 0 || r.Id.ToString("D4").Contains(q) || r.Note.Contains(q, StringComparison.OrdinalIgnoreCase)
                || r.Speaker.Contains(q) || r.Text.Contains(q) || r.Source.Contains(q, StringComparison.OrdinalIgnoreCase);
@@ -168,6 +179,68 @@ public partial class SoundWindow : Window
         _voiceView?.Refresh();
         _part1View?.Refresh();
         UpdateStatus();
+    }
+
+    private void Part1SpeakerBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _part1View?.Refresh();
+        if (StatusText != null) UpdateStatus();
+    }
+
+    // ── WAV 로 내보내기(asset-6) ─────────────────────────────────────────────
+
+    /// <summary>줄 하나의 소리를 푼다 — 재생과 같은 길(파트1 은 ADPCM 을 PCM 으로).</summary>
+    private PcmSound Decode(Row row) =>
+        row.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal) ? Part1VoiceLines.Decode(row.Id) : SoundCatalog.Load(_files, row.Entry);
+
+    /// <summary>내보낼 파일 이름 — 번호 · 말하는 이 · 대사 앞머리(파일 이름에 못 쓰는 글자는 뺀다).</summary>
+    private static string WavName(Row row)
+    {
+        string text = row.Text.Length > 24 ? row.Text[..24] : row.Text;
+        string name = string.Join("_", new[] { row.Id.ToString("D4"), row.Speaker, text }.Where(p => p.Length > 0));
+        foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c.ToString(), "");
+        return name.Trim().TrimEnd('.') + ".wav";
+    }
+
+    private async void ExportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var (grid, _, _, _) = CurrentPage();
+        if ((grid.SelectedItem as Row ?? _current) is not { } row) { StatusText.Text = "먼저 목록에서 소리를 고르세요."; return; }
+        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = WavName(row), Filter = "WAV 소리|*.wav", DefaultExt = ".wav" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            byte[] wav = await Task.Run(() => Decode(row).ToWav());
+            await File.WriteAllBytesAsync(dialog.FileName, wav);
+            StatusText.Text = $"{Path.GetFileName(dialog.FileName)} 로 내보냈습니다.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
+        {
+            StatusText.Text = $"내보내지 못했습니다: {ex.Message}";
+        }
+    }
+
+    private async void Part1ExportShownButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_part1View == null) return;
+        var rows = _part1View.Cast<Row>().ToList();
+        if (rows.Count == 0) { StatusText.Text = "내보낼 줄이 없습니다."; return; }
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = $"파트1 대사 {rows.Count}개를 저장할 폴더" };
+        if (dialog.ShowDialog(this) != true) return;
+        string folder = dialog.FolderName;
+        int done = 0, failed = 0;
+        foreach (var row in rows)
+        {
+            try
+            {
+                byte[] wav = await Task.Run(() => Decode(row).ToWav());
+                await File.WriteAllBytesAsync(Path.Combine(folder, WavName(row)), wav);
+                done++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException) { failed++; }
+            StatusText.Text = $"내보내는 중… {done + failed}/{rows.Count}";
+        }
+        StatusText.Text = $"{done}개를 '{folder}' 에 내보냈습니다" + (failed > 0 ? $" · {failed}개 실패" : "");
     }
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -243,8 +316,7 @@ public partial class SoundWindow : Window
             string key = $"{row.Entry.Folder}\\{row.FileName}";   // 파트1 Snd 와 파트2 Snd 는 이름이 겹친다
             if (!_decoded.TryGetValue(key, out sound!))
             {
-                bool part1 = row.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal);
-                sound = await Task.Run(() => part1 ? Part1VoiceLines.Decode(row.Id) : SoundCatalog.Load(_files, row.Entry));
+                sound = await Task.Run(() => Decode(row));
                 Remember(key, sound);
             }
         }
