@@ -734,7 +734,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 캐릭터 에디터 「외형」으로 파트2 목소리 묶음을 넣었으면(VoiceSet > 0, menu-97) 그것을 파트2 처럼 낸다.
         if (host._scene.IsPart1 && u.Data.VoiceSet == 0 && Part1TurnCall.For(u) is { Length: > 0 } p1call)
         {
-            if (IsMine(u) && host._part1TurnVoice) host.Play(p1call[(_tick & 3) % p1call.Length], 1000 + Array.IndexOf(host._units, u));
+            if (IsMine(u) && host._part1TurnVoice) host.Play(p1call[(int)((uint)_tick % p1call.Length)], 1000 + Array.IndexOf(host._units, u));
             return;
         }
         if (host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)
