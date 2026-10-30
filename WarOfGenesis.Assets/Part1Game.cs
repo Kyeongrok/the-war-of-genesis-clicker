@@ -484,6 +484,25 @@ public static class Part1Game
         return (tints, offsets);
     }
 
+    /// <summary>
+    /// 맞기 몸짓(모션 15 + 방향) 안의 타격 키(종류 5) — 원본은 그 틱에 맞은 이 둘레로 물리 타격을 보낸다(유닛 가상함수 +0xb4 = <c>0x10036130</c>:
+    /// 서술 <c>0x1003f3c0(선택자, …, 명중 100)</c> → 범위 <c>0x1008e9f0(모양, …, 크기)</c> 칸마다 <c>0x1009d440</c> 보통 피해). 인자 (선택자, 모양, 크기 4분의 1칸,
+    /// 거르기 0 적만 · 1 같은 편 · 2 누구나, 높이 · 시야 [H]). 파트1 인물 그림 가운데 맞기 동작에 이 키가 있는 것은 해파리(Obs 70, Chr 498)뿐 —
+    /// 틱 21, (0, 1 십자, 12 = 3칸, 0 적만). 싸서 옮긴 그림(<see cref="ToPart2Obs"/>)은 이 키를 버려(사용자 제보 fg-84) 여기서 따로 읽는다.
+    /// 파트1 폴더가 없으면 그 값을 그대로 쓴다.
+    /// </summary>
+    public static (int Tick, int Selector, int Shape, int Size, int Filter)? HurtStrike(int part1Obs, int dir)
+    {
+        if (Root == null) return part1Obs == 70 ? (21, 0, 1, 12, 0) : null;
+        if (!BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            return RawMotion(p1, 15 + dir)?.Where(k => k[2] == 5).OrderBy(k => k[0]).Select(k => ((int)k[0], (int)k[3], (int)k[4], (int)k[5], (int)k[6]))
+                       .Cast<(int, int, int, int, int)?>().FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
     /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
     public const int ScreenTint = 14;
 

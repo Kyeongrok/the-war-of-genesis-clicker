@@ -1863,6 +1863,32 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
         }
 
+        // 파트1 맞기 몸짓의 타격 키(해파리) — 몸짓이 그 틱에 닿으면 맞은 이 둘레의 적을 친다(Part1Game.HurtStrike).
+        if (_part1HurtStrikes.Count > 0 && !_part1HurtStrikeRunning)
+        {
+            var strikes = _part1HurtStrikes.ToList();
+            _part1HurtStrikes.Clear();
+            _part1HurtStrikeRunning = true;
+            try
+            {
+                foreach (var (by, at, strike) in strikes.OrderBy(s => s.At))
+                {
+                    while (host._lastTime < at) yield return true;
+                    if (!by.Alive || !by.OnField || by.Hp <= 0 || dying.Contains(by) || by.Data is not { } bd || Work(bd.BasicWorkId) is not { } basic) continue;
+                    var hit = host._units.Where(u => u.Alive && u.OnField && u.Hp > 0 && u != by && !dying.Contains(u) && Part1HurtStrikeCovers(by, u, strike)).ToList();
+                    if (Trace)
+                        System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                            $"{host._lastTime:F2} part1 hurt strike {by.ChrCode} ({by.Col},{by.Row}) 모양 {strike.Shape} 크기 {strike.Size} 거르기 {strike.Filter} → {string.Join(",", hit.Select(u => $"{u.ChrCode}({u.Col},{u.Row})"))}" + Environment.NewLine);
+                    foreach (var u in hit) ApplyWork(by, basic, u, dying);
+                    if (hit.Count > 0) while (hit.Any(u => u.IsBusy)) yield return true;
+                }
+            }
+            finally { _part1HurtStrikeRunning = false; _part1HurtStrikes.Clear(); }   // 둘레 타격이 건 것(반격 따위의 해파리)은 다시 터뜨리지 않는다
+            dying.RemoveAll(d => d.Hp > 0);
+            foreach (var d in host._units)
+                if (d.Alive && d.OnField && d.Hp <= 0 && !dying.Contains(d) && !SurvivesFatal(d)) dying.Add(d);
+        }
+
         // 22·23·24(SOUL·TP 사망 조건)는 행동 끝마다 본다 — 상태 20 → 18 CHRDIE 가 전 유닛에 0x1007c670 을 돌린다(ba-20 K3).
         foreach (var d in host._units)
             if (_demo == null && d.Alive && d.OnField && !dying.Contains(d) && DiesByStatus(d) && !SurvivesFatal(d)) { d.Hp = 0; GainAilmentKillExp(d); dying.Add(d); }
@@ -2023,6 +2049,40 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (by == target || by.Data is not { } d || Work(d.BasicWorkId) is not { } basic) return;
         _part1Counters.RemoveAll(c => c.By == by);
         _part1Counters.Add((by, target, basic));
+    }
+
+    /// <summary>
+    /// 행동 끝에 터뜨릴 맞기 몸짓 타격(파트1 해파리, 사용자 제보 fg-84) — 맞은 이, 터질 때(맞기 몸짓 시작 + 키 틱), 키 인자. 맞은 이마다 하나 —
+    /// 다시 맞으면 몸짓이 처음부터 돌아 시각만 늦춘다 [H: 원본은 틱에 닿기 전에 다시 맞으면 한 번만].
+    /// </summary>
+    internal readonly List<(UnitState By, double At, (int Tick, int Selector, int Shape, int Size, int Filter) Strike)> _part1HurtStrikes = [];
+
+    /// <summary>둘레 타격을 치는 중 — 그동안 맞은 해파리는 다시 걸지 않는다.</summary>
+    internal bool _part1HurtStrikeRunning;
+
+    private readonly Dictionary<int, (int Tick, int Selector, int Shape, int Size, int Filter)?> _hurtStrikeOf = [];
+
+    /// <summary>파트1 판에서 맞기 몸짓을 한 이 — 그 그림의 맞기 동작에 타격 키가 있으면 걸어 둔다.</summary>
+    private void QueuePart1HurtStrike(UnitState t)
+    {
+        if (!host._scene.IsPart1 || _part1HurtStrikeRunning || t.Data is not { SpriteId: > Part1Game.ObsBase } d) return;
+        int obs = d.SpriteId - Part1Game.ObsBase;
+        if (!_hurtStrikeOf.TryGetValue(obs, out var strike)) _hurtStrikeOf[obs] = strike = Part1Game.HurtStrike(obs, 0);
+        if (strike is not { } s) return;
+        _part1HurtStrikes.RemoveAll(h => h.By == t);
+        _part1HurtStrikes.Add((t, host._lastTime + s.Tick / TicksPerSecond, s));
+    }
+
+    /// <summary>
+    /// 둘레 타격이 그 유닛에 닿나 — 거르기(0 적만 · 1 같은 편 · 2 누구나), 모양 1 은 십자(같은 줄 · 같은 칸), 거리는 높이를 넣은 4분의 1칸(<see cref="WorkDistance(int, int, int, int, bool, bool)"/>)이 크기 안.
+    /// 그 밖의 모양은 자료에 없어 마름모로 본다 [H].
+    /// </summary>
+    private bool Part1HurtStrikeCovers(UnitState by, UnitState u, (int Tick, int Selector, int Shape, int Size, int Filter) s)
+    {
+        bool foe = IsFoeSide(by) != IsFoeSide(u);
+        if (s.Filter == 0 && !foe || s.Filter == 1 && foe) return false;
+        if (s.Shape == 1 && u.Col != by.Col && u.Row != by.Row) return false;
+        return WorkDistance(by.Col, by.Row, u.Col, u.Row, useHeight: true, graded: true).Graded <= s.Size;
     }
 
     /// <summary>파트1 자세를 켠다 — 자세 몸짓(동작 21 = 모션 63~65, <c>0x10035e00(0x15, 방향, 10000)</c>)을 한 번 하고 선다.</summary>
@@ -2196,6 +2256,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 파트1 막음(결과 4) — 피해 숫자는 뜨지만 맞기 몸짓 · 불꽃 대신 때린 이 쪽을 보고 동작 6(팔짱)을 한다(0x1003df9a).
         if (part1Guard) PlayGuardReaction(a, t, result);
         else PlayHitReaction(t, damaged: true, spark: !host._scene.IsPart1 || Part1.SparksOnHit(a, w));
+        if (!part1Guard && t.Hp > 0) QueuePart1HurtStrike(t);
         if (crit) PlayCritFlash();
         AddSoul(t, amount / Math.Max(1, host._db.N(43)));
         PlayHurtCry(t);

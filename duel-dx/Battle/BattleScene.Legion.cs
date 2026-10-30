@@ -36,6 +36,7 @@ internal sealed unsafe partial class BattleScene
         Part1.Ailments.Clear();
         Part1.Stances.Clear();
         _part1Counters.Clear();
+        _part1HurtStrikes.Clear();
         _part1LostMounts.Clear();
         _part1TeamMounts.Clear();
         _part1Mercs.Clear();
