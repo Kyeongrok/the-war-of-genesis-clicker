@@ -187,6 +187,18 @@
             </TabItem>
             <TabItem x:Name="VoiceTab" Header="인물 대사">
                 <DockPanel>
+                    <StackPanel
+                        Margin="0,0,0,4"
+                        DockPanel.Dock="Top"
+                        Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center" Text="말하는 이:" />
+                        <ComboBox
+                            x:Name="VoiceSpeakerBox"
+                            Width="200"
+                            Margin="6,0,0,0"
+                            AutomationProperties.AutomationId="VoiceSpeakerBox"
+                            SelectionChanged="Part1SpeakerBox_SelectionChanged" />
+                    </StackPanel>
                     <TextBlock
                         x:Name="VoiceHelpText"
                         Margin="0,4,0,0"

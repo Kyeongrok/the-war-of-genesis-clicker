@@ -113,9 +113,10 @@ public partial class SoundWindow : Window
             _part1View = CollectionViewSource.GetDefaultView(part1Rows);
             _part1View.Filter = Accept;
             // 말하는 이 고르기 — 대사가 많은 사람부터(asset-6).
-            Part1SpeakerBox.ItemsSource = new[] { AllSpeakers }.Concat(part1Rows.Where(r => r.Speaker.Length > 0).GroupBy(r => r.Speaker)
-                .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).Select(g => $"{g.Key} ({g.Count()})")).ToList();
+            Part1SpeakerBox.ItemsSource = SpeakerChoices(part1Rows);
             Part1SpeakerBox.SelectedIndex = 0;
+            VoiceSpeakerBox.ItemsSource = SpeakerChoices(voiceRows);   // 파트2 인물 대사도(asset-7)
+            VoiceSpeakerBox.SelectedIndex = 0;
             Part1VoiceHelpText.Text = Part1Game.Root == null
                 ? "파트1 폴더를 못 찾았습니다 — 게임 설정에서 파트1 폴더를 정하면 파트1 성우 대사가 나옵니다."
                 : $"파트1 Snd\\NNNN.snd 가운데 필드 · 챕터 대사(행동 206~208)가 부르는 성우 음성 {part1Rows.Count}개. 대사 위치는 처음 나오는 곳이다. 파트1 전투 대사에는 음성이 없다.";
@@ -143,14 +144,24 @@ public partial class SoundWindow : Window
 
     private const string AllSpeakers = "(모두)";
 
-    /// <summary>파트1 대사 탭에서 고른 말하는 이 — 「(모두)」면 null.</summary>
-    private string? Part1Speaker =>
-        Part1SpeakerBox?.SelectedItem is string s && s != AllSpeakers ? s[..s.LastIndexOf(" (", StringComparison.Ordinal)] : null;
+    /// <summary>말하는 이 고르기 칸의 줄 — 「(모두)」 다음에 대사가 많은 사람부터, 이름 옆에 개수.</summary>
+    private static List<string> SpeakerChoices(IEnumerable<Row> rows) =>
+        [AllSpeakers, .. rows.Where(r => r.Speaker.Length > 0).GroupBy(r => r.Speaker)
+                             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).Select(g => $"{g.Key} ({g.Count()})")];
+
+    /// <summary>그 칸에서 고른 말하는 이 — 「(모두)」면 null.</summary>
+    private static string? SpeakerOf(ComboBox? box) =>
+        box?.SelectedItem is string s && s != AllSpeakers ? s[..s.LastIndexOf(" (", StringComparison.Ordinal)] : null;
+
+    private string? Part1Speaker => SpeakerOf(Part1SpeakerBox);
+    private string? VoiceSpeaker => SpeakerOf(VoiceSpeakerBox);
 
     private bool Accept(object o)
     {
         if (o is not Row r) return false;
-        if (Part1Speaker is { } who && r.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal) && r.Speaker != who) return false;
+        bool part1 = r.Entry.Folder.StartsWith("파트1", StringComparison.Ordinal);
+        if (part1 && Part1Speaker is { } who && r.Speaker != who) return false;
+        if (!part1 && r.Entry.Kind == SoundKind.Voice && VoiceSpeaker is { } who2 && r.Speaker != who2) return false;
         string q = FilterBox.Text.Trim();
         return q.Length == 0 || r.Id.ToString("D4").Contains(q) || r.Note.Contains(q, StringComparison.OrdinalIgnoreCase)
                || r.Speaker.Contains(q) || r.Text.Contains(q) || r.Source.Contains(q, StringComparison.OrdinalIgnoreCase);
@@ -184,6 +195,7 @@ public partial class SoundWindow : Window
     private void Part1SpeakerBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _part1View?.Refresh();
+        _voiceView?.Refresh();
         if (StatusText != null) UpdateStatus();
     }
 
