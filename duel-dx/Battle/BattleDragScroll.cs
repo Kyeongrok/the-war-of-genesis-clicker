@@ -15,6 +15,7 @@ using static DuelDx.GameWindow;
 /// 끌 수 있는 때는 가장자리 스크롤과 같다(<see cref="BattleScene.EdgeScrollAllowed"/> — 내 차례 · 배치). 창(링 · 어빌리티 · 상태 ·
 /// 도구 창들) · 미니맵 · 상자 목록 · 배치 창 위의 누름은 미루지 않고 예전처럼 바로 클릭이 된다. 패드가 보내는 누름(wParam 에 MK_LBUTTON 이 없다)도 바로.
 /// 오른쪽 단추는 링 · 취소 · 설명에 쓰여 끌기에 안 쓴다.
+/// <para>배치 창 머리줄(「캐릭터 배치」 줄)을 누르고 끌면 카메라 대신 배치 창이 따라온다 — 창이 배치 칸을 가릴 때(사용자 요청 fa-73, btl 20022).</para>
 /// </remarks>
 internal sealed class BattleDragScroll(GameWindow host)
 {
@@ -24,8 +25,11 @@ internal sealed class BattleDragScroll(GameWindow host)
     /// <summary>누른 자리(창 픽셀) — 안 눌렀으면 null.</summary>
     private (int X, int Y)? _press;
 
-    /// <summary>무엇을 끄나 — 전투 판인가, 파트1 지도인가.</summary>
-    private bool _chapter;
+    /// <summary>무엇을 끄나 — 전투 판인가, 파트1 지도인가, 배치 창인가.</summary>
+    private bool _chapter, _panel;
+
+    /// <summary>배치 창 끌기를 시작할 때 옮겨 둔 양.</summary>
+    private (int X, int Y) _shift0;
 
     /// <summary>끌기로 바뀐 뒤인가 — 그러면 떼어도 클릭이 아니다.</summary>
     internal bool Dragging { get; private set; }
@@ -45,9 +49,10 @@ internal sealed class BattleDragScroll(GameWindow host)
         Cancel();
         if (!mouseButton) return false;
         var (bx, by) = host.BoardPoint(clientX, clientY);
+        (_chapter, _panel) = (false, false);
         if (ChapterAllowed(bx, by)) _chapter = true;
-        else if (BattleAllowed(bx, by)) _chapter = false;
-        else return false;
+        else if (PanelAllowed(bx, by)) (_panel, _shift0) = (true, host.Btl._deployPanelShift);
+        else if (!BattleAllowed(bx, by)) return false;
         _press = (clientX, clientY);
         Win32.SetCapture(host._hwnd);   // 창 밖에서 떼어도 WM_LBUTTONUP 이 오게
         return true;
@@ -62,7 +67,8 @@ internal sealed class BattleDragScroll(GameWindow host)
         {
             if (dx * dx + dy * dy <= Threshold * Threshold) return;
             Dragging = true;
-            if (_chapter) (_camX0, _camY0) = host.Part1TitleScr.Chapter._cam;
+            if (_panel) { }
+            else if (_chapter) (_camX0, _camY0) = host.Part1TitleScr.Chapter._cam;
             else
             {
                 var btl = host.Btl;
@@ -73,6 +79,12 @@ internal sealed class BattleDragScroll(GameWindow host)
         }
         double zoom = host._zoom > 0 ? host._zoom : 1;
         double ox = dx / zoom, oy = dy / zoom;   // 판 픽셀 — 잡은 자리가 커서 밑에 남게 반대로 민다
+        if (_panel)
+        {
+            if (!host.Btl._deployOpen) return;
+            host.Btl._deployPanelShift = (_shift0.X + (int)Math.Round(ox), _shift0.Y + (int)Math.Round(oy));
+            return;
+        }
         if (_chapter)
         {
             if (host.Part1TitleScr.ChapterOnTop) host.Part1TitleScr.Chapter.DragCamera((int)Math.Round(_camX0 - ox), (int)Math.Round(_camY0 - oy));
@@ -90,7 +102,7 @@ internal sealed class BattleDragScroll(GameWindow host)
     internal (int X, int Y)? OnUp()
     {
         var press = _press;
-        bool dragged = Dragging;
+        bool dragged = Dragging || _panel;   // 배치 창 머리줄은 누르기만 해도 할 일이 없다
         Cancel();
         return press is { } p && !dragged ? p : null;
     }
@@ -121,6 +133,11 @@ internal sealed class BattleDragScroll(GameWindow host)
         }
         return true;
     }
+
+    /// <summary>배치 창 머리줄의 누름인가 — 배치 중이고 위에 창 · 대사가 없을 때.</summary>
+    private bool PanelAllowed(int bx, int by) =>
+        host._battleLoaded && !host._loading && !host.BattleCovered && !AnyToolWindow() && host.Tlk._talk == null
+        && host.Btl.OnDeployPanelHead(bx, by);
 
     /// <summary>파트1 지도를 끌 수 있는 누름인가 — 지도만 떠 있고(창 · 메뉴 · 대사 · 고르기 없음) 지도 화면 안일 때.</summary>
     private bool ChapterAllowed(int bx, int by) =>

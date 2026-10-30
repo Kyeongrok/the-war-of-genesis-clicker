@@ -277,7 +277,8 @@ internal sealed class Part1MercDeploy(GameWindow host)
     internal (int X, int Y) Panel()
     {
         var (px, py) = host.Btl.DeployPanel();
-        return (px - PanelW - 8, py);
+        // 배치 창을 왼쪽 끝으로 끌어 놓았으면 오른쪽에 붙인다(fa-73).
+        return (px - PanelW - 8 >= host._camX ? px - PanelW - 8 : px + BattleScene.DeployW + 8, py);
     }
 
     private int GridTop => 30;

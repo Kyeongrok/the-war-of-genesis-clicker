@@ -326,7 +326,30 @@ internal sealed unsafe partial class BattleScene
     /// <summary>배치 창 높이 — 명단 줄 수와 패드 안내 줄에 따라.</summary>
     internal int DeployPanelHeight() => DeployTop + DeployRoster().Count * DeployRowH + 108 + (host.Pad.Active && host.Pad.Connected ? 18 : 0);
 
-    internal (int X, int Y) DeployPanel() => (host._camX + host.ViewWidth - DeployW - 12, host._camY + GridTop + 12);
+    /// <summary>
+    /// 배치 창 자리 — 기본은 오른쪽 위, 머리줄을 끌면 옮긴 만큼(<see cref="_deployPanelShift"/>, 화면 기준). 늘 보이는 영역 안에 둔다.
+    /// </summary>
+    internal (int X, int Y) DeployPanel()
+    {
+        int x = host.ViewWidth - DeployW - 12 + _deployPanelShift.X, y = GridTop + 12 + _deployPanelShift.Y;
+        x = Math.Clamp(x, 0, Math.Max(0, host.ViewWidth - DeployW));
+        y = Math.Clamp(y, GridTop, Math.Max(GridTop, host.ViewHeight - 26));
+        return (host._camX + x, host._camY + y);
+    }
+
+    /// <summary>
+    /// 배치 창을 끌어 옮긴 양(판 픽셀, 화면 기준) — 창이 배치 칸을 가릴 때 머리줄을 끌어 비킨다(사용자 요청 fa-73, btl 20022).
+    /// 실행 동안 이어진다(다음 전투의 배치 창도 같은 자리).
+    /// </summary>
+    internal (int X, int Y) _deployPanelShift;
+
+    /// <summary>배치 창 머리줄(「캐릭터 배치」 줄) 위인가 — 여기를 누르고 끌면 창이 따라온다.</summary>
+    internal bool OnDeployPanelHead(int bx, int by)
+    {
+        if (!_deployOpen) return false;
+        var (px, py) = DeployPanel();
+        return bx >= px && bx < px + DeployW && by >= py && by < py + 26;
+    }
 
     /// <summary>배치 단계의 클릭 — 명단·단추·초록 칸. 배치 중에는 다른 클릭을 받지 않는다.</summary>
     internal bool OnDeployClick(int bx, int by)
