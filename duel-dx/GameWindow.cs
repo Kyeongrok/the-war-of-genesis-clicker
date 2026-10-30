@@ -1280,7 +1280,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             }
             StatusScr.OpenStatusIfAsked();                  // 불러온 뒤에 연다 — 먼저 열면 불러오기가 창을 닫는다
             // 시험용 DUELDX_P1PICK=<Chr> — 그 인물의 레벨업 고르기 창을 띄운다(화면 밖에서 고르기 창 · 갈 수 있는 직업 칸을 보려고).
-            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1PICK"), out int pickChr)) Part1.LevelPicks.Add((pickChr, 1));
+            if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1PICK"), out int pickChr)) { Part1TitleScr.HookGrowth(); Part1.LevelPicks.Add((pickChr, 1)); }   // 고른 것이 인물 자료에 입혀지게(게임은 파트1 들머리가 건다)
             // DUELDX_LOADFIELD=<필드> 면 세이브를 불러온 뒤 그 필드를 연다(화면 밖 시험용 — 그 파티로 필드가 여는 전투를 처음부터 만든다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_LOADFIELD"), out int loadField) && loadField > 0) Fld.OpenField(loadField);
         }

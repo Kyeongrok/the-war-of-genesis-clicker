@@ -56,8 +56,18 @@ internal sealed unsafe partial class BattleScene
     internal void RefreshPart1Abilities(int chrCode)
     {
         if (!host._battleLoaded || !host._scene.IsPart1 || host._db?.Character(chrCode) is not { } fresh) return;
+        // 능력치 어빌리티(1 HP · 2~9 STR · DEX …)도 오르므로 최대 HP(Lp) · STR(Psy) · AC(Dep) · DEX 까지 새 값으로 — 전에는 어빌리티 목록만 바꿔
+        // 전투 안에서 「HP」를 올려도 최대 HP 가 그대로였다(사용자 제보 fg-90). 지금 HP 는 그대로 두고 최대치만 오른다(원본 0x1009ea50 은 최대 HP 를 그때그때 센다).
         foreach (var u in host._units)
-            if (u.ChrCode == chrCode && u.Data is { } d) u.Data = d with { Abilities = fresh.Abilities };
+            if (u.ChrCode == chrCode && u.Data is { } d)
+            {
+                u.Data = d with { Abilities = fresh.Abilities, Lp = fresh.Lp, Psy = fresh.Psy, Dep = fresh.Dep, Dex = fresh.Dex };
+                int before = u.MaxHp;
+                host.StatusScr.RefreshUnitStats(u);
+                if (Trace)
+                    File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 pick refresh chr {chrCode}: 최대 HP {before} → {u.MaxHp} (HP {u.Hp}) STR {fresh.Psy} AC {fresh.Dep} DEX {fresh.Dex}" + Environment.NewLine);
+            }
     }
 
     /// <summary>파트1 판에서 아직 안 고른 레벨업 어빌리티가 있다 — 사건·승패 판정을 그 뒤로 미룬다.</summary>
