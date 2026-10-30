@@ -96,6 +96,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         ("동맹을 AI 가 움직임", "끄면 동맹(편 3)도 내가 움직인다", MenuAllyAi, host._allyAi),
         ("전투 시작 시 소울 가득", "다음 전투부터 내 편 소울을 가득 채워 시작한다", MenuFullSoul, host._fullSoulAtStart),
+        ("안 움직이는 먼 적은 안 비춤", "화면 밖 적은 걷거나 기술을 쓸 때만 카메라가 간다", MenuQuietFoeCamera, host._quietFoeCamera),
         ("파트1 차례 목소리", "파트1 인물 차례에 성우 한 마디(원본에 없음)", MenuPart1TurnVoice, host._part1TurnVoice),
         ("파트1 차례 테두리", "차례인 유닛에 주황·노랑 반짝이는 테두리", MenuPart1TurnOutline, host._part1TurnOutline),
         ("튜토리얼에서도 저장", "파트1 튜토리얼 전투에서도 SAVE(원본은 막는다)", MenuPart1TutorialSave, host._part1TutorialSave),

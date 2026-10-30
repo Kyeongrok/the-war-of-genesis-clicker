@@ -689,7 +689,19 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (host._units[index].IsAlly)
                 host.Toast(host._units[index].HasStatus(4) || Part1Rules.SeesAllAsFoes(host._units[index]) ? $"{host.UnitName(index)} 이(가) {(host._units[index].HasStatus(4) ? "버서커" : "혼란")} 상태라 스스로 움직입니다" : $"{host.UnitName(index)} 차례 — 동맹이 스스로 움직입니다");
             // AI 는 행동 전에 카메라가 그 인물에게 가서 선다(상태 14 CHRWORK 0x10069df0, 감사4 C4). 내 차례(상태 22)는 안 옮긴다(C3).
-            _routine = CameraThen(host._units[index], AiRoutine(index));
+            // 모드 > 일반 「안 움직이는 먼 적은 안 비춤」(사용자 요청 fg-86, 기본 켬) — 화면 밖 적의 차례는 카메라를 미뤄 두고,
+            // 걷기 시작하거나(WalkTo) 기술을 쓸 때(UseWorkRoutine 의 CenterUnitAndWait)만 비춘다. 제자리에서 쉬는 먼 부대 쪽으로 화면이 오가지 않는다.
+            var ai = host._units[index];
+            _camDeferredFor = null;
+            if (host._quietFoeCamera && !ai.IsAlly && !UnitInView(ai))
+            {
+                _camDeferredFor = ai;
+                _routine = AiRoutine(index);
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"{host._lastTime:F2} camera deferred: unit {index} chr {ai.ChrCode} ({ai.Col},{ai.Row}) 화면 밖" + Environment.NewLine);
+            }
+            else _routine = CameraThen(ai, AiRoutine(index));
         }
     }
 

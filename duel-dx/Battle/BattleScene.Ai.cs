@@ -1079,7 +1079,17 @@ internal sealed unsafe partial class BattleScene
 
     internal IEnumerable<bool> WalkTo(UnitState u, MoveRange range, int cell)
     {
-        foreach (var step in range.PathTo(cell)) u.Path.Enqueue(step);
+        var steps = range.PathTo(cell).ToList();
+        // 차례 시작에 비추지 않은 먼 적(fg-86) — 정말 걸을 때 그 자리를 비춘다.
+        if (_camDeferredFor == u && steps.Count > 0)
+        {
+            _camDeferredFor = null;
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"{host._lastTime:F2} camera deferred → walk: chr {u.ChrCode} ({u.Col},{u.Row}) {steps.Count}칸" + Environment.NewLine);
+            foreach (bool b in CenterUnitAndWait(u)) yield return b;
+        }
+        foreach (var step in steps) u.Path.Enqueue(step);
         while (u.IsBusy) yield return true;
     }
 }

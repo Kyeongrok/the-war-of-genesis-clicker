@@ -39,6 +39,7 @@ namespace DuelDx;
 /// <param name="EggChaosCube">모드 &gt; 일반 &gt; 카오스 큐브 · 나야트레이 — 파트1 세이브 이스터에그(깃발 185, MosesEasterEggs.cs, 사용자 요청 menu-113, 기본 끔).</param>
 /// <param name="EggUnknownMap">모드 &gt; 일반 &gt; 알 수 없는 지도 — 깃발 186(기본 끔).</param>
 /// <param name="EggUnknownSeed">모드 &gt; 일반 &gt; 알 수 없는 씨앗 — 깃발 187(기본 끔).</param>
+/// <param name="QuietFoeCamera">모드 &gt; 일반 &gt; 안 움직이는 먼 적은 안 비춤 — 화면 밖 적의 차례에 카메라를 안 보내고 걷거나 기술을 쓸 때만 비출지(원본은 늘 비춘다, 사용자 요청 fg-86, 기본 켬).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -51,7 +52,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool HiResMoses = false, bool MiniMapFolded = true, int Part1Difficulty = 0,
                                     bool Part1TurnVoice = true, bool Part1TurnOutline = false, bool Part1TutorialSave = true,
                                     bool Part1ChestRollAtStart = true,
-                                    bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false)
+                                    bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false,
+                                    bool QuietFoeCamera = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

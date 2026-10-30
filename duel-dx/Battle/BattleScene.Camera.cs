@@ -131,6 +131,9 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>AI 차례(상태 8 → 14 CHRWORK 0x10069df0) — 그 인물을 가운데로 보내고 멈춘 뒤에 명령을 실행한다(감사4 C4).</summary>
+    /// <summary>차례가 왔지만 아직 비추지 않은 먼 적(모드 「안 움직이는 먼 적은 안 비춤」, fg-86) — 걷기 시작하면 비춘다.</summary>
+    internal UnitState? _camDeferredFor;
+
     internal IEnumerator<bool> CameraThen(UnitState u, IEnumerator<bool> inner)
     {
         foreach (bool b in CenterUnitAndWait(u)) yield return b;

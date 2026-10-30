@@ -258,7 +258,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -351,6 +351,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 인물의 차례 목소리(<see cref="Part1TurnCall"/>, 원본에 없음)를 내나 — 모드 > 일반 > 파트1 차례 목소리(사용자 요청, 기본 켬).</summary>
     internal bool _part1TurnVoice = UserSettings.Current.Part1TurnVoice;
     internal const int MenuPart1TurnVoice = 1199;
+
+    /// <summary>화면 밖 적의 차례에 카메라를 그쪽으로 안 보내나(걷거나 기술을 쓸 때만 비춘다) — 모드 > 일반 > 안 움직이는 먼 적은 안 비춤(사용자 요청 fg-86, 기본 켬).</summary>
+    internal bool _quietFoeCamera = UserSettings.Current.QuietFoeCamera;
+    internal const int MenuQuietFoeCamera = 1700;   // 1100~1199 · 1200 다시보기는 다 찼다
 
     /// <summary>파트1 차례 유닛의 반짝이는 테두리(<see cref="Part1TurnOutline"/>)를 두르나 — 모드 > 일반 > 파트1 차례 테두리(사용자 요청, 기본 끔).</summary>
     internal bool _part1TurnOutline = UserSettings.Current.Part1TurnOutline;
@@ -529,6 +533,12 @@ internal sealed unsafe partial class GameWindow
                 _part1TurnVoice = !_part1TurnVoice;
                 Win32.CheckMenuItem(_menuBar, MenuPart1TurnVoice, Win32.MF_BYCOMMAND | (_part1TurnVoice ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_part1TurnVoice ? "파트1 인물 차례에 목소리를 냅니다" : "파트1 인물 차례 목소리를 끕니다(원본대로)");
+                SaveSettings();
+                break;
+            case MenuQuietFoeCamera:
+                _quietFoeCamera = !_quietFoeCamera;
+                Win32.CheckMenuItem(_menuBar, MenuQuietFoeCamera, Win32.MF_BYCOMMAND | (_quietFoeCamera ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
+                Toast(_quietFoeCamera ? "화면 밖 적은 움직이거나 기술을 쓸 때만 비춥니다" : "적 차례마다 카메라가 그 적에게 갑니다(원본대로)");
                 SaveSettings();
                 break;
             case MenuPart1ChestRoll:
