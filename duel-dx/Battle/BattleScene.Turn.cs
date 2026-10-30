@@ -2511,7 +2511,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal int DrawnAction(UnitState u, int action)
     {
         if (!host._sprites.TryGetValue(u.ChrCode, out var sprite)) return action;
-        bool Empty(int a) => sprite.Clip(a, u.Facing) is not { Keys.Count: > 0 };   // 키가 하나도 없는 동작(정지 한 장짜리는 둔다)
+        // 키가 하나도 없는 동작(정지 한 장짜리는 둔다). Clip 은 빈 동작을 <b>서기</b>로 바꿔 돌려주므로(ObsMotionTable.Resolve) 서기로 떨어졌는지도 본다 —
+        // 전에는 키 수만 봐서 이 대체가 한 번도 안 걸렸고, 팡테온가드(Chr 285)의 기본공격이 서 있기만 했다(카페 제보 fg-95).
+        bool Empty(int a) => sprite.Clip(a, u.Facing) is not { Keys.Count: > 0 } c
+                             || (a != ObsMotionTable.ActionStand && c.Id == ObsMotionTable.DirectionOf(u.Facing));
         if (!Empty(action)) return action;
         foreach (int alt in new[] { 7, 5 })
             if (alt != action && !Empty(alt)) return alt;
