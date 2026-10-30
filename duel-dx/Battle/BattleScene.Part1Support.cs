@@ -201,7 +201,7 @@ internal sealed unsafe partial class BattleScene
             if (!u.Alive || !u.OnField) continue;
             var (fx, fy) = host.Btl.UnitFoot(u);
             if (set.Contains(Part1Rules.Condition))
-                host.DrawUi(Part1Game.ObsBase + 181, 0, tick, fx, fy + (int)(30 * 0.8 - 120 * 0.6), UiBlend.Alpha);
+                DrawPart1Mark(Part1Game.ObsBase + 181, 0, tick, fx, fy + (int)(30 * 0.8 - 120 * 0.6));
             bool hypnosis = set.Contains(Part1Rules.Hypnosis);
             if (!hypnosis && !set.Contains(Part1Rules.Confusion)) continue;
             for (int k = 0; k < 5; k++)
@@ -209,9 +209,19 @@ internal sealed unsafe partial class BattleScene
                 double angle = (tick - 6 * k) * 5 / 144.0 * 2 * Math.PI;
                 int x = fx + (int)Math.Round(18 * Math.Sin(angle)), y = fy - (int)(100 * 0.6) - (int)Math.Round(18 * 0.8 * Math.Cos(angle));
                 int motion = hypnosis ? 5 : 6 + (int)((uint)(u.ChrCode * 7 + k * 13) % 4);
-                host.DrawUi(Part1Game.ObsBase + 180, motion, tick, x, y, UiBlend.Alpha);
+                DrawPart1Mark(Part1Game.ObsBase + 180, motion, tick, x, y);
             }
         }
+    }
+
+    /// <summary>
+    /// 표지 한 장 — 그림의 섞기 키대로(비침 · 더하기 …). 전에는 모두 불투명으로 그려 컨디션이상의 연기(Obs 181)가
+    /// 까만 덩어리로 얼굴을 덮었다(사용자 제보 fg-85).
+    /// </summary>
+    private void DrawPart1Mark(int obs, int motion, int tick, int x, int y)
+    {
+        int key = host.UiFor(obs)?.BlendAt(motion, tick) ?? 0;
+        host.DrawUi(obs, motion, tick, x, y, BlendOf(key), fade: BlendFade(key));
     }
 
     /// <summary>
@@ -235,7 +245,7 @@ internal sealed unsafe partial class BattleScene
             foreach (var (on, motion, height) in (ReadOnlySpan<(bool, int, int)>)
                      [(Part1.Has(u, 15), 3, 40), (Part1.Has(u, 17), 0, 60), (berserk, 1, 80), (Part1.Has(u, 23), 2, 100)])
                 if (on)
-                    host.DrawUi(Part1Game.ObsBase + 180, motion, tick, fx + 12, fy + (int)(19 * 0.8 - height * 0.6), UiBlend.Alpha);
+                    DrawPart1Mark(Part1Game.ObsBase + 180, motion, tick, fx + 12, fy + (int)(19 * 0.8 - height * 0.6));
         }
     }
 
