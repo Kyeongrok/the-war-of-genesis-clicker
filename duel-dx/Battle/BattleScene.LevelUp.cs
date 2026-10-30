@@ -78,6 +78,10 @@ internal sealed unsafe partial class BattleScene
         // 용병(부하)이 쓰러뜨리면 살아 있는 대장이 쓰러뜨린 것으로 친다(사용자 요청 fg-44, 리메이크 — 원본은 용병 처치에 아무것도 안 준다).
         // 대장이 죽었으면 부대가 풀려(PromoteFollower: 부하는 대장 연결이 끊기고 편 3) 받을 이가 없고, 뽑힌 대장은 용병이라(Chr ≥ 106) 안 받는다.
         if ((uint)killer.LeaderIndex < host._units.Length && host._units[killer.LeaderIndex] is { Alive: true, Side: 4 } leader) killer = leader;
+        // 탈것(아지다하카 · 마장기 · 비행기 …, Chr ≥ 106)이 쓰러뜨리면 탄 사람이 받는다 — 원본 0x10035908~ 은 탈것 · 탄 이의 보상을 짝에게 넘긴다.
+        // 전에는 탈것이 받을 이로 남아 Chr 조건에 걸려 아무도 못 받았다(카페 제보 fg-96). 숫자는 판에 선 탈것 위에 띄운다.
+        var shownOn = killer;
+        if (_part1Riders.TryGetValue(killer, out var rider) && rider.Alive) killer = rider;
         if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
             || Part1.Fighter(killer) is not { } k || Part1.Fighter(victim) is not { } v) return;
         int before = k.Chr.Experience;
@@ -87,7 +91,7 @@ internal sealed unsafe partial class BattleScene
         growth.Experience += exp;
         host.Part1.Eld += eld;
         // 번 eld 도 함께 띄운다(리메이크 덧붙임 — 처치해도 돈이 안 들어온다는 카페 제보 fg-43: 들어오고 있었지만 보이는 곳이 상단 소지금뿐이었다).
-        Popup(killer, eld > 0 ? $"EXP +{exp}  {eld} eld" : $"EXP +{exp}", 0xFF90D0FF, 15);
+        Popup(shownOn, eld > 0 ? $"EXP +{exp}  {eld} eld" : $"EXP +{exp}", 0xFF90D0FF, 15);
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
                 $"part1 kill {killer.ChrCode} → {victim.ChrCode}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
