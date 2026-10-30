@@ -70,6 +70,10 @@ internal sealed unsafe partial class BattleScene
     private Part1BattleRange? _part1Range;
     private Part1BattleNarration? _part1Narration;
 
+    /// <summary>파트1 겹친 칸 고르기(<see cref="Part1Occlusion"/>) — 걸어서 닿는 앞 칸이 뒤 칸을 덮으면 앞이 이긴다.</summary>
+    internal Part1Occlusion Part1Occlusion => _part1Occlusion ??= new(host);
+    private Part1Occlusion? _part1Occlusion;
+
     /// <summary>파트1 해설 상자를 화면 자리(640×480 원점)에 — 판 그리기의 창 차례.</summary>
     internal void DrawPart1Narration() => _part1Narration?.Draw();
 

@@ -444,6 +444,8 @@ internal sealed unsafe partial class BattleScene
             _touchableFor = (range, _turn, mine, liveObjects);
         }
         var touchable = _touchable;
+        // 파트1 — 앞 칸에 통째로 덮여 고를 수 없는 칸은 안 칠한다(덮은 앞 칸 그림 위에 뒤 칸 파랑이 깔려 「벽 위로 간다」처럼 보였다, fg-82).
+        bool occlude = host._scene.IsPart1 && host.BoardIsMap;
 
         for (int row = 0; row < host.Rows; row++)
             for (int col = 0; col < host.Cols; col++)
@@ -454,7 +456,7 @@ internal sealed unsafe partial class BattleScene
                 // 직접 본 그대로다("aiming일 때만 빨강"으로 좁혔던 이전 판단은 상태 번호를 오독한 것으로 보인다:
                 // 같은 파일 안에서도 상태 12를 "어빌리티"(97줄 언저리)와 "그냥 걷기"(여기)로 서로 다르게 적어 놨었다).
                 uint layer = touchable.Contains(i) ? ObjectLayer : range.Cost[i] != int.MaxValue ? MoveLayer : range.Red[i] ? RangeLayer : 0;
-                if (layer == 0) continue;
+                if (layer == 0 || occlude && Part1Occlusion.Hidden(col, row)) continue;
                 PaintCell(col, row, layer);
             }
     }

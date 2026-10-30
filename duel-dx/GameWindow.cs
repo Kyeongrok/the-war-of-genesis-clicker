@@ -103,7 +103,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     {
         int col = bx / TileW;
         if ((uint)col >= Cols) return -1;
-        if (_battleLoaded && _scene.IsPart1 && BoardIsMap && !Fld.FieldOpen && !Mos._mosesOpen) return Part1RowAt(col, by);
+        if (_battleLoaded && _scene.IsPart1 && BoardIsMap && !Fld.FieldOpen && !Mos._mosesOpen) return Btl.Part1Occlusion.Pick(col, by, Part1RowAt(col, by));
         // 높이가 다른 칸들의 윗면이 같은 자리에 겹칠 수 있다 — 앞(아래) 칸부터 보되, 벽 칸(플래그 &9 — 못 들어가는 칸)은 뒤에 설 수 있는 칸이
         // 겹쳐 있으면 양보한다. 전에는 높은 벽 칸이 그 뒤 바닥 칸의 클릭을 가로챘다(Btl 0298 의 (21,12) 가 줄 16 으로 잡힘).
         int wall = -1;
