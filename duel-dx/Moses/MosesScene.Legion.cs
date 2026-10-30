@@ -241,9 +241,13 @@ internal sealed unsafe partial class MosesScene
         }
         foreach (var (dx, dy, chr, name, color) in cells.OrderBy(c => c.Dy))
         {
+            int sx = ox + 40 * dx + 150, sy = oy + 32 * dy + 186;
             if (PreviewSprite(chr)?.FrameOfMotion(2, 0, false) is { } frame)
-                host.BlitMasked(frame.Px, frame.W, frame.H, ox + 40 * dx + 150 + frame.X, oy + 32 * dy + 186 + frame.Y);
-            else DrawLegionCell(ox, oy, dx, dy, name, color);
+                host.BlitMasked(frame.Px, frame.W, frame.H, sx + frame.X, sy + frame.Y);
+            // 따로 내보낸 그림이 없는 인물(스턴의 부하들 · 슈 · 진 따위)은 Chr 의 공용 그림(SpriteId) 모션 2 — 군단 에디터와 같다.
+            else if (!(db.Character(chr) is { SpriteId: > 0 and < ushort.MaxValue } c
+                       && host.DrawUi(c.SpriteId, ObsMotionTable.DirectionFront, 0, sx, sy, GameWindow.UiBlend.Alpha, loop: false)))
+                DrawLegionCell(ox, oy, dx, dy, name, color);
         }
 
         host.DarkenRect(ox + 440, oy + 225, 190, 165, 12);
