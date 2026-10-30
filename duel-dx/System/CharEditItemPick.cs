@@ -9,7 +9,7 @@ using static DuelDx.GameWindow;
 /// 맨 위에 갈래 탭(「전체」 + 갈래들), 그 아래 찾기 칸(에디터의 찾기 칸과 같은 글자 · 한글 조합), 그 아래 줄 목록 — 줄을 누르면 그 칸에 끼고 닫힌다.
 /// </summary>
 /// <remarks>
-/// 파트2 갈래는 아이템 표에 섞인 머리줄(「=== 요요 ===」 · 「====&lt;아머&gt;======」)이다 — 표 차례대로 머리줄 다음 아이템이 그 갈래(같은 이름은 한 탭).
+/// 파트2 갈래는 아이템 종류(Itm 파일 8, <see cref="TypeName"/>)다 — 이름은 아이템 표 머리줄(「=== 요요 ===」 · 「====&lt;아머&gt;======」)의 말을 따랐다.
 /// 파트1 갈래는 아이템 갈래(+0x44, <see cref="Part1ItemTip.TypeName"/>)이고, 그 칸에 낄 수 있는 갈래만 넣는다(<see cref="Part1CharEdit.FitsSlot"/>).
 /// </remarks>
 internal sealed class CharEditItemPick(GameWindow host, CharEditScreen ed)
@@ -45,25 +45,24 @@ internal sealed class CharEditItemPick(GameWindow host, CharEditScreen ed)
     {
         List<Row> rows = [new(0, "(비움)", "", "")];
         if (host._db is not { } db) return rows;
-        string category = "기타";
-        foreach (var (id, item) in db.Items.OrderBy(kv => kv.Key))
+        // 갈래는 아이템 종류(Itm 파일 8)로 가른다 — 표의 머리줄 차례로 가르면 원본 표에 머리줄이 빠진 곳에서 섞인다
+        // (씨가 32~37 다음 포이즌 포트 39~43 앞에 머리줄이 없어 리엔의 술병이 씨가 탭에 들어갔다, fg-92). 장비 칸이 보는 것도 종류다.
+        foreach (var (id, item) in db.Items.OrderBy(kv => kv.Value.Type).ThenBy(kv => kv.Key))
         {
-            if (id == 0 || db.T(item.NameId) is not { Length: > 0 } name) continue;
-            if (name.StartsWith('='))
-            {
-                // 「====<부스터>======」 → 「부스터」, 「=== 일반검류 ===」 → 「일반검류」.
-                string head = name.Trim('=', '<', '>', ' ').Replace("<", "").Replace(">", "").Trim('=', ' ');
-                if (head.Length == 0) continue;
-                // 표 맨 앞 리본(1~7)은 첫 머리줄(8 「리본류」)보다 앞에 있다 — 그 머리줄 갈래로 친다.
-                if (category == "기타") rows = [.. rows.Select(r => r.Category == "기타" ? r with { Category = head } : r)];
-                category = head;
-                continue;
-            }
+            if (id == 0 || item.Type == 255 || db.T(item.NameId) is not { Length: > 0 } name || name.StartsWith('=')) continue;
             string info = string.Join(" · ", new[] { item.Attack > 0 ? $"공격 {item.Attack}" : "", item.Defense > 0 ? $"방어 {item.Defense}" : "", item.Price > 0 ? $"{item.Price}GP" : "" }.Where(s => s.Length > 0));
-            rows.Add(new(id, name, category, info));
+            rows.Add(new(id, name, TypeName(item.Type), info));
         }
         return rows;
     }
+
+    /// <summary>파트2 아이템 종류의 탭 이름 — 원본 아이템 표 머리줄(「=== 씨가 ===」 …)의 말을 따랐다.</summary>
+    internal static string TypeName(byte type) => type switch
+    {
+        0 => "VES", 1 => "부스터", 2 => "아머", 3 => "신발", 4 => "벨트", 5 => "반지", 6 => "목걸이", 7 => "사용아이템",
+        8 => "리본류", 9 => "요요", 10 => "사진기", 11 => "크로", 12 => "쌍권총", 13 => "씨가", 14 => "일반검류", 15 => "대검류",
+        16 => "아수라검", 17 => "포이즌 포트", 19 => "적들용무기", _ => $"종류 {type}",
+    };
 
     private static List<Row> Part1Rows(int slot)
     {
