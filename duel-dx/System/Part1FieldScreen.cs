@@ -160,6 +160,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     private double StartMotion(int n, int motion, bool loop)
     {
         if (n < 0 || n >= _spots.Length || _field is not { } field) return 0;
+        motion = Part1Game.ConvertedMotion(field.Sprites[n].SpriteId, motion);   // 대본은 원본 모션 번호 — 인물 그림은 파트2 동작으로 옮겨 쌌다(mo-36)
         _motion[n] = (motion, field.Sprites[n].Direction == 3);
         _motionStart[n] = host._lastTime;
         _motionOnce[n] = !loop;

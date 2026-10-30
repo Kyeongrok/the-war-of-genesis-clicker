@@ -416,6 +416,20 @@ public static class Part1Game
     ];
 
     /// <summary>
+    /// 원본 파트1 모션 번호(동작 × 3 + 방향 — 필드 · 챕터 대본 300 이 쓰는 것) → 다시 싼 그림(<see cref="ToPart2Obs"/>)의 모션 번호.
+    /// 인물 전투 그림(<see cref="BodySprites"/>)은 동작을 <see cref="ActionMap"/> 으로 옮겨 쌌으므로 같은 번호로 찾으면 다른 동작이 나오거나 없다 —
+    /// 필드 0029 셰라자드 모션 12(동작 4 숨 고르기 = 살라딘을 간호하는 자세)가 그래서 안 보였다(사용자 제보 mo-36). 옮긴 자리가 없는 동작(7 · 8 · 10)은 그대로.
+    /// </summary>
+    public static int ConvertedMotion(int part1Obs, int motion)
+    {
+        if (motion < 0 || !BodySprites().Contains(part1Obs)) return motion;
+        int action = motion / 3, dir = motion % 3;
+        foreach (var (to, (from, _, _)) in ActionMap)
+            if (from == action) return to * 3 + dir;
+        return motion;
+    }
+
+    /// <summary>
     /// 파트1 기술이 시전자에게 거는 동작(menu-85 · menu-89) — 동작 16 이상(던지기 17 · 돌진 18 · 시전 24 · 아수라파천무의 132~138 모션 …)은
     /// 파트2 에 없는 것이라 동작 번호에 40 을 더한 비어 있는 자리에 그대로 옮겨 둔다. 파트1 모션 m(48 이상)은 이 게임에서 m + 120 이다.
     /// </summary>
