@@ -1110,6 +1110,7 @@ internal sealed unsafe partial class BattleScene
                     foreach (var u in EventTargets(A(0), out _))
                     {
                         Part1.SetField(u, A(1), A(2));
+                        if (host.Part1.Party.Contains(u.ChrCode)) host.Part1.SetStat(u.ChrCode, A(1), A(2));   // 일행은 판 밖까지 남는다(원본은 CChr 자체를 고친다)
                         if (A(1) == 19 && Part1.Fighter(u) is { } f) { u.MaxHp = Math.Max(1, f.Chr.MaxHp); u.Hp = Math.Min(u.Hp, u.MaxHp); }
                     }
                 break;

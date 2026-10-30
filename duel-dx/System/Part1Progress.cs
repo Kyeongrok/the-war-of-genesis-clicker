@@ -380,6 +380,18 @@ internal sealed class Part1Progress
     internal Growth GrowthOf(int chrCode, int baseExperience) =>
         Grown.TryGetValue(chrCode, out var g) ? g : Grown[chrCode] = new Growth { Experience = baseExperience };
 
+    /// <summary>
+    /// 인물 칸을 값으로 못박는다 — 전투 행동 500(<c>0x1001ff80</c>)은 인물 자료(CChr) 자체를 고쳐 판이 끝나도 남는다. 리메이크는 자란 것의 칸 더하기(<see cref="Growth.Stats"/>)로 적는다.
+    /// 가베라의 동굴(전투 0023) 사건 2: 가베라의 저주를 맞은 살라딘 최대 HP 1200 · 능력치 다섯(사용자 제보 — 판 밖에서는 체력이 그대로였다).
+    /// </summary>
+    internal void SetStat(int chrCode, int field, int value)
+    {
+        if (Part1Chr.Load(chrCode - Part1Game.ChrBase) is not { } raw || (uint)field >= raw.Fields.Length) return;
+        var stats = GrowthOf(chrCode, raw.Fields[18]).Stats;
+        int add = stats.GetValueOrDefault(field) + value - Apply(raw).Fields[field];
+        if (add == 0) stats.Remove(field); else stats[field] = add;
+    }
+
     /// <summary>인물 레코드에 자란 것을 입힌다(GameDatabase.Part1Growth).</summary>
     internal Part1Chr Apply(Part1Chr chr)
     {
