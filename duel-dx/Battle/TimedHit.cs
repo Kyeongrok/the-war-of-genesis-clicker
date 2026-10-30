@@ -379,6 +379,16 @@ internal sealed class TimedHit(GameWindow host)
         var sizes = lines.Select((l, i) => Measure(l, 0xFFFFFFFF, i == 0 ? 11f : 9.5f)).ToArray();
         int gw = sizes.Max(m => m.W), gh = sizes.Sum(m => m.H + 2) - 2;
         int top = y - Cap - 8 - gh - 4;
+        // 전투 판의 미니맵(왼쪽 위, 위에 그린다)과 겹치면 미니맵 오른쪽으로 비킨다(사용자 요청 fa-74 — btl 20023 (3,10)에서 왼쪽이 가렸다).
+        if (_unit != null && host.MiniMap.Box is var (mx, my, mw, mh))
+        {
+            int left = Math.Min(x, cx - gw / 2) - 8, right = left + Math.Max(BarW, gw) + 16, bottom = y + BarH + 10 + 30;
+            if (left < mx + mw && right > mx && top - 4 < my + mh && bottom > my)
+            {
+                int shift = mx + mw + 4 - left;
+                (x, cx) = (x + shift, cx + shift);
+            }
+        }
         Fill(Math.Min(x, cx - gw / 2) - 8, top - 4, Math.Max(BarW, gw) + 16, y + BarH + 6 - top + 4, 0xC0000000);
         for (int i = 0, ly = top; i < lines.Length; ly += sizes[i].H + 2, i++)
             Text(lines[i], cx - sizes[i].W / 2, ly, i == 0 ? 0xFFFFFFFF : 0xFFC8D0E0, i == 0 ? 11f : 9.5f);

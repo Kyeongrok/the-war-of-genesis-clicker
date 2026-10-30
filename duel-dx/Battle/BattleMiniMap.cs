@@ -39,6 +39,9 @@ internal sealed class BattleMiniMap(GameWindow host)
     /// <summary>상자 목록을 이만큼 아래로 내린다 — 미니맵이 안 떠 있으면 0.</summary>
     internal int StackHeight => _box is { } b ? b.H + 6 : 0;
 
+    /// <summary>지난 틀에 그린 미니맵 자리(판 좌표) — 안 그렸으면 null. 타이밍 바가 이것을 비킨다.</summary>
+    internal (int X, int Y, int W, int H)? Box => _box;
+
     /// <summary>미니맵을 띄울 때인가 — 창 · 배치 · 대사 · 모세스 · 결과 따위가 떠 있으면 숨긴다.</summary>
     private bool Visible =>
         host._battleLoaded && host.BoardIsMap && host._map != null && !host._loading
