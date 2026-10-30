@@ -15,7 +15,7 @@ internal static class Part1TurnCall
     internal static readonly IReadOnlyDictionary<int, int[]> Calls = new Dictionary<int, int[]>
     {
         [65] = [124],   // 크리스티앙 — 필드 0094 「좋아, 좋아. 그럼 열심히 하자구!」(207 [340, 13, 124])
-        [10] = [1107],  // 셰라자드 — 필드 0022 사건 3 「살라딘님!」(208 [311, 16, 1107], 사용자 요청 fg-45)
+        [10] = [1107, 1141],  // 셰라자드 — 필드 0022 사건 3 「살라딘님!」(208 [311, 16, 1107], 사용자 요청 fg-45) · 필드 0029 사건 2 「왜 웃으세요?」(207 [311, 26, 1141], 사용자 요청 fg-87)
     };
 
     /// <summary>그 유닛의 차례 목소리(게임 안 소리 번호 = <see cref="Part1Game.ObsBase"/> + Snd) — 없으면 null.</summary>
