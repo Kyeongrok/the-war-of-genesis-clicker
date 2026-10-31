@@ -30,6 +30,12 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
     public IReadOnlyList<int> Markers { get; init; } = [];
 
     /// <summary>
+    /// 지도 말마다 그 무리 인물 — 말 목록 뒤 말마다 (u16 k, (인물, 0) × k). 첫 인물의 얼굴을 붉은 깃대 틀에 띄운다(<c>0x100b20d0</c>, 분석-파트1-챕터 13.4).
+    /// 챕터 4: 말 0 = 인물 18. 없으면 빈 목록.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<int>> MarkerChrs { get; init; } = [];
+
+    /// <summary>
     /// 지도 그림 — 말 목록 뒤 12바이트 × P(낱말 0 Obs · 1 x · 2 y · 3 · 4 · 5 글 줄, −1 이면 그림만). 원본 <c>0x100b2b30</c> 이 지도를 세울 때 Obs 모션 0 을 (x, y) 에 둔다.
     /// 시판 자료는 거의 다 Obs 820(엇갈린 두 칼) — 전투 장소 가운데에 하나씩. 챕터 304 [n] 이 n 번을 숨긴다.
     /// </summary>
@@ -69,12 +75,15 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
         int m = H();
         if (m < 0 || !Need(2 * m)) return null;
         var markers = Enumerable.Range(0, m).Select(_ => (int)H()).ToList();
+        var markerChrs = new List<IReadOnlyList<int>>(m);
         for (int i = 0; i < m; i++)
         {
             if (!Need(2)) return null;
             int k = H();
             if (k < 0 || !Need(4 * k)) return null;
-            o += 4 * k;
+            var chrs = new List<int>(k);
+            for (int j = 0; j < k; j++) { chrs.Add(H()); H(); }
+            markerChrs.Add(chrs);
         }
         if (!Need(2)) return null;
         int p = H();
@@ -93,7 +102,7 @@ public sealed record Part1Chapter(int Id, short[] Header, IReadOnlyList<Part1Cha
             if (na < 0 || !Need(14 * na)) break;
             events.Add(new Part1BattleEvent(i, max, conds, Commands(b, ref o, na)));
         }
-        return new Part1Chapter(id, header, places, events) { Markers = markers, Pictures = pictures };
+        return new Part1Chapter(id, header, places, events) { Markers = markers, MarkerChrs = markerChrs, Pictures = pictures };
     }
 
     private static List<ScriptCommand> Commands(byte[] b, ref int o, int count)

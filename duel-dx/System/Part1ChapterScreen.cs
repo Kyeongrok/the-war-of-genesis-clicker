@@ -39,7 +39,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     internal const int BannerObs = 219, TeamObs = 226, RingObs = 182;
 
     /// <summary>Esc 메뉴 — 원본 지도에는 없다(시스템 메뉴 쪽). 리메이크에 있던 연대표 · 일행 창 · 타이틀을 여기에 둔다.</summary>
-    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "동료 정보", "저장", "불러오기", "파트1 타이틀", "돌아가기"];
+    internal static readonly string[] MenuItems = ["연대표", "일행 · 장비", "동료 정보", "저장", "불러오기", "설정", "파트1 타이틀", "돌아가기"];
 
     internal const int MenuX = 250, MenuY = 170, MenuW = 140, MenuRowH = 28;
 
@@ -446,6 +446,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             _cam = (chapter.Header.Length > 4 ? chapter.Header[3] : 0, chapter.Header.Length > 4 ? chapter.Header[4] : 0);
             ClampCamera(MosesScene.MosesW, MosesScene.MosesH);
             _camAim = (_cam.X + MosesScene.MosesW / 2, _cam.Y + MosesScene.MosesH / 2);
+            // 리메이크는 고른 팀(아군)이 화면 가운데에 오게 연다 — 원본 자리(낱말 3·4)는 넓은 창에서 팀이 구석 · 밖에 걸렸다(사용자 요청 mo-37).
+            if (_team >= 0 && _team < _teams.Count) CenterOn(_teams[_team].Place);
         }
         ClampCamera();
         _open = true;
@@ -1001,8 +1003,9 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             // 저장 · 불러오기 — 전투 SAVE 와 같은 칸 창(파트1 칸 part1-battle-save-NN.json). 지도에서 적은 칸은 장면 갈래 4(「챕  터」)로, 불러오면 이 지도로 돌아온다.
             case MenuHit + 3: _mode = Mode.Map; SaveProgress(); host.SlotsScr.OpenSlots(0); break;
             case MenuHit + 4: _mode = Mode.Map; host.SlotsScr.OpenSlots(1); break;
-            case MenuHit + 5: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
-            case MenuHit + 6: _mode = Mode.Map; break;
+            case MenuHit + 5: _mode = Mode.Map; host.SettingsScr.Open(); break;   // 설정 창(메뉴 막대의 설정과 같다, 사용자 요청 mo-38)
+            case MenuHit + 6: _mode = Mode.Map; host.LeaveScene(() => _open = false); break;
+            case MenuHit + 7: _mode = Mode.Map; break;
             case >= 0 when hit < chapter.Places.Count: GoTo(hit); break;
         }
     }
@@ -1235,6 +1238,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             var (gx, gy) = Screen(chapter.Places[i], ox, oy);
             if (gx < ox - 120 || gx > ox + W + 120 || gy < oy - 20 || gy > oy + H + 100) continue;
             Art.Blit(Art.Motion(TeamObs, at.Count > 0 ? 0 : 3), gx, gy);
+            // 적 말 — 붉은 틀에 그 말 무리 첫 인물의 얼굴(전에는 틀만 비어 보였다, 사용자 보고 mo-37).
+            if (at.Count == 0 && Events.Markers.FindIndex(m => m == i) is >= 0 and var mk && mk < chapter.MarkerChrs.Count
+                && chapter.MarkerChrs[mk] is { Count: > 0 } foes)
+                Art.Face(Part1Game.ChrBase + foes[0], gx + 34, gy - 48);
             if (at.Count > 0)
             {
                 int lead = at.Contains(_team) ? _team : at[0];
