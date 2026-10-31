@@ -270,6 +270,8 @@ export default {
         return new Response(DASHBOARD_HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } });
       return json({ error: 'not found' }, 404);
     } catch (e) {
+      // wrangler tail 로 원인을 보게 남긴다 — D1 하루 읽기 한도가 차면 여기로 온다(code 7500).
+      console.error(e && e.stack || e);
       return json({ error: 'server error' }, 500);
     }
   },
