@@ -41,6 +41,9 @@ export const DASHBOARD_HTML = `<!doctype html>
   .envgrid h3 { font-size: 13px; margin: 0 0 4px; color: var(--accent); }
   .envgrid td.bar { width: 30%; }
   .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pagetabs { margin-bottom: 16px; position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 6px 0; }
+  .pagetabs button { padding: 7px 14px; }
+  section[data-tab][hidden] { display: none; }
   #error { color: var(--bad); }
   .bug { border-top: 1px solid var(--line); padding: 10px 0; }
   .bug .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -60,18 +63,22 @@ export const DASHBOARD_HTML = `<!doctype html>
     <span id="error"></span>
   </div>
   <div class="tiles" id="tiles"></div>
-  <section><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
-  <section><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
-  <section><h2>인물별 (파트마다 많이 쓴 20명 · 어빌리티 상위 20)</h2><div class="sub">파트2</div><div class="tabs" id="chartabs"></div><div class="sub">파트1</div><div class="tabs" id="chartabs1"></div><table id="chars"></table></section>
-  <section><h2>분기별</h2><table id="battles"></table></section>
-  <section><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
-  <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
-  <section><h2>버그 리포트</h2>
+  <div class="tabs pagetabs" id="pagetabs">
+    <button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
+    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button>
+  </div>
+  <section data-tab="ability"><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
+  <section data-tab="ability"><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
+  <section data-tab="chars"><h2>인물별 (파트마다 많이 쓴 20명 · 어빌리티 상위 20)</h2><div class="sub">파트2</div><div class="tabs" id="chartabs"></div><div class="sub">파트1</div><div class="tabs" id="chartabs1"></div><table id="chars"></table></section>
+  <section data-tab="battles"><h2>분기별</h2><table id="battles"></table></section>
+  <section data-tab="env"><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
+  <section data-tab="env"><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
+  <section data-tab="bugs"><h2>버그 리포트</h2>
     <div class="sub">게임의 「버그 리포트」로 받은 글입니다. 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
     <div class="filters"><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
       <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
     <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
-  <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
+  <section data-tab="days"><h2>날짜별 · 버전별</h2><table id="days"></table></section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -81,6 +88,17 @@ const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 let data = null, sortKey = 'uses', pickedChar = null;
 const state = { version: '', tachyrion: '' };
+
+// 아래 표들은 탭으로 나눠 하나씩 보인다 — 고른 탭은 이 브라우저에 남는다
+function pickTab(tab) {
+  document.querySelectorAll('section[data-tab]').forEach((el) => el.hidden = el.dataset.tab !== tab);
+  document.querySelectorAll('#pagetabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  try { localStorage.setItem('dashTab', tab); } catch (e) { }
+}
+document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => pickTab(b.dataset.tab));
+let savedTab = null;
+try { savedTab = localStorage.getItem('dashTab'); } catch (e) { }
+pickTab(document.querySelector('#pagetabs button[data-tab="' + savedTab + '"]') ? savedTab : 'ability');
 
 const abilityName = (r) => r.ability > 0 ? (data.names.abilities[r.ability] || '어빌리티 ' + r.ability) : r.work === 0 ? '일반 공격' : '아이템·기타 (work ' + r.work + ')';
 const charName = (id) => data.names.characters[id] || '인물 ' + id;
