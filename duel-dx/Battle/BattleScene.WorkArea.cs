@@ -211,7 +211,7 @@ internal sealed unsafe partial class BattleScene
         if (w.SelfCentred) (col, row) = (user.Col, user.Row);
         if (Part1DashOf(w) is { } dash) return Part1DashCells(dash, user, col, row);
         if (Part1BeamOf(w, user) is { } beam) return Part1BeamCells(beam, user, col, row);
-        if (Part1AreaOf(w, user) is { } p1) return Part1AreaCells(p1, user, col, row);
+        if (Part1AreaOf(w, user) is { } p1) return p1.AimFilter == 4 ? Part1AreaCells(p1, user, user.Col, user.Row) : Part1AreaCells(p1, user, col, row);
         var cells = new List<(int, int)>();
         if (w.AreaShape == 0) { cells.Add((col, row)); return cells; }
 
@@ -374,8 +374,11 @@ internal sealed unsafe partial class BattleScene
     /// 파트1 판에서 파트1 인물이 쓰는 파트1 기술(<see cref="Part1SkillBook"/> 이 만든 work)의 Attack — 효과 범위를 Attack.dat 로 잰다.
     /// 기본 공격(빌린 파트2 work)과 손으로 쓴 스킬 파일(썬더스탐 · 소환 …)은 null — 빌린 틀 · 그 파일의 범위를 둔다.
     /// </summary>
+    /// 다만 손으로 쓴 것 가운데 <b>제 자리 기술</b>(<c>+0x31</c> = 4 — 폭풍검 · 천수관음 · 묵호자 · 소환 · 메테오 스트라이크 …)은 Attack.dat 의 범위(큰 마름모 · 9999 판 전체)를 쓴다 —
+    /// 빌린 틀의 십자 범위로만 쳤다(버그 리포트 #3, fg-103).
     internal Part1Attack? Part1AreaOf(WorkData w, UnitState? user) =>
-        user != null && host._scene.IsPart1 && Part1SkillBook.IsGenerated(w.Id) && Part1.Fighter(user) is not null && Part1.AttackOf(w) is { } a ? a : null;
+        user != null && host._scene.IsPart1 && Part1.Fighter(user) is not null && Part1.AttackOf(w) is { } a
+        && (Part1SkillBook.IsGenerated(w.Id) || a.AimFilter == 4 && a.AreaShape != 0) ? a : null;
 
     /// <summary>
     /// 파트1 효과 범위 칸 — 원본 <c>0x100393b0(atk, 겨눈 x, y, 방향, 0, 0)</c> 그대로(분석-파트1-전투 31절).
