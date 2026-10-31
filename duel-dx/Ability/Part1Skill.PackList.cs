@@ -12,7 +12,7 @@ internal sealed partial class Part1Skill
     /// 기술 핸들러가 직접 부르는 <c>Sound(N, …)</c> · <c>Put(N, …)</c> 같은 글자 그대로의 번호는 팩 도구가 소스를 훑어 더한다.
     /// </summary>
     /// <remarks>
-    /// <c>DUELDX_P1NEEDS=&lt;파일&gt;</c> 로 켜면 이 목록을 JSON(<c>{"obs":[…],"sounds":[…]}</c>, 파트1 번호)으로 쓰고 바로 끝낸다 —
+    /// <c>DUELDX_P1NEEDS=&lt;파일&gt;</c> 로 켜면 이 목록을 JSON(<c>{"obs":[…],"sounds":[…],"works":{work:[…]}}</c>, 파트1 번호)으로 쓰고 바로 끝낸다 —
     /// <c>tools/part1-pack</c> 이 <c>tools/part1_needs.json</c> 으로 읽는다. 파트1 폴더는 안 본다(번호 표는 모두 코드에 있다).
     /// </remarks>
     internal static (SortedSet<int> Obs, SortedSet<int> Sounds) PackList()
@@ -42,7 +42,10 @@ internal sealed partial class Part1Skill
     {
         if (Environment.GetEnvironmentVariable("DUELDX_P1NEEDS") is not { Length: > 0 } file) return false;
         var (obs, sounds) = PackList();
-        File.WriteAllText(file, JsonSerializer.Serialize(new { obs, sounds }));
+        // 기술마다 쓰는 그림(파트1 번호) — 편집기 이펙트 보기의 「기술로 찾기」 가 파트1 기술을 이것으로 늘어놓는다(asset-9).
+        var works = Works.Concat(Enumerable.Range(0, Part1SkillBook.WorkStride).Select(a => Part1Game.ChrBase + a)).Where(Handles).Distinct().Order()
+            .ToDictionary(w => w.ToString(), w => NeedsFor(w).Where(n => n > 0).Distinct().ToArray());
+        File.WriteAllText(file, JsonSerializer.Serialize(new { obs, sounds, works }));
         return true;
     }
 }

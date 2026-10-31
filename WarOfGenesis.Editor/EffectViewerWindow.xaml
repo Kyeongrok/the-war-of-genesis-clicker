@@ -17,7 +17,7 @@
             Margin="0,6,0,0"
             DockPanel.Dock="Bottom"
             Foreground="DimGray"
-            Text="이펙트는 Obs 의 모션을 30틱/초로 그린다 — 그림 키·자식 키(다른 Obs 를 겹침)·섞기 키(17 더하기 · 10 닷지 · 12 스크린 · 1~8 밝기 단계)·자리 키를 원본 애니메이터처럼 따른다. 「assets」 가 ✗ 인 Obs 는 저장소 assets 에 없어 게임(duel-dx)에서 안 나온다 — 게임 폴더를 열어 두면 게임 자료로 미리 볼 수 있다. 기술 탭의 목록은 tools/re/work_fx_extra.tsv(원본 준비·핸들러가 띄우는 것 전부와 호출 주소)다. 「게임 표」 가 ○ 면 duel-dx 가 그 기술에 실제로 띄우는 표(AbilityScripts.g.cs)에도 있고, ✗ 면 게임에서 빠져 있다. duel-dx 가 손으로 만든 기술(나인 크루세이더의 칼, 필살기 앞머리 등)은 따로 그린다. 종류 obs? 는 Obs·모션을 셈으로 정하는 것, code 는 그림 자료 없이 코드로 그리는 것, sound 는 소리만 든 껍데기다."
+            Text="이펙트는 Obs 의 모션을 30틱/초로 그린다 — 그림 키·자식 키(다른 Obs 를 겹침)·섞기 키(17 더하기 · 10 닷지 · 12 스크린 · 1~8 밝기 단계)·자리 키를 원본 애니메이터처럼 따른다. 「assets」 가 ✗ 인 Obs 는 저장소 assets 에 없어 게임(duel-dx)에서 안 나온다 — 게임 폴더를 열어 두면 게임 자료로 미리 볼 수 있다. 기술 탭의 목록은 tools/re/work_fx_extra.tsv(원본 준비·핸들러가 띄우는 것 전부와 호출 주소)다. 「게임 표」 가 ○ 면 duel-dx 가 그 기술에 실제로 띄우는 표(AbilityScripts.g.cs)에도 있고, ✗ 면 게임에서 빠져 있다. duel-dx 가 손으로 만든 기술(나인 크루세이더의 칼, 필살기 앞머리 등)은 따로 그린다. 종류 obs? 는 Obs·모션을 셈으로 정하는 것, code 는 그림 자료 없이 코드로 그리는 것, sound 는 소리만 든 껍데기다. 파트 1 기술은 원본이 이펙트를 코드로 짠 시각표로 띄워 표가 없다 — 그 기술이 쓰는 그림의 모션을 늘어놓는다(파트1 폴더나 받아 둔 파트1 그림에서 읽는다)."
             TextWrapping="Wrap" />
         <Grid>
             <Grid.ColumnDefinitions>
@@ -58,6 +58,7 @@
                                 SelectionChanged="WorkGrid_SelectionChanged"
                                 SelectionMode="Single">
                                 <DataGrid.Columns>
+                                    <DataGridTextColumn Binding="{Binding Part}" Header="파트" />
                                     <DataGridTextColumn Binding="{Binding Ability}" Header="어빌" />
                                     <DataGridTextColumn
                                         MaxWidth="160"

@@ -30,7 +30,7 @@ namespace WarOfGenesis.Editor;
 /// </remarks>
 public partial class EffectViewerWindow : Window
 {
-    public sealed record WorkRow(int Ability, string Name, int Level, int Work, int Prepare, int Effects, int Missing);
+    public sealed record WorkRow(string Part, int Ability, string Name, int Level, int Work, int Prepare, int Effects, int Missing);
     public sealed record EffectRow(string Part, string Kind, string Obs, string Motion, string Where, string Delay, string Life,
                                    string InAssets, string InGame, string Note, string Address);
 
@@ -55,6 +55,9 @@ public partial class EffectViewerWindow : Window
     private readonly Dictionary<int, List<int>> _movies = [];
     /// <summary>work → 원본이 띄우는 것 전부(<c>tools/re/work_fx_extra.tsv</c>).</summary>
     private readonly Dictionary<int, List<Extra>> _extras = [];
+    /// <summary>파트1 work → 그 핸들러가 쓰는 그림(게임 번호 = 파트1 번호 + <see cref="Part1Game.ObsBase"/>, <c>tools/part1_needs.json</c> 의 works).</summary>
+    private readonly Dictionary<int, int[]> _part1Works = [];
+    private readonly SortedSet<int> _part1Obs = [];
     private readonly Dictionary<int, Sprite?> _sprites = [];
     private readonly List<WorkRow> _workRows = [];
     private readonly List<ObsRow> _obsRows = [];
@@ -97,23 +100,29 @@ public partial class EffectViewerWindow : Window
                 foreach (string path in Directory.EnumerateFiles(dir, "*.obs", SearchOption.AllDirectories))
                     if (int.TryParse(Path.GetFileNameWithoutExtension(path), out int n)) _assetObs.TryAdd(n, path);
             }
-            // duel-dx/AbilityScripts.g.cs — 저장소 뿌리(assets 의 부모)에서 찾는다.
-            string gen = Path.Combine(Path.GetDirectoryName(root)!, "duel-dx", "AbilityScripts.g.cs");
-            if (File.Exists(gen)) ParseScripts(File.ReadAllText(gen));
-            string tsv = Path.Combine(Path.GetDirectoryName(root)!, "tools", "re", "work_fx_extra.tsv");
-            if (File.Exists(tsv)) ParseExtras(File.ReadAllLines(tsv));
         }
         catch (DirectoryNotFoundException) { }
+        // 기술 표는 빌드할 때 exe 에 실어 온다(asset-9) — 따로 받은 편집기(%APPDATA%\DuelDx\editor)는 곁에 저장소가 없다.
+        if (Embedded("AbilityScripts.g.cs") is { } gen) ParseScripts(gen);
+        if (Embedded("work_fx_extra.tsv") is { } tsv) ParseExtras([.. tsv.Split('\n').Select(l => l.TrimEnd('\r'))]);
+        if (Embedded("part1_needs.json") is { } needs) ParsePart1(needs);
 
         foreach (int work in _scripts.Keys.Union(_extras.Keys).Order())
         {
             var w = _db?.Works.GetValueOrDefault(work);
             var ab = w != null ? _db!.Abilities.GetValueOrDefault(w.AbilityId) : null;
-            _workRows.Add(new WorkRow(w?.AbilityId ?? 0, ab != null ? _db!.T(ab.NameId) : "", w?.Level ?? 0, work, w?.Prepare ?? 0,
+            _workRows.Add(new WorkRow("2", w?.AbilityId ?? 0, ab != null ? _db!.T(ab.NameId) : "", w?.Level ?? 0, work, w?.Prepare ?? 0,
                                       _extras.TryGetValue(work, out var ex) ? ex.Count : _scripts[work].Effects.Length,
                                       PictureObs(work).Distinct().Count(o => !_assetObs.ContainsKey(o))));
         }
-        _workView = CollectionViewSource.GetDefaultView(_workRows.OrderBy(r => r.Ability).ThenBy(r => r.Level).ToList());
+        foreach (var (work, obs) in _part1Works)
+        {
+            var w = _db?.Works.GetValueOrDefault(work);
+            var ab = w != null ? _db!.Abilities.GetValueOrDefault(w.AbilityId) : null;
+            string name = ab != null ? _db!.T(ab.NameId) : $"Attack {Part1SkillBook.AttackIdOf(work)}";
+            _workRows.Add(new WorkRow("1", w?.AbilityId ?? 0, name, w?.Level ?? 0, work, w?.Prepare ?? 0, obs.Length, obs.Count(o => !Part1Readable(o))));
+        }
+        _workView = CollectionViewSource.GetDefaultView(_workRows.OrderByDescending(r => r.Part).ThenBy(r => r.Ability).ThenBy(r => r.Level).ThenBy(r => r.Work).ToList());
         _workView.Filter = o => o is WorkRow r && MatchesSkill(r);
         WorkGrid.ItemsSource = _workView;
 
@@ -122,13 +131,43 @@ public partial class EffectViewerWindow : Window
             if (int.TryParse(Path.GetFileNameWithoutExtension(name), out int n)) numbers.Add(n);
         foreach (int n in numbers)
             _obsRows.Add(new ObsRow(n, _assetObs.TryGetValue(n, out var p) ? Path.GetFileName(Path.GetDirectoryName(p)!) : "게임", _assetObs.ContainsKey(n) ? "○" : "✗"));
+        foreach (int n in _part1Obs.Where(n => !numbers.Contains(n)))
+            _obsRows.Add(new ObsRow(n, "파트1", Part1Readable(n) ? "파트1" : "✗"));
         _obsView = CollectionViewSource.GetDefaultView(_obsRows);
         _obsView.Filter = o => o is ObsRow r && MatchesObs(r);
         ObsGrid.ItemsSource = _obsView;
         if (_scripts.Count == 0) Tabs.SelectedIndex = 1;
         PreviewInfo.Text = $"assets 의 Obs {_assetObs.Count}개" + (_game != null ? " · 게임 폴더의 Obs 도 읽는다" : " · 게임 폴더를 안 열어 assets 만 읽는다")
-                         + (_scripts.Count > 0 ? $" · 기술 표 work {_scripts.Count}개" : " · duel-dx/AbilityScripts.g.cs 를 못 찾아 기술 탭이 비었다");
+                         + (_scripts.Count > 0 ? $" · 기술 표 work {_scripts.Count}개" : " · 기술 표를 못 읽어 기술 탭이 비었다")
+                         + (_part1Works.Count > 0 ? $" · 파트1 기술 {_part1Works.Count}개" + (Part1Game.Root == null ? "(파트1 폴더가 없어 받아 둔 그림만)" : "") : "");
     }
+
+    private static string? Embedded(string name)
+    {
+        using var stream = typeof(EffectViewerWindow).Assembly.GetManifestResourceStream(name);
+        if (stream == null) return null;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary><c>{"obs":[…],"sounds":[…],"works":{"work":[파트1 Obs…]}}</c> — 게임이 <c>DUELDX_P1NEEDS</c> 로 쓴 목록(Part1Skill.PackList).</summary>
+    private void ParsePart1(string json)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("obs", out var obs))
+            foreach (var o in obs.EnumerateArray()) _part1Obs.Add(Part1Game.ObsBase + o.GetInt32());
+        if (!doc.RootElement.TryGetProperty("works", out var works)) return;
+        foreach (var w in works.EnumerateObject())
+            if (int.TryParse(w.Name, out int work) && w.Value.GetArrayLength() > 0)
+                _part1Works[work] = [.. w.Value.EnumerateArray().Select(o => Part1Game.ObsBase + o.GetInt32())];
+    }
+
+    /// <summary>파트1 그림을 게임이 읽는 꼴로 둔 곳 — 게임과 같은 캐시(에셋 팩도 여기로 받는다, duel-dx AssetPack.Part1Folder).</summary>
+    private static string Part1Cache => Path.Combine(OriginalAssets.LocalFolder, "part1");
+
+    /// <summary>파트1 그림을 읽을 수 있는가 — 파트1 폴더가 있거나 캐시에 받아 둔 것이 있으면.</summary>
+    private static bool Part1Readable(int n) =>
+        Part1Game.Root != null || File.Exists(Path.Combine(Part1Cache, Part1Game.CacheSub($"{n}.obs"), $"{n}.obs"));
 
     /// <summary><c>[work] = ([동작…], [new(Obs, 모션, 대상?, 높이[, 지연, 수, 날기]), …]),</c> 줄과 영상 표 <c>[work] = [new(영상, …)]</c> 를 읽는다.</summary>
     private void ParseScripts(string text)
@@ -180,8 +219,13 @@ public partial class EffectViewerWindow : Window
             foreach (var f in s.Effects) yield return f.Obs;
     }
 
-    private byte[]? ReadObs(int n) =>
-        _assetObs.TryGetValue(n, out string? path) ? File.ReadAllBytes(path) : _game?.Read("Obs", $"{n:D4}.obs");
+    private byte[]? ReadObs(int n)
+    {
+        if (_assetObs.TryGetValue(n, out string? path)) return File.ReadAllBytes(path);
+        // 파트1 그림(20000 위) — 게임처럼 파트2 꼴로 다시 싸 캐시에 두고 읽는다.
+        if (n > Part1Game.ObsBase) return Part1Game.FilePath($"{n}.obs", Part1Cache) is { } p1 ? File.ReadAllBytes(p1) : null;
+        return _game?.Read("Obs", $"{n:D4}.obs");
+    }
 
     private Sprite? SpriteOf(int n)
     {
@@ -216,6 +260,7 @@ public partial class EffectViewerWindow : Window
     private void WorkGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (WorkGrid.SelectedItem is not WorkRow r) return;
+        if (r.Part == "1") { ShowPart1Work(r); return; }
         bool hasScript = _scripts.TryGetValue(r.Work, out var script);
         var game = hasScript ? script.Effects.Select(f => (f.Obs.ToString(), f.Motion.ToString())).ToHashSet() : [];
         string InAssets(string obs) => int.TryParse(obs, out int n) ? (_assetObs.ContainsKey(n) ? "○" : "✗") : "";
@@ -229,6 +274,27 @@ public partial class EffectViewerWindow : Window
         string movies = _movies.TryGetValue(r.Work, out var list) ? " · 영상 Mov " + string.Join(", ", list.Select(m => m.ToString("D4"))) : "";
         WorkInfo.Text = $"work {r.Work}" + (hasScript ? $" — 동작 사슬 [{string.Join(", ", script.Actions)}]" : "") + $" · 준비 동작 {r.Prepare}"
                         + (r.Prepare == 7 ? "(필살기 — 준비 갈래는 공통 앞머리, 게임은 FinisherPrelude 가 그린다)" : "") + movies;
+        PlayWork();
+    }
+
+    /// <summary>
+    /// 파트1 기술 — 원본 핸들러는 이펙트를 코드로 짠 시각표(지연 · 사슬 · 길)로 띄워(duel-dx Part1Skill.*) 표로 뽑아 둔 것이 없다.
+    /// 그 핸들러가 쓰는 그림의 모션을 모두 늘어놓아 하나씩 본다.
+    /// </summary>
+    private void ShowPart1Work(WorkRow r)
+    {
+        var rows = new List<EffectRow>();
+        foreach (int obs in _part1Works[r.Work])
+        {
+            string where = $"파트1 {obs - Part1Game.ObsBase}";
+            if (SpriteOf(obs) is not { } s) { rows.Add(new EffectRow("", "obs", obs.ToString(), "", where, "", "", "✗", "", "못 읽음(파트1 폴더도 받아 둔 그림도 없다)", "")); continue; }
+            foreach (var (motion, clip) in s.Table.Clips.OrderBy(k => k.Key))
+                if (clip.Keys.Count > 0 || clip.Children.Count > 0)
+                    rows.Add(new EffectRow("", "obs", obs.ToString(), motion.ToString(), where, "", clip.Length.ToString(), "파트1", "", NoteOf(obs, motion), ""));
+        }
+        EffectGrid.ItemsSource = rows;
+        WorkInfo.Text = $"파트1 work {r.Work}(Attack {Part1SkillBook.AttackIdOf(r.Work)}) — 그림 {_part1Works[r.Work].Length}개의 모션 {rows.Count}개. "
+                        + "원본은 이펙트를 코드로 짠 시각표로 띄워서 「모두 겹쳐 재생」 은 첫 모션만 보여 준다 — 줄을 골라 하나씩 본다";
         PlayWork();
     }
 
@@ -256,6 +322,11 @@ public partial class EffectViewerWindow : Window
     private void PlayWork()
     {
         if (WorkGrid.SelectedItem is not WorkRow r) return;
+        if (r.Part == "1")
+        {
+            if (EffectGrid.Items.Cast<EffectRow>().FirstOrDefault(x => x.Motion.Length > 0) is { } first) PlaySingle(int.Parse(first.Obs), int.Parse(first.Motion));
+            return;
+        }
         var list = new List<Playing>();
         if (_extras.TryGetValue(r.Work, out var extras))
         {
