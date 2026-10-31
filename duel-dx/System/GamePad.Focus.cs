@@ -34,7 +34,7 @@ internal sealed partial class GamePad
         if (tuning._tuningOpen)
         {
             var (x, y) = tuning.TuningOrigin();
-            int boxX = x + TuningScreen.TuningBoxX, boxY = y + TuningScreen.TuningBoxY;
+            int boxX = x + TuningScreen.TuningBoxX, boxY = y + tuning.TuningBoxY;
             if (tuning._tuningListOpen)
             {
                 for (int i = 0; i < TuningScreen.SoulWeightChoices.Length; i++)
@@ -51,7 +51,7 @@ internal sealed partial class GamePad
                 int rows = tuning.TuningChecks().Length;
                 for (int i = 0; i < rows; i++)
                     list.Add((x + 12, y + TuningScreen.TuningCheckY + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
-                if (tuning._tuningTab == TuningScreen.TabGeneral) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
+                if (tuning.ShowsSoulWeight) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
             }
             list.Add((x + TuningScreen.TuningW - 116, y + TuningScreen.TuningH - 40, 100, 28));   // 닫기
             return list;

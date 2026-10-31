@@ -260,11 +260,23 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
+    /// <summary>
+    /// 마지막에 연 쪽(파트1 타이틀을 열면 1, 파트2 로 돌아가면 0) — 게임을 다시 켜면 그쪽 타이틀부터(사용자 요청 menu-119).
+    /// </summary>
+    private static string LastPartFile => UserDataFolder.File("last-part.txt");
+
+    internal static bool LastWasPart1
+    {
+        get { try { return File.Exists(LastPartFile) && File.ReadAllText(LastPartFile).Trim() == "1"; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; } }
+        set { try { File.WriteAllText(LastPartFile, value ? "1" : "0"); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } }
+    }
+
     internal void Open()
     {
         _bg = ReadBackground(TitleBackground);
         _open = true;
         SlotsScreen.Part1Slots = true;
+        LastWasPart1 = true;
         _hover = -1;
         _shownAt = _skipTick = -1;
         host.StopMusic();
@@ -279,6 +291,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     {
         _open = false;
         SlotsScreen.Part1Slots = false;
+        LastWasPart1 = false;
         if (_chapter != null) _chapter._open = false;
         if (_timeline != null) _timeline._open = false;
         if (_field != null) _field._open = false;

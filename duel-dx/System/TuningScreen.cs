@@ -30,7 +30,18 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 464, TuningBoxX = 300, TuningBoxY = 270, TuningBoxW = 180, TuningRowH = 24;
+    internal const int TuningW = 600, TuningH = 464, TuningBoxX = 300, TuningBoxW = 180, TuningRowH = 24;
+
+    /// <summary>소울 기여도 상자의 y(창 기준) — 일반 탭 체크 줄 바로 아래(줄이 늘면 따라 내려간다 — 고정 270 이던 때 일곱째 줄과 겹쳤다).</summary>
+    internal int TuningBoxY => TuningCheckY + TuningChecks(TabGeneral).Length * TuningCheckH + 8;
+
+    /// <summary>
+    /// 파트1 에서 연 창인가 — 소울 기여도는 파트2 일반 공격(SOUL 배율)에만 걸려 파트1 에서는 안 보인다(사용자 요청 menu-120).
+    /// </summary>
+    private bool Part1Here => SlotsScreen.Part1Slots || (host._battleLoaded && host._scene.IsPart1);
+
+    /// <summary>일반 탭에 소울 기여도 상자를 두나.</summary>
+    internal bool ShowsSoulWeight => _tuningTab == TabGeneral && !Part1Here;
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
@@ -155,7 +166,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             if (at >= 0 && at < rows.Length && bx >= x + 12 && bx < x + TuningW - 12) host.OnMenuCommand(rows[at].Command);
             return true;
         }
-        if (_tuningListOpen)
+        if (_tuningListOpen && ShowsSoulWeight)
         {
             int row = (by - boxY - TuningRowH) / TuningRowH;
             if (bx >= boxX && bx < boxX + TuningBoxW && by >= boxY + TuningRowH && row >= 0 && row < SoulWeightChoices.Length)
@@ -167,7 +178,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             _tuningListOpen = false;
             return true;
         }
-        if (bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
+        _tuningListOpen = false;
+        if (ShowsSoulWeight && bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
         var checks = TuningChecks();
         int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
         if (line >= 0 && line < checks.Length && bx >= x + 12 && bx < x + TuningW - 12) { host.OnMenuCommand(checks[line].Command); return true; }
@@ -215,7 +227,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             ];
             for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
         }
-        if (_tuningTab != TabGeneral) { DrawTuningFoot(x, y); return; }
+        if (!ShowsSoulWeight) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
         host.UiText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
         host.UiFill(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
@@ -233,7 +245,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             $"                         SOUL 150: ×{Original(150):0.0} → ×{Factor(150):0.0}",
             "어빌리티는 원본대로라 SOUL 을 모아 쓰는 쪽이 나아진다. 적의 일반 공격에도 걸린다.",
         ];
-        for (int i = 0; i < lines.Length; i++) host.UiText(lines[i], x + 16, boxY + 44 + i * 22, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
+        for (int i = 0; i < lines.Length; i++) host.UiText(lines[i], x + 16, boxY + 32 + i * 21, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
         DrawTuningFoot(x, y);
 

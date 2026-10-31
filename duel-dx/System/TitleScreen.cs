@@ -61,6 +61,8 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (Environment.GetEnvironmentVariable("DUELDX_EPISODES") == "1") { host.EpisodesScr.OpenEpisodesIfAsked(); return; }
         if (Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0") return;
         OpenTitle();
+        // 지난번에 파트1 을 하다 껐으면 파트1 타이틀부터(menu-119) — 파트1 폴더를 아직 알 때만(모르면 파트2 타이틀에 머문다).
+        if (!OriginalGameSetup.Part1Only && Part1TitleScreen.LastWasPart1 && Part1Game.Root is not null) host.Part1TitleScr.Open();
     }
 
     internal void OpenTitle()
