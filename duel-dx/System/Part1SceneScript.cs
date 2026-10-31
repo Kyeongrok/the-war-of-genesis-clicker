@@ -527,7 +527,9 @@ internal sealed class Part1SceneScript(GameWindow host)
                         host.Play(Part1Game.ObsBase + a[2], VoiceTag);
                         PcmSound? clip;
                         lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
-                        _voiceEnd = clip != null ? host._lastTime + GameWindow.ClipSeconds(clip) : host._lastTime + 30;   // 아직 안 받았으면 넉넉히 — 넘길 때 끊게
+                        // 게임 시계(_lastTime)는 배속만큼 빨리 가고 목소리는 제 빠르기로 나므로 길이를 배속만큼 늘려 잡는다 — 안 그러면 2배속에서
+                        // 목소리가 반쯤 나왔을 때 다음 대사로 넘어갔다(사용자 보고 fg-104). 뒤의 쉬는 틈(VoiceAfterSeconds)은 게임 시간 그대로.
+                        _voiceEnd = clip != null ? host._lastTime + GameWindow.ClipSeconds(clip) * host._gameSpeed / 100.0 : host._lastTime + 30;   // 아직 안 받았으면 넉넉히 — 넘길 때 끊게
                         _voiceKnown = clip != null;
                     }
                     break;

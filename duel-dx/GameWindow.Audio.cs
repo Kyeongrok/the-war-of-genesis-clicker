@@ -563,7 +563,7 @@ internal sealed unsafe partial class GameWindow
                 if (!_soundChannels.TryGetValue(channel, out var cur) || cur.Tag != tag) return;   // 그 사이 다른 소리로 갈렸다
                 if (pcm == null) { _soundChannels.Remove(channel); return; }
                 // 되풀이하는 소리는 505 로 끌 때까지 도니, 504 가 영영 기다리지 않게 끝나는 때를 지금으로 둔다.
-                _soundChannels[channel] = (loop ? 0 : _lastTime + ClipSeconds(pcm), tag);
+                _soundChannels[channel] = (loop ? 0 : _lastTime + ClipSeconds(pcm) * _gameSpeed / 100.0, tag);   // 게임 시계는 배속만큼 빨리 간다
             }
             if (!Muted && pcm != null) _mixer.PlayEffect(pcm, _effectGain, tag, loop, left, right);
             if (BattleScene.Trace) _backgroundTrace.Enqueue($"channel {channel} sound {id}: {(pcm == null ? "파일 없음" : $"{ClipSeconds(pcm):0.0}초")} L {left:0.00} R {right:0.00}{(loop ? " loop" : "")}");

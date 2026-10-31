@@ -368,7 +368,8 @@ internal sealed unsafe partial class BattleScene
             }
             if (host.Tlk._talk == null) _talkNoWait = false;
             if (host.Tlk._talk != null && !_talkNoWait) return;                  // 대사가 떠 있으면 기다린다
-            if (_eventSoundSeconds > 0) { _eventWaitUntil = host._lastTime + _eventSoundSeconds; _eventSoundSeconds = 0; }
+            // 소리는 제 빠르기로 나고 게임 시계는 배속만큼 빨리 가므로 기다림도 배속만큼 늘린다(fg-104 — 2배속에서 목소리가 끊겼다).
+            if (_eventSoundSeconds > 0) { _eventWaitUntil = host._lastTime + _eventSoundSeconds * host._gameSpeed / 100.0; _eventSoundSeconds = 0; }
             if (_eventSoundLoading && !host.Tlk._talkSkip) return;               // 행동 500 의 소리를 아직 푸는 중
             if (_eventWaitUntil > host._lastTime && !host.Tlk._talkSkip) return;      // 건너뛰는 중이면 기다림은 없는 셈
             if (_runningEvent >= _events.Count) { _runningEvent = -1; host.Tlk._talkSkip = false; return; }   // 판이 바뀌었다
