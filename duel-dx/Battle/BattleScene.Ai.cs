@@ -242,6 +242,8 @@ internal sealed unsafe partial class BattleScene
         if (host._scene.IsPart1 && w.IsDamage)
         {
             int foes = targets.Count(i => SeesAsFoe(user, host._units[i]));
+            // 썬 라이트(선택자 8)는 판 위 모두에 닿지만 같은 편은 고친다(Part1Rules.HealsFriend) — 같은 편 수로 막지 않는다(fg-98).
+            if (Part1.AttackOf(w)?.Formula == 8) return foes >= need;
             return foes >= need && foes > targets.Count - foes;
         }
         return targets.Count >= need;

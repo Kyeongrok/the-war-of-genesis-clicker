@@ -157,9 +157,16 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>파트1 회복 기술(세기 식 6)의 회복량 — 최대 HP × 세기 ÷ 20000(분석-파트1-기술-b 9절). 아니면 null.
     /// 기계(칸 10 = 2)에게는 0 — 원본은 그 0 을 「Miss」로 띄운다(<c>0x10041430</c> → <c>0x1003dc30</c>).</summary>
     internal int? HealAmount(UnitState a, UnitState t, WorkData w) =>
-        AttackOf(w) is { Formula: 6 } attack && Fighter(a) is { } fa
+        AttackOf(w) is { Formula: 6 or 8 } attack && (attack.Formula == 6 || HealsFriend(a, t, w)) && Fighter(a) is { } fa
             ? IsMachine(t) ? 0 : (int)((long)t.MaxHp * (Part1Combat.Power(6, fa.AttackerAt(a.Soul)) + attack.PowerAdd * attack.PowerAdd) / 20000)
             : null;
+
+    /// <summary>
+    /// 선택자 8(썬 라이트 198)이 이 대상을 고치나 — 피해 적용 <c>0x100413b0</c> 은 8 을 적이면 5(마법 피해) · 아니면 6(회복)으로 가른다(분석-파트1-기술-b 9절 표).
+    /// 시전자 자신도 같은 편이라 고친다. 전에는 8 을 늘 피해로 굴려 썬 라이트가 아군 HP 를 깎았다(카페 제보 fg-98).
+    /// </summary>
+    internal bool HealsFriend(UnitState a, UnitState t, WorkData w) =>
+        AttackOf(w)?.Formula == 8 && !BattleScene.Hostile(a, t);
 
     /// <summary>
     /// AI 가 기술을 고를 때 견주는 세기 — 피해 기술이면 (세기 식 + 더하는 세기²) × 타수 × 명중률(방어 · 속성은 대상마다라 뺀다), 아니면 0.
@@ -458,6 +465,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
         int selector = attack?.Formula ?? 0;
         if (selector is >= 10 and <= 28) return null;
+        // 썬 라이트(선택자 8)가 같은 편에 닿으면 회복 갈래(6)다 — 명중 · 방어를 안 굴리고 결과 1(회복), 양은 HealAmount 가 낸다.
+        if (selector == 8 && HealsFriend(a, t, w)) return (0, 1, false);
         int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
         accuracy += aimBonus;
         // 원본 차례(0x100413b0): 무기로 치는 물리(선택자 0 · 1 · 29 · 30)만 ① 회피(0x10040fa0 → 결과 5, 역습 자세 +0x25a 면 7) ② 명중 굴림(결과 3)
@@ -501,7 +510,7 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         if (stance == 80 && selector != 5) defense += defense / 2;           // 완전방어 자세 — 마법(식 5) 말고는 방어 ×1.5(0x100415e1)
         LastHit = (power, defense, magic, ft.Resist(element), blocked);
         int damage = Part1Combat.Damage(power, defense, ft.Resist(element), null, rng.Next(32768));
-        if (Has(t, 20)) damage = selector == 5 ? 0 : damage * 2;      // 배리어 — 마법(식 5) 피해 0, 그 밖은 ×2
+        if (Has(t, 20)) damage = selector is 5 or 8 ? 0 : damage * 2;   // 배리어 — 마법(식 5 · 적에게 간 식 8) 피해 0, 그 밖은 ×2(0x10041729)
         // 시험용 DUELDX_P1CRIT=<%> 면 치명률을 그 값으로 덮는다(무기 덧기술을 화면 밖에서 보려고).
         // 치명률은 세기 식이 서술 +0xe 에 넣는다(0x1003f62b~) — 선택자 0~3 은 무기1, 29~31 은 무기2 의 아이템 +0x65, 그 밖(마법 · 살 4 …)은 0.
         int critRate = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1CRIT"), out int forced) ? forced

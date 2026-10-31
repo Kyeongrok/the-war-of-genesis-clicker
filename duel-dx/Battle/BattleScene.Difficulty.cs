@@ -65,6 +65,7 @@ internal sealed unsafe partial class BattleScene
             int hit = Math.Clamp(db.HitChance(a, user.Tp, d, t.Tp, w, t.Stance), 0, 100);
             long value = (long)Math.Min(dmg, t.Hp) * 1000 / t.MaxHp * hit / 100;
             if (dmg >= t.Hp) value += 1500 * hit / 100;
+            if (host._scene.IsPart1 && Part1.HealsFriend(user, t, w)) continue;   // 썬 라이트 — 같은 편은 고친다(fg-98), 깎는 값으로 안 뺀다
             total += SeesAsFoe(user, t) ? value : -value;
         }
         return (int)Math.Clamp(total, 0, 1_000_000);

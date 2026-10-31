@@ -616,6 +616,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1SQUADHP"), out int squadHp) && squadHp > 0)
             for (int i = 0; i < host._units.Length; i++)
                 if (host._units[i] is { Alive: true, LeaderIndex: < 0 } lead && FollowersOf(i).Count > 0) lead.Hp = Math.Min(lead.Hp, squadHp);
+        // 시험용 DUELDX_P1ALLYHP=<HP> 면 아군의 HP 를 그 아래로 깎아 둔다(썬 라이트 · 힐이 고치는 것을 화면 밖에서 보려고, fg-98).
+        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1ALLYHP"), out int allyHp) && allyHp > 0)
+            foreach (var ally in host._units.Where(u => u.Alive && u.IsAlly)) ally.Hp = Math.Min(ally.Hp, allyHp);
         // 파트1 — 차례가 올 때 소울 게이지 +20(150 에서 자름, 0x10034f80).
         if (host._scene.IsPart1 && !resume && index >= 0 && index < host._units.Length)
         {
@@ -2186,6 +2189,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             int before = t.Hp;
             t.Hp = Math.Min(t.MaxHp, t.Hp + amount);
             host.Stats.Heal(a, w, t.Hp - before);
+            if (Trace && host._scene.IsPart1)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 heal {a.ChrCode} → unit {Array.IndexOf(host._units, t)} chr {t.ChrCode} work {w.Id}: +{amount} HP {before} → {t.Hp}/{t.MaxHp}" + Environment.NewLine);
             // 회복은 떠오르지 않고 옛 HP 에서 새 HP 로 세어 올라간다(노랑).
             ShowNumber(t, host._db.T(159), HealColor2, rise: false, count: (before, t.Hp));
             ApplyAilments(a, t, w);
