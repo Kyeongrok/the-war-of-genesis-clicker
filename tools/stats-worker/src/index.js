@@ -175,7 +175,7 @@ async function listBugs(url, env) {
   const limit = Math.max(1, Math.min(200, int(Number(url.searchParams.get('limit') || 100))));
   if (status !== 'all' && !STATUS.test(status)) return json({ error: 'bad status' }, 400);
   const sql = `SELECT id, created_at, version, install, text, context, status, note FROM bug_reports WHERE id > ?`
-    + (status === 'all' ? '' : ' AND status = ?') + ' ORDER BY id LIMIT ?';
+    + (status === 'all' ? '' : ' AND status = ?') + (url.searchParams.get('order') === 'desc' ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id LIMIT ?');   // desc — 대시보드는 새 것부터
   const args = status === 'all' ? [since, limit] : [since, status, limit];
   const { results } = await env.DB.prepare(sql).bind(...args).all();
   const bugs = results.map((r) => {

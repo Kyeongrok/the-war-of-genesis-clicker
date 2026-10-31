@@ -42,6 +42,12 @@ export const DASHBOARD_HTML = `<!doctype html>
   .envgrid td.bar { width: 30%; }
   .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   #error { color: var(--bad); }
+  .bug { border-top: 1px solid var(--line); padding: 10px 0; }
+  .bug .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .bug .text { white-space: pre-wrap; margin: 6px 0; }
+  .bug pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(--dim); max-height: 300px; overflow: auto; }
+  .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; }
+  .tag.new { color: var(--gold); border-color: var(--gold); } .tag.fixed { color: var(--good); border-color: var(--good); }
 </style>
 </head>
 <body>
@@ -60,6 +66,11 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section><h2>분기별</h2><table id="battles"></table></section>
   <section><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
   <section><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
+  <section><h2>버그 리포트</h2>
+    <div class="sub">게임의 「버그 리포트」로 받은 글입니다. 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
+    <div class="filters"><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
+      <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
+    <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section><h2>날짜별 · 버전별</h2><table id="days"></table></section>
 </main>
 <script>
@@ -180,6 +191,53 @@ async function load() {
     render();
   } catch (e) { $('error').textContent = '불러오지 못했습니다: ' + e.message; }
 }
+// ── 버그 리포트 — 관리자 키로 /v1/bugs 를 읽고, 카드마다 상태를 바꾼다 ──
+const STATUS_NAME = { new: '새로', seen: '봤음', fixed: '고침', wontfix: '안 고침' };
+const bugState = { status: 'new' };
+const bugKey = () => { try { return localStorage.getItem('bugAdminKey') || ''; } catch { return ''; } };
+function bugCard(b) {
+  const c = b.context || {};
+  const when = new Date(b.created_at).toLocaleString('ko-KR');
+  const where = c.where || c.scene || '';
+  const buttons = Object.keys(STATUS_NAME).filter((s) => s !== b.status)
+    .map((s) => '<button data-id="' + b.id + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ');
+  return '<div class="bug"><div class="head"><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
+    + '<span class="dim">' + esc(when) + ' · v' + esc(b.version) + (where ? ' · ' + esc(where) : '') + '</span><span style="flex:1"></span>' + buttons + '</div>'
+    + '<div class="text">' + esc(b.text) + '</div>'
+    + (b.note ? '<div class="dim">메모: ' + esc(b.note) + '</div>' : '')
+    + '<details><summary class="dim">같이 온 것</summary><pre>' + esc(JSON.stringify(c, null, 2)) + '</pre></details></div>';
+}
+async function loadBugs() {
+  const key = bugKey();
+  $('bugerr').textContent = '';
+  if (!key) { $('bugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
+  try {
+    const res = await fetch('/v1/bugs?status=' + bugState.status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + key } });
+    if (res.status === 401) throw new Error('키가 맞지 않습니다');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const bugs = (await res.json()).bugs || [];
+    $('bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
+    $('bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(Number(b.dataset.id), b.dataset.s));
+  } catch (e) { $('bugerr').textContent = '불러오지 못했습니다: ' + e.message; }
+}
+async function markBug(id, status) {
+  const note = status === 'fixed' || status === 'wontfix' ? prompt('메모(선택 — 고친 커밋 · 판 번호 따위)', '') : null;
+  if (note === null && (status === 'fixed' || status === 'wontfix')) return;
+  const res = await fetch('/v1/bugs/' + id + '/status', { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
+    body: JSON.stringify(note ? { status, note } : { status }) });
+  if (!res.ok) { $('bugerr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
+  loadBugs();
+}
+$('bugkey').onclick = () => {
+  const k = prompt('관리자 키(BUG_ADMIN_KEY)', bugKey());
+  if (k === null) return;
+  try { localStorage.setItem('bugAdminKey', k.trim()); } catch { }
+  loadBugs();
+};
+$('bugreload').onclick = loadBugs;
+$('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs(); };
+loadBugs();
+
 $('version').onchange = (e) => { state.version = e.target.value; load(); };
 $('tachyrion').onchange = (e) => { state.tachyrion = e.target.value; load(); };
 load();
