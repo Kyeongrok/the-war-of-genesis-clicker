@@ -242,36 +242,42 @@ internal sealed class BugReport(GameWindow host)
 /// <summary>버그 리포트 글 쓰는 창 — 여러 줄 글 칸 · 같이 보내는 것 요약 · 보내기 / 취소.</summary>
 internal static class BugReportDialog
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     /// <summary>창을 띄워 글을 받는다 — 취소하거나 비워 두면 null.</summary>
     internal static string? Ask(System.Windows.Forms.IWin32Window owner, string summary)
     {
+        // 4K 처럼 배율이 큰 화면에서 글은 커지는데 자리는 96 DPI 점 그대로라 글이 잘렸다 — 창의 DPI 로 자리 · 크기를 키운다
+        float k = Math.Max(1f, GetDpiForWindow(owner.Handle) / 96f);
+        int S(int v) => (int)Math.Round(v * k);
         using var font = new Font("Malgun Gothic", 9.5f);
         using var form = new System.Windows.Forms.Form
         {
-            Text = "버그 리포트", ClientSize = new Size(560, 470), FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
+            Text = "버그 리포트", ClientSize = new Size(S(560), S(500)), FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
             StartPosition = System.Windows.Forms.FormStartPosition.CenterParent, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false,
-            Font = font, AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi, AutoScaleDimensions = new SizeF(96, 96),
+            Font = font, AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
         };
         var head = new System.Windows.Forms.Label
         {
-            Left = 12, Top = 10, Width = 536, Height = 38,
+            Left = S(12), Top = S(10), Width = S(536), Height = S(44),
             Text = "어떤 일이 있었는지 적어 주세요 — 무엇을 하다가(어느 전투 · 어떤 기술), 무엇이 보였고, 원래는 어땠어야 하는지.",
         };
         var box = new System.Windows.Forms.TextBox
         {
-            Left = 12, Top = 50, Width = 536, Height = 230, Multiline = true, AcceptsReturn = true, AcceptsTab = false,
+            Left = S(12), Top = S(58), Width = S(536), Height = S(230), Multiline = true, AcceptsReturn = true, AcceptsTab = false,
             ScrollBars = System.Windows.Forms.ScrollBars.Vertical, MaxLength = BugReport.MaxText, WordWrap = true,
         };
-        var count = new System.Windows.Forms.Label { Left = 12, Top = 284, Width = 536, Height = 18, Text = $"0 / {BugReport.MaxText}", ForeColor = Color.DimGray };
+        var count = new System.Windows.Forms.Label { Left = S(12), Top = S(292), Width = S(536), Height = S(22), Text = $"0 / {BugReport.MaxText}", ForeColor = Color.DimGray };
         var info = new System.Windows.Forms.TextBox
         {
-            Left = 12, Top = 306, Width = 536, Height = 110, Multiline = true, ReadOnly = true, TabStop = false,
+            Left = S(12), Top = S(318), Width = S(536), Height = S(120), Multiline = true, ReadOnly = true, TabStop = false,
             ScrollBars = System.Windows.Forms.ScrollBars.Vertical, Text = "같이 보내는 것:" + Environment.NewLine + summary,
             BackColor = System.Drawing.SystemColors.Control, ForeColor = Color.DimGray,
         };
-        var send = new System.Windows.Forms.Button { Text = "보내기", Left = 340, Top = 426, Width = 100, Height = 32, Enabled = false, DialogResult = System.Windows.Forms.DialogResult.OK };
-        var cancel = new System.Windows.Forms.Button { Text = "취소", Left = 448, Top = 426, Width = 100, Height = 32, DialogResult = System.Windows.Forms.DialogResult.Cancel };
-        var hint = new System.Windows.Forms.Label { Left = 12, Top = 434, Width = 320, Height = 18, Text = "Ctrl+Enter 로도 보냅니다", ForeColor = Color.DimGray };
+        var send = new System.Windows.Forms.Button { Text = "보내기", Left = S(340), Top = S(452), Width = S(100), Height = S(36), Enabled = false, DialogResult = System.Windows.Forms.DialogResult.OK };
+        var cancel = new System.Windows.Forms.Button { Text = "취소", Left = S(448), Top = S(452), Width = S(100), Height = S(36), DialogResult = System.Windows.Forms.DialogResult.Cancel };
+        var hint = new System.Windows.Forms.Label { Left = S(12), Top = S(460), Width = S(320), Height = S(22), Text = "Ctrl+Enter 로도 보냅니다", ForeColor = Color.DimGray };
         box.TextChanged += (_, _) =>
         {
             count.Text = $"{box.TextLength} / {BugReport.MaxText}";
