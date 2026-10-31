@@ -351,6 +351,20 @@ internal sealed class Part1Progress
         Join([chr]);
     }
 
+    /// <summary>
+    /// 전투 행동 500 [Chr, 8, 무리](0x1002009a) — 집 무리를 바꾸고(<see cref="MoveToGroup"/>) 원본처럼 이 판에 들어온 팀(전투 +0xaea0)에서도 넣고 뺀다:
+    /// 새 무리가 지금 챕터 무리면 그 팀 끝에 넣고(0x100ad940), 아니면 뺀다(0x100ad980). 판이 끝나면 그 팀이 챕터 팀으로 되쓰인다(0x10032f80).
+    /// 평소 팀 0 은 「무리 앞 10명」이라 할 일이 없지만, 사람을 적어 둔 팀(팀 1 부터 · 본부 교환 창을 연 팀 0)은 여기서 안 적으면 합류한 사람이 본부에만 남아
+    /// 다음 판 배치에 안 나왔다 — 챕터 49 설산2(Btl 0175)에서 든 디안이 설산 다리(0177)에 안 나와 카트린느를 못 얻었다(카페 제보 fg-105).
+    /// </summary>
+    internal void MoveToGroupInBattle(int chr, int group)
+    {
+        MoveToGroup(chr, group);
+        if (ActiveTeam is not { } team || ChapterTeams[ChapterId].IndexOf(team) == 0 && !team.Fixed) return;
+        if (group == CurrentGroup) { if (!team.Members.Contains(chr)) team.Members.Add(chr); }
+        else team.Members.Remove(chr);
+    }
+
     /// <summary>우리 편 사람인가(지금 무리 · 일행) — 아니면 용병.</summary>
     internal bool IsOurs(int chr) => Party.Contains(chr) || GroupMembers().Contains(chr);
 

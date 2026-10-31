@@ -103,6 +103,7 @@ internal sealed unsafe partial class BattleScene
                       : host._party.Keys.Count > 0 ? host._party.Keys.ToList()
                                               : [.. DemoScene.Fallback.Roster.Where(u => u.IsAlly).Select(u => u.ChrCode)];
             party = [.. party.Where(chr => !list.Any(u => u.ChrCode == chr))];
+            if (scene.IsPart1) GameWindow.TestRunTrace($"part1 deploy {scene.Id} [{string.Join(",", party)}] spots {spots.Count}");
             var free = spots.Where(sp => !list.Any(u => u.Col == sp.Col && u.Row == sp.Row)).ToList();
             // 배치 단계로 세우는 파티원은 「군단사용」(명단 +0x30, 기본 = 워드 7 켜짐 && 배속 있음)이면 배속 군단(+0x12c)으로 부하를 만든다
             // (0x100673dd~0x10067717, 분석-전투 ba-6). 전에는 늘 군단 0 이라 모세스에서 배속해도 대부분의 전투에서 부하가 안 나왔다(감사3 L4).

@@ -1106,10 +1106,10 @@ internal sealed unsafe partial class BattleScene
                 if (A(1) == 8)
                     foreach (var u in EventTargets(A(0), out _))
                     {
-                        host.Part1.MoveToGroup(u.ChrCode, A(2));
+                        host.Part1.MoveToGroupInBattle(u.ChrCode, A(2));   // 들어온 팀에도 넣는다(fg-105)
                         if (Trace)
                             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                                $"p1join {u.ChrCode} group {A(2)}{Environment.NewLine}");
+                                $"p1join {u.ChrCode} group {A(2)} team [{string.Join(",", host.Part1.ActiveMembers())}]{Environment.NewLine}");
                     }
                 else if (A(1) is >= 19 and <= 38)
                     foreach (var u in EventTargets(A(0), out _))
