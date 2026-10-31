@@ -817,7 +817,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             c = c with
             {
                 NameId = k.NameId, Name2Id = k.Name2Id, SpriteId = k.SpriteId, FaceId = Part1Game.FixFace(k.FaceId), TitleId = k.TitleId, Body = k.Body,
-                JobId = k.JobId, BasicWorkId = k.BasicWorkId, TpDivisor = k.TpDivisor, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
+                // 파트1 인물의 기본 공격은 늘 새로 만든 값으로 — 파트1 만 도는 판의 옛 세이브에는 0 이 적혀 있다.
+                JobId = k.JobId, BasicWorkId = baseData.Code >= Part1Game.ChrBase ? baseData.BasicWorkId : k.BasicWorkId, TpDivisor = k.TpDivisor, WeaponBand = k.WeaponBand, WeaponType = k.WeaponType,
                 VoiceSet = k.VoiceSet ?? baseData.VoiceSet,     // 캐릭터 에디터 「외형」이 목소리도 바꾼다 — 옛 세이브에는 칸이 없다
             };
             if (trustStats) c = c with { Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, Ctp = k.Ctp, Dep = k.Dep, Dex = k.Dex };

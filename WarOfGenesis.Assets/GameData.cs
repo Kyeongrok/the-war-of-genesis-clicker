@@ -608,9 +608,11 @@ public sealed class GameDatabase
         lock (_part1Characters) _part1Characters.Clear();
     }
 
-    /// <summary>파트1 인물이 빌려 쓰는 기본 공격 — 파트2 살라딘(Chr 219)의 것. 파트1 기본 공격 연출을 옮기기 전까지의 자리.</summary>
-    private ushort Part1BasicWork => _part1BasicWork ??= Character(219)?.BasicWorkId ?? 0;
-    private ushort? _part1BasicWork;
+    /// <summary>
+    /// 파트1 인물이 빌려 쓰는 기본 공격 — 파트2 살라딘(Chr 219)의 work 1. 파트1 기본 공격 연출을 옮기기 전까지의 자리.
+    /// 번호를 박아 둔다 — 전에는 Chr 219 를 읽어 왔는데, 파트1 만 도는 판에는 Chr 자료가 없어 0 이 되어 근접 인물이 공격 범위도 공격도 없었다(사용자 제보).
+    /// </summary>
+    private const ushort Part1BasicWork = 1;
 
     /// <summary>파트1 의 활 · 총이 빌려 쓰는 쏘는 기본 공격 — 파트2 원거리 기본 work 6(동작 9).</summary>
     private const ushort Part1ShootWork = 6;
