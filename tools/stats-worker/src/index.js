@@ -50,7 +50,7 @@ async function postBattle(request, env) {
 }
 
 // 집계 결과를 잠깐 들고 있는다 — D1 은 훑은 줄을 모두 「읽은 줄」로 센다(하루 무료 500만 줄).
-// 대시보드 한 번이 battles 를 열세 번 · skill_stats 를 두 번 다 훑어 수십만 줄이 나가므로, 같은 조건은 CACHE_MS 동안 cache 표의 한 줄로 돌려준다.
+// 대시보드는 기간 안의 battles 를 한 번(어빌리티 · 인물 탭은 skill_stats 도 한 번) 읽고, 같은 조건은 CACHE_MS 동안 cache 표의 한 줄로 돌려준다.
 // workers.dev 에서는 Cache API 가 안 들으니 D1 의 작은 표에 둔다. 같은 isolate 안에서는 메모리에서 바로 준다.
 // 통계는 몇 시간 늦어도 괜찮다 — 15분이던 때 하루 읽기 한도(500만 줄)를 넘었다(2026-10-31).
 const CACHE_MS = 6 * 60 * 60 * 1000;
@@ -83,50 +83,91 @@ async function getTop(env) {
   return { total, skills: results };
 }
 
-// 대시보드 집계 — 버전(없으면 전체)과 타키리온 개편 모드(tachyrion=1 켠 판 · 0 끈 판, 없으면 전체)로 거른다.
-// 그 칸이 생기기 전 판(v0.34 까지)은 모드가 없었으니 끈 판으로 센다. 캐릭터 에디터를 쓴 판도 넣는다(사용자 결정) — noedit=1 을 줄 때만 뺀다.
-// part 로 대시보드 탭 하나 몫만 센다 — summary(타일 · 버전 목록) · ability · chars · battles · env(모드 · 환경) · days. 없으면 모두(옛 페이지).
-// 탭마다 따로 캐시해서 보지 않는 탭의 표는 훑지 않는다.
-const PARTS = ['summary', 'ability', 'chars', 'battles', 'env', 'days'];
-async function getDashboard(version, noedit, tachyrion, env, part = '') {
-  const want = (p) => !part || part === p;
+// 대시보드 집계 — 기간(days: 최근 N일, 0 이면 전체 · 기본 7) 안의 판만 읽는다. battles_received 색인(migrations/0003)으로 그 앞 줄만 훑는다.
+// part=battles : 전투 표를 한 번만 읽어(판마다 한 줄) 타일 · 버전 목록 · 분기 · 날짜 · 환경 · 모드를 여기서 센다 — 예전에는 집계마다 표를 다시 훑어 17번 읽었다.
+// part=skills  : 어빌리티 · 인물 탭을 열 때만 — skill_stats 를 기간 안 판과 이어 한 번 읽는다.
+// 거르기: 버전 · 타키리온 개편(tachyrion=1 켠 판 · 0 끈 판) · 캐릭터 에디터 뺌(noedit=1). 그 칸이 생기기 전 판(v0.34 까지)은 개편을 끈 판으로 센다.
+const PARTS = ['battles', 'skills'];
+const DAY_CHOICES = [7, 30, 0];
+const since = (days) => (days ? new Date(Date.now() - days * 86400000).toISOString() : '');
+
+async function getDashboard(version, noedit, tachyrion, days, env, part) {
+  if (part === 'skills') return getSkills(version, noedit, tachyrion, days, env);
+  const rows = (await env.DB.prepare(
+    `SELECT received_at, install, version, battle, outcome, turns, seconds, flags FROM battles ${days ? 'WHERE received_at >= ?' : ''}`)
+    .bind(...(days ? [since(days)] : [])).all()).results;
+  for (const r of rows) { try { r.f = JSON.parse(r.flags) || {}; } catch { r.f = {}; } }
+  // 버전 목록은 버전 거르기 전의 것(고르는 상자에 다른 버전도 보이게).
+  const versions = [...new Set(rows.map((r) => r.version))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })).slice(0, 50);
+  const picked = rows.filter((r) => (!version || r.version === version) && (!noedit || r.f.charEdit !== true)
+    && (tachyrion === '' || String(r.f.tachyrion ? 1 : 0) === tachyrion));
+
+  const total = { battles: picked.length, installs: new Set(picked.map((r) => r.install)).size, wins: 0, turns: 0, secSum: 0, secN: 0 };
+  for (const r of picked) { total.wins += r.outcome === 'win'; total.turns += r.turns; if (r.seconds != null) { total.secSum += r.seconds; total.secN++; } }
+
+  // 묶음 — 키마다 판 수와 설치 수(뒤에 더 붙일 칸은 add 가).
+  const group = (keyOf, add) => {
+    const m = new Map();
+    for (const r of picked) {
+      for (const k of [].concat(keyOf(r))) {
+        let g = m.get(k);
+        if (!g) m.set(k, g = { k, battles: 0, inst: new Set() });
+        g.battles++; g.inst.add(r.install);
+        add?.(g, r);
+      }
+    }
+    return [...m.values()].map(({ inst, ...g }) => ({ ...g, installs: inst.size }));
+  };
+  const top = (list, n) => list.sort((a, b) => b.battles - a.battles).slice(0, n);
+
+  const battles = top(group((r) => r.battle, (g, r) => {
+    g.wins = (g.wins || 0) + (r.outcome === 'win'); g.turnSum = (g.turnSum || 0) + r.turns;
+    g.secSum = (g.secSum || 0) + (r.seconds ?? 0); g.secN = (g.secN || 0) + (r.seconds != null);
+  }), 300).map((g) => ({ battle: g.k, n: g.battles, wins: g.wins, turns: g.turnSum / g.battles, secSum: g.secSum, secN: g.secN }));
+  const days_ = group((r) => r.received_at.slice(0, 10) + '|' + r.version)
+    .map((g) => ({ day: g.k.split('|')[0], version: g.k.split('|')[1], battles: g.battles, installs: g.installs }))
+    .sort((a, b) => b.day.localeCompare(a.day) || b.version.localeCompare(a.version, undefined, { numeric: true })).slice(0, 120);
+
+  // 환경 · 설정(flags 의 값) — 그 칸을 안 보낸 옛 판은 k 가 null 로 한 줄에 모인다(대시보드가 「자료 없음」으로 따로 적는다).
+  // 조작 방식 — 기술을 패드로 더 많이 썼으면 pad, 패드를 조금이라도 썼으면 mixed, 아니면 keys.
+  const control = (f) => f.pad == null ? null : f.pad > f.keys ? 'pad' : f.pad > 0 ? 'mixed' : 'keys';
+  const ENV = { platform: 'platform', control, res: 'res', screen: 'screen', fullscreen: 'fullscreen', hiResUi: 'hiResUi',
+                font: 'font', zoom: 'zoom', touch: 'touch', part2Dir: 'part2Dir', part1Dir: 'part1Dir' };
+  const envRows = Object.fromEntries(Object.entries(ENV).map(([key, get]) =>
+    [key, top(group((r) => { const v = typeof get === 'function' ? get(r.f) : r.f[get]; return v === undefined ? null : v; }), 40)]));
+  // 켠 모드(flags.mods, menu-112) — 판마다 여럿. 비중의 밑은 mods 칸을 보낸 판 수.
+  const withMods = picked.filter((r) => Array.isArray(r.f.mods));
+  const mods = top(group((r) => (Array.isArray(r.f.mods) ? r.f.mods : [])), 60);
+  const modBase = { battles: withMods.length, installs: new Set(withMods.map((r) => r.install)).size };
+
+  return { total, versions, battles, days: days_, env: envRows, mods, modBase };
+}
+
+async function getSkills(version, noedit, tachyrion, days, env) {
   const where = [], args = [];
+  if (days) { where.push('b.received_at >= ?'); args.push(since(days)); }
   if (version) { where.push('b.version = ?'); args.push(version); }
   if (noedit) where.push(`b.flags NOT LIKE '%"charEdit":true%'`);
   if (tachyrion === '1') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 1`);
   if (tachyrion === '0') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 0`);
-  const cond = where.length ? 'WHERE ' + where.join(' AND ') : '';
-  const sums = 'SUM(s.uses) AS uses, SUM(s.hits) AS hits, SUM(s.damage) AS damage, SUM(s.kills) AS kills, SUM(s.heal) AS heal, COUNT(DISTINCT s.report) AS battles';
-  const all = (sql) => env.DB.prepare(sql).bind(...args).all().then((r) => r.results);
-  // 환경 · 설정(flags 의 값)별 판 수와 설치 수 — 그 칸을 안 보낸 옛 판은 k 가 NULL 로 한 줄에 모인다(대시보드가 「자료 없음」으로 따로 적는다).
-  const flag = (name) => `json_extract(b.flags, '$.${name}')`;
-  const dim = (expr) => all(`SELECT ${expr} AS k, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond} GROUP BY k ORDER BY battles DESC LIMIT 40`);
-  // 조작 방식 — 그 판에서 기술을 패드로 더 많이 썼으면 pad, 패드를 조금이라도 썼으면 mixed, 아니면 keys.
-  const control = `CASE WHEN ${flag('pad')} IS NULL THEN NULL WHEN ${flag('pad')} > ${flag('keys')} THEN 'pad' WHEN ${flag('pad')} > 0 THEN 'mixed' ELSE 'keys' END`;
-  const ENV = { platform: flag('platform'), control, res: flag('res'), screen: flag('screen'), fullscreen: flag('fullscreen'), hiResUi: flag('hiResUi'),
-                font: flag('font'), zoom: flag('zoom'), touch: flag('touch'), part2Dir: flag('part2Dir'), part1Dir: flag('part1Dir') };
-  // 켠 모드(flags.mods, menu-112) — 판마다 켠 것이 여럿이라 json_each 로 펼친다. mods 칸을 보낸 판 수도 함께(비중의 밑).
-  const none = Promise.resolve(undefined);
-  if (!want('env')) return getRest();
-  const mods = all(`SELECT j.value AS k, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b, json_each(b.flags, '$.mods') j ${cond} GROUP BY k ORDER BY battles DESC LIMIT 60`);
-  const modBase = env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond ? cond + ' AND' : 'WHERE'} json_type(b.flags, '$.mods') = 'array'`).bind(...args).first();
-  const envRows = Promise.all(Object.values(ENV).map(dim)).then((lists) => Object.fromEntries(Object.keys(ENV).map((key, i) => [key, lists[i]])));
-  if (part === 'env') return { env: await envRows, mods: await mods, modBase: await modBase };
-  return getRest(envRows, mods, modBase);
-
-  async function getRest(envRows = none, mods = none, modBase = none) {
-  const [total, abilities, chars, battles, days, versions, env_] = await Promise.all([
-    !want('summary') ? none : env.DB.prepare(`SELECT COUNT(*) AS battles, COUNT(DISTINCT install) AS installs, COALESCE(SUM(outcome = 'win'), 0) AS wins, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(seconds), 0) AS secSum, COUNT(seconds) AS secN FROM battles b ${cond}`).bind(...args).first(),
-    // p1 = 파트1 전투(20000 + 번호)의 것 — 대시보드가 어빌리티 순위를 파트1 · 파트2 로 나눈다(menu-110)
-    !want('ability') ? none : all(`SELECT (b.battle >= 20000) AS p1, s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY p1, s.ability, s.work`),
-    !want('chars') ? none : all(`SELECT s.chr, s.ability, s.work, ${sums} FROM skill_stats s JOIN battles b ON b.report = s.report ${cond} GROUP BY s.chr, s.ability, s.work`),
-    !want('battles') ? none : all(`SELECT b.battle, COUNT(*) AS n, SUM(b.outcome = 'win') AS wins, AVG(b.turns) AS turns, COALESCE(SUM(b.seconds), 0) AS secSum, COUNT(b.seconds) AS secN FROM battles b ${cond} GROUP BY b.battle ORDER BY n DESC, b.battle LIMIT 300`),
-    !want('days') ? none : all(`SELECT substr(b.received_at, 1, 10) AS day, b.version, COUNT(*) AS battles, COUNT(DISTINCT b.install) AS installs FROM battles b ${cond} GROUP BY day, b.version ORDER BY day DESC, b.version DESC LIMIT 120`),
-    !want('summary') ? none : env.DB.prepare('SELECT DISTINCT version FROM battles ORDER BY version DESC LIMIT 50').all().then((r) => r.results.map((v) => v.version)),
-    envRows,
-  ]);
-  return { total, abilities, chars, battles, days, versions, env: env_, mods: await mods, modBase: await modBase };
-  }
+  const rows = (await env.DB.prepare(
+    `SELECT s.report, (b.battle >= 20000) AS p1, s.chr, s.ability, s.work, s.uses, s.hits, s.damage, s.kills, s.heal
+     FROM battles b JOIN skill_stats s ON s.report = b.report ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`).bind(...args).all()).results;
+  // p1 = 파트1 전투(20000 + 번호)의 것 — 어빌리티 순위를 파트1 · 파트2 로 나눈다(menu-110).
+  const sum = (keyOf, head) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = keyOf(r);
+      let g = m.get(k);
+      if (!g) m.set(k, g = { ...head(r), uses: 0, hits: 0, damage: 0, kills: 0, heal: 0, reports: new Set() });
+      g.uses += r.uses; g.hits += r.hits; g.damage += r.damage; g.kills += r.kills; g.heal += r.heal; g.reports.add(r.report);
+    }
+    return [...m.values()].map(({ reports, ...g }) => ({ ...g, battles: reports.size }));
+  };
+  return {
+    abilities: sum((r) => `${r.p1}|${r.ability}|${r.work}`, (r) => ({ p1: r.p1, ability: r.ability, work: r.work })),
+    chars: sum((r) => `${r.chr}|${r.ability}|${r.work}`, (r) => ({ chr: r.chr, ability: r.ability, work: r.work })),
+  };
 }
 
 // 이름 표는 코드에 있으니 cache 표에 넣지 않고 내보낼 때 붙인다.
@@ -137,8 +178,9 @@ async function dashboard(url, env) {
   if (version && !/^[0-9A-Za-z.+_-]+$/.test(version)) return json({ error: 'bad version' }, 400);
   const noedit = url.searchParams.get('noedit') === '1';
   const t = url.searchParams.get('tachyrion'), tachyrion = t === '1' || t === '0' ? t : '';
-  const p = url.searchParams.get('part') || '', part = PARTS.includes(p) ? p : '';
-  const body = await cached(env, `dashboard4|${part}|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, env, part));
+  const p = url.searchParams.get('part'), part = PARTS.includes(p) ? p : 'battles';
+  const d = Number(url.searchParams.get('days') ?? 7), days = DAY_CHOICES.includes(d) ? d : 7;
+  const body = await cached(env, `dashboard5|${part}|${days}|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, days, env, part));
   return jsonText(body.slice(0, -1) + ',"names":' + NAMES + '}');
 }
 

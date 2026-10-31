@@ -58,6 +58,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>창세기전3 — 전투 통계 (파트1 · 파트2)</h1>
   <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
+    <label>기간 <select id="days"><option value="7">최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option></select></label>
     <label>버전 <select id="version"><option value="">전체</option></select></label>
     <label>타키리온 개편 <select id="tachyrion"><option value="">전체</option><option value="1">켠 판</option><option value="0">끈 판</option></select></label>
     <span id="error"></span>
@@ -88,9 +89,9 @@ const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 let data = null, sortKey = 'uses', pickedChar = null, currentTab = 'ability';
 // 탭이 쓰는 집계 갈래(/v1/dashboard?part=) — 버그 리포트 탭은 집계가 없다. 받은 갈래는 거르기를 바꿀 때까지 다시 안 받는다.
-const TAB_PART = { ability: 'ability', chars: 'chars', battles: 'battles', env: 'env', days: 'days' };
+const TAB_PART = { ability: 'skills', chars: 'skills' };
 let loadedParts = new Set();
-const state = { version: '', tachyrion: '' };
+const state = { version: '', tachyrion: '', days: '7' };
 
 // 아래 표들은 탭으로 나눠 하나씩 보인다 — 고른 탭은 이 브라우저에 남는다
 function pickTab(tab) {
@@ -217,19 +218,19 @@ function renderDays() {
 }
 
 async function fetchPart(part) {
-  const q = new URLSearchParams({ part, version: state.version, tachyrion: state.tachyrion });
+  const q = new URLSearchParams({ part, days: state.days, version: state.version, tachyrion: state.tachyrion });
   const res = await fetch('/v1/dashboard?' + q);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
 
-// 처음 · 거르기를 바꿀 때 — 타일 · 버전 목록(summary)과 지금 탭 몫만 받는다.
+// 처음 · 거르기를 바꿀 때 — 전투 표 집계(타일 · 버전 목록 · 분기 · 날짜 · 환경 · 모드)와, 지금 탭이 어빌리티 · 인물이면 그 몫도 받는다.
 async function load() {
   $('error').textContent = '';
   loadedParts = new Set();
   try {
-    data = await fetchPart('summary');
-    loadedParts.add('summary');
+    data = await fetchPart('battles');
+    loadedParts.add('battles');
     const sel = $('version'), keep = state.version;
     sel.innerHTML = '<option value="">전체</option>' + data.versions.map((v) => '<option>' + esc(v) + '</option>').join('');
     sel.value = keep;
@@ -295,6 +296,7 @@ $('bugreload').onclick = loadBugs;
 $('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs(); };
 loadBugs();
 
+$('days').onchange = (e) => { state.days = e.target.value; load(); };
 $('version').onchange = (e) => { state.version = e.target.value; load(); };
 $('tachyrion').onchange = (e) => { state.tachyrion = e.target.value; load(); };
 load();

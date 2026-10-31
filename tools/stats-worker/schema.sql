@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS battles (
   flags       TEXT NOT NULL       -- 수치를 흔드는 것들(JSON: 캐릭터 에디터를 썼나, 소울 기여도 …)
 );
 
+-- 대시보드는 기간(최근 1주 · 4주)만 읽는다 — 받은 때 색인으로 그 앞 줄만 훑는다.
+CREATE INDEX IF NOT EXISTS battles_received ON battles (received_at);
+
 CREATE TABLE IF NOT EXISTS skill_stats (
   report  TEXT NOT NULL,
   chr     INTEGER NOT NULL,       -- 쓴 인물(Chr 번호)
