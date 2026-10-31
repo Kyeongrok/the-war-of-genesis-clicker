@@ -266,14 +266,16 @@ internal sealed partial class Part1Skill
     }
 
     /// <summary>
-    /// 마룡광아탄(296) — 대상 쪽을 보고 파트1 동작 26. 대상 둘레에 연기 173 쉰이 솟고, 25틱에 시전자 666:0 · 소리 2070, 대상 앞에 용 아가리 764 셋
+    /// 마룡광아탄(296) — 대상 쪽을 보고 파트1 동작 26. 겨눈 칸(바로 옆) 둘레에 연기 173 쉰이 솟고, 25틱에 시전자 666:0 · 소리 2070, 겨눈 칸에 용 아가리 764 셋
     /// (가운데 25틱 · 옆 둘 45틱). 범위 칸마다 보이지 않는 이동기가 시전자에서 빠르기 4 로 가(30틱, 시전자의 줄 밖 칸은 45틱 늦게) 닿으면 766:0 이 터지며 친다.
     /// </summary>
     private int S2Maryong(List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
         var (hx, hy) = _home;
         var user = _user;
-        var t = TargetPoint(targets, aim);
+        // T = 겨눈 칸 — 이 기술은 칸을 겨눈다(+0x31 = 2, 사거리 바로 옆 한 칸)라 +0x206 에 유닛이 없다. 전에는 첫 대상(범위 띠 안 적)의 자리를 써서
+        // 용 아가리 · 연기가 시전자 앞 서너 칸의 적 위에 떴다(버그 리포트 #2, fg-101).
+        var t = aim;
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
         int last = Act(user, 26, 8);

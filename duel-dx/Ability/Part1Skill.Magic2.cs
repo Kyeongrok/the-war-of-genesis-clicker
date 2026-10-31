@@ -392,7 +392,6 @@ internal sealed partial class Part1Skill
     {
         var (hx, hy) = _home;
         int n = Math.Max(1, targets.Count), last = 0;
-        int repeats = Math.Max(1, Part1Attack.ById(Part1Attack.LoadAll(), id)?.Hits ?? 1);
         int Sign() => Rand(2) == 0 ? -1 : 1;
         for (int i = 0; i < n; i++)
         {
@@ -415,12 +414,12 @@ internal sealed partial class Part1Skill
             if (i == 0) Later(start, () => host.Btl.CenterOn(t.X, t.Y));
             int arrive = start + flight.Count, impact = arrive + 2;
             Put(51, 0, impact, t.X, t.Y, life: 71, sounds: true);
-            // 타수(+0x66, Lv3 · 4 = 2 · Lv5 = 3)는 원본 보통 타격 길이 되풀이한다(9.5 「Hit rule」) — 세기에 곱하지 않고 타마다 따로 굴린다(HitsPerBall, fg-71).
-            // 되풀이 사이 4틱은 숫자가 겹치지 않게 둔 가설 값. 앞 타에 쓰러졌으면 남은 타는 헛맞는다.
-            for (int k = 0; ti >= 0 && k < repeats; k++)
+            // 범위 안 한 명당 한 발 · 한 번만 친다(사용자 요청 fg-102). 전에는 타수(+0x66, Lv3 · 4 = 2 · Lv5 = 3)만큼 4틱 간격으로 되풀이했다(fg-71) —
+            // 세기에는 타수를 곱하지 않는다(HitsPerBall).
+            if (ti >= 0)
             {
                 int victim = ti;
-                Later(impact + 1 + 4 * k, () => { if (host._units[victim].Alive) hit(victim); });
+                Later(impact + 1, () => { if (host._units[victim].Alive) hit(victim); });
             }
             // 김 — 흔들리며 솟는 35:0 열(빠르기 3 × 1.1, 24틱).
             for (int k = 0; k < 10; k++)
