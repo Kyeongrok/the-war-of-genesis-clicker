@@ -23,7 +23,7 @@ using static DuelDx.GameWindow;
 internal sealed partial class Part1Skill(GameWindow host)
 {
     /// <summary>이 틀이 그리는 파트1 기술인가 — 고정 work 들 · 라이트닝볼츠(Attack 번호로 · 생성된 어빌리티 work 포함).</summary>
-    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work) || IsWeaponWork(work) || IsMagicWork(work) || IsSword2Work(work) || IsGunWork(work) || IsBigWork(work);
+    internal static bool Handles(int work) => Works.Contains(work) || IsLightning(work) || IsMeteor(work) || IsWeaponWork(work) || IsMagicWork(work) || IsSword2Work(work) || IsGunWork(work) || IsBigWork(work);
 
     /// <summary>총 · 기계 · 용병 · 잡기술(연사 · 저격 · 댓쉬 · 워프 · 도발 · 집중 · 기도 · 희생 · 최면 … , Part1Skill.Gun).</summary>
     internal static bool IsGunWork(int work) => work > Part1Game.ChrBase && !Works.Contains(work) && IsGunSkill(Part1SkillBook.AttackIdOf(work));
@@ -288,7 +288,7 @@ internal sealed partial class Part1Skill(GameWindow host)
         int prep = proc ? 0 : IsWeaponWork(w.Id) ? WeaponPrep(user, (ax, ay)) : IsMagicWork(w.Id) ? MagicPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
             : IsSword2Work(w.Id) ? Sword2Prep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
             : IsBigWork(w.Id) ? BigPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay))
-            : IsGunWork(w.Id) ? GunPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay)) : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork or MeteorWork
+            : IsGunWork(w.Id) ? GunPrep(Part1SkillBook.AttackIdOf(w.Id), user, (ax, ay)) : w.Id is HellKiteWork or NereidWork or MuspelWork or KannonWork or TitaniaWork or BlackFoxWork or ThunderWork || IsMeteor(w.Id)
             ? SummonPrep(user, (ax, ay)) : SwordPrep(user);
         for (double end = At(prep); host._lastTime < end;) yield return true;
         // 앞머리 끝 자세 — 원본은 앞머리 마지막 틱에 동작을 한 번 더 걸고, 마법 · 소환(종류 3 · 4)과 총(종류 5)은 +0x26 = −1(0x1009a210)로
@@ -306,7 +306,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => HellStrike(targets, hit),
             AsuraWork => Asura(targets, hit),
             ThunderWork => Thunder(targets, hit),
-            MeteorWork => Meteor(targets, hit),
+            _ when IsMeteor(w.Id) => Meteor(targets, hit),
             _ when IsLightning(w.Id) => Lightning(w.Id, targets, (ax, ay), hit),
             _ when IsWeaponWork(w.Id) => Weapon(Part1SkillBook.AttackIdOf(w.Id), targets, (ax, ay), hit),
             _ when IsMagicWork(w.Id) => Magic(Part1SkillBook.AttackIdOf(w.Id), targets, cells, (ax, ay), hit),
@@ -364,7 +364,7 @@ internal sealed partial class Part1Skill(GameWindow host)
             HellStrikeWork => [124, 10, 832, 228, 38],
             AsuraWork => [124, 526, 38, 832, 518, 519, 83, 696, 862, 846, 843],
             ThunderWork => [75, 379, 71, 277, 77],
-            MeteorWork => [115, 34, 64, 54, 123, 228, 124, 116, 23, 96, 93],
+            _ when IsMeteor(work) => [115, 34, 64, 54, 123, 228, 124, 116, 23, 96, 93],
             _ when IsLightning(work) => [56, 35, 65, 76, 75, 379, 71, 277, 41, 77],
             FlyingSlashWork => [503, 504, 230],
             StormSwordWork => [959, 75, 72, 379, 76, 67],

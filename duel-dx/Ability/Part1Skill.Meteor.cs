@@ -15,6 +15,12 @@ internal sealed partial class Part1Skill
 {
     internal const int MeteorWork = 20087;
 
+    /// <summary>
+    /// 메테오(Attack 87)인가 — 유성검 덧기술의 고정 work 20087 말고도, 어빌리티 36 「메테오」를 배워 쓰는 work 도(Part1SkillBook 이 20087 이 이미 쓰여
+    /// 1000 비켜 준 21087). 전에는 고정 번호만 봐서 21087 이 이 틀을 못 타고 파트2 길로 빠져 운석 없이 피해 · 죽음 · 경험치가 곧바로 났다(카페 제보 fg-99).
+    /// </summary>
+    internal static bool IsMeteor(int work) => work == MeteorWork || (work > Part1GameBase && WarOfGenesis.Assets.Part1SkillBook.AttackIdOf(work) == 87);
+
     private int Meteor(List<int> targets, Action<int> hit)
     {
         var (left, top, right, bottom) = View;
