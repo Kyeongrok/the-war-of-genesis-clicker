@@ -86,7 +86,10 @@ const n = (v) => Number(v || 0).toLocaleString('ko-KR');
 // 걸린 시간 — 초 합계와 잰 판 수로 평균을 내 「분:초」로. 잰 판이 없으면(옛 판 게임이 보낸 것) −.
 const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum / count); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-let data = null, sortKey = 'uses', pickedChar = null;
+let data = null, sortKey = 'uses', pickedChar = null, currentTab = 'ability';
+// 탭이 쓰는 집계 갈래(/v1/dashboard?part=) — 버그 리포트 탭은 집계가 없다. 받은 갈래는 거르기를 바꿀 때까지 다시 안 받는다.
+const TAB_PART = { ability: 'ability', chars: 'chars', battles: 'battles', env: 'env', days: 'days' };
+let loadedParts = new Set();
 const state = { version: '', tachyrion: '' };
 
 // 아래 표들은 탭으로 나눠 하나씩 보인다 — 고른 탭은 이 브라우저에 남는다
@@ -94,6 +97,8 @@ function pickTab(tab) {
   document.querySelectorAll('section[data-tab]').forEach((el) => el.hidden = el.dataset.tab !== tab);
   document.querySelectorAll('#pagetabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   try { localStorage.setItem('dashTab', tab); } catch (e) { }
+  currentTab = tab;
+  if (data) loadPart(tab);
 }
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => pickTab(b.dataset.tab));
 let savedTab = null;
@@ -151,12 +156,22 @@ function envTables() {
 
 function render() {
   const t = data.total;
+  if (!t) return;
   $('tiles').innerHTML = [[t.battles, '전투'], [t.installs, '설치'], [t.battles ? Math.round(100 * t.wins / t.battles) + '%' : '-', '승률'], [t.battles ? Math.round(t.turns / t.battles) : '-', '평균 턴'], [clock(t.secSum, t.secN), '평균 시간']]
     .map(([v, label]) => '<div class="tile"><b>' + (typeof v === 'number' ? n(v) : v) + '</b><span>' + label + '</span></div>').join('');
 
   // 파트1 · 파트2 를 나눠 상위 20 개씩만(사용자 요청 menu-110). 옛 캐시(p1 칸이 없는 것)는 모두 파트2 로 본다.
-  abilityTable($('abilities'), data.abilities.filter((r) => !r.p1), true, 20);
-  abilityTable($('abilities1'), data.abilities.filter((r) => r.p1), true, 20);
+  if (data.abilities) {
+    abilityTable($('abilities'), data.abilities.filter((r) => !r.p1), true, 20);
+    abilityTable($('abilities1'), data.abilities.filter((r) => r.p1), true, 20);
+  }
+  if (data.chars) renderChars();
+  if (data.battles) renderBattles();
+  if (data.env) { renderMods(); envTables(); }
+  if (data.days) renderDays();
+}
+
+function renderChars() {
 
   // 인물도 파트로 나눈다 — 파트1 인물은 20000 + 번호. 파트마다 쓴 횟수가 많은 20명, 고른 인물의 어빌리티는 상위 20개(menu-110).
   const usesOf = new Map();
@@ -172,6 +187,9 @@ function render() {
   tabs($('chartabs'), part2);
   tabs($('chartabs1'), part1);
   abilityTable($('chars'), data.chars.filter((r) => r.chr === pickedChar), false, 20);
+}
+
+function renderBattles() {
 
   // 분기마다 판 수만 보인다(사용자 요청 menu-110) — 파트2 Episode 4 · 5, 파트1 시반 슈미터 · 크림슨 크루세이더 · 아포칼립스. 분기를 모르는 전투는 그 파트의 「분기 모름」.
   const branchOf = (id) => data.names.branches[id] || (id >= 20000 ? '파트1 · 분기 모름' : '파트2 · 분기 모름');
@@ -182,32 +200,53 @@ function render() {
     + ([...counts.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([key, count]) =>
         '<tr><td class="name">' + esc(key) + '</td><td>' + n(count) + '</td></tr>').join('')
       || '<tr><td colspan="2" class="dim name">아직 자료가 없습니다.</td></tr>');
+}
 
+function renderMods() {
   // 켠 모드(menu-112) — 판마다 여러 개라 비중의 밑은 모드 칸을 보낸 판 수다.
   const base = (data.modBase && data.modBase.battles) || 0;
   $('mods').innerHTML = '<tr><th class="name">모드</th><th>전투</th><th>설치</th><th>비중</th><th></th></tr>'
     + ((data.mods || []).map((r) => '<tr><td class="name">' + esc(String(r.k)) + '</td><td>' + n(r.battles) + '</td><td>' + n(r.installs) + '</td><td>'
         + (base ? (100 * r.battles / base).toFixed(1) + '%' : '-') + '</td><td class="bar"><i style="width:' + (base ? (100 * r.battles / base).toFixed(1) : 0) + '%"></i></td></tr>').join('')
       || '<tr><td colspan="5" class="dim name">아직 자료가 없습니다 — 모드 칸은 v1.0.31 판부터 들어옵니다.</td></tr>');
+}
 
-  envTables();
-
+function renderDays() {
   $('days').innerHTML = '<tr><th class="name">날짜</th><th class="name">버전</th><th>전투</th><th>설치</th></tr>'
     + data.days.map((d) => '<tr><td class="name">' + esc(d.day) + '</td><td class="name">' + esc(d.version) + '</td><td>' + n(d.battles) + '</td><td>' + n(d.installs) + '</td></tr>').join('');
 }
 
+async function fetchPart(part) {
+  const q = new URLSearchParams({ part, version: state.version, tachyrion: state.tachyrion });
+  const res = await fetch('/v1/dashboard?' + q);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// 처음 · 거르기를 바꿀 때 — 타일 · 버전 목록(summary)과 지금 탭 몫만 받는다.
 async function load() {
   $('error').textContent = '';
+  loadedParts = new Set();
   try {
-    const q = new URLSearchParams({ version: state.version, tachyrion: state.tachyrion });
-    const res = await fetch('/v1/dashboard?' + q);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    data = await res.json();
+    data = await fetchPart('summary');
+    loadedParts.add('summary');
     const sel = $('version'), keep = state.version;
     sel.innerHTML = '<option value="">전체</option>' + data.versions.map((v) => '<option>' + esc(v) + '</option>').join('');
     sel.value = keep;
     render();
+    await loadPart(currentTab);
   } catch (e) { $('error').textContent = '불러오지 못했습니다: ' + e.message; }
+}
+
+// 탭을 열 때 그 탭의 집계를 받는다(이미 받았으면 그대로).
+async function loadPart(tab) {
+  const part = TAB_PART[tab];
+  if (!part || loadedParts.has(part) || !data) return;
+  loadedParts.add(part);
+  try {
+    Object.assign(data, await fetchPart(part));
+    render();
+  } catch (e) { loadedParts.delete(part); $('error').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 // ── 버그 리포트 — 관리자 키로 /v1/bugs 를 읽고, 카드마다 상태를 바꾼다 ──
 const STATUS_NAME = { new: '새로', seen: '봤음', fixed: '고침', wontfix: '안 고침' };
