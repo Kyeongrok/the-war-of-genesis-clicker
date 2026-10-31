@@ -250,11 +250,21 @@ public static class Part1Game
     {
         if (_bodySprites != null) return _bodySprites;
         var set = new HashSet<int>();
+        // 낱장 Chars\NNNN.chr 와 묶음(Chars.idx · Chars.pak)의 레코드를 다 본다 — 전에는 낱장만 훑어, 인물 레코드가 묶음에만 있는 설치본에서는
+        // 그 인물(일 사담 Obs 717 · 누르 에드 딘 952 …)의 그림이 몸 그림으로 안 잡혀 동작 번호를 안 바꾸고 쌌다(ActionMap 없이) — 기본 공격 ·
+        // 맞기 자리에 엉뚱한 모션이 돌았다(카페 제보 fg-97). 레코드를 읽는 쪽(Part1Chr.Load → Read)은 이미 낱장 다음 묶음을 본다.
         try
         {
             if (Root is { } root)
-                foreach (string f in Directory.EnumerateFiles(Path.Combine(root, "Chars"), "*.chr"))
-                    if (File.ReadAllBytes(f) is { Length: >= 0x3c } b && BitConverter.ToUInt16(b, 0x3a) is > 0 and var sprite) set.Add(sprite);
+            {
+                string folder = Path.Combine(root, "Chars");
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string f in Directory.EnumerateFiles(folder, "*.chr")) names.Add(Path.GetFileName(f));
+                foreach (string name in ReadIndex(Path.Combine(folder, "Chars.idx")).Keys)
+                    if (name.EndsWith(".chr", StringComparison.OrdinalIgnoreCase)) names.Add(name);
+                foreach (string name in names)
+                    if (Read("Chars", name) is { Length: >= 0x3c } b && BitConverter.ToUInt16(b, 0x3a) is > 0 and var sprite) set.Add(sprite);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         return _bodySprites = set;
@@ -263,11 +273,11 @@ public static class Part1Game
     /// <summary>파트1 인물 레코드 — 없거나 못 읽으면 null.</summary>
     public static Part1Character? Character(int code)
     {
-        if (Root is not { } root) return Shipped.FirstOrDefault(p => p.Code == code);
+        if (Root == null) return Shipped.FirstOrDefault(p => p.Code == code);
         try
         {
-            byte[] b = File.ReadAllBytes(Path.Combine(root, "Chars", $"{code:D4}.chr"));
-            if (b.Length < 0x40) return null;
+            // 낱장이 없으면 묶음(Chars.pak)에서 — 레코드가 묶음에만 있는 설치본도 있다(fg-97).
+            if (Read("Chars", $"{code:D4}.chr") is not { Length: >= 0x40 } b) return null;
             var name = b.Take(0x18).Select(x => (byte)(x ^ 0xFF)).TakeWhile(x => x != 0).ToArray();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return new Part1Character(code, Encoding.GetEncoding(949).GetString(name), BitConverter.ToUInt16(b, 0x3a), BitConverter.ToUInt16(b, 0x3e), BitConverter.ToUInt16(b, 0x3c));
@@ -681,7 +691,8 @@ public static class Part1Game
         bool obs = file.EndsWith(".obs", StringComparison.OrdinalIgnoreCase);
         string path = Path.Combine(cacheFolder, CacheSub(file), file);
         // 파트1 이 없는 PC 는 릴리즈에서 받아 둔 것(assets-part1-1)을 같은 자리에서 쓴다.
-        if (File.Exists(path)) return path;
+        // 몸 그림인데 동작 번호를 안 바꾸고 싸 둔 옛 파일(인물 레코드가 Chars.pak 에만 있어 몸 그림으로 못 잡던 때 것, fg-97)은 다시 싼다.
+        if (File.Exists(path) && !(obs && Root != null && BodySprites().Contains(n - ObsBase) && PackedUnmapped(path))) return path;
         if (Root == null) return null;
         if (Read(obs ? "Obss" : "Snd", $"{n - ObsBase:D4}.{(obs ? "obs" : "snd")}") is not { } p1) return null;
         try
@@ -694,6 +705,32 @@ public static class Part1Game
             return path;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException) { return null; }
+    }
+
+    /// <summary>
+    /// 다시 싼 그림(<see cref="ToPart2Obs"/>)이 동작 번호를 안 바꾸고 싼 것인가 — <see cref="ActionMap"/> 으로 싸면 동작 3 · 4 · 10 · 11 · 12(모션 9~14 · 30~38)는
+    /// 생기지 않는다. 그대로 싼 인물 그림에는 파트1 동작 3(원거리) · 4(숨 고르기) · 11 · 12(연속 공격)가 그 자리에 남는다. 못 읽으면 false(그대로 쓴다).
+    /// </summary>
+    private static bool PackedUnmapped(string path)
+    {
+        try
+        {
+            using var r = new BinaryReader(File.OpenRead(path));
+            r.ReadUInt16();
+            int subs = r.ReadUInt16();
+            r.ReadUInt16();
+            r.BaseStream.Position += 6L * subs;
+            int motions = r.ReadUInt16();
+            r.ReadUInt16();
+            for (int m = 0; m < motions; m++)
+            {
+                int action = r.ReadUInt16() / 3;
+                r.ReadUInt32();
+                if (action is 3 or 4 or 10 or 11 or 12) return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or EndOfStreamException) { }
+        return false;
     }
 
     /// <summary>

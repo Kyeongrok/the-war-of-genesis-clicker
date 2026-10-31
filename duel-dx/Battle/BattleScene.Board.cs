@@ -162,6 +162,13 @@ internal sealed unsafe partial class BattleScene
     internal void ApplyAimHook()
     {
         string[] aim = Environment.GetEnvironmentVariable("DUELDX_AIM")?.Split(':') ?? [];
+        // DUELDX_AIMBY=<Chr> — 그 인물의 차례가 올 때까지 다른 내 인물은 쉬게 한다(총 · 회복 사거리를 그 인물로 칠해 볼 때). basic:foe 와도 함께 쓴다.
+        if (!_aimHookDone && aim.Length > 0 && int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIMBY"), out int aimBy) && IsPlayerTurn && host.Tlk._talk == null
+            && _runningEvent < 0 && host._units[_turn].ChrCode != aimBy)
+        {
+            Rest(_turn);
+            return;
+        }
         // DUELDX_AIM=basic:ally — 링 「공격」으로 가장 가까운 아군을 겨눈다(버서커 시험). basic:foe 면 가장 가까운 적(빌린 모습의 공격 동작 시험).
         if (!_aimHookDone && aim is ["basic", "ally" or "foe"] && IsPlayerTurn && _routine == null && host.Tlk._talk == null && _runningEvent < 0
             && host._units[_turn] is { Data: { } bd } bu && Work(bd.BasicWorkId) is { } bw)
@@ -179,13 +186,6 @@ internal sealed unsafe partial class BattleScene
         }
         // 「basic」 은 차례 인물의 기본 공격 work(DUELDX_AIMSHOW 와 함께 — 기본 공격 사거리만 칠해 볼 때).
         if (_aimHookDone || aim.Length == 0) return;
-        // DUELDX_AIMBY=<Chr> — 그 인물의 차례가 올 때까지 다른 내 인물은 쉬게 한다(총 · 회복 사거리를 그 인물로 칠해 볼 때).
-        if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_AIMBY"), out int aimBy) && IsPlayerTurn && host.Tlk._talk == null && _runningEvent < 0
-            && host._units[_turn].ChrCode != aimBy)
-        {
-            Rest(_turn);
-            return;
-        }
         int id =aim[0] == "basic" ? (_turn >= 0 && host._units[_turn].Data is { } turnData ? turnData.BasicWorkId : -1) : int.TryParse(aim[0], out int parsed) ? parsed : -1;
         if (id < 0) return;
         if (!IsPlayerTurn || _routine != null || host.Tlk._talk != null || _runningEvent >= 0 || Work(id) is not { } w) return;
