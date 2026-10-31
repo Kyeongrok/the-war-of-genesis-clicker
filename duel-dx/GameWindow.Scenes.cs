@@ -149,6 +149,8 @@ internal sealed unsafe partial class GameWindow
     internal HiResBackdrop HiBack => _hiBack ?? LazyInitializer.EnsureInitialized(ref _hiBack, () => new HiResBackdrop(this));
     internal BattleStats? _stats;
     internal BattleStats Stats => _stats ?? LazyInitializer.EnsureInitialized(ref _stats, () => new BattleStats(this));
+    internal BugReport? _bugReport;
+    internal BugReport Bugs => _bugReport ?? LazyInitializer.EnsureInitialized(ref _bugReport, () => new BugReport(this));
     internal StatsScreen? _statsScr;
     internal StatsScreen StatsScr => _statsScr ?? LazyInitializer.EnsureInitialized(ref _statsScr, () => new StatsScreen(this));
     internal ItemBookScreen? _itemBookScr;

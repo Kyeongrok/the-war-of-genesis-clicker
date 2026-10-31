@@ -38,6 +38,17 @@ internal sealed unsafe class TitleScreen(GameWindow host)
 
     internal const int TitleButtonW = 170, TitleButtonH = 14;
 
+    /// <summary>오른쪽 아래 「버그 리포트」 단추(리메이크에만 있다, 사용자 요청 menu-118) — 왼쪽 아래 「PART 1 (BETA)」 와 맞선 자리 · 같은 꼴.</summary>
+    internal static readonly (int X, int Y, int W, int H) BugButton = (500, 440, 124, 26);
+    internal bool _bugHover;
+
+    internal bool BugButtonAt(int bx, int by)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        var (x, y, w, h) = BugButton;
+        return bx >= ox + x && bx < ox + x + w && by >= oy + y && by < oy + y + h;
+    }
+
     internal bool _titleOpen;
     internal int _titleHover = -1;
     internal double _titleOpenedAt;
@@ -202,6 +213,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         // 파트1 타이틀이 떠 있으면 그 화면이, 아니면 왼쪽 아래 「PART 1」 단추가 먼저 받는다.
         if (host.Part1TitleScr.OnClick(bx, by)) return true;
         if (host.Part1TitleScr.EntryAt(bx, by)) { host.Part1TitleScr.PressEntry(); return true; }
+        if (BugButtonAt(bx, by)) { _bugHover = false; host.Bugs.Open(); return true; }
         PressTitleButton(TitleButtonAt(bx, by));
         return true;
     }
@@ -292,6 +304,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (!_titleOpen) return;
         host.Part1TitleScr.UpdateHover(bx, by);
         _titleHover = host.Part1TitleScr._open ? -1 : TitleButtonAt(bx, by);
+        _bugHover = !host.Part1TitleScr._open && BugButtonAt(bx, by);
     }
 
     internal void DrawTitle()
@@ -335,6 +348,8 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (AssetPack.Status is { Length: > 0 } pack) host.UiText(pack, ox + 8, oy + 10, White, 12);
 
         host.Part1TitleScr.DrawEntry();   // 파트1 로 가는 단추(리메이크에만 있다)
+        var (bugX, bugY, bugW, bugH) = BugButton;
+        host.Part1TitleScr.DrawButton(ox + bugX, oy + bugY, bugW, bugH, "버그 리포트", _bugHover);
         DrawFanNotice(270, 250);   // 배경의 원본 저작권 글(x 270, y 232~246) 바로 밑
         host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();

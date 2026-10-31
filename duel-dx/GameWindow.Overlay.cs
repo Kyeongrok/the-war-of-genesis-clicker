@@ -230,21 +230,29 @@ internal sealed unsafe partial class GameWindow
     internal void DrawSceneTag()
     {
         if (!_showSceneTag || RecordsScr._recordsOpen) return;
-        // 파트1 필드 · 마을 · 챕터 지도는 파트2 타이틀을 연 채 그 위에 그린다 — 타이틀보다 먼저 본다.
-        string? part1 = _part1TitleScr is { _open: true } p1 ? p1.SceneTag() : null;
-        if (part1 == null && TitleScr._titleOpen) return;
         if (_hiResUi && _statusUnit >= 0) return;   // 화면 가득한 Status(층) 위로는 안 올린다 — 판에 그릴 때는 Status 에 가려졌다
-        string tag;
-        if (part1 != null) tag = part1;
-        else if (EpisodesScr._episodesOpen) tag = "연대표";
-        else if (Fld._field != null) tag = $"Fld {Fld._field.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc);
-        else if (Mos._mosesOpen) tag = Mos._mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc) : "모세스";
-        else if (_battleLoaded) tag = $"Btl {_scene.Id:D4} · 턴 {Btl._turnNo}" + (Btl._runningEvent >= 0 ? $" · 사건 {Btl._runningEvent}" : "");
-        else return;
+        if (SceneTagText() is not { } tag) return;
         var (_, w, h) = UiGetText(tag, White, 11f);
         int x = _camX + 4, y = _camY + ViewHeight - h - 4;
         UiFill(x - 2, y - 1, w + 4, h + 2, 0x90000000);
         UiText(tag, x, y, 0xFFB0B8C8, 11f);
+    }
+
+    /// <summary>
+    /// 지금 화면의 장면 번호 꼬리표(「Btl 0045 · 턴 3」 · 「Fld 0365 · 사건 3 · 줄 12」 · 「P1 Chp 0020」) — 타이틀이면 null.
+    /// 왼쪽 아래 꼬리표(<see cref="DrawSceneTag"/>)와 버그 리포트(<see cref="BugReport"/>)가 쓴다.
+    /// </summary>
+    internal string? SceneTagText()
+    {
+        // 파트1 필드 · 마을 · 챕터 지도는 파트2 타이틀을 연 채 그 위에 그린다 — 타이틀보다 먼저 본다.
+        string? part1 = _part1TitleScr is { _open: true } p1 ? p1.SceneTag() : null;
+        if (part1 != null) return part1;
+        if (TitleScr._titleOpen) return null;
+        if (EpisodesScr._episodesOpen) return "연대표";
+        if (Fld._field != null) return $"Fld {Fld._field.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc);
+        if (Mos._mosesOpen) return Mos._mosesChp is { } chp ? $"Chp {chp.Id:D4}" + ScriptPlace(Fld._fieldEvent, Fld._fieldPc) : "모세스";
+        if (_battleLoaded) return $"Btl {_scene.Id:D4} · 턴 {Btl._turnNo}" + (Btl._runningEvent >= 0 ? $" · 사건 {Btl._runningEvent}" : "");
+        return null;
 
         static string ScriptPlace(int ev, int pc) => ev >= 0 ? $" · 사건 {ev} · 줄 {Math.Max(0, pc - 1)}" : "";
     }

@@ -1269,6 +1269,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
             NotesScr.OpenIfUpdated();
             ConsentScr.OpenIfNeeded();
             Stats.UploadInBackground();   // 지난번에 못 보낸 통계가 있으면 다시 보낸다
+            Bugs.UploadInBackground();    // 지난번에 못 보낸 버그 리포트도
+            if (Offscreen && Environment.GetEnvironmentVariable("DUELDX_BUGREPORT_TEXT") is { Length: > 0 }) Bugs.Open();   // 화면 밖 시험 문 — 창 없이 그 글을 보낸다
             // DUELDX_SAVE=<칸> 이면 화면이 다 선 뒤 그 칸에 한 번 저장한다(화면 밖 시험용 — 세이브에 무엇이 적히는지 본다).
             if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_SAVE"), out int saveSlot)) Btl._saveSlotPending = saveSlot;
             // DUELDX_LOAD=<칸> 이면 그 세이브를 바로 불러온다(화면 밖 시험용). 모세스로 돌아오면 DUELDX_MOSESPAGE 도 따른다.

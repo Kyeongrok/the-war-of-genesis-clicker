@@ -60,3 +60,40 @@ npx wrangler d1 execute war-of-genesis-stats --remote --command "SELECT COALESCE
 
 `battles`(판 하나에 한 줄: 전투 번호 · 판 번호 · 난이도 · 승패 · 턴 수 · 설치 번호)와 `skill_stats`(인물 × 어빌리티마다 한 줄).
 이름 · 계정 · IP · 세이브 내용은 적지 않는다.
+
+## 버그 리포트
+
+게임의 「버그 리포트」(파트2 타이틀 오른쪽 아래 · 파트1 타이틀 PART 2 위 · 시스템 메뉴)가 글 쓰는 창을 띄우고, 쓴 글을 여기로 보낸다
+(`duel-dx/System/BugReport.cs`). 「익명 전투 통계 보내기」를 꺼 두어도 보낸다(사용자가 보내기를 눌렀으니). 못 보내면 `%APPDATA%\DuelDx\bug-queue` 에 두었다가 다음에 켤 때 다시 보낸다.
+
+- `POST /v1/bug` — `{ v: 1, install, version, text, context }`. 글 8000자 · context 32KB · 몸 48KB 까지. 설치 하나가 한 시간에 10 건(모두 합쳐 300 건)을 넘으면 429. `{ ok, id }` 를 돌려준다.
+- `GET /v1/bugs?since=<id>&status=new&limit=100` — 관리자만(`Authorization: Bearer <BUG_ADMIN_KEY>`, 아니면 401). `status=all` 이면 모두.
+- `POST /v1/bugs/<id>/status` `{ status, note }` — 관리자만. status 는 소문자 낱말(new · seen · fixed · wontfix · dup …), note 는 2000자까지(안 주면 그대로).
+
+`context` 에 게임이 붙이는 것: 판 번호 · OS · 기기 갈래 · 화면 크기 · 지금 자리(장면 꼬리표 「Btl 0045 · 턴 3」) · 전투 · 필드 · 챕터 · 난이도 · 켠 모드 ·
+읽기 오류 · `%TEMP%\dueldx_crash.log` 의 끝(200줄 · 20KB). 경로의 사용자 폴더 · 사용자 이름은 `%USERPROFILE%` · `<user>` 로 바꿔 보낸다.
+
+### 올리기(처음 한 번)
+
+```
+cd tools/stats-worker
+npx wrangler d1 execute war-of-genesis-stats --remote --file=migrations/0002_bug_reports.sql   # bug_reports 표
+npx wrangler secret put BUG_ADMIN_KEY                                                         # 관리자 열쇠(16자 넘게) — 물으면 붙여 넣는다
+npx wrangler deploy
+```
+
+열쇠는 아무 긴 무작위 글이면 된다 — PowerShell: `-join ((48..57)+(97..122) | Get-Random -Count 40 | % {[char]$_})`.
+같은 값을 `~\.dueldx-bug-admin-key` 에 한 줄로 적어 두면 `bugs.ps1` 이 읽는다.
+
+### 보기 · 고치기 — `bugs.ps1`
+
+```
+./bugs.ps1                                        # 새(new) 리포트: 번호 · 때 · 판 · 자리 · 환경 · 모드 · 오류 기록 첫 줄 · 글
+./bugs.ps1 -Id 42                                 # 하나를 자세히(오류 기록 전부)
+./bugs.ps1 -Status all -Since 40                  # 40 번 뒤 모두   (-Json 이면 JSON 그대로)
+./bugs.ps1 -Mark 42 -Status fixed -Note "v1.0.43 에서 고침"
+```
+
+로컬 시험: `npx wrangler d1 execute war-of-genesis-stats --local --file=schema.sql` 뒤
+`npx wrangler dev --local --port 8833 --var BUG_ADMIN_KEY:<열쇠>`, 게임은 `DUELDX_STATS_URL=http://127.0.0.1:8833` 으로 그쪽에 보낸다
+(화면 밖 시험은 `DUELDX_OFFSCREEN=1 DUELDX_BUGREPORT_TEXT=<글>` — 창 없이 켜자마자 그 글을 보낸다). `./bugs.ps1 -Url http://127.0.0.1:8833 -KeyFile <열쇠 파일>`.

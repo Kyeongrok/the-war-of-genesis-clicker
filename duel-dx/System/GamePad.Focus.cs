@@ -177,6 +177,8 @@ internal sealed partial class GamePad
         {
             var (ox, oy) = host.Mos.MosesOrigin();
             foreach (var (x, y, _) in TitleScreen.TitleButtons) list.Add((ox + x, oy + y, TitleScreen.TitleButtonW, TitleScreen.TitleButtonH));
+            var (bx, by, bw, bh) = TitleScreen.BugButton;   // 오른쪽 아래 「버그 리포트」
+            list.Add((ox + bx, oy + by, bw, bh));
             return list;
         }
         if (host.Mos._mosesOpen) MosesTargets(list);

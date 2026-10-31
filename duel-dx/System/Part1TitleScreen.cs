@@ -57,15 +57,16 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         ("PART 2", -1, 530, 450, 630, 468),
         ("EXIT", 4, Cx - 15, Cy + 193, Cx + 16, Cy + 207),
         ("TUTORIAL", 3, Cx - 33, Cy + 170, Cx + 31, Cy + 185),   // 원본 단추 2 — CONTINUE 아래, EXIT 위
+        ("버그 리포트", -1, 530, 428, 630, 446),                    // 원본에 없는 줄(사용자 요청 menu-118) — PART 2 위. 글 쓰는 창을 띄운다(BugReport)
     ];
 
     /// <summary>위·아래 키로 옮기는 차례 — 가운데 메뉴 줄 먼저, 그다음 오른쪽 아래 PART 2.</summary>
-    private static readonly int[] KeyOrder = [0, 1, 2, 5, 4, 3];
+    private static readonly int[] KeyOrder = [0, 1, 2, 5, 4, 3, 6];
 
     /// <summary>글 단추 크기 — 연대표 · 마을 · 일행 창이 <see cref="DrawButton"/> 과 함께 쓴다.</summary>
     internal const int ButtonW = 140, ButtonH = 24;
 
-    internal const int ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4, ButtonTutorial = 5;
+    internal const int ButtonNewGame = 0, ButtonLoad = 1, ButtonContinue = 2, ButtonPart2 = 3, ButtonExit = 4, ButtonTutorial = 5, ButtonBug = 6;
 
     /// <summary>튜토리얼 챕터 — 원본 상태 3(<c>0x100d5df2</c>)이 장면 4 에 넘기는 챕터 번호(0x50).</summary>
     internal const int TutorialChapter = 80;
@@ -397,6 +398,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
                 host.LeaveScene(ContinueGame);
                 break;
             case ButtonTutorial: PlayPress(); host.LeaveScene(StartTutorial); break;
+            case ButtonBug: PlayPress(); _hover = -1; host.Bugs.Open(); break;
             case ButtonPart2 when OriginalGameSetup.Part1Only: PlayPress(); ConnectPart2(); break;   // 파트2 원본을 몰라 파트1 만 도는 판 — 「PART 2 연결」(menu-115)
             case ButtonPart2: PlayPress(); host.LeaveScene(Close); break;
             case ButtonExit: host._running = false; break;   // 게임 끝내기 — 파트2 타이틀의 EXIT 와 같다(사용자 요청)

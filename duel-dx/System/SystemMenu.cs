@@ -29,7 +29,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal const int ListRowObs = 471;
 
     /// <summary>시스템 메뉴 항목 — 원본 차례대로(위에서 아래), 글자는 Obs 0894 모션.</summary>
-    internal enum SystemItem { Mission, Restart, Load, Save, Volume, JobTree, Party, Mods, Settings, Exit }
+    internal enum SystemItem { Mission, Restart, Load, Save, Volume, JobTree, Party, Mods, Settings, BugReport, Exit }
 
     internal static readonly (SystemItem Item, int Motion, string Label)[] SystemItems =
     [
@@ -42,6 +42,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         (SystemItem.Party, -3, "동료 정보"),     // 원본에 없는 줄(menu-106) — 파트1 일행 한눈에(P 와 같다)
         (SystemItem.Mods, -1, "MODE"),          // 원본에 없는 줄(사용자 요청 menu-34) — 모드 창을 연다. 글자 그림은 다른 줄에서 따와 만든다(DrawModeLabel)
         (SystemItem.Settings, -2, "SETTING"),   // 원본에 없는 줄(사용자 요청 menu-41) — 설정 창을 연다. 전체화면에서는 메뉴 막대가 없어 여기가 설정으로 가는 길이다
+        (SystemItem.BugReport, -3, "버그 리포트"), // 원본에 없는 줄(사용자 요청 menu-118) — 글 쓰는 창을 띄워 보낸다(BugReport). 지금 자리(전투 · 필드 · 챕터)가 같이 간다
         (SystemItem.Exit, 4, "EXIT GAME"),
     ];
 
@@ -130,6 +131,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             case SystemItem.Settings:
                 _systemMenuReturn = false;
                 host.SettingsScr.Open();
+                break;
+            case SystemItem.BugReport:
+                _systemMenuReturn = false;
+                host.Bugs.Open();
                 break;
             case SystemItem.JobTree:
             case SystemItem.Party:
@@ -389,15 +394,22 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         ".#####.######", "#######.#####", "#######.#####", "#######......", "#######......", ".............",
     ];
 
-    private uint[]? _treeIcon, _partyIcon;
+    /// <summary>버그 리포트 아이콘 — 벌레 한 마리(더듬이 · 몸통 · 다리).</summary>
+    private static readonly string[] BugIcon =
+    [
+        "..#.......#..", "...#.....#...", "....#####....", "...#######...", "#..#######..#", ".#.#######.#.", "...#######...",
+        "##.#######.##", "...#######...", ".#.#######.#.", "#...#####...#", ".....###.....", ".............",
+    ];
+
+    private uint[]? _treeIcon, _partyIcon, _bugIcon;
 
     /// <summary>전직 트리 · 동료 정보 줄의 아이콘 — 톱니와 같은 꼴(아이콘 칸 24×22, 기준점 (2, 3)). SAVE 그림이 없으면 기본 색으로.</summary>
     private void DrawDotIcon(SystemItem item, int x, int y, bool iconOnly = false)
     {
-        ref var cached = ref item == SystemItem.JobTree ? ref _treeIcon : ref _partyIcon;
+        ref var cached = ref item == SystemItem.JobTree ? ref _treeIcon : ref item == SystemItem.BugReport ? ref _bugIcon : ref _partyIcon;
         if (cached == null)
         {
-            var pattern = item == SystemItem.JobTree ? TreeIcon : PartyIcon;
+            var pattern = item == SystemItem.JobTree ? TreeIcon : item == SystemItem.BugReport ? BugIcon : PartyIcon;
             uint ink = host.UiFor(SystemObs)?.FrameAt(0, 0) is { } save ? IconInk(save) : 0xFF80F0C0;
             var canvas = new uint[LabelIconW * ModeLabelH];
             for (int r = 0; r < pattern.Length; r++)

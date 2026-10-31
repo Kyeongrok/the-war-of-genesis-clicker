@@ -209,10 +209,10 @@ internal sealed class BattleStats(GameWindow host)
 
     /// <summary>설치마다 하나인 무작위 번호 — 누구인지는 모르고 같은 설치인지만 안다.</summary>
     /// <summary>폴더의 마지막 이름 — 「C:\Games\창세기전3 파트2\」 → 「창세기전3 파트2」. 없으면 null.</summary>
-    private static string? DirName(string? root) =>
+    internal static string? DirName(string? root) =>
         root is { Length: > 0 } ? Path.GetFileName(Path.TrimEndingDirectorySeparator(root)) is { Length: > 0 } leaf ? leaf : root : null;
 
-    private static string InstallId()
+    internal static string InstallId()
     {
         if (File.Exists(InstallPath) && Guid.TryParse(File.ReadAllText(InstallPath).Trim(), out var known)) return known.ToString();
         string id = Guid.NewGuid().ToString();
