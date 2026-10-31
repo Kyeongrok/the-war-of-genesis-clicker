@@ -248,36 +248,49 @@ internal static class BugReportDialog
     /// <summary>창을 띄워 글을 받는다 — 취소하거나 비워 두면 null.</summary>
     internal static string? Ask(System.Windows.Forms.IWin32Window owner, string summary)
     {
-        // 4K 처럼 배율이 큰 화면에서 글은 커지는데 자리는 96 DPI 점 그대로라 글이 잘렸다 — 창의 DPI 로 자리 · 크기를 키운다
+        // 4K 처럼 배율이 큰 화면에서 글이 잘렸다(v1.0.44 · 45) — 칸 높이를 정하지 않고 글 크기에 맞춰 늘어나는 배치(TableLayoutPanel · AutoSize)로,
+        // 글꼴은 창 DPI 의 점(px)으로 정해 모든 칸이 같은 크기 글을 쓴다. 폭과 글 칸 높이만 DPI 로 키운다.
         float k = Math.Max(1f, GetDpiForWindow(owner.Handle) / 96f);
         int S(int v) => (int)Math.Round(v * k);
-        using var font = new Font("Malgun Gothic", 9.5f);
+        using var font = new Font("Malgun Gothic", 12f * k, GraphicsUnit.Pixel);
+        int width = S(540);
         using var form = new System.Windows.Forms.Form
         {
-            Text = "버그 리포트", ClientSize = new Size(S(560), S(500)), FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
+            Text = "버그 리포트", FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
             StartPosition = System.Windows.Forms.FormStartPosition.CenterParent, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false,
             Font = font, AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            AutoSize = true, AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink, Padding = new System.Windows.Forms.Padding(S(12)),
         };
+        var layout = new System.Windows.Forms.TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink };
         var head = new System.Windows.Forms.Label
         {
-            Left = S(12), Top = S(10), Width = S(536), Height = S(44),
+            AutoSize = true, MaximumSize = new Size(width, 0), Margin = new System.Windows.Forms.Padding(0, 0, 0, S(6)),
             Text = "어떤 일이 있었는지 적어 주세요 — 무엇을 하다가(어느 전투 · 어떤 기술), 무엇이 보였고, 원래는 어땠어야 하는지.",
         };
         var box = new System.Windows.Forms.TextBox
         {
-            Left = S(12), Top = S(58), Width = S(536), Height = S(230), Multiline = true, AcceptsReturn = true, AcceptsTab = false,
+            Width = width, Height = S(220), Multiline = true, AcceptsReturn = true, AcceptsTab = false, Margin = new System.Windows.Forms.Padding(0),
             ScrollBars = System.Windows.Forms.ScrollBars.Vertical, MaxLength = BugReport.MaxText, WordWrap = true,
         };
-        var count = new System.Windows.Forms.Label { Left = S(12), Top = S(292), Width = S(536), Height = S(22), Text = $"0 / {BugReport.MaxText}", ForeColor = Color.DimGray };
+        var count = new System.Windows.Forms.Label { AutoSize = true, Text = $"0 / {BugReport.MaxText}", ForeColor = Color.DimGray, Margin = new System.Windows.Forms.Padding(0, S(4), 0, S(6)) };
         var info = new System.Windows.Forms.TextBox
         {
-            Left = S(12), Top = S(318), Width = S(536), Height = S(120), Multiline = true, ReadOnly = true, TabStop = false,
+            Width = width, Height = S(110), Multiline = true, ReadOnly = true, TabStop = false, Margin = new System.Windows.Forms.Padding(0),
             ScrollBars = System.Windows.Forms.ScrollBars.Vertical, Text = "같이 보내는 것:" + Environment.NewLine + summary,
             BackColor = System.Drawing.SystemColors.Control, ForeColor = Color.DimGray,
         };
-        var send = new System.Windows.Forms.Button { Text = "보내기", Left = S(340), Top = S(452), Width = S(100), Height = S(36), Enabled = false, DialogResult = System.Windows.Forms.DialogResult.OK };
-        var cancel = new System.Windows.Forms.Button { Text = "취소", Left = S(448), Top = S(452), Width = S(100), Height = S(36), DialogResult = System.Windows.Forms.DialogResult.Cancel };
-        var hint = new System.Windows.Forms.Label { Left = S(12), Top = S(460), Width = S(320), Height = S(22), Text = "Ctrl+Enter 로도 보냅니다", ForeColor = Color.DimGray };
+        var send = new System.Windows.Forms.Button { Text = "보내기", AutoSize = true, MinimumSize = new Size(S(96), 0), Enabled = false, DialogResult = System.Windows.Forms.DialogResult.OK };
+        var cancel = new System.Windows.Forms.Button { Text = "취소", AutoSize = true, MinimumSize = new Size(S(96), 0), DialogResult = System.Windows.Forms.DialogResult.Cancel };
+        var hint = new System.Windows.Forms.Label { AutoSize = true, Text = "Ctrl+Enter 로도 보냅니다", ForeColor = Color.DimGray, Anchor = System.Windows.Forms.AnchorStyles.Left };
+        // 아래 줄 — 왼쪽 안내, 오른쪽 보내기 · 취소
+        var bottom = new System.Windows.Forms.TableLayoutPanel { ColumnCount = 3, AutoSize = true, Width = width, Margin = new System.Windows.Forms.Padding(0, S(10), 0, 0) };
+        bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
+        bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+        bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+        bottom.Controls.Add(hint, 0, 0);
+        bottom.Controls.Add(send, 1, 0);
+        bottom.Controls.Add(cancel, 2, 0);
+        bottom.Dock = System.Windows.Forms.DockStyle.Fill;
         box.TextChanged += (_, _) =>
         {
             count.Text = $"{box.TextLength} / {BugReport.MaxText}";
@@ -287,7 +300,8 @@ internal static class BugReportDialog
         {
             if (e.Control && e.KeyCode == System.Windows.Forms.Keys.Enter && send.Enabled) { e.SuppressKeyPress = true; form.DialogResult = System.Windows.Forms.DialogResult.OK; }
         };
-        form.Controls.AddRange([head, box, count, info, hint, send, cancel]);
+        layout.Controls.AddRange([head, box, count, info, bottom]);
+        form.Controls.Add(layout);
         form.CancelButton = cancel;
         form.Shown += (_, _) => box.Focus();
         if (form.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK) return null;
