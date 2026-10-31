@@ -163,7 +163,8 @@ internal sealed unsafe partial class GameWindow
         [SoundDeath] = Part1Game.DeathSnd,        // 106 쓰러짐
     };
 
-    internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false)
+    /// <param name="volume">그 소리만의 크기(0~1) — S.E 막대에 곱한다(파트1 차례 목소리, menu-121).</param>
+    internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false, float volume = 1f)
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
         // 파트1 만 도는 판(파트2 원본이 없는 PC) — 파트2 효과음 대신 파트1 원본의 같은 자리 소리를 낸다. 맞는 것이 없으면 안 낸다(사용자 요청 menu-109).
@@ -183,7 +184,7 @@ internal sealed unsafe partial class GameWindow
             lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
         else if (!loaded) PrefetchSound(sound);
         var (left, right) = SndPan(screenX);
-        float gain = SndGain;
+        float gain = SndGain * volume;
         // 화면 밖에서 난 소리는 작게 들린다 — 원본(0x10028c18~0x10028cef)은 화면 밖이면 −(d² % 5000)/100 dB(평균 약 −15 dB, 거리에 단조가 아님)다.
         // 리메이크는 화면 너비가 달라 그 식을 그대로 못 쓰니 평균값으로 줄인다(근사 — ba-21 sound D6). 전에는 화면 밖 소리도 제 크기였다.
         // → 사용자 요청으로 뺐다: 행동하는 인물이 화면 가장자리·밖에 있으면 제 공격 소리·목소리가 멀리서 나는 것처럼 작아졌다. 크기는 늘 제 크기로 둔다.

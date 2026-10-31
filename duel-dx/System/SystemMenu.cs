@@ -442,17 +442,20 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
 
     internal int _bgmVolume = Math.Clamp(UserSettings.Current.BgmVolume, 5, 100), _seVolume = Math.Clamp(UserSettings.Current.SeVolume, 5, 100);
 
+    /// <summary>파트1 차례 목소리 크기 %(원본에 없는 줄 — 사용자 요청 menu-121, 기본 80). S.E 막대에 곱한다.</summary>
+    internal int _voiceVolume = Math.Clamp(UserSettings.Current.Part1VoiceVolume, 5, 100);
+
     /// <summary>「배경음악」 체크 상자(원본 0x2728, (78,120)) — 끄면 음악을 멈추고 켜면 지금 곡을 다시 튼다.</summary>
     internal bool _bgmOn = UserSettings.Current.BgmOn;
 
-    internal const int VolumeW = 220, VolumeH = 160, VolumeCells = 20;
+    internal const int VolumeW = 220, VolumeH = 210, VolumeCells = 20;
 
     internal (int X, int Y) VolumeOrigin() => (host._camX + (host.ViewWidth - VolumeW) / 2, host._camY + (host.ViewHeight - VolumeH) / 2);
 
     internal void OnVolumeClick(int bx, int by)
     {
         var (x, y) = VolumeOrigin();
-        foreach (var (rowY, setter) in new (int, Action<int>)[] { (40, v => _bgmVolume = v), (90, v => _seVolume = v) })
+        foreach (var (rowY, setter) in new (int, Action<int>)[] { (40, v => _bgmVolume = v), (90, v => _seVolume = v), (140, v => _voiceVolume = v) })
         {
             if (by < y + rowY || by >= y + rowY + 13) continue;
             int cell = (bx - (x + 20)) / 9;
@@ -462,8 +465,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.SaveSettings();
             return;
         }
-        // 「배경음악」 체크 상자 — (78,120) 언저리.
-        if (bx >= x + 70 && bx < x + 200 && by >= y + 116 && by < y + 134)
+        // 「배경음악」 체크 상자 — 원본은 (78,120) 언저리, 파트1 목소리 줄을 더해 50 내렸다.
+        if (bx >= x + 70 && bx < x + 200 && by >= y + 166 && by < y + 184)
         {
             _bgmOn = !_bgmOn;
             if (!_bgmOn) host._mixer.StopMusic();   // 곡 번호는 남긴다 — 켜면 되살린다
@@ -490,7 +493,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         var (x, y) = VolumeOrigin();
         host.UiFrame(x, y + 26, VolumeW, VolumeH - 26, "Volume");
 
-        foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume) })
+        foreach (var (rowY, label, value) in new (int, string, int)[] { (40, "B.G.M", _bgmVolume), (90, "S.E", _seVolume), (140, "파트1 차례 목소리", _voiceVolume) })
         {
             host.UiText(label, x + 20, y + rowY - 18, White);
             for (int i = 0; i < VolumeCells; i++)
@@ -503,9 +506,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             host.UiRightText($"{value}", x + VolumeW - 16, y + rowY - 18, DimGray);
         }
         // 「배경음악」 체크 상자(Obs 806 모션 1/2 자리) — 그림 대신 네모.
-        host.UiStroke(x + 78, y + 118, 14, 14, White);
-        if (_bgmOn) host.UiFill(x + 81, y + 121, 8, 8, White);
-        host.UiText("배경음악", x + 98, y + 117, White);
+        host.UiStroke(x + 78, y + 168, 14, 14, White);
+        if (_bgmOn) host.UiFill(x + 81, y + 171, 8, 8, White);
+        host.UiText("배경음악", x + 98, y + 167, White);
         host.UiText("X", x + VolumeW - 18, y + 5, White, 15);
         host.UiText("닫으려면 아래를 누르세요", x + 20, y + VolumeH - 26, DimGray);
     }

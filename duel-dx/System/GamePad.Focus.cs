@@ -76,9 +76,9 @@ internal sealed partial class GamePad
         if (sys._volumeWindow)
         {
             var (x, y) = sys.VolumeOrigin();
-            foreach (int rowY in new[] { 40, 90 })
+            foreach (int rowY in new[] { 40, 90, 140 })
                 for (int cell = 0; cell < SystemMenu.VolumeCells; cell++) list.Add((x + 20 + cell * 9, y + rowY, 9, 13));
-            list.Add((x + 70, y + 116, 130, 18));                                           // 배경음악 체크
+            list.Add((x + 70, y + 166, 130, 18));                                           // 배경음악 체크
             return list;
         }
         if (sys._missionWindow) return list;
