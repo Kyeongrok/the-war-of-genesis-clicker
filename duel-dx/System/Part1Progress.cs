@@ -476,6 +476,36 @@ internal sealed class Part1Progress
     /// </summary>
     internal int[]? Fight;
 
+    /// <summary>
+    /// 연대표 칸을 여는 갈림길 필드 — (필드, 그 필드를 여는 챕터, 고르면 켜지는 깃발). 고르기에 따라 둘 중 하나가 꼭 켜진다(필드 자료로 본 것).
+    /// 0101 은 챕터 3 의 전투 0025 → 필드 0030 → 0101 이고 그 끝 506 이 챕터를 끝낸다 — 나머지는 챕터 사건 503 다음 501 이 챕터를 끝낸다.
+    /// </summary>
+    private static readonly (int Field, int[] Chapters, int[] Flags)[] Branches =
+    [
+        (101, [3], [7, 8]),        // 항구 티비앙 — 사략해적 · 호위선단
+        (34, [4, 5], [9, 10]),     // 카디스 · 무타나비 — 예니체리 얀 지슈카 · 카디스 공략작전
+        (50, [10], [14, 15]),      // 시반슈미터 육로 · 해로 — 백의검객 · 조의선인
+        (88, [22], [25, 26]),      // 버킹엄 · 우드빌
+        (175, [48], [50, 51]),     // 기즈공작 · 그라나다 상단 — 망국의 후예 · 사이럽스
+    ];
+
+    /// <summary>
+    /// v1.0.42 까지 Esc 가 필드를 통째로 끝내 갈림길을 못 고른 진행(fg-100) — 다시 고를 필드 번호, 없으면 −1.
+    /// <paramref name="chapterId"/> ≥ 0 이면 그 챕터의 갈림길만(0101: 전투 0025 를 이겼는데 챕터 3 이 안 끝났다 · 나머지: 그 챕터를 끝냈다 — 이어 하기가 끝낸 챕터 지도를 연다), −1 이면 끝낸 챕터의 갈림길 모두.
+    /// </summary>
+    internal int MissedBranch(byte[] flags, int chapterId)
+    {
+        bool Unset(int[] fs) => fs.All(f => f < flags.Length && flags[f] == 0);
+        foreach (var (field, chapters, fs) in Branches)
+        {
+            if (!Unset(fs)) continue;
+            if (field == 101 ? chapterId == 3 && Cleared.Contains(25) && !FinishedChapters.Contains(3)
+                             : (chapterId < 0 || chapters.Contains(chapterId)) && chapters.Any(FinishedChapters.Contains))
+                return field;
+        }
+        return -1;
+    }
+
     internal static string SavePath => UserDataFolder.File("part1.json");
 
     internal static bool HasSave => File.Exists(SavePath);

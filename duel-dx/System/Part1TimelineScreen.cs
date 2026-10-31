@@ -65,6 +65,8 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
     internal void Open()
     {
         GameWindow.TestRunTrace("part1 timeline open");   // 시험 전용 줄
+        // Esc 로 갈림길을 건너뛰어 다음 칸이 안 열린 진행(v1.0.42 까지, fg-100) — 그 필드를 다시 열어 고르게 하고 돌아온다.
+        if (shell.Field.ReofferMissedBranch(-1, () => { host.Part1.Save(host.FlagSt._flags); Open(); })) { _open = false; return; }
         _episodes = Part1Episode.LoadAll();
         var cells = new (int, int)[_episodes.Count];
         var taken = new HashSet<(int, int)>();

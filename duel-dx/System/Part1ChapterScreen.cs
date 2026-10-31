@@ -402,6 +402,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>그 챕터를 연다 — 못 읽으면 알리고 false.</summary>
     internal bool Open(int chapterId)
     {
+        // Esc 로 갈림길 필드를 건너뛴 진행(v1.0.42 까지, fg-100) — 그 필드를 다시 연다. 항구 티비앙(0101)은 끝 506 이 챕터 3 을 끝내 연대표로, 나머지는 고르고 이 지도로.
+        if (shell.Field.ReofferMissedBranch(chapterId, () => Open(chapterId)))
+        {
+            host.Part1.ChapterId = chapterId;
+            if (_chapter?.Id != chapterId) _chapter = null;
+            _open = false;
+            return true;
+        }
         bool resume = _resume && _chapter?.Id == chapterId;
         bool same = _chapter?.Id == chapterId && _mapPx.Length > 0;
         host.Part1.Fight = null;   // 이긴 전투에서 돌아왔으면 SettleFight 가 이미 적었다 — 이어 하기 등 다른 길이면 그 전투는 다시 연다

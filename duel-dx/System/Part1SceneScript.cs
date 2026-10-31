@@ -116,6 +116,7 @@ internal sealed class Part1SceneScript(GameWindow host)
     {
         if (Choice is not { } c || index < 0 || index >= c.Options.Count) return;
         _vars[c.Variable] = index + 1;
+        GameWindow.TestRunTrace($"part1 choose {index + 1} → var {c.Variable}");   // 시험 전용 줄
         Choice = null;
         Run();
     }
@@ -320,7 +321,41 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>챕터에서도 기다림을 지킬 때 — 그림 덮개 · 화면 바꾸기(챕터 100 · 103)가 떠 있는 동안(그것이 보이게).</summary>
     internal Func<bool>? TimedNow;
 
-    private bool IsTimed => Timed || TimedNow?.Invoke() == true;
+    private bool IsTimed => !Skipping && (Timed || TimedNow?.Invoke() == true);
+
+    /// <summary>
+    /// Esc 건너뛰기 중(<see cref="Skip"/>) — 기다림(1 · 2 · 602 · 701 · 칸)을 안 지키고 대사 · 효과음 · 목소리를 흘린다. 원본의 「건너뛰는 중」(0x101bb148)과 같은 뜻.
+    /// </summary>
+    internal bool Skipping { get; private set; }
+
+    /// <summary>
+    /// Esc — 남은 대사 · 기다림을 건너 <b>고르기(900)나 장면 넘김(500~506)까지</b> 곧바로 돈다. 고르기에 닿으면 멈추고 고를 때까지 기다린다(다시 Esc 로 이어 건너뛴다).
+    /// 전에는 Esc 가 필드를 통째로 끝내 고르기 · 그 뒤의 깃발(802) · 다음 필드(501) · 챕터 끝(506)까지 버렸다 — 항구 티비앙(필드 0101)에서 갈림길을 못 골라
+    /// 사략해적 · 호위선단이 안 열렸다(카페 제보 fg-100). 돌려주는 값: 다 돌아 할 일이 없으면 true(필드를 끝낸다).
+    /// </summary>
+    internal bool Skip()
+    {
+        if (Choice != null || _leaving) return false;
+        Skipping = true;
+        try
+        {
+            StopVoice();
+            for (int guard = 0; guard < 100000; guard++)
+            {
+                _waitUntil = 0;
+                _waitBusy = false;
+                _waitSound = false;
+                _slotsUntil = 0;
+                _musicSlot = null;
+                if (Talk != null) { Talk = null; _talkAutoAt = 0; _pages.Clear(); }
+                Run();
+                if (Choice != null || _leaving || _sceneLeft) return false;
+                if (Talk == null) break;
+            }
+        }
+        finally { Skipping = false; }
+        return Idle;
+    }
 
     /// <summary>챕터 505 — 지도 단추 · 떠 있는 창 · 이동 고르기를 닫는다(0x100c0d50 → 0x100b3f90: 단추 다섯 숨김 0x100b2070, 창 +0x13bf8 · +0x13bfc 지움, 고르기 +0x13c30 = 0).</summary>
     internal Action? UiReset;
@@ -486,7 +521,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     TalkSlot = slot;
                     string raw = a[1] >= 0 && a[1] < _lines.Count ? _lines[a[1]] : "";
                     if (raw.Length > 0) { (Talk, TalkRaw) = ((Part1Game.Speaker(raw).Trim(), Part1Game.PlainText(raw)), raw); host.Part1TitleScr.ResetTalk(); }
-                    if (c.Code >= 206 && a.Length > 2 && a[2] > 0)
+                    if (c.Code >= 206 && a.Length > 2 && a[2] > 0 && !Skipping)
                     {
                         host._mixer.StopEffect(VoiceTag);
                         host.Play(Part1Game.ObsBase + a[2], VoiceTag);
@@ -546,7 +581,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     break;
                 case 908 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
                 case 910 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mounts, Part1Game.ChrBase + a[1], a[2]); break;
-                case 600: host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
+                case 600: if (!Skipping) host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
                 case 700: host.PlayMusicFile(Part1Game.BgmBase + a[0], loop: a[1] != 0); break;   // [곡, 되풀이] — 필드 0002: 700 [42, 1]
                 case 302: SpriteShift?.Invoke(a[0], a[1], a[2], a[3]); break;
                 case 304 or 305: SpriteVisible?.Invoke(a[0], c.Code == 305); break;
@@ -610,11 +645,11 @@ internal sealed class Part1SceneScript(GameWindow host)
             case 400: CameraSet?.Invoke(A(0), A(1)); return true;
             case 600:                                                         // [소리] 칸 소리 — 앞 소리를 끊고 튼다(0x100cd6b0)
                 host._mixer.StopEffect(SoundTag);
-                if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), SoundTag);
+                if (A(0) > 0 && !Skipping) host.Play(Part1Game.ObsBase + A(0), SoundTag);   // 건너뛰는 동안은 흘린다(한 틀에 몰려 울리지 않게)
                 return true;
             case 601: host._mixer.StopEffect(SoundTag); return true;           // 칸 소리 끄기(0x100cd720)
-            case 602: _waitSound = Timed; return true;                       // 칸 소리가 끝날 때까지(0x100cd740)
-            case 603: if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0)); return true;   // 한 번 — 칸 없이(0x100cd7a0 → 0x1001a330)
+            case 602: _waitSound = IsTimed; return true;                       // 칸 소리가 끝날 때까지(0x100cd740)
+            case 603: if (A(0) > 0 && !Skipping) host.Play(Part1Game.ObsBase + A(0)); return true;   // 한 번 — 칸 없이(0x100cd7a0 → 0x1001a330)
             case 604:                                                         // 되풀이 소리(0x100cd7f0 → 0x1001a910(소리, 1))
                 host._mixer.StopEffect(LoopTag);
                 if (A(0) > 0) host.Play(Part1Game.ObsBase + A(0), LoopTag, loop: true);
@@ -627,7 +662,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                 // 0x1011fd68 · 끝났으면 멈추고 처음부터 0x100095b0 · 0x100095d0)보다 먼저 돌아(필드 틀 0x100c58de → 0x100c58f2) 끝난 그 틀을 701 이 본다.
                 // 소리를 꺼도(원본은 크기만 0, 0x10009690) 곡 길이로 센다 · 푸는 동안은 기다린다(MusicTrack). 곡이 없으면 곧 끝.
                 // 자료 10곳(필드 7 · 9 · 44 · 66 · 67 · 72 · 78 · 225 · 999)은 거의 앞서 건 한 번 곡(700 [곡, 0])의 끝을 기다린다.
-                _musicSlot = Timed ? host.MusicTrack() : null;
+                _musicSlot = IsTimed ? host.MusicTrack() : null;
                 if (BattleScene.Trace) host._backgroundTrace.Enqueue($"part1 701 곡 끝 기다림 — {(_musicSlot is { } s ? s.ToString() : "곡 없음(곧 끝)")} at {host._lastTime:F2}");
                 return true;
             case 702: host.StopMusic(); return true;                          // 곡 멈춤(0x100cd550)

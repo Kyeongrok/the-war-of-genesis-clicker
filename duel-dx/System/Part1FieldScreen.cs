@@ -10,7 +10,7 @@ namespace DuelDx;
 /// </summary>
 /// <remarks>
 /// 옵시디안 「분석-파트1-챕터」 7 · 14절. 배경(<c>BGRs</c>, 0002 는 1300×500 파노라마 — 머리 낱말 1·2 자리에서 본다) · 인물 · 대사 ·
-/// 그림 덮개(100 · 101 · 102)와 화면 바꾸기(103~107) · 그림자(307) · 뒤집기(306) · 고르기(900 · 901) · 글 쪽 창(904). Esc 는 필드를 건너뛴다.
+/// 그림 덮개(100 · 101 · 102)와 화면 바꾸기(103~107) · 그림자(307) · 뒤집기(306) · 고르기(900 · 901) · 글 쪽 창(904). Esc 는 고르기 · 장면 넘김까지 건너뛴다(fg-100).
 /// </remarks>
 internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen shell)
 {
@@ -32,7 +32,12 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         EffectStart = StartEffect,
         SpriteFreeze = n => { if (n >= 0 && n < _spots.Length) _frozen[n] = MotionTick(n); },
         SpriteVisible = (n, shown) => { if (n >= 0 && n < _spots.Length) _hidden[n] = !shown; },
-        CameraPan = (dx, dy, ticks) => { _cam = Camera(); _pan = (_cam.X, _cam.Y, dx, dy, Math.Max(1, ticks), host._lastTime); },
+        CameraPan = (dx, dy, ticks) =>
+        {
+            _cam = Camera();
+            _pan = (_cam.X, _cam.Y, dx, dy, Math.Max(1, ticks), host._lastTime);
+            if (Script.Skipping) FinishMoves();   // 건너뛰는 중 — 끝자리로 곧장
+        },
         IsField = true,
         PictureShow = (id, x, y, talk) => { var (px, w, h) = ReadImage(id); _cover = new Cover(px, w, h, x, y, 0, talk); },
         ColorShow = color => _cover = new Cover(null, 0, 0, 0, 0, color switch { 0 => 0xFFFFFFFFu, 2 => 0xFFFF0000u, _ => 0xFF000000u }, false),
@@ -62,6 +67,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     private int StartWipe(int code, short[] args)
     {
         if (!Part1Wipe.Makes(code, args)) return 0;
+        if (Script.Skipping) { if (args.Length > 0 && args[0] == 1) _cover = null; _wipe = null; return 0; }   // 건너뛰는 중 — 바꾸기 없이 끝 화면으로
         // 앞 바꾸기가 아직 돌면 그 끝 화면이 옛 화면이다(원본은 칸이 비어야 다음 행동이 돌아 겹치지 않는다).
         var old = _lastScene.Length == Part1Wipe.W * Part1Wipe.H ? (uint[])_lastScene.Clone() : new uint[Part1Wipe.W * Part1Wipe.H];
         _wipe = (new Part1Wipe(code, args, old), host._lastTime);
@@ -185,6 +191,8 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         var (x, y) = PositionOf(n);
         _spots[n] = (x, y);
         if (ticks <= 0) { _spots[n] = (x + dx, y + dy); return; }
+        if (Script.Skipping) { _walks.Remove(n); _spots[n] = (x + dx * ticks, y + dy * ticks); }   // 건너뛰는 중 — 끝자리로 곧장
+        else
         _walks[n] = new Walking(x, y, dx, dy, ticks, host._lastTime);
         if (dx != 0 || dy != 0)
             _facing[n] = Math.Abs(dx) >= Math.Abs(dy) ? dx > 0 ? Facing.Right : Facing.Left : dy > 0 ? Facing.Down : Facing.Up;
@@ -205,6 +213,23 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     {
         if (!int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1FIELD"), out int id) || id <= 0 || Part1Game.Root is null) return;
         host.LeaveScene(() => { shell.Open(); Open(id, () => { }); });
+    }
+
+    /// <summary>다시 연 갈림길 필드 — 한 번 켠 동안 한 번만(못 고르고 또 끝나도 되풀이하지 않게).</summary>
+    private readonly HashSet<int> _reoffered = [];
+
+    /// <summary>
+    /// v1.0.42 까지의 Esc 가 갈림길 필드를 통째로 끝내 고르지 못한 진행이면(<see cref="Part1Progress.MissedBranch"/>) 그 필드를 다시 연다 — 열었으면 true.
+    /// 연대표(<paramref name="chapterId"/> = −1)와 챕터 지도(<see cref="Part1ChapterScreen.Open"/>)가 부른다(fg-100).
+    /// </summary>
+    internal bool ReofferMissedBranch(int chapterId, Action onEnd)
+    {
+        int id = host.Part1.MissedBranch(host.FlagSt._flags, chapterId);
+        if (id < 0 || !_reoffered.Add(id) || Part1Field.Load(id) is null) return false;
+        GameWindow.TestRunTrace($"part1 missed branch {id} reoffered");   // 시험 전용 줄
+        host.Toast("건너뛴 갈림길을 다시 고릅니다");
+        Open(id, onEnd);
+        return true;
     }
 
     /// <summary>그 필드를 연다 — 끝나면(행동 500 · Esc · 대사가 다 끝나고 누름) <paramref name="onEnd"/>. 못 읽으면 곧바로 <paramref name="onEnd"/>.</summary>
@@ -280,6 +305,29 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         host.LeaveScene(() => { _open = false; _bg = null; onEnd?.Invoke(); });
     }
 
+    /// <summary>
+    /// Esc — 대사를 건너 고르기 · 장면 넘김까지 곧바로 돈다(<see cref="Part1SceneScript.Skip"/>). 고르기가 떠 있으면 안 받는다(고를 때까지 기다린다).
+    /// 다 돌아 할 일이 없으면(500 이 없는 필드) 끝낸다. 걷기 · 화면 밀기는 끝자리로 굳힌다.
+    /// </summary>
+    private void Skip()
+    {
+        if (Script.Choice != null) return;
+        FinishMoves();
+        bool done = Script.Skip();
+        GameWindow.TestRunTrace($"part1 field {_field?.Id} skip → {(Script.Choice is { } c ? "choice " + c.Text.Replace('\n', ' ') : done ? "end" : "scene change")}");   // 시험 전용 줄
+        if (done) End();
+        else FinishMoves();
+    }
+
+    /// <summary>걷는 인물 · 미는 화면을 끝자리로 — 건너뛰기가 기다림 없이 다음 걸음을 걸 때 앞 걸음이 반쯤에서 끊기지 않게.</summary>
+    private void FinishMoves()
+    {
+        foreach (var (n, w) in _walks.ToList()) _spots[n] = (w.FromX + w.Dx * w.Ticks, w.FromY + w.Dy * w.Ticks);
+        _walks.Clear();
+        if (_pan is { } pan) { _pan = null; _cam = (pan.X + pan.Dx * pan.Ticks, pan.Y + pan.Dy * pan.Ticks); _cam = Camera(); }
+        _wipe = null;
+    }
+
     /// <summary>고르기 줄 자리(화면 640×480 기준) — 물음 상자 위에 쌓는다.</summary>
     private static (int X, int Y, int W, int H) ChoiceRow(int i, int count) => (120, 330 - (count - i) * 32, 400, 28);
 
@@ -326,7 +374,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
             _choiceHover = (Math.Clamp(_choiceHover, 0, choice.Options.Count - 1) + (key == Win32.VK_UP ? choice.Options.Count - 1 : 1)) % choice.Options.Count;
             return;
         }
-        if (key == Win32.VK_ESCAPE) End();
+        if (key == Win32.VK_ESCAPE) Skip();
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE) OnClick();
     }
 
