@@ -66,6 +66,10 @@ public partial class EffectViewerWindow : Window
     private List<Playing> _playing = [];
     private int _tick, _length = 1;
     private bool _paused;
+    /// <summary>내보내기 중 — 바탕을 투명으로, 기준점 십자를 빼고 그린다(<see cref="ExportPng_Click"/>).</summary>
+    private bool _transparent;
+    /// <summary>지금 재생하는 것의 파일 이름 머리(「Obs0257_모션3」 · 「work1234」).</summary>
+    private string _exportName = "effect";
 
     public EffectViewerWindow(string gameRoot, GameDatabase? db)
     {
@@ -271,6 +275,7 @@ public partial class EffectViewerWindow : Window
                 var (x, y) = f.OnTarget ? (440, 330) : (200, 330);
                 for (int k = 0; k < Math.Max(1, f.Count); k++) list.Add(new Playing(f.Obs, f.Motion, f.Delay + k, x, y - f.Lift, x, y - f.Lift, false));
             }
+        _exportName = $"work{r.Work}";
         Start(list, $"work {r.Work} 전체 — 왼쪽 표시가 시전자, 오른쪽이 대상(자리 셈이 필요한 것은 그 표시 위에 겹친다)");
     }
 
@@ -288,8 +293,11 @@ public partial class EffectViewerWindow : Window
         if (ObsGrid.SelectedItem is ObsRow o && MotionGrid.SelectedItem is MotionRow m) PlaySingle(o.Obs, m.Motion);
     }
 
-    private void PlaySingle(int obs, int motion) =>
+    private void PlaySingle(int obs, int motion)
+    {
+        _exportName = $"Obs{obs:D4}_모션{motion}";
         Start([new Playing(obs, motion, 0, W / 2, H * 2 / 3, W / 2, H * 2 / 3, false)], $"Obs {obs} 모션 {motion} — 십자가 기준점");
+    }
 
     private void Start(List<Playing> list, string info)
     {
@@ -333,10 +341,19 @@ public partial class EffectViewerWindow : Window
 
     private void Render()
     {
-        uint bg = BackgroundBox.SelectedIndex switch { 1 => 0xFF606060, 2 => 0xFF5A3A22, _ => 0xFF000000 };
+        DrawFrame();
+        _bitmap.WritePixels(new Int32Rect(0, 0, W, H), _pixels, W * 4, 0);
+        TickText.Text = $"틱 {_tick,4} / {_length}";
+    }
+
+    /// <summary>지금 틱을 <see cref="_pixels"/> 에 그린다.</summary>
+    private void DrawFrame()
+    {
+        uint bg = _transparent ? 0 : BackgroundBox.SelectedIndex switch { 1 => 0xFF606060, 2 => 0xFF5A3A22, _ => 0xFF000000 };
         Array.Fill(_pixels, bg);
         // 기준점 표시 — 시전자·대상 자리(또는 한 이펙트의 기준점)
-        foreach (var (x, y) in _playing.SelectMany(p => new[] { (p.X0, p.Y0), (p.X1, p.Y1) }).Distinct()) Cross(x, y);
+        if (!_transparent)
+            foreach (var (x, y) in _playing.SelectMany(p => new[] { (p.X0, p.Y0), (p.X1, p.Y1) }).Distinct()) Cross(x, y);
         foreach (var p in _playing)
         {
             int t = _tick - p.Start;
@@ -346,8 +363,6 @@ public partial class EffectViewerWindow : Window
             double f = p.Fly ? Math.Min(1, (double)t / len) : 0;
             DrawMotion(p.Obs, p.Motion, t, (int)(p.X0 + (p.X1 - p.X0) * f), (int)(p.Y0 + (p.Y1 - p.Y0) * f), false, 0);
         }
-        _bitmap.WritePixels(new Int32Rect(0, 0, W, H), _pixels, W * 4, 0);
-        TickText.Text = $"틱 {_tick,4} / {_length}";
     }
 
     private void Cross(int x, int y)
@@ -394,6 +409,7 @@ public partial class EffectViewerWindow : Window
                 if (f.Bgra[o + 3] == 0) continue;
                 uint c = (uint)(f.Bgra[o] | f.Bgra[o + 1] << 8 | f.Bgra[o + 2] << 16);
                 ref uint d = ref _pixels[py * W + px];
+                uint under = d >> 24;
                 d = mode switch
                 {
                     17 => Add(d, c, 256),
@@ -402,6 +418,9 @@ public partial class EffectViewerWindow : Window
                     >= 1 and <= 8 => Add(d, c, mode * 32),    // 밝기 단계 — 1/8 씩(가설: 필살기 빛 알갱이 343)
                     _ => 0xFF000000 | c,
                 };
+                // 투명 바탕에 섞기 키(더하기·닷지·스크린)는 밝은 만큼만 불투명하게 — 검은 바탕에 더한 것과 같은 빛이 남는다.
+                if (_transparent && mode != 0)
+                    d = (d & 0xFFFFFF) | Math.Max(under, Math.Max(d >> 16 & 0xFF, Math.Max(d >> 8 & 0xFF, d & 0xFF))) << 24;
             }
         }
     }
@@ -422,6 +441,59 @@ public partial class EffectViewerWindow : Window
     {
         uint Ch(int s) { int a = (int)(d >> s & 0xFF), b = (int)(c >> s & 0xFF); return (uint)(b >= 255 ? 255 : Math.Min(255, a * 255 / (255 - b))); }
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
+    }
+
+    // ── PNG 내보내기(asset-8) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// 지금 재생하는 것(Obs 모션 하나 또는 기술 전체)을 틱마다 한 칸씩 — 한 줄에 10칸, 투명 바탕. 칸은 모든 틱의 그림이 들어가는 같은 크기라
+    /// 원점이 같다(차례로 넘기면 30틱/초로 미리 보기와 같게 움직인다). 섞기 키로 더한 빛은 밝기만큼 알파로 남긴다.
+    /// </summary>
+    private void ExportPng_Click(object sender, RoutedEventArgs e)
+    {
+        if (_playing.Count == 0) { PreviewInfo.Text = "먼저 Obs 모션이나 기술을 고르세요"; return; }
+        var frames = new List<uint[]>();
+        int saved = _tick;
+        _transparent = true;
+        try
+        {
+            for (_tick = 0; _tick < _length; _tick++) { DrawFrame(); frames.Add((uint[])_pixels.Clone()); }
+        }
+        finally { _transparent = false; _tick = saved; Render(); }
+
+        int left = W, top = H, right = -1, bottom = -1;
+        foreach (var f in frames)
+            for (int i = 0; i < f.Length; i++)
+                if (f[i] >> 24 != 0)
+                {
+                    int x = i % W, y = i / W;
+                    left = Math.Min(left, x); right = Math.Max(right, x); top = Math.Min(top, y); bottom = Math.Max(bottom, y);
+                }
+        if (right < 0) { PreviewInfo.Text = "그릴 그림이 없습니다(소리 껍데기이거나 자식만 든 모션을 못 읽음)"; return; }
+        int cellW = right - left + 1, cellH = bottom - top + 1, cols = Math.Min(10, frames.Count), rows = (frames.Count + cols - 1) / cols;
+        int width = cellW * cols, height = cellH * rows;
+        var px = new uint[width * height];
+        for (int n = 0; n < frames.Count; n++)
+            for (int y = 0; y < cellH; y++)
+                for (int x = 0; x < cellW; x++)
+                {
+                    uint c = frames[n][(top + y) * W + left + x];
+                    uint a = c >> 24;
+                    if (a is > 0 and < 255)    // 더한 빛 — 알파로 나눠 색을 되살린다
+                        c = a << 24 | Math.Min(255, (c >> 16 & 0xFF) * 255 / a) << 16 | Math.Min(255, (c >> 8 & 0xFF) * 255 / a) << 8 | Math.Min(255, (c & 0xFF) * 255 / a);
+                    px[((n / cols) * cellH + y) * width + (n % cols) * cellW + x] = c;
+                }
+        var bmp = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, px, width * 4);
+        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = _exportName + ".png", Filter = "PNG 그림|*.png", DefaultExt = ".png" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bmp));
+            using (var file = File.Create(dialog.FileName)) encoder.Save(file);
+            PreviewInfo.Text = $"내보냄: {Path.GetFileName(dialog.FileName)} — {frames.Count}틱, 칸 {cellW}×{cellH}, 한 줄 {cols}칸 · 기준점(첫 십자)은 칸 왼쪽 위에서 ({_playing[0].X0 - left}, {_playing[0].Y0 - top})";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { PreviewInfo.Text = $"못 썼습니다: {ex.Message}"; }
     }
 
     /// <summary>그 기술을 골라 보여 준다 — 다른 창에서 부를 수 있다.</summary>
