@@ -51,6 +51,8 @@ internal sealed partial class GamePad
                 int rows = tuning.TuningChecks().Length;
                 for (int i = 0; i < rows; i++)
                     list.Add((x + 12, y + TuningScreen.TuningCheckY + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
+                if (tuning.ShowsVoiceVolume)
+                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.VoiceButton(i));
                 if (tuning.ShowsSoulWeight) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
             }
             list.Add((x + TuningScreen.TuningW - 116, y + TuningScreen.TuningH - 40, 100, 28));   // 닫기
@@ -76,9 +78,9 @@ internal sealed partial class GamePad
         if (sys._volumeWindow)
         {
             var (x, y) = sys.VolumeOrigin();
-            foreach (int rowY in new[] { 40, 90, 140 })
+            foreach (int rowY in new[] { 40, 90 })
                 for (int cell = 0; cell < SystemMenu.VolumeCells; cell++) list.Add((x + 20 + cell * 9, y + rowY, 9, 13));
-            list.Add((x + 70, y + 166, 130, 18));                                           // 배경음악 체크
+            list.Add((x + 70, y + 116, 130, 18));                                           // 배경음악 체크
             return list;
         }
         if (sys._missionWindow) return list;

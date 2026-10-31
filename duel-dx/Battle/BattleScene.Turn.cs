@@ -742,7 +742,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (host._scene.IsPart1 && u.Data.VoiceSet == 0 && Part1TurnCall.For(u) is { Length: > 0 } p1call)
         {
             if (IsMine(u) && host._part1TurnVoice && Part1TurnCall.SoundOf(host, p1call[(int)((uint)_tick % p1call.Length)]) is > 0 and var p1sound)
-                host.Play(p1sound, 1000 + Array.IndexOf(host._units, u), volume: host.Sys._voiceVolume / 100f);
+                host.Play(p1sound, 1000 + Array.IndexOf(host._units, u), volume: host.TuningScr._voiceVolume / 100f);
             return;
         }
         if (host._voices.GetValueOrDefault(u.Data.VoiceSet).Call is { Length: > 0 } call)

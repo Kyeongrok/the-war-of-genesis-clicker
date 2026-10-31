@@ -43,6 +43,22 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>일반 탭에 소울 기여도 상자를 두나.</summary>
     internal bool ShowsSoulWeight => _tuningTab == TabGeneral && !Part1Here;
 
+    /// <summary>파트1 에서 연 일반 탭이면 소울 기여도 자리에 「파트1 차례 목소리 크기」 단추 줄을 둔다(사용자 요청 menu-121 — 음량 창이 아니라 모드에서).</summary>
+    internal bool ShowsVoiceVolume => _tuningTab == TabGeneral && Part1Here;
+
+    /// <summary>파트1 차례 목소리 크기 %(기본 80) — S.E 크기에 곱한다(<see cref="BattleScene.PlayTurnCall"/>).</summary>
+    internal int _voiceVolume = Math.Clamp(UserSettings.Current.Part1VoiceVolume, 0, 100);
+
+    internal static readonly int[] VoiceChoices = [0, 20, 40, 60, 80, 100];
+    internal const int VoiceW = 44, VoiceGap = 4;
+
+    /// <summary>목소리 크기 단추 i 의 자리(판 좌표).</summary>
+    internal (int X, int Y, int W, int H) VoiceButton(int i)
+    {
+        var (x, y) = TuningOrigin();
+        return (x + TuningBoxX + i * (VoiceW + VoiceGap), y + TuningBoxY, VoiceW, TuningRowH);
+    }
+
     /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
     internal const int TabY = 30, TabH = 24, TabW = 96;
@@ -179,6 +195,14 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             return true;
         }
         _tuningListOpen = false;
+        if (ShowsVoiceVolume)
+            for (int i = 0; i < VoiceChoices.Length; i++)
+                if (VoiceButton(i) is var (vx, vy, vw, vh) && bx >= vx && bx < vx + vw && by >= vy && by < vy + vh)
+                {
+                    _voiceVolume = VoiceChoices[i];
+                    host.SaveSettings();
+                    return true;
+                }
         if (ShowsSoulWeight && bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
         var checks = TuningChecks();
         int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
@@ -226,6 +250,21 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 $"· 일반 공격 — SOUL 로 늘어나는 공격력이 {ReworkSoulPercent}% 가 된다 (일반 탭의 소울 기여도에 곱한다)",
             ];
             for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
+        }
+        if (ShowsVoiceVolume)
+        {
+            int vy = y + TuningBoxY;
+            host.UiText("파트1 차례 목소리 크기", x + 16, vy + 4, White);
+            for (int i = 0; i < VoiceChoices.Length; i++)
+            {
+                var (bx, by, bw, bh) = VoiceButton(i);
+                bool on = VoiceChoices[i] == _voiceVolume;
+                host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
+                host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
+                string label = $"{VoiceChoices[i]}";
+                host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+            }
+            host.UiText("내 편 인물 차례에 나오는 성우 목소리 크기(%) — 효과음 크기에 곱한다", x + 16, vy + 32, DimGray, 12);
         }
         if (!ShowsSoulWeight) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
