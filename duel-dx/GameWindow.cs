@@ -794,8 +794,21 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("창을 만들지 못했습니다.");
     }
 
+    /// <summary>아직 한 눈금(120)이 안 된 휠 값 — 노트북 터치패드는 120 보다 잘게 보내 나누면 0 이 되어 휠이 안 먹었다(버그 리포트 #14 · #18).</summary>
+    private int _wheelRest;
+
     internal IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        if (msg == Win32.WM_MOUSEWHEEL)
+        {
+            int delta = (short)(((long)wParam >> 16) & 0xFFFF);
+            if (Math.Sign(delta) != Math.Sign(_wheelRest)) _wheelRest = 0;
+            _wheelRest += delta;
+            int whole = _wheelRest / 120 * 120;
+            _wheelRest -= whole;
+            if (whole == 0) return IntPtr.Zero;
+            wParam = (IntPtr)(((long)wParam & 0xFFFF) | ((long)(ushort)(short)whole << 16));
+        }
         switch (msg)
         {
             case Win32.WM_DESTROY:
@@ -846,6 +859,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when Part1TitleScr._open && Part1TitleScr.Timeline._open && !Part1TitleScr.Chapter._open:
                 Part1TitleScr.Timeline.Scroll(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 파트1 연대표를 굴린다
+                return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when EpisodesScr._episodesOpen:
+                EpisodesScr.ScrollEpisodes(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 연대표를 굴린다
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when _keysOpen:
                 ScrollKeys(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 단축키 목록을 굴린다

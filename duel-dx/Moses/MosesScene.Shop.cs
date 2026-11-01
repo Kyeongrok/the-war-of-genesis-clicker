@@ -90,7 +90,9 @@ internal sealed unsafe partial class MosesScene
     internal bool OnMosesShopWheel(int notches)
     {
         if (!_mosesOpen || _mosesPage != 3 || host.Sys.SystemOpen) return false;
-        int list = ShopRowAt(host._mouse.X, host._mouse.Y).List;
+        // 목록 옆 화살표 칸(폭 16) 위에서도 굴린다 — 전에는 글줄 위가 아니면 휠이 안 먹었다.
+        var (ox, oy) = MosesOrigin();
+        int list = Array.FindIndex(ShopLists, l => host._mouse.X >= ox + l.X && host._mouse.X < ox + l.X + l.W + 16 && host._mouse.Y >= oy + l.Y && host._mouse.Y < oy + l.Y + ShopRows * ShopRowH);
         if (list < 0) return false;
         _shopTop[list] = Math.Clamp(_shopTop[list] - notches, 0, Math.Max(0, ShopListItems(list).Count - ShopRows));
         return true;

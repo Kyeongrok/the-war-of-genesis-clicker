@@ -110,6 +110,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
         ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(처음 한 번 받는다)", MenuSkillMovies, host._skillMovies),
         ("전직할 때 EXP 없애기", "원본처럼 전직하면 쌓인 EXP 를 지운다 · 끄면 남긴다", MenuKeepJobExp, host._dropJobExp),
+        ("대사 중 우클릭으로 건너뛰기", "끄면 우클릭이 장면을 넘기지 않는다 · Esc 는 그대로", MenuRightClickSkipsTalk, host._rightClickSkipsTalk),
         ("대사 첫 클릭은 글 채우기", "끄면 원본처럼 첫 클릭에 바로 넘어간다", MenuTalkClickFills, host._talkClickFills),
         ("익명 전투 통계 보내기", "쓴 어빌리티 · 피해 · 조작 방식 — 이름·세이브는 안 보낸다", MenuSendStats, host._sendStats),
     ] : tab == TabBalance ?

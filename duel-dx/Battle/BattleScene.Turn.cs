@@ -1240,7 +1240,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (targetIndex >= 0) (col, row) = (host._units[targetIndex].Col, host._units[targetIndex].Row);
         if (col != a.Col || row != a.Row) a.Facing = FacingToward(a.Col, a.Row, col, row);
         if (w.Id == StanceDefendWork) a.Facing = Facing.Down;   // 방어 0x100b2d50 은 방향 2 를 박아 넣는다 — 늘 아래를 본다
-        if (!w.IsDamage) Popup(a, AbilityName(w), 0xFFB0E0FF, 15);
+        // 아이템의 work 은 어빌리티 이름이 「없음」이다 — 쓴 아이템 이름을 띄운다(버그 리포트 #13).
+        if (!w.IsDamage && UseLabel(w) is { Length: > 0 } useLabel) Popup(a, useLabel, 0xFFB0E0FF, 15);
+        _usedItem = 0;
         if (w.TintMode == 1) host._mapTintTarget = w.TintLevel;   // 기술을 쓰는 동안 맵이 물든다(0x10069efa, ba-20 P2)
 
         // 타이밍 크리티컬(모드 > 밸런스) — 치기 바로 앞에 단추를 띄우고, 맞춰 누르면 이 공격의 내 타격이 반드시 맞고 크리티컬이다.

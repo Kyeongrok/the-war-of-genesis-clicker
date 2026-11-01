@@ -97,6 +97,9 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
     /// <summary>스크롤 막대 — 화면 (567,174), 높이 286. 위 화살표·아래 화살표는 <c>Obs 0979</c> 장 2·3(19×45), 손잡이는 장 0·1(분석-UI 2.5).</summary>
     internal const int EpisodeBarX = 567, EpisodeBarY = 174, EpisodeBarH = 286, EpisodeArrowW = 19, EpisodeArrowH = 45;
 
+    /// <summary>손잡이 그림은 화살표보다 2 픽셀 왼쪽에 잡혀 있다 — 막대 줄 위로 맞춘다(버그 리포트 #18).</summary>
+    internal const int EpisodeThumbDx = 2;
+
     /// <summary>
     /// 목록 줄 수 — 원본 <c>0x10106fe0</c> 은 <b>열리는 가장 큰 번호 + 1</b> 만큼 칸을 넣는다(<c>0x1010716e</c>~<c>0x10107290</c>).
     /// 2열이니 줄 수는 그 절반(올림).
@@ -267,7 +270,7 @@ internal sealed unsafe class EpisodesScreen(GameWindow host)
             host.DrawUi(EpisodeObs, 61, tick, ox + EpisodeBarX, oy + EpisodeBarY, GameWindow.UiBlend.Alpha);
             host.DrawUi(EpisodeObs, 63, tick, ox + EpisodeBarX, oy + EpisodeBarY + EpisodeBarH - EpisodeArrowH, GameWindow.UiBlend.Alpha);
             var (thumbY, _) = EpisodeThumb(rows);
-            host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX, oy + EpisodeBarY + thumbY, GameWindow.UiBlend.Alpha);
+            host.DrawUi(EpisodeObs, 65, tick, ox + EpisodeBarX + EpisodeThumbDx, oy + EpisodeBarY + thumbY, GameWindow.UiBlend.Alpha);
         }
 
         host.Sys.DrawSystem();

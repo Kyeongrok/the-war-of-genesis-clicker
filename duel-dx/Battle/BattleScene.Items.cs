@@ -29,6 +29,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>대상을 고르는 중인 아이템 — 쓰면 개수가 하나 준다. 0 이면 아이템이 아니다.</summary>
     internal int _targetItem;
 
+    /// <summary>방금 대상을 확정해 쓰는 아이템 — 그 행동의 이름표에 쓴다. 개수를 줄이며 <see cref="_targetItem"/> 이 비어도 남는다.</summary>
+    internal int _usedItem;
+
     /// <summary>가방에서 전투에 쓸 수 있는 것만 — (아이템, 개수).</summary>
     internal List<(ItemData Item, int Count)> ItemRowsList()
     {
@@ -169,6 +172,7 @@ internal sealed unsafe partial class BattleScene
     internal void ConsumeTargetItem()
     {
         if (_targetItem == 0) return;
+        _usedItem = _targetItem;
         if (host.StatusScr._inventory.TryGetValue(_targetItem, out int count))
         {
             if (count <= 1) host.StatusScr._inventory.Remove(_targetItem);

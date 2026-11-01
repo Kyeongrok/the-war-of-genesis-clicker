@@ -54,7 +54,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool Part1TurnVoice = true, bool Part1TurnOutline = false, bool Part1TutorialSave = true,
                                     bool Part1ChestRollAtStart = true,
                                     bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false,
-                                    bool QuietFoeCamera = true, int Part1VoiceVolume = 80)
+                                    bool QuietFoeCamera = true, int Part1VoiceVolume = 80, bool RightClickSkipsTalk = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

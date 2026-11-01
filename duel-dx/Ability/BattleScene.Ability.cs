@@ -131,6 +131,14 @@ internal sealed unsafe partial class BattleScene
         return rows;
     }
 
+    /// <summary>쓸 때 머리 위에 띄우는 이름 — 아이템이면 아이템 이름, 이름 없는 work(파트1 약의 빌린 힐 따위)은 null.</summary>
+    internal string? UseLabel(WorkData w)
+    {
+        if (host._db is not { } db) return null;
+        if (_usedItem != 0) return db.Items.GetValueOrDefault(_usedItem) is { } item ? db.T(item.NameId) : null;
+        return db.Abilities.TryGetValue(w.AbilityId, out var ab) && db.T(ab.NameId) == db.T(0) ? null : AbilityName(w);
+    }
+
     internal string AbilityName(WorkData w) =>
         host._db != null && host._db.Abilities.TryGetValue(w.AbilityId, out var ab) ? $"{host._db.T(ab.NameId)} Lv{w.Level}" : $"work {w.Id}";
 
