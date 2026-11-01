@@ -258,7 +258,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -292,6 +292,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>모드 > 대사 중 우클릭으로 장면 건너뛰기 — 원본은 Esc · 우클릭 둘 다 장면을 통째로 넘긴다. 끄면 우클릭은 대사에서 아무 일도 안 한다(Esc 는 그대로, 버그 리포트 #15).</summary>
     internal bool _rightClickSkipsTalk = UserSettings.Current.RightClickSkipsTalk;
     internal const int MenuRightClickSkipsTalk = 1201;
+
+    /// <summary>모드 > 파트1 대사는 눌러서 넘기기 — 원본 209 · 210 · 전투 대사의 저절로 넘김과 성우 뒤 넘김을 끈다(버그 리포트 #24, fa-77).</summary>
+    internal bool _part1TalkWaits = UserSettings.Current.Part1TalkWaits;
+    internal const int MenuPart1TalkWaits = 1202;
 
     /// <summary>모드 > 밸런스 > 타이밍 어택 — 기본공격 앞에 뜨는 단추 둘을 1초 안에 차례로 누르면 두 번 친다(<see cref="TimedHit"/>, 사용자 요청 fg-32, 기본 끔).</summary>
     internal bool _timedHit = UserSettings.Current.TimedHit;
@@ -424,6 +428,11 @@ internal sealed unsafe partial class GameWindow
             case ItemBookScreen.MenuItemBook: ItemBookScr.Toggle(); break;
             case MenuPlanetMarks:
                 _planetMarks = !_planetMarks;
+                SaveSettings();
+                break;
+            case MenuPart1TalkWaits:
+                _part1TalkWaits = !_part1TalkWaits;
+                Toast(_part1TalkWaits ? "파트1 대사는 누를 때까지 기다립니다" : "파트1 대사가 원본처럼 저절로 넘어갑니다");
                 SaveSettings();
                 break;
             case MenuRightClickSkipsTalk:

@@ -182,7 +182,7 @@ internal sealed class Part1Bubble(GameWindow host, Part1MapArt art)
         if (_serial < 0) return false;
         if (_closeAt > 0) return Ticks(_closeAt) >= ShrinkTicks;
         if (_doneAt == 0 && host._lastTime >= _typeAt && Ticks(_typeAt) >= PageTicks()) _doneAt = host._lastTime;
-        if (_doneAt > 0 && _ticks > 0 && Ticks(_doneAt) > _ticks) Next();
+        if (_doneAt > 0 && _ticks > 0 && !host._part1TalkWaits && Ticks(_doneAt) > _ticks) Next();
         return false;
     }
 

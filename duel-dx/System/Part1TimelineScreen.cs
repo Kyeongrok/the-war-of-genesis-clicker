@@ -69,12 +69,14 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         if (shell.Field.ReofferMissedBranch(-1, () => { host.Part1.Save(host.FlagSt._flags); Open(); })) { _open = false; return; }
         _episodes = Part1Episode.LoadAll();
         var cells = new (int, int)[_episodes.Count];
-        var taken = new HashSet<(int, int)>();
-        for (int i = 0; i < _episodes.Count; i++)
+        // 때가 같거나 가까운 칸은 줄기마다 때 순서로 아래로 비켜 놓는다 — 전에는 때가 똑같은 칸만 비켜,
+        // 때가 조금 다른 칸의 제목이 겹쳤다(아델라이데 우드빌 · 다카마의 배상, 버그 리포트 #20~#23).
+        int Column(int i) => Math.Clamp(_episodes[i].Line, 0, ColumnX.Length - 1);
+        int[] bottom = [int.MinValue / 2, int.MinValue / 2, int.MinValue / 2];
+        foreach (int i in Enumerable.Range(0, _episodes.Count).OrderBy(i => TimeOf(_episodes[i])).ThenBy(i => i))
         {
-            var e = _episodes[i];
-            int col = Math.Clamp(e.Line, 0, ColumnX.Length - 1), y = 30 + TimeOf(e) * Step / 20;
-            while (!taken.Add((col, y))) y += CellH + 4;   // 때가 같은 칸(사략해적 · 호위선단)은 아래로
+            int col = Column(i), y = Math.Max(30 + TimeOf(_episodes[i]) * Step / 20, bottom[col] + CellH + 4);
+            bottom[col] = y;
             cells[i] = (ColumnX[col], y);
         }
         _cells = cells;

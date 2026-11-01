@@ -382,9 +382,9 @@ internal sealed class Part1SceneScript(GameWindow host)
         bool typing = Talk != null && host.Part1TitleScr.TalkTyping;
         if (typing && _talkAutoAt > 0) _talkAutoAt = host._lastTime + TalkTicks / GameWindow.TicksPerSecond;
         if (typing && _voiceEnd > 0 && host._lastTime >= _voiceEnd) _voiceEnd = host._lastTime;
-        if (Talk != null && _talkAutoAt > 0 && host._lastTime >= _talkAutoAt) { Advance(); return; }
+        if (Talk != null && _talkAutoAt > 0 && !host._part1TalkWaits && host._lastTime >= _talkAutoAt) { Advance(); return; }
         // 성우 대사는 목소리가 끝나고 조금 뒤 저절로 넘어간다(사용자 요청) — 장이 남았으면 다음 장부터. 받는 중이라 길이를 모르면(30초 어림) 기다리지 않는다.
-        if (Talk != null && _voiceEnd > 0 && _voiceKnown && host._lastTime >= _voiceEnd + VoiceAfterSeconds)
+        if (Talk != null && _voiceEnd > 0 && _voiceKnown && !host._part1TalkWaits && host._lastTime >= _voiceEnd + VoiceAfterSeconds)
         {
             _voiceEnd = 0;
             if (!host.Part1TitleScr.NextTalkPage(sound: false)) Advance();
