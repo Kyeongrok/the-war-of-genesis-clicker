@@ -1397,7 +1397,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                           && Work(ad.BasicWorkId) is { } basic ? basic : w;
             if (!effectsDone && part1Basic == 0)
             {
-                host.ScheduleAbilitySounds(w);
+                if (!FinisherStageSkill.Handles(w.Id)) host.ScheduleAbilitySounds(w);   // 전용 루틴이 제때 낸다
                 _fxTargets = targetIndex >= 0 ? [targetIndex] : null;
                 _fxStagger = 0;
                 _fxHitAt.Clear();
@@ -1617,9 +1617,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 {
                     var foe = host._units[ti];
                     if (dying.Contains(foe) || !foe.Alive) return;                                  // 첫 복제에 쓰러졌으면 둘째는 빈손
-                    if (w.Id == FinisherStrikeSkill.DarkScreamWork || struck.Add(ti)) ApplyWork(a, hitWork, foe, dying);
+                    if (w.Id == FinisherStrikeSkill.DarkScreamWork || FinisherStageSkill.HitsRepeatedly(w.Id) || struck.Add(ti)) ApplyWork(a, hitWork, foe, dying);
                 }
-                foreach (bool _ in host.FinisherStrikeAb.Routine(w, a, targets, StrikeOnce))
+                foreach (bool _ in host.FinisherStrikeAb.Routine(w, a, col, row, targets, StrikeOnce))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {
@@ -1678,7 +1678,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             // 핸들러가 판정(1001)을 보내는 틱까지 기다린다(ba-21 T1) — 원본은 이펙트가 다 나온 뒤에 숫자·맞음 동작이 뜬다(힐 114틱, 프레셔 49틱 …).
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
-            if (step == hitStep && !crashed && host._lastTime == stagedFrom && hitTimes.Count == 1 && w.Prepare != 7 && !LegionStageSkill.IsLegionSkill(w.Id) && !host.SpecialHitsAb.HasSpecialHit(w)
+            // 필살기도 몸짓에 타격 키가 없으면(0.05초 갈음) 핸들러 틱을 따른다 — 전에는 연출이 시작되자마자 숫자가 먼저 떴다(버그 리포트 #25, fg-111).
+            if (step == hitStep && !crashed && host._lastTime == stagedFrom && hitTimes.Count == 1 && (w.Prepare != 7 || hitTimes[0] <= 0.05) && !LegionStageSkill.IsLegionSkill(w.Id) && !host.SpecialHitsAb.HasSpecialHit(w)
                 && (WorkHitTicks.Table.TryGetValue(w.Id, out var handlerHit) || (ArriveHit(w) && _fxArriveAt > 0)))   // 길이를 모르는 단계가 낀 work 도 따른다 — 이펙트 표의 지연과 같은 시계라 숫자가 이펙트보다 먼저 뜨지 않는다
             {
                 bool sureHit = handlerHit.Sure || WorkHitTicks.CameraOnly.Contains(w.Id);

@@ -24,7 +24,7 @@ internal sealed unsafe class FinisherStrikeSkill(GameWindow host)
     private const int BesideWorld = 80, BeamPieces = 22, BeamStepWorld = 37;
     private const double ScreenY = 0.8;
 
-    internal static bool Handles(int work) => work is DarkScreamWork or PeionSpiritsWork or SatelliteWork;
+    internal static bool Handles(int work) => work is DarkScreamWork or PeionSpiritsWork or SatelliteWork || FinisherStageSkill.Handles(work);
 
     /// <summary>앞머리 뒤의 몸짓은 전용 루틴이 다 튼다 — 사슬에는 앞머리 몫(6 · 15)만 남긴다.</summary>
     internal static readonly int[] Actions = [6, 15];
@@ -33,11 +33,12 @@ internal sealed unsafe class FinisherStrikeSkill(GameWindow host)
 
     private readonly List<Clone> _clones = [];
 
-    internal IEnumerable<bool> Routine(WorkData w, UnitState user, List<int> targets, Action<int> hit)
+    internal IEnumerable<bool> Routine(WorkData w, UnitState user, int col, int row, List<int> targets, Action<int> hit)
     {
         if (BattleScene.Trace)
             System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
                 $"finisher strike {w.Id}: caster {user.ChrCode} targets {string.Join(", ", targets.Select(t => host._units[t].ChrCode))}" + Environment.NewLine);
+        if (FinisherStageSkill.Handles(w.Id)) return host.FinisherStageAb.Routine(w, user, col, row, targets, hit);
         return w.Id switch
         {
             DarkScreamWork => DarkScream(user, targets, hit),

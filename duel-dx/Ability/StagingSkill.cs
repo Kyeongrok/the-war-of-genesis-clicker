@@ -31,7 +31,6 @@ internal sealed unsafe class StagingSkill(GameWindow host)
         (int Strength, int Ticks, bool Vertical, int Delay)[] shakes = w.Id switch
         {
             1523 => [(2, 30, false, 0)],                                          // 타이타니아 슈발츠
-            1528 => [(2, 250, false, 0), (3, 180, false, 0)],                     // 코메트
             1589 => [(2, 15, false, 0), (2, 15, false, 30)],                      // 아수라 파천무
             1590 => [(2, 145, true, 0)],                                          // 진무 천지파열
             1665 => [(3, 210, true, 40)],                                         // 레드 크로스
