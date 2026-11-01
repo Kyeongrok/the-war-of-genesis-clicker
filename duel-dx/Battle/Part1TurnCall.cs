@@ -49,7 +49,7 @@ internal static class Part1TurnCall
 
     /// <summary>그 유닛의 차례 목소리 — 없으면 null.</summary>
     internal static Clip[]? For(UnitState u) =>
-        u.ChrCode > Part1Game.ChrBase && Calls.TryGetValue(u.ChrCode - Part1Game.ChrBase, out var clips) ? clips : null;
+        u.ChrCode >= Part1Game.ChrBase && Calls.TryGetValue(u.ChrCode - Part1Game.ChrBase, out var clips) ? clips : null;
 
     /// <summary>에셋 팩에 실을 파트1 Snd 번호.</summary>
     internal static IEnumerable<int> Sounds => People.SelectMany(p => p.Clips).Select(c => c.Snd).Distinct();
