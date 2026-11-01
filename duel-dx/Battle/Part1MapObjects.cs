@@ -746,8 +746,10 @@ internal sealed class Part1MapObjects(GameWindow host)
     internal bool ShootableAt(int col, int row)
     {
         Ensure();
-        return _objects.Any(o => o is { Motion: 0, Durability: > 0 } && o.Def.Reactions.Any(r => r.Message == 1 && r.Action is 0 or 1) && Touches(o, (c, r) => c == col && r == row));
+        return _objects.Any(o => o is { Motion: 0, Durability: > 0 } && BreaksWhenHit(o) && Touches(o, (c, r) => c == col && r == row));
     }
+
+    private static bool BreaksWhenHit(Obj o) => o.Def.Reactions.Any(r => r.Message == 1 && r.Action is 0 or 1);
 
     private static bool Touches(Obj o, Func<int, int, bool> inArea)
     {
@@ -997,8 +999,9 @@ internal sealed class Part1MapObjects(GameWindow host)
             return;
         }
         var area = new HashSet<(int, int)>(cells);
+        bool iceMissile = attack.Id is >= 97 and <= 105;   // 아이스 미사일은 통을 터뜨리지 않는다 — 사용자 확인(버그 리포트 #19). 자료 · 반응 코드로는 가려지지 않는다
         foreach (var o in _objects)
-            if (o != null && Touches(o, (c, r) => area.Contains((c, r)))) Notify(o, 1, hit);
+            if (o != null && !(iceMissile && BreaksWhenHit(o)) && Touches(o, (c, r) => area.Contains((c, r)))) Notify(o, 1, hit);
     }
 
     /// <summary>

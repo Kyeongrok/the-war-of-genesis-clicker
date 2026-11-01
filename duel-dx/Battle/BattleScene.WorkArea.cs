@@ -528,10 +528,11 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>겨눌 수 있는 칸인가 — 대상 방식이 유닛을 고르는 것이면 그 칸에 맞는 유닛이 있어야 한다.</summary>
     /// <summary>
-    /// 파트1 라이트닝 볼츠는 맞는 맵 물체(통)가 선 칸도 겨눈다 — 사용자 결정(버그 리포트 #19, gm-skil-39). 원본은 거르기 1 이라 유닛 칸만 켠다(<c>0x1008a950</c>).
+    /// 파트1 화이어 애로우(Attack 60~68) · 라이트닝 볼츠(134~142)는 맞는 맵 물체(통)가 선 칸도 겨눈다 — 사용자 결정(버그 리포트 #19, gm-skil-39).
+    /// 자료만 보면 거르기 1 이라 유닛 칸만 켠다(<c>0x1008a950</c>).
     /// </summary>
     internal bool Part1AimsObject(WorkData w, int col, int row) =>
-        host._scene.IsPart1 && Part1Skill.IsLightning(w.Id) && Part1Objects.ShootableAt(col, row);
+        host._scene.IsPart1 && Part1.AttackOf(w) is { Id: (>= 60 and <= 68) or (>= 134 and <= 142) } && Part1Objects.ShootableAt(col, row);
 
     internal bool CanAimAt(WorkData w, UnitState user, int col, int row)
     {
