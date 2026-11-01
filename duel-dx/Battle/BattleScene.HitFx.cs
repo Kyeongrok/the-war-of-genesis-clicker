@@ -448,6 +448,7 @@ internal sealed unsafe partial class BattleScene
         DrawFlyingEffects();
         host.NineCrusaderAb.DrawSwords();                                       // 나인 크루세이더의 나는 칼
         host.FinisherPreludeAb.DrawFinisherFx();                                   // 필살기 앞머리의 빛 알갱이·초상 컷인
+        host.FinisherStrikeAb.Draw();                                              // 다크 스크림의 대상 옆 복제
         host.AcrostAb.DrawSummonGrow();
         host.HeavenEarthAb.DrawHeavenEarthFx();                                // 천지 파열무의 X 자 불길·파편(시각표 효과 — 서몬 몬스터도 쓴다)
         host.Part1Ab.Draw();                                                   // 파트1 기술(검 기술 · 썬더스탐 · 소환)

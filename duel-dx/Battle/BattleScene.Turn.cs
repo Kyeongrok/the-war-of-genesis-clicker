@@ -1606,6 +1606,21 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
+            // 다크 스크림 · 페이온 스피리츠 · 셰틀라이트 어텍 — 원본은 대상마다 따로 친다(fg-109). 피해는 대상마다 한 번.
+            if (FinisherStrikeSkill.Handles(w.Id))
+            {
+                var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
+                var struck = new HashSet<int>();
+                foreach (bool _ in host.FinisherStrikeAb.Routine(w, a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                    yield return true;
+                if (!followersDone && targets.Count > 0)
+                {
+                    FollowersAttack(userIndex, host._units[targets[0]], dying, allyPass: false, leaderWork: w);
+                    followersDone = true;
+                }
+                while (a.IsBusy) yield return true;
+                continue;
+            }
             // 나인 크루세이더 — 칼이 날아다니며 차례로 꿰뚫는다. 피해는 대상마다 처음 꿰뚫릴 때 준다.
             if (w.Id == NineCrusaderSkill.NineCrusaderWork && targetIndex < 0)
             {

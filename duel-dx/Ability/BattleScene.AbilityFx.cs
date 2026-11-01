@@ -174,7 +174,8 @@ internal sealed unsafe partial class BattleScene
     /// 칼을 휘두르면 안 된다(fg-20). 대본이 아예 없을 때만 기본공격 동작을 빌린다.
     /// </summary>
     internal static int[] ActionsFor(WorkData w) =>
-        ScriptFor(w.Id) is { } m ? m.Actions
+        FinisherStrikeSkill.Handles(w.Id) ? FinisherStrikeSkill.Actions
+        : ScriptFor(w.Id) is { } m ? m.Actions
         : BasicWorkActions.GetValueOrDefault(w.Id) ?? StrikeActions;
 
     /// <summary>
@@ -500,8 +501,9 @@ internal sealed unsafe partial class BattleScene
     internal void SpawnAbilityEffects(WorkData w, UnitState user, int col, int row)
     {
         host.Mov.SpawnWorkMovies(w, user, col, row, prelude: false);   // 치는 순간의 영상(리 바이블·어스퀘이크·강림의 밤)
-        host.Cut.Start(w);                                               // 전체 화면 컷신(헬 카이트·진무 천지파열 …) — 도는 동안 전투가 선다
-        SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
+        bool ownStrike = FinisherStrikeSkill.Handles(w.Id);              // 영상 · 복제 · 효과를 전용 루틴이 제때 건다
+        if (!ownStrike) host.Cut.Start(w);                               // 전체 화면 컷신(헬 카이트·진무 천지파열 …) — 도는 동안 전투가 선다
+        if (!ownStrike) SpawnBodyClones(w, user, host._units.FirstOrDefault(u => u.Alive && u.Col == col && u.Row == row), col, row);   // 분신·잔상
         if (CounterBladeWorks.Contains(w.Id)) SpawnCounterBlades(user);
         host.UnitFxAb.StartUnitFx(w, user, col, row);                         // 유닛 숨김·밝기(희생·블라인드·브레인 브레이크 …)
         if (BladeMissileSkill.Works.Contains(w.Id)) host.BladeMissileAb.Spawn(w, user);   // 블레이드 미사일의 칼들
@@ -520,7 +522,7 @@ internal sealed unsafe partial class BattleScene
             double ticks = (script?.Effects ?? []).Select(e => e.Delay + (e.Life > 0 ? e.Life : host.EffectTicks(e.Obs, e.Motion))).DefaultIfEmpty(0).Max();
             host.DuckMusicForWork(ticks / TicksPerSecond);
         }
-        if (script is not { } m) return;
+        if (ownStrike || script is not { } m) return;
         // 손으로 적어 둔 소리표가 있는 어빌리티는 그것이 소리를 낸다 — 여기서 또 내면 겹친다.
         bool ownSounds = !host._abilitySounds.ContainsKey(w.AbilityId);
         var (userX, userY) = host.Btl.UnitFoot(user);

@@ -62,6 +62,8 @@ internal sealed unsafe partial class GameWindow
     internal TeleportSkill? _teleportAb;
     internal TeleportSkill TeleportAb => _teleportAb ?? LazyInitializer.EnsureInitialized(ref _teleportAb, () => new TeleportSkill(this));
 
+    internal FinisherStrikeSkill? _finisherStrikeAb;
+    internal FinisherStrikeSkill FinisherStrikeAb => _finisherStrikeAb ?? LazyInitializer.EnsureInitialized(ref _finisherStrikeAb, () => new FinisherStrikeSkill(this));
     internal FinisherPreludeSkill? _finisherPreludeAb;
     internal FinisherPreludeSkill FinisherPreludeAb => _finisherPreludeAb ?? LazyInitializer.EnsureInitialized(ref _finisherPreludeAb, () => new FinisherPreludeSkill(this));
 
