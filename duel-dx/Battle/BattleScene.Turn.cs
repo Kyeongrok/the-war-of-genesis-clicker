@@ -1668,6 +1668,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 ApplyWork(a, hitWork, crashTarget, dying);
                 if (crashTarget.Alive && crashTarget.Hp > 0) host.KnockbackAb.DrainSoul(crashTarget, 10);
             }
+            // 살(0x1008f9d0) — 동작 26 을 튼 지 32틱에 대상에 305:0 이 뜨고 그 효과가 피해를 낸다. 전에는 효과가 뜨기 전에 숫자가 먼저 떴다(버그 리포트 #13, gm-skil-38).
+            if (step == hitStep && w.AbilityId == SalAbility)
+            {
+                var salKeys = host.UiFor(SalEffectObs)?.Clip(0)?.Hits;
+                double salAt = effectsAt + (32 + (salKeys is { Count: > 0 } ? salKeys.Min(h => h.Start) : host.EffectTicks(SalEffectObs, 0))) / TicksPerSecond;
+                while (host._lastTime < salAt) yield return true;
+            }
             // 핸들러가 판정(1001)을 보내는 틱까지 기다린다(ba-21 T1) — 원본은 이펙트가 다 나온 뒤에 숫자·맞음 동작이 뜬다(힐 114틱, 프레셔 49틱 …).
             // 전에는 이펙트를 띄우는 틀에 판정해 숫자가 먼저 떴다. 길이를 다 아는 work(Sure)과 카메라 대기만 모르는 work 만 따른다.
             // 몸짓 타격 키로 치는 칸(여러 타)·필살기(준비 7 — 사슬이 핸들러 모션을 이미 튼다)·군단기·전용 연출이 이미 기다린 work 은 뺀다.
@@ -2526,6 +2533,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     /// <summary>타격 키 어빌리티 125(Hunter)가 고르는 work — 원본 <c>0x100322e0</c> 에 박혀 있다.</summary>
     internal const int HunterAbility = 125, HunterWork = 1468;
+
+    /// <summary>「살」 어빌리티와 대상에 뜨는 그 효과.</summary>
+    internal const int SalAbility = 4, SalEffectObs = 305;
 
     /// <summary>그 동작의 타격 키마다 적힌 어빌리티 번호 — <see cref="HitTimesFor"/> 와 같은 차례(시각 순). 키가 없으면 빈 목록.</summary>
     internal List<int> HitAbilitiesFor(UnitState u, int action) =>

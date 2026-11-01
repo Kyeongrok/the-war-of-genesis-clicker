@@ -1192,10 +1192,11 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             case 609:                                        // [인물, 이름 TXR, 챕터 Tlc 글, ?] 이름과 글을 <b>다른 표</b>에서 꺼내는 대사(0x100efb30)
                 // 원본은 0x1004a3f0(TXR)으로 이름을, 0x1004a650(Tlk\NNNN.Tlc = EvtText)으로 글을 읽어
                 // 0x160바이트 창을 [0x101bfe34] 에 만든다 — 600~603 의 대사창([0x101bfe30])과 다른 자리이고 틀은 (164,120)~(313,239).
+                // 글 번호는 그 필드의 글 표(Tlk\NNNN.tlf) 것이다 — 필드 12곳의 609 가 다 거기 있다. 챕터 표만 봐서 필드 0096 메시지가 챕터 0061 의 5번 「흠..」으로 나왔다(버그 리포트 #13, mo-42).
                 // 인자1 은 이름이 아니라 <b>발신지</b> TXR 이다 — 이름은 인물 것이고 발신지는 카드의 둘째 줄(「LOCATION」)에 뜬다(ba-21 field Y3).
                 _talkLocation = host._db?.T((ushort)A(1)) ?? "";
                 ShowFieldTalk(box: true, A(0), 0,
-                              textOverride: host.Mos.TalkTableFor()?[A(2)] ?? "", voice: A(3));
+                              textOverride: _fieldTalk?[A(2)] is { Length: > 0 } own ? own : host.Mos.TalkTableFor()?[A(2)] ?? "", voice: A(3));
                 break;
             case 514:                                        // 배경음악 멈추기(0x100eee30 → 음악 개체의 0x10024fb0)
                 // 되감아 멈출 뿐 개체와 크기(%)는 남는다 — 뒤따르는 512 가 그 크기로 바로 튼다(감사4 M2).
