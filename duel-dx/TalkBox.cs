@@ -301,6 +301,8 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             return;
         }
         int speaker = A(0);
+        // 원본 자료 오타 — 챕터 0061 나야트레이 합류의 109번 줄(「흐음.. 할 수 없군요.」)만 말하는 이가 샤크바리(245)다. 앞뒤가 다 살라딘(219)이다(사용자 판단, 버그 리포트 #13, mo-43).
+        if (speaker == 245 && A(1) == 109 && host.Fld._field == null && host.Mos._mosesChp?.Id == 61) speaker = 219;
         var w = new TalkWindow { Kind = a.Code, FieldSpeaker = speaker, Text = host.Fld.FieldText(A(1)), Voice = A(2) };
         if (a.Code == 600) { w.Pose = A(3); w.NoPortrait = A(6) != 0; }
         if (a.Code == 602)
