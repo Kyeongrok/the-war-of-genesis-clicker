@@ -1606,12 +1606,18 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            // 다크 스크림 · 페이온 스피리츠 · 셰틀라이트 어텍 — 원본은 대상마다 따로 친다(fg-109). 피해는 대상마다 한 번.
+            // 다크 스크림 · 페이온 스피리츠 · 셰틀라이트 어텍 — 원본은 대상마다 따로 친다(fg-109). 다크 스크림은 대상마다 두 번(복제마다), 나머지는 한 번.
             if (FinisherStrikeSkill.Handles(w.Id))
             {
                 var targets = targetIndex >= 0 ? [targetIndex] : WorkTargets(w, a, col, row);
                 var struck = new HashSet<int>();
-                foreach (bool _ in host.FinisherStrikeAb.Routine(w, a, targets, ti => { if (struck.Add(ti)) ApplyWork(a, hitWork, host._units[ti], dying); }))
+                void StrikeOnce(int ti)
+                {
+                    var foe = host._units[ti];
+                    if (dying.Contains(foe) || !foe.Alive) return;                                  // 첫 복제에 쓰러졌으면 둘째는 빈손
+                    if (w.Id == FinisherStrikeSkill.DarkScreamWork || struck.Add(ti)) ApplyWork(a, hitWork, foe, dying);
+                }
+                foreach (bool _ in host.FinisherStrikeAb.Routine(w, a, targets, StrikeOnce))
                     yield return true;
                 if (!followersDone && targets.Count > 0)
                 {

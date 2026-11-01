@@ -15,7 +15,7 @@ using static DuelDx.GameWindow;
 /// <para>페이온 스피리츠(work 1529, <c>0x100b0f00</c>): 모션 48. 대상 j 마다 1017:49 를 대상 위쪽 80 에, 시작 20j 틱. 마지막이 끝나면 모션 50.</para>
 /// <para>셰틀라이트 어텍(work 1522, <c>0x100a7070</c>): 모션 90. 대상 j 마다 307:0(대상) · 1322:0(시전자), 시작 15j 틱. 끝나면 영상 Mov 0038.
 /// 그 뒤 대상 j 마다 시작 30 + 8j 틱에 987:3 22조각을 대상에서 위로 37 간격, 1316:0(대상) · 1322:1(시전자). 987 첫 조각이 끝날 때 피해.</para>
-/// 자리는 월드 단위, 화면 y 는 × 0.8. 복제의 피해 고리(<c>0x100c2860</c>)는 지금 판의 피해 횟수를 바꾸지 않으려고 대상마다 첫 복제에서 한 번만 든다.
+/// 자리는 월드 단위, 화면 y 는 × 0.8. 다크 스크림은 복제마다 피해가 들어(<c>0x100c2860</c>) 범위 안 적을 두 번씩 친다(사용자 확인) — 명중도 타마다 따로 판정한다.
 /// </remarks>
 internal sealed unsafe class FinisherStrikeSkill(GameWindow host)
 {
@@ -89,11 +89,8 @@ internal sealed unsafe class FinisherStrikeSkill(GameWindow host)
                 int length = Math.Max(1, sprite?.MotionTicks(motion) ?? 0);
                 foreach (var (tick, sound) in sprite?.RawClip(motion)?.Sounds ?? []) host._pendingSounds.Add((start + he.Ticks(tick), sound));
                 finish = Math.Max(finish, start + he.Ticks(length));
-                if (pass == 0)
-                {
-                    var keys = sprite?.RawClip(motion)?.Hits;
-                    hits.Add((start + he.Ticks(keys is { Count: > 0 } ? keys.Min(h => h.Start) : length / 2), targets[j]));
-                }
+                var keys = sprite?.RawClip(motion)?.Hits;
+                hits.Add((start + he.Ticks(keys is { Count: > 0 } ? keys.Min(h => h.Start) : length / 2), targets[j]));
             }
         }
         foreach (var (at, target) in hits.OrderBy(h => h.At))
