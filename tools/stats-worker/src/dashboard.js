@@ -75,8 +75,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="env"><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
   <section data-tab="env"><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section data-tab="bugs"><h2>버그 리포트</h2>
-    <div class="sub">게임의 「버그 리포트」로 받은 글입니다. 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
-    <div class="filters"><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
+    <div class="sub">창세기전3과 용의기사2 리메이크의 「버그 리포트」로 받은 글입니다. 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
+    <div class="filters"><label>게임 <select id="buggame"><option value="">전체</option><option value="dow">창세기전3</option><option value="fd2">용의기사2</option></select></label><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
       <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
     <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="days"><h2>날짜별 · 버전별</h2><table id="days"></table></section>
@@ -251,15 +251,16 @@ async function loadPart(tab) {
 }
 // ── 버그 리포트 — 관리자 키로 /v1/bugs 를 읽고, 카드마다 상태를 바꾼다 ──
 const STATUS_NAME = { new: '새로', seen: '봤음', fixed: '고침', wontfix: '안 고침' };
-const bugState = { status: 'new' };
+const BUG_GAMES = { dow: '창세기전3', fd2: '용의기사2' };   // 번호는 게임마다 따로 센다
+const bugState = { status: 'new', game: '' };
 const bugKey = () => { try { return localStorage.getItem('bugAdminKey') || ''; } catch { return ''; } };
 function bugCard(b) {
   const c = b.context || {};
   const when = new Date(b.created_at).toLocaleString('ko-KR');
-  const where = c.where || c.scene || '';
+  const where = c.where || c.scene || (c.chapter ? c.chapter + '장' + (c.turn ? ' ' + c.turn + '턴' : '') : c.screen || '');
   const buttons = Object.keys(STATUS_NAME).filter((s) => s !== b.status)
-    .map((s) => '<button data-id="' + b.id + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ');
-  return '<div class="bug"><div class="head"><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
+    .map((s) => '<button data-id="' + b.id + '" data-g="' + b.game + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ');
+  return '<div class="bug"><div class="head"><span class="tag">' + BUG_GAMES[b.game] + '</span><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
     + '<span class="dim">' + esc(when) + ' · v' + esc(b.version) + (where ? ' · ' + esc(where) : '') + '</span><span style="flex:1"></span>' + buttons + '</div>'
     + '<div class="text">' + esc(b.text) + '</div>'
     + (b.note ? '<div class="dim">메모: ' + esc(b.note) + '</div>' : '')
@@ -270,18 +271,22 @@ async function loadBugs() {
   $('bugerr').textContent = '';
   if (!key) { $('bugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
   try {
-    const res = await fetch('/v1/bugs?status=' + bugState.status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + key } });
-    if (res.status === 401) throw new Error('키가 맞지 않습니다');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const bugs = (await res.json()).bugs || [];
+    const games = bugState.game ? [bugState.game] : Object.keys(BUG_GAMES);
+    const lists = await Promise.all(games.map(async (game) => {
+      const res = await fetch('/v1/bugs?game=' + game + '&status=' + bugState.status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + key } });
+      if (res.status === 401) throw new Error('키가 맞지 않습니다');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return ((await res.json()).bugs || []).map((b) => ({ ...b, game }));
+    }));
+    const bugs = lists.flat().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     $('bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
-    $('bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(Number(b.dataset.id), b.dataset.s));
+    $('bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(b.dataset.g, Number(b.dataset.id), b.dataset.s));
   } catch (e) { $('bugerr').textContent = '불러오지 못했습니다: ' + e.message; }
 }
-async function markBug(id, status) {
+async function markBug(game, id, status) {
   const note = status === 'fixed' || status === 'wontfix' ? prompt('메모(선택 — 고친 커밋 · 판 번호 따위)', '') : null;
   if (note === null && (status === 'fixed' || status === 'wontfix')) return;
-  const res = await fetch('/v1/bugs/' + id + '/status', { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
+  const res = await fetch('/v1/bugs/' + id + '/status?game=' + game, { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
     body: JSON.stringify(note ? { status, note } : { status }) });
   if (!res.ok) { $('bugerr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
   loadBugs();
@@ -294,6 +299,7 @@ $('bugkey').onclick = () => {
 };
 $('bugreload').onclick = loadBugs;
 $('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs(); };
+$('buggame').onchange = (e) => { bugState.game = e.target.value; loadBugs(); };
 loadBugs();
 
 $('days').onchange = (e) => { state.days = e.target.value; load(); };

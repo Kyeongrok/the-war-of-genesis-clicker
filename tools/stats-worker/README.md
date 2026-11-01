@@ -20,6 +20,7 @@ npx wrangler deploy                          # https://war-of-genesis-stats.<계
 - 대시보드: `https://…workers.dev/dashboard` — 어빌리티 순위(사용 · 피해 · 1회당 피해 · 처치로 줄 세우기) · 인물별 · 전투별 승률 · 날짜/버전별(전투는 챕터로 묶음). 캐릭터 에디터를 쓴 판도 넣는다. 지금은 누구나 볼 수 있다.
   이름 표(`src/names.js`)는 `python tools/stats-worker/make_names.py` 로 다시 뽑는다.
 
+- 버그 리포트 탭은 용의기사2 리메이크의 리포트(`fd2-bugs` D1, 바인딩 `FD2_DB`)도 같이 보여 주고 상태도 바꾼다. 받는 곳은 그대로 `fd2-remake/tools/bug-worker`.
 - 집계: `https://…workers.dev/v1/top` — 어빌리티별 쓴 횟수 · 피해 · 처치 합계
 - 마음대로 묻기:
 

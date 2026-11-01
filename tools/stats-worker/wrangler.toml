@@ -7,3 +7,9 @@ compatibility_date = "2026-10-01"
 binding = "DB"
 database_name = "war-of-genesis-stats"
 database_id = "6652a8b9-c5af-4c32-a0e9-3c4c86a175f3"
+
+# 용의기사2 리메이크의 버그 리포트(fd2-remake/tools/bug-worker) — 대시보드 버그 리포트 탭이 같이 읽고 상태를 바꾼다.
+[[d1_databases]]
+binding = "FD2_DB"
+database_name = "fd2-bugs"
+database_id = "547b23af-673c-4b9e-850c-685d8a0e25ea"

@@ -6,6 +6,7 @@
 //   POST /v1/bug      버그 리포트 한 건(게임의 「버그 리포트」 창, duel-dx/System/BugReport.cs) — {id} 를 돌려준다. 설치마다 한 시간에 10 건까지.
 //   GET  /v1/bugs?since=<id>&status=new        받은 버그 리포트(관리자만 — Authorization: Bearer <BUG_ADMIN_KEY>)
 //   POST /v1/bugs/<id>/status {status, note}   버그 리포트의 상태를 바꾼다(관리자만)
+//                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-bugs D1 — 받는 곳은 fd2-remake/tools/bug-worker)
 //
 // 누가 보냈는지는 설치할 때 만든 무작위 번호(install)뿐이다. IP 는 적지 않는다.
 
@@ -224,6 +225,9 @@ function isAdmin(request, env) {
 
 const STATUS = /^[a-z][a-z_-]{0,19}$/;
 
+// 어느 게임의 리포트인가 — 번호는 게임마다 따로 센다.
+const bugDb = (url, env) => (url.searchParams.get('game') === 'fd2' ? env.FD2_DB : env.DB);
+
 async function listBugs(url, env) {
   const since = int(Number(url.searchParams.get('since') || 0));
   const status = url.searchParams.get('status') || 'new';
@@ -232,7 +236,7 @@ async function listBugs(url, env) {
   const sql = `SELECT id, created_at, version, install, text, context, status, note FROM bug_reports WHERE id > ?`
     + (status === 'all' ? '' : ' AND status = ?') + (url.searchParams.get('order') === 'desc' ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id LIMIT ?');   // desc — 대시보드는 새 것부터
   const args = status === 'all' ? [since, limit] : [since, status, limit];
-  const { results } = await env.DB.prepare(sql).bind(...args).all();
+  const { results } = await bugDb(url, env).prepare(sql).bind(...args).all();
   const bugs = results.map((r) => {
     let context = {};
     try { context = JSON.parse(r.context); } catch { context = { raw: r.context }; }
@@ -241,12 +245,12 @@ async function listBugs(url, env) {
   return json({ bugs });
 }
 
-async function setBugStatus(id, request, env) {
+async function setBugStatus(id, request, url, env) {
   let b;
   try { b = JSON.parse(await request.text()); } catch { return json({ error: 'bad json' }, 400); }
   if (!b || typeof b.status !== 'string' || !STATUS.test(b.status)) return json({ error: 'bad status' }, 400);
   const note = typeof b.note === 'string' ? b.note.slice(0, 2000) : null;
-  const done = await env.DB.prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run();
+  const done = await bugDb(url, env).prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run();
   if (!done.meta.changes) return json({ error: 'not found' }, 404);
   return json({ ok: true, id, status: b.status });
 }
@@ -263,7 +267,7 @@ export default {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         if (request.method === 'GET' && pathname === '/v1/bugs') return await listBugs(url, env);
         const m = pathname.match(/^\/v1\/bugs\/(\d{1,12})\/status$/);
-        if (request.method === 'POST' && m) return await setBugStatus(Number(m[1]), request, env);
+        if (request.method === 'POST' && m) return await setBugStatus(Number(m[1]), request, url, env);
         return json({ error: 'not found' }, 404);
       }
       if (request.method === 'GET' && (pathname === '/dashboard' || pathname === '/'))
