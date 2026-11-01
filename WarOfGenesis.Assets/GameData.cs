@@ -908,8 +908,11 @@ public sealed class GameDatabase
     /// 그 work 을 쓰고 <b>실제로 깎이는</b> SOUL(<c>0x10072510</c>) — <c>+0x36</c> 이 0 이면 바탕은 안 깎이고 체질 덧붙임만 깎인다.
     /// 그래서 사이클론(에텔)·포스트럴(코절) 체질은 SOUL 이 거의 안 줄고 HP·TP 로 낸다.
     /// </summary>
+    /// <remarks>블리자드는 원본이 안 깎지만(+0x36 = 0) 소모 75 로 바꿨다(사용자 요청, 버그 리포트 #16, gm-skil-37). 필요 SOUL 은 그대로 100.</remarks>
     public int WorkSoulCost(CharacterData c, int workId) =>
-        !Works.TryGetValue(workId, out var w) ? 0 : (w.SoulSpend != 0 ? w.SoulBase : 0) + BodyShare(c, w, 45, 33);
+        !Works.TryGetValue(workId, out var w) ? 0 : (w.AbilityId == BlizzardAbility ? BlizzardSoulSpend : w.SoulSpend != 0 ? w.SoulBase : 0) + BodyShare(c, w, 45, 33);
+
+    private const int BlizzardAbility = 76, BlizzardSoulSpend = 75;
 
     /// <summary>그 work 을 쓰고 깎이는 HP(<c>0x100726e0</c>) — 바탕 없이 체질 덧붙임뿐이다.</summary>
     public int WorkHpCost(CharacterData c, int workId) =>
