@@ -1177,7 +1177,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 전에는 유닛만 세어, 기본공격으로는 칠 수 있는 물체에 기술을 쓰면 「대상이 없습니다」가 떴다(사용자 보고: Btl 0133 (1,15)).
         bool hitsObject = w.IsDamage && w.TargetMode is 1 or 5 && w.AbilityId != BlackHoleAbility
             && EffectCells(w, user, col, row).Any(c => ObjectAt(c.Item1, c.Item2) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user) && !_opened.Contains(obj));
-        if (needsUnit && !hitsObject && WorkTargets(w, user, col, row).Count == 0)
+        if (needsUnit && !hitsObject && !Part1AimsObject(w, col, row) && WorkTargets(w, user, col, row).Count == 0)
         {
             // 버서커(4)가 걸리면 편 판정(0x1006fde0)이 자기 자신까지 적으로 돌려줘 아군 대상 기술(힐 따위)은 자신에게도 못 쓴다 — 이유를 알려 준다
             // (사용자 질문: Btl 0141 죠안이 자신에게 힐을 못 씀). 큐어(대상 방식 5)는 된다.

@@ -527,6 +527,12 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>겨눌 수 있는 칸인가 — 대상 방식이 유닛을 고르는 것이면 그 칸에 맞는 유닛이 있어야 한다.</summary>
+    /// <summary>
+    /// 파트1 라이트닝 볼츠는 맞는 맵 물체(통)가 선 칸도 겨눈다 — 사용자 결정(버그 리포트 #19, gm-skil-39). 원본은 거르기 1 이라 유닛 칸만 켠다(<c>0x1008a950</c>).
+    /// </summary>
+    internal bool Part1AimsObject(WorkData w, int col, int row) =>
+        host._scene.IsPart1 && Part1Skill.IsLightning(w.Id) && Part1Objects.ShootableAt(col, row);
+
     internal bool CanAimAt(WorkData w, UnitState user, int col, int row)
     {
         if (!InWorkRange(w, user.Col, user.Row, col, row, user)) return false;
@@ -535,6 +541,7 @@ internal sealed unsafe partial class BattleScene
         if (w.TargetMode == 7) return CanLandOn(col, row, user) && HeightAt(col, row) == HeightAt(user.Col, user.Row);
         // 모드 1 은 적 유닛뿐 아니라 <b>적 물체</b>(포탑·바리케이트)도 겨눈다(0x100daca0).
         if (w.TargetMode == 1 && ObjectAt(col, row) is { Data.Breakable: true, Alive: true } obj && ObjectHostile(obj, user)) return true;
+        if (Part1AimsObject(w, col, row)) return true;
         return LiveUnitAt(col, row) is { } t && ModeAccepts(w.TargetMode, user, t);
     }
 }

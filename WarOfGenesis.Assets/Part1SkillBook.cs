@@ -83,7 +83,8 @@ public static class Part1SkillBook
         int? tm = a.AimFilter switch
         {
             1 or 3 or 5 => Mode(a.AimFilter),
-            2 => area == 0 ? Mode(a.AreaFilter) : 3,
+            // 맵 물체도 맞히는 기술(아이스 미사일 6~9 · 버스터 캐논, +0x41 = 1)은 칸을 그대로 누른다 — 유닛 방식으로 두면 통을 겨누지 못한다(버그 리포트 #19).
+            2 => area == 0 && !a.HitsTiles ? Mode(a.AreaFilter) : 3,
             // 6(격 · 부메랑)은 유닛이 없어도 되는 칸 누르기다 — 칸 거르개 0x1008a950 이 1 · 3 · 5 · 7 · 2 말고는 유닛을 안 본다, 맵 클릭 0x10032447 도 칸.
             // 범위(외줄)가 겨눈 칸에서 시전자 → 겨눈 칸 쪽으로 뻗는다. 전에는 빌린 연(1) 틀의 「적 한 명」이라 빈 칸으로 방향을 못 골랐다.
             6 => 3,

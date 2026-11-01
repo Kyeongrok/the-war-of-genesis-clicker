@@ -742,6 +742,13 @@ internal sealed class Part1MapObjects(GameWindow host)
     }
 
     /// <summary>물체가 알림을 받는 칸 — 지금 장의 발자국 가운데 지형 비트 0x10(그림만 걸친 칸)이 아닌 칸(<c>0x1008f4c6</c>). 부서진 통(장 3)은 모두 0x10 이라 더 안 맞는다.</summary>
+    /// <summary>그 칸에 공격을 맞으면 닳는 성한 물체(반응 0 · 1 — 통 따위)가 있나. 나무처럼 맞으면 타기만 하는 물체는 뺀다.</summary>
+    internal bool ShootableAt(int col, int row)
+    {
+        Ensure();
+        return _objects.Any(o => o is { Motion: 0, Durability: > 0 } && o.Def.Reactions.Any(r => r.Message == 1 && r.Action is 0 or 1) && Touches(o, (c, r) => c == col && r == row));
+    }
+
     private static bool Touches(Obj o, Func<int, int, bool> inArea)
     {
         var f = o.Def.Frames[o.Frame];
