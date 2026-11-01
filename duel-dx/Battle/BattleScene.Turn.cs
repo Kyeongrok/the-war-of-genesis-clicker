@@ -736,7 +736,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// </summary>
     internal void PlayTurnCall(UnitState u)
     {
-        if (u.Data == null || u.Tp != u.MaxTp || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
+        // 상태이상이면 TP 가 차지 않아 원본은 부르지 않는다 — 그래도 부르게 한다(사용자 요청, 버그 리포트 #28).
+        bool ailing = u.StatusId.Any(id => id != 0);
+        if (u.Data == null || (u.Tp != u.MaxTp && !ailing) || (IsMine(u) && (u.Col != u.OriginCol || u.Row != u.OriginRow))) return;
         // 파트1 인물의 차례 목소리(원본에 없음, Part1TurnCall) — 내가 움직이는 인물만, 모드에서 켰을 때.
         // 캐릭터 에디터 「외형」으로 파트2 목소리 묶음을 넣었으면(VoiceSet > 0, menu-97) 그것을 파트2 처럼 낸다.
         if (host._scene.IsPart1 && u.Data.VoiceSet == 0 && Part1TurnCall.For(u) is { Length: > 0 } p1call)

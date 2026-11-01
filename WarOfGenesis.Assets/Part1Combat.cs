@@ -84,6 +84,17 @@ public sealed record Part1Item(int Id, string Name, string EnglishName, int Pric
     /// 19 · 20 · 21 · 24 · 25(약 · 소모품 · 열쇠)는 못 낀다.
     /// </summary>
     /// <param name="equipment">그 인물의 지금 장비 다섯 칸(아이템 번호).</param>
+    public bool CanEquipFreeingHand(Part1Chr chr, int slot, int[] equipment, IReadOnlyList<Part1Item> items)
+    {
+        if (slot != 0 || !TwoHanded) return CanEquip(chr, slot, equipment, items);
+        var freed = (int[])equipment.Clone();
+        freed[1] = 0;
+        return CanEquip(chr, slot, freed, items);
+    }
+
+    /// <summary>두손 무기(대검 · 활 · 창) — 끼면 둘째 손이 비어야 한다. 고르는 창은 둘째 손을 벗기고 낀다(버그 리포트 #27).</summary>
+    public bool TwoHanded => Type is 5 or 7 or 11;
+
     public bool CanEquip(Part1Chr chr, int slot, int[] equipment, IReadOnlyList<Part1Item> items)
     {
         bool Has(params int[] abilities) => abilities.Any(a => chr.EffectiveLevel(a) >= 0);   // 원본도 쓰는 레벨(0x1009e020) — 지금 직업이 다루는 무기만

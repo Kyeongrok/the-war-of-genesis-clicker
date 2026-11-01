@@ -131,7 +131,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         if (!host.Part1.IsOurs(code) || Part1Chr.Load(code - Part1Game.ChrBase) is not { } raw) { host.Toast("일행만 장비를 바꿀 수 있습니다"); return; }
         var chr = host.Part1.Apply(raw);
         _items ??= Part1Item.LoadAll();
-        var options = host.Part1.Bag.Distinct().Where(id => id != chr.Equipment[slot] && Part1Item.ById(_items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, _items)).ToList();
+        var options = host.Part1.Bag.Distinct().Where(id => id != chr.Equipment[slot] && Part1Item.ById(_items, id) is { } item && item.CanEquipFreeingHand(chr, slot, chr.Equipment, _items)).ToList();
         if (chr.Equipment[slot] != 0) options.Add(0);
         if (options.Count == 0) { host.Toast("가방에 이 칸에 맞는 것이 없습니다"); return; }
         _equipSlot = slot;
@@ -150,6 +150,11 @@ internal sealed class Part1StatusPanel(GameWindow host)
         if (next != 0) host.Part1.Bag.Remove(next);
         if (old != 0) host.Part1.Bag.Add(old);
         slots[slot] = next;
+        if (slot == 0 && slots[1] != 0 && Part1Item.ById(_items ??= Part1Item.LoadAll(), next) is { TwoHanded: true })
+        {
+            host.Part1.Bag.Add(slots[1]);
+            slots[1] = 0;
+        }
         host.Part1.Equipped[code] = slots;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);

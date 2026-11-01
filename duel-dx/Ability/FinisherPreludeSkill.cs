@@ -39,7 +39,13 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
         public int Delay, Life = -1, Age;
         public bool Arrived, Done;
         public FxFlight? Next;
+        public SpriteFrame? Frame;   // 모션 대신 이 그림을 그린다
     }
+
+    /// <summary>
+    /// 유진(Chr 244)의 초상 Obs 0756 — 모션 1 이 전신이 아니라 모션 2 와 같은 띠(벌 5)를 가리킨다. 전신 그림(벌 6, 232×471)은 Obs 에 있는데 어떤 모션도 안 쓴다 — 원본 자료의 빠뜨림(버그 리포트 #26).
+    /// </summary>
+    private const int EugeneFaceObs = 756, EugeneFullBodySub = 6;
 
     internal readonly List<FxFlight> _fxFlights = [];
     internal double _fxLastStep;
@@ -117,6 +123,7 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
         a.Next = Flight(2, 139, -300, 150, 40, 1.3, true, -1, 0);
         var b = Flight(1, 1, 639, 480, 80, 0.9 * s, false, 30, 0);
         b.Next = Flight(1, 639, 940, 480, 40, 1.3 * s, false, -1, 0);
+        if (c.FaceId == EugeneFaceObs && host.UiFor(c.FaceId)?._frames.GetValueOrDefault((EugeneFullBodySub, 0)) is { } body) b.Frame = b.Next.Frame = body;
         _fxLastStep = host._lastTime;
         _fxFlights.Add(a);
         _fxFlights.Add(b);
@@ -160,7 +167,11 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
                 }
         }
         foreach (var f in _fxFlights)
-            if (f.Delay <= 0) host.DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, GameWindow.UiBlend.Alpha);
+        {
+            if (f.Delay > 0) continue;
+            if (f.Frame is { } body) host.DrawFrame(body, (int)f.X, (int)f.Y, GameWindow.UiBlend.Alpha);
+            else host.DrawUi(f.Obs, f.Motion, f.Age, (int)f.X, (int)f.Y, GameWindow.UiBlend.Alpha);
+        }
     }
 
     internal static void StepFxFlight(FxFlight f)

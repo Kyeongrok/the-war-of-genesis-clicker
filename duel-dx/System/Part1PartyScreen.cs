@@ -47,7 +47,7 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
     private List<int> BagFor(Part1Chr chr, int slot)
     {
         var items = Part1Item.LoadAll();
-        return [.. host.Part1.Bag.Distinct().Where(id => Part1Item.ById(items, id) is { } item && item.CanEquip(chr, slot, chr.Equipment, items))];
+        return [.. host.Part1.Bag.Distinct().Where(id => Part1Item.ById(items, id) is { } item && item.CanEquipFreeingHand(chr, slot, chr.Equipment, items))];
     }
 
     private int HitAt(int bx, int by)
@@ -132,6 +132,11 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
         if (next != 0) host.Part1.Bag.Remove(next);
         if (old != 0) host.Part1.Bag.Add(old);
         slots[_slot] = next;
+        if (_slot == 0 && slots[1] != 0 && Part1Item.ById(Part1Item.LoadAll(), next) is { TwoHanded: true })
+        {
+            host.Part1.Bag.Add(slots[1]);
+            slots[1] = 0;
+        }
         host.Part1.Equipped[code] = slots;
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);
