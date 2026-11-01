@@ -1524,6 +1524,9 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             if (host.Mos._mosesOpen && host.Mos._mosesPage == 0)
             {
                 host.Mos.ResetNavToStart();
+                // 모세스 세이브는 저장할 때의 단계·행성·성계를 담는다(0x10101e20(−1) → 0x100f57c0(−1)) — 전에는 불러오면 늘 챕터 시작 자리였다(mo-39).
+                if (state.NavAt is [var savedChapter, var savedStep, var savedPlanet, var savedSystem] && host.Mos._mosesChp?.Id == savedChapter)
+                    (host.Mos._mosesStep, host.Mos._mosesPlanet, host.Mos._mosesSystem) = (savedStep, savedPlanet, savedSystem);
                 host.Mos.ShowMosesBackground(host.Mos.MosesSystem()?.Background ?? 70);
             }
             _restoreVersion = SaveVersion;

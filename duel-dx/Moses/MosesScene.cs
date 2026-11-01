@@ -393,6 +393,9 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
 
     internal void OpenMoses(ChapterFile? chapter = null)
     {
+        // 전투·필드에서 돌아오면 떠날 때의 항행 자리에 선다(원본 0x100f57c0(−1) 이 레코드에서 +0x2e6a/+0x2e98/+0x2e9a 를 되살린다).
+        var navBefore = (Chapter: _mosesChp?.Id ?? -1, Step: _mosesStep, Planet: _mosesPlanet, System: _mosesSystem, Start: _navStart);
+        bool resumeNav = chapter == null && _mosesNavVisited;
         MosesEasterEggs.Apply(host);   // 켠 이스터에그 깃발(185~187)을 챕터 스크립트가 보기 전에 — 원본은 NEW GAME 이 파트1 세이브에서 넣는다(menu-113)
         // 새 챕터를 열면 꺼진다 — 다만 불러오기가 챕터를 다시 여는 길이면 세이브에 적힌 값으로.
         if (_mosesAltVoiceLoaded) _mosesAltVoice = true;
@@ -455,7 +458,14 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         host.PlayMusicFile(_mosesChp?.Bgm ?? 19, loop: true, gain: 0);
         host.FadeMusic(84, MosesFadeTicks);
         // 주 화면에는 볼 것이 없어 늘 NAVIGATION 부터 눌러야 했다 — 열 때 항행 페이지를 누른 채로 연다(사용자 요청 mo-7, 원본은 주 화면에서 선다).
-        if (_mosesChp != null) MosesGoPage(0, quiet: true);
+        if (_mosesChp == null) return;
+        MosesGoPage(0, quiet: true);
+        // 전에는 전투에서 이긴 길만 자리를 되돌려, 필드를 다녀오면 늘 챕터 시작 자리(샤이닝 스타 = 리치)로 갔다(mo-39). 스크립트 911 이 자리를 바꿨으면 그쪽이 이긴다.
+        if (resumeNav && navBefore.Chapter == _mosesChp.Id && Equals(navBefore.Start, _navStart))
+        {
+            (_mosesStep, _mosesPlanet, _mosesSystem) = (navBefore.Step, navBefore.Planet, navBefore.System);
+            ShowMosesBackground(MosesSystem()?.Background ?? 70);
+        }
     }
 
     /// <summary>아직 안 겪었고 조건이 열린 「자동 발생」 장소가 있으면 거기로 들어간다(<c>0x100fdd40</c>).</summary>
