@@ -69,17 +69,16 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         if (shell.Field.ReofferMissedBranch(-1, () => { host.Part1.Save(host.FlagSt._flags); Open(); })) { _open = false; return; }
         _episodes = Part1Episode.LoadAll();
         var cells = new (int, int)[_episodes.Count];
-        // 때가 같거나 가까운 칸은 줄기마다 때 순서로 아래로 비켜 놓는다 — 전에는 때가 똑같은 칸만 비켜,
-        // 때가 조금 다른 칸의 제목이 겹쳤다(아델라이데 우드빌 · 다카마의 배상, 버그 리포트 #20~#23).
-        int Column(int i) => Math.Clamp(_episodes[i].Line, 0, ColumnX.Length - 1);
-        int[] bottom = [int.MinValue / 2, int.MinValue / 2, int.MinValue / 2];
-        foreach (int i in Enumerable.Range(0, _episodes.Count).OrderBy(i => TimeOf(_episodes[i])).ThenBy(i => i))
+        var taken = new HashSet<(int, int)>();
+        for (int i = 0; i < _episodes.Count; i++)
         {
-            int col = Column(i), y = Math.Max(30 + TimeOf(_episodes[i]) * Step / 20, bottom[col] + CellH + 4);
-            bottom[col] = y;
+            var e = _episodes[i];
+            int col = Math.Clamp(e.Line, 0, ColumnX.Length - 1), y = 30 + TimeOf(e) * Step / 20;
+            while (!taken.Add((col, y))) y += CellH + 4;   // 때가 같은 칸(사략해적 · 호위선단)은 아래로
             cells[i] = (ColumnX[col], y);
         }
         _cells = cells;
+        MarkAlternatives();
         _contentH = cells.Length > 0 ? cells.Max(c => c.Item2) + CellH : 0;
         _bg ??= shell.Field.ReadImage(Background).Px;
         // 이미 이 곡이 돌고 있으면(연대표 안에서 저장 창을 다녀왔을 때 등) 다시 걸지 않는다.
@@ -90,7 +89,34 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         _hover = -1;
     }
 
-    private int MaxScroll => Math.Max(0, _contentH - (BandBottom - BandTop));
+    /// <summary>칸 표시 — 보통 · 안 그림(겹친 칸 가운데 열린 칸에 자리를 내줌) · 「미정」(겹친 칸이 다 닫힘, 묶음에 하나).</summary>
+    private enum Slot { Shown, Hidden, Undecided }
+
+    private Slot[] _slots = [];
+
+    /// <summary>
+    /// 앞 분기에 따라 하나만 열리는 칸은 때가 가까워 자리가 겹친다(아델라이데 우드빌 · 다카마의 배상, 버그 리포트 #20~#23, menu-125).
+    /// 칸 높이 안으로 이어지는 칸을 묶어, 열린 칸이 있으면 닫힌 칸을 감추고, 다 닫혔으면 「미정」 하나만 보인다.
+    /// </summary>
+    private void MarkAlternatives()
+    {
+        _slots = new Slot[_cells.Length];
+        foreach (var column in Enumerable.Range(0, _cells.Length).GroupBy(i => _cells[i].X))
+        {
+            var order = column.OrderBy(i => _cells[i].Y).ToList();
+            for (int from = 0, to; from < order.Count; from = to)
+            {
+                for (to = from + 1; to < order.Count && _cells[order[to]].Y - _cells[order[to - 1]].Y < CellH; to++) { }
+                if (to - from < 2) continue;
+                var group = order.GetRange(from, to - from);
+                bool anyOpen = group.Any(i => Unlocked(_episodes[i]));
+                foreach (int i in group) _slots[i] = anyOpen && Unlocked(_episodes[i]) ? Slot.Shown : Slot.Hidden;
+                if (!anyOpen) _slots[group[0]] = Slot.Undecided;
+            }
+        }
+    }
+
+    private int MaxScroll =>Math.Max(0, _contentH - (BandBottom - BandTop));
 
     internal void Scroll(int notches) => _scroll = Math.Clamp(_scroll + notches * Step, 0, MaxScroll);
 
@@ -111,6 +137,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         if (by < oy + BandTop || by >= oy + BandBottom) return -1;
         for (int i = 0; i < _cells.Length; i++)
         {
+            if (_slots[i] == Slot.Hidden) continue;
             var (x, y) = _cells[i];
             int top = oy + BandTop + y - _scroll - CellH / 2;
             if (bx >= ox + x - CellW / 2 && bx < ox + x + CellW / 2 && by >= top && by < top + CellH) return i;
@@ -162,6 +189,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         else if (hit == ScrollDownHit) Scroll(2);
         else if (hit >= 0 && hit < _episodes.Count)
         {
+            if (_slots[hit] == Slot.Undecided) { host.Toast("미정 — 앞의 분기에 따라 정해집니다"); return; }
             if (!Unlocked(_episodes[hit])) { host.Toast($"{_episodes[hit].Name} — 아직 열리지 않았습니다"); return; }
             // 끝낸 챕터는 다시 못 한다(사용자 요청) — 진행 깃발 · 동료가 이미 다음으로 넘어가 있다.
             if (host.Part1.FinishedChapters.Contains(_episodes[hit].ChapterId)) { host.Toast($"{_episodes[hit].Name} — 이미 끝낸 챕터입니다"); return; }
@@ -195,7 +223,13 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         {
             var (x, cy) = _cells[i];
             int y = oy + BandTop + cy - _scroll;
-            if (y < oy + BandTop || y > oy + BandBottom - 8) continue;
+            if (y < oy + BandTop || y > oy + BandBottom - 8 || _slots[i] == Slot.Hidden) continue;
+            if (_slots[i] == Slot.Undecided)
+            {
+                var (_, uw, uh) = host.UiGetText("미정", 0xFF707070, 12);
+                host.UiText("미정", ox + x - uw / 2, y - uh / 2, 0xFF707070, 12);
+                continue;
+            }
             var e = _episodes[i];
             bool open = Unlocked(e), done = host.Part1.FinishedChapters.Contains(e.ChapterId);
             // 닫힌 칸 · 끝낸 칸은 고를 수 없다 — 상자로 덮지 않고 글자만 옅게(사용자 요청).
