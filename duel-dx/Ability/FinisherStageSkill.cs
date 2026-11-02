@@ -17,13 +17,17 @@ using static DuelDx.GameWindow;
 /// T138 에 1432:0, T140 에 324:1 셋. T112~228 의 4틱마다(30번) 시전자 둘레 2칸(~T148) · 3칸(~T188) · 4칸의 적을 다시 모아 친다 — 3타가 아니다(<c>0x100b15cb</c>).</para>
 /// <para>코메트(work 1528, <c>0x100b0000</c>): 모션 90 뒤 1433:0, t=20 에 혜성 200:0(z+150, 위아래로 흔들리며 248틱) · 215:3 → 215:4, 흔들림 2(250틱), 파편 251 쉰 개가 솟았다가 혜성으로 빨려 든다.
 /// 혜성이 z+600 으로 솟으면(t≈277) 영상 0033 · 0046, 그 뒤 대상마다 한 번 맞는다. 영상 0046 위의 대상 복제는 영상이 전투를 멈춰 옮기지 않았다.</para>
+/// <para>헬 카이트(work 1467, <c>0x10092000</c>, 버그 리포트 #34): 모션 90, 시전자 윤곽의 낱알 5:1 이 50틱 머문 뒤 사방 먼 곳(±(2~7)×256)으로 날아갔다가
+/// 「윤곽 수/4 + 100」틱에 몸으로 돌아오고(389:4), 다 돌아오면 영상 0006. 영상 뒤 32틱 밝게 물든 화면이 걷히며 흔들리고, 25틱 뒤 용 321:0 넷이
+/// 화면 왼쪽 위에서 화면 가운데로 날아들어(앞장선 용은 321:3 으로) 그 자리에 111:0 · 199:0 · 170:0(50틱) → 170:1. 321:3 이 끝나면 시전자 둘레 ±280 × ±200(월드)에
+/// 폭발 180 · 181 · 181 열 개씩(지연 10~34틱, 0 모션 1~4번 → 1 모션) — 50틱 뒤 대상 모두가 맞는다. 낱알 떼 251 · 불씨 뿌리개 292 · 109:6 · 몸 복제는 옮기지 않았다.</para>
 /// 몸 복제의 그리기 칸 17(더하기)은 보통 그리기로 갈음했다.
 /// </remarks>
 internal sealed class FinisherStageSkill(GameWindow host)
 {
-    internal const int BigBangWork = 1593, InfernoWork = 1581, MushinWork = 1530, CometWork = 1528;
+    internal const int BigBangWork = 1593, InfernoWork = 1581, MushinWork = 1530, CometWork = 1528, HellKiteWork = 1467;
 
-    internal static bool Handles(int work) => work is BigBangWork or InfernoWork or MushinWork or CometWork;
+    internal static bool Handles(int work) => work is BigBangWork or InfernoWork or MushinWork or CometWork or HellKiteWork;
 
     /// <summary>핸들러 안에서 같은 대상을 여러 번 치는가.</summary>
     internal static bool HitsRepeatedly(int work) => work == MushinWork;
@@ -35,6 +39,7 @@ internal sealed class FinisherStageSkill(GameWindow host)
         BigBangWork => BigBang(user, col, row, targets, hit),
         InfernoWork => Inferno(user, targets, hit),
         MushinWork => Mushin(user, hit),
+        HellKiteWork => HellKite(w, user, targets, hit),
         _ => Comet(w, user, targets, hit),
     };
 
@@ -276,6 +281,146 @@ internal sealed class FinisherStageSkill(GameWindow host)
 
         host.Cut.Start(w);
         while (host.Cut.Playing) yield return true;
+        foreach (int t in targets) hit(t);
+    }
+
+    /// <summary>
+    /// 헬 카이트(<c>0x10092000</c>) — 전에는 뽑은 표의 「대상 칸」 효과(용 321 · 불길 111 · 199 · 170 · 폭발 180 · 181)가 자기 자리 기술이라 겨눈 칸 = 시전자 칸에
+    /// 한 장씩 겹쳐 떠서, 영상이 끝나자마자 시전자 몸에서 폭발이 터지고 시전자는 시전 모션(90)을 그제야 이어 하며 맞는 것처럼 보였다(버그 리포트 #34).
+    /// 원본 차례대로 — 모션 90 과 낱알 → 영상 → 화면 걷힘 → 용 → 화면 가득 흩어진 폭발 → 50틱 뒤 판정.
+    /// </summary>
+    private IEnumerable<bool> HellKite(WorkData w, UnitState user, List<int> targets, Action<int> hit)
+    {
+        var he = host.HeavenEarthAb;
+        var random = host.Btl._fxRandom;
+        var (ux, uy) = host.Btl.UnitFoot(user);
+        double t0 = host._lastTime;
+        void Log(string text)
+        {
+            if (BattleScene.Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"), $"{host._lastTime:F2} hellkite {text}" + Environment.NewLine);
+        }
+
+        // 단계 0 · 1 — 모션 90(한 번), 389:1 · 320:1. 윤곽 낱알: 원본은 시전자 그림의 윤곽점마다 5:1 을 만든다(0x1000ce10). 여기서는 몸 둘레 타원 위 150 점.
+        double motionEnd = t0 + he.PlayRawMotion(user, 90, loop: false);
+        Sound(389, 1, t0 + Tick(1));
+        Sound(320, 1, t0);
+        const int Points = 150;
+        int back = Points / 4 + 100;                      // 돌아오기 시작하는 틱(0x100c3a80) — 389:4 도 이때 울린다
+        Sound(389, 4, t0 + Tick(back));
+        var motes = new List<(int Appear, List<(double X, double Y)> Path)>();
+        for (int i = 0; i < Points; i++)
+        {
+            double a = 2 * Math.PI * i / Points;
+            (double X, double Y) home = (ux + 14 * Math.Cos(a), uy - 36 + 36 * Math.Sin(a));
+            int sx = random.Next(2) == 0 ? -1 : 1, sy = random.Next(2) == 0 ? -1 : 1;
+            (double X, double Y) far = (home.X + sx * (random.Next(6) + 2) * 256.0, home.Y + sy * (random.Next(6) + 2) * 256.0 * WorldY);
+            int appear = random.Next(50);
+            var path = new List<(double X, double Y)>();
+            double x = home.X, y = home.Y, speed = 1;
+            for (int t = appear; t < back; t++)
+            {
+                path.Add((x, y));
+                if (t < appear + 50) continue;            // 50틱 머문 뒤 떠난다(+0x78 의 +0x24 = 지연 + 50)
+                (x, y, speed) = Step(x, y, far, speed);
+            }
+            for (int guard = 0; guard < 200; guard++)
+            {
+                path.Add((x, y));
+                if (Math.Abs(x - home.X) < 0.5 && Math.Abs(y - home.Y) < 0.5) break;
+                (x, y, speed) = Step(x, y, home, speed);
+            }
+            motes.Add((appear, path));
+        }
+        static (double X, double Y, double Speed) Step(double x, double y, (double X, double Y) to, double speed)
+        {
+            double dx = to.X - x, dy = to.Y - y, far = Math.Sqrt(dx * dx + dy * dy);
+            if (far <= speed) return (to.X, to.Y, Math.Min(100, speed * 1.1));
+            return (x + dx / far * speed, y + dy / far * speed, Math.Min(100, speed * 1.1));
+        }
+        double motesEnd = t0 + Tick(motes.Max(m => m.Appear + m.Path.Count));
+        host.StagingAb._stageDraws.Add(() =>
+        {
+            if (host._lastTime >= motesEnd) return false;
+            int t = (int)((host._lastTime - t0) * TicksPerSecond);
+            foreach (var (appear, path) in motes)
+            {
+                int age = t - appear;
+                if (age < 0 || age >= path.Count) continue;
+                host.DrawUi(5, 1, age, (int)path[age].X, (int)path[age].Y, UiBlend.Add, loop: true);
+            }
+            return true;
+        });
+        foreach (bool _ in Wait(motionEnd)) yield return true;
+        user.PlayAction(ObsMotionTable.ActionStand, 0);
+        foreach (bool _ in Wait(motesEnd)) yield return true;
+
+        // 단계 2 · 3 — 영상 0006. 끝나면 389:3.
+        Log("movie");
+        host.Cut.Start(w);
+        while (host.Cut.Playing) yield return true;
+        Sound(389, 3, host._lastTime);
+
+        // 단계 4 — 32틱 동안 밝게 물든 화면(방식 1, 세기 32 − n)이 걷히고 가볍게 흔들린다. 단계 5 — 25틱.
+        double t4 = host._lastTime;
+        he._shakes.Add((t4, t4 + Tick(32), 1, false));
+        for (int n = 1; n <= 32; n++)
+        {
+            host.Btl.PlayTintFlash(1, 32 - n, 1);
+            foreach (bool _ in Wait(t4 + Tick(n))) yield return true;
+        }
+        foreach (bool _ in Wait(t4 + Tick(32 + 25))) yield return true;
+
+        // 단계 6 — 용 321:0 넷이 화면 왼쪽 위(원본 화면 (0,0) 언저리)에서 화면 가운데로 빠르기 50(최대 70)으로 날아들어 닿으면 사라지고,
+        // 앞장선 용은 화면 가운데에서 321:3(0x100c3b80)으로 바뀐다. 그 자리에 불길 111:0 · 199:0 · 170:0(50틱) → 170:1.
+        double t6 = host._lastTime;
+        Log("dragons");
+        Sound(389, 1, t6);
+        (double X, double Y) corner = (host._camX, host._camY), centre = (host._camX + host.ViewWidth / 2.0, host._camY + host.ViewHeight / 2.0);
+        int arrive = 0;
+        foreach (var (dx, dy) in new[] { (0, 0), (-93, -80), (-59, -10), (-20, -56) })
+        {
+            (double X, double Y) from = (corner.X + dx, corner.Y + dy), to = (centre.X + dx, centre.Y + dy);
+            double dist = Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2));
+            int fly = Math.Max(1, (int)Math.Ceiling(dist / 50));
+            if (dx == 0) arrive = fly;
+            host.StagingAb._stageDraws.Add(() =>
+            {
+                double age = (host._lastTime - t6) * TicksPerSecond;
+                if (age >= fly) return false;
+                double f = age / fly;
+                host.DrawUi(321, 0, (int)age, (int)(from.X + (to.X - from.X) * f), (int)(from.Y + (to.Y - from.Y) * f), UiBlend.Alpha, loop: true);
+                return true;
+            });
+        }
+        double fire = t6 + Tick(arrive);
+        int swoop = Math.Max(1, host.UiFor(321)?.MotionLength(3) ?? 16);
+        Fx(321, 3, fire, centre.X, centre.Y);
+        Sound(389, 2, fire);
+        Fx(111, 0, fire, centre.X, centre.Y);
+        Fx(199, 0, fire, centre.X, centre.Y);
+        Fx(170, 0, fire, centre.X, centre.Y, 50);
+        Fx(170, 1, fire + Tick(50), centre.X, centre.Y);
+
+        // 단계 7 — 용(321:3)이 끝나면 화면이 흔들리고, 시전자 둘레 ±280 × ±200(월드, 40 간격)에 폭발 서른 개가 10~34틱 늦게 터진다(0 모션 1~4번 → 1 모션).
+        double t7 = fire + Tick(swoop);
+        foreach (bool _ in Wait(t7)) yield return true;
+        Log($"explosions (dragons arrive +{arrive}, swoop {swoop} ticks)");
+        he._shakes.Add((t7, t7 + Tick(10), 4, false));
+        foreach (int obs in new[] { 180, 181, 181 })
+            for (int k = 0; k < 10; k++)
+            {
+                int rx = random.Next(15), ry = random.Next(11), loops = random.Next(4) + 1;
+                double x = ux + (rx * 5 - 35) * 8, y = uy + (ry * 5 - 25) * 8 * WorldY, start = t7 + Tick(rx + ry + 10);
+                double first = Math.Max(1, host.UiFor(obs)?.MotionLength(0) ?? 1) * loops;
+                Fx(obs, 0, start, x, y, first);
+                Sound(obs, 0, start);
+                Fx(obs, 1, start + Tick(first), x, y);
+            }
+
+        // 단계 8 — 50틱 뒤 범위 안 모두에게 판정(1001).
+        foreach (bool _ in Wait(t7 + Tick(50))) yield return true;
+        Log($"hit {targets.Count}");
         foreach (int t in targets) hit(t);
     }
 }
