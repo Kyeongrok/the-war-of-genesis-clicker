@@ -540,6 +540,8 @@ internal sealed unsafe partial class BattleScene
             // 표의 지연 54 는 116 이 끝나는 때(모으기 시작 기준)라 돌진 기준으로는 0 이다.
             if (w.AbilityId == ByeonchamAbility && e.Obs == ByeonchamWingObs) continue;
             if (w.AbilityId == ByeonchamAbility && e.Obs == ByeonchamDashSoundObs) e = e with { Delay = 0 };
+            // 소닉 블레이드 — 검기 43:0 은 SpecialHitsSkill 이 줄마다 날린다. 표의 한 장은 시전자 발에 제자리로 떠, 날지 않는 검기가 하나 더 보였다.
+            if (w.AbilityId == SpecialHitsSkill.SonicBladeAbility && e.Obs == SpecialHitsSkill.SonicBladeObs) continue;
             // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.

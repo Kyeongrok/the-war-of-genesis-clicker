@@ -11,6 +11,9 @@ internal sealed unsafe class SpecialHitsSkill(GameWindow host)
 {
     internal const int SonicBladeAbility = 20, CrazyShotAbility = 126, HellLaserAbility = 172;
 
+    /// <summary>소닉 블레이드의 검기 그림(Obs 43 모션 0).</summary>
+    internal const int SonicBladeObs = 43;
+
     internal const int ThunderStormAbility = 75;
 
     internal bool HasSpecialHit(WorkData w) => w.AbilityId is SonicBladeAbility or CrazyShotAbility or ThunderStormAbility;
@@ -41,15 +44,28 @@ internal sealed unsafe class SpecialHitsSkill(GameWindow host)
                 // 검기 43:0 — 줄마다 하나가 틱당 20 으로 날아가 처음 만난 적에서 사라진다(0x1008b018~). 전에는 시전자 발에 제자리 한 장이 떴다.
                 double fromX = ax + lane * sx * 40, fromY = ay + lane * sy * 40 * 0.8;
                 if (stop > 0)
-                    host.Btl._shots.Add((43, 0, host._lastTime, fromX, fromY, fromX + fx * 40 * stop, fromY + fy * 40 * stop * 0.8, 20, 1, 1, 0, 0, a.Facing == Facing.Right));
+                    host.Btl._shots.Add((SonicBladeObs, 0, host._lastTime, fromX, fromY, fromX + fx * 40 * stop, fromY + fy * 40 * stop * 0.8, 20, 1, 1, 0, 0, a.Facing == Facing.Right));
             }
+            // 검기 셋은 따로 난다 — 줄마다 제 검기가 닿는 틱(틱마다 반 칸)에 그 적을 치고 밀어낸다. 밀리는 것도 함께 간다.
+            // 전에는 한 적이 다 밀려난 뒤에야 다음 줄의 적이 맞아, 같이 날아간 검기가 지나간 뒤 한참 있다가 차례로 맞고 밀렸다(버그 리포트 #34).
             double start = host._lastTime;
-            foreach (var (t, k) in found.OrderBy(f => f.K))
+            var pushes = new List<IEnumerator<bool>>();
+            var arrivals = found.OrderBy(f => f.K).ToList();
+            int next = 0;
+            if (BattleScene.Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"{host._lastTime:F2} sonic blade {w.Id}: blades out, reach {reach}, foes [{string.Join(' ', arrivals.Select(f => $"{f.Unit.ChrCode}@{f.K}"))}]" + Environment.NewLine);
+            while (next < arrivals.Count || pushes.Count > 0)
             {
-                while (host._lastTime < start + k * 2 / TicksPerSecond) yield return true;   // 검기는 틱마다 반 칸
-                host.Btl.ApplyWork(a, hitWork, t, dying);
-                if (!dying.Contains(t) && t.Alive)
-                    foreach (bool _ in host.KnockbackAb.KnockbackRoutine(a, w, t, pushCells: reach - k)) yield return true;
+                for (; next < arrivals.Count && host._lastTime >= start + arrivals[next].K * 2 / TicksPerSecond; next++)
+                {
+                    var (t, k) = arrivals[next];
+                    host.Btl.ApplyWork(a, hitWork, t, dying);
+                    if (!dying.Contains(t) && t.Alive)
+                        pushes.Add(host.KnockbackAb.KnockbackRoutine(a, w, t, pushCells: reach - k).GetEnumerator());
+                }
+                pushes.RemoveAll(p => !p.MoveNext());
+                yield return true;
             }
             yield break;
         }
