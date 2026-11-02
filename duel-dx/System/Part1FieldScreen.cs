@@ -143,6 +143,9 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     private double[] _motionStart = [];
     private bool[] _motionOnce = [];
 
+    /// <summary>300 이 건 모션의 소리 키를 지난 틀에 어디까지 셌나(모션 틱, 건 직후 −1) — <see cref="StepMotionSounds"/>.</summary>
+    private int[] _soundTick = [];
+
     /// <summary>301 이 멈춘 그림 틱(멈추지 않았으면 null) — 300 이 새 모션을 걸면 푼다.</summary>
     private int?[] _frozen = [];
 
@@ -171,6 +174,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _motionStart[n] = host._lastTime;
         _motionOnce[n] = !loop;
         _frozen[n] = null;
+        _soundTick[n] = -1;
         if (loop) return 0;
         return (host.UiFor(SpriteObs(n))?.ShownLength(motion) ?? 0) / GameWindow.TicksPerSecond;
     }
@@ -180,7 +184,44 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         if (obs <= 0) return 0;
         int len = Math.Max(1, host.UiFor(Part1Game.ObsBase + obs)?.ShownLength(motion) ?? 1);
         _effects.Add(new Effect(Part1Game.ObsBase + obs, motion, layer, x, y, host._lastTime, len));
+        // 효과 그림 모션(과 자식)에 박힌 소리 키도 그 틱에 낸다 — 원본 Obs 가 모션을 돌며 소리 키(종류 1)를 튼다(0x100e5410). 전에는 그림만 그려 조용했다(버그 리포트 #35).
+        if (!Script.Skipping && !host.Tlk._talkSkip && host.UiFor(Part1Game.ObsBase + obs)?.Clip(motion) is { } clip)
+            foreach (var (start, sound) in ClipSounds(clip)) host._pendingSounds.Add((host._lastTime + start / GameWindow.TicksPerSecond, sound));
         return len / GameWindow.TicksPerSecond;
+    }
+
+    /// <summary>모션(과 자식 Obs 모션)의 소리 키 — (모션 틱, Snd 번호). 파트1 그림의 소리 · 자식 번호는 읽을 때 이미 <see cref="Part1Game.ObsBase"/> 위다.</summary>
+    private IEnumerable<(int Start, int Sound)> ClipSounds(ObsMotionClip clip)
+    {
+        foreach (var s in clip.Sounds) yield return s;
+        foreach (var child in clip.Children)
+            if (host.UiFor(child.Obs)?.Clip(child.Motion) is { } c)
+                foreach (var (s, sound) in c.Sounds) yield return (child.Start + s, sound);
+    }
+
+    /// <summary>
+    /// 행동 300 이 인물에 건 모션의 소리 키를 그 틱에 낸다 — 칼 휘두르는 소리 같은 것이 모션에 박혀 있다(「인페르노의 음모」 졸병 베기, 버그 리포트 #35).
+    /// 원본은 Obs 가 모션을 돌며 소리 키(종류 1)를 틀어(0x100e5410) 필드 장면에서도 났는데, 리메이크는 그림만 돌려 조용했다.
+    /// 되풀이 모션은 한 바퀴마다(<see cref="GameWindow.StepWalkSounds"/> 와 같은 셈), 한 번 도는 모션은 끝 그림에 선 뒤로는 안 낸다. 301 로 멈추면 그 자리에서 선다.
+    /// </summary>
+    private void StepMotionSounds()
+    {
+        for (int n = 0; n < _motion.Length; n++)
+        {
+            if (_motion[n] is not { } m) continue;
+            int tick = MotionTick(n), prev = _soundTick[n];
+            if (tick <= prev) { if (tick < prev) _soundTick[n] = tick; continue; }
+            _soundTick[n] = tick;
+            if (Script.Skipping || host.Tlk._talkSkip || host.UiFor(SpriteObs(n)) is not { } sprite || sprite.Clip(m.Motion) is not { } clip) continue;
+            int length = sprite.ShownLength(m.Motion);
+            foreach (var (start, sound) in ClipSounds(clip))
+            {
+                bool due = _motionOnce[n] || length <= 0
+                    ? prev < start && start <= tick
+                    : start + (long)((int)Math.Floor((prev - start) / (double)length) + 1) * length <= tick;   // prev < start + k·바퀴 ≤ tick 인 k 가 있나
+                if (due) host.Play(sound);
+            }
+        }
     }
 
     /// <summary>행동 304 로 숨긴 인물.</summary>
@@ -252,6 +293,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _motionStart = new double[field.Sprites.Count];
         _motionOnce = new bool[field.Sprites.Count];
         _frozen = new int?[field.Sprites.Count];
+        _soundTick = new int[field.Sprites.Count];
         _effects.Clear();
         _hidden = new bool[field.Sprites.Count];
         _flip = new bool[field.Sprites.Count];
@@ -405,6 +447,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     internal void Draw()
     {
         Script.Pump();
+        StepMotionSounds();
         PumpBubble();
         var (ox, oy) = host.Mos.MosesOrigin();
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
