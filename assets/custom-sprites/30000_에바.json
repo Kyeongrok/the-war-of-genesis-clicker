@@ -104,7 +104,7 @@
       "ColX": 0,
       "Path": "src/에바/ready.png",
       "Action": 5,
-      "Rows": "back:0:498,side:498:996,front:996:1494",
+      "Rows": "back:0:499,side:499:998,front:998:1497",
       "Anchor": "foot"
     },
     {
@@ -147,7 +147,7 @@
       "Anchor": "foot"
     },
     {
-      "ColW": 338,
+      "ColW": 328,
       "Cols": 8,
       "Sound": "",
       "Ticks": 5,
@@ -156,7 +156,7 @@
       "ColX": 0,
       "Path": "src/에바/charge.png",
       "Action": 7,
-      "Rows": "back:0:582,side:582:1164,front:1164:1746",
+      "Rows": "back:0:568,side:568:1136,front:1136:1704",
       "Anchor": "foot"
     }
   ]

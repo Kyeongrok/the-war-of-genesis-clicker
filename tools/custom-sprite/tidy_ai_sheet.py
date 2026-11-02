@@ -19,18 +19,28 @@ from scipy import ndimage
 MAGENTA = np.array([255, 0, 255])
 
 
+def sparkle_box(h: int, w: int):
+    """Gemini 가 그림마다 찍는 반짝이 자리 — 늘 오른쪽 아래에서 112픽셀쯤 안쪽, 가로세로 100픽셀 남짓.
+    반투명이라 옷 위에 겹치면 지울 수 없다(둘레 색으로 메우면 외곽선까지 뭉개졌다). 그래서 거기 걸친 칸은 표시해 두고 안 쓴다."""
+    return h - 175, w - 175, h - 45, w - 45
+
+
 def figure_mask(img: np.ndarray) -> np.ndarray:
     rgb = img[..., :3].astype(int)
-    far = np.sqrt(((rgb - MAGENTA) ** 2).sum(-1)) > 110
+    # 바탕색은 시트 가장자리 픽셀의 가운데 값 — 「#FF00FF」 라고 해도 진한 자주(B0109A 따위)로 그리는 일이 있다
+    edge = np.concatenate([rgb[:4].reshape(-1, 3), rgb[-4:].reshape(-1, 3), rgb[:, :4].reshape(-1, 3), rgb[:, -4:].reshape(-1, 3)])
+    back = np.median(edge, axis=0)
+    far = np.sqrt(((rgb - back) ** 2).sum(-1)) > 90
     if img.shape[-1] == 4:
         far &= img[..., 3] > 0
-    # Gemini 가 오른쪽 아래 구석에 찍는 연분홍 반짝이 — 은빛 칼(회색)과 달리 R · B 가 G 보다 뚜렷이 크다
-    h, w = far.shape
-    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-    pale_pink = (r > 200) & (b > 200) & (r - g > 25) & (b - g > 25)
-    corner = np.zeros_like(far)
-    corner[int(h * 0.88):, int(w * 0.88):] = True
-    far &= ~(pale_pink & corner)
+    # 바탕 위에 홀로 찍힌 반짝이는 지운다
+    y0, x0, y1, x1 = sparkle_box(*far.shape)
+    lone = far.copy()
+    lone[y0:y1, x0:x1] = False
+    labels, n = ndimage.label(far)
+    inside = set(np.unique(labels[y0:y1, x0:x1])) - set(np.unique(labels[lone])) - {0}
+    if inside:
+        far &= ~np.isin(labels, list(inside))
     return far
 
 
@@ -91,8 +101,11 @@ def main():
         img = np.array(Image.open(path).convert("RGBA"))
         rows, labels = find_cells(figure_mask(img))
         sheets.append((img, labels, rows))
+        y0, x0, y1, x1 = sparkle_box(*img.shape[:2])
         for i, r in enumerate(rows):
-            print(f"{k}/줄 {i}: 칸 {len(r)} — " + ", ".join(f"{c[2]-c[0]}x{c[3]-c[1]}" for c in r))
+            # ★ = 반짝이가 겹친 칸(쓰지 말 것)
+            print(f"{k}/줄 {i}: 칸 {len(r)} — " + ", ".join(
+                f"{c[2]-c[0]}x{c[3]-c[1]}" + ("★" if np.isin(labels[y0:y1, x0:x1], c[5]).any() else "") for c in r))
     if a.dry:
         return
 
