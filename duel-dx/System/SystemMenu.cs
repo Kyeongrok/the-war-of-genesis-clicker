@@ -867,6 +867,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                     string? SceneTitle = null,
                                     int[]? Part1Riders = null,     // 파트1 탈것 짝마다 (탈것 자리, 탄 이 자리, 무리 탈것 1/0) — 원본 유닛 기록의 +0x1cc · +0x1d0 · +0x1c0
                                     int[]? Part1LostMounts = null,
+                                    int? Difficulty = null,        // 저장할 때의 파트2 난이도 — 불러올 때 지금 난이도와 다르면 적 HP 를 새 최대치에 비례로 옮긴다(menu-127). 옛 세이브는 null(지금 난이도로 본다)
                                     int[]? ChapterResume = null);   // 필드 · 전투로 떠난 챕터 사건의 남은 행동 자리(챕터, 사건, 줄) — 돌아오면 잇는다(FieldScene._chapterResume, mo-32)   // 이 판에서 쓰러진 무리 탈것(Chr) — 전투가 끝날 때 무리에서 뺀다(SettlePart1Losses)    // 장면 이름 글 그대로 — 파트1 이름 번호(64000~)는 켤 때마다 새로 매겨져 SceneText 로는 나중에 못 찾는다(사용자 보고: 불러오기 목록에 이름이 안 뜸)
                                                                    // ↑ Part1: 파트1 전투면 파트1 진행 전부(Part1Progress.ToJson) — 불러오면 되살리고 전투가 끝나면 그 챕터로              // 사건(행동 512)이 바꾼 전투 곡 — 원본 전투 세이브는 곡 번호(CBattle+0x3c64)를 싣는다(0x1006f051 · 0x1006f42e, ba-22)
 
@@ -1147,7 +1148,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 SceneTitle: host._scene.IsPart1 ? host._scene.Title : null,
                 Part1Riders: battleSave && host._scene.IsPart1 ? host.Btl.SaveRiders() : null,
                 Part1LostMounts: battleSave && host._scene.IsPart1 ? [.. host.Btl._part1LostMounts] : null,
-                ChapterResume: host.Fld._chapterResume is var (rc, re, rp) ? [rc, re, rp] : null);
+                ChapterResume: host.Fld._chapterResume is var (rc, re, rp) ? [rc, re, rp] : null,
+                Difficulty: host.Btl._difficulty);
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, JsonSerializer.Serialize(state, SaveJson));
@@ -1415,11 +1417,15 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
             if (s.LegionPower is { } power) u.LegionPowerPercent = power;
         }
         // 최대치는 군단 대장·보정을 다 놓은 뒤에 센다 — 먼저 세면 HP 가 틀린 최대치로 잘린다.
+        // 적 최대 HP 는 저장할 때의 난이도로 먼저 센다 — 지금 난이도로 세면 더 쉬운 쪽에서 불러올 때 HP 가 잘렸다. 그 뒤 지금 난이도로 옮긴다(menu-127).
+        int nowDifficulty = host.Btl._difficulty;
+        if (state.Difficulty is { } savedDifficulty) host.Btl._difficulty = Math.Clamp(savedDifficulty, 0, BattleScene.DifficultyChoices.Length - 1);
         foreach (var (u, s) in restored)
         {
             (u.Hp, u.Tp, u.Soul) = (s.Hp, s.Tp, s.Soul);
             host.StatusScr.RefreshUnitStats(u);
         }
+        if (host.Btl._difficulty != nowDifficulty) { host.Btl._difficulty = nowDifficulty; host.Btl.ApplyDifficultyToField(); }
         host.Btl._eventFoundA = Mapped(state.FoundA) is >= 0 and var foundA ? host._units[foundA] : null;
         host.Btl._eventFoundB = Mapped(state.FoundB) is >= 0 and var foundB ? host._units[foundB] : null;
         RestoreObjects(state);

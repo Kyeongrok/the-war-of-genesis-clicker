@@ -127,9 +127,35 @@ internal sealed unsafe partial class BattleScene
         _difficulty = id - MenuDifficultyBase;
         for (int i = 0; i < DifficultyChoices.Length; i++)
             Win32.CheckMenuItem(host._menuBar, (uint)(MenuDifficultyBase + i), Win32.MF_BYCOMMAND | (i == _difficulty ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
-        // 피해 배율과 AI 는 바로, 최대 HP 는 다음 전투부터 바뀐다(싸우는 도중에 적 HP 가 튀지 않게).
-        host.Toast($"난이도: {DifficultyChoices[_difficulty].Name} — 적 최대 HP 는 다음 전투부터 바뀝니다");
+        // 피해 배율과 AI 는 원래 바로 걸렸고, 최대 HP 도 판에 선 적에게 바로 건다(menu-127 — 전에는 다음 전투부터였다).
+        ApplyDifficultyToField();
+        host.Toast($"난이도: {DifficultyChoices[_difficulty].Name}");
         host.SaveSettings();
         return true;
+    }
+
+    /// <summary>
+    /// 판에 선 적의 최대 HP 를 지금 난이도로 다시 세고, 지금 HP 는 같은 비율로 옮긴다(menu-127) — 반쯤 깎인 적은 새 최대치의 반쯤으로 남는다.
+    /// 쓰러진 적(HP 0)은 그대로, 산 적은 1 밑으로 안 내린다. 파트1 판은 파트2 난이도를 안 걸어서(<see cref="Part2Difficulty"/>) 바뀌는 것이 없다.
+    /// 세이브 불러오기도 이 길로 저장 때 난이도에서 지금 난이도로 옮긴다(SystemMenu.LoadBattleFrom).
+    /// </summary>
+    internal void ApplyDifficultyToField()
+    {
+        if (host._db == null || host._scene.IsPart1) return;
+        var units = host._units;
+        var before = new (int Hp, int MaxHp)[units.Length];
+        for (int i = 0; i < units.Length; i++) before[i] = (units[i].Hp, units[i].MaxHp);
+        for (int i = 0; i < units.Length; i++)
+            if (units[i].Data != null && IsFoeSide(units[i])) host.StatusScr.RefreshUnitStats(units[i]);
+        for (int i = 0; i < units.Length; i++)
+        {
+            var u = units[i];
+            var (hp, max) = before[i];
+            if (u.Data == null || !IsFoeSide(u) || max <= 0 || u.MaxHp == max) continue;
+            u.Hp = hp <= 0 ? hp : Math.Clamp((int)Math.Round((double)hp * u.MaxHp / max), 1, u.MaxHp);
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"difficulty {_difficulty}: unit {i} Chr {u.ChrCode} HP {hp}/{max} → {u.Hp}/{u.MaxHp}" + Environment.NewLine);
+        }
     }
 }
