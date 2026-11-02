@@ -14,14 +14,17 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell)
 {
-    /// <summary>오른쪽 단추 다섯 — 가운데 x 570(지도 화면 오른끝 − 70), 가운데 y 와 글(원본 0x100b1c30, id 0x64~0x68).</summary>
-    internal static readonly (int Y, string Name)[] Buttons = [(30, "이  동"), (65, "진  입"), (100, "상  태"), (135, "교  환"), (185, "턴종료")];
+    /// <summary>
+    /// 오른쪽 단추 — 가운데 x 570(지도 화면 오른끝 − 70), 가운데 y 와 글. 앞 다섯은 원본(0x100b1c30, id 0x64~0x68), 「메  뉴」는 리메이크가 더한 것 —
+    /// 저장 · 불러오기가 든 Esc 메뉴가 화면 어디에도 안 보여 지도에서는 저장이 안 되는 줄 알았다(사용자 요청 menu-126).
+    /// </summary>
+    internal static readonly (int Y, string Name)[] Buttons = [(30, "이  동"), (65, "진  입"), (100, "상  태"), (135, "교  환"), (185, "턴종료"), (220, "메  뉴")];
 
     internal const int ButtonX = 570;
 
     /// <summary>단추 가운데 x — 원본 640 화면의 570 을 지도 화면 오른끝에 붙인다(넓은 창에서도 오른위).</summary>
     private static int ButtonLeft(int ox, int w) => ox + w - (MosesScene.MosesW - ButtonX);
-    internal const int ButtonMove = 0, ButtonEnter = 1, ButtonStatus = 2, ButtonExchange = 3, ButtonEndTurn = 4, ButtonHit = 1000;
+    internal const int ButtonMove = 0, ButtonEnter = 1, ButtonStatus = 2, ButtonExchange = 3, ButtonEndTurn = 4, ButtonMenu = 5, ButtonHit = 1000;
 
     /// <summary>「N 팀」 꼬리표(id 0x12d + 팀) · 이동 고르기 장소 · Esc 메뉴 줄 · 마을 장소(누르면 상점 정보).</summary>
     internal const int TeamHit = 3000, TargetHit = 4000, MenuHit = 5000, TownHit = 6000;
@@ -946,6 +949,13 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         Back();
     }
 
+    /// <summary>Esc 메뉴를 연다(이동 고르기는 거둔다) — 「메  뉴」 단추 · 시스템 메뉴 키.</summary>
+    private void OpenMenu()
+    {
+        _mode = Mode.Menu;
+        _hover = -1;
+    }
+
     private void Back()
     {
         if (_status is { _open: true }) { if (!_status.ClosePanel()) _status.Close(); }   // 얼굴로 연 상태 패널이 있으면 그것만
@@ -969,6 +979,21 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         if (_cover != null || _transition != null) return;
         if (Picking) { if (key is Win32.VK_RETURN or Win32.VK_SPACE) PressPick(Math.Max(0, _hover - PickHit)); return; }   // 고르기 창은 닫을 수 없다(짚은 것 없으면 첫 후보)
         if (key == Win32.VK_ESCAPE) { Back(); return; }
+        // 시스템 메뉴 키(X · 패드 시작 단추) — 전투에서처럼 저장 · 불러오기가 든 메뉴를 열고 닫는다(menu-126). 전에는 지도에서 아무 일도 없었다.
+        if (host._keys.ActionFor(key) == KeyAction.System && !WindowOpen)
+        {
+            if (_mode == Mode.Menu) _mode = Mode.Map;
+            else OpenMenu();
+            return;
+        }
+        if (_mode == Mode.Menu)
+        {
+            // 메뉴는 위 · 아래로 줄을 고르고 Enter · Space 로 누른다 — 마우스 없이도 「저장」에 닿게.
+            int n = MenuItems.Length, at = _hover - MenuHit;
+            if (key is Win32.VK_UP or Win32.VK_DOWN) _hover = MenuHit + (at >= 0 && at < n ? (at + (key == Win32.VK_UP ? n - 1 : 1)) % n : key == Win32.VK_UP ? n - 1 : 0);
+            else if (key is Win32.VK_RETURN or Win32.VK_SPACE && at >= 0 && at < n) Press(_hover);
+            return;
+        }
         if (_status is { _open: true } && _status.OnKey(key)) return;   // 상태 패널: ←/→ 로 사람 바꾸기
         if (WindowOpen) return;
         switch (key)
@@ -991,6 +1016,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             case ButtonHit + ButtonStatus: PlayPress(); Status.Open(); break;
             case ButtonHit + ButtonExchange: if (CanExchange()) { PlayPress(); Exchange.Open(); } break;
             case ButtonHit + ButtonEndTurn: PlayPress(); EndMapTurn(); break;
+            case ButtonHit + ButtonMenu: PlayPress(); OpenMenu(); break;
             case >= TeamHit and < TeamHit + 8: PlayPress(); SelectTeam(hit - TeamHit); break;
             case >= TownHit and < TownHit + 1000 when hit - TownHit < chapter.Places.Count && chapter.Places[hit - TownHit] is { IsTown: true } town:
                 PlayPress();

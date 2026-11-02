@@ -156,8 +156,14 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal void OnKey(int key)
     {
-        if (key == Win32.VK_ESCAPE) { _menu = !_menu; _hover = -1; }   // Esc — 저장 · 불러오기 메뉴(다시 누르면 닫는다)
-        else if (_menu) { if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= MenuHit) Press(_hover); }
+        // Esc · 시스템 메뉴 키(X · 패드 시작 단추, menu-126) — 저장 · 불러오기 메뉴(다시 누르면 닫는다)
+        if (key == Win32.VK_ESCAPE || host._keys.ActionFor(key) == KeyAction.System) { _menu = !_menu; _hover = -1; }
+        else if (_menu)
+        {
+            int n = MenuItems.Length, at = _hover - MenuHit;
+            if (key is Win32.VK_UP or Win32.VK_DOWN) _hover = MenuHit + (at >= 0 && at < n ? (at + (key == Win32.VK_UP ? n - 1 : 1)) % n : key == Win32.VK_UP ? n - 1 : 0);
+            else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= MenuHit) Press(_hover);
+        }
         else if (key == Win32.VK_UP) Scroll(-1);
         else if (key == Win32.VK_DOWN) Scroll(1);
         else if (key is Win32.VK_RETURN or Win32.VK_SPACE && _hover >= 0) Press(_hover);
