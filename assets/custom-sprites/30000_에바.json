@@ -80,6 +80,84 @@
       "Action": 14,
       "Rows": "back:20:227",
       "Anchor": "foot"
+    },
+    {
+      "ColW": 538,
+      "Cols": 4,
+      "Sound": "",
+      "Ticks": 4,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/hit.png",
+      "Action": 2,
+      "Rows": "back:0:624,side:624:1248,front:1248:1872",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 435,
+      "Cols": 6,
+      "Sound": "",
+      "Ticks": 3,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/ready.png",
+      "Action": 5,
+      "Rows": "back:0:498,side:498:996,front:996:1494",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 527,
+      "Cols": 5,
+      "Sound": "",
+      "Ticks": 3,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/recover.png",
+      "Action": 24,
+      "Rows": "back:0:596,side:596:1192,front:1192:1788",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 456,
+      "Cols": 4,
+      "Sound": "",
+      "Ticks": 3,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/cast.png",
+      "Action": 6,
+      "Rows": "back:0:598,side:598:1196,front:1196:1794",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 514,
+      "Cols": 4,
+      "Sound": "",
+      "Ticks": 3,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/release.png",
+      "Action": 15,
+      "Rows": "back:0:595,side:595:1190,front:1190:1785",
+      "Anchor": "foot"
+    },
+    {
+      "ColW": 338,
+      "Cols": 8,
+      "Sound": "",
+      "Ticks": 5,
+      "Hit": "",
+      "Background": "key=ff00ff",
+      "ColX": 0,
+      "Path": "src/에바/charge.png",
+      "Action": 7,
+      "Rows": "back:0:582,side:582:1164,front:1164:1746",
+      "Anchor": "foot"
     }
   ]
 }
