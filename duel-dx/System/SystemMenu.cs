@@ -822,6 +822,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 VoiceSet = k.VoiceSet ?? baseData.VoiceSet,     // 캐릭터 에디터 「외형」이 목소리도 바꾼다 — 옛 세이브에는 칸이 없다
             };
             if (trustStats) c = c with { Lp = k.Lp, Psy = k.Psy, Tp = k.Tp, Ctp = k.Ctp, Dep = k.Dep, Dex = k.Dex };
+            // 고치기 전의 레벨 맞추기(캐릭터 에디터 레벨 단추 · 두 번째 805)가 자란 TP 를 지운 세이브 — TP + CTP 가 처음 합보다 모자라면 돌려준다(fg-116, 제보 #33).
+            if (trustStats && baseData.Code < Part1Game.ChrBase && host._db is { } db) c = db.RestoreTpPool(c);
         }
         if (regrow && (s.Char == null || !trustStats) && host._db?.Character(c.Code) is { } b)
         {

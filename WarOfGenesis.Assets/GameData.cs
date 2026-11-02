@@ -852,7 +852,12 @@ public sealed class GameDatabase
           : level < 60 ? S(1, k) * v * 30 / 5 / 100 + S(2, k) * (level - 30) * v / 5 / 100
                        : S(1, k) * v * 30 / 5 / 100 + S(2, k) * v * 30 / 5 / 100 + S(3, k) * (level - 60) * v / 2 / 100;
         // 성장 색인 6 LP · 7 TP · 9 PSY · 10 DEP · 11 DEX(LevelUp 과 같다)
-        int dTp = D(7, b.Tp), tp = b.Tp + dTp, ctp = c.Ctp - dTp;
+        // TP 도 다른 능력치처럼 기본값에서 다시 세므로, 앞서 CTP 에서 옮겨 온 TP(지금 TP − 기본 TP)를 먼저 CTP 로 되돌려 놓고 뺀다.
+        // 원본은 지금 CTP 에서 ΔTP 를 통째로 또 빼서, 이미 자란 인물에게 다시 쓰면 그 TP 가 사라졌다 — 캐릭터 에디터로 레벨을 몇 번 올리면
+        // CTP 가 100 에 닿아 TP 가 .chr 처음 값(살라딘 170)으로 굳고, 그 뒤 레벨업도 CTP 가 없어 TP 를 못 올렸다(fg-116, 제보 #33).
+        // 처음 쓰는 인물(TP = 기본 TP)은 원본과 똑같다.
+        int ctp0 = c.Ctp + Math.Max(0, c.Tp - b.Tp);
+        int dTp = D(7, b.Tp), tp = b.Tp + dTp, ctp = ctp0 - dTp;
         if (ctp < 100) { tp += ctp - 100; ctp = 100; }
         return c with
         {
@@ -861,6 +866,19 @@ public sealed class GameDatabase
             Dep = (ushort)(b.Dep + D(10, b.Dep)), Dex = (ushort)(b.Dex + D(11, b.Dex)),
             Tp = (ushort)Math.Max(1, tp), Ctp = (ushort)ctp,
         };
+    }
+
+    /// <summary>
+    /// 잃어버린 TP 를 되돌린다 — 레벨업(<see cref="LevelUp"/>)과 레벨 맞추기(<see cref="SetLevel"/>)는 TP 를 CTP 에서 <b>옮길 뿐</b>이라
+    /// TP + CTP 는 늘 .chr 처음 값의 합이다. 그보다 모자라면 고치기 전 <see cref="SetLevel"/> 이 자란 TP 를 지운 기록이다(fg-116, 제보 #33).
+    /// CTP 가 바닥(100)에 닿아 있으면 모자란 만큼 TP 로, 아직 남아 있으면 CTP 로 돌려준다(그때는 지운 TP 만큼 CTP 가 덜 빠졌던 것이다).
+    /// </summary>
+    public CharacterData RestoreTpPool(CharacterData c)
+    {
+        if (Character(c.Code) is not { } b) return c;
+        int lost = b.Tp + b.Ctp - (c.Tp + c.Ctp);
+        if (lost <= 0) return c;
+        return c.Ctp <= 100 ? c with { Tp = (ushort)(c.Tp + lost) } : c with { Ctp = (ushort)(c.Ctp + lost) };
     }
 
     /// <summary>DEP = 파일 DEP + 장비·패시브 보너스(0x20).</summary>
