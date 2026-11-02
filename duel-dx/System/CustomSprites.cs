@@ -33,8 +33,9 @@ internal static class CustomSprites
             foreach (string obs in Directory.EnumerateFiles(src, "*.obs"))
             {
                 string stem = Path.GetFileNameWithoutExtension(obs);
-                if (!done.Add(stem)) continue;
-                File.Copy(obs, Path.Combine(Folder, Path.GetFileName(obs)), true);
+                string mine = Path.Combine(Folder, Path.GetFileName(obs));
+                if (!done.Add(stem) && !Outdated(mine, obs)) continue;
+                File.Copy(obs, mine, true);
                 string json = Path.ChangeExtension(obs, ".json");
                 if (File.Exists(json)) File.Copy(json, Path.Combine(Folder, Path.GetFileName(json)), true);
                 string sheets = Path.Combine(src, "src", stem.Split('_', 2).Last());
@@ -49,6 +50,29 @@ internal static class CustomSprites
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// 전에 실어 보낸 예제 그대로인 파일(SHA-256) — 예제를 새로 그려 실으면(ed-12 에바 동작 추가) 이것과 같은 사본만 새것으로 바꾼다.
+    /// 사용자가 고쳐 넣은 것 · 지운 것은 그대로 둔다.
+    /// </summary>
+    private static readonly HashSet<string> OldExamples =
+    [
+        "bf2156464c290506330909aceff3f4569a07aa26f60a3c05059f78f113145324",   // 에바 — 서기 · 걷기 · 베기 · 연타만
+    ];
+
+    /// <summary>내 사본이 있고 옛 예제 그대로인데 실린 예제가 그와 다르면 참.</summary>
+    private static bool Outdated(string mine, string shipped)
+    {
+        if (!File.Exists(mine)) return false;
+        string have = Hash(mine);
+        return OldExamples.Contains(have) && have != Hash(shipped);
+    }
+
+    private static string Hash(string path)
+    {
+        using var file = File.OpenRead(path);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file)).ToLowerInvariant();
     }
 
     /// <summary>사용자 그림 번호인가.</summary>
