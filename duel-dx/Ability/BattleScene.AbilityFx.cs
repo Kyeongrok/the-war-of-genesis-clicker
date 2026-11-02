@@ -219,6 +219,9 @@ internal sealed unsafe partial class BattleScene
     /// <summary>「연」의 어빌리티 번호 — 레벨로 동작 사슬이 갈리는 유일한 핸들러(0x1007f860, 분석-모션 ba-10).</summary>
     internal const int YeonAbility = 1;
 
+    /// <summary>비연참(어빌리티 19, 핸들러 0x10080430) — 모으는 동안 등에 뜨는 불꽃 Obs 116 · 돌진 소리 Obs 1396.</summary>
+    internal const int ByeonchamAbility = 19, ByeonchamWingObs = 116, ByeonchamDashSoundObs = 1396;
+
     internal static int HitStepFor(WorkData w, int steps)
     {
         int[] actions = ActionsFor(w);
@@ -533,6 +536,10 @@ internal sealed unsafe partial class BattleScene
             var e = TachyrionSkill.Adjust(w, ElementalSkill.Adjust(w, OzmaSkill.Adjust(w, CycloneSkill.Adjust(w, raw))));
             // 필살기 공통 앞머리의 효과(시전 소리 1338 · 487 · 빛 알갱이 343 · 금빛 띠 344)는 FinisherPrelude 가 제때 띄운다 — 뽑은 표에 섞여 있어도 여기서는 뺀다.
             if (w.Prepare == 7 && e.Obs is 1338 or 487 or FinisherPreludeSkill.PreludeDotObs or FinisherPreludeSkill.PreludeBandObs) continue;
+            // 비연참 — 등의 불꽃 116:0 은 모으기 때 이미 띄웠고(UseWorkRoutine), 돌진 소리 1396:0 은 돌진하는 그때 운다(0x10080797 단계 2).
+            // 표의 지연 54 는 116 이 끝나는 때(모으기 시작 기준)라 돌진 기준으로는 0 이다.
+            if (w.AbilityId == ByeonchamAbility && e.Obs == ByeonchamWingObs) continue;
+            if (w.AbilityId == ByeonchamAbility && e.Obs == ByeonchamDashSoundObs) e = e with { Delay = 0 };
             // 준비 2·3·5·6 의 시전 소리 1338:1 은 시전 시작 +2틱에 이미 냈다(UseWorkRoutine, ba-15 R6).
             if (w.Prepare is 2 or 3 or 5 or 6 && e.Obs == 1338) continue;
             // 카운터 미사일 — 네 방향 모두 Obs 637 모션 6 이다(0x100a9260, ba-14 H3). 도구 표에 섞인 2·3·4·5 는 방향 가지의 겉모습이 아니라 뺀다.

@@ -1343,6 +1343,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 if (charging && w.AbilityId == 19) a.Facing = Facing.Down;
                 PlayChainStep(a, actions[step], HoldSeconds);
                 if (charging) SpawnSideClones(a, chargeFacing, drift: true);
+                // 비연참 — 원본(0x10080430 단계 0)은 모으기 동작과 함께 등의 불꽃 116:0(z+70, 55틱)을 띄우고 그것이 끝나야(단계 2) 돌진한다.
+                // 그동안 모으기 동작의 마지막 컷을 붙든다(단계 1, 되풀이 1000). 전에는 116 을 돌진할 때 띄우고 모으기 동작(7틱)만 기다려
+                // 시전이 반 초도 안 돼 끝나고 곧장 돌진해 맞았다(버그 리포트 #34).
+                if (charging && w.AbilityId == ByeonchamAbility && ScriptFor(w.Id)?.Effects.FirstOrDefault(e => e.Obs == ByeonchamWingObs) is { Obs: > 0 } wing)
+                {
+                    var (wx, wy) = UnitFoot(a);
+                    _effects.Add((wing.Obs, wing.Motion, host._lastTime, wx, wy - wing.Lift));
+                    int drawn = DrawnAction(a, actions[step]);
+                    double cast = host._sprites.TryGetValue(a.ChrCode, out var castSprite) ? castSprite.ActionSeconds(drawn, a.Facing) : 0;
+                    a.PlayAction(drawn, Math.Max(cast, host.EffectTicks(wing.Obs, wing.Motion) / TicksPerSecond));
+                }
                 if (actions[step] >= RawHold) for (double end = host._lastTime + 0.5; host._lastTime < end;) yield return true;   // 치는 칸이 아닌 붙듦(드묾)은 잠깐만
                 else while (a.IsBusy) yield return true;
                 if (charging) a.Facing = chargeFacing;
