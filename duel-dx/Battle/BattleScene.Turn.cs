@@ -2523,6 +2523,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 첫 타는 사용자가 원하는 대로 <b>0.05초</b>에 낸다. 타격 키가 없으면 한 번만.
     /// 다만 <b>원거리</b>(사거리 1칸 넘음)는 모션의 타격 키 그 틱에 낸다 — 총은 쏘는 컷에 타격 키가 있어서, 0.05초로 당기면
     /// 크리스티앙처럼 피해 숫자가 총을 쏘기 전에 떴다(사용자 보고).
+    /// 근접이어도 <b>멈춘 채 겨누다가 타격 키에서 베는</b> 모션(<see cref="HoldsUntilStrike"/>)은 그 키에 낸다.
     /// </summary>
     internal List<double> HitTimesFor(UnitState u, int action, bool ranged = false)
     {
@@ -2530,8 +2531,31 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (!host._sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { Hits.Count: > 0 } clip)
             return [first];
         var starts = clip.Hits.Select(h => h.Start).OrderBy(t => t).ToList();
-        double at = ranged ? Math.Max(first, starts[0] / TicksPerSecond) : first;
+        double at = ranged || HoldsUntilStrike(clip, starts[0]) ? Math.Max(first, starts[0] / TicksPerSecond) : first;
         return [.. starts.Select(t => at + (t - starts[0]) / TicksPerSecond)];
+    }
+
+    /// <summary>근접 타격을 키에 맞추는 겨눔 길이(틱) — 보통 모션은 타격 키(대개 9틱)까지 3틱마다 컷이 바뀌며 휘두른다.</summary>
+    internal const int WindUpHoldTicks = 12;
+
+    /// <summary>
+    /// 그 모션이 한 컷에 <see cref="WindUpHoldTicks"/> 틱 넘게 멈춰 겨누다가 <b>첫 타격 키 틱에 베는 컷으로 바뀌나</b>.
+    /// 원본 기본 공격(<c>0x1007f0a0</c>)은 판정을 따로 내지 않고 모션의 타격 키가 낸다. 리메이크는 근접 첫 타를 0.05초로 당기는데(사용자 감각),
+    /// 유진(그림 0900)의 동작 8 은 컷 39 를 3~15틱 붙든 뒤 15틱에 베는 컷 41 · 베는 소리 348 · 칼빛 Obs 0902 가 함께 나와,
+    /// 피해 숫자와 맞는 몸짓이 휘두르기 0.45초 전에 떴다(버그 리포트 #32). 같은 꼴의 그림(1274 · 1289 · 165 · 863 …)도 그 키에 친다.
+    /// </summary>
+    internal static bool HoldsUntilStrike(ObsMotionClip clip, int hitTick)
+    {
+        var keys = clip.Keys;
+        int j = -1;
+        for (int i = 1; i < keys.Count; i++)
+            if (keys[i].Start == hitTick) { j = i; break; }
+        if (j < 0) return false;
+        var pose = (keys[j - 1].SubentryId, keys[j - 1].Slot);
+        if (pose == (keys[j].SubentryId, keys[j].Slot)) return false;
+        int from = keys[j - 1].Start;
+        for (int i = j - 2; i >= 0 && (keys[i].SubentryId, keys[i].Slot) == pose; i--) from = keys[i].Start;
+        return hitTick - from >= WindUpHoldTicks;
     }
 
     /// <summary>타격 키 어빌리티 125(Hunter)가 고르는 work — 원본 <c>0x100322e0</c> 에 박혀 있다.</summary>
