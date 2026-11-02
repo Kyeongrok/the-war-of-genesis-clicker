@@ -439,7 +439,8 @@ internal sealed unsafe partial class BattleScene
     internal void DrawTurnMarker(UnitState unit, int x, int headY, bool selected = false)
     {
         // 편은 0x10074250(그 부대가 AI 인가)으로 — 자동 진행(AutoPlay)이어도 사람 편은 연보라.
-        bool human = unit.PlayerControlled || (unit.IsAlly && !host._allyAi);
+        // 파트1 용병은 편 3 으로 세워 AI 가 움직이지만(part1 용병 AI) 내 인물에게 딸린 내 병사다 — 사람 편 색으로(버그 리포트 #31: 주황이 적 표시로 보였다).
+        bool human = unit.PlayerControlled || (unit.IsAlly && !host._allyAi) || _part1Mercs.Contains(unit);
         int motion = (human ? 0 : 2) + (unit.LeaderIndex >= 0 ? 1 : 0);
         int tick = (int)(host._lastTime * TicksPerSecond);
         if (selected && host.UiFor(TurnMarkerObs)?.FrameAt(motion, tick, true, false) is { } f)
