@@ -6,7 +6,8 @@
 //   POST /v1/bug      버그 리포트 한 건(게임의 「버그 리포트」 창, duel-dx/System/BugReport.cs) — {id} 를 돌려준다. 설치마다 한 시간에 10 건까지.
 //   GET  /v1/bugs?since=<id>&status=new        받은 버그 리포트(관리자만 — Authorization: Bearer <BUG_ADMIN_KEY>)
 //   POST /v1/bugs/<id>/status {status, note}   버그 리포트의 상태를 바꾼다(관리자만)
-//                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-bugs D1 — 받는 곳은 fd2-remake/tools/bug-worker)
+//                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-remake D1 — 받는 곳은 fd2-remake/tools/bug-worker)
+//   GET  /v1/fd2/summary                       용의기사2 탭의 집계 — 리포트를 상태 · 버전 · 기기 · 화면 · 날짜별로 센 것(관리자만)
 //
 // 누가 보냈는지는 설치할 때 만든 무작위 번호(install)뿐이다. IP 는 적지 않는다.
 
@@ -255,6 +256,39 @@ async function setBugStatus(id, request, url, env) {
   return json({ ok: true, id, status: b.status });
 }
 
+// 용의기사2 탭의 집계(관리자만) — fd2-remake D1 의 버그 리포트를 상태 · 버전 · 기기 · 화면(장)별로, 플레이 통계(plays)를 장 · 날짜 · 버전 · 기기별로 센다.
+// 줄이 적어 지금은 캐시 없이 바로 센다 — 늘어나면 cached() 로 감싼다(D1 은 훑은 줄을 모두 읽은 줄로 센다).
+async function fd2Summary(env) {
+  const db = env.FD2_DB;
+  const group = (expr) => db.prepare(
+    `SELECT ${expr} AS k, COUNT(*) AS n, SUM(status = 'new') AS fresh, COUNT(DISTINCT install) AS installs FROM bug_reports GROUP BY k ORDER BY n DESC LIMIT 50`);
+  const [total, status, version, platform, where, days] = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS n, SUM(status = 'new') AS fresh, SUM(status = 'fixed') AS fixed, COUNT(DISTINCT install) AS installs, MAX(created_at) AS last FROM bug_reports`),
+    group('status'),
+    group('version'),
+    group(`json_extract(context, '$.platform')`),
+    // 게임 화면이면 「N장」(전투 중이면 「N장 전투」), 아니면 화면 이름(Title · Load …)
+    group(`CASE WHEN json_extract(context, '$.chapter') IS NOT NULL THEN json_extract(context, '$.chapter') || '장' || CASE WHEN json_extract(context, '$.battle') THEN ' 전투' ELSE '' END ELSE json_extract(context, '$.screen') END`),
+    db.prepare(`SELECT substr(created_at, 1, 10) AS k, COUNT(*) AS n, COUNT(DISTINCT install) AS installs FROM bug_reports GROUP BY k ORDER BY k DESC LIMIT 60`),
+  ]);
+  // 플레이 통계(plays — fd2-remake 의 POST /v1/play, 전투 한 판에 한 줄) — result 는 win · lose · quit, chapter 0 은 프롤로그, how 는 new · load
+  const DAY = `substr(COALESCE(started_at, received_at), 1, 10)`;
+  const [pTotal, pChapter, pDays, pVersion, pPlatform] = await db.batch([
+    db.prepare(`SELECT COUNT(DISTINCT install) AS installs, COUNT(*) AS plays, SUM(result = 'win') AS wins, SUM(result = 'lose') AS loses, SUM(result = 'quit') AS quits,
+                       SUM(seconds) AS secSum, MAX(CASE WHEN result = 'win' THEN chapter END) AS maxChapter, MAX(received_at) AS last FROM plays`),
+    db.prepare(`SELECT chapter AS k, SUM(result = 'win') AS wins, SUM(result = 'lose') AS loses, SUM(result = 'quit') AS quits, COUNT(DISTINCT install) AS installs,
+                       SUM(platform = 'android') AS phone, AVG(CASE WHEN result = 'win' THEN turns END) AS turns, AVG(CASE WHEN result = 'win' THEN seconds END) AS seconds,
+                       SUM(how = 'load') AS loads
+                FROM plays GROUP BY chapter ORDER BY chapter`),
+    db.prepare(`SELECT ${DAY} AS k, COUNT(DISTINCT install) AS installs, COUNT(*) AS plays, SUM(seconds) AS seconds FROM plays GROUP BY k ORDER BY k DESC LIMIT 60`),
+    db.prepare(`SELECT version AS k, COUNT(DISTINCT install) AS installs, COUNT(*) AS plays, SUM(seconds) AS seconds FROM plays GROUP BY k ORDER BY MAX(id) DESC LIMIT 30`),
+    db.prepare(`SELECT platform || CASE WHEN mobile_view = 1 AND platform <> 'android' THEN ' · 모바일 화면' ELSE '' END AS k, COUNT(DISTINCT install) AS installs,
+                       COUNT(*) AS plays, SUM(seconds) AS seconds FROM plays GROUP BY k ORDER BY installs DESC`),
+  ]);
+  return json({ total: total.results[0], status: status.results, version: version.results, platform: platform.results, where: where.results, days: days.results,
+    plays: { total: pTotal.results[0], chapters: pChapter.results, days: pDays.results, versions: pVersion.results, platforms: pPlatform.results } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url), { pathname } = url;
@@ -263,6 +297,10 @@ export default {
       if (request.method === 'GET' && pathname === '/v1/top') return jsonText(await cached(env, 'top', () => getTop(env)));
       if (request.method === 'GET' && pathname === '/v1/dashboard') return await dashboard(url, env);
       if (request.method === 'POST' && pathname === '/v1/bug') return await postBug(request, env);
+      if (request.method === 'GET' && pathname === '/v1/fd2/summary') {
+        if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
+        return await fd2Summary(env);
+      }
       if (pathname === '/v1/bugs' || pathname.startsWith('/v1/bugs/')) {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         if (request.method === 'GET' && pathname === '/v1/bugs') return await listBugs(url, env);

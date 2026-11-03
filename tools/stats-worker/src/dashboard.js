@@ -66,7 +66,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="tiles" id="tiles"></div>
   <div class="tabs pagetabs" id="pagetabs">
     <button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
-    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button>
+    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button><button data-tab="fd2">용의기사2</button>
   </div>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
@@ -80,6 +80,18 @@ export const DASHBOARD_HTML = `<!doctype html>
       <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
     <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="days"><h2>날짜별 · 버전별</h2><table id="days"></table></section>
+  <section data-tab="fd2"><h2>용의기사2 리메이크 · 플레이</h2>
+    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음)(위의 기간 · 버전 거르기는 안 씁니다). 관리자 키(버그 리포트 탭과 같은 것)를 넣어야 보입니다.</div>
+    <div class="filters"><button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
+    <div class="tiles" id="fd2ptiles"></div>
+    <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
+    <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
+  <section data-tab="fd2"><h2>용의기사2 · 버그 리포트 집계</h2>
+    <div class="tiles" id="fd2tiles"></div>
+    <div class="envgrid" id="fd2grid"></div></section>
+  <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
+    <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label></div>
+    <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -100,6 +112,7 @@ function pickTab(tab) {
   try { localStorage.setItem('dashTab', tab); } catch (e) { }
   currentTab = tab;
   if (data) loadPart(tab);
+  if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
 }
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => pickTab(b.dataset.tab));
 let savedTab = null;
@@ -288,15 +301,89 @@ async function markBug(game, id, status) {
   if (note === null && (status === 'fixed' || status === 'wontfix')) return;
   const res = await fetch('/v1/bugs/' + id + '/status?game=' + game, { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
     body: JSON.stringify(note ? { status, note } : { status }) });
-  if (!res.ok) { $('bugerr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
+  if (!res.ok) { $('bugerr').textContent = $('fd2err').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
   loadBugs();
+  if (fd2Loaded) loadFd2();
 }
-$('bugkey').onclick = () => {
+function askBugKey() {
   const k = prompt('관리자 키(BUG_ADMIN_KEY)', bugKey());
   if (k === null) return;
   try { localStorage.setItem('bugAdminKey', k.trim()); } catch { }
   loadBugs();
-};
+  if (currentTab === 'fd2') loadFd2();
+}
+$('bugkey').onclick = askBugKey;
+
+// ── 용의기사2 탭 — /v1/fd2/summary 의 집계와 fd2 리포트 목록(관리자 키). 탭을 처음 열 때 받는다 ──
+let fd2Loaded = false;
+const fd2Status = { status: 'new' };
+const FD2_TABLES = [
+  ['status', '상태', (k) => STATUS_NAME[k] || k],
+  ['version', '버전', (k) => 'v' + k],
+  ['platform', '기기', (k) => ({ windows: 'Windows', android: '안드로이드' }[k] || k)],
+  ['where', '화면 · 장', (k) => ({ Opening: '오프닝', Title: '타이틀', Prologue: '프롤로그', Game: '게임', Ending: '엔딩' }[k] || k)],
+];
+function fd2Table(title, rows, label, cols) {
+  const top = Math.max(1, ...rows.map((r) => r.n));
+  return '<div><h3>' + title + '</h3><table><tr><th class="name">값</th>' + cols.map(([, h]) => '<th>' + h + '</th>').join('') + '<th></th></tr>'
+    + (rows.length ? rows.map((r) => '<tr><td class="name">' + (r.k === null ? '<span class="dim">모름</span>' : esc(label(r.k))) + '</td>'
+        + cols.map(([c]) => '<td>' + n(r[c]) + '</td>').join('') + '<td class="bar"><i style="width:' + (100 * r.n / top).toFixed(1) + '%"></i></td></tr>').join('')
+      : '<tr><td colspan="' + (cols.length + 2) + '" class="dim name">아직 자료가 없습니다.</td></tr>')
+    + '</table></div>';
+}
+// 플레이 통계 — 타일 · 장별 표 · 날짜 · 버전 · 기기 표
+function renderFd2Plays(p) {
+  const t = p.total || {};
+  const tile = (v, label) => '<div class="tile"><b' + (typeof v === 'string' && v.length > 8 ? ' style="font-size:15px"' : '') + '>' + (typeof v === 'string' ? esc(v) : n(v)) + '</b><span>' + label + '</span></div>';
+  const decided = (t.wins || 0) + (t.loses || 0);
+  const hours = (sec) => (sec ? (Math.round(sec / 360) / 10).toLocaleString('ko-KR') + '시간' : '-');
+  const chap = (k) => (k === 0 ? '프롤로그' : k + '장');
+  $('fd2ptiles').innerHTML = tile(t.installs, '설치') + tile(t.plays, '판') + tile(decided ? Math.round(100 * t.wins / decided) + '%' : '-', '승률(그만둔 판 빼고)')
+    + tile(t.quits, '그만둔 판') + tile(hours(t.secSum), '논 시간 합') + tile(t.maxChapter != null ? chap(t.maxChapter) : '-', '가장 멀리 이긴 장')
+    + tile(t.last ? new Date(t.last).toLocaleString('ko-KR') : '-', '마지막으로 받은 때');
+  const rows = p.chapters || [];
+  const top = Math.max(1, ...rows.map((r) => r.installs));
+  const f1 = (v) => (v == null ? '-' : (Math.round(v * 10) / 10).toLocaleString('ko-KR'));
+  $('fd2chapters').innerHTML = '<tr><th class="name">장</th><th>이김</th><th>짐</th><th>그만둠</th><th>승률</th><th>설치</th><th>폰 판</th><th>불러온 판</th><th>평균 턴</th><th>평균 시간</th><th></th></tr>'
+    + (rows.length ? rows.map((r) => {
+        const all = r.wins + r.loses;
+        return '<tr><td class="name">' + chap(r.k) + '</td><td>' + n(r.wins) + '</td><td>' + n(r.loses) + '</td><td>' + n(r.quits) + '</td><td>' + (all ? Math.round(100 * r.wins / all) + '%' : '-')
+          + '</td><td>' + n(r.installs) + '</td><td>' + n(r.phone) + '</td><td>' + n(r.loads) + '</td><td>' + f1(r.turns) + '</td><td>' + (r.seconds == null ? '-' : clock(r.seconds, 1))
+          + '</td><td class="bar"><i style="width:' + (100 * r.installs / top).toFixed(1) + '%"></i></td></tr>';
+      }).join('')
+      : '<tr><td colspan="11" class="dim name">아직 자료가 없습니다.</td></tr>');
+  const cols = [['installs', '설치'], ['plays', '판'], ['minutes', '분']];
+  const prep = (rows) => rows.map((r) => ({ ...r, n: r.installs, minutes: Math.round((r.seconds || 0) / 60) }));   // 막대는 설치 수로
+  $('fd2pgrid').innerHTML = fd2Table('날짜별', prep(p.days || []), String, cols) + fd2Table('버전별', prep(p.versions || []), (k) => 'v' + k, cols)
+    + fd2Table('기기', prep(p.platforms || []), (k) => String(k).replace('windows', 'Windows').replace('android', '안드로이드'), cols);
+}
+async function loadFd2() {
+  fd2Loaded = true;
+  const key = bugKey();
+  $('fd2err').textContent = '';
+  if (!key) { $('fd2tiles').innerHTML = $('fd2grid').innerHTML = $('fd2ptiles').innerHTML = $('fd2chapters').innerHTML = $('fd2pgrid').innerHTML = ''; $('fd2bugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
+  const get = async (path) => {
+    const res = await fetch(path, { headers: { Authorization: 'Bearer ' + key } });
+    if (res.status === 401) throw new Error('키가 맞지 않습니다');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  };
+  try {
+    const [s, list] = await Promise.all([get('/v1/fd2/summary'), get('/v1/bugs?game=fd2&status=' + fd2Status.status + '&order=desc&limit=200')]);
+    const t = s.total || {};
+    $('fd2tiles').innerHTML = [[t.n, '리포트'], [t.fresh, '새로 온 것'], [t.fixed, '고침'], [t.installs, '보낸 설치'], [t.last ? new Date(t.last).toLocaleString('ko-KR') : '-', '마지막으로 받은 때']]
+      .map(([v, label]) => '<div class="tile"><b' + (typeof v === 'number' || v == null ? '' : ' style="font-size:15px"') + '>' + (typeof v === 'string' ? esc(v) : n(v)) + '</b><span>' + label + '</span></div>').join('');
+    $('fd2grid').innerHTML = FD2_TABLES.map(([k, title, label]) => fd2Table(title, s[k] || [], label, [['n', '리포트'], ['fresh', '새로'], ['installs', '설치']])).join('')
+      + fd2Table('날짜별', s.days || [], String, [['n', '리포트'], ['installs', '설치']]);
+    renderFd2Plays(s.plays || {});
+    const bugs = (list.bugs || []).map((b) => ({ ...b, game: 'fd2' }));
+    $('fd2bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
+    $('fd2bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug('fd2', Number(b.dataset.id), b.dataset.s));
+  } catch (e) { $('fd2err').textContent = '불러오지 못했습니다: ' + e.message; }
+}
+$('fd2key').onclick = askBugKey;
+$('fd2reload').onclick = loadFd2;
+$('fd2status').onchange = (e) => { fd2Status.status = e.target.value; loadFd2(); };
 $('bugreload').onclick = loadBugs;
 $('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs(); };
 $('buggame').onchange = (e) => { bugState.game = e.target.value; loadBugs(); };
