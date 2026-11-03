@@ -780,6 +780,22 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
     internal bool TalkTyping => LiveTyper is { Done: false };
 
     /// <summary>
+    /// 지금 쪽의 끝이 대사 전체에서 어디쯤인가(꾸밈을 뺀 글자 수 비율, 0~1) — 마지막 쪽이거나 대사가 없으면 1.
+    /// 쪽이 여럿인 성우 대사를 목소리에 맞춰 넘기는 데 쓴다(<see cref="Part1SceneScript.Pump"/>, 버그 리포트 #38).
+    /// </summary>
+    internal double TalkPageEnd
+    {
+        get
+        {
+            if (LiveTyper is not { Lines.Count: > 0 } t) return 1;
+            int end = Math.Min(t.Text.Length, t.Lines[^1].End);
+            if (end >= t.Text.Length || Part1Game.PlainText(t.Text[end..]).Trim().Length == 0) return 1;
+            int total = Part1Game.PlainText(t.Text).Length;
+            return total > 0 ? Math.Clamp((double)Part1Game.PlainText(t.Text[..end]).Length / total, 0, 1) : 1;
+        }
+    }
+
+    /// <summary>
     /// 꾸밈째 글을 상자에 — 원본 대사 창 <c>0x100a9000</c> 처럼 글 그리기 <c>0x10018c30</c> 로: 「/m0[이름]」 은 꼴 표 3 · 빛깔 7, 「/m1」 뒤 몸글은 가을체 12pt 굵게,
     /// /c /f /s /t /w 는 그 자리부터. 줄은 (상자 + 8, 상자 + 8) 부터 폭 − 16 에서 글자로 끊고(<c>0x100a8440</c>), 상자 밑 − 8 을 넘거나 /p 면 다음 쪽.
     /// 글은 창 틱(<c>0x100a9190</c>)대로 한 글자씩 찍는다 — /v 빠르기 · /d 쉼, 누르고 있으면 틱마다 4 걸음 · 쉼 없이(<c>0x100a8f90</c>).

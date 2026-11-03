@@ -261,6 +261,9 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>지금 성우 목소리가 끝나는 때 — 대사를 넘기면 그때 끊는다(원본은 끝날 때까지 다음 행동을 미룬다, 분석-파트1-챕터 11절).</summary>
     private double _voiceEnd;
 
+    /// <summary>지금 성우 목소리를 튼 때 — 쪽이 여럿인 대사는 목소리가 쪽 끝 글자까지 나왔을 때 다음 쪽으로 넘긴다(<see cref="Pump"/>).</summary>
+    private double _voiceStart;
+
     /// <summary>목소리 길이를 알았나(파일을 이미 받아 둠) — 모르면 저절로 넘기지 않는다.</summary>
     private bool _voiceKnown;
 
@@ -383,6 +386,16 @@ internal sealed class Part1SceneScript(GameWindow host)
         if (typing && _talkAutoAt > 0) _talkAutoAt = host._lastTime + TalkTicks / GameWindow.TicksPerSecond;
         if (typing && _voiceEnd > 0 && host._lastTime >= _voiceEnd) _voiceEnd = host._lastTime;
         if (Talk != null && _talkAutoAt > 0 && !host._part1TalkWaits && host._lastTime >= _talkAutoAt) { Advance(); return; }
+        // 쪽이 여럿인 성우 대사 — 목소리가 이 쪽 끝 글자까지 나왔으면(글 길이 비율로 어림) 다음 쪽으로. 전에는 목소리가 다 끝난 뒤에야
+        // 첫 쪽이 넘어가 둘째 · 셋째 쪽은 목소리 없이 뒤늦게 나왔다(버그 리포트 #38). 마지막 쪽은 아래(목소리가 끝난 뒤)대로.
+        if (Talk != null && _voiceEnd > _voiceStart && _voiceKnown && !typing && !host._part1TalkWaits
+            && host.Part1TitleScr.TalkPageEnd is var pageEnd && pageEnd < 1
+            && (host._lastTime - _voiceStart) / (_voiceEnd - _voiceStart) >= pageEnd)
+        {
+            GameWindow.TestRunTrace($"part1 voice page end {pageEnd:F2} at {host._lastTime - _voiceStart:F1}s of {_voiceEnd - _voiceStart:F1}s");   // 시험 전용 줄
+            host.Part1TitleScr.NextTalkPage(sound: false);
+            return;
+        }
         // 성우 대사는 목소리가 끝나고 조금 뒤 저절로 넘어간다(사용자 요청) — 장이 남았으면 다음 장부터. 받는 중이라 길이를 모르면(30초 어림) 기다리지 않는다.
         if (Talk != null && _voiceEnd > 0 && _voiceKnown && !host._part1TalkWaits && host._lastTime >= _voiceEnd + VoiceAfterSeconds)
         {
@@ -529,6 +542,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                         lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
                         // 게임 시계(_lastTime)는 배속만큼 빨리 가고 목소리는 제 빠르기로 나므로 길이를 배속만큼 늘려 잡는다 — 안 그러면 2배속에서
                         // 목소리가 반쯤 나왔을 때 다음 대사로 넘어갔다(사용자 보고 fg-104). 뒤의 쉬는 틈(VoiceAfterSeconds)은 게임 시간 그대로.
+                        _voiceStart = host._lastTime;
                         _voiceEnd = clip != null ? host._lastTime + GameWindow.ClipSeconds(clip) * host._gameSpeed / 100.0 : host._lastTime + 30;   // 아직 안 받았으면 넉넉히 — 넘길 때 끊게
                         _voiceKnown = clip != null;
                     }
