@@ -433,6 +433,9 @@ internal sealed partial class GamePad(GameWindow host)
                         host.EpisodesScr.ScrollEpisodes(action == PadAction.PrevUnit ? -1 : 1);
                         continue;
                     }
+                    // 파트1 연대표에서는 LB · RB 가 연대표를 굴린다(파트2 연대표와 같다). 메뉴가 떠 있어 못 굴리면 아래처럼 단추 옮기기.
+                    if (host._part1TitleScr is { TimelineOpen: true } part1 && !host.Sys.SystemOpen && !host.SettingsScr._open
+                        && part1.PadScroll(0, action == PadAction.PrevUnit ? -1 : 1)) continue;
                     // 성도(행성 고르기)에서는 LB · RB 가 이전 · 다음 행성(사용자 요청 mo-14). 타이틀에서는 단추 옮기기(fa-31).
                     if (CycleStarMap(action == PadAction.PrevUnit ? -1 : 1)) continue;
                     // 시스템 메뉴(와 그 확인창)에서도 LB · RB 가 고르는 칸을 위 · 아래로 옮긴다(사용자 요청 menu-31) — 슬롯 목록은 전처럼 굴린다.
@@ -564,6 +567,17 @@ internal sealed partial class GamePad(GameWindow host)
                 ("십자키 · 왼쪽 스틱", "명단에서 인물 짚기 / 칸 고르기 중엔 초록 칸 옮기기"), (Name(PadAction.Confirm), "인물 고르기 → 초록 칸에 세우기"),
                 (Name(PadAction.Cancel), "칸 고르기 그만두고 명단으로"), (Name(PadAction.Ring), "짚은 인물 배치취소"), (Name(PadAction.Rest), "자동배치"),
                 (Name(PadAction.PrevUnit), "짚은 인물 군단사용 켬 · 끔"), (Name(PadAction.System), "배치종료"), ("오른쪽 스틱", "커서 자유롭게"),
+            ]);
+        // 파트1 화면(타이틀 · 연대표 · 챕터 지도 · 필드 · 마을 · 일행) — 파트2 타이틀 위에서 열리므로 아래 「타이틀」보다 먼저 본다(버그 리포트 #40).
+        if (host._part1TitleScr is { _open: true } && !host.Sys.SystemOpen && !host.SettingsScr._open && !host.TuningScr._tuningOpen && host._statusUnit < 0)
+            return ("파트1",
+            [
+                ("십자키 · 왼쪽 스틱", "단추 사이 옮기기 (테두리) · 그 쪽에 단추가 없으면 지도 밀기 · 연대표 굴리기"),
+                ("오른쪽 스틱", "커서 자유롭게 (지도 가장자리에 대면 밀기)"),
+                ($"{Name(PadAction.PrevUnit)} · {Name(PadAction.NextUnit)}", "단추 차례로 옮기기 (연대표에서는 굴리기)"),
+                (Name(PadAction.Confirm), "누르기"),            // 아래 한 줄에도 나온다 — 필드 장면 번호 글을 덮지 않게 짧게
+                (Name(PadAction.Cancel), "뒤로"),
+                (Name(PadAction.System), "메뉴"),
             ]);
         if (host.Fld._fieldChoices is { Count: > 0 } || btl._itemMenu || host.TitleScr._titleOpen)
             return (host.TitleScr._titleOpen ? "타이틀" : btl._itemMenu ? "아이템 목록" : "고르기",

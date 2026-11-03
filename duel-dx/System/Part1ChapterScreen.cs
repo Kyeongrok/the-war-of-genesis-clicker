@@ -785,6 +785,78 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
 
     private static bool In((int X, int Y, int W, int H) r, int x, int y) => x >= r.X && x < r.X + r.W && y >= r.Y && y < r.Y + r.H;
 
+    // ── 패드 ──
+
+    /// <summary>패드 화면 상태 — 대사 · 고르기 · 덮개 · 레벨업 고르기 · 창 · 메뉴 · 이동 고르기 · 지도. 바뀌면 커서가 새 상태의 첫 자리로 간다.</summary>
+    internal int PadPage =>
+        Events.Talk != null ? 1 : Events.Choice != null ? 2 : _cover != null || _transition != null ? 3 : Picking ? 4
+        : _status is { _open: true } ? (_status.PanelOpen ? 6 : 5) : _exchange is { _open: true } ? 7 : _shops is { _open: true } ? 8
+        : 10 + (int)_mode;
+
+    /// <summary>
+    /// 패드 자리(<see cref="OnClick"/> · <see cref="HitAt"/> 와 같은 칸, 판 좌표) — 대사 · 덮개 중에는 없다(아무 데나 누르면 넘어간다).
+    /// 지도: 오른쪽 단추 → 화면에 보이는 「N 팀」 꼬리표 → 마을 장소. 이동 고르기: 갈 수 있는 이웃 장소 가운데(누르면 표지가 그 이웃으로 간다).
+    /// </summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (_chapter is not { } chapter || Events.Talk != null) return;
+        var (mx, my) = host.Mos.MosesOrigin();
+        if (Events.Choice is { } choice)
+        {
+            for (int i = 0; i < choice.Options.Count; i++)
+            {
+                var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+                list.Add((mx + x, my + y, w, h));
+            }
+            return;
+        }
+        if (_cover != null || _transition != null) return;
+        if (Picking)
+        {
+            if (CurrentPick() is { } pick)
+                for (int i = 0; i < pick.Options.Count; i++) list.Add((mx + PickX, my + PickY + i * PickRowH, PickW, PickRowH - 2));
+            return;
+        }
+        if (_status is { _open: true }) { _status.PadTargets(list); return; }
+        if (_exchange is { _open: true }) { _exchange.PadTargets(list); return; }
+        if (_shops is { _open: true }) { _shops.PadTargets(list); return; }
+        if (_mode == Mode.Menu)
+        {
+            for (int i = 0; i < MenuItems.Length; i++) list.Add((mx + MenuX, my + MenuY + 30 + i * MenuRowH, MenuW, MenuRowH - 2));
+            return;
+        }
+        var (ox, oy, ow, oh) = MapView();
+        bool Shown(int x, int y) => x >= ox && y >= oy && x < ox + ow && y < oy + oh;
+        if (_mode == Mode.Move)
+        {
+            foreach (int n in MoveTargets())
+                if (Screen(chapter.Places[n], ox, oy) is var (sx, sy) && Shown(sx, sy)) list.Add((sx - 16, sy - 16, 32, 32));
+            return;
+        }
+        // 단추 맞는 칸 — Part1MapArt.ButtonHit(|x − 가운데| < 50, |y − 가운데| < 15).
+        for (int i = 0; i < Buttons.Length; i++) list.Add((ButtonLeft(ox, ow) - 49, oy + Buttons[i].Y - 14, 99, 29));
+        for (int i = 0; i < chapter.Places.Count; i++)
+        {
+            var at = TeamsAt(i);
+            if (at.Count == 0) continue;
+            var (gx, gy) = Screen(chapter.Places[i], ox, oy);
+            for (int k = 0; k < at.Count; k++)
+                if (Shown(gx + 59 + 19, gy + 18 * k - 75 + 9)) list.Add((gx + 59, gy + 18 * k - 75, 39, 18));
+        }
+        for (int i = 0; i < chapter.Places.Count; i++)
+            if (TownBounds(chapter, i, ox, oy) is { } b && Shown(b.Place.X + b.Place.W / 2, b.Place.Y + b.Place.H / 2)) list.Add(b.Place);
+    }
+
+    /// <summary>패드 방향 쪽에 자리가 없을 때 지도를 민다(방향키와 같은 80점) — 지도 · 이동 고르기에서만. 움직였으면 true.</summary>
+    internal bool PadScroll(int dx, int dy)
+    {
+        if (_mode == Mode.Menu || WindowOpen || Events.Talk != null || Events.Choice != null || Picking || _cover != null || _transition != null) return false;
+        var before = _cam;
+        Scroll(dx * 80, dy * 80);
+        _camAim = null;
+        return _cam != before;
+    }
+
     /// <summary>마을 장소(종류 1, 마을 번호 있음)의 화면 네모 — 장소 네모와 이름 글 네모(<see cref="Draw"/> 의 장소 이름 자리). 마을이 아니면 null.</summary>
     private ((int X, int Y, int W, int H) Place, (int X, int Y, int W, int H) Label)? TownBounds(Part1Chapter chapter, int i, int ox, int oy)
     {

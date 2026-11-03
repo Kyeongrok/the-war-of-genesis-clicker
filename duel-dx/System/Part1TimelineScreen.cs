@@ -147,6 +147,48 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
+    /// <summary>
+    /// 패드 자리(<see cref="HitAt"/> 와 같은 칸) — 메뉴가 떠 있으면 그 줄들, 아니면 고를 수 있는(열렸고 안 끝낸, 띠 안에 보이는) 칸 · 타이틀 단추 · 굴리기 화살표.
+    /// 띠에 반쯤 걸친 칸은 띠 안쪽만.
+    /// </summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        if (_menu)
+        {
+            for (int i = 0; i < MenuItems.Length; i++) list.Add((ox + MenuX, oy + MenuY + 30 + i * MenuRowH, MenuW, MenuRowH - 2));
+            return;
+        }
+        int bandTop = oy + BandTop, bandBottom = oy + BandBottom;
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            if (_slots[i] != Slot.Shown || !Unlocked(_episodes[i]) || host.Part1.FinishedChapters.Contains(_episodes[i].ChapterId)) continue;
+            var (x, y) = _cells[i];
+            int top = bandTop + y - _scroll - CellH / 2;
+            int y0 = Math.Max(top, bandTop), y1 = Math.Min(top + CellH, bandBottom);
+            if (y1 - y0 >= CellH / 2) list.Add((ox + x - CellW / 2, y0, CellW, y1 - y0));
+        }
+        var (backX, backY, _) = Back[0];
+        list.Add((ox + backX, oy + backY, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH));
+        if (MaxScroll > 0)
+        {
+            list.Add((ox + 596, oy + 140, 24, 50));
+            list.Add((ox + 596, oy + 380, 24, 50));
+        }
+    }
+
+    /// <summary>패드 화면 상태 — Esc 메뉴가 떠 있나.</summary>
+    internal int PadPage => _menu ? 1 : 0;
+
+    /// <summary>패드로 굴린다(위 −1 · 아래 +1) — 메뉴가 떠 있거나 더 못 굴리면 false.</summary>
+    internal bool PadScroll(int dy)
+    {
+        if (_menu || dy == 0) return false;
+        int before = _scroll;
+        Scroll(dy);
+        return _scroll != before;
+    }
+
     internal void OnClick(int bx, int by)
     {
         int hit = HitAt(bx, by);

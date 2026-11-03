@@ -394,6 +394,52 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         return true;
     }
 
+    // ── 패드 ──
+
+    /// <summary>
+    /// 패드 커서가 건너뛰는 자리(판 좌표, <see cref="GamePad.Targets"/>) — 맨 위 파트1 화면의 클릭 처리기가 보는 칸 그대로. 비어 있으면 아무 데나 누르는 화면
+    /// (글자 흐름 · 대사)이라 확인이 커서 자리를 누르고 방향은 키로 간다. 파트1 은 파트2 타이틀 위에서 열려, 전에는 패드가 파트2 타이틀 단추 자리를 돌았다(버그 리포트 #40).
+    /// </summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (!_open) return;
+        if (_party is { _open: true }) _party.PadTargets(list);
+        else if (_town is { _open: true }) _town.PadTargets(list);
+        else if (_field is { _open: true }) _field.PadTargets(list);
+        else if (_chapter is { _open: true }) _chapter.PadTargets(list);
+        else if (_timeline is { _open: true }) _timeline.PadTargets(list);
+        else if (MenuShown)
+        {
+            // 위 · 아래 키 차례(가운데 메뉴 줄 → 오른쪽 아래 PART 2 · 버그 리포트) — 첫 자리 NEW GAME 에 커서가 먼저 선다.
+            var (ox, oy) = host.Mos.MosesOrigin();
+            foreach (int i in KeyOrder)
+            {
+                var (_, _, x0, y0, x1, y1) = Buttons[i];
+                list.Add((ox + x0, oy + y0, x1 - x0, y1 - y0));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 지금 맨 위 파트1 화면과 그 상태 — 바뀌면 패드 커서를 새 화면의 첫 자리로 올린다(<see cref="GamePad.AutoFocus"/>). 같은 화면에서 굴리거나 밀어
+    /// 자리가 움직인 것으로는 안 바뀐다.
+    /// </summary>
+    internal int PadPage =>
+        _party is { _open: true } ? 100
+        : _town is { _open: true } ? 200 + _town.PadPage
+        : _field is { _open: true } ? 300 + _field.PadPage
+        : _chapter is { _open: true } ? 400 + _chapter.PadPage
+        : _timeline is { _open: true } ? 500 + _timeline.PadPage
+        : MenuShown ? 1 : 0;
+
+    /// <summary>패드 방향 쪽에 자리가 없을 때 — 챕터 지도를 밀거나 연대표를 굴린다. 움직였으면 true.</summary>
+    internal bool PadScroll(int dx, int dy)
+    {
+        if (!_open || _party is { _open: true } || _town is { _open: true } || _field is { _open: true }) return false;
+        if (_chapter is { _open: true }) return _chapter.PadScroll(dx, dy);
+        return _timeline is { _open: true } && _timeline.PadScroll(dy);
+    }
+
     internal void Press(int button)
     {
         switch (button)

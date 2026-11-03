@@ -71,6 +71,18 @@ internal sealed class Part1PartyScreen(GameWindow host, Part1TitleScreen shell)
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
+    /// <summary>패드 자리(<see cref="HitAt"/> 와 같은 칸, 판 좌표) — 사람 줄 → 장비 다섯 칸 · 탑승 → 고른 칸의 가방 줄(맨 끝 「빼기」) → 나가기.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        for (int i = 0; i < Members.Count; i++) list.Add((ox + ListX, oy + ListY + i * (RowH + 2), RowW, RowH));
+        for (int s = 0; s < 5; s++) list.Add((ox + InfoX, oy + SlotY + s * RowH, 200, RowH - 2));
+        list.Add((ox + InfoX, oy + RideY, 200, RowH - 2));
+        if (_slot >= 0 && Member(_member) is { } chr)
+            for (int i = 0, count = BagFor(chr, _slot).Count + 1; i < count; i++) list.Add((ox + BagX, oy + SlotY + i * RowH, 196, RowH - 2));
+        list.Add((ox + 250, oy + 446, Part1TitleScreen.ButtonW, Part1TitleScreen.ButtonH));
+    }
+
     internal void OnClick(int bx, int by)
     {
         int hit = HitAt(bx, by);

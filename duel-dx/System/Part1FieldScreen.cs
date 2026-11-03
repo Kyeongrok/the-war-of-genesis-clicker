@@ -390,6 +390,21 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         if (ChoiceAt(bx, by) is >= 0 and var i) _choiceHover = i;
     }
 
+    /// <summary>패드 자리 — 고르기 줄(<see cref="ChoiceAt"/> 와 같은 칸)만. 대사 · 걷기는 아무 데나 누르면 넘어가므로 없다.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (Script.Choice is not { } choice || Script.Talk != null) return;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        for (int i = 0; i < choice.Options.Count; i++)
+        {
+            var (x, y, w, h) = ChoiceRow(i, choice.Options.Count);
+            list.Add((ox + x, oy + y, w, h));
+        }
+    }
+
+    /// <summary>패드 화면 상태 — 고르기가 떠 있나.</summary>
+    internal int PadPage => Script.Choice != null && Script.Talk == null ? 1 : 0;
+
     internal void OnClick(int bx, int by)
     {
         if (Script.Choice != null && Script.Talk == null) { if (Script.WaitingOnChoice && ChoiceAt(bx, by) is >= 0 and var i) Script.Choose(i); return; }

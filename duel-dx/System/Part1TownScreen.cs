@@ -105,6 +105,18 @@ internal sealed class Part1TownScreen(GameWindow host, Part1TitleScreen shell)
         return hit < 0 ? -1 : Array.IndexOf(_slots, hit);
     }
 
+    /// <summary>패드 자리(<see cref="HitAt"/> 와 같은 칸) — 시설 창이 떠 있으면 그 창의 것, 대사 · 상태 패널 중에는 없다. 시설 단추 → 얼굴 → EXIT.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (_window is { _open: true } w) { w.PadTargets(list); return; }
+        if (_talk != null || PanelOpen) return;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        Menu.PadTargets(list, ox, oy, slot => Array.IndexOf(_slots, slot) >= 0);
+    }
+
+    /// <summary>패드 화면 상태 — 시설 창 · 대사 · 상태 패널 · 차림표.</summary>
+    internal int PadPage => _window is { _open: true } w ? 10 + w.PadPage : _talk != null ? 1 : PanelOpen ? 2 : 0;
+
     internal void UpdateHover(int bx, int by)
     {
         if (_window is { _open: true } w) { w.UpdateHover(bx, by); return; }

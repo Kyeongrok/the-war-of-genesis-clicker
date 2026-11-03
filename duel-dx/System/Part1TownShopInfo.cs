@@ -109,6 +109,19 @@ internal sealed class Part1TownShopInfo(GameWindow host, Part1ChapterScreen chap
 
     internal void UpdateHover(int bx, int by) => _hover = LineAt(bx, by);
 
+    /// <summary>패드 자리 — 아이템 줄마다(짚으면 설명이 뜬다, <see cref="LineAt"/> 와 같은 칸). 상점 제목 줄은 뺀다. 닫기는 취소 단추.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        var (x, y, _, _) = Rect;
+        for (int i = 0; i < _lines.Count && i < _layout.Count; i++)
+        {
+            if (_lines[i].Item == null) continue;
+            var (c, r) = _layout[i];
+            list.Add((ox + x + Pad + c * ColW, oy + y + HeadH + r * RowH, ColW - 6, RowH));
+        }
+    }
+
     /// <summary>창 밖을 누르면 닫는다 — 안은 아무 일 없음.</summary>
     internal void OnClick(int bx, int by)
     {

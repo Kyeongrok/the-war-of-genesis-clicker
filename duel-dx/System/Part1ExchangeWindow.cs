@@ -170,6 +170,25 @@ internal sealed class Part1ExchangeWindow(GameWindow host, Part1ChapterScreen ma
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
+    /// <summary>패드 자리(<see cref="HitAt"/> 와 같은 칸, 판 좌표) — 왼쪽 칸들 → 오른쪽 칸들 → 옮기기 화살표 둘 → 이전 · 다음단계.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        int wx = ox + X, wy = oy + Y;
+        var g = Grid;
+        foreach (var (side, listX) in new[] { (_left, LeftX), (RightSide, RightX) })
+            for (int i = 0, n = Math.Min(Count(side), g.Cols * g.Rows); i < n; i++)
+            {
+                var (cx, cy) = Cell(listX, i);
+                list.Add((wx + cx, wy + cy, g.CellW, g.CellH));
+            }
+        list.Add((wx + 235, wy + 150, 45, 45));
+        list.Add((wx + 235, wy + 200, 45, 45));
+        // 단추 맞는 칸 — Part1MapArt.ButtonHit(|x − 가운데| < 50, |y − 가운데| < 15).
+        list.Add((wx + 100 - 49, wy + 367 - 14, 99, 29));
+        list.Add((wx + 410 - 49, wy + 367 - 14, 99, 29));
+    }
+
     internal void OnClick(int bx, int by)
     {
         int hit = HitAt(bx, by);

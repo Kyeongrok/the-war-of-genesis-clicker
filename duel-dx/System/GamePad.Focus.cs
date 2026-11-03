@@ -28,6 +28,7 @@ internal sealed partial class GamePad
     internal List<(int X, int Y, int W, int H)> Targets()
     {
         var list = new List<(int X, int Y, int W, int H)>();
+        _part1Page = -1;
         if (host.TimedEditScr._open) { host.TimedEditScr.AddTargets(list); return list; }   // 개발 > 타이밍 어택 수정 창
         // 모드 창은 어느 화면 위에서든 먼저 받는다 — 탭, 그 탭의 줄, 닫기(시스템 메뉴의 MODE 로 패드에서도 연다, menu-34).
         var tuning = host.TuningScr;
@@ -175,6 +176,15 @@ internal sealed partial class GamePad
             }
             return list;
         }
+        // 파트1 화면(타이틀 · 연대표 · 챕터 지도 · 필드 · 마을 · 일행)은 파트2 타이틀 위에서 열려 파트2 타이틀의 표시(_titleOpen)가 내내 서 있다 —
+        // 전에는 아래의 파트2 타이틀 단추 자리를 돌려 패드 커서가 안 보이는 파트2 단추 위로만 다녔고, 확인도 그 빈 자리를 눌러 파트1 이 패드로 안 됐다(버그 리포트 #40).
+        // 맨 위 파트1 화면의 자리를 그 화면의 클릭 처리기와 같은 칸으로 받는다. 전직 트리 · 일행 표가 떠 있으면 비운다(커서 · 키로).
+        if (host._part1TitleScr is { _open: true } part1)
+        {
+            _part1Page = host.Part1TablesOpen ? 0 : 1 + part1.PadPage;
+            if (!host.Part1TablesOpen) part1.PadTargets(list);
+            return list;
+        }
         if (host.TitleScr._titleOpen)
         {
             var (ox, oy) = host.Mos.MosesOrigin();
@@ -297,10 +307,16 @@ internal sealed partial class GamePad
         var targets = Targets();
         var first = targets.Count == 0 ? default : targets[0];
         // 모세스는 페이지가 달라도 첫 칸 자리가 같을 수 있다(장소 목록 ↔ PARTY 의 전직 · 용병관리) — 페이지 · 단계도 함께 본다(사용자 보고 mo-18).
-        int page = host.Mos._mosesOpen ? host.Mos._mosesPage * 8 + host.Mos._mosesStep : -1;
-        if (first == _lastFirst && page == _lastPage) return;   // 같은 창이다 — 목록을 굴려 줄 수만 달라진 것도 첫 자리는 그대로다
+        int page = host.Mos._mosesOpen ? host.Mos._mosesPage * 8 + host.Mos._mosesStep : _part1Page >= 0 ? 1000 + _part1Page : -1;
+        // 파트1 화면은 화면 · 상태(대사 · 고르기 · 메뉴 · 창)가 같으면 그대로 둔다 — 연대표를 굴리거나 지도를 밀면 첫 칸 자리가 움직여
+        // 첫 자리로만 보면 굴릴 때마다 커서가 첫 칸으로 끌려왔다. 다만 보이는 판 크기가 바뀌면(챕터 지도는 창만큼 넓은 판을 첫 그리기에서 차린다)
+        // 단추 자리가 통째로 옮겨 가므로 다시 첫 자리에 올린다 — 안 그러면 커서가 640 판에서 잰 옛 자리에 남았다.
+        var view = (host.ViewWidth, host.ViewHeight);
+        if (_part1Page >= 0 && page == _lastPage && view == _lastView) { _lastFirst = first; return; }
+        if (first == _lastFirst && page == _lastPage && view == _lastView) return;   // 같은 창이다 — 목록을 굴려 줄 수만 달라진 것도 첫 자리는 그대로다
         _lastFirst = first;
         _lastPage = page;
+        _lastView = view;
         if (targets.Count == 0) return;
         // 성도에서는 첫 행성이 아니라 <b>전투 · 필드 장소가 있는 행성</b>부터(사용자 요청 mo-15) — 상점뿐인 행성은 뒤로 미룬다.
         int pick = PreferredPlanet();
@@ -323,6 +339,15 @@ internal sealed partial class GamePad
 
     /// <summary>지난 틀의 모세스 페이지 · 단계(모세스가 아니면 −1).</summary>
     private int _lastPage = -1;
+
+    /// <summary>지난 틀의 보이는 판 크기 — 바뀌면 자리들이 통째로 옮겨 간 것이라 첫 자리에 다시 올린다.</summary>
+    private (int W, int H) _lastView;
+
+    /// <summary>
+    /// 마지막 <see cref="Targets"/> 가 파트1 화면의 자리를 냈으면 그 화면 · 상태 번호(<see cref="Part1TitleScreen.PadPage"/> + 1, 전직 트리 · 일행 표면 0),
+    /// 아니면 −1(위에 뜬 시스템 메뉴 · 설정 · 저장 칸 창 따위).
+    /// </summary>
+    private int _part1Page = -1;
 
     /// <summary>
     /// 성도(행성 고르기)에서 LB · RB — 커서를 이전 · 다음 행성으로(끝에서 반대쪽으로 돈다). 행성 위가 아니면 장소가 있는 첫 행성으로. 성도가 아니면 false.
@@ -452,6 +477,8 @@ internal sealed partial class GamePad
             var end = targets[dy < 0 ? targets.Count - 1 : 0];
             MoveCursorTo(end.X + end.W / 2, end.Y + end.H / 2);
         }
+        // 파트1 챕터 지도 · 연대표 — 그 쪽에 자리가 없으면 지도를 민다 · 연대표를 굴린다(키보드의 방향키와 같은 일). 밀려 들어온 자리로 다음 누름이 간다.
+        else if (_part1Page > 0 && host.Part1TitleScr.PadScroll(dx, dy)) { }
         // 그 방향에 자리가 없으면 목록을 한 줄 굴린다 — 로드 슬롯처럼 보이는 줄 너머가 있는 목록은 커서 밑에서 다음 줄이 올라온다(menu-27).
         else if (dy != 0 && cur >= 0 && CanScroll(dy)) PostMouse(Win32.WM_MOUSEWHEEL, dy < 0 ? 120 : -120);
         else if (aside_ >= 0) MoveCursorTo(targets[aside_].X + targets[aside_].W / 2, targets[aside_].Y + targets[aside_].H / 2);

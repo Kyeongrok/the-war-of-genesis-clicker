@@ -156,6 +156,50 @@ internal sealed class Part1TownWindow(GameWindow host, Part1TitleScreen shell, F
 
     internal void UpdateHover(int bx, int by) => _hover = HitAt(bx, by);
 
+    /// <summary>
+    /// 패드 자리(<see cref="HitAt"/> 와 같은 칸, 판 좌표) — 술집 얼굴 · 상점 탭 · 줄(짚으면 설명) · ▲▼ · 굴리기 · 용병 ▲▼ → 결정 → EXIT.
+    /// 작별 · 소문 대사 중에는 없다(아무 데나 누르면 넘어간다).
+    /// </summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (_leaving || _rumors.Count > 0) return;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        void Add(int x, int y, int w, int h) => list.Add((ox + x, oy + y, w, h));
+        bool confirm = true;
+        switch (_f.Kind)
+        {
+            case Part1TownScreen.Kind.Pub:
+                for (int i = 0; i < Math.Min(12, _f.Entries.Count); i++) Add(PubX + i % 4 * PubW + 5, PubY + i / 4 * PubH + 10, 50, 50);
+                confirm = false;   // 술집은 HitAt 이 얼굴 밖에서 바로 끝난다 — 결정 단추가 없다
+                break;
+            case Part1TownScreen.Kind.Shop:
+                Add(TabBuyX, TabY, TabW, SmallH);
+                Add(TabSellX, TabY, TabW, SmallH);
+                for (int v = 0; v < Rows && _scroll + v < _rows.Count; v++)
+                {
+                    int ry = RowY + v * RowH;
+                    Add(RowX, ry, 222, RowH - 1);
+                    Add(RowX + 226, ry + 5, 12, 16);
+                    Add(RowX + 255, ry + 5, 12, 16);
+                }
+                if (_rows.Count > Rows) { Add(ScrollX, RowY, 16, 16); Add(ScrollX, RowY + ScrollH - 16, 16, 16); }
+                break;
+            case Part1TownScreen.Kind.Guild:
+                for (int i = 0; i < Math.Min(2, _rows.Count); i++)
+                {
+                    int cy = CardY + i * CardStep;
+                    Add(CardX + 238, cy + 4, 12, 16);
+                    Add(CardX + 268, cy + 4, 12, 16);
+                }
+                break;
+        }
+        if (confirm) Add(ConfirmX, ConfirmY, SmallW, SmallH);
+        Add(ExitX, ExitY, SmallW, SmallH);
+    }
+
+    /// <summary>패드 화면 상태 — 작별 · 소문 대사 중인가.</summary>
+    internal int PadPage => _leaving || _rumors.Count > 0 ? 1 : 0;
+
     internal void OnClick(int bx, int by)
     {
         if (_leaving) { if (!TalkPage()) Close(); return; }   // 1003 은 작별 줄을 다 읽기(상태 4)를 기다려 닫는다

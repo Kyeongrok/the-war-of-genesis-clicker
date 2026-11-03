@@ -108,6 +108,32 @@ internal sealed class Part1HqStatusWindow(GameWindow host, Part1ChapterScreen ma
 
     internal void UpdateHover(int bx, int by) => _hover = PanelOpen ? -1 : HitAt(bx, by);
 
+    /// <summary>패드 자리(<see cref="HitAt"/> 와 같은 칸, 판 좌표) — 얼굴 · 아이템 칸 · 굴리기 화살표 · 일행 표 · 사람/탈것. 상태 패널이 떠 있으면 없다.</summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list)
+    {
+        if (PanelOpen) return;
+        var (ox, oy) = host.Mos.MosesOrigin();
+        int wx = ox + X, wy = oy + Y;
+        int faces = Math.Min(10, host.Part1.TeamMembers(_team).Count);
+        for (int i = 0; i < faces; i++) list.Add((wx + 39 + 55 * (i % 5) - 24, wy + 65 + 55 * (i / 5) - 24, 49, 49));
+        var items = Items();
+        for (int k = 0; k < ItemCols * ItemRows && _itemTop * ItemCols + k < items.Count; k++)
+            list.Add((wx + ItemX + 10 + k % ItemCols * (CellW + 5), wy + ItemY + 10 + k / ItemCols * (CellH + 5), CellW, CellH));
+        if (items.Count > ItemCols * ItemRows)
+        {
+            list.Add((wx + ItemX + ItemW - 16, wy + ItemY, 16, 16));
+            list.Add((wx + ItemX + ItemW - 16, wy + ItemY + ItemH - 16, 16, 16));
+        }
+        list.Add((wx + TableX, wy + TableY, TableW, TableH));
+        list.Add((wx + MercX + 150, wy + MercY + 5, 23, 23));
+        list.Add((wx + MercX + 173, wy + MercY + 5, 23, 23));
+        if (Mercs().Count > 3)
+        {
+            list.Add((wx + MercX + MercW - 16, wy + MercY + MercRowTop, 16, 16));
+            list.Add((wx + MercX + MercW - 16, wy + MercY + MercH - 16, 16, 16));
+        }
+    }
+
     internal void OnClick(int bx, int by)
     {
         if (PanelOpen) { _panel!.OffClick(bx, by); return; }

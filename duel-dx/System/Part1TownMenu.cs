@@ -62,6 +62,19 @@ internal sealed class Part1TownMenu(GameWindow host)
         return -1;
     }
 
+    /// <summary>
+    /// 패드 자리(<see cref="HitAt"/> 와 같은 칸, 판 좌표 — <paramref name="ox"/> · <paramref name="oy"/> 는 640×480 틀 왼위) — 보이는 시설 단추 가운데
+    /// <paramref name="usable"/> 이 받는 칸 → 얼굴 → EXIT.
+    /// </summary>
+    internal void PadTargets(List<(int X, int Y, int W, int H)> list, int ox, int oy, Func<int, bool> usable)
+    {
+        foreach (var b in _buttons.OrderBy(b => b.Slot))
+            if (Shown(b) && usable(b.Slot)) list.Add((ox + ButtonX, oy + ButtonY + ButtonStep * b.Slot, ButtonW, ButtonH));
+        int people = Math.Min(10, host.Part1.ActiveMembers().Count);
+        for (int i = 0; i < people; i++) list.Add((ox + FaceX + FaceStep * i - 24, oy + FaceY - 24, 49, 49));
+        list.Add((ox + ExitX, oy + ExitY, ExitW, ExitH));
+    }
+
     /// <summary>모션 틱의 섞기 키대로 — 단추 바탕 · 틀 장식은 섞기 9(더하기)라 바탕 그림이 비친다.</summary>
     private void DrawObs(int obs, int motion, int x, int y)
     {
