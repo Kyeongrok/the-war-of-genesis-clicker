@@ -92,12 +92,30 @@ async function getTop(env) {
 const PARTS = ['battles', 'skills'];
 const DAY_CHOICES = [7, 30, 0];
 const since = (days) => (days ? new Date(Date.now() - days * 86400000).toISOString() : '');
+// 직접 지정한 기간(from · to = 한국 날짜 YYYY-MM-DD, to 는 그날까지) → received_at(UTC ISO) 범위 [lo, hi).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const kstStart = (d) => new Date(d + 'T00:00:00+09:00').toISOString();
+const kstNext = (d) => new Date(new Date(d + 'T00:00:00+09:00').getTime() + 86400000).toISOString();
+// 기간 → SQL 조건(열 이름 col) · 묶을 값.
+function rangeWhere(range, col) {
+  if (range.from || range.to) {
+    const w = [], a = [];
+    if (range.from) { w.push(`${col} >= ?`); a.push(kstStart(range.from)); }
+    if (range.to) { w.push(`${col} < ?`); a.push(kstNext(range.to)); }
+    return [w, a];
+  }
+  return range.days ? [[`${col} >= ?`], [since(range.days)]] : [[], []];
+}
+// 받은 때(UTC ISO) → 한국 날짜 · 주(그 주 월요일) · 달.
+const kstDay = (iso) => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+const kstWeek = (day) => { const t = new Date(day + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - (t.getUTCDay() + 6) % 7); return t.toISOString().slice(0, 10); };
 
-async function getDashboard(version, noedit, tachyrion, days, env, part) {
-  if (part === 'skills') return getSkills(version, noedit, tachyrion, days, env);
+async function getDashboard(version, noedit, tachyrion, range, env, part) {
+  if (part === 'skills') return getSkills(version, noedit, tachyrion, range, env);
+  const [rw, ra] = rangeWhere(range, 'received_at');
   const rows = (await env.DB.prepare(
-    `SELECT received_at, install, version, battle, outcome, turns, seconds, flags FROM battles ${days ? 'WHERE received_at >= ?' : ''}`)
-    .bind(...(days ? [since(days)] : [])).all()).results;
+    `SELECT received_at, install, version, battle, outcome, turns, seconds, flags FROM battles ${rw.length ? 'WHERE ' + rw.join(' AND ') : ''}`)
+    .bind(...ra).all()).results;
   for (const r of rows) { try { r.f = JSON.parse(r.flags) || {}; } catch { r.f = {}; } }
   // 버전 목록은 버전 거르기 전의 것(고르는 상자에 다른 버전도 보이게).
   const versions = [...new Set(rows.map((r) => r.version))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })).slice(0, 50);
@@ -126,9 +144,19 @@ async function getDashboard(version, noedit, tachyrion, days, env, part) {
     g.wins = (g.wins || 0) + (r.outcome === 'win'); g.turnSum = (g.turnSum || 0) + r.turns;
     g.secSum = (g.secSum || 0) + (r.seconds ?? 0); g.secN = (g.secN || 0) + (r.seconds != null);
   }), 300).map((g) => ({ battle: g.k, n: g.battles, wins: g.wins, turns: g.turnSum / g.battles, secSum: g.secSum, secN: g.secN }));
-  const days_ = group((r) => r.received_at.slice(0, 10) + '|' + r.version)
-    .map((g) => ({ day: g.k.split('|')[0], version: g.k.split('|')[1], battles: g.battles, installs: g.installs }))
-    .sort((a, b) => b.day.localeCompare(a.day) || b.version.localeCompare(a.version, undefined, { numeric: true })).slice(0, 120);
+  // 날짜별 탭 — 한국 날짜로 하루 · 주(월요일 시작) · 달마다, 그리고 하루 × 버전.
+  for (const r of picked) { r.day = kstDay(r.received_at); }
+  const winsOf = (g, r) => { g.wins = (g.wins || 0) + (r.outcome === 'win'); };
+  const period = (keyOf) => group(keyOf, winsOf).map((g) => ({ key: g.k, battles: g.battles, installs: g.installs, wins: g.wins || 0 }))
+    .sort((a, b) => b.key.localeCompare(a.key));
+  const days_ = {
+    day: period((r) => r.day).slice(0, 400),
+    week: period((r) => kstWeek(r.day)).slice(0, 200),
+    month: period((r) => r.day.slice(0, 7)).slice(0, 120),
+    dayVersion: group((r) => r.day + '|' + r.version)
+      .map((g) => ({ day: g.k.split('|')[0], version: g.k.split('|')[1], battles: g.battles, installs: g.installs }))
+      .sort((a, b) => b.day.localeCompare(a.day) || b.version.localeCompare(a.version, undefined, { numeric: true })).slice(0, 400),
+  };
 
   // 환경 · 설정(flags 의 값) — 그 칸을 안 보낸 옛 판은 k 가 null 로 한 줄에 모인다(대시보드가 「자료 없음」으로 따로 적는다).
   // 조작 방식 — 기술을 패드로 더 많이 썼으면 pad, 패드를 조금이라도 썼으면 mixed, 아니면 keys.
@@ -145,9 +173,8 @@ async function getDashboard(version, noedit, tachyrion, days, env, part) {
   return { total, versions, battles, days: days_, env: envRows, mods, modBase };
 }
 
-async function getSkills(version, noedit, tachyrion, days, env) {
-  const where = [], args = [];
-  if (days) { where.push('b.received_at >= ?'); args.push(since(days)); }
+async function getSkills(version, noedit, tachyrion, range, env) {
+  const [where, args] = rangeWhere(range, 'b.received_at');
   if (version) { where.push('b.version = ?'); args.push(version); }
   if (noedit) where.push(`b.flags NOT LIKE '%"charEdit":true%'`);
   if (tachyrion === '1') where.push(`COALESCE(json_extract(b.flags, '$.tachyrion'), 0) = 1`);
@@ -182,7 +209,11 @@ async function dashboard(url, env) {
   const t = url.searchParams.get('tachyrion'), tachyrion = t === '1' || t === '0' ? t : '';
   const p = url.searchParams.get('part'), part = PARTS.includes(p) ? p : 'battles';
   const d = Number(url.searchParams.get('days') ?? 7), days = DAY_CHOICES.includes(d) ? d : 7;
-  const body = await cached(env, `dashboard5|${part}|${days}|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, days, env, part));
+  const f = url.searchParams.get('from') || '', to = url.searchParams.get('to') || '';
+  if ((f && !DATE_RE.test(f)) || (to && !DATE_RE.test(to))) return json({ error: 'bad date' }, 400);
+  const range = f || to ? { from: f, to } : { days };
+  const rangeKey = f || to ? `${f}~${to}` : days;
+  const body = await cached(env, `dashboard6|${part}|${rangeKey}|${version}|${noedit ? 1 : 0}|${tachyrion}`, () => getDashboard(version, noedit, tachyrion, range, env, part));
   return jsonText(body.slice(0, -1) + ',"names":' + NAMES + '}');
 }
 

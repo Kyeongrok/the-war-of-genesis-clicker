@@ -58,7 +58,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>창세기전3 — 전투 통계 (파트1 · 파트2)</h1>
   <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
-    <label>기간 <select id="days"><option value="7">최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option></select></label>
+    <label>기간 <select id="period"><option value="today">오늘</option><option value="7" selected>최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option><option value="custom">직접 지정</option></select></label>
+    <span id="customRange" hidden><input type="date" id="from"> ~ <input type="date" id="to"></span>
     <label>버전 <select id="version"><option value="">전체</option></select></label>
     <label>타키리온 개편 <select id="tachyrion"><option value="">전체</option><option value="1">켠 판</option><option value="0">끈 판</option></select></label>
     <span id="error"></span>
@@ -79,7 +80,9 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="filters"><label>게임 <select id="buggame"><option value="">전체</option><option value="dow">창세기전3</option><option value="fd2">용의기사2</option></select></label><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
       <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
     <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
-  <section data-tab="days"><h2>날짜별 · 버전별</h2><table id="days"></table></section>
+  <section data-tab="days"><h2>날짜별</h2>
+    <div class="filters"><label>묶음 <select id="dayUnit"><option value="day">하루</option><option value="week">주(월요일 시작)</option><option value="month">달</option><option value="dayVersion">하루 · 버전</option></select></label></div>
+    <table id="daysTable"></table></section>
   <section data-tab="fd2"><h2>용의기사2 리메이크 · 플레이</h2>
     <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음)(위의 기간 · 버전 거르기는 안 씁니다). 관리자 키(버그 리포트 탭과 같은 것)를 넣어야 보입니다.</div>
     <div class="filters"><button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
@@ -103,7 +106,8 @@ let data = null, sortKey = 'uses', pickedChar = null, currentTab = 'ability';
 // 탭이 쓰는 집계 갈래(/v1/dashboard?part=) — 버그 리포트 탭은 집계가 없다. 받은 갈래는 거르기를 바꿀 때까지 다시 안 받는다.
 const TAB_PART = { ability: 'skills', chars: 'skills' };
 let loadedParts = new Set();
-const state = { version: '', tachyrion: '', days: '7' };
+const state = { version: '', tachyrion: '', days: '7', from: '', to: '' };
+let dayUnit = 'day';
 
 // 아래 표들은 탭으로 나눠 하나씩 보인다 — 고른 탭은 이 브라우저에 남는다
 function pickTab(tab) {
@@ -225,13 +229,26 @@ function renderMods() {
       || '<tr><td colspan="5" class="dim name">아직 자료가 없습니다 — 모드 칸은 v1.0.31 판부터 들어옵니다.</td></tr>');
 }
 
+// 날짜별 탭 — 한국 날짜로 하루 · 주 · 달마다(기간 안), 또는 하루 × 버전.
 function renderDays() {
-  $('days').innerHTML = '<tr><th class="name">날짜</th><th class="name">버전</th><th>전투</th><th>설치</th></tr>'
-    + data.days.map((d) => '<tr><td class="name">' + esc(d.day) + '</td><td class="name">' + esc(d.version) + '</td><td>' + n(d.battles) + '</td><td>' + n(d.installs) + '</td></tr>').join('');
+  const d = data.days || {};
+  if (dayUnit === 'dayVersion') {
+    $('daysTable').innerHTML = '<tr><th class="name">날짜</th><th class="name">버전</th><th>전투</th><th>설치</th></tr>'
+      + (d.dayVersion || []).map((r) => '<tr><td class="name">' + esc(r.day) + '</td><td class="name">' + esc(r.version) + '</td><td>' + n(r.battles) + '</td><td>' + n(r.installs) + '</td></tr>').join('');
+    return;
+  }
+  const head = { day: '날짜', week: '주(월요일)', month: '달' }[dayUnit];
+  const rows = d[dayUnit] || [];
+  const max = Math.max(1, ...rows.map((r) => r.battles));
+  $('daysTable').innerHTML = '<tr><th class="name">' + head + '</th><th>전투</th><th>설치</th><th>승률</th><th></th></tr>'
+    + (rows.map((r) => '<tr><td class="name">' + esc(r.key) + '</td><td>' + n(r.battles) + '</td><td>' + n(r.installs) + '</td><td>'
+        + (r.battles ? Math.round(100 * r.wins / r.battles) + '%' : '-') + '</td><td class="bar"><i style="width:' + (100 * r.battles / max).toFixed(1) + '%"></i></td></tr>').join('')
+      || '<tr><td colspan="5" class="dim name">이 기간에는 자료가 없습니다.</td></tr>');
 }
 
 async function fetchPart(part) {
-  const q = new URLSearchParams({ part, days: state.days, version: state.version, tachyrion: state.tachyrion });
+  const q = new URLSearchParams({ part, version: state.version, tachyrion: state.tachyrion });
+  if (state.from || state.to) { if (state.from) q.set('from', state.from); if (state.to) q.set('to', state.to); } else q.set('days', state.days);
   const res = await fetch('/v1/dashboard?' + q);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
@@ -389,7 +406,20 @@ $('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs();
 $('buggame').onchange = (e) => { bugState.game = e.target.value; loadBugs(); };
 loadBugs();
 
-$('days').onchange = (e) => { state.days = e.target.value; load(); };
+// 기간 — 오늘(한국 날짜) · 최근 N일 · 전체 · 직접 지정(시작 · 끝 날짜, 끝은 그날까지).
+const kstToday = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+function applyPeriod() {
+  const v = $('period').value;
+  $('customRange').hidden = v !== 'custom';
+  if (v === 'today') { state.from = state.to = kstToday(); }
+  else if (v === 'custom') { state.from = $('from').value; state.to = $('to').value; if (!state.from && !state.to) return; }
+  else { state.from = state.to = ''; state.days = v; }
+  load();
+}
+$('period').onchange = applyPeriod;
+$('from').onchange = applyPeriod;
+$('to').onchange = applyPeriod;
+$('dayUnit').onchange = (e) => { dayUnit = e.target.value; if (data) renderDays(); };
 $('version').onchange = (e) => { state.version = e.target.value; load(); };
 $('tachyrion').onchange = (e) => { state.tachyrion = e.target.value; load(); };
 load();
