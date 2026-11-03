@@ -106,6 +106,9 @@ internal sealed class UnitState(DemoUnit unit)
     public int MaxSoul { get; set; }
     public int Ctp => Data?.Ctp ?? 0;
     public bool HasTurn { get; set; }
+
+    /// <summary>파트1 — 이번 틱에 이 차례 뒤로 더 받을 차례 수(릴렌트러스, 원본 남은 차례 <c>+0x1c6</c> − 1).</summary>
+    public int Part1ExtraTurns { get; set; }
     public bool Alive { get; set; } = true;
 
     /// <summary>전투를 시작한 칸 — RESTART 로 되돌릴 때 쓴다.</summary>
@@ -129,6 +132,7 @@ internal sealed class UnitState(DemoUnit unit)
         if (!keepFacing) Facing = StartFacing;
         Alive = true;
         HasTurn = true;
+        Part1ExtraTurns = 0;
         Stance = 0;
         IdleAction = -1;
         Action = -1;

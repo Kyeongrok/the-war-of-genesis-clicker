@@ -483,6 +483,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             u.Stance = 0;
             // 파트1 자세(+0x257~+0x25b)도 차례가 올 때 지운다(0x10036350) — 자세 몸짓(동작 21)도 서기로.
             if (part1) ClearPart1Stance(u);
+            // 파트1 — 차례가 오는 틱에 남은 차례 +0x1c6 = +0x1c8(1 + 릴렌트러스 레벨, 0x1003504e). 부하를 거느린 대장은 1(0x10036960).
+            if (part1) u.Part1ExtraTurns = FollowersOf(Array.IndexOf(host._units, u)).Count > 0 ? 0 : Part1.ExtraTurns(u);
         }
         _objectsDue = Objects.Count > 0;
         _eventCheckDue |= 1 << 3;
@@ -766,7 +768,27 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void EndTurn()
     {
         _eventCheckDue |= 1 << 2;                // 갈래 2 = 행동 끝(0x100680a3)
-        if (_turn >= 0) { host._units[_turn].HasTurn = false; NoteActed(host._units[_turn]); }
+        if (_turn >= 0)
+        {
+            var cur = host._units[_turn];
+            // 파트1 릴렌트러스 — 이동 · 행동을 다 쓰면 남은 차례 +0x1c6 을 하나 줄이고, 남았으면 이동 · 행동을 1 로 되채워 같은 틱에 차례를 또 받는다
+            // (0x10030d95~0x10030dbf). 되받은 차례도 고를 때 소울 +20 · 매 턴 회복 · 자세 지우기(0x10036350)를 다시 한다 — 자세 지우기는 여기서, 나머지는 StartTurn.
+            if (host._scene.IsPart1 && cur.Part1ExtraTurns > 0 && cur is { Alive: true, OnField: true, LeaderIndex: < 0 } && CanTakeTurn(cur))
+            {
+                cur.Part1ExtraTurns--;
+                cur.Tp = cur.MaxTp;
+                ClearPart1Stance(cur);
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 relentless tick {_tick} unit {_turn} chr {cur.ChrCode} extra turn (left {cur.Part1ExtraTurns})" + Environment.NewLine);
+            }
+            else
+            {
+                cur.HasTurn = false;
+                cur.Part1ExtraTurns = 0;
+            }
+            NoteActed(cur);
+        }
         _turn = -1;
         _ringUnit = -1;
         _skillLeader = -1;

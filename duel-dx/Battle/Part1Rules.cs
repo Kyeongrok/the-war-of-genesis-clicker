@@ -446,6 +446,16 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     internal int StanceAbility(UnitState u) =>
         Fighter(u) is { } f ? new[] { 76, 77, 78, 79, 80 }.FirstOrDefault(id => f.Chr.EffectiveLevel(id) >= 0) : 0;   // 쓰는 레벨(0x1009e020) — 지금 직업이 다루는 것만
 
+    /// <summary>어빌리티 139 「릴렌트러스」 — 같은 틱에 차례를 그 레벨만큼 더 받는다.</summary>
+    internal const int RelentlessAbility = 139;
+
+    /// <summary>
+    /// 차례가 오는 틱에 더 받는 차례 수 — 원본 남은 차례 <c>+0x1c6</c> = <c>+0x1c8</c> = 1 + 어빌리티 139 의 쓰는 레벨(<c>0x1009e020</c>, 0xff 면 0)
+    /// (유닛 만들기 <c>0x100347ac</c>~ · 부하가 떨어질 때 <c>0x1003690e</c> · <c>0x100369d5</c>). 부하를 거느린 대장은 1 로 둔다(<c>0x10036960</c>).
+    /// 지금 직업이 139 를 안 다루면(시반 블레이드만 다룬다) 배웠어도 -1 이라 더 안 받는다.
+    /// </summary>
+    internal int ExtraTurns(UnitState u) => Fighter(u) is { } f ? Math.Max(0, f.Chr.EffectiveLevel(RelentlessAbility)) : 0;
+
     /// <summary>자세 이름(어빌리티 이름 — 분석-파트1-전투 24절 A).</summary>
     internal static string StanceName(int ability) => ability switch { 76 => "방어", 77 => "회피", 78 => "반격", 79 => "역습", 80 => "완전방어", _ => "" };
 

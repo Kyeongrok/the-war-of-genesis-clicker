@@ -763,11 +763,13 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                                    int? LeaderIndex = null, int? FormationSlot = null, int? LegionId = null, int? LegionPower = null,
                                    int? OriginCol = null, int? OriginRow = null, bool? Detached = null,
                                    int? StartCol = null, int? StartRow = null, int[]? StatusBy = null, int? StartFacing = null,
-                                   int? P1Heat = null, int[]? P1Ailments = null, int[]? P1Buffs = null, int? P1Enchant = null, int? P1Stance = null);
+                                   int? P1Heat = null, int[]? P1Ailments = null, int[]? P1Buffs = null, int? P1Enchant = null, int? P1Stance = null,
+                                   int? P1ExtraTurns = null);
 
     // P1 칸 = 파트1 전투 유닛 상태 — 원본 유닛 기록(읽기 0x100340b0)이 온도 +0x4a(바탕 0x10099980)와 상태 바이트 +0x246~+0x25c 를 싣는다.
     // P1Heat 온도, P1Ailments 동결 1 · 쇼크 2 · 최면 14 · 컨디션이상 15 · 혼란 16, P1Buffs (세기 식 · 남은 길이) 짝(집중 1022 · 아이스 실드 14 …),
     // P1Enchant 속성 부여 1~3, P1Stance 자세 76~80. 없으면(옛 세이브 · 파트2) 예전처럼 80 · 모두 풀린 채.
+    // P1ExtraTurns = 이번 틱에 더 받을 차례(릴렌트러스, 원본 유닛 기록의 남은 차례 +0x1c6 − 1, 읽기 0x100341b6). 없으면 0.
 
     // StartCol·StartRow = 배치 단계가 옮긴 처음 자리(불러온 뒤 RESTART 가 Btl 기본 줄로 돌아가지 않게), StatusBy = 상태를 건 유닛의 자리 번호
     // (매 턴 피해로 쓰러뜨렸을 때 EXP 를 받을 사람 — 불러오면 사라졌다). ba-21 outer-rules 7.
@@ -1169,7 +1171,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     {
         if (!battleSave || !host._scene.IsPart1) return s;
         var (ailments, buffs, enchant, stance) = host.Btl.Part1.SaveUnit(u);
-        return s with { P1Heat = host.Btl.Part1Objects.SaveUnitHeat(u), P1Ailments = ailments, P1Buffs = buffs, P1Enchant = enchant, P1Stance = stance };
+        return s with { P1Heat = host.Btl.Part1Objects.SaveUnitHeat(u), P1Ailments = ailments, P1Buffs = buffs, P1Enchant = enchant, P1Stance = stance, P1ExtraTurns = u.Part1ExtraTurns > 0 ? u.Part1ExtraTurns : null };
     }
 
     /// <summary>
@@ -1606,7 +1608,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         btl.Part1Fields.Restore(state.Part1Energy, tick);
         btl.Part1.ClearUnitStates();
         foreach (var (u, s) in restored)
+        {
             if (!state.InMoses) btl.Part1.RestoreUnit(u, s.P1Ailments, s.P1Buffs, s.P1Enchant, s.P1Stance);
+            u.Part1ExtraTurns = state.InMoses ? 0 : s.P1ExtraTurns ?? 0;
+        }
         btl.Part1Objects.RestoreUnitHeat(restored.Select(r => (r.Unit, state.InMoses ? null : r.Save.P1Heat)));
         foreach (var (u, _) in restored) host.StatusScr.RefreshUnitStats(u);
     }
