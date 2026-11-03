@@ -368,10 +368,22 @@ internal sealed unsafe partial class BattleScene
         // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
         // 파트1 판은 원본 그리기 목록 차례(세계 y, 세계 z + 19 — 0x1001ad10)로 — 맵 물체의 깊이 층(Part1MapObjects)을 유닛 사이사이에 끼워 그린다.
         var p1 = host._scene.IsPart1 ? Part1Objects : null;
-        var order = p1 == null ? Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y)
-                               : Enumerable.Range(0, units.Length).OrderBy(i => Part1UnitKey(units[i]));
-        foreach (int i in order)
+        var order = (p1 == null ? Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y)
+                                : Enumerable.Range(0, units.Length).OrderBy(i => Part1UnitKey(units[i]))).ToArray();
+        // 체력바는 그 인물 바로 뒤에 그려 앞줄 인물이 덮게 한다(플레이어 제보 fa-80) — 앞 인물 그림과 겹치면 글도 판에 써서 함께 가려지게.
+        var bodies = host._showGauges ? new (int X, int Y, int W, int H)?[units.Length] : null;
+        if (bodies != null)
+            for (int k = 0; k < units.Length; k++)
+                if (units[k].Alive && units[k].OnField && sprites.TryGetValue(units[k].ChrCode, out var sp))
+                {
+                    var f = sp.FrameFor(units[k]);
+                    var (bx, by) = UnitFoot(units[k]);
+                    bodies[k] = (bx + f.X, by + f.Y, f.W, f.H);
+                }
+        _gaugeLayerText.Clear();
+        for (int at = 0; at < order.Length; at++)
         {
+            int i = order[at];
             var unit = units[i];
             if (!unit.Alive || !unit.OnField) continue;
             p1?.DrawUntil(Part1UnitKey(unit));
@@ -405,8 +417,24 @@ internal sealed unsafe partial class BattleScene
             // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
             bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
             if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
+            if (bodies != null) DrawGaugeInOrder(unit, order, at, bodies);
         }
         p1?.Flush();
+    }
+
+    /// <summary>
+    /// 그 인물의 체력바를 지금(그 인물 바로 뒤에) 판에 그린다. 뒤에 그릴 인물의 그림과 겹치면 글도 판에(같이 가려진다),
+    /// 아니면 글은 나중에 새 UI 층에 또렷하게(<see cref="DrawGauges"/>).
+    /// </summary>
+    private void DrawGaugeInOrder(UnitState unit, int[] order, int at, (int X, int Y, int W, int H)?[] bodies)
+    {
+        var g = GaugeRect(unit);
+        bool covered = false;
+        for (int k = at + 1; k < order.Length && !covered; k++)
+            if (bodies[order[k]] is { } b && b.X < g.X + g.W && g.X < b.X + b.W && b.Y < g.Y + g.H && g.Y < b.Y + b.H) covered = true;
+        bool board = covered || !host._hiResUi || host.BattleCovered;
+        DrawGauge(unit, shapes: true, text: board, boardText: board);
+        if (!board) _gaugeLayerText.Add(unit);
     }
 
     /// <summary>파트1 유닛의 깊이 열쇠 — 칸 사이를 걷는 중이면 그 사이 줄 · 높이(<see cref="Part1MapObjects.UnitKey"/>).</summary>

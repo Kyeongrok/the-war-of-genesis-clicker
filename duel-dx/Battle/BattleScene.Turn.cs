@@ -2657,31 +2657,68 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         }
     }
 
-    /// <summary>인물 발밑의 HP(초록·빨강)·TP(노랑) 막대.</summary>
+    /// <summary>
+    /// 인물 발밑의 HP(초록·빨강)·TP(노랑) 막대 — 막대 · 바탕은 <see cref="DrawUnits"/> 가 그 인물을 그린 바로 뒤에 그려(<see cref="DrawGauge"/>),
+    /// 앞줄(뒤에 그리는) 인물의 머리가 막대를 덮는다. 전에는 모든 인물 위에 덧그려 다가간 인물의 머리를 가렸다(플레이어 제보 fa-80).
+    /// 여기서는 앞 인물에 안 가려진 막대의 글(레벨 · 딱지)만 새 UI 층에 또렷하게 쓴다 — 가려진 막대의 글은 판에 이미 썼다.
+    /// </summary>
     internal void DrawGauges()
     {
-        foreach (var u in host._units)
+        foreach (var u in _gaugeLayerText) DrawGauge(u, shapes: false, text: true, boardText: false);
+        _gaugeLayerText.Clear();
+    }
+
+    /// <summary>새 UI 층에 글을 쓸 막대(앞 인물에 안 가려진 것) — <see cref="DrawUnits"/> 가 채우고 <see cref="DrawGauges"/> 가 비운다.</summary>
+    private readonly List<UnitState> _gaugeLayerText = [];
+
+    /// <summary>막대가 차지하는 네모(레벨 동그라미 · 딱지까지 넉넉히) — 앞 인물 그림과 겹치는지 볼 때.</summary>
+    internal (int X, int Y, int W, int H) GaugeRect(UnitState u)
+    {
+        var (fx, fy) = UnitFoot(u);
+        int y = fy + TileH / 2 - 7;
+        return (fx - TileW / 2 - 14, y - 6, TileW + 16, 24);
+    }
+
+    /// <summary>막대 하나 — <paramref name="shapes"/> 바탕 · 막대 · 동그라미, <paramref name="text"/> 레벨 · 딱지 글(<paramref name="boardText"/> 면 판에).</summary>
+    internal void DrawGauge(UnitState u, bool shapes, bool text, bool boardText)
+    {
+        if (!u.Alive || !u.OnField || u.MaxHp <= 0) return;   // 판 밖(증원 전·퇴장) 유닛의 막대가 빈 칸에 뜨지 않게(ba-20 G22)
+        var (fx, fy) = UnitFoot(u);
+        int w = TileW - 8, x = fx - w / 2, y = fy + TileH / 2 - 7;
+        if (shapes)
         {
-            if (!u.Alive || !u.OnField || u.MaxHp <= 0) continue;   // 판 밖(증원 전·퇴장) 유닛의 막대가 빈 칸에 뜨지 않게(ba-20 G22)
-            var (fx, fy) = host.Btl.UnitFoot(u);
-            int w = TileW - 8, x = fx - w / 2, y = fy + TileH / 2 - 7;
             host.FillRect(x - 1, y - 1, w + 2, 7, 0xC0000000);
             host.FillRect(x, y, w * u.Hp / u.MaxHp, 3, u.IsAlly ? 0xFF50D060 : 0xFFE05050);
             if (u.MaxTp > 0) host.FillRect(x, y + 3, w * Math.Clamp(u.Tp, 0, u.MaxTp) / u.MaxTp, 2, 0xFFE8C040);
-            // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다. 파트1 은 누적 경험치 ÷ 100(Part1Chr.Level — EXP 100 마다
-            // 어빌리티를 하나 올린 횟수)을 파트2 처럼 보인다(사용자 요청). 전투 중 오른 것까지 보이게 파트1 인물 자료에서 읽는다.
-            int? level = !u.IsAlly ? null : host._scene.IsPart1 ? Part1.Fighter(u)?.Chr.Level : u.Data?.Level;
-            if (level is { } shown)
+        }
+        // 아군이면 막대 왼쪽에 작은 원 안의 레벨(사용자 요청) — 적은 안 보인다. 파트1 은 누적 경험치 ÷ 100(Part1Chr.Level — EXP 100 마다
+        // 어빌리티를 하나 올린 횟수)을 파트2 처럼 보인다(사용자 요청). 전투 중 오른 것까지 보이게 파트1 인물 자료에서 읽는다.
+        int? level = !u.IsAlly ? null : host._scene.IsPart1 ? Part1.Fighter(u)?.Chr.Level : u.Data?.Level;
+        if (level is { } shown)
+        {
+            string lv = shown.ToString();
+            var (tw, th) = GaugeTextSize(lv, 0xFFFFFFFF, GaugeLevelFont, boardText);
+            int r = Math.Max(5, (tw + 3) / 2), cx = x - 2 - r, cy = y + 2;
+            if (shapes)
             {
-                string lv = shown.ToString();
-                var (tw, th) = host.BattleTextSize(lv, 0xFFFFFFFF, GaugeLevelFont);
-                int r = Math.Max(5, (tw + 3) / 2), cx = x - 2 - r, cy = y + 2;
                 host.FillCircle(cx, cy, r + 1, 0xE0000000);
                 host.FillCircle(cx, cy, r, 0xE0305070);
-                host.BattleText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont);
             }
-            DrawAilmentChips(u, fx, y + 7);
+            if (text) GaugeText(lv, cx - tw / 2, cy - th / 2, 0xFFFFFFFF, GaugeLevelFont, boardText);
         }
+        DrawAilmentChips(u, fx, y + 7, shapes, text, boardText);
+    }
+
+    private (int W, int H) GaugeTextSize(string s, uint argb, float size, bool board)
+    {
+        if (!board) return host.BattleTextSize(s, argb, size);
+        var (_, w, h) = host.GetText(s, argb, size);
+        return (w, h);
+    }
+
+    private void GaugeText(string s, int x, int y, uint argb, float size, bool board)
+    {
+        if (board) host.DrawText(s, x, y, argb, size); else host.BattleText(s, x, y, argb, size);
     }
 
     internal const float GaugeLevelFont = 7f;
@@ -2690,7 +2727,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 체력바 아래 상태이상 딱지 — 칸 셋 가운데 걸린 것만 두 글자로, 해로운 것은 빨강 · 이로운 것은 파랑 바탕(사용자 요청 fa-64).
     /// 원본에는 없다 — 원본은 Status · 정보 창의 칸에서만 보인다.
     /// </summary>
-    internal void DrawAilmentChips(UnitState u, int cx, int top)
+    internal void DrawAilmentChips(UnitState u, int cx, int top, bool shapes = true, bool text = true, bool boardText = false)
     {
         var chips = new List<(string Text, uint Back)>();
         for (int k = 0; k < 3; k++)
@@ -2707,14 +2744,17 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             chips.Add((stance == 80 ? "완방" : Part1Rules.StanceName(stance), 0xE02858B0u));
         if (chips.Count == 0) return;
         const int pad = 2, gap = 1;
-        var sizes = chips.Select(c => host.BattleTextSize(c.Text, 0xFFFFFFFF, AilmentChipFont)).ToList();
+        var sizes = chips.Select(c => GaugeTextSize(c.Text, 0xFFFFFFFF, AilmentChipFont, boardText)).ToList();
         int h = sizes.Max(s => s.H) + 1, total = sizes.Sum(s => s.W + 2 * pad) + gap * (chips.Count - 1), x = cx - total / 2;
         for (int k = 0; k < chips.Count; k++)
         {
             int w = sizes[k].W + 2 * pad;
-            host.FillRect(x - 1, top - 1, w + 2, h + 2, 0xC0000000);
-            host.FillRect(x, top, w, h, chips[k].Back);
-            host.BattleText(chips[k].Text, x + pad, top + (h - sizes[k].H) / 2, 0xFFFFFFFF, AilmentChipFont);
+            if (shapes)
+            {
+                host.FillRect(x - 1, top - 1, w + 2, h + 2, 0xC0000000);
+                host.FillRect(x, top, w, h, chips[k].Back);
+            }
+            if (text) GaugeText(chips[k].Text, x + pad, top + (h - sizes[k].H) / 2, 0xFFFFFFFF, AilmentChipFont, boardText);
             x += w + gap;
         }
     }
