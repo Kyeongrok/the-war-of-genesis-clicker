@@ -527,6 +527,27 @@ public static class Part1Game
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
     }
 
+    /// <summary>
+    /// 다시 싼 그림의 동작 <paramref name="action"/>(<see cref="ActionMap"/> 의 파트2 쪽 번호)이 옮겨 온 파트1 모션의 타격 키(종류 5)마다 적힌 <b>세기 식</b>(키 첫 인자) —
+    /// 다시 싼 타격 키(종류 6)와 같은 차례(틱 순)·같은 수. 원본 키 처리 <c>0x10036130</c> 은 이 값으로 서술을 짓는다(<c>0x1003f3c0(키[0], …, 명중 100)</c>) —
+    /// 인물은 1(무기1 (DEX + SKILL)·W/2) · 30(무기2), 마장기(아론다이트 Obs 396 · Mk3 598/599 · 287)는 0(기본 공격 식 (ATK + 10)·STR)이다.
+    /// <paramref name="dir"/> 은 0 위 · 1 옆 · 2 아래. 파트1 폴더가 없거나 그 동작에 키가 없으면 null.
+    /// </summary>
+    public static List<int>? StrikeSelectors(int part1Obs, int action, int dir)
+    {
+        if (Root == null || !BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        int from = -1, cap = 0;
+        foreach (var (to, (src, ability, hits)) in ActionMap)
+            if (to == action && ability > 0) (from, cap) = (src, hits);
+        if (from < 0) return null;
+        try
+        {
+            var keys = RawMotion(p1, from * 3 + dir)?.Where(k => k[2] == 5).Take(cap).OrderBy(k => k[0]).Select(k => (int)k[3]).ToList();
+            return keys is { Count: > 0 } ? keys : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
     /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
     public const int ScreenTint = 14;
 

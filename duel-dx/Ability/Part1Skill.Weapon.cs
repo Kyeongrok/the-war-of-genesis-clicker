@@ -30,6 +30,16 @@ internal sealed partial class Part1Skill
     internal static bool StrikesEachKey(int work) =>
         work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is (>= 11 and <= 15) or (>= 36 and <= 40);
 
+    /// <summary>연 · 참을 쓰면 첫 타격 키에 적힐 세기 식(<see cref="Part1Game.StrikeSelectors"/>) — 예상 피해 안내용. 모르면 null.</summary>
+    internal static int? FirstStrikeSelector(UnitState u, WorkData w)
+    {
+        if (!StrikesEachKey(w.Id) || u.Data is not { SpriteId: > Part1Game.ObsBase } d) return null;
+        int id = Part1SkillBook.AttackIdOf(w.Id), part1Action = id <= 15 ? id : 11 + id - 36;
+        int dir = u.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
+        int obs = d.SpriteId - Part1Game.ObsBase;
+        return (Part1Game.StrikeSelectors(obs, WeaponAction(part1Action), dir) ?? Part1Game.StrikeSelectors(obs, 13, dir))?[0];
+    }
+
     /// <summary>
     /// 적을 안 치는 파트1 기술 — 타이밍 명중 띠를 안 띄운다(사용자 요청 fg-73). 댓쉬 366 · 워프 367 은 세기 식 4(무기)가 적혀 있어도 옮기기만 하고,
     /// 효과 범위 거르기 <c>+0x40</c> = 3(같은 편 · 자신만 — 집중 · 기도 · 블래스 · 스피디 · 배리어 …)은 빗나갈 적이 없다.
@@ -92,9 +102,21 @@ internal sealed partial class Part1Skill
         var user = _user;
         var t = TargetPoint(targets, aim);
         user.Facing = FacingOf(t.X - _home.X, t.Y - _home.Y);
-        var (length, hits) = PlayStrike(user, part1Action);
-        foreach (int tick in hits)
-            foreach (int ti in targets) HitAt(tick, ti, hit);
+        var (length, hits, selectors) = PlayStrike(user, part1Action);
+        // 원본은 Attack.dat 의 세기 식(연 1)이 아니라 <b>타격 키에 적힌 식</b>으로 친다(0x10036130 → 0x1003f3c0(키[0], …, 명중 100)) —
+        // 마장기(아론다이트 · Mk3)의 연 키는 0 = 기본 공격 식이라 한 타가 기본 공격만큼 든다. 전에는 늘 식 1((DEX + SKILL)·W/2)로 쳐서
+        // 무기 ATK 가 큰 마장기의 연이 기본 공격의 10분의 1 남짓이었다(댓글 제보 fg-121).
+        for (int i = 0; i < hits.Count; i++)
+        {
+            int? selector = i < selectors.Count ? selectors[i] : null;
+            foreach (int ti in targets)
+                Later(hits[i], () =>
+                {
+                    host.Btl.Part1.KeySelector = selector;
+                    try { hit(ti); }
+                    finally { host.Btl.Part1.KeySelector = null; }
+                });
+        }
         return length + 1;
     }
 
@@ -359,21 +381,29 @@ internal sealed partial class Part1Skill
     /// 연 · 참의 칼질 — 파트1 동작 11~15 를 지금 걸고 (걸린 틱, 때리는 틱들)을 돌려준다. 때리는 틱은 그 모션의 타격 키에서 읽고,
     /// 키가 없으면 살라딘(Obs 196)의 키 자리. 4타~6타 동작이 그림에 없으면 2타 · 3타를 이어 붙인다(4 = 2+2 · 5 = 2+3 · 6 = 3+3).
     /// </summary>
-    private (int Length, List<int> Hits) PlayStrike(UnitState u, int part1Action)
+    private (int Length, List<int> Hits, List<int?> Selectors) PlayStrike(UnitState u, int part1Action)
     {
         int[] keys = StrikeKeys[Math.Clamp(part1Action - 11, 0, 4)];
-        if (!host._sprites.TryGetValue(u.ChrCode, out var sprite)) return (keys[^1] + 6, [.. keys]);
+        if (!host._sprites.TryGetValue(u.ChrCode, out var sprite)) return (keys[^1] + 6, [.. keys], []);
         bool Has(int a) => sprite.RawClip(a * 3) != null;
         int Ticks(int a) => Math.Max(1, (int)Math.Round(sprite.ActionSeconds(a, u.Facing) * TicksPerSecond));
         List<int> HitsOf(int a, int[] fallback) =>
             sprite.Clip(a, u.Facing)?.Hits is { Count: > 0 } h ? [.. h.Select(x => x.Start).OrderBy(x => x)] : [.. fallback];
+        // 타격 키마다 적힌 세기 식(0x10036130 → 0x1003f3c0(키[0], …)) — 그 동작의 타 수만큼, 모르면 null(Attack.dat 식).
+        List<int?> SelectorsOf(int a, int count)
+        {
+            var s = u.Data is { SpriteId: > Part1Game.ObsBase } d
+                ? Part1Game.StrikeSelectors(d.SpriteId - Part1Game.ObsBase, a, u.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 }) : null;
+            return s is { } list && list.Count == count ? [.. list.Select(x => (int?)x)] : [.. Enumerable.Repeat<int?>(null, count)];
+        }
         int own = WeaponAction(part1Action);
         if (Has(own))
         {
             int len = Ticks(own);
             u.PlayAction(own, len / TicksPerSecond);
             host.ScheduleActionSounds(u, own);
-            return (len, HitsOf(own, keys));
+            var ownHits = HitsOf(own, keys);
+            return (len, ownHits, SelectorsOf(own, ownHits.Count));
         }
         // 이어 붙이기 — 앞 동작이 끝나는 틱에 뒤 동작을 건다.
         (int A, int B) pair = part1Action switch { 13 => (13, 13), 14 => (13, 14), 15 => (14, 14), _ => (13, -1) };
@@ -382,11 +412,14 @@ internal sealed partial class Part1Skill
         u.PlayAction(a, la / TicksPerSecond);
         host.ScheduleActionSounds(u, a);
         var hits = HitsOf(a, a == 13 ? StrikeKeys[0] : [9]);
-        if (pair.B < 0 || !Has(pair.B)) return (la, hits);
+        var selectors = SelectorsOf(a, hits.Count);
+        if (pair.B < 0 || !Has(pair.B)) return (la, hits, selectors);
         int b = pair.B, lb = Ticks(b);
         Later(la, () => { u.PlayAction(b, lb / TicksPerSecond); host.ScheduleActionSounds(u, b); });
-        hits.AddRange(HitsOf(b, b == 13 ? StrikeKeys[0] : StrikeKeys[1]).Select(x => la + x));
-        return (la + lb, hits);
+        var later = HitsOf(b, b == 13 ? StrikeKeys[0] : StrikeKeys[1]);
+        hits.AddRange(later.Select(x => la + x));
+        selectors.AddRange(SelectorsOf(b, later.Count));
+        return (la + lb, hits, selectors);
     }
 
     /// <summary>살라딘(Obs 196)의 동작 11~15 타격 키 틱(종류 5) — 아홉 인물이 모두 같다(Part1Game.ActionMap 주석).</summary>

@@ -2090,11 +2090,15 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         var hits = new List<int>();
         int landed = 0;
         (int Power, int Defense, bool Magic, int? Resist, bool Blocked)? why = null;
+        // 파트1 연 · 참은 타격 키의 식으로 친다 — 안내도 첫 키의 식으로 굴린다(fg-121).
+        int? keySelector = host._scene.IsPart1 ? Part1Skill.FirstStrikeSelector(a, w) : null;
         for (int i = 0; i < Rolls; i++)
         {
             Part1.LastHit = null;
+            Part1.KeySelector = keySelector;
             var (amount, result, crit) = (host._scene.IsPart1 ? Part1.Resolve(rng, a, t, w, AimBonus(a)) : null)
                 ?? db.Resolve(rng, CombatData(a)!, a.Tp, host.TuningScr.AttackSoul(w, a.Soul), CombatData(t)!, t.Tp, t.Hp, t.MaxHp, w, t.Stance, a.Status(29), AimBonus(a));
+            Part1.KeySelector = null;
             if (result is not (2 or Part1Rules.Blocked or Part1Rules.CounterHit)) continue;
             landed++;
             if (!crit) hits.Add(amount);

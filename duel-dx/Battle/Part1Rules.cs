@@ -251,6 +251,13 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
     /// <summary>연사를 발마다 나눠 칠 때의 발 수(<see cref="Part1Skill.VolleyShots"/>) — 0 이 아니면 한 발 세기 = 세기 × 타수 ÷ 발 수(다 맞으면 합이 전과 같다).</summary>
     internal int SplitShots;
 
+    /// <summary>
+    /// 연 · 참의 이번 타격 키에 적힌 세기 식(<see cref="Part1Game.StrikeSelectors"/>) — null 이 아니면 그 한 타는 원본 키 처리 <c>0x10036130</c> 처럼 친다:
+    /// 서술 <c>0x1003f3c0(키[0], 서술, 속성 0, …, 명중 100, 치명 1)</c> — 세기는 그 식만(Attack.dat 의 +0x44 제곱 · 속성 +0x64 · 명중 +0x48 은 안 든다),
+    /// 속성은 무기 것(식 29~31 은 무기2), 명중 100. Part1Skill 이 그 타 동안만 켠다.
+    /// </summary>
+    internal int? KeySelector;
+
     internal bool Has(UnitState u, int sel) => Buffs.TryGetValue(u, out var b) && b.ContainsKey(sel);
 
     /// <summary>
@@ -474,10 +481,13 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         // 상태이상 기술(선택자 10~28)은 피해가 아니어서 파트2 식으로 넘긴다. 기본 공격은 무기 갈래의 기본 공격 칸(칼 1 — 식 0 · 명중 100, 활 4 — 식 3 · 명중 90 …).
         var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
         int selector = attack?.Formula ?? 0;
+        // 연 · 참의 타격 키 한 타 — 키에 적힌 식으로 친다(KeySelector, 원본 0x10036130).
+        bool keyHit = KeySelector is not null && attack != null && Part1Skill.StrikesEachKey(w.Id);
+        if (keyHit) selector = KeySelector!.Value;
         if (selector is >= 10 and <= 28) return null;
         // 썬 라이트(선택자 8)가 같은 편에 닿으면 회복 갈래(6)다 — 명중 · 방어를 안 굴리고 결과 1(회복), 양은 HealAmount 가 낸다.
         if (selector == 8 && HealsFriend(a, t, w)) return (0, 1, false);
-        int accuracy = attack is { Accuracy: > 0 } ? attack.Accuracy : 100;
+        int accuracy = !keyHit && attack is { Accuracy: > 0 } ? attack.Accuracy : 100;   // 키 한 타는 명중 100(0x10036151 push 0x64)
         accuracy += aimBonus;
         // 원본 차례(0x100413b0): 무기로 치는 물리(선택자 0 · 1 · 29 · 30)만 ① 회피(0x10040fa0 → 결과 5, 역습 자세 +0x25a 면 7) ② 명중 굴림(결과 3)
         // ③ 막기(0x10040eb0 → 결과 4 — 피해는 들어가고 방어에 두 손 아이템 +0x58 을 더한다). 때린 이 장비에 보정 246(회피 불능)이 있으면 ①③ 을 안 굴린다.
@@ -505,9 +515,10 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         bool weaponHit = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31;
         if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
         // 타수(+0x66) — 세기에 곱해 한 번에 준다(원본 AI 어림 0x10040985 와 같다). 쌍검 · 쌍권총 · 연 · 참처럼 타격 키마다 따로 치는 것은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
-        if (attack != null) power = (power + attack.PowerAdd * attack.PowerAdd) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
+        if (attack != null) power = (power + (keyHit ? 0 : attack.PowerAdd * attack.PowerAdd)) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
         if (attack != null && SplitHits && SplitShots > 0) power = power * Math.Max(1, attack.Hits) / SplitShots;
-        int element = attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
+        int element = keyHit ? (enchant > 0 ? enchant : (selector is >= 29 and <= 31 ? fa.Weapon2 : fa.Weapon1)?.Element ?? 0)   // 키 한 타: 0x1003f070 · 0x1003f1b0
+            : attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
         bool magic = selector is 5 or 6 or 8 or (>= 10 and <= 24);
         int defense = ft.Stat(magic ? Part1Chr.Mr : Part1Chr.Ac, t.Soul);
         // 쏘기(선택자 2 · 31)는 AC + 대상 장비 보정 244(총 피해 약화) — 방어 표 0x1004182c(바이트 표 0x1004183c 의 갈래 1 → 0x1004158d).
