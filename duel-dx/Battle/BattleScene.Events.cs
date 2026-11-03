@@ -123,6 +123,7 @@ internal sealed unsafe partial class BattleScene
         _eventNextBattle = 0;
         _eventNextField = 0;
         _part1ChapterEnd = false;
+        _part1WipeEndStarted = false;
         _part1NoBanner = false;
         _eventSoundSeconds = 0;                  // 앞 전투에서 늦게 풀린 소리가 이 전투의 이벤트를 멈추지 않게
         Array.Clear(_battleVars);
@@ -323,16 +324,56 @@ internal sealed unsafe partial class BattleScene
             int branch = e.Word2 & 3;
             if (branch != 0 && (_eventCheckDue & (1 << branch)) == 0) continue;
             if (!e.Conditions.All(EventCondition)) continue;
-            _eventFired[i]++;
-            _runningEvent = i;
-            _eventPc = 0;
-            _eventWaitUntil = 0;
-            _eventCamLine = (-1, -1);
-            _eventCamPending = false;
-            StepEvent();
+            StartEvent(i);
             return;                                                     // 나머지는 이 사건이 끝난 뒤 같은 시점 표시로 다시 본다
         }
         _eventCheckDue = 0;
+    }
+
+    /// <summary>사건 i 를 센 뒤 첫 줄부터 돌린다.</summary>
+    private void StartEvent(int i)
+    {
+        _eventFired[i]++;
+        _runningEvent = i;
+        _eventPc = 0;
+        _eventWaitUntil = 0;
+        _eventCamLine = (-1, -1);
+        _eventCamPending = false;
+        StepEvent();
+    }
+
+    /// <summary>이 판에서 <see cref="StartPart1ChapterEndOnWipe"/> 가 이미 사건을 돌렸나 — 한 번만.</summary>
+    internal bool _part1WipeEndStarted;
+
+    /// <summary>
+    /// 파트1 전멸 승리(원본에 없는 편의, CheckOutcome) 때 — 이기고 챕터를 끝내는(행동 105) 사건이 칸 도달 · 틱 같은 조건만 못 채워 남았으면
+    /// 그 사건을 <b>통째로</b> 돌린다(대사 · 걷기 · 깃발 · 105). 전에는 그냥 이겨 챕터 지도로 돌아갔는데, 105 가 안 돌아 챕터가 끝나지 않아 막혔다:
+    /// 챕터 46 「상륙」의 자마후자리 중앙신전(Btl 0169)은 편 4 누군가가 (7~11, 3~6) 에 닿아야 크리스티앙의 「자~ 몬스터들은 처치했고…」 → 105 인데,
+    /// 몬스터를 다 잡으면 그 대사 없이 지도로 돌아와 더 갈 데가 없었다(fg-119, 버그 제보 #36). 동방밀사의 탈출(Btl 0058)도 같은 꼴이다.
+    /// 아군 전멸(401 [4])이 조건인 사건은 뺀다. 돌렸으면 true — 결과는 그 사건의 105 가 낸다.
+    /// </summary>
+    internal bool StartPart1ChapterEndOnWipe()
+    {
+        if (_part1WipeEndStarted) return false;
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0 || (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire)) continue;
+            if (!e.Actions.Any(a => a.Code == Part1Script.Part1Only + 105)) continue;
+            if (e.Conditions.Any(c => c.Code == 401 && c.Args.Length > 0 && c.Args[0] == 4)) continue;
+            // 틱 · 타이머(1 · 2 · 3)와 자리(300 붙었다 · 400 사각형 안의 수 · 402 사각형 안에 있나)는 안 본다 — 그것을 채우러 가는 길을 적이 없으니 건너뛴다.
+            if (!e.Conditions.Where(c => c.Code is not (1 or 2 or 3 or 300 or 400 or 402)).All(EventCondition)) continue;
+            _part1WipeEndStarted = true;
+            // 자리 조건이 남겼을 「찾은 사람」(20010)은 판에 선 편 4 의 첫 사람으로.
+            _eventFoundA ??= host._units.FirstOrDefault(u => u.Alive && u.OnField && u.Side == 4);
+            TestRunTrace($"part1 wipe runs chapter-end event {i} btl {host._scene.Id} turnNo {_turnNo} t {host._lastTime:F1}");   // 시험 전용
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"wipe chapter end: 사건 {i}" + Environment.NewLine);
+            StartEvent(i);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -414,6 +414,16 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             return true;
         }
         bool resume = _resume && _chapter?.Id == chapterId;
+        // v1.0.60 까지 전멸 승리가 105(이기고 챕터 끝)를 건너뛴 진행(fg-119, 자마후자리 중앙신전 Btl 0169) — 남은 행동이 없으면 그 105 가 했을 대로 챕터를 끝내 연대표로.
+        if (!resume && host.Part1.Chain == null && host.Part1.MissedChapterEnd(chapterId) is >= 0 and var missed)
+        {
+            host.Part1.ChapterId = chapterId;
+            if (_chapter?.Id != chapterId) _chapter = null;
+            GameWindow.TestRunTrace($"part1 missed chapter end {chapterId} btl {missed}");   // 시험 전용 줄
+            if (BattleScene.Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 missed chapter end: 챕터 {chapterId} 전투 {missed}{Environment.NewLine}");
+            EndChapter();
+            return true;
+        }
         bool same = _chapter?.Id == chapterId && _mapPx.Length > 0;
         host.Part1.Fight = null;   // 이긴 전투에서 돌아왔으면 SettleFight 가 이미 적었다 — 이어 하기 등 다른 길이면 그 전투는 다시 연다
         _resume = false;

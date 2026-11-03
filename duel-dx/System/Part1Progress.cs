@@ -520,6 +520,52 @@ internal sealed class Part1Progress
         return -1;
     }
 
+    /// <summary>
+    /// v1.0.60 까지 전멸 승리가 「이기고 챕터 끝」(전투 행동 105)을 건너뛴 진행(fg-119) — 그 챕터에서 이어지는 전투 가운데 <b>105 로만 이기는</b> 판
+    /// (105 가 있고 다음 전투 101 · 필드 104 · 그냥 승리 100 [0] 이 없다)을 이겼는데 챕터가 안 끝났으면 그 전투 번호, 아니면 −1.
+    /// 그런 판은 이기면 반드시 챕터가 끝나므로, 이긴 채 챕터 지도에 남은 것은 그 건너뜀뿐이다. 자마후자리 중앙신전(챕터 46 → Btl 0166 → … → 0169)이 그랬다.
+    /// 챕터에서 닿는 전투는 장소 · 502 · 1201 의 전투와 필드 503 에서, 전투 101 · 104 와 필드 502 · 501 을 따라 모은다.
+    /// </summary>
+    internal int MissedChapterEnd(int chapterId)
+    {
+        if (chapterId < 0 || FinishedChapters.Contains(chapterId) || Part1Chapter.Load(chapterId) is not { } chapter) return -1;
+        var battles = new HashSet<int>();
+        var fields = new HashSet<int>();
+        var todo = new Stack<(bool Battle, int Id)>();
+        foreach (var place in chapter.Places) if (place.IsBattle) todo.Push((true, place.Target));
+        foreach (var a in chapter.Events.SelectMany(e => e.Actions))
+            switch (a.Code)
+            {
+                case 502: todo.Push((true, a.Args[0])); break;
+                case 503: todo.Push((false, a.Args[0])); break;
+                case 1201: todo.Push((true, a.Args[1])); break;
+            }
+        foreach (var (key, battle) in PlaceBattles)
+            if (key.StartsWith($"{chapterId}:") && battle >= 0) todo.Push((true, battle));
+        int found = -1;
+        while (todo.Count > 0 && battles.Count + fields.Count < 400)
+        {
+            var (isBattle, id) = todo.Pop();
+            if (id < 0 || !(isBattle ? battles : fields).Add(id)) continue;
+            if (isBattle)
+            {
+                if (Part1Battle.Load(id) is not { } b) continue;
+                var acts = b.Events.SelectMany(e => e.Actions).ToList();
+                foreach (var a in acts)
+                    if (a.Code == 101) todo.Push((true, a.Args[0]));
+                    else if (a.Code == 104) todo.Push((false, a.Args[0]));
+                if (found < 0 && Cleared.Contains(id) && acts.Any(a => a.Code == 105)
+                    && !acts.Any(a => a.Code is 101 or 104 || a.Code == 100 && a.Args[0] == 0))
+                    found = id;
+            }
+            else if (Part1Field.Load(id) is { } f)
+                foreach (var a in f.Events.SelectMany(e => e.Actions))
+                    if (a.Code == 502) todo.Push((true, a.Args[0]));
+                    else if (a.Code == 501) todo.Push((false, a.Args[0]));
+        }
+        return found;
+    }
+
     internal static string SavePath => UserDataFolder.File("part1.json");
 
     internal static bool HasSave => File.Exists(SavePath);

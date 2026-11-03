@@ -2446,6 +2446,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             && host._units.Any(u => !u.IsAlly) && !host._units.Any(u => u.Alive && !u.IsAlly)
             && host._units.Any(u => u.Alive && u.OnField && u.Side == 4))
         {
+            // 이기고 챕터를 끝내는(105) 사건이 남았으면 그것을 돌린다 — 그 대사와 105 가 결과를 낸다(fg-119).
+            if (StartPart1ChapterEndOnWipe()) return;
             ScriptedDestinationOnWipe();
             Part1WinFlagsOnWipe();
             _outcome = "승리 — 적을 모두 쓰러뜨렸습니다"; _outcomeAt = host._lastTime;
