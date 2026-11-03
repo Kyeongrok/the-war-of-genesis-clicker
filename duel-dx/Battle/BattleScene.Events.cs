@@ -174,11 +174,13 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>그 칸이 다른 유닛으로 차 있으면 가장 가까운(맨해튼, 반경 6까지) 설 수 있는 칸. 못 찾으면 그 칸 그대로.</summary>
     /// <param name="reserved">이미 다른 유닛에게 정해 준 칸(증원이 걸어 들어오는 중이라 아직 비어 보이는 칸) — 그 칸도 찬 것으로 본다.</param>
-    internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who, IReadOnlySet<(int, int)>? reserved = null)
+    /// <param name="standable">그 칸이 비어 있어도 설 수 없는 칸(벽 · 전장 범위 밖)이면 둘레(반경 12까지)에서 찾는다 — 증원(행동 200 · 214)용.
+    /// 파트1 Btl 0155 프리토리아 근교 산지 사건 4 는 루이 · 보르스를 벽 칸 (32,5) · (30,5) 에 불러, 벽에 갇힌 채 이동 칸이 자기 칸뿐이었다(버그 리포트 #37).</param>
+    internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who, IReadOnlySet<(int, int)>? reserved = null, bool standable = false)
     {
         bool Taken(int c, int r) => reserved?.Contains((c, r)) == true || host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r);
-        if (!Taken(col, row)) return (col, row);
-        for (int radius = 1; radius <= 6; radius++)
+        if (!Taken(col, row) && (!standable || CanStand(col, row, who))) return (col, row);
+        for (int radius = 1; radius <= (standable ? 12 : 6); radius++)
             for (int dy = -radius; dy <= radius; dy++)
                 foreach (int dx in new[] { -(radius - Math.Abs(dy)), radius - Math.Abs(dy) }.Distinct())
                 {
@@ -847,7 +849,7 @@ internal sealed unsafe partial class BattleScene
                     u.OnField = true;
                     u.ResetTo(A(2), A(3));
                     // 그 칸에 누가 서 있으면 가장 가까운 빈 칸에 세운다(200 0x1004ef60 · 214 0x1004f0f0, ba-20 V5). 전에는 겹쳐 섰다.
-                    var (landCol, landRow) = FreeCellNear(A(2), A(3), u, claimed);
+                    var (landCol, landRow) = FreeCellNear(A(2), A(3), u, claimed, standable: true);
                     claimed.Add((landCol, landRow));
                     if ((landCol, landRow) != (A(2), A(3))) u.ResetTo(landCol, landRow);
                     u.Facing = EdgeFacing(A(4));
