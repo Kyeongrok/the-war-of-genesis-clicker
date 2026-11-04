@@ -765,11 +765,12 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// 칸에 남은 기운(땅불 · 얼음 덩이, <see cref="Lingering"/>)도 물체 목록에 있어 함께 받는다 — 남이 보낸 알림 10 · 11 · 14 면 꺼진다
     /// (땅불 vt+0x48 <c>0x1007c9d0</c> · 얼음 덩이 <c>0x1007c5b0</c>: 보낸 이가 자기면 거르고, 아니면 +0x14a = 1). 높이 거르기(인자 a3)는 안 옮겼다 [H].
     /// </summary>
-    private void Send(Obj? from, int col, int row, int reach, int notice, Hit hit, bool self, Lingering? source = null)
+    private void Send(Obj? from, int col, int row, int reach, int notice, Hit hit, bool self, Lingering? source = null, bool units = true)
     {
         bool Near(int c, int r) => Math.Abs(c - col) + Math.Abs(r - row) <= reach;
-        foreach (var u in host._units)
-            if (u is { Alive: true, OnField: true } && Near(u.Col, u.Row)) UnitNotice(u, notice, hit, from, source);
+        if (units)
+            foreach (var u in host._units)
+                if (u is { Alive: true, OnField: true } && Near(u.Col, u.Row)) UnitNotice(u, notice, hit, from, source);
         foreach (var o in _objects)
             if (o != null && (self || o != from) && Touches(o, Near)) Notify(o, notice, hit);
         if (notice is not (10 or 11 or 14)) return;
@@ -994,7 +995,9 @@ internal sealed class Part1MapObjects(GameWindow host)
             for (int k = 0; k < Math.Max(1, attack.Hits); k++)
             {
                 var (c, r) = targets.Count > 0 && host._units[targets[host._rng.Next(targets.Count)]] is var t ? (t.Col, t.Row) : cells[host._rng.Next(cells.Count)];
-                Send(null, c, r, 0, 1, hit, self: true);   // 빈 땅에 떨어진 공의 땅불은 기술이 놓는다(Part1Skill.FireBall)
+                // 빈 땅에 떨어진 공의 땅불은 기술이 놓는다(Part1Skill.FireBall). 그 칸의 유닛은 공마다 기술이 이미 쳤다(hit) — 여기서 유닛에도 알림 1 을 보내면
+                // 공 수만큼 「물체」 피해(식 7)가 한 번 더 들어가고, 그 피해로 쓰러지면 때린 이가 없어 경험치가 안 들어왔다(버그 제보 #45). 물체에만 보낸다.
+                Send(null, c, r, 0, 1, hit, self: true, units: false);
             }
             return;
         }
