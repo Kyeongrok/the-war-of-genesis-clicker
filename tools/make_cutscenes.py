@@ -28,8 +28,6 @@ sys.path.insert(0, os.path.join(ROOT, 'tools', 're'))
 MOVIES = [6, 33, 36, 37, 38, 39, 43, 46, 47, 49, 50, 59, 60]
 # 필드 스크립트 행동 902 가 트는 이야기 영상(Fld 0012·0204·0383·0390·0411) — 6·37 은 기술 영상과 겹친다.
 STORY = [9, 48, 51, 52, 53, 54, 56, 57, 58]
-# 부팅 오프닝 영상 0008(모드 > 편의성 「파트2 오프닝 영상」, 기본 끔 — duel-dx/System/TitleScreen.cs).
-OPENING = [8]
 RATE, QUALITY = 22050, 80
 
 
@@ -71,7 +69,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         extract(game, tmp, 'Mov')          # 낱장 + Mov.idx/.pak — 원본 폴더는 건드리지 않는다
         total = 0
-        for n in MOVIES + STORY + OPENING:
+        for n in MOVIES + STORY:
             if os.path.exists(os.path.join(out_dir, '%04d.wgm' % n)): continue   # 이미 만든 것은 둔다
             count, size = convert(os.path.join(tmp, 'Mov', '%04d.mov' % n), os.path.join(out_dir, '%04d.wgm' % n))
             total += size
