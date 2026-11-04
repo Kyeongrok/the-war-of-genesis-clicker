@@ -259,6 +259,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             CheckOutcome();
             return;
         }
+        // DUELDX_WIN=chr:<Chr> 면 그 Chr 의 적(과 그가 탄 탈것)만 쓰러뜨린다 — 「누가 쓰러지면 이긴다」 사건을 화면 밖에서 시험할 때(파트1 Btl 0397 헤이스팅스).
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") is { } winChr && winChr.StartsWith("chr:") && int.TryParse(winChr[4..], out int killChr))
+            foreach (var who in host._units.Where(u => !u.IsAlly && u.Alive && u.ChrCode == killChr).ToList())
+                foreach (var u in host._units.Where(u => u.Alive && u.Record == who.Record && !u.IsAlly).ToList())   // 탄 탈것까지(같은 레코드)
+                {
+                    GameWindow.TestRunTrace($"win chr kill {u.ChrCode} ({u.Col},{u.Row})");
+                    KillUnit(u);
+                }
         // DUELDX_WIN=2 면 승리 조건을 안 보고 곧장 이긴 것으로 나간다 — 이벤트로만 이기는 판(전멸이 승리가 아닌 판)에서 모세스 복귀를 시험할 때.
         // DUELDX_WIN=3 이면 곧장 진 것으로 친다(배너 있는 패배 — 파트1 「Game Over」 띠를 화면 밖에서 볼 때).
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "3" && host._battleLoaded && !host.Mos._mosesOpen)

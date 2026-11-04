@@ -22,7 +22,36 @@ public static class Part1BattleAdditions
         ],
     };
 
-    public static Part1Battle Apply(Part1Battle battle)
+    /// <summary>
+    /// 판 → 덧붙일 사건(조건들, 행동들) — 원본 꼴 명령(코드 + 인자 6칸)이고, 사건 번호는 원본 사건 뒤로 붙는다(사용자 요청).
+    /// </summary>
+    private static readonly Dictionary<int, (ScriptCommand[] Conditions, ScriptCommand[] Actions)[]> Events = new()
+    {
+        // 0397 「헤이스팅스 성채」(레이지 오브 라이언) — 승리 조건 글은 「헤이스팅스의 격파」인데 원본 스크립트(사건 2)는 편 0·1·2 전멸이라,
+        // 걸어 오를 길이 없는 성벽(높이 24) 위 솔져 18 · 위자드 6 과 정문까지 다 쓰러뜨려야 끝났다. 헤이스팅스(인물 차례 1 = 10001)가
+        // 쓰러지면 사건 2 와 같은 105(이기고 챕터 끝)로 끝낸다(버그 제보 #41, 사용자 결정).
+        [397] = [([Cmd(100, 10001, 0)], [Cmd(105)])],
+    };
+
+    private static ScriptCommand Cmd(int code, params short[] args)
+    {
+        var full = new short[6];
+        args.CopyTo(full, 0);
+        return new ScriptCommand(code, full);
+    }
+
+    public static Part1Battle Apply(Part1Battle battle) => AddEvents(AddLines(battle));
+
+    private static Part1Battle AddEvents(Part1Battle battle)
+    {
+        if (!Events.TryGetValue(battle.Id, out var adds)) return battle;
+        var events = battle.Events.ToList();
+        foreach (var (conditions, actions) in adds)
+            events.Add(new Part1BattleEvent(events.Count, 1, conditions, actions));
+        return battle with { Events = events };
+    }
+
+    private static Part1Battle AddLines(Part1Battle battle)
     {
         if (!Lines.TryGetValue(battle.Id, out var adds)) return battle;
         var lines = battle.Lines.ToList();
