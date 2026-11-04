@@ -16,9 +16,11 @@ namespace DuelDx;
 /// (단계 사이의 유닛 동작은 옮기지 않았다). 영상이 도는 동안 게임 시계는 선다. 클릭 · Esc · Enter · Space 로 넘긴다.
 /// </para>
 /// <para>
-/// 게임은 Bink 영상을 못 풀어서 <c>tools/make_cutscenes.py</c> 가 미리 풀어 둔 <c>assets/effects/cut/NNNN.wgm</c>(JPEG 컷 + PCM 소리)을 읽는다.
-/// 이 파일은 원본 게임 폴더에서 만들 수 없어 누구나 받아야 한다(<see cref="AssetPack.FetchExtra"/>) — 아직 없으면 이번에는 영상 없이 지나가고
-/// 뒤에서 받아 둔다. 전투를 열 때 그 기술을 가진 인물이 있으면 미리 받는다(<see cref="Prefetch"/>).
+/// 원본 게임 폴더에 그 영상(<c>Mov\NNNN.mov</c> — 낱장이나 <c>Mov0?.pak</c> 안)이 있으면 <b>그것을 바로 푼다</b>(<see cref="BinkPlayback"/> — 우리 Bink 1 디코더,
+/// FFmpeg 과 컷마다 비트까지 같다). 뒤 실이 컷을 몇 장 앞서 풀고, 소리도 뒤에서 채운다. 원본에 없을 때만(파트1 만 있는 PC)
+/// <c>tools/make_cutscenes.py</c> 가 미리 풀어 둔 <c>assets/effects/cut/NNNN.wgm</c>(JPEG 컷 + PCM 소리)을 읽는다 — 이것은 꾸러미에서 받는다
+/// (<see cref="AssetPack.FetchExtra"/>, 아직 없으면 이번에는 영상 없이 지나가고 뒤에서 받아 둔다. 전투를 열 때 미리 받는다 — <see cref="Prefetch"/>).
+/// 오프닝(<c>0008</c>)은 꾸러미에 없어 원본에서만 튼다.
 /// </para>
 /// </remarks>
 internal sealed unsafe class CutscenePlayer(GameWindow host)
@@ -40,33 +42,101 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     private const string Kind = "effects/cut";
     private static string FileName(int movie) => $"{movie:D4}.wgm";
 
-    /// <summary>재생 중인 영상 파일 — 컷 자리 표와 소리.</summary>
-    private sealed class Clip(FileStream file, int width, int height, double fps, long[] offsets, PcmSound? sound) : IDisposable
+    /// <summary>재생 중인 영상 — 원본 Bink(<see cref="BinkClip"/>)나 미리 푼 .wgm(<see cref="WgmClip"/>).</summary>
+    private abstract class Clip : IDisposable
     {
-        public int Width => width;
-        public int Height => height;
-        public double Fps => fps;
-        public int Count => offsets.Length;
-        public PcmSound? Sound => sound;
+        public abstract int Width { get; }
+        public abstract int Height { get; }
+        public abstract double Fps { get; }
+        public abstract int Count { get; }
+        public abstract PcmSound? Sound { get; }
+        /// <summary>첫 컷을 보일 수 있나 — 그 전에는 시계와 소리를 세워 둔다.</summary>
+        public virtual bool Ready => true;
+        /// <summary>그 번호 컷(늦었으면 거기까지 풀린 가장 늦은 컷)을 <paramref name="frame"/>(너비×높이)에 옮긴다. 옮긴 것이 없으면 false.</summary>
+        public abstract bool Show(int index, int shown, uint[] frame);
+        public abstract void Dispose();
+    }
 
-        public byte[] Jpeg(int index)
+    /// <summary>원본 게임 폴더의 Bink 영상을 뒤 실에서 풀며 튼다.</summary>
+    private sealed class BinkClip(BinkPlayback playback) : Clip
+    {
+        public override int Width => playback.Width;
+        public override int Height => playback.Height;
+        public override double Fps => playback.Fps;
+        public override int Count => playback.FrameCount;
+        public override PcmSound? Sound => playback.Sound;
+        public override bool Ready => playback.FirstFrameReady;
+        public BinkPlayback Playback => playback;
+        public override bool Show(int index, int shown, uint[] frame) => playback.TakeFrame(index, frame);
+        public override void Dispose() => playback.Dispose();
+    }
+
+    /// <summary>미리 풀어 둔 .wgm — 컷 자리 표와 소리.</summary>
+    private sealed class WgmClip(FileStream file, int width, int height, double fps, long[] offsets, PcmSound? sound) : Clip
+    {
+        public override int Width => width;
+        public override int Height => height;
+        public override double Fps => fps;
+        public override int Count => offsets.Length;
+        public override PcmSound? Sound => sound;
+
+        public override bool Show(int index, int shown, uint[] frame)
         {
-            file.Position = offsets[index];
-            Span<byte> head = stackalloc byte[4];
-            file.ReadExactly(head);
-            var bytes = new byte[BitConverter.ToInt32(head)];
-            file.ReadExactly(bytes);
-            return bytes;
+            if (index == shown) return false;
+            try
+            {
+                file.Position = offsets[index];
+                Span<byte> head = stackalloc byte[4];
+                file.ReadExactly(head);
+                var bytes = new byte[BitConverter.ToInt32(head)];
+                file.ReadExactly(bytes);
+                using var stream = new MemoryStream(bytes);
+                using var bitmap = new Bitmap(stream);
+                if (bitmap.Width != width || bitmap.Height != height) return false;
+                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    for (int y = 0; y < bitmap.Height; y++)
+                        new Span<uint>((void*)(data.Scan0 + y * data.Stride), bitmap.Width).CopyTo(frame.AsSpan(y * bitmap.Width, bitmap.Width));
+                }
+                finally { bitmap.UnlockBits(data); }
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or ArgumentException) { return false; /* 깨진 컷은 앞 컷을 그대로 둔다 */ }
         }
 
-        public void Dispose() => file.Dispose();
+        public override void Dispose() => file.Dispose();
     }
+
+    /// <summary>원본 게임 폴더에서 그 영상 자리(낱장이나 묶음 안 토막) — 없으면 null. 폴더가 바뀌지 않는 한 한 번만 찾는다.</summary>
+    internal static (string Path, long Offset, long Length)? FindOriginal(int movie)
+    {
+        if (Environment.GetEnvironmentVariable("DUELDX_NOBINK") == "1") return null;   // 시험 문 — .wgm 길을 본다
+        if (OriginalGame.Files is not { } files) return null;
+        lock (OriginalCache)
+        {
+            string key = $"{OriginalGame.Root}|{movie}";
+            if (!OriginalCache.TryGetValue(key, out var found))
+            {
+                try { found = files.FindRange("Mov", $"{movie:D4}.mov"); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { found = null; }
+                OriginalCache[key] = found;
+            }
+            return found;
+        }
+    }
+
+    private static readonly Dictionary<string, (string Path, long Offset, long Length)?> OriginalCache = [];
+
+    /// <summary>그 영상을 지금 틀 수 있나 — 원본에 있거나 받아 둔 .wgm 이 있다(없으면 .wgm 받기를 뒤에서 건다).</summary>
+    private static bool Available(int movie) => FindOriginal(movie) != null || AssetPack.FetchExtra(Kind, FileName(movie)) != null;
 
     private readonly Queue<int> _queue = new();
     private Clip? _clip;
     private double _clipStart;
     private int _shown = -1, _soundTag;
     private uint[] _frame = [];
+    private bool _soundStarted;
 
     /// <summary>사용자 폴더의 영상(파트1 엔딩, <see cref="StartVideo"/>)을 뒤에서 마련하는 중(꺼내기 · 베끼기) — 다 되면 주 스레드에서 <see cref="_video"/> 로 연다.</summary>
     private Task<string?>? _loading;
@@ -83,25 +153,22 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     internal void Start(WorkData w)
     {
         if (!host._skillMovies || host._skippingAction || !WorkCutscenes.TryGetValue(w.Id, out var movies)) return;
-        // 하나라도 없으면 이번에는 통째로 넘긴다 — 반만 나오면 이상하다.
-        var paths = movies.Select(m => AssetPack.FetchExtra(Kind, FileName(m))).ToArray();
-        if (paths.Any(p => p == null)) return;
+        // 하나라도 없으면 이번에는 통째로 넘긴다 — 반만 나오면 이상하다(없는 .wgm 은 모두 뒤에서 받기를 건다).
+        if (!movies.Select(Available).ToArray().All(ok => ok)) return;
         foreach (int m in movies) _queue.Enqueue(m);
     }
 
     /// <summary>
     /// 이야기 영상 하나를 건다 — 필드 스크립트 행동 902(<c>0x100f2c40</c>: <c>Mov\%04d.mov</c> 를 필드 위에 틀고, 도는 동안 필드 장면은 안 그린다).
-    /// 기술 영상 설정과 상관없이 튼다. 파일이 아직 없으면 false(뒤에서 받아 둔다) — 그때는 전처럼 영상 없이 지나간다.
+    /// 기술 영상 설정과 상관없이 튼다. 원본에도 없고 받아 둔 .wgm 도 아직 없으면 false(뒤에서 받아 둔다) — 그때는 전처럼 영상 없이 지나간다.
+    /// <paramref name="originalOnly"/> 면 원본 게임 폴더의 것만 튼다(오프닝 — 꾸러미에 없다).
     /// </summary>
-    internal bool StartMovie(int movie)
+    internal bool StartMovie(int movie, bool originalOnly = false)
     {
-        if (AssetPack.FetchExtra(Kind, FileName(movie)) == null) return false;
+        if (originalOnly ? FindOriginal(movie) == null : !Available(movie)) return false;
         _queue.Enqueue(movie);
         return true;
     }
-
-    /// <summary>그 영상 파일을 미리 받아 둔다(뒤에서, 기다리지 않는다) — 모드에서 오프닝 영상을 켰을 때.</summary>
-    internal static void Prefetch(int movie) => AssetPack.FetchExtra(Kind, FileName(movie));
 
     /// <summary>
     /// 사용자 폴더의 영상 하나를 건다 — <paramref name="prepare"/> 는 뒤 스레드에서 돌며(캐비닛 꺼내기 · 베끼기에 몇 초 걸릴 수 있다) 틀 파일 자리나 null 을 준다.
@@ -127,7 +194,8 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
             foreach (var ab in db.Abilities.Values.Where(a => c.HasAbility(a.Id)))
                 foreach (int work in ab.WorkByLevel.Values)
                     if (WorkCutscenes.TryGetValue(work, out var movies))
-                        foreach (int m in movies) AssetPack.FetchExtra(Kind, FileName(m));
+                        foreach (int m in movies)
+                            if (FindOriginal(m) == null) AssetPack.FetchExtra(Kind, FileName(m));   // 원본에 있으면 안 받는다
     }
 
     private int _prefetchedBattle = -1;
@@ -151,14 +219,23 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
             _clip = clip;
             _frameW = clip.Width;
             _frameH = clip.Height;
+            if (_frame.Length != _frameW * _frameH) _frame = new uint[_frameW * _frameH];
             _clipStart = realTime;
             _shown = -1;
-            if (clip.Sound != null && !GameWindow.Muted)
-                host._mixer.PlayEffect(clip.Sound, host._effectGain, _soundTag = ++host._soundTag);
+            _soundStarted = false;
+        }
+        // 첫 컷이 풀릴 때까지(원본 Bink — 몇 ms) 시계와 소리를 세워 둔다. 그래야 소리와 컷이 같이 간다.
+        if (!_soundStarted)
+        {
+            if (!_clip.Ready) { _clipStart = realTime; return; }
+            _soundStarted = true;
+            _clipStart = realTime;
+            if (_clip.Sound != null && !GameWindow.Muted)
+                host._mixer.PlayEffect(_clip.Sound, host._effectGain, _soundTag = ++host._soundTag);
         }
         int index = (int)((realTime - _clipStart) * _clip.Fps);
         if (index >= _clip.Count) { CloseClip(); return; }
-        if (index != _shown) Decode(_clip, _shown = index);
+        if (_clip.Show(index, _shown, _frame)) _shown = index;
     }
 
     private void UpdateVideo(double realTime)
@@ -208,12 +285,27 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     {
         if (_soundTag != 0) host._mixer.StopEffect(_soundTag);
         _soundTag = 0;
+        if (_clip is BinkClip bink)   // 시험 기록 — 원본 영상을 제 빠르기로 풀었나
+            GameWindow.TestRunTrace($"bink close frames={bink.Count} shown={_shown} meanDecode={bink.Playback.MeanDecodeMs:F2}ms maxDecode={bink.Playback.MaxDecodeMs:F2}ms late={bink.Playback.LateTicks} bad={bink.Playback.BadFrames}");
         _clip?.Dispose();
         _clip = null;
     }
 
     private static Clip? Open(int movie)
     {
+        if (FindOriginal(movie) is { } original)
+        {
+            try
+            {
+                var playback = BinkPlayback.Start(original.Path, original.Offset, original.Length);
+                GameWindow.TestRunTrace($"bink open {movie:D4} {playback.Width}x{playback.Height} frames={playback.FrameCount} sound={playback.Sound?.Samples.Length ?? 0}");
+                return new BinkClip(playback);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+            {
+                GameWindow.TestRunTrace($"bink open failed {movie:D4} {ex.Message}");   // 못 풀면 받아 둔 .wgm 이 있으면 그것으로
+            }
+        }
         if (AssetPack.FetchExtra(Kind, FileName(movie)) is not { } path) return null;
         FileStream? file = null;
         try
@@ -246,31 +338,13 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
                 file.ReadExactly(size);
                 file.Position += BitConverter.ToInt32(size);
             }
-            return new Clip(file, width, height, fpsNum / (double)fpsDen, offsets, sound);
+            return new WgmClip(file, width, height, fpsNum / (double)fpsDen, offsets, sound);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             file?.Dispose();
             return null;
         }
-    }
-
-    private void Decode(Clip clip, int index)
-    {
-        try
-        {
-            using var stream = new MemoryStream(clip.Jpeg(index));
-            using var bitmap = new Bitmap(stream);
-            var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-            try
-            {
-                if (_frame.Length != bitmap.Width * bitmap.Height) _frame = new uint[bitmap.Width * bitmap.Height];
-                for (int y = 0; y < bitmap.Height; y++)
-                    new Span<uint>((void*)(data.Scan0 + y * data.Stride), bitmap.Width).CopyTo(_frame.AsSpan(y * bitmap.Width, bitmap.Width));
-            }
-            finally { bitmap.UnlockBits(data); }
-        }
-        catch (Exception ex) when (ex is IOException or ArgumentException) { /* 깨진 컷은 앞 컷을 그대로 둔다 */ }
     }
 
     /// <summary>이번 틀에 영상 컷을 그리나(<see cref="Draw"/> 와 같은 조건) — 사용자 영상을 여는 중에도 검은 화면을 그린다.</summary>

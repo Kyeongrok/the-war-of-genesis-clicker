@@ -74,13 +74,14 @@ internal sealed unsafe class TitleScreen(GameWindow host)
 
     /// <summary>
     /// 모드 &gt; 엔딩 영상 탭 「파트2 오프닝 영상」(기본 끔)을 켜 두었으면 타이틀 위에 오프닝 영상을 건다 — 클릭 · Esc 로 넘긴다(<see cref="CutscenePlayer"/>).
-    /// 영상이 도는 동안 게임 시계가 서서 타이틀은 영상이 끝난 뒤 바래 들어온다. 영상 파일이 아직 없으면(받는 판은 뒤에서 받아 둔다) 그냥 타이틀이다.
+    /// 영상이 도는 동안 게임 시계가 서서 타이틀은 영상이 끝난 뒤 바래 들어온다. 영상은 원본 게임 폴더의 <c>Mov\0008.mov</c>(Bink)를 그 자리에서 푼다 —
+    /// 꾸러미에는 넣지 않는다(사용자 결정). 원본에 없으면 그냥 타이틀이다.
     /// 원본 타이틀은 3340틱 뒤 오프닝을 다시 틀었다 — 그것은 안 옮겼다(곡만 다시 건다, <see cref="DrawTitle"/>).
     /// </summary>
     private void PlayOpening()
     {
         if (!host._openingMovie || OriginalGameSetup.Part1Only || !_titleOpen) return;
-        if (!host.Cut.StartMovie(OpeningMovie)) return;
+        if (!host.Cut.StartMovie(OpeningMovie, originalOnly: true)) return;   // 원본 폴더의 Mov 0008 을 바로 푼다 — 없으면 그냥 타이틀
         host.StopMusic();
         _musicAfterOpening = true;
     }

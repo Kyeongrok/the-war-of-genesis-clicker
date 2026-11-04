@@ -144,8 +144,8 @@ public sealed class BinkAudio
         return new PcmSound(output.GetRange(0, keep).ToArray(), Info.SampleRate, Info.Channels);
     }
 
-    /// <summary>binkaudio.c 의 RDCT 갈래 — 스테레오도 채널을 한 줄로 번갈아 담아 한 번에 변환한다.</summary>
-    private sealed class RdctDecoder
+    /// <summary>binkaudio.c 의 RDCT 갈래 — 스테레오도 채널을 한 줄로 번갈아 담아 한 번에 변환한다. 영상 소리도 이것으로 묶음마다 푼다(<see cref="BinkPlayback"/>).</summary>
+    internal sealed class RdctDecoder
     {
         private readonly int _frameLen, _overlapLen, _numBands;
         private readonly int[] _bands = new int[26];

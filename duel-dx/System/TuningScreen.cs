@@ -97,7 +97,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     ] : tab == TabMovie ?
     [
         // 엔딩 영상 탭 — 파트2 오프닝 켜기와, 파트1 엔딩 영상이 있는지(아래 글, DrawMovieTab).
-        ("파트2 오프닝 영상", "게임을 켤 때 타이틀 앞에 원본 오프닝(처음 한 번 받는다)", MenuOpeningMovie, host._openingMovie),
+        ("파트2 오프닝 영상", CutscenePlayer.FindOriginal(TitleScreen.OpeningMovie) != null ? "게임을 켤 때 타이틀 앞에 원본 오프닝(원본 폴더에서 바로 튼다)" : "원본 폴더에 Mov 0008 이 없어 나오지 않는다", MenuOpeningMovie, host._openingMovie),
     ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
@@ -112,7 +112,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("상자 강조", "아직 안 연 상자에 깜박이는 노란 테두리를 두른다", MenuChestGlow, host._highlightChests),
         ("행성에 할 일 표시", "전투·이야기 장소가 있는 행성에 노란 점", MenuPlanetMarks, host._planetMarks),
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
-        ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(처음 한 번 받는다)", MenuSkillMovies, host._skillMovies),
+        ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(원본 폴더에서 튼다)", MenuSkillMovies, host._skillMovies),
         ("전직할 때 EXP 없애기", "원본처럼 전직하면 쌓인 EXP 를 지운다 · 끄면 남긴다", MenuKeepJobExp, host._dropJobExp),
         ("대사 중 우클릭으로 건너뛰기", "끄면 우클릭이 장면을 넘기지 않는다 · Esc 는 그대로", MenuRightClickSkipsTalk, host._rightClickSkipsTalk),
         ("파트1 대사는 눌러서 넘기기", "켜면 저절로 넘어가지 않고 누를 때까지 기다린다", MenuPart1TalkWaits, host._part1TalkWaits),

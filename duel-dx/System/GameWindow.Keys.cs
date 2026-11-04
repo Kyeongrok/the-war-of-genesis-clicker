@@ -448,7 +448,6 @@ internal sealed unsafe partial class GameWindow
             case MenuOpeningMovie:
                 _openingMovie = !_openingMovie;
                 Toast(_openingMovie ? "다음에 게임을 켤 때 오프닝 영상이 나옵니다(클릭 · Esc 로 넘김)" : "게임을 켤 때 오프닝 영상을 틀지 않습니다");
-                if (_openingMovie) CutscenePlayer.Prefetch(TitleScreen.OpeningMovie);
                 SaveSettings();
                 break;
             case MenuSkillMovies:

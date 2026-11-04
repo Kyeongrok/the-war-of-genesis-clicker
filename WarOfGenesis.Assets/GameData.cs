@@ -26,6 +26,19 @@ public sealed class GameFiles
     public string? LoosePath(string folder, string name) =>
         Path.Combine(_root, folder, name) is var loose && File.Exists(loose) ? loose : null;
 
+    /// <summary>
+    /// 그 파일이 디스크의 어디에 있나 — 낱장이면 (그 파일, 0, 크기), 묶음 안이면 (그 <c>.pak</c>, 시작, 길이). 없으면 null.
+    /// 큰 파일(원본 영상 <c>Mov\NNNN.mov</c>)을 메모리에 다 올리지 않고 그 자리에서 읽을 때 쓴다(<see cref="BinkMovie.Open"/>).
+    /// </summary>
+    public (string Path, long Offset, long Length)? FindRange(string folder, string name)
+    {
+        string loose = Path.Combine(_root, folder, name);
+        if (File.Exists(loose)) return (loose, 0, new FileInfo(loose).Length);
+        if (!_pak || !IndexOf(folder).TryGetValue(name, out var ent)) return null;
+        string pak = Path.Combine(_root, folder, ent.Pak);
+        return File.Exists(pak) ? (pak, ent.Start, ent.End - ent.Start + 1L) : null;
+    }
+
     /// <summary>폴더에 든 파일 이름과 크기 — 낱장과 <c>.idx</c> 색인을 합친 것(같은 이름이면 낱장 크기).</summary>
     public IReadOnlyDictionary<string, long> List(string folder, string extension)
     {

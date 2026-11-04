@@ -2,9 +2,10 @@
 
     python tools/make_cutscenes.py <원본 게임 폴더>
 
-게임은 Bink 영상을 못 푼다(소리만 푼다). 그래서 컷마다 JPEG 로, 소리는 22,050Hz 16비트 PCM 으로 풀어 파일 하나에 담는다.
-만든 파일은 저장소에 싣지 않고(.gitignore) `tools/make_asset_pack.py` 가 꾸러미의 「찾을 때만 받는 낱장」으로 올린다 —
-원본 게임 폴더를 가진 사용자도 이 파일은 받아야 한다(원본 영상에서 만들 수 없으므로).
+게임은 원본 게임 폴더가 있으면 그 Bink 영상을 직접 푼다(`WarOfGenesis.Assets/BinkVideo.cs` · `BinkPlayback.cs`) — 이 .wgm 은
+원본 파트2 폴더가 없는 PC(파트1 만)를 위한 것이다. 컷마다 JPEG 로, 소리는 22,050Hz 16비트 PCM 으로 풀어 파일 하나에 담는다.
+만든 파일은 저장소에 싣지 않고(.gitignore) `tools/make_asset_pack.py` 가 꾸러미의 「찾을 때만 받는 낱장」으로 올린다.
+오프닝 0008 은 넣지 않는다(사용자 결정 — 원본에서만 튼다).
 
 `.wgm` 배치(작은 끝):
     "WGM1" · u16 너비 · u16 높이 · u16 fps 분자 · u16 fps 분모 · u32 컷 수 · u32 소리 표본율 · u16 소리 채널 · u32 소리 바이트 수
