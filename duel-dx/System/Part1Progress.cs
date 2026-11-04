@@ -250,7 +250,7 @@ internal sealed class Part1Progress
     /// 탈 사람 → 탈것(둘 다 20000 + 파트1 번호) — 배치 창의 「탑승」(원본 칸 +0x68, Part1MountDeploy)이나 일행 창에서 정한다. 원본은 판마다 새로 고르지만 리메이크는 적어 두고 다음 판도 태운다. 전투에서는 탈것으로 서고
     /// 탄 이는 판 밖에 있다가 탈것이 쓰러지면 그 칸에 내려선다(<see cref="BattleScene"/> 의 _part1Riders).
     /// </summary>
-    internal Dictionary<int, int> Riding = [];
+    internal Dictionary<int, int> Riding = TestCounts("DUELDX_PART1RIDING").ToDictionary(kv => kv.Key, kv => WarOfGenesis.Assets.Part1Game.ChrBase + kv.Value);   // 시험 전용: 사람:탈것(파트1 번호)
 
     /// <summary>
     /// 챕터 팀(원본 챕터 +0x38, 8개까지 · 분석-파트1-챕터 10.4) — 챕터 → 팀들. 팀 0 은 다른 팀에 안 든 일행 모두, 팀 1 부터는 904 [팀, Chr] 가 옮긴 사람들.

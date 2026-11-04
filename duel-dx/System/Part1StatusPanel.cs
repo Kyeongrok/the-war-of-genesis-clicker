@@ -35,7 +35,14 @@ internal sealed class Part1StatusPanel(GameWindow host)
     private (int X, int Y, int W, int H) _jobRow;
 
     /// <summary>패널을 눌렀다 — 장비 줄이면 바꾸고 true, 패널 안이면 true, 밖이면 false(닫기).</summary>
-    internal bool OnClick(UnitState u, int bx, int by) => OnClick(u.ChrCode, bx, by);
+    internal bool OnClick(UnitState u, int bx, int by) => OnClick(Shown(u).ChrCode, bx, by);
+
+    /// <summary>
+    /// 패널에 보일 인물 — 일행이 탄 탈것(아지다하카 · 마장기 …)이면 탄 이다. 전에는 탈것 그대로 보여 직업 줄이 탈것 것이고
+    /// 누르면 「일행만 직업을 바꿀 수 있습니다」라 탄 채로는 전직 · 장비 바꾸기를 못 했다(버그 제보 #44).
+    /// </summary>
+    private UnitState Shown(UnitState u) =>
+        host.Btl._part1Riders.GetValueOrDefault(u) is { } rider && host.Part1.IsOurs(rider.ChrCode) ? rider : u;
 
     private bool OnClick(int code, int bx, int by)
     {
@@ -196,15 +203,16 @@ internal sealed class Part1StatusPanel(GameWindow host)
         return 0xFF000000 | Ch(16) << 16 | Ch(8) << 8 | Ch(0);
     }
 
-    internal void Draw(UnitState u)
+    internal void Draw(UnitState unit)
     {
+        var u = Shown(unit);
         if (host.Btl.Part1.Fighter(u) is not { } fighter) return;
         ForgetChoicesUnlessFor(u.ChrCode);
-        var (fx, fy) = host.Btl.UnitFoot(u);
+        var (fx, fy) = host.Btl.UnitFoot(unit);   // 자리는 판에 선 탈것
         int x = Math.Clamp(fx - 220, host._camX + 4, host._camX + host.ViewWidth - W - ListW - 8);
         int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - H - 4);
         _layer = false;
-        DrawAt(fighter, u.Hp, u.MaxHp, u.Soul, x, y, host.StatusScr._statusRightHits, host.Btl.Part1Effects(u));
+        DrawAt(fighter, u.Hp, u.MaxHp, unit.Soul, x, y, host.StatusScr._statusRightHits, host.Btl.Part1Effects(unit));
         _panel = (x, y, W + 4 + ListW, H);
     }
 
