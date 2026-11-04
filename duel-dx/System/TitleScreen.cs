@@ -62,7 +62,27 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (Environment.GetEnvironmentVariable("DUELDX_TITLE") == "0") return;
         OpenTitle();
         // 지난번에 파트1 을 하다 껐으면 파트1 타이틀부터(menu-119) — 파트1 폴더를 아직 알 때만(모르면 파트2 타이틀에 머문다).
-        if (!OriginalGameSetup.Part1Only && Part1TitleScreen.LastWasPart1 && Part1Game.Root is not null) host.Part1TitleScr.Open();
+        if (!OriginalGameSetup.Part1Only && Part1TitleScreen.LastWasPart1 && Part1Game.Root is not null) { host.Part1TitleScr.Open(); return; }
+        PlayOpening();
+    }
+
+    /// <summary>원본 부팅이 타이틀 앞에 트는 오프닝 영상(<c>Mov 0008</c>, 292초). 원본은 그 앞에 로고 <c>Mov 0032</c> 도 틀었다 — 로고는 안 넣는다.</summary>
+    internal const int OpeningMovie = 8;
+
+    /// <summary>오프닝 영상이 끝나면 타이틀 곡을 건다 — 영상이 도는 동안은 곡을 세워 둔다.</summary>
+    private bool _musicAfterOpening;
+
+    /// <summary>
+    /// 모드 &gt; 엔딩 영상 탭 「파트2 오프닝 영상」(기본 끔)을 켜 두었으면 타이틀 위에 오프닝 영상을 건다 — 클릭 · Esc 로 넘긴다(<see cref="CutscenePlayer"/>).
+    /// 영상이 도는 동안 게임 시계가 서서 타이틀은 영상이 끝난 뒤 바래 들어온다. 영상 파일이 아직 없으면(받는 판은 뒤에서 받아 둔다) 그냥 타이틀이다.
+    /// 원본 타이틀은 3340틱 뒤 오프닝을 다시 틀었다 — 그것은 안 옮겼다(곡만 다시 건다, <see cref="DrawTitle"/>).
+    /// </summary>
+    private void PlayOpening()
+    {
+        if (!host._openingMovie || OriginalGameSetup.Part1Only || !_titleOpen) return;
+        if (!host.Cut.StartMovie(OpeningMovie)) return;
+        host.StopMusic();
+        _musicAfterOpening = true;
     }
 
     internal void OpenTitle()
@@ -313,6 +333,14 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     {
         if (!_titleOpen) return;
         if (host._part1TitleScr is { _open: true } part1) { part1.Draw(); return; }
+        if (_musicAfterOpening && !host.Cut.Playing)
+        {
+            _musicAfterOpening = false;
+            _titleMusicAt = host._lastTime;
+            host.StopMusic();
+            host.PlayMusicFile(TitleBgm, loop: false, gain: 0);   // OpenTitle 과 같이 0 에서 15틀에 84% 로
+            host.FadeMusic(84, 15);
+        }
         // 원본 타이틀 틱(0x10105920)은 3340틱(약 111초)을 넘으면 오프닝 필드(Fld 0022·0413 — Mov)로 갔다가 돌아온다(ba-20 T2).
         // 오프닝 영상은 없으니 곡만 처음부터 다시 건다 — 전에는 곡이 한 번 끝나면 계속 조용했다.
         if (_titleOpen && !host.Sys.SystemOpen && (host._lastTime - _titleMusicAt) * TicksPerSecond > 3340)

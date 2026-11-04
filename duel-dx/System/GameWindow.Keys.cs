@@ -258,7 +258,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -288,6 +288,11 @@ internal sealed unsafe partial class GameWindow
     internal bool _skillMovies = UserSettings.Current.SkillMovies;
 
     internal const int MenuSkillMovies = 1170;
+
+    /// <summary>모드 > 엔딩 영상 > 파트2 오프닝 영상 — 원본처럼 게임을 켤 때 파트2 타이틀 앞에 오프닝 영상(<c>Mov 0008</c>, 292초)을 튼다(사용자 요청, 기본 끔, <see cref="TitleScreen.OpenTitleIfAsked"/>).</summary>
+    internal bool _openingMovie = UserSettings.Current.OpeningMovie;
+
+    internal const int MenuOpeningMovie = 1181;
 
     /// <summary>모드 > 대사 중 우클릭으로 장면 건너뛰기 — 원본은 Esc · 우클릭 둘 다 장면을 통째로 넘긴다. 끄면 우클릭은 대사에서 아무 일도 안 한다(Esc 는 그대로, 버그 리포트 #15).</summary>
     internal bool _rightClickSkipsTalk = UserSettings.Current.RightClickSkipsTalk;
@@ -438,6 +443,12 @@ internal sealed unsafe partial class GameWindow
             case MenuRightClickSkipsTalk:
                 _rightClickSkipsTalk = !_rightClickSkipsTalk;
                 Toast(_rightClickSkipsTalk ? "대사 중 우클릭으로 장면을 건너뜁니다" : "대사 중 우클릭을 받지 않습니다(Esc 로 건너뜁니다)");
+                SaveSettings();
+                break;
+            case MenuOpeningMovie:
+                _openingMovie = !_openingMovie;
+                Toast(_openingMovie ? "다음에 게임을 켤 때 오프닝 영상이 나옵니다(클릭 · Esc 로 넘김)" : "게임을 켤 때 오프닝 영상을 틀지 않습니다");
+                if (_openingMovie) CutscenePlayer.Prefetch(TitleScreen.OpeningMovie);
                 SaveSettings();
                 break;
             case MenuSkillMovies:

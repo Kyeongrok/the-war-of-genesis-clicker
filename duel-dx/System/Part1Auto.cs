@@ -15,7 +15,11 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1Auto(GameWindow host)
 {
-    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial" or "continue";
+    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial" or "continue" or "ending";
+
+    /// <summary><c>DUELDX_P1AUTO=ending</c> — 파트1 타이틀에서 챕터 56 을 열고 곧바로 엔딩(챕터 705, <see cref="Part1ChapterScreen.OnEnding"/>)을 부르고 멈춘다(엔딩 영상 · 「엔딩 영상 없음」 시험).</summary>
+    private static readonly bool Ending = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "ending";
+    private bool _endingDone;
 
     /// <summary><c>DUELDX_P1AUTO=continue</c> — NEW GAME 대신 CONTINUE 로 세이브(DUELDX_SAVEDIR 의 part1.json)에서 잇는다.</summary>
     private static readonly bool FromSave = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "continue";
@@ -46,9 +50,17 @@ internal sealed class Part1Auto(GameWindow host)
         if (shell.Party._open) { shell.Party.OnKey(Win32.VK_ESCAPE); Wait(); return; }
         if (shell.Town._open) { shell.Town.OnKey(Win32.VK_ESCAPE); Wait(); return; }
         if (shell.Field._open) { shell.Field.OnClick(); return; }
+        if (Ending && shell.Chapter._open && shell.Chapter._chapter != null)
+        {
+            if (!_endingDone) { _endingDone = true; Log($"ending at chapter {shell.Chapter._chapter.Id}"); shell.Chapter.OnEnding(0); }
+            Wait(9999);
+            return;
+        }
         if (shell.Chapter._open) { ChapterStep(shell.Chapter); return; }
         if (shell.Timeline._open && Tutorial) { Log("tutorial done — timeline"); Wait(9999); return; }
         if (shell.Timeline._open) { NextChapter(shell, "timeline"); return; }
+        // 엔딩 시험 — 파트1 타이틀에서 곧장 엔딩 챕터(56 — 여는 사건이 705 를 부른다)를 연다.
+        if (Ending && !_newGameDone) { _newGameDone = true; Log("ending — open chapter 56"); host.LeaveScene(() => shell.Chapter.Open(56)); Wait(); return; }
         // 파트1 타이틀 — 처음이면 NEW GAME, 진 뒤면 CONTINUE.
         if (!_newGameDone) { _newGameDone = true; Log(Tutorial ? "tutorial" : FromSave ? "continue from save" : "new game"); shell.Press(Tutorial ? Part1TitleScreen.ButtonTutorial : FromSave ? Part1TitleScreen.ButtonContinue : Part1TitleScreen.ButtonNewGame); }
         else { _losses++; Log($"continue after loss #{_losses}"); shell.Press(Part1TitleScreen.ButtonContinue); }

@@ -61,9 +61,9 @@ internal sealed unsafe class TuningScreen(GameWindow host)
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
-    internal const int TabY = 30, TabH = 24, TabW = 96;
-    internal static readonly string[] TabNames = ["일반", "밸런스", "스토리", "편의성", "실험"];
-    internal const int TabGeneral = 0, TabBalance = 1, TabStory = 2, TabComfort = 3, TabLab = 4;
+    internal const int TabY = 30, TabH = 24, TabW = 92;
+    internal static readonly string[] TabNames = ["일반", "밸런스", "스토리", "편의성", "실험", "엔딩 영상"];
+    internal const int TabGeneral = 0, TabBalance = 1, TabStory = 2, TabComfort = 3, TabLab = 4, TabMovie = 5;
 
     /// <summary>스토리 탭 — 「대사 사이 멈춤」 고르기 단추들의 자리(창 기준).</summary>
     internal const int PauseY = 100, PauseW = 90, PauseH = 26, PauseGap = 4, StoryCheckY = 150;
@@ -80,7 +80,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// </summary>
     internal List<string> EnabledMods()
     {
-        var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab }.SelectMany(TuningChecks)
+        var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab, TabMovie }.SelectMany(TuningChecks)
             .Where(c => c.On && c.Command != MenuSendStats).Select(c => c.Label).ToList();
         if (_soulWeight != 100) on.Add($"일반 공격 소울 기여도 {SoulWeightLabel(_soulWeight)}");
         if (host._talkPauseSeconds >= 0) on.Add($"대사 사이 멈춤 {GameWindow.TalkPauseLabel(host._talkPauseSeconds)}");
@@ -94,6 +94,10 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("카오스 큐브 · 나야트레이", "샤이닝 스타 메일 → 블랙 레이븐 다리엘에서 합류", MenuEggChaosCube, host._eggChaosCube),
         ("알 수 없는 지도", "의혹 — 파치나의 동굴 전투가 열린다", MenuEggUnknownMap, host._eggUnknownMap),
         ("알 수 없는 씨앗", "의혹 — 빅 도그마 메일 · 건슬라이서 맘모스", MenuEggUnknownSeed, host._eggUnknownSeed),
+    ] : tab == TabMovie ?
+    [
+        // 엔딩 영상 탭 — 파트2 오프닝 켜기와, 파트1 엔딩 영상이 있는지(아래 글, DrawMovieTab).
+        ("파트2 오프닝 영상", "게임을 켤 때 타이틀 앞에 원본 오프닝(처음 한 번 받는다)", MenuOpeningMovie, host._openingMovie),
     ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.
@@ -253,6 +257,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             ];
             for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
         }
+        if (_tuningTab == TabMovie) DrawMovieTab(x, y + TuningCheckY + checks.Length * TuningCheckH + 8);
         if (ShowsVoiceVolume)
         {
             int vy = y + TuningBoxY;
@@ -324,6 +329,22 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             host.UiText(checks[i].Label, x + 44, cy + 6, White);
             host.UiText(checks[i].Note, x + TuningBoxX, cy + 7, DimGray, 12);
         }
+    }
+
+    /// <summary>엔딩 영상 탭의 글을 다시 훑은 때(게임 초)와 그 글 — 틀마다 파일을 찾지 않게 1초에 한 번.</summary>
+    private double _movieLinesAt = -10;
+    private (string Text, uint Color)[] _movieLines = [];
+
+    /// <summary>엔딩 영상 탭 — 파트1 엔딩 영상(<see cref="Part1EndingMovie"/>)이 있으면 그 자리, 없으면 찾는 곳과 둘 파일을 적는다(사용자 요청).</summary>
+    private void DrawMovieTab(int x, int top)
+    {
+        if (host._lastTime - _movieLinesAt > 1 || host._lastTime < _movieLinesAt)
+        {
+            _movieLinesAt = host._lastTime;
+            _movieLines = Part1EndingMovie.Status();
+        }
+        for (int i = 0; i < _movieLines.Length; i++)
+            host.UiText(_movieLines[i].Text, x + 16, top + i * 22, _movieLines[i].Color == 0 ? DimGray : _movieLines[i].Color, i == 0 ? 13f : 12f);
     }
 
     internal void DrawStoryTab(int x, int y)

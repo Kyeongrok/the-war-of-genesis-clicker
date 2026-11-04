@@ -205,9 +205,10 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>
     /// 챕터 705(0x100c1ab0) — <b>인자를 안 읽고</b> 장면 요청 6 · 번호 1, +0x13ca0 = 1. 장면 6(0x100d5480 → 0x100d5500)은 번호(+0xc)가 0 이면 <c>G3.pak</c>(오프닝 영상 —
     /// 부팅이 거는 것), 아니면 <c>Setup\_sys2.cab</c>(엔딩 영상 — 설치 폴더에 없으면 시디에서, 0x10004ac0)을 DirectShow(0x100089b0)로 틀고 Esc 로 건너뛴 뒤 장면 7(불러오기 · 타이틀 · 새로)로 간다.
-    /// 챕터 55 [0] · 56 [1] 둘 다 엔딩 영상이다. 리메이크는 그 영상이 없어(시디에만 있다) 영상 없이 챕터를 끝낸 것으로 적고 파트1 타이틀로 돌아간다.
+    /// 챕터 55 [0] · 56 [1] 둘 다 엔딩 영상이다. 리메이크는 챕터를 끝낸 것으로 적은 뒤, 파트1 폴더에 그 영상이 있으면 틀고(<see cref="Part1EndingMovie"/> — 클릭 · Esc 로 넘김)
+    /// 없으면(흔히 시디에만 있다) 「엔딩 영상 없음」을 띄우고, 파트1 타이틀로 돌아간다.
     /// </summary>
-    private void OnEnding(int movie)
+    internal void OnEnding(int movie)
     {
         GameWindow.TestRunTrace($"part1 chapter {_chapter?.Id} ending {movie}");   // 시험 전용 줄
         int done = _chapter?.Id ?? host.Part1.ChapterId;
@@ -217,7 +218,14 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         _resume = false;
         host.Part1.Save(host.FlagSt._flags);
         _gameOver = true;
-        host.Toast("파트1 끝");
+        // 영상이 도는 동안은 게임 시계가 서서 아래 바램(LeaveScene)은 영상이 끝난 뒤에 돈다.
+        if (Part1EndingMovie.Find() is { } file)
+        {
+            GameWindow.TestRunTrace($"part1 ending movie {file}");   // 시험 전용 줄
+            host.StopMusic();
+            host.Cut.StartVideo(() => Part1EndingMovie.Prepare(file), played => host.Toast(played ? "파트1 끝" : "엔딩 영상을 틀 수 없습니다"));
+        }
+        else host.Toast("엔딩 영상 없음");
         host.LeaveScene(() => { _open = false; shell.ReturnFromBattle(false); });
     }
 

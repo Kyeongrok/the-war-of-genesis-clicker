@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -67,8 +68,14 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     private int _shown = -1, _soundTag;
     private uint[] _frame = [];
 
+    /// <summary>사용자 폴더의 영상(파트1 엔딩, <see cref="StartVideo"/>)을 뒤에서 마련하는 중(꺼내기 · 베끼기) — 다 되면 주 스레드에서 <see cref="_video"/> 로 연다.</summary>
+    private Task<string?>? _loading;
+    private DirectShowVideo? _video;
+    private Action<bool>? _videoDone;
+    private int _frameW, _frameH;
+
     /// <summary>영상이 도는 중인가 — 그동안 게임 시계와 갱신이 선다(<see cref="GameWindow"/> 의 틀 고리).</summary>
-    internal bool Playing => _clip != null || _queue.Count > 0;
+    internal bool Playing => _clip != null || _queue.Count > 0 || _loading != null || _video != null;
 
     /// <summary>
     /// 그 work 의 컷신을 건다 — 설정이 꺼져 있거나, 적 행동을 건너뛰는 중이거나, 영상 파일이 아직 없으면 아무것도 안 한다(없는 것은 뒤에서 받아 둔다).
@@ -91,6 +98,25 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
         if (AssetPack.FetchExtra(Kind, FileName(movie)) == null) return false;
         _queue.Enqueue(movie);
         return true;
+    }
+
+    /// <summary>그 영상 파일을 미리 받아 둔다(뒤에서, 기다리지 않는다) — 모드에서 오프닝 영상을 켰을 때.</summary>
+    internal static void Prefetch(int movie) => AssetPack.FetchExtra(Kind, FileName(movie));
+
+    /// <summary>
+    /// 사용자 폴더의 영상 하나를 건다 — <paramref name="prepare"/> 는 뒤 스레드에서 돌며(캐비닛 꺼내기 · 베끼기에 몇 초 걸릴 수 있다) 틀 파일 자리나 null 을 준다.
+    /// 그 동안은 검은 화면에 「영상 준비 중」을 띄우고 게임 시계를 세운다. 파일은 주 스레드에서 DirectShow 로 연다(<see cref="DirectShowVideo"/> — 소리도 DirectShow 가 낸다).
+    /// 끝나면(넘기거나 다 보거나 못 열면) <paramref name="done"/>(틀었나)를 부른다.
+    /// </summary>
+    internal void StartVideo(Func<string?> prepare, Action<bool> done)
+    {
+        Skip();
+        _videoDone = done;
+        _loading = Task.Run(() =>
+        {
+            try { return prepare(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { return null; }
+        });
     }
 
     /// <summary>전투에 선 인물들이 가진 컷신 기술의 영상을 미리 받아 둔다(뒤에서, 기다리지 않는다).</summary>
@@ -117,11 +143,14 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
     /// <summary>실제 시각(초)으로 영상을 나아가게 한다 — 게임 속도와 상관없이 제 빠르기로 돈다.</summary>
     internal void Update(double realTime)
     {
+        if (_loading != null || _video != null) { UpdateVideo(realTime); return; }
         if (_clip == null)
         {
             if (!_queue.TryDequeue(out int movie)) return;
             if (Open(movie) is not { } clip) return;       // 못 읽는 파일은 넘긴다
             _clip = clip;
+            _frameW = clip.Width;
+            _frameH = clip.Height;
             _clipStart = realTime;
             _shown = -1;
             if (clip.Sound != null && !GameWindow.Muted)
@@ -132,11 +161,47 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
         if (index != _shown) Decode(_clip, _shown = index);
     }
 
+    private void UpdateVideo(double realTime)
+    {
+        if (_loading is { } loading)
+        {
+            if (!loading.IsCompleted) return;
+            _loading = null;
+            if (loading.Result is not { } path) { FinishVideo(false); return; }
+            try { _video = DirectShowVideo.Open(path, GameWindow.Muted ? 0 : host._effectGain); }
+            catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidDataException or IOException or TypeLoadException)
+            {
+                GameWindow.TestRunTrace($"video open failed {ex.Message}");   // 시험 전용 줄
+                FinishVideo(false);
+                return;
+            }
+            _frameW = _video.Width;
+            _frameH = _video.Height;
+            _frame = new uint[_frameW * _frameH];
+            _shown = -1;
+        }
+        if (_video is not { } v) return;
+        if (v.Finished) { FinishVideo(true); return; }
+        if (v.CopyFrame(_frame)) _shown = 0;
+    }
+
+    private void FinishVideo(bool played)
+    {
+        _loading = null;
+        _video?.Dispose();
+        _video = null;
+        _frameW = _frameH = 0;
+        var done = _videoDone;
+        _videoDone = null;
+        done?.Invoke(played);
+    }
+
     /// <summary>지금 영상을 넘긴다 — 남은 영상도 다 넘기고 전투로 돌아간다.</summary>
     internal void Skip()
     {
         _queue.Clear();
         CloseClip();
+        if (_loading != null || _video != null) FinishVideo(true);
     }
 
     private void CloseClip()
@@ -208,28 +273,35 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
         catch (Exception ex) when (ex is IOException or ArgumentException) { /* 깨진 컷은 앞 컷을 그대로 둔다 */ }
     }
 
-    /// <summary>보이는 화면을 검게 덮고 영상 컷을 비율대로 맞춰 그린다 — 맨 위에 그린다.</summary>
-    /// <summary>이번 틀에 영상 컷을 그리나(<see cref="Draw"/> 와 같은 조건).</summary>
-    internal bool Showing => _clip is { } clip && _frame.Length == clip.Width * clip.Height;
+    /// <summary>이번 틀에 영상 컷을 그리나(<see cref="Draw"/> 와 같은 조건) — 사용자 영상을 여는 중에도 검은 화면을 그린다.</summary>
+    internal bool Showing => _loading != null || (_clip != null || _video != null) && _frameW > 0 && _frame.Length == _frameW * _frameH;
 
+    /// <summary>보이는 화면을 검게 덮고 영상 컷을 비율대로 맞춰 그린다 — 맨 위에 그린다.</summary>
     internal void Draw()
     {
-        if (_clip is not { } clip || _frame.Length != clip.Width * clip.Height) return;
+        if (!Showing) return;
         int vw = host.ViewWidth, vh = host.ViewHeight;
         host.FillRect(host._camX, host._camY, vw, vh, 0xFF000000);
+        if (_loading != null || _shown < 0)
+        {
+            if (_loading != null) host.UiText("영상 준비 중…", host._camX + vw / 2 - 40, host._camY + vh / 2 - 8, 0xC0FFFFFF, 12);
+            host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
+            return;
+        }
+        var clip = (W: _frameW, H: _frameH);
         // 화면에 다 들어가는 가장 큰 크기(가까운 점 뽑기).
-        int w = Math.Min(vw, vh * clip.Width / clip.Height), h = w * clip.Height / clip.Width;
+        int w = Math.Min(vw, vh * clip.W / clip.H), h = w * clip.H / clip.W;
         int left = host._camX + (vw - w) / 2, top = host._camY + (vh - h) / 2;
         for (int y = 0; y < h; y++)
         {
             int by = top + y;
             if ((uint)by >= host.BoardHeight) continue;
-            int sy = y * clip.Height / h * clip.Width;
+            int sy = y * clip.H / h * clip.W;
             for (int x = 0; x < w; x++)
             {
                 int bx = left + x;
                 if ((uint)bx >= host.BoardWidth) continue;
-                host._fb[by * host.BoardWidth + bx] = _frame[sy + x * clip.Width / w] | 0xFF000000;
+                host._fb[by * host.BoardWidth + bx] = _frame[sy + x * clip.W / w] | 0xFF000000;
             }
         }
         host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
