@@ -205,7 +205,7 @@ public sealed record Part1Chr(int Code, string Name, string EnglishName, string 
         return this with { Fields = fields };
     }
 
-    public static Part1Chr? Load(int code) => Parse(code, Part1Game.Read("Chars", $"{code:D4}.chr"));
+    public static Part1Chr? Load(int code) => Parse(code, Part1Game.Read("Chars", $"{code:D4}.chr")) is { } chr ? Part1ChrAdditions.Apply(chr) : null;
 
     public static Part1Chr? Parse(int code, byte[]? b)
     {
