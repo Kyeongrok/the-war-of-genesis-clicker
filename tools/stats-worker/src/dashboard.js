@@ -92,15 +92,16 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="days"><h2>날짜별</h2>
     <div class="filters"><label>묶음 <select id="dayUnit"><option value="day">하루</option><option value="week">주(월요일 시작)</option><option value="month">달</option><option value="dayVersion">하루 · 버전</option></select></label></div>
     <table id="daysTable"></table></section>
-  <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
+  <div class="tabs pagetabs" data-tab="fd2" id="fd2tabs"><button data-fd2="bugs">버그 리포트</button><button data-fd2="summary">리포트 집계</button><button data-fd2="play">플레이</button></div>
+  <section data-tab="fd2" data-fd2="bugs"><h2>용의기사2 · 리포트</h2>
     <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
       <button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
     <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
-  <section data-tab="fd2"><h2>용의기사2 · 버그 리포트 집계</h2>
+  <section data-tab="fd2" data-fd2="summary"><h2>용의기사2 · 버그 리포트 집계</h2>
     <div class="tiles" id="fd2tiles"></div>
     <div class="envgrid" id="fd2grid"></div></section>
-  <section data-tab="fd2"><h2>용의기사2 리메이크 · 플레이</h2>
-    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음). 관리자 키(맨 위 리포트의 것)를 넣어야 보입니다.</div>
+  <section data-tab="fd2" data-fd2="play"><h2>용의기사2 리메이크 · 플레이</h2>
+    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음). 관리자 키(버그 리포트 탭의 것)를 넣어야 보입니다.</div>
     <div class="tiles" id="fd2ptiles"></div>
     <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
     <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
@@ -159,6 +160,17 @@ document.addEventListener('click', closeGameMenu);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGameMenu(); });
 
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => { dowTab = b.dataset.tab; pickTab(dowTab); });
+
+// 용의기사2 의 탭 — 버그 리포트가 맨 앞이고 처음은 그 탭이다. 섹션 안쪽 탭이라 바깥 탭(hidden)과 따로 style.display 로 가린다.
+// 자료는 탭과 상관없이 한 번에 불러온다(loadFd2).
+function pickFd2Tab(tab) {
+  if (!document.querySelector('#fd2tabs button[data-fd2="' + tab + '"]')) tab = 'bugs';
+  document.querySelectorAll('section[data-fd2]').forEach((el) => el.style.display = el.dataset.fd2 === tab ? '' : 'none');
+  document.querySelectorAll('#fd2tabs button').forEach((b) => b.classList.toggle('on', b.dataset.fd2 === tab));
+  try { localStorage.setItem('fd2Tab', tab); } catch (e) { }
+}
+document.querySelectorAll('#fd2tabs button').forEach((b) => b.onclick = () => pickFd2Tab(b.dataset.fd2));
+{ let t = null; try { t = localStorage.getItem('fd2Tab'); } catch (e) { } pickFd2Tab(t || 'bugs'); }
 let savedTab = null, savedGame = null, oldTab = null;
 try { savedTab = localStorage.getItem('dashTab2'); oldTab = localStorage.getItem('dashTab'); savedGame = localStorage.getItem('dashGame'); } catch (e) { }
 // 기본 탭은 버그 리포트다 — 그때 열쇠를 dashTab2 로 갈아, 예전(dashTab)에 고른 창세기전3 탭은 안 이어받는다.
