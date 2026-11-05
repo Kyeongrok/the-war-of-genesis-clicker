@@ -86,20 +86,23 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="env"><h2>켠 모드</h2><div class="sub">모드 창에서 켜 둔 것입니다. 비중은 모드 칸을 보낸 판(v1.0.31 부터) 가운데 그 모드를 켠 판입니다.</div><table id="mods"></table></section>
   <section data-tab="env"><h2>환경 · 설정</h2><div class="sub">기기 종류 · 화면 설정은 v0.36.0 부터, 조작 방식은 v0.31.1 부터 들어옵니다. 비중은 그 값을 보낸 판 가운데서입니다.</div><div class="envgrid" id="env"></div></section>
   <section data-tab="bugs"><h2>버그 리포트</h2>
-    <div class="sub">창세기전3 리메이크의 「버그 리포트」로 받은 글입니다. 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
+    <div class="sub">창세기전3 리메이크의 「버그 리포트」로 받은 글입니다(용의기사2 는 그 게임의 버그 리포트 탭에서 봅니다). 오류 기록이 들어 있어 관리자 키(BUG_ADMIN_KEY)를 넣어야 보입니다 — 키는 이 브라우저에만 남습니다.</div>
     <div class="filters"><label>상태 <select id="bugstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
       <button id="bugkey">관리자 키</button><button id="bugreload">새로 고침</button><span id="bugerr" class="bad"></span></div>
     <div id="bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="days"><h2>날짜별</h2>
     <div class="filters"><label>묶음 <select id="dayUnit"><option value="day">하루</option><option value="week">주(월요일 시작)</option><option value="month">달</option><option value="dayVersion">하루 · 버전</option></select></label></div>
     <table id="daysTable"></table></section>
-  <div class="tabs pagetabs" data-tab="fd2" id="fd2tabs"><button data-fd2="summary">리포트 집계</button><button data-fd2="play">플레이</button></div>
-  <div class="filters" data-tab="fd2"><button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
+  <div class="tabs pagetabs" data-tab="fd2" id="fd2tabs"><button data-fd2="bugs">버그 리포트</button><button data-fd2="summary">리포트 집계</button><button data-fd2="play">플레이</button></div>
+  <section data-tab="fd2" data-fd2="bugs"><h2>용의기사2 · 리포트</h2>
+    <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
+      <button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
+    <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="fd2" data-fd2="summary"><h2>용의기사2 · 버그 리포트 집계</h2>
     <div class="tiles" id="fd2tiles"></div>
     <div class="envgrid" id="fd2grid"></div></section>
   <section data-tab="fd2" data-fd2="play"><h2>용의기사2 리메이크 · 플레이</h2>
-    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음). 관리자 키를 넣어야 보입니다.</div>
+    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음). 관리자 키(버그 리포트 탭의 것)를 넣어야 보입니다.</div>
     <div class="tiles" id="fd2ptiles"></div>
     <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
     <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
@@ -159,16 +162,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGameM
 
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => { dowTab = b.dataset.tab; pickTab(dowTab); });
 
-// 용의기사2 의 탭 — 리포트 집계 · 플레이(리포트 글 목록은 뺐다, 사용자 요청). 섹션 안쪽 탭이라 바깥 탭(hidden)과 따로 style.display 로 가린다.
+// 용의기사2 의 탭 — 버그 리포트가 맨 앞이고 처음은 그 탭이다. 섹션 안쪽 탭이라 바깥 탭(hidden)과 따로 style.display 로 가린다.
 // 자료는 탭과 상관없이 한 번에 불러온다(loadFd2).
 function pickFd2Tab(tab) {
-  if (!document.querySelector('#fd2tabs button[data-fd2="' + tab + '"]')) tab = 'summary';
+  if (!document.querySelector('#fd2tabs button[data-fd2="' + tab + '"]')) tab = 'bugs';
   document.querySelectorAll('section[data-fd2]').forEach((el) => el.style.display = el.dataset.fd2 === tab ? '' : 'none');
   document.querySelectorAll('#fd2tabs button').forEach((b) => b.classList.toggle('on', b.dataset.fd2 === tab));
   try { localStorage.setItem('fd2Tab', tab); } catch (e) { }
 }
 document.querySelectorAll('#fd2tabs button').forEach((b) => b.onclick = () => pickFd2Tab(b.dataset.fd2));
-{ let t = null; try { t = localStorage.getItem('fd2Tab'); } catch (e) { } pickFd2Tab(t || 'summary'); }
+{ let t = null; try { t = localStorage.getItem('fd2Tab'); } catch (e) { } pickFd2Tab(t || 'bugs'); }
 let savedTab = null, savedGame = null, oldTab = null;
 try { savedTab = localStorage.getItem('dashTab2'); oldTab = localStorage.getItem('dashTab'); savedGame = localStorage.getItem('dashGame'); } catch (e) { }
 // 기본 탭은 버그 리포트다 — 그때 열쇠를 dashTab2 로 갈아, 예전(dashTab)에 고른 창세기전3 탭은 안 이어받는다.
@@ -334,8 +337,8 @@ async function loadPart(tab) {
 }
 // ── 버그 리포트 — 관리자 키로 /v1/bugs 를 읽고, 카드마다 상태를 바꾼다 ──
 const STATUS_NAME = { new: '새로', seen: '봤음', fixed: '고침', wontfix: '안 고침' };
-const BUG_GAMES = { dow: '창세기전3' };   // 용의기사2 리포트는 여기서 안 본다(사용자 요청)
-const bugState = { status: 'new', game: '' };
+const BUG_GAMES = { dow: '창세기전3', fd2: '용의기사2' };   // 번호는 게임마다 따로 센다
+const bugState = { status: 'new', game: 'dow' };   // 이 탭은 창세기전3 만 — 용의기사2 는 그 게임 화면의 탭에서
 const bugKey = () => { try { return localStorage.getItem('bugAdminKey') || ''; } catch { return ''; } };
 function bugCard(b) {
   const c = b.context || {};
@@ -343,7 +346,7 @@ function bugCard(b) {
   const where = c.where || c.scene || (c.chapter ? c.chapter + '장' + (c.turn ? ' ' + c.turn + '턴' : '') : c.screen || '');
   const buttons = Object.keys(STATUS_NAME).filter((s) => s !== b.status)
     .map((s) => '<button data-id="' + b.id + '" data-g="' + b.game + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ')
-    + ' <button data-reply="' + b.id + '">답 달기</button>';   // 답 — 게임의 「내 리포트」에 보인다
+    + (b.game === 'fd2' ? '' : ' <button data-reply="' + b.id + '">답 달기</button>');   // 답은 창세기전3만 — 게임의 「내 리포트」에 보인다
   return '<div class="bug"><div class="head"><span class="tag">' + BUG_GAMES[b.game] + '</span><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
     + '<span class="dim">' + esc(when) + ' · v' + esc(b.version) + (where ? ' · ' + esc(where) : '') + '</span><span style="flex:1"></span>' + buttons + '</div>'
     + '<div class="text">' + esc(b.text) + '</div>'
@@ -366,7 +369,7 @@ async function loadBugs() {
     const bugs = lists.flat().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     $('bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
     $('bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(b.dataset.g, Number(b.dataset.id), b.dataset.s));
-    $('bugs').querySelectorAll('button[data-reply]').forEach((b) => b.onclick = () => replyBug(bugs.find((x) => x.id === Number(b.dataset.reply))));
+    $('bugs').querySelectorAll('button[data-reply]').forEach((b) => b.onclick = () => replyBug(bugs.find((x) => x.game !== 'fd2' && x.id === Number(b.dataset.reply))));
   } catch (e) { $('bugerr').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 async function markBug(game, id, status) {
@@ -374,8 +377,9 @@ async function markBug(game, id, status) {
   if (note === null && (status === 'fixed' || status === 'wontfix')) return;
   const res = await fetch('/v1/bugs/' + id + '/status?game=' + game, { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
     body: JSON.stringify(note ? { status, note } : { status }) });
-  if (!res.ok) { $('bugerr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
+  if (!res.ok) { $('bugerr').textContent = $('fd2err').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
   loadBugs();
+  if (fd2Loaded) loadFd2();
 }
 // 답 — 보낸 분이 게임의 「내 리포트」에서 본다. 상태는 그대로 두고, 비우면 답을 지운다.
 async function replyBug(b) {
@@ -396,8 +400,9 @@ function askBugKey() {
 }
 $('bugkey').onclick = askBugKey;
 
-// ── 용의기사2 탭 — /v1/fd2/summary 의 리포트 집계 · 플레이 통계(관리자 키). 탭을 처음 열 때 받는다 ──
+// ── 용의기사2 탭 — /v1/fd2/summary 의 집계와 fd2 리포트 목록(관리자 키). 탭을 처음 열 때 받는다 ──
 let fd2Loaded = false;
+const fd2Status = { status: 'new' };
 const FD2_TABLES = [
   ['status', '상태', (k) => STATUS_NAME[k] || k],
   ['version', '버전', (k) => 'v' + k],
@@ -442,7 +447,7 @@ async function loadFd2() {
   fd2Loaded = true;
   const key = bugKey();
   $('fd2err').textContent = '';
-  if (!key) { $('fd2tiles').innerHTML = $('fd2grid').innerHTML = $('fd2ptiles').innerHTML = $('fd2chapters').innerHTML = $('fd2pgrid').innerHTML = ''; $('fd2err').textContent = '관리자 키를 넣으면 보입니다.'; return; }
+  if (!key) { $('fd2tiles').innerHTML = $('fd2grid').innerHTML = $('fd2ptiles').innerHTML = $('fd2chapters').innerHTML = $('fd2pgrid').innerHTML = ''; $('fd2bugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
   const get = async (path) => {
     const res = await fetch(path, { headers: { Authorization: 'Bearer ' + key } });
     if (res.status === 401) throw new Error('키가 맞지 않습니다');
@@ -450,17 +455,21 @@ async function loadFd2() {
     return res.json();
   };
   try {
-    const s = await get('/v1/fd2/summary');
+    const [s, list] = await Promise.all([get('/v1/fd2/summary'), get('/v1/bugs?game=fd2&status=' + fd2Status.status + '&order=desc&limit=200')]);
     const t = s.total || {};
     $('fd2tiles').innerHTML = [[t.n, '리포트'], [t.fresh, '새로 온 것'], [t.fixed, '고침'], [t.installs, '보낸 설치'], [t.last ? new Date(t.last).toLocaleString('ko-KR') : '-', '마지막으로 받은 때']]
       .map(([v, label]) => '<div class="tile"><b' + (typeof v === 'number' || v == null ? '' : ' style="font-size:15px"') + '>' + (typeof v === 'string' ? esc(v) : n(v)) + '</b><span>' + label + '</span></div>').join('');
     $('fd2grid').innerHTML = FD2_TABLES.map(([k, title, label]) => fd2Table(title, s[k] || [], label, [['n', '리포트'], ['fresh', '새로'], ['installs', '설치']])).join('')
       + fd2Table('날짜별', s.days || [], String, [['n', '리포트'], ['installs', '설치']]);
     renderFd2Plays(s.plays || {});
+    const bugs = (list.bugs || []).map((b) => ({ ...b, game: 'fd2' }));
+    $('fd2bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
+    $('fd2bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug('fd2', Number(b.dataset.id), b.dataset.s));
   } catch (e) { $('fd2err').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 $('fd2key').onclick = askBugKey;
 $('fd2reload').onclick = loadFd2;
+$('fd2status').onchange = (e) => { fd2Status.status = e.target.value; loadFd2(); };
 $('bugreload').onclick = loadBugs;
 $('bugstatus').onchange = (e) => { bugState.status = e.target.value; loadBugs(); };
 loadBugs();

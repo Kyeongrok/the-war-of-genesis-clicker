@@ -5,8 +5,9 @@
 //   GET  /dashboard   대시보드 페이지(dashboard.js) — /v1/dashboard?version= 에서 집계를 받아 그린다. 지금은 누구나 볼 수 있다.
 //   POST /v1/bug      버그 리포트 한 건(게임의 「버그 리포트」 창, duel-dx/System/BugReport.cs) — {id} 를 돌려준다. 설치마다 한 시간에 10 건까지.
 //   GET  /v1/bugs?since=<id>&status=new        받은 버그 리포트(관리자만 — Authorization: Bearer <BUG_ADMIN_KEY>)
-//   POST /v1/bugs/<id>/status {status, note, reply}   버그 리포트의 상태를 바꾼다(관리자만) — reply 는 보낸 사람에게 보이는 답
+//   POST /v1/bugs/<id>/status {status, note, reply}   버그 리포트의 상태를 바꾼다(관리자만) — reply 는 보낸 사람에게 보이는 답(창세기전3만)
 //   GET  /v1/bugs/mine?install=<id>            그 설치가 보낸 창세기전3 리포트의 상태 · 답(게임의 「내 리포트」, 키 없이)
+//                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-remake D1 — 받는 곳은 fd2-remake/tools/bug-worker)
 //   GET  /v1/fd2/summary                       용의기사2 탭의 집계 — 리포트를 상태 · 버전 · 기기 · 화면 · 날짜별로 센 것(관리자만)
 //
 // 누가 보냈는지는 설치할 때 만든 무작위 번호(install)뿐이다. IP 는 적지 않는다.
@@ -257,16 +258,16 @@ function isAdmin(request, env) {
 
 const STATUS = /^[a-z][a-z_-]{0,19}$/;
 
-// 용의기사2 리포트 글은 여기서 안 읽는다(사용자 요청) — 그 게임은 /v1/fd2/summary 의 집계만 본다.
-const bugDb = (url, env) => (url.searchParams.get('game') === 'fd2' ? null : env.DB);
+// 어느 게임의 리포트인가 — 번호는 게임마다 따로 센다.
+const bugDb = (url, env) => (url.searchParams.get('game') === 'fd2' ? env.FD2_DB : env.DB);
 
 async function listBugs(url, env) {
   const since = int(Number(url.searchParams.get('since') || 0));
   const status = url.searchParams.get('status') || 'new';
   const limit = Math.max(1, Math.min(200, int(Number(url.searchParams.get('limit') || 100))));
   if (status !== 'all' && !STATUS.test(status)) return json({ error: 'bad status' }, 400);
-  if (!bugDb(url, env)) return json({ error: 'not found' }, 404);
-  const cols = 'id, created_at, version, install, text, context, status, note, reply';
+  // 답(reply)은 창세기전3 표에만 있다 — 용의기사2 표(fd2-remake D1)에는 그 칸이 없다.
+  const cols = 'id, created_at, version, install, text, context, status, note' + (url.searchParams.get('game') === 'fd2' ? '' : ', reply');
   const sql = `SELECT ${cols} FROM bug_reports WHERE id > ?`
     + (status === 'all' ? '' : ' AND status = ?') + (url.searchParams.get('order') === 'desc' ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id LIMIT ?');   // desc — 대시보드는 새 것부터
   const args = status === 'all' ? [since, limit] : [since, status, limit];
@@ -297,9 +298,9 @@ async function setBugStatus(id, request, url, env) {
   const note = typeof b.note === 'string' ? b.note.slice(0, 2000) : null;
   // reply — 보낸 사람이 「내 리포트」에서 보는 답(창세기전3만). 빈 글이면 지운다, 없으면 그대로 둔다.
   const reply = typeof b.reply === 'string' ? b.reply.trim().slice(0, 2000) : null;
-  if (!bugDb(url, env)) return json({ error: 'not found' }, 404);
+  if (reply !== null && url.searchParams.get('game') === 'fd2') return json({ error: 'no reply for fd2' }, 400);
   const done = reply === null
-    ? await env.DB.prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run()
+    ? await bugDb(url, env).prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run()
     : await env.DB.prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note), reply = NULLIF(?, '') WHERE id = ?`).bind(b.status, note, reply, id).run();
   if (!done.meta.changes) return json({ error: 'not found' }, 404);
   return json({ ok: true, id, status: b.status });
