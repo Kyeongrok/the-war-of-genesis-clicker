@@ -8,6 +8,7 @@
 //   POST /v1/bugs/<id>/status {status, note, reply}   버그 리포트의 상태를 바꾼다(관리자만) — reply 는 보낸 사람에게 보이는 답(창세기전3만)
 //   GET  /v1/bugs/mine?install=<id>            그 설치가 보낸 창세기전3 리포트의 상태 · 답(게임의 「내 리포트」, 키 없이)
 //                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-remake D1 — 받는 곳은 fd2-remake/tools/bug-worker)
+//                                              ?game=mc 면 마그나카르타 패치판의 리포트(이 D1 의 mc_bug_reports — POST /v1/bug?game=mc 로 받는다)
 //   GET  /v1/fd2/summary                       용의기사2 탭의 집계 — 리포트를 상태 · 버전 · 기기 · 화면 · 날짜별로 센 것(관리자만)
 //
 // 누가 보냈는지는 설치할 때 만든 무작위 번호(install)뿐이다. IP 는 적지 않는다.
@@ -223,7 +224,8 @@ async function dashboard(url, env) {
 const BUG_MAX_BODY = 48 * 1024, BUG_MAX_TEXT = 8000, BUG_MAX_CONTEXT = 32 * 1024;
 const BUG_PER_HOUR = 10, BUG_ALL_PER_HOUR = 300;   // 설치 하나 · 모두 합쳐 한 시간에 받는 수
 
-async function postBug(request, env) {
+async function postBug(request, env, url) {
+  const table = bugTable(url);
   const raw = await request.text();
   if (raw.length > BUG_MAX_BODY) return json({ error: 'too large' }, 413);
   let b;
@@ -237,11 +239,11 @@ async function postBug(request, env) {
 
   const hourAgo = new Date(Date.now() - 3600_000).toISOString();
   const recent = await env.DB.prepare(
-    `SELECT COUNT(*) AS n, SUM(install = ?) AS mine FROM bug_reports WHERE created_at > ?`).bind(b.install, hourAgo).first();
+    `SELECT COUNT(*) AS n, SUM(install = ?) AS mine FROM ${table} WHERE created_at > ?`).bind(b.install, hourAgo).first();
   if ((recent?.mine ?? 0) >= BUG_PER_HOUR || (recent?.n ?? 0) >= BUG_ALL_PER_HOUR) return json({ error: 'rate limited' }, 429);
 
   const row = await env.DB.prepare(
-    `INSERT INTO bug_reports (created_at, version, install, text, context) VALUES (?, ?, ?, ?, ?) RETURNING id`)
+    `INSERT INTO ${table} (created_at, version, install, text, context) VALUES (?, ?, ?, ?, ?) RETURNING id`)
     .bind(new Date().toISOString(), text(b.version, 32), b.install, body, context).first();
   return json({ ok: true, id: row.id });
 }
@@ -260,6 +262,10 @@ const STATUS = /^[a-z][a-z_-]{0,19}$/;
 
 // 어느 게임의 리포트인가 — 번호는 게임마다 따로 센다.
 const bugDb = (url, env) => (url.searchParams.get('game') === 'fd2' ? env.FD2_DB : env.DB);
+// 마그나카르타(?game=mc)는 이 D1 의 따로 된 표 — 번호를 창세기전3 와 따로 센다(migrations/0005_mc_bug_reports.sql).
+const bugTable = (url) => (url.searchParams.get('game') === 'mc' ? 'mc_bug_reports' : 'bug_reports');
+// 답(reply)은 창세기전3만 — 게임의 「내 리포트」가 그것만 읽는다.
+const hasReply = (url) => !['fd2', 'mc'].includes(url.searchParams.get('game'));
 
 async function listBugs(url, env) {
   const since = int(Number(url.searchParams.get('since') || 0));
@@ -267,8 +273,8 @@ async function listBugs(url, env) {
   const limit = Math.max(1, Math.min(200, int(Number(url.searchParams.get('limit') || 100))));
   if (status !== 'all' && !STATUS.test(status)) return json({ error: 'bad status' }, 400);
   // 답(reply)은 창세기전3 표에만 있다 — 용의기사2 표(fd2-remake D1)에는 그 칸이 없다.
-  const cols = 'id, created_at, version, install, text, context, status, note' + (url.searchParams.get('game') === 'fd2' ? '' : ', reply');
-  const sql = `SELECT ${cols} FROM bug_reports WHERE id > ?`
+  const cols = 'id, created_at, version, install, text, context, status, note' + (hasReply(url) ? ', reply' : '');
+  const sql = `SELECT ${cols} FROM ${bugTable(url)} WHERE id > ?`
     + (status === 'all' ? '' : ' AND status = ?') + (url.searchParams.get('order') === 'desc' ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id LIMIT ?');   // desc — 대시보드는 새 것부터
   const args = status === 'all' ? [since, limit] : [since, status, limit];
   const { results } = await bugDb(url, env).prepare(sql).bind(...args).all();
@@ -298,9 +304,9 @@ async function setBugStatus(id, request, url, env) {
   const note = typeof b.note === 'string' ? b.note.slice(0, 2000) : null;
   // reply — 보낸 사람이 「내 리포트」에서 보는 답(창세기전3만). 빈 글이면 지운다, 없으면 그대로 둔다.
   const reply = typeof b.reply === 'string' ? b.reply.trim().slice(0, 2000) : null;
-  if (reply !== null && url.searchParams.get('game') === 'fd2') return json({ error: 'no reply for fd2' }, 400);
+  if (reply !== null && !hasReply(url)) return json({ error: 'no reply for this game' }, 400);
   const done = reply === null
-    ? await bugDb(url, env).prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run()
+    ? await bugDb(url, env).prepare(`UPDATE ${bugTable(url)} SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run()
     : await env.DB.prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note), reply = NULLIF(?, '') WHERE id = ?`).bind(b.status, note, reply, id).run();
   if (!done.meta.changes) return json({ error: 'not found' }, 404);
   return json({ ok: true, id, status: b.status });
@@ -346,7 +352,7 @@ export default {
       if (request.method === 'POST' && pathname === '/v1/battle') return await postBattle(request, env);
       if (request.method === 'GET' && pathname === '/v1/top') return jsonText(await cached(env, 'top', () => getTop(env)));
       if (request.method === 'GET' && pathname === '/v1/dashboard') return await dashboard(url, env);
-      if (request.method === 'POST' && pathname === '/v1/bug') return await postBug(request, env);
+      if (request.method === 'POST' && pathname === '/v1/bug') return await postBug(request, env, url);
       if (request.method === 'GET' && pathname === '/v1/fd2/summary') {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         return await fd2Summary(env);
