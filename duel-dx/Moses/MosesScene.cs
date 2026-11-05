@@ -375,9 +375,18 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
                 _mosesTestClicks.Add((host._lastTime + seconds, clickX, clickY));
         // DUELDX_MOSESHOVER=x,y 면 마우스가 모세스 화면의 그 자리에 있는 것처럼 둔다(화면 밖 시험용 — 툴팁·올림 그림).
         // 창이 화면 밖이라도 WM_MOUSEMOVE 가 한 번씩 와서 덮으므로 틀마다 다시 둔다(DrawMoses).
-        if (Environment.GetEnvironmentVariable("DUELDX_MOSESHOVER")?.Split(',') is [var hx, var hy] && int.TryParse(hx, out int mx) && int.TryParse(hy, out int my))
-            _mosesTestHover = (mx, my);
+        // DUELDX_MOSESHOVER=x,y;x2,y2@초 처럼 이으면 그 초부터 다음 자리로 옮긴다(올렸다 뗀 뒤 모습).
+        foreach (string item in (Environment.GetEnvironmentVariable("DUELDX_MOSESHOVER") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] parts = item.Split('@');
+            double hoverAt = parts.Length > 1 && double.TryParse(parts[1], out double hs) ? hs : 0;
+            if (parts[0].Split(',') is [var hx, var hy] && int.TryParse(hx, out int mx) && int.TryParse(hy, out int my))
+                _mosesTestHovers.Add((host._lastTime + hoverAt, mx, my));
+        }
     }
+
+    /// <summary>시험 훅 DUELDX_MOSESHOVER 의 자리들 — (이때부터, 모세스 x, 모세스 y).</summary>
+    private readonly List<(double At, int X, int Y)> _mosesTestHovers = [];
 
     /// <summary>전투가 끝나고 배너를 넘기면 모세스 화면으로 간다. 챕터를 주면 그 챕터로.</summary>
     /// <summary>
@@ -877,6 +886,8 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         if (dock != _mosesDockHover) { _mosesDockHover = dock; _mosesDockHoverAt = host._lastTime; }
         int hover = MosesIconAt(bx, by);
         if (hover != _mosesHover) { _mosesHover = hover; _mosesHoverAt = host._lastTime; }
+        // 도크 아이콘 · 칸 · 행성에 들어가면 계속 돌던 뒤로 · 항성계 단추는 나가기를 받아 첫 장으로 돌아간다(0x10001969 → 0x101049c0).
+        if (dock >= 0 || hover >= 0) _hoverSince.Clear();
     }
 
     /// <summary>시험 훅 DUELDX_MOSESCLICKS 가 걸어 둔 누름 — (때, 모세스 x, 모세스 y).</summary>
@@ -918,6 +929,11 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
     {
         if (!_mosesOpen) return;
         var (ox, oy) = MosesOrigin();
+        while (_mosesTestHovers.Count > 0 && _mosesTestHovers[0].At <= host._lastTime)
+        {
+            _mosesTestHover = (_mosesTestHovers[0].X, _mosesTestHovers[0].Y);
+            _mosesTestHovers.RemoveAt(0);
+        }
         if (_mosesTestHover is { } th)
         {
             host._mouse = (ox + th.X, oy + th.Y);
@@ -1158,16 +1174,30 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         }
     }
 
-    /// <summary>뒤로 단추 Obs 0248 @ (46,244) — 단추 클래스(id 100)라 들어오고 올리면 움직인다.</summary>
     /// <summary>단추에 마우스를 올린 때 — 올림 모션은 올린 순간부터 처음 장에서 돈다(전에는 전역 틱이라 모션 중간부터 돌았다, ba-20 S B2).</summary>
     internal readonly Dictionary<int, double> _hoverSince = [];
+    private (double PageAt, int System) _hoverSincePage;
 
+    /// <summary>
+    /// 뒤로 · 항성계 단추(단추 클래스 <c>0x101042e0</c>)의 모션 틱. 평소는 첫 장(가장 어두운 장 7)에 멈춰 있고(<c>+0x28 = −1</c>, <c>0x1010448a</c>),
+    /// 마우스가 들어오면(<c>0x10104990</c>, vtable +0x1c) 모션 0 이 7→2 로 밝아지기를 되풀이한다(끝나면 <c>0x10027090</c> 로 처음부터).
+    /// <b>마우스가 빈 바탕으로 나가도 멈추지 않는다</b> — 나가기(<c>0x101049c0</c>, vtable +0x20)는 다른 단추에 들어갈 때(<c>0x10001969</c>)나
+    /// 장면이 올림을 모두 지울 때(<c>0x10001510</c> — 행성 고르기 <c>0x100fef47</c> · 페이지 바꾸기 <c>0x10101a63</c>)만 오고, 바탕 판(<c>0x100eaf60</c>,
+    /// vtable +4 = <c>0x10007000</c>)은 맞음 판정이 늘 0 이라 올림을 받지 않는다. 그래서 한 번 올렸던 단추는 다른 칸 · 아이콘을 올리거나 페이지가 바뀔 때까지
+    /// 불이 들어온 채 돈다(플레이어 쪽지 mo-: 「원래 계속 불이 들어왔던 것 같다」). 전에는 나가자마자 장 7(거의 검정, 가산)로 돌아가 단추가 안 보였다.
+    /// </summary>
     internal int HoverTick(int key, bool hovered)
     {
-        if (!hovered) { _hoverSince.Remove(key); return 0; }
-        if (!_hoverSince.TryGetValue(key, out double since)) _hoverSince[key] = since = host._lastTime;
-        return (int)((host._lastTime - since) * TicksPerSecond);
+        if (_hoverSincePage != (_mosesPageAt, _mosesSystem)) { _hoverSince.Clear(); _hoverSincePage = (_mosesPageAt, _mosesSystem); }
+        if (hovered && !_hoverSince.ContainsKey(key))
+        {
+            _hoverSince.Clear();   // 이 단추에 들어오면 앞서 돌던 단추는 나가기를 받는다(0x10001969)
+            _hoverSince[key] = host._lastTime;
+        }
+        return _hoverSince.TryGetValue(key, out double since) ? (int)((host._lastTime - since) * TicksPerSecond) : 0;
     }
+
+    /// <summary>뒤로 단추 Obs 0248 @ (46,244) — 단추 클래스(id 100)라 들어오고 올리면 움직인다. 올렸다 떼도 계속 돈다(HoverTick).</summary>
 
     internal void DrawMosesBack(int ox, int oy, int tick)
     {
