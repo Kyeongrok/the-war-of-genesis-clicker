@@ -154,16 +154,36 @@ internal sealed class Part1JobTree(GameWindow host)
         return true;
     }
 
+    /// <summary>직업의 단 — 능력치 아닌 조건(검법 · 쌍검술 …) 가운데 가장 높은 필요 레벨. 성기사단(왕국검법 6)이 전투기사(3)보다 위다.</summary>
+    private static int Tier(Part1Job job) => Needs(job).Where(n => n.Ability > StatAbilityMax).Select(n => n.Need).DefaultIfEmpty(0).Max();
+
+    /// <summary>to 가 from 보다 위인가 — 단이 높거나, 단이 같으면 조건이 더 무겁다(어절트 슈미터 → 카빌라카 · 성기사단 → 크루세이더).</summary>
+    private static bool Upward(Part1Job from, Part1Job to) =>
+        from.Id != to.Id && to.Firsts.Any(f => f.A > 0) && (Tier(to) > Tier(from) || Tier(to) == Tier(from) && Weight(to) > Weight(from));
+
+    /// <summary>to 의 조건 가운데 from 이 가르치는 최대 · from 의 조건 · 인물의 지금 레벨로도 못 채우는 것의 수(<see cref="Leads"/> 는 0 이어야 한다).</summary>
+    private static int Unreachable(Part1Job from, Part1Job to, Part1Chr chr)
+    {
+        var own = Needs(from).ToDictionary(n => n.Ability, n => n.Need);
+        return Needs(to).Count(n => Math.Max(Math.Max(Teaches(from, n.Ability), own.GetValueOrDefault(n.Ability)), Level(chr, n.Ability)) < n.Need);
+    }
+
     /// <summary>
     /// 그 인물이 지금 직업에서 갈 수 있는 다음 직업과, 직업마다 아직 모자란 조건(어빌리티, 지금, 필요) — 레벨업 고르기 창 옆에 보인다.
     /// 지금 바로 바꿀 수 있는 직업은 모자란 것이 빈 목록이다.
+    /// 올라가는 직업(<see cref="Upward"/>)을 앞에 둔다 — 전에는 모자람 수 · 가벼운 순으로만 세워, 이미 거친 아래 직업
+    /// (슈미터 · 에스코트 · 해적 · 투사 …)이 일곱 칸을 채우고 바로 바꿀 수 있는 티아마타 · 시반 블레이드가 잘려 안 보였다(버그 리포트 #50).
+    /// 같은 소속의 올라가는 직업은 지금 직업으로 못 채우는 조건이 하나뿐이어도 넣는다 — 어절트 슈미터(DEX 4 까지) → 티아마타(DEX 5),
+    /// 티아마타 → 시반 블레이드(앙그라법전 3 — 슈미터 계열은 안 가르친다)도 무엇이 모자란지 보이게.
     /// </summary>
     internal static List<(Part1Job Job, List<(int Ability, int Now, int Need)> Missing)> NextJobsFor(Part1Chr chr)
     {
         var jobs = Part1Job.LoadAll();
         if (Part1Job.ById(jobs, chr.Fields[7]) is not { } now) return [];
-        return [.. jobs.Where(b => Leads(now, b, chr) || (b.Id != now.Id && CanChange(chr, b)))
-                       .OrderBy(b => Needs(b).Count(n => chr.AbilityLevel(n.Ability) < n.Need)).ThenBy(Weight)
+        return [.. jobs.Where(b => Leads(now, b, chr) || (b.Id != now.Id && CanChange(chr, b))
+                                   || (b.Head.A == now.Head.A && Upward(now, b) && Unreachable(now, b, chr) <= 1))
+                       .OrderBy(b => Upward(now, b) ? 0 : 1)
+                       .ThenBy(b => Needs(b).Count(n => chr.AbilityLevel(n.Ability) < n.Need)).ThenBy(Weight)
                        .Select(b => (b, Needs(b).Where(n => chr.AbilityLevel(n.Ability) < n.Need)
                                                .Select(n => (n.Ability, Math.Max(0, chr.AbilityLevel(n.Ability)), n.Need)).ToList()))
                        .Take(MaxSide)];
