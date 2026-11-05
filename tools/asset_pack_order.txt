@@ -1436,3 +1436,14 @@ bgm/0049.bgm
 bgm/0050.bgm
 bgm/0063.bgm
 bgm/3392.bgm
+moses/bgr/0002.bgr
+moses/bgr/0038.bgr
+moses/bgr/0044.bgr
+moses/bgr/0060.bgr
+moses/bgr/0073.bgr
+moses/bgr/0075.bgr
+moses/bgr/0076.bgr
+moses/bgr/0083.bgr
+moses/bgr/0085.bgr
+moses/bgr/0136.bgr
+moses/bgr/0161.bgr

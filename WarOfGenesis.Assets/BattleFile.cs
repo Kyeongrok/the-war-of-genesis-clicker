@@ -45,6 +45,11 @@ public sealed record BattleObjectRecord(int No, int ObjId, int X, int Y, int Tea
 public sealed record BattlePlacementCell(int X, int Y, int Direction);
 
 /// <summary>
+/// 맵 장식 그림 하나(<see cref="BattleFile.DecorOfMap"/>) — 그림 번호(&lt;10000 = Bgr, ≥10000 = Mov), 틱당 흐름, 칸 네모(맵 그림 기준).
+/// </summary>
+public sealed record MapDecorRecord(int Picture, int FlowX, int FlowY, int Col, int Row, int Cols, int Rows);
+
+/// <summary>
 /// <c>Btl/NNNN.btl</c> 한 판의 머리·인물·오브젝트·배치 칸. 이벤트 절은 <see cref="BattleEvents"/> 가 읽는다.
 /// </summary>
 /// <remarks>
@@ -159,6 +164,37 @@ public sealed record BattleFile(int Id, int MapId, ushort TitleId, ushort WinId,
                 short W(int k) => BitConverter.ToInt16(b, o + 2 * k);
                 if (W(2) <= 0) continue;
                 list.Add(new BattleObjectRecord(100 + W(1), W(2), W(3), W(4), W(5)));
+            }
+        }
+        catch (ArgumentException) { list.Clear(); }
+        return list;
+    }
+
+    /// <summary>
+    /// <c>Map</c> 파일의 장식(배경) 그림 — 맵 그림(Obt)의 <b>검은(0) 자리 뒤에 깔리는</b> 하늘·우주·먼 풍경(16바이트 × n, 맵 오브젝트 덩이 다음).
+    /// </summary>
+    /// <remarks>
+    /// <c>CBMap::LoadMap 0x100d6330</c> 의 6번째 덩이(<c>+0x64</c> 수 · <c>+0x60</c> 56바이트씩): 낱말 0 번호 · 1 그림(&lt;10000 이면 <c>BGR\%04d.bgr</c>,
+    /// <c>0x10022370 → 0x100240b0 → 0x100241c0</c> / ≥10000 이면 <c>Mov</c>) · 2·3 틱당 흐름 x·y(<c>0x100d6b20</c> 이 틱마다 더한다) ·
+    /// 4·5 칸 (x, y) · 6·7 칸 폭·높이. 칸은 ×40·×32 로 픽셀이 된다(<c>0x100d67d2~</c>). 예: <c>Map 0122</c>(Btl 0139 보아즈교 성지) = Bgr 0060 붉은 하늘.
+    /// </remarks>
+    public static IReadOnlyList<MapDecorRecord> DecorOfMap(byte[]? mapFile)
+    {
+        var list = new List<MapDecorRecord>();
+        if (mapFile is not { Length: >= 8 } b) return list;
+        try
+        {
+            int version = BitConverter.ToUInt16(b, 0);
+            int o = 6 + (version >= 3 ? 4 : 0);
+            int objects = BitConverter.ToUInt16(b, o);
+            o += 4 + 22 * objects;
+            int count = BitConverter.ToInt16(b, o);
+            o += 4;
+            for (int i = 0; i < count && o + 16 <= b.Length; i++, o += 16)
+            {
+                short W(int k) => BitConverter.ToInt16(b, o + 2 * k);
+                if (W(1) <= 0 || W(6) <= 0 || W(7) <= 0) continue;
+                list.Add(new MapDecorRecord(W(1), W(2), W(3), W(4), W(5), W(6), W(7)));
             }
         }
         catch (ArgumentException) { list.Clear(); }

@@ -129,6 +129,13 @@ class Refs:
             mo = 6 + (4 if struct.unpack_from('<H', m, 0)[0] >= 3 else 0)
             for i in range(struct.unpack_from('<H', m, mo)[0]):
                 if mo + 2 + 22 * i + 22 <= len(m): self.obj(struct.unpack_from('<h', m, mo + 2 + 22 * i + 4)[0])
+            # 맵 장식(배경) 그림 — BattleFile.DecorOfMap(16바이트 × n, 낱말 1 < 10000 = Bgr). 버그 리포트 #46.
+            do = mo + 4 + 22 * struct.unpack_from('<H', m, mo)[0]
+            if do + 4 <= len(m):
+                for i in range(max(0, struct.unpack_from('<h', m, do)[0])):
+                    if do + 4 + 16 * i + 16 <= len(m):
+                        pic = struct.unpack_from('<h', m, do + 4 + 16 * i + 2)[0]
+                        if 0 < pic < 10000: self.bgr(pic)
         self.bgm(head[8])
         o = 24
         for _ in range(max(0, head[10])):

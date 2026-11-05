@@ -1590,6 +1590,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_map is not { } map || !BoardIsMap) return;
 
         int boardH = BoardPad + Rows * TileH;
+        // 맵 장식(하늘 따위)을 먼저 깔고, 그랬으면 맵의 검은 점(Obt 555 값 0)은 뚫어 그 뒤가 보이게 얹는다(0x100d6c00, 버그 리포트 #46).
+        bool decor = DrawMapDecor(Math.Clamp(_camX, 0, BoardWidth), Math.Clamp(_camX + ViewWidth, 0, BoardWidth),
+                                  Math.Max(0, _camY), Math.Min(BoardHeight, _camY + ViewHeight));
         // 카메라가 비추는 줄 · 칸만 베낀다(Compose 가 지운 네모와 같다).
         int w = Math.Min(map.Width, BoardWidth), x0 = Math.Clamp(_camX, 0, w), x1 = Math.Clamp(_camX + ViewWidth, 0, w);
         if (x0 >= x1) return;
@@ -1599,7 +1602,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
             int by = y + map.OriginY + BoardPad;
             if ((uint)by >= boardH || GridTop + by >= BoardHeight) continue;
             var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(map.Bgra.AsSpan((y * map.Width + x0) * 4, (x1 - x0) * 4));
-            src.CopyTo(_fb.AsSpan((GridTop + by) * BoardWidth + x0, x1 - x0));
+            var dst = _fb.AsSpan((GridTop + by) * BoardWidth + x0, x1 - x0);
+            if (!decor) { src.CopyTo(dst); continue; }
+            for (int i = 0; i < src.Length; i++)
+                if (src[i] != 0xFF000000) dst[i] = src[i];
         }
     }
 

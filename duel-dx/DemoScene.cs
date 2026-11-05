@@ -108,6 +108,9 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
     public int StartCol { get; init; } = -1;
     public int StartRow { get; init; } = -1;
 
+    /// <summary>맵의 장식(배경) 그림 — 맵 그림의 검은 자리 뒤에 깔리는 하늘 따위(<see cref="BattleFile.DecorOfMap"/>, 버그 리포트 #46). 파트1 판은 빈 목록.</summary>
+    public IReadOnlyList<MapDecorRecord> MapDecor { get; init; } = [];
+
     /// <summary>자료를 못 읽을 때 쓰는 첫 전투(예전 상수 그대로).</summary>
     public static DemoScene Fallback { get; } = new(
         BattleDemoScene.BtlId, BattleDemoScene.Title, BattleDemoScene.MapFile, BattleDemoScene.Bgm,
@@ -238,7 +241,8 @@ internal sealed record DemoScene(int Id, string Title, string MapFile, int Bgm,
                 .ToList();
 
             return new DemoScene(id, title, mapFile, battle.Bgm, battle.TitleId, battle.WinId, battle.LoseId,
-                                 roster, next, placement, objects, battle.EngineJudgesWipe) { LegionsAllowed = battle.LegionsAllowed, StartCol = battle.StartX, StartRow = battle.StartY };
+                                 roster, next, placement, objects, battle.EngineJudgesWipe) { LegionsAllowed = battle.LegionsAllowed, StartCol = battle.StartX, StartRow = battle.StartY,
+                                   MapDecor = BattleFile.DecorOfMap(files.Read("Map", $"{battle.MapId:D4}.map")) };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {
