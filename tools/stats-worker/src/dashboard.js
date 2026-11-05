@@ -67,7 +67,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="tiles" id="tiles"></div>
   <div class="tabs pagetabs" id="pagetabs">
     <button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
-    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button><button data-tab="fd2">용의기사2</button>
+    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button><button data-tab="fd2">용의기사2</button><button data-tab="cds">대항해시대</button>
   </div>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
@@ -95,6 +95,9 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
     <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label></div>
     <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
+  <section data-tab="cds"><h2>대항해시대 리메이크</h2>
+    <div class="sub">cds-remake-stats 대시보드를 그대로 띄운 것입니다(위의 기간 · 버전 거르기는 안 씁니다). <a href="https://cds-remake-stats.oceanfog1.workers.dev/dashboard" target="_blank" rel="noopener">새 창으로 열기</a></div>
+    <iframe id="cdsframe" title="대항해시대 대시보드" style="width:100%;height:calc(100vh - 120px);min-height:480px;border:1px solid var(--line, #8884);border-radius:6px;background:var(--bg)"></iframe></section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -117,6 +120,10 @@ function pickTab(tab) {
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
+  // 대항해시대 탭은 남의 대시보드를 띄울 뿐이라 위의 거르기 · 합계 타일이 뜻이 없다 — 그 탭에서는 숨긴다.
+  // 띄우는 것은 처음 고를 때 한 번이다(안 보는 동안 그쪽 집계를 부르지 않게).
+  document.querySelectorAll('main > .filters, #tiles').forEach((el) => el.style.display = tab === 'cds' ? 'none' : '');   // hidden 은 display: flex 에 진다
+  if (tab === 'cds' && !$('cdsframe').src) $('cdsframe').src = 'https://cds-remake-stats.oceanfog1.workers.dev/dashboard';
 }
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => pickTab(b.dataset.tab));
 let savedTab = null;
