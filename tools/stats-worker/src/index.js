@@ -5,7 +5,8 @@
 //   GET  /dashboard   대시보드 페이지(dashboard.js) — /v1/dashboard?version= 에서 집계를 받아 그린다. 지금은 누구나 볼 수 있다.
 //   POST /v1/bug      버그 리포트 한 건(게임의 「버그 리포트」 창, duel-dx/System/BugReport.cs) — {id} 를 돌려준다. 설치마다 한 시간에 10 건까지.
 //   GET  /v1/bugs?since=<id>&status=new        받은 버그 리포트(관리자만 — Authorization: Bearer <BUG_ADMIN_KEY>)
-//   POST /v1/bugs/<id>/status {status, note}   버그 리포트의 상태를 바꾼다(관리자만)
+//   POST /v1/bugs/<id>/status {status, note, reply}   버그 리포트의 상태를 바꾼다(관리자만) — reply 는 보낸 사람에게 보이는 답(창세기전3만)
+//   GET  /v1/bugs/mine?install=<id>            그 설치가 보낸 창세기전3 리포트의 상태 · 답(게임의 「내 리포트」, 키 없이)
 //                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-remake D1 — 받는 곳은 fd2-remake/tools/bug-worker)
 //   GET  /v1/fd2/summary                       용의기사2 탭의 집계 — 리포트를 상태 · 버전 · 기기 · 화면 · 날짜별로 센 것(관리자만)
 //
@@ -265,7 +266,9 @@ async function listBugs(url, env) {
   const status = url.searchParams.get('status') || 'new';
   const limit = Math.max(1, Math.min(200, int(Number(url.searchParams.get('limit') || 100))));
   if (status !== 'all' && !STATUS.test(status)) return json({ error: 'bad status' }, 400);
-  const sql = `SELECT id, created_at, version, install, text, context, status, note FROM bug_reports WHERE id > ?`
+  // 답(reply)은 창세기전3 표에만 있다 — 용의기사2 표(fd2-remake D1)에는 그 칸이 없다.
+  const cols = 'id, created_at, version, install, text, context, status, note' + (url.searchParams.get('game') === 'fd2' ? '' : ', reply');
+  const sql = `SELECT ${cols} FROM bug_reports WHERE id > ?`
     + (status === 'all' ? '' : ' AND status = ?') + (url.searchParams.get('order') === 'desc' ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id LIMIT ?');   // desc — 대시보드는 새 것부터
   const args = status === 'all' ? [since, limit] : [since, status, limit];
   const { results } = await bugDb(url, env).prepare(sql).bind(...args).all();
@@ -277,12 +280,28 @@ async function listBugs(url, env) {
   return json({ bugs });
 }
 
+// 내 리포트 — 게임이 제 설치 번호로 자기가 보낸 리포트의 상태와 답을 본다(관리자 키 없이). 설치 번호는 무작위라 남의 것은 못 고른다.
+// 글은 앞 300자만, 같이 온 것 · 관리자 메모(note)는 안 준다.
+async function myBugs(url, env) {
+  const install = url.searchParams.get('install');
+  if (!isId(install)) return json({ error: 'bad install' }, 400);
+  const { results } = await env.DB.prepare(
+    `SELECT id, created_at, version, substr(text, 1, 300) AS text, status, reply FROM bug_reports WHERE install = ? ORDER BY id DESC LIMIT 50`)
+    .bind(install).all();
+  return json({ bugs: results });
+}
+
 async function setBugStatus(id, request, url, env) {
   let b;
   try { b = JSON.parse(await request.text()); } catch { return json({ error: 'bad json' }, 400); }
   if (!b || typeof b.status !== 'string' || !STATUS.test(b.status)) return json({ error: 'bad status' }, 400);
   const note = typeof b.note === 'string' ? b.note.slice(0, 2000) : null;
-  const done = await bugDb(url, env).prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run();
+  // reply — 보낸 사람이 「내 리포트」에서 보는 답(창세기전3만). 빈 글이면 지운다, 없으면 그대로 둔다.
+  const reply = typeof b.reply === 'string' ? b.reply.trim().slice(0, 2000) : null;
+  if (reply !== null && url.searchParams.get('game') === 'fd2') return json({ error: 'no reply for fd2' }, 400);
+  const done = reply === null
+    ? await bugDb(url, env).prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note) WHERE id = ?`).bind(b.status, note, id).run()
+    : await env.DB.prepare(`UPDATE bug_reports SET status = ?, note = COALESCE(?, note), reply = NULLIF(?, '') WHERE id = ?`).bind(b.status, note, reply, id).run();
   if (!done.meta.changes) return json({ error: 'not found' }, 404);
   return json({ ok: true, id, status: b.status });
 }
@@ -332,6 +351,7 @@ export default {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         return await fd2Summary(env);
       }
+      if (request.method === 'GET' && pathname === '/v1/bugs/mine') return await myBugs(url, env);
       if (pathname === '/v1/bugs' || pathname.startsWith('/v1/bugs/')) {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         if (request.method === 'GET' && pathname === '/v1/bugs') return await listBugs(url, env);

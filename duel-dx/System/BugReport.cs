@@ -127,6 +127,46 @@ internal sealed class BugReport(GameWindow host)
         });
     }
 
+    /// <summary>내 리포트 한 건 — 받는 곳이 돌려준 것(글은 앞 300자).</summary>
+    internal sealed record Mine(long Id, string CreatedAt, string Version, string Text, string Status, string? Reply);
+
+    /// <summary>못 보낸 채 줄에 남은 리포트 수 — 「내 리포트」 창이 「아직 못 보낸 것」으로 알린다.</summary>
+    internal static int QueuedCount()
+    {
+        try { return Directory.Exists(QueueFolder) ? Directory.GetFiles(QueueFolder, "*.json").Length : 0; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
+    }
+
+    /// <summary>
+    /// 이 설치가 보낸 리포트의 상태 · 답 — 받는 곳 <c>GET /v1/bugs/mine?install=</c>(관리자 키 없이 제 설치 번호로만).
+    /// 받을 곳이 없거나(화면 밖 시험에 DUELDX_STATS_URL 이 없을 때) 못 받으면 null.
+    /// </summary>
+    internal static async Task<List<Mine>?> LoadMine()
+    {
+        string url = Url;
+        if (url.Length == 0) return null;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var reply = await http.GetAsync($"{url.TrimEnd('/')}/v1/bugs/mine?install={Uri.EscapeDataString(BattleStats.InstallId())}");
+            if (!reply.IsSuccessStatusCode) return null;
+            using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+            var list = new List<Mine>();
+            foreach (var b in doc.RootElement.GetProperty("bugs").EnumerateArray())
+            {
+                string Str(string key) => b.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+                list.Add(new Mine(b.GetProperty("id").GetInt64(), Str("created_at"), Str("version"), Str("text"), Str("status"),
+                    Str("reply") is { Length: > 0 } r ? r : null));
+            }
+            return list;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException or IOException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Bug] mine {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>줄을 한 번 훑어 보낸다 — 남은 것 없이 다 보냈으면 true.</summary>
     private static async Task<bool> UploadQueue(string url)
     {
@@ -282,14 +322,19 @@ internal static class BugReportDialog
         var send = new System.Windows.Forms.Button { Text = "보내기", AutoSize = true, MinimumSize = new Size(S(96), 0), Enabled = false, DialogResult = System.Windows.Forms.DialogResult.OK };
         var cancel = new System.Windows.Forms.Button { Text = "취소", AutoSize = true, MinimumSize = new Size(S(96), 0), DialogResult = System.Windows.Forms.DialogResult.Cancel };
         var hint = new System.Windows.Forms.Label { AutoSize = true, Text = "Ctrl+Enter 로도 보냅니다", ForeColor = Color.DimGray, Anchor = System.Windows.Forms.AnchorStyles.Left };
-        // 아래 줄 — 왼쪽 안내, 오른쪽 보내기 · 취소
-        var bottom = new System.Windows.Forms.TableLayoutPanel { ColumnCount = 3, AutoSize = true, Width = width, Margin = new System.Windows.Forms.Padding(0, S(10), 0, 0) };
+        // 내 리포트 — 이 PC 에서 보낸 리포트의 상태 · 답을 본다(MyBugReportsDialog).
+        var mine = new System.Windows.Forms.Button { Text = "내 리포트", AutoSize = true, MinimumSize = new Size(S(96), 0), Margin = new System.Windows.Forms.Padding(0, S(3), S(10), S(3)) };
+        mine.Click += (_, _) => MyBugReportsDialog.Show(form);
+        // 아래 줄 — 왼쪽 내 리포트 · 안내, 오른쪽 보내기 · 취소
+        var bottom = new System.Windows.Forms.TableLayoutPanel { ColumnCount = 4, AutoSize = true, Width = width, Margin = new System.Windows.Forms.Padding(0, S(10), 0, 0) };
+        bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
         bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100));
         bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
         bottom.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
-        bottom.Controls.Add(hint, 0, 0);
-        bottom.Controls.Add(send, 1, 0);
-        bottom.Controls.Add(cancel, 2, 0);
+        bottom.Controls.Add(mine, 0, 0);
+        bottom.Controls.Add(hint, 1, 0);
+        bottom.Controls.Add(send, 2, 0);
+        bottom.Controls.Add(cancel, 3, 0);
         bottom.Dock = System.Windows.Forms.DockStyle.Fill;
         box.TextChanged += (_, _) =>
         {

@@ -56,6 +56,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   .bug { border-top: 1px solid var(--line); padding: 10px 0; }
   .bug .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .bug .text { white-space: pre-wrap; margin: 6px 0; }
+  .bug .reply { white-space: pre-wrap; margin: 4px 0; padding: 4px 8px; border-left: 3px solid var(--accent, #6aa0ff); }
   .bug pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(--dim); max-height: 300px; overflow: auto; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; }
   .tag.new { color: var(--gold); border-color: var(--gold); } .tag.fixed { color: var(--good); border-color: var(--good); }
@@ -344,11 +345,13 @@ function bugCard(b) {
   const when = new Date(b.created_at).toLocaleString('ko-KR');
   const where = c.where || c.scene || (c.chapter ? c.chapter + '장' + (c.turn ? ' ' + c.turn + '턴' : '') : c.screen || '');
   const buttons = Object.keys(STATUS_NAME).filter((s) => s !== b.status)
-    .map((s) => '<button data-id="' + b.id + '" data-g="' + b.game + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ');
+    .map((s) => '<button data-id="' + b.id + '" data-g="' + b.game + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ')
+    + (b.game === 'fd2' ? '' : ' <button data-reply="' + b.id + '">답 달기</button>');   // 답은 창세기전3만 — 게임의 「내 리포트」에 보인다
   return '<div class="bug"><div class="head"><span class="tag">' + BUG_GAMES[b.game] + '</span><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
     + '<span class="dim">' + esc(when) + ' · v' + esc(b.version) + (where ? ' · ' + esc(where) : '') + '</span><span style="flex:1"></span>' + buttons + '</div>'
     + '<div class="text">' + esc(b.text) + '</div>'
     + (b.note ? '<div class="dim">메모: ' + esc(b.note) + '</div>' : '')
+    + (b.reply ? '<div class="reply">답(보낸 분에게 보임): ' + esc(b.reply) + '</div>' : '')
     + '<details><summary class="dim">같이 온 것</summary><pre>' + esc(JSON.stringify(c, null, 2)) + '</pre></details></div>';
 }
 async function loadBugs() {
@@ -366,6 +369,7 @@ async function loadBugs() {
     const bugs = lists.flat().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     $('bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
     $('bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(b.dataset.g, Number(b.dataset.id), b.dataset.s));
+    $('bugs').querySelectorAll('button[data-reply]').forEach((b) => b.onclick = () => replyBug(bugs.find((x) => x.game !== 'fd2' && x.id === Number(b.dataset.reply))));
   } catch (e) { $('bugerr').textContent = '불러오지 못했습니다: ' + e.message; }
 }
 async function markBug(game, id, status) {
@@ -376,6 +380,16 @@ async function markBug(game, id, status) {
   if (!res.ok) { $('bugerr').textContent = $('fd2err').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
   loadBugs();
   if (fd2Loaded) loadFd2();
+}
+// 답 — 보낸 분이 게임의 「내 리포트」에서 본다. 상태는 그대로 두고, 비우면 답을 지운다.
+async function replyBug(b) {
+  if (!b) return;
+  const reply = prompt('보낸 분에게 보일 답(비우면 지웁니다)', b.reply || '');
+  if (reply === null) return;
+  const res = await fetch('/v1/bugs/' + b.id + '/status?game=' + b.game, { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
+    body: JSON.stringify({ status: b.status, reply }) });
+  if (!res.ok) { $('bugerr').textContent = '답을 달지 못했습니다: HTTP ' + res.status; return; }
+  loadBugs();
 }
 function askBugKey() {
   const k = prompt('관리자 키(BUG_ADMIN_KEY)', bugKey());

@@ -48,8 +48,11 @@ CREATE TABLE IF NOT EXISTS bug_reports (
   text       TEXT NOT NULL,              -- 사용자가 쓴 글(8000자까지)
   context    TEXT NOT NULL,              -- 게임이 붙인 것(JSON: 판 · OS · 화면 · 전투 · 난이도 · 모드 · 오류 기록 끝)
   status     TEXT NOT NULL DEFAULT 'new',-- new · seen · fixed · wontfix · dup …
-  note       TEXT                        -- 고친 사람의 메모
+  note       TEXT,                       -- 고친 사람의 메모(관리자끼리만)
+  reply      TEXT                        -- 보낸 사람에게 보이는 답(게임의 「내 리포트」, migrations/0004_bug_reply.sql)
 );
+-- 설치 하나가 보낸 리포트(「내 리포트」)를 고를 때.
+CREATE INDEX IF NOT EXISTS bug_reports_install ON bug_reports (install, id);
 
 CREATE INDEX IF NOT EXISTS bug_reports_install ON bug_reports (install, created_at);
 CREATE INDEX IF NOT EXISTS bug_reports_status ON bug_reports (status, id);
