@@ -13,7 +13,15 @@ export const DASHBOARD_HTML = `<!doctype html>
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", "Malgun Gothic", sans-serif; }
   main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
+  h1 { font-size: 20px; margin: 0 0 4px; position: relative; }
+  /* 제목의 게임 이름을 누르면 다른 게임의 통계로 바꾼다 */
+  #gamepick { font: inherit; font-weight: inherit; color: inherit; background: none; border: none; border-radius: 6px; padding: 0 4px; margin-left: -4px; }
+  #gamepick:hover, #gamepick[aria-expanded="true"] { background: var(--panel); }
+  #gamepick::after { content: ' ▾'; color: var(--dim); font-size: 14px; }
+  #gamemenu { position: absolute; top: 100%; left: 0; z-index: 3; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; min-width: 200px; box-shadow: 0 6px 20px #0006; }
+  #gamemenu button { display: block; width: 100%; text-align: left; border: none; font-size: 15px; font-weight: 600; }
+  #gamemenu button:hover { background: var(--bg); }
+  #gamemenu button.on { color: var(--accent); }
   h2 { font-size: 15px; margin: 0 0 10px; color: var(--gold); }
   .sub { color: var(--dim); margin-bottom: 16px; }
   .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
@@ -55,8 +63,9 @@ export const DASHBOARD_HTML = `<!doctype html>
 </head>
 <body>
 <main>
-  <h1>창세기전3 — 전투 통계 (파트1 · 파트2)</h1>
-  <div class="sub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
+  <h1><button id="gamepick" aria-haspopup="true" aria-expanded="false">창세기전3</button> <span id="gamesub">— 전투 통계 (파트1 · 파트2)</span>
+    <div id="gamemenu" hidden><button data-game="dow">창세기전3</button><button data-game="fd2">용의기사2</button><button data-game="cds">대항해시대</button></div></h1>
+  <div class="sub" id="dowsub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters">
     <label>기간 <select id="period"><option value="today">오늘</option><option value="7" selected>최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option><option value="custom">직접 지정</option></select></label>
     <span id="customRange" hidden><input type="date" id="from"> ~ <input type="date" id="to"></span>
@@ -67,7 +76,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <div class="tiles" id="tiles"></div>
   <div class="tabs pagetabs" id="pagetabs">
     <button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
-    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button><button data-tab="fd2">용의기사2</button><button data-tab="cds">대항해시대</button>
+    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button>
   </div>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
@@ -95,8 +104,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
     <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label></div>
     <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
-  <section data-tab="cds"><h2>대항해시대 리메이크</h2>
-    <div class="sub">cds-remake-stats 대시보드를 그대로 띄운 것입니다(위의 기간 · 버전 거르기는 안 씁니다). <a href="https://cds-remake-stats.oceanfog1.workers.dev/dashboard" target="_blank" rel="noopener">새 창으로 열기</a></div>
+  <section data-tab="cds">
+    <div class="sub">cds-remake-stats 대시보드를 그대로 띄운 것입니다. <a href="https://cds-remake-stats.oceanfog1.workers.dev/dashboard" target="_blank" rel="noopener">새 창으로 열기</a></div>
     <iframe id="cdsframe" title="대항해시대 대시보드" style="width:100%;height:calc(100vh - 120px);min-height:480px;border:1px solid var(--line, #8884);border-radius:6px;background:var(--bg)"></iframe></section>
 </main>
 <script>
@@ -120,15 +129,37 @@ function pickTab(tab) {
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
-  // 대항해시대 탭은 남의 대시보드를 띄울 뿐이라 위의 거르기 · 합계 타일이 뜻이 없다 — 그 탭에서는 숨긴다.
-  // 띄우는 것은 처음 고를 때 한 번이다(안 보는 동안 그쪽 집계를 부르지 않게).
-  document.querySelectorAll('main > .filters, #tiles').forEach((el) => el.style.display = tab === 'cds' ? 'none' : '');   // hidden 은 display: flex 에 진다
+  // 대항해시대는 남의 대시보드를 띄울 뿐이다 — 띄우는 것은 처음 고를 때 한 번이다(안 보는 동안 그쪽 집계를 부르지 않게).
   if (tab === 'cds' && !$('cdsframe').src) $('cdsframe').src = 'https://cds-remake-stats.oceanfog1.workers.dev/dashboard';
 }
-document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => pickTab(b.dataset.tab));
-let savedTab = null;
-try { savedTab = localStorage.getItem('dashTab'); } catch (e) { }
-pickTab(document.querySelector('#pagetabs button[data-tab="' + savedTab + '"]') ? savedTab : 'ability');
+
+// 게임 — 제목의 게임 이름을 눌러 고른다. 용의기사2 · 대항해시대는 섹션 하나씩이라(data-tab 이 게임 이름) 창세기전3 의
+// 설명 · 거르기 · 합계 타일 · 탭 줄을 숨기고 그 섹션만 보인다. 창세기전3 으로 돌아오면 마지막으로 본 탭을 다시 연다.
+const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계' };
+const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대' };
+let dowTab = 'ability';
+function pickGame(game) {
+  if (!GAMES[game]) game = 'dow';
+  $('gamepick').textContent = GAME_NAMES[game];
+  $('gamesub').textContent = GAMES[game];
+  document.title = GAME_NAMES[game] + ' 통계';
+  document.querySelectorAll('#gamemenu button').forEach((b) => b.classList.toggle('on', b.dataset.game === game));
+  document.querySelectorAll('#dowsub, main > .filters, #tiles, #pagetabs').forEach((el) => el.style.display = game === 'dow' ? '' : 'none');   // hidden 은 display: flex 에 진다
+  try { localStorage.setItem('dashGame', game); } catch (e) { }
+  pickTab(game === 'dow' ? dowTab : game);
+}
+const closeGameMenu = () => { $('gamemenu').hidden = true; $('gamepick').setAttribute('aria-expanded', 'false'); };
+$('gamepick').onclick = (e) => { e.stopPropagation(); const open = $('gamemenu').hidden; $('gamemenu').hidden = !open; $('gamepick').setAttribute('aria-expanded', String(open)); };
+document.querySelectorAll('#gamemenu button').forEach((b) => b.onclick = () => { closeGameMenu(); pickGame(b.dataset.game); });
+document.addEventListener('click', closeGameMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGameMenu(); });
+
+document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => { dowTab = b.dataset.tab; pickTab(dowTab); });
+let savedTab = null, savedGame = null;
+try { savedTab = localStorage.getItem('dashTab'); savedGame = localStorage.getItem('dashGame'); } catch (e) { }
+if (document.querySelector('#pagetabs button[data-tab="' + savedTab + '"]')) dowTab = savedTab;
+// 예전에는 용의기사2 · 대항해시대가 탭이었다 — 그 탭을 보던 채면 그 게임으로 연다.
+pickGame(savedGame || (GAMES[savedTab] ? savedTab : 'dow'));
 
 const abilityName = (r) => r.ability > 0 ? (data.names.abilities[r.ability] || '어빌리티 ' + r.ability) : r.work === 0 ? '일반 공격' : '아이템·기타 (work ' + r.work + ')';
 const charName = (id) => data.names.characters[id] || '인물 ' + id;
