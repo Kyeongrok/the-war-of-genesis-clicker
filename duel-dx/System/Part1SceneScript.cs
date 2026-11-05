@@ -222,8 +222,11 @@ internal sealed class Part1SceneScript(GameWindow host)
         return _sceneChanged || Talk != null || FiredEvents() != before;
     }
 
-    /// <summary>사건 0(늘 도는 목록)을 뺀 발동 수 합.</summary>
-    private int FiredEvents() => _fired.Where(f => f.Key != 0).Sum(f => f.Value);
+    /// <summary>
+    /// 사건 0(늘 도는 목록)과 발동 한도 0(무제한 — 늘 다시 터지는 부르기 목록, 챕터 28 사건 33)을 뺀 발동 수 합.
+    /// 무제한 사건까지 세면 훑을 때마다 늘어 「무엇이 일어났다」(<see cref="Arrive"/>)가 늘 참이 되고 훑기가 64 번까지 돈다.
+    /// </summary>
+    private int FiredEvents() => _fired.Where(f => f.Key != 0 && _events.FirstOrDefault(e => e.Index == f.Key)?.MaxFire != 0).Sum(f => f.Value);
 
     /// <summary>떠 있는 대사(말하는 이, 글) — 누르면 다음으로.</summary>
     internal (string Speaker, string Text)? Talk { get; private set; }
@@ -442,7 +445,11 @@ internal sealed class Part1SceneScript(GameWindow host)
     {
         if (_events.FirstOrDefault(e => e.Index == index) is not { } e) return false;
         int fired = _fired.GetValueOrDefault(index);
-        if (e.MaxFire >= 0 && fired >= e.MaxFire) return false;
+        // 최대 발동 0 은 「무제한」이다 — 원본 판정기 셋 다 0 이면 한도를 안 본다(챕터 0x100c1cf3 · 필드 0x100d0c03 · 전투 0x10022143:
+        // mov ax,[+0xc] / test ax,ax / je 조건으로). 전에는 0 을 「한 번도 안 터짐」으로 읽어 챕터 28 사건 33(깃발 90 → 사건 34~36 부르기)이 안 돌아
+        // 적 말 셋(오웬 튜터 · 케이트 호크 · 노호크)이 팬드래건 한 칸 앞에서 멈추고 팬드래건 전투(399~401)가 안 열렸다(버그 리포트 #49).
+        // −1(0xffff)은 원본에서 부호 있는 비교라 판정기로는 안 터지지만, 리메이크는 사건 0 · 부속 사건을 그대로 돌려 온 대로 한도 없이 둔다.
+        if (e.MaxFire > 0 && fired >= e.MaxFire) return false;
         if (e.MaxFire > 1000) return false;                                 // 29999 번 도는 배경 움직임(필드 0007 사건 11) — 걸음을 바로 옮겨 끝없이 돌므로 건너뛴다
         if (!e.Conditions.All(Holds)) return false;
         _fired[index] = fired + 1;
