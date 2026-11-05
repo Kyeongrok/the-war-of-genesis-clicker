@@ -51,7 +51,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   .tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   .pagetabs { margin-bottom: 16px; position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 6px 0; }
   .pagetabs button { padding: 7px 14px; }
-  section[data-tab][hidden] { display: none; }
+  main > [data-tab][hidden] { display: none; }
   #error { color: var(--bad); }
   .bug { border-top: 1px solid var(--line); padding: 10px 0; }
   .bug .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -104,9 +104,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="tiles" id="fd2ptiles"></div>
     <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
     <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
-  <section data-tab="cds">
-    <div class="sub">cds-remake-stats 대시보드를 그대로 띄운 것입니다. <a href="https://cds-remake-stats.oceanfog1.workers.dev/dashboard" target="_blank" rel="noopener">새 창으로 열기</a></div>
-    <iframe id="cdsframe" title="대항해시대 대시보드" style="width:100%;height:calc(100vh - 120px);min-height:480px;border:1px solid var(--line, #8884);border-radius:6px;background:var(--bg)"></iframe></section>
+  <div data-tab="cds"><cds-dashboard id="cdsdash" api="https://cds-remake-stats.oceanfog1.workers.dev"></cds-dashboard></div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -123,14 +121,20 @@ let dayUnit = 'day';
 
 // 아래 표들은 탭으로 나눠 하나씩 보인다 — 고른 탭은 이 브라우저에 남는다
 function pickTab(tab) {
-  document.querySelectorAll('section[data-tab]').forEach((el) => el.hidden = el.dataset.tab !== tab);
+  document.querySelectorAll('main > [data-tab]').forEach((el) => el.hidden = el.dataset.tab !== tab);
   document.querySelectorAll('#pagetabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   try { localStorage.setItem('dashTab2', tab); } catch (e) { }
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
-  // 대항해시대는 남의 대시보드를 띄울 뿐이다 — 띄우는 것은 처음 고를 때 한 번이다(안 보는 동안 그쪽 집계를 부르지 않게).
-  if (tab === 'cds' && !$('cdsframe').src) $('cdsframe').src = 'https://cds-remake-stats.oceanfog1.workers.dev/dashboard';
+  // 대항해시대 화면은 cds-remake-stats 가 내는 부품(<cds-dashboard>, /embed.js)이다 — 화면 코드는 그쪽 저장소(cds-helper)에 하나만 둔다.
+  // 부품 코드는 처음 고를 때 한 번 불러온다(안 보는 동안 그쪽 집계를 부르지 않게). 불러오면 부품이 제자리에 그려진다.
+  if (tab === 'cds' && !document.getElementById('cdsembed')) {
+    const js = document.createElement('script');
+    js.id = 'cdsembed';
+    js.src = 'https://cds-remake-stats.oceanfog1.workers.dev/embed.js';
+    document.head.appendChild(js);
+  }
 }
 
 // 게임 — 제목의 게임 이름을 눌러 고른다. 용의기사2 · 대항해시대는 섹션 하나씩이라(data-tab 이 게임 이름) 창세기전3 의
