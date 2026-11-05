@@ -1010,6 +1010,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal void OnKeyDown(int key)
     {
+        // F12 — 어느 화면에서나 버그 리포트(컷신 · 이야기 장면 · 기술 영상 중에도, 버그 리포트 #47 요청). 지금 장면 · 대사가 같이 간다(BugReport.Cutscene).
+        if (key == Win32.VK_F12) { Bugs.Open(); return; }
         if (Cut.Playing) { if (key is Win32.VK_ESCAPE or Win32.VK_RETURN or Win32.VK_SPACE) Cut.Skip(); return; }
         if (key == Win32.VK_F11) { OnMenuCommand(MenuFullscreen); return; }   // 전체화면 켜고 끄기 — 어느 화면에서나
         if (TimedHitFx.Running) { TimedHitFx.PressKey(key); return; }   // 타이밍 크리티컬 — 공격 키만 받는다

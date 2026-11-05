@@ -6,7 +6,7 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>
-/// 버그 리포트(사용자 요청 menu-118) — 타이틀 · 파트1 타이틀 · 시스템 메뉴의 「버그 리포트」가 글 쓰는 창을 띄우고, 쓴 글을
+/// 버그 리포트(사용자 요청 menu-118) — 타이틀 · 파트1 타이틀 · 시스템 메뉴의 「버그 리포트」와 어느 화면에서나 F12(컷신 · 이야기 장면 중에도, menu-128)가 글 쓰는 창을 띄우고, 쓴 글을
 /// 전투 통계를 받는 곳(<c>tools/stats-worker</c> 의 <c>POST /v1/bug</c>)으로 보낸다.
 /// </summary>
 /// <remarks>
@@ -63,6 +63,16 @@ internal sealed class BugReport(GameWindow host)
             if (BugReportDialog.Ask(owner, Summary(context)) is { } written) Submit(written, context);
         }
         finally { owner.ReleaseHandle(); }
+    }
+
+    private bool _keyHinted;
+
+    /// <summary>이야기 장면이 처음 열릴 때 한 번 — 「F12 로 버그 리포트」를 알린다(메뉴가 없는 장면에서도 보낼 수 있다는 것을 알게).</summary>
+    internal void HintKeyOnce()
+    {
+        if (_keyHinted) return;
+        _keyHinted = true;
+        host.Toast("F12 — 어느 화면에서나 버그 리포트");
     }
 
     /// <summary>글 하나를 줄에 세우고 뒤에서 보낸다 — 결과는 토스트로 알린다.</summary>
@@ -221,9 +231,49 @@ internal sealed class BugReport(GameWindow host)
             ["part2Dir"] = BattleStats.DirName(OriginalGame.Root),
             ["part1Dir"] = BattleStats.DirName(Part1Game.Root),
         };
+        // 컷신 · 이야기 장면(F12 로 어디서나 연다, 버그 리포트 #47 요청) — 어느 장면 · 지금 대사 · 건너뛰는 중인지.
+        if (Cutscene() is { } cut) c["cutscene"] = cut;
+        // 소리 상태 — 「소리가 안 난다」 제보를 가르려고(버그 리포트 #47): 걸린 곡 · 논리 크기 · 멈춤 · 장치를 다시 연 수.
+        c["audio"] = new Dictionary<string, object?>
+        {
+            ["bgm"] = host._musicId,
+            ["gain"] = Math.Round(host._musicGain, 2),
+            ["paused"] = host._musicPaused,
+            ["silenced"] = host.MusicSilenced,
+            ["bgmOn"] = host.Sys._bgmOn,
+            ["bgmVolume"] = host.Sys._bgmVolume,
+            ["seVolume"] = host.Sys._seVolume,
+            ["focus"] = Math.Round(host._mixer.MusicFocus, 2),
+            ["deviceResets"] = host._mixer.DeviceResets,
+        };
         if (host._loadError.Length > 0) c["loadError"] = Scrub(host._loadError);
         if (CrashLogTail() is { } crash) { c["crashLogAt"] = crash.At; c["crashLog"] = crash.Tail; }
         return c;
+    }
+
+    /// <summary>컷신 · 이야기 장면 정보 — 기술 영상 · 파트1 필드(이야기 장면) · 파트2 필드. 아니면 null.</summary>
+    private Dictionary<string, object?>? Cutscene()
+    {
+        if (host.Cut.Playing) return new() { ["kind"] = "기술 영상" };
+        var shell = host.Part1TitleScr;
+        if (shell._open && shell.Field is { _open: true, _field: { } field } screen)
+        {
+            var script = screen.Script;
+            return new()
+            {
+                ["kind"] = "파트1 이야기 장면",
+                ["field"] = field.Id,
+                ["background"] = field.Background,
+                ["place"] = script.Place is ( >= 0, >= 0) p ? $"사건 {p.Event} · 줄 {p.Line}" : null,
+                ["talk"] = script.Talk is { } t ? Clip($"{t.Speaker}: {t.Text}") : null,
+                ["choice"] = script.Choice?.Text is { } q ? Clip(q) : null,
+            };
+        }
+        if (host.Fld._field is { } f) return new() { ["kind"] = "이야기 장면", ["field"] = f.Id };
+        if (host.Mos._mosesOpen && host.Mos._mosesChp is { } chp) return new() { ["kind"] = "모세스 장면", ["chapter"] = chp.Id };
+        return null;
+
+        static string Clip(string s) { s = s.Replace('\n', ' ').Trim(); return s.Length > 120 ? s[..120] + "…" : s; }
     }
 
     /// <summary>오류 기록(<see cref="CrashLogPath"/>)의 끝 — 마지막 200 줄 · 20KB 까지. 없으면 null.</summary>
@@ -272,9 +322,12 @@ internal sealed class BugReport(GameWindow host)
             $"지금 자리: {c["where"]} · 파트{c["part"]} · 난이도 {c["difficulty"]}",
         };
         if (c["mods"] is List<string> { Count: > 0 } mods) lines.Add("켠 모드: " + string.Join(", ", mods));
+        if (c.TryGetValue("cutscene", out var cutscene) && cutscene is Dictionary<string, object?> cut)
+            lines.Add("장면: " + string.Join(" · ", cut.Where(kv => kv.Value != null).Select(kv => kv.Key == "kind" ? $"{kv.Value}" : $"{kv.Key} {kv.Value}")));
         if (c.TryGetValue("loadError", out var err)) lines.Add($"읽기 오류: {err}");
         if (c.TryGetValue("crashLogAt", out var at)) lines.Add($"오류 기록(dueldx_crash.log)의 끝 — {at} 에 적힌 것");
         lines.Add("이름 · 세이브 · 폴더 경로는 보내지 않습니다. 설치마다 하나인 무작위 번호만 같이 갑니다.");
+        lines.Add("F12 로 컷신 · 이야기 장면 중에도 이 창을 엽니다.");
         return string.Join(Environment.NewLine, lines);
     }
 }

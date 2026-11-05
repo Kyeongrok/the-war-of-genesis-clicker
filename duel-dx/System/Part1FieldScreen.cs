@@ -306,6 +306,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _open = true;
         GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
         Script.Start(field.Events, field.Lines, []);
+        host.Bugs.HintKeyOnce();   // 이야기 장면에서도 F12 로 버그 리포트(버그 리포트 #47 요청) — 켠 동안 한 번 알린다
     }
 
     private bool OnSceneChange(ScriptCommand c)
