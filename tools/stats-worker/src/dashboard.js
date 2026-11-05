@@ -75,8 +75,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div>
   <div class="tiles" id="tiles"></div>
   <div class="tabs pagetabs" id="pagetabs">
-    <button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
-    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button><button data-tab="bugs">버그 리포트</button>
+    <button data-tab="bugs">버그 리포트</button><button data-tab="ability">어빌리티</button><button data-tab="chars">인물별</button><button data-tab="battles">분기별</button>
+    <button data-tab="env">모드 · 환경</button><button data-tab="days">날짜별</button>
   </div>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트2 (상위 20)</h2><table id="abilities"></table></section>
   <section data-tab="ability"><h2>어빌리티 순위 · 파트1 (상위 20)</h2><table id="abilities1"></table></section>
@@ -92,18 +92,18 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section data-tab="days"><h2>날짜별</h2>
     <div class="filters"><label>묶음 <select id="dayUnit"><option value="day">하루</option><option value="week">주(월요일 시작)</option><option value="month">달</option><option value="dayVersion">하루 · 버전</option></select></label></div>
     <table id="daysTable"></table></section>
-  <section data-tab="fd2"><h2>용의기사2 리메이크 · 플레이</h2>
-    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음)(위의 기간 · 버전 거르기는 안 씁니다). 관리자 키(버그 리포트 탭과 같은 것)를 넣어야 보입니다.</div>
-    <div class="filters"><button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
-    <div class="tiles" id="fd2ptiles"></div>
-    <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
-    <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
+  <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
+    <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
+      <button id="fd2key">관리자 키</button><button id="fd2reload">새로 고침</button><span id="fd2err" class="bad"></span></div>
+    <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="fd2"><h2>용의기사2 · 버그 리포트 집계</h2>
     <div class="tiles" id="fd2tiles"></div>
     <div class="envgrid" id="fd2grid"></div></section>
-  <section data-tab="fd2"><h2>용의기사2 · 리포트</h2>
-    <div class="filters"><label>상태 <select id="fd2status"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label></div>
-    <div id="fd2bugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
+  <section data-tab="fd2"><h2>용의기사2 리메이크 · 플레이</h2>
+    <div class="sub">fd2-remake 가 전투 한 판마다 보낸 익명 기록입니다(v0.14.33 부터, 설정에서 끌 수 있음). 관리자 키(맨 위 리포트의 것)를 넣어야 보입니다.</div>
+    <div class="tiles" id="fd2ptiles"></div>
+    <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
+    <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
   <section data-tab="cds">
     <div class="sub">cds-remake-stats 대시보드를 그대로 띄운 것입니다. <a href="https://cds-remake-stats.oceanfog1.workers.dev/dashboard" target="_blank" rel="noopener">새 창으로 열기</a></div>
     <iframe id="cdsframe" title="대항해시대 대시보드" style="width:100%;height:calc(100vh - 120px);min-height:480px;border:1px solid var(--line, #8884);border-radius:6px;background:var(--bg)"></iframe></section>
@@ -114,7 +114,7 @@ const n = (v) => Number(v || 0).toLocaleString('ko-KR');
 // 걸린 시간 — 초 합계와 잰 판 수로 평균을 내 「분:초」로. 잰 판이 없으면(옛 판 게임이 보낸 것) −.
 const clock = (sum, count) => { if (!count) return '-'; const s = Math.round(sum / count); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-let data = null, sortKey = 'uses', pickedChar = null, currentTab = 'ability';
+let data = null, sortKey = 'uses', pickedChar = null, currentTab = 'bugs';
 // 탭이 쓰는 집계 갈래(/v1/dashboard?part=) — 버그 리포트 탭은 집계가 없다. 받은 갈래는 거르기를 바꿀 때까지 다시 안 받는다.
 const TAB_PART = { ability: 'skills', chars: 'skills' };
 let loadedParts = new Set();
@@ -125,7 +125,7 @@ let dayUnit = 'day';
 function pickTab(tab) {
   document.querySelectorAll('section[data-tab]').forEach((el) => el.hidden = el.dataset.tab !== tab);
   document.querySelectorAll('#pagetabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-  try { localStorage.setItem('dashTab', tab); } catch (e) { }
+  try { localStorage.setItem('dashTab2', tab); } catch (e) { }
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
@@ -137,7 +137,7 @@ function pickTab(tab) {
 // 설명 · 거르기 · 합계 타일 · 탭 줄을 숨기고 그 섹션만 보인다. 창세기전3 으로 돌아오면 마지막으로 본 탭을 다시 연다.
 const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계' };
 const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대' };
-let dowTab = 'ability';
+let dowTab = 'bugs';
 function pickGame(game) {
   if (!GAMES[game]) game = 'dow';
   $('gamepick').textContent = GAME_NAMES[game];
@@ -155,11 +155,12 @@ document.addEventListener('click', closeGameMenu);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGameMenu(); });
 
 document.querySelectorAll('#pagetabs button').forEach((b) => b.onclick = () => { dowTab = b.dataset.tab; pickTab(dowTab); });
-let savedTab = null, savedGame = null;
-try { savedTab = localStorage.getItem('dashTab'); savedGame = localStorage.getItem('dashGame'); } catch (e) { }
+let savedTab = null, savedGame = null, oldTab = null;
+try { savedTab = localStorage.getItem('dashTab2'); oldTab = localStorage.getItem('dashTab'); savedGame = localStorage.getItem('dashGame'); } catch (e) { }
+// 기본 탭은 버그 리포트다 — 그때 열쇠를 dashTab2 로 갈아, 예전(dashTab)에 고른 창세기전3 탭은 안 이어받는다.
 if (document.querySelector('#pagetabs button[data-tab="' + savedTab + '"]')) dowTab = savedTab;
 // 예전에는 용의기사2 · 대항해시대가 탭이었다 — 그 탭을 보던 채면 그 게임으로 연다.
-pickGame(savedGame || (GAMES[savedTab] ? savedTab : 'dow'));
+pickGame(savedGame || (GAMES[oldTab] ? oldTab : 'dow'));
 
 const abilityName = (r) => r.ability > 0 ? (data.names.abilities[r.ability] || '어빌리티 ' + r.ability) : r.work === 0 ? '일반 공격' : '아이템·기타 (work ' + r.work + ')';
 const charName = (id) => data.names.characters[id] || '인물 ' + id;
