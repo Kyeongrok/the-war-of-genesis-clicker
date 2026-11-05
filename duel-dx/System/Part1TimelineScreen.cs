@@ -82,7 +82,7 @@ internal sealed class Part1TimelineScreen(GameWindow host, Part1TitleScreen shel
         _contentH = cells.Length > 0 ? cells.Max(c => c.Item2) + CellH : 0;
         _bg ??= shell.Field.ReadImage(Background).Px;
         // 이미 이 곡이 돌고 있으면(연대표 안에서 저장 창을 다녀왔을 때 등) 다시 걸지 않는다.
-        if (host._musicId != Part1Game.BgmBase + Bgm) host.PlayMusicFile(Part1Game.BgmBase + Bgm, loop: true);
+        host.EnsureMusic(Part1Game.BgmBase + Bgm);   // 0 으로 줄여 둔 같은 곡이면 다시 건다(버그 리포트 #47)
         _scroll = 0;
         _menu = false;
         _open = true;

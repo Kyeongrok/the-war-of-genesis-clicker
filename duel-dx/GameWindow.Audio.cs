@@ -317,6 +317,22 @@ internal sealed unsafe partial class GameWindow
     internal bool _musicPaused;
 
     /// <summary>
+    /// 곡이 걸려 있어도 안 들리나 — 멈춤(크기 0) · 크기 0 · 0 으로 줄여 가는 중. 필드 끝의 703(0 까지 줄이기) · 517(0) 이 남긴다.
+    /// </summary>
+    internal bool MusicSilenced => _musicPaused || (_musicAudible ?? _musicGain) <= 0.001f || _musicFade is { To: <= 0.001f };
+
+    /// <summary>
+    /// 그 곡을 되풀이로 튼다 — 이미 그 곡이 들리고 있으면 그대로 둔다. 전에는 「같은 곡이면 그대로」만 봐서, 필드가 703 으로 곡을 0 까지 줄이고
+    /// 끝났는데 다음 장면(챕터 지도 · 연대표 · 파트1 타이틀)의 곡이 같으면 멈춘 채 다른 곡이 걸릴 때까지 배경음악이 안 났다(버그 리포트 #47).
+    /// </summary>
+    internal void EnsureMusic(int id)
+    {
+        if (_musicId == id && !MusicSilenced) return;
+        if (BattleScene.Trace && _musicId == id) _backgroundTrace.Enqueue($"music {id} 같은 곡이지만 안 들려 다시 건다 (gain {_musicGain:0.00}{(_musicPaused ? " 멈춤" : "")})");
+        PlayMusicFile(id, loop: true);
+    }
+
+    /// <summary>
     /// 논리 크기(<see cref="_musicGain"/>)와 다르게 <b>들리는</b> 크기 — 필드 머리 곡은 논리 0 으로 걸지만 100 % 로 울린다(감사4 M3).
     /// 페이드·크기 바꾸기가 한 번 걸리면 지운다.
     /// </summary>
@@ -331,6 +347,11 @@ internal sealed unsafe partial class GameWindow
         _musicDuckRestoreAt = null;
         _chapterEventMusic = false;
         if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 걸기 loop {loop}{(Muted ? " (소리 끔)" : !Sys._bgmOn ? " (BGM 꺼짐)" : "")}");
+        // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
+        // 소리를 끈 판에서도 크기는 같이 맞춘다 — 전에는 앞 곡의 페이드가 새 곡에 이어졌다.
+        _musicFade = null;
+        _musicGain = gain ?? MusicGain;
+        _musicAudible = audible;
         if (Muted || !Sys._bgmOn)
         {
             // 소리 없이도 곡은 돈다 — 원본은 음악 크기 0 이어도 곡을 틀어(0x10009690: 크기 −10000) 필드 701 이 끝을 기다린다. 길이는 701 이 물을 때 잰다.
@@ -338,10 +359,6 @@ internal sealed unsafe partial class GameWindow
             return;
         }
         _silentTrack = null;
-        // 새 음악은 제 크기로 시작한다 — 앞 장면이 줄여 둔 크기를 물려받으면 안 들린다. 필드 512 만 물려받는다(PlayMusicInherit).
-        _musicFade = null;
-        _musicGain = gain ?? MusicGain;
-        _musicAudible = audible;
         // 풀리는 동안 다른 곡을 걸었으면 이 곡은 버린다 — 늦게 풀린 곡이 새 곡을 덮어쓰지 않게.
         int request = Interlocked.Increment(ref _musicRequest);
         System.Threading.Tasks.Task.Run(() =>

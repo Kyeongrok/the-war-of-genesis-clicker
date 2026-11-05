@@ -654,7 +654,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
         var (ox, oy) = host.Mos.MosesOrigin();
         if (_shownAt < 0) _shownAt = host._lastTime;
         // 타이틀 곡 — 장면을 떠나는 페이드 동안은 다시 걸지 않는다(PART 2 로 갈 때 곡이 꺼진 뒤 도로 울렸다).
-        if (host._fadeOutStart < 0 && host._musicId != TitleMusic) host.PlayMusicFile(TitleMusic, loop: true);
+        if (host._fadeOutStart < 0) host.EnsureMusic(TitleMusic);   // 같은 곡이어도 필드가 0 으로 줄여 두었으면 다시 건다(버그 리포트 #47)
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_bg is { } bg)
             for (int y = 0; y < MosesScene.MosesH; y++)

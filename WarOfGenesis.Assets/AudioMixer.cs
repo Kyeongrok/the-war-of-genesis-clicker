@@ -66,14 +66,57 @@ public sealed class AudioMixer : IDisposable
     /// <summary><c>AUDIOMIXER_SILENT=1</c> 이면 장치로 내보내지 않고 섞기만 한다(테스트용 — 스피커로 소리가 안 난다).</summary>
     private static readonly bool Silent = Environment.GetEnvironmentVariable("AUDIOMIXER_SILENT") == "1";
 
-    /// <summary>소리 장치를 연다. 장치가 없으면 조용히 아무 소리도 안 낸다.</summary>
+    /// <summary>
+    /// 장치가 이만큼(ms) 버퍼를 하나도 돌려주지 않으면 죽은 것으로 보고 닫았다 다시 연다. 버퍼는 40ms 짜리 둘이라 보통은 80ms 안에 돌아온다.
+    /// </summary>
+    private const int StallMs = 1500;
+
+    /// <summary>장치를 못 열었을 때 다시 열어 보는 사이(ms).</summary>
+    private const int ReopenMs = 2000;
+
+    /// <summary>
+    /// 시험 문 <c>AUDIOMIXER_FAKE_STALL_MS=&lt;ms&gt;</c> — 장치를 연 지 그만큼 지나면 한 번, 장치가 버퍼를 안 돌려주는 것처럼 군다(다시 열기 시험).
+    /// 무음 버퍼만 흘리는 시험에서 쓴다 — 스피커로 소리가 나지 않게 효과음을 걸지 않는다.
+    /// </summary>
+    private static readonly int FakeStallMs = int.TryParse(Environment.GetEnvironmentVariable("AUDIOMIXER_FAKE_STALL_MS"), out int fs) ? fs : -1;
+
+    /// <summary>
+    /// 장치를 다시 연 수(멈춘 장치 · 쓰기 실패 · 처음에 못 열었다가 연 것) — 버그 리포트에 싣는다.
+    /// 소리 장치가 바뀌거나(HDMI · 블루투스 헤드셋) 잠깐 사라지면 waveOut 이 버퍼를 안 돌려주고 멈춰, 전에는 껐다 켤 때까지 소리가 하나도 안 났다(버그 리포트 #47).
+    /// </summary>
+    public int DeviceResets => Volatile.Read(ref _deviceResets);
+    private int _deviceResets;
+
+    /// <summary>장치로 내보낸 버퍼 수 — 시험이 다시 연 뒤에도 소리가 흐르는지 본다.</summary>
+    public long BuffersWritten => Interlocked.Read(ref _buffersWritten);
+    private long _buffersWritten;
+
+    /// <summary>소리 장치를 연다. 장치가 없으면 섞기만 하고(곡 시계 · 효과음 끝은 그대로 흐른다) 틈틈이 다시 열어 본다.</summary>
     public AudioMixer()
     {
-        IntPtr device = IntPtr.Zero;
-        var fmt = new WaveFormatEx { Tag = 1, Channels = 2, SamplesPerSec = Rate, Bits = 16, BlockAlign = 4, AvgBytesPerSec = Rate * 4 };
-        if (!Silent && waveOutOpen(out device, unchecked((uint)-1), ref fmt, IntPtr.Zero, IntPtr.Zero, 0) != 0) return;
-        _thread = new Thread(() => Pump(device)) { IsBackground = true, Name = "AudioMixer" };
+        _thread = new Thread(Pump) { IsBackground = true, Name = "AudioMixer" };
         _thread.Start();
+    }
+
+    private static IntPtr OpenDevice()
+    {
+        var fmt = new WaveFormatEx { Tag = 1, Channels = 2, SamplesPerSec = Rate, Bits = 16, BlockAlign = 4, AvgBytesPerSec = Rate * 4 };
+        return waveOutOpen(out IntPtr device, unchecked((uint)-1), ref fmt, IntPtr.Zero, IntPtr.Zero, 0) == 0 ? device : IntPtr.Zero;
+    }
+
+    /// <summary>장치를 닫는다 — 줄 선 버퍼를 다 돌려받아 빈 버퍼로 되돌린다.</summary>
+    private static void CloseDevice(ref IntPtr device, Queue<IntPtr> busy, Queue<IntPtr> free)
+    {
+        if (device == IntPtr.Zero) return;
+        waveOutReset(device);
+        while (busy.Count > 0)
+        {
+            IntPtr hdr = busy.Dequeue();
+            waveOutUnprepareHeader(device, hdr, HdrSize);
+            free.Enqueue(hdr);
+        }
+        waveOutClose(device);
+        device = IntPtr.Zero;
     }
 
     /// <summary>효과음을 한 번 튼다. <paramref name="tag"/> 는 <see cref="IsPlaying"/> 로 겹침을 막을 때 쓴다.</summary>
@@ -196,13 +239,35 @@ public sealed class AudioMixer : IDisposable
         lock (_gate) _musicPaused = false;
     }
 
-    private void Pump(IntPtr device)
+    /// <summary>버퍼 하나만큼 섞는다 — 장치가 있든 없든 목소리는 이만큼 나아간다.</summary>
+    private void MixOne(int[] mix, short[] pcm)
+    {
+        Array.Clear(mix);
+        lock (_gate)
+        {
+            if (_music != null && !_musicPaused && !Mix(_music, mix, _musicVolume * _musicFocus)) _music = null;
+            _effects.RemoveAll(v => !Mix(v, mix, 1f));
+        }
+        for (int i = 0; i < mix.Length; i++) pcm[i] = (short)Math.Clamp(mix[i], short.MinValue, short.MaxValue);
+        if (_dump != null) { _dump.Write(MemoryMarshal.AsBytes<short>(pcm)); _dump.Flush(); }
+    }
+
+    /// <summary>
+    /// 섞어서 장치로 민다. 장치가 버퍼를 <see cref="StallMs"/> 동안 하나도 안 돌려주거나 쓰기가 실패하면(장치가 바뀌었다 · 사라졌다)
+    /// 닫고 다시 연다 — 전에는 줄이 찬 채로 멈춰 게임을 껐다 켤 때까지 아무 소리도 안 났다(버그 리포트 #47). 장치가 없는 동안은
+    /// 무음 시험처럼 40ms 마다 섞기만 해 곡 시계(필드 701) · 효과음 끝(<see cref="IsPlaying"/>)이 멈추지 않는다.
+    /// </summary>
+    private void Pump()
     {
         var headers = new List<IntPtr>();
         var free = new Queue<IntPtr>();
         var busy = new Queue<IntPtr>();
         var mix = new int[BufferFrames * 2];
         var pcm = new short[BufferFrames * 2];
+        IntPtr device = IntPtr.Zero;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        long nextOpen = 0, lastProgress = 0, openedAt = 0, lastMix = 0;
+        bool everOpened = false, fakeStalled = false;
         try
         {
             for (int i = 0; i <= QueuedBuffers; i++)
@@ -215,44 +280,74 @@ public sealed class AudioMixer : IDisposable
 
             while (!_stop)
             {
-                while (!Silent && busy.Count > 0 && (Marshal.PtrToStructure<WaveHdr>(busy.Peek()).Flags & WhdrDone) != 0)
+                long now = clock.ElapsedMilliseconds;
+                if (!Silent && device == IntPtr.Zero && now >= nextOpen)
+                {
+                    device = OpenDevice();
+                    if (device != IntPtr.Zero)
+                    {
+                        if (everOpened || now > ReopenMs / 2) Interlocked.Increment(ref _deviceResets);
+                        everOpened = true;
+                        lastProgress = openedAt = now;
+                    }
+                    else nextOpen = now + ReopenMs;
+                }
+                if (Silent || device == IntPtr.Zero)
+                {
+                    // 장치 없이 섞기만 한다(무음 시험 · 장치를 못 연 동안).
+                    MixOne(mix, pcm);
+                    Thread.Sleep(1000 / 25);
+                    continue;
+                }
+
+                bool stallTest = FakeStallMs >= 0 && !fakeStalled && now - openedAt >= FakeStallMs;
+                while (!stallTest && busy.Count > 0 && (Marshal.PtrToStructure<WaveHdr>(busy.Peek()).Flags & WhdrDone) != 0)
                 {
                     IntPtr done = busy.Dequeue();
                     waveOutUnprepareHeader(device, done, HdrSize);
                     free.Enqueue(done);
+                    lastProgress = now;
                 }
-                while ((Silent && _dump != null) || (busy.Count < QueuedBuffers && free.Count > 0))
+                // 장치가 버퍼를 안 돌려주는 동안에도 목소리는 제 빠르기로 나아간다(섞어 버린다) — 곡 시계(701) · 효과음 끝이 멈춰 장면이 서지 않게.
+                if (busy.Count >= QueuedBuffers && now - lastProgress > 200 && now - lastMix >= 1000 / 25)
                 {
-                    Array.Clear(mix);
-                    lock (_gate)
-                    {
-                        if (_music != null && !_musicPaused && !Mix(_music, mix, _musicVolume * _musicFocus)) _music = null;
-                        _effects.RemoveAll(v => !Mix(v, mix, 1f));
-                    }
-                    for (int i = 0; i < mix.Length; i++) pcm[i] = (short)Math.Clamp(mix[i], short.MinValue, short.MaxValue);
-                    if (_dump != null) { _dump.Write(MemoryMarshal.AsBytes<short>(pcm)); _dump.Flush(); }
-
-                    if (Silent) break;   // 섞기만 하고 장치로는 안 보낸다
-
+                    MixOne(mix, pcm);
+                    lastMix = now;
+                }
+                if (busy.Count > 0 && now - lastProgress > StallMs)
+                {
+                    if (stallTest) fakeStalled = true;
+                    CloseDevice(ref device, busy, free);
+                    nextOpen = now;   // 곧바로 다시 연다(기본 장치가 바뀌었으면 새 장치로)
+                    continue;
+                }
+                bool failed = false;
+                while (!stallTest && busy.Count < QueuedBuffers && free.Count > 0)
+                {
+                    MixOne(mix, pcm);
+                    lastMix = now;
                     IntPtr hdr = free.Dequeue();
                     var h = Marshal.PtrToStructure<WaveHdr>(hdr);
                     Marshal.Copy(pcm, 0, h.Data, pcm.Length);
                     Marshal.StructureToPtr(new WaveHdr { Data = h.Data, Length = (uint)(pcm.Length * 2) }, hdr, false);
-                    waveOutPrepareHeader(device, hdr, HdrSize);
-                    waveOutWrite(device, hdr, HdrSize);
+                    if (waveOutPrepareHeader(device, hdr, HdrSize) != 0) { free.Enqueue(hdr); failed = true; break; }
+                    if (waveOutWrite(device, hdr, HdrSize) != 0) { waveOutUnprepareHeader(device, hdr, HdrSize); free.Enqueue(hdr); failed = true; break; }
+                    if (busy.Count == 0) lastProgress = now;   // 빈 줄에 처음 선 버퍼 — 여기서부터 잰다
                     busy.Enqueue(hdr);
+                    Interlocked.Increment(ref _buffersWritten);
                 }
-                Thread.Sleep(Silent ? 1000 / 25 : 10);
+                if (failed)
+                {
+                    CloseDevice(ref device, busy, free);
+                    nextOpen = now + 500;
+                    continue;
+                }
+                Thread.Sleep(10);
             }
         }
         finally
         {
-            if (!Silent)
-            {
-            waveOutReset(device);
-            foreach (IntPtr hdr in busy) waveOutUnprepareHeader(device, hdr, HdrSize);
-            waveOutClose(device);
-            }
+            if (device != IntPtr.Zero) CloseDevice(ref device, busy, free);
             foreach (IntPtr hdr in headers)
             {
                 Marshal.FreeHGlobal(Marshal.PtrToStructure<WaveHdr>(hdr).Data);
@@ -272,6 +367,8 @@ public sealed class AudioMixer : IDisposable
         int ch = s.Channels;
         long frames = s.FrameCount;
         float gl = v.Gain * master * v.Left, gr = v.Gain * master * v.Right;
+        // 크기가 NaN · 무한이면 (int) 가 int.MinValue 가 되어 섞은 소리가 한쪽 끝에 붙는다(모든 소리가 안 들린다) — 그 목소리는 0 으로.
+        if (!float.IsFinite(gl) || !float.IsFinite(gr)) gl = gr = 0;
         for (int i = 0; i < BufferFrames; i++)
         {
             long idx = (long)v.Position;

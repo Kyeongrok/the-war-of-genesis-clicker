@@ -489,7 +489,7 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     {
         if (chapter.Header.Length <= 8 || chapter.Header[8] < 0) return;
         int bgm = Part1Game.BgmBase + chapter.Header[8];
-        if (host._musicId != bgm) host.PlayMusicFile(bgm, loop: true);
+        host.EnsureMusic(bgm);   // 같은 곡이어도 필드가 0 으로 줄여 두었으면 다시 건다(버그 리포트 #47)
     }
 
     /// <summary>지도 그림을 1:1 로 — 열쇠 빛깔(노랑 · 파랑)과 그림 밖은 바다 무늬(BGR 0). 그림이 없으면 장소를 다 담는 크기의 바다.</summary>
