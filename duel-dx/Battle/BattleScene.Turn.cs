@@ -305,6 +305,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 // 행동이 끝났다 — 갈래 2 검사. 휴식·물체 만지기처럼 UseWorkRoutine 을 안 거치는 행동도 상태 21 을 지난다(0x100681a0 → 갈래 1).
                 _routine = null;
                 _eventCheckDue |= (1 << 2) | (1 << 1);
+                if (_turn >= 0) _walkChecked = (_turn, host._units[_turn].Col, host._units[_turn].Row);   // 걸어 붙는 행동도 여기서 본 셈이다
                 // 물체 차례(ObjectTurns)는 유닛의 행동 끝이 아니다 — 쏜 틱에만 자동 회복이 한 번 더 돌지 않게.
                 if (_objectRoutine) _objectRoutine = false;
                 else AutoHealAll();   // 8(자동 회복)도 행동 끝마다 전원에게(ba-20 C1)
@@ -317,6 +318,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             var u = host._units[_turn];
             if (!u.Alive || !u.OnField) EndTurn();   // 사건이 지금 차례 유닛을 판에서 빼면 차례를 버린다(0x100661b2, ba-20 V10)
+            else if (CheckEventsAfterWalk(u)) return;
             else if (IsMine(u) && !u.IsBusy && u.Tp <= 0 && !_abilityMenu && !_itemMenu && _targetWork < 0) Rest(_turn);
             return;
         }
@@ -670,6 +672,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             host._units[index].OriginCol = host._units[index].Col;
             host._units[index].OriginRow = host._units[index].Row;
         }
+        _walkChecked = (index, host._units[index].Col, host._units[index].Row);
         // 불러온 판의 카메라(감사5 S7) — 시작 카메라·페이드인 뒤, 되살린 차례가 서는 이 자리에서 놓는다. 카메라가 없는 옛 세이브는
         // 되살린 내 유닛을 한 번 가운데로(AI 차례는 아래 CameraThen 이 옮긴다).
         if (host.Sys._loadCameraPending)
@@ -914,6 +917,34 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     }
 
     // ── 걷기 ─────────────────────────────────────────────────────────────────
+
+    /// <summary>걸어서 선 뒤 사건을 본 칸 — 차례 유닛 번호와 칸. 같은 칸에서는 다시 보지 않는다.</summary>
+    internal (int Unit, int Col, int Row) _walkChecked = (-1, -1, -1);
+
+    /// <summary>
+    /// 내 유닛이 걸어서 새 칸에 서면 그때 사건을 본다(갈래 2 · 1) — 원본에서 이동은 그 자체로 행동이다: 이동 칸 고르기(상태 12 <c>0x10069c50</c>)가
+    /// 명령 0x2710 을 넣고 <c>0x100690c0</c> → 상태 14 CHRWORK(<c>0x10069df0</c>, 부대면 15 <c>0x10069ff0</c> 끝 <c>0x1006a447</c>)가 걷기를 마치면
+    /// 상태 20 을 돌려 <c>CheckEvents(2)</c>(<c>0x100680a3</c>) → 21 레벨업 끝 <c>CheckEvents(1)</c>(<c>0x10068270</c>)을 지난다.
+    /// 리메이크는 걷기를 TP 를 빼지 않는 미리 걷기로 두어 행동 끝(휴식 · 공격)에서야 사건을 봤다 — Btl 0049 리치행성 늪의 사건 2
+    /// (조건 300 살라딘 ↔ 아지다하카 붙음, 갈래 0)가 붙어도 안 터지고 행동을 끝내야 터졌다(버그 리포트 #51).
+    /// 사건이 터지면 링 · 목록을 닫고 걸음을 굳힌다(TP 를 지금 뺀다 — 원본도 이동하면 TP 를 쓴다). 그래서 사건 뒤에는 Esc 로 걸음을 물리지 못하고,
+    /// 남은 TP 로 차례를 이어 간다. 사건이 안 터지면 지금처럼 걸음을 물릴 수 있다. 사건을 돌렸으면 true.
+    /// </summary>
+    internal bool CheckEventsAfterWalk(UnitState u)
+    {
+        if (!IsMine(u) || u.IsBusy || _events.Count == 0 || EventsBusy) return false;
+        if (_walkChecked == (_turn, u.Col, u.Row)) return false;
+        _walkChecked = (_turn, u.Col, u.Row);
+        if (u.Col == u.OriginCol && u.Row == u.OriginRow) return false;   // 제자리(걸음을 물린 것)는 행동이 아니다
+        _eventCheckDue |= (1 << 2) | (1 << 1);
+        RunEvents();
+        if (!EventsBusy) return false;
+        CancelTargeting();
+        if (_ringUnit >= 0) CancelRing();
+        CommitMove(u);
+        TestRunTrace($"walk end runs event {_runningEvent} btl {host._scene.Id} unit {u.ChrCode} at ({u.Col},{u.Row}) turnNo {_turnNo}");   // 시험 전용
+        return true;
+    }
 
     /// <summary>차례인 아군을 클릭한 파란 칸까지 걷게 한다. TP 는 행동할 때 한 번에 뺀다.</summary>
     internal bool TryWalkTo(int col, int row)
