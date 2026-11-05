@@ -51,7 +51,42 @@ internal sealed unsafe partial class MoviePlayer(GameWindow host)
             }
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or DirectoryNotFoundException) { }
+        // 풀어 둔 PNG 가 없으면 원본 게임 폴더의 Mov\NNNN.mov 를 바로 푼다. PNG(effects/mov)는 저장소와 「자료 받기」 바탕 묶음에만 있고,
+        // 원본 폴더로 차린 배포판(%APPDATA%\DuelDx\assets)에는 없다 — 그래서 시전 소리 1338:1 만 나고 시전자를 휘감는 빛(Mov 0041 · 0042)이
+        // 안 보였다(플레이어 쪽지 fg-122). 영상은 250×360 · 51장이라 처음 쓸 때 한 번에 풀어도 짧다.
+        // DUELDX_NOMOVPNG=1 — 시험 문: PNG 를 안 읽고 원본 풀기 길을 본다.
+        if (frames.Count > 0 && Environment.GetEnvironmentVariable("DUELDX_NOMOVPNG") == "1") frames.Clear();
+        if (frames.Count == 0) frames.AddRange(DecodeOriginal(movie));
         return _movieFrames[movie] = [.. frames];
+    }
+
+    /// <summary>원본 <c>Mov\NNNN.mov</c>(Bink 1)를 컷마다 0xAARRGGBB 로 푼다 — 원본 폴더를 모르거나 못 풀면 빈 목록.</summary>
+    private static List<SpriteFrame> DecodeOriginal(int movie)
+    {
+        var frames = new List<SpriteFrame>();
+        if (CutscenePlayer.FindOriginal(movie) is not { } original) return frames;
+        try
+        {
+            using var bink = BinkMovie.Open(original.Path, original.Offset, original.Length);
+            var dec = new BinkVideoDecoder(bink.Width, bink.Height, bink.Info.Revision);
+            byte[] buf = [];
+            for (int i = 0; i < bink.FrameCount; i++)
+            {
+                int n = bink.ReadFrame(i, ref buf);
+                bink.Split(buf.AsSpan(0, n), out _, out var video);
+                dec.Decode(buf.AsSpan(0, n)[video]);
+                var px = new uint[bink.Width * bink.Height];
+                dec.ToArgb(px);
+                frames.Add(new SpriteFrame(px, bink.Width, bink.Height, 0, 0));
+            }
+            GameWindow.TestRunTrace($"mov {movie:D4} from original {bink.Width}x{bink.Height} frames={frames.Count}");   // 시험 전용 줄
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or ArgumentException)
+        {
+            GameWindow.TestRunTrace($"mov {movie:D4} original decode failed {ex.Message}");   // 시험 전용 줄
+            frames.Clear();
+        }
+        return frames;
     }
 
     /// <summary>그 work 의 영상을 띄운다 — <paramref name="prelude"/> 면 준비 동작(시전 시작)의 것, 아니면 치는 순간의 것.</summary>
@@ -63,6 +98,8 @@ internal sealed unsafe partial class MoviePlayer(GameWindow host)
             if (m.Prelude != prelude) continue;
             var (x, y) = m.OnTarget ? (col * TileW + TileW / 2, host.CellCenterY(col, row)) : host.Btl.UnitFoot(user);
             _movies.Add((m.Movie, host._lastTime, x + m.Dx, y + m.Dy));
+            int frames = MovieFrames(m.Movie).Length;   // 띄울 때 미리 읽어(풀어) 둔다 — 그리기 도중에 풀지 않게
+            GameWindow.TestRunTrace($"movie spawn {m.Movie:D4} work {w.Id} frames={frames}");   // 시험 전용 줄
         }
     }
 
