@@ -89,25 +89,34 @@ internal sealed unsafe partial class GameWindow
                 int ry1 = top0 + d.Row * ObtMap.CellHeight, ry2 = top0 + (d.Row + d.Rows) * ObtMap.CellHeight;
                 // 네모가 화면에 걸칠 때만(0x100d6d00~0x100d6d48).
                 if (_camX > rx2 || _camY > ry2 || _camX + ViewWidth <= rx1 || _camY + ViewHeight <= ry1) continue;
-                int left = rx1 + Parallax(_camX, rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX);
-                int top = ry1 + Parallax(_camY, ry1, ry2, pic.H, ViewHeight, CamMax);
+                // 카메라가 그 축으로 못 움직이면(화면이 맵보다 넓은 4K · 울트라와이드 따위) 시차가 0 에 멈춰 그림이 네모 왼쪽(위)에 붙고
+                // 나머지가 검게 빈다 — 그때만 그림을 네모 길이로 늘려 채운다(iOS 판 제보, 원본은 640×480 이라 이런 일이 없다).
+                bool fitX = Stuck(rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX), fitY = Stuck(ry1, ry2, pic.H, ViewHeight, CamMax);
+                int drawW = fitX ? rx2 - rx1 : pic.W, drawH = fitY ? ry2 - ry1 : pic.H;
+                int left = fitX ? rx1 : rx1 + Parallax(_camX, rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX);
+                int top = fitY ? ry1 : ry1 + Parallax(_camY, ry1, ry2, pic.H, ViewHeight, CamMax);
                 // 흐름 — 음수는 원본처럼 그림 크기를 더해 양수로 돌린 뒤 틱마다 더한다(0x100d6865~0x100d68b8).
                 int sx = (int)(((d.FlowX % pic.W + pic.W) % pic.W * ticks) % pic.W);
                 int sy = (int)(((d.FlowY % pic.H + pic.H) % pic.H * ticks) % pic.H);
-                int x0 = Math.Max(Math.Max(vx0, left), 0), x1 = Math.Min(Math.Min(vx1, left + pic.W), BoardWidth);
-                int y0 = Math.Max(Math.Max(vy0, top), 0), y1 = Math.Min(Math.Min(vy1, top + pic.H), BoardHeight);
+                int x0 = Math.Max(Math.Max(vx0, left), 0), x1 = Math.Min(Math.Min(vx1, left + drawW), BoardWidth);
+                int y0 = Math.Max(Math.Max(vy0, top), 0), y1 = Math.Min(Math.Min(vy1, top + drawH), BoardHeight);
                 if (x0 >= x1 || y0 >= y1) continue;
                 fixed (uint* src = pic.Px)
                     for (int y = y0; y < y1; y++)
                     {
-                        uint* row = src + (y - top + sy) % pic.H * pic.W;
+                        int py = (int)((long)(y - top) * pic.H / drawH);
+                        uint* row = src + (py + sy) % pic.H * pic.W;
                         uint* dst = fb + y * BoardWidth;
-                        for (int x = x0; x < x1; x++) dst[x] = row[(x - left + sx) % pic.W];
+                        for (int x = x0; x < x1; x++) dst[x] = row[((int)((long)(x - left) * pic.W / drawW) + sx) % pic.W];
                     }
                 drew = true;
             }
         return drew;
     }
+
+    /// <summary>네모가 그림보다 큰데 카메라가 그 축으로 못 움직이는지 — 그러면 시차가 0 에 멈춘다(<see cref="Parallax"/>).</summary>
+    private static bool Stuck(int r1, int r2, int pic, int view, int camMax) =>
+        r2 - r1 > pic && Math.Min(camMax, r2) <= Math.Max(r1 - view, 0);
 
     /// <summary>네모가 그림보다 크면 카메라가 아래끝 → 위끝으로 갈 때 그림을 0 → (네모 − 그림)만큼 민다(<c>0x100d6d84~0x100d6e22</c>).</summary>
     private static int Parallax(int cam, int r1, int r2, int pic, int view, int camMax)
