@@ -981,6 +981,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         int n = _buffedAllies.Count;
         _buffedAllies.Clear();
         if (n == 0 || !a.IsAlly || a.Data is not { } c || host._db is not { } db) return;
+        // 파트1 은 경험치 · 레벨이 유닛 자료가 아니라 파트1 진행(인물 칸 18)에 쌓인다 — 전에는 여기서 CumExp 에만 더해 「EXP +10」은 떴는데
+        // 상태 창 경험치도 안 늘고 어빌리티 고르기도 안 떴다(버그 리포트 #53, 셰라자드 힐 · 힐윈드). 처치 보상과 같은 길(GrantPart1Exp)로 보낸다.
+        // 원본 파트1 은 처치 때만 경험치를 준다(분석-파트1-전투 §20) — 이 경험치는 리메이크 규칙(BuffExpPerAlly)이라 파트2 장비 보정은 안 얹는다.
+        if (host._scene.IsPart1)
+        {
+            var receiver = _part1Riders.TryGetValue(a, out var rider) && rider.Alive ? rider : a;
+            if (receiver.Side == 4 && receiver.ChrCode - Part1Game.ChrBase is >= 0 and < 106 && Part1.Fighter(receiver) is { } k)
+                GrantPart1Exp(receiver, a, k, BuffExpPerAlly * n, 0, $"buff {receiver.ChrCode} ({n}명)");
+            return;
+        }
         int exp = db.WithEquipExp(c, BuffExpPerAlly * n);
         a.Data = c with { Exp = c.Exp + exp, CumExp = c.CumExp + exp };
         Popup(a, $"EXP +{exp}", 0xFF90D0FF, 15);

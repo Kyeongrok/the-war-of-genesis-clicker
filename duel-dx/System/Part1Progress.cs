@@ -79,7 +79,13 @@ internal sealed class Part1Progress
         internal Growth Copy() => new() { Experience = Experience, Abilities = new(Abilities), Job = Job, Stats = new(Stats) };
     }
 
-    internal Dictionary<int, Growth> Grown = [];
+    internal Dictionary<int, Growth> Grown = SeedGrown();
+
+    /// <summary>시험용 DUELDX_PART1EXP=「10:896,0:850」 — 파트1 번호 인물의 누적 경험치를 미리 박는다(레벨업 고르기를 화면 밖에서 보려고, 버그 리포트 #53).</summary>
+    private static Dictionary<int, Growth> SeedGrown() =>
+        (Environment.GetEnvironmentVariable("DUELDX_PART1EXP") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Split(':')).Where(p => p.Length == 2 && int.TryParse(p[0], out _) && int.TryParse(p[1], out _))
+            .ToDictionary(p => WarOfGenesis.Assets.Part1Game.ChrBase + int.Parse(p[0]), p => new Growth { Experience = int.Parse(p[1]) });
 
     /// <summary>성장 · 고를 레벨업을 통째로 떠 둔다 — RESTART 가 전투 전으로 되돌린다(<see cref="SystemMenu.RestartBattle"/>).</summary>
     internal (Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks) SnapshotGrowth() =>

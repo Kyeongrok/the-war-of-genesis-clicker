@@ -82,27 +82,37 @@ internal sealed unsafe partial class BattleScene
         // 전에는 탈것이 받을 이로 남아 Chr 조건에 걸려 아무도 못 받았다(카페 제보 fg-96). 숫자는 판에 선 탈것 위에 띄운다.
         var shownOn = killer;
         if (_part1Riders.TryGetValue(killer, out var rider) && rider.Alive) killer = rider;
-        if (host._db is not { } db || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
+        if (host._db is null || killer.Side != 4 || killer.ChrCode - Part1Game.ChrBase is not (>= 0 and < 106)
             || Part1.Fighter(killer) is not { } k || Part1.Fighter(victim) is not { } v) return;
+        var (exp, eld) = Part1Combat.KillReward(v.Chr.Experience, k.Chr.Experience, k.Stat(Part1Chr.Luck));
+        GrantPart1Exp(killer, shownOn, k, exp, eld, $"kill {killer.ChrCode} → {victim.ChrCode}");
+    }
+
+    /// <summary>
+    /// 파트1 경험치를 실제로 쌓는다 — 파트1 은 레벨 · 경험치가 유닛 자료(CharacterData.CumExp)가 아니라 파트1 진행의 자란 것(<see cref="Part1Progress.Growth"/>,
+    /// 원본 인물 칸 18 누적 경험치)에 있고, 레벨(÷100)이 오를 때마다 어빌리티 고르기(<see cref="Part1Progress.LevelPicks"/>, 원본 <c>0x10030edf</c> → <c>0x1009dac0</c>)를 쌓는다.
+    /// 처치 보상과 보조 · 회복 경험치(<see cref="GainBuffExp"/>)가 함께 쓴다.
+    /// </summary>
+    internal void GrantPart1Exp(UnitState receiver, UnitState shownOn, Part1Fighter k, int exp, int eld, string why)
+    {
+        if (exp <= 0 || host._db is not { } db) return;
         int before = k.Chr.Experience;
-        var (exp, eld) = Part1Combat.KillReward(v.Chr.Experience, before, k.Stat(Part1Chr.Luck));
-        if (exp <= 0) return;
-        var growth = host.Part1.GrowthOf(killer.ChrCode, before);
+        var growth = host.Part1.GrowthOf(receiver.ChrCode, before);
         growth.Experience += exp;
         host.Part1.Eld += eld;
         // 번 eld 도 함께 띄운다(리메이크 덧붙임 — 처치해도 돈이 안 들어온다는 카페 제보 fg-43: 들어오고 있었지만 보이는 곳이 상단 소지금뿐이었다).
         Popup(shownOn, eld > 0 ? $"EXP +{exp}  {eld} eld" : $"EXP +{exp}", 0xFF90D0FF, 15);
         if (Trace)
             File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
-                $"part1 kill {killer.ChrCode} → {victim.ChrCode}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
+                $"part1 {why}: EXP {before} + {exp} = {growth.Experience}, eld + {eld}" + Environment.NewLine);
         for (int level = before / 100 + 1; level <= growth.Experience / 100; level++)
         {
-            host.Part1.LevelPicks.Add((killer.ChrCode, level));
+            host.Part1.LevelPicks.Add((receiver.ChrCode, level));
             host.Toast($"{k.Chr.Name} — 어빌리티를 하나 올릴 수 있습니다");   // 고르기 창이 바로 뜬다(GameWindow.Part1PickOpen). 파트1 은 레벨이 없다
-            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {killer.ChrCode} {level}" + Environment.NewLine);
+            if (Trace) File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"), $"part1 level {receiver.ChrCode} {level}" + Environment.NewLine);
         }
         db.ForgetPart1Characters();
-        Part1.Forget(killer.ChrCode);
+        Part1.Forget(receiver.ChrCode);
     }
 
     /// <summary>
