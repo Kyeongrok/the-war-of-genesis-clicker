@@ -48,7 +48,8 @@ internal sealed unsafe partial class GameWindow
         if (row < 0) return -1;
         // 높은 벽 칸이 화면에서 겹쳐도 RowAt 이 설 수 있는 칸을 먼저 준다(Btl 0298 (21,12)) — 여기서 따로 겹친 칸의 유닛을 찾지는 않는다
         // (계단처럼 설 수 있는 두 칸이 겹칠 때 앞 칸 클릭이 뒤 칸 유닛으로 가면 안 된다).
-        return Array.FindIndex(_units, u => u.Alive && u.OnField && u.Col == col && u.Row == row);   // 퇴장한 사람은 안 잡는다(LiveUnitAt 과 같다)
+        // 퇴장한 사람은 안 잡는다 · 파트1 큰 유닛은 둘레 3×3 어디를 눌러도 잡힌다(LiveUnitAt 과 같다, 버그 리포트 #55).
+        return Btl.LiveUnitAt(col, row) is { } u ? Array.IndexOf(_units, u) : -1;
     }
 
     /// <summary>

@@ -39,6 +39,13 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         return MountFighter(u);
     }
 
+    /// <summary>
+    /// 큰 유닛인가 — 인물 칸 11(유닛 <c>+0xb9</c>, 탈것은 탈것 레코드 — 탄 이와 상관없다). 마장기 · 탱크 · 아지다하카 · 성문 · 용 따위 52명.
+    /// 판에서 제 칸 둘레 3×3 을 차지한다(<see cref="BattleScene.Part1Big"/>, 분석-파트1-전투 33절).
+    /// </summary>
+    internal bool IsBig(UnitState u) =>
+        u.ChrCode >= Part1Game.ChrBase && MountFighter(u)?.Chr.Fields is { } f && f.Length > Part1Chr.BigField && f[Part1Chr.BigField] != 0;
+
     private Part1Fighter? MountFighter(UnitState u)
     {
         if (!_fighters.TryGetValue(u.ChrCode, out var f))

@@ -96,7 +96,7 @@ internal sealed partial class Part1Skill
             int d = Rand(200) + 50;
             Strike(d, cx, cy);
             for (int i = 0; i < host._units.Length; i++)
-                if (host._units[i] is { Alive: true, OnField: true } u && u.Col == col && u.Row == row && u != _user && BattleScene.SeesAsFoe(_user, u))
+                if (host._units[i] is { Alive: true, OnField: true } u && host.Btl.Covers(u, col, row) && u != _user && BattleScene.SeesAsFoe(_user, u))
                     HitAt(d + 1, i, hit);
         }
         return last + 2;

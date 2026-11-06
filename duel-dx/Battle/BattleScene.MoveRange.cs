@@ -90,7 +90,42 @@ internal sealed unsafe partial class BattleScene
 
     // 전장에 있는 사람만 — 퇴장(사건 201)한 사람은 살아 있는 채 좌표가 남아, 그 칸을 누르면 보이지 않는 사람을 골라 걷지 못했다
     // (사용자 보고: Btl 0150 (21,22) 는 WASD 로는 가는데 클릭으로는 안 감).
-    internal UnitState? LiveUnitAt(int col, int row) => host._units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
+    // 파트1 큰 유닛(인물 칸 11 = 유닛 +0xb9)은 둘레 3×3 칸 어디에서든 잡힌다 — 원본 칸의 유닛 찾기 0x10089610 이 그 칸(맵 +0x64 표, 가운데 칸만 적힌다 0x10037080)에
+    // 유닛이 없으면 둘레 3×3 에서 +0xb9 인 유닛을 준다(0x1008969c~0x100897c9). 겨누기 · 범위 모으기(0x1008f1a0) · 설 칸(0x10089bf0)이 모두 이것을 쓴다(버그 리포트 #55).
+    internal UnitState? LiveUnitAt(int col, int row) =>
+        UnitStandingAt(col, row) ?? host._units.FirstOrDefault(u => u.Alive && u.OnField && Covers(u, col, row));
+
+    /// <summary>그 칸에 <b>가운데</b>를 둔 유닛만(원본 맵 +0x64 표 그대로) — ZOC 의 네 이웃(0x10089830 은 이웃을 표에서 바로 읽는다)이 쓴다.</summary>
+    internal UnitState? UnitStandingAt(int col, int row) => host._units.FirstOrDefault(u => u.Alive && u.OnField && u.Col == col && u.Row == row);
+
+    /// <summary>파트1 판의 큰 유닛(<see cref="Part1Rules.IsBig"/>) — 제 칸 둘레 3×3 을 차지한다.</summary>
+    internal bool Part1Big(UnitState u) => host._scene.IsPart1 && Part1.IsBig(u);
+
+    /// <summary>차지 칸의 반지름 — 큰 유닛 1(3×3), 나머지 0.</summary>
+    internal int Footprint(UnitState u) => Part1Big(u) ? 1 : 0;
+
+    /// <summary>그 유닛이 (col, row) 를 차지하나 — 제 칸, 큰 유닛이면 둘레 3×3.</summary>
+    internal bool Covers(UnitState u, int col, int row)
+    {
+        int dx = Math.Abs(u.Col - col), dy = Math.Abs(u.Row - row);
+        return dx == 0 && dy == 0 || dx <= 1 && dy <= 1 && Part1Big(u);
+    }
+
+    /// <summary>
+    /// <paramref name="who"/> 가 (col, row) 에 서면 차지 칸이 겹치는 다른 살아 있는 유닛(없으면 null) — 큰 유닛은 3×3 모든 칸에서 <c>0x10089610</c> 이
+    /// 자신 말고 아무도 안 주어야 선다(<c>0x10089ed9</c>~<c>0x10089efe</c> · 땅 <c>0x10089fa8</c>), 작은 유닛은 그 칸만(<c>0x10089d99</c>).
+    /// </summary>
+    internal UnitState? Overlapping(UnitState who, int col, int row, Func<UnitState, bool>? blocks = null)
+    {
+        int reach = Footprint(who);
+        foreach (var o in host._units)
+        {
+            if (o == who || !o.Alive || !o.OnField || blocks != null && !blocks(o)) continue;
+            int far = Math.Max(Math.Abs(o.Col - col), Math.Abs(o.Row - row));
+            if (far <= reach || far == reach + 1 && Footprint(o) == 1) return o;
+        }
+        return null;
+    }
 
     /// <summary>인물의 지금 자리·TP 로 이동 영역을 셈한다. 지도·게임 표가 없으면 null.</summary>
     /// <param name="workId">예산에서 뺄 기술(0 이면 플레이어가 고른 기술·기본공격) — AI 는 기술마다 예산이 다르다(0x1005d070).</param>
@@ -163,13 +198,17 @@ internal sealed unsafe partial class BattleScene
             || (unit.LeaderIndex >= 0 && (other.LeaderIndex == unit.LeaderIndex || Array.IndexOf(host._units, other) == unit.LeaderIndex));
         bool Blocks(UnitState other) => other != unit && !SameLegion(other) && !(passAllies && other.IsAlly);
 
-        bool big = c.Big;
+        // 파트1 큰 유닛(인물 칸 11)도 같은 3×3 규칙이다 — 0x10089bf0 의 +0xb9 땅 갈래(0x10089f31~): 3×3 이 판 안, 칸마다 |높이 − 가운데 높이| ≤ 2 ·
+        // 막힘 비트 1 없음 · 0x10089610 이 자신 말고 아무도 안 줌, ZOC 는 안 본다(버그 리포트 #55 — 전에는 한 칸으로 세워 서로 겹쳤다).
+        bool big = c.Big || Part1Big(unit);
+        // 그 칸을 차지한(큰 유닛이면 둘레 3×3 에서) 막는 유닛이 있나.
+        bool Occupied(int col, int row) => host._units.Any(o => o.Alive && o.OnField && Covers(o, col, row) && Blocks(o));
         bool Enterable(int col, int row)
         {
             if (col == originCol && row == originRow) return true;
             if (flyer != null) return flyBig ? InBounds(col - 1, row - 1) && InBounds(col + 1, row + 1) : InBounds(col, row);
             if (!InBounds(col, row) || (F(col, row) & 0x9) != 0) return false;
-            if (LiveUnitAt(col, row) is { } other && Blocks(other)) return false;
+            if (Occupied(col, row)) return false;
             // 큰 유닛(.chr 18 = 1)은 3×3 이 모두 판 안이고, 플래그 &9 가 없고, 가운데와 높이차 ≤ 2 이고, 다른 유닛이 없어야 들어간다 —
             // 이것뿐이고 <b>ZOC 는 안 본다</b>(0x100d9c7d~0x100d9e22, 땅 유닛 갈래 0x100d9d70~, 감사3 R6). 전에는 높이차를 안 보고 ZOC 를 봤다.
             if (big)
@@ -179,13 +218,14 @@ internal sealed unsafe partial class BattleScene
                     {
                         if (!InBounds(bx, by) || (F(bx, by) & 0x9) != 0) return false;
                         if (Math.Abs(H(bx, by) - H(col, row)) > 2) return false;
-                        if (LiveUnitAt(bx, by) is { } o2 && Blocks(o2)) return false;
+                        if (Occupied(bx, by)) return false;
                     }
                 return true;
             }
             foreach (var (px, py) in new[] { (col, row), (col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1) })
             {
-                if (!InBounds(px, py) || LiveUnitAt(px, py) is not { } e || !Blocks(e)) continue;
+                // 이웃은 가운데 칸만 본다(0x10089830 은 제 칸만 0x10089610, 이웃 넷은 맵 +0x64 표를 바로 읽는다) — 큰 유닛의 가장자리 칸 옆은 ZOC 가 아니다.
+                if (!InBounds(px, py) || UnitStandingAt(px, py) is not { } e || !Blocks(e)) continue;
                 // 적인지는 <b>버서커(4)까지 보는</b> 편 판정으로 가른다(0x1006fde0) — 그게 걸리면 모두가 적이다.
                 if (SeesAsFoe(unit, e) && Math.Abs(H(px, py) - H(col, row)) < 1) return false;
             }
@@ -224,7 +264,7 @@ internal sealed unsafe partial class BattleScene
                 if (costs[i] != int.MaxValue) costs[i] = (int)Math.Min(Math.Max(0, budget), ((long)costs[i] * part1Scale + part1Points - 1) / part1Points);
 
         // 나는 유닛이 설 수 없는 칸 — 지형 비트 2(큰 유닛은 3×3 어디든), 물체가 찍힌 칸(&8). 지나가기만 한 칸은 Prev 가 남아 길에는 든다(PathWithin).
-        // 원본은 큰 유닛의 3×3 에 다른 유닛도 없어야 하지만, 리메이크는 파트1 큰 유닛을 한 칸으로 세우므로 그 칸만 본다(아래 「다른 인물이 선 칸」).
+        // 3×3 에 다른 유닛이 없어야 하는 것은 아래 「다른 인물이 선 칸」이 차지 칸으로 본다.
         if (flyer != null)
             for (int i = 0; i < n; i++)
             {
@@ -242,9 +282,19 @@ internal sealed unsafe partial class BattleScene
         for (int i = 0; i < n; i++)
             if (costs[i] != int.MaxValue && ObjectBlocks(i % host.Cols, i / host.Cols)) costs[i] = int.MaxValue;
 
-        // 다른 인물이 선 칸은 파랑에서 뺀다.
-        for (int i = 0; i < n; i++)
-            if (costs[i] != int.MaxValue && i != start && LiveUnitAt(i % host.Cols, i / host.Cols) is { } other && other != unit) costs[i] = int.MaxValue;
+        // 다른 인물이 선 칸은 파랑에서 뺀다 — 차지 칸이 겹치는 칸 모두(파트1 큰 유닛은 둘레 3×3, 0x10089bf0 → 0x10089610, 버그 리포트 #55).
+        int self = Footprint(unit);
+        void Shut(int col, int row, int reach)
+        {
+            for (int y = row - reach; y <= row + reach; y++)
+                for (int x = col - reach; x <= col + reach; x++)
+                {
+                    int at = y * host.Cols + x;
+                    if ((uint)x < host.Cols && (uint)y < host.Rows && at != start) costs[at] = int.MaxValue;
+                }
+        }
+        foreach (var other in host._units)
+            if (other != unit && other.Alive && other.OnField) Shut(other.Col, other.Row, self + Footprint(other));
 
         // 걸어오는 중인 다른 인물의 <b>도착 칸</b>도 뺀다 — 아직 출발 쪽 칸에 서 있어 위에서 안 잡힌다. 대장을 따라 걷는 부하가
         // 다 서기 전에 다음 유닛이 그 칸을 골라 둘이 한 칸에 겹쳐 섰다(사용자 보고: 적이 한 칸에 겹친다, ba-22).
@@ -252,15 +302,11 @@ internal sealed unsafe partial class BattleScene
         {
             if (walker == unit || !walker.Alive || !walker.OnField || walker.Path.Count == 0) continue;
             var (lc, lr) = walker.Path.Last();
-            int at = lr * host.Cols + lc;
-            if ((uint)at < (uint)n && at != start) costs[at] = int.MaxValue;
+            Shut(lc, lr, self + Footprint(walker));
         }
         // 순간이동꾼(이동 종류 1)은 길을 비우고 도착 칸을 따로 들고 있다 — 칸을 옮기기 전(단계 0·1) 31틱 동안 같은 구멍이 있었다.
         foreach (var (blinker, b) in _blinks)
-        {
-            int at = b.Dest.Row * host.Cols + b.Dest.Col;
-            if (blinker != unit && b.Stage < 2 && (uint)at < (uint)n && at != start) costs[at] = int.MaxValue;
-        }
+            if (blinker != unit && b.Stage < 2) Shut(b.Dest.Col, b.Dest.Row, self + Footprint(blinker));
 
         // 붉은 칸 — 갈 수 있는 칸마다 <b>그 인물의 기본공격 모양</b>을 칠한다(0x100749b0).
         // 예전에는 「정확히 두 칸 상하좌우」로 박아 두어 높이·시야가 빠졌다 — 한 층만 달라도 사거리가 달라진다.

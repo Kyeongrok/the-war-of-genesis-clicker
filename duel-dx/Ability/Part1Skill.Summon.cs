@@ -265,7 +265,7 @@ internal sealed partial class Part1Skill
             Put(379, 0, e, cx, cy);
             Put(667, 1, e, cx - TileW / 2, cy - TileH / 2);
             for (int i = 0; i < host._units.Length; i++)
-                if (host._units[i] is { Alive: true, OnField: true } u && u.Col == col && u.Row == row && u != user && BattleScene.SeesAsFoe(user, u))
+                if (host._units[i] is { Alive: true, OnField: true } u && host.Btl.Covers(u, col, row) && u != user && BattleScene.SeesAsFoe(user, u))
                     HitAt(e + 1, i, hit);
             last = Math.Max(last, e + Length(71, 0));
         }

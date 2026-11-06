@@ -25,8 +25,8 @@ internal sealed partial class Part1Skill
     internal static bool IsBigSkill(int attackId) => attackId is 285 or 283 or 282 or 393 or 397 or 398 or (>= 403 and <= 406)
         or 271 or 407 or 280 or (>= 333 and <= 338);
 
-    /// <summary>원본이 대상마다 여러 번 맞히는 기술(네크로 · 가베라의 저주 — 네 쪽에서 한 번씩, Attack +0x66 = 1).</summary>
-    internal static bool BigHitsEachTime(int work) => IsBigWork(work) && Part1SkillBook.AttackIdOf(work) is 271 or 407;
+    /// <summary>원본이 대상마다 여러 번 맞히는 기술(네크로 · 가베라의 저주 — 네 쪽에서 한 번씩, Attack +0x66 = 1 · 다탄두 미사일 — 미사일마다 그 칸의 유닛).</summary>
+    internal static bool BigHitsEachTime(int work) => IsBigWork(work) && Part1SkillBook.AttackIdOf(work) is 271 or 407 or 285;
 
     /// <summary>기술 하나 — Attack 번호로 나눠 시각표를 깔고 끝나는 틱을 돌려준다.</summary>
     private int Big(int attackId, List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit) => attackId switch
@@ -430,7 +430,11 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 다탄두 미사일 285(<c>0x100589e0</c>) — Attack +0x58 = 16 발. i 째는 겨눈 칸 둘레의 아무 칸(적이 서 있으면 그 몸)을 노린다. 시전자 자리(z−20)에서
     /// 미사일 283(16방향)이 보는 쪽 옆으로 5i 벌어지며 떠오르고(빠르기 1 × 1.1), (16 − i)·5 틱 떠 있다가(첫 발이 뜰 때 소리 94) 굽은 길로 과녁에 날아가
-    /// 폭발 10 · 48(반반)이 서며 그 칸을 친다. 연기 34 다섯 · 불티 38 다섯 · 파편 366 열. 시전자는 파트1 동작 39. 여기서는 앞 발들이 대상 칸을 하나씩 맡는다.
+    /// 폭발 10 · 48(반반)이 서며 그 칸을 친다. 연기 34 다섯 · 불티 38 다섯 · 파편 366 열. 시전자는 파트1 동작 39.
+    /// <para>과녁 칸은 겨눈 칸(<c>+0x200/+0x202</c>)에서 가로 · 세로 따로 ±(rand % R)(R = 맵 <c>+0x84</c> = 칠한 범위의 가장 먼 맨해튼, <c>0x100393b0</c>)를
+    /// 전장 범위 안 · 칠한 칸(맵 <c>+0x70</c> 비트 1)일 때까지 다시 굴린다(<c>0x10058b34</c>~<c>0x10058c06</c>). 맞음 사건은 미사일마다 하나
+    /// (<c>0x100768f0(1, desc, 3, 1, 3, 0)</c> — 그 칸, <c>0x10059305</c>~)라 그 칸을 차지한 유닛(<c>0x10089610</c> — 큰 유닛은 둘레 3×3 어디든)이 발마다 맞는다.
+    /// 그래서 9칸을 차지한 마장기 · 탱크 · 아지다하카는 여러 발, 한 칸 유닛은 운에 따라 0~몇 발이다(버그 리포트 #55 — 전에는 대상마다 한 발씩 맡겼다).</para>
     /// </summary>
     private int MultiMissile(List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)
     {
@@ -444,18 +448,21 @@ internal sealed partial class Part1Skill
         const int N = 16;
         var (px, py) = dir is 0 or 2 ? (1, 0) : (0, 1);
         int first = int.MaxValue;
-        var struck = new HashSet<int>();
+        var painted = area.ToHashSet();
+        var (aimCol, aimRow) = _aimCell;
+        int spread = area.Max(c => Math.Abs(c.Col - aimCol) + Math.Abs(c.Row - aimRow));   // 맵 +0x84
         for (int i = 0; i < N; i++)
         {
-            int ti = i < targets.Count ? targets[i] : -1;
-            (double X, double Y) goal;
-            if (ti >= 0) goal = BodyPoint(ti, aim);
-            else
+            var cell = (Col: aimCol, Row: aimRow);
+            for (int tries = 0; spread > 0 && tries < 500; tries++)
             {
-                var cell = area[Rand(area.Count)];
-                var (cx, cy) = CellFoot(cell.Col, cell.Row);
-                goal = (cx + Rand(41) - 20, cy + (Rand(41) - 20) * 0.8);
+                int sx = Rand(2) == 0 ? 1 : -1, ox = Rand(spread) * sx, sy = Rand(2) == 0 ? 1 : -1, oy = Rand(spread) * sy;
+                if (painted.Contains((aimCol + ox, aimRow + oy))) { cell = (aimCol + ox, aimRow + oy); break; }
             }
+            // 그 칸을 차지한 유닛 — 범위의 대상(효과 거르기를 지난 것)이면 맞는다. 적이면 그 몸을 노린다(0x10038550 = 1 → 0x10039d90).
+            int ti = host.Btl.LiveUnitAt(cell.Col, cell.Row) is { } on ? Array.IndexOf(host._units, on) : -1;
+            if (ti >= 0 && !targets.Contains(ti)) ti = -1;
+            (double X, double Y) goal = ti >= 0 && BattleScene.SeesAsFoe(user, host._units[ti]) ? BodyPoint(ti, aim) : CellFoot(cell.Col, cell.Row);
             int side = i % 2 == 0 ? 1 : -1;
             (double X, double Y) s0 = (hx, hy + 20 * 0.6 - 30), s1 = (hx + px * side * 5 * i, hy + py * side * 5 * i * 0.8 - 30 - 20);
             int d = Dir16(s0, goal), m = d < 9 ? d : 16 - d;
@@ -469,7 +476,7 @@ internal sealed partial class Part1Skill
             int land = leave + arc.Count + 1;
             first = Math.Min(first, leave);
             Put(Rand(2) == 0 ? 10 : 48, 0, land, goal.X, goal.Y);
-            if (ti >= 0 && struck.Add(ti)) HitAt(land + 1, ti, hit);
+            if (ti >= 0) HitAt(land + 1, ti, hit);
             for (int n = 0; n < 5; n++) Rise(34, 0, land + 5 + Rand(10), goal.X + (Rand(2) == 0 ? -1 : 1) * Rand(20), goal.Y + (Rand(2) == 0 ? -1 : 1) * Rand(20) * 0.8, 3, 1.1);
             for (int n = 0; n < 5; n++) Debris(38, 0, land + Rand(10), goal.X, goal.Y, 15, 0.9);
             for (int n = 0; n < 10; n++) Debris(366, Rand(4), land + Rand(10), goal.X, goal.Y, 25, 0.8);

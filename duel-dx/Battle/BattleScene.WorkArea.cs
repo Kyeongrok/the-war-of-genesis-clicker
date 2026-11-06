@@ -460,7 +460,7 @@ internal sealed unsafe partial class BattleScene
         // 파트1 빛살(Part1BeamCells) — 이동기의 맞음 사건이 효과 거르기 +0x40 = 1(적)로 모은다. 빌린 기본 공격 틀(빔라이플)의 대상 방식과 상관없이.
         if (Part1BeamOf(w, user) is not null) mode = 1;
         var hit = Enumerable.Range(0, host._units.Length)
-            .Where(i => host._units[i].Alive && host._units[i].OnField && cells.Contains((host._units[i].Col, host._units[i].Row)) && ModeAccepts(mode, user, host._units[i]));
+            .Where(i => host._units[i].Alive && host._units[i].OnField && InCells(host._units[i], cells) && ModeAccepts(mode, user, host._units[i]));
         // 대상 상한 — 모으는 함수(0x100df5c0 · 0x10070bb0)는 위 행부터, 행 안에서는 왼쪽부터 훑다가 상한에서 멈춘다(ba-20 E8).
         // 블레이드 샤워 16명(0x100844aa), 카운터 스피어·진 풍아열공참·빅 뱅 20명.
         int cap = w.AbilityId switch { 112 => 16, 77 or 127 or 166 => 20, _ => int.MaxValue };
@@ -474,6 +474,20 @@ internal sealed unsafe partial class BattleScene
             if (all.Count > 6) return [.. Enumerable.Range(0, 6).Select(j => all[(_healPick + j) % all.Count])];
         }
         return [.. hit];
+    }
+
+    /// <summary>
+    /// 범위 칸에 그 유닛이 드나 — 제 칸, 파트1 큰 유닛이면 둘레 3×3 가운데 하나라도. 원본 대상 모으기 <c>0x1008f1a0</c> 는 칠한 칸마다 <c>0x10089610</c> 으로
+    /// 유닛을 찾고 <c>+0x27a</c> 깃발로 한 번만 넣는다 — 큰 유닛도 한 번 모을 때 한 번 맞는다(버그 리포트 #55).
+    /// </summary>
+    internal bool InCells(UnitState u, IReadOnlySet<(int Col, int Row)> cells)
+    {
+        if (cells.Contains((u.Col, u.Row))) return true;
+        if (!Part1Big(u)) return false;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (cells.Contains((u.Col + dx, u.Row + dy))) return true;
+        return false;
     }
 
     /// <summary>회복 다섯의 「여섯만」 고르기가 시작하는 자리 — 시전마다 새로 뽑는다.</summary>
@@ -518,11 +532,11 @@ internal sealed unsafe partial class BattleScene
     {
         if ((uint)col >= host.Cols || (uint)row >= host.Rows) return false;
         if (host._map is not { } map || col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0) return false;
-        if (LiveUnitAt(col, row) is { } other && other != user) return false;
+        if (Overlapping(user, col, row) != null) return false;   // 파트1 큰 유닛의 3×3 도 찬 칸이다(0x10089bf0 → 0x10089610)
         if (ObjectAt(col, row) is { Alive: true }) return false;
-        // ZOC 높이는 걷기 높이 +0x78(0x100d9b47 → 0x10073de0, 감사3 R9).
+        // ZOC 높이는 걷기 높이 +0x78(0x100d9b47 → 0x10073de0, 감사3 R9). 이웃은 가운데 칸만(0x10089830).
         foreach (var (dx, dy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-            if (LiveUnitAt(col + dx, row + dy) is { } e && e != user && SeesAsFoe(user, e) && WalkHeightAt(col + dx, row + dy) == WalkHeightAt(col, row)) return false;
+            if (UnitStandingAt(col + dx, row + dy) is { } e && e != user && SeesAsFoe(user, e) && WalkHeightAt(col + dx, row + dy) == WalkHeightAt(col, row)) return false;
         return true;
     }
 

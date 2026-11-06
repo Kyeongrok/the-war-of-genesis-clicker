@@ -455,7 +455,13 @@ internal sealed unsafe partial class BattleScene
     {
         if ((uint)col >= host.Cols || (uint)row >= host.Rows || !Part1Range.Contains(col, row)) return false;   // 파트1 전장 범위(행동 103) 밖도 못 선다
         if (host._map is { } map && (col >= map.Cols || row >= map.Rows || (CellFlagsAt(col, row) & 0x9) != 0)) return false;   // 물체를 찍은 칸 기준(ba-16)
-        return LiveUnitAt(col, row) is not { } other || other == who;
+        // 파트1 큰 유닛은 둘레 3×3 이 모두 판 안 · 막힘 없음 · 가운데와 높이 차 ≤ 2 여야 선다(0x10089bf0 의 +0xb9 갈래 0x10089e44~, 버그 리포트 #55).
+        if (Part1Big(who))
+            for (int y = row - 1; y <= row + 1; y++)
+                for (int x = col - 1; x <= col + 1; x++)
+                    if ((uint)x >= host.Cols || (uint)y >= host.Rows || !Part1Range.Contains(x, y) || (CellFlagsAt(x, y) & 0x9) != 0
+                        || Math.Abs(WalkHeightAt(x, y) - WalkHeightAt(col, row)) > 2) return false;
+        return Overlapping(who, col, row) == null;   // 차지 칸이 겹치는 다른 유닛이 없어야(큰 유닛은 3×3)
     }
 
     /// <summary>

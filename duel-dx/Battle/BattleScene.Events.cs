@@ -178,7 +178,7 @@ internal sealed unsafe partial class BattleScene
     /// 파트1 Btl 0155 프리토리아 근교 산지 사건 4 는 루이 · 보르스를 벽 칸 (32,5) · (30,5) 에 불러, 벽에 갇힌 채 이동 칸이 자기 칸뿐이었다(버그 리포트 #37).</param>
     internal (int Col, int Row) FreeCellNear(int col, int row, UnitState who, IReadOnlySet<(int, int)>? reserved = null, bool standable = false)
     {
-        bool Taken(int c, int r) => reserved?.Contains((c, r)) == true || host._units.Any(x => x != who && x.Alive && x.OnField && x.Col == c && x.Row == r);
+        bool Taken(int c, int r) => reserved?.Contains((c, r)) == true || Overlapping(who, c, r) != null;   // 차지 칸(파트1 큰 유닛 3×3)이 겹치면 찬 칸
         if (!Taken(col, row) && (!standable || CanStand(col, row, who))) return (col, row);
         for (int radius = 1; radius <= (standable ? 12 : 6); radius++)
             for (int dy = -radius; dy <= radius; dy++)
