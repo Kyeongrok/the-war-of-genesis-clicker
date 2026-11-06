@@ -89,12 +89,15 @@ internal sealed unsafe partial class GameWindow
                 int ry1 = top0 + d.Row * ObtMap.CellHeight, ry2 = top0 + (d.Row + d.Rows) * ObtMap.CellHeight;
                 // 네모가 화면에 걸칠 때만(0x100d6d00~0x100d6d48).
                 if (_camX > rx2 || _camY > ry2 || _camX + ViewWidth <= rx1 || _camY + ViewHeight <= ry1) continue;
-                // 카메라가 그 축으로 못 움직이면(화면이 맵보다 넓은 4K · 울트라와이드 따위) 시차가 0 에 멈춰 그림이 네모 왼쪽(위)에 붙고
-                // 나머지가 검게 빈다 — 그때만 그림을 네모 길이로 늘려 채운다(iOS 판 제보, 원본은 640×480 이라 이런 일이 없다).
-                bool fitX = Stuck(rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX), fitY = Stuck(ry1, ry2, pic.H, ViewHeight, CamMax);
-                int drawW = fitX ? rx2 - rx1 : pic.W, drawH = fitY ? ry2 - ry1 : pic.H;
-                int left = fitX ? rx1 : rx1 + Parallax(_camX, rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX);
-                int top = fitY ? ry1 : ry1 + Parallax(_camY, ry1, ry2, pic.H, ViewHeight, CamMax);
+                // 원본은 화면이 640×480 이라 그림 한 장이 화면을 늘 덮었다. 우리 화면은 그보다 넓어(1280×720 이상) 그림이 화면보다 좁으면
+                // 남는 쪽이 검게 빈다(iOS 판 제보 — 4K 는 카메라가 아예 못 움직여 왼쪽에 붙었고, 720p~1080p 는 조금 움직여도 오른쪽이 비었다).
+                // 그래서 그림을 적어도 화면 길이만큼(네모보다는 길지 않게) 늘려 그리고, 남는 길이만 원본처럼 시차로 민다.
+                // 카메라가 그 축으로 못 움직이면 네모 길이로 늘려 꽉 채운다.
+                // 네모가 그림보다 작으면 원본처럼 제 크기로 그리고 네모 밖은 잘린다.
+                int drawW = Stuck(rx1, rx2, pic.W, ViewWidth, Btl.CamMaxX) ? rx2 - rx1 : Math.Max(pic.W, Math.Min(rx2 - rx1, ViewWidth));
+                int drawH = Stuck(ry1, ry2, pic.H, ViewHeight, CamMax) ? ry2 - ry1 : Math.Max(pic.H, Math.Min(ry2 - ry1, ViewHeight));
+                int left = rx1 + Parallax(_camX, rx1, rx2, drawW, ViewWidth, Btl.CamMaxX);
+                int top = ry1 + Parallax(_camY, ry1, ry2, drawH, ViewHeight, CamMax);
                 // 흐름 — 음수는 원본처럼 그림 크기를 더해 양수로 돌린 뒤 틱마다 더한다(0x100d6865~0x100d68b8).
                 int sx = (int)(((d.FlowX % pic.W + pic.W) % pic.W * ticks) % pic.W);
                 int sy = (int)(((d.FlowY % pic.H + pic.H) % pic.H * ticks) % pic.H);
