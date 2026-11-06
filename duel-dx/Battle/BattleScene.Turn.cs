@@ -624,6 +624,21 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 시험용 DUELDX_P1MOUNTHP=<HP> 면 파트1 탈것의 HP 를 그 아래로 깎아 둔다(쓰러져 탄 이가 내려서는 것을 화면 밖에서 보려고).
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1MOUNTHP"), out int mountHp) && mountHp > 0)
             foreach (var mount in _part1Riders.Keys) mount.Hp = Math.Min(mount.Hp, mountHp);
+        // 시험용 DUELDX_P1ZEROHP=<Chr>,<Chr>… 면 판에 선 그 Chr 의 유닛 HP 를 0 으로 두고(쓰러지기 전 — 행동 끝 사건 검사가 보는 그 틈) 두 차례 뒤에 쓰러뜨린다.
+        // Chr 마다 한 번, 앞 Chr 가 쓰러진 뒤에야 다음 Chr(버그 리포트 #54: 마장기 620 → 내려선 벨제부르 96).
+        if (_turnNo >= 2 && Environment.GetEnvironmentVariable("DUELDX_P1ZEROHP") is { Length: > 0 } zeroList
+            && zeroList.Split(',').Select(t => int.TryParse(t, out int v) ? v : -1).FirstOrDefault(c => c >= 0 && !_zeroHpDone.Contains(c), -1) is >= 0 and var zeroChr
+            && host._units.FirstOrDefault(u => u.Alive && u.OnField && u.ChrCode == Part1Game.ChrBase + zeroChr) is { } z)
+        {
+            if (_zeroHpAt < 0) { z.Hp = 0; _zeroHpAt = _turnNo; TestRunTrace($"zero hp {z.ChrCode} ({z.Col},{z.Row}) turnNo {_turnNo}"); }
+            else if (_turnNo >= _zeroHpAt + 2)
+            {
+                _zeroHpDone.Add(zeroChr);
+                _zeroHpAt = -1;
+                TestRunTrace($"zero kill {z.ChrCode} turnNo {_turnNo} outcome '{_outcome}'");
+                KillUnit(z);
+            }
+        }
         // 시험용 DUELDX_P1SQUADHP=<HP> 면 부하를 거느린 대장의 HP 를 그 아래로 깎아 둔다(대장이 쓰러져 새 대장을 뽑는 것을 화면 밖에서 보려고).
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_P1SQUADHP"), out int squadHp) && squadHp > 0)
             for (int i = 0; i < host._units.Length; i++)
@@ -2565,6 +2580,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     }
 
     internal double _softlockSince = -1;
+
+    /// <summary>시험용 DUELDX_P1ZEROHP 로 이미 HP 를 0 으로 둔 Chr(StartTurn).</summary>
+    private readonly HashSet<int> _zeroHpDone = [];
+    private int _zeroHpAt = -1;
 
     /// <summary>아직 덜 터진 사건 가운데 틱·타이머 조건(2·3)으로 전투를 끝내는(행동 6·10·11) 것이 남았나.</summary>
     internal bool PendingTimedEnd()

@@ -154,11 +154,17 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
     /// <summary>교환 창이 팀을 만들고 지운 뒤 — 팀 목록과 고른 팀을 다시 맞춘다.</summary>
     internal List<Part1Team> MutableTeams => _teams ??= [];
 
-    /// <summary>904 — 그 사람을 팀으로 옮긴다. 없는 팀이면 만들고(8개까지) 장소 0 에 세운다.</summary>
-    private void JoinTeam(int team, int chr)
+    /// <summary>
+    /// 904 — 그 사람을 팀으로 옮긴다. 없는 팀이면 만들고(8개까지) 장소 0 에 세운다.
+    /// 팀 0 은 평소 「무리 앞 10명」(504 가 옮긴 것과 같다)이지만, 챕터에 아직 팀이 없을 때(<paramref name="fresh"/>) 904 가 팀 0 을 부르면
+    /// 원본은 빈 팀 0 을 새로 만들어 부른 사람만 넣는다(0x100c12e0 → 0x100ad940) — 그 팀을 「옮긴 사람만」(<see cref="Part1Team.Fixed"/>)으로 둔다.
+    /// 전에는 늘 무리 앞 10명이라, 챕터 55 「묵시록」(무리 4 가 열 명을 넘는다)에서 번호가 큰 죠안 · 시리우스 · 아델라이데 · 아스트럴이 출전 후보에서 빠졌다(버그 리포트 #54).
+    /// </summary>
+    private void JoinTeam(int team, int chr, bool fresh)
     {
         if (_teams is not { } teams || team < 0 || team >= 8) return;
         while (teams.Count <= team) teams.Add(new Part1Team { Place = 0 });
+        if (team == 0 && fresh && !teams[0].Fixed) (teams[0].Fixed, teams[0].Members) = (true, []);
         foreach (var t in teams) t.Members.Remove(chr);
         if (team > 0 || teams[0].Fixed) teams[team].Members.Add(chr);
     }

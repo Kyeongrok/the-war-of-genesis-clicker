@@ -726,6 +726,15 @@ internal sealed unsafe partial class BattleScene
                 // 「죽었다」 조건이 참이 되어 전투가 시작하자마자 끝났다.
                 var list = EventTargets(A(0), out bool whole);
                 if (A(0) >= 20000) return whole && list.Count > 0 && list.All(u => u.Alive && u.OnField);
+                // 파트1 10000+N — 원본 0x1001c980 은 레코드의 <b>사람</b>(유닛 표 +0xb9a0[N], 0x1001c4c0)을 보고 쓰러짐 깃발(+0x260, 0x10042750 상태 1)만 본다.
+                // 탈것에 탄 동안 그 사람은 살아 있다 — 탈것이 HP 0 으로 쓰러지는 중이어도(행동 끝 사건 검사가 쓰러짐 처리보다 앞) 「죽었다」가 아니다.
+                // 전에는 탈것을 보아, Btl 0194 마지막 전투에서 벨제부르의 마장기(620)를 쓰러뜨리자 사건 2(벨제부르 격파 → 승리)가 터져 본체가 안 나오고 엔딩으로 갔다(버그 리포트 #54).
+                // Chr 번호(0~9999)로 부른 사람도 탄 동안은 판 밖이지만 「없다」가 아니다.
+                if (host._scene.IsPart1)
+                {
+                    if (A(0) >= 10000) list = [.. list.Select(u => _part1Riders.TryGetValue(u, out var rider) ? rider : u)];
+                    return list.Count == 0 || list.All(u => !u.Alive || !u.OnField && !IsRiding(u) || u.Hp <= 0);
+                }
                 return list.Count == 0 || list.All(u => !u.Alive || !u.OnField || u.Hp <= 0);   // 전장 밖도 「없다」
             }
             case 203:                                                           // HP 퍼센트 비교

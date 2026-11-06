@@ -174,8 +174,8 @@ internal sealed class Part1SceneScript(GameWindow host)
     /// <summary>그 팀이 선 장소(없는 팀이면 −1) — 조건 302 [장소, 팀, v] 가 본다.</summary>
     internal Func<int, int>? TeamPlace;
 
-    /// <summary>904 [팀, Chr] — 그 사람을 그 팀으로(0x100c12e0: 팀이 없으면 만들고 장소 0 에 새 팀 말을 놓는다).</summary>
-    internal Action<int, int>? TeamJoin;
+    /// <summary>904 [팀, Chr, 처음] — 그 사람을 그 팀으로(0x100c12e0: 팀이 없으면 만들고 장소 0 에 새 팀 말을 놓는다). 처음 = 이 챕터에 아직 팀이 없었다(원본 팀 수 0).</summary>
+    internal Action<int, int, bool>? TeamJoin;
 
     /// <summary>903 [팀, 장소] — 팀 말을 전투 없이 그 장소로(0x100c14a0 → 0x100b2840). 리메이크는 팀 0(일행)만 있다.</summary>
     internal Action<int, int>? TeamMoved;
@@ -598,10 +598,19 @@ internal sealed class Part1SceneScript(GameWindow host)
                 case 903: TeamMoved?.Invoke(a[0], a[1]); break;
                 case 912: host.Part1.Eld = Math.Max(0, host.Part1.Eld + a[0]); break;
                 case 904 when a[1] >= 0:
-                    host.Part1.Join([Part1Game.ChrBase + a[1]]);
+                {
+                    int chr = Part1Game.ChrBase + a[1];
+                    host.Part1.Join([chr]);
+                    // 0x100c12e0 — 집 무리(+0x4c)가 지금 무리(챕터 +8)일 때만 팀에 넣는다. 다르면 아무것도 안 한다(팀 수도 안 는다, 분석-파트1-챕터 12.4).
+                    // 챕터 55 「묵시록」 · 78 은 열다섯 명을 차례로 부르고 그 가운데 무리 4 에 든 사람만 팀 0 이 된다(버그 리포트 #54).
+                    int group = host.Part1.CurrentGroup;
+                    if (group > 0 && host.Part1.HomeOf(chr) != group) break;
+                    // 원본 팀 수가 0 이던 때의 904 는 팀 0 을 새로 만든다 — 그 팀은 904 가 부른 사람만이다(무리 앞 10명이 아니다).
+                    bool fresh = host.Part1.ChapterId >= 0 && !host.Part1.Formed.Contains(host.Part1.ChapterId);
                     if (host.Part1.ChapterId >= 0) host.Part1.Formed.Add(host.Part1.ChapterId);   // 팀 수 ≠ 0 — 뒤 504 는 할 일이 없다(챕터 1 · 17)
-                    TeamJoin?.Invoke(a[0], Part1Game.ChrBase + a[1]);
+                    TeamJoin?.Invoke(a[0], chr, fresh);
                     break;
+                }
                 case 908 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mercenaries, Part1Game.ChrBase + a[1], a[2]); break;
                 case 910 when a[1] > 0: AddCount(host.Part1.ScriptStock(a[0]).Mounts, Part1Game.ChrBase + a[1], a[2]); break;
                 case 600: if (!Skipping) host.Play(Part1Game.ObsBase + a[0]); break;                     // [소리] — Snd/NNNN.snd(필드 0006: 600 [1852, 0])
