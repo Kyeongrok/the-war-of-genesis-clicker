@@ -234,6 +234,18 @@ internal static unsafe class Win32
     [DllImport("kernel32.dll")]
     public static extern bool CloseHandle(IntPtr handle);
 
+    /// <summary>
+    /// 시스템 · 화면 유휴 타이머를 막는다 — <c>ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED</c> 면 이 스레드가 다시 부를 때까지
+    /// 화면 끄기 · 화면 보호기 · 절전이 안 온다. <c>ES_CONTINUOUS</c> 만 주면 푼다.
+    /// </summary>
+    [DllImport("kernel32.dll")]
+    public static extern uint SetThreadExecutionState(uint flags);
+
+    public const uint ES_CONTINUOUS = 0x80000000, ES_DISPLAY_REQUIRED = 0x00000002, ES_SYSTEM_REQUIRED = 0x00000001;
+
+    public const uint WM_SYSCOMMAND = 0x0112;
+    public const int SC_SCREENSAVE = 0xF140, SC_MONITORPOWER = 0xF170;
+
     /// <summary>모니터 DPI 인식 — 이걸 안 하면 고배율 화면에서 창이 통째로 다시 늘려져
     /// 우리가 이미 2배로 그린 그림이 또 늘어나 뭉갠다(<c>DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2</c>).</summary>
     public static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new(-4);

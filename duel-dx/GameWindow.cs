@@ -680,6 +680,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         _running = true;
         var clock = Stopwatch.StartNew();
+        // 게임이 도는 동안 화면이 꺼지거나 화면 보호기가 뜨지 않게 한다(버그 리포트 #52 — 파트1 필드 0045 회상 장면을 보다가 「갑자기 화면이 까매짐」,
+        // 같은 때 소리 장치도 한 번 다시 열렸다). 성우 대사는 저절로 넘어가 마우스 · 키보드를 안 만지고 몇 분씩 볼 수 있고, 게임 패드 입력은
+        // Windows 유휴 타이머를 되돌리지 않는다 — 그동안 화면 끄기 시간이 차면 모니터가 꺼지고(HDMI 소리 장치도 함께 빠진다) 게임은 뒤에서 계속 돈다(가설).
+        Win32.SetThreadExecutionState(Win32.ES_CONTINUOUS | Win32.ES_DISPLAY_REQUIRED | Win32.ES_SYSTEM_REQUIRED);
 
         while (_running)
         {
@@ -730,6 +734,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             UpdateCursor();
             Render();
         }
+        Win32.SetThreadExecutionState(Win32.ES_CONTINUOUS);   // 화면 끄기 막음을 푼다
     }
 
     /// <summary>지난 프레임의 실제 시각(초) — 게임 시계(<c>_lastTime</c>)는 여기서 흐른 만큼 × 게임 속도로 나아간다.</summary>
@@ -816,6 +821,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_ERASEBKGND:
                 return (IntPtr)1;
+            // 게임 창이 앞에 있는 동안은 화면 보호기 · 모니터 끄기를 받지 않는다(버그 리포트 #52 — 위 SetThreadExecutionState 와 함께).
+            case Win32.WM_SYSCOMMAND when ((int)(long)wParam & 0xFFF0) is var sc
+                                          && (sc == Win32.SC_SCREENSAVE || sc == Win32.SC_MONITORPOWER && (long)lParam != -1):   // −1 은 「켜기」라 그대로 둔다
+                return IntPtr.Zero;
             case Win32.WM_SETCURSOR:
                 // 판 위에서는 게임 고유 커서(an-ui-1)를 하드웨어 커서로 건다 — UpdateCursor 가 컷에 맞춰 만든 것.
                 if ((((long)lParam) & 0xFFFF) == Win32.HTCLIENT) { Win32.SetCursor(_hwCursor); return (IntPtr)1; }
