@@ -138,8 +138,9 @@ internal sealed unsafe partial class GameWindow
 
     internal static readonly int[] SpeedChoices = [100, 150, 200];
 
-    /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 줄 번호 — 1200 + 목록 순번.</summary>
-    internal const int MenuReplayBase = 1200;
+    /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 줄 번호 — 2000 + 목록 순번.</summary>
+    /// <remarks>2000~2499 를 쓴다 — 전에는 1200 이라 둘째 · 셋째 장소가 「대사 중 우클릭으로 건너뛰기」(1201) · 「파트1 대사는 눌러서 넘기기」(1202)와 겹쳤다(menu-129).</remarks>
+    internal const int MenuReplayBase = 2000;
 
     /// <summary>「다녀온 장소 다시 열기」 하위 메뉴 — 펼칠 때마다 지금 챕터에서 다녀온 장소로 다시 채운다.</summary>
     internal static IntPtr _replayMenu;
@@ -151,7 +152,9 @@ internal sealed unsafe partial class GameWindow
     internal static readonly int[] ZoomChoices = [0, 100, 150, 200, 300, 400, 500, 600, 800];
 
     /// <summary>전투 배율 고르기(사용자 요청 menu-52) — 첫 칸 −1 은 「배율과 같게」, 나머지는 %.</summary>
-    internal const int MenuBattleZoom = 1180;
+    /// <remarks>번호 아홉 칸(1900~1908)을 통째로 쓴다. 전에는 1180~1188 이라 파트2 오프닝 영상(1181) · 세이브 이스터에그(1185~1187)와 겹쳐,
+    /// 150% 에서 ◀ 를 누르면 100%(1181) 대신 오프닝 영상이 켜고 꺼졌다(버그 리포트 #56, menu-129). 1900 대는 비어 있다.</remarks>
+    internal const int MenuBattleZoom = 1900;
     internal static readonly int[] BattleZoomChoices = [-1, 100, 150, 200, 300, 400, 500, 600, 800];
 
     /// <summary>전투 말풍선 크기 고르기(사용자 요청 menu-54).</summary>
@@ -367,7 +370,7 @@ internal sealed unsafe partial class GameWindow
 
     /// <summary>화면 밖 적의 차례에 카메라를 그쪽으로 안 보내나(걷거나 기술을 쓸 때만 비춘다) — 모드 > 일반 > 안 움직이는 먼 적은 안 비춤(사용자 요청 fg-86, 기본 켬).</summary>
     internal bool _quietFoeCamera = UserSettings.Current.QuietFoeCamera;
-    internal const int MenuQuietFoeCamera = 1700;   // 1100~1199 · 1200 다시보기는 다 찼다
+    internal const int MenuQuietFoeCamera = 1700;   // 1100~1199 는 다 찼다 · 1900 전투 배율 · 2000 다시보기
 
     /// <summary>파트1 차례 유닛의 반짝이는 테두리(<see cref="Part1TurnOutline"/>)를 두르나 — 모드 > 일반 > 파트1 차례 테두리(사용자 요청, 기본 끔).</summary>
     internal bool _part1TurnOutline = UserSettings.Current.Part1TurnOutline;
