@@ -1409,10 +1409,112 @@ internal sealed class Part1MapObjects(GameWindow host)
             int w = cx1 - cx0, h = cy1 - cy0;
             for (int y = 0; y < h; y++) Array.Copy(p.Pixels, (cy0 + y) * p.W + cx0, _clipBuf, y * w, w);
             host.BlitMasked(_clipBuf, w, h, p.X + cx0, p.Y + cy0);
+            GhostOver(_clipBuf, w, h, p.X + cx0, p.Y + cy0);
             return;
         }
-        if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); return; }
+        if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); GhostOver(p.Pixels, p.W, p.H, p.X, p.Y); return; }
         if (p.Child is { } k) DrawChild(k, p.Age, p.X, p.Y);
+    }
+
+    /// <summary>
+    /// 아직 그리지 않은(방금 그린 유닛보다 앞에 그릴) 맵 띠 · 물체 층 가운데 네모 안에 불투명 픽셀이 있는 것이 있나 — 체력바 글을 판에 써서 유닛과 함께 가려지게 할지 볼 때.
+    /// <see cref="QueueMapCover"/> 뒤, 그 유닛을 그린 바로 뒤에 부른다(그때 <c>_drawn</c> 부터가 그 유닛 위에 그릴 것이다).
+    /// </summary>
+    internal bool CoveredAhead(int x, int y, int w, int h)
+    {
+        for (int n = _pending.Count, p = _drawn; p < n; p++)
+        {
+            var q = _pending[p];
+            if (q.Pixels == null) continue;
+            var (cx0, cy0, cx1, cy1) = q.Clip ?? (0, 0, q.W, q.H);
+            int x0 = Math.Max(x, q.X + cx0), y0 = Math.Max(y, q.Y + cy0), x1 = Math.Min(x + w, q.X + cx1), y1 = Math.Min(y + h, q.Y + cy1);
+            for (int yy = y0; yy < y1; yy++)
+                for (int xx = x0; xx < x1; xx++)
+                    if ((q.Pixels[(yy - q.Y) * q.W + xx - q.X] & 0xFF000000) != 0) return true;
+        }
+        return false;
+    }
+
+    // ── 가려진 유닛 반투명(모드, 리메이크) ─────────────────────────────────────────────────────────────────
+    // 원본에는 없다(위 0x1001b7a0 — 둘째 그리기가 없다). 모드 > 일반 「가려진 캐릭터 반투명」(기본 끔)을 켜면
+    // 유닛(몸 · 딸린 층 · 차례 테두리 · 체력바 · 레벨 동그라미)을 그리기 앞뒤로 판을 떠 두고(GhostBegin · GhostEnd),
+    // 그 뒤에 그리는 맵 띠 · 물체 층이 그 유닛 픽셀을 덮으면 덮은 픽셀 위에 떠 둔 유닛 픽셀을 GhostAlpha 만큼 다시 섞는다.
+    // 깊이 차례 안에서 섞으므로 그보다 앞 유닛은 그대로 위에 서고, 가려지지 않은 부분은 바뀌지 않는다.
+
+    /// <summary>가려진 유닛을 다시 섞는 몫(256 = 불투명) — 45%.</summary>
+    internal const int GhostAlpha = 115;
+
+    private sealed class Ghost { public int X, Y, W, H; public uint[] Before = [], Px = []; }
+    private readonly List<Ghost> _ghosts = [];
+    private int _ghostCount;
+    private bool _ghostOn, _ghostOpen;
+
+    /// <summary>이번 틀에 반투명을 쓸지 정하고 떠 둔 유닛을 비운다 — <see cref="BattleScene.DrawUnits"/> 첫머리에.</summary>
+    internal void GhostFrame(bool on) { _ghostOn = on; _ghostCount = 0; }
+
+    /// <summary>유닛을 그리기 바로 앞 — 그 네모(판 좌표, 보이는 곳만)의 지금 판을 떠 둔다.</summary>
+    internal void GhostBegin(int x, int y, int w, int h)
+    {
+        if (!_ghostOn) return;
+        _ghostOpen = true;
+        int x0 = Math.Max(x, Math.Max(0, host._camX)), y0 = Math.Max(y, Math.Max(0, host._camY));
+        int x1 = Math.Min(x + w, Math.Min(host.BoardWidth, host._camX + host.ViewWidth));
+        int y1 = Math.Min(y + h, Math.Min(host.BoardHeight, host._camY + host.ViewHeight));
+        if (_ghostCount == _ghosts.Count) _ghosts.Add(new Ghost());
+        var g = _ghosts[_ghostCount];
+        g.X = x0; g.Y = y0; g.W = Math.Max(0, x1 - x0); g.H = Math.Max(0, y1 - y0);
+        if (g.W == 0 || g.H == 0) return;
+        int n = g.W * g.H;
+        if (g.Before.Length < n) { g.Before = new uint[n]; g.Px = new uint[n]; }
+        var fb = host._fb;
+        for (int yy = 0; yy < g.H; yy++) Array.Copy(fb, (g.Y + yy) * host.BoardWidth + g.X, g.Before, yy * g.W, g.W);
+    }
+
+    /// <summary>유닛(과 체력바)을 그린 바로 뒤 — 바뀐 픽셀만 유닛 픽셀로 남긴다(안 바뀐 곳은 0).</summary>
+    internal void GhostEnd()
+    {
+        if (!_ghostOn || !_ghostOpen) return;   // 그림이 없어 GhostBegin 을 건너뛴 유닛
+        _ghostOpen = false;
+        var g = _ghosts[_ghostCount];
+        if (g.W == 0 || g.H == 0) return;
+        var fb = host._fb;
+        bool any = false;
+        for (int yy = 0; yy < g.H; yy++)
+        {
+            int row = (g.Y + yy) * host.BoardWidth + g.X;
+            for (int xx = 0; xx < g.W; xx++)
+            {
+                uint now = fb[row + xx];
+                bool changed = now != g.Before[yy * g.W + xx];
+                g.Px[yy * g.W + xx] = changed ? now | 0xFF000000 : 0;
+                any |= changed;
+            }
+        }
+        if (any) _ghostCount++;
+    }
+
+    /// <summary>방금 그린 띠 · 층(src, 판 자리 dx · dy)의 불투명 픽셀이 앞서 그린 유닛 픽셀을 덮었으면 그 위에 유닛을 반투명으로 다시 섞는다.</summary>
+    private void GhostOver(uint[] src, int sw, int sh, int dx, int dy)
+    {
+        if (!_ghostOn || _ghostCount == 0) return;
+        var fb = host._fb;
+        int bw = host.BoardWidth;
+        for (int gi = 0; gi < _ghostCount; gi++)
+        {
+            var g = _ghosts[gi];
+            int x0 = Math.Max(dx, g.X), y0 = Math.Max(dy, g.Y), x1 = Math.Min(dx + sw, g.X + g.W), y1 = Math.Min(dy + sh, g.Y + g.H);
+            for (int y = y0; y < y1; y++)
+                for (int x = x0; x < x1; x++)
+                {
+                    if ((src[(y - dy) * sw + x - dx] & 0xFF000000) == 0) continue;
+                    uint c = g.Px[(y - g.Y) * g.W + x - g.X];
+                    if (c == 0) continue;
+                    int at = y * bw + x;
+                    uint d = fb[at];
+                    uint Mix(int s) => (uint)(((int)(c >> s & 0xFF) * GhostAlpha + (int)(d >> s & 0xFF) * (256 - GhostAlpha)) / 256);
+                    fb[at] = 0xFF000000 | Mix(16) << 16 | Mix(8) << 8 | Mix(0);
+                }
+        }
     }
 
     /// <summary>

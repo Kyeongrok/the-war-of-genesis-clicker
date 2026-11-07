@@ -261,7 +261,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -375,6 +375,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 차례 유닛의 반짝이는 테두리(<see cref="Part1TurnOutline"/>)를 두르나 — 모드 > 일반 > 파트1 차례 테두리(사용자 요청, 기본 끔).</summary>
     internal bool _part1TurnOutline = UserSettings.Current.Part1TurnOutline;
     internal const int MenuPart1TurnOutline = 1168;
+
+    /// <summary>파트1 기둥 · 벽 · 건물 · 맵 물체에 가려진 유닛(과 체력바)을 반투명으로 비쳐 보이나 — 모드 > 일반 > 가려진 캐릭터 반투명(원본에 없음, 사용자 요청 fa-84, 기본 끔, Part1MapObjects.GhostOver).</summary>
+    internal bool _coverGhost = UserSettings.Current.CoverGhost;
+    internal const int MenuCoverGhost = 1701;
 
     /// <summary>파트1 튜토리얼(챕터 79 · 80) 전투에서도 SAVE 를 하나 — 모드 > 일반 > 튜토리얼에서도 저장(원본은 막는다, 사용자 요청 menu-105, 기본 켬).</summary>
     internal bool _part1TutorialSave = UserSettings.Current.Part1TutorialSave;
@@ -600,6 +604,11 @@ internal sealed unsafe partial class GameWindow
                 _part1TutorialSave = !_part1TutorialSave;
                 Win32.CheckMenuItem(_menuBar, MenuPart1TutorialSave, Win32.MF_BYCOMMAND | (_part1TutorialSave ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_part1TutorialSave ? "튜토리얼 전투에서도 저장합니다" : "튜토리얼 전투에서는 저장하지 않습니다(원본대로)");
+                SaveSettings();
+                break;
+            case MenuCoverGhost:
+                _coverGhost = !_coverGhost;
+                Toast(_coverGhost ? "구조물에 가려진 캐릭터를 반투명으로 비춥니다" : "구조물에 가려진 캐릭터를 원본대로 가립니다");
                 SaveSettings();
                 break;
             case MenuPart1TurnOutline:

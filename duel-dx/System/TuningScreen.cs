@@ -30,7 +30,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>선택 상자가 펼쳐져 있나.</summary>
     internal bool _tuningListOpen;
 
-    internal const int TuningW = 600, TuningH = 464, TuningBoxX = 300, TuningBoxW = 180, TuningRowH = 24;
+    // 높이 496 — 일반 탭에 「가려진 캐릭터 반투명」 줄(fa-84)이 늘어 464 에서는 아래 설명이 「Esc: 닫기」와 겹쳤다.
+    internal const int TuningW = 600, TuningH = 496, TuningBoxX = 300, TuningBoxW = 180, TuningRowH = 24;
 
     /// <summary>소울 기여도 상자의 y(창 기준) — 일반 탭 체크 줄 바로 아래(줄이 늘면 따라 내려간다 — 고정 270 이던 때 일곱째 줄과 겹쳤다).</summary>
     internal int TuningBoxY => TuningCheckY + TuningChecks(TabGeneral).Length * TuningCheckH + 8;
@@ -148,6 +149,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("안 움직이는 먼 적은 안 비춤", "화면 밖 적은 걷거나 기술을 쓸 때만 카메라가 간다", MenuQuietFoeCamera, host._quietFoeCamera),
         ("파트1 차례 목소리", "파트1 인물 차례에 성우 한 마디(원본에 없음)", MenuPart1TurnVoice, host._part1TurnVoice),
         ("파트1 차례 테두리", "차례인 유닛에 주황·노랑 반짝이는 테두리", MenuPart1TurnOutline, host._part1TurnOutline),
+        ("가려진 캐릭터 반투명", "파트1 기둥·벽 뒤에 선 유닛을 반투명으로 비춘다", MenuCoverGhost, host._coverGhost),
         ("튜토리얼에서도 저장", "파트1 튜토리얼 전투에서도 SAVE(원본은 막는다)", MenuPart1TutorialSave, host._part1TutorialSave),
         ("무작위 상자는 시작 때", "파트1 무작위 상자를 전투 시작에 정함(끄면 열 때)", MenuPart1ChestRoll, host._part1ChestRollAtStart),
     ];
