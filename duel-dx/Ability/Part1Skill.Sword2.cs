@@ -324,7 +324,8 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 혈랑마혼(292) — 시전자 오른쪽 위(x+30, z+140)에서 칼빛 536:0 이 왼쪽 아래로 내려긋고(빠르기 10 × 0.8, 잔상 536:3 36틱), 시전자는 정면을 보고
     /// 파트1 동작 9 를 36번. 그 뒤 불 소용돌이 230 과 함께 대상까지 돌진하고(20 × 1.8), 옆 40 에 반투명한 분신 둘이 나란히 달린다(10 × 1.1).
-    /// 셋 모두 지나는 칸의 적을 친다(<c>0x100769b0</c>). 닿으면 돌진 자세 두 번 → 동작 21, 시전자는 겨눈 칸에 남는다(원본 그대로).
+    /// 셋 모두 지나는 칸의 적을 친다(<c>0x100769b0</c>). 시전자가 적의 칸을 지나는 틱마다 번개가 떨어지고 잔상이 남는다(<see cref="S2HyeollangTrail"/>).
+    /// 닿으면 돌진 자세 두 번 → 동작 21, 시전자는 겨눈 칸에 남는다(원본 그대로).
     /// </summary>
     private int S2Hyeollang(List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
@@ -355,6 +356,7 @@ internal sealed partial class Part1Skill
         int body = user.Data?.SpriteId ?? 0;
         bool clones = body > Part1Game.ObsBase && host.UiFor(body) != null;
         var (bm, bmirror) = BodyMotion(18, dir);
+        S2HyeollangTrail(charge, go, body, clones, bm, bmirror);
         var lanes = new List<List<(double X, double Y)>> { charge };
         foreach (int o in new[] { -40, 40 })
         {
@@ -382,6 +384,27 @@ internal sealed partial class Part1Skill
         int last = swing + ActionTicks(user, 21, 8);
         Carry(arrive, Enumerable.Repeat(t, last - arrive + 1).ToList());
         return Math.Max(last + 1, Length(536, 0));
+    }
+
+    /// <summary>
+    /// 혈랑마혼 돌진 이동기(<c>0x100816d0</c>)가 틱마다 하는 일 — 공격 번호가 292 면(<c>0x10081a46</c> → <c>0x10081bb2</c>) 지금 선 칸에 적(<c>0x10038550</c>)이 있을 때
+    /// 소리 65 와 번개 기둥 75(깜빡이 <c>0x1007b500</c>, 6틱)를 화면 높이 ÷ 256 + 3 개(480 이면 넷) z 425(= 255px)씩 쌓고 번개 379(6틱)를 그 자리에 떨어뜨린다.
+    /// 그리고 혼(26~30)처럼 시전자 그림의 잔상을 틱마다 남긴다(<c>0x10081e11</c>, 단계 8 · 2틱마다 바램). 전에는 이 틱 처리를 옮기지 않아 적을 지나도 번개가 안 떨어졌다(버그 리포트 #58).
+    /// </summary>
+    private void S2HyeollangTrail(List<(double X, double Y)> charge, int go, int body, bool ghosts, int motion, bool mirror)
+    {
+        var foes = host._units.Where(u => u is { Alive: true, OnField: true } && u != _user && BattleScene.SeesAsFoe(_user, u))
+                              .Select(u => host.Btl.UnitFoot(u)).ToList();
+        int bolts = host.ViewHeight / 256 + 3;
+        for (int k = 0; k < charge.Count; k++)
+        {
+            var p = charge[k];
+            if (ghosts) Along(body, motion, go + k, [(0, p.X, p.Y)], life: 14, mirror: mirror, fadeFrom: 0.7, fadeTo: 0.1, rawObs: true);
+            if (!foes.Any(f => Math.Abs(f.X - p.X) < TileW / 2.0 && Math.Abs(f.Y - p.Y) < TileH / 2.0)) continue;
+            Sound(65, go + k);
+            for (int n = 0; n < bolts; n++) Along(75, 0, go + k, [(0, p.X, p.Y - 255 * n)], life: 6, flicker: true);
+            Put(379, 0, go + k, p.X, p.Y, life: 6);
+        }
     }
 
     /// <summary>

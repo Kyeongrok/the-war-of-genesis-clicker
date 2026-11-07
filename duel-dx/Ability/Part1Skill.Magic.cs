@@ -277,10 +277,14 @@ internal sealed partial class Part1Skill
             }
             for (int n = 0; n < 2; n++) Along(696, 13, sigma + 92 + t + Rand(10), [(0, p.X + Rand(401) - 200, p.Y + Rand(401) - 200)], life: 32, screen: true);
         }
-        for (int k = 0; k < 28; k++)
+        // 칼금 — 원본은 640×480 화면에 28칸을 (640 − 24k, 18k)에 잇는다(0x100552c3). 696:5~7 은 너비 24px 의 세로 띠라 x 간격이 24 를 넘으면 띠 사이가 빈다 —
+        // 전에는 간격을 화면 비율(hw / 320)로 늘려 넓은 화면에서 칼금이 중간중간 끊겼다(버그 리포트 #58). x 간격은 24 그대로 두고 칸 수를 화면 너비만큼 늘려
+        // 오른쪽 위 → 왼쪽 아래 귀퉁이를 잇는다. 쓸고 지나가는 시간(원본 ⌊(k+1)/5⌋ — 6틱)은 칸 수와 상관없이 같게 둔다.
+        int slashes = Math.Max(28, (int)Math.Ceiling(2.0 * hw / 24) + 1);
+        for (int k = 0; k < slashes; k++)
         {
-            double sx = hw - 24 * k * (hw / 320.0), sy = -hh + 18 * k * (hh / 240.0);
-            int at = sigma + 172 + (k + 1) / 5;
+            double sx = hw - 24 * k, sy = -hh + 2.0 * hh * k / (slashes - 1);
+            int at = sigma + 172 + (k + 1) * 28 / slashes / 5;
             Along(696, 5, at, [(0, sx, sy)], screen: true);
             Along(696, 6, at + Length(696, 5) + 1, [(0, sx, sy)], life: 3, screen: true);
             Along(696, 7, at + Length(696, 5) + 5, [(0, sx, sy)], screen: true);
