@@ -43,7 +43,8 @@ internal sealed unsafe partial class GameWindow
         // 원본 장면 4(0x100af640)는 밝아지는 고리(+0x13ca8 += 4, 0x100af7ad)를 다 돈 뒤에야 사건을 이어 돌려, 중간에 다 밝은 화면으로 튀지 않는다.
         int level = _fadeInStart >= 0 ? SceneFadeLevel() : 31;
         _fadeInStart = -1;
-        _fadeOutStart = _lastTime - (31 - level) / 2.0 / TicksPerSecond;
+        // 켜자마자(_lastTime ≈ 0) 부르면 음수가 되어 「페이드 없음」(< 0)으로 읽혀 끝나지 않았다 — 시험 훅 DUELDX_P1FIELD 가 그래서 가끔 안 열렸다.
+        _fadeOutStart = Math.Max(0, _lastTime - (31 - level) / 2.0 / TicksPerSecond);
     }
 
     /// <summary>새 장면이 섰다 — 검정에서 밝아진다(타이틀·연대표·기록은 15틀, 세기 31 − 2i).</summary>

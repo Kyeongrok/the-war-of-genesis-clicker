@@ -1294,6 +1294,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
     internal void Update(double dt)
     {
+        if (!_openHooksPending && Offscreen) Part1TitleScr.Field.RetryIfAsked();   // 시험 훅(DUELDX_P1FIELD)이 페이드를 잃었으면 다시
         if (_openHooksPending)
         {
             _openHooksPending = false;

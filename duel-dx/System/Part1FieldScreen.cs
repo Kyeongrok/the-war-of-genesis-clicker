@@ -256,6 +256,20 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         host.LeaveScene(() => { shell.Open(); Open(id, () => { }); });
     }
 
+    private bool _askedOpened;
+    private int _askTries = 600;
+
+    /// <summary>
+    /// 시험 훅이 건 페이드가 뒤이어 선 타이틀(판 갈기 ResizeBoard 가 남은 페이드를 버린다)에 지워져 필드가 안 열린 채 남는 일이 있어,
+    /// 페이드가 없을 때 다시 건다 — <c>DUELDX_P1FIELD</c> 가 없으면 아무것도 안 한다.
+    /// </summary>
+    internal void RetryIfAsked()
+    {
+        if (_askedOpened || _askTries <= 0 || host.SceneFading || host._afterFadeOut != null) return;
+        _askTries--;
+        OpenIfAsked();
+    }
+
     /// <summary>다시 연 갈림길 필드 — 한 번 켠 동안 한 번만(못 고르고 또 끝나도 되풀이하지 않게).</summary>
     private readonly HashSet<int> _reoffered = [];
 
@@ -284,6 +298,7 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         }
         _field = field;
         _onEnd = onEnd;
+        _askedOpened = true;
         (_bg, _bgW, _bgH) = ReadImage(field.Background);
         _spots = [.. field.Sprites.Select(s => (s.X, s.Y))];
         _walks.Clear();
@@ -303,6 +318,14 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
         _lastScene = [];
         _choiceHover = 0;
         _facing = [.. field.Sprites.Select(s => s.Direction switch { 0 => Facing.Up, 2 => Facing.Down, 3 => Facing.Right, _ => Facing.Left })];
+        // 원본 로더는 필드 그림을 모션 0 으로 만들고(0x100c7563 → 0x1009f4d0 → 0x1009f820(그림, 0)) 틱을 세운다(0x100c7591: +0x46 = −1 —
+        // 틱 셈 0x1009f15a 는 +0x46 이 0 일 때만 센다). 300 이 모션을 걸어야 돈다. 파일의 낱말 6 은 방향이 아니라 층(0~2, 0x100c75a2)이다.
+        // 리메이크는 낱말 6 을 방향으로 읽어 1(대부분)이면 모션 1 을 되풀이해, 감옥 문(Obs 655)의 모션 1(섞기 14 로 하얗게 번쩍임 —
+        // 문을 열 때 300 [10000, 1] 이 한 번 거는 것)을 필드 0004 내내 되풀이했다 — 위에 그려지는 문 656 이 덮으면 안 보이지만 아니면 깜빡인다(버그 리포트 #66).
+        // 걷기 모션(3)이 없는 물체는 원본대로 모션 0 첫 장에 세운다.
+        // (인물은 원본도 모션 0 이지만 리메이크는 낱말 6 으로 서기 방향을 골라 왔다 — 그대로 둔다.)
+        for (int n = 0; n < field.Sprites.Count; n++)
+            if (host.UiFor(SpriteObs(n)) is { } sprite && sprite.Clip(ObsMotionTable.ActionWalk * 3) is null) { _motion[n] = (0, false); _frozen[n] = 0; }
         _open = true;
         GameWindow.TestRunTrace($"part1 field {id} open");   // 시험 전용 줄
         Script.Start(field.Events, field.Lines, []);

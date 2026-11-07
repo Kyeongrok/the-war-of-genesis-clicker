@@ -422,8 +422,15 @@ public static class Part1Game
         (8, (2, 25, 1)), (9, (3, 26, 1)), (13, (11, 25, 2)), (14, (12, 25, 3)), (15, (11, 25, 1)),
         // 4타 · 5타 · 6타(파트1 동작 13~15 — 연 · 참 Lv3~5) — 파트2 에 없는 동작이라 40 을 더한 빈 자리에(53~55).
         (ExtraBase + 13, (13, 25, 4)), (ExtraBase + 14, (14, 25, 5)), (ExtraBase + 15, (15, 25, 6)),
-        .. Enumerable.Range(ExtraFrom, 58 - ExtraFrom).Select(a => (ExtraBase + a, (a, 0, 0))),
+        .. Enumerable.Range(ExtraFrom, LastAction + 1 - ExtraFrom).Select(a => (ExtraBase + a, (a, 0, 0))),
     ];
+
+    /// <summary>
+    /// 파트1 인물 그림의 마지막 동작 — 인물 그림은 모두 모션 176 개(0~175)라 동작 58(모션 174 · 175)까지 있다. 전에는 57 에서 끊어(176 ÷ 3 내림)
+    /// 동작 58 을 안 쌌고, 필드 대본 300 이 거는 모션 174(철가면 Obs 605 의 필드 서기 — 그림 한 장)가 옮긴 자리를 못 찾아 번호 그대로 다시 싼 그림의
+    /// 모션 174(= 파트1 동작 18, 칼을 치켜든 돌진 자세)를 그렸다(버그 리포트 #67).
+    /// </summary>
+    public const int LastAction = 58;
 
     /// <summary>
     /// 원본 파트1 모션 번호(동작 × 3 + 방향 — 필드 · 챕터 대본 300 이 쓰는 것) → 다시 싼 그림(<see cref="ToPart2Obs"/>)의 모션 번호.
@@ -713,7 +720,7 @@ public static class Part1Game
         string path = Path.Combine(cacheFolder, CacheSub(file), file);
         // 파트1 이 없는 PC 는 릴리즈에서 받아 둔 것(assets-part1-1)을 같은 자리에서 쓴다.
         // 몸 그림인데 동작 번호를 안 바꾸고 싸 둔 옛 파일(인물 레코드가 Chars.pak 에만 있어 몸 그림으로 못 잡던 때 것, fg-97)은 다시 싼다.
-        if (File.Exists(path) && !(obs && Root != null && BodySprites().Contains(n - ObsBase) && PackedUnmapped(path))) return path;
+        if (File.Exists(path) && !(obs && Root != null && BodySprites().Contains(n - ObsBase) && (PackedUnmapped(path) || PackedWithoutLastAction(path, n - ObsBase)))) return path;
         if (Root == null) return null;
         if (Read(obs ? "Obss" : "Snd", $"{n - ObsBase:D4}.{(obs ? "obs" : "snd")}") is not { } p1) return null;
         try
@@ -726,6 +733,34 @@ public static class Part1Game
             return path;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException) { return null; }
+    }
+
+    private static readonly HashSet<string> _lastActionChecked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 동작 58 을 빼고 싼 옛 인물 그림인가(<see cref="LastAction"/>, 버그 리포트 #67) — 싼 그림의 가장 큰 모션 번호가 동작 98 자리(294)에 못 미치는데
+    /// 파트1 그림에는 동작 58(모션 174 · 175)이 있으면 다시 싼다. 파트1 파일을 읽어야 해서 켤 때마다 그림 하나에 한 번만 본다.
+    /// </summary>
+    private static bool PackedWithoutLastAction(string path, int part1Obs)
+    {
+        lock (_lastActionChecked) if (!_lastActionChecked.Add(path)) return false;
+        try
+        {
+            using (var r = new BinaryReader(File.OpenRead(path)))
+            {
+                r.ReadUInt16();
+                int subs = r.ReadUInt16();
+                r.ReadUInt16();
+                r.BaseStream.Position += 6L * subs;
+                r.ReadUInt16();
+                if (r.ReadUInt16() >= (ExtraBase + LastAction) * 3) return false;
+            }
+            if (Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return false;
+            for (int dir = 0; dir < 3; dir++)
+                if (RawMotion(p1, LastAction * 3 + dir) is { Count: > 0 }) return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or EndOfStreamException or ArgumentException or IndexOutOfRangeException or InvalidDataException) { }
+        return false;
     }
 
     /// <summary>
