@@ -1242,7 +1242,9 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 전에는 적 그림이 덮은 빈 칸(높은 칸에 선 적 · 큰 유닛의 그림 아래)을 누르면 그 적의 칸으로 바뀌어 「설 수 있는 빈 칸을 고르세요」가 떴다(사용자 보고: 살라딘 혈랑마혼).
         bool emptyCellAim = Btl._targetWork >= 0 && !Btl._targetIsBasicAttack && Btl.Work(Btl._targetWork) is { TargetMode: 7 };
         int index = UnitOrFoeAt(bx, by);
-        if (index >= 0 && !emptyCellAim) (col, row) = (_units[index].Col, _units[index].Row);
+        // 다만 누른 칸이 노란(사거리) 칸이고 그 유닛의 가운데 칸은 사거리 밖이면 누른 칸 그대로다 — 큰 유닛(3×3)의 차지 칸을 누르면
+        // 가운데 칸으로 바뀌어, 아지다하카 버스터 런쳐(사거리 = 바로 옆 네 칸 = 제 차지 칸)는 노란 칸을 눌러도 「사거리 밖입니다」였다(버그 리포트 #59).
+        if (index >= 0 && !emptyCellAim && !Btl.KeepsClickedAimCell(col, row, index)) (col, row) = (_units[index].Col, _units[index].Row);
         if (row < 0) return;
         if (Btl.OnTargetClick(col, row)) return;
 

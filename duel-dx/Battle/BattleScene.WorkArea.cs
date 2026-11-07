@@ -205,6 +205,21 @@ internal sealed unsafe partial class BattleScene
         return false;
     }
 
+    /// <summary>
+    /// 어빌리티를 겨누는 중 (col, row) 를 눌렀는데 그 자리에 유닛 <paramref name="unit"/>(차지 칸 · 그림)이 잡혔을 때 — 누른 칸이 노란(사거리) 칸이고
+    /// 그 유닛의 가운데 칸은 사거리 밖이면 누른 칸 그대로 겨눈다(true). 노란 칸을 칠하는 판정(<see cref="DrawWorkRange"/>)과 같은 것으로 본다.
+    /// 원본은 누른 자리를 커서 칸(<c>+0xca06</c> / <c>+0xca08</c>)으로 보고 그 칸의 칠한 깃발로 거른다(<c>0x100321e5</c>) — 큰 유닛의 차지 칸도 그 칸 그대로다.
+    /// 버그 리포트 #59: 아지다하카(3×3)의 버스터 런쳐 397 사거리는 바로 옆 네 칸 — 모두 제 차지 칸이라 누르면 제 가운데 칸으로 바뀌어 「사거리 밖입니다」.
+    /// </summary>
+    internal bool KeepsClickedAimCell(int col, int row, int unit)
+    {
+        if (_targetWork < 0 || _targetIsBasicAttack || _turn < 0 || row < 0 || Work(_targetWork) is not { } w) return false;
+        var user = host._units[_turn];
+        var on = host._units[unit];
+        bool Painted(int c, int r) => Part1.AttackOf(w) is { AimFilter: 7 } ? CanAimAt(w, user, c, r) : InWorkRange(w, user.Col, user.Row, c, r, user);
+        return Painted(col, row) && !Painted(on.Col, on.Row);
+    }
+
     /// <summary>효과 범위 칸들 — 겨눈 칸(자기 자리에 쓰는 work 면 시전자 칸)을 가운데로, 시전자 → 겨눈 칸 방향으로.</summary>
     internal List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
     {
