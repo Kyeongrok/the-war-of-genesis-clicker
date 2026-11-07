@@ -66,7 +66,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal (int X, int Y, int W, int H) VoiceButton(int i)
     {
         var (x, y) = TuningOrigin();
-        return (x + TuningBoxX + i * (VoiceW + VoiceGap), y + TuningBoxY, VoiceW, TuningRowH);
+        return (x + TuningBoxX + i * (VoiceW + VoiceGap), y + TuningBoxY - _scroll, VoiceW, TuningRowH);   // 굴린 자리(menu-131)
     }
 
     /// <summary>대사 목소리 크기 단추 i 의 자리(판 좌표) — 차례 목소리 단추 줄 바로 아래.</summary>
@@ -87,6 +87,123 @@ internal sealed unsafe class TuningScreen(GameWindow host)
 
     /// <summary>체크 줄 넷 — 창 위에서부터 y 70 · 102 · 134 · 166(탭 줄 아래). 누르면 그 메뉴 명령을 그대로 돌린다(알림·저장까지).</summary>
     internal const int TuningCheckY = 70, TuningCheckH = 32;
+
+    // ── 탭 내용 스크롤(사용자 요청 menu-131) ──
+    // 편의성 탭이 13줄이 되어 마지막 줄이 「닫기」 · 「Esc: 닫기」와 겹쳤다. 창을 더 키우면 640×480 판을 넘으므로 내용만 굴린다.
+    // 내용 칸은 탭 줄 아래(ViewTop) ~ 닫기 단추 위(ViewBottom). 그리개에 자르기가 없어 칸을 조금이라도 벗어난 줄 · 단추는 통째로 안 그리고 안 누른다.
+    // 굴림은 한 줄(TuningCheckH) 단위라 체크 줄이 늘 같은 자리에 선다. 다 들어가는 탭은 굴림 0 · 막대 없음 — 전과 똑같다.
+
+    /// <summary>내용 칸의 위 · 아래(창 기준) — 탭 줄 밑 선(54) 바로 아래부터 닫기 단추(TuningH − 40) 6 위까지.</summary>
+    internal const int ViewTop = TabY + TabH + 2, ViewBottom = TuningH - 46;
+
+    /// <summary>스크롤 막대 — 창 오른쪽 안(창 기준 x)과 굵기, 누름 판정은 양옆으로 넓힌다.</summary>
+    internal const int BarX = TuningW - 10, BarW = 6, BarHitPad = 4;
+
+    /// <summary>지금 굴린 만큼(px, 한 줄 단위) — 탭이 바뀌면 0.</summary>
+    internal int _scroll;
+    private int _scrollTab = -1;
+
+    /// <summary>막대 손잡이를 끄는 중이면 손잡이 위에서 잡은 자리(px).</summary>
+    private int? _barGrab;
+
+    /// <summary>방향키로 고른 체크 줄(−1 없음) — Enter · Space 가 누른다.</summary>
+    internal int _keyRow = -1;
+
+    /// <summary>지금 탭의 체크 줄이 시작하는 y(창 기준).</summary>
+    private int ChecksTop => _tuningTab == TabStory ? StoryCheckY : TuningCheckY;
+
+    /// <summary>지금 탭 내용의 맨 아래(창 기준, 굴리기 전) — 탭마다 그리는 것(DrawTuning)과 같은 셈.</summary>
+    internal int ContentBottom()
+    {
+        int rows = TuningChecks().Length;
+        int checksEnd = ChecksTop + rows * TuningCheckH - 4;   // 마지막 줄의 강조 칸 바닥
+        return _tuningTab switch
+        {
+            TabBalance => checksEnd + 4 + 8 + 3 * 22 + 16,                                // 어빌리티 개편 설명 넉 줄
+            TabMovie => checksEnd + 4 + 8 + Math.Max(0, _movieLines.Length - 1) * 22 + 18,   // 파트1 엔딩 영상 글
+            TabGeneral when ShowsSoulWeight => TuningBoxY + 32 + 3 * 21 + 16,             // 소울 기여도 설명 넉 줄
+            TabGeneral when ShowsVoiceVolume => TuningBoxY + TalkVoiceRowDy + 32 + 16,   // 대사 목소리 설명
+            _ => checksEnd,
+        };
+    }
+
+    /// <summary>굴릴 수 있는 끝(px) — 한 줄 단위로 올려 맞춘다.</summary>
+    internal int MaxScroll => (Math.Max(0, ContentBottom() - ViewBottom) + TuningCheckH - 1) / TuningCheckH * TuningCheckH;
+
+    /// <summary>탭이 바뀌었으면 굴림 · 고른 줄을 처음으로, 내용이 줄었으면 굴림을 끝 안으로.</summary>
+    private void SyncScroll()
+    {
+        if (_scrollTab != _tuningTab) { _scrollTab = _tuningTab; _scroll = 0; _keyRow = -1; _barGrab = null; }
+        _scroll = Math.Clamp(_scroll, 0, MaxScroll);
+    }
+
+    /// <summary>내용을 <paramref name="rows"/> 줄 굴린다(+ 아래로). 굴렸으면 true.</summary>
+    internal bool ScrollRows(int rows)
+    {
+        SyncScroll();
+        int was = _scroll;
+        _scroll = Math.Clamp(_scroll + rows * TuningCheckH, 0, MaxScroll);
+        return _scroll != was;
+    }
+
+    /// <summary>한 쪽(위 −1 · 아래 +1)으로 더 굴릴 수 있나.</summary>
+    internal bool CanScroll(int dy) { SyncScroll(); return dy < 0 ? _scroll > 0 : _scroll < MaxScroll; }
+
+    /// <summary>휠 — 한 눈금에 한 줄. 펼친 선택 상자 위에서는 안 굴린다.</summary>
+    internal void OnTuningWheel(int notches) { if (!_tuningListOpen) ScrollRows(-notches); }
+
+    /// <summary>창 기준 y 의 칸(높이 h)이 굴린 뒤에 내용 칸 안에 통째로 드나 — <paramref name="top"/> 은 굴리기 전 창 기준.</summary>
+    internal bool Shown(int top, int h) => top - _scroll >= ViewTop && top - _scroll + h <= ViewBottom;
+
+    /// <summary>한 쪽(창 기준) 페이지 — 내용 칸에 드는 줄 수에서 한 줄 덜.</summary>
+    private int PageRows => Math.Max(1, (ViewBottom - ViewTop) / TuningCheckH - 1);
+
+    /// <summary>체크 줄 i 가 보이게 굴린다(방향키 · 패드).</summary>
+    private void ShowRow(int i)
+    {
+        int top = ChecksTop + i * TuningCheckH;
+        if (top - _scroll < ViewTop) _scroll = Math.Max(0, (top - ViewTop) / TuningCheckH * TuningCheckH);
+        int over = top + TuningCheckH - 4 - ViewBottom;
+        if (over - _scroll > 0) _scroll = (over + TuningCheckH - 1) / TuningCheckH * TuningCheckH;
+        _scroll = Math.Clamp(_scroll, 0, MaxScroll);
+    }
+
+    /// <summary>스크롤 막대 칸(판 좌표)과 손잡이 — 굴릴 것이 없으면 null.</summary>
+    private (int X, int TrackY, int TrackH, int ThumbY, int ThumbH)? Bar()
+    {
+        int max = MaxScroll;
+        if (max <= 0) return null;
+        var (x, y) = TuningOrigin();
+        int trackY = y + ViewTop, trackH = ViewBottom - ViewTop;
+        int thumbH = Math.Max(24, trackH * trackH / (trackH + max));
+        return (x + BarX, trackY, trackH, trackY + (trackH - thumbH) * _scroll / max, thumbH);
+    }
+
+    /// <summary>막대를 누른 것이면 손잡이는 끌기 시작, 빈 칸은 그 쪽으로 한 쪽 굴리기.</summary>
+    private bool OnBarClick(int bx, int by)
+    {
+        if (Bar() is not { } bar) return false;
+        var (barX, trackY, trackH, thumbY, thumbH) = bar;
+        if (bx < barX - BarHitPad || bx >= barX + BarW + BarHitPad || by < trackY || by >= trackY + trackH) return false;
+        if (by >= thumbY && by < thumbY + thumbH) _barGrab = by - thumbY;
+        else ScrollRows(by < thumbY ? -PageRows : PageRows);
+        return true;
+    }
+
+    /// <summary>마우스가 움직였다 — 손잡이를 끄는 중이면 따라 굴린다(왼쪽 단추를 뗐으면 끝).</summary>
+    internal void OnTuningMouseMove(int by, bool leftHeld)
+    {
+        if (_barGrab is not { } grab) return;
+        if (!leftHeld || !_tuningOpen || Bar() is not { } bar) { _barGrab = null; return; }
+        var (_, trackY, trackH, _, thumbH) = bar;
+        int max = MaxScroll, room = Math.Max(1, trackH - thumbH);
+        int px = Math.Clamp((by - grab - trackY) * max / room, 0, max);
+        _scroll = (px + TuningCheckH / 2) / TuningCheckH * TuningCheckH;
+        _scroll = Math.Clamp(_scroll, 0, max);
+    }
+
+    /// <summary>왼쪽 단추를 뗐다 — 끌기 끝.</summary>
+    internal void OnTuningMouseUp() => _barGrab = null;
 
     /// <summary>지금 탭의 체크 줄 — 일반(전투 규칙 둘)과 편의성(보기·진행 편의 넷, 사용자 요청).</summary>
     internal (string Label, string Note, int Command, bool On)[] TuningChecks() => TuningChecks(_tuningTab);
@@ -175,39 +292,42 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal bool OnTuningClick(int bx, int by)
     {
         if (!_tuningOpen) return false;
-        var (x, y) = TuningOrigin();
+        SyncScroll();
+        var (x, y0) = TuningOrigin();
+        // 탭 내용은 굴린 자리로 판정한다(menu-131) — y 는 굴린 내용의 원점, y0 는 창 자리(탭 · 닫기 · 막대).
+        int y = y0 - _scroll;
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
+        bool inView = by >= y0 + ViewTop && by < y0 + ViewBottom;
         // 닫기 단추와 탭은 어느 탭에서나.
         if (!_tuningListOpen)
         {
-            if (bx >= x + TuningW - 116 && bx < x + TuningW - 16 && by >= y + TuningH - 40 && by < y + TuningH - 12) { _tuningOpen = false; return true; }
+            if (bx >= x + TuningW - 116 && bx < x + TuningW - 16 && by >= y0 + TuningH - 40 && by < y0 + TuningH - 12) { _tuningOpen = false; return true; }
             for (int t = 0; t < TabNames.Length; t++)
-                if (bx >= x + 12 + t * (TabW + 4) && bx < x + 12 + t * (TabW + 4) + TabW && by >= y + TabY && by < y + TabY + TabH) { _tuningTab = t; return true; }
+                if (bx >= x + 12 + t * (TabW + 4) && bx < x + 12 + t * (TabW + 4) + TabW && by >= y0 + TabY && by < y0 + TabY + TabH) { _tuningTab = t; SyncScroll(); return true; }
+            if (OnBarClick(bx, by)) return true;
         }
         if (_tuningTab == TabStory)
         {
             _tuningListOpen = false;
+            if (!inView) return true;
             for (int i = 0; i < TalkPauseChoices.Length; i++)
             {
                 int px = x + 16 + i * (PauseW + PauseGap);
-                if (bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
+                if (Shown(PauseY, PauseH) && bx >= px && bx < px + PauseW && by >= y + PauseY && by < y + PauseY + PauseH) { host.OnMenuCommand(MenuTalkPauseBase + i); return true; }
             }
-            var story = TuningChecks();
-            int pick = by >= y + StoryCheckY ? (by - y - StoryCheckY) / TuningCheckH : -1;
-            if (pick >= 0 && pick < story.Length && bx >= x + 12 && bx < x + TuningW - 12) host.OnMenuCommand(story[pick].Command);
+            PressCheck(x, y, bx, by);
             return true;
         }
         if (_tuningTab != TabGeneral)
         {
             // 밸런스 · 편의성 · 실험 탭 — 체크 줄뿐이다.
             _tuningListOpen = false;
-            var rows = TuningChecks();
-            int at = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
-            if (at >= 0 && at < rows.Length && bx >= x + 12 && bx < x + TuningW - 12) host.OnMenuCommand(rows[at].Command);
+            if (inView) PressCheck(x, y, bx, by);
             return true;
         }
         if (_tuningListOpen && ShowsSoulWeight)
         {
+            // 펼친 목록은 내용 칸 밖(닫기 단추 위)까지 덮어 그리므로 칸 검사 없이 받는다.
             int row = (by - boxY - TuningRowH) / TuningRowH;
             if (bx >= boxX && bx < boxX + TuningBoxW && by >= boxY + TuningRowH && row >= 0 && row < SoulWeightChoices.Length)
             {
@@ -219,55 +339,109 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             return true;
         }
         _tuningListOpen = false;
+        if (!inView) return true;
         if (ShowsVoiceVolume)
             for (int i = 0; i < VoiceChoices.Length; i++)
-                if (VoiceButton(i) is var (vx, vy, vw, vh) && bx >= vx && bx < vx + vw && by >= vy && by < vy + vh)
+                if (VoiceButton(i) is var (vx, vy, vw, vh) && Shown(TuningBoxY, vh) && bx >= vx && bx < vx + vw && by >= vy && by < vy + vh)
                 {
                     _voiceVolume = VoiceChoices[i];
                     host.SaveSettings();
                     return true;
                 }
-                else if (TalkVoiceButton(i) is var (tx, ty, tw, th) && bx >= tx && bx < tx + tw && by >= ty && by < ty + th)
+                else if (TalkVoiceButton(i) is var (tx, ty, tw, th) && Shown(TuningBoxY + TalkVoiceRowDy, th) && bx >= tx && bx < tx + tw && by >= ty && by < ty + th)
                 {
                     _talkVoiceVolume = VoiceChoices[i];
                     host.SaveSettings();
                     return true;
                 }
-        if (ShowsSoulWeight && bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
-        var checks = TuningChecks();
-        int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
-        if (line >= 0 && line < checks.Length && bx >= x + 12 && bx < x + TuningW - 12) { host.OnMenuCommand(checks[line].Command); return true; }
+        if (ShowsSoulWeight && Shown(TuningBoxY, TuningRowH) && bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
+        PressCheck(x, y, bx, by);
         return true;
     }
 
+    /// <summary>체크 줄을 누른다 — <paramref name="y"/> 는 굴린 내용의 원점. 다 보이는 줄만 받는다.</summary>
+    private void PressCheck(int x, int y, int bx, int by)
+    {
+        var rows = TuningChecks();
+        int top = ChecksTop;
+        int at = by >= y + top ? (by - y - top) / TuningCheckH : -1;
+        if (at < 0 || at >= rows.Length || bx < x + 12 || bx >= x + TuningW - 12 || !Shown(top + at * TuningCheckH, TuningCheckH - 4)) return;
+        _keyRow = at;
+        host.OnMenuCommand(rows[at].Command);
+    }
+
+    /// <summary>
+    /// 키 — Esc 닫기, ↑↓ 체크 줄 고르기(내용이 따라 굴러간다), Enter · Space 누르기, ←→ 탭, PgUp · PgDn 한 쪽, Home · End 처음 · 끝(menu-131).
+    /// </summary>
     internal void OnTuningKey(int key)
     {
-        if (key != Win32.VK_ESCAPE) return;
-        if (_tuningListOpen) _tuningListOpen = false; else _tuningOpen = false;
+        if (key == Win32.VK_ESCAPE)
+        {
+            if (_tuningListOpen) _tuningListOpen = false; else _tuningOpen = false;
+            return;
+        }
+        if (_tuningListOpen) return;
+        SyncScroll();
+        var rows = TuningChecks();
+        switch (key)
+        {
+            case Win32.VK_UP or Win32.VK_DOWN when rows.Length > 0:
+                int d = key == Win32.VK_DOWN ? 1 : -1;
+                _keyRow = _keyRow < 0 ? (d > 0 ? FirstShownRow(rows.Length) : LastShownRow(rows.Length)) : Math.Clamp(_keyRow + d, 0, rows.Length - 1);
+                ShowRow(_keyRow);
+                break;
+            case Win32.VK_UP or Win32.VK_DOWN:
+                ScrollRows(key == Win32.VK_DOWN ? 1 : -1);
+                break;
+            case Win32.VK_RETURN or Win32.VK_SPACE when _keyRow >= 0 && _keyRow < rows.Length:
+                ShowRow(_keyRow);
+                host.OnMenuCommand(rows[_keyRow].Command);
+                break;
+            case Win32.VK_LEFT or Win32.VK_RIGHT:
+                _tuningTab = (_tuningTab + (key == Win32.VK_RIGHT ? 1 : TabNames.Length - 1)) % TabNames.Length;
+                SyncScroll();
+                break;
+            case Win32.VK_PRIOR or Win32.VK_NEXT:
+                ScrollRows(key == Win32.VK_NEXT ? PageRows : -PageRows);
+                if (_keyRow >= 0) _keyRow = key == Win32.VK_NEXT ? Math.Max(_keyRow, FirstShownRow(rows.Length)) : Math.Min(_keyRow, LastShownRow(rows.Length));
+                break;
+            case Win32.VK_HOME or Win32.VK_END:
+                _scroll = key == Win32.VK_HOME ? 0 : MaxScroll;
+                break;
+        }
     }
+
+    /// <summary>지금 다 보이는 첫 · 마지막 체크 줄.</summary>
+    private int FirstShownRow(int n) { for (int i = 0; i < n; i++) if (Shown(ChecksTop + i * TuningCheckH, TuningCheckH - 4)) return i; return 0; }
+    private int LastShownRow(int n) { for (int i = n - 1; i >= 0; i--) if (Shown(ChecksTop + i * TuningCheckH, TuningCheckH - 4)) return i; return n - 1; }
 
     internal void DrawTuning()
     {
         if (!_tuningOpen || host._db is not { } db) return;
-        var (x, y) = TuningOrigin();
-        host.UiFill(x - 4, y - 4, TuningW + 8, TuningH + 8, 0x80000000);
-        host.UiFill(x, y, TuningW, TuningH, StatusScreen.PanelBg);
-        host.UiStroke(x, y, TuningW, TuningH, StatusScreen.BoxLine);
-        host.UiFill(x, y, TuningW, 28, StatusScreen.HeadBg);
-        host.UiText("모드 — 원본과 달라지는 것", x + 10, y + 6, White);
+        SyncScroll();
+        var (x, y0) = TuningOrigin();
+        host.UiFill(x - 4, y0 - 4, TuningW + 8, TuningH + 8, 0x80000000);
+        host.UiFill(x, y0, TuningW, TuningH, StatusScreen.PanelBg);
+        host.UiStroke(x, y0, TuningW, TuningH, StatusScreen.BoxLine);
+        host.UiFill(x, y0, TuningW, 28, StatusScreen.HeadBg);
+        host.UiText("모드 — 원본과 달라지는 것", x + 10, y0 + 6, White);
         for (int t = 0; t < TabNames.Length; t++)
         {
             int tx = x + 12 + t * (TabW + 4);
             bool on = t == _tuningTab;
-            host.UiFill(tx, y + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
-            host.UiStroke(tx, y + TabY, TabW, TabH, StatusScreen.BoxLine);
-            host.UiText(TabNames[t], tx + (TabW - host.UiGetText(TabNames[t], White).W) / 2, y + TabY + 4, on ? 0xFF00FFFF : White);
+            host.UiFill(tx, y0 + TabY, TabW, TabH, on ? StatusScreen.HeadBg : StatusScreen.BoxBg);
+            host.UiStroke(tx, y0 + TabY, TabW, TabH, StatusScreen.BoxLine);
+            host.UiText(TabNames[t], tx + (TabW - host.UiGetText(TabNames[t], White).W) / 2, y0 + TabY + 4, on ? 0xFF00FFFF : White);
         }
-        host.UiFill(x + 12, y + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
-        if (_tuningTab == TabStory) { DrawStoryTab(x, y); DrawChecks(x, y + StoryCheckY, TuningChecks()); DrawTuningFoot(x, y); return; }
+        host.UiFill(x + 12, y0 + TabY + TabH, TuningW - 24, 1, StatusScreen.BoxLine);
+        DrawBar();
+        // 아래부터 탭 내용 — y 는 굴린 내용의 원점(menu-131). 내용 칸(ViewTop ~ ViewBottom)을 벗어난 것은 Shown 이 거른다.
+        int y = y0 - _scroll;
+        if (_tuningTab == TabStory) { if (Shown(PauseY - 28, PauseH + 28)) DrawStoryTab(x, y); DrawChecks(x, y, StoryCheckY, TuningChecks()); DrawTuningFoot(x, y0); return; }
 
         var checks = TuningChecks();
-        DrawChecks(x, y + TuningCheckY, checks);
+        DrawChecks(x, y, TuningCheckY, checks);
+        int below = TuningCheckY + checks.Length * TuningCheckH + 8;   // 체크 줄 아래(창 기준, 굴리기 전)
 
         if (_tuningTab == TabBalance)
         {
@@ -279,43 +453,54 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 "· 엘레맨탈 파이어 — 필요 TP 가 20% 줄어든다 (레벨 1: 160 → 128 · 레벨 9 부터: 200 → 160)",
                 $"· 일반 공격 — SOUL 로 늘어나는 공격력이 {ReworkSoulPercent}% 가 된다 (일반 탭의 소울 기여도에 곱한다)",
             ];
-            for (int i = 0; i < rework.Length; i++) host.UiText(rework[i], x + 44, y + TuningCheckY + checks.Length * TuningCheckH + 8 + i * 22, DimGray, 12);
+            for (int i = 0; i < rework.Length; i++)
+                if (Shown(below + i * 22, 16)) host.UiText(rework[i], x + 44, y + below + i * 22, DimGray, 12);
         }
-        if (_tuningTab == TabMovie) DrawMovieTab(x, y + TuningCheckY + checks.Length * TuningCheckH + 8);
+        if (_tuningTab == TabMovie) DrawMovieTab(x, y, below);
         if (ShowsVoiceVolume)
         {
             int vy = y + TuningBoxY;
-            host.UiText("파트1 차례 목소리 크기", x + 16, vy + 4, White);
-            for (int i = 0; i < VoiceChoices.Length; i++)
+            if (Shown(TuningBoxY, TuningRowH))
             {
-                var (bx, by, bw, bh) = VoiceButton(i);
-                bool on = VoiceChoices[i] == _voiceVolume;
-                host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
-                host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
-                string label = $"{VoiceChoices[i]}";
-                host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+                host.UiText("파트1 차례 목소리 크기", x + 16, vy + 4, White);
+                for (int i = 0; i < VoiceChoices.Length; i++)
+                {
+                    var (bx, by, bw, bh) = VoiceButton(i);
+                    bool on = VoiceChoices[i] == _voiceVolume;
+                    host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
+                    host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
+                    string label = $"{VoiceChoices[i]}";
+                    host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+                }
             }
-            host.UiText("내 편 인물 차례에 나오는 성우 목소리 크기(%) — 효과음 크기에 곱한다", x + 16, vy + 32, DimGray, 12);
+            if (Shown(TuningBoxY + 32, 16)) host.UiText("내 편 인물 차례에 나오는 성우 목소리 크기(%) — 효과음 크기에 곱한다", x + 16, vy + 32, DimGray, 12);
             int ty = vy + TalkVoiceRowDy;
-            host.UiText("파트1 대사 목소리 크기", x + 16, ty + 4, White);
-            for (int i = 0; i < VoiceChoices.Length; i++)
+            if (Shown(TuningBoxY + TalkVoiceRowDy, TuningRowH))
             {
-                var (bx, by, bw, bh) = TalkVoiceButton(i);
-                bool on = VoiceChoices[i] == _talkVoiceVolume;
-                host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
-                host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
-                string label = $"{VoiceChoices[i]}";
-                host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+                host.UiText("파트1 대사 목소리 크기", x + 16, ty + 4, White);
+                for (int i = 0; i < VoiceChoices.Length; i++)
+                {
+                    var (bx, by, bw, bh) = TalkVoiceButton(i);
+                    bool on = VoiceChoices[i] == _talkVoiceVolume;
+                    host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
+                    host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
+                    string label = $"{VoiceChoices[i]}";
+                    host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+                }
             }
-            host.UiText("이야기 장면 대사의 성우 목소리 크기(%) — 원본처럼 효과음 크기와 따로 정한다", x + 16, ty + 32, DimGray, 12);
+            if (Shown(TuningBoxY + TalkVoiceRowDy + 32, 16)) host.UiText("이야기 장면 대사의 성우 목소리 크기(%) — 원본처럼 효과음 크기와 따로 정한다", x + 16, ty + 32, DimGray, 12);
         }
-        if (!ShowsSoulWeight) { DrawTuningFoot(x, y); return; }
+        if (!ShowsSoulWeight) { DrawTuningFoot(x, y0); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;
-        host.UiText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
-        host.UiFill(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
-        host.UiStroke(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxLine);
-        host.UiText(SoulWeightLabel(_soulWeight), boxX + 8, boxY + 4, White);
-        host.UiText("▼", boxX + TuningBoxW - 18, boxY + 4, DimGray);
+        bool boxShown = Shown(TuningBoxY, TuningRowH);
+        if (boxShown)
+        {
+            host.UiText("일반 공격 소울 기여도", x + 16, boxY + 4, White);
+            host.UiFill(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxBg);
+            host.UiStroke(boxX, boxY, TuningBoxW, TuningRowH - 2, StatusScreen.BoxLine);
+            host.UiText(SoulWeightLabel(_soulWeight), boxX + 8, boxY + 4, White);
+            host.UiText("▼", boxX + TuningBoxW - 18, boxY + 4, DimGray);
+        }
 
         // 설명 — 지금 값으로 SOUL 0·40·150 일 때 일반 공격 배율이 어떻게 되는지.
         double Factor(int soul) => db.N(85) == 0 ? 0 : (double)(BasicAttackSoul(soul) + db.N(2)) * db.N(42) / db.N(85);
@@ -327,12 +512,13 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             $"                         SOUL 150: ×{Original(150):0.0} → ×{Factor(150):0.0}",
             "어빌리티는 원본대로라 SOUL 을 모아 쓰는 쪽이 나아진다. 적의 일반 공격에도 걸린다.",
         ];
-        for (int i = 0; i < lines.Length; i++) host.UiText(lines[i], x + 16, boxY + 32 + i * 21, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
+        for (int i = 0; i < lines.Length; i++)
+            if (Shown(TuningBoxY + 32 + i * 21, 16)) host.UiText(lines[i], x + 16, boxY + 32 + i * 21, i is 1 or 2 ? 0xFFFFE070 : DimGray, 12);
 
-        DrawTuningFoot(x, y);
+        DrawTuningFoot(x, y0);
 
-        // 펼친 목록은 맨 위에
-        if (_tuningListOpen)
+        // 펼친 목록은 맨 위에 — 내용 칸 밖(닫기 단추 위)까지 덮는 띄움 창이라 자르지 않는다.
+        if (_tuningListOpen && boxShown)
             for (int i = 0; i < SoulWeightChoices.Length; i++)
             {
                 int ry = boxY + TuningRowH * (i + 1);
@@ -343,6 +529,16 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             }
     }
 
+    /// <summary>스크롤 막대 — 굴릴 것이 있는 탭만(menu-131). 끄는 중이거나 마우스가 올라가면 손잡이를 밝힌다.</summary>
+    private void DrawBar()
+    {
+        if (Bar() is not { } bar) return;
+        var (bx, trackY, trackH, thumbY, thumbH) = bar;
+        host.UiFill(bx, trackY, BarW, trackH, StatusScreen.BoxBg);
+        bool hot = _barGrab != null || MouseInBoard(bx - BarHitPad, thumbY, BarW + 2 * BarHitPad, thumbH);
+        host.UiFill(bx, thumbY, BarW, thumbH, hot ? 0xFF6A8ACA : 0xFF4A6A9A);
+    }
+
     internal void DrawTuningFoot(int x, int y)
     {
         int by = y + TuningH - 40;
@@ -351,14 +547,15 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         host.UiText("Esc: 닫기", x + 16, by + 7, DimGray);
     }
 
-    /// <summary>스토리 탭 — 대사 사이 멈춤(설정 메뉴와 같은 값)과 대사 첫 클릭 방식.</summary>
-    /// <summary>체크 줄들을 <paramref name="top"/> 부터 한 줄씩 그린다.</summary>
-    private void DrawChecks(int x, int top, (string Label, string Note, int Command, bool On)[] checks)
+    /// <summary>체크 줄들을 그린다 — <paramref name="y"/> 는 굴린 내용의 원점, <paramref name="top"/> 은 첫 줄(창 기준). 내용 칸에 다 드는 줄만.</summary>
+    private void DrawChecks(int x, int y, int top, (string Label, string Note, int Command, bool On)[] checks)
     {
         for (int i = 0; i < checks.Length; i++)
         {
-            int cy = top + i * TuningCheckH;
-            if (!_tuningListOpen && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH)) host.UiFill(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
+            if (!Shown(top + i * TuningCheckH, TuningCheckH - 4)) continue;
+            int cy = y + top + i * TuningCheckH;
+            bool hover = !_tuningListOpen && _barGrab == null && MouseInBoard(x + 12, cy, TuningW - 24, TuningCheckH);
+            if (hover || (i == _keyRow && !host.Pad.Active)) host.UiFill(x + 12, cy, TuningW - 24, TuningCheckH - 4, 0x402A4A8A);
             host.UiFill(x + 18, cy + 6, 16, 16, StatusScreen.BoxBg);
             host.UiStroke(x + 18, cy + 6, 16, 16, StatusScreen.BoxLine);
             if (checks[i].On) host.UiText("✔", x + 20, cy + 5, 0xFF00FFFF, 12);
@@ -372,7 +569,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     private (string Text, uint Color)[] _movieLines = [];
 
     /// <summary>엔딩 영상 탭 — 파트1 엔딩 영상(<see cref="Part1EndingMovie"/>)이 있으면 그 자리, 없으면 찾는 곳과 둘 파일을 적는다(사용자 요청).</summary>
-    private void DrawMovieTab(int x, int top)
+    private void DrawMovieTab(int x, int y, int top)
     {
         if (host._lastTime - _movieLinesAt > 1 || host._lastTime < _movieLinesAt)
         {
@@ -380,9 +577,10 @@ internal sealed unsafe class TuningScreen(GameWindow host)
             _movieLines = Part1EndingMovie.Status();
         }
         for (int i = 0; i < _movieLines.Length; i++)
-            host.UiText(_movieLines[i].Text, x + 16, top + i * 22, _movieLines[i].Color == 0 ? DimGray : _movieLines[i].Color, i == 0 ? 13f : 12f);
+            if (Shown(top + i * 22, 16)) host.UiText(_movieLines[i].Text, x + 16, y + top + i * 22, _movieLines[i].Color == 0 ? DimGray : _movieLines[i].Color, i == 0 ? 13f : 12f);
     }
 
+    /// <summary>스토리 탭 — 대사 사이 멈춤(설정 메뉴와 같은 값). <paramref name="y"/> 는 굴린 내용의 원점.</summary>
     internal void DrawStoryTab(int x, int y)
     {
         host.UiText("대사 사이 멈춤", x + 16, y + PauseY - 28, White);

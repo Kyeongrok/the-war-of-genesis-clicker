@@ -34,7 +34,8 @@ internal sealed partial class GamePad
         var tuning = host.TuningScr;
         if (tuning._tuningOpen)
         {
-            var (x, y) = tuning.TuningOrigin();
+            var (x, y0) = tuning.TuningOrigin();
+            int y = y0 - tuning._scroll;   // 탭 내용은 굴린 자리 — 내용 칸에 다 드는 것만 고른다(menu-131)
             int boxX = x + TuningScreen.TuningBoxX, boxY = y + tuning.TuningBoxY;
             if (tuning._tuningListOpen)
             {
@@ -43,23 +44,28 @@ internal sealed partial class GamePad
                 return list;
             }
             for (int t = 0; t < TuningScreen.TabNames.Length; t++)
-                list.Add((x + 12 + t * (TuningScreen.TabW + 4), y + TuningScreen.TabY, TuningScreen.TabW, TuningScreen.TabH));
+                list.Add((x + 12 + t * (TuningScreen.TabW + 4), y0 + TuningScreen.TabY, TuningScreen.TabW, TuningScreen.TabH));
+            int checksTop = TuningScreen.TuningCheckY;
             if (tuning._tuningTab == TuningScreen.TabStory)
-                for (int i = 0; i < GameWindow.TalkPauseChoices.Length; i++)
-                    list.Add((x + 16 + i * (TuningScreen.PauseW + TuningScreen.PauseGap), y + TuningScreen.PauseY, TuningScreen.PauseW, TuningScreen.PauseH));
-            else
             {
-                int rows = tuning.TuningChecks().Length;
-                for (int i = 0; i < rows; i++)
-                    list.Add((x + 12, y + TuningScreen.TuningCheckY + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
-                if (tuning.ShowsVoiceVolume)
-                {
-                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.VoiceButton(i));
-                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.TalkVoiceButton(i));
-                }
-                if (tuning.ShowsSoulWeight) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
+                if (tuning.Shown(TuningScreen.PauseY, TuningScreen.PauseH))
+                    for (int i = 0; i < GameWindow.TalkPauseChoices.Length; i++)
+                        list.Add((x + 16 + i * (TuningScreen.PauseW + TuningScreen.PauseGap), y + TuningScreen.PauseY, TuningScreen.PauseW, TuningScreen.PauseH));
+                checksTop = TuningScreen.StoryCheckY;   // 스토리 탭의 체크 줄(이스터에그)도 — 전에는 멈춤 단추만 골랐다
             }
-            list.Add((x + TuningScreen.TuningW - 116, y + TuningScreen.TuningH - 40, 100, 28));   // 닫기
+            int rows = tuning.TuningChecks().Length;
+            for (int i = 0; i < rows; i++)
+                if (tuning.Shown(checksTop + i * TuningScreen.TuningCheckH, TuningScreen.TuningCheckH - 4))
+                    list.Add((x + 12, y + checksTop + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
+            if (tuning.ShowsVoiceVolume)
+            {
+                if (tuning.Shown(tuning.TuningBoxY, TuningScreen.TuningRowH))
+                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.VoiceButton(i));
+                if (tuning.Shown(tuning.TuningBoxY + TuningScreen.TalkVoiceRowDy, TuningScreen.TuningRowH))
+                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.TalkVoiceButton(i));
+            }
+            if (tuning.ShowsSoulWeight && tuning.Shown(tuning.TuningBoxY, TuningScreen.TuningRowH)) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
+            list.Add((x + TuningScreen.TuningW - 116, y0 + TuningScreen.TuningH - 40, 100, 28));   // 닫기
             return list;
         }
         var sys = host.Sys;
@@ -473,6 +479,8 @@ internal sealed partial class GamePad
             if (aside <= along * 2) { if (score < bestScore) { bestScore = score; best = i; } }
             else if (score < asideScore) { asideScore = score; aside_ = i; }
         }
+        // 모드 창 — 내용의 끝 줄에서 탭 · 닫기로 넘어가기 전에 그 쪽에 남은 줄을 먼저 굴려 들인다(menu-131). 커서 밑으로 다음 줄이 온다.
+        if (dy != 0 && TuningContent(cur, targets.Count) && !TuningContent(best, targets.Count) && host.TuningScr.ScrollRows(dy)) return true;
         if (best >= 0) MoveCursorTo(targets[best].X + targets[best].W / 2, targets[best].Y + targets[best].H / 2);
         // 시스템 메뉴는 한 줄짜리 목록이라 끝에서 반대쪽 끝으로 돈다 — 맨 위 MISSION 에서 ↑ 는 EXIT GAME, 맨 아래에서 ↓ 는 맨 위(사용자 요청 menu-66).
         else if (dy != 0 && cur >= 0 && host.Sys._systemMenu && targets.Count == host.Sys.MenuItems.Length)
@@ -489,9 +497,15 @@ internal sealed partial class GamePad
         return true;
     }
 
+    /// <summary>모드 창의 탭 내용(탭 뒤 ~ 닫기 앞) 자리인가 — 자리 목록은 「탭 → 내용 → 닫기」 차례다.</summary>
+    private bool TuningContent(int i, int count) =>
+        host.TuningScr._tuningOpen && !host.TuningScr._tuningListOpen && !host.TimedEditScr._open
+        && i >= TuningScreen.TabNames.Length && i < count - 1;
+
     /// <summary>지금 창의 목록이 그 쪽(위 −1 · 아래 +1)으로 더 굴러갈 수 있나 — 모르는 창이면 false.</summary>
     private bool CanScroll(int dy)
     {
+        if (host.TuningScr._tuningOpen && !host.TimedEditScr._open) return !host.TuningScr._tuningListOpen && host.TuningScr.CanScroll(dy);
         var slots = host.SlotsScr;
         if (slots.SlotsOpen) return dy < 0 ? slots._slotsTop > 0 : slots._slotsTop < slots.SlotRows - SlotsScreen.SlotsVisible;
         var st = host.StatusScr;

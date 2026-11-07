@@ -866,6 +866,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_KEYUP:
                 Btl._heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            // 모드 창 탭 내용을 굴린다(menu-131) — 모드 창은 클릭도 뒤 화면보다 먼저 받는다. 그 위에 그리는 도구 창이 떠 있으면 그쪽이 받는다.
+            case Win32.WM_MOUSEWHEEL when TuningScr._tuningOpen && !NotesScr.Open && !SettingsScr._open && !StatsScr._open && !SkillBookScr._open
+                                          && !ItemBookScr._open && !LegionEditScr._open && !CharEditScr._open && _partyTable is not { _open: true }:
+                TuningScr.OnTuningWheel((short)(((long)wParam >> 16) & 0xFFFF) / 120);
+                return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when Part1TitleScr._open && Part1TitleScr.Timeline._open && !Part1TitleScr.Chapter._open:
                 Part1TitleScr.Timeline.Scroll(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 파트1 연대표를 굴린다
                 return IntPtr.Zero;
@@ -954,6 +959,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             }
             case Win32.WM_LBUTTONUP:
+                TuningScr.OnTuningMouseUp();   // 모드 창 스크롤 막대 끌기 끝(menu-131)
                 if (DragScroll.OnUp() is var (ux, uy)) OnClick(ux, uy);   // 끌지 않았으면 누른 자리의 클릭
                 return IntPtr.Zero;
             case Win32.WM_RBUTTONUP:
@@ -977,6 +983,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 }
                 var (bx, by) = BoardPoint((short)((long)lParam & 0xFFFF), (short)(((long)lParam >> 16) & 0xFFFF));
                 _mouse = (bx, by);
+                if (msg == Win32.WM_MOUSEMOVE) TuningScr.OnTuningMouseMove(by, ((long)wParam & Win32.MK_LBUTTON) != 0);   // 모드 창 스크롤 막대 끌기(menu-131)
                 if (Btl._mouseView != (bx - _camX, by - _camY)) Btl._edgeBlocked = false;   // 마우스가 정말 움직였으면 가장자리 스크롤을 다시 받는다
                 Btl._mouseView = (bx - _camX, by - _camY);   // 가장자리 스크롤은 화면 자리로 본다(Camera.cs)
                 Mos.UpdateMosesHover(bx, by);
