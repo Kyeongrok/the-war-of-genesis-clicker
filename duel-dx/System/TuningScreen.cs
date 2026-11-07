@@ -215,7 +215,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     internal List<string> EnabledMods()
     {
         var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab, TabMovie }.SelectMany(TuningChecks)
-            .Where(c => c.On && c.Command != MenuSendStats).Select(c => c.Label).ToList();
+            .Where(c => c.On && c.Command is not (MenuSendStats or MenuMosesWarpMovie)).Select(c => c.Label).ToList();
+        if (!host._mosesWarpMovie) on.Add("모세스 워프 영상 끔");   // 기본 켬(원본대로) — 끈 것이 원본과 다르다
         if (_soulWeight != 100) on.Add($"일반 공격 소울 기여도 {SoulWeightLabel(_soulWeight)}");
         if (host._talkPauseSeconds >= 0) on.Add($"대사 사이 멈춤 {GameWindow.TalkPauseLabel(host._talkPauseSeconds)}");
         return on;
@@ -232,6 +233,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         // 엔딩 영상 탭 — 파트2 오프닝 켜기와, 파트1 엔딩 영상이 있는지(아래 글, DrawMovieTab).
         ("파트2 오프닝 영상", CutscenePlayer.FindOriginal(TitleScreen.OpeningMovie) != null ? "게임을 켤 때 타이틀 앞에 원본 오프닝(원본 폴더에서 바로 튼다)" : "원본 폴더에 Mov 0008 이 없어 나오지 않는다", MenuOpeningMovie, host._openingMovie),
+        // 모세스 워프 영상 — 원본은 항성계를 옮길 때마다 떠나는 · 오는 영상을 튼다(버그 리포트 #70). 기본 켬, 끄면 영상 없이 넘어간다.
+        ("모세스 워프 영상", CutscenePlayer.FindOriginal(MosesScene.WarpLeaveMovies[0]) != null ? "항성계를 옮길 때 원본의 워프 영상을 튼다" : "원본 폴더에 워프 영상(Mov 0016~0031)이 없다", MenuMosesWarpMovie, host._mosesWarpMovie),
     ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.

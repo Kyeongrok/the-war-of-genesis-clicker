@@ -181,8 +181,10 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
 
     /// <summary>
     /// 다른 항성계로 옮긴다 — 원본(<c>0x100ff49e</c>~<c>0x100ff5ed</c>): Snd 565 → 큐 10100(<b>100틱 대기</b>) → 떠나는 영상·오는 영상
-    /// → 효과 4 → 큐 20566 = <b>Snd 566</b>(DLL 에서 566 을 넣는 곳은 여기 하나, <c>0x100ff5d7</c>). 영상은 생략하고(원본차이 F9)
-    /// 100틱 입력을 막은 뒤 크로스페이드로 바꾼다. (챕터 +0x2ec4 가 서 있으면 565 대신 590 이지만 그 표시는 데모에 없다.)
+    /// → 효과 4 → 큐 20566 = <b>Snd 566</b>(DLL 에서 566 을 넣는 곳은 여기 하나, <c>0x100ff5d7</c>). 100틱 입력을 막은 뒤 두 영상을 원본 폴더의
+    /// <c>Mov</c> 에서 바로 틀고(<see cref="WarpLeaveMovies"/> · <see cref="WarpArriveMovies"/>, 버그 리포트 #70), 영상의 마지막 화면에서 크로스페이드한다.
+    /// 모드 &gt; 엔딩 영상 &gt; 모세스 워프 영상을 끄거나 원본 폴더에 영상이 없으면 전처럼 영상 없이 크로스페이드만 한다.
+    /// (챕터 +0x2ec4 가 서 있으면 565 대신 590 이지만 그 표시는 데모에 없다.)
     /// </summary>
     internal void MosesSwitchSystem(int system)
     {
@@ -191,15 +193,67 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         _mosesSystemSwitch = (system, host._lastTime + 100 / TicksPerSecond);
     }
 
+    /// <summary>
+    /// 떠나는 영상 · 오는 영상 — 원본 <c>0x100ff4ab</c>~<c>0x100ff514</c> 이 스택에 int16 여덟 칸 두 줄을 깔고, 성계 자료 <c>+0x40</c>(배경 Bgr 번호)
+    /// − 65 로 고른다(<c>0x100ff564</c> <c>[esp+bg*2−0x42]</c> · <c>0x100ff5af</c> <c>[esp+bg*2−0x52]</c>). 떠나는 것은 옮기기 전 성계, 오는 것은 새 성계의 배경으로.
+    /// 큐에는 음수로 넣어 <c>Mov\%04d.mov</c> 로 연다. (ba18-mosesnav N8 은 −67 이라 적었으나 스택 자리를 다시 세면 −65 다.)
+    /// </summary>
+    internal static readonly int[] WarpLeaveMovies = [26, 24, 27, 31, 25, 28, 29, 30], WarpArriveMovies = [18, 16, 19, 23, 17, 20, 21, 22];
+
+    internal const int WarpMovieBackgroundBase = 65;
+
+    /// <summary>워프 영상을 걸어 두고 끝나기를 기다리는 중 — 끝나면 효과 4 와 Snd 566.</summary>
+    internal bool _warpMovies;
+
+    /// <summary>두 워프 영상을 건다 — 설정이 꺼졌거나 배경이 표 밖이거나 원본 폴더에 하나라도 없으면 false(반만 나오면 이상하다).</summary>
+    private bool StartWarpMovies(int fromBackground, int toBackground)
+    {
+        if (!host._mosesWarpMovie) return false;
+        int a = fromBackground - WarpMovieBackgroundBase, b = toBackground - WarpMovieBackgroundBase;
+        if ((uint)a >= WarpLeaveMovies.Length || (uint)b >= WarpArriveMovies.Length) return false;
+        int leave = WarpLeaveMovies[a], arrive = WarpArriveMovies[b];
+        if (CutscenePlayer.FindOriginal(leave) == null || CutscenePlayer.FindOriginal(arrive) == null)
+        {
+            GameWindow.TestRunTrace($"warp movie missing {leave:D4}/{arrive:D4}");   // 시험 전용 줄
+            return false;
+        }
+        host._mixer.StopEffect(WarpVoiceTag);   // 안내 음성이 남아 있으면 영상 소리와 겹치지 않게
+        host.Cut.StartMovie(leave, originalOnly: true);
+        host.Cut.StartMovie(arrive, originalOnly: true);
+        GameWindow.TestRunTrace($"warp movie {leave:D4} -> {arrive:D4} (bg {fromBackground} -> {toBackground})");   // 시험 전용 줄
+        return true;
+    }
+
     /// <summary>기다리던 항성계 옮기기 — 100틱이 지나면 새 성계를 차린다. 방금 그린 화면에서 크로스페이드하려고 DrawMoses 끝에서 부른다.</summary>
     internal void StepMosesSystemSwitch()
     {
-        if (_mosesSystemSwitch is not { } sw || host._lastTime < sw.At) return;
-        _mosesSystemSwitch = null;
+        if (_mosesSystemSwitch is not { } sw) return;
+        if (_warpMovies)
+        {
+            // 영상이 다 돌았다(넘겼다) — 마지막 컷을 다시 깔고 거기서 새 성계로 효과 4(원본은 영상이 백버퍼에 남긴 화면에서 섞는다).
+            if (host.Cut.Playing) return;
+            _warpMovies = false;
+            _mosesSystemSwitch = null;
+            if (host.Cut.PaintLastFrame()) GameWindow.TestRunTrace("warp movie done — fade from last frame");   // 시험 전용 줄
+            StartFade();
+            host._pendingSounds.Add((host._lastTime + MosesFadeTicks / TicksPerSecond, 566));   // 효과 4 뒤 큐 20566
+            return;
+        }
+        if (host._lastTime < sw.At) return;
+        int fromBackground = MosesSystem()?.Background ?? 70;
         _mosesSystem = sw.System;
         _mosesHover = -1;
+        int toBackground = MosesSystem()?.Background ?? 70;
+        if (StartWarpMovies(fromBackground, toBackground))
+        {
+            // 원본처럼 영상 사이에 성계를 바꿔 둔다(0x100ff574~0x100ff591) — 영상이 도는 동안 게임 시계가 서서 입력도 영상이 받는다.
+            _warpMovies = true;
+            ShowMosesBackground(toBackground);
+            return;
+        }
+        _mosesSystemSwitch = null;
         StartFade();
-        ShowMosesBackground(MosesSystem()?.Background ?? 70);
+        ShowMosesBackground(toBackground);
         host._pendingSounds.Add((host._lastTime + MosesFadeTicks / TicksPerSecond, 566));   // 효과 4 뒤 큐 20566
     }
 
@@ -418,6 +472,7 @@ internal sealed unsafe partial class MosesScene(GameWindow host)
         if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) host.ResizeBoard(TitleBoardCols, TitleBoardRows);
         _mosesDockHover = -1;
         _mosesSystemSwitch = null;
+        _warpMovies = false;
         // 도크 아이콘은 장면을 만들 때(전투·필드에서 돌아올 때마다) 한 번 미끄러져 들어온다 — 화면이 밝아지는 15틱 뒤부터(0x100fe4e4).
         _mosesSceneAt = host._lastTime + MosesFadeTicks / TicksPerSecond;
         _mosesSceneSeed = host.Btl._ailmentRandom.Next();

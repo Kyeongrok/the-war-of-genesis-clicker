@@ -362,6 +362,25 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
             host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
             return;
         }
+        PaintFrame();
+        host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
+    }
+
+    /// <summary>
+    /// 마지막으로 보인 컷을 판에 한 번 더 깐다 — 모세스 워프 영상(<see cref="MosesScene.StepMosesSystemSwitch"/>)이 끝난 뒤 원본 효과 4 가
+    /// 영상의 마지막 화면(백버퍼)에서 새 성계로 크로스페이드하므로, 그 「전 화면」을 떠 두려고 쓴다. 보인 컷이 없으면 false.
+    /// </summary>
+    internal bool PaintLastFrame()
+    {
+        if (_shown < 0 || _frameW <= 0 || _frame.Length != _frameW * _frameH) return false;
+        host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
+        PaintFrame();
+        return true;
+    }
+
+    private void PaintFrame()
+    {
+        int vw = host.ViewWidth, vh = host.ViewHeight;
         var clip = (W: _frameW, H: _frameH);
         // 화면에 다 들어가는 가장 큰 크기(가까운 점 뽑기).
         int w = Math.Min(vw, vh * clip.W / clip.H), h = w * clip.H / clip.W;
@@ -378,6 +397,5 @@ internal sealed unsafe class CutscenePlayer(GameWindow host)
                 host._fb[by * host.BoardWidth + bx] = _frame[sy + x * clip.W / w] | 0xFF000000;
             }
         }
-        host.UiText("클릭 · Esc: 넘기기", host._camX + vw - 130, host._camY + vh - 22, 0x80FFFFFF, 11);
     }
 }
