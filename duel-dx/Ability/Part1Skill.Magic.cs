@@ -191,13 +191,14 @@ internal sealed partial class Part1Skill
         Clone(132, a1, [(0, hx, hy)]);
         Clone(137, a2, [(0, hx, hy)]);
         var vis = targets.Where(t => Visible(host.Btl.UnitFoot(host._units[t]))).ToList();
-        if (vis.Count > 0) Sound(2085, a3 - 2);
         int markEnd = a3;
         for (int k = 0; k < vis.Count; k++)
         {
             var target = host._units[vis[k]];
             var (tx, ty) = host.Btl.UnitFoot(target);
             int at = a3 + 30 * (k + 1) + 2;
+            // 원본은 보이는 대상마다 Snd 2085 를 A2 끝 + 30(k+1) 에 낸다(0x100540b5: 트리거 A2, 0x10078f90 지연 = 30(k+1)) — 땅이 터질 때마다 소리가 난다(버그 리포트 #65).
+            Sound(2085, a3 - 2 + 30 * (k + 1));
             Put(124, 0, at, tx, ty);
             Put(124, 18, at, tx, ty);
             Later(at, () => Act(target, 5, 2, 5));

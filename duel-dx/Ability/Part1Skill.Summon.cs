@@ -79,7 +79,9 @@ internal sealed partial class Part1Skill
         var user = _user;
         var (left, top, right, bottom) = View;
         Sound(2079, 0);
-        Act(user, 30, ObsMotionTable.ActionStand);
+        // 원본은 정면으로 동작 30(검을 하늘로 치켜든다)을 걸고 바로 잠근다(0x1005cbfd → 0x1009a210(−1)) — 번개가 떨어지고 기술이 끝날 때까지 붙든다(버그 리포트 #64-2).
+        user.Facing = Facing.Down;
+        Act(user, 30, ObsMotionTable.ActionStand, repeat: 0);
         Rain(800, 7);
         // 번쩍임 — 틱마다 번쩍이고 있지 않으면 1/20 로 5~8틱(0x10087e00). 397틱에 한 번 더.
         for (int t = 0; t < 100; t++)

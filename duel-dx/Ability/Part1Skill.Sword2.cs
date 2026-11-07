@@ -176,7 +176,8 @@ internal sealed partial class Part1Skill
         var user = _user;
         Sound(1907, 0);
         user.Facing = Facing.Down;
-        Act(user, 31, 5);
+        // 원본은 동작 31 을 걸고 바로 잠근다(0x1006b00d → 0x1009a210(−1)) — 기술이 끝날 때까지 그 자세를 붙든다(버그 리포트 #64-2).
+        Act(user, 31, 5, repeat: 0);
         int last = S2Aura(10, 96);
         (double X, double Y, double Z) low = (hx, hy, 120), high = (hx, hy, 200), cur = high;
         var rise = S2Fly(low, high, 1, 1.1);
@@ -243,7 +244,8 @@ internal sealed partial class Part1Skill
         var user = _user;
         const int Stage = 2;   // 단계 0 · 1 — 닻 하나가 끝날 때까지(두 틱)
         host.Btl.CenterOn(aim.X, aim.Y);
-        Later(Stage + 1, () => { user.Facing = Facing.Down; Act(user, 24, 5); });
+        // 단계 3 — 동작 24 를 걸고 잠근다(0x1005fa55 → 0x1009a210(−1)): 빛기둥이 다 내리꽂힐 때까지 시전 자세를 붙든다(버그 리포트 #64-2).
+        Later(Stage + 1, () => { user.Facing = Facing.Down; Act(user, 24, 5, repeat: 0); });
         int last = S2Aura(Stage + 10, 192);
         int top = (int)aim.Y - host.ViewHeight / 2;
         for (int i = 0; i < targets.Count; i++)
@@ -415,7 +417,8 @@ internal sealed partial class Part1Skill
     {
         var user = _user;
         user.Facing = Facing.Down;
-        Act(user, 24, 5);
+        // 원본은 동작 24 를 걸고 바로 잠근다(0x1006a278 → 0x1009a210(−1)) — 기술이 끝날 때까지 붙든다(버그 리포트 #64-2).
+        Act(user, 24, 5, repeat: 0);
         int last = S2Aura(10, 96);
         for (int i = 0; i < targets.Count; i++)
         {
