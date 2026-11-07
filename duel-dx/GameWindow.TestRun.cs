@@ -25,6 +25,25 @@ internal sealed unsafe partial class GameWindow
 
     internal double _testRunStatAt;
 
+    /// <summary>
+    /// 시험 전용: <c>DUELDX_SNAPBURST=시작초,끝초[,간격초]</c> — 그 사이 그린 틀을 간격마다 <c>%TEMP%\dueldx_burst\NNNN_초.png</c> 로 남긴다
+    /// (장면 사이 넘어가는 틀을 화면 밖에서 차례로 보려고 — 버그 리포트 #57). 변수가 없으면 아무것도 안 한다.
+    /// </summary>
+    private static readonly double[]? SnapBurstSpec =
+        Environment.GetEnvironmentVariable("DUELDX_SNAPBURST")?.Split(',').Select(s => double.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : -1).ToArray() is [>= 0, > 0, ..] spec ? spec : null;
+    private double _snapBurstNext = -1;
+    private int _snapBurstNo;
+
+    internal void SnapBurst()
+    {
+        if (SnapBurstSpec is not { } spec || _lastTime < spec[0] || _lastTime > spec[1] || _lastTime < _snapBurstNext) return;
+        _snapBurstNext = _lastTime + (spec.Length > 2 && spec[2] > 0 ? spec[2] : 0);
+        string dir = Path.Combine(Path.GetTempPath(), "dueldx_burst");
+        Directory.CreateDirectory(dir);
+        SaveSnapshot();
+        File.Copy(Path.Combine(Path.GetTempPath(), "dueldx_snapshot.png"), Path.Combine(dir, $"{_snapBurstNo++:D4}_{_lastTime:F2}.png"), true);
+    }
+
     /// <summary>시험 전용: 대사를 눌러 넘길지(DUELDX_TESTSKIP=2)와 다음에 누를 때.</summary>
     internal static readonly bool TestClick = Environment.GetEnvironmentVariable("DUELDX_TESTSKIP") == "2";
     internal double _testClickAt;

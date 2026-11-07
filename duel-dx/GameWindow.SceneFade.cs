@@ -38,8 +38,12 @@ internal sealed unsafe partial class GameWindow
         if (_fadeOutStart >= 0) return;
         _afterFadeOut = next;
         _fadeOutKeepMusic = keepMusic;
+        // 밝아지던 중이면 <b>그 밝기에서</b> 어두워진다 — 전에는 페이드인을 끊고 31(다 밝음)부터 어두워져, 전투를 이기고 챕터로 돌아오자마자
+        // 남은 행동(2 [1] → 502)이 다음 전투로 떠날 때 반쯤 밝던 챕터 지도가 한 틀에 확 밝아졌다가 꺼졌다(버그 리포트 #57, Chp 0018 Btl 0079 → 0080).
+        // 원본 장면 4(0x100af640)는 밝아지는 고리(+0x13ca8 += 4, 0x100af7ad)를 다 돈 뒤에야 사건을 이어 돌려, 중간에 다 밝은 화면으로 튀지 않는다.
+        int level = _fadeInStart >= 0 ? SceneFadeLevel() : 31;
         _fadeInStart = -1;
-        _fadeOutStart = _lastTime;
+        _fadeOutStart = _lastTime - (31 - level) / 2.0 / TicksPerSecond;
     }
 
     /// <summary>새 장면이 섰다 — 검정에서 밝아진다(타이틀·연대표·기록은 15틀, 세기 31 − 2i).</summary>
@@ -119,8 +123,12 @@ internal sealed unsafe partial class GameWindow
     internal void DrawSceneFade()
     {
         // 필드는 제 화면 전환(900)이 있다. 타이틀·연대표·기록·모세스 위에도 덮는다(Compose 맨 끝).
-        if (!SceneFading || (FieldOpen && _afterFadeOut == null)) return;
-        int k = SceneFadeLevel();
+        // 판을 새 전투 맵으로 갈고 아직 첫 전투 틀(StepSceneFade — 시작 카메라 · 페이드인)이 안 돈 사이에 그리는 틀은 검게 둔다. 그리기가 갱신보다 먼저 돌아
+        // 새 전투가 옛 카메라 자리에서 다 밝은 채로 한 틀 보였고, 그 틀에 그림을 처음 푸느라 오래 걸리면 1~2초 남았다(버그 리포트 #57).
+        // 원본 0x10061ad0 은 검정에서 밝아지며 시작한다.
+        bool introBlack = _battleIntroPending && BoardIsMap && !TitleScr._titleOpen && !Mos._mosesOpen && !FieldOpen && !EpisodesScr._episodesOpen && !RecordsScr._recordsOpen;
+        if (!introBlack && (!SceneFading || (FieldOpen && _afterFadeOut == null))) return;
+        int k = introBlack ? 0 : SceneFadeLevel();
         if (k >= 31) return;
         Hi.Dim(k, 31);   // 새 UI 층에 이미 그린 창(전투 HUD …)도 함께 어두워진다 — 뒤에 그리는 메뉴 막대 창들은 그대로다
         for (int y = _camY; y < _camY + ViewHeight && y < BoardHeight; y++)

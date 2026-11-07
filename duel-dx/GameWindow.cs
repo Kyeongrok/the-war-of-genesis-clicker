@@ -1441,7 +1441,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
     internal void Render()
     {
         UpdateFullscreenMenu();
-        if (!PerfLog) { Compose(); Upload(); Draw(); return; }
+        if (!PerfLog) { Compose(); SnapBurst(); Upload(); Draw(); return; }
         _perf.Restart(); Compose(); double c = _perf.Elapsed.TotalMilliseconds;
         Upload(); double u = _perf.Elapsed.TotalMilliseconds;
         Draw(); double d = _perf.Elapsed.TotalMilliseconds;

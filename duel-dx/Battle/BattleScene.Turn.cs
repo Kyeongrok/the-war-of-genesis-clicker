@@ -90,6 +90,9 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>시험 전용: DUELDX_WIN=chests 가 상자를 연 차례.</summary>
     private int _chestTestTurn = -1;
 
+    /// <summary>시험 전용 DUELDX_WIN=once 를 이미 했나.</summary>
+    private bool _winOnceDone;
+
     /// <summary>DUELDX_TRACE=1 이면 동작 재생을 <c>%TEMP%\dueldx_trace.log</c> 에 적는다(화면 밖 시험용).</summary>
     /// <summary>파트1 판의 수치 식(<see cref="Part1Rules"/>).</summary>
     internal Part1Rules Part1 => _part1 ??= new(code => Part1Chr.Load(code) is { } chr ? host.Part1.Apply(chr) : null, current: true)
@@ -255,6 +258,14 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // DUELDX_WIN=1 이면 시작하자마자 이긴 것으로 친다 — 전투 이어짐·진행 깃발·모세스 전환을 화면 밖에서 시험할 때 쓴다.
         if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "1")
         {
+            foreach (var u in host._units.Where(u => !u.IsAlly)) u.Alive = false;
+            CheckOutcome();
+            return;
+        }
+        // DUELDX_WIN=once 면 적을 <b>한 번만</b> 쓰러뜨린다 — 이긴 사건이 새로 부르는 인물(증원)까지 다시 지우지 않고 그 뒤 대화 · 전환을 볼 때(버그 리포트 #57).
+        if (Environment.GetEnvironmentVariable("DUELDX_WIN") == "once" && !_winOnceDone)
+        {
+            _winOnceDone = true;
             foreach (var u in host._units.Where(u => !u.IsAlly)) u.Alive = false;
             CheckOutcome();
             return;
