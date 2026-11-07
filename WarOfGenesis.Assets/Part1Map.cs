@@ -138,6 +138,10 @@ public static class Part1Map
             int stripPixels = ObtMap.StripWidth * ObtMap.StripHeight;
             byte[] tiles = reader.ReadBytes(tileCount * stripPixels * 2);
             if (tiles.Length != tileCount * stripPixels * 2) return null;
+            // 타일마다 붙은 불투명 바이트(t × 1) — 원본 그리기(0x1001ae70)는 0 이면 색 0 을 비치게(0x1000c200 의 키 인자 1 → 0x1000c2c9),
+            // 1 이면 통째로 찍는다. 시판 맵에서 0 인 타일은 모두 색 0 픽셀이 있고 1 인 타일은 하나도 없다(바탕 4420 · 윗층 96927 띠).
+            // 전에는 바탕을 늘 불투명으로 다시 그려 바탕의 빈 타일 색 0 이 유닛 위에 검게 찍혔다(버그 리포트 #68).
+            byte[] opaque = reader.ReadBytes(tileCount);
 
             var pictures = new Dictionary<(int, bool), uint[]>();
             uint[] Picture(int tile, bool keyed)
@@ -156,8 +160,9 @@ public static class Part1Map
             foreach (var (col, row, depth, tile, upper) in entries)
             {
                 if (tile >= tileCount || (uint)col >= layerW || (uint)row >= layerH) continue;
-                // 바탕은 Part1Map 그림처럼 색 0 도 검게 칠하고, 윗층은 색 0 이 비친다.
-                (cells[row * layerW + col] ??= []).Add(new Part1MapStrip(depth >> 8, depth & 0xFF, Picture(tile, upper || keyBaseBlack)));
+                // 불투명 바이트가 0 인 타일은 바탕이든 윗층이든 색 0 이 비친다(바이트를 못 읽은 짧은 파일은 전처럼 윗층만).
+                bool keyed = tile < opaque.Length ? opaque[tile] == 0 : upper;
+                (cells[row * layerW + col] ??= []).Add(new Part1MapStrip(depth >> 8, depth & 0xFF, Picture(tile, keyed || keyBaseBlack)));
             }
             return new Part1MapDepthGrid(layerX, layerY, layerW, layerH, cells);
         }

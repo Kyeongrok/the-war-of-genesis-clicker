@@ -1264,6 +1264,9 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         /// <summary>그림 안에서 그릴 네모(x0, y0, x1, y1) — 맵 띠를 유닛 네모만큼만 다시 그릴 때.</summary>
         public (int X0, int Y0, int X1, int Y1)? Clip { get; init; }
+
+        /// <summary>Clip 이 있을 때 — 유닛을 그리기 전 판을 떠 둔 자리(<c>_under</c> 첫 칸, Clip 크기).</summary>
+        public int Under { get; init; }
     }
 
     private static readonly (int Col, int Row)? CamHold =
@@ -1356,8 +1359,10 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// </summary>
     internal void QueueMapCover(IReadOnlyList<(int X, int Y, int W, int H, long Key)> units)
     {
-        if (MapDepth() is not { } grid) return;
+        ClearMask();
         _cover.Clear();
+        _underUsed = 0;
+        if (MapDepth() is not { } grid) return;
         int top = GridTop + host.BoardPad;
         int vx0 = host._camX, vy0 = host._camY, vx1 = vx0 + host.ViewWidth, vy1 = vy0 + host.ViewHeight;
         void Cover(int x, int y, int w, int h, long key)
@@ -1394,9 +1399,33 @@ internal sealed class Part1MapObjects(GameWindow host)
             if (cx0 >= cx1 || cy0 >= cy1) continue;
             // 맵은 세계 (0, 0, 0) 의 물체 — 같은 깊이면 맵 띠가 물체보다 먼저, 칸 안에서는 바탕 → 윗층 차례.
             _pending.Add(new(DepthKey(40 * s.Row, 20 * s.Level), int.MinValue + cell * 16 + Math.Min(k, 15), s.Pixels, StripW, StripH,
-                             sx, sy, null, 0) { Clip = (cx0, cy0, cx1, cy1) });
+                             sx, sy, null, 0) { Clip = (cx0, cy0, cx1, cy1), Under = TakeUnder(grid.Cells[cell]!, k, sx, sy, cx0, cy0, cx1, cy1) });
         }
         _pending.Sort(ByKey);
+    }
+
+    // 유닛을 그리기 전의 판(맵 물들임 · 이동 범위 · 칸 강조까지 칠한 것)을 띠 자리마다 떠 둔다 — 띠가 그 자리의 맨 위 그림이면
+    // 다시 찍을 때 날 띠 대신 이 픽셀을 쓴다. 날 띠를 찍으면 유닛 픽셀 자리만 물들임 · 칠이 빠져 유닛 꼴의 얼룩이 남았다(버그 리포트 #68).
+    // 0 = 뒤 윗층 띠가 그 픽셀을 덮는다(그 자리 판은 윗층 그림이라 날 띠를 쓴다).
+    private uint[] _under = new uint[4096];
+    private int _underUsed;
+
+    private int TakeUnder(List<Part1MapStrip> strips, int k, int sx, int sy, int cx0, int cy0, int cx1, int cy1)
+    {
+        int n = (cx1 - cx0) * (cy1 - cy0), at = _underUsed;
+        if (at + n > _under.Length) Array.Resize(ref _under, Math.Max(_under.Length * 2, at + n));
+        _underUsed += n;
+        var fb = host._fb;
+        int bw = host.BoardWidth, bh = host.BoardHeight;
+        for (int y = cy0; y < cy1; y++)
+            for (int x = cx0; x < cx1; x++)
+            {
+                int p = y * StripW + x, bx = sx + x, by = sy + y;
+                bool top = (uint)bx < (uint)bw && (uint)by < (uint)bh;
+                for (int j = k + 1; j < strips.Count && top; j++) if (strips[j].Pixels[p] >> 24 != 0) top = false;
+                _under[at++] = top ? fb[by * bw + bx] | 0xFF000000 : 0;
+            }
+        return _underUsed - n;
     }
 
     private readonly uint[] _clipBuf = new uint[StripW * StripH];
@@ -1407,12 +1436,28 @@ internal sealed class Part1MapObjects(GameWindow host)
         {
             var (cx0, cy0, cx1, cy1) = clip;
             int w = cx1 - cx0, h = cy1 - cy0;
-            for (int y = 0; y < h; y++) Array.Copy(p.Pixels, (cy0 + y) * p.W + cx0, _clipBuf, y * w, w);
+            // 띠 픽셀은 앞서 그린 유닛 · 물체 층의 픽셀 자리에만 — 네모째 다시 그리면 유닛 둘레의 칸 강조 · 이동 범위가 네모로 지워졌다(버그 리포트 #68).
+            int level = StripLevel(p.Key), bw = host.BoardWidth, bh = host.BoardHeight;
+            bool any = false;
+            for (int y = 0; y < h; y++)
+            {
+                int by = p.Y + cy0 + y;
+                for (int x = 0; x < w; x++)
+                {
+                    uint c = p.Pixels[(cy0 + y) * p.W + cx0 + x];
+                    int bx = p.X + cx0 + x;
+                    bool show = c >> 24 != 0 && (uint)bx < (uint)bw && (uint)by < (uint)bh && Covers(_mask[by * bw + bx], level);
+                    uint under = _under[p.Under + y * w + x];
+                    _clipBuf[y * w + x] = !show ? 0 : under != 0 ? under : c;
+                    any |= show;
+                }
+            }
+            if (!any) return;
             host.BlitMasked(_clipBuf, w, h, p.X + cx0, p.Y + cy0);
             GhostOver(_clipBuf, w, h, p.X + cx0, p.Y + cy0);
             return;
         }
-        if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); GhostOver(p.Pixels, p.W, p.H, p.X, p.Y); return; }
+        if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); MarkLayer(p.Pixels, p.W, p.H, p.X, p.Y); GhostOver(p.Pixels, p.W, p.H, p.X, p.Y); return; }
         if (p.Child is { } k) DrawChild(k, p.Age, p.X, p.Y);
     }
 
@@ -1420,12 +1465,14 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// 아직 그리지 않은(방금 그린 유닛보다 앞에 그릴) 맵 띠 · 물체 층 가운데 네모 안에 불투명 픽셀이 있는 것이 있나 — 체력바 글을 판에 써서 유닛과 함께 가려지게 할지 볼 때.
     /// <see cref="QueueMapCover"/> 뒤, 그 유닛을 그린 바로 뒤에 부른다(그때 <c>_drawn</c> 부터가 그 유닛 위에 그릴 것이다).
     /// </summary>
-    internal bool CoveredAhead(int x, int y, int w, int h)
+    internal bool CoveredAhead(int x, int y, int w, int h, long unitKey)
     {
+        int minLevel = GaugeMinLevel(unitKey);
         for (int n = _pending.Count, p = _drawn; p < n; p++)
         {
             var q = _pending[p];
             if (q.Pixels == null) continue;
+            if (q.Clip != null && StripLevel(q.Key) < minLevel) continue;   // 체력바는 유닛 발보다 높은 띠만 가린다(GaugeMinLevel)
             var (cx0, cy0, cx1, cy1) = q.Clip ?? (0, 0, q.W, q.H);
             int x0 = Math.Max(x, q.X + cx0), y0 = Math.Max(y, q.Y + cy0), x1 = Math.Min(x + w, q.X + cx1), y1 = Math.Min(y + h, q.Y + cy1);
             for (int yy = y0; yy < y1; yy++)
@@ -1435,9 +1482,55 @@ internal sealed class Part1MapObjects(GameWindow host)
         return false;
     }
 
+    // ── 유닛 픽셀 자리(가림 마스크) ──────────────────────────────────────────────────────────────────────
+    // 원본은 띠 · 그림을 한 목록으로 깊이 차례대로 한 번씩 그리므로(0x1001b7a0), 앞 띠는 뒤 유닛의 <b>픽셀</b>만 덮는다 — 그 둘레 바닥은 이미 같은 띠다.
+    // 리메이크는 맵 그림을 먼저 통째로 깔고 칸 강조 · 이동 범위를 그 위에 칠한 다음 유닛 앞의 띠만 다시 그린다. 네모째 다시 그리면
+    // 유닛 둘레의 칠이 네모로 지워지고, 체력바(발밑 — 다음 줄 바닥 위)는 앞줄 바닥 · 낭떠러지 띠에 덮여 빈칸 · 검은 네모가 됐다(버그 리포트 #68).
+    // 그래서 유닛을 그리기 앞뒤로 판을 떠(UnitBegin · UnitMid · UnitEnd) 바뀐 픽셀만 마스크에 적고, 다시 그리는 띠는 마스크 자리에만 찍는다.
+    // 마스크 값: 0 = 비었음 · 255 = 몸 · 딸린 층 · 물체 층(앞 띠면 다 덮음) · 1~254 = 체력바 · 레벨 동그라미(띠 높이 ≥ 값 − 1 일 때만 덮음).
+
+    private byte[] _mask = [];
+    private readonly List<(int X, int Y, int W, int H)> _maskDirty = [];
+
+    /// <summary>띠 · 층의 깊이 열쇠에서 높이 단(z ÷ 20).</summary>
+    private static int StripLevel(long key) => (int)(((key % 1_000_000L) + 1_000_000L) % 1_000_000L / 20);
+
+    /// <summary>
+    /// 체력바를 덮을 수 있는 맵 띠의 가장 낮은 높이 단 — 유닛 발(z + 19)보다 높이 솟은 띠(기둥 · 벽 · 건물)만.
+    /// 막대는 발밑, 곧 다음 줄 바닥 자리에 그리므로 깊이만 보면 앞줄 바닥 · 그 밑 낭떠러지 띠가 늘 막대를 덮는다(원본에는 체력바가 없다).
+    /// </summary>
+    private static int GaugeMinLevel(long unitKey) => (int)((unitKey % 1_000_000L) / 20) + 1;
+
+    private static bool Covers(byte m, int level) => m == 255 || (m != 0 && level >= m - 1);
+
+    private void ClearMask()
+    {
+        int n = host.BoardWidth * host.BoardHeight;
+        if (_mask.Length != n) { _mask = new byte[n]; _maskDirty.Clear(); return; }
+        foreach (var (x, y, w, h) in _maskDirty)
+            for (int yy = 0; yy < h; yy++) Array.Clear(_mask, (y + yy) * host.BoardWidth + x, w);
+        _maskDirty.Clear();
+    }
+
+    /// <summary>맵 띠를 다시 그릴 것이 있나 — 없으면 마스크를 적지 않는다.</summary>
+    private bool MaskOn => _cover.Count > 0;
+
+    /// <summary>방금 그린 물체 층(불투명 픽셀)을 마스크에 — 그보다 앞인 맵 띠가 덮는다.</summary>
+    private void MarkLayer(uint[] px, int pw, int ph, int dx, int dy)
+    {
+        if (!MaskOn) return;
+        int bw = host.BoardWidth, bh = host.BoardHeight;
+        int x0 = Math.Max(dx, 0), y0 = Math.Max(dy, 0), x1 = Math.Min(dx + pw, bw), y1 = Math.Min(dy + ph, bh);
+        if (x0 >= x1 || y0 >= y1) return;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                if (px[(y - dy) * pw + x - dx] >> 24 != 0) _mask[y * bw + x] = 255;
+        _maskDirty.Add((x0, y0, x1 - x0, y1 - y0));
+    }
+
     // ── 가려진 유닛 반투명(모드, 리메이크) ─────────────────────────────────────────────────────────────────
     // 원본에는 없다(위 0x1001b7a0 — 둘째 그리기가 없다). 모드 > 일반 「가려진 캐릭터 반투명」(기본 끔)을 켜면
-    // 유닛(몸 · 딸린 층 · 차례 테두리 · 체력바 · 레벨 동그라미)을 그리기 앞뒤로 판을 떠 두고(GhostBegin · GhostEnd),
+    // 유닛(몸 · 딸린 층 · 차례 테두리 · 체력바 · 레벨 동그라미)을 그리기 앞뒤로 떠 둔 판(UnitBegin · UnitEnd)에서 유닛 픽셀을 남겨 두고,
     // 그 뒤에 그리는 맵 띠 · 물체 층이 그 유닛 픽셀을 덮으면 덮은 픽셀 위에 떠 둔 유닛 픽셀을 GhostAlpha 만큼 다시 섞는다.
     // 깊이 차례 안에서 섞으므로 그보다 앞 유닛은 그대로 위에 서고, 가려지지 않은 부분은 바뀌지 않는다.
 
@@ -1447,50 +1540,74 @@ internal sealed class Part1MapObjects(GameWindow host)
     private sealed class Ghost { public int X, Y, W, H; public uint[] Before = [], Px = []; }
     private readonly List<Ghost> _ghosts = [];
     private int _ghostCount;
-    private bool _ghostOn, _ghostOpen;
+    private bool _ghostOn, _unitOpen;
+    private byte _unitGaugeMask;
 
-    /// <summary>이번 틀에 반투명을 쓸지 정하고 떠 둔 유닛을 비운다 — <see cref="BattleScene.DrawUnits"/> 첫머리에.</summary>
+    /// <summary>이번 틀에 반투명을 쓸지 정하고 떠 둔 유닛을 비운다 — <see cref="BattleScene.DrawUnits"/> 첫머리에(<see cref="QueueMapCover"/> 뒤).</summary>
     internal void GhostFrame(bool on) { _ghostOn = on; _ghostCount = 0; }
 
-    /// <summary>유닛을 그리기 바로 앞 — 그 네모(판 좌표, 보이는 곳만)의 지금 판을 떠 둔다.</summary>
-    internal void GhostBegin(int x, int y, int w, int h)
+    /// <summary>유닛을 그리기 바로 앞 — 그 네모(판 좌표, 보이는 곳만)의 지금 판을 떠 둔다. 다시 그릴 맵 띠도 반투명도 없으면 아무것도 안 한다.</summary>
+    internal void UnitBegin(int x, int y, int w, int h, long unitKey)
     {
-        if (!_ghostOn) return;
-        _ghostOpen = true;
+        _unitOpen = false;
+        if (!_ghostOn && !MaskOn) return;
         int x0 = Math.Max(x, Math.Max(0, host._camX)), y0 = Math.Max(y, Math.Max(0, host._camY));
         int x1 = Math.Min(x + w, Math.Min(host.BoardWidth, host._camX + host.ViewWidth));
         int y1 = Math.Min(y + h, Math.Min(host.BoardHeight, host._camY + host.ViewHeight));
+        if (x0 >= x1 || y0 >= y1) return;
+        _unitOpen = true;
+        _unitGaugeMask = (byte)Math.Clamp(GaugeMinLevel(unitKey) + 1, 1, 254);
         if (_ghostCount == _ghosts.Count) _ghosts.Add(new Ghost());
         var g = _ghosts[_ghostCount];
-        g.X = x0; g.Y = y0; g.W = Math.Max(0, x1 - x0); g.H = Math.Max(0, y1 - y0);
-        if (g.W == 0 || g.H == 0) return;
+        g.X = x0; g.Y = y0; g.W = x1 - x0; g.H = y1 - y0;
         int n = g.W * g.H;
         if (g.Before.Length < n) { g.Before = new uint[n]; g.Px = new uint[n]; }
+        Array.Clear(g.Px, 0, n);
         var fb = host._fb;
         for (int yy = 0; yy < g.H; yy++) Array.Copy(fb, (g.Y + yy) * host.BoardWidth + g.X, g.Before, yy * g.W, g.W);
     }
 
-    /// <summary>유닛(과 체력바)을 그린 바로 뒤 — 바뀐 픽셀만 유닛 픽셀로 남긴다(안 바뀐 곳은 0).</summary>
-    internal void GhostEnd()
+    /// <summary>몸 · 딸린 층을 그린 뒤, 체력바를 그리기 앞 — 지금까지 바뀐 픽셀을 몸(255)으로 적고 판을 다시 떠 둔다.</summary>
+    internal void UnitMid() => TakeUnitPixels(255, refresh: true);
+
+    /// <summary>유닛(과 체력바)을 다 그린 뒤 — 그 사이 바뀐 픽셀을 체력바로 적는다. 반투명이면 유닛 픽셀을 남겨 둔다.</summary>
+    internal void UnitEnd()
     {
-        if (!_ghostOn || !_ghostOpen) return;   // 그림이 없어 GhostBegin 을 건너뛴 유닛
-        _ghostOpen = false;
+        if (!_unitOpen) return;   // 그림이 없어 UnitBegin 을 건너뛴 유닛
+        bool any = TakeUnitPixels(_unitGaugeMask, refresh: false);
+        _unitOpen = false;
+        if (_ghostOn && (any || HasPx(_ghosts[_ghostCount]))) _ghostCount++;
+    }
+
+    private static bool HasPx(Ghost g)
+    {
+        for (int i = 0, n = g.W * g.H; i < n; i++) if (g.Px[i] != 0) return true;
+        return false;
+    }
+
+    private bool TakeUnitPixels(byte mark, bool refresh)
+    {
+        if (!_unitOpen) return false;
         var g = _ghosts[_ghostCount];
-        if (g.W == 0 || g.H == 0) return;
         var fb = host._fb;
-        bool any = false;
+        int bw = host.BoardWidth;
+        bool any = false, mask = MaskOn;
         for (int yy = 0; yy < g.H; yy++)
         {
-            int row = (g.Y + yy) * host.BoardWidth + g.X;
+            int row = (g.Y + yy) * bw + g.X;
             for (int xx = 0; xx < g.W; xx++)
             {
+                int i = yy * g.W + xx;
                 uint now = fb[row + xx];
-                bool changed = now != g.Before[yy * g.W + xx];
-                g.Px[yy * g.W + xx] = changed ? now | 0xFF000000 : 0;
-                any |= changed;
+                if (now == g.Before[i]) continue;
+                any = true;
+                g.Px[i] = now | 0xFF000000;
+                if (mask) _mask[row + xx] = mark;   // 이 유닛이 덮어 그린 픽셀은 이제 이 유닛 것
+                if (refresh) g.Before[i] = now;
             }
         }
-        if (any) _ghostCount++;
+        if (any && mask) _maskDirty.Add((g.X, g.Y, g.W, g.H));
+        return any;
     }
 
     /// <summary>방금 그린 띠 · 층(src, 판 자리 dx · dy)의 불투명 픽셀이 앞서 그린 유닛 픽셀을 덮었으면 그 위에 유닛을 반투명으로 다시 섞는다.</summary>

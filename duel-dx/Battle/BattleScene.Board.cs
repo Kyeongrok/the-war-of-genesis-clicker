@@ -407,13 +407,14 @@ internal sealed unsafe partial class BattleScene
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
 
-            // 가려진 캐릭터 반투명(모드, fa-84) — 몸 · 딸린 층 · 체력바를 그리는 앞뒤로 판을 떠 둔다(Part1MapObjects.GhostBegin).
-            if (p1 != null && host._coverGhost && sprites.TryGetValue(unit.ChrCode, out var gs))
+            // 몸 · 딸린 층 · 체력바를 그리는 앞뒤로 판을 떠 둔다(Part1MapObjects.UnitBegin) — 앞 맵 띠는 유닛 픽셀 자리에만 다시 찍고(버그 리포트 #68),
+            // 가려진 캐릭터 반투명(모드, fa-84)이면 그 픽셀을 비쳐 그린다.
+            if (p1 != null && sprites.TryGetValue(unit.ChrCode, out var gs))
             {
                 var gf = gs.FrameFor(unit);
                 int gx0 = footX + gf.X - 24, gy0 = footY + gf.Y - 24, gx1 = footX + gf.X + gf.W + 24, gy1 = footY + gf.Y + gf.H + 24;
                 if (bodies != null) { var g = GaugeRect(unit); gx0 = Math.Min(gx0, g.X); gy0 = Math.Min(gy0, g.Y); gx1 = Math.Max(gx1, g.X + g.W); gy1 = Math.Max(gy1, g.Y + g.H); }
-                p1.GhostBegin(gx0, gy0, gx1 - gx0, gy1 - gy0);
+                p1.UnitBegin(gx0, gy0, gx1 - gx0, gy1 - gy0, Part1UnitKey(unit));
             }
             if (sprites.TryGetValue(unit.ChrCode, out var sprite))
             {
@@ -442,8 +443,10 @@ internal sealed unsafe partial class BattleScene
             // 차례 표시는 TP 가 찬(차례 깃발이 선) <b>모든</b> 유닛에게 — 지금 움직이는 유닛은 행동 동안 숨긴다(0x100d1f70: +0xff && 상태≠22).
             bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
             // 체력바를 차례 표시보다 먼저 — 반투명 모드가 떠 두는 것은 몸 · 체력바까지(차례 표시는 머리 위 표시라 뜨지 않는다). 둘은 겹치지 않는다(발밑 · 머리 위).
+            // 체력바는 몸과 따로 적는다 — 발밑이라 앞줄 바닥 · 낭떠러지가 아니라 솟은 띠(기둥 · 벽)만 덮는다(Part1MapObjects.GaugeMinLevel).
+            p1?.UnitMid();
             if (bodies != null) DrawGaugeInOrder(unit, order, at, bodies, p1);
-            if (p1 != null && host._coverGhost) p1.GhostEnd();
+            p1?.UnitEnd();
             if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
         }
         p1?.Flush();
@@ -460,7 +463,7 @@ internal sealed unsafe partial class BattleScene
         for (int k = at + 1; k < order.Length && !covered; k++)
             if (bodies[order[k]] is { } b && b.X < g.X + g.W && g.X < b.X + b.W && b.Y < g.Y + g.H && g.Y < b.Y + b.H) covered = true;
         // 파트1: 앞의 기둥 · 벽 · 맵 물체가 막대를 덮으면 글(레벨 숫자 · 딱지)도 판에 — 새 UI 층에 쓰면 막대는 가려지고 숫자만 구조물 위에 떴다(fa-84).
-        if (!covered && p1 != null) covered = p1.CoveredAhead(g.X, g.Y, g.W, g.H);
+        if (!covered && p1 != null) covered = p1.CoveredAhead(g.X, g.Y, g.W, g.H, Part1UnitKey(unit));
         bool board = covered || !host._hiResUi || host.BattleCovered;
         DrawGauge(unit, shapes: true, text: board, boardText: board);
         if (!board) _gaugeLayerText.Add(unit);
