@@ -144,8 +144,14 @@ internal sealed partial class Part1Skill
             while (held.Count < start + 400) held.Add((hx, hy - 20 * 0.6));
             Carry(0, held);
         }
-        (int X, int Y)[] focus = dark ? [(0, -202), (-30, -150), (0, -138), (30, -150)] : [(-33, -157), (-150, -50), (33, 27), (150, -50)];
-        (double X, double Y) f = (hx + focus[dir].X, hy + focus[dir].Y);
+        // F — 시전자 화면 자리 C(런쳐는 들어 올린 뒤의 자리, 단계 2 에서 +0x2a/+0x2c 를 다시 읽는다)에서 겨눈 쪽으로.
+        // 런쳐 397 은 제 표가 따로 있다(0x10071afc 뜀표 0x10072e04 — 위 (−15, −67) · 왼 (−63, +9) · 아래 (+14, +54) · 오른 (+63, +9)).
+        // 전에는 282 의 F(위 (−33, −157) …)를 같이 써서 빛줄기가 머리 앞이 아니라 90px 쯤 바깥에서 나갔다(버그 리포트 #58-1).
+        (int X, int Y)[] focus = dark ? [(0, -202), (-30, -150), (0, -138), (30, -150)]
+            : launcher ? [(-15, -67), (-63, 9), (14, 54), (63, 9)]
+            : [(-33, -157), (-150, -50), (33, 27), (150, -50)];
+        double casterY = launcher ? hy - 20 * 0.6 : hy;
+        (double X, double Y) f = (hx + focus[dir].X, casterY + focus[dir].Y);
         Later(start, () => host.Btl.CenterOn(f.X, f.Y));
         Later(start, () => Swing(user, 42, 8));
         Sound(1844, start + 30);
@@ -163,7 +169,9 @@ internal sealed partial class Part1Skill
             Put(520 - i, 0, start + 85 + 5 * i, f.X + vx * (40 * i - 20), f.Y + vy * (40 * i - 20), mirror: Rand(2) == 0);
         Sound(1843, start + 90);
         // 빛줄기 — 앞끝이 F 쯤에 오도록 F 에서 138px 바깥이 첫 토막의 자리(원본 282 의 화면 수치 −295 · +163 · ∓288 과 F 의 차이).
-        (double X, double Y) anchor = (f.X + vx * 138, f.Y + vy * 138);
+        // 런쳐 397 은 C 에서 바로 잰 첫 토막 자리(0x10071f41 위 (−15, −200) · 0x1007249c 왼 (−195, +7) · 0x100721e7 아래 (+13, +184) · 0x10072744 오른 (+195, +7), 오른은 뒤집음).
+        (int X, int Y)[] launch = [(-15, -200), (-195, 7), (13, 184), (195, 7)];
+        (double X, double Y) anchor = launcher ? (hx + launch[dir].X, casterY + launch[dir].Y) : (f.X + vx * 138, f.Y + vy * 138);
         last = Math.Max(last, BigBeam(dark ? 896 : 527, start + 90, anchor, dir, launcher ? 1 : 3, 10, 30, swap: true));
         // 맞히기 — 190틱에 판 끝까지(줄은 시전자와 옆 ±40 월드).
         int variant = launcher ? 2 : 0;
@@ -187,7 +195,8 @@ internal sealed partial class Part1Skill
 
     /// <summary>
     /// 큰 빛줄기 — <paramref name="cols"/> 줄(겨눈 쪽에 가로로 <paramref name="gap"/>px 간격)이 <paramref name="delay"/> 틱에 나타나고(모션 0 위 · 1 옆 · 2 아래, 오른쪽은 1 뒤집어)
-    /// <paramref name="hold"/> 틱 붙들고(3~5) 끝 모션(6~8) 한 번. 첫 토막 너머 보이는 판 끝까지 30px 마다 이어지는 토막(위 · 아래 9/11/13, 옆 10/12/14)이 같은 때에.
+    /// <paramref name="hold"/> 틱 붙들고(3~5) 끝 모션(6~8) 한 번. 첫 토막 자리부터 보이는 판 끝까지 30px 마다 이어지는 토막(위 · 아래 9/11/13, 옆 10/12/14)이 같은 때에 —
+    /// 이어지는 토막의 첫 장은 첫 토막과 <b>같은 자리</b>다(282 <c>0x10056b17</c> · 397 <c>0x1007208f</c> 가 첫 토막 좌표에서 훑기 시작). 전에는 30px 너머부터 깔아 첫 토막과 둘째 사이가 비었다.
     /// <paramref name="swap"/> 이면 끝 모션 동안 가장자리 두 줄이 서로 자리를 바꾼다(빠르기 1). 끝나는 틱.
     /// </summary>
     private int BigBeam(int obs, int delay, (double X, double Y) anchor, int dir, int cols, int gap, int hold, bool swap)
@@ -197,12 +206,15 @@ internal sealed partial class Part1Skill
         int m0 = dir switch { 0 => 0, 2 => 2, _ => 1 }, e0 = side ? 10 : 9;
         int a = delay, b = a + Length(obs, m0) + 1, c = b + hold + 1, end = c + Length(obs, m0 + 6);
         var (l, top, r, bottom) = View;
-        for (double k = 0; k < 60; k++)
+        int margin = 30 + Math.Max(r - l, bottom - top);
+        for (double k = 0; k < 120; k++)
         {
             double ax = anchor.X + vx * 30 * k, ay = anchor.Y + vy * 30 * k;
-            if (k > 0 && (ax < l - 30 || ax > r + 30 || ay < top - 30 || ay > bottom + 30)) break;
-            int m = k == 0 ? m0 : e0;
-            int[] seq = k == 0 ? [m, m + 3, m + 6] : [m, m + 2, m + 4];
+            // 판 끝은 깔 때의 화면이 아니라 카메라가 F 로 옮겨 간 뒤의 화면이다 — 화면 하나만큼 더 깐다(전에는 오른쪽 끝이 화면 앞에서 끊겼다).
+            if (k > 0 && (ax < l - margin || ax > r + margin || ay < top - margin || ay > bottom + margin)) break;
+            foreach (int m in k == 0 ? [m0, e0] : (int[])[e0])
+            {
+            int[] seq = m == m0 ? [m, m + 3, m + 6] : [m, m + 2, m + 4];
             for (int i = 0; i < cols; i++)
             {
                 double off = cols == 1 ? 0 : (i - 1) * gap;
@@ -217,6 +229,7 @@ internal sealed partial class Part1Skill
                     Along(obs, seq[2], c, AsPath(path.Prepend(p).ToList(), 2), life: Length(obs, seq[2]), mirror: mirror);
                 }
                 else Put(obs, seq[2], c, p.X, p.Y, mirror: mirror);
+            }
             }
         }
         return end;
