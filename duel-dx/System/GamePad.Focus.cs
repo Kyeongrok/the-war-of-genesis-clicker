@@ -53,7 +53,10 @@ internal sealed partial class GamePad
                 for (int i = 0; i < rows; i++)
                     list.Add((x + 12, y + TuningScreen.TuningCheckY + i * TuningScreen.TuningCheckH, TuningScreen.TuningW - 24, TuningScreen.TuningCheckH - 4));
                 if (tuning.ShowsVoiceVolume)
+                {
                     for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.VoiceButton(i));
+                    for (int i = 0; i < TuningScreen.VoiceChoices.Length; i++) list.Add(tuning.TalkVoiceButton(i));
+                }
                 if (tuning.ShowsSoulWeight) list.Add((boxX, boxY, TuningScreen.TuningBoxW, TuningScreen.TuningRowH));
             }
             list.Add((x + TuningScreen.TuningW - 116, y + TuningScreen.TuningH - 40, 100, 28));   // 닫기

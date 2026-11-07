@@ -60,6 +60,27 @@ internal sealed unsafe partial class GameWindow
     /// </summary>
     internal float SndGain => Sys._seVolume >= 100 ? 1f : (float)Math.Pow(10, (Sys._seVolume - 100) / 40.0);
 
+    /// <summary>
+    /// 파트1 원본(alpha.dll)의 크기 법 — 설정 막대(0~100 %)를 0~127 로 옮겨 <c>SetVolume((v − 127) × 16)</c>(1/100 dB), 0 이면 끈다.
+    /// 효과음은 <c>0x1001a9c0</c>(SefMain × 페이드 / 127 → <c>0x1000ad50</c>), 대사 목소리는 <c>0x1001a1f0</c>(VoiceVol), 곡은 <c>0x1001a000</c>(MusicMain → <c>0x10009690</c>)이
+    /// 모두 이 식을 쓴다 — 막대 끝에서 끝이 0 ~ −20.3 dB 다. 파트2 의 −0.5 dB/점(<see cref="SndGain"/>)을 파트1 에 쓰면 S.E 60 이 −20 dB 라
+    /// 필드 성우 대사가 배경음 아래로 묻혔다(버그 리포트 #60 — 원본은 S.E 60 이 −8.1 dB).
+    /// </summary>
+    internal static float Part1Gain(int percent)
+    {
+        int v = (int)Math.Round(Math.Clamp(percent, 0, 100) * 127 / 100.0);
+        return v <= 0 ? 0f : (float)Math.Pow(10, (v - 127) * 16 / 2000.0);
+    }
+
+    /// <summary>B.G.M 막대 → 믹서 곡 크기. 파트1 곡(<see cref="Part1Game.BgmBase"/> 위)은 파트1 원본 법(<see cref="Part1Gain"/>), 파트2 곡은 Bink 선형(감사4 V1).</summary>
+    internal float MusicVolumeFor(int id) => id >= Part1Game.BgmBase ? Part1Gain(Sys._bgmVolume) : Sys._bgmVolume / 100f;
+
+    /// <summary>
+    /// 파트1 대사(필드 206~208) 성우 목소리 크기 — 원본 대사 창(<c>0x100aa140</c>)은 목소리를 틀고 <c>0x1001a1f0</c> 으로 <b>VoiceVol</b>(S.E 와 따로, 기본 112/127)을 건다.
+    /// 리메이크는 모드 &gt; 일반(파트1) 「파트1 대사 목소리 크기」(기본 100)를 같은 법으로 쓴다(버그 리포트 #60).
+    /// </summary>
+    internal float Part1TalkVoiceGain => Part1Gain(TuningScr._talkVoiceVolume);
+
     /// <summary>work 번호 → 그 어빌리티를 쓸 때 (때리는 순간부터 몇 틱 뒤, Snd 번호). 분석-사운드 표에서 옮겼다.</summary>
     // 시전 소리 694 는 UseWorkRoutine 이 준비 2·3·5·6 에 시작 +2틱으로 낸다 — 여기에도 있으면 두 번 난다(ba-20 Q S-1).
     // 손으로 적은 표는 비웠다(ba-21 sound D3) — 아홉 줄 모두 같은 번호가 스크립트 이펙트의 소리 키에 있어(312:0 85 · 312:1 695 · 1324:1 662 …)
@@ -164,7 +185,8 @@ internal sealed unsafe partial class GameWindow
     };
 
     /// <param name="volume">그 소리만의 크기(0~1) — S.E 막대에 곱한다(파트1 차례 목소리, menu-121).</param>
-    internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false, float volume = 1f)
+    /// <param name="fixedGain">S.E 막대 대신 쓸 크기 — 파트1 대사 목소리는 원본이 S.E 와 따로인 VoiceVol 로 낸다(<see cref="Part1TalkVoiceGain"/>).</param>
+    internal void Play(int sound, int tag = 0, float screenX = float.NaN, bool loop = false, float volume = 1f, float? fixedGain = null)
     {
         if (_skippingAction) return;            // 건너뛰는 행동의 효과음은 안 낸다(한꺼번에 몰려 난다)
         // 파트1 만 도는 판(파트2 원본이 없는 PC) — 파트2 효과음 대신 파트1 원본의 같은 자리 소리를 낸다. 맞는 것이 없으면 안 낸다(사용자 요청 menu-109).
@@ -184,7 +206,8 @@ internal sealed unsafe partial class GameWindow
             lock (_sfx) loaded = _sfx.TryGetValue(sound, out pcm);
         else if (!loaded) PrefetchSound(sound);
         var (left, right) = SndPan(screenX);
-        float gain = SndGain * volume;
+        // 파트1 소리(Snd 20000+)는 파트1 원본의 크기 법을 따른다(버그 리포트 #60).
+        float gain = fixedGain ?? (sound >= Part1Game.ObsBase ? Part1Gain(Sys._seVolume) : SndGain) * volume;
         // 화면 밖에서 난 소리는 작게 들린다 — 원본(0x10028c18~0x10028cef)은 화면 밖이면 −(d² % 5000)/100 dB(평균 약 −15 dB, 거리에 단조가 아님)다.
         // 리메이크는 화면 너비가 달라 그 식을 그대로 못 쓰니 평균값으로 줄인다(근사 — ba-21 sound D6). 전에는 화면 밖 소리도 제 크기였다.
         // → 사용자 요청으로 뺐다: 행동하는 인물이 화면 가장자리·밖에 있으면 제 공격 소리·목소리가 멀리서 나는 것처럼 작아졌다. 크기는 늘 제 크기로 둔다.
@@ -371,9 +394,10 @@ internal sealed unsafe partial class GameWindow
                     var part1 = CachedClip(id) ?? Part1CdMusic.Music(id - Part1Game.BgmBase, BattleScene.Trace ? _backgroundTrace.Enqueue : null);   // 곡 15 · 29 는 시디 트랙(0x100094a0)
                     if (request != Volatile.Read(ref _musicRequest)) return;
                     if (part1 == null) { _mixer.StopMusic(); return; }
+                    _mixer.MusicVolume = MusicVolumeFor(id);
                     _mixer.PlayMusic(part1, loop, _musicAudible ?? _musicGain);
                     if (_musicPaused) _mixer.PauseMusic();
-                    if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작(파트1) gain {_musicAudible ?? _musicGain:0.00}");
+                    if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작(파트1) gain {_musicAudible ?? _musicGain:0.00} × BGM {Sys._bgmVolume}% = {_mixer.MusicVolume:0.000}");
                     return;
                 }
                 string path = VoicePack.BgmPath(id);
@@ -385,6 +409,7 @@ internal sealed unsafe partial class GameWindow
                 var pcm = CachedClip(id) ?? BinkAudio.Open(path).Decode();
                 if (request != Volatile.Read(ref _musicRequest)) return;
                 // 푸는 동안 517 페이드가 크기를 옮겼을 수 있다 — 지금 크기로 튼다(B.G.M 설정은 믹서가 곱한다).
+                _mixer.MusicVolume = MusicVolumeFor(id);
                 _mixer.PlayMusic(pcm, loop, _musicAudible ?? _musicGain);
                 if (_musicPaused) _mixer.PauseMusic();          // 푸는 동안 517 이 0 에 닿았다 — 멈춘 채로 둔다
                 if (BattleScene.Trace) _backgroundTrace.Enqueue($"music {id} 시작 gain {_musicAudible ?? _musicGain:0.00} × BGM {Sys._bgmVolume}%{(_musicPaused ? " (멈춤)" : "")}");

@@ -478,10 +478,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// <summary>
     /// 음량 막대를 믹서에 넣는다 — B.G.M 은 믹서 전체 크기라 <b>모든 곡·페이드·줄이기</b>에 곱해진다(감사4 V1).
     /// S.E 는 음성의 선형 크기이고, Snd 효과음은 <see cref="SndGain"/> 이 막대 1점당 −0.5 dB 로 셈한다(V3). 시작 때도 한 번 부른다(V2).
+    /// 파트1 곡 · 효과음은 파트1 원본 법(<see cref="GameWindow.Part1Gain"/>)으로 바꿔 셈한다.
     /// </summary>
     internal void ApplyVolumes()
     {
-        host._mixer.MusicVolume = _bgmVolume / 100f;
+        host._mixer.MusicVolume = host.MusicVolumeFor(host._musicId);   // 파트1 곡은 파트1 원본 법(버그 리포트 #60)
         host._effectGain = _seVolume / 100f;
     }
 

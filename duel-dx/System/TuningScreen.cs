@@ -49,6 +49,15 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// <summary>파트1 차례 목소리 크기 %(기본 80) — S.E 크기에 곱한다(<see cref="BattleScene.PlayTurnCall"/>).</summary>
     internal int _voiceVolume = Math.Clamp(UserSettings.Current.Part1VoiceVolume, 0, 100);
 
+    /// <summary>
+    /// 파트1 대사 목소리 크기 %(기본 100) — 필드 대사(206~208)의 성우 목소리. 원본처럼 S.E 와 따로다(VoiceVol, <see cref="GameWindow.Part1TalkVoiceGain"/>).
+    /// 버그 리포트 #60 — 전에는 S.E 막대에 묶여 S.E 를 낮추면 목소리가 배경음 아래로 묻혔다.
+    /// </summary>
+    internal int _talkVoiceVolume = Math.Clamp(UserSettings.Current.Part1TalkVoiceVolume, 0, 100);
+
+    /// <summary>「파트1 대사 목소리 크기」 줄 — 차례 목소리 줄에서 이만큼 아래.</summary>
+    internal const int TalkVoiceRowDy = 56;
+
     internal static readonly int[] VoiceChoices = [0, 20, 40, 60, 80, 100];
     internal const int VoiceW = 44, VoiceGap = 4;
 
@@ -57,6 +66,13 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     {
         var (x, y) = TuningOrigin();
         return (x + TuningBoxX + i * (VoiceW + VoiceGap), y + TuningBoxY, VoiceW, TuningRowH);
+    }
+
+    /// <summary>대사 목소리 크기 단추 i 의 자리(판 좌표) — 차례 목소리 단추 줄 바로 아래.</summary>
+    internal (int X, int Y, int W, int H) TalkVoiceButton(int i)
+    {
+        var (bx, by, bw, bh) = VoiceButton(i);
+        return (bx, by + TalkVoiceRowDy, bw, bh);
     }
 
     /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
@@ -209,6 +225,12 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                     host.SaveSettings();
                     return true;
                 }
+                else if (TalkVoiceButton(i) is var (tx, ty, tw, th) && bx >= tx && bx < tx + tw && by >= ty && by < ty + th)
+                {
+                    _talkVoiceVolume = VoiceChoices[i];
+                    host.SaveSettings();
+                    return true;
+                }
         if (ShowsSoulWeight && bx >= boxX && bx < boxX + TuningBoxW && by >= boxY && by < boxY + TuningRowH) { _tuningListOpen = true; return true; }
         var checks = TuningChecks();
         int line = by >= y + TuningCheckY ? (by - y - TuningCheckY) / TuningCheckH : -1;
@@ -272,6 +294,18 @@ internal sealed unsafe class TuningScreen(GameWindow host)
                 host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
             }
             host.UiText("내 편 인물 차례에 나오는 성우 목소리 크기(%) — 효과음 크기에 곱한다", x + 16, vy + 32, DimGray, 12);
+            int ty = vy + TalkVoiceRowDy;
+            host.UiText("파트1 대사 목소리 크기", x + 16, ty + 4, White);
+            for (int i = 0; i < VoiceChoices.Length; i++)
+            {
+                var (bx, by, bw, bh) = TalkVoiceButton(i);
+                bool on = VoiceChoices[i] == _talkVoiceVolume;
+                host.UiFill(bx, by, bw, bh - 2, on ? 0xFF2A4A8A : MouseInBoard(bx, by, bw, bh) ? 0x402A4A8A : StatusScreen.BoxBg);
+                host.UiStroke(bx, by, bw, bh - 2, StatusScreen.BoxLine);
+                string label = $"{VoiceChoices[i]}";
+                host.UiText(label, bx + (bw - host.UiGetText(label, White).W) / 2, by + 4, on ? 0xFF00FFFF : White);
+            }
+            host.UiText("이야기 장면 대사의 성우 목소리 크기(%) — 원본처럼 효과음 크기와 따로 정한다", x + 16, ty + 32, DimGray, 12);
         }
         if (!ShowsSoulWeight) { DrawTuningFoot(x, y); return; }
         int boxX = x + TuningBoxX, boxY = y + TuningBoxY;

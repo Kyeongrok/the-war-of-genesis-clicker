@@ -544,7 +544,7 @@ internal sealed class Part1SceneScript(GameWindow host)
                     if (c.Code >= 206 && a.Length > 2 && a[2] > 0 && !Skipping)
                     {
                         host._mixer.StopEffect(VoiceTag);
-                        host.Play(Part1Game.ObsBase + a[2], VoiceTag);
+                        host.Play(Part1Game.ObsBase + a[2], VoiceTag, fixedGain: host.Part1TalkVoiceGain);   // 원본 대사 창은 S.E 가 아니라 VoiceVol(0x100aa1bd → 0x1001a1f0, 버그 리포트 #60)
                         PcmSound? clip;
                         lock (host._sfx) host._sfx.TryGetValue(Part1Game.ObsBase + a[2], out clip);
                         // 게임 시계(_lastTime)는 배속만큼 빨리 가고 목소리는 제 빠르기로 나므로 길이를 배속만큼 늘려 잡는다 — 안 그러면 2배속에서

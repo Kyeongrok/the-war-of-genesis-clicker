@@ -243,6 +243,8 @@ internal sealed class BugReport(GameWindow host)
             ["bgmOn"] = host.Sys._bgmOn,
             ["bgmVolume"] = host.Sys._bgmVolume,
             ["seVolume"] = host.Sys._seVolume,
+            ["p1TalkVoice"] = host.TuningScr._talkVoiceVolume,
+            ["p1TurnVoice"] = host.TuningScr._voiceVolume,
             ["focus"] = Math.Round(host._mixer.MusicFocus, 2),
             ["deviceResets"] = host._mixer.DeviceResets,
         };
