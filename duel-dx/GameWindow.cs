@@ -1244,7 +1244,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
         int index = UnitOrFoeAt(bx, by);
         // 다만 누른 칸이 노란(사거리) 칸이고 그 유닛의 가운데 칸은 사거리 밖이면 누른 칸 그대로다 — 큰 유닛(3×3)의 차지 칸을 누르면
         // 가운데 칸으로 바뀌어, 아지다하카 버스터 런쳐(사거리 = 바로 옆 네 칸 = 제 차지 칸)는 노란 칸을 눌러도 「사거리 밖입니다」였다(버그 리포트 #59).
-        if (index >= 0 && !emptyCellAim && !Btl.KeepsClickedAimCell(col, row, index)) (col, row) = (_units[index].Col, _units[index].Row);
+        // 큰 유닛의 가운데 칸이 사거리 밖이면 사거리에 드는 차지 칸으로 간다(버그 리포트 #61 — 아론다이트 2~6연 → 적 마장기).
+        if (index >= 0 && !emptyCellAim) (col, row) = Btl.ClickedAimCell(col, row, index);
         if (row < 0) return;
         if (Btl.OnTargetClick(col, row)) return;
 

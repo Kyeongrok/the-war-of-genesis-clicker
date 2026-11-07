@@ -1087,7 +1087,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             if (!range.CanReach(i) || range.Cost[i] > narrow) continue;
             int d = Math.Abs(i % host.Cols - a.Col) + Math.Abs(i / host.Cols - a.Row);
-            if (d >= bestDist || !InWorkRange(w, i % host.Cols, i / host.Cols, t.Col, t.Row, a)) continue;
+            // 큰 유닛 대상은 차지 칸(3×3) 어디가 사거리에 들어도 된다(UnitAimCell, 원본 0x10089610 — 버그 리포트 #62).
+            if (d >= bestDist || UnitAimCell(w, a, t, i % host.Cols, i / host.Cols) is null) continue;
             bestDist = d;
             best = i;
         }
@@ -1139,7 +1140,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             .OrderBy(i => Math.Abs(host._units[i].Col - user.Col) + Math.Abs(host._units[i].Row - user.Row)).ThenBy(i => host._units[i].Hp).ThenBy(i => i)
             .ToList();
         int first = Work(c.BasicWorkId) is { } basic && CanAfford(user, basic)
-            ? foes.FirstOrDefault(i => InWorkRange(basic, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user), -1) : -1;
+            ? foes.FirstOrDefault(i => UnitAimCell(basic, user, host._units[i]) != null, -1) : -1;
         if (first < 0) first = foes.FirstOrDefault(i => FindAttackPath(_turn, i) != null, -1);
         if (first >= 0) (_attackCursor, _attackObject) = (first, null);
         else if (AttackableObjects() is [var obj, ..]) (_attackCursor, _attackObject) = (-1, obj);
@@ -1215,7 +1216,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     internal void AttackCursorTarget()
     {
         if (!HasAttackCursor || !IsPlayerTurn) return;
-        var (col, row) = _attackObject is { } o ? (o.Col, o.Row) : (host._units[_attackCursor].Col, host._units[_attackCursor].Row);
+        // 어빌리티는 겨눌 칸으로 — 큰 유닛은 가운데 칸이 사거리 밖이어도 사거리에 드는 차지 칸이 있다(버그 리포트 #61).
+        var t = host._units[Math.Max(0, _attackCursor)];
+        var (col, row) = _attackObject is { } o ? (o.Col, o.Row)
+            : !_targetIsBasicAttack && Work(_targetWork) is { } aw && UnitAimCell(aw, host._units[_turn], t) is { } cell ? cell : (t.Col, t.Row);
         OnTargetClick(col, row);
     }
 

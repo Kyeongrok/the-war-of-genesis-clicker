@@ -31,6 +31,8 @@ internal sealed unsafe partial class GameWindow
         {
             // 사거리 안이고 그 work 의 대상 방식에 맞는 칸에서만 칼·지팡이가 된다 — 아무 유닛 위나 아니다.
             int col = bx / TileW, row = RowAt(bx, by);
+            // 유닛 위면 클릭과 같은 칸으로 본다 — 큰 유닛은 가운데 칸이 사거리 밖이어도 사거리에 드는 차지 칸으로 친다(버그 리포트 #61).
+            if (by >= GridTop && row >= 0 && Btl._turn >= 0 && w.TargetMode != 7 && UnitOrFoeAt(bx, by) is var on and >= 0) (col, row) = Btl.ClickedAimCell(col, row, on);
             if (by < GridTop || row < 0 || Btl._turn < 0 || !Btl.CanAimAt(w, _units[Btl._turn], col, row)) return CursorArrow;
             return w.IsDamage ? CursorAttack : CursorSupport;
         }

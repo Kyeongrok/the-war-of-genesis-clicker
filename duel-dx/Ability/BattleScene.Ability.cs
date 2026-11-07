@@ -152,11 +152,11 @@ internal sealed unsafe partial class BattleScene
         if (w.TargetMode == 4)
             return [.. Enumerable.Range(0, host._units.Length)
                 .Where(i => host._units[i].Alive && host._units[i].OnField && ModeAccepts(4, user, host._units[i])
-                            && InWorkRange(w, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user))
+                            && UnitAimCell(w, user, host._units[i]) != null)
                 .OrderBy(i => host._units[i].Hp * 1000L / Math.Max(1, host._units[i].MaxHp)).ThenBy(i => i != _turn).ThenBy(i => i)];
         return [.. Enumerable.Range(0, host._units.Length)
             .Where(i => host._units[i].Alive && host._units[i].OnField && SeesAsFoe(user, host._units[i])
-                        && InWorkRange(w, user.Col, user.Row, host._units[i].Col, host._units[i].Row, user))
+                        && UnitAimCell(w, user, host._units[i]) != null)   // 큰 유닛은 차지 칸 어디든(버그 리포트 #61)
             .OrderBy(i => Math.Abs(host._units[i].Col - user.Col) + Math.Abs(host._units[i].Row - user.Row))
             .ThenBy(i => host._units[i].Hp).ThenBy(i => i)];
     }
@@ -174,7 +174,7 @@ internal sealed unsafe partial class BattleScene
     internal void AutoAimAbility(WorkData w, string name)
     {
         var user = host._units[_turn];
-        var targets = AbilityTargets(w).Where(i => CanAimAt(w, user, host._units[i].Col, host._units[i].Row)).ToList();
+        var targets = AbilityTargets(w).Where(i => CanAimAtUnit(w, user, host._units[i])).ToList();
         if (targets.Count == 0) return;
         string again = _targetHotkey >= 0 ? $"{(char)_targetHotkey} 한 번 더·" : "";
         if (w.TargetMode == 1)
@@ -184,7 +184,7 @@ internal sealed unsafe partial class BattleScene
             return;
         }
         var t = host._units[targets[0]];
-        _aimCell = (t.Col, t.Row);
+        _aimCell = UnitAimCell(w, user, t) ?? (t.Col, t.Row);
         host.Hint($"{name} — {host.UnitName(targets[0])} 이(가) 선 칸을 겨눕니다 ({again}Enter: 쓰기, 방향키·클릭: 다른 칸, 우클릭·Esc 취소)");
     }
 
@@ -273,7 +273,7 @@ internal sealed unsafe partial class BattleScene
         if (w.TargetMode == 1)
         {
             int foe = host.UnitOrFoeAt(bx, by);
-            if (foe >= 0 && SeesAsFoe(host._units[_turn], host._units[foe]) && CanAimAt(w, host._units[_turn], host._units[foe].Col, host._units[foe].Row))
+            if (foe >= 0 && SeesAsFoe(host._units[_turn], host._units[foe]) && CanAimAtUnit(w, host._units[_turn], host._units[foe]))
             {
                 _attackCursor = foe;
                 _aimCell = null;
@@ -311,7 +311,7 @@ internal sealed unsafe partial class BattleScene
             // 기본공격이면 칠 수 있는 적 물체(기총포탑 따위)도 대상이다(fa-65).
             var (fromCol, fromRow) = _attackObject is { } fo ? (fo.Col, fo.Row) : _attackCursor >= 0 ? (host._units[_attackCursor].Col, host._units[_attackCursor].Row) : (user.Col, user.Row);
             var candidates = (_targetIsBasicAttack ? AttackableEnemies() : AbilityTargets(w))
-                .Where(i => i != _attackCursor && (_targetIsBasicAttack || CanAimAt(w, user, host._units[i].Col, host._units[i].Row)))
+                .Where(i => i != _attackCursor && (_targetIsBasicAttack || CanAimAtUnit(w, user, host._units[i])))
                 .Select(i => (Unit: i, Obj: (DemoObject?)null, host._units[i].Col, host._units[i].Row));
             if (_targetIsBasicAttack)
                 candidates = candidates.Concat(AttackableObjects().Where(o => o != _attackObject).Select(o => (Unit: -1, Obj: (DemoObject?)o, o.Col, o.Row)));

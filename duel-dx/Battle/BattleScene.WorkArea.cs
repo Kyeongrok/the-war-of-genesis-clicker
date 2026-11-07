@@ -220,6 +220,47 @@ internal sealed unsafe partial class BattleScene
         return Painted(col, row) && !Painted(on.Col, on.Row);
     }
 
+    /// <summary>
+    /// (fromCol, fromRow) 에 선 <paramref name="user"/> 가 work 로 유닛 <paramref name="t"/> 를 겨눌 칸 — 가운데 칸이 사거리면 그 칸, 아니면 파트1 큰 유닛의
+    /// 차지 칸(둘레 3×3) 가운데 사거리에 드는 칸(시전자에게 가까운 것, 같으면 위 줄 · 왼쪽부터). 못 겨누면 null.
+    /// 원본은 사거리를 시전자 가운데 칸에서 칠하고(<c>0x1008a950</c>, 4 × 맨해튼) 칠한 칸마다 <c>0x10089610</c> 으로 유닛을 찾아(거르기 1 · 3 · 5, <c>0x1008aa58</c>~)
+    /// 큰 유닛은 3×3 어느 칸이 칠해져도 잡힌다. 리메이크는 대상의 가운데 칸만 재서, 맞붙은 마장기끼리는 가운데가 세 칸 떨어져 사거리 2칸(칼공격 · 2~6연 크기 8)으로는
+    /// 영영 닿지 않았다(버그 리포트 #61 · #62, 아론다이트 → 적 마장기). 시전자가 큰 유닛이어도 재는 곳은 가운데 칸 그대로다(원본 같음).
+    /// </summary>
+    internal (int Col, int Row)? UnitAimCell(WorkData w, UnitState user, UnitState t, int fromCol, int fromRow)
+    {
+        if (InWorkRange(w, fromCol, fromRow, t.Col, t.Row, user)) return (t.Col, t.Row);
+        if (!Part1Big(t)) return null;
+        (int Col, int Row)? best = null;
+        int bestFar = int.MaxValue;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int c = t.Col + dx, r = t.Row + dy, far = Math.Abs(c - fromCol) + Math.Abs(r - fromRow);
+                if ((dx, dy) == (0, 0) || far >= bestFar || !InWorkRange(w, fromCol, fromRow, c, r, user)) continue;
+                (best, bestFar) = ((c, r), far);
+            }
+        return best;
+    }
+
+    /// <summary>지금 자리의 <paramref name="user"/> 가 유닛 <paramref name="t"/> 를 겨눌 칸(<see cref="UnitAimCell(WorkData, UnitState, UnitState, int, int)"/>).</summary>
+    internal (int Col, int Row)? UnitAimCell(WorkData w, UnitState user, UnitState t) => UnitAimCell(w, user, t, user.Col, user.Row);
+
+    /// <summary>유닛 <paramref name="t"/> 를 지금 자리에서 그 work 로 겨눌 수 있나 — 큰 유닛은 차지 칸 어디든(<see cref="UnitAimCell(WorkData, UnitState, UnitState)"/>).</summary>
+    internal bool CanAimAtUnit(WorkData w, UnitState user, UnitState t) => UnitAimCell(w, user, t) is { } cell && CanAimAt(w, user, cell.Col, cell.Row);
+
+    /// <summary>
+    /// 겨누는 중 유닛을 눌렀을 때 판정할 칸 — 누른 칸이 노란 칸이면 그대로(<see cref="KeepsClickedAimCell"/>), 아니면 그 유닛을 겨눌 칸(가운데 칸,
+    /// 큰 유닛은 사거리에 드는 차지 칸), 그것도 없으면 가운데 칸. 큰 유닛 그림의 몸통(사거리 밖 칸)을 눌러도 닿는 칸으로 간다(버그 리포트 #61).
+    /// </summary>
+    internal (int Col, int Row) ClickedAimCell(int col, int row, int unit)
+    {
+        var on = host._units[unit];
+        if (KeepsClickedAimCell(col, row, unit)) return (col, row);
+        if (_targetWork >= 0 && _turn >= 0 && Work(_targetWork) is { } w && UnitAimCell(w, host._units[_turn], on) is { } cell) return cell;
+        return (on.Col, on.Row);
+    }
+
     /// <summary>효과 범위 칸들 — 겨눈 칸(자기 자리에 쓰는 work 면 시전자 칸)을 가운데로, 시전자 → 겨눈 칸 방향으로.</summary>
     internal List<(int Col, int Row)> AreaCells(WorkData w, UnitState user, int col, int row)
     {
