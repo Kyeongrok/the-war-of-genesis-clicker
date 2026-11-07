@@ -380,6 +380,20 @@ internal sealed unsafe partial class BattleScene
                     var (bx, by) = UnitFoot(units[k]);
                     bodies[k] = (bx + f.X, by + f.Y, f.W, f.H);
                 }
+        // 파트1: 유닛보다 앞인 맵 띠(기둥 · 벽 · 건물)가 유닛을 가린다 — 원본 그리기 목록 그대로 불투명하게(Part1MapObjects.QueueMapCover, 버그 리포트 #64-1).
+        if (p1 != null)
+        {
+            var covered = new List<(int X, int Y, int W, int H, long Key)>();
+            foreach (var u in units)
+                if (u.Alive && u.OnField && sprites.TryGetValue(u.ChrCode, out var sp))
+                {
+                    var f = sp.FrameFor(u);
+                    var (bx, by) = UnitFoot(u);
+                    // 자리 키(1픽셀 떨림)와 딸린 층이 조금 삐져나와도 덮이게 4점 넉넉히.
+                    covered.Add((bx + f.X - 4, by + f.Y - 4, f.W + 8, f.H + 8, Part1UnitKey(u)));
+                }
+            p1.QueueMapCover(covered);
+        }
         _gaugeLayerText.Clear();
         for (int at = 0; at < order.Length; at++)
         {

@@ -95,6 +95,75 @@ public static class Part1Map
         catch (EndOfStreamException) { return null; }
     }
 
+    /// <summary>
+    /// 맵 그림 띠의 깊이 격자 — 띠 칸(40×8)마다 그 자리에 그리는 띠들(바탕 → 윗층 차례)의 (칸 줄, 높이)와 그림.
+    /// 원본은 맵도 맵 물체와 같은 그리기(<c>0x10097390</c>)로 띠 하나하나를 깊이 (줄·40, 높이·20) 로 그리기 목록에 넣어(바탕 <c>0x1009761a</c> ·
+    /// 윗층 <c>0x100978d8</c> → <c>0x1001bc60</c>) 유닛과 함께 (y, z, 넣은 차례)로 그린다(<c>0x1001b7a0</c> → <c>0x1001ad10</c> → <c>0x1001ae70</c>) —
+    /// 유닛보다 앞줄이거나 같은 줄에서 높은 띠(벽 · 기둥 · 지붕)가 유닛을 <b>불투명하게</b> 가린다. 반투명 · 실루엣은 없다.
+    /// 리메이크는 맵 그림을 통째로 바탕에 깔고, 이 격자로 유닛을 가리는 띠만 유닛 위에 다시 그린다.
+    /// </summary>
+    /// <param name="keyBaseBlack">바탕 띠의 색 0 도 비치게 — 맵 장식(하늘)을 깐 판은 바탕의 검은 점을 뚫어 그린다.</param>
+    public static Part1MapDepthGrid? LoadDepth(int id, bool keyBaseBlack) =>
+        Part1Game.Read("Obts", $"{id:D4}.obt") is { } bytes ? ParseDepth(bytes, keyBaseBlack) : null;
+
+    public static Part1MapDepthGrid? ParseDepth(byte[] bytes, bool keyBaseBlack)
+    {
+        try
+        {
+            using var reader = new BinaryReader(new MemoryStream(bytes));
+            if (reader.ReadInt32() < 1) return null;
+            int cols = reader.ReadInt16(), rows = reader.ReadInt16();
+            if (cols <= 0 || rows <= 0) return null;
+            reader.ReadBytes(cols * rows * 2);
+            int layerW = reader.ReadInt16(), layerH = reader.ReadInt16(), layerX = reader.ReadInt16(), layerY = reader.ReadInt16();
+            if (layerW <= 0 || layerH <= 0) return null;
+            var entries = new List<(int Col, int Row, int Depth, int Tile, bool Upper)>();
+            void Read(int x0, int y0, int w, int h, bool upper)
+            {
+                for (int i = 0; i < w * h; i++)
+                {
+                    int row = reader.ReadByte(), level = reader.ReadByte(), tile = reader.ReadUInt16();
+                    // 띠 번호 0 은 원본이 안 그린다(0x100975c9 · 0x10097881).
+                    if (tile != 0) entries.Add((x0 + i % w, y0 + i / w, row << 8 | level, tile, upper));
+                }
+            }
+            Read(0, 0, layerW, layerH, false);
+            int upperCount = reader.ReadInt32();
+            for (int u = 0; u < upperCount; u++)
+            {
+                int x = reader.ReadInt16(), y = reader.ReadInt16(), w = reader.ReadInt16(), h = reader.ReadInt16();
+                Read(x, y, w, h, true);
+            }
+            int tileCount = reader.ReadInt32();
+            int stripPixels = ObtMap.StripWidth * ObtMap.StripHeight;
+            byte[] tiles = reader.ReadBytes(tileCount * stripPixels * 2);
+            if (tiles.Length != tileCount * stripPixels * 2) return null;
+
+            var pictures = new Dictionary<(int, bool), uint[]>();
+            uint[] Picture(int tile, bool keyed)
+            {
+                if (pictures.TryGetValue((tile, keyed), out var px)) return px;
+                px = new uint[stripPixels];
+                for (int p = 0, src = tile * stripPixels * 2; p < stripPixels; p++, src += 2)
+                {
+                    int c = tiles[src] | tiles[src + 1] << 8;
+                    if (c == 0 && keyed) continue;
+                    px[p] = 0xFF000000u | (uint)((c >> 10 & 0x1F) * 255 / 31) << 16 | (uint)((c >> 5 & 0x1F) * 255 / 31) << 8 | (uint)((c & 0x1F) * 255 / 31);
+                }
+                return pictures[(tile, keyed)] = px;
+            }
+            var cells = new List<Part1MapStrip>?[layerW * layerH];
+            foreach (var (col, row, depth, tile, upper) in entries)
+            {
+                if (tile >= tileCount || (uint)col >= layerW || (uint)row >= layerH) continue;
+                // 바탕은 Part1Map 그림처럼 색 0 도 검게 칠하고, 윗층은 색 0 이 비친다.
+                (cells[row * layerW + col] ??= []).Add(new Part1MapStrip(depth >> 8, depth & 0xFF, Picture(tile, upper || keyBaseBlack)));
+            }
+            return new Part1MapDepthGrid(layerX, layerY, layerW, layerH, cells);
+        }
+        catch (EndOfStreamException) { return null; }
+    }
+
     private static int[] ReadEntries(BinaryReader reader, int count)
     {
         var tiles = new int[count];
@@ -106,3 +175,12 @@ public static class Part1Map
         return tiles;
     }
 }
+
+/// <summary>맵 띠 하나 — 깊이(칸 줄, 높이 A)와 40×8 ARGB 그림(알파 0 이 비침).</summary>
+public sealed record Part1MapStrip(int Row, int Level, uint[] Pixels);
+
+/// <summary>
+/// 맵 띠의 깊이 격자(<see cref="Part1Map.LoadDepth"/>). 띠 칸 (i, j) 는 세계 화면 ((<paramref name="Col0"/> + i)·40, (<paramref name="Row0"/> + j)·8) — 맵 그림과 같은 자리.
+/// 칸마다 띠는 원본이 넣는 차례(바탕 → 윗층)다.
+/// </summary>
+public sealed record Part1MapDepthGrid(int Col0, int Row0, int Cols, int Rows, List<Part1MapStrip>?[] Cells);

@@ -1260,7 +1260,11 @@ internal sealed class Part1MapObjects(GameWindow host)
     // DrawObjects 때 그림자(z < 0 자식)만 바로 그리고 나머지 층·자식은 깊이 차례로 모아 둔 뒤 DrawUnits 가 유닛 사이사이에 풀어 그린다.
     // 열쇠는 세계 단위(칸 40 · 높이 한 단 20) — y · 1,000,000 + z.
 
-    private readonly record struct Pending(long Key, int Seq, uint[]? Pixels, int W, int H, int X, int Y, Part1MapObjectKey? Child, int Age);
+    private readonly record struct Pending(long Key, int Seq, uint[]? Pixels, int W, int H, int X, int Y, Part1MapObjectKey? Child, int Age)
+    {
+        /// <summary>그림 안에서 그릴 네모(x0, y0, x1, y1) — 맵 띠를 유닛 네모만큼만 다시 그릴 때.</summary>
+        public (int X0, int Y0, int X1, int Y1)? Clip { get; init; }
+    }
 
     private static readonly (int Col, int Row)? CamHold =
         Environment.GetEnvironmentVariable("DUELDX_P1CAM")?.Split(',') is [var hc, var hr] && int.TryParse(hc, out int c) && int.TryParse(hr, out int r) ? (c, r) : null;
@@ -1325,8 +1329,88 @@ internal sealed class Part1MapObjects(GameWindow host)
         _drawn = 0;
     }
 
+    // ── 맵 띠가 유닛을 가린다 ───────────────────────────────────────────────────────────────────────────
+    // 원본은 맵도 물체와 같은 그리기(0x10097390)로 띠마다 깊이 (줄·40, 높이·20) 를 그리기 목록에 넣는다(바탕 0x1009761a · 윗층 0x100978d8 → 0x1001bc60).
+    // 그래서 구조물(벽 · 기둥 · 건물) 뒤에 선 유닛은 그 띠에 불투명하게 가려진다 — 그리기(0x1001ae70)는 개체의 섞기 칸 +0x24 를 치명 물들이기 때만 덮어쓰고,
+    // 가려진 유닛을 비치게 · 실루엣으로 그리는 둘째 그리기는 없다(0x1001b7a0: 정렬 → 차례로 한 번씩). 버그 리포트 #64-1(Btl 20227 기둥 · 건물).
+    // 리메이크는 맵 그림을 통째로 바탕에 깐 채, 유닛 · 물체 층의 네모와 겹치고 그보다 앞인 띠만 그 네모 안으로 잘라 깊이 차례에 끼워 다시 그린다.
+
+    private const int StripW = 40, StripH = 8;   // 맵 띠 한 칸(ObtMap.StripWidth · StripHeight)
+    private Part1MapDepthGrid? _mapDepth;
+    private DemoScene? _mapDepthFor;
+    private readonly Dictionary<(int Cell, int Index), (int X0, int Y0, int X1, int Y1)> _cover = [];
+
+    private Part1MapDepthGrid? MapDepth()
+    {
+        if (ReferenceEquals(_mapDepthFor, host._scene)) return _mapDepth;
+        _mapDepthFor = host._scene;
+        var file = host._scene.MapFile;
+        _mapDepth = file.StartsWith(DemoScene.Part1MapPrefix, StringComparison.Ordinal) && int.TryParse(file[DemoScene.Part1MapPrefix.Length..], out int id)
+            ? Part1Map.LoadDepth(id, keyBaseBlack: host._scene.MapDecor.Count > 0) : null;
+        return _mapDepth;
+    }
+
+    /// <summary>
+    /// 유닛(네모 · 깊이 열쇠)과 이미 모은 물체 층을 가리는 맵 띠를 깊이 차례에 끼운다 — <see cref="BattleScene.DrawUnits"/> 가 첫 유닛을 그리기 전에.
+    /// 띠마다 가리는 것들의 네모를 합친 만큼만 다시 그려, 유닛 밖 바닥에 칠한 칸 강조 따위를 지우지 않는다.
+    /// </summary>
+    internal void QueueMapCover(IReadOnlyList<(int X, int Y, int W, int H, long Key)> units)
+    {
+        if (MapDepth() is not { } grid) return;
+        _cover.Clear();
+        int top = GridTop + host.BoardPad;
+        int vx0 = host._camX, vy0 = host._camY, vx1 = vx0 + host.ViewWidth, vy1 = vy0 + host.ViewHeight;
+        void Cover(int x, int y, int w, int h, long key)
+        {
+            int x0 = Math.Max(x, vx0), y0 = Math.Max(y, vy0), x1 = Math.Min(x + w, vx1), y1 = Math.Min(y + h, vy1);
+            if (x0 >= x1 || y0 >= y1) return;
+            int i0 = Math.Max(0, (int)Math.Floor(x0 / (double)StripW) - grid.Col0);
+            int i1 = Math.Min(grid.Cols - 1, (int)Math.Floor((x1 - 1) / (double)StripW) - grid.Col0);
+            int j0 = Math.Max(0, (int)Math.Floor((y0 - top) / (double)StripH) - grid.Row0);
+            int j1 = Math.Min(grid.Rows - 1, (int)Math.Floor((y1 - 1 - top) / (double)StripH) - grid.Row0);
+            for (int j = j0; j <= j1; j++)
+                for (int i = i0; i <= i1; i++)
+                {
+                    int cell = j * grid.Cols + i;
+                    if (grid.Cells[cell] is not { } strips) continue;
+                    for (int k = 0; k < strips.Count; k++)
+                    {
+                        if (DepthKey(40 * strips[k].Row, 20 * strips[k].Level) <= key) continue;
+                        _cover[(cell, k)] = _cover.TryGetValue((cell, k), out var r)
+                            ? (Math.Min(r.X0, x0), Math.Min(r.Y0, y0), Math.Max(r.X1, x1), Math.Max(r.Y1, y1)) : (x0, y0, x1, y1);
+                    }
+                }
+        }
+        foreach (var u in units) Cover(u.X, u.Y, u.W, u.H, u.Key);
+        for (int n = _pending.Count, p = 0; p < n; p++)
+            if (_pending[p].Pixels != null) Cover(_pending[p].X, _pending[p].Y, _pending[p].W, _pending[p].H, _pending[p].Key);
+        if (_cover.Count == 0) return;
+        foreach (var ((cell, k), (x0, y0, x1, y1)) in _cover)
+        {
+            var s = grid.Cells[cell]![k];
+            int sx = (grid.Col0 + cell % grid.Cols) * StripW, sy = top + (grid.Row0 + cell / grid.Cols) * StripH;
+            int cx0 = Math.Max(x0, sx) - sx, cy0 = Math.Max(y0, sy) - sy;
+            int cx1 = Math.Min(x1, sx + StripW) - sx, cy1 = Math.Min(y1, sy + StripH) - sy;
+            if (cx0 >= cx1 || cy0 >= cy1) continue;
+            // 맵은 세계 (0, 0, 0) 의 물체 — 같은 깊이면 맵 띠가 물체보다 먼저, 칸 안에서는 바탕 → 윗층 차례.
+            _pending.Add(new(DepthKey(40 * s.Row, 20 * s.Level), int.MinValue + cell * 16 + Math.Min(k, 15), s.Pixels, StripW, StripH,
+                             sx, sy, null, 0) { Clip = (cx0, cy0, cx1, cy1) });
+        }
+        _pending.Sort(ByKey);
+    }
+
+    private readonly uint[] _clipBuf = new uint[StripW * StripH];
+
     private void DrawPending(in Pending p)
     {
+        if (p.Pixels != null && p.Clip is { } clip)
+        {
+            var (cx0, cy0, cx1, cy1) = clip;
+            int w = cx1 - cx0, h = cy1 - cy0;
+            for (int y = 0; y < h; y++) Array.Copy(p.Pixels, (cy0 + y) * p.W + cx0, _clipBuf, y * w, w);
+            host.BlitMasked(_clipBuf, w, h, p.X + cx0, p.Y + cy0);
+            return;
+        }
         if (p.Pixels != null) { host.BlitMasked(p.Pixels, p.W, p.H, p.X, p.Y); return; }
         if (p.Child is { } k) DrawChild(k, p.Age, p.X, p.Y);
     }
