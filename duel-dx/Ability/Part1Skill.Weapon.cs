@@ -30,6 +30,15 @@ internal sealed partial class Part1Skill
     internal static bool StrikesEachKey(int work) =>
         work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) is (>= 11 and <= 15) or (>= 36 and <= 40);
 
+    /// <summary>
+    /// 시전자 모션의 타격 키(종류 5)로도 치는 파트1 기술인가 — 연 · 참(<see cref="StrikesEachKey"/>)과 풍아열공참(293).
+    /// 풍아열공참 핸들러(<c>0x100602a0</c>)는 시전자에게 파트1 동작 14(5연, <c>0x1006041c</c>)를 걸고 맞음 사건은 499 의 하나(<c>0x1006067a</c>)뿐이지만,
+    /// 동작 14 의 타격 키 다섯(살라딘 9 · 15 · 21 · 27 · 33틱, 죠안 12 · 30 · 36 · 42 · 48틱 — 키 (식 1/30, 모양 2, 크기 8, 적만))을
+    /// 유닛 키 처리 <c>0x10036130</c> 이 따로 쳐서 앞의 다섯 타도 피해가 든다. 그 키 한 타는 키에 적힌 식 · 명중 100 으로 친다(<see cref="Part1Rules.KeySelector"/>).
+    /// </summary>
+    internal static bool StrikesWithKeys(int work) =>
+        StrikesEachKey(work) || work >= Part1Game.ChrBase && Part1SkillBook.AttackIdOf(work) == 293;
+
     /// <summary>연 · 참을 쓰면 첫 타격 키에 적힐 세기 식(<see cref="Part1Game.StrikeSelectors"/>) — 예상 피해 안내용. 모르면 null.</summary>
     internal static int? FirstStrikeSelector(UnitState u, WorkData w)
     {
@@ -103,9 +112,17 @@ internal sealed partial class Part1Skill
         var t = TargetPoint(targets, aim);
         user.Facing = FacingOf(t.X - _home.X, t.Y - _home.Y);
         var (length, hits, selectors) = PlayStrike(user, part1Action);
-        // 원본은 Attack.dat 의 세기 식(연 1)이 아니라 <b>타격 키에 적힌 식</b>으로 친다(0x10036130 → 0x1003f3c0(키[0], …, 명중 100)) —
-        // 마장기(아론다이트 · Mk3)의 연 키는 0 = 기본 공격 식이라 한 타가 기본 공격만큼 든다. 전에는 늘 식 1((DEX + SKILL)·W/2)로 쳐서
-        // 무기 ATK 가 큰 마장기의 연이 기본 공격의 10분의 1 남짓이었다(댓글 제보 fg-121).
+        KeyHits(hits, selectors, targets, hit);
+        return length + 1;
+    }
+
+    /// <summary>
+    /// 모션 타격 키 틱마다 대상들을 친다(<c>0x10036130</c>). 원본은 Attack.dat 의 세기 식(연 1)이 아니라 <b>타격 키에 적힌 식</b>으로 친다
+    /// (0x10036130 → 0x1003f3c0(키[0], …, 명중 100)) — 마장기(아론다이트 · Mk3)의 연 키는 0 = 기본 공격 식이라 한 타가 기본 공격만큼 든다.
+    /// 전에는 늘 식 1((DEX + SKILL)·W/2)로 쳐서 무기 ATK 가 큰 마장기의 연이 기본 공격의 10분의 1 남짓이었다(댓글 제보 fg-121).
+    /// </summary>
+    private void KeyHits(List<int> hits, List<int?> selectors, List<int> targets, Action<int> hit)
+    {
         for (int i = 0; i < hits.Count; i++)
         {
             int? selector = i < selectors.Count ? selectors[i] : null;
@@ -117,7 +134,6 @@ internal sealed partial class Part1Skill
                     finally { host.Btl.Part1.KeySelector = null; }
                 });
         }
-        return length + 1;
     }
 
     /// <summary>살 — 시전자가 베고(파트1 동작 19), 15틱 뒤 대상 위(z+40)에 칼금 183(모션 0~2 중 하나)이 서며 한 틱 뒤 친다.</summary>

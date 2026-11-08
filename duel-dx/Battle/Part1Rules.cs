@@ -488,8 +488,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         // 상태이상 기술(선택자 10~28)은 피해가 아니어서 파트2 식으로 넘긴다. 기본 공격은 무기 갈래의 기본 공격 칸(칼 1 — 식 0 · 명중 100, 활 4 — 식 3 · 명중 90 …).
         var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
         int selector = attack?.Formula ?? 0;
-        // 연 · 참의 타격 키 한 타 — 키에 적힌 식으로 친다(KeySelector, 원본 0x10036130).
-        bool keyHit = KeySelector is not null && attack != null && Part1Skill.StrikesEachKey(w.Id);
+        // 연 · 참 · 풍아열공참의 타격 키 한 타 — 키에 적힌 식으로 친다(KeySelector, 원본 0x10036130).
+        bool keyHit = KeySelector is not null && attack != null && Part1Skill.StrikesWithKeys(w.Id);
         if (keyHit) selector = KeySelector!.Value;
         if (selector is >= 10 and <= 28) return null;
         // 썬 라이트(선택자 8)가 같은 편에 닿으면 회복 갈래(6)다 — 명중 · 방어를 안 굴리고 결과 1(회복), 양은 HealAmount 가 낸다.

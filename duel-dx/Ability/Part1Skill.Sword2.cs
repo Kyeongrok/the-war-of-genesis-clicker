@@ -141,6 +141,7 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 풍아열공참(293) — 대상 쪽을 보고 파트1 동작 14(소리 1890 은 그 끝에). 끝나면 동작 19 를 하고, 시전자 z+60 에 기운 54/64 스물다섯이 모이며
     /// 14틱 뒤 대상 위(z+60)에 499:0 이 서서 그 셋째 틱에 친다(<c>0x10076a10</c>).
+    /// 그 앞 동작 14(5연)의 타격 키 다섯도 키마다 친다(<c>0x10036130</c>, <see cref="StrikesWithKeys"/>) — 전에는 몸짓만 하고 피해가 499 의 한 번뿐이었다(버그 리포트 #79).
     /// </summary>
     private int S2Punga(List<int> targets, (double X, double Y) aim, Action<int> hit)
     {
@@ -149,7 +150,8 @@ internal sealed partial class Part1Skill
         var t = TargetPoint(targets, aim);
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
-        int a = Act(user, 14, 13);
+        var (a, keys, selectors) = PlayStrike(user, 14);
+        KeyHits(keys, selectors, targets, hit);
         Sound(1890, a);
         int last = a;
         for (int n = 0; n < 25; n++)
