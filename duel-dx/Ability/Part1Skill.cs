@@ -87,7 +87,55 @@ internal sealed partial class Part1Skill(GameWindow host)
     private int Length(int obs, int motion) => Math.Max(1, host.UiFor(P(obs))?.MotionLength(motion) ?? 1);
 
     private void Later(int tick, Action run) => _events.Add((At(tick), run));
-    private void HitAt(int tick, int target, Action<int> hit) => Later(tick, () => hit(target));
+
+    /// <summary>
+    /// 대상 하나를 친다. 칸마다 맞음 사건이 서는 기술(<see cref="HitsPerTile"/>)이면 큰 유닛(둘레 3×3)은 맞는 칸 가운데 차지한 칸 수만큼 맞는다 —
+    /// 첫 타는 그 틱에, 나머지는 <see cref="_tileSpacing"/> 틱씩 뒤에 <see cref="TileStrike"/> 로(버그 리포트 #78).
+    /// </summary>
+    private void HitAt(int tick, int target, Action<int> hit)
+    {
+        Later(tick, () => hit(target));
+        if (_tileCells is not { } tiles || host._units[target] is not { } u || !host.Btl.Part1Big(u)) return;
+        int covered = tiles.Count(c => host.Btl.Covers(u, c.Col, c.Row));
+        for (int k = 1; k < covered; k++)
+            Later(tick + _tileSpacing * k, () =>
+            {
+                TileStrike = true;
+                try { hit(target); }
+                finally { TileStrike = false; }
+            });
+    }
+
+    /// <summary>
+    /// 원본이 맞는 칸마다 따로 맞음 사건을 세우는 파트1 기술인가. 맞음 사건(<c>0x10076a80</c>)은 사건이 달린 물체의 칸 하나(인자 (3, 1, 3, 0))를
+    /// <c>0x10039690</c> 으로 칠하고 <c>0x1008f1a0</c> 으로 모으는데, 모으기의 <c>+0x27a</c> 깃발은 그 한 번 안에서만 겹침을 막고 끝에 지운다
+    /// (<c>0x1008f2c7</c> 세움 · <c>0x1008f355</c> 지움). 칸 → 유닛은 <c>0x10089610</c> 이라 큰 유닛은 둘레 3×3 어느 칸에서도 잡힌다. 그래서
+    /// 범위 칸마다 사건 물체를 놓는 기술(격 41~45 <c>0x10046fca</c> · 미사일 281 · 포격 362 · 자주포 395 · 폭격 396 의 공용 폭발 · 머스펠 헤임 347)과
+    /// 칸이 바뀔 때마다 치는 이동기(<c>0x100769b0</c> → <c>0x1007676e</c> — 혼 26~30 · 혈랑마혼 292 · 비연참 294 · 빛살 <see cref="BattleScene.IsPart1Beam"/>)는
+    /// 큰 유닛을 차지한 칸 수만큼 친다. 대상 목록(<c>0x1008f1a0(0, …)</c>)을 훑어 대상마다 사건을 하나 놓는 기술은 한 번이다.
+    /// 타이타니아 · 썬더스탐 · 메테오 · 공폭탄처럼 아무 칸에 떨어지는 것은 사람마다 한 번으로 둔 결정(menu-89)대로 여기 넣지 않는다.
+    /// </summary>
+    internal static bool HitsPerTile(int work) =>
+        work is FlyingSlashWork or MuspelWork || work > Part1Game.ChrBase && HitsPerTileAttack(Part1SkillBook.AttackIdOf(work));
+
+    /// <summary><see cref="HitsPerTile"/> 의 Attack 번호 판(기본 공격 빔라이플 · 포격도 이것으로).</summary>
+    internal static bool HitsPerTileAttack(int attackId) =>
+        attackId is (>= 26 and <= 30) or (>= 41 and <= 45) or 292 or 294 or 281 or 347 or 362 or 395 or 396 || BattleScene.IsPart1Beam(attackId);
+
+    /// <summary>칸마다 치는 기술의 맞는 칸(없으면 null) — <see cref="HitAt"/> 이 큰 유닛의 덧타격 수를 센다.</summary>
+    private HashSet<(int Col, int Row)>? _tileCells;
+
+    /// <summary>큰 유닛 덧타격 사이 틱 — 격 · 머스펠 헤임의 물결은 칸마다 4틱(거리 ÷ 10), 폭발은 0~4틱, 빛살 · 돌진은 칸마다 1틱쯤.</summary>
+    private int _tileSpacing = 2;
+
+    /// <summary>지금 부르는 hit 가 큰 유닛이 다른 칸에서 또 맞는 덧타격인가 — 전투가 같은 대상을 두 번째로 쳐도 막지 않는다.</summary>
+    internal bool TileStrike { get; private set; }
+
+    private void SetTileCells(bool perTile, int attackId, List<(int Col, int Row)> cells)
+    {
+        _tileCells = perTile && cells.Count > 0 ? cells.ToHashSet() : null;
+        _tileSpacing = attackId is (>= 41 and <= 45) or 347 ? 4 : attackId is 281 or 362 or 395 or 396 ? 2 : 1;
+    }
 
     private void Put(int obs, int motion, int tick, double x, double y, int? life = null, bool mirror = false, bool? sounds = null) =>
         Along(obs, motion, tick, [(0, x, y)], life, mirror, sounds);
@@ -299,6 +347,7 @@ internal sealed partial class Part1Skill(GameWindow host)
 
         _t0 = host._lastTime;
         _events.Clear();
+        SetTileCells(HitsPerTile(w.Id), Part1SkillBook.AttackIdOf(w.Id), cells);
         int last = w.Id switch
         {
             BlizzardWork => Blizzard(targets, hit),

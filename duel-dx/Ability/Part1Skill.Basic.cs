@@ -86,6 +86,8 @@ internal sealed partial class Part1Skill
         _shifts.Clear();
         var (ax, ay) = CellFoot(aim.Col, aim.Row);
         _t0 = host._lastTime;
+        // 빔라이플 · 포격은 칸마다 맞음 사건 — 큰 유닛은 차지한 칸 수만큼(HitsPerTile, 버그 리포트 #78).
+        SetTileCells(BasicKind(attackId) is BasicStyle.Beam or BasicStyle.Cannon && HitsPerTileAttack(attackId), attackId, cells);
         int last = BasicKind(attackId) switch
         {
             BasicStyle.Melee => BasicMelee(attackId, targets, (ax, ay), hit),

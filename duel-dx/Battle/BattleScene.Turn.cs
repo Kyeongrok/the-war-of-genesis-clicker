@@ -1611,9 +1611,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 {
                     if (Trace)
                         System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                            $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage} at {host._lastTime:0.00}" + Environment.NewLine);
+                            $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage}{(host.Part1Ab.TileStrike ? " tile" : "")} at {host._lastTime:0.00}" + Environment.NewLine);
                     if (host.Part1Ab.ChainStruck >= 2) _timedPercent = 100;   // 연속 공격으로 여러 번 치면 타마다 보통 피해
-                    if (struck.Add(ti) || each) ApplyWork(a, hitWork, host._units[ti], dying);
+                    // 칸마다 치는 기술은 큰 유닛이 차지한 다른 칸에서 또 맞는다(Part1Skill.HitsPerTile — 원본 0x10076a80 → 0x1008f1a0, 버그 리포트 #78).
+                    if (struck.Add(ti) || each || host.Part1Ab.TileStrike) ApplyWork(a, hitWork, host._units[ti], dying);
                 }
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))
