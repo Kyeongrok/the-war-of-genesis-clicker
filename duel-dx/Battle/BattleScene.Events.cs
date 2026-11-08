@@ -1282,4 +1282,24 @@ internal sealed unsafe partial class BattleScene
         for (double end = host._lastTime + 5; host._lastTime < end && host._units.Any(u => u.Alive && u.OnField && u.IsBusy);) yield return true;
         Log("끝");
     }
+
+    /// <summary>
+    /// 파트1: 돌고 있는 사건의 남은 줄에 이 유닛이 시전자인 기술(행동 400 → 207)이 있나.
+    /// </summary>
+    /// <remarks>
+    /// 원본 행동 400(<c>0x1001f990</c>)은 기술을 빈 칸(<c>0x1018ad44</c>)에 넣고 곧바로 다음 줄로 간다 — 줄을 붙드는 것은 뒤따르는 행동 1 뿐이라
+    /// 「400 → 2 → … → 400」 이면 앞 기술이 도는 <b>도중에</b> 다음 기술이 시작한다. Btl 0445(무영릉 1F) 사건 3 은
+    /// 묵호자의 파이어볼(76) → 2[130] → 대사 → 2[100] → 대사 → 2[100] → 기파랑의 위풍당당(286) 이라 기파랑은 불덩이를 맞는 가운데 필살기를 쓴다.
+    /// 리메이크는 기술 루틴을 한 번에 하나만 돌려(공용 연출 상태) 앞 기술이 끝난 뒤에 쏘는데, 그 사이 남은 불덩이에 기파랑이 쓰러져
+    /// 207 이 「시전자 없음」으로 빠지고 대사만 나온 채 전투가 끝났다(버그 리포트 #72). 그래서 사건이 시킨 기술은 이 사건이 뒤에 기술을 시킬
+    /// 사람을 쓰러뜨리지 않는다(HP 1 로 남긴다). 자료에서 「400 → 1 없이 → 400」 으로 앞 기술 도중 다음 시전자가 맞는 곳은 0445 하나다.
+    /// </remarks>
+    internal bool EventCastsLater(UnitState u)
+    {
+        if (!host._scene.IsPart1 || _runningEvent < 0 || _runningEvent >= _events.Count) return false;
+        var acts = _events[_runningEvent].Actions;
+        for (int pc = Math.Max(0, _eventPc); pc < acts.Count; pc++)
+            if (acts[pc].Code == 207 && acts[pc].Args.Length > 0 && EventTargets(acts[pc].Args[0], out _).Contains(u)) return true;
+        return false;
+    }
 }

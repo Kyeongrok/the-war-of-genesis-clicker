@@ -1997,6 +1997,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         _skillLeader = -1;
         // 사건 207 의 쓰러짐 처리(0x1004e6d0)는 지금 차례 유닛([ctrl+0x4ce8])이면 HP 1 로 남긴다(0x1004e757~0x1004e765, 감사5 B3).
         if (eventFinisher && !part1Counter && (uint)_turn < host._units.Length && host._units[_turn] is var now && dying.Remove(now)) now.Hp = 1;
+        // 파트1: 이 사건이 뒤에 기술을 시킬 사람도 HP 1 로 남긴다 — 원본은 그 기술을 앞 기술 도중에 시작한다(EventCastsLater, Btl 0445 위풍당당 · 버그 리포트 #72).
+        if (eventFinisher && !part1Counter && host._scene.IsPart1)
+            foreach (var keep in host._units.Where(u => u.Alive && u.OnField && (u.Hp <= 0 || dying.Contains(u)) && EventCastsLater(u)).ToList())
+            {
+                dying.Remove(keep);
+                keep.Hp = 1;
+            }
 
         // 파트1 무기 덧기술 — 치명타가 걸어 둔 기술을 맞은 자리에 공짜로 쏜다(사건 207 과 같은 길, 비용 없음).
         if (_part1Proc is { } part1Proc && (!eventFinisher || part1Counter))   // 되받아치기의 치명도 덧기술을 쏜다
