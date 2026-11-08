@@ -111,7 +111,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
 
     internal static readonly bool Trace = Environment.GetEnvironmentVariable("DUELDX_TRACE") == "1";
 
-    internal bool IsPlayerTurn => _turn >= 0 && IsMine(host._units[_turn]) && _routine == null && _outcome.Length == 0;
+    /// <remarks>차례 번호가 유닛 표 밖이면(판을 바꾸는 사이 남은 옛 번호) 내 차례가 아니다 — 전에는 그 자리를 읽다 IndexOutOfRange 로 죽었다(버그 리포트 #71 의 v1.0.81 crashLog, TryWalkTo).</remarks>
+    internal bool IsPlayerTurn => (uint)_turn < (uint)host._units.Length && IsMine(host._units[_turn]) && _routine == null && _outcome.Length == 0;
 
 
     /// <summary>지금 판의 아군 상태를 파티에 담아 둔다(다음 전투로 이어진다).</summary>
@@ -975,8 +976,10 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// <summary>차례인 아군을 클릭한 파란 칸까지 걷게 한다. TP 는 행동할 때 한 번에 뺀다.</summary>
     internal bool TryWalkTo(int col, int row)
     {
-        var u = host._units[_turn >= 0 ? _turn : 0];
-        if (!IsPlayerTurn || u.IsBusy || ComputeRange(u) is not { } range) return false;
+        // 차례 번호 · 누른 칸 · 차례인 유닛의 칸이 판 밖이면 걷지 않는다 — 전에는 유닛 표를 먼저 읽어 차례 번호가 표 밖이면 IndexOutOfRange 로 죽었다(버그 리포트 #71 crashLog).
+        if (!IsPlayerTurn || (uint)col >= (uint)host.Cols || (uint)row >= (uint)host.Rows) return false;
+        var u = host._units[_turn];
+        if (u.IsBusy || (uint)u.Col >= (uint)host.Cols || (uint)u.Row >= (uint)host.Rows || ComputeRange(u) is not { } range) return false;
         if (PathWithin(range, u.Col, u.Row, row * host.Cols + col) is not { Count: > 0 } path) return false;
         foreach (var cell in path) u.Path.Enqueue(cell);
         return true;
