@@ -522,7 +522,9 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         bool weaponHit = attack == null || selector is 0 or 1 or 2 or 3 or 4 or 29 or 30 or 31;
         if (weaponHit && Has(a, 23)) power = power * 3 / 2;          // 블러드 러스트 — 무기 E ×1.5
         // 타수(+0x66) — 세기에 곱해 한 번에 준다(원본 AI 어림 0x10040985 와 같다). 쌍검 · 쌍권총 · 연 · 참처럼 타격 키마다 따로 치는 것은 부르는 쪽이 나눠 치고(SplitHits) 곱하지 않는다.
-        if (attack != null) power = (power + (keyHit ? 0 : attack.PowerAdd * attack.PowerAdd)) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
+        // 풍아열공참(293)의 마지막 한 대는 원본 핸들러가 (+0x44)² 를 두 번 더한다(0x100603b6 lea ecx,[eax+edx*2] — 사용자 결정, 버그 리포트 #79).
+        int powerAdds = !keyHit && attack?.Id == 293 ? 2 : 1;
+        if (attack != null) power = (power + (keyHit ? 0 : attack.PowerAdd * attack.PowerAdd * powerAdds)) * (SplitHits ? 1 : Math.Max(1, attack.Hits));
         if (attack != null && SplitHits && SplitShots > 0) power = power * Math.Max(1, attack.Hits) / SplitShots;
         int element = keyHit ? (enchant > 0 ? enchant : (selector is >= 29 and <= 31 ? fa.Weapon2 : fa.Weapon1)?.Element ?? 0)   // 키 한 타: 0x1003f070 · 0x1003f1b0
             : attack is { Element: > 0 } ? attack.Element : enchant > 0 ? enchant : fa.Weapon1?.Element ?? 0;
