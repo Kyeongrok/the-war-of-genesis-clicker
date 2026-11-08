@@ -86,7 +86,10 @@ internal sealed partial class Part1Skill
                 if (k == kStar || Rand(2) == 1) Put(617, 10 + r, a + 1, px, py, mirror: mirror);
                 int e1 = a + d + 66, e1End = e1 + Length(617, 6 + r);
                 Put(617, 6 + r, e1, px, py, mirror: mirror);
-                if (k == 1) { Sound(2021, a); Sound(2022, e1End); }
+                // 소리는 줄마다(k = 1) — 원본 CSound 는 트리거(0x10078fc0)가 끝나고 지연(0x10078f90 → +0x26)만큼 뒤에 난다(0x10078e20).
+                // 2021 은 A 끝 + d + 64(0x10059adf · 0x10059aee — 그 줄의 금 E1 이 갈라질 때), 2022 는 E1 끝 + d + 7(0x10059eec · 0x10059efb —
+                // 첫 칸이 벌어질 때). 전에는 지연을 빼 2021 이 A 끝에 · 2022 가 E1 끝에 나서 X 자 획이 갈라질 때 소리가 없었다(버그 리포트 #73).
+                if (k == 1) { Sound(2021, a + d + 64); Sound(2022, e1End + d + 7); }
                 // 벌어진 금 — 250틱 붙들었다가 닫힌다.
                 int s = e1End + d + 5 * k + 2;
                 Put(617, 2 * r, s, px, upY, life: 250, mirror: mirror);

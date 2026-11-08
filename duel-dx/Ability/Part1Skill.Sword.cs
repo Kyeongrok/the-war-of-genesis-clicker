@@ -93,7 +93,8 @@ internal sealed partial class Part1Skill
             Shards(arrive + 2, tx, ty);
             last = Math.Max(last, arrive + 2 + 5 + Math.Max(Length(101, 6), Length(787, 0)));
         }
-        if (targets.Count > 0) Sound(2028, e1End);
+        // 2028 은 대상마다 하나 — 트리거 101:0 · 지연 10i(0x1005de22 · 0x1005de2a), 던지기와 함께 난다(버그 리포트 #73 과 같은 지연 누락).
+        for (int i = 0; i < targets.Count; i++) Sound(2028, e1End + 10 * i);
         return last;
     }
 

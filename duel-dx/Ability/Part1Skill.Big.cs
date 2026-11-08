@@ -302,7 +302,7 @@ internal sealed partial class Part1Skill
     // ---- 롱 레이져 ----
 
     /// <summary>
-    /// 롱 레이져 398(<c>0x10072e60</c>) — 소리 1914. 시전자를 둘레 3×3 칸의 가장 높은 땅 +20 까지 들어 올리고(운반자, 빠르기 10, 걷는 동작), 닿으면 소리 1895,
+    /// 롱 레이져 398(<c>0x10072e60</c>) — 소리 1914. 시전자를 둘레 3×3 칸의 가장 높은 땅 +20 까지 들어 올리고(운반자, 빠르기 10, 걷는 동작), 닿고 15틱 뒤 소리 1895,
     /// 15틱 뒤 그 높이에서 빛살 505(위 6 · 아래 7 · 왼 8 · 오른 9)가 보는 쪽 판 끝까지 빠르기 40 으로 난다 — 들어서는 칸마다 적을 친다. 빛살이 끝나면 시전자를 내린다.
     /// </summary>
     private int LongLaser(List<int> targets, (double X, double Y) aim, Action<int> hit)
@@ -317,7 +317,7 @@ internal sealed partial class Part1Skill
         double lift = 20 * 0.6;
         var up = Move(_home, (hx, hy - lift), 10, 1.0);
         int arrive = up.Count;
-        Sound(1895, arrive);
+        Sound(1895, arrive + 15);   // 트리거 운반자 · 지연 15(0x1007314e · 0x10073157) — 빛살과 함께 난다(버그 리포트 #73 과 같은 지연 누락)
         int s = arrive + 17;
         (double X, double Y) from = (hx, hy - lift);
         var (ux, uy) = BigDirs[dir];
@@ -483,7 +483,8 @@ internal sealed partial class Part1Skill
             Along(283, m, 0, AsPath(rise.Prepend(s0).ToList()), life: rise.Count, mirror: d >= 9);
             int hover = (N - i) * 5, leave = rise.Count + 1 + hover;
             Along(283, m, rise.Count + 1, [(0, s1.X, s1.Y)], life: hover, mirror: d >= 9);
-            if (i == 0) Sound(94, rise.Count + 1 + hover);
+            // 트리거는 첫 미사일의 솟는 이동기([esp+0x1c]), 지연 5(0x100590d6 · 0x100590df) — 떠 있기가 끝날 때가 아니다(버그 리포트 #73 과 같은 지연 누락).
+            if (i == 0) Sound(94, rise.Count + 5);
             var arc = Arc(s1, goal, 1, 1.1, 70, 60);
             Along(283, m, leave, AsPath(arc.Prepend(s1).ToList()), life: arc.Count, mirror: d >= 9);
             int land = leave + arc.Count + 1;

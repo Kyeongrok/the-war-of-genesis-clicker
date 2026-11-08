@@ -257,7 +257,7 @@ internal sealed partial class Part1Skill
         int sigma = a6 + Len(135);
 
         // 화면 — 비스듬한 줄무늬 쉰 · 따라가는 696:0 · 분신 136(불티를 뿌린다) · 칼금 28칸 · 화면이 바랜다.
-        Sound(2089, sigma);
+        Sound(2089, sigma + 18);   // 트리거 M2 · 지연 18(0x100550ef · 0x100550f8) — 트리거가 있어도 지연은 산다(버그 리포트 #73)
         for (int n = 0; n < 50; n++)
         {
             var path = Move((hw + Rand(2 * hw), -hh - Rand(2 * hh)), (-hw - Rand(2 * hw), hh + Rand(2 * hh)), Rand(2) + 1, 1.05);
