@@ -917,7 +917,12 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         {
             // 차례 끝 대기(0x10030164 → 0x10036350) — 안 움직이고 안 했으면 선 칸의 맵 물체에 알림 2(· 어빌리티 63 이면 5): 문 곁에서 쉬면 문이 열린다.
             if (part1Stayed) Part1Objects.WaitTurnEnd(u);
-            int gain = (u.MaxHp - u.Hp) / (part1Stayed ? 5 : 10);
+            // 기계(인물 칸 10 = 2 — 마장기 · 탱크)는 쉬어도 HP 가 안 찬다: 두 갈래 다 종류(+0xb8) == 2 면 회복을 건너뛴다(0x1003e625 · 0x1003e7af).
+            // 전에는 기계도 채워 쇼크가 풀린 마장기가 쉬며 HP 를 되찾았다(버그 리포트 #82, Btl 20068 베이모스T2).
+            int gain = Part1.IsMachine(u) ? 0 : (u.MaxHp - u.Hp) / (part1Stayed ? 5 : 10);
+            if (Trace)
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                    $"part1 rest chr {u.ChrCode} 기계 {Part1.IsMachine(u)} 안 움직임 {part1Stayed} HP {u.Hp}/{u.MaxHp} +{gain}" + Environment.NewLine);
             if (gain > 0 && !u.HasStatus(26))
             {
                 int before = u.Hp;

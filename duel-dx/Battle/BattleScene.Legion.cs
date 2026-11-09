@@ -903,7 +903,7 @@ internal sealed unsafe partial class BattleScene
             foreach (var f in FollowersOf(leaderIndex))
             {
                 bool stayed = f.Col == f.OriginCol && f.Row == f.OriginRow && f.Tp >= f.MaxTp;
-                int gain = (f.MaxHp - f.Hp) / (stayed ? 5 : 10);
+                int gain = Part1.IsMachine(f) ? 0 : (f.MaxHp - f.Hp) / (stayed ? 5 : 10);   // 기계는 안 찬다(0x1003e625 · 0x1003e7af, 버그 리포트 #82)
                 if (gain <= 0 || f.HasStatus(26)) continue;
                 int before = f.Hp;
                 f.Hp += gain;
