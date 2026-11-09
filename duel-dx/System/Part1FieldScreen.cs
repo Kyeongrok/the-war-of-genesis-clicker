@@ -170,6 +170,9 @@ internal sealed unsafe class Part1FieldScreen(GameWindow host, Part1TitleScreen 
     {
         if (n < 0 || n >= _spots.Length || _field is not { } field) return 0;
         motion = Part1Game.ConvertedMotion(field.Sprites[n].SpriteId, motion);   // 대본은 원본 모션 번호 — 인물 그림은 파트2 동작으로 옮겨 쌌다(mo-36)
+        // 그림에 없는 모션이면 아무것도 안 바꾼다 — 원본 모션 걸기(0x1009f8e0)는 그 모션의 키 수(+8)가 0 이면 그냥 돌아가 지금 모션을 둔다(0x1009f92f).
+        // 필드 0052 의 누운 이스파히니(Obs 819 — 모션 0 한 장뿐)에 사건 1 이 모션 1 을 걸어, 전에는 없는 모션을 그리느라 사라졌다(버그 리포트 #83).
+        if (host.UiFor(SpriteObs(n)) is { _table: not null } sprite && sprite.Clip(motion) is null) return 0;
         _motion[n] = (motion, field.Sprites[n].Direction == 3);
         _motionStart[n] = host._lastTime;
         _motionOnce[n] = !loop;
