@@ -67,8 +67,10 @@ internal sealed partial class Part1Skill
         user.Facing = Facing.Down;
         int a = Act(user, 26, 5);
         Later(a + 1, () => { user.Facing = Facing.Down; Act(user, 27, 5, repeat: 0); });
-        Put(123, 0, a + 1, hx, hy);
-        Put(666, 0, a + 1, hx, hy);
+        // 땅에 깔린 그림(시전자 · 금 · 대상 자리, 땅 높이 z — 0x1005b98f 등)은 깊이 칸 +0x65 를 안 건드려 같은 줄 유닛 밑에 그려진다(GroundOf, 버그 리포트 #84).
+        long home = GroundOf(user);
+        Put(123, 0, a + 1, hx, hy, ground: home);
+        Put(666, 0, a + 1, hx, hy, ground: home);
         int last = a + 1 + Math.Max(Length(123, 0), Length(666, 0));
 
         // 대각선 넷 — 줄마다 d = rand%30 · k* = rand%5 를 따로 뽑는다. 칸 k 의 자리 P = 시전자 + (±40k, ±40k), P′ = P 의 한 칸 위.
@@ -81,24 +83,25 @@ internal sealed partial class Part1Skill
             for (int k = 1; k < 64; k++)
             {
                 double px = hx + sx * 40 * k, py = hy + sy * 40 * k * 0.8, upY = py - 40 * 0.8;
+                long gP = GroundOf(user, sy * 40 * k), gUp = GroundOf(user, sy * 40 * k - 40);
                 if (px < left || px > right || py < top || py > bottom) break;
                 int r = Rand(3);
-                if (k == kStar || Rand(2) == 1) Put(617, 10 + r, a + 1, px, py, mirror: mirror);
+                if (k == kStar || Rand(2) == 1) Put(617, 10 + r, a + 1, px, py, mirror: mirror, ground: gP);
                 int e1 = a + d + 66, e1End = e1 + Length(617, 6 + r);
-                Put(617, 6 + r, e1, px, py, mirror: mirror);
+                Put(617, 6 + r, e1, px, py, mirror: mirror, ground: gP);
                 // 소리는 줄마다(k = 1) — 원본 CSound 는 트리거(0x10078fc0)가 끝나고 지연(0x10078f90 → +0x26)만큼 뒤에 난다(0x10078e20).
                 // 2021 은 A 끝 + d + 64(0x10059adf · 0x10059aee — 그 줄의 금 E1 이 갈라질 때), 2022 는 E1 끝 + d + 7(0x10059eec · 0x10059efb —
                 // 첫 칸이 벌어질 때). 전에는 지연을 빼 2021 이 A 끝에 · 2022 가 E1 끝에 나서 X 자 획이 갈라질 때 소리가 없었다(버그 리포트 #73).
                 if (k == 1) { Sound(2021, a + d + 64); Sound(2022, e1End + d + 7); }
                 // 벌어진 금 — 250틱 붙들었다가 닫힌다.
                 int s = e1End + d + 5 * k + 2;
-                Put(617, 2 * r, s, px, upY, life: 250, mirror: mirror);
-                Put(617, 2 * r + 1, s, px, py, life: 250, mirror: mirror);
-                Put(617, 2 * r + 13, s + 251, px, upY, mirror: mirror);
-                Put(617, 2 * r + 14, s + 251, px, py, mirror: mirror);
-                Put(617, 6 + r, s, px, py, mirror: mirror);
+                Put(617, 2 * r, s, px, upY, life: 250, mirror: mirror, ground: gUp);
+                Put(617, 2 * r + 1, s, px, py, life: 250, mirror: mirror, ground: gP);
+                Put(617, 2 * r + 13, s + 251, px, upY, mirror: mirror, ground: gUp);
+                Put(617, 2 * r + 14, s + 251, px, py, mirror: mirror, ground: gP);
+                Put(617, 6 + r, s, px, py, mirror: mirror, ground: gP);
                 int g = e1End + d + 7 * k + 2, obs = Rand(2) == 0 ? 10 : 48;
-                Put(obs, 1, g, px, py);
+                Put(obs, 1, g, px, py, ground: gP);
                 chainEnd = g + Length(obs, 1);
                 for (int n = 0; n < 5; n++)
                     Rise(228, 6, g + Rand(10), px + Rand(41) - 20, py + (Rand(41) - 20) * 0.8 - Rand(20) * 0.6, Rand(5) + 15, 0.9);
@@ -113,20 +116,21 @@ internal sealed partial class Part1Skill
         {
             int ti = targets[j];
             var (tx, ty) = host.Btl.UnitFoot(host._units[ti]);
-            Put(617, 6 + Rand(4), start + 1, tx, ty);
+            long gT = GroundOf(host._units[ti]);
+            Put(617, 6 + Rand(4), start + 1, tx, ty, ground: gT);
             int mx = 6 + Rand(4), x = start + 7, xEnd = x + Length(617, mx);
-            Put(617, mx, x, tx, ty, mirror: true);
+            Put(617, mx, x, tx, ty, mirror: true, ground: gT);
             if (j == 0) Sound(2023, xEnd);
             int mc = 10 + Rand(3), c = xEnd + 1, cEnd = c + Length(617, mc);
-            Put(617, mc, c, tx, ty);
+            Put(617, mc, c, tx, ty, ground: gT);
             if (j == 0) Sound(2024, cEnd);
             int h = cEnd + 1;
-            Put(617, 19, h, tx, ty, life: 70);
-            Put(617, 20, h + 71, tx, ty);
-            Put(765, 0, h, tx, ty);
+            Put(617, 19, h, tx, ty, life: 70, ground: gT);
+            Put(617, 20, h + 71, tx, ty, ground: gT);
+            Put(765, 0, h, tx, ty, ground: gT);
             HitAt(h + 1, ti, hit);
-            Put(123, 5, h, tx, ty);
-            Put(10, 1, h, tx, ty);
+            Put(123, 5, h, tx, ty, ground: gT);
+            Put(10, 1, h, tx, ty, ground: gT);
             for (int n = 0; n < 20; n++)
                 Rise(228, 6 + Rand(3), h + Rand(10), tx + Rand(121) - 60, ty + (Rand(121) - 60) * 0.8 - Rand(20) * 0.6, Rand(10) + 20, 0.95);
             flash = Math.Max(flash, cEnd);

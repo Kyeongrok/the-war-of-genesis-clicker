@@ -1324,6 +1324,9 @@ internal sealed class Part1MapObjects(GameWindow host)
         for (; _drawn < _pending.Count && _pending[_drawn].Key < key; _drawn++) DrawPending(_pending[_drawn]);
     }
 
+    /// <summary>아직 안 그린 층 · 자식 가운데 가장 앞(작은) 깊이 열쇠 — 없으면 <see cref="long.MaxValue"/>(땅에 깔린 기술 그림과 차례를 섞으려고).</summary>
+    internal long NextKey => _drawn < _pending.Count ? _pending[_drawn].Key : long.MaxValue;
+
     /// <summary>남은 층 · 자식을 다 그린다 — 유닛을 다 그린 뒤.</summary>
     internal void Flush()
     {

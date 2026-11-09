@@ -397,13 +397,14 @@ internal sealed unsafe partial class BattleScene
             p1.QueueMapCover(covered);
             p1.GhostFrame(host._coverGhost);
         }
+        host.Part1Ab.BeginGround();   // 땅에 깔린 기술 그림(천지파열무의 금 따위)도 유닛 사이에 깊이 차례로 — 버그 리포트 #84
         _gaugeLayerText.Clear();
         for (int at = 0; at < order.Length; at++)
         {
             int i = order[at];
             var unit = units[i];
             if (!unit.Alive || !unit.OnField) continue;
-            p1?.DrawUntil(Part1UnitKey(unit));
+            DrawDepthUntil(p1, Part1UnitKey(unit));
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
 
@@ -449,7 +450,24 @@ internal sealed unsafe partial class BattleScene
             p1?.UnitEnd();
             if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
         }
+        DrawDepthUntil(p1, long.MaxValue);
         p1?.Flush();
+    }
+
+    /// <summary>
+    /// 깊이 열쇠가 <paramref name="key"/> 보다 뒤인 물체 층(<see cref="Part1MapObjects.DrawUntil"/>)과 땅에 깔린 기술 그림(<see cref="Part1Skill.DrawGroundUntil"/>)을
+    /// 둘의 깊이 차례를 섞어 그린다 — 원본은 둘 다 한 그리기 목록에서 정렬된다(<c>0x1001ad10</c>). 같은 깊이면 물체 층이 먼저.
+    /// </summary>
+    private void DrawDepthUntil(Part1MapObjects? p1, long key)
+    {
+        var fx = host.Part1Ab;
+        while (true)
+        {
+            long g = fx.NextGroundKey, o = p1?.NextKey ?? long.MaxValue;
+            if (Math.Min(g, o) >= key) break;
+            if (o <= g) p1!.DrawUntil(g == long.MaxValue ? key : Math.Min(g + 1, key));
+            else fx.DrawGroundUntil(Math.Min(o, key));
+        }
     }
 
     /// <summary>
@@ -470,7 +488,7 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>파트1 유닛의 깊이 열쇠 — 칸 사이를 걷는 중이면 그 사이 줄 · 높이(<see cref="Part1MapObjects.UnitKey"/>).</summary>
-    private long Part1UnitKey(UnitState unit) => Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y));
+    internal long Part1UnitKey(UnitState unit) => Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y));
 
     /// <summary>
     /// 물체까지 찍은 걷기 높이(<see cref="WalkHeightAt"/>)를 네 이웃 칸으로 섞은 값 — 파트1 유닛이 서는 높이. 원본은 물체가 판 높이를 덮어써서(<c>0x100996e0</c>)

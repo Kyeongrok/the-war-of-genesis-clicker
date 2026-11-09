@@ -130,12 +130,14 @@ internal sealed partial class Part1Skill
             Later(at, () => { user.Facing = face; Act(user, 26, 8); });
             int c = at + len;
             Sound(2020, c);
-            Put(124, 0, c + 2, tx, ty);
-            Put(124, 18, c + 2, tx, ty);
+            // 충격 · 기둥 밑동(z + 0) · 갈라진 땅 832 는 대상 자리에 땅 높이 z 로 놓여 대상 밑에 그려진다(0x1005cf39 · 0x1005d060 · 0x1005d11e, 버그 리포트 #84).
+            long gT = GroundOf(target);
+            Put(124, 0, c + 2, tx, ty, ground: gT);
+            Put(124, 18, c + 2, tx, ty, ground: gT);
             HitAt(c + 3, ti, hit);
-            for (int j = 0; ty - 60 * j * 0.6 > top - 40; j++) Put(10, 1, c + 2 + 2 * j, tx, ty - 60 * j * 0.6, mirror: Rand(2) == 0);
-            Put(832, 2, c + 2, tx, ty, life: 60);
-            Put(832, 3, c + 63, tx, ty);
+            for (int j = 0; ty - 60 * j * 0.6 > top - 40; j++) Put(10, 1, c + 2 + 2 * j, tx, ty - 60 * j * 0.6, mirror: Rand(2) == 0, ground: j == 0 ? gT : null);
+            Put(832, 2, c + 2, tx, ty, life: 60, ground: gT);
+            Put(832, 3, c + 63, tx, ty, ground: gT);
             for (int m = 0; m < 3; m++)
             {
                 int r = Rand(3), start = c + 2 + Rand(10);
@@ -199,14 +201,16 @@ internal sealed partial class Part1Skill
             int at = a3 + 30 * (k + 1) + 2;
             // 원본은 보이는 대상마다 Snd 2085 를 A2 끝 + 30(k+1) 에 낸다(0x100540b5: 트리거 A2, 0x10078f90 지연 = 30(k+1)) — 땅이 터질 때마다 소리가 난다(버그 리포트 #65).
             Sound(2085, a3 - 2 + 30 * (k + 1));
-            Put(124, 0, at, tx, ty);
-            Put(124, 18, at, tx, ty);
+            // 충격 · 빛기둥 밑동 · 갈라진 땅 832 는 땅 높이 z 라 대상 밑에(0x1005415f · 0x100542c3 · 0x1005449d, 버그 리포트 #84).
+            long gT = GroundOf(target);
+            Put(124, 0, at, tx, ty, ground: gT);
+            Put(124, 18, at, tx, ty, ground: gT);
             Later(at, () => Act(target, 5, 2, 5));
             int j = 0;
-            for (; ty - 60 * j * 0.6 > top - 40; j++) Put(526, 1, at + 2 * j, tx, ty - 60 * j * 0.6, mirror: Rand(2) == 0);
+            for (; ty - 60 * j * 0.6 > top - 40; j++) Put(526, 1, at + 2 * j, tx, ty - 60 * j * 0.6, mirror: Rand(2) == 0, ground: j == 0 ? gT : null);
             for (int n = 0; n < 10; n++) Debris(38, 0, at + Rand(5), tx + Rand(41) - 20, ty + Rand(41) - 20, Rand(10) + 10, 0.9);
-            Put(832, 2, at, tx, ty, life: 250);
-            Put(832, 3, at + 251, tx, ty);
+            Put(832, 2, at, tx, ty, life: 250, ground: gT);
+            Put(832, 3, at + 251, tx, ty, ground: gT);
             markEnd = at + 2 * Math.Max(0, j - 1) + 45;
         }
         int tau = markEnd;

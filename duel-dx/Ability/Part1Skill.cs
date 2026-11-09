@@ -50,9 +50,10 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// <summary>
     /// 그릴 그림 하나 — 시작(초), 길(마디 사이는 곧게), 수명(null 이면 모션 한 번). <paramref name="Screen"/> 이면 길이 화면 가운데 기준이다.
     /// 옅기는 처음 → 끝으로 곧게 바뀐다(섞기 13 단계를 올리고 내리는 그림). <paramref name="Flicker"/> 면 2틱마다 모션 0~2 를 아무렇게나(번개 기둥 0x1007b500).
+    /// <paramref name="Ground"/> 가 있으면 땅에 깔린 그림 — 그 깊이 열쇠로 유닛 사이에 끼워 그린다(<see cref="GroundOf"/>, <see cref="DrawGroundUntil"/>).
     /// </summary>
     private sealed record Fx(int Obs, int Motion, double Start, (int Tick, double X, double Y)[] Path, int? Life, bool Mirror,
-                             bool Screen = false, double FadeFrom = 1, double FadeTo = 1, bool Flicker = false);
+                             bool Screen = false, double FadeFrom = 1, double FadeTo = 1, bool Flicker = false, long? Ground = null);
 
     /// <summary>선 하나(빗줄기 · 빛줄기 · 빛살) — 틱마다 두 끝과 옅기를 준다. null 이면 그 틱에는 안 그린다.</summary>
     private sealed record Line(double Start, int Life, bool Screen, Func<int, (double X0, double Y0, double X1, double Y1, double Alpha)?> At, uint Color, int Width = 2);
@@ -140,8 +141,16 @@ internal sealed partial class Part1Skill(GameWindow host)
         _tileSpacing = attackId is (>= 41 and <= 45) or 347 ? 4 : attackId is 281 or 362 or 395 or 396 ? 2 : 1;
     }
 
-    private void Put(int obs, int motion, int tick, double x, double y, int? life = null, bool mirror = false, bool? sounds = null) =>
-        Along(obs, motion, tick, [(0, x, y)], life, mirror, sounds);
+    private void Put(int obs, int motion, int tick, double x, double y, int? life = null, bool mirror = false, bool? sounds = null, long? ground = null) =>
+        Along(obs, motion, tick, [(0, x, y)], life, mirror, sounds, ground: ground);
+
+    /// <summary>
+    /// 땅에 깔린 그림의 깊이 열쇠 — 유닛 <paramref name="u"/> 가 선 칸의 땅 높이(유닛 열쇠의 z + 19 에서 19 를 뺀 것)에서 세계 y 로 <paramref name="dy"/> 만큼.
+    /// 원본 이펙트는 깊이 칸 <c>+0x65</c> 가 0 이면 제 세계 (y, z) 로 유닛과 한 목록에서 정렬된다(<c>0x10077f80</c> — 0 은 <c>+0x38</c> 그대로, 3 · 4 만 맡은 유닛
+    /// 바로 앞 · 뒤). 땅을 가르는 그림(천지파열무 617 <c>0x1005b98f</c>~ · 헬 스트라이크 832 <c>0x1005d11e</c> · 아수라파천무 832 <c>0x1005449d</c>, 충격 124, 기둥 밑동)은
+    /// 유닛의 (x, y) 에 땅 높이 z(높이 · 20)로 놓이고 깊이 칸을 건드리지 않아서, 같은 줄 유닛(z + 19)보다 먼저 — 곧 캐릭터 밑에 그려진다(버그 리포트 #84).
+    /// </summary>
+    private long GroundOf(UnitState u, double dy = 0) => host.Btl.Part1UnitKey(u) - 19 + (long)Math.Floor(dy) * 1_000_000L;
 
     /// <summary>
     /// 그림 하나를 깐다. 원본 이펙트(<c>0x10085e00</c> 과 그 이동기들 — 키 처리가 모두 <c>0x100982d0</c> → <c>0x10098370</c>)는 제 모션의 소리 키(종류 1)를
@@ -149,10 +158,10 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// 다만 시전자 그림을 빌린 잔상(<paramref name="rawObs"/>)은 그 동작 소리를 시전자 동작이 이미 내므로 달라고 할 때만 낸다.
     /// </summary>
     private void Along(int obs, int motion, int tick, (int Tick, double X, double Y)[] path, int? life = null, bool mirror = false, bool? sounds = null,
-                       bool screen = false, double fadeFrom = 1, double fadeTo = 1, bool flicker = false, bool rawObs = false)
+                       bool screen = false, double fadeFrom = 1, double fadeTo = 1, bool flicker = false, bool rawObs = false, long? ground = null)
     {
         int id = rawObs ? obs : P(obs);
-        _fx.Add(new Fx(id, motion, At(tick), path, life, mirror, screen, fadeFrom, fadeTo, flicker));
+        _fx.Add(new Fx(id, motion, At(tick), path, life, mirror, screen, fadeFrom, fadeTo, flicker, ground));
         if (sounds ?? !rawObs) KeySounds(id, motion, tick, 0);
     }
 
@@ -494,33 +503,76 @@ internal sealed partial class Part1Skill(GameWindow host)
         return 55;
     }
 
+    /// <summary>그림 하나를 그린다(<paramref name="draw"/> 가 거짓이면 끝났는지만 본다) — 다 끝났으면 true(지운다).</summary>
+    private bool DrawFx(Fx f, double now, int cx, int cy, bool draw = true)
+    {
+        if (now < f.Start) return false;
+        int tick = (int)((now - f.Start) * TicksPerSecond);
+        if (host.UiFor(f.Obs) is not { } sprite) return true;
+        int end = f.Life ?? Math.Max(1, sprite.MotionLength(f.Motion));
+        if (tick >= end) return true;
+        if (!draw) return false;
+        var path = f.Path;
+        int k = 0;
+        while (k + 1 < path.Length && tick >= path[k + 1].Tick) k++;
+        var (a, b) = (path[k], path[Math.Min(k + 1, path.Length - 1)]);
+        double t = b.Tick > a.Tick ? Math.Clamp((tick - a.Tick) / (double)(b.Tick - a.Tick), 0, 1) : 0;
+        int x = (int)(a.X + (b.X - a.X) * t) + (f.Screen ? cx : 0), y = (int)(a.Y + (b.Y - a.Y) * t) + (f.Screen ? cy : 0);
+        bool loop = f.Life != null;
+        int motion = f.Flicker ? (int)((uint)(tick / 2 * 2654435761u + (uint)f.GetHashCode()) % 3) : f.Motion;
+        double fade = f.FadeFrom + (f.FadeTo - f.FadeFrom) * Math.Clamp(tick / (double)Math.Max(1, end - 1), 0, 1);
+        if (sprite.Clip(motion) is { Children.Count: > 0 } clip) host.Btl.DrawUnitLayers(clip, tick, x, y, f.Mirror, fade, loop: loop);
+        int key = sprite.BlendAt(motion, tick);
+        host.DrawUi(f.Obs, motion, tick, x, y, BlendOf(key), loop: loop, mirror: f.Mirror, fade: fade * BlendFade(key));
+        return false;
+    }
+
+    // ── 땅에 깔린 그림 ─────────────────────────────────────────────────────────────────────────────────────
+    // 원본은 이펙트도 유닛 · 맵 띠와 한 그리기 목록에서 (세계 y, 세계 z, 넣은 차례)로 정렬해 그린다(0x1001b7a0 → 0x1001ad10).
+    // 리메이크는 이펙트를 유닛을 다 그린 뒤에 덮어 그려서, 땅이 갈라지는 그림이 캐릭터 위에 올라왔다(버그 리포트 #84).
+    // 땅에 깔린 그림(Fx.Ground)만 DrawUnits 가 유닛을 그리는 사이사이에 깊이 차례대로 끼운다.
+
+    private readonly List<Fx> _groundNow = [];
+    private int _groundDrawn;
+
+    /// <summary>이번 틀에 그릴 땅 그림을 깊이 차례로 모은다 — DrawUnits 가 첫 유닛을 그리기 전에.</summary>
+    internal void BeginGround()
+    {
+        double now = host._lastTime;
+        _groundNow.Clear();
+        _groundDrawn = 0;
+        foreach (var f in _fx)
+            if (f.Ground != null && now >= f.Start) _groundNow.Add(f);
+        // 같은 깊이면 깐 차례(원본 +0x34) — OrderBy 는 안정 정렬이다.
+        if (_groundNow.Count > 1)
+        {
+            var sorted = _groundNow.OrderBy(f => f.Ground!.Value).ToList();
+            _groundNow.Clear();
+            _groundNow.AddRange(sorted);
+        }
+    }
+
+    /// <summary>아직 안 그린 땅 그림 가운데 가장 앞(작은) 깊이 열쇠 — 없으면 <see cref="long.MaxValue"/>.</summary>
+    internal long NextGroundKey => _groundDrawn < _groundNow.Count ? _groundNow[_groundDrawn].Ground!.Value : long.MaxValue;
+
+    /// <summary>깊이 열쇠가 <paramref name="key"/> 보다 뒤(작은)인 땅 그림을 그린다.</summary>
+    internal void DrawGroundUntil(long key)
+    {
+        if (_groundDrawn >= _groundNow.Count) return;
+        double now = host._lastTime;
+        int cx = host._camX + host.ViewWidth / 2, cy = host._camY + host.ViewHeight / 2;
+        for (; _groundDrawn < _groundNow.Count && _groundNow[_groundDrawn].Ground!.Value < key; _groundDrawn++)
+            DrawFx(_groundNow[_groundDrawn], now, cx, cy);
+    }
+
     /// <summary>그림 · 선 · 눈송이 · 번쩍임을 그린다 — DrawEffects 가 부른다.</summary>
     internal void Draw()
     {
         double now = host._lastTime;
         int cx = host._camX + host.ViewWidth / 2, cy = host._camY + host.ViewHeight / 2;
         bool flash = _flashes.Any(f => now >= f.Start && now < f.End);
-        _fx.RemoveAll(f =>
-        {
-            if (now < f.Start) return false;
-            int tick = (int)((now - f.Start) * TicksPerSecond);
-            if (host.UiFor(f.Obs) is not { } sprite) return true;
-            int end = f.Life ?? Math.Max(1, sprite.MotionLength(f.Motion));
-            if (tick >= end) return true;
-            var path = f.Path;
-            int k = 0;
-            while (k + 1 < path.Length && tick >= path[k + 1].Tick) k++;
-            var (a, b) = (path[k], path[Math.Min(k + 1, path.Length - 1)]);
-            double t = b.Tick > a.Tick ? Math.Clamp((tick - a.Tick) / (double)(b.Tick - a.Tick), 0, 1) : 0;
-            int x = (int)(a.X + (b.X - a.X) * t) + (f.Screen ? cx : 0), y = (int)(a.Y + (b.Y - a.Y) * t) + (f.Screen ? cy : 0);
-            bool loop = f.Life != null;
-            int motion = f.Flicker ? (int)((uint)(tick / 2 * 2654435761u + (uint)f.GetHashCode()) % 3) : f.Motion;
-            double fade = f.FadeFrom + (f.FadeTo - f.FadeFrom) * Math.Clamp(tick / (double)Math.Max(1, end - 1), 0, 1);
-            if (sprite.Clip(motion) is { Children.Count: > 0 } clip) host.Btl.DrawUnitLayers(clip, tick, x, y, f.Mirror, fade, loop: loop);
-            int key = sprite.BlendAt(motion, tick);
-            host.DrawUi(f.Obs, motion, tick, x, y, BlendOf(key), loop: loop, mirror: f.Mirror, fade: fade * BlendFade(key));
-            return false;
-        });
+        // 땅에 깔린 그림은 DrawUnits 가 유닛 사이에 이미 그렸다(DrawGroundUntil) — 여기서는 끝난 것만 지운다.
+        _fx.RemoveAll(f => DrawFx(f, now, cx, cy, draw: f.Ground == null));
         _lines.RemoveAll(l =>
         {
             if (now < l.Start) return false;
