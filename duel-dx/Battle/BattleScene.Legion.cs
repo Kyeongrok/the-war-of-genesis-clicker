@@ -729,7 +729,12 @@ internal sealed unsafe partial class BattleScene
     {
         if (host._db is null) return;
         // 대장이 쓴 기술의 +0x41 이 0 이면 부하는 안 따라 친다(0x1005fd00) — 피해 work 469개가 그렇다(fg-21 ⑯).
-        if (leaderWork is { FollowersAct: false }) return;
+        // 파트1 은 이 칸을 안 본다 — 파트1 기술 work 는 파트2 틀을 빌려 만든 것이라(Part1SkillBook: 무기 = 어빌리티 1 · 회복 = 9 · 그 밖 = 29 엘레맨탈 파이어)
+        // +0x41 이 틀의 값이다. 엘레맨탈 파이어 틀만 0 이어서 마법 · 상태 기술을 쓴 대장의 용병만 따라 치지 않고 쉬었다(버그 리포트 #92, Btl 20089).
+        // 원본 파트1(alpha.dll)엔 이 깃발이 없다: 대장의 공격 클릭은 늘 부대 공격 0x3ee(0x10032447~0x1003246b → 처리 0x1003c890)로,
+        // 대장 사슬(+0x1d8 → +0x1e4)의 부하마다 제 기본 공격(+0xb6)으로 다가가 친다. 대장은 어빌리티 쪽이 군단명령으로 바뀌어 마법을 못 쓰므로
+        // 「마법이면 혼자」라는 규칙도 없다 — 그래서 어떤 기술이든 부하가 따라 친다.
+        if (leaderWork is { FollowersAct: false } && !host._scene.IsPart1) return;
         // 잡힌 칸 — 이번에 부하가 고른 설 칸과, 지금 걷고 있는 유닛(다른 군단 부하 포함)의 도착 칸. 아직 출발 칸에 서 있어 LiveUnitAt 에 안 잡힌다.
         var approached = new HashSet<int>();
         foreach (var walker in host._units)
