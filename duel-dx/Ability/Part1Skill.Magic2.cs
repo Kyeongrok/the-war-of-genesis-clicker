@@ -251,13 +251,11 @@ internal sealed partial class Part1Skill
             (double X, double Y) t = victim >= 0 ? ((double, double))host.Btl.UnitFoot(host._units[victim])
                 : (aim.X + (Rand(3) - 1) * TileW, aim.Y + (Rand(3) - 1) * 32);
             Sound(59, Math.Max(0, (20 - k) * k));
-            // 솟아 도는 불티(0x100808d0) — 반지름 20~49 를 빠르기 15 로 돌며 틱마다 z 가 15 씩 오른다(50틱).
+            // 솟아 도는 불티(0x100808d0, 0x10048d5c~0x10048ddb: +0x110(50, 15, ×1.0, 1, rand%30+20, 1)) — 반지름 20~49 원을 도는 길잡이를 빠르기 15 로 쫓으며
+            // 틱마다 z 가 15 씩 오른다. 쫓는 걸음이 높이를 도로 끌어내려 시전자 둘레를 빙글빙글 돌며 천천히 오른다(RisingSwirl, 버그 리포트 #80).
             int puffs = n > 8 ? 10 : 30;
             for (int i = 0; i < puffs; i++)
-            {
-                var ring = Circle(ground.X, ground.Y, Rand(30) + 20, 50, 15, 1, true, Rand(360) * Math.PI / 180);
-                Along(64, 2, 20 * k, [.. ring.Select(p => (p.Tick, p.X, p.Y - p.Tick * 15 * 0.6))], life: 50);
-            }
+                Along(64, 2, 20 * k, RisingSwirl(ground.X, ground.Y, Rand(30) + 20, 50, 15, true, Rand(360) * Math.PI / 180), life: 50);
             Put(55, 1, 20 * k + 20, s.X, s.Y, life: 56);
             Put(33, 0, 20 * k + 23, s.X, s.Y);
             int go = 20 * k + 23 + Length(33, 0) + 1;

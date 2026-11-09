@@ -97,20 +97,23 @@ internal sealed partial class Part1Skill(GameWindow host)
         Later(tick, () => hit(target));
         if (_tileCells is not { } tiles || host._units[target] is not { } u || !host.Btl.Part1Big(u)) return;
         int covered = tiles.Count(c => host.Btl.Covers(u, c.Col, c.Row));
-        for (int k = 1; k < covered; k++)
-            Later(tick + _tileSpacing * k, () =>
-            {
-                TileStrike = true;
-                try { hit(target); }
-                finally { TileStrike = false; }
-            });
+        for (int k = 1; k < covered; k++) TileHitAt(tick + _tileSpacing * k, target, hit);
     }
+
+    /// <summary>큰 유닛이 다른 칸에서 또 맞는 덧타격 하나 — <see cref="TileStrike"/> 를 세운 채 친다.</summary>
+    private void TileHitAt(int tick, int target, Action<int> hit) => Later(tick, () =>
+    {
+        TileStrike = true;
+        try { hit(target); }
+        finally { TileStrike = false; }
+    });
 
     /// <summary>
     /// 원본이 맞는 칸마다 따로 맞음 사건을 세우는 파트1 기술인가. 맞음 사건(<c>0x10076a80</c>)은 사건이 달린 물체의 칸 하나(인자 (3, 1, 3, 0))를
     /// <c>0x10039690</c> 으로 칠하고 <c>0x1008f1a0</c> 으로 모으는데, 모으기의 <c>+0x27a</c> 깃발은 그 한 번 안에서만 겹침을 막고 끝에 지운다
     /// (<c>0x1008f2c7</c> 세움 · <c>0x1008f355</c> 지움). 칸 → 유닛은 <c>0x10089610</c> 이라 큰 유닛은 둘레 3×3 어느 칸에서도 잡힌다. 그래서
     /// 범위 칸마다 사건 물체를 놓는 기술(격 41~45 <c>0x10046fca</c> · 미사일 281 · 포격 362 · 자주포 395 · 폭격 396 의 공용 폭발 · 머스펠 헤임 347)과
+    /// 범위 칸마다 이동기를 보내 닿은 칸에 사건을 다는 검 기술(마룡광아탄 296 <c>0x10061976</c> · 플라즈마 슬래쉬 295 <c>0x10061004</c>, 버그 리포트 #85)과
     /// 칸이 바뀔 때마다 치는 이동기(<c>0x100769b0</c> → <c>0x1007676e</c> — 혼 26~30 · 혈랑마혼 292 · 비연참 294 · 빛살 <see cref="BattleScene.IsPart1Beam"/>)는
     /// 큰 유닛을 차지한 칸 수만큼 친다. 대상 목록(<c>0x1008f1a0(0, …)</c>)을 훑어 대상마다 사건을 하나 놓는 기술은 한 번이다.
     /// 타이타니아 · 썬더스탐 · 메테오 · 공폭탄처럼 아무 칸에 떨어지는 것은 사람마다 한 번으로 둔 결정(menu-89)대로 여기 넣지 않는다.
@@ -120,7 +123,7 @@ internal sealed partial class Part1Skill(GameWindow host)
 
     /// <summary><see cref="HitsPerTile"/> 의 Attack 번호 판(기본 공격 빔라이플 · 포격도 이것으로).</summary>
     internal static bool HitsPerTileAttack(int attackId) =>
-        attackId is (>= 26 and <= 30) or (>= 41 and <= 45) or 292 or 294 or 281 or 347 or 362 or 395 or 396 || BattleScene.IsPart1Beam(attackId);
+        attackId is (>= 26 and <= 30) or (>= 41 and <= 45) or 292 or 294 or 295 or 296 or 281 or 347 or 362 or 395 or 396 || BattleScene.IsPart1Beam(attackId);
 
     /// <summary>칸마다 치는 기술의 맞는 칸(없으면 null) — <see cref="HitAt"/> 이 큰 유닛의 덧타격 수를 센다.</summary>
     private HashSet<(int Col, int Row)>? _tileCells;
@@ -217,6 +220,30 @@ internal sealed partial class Part1Skill(GameWindow host)
             double a = start + (reverse ? -1 : 1) * walked / points * 2 * Math.PI;
             path.Add((t, cx + r * Math.Cos(a), cy + r * Math.Sin(a) * (flat ? 1 : 0.8)));
             for (int k = 0; k < 2; k++) { walked += speed; speed = Math.Clamp(speed * factor, 0, 40); }
+        }
+        return [.. path];
+    }
+
+    /// <summary>
+    /// 솟아 도는 불티(클래스 <c>0x100808d0</c>, 틱 <c>0x10080920</c>) — 원을 도는 길잡이(<see cref="Circle"/> 과 같은 원, <c>0x10080640</c>)를 가운데에서 출발해 쫓으며,
+    /// 틱마다 먼저 길잡이 쪽으로 3차원 거리 빠르기만큼 다가가고(<c>0x10078700</c> — 거리 <c>0x10019720</c> 가 빠르기 이하면 그 자리로, 아니면 그 방향으로 빠르기만큼)
+    /// 그다음 z 를 빠르기만큼 올린다(<c>0x10080949</c> add [esi+0x72], ftol(+0x98)). 길잡이는 땅 높이에 있으니 쫓는 걸음이 오른 높이를 도로 끌어내려,
+    /// 불티는 원을 따라 돌며 천천히(50틱에 높이 70~110) 오른다 — 버그 리포트 #80: 전에는 z 만 틱마다 15 씩 올려(50틱에 750) 곧게 위로 솟구쳤다.
+    /// </summary>
+    private static (int Tick, double X, double Y)[] RisingSwirl(double cx, double cy, double r, int life, double speed, bool reverse, double start)
+    {
+        int points = Math.Max(8, (int)(8 * r));
+        var path = new List<(int, double, double)> { (0, cx, cy) };
+        double walked = 0, px = 0, py = 0, pz = 0;
+        for (int t = 1; t <= life; t++)
+        {
+            walked += speed;
+            double a = start + (reverse ? -1 : 1) * walked / points * 2 * Math.PI;
+            double dx = r * Math.Cos(a) - px, dy = r * Math.Sin(a) - py, dz = -pz, far = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            if ((int)far <= (int)speed) (px, py, pz) = (px + dx, py + dy, 0);
+            else (px, py, pz) = (px + dx / far * speed, py + dy / far * speed, pz + dz / far * speed);
+            pz += (int)speed;
+            path.Add((t, cx + px, cy + py * 0.8 - pz * 0.6));
         }
         return [.. path];
     }
