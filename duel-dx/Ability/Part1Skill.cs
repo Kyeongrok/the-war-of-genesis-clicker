@@ -150,7 +150,7 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// 바로 앞 · 뒤). 땅을 가르는 그림(천지파열무 617 <c>0x1005b98f</c>~ · 헬 스트라이크 832 <c>0x1005d11e</c> · 아수라파천무 832 <c>0x1005449d</c>, 충격 124, 기둥 밑동)은
     /// 유닛의 (x, y) 에 땅 높이 z(높이 · 20)로 놓이고 깊이 칸을 건드리지 않아서, 같은 줄 유닛(z + 19)보다 먼저 — 곧 캐릭터 밑에 그려진다(버그 리포트 #84).
     /// </summary>
-    private long GroundOf(UnitState u, double dy = 0) => host.Btl.Part1UnitKey(u) - 19 + (long)Math.Floor(dy) * 1_000_000L;
+    private long GroundOf(UnitState u, double dy = 0) => host.Btl.Part1UnitGroundKey(u) - 19 + (long)Math.Floor(dy) * 1_000_000L;
 
     /// <summary>
     /// 그림 하나를 깐다. 원본 이펙트(<c>0x10085e00</c> 과 그 이동기들 — 키 처리가 모두 <c>0x100982d0</c> → <c>0x10098370</c>)는 제 모션의 소리 키(종류 1)를

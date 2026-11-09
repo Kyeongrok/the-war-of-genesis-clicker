@@ -487,8 +487,17 @@ internal sealed unsafe partial class BattleScene
         if (!board) _gaugeLayerText.Add(unit);
     }
 
-    /// <summary>파트1 유닛의 깊이 열쇠 — 칸 사이를 걷는 중이면 그 사이 줄 · 높이(<see cref="Part1MapObjects.UnitKey"/>).</summary>
-    internal long Part1UnitKey(UnitState unit) => Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y));
+    /// <summary>
+    /// 파트1 유닛의 깊이 열쇠 — 칸 사이를 걷는 중이면 그 사이 줄 · 높이(<see cref="Part1MapObjects.UnitKey"/>), 세계 y 에 지금 컷의 아래 끝을 더한다.
+    /// 원본 유닛은 모션을 걸 때마다(vt+0x68 <c>0x100981d0</c>) 깊이 칸 <c>+0x65</c> = 1 이라, 깊이 y(vt+0x70 <c>0x10097f70</c>) = 세계 y + (컷 높이 <c>+2</c> + 컷 y <c>+6</c>)·40/32 —
+    /// 곧 그림의 아래 끝이다. 사람은 발이 그림 끝이라 거의 0 이지만, 3×3 전차 · 마장기는 그림이 한 줄 아래까지 내려와 앞줄로 정렬된다.
+    /// 전에는 세계 y 만 써서 앞줄 바닥 띠(QueueMapCover)가 전차 아래쪽을 덮어 잘려 보였다(버그 리포트 #88).
+    /// </summary>
+    internal long Part1UnitKey(UnitState unit) =>
+        Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y), host._sprites.TryGetValue(unit.ChrCode, out var sp) ? sp.FrameFor(unit) is var f ? (f.Y + f.H) * 40 / 32 : 0 : 0);
+
+    /// <summary>파트1 유닛이 선 땅의 깊이 열쇠(컷 끝을 안 더한 세계 y · 유닛 z) — 깊이 칸 0 인 이펙트가 유닛 (x, y) 에 놓일 때(<see cref="Part1Skill"/> GroundOf).</summary>
+    internal long Part1UnitGroundKey(UnitState unit) => Part1MapObjects.UnitKey(unit.Y, StampedHeightAt(unit.X, unit.Y));
 
     /// <summary>
     /// 물체까지 찍은 걷기 높이(<see cref="WalkHeightAt"/>)를 네 이웃 칸으로 섞은 값 — 파트1 유닛이 서는 높이. 원본은 물체가 판 높이를 덮어써서(<c>0x100996e0</c>)
