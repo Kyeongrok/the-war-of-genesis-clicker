@@ -206,7 +206,7 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 타이타니아 — 화면 가운데에 빛 틈이 위아래로 열리고 전격 거인(210)이 나타나 180틱 떠 있는 동안 손의 구슬에서 빛줄기 백 개가 화면 끝으로 뻗었다 줄어든다.
     /// 그동안 범위 안 아무 칸에 번개 백 개(210:9)가 떨어지고, 맞은 칸의 사람을 그 번개(71:0)로 친다. 번개마다 맞음 사건(3, 1, 3, 0 — 그 칸 하나)이라
-    /// 한 사람이 여러 번, 큰 유닛은 차지한 칸에 떨어질 때마다 맞는다(<see cref="HitsEachTime"/>, fg-159 — menu-89 때는 사람마다 한 번이었다).
+    /// 한 사람이 여러 번, 큰 유닛은 차지한 칸에 떨어질 때마다 맞는다(<see cref="HitsEachTime"/>, fg-160 — menu-89 때는 사람마다 한 번이었다).
     /// </summary>
     private int Titania(List<(int Col, int Row)> cells, Action<int> hit)
     {

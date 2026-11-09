@@ -141,7 +141,7 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// 칸이 바뀔 때마다 치는 이동기(<c>0x100769b0</c> → <c>0x1007676e</c> — 혼 26~30 · 혈랑마혼 292 · 비연참 294 · 빛살 <see cref="BattleScene.IsPart1Beam"/>)는
     /// 큰 유닛을 차지한 칸 수만큼 친다. 대상 목록(<c>0x1008f1a0(0, …)</c>)을 훑어 대상마다 사건을 하나 놓는 기술은 한 번이다.
     /// 타이타니아 · 썬더스탐 · 메테오 · 공폭탄처럼 아무 칸에 떨어지는 것은 여기 넣지 않는다 — 떨어질 때마다 그 자리를 덮는 유닛을 제 시각표가 따로 치고
-    /// <see cref="HitsEachTime"/> 로 거르기를 건너뛴다(fg-159).
+    /// <see cref="HitsEachTime"/> 로 거르기를 건너뛴다(fg-160).
     /// </summary>
     internal static bool HitsPerTile(int work) =>
         work is FlyingSlashWork or MuspelWork || work > Part1Game.ChrBase && HitsPerTileAttack(Part1SkillBook.AttackIdOf(work));

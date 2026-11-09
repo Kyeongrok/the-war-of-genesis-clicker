@@ -522,7 +522,7 @@ internal sealed partial class Part1Skill
     /// 공폭탄(387, <c>0x1006de00</c>) — 시전자가 파트1 동작 39 를 한 번 하고 그것이 끝날 때 소리 94. 폭탄 열여덟(Attack +0x58)이 범위 칸 둘레에 떨어진다:
     /// 시전자가 위 · 아래를 보면 Obs 283:8 이 바로 위(z+1000)에서, 옆을 보면 283:7 이 옆에서 비스듬히(빠르기 1 × 1.4). i 째는 동작이 끝나고 10 + 3i + 0~17 틱 뒤 떠난다.
     /// 폭탄마다 겨눈 칸 둘레 아무 칸(범위 칸 중 하나)에 떨어져 그 칸이 터지고(공용 폭발의 맞음 사건 (3, 1, 3, 0) — 그 칸 하나), 그 칸을 덮는 유닛을 맞힌다.
-    /// 폭탄마다 따로라 한 유닛이 여러 번, 큰 유닛은 차지한 칸에 떨어질 때마다 맞는다(<see cref="HitsEachTime"/>, fg-159 — 전에는 대상 칸에 먼저 하나씩 떨어뜨리고
+    /// 폭탄마다 따로라 한 유닛이 여러 번, 큰 유닛은 차지한 칸에 떨어질 때마다 맞는다(<see cref="HitsEachTime"/>, fg-160 — 전에는 대상 칸에 먼저 하나씩 떨어뜨리고
     /// 사람마다 한 번이었다). 누가 맞는지는 범위 대상(<paramref name="targets"/> — Attack +0x40 = 2, 범위 안 모두)의 거르기 그대로.
     /// </summary>
     private int GunAirBomb(List<int> targets, List<(int Col, int Row)> cells, (double X, double Y) aim, Action<int> hit)

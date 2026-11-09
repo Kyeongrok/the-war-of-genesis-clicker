@@ -15,7 +15,7 @@ internal sealed partial class Part1Skill
     /// <summary>
     /// 원본이 같은 대상을 여러 번 맞히는 기술 — 전투의 「대상마다 한 번」 거르기를 건너뛴다. 어비스 네레이드는 대상마다 얼음 셋이 한 번씩(세 번).
     /// 아무 칸에 떨어지는 것(타이타니아 · 썬더스탐 · 메테오 · 공폭탄)은 떨어진 자리마다 맞음 사건이 서서(<c>0x10076a80</c>) 거기 선 유닛이 또 맞는다 —
-    /// 큰 유닛은 차지한 칸에 떨어질 때마다(menu-89 의 「사람마다 한 번」을 원본대로 되돌림, 사용자 결정 2026-11-09 fg-159).
+    /// 큰 유닛은 차지한 칸에 떨어질 때마다(menu-89 의 「사람마다 한 번」을 원본대로 되돌림, 사용자 결정 2026-11-09 fg-160).
     /// </summary>
     internal static bool HitsEachTime(int work) => work is NereidWork or TitaniaWork or ThunderWork || IsMeteor(work) || IsAirBombWork(work)
         || BigHitsEachTime(work) || IsRampageWork(work);   // 폭주는 메테오 · 썬더스탐 핸들러를 그대로 부른다(Part1Skill.Rampage)
