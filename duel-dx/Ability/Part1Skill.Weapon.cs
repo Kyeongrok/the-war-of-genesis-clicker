@@ -112,6 +112,7 @@ internal sealed partial class Part1Skill
         var t = TargetPoint(targets, aim);
         user.Facing = FacingOf(t.X - _home.X, t.Y - _home.Y);
         var (length, hits, selectors) = PlayStrike(user, part1Action);
+        UseKeyLine(part1Action);
         KeyHits(hits, selectors, targets, hit);
         return length + 1;
     }
@@ -127,12 +128,25 @@ internal sealed partial class Part1Skill
         {
             int? selector = i < selectors.Count ? selectors[i] : null;
             foreach (int ti in targets)
+            {
                 Later(hits[i], () =>
                 {
                     host.Btl.Part1.KeySelector = selector;
                     try { hit(ti); }
                     finally { host.Btl.Part1.KeySelector = null; }
                 });
+                // 큰 유닛은 키가 칠한 칸 가운데 차지한 칸 수만큼 맞는다(UseKeyLine, 버그 리포트 #86).
+                if (_tileCells is not { } tiles || host._units[ti] is not { } u || !host.Btl.Part1Big(u)) continue;
+                int covered = tiles.Count(c => host.Btl.Covers(u, c.Col, c.Row));
+                for (int k = 1; k < covered; k++)
+                    Later(hits[i] + _tileSpacing * k, () =>
+                    {
+                        host.Btl.Part1.KeySelector = selector;
+                        TileStrike = true;
+                        try { hit(ti); }
+                        finally { TileStrike = false; host.Btl.Part1.KeySelector = null; }
+                    });
+            }
         }
     }
 

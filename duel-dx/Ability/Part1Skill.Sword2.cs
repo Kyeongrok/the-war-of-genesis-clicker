@@ -155,6 +155,7 @@ internal sealed partial class Part1Skill
         int dir = Dir4(t.X - hx, t.Y - hy);
         user.Facing = FacingOf4(dir);
         var (a, keys, selectors) = PlayStrike(user, 14);
+        UseKeyLine(14);
         KeyHits(keys, selectors, targets, hit);
         Sound(1890, a);
         int last = a;

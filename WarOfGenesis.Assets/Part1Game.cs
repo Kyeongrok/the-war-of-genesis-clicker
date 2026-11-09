@@ -555,6 +555,23 @@ public static class Part1Game
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
     }
 
+    /// <summary>
+    /// 파트1 동작 <paramref name="part1Action"/>(모션 = 동작 × 3 + <paramref name="dir"/>, 0 위 · 1 옆 · 2 아래)의 첫 타격 키(종류 5)가 외줄(모양 2)이면 그 크기(4분의 1칸).
+    /// 원본 키 처리 <c>0x10036130</c> 은 <c>0x1008e9f0</c> 모양 2 = <c>0x1008af30</c> 으로 시전자 칸에서 보는 쪽 외줄 중 4 × 거리 ≤ 크기 인 칸을 칠하고
+    /// 칠한 칸마다 유닛을 찾아 친다. 파트1 그림의 타격 키 4,783 개 가운데 4,660 개가 (2, 8) = 앞 두 칸, 87 개가 (2, 12) = 앞 세 칸.
+    /// 파트1 폴더가 없거나 키가 없거나 외줄이 아니면 null.
+    /// </summary>
+    public static int? StrikeReach(int part1Obs, int part1Action, int dir)
+    {
+        if (Root == null || !BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            var key = RawMotion(p1, part1Action * 3 + dir)?.Where(k => k[2] == 5).OrderBy(k => k[0]).FirstOrDefault();
+            return key is { } k && k[4] == 2 ? k[5] : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
     /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
     public const int ScreenTint = 14;
 

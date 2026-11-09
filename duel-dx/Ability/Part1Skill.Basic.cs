@@ -169,6 +169,7 @@ internal sealed partial class Part1Skill
                 int len = Swing(_user, 9 + n, 8);
                 var keys = sprite.Clip(act, _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).ToList() ?? [];
                 if (keys.Count == 0) break;
+                UseKeyLine(9 + n);
                 foreach (int k in keys) foreach (int ti in targets) HitAt(k, ti, hit);
                 ChainStruck = keys.Count;
                 return Math.Max(len, keys[^1]) + 1;
@@ -178,8 +179,10 @@ internal sealed partial class Part1Skill
         if (hits >= 2 && host._sprites.TryGetValue(_user.ChrCode, out var spr))
         {
             var toward = TargetPoint(targets, aim);
-            var (lenS, _) = BasicSwing(toward, BasicAction(id));
-            var keys = spr.Clip(WeaponAction(BasicAction(id)), _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).Take(hits).ToList() ?? [];
+            int action = BasicAction(id);
+            var (lenS, _) = BasicSwing(toward, action);
+            var keys = spr.Clip(WeaponAction(action), _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).Take(hits).ToList() ?? [];
+            UseKeyLine(action);
             if (keys.Count >= 2)
             {
                 foreach (int k in keys) foreach (int ti in targets) HitAt(k, ti, hit);
@@ -191,7 +194,10 @@ internal sealed partial class Part1Skill
             SplitStruck = hits;
             return lenS + 1;
         }
-        var (len1, at) = BasicSwing(TargetPoint(targets, aim), BasicAction(id));
+        int act1 = BasicAction(id);
+        var (len1, at) = BasicSwing(TargetPoint(targets, aim), act1);
+        // 피해는 타격 키에서 — 큰 유닛은 키가 칠한 칸 가운데 차지한 칸 수만큼(UseKeyLine, 버그 리포트 #86).
+        UseKeyLine(act1);
         foreach (int ti in targets) HitAt(at, ti, hit);
         return Math.Max(len1, at) + 1;
     }

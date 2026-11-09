@@ -101,6 +101,29 @@ internal sealed partial class Part1Skill(GameWindow host)
         for (int k = 1; k < covered; k++) TileHitAt(tick + _tileSpacing * k, target, hit);
     }
 
+    /// <summary>
+    /// 손 공격(칼질 기본 공격 · 연 · 참 · 풍아열공참)의 타격 키 칸을 <see cref="_tileCells"/> 로 둔다 — 시전자가 지금 보는 쪽으로 걸 때 부른다.
+    /// 원본 키 처리 <c>0x10036130</c> 은 범위 <c>0x1008e9f0</c>(키 모양 2 = 외줄 <c>0x1008af30</c>)로 시전자 칸에서 보는 쪽 칸 중 4 × 거리(높이 넣음) ≤ 키 크기 인 칸을
+    /// 층 12 에 칠하고(<c>0x100361ea</c>), 시전자 둘레를 훑어 칠한 칸마다 <c>0x10089610</c> 으로 유닛을 찾아 <c>0x1009d440</c> 으로 친다(<c>0x10036296</c>~) —
+    /// 겹침 거르기가 없어 큰 유닛(둘레 3×3)은 칠한 칸 가운데 차지한 칸 수만큼 맞는다. 키 크기는 거의 8(앞 두 칸)이라, 마장기 바로 앞에서 치면 가장자리 · 가운데
+    /// 두 칸이 칠해져 키마다 두 번 맞는다(버그 리포트 #86). 크기 12(창 · 앞 세 칸)면 세 번. 리메이크는 대상마다 한 번이었다.
+    /// </summary>
+    private void UseKeyLine(int part1Action)
+    {
+        var u = _user;
+        int dir = u.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
+        int reach = (u.Data is { SpriteId: > Part1Game.ObsBase } d ? Part1Game.StrikeReach(d.SpriteId - Part1Game.ObsBase, part1Action, dir) : null) ?? 8;
+        var (dc, dr) = u.Facing switch { Facing.Up => (0, -1), Facing.Down => (0, 1), Facing.Left => (-1, 0), _ => (1, 0) };
+        var cells = new HashSet<(int Col, int Row)>();
+        for (int k = 1; k <= reach / 4; k++)
+        {
+            int c = u.Col + dc * k, r = u.Row + dr * k;
+            if (host.Btl.WorkDistance(u.Col, u.Row, c, r, useHeight: true, graded: true).Graded <= reach) cells.Add((c, r));
+        }
+        _tileCells = cells;
+        _tileSpacing = 2;
+    }
+
     /// <summary>큰 유닛이 다른 칸에서 또 맞는 덧타격 하나 — <see cref="TileStrike"/> 를 세운 채 친다.</summary>
     private void TileHitAt(int tick, int target, Action<int> hit) => Later(tick, () =>
     {
