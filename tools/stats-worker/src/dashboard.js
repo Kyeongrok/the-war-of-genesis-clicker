@@ -65,7 +65,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 <body>
 <main>
   <h1><button id="gamepick" aria-haspopup="true" aria-expanded="false">창세기전3</button> <span id="gamesub">— 전투 통계 (파트1 · 파트2)</span>
-    <div id="gamemenu" hidden><button data-game="dow">창세기전3</button><button data-game="fd2">용의기사2</button><button data-game="cds">대항해시대</button><button data-game="mc">마그나카르타</button></div></h1>
+    <div id="gamemenu" hidden><button data-game="dow">창세기전3</button><button data-game="fd2">용의기사2</button><button data-game="cds">대항해시대</button><button data-game="mc">마그나카르타</button><button data-game="games">게임 앱</button></div></h1>
   <div class="sub" id="dowsub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters" id="dowfilters">
     <label>기간 <select id="period"><option value="today">오늘</option><option value="7" selected>최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option><option value="custom">직접 지정</option></select></label>
@@ -113,6 +113,12 @@ export const DASHBOARD_HTML = `<!doctype html>
       <button id="mckey">관리자 키</button><button id="mcreload">새로 고침</button><span id="mcerr" class="bad"></span></div>
     <div class="tiles" id="mctiles"></div>
     <div id="mcbugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
+  <section data-tab="games"><h2>게임 앱 · 버그 리포트</h2>
+    <div class="sub">안드로이드 게임 앱(Kyeongrok/mobile-games — 스도쿠 · 상하이 · 리치마작 …)의 「버그 리포트」에서 온 것입니다. 관리자 키는 다른 게임과 같습니다.</div>
+    <div class="filters"><label>상태 <select id="gamesstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
+      <button id="gameskey">관리자 키</button><button id="gamesreload">새로 고침</button><span id="gameserr" class="bad"></span></div>
+    <div class="tiles" id="gamestiles"></div>
+    <div id="gamesbugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -135,7 +141,7 @@ function pickTab(tab) {
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
-  if (tab === 'mc') setTimeout(() => { if (!mcLoaded) loadMc(); });
+  if (tab === 'mc' || tab === 'games') setTimeout(() => { if (!simpleLoaded[tab]) loadSimple(tab); });
   // 대항해시대 화면은 cds-remake-stats 가 내는 부품(<cds-dashboard>, /embed.js)이다 — 화면 코드는 그쪽 저장소(cds-helper)에 하나만 둔다.
   // 부품 코드는 처음 고를 때 한 번 불러온다(안 보는 동안 그쪽 집계를 부르지 않게). 불러오면 부품이 제자리에 그려진다.
   if (tab === 'cds' && !document.getElementById('cdsembed')) {
@@ -148,8 +154,8 @@ function pickTab(tab) {
 
 // 게임 — 제목의 게임 이름을 눌러 고른다. 용의기사2 · 대항해시대는 섹션 하나씩이라(data-tab 이 게임 이름) 창세기전3 의
 // 설명 · 거르기 · 합계 타일 · 탭 줄을 숨기고 그 섹션만 보인다. 창세기전3 으로 돌아오면 마지막으로 본 탭을 다시 연다.
-const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계', mc: '— 패치판 버그 리포트' };
-const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대', mc: '마그나카르타' };
+const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계', mc: '— 패치판 버그 리포트', games: '— 안드로이드 게임 모음 버그 리포트' };
+const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대', mc: '마그나카르타', games: '게임 앱' };
 let dowTab = 'bugs';
 function pickGame(game) {
   if (!GAMES[game]) game = 'dow';
@@ -344,16 +350,16 @@ async function loadPart(tab) {
 }
 // ── 버그 리포트 — 관리자 키로 /v1/bugs 를 읽고, 카드마다 상태를 바꾼다 ──
 const STATUS_NAME = { new: '새로', seen: '봤음', fixed: '고침', wontfix: '안 고침' };
-const BUG_GAMES = { dow: '창세기전3', fd2: '용의기사2', mc: '마그나카르타' };   // 번호는 게임마다 따로 센다
+const BUG_GAMES = { dow: '창세기전3', fd2: '용의기사2', mc: '마그나카르타', games: '게임 앱' };   // 번호는 게임마다 따로 센다
 const bugState = { status: 'new', game: 'dow' };   // 이 탭은 창세기전3 만 — 용의기사2 는 그 게임 화면의 탭에서
 const bugKey = () => { try { return localStorage.getItem('bugAdminKey') || ''; } catch { return ''; } };
 function bugCard(b) {
   const c = b.context || {};
   const when = new Date(b.created_at).toLocaleString('ko-KR');
-  const where = c.where || c.scene || (c.chapter ? c.chapter + '장' + (c.turn ? ' ' + c.turn + '턴' : '') : c.screen || '');
+  const where = c.where || c.scene || (c.chapter ? c.chapter + '장' + (c.turn ? ' ' + c.turn + '턴' : '') : (c.screen || '') + (c.lastGame && c.lastGame !== c.screen ? ' · 마지막 ' + c.lastGame : ''));
   const buttons = Object.keys(STATUS_NAME).filter((s) => s !== b.status)
     .map((s) => '<button data-id="' + b.id + '" data-g="' + b.game + '" data-s="' + s + '">' + STATUS_NAME[s] + '</button>').join(' ')
-    + (b.game === 'fd2' || b.game === 'mc' ? '' : ' <button data-reply="' + b.id + '">답 달기</button>');   // 답은 창세기전3만 — 게임의 「내 리포트」에 보인다
+    + (b.game !== 'dow' ? '' : ' <button data-reply="' + b.id + '">답 달기</button>');   // 답은 창세기전3만 — 게임의 「내 리포트」에 보인다
   return '<div class="bug"><div class="head"><span class="tag">' + BUG_GAMES[b.game] + '</span><b>#' + b.id + '</b><span class="tag ' + esc(b.status) + '">' + esc(STATUS_NAME[b.status] || b.status) + '</span>'
     + '<span class="dim">' + esc(when) + ' · v' + esc(b.version) + (where ? ' · ' + esc(where) : '') + '</span><span style="flex:1"></span>' + buttons + '</div>'
     + '<div class="text">' + esc(b.text) + '</div>'
@@ -384,10 +390,10 @@ async function markBug(game, id, status) {
   if (note === null && (status === 'fixed' || status === 'wontfix')) return;
   const res = await fetch('/v1/bugs/' + id + '/status?game=' + game, { method: 'POST', headers: { Authorization: 'Bearer ' + bugKey(), 'content-type': 'application/json' },
     body: JSON.stringify(note ? { status, note } : { status }) });
-  if (!res.ok) { $('bugerr').textContent = $('fd2err').textContent = $('mcerr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
+  if (!res.ok) { $('bugerr').textContent = $('fd2err').textContent = $('mcerr').textContent = $('gameserr').textContent = '바꾸지 못했습니다: HTTP ' + res.status; return; }
   loadBugs();
   if (fd2Loaded) loadFd2();
-  if (mcLoaded) loadMc();
+  Object.keys(simpleLoaded).forEach((g) => { if (simpleLoaded[g]) loadSimple(g); });
 }
 // 답 — 보낸 분이 게임의 「내 리포트」에서 본다. 상태는 그대로 두고, 비우면 답을 지운다.
 async function replyBug(b) {
@@ -405,7 +411,7 @@ function askBugKey() {
   try { localStorage.setItem('bugAdminKey', k.trim()); } catch { }
   loadBugs();
   if (currentTab === 'fd2') loadFd2();
-  if (currentTab === 'mc') loadMc();
+  if (currentTab === 'mc' || currentTab === 'games') loadSimple(currentTab);
 }
 $('bugkey').onclick = askBugKey;
 
@@ -476,33 +482,35 @@ async function loadFd2() {
     $('fd2bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug('fd2', Number(b.dataset.id), b.dataset.s));
   } catch (e) { $('fd2err').textContent = '불러오지 못했습니다: ' + e.message; }
 }
-// ── 마그나카르타 — 버그 리포트만(/v1/bugs?game=mc). 같은 관리자 키 ──
-const mcStatus = { status: 'new' };
-let mcLoaded = false;
-async function loadMc() {
-  mcLoaded = true;
+// ── 마그나카르타 · 게임 앱 — 버그 리포트만(/v1/bugs?game=mc · games). 같은 관리자 키. 섹션 안 id 는 게임 이름이 앞에 붙는다 ──
+const simpleStatus = { mc: 'new', games: 'new' };
+const simpleLoaded = { mc: false, games: false };
+async function loadSimple(game) {
+  simpleLoaded[game] = true;
   const key = bugKey();
-  $('mcerr').textContent = '';
-  if (!key) { $('mctiles').innerHTML = ''; $('mcbugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
+  $(game + 'err').textContent = '';
+  if (!key) { $(game + 'tiles').innerHTML = ''; $(game + 'bugs').innerHTML = '<span class="dim">관리자 키를 넣으면 보입니다.</span>'; return; }
   try {
     const get = async (status) => {
-      const res = await fetch('/v1/bugs?game=mc&status=' + status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + key } });
+      const res = await fetch('/v1/bugs?game=' + game + '&status=' + status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + key } });
       if (res.status === 401) throw new Error('키가 맞지 않습니다');
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      return ((await res.json()).bugs || []).map((b) => ({ ...b, game: 'mc' }));
+      return ((await res.json()).bugs || []).map((b) => ({ ...b, game }));
     };
-    const [bugs, all] = await Promise.all([get(mcStatus.status), mcStatus.status === 'all' ? null : get('all')]);
+    const [bugs, all] = await Promise.all([get(simpleStatus[game]), simpleStatus[game] === 'all' ? null : get('all')]);
     const every = all || bugs;
     const installs = new Set(every.map((b) => b.install)).size;
-    $('mctiles').innerHTML = [[every.length, '리포트'], [every.filter((b) => b.status === 'new').length, '새로 온 것'], [every.filter((b) => b.status === 'fixed').length, '고침'], [installs, '보낸 설치']]
+    $(game + 'tiles').innerHTML = [[every.length, '리포트'], [every.filter((b) => b.status === 'new').length, '새로 온 것'], [every.filter((b) => b.status === 'fixed').length, '고침'], [installs, '보낸 설치']]
       .map(([v, label]) => '<div class="tile"><b>' + n(v) + '</b><span>' + label + '</span></div>').join('');
-    $('mcbugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
-    $('mcbugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug('mc', Number(b.dataset.id), b.dataset.s));
-  } catch (e) { $('mcerr').textContent = '불러오지 못했습니다: ' + e.message; }
+    $(game + 'bugs').innerHTML = bugs.length ? bugs.map(bugCard).join('') : '<span class="dim">없습니다.</span>';
+    $(game + 'bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug(game, Number(b.dataset.id), b.dataset.s));
+  } catch (e) { $(game + 'err').textContent = '불러오지 못했습니다: ' + e.message; }
 }
-$('mckey').onclick = askBugKey;
-$('mcreload').onclick = loadMc;
-$('mcstatus').onchange = (e) => { mcStatus.status = e.target.value; loadMc(); };
+for (const game of Object.keys(simpleStatus)) {
+  $(game + 'key').onclick = askBugKey;
+  $(game + 'reload').onclick = () => loadSimple(game);
+  $(game + 'status').onchange = (e) => { simpleStatus[game] = e.target.value; loadSimple(game); };
+}
 $('fd2key').onclick = askBugKey;
 $('fd2reload').onclick = loadFd2;
 $('fd2status').onchange = (e) => { fd2Status.status = e.target.value; loadFd2(); };

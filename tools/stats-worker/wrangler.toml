@@ -13,3 +13,9 @@ database_id = "6652a8b9-c5af-4c32-a0e9-3c4c86a175f3"
 binding = "FD2_DB"
 database_name = "fd2-remake"
 database_id = "9640048b-c93d-4108-9ce1-d38fb4722c08"
+
+# 게임 앱(Kyeongrok/mobile-games — 스도쿠 · 상하이 …)의 버그 리포트(mobile/tools/bug-worker) — 대시보드 「게임 앱」이 같이 읽고 상태를 바꾼다.
+[[d1_databases]]
+binding = "GAMES_DB"
+database_name = "mobile-games"
+database_id = "904bb14e-bf69-4d46-9236-da9e783c1018"

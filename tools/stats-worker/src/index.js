@@ -8,6 +8,7 @@
 //   POST /v1/bugs/<id>/status {status, note, reply}   버그 리포트의 상태를 바꾼다(관리자만) — reply 는 보낸 사람에게 보이는 답(창세기전3만)
 //   GET  /v1/bugs/mine?install=<id>            그 설치가 보낸 창세기전3 리포트의 상태 · 답(게임의 「내 리포트」, 키 없이)
 //                                              둘 다 ?game=fd2 면 용의기사2 리메이크의 리포트(fd2-remake D1 — 받는 곳은 fd2-remake/tools/bug-worker)
+//                                              ?game=games 면 게임 앱(mobile-games)의 리포트(mobile-games D1 — 받는 곳은 mobile/tools/bug-worker)
 //                                              ?game=mc 면 마그나카르타 패치판의 리포트(이 D1 의 mc_bug_reports — POST /v1/bug?game=mc 로 받는다)
 //   GET  /v1/fd2/summary                       용의기사2 탭의 집계 — 리포트를 상태 · 버전 · 기기 · 화면 · 날짜별로 센 것(관리자만)
 //
@@ -261,11 +262,12 @@ function isAdmin(request, env) {
 const STATUS = /^[a-z][a-z_-]{0,19}$/;
 
 // 어느 게임의 리포트인가 — 번호는 게임마다 따로 센다.
-const bugDb = (url, env) => (url.searchParams.get('game') === 'fd2' ? env.FD2_DB : env.DB);
+const BUG_DBS = { fd2: 'FD2_DB', games: 'GAMES_DB' };
+const bugDb = (url, env) => env[BUG_DBS[url.searchParams.get('game')] || 'DB'];
 // 마그나카르타(?game=mc)는 이 D1 의 따로 된 표 — 번호를 창세기전3 와 따로 센다(migrations/0005_mc_bug_reports.sql).
 const bugTable = (url) => (url.searchParams.get('game') === 'mc' ? 'mc_bug_reports' : 'bug_reports');
 // 답(reply)은 창세기전3만 — 게임의 「내 리포트」가 그것만 읽는다.
-const hasReply = (url) => !['fd2', 'mc'].includes(url.searchParams.get('game'));
+const hasReply = (url) => !['fd2', 'mc', 'games'].includes(url.searchParams.get('game'));
 
 async function listBugs(url, env) {
   const since = int(Number(url.searchParams.get('since') || 0));
