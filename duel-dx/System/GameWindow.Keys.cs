@@ -261,7 +261,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie, _part1RouteMarks));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -383,6 +383,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>모드 > 엔딩 영상 > 모세스 워프 영상 — 다른 항성계로 옮길 때 원본처럼 떠나는 · 오는 영상을 튼다(버그 리포트 #70, 기본 켬). 끄면 영상 없이 크로스페이드만.</summary>
     internal bool _mosesWarpMovie = UserSettings.Current.MosesWarpMovie;
     internal const int MenuMosesWarpMovie = 1702;
+
+    /// <summary>파트1 챕터 지도에서 사건이 걸린 표지 없는 길목(15장 「사막」 따위)에 이름 · 느낌표를 그리나 — 모드 &gt; 편의성(원본에 없음, 버그 리포트 #90 후속 fg-159, 기본 켬, Part1ChapterScreen.DrawRouteMarks).</summary>
+    internal bool _part1RouteMarks = UserSettings.Current.Part1RouteMarks;
+    internal const int MenuPart1RouteMarks = 1703;
 
     /// <summary>파트1 튜토리얼(챕터 79 · 80) 전투에서도 SAVE 를 하나 — 모드 > 일반 > 튜토리얼에서도 저장(원본은 막는다, 사용자 요청 menu-105, 기본 켬).</summary>
     internal bool _part1TutorialSave = UserSettings.Current.Part1TutorialSave;
@@ -613,6 +617,11 @@ internal sealed unsafe partial class GameWindow
                 _part1TutorialSave = !_part1TutorialSave;
                 Win32.CheckMenuItem(_menuBar, MenuPart1TutorialSave, Win32.MF_BYCOMMAND | (_part1TutorialSave ? Win32.MF_CHECKED : Win32.MF_UNCHECKED));
                 Toast(_part1TutorialSave ? "튜토리얼 전투에서도 저장합니다" : "튜토리얼 전투에서는 저장하지 않습니다(원본대로)");
+                SaveSettings();
+                break;
+            case MenuPart1RouteMarks:
+                _part1RouteMarks = !_part1RouteMarks;
+                Toast(_part1RouteMarks ? "파트1 지도에서 사건이 걸린 길목을 표시합니다" : "파트1 지도 길목을 원본대로 표시 없이 둡니다");
                 SaveSettings();
                 break;
             case MenuCoverGhost:

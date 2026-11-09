@@ -1338,6 +1338,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             Art.Blit(Art.Motion(pic[0], 0, tick), px, py);
         }
 
+        if (!window && host._part1RouteMarks) DrawRouteMarks(chapter, ox, oy, W, H);
+
         // 이동 고르기 — 갈 수 있는 이웃마다 퍼지는 고리(Obs 182, 0x100c4cf0)와 팀 자리에서 그 이웃까지의 선.
         // 원본(0x100c4e00)은 고리 하나를 마우스 쪽 이웃에 두고(0x100c50b0, MoveAim), 팀 장소 가운데 → 고리 자리로 선을 긋는다:
         // 0x1000c8b0 선을 (0,0) · x+1 · y+1 · x−1 · y−1 로 다섯 번(굵기 3 십자꼴), 빛깔 16비트 0x6259(15비트 0x3139) = (99, 73, 206).
@@ -1441,6 +1443,82 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
         }
         else if (Picking) DrawPick(ox, oy);
         host.DrawToast();
+    }
+
+    /// <summary>
+    /// 표지 없는 길목인데 닿으면 챕터 사건이 일어나는 장소인가 — 원본에 없는 표시(모드 &gt; 편의성 &gt; 파트1 지도 길목 표시, 버그 리포트 #90 후속 fg-159).
+    /// 원본 표지는 마을(종류 1)의 이름 글과 전투 장소의 칼 그림(<see cref="Part1Chapter.Pictures"/>) · 타일 지도의 성채라, 마을도 전투도 아닌(낱말 7 = −1) 장소 중
+    /// 칼 그림이 안 닿은 곳만 본다. 지금 열린 곳(낱말 5 깃발)이어야 하고, 팀이 서 있는 곳은 뺀다(닿기는 옮겨 와야 일어난다).
+    /// 사건 판정은 <see cref="Part1SceneScript.WaitsOnArrival"/> — 조건 200 [갈래, 장소] 사건이 아직 남았고 나머지 조건(깃발 · 턴 · 말)도 지금 맞을 때.
+    /// 15장 「사막의 광풍」 장소 6 「사막」(깃발 66 뒤 사건 3 → Btl 72)이 이 꼴이라 플레이어가 자비단으로 곧장 가 「전투가 안 일어난다」고 제보했다.
+    /// </summary>
+    internal bool RouteMarked(Part1Chapter chapter, int i)
+    {
+        var p = chapter.Places[i];
+        if (p.Kind == 1 || p.Target >= 0) return false;
+        int gate = p.Words[5];
+        var flags = host.FlagSt._flags;
+        if (gate >= 0 && (gate >= flags.Length || flags[gate] == 0)) return false;
+        for (int k = 0; k < chapter.Pictures.Count; k++)
+        {
+            var pic = chapter.Pictures[k];
+            if (pic.Length < 3 || pic[0] <= 0 || _hiddenPictures.Contains((chapter.Id, k))) continue;
+            if (pic[1] >= p.X - RoutePicSlack && pic[1] <= p.X + p.Words[3] + RoutePicSlack && pic[2] >= p.Y - RoutePicSlack && pic[2] <= p.Y + p.Words[4] + RoutePicSlack) return false;
+        }
+        if (TeamsAt(i).Count > 0) return false;
+        return Events.WaitsOnArrival(i);
+    }
+
+    /// <summary>칼 그림이 장소 네모에서 이만큼 안에 있으면 그 장소의 표지로 친다.</summary>
+    private const int RoutePicSlack = 20;
+
+    /// <summary>
+    /// 길목 표시 — 장소 가운데에 퍼지는 노란 고리(1초에 한 번), 장소 아래에 마을과 같은 자리로 이름 글(호박빛 바탕)과 그 왼쪽 깜빡이는 「!」 딱지.
+    /// 지도 그림이 없으면 이름은 위 장소 이름 줄이 이미 적으므로 고리 · 딱지만.
+    /// </summary>
+    private void DrawRouteMarks(Part1Chapter chapter, int ox, int oy, int W, int H)
+    {
+        double t = host._lastTime;
+        for (int i = 0; i < chapter.Places.Count; i++)
+        {
+            var p = chapter.Places[i];
+            var (cx, cy) = Screen(p, ox, oy);
+            if (cx < ox - 80 || cx > ox + W + 80 || cy < oy - 60 || cy > oy + H + 40) continue;
+            if (!RouteMarked(chapter, i)) continue;
+            double phase = t % 1.0;
+            int r = 8 + (int)(phase * 14);
+            uint ringAlpha = (uint)(255 * (1 - phase)) << 24;
+            Ring(cx, cy, r, ringAlpha | 0x00FFD040);
+            Ring(cx, cy, r + 1, ringAlpha | 0x00FFD040);
+            Ring(cx, cy, 5, 0xFFFFD040);
+            Art.Fill(cx - 2, cy - 2, 5, 5, 0xFFFFE080);
+            // 이름 글 — 마을 이름과 같은 자리(장소 아래 가운데). 그 왼쪽에 「!」 딱지(0.5초마다 밝고 어둡게) — 장소 위는 이웃 장소의 팀 말 꼬리표에 가린다.
+            string name = Part1Game.PlainText(chapter.NameOf(p)).Replace('\n', ' ').Trim();
+            int sx = cx, sy = oy + p.Y + p.Words[4] + 15 - _cam.Y, tw = name.Length > 0 ? Art.TextW(name, 12) : 0;
+            if (_hasMap && tw > 0)
+            {
+                Art.Fill(sx - tw / 2 - 3, sy - 1, tw + 6, 17, 0xB0703010u);
+                host.UiText(name, sx - tw / 2 + 1, sy + 1, 0xFF000000, 12);
+                host.UiText(name, sx - tw / 2, sy, 0xFFFFE080, 12);
+            }
+            bool bright = (int)(t * 2) % 2 == 0;
+            int bx = sx - tw / 2 - 3 - 16, by = sy - 1;
+            Art.Fill(bx, by, 14, 17, bright ? 0xFFFFD040u : 0xFFB08020u);
+            Art.Stroke(bx, by, 14, 17, 0xFF000000);
+            Art.TextCentered("!", bx + 7, by + 8, 0xFF000000, 13);
+        }
+    }
+
+    /// <summary>한 점 굵기 원(지도 화면 안만) — 알파가 있으면 섞는다.</summary>
+    private void Ring(int cx, int cy, int r, uint color)
+    {
+        if (color >> 24 == 0) return;
+        int steps = Math.Max(16, r * 7);
+        for (int k = 0; k < steps; k++)
+        {
+            double a = k * 2 * Math.PI / steps;
+            Art.Fill(cx + (int)Math.Round(r * Math.Cos(a)), cy + (int)Math.Round(r * Math.Sin(a)), 1, 1, color);
+        }
     }
 
     /// <summary>가운데 640×480 틀 기준 네모 (x, y, w, h) 가 떠 있는 창 · 메뉴 · 턴 끝 알림에 덮이나.</summary>

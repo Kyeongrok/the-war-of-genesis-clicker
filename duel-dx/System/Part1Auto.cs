@@ -15,14 +15,17 @@ namespace DuelDx;
 /// </remarks>
 internal sealed class Part1Auto(GameWindow host)
 {
-    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial" or "continue" or "ending";
+    internal static readonly bool On = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "1" or "tutorial" or "continue" or "ending" or "hold";
 
     /// <summary><c>DUELDX_P1AUTO=ending</c> — 파트1 타이틀에서 챕터 56 을 열고 곧바로 엔딩(챕터 705, <see cref="Part1ChapterScreen.OnEnding"/>)을 부르고 멈춘다(엔딩 영상 · 「엔딩 영상 없음」 시험).</summary>
     private static readonly bool Ending = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "ending";
     private bool _endingDone;
 
     /// <summary><c>DUELDX_P1AUTO=continue</c> — NEW GAME 대신 CONTINUE 로 세이브(DUELDX_SAVEDIR 의 part1.json)에서 잇는다.</summary>
-    private static readonly bool FromSave = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "continue";
+    private static readonly bool FromSave = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") is "continue" or "hold";
+
+    /// <summary><c>DUELDX_P1AUTO=hold</c> — CONTINUE 로 세이브의 챕터 지도를 열고 그 자리에서 멈춘다(지도 그리기 시험 — 길목 표시 fg-159).</summary>
+    private static readonly bool Hold = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "hold";
 
     /// <summary><c>DUELDX_P1AUTO=tutorial</c> — NEW GAME 대신 TUTORIAL 을 누르고, 연대표에 닿으면 멈춘다.</summary>
     private static readonly bool Tutorial = Environment.GetEnvironmentVariable("DUELDX_P1AUTO") == "tutorial";
@@ -56,6 +59,7 @@ internal sealed class Part1Auto(GameWindow host)
             Wait(9999);
             return;
         }
+        if (Hold && shell.Chapter._open) return;
         if (shell.Chapter._open) { ChapterStep(shell.Chapter); return; }
         if (shell.Timeline._open && Tutorial) { Log("tutorial done — timeline"); Wait(9999); return; }
         if (shell.Timeline._open) { NextChapter(shell, "timeline"); return; }

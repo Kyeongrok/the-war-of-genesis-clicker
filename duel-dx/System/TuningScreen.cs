@@ -248,6 +248,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("상자 강조", "아직 안 연 상자에 깜박이는 노란 테두리를 두른다", MenuChestGlow, host._highlightChests),
         ("행성에 할 일 표시", "전투·이야기 장소가 있는 행성에 노란 점", MenuPlanetMarks, host._planetMarks),
+        ("파트1 지도 길목 표시", "사건이 걸린 표지 없는 길목에 이름과 느낌표(원본에 없음)", MenuPart1RouteMarks, host._part1RouteMarks),
         ("적 행동 중 클릭으로 건너뛰기", "모션·이펙트를 건너뛰고 결과만 보인다", MenuSkipEnemy, host._skipEnemyAction),
         ("기술 영상 보기", "헬 카이트·진무 천지파열 같은 기술의 영상(원본 폴더에서 튼다)", MenuSkillMovies, host._skillMovies),
         ("전직할 때 EXP 없애기", "원본처럼 전직하면 쌓인 EXP 를 지운다 · 끄면 남긴다", MenuKeepJobExp, host._dropJobExp),

@@ -223,6 +223,30 @@ internal sealed class Part1SceneScript(GameWindow host)
     }
 
     /// <summary>
+    /// 리메이크 — 지금 일행이 그 장소에 닿으면 터질 챕터 사건이 있나: 조건에 200 [갈래, 그 장소] 가 들고, 발동 한도가 남았고, 닿았다 치면 나머지 조건(깃발 101 · 턴 1 · 말 201~303 …)도 지금 맞는 사건.
+    /// 챕터 지도가 표지 없는 길목에 표시를 그릴 때 본다(<see cref="Part1ChapterScreen.DrawRouteMarks"/>, 버그 리포트 #90 후속 fg-159) — 사건은 돌리지 않는다.
+    /// 조건 202(진입)는 안 본다 — 들어갈 곳이 없는 길목은 「진  입」이 막혀 있다.
+    /// </summary>
+    internal bool WaitsOnArrival(int place)
+    {
+        if (IsField || place < 0) return false;
+        int saved = Arrived;
+        Arrived = place;
+        try
+        {
+            foreach (var e in _events)
+            {
+                if (e.Index == 0 || e.MaxFire > 1000) continue;
+                if (e.MaxFire > 0 && _fired.GetValueOrDefault(e.Index) >= e.MaxFire) continue;
+                if (!e.Conditions.Any(c => c.Code == 200 && c.Args.Length > 1 && c.Args[1] == place)) continue;
+                if (e.Conditions.All(Holds)) return true;
+            }
+            return false;
+        }
+        finally { Arrived = saved; }
+    }
+
+    /// <summary>
     /// 사건 0(늘 도는 목록)과 발동 한도 0(무제한 — 늘 다시 터지는 부르기 목록, 챕터 28 사건 33)을 뺀 발동 수 합.
     /// 무제한 사건까지 세면 훑을 때마다 늘어 「무엇이 일어났다」(<see cref="Arrive"/>)가 늘 참이 되고 훑기가 64 번까지 돈다.
     /// </summary>
