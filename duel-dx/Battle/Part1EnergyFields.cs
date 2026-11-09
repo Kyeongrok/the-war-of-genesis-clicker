@@ -79,7 +79,9 @@ internal sealed class Part1EnergyFields(GameWindow host)
         var rules = btl.Part1;
         foreach (var u in host._units)
         {
-            if (u is not { Alive: true, OnField: true } || u.Col != f.Col || u.Row != f.Row) continue;
+            // 제 칸의 유닛 모으기(0x1008f7c0)는 큰 유닛(+0xb9)이면 둘레 3×3 칸(0x1008f844~0x1008f8f3)을 훑어 잡는다 — 마장기 · 탱크는 차지한 어느 칸의 기운에도
+            // 굴린다. 전에는 기준 칸만 봐서 3×3 기계에게는 기준 칸 기운 하나만 굴렸다(버그 리포트 #85).
+            if (u is not { Alive: true, OnField: true } || !btl.Covers(u, f.Col, f.Row)) continue;
             if (!rules.IsMachine(u) || rules.HasAilment(u, Part1Rules.Shock)) continue;
             int roll = btl._ailmentRandom.Next(32768);
             bool lands = roll % 50 == 0;

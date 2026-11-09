@@ -532,6 +532,18 @@ internal sealed partial class Part1Skill
         {
             var u = host._units[ti];
             var (fx, fy) = host.Btl.UnitFoot(u);
+            // 원본은 칸마다 맞음 사건(0x100768f0(1, …, 3, 1, 3, 0))을 달아 그 칸의 유닛을 모으므로, 큰 유닛(3×3)은 차지한 칸마다 그 칸이 터질 때 맞는다
+            // (295 0x10061004 · 296 0x10061976, 버그 리포트 #85). 첫 타 말고는 TileStrike.
+            if (_tileCells != null && host.Btl.Part1Big(u))
+            {
+                var covered = land.Where(l => host.Btl.Covers(u, l.Cell.Col, l.Cell.Row)).Select(l => l.Tick).Order().ToList();
+                if (covered.Count > 0)
+                {
+                    Later(covered[0] + 2, () => hit(ti));
+                    foreach (int t in covered.Skip(1)) TileHitAt(t + 2, ti, hit);
+                    continue;
+                }
+            }
             int tick = land.Count == 0 ? 1
                 : land.FindIndex(l => l.Cell.Col == u.Col && l.Cell.Row == u.Row) is >= 0 and var i ? land[i].Tick
                 : land.OrderBy(l => Dist(l.At, (fx, fy))).First().Tick;
