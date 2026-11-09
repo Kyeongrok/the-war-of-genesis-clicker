@@ -33,6 +33,17 @@ public static class Part1BattleAdditions
         [397] = [([Cmd(100, 10001, 0)], [Cmd(105)])],
     };
 
+    /// <summary>
+    /// 판 → 바꿔 보일 승리 조건 글 — 원본 줄은 두고 새 줄을 붙여 머리의 승리 조건 줄 번호만 그쪽으로 돌린다(사용자 결정).
+    /// </summary>
+    private static readonly Dictionary<int, string> WinTexts = new()
+    {
+        // 0070 「시지아 요새」 — 글은 「알제브르의 격파」인데 알제브르(인물 레코드 0)는 안 쓰는 레코드라 로더가 지워 맵에 없고,
+        // 실제 승리 사건은 편 0·1·2 전멸이다. 알제브르는 세우지 않고 글만 고친다(버그 리포트 #89, 사용자 결정 2026-11-09).
+        // 문구는 파트1 「전멸」 승리 조건 가운데 가장 흔한 꼴(36판).
+        [70] = "적 부대의 전멸",
+    };
+
     private static ScriptCommand Cmd(int code, params short[] args)
     {
         var full = new short[6];
@@ -40,7 +51,10 @@ public static class Part1BattleAdditions
         return new ScriptCommand(code, full);
     }
 
-    public static Part1Battle Apply(Part1Battle battle) => AddEvents(AddLines(battle));
+    public static Part1Battle Apply(Part1Battle battle) => AddEvents(AddLines(ReplaceWinText(battle)));
+
+    private static Part1Battle ReplaceWinText(Part1Battle battle) =>
+        WinTexts.TryGetValue(battle.Id, out var text) ? battle with { Lines = [.. battle.Lines, text], WinLine = battle.Lines.Count } : battle;
 
     private static Part1Battle AddEvents(Part1Battle battle)
     {
