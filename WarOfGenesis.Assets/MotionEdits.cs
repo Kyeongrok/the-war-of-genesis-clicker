@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace WarOfGenesis.Assets;
 
@@ -11,11 +12,22 @@ namespace WarOfGenesis.Assets;
 /// 한 모션의 손질은 <b>남길 원본 그림 키의 차례 번호</b>와 <b>그 키의 새 길이(틱)</b> 두 줄이다. 새 키는 차례대로 이어 붙인다.
 /// 소리·타격·자식 그림·섞기·물들이기·떨림 키는 원래 들어 있던 그림 키 안의 자리를 새 길이에 비례해 옮긴다 —
 /// 지운 키 안에 있던 것은 다음에 남은 키의 처음으로 간다. 그래서 빠르게 해도 타격·소리가 그림과 어긋나지 않는다.
+/// <para>
+/// 셋째 줄 <c>AddChildren</c> 은 원본에 없는 자식 Obs 키를 더한다(틱은 손질 뒤 시간줄 기준). 키 손질 없이 자식만 더할 때는
+/// <c>Keep</c> · <c>Lengths</c> 를 빈 배열로 둔다. 칼리오페(Obs 0540)의 기 모으기(모션 21~23)에 빠진 빛 Obs 0108 을 넣는 데 쓴다(버그 리포트 #91, 사용자 결정).
+/// </para>
 /// </remarks>
 public static class MotionEdits
 {
-    /// <summary>한 모션의 손질 — 남길 원본 키 번호(시작 틱 차례)와 그 새 길이.</summary>
-    public sealed record Edit(int[] Keep, int[] Lengths);
+    /// <summary>한 모션의 손질 — 남길 원본 키 번호(시작 틱 차례)와 그 새 길이, 더할 자식 키(없으면 null).</summary>
+    public sealed record Edit(
+        int[] Keep,
+        int[] Lengths,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChildKey[]? AddChildren = null)
+    {
+        /// <summary>키 손질이 있나 — 빈 Keep 이면 원본 키 · 길이 그대로.</summary>
+        [JsonIgnore] public bool Retimes => Keep.Length > 0 && Keep.Length == Lengths.Length;
+    }
 
     private static Dictionary<string, Dictionary<string, Edit>>? _all;
 
@@ -65,8 +77,15 @@ public static class MotionEdits
     /// <summary>원본 모션에 손질을 덧입힌 모션을 만든다.</summary>
     public static ObsMotionClip Apply(ObsMotionClip clip, Edit edit)
     {
+        var retimed = Retime(clip, edit);
+        return edit.AddChildren is { Length: > 0 } add ? retimed with { Children = [.. retimed.Children, .. add] } : retimed;
+    }
+
+    /// <summary>남길 키 · 길이 손질만 덧입힌다.</summary>
+    private static ObsMotionClip Retime(ObsMotionClip clip, Edit edit)
+    {
         var keys = clip.Keys.OrderBy(k => k.Start).ToList();
-        if (keys.Count == 0 || edit.Keep.Length == 0 || edit.Keep.Length != edit.Lengths.Length) return clip;
+        if (keys.Count == 0 || !edit.Retimes) return clip;
         var newStart = new int[edit.Keep.Length];
         var newKeys = new List<MotionKey>();
         int t = keys[0].Start;

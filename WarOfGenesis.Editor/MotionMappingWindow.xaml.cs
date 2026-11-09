@@ -157,7 +157,7 @@ public partial class MotionMappingWindow : Window
     private (List<int> Keep, List<int> Lengths)? CurrentEdit()
     {
         if (_current == null || !_original.Clips.TryGetValue(_current.Id, out var orig)) return null;
-        if (MotionEdits.Get(_obs, _current.Id) is { } e) return ([.. e.Keep], [.. e.Lengths]);
+        if (MotionEdits.Get(_obs, _current.Id) is { Retimes: true } e) return ([.. e.Keep], [.. e.Lengths]);
         var keys = orig.Keys.OrderBy(k => k.Start).ToList();
         return ([.. Enumerable.Range(0, keys.Count)], [.. keys.Select(k => Math.Max(1, k.Length))]);
     }
@@ -168,7 +168,12 @@ public partial class MotionMappingWindow : Window
         if (_current == null || _obs <= 0 || !_original.Clips.TryGetValue(_current.Id, out var orig)) return;
         var keys = orig.Keys.OrderBy(k => k.Start).ToList();
         bool same = keep.Count == keys.Count && keep.Select((k, i) => k == i && lengths[i] == Math.Max(1, keys[i].Length)).All(x => x);
-        var edit = same || keep.Count == 0 ? null : new MotionEdits.Edit([.. keep], [.. lengths]);
+        // 더한 자식 키(AddChildren)는 키 손질과 따로 둔다 — 키를 원본으로 되돌려도 남긴다.
+        var added = MotionEdits.Get(_obs, _current.Id)?.AddChildren;
+        bool noRetime = same || keep.Count == 0;
+        var edit = noRetime && added == null ? null
+                 : noRetime ? new MotionEdits.Edit([], [], added)
+                 : new MotionEdits.Edit([.. keep], [.. lengths], added);
         MotionEdits.Set(_obs, _current.Id, edit);
         _current = edit == null ? orig : MotionEdits.Apply(orig, edit);
         if (MotionList.SelectedItem is ClipItem)
