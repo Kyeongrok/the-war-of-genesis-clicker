@@ -1075,7 +1075,13 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 기본공격 자리 찾기 — 이동 영역 칸(시작 자리 포함) 중 목표가 사거리에 드는, 시작 자리에서 가장 싼 칸.
     /// 길은 지금 자리에서 그 칸까지다.
     /// </summary>
-    internal (List<(int Col, int Row)> Path, int Cost)? FindAttackPath(int attackerIndex, int targetIndex)
+    /// <param name="aimCell">
+    /// 플레이어가 누른 큰 유닛(3×3)의 차지 칸 — 주면 <b>그 칸이 사거리에 드는 자리</b>를 먼저 찾고, 없을 때만 차지 칸 어디든 닿는 자리로 간다.
+    /// 원본은 누른 칸 하나를 대상 칸으로 삼는다(파트2 붉은 칸 클릭 <c>0x1006dee0</c> → <c>0x100608e0</c> 은 누른 칸이 사거리에 드는 자리를 찾고,
+    /// 파트1 맵 클릭 <c>0x10032060</c> 은 누른 칸의 유닛을 <c>0x10089610</c> 으로 찾는다). 전에는 차지 칸 아무 데나 닿는 가장 가까운 자리로 가서,
+    /// 마장기 반대쪽 칸을 눌러도 가까운 쪽에서 쳤다(버그 리포트 #81, Btl 20068).
+    /// </param>
+    internal (List<(int Col, int Row)> Path, int Cost)? FindAttackPath(int attackerIndex, int targetIndex, (int Col, int Row)? aimCell = null)
     {
         var a = host._units[attackerIndex];
         var t = host._units[targetIndex];
@@ -1090,15 +1096,22 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // (맨해튼, 같으면 배열 번호 순). 비용은 기준 칸 → 그 칸 한 번이다(ba-20 M2). 전에는 기준 칸에서 가장 싼 칸을 골라,
         // 미리 걸어가 자리를 잡고 적을 눌러도 싼 칸으로 되걸어갔다.
         int narrow = a.HasStatus(25) ? 0 : a.Tp + Math.Min(0, a.Ctp - TpCostFor(a, a.Data, w.Id));
-        int best = -1, bestDist = int.MaxValue;
-        for (int i = 0; i < range.Cost.Length; i++)
+        // 누른 차지 칸이 있으면 그 칸이 사거리에 드는 자리만 먼저 본다(버그 리포트 #81) — 없으면 아래 차지 칸 어디든으로 물러난다.
+        var aim = aimCell is { } ac && Part1Big(t) && Covers(t, ac.Col, ac.Row) ? aimCell : null;
+        int best = -1;
+        for (int pass = aim != null ? 0 : 1; pass < 2 && best < 0; pass++)
         {
-            if (!range.CanReach(i) || range.Cost[i] > narrow) continue;
-            int d = Math.Abs(i % host.Cols - a.Col) + Math.Abs(i / host.Cols - a.Row);
-            // 큰 유닛 대상은 차지 칸(3×3) 어디가 사거리에 들어도 된다(UnitAimCell, 원본 0x10089610 — 버그 리포트 #62).
-            if (d >= bestDist || UnitAimCell(w, a, t, i % host.Cols, i / host.Cols) is null) continue;
-            bestDist = d;
-            best = i;
+            int bestDist = int.MaxValue;
+            for (int i = 0; i < range.Cost.Length; i++)
+            {
+                if (!range.CanReach(i) || range.Cost[i] > narrow) continue;
+                int c = i % host.Cols, r = i / host.Cols, d = Math.Abs(c - a.Col) + Math.Abs(r - a.Row);
+                if (d >= bestDist) continue;
+                // 큰 유닛 대상은 차지 칸(3×3) 어디가 사거리에 들어도 된다(UnitAimCell, 원본 0x10089610 — 버그 리포트 #62).
+                if (pass == 0 ? !InWorkRange(w, c, r, aim!.Value.Col, aim.Value.Row, a) : UnitAimCell(w, a, t, c, r) is null) continue;
+                bestDist = d;
+                best = i;
+            }
         }
         // 길은 넓은 예산(지금 TP 전부)으로 찾는다 — 대상 고르기 중의 range 는 좁은 예산이라, 멀리 걸어가 있으면 지금 칸이 그 밖이라 길이 안 나왔다.
         if (best < 0) return null;
@@ -1119,16 +1132,20 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     // ── 플레이어 대상 고르기 ─────────────────────────────────────────────────
 
     /// <summary>적을 클릭하면 링을 안 거치고 바로 친다(fa-12) — 걸음 비용도 그때 함께 뺀다.</summary>
-    internal void QuickAttack(int targetIndex)
+    /// <param name="aimCell">누른 칸 — 큰 유닛이면 그 칸 쪽에서 친다(<see cref="FindAttackPath"/>, 버그 리포트 #81).</param>
+    internal void QuickAttack(int targetIndex, (int Col, int Row)? aimCell = null)
     {
         if (host._units[_turn].Data is not { } c || Work(c.BasicWorkId) is not { } w) return;
-        if (FindAttackPath(_turn, targetIndex) is not { } plan)
+        if (FindAttackPath(_turn, targetIndex, aimCell) is not { } plan)
         {
             host.Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요");
             return;
         }
         // 걸음 비용은 여기서 미리 빼지 않는다 — UseWorkRoutine 의 CommitMove 가 「기준 칸 → 친 칸」을 한 번만 뺀다(ba-20 M2).
         _commitUndo = null;   // 바로 치므로 되돌릴 일이 없다
+        if (Trace)   // 시험 전용 — 누른 칸과 설 자리(버그 리포트 #81)
+            System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                $"quick attack {host._units[targetIndex].ChrCode} at ({host._units[targetIndex].Col},{host._units[targetIndex].Row}) aim {aimCell} → stand {(plan.Path.Count > 0 ? plan.Path[^1] : (host._units[_turn].Col, host._units[_turn].Row))}" + Environment.NewLine);
         _routine = UseWorkRoutine(_turn, w, targetIndex, host._units[targetIndex].Col, host._units[targetIndex].Row, plan.Path);
     }
 
@@ -1232,7 +1249,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     }
 
     /// <summary>대상 고르는 중의 클릭. 처리했으면 true.</summary>
-    internal bool OnTargetClick(int col, int row)
+    /// <param name="clickedCell">마우스로 누른 칸(가운데 칸으로 바꾸기 전) — 기본공격이 큰 유닛을 그 칸 쪽에서 치게 한다(버그 리포트 #81). 키보드 · 패드는 안 준다.</param>
+    internal bool OnTargetClick(int col, int row, (int Col, int Row)? clickedCell = null)
     {
         if (_targetWork < 0) return false;
         if (!IsPlayerTurn || Work(_targetWork) is not { } w) { CancelTargeting(); return true; }
@@ -1250,7 +1268,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 return true;
             }
             // 칠 수 있는 상대는 편 판정으로 가른다 — 버서커(4)면 아군도 친다(0x1006fde0). 전에는 편(IsAlly)만 봐서 버서커여도 아군을 못 쳤다.
-            if (target < 0 || !SeesAsFoe(user, host._units[target]) || FindAttackPath(_turn, target) is not { } plan)
+            if (target < 0 || !SeesAsFoe(user, host._units[target]) || FindAttackPath(_turn, target, clickedCell) is not { } plan)
             {
                 host.Hint("공격할 수 없습니다 — 빨간 칸 안의 적을 고르세요 (우클릭·Esc 취소)");
                 return true;

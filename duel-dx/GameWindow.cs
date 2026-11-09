@@ -1252,16 +1252,18 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 다만 누른 칸이 노란(사거리) 칸이고 그 유닛의 가운데 칸은 사거리 밖이면 누른 칸 그대로다 — 큰 유닛(3×3)의 차지 칸을 누르면
         // 가운데 칸으로 바뀌어, 아지다하카 버스터 런쳐(사거리 = 바로 옆 네 칸 = 제 차지 칸)는 노란 칸을 눌러도 「사거리 밖입니다」였다(버그 리포트 #59).
         // 큰 유닛의 가운데 칸이 사거리 밖이면 사거리에 드는 차지 칸으로 간다(버그 리포트 #61 — 아론다이트 2~6연 → 적 마장기).
+        // 큰 유닛(3×3)의 차지 칸을 눌렀으면 그 칸을 기억해 둔다 — 걸어가 칠 때 그 칸 쪽 자리로 간다(버그 리포트 #81). 몸통 그림만 눌렀으면 없다.
+        (int Col, int Row)? clickedCell = index >= 0 && row >= 0 && Btl.Covers(_units[index], col, row) ? (col, row) : null;
         if (index >= 0 && !emptyCellAim) (col, row) = Btl.ClickedAimCell(col, row, index);
         if (row < 0) return;
-        if (Btl.OnTargetClick(col, row)) return;
+        if (Btl.OnTargetClick(col, row, clickedCell)) return;
 
         if (index >= 0)
         {
             // 적군은 고를 수 없다(fa-9) — 대신 내 차례면 클릭만으로 바로 공격한다(fa-12).
             // 차례를 기다리는(▼) 다른 내 인물이면 그 인물에게 차례를 넘긴다(원본 상태 22 0x1006aeba).
             if (_units[index].IsAlly) { if (!Btl.TrySwitchTurnTo(index)) _selected = index; }
-            else if (Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy) Btl.QuickAttack(index);
+            else if (Btl.IsPlayerTurn && !_units[Btl._turn].IsBusy) Btl.QuickAttack(index, clickedCell);
             return;
         }
         if (Btl.TryTouchObject(col, row) || Btl.TryAttackObject(col, row)) return;
