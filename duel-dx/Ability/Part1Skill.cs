@@ -140,7 +140,8 @@ internal sealed partial class Part1Skill(GameWindow host)
     /// 범위 칸마다 이동기를 보내 닿은 칸에 사건을 다는 검 기술(마룡광아탄 296 <c>0x10061976</c> · 플라즈마 슬래쉬 295 <c>0x10061004</c>, 버그 리포트 #85)과
     /// 칸이 바뀔 때마다 치는 이동기(<c>0x100769b0</c> → <c>0x1007676e</c> — 혼 26~30 · 혈랑마혼 292 · 비연참 294 · 빛살 <see cref="BattleScene.IsPart1Beam"/>)는
     /// 큰 유닛을 차지한 칸 수만큼 친다. 대상 목록(<c>0x1008f1a0(0, …)</c>)을 훑어 대상마다 사건을 하나 놓는 기술은 한 번이다.
-    /// 타이타니아 · 썬더스탐 · 메테오 · 공폭탄처럼 아무 칸에 떨어지는 것은 사람마다 한 번으로 둔 결정(menu-89)대로 여기 넣지 않는다.
+    /// 타이타니아 · 썬더스탐 · 메테오 · 공폭탄처럼 아무 칸에 떨어지는 것은 여기 넣지 않는다 — 떨어질 때마다 그 자리를 덮는 유닛을 제 시각표가 따로 치고
+    /// <see cref="HitsEachTime"/> 로 거르기를 건너뛴다(fg-159).
     /// </summary>
     internal static bool HitsPerTile(int work) =>
         work is FlyingSlashWork or MuspelWork || work > Part1Game.ChrBase && HitsPerTileAttack(Part1SkillBook.AttackIdOf(work));

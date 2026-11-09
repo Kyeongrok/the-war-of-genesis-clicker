@@ -15,7 +15,7 @@ using static DuelDx.GameWindow;
 /// 2 — <b>문 라이트 핸들러</b>(<c>0x1004c480</c>) · 4 — <b>썬더스탐 핸들러</b>(<c>0x1004dc80</c>) ·
 /// 5 — 바쁜 이펙트가 0 이 될 때까지(기운까지 다 사라질 때까지) 기다린다 ·
 /// 6 — 시전자가 버써크(+0x24e)가 아니면 표지(<c>0x10041c60(8)</c>)를 달고 버써크 255 를 건다(<c>0x10042570(8, 0xff)</c>, 이미 걸려 있으면 그대로) → 끝(<c>0x1003a350</c>).</para>
-/// <para>세 핸들러는 시전자 +0x1fc = 380 인 채로 불려 피해는 모두 폭주(Attack 380)의 세기로 든다. 그래서 대상마다 단계마다 한 번씩, 많게는 세 번 맞는다.
+/// <para>세 핸들러는 시전자 +0x1fc = 380 인 채로 불려 피해는 모두 폭주(Attack 380)의 세기로 든다. 그래서 메테오 · 썬더스탐 단계는 운석 · 번개마다 맞는다(fg-159).
 /// 리메이크는 버써크를 파트2 상태 4(버서커)로 걸고, 그 상태는 차례로 줄지 않아 큐어 · 회복 아이템으로 풀 때까지 남는다(원본 255 와 같은 꼴).</para>
 /// <para>가설: 「바쁜 수 3 이하」를 앞 단계 이펙트가 다 끝난 때로 본다 — 다음 단계는 앞 핸들러가 돌려준 끝 틱에 시작한다.</para>
 /// <para>전에는 이 핸들러를 안 옮겨 work 20380 이 빌린 마법 틀로 판 전체를 한 번 치고 끝났고 버써크도 안 걸렸다(버그 리포트 #48).</para>
@@ -40,17 +40,18 @@ internal sealed partial class Part1Skill
         int auraEnd = m0 + 1 + auraHold + 1 + Length(897, 2);
         Put(897, 2, m0 + 1 + auraHold + 1, hx, hy - 20 * 0.6);
 
-        // 단계마다 같은 대상은 한 번 — 메테오는 운석 여럿이 같은 이를 덮어도 한 번(리메이크 메테오와 같이), 세 단계를 합치면 세 번까지.
-        // 대상 목록은 시작 때 것이라 앞 단계에서 쓰러진 이는 건너뛴다(원본 문 라이트는 그때 판 위의 적을 훑는다).
+        // 메테오 · 썬더스탐은 제 핸들러 그대로 — 운석 · 번개마다 따로 맞아 한 적이 여러 번 맞을 수 있다(fg-159).
+        // 문 라이트는 단계 안에서 같은 대상은 한 번. 대상 목록은 시작 때 것이라 앞 단계에서 쓰러진 이는 건너뛴다(원본 문 라이트는 그때 판 위의 적을 훑는다).
         Action<int> Once()
         {
             var struck = new HashSet<int>();
             return ti => { if (host._units[ti] is { Alive: true, Hp: > 0 } && struck.Add(ti)) hit(ti); };
         }
+        Action<int> Living() => ti => { if (host._units[ti] is { Alive: true, Hp: > 0 }) hit(ti); };
 
-        int meteorEnd = Stage(0, () => Meteor(targets, Once()));
+        int meteorEnd = Stage(0, () => Meteor(targets, Living()));
         int moonEnd = Stage(meteorEnd, () => MoonLight(124, targets, cells, aim, Once()));
-        int thunderEnd = Stage(moonEnd, () => Thunder(targets, Once()));
+        int thunderEnd = Stage(moonEnd, () => Thunder(targets, Living()));
         int end = Math.Max(thunderEnd, auraEnd);
 
         // 시전자는 정면(아래)을 보고 동작 9 를 끝까지 붙든다(+0x26 = −1).

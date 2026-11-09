@@ -10,7 +10,8 @@ using static DuelDx.GameWindow;
 /// <remarks>
 /// <para>핸들러: 161 <c>0x1004dc80</c>(앞머리 <see cref="SummonPrep"/>) · 288 <c>0x1005cc30</c> · 277 <c>0x10053aa0</c>(앞머리 <see cref="SwordPrep"/>)
 /// (볼트 분석-파트1-검기술 b).</para>
-/// <para>원본과 다르게 한 것: 썬더스탐은 원본에서 판 위의 <b>모든 적</b>을 치는데 여기서는 범위 안의 적만 친다. 아수라파천무는 시전자 자신의 그림
+/// <para>썬더스탐은 원본대로 판 위의 <b>모든 적</b>을 친다(fg-159 — menu-89 때는 범위 안의 적만이었다).</para>
+/// <para>원본과 다르게 한 것: 아수라파천무는 시전자 자신의 그림
 /// (철가면 Obs 605 의 모션 132~138)으로 분신을 만든다 — 그 모션이 없는 모습이면 분신 없이 시전자가 그 자리에서 자세만 잡는다.
 /// 분신이 뿌리는 불티(틱마다 140)는 20 으로 줄였다.</para>
 /// </remarks>
@@ -33,8 +34,12 @@ internal sealed partial class Part1Skill
     }
 
     /// <summary>
-    /// 썬더스탐 — 시전자 둘레의 세 원(반지름 R/3+200 · R/2+200 · R+200)을 번개 기둥 둘이 넓어지며 돌고, 대상마다 50~249틱 사이 아무 때 번개(75 · 379 · 71:1 · 277)가 떨어져 한 번 친다.
-    /// 보이는 판의 아무 칸에도 번개 쉰 개가 떨어지고 거기 선 적도 맞는다. 판 밖의 대상은 바로 맞는다.
+    /// 썬더스탐 — 시전자 둘레의 세 원(반지름 R/3+200 · R/2+200 · R+200)을 번개 기둥 둘이 넓어지며 돌고, 적마다 50~249틱 사이 아무 때 번개(75 · 379 · 71:1 · 277)가 떨어져 한 번 친다.
+    /// 보이는 판의 아무 칸에도 번개 쉰 개가 떨어지고 거기 선 적도 또 맞는다. 판 밖의 적은 바로 맞는다.
+    /// 원본(<c>0x1004dc80</c>)은 대상 목록이 아니라 판의 모든 칸(map+0x64 — 큰 유닛도 기준 칸 하나)을 훑어 <c>0x10038550</c> 이 적이라는 유닛을 고르고
+    /// (<c>0x1004e4c6</c>, 판 밖이면 <c>0x1004e8e4</c> 에서 바로 <c>0x1009d440</c>), 아무 칸 번개 쉰 개의 277 에도 맞음 사건(3, 1, 3, 0)을 단다 —
+    /// 그 칸 하나를 Attack 161 +0x40 = 1(적만)로 칠해(<c>0x10076bc1</c> → <c>0x10039690</c>) <c>0x10089610</c> 으로 모으므로 큰 유닛은 차지한 칸에 떨어질 때마다 맞고
+    /// 아군은 안 맞는다. 맞음은 번개마다 따로라 한 적이 여러 번 맞을 수 있다(<see cref="HitsEachTime"/>, fg-159).
     /// </summary>
     private int Thunder(List<int> targets, Action<int> hit)
     {
@@ -80,7 +85,7 @@ internal sealed partial class Part1Skill
             for (int n = 0; n < 3; n++) Debris(77, 0, d + 5, x, y, 10, 0.9, 12);
             last = Math.Max(last, d + Math.Max(Length(277, 0), Length(71, 1)));
         }
-        foreach (int ti in targets)
+        foreach (int ti in FoesOf(_user))   // 범위 안 대상(targets)이 아니라 판 위의 모든 적
         {
             var p = host.Btl.UnitFoot(host._units[ti]);
             if (!Visible(p)) { HitAt(1, ti, hit); continue; }
