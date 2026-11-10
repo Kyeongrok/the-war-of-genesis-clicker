@@ -58,6 +58,18 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
     internal (double X, double Y) PreludeScreen(double sx, double sy) =>
         (host._camX + sx * host.ViewWidth / 640.0, host._camY + host.ViewHeight / 2.0 + (sy - 240));
 
+    /// <summary>전신 초상(모션 1, 원본 y 480 = 화면 아래 끝에 발을 둔다)의 세로 자리.</summary>
+    /// <remarks>
+    /// 원본 화면은 늘 480 높이라 전신(약 440 높이)의 머리가 화면 위에서 40 쯤 아래, HUD 창(0x100e3f60 — (490,10) 140×60) 바로 밑에 온다.
+    /// 지금 보기는 작은 맵이면 맵 높이의 7/10 으로 줄어(글로리발 여객선 Btl 0078 은 1920×1080 에서 364) 가운데 기준으로 두면
+    /// 발이 화면 아래로 빠지는 만큼 머리가 화면 위로 올라가 얼굴이 HUD 창 밑에 깔리거나 잘렸다(버그 리포트 #94).
+    /// 보기가 480 보다 낮으면 원본처럼 <b>화면 위에서 잰 자리</b>에 두어 머리 · 얼굴 자리를 원본과 같게 하고 다리를 아래로 자른다.
+    /// 원본도 이 동안 HUD 를 숨기지 않는다 — HUD 를 통째로 숨기는 전면 효과 깃발 0x101b5668(0x1002d0c0)은 아수라 파천무 핸들러(0x100b9820)가
+    /// 영상 단계(0x100b98e6 ~ 0x100b9a57)에서야 세운다. 그리는 차례도 원본은 전투(유닛 · 효과 — 초상도 0x100c1fa0 효과다)를 그린 뒤
+    /// 창 뿌리 0x101b5fe4(HUD 가 여기 달린다)를 그 위에 그린다(0x10064130) — 그래서 자리만 원본에 맞춘다.
+    /// </remarks>
+    internal double PreludeFullBodyY(double sy) => host._camY + Math.Max(sy, host.ViewHeight / 2.0 + (sy - 240));
+
     /// <summary>앞머리를 돌린다 — 기술 코루틴이 핸들러(동작 사슬) 앞에서 끝까지 기다린다.</summary>
     internal IEnumerable<bool> FinisherPrelude(WorkData w, UnitState user)
     {
@@ -123,6 +135,7 @@ internal sealed unsafe class FinisherPreludeSkill(GameWindow host)
         a.Next = Flight(2, 139, -300, 150, 40, 1.3, true, -1, 0);
         var b = Flight(1, 1, 639, 480, 80, 0.9 * s, false, 30, 0);
         b.Next = Flight(1, 639, 940, 480, 40, 1.3 * s, false, -1, 0);
+        b.Y = b.Ty = b.Next.Y = b.Next.Ty = PreludeFullBodyY(480);   // 전신은 머리 자리를 원본과 같게(버그 리포트 #94)
         if (c.FaceId == EugeneFaceObs && host.UiFor(c.FaceId)?._frames.GetValueOrDefault((EugeneFullBodySub, 0)) is { } body) b.Frame = b.Next.Frame = body;
         _fxLastStep = host._lastTime;
         _fxFlights.Add(a);
