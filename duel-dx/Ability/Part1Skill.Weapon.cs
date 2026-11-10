@@ -14,8 +14,8 @@ using static DuelDx.GameWindow;
 /// <para>연 · 참은 이펙트 없이 시전자 동작만 걸고, 피해는 그 모션의 타격 키(종류 5)마다 난다(<c>0x10036130</c>). 여기서는 키 틱마다 <c>hit</c> 를 부르고
 /// 전투가 키마다 따로 굴려 친다(<see cref="StrikesEachKey"/> — +0x66 을 곱하지 않는다). 전에는 첫 키에 타 수만큼 곱해 한 번만 쳐서
 /// 둘째 칼부터는 숫자도 HP 줄음도 없었다(사용자 보고: btl 20141 죠안의 연 두 번째 타격이 안 들어간다).</para>
-/// <para>원본과 다르게 한 것: 비가 맞은 이를 4칸(160px) 밀어내는 것(<c>0x100816d0</c>)과 혼이 시전자를 겨눈 칸에 옮겨 두는 것은 판 상태를 바꾸는 일이라
-/// 여기서는 하지 않는다 — 비는 그 자리에서 먼지만 일고, 혼은 끝날 때까지 겨눈 칸에 서 있는다. 혼의 판 자리 옮김은 전투(UseWorkRoutine 의 +0x31 = 7 갈래)가 한다.
+/// <para>비는 맞은 이를 4칸(160px)까지 밀어낸다(<c>0x100816d0</c>, <see cref="BiKnockback"/> — 버그 리포트 #95 전에는 먼지만 일었다).
+/// 혼이 시전자를 겨눈 칸에 옮겨 두는 것은 여기서 하지 않는다 — 혼은 끝날 때까지 겨눈 칸에 서 있고, 판 자리 옮김은 전투(UseWorkRoutine 의 +0x31 = 7 갈래)가 한다.
 /// 격의 범위 칸(<c>0x100393b0</c>, 모양 +0x33 = 2)은 칸 목록이 없어서 시전자에서 대상 쪽으로 곧게 R = +0x38 ÷ 4 칸(4~8)과 대상들의 칸으로 어림했다.</para>
 /// </remarks>
 internal sealed partial class Part1Skill
@@ -197,14 +197,64 @@ internal sealed partial class Part1Skill
         if (victim >= 0)
         {
             HitAt(arrive, victim, hit);
-            // 밀려나는 동안의 먼지(빠르기 25 × 0.85 로 160px — 여기서는 그 자리에서 일어난다).
-            var (vx, vy) = host.Btl.UnitFoot(host._units[victim]);
-            int push = Move((0, 0), (160, 0), 25, 0.85).Count;
-            for (int k = 0; k < push; k++)
-                for (int n = 0; n < 2; n++) Put(174, Rand(3) + 3, arrive + k, vx + (Rand(2) == 0 ? -1 : 1) * Rand(20), vy + 20 * 0.8);
-            last = Math.Max(last, arrive + push + Length(174, 3));
+            last = Math.Max(last, BiKnockback(user, host._units[victim], arrive));
         }
         return last + 1;
+    }
+
+    /// <summary>비에 밀리지 않는 인물 — 원본 <c>0x1007db00</c> 이 유닛 +0x6c(Chr) = 0x270 이면 이동기를 안 싣는다.</summary>
+    private const int BiUnpushableChr = 0x270;
+
+    /// <summary>
+    /// 비의 밀어내기(버그 리포트 #95) — 검기 탄 틱 <c>0x1007db00</c> 이 맞은 적을 탄 출발점(시전자)에서 그 적 쪽 4방향으로 160px(4칸) 너머 점까지
+    /// 이동기 <c>0x100816d0</c> 에 싣는다: <c>+0xc8(유닛, 동작 5(맞음), 그 방향, 점, 빠르기 25, ×0.85, 1)</c>. 이동기 틱 <c>0x100819e0</c> 은 1틱에 맞음 동작을
+    /// 붙들고(반복 1000) 판 자리에서 빼며, Attack 21~25 면 틱마다 먼지 174:3~5 둘을 (x ± rand%20, y+20)에 일으키고 <b>다음 칸이 차 있으면</b>(<c>0x10089bf0</c>) 멈춘다.
+    /// 큰 유닛(+0xb9 ≠ 0)과 Chr 0x270 은 안 민다. 피해는 같은 틱에 바로 든다 — 쓰러질 적도 밀린 칸에서 쓰러진다.
+    /// 맞음 동작은 원본처럼 미는 방향으로 건다. 끝나는 틱을 돌려준다. 전에는 판 상태를 바꾸지 않으려고 먼지만 그 자리에서 일었다.
+    /// </summary>
+    private int BiKnockback(UnitState user, UnitState victim, int arrive)
+    {
+        var (vx, vy) = host.Btl.UnitFoot(victim);
+        if (host.Btl.Part1Big(victim) || victim.ChrCode == Part1Game.ChrBase + BiUnpushableChr) return arrive;
+        int dir = Dir4((victim.Col - user.Col) * 40.0, (victim.Row - user.Row) * 40.0 * 0.8);
+        var (dc, dr) = dir switch { 0 => (0, -1), 1 => (-1, 0), 3 => (1, 0), _ => (0, 1) };
+        // 160px 를 빠르기 25 × 0.85 로 — 틱마다 간 거리(px).
+        var flight = Move((0, 0), (160, 0), 25, 0.85).Select(p => p.X).ToList();
+        // 다음 칸이 차거나 막히면 거기서 멈춘다 — 판 칸(40px) 단위로 미리 센다.
+        int moved = 0;
+        for (int col = victim.Col, row = victim.Row; moved < 4 && host.Btl.CanStand(col + dc, row + dr, victim); col += dc, row += dr) moved++;
+        double reach = moved * 40.0;
+        var steps = new List<double>();
+        foreach (double d in flight)
+        {
+            steps.Add(Math.Min(d, reach));
+            if (d >= reach) break;
+        }
+        if (BattleScene.Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"part1 bi knockback {victim.ChrCode}({victim.Col},{victim.Row}) dir {dir} → {moved} cells, {steps.Count} ticks" + Environment.NewLine);
+        int start = arrive + 1;
+        Later(start, () =>
+        {
+            if (!victim.OnField) return;
+            victim.Facing = FacingOf4(dir);
+            Act(victim, 5, BattleScene.HitAction, repeat: 0);
+            if (moved > 0) victim.BeginSlide(victim.Col + dc * moved, victim.Row + dr * moved);
+        });
+        for (int k = 0; k < steps.Count; k++)
+        {
+            double along = steps[k];
+            if (moved > 0) Later(start + k, () => victim.SetSlide(along / reach));
+            double sx = vx + dc * along, sy = vy + dr * along * 0.8;
+            for (int n = 0; n < 2; n++) Put(174, Rand(3) + 3, start + k, sx + (Rand(2) == 0 ? -1 : 1) * Rand(20), sy + 20 * 0.8);
+        }
+        int end = start + steps.Count;
+        Later(end, () =>
+        {
+            if (moved > 0) victim.SetSlide(1);
+            if (victim.Alive && victim.Hp > 0) victim.PlayAction(ObsMotionTable.ActionStand, 0);
+        });
+        return end + Length(174, 3);
     }
 
     /// <summary>
