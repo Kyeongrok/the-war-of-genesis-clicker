@@ -37,6 +37,13 @@ internal sealed unsafe class PushSkill(GameWindow host)
 
     internal const int MusinWork = 1530, SunBlastWork = 1585;
 
+    /// <summary>
+    /// 데스 포토그래프(어빌리티 169, 루시엔) — 핸들러 <c>0x100b31c0</c> 단계 1 이 범위 안 대상마다 판정 슬롯 13개를 깐다
+    /// (<c>0x100b3344</c> 13회 · 지연 표 <c>0x100b32cc~0x100b3320</c> = 74·86·98·107·113·119·125·134·140·146·152·158·179틱, 수명 1, 사라질 때 판정 <c>0x100c29b0</c>).
+    /// 그래서 13타다 — 첫 타 뒤 간격은 지연 차이. 전에는 첫 슬롯 하나만 쳤다(버그 리포트 #97).
+    /// </summary>
+    internal const int DeathPhotographWork = 1594;
+
     /// <summary>사이킥 크로스(어빌리티 84) Lv1~10 — 「\」 획 뒤 5틱마다 「/」 획이 겹쳐 <b>가운데 칸은 두 번</b> 맞는다(0x100ab290, ba-14 H4).</summary>
     internal static readonly HashSet<int> PsychicCrossWorks = [1111, .. Enumerable.Range(1112, 9)];
 
@@ -45,6 +52,7 @@ internal sealed unsafe class PushSkill(GameWindow host)
     {
         MusinWork => [40, 40],
         SunBlastWork => [30, 15, 25],
+        DeathPhotographWork => [12, 12, 9, 6, 6, 6, 9, 6, 6, 6, 6, 21],
         _ when CounterMissileWorks.Contains(w.Id) && w.Level >= 11 => [60],
         _ => [],
     };
