@@ -1280,9 +1280,14 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>깊이 열쇠(세계 y, 세계 z) — y 가 먼저, 같으면 z.</summary>
     internal static long DepthKey(double worldY, int worldZ) => (long)Math.Floor(worldY) * 1_000_000L + worldZ;
 
-    /// <summary>유닛의 깊이 열쇠 — 세계 (40·줄, 20·높이 + 19)(<c>0x100349b6</c>). 높이는 물체까지 찍은 판 높이(통 · 상자 위에 서면 그만큼 높다).
+    /// <summary>유닛의 깊이 열쇠 — 세계 (40·줄 + 20, 20·높이 + 19)(<c>0x100349b6</c>). 높이는 물체까지 찍은 판 높이(통 · 상자 위에 서면 그만큼 높다).
     /// <paramref name="bottom"/> 는 세계 y 에 더할 컷 아래 끝(<see cref="BattleScene.Part1UnitKey"/>).</summary>
-    internal static long UnitKey(double row, double height, int bottom = 0) => DepthKey(row * 40 + bottom, (int)Math.Round(height * 20) + 19);
+    /// <remarks>
+    /// 유닛 세계 y 는 <b>칸 가운데</b>(칸 × 40 + 20 — 이동기 끝 자리 <c>0x1008185d</c>~, 화면 32·줄 + 16 = <see cref="BattleScene.UnitFoot"/>)다. 물체 · 맵 띠는 칸 위 끝(40·줄)이다.
+    /// 전에는 + 20 을 빠뜨려 위로 걷는 동안(줄 r → r − 1) 유닛 깊이가 떠나온 줄 r 의 바닥 띠(40·r)보다 앞서 그 띠가 다리를 덮었고,
+    /// 아래로 걸을 때도 다음 줄 바닥 띠가 발을 덮었다 — 칸 사이를 걸을 때 윗몸만 보이고 아래가 잘렸다(버그 리포트 #96).
+    /// </remarks>
+    internal static long UnitKey(double row, double height, int bottom = 0) => DepthKey(row * 40 + 20 + bottom, (int)Math.Round(height * 20) + 19);
 
     /// <summary>
     /// 물체를 준비한다 — 키를 돌리고, 그림자(z &lt; 0 자식 — 땅에 깔린다)는 바로 그리고, 장의 깊이 층과 나머지 자식(불꽃)은 깊이 차례로 모아 둔다.
