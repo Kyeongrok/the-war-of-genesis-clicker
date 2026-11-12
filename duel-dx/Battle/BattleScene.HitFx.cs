@@ -544,11 +544,15 @@ internal sealed unsafe partial class BattleScene
     /// Miss 는 연두. 떠오름은 틱마다 z += 40/나이, 20틱에 사라진다(화면 픽셀 = z×12/20).
     /// 세어 올라가는 회복 숫자는 <b>목표 HP 에 닿는 그 틱에</b> 사라진다(<c>0x100d2950</c> — 차이/10(최소 1)씩이라 보통 10~11틱).
     /// </summary>
-    internal void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null)
+    /// <param name="dy">숫자를 그만큼 위(음수)·아래로 옮긴다 — 같은 유닛에 HP · 소울 숫자가 한꺼번에 뜰 때 겹치지 않게(버그 리포트 #99).</param>
+    internal void ShowNumber(UnitState u, string text, uint color, bool rise = true, (int From, int To)? count = null, int dy = 0)
     {
         var (x, y) = host.Btl.UnitFoot(u);
-        _numbers.Add((text, color, x, y, host._lastTime, rise, count));
+        _numbers.Add((text, color, x, y + dy, host._lastTime, rise, count));
     }
+
+    /// <summary>차례 시작에 장비로 찬 소울 숫자 색 — HP 회복(노랑)과 가르려고 하늘색(원본에 없는 표시, 버그 리포트 #99).</summary>
+    internal const uint SoulHealColor = 0xFF60D8FF;
 
     /// <summary>판의 그 자리에 숫자를 띄운다 — 물체가 맞을 때는 물체 자리에 뜬다(0x100e77e0, ba-20 O P2).</summary>
     internal void ShowNumberAt(int x, int y, string text, uint color) => _numbers.Add((text, color, x, y, host._lastTime, true, null));

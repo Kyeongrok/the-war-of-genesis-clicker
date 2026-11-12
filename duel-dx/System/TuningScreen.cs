@@ -244,6 +244,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     [
         ("조작 안내 글 보이기", "화면 아래에 지금 할 수 있는 조작을 알려 준다", MenuHints, host._showHints),
         ("체력바 보이기", "유닛 머리 위의 HP·TP 막대", MenuGauges, host._showGauges),
+        ("차례 회복 숫자 보이기", "파트1 장비로 차례마다 찬 HP·소울(원본에 없음)", MenuTurnRegenNumbers, host._turnRegenNumbers),
         ("레벨업 창 보이기", "레벨이 오를 때 능력치 창을 띄운다", MenuLevelUpWindow, host.Btl._showLevelUp),
         ("상자 내용물 보기", "전투 화면 왼쪽 위에 상자에 든 것을 보인다", MenuChestContents, host._showChestContents),
         ("상자 강조", "아직 안 연 상자에 깜박이는 노란 테두리를 두른다", MenuChestGlow, host._highlightChests),

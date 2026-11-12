@@ -46,6 +46,7 @@ namespace DuelDx;
 /// <param name="OpeningMovie">모드 &gt; 엔딩 영상 &gt; 파트2 오프닝 영상 — 게임을 켤 때 파트2 타이틀 앞에 원본 오프닝 영상(<c>Mov 0008</c>)을 틀지(사용자 요청, 기본 끔 — TitleScreen.cs).</param>
 /// <param name="Part1RouteMarks">모드 &gt; 편의성 &gt; 파트1 지도 길목 표시 — 파트1 챕터 지도에서 닿으면 사건이 일어나는데 원본 표지(마을 이름 · 칼 그림)가 없는 길목에 이름과 깜빡이는 느낌표를 그릴지(원본에 없음, 버그 리포트 #90 후속 fg-159, 기본 켬).</param>
 /// <param name="MosesWarpMovie">모드 &gt; 엔딩 영상 &gt; 모세스 워프 영상 — 파트2 모세스에서 다른 항성계로 옮길 때 원본처럼 떠나는 · 오는 영상(<c>Mov 0016~0031</c>)을 틀지(버그 리포트 #70, 기본 켬 — MosesScene.StepMosesSystemSwitch).</param>
+/// <param name="TurnRegenNumbers">모드 &gt; 편의성 &gt; 차례 회복 숫자 보이기 — 파트1 차례 시작에 장비 보정 400 · 401(요정의 팔찌 · 천사의 목걸이 · 사이킥 · 포스 써크렛)로 찬 HP · 소울을 그 유닛 위에 숫자로 띄울지(원본 0x10036433 은 안 띄운다, 버그 리포트 #99, 기본 켬).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -61,7 +62,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false,
                                     bool QuietFoeCamera = true, int Part1VoiceVolume = 80, bool RightClickSkipsTalk = true, bool Part1TalkWaits = false,
                                     bool OpeningMovie = false, int Part1TalkVoiceVolume = 100, bool CoverGhost = false,
-                                    bool MosesWarpMovie = true, bool Part1RouteMarks = true)
+                                    bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

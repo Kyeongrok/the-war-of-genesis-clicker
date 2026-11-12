@@ -670,11 +670,21 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             if (Part1.Fighter(p1u) is { } gear)
             {
                 int hpUp = gear.Equipment.Sum(i => i?.Bonus(400) ?? 0), soulUp = gear.Equipment.Sum(i => i?.Bonus(401) ?? 0);
+                int hpBefore = p1u.Hp, soulBefore = p1u.Soul;
                 if (hpUp != 0 && p1u.Hp > 0) p1u.Hp = Math.Min(p1u.MaxHp, p1u.Hp + hpUp);
                 if (soulUp != 0) p1u.Soul = Math.Min(p1u.MaxSoul, p1u.Soul + soulUp);
+                // 모드 > 편의성 > 차례 회복 숫자 보이기 — 장비로 찬 HP · 소울을 그 유닛 위에 띄운다. 원본 0x10036433~0x10036493 은 값만 더하고
+                // 숫자를 안 띄운다(원본에 없음, 버그 리포트 #99, 기본 켬). HP 는 회복 숫자 그대로(옛 HP → 새 HP 로 세어 올라가는 노랑),
+                // 소울은 격려처럼 「SOUL +n」 이 떠오르되 하늘색으로 가르고, 둘 다 뜨면 HP 위에 둔다.
+                bool hpShown = false, soulShown = false;
+                if (host._turnRegenNumbers && p1u.OnField && host._db is { } regenDb)
+                {
+                    if (hpShown = p1u.Hp > hpBefore) ShowNumber(p1u, regenDb.T(159), HealColor2, rise: false, count: (hpBefore, p1u.Hp));
+                    if (soulShown = p1u.Soul > soulBefore) ShowNumber(p1u, $"{regenDb.T(41)} +{p1u.Soul - soulBefore}", SoulHealColor, dy: hpShown ? -18 : 0);
+                }
                 if (Trace && hpUp + soulUp != 0)
                     System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
-                        $"part1 turn regen chr {p1u.ChrCode} hp +{hpUp} → {p1u.Hp}/{p1u.MaxHp} soul +{soulUp} → {p1u.Soul}" + Environment.NewLine);
+                        $"part1 turn regen chr {p1u.ChrCode} hp +{hpUp} → {p1u.Hp}/{p1u.MaxHp} soul +{soulUp} → {p1u.Soul} 숫자 hp {hpShown} soul {soulShown} at {host._lastTime:F2}" + Environment.NewLine);
             }
             // 파트1 부하는 대장 차례마다 이동 1 · 행동 1 을 받는다(0x10036825: +0x1c6 = +0x1c8 = 1) — 부하 TP 를 채우고 시작 칸을 적는다
             // (휴식의 1/5 · 1/10 가름). 부하는 제 차례가 없어 틱의 TP 채우기(차례 깃발이 안 선 사람만)를 못 받는다.
