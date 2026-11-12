@@ -678,8 +678,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
             }
             // 파트1 부하는 대장 차례마다 이동 1 · 행동 1 을 받는다(0x10036825: +0x1c6 = +0x1c8 = 1) — 부하 TP 를 채우고 시작 칸을 적는다
             // (휴식의 1/5 · 1/10 가름). 부하는 제 차례가 없어 틱의 TP 채우기(차례 깃발이 안 선 사람만)를 못 받는다.
+            // 소울 +20 도 부하마다 따로 받는다 — 0x10034f50 이 제 몸에 0x10034f80 을 부른 뒤, 대장(+0x1be)이면 부하 사슬(+0x1d8 → +0x1e4)마다
+            // 같은 함수(블래스 +20 · 중독 120 · 컨디션이상 50 자르기)를 부른다. 장비 보정 401 은 차례 임자에게만(0x10036479). 전에는 부하 소울이 늘 그대로였다.
             foreach (var f in FollowersOf(index))
             {
+                f.Soul = Part1Combat.GaugeOnTurn(f.Soul, cap: f.MaxSoul);
+                if (Part1.Has(f, 15)) f.Soul = Part1Combat.GaugeOnTurn(f.Soul, cap: f.MaxSoul);
+                CapPart1Soul(f);
+                if (Trace)
+                    System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dueldx_trace.log"),
+                        $"part1 follower soul chr {f.ChrCode} (대장 {host._units[index].ChrCode}) → {f.Soul}" + Environment.NewLine);
                 f.Tp = f.MaxTp;
                 f.OriginCol = f.Col;
                 f.OriginRow = f.Row;
