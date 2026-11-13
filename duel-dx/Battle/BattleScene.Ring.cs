@@ -225,7 +225,7 @@ internal sealed unsafe partial class BattleScene
         if (OnPart1ConditionsClick()) return;         // 파트1 조건 창(706)은 오른쪽 단추로도 닫힌다(vt +0x14 → 0x10097260)
         // 대사 중 우클릭은 <b>그 장면을 통째로</b> 건너뛴다(왼쪽 클릭은 한 줄씩).
         if (host._rightClickSkipsTalk ? host.Tlk.OnTalkInput(skipAll: true) : host.Tlk._talk != null) return;
-        if (_deployOpen) { _deployPick = null; return; }   // 배치 중 우클릭 = 고른 사람 놓기
+        if (_deployOpen) { if (!OnDeployRightClick(bx, by)) _deployPick = null; return; }   // 배치 중 우클릭 = 명단 줄이면 메뉴, 아니면 고른 사람 놓기
         // 창은 모달이다(0x1003fc80) — 레벨업·알림·결과 배너·시스템 창이 떠 있으면 우클릭이 뒤의 유닛 정보 창·링을 열지 않는다(ba-20 G2).
         if (!host.Mos._mosesOpen && !host.FieldOpen)
         {

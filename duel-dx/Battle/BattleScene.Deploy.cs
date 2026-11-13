@@ -221,6 +221,7 @@ internal sealed unsafe partial class BattleScene
     {
         _deployOpen = false;
         _deployPick = null;
+        host.DeployMenu.Close();
         _deployNoLegion.Clear();
         _deployLegionsAllowed = scene.LegionsAllowed;
         bool open = fresh && scene.Placement is { Count: > 0 } && !AutoPlay
@@ -311,6 +312,7 @@ internal sealed unsafe partial class BattleScene
         _deployBench.Clear();
         _deployMovable.Clear();
         _deployPick = null;
+        host.DeployMenu.Close();
         _deployOpen = false;
         host._selected = -1;
         host.Hint("");
@@ -355,6 +357,7 @@ internal sealed unsafe partial class BattleScene
     internal bool OnDeployClick(int bx, int by)
     {
         if (!_deployOpen) return false;
+        if (host.DeployMenu.Open) { host.DeployMenu.OnClick(bx, by); return true; }   // 명단 우클릭 메뉴 — 밖을 누르면 닫기만
         if (host._scene.IsPart1 && host.MercDeploy.OnClick(bx, by)) return true;   // 「용병 배치」 칸 창
         if (host._scene.IsPart1 && host.MountDeploy.OnClick(bx, by)) return true;  // 「탑승」 탈것 창
         var roster = DeployRoster();
@@ -401,11 +404,31 @@ internal sealed unsafe partial class BattleScene
         return true;
     }
 
+    /// <summary>
+    /// 배치 중 오른쪽 단추 — 명단 줄 위면 그 인물의 메뉴(「배치 취소」 · 「탑승」, <see cref="DeployContextMenu"/>)를 연다.
+    /// 메뉴가 떠 있으면 닫는다(다른 줄 위면 그 줄로 다시 연다). 명단 밖이면 false(부른 쪽이 고른 사람을 놓는다).
+    /// </summary>
+    internal bool OnDeployRightClick(int bx, int by)
+    {
+        var menu = host.DeployMenu;
+        bool was = menu.Open;
+        menu.Close();
+        var roster = DeployRoster();
+        var (px, py) = DeployPanel();
+        int row = (by - py - DeployTop) / DeployRowH;
+        if (bx >= px && bx < px + DeployW && by >= py + DeployTop && row >= 0 && row < roster.Count)
+        {
+            menu.OpenAt(roster[row], bx, by);
+            return true;
+        }
+        return was;
+    }
+
     internal bool OnDeployKey(int key)
     {
         if (!_deployOpen) return false;
         if (key == Win32.VK_RETURN) FinishDeploy();
-        else if (key == Win32.VK_ESCAPE) { if (host.MercDeploy.Open) host.MercDeploy.Leader = null; else if (host.MountDeploy.Open) host.MountDeploy.Who = null; else _deployPick = null; }
+        else if (key == Win32.VK_ESCAPE) { if (host.DeployMenu.Open) host.DeployMenu.Close(); else if (host.MercDeploy.Open) host.MercDeploy.Leader = null; else if (host.MountDeploy.Open) host.MountDeploy.Who = null; else _deployPick = null; }
         return true;
     }
 
@@ -453,6 +476,7 @@ internal sealed unsafe partial class BattleScene
             if (u == _deployPick) host.UiFill(x + 4, ry - 2, DeployW - 8, DeployRowH - 2, 0xFF2A4A8A);
             // 패드가 짚은 줄 — 커서 테와 같은 색의 둥근 테(칸 고르기 중에는 고른 인물 줄에 그대로).
             if (pad && i == _deployFocus && !_deployCellMode) Focus(x + 4, ry - 2, DeployW - 8, DeployRowH - 2);
+            if (host.DeployMenu.Who == u) host.UiStroke(x + 4, ry - 2, DeployW - 8, DeployRowH - 2, GamePad.FocusColor);   // 우클릭 메뉴를 연 줄
             // 파트1 탄 인물 — 줄은 탈것 유닛이지만 이름은 탄 사람, 뒤에 탈것 이름.
             int mountChr = host._scene.IsPart1 ? host.MountDeploy.MountOf(u) : 0;
             var shownUnit = mountChr > 0 ? host.MountDeploy.Person(u) : u;
@@ -546,6 +570,7 @@ internal sealed unsafe partial class BattleScene
         }
         if (part1) host.MercDeploy.Draw();   // 「용병 배치」 칸 창 — 배치 창 아래
         if (part1) host.MountDeploy.Draw();  // 「탑승」 탈것 창 — 같은 자리(하나만 열린다)
+        host.DeployMenu.Draw();               // 명단 우클릭 메뉴 — 맨 위
 
         // 패드 커서 테 — 새 UI 에서는 창과 같은 층에(판에 그리면 창 밑에 깔린다).
         void Focus(int fx1, int fy1, int fw1, int fh1)

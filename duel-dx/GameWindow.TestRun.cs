@@ -51,8 +51,9 @@ internal sealed unsafe partial class GameWindow
     /// <summary>
     /// 시험 전용: <c>DUELDX_CLICKS=x,y@초;x,y@초…</c> — 그 때(실제 초) <b>보이는 화면 좌표</b>(스냅숏 그림의 좌표)를 왼쪽 클릭한다.
     /// 창 클라이언트 좌표는 배율·여백 때문에 스냅숏과 달라 PostMessage 클릭이 빗나갔다 — 여기서는 화면 좌표를 클라이언트 좌표로 바꿔 넣는다.
+    /// 좌표 앞에 <c>r</c> 를 붙이면 오른쪽 단추, <c>m</c> 이면 마우스만 옮긴다(짚은 줄 · 하위 메뉴를 보려고).
     /// </summary>
-    internal List<(double At, int X, int Y)>? _testClicks;
+    internal List<(double At, char Kind, int X, int Y)>? _testClicks;
 
     internal void TestClicksTick()
     {
@@ -60,19 +61,20 @@ internal sealed unsafe partial class GameWindow
         {
             _testClicks = [];
             foreach (string item in (Environment.GetEnvironmentVariable("DUELDX_CLICKS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
-                if (item.Split('@') is [var at, var when] && at.Split(',') is [var sx, var sy]
+                if (item.Split('@') is [var at, var when] && at.TrimStart('r', 'm').Split(',') is [var sx, var sy]
                     && int.TryParse(sx, out int x) && int.TryParse(sy, out int y)
                     && double.TryParse(when, System.Globalization.CultureInfo.InvariantCulture, out double seconds))
-                    _testClicks.Add((seconds, x, y));
+                    _testClicks.Add((seconds, at[0] is 'r' or 'm' ? at[0] : 'l', x, y));
         }
         while (_testClicks.Count > 0 && _testClicks[0].At <= _realTime)
         {
-            var (_, x, y) = _testClicks[0];
+            var (_, kind, x, y) = _testClicks[0];
             _testClicks.RemoveAt(0);
             int cx = ViewOffsetX + (int)(x * _zoom), cy = ViewOffsetY + (int)(y * _zoom);
             var (bx, by) = BoardPoint(cx, cy);
             _mouse = (bx, by);
-            OnClick(cx, cy);
+            if (kind == 'r') Btl.OnRightClick(bx, by);
+            else if (kind == 'l') OnClick(cx, cy);
         }
     }
 
