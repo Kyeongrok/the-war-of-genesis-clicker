@@ -611,7 +611,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     internal int _restartMoney;
 
     /// <summary>파트1 판에 들어올 때의 가방 · eld — RESTART 가 되돌린다(불러온 판은 기준이 없어 안 되돌린다).</summary>
-    internal (List<int> Bag, int Eld, (Dictionary<int, Part1Progress.Growth> Grown, List<(int Chr, int Level)> Picks) Growth)? _restartPart1;
+    internal (List<int> Bag, int Eld, Part1Progress.GrowthShot Growth)? _restartPart1;
 
     /// <summary>
     /// 전투에 들어올 때의 명부(Chr → 인물)·군단 배속·가진 군단 — RESTART 가 되돌린다. 전투 세이브에도 실려서 불러온 뒤 RESTART 도
@@ -670,9 +670,10 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         {
             host.Part1.Bag = [.. part1.Bag];
             host.Part1.Eld = part1.Eld;
-            host.Part1.RestoreGrowth(part1.Growth);
+            var reequipped = host.Part1.RestoreGrowth(part1.Growth);   // 장비도(버그 리포트 #106)
             host._db?.ForgetPart1Characters();
             host.Btl.Part1.Forget();
+            foreach (int code in reequipped) host.Btl.RefreshPart1Abilities(code);   // 장비가 연 어빌리티 · 능력치도 전투 전으로
         }
         // 명부·군단도 전투 전으로 — 이것이 없으면 불러온 뒤 RESTART 가 그 전투에서 얻은 EXP·레벨·상자 아이템을 들고 다시 시작했다(감사5 S5).
         if (_entryRoster != null)

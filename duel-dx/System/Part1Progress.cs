@@ -87,15 +87,25 @@ internal sealed class Part1Progress
             .Select(x => x.Split(':')).Where(p => p.Length == 2 && int.TryParse(p[0], out _) && int.TryParse(p[1], out _))
             .ToDictionary(p => WarOfGenesis.Assets.Part1Game.ChrBase + int.Parse(p[0]), p => new Growth { Experience = int.Parse(p[1]) });
 
-    /// <summary>성장 · 고를 레벨업을 통째로 떠 둔다 — RESTART 가 전투 전으로 되돌린다(<see cref="SystemMenu.RestartBattle"/>).</summary>
-    internal (Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks) SnapshotGrowth() =>
-        (Grown.ToDictionary(g => g.Key, g => g.Value.Copy()), [.. LevelPicks]);
+    /// <summary>
+    /// 성장 · 고를 레벨업 · 장비를 통째로 떠 둔다 — RESTART 가 전투 전으로 되돌린다(<see cref="SystemMenu.RestartBattle"/>).
+    /// 장비가 빠져 있어 전투 중 상자에서 얻어 끼운 것이 RESTART 뒤에도 끼워진 채 상자에서 또 나왔다(버그 리포트 #106 — 크리사오르 복사).
+    /// </summary>
+    internal GrowthShot SnapshotGrowth() =>
+        new(Grown.ToDictionary(g => g.Key, g => g.Value.Copy()), [.. LevelPicks], Equipped.ToDictionary(e => e.Key, e => (int[])e.Value.Clone()));
 
-    internal void RestoreGrowth((Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks) shot)
+    /// <summary>되돌리고, 장비가 달라진 인물 번호를 돌려준다(그 판 유닛의 어빌리티 · 능력치를 새로 맞추라고).</summary>
+    internal List<int> RestoreGrowth(GrowthShot shot)
     {
         Grown = shot.Grown.ToDictionary(g => g.Key, g => g.Value.Copy());
         LevelPicks = [.. shot.Picks];
+        var changed = Equipped.Keys.Union(shot.Equipped.Keys)
+            .Where(code => !(Equipped.TryGetValue(code, out var now) && shot.Equipped.TryGetValue(code, out var was) && now.SequenceEqual(was))).ToList();
+        Equipped = shot.Equipped.ToDictionary(e => e.Key, e => (int[])e.Value.Clone());
+        return changed;
     }
+
+    internal sealed record GrowthShot(Dictionary<int, Growth> Grown, List<(int Chr, int Level)> Picks, Dictionary<int, int[]> Equipped);
 
     /// <summary>고를 레벨업(인물, 오른 레벨) — 전투에서 쌓이고 챕터 지도에서 하나씩 고른다(<see cref="Part1ChapterScreen"/>).</summary>
     internal List<(int Chr, int Level)> LevelPicks = [];
