@@ -572,6 +572,26 @@ public static class Part1Game
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
     }
 
+    /// <summary>
+    /// 파트1 동작 <paramref name="part1Action"/>(모션 = 동작 × 3 + <paramref name="dir"/>)의 타격 키(종류 5) 틱들 — 한 틱 차이로 붙은 키는 한 번 휘두르기로 묶는다.
+    /// 다시 싼 그림(<see cref="ActionMap"/>)은 기본 공격 키를 하나로 잘라 옮기므로, 여러 번 휘두르는 몬스터의 타수를 셀 때 이것을 본다 —
+    /// 아이즈 스켈톤(Obs 98, 더블 어택 352)은 세 번 휘두르며 위 22 · 37 · 51, 옆 · 아래 21,22 · 36,37 · 50,51 에 키가 있다(버그 리포트 #105).
+    /// 파트1 폴더가 없거나 키가 없으면 null.
+    /// </summary>
+    public static List<int>? StrikeTicks(int part1Obs, int part1Action, int dir)
+    {
+        if (Root == null || !BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            var ticks = RawMotion(p1, part1Action * 3 + dir)?.Where(k => k[2] == 5).Select(k => (int)k[0]).Distinct().OrderBy(t => t).ToList();
+            if (ticks is not { Count: > 0 }) return null;
+            var swings = new List<int>();
+            foreach (int t in ticks) if (swings.Count == 0 || t - swings[^1] > 1) swings.Add(t);
+            return swings;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
     /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
     public const int ScreenTint = 14;
 

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using WarOfGenesis.Assets;
 
 namespace DuelDx;
@@ -182,6 +182,11 @@ internal sealed partial class Part1Skill
             int action = BasicAction(id);
             var (lenS, _) = BasicSwing(toward, action);
             var keys = spr.Clip(WeaponAction(action), _user.Facing)?.Hits?.Select(h => h.Start).OrderBy(s => s).Take(hits).ToList() ?? [];
+            // 원본 모션이 타수보다 많이 휘두르면 휘두를 때마다 — 다시 싼 그림은 키를 하나로 잘라 옮겼다. 원본은 타격 키마다 친다(0x10036130).
+            // 아이즈 스켈톤(Obs 98)은 세 번 휘두르는데 2타(그것도 휘두르기와 어긋나게)만 쳤다(버그 리포트 #105). 살라딘(키 2 = 타수 2)은 그대로.
+            int dir = _user.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
+            if (_user.Data is { SpriteId: > Part1Game.ObsBase } sd && Part1Game.StrikeTicks(sd.SpriteId - Part1Game.ObsBase, action, dir) is { } swings && swings.Count > keys.Count)
+                keys = swings;
             UseKeyLine(action);
             if (keys.Count >= 2)
             {
