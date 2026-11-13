@@ -684,11 +684,14 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 같은 때 소리 장치도 한 번 다시 열렸다). 성우 대사는 저절로 넘어가 마우스 · 키보드를 안 만지고 몇 분씩 볼 수 있고, 게임 패드 입력은
         // Windows 유휴 타이머를 되돌리지 않는다 — 그동안 화면 끄기 시간이 차면 모니터가 꺼지고(HDMI 소리 장치도 함께 빠진다) 게임은 뒤에서 계속 돈다(가설).
         Win32.SetThreadExecutionState(Win32.ES_CONTINUOUS | Win32.ES_DISPLAY_REQUIRED | Win32.ES_SYSTEM_REQUIRED);
+        // 멈춤 감시 — 주 루프가 15초 넘게 안 돌면 그때 하던 일을 오류 기록에 적는다(버그 리포트 #100, HangWatchdog).
+        HangWatchdog.Start(this);
 
         while (_running)
         {
             // 줄에 자리가 나면 그때 입력을 받아 그린다 — 미리 그려 둔 프레임 뒤에 입력이 밀리지 않게.
             Win32.WaitForSingleObjectEx(_frameWait, 100, true);
+            HangWatchdog.Beat(HangWatchdog.Stage.Messages);
             while (Win32.PeekMessageW(out var msg, IntPtr.Zero, 0, 0, Win32.PM_REMOVE))
             {
                 if (msg.Message == Win32.WM_QUIT) { _running = false; break; }
@@ -708,6 +711,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             // 기술 컷신이 도는 동안은 게임 시계를 세운다 — 영상이 끝나면 멈춘 자리에서 이어 간다(CutscenePlayer).
             if (Cut.Playing)
             {
+                HangWatchdog.Beat(HangWatchdog.Stage.Cutscene);
                 Cut.Update(real);
                 UpdateCursor();
                 Render();
@@ -717,6 +721,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             for (int step = 0; step < TestRunSteps && _running; step++)
             {
                 double now = _lastTime + dt;
+                HangWatchdog.Beat(HangWatchdog.Stage.Update);
                 Update(dt);
                 _lastTime = now;
                 TestRunTick();
@@ -725,6 +730,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             for (int step = 0; step < 240 && _skippingAction && _running; step++)
             {
                 double tickDt = 1.0 / TicksPerSecond, now = _lastTime + tickDt;
+                HangWatchdog.Beat(HangWatchdog.Stage.SkipEnemyAction);
                 Update(tickDt);
                 _lastTime = now;
                 StepSkipEnemyAction();
@@ -732,6 +738,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
             Cut.PrefetchForBattle();   // 컷신 기술을 가진 인물이 있으면 영상을 미리 받아 둔다
             UpdateCursor();
+            HangWatchdog.Beat(HangWatchdog.Stage.Render);
             Render();
         }
         Win32.SetThreadExecutionState(Win32.ES_CONTINUOUS);   // 화면 끄기 막음을 푼다
