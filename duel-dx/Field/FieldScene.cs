@@ -331,6 +331,9 @@ internal sealed unsafe partial class FieldScene(GameWindow host)
             var files = GameFiles.FromFolder(AssetsFolder.Find("data"));
             var bytes = files.Read("Fld", $"{id:D4}.fld");
             if (FieldFile.Parse(id, bytes) is not { } field || bytes == null) return false;
+            // 전투 끝 행동 6(전투 → 필드)으로 오면 판이 아직 전투 맵 크기다 — 모세스를 열 때(OpenMoses)처럼 640×480 틀로 되돌린다.
+            // 안 그러면 전투 맵 크기 · 전투 배율 판 한가운데에 필드가 뜨고 위아래 · 좌우가 검게 남았다(버그 리포트 #103, Btl 80 → Fld 0212).
+            if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) host.ResizeBoard(TitleBoardCols, TitleBoardRows);
             _field = field;
             _fieldGray = false;
             _screenWaveOwner = null;   // 필드 개체 생성자 0x100ec180 이 +0x294 = 0
