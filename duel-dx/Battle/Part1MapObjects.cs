@@ -916,21 +916,11 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>그 칸에 얼음 덩이가 있나(<c>0x1008fcc0</c> — 프로즌 아이스 115~123 의 것).</summary>
     internal bool IceAt(int col, int row) => _lingering.Any(l => l is { Notice: 11, Out: false } && l.Col == col && l.Row == row);
 
-    /// <summary>얼음 · 땅불 칸 테두리 색 — 하늘색 · 주황(모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시).</summary>
-    private const uint IceMark = 0xFF64D2FF, FireMark = 0xFFFF8C28;
-
-    /// <summary>칸 바닥을 살짝 어둡게 — 비탈은 네 꼭짓점 사각형(<see cref="BattleScene.CellCorners"/>)을 세로줄로 채운다.</summary>
-    private void DarkenCell(int col, int row)
-    {
-        var (x0, x1, yNw, yNe, ySw, ySe) = host.Btl.CellCorners(col, row);
-        int w = Math.Max(1, x1 - x0);
-        for (int x = x0; x < x1; x++)
-        {
-            double t = (x - x0) / (double)w;
-            int top = (int)Math.Round(yNw + (yNe - yNw) * t), bottom = (int)Math.Round(ySw + (ySe - ySw) * t);
-            if (bottom > top) host.FillRect(x, top, 1, bottom - top, 0x50000000);
-        }
-    }
+    /// <summary>
+    /// 얼음 · 땅불 칸을 물들이는 층색 — 하늘색 · 주황(모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시, 원본에 없음).
+    /// 범위 칸처럼 칸밝기를 곱해 더하고, 가산이 포화하는 흰 눈밭에서는 곱하기로 넘어간다(<see cref="BattleScene.PaintCell(int, int, uint, bool)"/>).
+    /// </summary>
+    private const uint IceMarkLayer = 0x64D2FF, FireMarkLayer = 0xFF8C28;
 
     /// <summary>얼음 덩이를 그린다 — 물체와 함께, 유닛보다 먼저(덩이는 칸 바닥 높이, 유닛은 그 위 +19 라 원본 깊이로도 유닛이 앞이다).</summary>
     private void DrawLingering()
@@ -941,19 +931,13 @@ internal sealed class Part1MapObjects(GameWindow host)
         foreach (var l in _lingering)
         {
             int tick = (int)((now - l.DrawFrom) * TicksPerSecond);
-            // 모드 > 가독성 향상 > 얼음 · 땅불 칸 표시(원본에 없음) — 얼음 덩이 칸은 바닥을 살짝 어둡게 깔고 덩이를 얹는다(흰 눈밭에서 흰 덩이가 묻혔다).
-            if (marks && l is { Notice: 11, Out: false }) DarkenCell(l.Col, l.Row);
+            // 모드 > 가독성 향상 > 얼음 · 땅불 칸 표시(원본에 없음) — 칸 바닥을 하늘색 · 주황으로 물들이고 덩이 · 불을 얹는다(흰 눈밭에서 흰 덩이가 묻혔다).
+            if (marks && l is { Notice: 10 or 11, Out: false }) host.Btl.PaintCell(l.Col, l.Row, l.Notice == 11 ? IceMarkLayer : FireMarkLayer, mark: true);
             switch (l.Notice)
             {
                 case 11: DrawCellObs(118, l.Motion + 3, tick, l.Col, l.Row, loop: true); break;
                 case 10: DrawCellObs(23, l.Motion, tick, l.Col, l.Row, loop: true); break;
                 default: DrawAsh(l, tick); break;
-            }
-            // 테두리는 덩이 · 불 위에 — 물체 · 유닛은 이 뒤에 그려지니 그 앞을 가리지 않는다.
-            if (marks && l is { Notice: 10 or 11, Out: false })
-            {
-                host.Btl.StrokeCellSides(l.Col, l.Row, true, true, true, true, BattleScene.EdgeShade, shade: true);
-                host.Btl.StrokeCellSides(l.Col, l.Row, true, true, true, true, l.Notice == 11 ? IceMark : FireMark, shade: false);
             }
         }
         _melting.RemoveAll(l =>

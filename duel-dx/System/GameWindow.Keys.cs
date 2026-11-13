@@ -392,16 +392,16 @@ internal sealed unsafe partial class GameWindow
     internal bool _turnRegenNumbers = UserSettings.Current.TurnRegenNumbers;
     internal const int MenuTurnRegenNumbers = 1704;
 
-    // ── 모드 > 가독성 향상 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없고 기본 켬. ──
-    /// <summary>바탕이 밝은 칸은 범위를 가산 대신 진한 반투명 색으로 칠하나(BattleScene.PaintCell · BrightCellLuma).</summary>
+    // ── 모드 > 가독성 향상 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없다, 범위 테두리만 기본 끔. ──
+    /// <summary>범위 칸의 가산이 포화하는(밝은 바탕) 만큼 곱하기로 섞어 물들이나(BattleScene.PaintCell · CellBlendWeight).</summary>
     internal bool _brightCellFill = UserSettings.Current.BrightCellFill;
     internal const int MenuBrightCellFill = 1705;
 
     /// <summary>이동 · 사거리 범위의 바깥 가장자리에 선을 두르나(BattleScene.DrawRangeEdges).</summary>
-    internal bool _rangeEdges = UserSettings.Current.RangeEdges;
+    internal bool _rangeEdges = UserSettings.Current.RangeOutline;
     internal const int MenuRangeEdges = 1706;
 
-    /// <summary>파트1 얼음 덩이 · 땅불 칸에 테두리를 그리나(Part1MapObjects.DrawLingering).</summary>
+    /// <summary>파트1 얼음 덩이 · 땅불 칸을 하늘색 · 주황으로 물들이나(Part1MapObjects.DrawLingering).</summary>
     internal bool _part1FieldMarks = UserSettings.Current.Part1FieldMarks;
     internal const int MenuPart1FieldMarks = 1707;
 
@@ -652,7 +652,7 @@ internal sealed unsafe partial class GameWindow
                 break;
             case MenuBrightCellFill:
                 _brightCellFill = !_brightCellFill;
-                Toast(_brightCellFill ? "밝은 칸의 범위를 진한 색으로 칠합니다" : "범위를 원본대로 밝히기만 합니다");
+                Toast(_brightCellFill ? "밝은 바탕에서도 범위 칸을 물들입니다" : "범위를 원본대로 밝히기만 합니다");
                 SaveSettings();
                 break;
             case MenuRangeEdges:
@@ -662,7 +662,7 @@ internal sealed unsafe partial class GameWindow
                 break;
             case MenuPart1FieldMarks:
                 _part1FieldMarks = !_part1FieldMarks;
-                Toast(_part1FieldMarks ? "얼음 덩이 · 땅불 칸에 테두리를 그립니다" : "얼음 덩이 · 땅불을 원본대로 표시 없이 둡니다");
+                Toast(_part1FieldMarks ? "얼음 덩이 · 땅불 칸을 물들입니다" : "얼음 덩이 · 땅불을 원본대로 표시 없이 둡니다");
                 SaveSettings();
                 break;
             case MenuTemperatureDisplay:

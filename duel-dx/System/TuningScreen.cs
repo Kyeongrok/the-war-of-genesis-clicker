@@ -238,10 +238,10 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("모세스 워프 영상", CutscenePlayer.FindOriginal(MosesScene.WarpLeaveMovies[0]) != null ? "항성계를 옮길 때 원본의 워프 영상을 튼다" : "원본 폴더에 워프 영상(Mov 0016~0031)이 없다", MenuMosesWarpMovie, host._mosesWarpMovie),
     ] : tab == TabReadable ?
     [
-        // 가독성 향상 탭 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없고 기본 켬.
-        ("밝은 칸 범위 진하게", "눈밭 같은 밝은 칸에서 범위를 진하게(원본에 없음)", MenuBrightCellFill, host._brightCellFill),
+        // 가독성 향상 탭 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없다 — 범위 테두리만 기본 끔(어색하다는 말에 물들이기로 바꿈).
+        ("밝은 칸 범위 진하게", "흰 바탕에 묻히는 범위 칸을 물들인다(원본에 없음)", MenuBrightCellFill, host._brightCellFill),
         ("범위 테두리", "이동 · 공격 범위 바깥에 선을 두른다(원본에 없음)", MenuRangeEdges, host._rangeEdges),
-        ("얼음 · 땅불 칸 표시", "파트1 얼음 덩이 · 땅불 칸에 테두리(원본에 없음)", MenuPart1FieldMarks, host._part1FieldMarks),
+        ("얼음 · 땅불 칸 표시", "파트1 얼음 덩이 · 땅불 칸을 물들인다(원본에 없음)", MenuPart1FieldMarks, host._part1FieldMarks),
         // 온도 표시 — 빙원 판에서 캐릭터가 얼어붙는데 기온 · 몸 온도가 안 보인다는 요청. 원본에 없고 기본 켬.
         ("온도 표시", "파트1 기온 · 몸 온도 · 깎인 SPD(원본에 없음)", MenuTemperatureDisplay, host._temperatureDisplay),
     ] : tab == TabLab ?

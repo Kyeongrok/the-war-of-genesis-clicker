@@ -552,7 +552,6 @@ internal sealed unsafe partial class BattleScene
 
     /// <summary>
     /// 칸의 고른 변에 선을 긋는다 — <paramref name="shade"/> 면 변 바로 바깥 1px, 아니면 변에서 안쪽으로 2px.
-    /// 얼음 · 땅불 칸 표시(<see cref="Part1MapObjects"/>)도 쓴다.
     /// </summary>
     internal void StrokeCellSides(int col, int row, bool n, bool s, bool w, bool e, uint color, bool shade)
     {
@@ -602,32 +601,48 @@ internal sealed unsafe partial class BattleScene
 
     // ── 밝은 칸 범위 진하게(모드 > 가독성 향상, 원본에 없음) ──
     // 원본은 범위 칸을 가산(섞기 방식 17)으로만 밝혀, 바탕이 거의 흰 눈밭(파트1 Btl 20031 빙원 따위)에서는 채널이 255 에 붙어 칸이 안 보였다.
-    // 맵 그림의 그 칸 평균 휘도가 문턱 이상인 칸만 진한 반투명 색으로 덮는다. 어두운 칸은 원본 가산 그대로.
+    // 가산이 잘리는(포화하는) 만큼만 곱하기(바탕 × 층색/255)로 넘어간다 — 잘림이 없는 점은 원본 가산 그대로(비트 단위로 같다).
+    // 곱하기는 바탕의 결 · 그림자를 그대로 두고 색만 입히니, 흰 눈은 층색 그대로 물들고 반투명 판을 덮은 느낌이 안 난다.
 
     /// <summary>
-    /// 이 휘도(0~255, 0.30R + 0.59G + 0.11B 평균) 이상인 칸을 밝은 칸으로 본다 — Btl 20031 빙원의 눈밭 칸은 210~230, 벼랑이 걸친 칸 150~200,
-    /// 파트1 풀밭(Btl 20087)은 100~130 이라 그 사이로 잡았다.
+    /// 한 점의 곱하기 쪽 가중치(0~256) — 가산 tint 가 그 점에서 잘려 나가는 몫의 채널 최대값: max_c( max(0, 바탕_c + tint_c − 255) / tint_c ).
+    /// 잘림이 없으면 0(원본 가산 그대로), tint 를 다 잃으면 256(곱하기만).
     /// </summary>
-    internal const int BrightCellLuma = 160;
+    private static int ClipWeight(uint c, uint tr, uint tg, uint tb)
+    {
+        int w = 0;
+        int r = (int)(c >> 16 & 0xFF) + (int)tr - 255, g = (int)(c >> 8 & 0xFF) + (int)tg - 255, b = (int)(c & 0xFF) + (int)tb - 255;
+        if (r > 0 && tr > 0) w = Math.Max(w, r * 256 / (int)tr);
+        if (g > 0 && tg > 0) w = Math.Max(w, g * 256 / (int)tg);
+        if (b > 0 && tb > 0) w = Math.Max(w, b * 256 / (int)tb);
+        return Math.Min(256, w);
+    }
 
-    /// <summary>칸마다 맵 그림 평균 휘도(−1 = 아직 안 셈) — 맵이 바뀌면 다시 만든다.</summary>
-    private short[] _cellLuma = [];
-    private object? _cellLumaMap;
+    /// <summary>칸마다 바탕(맵 그림)의 평균 곱하기 가중치(−1 = 아직 안 셈) — tint 마다 따로, 맵이 바뀌면 다시 만든다.</summary>
+    private readonly Dictionary<uint, short[]> _cellBlend = [];
+    private object? _cellBlendMap;
 
-    /// <summary>칸 바탕(맵 그림)의 평균 휘도 — 칸마다 한 번 세어 둔다. 그림 위로 걸친 칸이 없는 판(타이틀 틀 따위)은 0.</summary>
-    internal int CellLuma(int col, int row)
+    /// <summary>
+    /// 칸의 곱하기 가중치(0~256) — 맵 그림에서 그 칸(높이만큼 올린 40×32) 점들의 <see cref="ClipWeight"/> 평균 p 를
+    /// smoothstep(0, <see cref="BlendFullAt"/>, p) × <see cref="BlendMax"/> 로 편 값. 칸마다 tint 마다 한 번 센다.
+    /// 칸 안에서는 한 값으로 섞어 눈의 결 · 그림자의 밝고 어두움이 뒤집히지 않게 한다 — 점마다 가중치를 달리해 봤더니 밝은 점일수록 더 곱해져
+    /// 어두워져서 눈결이 얼룩처럼 뒤집혔다. 잘리는 점이 없는 칸은 0 이라 원본 가산과 비트 단위로 같다. 칸 테두리선이 칸 사이 경계를 가린다.
+    /// smoothstep 은 잘림이 조금뿐인 칸(풀밭의 밝은 점 몇 개)은 거의 그대로 두고, 눈밭(이동 파랑 p ≈ 0.85, 사거리 주황 p ≈ 0.5 — 눈이 푸른 기가 돌아
+    /// 빨강 채널이 덜 잘린다)은 곱하기 쪽으로 다 넘긴다.
+    /// </summary>
+    internal int CellBlendWeight(int col, int row, uint tint)
     {
         if (!host.BoardIsMap || host._map is not { } map) return 0;
         int n = host.Cols * host.Rows;
-        if (!ReferenceEquals(_cellLumaMap, map) || _cellLuma.Length != n)
+        if (!ReferenceEquals(_cellBlendMap, map)) { _cellBlend.Clear(); _cellBlendMap = map; }
+        if (!_cellBlend.TryGetValue(tint, out var table) || table.Length != n)
         {
-            _cellLuma = new short[n];
-            Array.Fill(_cellLuma, (short)-1);
-            _cellLumaMap = map;
+            _cellBlend[tint] = table = new short[n];
+            Array.Fill(table, (short)-1);
         }
         int i = row * host.Cols + col;
-        if (_cellLuma[i] >= 0) return _cellLuma[i];
-        // 칸 그린 자리(높이만큼 올린 40×32) → 맵 그림 자리. 둘째 픽셀마다 본다.
+        if (table[i] >= 0) return table[i];
+        uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
         int top = host.CellTop(col, row) - GridTop - map.OriginY - host.BoardPad;
         long sum = 0;
         int count = 0;
@@ -635,21 +650,47 @@ internal sealed unsafe partial class BattleScene
             for (int x = Math.Max(0, col * TileW); x < Math.Min(map.Width, col * TileW + TileW); x += 2)
             {
                 int o = (y * map.Width + x) * 4;
-                sum += (77 * map.Bgra[o + 2] + 150 * map.Bgra[o + 1] + 29 * map.Bgra[o]) >> 8;
+                sum += ClipWeight((uint)map.Bgra[o + 2] << 16 | (uint)map.Bgra[o + 1] << 8 | map.Bgra[o], tr, tg, tb);
                 count++;
             }
-        return _cellLuma[i] = (short)(count == 0 ? 0 : sum / count);
+        double p = count == 0 ? 0 : Math.Min(1, sum / (double)count / 256 / BlendFullAt);
+        int w = (int)Math.Round(p * p * (3 - 2 * p) * BlendMax * 256);
+        return table[i] = (short)(w < BlendMin ? 0 : w);   // 잘림이 아주 조금인 칸(밝은 흙길 따위)은 원본 가산 그대로
     }
 
-    /// <summary>밝은 칸에 덮을 진한 반투명 색 — 이동 진한 파랑 · 사거리 진한 주황 · 효과 범위 진한 호박색 · 물체 칸 진한 노랑, 그 밖 층은 원색을 어둡게.</summary>
-    internal static uint BrightFill(uint layer) => layer switch
+    /// <summary>
+    /// 칸 평균 잘림 몫이 <see cref="BlendFullAt"/> 이상이면 가중치가 <see cref="BlendMax"/> 에 닿는다(<see cref="CellBlendWeight"/>).
+    /// 곱하기만 쓰면 흰 눈이 층색 그대로(파랑 (88,93,245))라 칠한 판처럼 납작했다 — 가산 몫을 30% 남겨 눈의 밝은 기를 살린다.
+    /// </summary>
+    internal const double BlendFullAt = 0.6, BlendMax = 0.7;
+
+    /// <summary>가중치가 이보다 작으면(256 분의) 0 으로 — 차이가 1 단계도 안 나는 섞기로 원본과 어긋나지 않게.</summary>
+    internal const int BlendMin = 8;
+
+    /// <summary>
+    /// 섞기 표 — 채널마다 바탕 0~255 → 결과(가산 × (256 − w) + 곱하기 × w) / 256, R · G · B 를 이어 768 칸. (tint, 층색, w) 마다 한 번 만든다.
+    /// 점마다는 표 세 번 찾기라 원본 가산과 값이 거의 같다.
+    /// </summary>
+    private readonly Dictionary<(uint Tint, uint Layer, int W), byte[]> _blendLut = [];
+
+    private byte[] BlendLut(uint tint, uint layer, int w)
     {
-        MoveLayer => 0x801E46DC,
-        RangeLayer => 0x80E65A0A,
-        SplashLayer => 0x80D28C00,
-        ObjectLayer => 0x80B49600,
-        _ => 0x80000000 | (layer >> 16 & 0xFF) * 3 / 4 << 16 | (layer >> 8 & 0xFF) * 3 / 4 << 8 | (layer & 0xFF) * 3 / 4,
-    };
+        if (_blendLut.TryGetValue((tint, layer, w), out var lut)) return lut;
+        if (_blendLut.Count > 4096) _blendLut.Clear();
+        lut = new byte[768];
+        for (int ch = 0; ch < 3; ch++)
+        {
+            int shift = 16 - 8 * ch;
+            uint t = tint >> shift & 0xFF, l = layer >> shift & 0xFF;
+            uint l256 = l + (l >> 7);   // 0~255 → 0~256 — 흰 층(255)은 바탕을 그대로 둔다
+            for (uint c = 0; c < 256; c++)
+            {
+                uint a = Math.Min(255, c + t), m = c * l256 >> 8;
+                lut[ch * 256 + c] = (byte)((a * (uint)(256 - w) + m * (uint)w + 128) >> 8);
+            }
+        }
+        return _blendLut[(tint, layer, w)] = lut;
+    }
 
     /// <summary>
     /// 칸 밝기 10~90 — 원본 <c>0x10030cc0</c> 이 Obt 를 읽은 뒤 칸마다 넣는 값. 평지는 74.
@@ -675,7 +716,13 @@ internal sealed unsafe partial class BattleScene
     /// 원본은 비탈 모양 3 을 「윗변 북서·아랫변 남서 높이의 네모」로, 1·2 는 선·삼각형 조각으로 그리는데(0x100d7ba3·0x100d7dcf·0x100d820e)
     /// 조각 표까지는 못 옮겨 네 꼭짓점 사각형으로 근사한다(가설).
     /// </summary>
-    internal void PaintCell(int col, int row, uint layer)
+    internal void PaintCell(int col, int row, uint layer) => PaintCell(col, row, layer, mark: false);
+
+    /// <summary>
+    /// 모드 &gt; 가독성 향상 &gt; 밝은 칸 범위 진하게면 가산이 포화하는 칸은 곱하기 쪽으로 섞는다(<see cref="CellBlendWeight"/>).
+    /// <paramref name="mark"/> 면 테두리 없이 칸 안만 물들이고 그 옵션과 상관없이 늘 섞는다(얼음 · 땅불 칸 표시, <see cref="Part1MapObjects"/>).
+    /// </summary>
+    internal void PaintCell(int col, int row, uint layer, bool mark)
     {
         // 화면에 안 보이는 칸은 안 칠한다 — 판 전체가 한 장의 그림이라 전에는 카메라 밖 칸까지 틀마다 다 칠했다. 넓은 맵에서 TP 가 많은
         // 인물의 차례면 이동 · 사거리 칸이 수천이라 한 틀에 12ms 를 먹어 내 차례만 되면 느려졌다(사용자 보고 fa-60). 비탈로 솟는 몫만큼 위아래로 넉넉히 본다.
@@ -684,21 +731,22 @@ internal sealed unsafe partial class BattleScene
         if (cellTop > host._camY + host.ViewHeight + 2 * TileH || cellTop + TileH < host._camY - 2 * TileH) return;
         int bright = CellBrightness(col, row);
         uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
-        // 모드 > 가독성 향상 > 밝은 칸 범위 진하게 — 바탕이 밝은 칸은 더하는 대신 진한 반투명 색으로 덮는다(가산은 흰 바탕에서 255 에 붙어 안 보인다).
-        uint fill = host._brightCellFill && CellLuma(col, row) >= BrightCellLuma ? BrightFill(layer) : 0;
+        // 곱하기 가중치 — 끔이거나 잘림이 없는 칸이면 0(원본 가산 그대로), 아니면 섞기 표.
+        int blend = !host._brightCellFill && !mark ? 0 : CellBlendWeight(col, row, tint);
+        byte[]? lut = blend > 0 ? BlendLut(tint, layer, blend) : null;
         int x0 = col * TileW, x1 = x0 + TileW;
         int baseTop = GridTop + host.BoardPad + row * TileH, baseBottom = baseTop + TileH;
         if (!host.BoardIsMap || host._map!.SlopeAt(col, row) == 0)
         {
             int y = host.CellTop(col, row);
-            if (fill != 0) host.FillRect(x0, y, TileW, TileH, fill);
-            else AddRect(x0, y, TileW, TileH, tint);
-            host.StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
+            AddRect(x0, y, TileW, TileH, tint, lut);
+            if (!mark) host.StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
             return;
         }
         int yNw = baseTop - CornerPx(host._map.CornerAt(col, row, 1)), yNe = baseTop - CornerPx(host._map.CornerAt(col, row, 2));
         int ySw = baseBottom - CornerPx(host._map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(host._map.CornerAt(col, row, 0));
-        AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint, fill);
+        AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint, lut);
+        if (mark) return;
         uint line = 0xFF000000 | tint;
         host.Mos.DrawSegment(x0, yNw, x1, yNe, line);
         host.Mos.DrawSegment(x0, ySw, x1, ySe, line);
@@ -706,25 +754,23 @@ internal sealed unsafe partial class BattleScene
         host.Mos.DrawSegment(x1, yNe, x1, ySe, line);
     }
 
-    /// <summary>
-    /// 윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.
-    /// <paramref name="fill"/> 이 있으면(밝은 칸) 더하는 대신 그 반투명 색으로 덮는다.
-    /// </summary>
-    internal void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint, uint fill = 0)
+    /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다(섞기는 <see cref="AddRect"/> 와 같다).</summary>
+    internal void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint, byte[]? lut = null)
     {
         int w = Math.Max(1, x1 - x0);
         for (int x = x0; x < x1; x++)
         {
             double t = (x - x0) / (double)w;
             int top = (int)Math.Round(yNw + (yNe - yNw) * t), bottom = (int)Math.Round(ySw + (ySe - ySw) * t);
-            if (bottom <= top) continue;
-            if (fill != 0) host.FillRect(x, top, 1, bottom - top, fill);
-            else AddRect(x, top, 1, bottom - top, tint);
+            if (bottom > top) AddRect(x, top, 1, bottom - top, tint, lut);
         }
     }
 
-    /// <summary>네모 안을 색을 <b>더해서</b> 밝힌다(255 에서 멈춘다).</summary>
-    internal void AddRect(int x, int y, int w, int h, uint tint)
+    /// <summary>
+    /// 네모 안을 색을 <b>더해서</b> 밝힌다(255 에서 멈춘다) — 원본 섞기 방식 17.
+    /// <paramref name="lut"/>(<see cref="BlendLut"/>)이 있으면 가산과 곱하기를 섞은 표로 바꾼다(모드 &gt; 가독성 향상).
+    /// </summary>
+    internal void AddRect(int x, int y, int w, int h, uint tint, byte[]? lut = null)
     {
         uint tr = tint >> 16 & 0xFF, tg = tint >> 8 & 0xFF, tb = tint & 0xFF;
         // 네모를 판 안으로 먼저 자르고 판 크기 · 버퍼를 한 번만 읽는다 — 전에는 픽셀마다 경계와 판 너비를 다시 셈했다(이동 영역이 떠 있는 내내 드는 값이다, fa-60).
@@ -735,6 +781,15 @@ internal sealed unsafe partial class BattleScene
         for (int yy = y0; yy < y1; yy++)
         {
             int i = yy * bw + x0;
+            if (lut != null)
+            {
+                for (int n = x1 - x0; n > 0; n--, i++)
+                {
+                    uint c = fb[i];
+                    fb[i] = c & 0xFF000000 | (uint)lut[c >> 16 & 0xFF] << 16 | (uint)lut[256 + (c >> 8 & 0xFF)] << 8 | lut[512 + (c & 0xFF)];
+                }
+                continue;
+            }
             for (int n = x1 - x0; n > 0; n--, i++)
             {
                 uint c = fb[i];
