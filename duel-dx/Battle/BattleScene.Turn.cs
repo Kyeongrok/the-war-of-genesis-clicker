@@ -2931,13 +2931,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 칠하지만 +0x31 = 7 이면 7 을 넘겨(0x10038c13 · 0x10038c31) 설 수 있는 빈 칸(0x1008a950 → 0x10089bf0)만 칠해진다.
         // 누르기도 칠해진 칸만 받는다(0x100321e5 칸 깃발 &0xffc). 전에는 사거리 칸을 다 칠해 못 누르는 칸(적 옆 · 유닛 칸)도 붉었다.
         bool landOnly = Part1.AttackOf(w) is { AimFilter: 7 };
+        var edges = EdgeCells();   // 모드 > 가독성 향상 > 범위 테두리 — 사거리 집합의 바깥 가장자리(효과 범위는 안 넣는다)
         for (int row = 0; row < host.Rows; row++)
             for (int col = 0; col < host.Cols; col++)
             {
                 bool inRange = landOnly ? CanAimAt(w, u, col, row) : InWorkRange(w, u.Col, u.Row, col, row, u), inSplash = splash.Contains((col, row));
                 if (!inRange && !inSplash) continue;
                 PaintCell(col, row, inSplash ? SplashLayer : RangeLayer);
+                if (inRange && edges != null) edges[row * host.Cols + col] = 2;
             }
+        if (edges != null) DrawRangeEdges(edges, 2, 0, RangeEdge);
         // 저절로 겨눈 대상(적 커서나 칸)에도 깜빡이는 빨간 테두리
         if (aim is { } a)
         {

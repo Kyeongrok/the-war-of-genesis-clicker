@@ -492,6 +492,7 @@ internal sealed unsafe partial class BattleScene
         var touchable = _touchable;
         // 파트1 — 앞 칸에 통째로 덮여 고를 수 없는 칸은 안 칠한다(덮은 앞 칸 그림 위에 뒤 칸 파랑이 깔려 「벽 위로 간다」처럼 보였다, fg-82).
         bool occlude = host._scene.IsPart1 && host.BoardIsMap;
+        var edges = EdgeCells();
 
         for (int row = 0; row < host.Rows; row++)
             for (int col = 0; col < host.Cols; col++)
@@ -504,8 +505,151 @@ internal sealed unsafe partial class BattleScene
                 uint layer = touchable.Contains(i) ? ObjectLayer : range.Cost[i] != int.MaxValue ? MoveLayer : range.Red[i] ? RangeLayer : 0;
                 if (layer == 0 || occlude && Part1Occlusion.Hidden(col, row)) continue;
                 PaintCell(col, row, layer);
+                // 테두리 집합 — 이동(손댈 물체 칸도 걸어가 닿으니 이동 쪽) 1 · 사거리 2.
+                if (edges != null) edges[i] = (byte)(layer == RangeLayer ? 2 : 1);
             }
+        if (edges != null)
+        {
+            DrawRangeEdges(edges, 1, 0, MoveEdge);
+            DrawRangeEdges(edges, 2, 1, RangeEdge);   // 사거리는 파랑과 닿은 쪽에는 안 긋는다 — 바깥 가장자리만
+        }
     }
+
+    /// <summary>범위 테두리 색 — 이동 파랑 · 사거리 주황(모드 &gt; 가독성 향상 &gt; 범위 테두리, 원본에 없음).</summary>
+    internal const uint MoveEdge = 0xFF3C8CFF, RangeEdge = 0xFFFF8C1E, EdgeShade = 0xC0000000;
+
+    /// <summary>테두리 집합을 담는 칸 표 — 틀마다 새로 만들지 않는다.</summary>
+    private byte[] _edgeCells = [];
+
+    /// <summary>범위 테두리를 켰으면 판 크기의 빈 칸 표를, 껐으면 null.</summary>
+    internal byte[]? EdgeCells()
+    {
+        if (!host._rangeEdges) return null;
+        int n = host.Cols * host.Rows;
+        if (_edgeCells.Length != n) _edgeCells = new byte[n];
+        else Array.Clear(_edgeCells);
+        return _edgeCells;
+    }
+
+    /// <summary>
+    /// 범위 집합의 경계 변에만 2px 선(안쪽)과 1px 어두운 외곽선(바깥)을 긋는다 — 칸 표에서 값이 <paramref name="kind"/> 인 칸의 네 변 가운데
+    /// 이웃이 같은 값도 <paramref name="alsoInside"/> 도 아닌 변(판 밖 포함). 비탈 칸은 네 모서리 높이로 기운 변을 긋는다(PaintCell 과 같은 꼭짓점).
+    /// 어두운 외곽선을 먼저 다 긋고 색 선을 얹어, 이웃 변의 외곽선이 색 선을 덮지 않게 한다. 모드 &gt; 가독성 향상 &gt; 범위 테두리(원본에 없음).
+    /// </summary>
+    internal void DrawRangeEdges(byte[] cells, byte kind, byte alsoInside, uint color)
+    {
+        int cols = host.Cols, rows = host.Rows;
+        bool Out(int c, int r) => (uint)c >= cols || (uint)r >= rows || cells[r * cols + c] is var k && k != kind && (alsoInside == 0 || k != alsoInside);
+        for (int pass = 0; pass < 2; pass++)
+            for (int row = 0; row < rows; row++)
+                for (int col = 0; col < cols; col++)
+                {
+                    if (cells[row * cols + col] != kind) continue;
+                    bool n = Out(col, row - 1), s = Out(col + 0, row + 1), w = Out(col - 1, row), e = Out(col + 1, row);
+                    if (n || s || w || e) StrokeCellSides(col, row, n, s, w, e, pass == 0 ? EdgeShade : color, shade: pass == 0);
+                }
+    }
+
+    /// <summary>
+    /// 칸의 고른 변에 선을 긋는다 — <paramref name="shade"/> 면 변 바로 바깥 1px, 아니면 변에서 안쪽으로 2px.
+    /// 얼음 · 땅불 칸 표시(<see cref="Part1MapObjects"/>)도 쓴다.
+    /// </summary>
+    internal void StrokeCellSides(int col, int row, bool n, bool s, bool w, bool e, uint color, bool shade)
+    {
+        if (col * TileW > host._camX + host.ViewWidth + 2 || (col + 1) * TileW < host._camX - 2) return;
+        var (x0, x1, yNw, yNe, ySw, ySe) = CellCorners(col, row);
+        if (Math.Max(ySw, ySe) < host._camY - 2 || Math.Min(yNw, yNe) > host._camY + host.ViewHeight + 2) return;
+        // 선 자리 — 바깥 1px(그림자)은 −1, 안쪽 2px 는 0 · +1(변에서 칸 안쪽으로).
+        int[] offs = shade ? [-1] : [0, 1];
+        foreach (int o in offs)
+        {
+            if (n) Segment(x0, yNw + o, x1, yNe + o, color);
+            if (s) Segment(x0, ySw - o, x1, ySe - o, color);
+            if (w) Segment(x0 + o, yNw, x0 + o, ySw, color);
+            if (e) Segment(x1 - o, yNe, x1 - o, ySe, color);
+        }
+    }
+
+    /// <summary>칸의 네 꼭짓점 — 평지는 40×32 네모(오른쪽 · 아래 변은 이웃과 나눠 쓰는 줄), 비탈은 모서리 높이로 올린 자리(<see cref="PaintCell"/> 과 같다).</summary>
+    internal (int X0, int X1, int YNw, int YNe, int YSw, int YSe) CellCorners(int col, int row)
+    {
+        int x0 = col * TileW, x1 = x0 + TileW;
+        if (!host.BoardIsMap || host._map!.SlopeAt(col, row) == 0)
+        {
+            int y = host.CellTop(col, row);
+            return (x0, x1, y, y, y + TileH, y + TileH);
+        }
+        int baseTop = GridTop + host.BoardPad + row * TileH, baseBottom = baseTop + TileH;
+        return (x0, x1, baseTop - CornerPx(host._map.CornerAt(col, row, 1)), baseTop - CornerPx(host._map.CornerAt(col, row, 2)),
+                baseBottom - CornerPx(host._map.CornerAt(col, row, 3)), baseBottom - CornerPx(host._map.CornerAt(col, row, 0)));
+    }
+
+    /// <summary>브레젠험 선 — 판 밖은 SetPixel 이 거른다.</summary>
+    private void Segment(int x0, int y0, int x1, int y1, uint color)
+    {
+        if (y0 == y1) { host.FillRect(Math.Min(x0, x1), y0, Math.Abs(x1 - x0) + 1, 1, color); return; }
+        if (x0 == x1) { host.FillRect(x0, Math.Min(y0, y1), 1, Math.Abs(y1 - y0) + 1, color); return; }
+        int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
+        for (int guard = 0; guard < 4096; guard++)
+        {
+            host.SetPixel(x0, y0, color);
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+    }
+
+    // ── 밝은 칸 범위 진하게(모드 > 가독성 향상, 원본에 없음) ──
+    // 원본은 범위 칸을 가산(섞기 방식 17)으로만 밝혀, 바탕이 거의 흰 눈밭(파트1 Btl 20031 빙원 따위)에서는 채널이 255 에 붙어 칸이 안 보였다.
+    // 맵 그림의 그 칸 평균 휘도가 문턱 이상인 칸만 진한 반투명 색으로 덮는다. 어두운 칸은 원본 가산 그대로.
+
+    /// <summary>
+    /// 이 휘도(0~255, 0.30R + 0.59G + 0.11B 평균) 이상인 칸을 밝은 칸으로 본다 — Btl 20031 빙원의 눈밭 칸은 210~230, 벼랑이 걸친 칸 150~200,
+    /// 파트1 풀밭(Btl 20087)은 100~130 이라 그 사이로 잡았다.
+    /// </summary>
+    internal const int BrightCellLuma = 160;
+
+    /// <summary>칸마다 맵 그림 평균 휘도(−1 = 아직 안 셈) — 맵이 바뀌면 다시 만든다.</summary>
+    private short[] _cellLuma = [];
+    private object? _cellLumaMap;
+
+    /// <summary>칸 바탕(맵 그림)의 평균 휘도 — 칸마다 한 번 세어 둔다. 그림 위로 걸친 칸이 없는 판(타이틀 틀 따위)은 0.</summary>
+    internal int CellLuma(int col, int row)
+    {
+        if (!host.BoardIsMap || host._map is not { } map) return 0;
+        int n = host.Cols * host.Rows;
+        if (!ReferenceEquals(_cellLumaMap, map) || _cellLuma.Length != n)
+        {
+            _cellLuma = new short[n];
+            Array.Fill(_cellLuma, (short)-1);
+            _cellLumaMap = map;
+        }
+        int i = row * host.Cols + col;
+        if (_cellLuma[i] >= 0) return _cellLuma[i];
+        // 칸 그린 자리(높이만큼 올린 40×32) → 맵 그림 자리. 둘째 픽셀마다 본다.
+        int top = host.CellTop(col, row) - GridTop - map.OriginY - host.BoardPad;
+        long sum = 0;
+        int count = 0;
+        for (int y = Math.Max(0, top); y < Math.Min(map.Height, top + TileH); y += 2)
+            for (int x = Math.Max(0, col * TileW); x < Math.Min(map.Width, col * TileW + TileW); x += 2)
+            {
+                int o = (y * map.Width + x) * 4;
+                sum += (77 * map.Bgra[o + 2] + 150 * map.Bgra[o + 1] + 29 * map.Bgra[o]) >> 8;
+                count++;
+            }
+        return _cellLuma[i] = (short)(count == 0 ? 0 : sum / count);
+    }
+
+    /// <summary>밝은 칸에 덮을 진한 반투명 색 — 이동 진한 파랑 · 사거리 진한 주황 · 효과 범위 진한 호박색 · 물체 칸 진한 노랑, 그 밖 층은 원색을 어둡게.</summary>
+    internal static uint BrightFill(uint layer) => layer switch
+    {
+        MoveLayer => 0x801E46DC,
+        RangeLayer => 0x80E65A0A,
+        SplashLayer => 0x80D28C00,
+        ObjectLayer => 0x80B49600,
+        _ => 0x80000000 | (layer >> 16 & 0xFF) * 3 / 4 << 16 | (layer >> 8 & 0xFF) * 3 / 4 << 8 | (layer & 0xFF) * 3 / 4,
+    };
 
     /// <summary>
     /// 칸 밝기 10~90 — 원본 <c>0x10030cc0</c> 이 Obt 를 읽은 뒤 칸마다 넣는 값. 평지는 74.
@@ -540,18 +684,21 @@ internal sealed unsafe partial class BattleScene
         if (cellTop > host._camY + host.ViewHeight + 2 * TileH || cellTop + TileH < host._camY - 2 * TileH) return;
         int bright = CellBrightness(col, row);
         uint tint = (layer >> 16 & 0xFF) * (uint)bright / 256 << 16 | (layer >> 8 & 0xFF) * (uint)bright / 256 << 8 | (layer & 0xFF) * (uint)bright / 256;
+        // 모드 > 가독성 향상 > 밝은 칸 범위 진하게 — 바탕이 밝은 칸은 더하는 대신 진한 반투명 색으로 덮는다(가산은 흰 바탕에서 255 에 붙어 안 보인다).
+        uint fill = host._brightCellFill && CellLuma(col, row) >= BrightCellLuma ? BrightFill(layer) : 0;
         int x0 = col * TileW, x1 = x0 + TileW;
         int baseTop = GridTop + host.BoardPad + row * TileH, baseBottom = baseTop + TileH;
         if (!host.BoardIsMap || host._map!.SlopeAt(col, row) == 0)
         {
             int y = host.CellTop(col, row);
-            AddRect(x0, y, TileW, TileH, tint);
+            if (fill != 0) host.FillRect(x0, y, TileW, TileH, fill);
+            else AddRect(x0, y, TileW, TileH, tint);
             host.StrokeRect(x0, y, TileW + 1, TileH + 1, 0xFF000000 | tint);
             return;
         }
         int yNw = baseTop - CornerPx(host._map.CornerAt(col, row, 1)), yNe = baseTop - CornerPx(host._map.CornerAt(col, row, 2));
         int ySw = baseBottom - CornerPx(host._map.CornerAt(col, row, 3)), ySe = baseBottom - CornerPx(host._map.CornerAt(col, row, 0));
-        AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint);
+        AddQuad(x0, x1, yNw, yNe, ySw, ySe, tint, fill);
         uint line = 0xFF000000 | tint;
         host.Mos.DrawSegment(x0, yNw, x1, yNe, line);
         host.Mos.DrawSegment(x0, ySw, x1, ySe, line);
@@ -559,15 +706,20 @@ internal sealed unsafe partial class BattleScene
         host.Mos.DrawSegment(x1, yNe, x1, ySe, line);
     }
 
-    /// <summary>윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.</summary>
-    internal void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint)
+    /// <summary>
+    /// 윗변(yNw→yNe)과 아랫변(ySw→ySe)이 기운 사각형 안을 색을 더해 밝힌다 — 세로줄마다 두 변 사이를 채운다.
+    /// <paramref name="fill"/> 이 있으면(밝은 칸) 더하는 대신 그 반투명 색으로 덮는다.
+    /// </summary>
+    internal void AddQuad(int x0, int x1, int yNw, int yNe, int ySw, int ySe, uint tint, uint fill = 0)
     {
         int w = Math.Max(1, x1 - x0);
         for (int x = x0; x < x1; x++)
         {
             double t = (x - x0) / (double)w;
             int top = (int)Math.Round(yNw + (yNe - yNw) * t), bottom = (int)Math.Round(ySw + (ySe - ySw) * t);
-            if (bottom > top) AddRect(x, top, 1, bottom - top, tint);
+            if (bottom <= top) continue;
+            if (fill != 0) host.FillRect(x, top, 1, bottom - top, fill);
+            else AddRect(x, top, 1, bottom - top, tint);
         }
     }
 

@@ -76,11 +76,12 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         return (bx, by + TalkVoiceRowDy, bw, bh);
     }
 
-    /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
+    /// <summary>탭 — 0 일반(전투 규칙) · 1 밸런스(어빌리티 개편, 사용자 요청 menu-64) · 2 스토리(대사 진행) · 3 편의성 · 4 실험 · 5 엔딩 영상 · 6 가독성 향상. 제목줄 바로 아래 한 줄(사용자 요청).</summary>
     internal int _tuningTab = int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TUNING"), out int startTab) ? Math.Clamp(startTab, 0, TabNames.Length - 1) : 0;
-    internal const int TabY = 30, TabH = 24, TabW = 92;
-    internal static readonly string[] TabNames = ["일반", "밸런스", "스토리", "편의성", "실험", "엔딩 영상"];
-    internal const int TabGeneral = 0, TabBalance = 1, TabStory = 2, TabComfort = 3, TabLab = 4, TabMovie = 5;
+    // 탭 너비 80 — 일곱째 탭(가독성 향상)이 늘어 92 로는 창(600) 오른쪽을 넘었다(끝 탭 오른쪽 12 + 6 × 84 + 80 = 596).
+    internal const int TabY = 30, TabH = 24, TabW = 80;
+    internal static readonly string[] TabNames = ["일반", "밸런스", "스토리", "편의성", "실험", "엔딩 영상", "가독성 향상"];
+    internal const int TabGeneral = 0, TabBalance = 1, TabStory = 2, TabComfort = 3, TabLab = 4, TabMovie = 5, TabReadable = 6;
 
     /// <summary>스토리 탭 — 「대사 사이 멈춤」 고르기 단추들의 자리(창 기준).</summary>
     internal const int PauseY = 100, PauseW = 90, PauseH = 26, PauseGap = 4, StoryCheckY = 150;
@@ -214,7 +215,7 @@ internal sealed unsafe class TuningScreen(GameWindow host)
     /// </summary>
     internal List<string> EnabledMods()
     {
-        var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab, TabMovie }.SelectMany(TuningChecks)
+        var on = new[] { TabGeneral, TabBalance, TabStory, TabComfort, TabLab, TabMovie, TabReadable }.SelectMany(TuningChecks)
             .Where(c => c.On && c.Command is not (MenuSendStats or MenuMosesWarpMovie)).Select(c => c.Label).ToList();
         if (!host._mosesWarpMovie) on.Add("모세스 워프 영상 끔");   // 기본 켬(원본대로) — 끈 것이 원본과 다르다
         if (_soulWeight != 100) on.Add($"일반 공격 소울 기여도 {SoulWeightLabel(_soulWeight)}");
@@ -235,6 +236,12 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("파트2 오프닝 영상", CutscenePlayer.FindOriginal(TitleScreen.OpeningMovie) != null ? "게임을 켤 때 타이틀 앞에 원본 오프닝(원본 폴더에서 바로 튼다)" : "원본 폴더에 Mov 0008 이 없어 나오지 않는다", MenuOpeningMovie, host._openingMovie),
         // 모세스 워프 영상 — 원본은 항성계를 옮길 때마다 떠나는 · 오는 영상을 튼다(버그 리포트 #70). 기본 켬, 끄면 영상 없이 넘어간다.
         ("모세스 워프 영상", CutscenePlayer.FindOriginal(MosesScene.WarpLeaveMovies[0]) != null ? "항성계를 옮길 때 원본의 워프 영상을 튼다" : "원본 폴더에 워프 영상(Mov 0016~0031)이 없다", MenuMosesWarpMovie, host._mosesWarpMovie),
+    ] : tab == TabReadable ?
+    [
+        // 가독성 향상 탭 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없고 기본 켬.
+        ("밝은 칸 범위 진하게", "눈밭 같은 밝은 칸에서 범위를 진하게(원본에 없음)", MenuBrightCellFill, host._brightCellFill),
+        ("범위 테두리", "이동 · 공격 범위 바깥에 선을 두른다(원본에 없음)", MenuRangeEdges, host._rangeEdges),
+        ("얼음 · 땅불 칸 표시", "파트1 얼음 덩이 · 땅불 칸에 테두리(원본에 없음)", MenuPart1FieldMarks, host._part1FieldMarks),
     ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.

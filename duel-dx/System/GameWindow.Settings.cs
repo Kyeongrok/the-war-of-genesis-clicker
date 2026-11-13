@@ -47,6 +47,9 @@ namespace DuelDx;
 /// <param name="Part1RouteMarks">모드 &gt; 편의성 &gt; 파트1 지도 길목 표시 — 파트1 챕터 지도에서 닿으면 사건이 일어나는데 원본 표지(마을 이름 · 칼 그림)가 없는 길목에 이름과 깜빡이는 느낌표를 그릴지(원본에 없음, 버그 리포트 #90 후속 fg-159, 기본 켬).</param>
 /// <param name="MosesWarpMovie">모드 &gt; 엔딩 영상 &gt; 모세스 워프 영상 — 파트2 모세스에서 다른 항성계로 옮길 때 원본처럼 떠나는 · 오는 영상(<c>Mov 0016~0031</c>)을 틀지(버그 리포트 #70, 기본 켬 — MosesScene.StepMosesSystemSwitch).</param>
 /// <param name="TurnRegenNumbers">모드 &gt; 편의성 &gt; 차례 회복 숫자 보이기 — 파트1 차례 시작에 장비 보정 400 · 401(요정의 팔찌 · 천사의 목걸이 · 사이킥 · 포스 써크렛)로 찬 HP · 소울을 그 유닛 위에 숫자로 띄울지(원본 0x10036433 은 안 띄운다, 버그 리포트 #99, 기본 켬).</param>
+/// <param name="BrightCellFill">모드 &gt; 가독성 향상 &gt; 밝은 칸 범위 진하게 — 눈밭처럼 바탕이 밝은 칸(맵 그림 평균 휘도가 문턱 이상)은 이동 · 사거리 · 효과 범위를 원본의 가산 대신 진한 반투명 색으로 칠할지(원본에 없음, 기본 켬 — BattleScene.PaintCell).</param>
+/// <param name="RangeEdges">모드 &gt; 가독성 향상 &gt; 범위 테두리 — 이동 범위(파랑) · 사거리(주황)의 바깥 가장자리에 2px 선과 1px 어두운 외곽선을 두를지(원본에 없음, 기본 켬 — BattleScene.DrawRangeEdges).</param>
+/// <param name="Part1FieldMarks">모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시 — 파트1 프로즌 아이스 얼음 덩이가 남은 칸에 하늘색 테두리와 살짝 어두운 바닥, 땅불 칸에 주황 테두리를 그릴지(원본에 없음, 기본 켬 — Part1MapObjects.DrawLingering).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -62,7 +65,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool EggChaosCube = false, bool EggUnknownMap = false, bool EggUnknownSeed = false,
                                     bool QuietFoeCamera = true, int Part1VoiceVolume = 80, bool RightClickSkipsTalk = true, bool Part1TalkWaits = false,
                                     bool OpeningMovie = false, int Part1TalkVoiceVolume = 100, bool CoverGhost = false,
-                                    bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true)
+                                    bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true,
+                                    bool BrightCellFill = true, bool RangeEdges = true, bool Part1FieldMarks = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

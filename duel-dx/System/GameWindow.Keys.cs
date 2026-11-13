@@ -261,7 +261,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie, _part1RouteMarks, _turnRegenNumbers));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie, _part1RouteMarks, _turnRegenNumbers, _brightCellFill, _rangeEdges, _part1FieldMarks));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -391,6 +391,19 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 차례 시작에 장비로 찬 HP · 소울을 숫자로 띄우나 — 모드 &gt; 편의성(원본에 없음, 버그 리포트 #99, 기본 켬, BattleScene.StartTurn).</summary>
     internal bool _turnRegenNumbers = UserSettings.Current.TurnRegenNumbers;
     internal const int MenuTurnRegenNumbers = 1704;
+
+    // ── 모드 > 가독성 향상 — 흰 눈밭 판(파트1 Btl 20031 빙원 따위)에서 범위 칸 · 얼음 덩이가 잘 안 보인다는 요청. 셋 다 원본에 없고 기본 켬. ──
+    /// <summary>바탕이 밝은 칸은 범위를 가산 대신 진한 반투명 색으로 칠하나(BattleScene.PaintCell · BrightCellLuma).</summary>
+    internal bool _brightCellFill = UserSettings.Current.BrightCellFill;
+    internal const int MenuBrightCellFill = 1705;
+
+    /// <summary>이동 · 사거리 범위의 바깥 가장자리에 선을 두르나(BattleScene.DrawRangeEdges).</summary>
+    internal bool _rangeEdges = UserSettings.Current.RangeEdges;
+    internal const int MenuRangeEdges = 1706;
+
+    /// <summary>파트1 얼음 덩이 · 땅불 칸에 테두리를 그리나(Part1MapObjects.DrawLingering).</summary>
+    internal bool _part1FieldMarks = UserSettings.Current.Part1FieldMarks;
+    internal const int MenuPart1FieldMarks = 1707;
 
     /// <summary>파트1 튜토리얼(챕터 79 · 80) 전투에서도 SAVE 를 하나 — 모드 > 일반 > 튜토리얼에서도 저장(원본은 막는다, 사용자 요청 menu-105, 기본 켬).</summary>
     internal bool _part1TutorialSave = UserSettings.Current.Part1TutorialSave;
@@ -631,6 +644,21 @@ internal sealed unsafe partial class GameWindow
             case MenuTurnRegenNumbers:
                 _turnRegenNumbers = !_turnRegenNumbers;
                 Toast(_turnRegenNumbers ? "차례마다 장비로 찬 HP · 소울을 숫자로 띄웁니다" : "장비로 찬 HP · 소울을 원본대로 숫자 없이 채웁니다");
+                SaveSettings();
+                break;
+            case MenuBrightCellFill:
+                _brightCellFill = !_brightCellFill;
+                Toast(_brightCellFill ? "밝은 칸의 범위를 진한 색으로 칠합니다" : "범위를 원본대로 밝히기만 합니다");
+                SaveSettings();
+                break;
+            case MenuRangeEdges:
+                _rangeEdges = !_rangeEdges;
+                Toast(_rangeEdges ? "이동 · 공격 범위 가장자리에 테두리를 두릅니다" : "범위를 원본대로 테두리 없이 칠합니다");
+                SaveSettings();
+                break;
+            case MenuPart1FieldMarks:
+                _part1FieldMarks = !_part1FieldMarks;
+                Toast(_part1FieldMarks ? "얼음 덩이 · 땅불 칸에 테두리를 그립니다" : "얼음 덩이 · 땅불을 원본대로 표시 없이 둡니다");
                 SaveSettings();
                 break;
             case MenuCoverGhost:
