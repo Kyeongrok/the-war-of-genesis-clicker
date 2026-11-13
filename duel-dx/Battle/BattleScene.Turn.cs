@@ -2698,7 +2698,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
     /// 첫 타는 사용자가 원하는 대로 <b>0.05초</b>에 낸다. 타격 키가 없으면 한 번만.
     /// 다만 <b>원거리</b>(사거리 1칸 넘음)는 모션의 타격 키 그 틱에 낸다 — 총은 쏘는 컷에 타격 키가 있어서, 0.05초로 당기면
     /// 크리스티앙처럼 피해 숫자가 총을 쏘기 전에 떴다(사용자 보고).
-    /// 근접이어도 <b>멈춘 채 겨누다가 타격 키에서 베는</b> 모션(<see cref="HoldsUntilStrike"/>)은 그 키에 낸다.
+    /// 근접이어도 <b>멈춘 채 겨누다가 타격 키에서 베는</b> 모션(<see cref="HoldsUntilStrike"/>)과 <b>첫 타격 키가 늦은</b>
+    /// 모션(<see cref="LateStrikeTicks"/>)은 그 키에 낸다.
     /// </summary>
     internal List<double> HitTimesFor(UnitState u, int action, bool ranged = false)
     {
@@ -2706,9 +2707,16 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         if (!host._sprites.TryGetValue(u.ChrCode, out var sprite) || sprite.Clip(action, u.Facing) is not { Hits.Count: > 0 } clip)
             return [first];
         var starts = clip.Hits.Select(h => h.Start).OrderBy(t => t).ToList();
-        double at = ranged || HoldsUntilStrike(clip, starts[0]) ? Math.Max(first, starts[0] / TicksPerSecond) : first;
+        double at = ranged || starts[0] >= LateStrikeTicks || HoldsUntilStrike(clip, starts[0]) ? Math.Max(first, starts[0] / TicksPerSecond) : first;
         return [.. starts.Select(t => at + (t - starts[0]) / TicksPerSecond)];
     }
+
+    /// <summary>
+    /// 근접인데 첫 타격 키가 이 틱 이상이면 0.05초로 당기지 않고 그 키에 친다 — 보통 휘두르기는 9~15틱이라 그대로 당기고,
+    /// 샤크바리(그림 0202) 27틱처럼 컷을 3틱마다 바꾸며 길게 겨누는 모션은 피해 숫자가 휘두르기 0.85초 전에 떴다(버그 리포트 #104).
+    /// 같이 바뀌는 그림: 0117(36틱) · 0212(20) · 0350 · 0572(19).
+    /// </summary>
+    internal const int LateStrikeTicks = 18;
 
     /// <summary>근접 타격을 키에 맞추는 겨눔 길이(틱) — 보통 모션은 타격 키(대개 9틱)까지 3틱마다 컷이 바뀌며 휘두른다.</summary>
     internal const int WindUpHoldTicks = 12;
