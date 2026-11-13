@@ -51,13 +51,13 @@ public sealed record ObtFootprint(int Cols, int Rows, ushort[] Raw, ushort[] Fla
 /// cols*rows × u16            칸별 지형 값
 /// s16 layerW, layerH, layerX, layerY
 /// layerW*layerH × (s8, s8, u16 타일번호)   — 그림 배치표. 한 칸이 40×8 픽셀 띠 하나다
-/// u32 n, n × (u16, u16, s16 w, s16 h, w*h*4 바이트)  — 덧그림
+/// u32 n, n × (s16 x, s16 y, s16 w, s16 h, w*h × (u8 칸 줄, u8 z, u16 타일))  — 덧그림(유닛 앞에 서는 층)
 /// u32 tileCount, tileCount × 640 바이트(40×8 RGB555), tileCount × 1 바이트
 /// version ≥ 3: u32 n, n × (s16 w, s16 h, u16×3, w*h 바이트)
 /// </code>
 /// 전투 칸은 40×32 픽셀이다 — 원본은 640×480 화면에서 커서 칸이 40×32 이고, 32 칸 × 40 = 1280 이
 /// 배치표 폭과 맞는다. <c>layerY</c>(0153 은 −2)는 띠 두 줄(16픽셀)만큼 그림을 위로 올린다.
-/// 배치표 레코드의 앞 두 바이트(s8 두 개)와 덧그림·마지막 절의 뜻은 아직 모른다 — 그림에는 안 쓴다.
+/// 배치표 레코드의 앞 두 바이트(s8 두 개)와 마지막 절의 뜻은 아직 모른다 — 그림에는 안 쓴다. 덧그림은 <see cref="ParseDepth"/> 참고.
 /// </remarks>
 public static class ObtMap
 {
@@ -88,6 +88,81 @@ public static class ObtMap
             flags[i] = BitConverter.ToUInt16(bytes, grid + i * 2);
         }
         return new ObtFootprint(cols, rows, raw, flags);
+    }
+
+    /// <summary>덧그림 띠 하나 — 배치표 띠 자리(열, 줄), 그 띠의 깊이(칸 줄 · 높이 원 단위 z 바이트)와 타일 번호.</summary>
+    private readonly record struct Overlay(int Col, int Row, int CellRow, int Z, int Tile);
+
+    /// <summary>
+    /// 덧그림 절 <c>u32 n, n × (s16 x, s16 y, s16 w, s16 h, w·h × (u8 칸 줄, u8 z, u16 타일))</c> — 파트1 윗층과 같은 꼴, 배치표와 같은 띠 좌표(layerY 를 따로 안 더한다).
+    /// 타일 0 은 원본이 안 그린다.
+    /// </summary>
+    private static List<Overlay> ReadOverlays(BinaryReader reader)
+    {
+        var list = new List<Overlay>();
+        uint n = reader.ReadUInt32();
+        for (int i = 0; i < n; i++)
+        {
+            int x = reader.ReadInt16(), y = reader.ReadInt16(), w = reader.ReadInt16(), h = reader.ReadInt16();
+            for (int k = 0; k < w * h; k++)
+            {
+                int row = reader.ReadByte(), z = reader.ReadByte(), tile = reader.ReadUInt16();
+                if (tile != 0) list.Add(new Overlay(x + k % w, y + k / w, row, z, tile));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// 덧그림 띠의 깊이 격자 — 바탕 띠는 넣지 않는다(바탕은 유닛을 가리지 않는다). 덧그림이 없으면 null.
+    /// 원본은 덧그림 띠마다(<c>0x100d6c00</c> → <c>0x10027c20</c>) 깊이 (칸 줄·40, z·20)으로 그리기 목록(<c>0x1002e2c0</c>, 파트1 <c>0x1001bc60</c> 과 같은 것)에 넣어
+    /// 유닛과 함께 깊이 차례로 그린다 — 유닛보다 앞 줄의 덧그림(벽 · 기둥 · 덩굴)이 유닛을 가린다. 파트1 <see cref="Part1Map.ParseDepth"/> 와 같은 격자를 돌려준다.
+    /// </summary>
+    /// <remarks>z 바이트는 원 높이(한 층 = 20) 그대로라 층으로는 (z + 19) / 20 이다.</remarks>
+    public static Part1MapDepthGrid? ParseDepth(byte[] bytes)
+    {
+        try
+        {
+            using var reader = new BinaryReader(new MemoryStream(bytes));
+            int version = reader.ReadUInt16();
+            int cols = reader.ReadInt16(), rows = reader.ReadInt16();
+            if (cols <= 0 || rows <= 0) return null;
+            int cellRecordSize = 10 + 1 + 16 + 2 + 2 + 2 + (version >= 4 ? 12 : 0);
+            reader.BaseStream.Seek((long)cols * rows * (cellRecordSize + 2), SeekOrigin.Current);
+            int layerW = reader.ReadInt16(), layerH = reader.ReadInt16();
+            reader.ReadInt16();
+            int layerY = reader.ReadInt16();
+            if (layerW <= 0 || layerH <= 0) return null;
+            reader.BaseStream.Seek((long)layerW * layerH * 4, SeekOrigin.Current);
+            var overlays = ReadOverlays(reader);
+            if (overlays.Count == 0) return null;
+            int tileCount = (int)reader.ReadUInt32();
+            int stripPixels = StripWidth * StripHeight;
+            byte[] tiles = reader.ReadBytes(tileCount * stripPixels * 2);
+            if (tiles.Length != tileCount * stripPixels * 2) return null;
+            byte[] opaque = reader.ReadBytes(tileCount);
+            var pictures = new Dictionary<(int, bool), uint[]>();
+            var cells = new List<Part1MapStrip>?[layerW * layerH];
+            foreach (var o in overlays)
+            {
+                if (o.Tile >= tileCount || (uint)o.Col >= layerW || (uint)o.Row >= layerH) continue;
+                bool keyed = o.Tile >= opaque.Length || opaque[o.Tile] == 0;
+                if (!pictures.TryGetValue((o.Tile, keyed), out var px))
+                {
+                    px = new uint[stripPixels];
+                    for (int p = 0, src = o.Tile * stripPixels * 2; p < stripPixels; p++, src += 2)
+                    {
+                        int c = tiles[src] | tiles[src + 1] << 8;
+                        if (c == 0 && keyed) continue;
+                        px[p] = 0xFF000000u | (uint)((c >> 10 & 0x1F) * 255 / 31) << 16 | (uint)((c >> 5 & 0x1F) * 255 / 31) << 8 | (uint)((c & 0x1F) * 255 / 31);
+                    }
+                    pictures[(o.Tile, keyed)] = px;
+                }
+                (cells[o.Row * layerW + o.Col] ??= []).Add(new Part1MapStrip(o.CellRow, (o.Z + 19) / 20, px));
+            }
+            return new Part1MapDepthGrid(0, layerY, layerW, layerH, cells);
+        }
+        catch (EndOfStreamException) { return null; }
     }
 
     /// <summary>메모리에 읽어 둔 Obt(예: pak 안 파일)를 푼다.</summary>
@@ -134,42 +209,41 @@ public static class ObtMap
             tileIds[i] = reader.ReadUInt16();
         }
 
-        uint overlays = reader.ReadUInt32();
-        for (int i = 0; i < overlays; i++)
-        {
-            reader.ReadUInt16(); reader.ReadUInt16();
-            int w = reader.ReadInt16(), h = reader.ReadInt16();
-            reader.BaseStream.Seek((long)w * h * 4, SeekOrigin.Current);
-        }
+        var overlays = ReadOverlays(reader);
 
         int tileCount = (int)reader.ReadUInt32();
         byte[] tiles = reader.ReadBytes(tileCount * StripWidth * StripHeight * 2);
         if (tiles.Length != tileCount * StripWidth * StripHeight * 2)
             throw new InvalidDataException($"{Path.GetFileName(path)}: 타일 자료가 잘렸습니다.");
+        byte[] opaque = reader.ReadBytes(tileCount);
 
         int width = layerW * StripWidth, height = layerH * StripHeight;
         var bgra = new byte[width * height * 4];
-        for (int ly = 0; ly < layerH; ly++)
+        void Put(int lx, int ly, int id, bool keyed)
         {
-            for (int lx = 0; lx < layerW; lx++)
+            if (id >= tileCount || (uint)lx >= layerW || (uint)ly >= layerH) return;
+            int src = id * StripWidth * StripHeight * 2;
+            for (int py = 0; py < StripHeight; py++)
             {
-                int id = tileIds[ly * layerW + lx];
-                if (id >= tileCount) continue;
-                int src = id * StripWidth * StripHeight * 2;
-                for (int py = 0; py < StripHeight; py++)
+                int dst = ((ly * StripHeight + py) * width + lx * StripWidth) * 4;
+                for (int px = 0; px < StripWidth; px++, src += 2, dst += 4)
                 {
-                    int dst = ((ly * StripHeight + py) * width + lx * StripWidth) * 4;
-                    for (int px = 0; px < StripWidth; px++, src += 2, dst += 4)
-                    {
-                        int c = tiles[src] | (tiles[src + 1] << 8);
-                        bgra[dst] = (byte)(((c >> 0) & 0x1F) * 255 / 31);
-                        bgra[dst + 1] = (byte)(((c >> 5) & 0x1F) * 255 / 31);
-                        bgra[dst + 2] = (byte)(((c >> 10) & 0x1F) * 255 / 31);
-                        bgra[dst + 3] = 255;
-                    }
+                    int c = tiles[src] | (tiles[src + 1] << 8);
+                    if (c == 0 && keyed) continue;
+                    bgra[dst] = (byte)(((c >> 0) & 0x1F) * 255 / 31);
+                    bgra[dst + 1] = (byte)(((c >> 5) & 0x1F) * 255 / 31);
+                    bgra[dst + 2] = (byte)(((c >> 10) & 0x1F) * 255 / 31);
+                    bgra[dst + 3] = 255;
                 }
             }
         }
+        for (int ly = 0; ly < layerH; ly++)
+            for (int lx = 0; lx < layerW; lx++)
+                Put(lx, ly, tileIds[ly * layerW + lx], keyed: false);
+        // 덧그림(유닛 앞에 서는 층)도 그림에 얹는다 — 전에는 읽고 버려서 107/144 맵에서 그림이 빠졌다(Obt 0153 앞쪽 덩굴 대신 바탕의 검은 그림자, 버그 리포트 #102).
+        // 불투명 바이트가 0 인 타일은 색 0 이 비친다(파트1 윗층과 같은 규칙 — 덧그림 타일 51,094개 전수).
+        foreach (var o in overlays)
+            Put(o.Col, o.Row, o.Tile, keyed: o.Tile >= opaque.Length || opaque[o.Tile] == 0);
 
         return new ObtMapImage(width, height, layerY * StripHeight, cols, rows, bgra, heights, flags, corners, slopes);
     }

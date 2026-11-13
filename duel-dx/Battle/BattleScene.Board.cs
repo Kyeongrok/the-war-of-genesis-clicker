@@ -368,6 +368,9 @@ internal sealed unsafe partial class BattleScene
         // 아래 줄 인물이 위 줄 인물을 가리도록 발 위치(y) 순서로 그린다.
         // 파트1 판은 원본 그리기 목록 차례(세계 y, 세계 z + 19 — 0x1001ad10)로 — 맵 물체의 깊이 층(Part1MapObjects)을 유닛 사이사이에 끼워 그린다.
         var p1 = host._scene.IsPart1 ? Part1Objects : null;
+        // 파트2: 맵 덧그림(벽 · 기둥 · 덩굴 — ObtMap.ParseDepth)이 그보다 뒷줄 유닛을 가린다(버그 리포트 #102-3). 맵 물체 층은 없고 가림 · 반투명만 같은 장치로.
+        var cover = p1 ?? (host.BoardIsMap ? Part1Objects : null);
+        if (p1 == null) cover?.BeginCoverOnly();
         var order = (p1 == null ? Enumerable.Range(0, units.Length).OrderBy(i => units[i].Y)
                                 : Enumerable.Range(0, units.Length).OrderBy(i => Part1UnitKey(units[i]))).ToArray();
         // 체력바는 그 인물 바로 뒤에 그려 앞줄 인물이 덮게 한다(플레이어 제보 fa-80) — 앞 인물 그림과 겹치면 글도 판에 써서 함께 가려지게.
@@ -381,7 +384,7 @@ internal sealed unsafe partial class BattleScene
                     bodies[k] = (bx + f.X, by + f.Y, f.W, f.H);
                 }
         // 파트1: 유닛보다 앞인 맵 띠(기둥 · 벽 · 건물)가 유닛을 가린다 — 원본 그리기 목록 그대로 불투명하게(Part1MapObjects.QueueMapCover, 버그 리포트 #64-1).
-        if (p1 != null)
+        if (cover != null)
         {
             var covered = new List<(int X, int Y, int W, int H, long Key)>();
             foreach (var u in units)
@@ -390,12 +393,12 @@ internal sealed unsafe partial class BattleScene
                     var f = sp.FrameFor(u);
                     var (bx, by) = UnitFoot(u);
                     // 자리 키(1픽셀 떨림)와 딸린 층이 조금 삐져나와도 덮이게 4점 넉넉히.
-                    covered.Add((bx + f.X - 4, by + f.Y - 4, f.W + 8, f.H + 8, Part1UnitKey(u)));
+                    covered.Add((bx + f.X - 4, by + f.Y - 4, f.W + 8, f.H + 8, CoverKey(u)));
                     // 체력바 · 레벨 동그라미 · 딱지도 같은 깊이로 가려지게(사용자 요청 fa-84) — 막대는 발밑이라 몸 네모 밖이다.
-                    if (host._showGauges) { var g = GaugeRect(u); covered.Add((g.X, g.Y, g.W, g.H, Part1UnitKey(u))); }
+                    if (host._showGauges) { var g = GaugeRect(u); covered.Add((g.X, g.Y, g.W, g.H, CoverKey(u))); }
                 }
-            p1.QueueMapCover(covered);
-            p1.GhostFrame(host._coverGhost);
+            cover.QueueMapCover(covered);
+            cover.GhostFrame(host._coverGhost);
         }
         host.Part1Ab.BeginGround();   // 땅에 깔린 기술 그림(천지파열무의 금 따위)도 유닛 사이에 깊이 차례로 — 버그 리포트 #84
         _gaugeLayerText.Clear();
@@ -404,18 +407,18 @@ internal sealed unsafe partial class BattleScene
             int i = order[at];
             var unit = units[i];
             if (!unit.Alive || !unit.OnField) continue;
-            DrawDepthUntil(p1, Part1UnitKey(unit));
+            DrawDepthUntil(cover, CoverKey(unit));
             var (footX, footY) = UnitFoot(unit);
             int headY = footY - TileH;
 
             // 몸 · 딸린 층 · 체력바를 그리는 앞뒤로 판을 떠 둔다(Part1MapObjects.UnitBegin) — 앞 맵 띠는 유닛 픽셀 자리에만 다시 찍고(버그 리포트 #68),
             // 가려진 캐릭터 반투명(모드, fa-84)이면 그 픽셀을 비쳐 그린다.
-            if (p1 != null && sprites.TryGetValue(unit.ChrCode, out var gs))
+            if (cover != null && sprites.TryGetValue(unit.ChrCode, out var gs))
             {
                 var gf = gs.FrameFor(unit);
                 int gx0 = footX + gf.X - 24, gy0 = footY + gf.Y - 24, gx1 = footX + gf.X + gf.W + 24, gy1 = footY + gf.Y + gf.H + 24;
                 if (bodies != null) { var g = GaugeRect(unit); gx0 = Math.Min(gx0, g.X); gy0 = Math.Min(gy0, g.Y); gx1 = Math.Max(gx1, g.X + g.W); gy1 = Math.Max(gy1, g.Y + g.H); }
-                p1.UnitBegin(gx0, gy0, gx1 - gx0, gy1 - gy0, Part1UnitKey(unit));
+                cover.UnitBegin(gx0, gy0, gx1 - gx0, gy1 - gy0, CoverKey(unit));
             }
             if (sprites.TryGetValue(unit.ChrCode, out var sprite))
             {
@@ -445,14 +448,20 @@ internal sealed unsafe partial class BattleScene
             bool acting = i == _turn && !(IsPlayerTurn && !unit.IsBusy);
             // 체력바를 차례 표시보다 먼저 — 반투명 모드가 떠 두는 것은 몸 · 체력바까지(차례 표시는 머리 위 표시라 뜨지 않는다). 둘은 겹치지 않는다(발밑 · 머리 위).
             // 체력바는 몸과 따로 적는다 — 발밑이라 앞줄 바닥 · 낭떠러지가 아니라 솟은 띠(기둥 · 벽)만 덮는다(Part1MapObjects.GaugeMinLevel).
-            p1?.UnitMid();
-            if (bodies != null) DrawGaugeInOrder(unit, order, at, bodies, p1);
-            p1?.UnitEnd();
+            cover?.UnitMid();
+            if (bodies != null) DrawGaugeInOrder(unit, order, at, bodies, cover);
+            cover?.UnitEnd();
             if (unit.HasTurn && !acting && _outcome.Length == 0) DrawTurnMarker(unit, footX, headY, selected: i == host._selected);
         }
-        DrawDepthUntil(p1, long.MaxValue);
-        p1?.Flush();
+        DrawDepthUntil(cover, long.MaxValue);
+        cover?.Flush();
     }
+
+    /// <summary>
+    /// 가림에 쓰는 유닛 깊이 열쇠 — 파트1 은 <see cref="Part1UnitKey"/>, 파트2 는 컷 끝을 안 더한 (40·줄 + 20, 20·높이 + 19).
+    /// 파트2 는 그리는 차례가 발 y 순서라 열쇠도 y 순서를 지키게 컷 끝을 안 더한다 — 덧그림은 줄·40 에 놓이므로 「유닛보다 아랫줄 덧그림이 가린다」로 동작한다.
+    /// </summary>
+    private long CoverKey(UnitState unit) => host._scene.IsPart1 ? Part1UnitKey(unit) : Part1UnitGroundKey(unit);
 
     /// <summary>
     /// 깊이 열쇠가 <paramref name="key"/> 보다 뒤인 물체 층(<see cref="Part1MapObjects.DrawUntil"/>)과 땅에 깔린 기술 그림(<see cref="Part1Skill.DrawGroundUntil"/>)을
@@ -481,7 +490,7 @@ internal sealed unsafe partial class BattleScene
         for (int k = at + 1; k < order.Length && !covered; k++)
             if (bodies[order[k]] is { } b && b.X < g.X + g.W && g.X < b.X + b.W && b.Y < g.Y + g.H && g.Y < b.Y + b.H) covered = true;
         // 파트1: 앞의 기둥 · 벽 · 맵 물체가 막대를 덮으면 글(레벨 숫자 · 딱지)도 판에 — 새 UI 층에 쓰면 막대는 가려지고 숫자만 구조물 위에 떴다(fa-84).
-        if (!covered && p1 != null) covered = p1.CoveredAhead(g.X, g.Y, g.W, g.H, Part1UnitKey(unit));
+        if (!covered && p1 != null) covered = p1.CoveredAhead(g.X, g.Y, g.W, g.H, CoverKey(unit));
         bool board = covered || !host._hiResUi || host.BattleCovered;
         DrawGauge(unit, shapes: true, text: board, boardText: board);
         if (!board) _gaugeLayerText.Add(unit);

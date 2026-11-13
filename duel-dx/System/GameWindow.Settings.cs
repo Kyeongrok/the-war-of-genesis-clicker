@@ -34,7 +34,7 @@ namespace DuelDx;
 /// <param name="TachyrionRework">타키리온 체질 개편(자료 모드 <c>assets/data/mods/tachyrion</c>)을 쓸지 — 모드 &gt; 밸런스, 기본 끔(원본대로).</param>
 /// <param name="Part1TurnVoice">모드 &gt; 일반 &gt; 파트1 차례 목소리 — 파트1 인물(크리스티앙 …)의 차례에 필드 대사 음성 한 마디를 낼지(원본에 없음, 사용자 요청, 기본 켬).</param>
 /// <param name="Part1TurnOutline">모드 &gt; 일반 &gt; 파트1 차례 테두리 — 파트1 전투에서 차례인 유닛에 주황 · 노랑으로 반짝이는 1픽셀 테두리를 두를지(원본 <c>0x10034bd9~</c> 을 따르되 빛깔 · 빠르기는 사용자 요청대로, 기본 끔, Part1TurnOutline.cs).</param>
-/// <param name="CoverGhost">모드 &gt; 일반 &gt; 가려진 캐릭터 반투명 — 파트1 전투에서 기둥 · 벽 · 건물 · 맵 물체에 가려진 유닛과 그 체력바를 45% 로 비쳐 보일지(원본은 그냥 가린다, 사용자 요청 fa-84, 기본 끔).</param>
+/// <param name="CoverGhost">모드 &gt; 일반 &gt; 가려진 캐릭터 반투명 — 전투에서 기둥 · 벽 · 건물 · 맵 물체(파트2 는 맵 덧그림, 버그 리포트 #102-3)에 가려진 유닛과 그 체력바를 45% 로 비쳐 보일지(원본은 그냥 가린다, 사용자 요청 fa-84, 기본 끔).</param>
 /// <param name="Part1TutorialSave">모드 &gt; 일반 &gt; 튜토리얼에서도 저장 — 파트1 튜토리얼(챕터 79 · 80) 전투에서 SAVE 를 할지(원본은 막는다, 사용자 요청 menu-104 · menu-105, 기본 켬).</param>
 /// <param name="Part1ChestRollAtStart">모드 &gt; 일반 &gt; 무작위 상자는 전투 시작 때 — 파트1 무작위 상자(든 것 0)의 아이템을 판을 세울 때 굴려 세이브에 둘지(끄면 열 때 굴린다, 사용자 요청 fg-59 · fg-60, 기본 켬).</param>
 /// <param name="EggChaosCube">모드 &gt; 일반 &gt; 카오스 큐브 · 나야트레이 — 파트1 세이브 이스터에그(깃발 185, MosesEasterEggs.cs, 사용자 요청 menu-113, 기본 끔).</param>
@@ -51,6 +51,7 @@ namespace DuelDx;
 /// <param name="RangeOutline">모드 &gt; 가독성 향상 &gt; 범위 테두리 — 이동 범위(파랑) · 사거리(주황)의 바깥 가장자리에 2px 선과 1px 어두운 외곽선을 두를지(원본에 없음, 기본 끔 — BattleScene.DrawRangeEdges). 처음엔 「RangeEdges」 기본 켬이었는데 어색하다고 해 기본을 끔으로 바꾸며 이름도 바꿔, 이미 켬으로 적힌 설정도 한 번 끔으로 돌아간다.</param>
 /// <param name="Part1FieldMarks">모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시 — 파트1 프로즌 아이스 얼음 덩이가 남은 칸을 하늘색, 땅불 칸을 주황으로 물들일지(범위 칸과 같은 가산 → 포화하면 곱하기, 원본에 없음, 기본 켬 — Part1MapObjects.DrawLingering).</param>
 /// <param name="TemperatureDisplay">모드 &gt; 가독성 향상 &gt; 온도 표시 — 파트1 판의 기온(기본 80 과 다를 때, 미니맵 머리 줄 · 미니맵이 없으면 오른쪽 위 정보 창 옆)과 파트1 상태 창의 몸 온도 · 그로 깎인 SPD 를 보일지(원본에 없음, 기본 켬 — BattleMiniMap.DrawAmbient · Part1StatusPanel).</param>
+/// <param name="TalkWaits">모드 &gt; 파트2 대사는 눌러서 넘기기 — 대사창(600 · 601 · 602)이 다 나온 뒤 저절로 닫지 않고 누를 때까지 기다릴지(버그 리포트 #102, 기본 끔 — TalkBox.UpdateTalk).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -68,7 +69,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool OpeningMovie = false, int Part1TalkVoiceVolume = 100, bool CoverGhost = false,
                                     bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true,
                                     bool BrightCellFill = true, bool RangeOutline = false, bool Part1FieldMarks = true,
-                                    bool TemperatureDisplay = true)
+                                    bool TemperatureDisplay = true, bool TalkWaits = false)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

@@ -127,6 +127,11 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
         /// <summary>누르고 있는 동안 더 간 글 틱 — 흘리기 시각에 더한다(<see cref="TalkHeld"/>).</summary>
         public double HoldBoost;
         public bool AllRevealed => Revealed >= Clean.Length;
+        /// <summary>
+        /// 쪽 채우기로 칸을 다 보여 주고 다음 클릭을 기다리는 중 — 흘리기 · 줄 올리기를 멈춘다(<see cref="FillTalk"/>, 버그 리포트 #102).
+        /// 전에는 첫 클릭이 글 끝까지 채우며 칸을 마지막 줄로 밀어서 앞 줄을 못 읽었다.
+        /// </summary>
+        public bool PageHold;
         /// <summary>파트1 전투 대사 200 의 창(<see cref="Part1BattleTalk"/>) — 있으면 펴짐 · 글 · 넘김 · 그리기를 이 창이 한다.</summary>
         public Part1Bubble? Part1;
     }
@@ -491,6 +496,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             if (t < 0) continue;                                  // 펴지는 중 — 글도 음성도 아직
             EnsureTalkLayout(w);
             if (w.Voice > 0 && !w.VoiceStarted) { w.VoiceStarted = true; StartTalkWindowVoice(w); }
+            if (w.PageHold) continue;                             // 쪽을 다 보이고 클릭을 기다린다 — 흘리기 · 저절로 닫기 모두 멈춤
             if (held)
             {
                 // 누르는 동안은 음성을 안 따르고 글 걸음으로 빨리 흘린다
@@ -508,7 +514,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             if (w.AllRevealed && !TalkVoicePlaying(w))
             {
                 if (w.DoneAt < 0) w.DoneAt = host._lastTime;
-                if ((host._lastTime - w.DoneAt) * TicksPerSecond > TalkAutoTicks) BeginCloseTalk(w);
+                if ((host._lastTime - w.DoneAt) * TicksPerSecond > TalkAutoTicks && !host._talkWaits) BeginCloseTalk(w);
             }
         }
     }
@@ -599,14 +605,21 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
     }
 
     /// <summary>글을 다 채운다 — 마지막 칸만큼의 줄을 보인다.</summary>
+    /// <remarks>
+    /// 한 번에 <b>한 칸(쪽)</b>만 — 글이 칸(상자 4줄 · 말풍선 3줄)보다 길면 지금 칸을 끝까지 채우고 멈춘다(<see cref="TalkWindow.PageHold"/>).
+    /// 다음 클릭은 다음 칸으로 넘겨 또 끝까지 채우고, 마지막 칸이면 다 보인 것이 된다(그다음 클릭이 닫는다). 버그 리포트 #102 — 전에는 끝까지 채우며
+    /// 칸을 마지막 줄로 밀어 긴 말풍선의 앞 줄을 못 읽었다.
+    /// </remarks>
     internal void FillTalk(TalkWindow w)
     {
         if (w.Part1 != null) return;
         EnsureTalkLayout(w);
-        w.Revealed = w.Clean.Length;
         w.ScrollPx = 0;
-        int last = w.Clean.Length > 0 ? w.CharLine[^1] : 0;
-        w.TopLine = Math.Max(w.TopLine, last - w.MaxLines + 1);
+        // 지금 칸이 이미 다 보였으면(쪽 기다림 · 줄 올리기 직전) 다음 칸으로 — 아직 안 보인 첫 줄부터. 한 번 누름이 헛돌지 않게.
+        if (w.Revealed < w.Clean.Length && w.CharLine[w.Revealed] >= w.TopLine + w.MaxLines) w.TopLine = w.CharLine[w.Revealed];
+        int end = w.TopLine + w.MaxLines;
+        while (w.Revealed < w.Clean.Length && w.CharLine[w.Revealed] < end) w.Revealed++;
+        w.PageHold = !w.AllRevealed;
     }
 
     /// <summary>
@@ -764,7 +777,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             : (host._lastTime - w.OpenedAt) * TicksPerSecond / w.OpenTicks;
         open = Math.Clamp(open, 0, 1);
         bool full = w.ClosingAt < 0 && open >= 1;
-        bool ready = w.AllRevealed && !TalkVoicePlaying(w);
+        bool ready = w.PageHold || (w.AllRevealed && !TalkVoicePlaying(w));
         // 원본 대사창은 640×480 화면 기준이다 — 필드·모세스는 그 틀, 전투는 보이는 판의 왼위를 (0,0) 으로 본다.
         // 모세스 대화도 창 아래 끝이 아니라 모세스 틀 아래 끝에 맞춘다 — 창이 틀보다 길면 상자 아래가 틀 밖으로 잘렸다(사용자 보고: Chp 0049).
         bool framed = host.FieldOpen || host.Mos._mosesOpen;

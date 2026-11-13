@@ -1366,9 +1366,25 @@ internal sealed class Part1MapObjects(GameWindow host)
         if (ReferenceEquals(_mapDepthFor, host._scene)) return _mapDepth;
         _mapDepthFor = host._scene;
         var file = host._scene.MapFile;
-        _mapDepth = file.StartsWith(DemoScene.Part1MapPrefix, StringComparison.Ordinal) && int.TryParse(file[DemoScene.Part1MapPrefix.Length..], out int id)
-            ? Part1Map.LoadDepth(id, keyBaseBlack: host._scene.MapDecor.Count > 0) : null;
+        if (file.StartsWith(DemoScene.Part1MapPrefix, StringComparison.Ordinal))
+            _mapDepth = int.TryParse(file[DemoScene.Part1MapPrefix.Length..], out int id) ? Part1Map.LoadDepth(id, keyBaseBlack: host._scene.MapDecor.Count > 0) : null;
+        else
+        {
+            // 파트2 는 덧그림 띠만(ObtMap.ParseDepth) — 바탕은 유닛을 가리지 않는다. 버그 리포트 #102-3(벽 뒤 캐릭터가 벽 위로 올라온다).
+            try { _mapDepth = ObtMap.ParseDepth(File.ReadAllBytes(AssetPack.MapPath(file))); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _mapDepth = null; }
+        }
         return _mapDepth;
+    }
+
+    /// <summary>
+    /// 파트2 판의 한 틀을 시작한다 — 파트2 에는 맵 물체 층이 없어 <see cref="Draw"/> 를 안 부르므로 모아 둔 것만 비운다.
+    /// 이 객체는 파트2 에서 맵 덧그림의 가림 · 반투명(<see cref="QueueMapCover"/> · <see cref="GhostFrame"/> · <see cref="UnitBegin"/>)만 맡는다.
+    /// </summary>
+    internal void BeginCoverOnly()
+    {
+        _pending.Clear();
+        _drawn = 0;
     }
 
     /// <summary>
