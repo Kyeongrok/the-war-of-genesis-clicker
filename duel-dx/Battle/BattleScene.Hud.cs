@@ -73,6 +73,17 @@ internal sealed unsafe partial class BattleScene
             Right($"Soul:{unit.Soul}", 134, 44);
         }
 
+        // 파트1 판 기온 — 미니맵이 뜨는 판은 미니맵 머리 줄에, 판이 화면보다 작아 미니맵이 없으면 이 창 왼쪽 위에 작게(모드 > 가독성 향상 > 온도 표시, 원본에 없음).
+        if (!host.MiniMap.MapLarger && BattleMiniMap.AmbientLabel(host) is var (ambientText, ambientColor, ambient))
+        {
+            int tw = host.UiGetText(ambientText, ambientColor, size).W;
+            int cx = x - tw - 12 - 4, cy = y;
+            host.UiFill(cx, cy, tw + 12, 18, 0xB0000000);
+            host.UiText(ambientText, cx + 6, cy + 2, ambientColor, size);
+            if (host._mouse.X >= cx && host._mouse.X < cx + tw + 12 && host._mouse.Y >= cy && host._mouse.Y < cy + 18)
+                host.StatusScr.DrawDescriptionTip(BattleMiniMap.AmbientTip(ambient), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+        }
+
         // 겨누는 중인 어빌리티·아이템 이름 — 창 바로 아래 같은 폭의 칸에(사용자 요청 fa-48, 원본에 없다).
         // 목록이 닫힌 뒤에는 잠깐 뜨는 안내 줄 말고는 무엇을 골랐는지 알 길이 없었다.
         if (AimingName() is { } aiming)

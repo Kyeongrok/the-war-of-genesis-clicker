@@ -114,7 +114,42 @@ internal sealed class BattleMiniMap(GameWindow host)
         _image = img;
     }
 
+    /// <summary>판이 보이는 영역보다 큰가 — 이때만 미니맵이 뜬다(창 · 대사로 잠시 숨는 것과 별개). 아니면 기온은 오른쪽 위 정보 창 옆에 둔다.</summary>
+    internal bool MapLarger => host.Btl.CamMaxX > 0 || host.CamMax > 0;
+
+    private const uint ColdColor = 0xFF80D0FF, HotColor = 0xFFFFA040;
+
+    private static string Signed(int v) => v < 0 ? $"−{-v}" : $"{v}";
+
+    /// <summary>
+    /// 파트1 판 기온 글(「기온 −20」)과 빛깔 — 기온이 기본 80(<see cref="Part1MapObjects.UnitStartHeat"/>)과 다를 때만, 낮으면 하늘색 · 높으면 주황.
+    /// 모드 &gt; 가독성 향상 &gt; 온도 표시를 끄거나 파트2 판이면 null.
+    /// </summary>
+    internal static (string Text, uint Color, int Ambient)? AmbientLabel(GameWindow host)
+    {
+        if (!host._temperatureDisplay || !host._scene.IsPart1 || !host._battleLoaded) return null;
+        int a = host.Btl.Part1Objects.Ambient;
+        if (a == Part1MapObjects.UnitStartHeat) return null;
+        return ($"기온 {Signed(a)}", a < Part1MapObjects.UnitStartHeat ? ColdColor : HotColor, a);
+    }
+
+    /// <summary>기온 글에 마우스를 올렸을 때의 설명.</summary>
+    internal static string AmbientTip(int ambient) =>
+        $"판 기온 {Signed(ambient)} — 캐릭터 몸 온도가 시간 틱마다 2씩 이쪽으로 간다(이 지형의 적응 어빌리티가 있으면 80 쪽)"
+        + "$n몸 온도가 0 아래면 SPD 가 그만큼 깎이고, SPD 가 4 아래로 떨어지면 동결$n160 을 넘으면 틱마다 불 피해$n캐릭터 몸 온도는 상태 창에서 본다";
+
+    /// <summary>이번 틀에 기온 글을 짚었나 — 설명은 미니맵을 다 그린 뒤 맨 위에.</summary>
+    private bool _ambientTip;
+
     internal void Draw()
+    {
+        _ambientTip = false;
+        DrawMap();
+        if (_ambientTip && AmbientLabel(host) is var (_, _, ambient))
+            host.StatusScr.DrawDescriptionTip(AmbientTip(ambient), host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+    }
+
+    private void DrawMap()
     {
         _box = _fold = _body = null;
         if (!Visible || host._map is not { } map) return;
@@ -134,6 +169,19 @@ internal sealed class BattleMiniMap(GameWindow host)
         host.UiFill(fold.X, fold.Y, fold.W, fold.H, over ? 0xFF2A4A8A : 0xFF303030);
         host.UiStroke(fold.X, fold.Y, fold.W, fold.H, 0xFF909090);
         host.UiFill(fold.X + 4, fold.Y + 7, 8, 1, White);
+
+        // 판 기온 — 「미니맵」 글자와 접기 단추 사이(모드 > 가독성 향상 > 온도 표시, 원본에 없음). 좁은 미니맵이면 숫자만.
+        if (AmbientLabel(host) is var (ambientText, ambientColor, ambient))
+        {
+            int left = x + 2 + host.UiGetText("미니맵", 0xFFFFE070, 12).W + 6, right = fold.X - 5;
+            int tw = host.UiGetText(ambientText, ambientColor, 11).W;
+            if (right - tw < left) { ambientText = Signed(ambient); tw = host.UiGetText(ambientText, ambientColor, 11).W; }
+            if (right - tw >= left)
+            {
+                host.UiText(ambientText, right - tw, y + 1, ambientColor, 11);
+                if (host._mouse.X >= right - tw && host._mouse.X < right && host._mouse.Y >= y - 1 && host._mouse.Y < y + 15) _ambientTip = true;
+            }
+        }
         if (Folded) { host.UiFill(fold.X + 7, fold.Y + 4, 1, 8, White); return; }
 
         int ix = x - 4 + Pad, iy = y - 3 + HeaderH + 2;

@@ -242,6 +242,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("밝은 칸 범위 진하게", "눈밭 같은 밝은 칸에서 범위를 진하게(원본에 없음)", MenuBrightCellFill, host._brightCellFill),
         ("범위 테두리", "이동 · 공격 범위 바깥에 선을 두른다(원본에 없음)", MenuRangeEdges, host._rangeEdges),
         ("얼음 · 땅불 칸 표시", "파트1 얼음 덩이 · 땅불 칸에 테두리(원본에 없음)", MenuPart1FieldMarks, host._part1FieldMarks),
+        // 온도 표시 — 빙원 판에서 캐릭터가 얼어붙는데 기온 · 몸 온도가 안 보인다는 요청. 원본에 없고 기본 켬.
+        ("온도 표시", "파트1 기온 · 몸 온도 · 깎인 SPD(원본에 없음)", MenuTemperatureDisplay, host._temperatureDisplay),
     ] : tab == TabLab ?
     [
         // 실험 탭 — 아직 다듬는 중인 것. 기본은 모두 끔.

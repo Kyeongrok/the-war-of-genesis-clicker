@@ -50,6 +50,7 @@ namespace DuelDx;
 /// <param name="BrightCellFill">모드 &gt; 가독성 향상 &gt; 밝은 칸 범위 진하게 — 눈밭처럼 바탕이 밝은 칸(맵 그림 평균 휘도가 문턱 이상)은 이동 · 사거리 · 효과 범위를 원본의 가산 대신 진한 반투명 색으로 칠할지(원본에 없음, 기본 켬 — BattleScene.PaintCell).</param>
 /// <param name="RangeEdges">모드 &gt; 가독성 향상 &gt; 범위 테두리 — 이동 범위(파랑) · 사거리(주황)의 바깥 가장자리에 2px 선과 1px 어두운 외곽선을 두를지(원본에 없음, 기본 켬 — BattleScene.DrawRangeEdges).</param>
 /// <param name="Part1FieldMarks">모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시 — 파트1 프로즌 아이스 얼음 덩이가 남은 칸에 하늘색 테두리와 살짝 어두운 바닥, 땅불 칸에 주황 테두리를 그릴지(원본에 없음, 기본 켬 — Part1MapObjects.DrawLingering).</param>
+/// <param name="TemperatureDisplay">모드 &gt; 가독성 향상 &gt; 온도 표시 — 파트1 판의 기온(기본 80 과 다를 때, 미니맵 머리 줄 · 미니맵이 없으면 오른쪽 위 정보 창 옆)과 파트1 상태 창의 몸 온도 · 그로 깎인 SPD 를 보일지(원본에 없음, 기본 켬 — BattleMiniMap.DrawAmbient · Part1StatusPanel).</param>
 internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, bool ShowGauges = false, int ZoomPercent = 0,
                                     int ViewW = 1280, int ViewH = 960, bool ShowHints = true, bool ShowLevelUp = true,
                                     bool DropExpOnJobChange = false, bool ShowStatusBar = false, int GameSpeed = 100,
@@ -66,7 +67,8 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool QuietFoeCamera = true, int Part1VoiceVolume = 80, bool RightClickSkipsTalk = true, bool Part1TalkWaits = false,
                                     bool OpeningMovie = false, int Part1TalkVoiceVolume = 100, bool CoverGhost = false,
                                     bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true,
-                                    bool BrightCellFill = true, bool RangeEdges = true, bool Part1FieldMarks = true)
+                                    bool BrightCellFill = true, bool RangeEdges = true, bool Part1FieldMarks = true,
+                                    bool TemperatureDisplay = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

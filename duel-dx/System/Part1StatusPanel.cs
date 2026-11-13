@@ -193,6 +193,32 @@ internal sealed class Part1StatusPanel(GameWindow host)
         ["Wtp"] = "WTP — 차례가 오는 간격(틱) — 작을수록 자주 움직인다",
     };
 
+    /// <summary>몸 온도 줄의 높이 — 줄이 있으면 패널이 이만큼 길어진다.</summary>
+    private const int HeatRowH = 16;
+
+    private static string Signed(int v) => v < 0 ? $"−{-v}" : $"{v}";
+
+    /// <summary>
+    /// 몸 온도 줄(글 · 빛깔 · 짚었을 때 설명) — 몸 온도(<see cref="Part1MapObjects.UnitHeat"/>)가 처음 값 80 이면 null.
+    /// 0 아래면 하늘색으로 깎인 SPD(<see cref="BattleScene.Part1Spd"/> 온도 빼기 전 − 뒤)와 남은 이동 SPD, 160 을 넘으면 주황으로 불 피해, 그 사이는 흐리게.
+    /// 모드 &gt; 가독성 향상 &gt; 온도 표시를 끄거나 파트1 판이 아니면 null.
+    /// </summary>
+    private (string Text, uint Color, string Tip)? HeatLine(UnitState u)
+    {
+        if (!host._temperatureDisplay || !host._battleLoaded || !host._scene.IsPart1 || Array.IndexOf(host._units, u) < 0) return null;
+        var btl = host.Btl;
+        int t = btl.Part1Objects.UnitHeat(u);
+        if (t == Part1MapObjects.UnitStartHeat) return null;
+        int ambient = btl.Part1Objects.Ambient;
+        int before = btl.Part1Spd(u, heat: false), after = btl.Part1Spd(u);
+        string tip = $"몸 온도 {Signed(t)} — 시간 틱마다 판 기온({Signed(ambient)}) 쪽으로 2씩 간다(이 지형의 적응 어빌리티가 있으면 80 쪽)"
+                     + $"$n0 아래면 SPD 가 그만큼 깎이고(지금 이동 SPD {before} → {after}), SPD 가 4 아래로 떨어지면 동결"
+                     + "$n160 을 넘으면 틱마다 불 피해(가끔 컨디션 이상)";
+        if (t < 0) return ($"몸 온도 {Signed(t)} · SPD −{before - after} → {after}", 0xFF80D0FF, tip);
+        if (t > Part1MapObjects.IgniteHeat) return ($"몸 온도 {t} · 틱마다 불 피해", 0xFFFFA040, tip);
+        return ($"몸 온도 {t}", 0xFF8890A0, tip);
+    }
+
     /// <summary>파트1 판의 파트1 인물이면 이 창을 쓴다.</summary>
     internal bool Applies(UnitState u) => host._battleLoaded && host._scene.IsPart1 && u.ChrCode >= Part1Game.ChrBase && !host.Mos._mosesOpen;
 
@@ -210,10 +236,11 @@ internal sealed class Part1StatusPanel(GameWindow host)
         ForgetChoicesUnlessFor(u.ChrCode);
         var (fx, fy) = host.Btl.UnitFoot(unit);   // 자리는 판에 선 탈것
         int x = Math.Clamp(fx - 220, host._camX + 4, host._camX + host.ViewWidth - W - ListW - 8);
-        int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - H - 4);
+        int h = H + (HeatLine(unit) != null ? HeatRowH : 0);
+        int y = Math.Clamp(fy - 80 - 40, host._camY + 4, host._camY + host.ViewHeight - h - 4);
         _layer = false;
-        DrawAt(fighter, u.Hp, u.MaxHp, unit.Soul, x, y, host.StatusScr._statusRightHits, host.Btl.Part1Effects(unit));
-        _panel = (x, y, W + 4 + ListW, H);
+        DrawAt(fighter, u.Hp, u.MaxHp, unit.Soul, x, y, host.StatusScr._statusRightHits, host.Btl.Part1Effects(unit), unit);
+        _panel = (x, y, W + 4 + ListW, h);
     }
 
     // ── 전투 밖(챕터 지도 상태 창의 얼굴) ─────────────────────────────────────
@@ -331,9 +358,9 @@ internal sealed class Part1StatusPanel(GameWindow host)
 
         int y = y0 + StripH + StripGap;
         int maxHp = Math.Max(1, chr.MaxHp);
-        if (unit != null) DrawAt(fighter, unit.Hp, unit.MaxHp, unit.Soul, x, y, _offRightHits);
+        if (unit != null) DrawAt(fighter, unit.Hp, unit.MaxHp, unit.Soul, x, y, _offRightHits, heatOf: unit);
         else DrawAt(fighter, maxHp, maxHp, 40, x, y, _offRightHits);
-        _panel = (x, y0, total, StripH + StripGap + Math.Max(H, _listH));
+        _panel = (x, y0, total, StripH + StripGap + Math.Max(H + (unit != null && HeatLine(unit) != null ? HeatRowH : 0), _listH));
     }
 
     /// <summary>바탕 — 전투는 그림 층(층 바탕은 판에 그린 얼굴을 덮는다), 전투 밖은 그림도 층에 그리므로 층에.</summary>
@@ -356,14 +383,16 @@ internal sealed class Part1StatusPanel(GameWindow host)
     private int _listH;
 
     private void DrawAt(Part1Fighter fighter, int hp, int maxHp, int soul, int x, int y, List<(int X, int Y, int W, int H, Action Click)> rightHits,
-                        List<(string Name, bool Bad)>? effects = null)
+                        List<(string Name, bool Bad)>? effects = null, UnitState? heatOf = null)
     {
         var chr = fighter.Chr;
         _jobs ??= Part1Job.LoadAll();
         _abilities ??= Part1Ability.LoadAll();
         _items ??= Part1Item.LoadAll();
-        Bg(x, y, W, H, 0xFF101828);   // 바탕은 그림 층에 — UI 층(UiFill)은 얼굴 그림을 덮는다
-        host.UiStroke(x, y, W, H, 0xFF8098C8);
+        var heat = heatOf != null ? HeatLine(heatOf) : null;
+        int panelH = H + (heat != null ? HeatRowH : 0);
+        Bg(x, y, W, panelH, 0xFF101828);   // 바탕은 그림 층에 — UI 층(UiFill)은 얼굴 그림을 덮는다
+        host.UiStroke(x, y, W, panelH, 0xFF8098C8);
 
         if (host.Part1.FaceObs(chr) is > 0 and var faceObs)
         {
@@ -411,6 +440,15 @@ internal sealed class Part1StatusPanel(GameWindow host)
                 hoverStat = StatTips.GetValueOrDefault(stats[k].Label);
         }
         row += 3 * 17 + 8;
+
+        // 몸 온도 — 능력치 바로 아래 한 줄(모드 > 가독성 향상 > 온도 표시, 원본에 없음). 80 이면 줄을 안 둔다.
+        if (heat is var (heatText, heatColor, heatTip))
+        {
+            host.UiText(heatText, x + 10, row - 4, heatColor, 11);
+            if (hoverStat == null && host._mouse.X >= x + 6 && host._mouse.X < x + W - 6 && host._mouse.Y >= row - 5 && host._mouse.Y < row + 11)
+                hoverStat = heatTip;
+            row += HeatRowH;
+        }
 
         // 장비 다섯 칸 — 줄마다 아이템 그림(Obs 0012 모션 = 아이템 +0x45) · 칸 이름 · 아이템 이름. 누르면 낄 것 목록, 짚으면 아이템 설명.
         Part1Item? hoverItem = null;

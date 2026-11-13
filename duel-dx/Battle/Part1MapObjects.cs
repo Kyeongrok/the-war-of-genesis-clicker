@@ -535,10 +535,10 @@ internal sealed class Part1MapObjects(GameWindow host)
     /// <summary>공격 서술 가운데 물체가 보는 둘 — +8 세기 · +3 속성(1 화염 · 2 빙한).</summary>
     internal readonly record struct Hit(int Power, int Element);
 
-    private const int MinHeat = -60, MaxHeat = 200, IgniteHeat = 160;
+    internal const int MinHeat = -60, MaxHeat = 200, IgniteHeat = 160;
 
     /// <summary>기온 — 머리 낱말 6(+0xb96e, 로더 <c>0x1002cbe5</c>). 물체 · 유닛 온도가 이쪽으로 간다. 이벤트 행동 102 가 바꾼다(<see cref="SetAmbient"/>).</summary>
-    private int Ambient => _ambient ?? host._scene.Part1Ambient;
+    internal int Ambient => _ambient ?? host._scene.Part1Ambient;
 
     private int? _ambient;
 
