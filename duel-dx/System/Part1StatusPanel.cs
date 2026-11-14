@@ -113,6 +113,7 @@ internal sealed class Part1StatusPanel(GameWindow host)
         var growth = host.Part1.GrowthOf(code, chr.Experience);
         growth.Job = job;
         if (host._dropJobExp) growth.Experience = growth.Experience / 100 * 100;
+        UnequipUnfit(code, raw);
         host._db?.ForgetPart1Characters();
         host.Btl.Part1.Forget(code);
         host.Btl.RefreshPart1Abilities(code);   // 전투 안에서 바꾸면 그 판의 기술 목록 · 정보 창도 바로 새 직업 것으로(사용자 보고: 록슬리 과학자로 돌아왔는데 화이어 애로우가 없다)
@@ -121,6 +122,28 @@ internal sealed class Part1StatusPanel(GameWindow host)
         bool batchim = name.Length > 0 && name[^1] is >= '가' and <= '힣' && (name[^1] - '가') % 28 is not (0 or 8);
         host.Toast($"{name}{(batchim ? "으로" : "로")} 전직{(host._dropJobExp ? " — 이번 레벨의 경험치는 없어집니다" : "")}");
         _onChange?.Invoke();
+    }
+
+    /// <summary>
+    /// 전직한 뒤 새 직업이 못 끼는 장비를 가방으로 돌린다 — 원본 전직 <c>0x1002e247</c> 의 「못 끼는 장비를 가방으로 돌린다」
+    /// (분석-파트1-전투 C절 전직, 경고 글 0x1011c20c 「장비하고 있던 아이템이 해제될 수도 있습니다」). 칸 0 부터 차례로 보므로
+    /// 첫 손 무기가 빠지면 그 무기에 딸린 방패 · 스코프 · 둘째 손 칼도 함께 빠진다.
+    /// 전에는 직업만 바꿔 슈미터의 쌍검이 화랑으로 바꾼 뒤에도 끼워져 있었다(버그 리포트 #108).
+    /// </summary>
+    private void UnequipUnfit(int code, Part1Chr raw)
+    {
+        var chr = host.Part1.Apply(raw);   // 직업은 이미 새것
+        _items ??= Part1Item.LoadAll();
+        var slots = (int[])chr.Equipment.Clone();
+        bool changed = false;
+        for (int slot = 0; slot < slots.Length; slot++)
+        {
+            if (slots[slot] == 0 || Part1Item.ById(_items, slots[slot]) is not { } item || item.CanEquip(chr, slot, slots, _items)) continue;
+            host.Part1.Bag.Add(slots[slot]);
+            slots[slot] = 0;
+            changed = true;
+        }
+        if (changed) host.Part1.Equipped[code] = slots;
     }
 
     /// <summary>떠 있는 장비 목록(슬롯을 누르면 그 칸에 낄 수 있는 가방의 아이템이 뜬다 — 원본 0x100925f0, 사용자 화면) — 0 은 「벗기」.</summary>
