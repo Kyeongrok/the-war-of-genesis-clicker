@@ -117,9 +117,10 @@ internal sealed partial class GamePad
                 return list;
             }
             var rows = settings.Rows();
+            var tops = settings.RowTops(rows, top);
             for (int i = 0; i < rows.Length; i++)
             {
-                int ry = top + i * SettingsScreen.RowH;
+                int ry = tops[i];
                 if (rows[i].Step != null) { list.Add((px + 170, ry, 24, 24)); list.Add((px + 170 + 24 + 184, ry, 24, 24)); }
                 else if (rows[i].Toggle != null) list.Add((px, ry, 200, 24));
                 else if (rows[i].Press != null) list.Add((px, ry, 200, 26));

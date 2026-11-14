@@ -873,6 +873,10 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_KEYUP:
                 Btl._heldMoveKeys.Remove((int)wParam);
                 return IntPtr.Zero;
+            // 단축키 설정 창은 메뉴 막대 창들과 같이 맨 위에 그리므로 휠도 먼저 받는다 — 전에는 파트1 연대표 · 모드 창이 먼저 먹었다(버그 리포트 #107).
+            case Win32.WM_MOUSEWHEEL when _keysOpen:
+                ScrollKeys(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 단축키 목록을 굴린다
+                return IntPtr.Zero;
             // 모드 창 탭 내용을 굴린다(menu-131) — 모드 창은 클릭도 뒤 화면보다 먼저 받는다. 그 위에 그리는 도구 창이 떠 있으면 그쪽이 받는다.
             case Win32.WM_MOUSEWHEEL when TuningScr._tuningOpen && !NotesScr.Open && !SettingsScr._open && !StatsScr._open && !SkillBookScr._open
                                           && !ItemBookScr._open && !LegionEditScr._open && !CharEditScr._open && _partyTable is not { _open: true }:
@@ -883,9 +887,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when EpisodesScr._episodesOpen:
                 EpisodesScr.ScrollEpisodes(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 연대표를 굴린다
-                return IntPtr.Zero;
-            case Win32.WM_MOUSEWHEEL when _keysOpen:
-                ScrollKeys(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 단축키 목록을 굴린다
                 return IntPtr.Zero;
             case Win32.WM_MOUSEWHEEL when ProgressScr._progressOpen:
                 ProgressScr._progressScroll -= 3 * (short)(((long)wParam >> 16) & 0xFFFF) / 120;   // 진행 상태 창이 떠 있으면 그 목록을 굴린다
@@ -1211,6 +1212,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (NotesScr.OnClick(bx, by)) return;          // 릴리즈 노트(업데이트 뒤 처음 켰을 때)
         if (ConsentScr.OnClick(bx, by)) return;        // 「익명 통계를 보내도 될까요?」(처음 한 번)
         if (SettingsScr.OnClick(bx, by)) return;       // 설정 창
+        if (OnKeysClick(bx, by)) return;               // 단축키 설정 창(설정 > 키보드) — 전에는 타이틀 · 모세스 · 필드가 먼저 클릭을 먹었다(버그 리포트 #107)
         if (TimedEditScr.OnClick(bx, by)) return;      // 개발 > 타이밍 어택 수정 창
         if (DevScr.OnClick(bx, by)) return;            // 개발 창
         if (StatsScr.OnClick(bx, by)) return;          // 도구 > 전투 통계
@@ -1244,7 +1246,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (ChaptersScr.OnChaptersClick(bx, by)) return;
         if (Mos.OnMosesClick(bx, by)) return;
         // 위에 그려지는 창이 먼저 받는다 — 전에는 아이템 목록이 시스템 메뉴·Status 보다 먼저 클릭을 먹었다(ba-20 G2).
-        if (OnKeysClick(bx, by) || Sys.OnSystemClick(bx, by) || StatusScr.OnStatusClick(bx, by)) return;
+        if (Sys.OnSystemClick(bx, by) || StatusScr.OnStatusClick(bx, by)) return;
         if (Btl.OnItemMenuClick(bx, by)) return;
         if (Btl.OnRingClick(bx, by) || Btl.OnAbilityMenuClick(bx, by)) return;
 
@@ -1574,7 +1576,6 @@ internal sealed unsafe partial class GameWindow : IDisposable
         Btl.DrawUnitInfo();
         if (!Mos._mosesOpen) Sys.DrawSystem();
         Btl.DrawDeployPanel();
-        DrawKeysPanel();
         Btl.DrawLevelUp();
         PerfMark("창");
         double perfA = PerfLog ? _perf.Elapsed.TotalMilliseconds : 0;
@@ -1602,6 +1603,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         _jobTree?.Draw();
         _partyTable?.Draw();
         SettingsScr.Draw();
+        DrawKeysPanel();                       // 설정 > 키보드의 단축키 설정 창 — 전에는 전투 판 차례에 그려 타이틀 · 모세스 · 필드 그림에 묻혔다(버그 리포트 #107)
         DevScr.Draw();
         TimedEditScr.Draw();
         ConsentScr.Draw();
