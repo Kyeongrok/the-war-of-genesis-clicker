@@ -633,6 +633,8 @@ internal sealed unsafe partial class BattleScene
     internal int CellBlendWeight(int col, int row, uint tint)
     {
         if (!host.BoardIsMap || host._map is not { } map) return 0;
+        // 판 밖 칸은 표에 자리가 없다 — 전에는 그대로 찾아 IndexOutOfRangeException 으로 게임이 꺼졌다(버그 리포트 #116).
+        if ((uint)col >= (uint)host.Cols || (uint)row >= (uint)host.Rows) return 0;
         int n = host.Cols * host.Rows;
         if (!ReferenceEquals(_cellBlendMap, map)) { _cellBlend.Clear(); _cellBlendMap = map; }
         if (!_cellBlend.TryGetValue(tint, out var table) || table.Length != n)
@@ -727,6 +729,7 @@ internal sealed unsafe partial class BattleScene
         // 화면에 안 보이는 칸은 안 칠한다 — 판 전체가 한 장의 그림이라 전에는 카메라 밖 칸까지 틀마다 다 칠했다. 넓은 맵에서 TP 가 많은
         // 인물의 차례면 이동 · 사거리 칸이 수천이라 한 틀에 12ms 를 먹어 내 차례만 되면 느려졌다(사용자 보고 fa-60). 비탈로 솟는 몫만큼 위아래로 넉넉히 본다.
         if (col * TileW > host._camX + host.ViewWidth || (col + 1) * TileW < host._camX) return;
+        if ((uint)col >= (uint)host.Cols || (uint)row >= (uint)host.Rows) return;   // 판 밖 칸은 안 칠한다(버그 리포트 #116)
         int cellTop = host.CellTop(col, row);
         if (cellTop > host._camY + host.ViewHeight + 2 * TileH || cellTop + TileH < host._camY - 2 * TileH) return;
         int bright = CellBrightness(col, row);

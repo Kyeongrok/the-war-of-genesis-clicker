@@ -51,12 +51,14 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     private readonly List<Obj?> _objects = [];
     private DemoScene? _for;
+    private object? _forMap;   // 판을 세운 맵 — 같은 장면이라도 맵을 다시 읽었으면 칸의 기운 · 물체를 새로(버그 리포트 #116)
     private ZMode _zMode = ZMode.Keep;
 
     /// <summary>판의 물체를 처음 상태로(동작 0) — 판을 세울 때 · RESTART(<see cref="BattleScene.LoadEvents"/>).</summary>
     internal void Reset()
     {
         _for = host._scene;
+        _forMap = host._map;
         _ambient = null;
         _objects.Clear();
         _lingering.Clear();
@@ -83,7 +85,7 @@ internal sealed class Part1MapObjects(GameWindow host)
 
     private void Ensure()
     {
-        if (!ReferenceEquals(_for, host._scene)) Reset();
+        if (!ReferenceEquals(_for, host._scene) || !ReferenceEquals(_forMap, host._map)) Reset();
     }
 
     // ── 상자 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -846,8 +848,11 @@ internal sealed class Part1MapObjects(GameWindow host)
         Linger(col, row, life, 11, motion);
     }
 
+    private bool OnBoard(int col, int row) => (uint)col < (uint)host.Cols && (uint)row < (uint)host.Rows;
+
     private void Linger(int col, int row, int life, int notice, int motion)
     {
+        if (!OnBoard(col, row)) return;   // 판 밖 칸에는 안 놓는다(버그 리포트 #116)
         int tick = host.Btl._tick;
         var l = new Lingering(col, row, tick, tick + life, notice, motion) { DrawFrom = host._lastTime };
         _lingering.Add(l);
@@ -927,12 +932,13 @@ internal sealed class Part1MapObjects(GameWindow host)
     {
         Retire();
         double now = host._lastTime;
-        bool marks = host._part1FieldMarks;
+        // 판이 이 맵이 아닐 때(타이틀 · 챕터 지도가 판을 제 크기로 갈았을 때)는 칸을 칠하지 않는다 — 칸 번호가 판과 안 맞는다(버그 리포트 #116).
+        bool marks = host._part1FieldMarks && host.BoardIsMap;
         foreach (var l in _lingering)
         {
             int tick = (int)((now - l.DrawFrom) * TicksPerSecond);
             // 모드 > 가독성 향상 > 얼음 · 땅불 칸 표시(원본에 없음) — 칸 바닥을 하늘색 · 주황으로 물들이고 덩이 · 불을 얹는다(흰 눈밭에서 흰 덩이가 묻혔다).
-            if (marks && l is { Notice: 10 or 11, Out: false }) host.Btl.PaintCell(l.Col, l.Row, l.Notice == 11 ? IceMarkLayer : FireMarkLayer, mark: true);
+            if (marks && l is { Notice: 10 or 11, Out: false } && OnBoard(l.Col, l.Row)) host.Btl.PaintCell(l.Col, l.Row, l.Notice == 11 ? IceMarkLayer : FireMarkLayer, mark: true);
             switch (l.Notice)
             {
                 case 11: DrawCellObs(118, l.Motion + 3, tick, l.Col, l.Row, loop: true); break;
@@ -1773,6 +1779,7 @@ internal sealed class Part1MapObjects(GameWindow host)
         {
             int notice = saved[at + 2], motion = saved[at + 3];
             if (notice is not (10 or 11 or AshNotice)) continue;
+            if (!OnBoard(saved[at], saved[at + 1])) continue;   // 맵과 안 맞는 세이브 칸은 버린다(버그 리포트 #116)
             if (motion is < 0 or > 2) motion = host._rng.Next(3);   // 2026-10-26 앞 세이브의 땅불은 모션이 없었다(−1)
             var l = new Lingering(saved[at], saved[at + 1], tick - saved[at + 4], tick + saved[at + 5], notice, motion) { DrawFrom = host._lastTime };
             if (notice == AshNotice) l.DrawFrom -= AshIntro(motion) / TicksPerSecond;   // 재는 앞(23 r+3 → 96 r)을 다시 안 그린다
