@@ -1671,7 +1671,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                             $"part1 strike {w.Id} → unit {ti} chr {host._units[ti].ChrCode} hp {host._units[ti].Hp} work {hitWork.Id} dmg {hitWork.IsDamage}{(host.Part1Ab.TileStrike ? " tile" : "")} at {host._lastTime:0.00}" + Environment.NewLine);
                     if (host.Part1Ab.ChainStruck >= 2) _timedPercent = 100;   // 연속 공격으로 여러 번 치면 타마다 보통 피해
                     // 칸마다 치는 기술은 큰 유닛이 차지한 다른 칸에서 또 맞는다(Part1Skill.HitsPerTile — 원본 0x10076a80 → 0x1008f1a0, 버그 리포트 #78).
-                    if (struck.Add(ti) || each || host.Part1Ab.TileStrike) ApplyWork(a, hitWork, host._units[ti], dying);
+                    // 칼질 기본 공격이 원본 모션의 타격 키마다 치면(마르자나 · 무카파 · 발라 — 버그 리포트 #115) 같은 대상을 또 맞혀도 거르지 않는다.
+                    if (struck.Add(ti) || each || host.Part1Ab.TileStrike || host.Part1Ab.SplitStruck >= 2) ApplyWork(a, hitWork, host._units[ti], dying);
                 }
                 foreach (bool _ in part1Basic > 0 ? host.Part1Ab.BasicRoutine(part1Basic, a, targets, cells, (col, row), Part1Hit)
                                                   : host.Part1Ab.Routine(w, a, targets, cells, (col, row), Part1Hit, proc: _part1ProcRunning))

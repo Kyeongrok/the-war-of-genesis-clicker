@@ -203,6 +203,16 @@ internal sealed partial class Part1Skill
         var (len1, at) = BasicSwing(TargetPoint(targets, aim), act1);
         // 피해는 타격 키에서 — 큰 유닛은 키가 칠한 칸 가운데 차지한 칸 수만큼(UseKeyLine, 버그 리포트 #86).
         UseKeyLine(act1);
+        // 원본은 타격 키마다 그 키의 식으로 친다(0x10036130). 마르자나 · 무카파 · 발라의 칼공격 동작 2 는 키가 둘(식 0 무기1 · 식 29 무기2)이라
+        // 두 번 친다 — 다시 싼 그림은 기본 공격 키를 하나로 잘라 옮겨 한 번만 쳤다(버그 리포트 #115). 첫 키는 지금 셈(Attack.dat) 그대로.
+        int dir1 = _user.Facing switch { Facing.Up => 0, Facing.Down => 2, _ => 1 };
+        if (_user.Data is { SpriteId: > Part1Game.ObsBase } d1
+            && Part1Game.StrikeKeyList(d1.SpriteId - Part1Game.ObsBase, act1, dir1) is { Count: >= 2 } raw)
+        {
+            KeyHits([.. raw.Select(k => k.Tick)], [null, .. raw.Skip(1).Select(k => (int?)k.Selector)], targets, hit);
+            SplitStruck = raw.Count;
+            return Math.Max(len1, raw[^1].Tick) + 1;
+        }
         foreach (int ti in targets) HitAt(at, ti, hit);
         return Math.Max(len1, at) + 1;
     }

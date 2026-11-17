@@ -489,7 +489,8 @@ internal sealed class Part1Rules(Func<int, Part1Chr?> load)
         var attack = AttackOf(w) ?? Part1Attack.ById(_attacks ??= Part1Attack.LoadAll(), BasicAttackOf(fa));
         int selector = attack?.Formula ?? 0;
         // 연 · 참 · 풍아열공참의 타격 키 한 타 — 키에 적힌 식으로 친다(KeySelector, 원본 0x10036130).
-        bool keyHit = KeySelector is not null && attack != null && Part1Skill.StrikesWithKeys(w.Id);
+        // 기본 공격(AttackOf 가 없음)도 칼질 모션의 둘째 키부터는 키의 식으로 친다(Part1Skill.BasicMelee, 버그 리포트 #115).
+        bool keyHit = KeySelector is not null && attack != null && (Part1Skill.StrikesWithKeys(w.Id) || AttackOf(w) == null);
         if (keyHit) selector = KeySelector!.Value;
         if (selector is >= 10 and <= 28) return null;
         // 썬 라이트(선택자 8)가 같은 편에 닿으면 회복 갈래(6)다 — 명중 · 방어를 안 굴리고 결과 1(회복), 양은 HealAmount 가 낸다.

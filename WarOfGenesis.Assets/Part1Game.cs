@@ -592,6 +592,23 @@ public static class Part1Game
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
     }
 
+    /// <summary>
+    /// 파트1 동작 <paramref name="part1Action"/>(모션 = 동작 × 3 + <paramref name="dir"/>)의 타격 키(종류 5)마다 (틱, 세기 식) — 틱 순.
+    /// 원본 키 처리 <c>0x10036130</c> 은 키마다 그 식 · 명중 100 으로 따로 친다. 칼질 기본 공격(칼공격 1 · 동작 2)에 키가 둘인 인물은
+    /// 살라딘(Obs 196) · 마르자나(352) · 무카파(682) · 발라(674)이고 둘째 키는 식 29(무기2 — 없으면 맨손 (0 + 10)·STR)다(버그 리포트 #115).
+    /// 파트1 폴더가 없거나 키가 없으면 null.
+    /// </summary>
+    public static List<(int Tick, int Selector)>? StrikeKeyList(int part1Obs, int part1Action, int dir)
+    {
+        if (Root == null || !BodySprites().Contains(part1Obs) || Read("Obss", $"{part1Obs:D4}.obs") is not { } p1) return null;
+        try
+        {
+            var keys = RawMotion(p1, part1Action * 3 + dir)?.Where(k => k[2] == 5).OrderBy(k => k[0]).Select(k => ((int)k[0], (int)k[3])).ToList();
+            return keys is { Count: > 0 } ? keys : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or InvalidDataException) { return null; }
+    }
+
     /// <summary>파트1 물들이기 14(회색 스크린)를 파트2 물들이기 방식 번호로 둘 자리 — 파트2 방식은 1~9 라 겹치지 않는다.</summary>
     public const int ScreenTint = 14;
 
