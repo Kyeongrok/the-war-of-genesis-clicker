@@ -252,7 +252,13 @@ internal sealed unsafe partial class BattleScene
         {
             // 항목 위에서 오른쪽 단추를 누르고 있는 동안 설명(TXR 1375~1380, 0x1003fc80 모달 · 떼면 0x10042ac0) — 항목 밖 우클릭만 링 취소(0x100e1540). ba-14 U1.
             int item = RingItemAt(bx, by);
-            if (item >= 0 && _ringPhase == RingPhase.Idle) { _ringHelp = Items[item].Command == RingCommand.March ? MarchHelp : host._db?.T((ushort)(1375 + item)); return; }
+            if (item >= 0 && _ringPhase == RingPhase.Idle)
+            {
+                _ringHelp = Items[item].Command == RingCommand.March ? MarchHelp
+                    : Items[item].Command == RingCommand.Rest && Part1RestStance(_ringUnit) is > 0 and var stance ? Part1StanceHelp(stance)
+                    : host._db?.T((ushort)(1375 + item));
+                return;
+            }
             CancelRing();
             return;
         }
@@ -331,7 +337,10 @@ internal sealed unsafe partial class BattleScene
         switch (command)
         {
             case RingCommand.Status: host._statusUnit = unit; break;
-            case RingCommand.Rest: host.Toast($"{host.UnitName(unit)} 휴식"); Rest(unit); break;
+            case RingCommand.Rest:
+                host.Toast(Part1RestStance(unit) is > 0 and var stance ? $"{host.UnitName(unit)} {Part1Rules.StanceName(stance)}" : $"{host.UnitName(unit)} 휴식");
+                Rest(unit);
+                break;
             case RingCommand.March: March(unit); break;
             case RingCommand.Attack: BeginAttackTargeting(); break;
             case RingCommand.Ability:
@@ -349,6 +358,17 @@ internal sealed unsafe partial class BattleScene
                 break;
         }
     }
+
+    /// <summary>파트1 자세 단추의 설명(오른쪽 단추를 누르고 있는 동안) — 분석-파트1-전투 32절의 효과 표. 원본에 없는 글이다.</summary>
+    private static string Part1StanceHelp(int stance) => stance switch
+    {
+        76 => "방어: 쉬면서 방어 자세를 취한다(HP 1/5 회복). 다음 차례까지 무기 공격을 막는 굴림이 커진다.",
+        77 => "회피: 쉬면서 회피 자세를 취한다(HP 1/5 회복). 다음 차례까지 무기 공격을 피하는 굴림이 커진다.",
+        78 => "반격: 쉬면서 반격 자세를 취한다(HP 1/5 회복). 다음 차례까지 맞으면 사거리 안의 상대를 되받아친다.",
+        79 => "역습: 쉬면서 역습 자세를 취한다(HP 1/5 회복). 다음 차례까지 무기 공격을 피하는 굴림을 하고, 피하면 사거리 안의 상대를 되받아친다.",
+        80 => "완전방어: 쉬면서 완전방어 자세를 취한다(HP 1/5 회복). 다음 차례까지 무기 공격을 늘 막고, 마법이 아니면 방어가 1.5배.",
+        _ => "",
+    };
 
     internal void DrawRing()
     {
@@ -379,8 +399,24 @@ internal sealed unsafe partial class BattleScene
                 var (_, w, h) = host.GetText(shortName, enabled ? White : DimGray);
                 host.DrawText(shortName, x - w / 2, y - h / 2, enabled ? White : DimGray);
             }
+            // 파트1 휴식 단추 — 쉬면 자세가 켜질 때는 원본 턴 메뉴처럼 「휴식」 대신 그 자세 이름(방어 · 회피 · 반격 · 역습 · 완전방어)을 단다(0x10090719~, 버그 리포트 #112).
+            // 원본 단추는 글이 늘 보이므로 마우스를 안 올려도 쓴다. 이름표 그림(0452)엔 이 글이 없어 글로 쓴다.
+            if (command == RingCommand.Rest && Part1RestStance(_ringUnit) is > 0 and var stance)
+            {
+                string name = Part1Rules.StanceName(stance);
+                if (host._hiResUi && !host.BattleCovered)
+                {
+                    host.Hi.DrawText(name, x - 22, y + 9, 0xE0000000, 14);
+                    host.Hi.DrawText(name, x - 23, y + 8, hover ? White : 0xFFB0E0FF, 14);
+                }
+                else
+                {
+                    host.DrawText(name, x - 22, y + 13, 0xE0000000, 15);
+                    host.DrawText(name, x - 23, y + 12, hover ? White : 0xFFB0E0FF, 15);
+                }
+            }
             // 새 UI 는 이름표 그림(점 글씨, Obs 0452) 대신 같은 자리에 글로 쓴다(menu-57) — 검은 그림자 한 겹.
-            if (hover && host._hiResUi && !host.BattleCovered)
+            else if (hover && host._hiResUi && !host.BattleCovered)
             {
                 host.Hi.DrawText(hoverName, x - 22, y + 9, 0xE0000000, 14);
                 host.Hi.DrawText(hoverName, x - 23, y + 8, White, 14);

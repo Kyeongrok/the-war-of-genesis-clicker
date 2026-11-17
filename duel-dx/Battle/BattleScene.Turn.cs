@@ -913,12 +913,29 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         u.OriginRow = u.Row;
     }
 
+    /// <summary>파트1 — 차례 시작 칸 그대로이고 아직 아무것도 안 했나(<c>0x1003e5c0</c>~: 이동 · 행동이 다 남고 칸이 같다).</summary>
+    private bool Part1Stayed(UnitState u) => u.Col == u.OriginCol && u.Row == u.OriginRow && _part1ActedBy != u;
+
+    /// <summary>
+    /// 지금 쉬면 켜질 파트1 자세(어빌리티 76 방어 · 77 회피 · 78 반격 · 79 역습 · 80 완전방어), 없으면 0 — 원본 휴식 <c>0x1003e6ca</c>~:
+    /// 안 움직였고 아무것도 안 했으며, 대장(<c>+0x1be</c>)도 탄 이(<c>+0x1bf</c>)도 아니면 가진 것 가운데 <b>번호가 가장 작은 하나</b>(<see cref="Part1Rules.StanceAbility"/>).
+    /// 원본 턴 메뉴(<c>0x10090719</c>~<c>0x1009085e</c>)는 같은 조건으로 「휴식」 단추 글을 이 자세 이름으로 바꾼다 — 링 단추 글 · 쉴 때 알림이 이것을 본다(버그 리포트 #112).
+    /// </summary>
+    internal int Part1RestStance(int index)
+    {
+        if (!host._scene.IsPart1 || index < 0 || index >= host._units.Length) return 0;
+        var u = host._units[index];
+        if (!Part1Stayed(u) || FollowersOf(index).Count > 0 || _part1Riders.ContainsKey(u) || _part1Riders.ContainsValue(u)) return 0;
+        return Part1.StanceAbility(u);
+    }
+
     /// <summary>휴식 <c>0x1007a790</c>: (최대 HP − 현재 HP) × 남은 TP / 최대 TP × Num[35]% 를 채우고 남은 TP 를 버린다.</summary>
     internal void Rest(int index)
     {
         var u = host._units[index];
         // 파트1 — 차례 시작 칸 그대로이고 아직 아무것도 안 했나(0x1003e5c0~: 이동 · 행동이 다 남고 칸이 같다). CommitMove 가 시작 칸을 옮기기 전에 본다.
-        bool part1Stayed = u.Col == u.OriginCol && u.Row == u.OriginRow && _part1ActedBy != u;
+        bool part1Stayed = Part1Stayed(u);
+        int restStance = Part1RestStance(index);   // 링 단추 글(자세 이름)과 같은 규칙 — 시작 칸을 옮기기 전에 본다
         CommitMove(u);
         // TP 를 다 쓰고(≤ 0) 끝나는 차례는 휴식이 아니다 — 원본은 깃발만 내리고(0x10071e20 → 0x10074400) 자동 휴식(WAITNEXT 0x10067a7a)에
         // 오지 않아 <b>음수 TP(빚)가 그대로 남는다</b>. 다음 차례가 그만큼 늦다(ba-20 K1). 전에는 늘 0 으로 올려 줘 연속 행동이 공짜였다.
@@ -947,9 +964,7 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 u.Hp += gain;
                 ShowNumber(u, host._db?.T(159) ?? "HP", HealColor2, rise: false, count: (before, u.Hp));
             }
-            if (part1Stayed && FollowersOf(index).Count == 0 && !_part1Riders.ContainsKey(u) && !_part1Riders.ContainsValue(u)
-                && Part1.StanceAbility(u) is > 0 and var stance)
-                EnterPart1Stance(u, stance);
+            if (restStance > 0) EnterPart1Stance(u, restStance);
         }
         else if (u.Tp > 0 && u.MaxTp > 0 && host._db != null && !u.HasStatus(26))
         {
