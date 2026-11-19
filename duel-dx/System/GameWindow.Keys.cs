@@ -261,7 +261,7 @@ internal sealed unsafe partial class GameWindow
     }
 
     /// <summary>모드·격자·체력바를 바꾸면 바로 적어 다음에 켤 때도 그대로 두게 한다.</summary>
-    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie, _part1RouteMarks, _turnRegenNumbers, _brightCellFill, _rangeEdges, _part1FieldMarks, _temperatureDisplay, _talkWaits));
+    internal void SaveSettings() => UserSettings.Save(new UserSettings(_allyAi, _showGrid, _showGauges, _zoomPercent, _viewW, _viewH, _showHints, Btl._showLevelUp, _dropJobExp, _showStatusBar, _gameSpeed, _talkPauseSeconds, _showSceneTag, _showChestContents, _fullSoulAtStart, Btl._difficulty, TuningScr._soulWeight, Sys._bgmVolume, Sys._seVolume, Sys._bgmOn, _talkClickFills, _skipEnemyAction, _sendStats, _statsAskedAt, _planetMarks, _skillMovies, _timedHit, _fullscreen, _battleZoomPercent, _bubbleScalePercent, _hiResUi, _highlightChests, _tachyrionRework, _fontScalePercent, _timedAim, _hiResMoses, _miniMap?.Folded ?? UserSettings.Current.MiniMapFolded, BattleScene.Part1Difficulty, _part1TurnVoice, _part1TurnOutline, _part1TutorialSave, _part1ChestRollAtStart, _eggChaosCube, _eggUnknownMap, _eggUnknownSeed, _quietFoeCamera, TuningScr._voiceVolume, _rightClickSkipsTalk, _part1TalkWaits, _openingMovie, TuningScr._talkVoiceVolume, _coverGhost, _mosesWarpMovie, _part1RouteMarks, _turnRegenNumbers, _brightCellFill, _rangeEdges, _part1FieldMarks, _temperatureDisplay, _talkWaits, _part1TurnButtons));
 
     /// <summary>항행의 행성 고르기에서 전투·필드 장소가 있는 행성을 표시하나 — 모드 > 편의성(기본 켬, 원본에 없다).</summary>
     internal bool _planetMarks = UserSettings.Current.PlanetMarks;
@@ -414,6 +414,10 @@ internal sealed unsafe partial class GameWindow
     /// <summary>파트1 기온(미니맵 머리 줄 · 정보 창 옆)과 상태 창의 몸 온도 · 깎인 SPD 를 보이나(BattleMiniMap.DrawAmbient · Part1StatusPanel).</summary>
     internal bool _temperatureDisplay = UserSettings.Current.TemperatureDisplay;
     internal const int MenuTemperatureDisplay = 1708;
+
+    /// <summary>파트1 차례 메뉴를 원본 글 단추 넷으로 그리나(BattleScene.DrawPart1Buttons) — 끄면 파트2 링 아이콘.</summary>
+    internal bool _part1TurnButtons = UserSettings.Current.Part1TurnButtons;
+    internal const int MenuPart1TurnButtons = 1709;
 
     /// <summary>파트1 튜토리얼(챕터 79 · 80) 전투에서도 SAVE 를 하나 — 모드 > 일반 > 튜토리얼에서도 저장(원본은 막는다, 사용자 요청 menu-105, 기본 켬).</summary>
     internal bool _part1TutorialSave = UserSettings.Current.Part1TutorialSave;
@@ -674,6 +678,11 @@ internal sealed unsafe partial class GameWindow
             case MenuPart1FieldMarks:
                 _part1FieldMarks = !_part1FieldMarks;
                 Toast(_part1FieldMarks ? "얼음 덩이 · 땅불 칸을 물들입니다" : "얼음 덩이 · 땅불을 원본대로 표시 없이 둡니다");
+                SaveSettings();
+                break;
+            case MenuPart1TurnButtons:
+                _part1TurnButtons = !_part1TurnButtons;
+                Toast(_part1TurnButtons ? "파트1 차례 메뉴를 원본처럼 글 단추로 그립니다" : "파트1 차례 메뉴를 파트2 링으로 그립니다");
                 SaveSettings();
                 break;
             case MenuTemperatureDisplay:

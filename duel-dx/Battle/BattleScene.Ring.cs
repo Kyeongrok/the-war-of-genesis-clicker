@@ -92,16 +92,43 @@ internal sealed unsafe partial class BattleScene
 
     internal int RingTick(double since) => (int)((host._lastTime - since) * TicksPerSecond);
 
+    /// <summary>
+    /// 파트1 판을 원본 턴 메뉴(틀 없는 글 단추 넷, <c>0x10090420</c>)로 그리나 — 모드 &gt; 일반 「파트1 원본 턴 메뉴」(기본 켬).
+    /// 끄면 예전처럼 파트2 링 아이콘을 그 자리에 놓는다. 파트2 링으로 나오니 파트2 규칙(일반 공격 두 번 따위)을 기대한 제보가 잦았다.
+    /// </summary>
+    internal bool Part1Buttons => host._scene.IsPart1 && host._part1TurnButtons;
+
+    /// <summary>원본 파트1 단추 크기(<c>0x1009f1b0(−50,−15,50,15)</c>)와 자리 — 어빌리티 · 휴식 · 아이템 · 상태, 다섯째(행군, 원본에 없음)는 아래.</summary>
+    private const int Part1ButtonW = 100, Part1ButtonH = 30;
+    private static readonly (int X, int Y)[] Part1ButtonSpots = [(-100, -60), (100, -60), (-100, 0), (100, 0), (0, 40)];
+
+    /// <summary>원본 파트1 단추의 아이콘 — Obs 0011 장(분석-파트1-전투 24절 A). 행군은 원본에 없어 손그림(MarchIcon)이다.</summary>
+    private static int Part1ButtonIcon(RingCommand command) => command switch
+    {
+        RingCommand.Ability => 0x11, RingCommand.Rest => 0x12, RingCommand.Item => 0x10, RingCommand.Status => 0x0f, _ => -1,
+    };
+
+    private static string Part1ButtonLabel(RingCommand command) => command switch
+    {
+        RingCommand.Ability => "어빌리티", RingCommand.Rest => "휴식", RingCommand.Item => "아이템", RingCommand.Status => "상  태",
+        RingCommand.March => "행군", _ => command.ToString(),
+    };
+
     /// <summary>링 중심 — 유닛 자리에서 40픽셀 위, 판 가장자리에서 89픽셀 안쪽.</summary>
     internal (int X, int Y) RingCenter(UnitState unit)
     {
         var (fx, fy) = host.Btl.UnitFoot(unit);
+        // 원본 파트1 단추 — 원점은 유닛 자리, x 는 150 ~ 화면 폭 − 150, (y − 30) 은 45 ~ 화면 높이 − 45 안으로 민다(0x10090489~0x100904ea).
+        if (Part1Buttons)
+            return (Math.Clamp(fx, host._camX + 150, host._camX + host.ViewWidth - 150),
+                    Math.Clamp(fy, host._camY + GridTop + 75, host._camY + host.ViewHeight - 45));
         return (Math.Clamp(fx, host._camX + RingEdge, host._camX + host.ViewWidth - RingEdge), Math.Clamp(fy - RingLift, host._camY + GridTop + RingEdge, host._camY + host.ViewHeight - RingEdge));
     }
 
     /// <summary>지금 단계·틱에서 i 번 항목의 중심(링 중심 기준).</summary>
     internal (int X, int Y) RingItemOffset(int i)
     {
+        if (Part1Buttons) return i < Part1ButtonSpots.Length ? Part1ButtonSpots[i] : (0, 40 + 35 * (i - 4));   // 원본 단추는 움직이지 않는다
         double baseAngle = host._scene.IsPart1 && i < Part1RingAngles.Length ? Part1RingAngles[i] : 2 * Math.PI * (6 - i) / 6 - Math.PI / 2;
         int n = RingTick(_ringPhaseStart) + 1;
         double r, a;
@@ -124,7 +151,8 @@ internal sealed unsafe partial class BattleScene
         {
             var (ox, oy) = RingItemOffset(i);
             int dx = bx - cx - ox, dy = by - cy - oy;
-            if (dx * dx + dy * dy <= RingHitRadius * RingHitRadius) return i;
+            if (Part1Buttons ? Math.Abs(dx) <= Part1ButtonW / 2 && Math.Abs(dy) <= Part1ButtonH / 2
+                             : dx * dx + dy * dy <= RingHitRadius * RingHitRadius) return i;
         }
         return -1;
     }
@@ -377,6 +405,12 @@ internal sealed unsafe partial class BattleScene
         int t = RingTick(_ringOpenedAt);
         int n = RingTick(_ringPhaseStart) + 1;
         bool closing = _ringPhase is RingPhase.Picking or RingPhase.Cancelling;
+        if (Part1Buttons)
+        {
+            if (!closing) DrawPart1Buttons(cx, cy, t);
+            if (_ringHelp is { Length: > 0 } tip) host.StatusScr.DrawDescriptionTip(tip, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+            return;
+        }
 
         if (!closing) host.DrawUi(106, 0, t, cx, cy, UiBlend.Darken);
         if (!closing && (_ringPhase != RingPhase.Opening || n >= 7)) host.DrawUi(86, 1, t, cx, cy, UiBlend.Add);
@@ -425,6 +459,53 @@ internal sealed unsafe partial class BattleScene
                 host.DrawText(hoverName, x - 23, y + 12, White, 15);
         }
         if (_ringHelp is { Length: > 0 } help) host.StatusScr.DrawDescriptionTip(help, host._mouse.X, host._mouse.Y, host._camX, host._camY, host.ViewWidth, host.ViewHeight);
+    }
+
+    /// <summary>
+    /// 원본 파트1 턴 메뉴 — 틀 없이 100×30 단추 넷(<c>0x10090420</c>, 분석-파트1-전투 24절 A). 단추마다 Obs 0011 아이콘과 글이 늘 보이고,
+    /// 못 누르는 단추(남은 행동이 없을 때 어빌리티 · 아이템)는 잿빛이다. 휴식 단추는 쉬면 켜질 자세 이름을 단다(0x10090719~).
+    /// 단추 바탕 그림은 원본 위치를 아직 못 찾아 어두운 판에 테두리를 두른다(가설).
+    /// </summary>
+    private void DrawPart1Buttons(int cx, int cy, int t)
+    {
+        bool hi = host._hiResUi && !host.BattleCovered;
+        for (int i = 0; i < Items.Length; i++)
+        {
+            var command = Items[i].Command;
+            var (ox, oy) = RingItemOffset(i);
+            int x = cx + ox - Part1ButtonW / 2, y = cy + oy - Part1ButtonH / 2;
+            bool hover = _ringPhase == RingPhase.Idle && i == _ringHover;
+            bool enabled = RingItemEnabled(command, _ringUnit);
+            uint fill = hover ? 0xE0304070u : 0xD0101828u, edge = hover ? 0xFFE8D088u : 0xFF8090B0u;
+            uint text = !enabled ? DimGray : hover ? White : 0xFFE0E8F8u;
+            string label = command == RingCommand.Rest && Part1RestStance(_ringUnit) is > 0 and var stance
+                ? Part1Rules.StanceName(stance) : Part1ButtonLabel(command);
+
+            if (hi) { host.Hi.FillRect(x, y, Part1ButtonW, Part1ButtonH, fill); host.Hi.StrokeRect(x, y, Part1ButtonW, Part1ButtonH, edge); }
+            else { host.FillRect(x, y, Part1ButtonW, Part1ButtonH, fill); host.StrokeRect(x, y, Part1ButtonW, Part1ButtonH, edge); }
+
+            // 아이콘 — 단추 왼쪽에 세로 가운데로. 그림이 없으면 글만 쓴다.
+            int iconRight = x + 6;
+            int obs = Part1ButtonIcon(command);
+            if (command == RingCommand.March)
+            {
+                // 새 UI 면 단추 바탕이 층에 깔려 판에 그린 아이콘을 덮는다 — 아이콘도 같은 층에 그린다.
+                var march = MarchIcon.Frame(t);
+                if (hi) host.Hi.DrawImage(march.Px, march.W, march.W, march.H, x + 18 + march.X, y + Part1ButtonH / 2 + march.Y, dim: !enabled);
+                else host.DrawFrame(march, x + 18, y + Part1ButtonH / 2, enabled ? UiBlend.Add : UiBlend.AddDim);
+                iconRight = x + 32;
+            }
+            else if (obs >= 0 && host.UiFor(Part1Game.ObsBase + 11)?.FrameAt(obs, 0) is { } icon)
+            {
+                host.UiSprite(Part1Game.ObsBase + 11, obs, 0, x + 6 - icon.X, y + (Part1ButtonH - icon.H) / 2 - icon.Y, dim: !enabled);
+                iconRight = x + 6 + icon.W + 4;
+            }
+
+            var (_, tw, th) = host.GetText(label, text, 14);
+            int tx = Math.Max(iconRight, x + (Part1ButtonW - tw) / 2), ty = y + (Part1ButtonH - th) / 2;
+            if (hi) host.Hi.DrawText(label, tx, ty, text, 14);
+            else host.DrawText(label, tx, ty, text, 14);
+        }
     }
 
     /// <summary>오른쪽 단추를 누르고 있는 동안 보이는 링 항목 설명 — 떼면 지운다(WM_RBUTTONUP).</summary>

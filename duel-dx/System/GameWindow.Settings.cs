@@ -49,6 +49,7 @@ namespace DuelDx;
 /// <param name="TurnRegenNumbers">모드 &gt; 편의성 &gt; 차례 회복 숫자 보이기 — 파트1 차례 시작에 장비 보정 400 · 401(요정의 팔찌 · 천사의 목걸이 · 사이킥 · 포스 써크렛)로 찬 HP · 소울을 그 유닛 위에 숫자로 띄울지(원본 0x10036433 은 안 띄운다, 버그 리포트 #99, 기본 켬).</param>
 /// <param name="BrightCellFill">모드 &gt; 가독성 향상 &gt; 밝은 칸 범위 진하게 — 이동 · 사거리 · 효과 범위의 원본 가산이 눈밭처럼 밝은 바탕에서 255 에 붙어(포화해) 잘리는 칸은 그만큼 곱하기(바탕 × 층색)로 섞어 물들일지(원본에 없음, 기본 켬 — 안 잘리는 칸은 원본 가산 그대로, BattleScene.PaintCell · CellBlendWeight).</param>
 /// <param name="RangeOutline">모드 &gt; 가독성 향상 &gt; 범위 테두리 — 이동 범위(파랑) · 사거리(주황)의 바깥 가장자리에 2px 선과 1px 어두운 외곽선을 두를지(원본에 없음, 기본 끔 — BattleScene.DrawRangeEdges). 처음엔 「RangeEdges」 기본 켬이었는데 어색하다고 해 기본을 끔으로 바꾸며 이름도 바꿔, 이미 켬으로 적힌 설정도 한 번 끔으로 돌아간다.</param>
+/// <param name="Part1TurnButtons">모드 &gt; 일반 &gt; 파트1 원본 턴 메뉴 — 파트1 차례 메뉴를 원본처럼 틀 없는 글 단추 넷(0x10090420)으로 그릴지(끄면 파트2 링 아이콘, 기본 켬 — BattleScene.DrawPart1Buttons).</param>
 /// <param name="Part1FieldMarks">모드 &gt; 가독성 향상 &gt; 얼음 · 땅불 칸 표시 — 파트1 프로즌 아이스 얼음 덩이가 남은 칸을 하늘색, 땅불 칸을 주황으로 물들일지(범위 칸과 같은 가산 → 포화하면 곱하기, 원본에 없음, 기본 켬 — Part1MapObjects.DrawLingering).</param>
 /// <param name="TemperatureDisplay">모드 &gt; 가독성 향상 &gt; 온도 표시 — 파트1 판의 기온(기본 80 과 다를 때, 미니맵 머리 줄 · 미니맵이 없으면 오른쪽 위 정보 창 옆)과 파트1 상태 창의 몸 온도 · 그로 깎인 SPD 를 보일지(원본에 없음, 기본 켬 — BattleMiniMap.DrawAmbient · Part1StatusPanel).</param>
 /// <param name="TalkWaits">모드 &gt; 파트2 대사는 눌러서 넘기기 — 대사창(600 · 601 · 602)이 다 나온 뒤 저절로 닫지 않고 누를 때까지 기다릴지(버그 리포트 #102, 기본 끔 — TalkBox.UpdateTalk).</param>
@@ -69,7 +70,7 @@ internal sealed record UserSettings(bool AllyAi = true, bool ShowGrid = false, b
                                     bool OpeningMovie = false, int Part1TalkVoiceVolume = 100, bool CoverGhost = false,
                                     bool MosesWarpMovie = true, bool Part1RouteMarks = true, bool TurnRegenNumbers = true,
                                     bool BrightCellFill = true, bool RangeOutline = false, bool Part1FieldMarks = true,
-                                    bool TemperatureDisplay = true, bool TalkWaits = false)
+                                    bool TemperatureDisplay = true, bool TalkWaits = false, bool Part1TurnButtons = true)
 {
     internal static string FilePath => UserDataFolder.File("settings.json");
 

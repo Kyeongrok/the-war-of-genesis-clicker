@@ -281,6 +281,8 @@ internal sealed unsafe class TuningScreen(GameWindow host)
         ("안 움직이는 먼 적은 안 비춤", "화면 밖 적은 걷거나 기술을 쓸 때만 카메라가 간다", MenuQuietFoeCamera, host._quietFoeCamera),
         ("파트1 차례 목소리", "파트1 인물 차례에 성우 한 마디(원본에 없음)", MenuPart1TurnVoice, host._part1TurnVoice),
         ("파트1 차례 테두리", "차례인 유닛에 주황·노랑 반짝이는 테두리", MenuPart1TurnOutline, host._part1TurnOutline),
+        // 파트1 원본 턴 메뉴 — 파트2 링으로 나오니 파트2 규칙을 기대한 제보가 잦았다(사용자 요청). 기본 켬, 끄면 예전 링.
+        ("파트1 원본 턴 메뉴", "파트1 차례 메뉴를 원본처럼 글 단추 넷으로(끄면 파트2 링)", MenuPart1TurnButtons, host._part1TurnButtons),
         ("가려진 캐릭터 반투명", "기둥·벽 뒤에 선 유닛을 반투명으로 비춘다", MenuCoverGhost, host._coverGhost),
         ("튜토리얼에서도 저장", "파트1 튜토리얼 전투에서도 SAVE(원본은 막는다)", MenuPart1TutorialSave, host._part1TutorialSave),
         ("무작위 상자는 시작 때", "파트1 무작위 상자를 전투 시작에 정함(끄면 열 때)", MenuPart1ChestRoll, host._part1ChestRollAtStart),
