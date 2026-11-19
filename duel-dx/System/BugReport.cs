@@ -52,7 +52,12 @@ internal sealed class BugReport(GameWindow host)
         if (GameWindow.Offscreen)
         {
             // 화면 밖 시험 — 창을 안 띄운다. 시험 문의 글이 있으면 그 글로 보내는 길을 탄다.
-            if (Environment.GetEnvironmentVariable("DUELDX_BUGREPORT_TEXT") is { Length: > 0 } text) Submit(text, context);
+            if (Environment.GetEnvironmentVariable("DUELDX_BUGREPORT_TEXT") is { Length: > 0 } text)
+            {
+                // DUELDX_BUGREPORT_SAVE=1 이면 창의 「세이브 함께 보내기」를 고른 것처럼 마지막 세이브를 싣는다.
+                if (Environment.GetEnvironmentVariable("DUELDX_BUGREPORT_SAVE") == "1" && LatestSavePath() is { } save) AttachSave(context, save);
+                Submit(text, context);
+            }
             else host.Toast("화면 밖 시험에서는 버그 리포트 창을 띄우지 않습니다");
             return;
         }
@@ -60,9 +65,58 @@ internal sealed class BugReport(GameWindow host)
         owner.AssignHandle(host._hwnd);
         try
         {
-            if (BugReportDialog.Ask(owner, Summary(context)) is { } written) Submit(written, context);
+            string? save = LatestSavePath();
+            string? saveLabel = save == null ? null : $"{Path.GetFileName(save)} · {File.GetLastWriteTime(save):yyyy-MM-dd HH:mm}";
+            if (BugReportDialog.Ask(owner, Summary(context), saveLabel, out bool attach) is { } written)
+            {
+                if (attach && save != null) AttachSave(context, save);
+                Submit(written, context);
+            }
         }
         finally { owner.ReleaseHandle(); }
+    }
+
+    /// <summary>
+    /// 붙일 세이브의 압축 글자 수 한도 — 받는 쪽은 context 를 32KB 까지 받는다(tools/stats-worker BUG_MAX_CONTEXT). 오류 기록 · 모드 목록 몫을 남긴다.
+    /// 보통 세이브(30~170KB JSON)는 gzip 뒤 base64 로 3~13KB 다.
+    /// </summary>
+    internal const int MaxSaveChars = 20000;
+
+    /// <summary>
+    /// 가장 최근에 적힌 세이브(전투 · 파트1 · 자동 저장 모두) — 없으면 null. 버그 리포트에 붙여, 멈춤처럼 그 판 상태에서만 나는 일을 재현한다(버그 리포트 #118).
+    /// </summary>
+    internal static string? LatestSavePath()
+    {
+        try
+        {
+            return Directory.EnumerateFiles(UserDataFolder.Path, "*battle-save*.json")
+                .Select(p => new FileInfo(p)).Where(f => f.Length > 0)
+                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// 세이브를 gzip 해 base64 로 context["save"] 에 싣는다 — 받는 쪽 표를 바꾸지 않고 리포트 한 건에 담긴다. 너무 크면 싣지 않고 그 까닭만 적는다.
+    /// 꺼내기: tools/stats-worker/bugs.ps1 -Id N -Save.
+    /// </summary>
+    internal static void AttachSave(Dictionary<string, object?> context, string path)
+    {
+        try
+        {
+            byte[] raw = File.ReadAllBytes(path);
+            using var packed = new MemoryStream();
+            using (var gz = new System.IO.Compression.GZipStream(packed, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true)) gz.Write(raw);
+            string data = Convert.ToBase64String(packed.ToArray());
+            var info = new Dictionary<string, object?> { ["name"] = Path.GetFileName(path), ["at"] = File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm:ss"), ["bytes"] = raw.Length };
+            if (data.Length <= MaxSaveChars) info["gz"] = data;
+            else info["skipped"] = $"압축해도 {data.Length}자라 싣지 않음(한도 {MaxSaveChars})";
+            context["save"] = info;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            context["save"] = new Dictionary<string, object?> { ["name"] = Path.GetFileName(path), ["skipped"] = ex.GetType().Name };
+        }
     }
 
     private bool _keyHinted;
@@ -341,8 +395,11 @@ internal static class BugReportDialog
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     /// <summary>창을 띄워 글을 받는다 — 취소하거나 비워 두면 null.</summary>
-    internal static string? Ask(System.Windows.Forms.IWin32Window owner, string summary)
+    /// <param name="saveLabel">붙일 수 있는 마지막 세이브(이름 · 시각). 없으면 null — 체크 칸을 안 둔다.</param>
+    /// <param name="attachSave">「마지막 세이브 파일 함께 보내기」를 골랐는지.</param>
+    internal static string? Ask(System.Windows.Forms.IWin32Window owner, string summary, string? saveLabel, out bool attachSave)
     {
+        attachSave = false;
         // 4K 처럼 배율이 큰 화면에서 글이 잘렸다(v1.0.44 · 45) — 칸 높이를 정하지 않고 글 크기에 맞춰 늘어나는 배치(TableLayoutPanel · AutoSize)로,
         // 글꼴은 창 DPI 의 점(px)으로 정해 모든 칸이 같은 크기 글을 쓴다. 폭과 글 칸 높이만 DPI 로 키운다.
         float k = Math.Max(1f, GetDpiForWindow(owner.Handle) / 96f);
@@ -400,11 +457,18 @@ internal static class BugReportDialog
         {
             if (e.Control && e.KeyCode == System.Windows.Forms.Keys.Enter && send.Enabled) { e.SuppressKeyPress = true; form.DialogResult = System.Windows.Forms.DialogResult.OK; }
         };
-        layout.Controls.AddRange([head, box, count, info, bottom]);
+        // 마지막 세이브 붙이기 — 멈춤 · 진행 막힘처럼 그 판 상태에서만 나는 일은 세이브가 있어야 재현된다(버그 리포트 #118). 기본으로 고른다.
+        var save = saveLabel == null ? null : new System.Windows.Forms.CheckBox
+        {
+            AutoSize = true, Checked = true, Margin = new System.Windows.Forms.Padding(0, S(8), 0, 0),
+            Text = $"마지막 세이브 파일 함께 보내기 ({saveLabel})",
+        };
+        layout.Controls.AddRange(save == null ? [head, box, count, info, bottom] : [head, box, count, info, save, bottom]);
         form.Controls.Add(layout);
         form.CancelButton = cancel;
         form.Shown += (_, _) => box.Focus();
         if (form.ShowDialog(owner) != System.Windows.Forms.DialogResult.OK) return null;
+        attachSave = save?.Checked == true;
         string text = box.Text.Trim();
         return text.Length > 0 ? text : null;
     }

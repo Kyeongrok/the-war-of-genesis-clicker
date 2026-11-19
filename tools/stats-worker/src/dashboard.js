@@ -365,7 +365,7 @@ function bugCard(b) {
     + '<div class="text">' + esc(b.text) + '</div>'
     + (b.note ? '<div class="dim">메모: ' + esc(b.note) + '</div>' : '')
     + (b.reply ? '<div class="reply">답(보낸 분에게 보임): ' + esc(b.reply) + '</div>' : '')
-    + '<details><summary class="dim">같이 온 것</summary><pre>' + esc(JSON.stringify(c, null, 2)) + '</pre></details></div>';
+    + '<details><summary class="dim">같이 온 것</summary><pre>' + esc(JSON.stringify(c, (k, v) => (k === 'gz' && typeof v === 'string' ? '(세이브 ' + v.length + '자 — bugs.ps1 -Id ' + b.id + ' -Save 로 꺼낸다)' : v), 2)) + '</pre></details></div>';
 }
 async function loadBugs() {
   const key = bugKey();

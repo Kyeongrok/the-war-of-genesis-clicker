@@ -6,6 +6,7 @@
   ./bugs.ps1                              # 새(new) 리포트 목록
   ./bugs.ps1 -Status all -Since 40        # 40 번 뒤의 모든 리포트
   ./bugs.ps1 -Id 42                       # 42 번 하나를 자세히(오류 기록 끝까지)
+  ./bugs.ps1 -Id 42 -Save                 # 42 번에 붙어 온 세이브를 bug-42-<이름>.json 으로 꺼낸다(-Out 폴더, 기본 지금 폴더)
   ./bugs.ps1 -Mark 42 -Status fixed -Note "v1.0.43 에서 고침"
   ./bugs.ps1 -Url http://127.0.0.1:8833 -KeyFile .\test-key.txt   # 로컬 wrangler dev 에 대고
 
@@ -21,7 +22,9 @@ param(
   [int]$Limit = 100,
   [string]$Url = '',
   [string]$KeyFile = (Join-Path $HOME '.dueldx-bug-admin-key'),
-  [switch]$Json
+  [switch]$Json,
+  [switch]$Save,
+  [string]$Out = '.'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,6 +68,21 @@ $r = Call 'GET' ("/v1/bugs?since=$from&status=$([uri]::EscapeDataString($Status)
 $bugs = @($r.bugs)
 if ($Id -gt 0) { $bugs = @($bugs | Where-Object { $_.id -eq $Id }) }
 
+# ── 붙어 온 세이브 꺼내기 — 게임이 gzip 해 base64 로 context.save.gz 에 싣는다(duel-dx/System/BugReport.cs AttachSave) ──
+if ($Save) {
+  if ($Id -le 0) { throw "-Save 는 -Id 와 함께 주세요" }
+  $s = $bugs[0].context.save
+  if (-not $s) { Write-Output "#$Id 에는 세이브가 없습니다"; return }
+  if (-not $s.gz) { Write-Output "#$Id 세이브 $($s.name) 는 실리지 않았습니다: $($s.skipped)"; return }
+  $packed = [Convert]::FromBase64String($s.gz)
+  $in = [System.IO.MemoryStream]::new($packed); $gz = [System.IO.Compression.GZipStream]::new($in, [System.IO.Compression.CompressionMode]::Decompress)
+  $outStream = [System.IO.MemoryStream]::new(); $gz.CopyTo($outStream); $gz.Dispose()
+  $path = Join-Path (Resolve-Path $Out) ("bug-$Id-" + $s.name)
+  [System.IO.File]::WriteAllBytes($path, $outStream.ToArray())
+  Write-Output "세이브 $($s.name)($($s.at), $($outStream.Length) 바이트) → $path"
+  return
+}
+
 if ($Json) { $bugs | ConvertTo-Json -Depth 8; return }
 if ($bugs.Count -eq 0) { Write-Output "($Status 리포트 없음)"; return }
 
@@ -76,6 +94,7 @@ foreach ($b in $bugs) {
   Write-Output ("   환경: {0} · {1} · {2} · {3}{4}{5}" -f $c.game, $c.os, $c.platform, $c.res, $(if ($c.fullscreen) { ' 전체화면' } else { '' }), $(if ($c.hiResUi) { ' 새UI' } else { '' }))
   if ($c.mods -and @($c.mods).Count) { Write-Output ("   모드: " + (@($c.mods) -join ', ')) }
   if ($c.loadError) { Write-Output ("   읽기 오류: " + $c.loadError) }
+  if ($c.save) { Write-Output ("   세이브: {0} ({1}){2}" -f $c.save.name, $c.save.at, $(if ($c.save.gz) { ' — -Save 로 꺼낸다' } else { ' — 안 실림: ' + $c.save.skipped })) }
   if ($c.crashLog) {
     $lines = @($c.crashLog -split "`n")
     if ($Id -gt 0) { Write-Output "   오류 기록($($c.crashLogAt)):"; $lines | ForEach-Object { Write-Output "     $_" } }
