@@ -24,6 +24,7 @@ internal static class HangWatchdog
 
     private static long _beatAt;
     private static int _stage;
+    private static string? _where;
     private static GameWindow? _host;
     private static Thread? _thread;
 
@@ -41,8 +42,15 @@ internal static class HangWatchdog
     internal static void Beat(Stage stage)
     {
         Volatile.Write(ref _stage, (int)stage);
+        Volatile.Write(ref _where, null);
         Volatile.Write(ref _beatAt, Environment.TickCount64);
     }
+
+    /// <summary>
+    /// 단계 안의 하위 걸음 — 박동은 안 치고 「지금 어디까지 왔나」만 적는다. 멈추면 마지막 표식이 기록에 실린다(버그 리포트 #118 — 「단계 Update」만으로는
+    /// 차례 처리 · 이동 범위 셈 · 부하 따라오기 가운데 어디서 30~70초씩 걸렸는지 가를 수 없었다).
+    /// </summary>
+    internal static void Mark(string where) => Volatile.Write(ref _where, where);
 
     private static void Watch()
     {
@@ -72,6 +80,9 @@ internal static class HangWatchdog
     private static string Describe()
     {
         var parts = new List<string> { $"단계 {(Stage)Volatile.Read(ref _stage)}" };
+        if (Volatile.Read(ref _where) is { } where) parts.Add($"하위 {where}");
+        // 갈수록 길어지는 멈춤(버그 리포트 #118)이 메모리 · GC 탓인지 가르려고 — 관리 힙 크기와 2세대 GC 횟수.
+        try { parts.Add($"메모리 {GC.GetTotalMemory(false) / (1024 * 1024)}MB · GC2 {GC.CollectionCount(2)}회"); } catch { }
         try
         {
             if (_host is not { } host) return string.Join(" · ", parts);

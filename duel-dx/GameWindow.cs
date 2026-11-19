@@ -1367,6 +1367,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         // 틱·AI·이벤트·걷기가 멈춘다. 전에는 뒤에서 계속 돌아 AI 차례·행동 도중이 저장됐다(감사5 S1).
         if (Sys.SystemOpen) { UpdateSounds(); if (_afterFadeOut != null) StepSceneFadeClock(); return; }
 
+        HangWatchdog.Mark("인물 움직임");
         foreach (var unit in _units) unit.Advance(dt * TicksPerSecond, dt);
 
         // 키를 누르고 있으면 한 칸이 끝난 그 프레임에 바로 다음 칸을 건다 — 멈칫하지 않고 걷기 컷도 이어진다.
@@ -1379,6 +1380,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             Btl._aimRepeatAt = _realTime + AimRepeatEvery;
 
         // 정해 둔 길이 있으면 한 칸씩 이어 걷는다(클릭 이동·공격 자리로 가기·적 AI).
+        HangWatchdog.Mark("걷기");
         Btl.StepBlinks();
         LegionStageAb.StepLegionFades();
         UnitFxAb.StepUnitFx();
@@ -1398,15 +1400,19 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         foreach (var unit in _units) unit.SettleIfStopped();
         Btl.ResolvePendingTouch();                  // 상자 옆까지 걸어간 인물이 멈췄으면 연다
+        HangWatchdog.Mark("부하 따라오기");
         Btl.SyncFollowers();
         StepSceneFade();                        // 새 판이면 시작 카메라·페이드인, 끝났으면 페이드아웃 뒤 다음 장면
         if (Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || EpisodesScr._episodesOpen) return;   // 페이드아웃이 장면을 넘겼다
+        HangWatchdog.Mark("카메라");
         Btl.UpdateCamera(dt);
         Btl.ApplyPoseHook();
         if (_fadeInStart < 0) Btl.ApplyWorkHook();
         StatusScr.SyncVirtualStatus();
         UpdateSounds();
+        HangWatchdog.Mark("링");
         Btl.UpdateRing();
+        HangWatchdog.Mark("대사");
         Tlk.UpdateTalk();
         // 페이드인 동안은 틱·이벤트가 멈춘다(원본은 페이드를 다 한 뒤에 루프로 들어간다, 0x10061ad0).
         if (_fadeInStart >= 0) return;
@@ -1416,9 +1422,13 @@ internal sealed unsafe partial class GameWindow : IDisposable
             if (BattleScene.AutoPlay) Part1TitleScr.Chapter.PressPick(0);
             return;
         }
+        HangWatchdog.Mark("사건");
         Btl.StepEvent();
+        HangWatchdog.Mark("차례 처리");
         Btl.UpdateTurn();
+        HangWatchdog.Mark("이동 범위");
         Btl.RefreshMoveRange();
+        HangWatchdog.Mark("결과 배너");
         UpdateOutcomeBanner();                  // 배너는 음악이 끝나고(최소 121틱) 저절로 넘어간다(0x1006afa0)
     }
 
