@@ -984,8 +984,15 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         // 레벨 0 은 자료 없는 유닛(NEW GAME 이 비운 앞 판 유닛)을 적은 것이다 — 넣으면 살라딘이 레벨 0 · 어빌리티 없이 돌아왔다(사용자 보고).
         // 빼 두면 아래 동료 목록이 .chr 처음 값으로 채운다.
         foreach (var s in state.Units)
-            if (s.Side == 4 && (s.LeaderIndex ?? -1) < 0 && s.Level > 0 && host._db?.Character(s.ChrCode) is { } bc)
+            if (RestoresRoster(s.Side, s.LeaderIndex ?? -1, s.Level) && host._db?.Character(s.ChrCode) is { } bc)
                 host._party[s.ChrCode] = Restored(bc, s, regrow: true);
+        // 고치기 전 세이브 — 편 3 손님으로 선 주역(면제 명단)은 명부(Party)에서 빠진 채 적혔다(위 SaveBattleTo, 버그 리포트 #123).
+        // 명부에도 없으면 판 유닛 값으로 넣는다 — 다음 전투가 시작할 때 RememberParty 가 하는 것과 같다.
+        var savedRoster = (state.Party ?? []).Select(p => p.ChrCode).ToHashSet();
+        foreach (var s in state.Units)
+            if (s.Side == 3 && (s.LeaderIndex ?? -1) < 0 && s.Level > 0 && !savedRoster.Contains(s.ChrCode) && !host._party.ContainsKey(s.ChrCode)
+                && host._db is { } gdb && gdb.LevelExempt.Contains(s.ChrCode) && gdb.Character(s.ChrCode) is { } gc)
+                host._party[s.ChrCode] = Restored(gc, s, regrow: true);
         // 전투 밖 인물 — 이제는 명부 전체(어느 파티에 있든, 파티에서 빠졌든)가 여기 실린다. 옛 세이브는 지금 파티 사람만 적혀 있다.
         foreach (var s in state.Party ?? [])
             if (host._db?.Character(s.ChrCode) is { } pc)
@@ -1064,6 +1071,12 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
 
     internal static readonly JsonSerializerOptions SaveJson = new() { WriteIndented = true };
 
+    /// <summary>
+    /// 세이브의 판 유닛이 불러올 때 명부(<c>_party</c>)로 되살아나나 — 편 4 · 군단 부하 아님 · 레벨 있음. 저장(명부에서 뺄 인물)과 불러오기가 같은 규칙을 써야
+    /// 편 3 손님 · 적으로 선 주역의 명부 자료가 빠지지 않는다(버그 리포트 #123).
+    /// </summary>
+    internal static bool RestoresRoster(int side, int leaderIndex, int level) => side == 4 && leaderIndex < 0 && level > 0;
+
     /// <summary>판 밖 인물 한 명의 세이브 칸(자리·HP 없음) — 명부·전투 전 스냅숏에 쓴다.</summary>
     internal static SaveUnit PartyUnit(int chr, CharacterData c) =>
         new(chr, 0, 0, 0, 0, 0, 0, true, false, c.Level, c.CumExp, c.Exp, c.Items, c.Passives,
@@ -1118,7 +1131,11 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 // 전투에 안 선 인물의 레벨·장비·어빌리티 — 안 적으면 불러올 때 사라진다. _party 는 이제 전역 명부(원본 0x101b6884,
                 // 감사 F7·R4 G1)라 다른 파티 사람과 파티에서 빠진 사람까지 여기 다 실린다(은행에는 인원 번호만).
                 // 자료 없는 유닛(NEW GAME 이 비운 앞 판 유닛)은 빼고 본다 — 그것이 명부의 같은 인물을 가려 레벨 0 · 어빌리티 없이 적혔다(사용자 보고).
-                [.. host._party.Where(p => !host._units.Any(u => u.ChrCode == p.Key && u.Data != null)).Select(p => PartyUnit(p.Key, p.Value))],
+                // 판 유닛으로 되살아나는 인물(RestoresRoster — 편 4 · 부하 아님 · 레벨 있음)만 뺀다. 편 3 손님 · 적으로 선 주역은 불러올 때 명부로 안 돌아오므로
+                // 여기 빠지면 명부에서 사라졌다 — Btl 0080(손님 네리사 · 샤크바리) 뒤 모세스에서 저장 · 불러오기 하면 Chp 0021 의 805(레벨 맞추기)가
+                // 날아가 Chp 0022(브레인 엠티) 801 이 .chr 처음 값(Lv1)으로 합류시켰다(버그 리포트 #123).
+                [.. host._party.Where(p => !host._units.Any(u => u.ChrCode == p.Key && u.Data != null && RestoresRoster(u.Side, u.LeaderIndex, u.Data.Level)))
+                               .Select(p => PartyUnit(p.Key, p.Value))],
                 [.. host.Mos._ownedLegions], host.PartySt.SaveBank(),
                 [.. host.Mos._mailbox], [.. host.Mos._mailRead], [.. host.Mos._planetVisits.Select(v => $"{v.Chapter}:{v.Planet}")],
                 Enumerable.Range(0, host.Fld._chapterVars.Length).Where(i => host.Fld._chapterVars[i] != 0).ToDictionary(i => i.ToString(), i => (int)host.Fld._chapterVars[i]),
