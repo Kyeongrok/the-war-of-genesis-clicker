@@ -28,7 +28,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
     internal const int SlotsW = 320, SlotsH = 264, SlotRowH = 24, SlotRowW = 280, SlotPad = 12;
     internal const int SlotsVisible = 10, SaveSlots = 20, AutoSlot = 20;
     internal const int SlotScrollObs = 71, SlotHighlightObs = 471, SlotHighlightMotion = 20;
-    internal const uint SlotLabelColor = 0xFFFFFF64, SlotTimeColor = 0xFF64FF64;
+    internal const uint SlotLabelColor = 0xFFFFFF64, SlotTimeColor = 0xFF64FF64, SlotLatestColor = 0xFF64FFFF;
 
     /// <summary>−1 닫힘 · 0 Save · 1 Load.</summary>
     internal int _slotsMode = -1;
@@ -249,6 +249,7 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
         if (!host.UiSprite(FrameObs, 5, 0, x + 296, y - 24))
             host.UiStroke(x + 296, y - 24, 18, 18, White);
 
+        int latest = LatestSlot();
         for (int i = 0; i < SlotsVisible; i++)
         {
             if (_slotsTop + i >= SlotRows) break;
@@ -278,13 +279,39 @@ internal sealed unsafe class SlotsScreen(GameWindow host)
             host.UiText(title, Math.Max(rx + (SlotRowW - tw) / 2, rx + 10 + lw + 8), ry + (SlotRowH - th) / 2, White);
             host.UiText(label, rx + 10, ry + (SlotRowH - th) / 2, SlotLabelColor);
 
-            long ms = head.PlayMs;
-            string time = $"{ms / 3600000,3}:{ms % 3600000 / 60000:D2}:{ms % 60000 / 1000:D2}";
+            // 오른쪽 시각 — 원본은 플레이 시간을 적지만, 어느 것이 최신인지 몰라 하나씩 열어 봐야 했다(버그 리포트 #122).
+            // 저장한 날짜 · 시각(파일 시각)을 적고 가장 최근 것은 밝게, 플레이 시간은 줄에 마우스를 올리면 창 아래에 적는다.
+            var savedAt = SlotSavedAt(slot);
+            string time = savedAt is { } at ? at.ToString("MM'/'dd HH:mm") : PlayTimeText(head.PlayMs);
             var (_, pw, _) = host.UiGetText(time, White);
-            host.UiText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, SlotTimeColor);
+            host.UiText(time, rx + SlotRowW - 10 - pw, ry + (SlotRowH - th) / 2, slot == latest ? SlotLatestColor : SlotTimeColor);
         }
 
         DrawSlotScrollbar(x + 304, y, tick);
+
+        if (_slotsHover >= 0 && SlotHead(_slotsHover) is { } hover)
+        {
+            string info = SlotSavedAt(_slotsHover) is { } at
+                ? $"저장 {at:yyyy-MM-dd HH:mm}{(_slotsHover == latest ? " (최근)" : "")}  ·  플레이 시간 {PlayTimeText(hover.PlayMs).Trim()}"
+                : $"플레이 시간 {PlayTimeText(hover.PlayMs).Trim()}";
+            var (_, iw, ih) = host.UiGetText(info, White);
+            int ix = x + (SlotsW - iw) / 2, iy = y + SlotsH + 8;
+            host.UiFill(ix - 8, iy - 4, iw + 16, ih + 8, 0xD0000000);   // 타이틀 메뉴 글씨 위에서도 읽히게 어두운 바탕
+            host.UiText(info, ix, iy, White);
+        }
+    }
+
+    static string PlayTimeText(long ms) => $"{ms / 3600000,3}:{ms % 3600000 / 60000:D2}:{ms % 60000 / 1000:D2}";
+
+    /// <summary>그 슬롯 파일을 마지막으로 적은 시각(이 컴퓨터 시간) — 없거나 못 읽으면 null.</summary>
+    internal DateTime? SlotSavedAt(int slot)
+    {
+        try
+        {
+            string path = SlotPath(slot);
+            return File.Exists(path) ? File.GetLastWriteTime(path) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>스크롤 막대 — 위·아래 화살표와 손잡이(움직이는 길 232).</summary>
