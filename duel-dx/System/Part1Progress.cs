@@ -372,11 +372,22 @@ internal sealed class Part1Progress
     /// 새 무리가 지금 챕터 무리면 그 팀 끝에 넣고(0x100ad940), 아니면 뺀다(0x100ad980). 판이 끝나면 그 팀이 챕터 팀으로 되쓰인다(0x10032f80).
     /// 평소 팀 0 은 「무리 앞 10명」이라 할 일이 없지만, 사람을 적어 둔 팀(팀 1 부터 · 본부 교환 창을 연 팀 0)은 여기서 안 적으면 합류한 사람이 본부에만 남아
     /// 다음 판 배치에 안 나왔다 — 챕터 49 설산2(Btl 0175)에서 든 디안이 설산 다리(0177)에 안 나와 카트린느를 못 얻었다(카페 제보 fg-105).
+    /// 사람을 안 적은 팀 0(「무리 앞 10명」)도 여기서 그 10명을 적어 둔 팀으로 굳힌다 — 원본 팀 0 은 504 가 챕터를 열 때 옮긴 10명이고 합류한 사람은 그 끝에 붙는데,
+    /// 「앞 10명」을 그때그때 다시 세면 번호가 작은 합류자가 끼어들어 끝 사람이 밀려났다. 챕터 27 Btl 0109 에서 든 엘핀스톤(38)이
+    /// 레이브(45)를 밀어내 팬드래건성 공방전(0110) · 내부(0111)에 레이브가 안 나왔다(버그 리포트 #124).
     /// </summary>
     internal void MoveToGroupInBattle(int chr, int group)
     {
+        var active = ActiveTeam;
+        bool looseZero = active is { Fixed: false } && ChapterTeams[ChapterId].IndexOf(active) == 0;
+        var before = looseZero ? TeamMembers(0) : null;   // 집을 바꾸기 전의 「앞 10명」
         MoveToGroup(chr, group);
-        if (ActiveTeam is not { } team || ChapterTeams[ChapterId].IndexOf(team) == 0 && !team.Fixed) return;
+        if (active is not { } team) return;
+        if (before != null)
+        {
+            if (before.Count == 0 && group != CurrentGroup) return;   // 빈 팀으로 굳히지 않는다
+            (team.Fixed, team.Members) = (true, before);
+        }
         if (group == CurrentGroup) { if (!team.Members.Contains(chr)) team.Members.Add(chr); }
         else team.Members.Remove(chr);
     }
