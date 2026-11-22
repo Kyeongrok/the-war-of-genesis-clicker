@@ -23,7 +23,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
 {
     internal bool Open;
 
-    private const int FieldW = MosesScene.MosesW, FieldH = 400, PanelY = 400, Cell = ObtMap.CellWidth, CellH = ObtMap.CellHeight;
+    private const int FieldW = MosesScene.MosesW, FieldH = 400, PanelY = 400, Top = 36, ViewH = FieldH - Top, Cell = ObtMap.CellWidth, CellH = ObtMap.CellHeight;
     private const int CardW = 56, CardH = 54, CardY = PanelY + 22, TabW = 56;
     private const uint Gold = 0xFFFFD860, Red = 0xFFFF7070, Green = 0xFF80F080, Dim = 0xFF98A0B8;
 
@@ -36,6 +36,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
         internal readonly double X = x, Y = y;
         internal double Cooldown, AnimAt = -9;
         internal int Action;
+        internal double AnimLen = 0.5, PendingAt = -1, PendingDamage;
+        internal Enemy? PendingTarget;
         internal Facing Facing = Facing.Down;
         internal int Spent = def.Cost;
         internal int Kills;
@@ -56,6 +58,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
         internal readonly Enemy Target = target;
         internal readonly Tower From = from;
         internal readonly double Damage = damage;
+        internal Part1Skill.BasicStyle Style;
+        internal uint Color = 0xFFFFFFFF;
     }
 
     private TdMap _map = TdData.Maps[0];
@@ -71,6 +75,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private readonly List<Enemy> _enemies = [];
     private readonly List<Shot> _shots = [];
     private readonly List<(double X, double Y, double At, int Kind)> _fx = [];
+    private readonly List<(double X1, double Y1, double X2, double Y2, double At, uint Color)> _beams = [];
+    private readonly Random _rng = new();
     private readonly List<(string Text, double X, double Y, double At, uint Color)> _floats = [];
     private readonly List<(double At, int Enemy)> _spawns = [];
 
@@ -89,6 +95,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private Task? _loading;
     private int _loaded, _toLoad;
     private Dictionary<int, ExportedCharacter>? _manifests;
+
+    /// <summary>타워 인물의 기본 공격 — 이 게임 동작 번호 · 핸들러 갈래 · Attack 번호(파트1).</summary>
+    private readonly ConcurrentDictionary<int, (int Action, Part1Skill.BasicStyle Style, int AttackId)> _attacks = new();
 
     private TowerDefenseSave _save = new();
 
@@ -125,7 +134,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     private void Reset()
     {
-        _towers.Clear(); _enemies.Clear(); _shots.Clear(); _fx.Clear(); _floats.Clear(); _spawns.Clear();
+        _towers.Clear(); _enemies.Clear(); _shots.Clear(); _fx.Clear(); _beams.Clear(); _floats.Clear(); _spawns.Clear();
         _gold = TdData.StartGold;
         _lives = TdData.StartLives;
         _wave = 0;
@@ -178,7 +187,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             return;
         }
         _camX = _map.CamX >= 0 ? _map.CamX : Math.Max(0, (_img.Width - FieldW) / 2);
-        _camY = _map.CamY >= 0 ? _map.CamY : Math.Max(0, (_img.Height - FieldH) / 2);
+        _camY = _map.CamY >= 0 ? _map.CamY : Math.Max(0, (_img.Height - ViewH) / 2);
         BuildPath();
     }
 
@@ -192,7 +201,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private bool Visible(int col, int row, int margin = 0)
     {
         var (x, y) = CellFoot(col, row);
-        return x - Cell / 2 >= _camX + margin && x + Cell / 2 <= _camX + FieldW - margin && y - CellH / 2 >= _camY + margin && y + CellH / 2 <= _camY + FieldH - margin;
+        return x - Cell / 2 >= _camX + margin && x + Cell / 2 <= _camX + FieldW - margin && y - CellH / 2 >= _camY + margin && y + CellH / 2 <= _camY + ViewH - margin;
     }
 
     private bool Walkable(int col, int row) =>
@@ -212,8 +221,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
         else
         {
             int c0 = (int)Math.Ceiling(_camX / (double)Cell), c1 = (_camX + FieldW) / Cell - 1;
-            int midRow = (_camY + FieldH / 2 + m.OriginY) / CellH;
-            int topRow = (_camY + FieldH / 5 + m.OriginY) / CellH, bottomRow = (_camY + FieldH * 4 / 5 + m.OriginY) / CellH;
+            int midRow = (_camY + ViewH / 2 + m.OriginY) / CellH;
+            int topRow = (_camY + ViewH / 5 + m.OriginY) / CellH, bottomRow = (_camY + ViewH * 4 / 5 + m.OriginY) / CellH;
             marks.Add(Nearest(c0, midRow, edge: true));
             marks.Add(Nearest(c0 + (c1 - c0) / 3, topRow));
             marks.Add(Nearest(c0 + (c1 - c0) * 2 / 3, bottomRow));
@@ -313,6 +322,14 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 _sprites[chr] = LoadSprite(chr);
                 Interlocked.Increment(ref _loaded);
             }
+            // 타워의 기본 공격(파트1 인물 레코드)과 그 동작의 소리를 미리 — 처음 칠 때 조용하지 않게.
+            foreach (var def in TdData.Towers)
+            {
+                var (action, _, _) = AttackOf(def);
+                if (_sprites.GetValueOrDefault(def.Chr) is { } sp)
+                    host.PreloadSounds([.. new[] { action, 8, 9 }.SelectMany(a => new[] { Facing.Left, Facing.Up, Facing.Down }.Select(f => sp.Clip(a, f)))
+                                                     .Where(c => c != null).SelectMany(c => c!.Sounds.Select(x => x.Sound))]);
+            }
             // 파트1 그림이 없는 적은 파트2 병사로.
             foreach (var e in TdData.Enemies.Where(e => _sprites.GetValueOrDefault(e.Chr) == null && !_sprites.ContainsKey(e.Fallback)))
                 _sprites[e.Fallback] = LoadSprite(e.Fallback);
@@ -355,6 +372,74 @@ internal sealed class TowerDefenseScene(GameWindow host)
         host.DrawFrame(frame, sx, sy, UiBlend.Alpha, fade);
         host.Btl.DrawUnitLayers(clip, tick, sx, sy, mirror, fade, loop);
         return sy + frame.Y;
+    }
+
+    /// <summary>
+    /// 타워 인물의 기본 공격 — 파트1 인물은 레코드 칸 9(없으면 무기 갈래)의 Attack 번호로 전투와 같은 표를 쓴다(<see cref="Part1Skill.BasicKind"/> ·
+    /// 동작은 칼 1 = 2 · 3, 맨 갈래 2~5 = 2, 빔라이플 10 = 3, 용병 갈래 = 2 + 레벨 → <see cref="Part1Skill.Part2Action"/>).
+    /// 파트2 인물은 무기 갈래로 근접 동작 8 · 쏘기 9.
+    /// </summary>
+    private (int Action, Part1Skill.BasicStyle Style, int AttackId) AttackOf(TdTowerDef def)
+    {
+        if (_attacks.TryGetValue(def.Chr, out var known)) return known;
+        var style = def.Weapon switch
+        {
+            TdWeapon.Gun => Part1Skill.BasicStyle.Shot, TdWeapon.Beam => Part1Skill.BasicStyle.Beam, TdWeapon.Bow => Part1Skill.BasicStyle.Arrow,
+            TdWeapon.Magic => Part1Skill.BasicStyle.Missile, _ => Part1Skill.BasicStyle.Melee,
+        };
+        var info = (style == Part1Skill.BasicStyle.Melee ? 8 : 9, style, 0);
+        try
+        {
+            if (def.Chr >= Part1Game.ChrBase && Part1Chr.Load(def.Chr - Part1Game.ChrBase) is { } c)
+            {
+                int id = c.BasicAttackId > 0 ? c.BasicAttackId : Part1Item.BasicAttack(c.Equipment[0] > 0 ? Part1Item.ById(Part1Tables.Items, c.Equipment[0]) : null);
+                if (Part1Skill.BasicKind(id) is var kind and not Part1Skill.BasicStyle.None)
+                {
+                    int part1 = id switch { 1 or 2 or 3 or 4 or 5 => 2, 10 or 362 => 3, 280 => 20, _ => 2 + Part1Skill.BasicLevel(id) };
+                    info = (Part1Skill.Part2Action(part1), kind, id);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException) { }
+        return _attacks[def.Chr] = info;
+    }
+
+    /// <summary>탄의 빠르기(칸/초) — 총알이 가장 빠르고 마법탄이 가장 느리다.</summary>
+    private static double ShotSpeed(Part1Skill.BasicStyle style) => style switch
+    {
+        Part1Skill.BasicStyle.Shot or Part1Skill.BasicStyle.Volley => 26,
+        Part1Skill.BasicStyle.Arrow or Part1Skill.BasicStyle.Throw or Part1Skill.BasicStyle.Boomerang => 13,
+        Part1Skill.BasicStyle.Cannon => 10,
+        _ => 8,
+    };
+
+    /// <summary>탄 색 — 화이어 애로우 324~ 주황 · 아이스미사일 327~ 하늘 · 라이트닝볼츠 330~ 노랑, 총알 노랑, 화살 · 창 나무색.</summary>
+    private static uint ShotColorOf(Part1Skill.BasicStyle style, int attackId) => style switch
+    {
+        Part1Skill.BasicStyle.Missile => attackId switch { >= 330 and <= 332 => 0xFFFFFF80, >= 327 and <= 329 => 0xFF90E8FF, >= 324 and <= 326 => 0xFFFF9040, _ => 0xFF90C0FF },
+        Part1Skill.BasicStyle.Shot or Part1Skill.BasicStyle.Volley => 0xFFFFF070,
+        _ => 0xFFE8D8A0,
+    };
+
+    /// <summary>그 동작 모션의 소리 키(자식 그림의 소리까지)를 판 시계에 맞춰 건다 — 전투의 ScheduleActionSounds 와 같은 셈.</summary>
+    private void QueueSounds(ObsMotionClip? clip, double x)
+    {
+        if (clip == null) return;
+        var (ox, _) = host.Mos.MosesOrigin();
+        float sx = (float)(ox + x - _camX);
+        double t0 = host._lastTime;
+        foreach (var (start, sound) in clip.Sounds) host._pendingSounds.Add((t0 + start / TicksPerSecond / _speed, sound, sx));
+        foreach (var (start, obs, motion, _, _, _, _) in clip.Children)
+            if (host.UiFor(obs)?.Clip(motion) is { } child)
+                foreach (var (cs, sound) in child.Sounds) host._pendingSounds.Add((t0 + (start + cs) / TicksPerSecond / _speed, sound, sx));
+    }
+
+    private Enemy? TargetFor(Tower t, double reach)
+    {
+        Enemy? target = null;
+        foreach (var e in _enemies)
+            if (e.Alive && Dist2(t.X, t.Y, e.X, e.Y) <= reach * reach && (target == null || e.Dist > target.Dist)) target = e;
+        return target;
     }
 
     private bool HasAction(UnitSprite? s, int action) => s?._table?.Resolve(action, ObsMotionTable.DirectionSide) is { Keys.Count: > 0 };
@@ -404,33 +489,41 @@ internal sealed class TowerDefenseScene(GameWindow host)
         }
         _enemies.RemoveAll(e => !e.Alive && _sim - e.DeadAt > 0.8);
 
-        // 타워
+        // 타워 — 겨누면 공격 동작을 걸고, 그 모션의 타격 키(없으면 첫 소리 키 · 길이 절반)에서 친다 · 쏜다.
+        // 간격은 모션 길이보다 짧지 않게 하고 그만큼 피해를 키워 초당 피해는 그대로 둔다(동작이 끊기지 않게).
         foreach (var t in _towers)
         {
-            var (power, haste, range) = AuraOn(t);
+            var (power, haste, _) = AuraOn(t);
+            if (t.PendingAt >= 0 && _sim >= t.PendingAt) { t.PendingAt = -1; Release(t); }
             t.Cooldown -= dt * (1 + haste);
-            if (t.Cooldown > 0) continue;
-            double reach = t.Def.Stats.Range * t.Def.Power * (t.Def.Hero ? 0.6 : 1) * (1 + range) * Cell;
-            reach = Math.Max(reach, t.Def.Stats.Range * Cell * (1 + range));
-            Enemy? target = null;
-            foreach (var e in _enemies)
-                if (e.Alive && Dist2(t.X, t.Y, e.X, e.Y) <= reach * reach && (target == null || e.Dist > target.Dist)) target = e;
-            if (target == null) continue;
-            t.Cooldown = t.Def.Stats.Interval;
-            t.AnimAt = _sim;
+            if (t.Cooldown > 0 || t.PendingAt >= 0) continue;
+            if (TargetFor(t, Reach(t)) is not { } target) continue;
             var sprite = _sprites.GetValueOrDefault(t.Def.Chr);
-            t.Action = t.Def.Stats.Shot > 0 && HasAction(sprite, 9) ? 9 : HasAction(sprite, 8) ? 8 : ObsMotionTable.ActionStand;
+            var atk = AttackOf(t.Def);
+            int action = atk.AttackId == 1 ? Part1Skill.Part2Action(_rng.Next(2) == 0 ? 2 : 3) : atk.Action;
+            int plain = atk.Style == Part1Skill.BasicStyle.Melee ? 8 : 9;
+            if (!HasAction(sprite, action)) action = HasAction(sprite, plain) ? plain : HasAction(sprite, 8) ? 8 : ObsMotionTable.ActionStand;
             double dx = target.X - t.X, dy = target.Y - t.Y;
-            t.Facing = Math.Abs(dx) >= Math.Abs(dy) ? (dx >= 0 ? Facing.Right : Facing.Left) : (dy >= 0 ? Facing.Down : Facing.Up);
-            double damage = t.Def.Stats.Damage * t.Def.Power * (1 + power);
-            if (t.Def.Stats.Shot > 0) _shots.Add(new Shot(t.X, t.Y - 24, target, t, damage));
-            else Strike(t, target, damage);
+            t.Facing = Math.Abs(dx) >= Math.Abs(dy) * 1.25 ? (dx >= 0 ? Facing.Right : Facing.Left) : (dy >= 0 ? Facing.Down : Facing.Up);
+            var clip = sprite?.Clip(action, t.Facing);
+            double len = sprite?.ActionSeconds(action, t.Facing) ?? 0;
+            if (len <= 0) len = 0.5;
+            double hit = clip is { Hits.Count: > 0 } ? clip.Hits[0].Start / TicksPerSecond : clip is { Sounds.Count: > 0 } ? clip.Sounds[0].Start / TicksPerSecond : len * 0.5;
+            double interval = Math.Max(t.Def.Stats.Interval, len);
+            t.Cooldown = interval;
+            t.AnimAt = _sim;
+            t.AnimLen = len;
+            t.Action = action;
+            t.PendingAt = _sim + Math.Min(hit, len);
+            t.PendingTarget = target;
+            t.PendingDamage = t.Def.Stats.Damage * t.Def.Power * (1 + power) * interval / t.Def.Stats.Interval;
+            QueueSounds(clip, t.X);
         }
 
         // 탄
         foreach (var s in _shots.ToList())
         {
-            double speed = s.From.Def.Stats.Shot * Cell * dt;
+            double speed = ShotSpeed(s.Style) * Cell * dt;
             double tx = s.Target.X, ty = s.Target.Y - 22, d = Math.Sqrt(Dist2(s.X, s.Y, tx, ty));
             if (d <= speed || !s.Target.Alive)
             {
@@ -443,6 +536,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         }
 
         _fx.RemoveAll(f => _sim - f.At > 0.6);
+        _beams.RemoveAll(b => _sim - b.At > 0.3);
         _floats.RemoveAll(f => _sim - f.At > 1.0);
 
         if (_wave >= TdData.Waves.Length && _spawns.Count == 0 && !_enemies.Any(e => e.Alive) && _phase == Phase.Playing)
@@ -454,6 +548,29 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     /// <summary>파트2 게임 오버 소리 대신 — 전투에서 진 때 쓰는 효과음이 따로 없어 짧은 알림음을 쓴다.</summary>
     private const int GameOverSound = 578;
+
+    /// <summary>타격 키 — 칼은 그 자리에서 치고, 빔은 곧은 줄로 꿰뚫고, 나머지는 탄을 쏜다. 겨눈 적이 그새 죽거나 벗어났으면 다른 적을.</summary>
+    private void Release(Tower t)
+    {
+        double reach = Reach(t) * 1.15;
+        var target = t.PendingTarget is { Alive: true } p && Dist2(t.X, t.Y, p.X, p.Y) <= reach * reach ? p : TargetFor(t, reach);
+        if (target == null) return;
+        var atk = AttackOf(t.Def);
+        double muzzle = t.Facing == Facing.Right ? 12 : t.Facing == Facing.Left ? -12 : 0;
+        switch (atk.Style)
+        {
+            case Part1Skill.BasicStyle.Melee:
+                Strike(t, target, t.PendingDamage);
+                break;
+            case Part1Skill.BasicStyle.Beam:
+                _beams.Add((t.X + muzzle, t.Y - 28, target.X, target.Y - 22, _sim, t.Def.Stats.ShotColor != 0 ? t.Def.Stats.ShotColor : 0xFF80FFFF));
+                Strike(t, target, t.PendingDamage);
+                break;
+            default:
+                _shots.Add(new Shot(t.X + muzzle, t.Y - 28, target, t, t.PendingDamage) { Style = atk.Style, Color = ShotColorOf(atk.Style, atk.AttackId) });
+                break;
+        }
+    }
 
     private void Strike(Tower t, Enemy target, double damage)
     {
@@ -574,8 +691,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     private (int Col, int Row) CellAt(int lx, int ly)
     {
-        if (_img is not { } m || lx < 0 || ly < 0 || lx >= FieldW || ly >= FieldH) return (-1, -1);
-        int x = lx + _camX, y = ly + _camY, col = x / Cell;
+        if (_img is not { } m || lx < 0 || ly < Top || lx >= FieldW || ly >= FieldH) return (-1, -1);
+        int x = lx + _camX, y = ly - Top + _camY, col = x / Cell;
         // 높이 때문에 겹치면 앞(아래) 줄이 이긴다 — 판의 RowAt 과 같은 셈.
         for (int row = m.Rows - 1; row >= 0; row--)
         {
@@ -640,7 +757,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             _pick = card;
             return true;
         }
-        if (ly >= FieldH) return true;
+        if (ly >= FieldH || ly < Top) return true;
         var (col, row) = CellAt(lx, ly);
         if (_pick >= 0) { Place(col, row); return true; }
         _selected = _towers.FirstOrDefault(t => t.Col == col && t.Row == row);
@@ -691,15 +808,18 @@ internal sealed class TowerDefenseScene(GameWindow host)
         if (!Open) return;
         Advance();
         var (ox, oy) = host.Mos.MosesOrigin();
+        int fy = oy + Top;   // 맵 칸의 윗끝 — 위 막대(골드 · 단추)가 적을 가리지 않게 그 아래부터 맵을 깐다(td-2)
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
-        DrawMap(ox, oy);
+        DrawMap(ox, fy);
 
         var clipBefore = host._uiClip;
-        host._uiClip = (ox, oy, FieldW, FieldH);
-        DrawPath(ox, oy);
-        DrawPlacement(ox, oy);
-        DrawBodies(ox, oy);
-        DrawShots(ox, oy);
+        host._uiClip = (ox, fy, FieldW, ViewH);
+        DrawPath(ox, fy);
+        DrawGates(ox, fy);
+        DrawPlacement(ox, fy);
+        DrawBodies(ox, fy);
+        DrawShots(ox, fy);
+        DrawBeams(ox, fy);
         host._uiClip = clipBefore;
 
         DrawTopBar(ox, oy);
@@ -707,8 +827,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
         DrawInfo(ox, oy);
         foreach (var (text, x, y, at, color) in _floats)
         {
-            int sx = ox + (int)x - _camX, sy = oy + (int)(y - (_sim - at) * 30) - _camY;
-            if (sy > oy && sy < oy + FieldH) Outlined(text, sx - text.Length * 3, sy, color, 12);
+            int sx = ox + (int)x - _camX, sy = fy + (int)(y - (_sim - at) * 30) - _camY;
+            if (sy > fy && sy < oy + FieldH) Outlined(text, sx - text.Length * 3, sy, color, 12);
         }
         if (_phase != Phase.Playing) DrawResult(ox, oy);
         if (_loading is { IsCompleted: false }) Outlined($"인물 그림을 불러오는 중… {_loaded}/{_toLoad}", ox + 8, oy + FieldH - 22, Dim, 11);
@@ -720,7 +840,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         if (_img is not { } m) { host.UiText("맵을 못 읽었습니다", ox + 240, oy + 190, Red); return; }
         var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(m.Bgra.AsSpan());
         int x0 = Math.Max(0, _camX), x1 = Math.Min(m.Width, _camX + FieldW);
-        for (int y = 0; y < FieldH; y++)
+        for (int y = 0; y < ViewH; y++)
         {
             int my = _camY + y, by = oy + y;
             if (my < 0 || my >= m.Height || by < 0 || by >= host.BoardHeight || x0 >= x1) continue;
@@ -738,21 +858,55 @@ internal sealed class TowerDefenseScene(GameWindow host)
         return (ox + (int)x - Cell / 2 - _camX, oy + (int)y - CellH / 2 - _camY);
     }
 
+    /// <summary>
+    /// 길 — 입구(초록)에서 출구(빨강)로 색이 바뀌고, 칸마다 다음 칸 쪽 화살표, 그 위로 밝은 띠가 입구에서 출구로 흐른다(td-2: 「어디가 시작이고 끝인지 한눈에」).
+    /// </summary>
     private void DrawPath(int ox, int oy)
     {
-        foreach (var (c, r) in _pathOrder)
+        int n = _pathOrder.Count, flow = (int)(_sim * 8) % Math.Max(1, n + 6);
+        for (int i = 0; i < n; i++)
         {
+            var (c, r) = _pathOrder[i];
             var (x, y) = CellTopLeft(ox, oy, c, r);
-            host.FillRect(x + 2, y + 2, Cell - 4, CellH - 4, 0x50D8A050);
+            double k = n > 1 ? i / (double)(n - 1) : 0;
+            uint rr = (uint)(80 + 175 * k), gg = (uint)(220 - 150 * k), bb = 70;
+            bool lit = i <= flow && i > flow - 3;
+            host.FillRect(x + 2, y + 2, Cell - 4, CellH - 4, (lit ? 0x90000000u : 0x48000000u) | rr << 16 | gg << 8 | bb);
+            var next = i + 1 < n ? _pathOrder[i + 1] : (c + 1, r);
+            Arrow(x + Cell / 2, y + CellH / 2, Math.Sign(next.Item1 - c), Math.Sign(next.Item2 - r), lit ? 0xFFFFFFFF : 0xC0FFFFFF);
         }
-        // 길의 들어오는 곳 · 나가는 곳
-        if (_pathOrder.Count > 0)
-        {
-            var (sx, sy) = CellTopLeft(ox, oy, _pathOrder[0].Col, _pathOrder[0].Row);
-            var (ex, ey) = CellTopLeft(ox, oy, _pathOrder[^1].Col, _pathOrder[^1].Row);
-            host.StrokeRect(sx + 1, sy + 1, Cell - 2, CellH - 2, 0xFFFF6060);
-            host.StrokeRect(ex + 1, ey + 1, Cell - 2, CellH - 2, 0xFF60A0FF);
-        }
+    }
+
+    /// <summary>(cx, cy) 가운데 (dx, dy) 쪽을 가리키는 작은 화살표.</summary>
+    private void Arrow(int cx, int cy, int dx, int dy, uint color)
+    {
+        for (int i = 0; i < 6; i++)
+            for (int j = -i; j <= i; j++)
+            {
+                int along = 3 - i, side = j;
+                int px = cx + along * dx - side * dy, py = cy + along * dy + side * dx;
+                if (InField(px, py)) host.SetPixel(px, py, color);
+            }
+    }
+
+    /// <summary>입구 · 출구 깃발 — 칸 위에 이름표.</summary>
+    private void DrawGates(int ox, int oy)
+    {
+        if (_pathOrder.Count == 0) return;
+        Gate(ox, oy, _pathOrder[0], "입구", 0xFF40C060);
+        Gate(ox, oy, _pathOrder[^1], "출구", 0xFFE04848);
+    }
+
+    private void Gate(int ox, int oy, (int Col, int Row) cell, string label, uint color)
+    {
+        var (x, y) = CellTopLeft(ox, oy, cell.Col, cell.Row);
+        bool pulse = (int)(_sim * 3) % 2 == 0;
+        host.StrokeRect(x, y, Cell, CellH, color);
+        host.StrokeRect(x + 1, y + 1, Cell - 2, CellH - 2, pulse ? 0xFFFFFFFF : color);
+        int lx = Math.Clamp(x + Cell / 2 - 18, ox + 2, ox + FieldW - 40), ly = y - 20 < oy + 2 ? y + CellH + 2 : y - 20;
+        host.FillRect(lx, ly, 36, 17, color);
+        host.StrokeRect(lx, ly, 36, 17, 0xFFFFFFFF);
+        Outlined(label, lx + 5, ly + 1, 0xFFFFFFFF, 11);
     }
 
     private void DrawPlacement(int ox, int oy)
@@ -797,7 +951,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 if (tower.Def.Hero) Ellipse(sx, sy, 16, 6, 0xFFFFD860);
                 else if (AuraOn(tower) is var a && a.Power + a.Haste + a.Range > 0) Ellipse(sx, sy, 13, 5, 0xA0FFE8A0);
                 double age = _sim - tower.AnimAt;
-                bool attacking = age < 0.6 && tower.Action != ObsMotionTable.ActionStand;
+                bool attacking = age < tower.AnimLen && tower.Action != ObsMotionTable.ActionStand;
                 var sprite = _sprites.GetValueOrDefault(tower.Def.Chr);
                 int top = DrawSprite(sprite, attacking ? tower.Action : ObsMotionTable.ActionStand, tower.Facing, attacking ? age : _sim, !attacking, sx, sy);
                 if (sprite == null) NameTag(tower.Def.Name, sx, sy - 30, tower.Def.Hero ? Gold : 0xFFFFFFFF);
@@ -845,24 +999,55 @@ internal sealed class TowerDefenseScene(GameWindow host)
         foreach (var s in _shots)
         {
             int sx = ox + (int)s.X - _camX, sy = oy + (int)s.Y - _camY;
-            uint color = s.From.Def.Stats.ShotColor;
-            if (s.From.Def.Weapon == TdWeapon.Magic)
+            uint color = s.Color;
+            double tx = s.Target.X - s.X, ty = s.Target.Y - 22 - s.Y, d = Math.Max(1, Math.Sqrt(tx * tx + ty * ty));
+            if (s.Style == Part1Skill.BasicStyle.Missile)
             {
-                host.FillRect(sx - 4, sy - 4, 8, 8, 0x8090C0FF);
-                host.FillRect(sx - 2, sy - 2, 4, 4, 0xFFFFFFFF);
+                host.FillRect(sx - 5, sy - 5, 10, 10, (color & 0x00FFFFFF) | 0x50000000);
+                host.FillRect(sx - 3, sy - 3, 6, 6, (color & 0x00FFFFFF) | 0xB0000000);
+                host.FillRect(sx - 1, sy - 1, 3, 3, 0xFFFFFFFF);
             }
             else
             {
-                double tx = s.Target.X - s.X, ty = s.Target.Y - 22 - s.Y, d = Math.Max(1, Math.Sqrt(tx * tx + ty * ty));
-                for (int i = 0; i < 7; i++) host.SetPixel(sx - (int)(tx / d * i), sy - (int)(ty / d * i), color);
-                host.SetPixel(sx + 1, sy, color);
+                int tail = s.Style is Part1Skill.BasicStyle.Shot or Part1Skill.BasicStyle.Volley ? 10 : 14;
+                Line(sx, sy, sx - (int)(tx / d * tail), sy - (int)(ty / d * tail), color, s.Style == Part1Skill.BasicStyle.Throw ? 2 : 1);
+            }
+        }
+    }
+
+    private void DrawBeams(int ox, int oy)
+    {
+        foreach (var (x1, y1, x2, y2, at, color) in _beams)
+        {
+            double k = Math.Clamp(1 - (_sim - at) / 0.3, 0, 1);
+            int ax = ox + (int)x1 - _camX, ay = oy + (int)y1 - _camY, bx = ox + (int)x2 - _camX, by = oy + (int)y2 - _camY;
+            uint a = (uint)(k * 255) << 24, half = (uint)(k * 110) << 24;
+            Line(ax, ay, bx, by, (color & 0x00FFFFFF) | half, 7);
+            Line(ax, ay, bx, by, (color & 0x00FFFFFF) | a, 3);
+            Line(ax, ay, bx, by, 0x00FFFFFF | a, 1);
+        }
+    }
+
+    /// <summary>굵기 <paramref name="thick"/> 의 곧은 줄(맵 칸 안만).</summary>
+    private void Line(int x1, int y1, int x2, int y2, uint color, int thick)
+    {
+        int n = Math.Max(1, Math.Max(Math.Abs(x2 - x1), Math.Abs(y2 - y1)));
+        bool flat = Math.Abs(x2 - x1) > Math.Abs(y2 - y1);
+        for (int i = 0; i <= n; i++)
+        {
+            int x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n;
+            for (int o = -(thick / 2); o <= thick / 2; o++)
+            {
+                int px = flat ? x : x + o, py = flat ? y + o : y;
+                if (InField(px, py)) host.SetPixel(px, py, color);
             }
         }
     }
 
     private void DrawTopBar(int ox, int oy)
     {
-        host.FillRect(ox, oy, 330, 34, 0xA0000000);
+        host.FillRect(ox, oy, FieldW, Top, 0xFF10141E);
+        host.FillRect(ox, oy + Top - 1, FieldW, 1, 0xFF404C70);
         Outlined($"골드 {_gold}", ox + 8, oy + 9, Gold, 13);
         Outlined($"생명 {_lives}", ox + 100, oy + 9, _lives <= 5 ? Red : Green, 13);
         Outlined($"웨이브 {_wave}/{TdData.Waves.Length}", ox + 180, oy + 9, 0xFFFFFFFF, 13);

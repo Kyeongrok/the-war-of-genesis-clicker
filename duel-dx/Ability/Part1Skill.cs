@@ -330,7 +330,7 @@ internal sealed partial class Part1Skill(GameWindow host)
     }
 
     /// <summary>파트1 동작 번호 → 이 게임의 동작 번호(<see cref="Part1Game.ActionMap"/>). 16 이상은 40 을 더한 자리에 옮겨 두었다.</summary>
-    private static int Part2Action(int part1) => part1 switch
+    internal static int Part2Action(int part1) => part1 switch
     {
         0 => 0, 1 => 1, 2 => 8, 3 => 9, 4 => 7, 5 => 2, 6 => 6, 9 => 5, 11 => 13, 12 => 14, 13 or 14 or 15 => Part1Game.ExtraBase + part1,
         >= Part1Game.ExtraFrom => Part1Game.ExtraBase + part1,

@@ -21,13 +21,13 @@ using static DuelDx.GameWindow;
 /// </remarks>
 internal sealed partial class Part1Skill
 {
-    private enum BasicStyle { None, Melee, Arrow, Shot, Beam, Missile, Boomerang, Throw, Cannon, Volley }
+    internal enum BasicStyle { None, Melee, Arrow, Shot, Beam, Missile, Boomerang, Throw, Cannon, Volley }
 
     /// <summary>이 틀이 그리는 파트1 기본 공격(Attack 번호)인가.</summary>
     internal static bool DrawsBasic(int attackId) => BasicKind(attackId) != BasicStyle.None;
 
     /// <summary>Attack 번호 → 핸들러 갈래(표 <c>0x100433f0</c> · <c>0x1004354c</c>/<c>0x1004342c</c> · <c>0x10043684</c>).</summary>
-    private static BasicStyle BasicKind(int id) => id switch
+    internal static BasicStyle BasicKind(int id) => id switch
     {
         1 or 2 or 3 or 280 or (>= 297 and <= 305) or (>= 318 and <= 320) or (>= 352 and <= 354) => BasicStyle.Melee,
         4 => BasicStyle.Arrow,
@@ -57,7 +57,7 @@ internal sealed partial class Part1Skill
     };
 
     /// <summary>용병 갈래의 레벨(0 · 1 · 2) — 셋씩 묶인 번호(297~320 · 324~338 · 342~344 · 352~357).</summary>
-    private static int BasicLevel(int id) => id switch
+    internal static int BasicLevel(int id) => id switch
     {
         >= 297 and <= 320 => (id - 297) % 3,
         >= 324 and <= 338 => (id - 324) % 3,

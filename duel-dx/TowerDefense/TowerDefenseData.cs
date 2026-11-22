@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>타워의 무기 갈래(사용자 요청 td-1) — 공격 방식이 갈래마다 다르다.</summary>
-internal enum TdWeapon { Sword, Spear, DualBlade, GreatSword, Bow, Gun, Magic }
+internal enum TdWeapon { Sword, Spear, DualBlade, GreatSword, Bow, Gun, Beam, Magic }
 
 /// <summary>영웅 타워의 오라 — 둘레(<see cref="TdData.AuraRange"/>) 타워를 세게 한다. 같은 갈래는 겹치지 않고 가장 센 것만 먹는다.</summary>
 internal enum TdAura { None, Power, Haste, Range }
@@ -54,29 +54,32 @@ internal static class TdData
         [TdWeapon.GreatSword] = new("대검", 1.6, 30, 1.50, 0.9, 0, 0, 0),
         [TdWeapon.Bow] = new("활", 4.2, 10, 0.70, 0, 0, 11, 0xFFE8D8A0),
         [TdWeapon.Gun] = new("총", 3.6, 24, 1.10, 0, 0, 22, 0xFFFFF070),
+        [TdWeapon.Beam] = new("빔", 3.4, 20, 1.20, 0, 2, 0, 0xFF80FFFF),
         [TdWeapon.Magic] = new("마법", 3.0, 20, 1.60, 1.1, 0, 7, 0xFF90C0FF),
     };
 
     /// <summary>
-    /// 지을 수 있는 타워 — 앞은 병종(용병) 타워, 뒤는 영웅 타워. 병종은 파트1 · 2 의 일반 병사를 무기 갈래로 골랐다.
+    /// 지을 수 있는 타워 — 앞은 병종(용병) 타워, 뒤는 영웅 타워. 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래 — 칼 297 · 창 300 ·
+    /// 단발사격 306 · 빔라이플 315 · 화이어 애로우 324 · 활 4)으로 골랐다. 파트1 에 활을 쓰는 병사가 없어 궁병은 연적심(활 4)이다.
     /// 영웅은 비싸고 하나씩만 지을 수 있으며 오라를 두른다(사용자 요청 td-1).
     /// </summary>
     internal static readonly TdTowerDef[] Towers =
     [
-        new(Part1Game.ChrBase + 144, "검병", TdWeapon.Sword, 50),
-        new(Part1Game.ChrBase + 153, "창병", TdWeapon.Spear, 60),
+        new(Part1Game.ChrBase + 155, "검병", TdWeapon.Sword, 50),
+        new(Part1Game.ChrBase + 159, "창병", TdWeapon.Spear, 60),
         new(Part1Game.ChrBase + 387, "쌍검병", TdWeapon.DualBlade, 70),
-        new(Part1Game.ChrBase + 278, "대검병", TdWeapon.GreatSword, 90),
-        new(Part1Game.ChrBase + 256, "석궁병", TdWeapon.Bow, 70),
-        new(265, "총병", TdWeapon.Gun, 90),
-        new(Part1Game.ChrBase + 208, "마법사", TdWeapon.Magic, 110),
+        new(Part1Game.ChrBase + 192, "대검병", TdWeapon.GreatSword, 90),
+        new(Part1Game.ChrBase + 89, "궁병", TdWeapon.Bow, 70),
+        new(Part1Game.ChrBase + 144, "총병", TdWeapon.Gun, 80),
+        new(Part1Game.ChrBase + 256, "빔병", TdWeapon.Beam, 100),
+        new(Part1Game.ChrBase + 168, "마법사", TdWeapon.Magic, 110),
 
         new(Part1Game.ChrBase + 0, "살라딘", TdWeapon.DualBlade, 450, 1.9, true, TdAura.Haste, 0.25),
         new(Part1Game.ChrBase + 30, "버몬트", TdWeapon.GreatSword, 500, 1.8, true, TdAura.Power, 0.30),
-        new(Part1Game.ChrBase + 65, "크리스티앙", TdWeapon.Sword, 450, 1.9, true, TdAura.Range, 0.20),
+        new(Part1Game.ChrBase + 65, "크리스티앙", TdWeapon.Gun, 450, 1.9, true, TdAura.Range, 0.20),
         new(Part1Game.ChrBase + 10, "셰라자드", TdWeapon.Magic, 520, 1.8, true, TdAura.Power, 0.25),
-        new(Part1Game.ChrBase + 32, "어윈 록슬리", TdWeapon.Bow, 420, 1.8, true, TdAura.Range, 0.15),
-        new(Part1Game.ChrBase + 16, "얀 지슈카", TdWeapon.Sword, 420, 1.8, true, TdAura.Haste, 0.20),
+        new(Part1Game.ChrBase + 32, "어윈 록슬리", TdWeapon.Magic, 420, 1.8, true, TdAura.Range, 0.15),
+        new(Part1Game.ChrBase + 16, "얀 지슈카", TdWeapon.GreatSword, 420, 1.8, true, TdAura.Haste, 0.20),
         new(219, "살라딘(2부)", TdWeapon.DualBlade, 480, 2.0, true, TdAura.Haste, 0.25),
         new(220, "크리스티앙(2부)", TdWeapon.Gun, 480, 2.0, true, TdAura.Power, 0.25),
         new(221, "죠안", TdWeapon.Magic, 480, 1.9, true, TdAura.Range, 0.20),
