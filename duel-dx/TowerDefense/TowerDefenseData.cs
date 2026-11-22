@@ -34,7 +34,10 @@ internal sealed record TdSpawn(int Enemy, int Count, double Every);
 /// <summary>맵 — 파트2 전투 맵(Obt) 한 장의 한 네모(640×400)와 적이 지나는 칸들.</summary>
 /// <param name="Waypoints">길이 거쳐 가는 화면 칸(640×400 네모 안 40×32 칸, 첫 · 끝은 들어오고 나가는 곳) — 칸 사이는 걸을 수 있는 칸으로 잇는다(<see cref="TowerDefenseScene"/>).</param>
 /// <param name="ViewCells">참이면 경유점이 보는 네모 안 칸(옛 꼴), 거짓이면 맵 칸(편집기가 적는 꼴).</param>
-internal sealed record TdMap(string Name, string File, int CamX, int CamY, (int Col, int Row)[] Waypoints, int Bgm, bool ViewCells = true);
+/// <param name="AreaW">싸움터 네모 크기(0 = 화면 크기) — 크면 굴려 본다(td-8).</param>
+/// <param name="Open">손으로 연 칸 · <paramref name="Blocked"/> 막은 칸(td-10).</param>
+internal sealed record TdMap(string Name, string File, int CamX, int CamY, (int Col, int Row)[] Waypoints, int Bgm, bool ViewCells = true,
+                            int AreaW = 0, int AreaH = 0, int[][]? Open = null, int[][]? Blocked = null);
 
 /// <summary>스테이지 — 맵과 시작 골드 · 생명, 적과 웨이브(편집기 「타워 디펜스」가 고친다, 사용자 요청 td-4).</summary>
 internal sealed record TdStage(string Id, TdMap Map, int StartGold, int StartLives, double HpPerWave, TdEnemyDef[] Enemies, TdSpawn[][] Waves);
@@ -82,7 +85,7 @@ internal static class TdData
                                         Enum.TryParse<TdAura>(t.Aura, out var a) ? a : TdAura.None, t.AuraValue)).ToArray();
         Stages = stages.Select(s => new TdStage(
             s.Id,
-            new TdMap(s.Name, s.Map, s.CamX, s.CamY, s.Waypoints.Select(p => (p[0], p[1])).ToArray(), s.Bgm, s.ViewCells),
+            new TdMap(s.Name, s.Map, s.CamX, s.CamY, s.Waypoints.Select(p => (p[0], p[1])).ToArray(), s.Bgm, s.ViewCells, s.AreaW, s.AreaH, [.. s.Open], [.. s.Blocked]),
             s.StartGold, s.StartLives, Math.Max(0, s.HpPerWave),
             s.Enemies.Select(e => new TdEnemyDef(e.Chr, e.Fallback, e.Name, Math.Max(1, e.Hp), Math.Max(0.1, e.Speed), Math.Max(0, e.Bounty), Math.Max(0, e.Leak), Math.Max(0, e.Armor))).ToArray(),
             s.Waves.Select(w => w.Select(g => new TdSpawn(g.Enemy, g.Count, Math.Max(0.1, g.Every))).ToArray()).ToArray())).ToArray();

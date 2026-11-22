@@ -5,7 +5,21 @@
     Title="타워 디펜스 편집 — 스테이지 · 타워 (assets/data/towerdefense/*.json)"
     Width="1280"
     Height="820"
+    xmlns:local="clr-namespace:WarOfGenesis.Editor"
+    PreviewKeyDown="Window_PreviewKeyDown"
     WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <local:ChrPictureConverter x:Key="ChrPicture" />
+        <DataTemplate x:Key="ChrPictureCell">
+            <Image
+                Width="48"
+                Height="56"
+                Source="{Binding Chr, Converter={StaticResource ChrPicture}}"
+                Stretch="Uniform"
+                StretchDirection="DownOnly"
+                RenderOptions.BitmapScalingMode="NearestNeighbor" />
+        </DataTemplate>
+    </Window.Resources>
     <DockPanel Margin="8">
         <!--  아래: 저장 · 상태 글  -->
         <DockPanel Margin="0,8,0,0" DockPanel.Dock="Bottom">
@@ -64,13 +78,13 @@
                             <TextBlock Margin="0,0,4,0" VerticalAlignment="Center" Text="이름" />
                             <TextBox x:Name="NameBox" Width="130" Margin="0,0,10,0" TextChanged="NameBox_TextChanged" />
                             <TextBlock Margin="0,0,4,0" VerticalAlignment="Center" Text="맵" />
-                            <ComboBox
+                            <TextBox
                                 x:Name="MapBox"
-                                Width="140"
+                                Width="100"
                                 Margin="0,0,4,0"
                                 AutomationProperties.AutomationId="TdMapBox"
-                                IsEditable="True"
                                 ToolTip="part1:NNNN = 파트1 Obt, NNNN.obt = 파트2 Obt" />
+                            <Button Margin="0,0,4,0" Padding="8,1" Click="MapPick_Click" Content="맵 고르기…" AutomationProperties.AutomationId="TdMapPick" />
                             <Button Margin="0,0,10,0" Padding="8,1" Click="MapLoad_Click" Content="불러오기" />
                             <TextBlock Margin="0,0,4,0" VerticalAlignment="Center" Text="골드" />
                             <TextBox x:Name="GoldBox" Width="50" Margin="0,0,10,0" />
@@ -87,13 +101,18 @@
                         <!--  맵: 클릭으로 길 찍기  -->
                         <DockPanel Grid.Row="1">
                             <DockPanel Margin="0,0,0,4" DockPanel.Dock="Top">
+                                <RadioButton x:Name="ToolWaypoint" Margin="0,0,8,0" VerticalAlignment="Center" Content="경유점" DockPanel.Dock="Left" IsChecked="True" GroupName="MapTool" />
+                                <RadioButton x:Name="ToolGround" Margin="0,0,10,0" VerticalAlignment="Center" Content="걷기 칸 칠하기" DockPanel.Dock="Left" GroupName="MapTool"
+                                             ToolTip="칸을 눌러(끌어) 걸을 수 있게 · 못 걷게 바꾼다 — 길과 타워 자리가 이 칸을 따른다" />
                                 <Button Margin="0,0,4,0" Padding="8,1" Click="PathClear_Click" Content="길 지우기" DockPanel.Dock="Left" />
-                                <Button Margin="0,0,4,0" Padding="8,1" Click="PathUndo_Click" Content="마지막 점 빼기" DockPanel.Dock="Left" />
-                                <Button Margin="0,0,10,0" Padding="8,1" Click="CamCenter_Click" Content="보는 자리 가운데로" DockPanel.Dock="Left" />
+                                <Button Margin="0,0,4,0" Padding="8,1" Click="GroundClear_Click" Content="칠한 칸 지우기" DockPanel.Dock="Left" />
+                                <Button Margin="0,0,4,0" Padding="8,1" Click="CamCenter_Click" Content="싸움터 가운데로" DockPanel.Dock="Left" />
+                                <Button Margin="0,0,10,0" Padding="8,1" Click="AreaReset_Click" Content="싸움터 화면 크기로" DockPanel.Dock="Left" />
                                 <TextBlock
                                     VerticalAlignment="Center"
                                     Foreground="#555"
-                                    Text="왼클릭: 경유점 더하기(첫 점 입구 · 끝 점 출구) · 오른클릭: 가까운 점 빼기 · Shift+클릭: 노란 네모(게임 화면)를 그 자리로 · 빗금: 못 걷는 칸" />
+                                    TextWrapping="Wrap"
+                                    Text="경유점: 왼클릭 더하기(첫 점 입구 · 끝 점 출구) · 오른클릭 빼기 · 노란 네모(싸움터): 안을 끌어 옮기기, 가장자리 · 모서리를 끌어 크기(화면보다 크면 게임에서 굴려 본다) · 어두운 칸: 못 걷는 칸 · Ctrl+Z 실행 취소" />
                             </DockPanel>
                             <ScrollViewer x:Name="MapScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#202020">
                                 <Grid x:Name="MapHost" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -102,6 +121,8 @@
                                         x:Name="MapOverlay"
                                         Background="Transparent"
                                         MouseLeftButtonDown="MapOverlay_MouseLeftButtonDown"
+                                        MouseLeftButtonUp="MapOverlay_MouseLeftButtonUp"
+                                        MouseMove="MapOverlay_MouseMove"
                                         MouseRightButtonDown="MapOverlay_MouseRightButtonDown" />
                                 </Grid>
                             </ScrollViewer>
@@ -128,6 +149,7 @@
                                     HeadersVisibility="Column"
                                     LoadingRow="EnemyGrid_LoadingRow">
                                     <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="그림" CellTemplate="{StaticResource ChrPictureCell}" IsReadOnly="True" />
                                         <DataGridTextColumn Binding="{Binding Chr}" Header="인물 번호" />
                                         <DataGridTextColumn Binding="{Binding Fallback}" Header="대신(파트2)" />
                                         <DataGridTextColumn Width="*" Binding="{Binding Name}" Header="이름" />
@@ -192,6 +214,7 @@
                             CanUserAddRows="False"
                             HeadersVisibility="Column">
                             <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="그림" CellTemplate="{StaticResource ChrPictureCell}" IsReadOnly="True" />
                                 <DataGridTextColumn Binding="{Binding Chr}" Header="인물 번호" />
                                 <DataGridTextColumn Width="*" Binding="{Binding Name}" Header="이름" />
                                 <DataGridComboBoxColumn x:Name="TowerWeaponColumn" Header="무기 갈래" SelectedValueBinding="{Binding Weapon}" SelectedValuePath="Key" DisplayMemberPath="Value" />

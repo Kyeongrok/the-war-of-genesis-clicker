@@ -77,6 +77,12 @@ public sealed class TdStageEntry
     public int CamY { get; set; } = -1;
     /// <summary>길이 거쳐 가는 칸 [열, 행] — 첫 · 끝은 입구 · 출구, 사이는 걸을 수 있는 칸으로 잇는다. 비면 저절로 고른다.</summary>
     public List<int[]> Waypoints { get; set; } = [];
+    /// <summary>싸움터 네모 크기(px) — 0 이면 게임 화면 크기(640×364). 크면 게임에서 굴려 본다(td-8).</summary>
+    public int AreaW { get; set; }
+    public int AreaH { get; set; }
+    /// <summary>맵 자료와 달리 손으로 연 칸 · 막은 칸 [열, 행](td-10).</summary>
+    public List<int[]> Open { get; set; } = [];
+    public List<int[]> Blocked { get; set; } = [];
     /// <summary>참이면 <see cref="Waypoints"/> 가 보는 네모 안 칸(옛 꼴), 거짓이면 맵 칸.</summary>
     public bool ViewCells { get; set; }
     public int Bgm { get; set; } = BattleDemoScene.Bgm;
@@ -264,77 +270,106 @@ public static class TowerDefenseBook
     /// <summary>칸 크기와 높이 한 칸의 픽셀(판과 같다).</summary>
     public const int Cell = 40, CellH = 32, HeightStep = 12;
 
-    /// <summary>보는 네모 크기(게임 화면에서 위 막대 · 아래 짓기 칸을 뺀 자리).</summary>
+    /// <summary>게임 화면에서 맵이 보이는 네모(위 막대 · 아래 짓기 칸을 뺀 자리).</summary>
     public const int ViewW = 640, ViewH = 364;
 
     /// <summary>칸 가운데(발 자리)의 맵 그림 좌표.</summary>
     public static (double X, double Y) CellFoot(ObtMapImage m, int col, int row) =>
         (col * Cell + Cell / 2.0, row * CellH + CellH / 2.0 - m.HeightAt(col, row) * HeightStep - m.OriginY);
 
-    /// <summary>스테이지의 보는 네모 왼위 — -1 이면 맵 가운데.</summary>
-    public static (int X, int Y) Camera(ObtMapImage m, int camX, int camY) =>
-        (camX >= 0 ? camX : Math.Max(0, (m.Width - ViewW) / 2), camY >= 0 ? camY : Math.Max(0, (m.Height - ViewH) / 2));
+    /// <summary>
+    /// 스테이지의 싸움터 네모(맵 그림 좌표) — 왼위가 -1 이면 맵 가운데, 크기가 0 이면 게임 화면 크기(640×364).
+    /// 화면보다 크면 게임에서 화살표 키 · 화면 가장자리로 굴려 본다(td-8).
+    /// </summary>
+    public static (int X, int Y, int W, int H) Area(ObtMapImage m, TdStageEntry s) => Area(m, s.CamX, s.CamY, s.AreaW, s.AreaH);
 
-    /// <summary>그 칸이 보는 네모 안에 다 들어오는가.</summary>
-    public static bool Visible(ObtMapImage m, int camX, int camY, int col, int row)
+    public static (int X, int Y, int W, int H) Area(ObtMapImage m, int camX, int camY, int areaW, int areaH)
     {
-        var (x, y) = CellFoot(m, col, row);
-        return x - Cell / 2 >= camX && x + Cell / 2 <= camX + ViewW && y - CellH / 2 >= camY && y + CellH / 2 <= camY + ViewH;
+        int w = areaW > 0 ? areaW : ViewW, h = areaH > 0 ? areaH : ViewH;
+        return (camX >= 0 ? camX : Math.Max(0, (m.Width - w) / 2), camY >= 0 ? camY : Math.Max(0, (m.Height - h) / 2), w, h);
     }
-
-    /// <summary>걸을 수 있고(막힘 깃발 1 · 8 없음) 보이는 칸.</summary>
-    public static bool Walkable(ObtMapImage m, int camX, int camY, int col, int row) =>
-        col >= 0 && row >= 0 && col < m.Cols && row < m.Rows && (m.FlagsAt(col, row) & 0x9) == 0 && Visible(m, camX, camY, col, row);
 
     /// <summary>옛 꼴(보는 네모 안 칸) 경유점을 맵 칸으로.</summary>
     public static (int Col, int Row) ViewToMap(ObtMapImage m, int camX, int camY, int vc, int vr) =>
         ((camX + vc * Cell + Cell / 2) / Cell, (camY + vr * CellH + CellH / 2 + m.OriginY) / CellH);
+}
+
+/// <summary>
+/// 싸움터 — 맵, 싸움터 네모, 스테이지가 손으로 연 · 막은 칸(td-10). 걸을 수 있는 칸 · 길 잇기를 게임과 편집기가 같이 쓴다.
+/// </summary>
+public sealed class TdField(ObtMapImage map, (int X, int Y, int W, int H) area, IEnumerable<int[]>? open = null, IEnumerable<int[]>? blocked = null)
+{
+    public ObtMapImage Map { get; } = map;
+    public (int X, int Y, int W, int H) Area { get; } = area;
+    private readonly HashSet<(int, int)> _open = [.. (open ?? []).Where(p => p is { Length: 2 }).Select(p => (p[0], p[1]))];
+    private readonly HashSet<(int, int)> _blocked = [.. (blocked ?? []).Where(p => p is { Length: 2 }).Select(p => (p[0], p[1]))];
+
+    public static TdField Of(ObtMapImage m, TdStageEntry s) => new(m, TowerDefenseBook.Area(m, s), s.Open, s.Blocked);
+
+    /// <summary>그 칸이 싸움터 네모 안에 다 들어오는가.</summary>
+    public bool Inside(int col, int row)
+    {
+        var (x, y) = TowerDefenseBook.CellFoot(Map, col, row);
+        return x - TowerDefenseBook.Cell / 2 >= Area.X && x + TowerDefenseBook.Cell / 2 <= Area.X + Area.W
+            && y - TowerDefenseBook.CellH / 2 >= Area.Y && y + TowerDefenseBook.CellH / 2 <= Area.Y + Area.H;
+    }
+
+    /// <summary>맵 자료로 걸을 수 있는가(막힘 깃발 1 · 8 없음) — 손으로 연 · 막은 칸이 먼저.</summary>
+    public bool Ground(int col, int row) =>
+        col >= 0 && row >= 0 && col < Map.Cols && row < Map.Rows
+        && (_blocked.Contains((col, row)) ? false : _open.Contains((col, row)) || (Map.FlagsAt(col, row) & 0x9) == 0);
+
+    /// <summary>걸을 수 있고 싸움터 안인 칸 — 길과 타워 자리.</summary>
+    public bool Walkable(int col, int row) => Ground(col, row) && Inside(col, row);
 
     /// <summary>
     /// 경유점(맵 칸)을 걸을 수 있는 칸으로 잇는 길. 경유점은 둘레에서 가장 가까운 걸을 수 있는 칸으로 옮기고(첫 · 끝은 그 열에서만),
-    /// 칸 사이는 높이 차 1 이하로 잇는 가장 짧은 길(BFS), 못 이으면 곧은 줄. 경유점이 없으면 왼 가운데 → 위 → 아래 → 오른 가운데로 저절로.
+    /// 칸 사이는 높이 차 1 이하로 잇는 가장 짧은 길(BFS) — 손으로 연 칸은 높이 차를 안 따진다. 못 이으면 곧은 줄.
+    /// 경유점이 없으면 왼 가운데 → 위 → 아래 → 오른 가운데로 저절로.
     /// </summary>
-    public static List<(int Col, int Row)> BuildPath(ObtMapImage m, int camX, int camY, IReadOnlyList<(int Col, int Row)> waypoints)
+    public List<(int Col, int Row)> BuildPath(IReadOnlyList<(int Col, int Row)> waypoints)
     {
         var marks = new List<(int, int)>();
         if (waypoints.Count > 0)
             for (int i = 0; i < waypoints.Count; i++)
-                marks.Add(Nearest(m, camX, camY, waypoints[i].Col, waypoints[i].Row, edge: i == 0 || i == waypoints.Count - 1));
+                marks.Add(Nearest(waypoints[i].Col, waypoints[i].Row, edge: i == 0 || i == waypoints.Count - 1));
         else
         {
-            int c0 = (int)Math.Ceiling(camX / (double)Cell), c1 = (camX + ViewW) / Cell - 1;
-            int midRow = (camY + ViewH / 2 + m.OriginY) / CellH;
-            int topRow = (camY + ViewH / 5 + m.OriginY) / CellH, bottomRow = (camY + ViewH * 4 / 5 + m.OriginY) / CellH;
-            marks.Add(Nearest(m, camX, camY, c0, midRow, edge: true));
-            marks.Add(Nearest(m, camX, camY, c0 + (c1 - c0) / 3, topRow));
-            marks.Add(Nearest(m, camX, camY, c0 + (c1 - c0) * 2 / 3, bottomRow));
-            marks.Add(Nearest(m, camX, camY, c1, midRow, edge: true));
+            var (ax, ay, aw, ah) = Area;
+            int c0 = (int)Math.Ceiling(ax / (double)TowerDefenseBook.Cell), c1 = (ax + aw) / TowerDefenseBook.Cell - 1;
+            int midRow = (ay + ah / 2 + Map.OriginY) / TowerDefenseBook.CellH;
+            int topRow = (ay + ah / 5 + Map.OriginY) / TowerDefenseBook.CellH, bottomRow = (ay + ah * 4 / 5 + Map.OriginY) / TowerDefenseBook.CellH;
+            marks.Add(Nearest(c0, midRow, edge: true));
+            marks.Add(Nearest(c0 + (c1 - c0) / 3, topRow));
+            marks.Add(Nearest(c0 + (c1 - c0) * 2 / 3, bottomRow));
+            marks.Add(Nearest(c1, midRow, edge: true));
         }
         var order = new List<(int Col, int Row)>();
         for (int i = 0; i < marks.Count; i++)
         {
-            var leg = i == 0 ? [marks[0]] : Route(m, camX, camY, marks[i - 1], marks[i]);
+            var leg = i == 0 ? [marks[0]] : Route(marks[i - 1], marks[i]);
             foreach (var c in leg)
                 if (order.Count == 0 || order[^1] != c) order.Add(c);
         }
         return order;
     }
 
-    private static (int, int) Nearest(ObtMapImage m, int camX, int camY, int col, int row, bool edge = false)
+    private (int, int) Nearest(int col, int row, bool edge = false)
     {
+        if (Walkable(col, row)) return (col, row);
         (int, int) best = (col, row);
         int bestD = int.MaxValue;
         for (int c = col - (edge ? 0 : 3); c <= col + (edge ? 0 : 3); c++)
             for (int r = row - 8; r <= row + 8; r++)
             {
-                if (!Walkable(m, camX, camY, c, r)) continue;
+                if (!Walkable(c, r)) continue;
                 int d = Math.Abs(c - col) * 3 + Math.Abs(r - row);
                 if (d < bestD) (bestD, best) = (d, (c, r));
             }
         return best;
     }
 
-    private static List<(int Col, int Row)> Route(ObtMapImage m, int camX, int camY, (int Col, int Row) from, (int Col, int Row) to)
+    private List<(int Col, int Row)> Route((int Col, int Row) from, (int Col, int Row) to)
     {
         var prev = new Dictionary<(int, int), (int, int)>();
         var queue = new Queue<(int Col, int Row)>();
@@ -348,8 +383,8 @@ public static class TowerDefenseBook
             foreach (var (dc, dr) in steps)
             {
                 var next = (cur.Col + dc, cur.Row + dr);
-                if (prev.ContainsKey(next) || !Walkable(m, camX, camY, next.Item1, next.Item2)) continue;
-                if (Math.Abs(m.HeightAt(next.Item1, next.Item2) - m.HeightAt(cur.Col, cur.Row)) > 1) continue;
+                if (prev.ContainsKey(next) || !Walkable(next.Item1, next.Item2)) continue;
+                if (!_open.Contains(next) && !_open.Contains(cur) && Math.Abs(Map.HeightAt(next.Item1, next.Item2) - Map.HeightAt(cur.Col, cur.Row)) > 1) continue;
                 prev[next] = cur;
                 queue.Enqueue(next);
             }

@@ -17,6 +17,57 @@ namespace WarOfGenesis.Editor;
 /// 저장하면 <c>assets/data/towerdefense/</c> 에 <c>towers.json</c> · <c>stage-NN.json</c> 을 적고(<see cref="TowerDefenseBook"/>),
 /// 게임은 타워 디펜스를 열 때마다 다시 읽는다. 길은 게임과 같은 셈(<see cref="TowerDefenseBook.BuildPath"/>)으로 그려 보인다.
 /// </summary>
+/// <summary>인물 번호 → 그 인물의 전투 그림 첫 장(타워 · 적 표의 「그림」 칸, 사용자 요청 td-7). 파트1(20000+)은 파트1 폴더 Obss 에서 파트2 꼴로 바꿔 읽는다.</summary>
+public sealed class ChrPictureConverter : System.Windows.Data.IValueConverter
+{
+    private static readonly Dictionary<int, BitmapSource?> Cache = [];
+    private static GameDatabase? _db;
+    private static GameFiles? _game;
+    private static bool _ready;
+
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is int chr ? Picture(chr) : null;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+
+    public static BitmapSource? Picture(int chr)
+    {
+        if (chr <= 0) return null;
+        if (Cache.TryGetValue(chr, out var known)) return known;
+        BitmapSource? image = null;
+        try
+        {
+            byte[]? obs = null;
+            if (chr >= TowerDefenseBook.Part1Base)
+            {
+                if (Part1Game.Character(chr - TowerDefenseBook.Part1Base) is { SpriteId: > 0 } p1 && Part1Game.Read("Obss", $"{p1.SpriteId:D4}.obs") is { } raw)
+                    obs = Part1Game.ToPart2Obs(raw);
+            }
+            else
+            {
+                if (!_ready)
+                {
+                    _ready = true;
+                    try { _db = GameDatabase.Load(GameFiles.FromFolder(AssetsFolder.Find("data"))); } catch (Exception ex) when (ex is IOException or InvalidDataException) { }
+                    _game = MainWindow.LoadSavedGameRoot() is { Length: > 0 } root && Directory.Exists(root) ? GameFiles.FromGameRoot(root) : null;
+                }
+                if (_db?.Character(chr) is { SpriteId: > 0 } c)
+                {
+                    string characters = AssetsFolder.Find("characters");
+                    foreach (string folder in Directory.Exists(characters) ? Directory.GetDirectories(characters, $"{chr:D4}_*") : [])
+                        if (System.IO.Path.Combine(folder, $"{c.SpriteId:D4}.obs") is var path && File.Exists(path)) obs = File.ReadAllBytes(path);
+                    obs ??= _game?.Read("Obs", $"{c.SpriteId:D4}.obs");
+                }
+            }
+            if (obs != null && ObsSprite.DecodeFirstFrame(obs) is { Width: > 0, Height: > 0 } f)
+            {
+                image = BitmapSource.Create(f.Width, f.Height, 96, 96, PixelFormats.Bgra32, null, f.Bgra, f.Width * 4);
+                image.Freeze();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException or UnauthorizedAccessException) { }
+        return Cache[chr] = image;
+    }
+}
+
 public partial class TowerDefenseEditWindow : Window
 {
     /// <summary>웨이브 칸의 한 줄 — 스테이지의 웨이브 목록을 펼친 것.</summary>
@@ -30,8 +81,7 @@ public partial class TowerDefenseEditWindow : Window
         public string EnemyName => Owner?._stage is { } s && Enemy >= 0 && Enemy < s.Enemies.Count ? s.Enemies[Enemy].Name : "(없는 번호)";
     }
 
-    private static readonly string[] MapSuggestions =
-        ["part1:0086", "part1:0093", "part1:0088", "part1:0100", "part1:0105", "part1:0011", "part1:0009", "part1:0079", "0153.obt"];
+
 
     private static readonly Dictionary<string, string> WeaponNames = new()
     {
@@ -64,13 +114,15 @@ public partial class TowerDefenseEditWindow : Window
 
         TowerWeaponColumn.ItemsSource = WeaponNames.ToList();
         TowerAuraColumn.ItemsSource = AuraNames.ToList();
-        MapBox.ItemsSource = MapSuggestions;
         StageList.ItemsSource = _stages;
         TowerGrid.ItemsSource = _towers;
         WeaponGrid.ItemsSource = _weapons;
         EnemyGrid.ItemsSource = _enemies;
         WaveGrid.ItemsSource = _waves;
-        WaveGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => WaveGrid.Items.Refresh(), System.Windows.Threading.DispatcherPriority.Background);
+        foreach (var grid in new[] { TowerGrid, WeaponGrid, EnemyGrid, WaveGrid }) grid.BeginningEdit += (_, _) => PushUndo(commitGrids: false);
+        TowerGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { TowerGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!TowerGrid.IsKeyboardFocusWithin || TowerGrid.CurrentCell.IsValid) try { TowerGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
+        EnemyGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { EnemyGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!EnemyGrid.IsKeyboardFocusWithin || EnemyGrid.CurrentCell.IsValid) try { EnemyGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
+        WaveGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { WaveGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!WaveGrid.IsKeyboardFocusWithin || WaveGrid.CurrentCell.IsValid) try { WaveGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
 
         Fill(TowerDefenseBook.LoadTowers(_files), TowerDefenseBook.LoadStages(_files));
         StatusText.Text = Directory.Exists(_folder) && Directory.EnumerateFiles(_folder, "*.json").Any()
@@ -97,7 +149,7 @@ public partial class TowerDefenseEditWindow : Window
         ShowStage(StageList.SelectedItem as TdStageEntry);
     }
 
-    private void ShowStage(TdStageEntry? s)
+    private void ShowStage(TdStageEntry? s, bool scroll = true)
     {
         _stage = s;
         StagePanel.IsEnabled = s != null;
@@ -115,11 +167,11 @@ public partial class TowerDefenseEditWindow : Window
         foreach (var en in s.Enemies) _enemies.Add(en);
         for (int w = 0; w < s.Waves.Count; w++)
             foreach (var g in s.Waves[w]) _waves.Add(new WaveRow { Owner = this, Wave = w + 1, Enemy = g.Enemy, Count = g.Count, Every = g.Every });
-        LoadMap();
+        LoadMap(scroll);
     }
 
     /// <summary>칸에 적은 것을 지금 스테이지에 옮긴다 — 다른 스테이지로 갈 때와 저장할 때.</summary>
-    private void CommitStage()
+    private void CommitStage(bool commitGrids = true)
     {
         if (_stage is not { } s) return;
         s.Name = NameBox.Text.Trim().Length > 0 ? NameBox.Text.Trim() : "이름 없음";
@@ -129,8 +181,11 @@ public partial class TowerDefenseEditWindow : Window
         if (int.TryParse(LivesBox.Text, out int l)) s.StartLives = Math.Max(1, l);
         if (double.TryParse(HpBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double h)) s.HpPerWave = Math.Max(0, h);
         if (int.TryParse(BgmBox.Text, out int b)) s.Bgm = b;
-        EnemyGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        WaveGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        if (commitGrids)
+        {
+            EnemyGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            WaveGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        }
         s.Enemies = [.. _enemies];
         s.Waves = _waves.Where(r => r.Wave >= 1).GroupBy(r => r.Wave).OrderBy(gr => gr.Key)
             .Select(gr => gr.Select(r => new TdSpawnEntry { Enemy = r.Enemy, Count = r.Count, Every = r.Every }).ToList()).ToList();
@@ -145,7 +200,7 @@ public partial class TowerDefenseEditWindow : Window
 
     private void StageAdd_Click(object sender, RoutedEventArgs e)
     {
-        CommitStage();
+        PushUndo();
         var basis = TowerDefenseBook.DefaultStages()[0];
         var s = new TdStageEntry
         {
@@ -159,7 +214,7 @@ public partial class TowerDefenseEditWindow : Window
     private void StageCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_stage == null) return;
-        CommitStage();
+        PushUndo();
         var copy = System.Text.Json.JsonSerializer.Deserialize<TdStageEntry>(TowerDefenseBook.ToJson(_stage),
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
         copy.Id = $"custom-{DateTime.Now:yyyyMMddHHmmss}";
@@ -172,6 +227,7 @@ public partial class TowerDefenseEditWindow : Window
     {
         if (_stage == null) return;
         if (_stages.Count <= 1) { StatusText.Text = "스테이지는 하나는 있어야 합니다."; return; }
+        PushUndo();
         int i = _stages.IndexOf(_stage);
         _stage = null;
         _stages.RemoveAt(i);
@@ -186,6 +242,7 @@ public partial class TowerDefenseEditWindow : Window
         if (_stage == null) return;
         int i = _stages.IndexOf(_stage), j = i + d;
         if (j < 0 || j >= _stages.Count) return;
+        PushUndo();
         _filling = true;
         _stages.Move(i, j);
         _filling = false;
@@ -194,27 +251,48 @@ public partial class TowerDefenseEditWindow : Window
 
     // ── 맵 · 길 ──
 
+    private void MapPick_Click(object sender, RoutedEventArgs e)
+    {
+        if (_stage == null) return;
+        var pick = new TdMapPickWindow(_files, MapBox.Text.Trim()) { Owner = this };
+        if (pick.ShowDialog() != true || pick.Picked is not { } map) return;
+        PushUndo();
+        MapBox.Text = map;
+        _stage.Map = map;
+        _stage.CamX = _stage.CamY = -1;
+        _stage.AreaW = _stage.AreaH = 0;
+        LoadMap();
+    }
+
     private void MapLoad_Click(object sender, RoutedEventArgs e)
     {
         if (_stage == null) return;
+        PushUndo();
         _stage.Map = MapBox.Text.Trim();
         _stage.CamX = _stage.CamY = -1;
         LoadMap();
     }
 
-    private void LoadMap()
+    /// <summary>스테이지의 맵을 읽는다 — part1:NNNN 은 파트1 폴더 Obts, NNNN.obt 는 assets/maps(게임과 같은 곳).</summary>
+    internal static ObtMapImage? ReadMap(GameFiles files, string name)
+    {
+        try
+        {
+            if (name.StartsWith("part1:", StringComparison.Ordinal)) return int.TryParse(name[6..], out int id) ? Part1Map.Load(id) : null;
+            // 파트2 맵은 게임과 같이 assets/maps(원본 폴더에서 뽑아 둔 것), 없으면 data/Obt
+            string loose = System.IO.Path.Combine(AssetsFolder.Find("maps"), name);
+            if (File.Exists(loose)) return ObtMap.Parse(File.ReadAllBytes(loose), name);
+            return files.Read("Obt", name) is { } bytes ? ObtMap.Parse(bytes, name) : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException) { return null; }
+    }
+
+    private void LoadMap(bool scroll = true)
     {
         _map = null;
         MapImage.Source = null;
         if (_stage is not { } s) return;
-        try
-        {
-            if (s.Map.StartsWith("part1:", StringComparison.Ordinal))
-                _map = int.TryParse(s.Map[6..], out int id) ? Part1Map.Load(id) : null;
-            else if (_files.Read("Obt", s.Map) is { } bytes)
-                _map = ObtMap.Parse(bytes, s.Map);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { }
+        _map = ReadMap(_files, s.Map);
         if (_map is not { } m)
         {
             StatusText.Text = s.Map.StartsWith("part1:", StringComparison.Ordinal) && Part1Game.Root == null
@@ -231,13 +309,14 @@ public partial class TowerDefenseEditWindow : Window
         // 옛 꼴(보는 네모 안 칸) 경유점은 맵 칸으로 바꿔 둔다 — 저장하면 맵 칸으로 적힌다.
         if (s.ViewCells)
         {
-            var (cx, cy) = TowerDefenseBook.Camera(m, s.CamX, s.CamY);
-            s.Waypoints = s.Waypoints.Select(p => TowerDefenseBook.ViewToMap(m, cx, cy, p[0], p[1]) is var (c, r) ? new[] { c, r } : p).ToList();
+            var area = TowerDefenseBook.Area(m, s);
+            s.Waypoints = s.Waypoints.Select(p => TowerDefenseBook.ViewToMap(m, area.X, area.Y, p[0], p[1]) is var (c, r) ? new[] { c, r } : p).ToList();
             s.ViewCells = false;
         }
         Redraw();
-        // 노란 네모(게임 화면)가 보이게 굴린다
-        var (vx, vy) = TowerDefenseBook.Camera(m, s.CamX, s.CamY);
+        if (!scroll) return;
+        // 노란 네모(싸움터)가 보이게 굴린다
+        var (vx, vy, _, _) = TowerDefenseBook.Area(m, s);
         MapScroll.UpdateLayout();
         MapScroll.ScrollToHorizontalOffset(Math.Max(0, vx - 40));
         MapScroll.ScrollToVerticalOffset(Math.Max(0, vy - 40));
@@ -250,17 +329,25 @@ public partial class TowerDefenseEditWindow : Window
     {
         MapOverlay.Children.Clear();
         if (_map is not { } m || _stage is not { } s) return;
-        var (camX, camY) = TowerDefenseBook.Camera(m, s.CamX, s.CamY);
+        var field = TdField.Of(m, s);
+        var (ax, ay, aw, ah) = field.Area;
+        var opened = s.Open.Select(p => (p[0], p[1])).ToHashSet();
+        var blockedHand = s.Blocked.Select(p => (p[0], p[1])).ToHashSet();
 
-        // 못 걷는 칸 — 빗금 대신 옅은 검정
-        var blocked = new SolidColorBrush(Color.FromArgb(90, 0, 0, 0));
-        blocked.Freeze();
+        // 못 걷는 칸 — 어둡게, 손으로 막은 칸은 붉게, 손으로 연 칸은 파란 테
+        var blocked = new SolidColorBrush(Color.FromArgb(110, 0, 0, 0));
+        var handBlocked = new SolidColorBrush(Color.FromArgb(120, 200, 40, 40));
+        blocked.Freeze(); handBlocked.Freeze();
         for (int r = 0; r < m.Rows; r++)
             for (int c = 0; c < m.Cols; c++)
-                if ((m.FlagsAt(c, r) & 0x9) != 0) AddRect(CellTop(m, c, r), TowerDefenseBook.Cell, TowerDefenseBook.CellH, blocked, null);
+            {
+                if (blockedHand.Contains((c, r))) AddRect(CellTop(m, c, r), TowerDefenseBook.Cell, TowerDefenseBook.CellH, handBlocked, null);
+                else if (!field.Ground(c, r)) AddRect(CellTop(m, c, r), TowerDefenseBook.Cell, TowerDefenseBook.CellH, blocked, null);
+                if (opened.Contains((c, r))) AddRect(CellTop(m, c, r), TowerDefenseBook.Cell, TowerDefenseBook.CellH, null, Brushes.DeepSkyBlue, 1);
+            }
 
         // 길 — 입구 초록 → 출구 빨강
-        var path = TowerDefenseBook.BuildPath(m, camX, camY, s.Waypoints.Select(p => (p[0], p[1])).ToList());
+        var path = field.BuildPath(s.Waypoints.Select(p => (p[0], p[1])).ToList());
         for (int i = 0; i < path.Count; i++)
         {
             double t = path.Count > 1 ? i / (double)(path.Count - 1) : 0;
@@ -268,13 +355,35 @@ public partial class TowerDefenseEditWindow : Window
             AddRect(CellTop(m, path[i].Col, path[i].Row), TowerDefenseBook.Cell, TowerDefenseBook.CellH, fill, null);
         }
 
-        // 보는 네모(게임 화면) — 노랑
-        var view = new Rectangle { Width = TowerDefenseBook.ViewW, Height = TowerDefenseBook.ViewH, Stroke = Brushes.Yellow, StrokeThickness = 2, IsHitTestVisible = false };
-        Canvas.SetLeft(view, camX);
-        Canvas.SetTop(view, camY);
+        // 싸움터 네모 — 노랑, 손잡이 여덟, 게임 첫 화면(640×364)은 점선
+        var view = new Rectangle { Width = aw, Height = ah, Stroke = Brushes.Yellow, StrokeThickness = 2, IsHitTestVisible = false };
+        Canvas.SetLeft(view, ax);
+        Canvas.SetTop(view, ay);
         MapOverlay.Children.Add(view);
+        if (aw > TowerDefenseBook.ViewW || ah > TowerDefenseBook.ViewH)
+        {
+            var screen = new Rectangle
+            {
+                Width = Math.Min(aw, TowerDefenseBook.ViewW), Height = Math.Min(ah, TowerDefenseBook.ViewH), Stroke = Brushes.Yellow, StrokeThickness = 1,
+                StrokeDashArray = [4, 4], IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(screen, ax);
+            Canvas.SetTop(screen, ay);
+            MapOverlay.Children.Add(screen);
+        }
+        foreach (var (hx, hy) in new[] { (ax, ay), (ax + aw, ay), (ax, ay + ah), (ax + aw, ay + ah), (ax + aw / 2, ay), (ax + aw / 2, ay + ah), (ax, ay + ah / 2), (ax + aw, ay + ah / 2) })
+            AddRect((hx - 5, hy - 5), 10, 10, Brushes.Yellow, Brushes.Black, 1);
+        bool big = aw > TowerDefenseBook.ViewW || ah > TowerDefenseBook.ViewH;
+        var size = new TextBlock
+        {
+            Text = $"싸움터 {aw}×{ah}" + (big ? " (점선 = 게임 한 화면, 나머지는 굴려 봄)" : ""), Foreground = Brushes.Yellow,
+            Background = new SolidColorBrush(Color.FromArgb(170, 0, 0, 0)), IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(size, ax + 8);
+        Canvas.SetTop(size, Math.Max(0, ay - 20));
+        MapOverlay.Children.Add(size);
 
-        // 경유점 — 번호, 첫 · 끝은 입구 · 출구
+        // 경유점 — 번호, 첫 · 끝은 입구 · 출구, 싸움터 밖이면 주황 테
         for (int i = 0; i < s.Waypoints.Count; i++)
         {
             var (x, y) = CellTop(m, s.Waypoints[i][0], s.Waypoints[i][1]);
@@ -285,13 +394,17 @@ public partial class TowerDefenseEditWindow : Window
             Canvas.SetLeft(text, x + 4);
             Canvas.SetTop(text, y + 6);
             MapOverlay.Children.Add(text);
+            if (!field.Inside(s.Waypoints[i][0], s.Waypoints[i][1])) AddRect((x, y), TowerDefenseBook.Cell, TowerDefenseBook.CellH, null, Brushes.Orange, 1);
         }
-        StatusText.Text = $"{s.Name} — 맵 {m.Width}×{m.Height}, 길 {path.Count}칸, 경유점 {s.Waypoints.Count}개" + (s.Waypoints.Count < 2 ? " (2개보다 적으면 게임이 저절로 고릅니다)" : "");
+        int outside = s.Waypoints.Count(p => !field.Inside(p[0], p[1]));
+        StatusText.Text = $"{s.Name} — 맵 {m.Width}×{m.Height}, 길 {path.Count}칸, 경유점 {s.Waypoints.Count}개"
+                          + (s.Waypoints.Count < 2 ? " (2개보다 적으면 게임이 저절로 고릅니다)" : "")
+                          + (outside > 0 ? $" · ⚠ 경유점 {outside}개가 싸움터 밖이라 안쪽 칸으로 당겨집니다(주황 테)" : "");
     }
 
-    private void AddRect((double X, double Y) at, double w, double h, Brush? fill, Brush? stroke)
+    private void AddRect((double X, double Y) at, double w, double h, Brush? fill, Brush? stroke, double thickness = 2)
     {
-        var r = new Rectangle { Width = w, Height = h, Fill = fill, Stroke = stroke, StrokeThickness = stroke != null ? 2 : 0, IsHitTestVisible = false };
+        var r = new Rectangle { Width = w, Height = h, Fill = fill, Stroke = stroke, StrokeThickness = stroke != null ? thickness : 0, IsHitTestVisible = false };
         Canvas.SetLeft(r, at.X);
         Canvas.SetTop(r, at.Y);
         MapOverlay.Children.Add(r);
@@ -311,24 +424,131 @@ public partial class TowerDefenseEditWindow : Window
         return (-1, -1);
     }
 
+    // 끌기 — 싸움터 네모 옮기기 · 크기(쥔 가장자리), 걷기 칸 칠하기(칠하는 값)
+    private enum Drag { None, Move, Resize, Paint }
+    private Drag _drag;
+    private bool _dragLeft, _dragRight, _dragTop, _dragBottom, _paintOpen;
+    private Point _dragFrom;
+    private (int X, int Y, int W, int H) _dragArea;
+    private (int, int) _lastPainted = (-1, -1);
+
+    /// <summary>싸움터 네모의 어느 가장자리 근처인가(7px), 안쪽인가.</summary>
+    private static (bool L, bool R, bool T, bool B, bool Inside) AreaHit(Point p, (int X, int Y, int W, int H) a)
+    {
+        const double Grip = 7;
+        bool inX = p.X >= a.X - Grip && p.X <= a.X + a.W + Grip, inY = p.Y >= a.Y - Grip && p.Y <= a.Y + a.H + Grip;
+        bool l = inY && Math.Abs(p.X - a.X) <= Grip, r = inY && Math.Abs(p.X - (a.X + a.W)) <= Grip;
+        bool t = inX && Math.Abs(p.Y - a.Y) <= Grip, b = inX && Math.Abs(p.Y - (a.Y + a.H)) <= Grip;
+        return (l, r, t, b, p.X > a.X && p.X < a.X + a.W && p.Y > a.Y && p.Y < a.Y + a.H);
+    }
+
     private void MapOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_map is not { } m || _stage is not { } s) return;
         var p = e.GetPosition(MapOverlay);
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        var area = TowerDefenseBook.Area(m, s);
+        if (ToolGround.IsChecked == true)
         {
-            s.CamX = (int)Math.Clamp(p.X - TowerDefenseBook.ViewW / 2, 0, Math.Max(0, m.Width - TowerDefenseBook.ViewW));
-            s.CamY = (int)Math.Clamp(p.Y - TowerDefenseBook.ViewH / 2, 0, Math.Max(0, m.Height - TowerDefenseBook.ViewH));
+            var (gc, gr) = CellAt(p);
+            if (gc < 0) return;
+            PushUndo();
+            _paintOpen = !TdField.Of(m, s).Ground(gc, gr);
+            _drag = Drag.Paint;
+            _lastPainted = (-1, -1);
+            Paint(gc, gr);
+            MapOverlay.CaptureMouse();
+            return;
         }
-        else if (CellAt(p) is var (c, r) && c >= 0)
-            s.Waypoints.Add([c, r]);
+        var hit = AreaHit(p, area);
+        if (hit.L || hit.R || hit.T || hit.B)
+        {
+            PushUndo();
+            (_drag, _dragLeft, _dragRight, _dragTop, _dragBottom) = (Drag.Resize, hit.L, hit.R, hit.T, hit.B);
+        }
+        else if (hit.Inside && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            PushUndo();
+            _drag = Drag.Move;
+        }
+        else
+        {
+            if (CellAt(p) is var (c, r) && c >= 0)
+            {
+                PushUndo();
+                s.Waypoints.Add([c, r]);
+                Redraw();
+            }
+            return;
+        }
+        _dragFrom = p;
+        _dragArea = area;
+        MapOverlay.CaptureMouse();
+    }
+
+    private void MapOverlay_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_map is not { } m || _stage is not { } s) return;
+        var p = e.GetPosition(MapOverlay);
+        if (_drag == Drag.None)
+        {
+            // 커서 모양으로 끌 수 있는 곳을 알린다
+            var hit = AreaHit(p, TowerDefenseBook.Area(m, s));
+            MapOverlay.Cursor = ToolGround.IsChecked == true ? Cursors.Pen
+                : (hit.L && hit.T) || (hit.R && hit.B) ? Cursors.SizeNWSE : (hit.R && hit.T) || (hit.L && hit.B) ? Cursors.SizeNESW
+                : hit.L || hit.R ? Cursors.SizeWE : hit.T || hit.B ? Cursors.SizeNS
+                : hit.Inside && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? Cursors.SizeAll : Cursors.Cross;
+            return;
+        }
+        if (_drag == Drag.Paint)
+        {
+            if (CellAt(p) is var (c, r) && c >= 0) Paint(c, r);
+            return;
+        }
+        int dx = (int)(p.X - _dragFrom.X), dy = (int)(p.Y - _dragFrom.Y);
+        var (x, y, w, h) = _dragArea;
+        const int Min = 160;
+        if (_drag == Drag.Move) { x += dx; y += dy; }
+        else
+        {
+            if (_dragLeft) { int nx = Math.Min(x + dx, x + w - Min); w += x - nx; x = nx; }
+            if (_dragRight) w = Math.Max(Min, w + dx);
+            if (_dragTop) { int ny = Math.Min(y + dy, y + h - Min); h += y - ny; y = ny; }
+            if (_dragBottom) h = Math.Max(Min, h + dy);
+        }
+        w = Math.Min(w, m.Width);
+        h = Math.Min(h, m.Height);
+        x = Math.Clamp(x, 0, m.Width - w);
+        y = Math.Clamp(y, 0, m.Height - h);
+        (s.CamX, s.CamY, s.AreaW, s.AreaH) = (x, y, w, h);
+        Redraw();
+    }
+
+    private void MapOverlay_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_drag == Drag.None) return;
+        _drag = Drag.None;
+        MapOverlay.ReleaseMouseCapture();
+        Redraw();
+    }
+
+    /// <summary>걷기 칸 칠하기 — 맵 자료 그대로가 되면 덮어쓰기에서 뺀다.</summary>
+    private void Paint(int c, int r)
+    {
+        if (_map is not { } m || _stage is not { } s || _lastPainted == (c, r)) return;
+        _lastPainted = (c, r);
+        s.Open.RemoveAll(p => p[0] == c && p[1] == r);
+        s.Blocked.RemoveAll(p => p[0] == c && p[1] == r);
+        bool natural = (m.FlagsAt(c, r) & 0x9) == 0;
+        if (_paintOpen && !natural) s.Open.Add([c, r]);
+        if (!_paintOpen && natural) s.Blocked.Add([c, r]);
         Redraw();
     }
 
     private void MapOverlay_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (_map is not { } m || _stage is not { Waypoints.Count: > 0 } s) return;
+        if (_map is not { } m || _stage is not { Waypoints.Count: > 0 } s || ToolGround.IsChecked == true) return;
         var p = e.GetPosition(MapOverlay);
+        PushUndo();
         int nearest = Enumerable.Range(0, s.Waypoints.Count)
             .MinBy(i => CellTop(m, s.Waypoints[i][0], s.Waypoints[i][1]) is var (x, y) ? Math.Pow(x + 20 - p.X, 2) + Math.Pow(y + 16 - p.Y, 2) : 0);
         s.Waypoints.RemoveAt(nearest);
@@ -338,39 +558,107 @@ public partial class TowerDefenseEditWindow : Window
     private void PathClear_Click(object sender, RoutedEventArgs e)
     {
         if (_stage == null) return;
+        PushUndo();
         _stage.Waypoints.Clear();
         Redraw();
     }
 
-    private void PathUndo_Click(object sender, RoutedEventArgs e)
+    private void GroundClear_Click(object sender, RoutedEventArgs e)
     {
-        if (_stage is not { Waypoints.Count: > 0 } s) return;
-        s.Waypoints.RemoveAt(s.Waypoints.Count - 1);
+        if (_stage == null) return;
+        PushUndo();
+        _stage.Open.Clear();
+        _stage.Blocked.Clear();
         Redraw();
     }
 
     private void CamCenter_Click(object sender, RoutedEventArgs e)
     {
         if (_stage == null) return;
+        PushUndo();
         _stage.CamX = _stage.CamY = -1;
         Redraw();
+    }
+
+    private void AreaReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_stage == null) return;
+        PushUndo();
+        _stage.AreaW = _stage.AreaH = 0;
+        Redraw();
+    }
+
+    // ── 실행 취소(Ctrl+Z, 사용자 요청 td-9) — 바꾸기 전 모든 자료를 통째로 적어 둔다 ──
+
+    private readonly List<(string Towers, List<string> Stages, int Selected)> _undo = [];
+    private static readonly System.Text.Json.JsonSerializerOptions UndoJson = new() { PropertyNameCaseInsensitive = true };
+
+    /// <param name="commitGrids">표 칸 고치기를 시작할 때는 거짓 — 그 표를 건드리지 않고 지금 값만 적는다.</param>
+    private void PushUndo(bool commitGrids = true)
+    {
+        CommitStage(commitGrids);
+        if (commitGrids)
+        {
+            TowerGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            WeaponGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        }
+        _undo.Add((TowerDefenseBook.ToJson(new TdTowersFile { Weapons = [.. _weapons], Towers = [.. _towers] }),
+                   _stages.Select(TowerDefenseBook.ToJson).ToList(), StageList.SelectedIndex));
+        if (_undo.Count > 200) _undo.RemoveAt(0);
+    }
+
+    private void Undo()
+    {
+        if (_undo.Count == 0) { StatusText.Text = "더 되돌릴 것이 없습니다."; return; }
+        var (towers, stages, selected) = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
+        var t = System.Text.Json.JsonSerializer.Deserialize<TdTowersFile>(towers, UndoJson)!;
+        var list = stages.Select(j => System.Text.Json.JsonSerializer.Deserialize<TdStageEntry>(j, UndoJson)!).ToList();
+        double hx = MapScroll.HorizontalOffset, vy = MapScroll.VerticalOffset;
+        _filling = true;
+        _towers.Clear(); _weapons.Clear(); _stages.Clear();
+        foreach (var x in t.Towers) _towers.Add(x);
+        foreach (var w in t.Weapons) _weapons.Add(w);
+        foreach (var s in list) _stages.Add(s);
+        _stage = null;
+        StageList.SelectedIndex = Math.Clamp(selected, -1, _stages.Count - 1);
+        _filling = false;
+        ShowStage(StageList.SelectedItem as TdStageEntry, scroll: false);
+        MapScroll.ScrollToHorizontalOffset(hx);
+        MapScroll.ScrollToVerticalOffset(vy);
+        StatusText.Text = $"되돌렸습니다 (남은 단계 {_undo.Count})";
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Z || !Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+        // 글자 칸을 고치는 중이면 그 칸의 실행 취소를 쓴다
+        if (Keyboard.FocusedElement is TextBox { IsReadOnly: false }) return;
+        e.Handled = true;
+        Undo();
     }
 
     // ── 적 · 웨이브 ──
 
     private void EnemyGrid_LoadingRow(object? sender, DataGridRowEventArgs e) => e.Row.Header = e.Row.GetIndex();
 
-    private void EnemyAdd_Click(object sender, RoutedEventArgs e) =>
+    private void EnemyAdd_Click(object sender, RoutedEventArgs e)
+    {
+        PushUndo();
         _enemies.Add(new TdEnemyEntry { Chr = TowerDefenseBook.Part1Base + 144, Fallback = 230, Name = "솔져", Hp = 60, Speed = 1.3, Bounty = 6 });
+    }
 
     private void EnemyDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (EnemyGrid.SelectedItem is TdEnemyEntry en) _enemies.Remove(en);
+        if (EnemyGrid.SelectedItem is not TdEnemyEntry en) return;
+        PushUndo();
+        _enemies.Remove(en);
         WaveGrid.Items.Refresh();
     }
 
     private void WaveAdd_Click(object sender, RoutedEventArgs e)
     {
+        PushUndo();
         int wave = _waves.Count > 0 ? _waves.Max(w => w.Wave) + 1 : 1;
         if (WaveGrid.SelectedItem is WaveRow sel) wave = sel.Wave;   // 고른 줄이 있으면 그 웨이브에 묶음을 더한다
         var row = new WaveRow { Owner = this, Wave = wave, Enemy = 0, Count = 5, Every = 1 };
@@ -381,13 +669,16 @@ public partial class TowerDefenseEditWindow : Window
 
     private void WaveDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (WaveGrid.SelectedItem is WaveRow r) _waves.Remove(r);
+        if (WaveGrid.SelectedItem is not WaveRow r) return;
+        PushUndo();
+        _waves.Remove(r);
     }
 
     // ── 타워 ──
 
     private void TowerAdd_Click(object sender, RoutedEventArgs e)
     {
+        PushUndo();
         var t = new TdTowerEntry { Chr = TowerDefenseBook.Part1Base + 155, Name = "새 타워", Weapon = "Sword", Cost = 60 };
         int at = TowerGrid.SelectedItem is TdTowerEntry s ? _towers.IndexOf(s) + 1 : _towers.Count;
         _towers.Insert(at, t);
@@ -396,7 +687,9 @@ public partial class TowerDefenseEditWindow : Window
 
     private void TowerDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (TowerGrid.SelectedItem is TdTowerEntry t) _towers.Remove(t);
+        if (TowerGrid.SelectedItem is not TdTowerEntry t) return;
+        PushUndo();
+        _towers.Remove(t);
     }
 
     private void TowerUp_Click(object sender, RoutedEventArgs e) => MoveTower(-1);
@@ -407,6 +700,7 @@ public partial class TowerDefenseEditWindow : Window
         if (TowerGrid.SelectedItem is not TdTowerEntry t) return;
         int i = _towers.IndexOf(t), j = i + d;
         if (j < 0 || j >= _towers.Count) return;
+        PushUndo();
         _towers.Move(i, j);
         TowerGrid.SelectedItem = t;
     }
@@ -457,6 +751,7 @@ public partial class TowerDefenseEditWindow : Window
     {
         if (MessageBox.Show(this, "스테이지와 타워를 모두 게임의 바탕 값으로 되돌립니다. (저장해야 파일에 적힙니다)", "타워 디펜스 편집",
                             MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        PushUndo();
         Fill(TowerDefenseBook.DefaultTowers(), TowerDefenseBook.DefaultStages());
         StatusText.Text = "바탕 값을 불러왔습니다 — 저장하면 파일에 적힙니다.";
     }

@@ -67,6 +67,11 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private TdMap _map = TdData.Stages[0].Map;
     private ObtMapImage? _img;
     private int _camX, _camY;
+    /// <summary>싸움터 — 걸을 수 있는 칸 · 길 잇기(편집기와 같은 셈)와 싸움터 네모. 화면보다 크면 _camX/_camY 가 그 안을 굴러다닌다(td-8).</summary>
+    private TdField? _field;
+    private (int X, int Y, int W, int H) _area;
+    private (int X, int Y) _mouse = (-1, -1);
+    private double _scrollClock = -1;
     private readonly HashSet<(int, int)> _pathCells = [];
     private readonly List<(int Col, int Row)> _pathOrder = [];
     private readonly List<(double X, double Y)> _path = [];
@@ -203,8 +208,11 @@ internal sealed class TowerDefenseScene(GameWindow host)
             host.Toast($"맵 {_map.File} 을 못 읽었습니다");
             return;
         }
-        _camX = _map.CamX >= 0 ? _map.CamX : Math.Max(0, (_img.Width - FieldW) / 2);
-        _camY = _map.CamY >= 0 ? _map.CamY : Math.Max(0, (_img.Height - ViewH) / 2);
+        _area = TowerDefenseBook.Area(_img, _map.CamX, _map.CamY, _map.AreaW, _map.AreaH);
+        _field = new TdField(_img, _area, _map.Open, _map.Blocked);
+        // 싸움터가 화면보다 작으면 가운데에, 크면 왼위부터(굴려 본다)
+        _camX = _area.W >= FieldW ? _area.X : _area.X - (FieldW - _area.W) / 2;
+        _camY = _area.H >= ViewH ? _area.Y : _area.Y - (ViewH - _area.H) / 2;
         BuildPath();
     }
 
@@ -215,21 +223,14 @@ internal sealed class TowerDefenseScene(GameWindow host)
         return (col * Cell + Cell / 2.0, row * CellH + CellH / 2.0 - h * HeightStep - (_img?.OriginY ?? 0));
     }
 
-    private bool Visible(int col, int row, int margin = 0)
-    {
-        var (x, y) = CellFoot(col, row);
-        return x - Cell / 2 >= _camX + margin && x + Cell / 2 <= _camX + FieldW - margin && y - CellH / 2 >= _camY + margin && y + CellH / 2 <= _camY + ViewH - margin;
-    }
-
-    private bool Walkable(int col, int row) =>
-        _img is { } m && col >= 0 && row >= 0 && col < m.Cols && row < m.Rows && (m.FlagsAt(col, row) & 0x9) == 0 && Visible(col, row);
+    private bool Walkable(int col, int row) => _field?.Walkable(col, row) == true;
 
     private void BuildPath()
     {
         if (_img is not { } m) return;
         // 경유점 → 걸을 수 있는 칸으로 잇기는 편집기와 같은 셈(TowerDefenseBook.BuildPath). 옛 꼴(보는 네모 안 칸)은 맵 칸으로 바꾼다.
-        var marks = _map.Waypoints.Select(p => _map.ViewCells ? TowerDefenseBook.ViewToMap(m, _camX, _camY, p.Col, p.Row) : p).ToList();
-        _pathOrder.AddRange(TowerDefenseBook.BuildPath(m, _camX, _camY, marks));
+        var marks = _map.Waypoints.Select(p => _map.ViewCells ? TowerDefenseBook.ViewToMap(m, _area.X, _area.Y, p.Col, p.Row) : p).ToList();
+        _pathOrder.AddRange(_field!.BuildPath(marks));
         if (_pathOrder.Count == 0) return;
         foreach (var c in _pathOrder) _pathCells.Add(c);
 
@@ -242,12 +243,30 @@ internal sealed class TowerDefenseScene(GameWindow host)
             _pathLen.Add(_pathLen[^1] + Math.Sqrt(Math.Pow(_path[i].X - _path[i - 1].X, 2) + Math.Pow(_path[i].Y - _path[i - 1].Y, 2)));
     }
 
-    /// <summary>그 자리에서 가장 가까운 보는 네모 가장자리의 30px 밖.</summary>
+    /// <summary>그 자리에서 가장 가까운 싸움터 가장자리의 30px 밖.</summary>
     private (double X, double Y) Outside((double X, double Y) p)
     {
-        double left = p.X - _camX, right = _camX + FieldW - p.X, top = p.Y - _camY, bottom = _camY + ViewH - p.Y;
+        var (ax, ay, aw, ah) = _area;
+        double left = p.X - ax, right = ax + aw - p.X, top = p.Y - ay, bottom = ay + ah - p.Y;
         double min = Math.Min(Math.Min(left, right), Math.Min(top, bottom));
-        return min == left ? (_camX - 30, p.Y) : min == right ? (_camX + FieldW + 30, p.Y) : min == top ? (p.X, _camY - 30) : (p.X, _camY + ViewH + 30);
+        return min == left ? (ax - 30, p.Y) : min == right ? (ax + aw + 30, p.Y) : min == top ? (p.X, ay - 30) : (p.X, ay + ah + 30);
+    }
+
+    /// <summary>싸움터가 화면보다 크면 굴린다 — 마우스가 맵 가장자리 18px 안이면 그쪽으로(초당 420px). 화살표 키는 <see cref="OnKey"/>.</summary>
+    private void Scroll()
+    {
+        double now = host._lastTime, dt = _scrollClock < 0 ? 0 : Math.Min(0.1, now - _scrollClock);
+        _scrollClock = now;
+        if (_phase != Phase.Playing || _mouse.X < 0) return;
+        int dx = _mouse.X < 18 ? -1 : _mouse.X >= FieldW - 18 ? 1 : 0;
+        int dy = _mouse.Y >= Top && _mouse.Y < Top + 18 ? -1 : _mouse.Y >= FieldH - 18 && _mouse.Y < FieldH ? 1 : 0;
+        if (dx != 0 || dy != 0) Pan((int)(dx * 420 * dt), (int)(dy * 420 * dt));
+    }
+
+    private void Pan(int dx, int dy)
+    {
+        if (_area.W > FieldW) _camX = Math.Clamp(_camX + dx, _area.X, _area.X + _area.W - FieldW);
+        if (_area.H > ViewH) _camY = Math.Clamp(_camY + dy, _area.Y, _area.Y + _area.H - ViewH);
     }
 
     private (double X, double Y, Facing Facing) PointAt(double dist)
@@ -820,6 +839,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
             if (i < cards.Count) { if (CannotBuild(TdData.Towers[cards[i]]) is { } why) host.Toast(why); else _pick = cards[i]; }
         }
         else if (key == Win32.VK_TAB) { _tab ^= 1; _pick = -1; }
+        else if (key is Win32.VK_LEFT or Win32.VK_RIGHT or Win32.VK_UP or Win32.VK_DOWN)
+            Pan(key == Win32.VK_LEFT ? -Cell * 2 : key == Win32.VK_RIGHT ? Cell * 2 : 0, key == Win32.VK_UP ? -CellH * 2 : key == Win32.VK_DOWN ? CellH * 2 : 0);
         else if (key == 'S' && _selected != null) Sell(_selected);
         return true;
     }
@@ -828,6 +849,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     {
         if (!Open) return;
         var (lx, ly) = Local(bx, by);
+        _mouse = (lx, ly);
         _hoverButton = ButtonAt(lx, ly);
         _hoverCard = CardAt(lx, ly);
         _hoverCell = CellAt(lx, ly);
@@ -843,7 +865,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
         int fy = oy + Top;   // 맵 칸의 윗끝 — 위 막대(골드 · 단추)가 적을 가리지 않게 그 아래부터 맵을 깐다(td-2)
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
         if (_phase == Phase.Select) { DrawSelect(ox, oy); host.DrawToast(); return; }
+        Scroll();
         DrawMap(ox, fy);
+        DrawOutsideArea(ox, fy);
 
         var clipBefore = host._uiClip;
         host._uiClip = (ox, fy, FieldW, ViewH);
@@ -866,6 +890,21 @@ internal sealed class TowerDefenseScene(GameWindow host)
         if (_phase != Phase.Playing) DrawResult(ox, oy);
         if (_loading is { IsCompleted: false }) Outlined($"인물 그림을 불러오는 중… {_loaded}/{_toLoad}", ox + 8, oy + FieldH - 22, Dim, 11);
         host.DrawToast();
+    }
+
+    /// <summary>싸움터 밖(화면보다 작은 싸움터의 둘레)을 어둡게.</summary>
+    private void DrawOutsideArea(int ox, int oy)
+    {
+        int l = _area.X - _camX, t = _area.Y - _camY, r = l + _area.W, b = t + _area.H;
+        const uint Shade = 0xB0000000;
+        if (t > 0) host.FillRect(ox, oy, FieldW, Math.Min(t, ViewH), Shade);
+        if (b < ViewH) host.FillRect(ox, oy + Math.Max(0, b), FieldW, ViewH - Math.Max(0, b), Shade);
+        int top = Math.Max(0, t), bottom = Math.Min(ViewH, b);
+        if (bottom > top)
+        {
+            if (l > 0) host.FillRect(ox, oy + top, Math.Min(l, FieldW), bottom - top, Shade);
+            if (r < FieldW) host.FillRect(ox + Math.Max(0, r), oy + top, FieldW - Math.Max(0, r), bottom - top, Shade);
+        }
     }
 
     private void DrawMap(int ox, int oy)
