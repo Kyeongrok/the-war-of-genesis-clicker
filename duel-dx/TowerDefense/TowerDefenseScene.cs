@@ -47,7 +47,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     {
         internal readonly TdEnemyDef Def = def;
         internal readonly int MaxHp = hp;
-        internal double Hp = hp, Dist, X, Y, DeadAt = -1, HitAt = -9;
+        internal double Hp = hp, Dist, X, Y, DeadAt = -1, HitAt = -9, SlowUntil = -1, Slow;
         internal Facing Facing = Facing.Right;
         internal bool Alive => DeadAt < 0;
     }
@@ -385,7 +385,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         var style = def.Weapon switch
         {
             TdWeapon.Gun => Part1Skill.BasicStyle.Shot, TdWeapon.Beam => Part1Skill.BasicStyle.Beam, TdWeapon.Bow => Part1Skill.BasicStyle.Arrow,
-            TdWeapon.Magic => Part1Skill.BasicStyle.Missile, _ => Part1Skill.BasicStyle.Melee,
+            TdWeapon.Magic or TdWeapon.Frost => Part1Skill.BasicStyle.Missile, _ => Part1Skill.BasicStyle.Melee,
         };
         var info = (style == Part1Skill.BasicStyle.Melee ? 8 : 9, style, 0);
         try
@@ -476,7 +476,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         double total = _pathLen.Count > 0 ? _pathLen[^1] : 0;
         foreach (var e in _enemies.Where(e => e.Alive))
         {
-            e.Dist += e.Def.Speed * Cell * dt;
+            e.Dist += e.Def.Speed * (_sim < e.SlowUntil ? 1 - e.Slow : 1) * Cell * dt;
             (e.X, e.Y, e.Facing) = PointAt(e.Dist);
             if (e.Dist >= total)
             {
@@ -586,6 +586,12 @@ internal sealed class TowerDefenseScene(GameWindow host)
             double dealt = Math.Max(1, (e == target ? damage : damage * 0.6) - e.Def.Armor);
             e.Hp -= dealt;
             e.HitAt = _sim;
+            if (w.Slow > 0)
+            {
+                double slow = e.MaxHp >= 800 ? w.Slow * 0.5 : w.Slow;
+                if (_sim >= e.SlowUntil || slow >= e.Slow) e.Slow = slow;
+                e.SlowUntil = _sim + w.SlowSeconds;
+            }
             if (e.Hp <= 0 && e.Alive)
             {
                 e.DeadAt = _sim;
@@ -594,7 +600,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 _floats.Add(($"+{e.Def.Bounty}", e.X, e.Y - 50, _sim, Gold));
             }
         }
-        _fx.Add((target.X, target.Y - 20, _sim, w.Splash > 0 ? 1 : 0));
+        _fx.Add((target.X, target.Y - 20, _sim, w.Slow > 0 ? 2 : w.Splash > 0 ? 1 : 0));
     }
 
     /// <summary>둘레 영웅들의 오라 — (공격력 + 몫, 빠르기 + 몫, 사거리 + 몫). 같은 갈래는 가장 센 것 하나.</summary>
@@ -978,6 +984,12 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 int w = enemy.MaxHp >= 800 ? 40 : 26, barY = Math.Max(oy + 2, top - 6);
                 host.FillRect(sx - w / 2 - 1, barY - 1, w + 2, 5, 0xFF000000);
                 host.FillRect(sx - w / 2, barY, (int)(w * Math.Clamp(enemy.Hp / enemy.MaxHp, 0, 1)), 3, enemy.MaxHp >= 800 ? 0xFFFF9030u : 0xFFE04040u);
+                // 늦춰진 적 — 발밑 하늘색 고리와 HP 막대 위 하늘색 줄
+                if (_sim < enemy.SlowUntil)
+                {
+                    Ellipse(sx, sy, 14, 5, 0xC090E8FF);
+                    host.FillRect(sx - w / 2, barY - 3, (int)(w * Math.Clamp((enemy.SlowUntil - _sim) / 2.0, 0, 1)), 2, 0xFF90E8FF);
+                }
             }));
         }
         foreach (var (_, draw) in items.OrderBy(i => i.Y)) draw();
@@ -990,6 +1002,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 int r = 4 + tick;
                 Circle(sx, sy, r, 0xC0FFE080);
             }
+            if (kind == 2) Circle(sx, sy, (int)(TdData.Weapons[TdWeapon.Frost].Splash * Cell * Math.Min(1, (_sim - at) * 4)), 0x8090E8FF);
             if (kind == 1) Circle(sx, sy, (int)(TdData.Weapons[TdWeapon.Magic].Splash * Cell * Math.Min(1, (_sim - at) * 4)), 0x80A0C0FF);
         }
     }
@@ -1070,7 +1083,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             host.StrokeRect(ox + 2, ty, TabW - 4, 32, _tab == i ? 0xFFB0D0FFu : 0xFF404C70u);
             Outlined(tabs[i], ox + 14, ty + 8, _tab == i ? 0xFFFFFFFFu : Dim, 13);
         }
-        Outlined(_tab == 0 ? "병종 타워 — 1~7 키 · Tab 영웅" : "영웅 타워 — 하나씩만 · 둘레 타워를 세게 하는 오라", ox + TabW + 8, py + 4, Dim, 11);
+        Outlined(_tab == 0 ? $"병종 타워 — 1~{Math.Min(9, TdData.Towers.Count(d => !d.Hero))} 키 · Tab 영웅" : "영웅 타워 — 하나씩만 · 둘레 타워를 세게 하는 오라", ox + TabW + 8, py + 4, Dim, 11);
         int n = 0;
         foreach (int card in TabCards())
         {
@@ -1136,6 +1149,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         TdWeapon.Bow => "활 — 멀리서 빠르게 쏜다",
         TdWeapon.Gun => "총 — 멀리서 세게 쏜다",
         TdWeapon.Magic => "마법 — 맞은 자리 둘레에 폭발",
+        TdWeapon.Frost => $"냉기 — 맞은 자리 둘레 적을 {def.Stats.SlowSeconds:0}초 동안 {def.Stats.Slow:P0} 느리게",
         _ => "장검 — 고르게 센 근접 공격",
     };
 

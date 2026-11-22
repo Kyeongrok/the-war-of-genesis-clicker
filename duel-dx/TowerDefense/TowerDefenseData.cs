@@ -3,7 +3,7 @@ using WarOfGenesis.Assets;
 namespace DuelDx;
 
 /// <summary>타워의 무기 갈래(사용자 요청 td-1) — 공격 방식이 갈래마다 다르다.</summary>
-internal enum TdWeapon { Sword, Spear, DualBlade, GreatSword, Bow, Gun, Beam, Magic }
+internal enum TdWeapon { Sword, Spear, DualBlade, GreatSword, Bow, Gun, Beam, Magic, Frost }
 
 /// <summary>영웅 타워의 오라 — 둘레(<see cref="TdData.AuraRange"/>) 타워를 세게 한다. 같은 갈래는 겹치지 않고 가장 센 것만 먹는다.</summary>
 internal enum TdAura { None, Power, Haste, Range }
@@ -12,7 +12,9 @@ internal enum TdAura { None, Power, Haste, Range }
 /// <param name="Splash">맞은 자리에서 이 반경(칸) 안의 적도 맞는다(0 = 하나만).</param>
 /// <param name="Pierce">창 — 겨눈 적 뒤로 한 줄에 선 적까지 이만큼 더 꿰뚫는다.</param>
 /// <param name="Shot">날아가는 탄의 빠르기(칸/초) — 0 이면 근접(치는 순간 맞는다).</param>
-internal sealed record TdWeaponStats(string Name, double Range, int Damage, double Interval, double Splash, int Pierce, double Shot, uint ShotColor);
+/// <param name="Slow">맞은 적의 걸음을 이만큼 늦춘다(0.45 = 45% 느리게) — 우두머리는 절반만 먹는다.</param>
+/// <param name="SlowSeconds">늦추는 시간(초) — 다시 맞으면 새로 잰다.</param>
+internal sealed record TdWeaponStats(string Name, double Range, int Damage, double Interval, double Splash, int Pierce, double Shot, uint ShotColor, double Slow = 0, double SlowSeconds = 0);
 
 /// <summary>지을 수 있는 타워 하나 — 인물(Chr 번호, 파트1 은 20000+)과 갈래.</summary>
 /// <param name="Power">갈래 바탕 피해 · 사거리에 곱한다(영웅은 1 보다 크다).</param>
@@ -56,23 +58,25 @@ internal static class TdData
         [TdWeapon.Gun] = new("총", 3.6, 24, 1.10, 0, 0, 22, 0xFFFFF070),
         [TdWeapon.Beam] = new("빔", 3.4, 20, 1.20, 0, 2, 0, 0xFF80FFFF),
         [TdWeapon.Magic] = new("마법", 3.0, 20, 1.60, 1.1, 0, 7, 0xFF90C0FF),
+        [TdWeapon.Frost] = new("냉기", 3.2, 7, 1.20, 0.8, 0, 7, 0xFF90E8FF, 0.45, 2.0),
     };
 
     /// <summary>
     /// 지을 수 있는 타워 — 앞은 병종(용병) 타워, 뒤는 영웅 타워. 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래 — 칼 297 · 창 300 ·
-    /// 단발사격 306 · 빔라이플 315 · 화이어 애로우 324 · 활 4)으로 골랐다. 파트1 에 활을 쓰는 병사가 없어 궁병은 연적심(활 4)이다.
+    /// 단발사격 306 · 빔라이플 315 · 화이어 애로우 324 · 아이스 미사일 327 · 활 4)으로 골랐고 이름도 그 병사 이름이다(사용자 요청 td-3). 아이스 마스터는 맞은 적을 늦춘다. 파트1 에 활을 쓰는 병사가 없어 궁병은 연적심(활 4)이다.
     /// 영웅은 비싸고 하나씩만 지을 수 있으며 오라를 두른다(사용자 요청 td-1).
     /// </summary>
     internal static readonly TdTowerDef[] Towers =
     [
-        new(Part1Game.ChrBase + 155, "검병", TdWeapon.Sword, 50),
-        new(Part1Game.ChrBase + 159, "창병", TdWeapon.Spear, 60),
-        new(Part1Game.ChrBase + 387, "쌍검병", TdWeapon.DualBlade, 70),
-        new(Part1Game.ChrBase + 192, "대검병", TdWeapon.GreatSword, 90),
-        new(Part1Game.ChrBase + 89, "궁병", TdWeapon.Bow, 70),
-        new(Part1Game.ChrBase + 144, "총병", TdWeapon.Gun, 80),
-        new(Part1Game.ChrBase + 256, "빔병", TdWeapon.Beam, 100),
-        new(Part1Game.ChrBase + 168, "마법사", TdWeapon.Magic, 110),
+        new(Part1Game.ChrBase + 155, "나이트", TdWeapon.Sword, 50),
+        new(Part1Game.ChrBase + 159, "파이크", TdWeapon.Spear, 60),
+        new(Part1Game.ChrBase + 387, "어쌔신", TdWeapon.DualBlade, 70),
+        new(Part1Game.ChrBase + 192, "알가지", TdWeapon.GreatSword, 90),
+        new(Part1Game.ChrBase + 89, "연적심", TdWeapon.Bow, 70),
+        new(Part1Game.ChrBase + 144, "솔져", TdWeapon.Gun, 80),
+        new(Part1Game.ChrBase + 256, "스파히", TdWeapon.Beam, 100),
+        new(Part1Game.ChrBase + 168, "위자드", TdWeapon.Magic, 110),
+        new(Part1Game.ChrBase + 539, "아이스 마스터", TdWeapon.Frost, 90),
 
         new(Part1Game.ChrBase + 0, "살라딘", TdWeapon.DualBlade, 450, 1.9, true, TdAura.Haste, 0.25),
         new(Part1Game.ChrBase + 30, "버몬트", TdWeapon.GreatSword, 500, 1.8, true, TdAura.Power, 0.30),
