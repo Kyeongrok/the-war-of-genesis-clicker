@@ -30,7 +30,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         GameRootBox.Text = LoadSavedGameRoot() ?? DefaultGameRoot;
-        Loaded += (_, _) => TryLoadGameRoot(GameRootBox.Text);
+        Loaded += (_, _) =>
+        {
+            TryLoadGameRoot(GameRootBox.Text);
+            // 게임의 타워 디펜스 「편집기」 단추가 --open=towerdefense 로 켜면 그 창을 바로 연다(사용자 요청 td-6).
+            if (Environment.GetCommandLineArgs().Contains("--open=towerdefense")) TowerDefenseEditMenuItem_Click(this, new RoutedEventArgs());
+        };
     }
 
     // ── 캐릭터 > 캐릭터 스탯 창 ─────────────────────────────────────────────

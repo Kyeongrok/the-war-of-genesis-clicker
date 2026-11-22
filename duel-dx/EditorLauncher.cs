@@ -16,12 +16,13 @@ internal static class EditorLauncher
     private static readonly string Folder = Path.Combine(UserDataFolder.Path, "editor");
     private static bool _busy;
 
-    public static void Open(Action<string> say)
+    /// <param name="args">편집기 명령줄 — <c>--open=towerdefense</c> 면 타워 디펜스 편집 창을 바로 연다.</param>
+    public static void Open(Action<string> say, string args = "")
     {
         string beside = Path.Combine(AppContext.BaseDirectory, "WarOfGenesis.Editor.exe");
         string fetched = Path.Combine(Folder, "WarOfGenesis.Editor.exe");
         string? exe = File.Exists(beside) ? beside : File.Exists(fetched) ? fetched : FindInRepo();
-        if (exe != null) { Start(exe, say); return; }
+        if (exe != null) { Start(exe, say, args); return; }
         if (_busy) { say("편집기를 받는 중입니다…"); return; }
         _busy = true;
         say("편집기를 받습니다 — 다 받으면 열립니다");
@@ -40,7 +41,7 @@ internal static class EditorLauncher
                 }
                 ZipFile.ExtractToDirectory(zip, Folder, overwriteFiles: true);
                 File.Delete(zip);
-                if (File.Exists(fetched)) Start(fetched, say); else say("편집기 꾸러미에 실행 파일이 없습니다");
+                if (File.Exists(fetched)) Start(fetched, say, args); else say("편집기 꾸러미에 실행 파일이 없습니다");
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
             {
@@ -64,11 +65,11 @@ internal static class EditorLauncher
         return null;
     }
 
-    private static void Start(string exe, Action<string> say)
+    private static void Start(string exe, Action<string> say, string args)
     {
         try
         {
-            var start = new ProcessStartInfo(exe) { WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false };
+            var start = new ProcessStartInfo(exe, args) { WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false };
             start.Environment["WAROFGENESIS_ASSETS"] = Path.GetDirectoryName(AssetsFolder.Find("data"))!;
             if (Environment.ProcessPath is { } game) start.Environment["WAROFGENESIS_GAME"] = game;
             Process.Start(start);

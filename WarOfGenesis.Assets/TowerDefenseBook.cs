@@ -189,14 +189,14 @@ public static class TowerDefenseBook
             new() { Key = "Magic", Name = "마법", Range = 3.0, Damage = 20, Interval = 1.60, Splash = 1.1, Shot = 7, ShotColor = Hex(0xFF90C0FF) },
             new() { Key = "Frost", Name = "냉기", Range = 3.2, Damage = 7, Interval = 1.20, Splash = 0.8, Shot = 7, ShotColor = Hex(0xFF90E8FF), Slow = 0.45, SlowSeconds = 2.0 },
         ],
-        // 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래)으로 골랐고 이름도 그 병사 이름(td-2 · td-3). 궁병 자리는 활을 쓰는 연적심.
+        // 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래)으로 골랐고 이름도 그 병사 이름(td-2 · td-3). 궁병 자리는 한제국 활 직업 조의선인(Grand Archer, 파트1 484 — 활 4, td-5).
         Towers =
         [
             T(Part1Base + 155, "나이트", "Sword", 50),
             T(Part1Base + 159, "파이크", "Spear", 60),
             T(Part1Base + 387, "어쌔신", "DualBlade", 70),
             T(Part1Base + 192, "알가지", "GreatSword", 90),
-            T(Part1Base + 89, "연적심", "Bow", 70),
+            T(Part1Base + 484, "조의선인", "Bow", 70),
             T(Part1Base + 144, "솔져", "Gun", 80),
             T(Part1Base + 256, "스파히", "Beam", 100),
             T(Part1Base + 168, "위자드", "Magic", 110),

@@ -60,6 +60,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         internal readonly double Damage = damage;
         internal Part1Skill.BasicStyle Style;
         internal uint Color = 0xFFFFFFFF;
+        internal int AttackId;
     }
 
     private TdStage _stage = TdData.Stages[0];
@@ -284,6 +285,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
                     host.PreloadSounds([.. new[] { action, 8, 9 }.SelectMany(a => new[] { Facing.Left, Facing.Up, Facing.Down }.Select(f => sp.Clip(a, f)))
                                                      .Where(c => c != null).SelectMany(c => c!.Sounds.Select(x => x.Sound))]);
             }
+            // 탄 · 맞은 자리 소리(전투의 기본 공격 핸들러가 따로 내는 것) — 활 시위 56 · 화살 793 · 맞은 자리 183, CSound 2038 · 마법 6 · 81 · 80
+            host.PreloadSounds([.. new[] { 2038, 6, 81, 80 }.Select(n => Part1Game.ObsBase + n),
+                                .. new[] { (56, 1), (793, 4), (183, 0), (183, 1), (183, 2), (55, 1), (198, 0), (48, 0), (275, 4), (51, 0), (276, 0), (71, 0), (505, 9) }.SelectMany(o => host.UiFor(Part1Game.ObsBase + o.Item1)?.Clip(o.Item2)?.Sounds.Select(x => x.Sound) ?? [])]);
             // 파트1 그림이 없는 적은 파트2 병사로.
             foreach (var e in _stage.Enemies.Where(e => _sprites.GetValueOrDefault(e.Chr) == null && !_sprites.ContainsKey(e.Fallback)))
                 _sprites[e.Fallback] = LoadSprite(e.Fallback);
@@ -388,6 +392,35 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 foreach (var (cs, sound) in child.Sounds) host._pendingSounds.Add((t0 + (start + cs) / TicksPerSecond / _speed, sound, sx));
     }
 
+    /// <summary>파트1 그림(Obs 번호) 한 모션의 소리 키를 지금부터 건다.</summary>
+    private void ObsSounds(int part1Obs, int motion, double x) => QueueSounds(host.UiFor(Part1Game.ObsBase + part1Obs)?.Clip(motion), x);
+
+    /// <summary>파트1 소리(CSound 번호) 하나를 지금 낸다.</summary>
+    private void PlayPart1(int sound, double x)
+    {
+        var (ox, _) = host.Mos.MosesOrigin();
+        host._pendingSounds.Add((host._lastTime, Part1Game.ObsBase + sound, (float)(ox + x - _camX)));
+    }
+
+    /// <summary>탄이 닿을 때의 소리 — 화살 · 던지기는 CSound 2038, 화살 · 총알은 맞은 자리 그림(183)의 소리 키도(전투와 같다).</summary>
+    private void Arrived(Shot s)
+    {
+        if (s.Style is Part1Skill.BasicStyle.Arrow or Part1Skill.BasicStyle.Throw or Part1Skill.BasicStyle.Boomerang) PlayPart1(2038, s.X);
+        if (s.Style is Part1Skill.BasicStyle.Arrow or Part1Skill.BasicStyle.Shot or Part1Skill.BasicStyle.Volley) ObsSounds(183, _rng.Next(3), s.X);
+        if (s.Style == Part1Skill.BasicStyle.Missile) ObsSounds(MissileParts(s.AttackId).Burst, 0, s.X);
+    }
+
+    /// <summary>
+    /// 용병 마법 셋의 소리 · 그림(전투 BasicMissile 과 같은 표) — 화이어 애로우(소리 6 · 빛 55 · 불덩이 198 · 터짐 48), 아이스미사일(81 · 56 · 얼음살 275 · 51),
+    /// 라이트닝볼츠(80 · 56 · 276 · 71). 아이스 마스터는 아이스미사일 327 이라 얼음 쏘는 소리 81 과 얼음살 · 터짐 소리 키가 난다(td-5).
+    /// </summary>
+    private static (int Sound, int Glow, int Shot, int Burst) MissileParts(int attackId) => attackId switch
+    {
+        <= 326 => (6, 55, 198, 48),
+        <= 329 => (81, 56, 275, 51),
+        _ => (80, 56, 276, 71),
+    };
+
     private Enemy? TargetFor(Tower t, double reach)
     {
         Enemy? target = null;
@@ -483,6 +516,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             {
                 _shots.Remove(s);
                 if (s.Target.Alive) Strike(s.From, s.Target, s.Damage);
+                Arrived(s);
                 continue;
             }
             s.X += (tx - s.X) / d * speed;
@@ -517,11 +551,21 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 Strike(t, target, t.PendingDamage);
                 break;
             case Part1Skill.BasicStyle.Beam:
+                ObsSounds(505, 9, t.X);   // 빔 줄 그림의 소리 키(전투 BasicBeam 과 같다)
                 _beams.Add((t.X + muzzle, t.Y - 28, target.X, target.Y - 22, _sim, t.Def.Stats.ShotColor != 0 ? t.Def.Stats.ShotColor : 0xFF80FFFF));
                 Strike(t, target, t.PendingDamage);
                 break;
             default:
-                _shots.Add(new Shot(t.X + muzzle, t.Y - 28, target, t, t.PendingDamage) { Style = atk.Style, Color = ShotColorOf(atk.Style, atk.AttackId) });
+                _shots.Add(new Shot(t.X + muzzle, t.Y - 28, target, t, t.PendingDamage) { Style = atk.Style, Color = ShotColorOf(atk.Style, atk.AttackId), AttackId = atk.AttackId });
+                // 쏘는 순간의 소리 — 활은 시위(56) · 화살(793) 그림의 소리 키, 마법탄은 불 6 · 얼음 81 · 번개 80(전투 BasicArrow · BasicMissile 과 같다)
+                if (atk.Style == Part1Skill.BasicStyle.Arrow) { ObsSounds(56, 1, t.X); ObsSounds(793, 4, t.X); }
+                else if (atk.Style == Part1Skill.BasicStyle.Missile)
+                {
+                    var (sound, glow, shot, _) = MissileParts(atk.AttackId);
+                    PlayPart1(sound, t.X);
+                    ObsSounds(glow, 1, t.X);
+                    ObsSounds(shot, shot == 275 ? 4 : 0, t.X);
+                }
                 break;
         }
     }
@@ -676,7 +720,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 int col = i / 8, cols = Math.Min(2, (TdData.Stages.Length + 7) / 8), w = cols == 1 ? 360 : 290;
                 yield return ($"stage:{i}", $"{i + 1}. {st.Map.Name}{mark}", FieldW / 2 - (cols * (w + 10) - 10) / 2 + col * (w + 10), 92 + i % 8 * 36, w, 28);
             }
-            yield return ("leave", "타이틀로", FieldW / 2 - 60, 400, 120, 28);
+            yield return ("editor", "편집기", FieldW / 2 - 130, 400, 120, 28);
+            yield return ("leave", "타이틀로", FieldW / 2 + 10, 400, 120, 28);
             yield break;
         }
         if (_phase != Phase.Playing)
@@ -688,6 +733,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             yield break;
         }
         string wave = _wave >= _stage.Waves.Length ? "마지막 웨이브" : _nextWaveIn > 0 ? $"다음 웨이브 ({Math.Ceiling(_nextWaveIn)})" : _wave == 0 ? "웨이브 시작" : "웨이브 진행 중";
+        yield return ("editor", "편집기", FieldW - 366, 6, 62, 24);
         yield return ("wave", wave, FieldW - 300, 6, 138, 24);
         yield return ("speed", $"속도 x{_speed}", FieldW - 156, 6, 72, 24);
         yield return ("leave", "나가기", FieldW - 78, 6, 72, 24);
@@ -721,6 +767,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         {
             case "again": Reset(); return true;
             case "stages": _phase = Phase.Select; _img = null; return true;
+            case "editor": EditorLauncher.Open(host.Toast, "--open=towerdefense"); return true;
             case "leave": Leave(); return true;
             case "wave": if (_wave < _stage.Waves.Length && (_wave == 0 || _nextWaveIn > 0)) StartWave(); return true;
             case "speed": _speed = _speed == 1 ? 2 : _speed == 2 ? 3 : 1; return true;
@@ -1043,9 +1090,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
         host.FillRect(ox, oy + Top - 1, FieldW, 1, 0xFF404C70);
         Outlined($"골드 {_gold}", ox + 8, oy + 9, Gold, 13);
         Outlined($"생명 {_lives}", ox + 100, oy + 9, _lives <= 5 ? Red : Green, 13);
-        Outlined($"웨이브 {_wave}/{_stage.Waves.Length}", ox + 180, oy + 9, 0xFFFFFFFF, 13);
-        int best = _save.BestWave.GetValueOrDefault(_map.File);
-        if (best > 0) Outlined($"최고 {best}", ox + 276, oy + 11, Dim, 11);
+        int best = _save.BestWave.GetValueOrDefault(_stage.Id);
+        Outlined($"웨이브 {_wave}/{_stage.Waves.Length}", ox + 180, oy + (best > 0 ? 3 : 9), 0xFFFFFFFF, 13);
+        if (best > 0) Outlined($"최고 {best}", ox + 182, oy + 21, Dim, 9);   // 웨이브 밑 — 오른쪽에 「편집기」 단추가 선다(td-6)
         foreach (var (id, label, x, y, w, h) in Buttons())
             if (y < FieldH - 40 && _phase == Phase.Playing) host.Part1TitleScr.DrawButton(ox + x, oy + y, w, h, label, _hoverButton == id);
     }
