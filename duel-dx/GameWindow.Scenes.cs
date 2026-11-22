@@ -16,7 +16,11 @@ internal sealed unsafe partial class GameWindow
     /// 전투 판이 다른 화면(모세스 · 필드 · 타이틀 · 기록 · 연대표 · 챕터 고르기)에 덮여 있나 — 새 UI 층에 그리는 전투 창(HUD · 정보 창 · 목록)은 이때 안 그린다.
     /// 판에 그릴 때는 뒤에 그리는 그 화면이 덮어 줬지만, 층은 늘 판 위라 비쳐 나온다(menu-57).
     /// </summary>
-    internal bool BattleCovered => Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || RecordsScr._recordsOpen || EpisodesScr._episodesOpen || ChaptersScr._chaptersOpen;
+    internal bool BattleCovered => Mos._mosesOpen || FieldOpen || TitleScr._titleOpen || RecordsScr._recordsOpen || EpisodesScr._episodesOpen || ChaptersScr._chaptersOpen || _towerDef is { Open: true };
+
+    /// <summary>타워 디펜스(td-1) — 타이틀 단추로 연다.</summary>
+    internal TowerDefenseScene? _towerDef;
+    internal TowerDefenseScene TowerDef => _towerDef ?? LazyInitializer.EnsureInitialized(ref _towerDef, () => new TowerDefenseScene(this));
 
     /// <summary>MosesScene — 처음 쓸 때 만든다(장면마다 따로 선 클래스).</summary>
     internal MosesScene? _mosScene;

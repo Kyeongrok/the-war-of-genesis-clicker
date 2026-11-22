@@ -928,6 +928,8 @@ internal sealed unsafe partial class GameWindow : IDisposable
             case Win32.WM_MOUSEWHEEL when Btl._abilityMenu && !Sys.SystemOpen:
                 Btl.ScrollAbilityMenu(-(short)(((long)wParam >> 16) & 0xFFFF) / 120);   // 어빌리티 목록은 8줄 창 — 휠로 굴린다(ba-20 G12)
                 return IntPtr.Zero;
+            case Win32.WM_MOUSEWHEEL when _towerDef is { Open: true }:
+                return IntPtr.Zero;   // 타워 디펜스는 화면이 고정이다
             case Win32.WM_MOUSEWHEEL when Sys.SystemOpen || Btl.LevelUpOpen || Btl._abilityMenu || Mos._mosesOpen:
                 return IntPtr.Zero;   // 창이 떠 있으면 휠이 뒤의 카메라를 굴리지 않는다
             case Win32.WM_MOUSEWHEEL:
@@ -1000,6 +1002,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 Btl.UpdateAbilityHover(bx, by);
                 Btl.UpdateAimHover(bx, by);
                 TitleScr.UpdateTitleHover(bx, by);
+                _towerDef?.UpdateHover(bx, by);
                 RecordsScr.UpdateRecordsHover(bx, by);
                 Fld.UpdateFieldHover(bx, by);
                 if (Part1PickOpen) Part1TitleScr.Chapter._hover = Part1ChapterScreen.PickHit + Part1TitleScr.Chapter.PickAt(bx, by);   // 전투 안 레벨업 창도 짚은 줄을 파랗게
@@ -1010,6 +1013,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
                 else if (msg == Win32.WM_RBUTTONDOWN && CharEditScr._open) CharEditScr.OnRightDown(bx, by);   // 에디터가 떠 있으면 뒤의 판은 오른쪽 단추를 안 받는다
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Town._open && Part1TitleScr.Town.OnRightDown(bx, by)) { }   // 파트1 마을: 얼굴로 연 상태 패널
                 else if (msg == Win32.WM_RBUTTONDOWN && Part1TitleScr._open && Part1TitleScr.Chapter._open) Part1TitleScr.Chapter.OnRightClick();   // 파트1 지도: 창 · 이동 고르기 닫기, 없으면 메뉴
+                else if (msg == Win32.WM_RBUTTONDOWN && _towerDef?.OnRightClick() == true) { }   // 타워 디펜스: 고른 것 풀기
                 else if (msg == Win32.WM_RBUTTONDOWN) Btl.OnRightClick(bx, by);
                 else Btl.OnRingMouseMove(bx, by);
                 return IntPtr.Zero;
@@ -1074,6 +1078,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (_keys.ActionFor(key) == KeyAction.PartyTable && PartyTable.Toggle()) return;   // 파트1 전투 · 챕터 지도만
         if (_keys.ActionFor(key) == KeyAction.JobTree && JobTree.Toggle()) return;   // 파트1 전투 · 챕터 지도만 — 파트2 는 그냥 지나간다
         // 타이틀 화면 — Esc 는 슬롯 창, Enter 는 초점 단추 NEW GAME(Title.cs).
+        if (_towerDef?.OnKey(key) == true) return;   // 타워 디펜스(td-1)
         if (TitleScr.OnTitleKey(key)) return;
         // 연대표에서도 전투 키는 안 먹고 Esc 로 시스템 메뉴만 연다.
         if (EpisodesScr._episodesOpen)
@@ -1227,6 +1232,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         if (Btl.OnChestListClick(bx, by)) return;      // 상자 목록의 접기 단추
         if (_afterFadeOut != null) return;     // 장면을 떠나는 페이드 동안은 입력을 안 받는다
         if (SceneFading && !Mos._mosesOpen && !FieldOpen && !TitleScr._titleOpen) return;   // 전투 시작·끝 페이드 동안은 입력을 안 받는다
+        if (_towerDef?.OnClick(bx, by) == true) return;   // 타워 디펜스(td-1)
         if (Btl.LevelUpOpen) { Btl.CloseLevelUp(); return; }
         if (TrySkipEnemyAction()) return;      // 적이 행동하는 동안의 클릭 = 그 행동 건너뛰기(모드)
         if (SlotsScr._notice != null) { SlotsScr._notice = null; return; }     // 「저장되었습니다.」 같은 알림은 클릭으로 바로 닫는다
@@ -1310,6 +1316,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         {
             _openHooksPending = false;
             TitleScr.OpenTitleIfAsked();
+            if (Environment.GetEnvironmentVariable("DUELDX_TD") is { Length: > 0 }) TowerDef.OpenIfAsked();   // 화면 밖 시험: 타워 디펜스를 바로
             Mos.OpenMosesIfAsked();
             Fld.OpenFieldIfAsked();
             Part1TitleScr.Field.OpenIfAsked();
@@ -1597,6 +1604,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
         TitleScr.DrawTitle();
         EpisodesScr.DrawEpisodes();
         ChaptersScr.DrawChapters();
+        _towerDef?.Draw();                     // 타워 디펜스(td-1)
         DrawSceneFade();                       // 전투 시작·끝 16틀 페이드(감사4 C6·C7)
         DrawSceneTag();
         DrawMusicNotice();

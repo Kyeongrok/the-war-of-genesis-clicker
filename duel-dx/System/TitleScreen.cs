@@ -42,6 +42,17 @@ internal sealed unsafe class TitleScreen(GameWindow host)
     internal static readonly (int X, int Y, int W, int H) BugButton = (500, 440, 124, 26);
     internal bool _bugHover;
 
+    /// <summary>「타워 디펜스」 단추(사용자 요청 td-1, 원본에 없다) — 버그 리포트 단추 바로 위, 같은 꼴.</summary>
+    internal static readonly (int X, int Y, int W, int H) TdButton = (500, 408, 124, 26);
+    internal bool _tdHover;
+
+    internal bool TdButtonAt(int bx, int by)
+    {
+        var (ox, oy) = host.Mos.MosesOrigin();
+        var (x, y, w, h) = TdButton;
+        return bx >= ox + x && bx < ox + x + w && by >= oy + y && by < oy + y + h;
+    }
+
     internal bool BugButtonAt(int bx, int by)
     {
         var (ox, oy) = host.Mos.MosesOrigin();
@@ -237,6 +248,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (host.Part1TitleScr.OnClick(bx, by)) return true;
         if (host.Part1TitleScr.EntryAt(bx, by)) { host.Part1TitleScr.PressEntry(); return true; }
         if (BugButtonAt(bx, by)) { _bugHover = false; host.Bugs.Open(); return true; }
+        if (TdButtonAt(bx, by)) { _tdHover = false; host.LeaveScene(() => host.TowerDef.Start(0)); return true; }
         PressTitleButton(TitleButtonAt(bx, by));
         return true;
     }
@@ -328,6 +340,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         host.Part1TitleScr.UpdateHover(bx, by);
         _titleHover = host.Part1TitleScr._open ? -1 : TitleButtonAt(bx, by);
         _bugHover = !host.Part1TitleScr._open && BugButtonAt(bx, by);
+        _tdHover = !host.Part1TitleScr._open && TdButtonAt(bx, by);
     }
 
     internal void DrawTitle()
@@ -381,6 +394,8 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         host.Part1TitleScr.DrawEntry();   // 파트1 로 가는 단추(리메이크에만 있다)
         var (bugX, bugY, bugW, bugH) = BugButton;
         host.Part1TitleScr.DrawButton(ox + bugX, oy + bugY, bugW, bugH, "버그 리포트", _bugHover);
+        var (tdX, tdY, tdW, tdH) = TdButton;
+        host.Part1TitleScr.DrawButton(ox + tdX, oy + tdY, tdW, tdH, "타워 디펜스", _tdHover);
         DrawFanNotice(270, 250);   // 배경의 원본 저작권 글(x 270, y 232~246) 바로 밑
         host.Sys.DrawSystem();     // CONTINUE 가 연 슬롯 창
         host.DrawToast();
