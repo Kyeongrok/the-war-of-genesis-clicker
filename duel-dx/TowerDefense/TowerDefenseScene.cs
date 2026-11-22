@@ -31,7 +31,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     private sealed class Tower(TdTowerDef def, int col, int row, double x, double y)
     {
-        internal readonly TdTowerDef Def = def;
+        internal TdTowerDef Def = def;   // 올리면 바뀐다(td-12)
         internal readonly int Col = col, Row = row;
         internal readonly double X = x, Y = y;
         internal double Cooldown, AnimAt = -9;
@@ -642,8 +642,11 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private double Reach(Tower t)
     {
         var (_, _, range) = AuraOn(t);
-        return Math.Max(t.Def.Stats.Range * t.Def.Power * (t.Def.Hero ? 0.6 : 1), t.Def.Stats.Range) * (1 + range) * Cell;
+        return RangeOf(t.Def) * (1 + range) * Cell;
     }
+
+    /// <summary>타워 사거리(칸) — 힘(올린 타워 · 영웅)은 피해에 다 먹고 사거리에는 4분의 1만(힘 2.4 = 1.35배) 먹는다. 근접이 멀리서 치지 않게(td-12).</summary>
+    private static double RangeOf(TdTowerDef def) => def.Stats.Range * (1 + Math.Max(0, def.Power - 1) * 0.25);
 
     private void StartWave()
     {
@@ -668,7 +671,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     // ── 짓기 · 팔기 ──
 
-    private IEnumerable<int> TabCards() => Enumerable.Range(0, TdData.Towers.Length).Where(i => TdData.Towers[i].Hero == (_tab == 1));
+    private IEnumerable<int> TabCards() => Enumerable.Range(0, TdData.Towers.Length).Where(i => TdData.Towers[i].Buildable && TdData.Towers[i].Hero == (_tab == 1));
 
     private bool HeroBuilt(TdTowerDef def) => def.Hero && _towers.Any(t => t.Def == def);
 
@@ -694,6 +697,22 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     /// <summary>짓는 소리 — 모세스 단추 소리를 빌린다.</summary>
     private const int PlaceSound = 578;
+
+    /// <summary>
+    /// 타워 올리기(사용자 요청 td-12) — 파트1 전직표처럼 다음 타워 가운데 하나로 바꾼다. 값은 다음 타워의 값, 판 값(팔기)에 더한다.
+    /// 영웅으로 올리는 갈래면 그 영웅이 이미 있으면 안 된다.
+    /// </summary>
+    private void Upgrade(Tower t, TdTowerDef next)
+    {
+        if (next.Hero && HeroBuilt(next)) { host.Toast("영웅은 하나만 둘 수 있습니다"); return; }
+        if (_gold < next.Cost) { host.Toast($"골드가 모자랍니다 ({next.Cost - _gold} 더)"); return; }
+        _gold -= next.Cost;
+        t.Def = next;
+        t.Spent += next.Cost;
+        t.Cooldown = Math.Min(t.Cooldown, 0.2);
+        _floats.Add(($"▲ {next.Name}", t.X - 20, t.Y - 60, _sim, Gold));
+        host.Play(PlaceSound);
+    }
 
     private void Sell(Tower t)
     {
@@ -756,7 +775,14 @@ internal sealed class TowerDefenseScene(GameWindow host)
         yield return ("wave", wave, FieldW - 300, 6, 138, 24);
         yield return ("speed", $"속도 x{_speed}", FieldW - 156, 6, 72, 24);
         yield return ("leave", "나가기", FieldW - 78, 6, 72, 24);
-        if (_selected != null) yield return ("sell", $"팔기 +{(int)(_selected.Spent * TdData.SellRate)}", FieldW - 112, PanelY - 34, 106, 26);
+        if (_selected != null)
+        {
+            yield return ("sell", $"팔기 +{(int)(_selected.Spent * TdData.SellRate)}", FieldW - 112, PanelY - 34, 106, 26);
+            // 올리기 — 팔기 위로 쌓는다(다음 타워마다 하나)
+            var next = _selected.Def.Next;
+            for (int i = 0; i < next.Length; i++)
+                yield return ($"up:{i}", $"▲ {next[i].Name} {next[i].Cost}", FieldW - 166, PanelY - 64 - i * 30, 160, 26);
+        }
     }
 
     private string? ButtonAt(int lx, int ly) =>
@@ -791,6 +817,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
             case "wave": if (_wave < _stage.Waves.Length && (_wave == 0 || _nextWaveIn > 0)) StartWave(); return true;
             case "speed": _speed = _speed == 1 ? 2 : _speed == 2 ? 3 : 1; return true;
             case "sell": if (_selected != null) Sell(_selected); return true;
+            case { } up when up.StartsWith("up:", StringComparison.Ordinal):
+                if (_selected is { } sel && int.Parse(up[3..]) is var ui && ui < sel.Def.Next.Length) Upgrade(sel, sel.Def.Next[ui]);
+                return true;
         }
         if (_phase != Phase.Playing) return true;
         if (TabAt(lx, ly) is var tab and >= 0 and <= 1) { _tab = tab; _pick = -1; return true; }
@@ -842,6 +871,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         else if (key is Win32.VK_LEFT or Win32.VK_RIGHT or Win32.VK_UP or Win32.VK_DOWN)
             Pan(key == Win32.VK_LEFT ? -Cell * 2 : key == Win32.VK_RIGHT ? Cell * 2 : 0, key == Win32.VK_UP ? -CellH * 2 : key == Win32.VK_DOWN ? CellH * 2 : 0);
         else if (key == 'S' && _selected != null) Sell(_selected);
+        else if (key == 'U' && _selected is { } sel && sel.Def.Next is { Length: > 0 } next) Upgrade(sel, next[0]);
         return true;
     }
 
@@ -996,7 +1026,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 bool ok = CanPlace(_hoverCell.Col, _hoverCell.Row);
                 host.FillRect(x, y, Cell, CellH, ok ? 0x7060FF60u : 0x70FF4040u);
                 var (fx, fy) = CellFoot(_hoverCell.Col, _hoverCell.Row);
-                double reach = Math.Max(def.Stats.Range * def.Power * (def.Hero ? 0.6 : 1), def.Stats.Range) * Cell;
+                double reach = RangeOf(def) * Cell;
                 Circle(ox + (int)fx - _camX, oy + (int)fy - _camY, (int)reach, ok ? 0xC0A0FFA0u : 0xC0FF8080u);
                 if (def.Hero) Circle(ox + (int)fx - _camX, oy + (int)fy - _camY, (int)(TdData.AuraRange * Cell), 0xA0FFD860);
             }
@@ -1174,6 +1204,9 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private void DrawInfo(int ox, int oy)
     {
         int card = _hoverCard >= 0 ? _hoverCard : _pick;
+        // 올리기 단추 위면 그 다음 타워를 보인다
+        if (_selected is { } hs && _hoverButton is { } hb && hb.StartsWith("up:", StringComparison.Ordinal) && int.Parse(hb[3..]) is var hi && hi < hs.Def.Next.Length)
+            card = Array.IndexOf(TdData.Towers, hs.Def.Next[hi]);
         string[]? lines = null;
         uint head = 0xFFFFFFFF;
         if (card >= 0)
@@ -1188,6 +1221,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
             head = t.Def.Hero ? Gold : 0xFFFFFFFF;
             var (p, h, r) = AuraOn(t);
             lines = [$"{t.Def.Name} — {t.Def.Stats.Name}  ·  처치 {t.Kills}", StatLine(t.Def, p, h, r), WeaponNote(t.Def)];
+            if (t.Def.Next.Length > 0) lines = [.. lines, $"올리기(U): {string.Join(" · ", t.Def.Next.Select(n => n.Name))}"];
             if (t.Def.Hero) lines = [.. lines, AuraText(t.Def)];
             if (p + h + r > 0) lines = [.. lines, $"오라 받는 중: {(p > 0 ? $"공격 +{p:P0} " : "")}{(h > 0 ? $"속도 +{h:P0} " : "")}{(r > 0 ? $"사거리 +{r:P0}" : "")}"];
         }
@@ -1197,13 +1231,14 @@ internal sealed class TowerDefenseScene(GameWindow host)
         host.StrokeRect(x0, y0, w, hgt, 0xFF6078A0);
         for (int i = 0; i < lines.Length; i++) host.UiText(lines[i], x0 + 8, y0 + 4 + i * 16, i == 0 ? head : 0xFFD8DCE8, i == 0 ? 12 : 11);
         if (_selected != null && card < 0)
-            foreach (var b in Buttons().Where(b => b.Id == "sell")) host.Part1TitleScr.DrawButton(ox + b.X, oy + b.Y, b.W, b.H, b.Label, _hoverButton == "sell");
+            foreach (var b in Buttons().Where(b => b.Id == "sell" || b.Id.StartsWith("up:", StringComparison.Ordinal)))
+                host.Part1TitleScr.DrawButton(ox + b.X, oy + b.Y, b.W, b.H, b.Label, _hoverButton == b.Id);
     }
 
     private static string StatLine(TdTowerDef def, double power, double haste, double range)
     {
         var w = def.Stats;
-        double reach = Math.Max(w.Range * def.Power * (def.Hero ? 0.6 : 1), w.Range) * (1 + range);
+        double reach = RangeOf(def) * (1 + range);
         return $"피해 {w.Damage * def.Power * (1 + power):0}  ·  간격 {w.Interval / (1 + haste):0.00}초  ·  사거리 {reach:0.0}칸";
     }
 

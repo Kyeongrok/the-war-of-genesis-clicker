@@ -36,6 +36,19 @@ public sealed class TdTowerEntry
     /// <summary>갈래 피해 · 사거리에 곱한다.</summary>
     public double Power { get; set; } = 1;
     public bool Hero { get; set; }
+    /// <summary>다른 타워가 가리키는 이름(<see cref="Upgrades"/>) — 비면 <see cref="Name"/>.</summary>
+    public string Key { get; set; } = "";
+    /// <summary>짓기 칸에 나오는가 — 거짓이면 다른 타워에서 올려야만 된다(전직표의 윗 직업).</summary>
+    public bool Buildable { get; set; } = true;
+    /// <summary>올릴 수 있는 다음 타워들의 키(사용자 요청 td-12, 파트1 전직표처럼 여러 갈래). 올리는 값은 그 타워의 값.</summary>
+    public List<string> Upgrades { get; set; } = [];
+    [JsonIgnore] public string KeyOrName => Key.Length > 0 ? Key : Name;
+    /// <summary>편집기 표 칸 — 다음 타워 키를 쉼표로.</summary>
+    [JsonIgnore] public string UpgradesText
+    {
+        get => string.Join(", ", Upgrades);
+        set => Upgrades = [.. (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+    }
     /// <summary>None · Power(공격력) · Haste(공격 속도) · Range(사거리).</summary>
     public string Aura { get; set; } = "None";
     public double AuraValue { get; set; }
@@ -198,15 +211,35 @@ public static class TowerDefenseBook
         // 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래)으로 골랐고 이름도 그 병사 이름(td-2 · td-3). 궁병 자리는 한제국 활 직업 조의선인(Grand Archer, 파트1 484 — 활 4, td-5).
         Towers =
         [
-            T(Part1Base + 155, "나이트", "Sword", 50),
-            T(Part1Base + 159, "파이크", "Spear", 60),
-            T(Part1Base + 387, "어쌔신", "DualBlade", 70),
-            T(Part1Base + 192, "알가지", "GreatSword", 90),
+            T(Part1Base + 155, "나이트", "Sword", 50, up: ["로열나이트", "크루세이더"]),
+            T(Part1Base + 159, "파이크", "Spear", 60, up: ["투창병", "바시아조크"]),
+            T(Part1Base + 387, "어쌔신", "DualBlade", 70, up: ["검투사"]),
+            T(Part1Base + 192, "알가지", "GreatSword", 90, up: ["알가지베테랑", "예니체리"]),
             T(Part1Base + 484, "조의선인", "Bow", 70),
-            T(Part1Base + 144, "솔져", "Gun", 80),
-            T(Part1Base + 256, "스파히", "Beam", 100),
-            T(Part1Base + 168, "위자드", "Magic", 110),
-            T(Part1Base + 539, "아이스 마스터", "Frost", 90),
+            T(Part1Base + 144, "솔져", "Gun", 80, up: ["베테랑솔져", "로열가드"]),
+            T(Part1Base + 256, "스파히", "Beam", 100, up: ["스파히레이져", "스파히바주카"]),
+            T(Part1Base + 168, "위자드", "Magic", 110, up: ["화이어마스터", "썬더 마스터"]),
+            T(Part1Base + 539, "아이스 마스터", "Frost", 90, up: ["서번트아이스"]),
+            // 올리기 전용(전직표의 윗 직업 — 파트1 병사 중 같은 무기 갈래의 윗 병종, td-12)
+            U(Part1Base + 137, "로열나이트", "Sword", 130, 1.7, "황실기사", "패러딘"),
+            U(Part1Base + 149, "크루세이더", "GreatSword", 140, 1.6, "아크 나이트"),
+            U(Part1Base + 582, "황실기사", "Sword", 240, 2.5),
+            U(Part1Base + 585, "패러딘", "Sword", 260, 2.4),
+            U(Part1Base + 584, "아크 나이트", "GreatSword", 260, 2.4),
+            U(Part1Base + 524, "투창병", "Spear", 120, 1.7),
+            U(Part1Base + 154, "바시아조크", "Spear", 140, 1.8),
+            U(Part1Base + 519, "검투사", "DualBlade", 150, 1.8),
+            U(Part1Base + 571, "알가지베테랑", "GreatSword", 160, 1.7),
+            U(Part1Base + 197, "예니체리", "GreatSword", 150, 1.6),
+            U(Part1Base + 530, "베테랑솔져", "Gun", 140, 1.7, "드래군랜서"),
+            U(Part1Base + 165, "로열가드", "Gun", 150, 1.7),
+            U(Part1Base + 590, "드래군랜서", "Gun", 240, 2.4),
+            U(Part1Base + 569, "스파히레이져", "Beam", 180, 1.7),
+            U(Part1Base + 570, "스파히바주카", "Gun", 180, 1.9),
+            U(Part1Base + 538, "화이어마스터", "Magic", 180, 1.7),
+            U(Part1Base + 540, "썬더 마스터", "Magic", 190, 1.7),
+            U(Part1Base + 592, "서번트아이스", "Frost", 170, 1.6, "S.마에스트로"),
+            U(Part1Base + 594, "S.마에스트로", "Frost", 260, 2.3),
             T(Part1Base + 0, "살라딘", "DualBlade", 450, 1.9, "Haste", 0.25),
             T(Part1Base + 30, "버몬트", "GreatSword", 500, 1.8, "Power", 0.30),
             T(Part1Base + 65, "크리스티앙", "Gun", 450, 1.9, "Range", 0.20),
@@ -220,8 +253,12 @@ public static class TowerDefenseBook
         ],
     };
 
-    private static TdTowerEntry T(int chr, string name, string weapon, int cost, double power = 1, string? aura = null, double auraValue = 0) =>
-        new() { Chr = chr, Name = name, Weapon = weapon, Cost = cost, Power = power, Hero = aura != null, Aura = aura ?? "None", AuraValue = auraValue };
+    private static TdTowerEntry T(int chr, string name, string weapon, int cost, double power = 1, string? aura = null, double auraValue = 0, string[]? up = null) =>
+        new() { Chr = chr, Name = name, Weapon = weapon, Cost = cost, Power = power, Hero = aura != null, Aura = aura ?? "None", AuraValue = auraValue, Upgrades = [.. up ?? []] };
+
+    /// <summary>올리기 전용 타워 — 짓기 칸에 안 나오고 앞 타워에서 올린다.</summary>
+    private static TdTowerEntry U(int chr, string name, string weapon, int cost, double power, params string[] up) =>
+        new() { Chr = chr, Name = name, Weapon = weapon, Cost = cost, Power = power, Buildable = false, Upgrades = [.. up] };
 
     private static TdEnemyEntry E(int chr, int fallback, string name, int hp, double speed, int bounty, int leak = 1, int armor = 0) =>
         new() { Chr = Part1Base + chr, Fallback = fallback, Name = name, Hp = hp, Speed = speed, Bounty = bounty, Leak = leak, Armor = armor };

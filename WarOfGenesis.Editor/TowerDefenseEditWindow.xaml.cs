@@ -120,7 +120,8 @@ public partial class TowerDefenseEditWindow : Window
         EnemyGrid.ItemsSource = _enemies;
         WaveGrid.ItemsSource = _waves;
         foreach (var grid in new[] { TowerGrid, WeaponGrid, EnemyGrid, WaveGrid }) grid.BeginningEdit += (_, _) => PushUndo(commitGrids: false);
-        TowerGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { TowerGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!TowerGrid.IsKeyboardFocusWithin || TowerGrid.CurrentCell.IsValid) try { TowerGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
+        _towers.CollectionChanged += (_, _) => RebuildTree();
+        TowerGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { RebuildTree(); TowerGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!TowerGrid.IsKeyboardFocusWithin || TowerGrid.CurrentCell.IsValid) try { TowerGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
         EnemyGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { EnemyGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!EnemyGrid.IsKeyboardFocusWithin || EnemyGrid.CurrentCell.IsValid) try { EnemyGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
         WaveGrid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { WaveGrid.CommitEdit(DataGridEditingUnit.Row, true); if (!WaveGrid.IsKeyboardFocusWithin || WaveGrid.CurrentCell.IsValid) try { WaveGrid.Items.Refresh(); } catch (InvalidOperationException) { } }, System.Windows.Threading.DispatcherPriority.Background);
 
@@ -705,6 +706,46 @@ public partial class TowerDefenseEditWindow : Window
         TowerGrid.SelectedItem = t;
     }
 
+    // ── 올리기 표(전직표, td-12) ──
+
+    /// <summary>짓기 칸 타워부터 「다음 타워」를 따라 내려가는 나무 — 그림 · 이름 · 값. 없는 키는 붉게, 되돌아오는 고리는 끊는다.</summary>
+    private void RebuildTree()
+    {
+        UpgradeTree.Items.Clear();
+        var byKey = _towers.GroupBy(t => t.KeyOrName).ToDictionary(g => g.Key, g => g.First());
+        TreeViewItem Node(TdTowerEntry t, HashSet<string> seen)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new Image { Source = ChrPictureConverter.Picture(t.Chr), Width = 32, Height = 40, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly });
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{t.Name}  {t.Cost}골드 · {WeaponNames.GetValueOrDefault(t.Weapon, t.Weapon)}" + (t.Hero ? " · 영웅" : ""),
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), FontWeight = t.Buildable ? FontWeights.Bold : FontWeights.Normal,
+            });
+            var item = new TreeViewItem { Header = row, Tag = t, IsExpanded = true };
+            var next = new HashSet<string>(seen) { t.KeyOrName };
+            foreach (string k in t.Upgrades)
+            {
+                if (!byKey.TryGetValue(k, out var n)) { item.Items.Add(new TreeViewItem { Header = $"「{k}」 — 없는 키", Foreground = Brushes.Red }); continue; }
+                if (next.Contains(k)) { item.Items.Add(new TreeViewItem { Header = $"「{k}」 — 앞으로 되돌아감(고리)", Foreground = Brushes.OrangeRed }); continue; }
+                item.Items.Add(Node(n, next));
+            }
+            return item;
+        }
+        foreach (var t in _towers.Where(t => t.Buildable)) UpgradeTree.Items.Add(Node(t, []));
+        var reachable = new HashSet<string>();
+        void Walk(TdTowerEntry t) { if (!reachable.Add(t.KeyOrName)) return; foreach (var k in t.Upgrades) if (byKey.TryGetValue(k, out var n)) Walk(n); }
+        foreach (var t in _towers.Where(t => t.Buildable)) Walk(t);
+        var orphans = _towers.Where(t => !reachable.Contains(t.KeyOrName)).ToList();
+        if (orphans.Count > 0)
+            UpgradeTree.Items.Add(new TreeViewItem { Header = $"어디서도 못 가는 타워: {string.Join(", ", orphans.Select(o => o.Name))}", Foreground = Brushes.OrangeRed });
+    }
+
+    private void UpgradeTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is TreeViewItem { Tag: TdTowerEntry t }) { TowerGrid.SelectedItem = t; TowerGrid.ScrollIntoView(t); }
+    }
+
     // ── 저장 ──
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -721,7 +762,7 @@ public partial class TowerDefenseEditWindow : Window
             if (!TowerDefenseBook.Valid(check)) problems.Add($"「{s.Name}」: 맵 · 적 · 웨이브 중 빈 것이 있어 게임이 이 스테이지를 건너뜁니다");
             else if (check.Waves.Sum(w => w.Count) != s.Waves.Sum(w => w.Count)) problems.Add($"「{s.Name}」: 없는 적 번호를 가리키는 웨이브 줄은 게임이 버립니다");
         }
-        if (_towers.Count(t => !t.Hero) > 10 || _towers.Count(t => t.Hero) > 10) problems.Add("한 탭에 10개가 넘으면 게임 짓기 칸에 다 안 보입니다");
+        if (_towers.Count(t => t.Buildable && !t.Hero) > 10 || _towers.Count(t => t.Buildable && t.Hero) > 10) problems.Add("한 탭에 10개가 넘으면 게임 짓기 칸에 다 안 보입니다");
         if (stages.Select(s => s.Id).Distinct().Count() != stages.Count) problems.Add("기록 열쇠가 겹치는 스테이지가 있습니다(최고 기록을 함께 씁니다)");
         try
         {

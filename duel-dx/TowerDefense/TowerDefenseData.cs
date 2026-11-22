@@ -18,8 +18,14 @@ internal sealed record TdWeaponStats(string Name, double Range, int Damage, doub
 
 /// <summary>지을 수 있는 타워 하나 — 인물(Chr 번호, 파트1 은 20000+)과 갈래.</summary>
 /// <param name="Power">갈래 바탕 피해 · 사거리에 곱한다(영웅은 1 보다 크다).</param>
-internal sealed record TdTowerDef(int Chr, string Name, TdWeapon Weapon, int Cost, double Power = 1, bool Hero = false, TdAura Aura = TdAura.None, double AuraValue = 0)
+/// <param name="Buildable">짓기 칸에 나오는가 — 거짓이면 다른 타워에서 올려야만 된다.</param>
+/// <param name="Upgrades">올릴 수 있는 다음 타워들의 키(td-12).</param>
+internal sealed record TdTowerDef(int Chr, string Name, TdWeapon Weapon, int Cost, double Power = 1, bool Hero = false, TdAura Aura = TdAura.None, double AuraValue = 0,
+                                  string Key = "", bool Buildable = true, string[]? Upgrades = null)
 {
+    /// <summary>올릴 수 있는 다음 타워 — 키가 없는 것은 버린다.</summary>
+    internal TdTowerDef[] Next => (Upgrades ?? []).Select(k => TdData.Towers.FirstOrDefault(t => t.Key == k)).OfType<TdTowerDef>().Where(t => t != this).ToArray();
+
     internal TdWeaponStats Stats => TdData.Weapons[Weapon];
 }
 
@@ -82,7 +88,7 @@ internal static class TdData
                                    Math.Clamp(w.Slow, 0, 0.95), Math.Max(0, w.SlowSeconds)));
         Towers = towers.Towers.Where(t => Enum.TryParse<TdWeapon>(t.Weapon, out var w) && Weapons.ContainsKey(w))
             .Select(t => new TdTowerDef(t.Chr, t.Name, Enum.Parse<TdWeapon>(t.Weapon), Math.Max(0, t.Cost), t.Power > 0 ? t.Power : 1, t.Hero,
-                                        Enum.TryParse<TdAura>(t.Aura, out var a) ? a : TdAura.None, t.AuraValue)).ToArray();
+                                        Enum.TryParse<TdAura>(t.Aura, out var a) ? a : TdAura.None, t.AuraValue, t.KeyOrName, t.Buildable, [.. t.Upgrades])).ToArray();
         Stages = stages.Select(s => new TdStage(
             s.Id,
             new TdMap(s.Name, s.Map, s.CamX, s.CamY, s.Waypoints.Select(p => (p[0], p[1])).ToArray(), s.Bgm, s.ViewCells, s.AreaW, s.AreaH, [.. s.Open], [.. s.Blocked]),

@@ -195,12 +195,22 @@
                         <RowDefinition Height="8" />
                         <RowDefinition Height="300" />
                     </Grid.RowDefinitions>
-                    <DockPanel Grid.Row="0">
+                    <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="300" />
+                    </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="2">
+                        <TextBlock Margin="0,0,0,2" DockPanel.Dock="Top" FontWeight="Bold" Text="올리기 표(전직표) — 짓기 칸 타워부터" />
+                        <TreeView x:Name="UpgradeTree" AutomationProperties.AutomationId="TdUpgradeTree" SelectedItemChanged="UpgradeTree_SelectedItemChanged" />
+                    </DockPanel>
+                    <DockPanel Grid.Column="0">
                         <DockPanel Margin="0,0,0,2" DockPanel.Dock="Top">
                             <TextBlock
                                 VerticalAlignment="Center"
                                 FontWeight="Bold"
-                                Text="타워 — 영웅이 아니면 「병종」 탭, 영웅이면 「영웅」 탭(하나씩만 · 오라). 한 탭에 10개까지 보인다. 인물 번호: 파트1 = 20000 + 번호, 파트2 = 그대로" />
+                                Text="타워 — 「짓기 칸」이면 병종 · 영웅 탭에 나오고(한 탭 10개까지), 아니면 다른 타워의 「다음 타워」로만 올린다. 올리는 값 = 그 타워 값. 인물 번호: 파트1 = 20000 + 번호" />
                             <Button Margin="6,0,0,0" Padding="6,0" Click="TowerDown_Click" Content="▼" DockPanel.Dock="Right" />
                             <Button Margin="6,0,0,0" Padding="6,0" Click="TowerUp_Click" Content="▲" DockPanel.Dock="Right" />
                             <Button Margin="6,0,0,0" Padding="6,0" Click="TowerDelete_Click" Content="지우기" DockPanel.Dock="Right" />
@@ -223,9 +233,13 @@
                                 <DataGridCheckBoxColumn Binding="{Binding Hero}" Header="영웅" />
                                 <DataGridComboBoxColumn x:Name="TowerAuraColumn" Header="오라" SelectedValueBinding="{Binding Aura}" SelectedValuePath="Key" DisplayMemberPath="Value" />
                                 <DataGridTextColumn Binding="{Binding AuraValue}" Header="오라 값(0.25 = 25%)" />
+                                <DataGridCheckBoxColumn Binding="{Binding Buildable}" Header="짓기 칸" />
+                                <DataGridTextColumn Binding="{Binding Key}" Header="키(비면 이름)" />
+                                <DataGridTextColumn Width="1.5*" Binding="{Binding UpgradesText}" Header="다음 타워(키, 쉼표로)" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
+                    </Grid>
                     <DockPanel Grid.Row="2">
                         <TextBlock
                             Margin="0,0,0,2"
