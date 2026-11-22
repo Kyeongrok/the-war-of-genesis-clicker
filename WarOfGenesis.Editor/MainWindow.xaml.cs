@@ -338,6 +338,16 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>타워 디펜스 스테이지 · 타워 편집(사용자 요청 td-4).</summary>
+    private void TowerDefenseEditMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try { new TowerDefenseEditWindow { Owner = this }.Show(); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or DirectoryNotFoundException)
+        {
+            StatusText.Text = $"assets/data 를 읽지 못했습니다: {ex.Message}";
+        }
+    }
+
     // ── 이펙트 보기 ────────────────────────────────────────────────────────
 
     /// <summary>기술이 쓰는 이펙트와 Obs 모션을 재생해 본다. 게임 폴더가 열려 있으면 기술 이름과 assets 에 없는 Obs 도 보인다.</summary>

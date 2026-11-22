@@ -27,7 +27,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private const int CardW = 56, CardH = 54, CardY = PanelY + 22, TabW = 56;
     private const uint Gold = 0xFFFFD860, Red = 0xFFFF7070, Green = 0xFF80F080, Dim = 0xFF98A0B8;
 
-    private enum Phase { Playing, Won, Lost }
+    private enum Phase { Playing, Won, Lost, Select }
 
     private sealed class Tower(TdTowerDef def, int col, int row, double x, double y)
     {
@@ -62,8 +62,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
         internal uint Color = 0xFFFFFFFF;
     }
 
-    private TdMap _map = TdData.Maps[0];
-    private int _mapIndex;
+    private TdStage _stage = TdData.Stages[0];
+    private TdMap _map = TdData.Stages[0].Map;
     private ObtMapImage? _img;
     private int _camX, _camY;
     private readonly HashSet<(int, int)> _pathCells = [];
@@ -107,36 +107,52 @@ internal sealed class TowerDefenseScene(GameWindow host)
     internal void OpenIfAsked()
     {
         if (Environment.GetEnvironmentVariable("DUELDX_TD") is not { Length: > 0 } v || !int.TryParse(v, out int n) || n <= 0) return;
-        Start(0);
+        Start(int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TD_STAGE"), out int st) ? st : 0);
         if (int.TryParse(Environment.GetEnvironmentVariable("DUELDX_TD_GOLD"), out int g)) _gold = g;
-        if (n > 1) _wave = Math.Min(n - 1, TdData.Waves.Length - 1);
+        if (n > 1) _wave = Math.Min(n - 1, _stage.Waves.Length - 1);
     }
 
-    internal void Start(int mapIndex)
+    /// <summary>타워 디펜스를 연다 — <paramref name="stageIndex"/> 가 음수면 스테이지가 둘 이상일 때 고르는 창부터(편집기가 스테이지를 더한다, td-4).</summary>
+    internal void Start(int stageIndex)
     {
+        TdData.Reload();
         host.TitleScr._titleOpen = false;
         host.Mos._mosesOpen = false;
         if (host._part1TitleScr is { } p1) p1._open = false;
         if (host.Cols != TitleBoardCols || host.Rows != TitleBoardRows) { host.ResizeBoard(TitleBoardCols, TitleBoardRows); host._battleLoaded = false; }
         Open = true;
-        _mapIndex = Math.Clamp(mapIndex, 0, TdData.Maps.Length - 1);
-        _map = TdData.Maps[_mapIndex];
+        _save = TowerDefenseSave.Load();
+        host.StopMusic();
+        if (stageIndex < 0 && TdData.Stages.Length > 1)
+        {
+            _phase = Phase.Select;
+            _img = null;
+            host.PlayMusicFile(TdData.Stages[0].Map.Bgm, loop: true);
+            host.EnterSceneFade();
+            return;
+        }
+        StartStage(Math.Max(0, stageIndex));
+        host.EnterSceneFade();
+    }
+
+    private void StartStage(int index)
+    {
+        _stage = TdData.Stages[Math.Clamp(index, 0, TdData.Stages.Length - 1)];
+        _map = _stage.Map;
         // 화면 밖 시험: DUELDX_TD_MAP=part1:0093 따위로 다른 맵을 본다.
         if (Environment.GetEnvironmentVariable("DUELDX_TD_MAP") is { Length: > 0 } test) _map = _map with { Name = "시험", File = test, Waypoints = [] };
-        _save = TowerDefenseSave.Load();
         LoadMap();
         Reset();
         BeginLoadingSprites();
         host.StopMusic();
         host.PlayMusicFile(_map.Bgm, loop: true);
-        host.EnterSceneFade();
     }
 
     private void Reset()
     {
         _towers.Clear(); _enemies.Clear(); _shots.Clear(); _fx.Clear(); _beams.Clear(); _floats.Clear(); _spawns.Clear();
-        _gold = TdData.StartGold;
-        _lives = TdData.StartLives;
+        _gold = _stage.StartGold;
+        _lives = _stage.StartLives;
         _wave = 0;
         _sim = 0;
         _lastClock = -1;
@@ -160,8 +176,8 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     private void Record(bool won)
     {
-        string key = _map.File;
-        int reached = won ? TdData.Waves.Length : Math.Max(0, _wave - 1);
+        string key = _stage.Id;
+        int reached = won ? _stage.Waves.Length : Math.Max(0, _wave - 1);
         if (reached > _save.BestWave.GetValueOrDefault(key)) _save.BestWave[key] = reached;
         if (won) _save.Clears[key] = _save.Clears.GetValueOrDefault(key) + 1;
         _save.Write();
@@ -210,89 +226,27 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private void BuildPath()
     {
         if (_img is not { } m) return;
-        var marks = new List<(int, int)>();
-        // 적힌 경유점은 화면 칸(맵 네모의 왼위에서 40×32 칸) — 그 자리에서 가장 가까운 걸을 수 있는 칸으로.
-        if (_map.Waypoints.Length > 0)
-            for (int i = 0; i < _map.Waypoints.Length; i++)
-            {
-                var (vc, vr) = _map.Waypoints[i];
-                marks.Add(Nearest((_camX + vc * Cell + Cell / 2) / Cell, (_camY + vr * CellH + CellH / 2 + m.OriginY) / CellH, edge: i == 0 || i == _map.Waypoints.Length - 1));
-            }
-        else
-        {
-            int c0 = (int)Math.Ceiling(_camX / (double)Cell), c1 = (_camX + FieldW) / Cell - 1;
-            int midRow = (_camY + ViewH / 2 + m.OriginY) / CellH;
-            int topRow = (_camY + ViewH / 5 + m.OriginY) / CellH, bottomRow = (_camY + ViewH * 4 / 5 + m.OriginY) / CellH;
-            marks.Add(Nearest(c0, midRow, edge: true));
-            marks.Add(Nearest(c0 + (c1 - c0) / 3, topRow));
-            marks.Add(Nearest(c0 + (c1 - c0) * 2 / 3, bottomRow));
-            marks.Add(Nearest(c1, midRow, edge: true));
-        }
-        for (int i = 0; i < marks.Count; i++)
-        {
-            var leg = i == 0 ? [marks[0]] : Route(marks[i - 1], marks[i]);
-            foreach (var c in leg)
-                if (_pathOrder.Count == 0 || _pathOrder[^1] != c) _pathOrder.Add(c);
-        }
+        // 경유점 → 걸을 수 있는 칸으로 잇기는 편집기와 같은 셈(TowerDefenseBook.BuildPath). 옛 꼴(보는 네모 안 칸)은 맵 칸으로 바꾼다.
+        var marks = _map.Waypoints.Select(p => _map.ViewCells ? TowerDefenseBook.ViewToMap(m, _camX, _camY, p.Col, p.Row) : p).ToList();
+        _pathOrder.AddRange(TowerDefenseBook.BuildPath(m, _camX, _camY, marks));
+        if (_pathOrder.Count == 0) return;
         foreach (var c in _pathOrder) _pathCells.Add(c);
 
-        // 화면 밖 왼쪽에서 들어와 오른쪽 밖으로 나간다.
-        var first = CellFoot(_pathOrder[0].Col, _pathOrder[0].Row);
-        var last = CellFoot(_pathOrder[^1].Col, _pathOrder[^1].Row);
-        _path.Add((_camX - 30, first.Y));
+        // 입구 · 출구 칸에서 가장 가까운 화면 가장자리 밖으로 들어오고 나간다(편집기 스테이지는 위 · 아래에서도 들어온다).
+        _path.Add(Outside(CellFoot(_pathOrder[0].Col, _pathOrder[0].Row)));
         foreach (var (c, r) in _pathOrder) _path.Add(CellFoot(c, r));
-        _path.Add((_camX + FieldW + 30, last.Y));
+        _path.Add(Outside(CellFoot(_pathOrder[^1].Col, _pathOrder[^1].Row)));
         _pathLen.Add(0);
         for (int i = 1; i < _path.Count; i++)
             _pathLen.Add(_pathLen[^1] + Math.Sqrt(Math.Pow(_path[i].X - _path[i - 1].X, 2) + Math.Pow(_path[i].Y - _path[i - 1].Y, 2)));
     }
 
-    /// <summary>(col, row) 에서 가장 가까운 걸을 수 있는 칸 — <paramref name="edge"/> 면 그 열에서만 찾는다.</summary>
-    private (int, int) Nearest(int col, int row, bool edge = false)
+    /// <summary>그 자리에서 가장 가까운 보는 네모 가장자리의 30px 밖.</summary>
+    private (double X, double Y) Outside((double X, double Y) p)
     {
-        (int, int) best = (col, row);
-        int bestD = int.MaxValue;
-        for (int c = col - (edge ? 0 : 3); c <= col + (edge ? 0 : 3); c++)
-            for (int r = row - 8; r <= row + 8; r++)
-            {
-                if (!Walkable(c, r)) continue;
-                int d = Math.Abs(c - col) * 3 + Math.Abs(r - row);
-                if (d < bestD) (bestD, best) = (d, (c, r));
-            }
-        return best;
-    }
-
-    /// <summary>두 칸을 걸을 수 있는 칸(높이 차 1 이하)으로 잇는 가장 짧은 길(BFS) — 못 이으면 곧은 줄.</summary>
-    private List<(int Col, int Row)> Route((int Col, int Row) from, (int Col, int Row) to)
-    {
-        var prev = new Dictionary<(int, int), (int, int)>();
-        var queue = new Queue<(int Col, int Row)>();
-        queue.Enqueue(from);
-        prev[from] = from;
-        (int, int)[] steps = [(1, 0), (-1, 0), (0, 1), (0, -1)];
-        while (queue.Count > 0)
-        {
-            var cur = queue.Dequeue();
-            if (cur == to) break;
-            foreach (var (dc, dr) in steps)
-            {
-                var next = (cur.Col + dc, cur.Row + dr);
-                if (prev.ContainsKey(next) || !Walkable(next.Item1, next.Item2)) continue;
-                if (Math.Abs(_img!.HeightAt(next.Item1, next.Item2) - _img.HeightAt(cur.Col, cur.Row)) > 1) continue;
-                prev[next] = cur;
-                queue.Enqueue(next);
-            }
-        }
-        var route = new List<(int, int)>();
-        if (!prev.ContainsKey(to))
-        {
-            int n = Math.Max(Math.Abs(to.Col - from.Col), Math.Abs(to.Row - from.Row));
-            for (int i = 1; i <= n; i++) route.Add((from.Col + (to.Col - from.Col) * i / n, from.Row + (to.Row - from.Row) * i / n));
-            return route;
-        }
-        for (var c = to; c != from; c = prev[c]) route.Add(c);
-        route.Reverse();
-        return route;
+        double left = p.X - _camX, right = _camX + FieldW - p.X, top = p.Y - _camY, bottom = _camY + ViewH - p.Y;
+        double min = Math.Min(Math.Min(left, right), Math.Min(top, bottom));
+        return min == left ? (_camX - 30, p.Y) : min == right ? (_camX + FieldW + 30, p.Y) : min == top ? (p.X, _camY - 30) : (p.X, _camY + ViewH + 30);
     }
 
     private (double X, double Y, Facing Facing) PointAt(double dist)
@@ -311,7 +265,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private void BeginLoadingSprites()
     {
         if (_loading is { IsCompleted: false }) return;
-        var wanted = TdData.Towers.Select(t => t.Chr).Concat(TdData.Enemies.Select(e => e.Chr)).Distinct().Where(c => !_sprites.ContainsKey(c)).ToList();
+        var wanted = TdData.Towers.Select(t => t.Chr).Concat(_stage.Enemies.Select(e => e.Chr)).Distinct().Where(c => !_sprites.ContainsKey(c)).ToList();
         _toLoad = wanted.Count;
         _loaded = 0;
         if (wanted.Count == 0) return;
@@ -331,7 +285,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                                                      .Where(c => c != null).SelectMany(c => c!.Sounds.Select(x => x.Sound))]);
             }
             // 파트1 그림이 없는 적은 파트2 병사로.
-            foreach (var e in TdData.Enemies.Where(e => _sprites.GetValueOrDefault(e.Chr) == null && !_sprites.ContainsKey(e.Fallback)))
+            foreach (var e in _stage.Enemies.Where(e => _sprites.GetValueOrDefault(e.Chr) == null && !_sprites.ContainsKey(e.Fallback)))
                 _sprites[e.Fallback] = LoadSprite(e.Fallback);
         });
     }
@@ -463,13 +417,13 @@ internal sealed class TowerDefenseScene(GameWindow host)
         if (_nextWaveIn > 0 && (_nextWaveIn -= dt) <= 0) StartWave();
         while (_spawns.Count > 0 && _spawns[0].At <= _sim)
         {
-            var def = TdData.Enemies[_spawns[0].Enemy];
-            int hp = (int)(def.Hp * (1 + TdData.HpPerWave * (_wave - 1)));
+            var def = _stage.Enemies[_spawns[0].Enemy];
+            int hp = (int)(def.Hp * (1 + _stage.HpPerWave * (_wave - 1)));
             var e = new Enemy(def, hp);
             (e.X, e.Y, e.Facing) = PointAt(0);
             _enemies.Add(e);
             _spawns.RemoveAt(0);
-            if (_spawns.Count == 0 && _wave < TdData.Waves.Length) _nextWaveIn = 18;
+            if (_spawns.Count == 0 && _wave < _stage.Waves.Length) _nextWaveIn = 18;
         }
 
         // 적 걷기
@@ -483,7 +437,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
                 e.DeadAt = _sim;
                 e.Hp = 0;
                 _lives = Math.Max(0, _lives - e.Def.Leak);
-                _floats.Add(($"-{e.Def.Leak}", _camX + FieldW - 40, e.Y - 40, _sim, Red));
+                _floats.Add(($"-{e.Def.Leak}", Math.Clamp(e.X, _camX + 20, _camX + FieldW - 40), Math.Clamp(e.Y - 40, _camY + 10, _camY + ViewH - 20), _sim, Red));
                 if (_lives == 0) { _phase = Phase.Lost; Record(false); host.Play(GameOverSound); }
             }
         }
@@ -539,7 +493,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         _beams.RemoveAll(b => _sim - b.At > 0.3);
         _floats.RemoveAll(f => _sim - f.At > 1.0);
 
-        if (_wave >= TdData.Waves.Length && _spawns.Count == 0 && !_enemies.Any(e => e.Alive) && _phase == Phase.Playing)
+        if (_wave >= _stage.Waves.Length && _spawns.Count == 0 && !_enemies.Any(e => e.Alive) && _phase == Phase.Playing)
         {
             _phase = Phase.Won;
             Record(true);
@@ -630,7 +584,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
 
     private void StartWave()
     {
-        if (_wave >= TdData.Waves.Length || _phase != Phase.Playing) return;
+        if (_wave >= _stage.Waves.Length || _phase != Phase.Playing) return;
         // 앞당겨 부르면 남은 초만큼 골드
         if (_nextWaveIn > 0)
         {
@@ -640,7 +594,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         }
         _nextWaveIn = -1;
         double at = _sim + 0.5;
-        foreach (var group in TdData.Waves[_wave])
+        foreach (var group in _stage.Waves[_wave])
         {
             for (int i = 0; i < group.Count; i++) _spawns.Add((at + i * group.Every, group.Enemy));
             at += group.Count * group.Every * 0.6;
@@ -711,13 +665,29 @@ internal sealed class TowerDefenseScene(GameWindow host)
     /// <summary>오른쪽 위 단추들 — (이름, x, y, 폭, 높이).</summary>
     private IEnumerable<(string Id, string Label, int X, int Y, int W, int H)> Buttons()
     {
-        if (_phase != Phase.Playing)
+        if (_phase == Phase.Select)
         {
-            yield return ("again", "다시 하기", FieldW / 2 - 130, 250, 120, 28);
-            yield return ("leave", "타이틀로", FieldW / 2 + 10, 250, 120, 28);
+            // 스테이지 고르기 — 한 줄에 8개, 넘치면 오른쪽 줄
+            for (int i = 0; i < TdData.Stages.Length; i++)
+            {
+                var st = TdData.Stages[i];
+                int best = _save.BestWave.GetValueOrDefault(st.Id), clears = _save.Clears.GetValueOrDefault(st.Id);
+                string mark = clears > 0 ? $"  ★{clears}" : best > 0 ? $"  최고 {best}/{st.Waves.Length}" : "";
+                int col = i / 8, cols = Math.Min(2, (TdData.Stages.Length + 7) / 8), w = cols == 1 ? 360 : 290;
+                yield return ($"stage:{i}", $"{i + 1}. {st.Map.Name}{mark}", FieldW / 2 - (cols * (w + 10) - 10) / 2 + col * (w + 10), 92 + i % 8 * 36, w, 28);
+            }
+            yield return ("leave", "타이틀로", FieldW / 2 - 60, 400, 120, 28);
             yield break;
         }
-        string wave = _wave >= TdData.Waves.Length ? "마지막 웨이브" : _nextWaveIn > 0 ? $"다음 웨이브 ({Math.Ceiling(_nextWaveIn)})" : _wave == 0 ? "웨이브 시작" : "웨이브 진행 중";
+        if (_phase != Phase.Playing)
+        {
+            bool many = TdData.Stages.Length > 1;
+            yield return ("again", "다시 하기", FieldW / 2 - (many ? 195 : 130), 250, 120, 28);
+            if (many) yield return ("stages", "스테이지", FieldW / 2 - 60, 250, 120, 28);
+            yield return ("leave", "타이틀로", FieldW / 2 + (many ? 75 : 10), 250, 120, 28);
+            yield break;
+        }
+        string wave = _wave >= _stage.Waves.Length ? "마지막 웨이브" : _nextWaveIn > 0 ? $"다음 웨이브 ({Math.Ceiling(_nextWaveIn)})" : _wave == 0 ? "웨이브 시작" : "웨이브 진행 중";
         yield return ("wave", wave, FieldW - 300, 6, 138, 24);
         yield return ("speed", $"속도 x{_speed}", FieldW - 156, 6, 72, 24);
         yield return ("leave", "나가기", FieldW - 78, 6, 72, 24);
@@ -745,11 +715,14 @@ internal sealed class TowerDefenseScene(GameWindow host)
     {
         if (!Open) return false;
         var (lx, ly) = Local(bx, by);
-        switch (ButtonAt(lx, ly))
+        string? button = ButtonAt(lx, ly);
+        if (button?.StartsWith("stage:", StringComparison.Ordinal) == true) { StartStage(int.Parse(button[6..])); return true; }
+        switch (button)
         {
             case "again": Reset(); return true;
+            case "stages": _phase = Phase.Select; _img = null; return true;
             case "leave": Leave(); return true;
-            case "wave": if (_wave < TdData.Waves.Length && (_wave == 0 || _nextWaveIn > 0)) StartWave(); return true;
+            case "wave": if (_wave < _stage.Waves.Length && (_wave == 0 || _nextWaveIn > 0)) StartWave(); return true;
             case "speed": _speed = _speed == 1 ? 2 : _speed == 2 ? 3 : 1; return true;
             case "sell": if (_selected != null) Sell(_selected); return true;
         }
@@ -781,6 +754,12 @@ internal sealed class TowerDefenseScene(GameWindow host)
     internal bool OnKey(int key)
     {
         if (!Open) return false;
+        if (_phase == Phase.Select)
+        {
+            if (key == Win32.VK_ESCAPE) Leave();
+            else if (key is >= '1' and <= '9' && key - '1' < TdData.Stages.Length) StartStage(key - '1');
+            return true;
+        }
         if (key == Win32.VK_ESCAPE)
         {
             if (_pick >= 0 || _selected != null) { _pick = -1; _selected = null; }
@@ -816,6 +795,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         var (ox, oy) = host.Mos.MosesOrigin();
         int fy = oy + Top;   // 맵 칸의 윗끝 — 위 막대(골드 · 단추)가 적을 가리지 않게 그 아래부터 맵을 깐다(td-2)
         host.FillRect(host._camX, host._camY, host.ViewWidth, host.ViewHeight, 0xFF000000);
+        if (_phase == Phase.Select) { DrawSelect(ox, oy); host.DrawToast(); return; }
         DrawMap(ox, fy);
 
         var clipBefore = host._uiClip;
@@ -1063,7 +1043,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
         host.FillRect(ox, oy + Top - 1, FieldW, 1, 0xFF404C70);
         Outlined($"골드 {_gold}", ox + 8, oy + 9, Gold, 13);
         Outlined($"생명 {_lives}", ox + 100, oy + 9, _lives <= 5 ? Red : Green, 13);
-        Outlined($"웨이브 {_wave}/{TdData.Waves.Length}", ox + 180, oy + 9, 0xFFFFFFFF, 13);
+        Outlined($"웨이브 {_wave}/{_stage.Waves.Length}", ox + 180, oy + 9, 0xFFFFFFFF, 13);
         int best = _save.BestWave.GetValueOrDefault(_map.File);
         if (best > 0) Outlined($"최고 {best}", ox + 276, oy + 11, Dim, 11);
         foreach (var (id, label, x, y, w, h) in Buttons())
@@ -1161,13 +1141,21 @@ internal sealed class TowerDefenseScene(GameWindow host)
         _ => "",
     };
 
+    /// <summary>스테이지 고르기 — 편집기(타워 디펜스)에서 스테이지를 둘 이상 만들면 타이틀 단추가 이 창을 연다.</summary>
+    private void DrawSelect(int ox, int oy)
+    {
+        host.FillRect(ox, oy, FieldW, 480, 0xFF0C1018);
+        Outlined("타워 디펜스 — 스테이지", ox + FieldW / 2 - 110, oy + 40, Gold, 20);
+        foreach (var (id, label, x, y, w, h) in Buttons()) host.Part1TitleScr.DrawButton(ox + x, oy + y, w, h, label, _hoverButton == id);
+    }
+
     private void DrawResult(int ox, int oy)
     {
         host.FillRect(ox + FieldW / 2 - 170, oy + 150, 340, 145, 0xE0101828);
         host.StrokeRect(ox + FieldW / 2 - 170, oy + 150, 340, 145, _phase == Phase.Won ? Gold : Red);
         string title = _phase == Phase.Won ? "방어 성공!" : "방어 실패";
         Outlined(title, ox + FieldW / 2 - title.Length * 9, oy + 168, _phase == Phase.Won ? Gold : Red, 20);
-        string sub = _phase == Phase.Won ? $"남은 생명 {_lives} · 타워 {_towers.Count}개" : $"웨이브 {_wave}/{TdData.Waves.Length} 에서 무너졌습니다";
+        string sub = _phase == Phase.Won ? $"남은 생명 {_lives} · 타워 {_towers.Count}개" : $"웨이브 {_wave}/{_stage.Waves.Length} 에서 무너졌습니다";
         Outlined(sub, ox + FieldW / 2 - sub.Length * 5, oy + 208, 0xFFFFFFFF, 12);
         foreach (var (id, label, x, y, w, h) in Buttons()) host.Part1TitleScr.DrawButton(ox + x, oy + y, w, h, label, _hoverButton == id);
     }

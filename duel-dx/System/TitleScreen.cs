@@ -248,7 +248,7 @@ internal sealed unsafe class TitleScreen(GameWindow host)
         if (host.Part1TitleScr.OnClick(bx, by)) return true;
         if (host.Part1TitleScr.EntryAt(bx, by)) { host.Part1TitleScr.PressEntry(); return true; }
         if (BugButtonAt(bx, by)) { _bugHover = false; host.Bugs.Open(); return true; }
-        if (TdButtonAt(bx, by)) { _tdHover = false; host.LeaveScene(() => host.TowerDef.Start(0)); return true; }
+        if (TdButtonAt(bx, by)) { _tdHover = false; host.LeaveScene(() => host.TowerDef.Start(-1)); return true; }
         PressTitleButton(TitleButtonAt(bx, by));
         return true;
     }

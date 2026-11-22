@@ -33,14 +33,16 @@ internal sealed record TdSpawn(int Enemy, int Count, double Every);
 
 /// <summary>맵 — 파트2 전투 맵(Obt) 한 장의 한 네모(640×400)와 적이 지나는 칸들.</summary>
 /// <param name="Waypoints">길이 거쳐 가는 화면 칸(640×400 네모 안 40×32 칸, 첫 · 끝은 들어오고 나가는 곳) — 칸 사이는 걸을 수 있는 칸으로 잇는다(<see cref="TowerDefenseScene"/>).</param>
-internal sealed record TdMap(string Name, string File, int CamX, int CamY, (int Col, int Row)[] Waypoints, int Bgm);
+/// <param name="ViewCells">참이면 경유점이 보는 네모 안 칸(옛 꼴), 거짓이면 맵 칸(편집기가 적는 꼴).</param>
+internal sealed record TdMap(string Name, string File, int CamX, int CamY, (int Col, int Row)[] Waypoints, int Bgm, bool ViewCells = true);
+
+/// <summary>스테이지 — 맵과 시작 골드 · 생명, 적과 웨이브(편집기 「타워 디펜스」가 고친다, 사용자 요청 td-4).</summary>
+internal sealed record TdStage(string Id, TdMap Map, int StartGold, int StartLives, double HpPerWave, TdEnemyDef[] Enemies, TdSpawn[][] Waves);
 
 internal static class TdData
 {
     /// <summary>오라가 닿는 반경(칸).</summary>
     internal const double AuraRange = 2.6;
-
-    internal const int StartGold = 250, StartLives = 20;
 
     /// <summary>웨이브를 앞당겨 부르면 남은 기다림 1초마다 주는 골드.</summary>
     internal const int EarlyBonusPerSecond = 2;
@@ -48,87 +50,44 @@ internal static class TdData
     /// <summary>판 골드 — 타워를 팔면 지은 값의 이만큼을 돌려준다.</summary>
     internal const double SellRate = 0.7;
 
-    internal static readonly Dictionary<TdWeapon, TdWeaponStats> Weapons = new()
-    {
-        [TdWeapon.Sword] = new("장검", 1.6, 16, 0.80, 0, 0, 0, 0),
-        [TdWeapon.Spear] = new("창", 2.1, 13, 0.95, 0, 2, 0, 0),
-        [TdWeapon.DualBlade] = new("쌍검", 1.5, 8, 0.40, 0, 0, 0, 0),
-        [TdWeapon.GreatSword] = new("대검", 1.6, 30, 1.50, 0.9, 0, 0, 0),
-        [TdWeapon.Bow] = new("활", 4.2, 10, 0.70, 0, 0, 11, 0xFFE8D8A0),
-        [TdWeapon.Gun] = new("총", 3.6, 24, 1.10, 0, 0, 22, 0xFFFFF070),
-        [TdWeapon.Beam] = new("빔", 3.4, 20, 1.20, 0, 2, 0, 0xFF80FFFF),
-        [TdWeapon.Magic] = new("마법", 3.0, 20, 1.60, 1.1, 0, 7, 0xFF90C0FF),
-        [TdWeapon.Frost] = new("냉기", 3.2, 7, 1.20, 0.8, 0, 7, 0xFF90E8FF, 0.45, 2.0),
-    };
+    /// <summary>무기 갈래 수치 — <see cref="Reload"/> 가 채운다.</summary>
+    internal static Dictionary<TdWeapon, TdWeaponStats> Weapons { get; private set; } = [];
+
+    /// <summary>지을 수 있는 타워 — 병종(용병)과 영웅(하나씩만, 오라).</summary>
+    internal static TdTowerDef[] Towers { get; private set; } = [];
+
+    internal static TdStage[] Stages { get; private set; } = [];
+
+    static TdData() => Reload();
 
     /// <summary>
-    /// 지을 수 있는 타워 — 앞은 병종(용병) 타워, 뒤는 영웅 타워. 병종은 파트1 병사를 그 인물의 기본 공격(칸 9 · 무기 갈래 — 칼 297 · 창 300 ·
-    /// 단발사격 306 · 빔라이플 315 · 화이어 애로우 324 · 아이스 미사일 327 · 활 4)으로 골랐고 이름도 그 병사 이름이다(사용자 요청 td-3). 아이스 마스터는 맞은 적을 늦춘다. 파트1 에 활을 쓰는 병사가 없어 궁병은 연적심(활 4)이다.
-    /// 영웅은 비싸고 하나씩만 지을 수 있으며 오라를 두른다(사용자 요청 td-1).
+    /// <c>assets/data/towerdefense/</c> 의 towers.json · stage-NN.json 을 다시 읽는다(<see cref="TowerDefenseBook"/>) — 타워 디펜스를 열 때마다 불러
+    /// 편집기에서 고친 것이 게임을 다시 켜지 않아도 먹는다. 파일이 없으면 바탕 값.
     /// </summary>
-    internal static readonly TdTowerDef[] Towers =
-    [
-        new(Part1Game.ChrBase + 155, "나이트", TdWeapon.Sword, 50),
-        new(Part1Game.ChrBase + 159, "파이크", TdWeapon.Spear, 60),
-        new(Part1Game.ChrBase + 387, "어쌔신", TdWeapon.DualBlade, 70),
-        new(Part1Game.ChrBase + 192, "알가지", TdWeapon.GreatSword, 90),
-        new(Part1Game.ChrBase + 89, "연적심", TdWeapon.Bow, 70),
-        new(Part1Game.ChrBase + 144, "솔져", TdWeapon.Gun, 80),
-        new(Part1Game.ChrBase + 256, "스파히", TdWeapon.Beam, 100),
-        new(Part1Game.ChrBase + 168, "위자드", TdWeapon.Magic, 110),
-        new(Part1Game.ChrBase + 539, "아이스 마스터", TdWeapon.Frost, 90),
+    internal static void Reload()
+    {
+        GameFiles? files = null;
+        try { files = GameFiles.FromFolder(AssetsFolder.Find("data")); }
+        catch (Exception ex) when (ex is IOException or DirectoryNotFoundException or InvalidOperationException) { }
+        var towers = files != null ? TowerDefenseBook.LoadTowers(files) : TowerDefenseBook.DefaultTowers();
+        var stages = files != null ? TowerDefenseBook.LoadStages(files) : TowerDefenseBook.DefaultStages();
 
-        new(Part1Game.ChrBase + 0, "살라딘", TdWeapon.DualBlade, 450, 1.9, true, TdAura.Haste, 0.25),
-        new(Part1Game.ChrBase + 30, "버몬트", TdWeapon.GreatSword, 500, 1.8, true, TdAura.Power, 0.30),
-        new(Part1Game.ChrBase + 65, "크리스티앙", TdWeapon.Gun, 450, 1.9, true, TdAura.Range, 0.20),
-        new(Part1Game.ChrBase + 10, "셰라자드", TdWeapon.Magic, 520, 1.8, true, TdAura.Power, 0.25),
-        new(Part1Game.ChrBase + 32, "어윈 록슬리", TdWeapon.Magic, 420, 1.8, true, TdAura.Range, 0.15),
-        new(Part1Game.ChrBase + 16, "얀 지슈카", TdWeapon.GreatSword, 420, 1.8, true, TdAura.Haste, 0.20),
-        new(219, "살라딘(2부)", TdWeapon.DualBlade, 480, 2.0, true, TdAura.Haste, 0.25),
-        new(220, "크리스티앙(2부)", TdWeapon.Gun, 480, 2.0, true, TdAura.Power, 0.25),
-        new(221, "죠안", TdWeapon.Magic, 480, 1.9, true, TdAura.Range, 0.20),
-        new(223, "베라모드", TdWeapon.GreatSword, 520, 1.9, true, TdAura.Power, 0.30),
-    ];
-
-    /// <summary>적 — 파트1 병사들(없으면 파트2 병사로 대신 선다).</summary>
-    internal static readonly TdEnemyDef[] Enemies =
-    [
-        new(Part1Game.ChrBase + 144, 230, "솔져", 60, 1.30, 6),
-        new(Part1Game.ChrBase + 145, 311, "도적", 45, 1.90, 6),
-        new(Part1Game.ChrBase + 132, 363, "좀비", 120, 0.80, 8),
-        new(Part1Game.ChrBase + 130, 265, "나이트", 160, 1.10, 11, 1, 3),
-        new(Part1Game.ChrBase + 153, 231, "파이크", 110, 1.20, 9, 1, 2),
-        new(Part1Game.ChrBase + 208, 251, "위자드", 90, 1.20, 10),
-        new(Part1Game.ChrBase + 131, 300, "캡틴 스켈톤", 260, 0.95, 16, 2, 4),
-        new(Part1Game.ChrBase + 229, 362, "드래군", 220, 1.70, 16, 2, 2),
-        new(Part1Game.ChrBase + 136, 255, "리치", 900, 0.70, 80, 5, 4),
-        new(Part1Game.ChrBase + 221, 304, "장군", 1600, 0.75, 150, 10, 6),
-    ];
-
-    /// <summary>웨이브 10개 — 적 번호는 <see cref="Enemies"/> 차례. 5 · 10 에 우두머리.</summary>
-    internal static readonly TdSpawn[][] Waves =
-    [
-        [new(0, 8, 1.1)],
-        [new(0, 6, 0.9), new(1, 6, 0.7)],
-        [new(2, 8, 1.2), new(1, 6, 0.6)],
-        [new(4, 8, 1.0), new(5, 4, 1.4)],
-        [new(3, 6, 1.2), new(8, 1, 1)],
-        [new(1, 14, 0.45), new(4, 8, 0.9)],
-        [new(3, 8, 1.0), new(5, 6, 1.0), new(6, 3, 2)],
-        [new(7, 10, 0.8), new(2, 10, 0.6)],
-        [new(6, 6, 1.2), new(3, 10, 0.8), new(7, 6, 0.8)],
-        [new(7, 8, 0.7), new(6, 6, 1.0), new(9, 1, 1), new(8, 2, 3)],
-    ];
-
-    /// <summary>한 웨이브가 지날 때마다 적 HP 에 곱하는 덧셈 몫(웨이브 n 은 1 + n × 이 값).</summary>
-    internal const double HpPerWave = 0.10;
+        Weapons = towers.Weapons.Where(w => Enum.TryParse<TdWeapon>(w.Key, out _)).ToDictionary(
+            w => Enum.Parse<TdWeapon>(w.Key),
+            w => new TdWeaponStats(w.Name, Math.Max(0.5, w.Range), Math.Max(0, w.Damage), Math.Max(0.1, w.Interval), Math.Max(0, w.Splash), Math.Max(0, w.Pierce),
+                                   Math.Max(0, w.Shot), uint.TryParse(w.ShotColor, System.Globalization.NumberStyles.HexNumber, null, out uint c) ? c : 0,
+                                   Math.Clamp(w.Slow, 0, 0.95), Math.Max(0, w.SlowSeconds)));
+        Towers = towers.Towers.Where(t => Enum.TryParse<TdWeapon>(t.Weapon, out var w) && Weapons.ContainsKey(w))
+            .Select(t => new TdTowerDef(t.Chr, t.Name, Enum.Parse<TdWeapon>(t.Weapon), Math.Max(0, t.Cost), t.Power > 0 ? t.Power : 1, t.Hero,
+                                        Enum.TryParse<TdAura>(t.Aura, out var a) ? a : TdAura.None, t.AuraValue)).ToArray();
+        Stages = stages.Select(s => new TdStage(
+            s.Id,
+            new TdMap(s.Name, s.Map, s.CamX, s.CamY, s.Waypoints.Select(p => (p[0], p[1])).ToArray(), s.Bgm, s.ViewCells),
+            s.StartGold, s.StartLives, Math.Max(0, s.HpPerWave),
+            s.Enemies.Select(e => new TdEnemyDef(e.Chr, e.Fallback, e.Name, Math.Max(1, e.Hp), Math.Max(0.1, e.Speed), Math.Max(0, e.Bounty), Math.Max(0, e.Leak), Math.Max(0, e.Armor))).ToArray(),
+            s.Waves.Select(w => w.Select(g => new TdSpawn(g.Enemy, g.Count, Math.Max(0.1, g.Every))).ToArray()).ToArray())).ToArray();
+    }
 
     /// <summary>파트1 맵을 못 읽는 PC(파트1 이 없다)에서 대신 여는 파트2 맵.</summary>
     internal static readonly TdMap FallbackMap = new("사막", "0153.obt", -1, -1, [], BattleDemoScene.Bgm);
-
-    /// <summary>맵 — 길이 좁게 굽는 동굴 · 던전 지형(사용자 요청 td-1). 지하 미궁은 파트1 Btl 0415 의 Obt 86.</summary>
-    internal static readonly TdMap[] Maps =
-    [
-        new("지하 미궁", "part1:0086", -1, -1, [(0, 6), (1, 1), (15, 1), (15, 6)], BattleDemoScene.Bgm),
-    ];
 }

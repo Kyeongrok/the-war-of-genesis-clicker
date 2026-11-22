@@ -57,6 +57,11 @@
                     AutomationProperties.AutomationId="ItemEditMenuItem"
                     Click="ItemEditMenuItem_Click"
                     Header="아이템 편집(_I)" />
+                <MenuItem
+                    x:Name="TowerDefenseEditMenuItem"
+                    AutomationProperties.AutomationId="TowerDefenseEditMenuItem"
+                    Click="TowerDefenseEditMenuItem_Click"
+                    Header="타워 디펜스 편집(_T)" />
             </MenuItem>
             <MenuItem Header="어빌리티(_B)">
                 <MenuItem
