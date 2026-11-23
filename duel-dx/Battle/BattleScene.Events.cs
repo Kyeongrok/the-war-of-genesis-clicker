@@ -285,6 +285,24 @@ internal sealed unsafe partial class BattleScene
     }
 
     /// <summary>
+    /// 출구가 있는 파트1 판인가 — 「사각형 안에 있나」(402, 파트1 302) 조건으로 이기거나(11 [0]) 판을 나가는(6 필드 · 10 전투 · 105 챕터 끝) 사건이
+    /// 아직 남아 있다. 이런 판은 적을 다 잡아도 원본처럼 그 칸에 닿아야 끝난다(사용자 결정 fg-166 — 무영릉 1F 튜토리얼은 북쪽 계단, 버그 리포트 #129).
+    /// 아군 전멸(401 [4])이 조건인 사건은 패배 쪽이라 안 센다.
+    /// </summary>
+    internal bool Part1HasExit()
+    {
+        for (int i = 0; i < _events.Count; i++)
+        {
+            var e = _events[i];
+            if (e.Conditions.Count == 0 || (e.MaxFire > 0 && _eventFired[i] >= e.MaxFire)) continue;
+            if (!e.Conditions.Any(c => c.Code == 402)) continue;
+            if (e.Conditions.Any(c => c.Code == 401 && c.Args.Length > 0 && c.Args[0] == 4)) continue;
+            if (e.Actions.Any(a => a.Code == 11 && a.Args.Length > 0 && a.Args[0] == 0 || a.Code is 6 or 10 || a.Code == Part1Script.Part1Only + 105)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// 파트1 전멸 승리(원본에 없는 편의, CheckOutcome) — 스크립트의 승리 사건(행동 11 [0])이 하던 진행 깃발(102 · 103)과 합류(500 [인물, 8, 무리])를 대신 해 준다.
     /// 승리 사건을 안 거치고 이기면 깃발이 안 켜져 챕터가 막혔다: 챕터 37 「인페르노의 음모」 사이럽스(Btl 0137)는 10001 이 (2~6, 6~9) 에 닿거나
     /// 타이머 1 이 300 에 이르러야 깃발 63 = 1 로 이기는데, 적을 다 잡아 이기면 63 이 0 이라 로우엔(사건 2 → Btl 0091)이 마을로만 열렸다(사용자 보고 fg-38).

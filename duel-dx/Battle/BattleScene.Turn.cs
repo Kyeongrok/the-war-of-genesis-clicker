@@ -2618,7 +2618,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
         // 적을 다 잡아도 조건(특정 칸 도달 따위)을 채워야 넘어간다. 전에는 전멸이면 끝내고 스크립트의 나가는 길을 대신 골랐다(fg-21 ⑬).
         // 파트1 판은 탈출 · 도달처럼 전멸을 안 보는 판이라도, 맵 밖에서 기다리는 증원까지 적이 하나도 안 남으면 이긴다
         // (사용자 요청: 「다 죽였으면 클리어 — 도망갈 이유가 없으면」, 원본은 조건 칸에 닿아야 끝난다). 나가는 길은 스크립트의 승리 갈래를 따른다.
-        if (!host._scene.EngineJudgesWipe && host._scene.IsPart1
+        // 다만 출구(칸 도달로 이기거나 나가는 사건)가 있는 판은 원본처럼 출구로 가야 끝난다(사용자 결정 fg-166, 버그 리포트 #129).
+        if (!host._scene.EngineJudgesWipe && host._scene.IsPart1 && !Part1HasExit()
             && host._units.Any(u => !u.IsAlly) && !host._units.Any(u => u.Alive && !u.IsAlly)
             && host._units.Any(u => u.Alive && u.OnField && u.Side == 4))
         {
