@@ -347,6 +347,24 @@ async function fd2Summary(env) {
     plays: { total: pTotal.results[0], chapters: pChapter.results, days: pDays.results, versions: pVersion.results, platforms: pPlatform.results } });
 }
 
+// 맨 위 오버뷰(관리자만) — 게임마다 플레이 시간(24시간 · 7일 · 30일 · 전체)과 버그 리포트 수(전체 · 새로 온 것).
+// 시간은 창세기전3 · 용의기사2 모두 전투 기록의 걸린 시간 합이다. 전투 표가 커서 시간은 cached()(6시간)로 묵히고, 리포트 수는 바로 센다.
+async function overview(env) {
+  const ago = (ms) => new Date(Date.now() - ms).toISOString();
+  const day = ago(864e5), week = ago(7 * 864e5), month = ago(30 * 864e5);
+  const sums = (db, table, at) => db.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN ${at} >= ? THEN seconds END), 0) AS day, COALESCE(SUM(CASE WHEN ${at} >= ? THEN seconds END), 0) AS week,
+            COALESCE(SUM(CASE WHEN ${at} >= ? THEN seconds END), 0) AS month,
+            COALESCE(SUM(seconds), 0) AS total FROM ${table}`).bind(day, week, month).first();
+  const play = JSON.parse(await cached(env, 'overview-play2', async () => ({
+    dow: await sums(env.DB, 'battles', 'received_at'),
+    fd2: await sums(env.FD2_DB, 'plays', 'received_at'),
+  })));
+  const count = (db, table) => db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(status = 'new'), 0) AS fresh FROM ${table}`).first();
+  const [dow, fd2, games] = await Promise.all([count(env.DB, 'bug_reports'), count(env.FD2_DB, 'bug_reports'), count(env.GAMES_DB, 'bug_reports')]);
+  return json({ play, bugs: { dow, fd2, games } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url), { pathname } = url;
@@ -358,6 +376,10 @@ export default {
       if (request.method === 'GET' && pathname === '/v1/fd2/summary') {
         if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
         return await fd2Summary(env);
+      }
+      if (request.method === 'GET' && pathname === '/v1/overview') {
+        if (!isAdmin(request, env)) return json({ error: 'unauthorized' }, 401);
+        return await overview(env);
       }
       if (request.method === 'GET' && pathname === '/v1/bugs/mine') return await myBugs(url, env);
       if (pathname === '/v1/bugs' || pathname.startsWith('/v1/bugs/')) {

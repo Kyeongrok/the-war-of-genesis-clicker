@@ -59,13 +59,21 @@ export const DASHBOARD_HTML = `<!doctype html>
   .bug .reply { white-space: pre-wrap; margin: 4px 0; padding: 4px 8px; border-left: 3px solid var(--accent, #6aa0ff); }
   .bug pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(--dim); max-height: 300px; overflow: auto; }
   .tag { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; }
+  #overview { margin-bottom: 18px; } #overview .row { display: grid; grid-template-columns: 90px repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 10px; align-items: stretch; }
+  #overview .label { color: var(--dim); align-self: center; } #overview .tile b { font-size: 20px; } #overview .tile small { color: var(--dim); display: block; margin-top: 2px; }
   .tag.new { color: var(--gold); border-color: var(--gold); } .tag.fixed { color: var(--good); border-color: var(--good); }
 </style>
 </head>
 <body>
 <main>
+  <div id="overview">
+    <div class="filters"><label>기간 <select id="ovperiod"><option value="day">최근 하루</option><option value="week">최근 1주</option><option value="month">최근 30일</option><option value="total">전체</option></select></label></div>
+    <div class="row" id="ovplay"><span class="label">플레이 시간</span></div>
+    <div class="row" id="ovbugs"><span class="label">버그 리포트</span></div>
+    <div class="sub" id="ovnote"></div>
+  </div>
   <h1><button id="gamepick" aria-haspopup="true" aria-expanded="false">창세기전3</button> <span id="gamesub">— 전투 통계 (파트1 · 파트2)</span>
-    <div id="gamemenu" hidden><button data-game="dow">창세기전3</button><button data-game="fd2">용의기사2</button><button data-game="cds">대항해시대</button><button data-game="mc">마그나카르타</button><button data-game="games">게임 앱</button></div></h1>
+    <div id="gamemenu" hidden><button data-game="dow">창세기전3</button><button data-game="fd2">용의기사2</button><button data-game="cds">대항해시대</button><button data-game="games">게임 앱</button></div></h1>
   <div class="sub" id="dowsub">익명으로 수집한 전투 요약입니다. 내 편 주인공이 직접 쓴 어빌리티만 셉니다(군단 부하 · 적 제외).</div>
   <div class="filters" id="dowfilters">
     <label>기간 <select id="period"><option value="today">오늘</option><option value="7" selected>최근 1주</option><option value="30">최근 4주</option><option value="0">전체</option><option value="custom">직접 지정</option></select></label>
@@ -107,12 +115,6 @@ export const DASHBOARD_HTML = `<!doctype html>
     <h2>장별</h2><div class="sub">평균 턴 · 시간은 이긴 판만입니다. 시간은 손을 댄 지 3분 안인 동안만 셉니다. 승률은 그만둔 판을 뺍니다.</div><table id="fd2chapters"></table>
     <div class="envgrid" id="fd2pgrid" style="margin-top:14px"></div></section>
   <div data-tab="cds"><cds-dashboard id="cdsdash" api="https://cds-remake-stats.oceanfog1.workers.dev"></cds-dashboard></div>
-  <section data-tab="mc"><h2>마그나카르타 · 버그 리포트</h2>
-    <div class="sub">마그나카르타 패치판(Kyeongrok/magnacarta-remake)의 게임 안 「버그 리포트」 창에서 온 것입니다. 관리자 키는 다른 게임과 같습니다.</div>
-    <div class="filters"><label>상태 <select id="mcstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
-      <button id="mckey">관리자 키</button><button id="mcreload">새로 고침</button><span id="mcerr" class="bad"></span></div>
-    <div class="tiles" id="mctiles"></div>
-    <div id="mcbugs" class="dim">관리자 키를 넣으면 보입니다.</div></section>
   <section data-tab="games"><h2>게임 앱 · 버그 리포트</h2>
     <div class="sub">안드로이드 게임 앱(Kyeongrok/mobile-games — 스도쿠 · 상하이 · 리치마작 …)의 「버그 리포트」에서 온 것입니다. 관리자 키는 다른 게임과 같습니다.</div>
     <div class="filters"><label>상태 <select id="gamesstatus"><option value="new">새로 온 것</option><option value="all">전체</option><option value="seen">봤음</option><option value="fixed">고침</option><option value="wontfix">안 고침</option></select></label>
@@ -141,7 +143,7 @@ function pickTab(tab) {
   currentTab = tab;
   if (data) loadPart(tab);
   if (tab === 'fd2') setTimeout(() => { if (!fd2Loaded) loadFd2(); });   // 아래 스크립트가 다 읽힌 뒤에
-  if (tab === 'mc' || tab === 'games') setTimeout(() => { if (!simpleLoaded[tab]) loadSimple(tab); });
+  if (tab === 'games') setTimeout(() => { if (!simpleLoaded[tab]) loadSimple(tab); });
   // 대항해시대 화면은 cds-remake-stats 가 내는 부품(<cds-dashboard>, /embed.js)이다 — 화면 코드는 그쪽 저장소(cds-helper)에 하나만 둔다.
   // 부품 코드는 처음 고를 때 한 번 불러온다(안 보는 동안 그쪽 집계를 부르지 않게). 불러오면 부품이 제자리에 그려진다.
   if (tab === 'cds' && !document.getElementById('cdsembed')) {
@@ -154,8 +156,8 @@ function pickTab(tab) {
 
 // 게임 — 제목의 게임 이름을 눌러 고른다. 용의기사2 · 대항해시대는 섹션 하나씩이라(data-tab 이 게임 이름) 창세기전3 의
 // 설명 · 거르기 · 합계 타일 · 탭 줄을 숨기고 그 섹션만 보인다. 창세기전3 으로 돌아오면 마지막으로 본 탭을 다시 연다.
-const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계', mc: '— 패치판 버그 리포트', games: '— 안드로이드 게임 모음 버그 리포트' };
-const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대', mc: '마그나카르타', games: '게임 앱' };
+const GAMES = { dow: '— 전투 통계 (파트1 · 파트2)', fd2: '— 리메이크 플레이 · 버그 리포트', cds: '— 코스타 델 솔 게임 통계', games: '— 안드로이드 게임 모음 버그 리포트' };
+const GAME_NAMES = { dow: '창세기전3', fd2: '용의기사2', cds: '대항해시대', games: '게임 앱' };
 let dowTab = 'bugs';
 function pickGame(game) {
   if (!GAMES[game]) game = 'dow';
@@ -410,10 +412,64 @@ function askBugKey() {
   if (k === null) return;
   try { localStorage.setItem('bugAdminKey', k.trim()); } catch { }
   loadBugs();
+  loadOverview();
   if (currentTab === 'fd2') loadFd2();
-  if (currentTab === 'mc' || currentTab === 'games') loadSimple(currentTab);
+  if (currentTab === 'games') loadSimple(currentTab);
 }
 $('bugkey').onclick = askBugKey;
+// ── 맨 위 오버뷰 — 게임별 플레이 시간 · 버그 리포트 수를 한눈에. 창세기전3 · 용의기사2 · 게임 앱은 /v1/overview(관리자 키),
+//    대항해시대는 cds Worker 에서 직접(플레이 시간은 대시보드 집계의 play 셈 — 게임이 끌 때 보낸다, 리포트는 /v1/bugs). ──
+const CDS_API = 'https://cds-remake-stats.oceanfog1.workers.dev';
+const hours = (sec) => (Number(sec || 0) / 3600).toFixed(1) + '시간';
+function ovTile(name, main, sub) { return '<div class="tile"><span>' + name + '</span><b>' + main + '</b><small>' + sub + '</small></div>'; }
+async function loadOverview() {
+  const key = bugKey();
+  const cdsKey = (() => { try { return localStorage.getItem('cdsBugAdminKey') || key; } catch { return key; } })();
+  const play = { dow: null, fd2: null, cds: null }, bugs = { dow: null, fd2: null, cds: null, games: null };
+  const notes = [];
+  const jobs = [];
+  if (key) jobs.push(fetch('/v1/overview', { headers: { Authorization: 'Bearer ' + key } }).then(async (r) => {
+    if (!r.ok) throw new Error(r.status === 401 ? '키가 맞지 않습니다' : 'HTTP ' + r.status);
+    const o = await r.json(); play.dow = o.play.dow; play.fd2 = o.play.fd2; Object.assign(bugs, o.bugs);
+  }).catch((e) => notes.push('창세기전3 · 용의기사2 · 게임 앱: ' + e.message)));
+  else notes.push('관리자 키를 넣으면 창세기전3 · 용의기사2 · 게임 앱이 보입니다.');
+  const cdsPlay = (period) => fetch(CDS_API + '/v1/dashboard?period=' + period).then((r) => r.json())
+    .then((d) => ((d.kinds || []).find((k) => k.kind === 'play') || { n: 0 }).n);
+  jobs.push(Promise.all([cdsPlay('day'), cdsPlay('week'), cdsPlay('month'), cdsPlay('all')]).then(([day, week, month, total]) => { play.cds = { day, week, month, total }; })
+    .catch((e) => notes.push('대항해시대 플레이 시간: ' + e.message)));
+  if (cdsKey) {
+    const cdsBugs = (status) => fetch(CDS_API + '/v1/bugs?status=' + status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + cdsKey } })
+      .then((r) => { if (!r.ok) throw new Error(r.status === 401 ? '키가 맞지 않습니다' : 'HTTP ' + r.status); return r.json(); }).then((o) => (o.bugs || []).length);
+    jobs.push(Promise.all([cdsBugs('all'), cdsBugs('new')]).then(([total, fresh]) => { bugs.cds = { total: total >= 200 ? '200+' : total, fresh }; })
+      .catch((e) => notes.push('대항해시대 리포트: ' + e.message)));
+  }
+  await Promise.all(jobs);
+  ovData = play;
+  drawOvPlay();
+  const B = [['dow', '창세기전3'], ['fd2', '용의기사2'], ['cds', '대항해시대'], ['games', '게임 앱']];
+  $('ovbugs').innerHTML = '<span class="label">버그 리포트</span>' + B.map(([g, name]) => bugs[g]
+    ? ovTile(name, '새로 온 것 ' + n(bugs[g].fresh), '전체 ' + (typeof bugs[g].total === 'string' ? bugs[g].total : n(bugs[g].total))) : ovTile(name, '-', '')).join('');
+  $('ovnote').textContent = '플레이 시간 — 창세기전3 · 용의기사2 는 전투 기록의 걸린 시간 합, 대항해시대는 게임을 켜고 끈 시간 합(v1.2.44 부터 끌 때 보냄). 집계는 몇 시간 늦을 수 있습니다.'
+    + (notes.length ? ' · ' + notes.join(' · ') : '');
+}
+// 플레이 시간 기간 — 일(24시간) · 주(7일) · 월(30일) · 전체. 고른 것을 기억한다.
+let ovData = null, ovPeriod = (() => { try { return localStorage.getItem('ovPeriod') || 'day'; } catch { return 'day'; } })();
+const OV_NAMES = { day: '최근 하루', week: '최근 1주', month: '최근 30일', total: '전체' };
+function drawOvPlay() {
+  $('ovperiod').value = ovPeriod;
+  if (!ovData) return;
+  const P = [['dow', '창세기전3'], ['fd2', '용의기사2'], ['cds', '대항해시대']];
+  $('ovplay').innerHTML = '<span class="label">플레이 시간</span>' + P.map(([g, name]) => ovData[g]
+    ? ovTile(name, hours(ovData[g][ovPeriod]), OV_NAMES[ovPeriod]) : ovTile(name, '-', '')).join('');
+}
+$('ovperiod').onchange = (e) => {
+  ovPeriod = e.target.value;
+  try { localStorage.setItem('ovPeriod', ovPeriod); } catch { }
+  drawOvPlay();
+};
+drawOvPlay();
+loadOverview();
+
 
 // ── 용의기사2 탭 — /v1/fd2/summary 의 집계와 fd2 리포트 목록(관리자 키). 탭을 처음 열 때 받는다 ──
 let fd2Loaded = false;
@@ -482,9 +538,9 @@ async function loadFd2() {
     $('fd2bugs').querySelectorAll('button[data-id]').forEach((b) => b.onclick = () => markBug('fd2', Number(b.dataset.id), b.dataset.s));
   } catch (e) { $('fd2err').textContent = '불러오지 못했습니다: ' + e.message; }
 }
-// ── 마그나카르타 · 게임 앱 — 버그 리포트만(/v1/bugs?game=mc · games). 같은 관리자 키. 섹션 안 id 는 게임 이름이 앞에 붙는다 ──
-const simpleStatus = { mc: 'new', games: 'new' };
-const simpleLoaded = { mc: false, games: false };
+// ── 게임 앱 — 버그 리포트만(/v1/bugs?game=games). 같은 관리자 키. 섹션 안 id 는 게임 이름이 앞에 붙는다 ──
+const simpleStatus = { games: 'new' };
+const simpleLoaded = { games: false };
 async function loadSimple(game) {
   simpleLoaded[game] = true;
   const key = bugKey();
