@@ -1266,7 +1266,7 @@ internal sealed class TowerDefenseScene(GameWindow host)
     private void DrawSelect(int ox, int oy)
     {
         host.FillRect(ox, oy, FieldW, 480, 0xFF0C1018);
-        Outlined("타워 디펜스 — 스테이지", ox + FieldW / 2 - 110, oy + 40, Gold, 20);
+        Outlined("타워 디펜스(개발중) — 스테이지", ox + FieldW / 2 - 110, oy + 40, Gold, 20);
         foreach (var (id, label, x, y, w, h) in Buttons()) host.Part1TitleScr.DrawButton(ox + x, oy + y, w, h, label, _hoverButton == id);
     }
 
