@@ -152,7 +152,8 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
                 _confirm = ("RESTART", "전투를 다시 시작하시겠습니까?", RestartFromDeploy);
                 break;
             case SystemItem.Exit:
-                _confirm = ("EXIT GAME", "창세기전3 PartII를 종료하시겠습니까?", () => host.LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
+                // 파트1 판이면 파트1 이름으로 묻고 파트1 타이틀로 돌아간다 — 전에는 파트2 글로 묻고 파트2 타이틀로 갔다(버그 리포트 #129).
+                _confirm = ("EXIT GAME", Part1Screens ? "창세기전3 PartI을 종료하시겠습니까?" : "창세기전3 PartII를 종료하시겠습니까?", () => host.LeaveScene(BackToTitle));   // 16틀 검게 나간다(ba-21 outer #2)
                 break;
         }
     }
@@ -166,6 +167,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
     /// </remarks>
     internal void BackToTitle()
     {
+        bool part1 = !OriginalGameSetup.Part1Only && Part1Screens && Part1Game.Root is not null;
         _systemMenu = _missionWindow = _volumeWindow = false;
         host.SlotsScr._slotsMode = -1;
         host.Fld.CloseField();
@@ -175,6 +177,7 @@ internal sealed unsafe partial class SystemMenu(GameWindow host)
         host._battleLoaded = false;
         host.ResizeBoard(TitleBoardCols, TitleBoardRows);
         host.TitleScr.OpenTitle();
+        if (part1) host.Part1TitleScr.Open();   // 파트1 에서 나왔으면 파트1 타이틀로(버그 리포트 #129)
     }
 
     /// <summary>열린 창이 있으면 클릭을 처리하고 true.</summary>

@@ -1737,7 +1737,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 while (a.IsBusy) yield return true;
                 continue;
             }
-            // 리콜 — 고른 아군을 시전자 옆으로 불러온다(피해·회복 없음).
+            // 리콜 — 고른 아군을 시전자 옆으로 불러오고, work 가 종류 1 · 위력 10~20(최대 HP %)이라 불러온 뒤 그만큼 회복한다.
+            // 전에는 옮기기만 해 설명(「최대 HP의 10% 회복」)과 달리 HP 가 그대로였다(버그 리포트 #131).
             if (w.AbilityId == TeleportSkill.RecallAbility)
             {
                 var targets = WorkTargets(w, a, col, row);
@@ -1745,7 +1746,8 @@ internal sealed unsafe partial class BattleScene(GameWindow host)
                 if (who != null)
                 {
                     foreach (bool _ in host.TeleportAb.RecallRoutine(a, who)) yield return true;
-                    MarkBuffed(a, who, w);
+                    if (hitWork.IsHeal) ApplyWork(a, hitWork, who, dying);
+                    else MarkBuffed(a, who, w);
                 }
                 while (a.IsBusy) yield return true;
                 continue;

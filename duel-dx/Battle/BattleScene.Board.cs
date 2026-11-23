@@ -491,7 +491,8 @@ internal sealed unsafe partial class BattleScene
             if (bodies[order[k]] is { } b && b.X < g.X + g.W && g.X < b.X + b.W && b.Y < g.Y + g.H && g.Y < b.Y + b.H) covered = true;
         // 파트1: 앞의 기둥 · 벽 · 맵 물체가 막대를 덮으면 글(레벨 숫자 · 딱지)도 판에 — 새 UI 층에 쓰면 막대는 가려지고 숫자만 구조물 위에 떴다(fa-84).
         if (!covered && p1 != null) covered = p1.CoveredAhead(g.X, g.Y, g.W, g.H, CoverKey(unit));
-        bool board = covered || !host._hiResUi || host.BattleCovered;
+        // 상태 창이 떠 있으면 막대 글도 판에 — 파트1 곁 패널(Part1StatusPanel)은 판에 그려, 층에 쓴 레벨 숫자가 패널 위로 비쳤다(버그 리포트 #128).
+        bool board = covered || !host._hiResUi || host.BattleCovered || host._statusUnit >= 0;
         DrawGauge(unit, shapes: true, text: board, boardText: board);
         if (!board) _gaugeLayerText.Add(unit);
     }

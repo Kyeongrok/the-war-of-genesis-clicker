@@ -298,8 +298,18 @@ internal static class Part1Text
 internal sealed class Part1TextPainter(GameWindow host)
 {
     /// <summary>조각 폭 — 꾸밈의 꼴(이름 · 크기 · 굵기)로 잰다.</summary>
-    internal int Width(string s, Part1TextStyle st) =>
-        s.Length == 0 ? 0 : (int)Math.Ceiling(Native.TextRaster.Width(s, host.FontSize(st.Pixels), st.FaceName, st.Bold));
+    /// <remarks>
+    /// 새 UI 는 글을 창 해상도 층에 큰 글꼴로 그려, 판 크기로 잰 폭보다 넓을 수 있다 — 창 폭 · 줄 나누기가 판 폭으로 잡혀 1920×1080 에서
+    /// 튜토리얼 첫 대사(「너 움직일줄은 아냐?」)의 끝이 창 테두리를 넘었다(버그 리포트 #127). 층으로 그리면 층에서 잰 폭과 큰 쪽을 쓴다.
+    /// </remarks>
+    internal int Width(string s, Part1TextStyle st)
+    {
+        if (s.Length == 0) return 0;
+        int board = (int)Math.Ceiling(Native.TextRaster.Width(s, host.FontSize(st.Pixels), st.FaceName, st.Bold));
+        if (!host._hiResUi || host._zoom <= 0) return board;
+        float real = (float)Math.Round(host.FontSize(st.Pixels) * host._zoom * 4) / 4;   // HiCanvas.Glyphs 와 같은 크기 — 그리지 않고 재기만
+        return Math.Max(board, (int)Math.Ceiling(Native.TextRaster.Width(s, real, st.FaceName, st.Bold) / host._zoom));
+    }
 
     /// <summary>검은 테두리(위아래 왼오른 1픽셀) 위에 빛깔 글(<c>0x100194b0</c> · <c>0x10018210</c>).</summary>
     internal void Outlined(string text, int x, int y, Part1TextStyle st, uint color)

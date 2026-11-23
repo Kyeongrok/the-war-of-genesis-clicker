@@ -37,6 +37,15 @@ internal static class Part1CdMusic
             try { song = Part1Game.Music(n); }
             catch (Exception ex) when (ex is InvalidDataException or ArgumentException or IndexOutOfRangeException) { log?.Invoke($"music 파트1 곡 {n} BGMs 못 풂: {ex.Message}"); }
             if (song != null) return song;
+            // 곡 15 · 29 는 시디 1 의 트랙 2 · 3 이라 BGMs 에도 곡 묶음(assets-part1bgm-1)에도 없다. 빈 G3CD_0 이 없는 설치본은 시디 곡으로 안 보여
+            // 무영릉(튜토리얼 Btl 0415, 곡 29)이 무음이었다(버그 리포트 #130) — 시디 트랙 WAV(assets-part1cd-1)를 쓴다.
+            if (DiscOneTrack(n) is { } discTrack
+                && Fetch(AssetPack.Part1CdKind, $"Track{discTrack:D2}.wav", $"BGMs\\{n:D4}.bgm 이 없어") is { } trackAsset
+                && Decode(trackAsset, log, wavOnly: true) is { } trackSong)
+            {
+                log?.Invoke($"music 파트1 곡 {n} → 시디 1 트랙 {discTrack} 자산 WAV {trackSong.Duration.TotalSeconds:0.0}초 (시디 표 없음)");
+                return trackSong;
+            }
             if (Fetch(AssetPack.Part1SongKind, $"{n:D4}.wav", $"BGMs\\{n:D4}.bgm 이 없어") is { } songAsset && Decode(songAsset, log, wavOnly: true) is { } fetched)
             {
                 log?.Invoke($"music 파트1 곡 {n} → 자산 WAV {Path.GetFileName(songAsset)} {fetched.Duration.TotalSeconds:0.0}초");
@@ -68,6 +77,9 @@ internal static class Part1CdMusic
         log?.Invoke($"music 파트1 곡 {n} → 시디 트랙 {track}: {(files.Count == 0 ? "트랙 파일 없음" : "못 풂")} · 자산 없음 (무음)");
         return null;
     }
+
+    /// <summary>시디 1 표(Tracks.ini 줄 1 「15 29」)의 곡이면 그 트랙 번호 — 시디 표를 못 찾은 설치본에서 쓴다.</summary>
+    private static int? DiscOneTrack(int n) => n switch { 15 => 2, 29 => 3, _ => null };
 
     /// <summary>
     /// 배경음악을 받는 중 · 못 받음 알림 — 화면 오른쪽 아래 귀퉁이(<see cref="GameWindow.DrawMusicNotice"/>). 뒤 스레드가 쓰고 그리기가 읽는다.
