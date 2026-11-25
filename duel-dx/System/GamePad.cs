@@ -214,7 +214,7 @@ internal sealed partial class GamePad(GameWindow host)
     /// <summary>틀마다 한 번 — 새로 눌린 단추는 키 누름으로, 뗀 방향은 걷기 멈춤으로 넘긴다. 설정 창이 기다리는 중이면 눌린 단추를 그 동작에 묶는다.</summary>
     /// <summary>DUELDX_PAD=1 — 패드가 꽂혀 있는 것처럼 군다(화면 밖 시험용 — 노란 테 · 안내 줄). DUELDX_PADGUIDE=1 이면 안내 창을 띄운 채.</summary>
     private static readonly bool Fake = Environment.GetEnvironmentVariable("DUELDX_PAD") == "1";
-    private bool _fakeDone;
+    private bool _fakeDone, _fakeConfirm = Environment.GetEnvironmentVariable("DUELDX_PADCONFIRM") == "1";
 
     internal void Poll()
     {
@@ -225,6 +225,17 @@ internal sealed partial class GamePad(GameWindow host)
             _pad = 0;
             if (!_fakeDone) { _fakeDone = true; _guideOpen = Environment.GetEnvironmentVariable("DUELDX_PADGUIDE") == "1"; }
             if (PointerMode && !_guideOpen) AutoFocus();
+            if (!PointerMode)
+            {
+                PointAtChest();
+                // DUELDX_PADCONFIRM=1 — 커서가 손댈 수 있는 상자 · 문 위면 확인 단추를 한 번 누른 것처럼 그 자리를 누른다(버그 리포트 #132 시험).
+                if (_fakeConfirm && TouchableUnderCursor())
+                {
+                    _fakeConfirm = false;
+                    var (bx, by) = host._mouse;
+                    host.OnClick((int)Math.Round((bx - host._camX) * host._zoom) + host.ViewOffsetX, (int)Math.Round((by - host._camY) * host._zoom) + host.ViewOffsetY);
+                }
+            }
             return;
         }
         int now = 0, rx = 0, ry = 0, lx = 0, ly = 0;

@@ -407,10 +407,13 @@ internal sealed partial class GamePad
         var (mx, my) = host._mouse;
         if (!host._battleLoaded || !btl.IsPlayerTurn || btl._turn < 0 || my < GameWindow.GridTop || btl._targetWork >= 0 || btl._ringUnit >= 0 || btl._abilityMenu) return false;
         int row = host.RowAt(mx, my);
-        return row >= 0 && btl.ObjectAt(mx / GameWindow.TileW, row) is { } obj && btl.FindTouchPath(host._units[btl._turn], obj) != null;
+        if (row < 0) return false;
+        // 파트1 상자 · 문은 Part1MapObjects 에 따로 있다 — 마우스 주먹 커서와 같은 물음(버그 리포트 #132).
+        if (host._scene.IsPart1 && btl.Part1Objects.CanTouchAt(mx / GameWindow.TileW, row)) return true;
+        return btl.ObjectAt(mx / GameWindow.TileW, row) is { } obj && btl.FindTouchPath(host._units[btl._turn], obj) != null;
     }
 
-    private DemoObject? _pointedObj;
+    private object? _pointedObj;
 
     /// <summary>
     /// 내 차례의 인물이 상자 · 문 <b>바로 옆</b>에 서면 커서를 그 물체 위로 옮긴다 — 커서가 주먹으로 바뀌고 확인이 연다(사용자 요청 fa-35).
@@ -422,6 +425,14 @@ internal sealed partial class GamePad
         if (!host._battleLoaded || !btl.IsPlayerTurn || btl._turn < 0 || btl._targetWork >= 0 || btl._ringUnit >= 0 || btl._abilityMenu || host._units[btl._turn].IsBusy)
             return;
         var u = host._units[btl._turn];
+        if (host._scene.IsPart1)
+        {
+            var touch = btl.Part1Objects.AdjacentTouch(u);
+            if (touch?.Key == _pointedObj) return;
+            _pointedObj = touch?.Key;
+            if (touch is { } t) MoveCursorTo(t.Col * GameWindow.TileW + GameWindow.TileW / 2, host.CellTop(t.Col, t.Row) + GameWindow.TileH / 2);
+            return;
+        }
         DemoObject? near = null;
         foreach (var o in btl.Objects)
             if (o.Alive && !btl._opened.Contains(o) && o.Data.Kind is 2 or 6 or 8 && Math.Abs(o.Col - u.Col) + Math.Abs(o.Row - u.Row) == 1

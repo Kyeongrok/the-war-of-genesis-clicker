@@ -253,6 +253,30 @@ internal sealed class Part1MapObjects(GameWindow host)
         return CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o)) != null;
     }
 
+    /// <summary>
+    /// 걷지 않고 바로 열 수 있는 상자 · 문 — 그 물체(같은 물체인지 가르는 열쇠)와 주먹 커서가 서는 칸(<see cref="CanTouchAt"/> 이 참인 칸). 없으면 null.
+    /// 패드가 커서를 그 칸으로 옮겨 확인 단추가 열게 한다(버그 리포트 #132 — 파트2 물체만 보아 파트1 상자는 패드로 못 열었다).
+    /// </summary>
+    internal (object Key, int Col, int Row)? AdjacentTouch(UnitState user)
+    {
+        Ensure();
+        var btl = host.Btl;
+        // 틀마다 불린다 — 몸 · 서는 칸이 인물 곁(맨해튼 1 안)에 있는 물체가 없으면 이동 영역을 셈하지 않는다.
+        bool Close(Obj o) => BodyCells(o).Concat(o.Door ? StandCells(o) : []).Any(p => Math.Abs(p.Col - user.Col) + Math.Abs(p.Row - user.Row) <= 1);
+        var close = _objects.OfType<Obj>().Where(o => (o.Chest != null || o.Door) && !Opened(o) && Close(o)).ToList();
+        if (close.Count == 0 || btl.ComputeRange(user) is not { } range) return null;
+        foreach (var o in close)
+        {
+            bool near = o is { Door: true } ? CanOpenDoor(user, o) && StandPath(user, o, range) is { Count: 0 }
+                : CanOpen(user, o) && btl.FindTouchPathTo(user, BodyCells(o), range) is { Count: 0 };
+            if (!near) continue;
+            var cells = BodyCells(o).Concat(o.Door ? StandCells(o) : []);
+            foreach (var (c, r) in cells)
+                if ((uint)c < (uint)host.Cols && (uint)r < (uint)host.Rows && CanTouchAt(c, r)) return (o, c, r);
+        }
+        return null;
+    }
+
     /// <summary>이동 영역 위에 노랗게 칠할 상자 칸(판 칸 번호) — 차례인 인물이 걸어가 열 수 있는 것.</summary>
     internal IEnumerable<int> TouchableCells(UnitState user, BattleScene.MoveRange range)
     {
