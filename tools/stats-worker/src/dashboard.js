@@ -418,7 +418,7 @@ function askBugKey() {
 }
 $('bugkey').onclick = askBugKey;
 // ── 맨 위 오버뷰 — 게임별 플레이 시간 · 버그 리포트 수를 한눈에. 창세기전3 · 용의기사2 · 게임 앱은 /v1/overview(관리자 키),
-//    대항해시대는 cds Worker 에서 직접(플레이 시간은 대시보드 집계의 play 셈 — 게임이 끌 때 보낸다, 리포트는 /v1/bugs). ──
+//    대항해시대는 cds Worker 에서 직접(플레이 시간은 /v1/playtime — 게임이 끌 때 보내는 play 셈, 리포트는 /v1/bugs). ──
 const CDS_API = 'https://cds-remake-stats.oceanfog1.workers.dev';
 const hours = (sec) => (Number(sec || 0) / 3600).toFixed(1) + '시간';
 function ovTile(name, main, sub) { return '<div class="tile"><span>' + name + '</span><b>' + main + '</b><small>' + sub + '</small></div>'; }
@@ -433,9 +433,9 @@ async function loadOverview() {
     const o = await r.json(); play.dow = o.play.dow; play.fd2 = o.play.fd2; Object.assign(bugs, o.bugs);
   }).catch((e) => notes.push('창세기전3 · 용의기사2 · 게임 앱: ' + e.message)));
   else notes.push('관리자 키를 넣으면 창세기전3 · 용의기사2 · 게임 앱이 보입니다.');
-  const cdsPlay = (period) => fetch(CDS_API + '/v1/dashboard?period=' + period).then((r) => r.json())
-    .then((d) => ((d.kinds || []).find((k) => k.kind === 'play') || { n: 0 }).n);
-  jobs.push(Promise.all([cdsPlay('day'), cdsPlay('week'), cdsPlay('month'), cdsPlay('all')]).then(([day, week, month, total]) => { play.cds = { day, week, month, total }; })
+  // 플레이 시간 합만 내는 /v1/playtime 한 번 — 예전에는 /v1/dashboard 를 기간 넷으로 불러 열 때마다 cds D1 을 육십만 줄씩 읽었다(하루 한도를 넘김, 2026-11-25).
+  jobs.push(fetch(CDS_API + '/v1/playtime').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then((d) => { play.cds = { day: d.day, week: d.week, month: d.month, total: d.total }; })
     .catch((e) => notes.push('대항해시대 플레이 시간: ' + e.message)));
   if (cdsKey) {
     const cdsBugs = (status) => fetch(CDS_API + '/v1/bugs?status=' + status + '&order=desc&limit=200', { headers: { Authorization: 'Bearer ' + cdsKey } })
