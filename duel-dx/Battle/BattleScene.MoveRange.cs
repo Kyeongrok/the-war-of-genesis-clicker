@@ -466,6 +466,10 @@ internal sealed unsafe partial class BattleScene
                     host.UiText($"{WalkHeightAt(c, r)}", c * TileW + 14, top + 8, (CellFlagsAt(c, r) & 1) != 0 ? 0xFFFF4040 : 0xFFFFFF00, 11);   // 빨강 = 물체까지 찍은 판에서 못 들어가는 칸
                 }
         if (_rangeUnit < 0 || _range is not { } range) return;
+        // 사건이 도는 동안은 깔지 않는다 — 행동 끝 갈래로 터진 사건(Btl 0145 사건 4: 살라딘이 친 뒤 데미안의 천지파열무)에서
+        // 친 인물의 남은 이동 · 사거리가 연출 내내 깔려 있었다(버그 리포트 #135). 영역은 그대로 두어 사건이 끝나면 다시 뜬다.
+        // 사건이 전투를 끝냈으면(행동 6 · 10 · 11) 장면이 바뀔 때까지도 안 깐다.
+        if (_runningEvent >= 0 || _outcome.Length > 0) return;
         // 판 크기가 바뀐 뒤(다음 전투·필드로 넘어간 틀) 옛 판으로 셈한 영역이 남아 있으면 칸 수가 안 맞아 배열 밖을 읽었다(사용자 보고, 튕김) — 버린다.
         if (range.Cost.Length != host.Cols * host.Rows || range.Red.Length != host.Cols * host.Rows) { _range = null; _rangeUnit = -1; return; }
         // 어빌리티 대상을 고르는 중(원본 상태 11)에는 이동 영역(파랑)·공격 사거리(빨강)를 걷고 그 기술의 사거리·효과 범위만 깐다 —

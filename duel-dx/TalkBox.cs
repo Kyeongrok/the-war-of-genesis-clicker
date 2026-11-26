@@ -348,7 +348,15 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
             // 0x100ef2a5: 칸0 이 있고 칸1 이 비었으면 칸1, 아니면 칸0 을 지우고 칸0.
             var s0 = _talks.Find(t => t.Kind == 601 && t.Slot == 0);
             var s1 = _talks.Find(t => t.Kind == 601 && t.Slot == 1);
-            if (s0 != null && s1 == null) w.Slot = 1;
+            // 전투 말풍선 자리는 말하는 이로만 정해진다 — 같은 사람의 앞 말풍선이 아직 떠 있으면(「601 → 2[틱] → 601」, 클릭 안 기다림)
+            // 칸1 로 가 둘이 같은 자리에 겹쳤다(Btl 0145 사건 4 살라딘 「헉... 이 기술은...설마...」 · 「제길... 할 수 없다!」, 버그 리포트 #135).
+            // 그 사람의 앞 말풍선을 지우고 그 칸에 띄운다(일부러 둔 차이).
+            if (w.Speaker >= 0 && w.Part1 == null && _talks.Find(t => t.Kind == 601 && t.Part1 == null && t.Speaker == w.Speaker) is { } same)
+            {
+                w.Slot = same.Slot;
+                RemoveTalkWindow(same);
+            }
+            else if (s0 != null && s1 == null) w.Slot = 1;
             else
             {
                 if (s0 != null) RemoveTalkWindow(s0);

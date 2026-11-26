@@ -30,12 +30,22 @@ internal sealed unsafe partial class BattleScene
     /// <summary>줄 머리 유닛에게 카메라 명령을 걸었나 — 멈추면 창을 띄운다.</summary>
     internal bool _levelUpCamSent;
 
+    /// <summary>
+    /// 처치 경험치를 받는가 — <b>사람이 명령하는 유닛</b>(원본 <c>0x100742e0</c>). 원본은 편 4 만 사람이 움직여 편 4 만 보았지만, 이 게임은
+    /// 「동맹을 AI 가 움직임」을 끄면 편 3 손님(Btl 0116 의 샤크바리 따위)도 사람이 움직인다 — 그때는 그 손님도 받는다.
+    /// 전에는 편 4 만 보아 손님으로 선 샤크바리가 몹을 잡아도 경험치가 안 올랐다(버그 리포트 #136). 보조 경험치(<see cref="GainBuffExp"/>)는 전부터 편 3 도 받았다.
+    /// </summary>
+    internal bool EarnsKillExp(UnitState u) => u.PlayerControlled || (u.IsAlly && !host._allyAi);
+
     /// <summary>쓰러뜨린 쪽에 경험치를 준다(메시지 1016). 여럿이 나누면 <paramref name="share"/> 로 나눈 몫(1 이상).</summary>
     internal void GainKillExp(UnitState killer, UnitState victim, int share = 1)
     {
         if (host._scene.IsPart1) { GainPart1KillExp(killer, victim); return; }
         // 경험치는 <b>사람이 명령하는 유닛</b>만 받는다(0x100742e0 — 편 3 동맹 AI 는 못 받는다).
-        if (host._db == null || killer.Data is not { } k || victim.Data is not { } v || !killer.PlayerControlled) return;
+        if (Trace)
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "dueldx_trace.log"),
+                $"kill exp {killer.ChrCode}(편 {killer.Side}, 자료 {killer.Data != null}) → {victim.ChrCode}(자료 {victim.Data != null}) CumExp {killer.Data?.CumExp}" + Environment.NewLine);
+        if (host._db == null || killer.Data is not { } k || victim.Data is not { } v || !EarnsKillExp(killer)) return;
         // 11(경험치 증가)은 자르기 <b>앞</b>에 더한다(0x10072285~) — 그래서 한 번에 상한(Num 17)을 넘지 않는다.
         // 장비 보정 42(경험치 %)는 자른 뒤에 얹는다 — 원본은 이 번호를 안 읽어 반지가 헛것이었다(ItemBook.ExpStat, 사용자 요청 ed-2 · menu-86).
         int exp = Math.Max(1, host._db.WithEquipExp(k, host._db.ExpForKill(k, v.Level, killer.Status(11))) / share);
