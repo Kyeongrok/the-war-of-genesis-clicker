@@ -231,7 +231,8 @@ internal sealed class Part1ChapterScreen(GameWindow host, Part1TitleScreen shell
             host.StopMusic();
             host.Cut.StartVideo(() => Part1EndingMovie.Prepare(file), played => host.Toast(played ? "파트1 끝" : "엔딩 영상을 틀 수 없습니다"));
         }
-        else host.Toast("엔딩 영상 없음");
+        // 영상은 흔히 원본 시디에만 있다 — 어디에 두면 나오는지까지 알린다(버그 리포트 #138).
+        else host.Toast(@"엔딩 영상 없음 — 시디의 Setup\_sys2.cab 을 파트1 폴더\Setup 에 두세요", 8);
         host.LeaveScene(() => { _open = false; shell.ReturnFromBattle(false); });
     }
 

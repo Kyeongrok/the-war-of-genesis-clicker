@@ -28,10 +28,12 @@ internal sealed unsafe partial class GameWindow
     internal string _toast = "";
     internal double _toastUntil;
 
-    internal void Toast(string text)
+    internal void Toast(string text) => Toast(text, 2.5);
+
+    internal void Toast(string text, double seconds)
     {
         _toast = text;
-        _toastUntil = _lastTime + 2.5;
+        _toastUntil = _lastTime + seconds;
     }
 
     /// <summary>조작 안내 글 — 설정 > 안내 글 켜기·끄기로 숨길 수 있다(사용자 요청). 결과 알림(Toast)은 늘 보인다.</summary>

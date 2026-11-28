@@ -115,6 +115,9 @@ internal static unsafe class Win32
     public static extern short GetKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out Point point);
 
     [DllImport("user32.dll")]

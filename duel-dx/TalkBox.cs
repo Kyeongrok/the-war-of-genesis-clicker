@@ -60,7 +60,7 @@ internal sealed unsafe partial class TalkBox(GameWindow host)
 
     /// <summary>필드 대사를 넘기는 단추를 지금 누르고 있나 — 왼쪽 단추 또는 패드 확인(A).</summary>
     internal bool TalkHeld() =>
-        host.FieldOpen && !GameWindow.Offscreen
+        host.FieldOpen && host.Focused
         && ((Win32.GetKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 || host.Pad.HeldNow(PadAction.Confirm));
 
     /// <summary>글 한 걸음(한 글자)의 틱 수 — <c>[+0x21c] % 3</c>(<c>0x10029070</c>).</summary>

@@ -763,7 +763,7 @@ internal sealed unsafe class Part1TitleScreen(GameWindow host)
 
     /// <summary>글을 넘기는 단추를 누르고 있나 — 왼 단추 · Enter · Space · 패드 확인(화면 밖 시험에서는 늘 뗀 것).</summary>
     private bool Held() =>
-        !GameWindow.Offscreen
+        host.Focused
         && ((Win32.GetKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 || (Win32.GetKeyState(Win32.VK_RETURN) & 0x8000) != 0
             || (Win32.GetKeyState(Win32.VK_SPACE) & 0x8000) != 0 || host.Pad.HeldNow(PadAction.Confirm));
 

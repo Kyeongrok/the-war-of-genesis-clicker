@@ -438,6 +438,20 @@ internal sealed unsafe partial class GameWindow : IDisposable
         return Math.Max(work.Left, work.Left + (work.Width - windowWidth) / 2);
     }
 
+    /// <summary>창을 작업 영역 세로 가운데에 둘 위쪽 자리 — 예전에는 늘 0(맨 위)이었다(버그 리포트 #139).</summary>
+    internal static int WindowTop(int windowHeight)
+    {
+        var work = new Win32.Rect();
+        if (!Win32.SystemParametersInfoW(Win32.SPI_GETWORKAREA, 0, ref work, 0)) return 0;
+        return Math.Max(work.Top, work.Top + (work.Bottom - work.Top - windowHeight) / 2);
+    }
+
+    /// <summary>창 모드로 마지막에 맞춰 둔 화면 크기(전체화면이면 null) — 같으면 창을 다시 놓지 않는다(버그 리포트 #139).</summary>
+    private (int W, int H)? _windowedClient;
+
+    /// <summary>게임 창이 앞에 있나 — 다른 창(다른 모니터)을 누르고 있는 왼쪽 단추를 대사 넘김으로 읽지 않게(버그 리포트 #137).</summary>
+    internal bool Focused => !Offscreen && _hwnd != IntPtr.Zero && Win32.GetForegroundWindow() == _hwnd;
+
     /// <summary>
     /// 배율을 정한다 — 설정 > 해상도가 <b>창 크기 그대로</b>, 설정 > 배율이 <b>확대 그대로</b>다(사용자 요청: 「해상도는 창 크기, 배율은 정직하게」).
     /// 보이는 판 = 창 ÷ 배율. 판이 그보다 작으면(모세스·타이틀 640×480) 창 가운데에 두고 둘레를 검게 남긴다.
@@ -598,6 +612,7 @@ internal sealed unsafe partial class GameWindow : IDisposable
             Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_POPUP | Win32.WS_VISIBLE);
             Win32.SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, Win32.GetSystemMetrics(Win32.SM_CXSCREEN), Win32.GetSystemMetrics(Win32.SM_CYSCREEN),
                                Win32.SWP_NOZORDER | Win32.SWP_FRAMECHANGED);
+            _windowedClient = null;
         }
         else
         {
@@ -605,9 +620,17 @@ internal sealed unsafe partial class GameWindow : IDisposable
             Win32.AdjustWindowRect(ref rect, Win32.WS_OVERLAPPEDWINDOW, true);
             // 전체화면에서 돌아올 때를 위해 창 꼴과 메뉴 막대도 되돌린다(이미 그 꼴이면 달라지는 것이 없다).
             if (Win32.GetMenu(_hwnd) == IntPtr.Zero && _menuBar != IntPtr.Zero) Win32.SetMenu(_hwnd, _menuBar);
-            Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE);
-            Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
-                               rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+            // 크기가 그대로면(전투 ↔ 필드처럼 판만 바뀜) 창을 옮기지 않는다 — 예전엔 장면이 바뀔 때마다 창을 화면 위 가운데로 다시 놓아,
+            // 사용자가 옮겨 둔 자리를 잃고 Magpie 같은 창 확대가 풀렸다(버그 리포트 #139).
+            bool sameWindow = _windowedClient == (pixelW, pixelH) && Win32.GetClientRect(_hwnd, out var client)
+                              && client.Right - client.Left == pixelW && client.Bottom - client.Top == pixelH;
+            if (!sameWindow)
+            {
+                Win32.SetWindowLongPtrW(_hwnd, Win32.GWL_STYLE, Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE);
+                Win32.SetWindowPos(_hwnd, IntPtr.Zero, Offscreen ? -8000 : WindowLeft(rect.Width), Offscreen ? 0 : WindowTop(rect.Height),
+                                   rect.Width, rect.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+            }
+            _windowedClient = (pixelW, pixelH);
         }
         _backBufferRtv?.Dispose();
         _swapChain.ResizeBuffers(2, (uint)pixelW, (uint)pixelH, Format.B8G8R8A8_UNorm, SwapChainFlags.FrameLatencyWaitableObject);
@@ -800,10 +823,11 @@ internal sealed unsafe partial class GameWindow : IDisposable
 
         _active = this;
         _hwnd = Win32.CreateWindowExW(0, ClassName, $"창세기전3 파트2 — WarOfGenesis {AppVersion}",
-            Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : WindowLeft(rect.Width), 0,
+            Win32.WS_OVERLAPPEDWINDOW, Offscreen ? -8000 : WindowLeft(rect.Width), Offscreen ? 0 : WindowTop(rect.Height),
             rect.Width, rect.Height,
             IntPtr.Zero, menu, Win32.GetModuleHandleW(null), IntPtr.Zero);
         if (_hwnd == IntPtr.Zero) throw new InvalidOperationException("창을 만들지 못했습니다.");
+        _windowedClient = (pixelW, pixelH);
     }
 
     /// <summary>아직 한 눈금(120)이 안 된 휠 값 — 노트북 터치패드는 120 보다 잘게 보내 나누면 0 이 되어 휠이 안 먹었다(버그 리포트 #14 · #18).</summary>
